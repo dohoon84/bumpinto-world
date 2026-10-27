@@ -3,6 +3,7 @@
 //   presence.sendState({x,z,ry,moving}) / presence.sendChat(text) / presence.connect(me) / presence.close()
 import { STATE_HZ } from './protocol.js';
 import { sanitizeLook } from '../look.js';
+import { deviceId } from '../sms.js';
 
 class Emitter {
   constructor() { this.handlers = {}; }
@@ -27,12 +28,26 @@ export class WebSocketPresence extends Emitter {
     this.emit('status', `현재 접속자 ${this.peerIds.size + 1}명`);
   }
   connect(me) {
+    if (this.ws) {
+      const old = this.ws;
+      this.ws = null;
+      try { old.onclose = null; old.close(); } catch {}
+    }
     this.manualClose = false;
     this.me = me;
     clearTimeout(this.retryTimer);
+    clearInterval(this.pingTimer);
     this.emit('status', '현재 접속자 확인 중…');
     const ws = (this.ws = new WebSocket(this.url));
-    ws.onopen = () => { this.retry = 1000; ws.send(JSON.stringify({ t: 'hello', name: me.name, color: me.color, look: me.look })); };
+    ws.onopen = () => {
+      this.retry = 1000;
+      ws.send(JSON.stringify({ t: 'hello', deviceId: deviceId(), name: me.name, color: me.color, look: me.look }));
+      this.pingTimer = setInterval(() => {
+        if (this.ws === ws && ws.readyState === 1) {
+          try { ws.send(JSON.stringify({ t: 'ping' })); } catch {}
+        }
+      }, 15000);
+    };
     ws.onmessage = (ev) => {
       let m; try { m = JSON.parse(ev.data); } catch { return; }
       if (m.t === 'welcome') {
@@ -49,6 +64,7 @@ export class WebSocketPresence extends Emitter {
       this.emit(m.t, m);
     };
     ws.onclose = () => {
+      clearInterval(this.pingTimer);
       if (this.manualClose || this.ws !== ws) return;
       this.peerIds.clear();
       this.emit('status', '연결 끊김 — 재시도 중');
@@ -65,6 +81,7 @@ export class WebSocketPresence extends Emitter {
   close() {
     this.manualClose = true;
     clearTimeout(this.retryTimer);
+    clearInterval(this.pingTimer);
     const ws = this.ws;
     this.ws = null;
     if (ws) { ws.onclose = null; ws.close(); }

@@ -322,8 +322,8 @@ function rememberPlace(force = false) {
   if (sms.session) sms.session.place = { x: p.x, y: p.y, z: p.z, ry: player.rotation.y };
   sms.savePlace({ x: p.x, y: p.y, z: p.z, ry: player.rotation.y });
 }
-addEventListener('pagehide', () => rememberPlace(true));
-addEventListener('beforeunload', () => rememberPlace(true));
+addEventListener('pagehide', () => { rememberPlace(true); presence.close(); });
+addEventListener('beforeunload', () => { rememberPlace(true); presence.close(); });
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'hidden') rememberPlace(true);
 });
