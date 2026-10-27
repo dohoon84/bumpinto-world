@@ -21,6 +21,7 @@ import { createTerrain } from './world/terrain.js'; // [terrain]
 import { Taxis } from './entities/taxis.js'; // [taxi]
 import { Police } from './entities/police.js';
 import { addRiversideFolk } from './entities/riversideFolk.js';
+import { addStationPlaza } from './world/stationPlaza.js';
 
 const params = new URLSearchParams(location.search);
 const shot = params.has('shot');
@@ -163,6 +164,11 @@ const taxiCount = params.get('taxis') === '0' ? 0 : Math.max(0, Math.min(80, Num
 const taxis = taxiCount ? new Taxis(scene, overlay, { drive: driveData, data, transit, world, count: taxiCount }) : null;
 const police = params.get('police') === '0' ? null : new Police(scene, overlay, { drive: driveData, data, transit, world, count: 2 });
 const riverFolk = terrain ? addRiversideFolk(scene, overlay, terrain, world, st) : null;
+const stationPlaza = addStationPlaza(scene, overlay, world);
+{
+  const origBlocked = world.isBlocked;
+  world.isBlocked = (x, z, r) => origBlocked(x, z, r) || stationPlaza.blocks(x, z);
+}
 
 // --- 멀티플레이 프레즌스(지금은 목업, ?ws=URL 이면 실서버) ---
 const presence = createPresence({ station: st });
@@ -572,6 +578,7 @@ function frame() {
   taxis?.update(dt); // [taxi]
   police?.update(dt, player.position, { riding: !!bikes.riding });
   riverFolk?.update(dt, player.position);
+  stationPlaza.update(dt, player.position);
   remotes.update(dt);
   myBubble.tick();
 
