@@ -93,7 +93,8 @@ export class SimulatedBusSource {
       if (st && st.s - b.s < limit) { limit = st.s - b.s; reason = 'stop'; }
       // 2) 보행 신호가 초록/깜빡이면 횡단보도 앞 정지선에서 대기
       for (const q of P.xings) {
-        const gapToLine = q.s - 4 - front;
+        const stopOffset = (q.c.depth || 2.2) + 1.8;
+        const gapToLine = q.s - stopOffset - front;
         if (gapToLine < -1.5) continue; // 이미 진입
         if (gapToLine > 45) break;
         if (ctx.pedLight(q.c) !== 'red') { if (gapToLine < limit) { limit = Math.max(0, gapToLine); reason = 'xing'; } }

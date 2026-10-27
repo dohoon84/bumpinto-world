@@ -193,7 +193,7 @@ export class Taxis {
     // 신호: 보행 신호(=차량 정지)면 정지선 앞에서
     const front = t.s + taxiLength() / 2;
     if (this.transit) for (const q of t.sigQ) {
-      const stopAt = q.s - 4.5; if (stopAt < front - 1.5) continue; if (stopAt - front > 60) break;
+      const stopAt = q.s - ((q.c.depth || 2.2) + 2.3); if (stopAt < front - 1.5) continue; if (stopAt - front > 60) break;
       if (this.transit.pedLight(q.c) !== 'red') { limit = Math.min(limit, vAllow(stopAt - front - 0.5)); break; }
     }
     // 앞차

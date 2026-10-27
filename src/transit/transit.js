@@ -32,12 +32,16 @@ export function buildTransit(scene, T, world, overlay, { mode = 'sim', proxy } =
   };
 
   // ---------- 횡단보도(지브라) ----------
+  // 정자역 바로 앞 성남대로 메인 횡단보도(4616070993, 7165256406)는 실제 광장 보행량에 맞춰 폭을 3배(약 13.2m)로 넓힌다.
   const pos = [], idx = [];
   for (const c of T.crossings) {
+    const isStationMain = c.id === 4616070993 || c.id === 7165256406 || (c.sig && c.road === '성남대로' && Math.abs(c.z - 43.6) < 8);
     const [dx, dz] = c.dir, nx = -dz, nz = dx;
-    const half = c.w / 2, depth = c.sig ? 2.2 : 1.8; // 길이방향(도로방향) 반폭 -> 폭 4~4.4m
-    for (let v = -half + 0.4; v <= half - 0.2; v += 1.0) idx.push(...quad(pos, c.x + nx * v, c.z + nz * v, dx, dz, nx, nz, depth, 0.25, 0.1));
-    if (c.sig) for (const sgn of [-1, 1]) idx.push(...quad(pos, c.x + dx * sgn * (depth + 1.6) - nx * (sgn * half / 2), c.z + dz * sgn * (depth + 1.6) - nz * (sgn * half / 2), nx, nz, dx, dz, half / 2, 0.2, 0.1)); // 정지선(진행 방향 차로 쪽)
+    const half = c.w / 2;
+    const depth = (c.sig ? 2.2 : 1.8) * (isStationMain ? 3 : 1);
+    c.depth = depth;
+    for (let v = -half + 0.4; v <= half - 0.2; v += 1.0) idx.push(...quad(pos, c.x + nx * v, c.z + nz * v, dx, dz, nx, nz, depth, 0.28, 0.108));
+    if (c.sig) for (const sgn of [-1, 1]) idx.push(...quad(pos, c.x + dx * sgn * (depth + 1.6) - nx * (sgn * half / 2), c.z + dz * sgn * (depth + 1.6) - nz * (sgn * half / 2), nx, nz, dx, dz, half / 2, 0.22, 0.108)); // 정지선(진행 방향 차로 쪽)
   }
   if (idx.length) scene.add(flatMesh(pos, idx, '#f7f7f2'));
 
@@ -53,8 +57,9 @@ export function buildTransit(scene, T, world, overlay, { mode = 'sim', proxy } =
     if (!lampMats.has(k)) lampMats.set(k, { red: new THREE.MeshBasicMaterial({ color: '#3a1010' }), green: new THREE.MeshBasicMaterial({ color: '#0d2a18' }), c });
     const M = lampMats.get(k);
     const [dx, dz] = c.dir, nx = -dz, nz = dx;
+    const poleOffset = (c.depth || 2.2) + 0.5;
     for (const sgn of [-1, 1]) {
-      const px = c.x + nx * sgn * (c.w / 2 + 0.9) + dx * 2.6, pz = c.z + nz * sgn * (c.w / 2 + 0.9) + dz * 2.6;
+      const px = c.x + nx * sgn * (c.w / 2 + 0.9) + dx * poleOffset, pz = c.z + nz * sgn * (c.w / 2 + 0.9) + dz * poleOffset;
       const g = new THREE.Group();
       const pole = new THREE.Mesh(poleGeo, poleMat); pole.castShadow = true;
       const head = new THREE.Mesh(headGeo, headMat); head.position.y = 2.75; head.castShadow = true;
@@ -162,7 +167,8 @@ export function makeCrossingGuard(transit) {
       const [dx, dz] = c.dir, nx = -dz, nz = dx;
       const along = Math.abs((px - c.x) * dx + (pz - c.z) * dz);
       const across = Math.abs((px - c.x) * nx + (pz - c.z) * nz);
-      if (along < 3.3 && across < c.w / 2 + 0.35 && transit.pedLight(c) !== 'green') return c;
+      const depth = c.depth || 2.2;
+      if (along < depth + 1.1 && across < c.w / 2 + 0.35 && transit.pedLight(c) !== 'green') return c;
     }
     return null;
   };

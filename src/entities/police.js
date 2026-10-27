@@ -319,7 +319,8 @@ export class Police {
 
   _inZone(c, x, z) {
     const [dx, dz] = c.dir, nx = -dz, nz = dx;
-    return Math.abs((x - c.x) * dx + (z - c.z) * dz) < 2.8 && Math.abs((x - c.x) * nx + (z - c.z) * nz) < c.w / 2 + 0.15;
+    const depth = c.depth || 2.2;
+    return Math.abs((x - c.x) * dx + (z - c.z) * dz) < depth + 0.6 && Math.abs((x - c.x) * nx + (z - c.z) * nz) < c.w / 2 + 0.15;
   }
 
   _lights(car, dt, hot) {
