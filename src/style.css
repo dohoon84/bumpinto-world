@@ -392,10 +392,12 @@ body.in-lobby #hud, body.in-lobby #buttons, body.in-lobby #chat, body.in-lobby #
 .gate-toast-btn { flex: 1; text-align: center; font: inherit; font-size: 12.5px; font-weight: 700; padding: 7px 10px; border-radius: 8px; border: 1px solid rgba(255,255,255,.22); background: rgba(255,255,255,.1); color: #fff; text-decoration: none; cursor: pointer; }
 .gate-toast-btn.primary { background: #f5a200; color: #122033; border-color: #f5a200; }
 @media (max-width: 860px) {
-  .gate-copy { bottom: 16px; }
-  .gate-copy h1 { font-size: 20px; }
+  .gate-copy { bottom: 12px; padding: 11px 14px 13px; }
+  .gate-copy h1 { font-size: 19px; }
   .gate-copy .lead { font-size: 12px; }
-  #world-gate .studio { right: 12px; bottom: 168px; }
+  .gate-regions { right: 12px; left: 12px; top: 10px; width: auto; padding: 9px 11px; }
+  .gate-regions-list { max-height: 128px; }
+  #world-gate .studio { display: none; }
 }
 
 #handset {
@@ -530,25 +532,16 @@ body.in-lobby #hud, body.in-lobby #buttons, body.in-lobby #chat, body.in-lobby #
 #enter-loading .enter-line { margin: 0; min-height: 1.45em; font-size: 15px; font-weight: 700; line-height: 1.45; color: #122033; }
 #enter-loading .enter-track { margin-top: 16px; height: 10px; overflow: hidden; border-radius: 99px; background: rgba(18,32,51,.12); }
 #enter-loading .enter-fill { width: 0%; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #d4003b, #f5a200); }
-#pc-only { position: fixed; inset: 0; z-index: 80; display: grid; place-items: center; padding: 28px 16px; background: linear-gradient(180deg, #070d1c, #1a2744); }
+#pc-only { position: fixed; inset: 0; z-index: 80; display: grid; place-items: center; padding: 28px 16px; background: rgba(7, 13, 28, .82); backdrop-filter: blur(6px); }
 #pc-only[hidden] { display: none !important; }
-html.pc-only #enter-loading,
-html.pc-only #app,
-html.pc-only #world-gate,
-html.pc-only #lobby,
-html.pc-only #joystick,
-html.pc-only #hud,
-html.pc-only #buttons,
-html.pc-only #chat,
-html.pc-only #handset,
-html.pc-only #phone,
-html.pc-only #board-Launcher,
-html.pc-only #contribute-launcher,
-html.pc-only #board-modal,
-html.pc-only #attribution { display: none !important; }
-.pc-only-card { width: min(440px, calc(100% - 32px)); text-align: center; padding: 14px 16px 16px; color: #122033; background: rgba(255,255,255,.84); border-radius: 12px; box-shadow: 0 2px 10px rgba(18,32,51,.16); }
+.pc-only-card { width: min(420px, calc(100% - 24px)); text-align: center; padding: 20px 18px 18px; color: #122033; background: rgba(255,255,255,.95); border-radius: 16px; box-shadow: 0 14px 36px rgba(0,0,0,.38); }
+.pc-only-kicker { display: inline-block; margin: 0 0 6px; padding: 3px 9px; border-radius: 999px; background: #f5a200; color: #122033; font-size: 11px; font-weight: 800; letter-spacing: 0.04em; }
 .pc-only-card h1 { margin: 0; font-size: 22px; font-weight: 800; line-height: 1.25; color: #122033; }
-.pc-only-card p { margin: 8px 0 0; font-size: 13px; font-weight: 600; color: #122033; }
+.pc-only-card p { margin: 10px 0 0; font-size: 13.5px; line-height: 1.5; font-weight: 600; color: #3d4d63; }
+.pc-only-actions { margin-top: 16px; display: flex; flex-direction: column; gap: 8px; }
+.pc-only-btn { display: block; width: 100%; font: inherit; font-size: 13.5px; font-weight: 800; padding: 10px 14px; border-radius: 10px; border: 1px solid rgba(18,32,51,.15); background: #122033; color: #fff; text-decoration: none; cursor: pointer; }
+.pc-only-btn.primary { background: linear-gradient(90deg, #d4003b 50%, #f5a200 50%); border: 0; color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,.35); }
+.pc-only-btn.sub { background: rgba(18,32,51,.08); color: #122033; }
 
 /* 우측 게시판 런처 및 모달 */
 .board-launcher {

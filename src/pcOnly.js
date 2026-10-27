@@ -1,4 +1,6 @@
 // 핸드폰·태블릿만 가린다. 데스크톱은 창을 줄여도 그대로 둔다.
+// 모바일에서도 첫 화면인 3D 지구본(worldGate)까지는 둘러볼 수 있고,
+// 정자동 입장을 눌렀을 때 PC 전용 안내 모달을 띄운다.
 export function isHandheld() {
   const ua = navigator.userAgent || '';
   const platform = navigator.platform || '';
@@ -14,10 +16,30 @@ export function isHandheld() {
   return coarse && points > 0;
 }
 
-export function showPcOnly() {
-  document.documentElement.classList.add('pc-only');
-  document.body.classList.add('pc-only');
-  document.body.classList.remove('in-gate', 'in-lobby', 'touch');
+export function showPcOnly({ onClose } = {}) {
   const panel = document.getElementById('pc-only');
-  if (panel) panel.hidden = false;
+  if (!panel) return;
+  panel.hidden = false;
+
+  if (!panel.dataset.bound) {
+    panel.dataset.bound = '1';
+    panel.addEventListener('click', async (e) => {
+      if (e.target === panel || e.target.closest('[data-pc-only-close]')) {
+        panel.hidden = true;
+        onClose?.();
+        return;
+      }
+      const copyBtn = e.target.closest('[data-pc-only-copy]');
+      if (copyBtn) {
+        try {
+          await navigator.clipboard.writeText('https://bumpinto.world');
+          const orig = copyBtn.textContent;
+          copyBtn.textContent = '✅ 주소가 복사되었습니다!';
+          setTimeout(() => { copyBtn.textContent = orig; }, 2200);
+        } catch {
+          prompt('아래 주소를 복사해 PC 브라우저에서 열어주세요:', 'https://bumpinto.world');
+        }
+      }
+    });
+  }
 }
