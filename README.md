@@ -1,7 +1,32 @@
-# 🌍 Bumpinto World — 다 같이 만들어 가는 3D 오픈월드
+# 🌍 Bumpinto World — Open-Source 3D Real-World Metaverse
 
-> **라이브 월드 바로가기**: **[https://bumpinto.world](https://bumpinto.world)**  
-> **개발 · 오픈소스 허브**: **[CrazyLabs (crazylabs.co.kr)](https://crazylabs.co.kr)** · **[기여 가이드 (CONTRIBUTING.md)](./CONTRIBUTING.md)**
+> **🌐 Live World**: **[https://bumpinto.world](https://bumpinto.world)**  
+> **🏗️ Created by**: **[CrazyLabs (crazylabs.co.kr)](https://crazylabs.co.kr)** · **📖 [Contributing Guide (English / 한국어)](./CONTRIBUTING.md)**
+
+---
+
+## 🇺🇸 Overview (English)
+
+**Bumpinto World** is a lightweight, zero-asset-download 3D open world running directly in the browser with **Three.js**, **OpenStreetMap (OSM)** real-world geometry, **real-time public transit APIs**, and **Cloudflare Durable Objects** (WebSockets multiplayer, virtual phone/SMS with PIN recovery, and in-game community board).
+
+Our first live district is **Jeongja Station (Bundang, South Korea)** (~900m radius, including Naver 1784, Tancheon stream trails, real bus routes, and Kakao T bikes). Because one person cannot build the entire world alone, we are opening the project so contributors worldwide can help build new neighborhoods, procedural 3D landmarks, and street NPCs.
+
+### 🤝 Why Contribute? (Mutual Promotion & In-Game Credits)
+Every merged Pull Request earns permanent recognition inside the live **[bumpinto.world](https://bumpinto.world)** experience:
+- **👑 In-Game Hall of Fame (`src/contributors.js`)**: Feature your name, badge, and link (GitHub / personal site / company) inside the in-game **`🌍 함께 만들기 (Contribute)`** modal.
+- **🏢 3D Building & Region Pioneer Credits**: Model a custom landmark or convert a new city/station from OSM to have your handle engraved on the 3D building plaque or globe region list.
+- **🗣️ Custom Citizen NPC**: Add your own avatar and dialogue lines to `src/entities/npcs.js` to walk the streets 24/7.
+- 👉 **Read the full [English & Korean Contributing Guide (CONTRIBUTING.md)](./CONTRIBUTING.md)** to get started in 5 minutes!
+
+### ⚡ Quick Start
+```bash
+npm install
+npm run dev            # http://localhost:5173 (Node.js 22+ recommended)
+```
+
+---
+
+## 🇰🇷 프로젝트 소개 (한국어)
 
 **Bumpinto World**는 실제 도시 데이터(OpenStreetMap)와 실시간 대중교통 API를 결합해 브라우저에서 바로 걸어 다니고, 마주치는 사람들과 대화·문자·커뮤니티를 나누는 **오픈소스 3D 메타버스 월드**입니다.
 
