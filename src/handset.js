@@ -1,5 +1,21 @@
 // 휴대폰 화면. 홈에서 메시지와 연락처를 열고, 번호부 서버와 주고받는다.
-import { phoneDigits } from './sms.js';
+import { phoneDigits, currentRegion } from './sms.js';
+
+const REGION_NAMES = {
+  jeongja: '정자동',
+  sunae: '수내역',
+  seohyeon: '서현역',
+  imae: '이매역',
+  yatap: '야탑역',
+  pangyo: '판교역',
+  gangnam: '강남역',
+  seongsu: '성수동',
+  hongdae: '홍대입구',
+};
+function defaultGuideName() {
+  const r = currentRegion();
+  return `${REGION_NAMES[r] || r || '정자동'} 안내센터`;
+}
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const clock = (at) => {
@@ -30,7 +46,7 @@ export function mountHandset({ sms } = {}) {
       return;
     }
     const unreadThread = Array.isArray(threads) ? threads.find((t) => t.unread > 0) : null;
-    const sender = unreadThread?.name || '정자동 안내센터';
+    const sender = unreadThread?.name || defaultGuideName();
     toastEl.dataset.peer = unreadThread?.phone || '01020000000';
     toastEl.innerHTML = `<span class="toast-dot"></span><span>📩 <b>${esc(sender)}</b> 새 문자 (${unread})</span>`;
     toastEl.hidden = false;

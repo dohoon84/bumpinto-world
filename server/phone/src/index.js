@@ -60,28 +60,29 @@ export default {
     };
     if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: cors });
     const url = new URL(request.url);
+    const queryRegion = (url.searchParams.get("region") || "jeongja").trim().toLowerCase() || "jeongja";
     if (url.pathname === "/ws") {
-      return env.ROOM.getByName("jeongja").fetch(request);
+      return env.ROOM.getByName(queryRegion).fetch(request);
     }
     if (request.method === "GET" && url.pathname === "/health") return json({ ok: true }, 200, cors);
     if (request.method === "GET" && url.pathname === "/stats") {
       let online = 0;
       let residents = 0;
       try {
-        const r = await env.ROOM.getByName("jeongja").fetch("https://room/stats");
+        const r = await env.ROOM.getByName(queryRegion).fetch("https://room/stats");
         if (r.ok) {
           const j = await r.json();
           online = Number(j?.online || 0);
         }
       } catch {}
       try {
-        const bookStats = await env.PHONE_BOOK.getByName("jeongja").board({ op: "stats" });
+        const bookStats = await env.PHONE_BOOK.getByName(queryRegion).board({ op: "stats", region: queryRegion });
         if (bookStats?.ok) {
           residents = Number(bookStats.residents || 0);
           if (!online && bookStats.activeRecently) online = Number(bookStats.activeRecently || 0);
         }
       } catch {}
-      return json({ ok: true, online, residents }, 200, cors);
+      return json({ ok: true, region: queryRegion, online, residents }, 200, cors);
     }
     const method = ROUTES[url.pathname];
     if (!method || request.method !== "POST") return json({ ok: false, error: "not_found" }, 404, cors);
@@ -90,8 +91,10 @@ export default {
     if (text.length > 8000) return json({ ok: false, error: "too_big" }, 413, cors);
     let body;
     try { body = JSON.parse(text || "{}"); } catch { return json({ ok: false, error: "bad_body" }, 400, cors); }
+    const regionKey = String(body?.region || queryRegion || "jeongja").trim().toLowerCase() || "jeongja";
+    body.region = regionKey;
     try {
-      const out = await env.PHONE_BOOK.getByName("jeongja")[method](body);
+      const out = await env.PHONE_BOOK.getByName(regionKey)[method](body);
       return json(out, out.ok ? 200 : 400, cors);
     } catch (error) {
       return json({ ok: false, error: "server", detail: String(error?.message || error) }, 500, cors);

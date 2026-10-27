@@ -49,6 +49,16 @@ export function phoneDigits(value) {
 }
 
 const DEFAULT_SMS_BASE = import.meta.env?.VITE_PHONE_URL || 'https://jeongja-phone.xn0texn073.workers.dev';
+const DEFAULT_REGION = 'jeongja';
+
+export function currentRegion() {
+  try {
+    const params = new URLSearchParams(location.search);
+    return (params.get('region') || DEFAULT_REGION).trim().toLowerCase() || DEFAULT_REGION;
+  } catch {
+    return DEFAULT_REGION;
+  }
+}
 
 function smsBase() {
   const params = new URLSearchParams(location.search);
@@ -87,7 +97,7 @@ export function createSms() {
       res = await fetch(`${base}${path}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id, ...body }),
+        body: JSON.stringify({ id, region: currentRegion(), ...body }),
         keepalive,
       });
     } catch {

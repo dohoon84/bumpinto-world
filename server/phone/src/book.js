@@ -6,7 +6,25 @@ const PIN_RE = /^\d{4,6}$/;
 const FIRST_NUMBER = 20000001;
 const GUIDE_ID = "00000000-0000-4000-8000-000000000000";
 const GUIDE_PHONE = "01020000000";
-const GUIDE_NAME = "정자동 안내센터";
+const DEFAULT_REGION = "jeongja";
+const REGION_LABELS = {
+  jeongja: "정자동",
+  sunae: "수내역",
+  seohyeon: "서현역",
+  imae: "이매역",
+  yatap: "야탑역",
+  pangyo: "판교역",
+  gangnam: "강남역",
+  seongsu: "성수동",
+  hongdae: "홍대입구",
+};
+function regionLabelOf(region) {
+  const key = String(region || DEFAULT_REGION).trim().toLowerCase();
+  return REGION_LABELS[key] || String(region || "정자동").trim() || "정자동";
+}
+function guideNameOf(region) {
+  return `${regionLabelOf(region)} 안내센터`;
+}
 const PIN_MAX_FAILS = 5;
 const PIN_LOCK_MS = 5 * 60 * 1000;
 const BOARD_PAGE_SIZE = 20;
@@ -199,42 +217,90 @@ export class PhoneBook extends DurableObject {
       }
       sql.exec(`INSERT INTO _sql_schema_migrations (id) VALUES (4)`);
     }
+    if (version < 5) {
+      const now = Date.now();
+      const regionName = this.#regionLabel();
+      this.#ensureGuideAccount(now, regionName);
+      const users = sql.exec("SELECT phone, name FROM users WHERE phone != ?", GUIDE_PHONE).toArray();
+      for (const u of users) {
+        const body = this.#welcomeBody(u.name, u.phone, regionName);
+        const firstMsg = sql.exec(
+          "SELECT id FROM messages WHERE sender = ? AND receiver = ? ORDER BY id ASC LIMIT 1",
+          GUIDE_PHONE, u.phone,
+        ).toArray()[0];
+        if (firstMsg) {
+          sql.exec("UPDATE messages SET body = ? WHERE id = ?", body, firstMsg.id);
+        } else {
+          sql.exec(
+            "INSERT INTO messages (sender, receiver, body, created_at) VALUES (?, ?, ?, ?)",
+            GUIDE_PHONE, u.phone, body, now,
+          );
+        }
+      }
+      sql.exec(`INSERT INTO _sql_schema_migrations (id) VALUES (5)`);
+    }
   }
 
-  #welcomeBody(name, phone) {
+  #regionLabel(region) {
+    if (region) return regionLabelOf(region);
+    try {
+      const row = this.ctx.storage.sql.exec("SELECT value FROM meta WHERE key = 'region'").toArray()[0];
+      if (row?.value) return regionLabelOf(row.value);
+    } catch {}
+    return regionLabelOf(DEFAULT_REGION);
+  }
+
+  #setRegion(region) {
+    if (!region) return;
+    const label = regionLabelOf(region);
+    try {
+      this.ctx.storage.sql.exec(
+        "INSERT INTO meta (key, value) VALUES ('region', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+        label,
+      );
+    } catch {}
+  }
+
+  #welcomeBody(name, phone, region) {
     const safeName = cleanName(name) || "주민";
-    return `🎉 반가워요 ${safeName}님! Bumpinto World 정자역 입주를 환영합니다. 내 번호(${displayPhone(phone)})로 다른 주민과 문자·연락처를 주고받고, [비밀번호] 앱에서 재입장 PIN을 설정해 보세요. 광장 버스킹과 탄천 산책로도 둘러보세요!`;
+    const rLabel = this.#regionLabel(region);
+    const gName = `${rLabel} 안내센터`;
+    return `[${gName}] ${rLabel} 입주민분들께 안내 말씀 드립니다. 반가워요 ${safeName}님! 🎉 Bumpinto World ${rLabel} 입주를 진심으로 환영합니다. 발급받으신 내 번호(${displayPhone(phone)})로 이웃 주민들과 문자·연락처를 주고받을 수 있으며, [비밀번호] 앱에서 재입장 PIN을 설정하시면 다른 기기에서도 그대로 이어하실 수 있습니다.`;
   }
 
-  #ensureGuideAccount(now = Date.now()) {
+  #ensureGuideAccount(now = Date.now(), region) {
     const sql = this.ctx.storage.sql;
+    const gName = `${this.#regionLabel(region)} 안내센터`;
     sql.exec(
       `INSERT INTO users (id, phone, name, look, updated_at)
        VALUES (?, ?, ?, ?, ?)
        ON CONFLICT(id) DO UPDATE SET name = excluded.name`,
       GUIDE_ID,
       GUIDE_PHONE,
-      GUIDE_NAME,
+      gName,
       JSON.stringify({ gender: "f", face: "round", hair: "medium", top: "hoodie", color: "#1f5fbf", skin: "#f2d0b0", pants: "#2b3040" }),
       now,
     );
   }
 
-  #ensureWelcome(phone, name, now = Date.now(), updateUnread = false) {
+  #ensureWelcome(phone, name, now = Date.now(), updateUnread = false, region) {
     if (!phone || phone === GUIDE_PHONE) return;
-    this.#ensureGuideAccount(now);
+    if (region) this.#setRegion(region);
+    const rLabel = this.#regionLabel(region);
+    const gName = `${rLabel} 안내센터`;
+    this.#ensureGuideAccount(now, rLabel);
     const sql = this.ctx.storage.sql;
     sql.exec(
       `INSERT INTO contacts (owner, peer, alias, created_at)
        VALUES (?, ?, ?, ?)
-       ON CONFLICT(owner, peer) DO NOTHING`,
-      phone, GUIDE_PHONE, GUIDE_NAME, now,
+       ON CONFLICT(owner, peer) DO UPDATE SET alias = excluded.alias`,
+      phone, GUIDE_PHONE, gName, now,
     );
     const existingMsg = sql.exec(
       "SELECT id, read_at FROM messages WHERE sender = ? AND receiver = ? ORDER BY id ASC LIMIT 1",
       GUIDE_PHONE, phone,
     ).toArray()[0];
-    const body = this.#welcomeBody(name, phone);
+    const body = this.#welcomeBody(name, phone, rLabel);
     if (!existingMsg) {
       sql.exec(
         "INSERT INTO messages (sender, receiver, body, created_at) VALUES (?, ?, ?, ?)",
@@ -342,9 +408,9 @@ export class PhoneBook extends DurableObject {
         existing.name = name;
         existing.look = look;
         existing.updated_at = now;
-        this.#ensureWelcome(existing.phone, name, now, true);
+        this.#ensureWelcome(existing.phone, name, now, true, input?.region);
       } else {
-        this.#ensureWelcome(existing.phone, existing.name, now, false);
+        this.#ensureWelcome(existing.phone, existing.name, now, false, input?.region);
       }
       return this.#profile(existing);
     }
@@ -360,7 +426,7 @@ export class PhoneBook extends DurableObject {
       "INSERT INTO users (id, phone, name, look, pin_salt, pin_hash, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
       id, phone, name, look, salt, hash, now,
     );
-    this.#ensureWelcome(phone, name, now, true);
+    this.#ensureWelcome(phone, name, now, true, input?.region);
     return this.#profile({ id, phone, name, look, x: null, y: null, z: null, ry: null, pin_hash: hash, updated_at: now });
   }
 
@@ -550,7 +616,9 @@ export class PhoneBook extends DurableObject {
       found.user.phone, phone, body, now,
     );
     if (phone === GUIDE_PHONE) {
-      const autoReply = `[정자동 안내센터] 메시지 감사합니다 😊 건의사항이나 맛집·이웃 소식은 화면 우측 상단 [📋 게시판]에도 자유롭게 남겨 주세요!`;
+      const rLabel = this.#regionLabel(input?.region);
+      const gName = `${rLabel} 안내센터`;
+      const autoReply = `[${gName}] ${rLabel} 입주민분들께 안내 말씀 드립니다. 보내주신 소중한 의견 감사합니다 😊 건의사항이나 맛집·이웃 소식은 화면 우측 상단 [📋 게시판]을 통해서도 모든 입주민과 함께 나누실 수 있습니다!`;
       this.ctx.storage.sql.exec(
         "INSERT INTO messages (sender, receiver, body, created_at) VALUES (?, ?, ?, ?)",
         GUIDE_PHONE, found.user.phone, autoReply, now + 1,
