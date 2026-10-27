@@ -41,11 +41,11 @@ export class Room extends DurableObject {
     return new Response(null, { status: 101, webSocket: client });
   }
 
-  #evictSocket(ws, reason = "evicted") {
+  #evictSocket(ws, code = 1000, reason = "evicted") {
     const peer = ws.deserializeAttachment();
     ws.serializeAttachment(null);
     try {
-      ws.close(1000, reason);
+      ws.close(code, reason);
     } catch {}
     if (peer?.id) {
       this.#broadcast({ t: "leave", id: peer.id }, ws);
@@ -58,13 +58,12 @@ export class Room extends DurableObject {
       if (ws === except) continue;
       const peer = ws.deserializeAttachment();
       if (!peer || !peer.id) continue;
-      if (
-        !peer.deviceId ||
-        !peer.lastSeen ||
-        (duplicateDeviceId && peer.deviceId === duplicateDeviceId) ||
-        now - peer.lastSeen > STALE_MS
-      ) {
-        this.#evictSocket(ws, duplicateDeviceId ? "replaced" : "stale");
+      if (duplicateDeviceId && peer.deviceId && peer.deviceId === duplicateDeviceId) {
+        this.#evictSocket(ws, 4001, "replaced");
+        continue;
+      }
+      if (!peer.lastSeen || now - peer.lastSeen > STALE_MS) {
+        this.#evictSocket(ws, 1000, "stale");
       }
     }
   }
@@ -116,8 +115,10 @@ export class Room extends DurableObject {
     const now = Date.now();
     let me = ws.deserializeAttachment();
     if (m.t === "hello" && !me) {
-      const deviceId = typeof m.deviceId === "string" ? m.deviceId.slice(0, 64) : "";
-      this.#pruneStale(ws, deviceId || null);
+      const id = "p-" + crypto.randomUUID().slice(0, 8);
+      const rawDevice = typeof m.deviceId === "string" ? m.deviceId.trim().slice(0, 64) : "";
+      const deviceId = rawDevice || id;
+      this.#pruneStale(ws, rawDevice || null);
 
       const look = sanitizeLook({
         hair: "short",
@@ -126,7 +127,7 @@ export class Room extends DurableObject {
         color: m.color || m.look?.color,
       });
       me = {
-        id: "p-" + crypto.randomUUID().slice(0, 8),
+        id,
         deviceId,
         name: String(m.name || "손님").trim().slice(0, 24) || "손님",
         color: look.color,
@@ -151,11 +152,9 @@ export class Room extends DurableObject {
       this.#broadcast({ t: "join", peer: publicMe }, ws);
       return;
     }
-    if (!me || !me.deviceId) {
-      this.#evictSocket(ws, "upgrade_required");
-      return;
-    }
+    if (!me) return;
     me.lastSeen = now;
+    if (!me.deviceId) me.deviceId = me.id;
     if (m.t === "ping") {
       ws.serializeAttachment(me);
       this.#pruneStale(ws);

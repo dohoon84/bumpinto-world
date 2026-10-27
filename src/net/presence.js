@@ -63,12 +63,22 @@ export class WebSocketPresence extends Emitter {
       }
       this.emit(m.t, m);
     };
-    ws.onclose = () => {
+    ws.onclose = (ev) => {
       clearInterval(this.pingTimer);
       if (this.manualClose || this.ws !== ws) return;
       this.peerIds.clear();
-      this.emit('status', '연결 끊김 — 재시도 중');
       this.emit('reset');
+      // 다른 탭에서 같은 캐릭터로 새로 접속해 대체된 경우(4001): 백그라운드 탭에서 무한 재접속 핑퐁을 막고, 다시 포커스될 때만 재연결
+      if (ev?.code === 4001) {
+        this.emit('status', '다른 탭에서 접속 중');
+        const onFocus = () => {
+          removeEventListener('focus', onFocus);
+          if (!this.manualClose) this.connect(me);
+        };
+        addEventListener('focus', onFocus);
+        return;
+      }
+      this.emit('status', '연결 끊김 — 재시도 중');
       this.retryTimer = setTimeout(() => this.connect(me), (this.retry = Math.min(this.retry * 2, 15000)));
     };
   }
