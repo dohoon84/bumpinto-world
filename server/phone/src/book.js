@@ -4,6 +4,9 @@ import { DurableObject } from "cloudflare:workers";
 const ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const PIN_RE = /^\d{4,6}$/;
 const FIRST_NUMBER = 20000001;
+const GUIDE_ID = "00000000-0000-4000-8000-000000000000";
+const GUIDE_PHONE = "01020000000";
+const GUIDE_NAME = "정자동 안내센터";
 const PIN_MAX_FAILS = 5;
 const PIN_LOCK_MS = 5 * 60 * 1000;
 const BOARD_PAGE_SIZE = 20;
@@ -187,6 +190,62 @@ export class PhoneBook extends DurableObject {
       );
       sql.exec(`INSERT INTO _sql_schema_migrations (id) VALUES (3)`);
     }
+    if (version < 4) {
+      const now = Date.now();
+      this.#ensureGuideAccount(now);
+      const users = sql.exec("SELECT phone, name FROM users WHERE phone != ?", GUIDE_PHONE).toArray();
+      for (const u of users) {
+        this.#ensureWelcome(u.phone, u.name, now);
+      }
+      sql.exec(`INSERT INTO _sql_schema_migrations (id) VALUES (4)`);
+    }
+  }
+
+  #welcomeBody(name, phone) {
+    const safeName = cleanName(name) || "주민";
+    return `🎉 반가워요 ${safeName}님! Bumpinto World 정자역 입주를 환영합니다. 내 번호(${displayPhone(phone)})로 다른 주민과 문자·연락처를 주고받고, [비밀번호] 앱에서 재입장 PIN을 설정해 보세요. 광장 버스킹과 탄천 산책로도 둘러보세요!`;
+  }
+
+  #ensureGuideAccount(now = Date.now()) {
+    const sql = this.ctx.storage.sql;
+    sql.exec(
+      `INSERT INTO users (id, phone, name, look, updated_at)
+       VALUES (?, ?, ?, ?, ?)
+       ON CONFLICT(id) DO UPDATE SET name = excluded.name`,
+      GUIDE_ID,
+      GUIDE_PHONE,
+      GUIDE_NAME,
+      JSON.stringify({ gender: "f", face: "round", hair: "medium", top: "hoodie", color: "#1f5fbf", skin: "#f2d0b0", pants: "#2b3040" }),
+      now,
+    );
+  }
+
+  #ensureWelcome(phone, name, now = Date.now(), updateUnread = false) {
+    if (!phone || phone === GUIDE_PHONE) return;
+    this.#ensureGuideAccount(now);
+    const sql = this.ctx.storage.sql;
+    sql.exec(
+      `INSERT INTO contacts (owner, peer, alias, created_at)
+       VALUES (?, ?, ?, ?)
+       ON CONFLICT(owner, peer) DO NOTHING`,
+      phone, GUIDE_PHONE, GUIDE_NAME, now,
+    );
+    const existingMsg = sql.exec(
+      "SELECT id, read_at FROM messages WHERE sender = ? AND receiver = ? ORDER BY id ASC LIMIT 1",
+      GUIDE_PHONE, phone,
+    ).toArray()[0];
+    const body = this.#welcomeBody(name, phone);
+    if (!existingMsg) {
+      sql.exec(
+        "INSERT INTO messages (sender, receiver, body, created_at) VALUES (?, ?, ?, ?)",
+        GUIDE_PHONE, phone, body, now,
+      );
+    } else if (updateUnread && existingMsg.read_at == null) {
+      sql.exec(
+        "UPDATE messages SET body = ? WHERE id = ?",
+        body, existingMsg.id,
+      );
+    }
   }
 
   #user(id) {
@@ -283,6 +342,9 @@ export class PhoneBook extends DurableObject {
         existing.name = name;
         existing.look = look;
         existing.updated_at = now;
+        this.#ensureWelcome(existing.phone, name, now, true);
+      } else {
+        this.#ensureWelcome(existing.phone, existing.name, now, false);
       }
       return this.#profile(existing);
     }
@@ -298,6 +360,7 @@ export class PhoneBook extends DurableObject {
       "INSERT INTO users (id, phone, name, look, pin_salt, pin_hash, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
       id, phone, name, look, salt, hash, now,
     );
+    this.#ensureWelcome(phone, name, now, true);
     return this.#profile({ id, phone, name, look, x: null, y: null, z: null, ry: null, pin_hash: hash, updated_at: now });
   }
 
@@ -346,6 +409,7 @@ export class PhoneBook extends DurableObject {
     }
     sql.exec("UPDATE users SET pin_fails = 0, pin_locked_until = 0, updated_at = ? WHERE id = ?", now, row.id);
     row.updated_at = now;
+    this.#ensureWelcome(row.phone, row.name, now, false);
     return this.#profile(row);
   }
 
@@ -422,6 +486,7 @@ export class PhoneBook extends DurableObject {
     const found = this.#user(input?.id);
     if (found.error) return { ok: false, error: found.error };
     const mine = found.user.phone;
+    this.#ensureWelcome(mine, found.user.name, Date.now(), false);
     const rows = this.ctx.storage.sql.exec(
       `SELECT id, sender, receiver, body, created_at, read_at FROM messages
        WHERE sender = ? OR receiver = ? ORDER BY id DESC LIMIT 300`,
@@ -484,6 +549,13 @@ export class PhoneBook extends DurableObject {
       "INSERT INTO messages (sender, receiver, body, created_at) VALUES (?, ?, ?, ?)",
       found.user.phone, phone, body, now,
     );
+    if (phone === GUIDE_PHONE) {
+      const autoReply = `[정자동 안내센터] 메시지 감사합니다 😊 건의사항이나 맛집·이웃 소식은 화면 우측 상단 [📋 게시판]에도 자유롭게 남겨 주세요!`;
+      this.ctx.storage.sql.exec(
+        "INSERT INTO messages (sender, receiver, body, created_at) VALUES (?, ?, ?, ?)",
+        GUIDE_PHONE, found.user.phone, autoReply, now + 1,
+      );
+    }
     return { ok: true, at: now, body };
   }
 
@@ -523,8 +595,8 @@ export class PhoneBook extends DurableObject {
     const op = String(input?.op || "list");
     const sql = this.ctx.storage.sql;
     if (op === "stats") {
-      const row = sql.exec("SELECT COUNT(*) AS cnt FROM users").toArray()[0];
-      const activeRow = sql.exec("SELECT COUNT(*) AS cnt FROM users WHERE updated_at > ?", Date.now() - 60000).toArray()[0];
+      const row = sql.exec("SELECT COUNT(*) AS cnt FROM users WHERE phone != ?", GUIDE_PHONE).toArray()[0];
+      const activeRow = sql.exec("SELECT COUNT(*) AS cnt FROM users WHERE phone != ? AND updated_at > ?", GUIDE_PHONE, Date.now() - 60000).toArray()[0];
       return { ok: true, residents: Number(row?.cnt || 0), activeRecently: Number(activeRow?.cnt || 0) };
     }
     const id = String(input?.id || "");
@@ -648,7 +720,7 @@ export class PhoneBook extends DurableObject {
 
   stats() {
     this.#migrate();
-    const row = this.ctx.storage.sql.exec("SELECT COUNT(*) AS cnt FROM users").toArray()[0];
+    const row = this.ctx.storage.sql.exec("SELECT COUNT(*) AS cnt FROM users WHERE phone != ?", GUIDE_PHONE).toArray()[0];
     return { residents: Number(row?.cnt || 0) };
   }
 }

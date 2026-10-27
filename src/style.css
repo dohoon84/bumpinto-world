@@ -505,6 +505,43 @@ body.in-lobby #hud, body.in-lobby #buttons, body.in-lobby #chat, body.in-lobby #
   user-select: none; cursor: pointer;
 }
 #handset.open { transform: translateY(0); cursor: default; }
+#handset .handset-toast {
+  position: absolute;
+  left: 50%;
+  top: -46px;
+  transform: translateX(-50%);
+  z-index: 8;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 13px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, .28);
+  background: rgba(12, 22, 38, .92);
+  color: #fff;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, .32);
+  animation: handsetToastFloat 2.2s ease-in-out infinite;
+}
+#handset .handset-toast[hidden],
+#handset.open .handset-toast { display: none !important; }
+#handset .handset-toast b { color: #ffe169; font-weight: 800; }
+#handset .handset-toast .toast-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #ff3b30;
+  box-shadow: 0 0 0 3px rgba(255, 59, 48, .3);
+  flex-shrink: 0;
+}
+@keyframes handsetToastFloat {
+  0%, 100% { transform: translate(-50%, 0); }
+  50% { transform: translate(-50%, -4px); }
+}
 #handset .shell { position: relative; width: 100%; height: 100%; padding: 10px; border-radius: 42px; background: linear-gradient(160deg, #3a3a3e, #0c0c0e 28%, #1a1a1d); box-shadow: inset 0 0 0 1.5px #5a5a60, inset 0 0 0 6px #0a0a0c; }
 #handset .side { position: absolute; width: 3px; border-radius: 2px; background: #2a2a2e; }
 #handset .vol { left: -2px; top: 108px; height: 64px; box-shadow: 0 78px 0 #2a2a2e; }

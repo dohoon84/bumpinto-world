@@ -16,6 +16,25 @@ export function mountHandset({ sms } = {}) {
   let peer = '';
   let unread = 0;
   let timer = 0;
+  let toastDismissed = false;
+
+  const toastEl = document.createElement('button');
+  toastEl.type = 'button';
+  toastEl.className = 'handset-toast';
+  toastEl.hidden = true;
+  el.prepend(toastEl);
+
+  const updateToast = (threads = null) => {
+    if (unread <= 0 || open || toastDismissed) {
+      toastEl.hidden = true;
+      return;
+    }
+    const unreadThread = Array.isArray(threads) ? threads.find((t) => t.unread > 0) : null;
+    const sender = unreadThread?.name || '정자동 안내센터';
+    toastEl.dataset.peer = unreadThread?.phone || '01020000000';
+    toastEl.innerHTML = `<span class="toast-dot"></span><span>📩 <b>${esc(sender)}</b> 새 문자 (${unread})</span>`;
+    toastEl.hidden = false;
+  };
 
   const paintTime = () => {
     const d = new Date();
@@ -29,7 +48,12 @@ export function mountHandset({ sms } = {}) {
     open = next;
     el.classList.toggle('open', open);
     el.setAttribute('aria-expanded', open ? 'true' : 'false');
-    if (open) show('home');
+    if (open) {
+      toastEl.hidden = true;
+      show('home');
+    } else {
+      updateToast();
+    }
   };
 
   const badge = (n) => (n > 0 ? `<i class="badge">${n > 99 ? '99+' : n}</i>` : '');
@@ -208,6 +232,19 @@ export function mountHandset({ sms } = {}) {
   }
 
   el.addEventListener('click', (e) => {
+    const toastBtn = e.target.closest('.handset-toast');
+    if (toastBtn) {
+      e.stopPropagation();
+      toastDismissed = true;
+      toastEl.hidden = true;
+      open = true;
+      el.classList.add('open');
+      el.setAttribute('aria-expanded', 'true');
+      const targetPeer = toastBtn.dataset.peer;
+      if (targetPeer) show('thread', targetPeer);
+      else show('threads');
+      return;
+    }
     if (!open) { setOpen(true); return; }
     if (e.target.closest('.home')) {
       if (view === 'home') setOpen(false);
@@ -229,8 +266,11 @@ export function mountHandset({ sms } = {}) {
         if (view === 'thread') paintLog(conv);
       }
       const box = await sms.threads();
+      const prevUnread = unread;
       unread = box.unread || 0;
+      if (unread > prevUnread) toastDismissed = false;
       el.classList.toggle('has-mail', unread > 0);
+      updateToast(box.threads || []);
       if (view === 'threads') paintThreads(box.threads || []);
       if (view === 'home') {
         const glyph = body.querySelector('.glyph.msg');
@@ -253,10 +293,15 @@ export function mountHandset({ sms } = {}) {
     close() { setOpen(false); },
     signIn() {
       unread = sms?.session?.unread || 0;
+      toastDismissed = false;
       el.classList.toggle('has-mail', unread > 0);
+      updateToast();
       if (view === 'home') home();
       clearInterval(timer);
-      if (sms?.session && !sms.session.off) timer = setInterval(poll, 4000);
+      if (sms?.session && !sms.session.off) {
+        poll();
+        timer = setInterval(poll, 4000);
+      }
     },
   };
 }
