@@ -169,6 +169,152 @@ const presence = createPresence({ station: st });
 if (npcs.guard) presence.setGuard?.(npcs.guard);
 const remotes = new RemotePlayers(scene, overlay, presence, () => player.position, (t) => myBubble.say(t, 6000), terrain?.getGroundHeight); // [terrain] 원격 플레이어도 지형 높이
 const statusEl = document.getElementById('presence-status');
+const presencePanel = document.getElementById('presence-panel');
+let presenceOpen = false;
+let presenceTimer = 0;
+
+const escHtml = (s) =>
+  String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+function nearestSpotLabel(x, z) {
+  let bestText = '정자역 광장';
+  let bestDist = Math.hypot(x - st.x, z - st.z);
+  for (const l of data.labels || []) {
+    const d = Math.hypot(x - l.x, z - l.z);
+    if (d < bestDist) {
+      bestDist = d;
+      bestText = l.text;
+    }
+  }
+  return { name: bestText, dist: Math.round(bestDist) };
+}
+
+function compassDir(dx, dz) {
+  const dirs = ['북', '북동', '동', '남동', '남', '남서', '서', '북서'];
+  const deg = ((Math.atan2(dx, -dz) * 180) / Math.PI + 360) % 360;
+  return dirs[Math.round(deg / 45) % 8];
+}
+
+function renderPresencePanel() {
+  if (!presencePanel || !presenceOpen) return;
+  const peers = remotes.list();
+  const mySpot = nearestSpotLabel(player.position.x, player.position.z);
+  const peerRows = peers.length
+    ? peers
+        .map((p) => {
+          const spot = nearestSpotLabel(p.x, p.z);
+          const dx = p.x - player.position.x;
+          const dz = p.z - player.position.z;
+          const dist = Math.round(Math.hypot(dx, dz));
+          const dir = dist > 3 ? `${compassDir(dx, dz)}쪽 ${dist}m` : '바로 옆';
+          return `
+            <li class="p-row">
+              <div class="p-info">
+                <div class="p-title">
+                  <span class="p-swatch" style="background:${escHtml(p.color)}"></span>
+                  <strong>${escHtml(p.name)}</strong>
+                  <span class="p-dir">${escHtml(dir)}</span>
+                </div>
+                <small>📍 ${escHtml(spot.name)} 근처 (${spot.dist}m)</small>
+              </div>
+              <div class="p-actions">
+                <button type="button" class="p-btn" data-peer-look="${escHtml(p.id)}" title="그 방향 바라보기">방향</button>
+                <button type="button" class="p-btn go" data-peer-go="${escHtml(p.id)}" title="그 플레이어 옆으로 이동">이동</button>
+              </div>
+            </li>`;
+        })
+        .join('')
+    : `<li class="p-empty">현재 다른 접속자가 없습니다.<br><small>친구나 커뮤니티에 링크를 공유해 보세요!</small></li>`;
+
+  presencePanel.innerHTML = `
+    <div class="p-head">
+      <span>🟢 실시간 접속자 (${peers.length + 1}명)</span>
+      <button type="button" class="p-close" data-presence-close="1" aria-label="닫기">✕</button>
+    </div>
+    <ul class="p-list">
+      <li class="p-row me">
+        <div class="p-info">
+          <div class="p-title">
+            <span class="p-swatch" style="background:${escHtml(me.color || '#4f7cff')}"></span>
+            <strong>${escHtml(me.name || '나')}</strong>
+            <span class="p-me-badge">나</span>
+          </div>
+          <small>📍 ${escHtml(mySpot.name)} 근처 (${mySpot.dist}m)</small>
+        </div>
+      </li>
+      ${peerRows}
+    </ul>
+    <div class="p-foot">우측 하단 미니맵에도 접속자 위치·방향이 표시됩니다</div>`;
+}
+
+function setPresenceOpen(next) {
+  if (!presencePanel) return;
+  presenceOpen = next;
+  presencePanel.hidden = !presenceOpen;
+  statusEl?.classList.toggle('open', presenceOpen);
+  clearInterval(presenceTimer);
+  if (presenceOpen) {
+    renderPresencePanel();
+    presenceTimer = setInterval(renderPresencePanel, 1000);
+  }
+}
+
+statusEl?.addEventListener('click', () => setPresenceOpen(!presenceOpen));
+statusEl?.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' || e.key === ' ') {
+    e.preventDefault();
+    setPresenceOpen(!presenceOpen);
+  }
+});
+
+presencePanel?.addEventListener('click', (e) => {
+  if (e.target.closest('[data-presence-close]')) {
+    setPresenceOpen(false);
+    return;
+  }
+  const lookBtn = e.target.closest('[data-peer-look]');
+  if (lookBtn) {
+    const peer = remotes.list().find((p) => p.id === lookBtn.dataset.peerLook);
+    if (!peer) return;
+    const dx = peer.x - player.position.x;
+    const dz = peer.z - player.position.z;
+    if (Math.hypot(dx, dz) > 0.1) {
+      setMode('follow');
+      cam.yaw = Math.atan2(-dx, -dz);
+      cam.pitch = 0.22;
+      player.rotation.y = Math.atan2(dx, dz);
+    }
+    return;
+  }
+  const goBtn = e.target.closest('[data-peer-go]');
+  if (goBtn) {
+    const peer = remotes.list().find((p) => p.id === goBtn.dataset.peerGo);
+    if (!peer) return;
+    if (bikes.riding) dismountBike();
+    let tx = peer.x + 2.2;
+    let tz = peer.z + 1.2;
+    for (let a = 0; a < Math.PI * 2; a += 0.6) {
+      const cx = peer.x + Math.cos(a) * 2.4;
+      const cz = peer.z + Math.sin(a) * 2.4;
+      if (!world.isBlocked(cx, cz)) {
+        tx = cx;
+        tz = cz;
+        break;
+      }
+    }
+    const ty = terrain ? terrain.getGroundHeight(tx, tz, peer.y || 0) : 0;
+    player.position.set(tx, ty, tz);
+    const dx = peer.x - tx;
+    const dz = peer.z - tz;
+    player.rotation.y = Math.atan2(dx, dz);
+    setMode('follow');
+    cam.yaw = Math.atan2(-dx, -dz);
+    cam.pitch = 0.25;
+    rememberPlace(true);
+    renderPresencePanel();
+  }
+});
+
 presence.on('status', (s) => {
   if (!statusEl) return;
   if (!s) {
@@ -178,12 +324,13 @@ presence.on('status', (s) => {
   }
   const m = String(s).match(/^(현재 접속자\s*)(\d+명)$/);
   if (m) {
-    statusEl.className = 'is-live';
-    statusEl.innerHTML = `<span class="live-dot" aria-hidden="true"></span><span class="live-label">${m[1]}</span><strong class="live-count">${m[2]}</strong>`;
+    statusEl.className = 'is-live' + (presenceOpen ? ' open' : '');
+    statusEl.innerHTML = `<span class="live-dot" aria-hidden="true"></span><span class="live-label">${m[1]}</span><strong class="live-count">${m[2]}</strong><span class="live-caret" aria-hidden="true">▾</span>`;
   } else {
-    statusEl.className = /끊김|재시도/.test(s) ? 'is-warn' : 'is-wait';
+    statusEl.className = (/끊김|재시도/.test(s) ? 'is-warn' : 'is-wait') + (presenceOpen ? ' open' : '');
     statusEl.innerHTML = `<span class="live-dot" aria-hidden="true"></span><span class="live-label">${s}</span>`;
   }
+  if (presenceOpen) renderPresencePanel();
 });
 const sms = createSms();
 const handset = mountHandset({ sms });
@@ -291,6 +438,7 @@ leaveBtn.onclick = () => {
   rememberPlace(true);
   board.close();
   handset.close();
+  setPresenceOpen(false);
   joined = false;
   player.visible = false;
   nameTag.hidden = true;
@@ -451,6 +599,7 @@ function frame() {
     x: player.position.x, z: player.position.z, dt,
     moving: moveSpeed > 0.25,
     moveYaw, lookYaw: Math.atan2(-Math.sin(viewYaw), -Math.cos(viewYaw)),
+    peers: remotes.list(),
   });
   atmosphere.update(dt, camera);
   sun.position.copy(sun.target.position).addScaledVector(atmosphere.sunDir, 500);

@@ -150,6 +150,89 @@ function drawBlip(ctx, now, s) {
   ctx.fill();
 }
 
+function drawPeerMarkers(ctx, peers, x, z, w, h, viewW, viewH, now, s) {
+  if (!peers || !peers.length) return;
+  const pxPerM = w / viewW;
+  const cx = w / 2;
+  const cy = h / 2;
+  const pad = 13 * s;
+  const maxX = cx - pad;
+  const maxY = cy - pad;
+  const pulse = (Math.sin(now * 0.007) + 1) / 2;
+
+  ctx.save();
+  ctx.font = `800 ${Math.round(9.5 * s)}px Pretendard, -apple-system, sans-serif`;
+  ctx.textBaseline = 'middle';
+
+  for (const peer of peers) {
+    const dx = (peer.x || 0) - x;
+    const dz = (peer.z || 0) - z;
+    const ox = dx * pxPerM;
+    const oy = dz * pxPerM;
+    const inside = Math.abs(ox) <= maxX && Math.abs(oy) <= maxY;
+    const label = String(peer.name || '손님').slice(0, 8);
+
+    if (inside) {
+      const px = cx + ox;
+      const py = cy + oy;
+      ctx.beginPath();
+      ctx.arc(px, py, (4.8 + pulse * 3.5) * s, 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(32, 201, 151, ${0.42 * (1 - pulse * 0.5)})`;
+      ctx.fill();
+
+      ctx.beginPath();
+      ctx.arc(px, py, 4.3 * s, 0, Math.PI * 2);
+      ctx.fillStyle = '#102033';
+      ctx.fill();
+
+      ctx.beginPath();
+      ctx.arc(px, py, 3.1 * s, 0, Math.PI * 2);
+      ctx.fillStyle = '#ffe169';
+      ctx.fill();
+
+      ctx.textAlign = 'center';
+      ctx.lineWidth = 2.8 * s;
+      ctx.strokeStyle = 'rgba(16, 32, 51, 0.92)';
+      ctx.strokeText(label, px, py - 8.5 * s);
+      ctx.fillStyle = '#ffffff';
+      ctx.fillText(label, px, py - 8.5 * s);
+    } else {
+      const angle = Math.atan2(oy, ox);
+      const kx = Math.abs(ox) > 1e-4 ? maxX / Math.abs(ox) : Infinity;
+      const ky = Math.abs(oy) > 1e-4 ? maxY / Math.abs(oy) : Infinity;
+      const k = Math.min(kx, ky);
+      const ex = cx + ox * k;
+      const ey = cy + oy * k;
+
+      ctx.save();
+      ctx.translate(ex, ey);
+      ctx.rotate(angle);
+      ctx.beginPath();
+      ctx.moveTo(5.5 * s, 0);
+      ctx.lineTo(-4.2 * s, -4.0 * s);
+      ctx.lineTo(-2.4 * s, 0);
+      ctx.lineTo(-4.2 * s, 4.0 * s);
+      ctx.closePath();
+      ctx.fillStyle = '#20c997';
+      ctx.strokeStyle = '#102033';
+      ctx.lineWidth = 1.6 * s;
+      ctx.fill();
+      ctx.stroke();
+      ctx.restore();
+
+      const tx = ex - Math.cos(angle) * 8 * s;
+      const ty = ey - Math.sin(angle) * 8 * s;
+      ctx.textAlign = ex > cx + 12 * s ? 'right' : ex < cx - 12 * s ? 'left' : 'center';
+      ctx.lineWidth = 2.6 * s;
+      ctx.strokeStyle = 'rgba(16, 32, 51, 0.92)';
+      ctx.strokeText(label, tx, ty);
+      ctx.fillStyle = '#ffe169';
+      ctx.fillText(label, tx, ty);
+    }
+  }
+  ctx.restore();
+}
+
 export function mountPhone({ data }) {
   const canvas = document.getElementById('phone-map');
   const ctx = canvas.getContext('2d');
@@ -158,7 +241,7 @@ export function mountPhone({ data }) {
   let ready = false;
 
   return {
-    tick({ x, z, moving, moveYaw, lookYaw, dt = 0.016 }) {
+    tick({ x, z, moving, moveYaw, lookYaw, dt = 0.016, peers = [] }) {
       const target = moving ? moveYaw : lookYaw;
       if (!ready) { heading = target; ready = true; }
       else {
@@ -178,6 +261,8 @@ export function mountPhone({ data }) {
       ctx.fillRect(0, 0, w, h);
       ctx.drawImage(src, sx, sy, viewW * scale, viewH * scale, 0, 0, w, h);
 
+      const s = w / Math.max(1, canvas.clientWidth);
+      const now = performance.now();
       const reach = Math.min(w, h) * 0.46;
       const dir = Math.atan2(Math.cos(heading), Math.sin(heading));
       ctx.save();
@@ -186,9 +271,11 @@ export function mountPhone({ data }) {
       drawCone(ctx, reach);
       ctx.restore();
 
+      drawPeerMarkers(ctx, peers, x, z, w, h, viewW, viewH, now, s);
+
       ctx.save();
       ctx.translate(w / 2, h / 2);
-      drawBlip(ctx, performance.now(), w / Math.max(1, canvas.clientWidth));
+      drawBlip(ctx, now, s);
       ctx.restore();
     },
   };

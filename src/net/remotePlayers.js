@@ -27,10 +27,25 @@ export class RemotePlayers {
     if (!peer.look) look.hat = '#ffffff';
     const mesh = createAvatar(look);
     mesh.position.set(peer.x || 0, this.groundY ? this.groundY(peer.x || 0, peer.z || 0, 0) : 0, peer.z || 0); this.scene.add(mesh); // [terrain]
-    const p = { mesh, target: mesh.position.clone(), ry: peer.ry || 0 };
+    const p = { id: peer.id, name: peer.name || '손님', color: look.color || '#20c997', mesh, target: mesh.position.clone(), ry: peer.ry || 0 };
     p.tag = this.overlay.add({ cls: 'tag remote', text: peer.name || '손님', getPos: () => mesh.position.clone().setY(mesh.position.y + 2.05), maxDist: 80 }); // [terrain]
     p.bubble = new Bubble(this.overlay, 'remote', () => mesh.position.clone().setY(mesh.position.y + 2.7)); // [terrain]
     this.peers.set(peer.id, p);
+  }
+  list() {
+    const out = [];
+    for (const p of this.peers.values()) {
+      out.push({
+        id: p.id,
+        name: p.name,
+        color: p.color,
+        x: p.mesh.position.x,
+        y: p.mesh.position.y,
+        z: p.mesh.position.z,
+        ry: p.mesh.rotation.y,
+      });
+    }
+    return out;
   }
   remove(id) { const p = this.peers.get(id); if (!p) return; this.scene.remove(p.mesh); this.overlay.remove(p.tag); this.overlay.remove(p.bubble.item); this.peers.delete(id); }
   update(dt) {
