@@ -123,7 +123,7 @@ body.in-lobby #hud, body.in-lobby #buttons, body.in-lobby #chat, body.in-lobby #
   right: 16px;
   top: 16px;
   z-index: 4;
-  width: min(260px, calc(100% - 32px));
+  width: min(272px, calc(100% - 32px));
   background: rgba(12, 22, 38, .86);
   border: 1px solid rgba(255, 255, 255, .16);
   border-radius: 14px;
@@ -146,6 +146,9 @@ body.in-lobby #hud, body.in-lobby #buttons, body.in-lobby #chat, body.in-lobby #
   display: flex;
   flex-direction: column;
   gap: 5px;
+  max-height: min(340px, calc(100vh - 230px));
+  overflow-y: auto;
+  padding-right: 2px;
 }
 .gate-upcoming-item {
   width: 100%;

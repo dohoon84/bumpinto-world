@@ -17,7 +17,7 @@ export const CONTRIBUTORS = [
 export const CONTRIBUTION_AREAS = [
   {
     title: '🗺️ 새 지역(동네) 개척하기',
-    desc: '판교역, 강남역, 성수동, 홍대입구 등 원하는 동네의 OSM 데이터를 변환해 새 지역을 열 수 있습니다.',
+    desc: '수내역, 서현역, 이매역, 야탑역, 판교역, 강남역 등 원하는 동네의 OSM 데이터를 변환해 새 지역을 열 수 있습니다.',
     reward: '지구본 & 로딩 화면에 [지역 개척자(Pioneer)] 타이틀 영구 등재',
   },
   {

@@ -8,6 +8,10 @@ const LAT0 = -56, LAT1 = 82;
 const JEONGJA = { id: 'jeongja', name: '정자동', status: 'open', lat: 37.3665, lon: 127.10835 };
 
 export const UPCOMING_REGIONS = [
+  { id: 'sunae', name: '수내역', desc: '중앙공원 · 롯데백화점', lat: 37.3785, lon: 127.1144 },
+  { id: 'seohyeon', name: '서현역', desc: 'AK플라자 · 로데오거리', lat: 37.3851, lon: 127.1236 },
+  { id: 'imae', name: '이매역', desc: '성남아트센터 · 탄천', lat: 37.3958, lon: 127.1281 },
+  { id: 'yatap', name: '야탑역', desc: '성남종합버스터미널 · 먹자골목', lat: 37.4114, lon: 127.1287 },
   { id: 'pangyo', name: '판교역', desc: '테크노밸리 · 화랑공원', lat: 37.3947, lon: 127.1112 },
   { id: 'gangnam', name: '강남역', desc: '강남대로 · 테헤란로', lat: 37.4979, lon: 127.0276 },
   { id: 'seongsu', name: '성수동', desc: '연무장길 · 서울숲', lat: 37.5445, lon: 127.0560 },
