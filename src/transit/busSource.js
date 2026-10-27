@@ -11,7 +11,9 @@ import { liveryOf } from './livery.js';
 import { busLength } from './busModel.js';
 
 export const TIME_COMPRESS = 8; // 실제 배차간격을 1/8로 압축(화면에 버스가 자주 보이도록)
-const LIVE_POLL_MS = 15000; // Worker /locations 캐시와 같음. 매 프레임 조회 금지.
+const LIVE_POLL_MS = 120000; // 일일 1,000건 한도 보호를 위해 2분 주기로 위치 폴링
+const LIVE_BACKOFF_MS = 600000; // 한도 초과/오류 시 10분 백오프
+const ARRIVAL_TTL_MS = 60000; // 정류장 도착정보 캐시 60초
 const HEADWAY_MIN = { M: 12, express: 12, premium: 15, seat: 12, city: 12, village: 10, intercity: 20, airport: 30 };
 const VMAX = { M: 15, intercity: 18, express: 12, premium: 12, seat: 11, city: 11, village: 9.5, airport: 14 };
 const ACC = 1.3, DEC = 1.8, DWELL = 9, LANE_OFF = 1.7;
@@ -240,6 +242,13 @@ export class RealtimeBusSource {
   get label() {
     return this.locState === 'ok' ? this._liveLabel : (this.fallback?.label || this._liveLabel);
   }
+  panelLabel(stop) {
+    const key = stop?.ref?.split(';')[0];
+    const c = key ? this.cache.get(key) : null;
+    if (c?.list) return this._liveLabel;
+    if (c?.error) return `${this.fallback?.label || '시뮬레이션'} · 실시간 한도 초과/지연 폴백`;
+    return this._liveLabel;
+  }
   update(dt, ctx) {
     this.fallback?.update(dt, ctx);
     if (!this.proxy) { this.locState = 'error'; this.locError = 'proxy URL 없음'; return; }
@@ -247,7 +256,16 @@ export class RealtimeBusSource {
     if (this.inflight || now < this.nextPoll) return;
     this.nextPoll = now + LIVE_POLL_MS;
     this.inflight = true;
-    this._refresh().catch((e) => { this.locState = 'error'; this.locError = String(e.message || e); }).finally(() => { this.inflight = false; });
+    this._refresh()
+      .catch((e) => {
+        this.locState = 'error';
+        this.locError = String(e.message || e);
+        this.nextPoll = performance.now() + LIVE_BACKOFF_MS;
+      })
+      .finally(() => {
+        if (this.locState === 'error') this.nextPoll = Math.max(this.nextPoll, performance.now() + LIVE_BACKOFF_MS);
+        this.inflight = false;
+      });
   }
   vehicles() {
     if (this.locState === 'ok') return this.liveVehicles;
@@ -256,7 +274,7 @@ export class RealtimeBusSource {
   arrivals(stop) {
     const key = stop.ref.split(';')[0];
     const c = this.cache.get(key);
-    if (!c || performance.now() - c.at > 30000) this._fetch(key);
+    if (!c || performance.now() - c.at > ARRIVAL_TTL_MS) this._fetch(key);
     if (c?.list) return c.list;
     if (c?.error) return this.fallback ? this.fallback.arrivals(stop) : [{ ref: '⚠', type: 'city', etaSec: null, kind: 'live', text: c.error }];
     return [{ ref: '…', type: 'city', etaSec: null, kind: 'live', text: '실시간 정보 불러오는 중' }];

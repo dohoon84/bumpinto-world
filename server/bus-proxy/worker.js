@@ -8,9 +8,9 @@
 //  GET /route-stations?routeId=...    -> busrouteservice/v2/getBusRouteStationListv2 (경유 정류소 순번·번호)
 const BASE = 'https://apis.data.go.kr/6410000';
 const ROUTES = {
-  '/arrivals': { path: '/busarrivalservice/v2/getBusArrivalListv2', param: 'stationId', ttl: 20 },
+  '/arrivals': { path: '/busarrivalservice/v2/getBusArrivalListv2', param: 'stationId', ttl: 45 },
   '/stations': { path: '/busstationservice/v2/getBusStationListv2', param: 'keyword', ttl: 86400 },
-  '/locations': { path: '/buslocationservice/v2/getBusLocationListv2', param: 'routeId', ttl: 15 },
+  '/locations': { path: '/buslocationservice/v2/getBusLocationListv2', param: 'routeId', ttl: 120 },
   '/route-list': { path: '/busrouteservice/v2/getBusRouteListv2', param: 'keyword', ttl: 86400 },
   '/route-stations': { path: '/busrouteservice/v2/getBusRouteStationListv2', param: 'routeId', ttl: 86400 },
 };
@@ -66,10 +66,19 @@ export default {
         return json({ error: 'upstream_unreachable', detail: String(e) }, 502, cors);
       }
       const text = await upstream.text();
-      // 키 오류/한도 초과는 XML(OpenAPI_ServiceResponse)로 올 수 있음: returnReasonCode 20/22/23/29 등
+      // 키 오류/한도 초과는 XML 또는 JSON(OpenAPI_ServiceResponse)으로 올 수 있음: returnReasonCode 20/22/23/29 등
       if (text.trimStart().startsWith('<')) {
         const code = text.match(/<returnReasonCode>(\d+)</)?.[1], msg = text.match(/<returnAuthMsg>([^<]+)</)?.[1];
         return json({ error: 'gateway', code, msg }, 502, cors);
+      }
+      if (text.includes('OpenAPI_ServiceResponse')) {
+        try {
+          const parsed = JSON.parse(text);
+          const hdr = parsed?.OpenAPI_ServiceResponse?.cmmMsgHeader;
+          if (hdr) {
+            return json({ error: 'gateway', code: hdr.returnReasonCode, msg: hdr.returnAuthMsg || hdr.errMsg }, 502, cors);
+          }
+        } catch {}
       }
       res = new Response(text, { headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': `public, max-age=${r.ttl}` } });
       if (upstream.ok) ctx.waitUntil(cache.put(cacheKey, res.clone()));

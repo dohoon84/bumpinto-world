@@ -138,13 +138,17 @@ export function buildTransit(scene, T, world, overlay, { mode = 'sim', proxy } =
     for (const s of T.stops) { const d = Math.hypot(s._pos.x - playerPos.x, s._pos.z - playerPos.z); if (d < bd) { bd = d; best = s; } }
     panelStop = best;
     if (!best) { panel.classList.remove('open'); return; }
-    const rows = source.arrivals(best).map((a) => {
+    const arrivalList = source.arrivals(best);
+    const rows = arrivalList.map((a) => {
       const lv = liveryOf(a.type);
       return `<tr><td><span class="chip" style="background:${lv.plain ? '#2c3e6b' : lv.color}">${a.ref}</span></td><td class="ty">${lv.label}</td><td class="eta">${fmt(a)}${a.kind === 'virtual' ? ' <i title="OSM에 노선 형상이 없어 3D 버스 없이 가상 배차로만 계산">가상</i>' : ''}</td></tr>`;
     }).join('');
+    const footerText = source.panelLabel
+      ? source.panelLabel(best, arrivalList)
+      : `${source.label}${mode === 'sim' ? ' · 실제 시간표 아님' : ''}`;
     panel.innerHTML = `<div class="hd">🚏 ${best.name} <small>${best.ref ? '정류소번호 ' + best.ref.split(';')[0] : ''}</small></div>
       <table>${rows || '<tr><td colspan=3>등록된 노선 정보 없음 (OSM route_ref 없음)</td></tr>'}</table>
-      <div class="ft">${source.label}${mode === 'sim' ? ' · 실제 시간표 아님' : ''}</div>`;
+      <div class="ft">${footerText}</div>`;
     panel.classList.add('open');
   };
 
