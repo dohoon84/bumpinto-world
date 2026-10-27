@@ -640,4 +640,10 @@ export class PhoneBook extends DurableObject {
 
     return { ok: false, error: "bad_op" };
   }
+
+  stats() {
+    this.#migrate();
+    const row = this.ctx.storage.sql.exec("SELECT COUNT(*) AS cnt FROM users").toArray()[0];
+    return { residents: Number(row?.cnt || 0) };
+  }
 }

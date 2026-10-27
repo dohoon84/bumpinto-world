@@ -64,6 +64,25 @@ export default {
       return env.ROOM.getByName("jeongja").fetch(request);
     }
     if (request.method === "GET" && url.pathname === "/health") return json({ ok: true }, 200, cors);
+    if (request.method === "GET" && url.pathname === "/stats") {
+      try {
+        const [roomStats, bookStats] = await Promise.all([
+          env.ROOM.getByName("jeongja").stats(),
+          env.PHONE_BOOK.getByName("jeongja").stats(),
+        ]);
+        return json(
+          {
+            ok: true,
+            online: Number(roomStats?.online || 0),
+            residents: Number(bookStats?.residents || 0),
+          },
+          200,
+          cors,
+        );
+      } catch (error) {
+        return json({ ok: false, online: 0, residents: 0, detail: String(error?.message || error) }, 200, cors);
+      }
+    }
     const method = ROUTES[url.pathname];
     if (!method || request.method !== "POST") return json({ ok: false, error: "not_found" }, 404, cors);
     let text;

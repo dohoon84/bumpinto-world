@@ -19,6 +19,18 @@ export const UPCOMING_REGIONS = [
 ];
 
 export const REPO_URL = 'https://github.com/dohoon84/bumpinto-world';
+const DEFAULT_PHONE_BASE = import.meta.env?.VITE_PHONE_URL || 'https://jeongja-phone.xn0texn073.workers.dev';
+
+function phoneStatsUrl() {
+  const params = new URLSearchParams(location.search);
+  if (params.get('sms') === 'off') return '';
+  if (params.get('sms') === 'local') return 'http://127.0.0.1:8789/stats';
+  if (params.has('sms')) {
+    const b = (params.get('sms') || '').replace(/\/$/, '');
+    return b ? `${b}/stats` : '';
+  }
+  return `${DEFAULT_PHONE_BASE.replace(/\/$/, '')}/stats`;
+}
 
 function unproj(px, py) {
   return [px / MAP_W * 360 - 180, LAT1 - (py / MAP_H) * (LAT1 - LAT0)];
@@ -99,6 +111,22 @@ export function openWorldGate({ onEnter }) {
   ).join('');
 
   root.innerHTML = `
+    <div class="gate-telemetry" aria-live="polite">
+      <div class="gate-telemetry-hd">
+        <span class="gate-sat-dot"></span>
+        <span>🛰️ 위성 실시간 관측 · 정자동 (37.37°N)</span>
+      </div>
+      <div class="gate-telemetry-grid">
+        <div class="gate-stat-card">
+          <small>현재 거리 산책 중</small>
+          <strong id="gate-stat-online">관측 중…</strong>
+        </div>
+        <div class="gate-stat-card">
+          <small>누적 등록 입주민</small>
+          <strong id="gate-stat-residents">집계 중…</strong>
+        </div>
+      </div>
+    </div>
     <aside class="gate-regions" aria-label="월드 지역 목록">
       <div class="gate-regions-hd">🌏 오픈 월드 지역 현황</div>
       <ul class="gate-regions-list">
@@ -106,7 +134,7 @@ export function openWorldGate({ onEnter }) {
           <button type="button" class="gate-upcoming-item is-open" data-enter-now="1">
             <span class="dot open"></span>
             <span class="name">정자동 (정자역)</span>
-            <small>성남시 분당구</small>
+            <small id="gate-jeongja-sub">성남시 분당구</small>
             <em>열림 · 입장</em>
           </button>
         </li>
@@ -136,10 +164,17 @@ export function openWorldGate({ onEnter }) {
       </span>
     </a>
     <canvas id="gate-globe"></canvas>
-    <button type="button" id="gate-jeongja" hidden>정자동 · 열림</button>`;
+    <button type="button" id="gate-jeongja" hidden>
+      <span>정자동 · 열림</span>
+      <span id="gate-pin-badge" class="gate-pin-badge" hidden></span>
+    </button>`;
 
   const canvas = root.querySelector('#gate-globe');
   const label = root.querySelector('#gate-jeongja');
+  const pinBadge = root.querySelector('#gate-pin-badge');
+  const statOnlineEl = root.querySelector('#gate-stat-online');
+  const statResidentsEl = root.querySelector('#gate-stat-residents');
+  const jeongjaSubEl = root.querySelector('#gate-jeongja-sub');
   const toast = root.querySelector('#gate-region-toast');
 
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
@@ -170,7 +205,41 @@ export function openWorldGate({ onEnter }) {
   scene.add(air, globe);
   globe.rotation.y = -Math.atan2(spot.x, spot.z);
 
-  let alive = true, raf = 0, drag = null, moved = 0, lastT = 0, toastTimer = 0;
+  let alive = true, raf = 0, drag = null, moved = 0, lastT = 0, toastTimer = 0, statsTimer = 0;
+
+  async function refreshGateStats() {
+    const url = phoneStatsUrl();
+    if (!url || !alive) return;
+    try {
+      const r = await fetch(url, { cache: 'no-store' });
+      const j = await r.json();
+      if (!alive || !j || !j.ok) return;
+      const online = Math.max(0, Number(j.online || 0));
+      const residents = Math.max(0, Number(j.residents || 0));
+      if (statOnlineEl) {
+        statOnlineEl.innerHTML = online > 0
+          ? `<span class="live-num">${online}명</span> 활동 중`
+          : `<span class="idle-num">0명</span> · 첫 산책자 대기 중`;
+      }
+      if (statResidentsEl) {
+        statResidentsEl.innerHTML = `<span class="res-num">${residents.toLocaleString()}명</span>`;
+      }
+      if (jeongjaSubEl) {
+        jeongjaSubEl.textContent = online > 0
+          ? `성남시 분당구 · 🟢 ${online}명 산책 중`
+          : `성남시 분당구 · 입주민 ${residents}명`;
+      }
+      if (pinBadge) {
+        pinBadge.hidden = false;
+        pinBadge.textContent = online > 0 ? `🟢 ${online}명 산책 중` : `입주민 ${residents}명`;
+      }
+    } catch {
+      /* 네트워크 실패 시 조용히 무시 */
+    }
+  }
+  refreshGateStats();
+  statsTimer = setInterval(refreshGateStats, 12000);
+
   const fit = () => {
     const w = root.clientWidth || innerWidth, h = root.clientHeight || innerHeight;
     renderer.setSize(w, h, false);
@@ -183,6 +252,7 @@ export function openWorldGate({ onEnter }) {
     if (!alive) return;
     alive = false;
     clearTimeout(toastTimer);
+    clearInterval(statsTimer);
     cancelAnimationFrame(raf);
     removeEventListener('resize', onResize);
     removeEventListener('blur', clearDrag);

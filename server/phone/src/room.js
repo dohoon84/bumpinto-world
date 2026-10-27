@@ -89,6 +89,11 @@ export class Room extends DurableObject {
     return list;
   }
 
+  stats() {
+    const peers = this.#peers(null);
+    return { online: peers.length };
+  }
+
   #send(ws, msg) {
     try {
       ws.send(JSON.stringify(msg));

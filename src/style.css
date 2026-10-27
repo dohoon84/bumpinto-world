@@ -276,8 +276,94 @@ body.in-lobby #hud, body.in-lobby #buttons, body.in-lobby #chat, body.in-lobby #
 #world-gate .studio strong { display: block; margin-top: 1px; font-size: 15px; letter-spacing: 0.06em; }
 #world-gate .studio em { display: block; margin-top: 1px; font-style: normal; font-size: 12px; color: #f6d98a; }
 #gate-globe { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
-#gate-jeongja { position: absolute; z-index: 3; transform: translate(-50%, -150%); border: 0; border-radius: 6px; padding: 4px 10px; background: linear-gradient(90deg, #d4003b 50%, #f5a200 50%); color: #fff; font: inherit; font-size: 15px; font-weight: 700; cursor: pointer; text-shadow: 0 1px 2px rgba(0,0,0,.4); box-shadow: 0 2px 8px rgba(0,0,0,.18); }
+#gate-jeongja { position: absolute; z-index: 3; transform: translate(-50%, -150%); border: 0; border-radius: 9px; padding: 5px 11px; background: linear-gradient(90deg, #d4003b 50%, #f5a200 50%); color: #fff; font: inherit; font-size: 14.5px; font-weight: 800; cursor: pointer; text-shadow: 0 1px 2px rgba(0,0,0,.4); box-shadow: 0 4px 14px rgba(0,0,0,.28); display: inline-flex; align-items: center; gap: 7px; white-space: nowrap; }
 #gate-jeongja[hidden] { display: none !important; }
+.gate-pin-badge {
+  font-size: 11px;
+  font-weight: 800;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: rgba(12, 22, 38, .82);
+  color: #ffe169;
+  text-shadow: none;
+  border: 1px solid rgba(255, 255, 255, .25);
+}
+.gate-pin-badge[hidden] { display: none !important; }
+.gate-telemetry {
+  position: absolute;
+  left: 16px;
+  top: 16px;
+  z-index: 4;
+  width: min(296px, calc(100% - 32px));
+  background: rgba(10, 20, 36, .86);
+  border: 1px solid rgba(110, 198, 255, .26);
+  border-radius: 14px;
+  padding: 11px 13px;
+  color: #e8f2f8;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, .28);
+  backdrop-filter: blur(6px);
+  pointer-events: none;
+}
+.gate-telemetry-hd {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 11.5px;
+  font-weight: 800;
+  color: #8ec8ef;
+  letter-spacing: 0.03em;
+  margin-bottom: 8px;
+}
+.gate-sat-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #2bff7a;
+  box-shadow: 0 0 0 3px rgba(43, 255, 122, .25);
+  animation: gateSatPulse 2s infinite;
+  flex-shrink: 0;
+}
+@keyframes gateSatPulse {
+  0%, 100% { box-shadow: 0 0 0 2px rgba(43, 255, 122, .35); opacity: 1; }
+  50% { box-shadow: 0 0 0 6px rgba(43, 255, 122, 0); opacity: 0.78; }
+}
+.gate-telemetry-grid {
+  display: grid;
+  grid-template-columns: 1.25fr 0.9fr;
+  gap: 7px;
+}
+.gate-stat-card {
+  background: rgba(255, 255, 255, .06);
+  border: 1px solid rgba(255, 255, 255, .09);
+  border-radius: 9px;
+  padding: 6px 9px;
+}
+.gate-stat-card small {
+  display: block;
+  font-size: 10.5px;
+  color: #9eb4c6;
+  margin-bottom: 2px;
+}
+.gate-stat-card strong {
+  display: block;
+  font-size: 12.5px;
+  font-weight: 800;
+  color: #fff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.gate-stat-card .live-num {
+  color: #2bff7a;
+  font-size: 14px;
+}
+.gate-stat-card .idle-num {
+  color: #ffe169;
+}
+.gate-stat-card .res-num {
+  color: #ffe169;
+  font-size: 13.5px;
+}
 .gate-regions {
   position: absolute;
   right: 16px;
@@ -392,11 +478,20 @@ body.in-lobby #hud, body.in-lobby #buttons, body.in-lobby #chat, body.in-lobby #
 .gate-toast-btn { flex: 1; text-align: center; font: inherit; font-size: 12.5px; font-weight: 700; padding: 7px 10px; border-radius: 8px; border: 1px solid rgba(255,255,255,.22); background: rgba(255,255,255,.1); color: #fff; text-decoration: none; cursor: pointer; }
 .gate-toast-btn.primary { background: #f5a200; color: #122033; border-color: #f5a200; }
 @media (max-width: 860px) {
-  .gate-copy { bottom: 12px; padding: 11px 14px 13px; }
-  .gate-copy h1 { font-size: 19px; }
+  .gate-copy { bottom: 10px; padding: 10px 13px 12px; }
+  .gate-copy h1 { font-size: 18px; }
   .gate-copy .lead { font-size: 12px; }
-  .gate-regions { right: 12px; left: 12px; top: 10px; width: auto; padding: 9px 11px; }
-  .gate-regions-list { max-height: 128px; }
+  .gate-telemetry {
+    left: 12px;
+    right: 12px;
+    top: 10px;
+    width: auto;
+    padding: 8px 10px;
+  }
+  .gate-telemetry-hd { margin-bottom: 5px; font-size: 11px; }
+  .gate-stat-card { padding: 4px 8px; }
+  .gate-regions { right: 12px; left: 12px; top: 86px; width: auto; padding: 8px 10px; }
+  .gate-regions-list { max-height: 98px; }
   #world-gate .studio { display: none; }
 }
 
