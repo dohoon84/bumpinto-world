@@ -324,6 +324,11 @@ function rememberPlace(force = false) {
 }
 addEventListener('pagehide', () => { rememberPlace(true); presence.close(); });
 addEventListener('beforeunload', () => { rememberPlace(true); presence.close(); });
+if (import.meta.hot) {
+  import.meta.hot.dispose(() => {
+    presence.close();
+  });
+}
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'hidden') rememberPlace(true);
 });

@@ -59,8 +59,9 @@ export class Room extends DurableObject {
       const peer = ws.deserializeAttachment();
       if (!peer || !peer.id) continue;
       if (
+        !peer.deviceId ||
         !peer.lastSeen ||
-        (duplicateDeviceId && peer.deviceId && peer.deviceId === duplicateDeviceId) ||
+        (duplicateDeviceId && peer.deviceId === duplicateDeviceId) ||
         now - peer.lastSeen > STALE_MS
       ) {
         this.#evictSocket(ws, duplicateDeviceId ? "replaced" : "stale");
@@ -150,7 +151,10 @@ export class Room extends DurableObject {
       this.#broadcast({ t: "join", peer: publicMe }, ws);
       return;
     }
-    if (!me) return;
+    if (!me || !me.deviceId) {
+      this.#evictSocket(ws, "upgrade_required");
+      return;
+    }
     me.lastSeen = now;
     if (m.t === "ping") {
       ws.serializeAttachment(me);
