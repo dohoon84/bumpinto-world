@@ -32,6 +32,10 @@ function sanitizeLook(raw = {}) {
 
 export class Room extends DurableObject {
   async fetch(request) {
+    const url = new URL(request.url);
+    if (url.pathname === "/stats") {
+      return Response.json(this.stats());
+    }
     if (request.headers.get("Upgrade")?.toLowerCase() !== "websocket") {
       return new Response("Expected WebSocket", { status: 426 });
     }

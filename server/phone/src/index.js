@@ -65,23 +65,23 @@ export default {
     }
     if (request.method === "GET" && url.pathname === "/health") return json({ ok: true }, 200, cors);
     if (request.method === "GET" && url.pathname === "/stats") {
+      let online = 0;
+      let residents = 0;
       try {
-        const [roomStats, bookStats] = await Promise.all([
-          env.ROOM.getByName("jeongja").stats(),
-          env.PHONE_BOOK.getByName("jeongja").stats(),
-        ]);
-        return json(
-          {
-            ok: true,
-            online: Number(roomStats?.online || 0),
-            residents: Number(bookStats?.residents || 0),
-          },
-          200,
-          cors,
-        );
-      } catch (error) {
-        return json({ ok: false, online: 0, residents: 0, detail: String(error?.message || error) }, 200, cors);
-      }
+        const r = await env.ROOM.getByName("jeongja").fetch("https://room/stats");
+        if (r.ok) {
+          const j = await r.json();
+          online = Number(j?.online || 0);
+        }
+      } catch {}
+      try {
+        const bookStats = await env.PHONE_BOOK.getByName("jeongja").board({ op: "stats" });
+        if (bookStats?.ok) {
+          residents = Number(bookStats.residents || 0);
+          if (!online && bookStats.activeRecently) online = Number(bookStats.activeRecently || 0);
+        }
+      } catch {}
+      return json({ ok: true, online, residents }, 200, cors);
     }
     const method = ROUTES[url.pathname];
     if (!method || request.method !== "POST") return json({ ok: false, error: "not_found" }, 404, cors);

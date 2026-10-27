@@ -521,11 +521,16 @@ export class PhoneBook extends DurableObject {
 
   board(input) {
     const op = String(input?.op || "list");
+    const sql = this.ctx.storage.sql;
+    if (op === "stats") {
+      const row = sql.exec("SELECT COUNT(*) AS cnt FROM users").toArray()[0];
+      const activeRow = sql.exec("SELECT COUNT(*) AS cnt FROM users WHERE updated_at > ?", Date.now() - 60000).toArray()[0];
+      return { ok: true, residents: Number(row?.cnt || 0), activeRecently: Number(activeRow?.cnt || 0) };
+    }
     const id = String(input?.id || "");
     const found = ID_RE.test(id) ? this.#user(id) : { user: null };
     const user = found.user || null;
     const myPhone = user?.phone || null;
-    const sql = this.ctx.storage.sql;
 
     if (op === "list") {
       const cat = String(input?.category || "all");
