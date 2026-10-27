@@ -1,5 +1,5 @@
 // 입장 전 지구본. 해안선은 실제 국가 윤곽이고, 남한만 밝히고 정자동을 누르면 입장한다.
-// 다음 오픈 예정 지역(기여자 모집 중) 핀도 함께 표시한다.
+// 다음 오픈 예정 지역(기여자 모집 중)은 오른쪽 상단 패널에 리스팅한다.
 import * as THREE from 'three';
 import { MAP_W, MAP_H, LAND, KOREA } from './worldLand.js';
 import { trackEvent } from './analytics.js';
@@ -8,10 +8,10 @@ const LAT0 = -56, LAT1 = 82;
 const JEONGJA = { id: 'jeongja', name: '정자동', status: 'open', lat: 37.3665, lon: 127.10835 };
 
 export const UPCOMING_REGIONS = [
-  { id: 'pangyo', name: '판교역', desc: '테크노밸리 · 화랑공원', lat: 37.3947, lon: 127.1112, dx: 52, dy: -26 },
-  { id: 'gangnam', name: '강남역', desc: '강남대로 · 테헤란로', lat: 37.4979, lon: 127.0276, dx: -56, dy: -22 },
-  { id: 'seongsu', name: '성수동', desc: '연무장길 · 서울숲', lat: 37.5445, lon: 127.0560, dx: 54, dy: -46 },
-  { id: 'hongdae', name: '홍대입구', desc: '경의선숲길 · 걷고싶은거리', lat: 37.5572, lon: 126.9245, dx: -62, dy: -48 },
+  { id: 'pangyo', name: '판교역', desc: '테크노밸리 · 화랑공원', lat: 37.3947, lon: 127.1112 },
+  { id: 'gangnam', name: '강남역', desc: '강남대로 · 테헤란로', lat: 37.4979, lon: 127.0276 },
+  { id: 'seongsu', name: '성수동', desc: '연무장길 · 서울숲', lat: 37.5445, lon: 127.0560 },
+  { id: 'hongdae', name: '홍대입구', desc: '경의선숲길 · 걷고싶은거리', lat: 37.5572, lon: 126.9245 },
 ];
 
 export const REPO_URL = 'https://github.com/dohoon84/bumpinto-world';
@@ -80,18 +80,44 @@ function lonLat(lon, lat, radius) {
 
 export function openWorldGate({ onEnter }) {
   const root = document.getElementById('world-gate');
-  const upcomingButtons = UPCOMING_REGIONS.map(
-    (r) =>
-      `<button type="button" class="gate-upcoming" data-region="${r.id}" hidden>${r.name} · 준비중</button>`,
+  root.hidden = false;
+
+  const upcomingListHtml = UPCOMING_REGIONS.map(
+    (r) => `
+      <li>
+        <button type="button" class="gate-upcoming-item" data-region="${r.id}">
+          <span class="dot"></span>
+          <span class="name">${r.name}</span>
+          <small>${r.desc}</small>
+          <em>준비중</em>
+        </button>
+      </li>`,
   ).join('');
 
   root.innerHTML = `
+    <aside class="gate-regions" aria-label="월드 지역 목록">
+      <div class="gate-regions-hd">🌏 오픈 월드 지역 현황</div>
+      <ul class="gate-regions-list">
+        <li>
+          <button type="button" class="gate-upcoming-item is-open" data-enter-now="1">
+            <span class="dot open"></span>
+            <span class="name">정자동 (정자역)</span>
+            <small>성남시 분당구</small>
+            <em>열림 · 입장</em>
+          </button>
+        </li>
+        ${upcomingListHtml}
+      </ul>
+      <a href="${REPO_URL}/blob/main/CONTRIBUTING.md" target="_blank" rel="noopener" class="gate-regions-ft">
+        + 내 동네 개척자로 참여하기 (GitHub)
+      </a>
+    </aside>
     <div class="gate-copy">
       <p class="kicker">순차 오픈 · 오픈소스</p>
       <h1>Bumpinto World</h1>
-      <p class="lead">다 같이 만들어 가는 오픈 월드 · 다음 동네 개척자를 찾습니다</p>
+      <p class="lead">다 같이 만들어 가는 오픈 월드</p>
       <div class="rule"></div>
-      <p class="note">정자동(열림)을 눌러 입장하거나, 준비 중인 지역을 눌러 함께 만들어 보세요</p>
+      <p class="note">지구본의 <b>정자동 · 열림</b>을 눌러 입장하세요</p>
       <div class="gate-links">
         <a href="${REPO_URL}" target="_blank" rel="noopener" class="gate-gh-btn">⭐ GitHub에서 함께 만들기</a>
       </div>
@@ -106,15 +132,11 @@ export function openWorldGate({ onEnter }) {
       </span>
     </a>
     <canvas id="gate-globe"></canvas>
-    <button type="button" id="gate-jeongja" hidden>정자동 · 열림</button>
-    ${upcomingButtons}`;
+    <button type="button" id="gate-jeongja" hidden>정자동 · 열림</button>`;
 
   const canvas = root.querySelector('#gate-globe');
   const label = root.querySelector('#gate-jeongja');
   const toast = root.querySelector('#gate-region-toast');
-  const upcomingEls = new Map(
-    UPCOMING_REGIONS.map((r) => [r.id, root.querySelector(`.gate-upcoming[data-region="${r.id}"]`)]),
-  );
 
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
   renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
@@ -141,18 +163,6 @@ export function openWorldGate({ onEnter }) {
   const halo = new THREE.Mesh(new THREE.SphereGeometry(0.028, 16, 12), new THREE.MeshBasicMaterial({ color: '#f5a200', transparent: true, opacity: 0.7 }));
   halo.position.copy(spot);
   globe.add(earth, pin, halo);
-
-  const upcomingPins = UPCOMING_REGIONS.map((r) => {
-    const pos = lonLat(r.lon, r.lat, 1.022);
-    const mesh = new THREE.Mesh(
-      new THREE.SphereGeometry(0.012, 10, 8),
-      new THREE.MeshBasicMaterial({ color: '#8ec8ef' }),
-    );
-    mesh.position.copy(pos);
-    globe.add(mesh);
-    return { ...r, mesh, el: upcomingEls.get(r.id) };
-  });
-
   scene.add(air, globe);
   globe.rotation.y = -Math.atan2(spot.x, spot.z);
 
@@ -166,6 +176,7 @@ export function openWorldGate({ onEnter }) {
   const onResize = () => fit();
   const clearDrag = () => { drag = null; };
   const enter = () => {
+    if (!alive) return;
     alive = false;
     clearTimeout(toastTimer);
     cancelAnimationFrame(raf);
@@ -196,7 +207,7 @@ export function openWorldGate({ onEnter }) {
     toastTimer = setTimeout(() => { toast.hidden = true; }, 12000);
   }
 
-  toast.addEventListener('click', (e) => {
+  root.addEventListener('click', (e) => {
     if (e.target.closest('.gate-toast-close')) {
       toast.hidden = true;
       return;
@@ -204,12 +215,14 @@ export function openWorldGate({ onEnter }) {
     if (e.target.closest('[data-enter-now]')) {
       toast.hidden = true;
       enter();
+      return;
+    }
+    const regionBtn = e.target.closest('[data-region]');
+    if (regionBtn) {
+      const found = UPCOMING_REGIONS.find((r) => r.id === regionBtn.dataset.region);
+      if (found) showUpcomingToast(found);
     }
   });
-
-  for (const item of upcomingPins) {
-    item.el?.addEventListener('click', () => showUpcomingToast(item));
-  }
 
   const ndc = new THREE.Vector3();
   const camDir = new THREE.Vector3();
@@ -230,20 +243,8 @@ export function openWorldGate({ onEnter }) {
     label.hidden = !facing;
     if (facing) {
       world.project(camera);
-      const sx = (world.x * 0.5 + 0.5) * canvas.clientWidth;
-      const sy = (-world.y * 0.5 + 0.5) * canvas.clientHeight;
-      label.style.left = `${sx}px`;
-      label.style.top = `${sy}px`;
-      for (const item of upcomingPins) {
-        if (!item.el) continue;
-        item.el.hidden = false;
-        item.el.style.left = `${sx + item.dx}px`;
-        item.el.style.top = `${sy + item.dy}px`;
-      }
-    } else {
-      for (const item of upcomingPins) {
-        if (item.el) item.el.hidden = true;
-      }
+      label.style.left = `${(world.x * 0.5 + 0.5) * canvas.clientWidth}px`;
+      label.style.top = `${(-world.y * 0.5 + 0.5) * canvas.clientHeight}px`;
     }
     renderer.render(scene, camera);
   };

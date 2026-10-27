@@ -196,18 +196,27 @@ function applySession(session) {
 }
 const leaveBtn = document.getElementById('btn-leave');
 leaveBtn.hidden = !joined;
+const reopenGate = () => {
+  document.body.classList.remove('in-lobby');
+  document.body.classList.add('in-gate');
+  openWorldGate({ onEnter() { if (startLobby) startLobby(); else lobbyQueued = true; } });
+};
 startLobby = () => {
   document.body.classList.remove('in-gate');
   document.body.classList.add('in-lobby');
-  openLobby({ sms, onJoin(name, look, session) {
-    me.name = name; me.color = look.color; me.look = look;
-    wear(look); applySession(session); player.visible = true; nameTag.hidden = false; nameTag.el.textContent = name;
-    document.body.classList.remove('in-lobby');
-    leaveBtn.hidden = false;
-    handset.signIn();
-    presence.connect(me); joined = true;
-    trackEvent('world_join', { has_pin: !!session?.hasPin, resumed: !!session?.place });
-  } });
+  openLobby({
+    sms,
+    onBack: reopenGate,
+    onJoin(name, look, session) {
+      me.name = name; me.color = look.color; me.look = look;
+      wear(look); applySession(session); player.visible = true; nameTag.hidden = false; nameTag.el.textContent = name;
+      document.body.classList.remove('in-lobby');
+      leaveBtn.hidden = false;
+      handset.signIn();
+      presence.connect(me); joined = true;
+      trackEvent('world_join', { has_pin: !!session?.hasPin, resumed: !!session?.place });
+    },
+  });
 };
 if (lobbyQueued) startLobby();
 if (joined) presence.connect(me);

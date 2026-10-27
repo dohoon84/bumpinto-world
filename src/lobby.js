@@ -108,7 +108,7 @@ function getEnterScreen() {
   return enterScreen;
 }
 
-export function openLobby({ sms, onJoin }) {
+export function openLobby({ sms, onJoin, onBack }) {
   const saved = readProfile();
   const look = sanitizeLook({ hair: 'short', top: 'hoodie', ...(saved?.look || {}) });
   const root = document.getElementById('lobby');
@@ -116,7 +116,10 @@ export function openLobby({ sms, onJoin }) {
     <form id="lobby-card" autocomplete="off">
       <div id="lobby-preview"></div>
       <div id="lobby-fields">
-        <h1>정자역에 입장</h1>
+        <div class="lobby-top-bar">
+          <h1>정자역에 입장</h1>
+          <button type="button" id="lobby-back-globe" class="lobby-back-btn">🌏 지구본으로</button>
+        </div>
         <p class="sub">닉네임과 모습을 고르거나, 기존 번호로 이어서 들어오세요.</p>
         <div class="lobby-tabs" role="tablist">
           <button type="button" class="tab on" data-mode="join" role="tab" aria-selected="true">내 캐릭터 입장</button>
@@ -249,7 +252,21 @@ export function openLobby({ sms, onJoin }) {
 
   const phoneLine = root.querySelector('#lobby-phone');
   const go = root.querySelector('#lobby-go');
+  const backBtn = root.querySelector('#lobby-back-globe');
   const pickedLook = () => sanitizeLook({ ...look, hair: look.hair || 'short' });
+
+  const cleanupLobby = () => {
+    ticket += 1;
+    cancelAnimationFrame(raf);
+    removeEventListener('resize', onResize);
+    renderer.dispose();
+  };
+
+  backBtn?.addEventListener('click', () => {
+    if (joining) return;
+    cleanupLobby();
+    onBack?.();
+  });
 
   const syncLookButtons = () => {
     picks.querySelectorAll('button[data-k]').forEach((b) => {
