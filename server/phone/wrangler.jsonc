@@ -1,0 +1,17 @@
+{
+  "name": "jeongja-phone",
+  "main": "src/index.js",
+  "compatibility_date": "2026-10-27",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": { "enabled": true },
+  "durable_objects": {
+    "bindings": [
+      { "name": "PHONE_BOOK", "class_name": "PhoneBook" },
+      { "name": "ROOM", "class_name": "Room" }
+    ]
+  },
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["PhoneBook"] },
+    { "tag": "v2", "new_sqlite_classes": ["Room"] }
+  ]
+}

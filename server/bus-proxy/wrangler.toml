@@ -1,0 +1,9 @@
+# 로컬 wrangler dev 는 이 디렉터리의 .dev.vars (DATA_GO_KR_KEY)를 읽는다.
+# 배포된 Worker secret 은 별도: npx wrangler secret put DATA_GO_KR_KEY && npx wrangler deploy
+name = "jeongja-bus-proxy"
+main = "worker.js"
+compatibility_date = "2026-10-01"
+
+[vars]
+# 쉼표로 여러 개. 예: "https://bumpinto.world,https://jeongja3d.pages.dev,http://localhost:5173"
+ALLOWED_ORIGINS = "https://bumpinto.world,https://www.bumpinto.world,https://jeongja3d.pages.dev,http://localhost:5173,http://127.0.0.1:5173,http://localhost:4173,http://127.0.0.1:4173"

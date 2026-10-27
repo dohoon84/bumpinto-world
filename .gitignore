@@ -1,0 +1,18 @@
+node_modules
+dist
+*.zip
+.DS_Store
+**/.DS_Store
+.cursor
+feature/
+
+# 공공데이터 인증키. 예시 파일(.env.example, .dev.vars.example)만 추적.
+.env
+.env.*
+!.env.example
+.dev.vars
+**/.dev.vars
+.wrangler
+**/.wrangler
+# 일반 인증키 전문이 들어 있음
+info/

@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+  <title>Bumpinto World</title>
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <link rel="stylesheet" href="/src/style.css" />
+  <!-- Google tag (gtag.js) -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-WVF00T91DQ"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+    gtag('config', 'G-WVF00T91DQ');
+  </script>
+</head>
+<body class="in-gate">
+  <div id="app"></div>
+  <div id="overlay"></div>
+  <div id="hud">
+    <div class="help">WASD/방향키 이동 · Shift 달리기 · 마우스 드래그로 위·아래·좌·우 · 휠 줌 · Enter 채팅 · M 위에서 보기 · E 카카오바이크 · 정류장 근처에 가면 도착 정보</div>
+    <div class="clock" id="hud-clock">--:--</div>
+  </div>
+  <div id="buttons">
+    <button id="btn-view" title="M">🗺️ 위에서 보기</button>
+    <button id="btn-home" title="H">🚇 역으로</button>
+    <button id="btn-leave" type="button" hidden>나가기</button>
+  </div>
+  <form id="chat" autocomplete="off">
+    <input id="chat-input" maxlength="80" placeholder="말 걸기 (Enter) — 근처 사람에게만 보여요" />
+  </form>
+  <button id="ride-btn" type="button" hidden>🚲 카카오바이크 타기 (E)</button>
+  <div id="joystick"><div id="stick"></div></div>
+  <div id="presence-status"></div>
+  <button id="board-Launcher" class="board-launcher" type="button" aria-label="커뮤니티 게시판 열기">
+    <span class="board-icon">📋</span>
+    <span class="board-label">게시판</span>
+  </button>
+  <button id="contribute-launcher" class="board-launcher contribute-launcher" type="button" aria-label="함께 만들기 및 명예의 전당 열기">
+    <span class="board-icon">🌍</span>
+    <span class="board-label">함께 만들기</span>
+  </button>
+  <div id="board-modal" hidden></div>
+  <div id="stop-panel"></div>
+  <div id="handset">
+    <div class="shell">
+      <span class="side vol"></span>
+      <span class="side power"></span>
+      <div class="glass">
+        <div class="island"></div>
+        <div class="status"><span id="handset-time">--:--</span><span class="radios" aria-hidden="true"></span></div>
+        <div id="handset-body"></div>
+        <button type="button" class="home" aria-label="휴대폰 홈"></button>
+      </div>
+    </div>
+  </div>
+  <div id="phone">
+    <div class="bezel">
+      <div class="ear"></div>
+      <div id="phone-screen">
+        <canvas id="phone-map" aria-label="소형맵"></canvas>
+      </div>
+    </div>
+  </div>
+  <div id="pc-only" hidden>
+    <div class="pc-only-card">
+      <h1>정자역</h1>
+      <p>이 게임은 PC 브라우저에서만 진행합니다.</p>
+    </div>
+  </div>
+  <div id="world-gate"></div>
+  <div id="lobby"></div>
+  <div id="attribution">© <a href="https://crazylabs.co.kr" target="_blank" rel="noopener">CrazyLabs</a> · <a href="https://github.com/dohoon84/bumpinto-world" target="_blank" rel="noopener">GitHub 오픈소스</a> · 지도 © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> (ODbL)</div>
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>

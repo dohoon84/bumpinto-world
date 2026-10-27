@@ -1,0 +1,36 @@
+{
+  "name": "jeongja3d",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "fetch-osm": "bash data/fetch.sh",
+    "convert": "node scripts/convert.mjs && node scripts/convert-transit.mjs",
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview --port 4173",
+    "relay": "node server/dev-relay.mjs",
+    "shots": "node scripts/shots.mjs",
+    "zip": "npm run build && python3 -c \"import shutil; shutil.make_archive('jeongja3d-dist', 'zip', 'dist')\"",
+    "fetch-transit": "bash data/fetch.sh query_transit.overpassql osm_transit_raw.json",
+    "convert-transit": "node scripts/convert-transit.mjs",
+    "shots-transit": "node scripts/shots-transit.mjs",
+    "mock-bus-proxy": "node server/bus-proxy/mock-proxy.mjs",
+    "bus-proxy": "cd server/bus-proxy && npx --yes wrangler dev --ip 127.0.0.1 --port 8788",
+    "phone": "cd server/phone && npx --yes wrangler dev --ip 127.0.0.1 --port 8789",
+    "deploy:phone": "cd server/phone && npx --yes wrangler deploy",
+    "deploy:bus-proxy": "cd server/bus-proxy && npx --yes wrangler deploy",
+    "deploy:pages": "npm run build && npx --yes wrangler pages deploy dist --project-name jeongja3d --branch main",
+    "deploy": "npm run deploy:phone && npm run deploy:bus-proxy && npm run deploy:pages",
+    "convert-taxi-terrain": "node scripts/convert-taxi-terrain.mjs",
+    "shots-taxi-terrain": "node scripts/shots-taxi-terrain.mjs"
+  },
+  "dependencies": {
+    "three": "^0.186.1"
+  },
+  "devDependencies": {
+    "playwright": "^1.64.1",
+    "vite": "^8.3.5",
+    "ws": "^8.22.0"
+  }
+}

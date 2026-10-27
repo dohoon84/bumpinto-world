@@ -1,0 +1,3 @@
+# 공공데이터포털 일반 인증키 (Decoding). 실제 값은 .dev.vars 에만 둔다.
+# worker.js 가 encodeURIComponent 로 한 번 인코딩하므로, Encoding 키가 따로 있으면 넣지 말 것.
+DATA_GO_KR_KEY=

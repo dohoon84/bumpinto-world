@@ -1,0 +1,21 @@
+[out:json][timeout:120][bbox:37.3580,127.1015,37.3720,127.1151];
+(
+  way["building"];
+  relation["building"];
+  way["highway"];
+  way["railway"];
+  way["natural"];
+  relation["natural"="water"];
+  way["waterway"];
+  way["leisure"];
+  relation["leisure"="park"];
+  way["landuse"];
+  node["railway"="station"];
+  node["amenity"="cafe"];
+  node["shop"~"^(convenience|supermarket|variety_store)$"];
+  node["office"="educational_institution"];
+  node["amenity"~"^(school|kindergarten|townhall|police|post_office|library|community_centre)$"];
+  way["amenity"~"^(school|kindergarten|townhall|police|post_office|library|community_centre)$"];
+  way["landuse"="residential"];
+);
+out body geom;

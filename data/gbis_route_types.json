@@ -1,0 +1,414 @@
+{
+ "source": "https://www.gbis.go.kr/service/busInfo/metroBus.action?centerId=<시군>&cmd=metroBusList , townBus.action?...&cmd=townBus (경기버스정보 인허가노선 목록, 2026-10-27 조회)",
+ "centers": {
+  "4113000000": "성남시",
+  "4146000000": "용인시",
+  "4161000000": "광주시",
+  "4145000000": "?",
+  "4122000000": "평택시"
+ },
+ "routes": {
+  "33-1": [
+   {
+    "center": "4113000000",
+    "kind": "metro",
+    "op": "성남시내버스",
+    "gbisType": "일반",
+    "type": "city",
+    "from": "산성동",
+    "to": "청구아파트"
+   },
+   {
+    "center": "4161000000",
+    "kind": "metro",
+    "op": "대원고속",
+    "gbisType": "일반",
+    "type": "city",
+    "from": "추자가압장앞",
+    "to": "삼동역"
+   }
+  ],
+  "51": [
+   {
+    "center": "4113000000",
+    "kind": "metro",
+    "op": "성남시내버스",
+    "gbisType": "일반",
+    "type": "city",
+    "from": "사기막골",
+    "to": "서울대병원"
+   },
+   {
+    "center": "4146000000",
+    "kind": "town",
+    "op": "용인-마북운수",
+    "gbisType": "마을",
+    "type": "village",
+    "from": "벽산블루밍아파트",
+    "to": "기흥역4번출구.기흥역시외버스정류소"
+   }
+  ],
+  "101": [
+   {
+    "center": "4113000000",
+    "kind": "metro",
+    "op": "성남시내버스",
+    "gbisType": "일반",
+    "type": "city",
+    "from": "오리역",
+    "to": "수서역5번출구"
+   },
+   {
+    "center": "4146000000",
+    "kind": "metro",
+    "op": "경기고속",
+    "gbisType": "일반",
+    "type": "city",
+    "from": "백암터미널",
+    "to": "청강문화산업대입구"
+   }
+  ],
+  "220": [
+   {
+    "center": "4113000000",
+    "kind": "metro",
+    "op": "성남시내버스",
+    "gbisType": "일반",
+    "type": "city",
+    "from": "영원무역",
+    "to": "한국학중앙연구원"
+   }
+  ],
+  "250": [
+   {
+    "center": "4113000000",
+    "kind": "metro",
+    "op": "대명운수",
+    "gbisType": "일반",
+    "type": "city",
+    "from": "도촌동행정복지센터",
+    "to": "궁내동.궁안마을"
+   }
+  ],
+  "300": [
+   {
+    "center": "4113000000",
+    "kind": "metro",
+    "op": "대원버스",
+    "gbisType": "일반",
+    "type": "city",
+    "from": "오리역",
+    "to": "은대미"
+   },
+   {
+    "center": "4122000000",
+    "kind": "metro",
+    "op": "평택여객",
+    "gbisType": "일반",
+    "type": "city",
+    "from": "오성면사무소앞",
+    "to": "오성면사무소"
+   }
+  ],
+  "380": [
+   {
+    "center": "4113000000",
+    "kind": "metro",
+    "op": "대원버스",
+    "gbisType": "일반",
+    "type": "city",
+    "from": "동분당더퍼스트정문",
+    "to": "판교대장초·중학교"
+   }
+  ],
+  "390": [
+   {
+    "center": "4113000000",
+    "kind": "metro",
+    "op": "성남시내버스",
+    "gbisType": "일반",
+    "type": "city",
+    "from": "사송동.종점",
+    "to": "초당역"
+   }
+  ],
+  "720-1A": [
+   {
+    "center": "4113000000",
+    "kind": "metro",
+    "op": "성남시내버스",
+    "gbisType": "일반",
+    "type": "city",
+    "from": "오리역",
+    "to": "남한산성공원입구.양지파출소"
+   }
+  ],
+  "3500": [
+   {
+    "center": "4113000000",
+    "kind": "metro",
+    "op": "대명운수",
+    "gbisType": "직좌",
+    "type": "express",
+    "from": "구미동차고지(미정차)",
+    "to": "케피코경기외국어고등학교"
+   }
+  ],
+  "9000": [
+   {
+    "center": "4113000000",
+    "kind": "metro",
+    "op": "대원버스",
+    "gbisType": "직좌",
+    "type": "express",
+    "from": "구미동차고지(미정차)",
+    "to": "서울역버스환승센터(5번승강장)(중)"
+   }
+  ],
+  "9407": [
+   {
+    "center": "4113000000",
+    "kind": "metro",
+    "op": "대원버스",
+    "gbisType": "직좌",
+    "type": "express",
+    "from": "구미동차고지앞",
+    "to": "ST송은빌딩"
+   }
+  ],
+  "M4102": [
+   {
+    "center": "4113000000",
+    "kind": "metro",
+    "op": "대원버스",
+    "gbisType": "광역",
+    "type": "M",
+    "from": "구미동차고지(미정차)",
+    "to": "숭례문"
+   }
+  ],
+  "8106": [
+   {
+    "center": "4113000000",
+    "kind": "metro",
+    "op": "성남시내버스",
+    "gbisType": "직좌",
+    "type": "express",
+    "from": "구미동차고지(미정차)",
+    "to": "상동역1번출구.부천터미널소풍"
+   }
+  ],
+  "8109": [
+   {
+    "center": "4113000000",
+    "kind": "metro",
+    "op": "경기고속",
+    "gbisType": "직좌",
+    "type": "express",
+    "from": "구미동차고지(미정차)",
+    "to": "대화역"
+   }
+  ],
+  "G8110": [
+   {
+    "center": "4113000000",
+    "kind": "metro",
+    "op": "대원버스",
+    "gbisType": "직좌",
+    "type": "express",
+    "from": "오리역",
+    "to": "국가인권위.안중근활동터(중)"
+   }
+  ],
+  "109": [
+   {
+    "center": "4113000000",
+    "kind": "town",
+    "op": "성남-진아교통",
+    "gbisType": "마을",
+    "type": "village",
+    "from": "정자역(마을)",
+    "to": "이마트"
+   }
+  ],
+  "109-1": [
+   {
+    "center": "4113000000",
+    "kind": "town",
+    "op": "성남-진아교통",
+    "gbisType": "마을",
+    "type": "village",
+    "from": "태재고개",
+    "to": "정자역(마을)"
+   }
+  ],
+  "117": [
+   {
+    "center": "4113000000",
+    "kind": "town",
+    "op": "성남-진아교통",
+    "gbisType": "마을",
+    "type": "village",
+    "from": "더샵판교퍼스트파크정문",
+    "to": "분당중앙고등학교"
+   }
+  ],
+  "19": [
+   {
+    "center": "4113000000",
+    "kind": "town",
+    "op": "성남-미금마을버스",
+    "gbisType": "마을",
+    "type": "village",
+    "from": "서울대병원",
+    "to": "정자역"
+   },
+   {
+    "center": "4146000000",
+    "kind": "town",
+    "op": "용인-용인교통",
+    "gbisType": "마을",
+    "type": "village",
+    "from": "구성역5번출입구",
+    "to": "오리역.하나로마트(마을)"
+   }
+  ],
+  "16": [
+   {
+    "center": "4122000000",
+    "kind": "town",
+    "op": "평택-율포여객",
+    "gbisType": "마을",
+    "type": "village",
+    "from": "서정리역(마을)",
+    "to": "평택지제역"
+   },
+   {
+    "center": "4146000000",
+    "kind": "town",
+    "op": "용인-수성교통",
+    "gbisType": "마을",
+    "type": "village",
+    "from": "성복효성해링턴코트",
+    "to": "미금역.2001아울렛"
+   },
+   {
+    "center": "4146000000",
+    "kind": "metro",
+    "op": "대원고속",
+    "gbisType": "일반",
+    "type": "city",
+    "from": "용인공영버스터미널.용인드마크데시앙앞",
+    "to": "백암터미널"
+   },
+   {
+    "center": "4161000000",
+    "kind": "metro",
+    "op": "대원고속",
+    "gbisType": "일반",
+    "type": "city",
+    "from": "상산곡동.공영차고지",
+    "to": "잠실역1번.11번출구"
+   }
+  ],
+  "102": [
+   {
+    "center": "4146000000",
+    "kind": "metro",
+    "op": "경남여객",
+    "gbisType": "직좌",
+    "type": "express",
+    "from": "단국대.치과병원",
+    "to": "건대입구역1번출구"
+   }
+  ],
+  "820": [
+   {
+    "center": "4146000000",
+    "kind": "metro",
+    "op": "경남여객",
+    "gbisType": "일반",
+    "type": "city",
+    "from": "명지대",
+    "to": "정자역"
+   }
+  ],
+  "1101": [
+   {
+    "center": "4146000000",
+    "kind": "metro",
+    "op": "경남여객",
+    "gbisType": "직좌",
+    "type": "express",
+    "from": "단국대.치과병원",
+    "to": "신분당선강남역(중)"
+   }
+  ],
+  "1303": [
+   {
+    "center": "4146000000",
+    "kind": "metro",
+    "op": "경남여객",
+    "gbisType": "직좌",
+    "type": "express",
+    "from": "외국어대학교",
+    "to": "안양역"
+   }
+  ],
+  "7007-1": [
+   {
+    "center": "4146000000",
+    "kind": "metro",
+    "op": "경남여객",
+    "gbisType": "직좌",
+    "type": "express",
+    "from": "단국대.치과병원",
+    "to": "한국거래소"
+   }
+  ],
+  "M4101": [
+   {
+    "center": "4146000000",
+    "kind": "metro",
+    "op": "경남여객",
+    "gbisType": "광역",
+    "type": "M",
+    "from": "상현역",
+    "to": "숭례문"
+   }
+  ],
+  "8100": [
+   {
+    "center": "4146000000",
+    "kind": "metro",
+    "op": "경남여객",
+    "gbisType": "직좌",
+    "type": "express",
+    "from": "단국대.치과병원",
+    "to": "을지로입구역.광교"
+   }
+  ],
+  "520": [
+   {
+    "center": "4161000000",
+    "kind": "metro",
+    "op": "경기고속",
+    "gbisType": "일반",
+    "type": "city",
+    "from": "구미동차고지앞",
+    "to": "강남cc"
+   }
+  ],
+  "720-1": [
+   {
+    "center": "4161000000",
+    "kind": "metro",
+    "op": "경기고속",
+    "gbisType": "일반",
+    "type": "city",
+    "from": "영통차고지대기(미정차)",
+    "to": "성남역"
+   }
+  ]
+ }
+}
