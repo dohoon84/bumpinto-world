@@ -59,8 +59,9 @@ export class Room extends DurableObject {
       const peer = ws.deserializeAttachment();
       if (!peer || !peer.id) continue;
       if (
+        !peer.lastSeen ||
         (duplicateDeviceId && peer.deviceId && peer.deviceId === duplicateDeviceId) ||
-        (peer.lastSeen && now - peer.lastSeen > STALE_MS)
+        now - peer.lastSeen > STALE_MS
       ) {
         this.#evictSocket(ws, duplicateDeviceId ? "replaced" : "stale");
       }
