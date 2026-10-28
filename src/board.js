@@ -13,9 +13,32 @@ const CATEGORIES = [
 ];
 
 const CAT_LABEL = Object.fromEntries(CATEGORIES.map((c) => [c.key, c.badge || c.label]));
+const BOARD_SEEN_KEY = 'jeongja3d.board.seenId';
+const NEW_WINDOW_MS = 24 * 60 * 60 * 1000;
 
 const esc = (s) =>
   String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+function readSeenPostId() {
+  try {
+    return Number(localStorage.getItem(BOARD_SEEN_KEY) || 0) || 0;
+  } catch {
+    return 0;
+  }
+}
+
+function writeSeenPostId(id) {
+  const next = Math.max(readSeenPostId(), Number(id) || 0);
+  if (!next) return;
+  try {
+    localStorage.setItem(BOARD_SEEN_KEY, String(next));
+  } catch {}
+}
+
+function isNewPost(item, now = Date.now()) {
+  if (!item?.createdAt) return false;
+  return now - Number(item.createdAt) <= NEW_WINDOW_MS;
+}
 
 function fmtDate(ms) {
   if (!ms) return '';
@@ -35,6 +58,7 @@ function fmtDate(ms) {
 
 export function mountBoard({ sms, getMe } = {}) {
   const launcher = document.getElementById('board-Launcher');
+  const launcherBadge = document.getElementById('board-new-badge');
   const contribLauncher = document.getElementById('contribute-launcher');
   const modal = document.getElementById('board-modal');
   if (!launcher || !modal) return { open: false, close() {} };
@@ -51,10 +75,39 @@ export function mountBoard({ sms, getMe } = {}) {
   let commentLoading = false;
   let likeLoading = false;
   let errorMsg = '';
+  let hasUnreadNew = false;
 
   function syncLaunchers() {
     launcher.classList.toggle('active', isOpen && view !== 'contribute');
     contribLauncher?.classList.toggle('active', isOpen && view === 'contribute');
+    if (launcherBadge) {
+      launcherBadge.hidden = !hasUnreadNew || (isOpen && view !== 'contribute');
+    }
+  }
+
+  function updateNewStatusFromItems(items = [], markSeen = false) {
+    if (!Array.isArray(items) || !items.length) return;
+    const maxId = Math.max(0, ...items.map((it) => Number(it.id) || 0));
+    const seenId = readSeenPostId();
+    const now = Date.now();
+    if (markSeen) {
+      writeSeenPostId(maxId);
+      hasUnreadNew = false;
+    } else {
+      const hasRecent = items.some((it) => isNewPost(it, now));
+      hasUnreadNew = maxId > seenId && hasRecent;
+    }
+    syncLaunchers();
+  }
+
+  async function checkNewPosts() {
+    if (isOpen && view !== 'contribute') return;
+    try {
+      const res = await sms.board('list', { category: 'all', page: 1 });
+      updateNewStatusFromItems(res.items || [], false);
+    } catch {
+      /* 백그라운드 확인 실패 무시 */
+    }
   }
 
   function setOpen(next, targetView = 'list') {
@@ -93,6 +146,7 @@ export function mountBoard({ sms, getMe } = {}) {
         pageSize: res.pageSize || 20,
       };
       page = listData.page;
+      updateNewStatusFromItems(listData.items, isOpen && view !== 'contribute');
     } catch (err) {
       errorMsg = err.message || '게시글 목록을 불러오지 못했습니다.';
     } finally {
@@ -163,6 +217,7 @@ export function mountBoard({ sms, getMe } = {}) {
             <td class="col-title">
               <button type="button" class="title-btn" data-post-id="${item.id}">
                 ${esc(item.title)}
+                ${isNewPost(item) ? '<span class="post-new-icon" title="24시간 이내 새 글">N</span>' : ''}
                 ${item.commentsCount > 0 ? `<span class="cmt-count">[${item.commentsCount}]</span>` : ''}
                 ${item.mine ? '<em class="mine-tag">내 글</em>' : ''}
               </button>
@@ -248,6 +303,7 @@ export function mountBoard({ sms, getMe } = {}) {
           <div class="board-detail-top">
             <span class="cat-badge cat-${esc(p.category)}">${esc(CAT_LABEL[p.category] || p.category)}</span>
             <h2>${esc(p.title)}</h2>
+            ${isNewPost(p) ? '<span class="post-new-icon" title="24시간 이내 새 글">N</span>' : ''}
           </div>
           <div class="board-detail-meta">
             <span>작성자 <b>${esc(p.authorName)}</b>${p.authorDisplay ? ` <small>(${esc(p.authorDisplay)})</small>` : ''}</span>
@@ -617,6 +673,7 @@ export function mountBoard({ sms, getMe } = {}) {
         });
         currentPost = res.post;
         currentComments = res.comments || [];
+        if (currentPost?.id) writeSeenPostId(currentPost.id);
         view = 'detail';
         page = 1;
         trackEvent('board_post_create', { category: cat });
@@ -634,6 +691,9 @@ export function mountBoard({ sms, getMe } = {}) {
       setOpen(false);
     }
   });
+
+  checkNewPosts();
+  setInterval(checkNewPosts, 30000);
 
   return {
     get open() {
