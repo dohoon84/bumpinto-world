@@ -6,20 +6,12 @@
   <title>Bumpinto World</title>
   <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
   <link rel="stylesheet" href="/src/style.css" />
-  <!-- Google tag (gtag.js) -->
-  <script async src="https://www.googletagmanager.com/gtag/js?id=G-WVF00T91DQ"></script>
-  <script>
-    window.dataLayer = window.dataLayer || [];
-    function gtag(){dataLayer.push(arguments);}
-    gtag('js', new Date());
-    gtag('config', 'G-WVF00T91DQ');
-  </script>
 </head>
 <body class="in-gate">
   <div id="app"></div>
   <div id="overlay"></div>
   <div id="hud">
-    <div class="help">WASD/방향키 이동 · Shift 달리기 · 마우스 드래그로 위·아래·좌·우 · 휠 줌 · Enter 채팅 · M 위에서 보기 · E 카카오바이크 · 정류장 근처에 가면 도착 정보</div>
+    <div class="help">WASD/방향키 이동 · Shift 달리기 · Space 점프 · C 앉기 · Z 자리비움 · 1~6 호들갑 · Enter 채팅(!! 외침) · M 위에서 보기 · E 바이크</div>
     <div class="clock" id="hud-clock">--:--</div>
   </div>
   <div id="buttons">
@@ -27,21 +19,30 @@
     <button id="btn-home" title="H">🚇 역으로</button>
     <button id="btn-leave" type="button" hidden>나가기</button>
   </div>
+  <div id="emote-bar" aria-label="호들갑 리액션 퀵바"></div>
   <form id="chat" autocomplete="off">
-    <input id="chat-input" maxlength="80" placeholder="말 걸기 (Enter) — 근처 사람에게만 보여요" />
+    <input id="chat-input" maxlength="80" placeholder="말 걸기 (Enter) · 끝에 !! 붙이면 호들갑 외침!" />
+    <button id="chat-log-toggle" type="button" title="주변 대화 전체보기 열기/닫기" aria-expanded="false">
+      <span>💬 전체보기</span>
+      <span id="chat-unread" class="chat-unread" hidden>0</span>
+    </button>
   </form>
   <button id="ride-btn" type="button" hidden>🚲 카카오바이크 타기 (E)</button>
+  <div id="chat-log-panel" hidden></div>
   <div id="joystick"><div id="stick"></div></div>
-  <div id="presence-status" role="button" tabindex="0" title="클릭하여 접속자 위치 및 목록 보기"></div>
+  <div id="top-right-bar">
+    <button id="contribute-launcher" class="board-launcher contribute-launcher" type="button" aria-label="함께 만들기 및 명예의 전당 열기">
+      <span class="board-icon">🌍</span>
+      <span class="board-label">함께 만들기</span>
+    </button>
+    <button id="board-Launcher" class="board-launcher" type="button" aria-label="커뮤니티 게시판 열기">
+      <span class="board-icon">📋</span>
+      <span class="board-label">게시판</span>
+      <span id="board-new-badge" class="board-new-badge" hidden>N</span>
+    </button>
+    <div id="presence-status" role="button" tabindex="0" title="클릭하여 접속자 위치 및 목록 보기"></div>
+  </div>
   <div id="presence-panel" hidden></div>
-  <button id="board-Launcher" class="board-launcher" type="button" aria-label="커뮤니티 게시판 열기">
-    <span class="board-icon">📋</span>
-    <span class="board-label">게시판</span>
-  </button>
-  <button id="contribute-launcher" class="board-launcher contribute-launcher" type="button" aria-label="함께 만들기 및 명예의 전당 열기">
-    <span class="board-icon">🌍</span>
-    <span class="board-label">함께 만들기</span>
-  </button>
   <div id="board-modal" hidden></div>
   <div id="stop-panel"></div>
   <div id="handset">

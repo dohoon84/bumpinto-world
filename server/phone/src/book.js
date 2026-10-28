@@ -1,4 +1,5 @@
 import { DurableObject } from "cloudflare:workers";
+import { NOTICE_POSTS } from "../../../src/notices.js";
 
 // 정자역 번호부 하나. 번호는 여기서만 올라가서 겹치지 않는다.
 const ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -28,7 +29,8 @@ function guideNameOf(region) {
 const PIN_MAX_FAILS = 5;
 const PIN_LOCK_MS = 5 * 60 * 1000;
 const BOARD_PAGE_SIZE = 20;
-const BOARD_CATS = new Set(["intro", "feedback", "food", "free"]);
+const BOARD_CATS = new Set(["notice", "intro", "feedback", "food", "free"]);
+const WRITABLE_BOARD_CATS = new Set(["intro", "feedback", "food", "free"]);
 
 function cleanTitle(value) {
   const title = String(value || "").replace(/[\u0000-\u001f]/g, " ").trim().replace(/\s+/g, " ").slice(0, 80);
@@ -41,6 +43,15 @@ function cleanPostBody(value) {
     .replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/g, "")
     .trim()
     .slice(0, 2000);
+  return body || null;
+}
+
+function cleanCommentBody(value) {
+  const body = String(value || "")
+    .replace(/\r\n?/g, "\n")
+    .replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/g, "")
+    .trim()
+    .slice(0, 500);
   return body || null;
 }
 
@@ -238,6 +249,59 @@ export class PhoneBook extends DurableObject {
         }
       }
       sql.exec(`INSERT INTO _sql_schema_migrations (id) VALUES (5)`);
+    }
+    if (version < 6) {
+      const cols = sql.exec("PRAGMA table_info(posts)").toArray();
+      if (!cols.some((c) => c.name === "notice_key")) {
+        sql.exec(`ALTER TABLE posts ADD COLUMN notice_key TEXT`);
+      }
+      sql.exec(`CREATE UNIQUE INDEX IF NOT EXISTS posts_notice_key ON posts (notice_key) WHERE notice_key IS NOT NULL`);
+      sql.exec(`CREATE TABLE IF NOT EXISTS post_likes (
+        post_id INTEGER NOT NULL,
+        user_id TEXT NOT NULL,
+        user_phone TEXT,
+        created_at INTEGER NOT NULL,
+        PRIMARY KEY (post_id, user_id)
+      )`);
+      sql.exec(`CREATE INDEX IF NOT EXISTS post_likes_post ON post_likes (post_id)`);
+      sql.exec(`CREATE TABLE IF NOT EXISTS post_comments (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        post_id INTEGER NOT NULL,
+        author_id TEXT NOT NULL,
+        author_phone TEXT,
+        author_name TEXT NOT NULL,
+        body TEXT NOT NULL,
+        created_at INTEGER NOT NULL
+      )`);
+      sql.exec(`CREATE INDEX IF NOT EXISTS post_comments_post ON post_comments (post_id, id ASC)`);
+      sql.exec(`INSERT INTO _sql_schema_migrations (id) VALUES (6)`);
+    }
+    this.#syncNotices();
+  }
+
+  #syncNotices() {
+    const sql = this.ctx.storage.sql;
+    const now = Date.now();
+    for (const item of NOTICE_POSTS || []) {
+      const key = String(item?.key || "").trim();
+      const title = cleanTitle(item?.title);
+      const body = cleanPostBody(item?.body);
+      if (!key || !title || !body) continue;
+      const authorName = cleanName(item?.authorName) || "크레이지랩스";
+      const createdAt = Number.isFinite(item?.createdAt) ? Number(item.createdAt) : now;
+      const existing = sql.exec("SELECT id, title, body FROM posts WHERE notice_key = ?", key).toArray()[0];
+      if (!existing) {
+        sql.exec(
+          `INSERT INTO posts (category, title, body, author_id, author_phone, author_name, views, created_at, updated_at, notice_key)
+           VALUES ('notice', ?, ?, 'system', ?, ?, 1, ?, ?, ?)`,
+          title, body, GUIDE_PHONE, authorName, createdAt, createdAt, key,
+        );
+      } else if (existing.title !== title || existing.body !== body) {
+        sql.exec(
+          "UPDATE posts SET category = 'notice', title = ?, body = ?, author_name = ? WHERE id = ?",
+          title, body, authorName, existing.id,
+        );
+      }
     }
   }
 
@@ -640,10 +704,34 @@ export class PhoneBook extends DurableObject {
   }
 
   #postRow(row, id, myPhone, includeBody = false) {
+    const sql = this.ctx.storage.sql;
     const mine = Boolean(
       (id && row.author_id === id) ||
       (myPhone && row.author_phone && row.author_phone === myPhone),
     );
+    const likesCount = Number(
+      row.likes_count ??
+        sql.exec("SELECT COUNT(*) AS n FROM post_likes WHERE post_id = ?", row.id).toArray()[0]?.n ??
+        0,
+    );
+    const commentsCount = Number(
+      row.comments_count ??
+        sql.exec("SELECT COUNT(*) AS n FROM post_comments WHERE post_id = ?", row.id).toArray()[0]?.n ??
+        0,
+    );
+    let liked = false;
+    if (id || myPhone) {
+      const likedRow = myPhone
+        ? sql.exec(
+            "SELECT 1 AS ok FROM post_likes WHERE post_id = ? AND (user_id = ? OR user_phone = ?) LIMIT 1",
+            row.id, id || "", myPhone,
+          ).toArray()[0]
+        : sql.exec(
+            "SELECT 1 AS ok FROM post_likes WHERE post_id = ? AND user_id = ? LIMIT 1",
+            row.id, id,
+          ).toArray()[0];
+      liked = !!likedRow;
+    }
     const item = {
       id: row.id,
       category: row.category,
@@ -652,11 +740,30 @@ export class PhoneBook extends DurableObject {
       authorDisplay: row.author_phone ? displayPhone(row.author_phone) : "",
       mine,
       views: row.views || 0,
+      likesCount,
+      commentsCount,
+      liked,
       createdAt: row.created_at,
       updatedAt: row.updated_at,
     };
     if (includeBody) item.body = row.body;
     return item;
+  }
+
+  #commentRow(row, id, myPhone) {
+    const mine = Boolean(
+      (id && row.author_id === id) ||
+      (myPhone && row.author_phone && row.author_phone === myPhone),
+    );
+    return {
+      id: row.id,
+      postId: row.post_id,
+      authorName: row.author_name,
+      authorDisplay: row.author_phone ? displayPhone(row.author_phone) : "",
+      body: row.body,
+      createdAt: row.created_at,
+      mine,
+    };
   }
 
   board(input) {
@@ -684,13 +791,19 @@ export class PhoneBook extends DurableObject {
       const offset = (safePage - 1) * BOARD_PAGE_SIZE;
       const rows = filterCat
         ? sql.exec(
-            `SELECT id, category, title, author_id, author_phone, author_name, views, created_at, updated_at
-             FROM posts WHERE category = ? ORDER BY id DESC LIMIT ? OFFSET ?`,
+            `SELECT p.id, p.category, p.title, p.author_id, p.author_phone, p.author_name, p.views, p.created_at, p.updated_at,
+                    (SELECT COUNT(*) FROM post_likes pl WHERE pl.post_id = p.id) AS likes_count,
+                    (SELECT COUNT(*) FROM post_comments pc WHERE pc.post_id = p.id) AS comments_count
+             FROM posts p WHERE p.category = ? ORDER BY p.id DESC LIMIT ? OFFSET ?`,
             filterCat, BOARD_PAGE_SIZE, offset,
           ).toArray()
         : sql.exec(
-            `SELECT id, category, title, author_id, author_phone, author_name, views, created_at, updated_at
-             FROM posts ORDER BY id DESC LIMIT ? OFFSET ?`,
+            `SELECT p.id, p.category, p.title, p.author_id, p.author_phone, p.author_name, p.views, p.created_at, p.updated_at,
+                    (SELECT COUNT(*) FROM post_likes pl WHERE pl.post_id = p.id) AS likes_count,
+                    (SELECT COUNT(*) FROM post_comments pc WHERE pc.post_id = p.id) AS comments_count
+             FROM posts p
+             ORDER BY CASE WHEN p.category = 'notice' THEN 0 ELSE 1 END ASC, p.id DESC
+             LIMIT ? OFFSET ?`,
             BOARD_PAGE_SIZE, offset,
           ).toArray();
       return {
@@ -712,16 +825,105 @@ export class PhoneBook extends DurableObject {
         postId,
       ).toArray()[0];
       if (!row) return { ok: false, error: "post_not_found" };
-      sql.exec("UPDATE posts SET views = views + 1 WHERE id = ?", postId);
-      row.views = (row.views || 0) + 1;
-      return { ok: true, post: this.#postRow(row, id, myPhone, true) };
+      if (!input?.noView) {
+        sql.exec("UPDATE posts SET views = views + 1 WHERE id = ?", postId);
+        row.views = (row.views || 0) + 1;
+      }
+      const commentRows = sql.exec(
+        "SELECT id, post_id, author_id, author_phone, author_name, body, created_at FROM post_comments WHERE post_id = ? ORDER BY id ASC LIMIT 200",
+        postId,
+      ).toArray();
+      return {
+        ok: true,
+        post: this.#postRow(row, id, myPhone, true),
+        comments: commentRows.map((c) => this.#commentRow(c, id, myPhone)),
+      };
     }
 
     if (!ID_RE.test(id)) return { ok: false, error: "bad_id" };
 
+    if (op === "like") {
+      const postId = Math.floor(Number(input?.postId) || 0);
+      if (!postId) return { ok: false, error: "post_not_found" };
+      const postExists = sql.exec("SELECT id FROM posts WHERE id = ?", postId).toArray()[0];
+      if (!postExists) return { ok: false, error: "post_not_found" };
+      const existingLike = myPhone
+        ? sql.exec(
+            "SELECT user_id FROM post_likes WHERE post_id = ? AND (user_id = ? OR user_phone = ?) LIMIT 1",
+            postId, id, myPhone,
+          ).toArray()[0]
+        : sql.exec(
+            "SELECT user_id FROM post_likes WHERE post_id = ? AND user_id = ? LIMIT 1",
+            postId, id,
+          ).toArray()[0];
+      let liked = false;
+      if (existingLike) {
+        if (myPhone) {
+          sql.exec("DELETE FROM post_likes WHERE post_id = ? AND (user_id = ? OR user_phone = ?)", postId, id, myPhone);
+        } else {
+          sql.exec("DELETE FROM post_likes WHERE post_id = ? AND user_id = ?", postId, id);
+        }
+        liked = false;
+      } else {
+        sql.exec(
+          "INSERT INTO post_likes (post_id, user_id, user_phone, created_at) VALUES (?, ?, ?, ?) ON CONFLICT(post_id, user_id) DO NOTHING",
+          postId, id, myPhone, Date.now(),
+        );
+        liked = true;
+      }
+      const likesCount = Number(
+        sql.exec("SELECT COUNT(*) AS n FROM post_likes WHERE post_id = ?", postId).toArray()[0]?.n || 0,
+      );
+      return { ok: true, postId, liked, likesCount };
+    }
+
+    if (op === "comment_create") {
+      const postId = Math.floor(Number(input?.postId) || 0);
+      if (!postId) return { ok: false, error: "post_not_found" };
+      const postExists = sql.exec("SELECT id FROM posts WHERE id = ?", postId).toArray()[0];
+      if (!postExists) return { ok: false, error: "post_not_found" };
+      const body = cleanCommentBody(input?.body);
+      if (!body) return { ok: false, error: "empty" };
+      const authorName = user?.name || cleanName(input?.name) || "손님";
+      const now = Date.now();
+      sql.exec(
+        "INSERT INTO post_comments (post_id, author_id, author_phone, author_name, body, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+        postId, id, myPhone, authorName, body, now,
+      );
+      const inserted = sql.exec(
+        "SELECT id, post_id, author_id, author_phone, author_name, body, created_at FROM post_comments WHERE post_id = ? ORDER BY id DESC LIMIT 1",
+        postId,
+      ).toArray()[0];
+      const commentsCount = Number(
+        sql.exec("SELECT COUNT(*) AS n FROM post_comments WHERE post_id = ?", postId).toArray()[0]?.n || 0,
+      );
+      return {
+        ok: true,
+        comment: this.#commentRow(inserted, id, myPhone),
+        commentsCount,
+      };
+    }
+
+    if (op === "comment_delete") {
+      const commentId = Math.floor(Number(input?.commentId) || 0);
+      if (!commentId) return { ok: false, error: "comment_not_found" };
+      const existing = sql.exec(
+        "SELECT id, post_id, author_id, author_phone FROM post_comments WHERE id = ?",
+        commentId,
+      ).toArray()[0];
+      if (!existing) return { ok: false, error: "comment_not_found" };
+      const isMine = existing.author_id === id || (myPhone && existing.author_phone === myPhone);
+      if (!isMine) return { ok: false, error: "forbidden" };
+      sql.exec("DELETE FROM post_comments WHERE id = ?", commentId);
+      const commentsCount = Number(
+        sql.exec("SELECT COUNT(*) AS n FROM post_comments WHERE post_id = ?", existing.post_id).toArray()[0]?.n || 0,
+      );
+      return { ok: true, postId: existing.post_id, commentsCount };
+    }
+
     if (op === "create") {
       const cat = String(input?.category || "free");
-      if (!BOARD_CATS.has(cat)) return { ok: false, error: "bad_category" };
+      if (!WRITABLE_BOARD_CATS.has(cat)) return { ok: false, error: "bad_category" };
       const title = cleanTitle(input?.title);
       if (!title) return { ok: false, error: "bad_title" };
       const body = cleanPostBody(input?.body);
@@ -736,7 +938,7 @@ export class PhoneBook extends DurableObject {
       const inserted = sql.exec(
         "SELECT id, category, title, body, author_id, author_phone, author_name, views, created_at, updated_at FROM posts ORDER BY id DESC LIMIT 1",
       ).toArray()[0];
-      return { ok: true, post: this.#postRow(inserted, id, myPhone, true) };
+      return { ok: true, post: this.#postRow(inserted, id, myPhone, true), comments: [] };
     }
 
     if (op === "update") {
@@ -749,8 +951,8 @@ export class PhoneBook extends DurableObject {
       if (!existing) return { ok: false, error: "post_not_found" };
       const isMine = existing.author_id === id || (myPhone && existing.author_phone === myPhone);
       if (!isMine) return { ok: false, error: "forbidden" };
-      const cat = String(input?.category || existing.category);
-      if (!BOARD_CATS.has(cat)) return { ok: false, error: "bad_category" };
+      const cat = existing.category === "notice" ? "notice" : String(input?.category || existing.category);
+      if (cat !== "notice" && !WRITABLE_BOARD_CATS.has(cat)) return { ok: false, error: "bad_category" };
       const title = cleanTitle(input?.title);
       if (!title) return { ok: false, error: "bad_title" };
       const body = cleanPostBody(input?.body);
@@ -766,7 +968,15 @@ export class PhoneBook extends DurableObject {
       existing.body = body;
       existing.author_name = authorName;
       existing.updated_at = now;
-      return { ok: true, post: this.#postRow(existing, id, myPhone, true) };
+      const commentRows = sql.exec(
+        "SELECT id, post_id, author_id, author_phone, author_name, body, created_at FROM post_comments WHERE post_id = ? ORDER BY id ASC LIMIT 200",
+        postId,
+      ).toArray();
+      return {
+        ok: true,
+        post: this.#postRow(existing, id, myPhone, true),
+        comments: commentRows.map((c) => this.#commentRow(c, id, myPhone)),
+      };
     }
 
     if (op === "delete") {
@@ -779,6 +989,8 @@ export class PhoneBook extends DurableObject {
       if (!existing) return { ok: false, error: "post_not_found" };
       const isMine = existing.author_id === id || (myPhone && existing.author_phone === myPhone);
       if (!isMine) return { ok: false, error: "forbidden" };
+      sql.exec("DELETE FROM post_likes WHERE post_id = ?", postId);
+      sql.exec("DELETE FROM post_comments WHERE post_id = ?", postId);
       sql.exec("DELETE FROM posts WHERE id = ?", postId);
       return { ok: true };
     }

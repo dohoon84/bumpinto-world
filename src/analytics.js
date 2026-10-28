@@ -4,10 +4,17 @@ const DEFAULT_GA_ID = import.meta.env?.VITE_GA_ID || 'G-WVF00T91DQ';
 let initialized = false;
 let activeId = '';
 
+export function isLocalHost() {
+  if (typeof location === 'undefined') return false;
+  const h = location.hostname;
+  return h === 'localhost' || h === '127.0.0.1' || h === '[::1]' || h.endsWith('.local');
+}
+
 export function initAnalytics(customId) {
   if (typeof window === 'undefined') return;
   const params = new URLSearchParams(location.search);
   if (params.has('shot') || params.get('ga') === 'off') return;
+  if (isLocalHost() && !customId && !params.has('ga')) return;
   const id = (customId || params.get('ga') || DEFAULT_GA_ID || '').trim();
   if (!id || !/^G-[A-Z0-9]+$/i.test(id)) return;
   if (typeof window.gtag === 'function') {

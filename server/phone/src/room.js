@@ -87,6 +87,9 @@ export class Room extends DurableObject {
           x: peer.x,
           z: peer.z,
           ry: peer.ry,
+          riding: !!peer.riding,
+          sit: peer.sit || "",
+          afk: !!peer.afk,
         });
       }
     }
@@ -173,11 +176,23 @@ export class Room extends DurableObject {
       me.x = Number(m.x) || 0;
       me.z = Number(m.z) || 0;
       me.ry = Number(m.ry) || 0;
+      me.riding = !!m.riding;
+      me.sit = typeof m.sit === "string" ? m.sit.slice(0, 16) : "";
+      me.afk = !!m.afk;
+      const jy = Math.max(0, Math.min(5, Number(m.jy) || 0));
+      const emote = typeof m.emote === "string" ? m.emote.slice(0, 16) : "";
       ws.serializeAttachment(me);
       this.#broadcast(
-        { t: "state", id: me.id, x: me.x, z: me.z, ry: me.ry, moving: !!m.moving },
+        { t: "state", id: me.id, x: me.x, z: me.z, ry: me.ry, moving: !!m.moving, riding: me.riding, jy, emote, sit: me.sit, afk: me.afk },
         ws,
       );
+      return;
+    }
+    if (m.t === "emote") {
+      ws.serializeAttachment(me);
+      const kind = String(m.kind || "").trim().slice(0, 16);
+      const combo = Math.max(1, Math.min(99, Math.floor(Number(m.combo) || 1)));
+      if (kind) this.#broadcast({ t: "emote", id: me.id, kind, combo }, ws);
       return;
     }
     if (m.t === "chat") {

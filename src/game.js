@@ -8,9 +8,11 @@ import { sanitizeLook } from './look.js';
 import { NPCs, NPC_DEFS, CROWD_EXTRA } from './entities/npcs.js';
 import { createAtmosphere } from './weather.js';
 import { Overlay, Bubble } from './overlay.js';
+import { EMOTE_LIST, EMOTE_BY_ID, EMOTE_BY_CODE, EmoteFX } from './emotes.js';
 import { Input } from './input.js';
 import { createPresence } from './net/presence.js';
 import { RemotePlayers } from './net/remotePlayers.js';
+import { CHAT_RADIUS } from './net/protocol.js';
 import { buildTransit, makeCrossingGuard } from './transit/transit.js';
 import { mountPhone } from './phone.js';
 import { mountHandset } from './handset.js';
@@ -22,6 +24,7 @@ import { Taxis } from './entities/taxis.js'; // [taxi]
 import { Police } from './entities/police.js';
 import { addRiversideFolk } from './entities/riversideFolk.js';
 import { addStationPlaza } from './world/stationPlaza.js';
+import { mountDonationBillboards } from './world/donationBillboard.js';
 
 const params = new URLSearchParams(location.search);
 const shot = params.has('shot');
@@ -115,9 +118,17 @@ function wear(next) {
 const pos = new THREE.Vector3(world.signPos.x + 4, 0, world.signPos.z + 4);
 for (let r = 0, a = 0; (world.isBlocked(pos.x, pos.z) || world.onRoad(pos.x, pos.z)) && r < 80; a += 0.7, r += 0.3) pos.set(world.signPos.x + Math.cos(a) * r, 0, world.signPos.z + Math.sin(a) * r);
 player.position.copy(pos);
-const nameTag = overlay.add({ cls: 'tag', text: me.name || '나', getPos: () => player.position.clone().setY(player.position.y + 2.15), maxDist: 60 }); // [terrain] 높이 상대
+const nameTag = overlay.add({
+  cls: 'tag',
+  text: me.name || '나',
+  getPos: () => player.position.clone().setY(player.position.y + (player.userData.jumpY || 0) + (player.userData.sit || player.userData.afk ? 1.55 : 2.15)),
+  maxDist: 60,
+}); // [terrain] 높이 상대
 nameTag.hidden = !joined;
-const myBubble = new Bubble(overlay, 'me', () => player.position.clone().setY(player.position.y + 2.7)); // [terrain]
+const myBubble = new Bubble(overlay, 'me', () => player.position.clone().setY(player.position.y + (player.userData.jumpY || 0) + (player.userData.sit || player.userData.afk ? 2.15 : 2.7)), {
+  getName: () => me.name || '나',
+  getColor: () => me.color || '#4f7cff',
+}); // [terrain]
 
 // ?npcs=N 은 0부터 상한까지. 이름 있는 주민을 먼저 두고, 남은 수만큼 지도 전역 행인을 채운다.
 const npcCap = NPC_DEFS.length + CROWD_EXTRA;
@@ -165,15 +176,17 @@ const taxis = taxiCount ? new Taxis(scene, overlay, { drive: driveData, data, tr
 const police = params.get('police') === '0' ? null : new Police(scene, overlay, { drive: driveData, data, transit, world, count: 2 });
 const riverFolk = terrain ? addRiversideFolk(scene, overlay, terrain, world, st) : null;
 const stationPlaza = addStationPlaza(scene, overlay, world);
+const donationBoards = mountDonationBillboards({ scene, overlay, world, camera, domElement: renderer.domElement });
 {
   const origBlocked = world.isBlocked;
-  world.isBlocked = (x, z, r) => origBlocked(x, z, r) || stationPlaza.blocks(x, z);
+  world.isBlocked = (x, z, r) => origBlocked(x, z, r) || stationPlaza.blocks(x, z) || donationBoards.blocks(x, z);
 }
 
 // --- 멀티플레이 프레즌스(지금은 목업, ?ws=URL 이면 실서버) ---
+const emoteFx = new EmoteFX(scene, document.getElementById('overlay'), camera);
 const presence = createPresence({ station: st });
 if (npcs.guard) presence.setGuard?.(npcs.guard);
-const remotes = new RemotePlayers(scene, overlay, presence, () => player.position, (t) => myBubble.say(t, 6000), terrain?.getGroundHeight); // [terrain] 원격 플레이어도 지형 높이
+const remotes = new RemotePlayers(scene, overlay, presence, () => player.position, (t) => myBubble.say(t, 6000), terrain?.getGroundHeight, emoteFx); // [terrain] 원격 플레이어도 지형 높이
 const statusEl = document.getElementById('presence-status');
 const presencePanel = document.getElementById('presence-panel');
 let presenceOpen = false;
@@ -213,6 +226,13 @@ function renderPresencePanel() {
           const dz = p.z - player.position.z;
           const dist = Math.round(Math.hypot(dx, dz));
           const dir = dist > 3 ? `${compassDir(dx, dz)}쪽 ${dist}m` : '바로 옆';
+          const statusBadge = p.riding
+            ? ' · 🚲 바이크 탑승 중'
+            : p.afk
+              ? ' · 💤 자리비움'
+              : p.sit
+                ? ' · 🧘 휴식 중'
+                : '';
           return `
             <li class="p-row">
               <div class="p-info">
@@ -221,7 +241,7 @@ function renderPresencePanel() {
                   <strong>${escHtml(p.name)}</strong>
                   <span class="p-dir">${escHtml(dir)}</span>
                 </div>
-                <small>📍 ${escHtml(spot.name)} 근처 (${spot.dist}m)</small>
+                <small>📍 ${escHtml(spot.name)} 근처 (${spot.dist}m)${statusBadge}</small>
               </div>
               <div class="p-actions">
                 <button type="button" class="p-btn" data-peer-look="${escHtml(p.id)}" title="그 방향 바라보기">방향</button>
@@ -232,25 +252,35 @@ function renderPresencePanel() {
         .join('')
     : `<li class="p-empty">현재 다른 접속자가 없습니다.<br><small>친구나 커뮤니티에 링크를 공유해 보세요!</small></li>`;
 
-  presencePanel.innerHTML = `
-    <div class="p-head">
-      <span>🟢 실시간 접속자 (${peers.length + 1}명)</span>
-      <button type="button" class="p-close" data-presence-close="1" aria-label="닫기">✕</button>
-    </div>
-    <ul class="p-list">
-      <li class="p-row me">
-        <div class="p-info">
-          <div class="p-title">
-            <span class="p-swatch" style="background:${escHtml(me.color || '#4f7cff')}"></span>
-            <strong>${escHtml(me.name || '나')}</strong>
-            <span class="p-me-badge">나</span>
-          </div>
-          <small>📍 ${escHtml(mySpot.name)} 근처 (${mySpot.dist}m)</small>
+  const listHtml = `
+    <li class="p-row me">
+      <div class="p-info">
+        <div class="p-title">
+          <span class="p-swatch" style="background:${escHtml(me.color || '#4f7cff')}"></span>
+          <strong>${escHtml(me.name || '나')}</strong>
+          <span class="p-me-badge">나</span>
         </div>
-      </li>
-      ${peerRows}
-    </ul>
-    <div class="p-foot">우측 하단 미니맵에도 접속자 위치·방향이 표시됩니다</div>`;
+        <small>📍 ${escHtml(mySpot.name)} 근처 (${mySpot.dist}m)</small>
+      </div>
+    </li>
+    ${peerRows}`;
+
+  let listEl = presencePanel.querySelector('.p-list');
+  if (!listEl) {
+    presencePanel.innerHTML = `
+      <div class="p-head">
+        <span class="p-head-title">🟢 실시간 접속자 (${peers.length + 1}명)</span>
+        <button type="button" class="p-close" data-presence-close="1" aria-label="닫기">✕</button>
+      </div>
+      <ul class="p-list">${listHtml}</ul>
+      <div class="p-foot">우측 하단 미니맵에도 접속자 위치·방향이 표시됩니다</div>`;
+  } else {
+    const prevScroll = listEl.scrollTop;
+    const headTitle = presencePanel.querySelector('.p-head-title');
+    if (headTitle) headTitle.textContent = `🟢 실시간 접속자 (${peers.length + 1}명)`;
+    listEl.innerHTML = listHtml;
+    listEl.scrollTop = prevScroll;
+  }
 }
 
 function setPresenceOpen(next) {
@@ -362,7 +392,9 @@ startLobby = () => {
     onBack: reopenGate,
     onJoin(name, look, session) {
       me.name = name; me.color = look.color; me.look = look;
-      wear(look); applySession(session); player.visible = true; nameTag.hidden = false; nameTag.el.textContent = name;
+      mySit = ''; myAfk = false; myEmote = ''; myEmoteUntil = 0; idleTime = 0;
+      wear(look); applySession(session); player.visible = true; nameTag.hidden = false; nameTag.el.textContent = name; nameTag.el.classList.remove('is-afk');
+      renderEmoteBar();
       document.body.classList.remove('in-lobby');
       leaveBtn.hidden = false;
       handset.signIn();
@@ -374,11 +406,359 @@ startLobby = () => {
 if (lobbyQueued) startLobby();
 if (joined) presence.connect(me);
 
-// --- 채팅 ---
+// --- 채팅 & 주변 대화 전체보기 로그 ---
 const chatForm = document.getElementById('chat'), chatInput = document.getElementById('chat-input');
+const chatLogToggle = document.getElementById('chat-log-toggle');
+const chatUnreadEl = document.getElementById('chat-unread');
+const chatLogPanel = document.getElementById('chat-log-panel');
+const chatLogs = [];
+const MAX_CHAT_LOGS = 100;
+let chatLogOpen = false;
+let chatIncludeNpc = false;
+let chatUnread = 0;
+
+function syncChatUnread() {
+  if (!chatUnreadEl) return;
+  if (chatUnread > 0 && !chatLogOpen) {
+    chatUnreadEl.hidden = false;
+    chatUnreadEl.textContent = chatUnread > 99 ? '99+' : String(chatUnread);
+  } else {
+    chatUnreadEl.hidden = true;
+  }
+}
+
+function renderChatLogPanel() {
+  if (!chatLogPanel || !chatLogOpen) return;
+
+  const visibleLogs = chatIncludeNpc ? chatLogs : chatLogs.filter((item) => item.kind !== 'npc');
+  const rowsHtml = visibleLogs.length
+    ? visibleLogs
+        .map((item) => {
+          const badge =
+            item.kind === 'me'
+              ? '<span class="c-badge me">나</span>'
+              : item.kind === 'npc'
+                ? '<span class="c-badge npc">NPC</span>'
+                : `<span class="c-swatch" style="background:${escHtml(item.color || '#20c997')}"></span>`;
+          return `
+            <li class="c-row ${escHtml(item.kind)}">
+              <div class="c-meta">
+                <div class="c-who">
+                  ${badge}
+                  <strong>${escHtml(item.name)}</strong>
+                </div>
+                <time class="c-time">${escHtml(item.time)}</time>
+              </div>
+              <p class="c-text">${escHtml(item.text)}</p>
+            </li>`;
+        })
+        .join('')
+    : `<li class="c-empty">${
+        chatIncludeNpc
+          ? '아직 근처(30m)에서 들린 대화가 없습니다.'
+          : '아직 주고받은 플레이어 대화가 없습니다.<br><small>근처(30m) 접속자와 인사하거나 상단의 <b>NPC 대사 포함</b>을 켜보세요!</small>'
+      }</li>`;
+
+  let listEl = chatLogPanel.querySelector('.c-list');
+  if (!listEl) {
+    chatLogPanel.innerHTML = `
+      <div class="c-head">
+        <span class="c-title">💬 주변 대화 전체보기 <small>(30m)</small></span>
+        <div class="c-head-actions">
+          <button type="button" class="c-npc-toggle${chatIncludeNpc ? ' on' : ''}" data-chat-npc-toggle="1" aria-pressed="${chatIncludeNpc}">
+            🗣️ NPC 대사 포함
+          </button>
+          <button type="button" class="c-close" data-chat-close="1" aria-label="닫기">✕</button>
+        </div>
+      </div>
+      <ul class="c-list">${rowsHtml}</ul>`;
+  } else {
+    const prevScroll = listEl.scrollTop;
+    const npcBtn = chatLogPanel.querySelector('[data-chat-npc-toggle]');
+    if (npcBtn) {
+      npcBtn.classList.toggle('on', chatIncludeNpc);
+      npcBtn.setAttribute('aria-pressed', String(chatIncludeNpc));
+    }
+    listEl.innerHTML = rowsHtml;
+    listEl.scrollTop = prevScroll;
+  }
+}
+
+function setChatLogOpen(next) {
+  if (!chatLogPanel) return;
+  chatLogOpen = next;
+  chatLogPanel.hidden = !chatLogOpen;
+  chatLogToggle?.classList.toggle('open', chatLogOpen);
+  chatLogToggle?.setAttribute('aria-expanded', String(chatLogOpen));
+  if (chatLogOpen) {
+    chatUnread = 0;
+    syncChatUnread();
+    renderChatLogPanel();
+  }
+}
+
+overlay.onSay = ({ cls, text, pos, meta }) => {
+  if (!joined || !text) return;
+  if (cls === 'npc') {
+    if (!pos || Math.hypot(player.position.x - pos.x, player.position.z - pos.z) > CHAT_RADIUS) return;
+  }
+  const now = new Date();
+  const hh = String(now.getHours()).padStart(2, '0');
+  const mm = String(now.getMinutes()).padStart(2, '0');
+  const name = meta?.getName
+    ? meta.getName()
+    : (meta?.name || (cls === 'me' ? (me.name || '나') : cls === 'remote' ? '손님' : '주민'));
+  const color = meta?.getColor
+    ? meta.getColor()
+    : (meta?.color || (cls === 'me' ? (me.color || '#4f7cff') : cls === 'remote' ? '#20c997' : '#9775fa'));
+
+  // 동일 화자가 직전에 같은 대사를 연속으로 띄운 경우 중복 누적 방지
+  const last = chatLogs[chatLogs.length - 1];
+  if (cls === 'npc' && last && last.kind === 'npc' && last.name === name && last.text === text) return;
+
+  chatLogs.push({ kind: cls, name, color, text, time: `${hh}:${mm}` });
+  if (chatLogs.length > MAX_CHAT_LOGS) chatLogs.shift();
+
+  if (chatLogOpen) {
+    if (cls !== 'npc' || chatIncludeNpc) renderChatLogPanel();
+  } else if (cls === 'remote' || (cls === 'npc' && chatIncludeNpc)) {
+    chatUnread++;
+    syncChatUnread();
+  }
+};
+
+chatLogToggle?.addEventListener('click', () => setChatLogOpen(!chatLogOpen));
+chatLogPanel?.addEventListener('click', (e) => {
+  if (e.target.closest('[data-chat-close]')) {
+    setChatLogOpen(false);
+    return;
+  }
+  if (e.target.closest('[data-chat-npc-toggle]')) {
+    chatIncludeNpc = !chatIncludeNpc;
+    renderChatLogPanel();
+  }
+});
+
 chatForm.addEventListener('submit', (e) => {
   e.preventDefault(); const text = chatInput.value.trim(); if (!text) return chatInput.blur();
-  myBubble.say(text, 6000); presence.sendChat(text); chatInput.value = ''; chatInput.blur();
+  myBubble.say(text, 6000);
+  if (myBubble.item.el.classList.contains('shouting')) {
+    triggerEmote('fuss', false);
+  }
+  presence.sendChat(text); chatInput.value = ''; chatInput.blur();
+});
+
+// --- 호들갑(리액션/이모트) 퀵바 & 단축키 (1~6) + 앉기(C) & 자동 대기모드(30초) ---
+const emoteBar = document.getElementById('emote-bar');
+const AFK_TIMEOUT_SEC = 30;
+let emoteFolded = false;
+let myEmote = '';
+let myEmoteUntil = 0;
+let emoteCombo = 0;
+let lastEmoteAt = 0;
+let mySit = ''; // '' | 'ground' | 'beanbag' | 'bench' | 'ledge'
+let sitExitPos = null; // 좌석에서 일어날 때 복귀할 안전한 좌표
+let myAfk = false;
+let idleTime = 0;
+let myZzzTimer = 0;
+let nearSeatHint = null;
+
+function standUpFromSeat() {
+  if (!mySit && !sitExitPos) return;
+  if (sitExitPos) {
+    const ty = terrain ? terrain.getGroundHeight(sitExitPos.x, sitExitPos.z, player.position.y) : 0;
+    player.position.set(sitExitPos.x, ty, sitExitPos.z);
+    sitExitPos = null;
+  }
+  mySit = '';
+  player.userData.sit = '';
+}
+
+function syncMyNameTag() {
+  const baseName = me.name || '나';
+  const want = myAfk ? `${baseName} 💤 자리비움` : baseName;
+  if (nameTag.el.textContent !== want) {
+    nameTag.el.textContent = want;
+    nameTag.el.classList.toggle('is-afk', myAfk);
+  }
+}
+
+function wakeFromAfk() {
+  idleTime = 0;
+  if (myAfk) {
+    myAfk = false;
+    syncMyNameTag();
+    renderEmoteBar();
+  }
+}
+
+function renderEmoteBar() {
+  if (!emoteBar) return;
+  if (emoteFolded) {
+    emoteBar.classList.add('folded');
+    emoteBar.innerHTML = `
+      <button type="button" class="emote-fold-btn" data-emote-fold="0" title="리액션·앉기·자리비움 바 펼치기">
+        <span>🎉 리액션 (1~6) · 🧘 앉기 (C) · 💤 자리비움 (Z)</span>
+        <span class="caret">▴</span>
+      </button>`;
+    return;
+  }
+  emoteBar.classList.remove('folded');
+  const sitTitle = mySit
+    ? '일어나기 (단축키 C)'
+    : nearSeatHint
+      ? `${nearSeatHint.label} (단축키 C)`
+      : '자리에 앉기 (단축키 C — 빈백·벤치 근처에선 맞춰 앉아요)';
+  const sitLabel = mySit ? '일어나기' : nearSeatHint ? nearSeatHint.label.replace(/\s*\(C\)$/, '').replace(/^.\s*/, '') : '앉기';
+  const sitIcon = mySit ? '🚶' : nearSeatHint ? nearSeatHint.label.split(' ')[0] : '🧘';
+  const btns = EMOTE_LIST.map(
+    (e) => `
+      <button type="button" class="emote-btn ${myEmote === e.id ? 'active' : ''}" data-emote-id="${e.id}" title="${e.label} (단축키 ${e.digit} 연타 가능!)">
+        <kbd>${e.digit}</kbd>
+        <span class="em-ico">${e.icon}</span>
+        <span class="em-lbl">${e.label}</span>
+      </button>`,
+  ).join('');
+  emoteBar.innerHTML = `
+    <div class="emote-list">
+      <button type="button" class="emote-btn sit-btn ${mySit ? 'active' : ''}" data-sit-toggle="1" title="${escHtml(sitTitle)}">
+        <kbd>C</kbd>
+        <span class="em-ico">${sitIcon}</span>
+        <span class="em-lbl">${escHtml(sitLabel)}</span>
+      </button>
+      <button type="button" class="emote-btn afk-btn ${myAfk ? 'active' : ''}" data-afk-toggle="1" title="자리비움/업무중 모드 전환 (단축키 Z)">
+        <kbd>Z</kbd>
+        <span class="em-ico">💤</span>
+        <span class="em-lbl">${myAfk ? '복귀' : '자리비움'}</span>
+      </button>
+      <span class="emote-sep" aria-hidden="true"></span>
+      ${btns}
+    </div>
+    <button type="button" class="emote-fold-btn icon-only" data-emote-fold="1" title="리액션 바 접기" aria-label="리액션 바 접기">▾</button>`;
+}
+renderEmoteBar();
+
+function toggleSit() {
+  if (!joined || board.open) return;
+  wakeFromAfk();
+  if (bikes.riding) dismountBike();
+  if (mySit) {
+    standUpFromSeat();
+    renderEmoteBar();
+    return;
+  }
+  myEmote = '';
+  myEmoteUntil = 0;
+  player.userData.emote = '';
+  const seat = stationPlaza.findSeat?.(player.position.x, player.position.z);
+  if (seat) {
+    sitExitPos = {
+      x: seat.exitX ?? player.position.x,
+      z: seat.exitZ ?? player.position.z,
+    };
+    const ty = terrain ? terrain.getGroundHeight(seat.x, seat.z, player.position.y) : 0;
+    player.position.set(seat.x, ty, seat.z);
+    player.rotation.y = seat.ry;
+    mySit = seat.kind;
+  } else {
+    sitExitPos = null;
+    mySit = 'ground';
+  }
+  player.userData.sit = mySit;
+  trackEvent('player_sit', { kind: mySit });
+  renderEmoteBar();
+}
+
+function toggleAfk() {
+  if (!joined || board.open) return;
+  if (bikes.riding) dismountBike();
+  if (myAfk) {
+    myAfk = false;
+    idleTime = 0;
+    standUpFromSeat();
+    syncMyNameTag();
+    renderEmoteBar();
+    return;
+  }
+  myEmote = '';
+  myEmoteUntil = 0;
+  player.userData.emote = '';
+  if (!mySit) {
+    const seat = stationPlaza.findSeat?.(player.position.x, player.position.z);
+    if (seat) {
+      sitExitPos = {
+        x: seat.exitX ?? player.position.x,
+        z: seat.exitZ ?? player.position.z,
+      };
+      const ty = terrain ? terrain.getGroundHeight(seat.x, seat.z, player.position.y) : 0;
+      player.position.set(seat.x, ty, seat.z);
+      player.rotation.y = seat.ry;
+      mySit = seat.kind;
+    } else {
+      sitExitPos = null;
+      mySit = 'ground';
+    }
+    player.userData.sit = mySit;
+  }
+  myAfk = true;
+  idleTime = AFK_TIMEOUT_SEC;
+  myZzzTimer = 0;
+  syncMyNameTag();
+  emoteFx.spawnZzz(player.position);
+  trackEvent('player_afk_toggle', { afk: true });
+  renderEmoteBar();
+}
+
+function triggerEmote(emoteId, sendNet = true) {
+  if (!joined || board.open) return;
+  wakeFromAfk();
+  if (mySit) {
+    standUpFromSeat();
+  }
+  const def = EMOTE_BY_ID[emoteId];
+  if (!def) return;
+  const now = performance.now();
+  if (now - lastEmoteAt < 900) {
+    emoteCombo = Math.min(99, emoteCombo + 1);
+  } else {
+    emoteCombo = 1;
+  }
+  lastEmoteAt = now;
+  myEmote = def.id;
+  myEmoteUntil = now + 3400;
+  player.userData.emote = myEmote;
+  emoteFx.burst(player.position, def.id, emoteCombo);
+  if (sendNet) {
+    presence.sendEmote(def.id, emoteCombo);
+    trackEvent('emote_use', { emote: def.id, combo: emoteCombo });
+  }
+  renderEmoteBar();
+}
+
+emoteBar?.addEventListener('click', (e) => {
+  const foldBtn = e.target.closest('[data-emote-fold]');
+  if (foldBtn) {
+    emoteFolded = foldBtn.dataset.emoteFold === '1';
+    renderEmoteBar();
+    return;
+  }
+  const sitBtn = e.target.closest('[data-sit-toggle]');
+  if (sitBtn) {
+    toggleSit();
+    sitBtn.blur();
+    return;
+  }
+  const afkBtn = e.target.closest('[data-afk-toggle]');
+  if (afkBtn) {
+    toggleAfk();
+    afkBtn.blur();
+    return;
+  }
+  const btn = e.target.closest('[data-emote-id]');
+  if (btn) {
+    triggerEmote(btn.dataset.emoteId, true);
+    btn.blur();
+  }
 });
 
 // --- 입력/카메라 ---
@@ -391,19 +771,39 @@ viewBtn.onclick = () => setMode(cam.mode === 'overview' ? 'follow' : 'overview')
 
 const helpEl = document.querySelector('#hud .help');
 const HELP_WALK = helpEl.textContent;
-const HELP_RIDE = '카카오바이크 · W 전진 · S 브레이크 · A/D 회전 · Shift 빠르게 · E 내리기';
+const HELP_RIDE = '카카오바이크 · W 전진 · S 브레이크 · A/D 회전 · Shift 빠르게 · Space 점프 · E 내리기';
 const rideBtn = document.getElementById('ride-btn');
 const RIDE_Y = 0.16;
+const JUMP_V = 6.2;
+const BIKE_JUMP_V = 4.8;
+const JUMP_GRAVITY = 18;
+let jumpY = 0;
+let jumpVel = 0;
 let rideUi = '';
+function triggerJump() {
+  if (!joined || board.open) return;
+  wakeFromAfk();
+  if (mySit) {
+    standUpFromSeat();
+    renderEmoteBar();
+  }
+  if (jumpY <= 0.001) {
+    jumpVel = bikes.riding ? BIKE_JUMP_V : JUMP_V;
+  }
+}
 function seatPlayer() {
   const b = bikes.riding;
   const back = 0.12;
-  player.position.set(b.x - Math.sin(b.ry) * back, (b.y || 0) + RIDE_Y, b.z - Math.cos(b.ry) * back);
+  player.position.set(b.x - Math.sin(b.ry) * back, (b.y || 0) + RIDE_Y + jumpY, b.z - Math.cos(b.ry) * back);
   player.rotation.y = b.ry;
+  player.userData.jumpY = 0;
 }
 function dismountBike() {
   const b = bikes.riding;
   if (!b) return;
+  jumpY = 0;
+  jumpVel = 0;
+  b.mesh.position.y = b.y || 0;
   clearRidePose(player);
   const fx = Math.sin(b.ry), fz = Math.cos(b.ry);
   const spots = [[b.x + fz * 0.95, b.z - fx * 0.95], [b.x - fz * 0.95, b.z + fx * 0.95], [b.x - fx * 0.8, b.z - fz * 0.8]];
@@ -415,9 +815,18 @@ function dismountBike() {
 }
 function toggleRide() {
   if (!joined) return;
+  wakeFromAfk();
   if (bikes.riding) { dismountBike(); return; }
   const b = bikes.nearest(player.position.x, player.position.z, undefined, player.position.y);
   if (!b) return;
+  jumpY = 0;
+  jumpVel = 0;
+  standUpFromSeat();
+  myEmote = '';
+  myEmoteUntil = 0;
+  player.userData.jumpY = 0;
+  player.userData.emote = '';
+  renderEmoteBar();
   bikes.mount(b);
   seatPlayer();
   animateRide(player, 0, 0);
@@ -443,8 +852,20 @@ leaveBtn.onclick = () => {
   if (bikes.riding) dismountBike();
   rememberPlace(true);
   board.close();
+  donationBoards.closeModal();
   handset.close();
   setPresenceOpen(false);
+  setChatLogOpen(false);
+  mySit = '';
+  myAfk = false;
+  myEmote = '';
+  myEmoteUntil = 0;
+  idleTime = 0;
+  player.userData.sit = '';
+  player.userData.afk = false;
+  player.userData.emote = '';
+  nameTag.el.classList.remove('is-afk');
+  renderEmoteBar();
   joined = false;
   player.visible = false;
   nameTag.hidden = true;
@@ -461,13 +882,19 @@ input.onKey = (e) => {
   if (e.code === 'KeyH') document.getElementById('btn-home').onclick();
   if (e.code === 'Enter') { e.preventDefault(); chatInput.focus(); }
   if (e.code === 'KeyE' && !e.repeat) toggleRide();
+  if (e.code === 'KeyF' && !e.repeat && donationBoards.isNear) donationBoards.openModal('hotkey_f');
+  if (e.code === 'KeyC' && !e.repeat) toggleSit();
+  if (e.code === 'KeyZ' && !e.repeat) toggleAfk();
+  if (e.code === 'Space' && !e.repeat) triggerJump();
+  const emoteDef = EMOTE_BY_CODE[e.code];
+  if (emoteDef) triggerEmote(emoteDef.id, true);
 };
 const ov = { yaw: 0.35, pitch: 0.95, dist: 1000 };
 const phone = mountPhone({ data });
 
 let placeAt = 0, placeMark = '';
 function rememberPlace(force = false) {
-  if (!joined || sms.off || !sms.session) return;
+  if (!joined || !sms.session) return;
   const p = player.position;
   const here = `${p.x.toFixed(1)},${p.y.toFixed(1)},${p.z.toFixed(1)},${player.rotation.y.toFixed(2)}`;
   const now = performance.now();
@@ -509,7 +936,23 @@ function frame() {
   } else { ov.yaw += dy; ov.pitch = THREE.MathUtils.clamp(ov.pitch + dp, 0.08, 1.5); ov.dist = THREE.MathUtils.clamp(ov.dist * (1 + dz), 150, 2500); }
 
   // 이동. 걸을 때는 카메라 기준, 바이크는 핸들(W 전진 · A/D 회전). 건물 안으로는 못 들어감.
-  const { f, s, run } = input.axes();
+  const { f, s, run, jump } = input.axes();
+  if (dy || dp || dz || f || s || jump) wakeFromAfk();
+  if (joined && jump && !board.open && jumpY <= 0.001) {
+    if (mySit) {
+      standUpFromSeat();
+      renderEmoteBar();
+    }
+    jumpVel = bikes.riding ? BIKE_JUMP_V : JUMP_V;
+  }
+  if (jumpY > 0 || jumpVel > 0) {
+    jumpY += jumpVel * dt;
+    jumpVel -= JUMP_GRAVITY * dt;
+    if (jumpY <= 0) {
+      jumpY = 0;
+      jumpVel = 0;
+    }
+  }
   moveSpeed = 0;
   if (joined && bikes.riding) {
     const b = bikes.riding;
@@ -540,6 +983,7 @@ function frame() {
       if (!xOk && !zOk) { bikes.speed = 0; break; }
     }
     bikes.place(b);
+    b.mesh.position.y = (b.y || 0) + jumpY;
     seatPlayer();
     moveSpeed = Math.abs(bikes.speed);
     player.userData.phoneOpen = false;
@@ -547,6 +991,10 @@ function frame() {
     bikes.spin(dt);
   } else {
     if (joined && (f || s)) {
+      if (mySit) {
+        standUpFromSeat();
+        renderEmoteBar();
+      }
       const yaw = cam.mode === 'follow' ? cam.yaw : ov.yaw;
       const fx = -Math.sin(yaw), fz = -Math.cos(yaw), rx = -fz, rz = fx;
       let mx = fx * f + rx * s, mz = fz * f + rz * s; const L = Math.hypot(mx, mz); mx /= L; mz /= L;
@@ -566,11 +1014,65 @@ function frame() {
       moveSpeed = sp;
     }
     if (!terrain && player.position.y !== 0) player.position.y = 0; // [terrain] 지형이 있으면 둔치 높이를 유지
+
+    // 빈백·벤치 근처 좌석 감지하여 하단 앉기 버튼 문구 자동 전환
+    const foundSeat = !mySit && joined ? stationPlaza.findSeat?.(player.position.x, player.position.z) : null;
+    if ((foundSeat?.label || '') !== (nearSeatHint?.label || '')) {
+      nearSeatHint = foundSeat || null;
+      if (!emoteFolded) renderEmoteBar();
+    }
+
+    // 30초 동안 아무 입력이 없으면 자동 대기모드(자리비움/졸기) 전환
+    if (joined && moveSpeed < 0.05 && !myEmote && !handset.open && !board.open) {
+      idleTime += dt;
+      if (!myAfk && idleTime >= AFK_TIMEOUT_SEC) {
+        myAfk = true;
+        if (!mySit) {
+          if (foundSeat) {
+            sitExitPos = {
+              x: foundSeat.exitX ?? player.position.x,
+              z: foundSeat.exitZ ?? player.position.z,
+            };
+            const ty = terrain ? terrain.getGroundHeight(foundSeat.x, foundSeat.z, player.position.y) : 0;
+            player.position.set(foundSeat.x, ty, foundSeat.z);
+            player.rotation.y = foundSeat.ry;
+            mySit = foundSeat.kind;
+          } else {
+            sitExitPos = null;
+            mySit = 'ground';
+          }
+        }
+        syncMyNameTag();
+        renderEmoteBar();
+      }
+    } else {
+      idleTime = 0;
+    }
+
+    if (myAfk) {
+      myZzzTimer -= dt;
+      if (myZzzTimer <= 0) {
+        myZzzTimer = 1.6;
+        emoteFx.spawnZzz(player.position);
+      }
+    }
+
+    if (myEmote && (performance.now() > myEmoteUntil || moveSpeed > 6.5)) {
+      myEmote = '';
+      myEmoteUntil = 0;
+      if (!emoteFolded) {
+        emoteBar?.querySelectorAll('.emote-btn.active').forEach((b) => b.classList.remove('active'));
+      }
+    }
     player.userData.phoneOpen = handset.open;
+    player.userData.jumpY = jumpY;
+    player.userData.emote = myEmote;
+    player.userData.sit = mySit;
+    player.userData.afk = myAfk;
     animateAvatar(player, moveSpeed, dt);
   }
   syncRideUi();
-  if (joined) presence.sendState({ x: player.position.x, z: player.position.z, ry: player.rotation.y, moving: moveSpeed > 0 });
+  if (joined) presence.sendState({ x: player.position.x, z: player.position.z, ry: player.rotation.y, moving: moveSpeed > 0, riding: !!bikes.riding, jy: Number(jumpY.toFixed(2)), emote: bikes.riding ? '' : myEmote, sit: bikes.riding ? '' : mySit, afk: bikes.riding ? false : myAfk });
   rememberPlace();
 
   npcs.update(dt, player.position);
@@ -579,6 +1081,7 @@ function frame() {
   police?.update(dt, player.position, { riding: !!bikes.riding });
   riverFolk?.update(dt, player.position);
   stationPlaza.update(dt, player.position);
+  donationBoards.update(dt, joined ? player.position : null);
   remotes.update(dt);
   myBubble.tick();
 
@@ -612,6 +1115,7 @@ function frame() {
   sun.position.copy(sun.target.position).addScaledVector(atmosphere.sunDir, 500);
   renderer.render(scene, camera);
   overlay.update(innerWidth, innerHeight);
+  emoteFx.update(dt, innerWidth, innerHeight);
   requestAnimationFrame(frame);
 }
 addEventListener('resize', () => { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); });

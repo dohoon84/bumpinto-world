@@ -1,5 +1,6 @@
 // HTML 오버레이: 이름표, 말풍선, 지명 라벨을 3D 위치에 맞춰 화면에 투영
 import * as THREE from 'three';
+import { isShoutText } from './emotes.js';
 const v = new THREE.Vector3();
 
 export class Overlay {
@@ -25,8 +26,23 @@ export class Overlay {
 }
 // 말풍선 헬퍼: 일정 시간 동안 텍스트 표시
 export class Bubble {
-  constructor(overlay, cls, getPos) { this.item = overlay.add({ cls: 'bubble ' + cls, getPos, maxDist: 70 }); this.item.hidden = true; this.until = 0; }
-  say(text, ms = 4500) { this.item.el.textContent = text; this.item.hidden = false; this.until = performance.now() + ms; }
+  constructor(overlay, cls, getPos, meta = {}) {
+    this.overlay = overlay;
+    this.cls = cls;
+    this.getPos = getPos;
+    this.meta = meta;
+    this.item = overlay.add({ cls: 'bubble ' + cls, getPos, maxDist: 70 });
+    this.item.hidden = true;
+    this.until = 0;
+  }
+  say(text, ms = 4500) {
+    const shout = (this.cls === 'me' || this.cls === 'remote') && isShoutText(text);
+    this.item.el.textContent = text;
+    this.item.el.classList.toggle('shouting', shout);
+    this.item.hidden = false;
+    this.until = performance.now() + ms;
+    this.overlay.onSay?.({ cls: this.cls, text, shout, pos: this.getPos?.(), meta: this.meta });
+  }
   tick() { if (!this.item.hidden && performance.now() > this.until) this.item.hidden = true; }
   get showing() { return !this.item.hidden; }
 }

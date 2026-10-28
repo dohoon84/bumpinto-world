@@ -410,7 +410,7 @@ function createBuskingStage(x, z, overlay) {
       getPos: () => new THREE.Vector3(x - 0.7, 2.75, z - 0.42),
       maxDist: 55,
     });
-    bubble = new Bubble(overlay, 'npc', () => new THREE.Vector3(x - 0.7, 3.3, z - 0.42));
+    bubble = new Bubble(overlay, 'npc', () => new THREE.Vector3(x - 0.7, 3.3, z - 0.42), { name: '🎸 정자역 버스킹 밴드' });
   }
 
   const SONGS = [
@@ -794,7 +794,7 @@ function createPagodaPavilion(x, z, overlay) {
       maxDist: 105,
       minDist: 0,
     });
-    bubble = new Bubble(overlay, 'npc', () => new THREE.Vector3(x, 2.8, z));
+    bubble = new Bubble(overlay, 'npc', () => new THREE.Vector3(x, 2.8, z), { name: '🛖 정자 쉼터' });
   }
 
   const LINES = [
@@ -1150,7 +1150,7 @@ export function addStationPlaza(scene, overlay, world) {
   let flockAnchor = new THREE.Vector3(PLAZA_X + 5, 1.8, PLAZA_Z - 5);
   let bubbleCooldown = 0;
   if (overlay) {
-    flockBubble = new Bubble(overlay, 'npc', () => flockAnchor);
+    flockBubble = new Bubble(overlay, 'npc', () => flockAnchor, { name: '🕊️ 광장 비둘기' });
   }
 
   function scarePigeon(p, fromX, fromZ) {
@@ -1306,5 +1306,80 @@ export function addStationPlaza(scene, overlay, world) {
     return false;
   }
 
-  return { update, blocks };
+  const emptyBeanbags = BEANBAGS.filter((b) => !b.sitter);
+  const benchTrees = TREE_SPOTS.filter((t) => t[3]).map(([tx, tz]) => ({ x: tx, z: tz }));
+
+  function findSeat(px, pz) {
+    // 1) 빈 빈백 근처 (반경 1.65m 이내)
+    let bestBag = null;
+    let bestBagD = 1.65;
+    for (const b of emptyBeanbags) {
+      const d = Math.hypot(px - b.x, pz - b.z);
+      if (d < bestBagD) {
+        bestBagD = d;
+        bestBag = b;
+      }
+    }
+    if (bestBag) {
+      return { kind: 'beanbag', label: '🛋️ 빈백에 앉기 (C)', x: bestBag.x, z: bestBag.z, ry: bestBag.rot };
+    }
+
+    // 2) 원형 나무 벤치 근처 (나무 중심에서 반경 0.85~2.35m 이내)
+    for (const t of benchTrees) {
+      const dx = px - t.x, dz = pz - t.z;
+      const d = Math.hypot(dx, dz);
+      if (d >= 0.85 && d <= 2.35) {
+        const ang = Math.atan2(dx, dz);
+        return {
+          kind: 'bench',
+          label: '🪑 나무 벤치에 앉기 (C)',
+          x: t.x + Math.sin(ang) * 1.48,
+          z: t.z + Math.cos(ang) * 1.48,
+          exitX: t.x + Math.sin(ang) * 2.05,
+          exitZ: t.z + Math.cos(ang) * 2.05,
+          ry: ang,
+        };
+      }
+    }
+
+    // 3) 분수대 대리석 둘레 턱 (충돌 반경 5.5m 바깥쪽 가장자리 5.55m에 걸터앉고, 일어날 땐 6.05m로 복귀)
+    {
+      const dx = px - fountain.x, dz = pz - fountain.z;
+      const d = Math.hypot(dx, dz);
+      if (d >= 4.5 && d <= 6.6) {
+        const ang = Math.atan2(dx, dz);
+        return {
+          kind: 'ledge',
+          label: '⛲ 분수대 턱에 앉기 (C)',
+          x: fountain.x + Math.sin(ang) * 5.55,
+          z: fountain.z + Math.cos(ang) * 5.55,
+          exitX: fountain.x + Math.sin(ang) * 6.05,
+          exitZ: fountain.z + Math.cos(ang) * 6.05,
+          ry: ang,
+        };
+      }
+    }
+
+    // 4) 정자 바둑 쉼터 둘레 난간 벤치 (충돌 박스 바깥으로 안전하게 착석/복귀)
+    {
+      const dx = px - pagoda.x, dz = pz - pagoda.z;
+      const d = Math.hypot(dx, dz);
+      if (d >= 2.2 && d <= 3.9) {
+        const ang = Math.atan2(dx, dz);
+        return {
+          kind: 'bench',
+          label: '🛖 정자 쉼터에 앉기 (C)',
+          x: pagoda.x + Math.sin(ang) * 2.95,
+          z: pagoda.z + Math.cos(ang) * 2.95,
+          exitX: pagoda.x + Math.sin(ang) * 3.45,
+          exitZ: pagoda.z + Math.cos(ang) * 3.45,
+          ry: ang,
+        };
+      }
+    }
+
+    return null;
+  }
+
+  return { update, blocks, findSeat };
 }

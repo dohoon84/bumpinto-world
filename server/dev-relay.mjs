@@ -19,7 +19,19 @@ wss.on('connection', (ws) => {
       peers.set(ws, peer); broadcast({ t: 'join', peer }, ws);
     }
     const p = peers.get(ws); if (!p) return;
-    if (m.t === 'state') { Object.assign(p, { x: +m.x || 0, z: +m.z || 0, ry: +m.ry || 0 }); broadcast({ t: 'state', id: p.id, x: p.x, z: p.z, ry: p.ry, moving: !!m.moving }, ws); }
+    if (m.t === 'state') {
+      const jy = Math.max(0, Math.min(5, +m.jy || 0));
+      const emote = typeof m.emote === 'string' ? m.emote.slice(0, 16) : '';
+      const sit = typeof m.sit === 'string' ? m.sit.slice(0, 16) : '';
+      const afk = !!m.afk;
+      Object.assign(p, { x: +m.x || 0, z: +m.z || 0, ry: +m.ry || 0, riding: !!m.riding, sit, afk });
+      broadcast({ t: 'state', id: p.id, x: p.x, z: p.z, ry: p.ry, moving: !!m.moving, riding: p.riding, jy, emote, sit, afk }, ws);
+    }
+    if (m.t === 'emote') {
+      const kind = String(m.kind || '').trim().slice(0, 16);
+      const combo = Math.max(1, Math.min(99, Math.floor(+m.combo || 1)));
+      if (kind) broadcast({ t: 'emote', id: p.id, kind, combo }, ws);
+    }
     if (m.t === 'chat') broadcast({ t: 'chat', id: p.id, text: String(m.text).slice(0, 120) }, ws);
   });
   ws.on('close', () => { const p = peers.get(ws); if (p) { peers.delete(ws); broadcast({ t: 'leave', id: p.id }); } });

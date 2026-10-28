@@ -154,6 +154,7 @@ export function createAvatar({
   g.userData = {
     rig, legL, legR, armL, armR, phase: 0, head, eyeL, eyeR, handPhone, phoneOpen: false,
     eyeY: eyeL.position.y, eyeZ: eyeL.position.z, armLz: armL.rotation.z, armRz: armR.rotation.z,
+    legLy: legL.position.y, legLz: legL.position.z,
   };
   return g;
 }
@@ -173,13 +174,187 @@ export function createCat({ color = '#f0a050' } = {}) {
   return g;
 }
 
-// 걷기 애니메이션: speed(m/s) 에 따라 팔다리를 엇갈려 흔들고 살짝 통통
+// 걷기/점프/호들갑(이모트) 애니메이션
 export function animateAvatar(a, speed, dt) {
   const u = a.userData;
-  if (speed > 0.05) u.phase += dt * (4 + speed * 2.2); else u.phase *= 0.85;
+  const jumpY = u.jumpY || 0;
+  const jumping = jumpY > 0.02;
+  const emote = u.emote || '';
+  const sit = u.sit || '';
+  const afk = !!u.afk;
+
+  // 기본 회전/위치값 초기화
+  u.rig.rotation.set(0, 0, 0);
+  if (u.head) u.head.rotation.set(0, 0, 0);
+  if (u.legL) {
+    u.legL.rotation.set(0, 0, 0);
+    u.legR.rotation.set(0, 0, 0);
+    if (u.legLy != null) {
+      u.legL.position.y = u.legLy; u.legL.position.z = u.legLz;
+      u.legR.position.y = u.legLy; u.legR.position.z = u.legLz;
+    }
+  }
+  if (u.armL) {
+    u.armL.rotation.set(0, 0, u.armLz ?? 0);
+    u.armR.rotation.set(0, 0, u.armRz ?? 0);
+  }
+
+  // 앉기 / 자동 대기모드(자리비움) 포즈
+  if ((sit || afk) && !jumping && !u.cat) {
+    u.sitT = (u.sitT || 0) + dt;
+    const t = u.sitT;
+    if (u.handPhone) u.handPhone.visible = false;
+
+    if (sit === 'beanbag') {
+      // 🛋️ 빈백에 푹 기대어 눕듯이 앉기 (다리·발이 지면 위로 자연스럽게 올라오도록 보정)
+      u.rig.position.y = -0.46;
+      u.rig.rotation.x = -0.24;
+      u.legL.position.y = 0.62; u.legL.position.z = 0.28;
+      u.legR.position.y = 0.62; u.legR.position.z = 0.28;
+      u.legL.rotation.x = -1.35;
+      u.legR.rotation.x = -1.30;
+      u.armL.rotation.x = -0.55;
+      u.armR.rotation.x = -0.65;
+    } else if (sit === 'bench' || sit === 'ledge') {
+      // 🪑 벤치(높이 0.44m) / ⛲ 분수대 턱(높이 0.58m)에 걸터앉기
+      u.rig.position.y = sit === 'ledge' ? -0.14 : -0.26;
+      u.legL.position.y = 0.52; u.legL.position.z = 0.24;
+      u.legR.position.y = 0.52; u.legR.position.z = 0.24;
+      u.legL.rotation.x = -1.15 + Math.sin(t * 2.2) * 0.08;
+      u.legR.rotation.x = -1.15 - Math.sin(t * 2.2) * 0.08;
+      u.armL.rotation.x = -0.65;
+      u.armR.rotation.x = -0.65;
+    } else {
+      // 🧘 길바닥에 철푸덕 앉기 (다리가 수평으로 지면 위에 얹혀 땅속으로 묻히지 않게 보정)
+      u.rig.position.y = -0.54;
+      u.legL.position.y = 0.66; u.legL.position.z = 0.28;
+      u.legR.position.y = 0.66; u.legR.position.z = 0.28;
+      u.legL.rotation.x = -Math.PI / 2;
+      u.legR.rotation.x = -Math.PI / 2;
+      u.legL.rotation.y = -0.18;
+      u.legR.rotation.y = 0.18;
+      u.armL.rotation.x = -0.72;
+      u.armR.rotation.x = -0.72;
+      u.armL.rotation.z = (u.armLz ?? -0.28) * 0.6;
+      u.armR.rotation.z = (u.armRz ?? 0.28) * 0.6;
+    }
+
+    if (afk) {
+      // 💤 대기모드: 고개를 꾸벅꾸벅 숙이며 졸기
+      const nod = 0.36 + Math.sin(t * 2.1) * 0.18;
+      if (u.head) {
+        u.head.rotation.x = nod;
+        u.head.rotation.z = Math.sin(t * 1.05) * 0.1;
+      }
+      if (u.eyeL) {
+        u.eyeL.position.y = u.eyeY - 0.04;
+        u.eyeR.position.y = u.eyeY - 0.04;
+        u.eyeL.position.z = u.eyeZ + 0.02;
+        u.eyeR.position.z = u.eyeZ + 0.02;
+      }
+    } else if (u.eyeL) {
+      u.eyeL.position.y = u.eyeY;
+      u.eyeR.position.y = u.eyeY;
+      u.eyeL.position.z = u.eyeZ;
+      u.eyeR.position.z = u.eyeZ;
+    }
+    return;
+  }
+  u.sitT = 0;
+
+  if (emote && !u.cat) {
+    u.emoteT = (u.emoteT || 0) + dt;
+    const t = u.emoteT;
+    if (u.handPhone) u.handPhone.visible = false;
+    if (u.eyeL) {
+      u.eyeL.position.y = u.eyeY; u.eyeR.position.y = u.eyeY;
+      u.eyeL.position.z = u.eyeZ; u.eyeR.position.z = u.eyeZ;
+    }
+    let emoteHop = 0;
+    if (emote === 'cheer') {
+      // 🙌 만세: 양팔 번쩍 들고 폴짝폴짝 환호
+      emoteHop = Math.abs(Math.sin(t * 9.5)) * 0.22;
+      u.armL.rotation.x = -2.85 + Math.sin(t * 14) * 0.25;
+      u.armR.rotation.x = -2.85 - Math.sin(t * 14) * 0.25;
+      u.armL.rotation.z = -0.35 + Math.cos(t * 14) * 0.15;
+      u.armR.rotation.z = 0.35 - Math.cos(t * 14) * 0.15;
+      u.legL.rotation.x = Math.sin(t * 9.5) * 0.35;
+      u.legR.rotation.x = -Math.sin(t * 9.5) * 0.35;
+      u.rig.rotation.y = Math.sin(t * 6) * 0.18;
+    } else if (emote === 'fuss') {
+      // 🤪 호들갑(오두방정): 초고속으로 양팔 파닥거리며 온몸 좌우 흔들기
+      emoteHop = Math.abs(Math.sin(t * 18)) * 0.16;
+      u.rig.rotation.z = Math.sin(t * 20) * 0.18;
+      u.rig.rotation.y = Math.cos(t * 15) * 0.28;
+      u.armL.rotation.x = -2.1 + Math.sin(t * 28) * 0.85;
+      u.armR.rotation.x = -2.1 - Math.sin(t * 28) * 0.85;
+      u.armL.rotation.z = -0.85 + Math.cos(t * 24) * 0.45;
+      u.armR.rotation.z = 0.85 - Math.cos(t * 24) * 0.45;
+      u.legL.rotation.x = Math.sin(t * 24) * 0.65;
+      u.legR.rotation.x = -Math.sin(t * 24) * 0.65;
+      if (u.head) u.head.rotation.z = Math.sin(t * 22) * 0.25;
+    } else if (emote === 'dance') {
+      // 💃 댄스: 리듬 바운스 + 트위스트 춤
+      emoteHop = Math.abs(Math.sin(t * 8.5)) * 0.14;
+      u.rig.rotation.y = Math.sin(t * 4.25) * 0.45;
+      u.rig.rotation.z = Math.cos(t * 8.5) * 0.12;
+      u.armL.rotation.x = -1.6 + Math.sin(t * 8.5) * 0.75;
+      u.armR.rotation.x = -1.6 - Math.sin(t * 8.5) * 0.75;
+      u.armL.rotation.z = -0.55 + Math.cos(t * 8.5) * 0.35;
+      u.armR.rotation.z = 0.55 + Math.cos(t * 8.5) * 0.35;
+      u.legL.rotation.x = Math.sin(t * 8.5) * 0.45;
+      u.legR.rotation.x = -Math.sin(t * 8.5) * 0.45;
+      u.legL.rotation.z = -0.12;
+      u.legR.rotation.z = 0.12;
+    } else if (emote === 'clap') {
+      // 👏 물개박수: 양손 가슴 앞에서 초고속 박수
+      emoteHop = Math.abs(Math.sin(t * 11)) * 0.08;
+      const clapWave = Math.abs(Math.sin(t * 22));
+      u.armL.rotation.x = -1.45;
+      u.armR.rotation.x = -1.45;
+      u.armL.rotation.z = 0.25 + clapWave * 0.52;
+      u.armR.rotation.z = -0.25 - clapWave * 0.52;
+      u.rig.rotation.x = Math.sin(t * 11) * 0.08;
+    } else if (emote === 'love') {
+      // ❤️ 머리 위 하트 + 좌우 스웨이
+      emoteHop = Math.abs(Math.sin(t * 7)) * 0.14;
+      u.armL.rotation.x = -2.95;
+      u.armR.rotation.x = -2.95;
+      u.armL.rotation.z = 0.48;
+      u.armR.rotation.z = -0.48;
+      u.rig.rotation.z = Math.sin(t * 7) * 0.14;
+      if (u.head) u.head.rotation.z = -Math.sin(t * 7) * 0.12;
+    } else if (emote === 'lol') {
+      // 🤣 대폭소: 몸을 뒤로 젖히며 배 잡고 박장대소
+      emoteHop = Math.abs(Math.sin(t * 14)) * 0.1;
+      u.rig.rotation.x = -0.22 + Math.sin(t * 18) * 0.12;
+      u.rig.rotation.z = Math.sin(t * 12) * 0.1;
+      u.armL.rotation.x = -1.1 + Math.sin(t * 20) * 0.25;
+      u.armR.rotation.x = -1.1 - Math.sin(t * 20) * 0.25;
+      u.armL.rotation.z = 0.45;
+      u.armR.rotation.z = -0.45;
+      u.legL.rotation.x = Math.sin(t * 20) * 0.5;
+      u.legR.rotation.x = -Math.sin(t * 20) * 0.5;
+      if (u.head) u.head.rotation.x = -0.35 + Math.sin(t * 20) * 0.18;
+    }
+    u.rig.position.y = emoteHop + jumpY;
+    return;
+  }
+  u.emoteT = 0;
+
+  if (speed > 0.05 && !jumping) u.phase += dt * (4 + speed * 2.2);
+  else if (!jumping) u.phase *= 0.85;
   const s = Math.sin(u.phase) * Math.min(1, speed / 2);
-  if (u.legL) { u.legL.rotation.x = s * 0.7; u.legR.rotation.x = -s * 0.7; }
-  if (u.phoneOpen && u.handPhone) {
+  if (u.legL) {
+    if (jumping) {
+      u.legL.rotation.x = -0.42;
+      u.legR.rotation.x = 0.28;
+    } else {
+      u.legL.rotation.x = s * 0.7;
+      u.legR.rotation.x = -s * 0.7;
+    }
+  }
+  if (u.phoneOpen && u.handPhone && !jumping) {
     u.handPhone.visible = true;
     u.armL.rotation.x = -1.42; u.armR.rotation.x = -1.42;
     u.armL.rotation.z = 0.72; u.armR.rotation.z = -0.72;
@@ -190,15 +365,21 @@ export function animateAvatar(a, speed, dt) {
     }
   } else if (u.armL) {
     if (u.handPhone) u.handPhone.visible = false;
-    u.armL.rotation.x = -s * 0.8; u.armR.rotation.x = s * 0.8;
-    u.armL.rotation.z = u.armLz; u.armR.rotation.z = u.armRz;
+    if (jumping) {
+      u.armL.rotation.x = -0.65; u.armR.rotation.x = -0.65;
+      u.armL.rotation.z = u.armLz - 0.38; u.armR.rotation.z = u.armRz + 0.38;
+    } else {
+      u.armL.rotation.x = -s * 0.8; u.armR.rotation.x = s * 0.8;
+      u.armL.rotation.z = u.armLz; u.armR.rotation.z = u.armRz;
+    }
     if (u.head) u.head.rotation.x = 0;
     if (u.eyeL) {
       u.eyeL.position.y = u.eyeY; u.eyeR.position.y = u.eyeY;
       u.eyeL.position.z = u.eyeZ; u.eyeR.position.z = u.eyeZ;
     }
   }
-  u.rig.position.y = Math.abs(Math.sin(u.phase)) * 0.06 * Math.min(1, speed / 2);
+  const walkBob = jumping ? 0 : Math.abs(Math.sin(u.phase)) * 0.06 * Math.min(1, speed / 2);
+  u.rig.position.y = walkBob + jumpY;
 }
 
 // 안장에 앉은 자세. 팔은 핸들 쪽(+Z), 다리는 페달 방향으로 구부리고 굴린다.

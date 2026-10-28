@@ -99,19 +99,25 @@ export function mountHandset({ sms } = {}) {
   };
 
   const paintThreads = (threads) => {
+    const prevPane = body.querySelector('.pane.list');
+    const prevScroll = prevPane ? prevPane.scrollTop : 0;
     const rows = threads.length ? threads.map((t) => `<button type="button" class="row" data-open="${esc(t.phone)}">
       <span><b>${esc(t.name)}</b><small>${esc(t.display)} · ${esc(t.preview)}</small></span>
       ${t.unread ? `<i class="count">${t.unread}</i>` : ''}
     </button>`).join('') : '<p class="hint">오고 간 메시지가 없습니다.</p>';
     body.innerHTML = `<div class="pane list"><p class="hd">메시지</p>${rows}</div>`;
+    const nextPane = body.querySelector('.pane.list');
+    if (nextPane) nextPane.scrollTop = prevScroll;
   };
 
   const paintLog = (conv) => {
     const log = body.querySelector('.log');
     if (!log || peer !== conv.peer.phone) return false;
+    const pane = log.closest('.pane');
+    const prevScroll = pane ? pane.scrollTop : 0;
     log.innerHTML = conv.messages.map((m) => `<div class="msgline ${m.mine ? 'out' : 'in'}">${esc(m.body)}<time>${clock(m.at)}</time></div>`).join('')
       || '<p class="hint">첫 메시지를 보내 보세요.</p>';
-    log.scrollTop = log.scrollHeight;
+    if (pane) pane.scrollTop = prevScroll;
     const block = body.querySelector('[data-block]');
     if (block) block.textContent = conv.peer.blocked ? '차단 해제' : '차단';
     return true;
