@@ -84,8 +84,10 @@ export default {
           if (!online && bookStats.activeRecently) online = Number(bookStats.activeRecently || 0);
           if (detail) {
             extra = {
+              regionName: bookStats.regionName,
               todayJoined: bookStats.todayJoined,
               todayActive: bookStats.todayActive,
+              byRegion: bookStats.byRegion,
               community: bookStats.community,
               dailySignups: bookStats.dailySignups,
             };

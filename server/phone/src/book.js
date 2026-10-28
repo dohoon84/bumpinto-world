@@ -285,6 +285,15 @@ export class PhoneBook extends DurableObject {
       sql.exec(`CREATE INDEX IF NOT EXISTS users_created_at ON users (created_at)`);
       sql.exec(`INSERT INTO _sql_schema_migrations (id) VALUES (7)`);
     }
+    if (version < 8) {
+      const cols = sql.exec("PRAGMA table_info(users)").toArray();
+      if (!cols.some((c) => c.name === "region")) {
+        sql.exec(`ALTER TABLE users ADD COLUMN region TEXT`);
+      }
+      sql.exec(`UPDATE users SET region = ? WHERE region IS NULL`, DEFAULT_REGION);
+      sql.exec(`CREATE INDEX IF NOT EXISTS users_region ON users (region)`);
+      sql.exec(`INSERT INTO _sql_schema_migrations (id) VALUES (8)`);
+    }
     this.#syncNotices();
   }
 
@@ -495,12 +504,13 @@ export class PhoneBook extends DurableObject {
       salt = crypto.randomUUID();
       hash = await hashPin(salt, pin);
     }
+    const regionKey = String(input?.region || DEFAULT_REGION).trim().toLowerCase() || DEFAULT_REGION;
     sql.exec(
-      "INSERT INTO users (id, phone, name, look, pin_salt, pin_hash, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-      id, phone, name, look, salt, hash, now, now,
+      "INSERT INTO users (id, phone, name, look, pin_salt, pin_hash, region, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      id, phone, name, look, salt, hash, regionKey, now, now,
     );
-    this.#ensureWelcome(phone, name, now, true, input?.region);
-    return this.#profile({ id, phone, name, look, x: null, y: null, z: null, ry: null, pin_hash: hash, updated_at: now });
+    this.#ensureWelcome(phone, name, now, true, regionKey);
+    return this.#profile({ id, phone, name, look, region: regionKey, x: null, y: null, z: null, ry: null, pin_hash: hash, updated_at: now });
   }
 
   async setPin(input) {
@@ -798,31 +808,54 @@ export class PhoneBook extends DurableObject {
       ).toArray()[0];
       const dailyRows = sql.exec(
         `SELECT date((COALESCE(created_at, updated_at) + 32400000) / 1000, 'unixepoch') AS day_kst,
+                COALESCE(region, 'jeongja') AS region_key,
                 COUNT(*) AS joined
          FROM users
          WHERE phone != ?
-         GROUP BY day_kst
-         ORDER BY day_kst DESC
-         LIMIT 30`,
+         GROUP BY day_kst, region_key
+         ORDER BY day_kst DESC, joined DESC
+         LIMIT 60`,
+        GUIDE_PHONE,
+      ).toArray();
+      const regionRows = sql.exec(
+        `SELECT COALESCE(region, 'jeongja') AS region_key,
+                COUNT(*) AS residents
+         FROM users
+         WHERE phone != ?
+         GROUP BY region_key
+         ORDER BY residents DESC`,
         GUIDE_PHONE,
       ).toArray();
       const postsRow = sql.exec("SELECT COUNT(*) AS cnt FROM posts WHERE category != 'notice'").toArray()[0];
       const commentsRow = sql.exec("SELECT COUNT(*) AS cnt FROM post_comments").toArray()[0];
       const likesRow = sql.exec("SELECT COUNT(*) AS cnt FROM post_likes").toArray()[0];
       const smsRow = sql.exec("SELECT COUNT(*) AS cnt FROM messages WHERE sender != ?", GUIDE_PHONE).toArray()[0];
+      const rKey = String(input?.region || DEFAULT_REGION).trim().toLowerCase() || DEFAULT_REGION;
       return {
         ok: true,
+        region: rKey,
+        regionName: regionLabelOf(rKey),
         residents: Number(row?.cnt || 0),
         activeRecently: Number(activeRow?.cnt || 0),
         todayJoined: Number(todayJoinedRow?.cnt || 0),
         todayActive: Number(todayActiveRow?.cnt || 0),
+        byRegion: regionRows.map((r) => ({
+          region: r.region_key,
+          regionName: regionLabelOf(r.region_key),
+          residents: Number(r.residents || 0),
+        })),
         community: {
           userPosts: Number(postsRow?.cnt || 0),
           comments: Number(commentsRow?.cnt || 0),
           likes: Number(likesRow?.cnt || 0),
           userSmsSent: Number(smsRow?.cnt || 0),
         },
-        dailySignups: dailyRows.map((r) => ({ date: r.day_kst, joined: Number(r.joined || 0) })),
+        dailySignups: dailyRows.map((r) => ({
+          date: r.day_kst,
+          region: r.region_key,
+          regionName: regionLabelOf(r.region_key),
+          joined: Number(r.joined || 0),
+        })),
       };
     }
     const id = String(input?.id || "");
