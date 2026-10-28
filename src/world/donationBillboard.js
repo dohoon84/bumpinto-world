@@ -338,21 +338,21 @@ export function mountDonationBillboards({ scene, overlay, world, camera, domElem
   const signX = world?.signPos?.x ?? -6.6;
   const signZ = world?.signPos?.z ?? 6.4;
 
-  // 1) 정자역 출입구 첫 시작점 바로 앞 + 2) 광장 분수대/빈백 라운지 옆
+  // 1) 정자역 출입구 캐노피 바깥쪽(플레이어 첫 스폰 정면 시야의 탁 트인 보도) + 2) 광장 버스킹 무대·빈백 라운지 옆 오픈 공간
   const SPOTS = [
     {
       id: 'station_entry',
       label: '☕ 인프라 후원 전광판 · QR 전단지 (클릭 / F)',
-      x: signX + 4.8,
-      z: signZ - 1.2,
-      ry: -0.45,
+      x: signX + 3.1,
+      z: signZ + 9.2,
+      ry: 2.67,
     },
     {
       id: 'plaza_lounge',
       label: '☕ 인프라 후원 전광판 · QR 전단지 (클릭 / F)',
-      x: -67.5,
-      z: 27.5,
-      ry: -0.35,
+      x: -66.0,
+      z: 41.5,
+      ry: -0.4,
     },
   ];
 
@@ -371,7 +371,7 @@ export function mountDonationBillboards({ scene, overlay, world, camera, domElem
         cls: 'label donate-sign',
         text: s.label,
         getPos: () => new THREE.Vector3(s.x, 4.75, s.z),
-        maxDist: 140,
+        maxDist: 45,
         minDist: 0,
       });
       item.el.style.pointerEvents = 'auto';
