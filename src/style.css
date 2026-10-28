@@ -917,6 +917,34 @@ body.in-lobby #hud, body.in-lobby #buttons, body.in-lobby #top-right-bar, body.i
   box-shadow: 0 6px 18px rgba(18, 32, 51, .28);
 }
 .board-launcher .board-icon { font-size: 16px; line-height: 1; }
+.board-new-badge,
+#board-modal .post-new-icon {
+  display: inline-grid;
+  place-items: center;
+  width: 17px;
+  height: 17px;
+  border-radius: 50%;
+  background: #ff2d20;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 900;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  box-shadow: 0 1px 4px rgba(255, 45, 32, .45);
+  flex-shrink: 0;
+}
+.board-new-badge[hidden] { display: none !important; }
+#board-modal .post-new-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  margin-left: 4px;
+  vertical-align: 1px;
+  border-radius: 4px;
+  font-size: 10px;
+}
 
 #board-modal {
   position: fixed;
