@@ -150,12 +150,23 @@ export class MockPresence extends Emitter {
   }
 }
 
+function isLocalHost() {
+  if (typeof location === 'undefined') return false;
+  const h = location.hostname;
+  return h === 'localhost' || h === '127.0.0.1' || h === '[::1]' || h.endsWith('.local');
+}
+
 export function createPresence({ station }) {
   const params = new URLSearchParams(location.search);
   const wsParam = params.get('ws');
-  if (wsParam === 'mock' || wsParam === 'off' || (params.has('shot') && !wsParam)) {
+  if (wsParam === 'mock' || wsParam === 'off' || (params.has('shot') && !wsParam) || (!wsParam && isLocalHost())) {
     return new MockPresence({ station });
   }
-  const url = wsParam === 'local' ? 'ws://127.0.0.1:8787' : (wsParam || DEFAULT_WS_URL);
+  const url =
+    wsParam === 'local'
+      ? 'ws://127.0.0.1:8787'
+      : wsParam === 'prod' || wsParam === 'live'
+        ? DEFAULT_WS_URL
+        : (wsParam || DEFAULT_WS_URL);
   return new WebSocketPresence(url);
 }

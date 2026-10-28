@@ -162,7 +162,7 @@ export function openLobby({ sms, onJoin, onBack }) {
   const paneJoin = root.querySelector('#lobby-pane-join');
   const paneLogin = root.querySelector('#lobby-pane-login');
   const loadBtn = root.querySelector('#lobby-load');
-  nick.value = saved?.name || '';
+  nick.value = saved?.name || (sms?.off ? '로컬테스터' : '');
   if (saved?.display || saved?.phone) loginPhone.value = saved.display || saved.phone;
   const error = root.querySelector('#lobby-error');
   const picks = root.querySelector('#lobby-picks');
@@ -291,7 +291,11 @@ export function openLobby({ sms, onJoin, onBack }) {
   };
 
   const showNumber = (session) => {
-    if (session?.off) { phoneLine.textContent = '번호 서버 없이 입장합니다.'; return; }
+    if (session?.off) {
+      const again = session?.place ? ' · 지난 위치에서 이어집니다' : '';
+      phoneLine.textContent = `🧪 로컬 테스트 모드 (실서버 계정 미생성)${again}`;
+      return;
+    }
     const again = session?.place ? ' · 지난 위치에서 이어집니다' : '';
     const pinBadge = session?.hasPin ? ' · PIN 설정됨' : ' · PIN 미설정';
     phoneLine.textContent = session?.display ? `내 번호 ${session.display}${again}${pinBadge}` : '번호 받는 중…';

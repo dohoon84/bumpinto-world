@@ -111,7 +111,7 @@ export function addRiversideFolk(scene, overlay, terrain, world, station) {
       scene.add(mesh);
     } else scene.add(mesh);
     const tag = overlay.add({ cls: 'tag npc', text: who.name, getPos: () => mesh.position.clone().setY(mesh.position.y + 2.15), maxDist: 48 });
-    const bubble = new Bubble(overlay, 'npc', () => mesh.position.clone().setY(mesh.position.y + 2.55));
+    const bubble = new Bubble(overlay, 'npc', () => mesh.position.clone().setY(mesh.position.y + 2.55), { name: who.name });
     people.push({ who, pts, len, side, ride, mesh, rider, bike, tag, bubble, s: (people.length + 0.5) / (RUNNERS.length + RIDERS.length) * len, dir: people.length % 2 ? 1 : -1, said: 0 });
   };
   RUNNERS.forEach((w) => place(w, runPath, w.speed > 3.2 ? 0.55 : -0.55, false));

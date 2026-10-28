@@ -223,7 +223,7 @@ export class Police {
     const officer = createAvatar({ color: '#1d4e89', pants: '#1a2333', hat: '#142033', skin: '#e8c4a8', gender: 'm', face: 'square', hair: 'short', top: 'long' });
     officer.visible = false;
     this.scene.add(officer);
-    const bubble = new Bubble(this.overlay, 'npc', () => officer.position.clone().setY(officer.position.y + 2.3));
+    const bubble = new Bubble(this.overlay, 'npc', () => officer.position.clone().setY(officer.position.y + 2.3), { name: '경찰관' });
     const tag = this.overlay.add({ cls: 'tag', text: '경찰', getPos: () => mesh.position.clone().setY(mesh.position.y + 2.3), maxDist: 42 });
     const car = { i, mesh, officer, bubble, tag, v: 6, s: 0, pts: [], cum: [], node: 0, prev: -1, state: 'patrol', heading: 0, mode: 'patrol' };
     this.list.push(car);

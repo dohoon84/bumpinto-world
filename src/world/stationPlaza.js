@@ -410,7 +410,7 @@ function createBuskingStage(x, z, overlay) {
       getPos: () => new THREE.Vector3(x - 0.7, 2.75, z - 0.42),
       maxDist: 55,
     });
-    bubble = new Bubble(overlay, 'npc', () => new THREE.Vector3(x - 0.7, 3.3, z - 0.42));
+    bubble = new Bubble(overlay, 'npc', () => new THREE.Vector3(x - 0.7, 3.3, z - 0.42), { name: '🎸 정자역 버스킹 밴드' });
   }
 
   const SONGS = [
@@ -794,7 +794,7 @@ function createPagodaPavilion(x, z, overlay) {
       maxDist: 105,
       minDist: 0,
     });
-    bubble = new Bubble(overlay, 'npc', () => new THREE.Vector3(x, 2.8, z));
+    bubble = new Bubble(overlay, 'npc', () => new THREE.Vector3(x, 2.8, z), { name: '🛖 정자 쉼터' });
   }
 
   const LINES = [
@@ -1150,7 +1150,7 @@ export function addStationPlaza(scene, overlay, world) {
   let flockAnchor = new THREE.Vector3(PLAZA_X + 5, 1.8, PLAZA_Z - 5);
   let bubbleCooldown = 0;
   if (overlay) {
-    flockBubble = new Bubble(overlay, 'npc', () => flockAnchor);
+    flockBubble = new Bubble(overlay, 'npc', () => flockAnchor, { name: '🕊️ 광장 비둘기' });
   }
 
   function scarePigeon(p, fromX, fromZ) {

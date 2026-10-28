@@ -228,7 +228,7 @@ export class NPCs {
       const npc = { def, mesh, path, len, lo, hi, s: s0, dir: rnd() < 0.5 ? -1 : 1, pos: new THREE.Vector3(), lineIdx: Math.floor(rnd() * def.lines.length), talking: false, cooldown: 0, pause: 0 };
       const head = () => npc.pos.clone().setY(npc.pos.y + (def.cat ? 0.9 : 2.25)); // [terrain] 높이 상대
       npc.tag = overlay.add({ cls: 'tag npc', text: def.name, getPos: () => npc.pos.clone().setY(npc.pos.y + (def.cat ? 0.75 : 2.05)), maxDist: 45 }); // [terrain]
-      npc.bubble = new Bubble(overlay, 'npc', () => head().setY(head().y + 0.45));
+      npc.bubble = new Bubble(overlay, 'npc', () => head().setY(head().y + 0.45), { name: def.name });
       this.list.push(npc);
       this._place(npc);
     });
@@ -337,7 +337,7 @@ export class NPCs {
       };
       const head = () => npc.pos.clone().setY(npc.pos.y + 2.25);
       npc.tag = overlay.add({ cls: 'tag npc', text: def.name, getPos: () => npc.pos.clone().setY(npc.pos.y + 2.05), maxDist: 40 });
-      npc.bubble = new Bubble(overlay, 'npc', () => head().setY(head().y + 0.45));
+      npc.bubble = new Bubble(overlay, 'npc', () => head().setY(head().y + 0.45), { name: def.name });
       this.list.push(npc);
       this._place(npc);
       taken.push(npc.pos.x, npc.pos.z);

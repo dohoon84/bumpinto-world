@@ -2,7 +2,34 @@
 import { sanitizeLook } from './look.js';
 
 const DEVICE_KEY = 'jeongja3d.device';
+const LOCAL_PLACE_KEY = 'jeongja3d.place';
 const ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function isLocalHost() {
+  if (typeof location === 'undefined') return false;
+  const h = location.hostname;
+  return h === 'localhost' || h === '127.0.0.1' || h === '[::1]' || h.endsWith('.local');
+}
+
+function readLocalPlace() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(LOCAL_PLACE_KEY) || 'null');
+    if (raw && Number.isFinite(raw.x) && Number.isFinite(raw.z)) {
+      return { x: Number(raw.x), y: Number(raw.y) || 0, z: Number(raw.z), ry: Number(raw.ry) || 0 };
+    }
+  } catch {}
+  return null;
+}
+
+function writeLocalPlace(place) {
+  if (!place || !Number.isFinite(place.x) || !Number.isFinite(place.z)) return;
+  try {
+    localStorage.setItem(
+      LOCAL_PLACE_KEY,
+      JSON.stringify({ x: Number(place.x), y: Number(place.y) || 0, z: Number(place.z), ry: Number(place.ry) || 0 }),
+    );
+  } catch {}
+}
 
 const ERRORS = {
   bad_id: '기기 번호가 올바르지 않습니다.',
@@ -62,9 +89,12 @@ export function currentRegion() {
 
 function smsBase() {
   const params = new URLSearchParams(location.search);
-  if (params.get('sms') === 'off') return '';
-  if (params.get('sms') === 'local') return 'http://127.0.0.1:8789';
-  if (params.has('sms')) return (params.get('sms') || '').replace(/\/$/, '');
+  const smsParam = params.get('sms');
+  if (smsParam === 'off') return '';
+  if (smsParam === 'local') return 'http://127.0.0.1:8789';
+  if (smsParam === 'prod' || smsParam === 'live') return DEFAULT_SMS_BASE.replace(/\/$/, '');
+  if (params.has('sms')) return (smsParam || '').replace(/\/$/, '');
+  if (isLocalHost()) return '';
   return DEFAULT_SMS_BASE.replace(/\/$/, '');
 }
 
@@ -121,7 +151,7 @@ export function createSms() {
     get session() { return session; },
     async enter({ name, look, pin, preview = false }) {
       if (!base) {
-        session = { off: true, phone: '', display: '', place: null, unread: 0, hasPin: false, look: sanitizeLook(look), name };
+        session = { off: true, phone: '', display: '', place: readLocalPlace(), unread: 0, hasPin: false, look: sanitizeLook(look), name };
         return session;
       }
       const payload = { name, look: sanitizeLook(look), preview };
@@ -149,7 +179,11 @@ export function createSms() {
       return data;
     },
     savePlace(place) {
-      if (!base || !session || session.off) return;
+      if (!session) return;
+      if (!base || session.off) {
+        writeLocalPlace(place);
+        return;
+      }
       post('/place', place, { keepalive: true }).catch(() => {});
     },
     threads() { return post('/threads', {}); },
