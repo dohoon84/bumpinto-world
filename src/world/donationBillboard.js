@@ -264,8 +264,9 @@ function buildBillboardUnit({ x, z, ry = 0 }, flyerTex, tickerTex) {
   const baseRing = new THREE.Mesh(new THREE.CylinderGeometry(1.08, 1.08, 0.04, 20), goldMat);
   baseRing.position.y = 0.19;
 
-  const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.26, 3.6, 14), darkMetal);
-  pole.position.y = 1.8;
+  // 전광판 헤드만 돌아가고 하단 기둥은 전단지 아래까지만 세워 스크린 글자를 가리지 않게 함
+  const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.26, 2.75, 14), darkMetal);
+  pole.position.y = 1.38;
   pole.castShadow = true;
   g.add(basePad, baseRing, pole);
 
@@ -350,9 +351,9 @@ export function mountDonationBillboards({ scene, overlay, world, camera, domElem
     {
       id: 'plaza_lounge',
       label: '☕ 인프라 후원 전광판 · QR 전단지 (클릭 / F)',
-      x: -66.0,
-      z: 41.5,
-      ry: -0.4,
+      x: -56.4,
+      z: 36.2,
+      ry: -0.75,
     },
   ];
 
