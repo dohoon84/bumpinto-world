@@ -63,6 +63,10 @@ function phoneOk(value) {
   return /^010\d{8}$/.test(value);
 }
 
+function isBoardAdmin(phone) {
+  return digits(phone).endsWith("0002");
+}
+
 function cleanPin(value) {
   const pin = String(value ?? "").trim();
   return PIN_RE.test(pin) ? pin : null;
@@ -728,6 +732,7 @@ export class PhoneBook extends DurableObject {
       (id && row.author_id === id) ||
       (myPhone && row.author_phone && row.author_phone === myPhone),
     );
+    const canManage = mine || (isBoardAdmin(myPhone) && row.category === "notice");
     const likesCount = Number(
       row.likes_count ??
         sql.exec("SELECT COUNT(*) AS n FROM post_likes WHERE post_id = ?", row.id).toArray()[0]?.n ??
@@ -758,6 +763,7 @@ export class PhoneBook extends DurableObject {
       authorName: row.author_name,
       authorDisplay: row.author_phone ? displayPhone(row.author_phone) : "",
       mine,
+      canManage,
       views: row.views || 0,
       likesCount,
       commentsCount,
@@ -1008,7 +1014,9 @@ export class PhoneBook extends DurableObject {
 
     if (op === "create") {
       const cat = String(input?.category || "free");
-      if (!WRITABLE_BOARD_CATS.has(cat)) return { ok: false, error: "bad_category" };
+      if (cat === "notice") {
+        if (!isBoardAdmin(myPhone)) return { ok: false, error: "notice_admin" };
+      } else if (!WRITABLE_BOARD_CATS.has(cat)) return { ok: false, error: "bad_category" };
       const title = cleanTitle(input?.title);
       if (!title) return { ok: false, error: "bad_title" };
       const body = cleanPostBody(input?.body);
@@ -1035,8 +1043,11 @@ export class PhoneBook extends DurableObject {
       ).toArray()[0];
       if (!existing) return { ok: false, error: "post_not_found" };
       const isMine = existing.author_id === id || (myPhone && existing.author_phone === myPhone);
-      if (!isMine) return { ok: false, error: "forbidden" };
-      const cat = existing.category === "notice" ? "notice" : String(input?.category || existing.category);
+      const admin = isBoardAdmin(myPhone);
+      if (!isMine && !(admin && existing.category === "notice")) return { ok: false, error: "forbidden" };
+      let cat = String(input?.category || existing.category);
+      if (cat === "notice" && !admin) return { ok: false, error: "notice_admin" };
+      if (existing.category === "notice" && !admin) cat = "notice";
       if (cat !== "notice" && !WRITABLE_BOARD_CATS.has(cat)) return { ok: false, error: "bad_category" };
       const title = cleanTitle(input?.title);
       if (!title) return { ok: false, error: "bad_title" };
@@ -1068,12 +1079,12 @@ export class PhoneBook extends DurableObject {
       const postId = Math.floor(Number(input?.postId) || 0);
       if (!postId) return { ok: false, error: "post_not_found" };
       const existing = sql.exec(
-        "SELECT id, author_id, author_phone FROM posts WHERE id = ?",
+        "SELECT id, category, author_id, author_phone FROM posts WHERE id = ?",
         postId,
       ).toArray()[0];
       if (!existing) return { ok: false, error: "post_not_found" };
       const isMine = existing.author_id === id || (myPhone && existing.author_phone === myPhone);
-      if (!isMine) return { ok: false, error: "forbidden" };
+      if (!isMine && !(isBoardAdmin(myPhone) && existing.category === "notice")) return { ok: false, error: "forbidden" };
       sql.exec("DELETE FROM post_likes WHERE post_id = ?", postId);
       sql.exec("DELETE FROM post_comments WHERE post_id = ?", postId);
       sql.exec("DELETE FROM posts WHERE id = ?", postId);
