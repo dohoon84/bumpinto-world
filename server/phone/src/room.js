@@ -173,9 +173,10 @@ export class Room extends DurableObject {
       me.x = Number(m.x) || 0;
       me.z = Number(m.z) || 0;
       me.ry = Number(m.ry) || 0;
+      const jy = Math.max(0, Math.min(5, Number(m.jy) || 0));
       ws.serializeAttachment(me);
       this.#broadcast(
-        { t: "state", id: me.id, x: me.x, z: me.z, ry: me.ry, moving: !!m.moving },
+        { t: "state", id: me.id, x: me.x, z: me.z, ry: me.ry, moving: !!m.moving, jy },
         ws,
       );
       return;

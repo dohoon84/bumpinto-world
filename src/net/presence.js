@@ -85,7 +85,8 @@ export class WebSocketPresence extends Emitter {
   sendState(s) {
     const now = performance.now();
     if (now - this.lastSent < 1000 / STATE_HZ || this.ws?.readyState !== 1) return;
-    const sig = `${s.x.toFixed(2)},${s.z.toFixed(2)},${s.ry.toFixed(2)},${s.moving ? 1 : 0}`;
+    const jy = Number(s.jy) || 0;
+    const sig = `${s.x.toFixed(2)},${s.z.toFixed(2)},${s.ry.toFixed(2)},${s.moving ? 1 : 0},${jy.toFixed(2)}`;
     if (sig === this.lastSig && now - this.lastSent < 10000) return;
     this.lastSig = sig;
     this.lastSent = now;

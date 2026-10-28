@@ -13,7 +13,7 @@ export class RemotePlayers {
     presence.on('join', (m) => this.add(m.peer));
     presence.on('leave', (m) => this.remove(m.id));
     presence.on('reset', () => [...this.peers.keys()].forEach((id) => this.remove(id)));
-    presence.on('state', (m) => { const p = this.peers.get(m.id); if (p) { p.target.set(m.x, this.groundY ? this.groundY(m.x, m.z, p.target.y) : 0, m.z); /* [terrain] */ p.ry = m.ry; } });
+    presence.on('state', (m) => { const p = this.peers.get(m.id); if (p) { p.target.set(m.x, this.groundY ? this.groundY(m.x, m.z, p.target.y) : 0, m.z); /* [terrain] */ p.ry = m.ry; p.targetJy = Math.max(0, Number(m.jy) || 0); } });
     presence.on('chat', (m) => {
       if (m.id === this.myId || m.id === 'me') return onMyChat?.(m.text);
       const p = this.peers.get(m.id); if (!p) return;
@@ -27,9 +27,9 @@ export class RemotePlayers {
     if (!peer.look) look.hat = '#ffffff';
     const mesh = createAvatar(look);
     mesh.position.set(peer.x || 0, this.groundY ? this.groundY(peer.x || 0, peer.z || 0, 0) : 0, peer.z || 0); this.scene.add(mesh); // [terrain]
-    const p = { id: peer.id, name: peer.name || '손님', color: look.color || '#20c997', mesh, target: mesh.position.clone(), ry: peer.ry || 0 };
-    p.tag = this.overlay.add({ cls: 'tag remote', text: peer.name || '손님', getPos: () => mesh.position.clone().setY(mesh.position.y + 2.05), maxDist: 80 }); // [terrain]
-    p.bubble = new Bubble(this.overlay, 'remote', () => mesh.position.clone().setY(mesh.position.y + 2.7), { name: p.name, color: p.color, id: p.id }); // [terrain]
+    const p = { id: peer.id, name: peer.name || '손님', color: look.color || '#20c997', mesh, target: mesh.position.clone(), ry: peer.ry || 0, jy: 0, targetJy: 0 };
+    p.tag = this.overlay.add({ cls: 'tag remote', text: peer.name || '손님', getPos: () => mesh.position.clone().setY(mesh.position.y + (p.jy || 0) + 2.05), maxDist: 80 }); // [terrain]
+    p.bubble = new Bubble(this.overlay, 'remote', () => mesh.position.clone().setY(mesh.position.y + (p.jy || 0) + 2.7), { name: p.name, color: p.color, id: p.id }); // [terrain]
     this.peers.set(peer.id, p);
   }
   list() {
@@ -54,6 +54,9 @@ export class RemotePlayers {
       p.mesh.position.lerp(p.target, Math.min(1, dt * 8)); // 10Hz 상태를 부드럽게 보간
       const sp = before.distanceTo(p.mesh.position) / Math.max(dt, 1e-3);
       p.mesh.rotation.y += Math.atan2(Math.sin(p.ry - p.mesh.rotation.y), Math.cos(p.ry - p.mesh.rotation.y)) * Math.min(1, dt * 8);
+      p.jy += ((p.targetJy || 0) - p.jy) * Math.min(1, dt * 14);
+      if (p.jy < 0.01) p.jy = 0;
+      p.mesh.userData.jumpY = p.jy;
       animateAvatar(p.mesh, sp, dt); p.bubble.tick();
     }
   }

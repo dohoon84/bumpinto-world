@@ -173,13 +173,24 @@ export function createCat({ color = '#f0a050' } = {}) {
   return g;
 }
 
-// 걷기 애니메이션: speed(m/s) 에 따라 팔다리를 엇갈려 흔들고 살짝 통통
+// 걷기/점프 애니메이션: speed(m/s) 에 따라 팔다리를 엇갈려 흔들고, 점프 시 공중 포즈 적용
 export function animateAvatar(a, speed, dt) {
   const u = a.userData;
-  if (speed > 0.05) u.phase += dt * (4 + speed * 2.2); else u.phase *= 0.85;
+  const jumpY = u.jumpY || 0;
+  const jumping = jumpY > 0.02;
+  if (speed > 0.05 && !jumping) u.phase += dt * (4 + speed * 2.2);
+  else if (!jumping) u.phase *= 0.85;
   const s = Math.sin(u.phase) * Math.min(1, speed / 2);
-  if (u.legL) { u.legL.rotation.x = s * 0.7; u.legR.rotation.x = -s * 0.7; }
-  if (u.phoneOpen && u.handPhone) {
+  if (u.legL) {
+    if (jumping) {
+      u.legL.rotation.x = -0.42;
+      u.legR.rotation.x = 0.28;
+    } else {
+      u.legL.rotation.x = s * 0.7;
+      u.legR.rotation.x = -s * 0.7;
+    }
+  }
+  if (u.phoneOpen && u.handPhone && !jumping) {
     u.handPhone.visible = true;
     u.armL.rotation.x = -1.42; u.armR.rotation.x = -1.42;
     u.armL.rotation.z = 0.72; u.armR.rotation.z = -0.72;
@@ -190,15 +201,21 @@ export function animateAvatar(a, speed, dt) {
     }
   } else if (u.armL) {
     if (u.handPhone) u.handPhone.visible = false;
-    u.armL.rotation.x = -s * 0.8; u.armR.rotation.x = s * 0.8;
-    u.armL.rotation.z = u.armLz; u.armR.rotation.z = u.armRz;
+    if (jumping) {
+      u.armL.rotation.x = -0.65; u.armR.rotation.x = -0.65;
+      u.armL.rotation.z = u.armLz - 0.38; u.armR.rotation.z = u.armRz + 0.38;
+    } else {
+      u.armL.rotation.x = -s * 0.8; u.armR.rotation.x = s * 0.8;
+      u.armL.rotation.z = u.armLz; u.armR.rotation.z = u.armRz;
+    }
     if (u.head) u.head.rotation.x = 0;
     if (u.eyeL) {
       u.eyeL.position.y = u.eyeY; u.eyeR.position.y = u.eyeY;
       u.eyeL.position.z = u.eyeZ; u.eyeR.position.z = u.eyeZ;
     }
   }
-  u.rig.position.y = Math.abs(Math.sin(u.phase)) * 0.06 * Math.min(1, speed / 2);
+  const walkBob = jumping ? 0 : Math.abs(Math.sin(u.phase)) * 0.06 * Math.min(1, speed / 2);
+  u.rig.position.y = walkBob + jumpY;
 }
 
 // 안장에 앉은 자세. 팔은 핸들 쪽(+Z), 다리는 페달 방향으로 구부리고 굴린다.

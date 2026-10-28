@@ -21,13 +21,14 @@ export class Input {
     canvas.addEventListener('pointerup', () => (drag = null));
     canvas.addEventListener('wheel', (e) => { this.zoomDelta += e.deltaY * 0.002; e.preventDefault(); }, { passive: false });
   }
-  // 반환: {fx, fz(앞=+), run}
+  // 반환: {f, s, run, jump}
   axes() {
     const k = this.keys; let f = 0, s = 0;
     if (k.has('KeyW') || k.has('ArrowUp')) f += 1; if (k.has('KeyS') || k.has('ArrowDown')) f -= 1;
     if (k.has('KeyD') || k.has('ArrowRight')) s += 1; if (k.has('KeyA') || k.has('ArrowLeft')) s -= 1;
     const run = k.has('ShiftLeft') || k.has('ShiftRight');
-    return { f: Math.max(-1, Math.min(1, f)), s: Math.max(-1, Math.min(1, s)), run };
+    const jump = k.has('Space');
+    return { f: Math.max(-1, Math.min(1, f)), s: Math.max(-1, Math.min(1, s)), run, jump };
   }
   consumeLook() { const r = [this.yawDelta, this.pitchDelta, this.zoomDelta]; this.yawDelta = this.pitchDelta = this.zoomDelta = 0; return r; }
 }
