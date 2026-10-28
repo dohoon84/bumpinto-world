@@ -8,9 +8,8 @@ export const DONATION_CONFIG = {
     '☕ 무료로 운영되는 Bumpinto World 오픈월드! 24시간 쾌적한 월드 유지를 위해 커피 한 잔 후원해 주세요 ♥   ·   하단 QR 전단지 또는 F 키를 눌러 후원 안내 보기   ·   ',
   subBannerText: '100% 서버 · 도메인 · 인프라 운영 비용으로 사용됩니다',
 
-  // 2) QR코드 이미지 경로 (예: '/donation-qr.png' 또는 '/crazylabs-qr.svg')
-  //    송금 QR 이미지를 public 폴더에 넣고 경로만 바꾸시면 전단지와 모달에 즉시 표시됩니다.
-  qrImageUrl: `${import.meta.env?.BASE_URL || '/'}crazylabs-qr.svg`,
+  // 2) QR코드 이미지 경로 (스마트폰 카메라 스캔 시 하나은행 56791043984207 · 범프인투 송금 안내 페이지 오픈)
+  qrImageUrl: `${import.meta.env?.BASE_URL || '/'}donation-qr.svg`,
 
   // 3) 모달 안내 문구
   modalTitle: '☕ Bumpinto World 인프라 후원 안내',
