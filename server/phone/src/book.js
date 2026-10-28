@@ -276,6 +276,15 @@ export class PhoneBook extends DurableObject {
       sql.exec(`CREATE INDEX IF NOT EXISTS post_comments_post ON post_comments (post_id, id ASC)`);
       sql.exec(`INSERT INTO _sql_schema_migrations (id) VALUES (6)`);
     }
+    if (version < 7) {
+      const cols = sql.exec("PRAGMA table_info(users)").toArray();
+      if (!cols.some((c) => c.name === "created_at")) {
+        sql.exec(`ALTER TABLE users ADD COLUMN created_at INTEGER`);
+      }
+      sql.exec(`UPDATE users SET created_at = updated_at WHERE created_at IS NULL`);
+      sql.exec(`CREATE INDEX IF NOT EXISTS users_created_at ON users (created_at)`);
+      sql.exec(`INSERT INTO _sql_schema_migrations (id) VALUES (7)`);
+    }
     this.#syncNotices();
   }
 
@@ -487,8 +496,8 @@ export class PhoneBook extends DurableObject {
       hash = await hashPin(salt, pin);
     }
     sql.exec(
-      "INSERT INTO users (id, phone, name, look, pin_salt, pin_hash, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
-      id, phone, name, look, salt, hash, now,
+      "INSERT INTO users (id, phone, name, look, pin_salt, pin_hash, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+      id, phone, name, look, salt, hash, now, now,
     );
     this.#ensureWelcome(phone, name, now, true, input?.region);
     return this.#profile({ id, phone, name, look, x: null, y: null, z: null, ry: null, pin_hash: hash, updated_at: now });
@@ -770,9 +779,50 @@ export class PhoneBook extends DurableObject {
     const op = String(input?.op || "list");
     const sql = this.ctx.storage.sql;
     if (op === "stats") {
+      const now = Date.now();
+      const kstOffset = 9 * 60 * 60 * 1000;
+      const kstDayStart = Math.floor((now + kstOffset) / 86400000) * 86400000 - kstOffset;
       const row = sql.exec("SELECT COUNT(*) AS cnt FROM users WHERE phone != ?", GUIDE_PHONE).toArray()[0];
-      const activeRow = sql.exec("SELECT COUNT(*) AS cnt FROM users WHERE phone != ? AND updated_at > ?", GUIDE_PHONE, Date.now() - 60000).toArray()[0];
-      return { ok: true, residents: Number(row?.cnt || 0), activeRecently: Number(activeRow?.cnt || 0) };
+      const activeRow = sql.exec("SELECT COUNT(*) AS cnt FROM users WHERE phone != ? AND updated_at > ?", GUIDE_PHONE, now - 60000).toArray()[0];
+      if (!input?.detail) {
+        return { ok: true, residents: Number(row?.cnt || 0), activeRecently: Number(activeRow?.cnt || 0) };
+      }
+      const todayJoinedRow = sql.exec(
+        "SELECT COUNT(*) AS cnt FROM users WHERE phone != ? AND COALESCE(created_at, updated_at) >= ?",
+        GUIDE_PHONE, kstDayStart,
+      ).toArray()[0];
+      const todayActiveRow = sql.exec(
+        "SELECT COUNT(*) AS cnt FROM users WHERE phone != ? AND updated_at >= ?",
+        GUIDE_PHONE, kstDayStart,
+      ).toArray()[0];
+      const dailyRows = sql.exec(
+        `SELECT date((COALESCE(created_at, updated_at) + 32400000) / 1000, 'unixepoch') AS day_kst,
+                COUNT(*) AS joined
+         FROM users
+         WHERE phone != ?
+         GROUP BY day_kst
+         ORDER BY day_kst DESC
+         LIMIT 30`,
+        GUIDE_PHONE,
+      ).toArray();
+      const postsRow = sql.exec("SELECT COUNT(*) AS cnt FROM posts WHERE category != 'notice'").toArray()[0];
+      const commentsRow = sql.exec("SELECT COUNT(*) AS cnt FROM post_comments").toArray()[0];
+      const likesRow = sql.exec("SELECT COUNT(*) AS cnt FROM post_likes").toArray()[0];
+      const smsRow = sql.exec("SELECT COUNT(*) AS cnt FROM messages WHERE sender != ?", GUIDE_PHONE).toArray()[0];
+      return {
+        ok: true,
+        residents: Number(row?.cnt || 0),
+        activeRecently: Number(activeRow?.cnt || 0),
+        todayJoined: Number(todayJoinedRow?.cnt || 0),
+        todayActive: Number(todayActiveRow?.cnt || 0),
+        community: {
+          userPosts: Number(postsRow?.cnt || 0),
+          comments: Number(commentsRow?.cnt || 0),
+          likes: Number(likesRow?.cnt || 0),
+          userSmsSent: Number(smsRow?.cnt || 0),
+        },
+        dailySignups: dailyRows.map((r) => ({ date: r.day_kst, joined: Number(r.joined || 0) })),
+      };
     }
     const id = String(input?.id || "");
     const found = ID_RE.test(id) ? this.#user(id) : { user: null };
