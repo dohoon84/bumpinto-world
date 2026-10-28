@@ -116,9 +116,9 @@ function wear(next) {
 const pos = new THREE.Vector3(world.signPos.x + 4, 0, world.signPos.z + 4);
 for (let r = 0, a = 0; (world.isBlocked(pos.x, pos.z) || world.onRoad(pos.x, pos.z)) && r < 80; a += 0.7, r += 0.3) pos.set(world.signPos.x + Math.cos(a) * r, 0, world.signPos.z + Math.sin(a) * r);
 player.position.copy(pos);
-const nameTag = overlay.add({ cls: 'tag', text: me.name || '나', getPos: () => player.position.clone().setY(player.position.y + 2.15), maxDist: 60 }); // [terrain] 높이 상대
+const nameTag = overlay.add({ cls: 'tag', text: me.name || '나', getPos: () => player.position.clone().setY(player.position.y + (player.userData.jumpY || 0) + 2.15), maxDist: 60 }); // [terrain] 높이 상대
 nameTag.hidden = !joined;
-const myBubble = new Bubble(overlay, 'me', () => player.position.clone().setY(player.position.y + 2.7), {
+const myBubble = new Bubble(overlay, 'me', () => player.position.clone().setY(player.position.y + (player.userData.jumpY || 0) + 2.7), {
   getName: () => me.name || '나',
   getColor: () => me.color || '#4f7cff',
 }); // [terrain]
@@ -526,19 +526,34 @@ viewBtn.onclick = () => setMode(cam.mode === 'overview' ? 'follow' : 'overview')
 
 const helpEl = document.querySelector('#hud .help');
 const HELP_WALK = helpEl.textContent;
-const HELP_RIDE = '카카오바이크 · W 전진 · S 브레이크 · A/D 회전 · Shift 빠르게 · E 내리기';
+const HELP_RIDE = '카카오바이크 · W 전진 · S 브레이크 · A/D 회전 · Shift 빠르게 · Space 점프 · E 내리기';
 const rideBtn = document.getElementById('ride-btn');
 const RIDE_Y = 0.16;
+const JUMP_V = 6.2;
+const BIKE_JUMP_V = 4.8;
+const JUMP_GRAVITY = 18;
+let jumpY = 0;
+let jumpVel = 0;
 let rideUi = '';
+function triggerJump() {
+  if (!joined || board.open) return;
+  if (jumpY <= 0.001) {
+    jumpVel = bikes.riding ? BIKE_JUMP_V : JUMP_V;
+  }
+}
 function seatPlayer() {
   const b = bikes.riding;
   const back = 0.12;
-  player.position.set(b.x - Math.sin(b.ry) * back, (b.y || 0) + RIDE_Y, b.z - Math.cos(b.ry) * back);
+  player.position.set(b.x - Math.sin(b.ry) * back, (b.y || 0) + RIDE_Y + jumpY, b.z - Math.cos(b.ry) * back);
   player.rotation.y = b.ry;
+  player.userData.jumpY = 0;
 }
 function dismountBike() {
   const b = bikes.riding;
   if (!b) return;
+  jumpY = 0;
+  jumpVel = 0;
+  b.mesh.position.y = b.y || 0;
   clearRidePose(player);
   const fx = Math.sin(b.ry), fz = Math.cos(b.ry);
   const spots = [[b.x + fz * 0.95, b.z - fx * 0.95], [b.x - fz * 0.95, b.z + fx * 0.95], [b.x - fx * 0.8, b.z - fz * 0.8]];
@@ -553,6 +568,9 @@ function toggleRide() {
   if (bikes.riding) { dismountBike(); return; }
   const b = bikes.nearest(player.position.x, player.position.z, undefined, player.position.y);
   if (!b) return;
+  jumpY = 0;
+  jumpVel = 0;
+  player.userData.jumpY = 0;
   bikes.mount(b);
   seatPlayer();
   animateRide(player, 0, 0);
@@ -597,6 +615,7 @@ input.onKey = (e) => {
   if (e.code === 'KeyH') document.getElementById('btn-home').onclick();
   if (e.code === 'Enter') { e.preventDefault(); chatInput.focus(); }
   if (e.code === 'KeyE' && !e.repeat) toggleRide();
+  if (e.code === 'Space' && !e.repeat) triggerJump();
 };
 const ov = { yaw: 0.35, pitch: 0.95, dist: 1000 };
 const phone = mountPhone({ data });
@@ -645,7 +664,18 @@ function frame() {
   } else { ov.yaw += dy; ov.pitch = THREE.MathUtils.clamp(ov.pitch + dp, 0.08, 1.5); ov.dist = THREE.MathUtils.clamp(ov.dist * (1 + dz), 150, 2500); }
 
   // 이동. 걸을 때는 카메라 기준, 바이크는 핸들(W 전진 · A/D 회전). 건물 안으로는 못 들어감.
-  const { f, s, run } = input.axes();
+  const { f, s, run, jump } = input.axes();
+  if (joined && jump && !board.open && jumpY <= 0.001) {
+    jumpVel = bikes.riding ? BIKE_JUMP_V : JUMP_V;
+  }
+  if (jumpY > 0 || jumpVel > 0) {
+    jumpY += jumpVel * dt;
+    jumpVel -= JUMP_GRAVITY * dt;
+    if (jumpY <= 0) {
+      jumpY = 0;
+      jumpVel = 0;
+    }
+  }
   moveSpeed = 0;
   if (joined && bikes.riding) {
     const b = bikes.riding;
@@ -676,6 +706,7 @@ function frame() {
       if (!xOk && !zOk) { bikes.speed = 0; break; }
     }
     bikes.place(b);
+    b.mesh.position.y = (b.y || 0) + jumpY;
     seatPlayer();
     moveSpeed = Math.abs(bikes.speed);
     player.userData.phoneOpen = false;
@@ -703,10 +734,11 @@ function frame() {
     }
     if (!terrain && player.position.y !== 0) player.position.y = 0; // [terrain] 지형이 있으면 둔치 높이를 유지
     player.userData.phoneOpen = handset.open;
+    player.userData.jumpY = jumpY;
     animateAvatar(player, moveSpeed, dt);
   }
   syncRideUi();
-  if (joined) presence.sendState({ x: player.position.x, z: player.position.z, ry: player.rotation.y, moving: moveSpeed > 0 });
+  if (joined) presence.sendState({ x: player.position.x, z: player.position.z, ry: player.rotation.y, moving: moveSpeed > 0, jy: Number(jumpY.toFixed(2)) });
   rememberPlace();
 
   npcs.update(dt, player.position);
