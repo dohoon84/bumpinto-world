@@ -69,7 +69,17 @@ html, body { margin: 0; height: 100%; overflow: hidden; font-family: 'Pretendard
 #hud .clock { display: inline-block; margin-top: 6px; font-size: 13px; font-weight: 800; color: #122033; background: rgba(255,255,255,.95); padding: 3px 8px; border-radius: 8px; border: 1px solid rgba(18,32,51,.12); }
 #buttons { position: fixed; right: 12px; top: 10px; display: flex; gap: 6px; }
 #buttons button { font: inherit; font-size: 13px; border: 0; border-radius: 10px; padding: 7px 10px; background: rgba(255,255,255,.85); box-shadow: 0 1px 4px rgba(0,0,0,.15); cursor: pointer; }
-#chat { position: fixed; left: 50%; bottom: 14px; transform: translateX(-50%); width: min(500px, 78vw); display: flex; align-items: center; gap: 8px; z-index: 7; }
+#chat {
+  position: fixed;
+  left: clamp(270px, min(50vw, calc(100vw - 735px)), 50vw);
+  bottom: 14px;
+  transform: translateX(-50%);
+  width: min(500px, calc(100vw - 480px));
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  z-index: 7;
+}
 #chat input { flex: 1; min-width: 0; font: inherit; font-size: 14px; padding: 9px 14px; border-radius: 20px; border: 1px solid rgba(0,0,0,.1); background: rgba(255,255,255,.88); outline: none; box-shadow: 0 2px 10px rgba(18,32,51,.12); }
 #chat input:focus { background: rgba(255,255,255,.98); border-color: rgba(31,95,191,.45); }
 #chat-log-toggle {
@@ -114,13 +124,13 @@ html, body { margin: 0; height: 100%; overflow: hidden; font-family: 'Pretendard
 #chat-log-toggle .chat-unread[hidden] { display: none !important; }
 #emote-bar {
   position: fixed;
-  left: 50%;
+  left: clamp(270px, min(50vw, calc(100vw - 735px)), 50vw);
   bottom: 58px;
   transform: translateX(-50%);
   z-index: 7;
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: 4px;
   padding: 4px 6px;
   border-radius: 999px;
   background: rgba(15, 25, 42, 0.78);
@@ -128,6 +138,7 @@ html, body { margin: 0; height: 100%; overflow: hidden; font-family: 'Pretendard
   box-shadow: 0 4px 14px rgba(12, 22, 38, 0.25);
   backdrop-filter: blur(6px);
   user-select: none;
+  max-width: calc(100vw - 470px);
 }
 #emote-bar.folded {
   padding: 0;
@@ -138,20 +149,20 @@ html, body { margin: 0; height: 100%; overflow: hidden; font-family: 'Pretendard
 #emote-bar .emote-list {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 3px;
 }
 #emote-bar .emote-btn {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 3.5px;
   font: inherit;
-  font-size: 12px;
+  font-size: 11.5px;
   font-weight: 800;
   color: #e8f2f8;
   background: rgba(255, 255, 255, 0.09);
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 999px;
-  padding: 4px 9px 4px 6px;
+  padding: 4px 8px 4px 5px;
   cursor: pointer;
   white-space: nowrap;
   transition: transform .12s, background .12s, border-color .12s;
@@ -230,16 +241,16 @@ html, body { margin: 0; height: 100%; overflow: hidden; font-family: 'Pretendard
   background: rgba(255, 255, 255, 0.18);
   color: #ffe169;
 }
-#ride-btn { position: fixed; left: 50%; bottom: 98px; transform: translateX(-50%); z-index: 6; font: inherit; font-size: 14px; font-weight: 800; color: #3a2a00; background: #fee500; border: 0; border-radius: 999px; padding: 8px 14px; box-shadow: 0 2px 8px rgba(0,0,0,.18); cursor: pointer; }
+#ride-btn { position: fixed; left: clamp(270px, min(50vw, calc(100vw - 735px)), 50vw); bottom: 98px; transform: translateX(-50%); z-index: 6; font: inherit; font-size: 14px; font-weight: 800; color: #3a2a00; background: #fee500; border: 0; border-radius: 999px; padding: 8px 14px; box-shadow: 0 2px 8px rgba(0,0,0,.18); cursor: pointer; }
 #ride-btn[hidden] { display: none !important; }
 body.in-lobby #ride-btn { display: none !important; }
 #chat-log-panel {
   position: fixed;
-  left: 50%;
+  left: clamp(270px, min(50vw, calc(100vw - 735px)), 50vw);
   bottom: 98px;
   transform: translateX(-50%);
   z-index: 12;
-  width: min(500px, calc(100vw - 24px));
+  width: min(500px, calc(100vw - 480px));
   background: rgba(15, 25, 42, 0.92);
   color: #e8f2f8;
   border: 1px solid rgba(255, 255, 255, 0.18);
@@ -248,6 +259,9 @@ body.in-lobby #ride-btn { display: none !important; }
   box-shadow: 0 12px 32px rgba(8, 16, 30, 0.42);
   backdrop-filter: blur(8px);
   transition: bottom .18s ease;
+}
+@media (max-width: 1180px) {
+  #emote-bar .emote-btn[data-emote-id] .em-lbl { display: none; }
 }
 #ride-btn:not([hidden]) ~ #chat-log-panel { bottom: 142px; }
 #chat-log-panel[hidden] { display: none !important; }
