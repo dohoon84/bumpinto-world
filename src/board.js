@@ -13,6 +13,10 @@ const CATEGORIES = [
 ];
 
 const CAT_LABEL = Object.fromEntries(CATEGORIES.map((c) => [c.key, c.badge || c.label]));
+
+function isBoardAdmin(phone) {
+  return String(phone || '').replace(/\D/g, '').endsWith('0002');
+}
 const BOARD_SEEN_KEY = 'jeongja3d.board.seenId';
 const NEW_WINDOW_MS = 24 * 60 * 60 * 1000;
 
@@ -326,7 +330,7 @@ export function mountBoard({ sms, getMe } = {}) {
           <button type="button" class="board-btn" data-action="back-list">‹ 목록으로</button>
           <div class="right-actions">
             ${
-              p.mine
+              p.canManage || p.mine
                 ? `<button type="button" class="board-btn" data-action="edit">수정</button>
                    <button type="button" class="board-btn danger" data-action="delete">삭제</button>`
                 : ''
@@ -346,13 +350,10 @@ export function mountBoard({ sms, getMe } = {}) {
 
   function renderFormBody() {
     const isEdit = !!editingPost;
-    const writableCats = CATEGORIES.filter((c) => c.key !== 'all' && c.key !== 'notice');
-    const defaultCat =
-      editingPost?.category && editingPost.category !== 'notice'
-        ? editingPost.category
-        : category !== 'all' && category !== 'notice'
-          ? category
-          : 'intro';
+    const admin = isBoardAdmin(sms?.session?.phone);
+    const writableCats = CATEGORIES.filter((c) => c.key !== 'all' && (admin || c.key !== 'notice'));
+    const picked = editingPost?.category || category;
+    const defaultCat = writableCats.some((c) => c.key === picked) ? picked : 'intro';
     const catOptions = writableCats
       .map(
         (c) =>

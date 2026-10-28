@@ -10,6 +10,10 @@ const BOARD_PAGE_SIZE = 20;
 const BOARD_CATS = new Set(['notice', 'intro', 'feedback', 'food', 'free']);
 const WRITABLE_BOARD_CATS = new Set(['intro', 'feedback', 'food', 'free']);
 
+function isBoardAdmin(phone) {
+  return String(phone || '').replace(/\D/g, '').endsWith('0002');
+}
+
 function isLocalHost() {
   if (typeof location === 'undefined') return false;
   const h = location.hostname;
@@ -55,6 +59,7 @@ const ERRORS = {
   post_not_found: '존재하지 않거나 삭제된 게시글입니다.',
   comment_not_found: '존재하지 않거나 삭제된 댓글입니다.',
   forbidden: '본인이 작성한 글만 수정·삭제할 수 있습니다.',
+  notice_admin: '공지는 관리자만 등록할 수 있습니다.',
   not_found: '번호가 아직 없습니다. 다시 입장해 주세요.',
   full: '더 이상 번호를 발급할 수 없습니다.',
   server: '번호 서버 오류입니다.',
@@ -227,6 +232,7 @@ function runLocalBoard(id, session, op, extra = {}) {
       authorName: p.authorName,
       authorDisplay: p.authorPhone ? formatPhone(p.authorPhone) : '',
       mine: p.authorId === id,
+      canManage: p.authorId === id || (isBoardAdmin(session?.phone) && p.category === 'notice'),
       views: p.views || 0,
       likesCount,
       commentsCount,
@@ -337,7 +343,9 @@ function runLocalBoard(id, session, op, extra = {}) {
 
   if (op === 'create') {
     const cat = String(extra.category || 'free');
-    if (!WRITABLE_BOARD_CATS.has(cat)) fail('bad_category');
+    if (cat === 'notice') {
+      if (!isBoardAdmin(session?.phone)) fail('notice_admin');
+    } else if (!WRITABLE_BOARD_CATS.has(cat)) fail('bad_category');
     const title = String(extra.title || '').trim().slice(0, 80);
     if (!title) fail('bad_title');
     const body = String(extra.body || '').trim().slice(0, 2000);
@@ -365,8 +373,11 @@ function runLocalBoard(id, session, op, extra = {}) {
     const postId = Math.floor(Number(extra.postId) || 0);
     const post = store.posts.find((p) => p.id === postId);
     if (!post) fail('post_not_found');
-    if (post.authorId !== id) fail('forbidden');
-    const cat = post.category === 'notice' ? 'notice' : String(extra.category || post.category);
+    const admin = isBoardAdmin(session?.phone);
+    if (post.authorId !== id && !(admin && post.category === 'notice')) fail('forbidden');
+    let cat = String(extra.category || post.category);
+    if (cat === 'notice' && !admin) fail('notice_admin');
+    if (post.category === 'notice' && !admin) cat = 'notice';
     if (cat !== 'notice' && !WRITABLE_BOARD_CATS.has(cat)) fail('bad_category');
     const title = String(extra.title || '').trim().slice(0, 80);
     if (!title) fail('bad_title');
@@ -388,7 +399,8 @@ function runLocalBoard(id, session, op, extra = {}) {
     const postId = Math.floor(Number(extra.postId) || 0);
     const idx = store.posts.findIndex((p) => p.id === postId);
     if (idx < 0) fail('post_not_found');
-    if (store.posts[idx].authorId !== id) fail('forbidden');
+    const target = store.posts[idx];
+    if (target.authorId !== id && !(isBoardAdmin(session?.phone) && target.category === 'notice')) fail('forbidden');
     store.posts.splice(idx, 1);
     store.likes = store.likes.filter((l) => l.postId !== postId);
     store.comments = store.comments.filter((c) => c.postId !== postId);
