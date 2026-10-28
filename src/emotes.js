@@ -163,6 +163,30 @@ export class EmoteFX {
     }
   }
 
+  spawnZzz(originPos) {
+    if (!originPos) return;
+    if (this.camera.position.distanceTo(originPos) > 70) return;
+    const el = document.createElement('div');
+    el.className = 'emote-floater zzz';
+    el.textContent = Math.random() < 0.5 ? '💤' : 'Zzz';
+    this.root.appendChild(el);
+    this.floaters2d.push({
+      el,
+      pos: new THREE.Vector3(
+        originPos.x + (Math.random() - 0.5) * 0.25,
+        originPos.y + 1.55,
+        originPos.z + (Math.random() - 0.5) * 0.25,
+      ),
+      vy: 0.55,
+      swayAmp: 10,
+      swayFreq: 2.6,
+      swayPhase: Math.random() * Math.PI * 2,
+      scale: 0.78,
+      age: 0,
+      life: 1.8,
+    });
+  }
+
   update(dt, w, h) {
     // 3D 파티클 업데이트
     for (let i = this.particles3d.length - 1; i >= 0; i--) {
