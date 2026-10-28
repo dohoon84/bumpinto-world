@@ -105,13 +105,13 @@ function createFlyerTexture() {
       drawStylizedQr(ctx, 124, 246, 264);
     }
 
-    // 6) 하단 스캔 안내 문구
-    ctx.fillStyle = '#1f5fbf';
-    ctx.font = '900 22px "Pretendard", "Noto Sans KR", sans-serif';
-    ctx.fillText('📱 스마트폰 카메라로 QR을 스캔해 주세요', 256, 568);
+    // 6) 하단 토스(Toss) & 받는 사람(범프인투) 안내 문구
+    ctx.fillStyle = '#0064ff';
+    ctx.font = '900 24px "Pretendard", "Noto Sans KR", sans-serif';
+    ctx.fillText(`💙 ${DONATION_CONFIG.payMethod}  ·  받는 사람: ${DONATION_CONFIG.recipientName}`, 256, 566);
     ctx.fillStyle = '#475569';
     ctx.font = 'bold 18px "Pretendard", "Noto Sans KR", sans-serif';
-    ctx.fillText(DONATION_CONFIG.subBannerText, 256, 600);
+    ctx.fillText('스마트폰 카메라로 QR을 찍으면 토스 송금이 열립니다', 256, 602);
 
     // 7) 하단 절취선 문어발 조각 (전단지 감성)
     ctx.strokeStyle = '#94a3b8';
@@ -408,11 +408,12 @@ export function mountDonationBillboards({ scene, overlay, world, camera, domElem
           <p class="donate-lead">${esc(DONATION_CONFIG.modalLead)}</p>
           <div class="donate-qr-card">
             <div class="donate-tape"></div>
-            <span class="qr-badge">📱 스마트폰 카메라로 QR 스캔</span>
+            <span class="qr-badge toss">💙 ${esc(DONATION_CONFIG.payMethod)}</span>
             <div class="qr-frame large">
-              <img src="${esc(DONATION_CONFIG.qrImageUrl)}" alt="후원 QR코드" />
+              <img src="${esc(DONATION_CONFIG.qrImageUrl)}" alt="토스 후원 QR코드" />
             </div>
-            <small>스마트폰 기본 카메라 또는 페이 앱으로 위 QR코드를 스캔해 주세요</small>
+            <strong class="qr-recipient">받는 사람: ${esc(DONATION_CONFIG.recipientName)}</strong>
+            <small>스마트폰 기본 카메라 또는 토스(Toss) 앱으로 위 QR코드를 스캔해 주세요</small>
           </div>
           <div class="donate-usage">
             <h3>💡 후원금은 이렇게 사용됩니다</h3>
