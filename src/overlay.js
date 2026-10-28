@@ -25,8 +25,21 @@ export class Overlay {
 }
 // 말풍선 헬퍼: 일정 시간 동안 텍스트 표시
 export class Bubble {
-  constructor(overlay, cls, getPos) { this.item = overlay.add({ cls: 'bubble ' + cls, getPos, maxDist: 70 }); this.item.hidden = true; this.until = 0; }
-  say(text, ms = 4500) { this.item.el.textContent = text; this.item.hidden = false; this.until = performance.now() + ms; }
+  constructor(overlay, cls, getPos, meta = {}) {
+    this.overlay = overlay;
+    this.cls = cls;
+    this.getPos = getPos;
+    this.meta = meta;
+    this.item = overlay.add({ cls: 'bubble ' + cls, getPos, maxDist: 70 });
+    this.item.hidden = true;
+    this.until = 0;
+  }
+  say(text, ms = 4500) {
+    this.item.el.textContent = text;
+    this.item.hidden = false;
+    this.until = performance.now() + ms;
+    this.overlay.onSay?.({ cls: this.cls, text, pos: this.getPos?.(), meta: this.meta });
+  }
   tick() { if (!this.item.hidden && performance.now() > this.until) this.item.hidden = true; }
   get showing() { return !this.item.hidden; }
 }

@@ -21,14 +21,23 @@ export const UPCOMING_REGIONS = [
 export const REPO_URL = 'https://github.com/dohoon84/bumpinto-world';
 const DEFAULT_PHONE_BASE = import.meta.env?.VITE_PHONE_URL || 'https://jeongja-phone.xn0texn073.workers.dev';
 
+function isLocalHost() {
+  if (typeof location === 'undefined') return false;
+  const h = location.hostname;
+  return h === 'localhost' || h === '127.0.0.1' || h === '[::1]' || h.endsWith('.local');
+}
+
 function phoneStatsUrl() {
   const params = new URLSearchParams(location.search);
-  if (params.get('sms') === 'off') return '';
-  if (params.get('sms') === 'local') return 'http://127.0.0.1:8789/stats';
+  const smsParam = params.get('sms');
+  if (smsParam === 'off') return '';
+  if (smsParam === 'local') return 'http://127.0.0.1:8789/stats';
+  if (smsParam === 'prod' || smsParam === 'live') return `${DEFAULT_PHONE_BASE.replace(/\/$/, '')}/stats`;
   if (params.has('sms')) {
-    const b = (params.get('sms') || '').replace(/\/$/, '');
+    const b = (smsParam || '').replace(/\/$/, '');
     return b ? `${b}/stats` : '';
   }
+  if (isLocalHost()) return '';
   return `${DEFAULT_PHONE_BASE.replace(/\/$/, '')}/stats`;
 }
 
@@ -208,8 +217,18 @@ export function openWorldGate({ onEnter }) {
   let alive = true, raf = 0, drag = null, moved = 0, lastT = 0, toastTimer = 0, statsTimer = 0;
 
   async function refreshGateStats() {
+    if (!alive) return;
     const url = phoneStatsUrl();
-    if (!url || !alive) return;
+    if (!url) {
+      if (statOnlineEl) statOnlineEl.innerHTML = `<span class="idle-num">로컬 모드</span> · 집계 제외`;
+      if (statResidentsEl) statResidentsEl.innerHTML = `<span class="res-num">테스트 환경</span>`;
+      if (jeongjaSubEl) jeongjaSubEl.textContent = '성남시 분당구 · 🧪 로컬 테스트 모드';
+      if (pinBadge) {
+        pinBadge.hidden = false;
+        pinBadge.textContent = '🧪 로컬 모드';
+      }
+      return;
+    }
     try {
       const r = await fetch(url, { cache: 'no-store' });
       const j = await r.json();

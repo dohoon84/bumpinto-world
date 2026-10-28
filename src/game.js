@@ -11,6 +11,7 @@ import { Overlay, Bubble } from './overlay.js';
 import { Input } from './input.js';
 import { createPresence } from './net/presence.js';
 import { RemotePlayers } from './net/remotePlayers.js';
+import { CHAT_RADIUS } from './net/protocol.js';
 import { buildTransit, makeCrossingGuard } from './transit/transit.js';
 import { mountPhone } from './phone.js';
 import { mountHandset } from './handset.js';
@@ -117,7 +118,10 @@ for (let r = 0, a = 0; (world.isBlocked(pos.x, pos.z) || world.onRoad(pos.x, pos
 player.position.copy(pos);
 const nameTag = overlay.add({ cls: 'tag', text: me.name || '나', getPos: () => player.position.clone().setY(player.position.y + 2.15), maxDist: 60 }); // [terrain] 높이 상대
 nameTag.hidden = !joined;
-const myBubble = new Bubble(overlay, 'me', () => player.position.clone().setY(player.position.y + 2.7)); // [terrain]
+const myBubble = new Bubble(overlay, 'me', () => player.position.clone().setY(player.position.y + 2.7), {
+  getName: () => me.name || '나',
+  getColor: () => me.color || '#4f7cff',
+}); // [terrain]
 
 // ?npcs=N 은 0부터 상한까지. 이름 있는 주민을 먼저 두고, 남은 수만큼 지도 전역 행인을 채운다.
 const npcCap = NPC_DEFS.length + CROWD_EXTRA;
@@ -374,8 +378,139 @@ startLobby = () => {
 if (lobbyQueued) startLobby();
 if (joined) presence.connect(me);
 
-// --- 채팅 ---
+// --- 채팅 & 주변 대화 전체보기 로그 ---
 const chatForm = document.getElementById('chat'), chatInput = document.getElementById('chat-input');
+const chatLogToggle = document.getElementById('chat-log-toggle');
+const chatUnreadEl = document.getElementById('chat-unread');
+const chatLogPanel = document.getElementById('chat-log-panel');
+const chatLogs = [];
+const MAX_CHAT_LOGS = 100;
+let chatLogOpen = false;
+let chatIncludeNpc = false;
+let chatUnread = 0;
+
+function syncChatUnread() {
+  if (!chatUnreadEl) return;
+  if (chatUnread > 0 && !chatLogOpen) {
+    chatUnreadEl.hidden = false;
+    chatUnreadEl.textContent = chatUnread > 99 ? '99+' : String(chatUnread);
+  } else {
+    chatUnreadEl.hidden = true;
+  }
+}
+
+function renderChatLogPanel(scrollToBottom = false) {
+  if (!chatLogPanel || !chatLogOpen) return;
+  const prevList = chatLogPanel.querySelector('.c-list');
+  const prevScroll = prevList ? prevList.scrollTop : 0;
+  const wasNearBottom = !prevList || (prevList.scrollHeight - prevList.scrollTop - prevList.clientHeight < 36);
+
+  const visibleLogs = chatIncludeNpc ? chatLogs : chatLogs.filter((item) => item.kind !== 'npc');
+  const rowsHtml = visibleLogs.length
+    ? visibleLogs
+        .map((item) => {
+          const badge =
+            item.kind === 'me'
+              ? '<span class="c-badge me">나</span>'
+              : item.kind === 'npc'
+                ? '<span class="c-badge npc">NPC</span>'
+                : `<span class="c-swatch" style="background:${escHtml(item.color || '#20c997')}"></span>`;
+          return `
+            <li class="c-row ${escHtml(item.kind)}">
+              <div class="c-meta">
+                <div class="c-who">
+                  ${badge}
+                  <strong>${escHtml(item.name)}</strong>
+                </div>
+                <time class="c-time">${escHtml(item.time)}</time>
+              </div>
+              <p class="c-text">${escHtml(item.text)}</p>
+            </li>`;
+        })
+        .join('')
+    : `<li class="c-empty">${
+        chatIncludeNpc
+          ? '아직 근처(30m)에서 들린 대화가 없습니다.'
+          : '아직 주고받은 플레이어 대화가 없습니다.<br><small>근처(30m) 접속자와 인사하거나 상단의 <b>NPC 대사 포함</b>을 켜보세요!</small>'
+      }</li>`;
+
+  chatLogPanel.innerHTML = `
+    <div class="c-head">
+      <span class="c-title">💬 주변 대화 전체보기 <small>(30m)</small></span>
+      <div class="c-head-actions">
+        <button type="button" class="c-npc-toggle${chatIncludeNpc ? ' on' : ''}" data-chat-npc-toggle="1" aria-pressed="${chatIncludeNpc}">
+          🗣️ NPC 대사 포함
+        </button>
+        <button type="button" class="c-close" data-chat-close="1" aria-label="닫기">✕</button>
+      </div>
+    </div>
+    <ul class="c-list">${rowsHtml}</ul>`;
+
+  const nextList = chatLogPanel.querySelector('.c-list');
+  if (nextList) {
+    if (scrollToBottom || wasNearBottom) {
+      nextList.scrollTop = nextList.scrollHeight;
+    } else {
+      nextList.scrollTop = prevScroll;
+    }
+  }
+}
+
+function setChatLogOpen(next) {
+  if (!chatLogPanel) return;
+  chatLogOpen = next;
+  chatLogPanel.hidden = !chatLogOpen;
+  chatLogToggle?.classList.toggle('open', chatLogOpen);
+  chatLogToggle?.setAttribute('aria-expanded', String(chatLogOpen));
+  if (chatLogOpen) {
+    chatUnread = 0;
+    syncChatUnread();
+    renderChatLogPanel(true);
+  }
+}
+
+overlay.onSay = ({ cls, text, pos, meta }) => {
+  if (!joined || !text) return;
+  if (cls === 'npc') {
+    if (!pos || Math.hypot(player.position.x - pos.x, player.position.z - pos.z) > CHAT_RADIUS) return;
+  }
+  const now = new Date();
+  const hh = String(now.getHours()).padStart(2, '0');
+  const mm = String(now.getMinutes()).padStart(2, '0');
+  const name = meta?.getName
+    ? meta.getName()
+    : (meta?.name || (cls === 'me' ? (me.name || '나') : cls === 'remote' ? '손님' : '주민'));
+  const color = meta?.getColor
+    ? meta.getColor()
+    : (meta?.color || (cls === 'me' ? (me.color || '#4f7cff') : cls === 'remote' ? '#20c997' : '#9775fa'));
+
+  // 동일 화자가 직전에 같은 대사를 연속으로 띄운 경우 중복 누적 방지
+  const last = chatLogs[chatLogs.length - 1];
+  if (cls === 'npc' && last && last.kind === 'npc' && last.name === name && last.text === text) return;
+
+  chatLogs.push({ kind: cls, name, color, text, time: `${hh}:${mm}` });
+  if (chatLogs.length > MAX_CHAT_LOGS) chatLogs.shift();
+
+  if (chatLogOpen) {
+    if (cls !== 'npc' || chatIncludeNpc) renderChatLogPanel(true);
+  } else if (cls === 'remote' || (cls === 'npc' && chatIncludeNpc)) {
+    chatUnread++;
+    syncChatUnread();
+  }
+};
+
+chatLogToggle?.addEventListener('click', () => setChatLogOpen(!chatLogOpen));
+chatLogPanel?.addEventListener('click', (e) => {
+  if (e.target.closest('[data-chat-close]')) {
+    setChatLogOpen(false);
+    return;
+  }
+  if (e.target.closest('[data-chat-npc-toggle]')) {
+    chatIncludeNpc = !chatIncludeNpc;
+    renderChatLogPanel(true);
+  }
+});
+
 chatForm.addEventListener('submit', (e) => {
   e.preventDefault(); const text = chatInput.value.trim(); if (!text) return chatInput.blur();
   myBubble.say(text, 6000); presence.sendChat(text); chatInput.value = ''; chatInput.blur();
@@ -445,6 +580,7 @@ leaveBtn.onclick = () => {
   board.close();
   handset.close();
   setPresenceOpen(false);
+  setChatLogOpen(false);
   joined = false;
   player.visible = false;
   nameTag.hidden = true;
@@ -467,7 +603,7 @@ const phone = mountPhone({ data });
 
 let placeAt = 0, placeMark = '';
 function rememberPlace(force = false) {
-  if (!joined || sms.off || !sms.session) return;
+  if (!joined || !sms.session) return;
   const p = player.position;
   const here = `${p.x.toFixed(1)},${p.y.toFixed(1)},${p.z.toFixed(1)},${player.rotation.y.toFixed(2)}`;
   const now = performance.now();

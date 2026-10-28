@@ -29,7 +29,7 @@ export class RemotePlayers {
     mesh.position.set(peer.x || 0, this.groundY ? this.groundY(peer.x || 0, peer.z || 0, 0) : 0, peer.z || 0); this.scene.add(mesh); // [terrain]
     const p = { id: peer.id, name: peer.name || '손님', color: look.color || '#20c997', mesh, target: mesh.position.clone(), ry: peer.ry || 0 };
     p.tag = this.overlay.add({ cls: 'tag remote', text: peer.name || '손님', getPos: () => mesh.position.clone().setY(mesh.position.y + 2.05), maxDist: 80 }); // [terrain]
-    p.bubble = new Bubble(this.overlay, 'remote', () => mesh.position.clone().setY(mesh.position.y + 2.7)); // [terrain]
+    p.bubble = new Bubble(this.overlay, 'remote', () => mesh.position.clone().setY(mesh.position.y + 2.7), { name: p.name, color: p.color, id: p.id }); // [terrain]
     this.peers.set(peer.id, p);
   }
   list() {
