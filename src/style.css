@@ -190,6 +190,16 @@ html, body { margin: 0; height: 100%; overflow: hidden; font-family: 'Pretendard
   border-color: #63e6be;
   color: #082019;
 }
+#emote-bar .emote-btn.afk-btn {
+  background: rgba(116, 143, 252, 0.22);
+  border-color: rgba(145, 167, 255, 0.5);
+  color: #edf2ff;
+}
+#emote-bar .emote-btn.afk-btn.active {
+  background: #5c7cfa;
+  border-color: #bac8ff;
+  color: #fff;
+}
 #emote-bar .emote-sep {
   width: 1px;
   height: 18px;
