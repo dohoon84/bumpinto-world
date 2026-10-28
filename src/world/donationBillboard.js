@@ -93,31 +93,25 @@ function createFlyerTexture() {
     ctx.font = 'bold 19px "Pretendard", "Noto Sans KR", sans-serif';
     ctx.fillText('QR 스캔 또는 가까이 와서 [F] 키 클릭', 256, 206);
 
-    // 5) 중앙 QR코드 박스
+    // 5) 중앙 QR코드 박스 (큼직하게 배치)
     ctx.strokeStyle = '#122033';
-    ctx.lineWidth = 4;
-    ctx.strokeRect(126, 226, 260, 260);
+    ctx.lineWidth = 5;
+    ctx.strokeRect(106, 228, 300, 300);
     if (qrImg) {
       ctx.fillStyle = '#ffffff';
-      ctx.fillRect(130, 230, 252, 252);
-      ctx.drawImage(qrImg, 138, 238, 236, 236);
+      ctx.fillRect(110, 232, 292, 292);
+      ctx.drawImage(qrImg, 120, 242, 272, 272);
     } else {
-      drawStylizedQr(ctx, 140, 240, 232);
+      drawStylizedQr(ctx, 124, 246, 264);
     }
 
-    // 6) 계좌번호 안내 영역
-    ctx.fillStyle = '#f1f5f9';
-    ctx.fillRect(54, 506, 404, 102);
-    ctx.strokeStyle = '#cbd5e1';
-    ctx.lineWidth = 2;
-    ctx.strokeRect(54, 506, 404, 102);
-
+    // 6) 하단 스캔 안내 문구
     ctx.fillStyle = '#1f5fbf';
-    ctx.font = '900 24px "Pretendard", "Noto Sans KR", sans-serif';
-    ctx.fillText(`${DONATION_CONFIG.bankName}  ${DONATION_CONFIG.accountNumber}`, 256, 548);
-    ctx.fillStyle = '#33415c';
-    ctx.font = 'bold 20px "Pretendard", "Noto Sans KR", sans-serif';
-    ctx.fillText(`예금주: ${DONATION_CONFIG.accountHolder}`, 256, 586);
+    ctx.font = '900 22px "Pretendard", "Noto Sans KR", sans-serif';
+    ctx.fillText('📱 스마트폰 카메라로 QR을 스캔해 주세요', 256, 568);
+    ctx.fillStyle = '#475569';
+    ctx.font = 'bold 18px "Pretendard", "Noto Sans KR", sans-serif';
+    ctx.fillText(DONATION_CONFIG.subBannerText, 256, 600);
 
     // 7) 하단 절취선 문어발 조각 (전단지 감성)
     ctx.strokeStyle = '#94a3b8';
@@ -221,22 +215,18 @@ function createTickerRenderer() {
     ctx.fillText(msg, 40 + offset + msgW, 188);
     ctx.restore();
 
-    // 하단 계좌 & 안내 바
+    // 하단 안내 바
     ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
     ctx.fillRect(28, 252, 968, 98);
 
     ctx.fillStyle = '#74c0fc';
     ctx.font = 'bold 28px "Pretendard", "Noto Sans KR", sans-serif';
     ctx.textAlign = 'center';
-    ctx.fillText(
-      `💳 ${DONATION_CONFIG.bankName} ${DONATION_CONFIG.accountNumber} (${DONATION_CONFIG.accountHolder})`,
-      512,
-      294,
-    );
+    ctx.fillText(DONATION_CONFIG.subBannerText, 512, 294);
 
     ctx.fillStyle = '#ffffff';
     ctx.font = 'bold 24px "Pretendard", "Noto Sans KR", sans-serif';
-    ctx.fillText('👇 기둥 아래 QR 전단지를 보거나 가까이 와서 [F] 키를 눌러주세요!', 512, 334);
+    ctx.fillText('👇 기둥 아래 QR 전단지를 스캔하거나 가까이 와서 [F] 키를 눌러주세요!', 512, 334);
 
     tex.needsUpdate = true;
   }
@@ -395,7 +385,6 @@ export function mountDonationBillboards({ scene, overlay, world, camera, domElem
   document.body.appendChild(modal);
 
   let modalOpen = false;
-  let copiedToast = false;
 
   const esc = (s) =>
     String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -417,29 +406,17 @@ export function mountDonationBillboards({ scene, overlay, world, camera, domElem
         </header>
         <div class="donate-body">
           <p class="donate-lead">${esc(DONATION_CONFIG.modalLead)}</p>
-          <div class="donate-grid">
-            <div class="donate-qr-card">
-              <div class="donate-tape"></div>
-              <span class="qr-badge">📱 스마트폰 QR 스캔</span>
-              <div class="qr-frame">
-                <img src="${esc(DONATION_CONFIG.qrImageUrl)}" alt="후원 QR코드" />
-              </div>
-              <small>카메라로 스캔하거나 아래 계좌번호를 복사해 주세요</small>
+          <div class="donate-qr-card">
+            <div class="donate-tape"></div>
+            <span class="qr-badge">📱 스마트폰 카메라로 QR 스캔</span>
+            <div class="qr-frame large">
+              <img src="${esc(DONATION_CONFIG.qrImageUrl)}" alt="후원 QR코드" />
             </div>
-            <div class="donate-info-card">
-              <div class="donate-account-box">
-                <small>후원 계좌번호 (${esc(DONATION_CONFIG.bankName)})</small>
-                <strong class="acc-num">${esc(DONATION_CONFIG.bankName)} ${esc(DONATION_CONFIG.accountNumber)}</strong>
-                <span class="acc-holder">예금주: ${esc(DONATION_CONFIG.accountHolder)}</span>
-                <button type="button" class="donate-copy-btn ${copiedToast ? 'copied' : ''}" data-donate-copy="1">
-                  ${copiedToast ? '✅ 계좌번호가 복사되었습니다!' : '📋 계좌번호 복사하기'}
-                </button>
-              </div>
-              <div class="donate-usage">
-                <h3>💡 후원금은 이렇게 사용됩니다</h3>
-                <ul>${pointsHtml}</ul>
-              </div>
-            </div>
+            <small>스마트폰 기본 카메라 또는 페이 앱으로 위 QR코드를 스캔해 주세요</small>
+          </div>
+          <div class="donate-usage">
+            <h3>💡 후원금은 이렇게 사용됩니다</h3>
+            <ul>${pointsHtml}</ul>
           </div>
           <p class="donate-note">${esc(DONATION_CONFIG.modalNote)}</p>
         </div>
@@ -448,7 +425,6 @@ export function mountDonationBillboards({ scene, overlay, world, camera, domElem
 
   function openModal(source = 'button') {
     modalOpen = true;
-    copiedToast = false;
     modal.hidden = false;
     renderModal();
     trackEvent('donation_modal_open', { source });
@@ -462,30 +438,9 @@ export function mountDonationBillboards({ scene, overlay, world, camera, domElem
 
   nearBtn.addEventListener('click', () => openModal('near_button'));
 
-  modal.addEventListener('click', async (e) => {
+  modal.addEventListener('click', (e) => {
     if (e.target.closest('[data-donate-close]')) {
       closeModal();
-      return;
-    }
-    if (e.target.closest('[data-donate-copy]')) {
-      const text = `${DONATION_CONFIG.bankName} ${DONATION_CONFIG.accountNumber}`;
-      try {
-        await navigator.clipboard.writeText(text);
-      } catch {
-        const ta = document.createElement('textarea');
-        ta.value = text;
-        document.body.appendChild(ta);
-        ta.select();
-        document.execCommand('copy');
-        ta.remove();
-      }
-      copiedToast = true;
-      renderModal();
-      trackEvent('donation_account_copy');
-      setTimeout(() => {
-        copiedToast = false;
-        if (modalOpen) renderModal();
-      }, 2500);
     }
   });
 
