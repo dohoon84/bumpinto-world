@@ -8,6 +8,7 @@ import { sanitizeLook } from './look.js';
 import { NPCs, NPC_DEFS, CROWD_EXTRA } from './entities/npcs.js';
 import { createAtmosphere } from './weather.js';
 import { Overlay, Bubble } from './overlay.js';
+import { EMOTE_LIST, EMOTE_BY_ID, EMOTE_BY_CODE, EmoteFX } from './emotes.js';
 import { Input } from './input.js';
 import { createPresence } from './net/presence.js';
 import { RemotePlayers } from './net/remotePlayers.js';
@@ -175,9 +176,10 @@ const stationPlaza = addStationPlaza(scene, overlay, world);
 }
 
 // --- 멀티플레이 프레즌스(지금은 목업, ?ws=URL 이면 실서버) ---
+const emoteFx = new EmoteFX(scene, document.getElementById('overlay'), camera);
 const presence = createPresence({ station: st });
 if (npcs.guard) presence.setGuard?.(npcs.guard);
-const remotes = new RemotePlayers(scene, overlay, presence, () => player.position, (t) => myBubble.say(t, 6000), terrain?.getGroundHeight); // [terrain] 원격 플레이어도 지형 높이
+const remotes = new RemotePlayers(scene, overlay, presence, () => player.position, (t) => myBubble.say(t, 6000), terrain?.getGroundHeight, emoteFx); // [terrain] 원격 플레이어도 지형 높이
 const statusEl = document.getElementById('presence-status');
 const presencePanel = document.getElementById('presence-panel');
 let presenceOpen = false;
@@ -524,7 +526,85 @@ chatLogPanel?.addEventListener('click', (e) => {
 
 chatForm.addEventListener('submit', (e) => {
   e.preventDefault(); const text = chatInput.value.trim(); if (!text) return chatInput.blur();
-  myBubble.say(text, 6000); presence.sendChat(text); chatInput.value = ''; chatInput.blur();
+  myBubble.say(text, 6000);
+  if (myBubble.item.el.classList.contains('shouting')) {
+    triggerEmote('fuss', false);
+  }
+  presence.sendChat(text); chatInput.value = ''; chatInput.blur();
+});
+
+// --- 호들갑(리액션/이모트) 퀵바 & 단축키 (1~6) ---
+const emoteBar = document.getElementById('emote-bar');
+let emoteFolded = false;
+let myEmote = '';
+let myEmoteUntil = 0;
+let emoteCombo = 0;
+let lastEmoteAt = 0;
+
+function renderEmoteBar() {
+  if (!emoteBar) return;
+  if (emoteFolded) {
+    emoteBar.classList.add('folded');
+    emoteBar.innerHTML = `
+      <button type="button" class="emote-fold-btn" data-emote-fold="0" title="호들갑 리액션 바 펼치기">
+        <span>🎉 호들갑 리액션 (1~6)</span>
+        <span class="caret">▴</span>
+      </button>`;
+    return;
+  }
+  emoteBar.classList.remove('folded');
+  const btns = EMOTE_LIST.map(
+    (e) => `
+      <button type="button" class="emote-btn ${myEmote === e.id ? 'active' : ''}" data-emote-id="${e.id}" title="${e.label} (단축키 ${e.digit} 연타 가능!)">
+        <kbd>${e.digit}</kbd>
+        <span class="em-ico">${e.icon}</span>
+        <span class="em-lbl">${e.label}</span>
+      </button>`,
+  ).join('');
+  emoteBar.innerHTML = `
+    <div class="emote-list">${btns}</div>
+    <button type="button" class="emote-fold-btn icon-only" data-emote-fold="1" title="리액션 바 접기" aria-label="리액션 바 접기">▾</button>`;
+}
+renderEmoteBar();
+
+function triggerEmote(emoteId, sendNet = true) {
+  if (!joined || board.open) return;
+  const def = EMOTE_BY_ID[emoteId];
+  if (!def) return;
+  const now = performance.now();
+  if (now - lastEmoteAt < 900) {
+    emoteCombo = Math.min(99, emoteCombo + 1);
+  } else {
+    emoteCombo = 1;
+  }
+  lastEmoteAt = now;
+  myEmote = def.id;
+  myEmoteUntil = now + 3400;
+  player.userData.emote = myEmote;
+  emoteFx.burst(player.position, def.id, emoteCombo);
+  if (sendNet) {
+    presence.sendEmote(def.id, emoteCombo);
+    trackEvent('emote_use', { emote: def.id, combo: emoteCombo });
+  }
+  if (!emoteFolded) {
+    emoteBar?.querySelectorAll('.emote-btn').forEach((btn) => {
+      btn.classList.toggle('active', btn.dataset.emoteId === myEmote);
+    });
+  }
+}
+
+emoteBar?.addEventListener('click', (e) => {
+  const foldBtn = e.target.closest('[data-emote-fold]');
+  if (foldBtn) {
+    emoteFolded = foldBtn.dataset.emoteFold === '1';
+    renderEmoteBar();
+    return;
+  }
+  const btn = e.target.closest('[data-emote-id]');
+  if (btn) {
+    triggerEmote(btn.dataset.emoteId, true);
+    btn.blur();
+  }
 });
 
 // --- 입력/카메라 ---
@@ -627,6 +707,8 @@ input.onKey = (e) => {
   if (e.code === 'Enter') { e.preventDefault(); chatInput.focus(); }
   if (e.code === 'KeyE' && !e.repeat) toggleRide();
   if (e.code === 'Space' && !e.repeat) triggerJump();
+  const emoteDef = EMOTE_BY_CODE[e.code];
+  if (emoteDef) triggerEmote(emoteDef.id, true);
 };
 const ov = { yaw: 0.35, pitch: 0.95, dist: 1000 };
 const phone = mountPhone({ data });
@@ -744,12 +826,20 @@ function frame() {
       moveSpeed = sp;
     }
     if (!terrain && player.position.y !== 0) player.position.y = 0; // [terrain] 지형이 있으면 둔치 높이를 유지
+    if (myEmote && (performance.now() > myEmoteUntil || moveSpeed > 6.5)) {
+      myEmote = '';
+      myEmoteUntil = 0;
+      if (!emoteFolded) {
+        emoteBar?.querySelectorAll('.emote-btn.active').forEach((b) => b.classList.remove('active'));
+      }
+    }
     player.userData.phoneOpen = handset.open;
     player.userData.jumpY = jumpY;
+    player.userData.emote = myEmote;
     animateAvatar(player, moveSpeed, dt);
   }
   syncRideUi();
-  if (joined) presence.sendState({ x: player.position.x, z: player.position.z, ry: player.rotation.y, moving: moveSpeed > 0, riding: !!bikes.riding, jy: Number(jumpY.toFixed(2)) });
+  if (joined) presence.sendState({ x: player.position.x, z: player.position.z, ry: player.rotation.y, moving: moveSpeed > 0, riding: !!bikes.riding, jy: Number(jumpY.toFixed(2)), emote: bikes.riding ? '' : myEmote });
   rememberPlace();
 
   npcs.update(dt, player.position);
@@ -791,6 +881,7 @@ function frame() {
   sun.position.copy(sun.target.position).addScaledVector(atmosphere.sunDir, 500);
   renderer.render(scene, camera);
   overlay.update(innerWidth, innerHeight);
+  emoteFx.update(dt, innerWidth, innerHeight);
   requestAnimationFrame(frame);
 }
 addEventListener('resize', () => { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); });

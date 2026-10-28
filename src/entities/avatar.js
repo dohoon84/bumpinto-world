@@ -173,11 +173,105 @@ export function createCat({ color = '#f0a050' } = {}) {
   return g;
 }
 
-// 걷기/점프 애니메이션: speed(m/s) 에 따라 팔다리를 엇갈려 흔들고, 점프 시 공중 포즈 적용
+// 걷기/점프/호들갑(이모트) 애니메이션
 export function animateAvatar(a, speed, dt) {
   const u = a.userData;
   const jumpY = u.jumpY || 0;
   const jumping = jumpY > 0.02;
+  const emote = u.emote || '';
+
+  // 기본 회전값 초기화
+  u.rig.rotation.set(0, 0, 0);
+  if (u.head) u.head.rotation.set(0, 0, 0);
+  if (u.legL) {
+    u.legL.rotation.y = 0; u.legL.rotation.z = 0;
+    u.legR.rotation.y = 0; u.legR.rotation.z = 0;
+  }
+  if (u.armL) {
+    u.armL.rotation.y = 0;
+    u.armR.rotation.y = 0;
+  }
+
+  if (emote && !u.cat) {
+    u.emoteT = (u.emoteT || 0) + dt;
+    const t = u.emoteT;
+    if (u.handPhone) u.handPhone.visible = false;
+    if (u.eyeL) {
+      u.eyeL.position.y = u.eyeY; u.eyeR.position.y = u.eyeY;
+      u.eyeL.position.z = u.eyeZ; u.eyeR.position.z = u.eyeZ;
+    }
+    let emoteHop = 0;
+    if (emote === 'cheer') {
+      // 🙌 만세: 양팔 번쩍 들고 폴짝폴짝 환호
+      emoteHop = Math.abs(Math.sin(t * 9.5)) * 0.22;
+      u.armL.rotation.x = -2.85 + Math.sin(t * 14) * 0.25;
+      u.armR.rotation.x = -2.85 - Math.sin(t * 14) * 0.25;
+      u.armL.rotation.z = -0.35 + Math.cos(t * 14) * 0.15;
+      u.armR.rotation.z = 0.35 - Math.cos(t * 14) * 0.15;
+      u.legL.rotation.x = Math.sin(t * 9.5) * 0.35;
+      u.legR.rotation.x = -Math.sin(t * 9.5) * 0.35;
+      u.rig.rotation.y = Math.sin(t * 6) * 0.18;
+    } else if (emote === 'fuss') {
+      // 🤪 호들갑(오두방정): 초고속으로 양팔 파닥거리며 온몸 좌우 흔들기
+      emoteHop = Math.abs(Math.sin(t * 18)) * 0.16;
+      u.rig.rotation.z = Math.sin(t * 20) * 0.18;
+      u.rig.rotation.y = Math.cos(t * 15) * 0.28;
+      u.armL.rotation.x = -2.1 + Math.sin(t * 28) * 0.85;
+      u.armR.rotation.x = -2.1 - Math.sin(t * 28) * 0.85;
+      u.armL.rotation.z = -0.85 + Math.cos(t * 24) * 0.45;
+      u.armR.rotation.z = 0.85 - Math.cos(t * 24) * 0.45;
+      u.legL.rotation.x = Math.sin(t * 24) * 0.65;
+      u.legR.rotation.x = -Math.sin(t * 24) * 0.65;
+      if (u.head) u.head.rotation.z = Math.sin(t * 22) * 0.25;
+    } else if (emote === 'dance') {
+      // 💃 댄스: 리듬 바운스 + 트위스트 춤
+      emoteHop = Math.abs(Math.sin(t * 8.5)) * 0.14;
+      u.rig.rotation.y = Math.sin(t * 4.25) * 0.45;
+      u.rig.rotation.z = Math.cos(t * 8.5) * 0.12;
+      u.armL.rotation.x = -1.6 + Math.sin(t * 8.5) * 0.75;
+      u.armR.rotation.x = -1.6 - Math.sin(t * 8.5) * 0.75;
+      u.armL.rotation.z = -0.55 + Math.cos(t * 8.5) * 0.35;
+      u.armR.rotation.z = 0.55 + Math.cos(t * 8.5) * 0.35;
+      u.legL.rotation.x = Math.sin(t * 8.5) * 0.45;
+      u.legR.rotation.x = -Math.sin(t * 8.5) * 0.45;
+      u.legL.rotation.z = -0.12;
+      u.legR.rotation.z = 0.12;
+    } else if (emote === 'clap') {
+      // 👏 물개박수: 양손 가슴 앞에서 초고속 박수
+      emoteHop = Math.abs(Math.sin(t * 11)) * 0.08;
+      const clapWave = Math.abs(Math.sin(t * 22));
+      u.armL.rotation.x = -1.45;
+      u.armR.rotation.x = -1.45;
+      u.armL.rotation.z = 0.25 + clapWave * 0.52;
+      u.armR.rotation.z = -0.25 - clapWave * 0.52;
+      u.rig.rotation.x = Math.sin(t * 11) * 0.08;
+    } else if (emote === 'love') {
+      // ❤️ 머리 위 하트 + 좌우 스웨이
+      emoteHop = Math.abs(Math.sin(t * 7)) * 0.14;
+      u.armL.rotation.x = -2.95;
+      u.armR.rotation.x = -2.95;
+      u.armL.rotation.z = 0.48;
+      u.armR.rotation.z = -0.48;
+      u.rig.rotation.z = Math.sin(t * 7) * 0.14;
+      if (u.head) u.head.rotation.z = -Math.sin(t * 7) * 0.12;
+    } else if (emote === 'lol') {
+      // 🤣 대폭소: 몸을 뒤로 젖히며 배 잡고 박장대소
+      emoteHop = Math.abs(Math.sin(t * 14)) * 0.1;
+      u.rig.rotation.x = -0.22 + Math.sin(t * 18) * 0.12;
+      u.rig.rotation.z = Math.sin(t * 12) * 0.1;
+      u.armL.rotation.x = -1.1 + Math.sin(t * 20) * 0.25;
+      u.armR.rotation.x = -1.1 - Math.sin(t * 20) * 0.25;
+      u.armL.rotation.z = 0.45;
+      u.armR.rotation.z = -0.45;
+      u.legL.rotation.x = Math.sin(t * 20) * 0.5;
+      u.legR.rotation.x = -Math.sin(t * 20) * 0.5;
+      if (u.head) u.head.rotation.x = -0.35 + Math.sin(t * 20) * 0.18;
+    }
+    u.rig.position.y = emoteHop + jumpY;
+    return;
+  }
+  u.emoteT = 0;
+
   if (speed > 0.05 && !jumping) u.phase += dt * (4 + speed * 2.2);
   else if (!jumping) u.phase *= 0.85;
   const s = Math.sin(u.phase) * Math.min(1, speed / 2);
