@@ -2,6 +2,17 @@
 import * as THREE from 'three';
 import { createAvatar, createCat, animateAvatar } from './avatar.js';
 import { Bubble } from '../overlay.js';
+import {
+  STARBASE_NPC_DEFS,
+  STARBASE_CROWD_BUILD,
+  STARBASE_CROWD_LAUNCH,
+  STARBASE_CROWD_VILLAGE,
+  STARBASE_CROWD_EXTRA,
+  isStarbaseBuildZone,
+  isStarbaseLaunchZone,
+  isStarbaseVillageZone,
+  starbaseCrowdDef,
+} from '../regions/starbaseNpcs.js';
 
 // spot/spotKind 는 jeongja.json 라벨·건물 이름. 없으면 역 근처 보도로 떨어진다.
 export const NPC_DEFS = [
@@ -229,8 +240,19 @@ function crowdDef(i, zone, asChild) {
   };
 }
 
+export function getNpcCapForRegion(regionId = 'jeongja') {
+  if (regionId === 'starbase') return STARBASE_NPC_DEFS.length + STARBASE_CROWD_EXTRA;
+  return NPC_DEFS.length + CROWD_EXTRA;
+}
+
 export class NPCs {
-  constructor(scene, overlay, world, data, { count = NPC_DEFS.length + CROWD_EXTRA, seed = 7, terrain = null } = {}) {
+  constructor(scene, overlay, world, data, { count, seed = 7, terrain = null, region = null } = {}) {
+    const isStarbase = (region?.id === 'starbase') || (data?.station?.name === 'Starbase');
+    this.isStarbase = isStarbase;
+    this.lang = region?.lang || (isStarbase ? 'en' : 'ko');
+    const defs = isStarbase ? STARBASE_NPC_DEFS : NPC_DEFS;
+    const defaultCap = isStarbase ? (STARBASE_NPC_DEFS.length + STARBASE_CROWD_EXTRA) : (NPC_DEFS.length + CROWD_EXTRA);
+    const totalCount = count == null ? defaultCap : count;
     this.list = []; this.world = world; this.terrain = terrain; this.rush = false; this.shown = 0;
     let sd = seed; const rnd = () => ((sd = (sd * 16807) % 2147483647) / 2147483647);
     const st = data.station;
@@ -250,8 +272,9 @@ export class NPCs {
       spotCache.set(key, found);
       return found;
     };
-    const candidates = world.walkPaths.filter((p) => polyLen(p.pts) > 40 && p.door == null);
-    NPC_DEFS.slice(0, count).forEach((def, i) => {
+    const baseWalkList = isStarbase ? (world.cityWalkPaths || world.walkPaths) : world.walkPaths;
+    const candidates = baseWalkList.filter((p) => polyLen(p.pts) > (isStarbase ? 24 : 40) && p.door == null);
+    defs.slice(0, totalCount).forEach((def, i) => {
       const named = def.spot ? spotOf(def.spot, def.spotKind) : null;
       const anchor = (def.prefer === 'tancheon' && tc) ? tc : named || (def.prefer === 'cafe' && cafe) || st;
       const room = def.interior != null && world.starbucksRooms?.find((r) => r.spot === def.spot);
@@ -268,8 +291,9 @@ export class NPCs {
         const door = Math.max(0, Math.min(len, linked.door));
         lo = Math.max(0, door - 26); hi = Math.min(len, door + 26); s0 = door;
       } else {
-        const reach = anchor === st && !def.spot ? 90 + (i % 5) * 18 : def.prefer === 'tancheon' ? 140 : 170;
+        const reach = anchor === st && !def.spot ? 90 + (i % 5) * 18 : def.prefer === 'tancheon' ? 140 : isStarbase ? 240 : 170;
         let pool = candidates.filter((p) => near(p, anchor.x, anchor.z) < reach);
+        if (!pool.length) pool = candidates.filter((p) => near(p, anchor.x, anchor.z) < 420);
         if (!pool.length) pool = candidates.filter((p) => near(p, st.x, st.z) < 200);
         if (!pool.length) pool = candidates;
         const base = pool[(Math.floor(rnd() * pool.length) + i) % pool.length] || candidates[0];
@@ -289,7 +313,7 @@ export class NPCs {
       this.list.push(npc);
       this._place(npc);
     });
-    this._addCrowd(scene, overlay, data, rnd, Math.max(0, count - NPC_DEFS.length));
+    this._addCrowd(scene, overlay, data, rnd, Math.max(0, totalCount - defs.length));
   }
   _wet(x, z, bridge) {
     if (bridge) return false;
@@ -311,8 +335,13 @@ export class NPCs {
         if (z > z1) z1 = z;
       }
       const cx = (x0 + x1) / 2, cz = (z0 + z1) / 2;
-      const back = isBackBlock(cx, cz);
-      if (!back && b.k !== 'commercial' && b.k !== 'office' && b.k !== 'retail') continue;
+      if (this.isStarbase) {
+        const inBuildOrLaunch = isStarbaseBuildZone(cx, cz) || isStarbaseLaunchZone(cx, cz);
+        if (!inBuildOrLaunch && b.k !== 'industrial' && b.k !== 'warehouse' && b.k !== 'construction') continue;
+      } else {
+        const back = isBackBlock(cx, cz);
+        if (!back && b.k !== 'commercial' && b.k !== 'office' && b.k !== 'retail') continue;
+      }
       let cur = [];
       const commit = () => {
         if (polyLen(cur) >= 12) out.push({ pts: cur, offset: 0, side: 1, kind: 'footway', bridge: false, frontage: true });
@@ -402,7 +431,9 @@ export class NPCs {
     return out;
   }
   _spawnCrowd(scene, overlay, rnd, spot, zone, buddy, asChild) {
-    const def = crowdDef(this._crowdI++, zone, asChild);
+    const def = this.isStarbase
+      ? starbaseCrowdDef(this._crowdI++, zone, asChild)
+      : crowdDef(this._crowdI++, zone, asChild);
     if (buddy) def.social = true;
     const mesh = createAvatar(def.look);
     mesh.traverse((o) => { if (o.isMesh) o.castShadow = false; });
@@ -426,6 +457,64 @@ export class NPCs {
   _addCrowd(scene, overlay, data, rnd, count) {
     if (!count) return;
     const bb = data.meta.bboxLocal;
+    if (this.isStarbase) {
+      const spots = { build: [], launch: [], village: [] };
+      const pushSb = (spot) => {
+        const { x, z } = spot;
+        if (isStarbaseBuildZone(x, z)) spots.build.push(spot);
+        else if (isStarbaseLaunchZone(x, z)) spots.launch.push(spot);
+        else if (isStarbaseVillageZone(x, z)) spots.village.push(spot);
+      };
+      for (const p of this.world.cityWalkPaths || []) this._collectSpots(p, bb, pushSb);
+      for (const p of this._frontagePaths(data)) this._collectSpots(p, bb, pushSb);
+      const shuffle = (arr) => {
+        for (let i = arr.length - 1; i > 0; i--) {
+          const j = Math.floor(rnd() * (i + 1));
+          const t = arr[i]; arr[i] = arr[j]; arr[j] = t;
+        }
+      };
+      for (const list of Object.values(spots)) shuffle(list);
+      const taken = [];
+      for (const n of this.list) taken.push(n.pos.x, n.pos.z);
+      const nearTaken = (x, z, gap) => {
+        for (let i = 0; i < taken.length; i += 2) if ((taken[i] - x) ** 2 + (taken[i + 1] - z) ** 2 < gap * gap) return true;
+        return false;
+      };
+      this._crowdI = 0;
+      let made = 0;
+      const fill = (list, limit, gap, zone) => {
+        let n = 0;
+        for (let i = 0; i < list.length && n < limit; i++) {
+          const spot = list[i];
+          if (nearTaken(spot.x, spot.z, gap)) continue;
+          const npc = this._spawnCrowd(scene, overlay, rnd, spot, zone, null, false);
+          taken.push(npc.pos.x, npc.pos.z);
+          n++; made++;
+          if (n >= limit) break;
+          let asChild = false;
+          if (zone === 'village' && !npc.def.child && n % 4 === 0) asChild = true;
+          else if (!npc.def.social) continue;
+          const mate = this._mateSpot(spot);
+          if (!mate || nearTaken(mate.x, mate.z, 1.25)) continue;
+          const pal = this._spawnCrowd(scene, overlay, rnd, mate, zone, npc, asChild);
+          taken.push(pal.pos.x, pal.pos.z);
+          n++; made++;
+        }
+        return n;
+      };
+      const scale = count / STARBASE_CROWD_EXTRA;
+      const buildN = Math.round(STARBASE_CROWD_BUILD * scale);
+      const launchN = Math.round(STARBASE_CROWD_LAUNCH * scale);
+      const villageN = Math.max(0, count - buildN - launchN);
+      const buildMade = fill(spots.build, buildN, 3.0, 'build');
+      const launchMade = fill(spots.launch, launchN, 3.2, 'launch');
+      const villageMade = fill(spots.village, villageN, 13.5, 'village');
+      this.crowdMade = made;
+      this.crowdBuild = buildMade;
+      this.crowdLaunch = launchMade;
+      this.crowdVillage = villageMade;
+      return;
+    }
     const homes = (data.labels || []).filter((l) => (l.kind === 'apt' || l.kind === 'school') && l.x > 165);
     const nearHome = (x, z, r) => {
       const r2 = r * r;
@@ -591,7 +680,8 @@ export class NPCs {
         if (!n.waiting) {
           n.waiting = true;
           this.waitCount = (this.waitCount || 0) + 1;
-          if (close && Math.random() < 0.35 && !n.bubble.showing) n.bubble.say('🚦 빨간불이네요, 잠깐 기다려요', 2500);
+          const waitMsg = this.lang === 'en' ? '🚦 Red light — holding here for a sec.' : '🚦 빨간불이네요, 잠깐 기다려요';
+          if (close && Math.random() < 0.35 && !n.bubble.showing) n.bubble.say(waitMsg, 2500);
         }
       } else {
         n.waiting = false;

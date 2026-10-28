@@ -10,6 +10,7 @@ const GUIDE_PHONE = "01020000000";
 const DEFAULT_REGION = "jeongja";
 const REGION_LABELS = {
   jeongja: "정자동",
+  starbase: "Starbase, TX",
   sunae: "수내역",
   seohyeon: "서현역",
   imae: "이매역",
@@ -63,8 +64,17 @@ function phoneOk(value) {
   return /^010\d{8}$/.test(value);
 }
 
-function isBoardAdmin(phone) {
-  return digits(phone).endsWith("0002");
+const ADMIN_DIGEST = "6001b80b59ab45a1c919e5080a5285255009af2e29137e3af3bb280ee21b8dcf";
+
+async function isBoardAdmin(phone, env = null) {
+  const d = digits(phone);
+  if (!phoneOk(d)) return false;
+  if (env?.ADMIN_PHONES) {
+    const list = String(env.ADMIN_PHONES).split(",").map((s) => digits(s)).filter(Boolean);
+    if (list.includes(d)) return true;
+  }
+  const digest = await hashPin("bumpinto-board-admin-v1", d);
+  return sameHash(digest, ADMIN_DIGEST);
 }
 
 function cleanPin(value) {
@@ -298,6 +308,23 @@ export class PhoneBook extends DurableObject {
       sql.exec(`CREATE INDEX IF NOT EXISTS users_region ON users (region)`);
       sql.exec(`INSERT INTO _sql_schema_migrations (id) VALUES (8)`);
     }
+    if (version < 9) {
+      sql.exec(`CREATE TABLE IF NOT EXISTS user_places (
+        user_id TEXT NOT NULL,
+        region TEXT NOT NULL,
+        x REAL NOT NULL,
+        y REAL NOT NULL,
+        z REAL NOT NULL,
+        ry REAL NOT NULL,
+        updated_at INTEGER NOT NULL,
+        PRIMARY KEY (user_id, region)
+      )`);
+      sql.exec(`INSERT OR IGNORE INTO user_places (user_id, region, x, y, z, ry, updated_at)
+        SELECT id, COALESCE(region, 'jeongja'), x, COALESCE(y, 0), z, COALESCE(ry, 0), COALESCE(updated_at, 0)
+        FROM users
+        WHERE x IS NOT NULL AND z IS NOT NULL`);
+      sql.exec(`INSERT INTO _sql_schema_migrations (id) VALUES (9)`);
+    }
     this.#syncNotices();
   }
 
@@ -444,9 +471,26 @@ export class PhoneBook extends DurableObject {
     return phone;
   }
 
-  #profile(row) {
+  #placeForRegion(userId, regionKey, fallbackRow = null) {
+    const rKey = String(regionKey || DEFAULT_REGION).trim().toLowerCase() || DEFAULT_REGION;
+    try {
+      const pRow = this.ctx.storage.sql.exec(
+        "SELECT x, y, z, ry FROM user_places WHERE user_id = ? AND region = ?",
+        userId, rKey,
+      ).toArray()[0];
+      if (pRow) return placeOf(pRow);
+    } catch {}
+    if (fallbackRow && (fallbackRow.region || DEFAULT_REGION) === rKey) {
+      return placeOf(fallbackRow);
+    }
+    return null;
+  }
+
+  async #profile(row, regionKey = DEFAULT_REGION) {
     let look = {};
     try { look = JSON.parse(row.look); } catch { look = {}; }
+    const rKey = String(regionKey || row.region || DEFAULT_REGION).trim().toLowerCase() || DEFAULT_REGION;
+    const isAdmin = await isBoardAdmin(row.phone, this.env);
     return {
       ok: true,
       id: row.id,
@@ -454,8 +498,10 @@ export class PhoneBook extends DurableObject {
       display: displayPhone(row.phone),
       name: row.name,
       look,
-      place: placeOf(row),
+      region: rKey,
+      place: this.#placeForRegion(row.id, rKey, row),
       hasPin: !!row.pin_hash,
+      isAdmin,
       updatedAt: row.updated_at,
       unread: this.#unread(row.phone),
     };
@@ -471,10 +517,11 @@ export class PhoneBook extends DurableObject {
     const rawPin = input?.pin != null && String(input.pin).trim() !== "" ? String(input.pin) : null;
     const pin = rawPin != null ? cleanPin(rawPin) : null;
     if (rawPin != null && !pin) return { ok: false, error: "bad_pin" };
+    const regionKey = String(input?.region || DEFAULT_REGION).trim().toLowerCase() || DEFAULT_REGION;
     const sql = this.ctx.storage.sql;
     const now = Date.now();
     const existing = sql.exec(
-      "SELECT id, phone, name, look, x, y, z, ry, updated_at, pin_salt, pin_hash FROM users WHERE id = ?",
+      "SELECT id, phone, name, look, region, x, y, z, ry, updated_at, pin_salt, pin_hash FROM users WHERE id = ?",
       id,
     ).toArray()[0];
     if (existing) {
@@ -483,22 +530,23 @@ export class PhoneBook extends DurableObject {
           const salt = crypto.randomUUID();
           const hash = await hashPin(salt, pin);
           sql.exec(
-            "UPDATE users SET name = ?, look = ?, pin_salt = ?, pin_hash = ?, pin_fails = 0, pin_locked_until = 0, updated_at = ? WHERE id = ?",
-            name, look, salt, hash, now, id,
+            "UPDATE users SET name = ?, look = ?, region = ?, pin_salt = ?, pin_hash = ?, pin_fails = 0, pin_locked_until = 0, updated_at = ? WHERE id = ?",
+            name, look, regionKey, salt, hash, now, id,
           );
           existing.pin_salt = salt;
           existing.pin_hash = hash;
         } else {
-          sql.exec("UPDATE users SET name = ?, look = ?, updated_at = ? WHERE id = ?", name, look, now, id);
+          sql.exec("UPDATE users SET name = ?, look = ?, region = ?, updated_at = ? WHERE id = ?", name, look, regionKey, now, id);
         }
         existing.name = name;
         existing.look = look;
+        existing.region = regionKey;
         existing.updated_at = now;
-        this.#ensureWelcome(existing.phone, name, now, true, input?.region);
+        this.#ensureWelcome(existing.phone, name, now, true, regionKey);
       } else {
-        this.#ensureWelcome(existing.phone, existing.name, now, false, input?.region);
+        this.#ensureWelcome(existing.phone, existing.name, now, false, regionKey);
       }
-      return this.#profile(existing);
+      return this.#profile(existing, regionKey);
     }
     const phone = this.#issue();
     if (!phone) return { ok: false, error: "full" };
@@ -508,13 +556,12 @@ export class PhoneBook extends DurableObject {
       salt = crypto.randomUUID();
       hash = await hashPin(salt, pin);
     }
-    const regionKey = String(input?.region || DEFAULT_REGION).trim().toLowerCase() || DEFAULT_REGION;
     sql.exec(
       "INSERT INTO users (id, phone, name, look, pin_salt, pin_hash, region, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
       id, phone, name, look, salt, hash, regionKey, now, now,
     );
     this.#ensureWelcome(phone, name, now, true, regionKey);
-    return this.#profile({ id, phone, name, look, region: regionKey, x: null, y: null, z: null, ry: null, pin_hash: hash, updated_at: now });
+    return this.#profile({ id, phone, name, look, region: regionKey, x: null, y: null, z: null, ry: null, pin_hash: hash, updated_at: now }, regionKey);
   }
 
   async setPin(input) {
@@ -537,9 +584,10 @@ export class PhoneBook extends DurableObject {
     if (!phoneOk(phone)) return { ok: false, error: "bad_phone" };
     const pin = cleanPin(input?.pin);
     if (!pin) return { ok: false, error: "bad_pin" };
+    const regionKey = String(input?.region || DEFAULT_REGION).trim().toLowerCase() || DEFAULT_REGION;
     const sql = this.ctx.storage.sql;
     const row = sql.exec(
-      "SELECT id, phone, name, look, x, y, z, ry, updated_at, pin_salt, pin_hash, pin_fails, pin_locked_until FROM users WHERE phone = ?",
+      "SELECT id, phone, name, look, region, x, y, z, ry, updated_at, pin_salt, pin_hash, pin_fails, pin_locked_until FROM users WHERE phone = ?",
       phone,
     ).toArray()[0];
     if (!row) return { ok: false, error: "unknown_number" };
@@ -560,10 +608,10 @@ export class PhoneBook extends DurableObject {
       );
       return { ok: false, error: lockedUntil ? "pin_locked" : "wrong_pin" };
     }
-    sql.exec("UPDATE users SET pin_fails = 0, pin_locked_until = 0, updated_at = ? WHERE id = ?", now, row.id);
+    sql.exec("UPDATE users SET pin_fails = 0, pin_locked_until = 0, region = ?, updated_at = ? WHERE id = ?", regionKey, now, row.id);
     row.updated_at = now;
-    this.#ensureWelcome(row.phone, row.name, now, false);
-    return this.#profile(row);
+    this.#ensureWelcome(row.phone, row.name, now, false, regionKey);
+    return this.#profile(row, regionKey);
   }
 
   place(input) {
@@ -571,10 +619,18 @@ export class PhoneBook extends DurableObject {
     if (found.error) return { ok: false, error: found.error };
     const x = num(input?.x), y = num(input?.y), z = num(input?.z), ry = num(input?.ry);
     if (x == null || y == null || z == null || ry == null) return { ok: false, error: "bad_place" };
+    const regionKey = String(input?.region || DEFAULT_REGION).trim().toLowerCase() || DEFAULT_REGION;
     const now = Date.now();
     this.ctx.storage.sql.exec(
-      "UPDATE users SET x = ?, y = ?, z = ?, ry = ?, updated_at = ? WHERE id = ?",
-      x, y, z, ry, now, found.user.id,
+      "UPDATE users SET region = ?, x = ?, y = ?, z = ?, ry = ?, updated_at = ? WHERE id = ?",
+      regionKey, x, y, z, ry, now, found.user.id,
+    );
+    this.ctx.storage.sql.exec(
+      `INSERT INTO user_places (user_id, region, x, y, z, ry, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(user_id, region) DO UPDATE SET
+         x = excluded.x, y = excluded.y, z = excluded.z, ry = excluded.ry, updated_at = excluded.updated_at`,
+      found.user.id, regionKey, x, y, z, ry, now,
     );
     return { ok: true, updatedAt: now };
   }
@@ -726,13 +782,13 @@ export class PhoneBook extends DurableObject {
     return { ok: true, unread: this.#unread(found.user.phone) };
   }
 
-  #postRow(row, id, myPhone, includeBody = false) {
+  #postRow(row, id, myPhone, includeBody = false, admin = false) {
     const sql = this.ctx.storage.sql;
     const mine = Boolean(
       (id && row.author_id === id) ||
       (myPhone && row.author_phone && row.author_phone === myPhone),
     );
-    const canManage = mine || (isBoardAdmin(myPhone) && row.category === "notice");
+    const canManage = mine || (admin && row.category === "notice");
     const likesCount = Number(
       row.likes_count ??
         sql.exec("SELECT COUNT(*) AS n FROM post_likes WHERE post_id = ?", row.id).toArray()[0]?.n ??
@@ -791,7 +847,7 @@ export class PhoneBook extends DurableObject {
     };
   }
 
-  board(input) {
+  async board(input) {
     this.#migrate();
     const op = String(input?.op || "list");
     const sql = this.ctx.storage.sql;
@@ -868,6 +924,7 @@ export class PhoneBook extends DurableObject {
     const found = ID_RE.test(id) ? this.#user(id) : { user: null };
     const user = found.user || null;
     const myPhone = user?.phone || null;
+    const admin = myPhone ? await isBoardAdmin(myPhone, this.env) : false;
 
     if (op === "list") {
       this.#syncNotices();
@@ -904,7 +961,7 @@ export class PhoneBook extends DurableObject {
         pageSize: BOARD_PAGE_SIZE,
         total,
         totalPages,
-        items: rows.map((r) => this.#postRow(r, id, myPhone, false)),
+        items: rows.map((r) => this.#postRow(r, id, myPhone, false, admin)),
       };
     }
 
@@ -926,7 +983,7 @@ export class PhoneBook extends DurableObject {
       ).toArray();
       return {
         ok: true,
-        post: this.#postRow(row, id, myPhone, true),
+        post: this.#postRow(row, id, myPhone, true, admin),
         comments: commentRows.map((c) => this.#commentRow(c, id, myPhone)),
       };
     }
@@ -1015,7 +1072,7 @@ export class PhoneBook extends DurableObject {
     if (op === "create") {
       const cat = String(input?.category || "free");
       if (cat === "notice") {
-        if (!isBoardAdmin(myPhone)) return { ok: false, error: "notice_admin" };
+        if (!admin) return { ok: false, error: "notice_admin" };
       } else if (!WRITABLE_BOARD_CATS.has(cat)) return { ok: false, error: "bad_category" };
       const title = cleanTitle(input?.title);
       if (!title) return { ok: false, error: "bad_title" };
@@ -1031,7 +1088,7 @@ export class PhoneBook extends DurableObject {
       const inserted = sql.exec(
         "SELECT id, category, title, body, author_id, author_phone, author_name, views, created_at, updated_at FROM posts ORDER BY id DESC LIMIT 1",
       ).toArray()[0];
-      return { ok: true, post: this.#postRow(inserted, id, myPhone, true), comments: [] };
+      return { ok: true, post: this.#postRow(inserted, id, myPhone, true, admin), comments: [] };
     }
 
     if (op === "update") {
@@ -1043,7 +1100,6 @@ export class PhoneBook extends DurableObject {
       ).toArray()[0];
       if (!existing) return { ok: false, error: "post_not_found" };
       const isMine = existing.author_id === id || (myPhone && existing.author_phone === myPhone);
-      const admin = isBoardAdmin(myPhone);
       if (!isMine && !(admin && existing.category === "notice")) return { ok: false, error: "forbidden" };
       let cat = String(input?.category || existing.category);
       if (cat === "notice" && !admin) return { ok: false, error: "notice_admin" };
@@ -1070,7 +1126,7 @@ export class PhoneBook extends DurableObject {
       ).toArray();
       return {
         ok: true,
-        post: this.#postRow(existing, id, myPhone, true),
+        post: this.#postRow(existing, id, myPhone, true, admin),
         comments: commentRows.map((c) => this.#commentRow(c, id, myPhone)),
       };
     }
@@ -1084,7 +1140,7 @@ export class PhoneBook extends DurableObject {
       ).toArray()[0];
       if (!existing) return { ok: false, error: "post_not_found" };
       const isMine = existing.author_id === id || (myPhone && existing.author_phone === myPhone);
-      if (!isMine && !(isBoardAdmin(myPhone) && existing.category === "notice")) return { ok: false, error: "forbidden" };
+      if (!isMine && !(admin && existing.category === "notice")) return { ok: false, error: "forbidden" };
       sql.exec("DELETE FROM post_likes WHERE post_id = ?", postId);
       sql.exec("DELETE FROM post_comments WHERE post_id = ?", postId);
       sql.exec("DELETE FROM posts WHERE id = ?", postId);

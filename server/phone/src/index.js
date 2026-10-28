@@ -61,6 +61,7 @@ export default {
     if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: cors });
     const url = new URL(request.url);
     const queryRegion = (url.searchParams.get("region") || "jeongja").trim().toLowerCase() || "jeongja";
+    const GLOBAL_BOOK_KEY = "jeongja"; // 단일 글로벌 번호부/패스포트 DB (모든 동네가 캐릭터·번호·문자 공유)
     if (url.pathname === "/ws") {
       return env.ROOM.getByName(queryRegion).fetch(request);
     }
@@ -78,7 +79,7 @@ export default {
         }
       } catch {}
       try {
-        const bookStats = await env.PHONE_BOOK.getByName(queryRegion).board({ op: "stats", region: queryRegion, detail });
+        const bookStats = await env.PHONE_BOOK.getByName(GLOBAL_BOOK_KEY).board({ op: "stats", region: queryRegion, detail });
         if (bookStats?.ok) {
           residents = Number(bookStats.residents || 0);
           if (!online && bookStats.activeRecently) online = Number(bookStats.activeRecently || 0);
@@ -106,7 +107,7 @@ export default {
     const regionKey = String(body?.region || queryRegion || "jeongja").trim().toLowerCase() || "jeongja";
     body.region = regionKey;
     try {
-      const out = await env.PHONE_BOOK.getByName(regionKey)[method](body);
+      const out = await env.PHONE_BOOK.getByName(GLOBAL_BOOK_KEY)[method](body);
       return json(out, out.ok ? 200 : 400, cors);
     } catch (error) {
       return json({ ok: false, error: "server", detail: String(error?.message || error) }, 500, cors);

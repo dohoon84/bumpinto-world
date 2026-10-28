@@ -1,0 +1,87 @@
+// 미국 텍사스 보카치카 스타베이스 (Starbase, TX) 지역 설정
+export const STARBASE_REGION = {
+  id: 'starbase',
+  name: '스타베이스 (Starbase, TX)',
+  enName: 'Starbase, TX (Boca Chica)',
+  shortName: 'Starbase',
+  enShortName: 'Starbase, TX',
+  sub: '미국 텍사스 보카치카 · SpaceX',
+  enSub: 'Boca Chica, TX · SpaceX',
+  country: 'US',
+  flag: '🇺🇸',
+  airportCode: 'BRO',
+  airportName: '스타베이스, TX',
+  enAirportName: 'Starbase, TX',
+  flightLines: [
+    '🛫 인천공항(ICN) 이륙 · 텍사스 브라운즈빌(BRO)행 여객기 탑승 중…',
+    '✈️ 태평양 상공 38,000ft 순항 중 · 기내 창밖으로 구름이 지나갑니다…',
+    '🚀 보카치카 해안과 스타십 발사대가 창밖 시야에 들어옵니다…',
+    '🛬 스타베이스(TX) 착륙 완료 · 보카치카 마을로 이동 중…',
+  ],
+  enFlightLines: [
+    '🛫 Departing Incheon (ICN) · Boarding flight to Brownsville / Starbase (BRO)…',
+    '✈️ Cruising at 38,000 ft across the Pacific Ocean…',
+    '🚀 Boca Chica Beach & Starship towers coming into view…',
+    '🛬 Touchdown at Starbase, TX · Entering the neighborhood…',
+  ],
+  lang: 'en',
+  status: 'open',
+  lat: 25.9915,
+  lon: -97.1830,
+  timeZone: 'America/Chicago',
+  globePinText: '🚀 Starbase, TX · OPEN',
+  enGlobePinText: '🚀 Starbase, TX · OPEN',
+  globePinStyle: 'us',
+  telemetryLabel: '🛰️ 위성 실시간 관측 · Starbase, TX (25.99°N)',
+  enTelemetryLabel: '🛰️ LIVE TELEMETRY · STARBASE, TX (25.99°N)',
+  lobbyTitle: '스타베이스(TX)에 입장',
+  enLobbyTitle: 'Enter Starbase, TX',
+  lobbyEnterLines: [
+    '보카치카 대로(Highway 4)를 따라 스타베이스로 진입하는 중…',
+    '메가베이 & 스타팩토리 크레인을 가동하는 중…',
+    '발사장 통합타워 메카질라(젓가락 팔)를 점검하는 중…',
+    '발사탑 남쪽 로드스터 점프 쇼 무대를 준비하는 중…',
+    '스타베이스 멀티플레이 릴레이에 연결하는 중…',
+  ],
+  enLobbyEnterLines: [
+    'Approaching Starbase along Highway 4 (Boca Chica Blvd)…',
+    'Powering up Mega Bay & Starfactory gantry cranes…',
+    'Checking Mechazilla chopsticks at Integration Tower 1…',
+    'Prepping the Rocket Roadster jump stage south of the pad…',
+    'Connecting to Starbase multiplayer relay…',
+  ],
+  stationOverlayText: '🚀 Starbase · Boca Chica, TX',
+  defaultSpotName: 'Starbase Village',
+  enDefaultSpotName: 'Starbase Village',
+  homeBtnLabel: '🏠 마을로',
+  enHomeBtnLabel: '🏠 Village',
+  dataFiles: {
+    world: 'starbase.json',
+    transit: null,
+    terrain: null,
+    drive: null,
+  },
+  signBoard: {
+    topLeftColor: '#0b3d91',
+    topRightColor: '#4cc9f0',
+    title: 'STARBASE',
+    sub: 'Boca Chica, TX · Gateway to Mars',
+  },
+  features: {
+    jeongjaBuildings: false,
+    stationPlaza: false,
+    dogPark: false,
+    transit: false,
+    taxis: false,
+    umbrellas: false,
+    roadsterShow: true, // 발사탑 남쪽 약 350m 빈터 (2730, -280) 로드스터 점프 쇼
+    launchTower: true,  // 발사탑 1·2기(메카질라), 스타십 풀스택, 부스터 캐치, OLM, 극저온 탱크 3D 모델
+    launchShow: true,   // 5분 주기 전체 동기화 로켓 발사 → 핫스테이징 → 부스터 귀환 → 젓가락 캐치 쇼
+    trucks: true,       // 각진 픽업트럭 'Steel Truck' 20대 배치 & 탑승/운전(F 키)
+  },
+  // 생산기지(Build Site), 발사장(Launch Pad), 로드스터 쇼 무대, 마을(Village) 간 빠른 이동 스팟
+  quickSpots: [
+    { id: 'build', label: '🏭 생산기지', enLabel: '🏭 Build Site', title: 'Teleport to Starfactory & Mega Bay (Build Site)', x: -495, z: 540, ry: -0.8, camYaw: 2.35, camPitch: 0.25, camDist: 16 },
+    { id: 'launch', label: '🚀 발사장', enLabel: '🚀 Launch Pad', title: 'Teleport to Orbital Launch Site & Integration Towers', x: 2610, z: -475, ry: 3.0, camYaw: -0.15, camPitch: 0.12, camDist: 22 },
+  ],
+};

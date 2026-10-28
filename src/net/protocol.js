@@ -2,7 +2,7 @@
 //
 // client -> server
 //   { t: 'hello', name, color, look }               접속 직후 1회. look는 src/look.js 외형
-//   { t: 'state', x, z, ry, moving }                 위치 (최대 ~10Hz)
+//   { t: 'state', x, z, ry, moving, veh? }           위치 (최대 ~10Hz). [truck] veh = { id, ry, v, st } 트럭 운전 중일 때만
 //   { t: 'chat', text }                              채팅(서버는 보낸 사람 제외 브로드캐스트, 근접 필터는 클라이언트에서)
 // server -> client
 //   { t: 'welcome', id, peers: [Peer] }              내 id + 현재 접속자 목록
