@@ -29,16 +29,18 @@
   <button id="ride-btn" type="button" hidden>🚲 카카오바이크 타기 (E)</button>
   <div id="chat-log-panel" hidden></div>
   <div id="joystick"><div id="stick"></div></div>
-  <div id="presence-status" role="button" tabindex="0" title="클릭하여 접속자 위치 및 목록 보기"></div>
+  <div id="top-right-bar">
+    <button id="contribute-launcher" class="board-launcher contribute-launcher" type="button" aria-label="함께 만들기 및 명예의 전당 열기">
+      <span class="board-icon">🌍</span>
+      <span class="board-label">함께 만들기</span>
+    </button>
+    <button id="board-Launcher" class="board-launcher" type="button" aria-label="커뮤니티 게시판 열기">
+      <span class="board-icon">📋</span>
+      <span class="board-label">게시판</span>
+    </button>
+    <div id="presence-status" role="button" tabindex="0" title="클릭하여 접속자 위치 및 목록 보기"></div>
+  </div>
   <div id="presence-panel" hidden></div>
-  <button id="board-Launcher" class="board-launcher" type="button" aria-label="커뮤니티 게시판 열기">
-    <span class="board-icon">📋</span>
-    <span class="board-label">게시판</span>
-  </button>
-  <button id="contribute-launcher" class="board-launcher contribute-launcher" type="button" aria-label="함께 만들기 및 명예의 전당 열기">
-    <span class="board-icon">🌍</span>
-    <span class="board-label">함께 만들기</span>
-  </button>
   <div id="board-modal" hidden></div>
   <div id="stop-panel"></div>
   <div id="handset">
