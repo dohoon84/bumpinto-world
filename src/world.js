@@ -15,7 +15,14 @@ const ROAD_STYLE = {
   footway: ['#e2d3b5', 0.1], pedestrian: ['#e6d8bb', 0.095], path: ['#d9c8a4', 0.1], cycleway: ['#d68c7a', 0.1], steps: ['#cbbd9f', 0.1], track: ['#c9b48d', 0.09],
 };
 const PARK_COLOR = { park: '#a8d59a', garden: '#b2dc9f', playground: '#c6e2a0', pitch: '#9fd08c', grass: '#b5dda3', forest: '#86bf7c', wood: '#86bf7c', scrub: '#9cc78a', meadow: '#bfe0a8', recreation_ground: '#b0d89c', village_green: '#b5dda3', grassland: '#bfe0a8', plaza: '#e9dfca' };
-const BUILDING_COLOR = { apartments: '#f3e3d3', residential: '#f1e0cf', commercial: '#d8e2ee', office: '#d3deec', retail: '#eedccb', school: '#f4d7b8', kindergarten: '#f7d4c4', public: '#e8dcc8', house: '#efe6d6', civic: '#e4ddd0', church: '#efe8dc', yes: '#e7e3dc' };
+const BUILDING_COLOR = {
+  apartments: '#f3e3d3', residential: '#f1e0cf', commercial: '#d8e2ee', office: '#d3deec',
+  retail: '#eedccb', school: '#f4d7b8', kindergarten: '#f7d4c4', public: '#e8dcc8',
+  house: '#efe6d6', civic: '#e4ddd0', church: '#efe8dc',
+  industrial: '#cfd8e3', warehouse: '#d5dde7', construction: '#c7d2df',
+  rocket: '#b8c4d0', static_caravan: '#e3e8ee', container: '#c2ccd6',
+  yes: '#e7e3dc',
+};
 const FACADE_BAY = 3.2, FACADE_FLOOR = 3.2;
 
 const toShape = (ring, holes = []) => {
@@ -79,17 +86,21 @@ function pointInRing(x, z, r) {
   return inside;
 }
 
-export function buildWorld(scene, data) {
-  addCafeSidewalks(data); // 역 보행망이 끊긴 카페 앞까지 인도
-  placeJeongjaStationStarbucks(data);
-  placeNobiosHotel(data);
+export function buildWorld(scene, data, region = null) {
+  const isJeongja = region ? !!region.features?.jeongjaBuildings : data.station?.name !== 'Starbase';
+  if (isJeongja) {
+    addCafeSidewalks(data); // 역 보행망이 끊긴 카페 앞까지 인도
+    placeJeongjaStationStarbucks(data);
+    placeNobiosHotel(data);
+  }
   const { x0, x1, z0, z1 } = data.meta.bboxLocal;
   const cx = (x0 + x1) / 2, cz = (z0 + z1) / 2;
   const mat = (color, extra = {}) => new THREE.MeshLambertMaterial({ color, ...extra });
 
-  // 바닥
-  const ground = new THREE.Mesh(new THREE.PlaneGeometry(6000, 6000), mat('#efe9dc'));
-  ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true; scene.add(ground);
+  // 바닥 (넓은 지역에서도 경계 밖 바닥이 잘리지 않도록 bbox 크기에 비례해 확장)
+  const groundSpan = Math.max(6000, (x1 - x0) + 3200, (z1 - z0) + 3200);
+  const ground = new THREE.Mesh(new THREE.PlaneGeometry(groundSpan, groundSpan), mat('#efe9dc'));
+  ground.rotation.x = -Math.PI / 2; ground.position.set(cx, 0, cz); ground.receiveShadow = true; scene.add(ground);
   const block = new THREE.Mesh(new THREE.PlaneGeometry(x1 - x0, z1 - z0), mat('#ebe4d4'));
   block.rotation.x = -Math.PI / 2; block.position.set(cx, 0.01, cz); block.receiveShadow = true; scene.add(block);
 
@@ -132,6 +143,12 @@ export function buildWorld(scene, data) {
     const origMin = b.mh || 0;
     const minH = shell?.mode === 'podium' ? 3.4 : shell?.mode === 'full' ? Math.max(origMin, b.h - 0.42) : origMin;
     const h = Math.max(0.35, b.h - minH);
+    if (origMin < 2.5) {
+      let mnx = Infinity, mnz = Infinity, mxx = -Infinity, mxz = -Infinity;
+      for (const [x, z] of b.o) { mnx = Math.min(mnx, x); mxx = Math.max(mxx, x); mnz = Math.min(mnz, z); mxz = Math.max(mxz, z); }
+      colliders.add(b.o, mnx, mnz, mxx, mxz);
+    }
+    if (b._skip) continue; // [tower] 발사탑/OLM/탱크 상세 모델로 교체될 건물은 기본 상자 생략
     let g;
     try { g = new THREE.ExtrudeGeometry(toShape(b.o, b.holes || []), { depth: h, bevelEnabled: false, UVGenerator: FACADE_UV }); } catch { continue; }
     g.rotateX(-Math.PI / 2); g.translate(0, minH, 0);
@@ -149,11 +166,6 @@ export function buildWorld(scene, data) {
     g.dispose();
     if (cap) { if (cap.attributes.uv) cap.deleteAttribute('uv'); roofs.push(cap); }
     if (side) (walls[facadeKey(b.k)] ||= []).push(side);
-    if (origMin < 2.5) {
-      let mnx = Infinity, mnz = Infinity, mxx = -Infinity, mxz = -Infinity;
-      for (const [x, z] of b.o) { mnx = Math.min(mnx, x); mxx = Math.max(mxx, x); mnz = Math.min(mnz, z); mxz = Math.max(mxz, z); }
-      colliders.add(b.o, mnx, mnz, mxx, mxz);
-    }
   }
   if (roofs.length) {
     const bmesh = new THREE.Mesh(mergeGeometries(roofs), new THREE.MeshLambertMaterial({ vertexColors: true }));
@@ -163,11 +175,13 @@ export function buildWorld(scene, data) {
     const mesh = new THREE.Mesh(mergeGeometries(geos), facadeMaterial(key));
     mesh.castShadow = true; mesh.receiveShadow = true; scene.add(mesh);
   }
-  const starbucksRooms = addStarbucksGlass(scene, shells);
-  addNobiosShop(scene);
+  const starbucksRooms = isJeongja ? addStarbucksGlass(scene, shells) : [];
+  if (isJeongja) {
+    addNobiosShop(scene);
+    addPostOfficeMarks(scene, data);
+    addStationCafeCrowd(scene, data);
+  }
   addWindowLights(scene, data.buildings, shells);
-  addPostOfficeMarks(scene, data);
-  addStationCafeCrowd(scene, data);
   addPlaceSigns(scene, data);
 
   // 차도 위 판정(가로수/표지판이 도로 한가운데 서지 않게)
@@ -206,10 +220,10 @@ export function buildWorld(scene, data) {
   treePts.forEach(([x, z], i) => { const k = 0.8 + rnd() * 0.5; q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), rnd() * 6); s.set(k, k, k); m4.compose(new THREE.Vector3(x, 0, z), q, s); crowns.setMatrixAt(i, m4); trunks.setMatrixAt(i, m4); });
   crowns.castShadow = trunks.castShadow = true; scene.add(crowns, trunks);
 
-  // 정자역 표지(역은 지하라서 출입구 느낌의 사인 기둥)
+  // 중심 표지(역/동네 중심 사인 기둥)
   const sp = { x: data.station.x, z: data.station.z };
   for (let r = 0, a = 0; r < 120 && (onRoad(sp.x, sp.z) || colliders.query(sp.x, sp.z).some((ring) => pointInRing(sp.x, sp.z, ring))); a += 0.5, r += 0.25) { sp.x = data.station.x + Math.cos(a) * r; sp.z = data.station.z + Math.sin(a) * r; }
-  scene.add(stationSign(sp));
+  scene.add(stationSign(sp, region?.signBoard));
 
   const isBlocked = (x, z, r = 0.35) => {
     for (const [dx, dz] of [[0, 0], [r, 0], [-r, 0], [0, r], [0, -r]]) {
@@ -243,14 +257,21 @@ export function buildWorld(scene, data) {
   return { isBlocked, onRoad, walkPaths, cityWalkPaths, inWater, signPos: sp, bounds: { x0, x1, z0, z1 }, treeCount: treePts.length, ground, block, starbucksRooms }; // [terrain] ground/block: terrain.build 가 하천 구간을 비운 형상으로 교체
 }
 
-function stationSign(st) {
+function stationSign(st, signCfg = null) {
   const g = new THREE.Group();
   const cv = document.createElement('canvas'); cv.width = 512; cv.height = 256;
   const x = cv.getContext('2d');
+  const topLeft = signCfg?.topLeftColor || '#d4003b';
+  const topRight = signCfg?.topRightColor || '#f5a200';
+  const title = signCfg?.title || '정자';
+  const sub = signCfg?.sub || 'Jeongja · D15 · K230';
   x.fillStyle = '#ffffff'; x.fillRect(0, 0, 512, 256);
-  x.fillStyle = '#d4003b'; x.fillRect(0, 0, 256, 34); x.fillStyle = '#f5a200'; x.fillRect(256, 0, 256, 34);
-  x.fillStyle = '#1d2a44'; x.font = 'bold 110px sans-serif'; x.textAlign = 'center'; x.fillText('정자', 256, 160);
-  x.font = '36px sans-serif'; x.fillText('Jeongja · D15 · K230', 256, 222);
+  x.fillStyle = topLeft; x.fillRect(0, 0, 256, 34); x.fillStyle = topRight; x.fillRect(256, 0, 256, 34);
+  x.fillStyle = '#1d2a44';
+  x.font = title.length > 4 ? 'bold 74px sans-serif' : 'bold 110px sans-serif';
+  x.textAlign = 'center';
+  x.fillText(title, 256, title.length > 4 ? 152 : 160);
+  x.font = '32px sans-serif'; x.fillText(sub, 256, 222);
   const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 4;
   const board = new THREE.Mesh(new THREE.BoxGeometry(6, 3, 0.3), [0, 1, 2, 3, 4, 5].map((i) => (i === 4 || i === 5 ? new THREE.MeshLambertMaterial({ map: tex }) : new THREE.MeshLambertMaterial({ color: '#1d2a44' }))));
   board.position.y = 6.5; board.castShadow = true;

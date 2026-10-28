@@ -10,8 +10,8 @@ const BOARD_PAGE_SIZE = 20;
 const BOARD_CATS = new Set(['notice', 'intro', 'feedback', 'food', 'free']);
 const WRITABLE_BOARD_CATS = new Set(['intro', 'feedback', 'food', 'free']);
 
-function isBoardAdmin(phone) {
-  return String(phone || '').replace(/\D/g, '').endsWith('0002');
+function isBoardAdmin(session) {
+  return Boolean(session?.isAdmin);
 }
 
 function isLocalHost() {
@@ -20,9 +20,14 @@ function isLocalHost() {
   return h === 'localhost' || h === '127.0.0.1' || h === '[::1]' || h.endsWith('.local');
 }
 
+function localPlaceKey() {
+  const r = currentRegion();
+  return r === DEFAULT_REGION ? LOCAL_PLACE_KEY : `${LOCAL_PLACE_KEY}.${r}`;
+}
+
 function readLocalPlace() {
   try {
-    const raw = JSON.parse(localStorage.getItem(LOCAL_PLACE_KEY) || 'null');
+    const raw = JSON.parse(localStorage.getItem(localPlaceKey()) || 'null');
     if (raw && Number.isFinite(raw.x) && Number.isFinite(raw.z)) {
       return { x: Number(raw.x), y: Number(raw.y) || 0, z: Number(raw.z), ry: Number(raw.ry) || 0 };
     }
@@ -34,7 +39,7 @@ function writeLocalPlace(place) {
   if (!place || !Number.isFinite(place.x) || !Number.isFinite(place.z)) return;
   try {
     localStorage.setItem(
-      LOCAL_PLACE_KEY,
+      localPlaceKey(),
       JSON.stringify({ x: Number(place.x), y: Number(place.y) || 0, z: Number(place.z), ry: Number(place.ry) || 0 }),
     );
   } catch {}
@@ -232,7 +237,7 @@ function runLocalBoard(id, session, op, extra = {}) {
       authorName: p.authorName,
       authorDisplay: p.authorPhone ? formatPhone(p.authorPhone) : '',
       mine: p.authorId === id,
-      canManage: p.authorId === id || (isBoardAdmin(session?.phone) && p.category === 'notice'),
+      canManage: p.authorId === id || (isBoardAdmin(session) && p.category === 'notice'),
       views: p.views || 0,
       likesCount,
       commentsCount,
@@ -344,7 +349,7 @@ function runLocalBoard(id, session, op, extra = {}) {
   if (op === 'create') {
     const cat = String(extra.category || 'free');
     if (cat === 'notice') {
-      if (!isBoardAdmin(session?.phone)) fail('notice_admin');
+      if (!isBoardAdmin(session)) fail('notice_admin');
     } else if (!WRITABLE_BOARD_CATS.has(cat)) fail('bad_category');
     const title = String(extra.title || '').trim().slice(0, 80);
     if (!title) fail('bad_title');
@@ -373,7 +378,7 @@ function runLocalBoard(id, session, op, extra = {}) {
     const postId = Math.floor(Number(extra.postId) || 0);
     const post = store.posts.find((p) => p.id === postId);
     if (!post) fail('post_not_found');
-    const admin = isBoardAdmin(session?.phone);
+    const admin = isBoardAdmin(session);
     if (post.authorId !== id && !(admin && post.category === 'notice')) fail('forbidden');
     let cat = String(extra.category || post.category);
     if (cat === 'notice' && !admin) fail('notice_admin');
@@ -400,7 +405,7 @@ function runLocalBoard(id, session, op, extra = {}) {
     const idx = store.posts.findIndex((p) => p.id === postId);
     if (idx < 0) fail('post_not_found');
     const target = store.posts[idx];
-    if (target.authorId !== id && !(isBoardAdmin(session?.phone) && target.category === 'notice')) fail('forbidden');
+    if (target.authorId !== id && !(isBoardAdmin(session) && target.category === 'notice')) fail('forbidden');
     store.posts.splice(idx, 1);
     store.likes = store.likes.filter((l) => l.postId !== postId);
     store.comments = store.comments.filter((c) => c.postId !== postId);
@@ -425,6 +430,7 @@ export function createSms() {
       place: data.place,
       unread: data.unread || 0,
       hasPin: !!data.hasPin,
+      isAdmin: !!data.isAdmin,
       updatedAt: data.updatedAt,
     };
   }

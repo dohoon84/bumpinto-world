@@ -38,9 +38,10 @@ function fillPoly(ctx, poly, x0, z0, scale) {
   ctx.fill('evenodd');
 }
 
-function drawBaseMap(data) {
+function drawBaseMap(data, region = null) {
   const b = data.meta.bboxLocal;
-  const scale = MAP_SCALE;
+  const maxSpan = Math.max(b.x1 - b.x0, b.z1 - b.z0, 1);
+  const scale = Math.min(MAP_SCALE, 2400 / maxSpan);
   const w = Math.ceil((b.x1 - b.x0) * scale);
   const h = Math.ceil((b.z1 - b.z0) * scale);
   const canvas = document.createElement('canvas');
@@ -73,8 +74,9 @@ function drawBaseMap(data) {
     ctx.fillStyle = BUILDING_COLOR[building.k] || '#e7e3dc';
     fillPoly(ctx, building, b.x0, b.z0, scale);
   }
-  // 탄천 반려견 놀이터 (소형견 / 중·대형견 구역) 미니맵 표시
-  {
+  // 탄천 반려견 놀이터 (정자동 전용)
+  const hasDogPark = region ? !!region.features?.dogPark : data.station?.name !== 'Starbase';
+  if (hasDogPark) {
     const dx0 = (75.5 - b.x0) * scale;
     const dx1 = (102.5 - b.x0) * scale;
     const dz0 = (-302.0 - b.z0) * scale;
@@ -257,10 +259,10 @@ function drawPeerMarkers(ctx, peers, x, z, w, h, viewW, viewH, now, s) {
   ctx.restore();
 }
 
-export function mountPhone({ data }) {
+export function mountPhone({ data, region = null }) {
   const canvas = document.getElementById('phone-map');
   const ctx = canvas.getContext('2d');
-  const map = drawBaseMap(data);
+  const map = drawBaseMap(data, region);
   let heading = 0;
   let ready = false;
 

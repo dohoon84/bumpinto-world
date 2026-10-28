@@ -1,10 +1,17 @@
 // 정자(성남) 실제 시각(KST)과 Open-Meteo 현재 날씨로 해·하늘·안개·비를 맞춘다.
 import * as THREE from 'three';
 import { eveningFromPart, isEvening, setEvening } from './evening.js';
+import { isEn as isUiEn } from './i18n.js';
 
-const LAT = 37.3665 * Math.PI / 180;
-const LON = 127.10835;
-const FORECAST = 'https://api.open-meteo.com/v1/forecast?latitude=37.3665&longitude=127.10835&current=temperature_2m,weather_code,cloud_cover,precipitation,wind_speed_10m&timezone=Asia%2FSeoul';
+const DEFAULT_LAT = 37.3665;
+const DEFAULT_LON = 127.10835;
+const DEFAULT_TZ = 'Asia/Seoul';
+const LAT = DEFAULT_LAT * Math.PI / 180;
+const LON = DEFAULT_LON;
+
+function buildForecastUrl(lat = DEFAULT_LAT, lon = DEFAULT_LON, tz = DEFAULT_TZ) {
+  return `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,weather_code,cloud_cover,precipitation,wind_speed_10m&timezone=${encodeURIComponent(tz)}`;
+}
 
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const smooth = (e0, e1, x) => {
@@ -84,17 +91,18 @@ export function rushPeriod(hour) {
   return 'normal';
 }
 
-function effectiveDate(now = new Date()) {
+function effectiveDate(now = new Date(), tz = DEFAULT_TZ) {
   const fh = forcedHourFromUrl();
   if (fh == null) return now;
-  const { hour, minute } = seoulClock(now);
+  const { hour, minute } = seoulClock(now, tz);
   const currentHours = hour + minute / 60;
   const diffMs = (fh - currentHours) * 3600 * 1000;
   return new Date(now.getTime() + diffMs);
 }
 
 // 태양 고도(alt)·방위(az, 북=0, 시계방향). x=동, z=남.
-export function solarPosition(date) {
+export function solarPosition(date, latDeg = DEFAULT_LAT, lonDeg = DEFAULT_LON) {
+  const latRad = latDeg * Math.PI / 180;
   const days = date.getTime() / 86400000 + 2440587.5 - 2451545.0;
   const meanAnomaly = ((357.5291 + 0.98560028 * days) % 360) * Math.PI / 180;
   const meanLong = (280.459 + 0.98564736 * days) % 360;
@@ -103,18 +111,18 @@ export function solarPosition(date) {
   const dec = Math.asin(Math.sin(eps) * Math.sin(lambda));
   const ra = Math.atan2(Math.cos(eps) * Math.sin(lambda), Math.cos(lambda));
   const gmst = ((280.46061837 + 360.98564736629 * days) % 360) * Math.PI / 180;
-  const ha = Math.atan2(Math.sin(gmst + LON * Math.PI / 180 - ra), Math.cos(gmst + LON * Math.PI / 180 - ra));
-  const sinAlt = Math.sin(LAT) * Math.sin(dec) + Math.cos(LAT) * Math.cos(dec) * Math.cos(ha);
+  const ha = Math.atan2(Math.sin(gmst + lonDeg * Math.PI / 180 - ra), Math.cos(gmst + lonDeg * Math.PI / 180 - ra));
+  const sinAlt = Math.sin(latRad) * Math.sin(dec) + Math.cos(latRad) * Math.cos(dec) * Math.cos(ha);
   const alt = Math.asin(clamp(sinAlt, -1, 1));
-  const cosAz = (Math.sin(dec) - Math.sin(alt) * Math.sin(LAT)) / (Math.cos(alt) * Math.cos(LAT) || 1e-6);
+  const cosAz = (Math.sin(dec) - Math.sin(alt) * Math.sin(latRad)) / (Math.cos(alt) * Math.cos(latRad) || 1e-6);
   let az = Math.acos(clamp(cosAz, -1, 1));
   if (ha > 0) az = Math.PI * 2 - az;
   return { alt, az };
 }
 
-export function seoulClock(date = new Date()) {
+export function seoulClock(date = new Date(), timeZone = DEFAULT_TZ) {
   const parts = new Intl.DateTimeFormat('en-US', {
-    timeZone: 'Asia/Seoul',
+    timeZone,
     hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
   }).formatToParts(date);
   const num = (type) => Number(parts.find((p) => p.type === type)?.value || 0);
@@ -131,8 +139,21 @@ export function dayPart(hour, alt) {
   return '밤';
 }
 
-export function weatherPhrase(code) {
+export function weatherPhrase(code, isEn = false) {
   const c = Number(code) || 0;
+  if (isEn) {
+    if (c === 0) return 'Clear';
+    if (c === 1) return 'Mostly Clear';
+    if (c === 2) return 'Partly Cloudy';
+    if (c === 3) return 'Cloudy';
+    if (c === 45 || c === 48) return 'Fog';
+    if (c >= 51 && c <= 57) return 'Drizzle';
+    if (c >= 61 && c <= 67) return 'Rain';
+    if ((c >= 71 && c <= 77) || c === 85 || c === 86) return 'Snow';
+    if (c >= 80 && c <= 82) return 'Showers';
+    if (c >= 95) return 'Thunderstorm';
+    return 'Clear';
+  }
   if (c === 0) return '맑음';
   if (c === 1) return '대체로 맑음';
   if (c === 2) return '구름 조금';
@@ -199,7 +220,12 @@ function reseed(drop, cam, snow) {
   drop.on = true;
 }
 
-export function createAtmosphere({ scene, sun, hemi, skyGeo, getMode, clock }) {
+export function createAtmosphere({ scene, sun, hemi, skyGeo, getMode, clock, region = null }) {
+  const rLat = region?.lat ?? DEFAULT_LAT;
+  const rLon = region?.lon ?? DEFAULT_LON;
+  const rTz = region?.timeZone || DEFAULT_TZ;
+  const isEn = region?.lang === 'en';
+  const forecastUrl = buildForecastUrl(rLat, rLon, rTz);
   const sunDir = new THREE.Vector3(-0.45, 1, 0.35).normalize();
   const precip = makePrecip(scene);
   const topC = new THREE.Color();
@@ -248,8 +274,8 @@ export function createAtmosphere({ scene, sun, hemi, skyGeo, getMode, clock }) {
   }
 
   function apply(date, camera, dt) {
-    const { alt, az } = solarPosition(date);
-    const { hour, minute } = seoulClock(date);
+    const { alt, az } = solarPosition(date, rLat, rLon);
+    const { hour, minute } = seoulClock(date, rTz);
     const kind = precipKind(state.live ? state.code : 0, state.live ? state.precip : 0, state.temp);
     let cloud = state.live ? clamp((state.cloud || 0) / 100, 0, 1) : 0;
     if (state.live) {
@@ -285,12 +311,18 @@ export function createAtmosphere({ scene, sun, hemi, skyGeo, getMode, clock }) {
     hemi.color.copy(topC).lerp(tmpB.set('#d5deea'), 0.72).lerp(tmpA.set('#ffffff'), dayK * 0.55);
     hemi.groundColor.set('#1a1612').lerp(tmpA.set('#c9b99a'), dayK);
 
-    const phrase = state.live ? weatherPhrase(state.code) : '맑음';
+    const uiEn = isUiEn();
+    const phrase = state.live ? weatherPhrase(state.code, uiEn) : (uiEn ? 'Clear' : '맑음');
     const shown = weatherWithTemp(phrase, state.live ? state.temp : null);
     const part = dayPart(hour, alt);
     const rush = rushPeriod(hour);
-    const rushBadge = rush === 'morning' ? ' · 🚇 출근' : rush === 'lunch' ? ' · ☕ 점심' : rush === 'evening' ? ' · 🌇 퇴근' : '';
-    const label = `${part} ${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')} · ${shown}${rushBadge}`;
+    const partDisplay = uiEn
+      ? ({ '새벽': 'Dawn', '아침': 'Morning', '낮': 'Day', '저녁': 'Dusk', '밤': 'Night' }[part] || part)
+      : part;
+    const rushBadge = uiEn
+      ? (rush === 'morning' ? ' · 🚗 Morning' : rush === 'lunch' ? ' · ☕ Lunch' : rush === 'evening' ? ' · 🌇 Evening' : '')
+      : (rush === 'morning' ? ' · 🚇 출근' : rush === 'lunch' ? ' · ☕ 점심' : rush === 'evening' ? ' · 🌇 퇴근' : '');
+    const label = `${partDisplay} ${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')} · ${shown}${rushBadge}`;
     state.hour = hour;
     state.minute = minute;
     state.rush = rush;
@@ -359,7 +391,7 @@ export function createAtmosphere({ scene, sun, hemi, skyGeo, getMode, clock }) {
       return;
     }
     try {
-      const res = await fetch(FORECAST, { cache: 'no-store' });
+      const res = await fetch(forecastUrl, { cache: 'no-store' });
       if (!res.ok) throw new Error(String(res.status));
       const body = await res.json();
       const c = body.current || {};
@@ -395,12 +427,14 @@ export function createAtmosphere({ scene, sun, hemi, skyGeo, getMode, clock }) {
 
   function setHour(h) {
     manualHour = h == null || h === 'live' ? null : clamp(Number(h), 0, 23.99);
-    apply(effectiveDate(), null, 0);
+    apply(effectiveDate(new Date(), rTz), null, 0);
   }
 
   if (clock) {
     clock.style.cursor = 'pointer';
-    clock.title = '클릭하여 시간대 전환 (실시간 → 08:30 출근 → 12:30 점심 → 18:30 퇴근 → 21:30 밤)';
+    clock.title = isEn
+      ? 'Click to cycle time of day (Live → 08:30 → 12:30 → 18:30 → 21:30)'
+      : '클릭하여 시간대 전환 (실시간 → 08:30 출근 → 12:30 점심 → 18:30 퇴근 → 21:30 밤)';
     const cycle = [null, 8.5, 12.5, 18.5, 21.5];
     let cIdx = 0;
     clock.addEventListener('click', () => {
@@ -411,7 +445,7 @@ export function createAtmosphere({ scene, sun, hemi, skyGeo, getMode, clock }) {
 
   pull();
   setInterval(pull, 10 * 60 * 1000);
-  apply(effectiveDate(), null, 0);
+  apply(effectiveDate(new Date(), rTz), null, 0);
 
   return {
     sunDir,
@@ -419,11 +453,11 @@ export function createAtmosphere({ scene, sun, hemi, skyGeo, getMode, clock }) {
     setWeather,
     setHour,
     presets: WEATHER_PRESETS,
-    update(dt, camera) { apply(effectiveDate(), camera, dt || 0); },
+    update(dt, camera) { apply(effectiveDate(new Date(), rTz), camera, dt || 0); },
     sample(date) {
-      const d = date || effectiveDate();
-      const { alt, az } = solarPosition(d);
-      const clock = seoulClock(d);
+      const d = date || effectiveDate(new Date(), rTz);
+      const { alt, az } = solarPosition(d, rLat, rLon);
+      const clock = seoulClock(d, rTz);
       return { alt, az, day: dayPart(clock.hour, alt), ...clock };
     },
   };

@@ -90,10 +90,12 @@ export class WebSocketPresence extends Emitter {
     const sit = s.sit || '';
     const afk = s.afk ? 1 : 0;
     const umb = s.umb || '';
-    const discreteSig = `${s.riding ? 1 : 0},${em},${sit},${afk},${umb}`;
+    const vehId = s.veh ? s.veh.id : -1;
+    const vehSig = s.veh ? `${s.veh.id},${s.veh.ry},${s.veh.v},${s.veh.st}` : '';
+    const discreteSig = `${s.riding ? 1 : 0},${em},${sit},${afk},${umb},${vehId}`;
     const discreteChanged = discreteSig !== this.lastDiscreteSig;
     if (!force && !discreteChanged && now - this.lastSent < 1000 / STATE_HZ) return;
-    const sig = `${s.x.toFixed(2)},${s.z.toFixed(2)},${s.ry.toFixed(2)},${s.moving ? 1 : 0},${discreteSig},${jy.toFixed(2)}`;
+    const sig = `${s.x.toFixed(2)},${s.z.toFixed(2)},${s.ry.toFixed(2)},${s.moving ? 1 : 0},${discreteSig},${jy.toFixed(2)},${vehSig}`;
     if (!force && !discreteChanged && sig === this.lastSig && now - this.lastSent < 2500) return;
     this.lastDiscreteSig = discreteSig;
     this.lastSig = sig;
@@ -116,19 +118,45 @@ export class WebSocketPresence extends Emitter {
 
 // 로컬 목업: 가짜 플레이어 1명이 역 근처를 돌아다니며 가끔 말을 걸고, 내 채팅에 답장함
 export class MockPresence extends Emitter {
-  constructor({ station }) { super(); this.station = station; this.t = 0; }
+  constructor({ station, region = null }) {
+    super();
+    this.station = station;
+    this.region = region;
+    this.isEn = region?.lang === 'en' || station?.name === 'Starbase';
+    this.t = 0;
+  }
   connect(me) {
     clearInterval(this.timer);
     clearTimeout(this.helloTimer);
     this.me = me; this.my = { x: this.station.x, z: this.station.z };
-    this.peer = { id: 'mock-1', name: '판교러버', color: '#00b894', look: sanitizeLook({ gender: 'f', face: 'round', hair: 'pony', glasses: true, top: 'hoodie', color: '#00b894' }), x: this.station.x + 12, z: this.station.z - 6, ry: 0 };
+    this.peer = {
+      id: 'mock-1',
+      name: this.isEn ? 'StarshipSpotter' : '판교러버',
+      color: '#00b894',
+      look: sanitizeLook({ gender: 'f', face: 'round', hair: 'pony', glasses: true, top: 'hoodie', color: '#00b894' }),
+      x: this.station.x + 12,
+      z: this.station.z - 6,
+      ry: 0,
+    };
     this.helloTimer = setTimeout(() => {
       this.emit('welcome', { t: 'welcome', id: 'me', peers: [] });
       this.emit('join', { t: 'join', peer: this.peer });
       this.emit('status', '현재 접속자 2명');
     }, 300);
     this.timer = setInterval(() => this._tick(), 1000 / STATE_HZ);
-    this.lines = ['안녕하세요! 정자역 처음 오셨어요?', '여기 지도 OSM 데이터로 만든 거래요 ㅋㅋ', '탄천 쪽으로 같이 산책 가실래요?', '저는 판교 출근인데 정자에서 놀아요 😎'];
+    this.lines = this.isEn
+      ? [
+          'Hey! First time visiting Starbase, TX?',
+          'Most of the crew commutes from Brownsville to Starfactory & the Launch Pad!',
+          'Press R or head south of Integration Tower 1 to watch the Roadster Jump Show 🚀',
+          'Wait until you see Mega Bay and the chopstick arms up close!',
+        ]
+      : [
+          '안녕하세요! 정자역 처음 오셨어요?',
+          '여기 지도 OSM 데이터로 만든 거래요 ㅋㅋ',
+          '탄천 쪽으로 같이 산책 가실래요?',
+          '저는 판교 출근인데 정자에서 놀아요 😎',
+        ];
     this.li = 0; this.nextTalk = 4;
   }
   _tick() {
@@ -155,7 +183,18 @@ export class MockPresence extends Emitter {
   setGuard(fn) { this.guard = fn; }
   sendState(s) { this.my = { x: s.x, z: s.z, riding: !!s.riding, sit: s.sit || '', afk: !!s.afk }; }
   sendChat(text) {
-    const reply = /안녕|하이|hi|hello/i.test(text) ? '반가워요! 👋' : /탄천/.test(text) ? '탄천 좋죠! 오리 보러 가요 🦆' : /네이버/.test(text) ? '1784 사옥 로봇 보셨어요?' : 'ㅋㅋㅋ 그러게요!! 🔥';
+    let reply;
+    if (this.isEn) {
+      reply = /hi|hello|hey/i.test(text)
+        ? 'Hey there! Welcome to Starbase 👋'
+        : /roadster|jump|show/i.test(text)
+          ? 'The Roadster Jump Show is 350m south of Integration Tower 1! Press R to watch 🏎️💨'
+          : /launch|tower|pad|starship/i.test(text)
+            ? 'Orbital Launch Pad 1 & 2 are right down the highway toward Boca Chica Beach 🚀'
+            : 'Haha totally!! Starbase vibes are unreal 🔥';
+    } else {
+      reply = /안녕|하이|hi|hello/i.test(text) ? '반가워요! 👋' : /탄천/.test(text) ? '탄천 좋죠! 오리 보러 가요 🦆' : /네이버/.test(text) ? '1784 사옥 로봇 보셨어요?' : 'ㅋㅋㅋ 그러게요!! 🔥';
+    }
     setTimeout(() => this.emit('chat', { t: 'chat', id: this.peer.id, text: reply }), 1200);
   }
   sendEmote(kind, combo = 1) {
@@ -165,15 +204,24 @@ export class MockPresence extends Emitter {
       this.peerEmoteUntil = performance.now() + 3400;
       this.emit('emote', { t: 'emote', id: this.peer.id, kind, combo });
       if (combo === 2 || combo === 5) {
-        const hypeLines = {
-          cheer: '와아아!! 만세!! 🙌🎉',
-          fuss: '우와아아앙 텐션 미쳤다!! 🚨🔥',
-          dance: '오예~ 같이 춤춰요!! 💃🪩',
-          clap: '짝짝짝!! 물개박수!! 👏💯',
-          love: '하트 받아가세요!! ❤️💖',
-          lol: 'ㅋㅋㅋㅋㅋ 아 배아파!! 🤣',
-        };
-        this.emit('chat', { t: 'chat', id: this.peer.id, text: hypeLines[kind] || '와아아!! 🎉' });
+        const hypeLines = this.isEn
+          ? {
+              cheer: 'Woohoo!! Let us go Starbase!! 🙌🎉',
+              fuss: 'Full thrust energy!! 🚨🔥',
+              dance: 'Dance party under the Starship!! 💃🪩',
+              clap: 'Standing ovation!! 👏💯',
+              love: 'Sending love from Boca Chica!! ❤️💖',
+              lol: 'Hahaha too good!! 🤣',
+            }
+          : {
+              cheer: '와아아!! 만세!! 🙌🎉',
+              fuss: '우와아아앙 텐션 미쳤다!! 🚨🔥',
+              dance: '오예~ 같이 춤춰요!! 💃🪩',
+              clap: '짝짝짝!! 물개박수!! 👏💯',
+              love: '하트 받아가세요!! ❤️💖',
+              lol: 'ㅋㅋㅋㅋㅋ 아 배아파!! 🤣',
+            };
+        this.emit('chat', { t: 'chat', id: this.peer.id, text: hypeLines[kind] || (this.isEn ? 'Woohoo!! 🎉' : '와아아!! 🎉') });
       }
     }, 320);
   }
@@ -193,17 +241,20 @@ function isLocalHost() {
   return h === 'localhost' || h === '127.0.0.1' || h === '[::1]' || h.endsWith('.local');
 }
 
-export function createPresence({ station }) {
+export function createPresence({ station, region = null }) {
   const params = new URLSearchParams(location.search);
   const wsParam = params.get('ws');
   if (wsParam === 'mock' || wsParam === 'off' || (params.has('shot') && !wsParam) || (!wsParam && isLocalHost())) {
-    return new MockPresence({ station });
+    return new MockPresence({ station, region });
   }
-  const url =
+  const base =
     wsParam === 'local'
       ? 'ws://127.0.0.1:8787'
       : wsParam === 'prod' || wsParam === 'live'
         ? DEFAULT_WS_URL
         : (wsParam || DEFAULT_WS_URL);
+  const regionId = region?.id || params.get('region') || 'jeongja';
+  const sep = base.includes('?') ? '&' : '?';
+  const url = `${base}${sep}region=${encodeURIComponent(regionId)}`;
   return new WebSocketPresence(url);
 }

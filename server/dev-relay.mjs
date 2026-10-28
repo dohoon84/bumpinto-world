@@ -24,8 +24,11 @@ wss.on('connection', (ws) => {
       const emote = typeof m.emote === 'string' ? m.emote.slice(0, 16) : '';
       const sit = typeof m.sit === 'string' ? m.sit.slice(0, 16) : '';
       const afk = !!m.afk;
-      Object.assign(p, { x: +m.x || 0, z: +m.z || 0, ry: +m.ry || 0, riding: !!m.riding, sit, afk });
-      broadcast({ t: 'state', id: p.id, x: p.x, z: p.z, ry: p.ry, moving: !!m.moving, riding: p.riding, jy, emote, sit, afk }, ws);
+      const veh = m.veh && typeof m.veh === 'object'
+        ? { id: m.veh.id | 0, ry: +m.veh.ry || 0, v: +m.veh.v || 0, st: +m.veh.st || 0 }
+        : null;
+      Object.assign(p, { x: +m.x || 0, z: +m.z || 0, ry: +m.ry || 0, riding: !!m.riding, sit, afk, veh });
+      broadcast({ t: 'state', id: p.id, x: p.x, z: p.z, ry: p.ry, moving: !!m.moving, riding: p.riding, jy, emote, sit, afk, ...(veh ? { veh } : {}) }, ws);
     }
     if (m.t === 'emote') {
       const kind = String(m.kind || '').trim().slice(0, 16);

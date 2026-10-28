@@ -2,6 +2,7 @@
 import * as THREE from 'three';
 import { createAvatar } from './entities/avatar.js';
 import { LOOK_CHOICES, OUTFIT_COLORS, PROFILE_KEY, sanitizeLook } from './look.js';
+import { isEn, tr, toggleLang, onLangChange } from './i18n.js';
 
 const ENTER_LINES = [
   '정자역 광장으로 걸어 들어가는 중',
@@ -9,6 +10,13 @@ const ENTER_LINES = [
   '카카오바이크를 길가에 두는 중',
   '밤 거리의 불을 켜는 중',
   '지인을 만날 자리를 찾는 중',
+];
+const ENTER_LINES_EN = [
+  'Entering the 3D neighborhood…',
+  'Preparing streets and landmarks…',
+  'Parking bikes along the sidewalk…',
+  'Lighting up the evening streets…',
+  'Connecting to multiplayer relay…',
 ];
 const ENTER_MIN_MS = 1200;
 const ENTER_LINE_MS = 700;
@@ -23,10 +31,31 @@ function createEnterScreen() {
   root.hidden = true;
   root.innerHTML = `
     <div class="enter-card">
+      <div class="enter-flight" hidden>
+        <div class="enter-airport from">
+          <span class="code"></span>
+          <span class="city"></span>
+        </div>
+        <div class="enter-sky-track" aria-hidden="true">
+          <div class="enter-sky-line"></div>
+          <span class="enter-plane">✈️</span>
+        </div>
+        <div class="enter-airport to">
+          <span class="code"></span>
+          <span class="city"></span>
+        </div>
+      </div>
       <p class="enter-line" role="status" aria-live="polite"></p>
       <div class="enter-track" aria-hidden="true"><div class="enter-fill"></div></div>
     </div>`;
   document.body.appendChild(root);
+  const card = root.querySelector('.enter-card');
+  const flightBox = root.querySelector('.enter-flight');
+  const fromCode = root.querySelector('.enter-airport.from .code');
+  const fromCity = root.querySelector('.enter-airport.from .city');
+  const toCode = root.querySelector('.enter-airport.to .code');
+  const toCity = root.querySelector('.enter-airport.to .city');
+  const planeEl = root.querySelector('.enter-plane');
   const line = root.querySelector('.enter-line');
   const fill = root.querySelector('.enter-fill');
   let creepRaf = 0;
@@ -34,27 +63,70 @@ function createEnterScreen() {
   let running = false;
   let started = 0;
   let progress = 0;
+  let minDuration = ENTER_MIN_MS;
   let token = 0;
 
-  const paint = () => { fill.style.width = `${progress * 100}%`; };
-  const creep = (elapsed) => Math.min(0.95, 0.95 * (1 - Math.exp(-(elapsed / 1000) / 0.7)));
+  let isFlightMode = false;
+  let activeLines = ENTER_LINES;
+
+  const paint = () => {
+    const pct = `${progress * 100}%`;
+    fill.style.width = pct;
+    if (planeEl) planeEl.style.left = `${Math.min(96, Math.max(4, progress * 92 + 4))}%`;
+    if (isFlightMode && activeLines.length > 0) {
+      const idx = Math.min(activeLines.length - 1, Math.floor(progress * activeLines.length));
+      if (line.textContent !== activeLines[idx]) {
+        line.textContent = activeLines[idx];
+      }
+    }
+  };
+  const creep = (elapsed) => {
+    if (isFlightMode) {
+      // 비행 모드: minDuration 동안 0 -> 0.92 까지 일정하고 여유 있게 순항
+      const linear = Math.min(1, elapsed / Math.max(1000, minDuration));
+      return Math.min(0.94, linear * 0.92);
+    }
+    return Math.min(0.95, 0.95 * (1 - Math.exp(-(elapsed / 1000) / 0.7)));
+  };
   const stopCreep = () => { running = false; cancelAnimationFrame(creepRaf); };
 
   return {
-    show() {
+    show(customLines = null, opts = null) {
       if (running || !root.hidden) return;
+      const en = isEn();
+      const flight = opts?.flight || null;
+      if (flight?.from && flight?.to) {
+        isFlightMode = true;
+        card.classList.add('is-flight');
+        flightBox.hidden = false;
+        fromCode.textContent = `${flight.from.flag || '🛫'} ${flight.from.airportCode || 'DEP'}`;
+        fromCity.textContent = en ? (flight.from.enAirportName || flight.from.enShortName || flight.from.shortName) : (flight.from.airportName || flight.from.shortName);
+        toCode.textContent = `${flight.to.flag || '🛬'} ${flight.to.airportCode || 'ARR'}`;
+        toCity.textContent = en ? (flight.to.enAirportName || flight.to.enShortName || flight.to.shortName) : (flight.to.airportName || flight.to.shortName);
+        minDuration = opts?.minMs || 3600;
+      } else {
+        isFlightMode = false;
+        card.classList.remove('is-flight');
+        flightBox.hidden = true;
+        minDuration = opts?.minMs || ENTER_MIN_MS;
+      }
+      const fallback = en ? ENTER_LINES_EN : ENTER_LINES;
+      const lines = Array.isArray(customLines) && customLines.length ? customLines : fallback;
+      activeLines = lines;
       const mine = ++token;
       running = true;
-      progress = 0;
-      started = performance.now();
+      progress = opts?.startProgress || 0;
+      started = performance.now() - (progress * minDuration);
+      line.textContent = lines[0];
       paint();
-      let i = 0;
-      line.textContent = ENTER_LINES[0];
       clearInterval(lineTimer);
-      lineTimer = setInterval(() => {
-        i = (i + 1) % ENTER_LINES.length;
-        line.textContent = ENTER_LINES[i];
-      }, ENTER_LINE_MS);
+      if (!isFlightMode) {
+        let i = 0;
+        lineTimer = setInterval(() => {
+          i = (i + 1) % lines.length;
+          line.textContent = lines[i];
+        }, ENTER_LINE_MS);
+      }
       root.hidden = false;
       const tick = (now) => {
         if (!running || mine !== token) return;
@@ -74,7 +146,7 @@ function createEnterScreen() {
     },
     async finish() {
       const mine = token;
-      const wait = Math.max(0, ENTER_MIN_MS - (performance.now() - started));
+      const wait = Math.max(0, minDuration - (performance.now() - started));
       if (wait) await new Promise((resolve) => setTimeout(resolve, wait));
       if (!running || mine !== token) return;
       stopCreep();
@@ -103,12 +175,12 @@ function createEnterScreen() {
 }
 
 let enterScreen;
-function getEnterScreen() {
+export function getEnterScreen() {
   if (!enterScreen) enterScreen = createEnterScreen();
   return enterScreen;
 }
 
-export function openLobby({ sms, onJoin, onBack }) {
+export function openLobby({ sms, region = null, onJoin, onBack }) {
   const saved = readProfile();
   const look = sanitizeLook({ hair: 'short', top: 'hoodie', ...(saved?.look || {}) });
   const root = document.getElementById('lobby');
@@ -117,44 +189,48 @@ export function openLobby({ sms, onJoin, onBack }) {
       <div id="lobby-preview"></div>
       <div id="lobby-fields">
         <div class="lobby-top-bar">
-          <h1>정자역에 입장</h1>
-          <button type="button" id="lobby-back-globe" class="lobby-back-btn">🌏 지구본으로</button>
+          <h1 id="lobby-title"></h1>
+          <div style="display:flex;gap:6px;align-items:center">
+            <button type="button" id="lobby-lang-btn" class="lobby-back-btn"></button>
+            <button type="button" id="lobby-back-globe" class="lobby-back-btn"></button>
+          </div>
         </div>
-        <p class="sub">닉네임과 모습을 고르거나, 기존 번호로 이어서 들어오세요.</p>
+        <p id="lobby-sub" class="sub"></p>
         <div class="lobby-tabs" role="tablist">
-          <button type="button" class="tab on" data-mode="join" role="tab" aria-selected="true">내 캐릭터 입장</button>
-          <button type="button" class="tab" data-mode="login" role="tab" aria-selected="false">기존 번호로 이어하기</button>
+          <button type="button" id="lobby-tab-join" class="tab on" data-mode="join" role="tab" aria-selected="true"></button>
+          <button type="button" id="lobby-tab-login" class="tab" data-mode="login" role="tab" aria-selected="false"></button>
         </div>
         <div id="lobby-pane-join">
           <div class="lobby-row2">
-            <label class="nick">닉네임
-              <input id="nick" maxlength="16" placeholder="어떤 이름으로 만날까요?" />
+            <label class="nick"><span id="lobby-nick-lbl"></span>
+              <input id="nick" maxlength="16" />
             </label>
-            <label class="nick">재입장 PIN <small>(숫자 4~6자리)</small>
-              <input id="lobby-pin" type="password" inputmode="numeric" maxlength="6" placeholder="다른 기기 이어하기용" />
+            <label class="nick"><span id="lobby-pin-lbl"></span>
+              <input id="lobby-pin" type="password" inputmode="numeric" maxlength="6" />
             </label>
           </div>
-          <p id="lobby-phone" class="phone-no">번호 받는 중…</p>
+          <p id="lobby-phone" class="phone-no"></p>
           <div id="lobby-picks"></div>
-          <div class="pick-label">옷 색</div>
+          <div id="lobby-color-lbl" class="pick-label"></div>
           <div id="color-picks" class="pick"></div>
         </div>
         <div id="lobby-pane-login" hidden>
-          <p class="login-guide">이전에 발급받은 휴대폰 번호와 설정해 둔 PIN(4~6자리)을 입력하면 닉네임·외형·위치·메시지를 그대로 이어받습니다.</p>
-          <label class="nick">휴대폰 번호
+          <p id="lobby-login-guide" class="login-guide"></p>
+          <label class="nick"><span id="lobby-login-phone-lbl"></span>
             <input id="login-phone" inputmode="numeric" maxlength="13" placeholder="010-2000-0001" />
           </label>
-          <label class="nick" style="margin-top:10px">비밀번호 (PIN 4~6자리)
-            <input id="login-pin" type="password" inputmode="numeric" maxlength="6" placeholder="설정한 숫자 4~6자리" />
+          <label class="nick" style="margin-top:10px"><span id="lobby-login-pin-lbl"></span>
+            <input id="login-pin" type="password" inputmode="numeric" maxlength="6" />
           </label>
-          <button type="button" id="lobby-load" class="sub-btn">내 캐릭터 불러오기 (미리보기)</button>
+          <button type="button" id="lobby-load" class="sub-btn"></button>
         </div>
         <p id="lobby-error"></p>
-        <button type="submit" id="lobby-go">입장하기</button>
+        <button type="submit" id="lobby-go"></button>
       </div>
     </form>`;
 
   let mode = 'join';
+  let lastSession = null;
   const nick = root.querySelector('#nick');
   const pinInput = root.querySelector('#lobby-pin');
   const loginPhone = root.querySelector('#login-phone');
@@ -162,35 +238,45 @@ export function openLobby({ sms, onJoin, onBack }) {
   const paneJoin = root.querySelector('#lobby-pane-join');
   const paneLogin = root.querySelector('#lobby-pane-login');
   const loadBtn = root.querySelector('#lobby-load');
-  nick.value = saved?.name || (sms?.off ? '로컬테스터' : '');
-  if (saved?.display || saved?.phone) loginPhone.value = saved.display || saved.phone;
+  const phoneLine = root.querySelector('#lobby-phone');
+  const go = root.querySelector('#lobby-go');
+  const backBtn = root.querySelector('#lobby-back-globe');
+  const langBtn = root.querySelector('#lobby-lang-btn');
   const error = root.querySelector('#lobby-error');
   const picks = root.querySelector('#lobby-picks');
 
-  for (const choice of LOOK_CHOICES) {
-    const row = document.createElement('div');
-    row.className = 'pick-row';
-    row.innerHTML = `<div class="pick-label">${choice.label}</div>`;
-    const wrap = document.createElement('div');
-    wrap.className = 'pick';
-    const current = choice.key === 'glasses' ? (look.glasses ? '1' : '0') : look[choice.key];
-    for (const [value, label] of choice.options) {
-      const b = document.createElement('button');
-      b.type = 'button';
-      b.textContent = label;
-      b.dataset.k = choice.key;
-      b.dataset.v = value;
-      if (value === current) b.classList.add('on');
-      b.addEventListener('click', () => {
-        wrap.querySelectorAll('button').forEach((el) => el.classList.toggle('on', el === b));
-        if (choice.key === 'glasses') look.glasses = value === '1';
-        else look[choice.key] = value;
-        show();
-      });
-      wrap.appendChild(b);
+  const defaultLocalNick = () => (isEn() ? 'Explorer' : '로컬테스터');
+  nick.value = saved?.name || (sms?.off ? defaultLocalNick() : '');
+  if (saved?.display || saved?.phone) loginPhone.value = saved.display || saved.phone;
+
+  function renderPicks() {
+    const en = isEn();
+    picks.innerHTML = '';
+    for (const choice of LOOK_CHOICES) {
+      const row = document.createElement('div');
+      row.className = 'pick-row';
+      row.innerHTML = `<div class="pick-label">${en ? (choice.enLabel || choice.label) : choice.label}</div>`;
+      const wrap = document.createElement('div');
+      wrap.className = 'pick';
+      const current = choice.key === 'glasses' ? (look.glasses ? '1' : '0') : look[choice.key];
+      for (const [value, koLbl, enLbl] of choice.options) {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.textContent = en ? (enLbl || koLbl) : koLbl;
+        b.dataset.k = choice.key;
+        b.dataset.v = value;
+        if (value === current) b.classList.add('on');
+        b.addEventListener('click', () => {
+          wrap.querySelectorAll('button').forEach((el) => el.classList.toggle('on', el === b));
+          if (choice.key === 'glasses') look.glasses = value === '1';
+          else look[choice.key] = value;
+          show();
+        });
+        wrap.appendChild(b);
+      }
+      row.appendChild(wrap);
+      picks.appendChild(row);
     }
-    row.appendChild(wrap);
-    picks.appendChild(row);
   }
 
   const colors = root.querySelector('#color-picks');
@@ -248,19 +334,84 @@ export function openLobby({ sms, onJoin, onBack }) {
   loop();
   const onResize = () => fit();
   addEventListener('resize', onResize);
-  nick.focus();
 
-  const phoneLine = root.querySelector('#lobby-phone');
-  const go = root.querySelector('#lobby-go');
-  const backBtn = root.querySelector('#lobby-back-globe');
   const pickedLook = () => sanitizeLook({ ...look, hair: look.hair || 'short' });
+
+  const showNumber = (session) => {
+    if (session) lastSession = session;
+    const s = session || lastSession;
+    const en = isEn();
+    if (s?.off) {
+      const again = s?.place ? (en ? ' · Resumes at last position' : ' · 지난 위치에서 이어집니다') : '';
+      phoneLine.textContent = en
+        ? `🧪 Local Test Mode (No server account needed)${again}`
+        : `🧪 로컬 테스트 모드 (실서버 계정 미생성)${again}`;
+      return;
+    }
+    const again = s?.place ? (en ? ' · Resumes at last position' : ' · 지난 위치에서 이어집니다') : '';
+    const pinBadge = s?.hasPin ? (en ? ' · PIN set' : ' · PIN 설정됨') : (en ? ' · No PIN' : ' · PIN 미설정');
+    phoneLine.textContent = s?.display
+      ? (en ? `My Number ${s.display}${again}${pinBadge}` : `내 번호 ${s.display}${again}${pinBadge}`)
+      : (en ? 'Assigning virtual number…' : '번호 받는 중…');
+    if (pinInput) {
+      pinInput.placeholder = s?.hasPin
+        ? (en ? '4–6 digits to change PIN' : '변경 시 숫자 4~6자리 입력')
+        : (en ? 'For cross-device login' : '다른 기기 이어하기용');
+    }
+  };
+
+  function renderLobbyLocale() {
+    const en = isEn();
+    const title = en
+      ? (region?.enLobbyTitle || region?.lobbyTitle || 'Enter World')
+      : (region?.lobbyTitle || '정자역에 입장');
+    root.querySelector('#lobby-title').textContent = title;
+    if (langBtn) langBtn.textContent = en ? '🌐 KO' : '🌐 EN';
+    if (backBtn) backBtn.textContent = tr('🌏 지구본으로', '🌏 Globe');
+    root.querySelector('#lobby-sub').textContent = tr(
+      '닉네임과 모습을 고르거나, 기존 번호로 이어서 들어오세요.',
+      'Choose your nickname and look, or resume with your virtual phone number.',
+    );
+    root.querySelector('#lobby-tab-join').textContent = tr('내 캐릭터 입장', 'Join with Avatar');
+    root.querySelector('#lobby-tab-login').textContent = tr('기존 번호로 이어하기', 'Resume with Number');
+    root.querySelector('#lobby-nick-lbl').textContent = tr('닉네임', 'Nickname');
+    nick.placeholder = tr('어떤 이름으로 만날까요?', 'What should people call you?');
+    if (nick.value === '로컬테스터' && en) nick.value = 'Explorer';
+    else if (nick.value === 'Explorer' && !en) nick.value = '로컬테스터';
+    root.querySelector('#lobby-pin-lbl').innerHTML = en
+      ? 'Recovery PIN <small>(4–6 digits)</small>'
+      : '재입장 PIN <small>(숫자 4~6자리)</small>';
+    root.querySelector('#lobby-color-lbl').textContent = tr('옷 색', 'Outfit Color');
+    root.querySelector('#lobby-login-guide').textContent = tr(
+      '이전에 발급받은 휴대폰 번호와 설정해 둔 PIN(4~6자리)을 입력하면 닉네임·외형·위치·메시지를 그대로 이어받습니다.',
+      'Enter your previously issued virtual phone number and PIN (4–6 digits) to restore your nickname, avatar, position, and messages.',
+    );
+    root.querySelector('#lobby-login-phone-lbl').textContent = tr('휴대폰 번호', 'Virtual Phone Number');
+    root.querySelector('#lobby-login-pin-lbl').textContent = tr('비밀번호 (PIN 4~6자리)', 'PIN (4–6 digits)');
+    loginPin.placeholder = tr('설정한 숫자 4~6자리', 'Enter your 4–6 digit PIN');
+    loadBtn.textContent = tr('내 캐릭터 불러오기 (미리보기)', 'Load My Avatar (Preview)');
+    go.textContent = mode === 'login'
+      ? tr('인증하고 입장하기', 'Verify & Enter')
+      : tr('입장하기', 'Enter World');
+    renderPicks();
+    showNumber();
+  }
+
+  const unsubLang = onLangChange(() => renderLobbyLocale());
+  renderLobbyLocale();
+  nick.focus();
 
   const cleanupLobby = () => {
     ticket += 1;
+    unsubLang();
     cancelAnimationFrame(raf);
     removeEventListener('resize', onResize);
     renderer.dispose();
   };
+
+  langBtn?.addEventListener('click', () => {
+    toggleLang();
+  });
 
   backBtn?.addEventListener('click', () => {
     if (joining) return;
@@ -290,20 +441,6 @@ export function openLobby({ sms, onJoin, onBack }) {
     showNumber(session);
   };
 
-  const showNumber = (session) => {
-    if (session?.off) {
-      const again = session?.place ? ' · 지난 위치에서 이어집니다' : '';
-      phoneLine.textContent = `🧪 로컬 테스트 모드 (실서버 계정 미생성)${again}`;
-      return;
-    }
-    const again = session?.place ? ' · 지난 위치에서 이어집니다' : '';
-    const pinBadge = session?.hasPin ? ' · PIN 설정됨' : ' · PIN 미설정';
-    phoneLine.textContent = session?.display ? `내 번호 ${session.display}${again}${pinBadge}` : '번호 받는 중…';
-    if (pinInput) {
-      pinInput.placeholder = session?.hasPin ? '변경 시 숫자 4~6자리 입력' : '다른 기기 이어하기용';
-    }
-  };
-
   const setLobbyMode = (next) => {
     mode = next;
     error.textContent = '';
@@ -314,7 +451,9 @@ export function openLobby({ sms, onJoin, onBack }) {
     });
     paneJoin.hidden = mode !== 'join';
     paneLogin.hidden = mode !== 'login';
-    go.textContent = mode === 'login' ? '인증하고 입장하기' : '입장하기';
+    go.textContent = mode === 'login'
+      ? tr('인증하고 입장하기', 'Verify & Enter')
+      : tr('입장하기', 'Enter World');
     if (mode === 'login') loginPhone.focus();
     else nick.focus();
   };
@@ -326,8 +465,16 @@ export function openLobby({ sms, onJoin, onBack }) {
   loadBtn.addEventListener('click', async () => {
     const phone = loginPhone.value.trim();
     const pin = loginPin.value.trim();
-    if (!phone) { error.textContent = '휴대폰 번호를 입력해 주세요.'; loginPhone.focus(); return; }
-    if (!/^\d{4,6}$/.test(pin)) { error.textContent = '비밀번호(PIN)는 숫자 4~6자리로 입력해 주세요.'; loginPin.focus(); return; }
+    if (!phone) {
+      error.textContent = tr('휴대폰 번호를 입력해 주세요.', 'Please enter your phone number.');
+      loginPhone.focus();
+      return;
+    }
+    if (!/^\d{4,6}$/.test(pin)) {
+      error.textContent = tr('비밀번호(PIN)는 숫자 4~6자리로 입력해 주세요.', 'PIN must be 4 to 6 digits.');
+      loginPin.focus();
+      return;
+    }
     error.textContent = '';
     loadBtn.disabled = true;
     try {
@@ -346,12 +493,18 @@ export function openLobby({ sms, onJoin, onBack }) {
   let ticket = 0;
   const issue = (name, preview, pin) => {
     const mine = ++ticket;
-    return sms.enter({ name: name || nick.value.trim() || '손님', look: pickedLook(), pin, preview }).then((session) => {
+    const fallbackName = isEn() ? 'Guest' : '손님';
+    return sms.enter({ name: name || nick.value.trim() || fallbackName, look: pickedLook(), pin, preview }).then((session) => {
       if (mine === ticket) showNumber(session);
       return session;
     });
   };
   issue(saved?.name, true).catch((err) => { phoneLine.textContent = err.message; });
+
+  const getRegionEnterLines = () => {
+    if (isEn()) return region?.enLobbyEnterLines || region?.lobbyEnterLines || ENTER_LINES_EN;
+    return region?.lobbyEnterLines || ENTER_LINES;
+  };
 
   let joining = false;
   root.querySelector('#lobby-card').addEventListener('submit', async (e) => {
@@ -361,13 +514,21 @@ export function openLobby({ sms, onJoin, onBack }) {
     if (mode === 'login') {
       const phone = loginPhone.value.trim();
       const pin = loginPin.value.trim();
-      if (!phone) { error.textContent = '휴대폰 번호를 입력해 주세요.'; loginPhone.focus(); return; }
-      if (!/^\d{4,6}$/.test(pin)) { error.textContent = '비밀번호(PIN)는 숫자 4~6자리로 입력해 주세요.'; loginPin.focus(); return; }
+      if (!phone) {
+        error.textContent = tr('휴대폰 번호를 입력해 주세요.', 'Please enter your phone number.');
+        loginPhone.focus();
+        return;
+      }
+      if (!/^\d{4,6}$/.test(pin)) {
+        error.textContent = tr('비밀번호(PIN)는 숫자 4~6자리로 입력해 주세요.', 'PIN must be 4 to 6 digits.');
+        loginPin.focus();
+        return;
+      }
       error.textContent = '';
       joining = true;
       go.disabled = true;
       const screen = getEnterScreen();
-      screen.show();
+      screen.show(getRegionEnterLines());
       let session;
       try {
         session = await sms.login({ phone, pin });
@@ -378,22 +539,24 @@ export function openLobby({ sms, onJoin, onBack }) {
         joining = false;
         return;
       }
-      const name = session.name || '손님';
+      const name = session.name || (isEn() ? 'Guest' : '손님');
       const picked = sanitizeLook(session.look || pickedLook());
       try { localStorage.setItem(PROFILE_KEY, JSON.stringify({ name, look: picked, phone: session.phone, display: session.display })); } catch {}
-      cancelAnimationFrame(raf);
-      removeEventListener('resize', onResize);
-      renderer.dispose();
+      cleanupLobby();
       onJoin(name, picked, session);
       await screen.finish();
       return;
     }
 
     const name = nick.value.trim().replace(/\s+/g, ' ').slice(0, 16);
-    if (!name) { error.textContent = '닉네임을 입력해 주세요.'; nick.focus(); return; }
+    if (!name) {
+      error.textContent = tr('닉네임을 입력해 주세요.', 'Please enter a nickname.');
+      nick.focus();
+      return;
+    }
     const pin = pinInput.value.trim();
     if (pin && !/^\d{4,6}$/.test(pin)) {
-      error.textContent = '비밀번호(PIN)는 숫자 4~6자리로 입력해 주세요.';
+      error.textContent = tr('비밀번호(PIN)는 숫자 4~6자리로 입력해 주세요.', 'PIN must be 4 to 6 digits.');
       pinInput.focus();
       return;
     }
@@ -401,7 +564,7 @@ export function openLobby({ sms, onJoin, onBack }) {
     joining = true;
     go.disabled = true;
     const screen = getEnterScreen();
-    screen.show();
+    screen.show(getRegionEnterLines());
     let session;
     try { session = await issue(name, false, pin || undefined); }
     catch (err) {
@@ -413,9 +576,7 @@ export function openLobby({ sms, onJoin, onBack }) {
     }
     const picked = session.look || pickedLook();
     try { localStorage.setItem(PROFILE_KEY, JSON.stringify({ name, look: picked, phone: session.phone, display: session.display })); } catch { /* 저장이 막혀 있어도 입장은 된다 */ }
-    cancelAnimationFrame(raf);
-    removeEventListener('resize', onResize);
-    renderer.dispose();
+    cleanupLobby();
     onJoin(name, picked, session);
     await screen.finish();
   });
