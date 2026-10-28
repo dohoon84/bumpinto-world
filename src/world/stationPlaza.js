@@ -1324,7 +1324,7 @@ export function addStationPlaza(scene, overlay, world) {
       return { kind: 'beanbag', label: '🛋️ 빈백에 앉기 (C)', x: bestBag.x, z: bestBag.z, ry: bestBag.rot };
     }
 
-    // 2) 원형 나무 벤치 근처 (나무 중심에서 반경 1.0~2.35m 이내)
+    // 2) 원형 나무 벤치 근처 (나무 중심에서 반경 0.85~2.35m 이내)
     for (const t of benchTrees) {
       const dx = px - t.x, dz = pz - t.z;
       const d = Math.hypot(dx, dz);
@@ -1333,40 +1333,46 @@ export function addStationPlaza(scene, overlay, world) {
         return {
           kind: 'bench',
           label: '🪑 나무 벤치에 앉기 (C)',
-          x: t.x + Math.sin(ang) * 1.44,
-          z: t.z + Math.cos(ang) * 1.44,
+          x: t.x + Math.sin(ang) * 1.48,
+          z: t.z + Math.cos(ang) * 1.48,
+          exitX: t.x + Math.sin(ang) * 2.05,
+          exitZ: t.z + Math.cos(ang) * 2.05,
           ry: ang,
         };
       }
     }
 
-    // 3) 분수대 대리석 둘레 턱 (중심에서 반경 4.6~6.3m 이내)
+    // 3) 분수대 대리석 둘레 턱 (충돌 반경 5.5m 바깥쪽 가장자리 5.55m에 걸터앉고, 일어날 땐 6.05m로 복귀)
     {
       const dx = px - fountain.x, dz = pz - fountain.z;
       const d = Math.hypot(dx, dz);
-      if (d >= 4.5 && d <= 6.35) {
+      if (d >= 4.5 && d <= 6.6) {
         const ang = Math.atan2(dx, dz);
         return {
           kind: 'ledge',
           label: '⛲ 분수대 턱에 앉기 (C)',
-          x: fountain.x + Math.sin(ang) * 4.95,
-          z: fountain.z + Math.cos(ang) * 4.95,
+          x: fountain.x + Math.sin(ang) * 5.55,
+          z: fountain.z + Math.cos(ang) * 5.55,
+          exitX: fountain.x + Math.sin(ang) * 6.05,
+          exitZ: fountain.z + Math.cos(ang) * 6.05,
           ry: ang,
         };
       }
     }
 
-    // 4) 정자 바둑 쉼터 둘레 난간 벤치
+    // 4) 정자 바둑 쉼터 둘레 난간 벤치 (충돌 박스 바깥으로 안전하게 착석/복귀)
     {
       const dx = px - pagoda.x, dz = pz - pagoda.z;
       const d = Math.hypot(dx, dz);
-      if (d >= 2.2 && d <= 3.7) {
+      if (d >= 2.2 && d <= 3.9) {
         const ang = Math.atan2(dx, dz);
         return {
           kind: 'bench',
           label: '🛖 정자 쉼터에 앉기 (C)',
-          x: pagoda.x + Math.sin(ang) * 2.85,
-          z: pagoda.z + Math.cos(ang) * 2.85,
+          x: pagoda.x + Math.sin(ang) * 2.95,
+          z: pagoda.z + Math.cos(ang) * 2.95,
+          exitX: pagoda.x + Math.sin(ang) * 3.45,
+          exitZ: pagoda.z + Math.cos(ang) * 3.45,
           ry: ang,
         };
       }

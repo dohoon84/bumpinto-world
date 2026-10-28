@@ -206,35 +206,35 @@ export function animateAvatar(a, speed, dt) {
     if (u.handPhone) u.handPhone.visible = false;
 
     if (sit === 'beanbag') {
-      // 🛋️ 빈백에 푹 기대어 눕듯이 앉기
-      u.rig.position.y = -0.56;
-      u.rig.rotation.x = -0.28;
-      u.legL.position.y = 0.48; u.legL.position.z = 0.26;
-      u.legR.position.y = 0.48; u.legR.position.z = 0.26;
-      u.legL.rotation.x = -1.18;
-      u.legR.rotation.x = -1.12;
+      // 🛋️ 빈백에 푹 기대어 눕듯이 앉기 (다리·발이 지면 위로 자연스럽게 올라오도록 보정)
+      u.rig.position.y = -0.46;
+      u.rig.rotation.x = -0.24;
+      u.legL.position.y = 0.62; u.legL.position.z = 0.28;
+      u.legR.position.y = 0.62; u.legR.position.z = 0.28;
+      u.legL.rotation.x = -1.35;
+      u.legR.rotation.x = -1.30;
       u.armL.rotation.x = -0.55;
       u.armR.rotation.x = -0.65;
     } else if (sit === 'bench' || sit === 'ledge') {
-      // 🪑 벤치 / 분수대 턱 / 정자 쉼터에 걸터앉기
-      u.rig.position.y = sit === 'ledge' ? -0.42 : -0.48;
-      u.legL.position.y = 0.46; u.legL.position.z = 0.22;
-      u.legR.position.y = 0.46; u.legR.position.z = 0.22;
-      u.legL.rotation.x = -1.25 + Math.sin(t * 2.2) * 0.08;
-      u.legR.rotation.x = -1.25 - Math.sin(t * 2.2) * 0.08;
+      // 🪑 벤치(높이 0.44m) / ⛲ 분수대 턱(높이 0.58m)에 걸터앉기
+      u.rig.position.y = sit === 'ledge' ? -0.14 : -0.26;
+      u.legL.position.y = 0.52; u.legL.position.z = 0.24;
+      u.legR.position.y = 0.52; u.legR.position.z = 0.24;
+      u.legL.rotation.x = -1.15 + Math.sin(t * 2.2) * 0.08;
+      u.legR.rotation.x = -1.15 - Math.sin(t * 2.2) * 0.08;
       u.armL.rotation.x = -0.65;
       u.armR.rotation.x = -0.65;
     } else {
-      // 🧘 바닥에 철푸덕 앉기 (또는 대기모드 자동 착석)
+      // 🧘 길바닥에 철푸덕 앉기 (다리가 수평으로 지면 위에 얹혀 땅속으로 묻히지 않게 보정)
       u.rig.position.y = -0.54;
-      u.legL.position.y = 0.46; u.legL.position.z = 0.24;
-      u.legR.position.y = 0.46; u.legR.position.z = 0.24;
-      u.legL.rotation.x = -1.42;
-      u.legR.rotation.x = -1.42;
-      u.legL.rotation.z = -0.18;
-      u.legR.rotation.z = 0.18;
-      u.armL.rotation.x = -0.78;
-      u.armR.rotation.x = -0.78;
+      u.legL.position.y = 0.66; u.legL.position.z = 0.28;
+      u.legR.position.y = 0.66; u.legR.position.z = 0.28;
+      u.legL.rotation.x = -Math.PI / 2;
+      u.legR.rotation.x = -Math.PI / 2;
+      u.legL.rotation.y = -0.18;
+      u.legR.rotation.y = 0.18;
+      u.armL.rotation.x = -0.72;
+      u.armR.rotation.x = -0.72;
       u.armL.rotation.z = (u.armLz ?? -0.28) * 0.6;
       u.armR.rotation.z = (u.armRz ?? 0.28) * 0.6;
     }

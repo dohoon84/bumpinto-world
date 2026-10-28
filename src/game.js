@@ -555,10 +555,22 @@ let myEmoteUntil = 0;
 let emoteCombo = 0;
 let lastEmoteAt = 0;
 let mySit = ''; // '' | 'ground' | 'beanbag' | 'bench' | 'ledge'
+let sitExitPos = null; // 좌석에서 일어날 때 복귀할 안전한 좌표
 let myAfk = false;
 let idleTime = 0;
 let myZzzTimer = 0;
 let nearSeatHint = null;
+
+function standUpFromSeat() {
+  if (!mySit && !sitExitPos) return;
+  if (sitExitPos) {
+    const ty = terrain ? terrain.getGroundHeight(sitExitPos.x, sitExitPos.z, player.position.y) : 0;
+    player.position.set(sitExitPos.x, ty, sitExitPos.z);
+    sitExitPos = null;
+  }
+  mySit = '';
+  player.userData.sit = '';
+}
 
 function syncMyNameTag() {
   const baseName = me.name || '나';
@@ -569,23 +581,22 @@ function syncMyNameTag() {
   }
 }
 
-function noteActivity() {
+function wakeFromAfk() {
   idleTime = 0;
   if (myAfk) {
     myAfk = false;
     syncMyNameTag();
+    renderEmoteBar();
   }
 }
-addEventListener('keydown', noteActivity, { passive: true });
-addEventListener('pointerdown', noteActivity, { passive: true });
 
 function renderEmoteBar() {
   if (!emoteBar) return;
   if (emoteFolded) {
     emoteBar.classList.add('folded');
     emoteBar.innerHTML = `
-      <button type="button" class="emote-fold-btn" data-emote-fold="0" title="리액션·앉기 바 펼치기">
-        <span>🎉 리액션 (1~6) · 🧘 앉기 (C)</span>
+      <button type="button" class="emote-fold-btn" data-emote-fold="0" title="리액션·앉기·자리비움 바 펼치기">
+        <span>🎉 리액션 (1~6) · 🧘 앉기 (C) · 💤 자리비움 (Z)</span>
         <span class="caret">▴</span>
       </button>`;
     return;
@@ -613,6 +624,11 @@ function renderEmoteBar() {
         <span class="em-ico">${sitIcon}</span>
         <span class="em-lbl">${escHtml(sitLabel)}</span>
       </button>
+      <button type="button" class="emote-btn afk-btn ${myAfk ? 'active' : ''}" data-afk-toggle="1" title="자리비움/업무중 모드 전환 (단축키 Z)">
+        <kbd>Z</kbd>
+        <span class="em-ico">💤</span>
+        <span class="em-lbl">${myAfk ? '복귀' : '자리비움'}</span>
+      </button>
       <span class="emote-sep" aria-hidden="true"></span>
       ${btns}
     </div>
@@ -622,11 +638,10 @@ renderEmoteBar();
 
 function toggleSit() {
   if (!joined || board.open) return;
-  noteActivity();
+  wakeFromAfk();
   if (bikes.riding) dismountBike();
   if (mySit) {
-    mySit = '';
-    player.userData.sit = '';
+    standUpFromSeat();
     renderEmoteBar();
     return;
   }
@@ -635,11 +650,16 @@ function toggleSit() {
   player.userData.emote = '';
   const seat = stationPlaza.findSeat?.(player.position.x, player.position.z);
   if (seat) {
+    sitExitPos = {
+      x: seat.exitX ?? player.position.x,
+      z: seat.exitZ ?? player.position.z,
+    };
     const ty = terrain ? terrain.getGroundHeight(seat.x, seat.z, player.position.y) : 0;
     player.position.set(seat.x, ty, seat.z);
     player.rotation.y = seat.ry;
     mySit = seat.kind;
   } else {
+    sitExitPos = null;
     mySit = 'ground';
   }
   player.userData.sit = mySit;
@@ -647,12 +667,51 @@ function toggleSit() {
   renderEmoteBar();
 }
 
+function toggleAfk() {
+  if (!joined || board.open) return;
+  if (bikes.riding) dismountBike();
+  if (myAfk) {
+    myAfk = false;
+    idleTime = 0;
+    standUpFromSeat();
+    syncMyNameTag();
+    renderEmoteBar();
+    return;
+  }
+  myEmote = '';
+  myEmoteUntil = 0;
+  player.userData.emote = '';
+  if (!mySit) {
+    const seat = stationPlaza.findSeat?.(player.position.x, player.position.z);
+    if (seat) {
+      sitExitPos = {
+        x: seat.exitX ?? player.position.x,
+        z: seat.exitZ ?? player.position.z,
+      };
+      const ty = terrain ? terrain.getGroundHeight(seat.x, seat.z, player.position.y) : 0;
+      player.position.set(seat.x, ty, seat.z);
+      player.rotation.y = seat.ry;
+      mySit = seat.kind;
+    } else {
+      sitExitPos = null;
+      mySit = 'ground';
+    }
+    player.userData.sit = mySit;
+  }
+  myAfk = true;
+  idleTime = AFK_TIMEOUT_SEC;
+  myZzzTimer = 0;
+  syncMyNameTag();
+  emoteFx.spawnZzz(player.position);
+  trackEvent('player_afk_toggle', { afk: true });
+  renderEmoteBar();
+}
+
 function triggerEmote(emoteId, sendNet = true) {
   if (!joined || board.open) return;
-  noteActivity();
+  wakeFromAfk();
   if (mySit) {
-    mySit = '';
-    player.userData.sit = '';
+    standUpFromSeat();
   }
   const def = EMOTE_BY_ID[emoteId];
   if (!def) return;
@@ -687,6 +746,12 @@ emoteBar?.addEventListener('click', (e) => {
     sitBtn.blur();
     return;
   }
+  const afkBtn = e.target.closest('[data-afk-toggle]');
+  if (afkBtn) {
+    toggleAfk();
+    afkBtn.blur();
+    return;
+  }
   const btn = e.target.closest('[data-emote-id]');
   if (btn) {
     triggerEmote(btn.dataset.emoteId, true);
@@ -715,10 +780,9 @@ let jumpVel = 0;
 let rideUi = '';
 function triggerJump() {
   if (!joined || board.open) return;
-  noteActivity();
+  wakeFromAfk();
   if (mySit) {
-    mySit = '';
-    player.userData.sit = '';
+    standUpFromSeat();
     renderEmoteBar();
   }
   if (jumpY <= 0.001) {
@@ -749,17 +813,16 @@ function dismountBike() {
 }
 function toggleRide() {
   if (!joined) return;
-  noteActivity();
+  wakeFromAfk();
   if (bikes.riding) { dismountBike(); return; }
   const b = bikes.nearest(player.position.x, player.position.z, undefined, player.position.y);
   if (!b) return;
   jumpY = 0;
   jumpVel = 0;
-  mySit = '';
+  standUpFromSeat();
   myEmote = '';
   myEmoteUntil = 0;
   player.userData.jumpY = 0;
-  player.userData.sit = '';
   player.userData.emote = '';
   renderEmoteBar();
   bikes.mount(b);
@@ -817,6 +880,7 @@ input.onKey = (e) => {
   if (e.code === 'Enter') { e.preventDefault(); chatInput.focus(); }
   if (e.code === 'KeyE' && !e.repeat) toggleRide();
   if (e.code === 'KeyC' && !e.repeat) toggleSit();
+  if (e.code === 'KeyZ' && !e.repeat) toggleAfk();
   if (e.code === 'Space' && !e.repeat) triggerJump();
   const emoteDef = EMOTE_BY_CODE[e.code];
   if (emoteDef) triggerEmote(emoteDef.id, true);
@@ -869,11 +933,10 @@ function frame() {
 
   // 이동. 걸을 때는 카메라 기준, 바이크는 핸들(W 전진 · A/D 회전). 건물 안으로는 못 들어감.
   const { f, s, run, jump } = input.axes();
-  if (dy || dp || dz || f || s || jump) noteActivity();
+  if (dy || dp || dz || f || s || jump) wakeFromAfk();
   if (joined && jump && !board.open && jumpY <= 0.001) {
     if (mySit) {
-      mySit = '';
-      player.userData.sit = '';
+      standUpFromSeat();
       renderEmoteBar();
     }
     jumpVel = bikes.riding ? BIKE_JUMP_V : JUMP_V;
@@ -925,8 +988,7 @@ function frame() {
   } else {
     if (joined && (f || s)) {
       if (mySit) {
-        mySit = '';
-        player.userData.sit = '';
+        standUpFromSeat();
         renderEmoteBar();
       }
       const yaw = cam.mode === 'follow' ? cam.yaw : ov.yaw;
@@ -962,10 +1024,22 @@ function frame() {
       if (!myAfk && idleTime >= AFK_TIMEOUT_SEC) {
         myAfk = true;
         if (!mySit) {
-          mySit = foundSeat ? foundSeat.kind : 'ground';
-          renderEmoteBar();
+          if (foundSeat) {
+            sitExitPos = {
+              x: foundSeat.exitX ?? player.position.x,
+              z: foundSeat.exitZ ?? player.position.z,
+            };
+            const ty = terrain ? terrain.getGroundHeight(foundSeat.x, foundSeat.z, player.position.y) : 0;
+            player.position.set(foundSeat.x, ty, foundSeat.z);
+            player.rotation.y = foundSeat.ry;
+            mySit = foundSeat.kind;
+          } else {
+            sitExitPos = null;
+            mySit = 'ground';
+          }
         }
         syncMyNameTag();
+        renderEmoteBar();
       }
     } else {
       idleTime = 0;
