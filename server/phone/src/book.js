@@ -776,6 +776,7 @@ export class PhoneBook extends DurableObject {
   }
 
   board(input) {
+    this.#migrate();
     const op = String(input?.op || "list");
     const sql = this.ctx.storage.sql;
     if (op === "stats") {
