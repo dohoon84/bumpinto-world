@@ -154,6 +154,7 @@ export function createAvatar({
   g.userData = {
     rig, legL, legR, armL, armR, phase: 0, head, eyeL, eyeR, handPhone, phoneOpen: false,
     eyeY: eyeL.position.y, eyeZ: eyeL.position.z, armLz: armL.rotation.z, armRz: armR.rotation.z,
+    legLy: legL.position.y, legLz: legL.position.z,
   };
   return g;
 }
@@ -179,18 +180,87 @@ export function animateAvatar(a, speed, dt) {
   const jumpY = u.jumpY || 0;
   const jumping = jumpY > 0.02;
   const emote = u.emote || '';
+  const sit = u.sit || '';
+  const afk = !!u.afk;
 
-  // 기본 회전값 초기화
+  // 기본 회전/위치값 초기화
   u.rig.rotation.set(0, 0, 0);
   if (u.head) u.head.rotation.set(0, 0, 0);
   if (u.legL) {
-    u.legL.rotation.y = 0; u.legL.rotation.z = 0;
-    u.legR.rotation.y = 0; u.legR.rotation.z = 0;
+    u.legL.rotation.set(0, 0, 0);
+    u.legR.rotation.set(0, 0, 0);
+    if (u.legLy != null) {
+      u.legL.position.y = u.legLy; u.legL.position.z = u.legLz;
+      u.legR.position.y = u.legLy; u.legR.position.z = u.legLz;
+    }
   }
   if (u.armL) {
-    u.armL.rotation.y = 0;
-    u.armR.rotation.y = 0;
+    u.armL.rotation.set(0, 0, u.armLz ?? 0);
+    u.armR.rotation.set(0, 0, u.armRz ?? 0);
   }
+
+  // 앉기 / 자동 대기모드(자리비움) 포즈
+  if ((sit || afk) && !jumping && !u.cat) {
+    u.sitT = (u.sitT || 0) + dt;
+    const t = u.sitT;
+    if (u.handPhone) u.handPhone.visible = false;
+
+    if (sit === 'beanbag') {
+      // 🛋️ 빈백에 푹 기대어 눕듯이 앉기
+      u.rig.position.y = -0.56;
+      u.rig.rotation.x = -0.28;
+      u.legL.position.y = 0.48; u.legL.position.z = 0.26;
+      u.legR.position.y = 0.48; u.legR.position.z = 0.26;
+      u.legL.rotation.x = -1.18;
+      u.legR.rotation.x = -1.12;
+      u.armL.rotation.x = -0.55;
+      u.armR.rotation.x = -0.65;
+    } else if (sit === 'bench' || sit === 'ledge') {
+      // 🪑 벤치 / 분수대 턱 / 정자 쉼터에 걸터앉기
+      u.rig.position.y = sit === 'ledge' ? -0.42 : -0.48;
+      u.legL.position.y = 0.46; u.legL.position.z = 0.22;
+      u.legR.position.y = 0.46; u.legR.position.z = 0.22;
+      u.legL.rotation.x = -1.25 + Math.sin(t * 2.2) * 0.08;
+      u.legR.rotation.x = -1.25 - Math.sin(t * 2.2) * 0.08;
+      u.armL.rotation.x = -0.65;
+      u.armR.rotation.x = -0.65;
+    } else {
+      // 🧘 바닥에 철푸덕 앉기 (또는 대기모드 자동 착석)
+      u.rig.position.y = -0.54;
+      u.legL.position.y = 0.46; u.legL.position.z = 0.24;
+      u.legR.position.y = 0.46; u.legR.position.z = 0.24;
+      u.legL.rotation.x = -1.42;
+      u.legR.rotation.x = -1.42;
+      u.legL.rotation.z = -0.18;
+      u.legR.rotation.z = 0.18;
+      u.armL.rotation.x = -0.78;
+      u.armR.rotation.x = -0.78;
+      u.armL.rotation.z = (u.armLz ?? -0.28) * 0.6;
+      u.armR.rotation.z = (u.armRz ?? 0.28) * 0.6;
+    }
+
+    if (afk) {
+      // 💤 대기모드: 고개를 꾸벅꾸벅 숙이며 졸기
+      const nod = 0.36 + Math.sin(t * 2.1) * 0.18;
+      if (u.head) {
+        u.head.rotation.x = nod;
+        u.head.rotation.z = Math.sin(t * 1.05) * 0.1;
+      }
+      if (u.eyeL) {
+        u.eyeL.position.y = u.eyeY - 0.04;
+        u.eyeR.position.y = u.eyeY - 0.04;
+        u.eyeL.position.z = u.eyeZ + 0.02;
+        u.eyeR.position.z = u.eyeZ + 0.02;
+      }
+    } else if (u.eyeL) {
+      u.eyeL.position.y = u.eyeY;
+      u.eyeR.position.y = u.eyeY;
+      u.eyeL.position.z = u.eyeZ;
+      u.eyeR.position.z = u.eyeZ;
+    }
+    return;
+  }
+  u.sitT = 0;
 
   if (emote && !u.cat) {
     u.emoteT = (u.emoteT || 0) + dt;

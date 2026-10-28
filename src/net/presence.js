@@ -87,7 +87,9 @@ export class WebSocketPresence extends Emitter {
     if (now - this.lastSent < 1000 / STATE_HZ || this.ws?.readyState !== 1) return;
     const jy = Number(s.jy) || 0;
     const em = s.emote || '';
-    const sig = `${s.x.toFixed(2)},${s.z.toFixed(2)},${s.ry.toFixed(2)},${s.moving ? 1 : 0},${s.riding ? 1 : 0},${jy.toFixed(2)},${em}`;
+    const sit = s.sit || '';
+    const afk = s.afk ? 1 : 0;
+    const sig = `${s.x.toFixed(2)},${s.z.toFixed(2)},${s.ry.toFixed(2)},${s.moving ? 1 : 0},${s.riding ? 1 : 0},${jy.toFixed(2)},${em},${sit},${afk}`;
     if (sig === this.lastSig && now - this.lastSent < 10000) return;
     this.lastSig = sig;
     this.lastSent = now;
@@ -128,6 +130,8 @@ export class MockPresence extends Emitter {
     const dt = 1 / STATE_HZ; this.t += dt;
     // 플레이어 주변을 크게 원을 그리며 서성임 (내 캐릭터가 바이크를 타면 판교러버도 같이 바이크를 타고 달림)
     const riding = !!this.my.riding;
+    const sit = riding ? '' : (this.my.sit || '');
+    const afk = riding ? false : !!this.my.afk;
     if (this.peerEmoteUntil && performance.now() > this.peerEmoteUntil) {
       this.peerEmote = '';
       this.peerEmoteUntil = 0;
@@ -136,15 +140,15 @@ export class MockPresence extends Emitter {
     const spd = riding ? 4.8 : 2.2;
     const tx = cx + Math.cos(this.t * (riding ? 0.45 : 0.25)) * R, tz = cz + Math.sin(this.t * (riding ? 0.45 : 0.25)) * R;
     const dx = tx - this.peer.x, dz = tz - this.peer.z, L = Math.hypot(dx, dz);
-    const step = this.peerEmote && !riding ? 0 : Math.min(L, spd * dt);
+    const step = (this.peerEmote || sit || afk) && !riding ? 0 : Math.min(L, spd * dt);
     const wait = L > 0.05 && this.guard && this.guard(this.peer.x, this.peer.z, dx / L, dz / L);
     if (!wait && L > 0.01 && step > 0) { this.peer.x += (dx / L) * step; this.peer.z += (dz / L) * step; this.peer.ry = Math.atan2(dx, dz); }
-    this.emit('state', { t: 'state', id: this.peer.id, x: this.peer.x, z: this.peer.z, ry: this.peer.ry, moving: !wait && step > 0.05, riding, emote: riding ? '' : (this.peerEmote || '') });
+    this.emit('state', { t: 'state', id: this.peer.id, x: this.peer.x, z: this.peer.z, ry: this.peer.ry, moving: !wait && step > 0.05, riding, emote: riding ? '' : (this.peerEmote || ''), sit, afk });
     this.nextTalk -= dt;
     if (this.nextTalk <= 0) { this.emit('chat', { t: 'chat', id: this.peer.id, text: this.lines[this.li++ % this.lines.length] }); this.nextTalk = 12; }
   }
   setGuard(fn) { this.guard = fn; }
-  sendState(s) { this.my = { x: s.x, z: s.z, riding: !!s.riding }; }
+  sendState(s) { this.my = { x: s.x, z: s.z, riding: !!s.riding, sit: s.sit || '', afk: !!s.afk }; }
   sendChat(text) {
     const reply = /안녕|하이|hi|hello/i.test(text) ? '반가워요! 👋' : /탄천/.test(text) ? '탄천 좋죠! 오리 보러 가요 🦆' : /네이버/.test(text) ? '1784 사옥 로봇 보셨어요?' : 'ㅋㅋㅋ 그러게요!! 🔥';
     setTimeout(() => this.emit('chat', { t: 'chat', id: this.peer.id, text: reply }), 1200);

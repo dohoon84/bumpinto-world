@@ -25,6 +25,8 @@ export class RemotePlayers {
       p.ry = m.ry;
       p.targetJy = Math.max(0, Number(m.jy) || 0);
       p.riding = !!m.riding;
+      p.sit = typeof m.sit === 'string' ? m.sit : '';
+      p.afk = !!m.afk;
       if (typeof m.emote === 'string') {
         p.emote = m.emote;
         if (m.emote) p.emoteUntil = performance.now() + 1500;
@@ -76,10 +78,12 @@ export class RemotePlayers {
       jy: 0,
       targetJy: 0,
       riding: !!peer.riding,
+      sit: peer.sit || '',
+      afk: !!peer.afk,
       wasRiding: false,
     };
-    p.tag = this.overlay.add({ cls: 'tag remote', text: peer.name || '손님', getPos: () => mesh.position.clone().setY(mesh.position.y + 2.05), maxDist: 80 }); // [terrain]
-    p.bubble = new Bubble(this.overlay, 'remote', () => mesh.position.clone().setY(mesh.position.y + 2.7), { name: p.name, color: p.color, id: p.id }); // [terrain]
+    p.tag = this.overlay.add({ cls: 'tag remote', text: peer.name || '손님', getPos: () => mesh.position.clone().setY(mesh.position.y + (p.sit || p.afk ? 1.55 : 2.05)), maxDist: 80 }); // [terrain]
+    p.bubble = new Bubble(this.overlay, 'remote', () => mesh.position.clone().setY(mesh.position.y + (p.sit || p.afk ? 2.15 : 2.7)), { name: p.name, color: p.color, id: p.id }); // [terrain]
     this.peers.set(peer.id, p);
   }
   list() {
@@ -94,6 +98,8 @@ export class RemotePlayers {
         z: p.pos.z,
         ry: p.mesh.rotation.y,
         riding: p.riding,
+        sit: p.sit,
+        afk: p.afk,
       });
     }
     return out;
@@ -142,6 +148,20 @@ export class RemotePlayers {
           p.emoteUntil = 0;
         }
         p.mesh.userData.emote = p.emote || '';
+        p.mesh.userData.sit = p.sit || '';
+        p.mesh.userData.afk = !!p.afk;
+        const wantTag = p.afk ? `${p.name} 💤 자리비움` : p.name;
+        if (p.tag.el.textContent !== wantTag) {
+          p.tag.el.textContent = wantTag;
+          p.tag.el.classList.toggle('is-afk', !!p.afk);
+        }
+        if (p.afk) {
+          p.zzzTimer = (p.zzzTimer || 0) - dt;
+          if (p.zzzTimer <= 0) {
+            p.zzzTimer = 1.6;
+            this.emoteFx?.spawnZzz(p.mesh.position);
+          }
+        }
         animateAvatar(p.mesh, sp, dt);
       }
       p.bubble.tick();

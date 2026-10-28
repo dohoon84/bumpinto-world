@@ -1306,5 +1306,74 @@ export function addStationPlaza(scene, overlay, world) {
     return false;
   }
 
-  return { update, blocks };
+  const emptyBeanbags = BEANBAGS.filter((b) => !b.sitter);
+  const benchTrees = TREE_SPOTS.filter((t) => t[3]).map(([tx, tz]) => ({ x: tx, z: tz }));
+
+  function findSeat(px, pz) {
+    // 1) 빈 빈백 근처 (반경 1.65m 이내)
+    let bestBag = null;
+    let bestBagD = 1.65;
+    for (const b of emptyBeanbags) {
+      const d = Math.hypot(px - b.x, pz - b.z);
+      if (d < bestBagD) {
+        bestBagD = d;
+        bestBag = b;
+      }
+    }
+    if (bestBag) {
+      return { kind: 'beanbag', label: '🛋️ 빈백에 앉기 (C)', x: bestBag.x, z: bestBag.z, ry: bestBag.rot };
+    }
+
+    // 2) 원형 나무 벤치 근처 (나무 중심에서 반경 1.0~2.35m 이내)
+    for (const t of benchTrees) {
+      const dx = px - t.x, dz = pz - t.z;
+      const d = Math.hypot(dx, dz);
+      if (d >= 0.85 && d <= 2.35) {
+        const ang = Math.atan2(dx, dz);
+        return {
+          kind: 'bench',
+          label: '🪑 나무 벤치에 앉기 (C)',
+          x: t.x + Math.sin(ang) * 1.44,
+          z: t.z + Math.cos(ang) * 1.44,
+          ry: ang,
+        };
+      }
+    }
+
+    // 3) 분수대 대리석 둘레 턱 (중심에서 반경 4.6~6.3m 이내)
+    {
+      const dx = px - fountain.x, dz = pz - fountain.z;
+      const d = Math.hypot(dx, dz);
+      if (d >= 4.5 && d <= 6.35) {
+        const ang = Math.atan2(dx, dz);
+        return {
+          kind: 'ledge',
+          label: '⛲ 분수대 턱에 앉기 (C)',
+          x: fountain.x + Math.sin(ang) * 4.95,
+          z: fountain.z + Math.cos(ang) * 4.95,
+          ry: ang,
+        };
+      }
+    }
+
+    // 4) 정자 바둑 쉼터 둘레 난간 벤치
+    {
+      const dx = px - pagoda.x, dz = pz - pagoda.z;
+      const d = Math.hypot(dx, dz);
+      if (d >= 2.2 && d <= 3.7) {
+        const ang = Math.atan2(dx, dz);
+        return {
+          kind: 'bench',
+          label: '🛖 정자 쉼터에 앉기 (C)',
+          x: pagoda.x + Math.sin(ang) * 2.85,
+          z: pagoda.z + Math.cos(ang) * 2.85,
+          ry: ang,
+        };
+      }
+    }
+
+    return null;
+  }
+
+  return { update, blocks, findSeat };
 }
