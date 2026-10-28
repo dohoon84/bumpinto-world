@@ -2,6 +2,7 @@
   "name": "jeongja3d",
   "private": true,
   "version": "0.1.0",
+  "license": "LicenseRef-Bumpinto-Source",
   "type": "module",
   "scripts": {
     "fetch-osm": "bash data/fetch.sh",

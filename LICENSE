@@ -1,26 +1,52 @@
-MIT License with Attribution Requirement (Bumpinto World / CrazyLabs)
+Bumpinto World Source License
+Personal use allowed. Commercial service use prohibited.
+Attribution required. (Bumpinto World / CrazyLabs)
 
-Copyright (c) 2026 김도훈 (CrazyLabs, https://crazylabs.co.kr) and Bumpinto World Contributors
+Copyright (c) 2026 김도훈 (CrazyLabs, https://crazylabs.co.kr)
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+This license applies to original Bumpinto World source code in this
+repository (the "Software"), including files under src/ and server/.
 
-1. The above copyright notice and this permission notice shall be included in all
-   copies or substantial portions of the Software.
+Other licenses stay in force for material that is not this Software:
+- third-party components keep their own licenses, including three.js (MIT);
+- OpenStreetMap-derived data in public/*.json remains under the Open
+  Database License (ODbL) by OpenStreetMap contributors
+  (https://www.openstreetmap.org/copyright).
+This license does not narrow those terms.
 
-2. Attribution Requirement: Any public deployment, hosted version, derivative work,
-   or redistribution of the Software (in whole or in part) must retain visible
-   attribution to "CrazyLabs (https://crazylabs.co.kr)" and "Bumpinto World
-   (https://bumpinto.world)" in the user interface (such as the world gate badge
-   and bottom attribution bar).
+1. Allowed use
+You may use, copy, modify, and run the Software privately, including
+for personal, educational, and internal use. You may redistribute the
+Software and modified versions, and you may run a public deployment,
+only if you comply with sections 2, 3, and 4 and the deployment is not
+a commercial service.
 
-3. Map Data Notice: Derived map data in `public/*.json` is based on OpenStreetMap
-   data and is licensed under the Open Data Commons Open Database License (ODbL)
-   by OpenStreetMap contributors (https://www.openstreetmap.org/copyright).
+2. No commercial service
+You may not use the Software, or a modified or derivative version, to
+provide a commercial service. A commercial service means offering the
+Software's world, client, or backend to third parties for a fee,
+subscription, advertising, sponsorship, or other commercial advantage.
+
+A copy with a different name, region, text, or branding is still
+subject to this section when it contains a substantial part of the
+Software.
+
+This section does not limit 김도훈 (CrazyLabs) from operating or
+licensing the Software, including as a commercial service.
+
+3. Attribution
+The copyright notice and this license must stay with every copy or
+substantial portion of the Software.
+
+A public deployment or derivative work must keep visible attribution
+to "CrazyLabs (https://crazylabs.co.kr)" and "Bumpinto World
+(https://bumpinto.world)" in the user interface, including the world
+gate badge and the bottom attribution bar.
+
+4. Earlier versions
+Copies obtained under the previous "MIT License with Attribution
+Requirement (Bumpinto World / CrazyLabs)" remain under that license.
+This text applies to versions distributed with this file.
 
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,

@@ -1,4 +1,4 @@
-# 🌍 Bumpinto World — Open-Source 3D Real-World Metaverse
+# 🌍 Bumpinto World — Source-Available 3D Real-World Metaverse
 
 > **🌐 Live World**: **[https://bumpinto.world](https://bumpinto.world)**  
 > **🏗️ Created by**: **[CrazyLabs (crazylabs.co.kr)](https://crazylabs.co.kr)** · **📖 [Contributing Guide (English / 한국어)](./CONTRIBUTING.md)**
@@ -28,9 +28,9 @@ npm run dev            # http://localhost:5173 (Node.js 22+ recommended)
 
 ## 🇰🇷 프로젝트 소개 (한국어)
 
-**Bumpinto World**는 실제 도시 데이터(OpenStreetMap)와 실시간 대중교통 API를 결합해 브라우저에서 바로 걸어 다니고, 마주치는 사람들과 대화·문자·커뮤니티를 나누는 **오픈소스 3D 메타버스 월드**입니다.
+**Bumpinto World**는 실제 도시 데이터(OpenStreetMap)와 실시간 대중교통 API를 결합해 브라우저에서 바로 걸어 다니고, 마주치는 사람들과 대화·문자·커뮤니티를 나누는 **소스 공개 3D 메타버스 월드**입니다.
 
-첫 번째 오픈 지역인 **성남시 분당구 정자역(정자동)** 반경 약 900m를 시작으로, **수내역 · 서현역 · 이매역 · 야탑역 · 판교역 · 강남역 · 성수동 · 홍대입구** 등 다음 동네와 랜드마크 건물을 **오픈소스 기여자들과 상부상조하며 함께 확장**하고 있습니다.
+첫 번째 오픈 지역인 **성남시 분당구 정자역(정자동)** 반경 약 900m를 시작으로, **수내역 · 서현역 · 이매역 · 야탑역 · 판교역 · 강남역 · 성수동 · 홍대입구** 등 다음 동네와 랜드마크 건물을 **소스 공개에 참여하는 기여자들과 상부상조하며 함께 확장**하고 있습니다.
 
 ### 🤝 함께 만들기 & 기여자 리워드 (Win-Win)
 혼자서 모든 동네를 다 만들 수 없기에 소스를 공개합니다. PR을 통해 **새 지역(동네) 변환, 3D 랜드마크 건물, 시민 NPC 대사, 주변 맛집**을 추가해 주시면:
@@ -292,6 +292,9 @@ export default {
 - 그림자는 플레이어 주변(걷기)·전체(조감도)만 커버하는 단일 그림자맵이라 조감도에서 그림자가 흐릿합니다.
 
 ## 라이선스 / 출처
+- 자체 코드(`src/`, `server/`)는 [Bumpinto World Source License](./LICENSE)입니다. 개인·학습·내부 실행과 무료 공개는 가능합니다. 이 소스나 그 수정본으로 영리 서비스(유료, 구독, 광고·후원으로 제3자에게 제공하는 월드)를 운영할 수 없습니다.
+- 공개 화면에는 CrazyLabs(https://crazylabs.co.kr)와 Bumpinto World(https://bumpinto.world) 표기를 유지합니다.
+- 이 문구로 바꾸기 전에 받은 복사본은 당시의 MIT License with Attribution Requirement가 적용됩니다.
 - 지도 데이터 © OpenStreetMap contributors, [ODbL](https://www.openstreetmap.org/copyright). 화면 오른쪽 아래에 표시됩니다. `public/jeongja.json`은 ODbL 파생 데이터베이스입니다.
 - three.js (MIT).
 - 노선 유형: 경기버스정보(gbis.go.kr). 버스 도색 색상 출처는 위 "버스 도색 매핑과 출처" 참고. 실시간 데이터(사용 시): 공공데이터포털(data.go.kr) 경기도 버스 API, 공공누리 조건 확인 필요.
