@@ -27,6 +27,7 @@ export class RemotePlayers {
       p.riding = !!m.riding;
       p.sit = typeof m.sit === 'string' ? m.sit : '';
       p.afk = !!m.afk;
+      p.umb = typeof m.umb === 'string' ? m.umb : (m.umb ? 'yellow' : '');
       if (typeof m.emote === 'string') {
         p.emote = m.emote;
         if (m.emote) p.emoteUntil = performance.now() + 1500;
@@ -80,6 +81,7 @@ export class RemotePlayers {
       riding: !!peer.riding,
       sit: peer.sit || '',
       afk: !!peer.afk,
+      umb: typeof peer.umb === 'string' ? peer.umb : (peer.umb ? 'yellow' : ''),
       wasRiding: false,
     };
     p.tag = this.overlay.add({ cls: 'tag remote', text: peer.name || '손님', getPos: () => mesh.position.clone().setY(mesh.position.y + (p.sit || p.afk ? 1.55 : 2.05)), maxDist: 80 }); // [terrain]
@@ -150,6 +152,7 @@ export class RemotePlayers {
         p.mesh.userData.emote = p.emote || '';
         p.mesh.userData.sit = p.sit || '';
         p.mesh.userData.afk = !!p.afk;
+        p.mesh.userData.umbrella = p.umb || '';
         const wantTag = p.afk ? `${p.name} 💤 자리비움` : p.name;
         if (p.tag.el.textContent !== wantTag) {
           p.tag.el.textContent = wantTag;

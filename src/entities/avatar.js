@@ -25,13 +25,146 @@ const geo = {
   sideburn: new THREE.CapsuleGeometry(0.04, 0.2, 2, 6),
   cheekBeard: new THREE.BoxGeometry(0.12, 0.05, 0.055),
   chinBeard: new THREE.BoxGeometry(0.26, 0.08, 0.1),
+  umbShaft: new THREE.CylinderGeometry(0.016, 0.016, 1.38, 8),
+  umbHandle: new THREE.TorusGeometry(0.065, 0.018, 6, 12, Math.PI),
+  umbFerrule: new THREE.ConeGeometry(0.028, 0.09, 8),
+  umbRibHub: new THREE.CylinderGeometry(0.032, 0.032, 0.04, 8),
+  cupBody: new THREE.CylinderGeometry(0.056, 0.042, 0.145, 10),
+  cupSleeve: new THREE.CylinderGeometry(0.052, 0.047, 0.058, 10),
+  cupLid: new THREE.CylinderGeometry(0.06, 0.058, 0.022, 10),
+  cupDome: new THREE.SphereGeometry(0.056, 8, 6, 0, Math.PI * 2, 0, Math.PI * 0.5),
+  cupStraw: new THREE.CylinderGeometry(0.007, 0.007, 0.11, 6),
+  lanyardStrap: new THREE.BoxGeometry(0.022, 0.28, 0.012),
+  lanyardCard: new THREE.BoxGeometry(0.085, 0.11, 0.014),
 };
 const matCache = new Map();
 const M = (c) => { if (!matCache.has(c)) matCache.set(c, new THREE.MeshLambertMaterial({ color: c })); return matCache.get(c); };
 const HAIR = '#2a211c';
 const BEARD = '#4a3428';
+const UMB_SEGMENTS = 8;
+const umbWedgeGeos = Array.from({ length: UMB_SEGMENTS }, (_, i) => {
+  const g = new THREE.SphereGeometry(
+    0.84,
+    3,
+    6,
+    (i * Math.PI * 2) / UMB_SEGMENTS,
+    (Math.PI * 2) / UMB_SEGMENTS,
+    0,
+    Math.PI * 0.44,
+  );
+  g.scale(1, 0.56, 1);
+  return g;
+});
+
+export const UMBRELLA_THEMES = [
+  { id: 'yellow', label: '개나리 노란', color: '#ffd43b', stripeColor: '#fff3bf' },
+  { id: 'red', label: '체리 레드', color: '#ff6b6b', stripeColor: '#ffe3e3' },
+  { id: 'sky', label: '하늘 파란', color: '#339af0', stripeColor: '#d0ebff' },
+  { id: 'mint', label: '에메랄드 민트', color: '#20c997', stripeColor: '#c3fae8' },
+  { id: 'purple', label: '라벤더 보라', color: '#845ef7', stripeColor: '#e5dbff' },
+  { id: 'pink', label: '코랄 핑크', color: '#f06595', stripeColor: '#ffdeeb' },
+  { id: 'orange', label: '오렌지 선셋', color: '#ff922b', stripeColor: '#ffe8cc' },
+  { id: 'navy', label: '클래식 네이비', color: '#1c7ed6', stripeColor: '#a5d8ff' },
+];
+
+export function resolveUmbrellaTheme(val) {
+  if (!val) return UMBRELLA_THEMES[0];
+  if (typeof val === 'object' && val.color) return val;
+  const s = String(val).trim().toLowerCase();
+  const found = UMBRELLA_THEMES.find((t) => t.id === s || t.color.toLowerCase() === s);
+  if (found) return found;
+  if (/^#[0-9a-f]{6}$/i.test(s)) return { id: s, label: '컬러', color: s, stripeColor: '#ffffff' };
+  return UMBRELLA_THEMES[0];
+}
+
+export function createUmbrellaProp({ color = '#ffd43b', stripeColor = '#fff9db', cloneMaterials = false } = {}) {
+  const g = new THREE.Group();
+  const matOf = (c, extra = {}) => {
+    if (cloneMaterials) return new THREE.MeshLambertMaterial({ color: c, ...extra });
+    const key = `umb:${c}:${JSON.stringify(extra)}`;
+    if (!matCache.has(key)) matCache.set(key, new THREE.MeshLambertMaterial({ color: c, ...extra }));
+    return matCache.get(key);
+  };
+
+  // 중봉(기둥) — 손잡이 기준점(0,0,0)에서 위로 뻗음
+  const shaft = new THREE.Mesh(geo.umbShaft, matOf('#d0d7de'));
+  shaft.position.y = 0.65;
+  g.add(shaft);
+
+  // J자 손잡이
+  const handle = new THREE.Mesh(geo.umbHandle, matOf('#5c3d2e'));
+  handle.rotation.z = Math.PI;
+  handle.position.set(-0.065, 0.0, 0);
+  g.add(handle);
+
+  // 우산갓 (8각 투톤 돔)
+  const canopy = new THREE.Group();
+  canopy.position.y = 1.05;
+  const wedges = [];
+  for (let i = 0; i < UMB_SEGMENTS; i++) {
+    const col = i % 2 === 0 ? color : (stripeColor || color);
+    const wedge = new THREE.Mesh(
+      umbWedgeGeos[i],
+      matOf(col, { side: THREE.DoubleSide }),
+    );
+    wedge.castShadow = true;
+    canopy.add(wedge);
+    wedges.push(wedge);
+  }
+  const ferrule = new THREE.Mesh(geo.umbFerrule, matOf('#f59f00'));
+  ferrule.position.y = 0.50;
+  const hub = new THREE.Mesh(geo.umbRibHub, matOf('#2d3436'));
+  hub.position.y = 0.46;
+  canopy.add(ferrule, hub);
+  g.add(canopy);
+  g.userData = { wedges, themeKey: `${color}|${stripeColor}` };
+
+  return g;
+}
+
+export function applyUmbrellaTheme(umbGroup, themeOrVal) {
+  if (!umbGroup?.userData?.wedges) return;
+  const theme = resolveUmbrellaTheme(themeOrVal);
+  const key = `${theme.color}|${theme.stripeColor || theme.color}`;
+  if (umbGroup.userData.themeKey === key) return;
+  umbGroup.userData.themeKey = key;
+  const matOf = (c) => {
+    const mKey = `umb:${c}:{"side":2}`;
+    if (!matCache.has(mKey)) matCache.set(mKey, new THREE.MeshLambertMaterial({ color: c, side: THREE.DoubleSide }));
+    return matCache.get(mKey);
+  };
+  umbGroup.userData.wedges.forEach((w, i) => {
+    const col = i % 2 === 0 ? theme.color : (theme.stripeColor || theme.color);
+    w.material = matOf(col);
+  });
+}
 
 function put(parent, mesh, x, y, z) { mesh.position.set(x, y, z); parent.add(mesh); return mesh; }
+
+export function createCoffeeCupProp(kind = 'iced') {
+  const g = new THREE.Group();
+  const isHot = kind === 'hot' || kind === 'latte';
+  const bodyColor = isHot ? '#f5efe6' : '#6b4423';
+  const sleeveColor = isHot ? '#006241' : '#c49a6c';
+  const cup = new THREE.Mesh(geo.cupBody, M(bodyColor));
+  cup.position.y = 0.072;
+  const sleeve = new THREE.Mesh(geo.cupSleeve, M(sleeveColor));
+  sleeve.position.y = 0.068;
+  g.add(cup, sleeve);
+  if (isHot) {
+    const lid = new THREE.Mesh(geo.cupLid, M('#2d3436'));
+    lid.position.y = 0.15;
+    g.add(lid);
+  } else {
+    const dome = new THREE.Mesh(geo.cupDome, M('#e9f2f7'));
+    dome.position.y = 0.14;
+    const straw = new THREE.Mesh(geo.cupStraw, M('#00704a'));
+    straw.position.set(0.014, 0.185, 0.01);
+    straw.rotation.z = -0.18;
+    g.add(dome, straw);
+  }
+  return g;
+}
 
 function addHair(rig, hair) {
   if (!hair || hair === 'bald') return;
@@ -94,6 +227,7 @@ function addArm(rig, side, halfW, look) {
 export function createAvatar({
   color = '#4f7cff', skin = '#f2d0b0', hat = null, pants = '#3b4252', bag = null, scale = 1,
   gender = 'm', face = 'round', hair = null, glasses = false, beard = 'none', top = 'long',
+  coffee = null, badge = null,
 } = {}) {
   const look = { color, skin, top };
   const female = gender === 'f';
@@ -105,6 +239,16 @@ export function createAvatar({
   body.scale.set(female ? 0.9 : 1.08, 1, female ? 0.92 : 1.02);
   if (top === 'hoodie') { body.scale.x *= 1.06; body.scale.z *= 1.1; }
   rig.add(body);
+
+  if (badge) {
+    const bz = (female ? 0.205 : 0.225) * (top === 'hoodie' ? 1.08 : 1);
+    const strapMat = M( typeof badge === 'string' ? badge : '#03c75a');
+    const sL = put(rig, new THREE.Mesh(geo.lanyardStrap, strapMat), -0.055, 1.18, bz);
+    sL.rotation.z = -0.34;
+    const sR = put(rig, new THREE.Mesh(geo.lanyardStrap, strapMat), 0.055, 1.18, bz);
+    sR.rotation.z = 0.34;
+    put(rig, new THREE.Mesh(geo.lanyardCard, M('#f8f9fa')), 0, 1.0, bz + 0.008);
+  }
 
   const head = new THREE.Mesh(face === 'square' ? geo.headBox : geo.head, M(skin));
   head.position.y = 1.6;
@@ -149,10 +293,26 @@ export function createAvatar({
   handPhone.visible = false;
   rig.add(handPhone);
 
+  const handUmbrella = createUmbrellaProp({ color: '#ffd43b', stripeColor: '#fff3bf' });
+  handUmbrella.position.set(halfW * 0.62 + 0.09, 1.18, 0.24);
+  handUmbrella.rotation.set(0.06, 0, -0.04);
+  handUmbrella.visible = false;
+  rig.add(handUmbrella);
+
+  let handCoffee = null;
+  if (coffee) {
+    handCoffee = createCoffeeCupProp(coffee === true ? 'iced' : coffee);
+    handCoffee.position.set(0.02, -0.68, 0.09);
+    handCoffee.rotation.set(Math.PI * 0.46, 0, -0.18);
+    armL.add(handCoffee);
+  }
+
   rig.traverse((o) => { if (o.isMesh) o.castShadow = true; });
   g.scale.setScalar(scale);
   g.userData = {
     rig, legL, legR, armL, armR, phase: 0, head, eyeL, eyeR, handPhone, phoneOpen: false,
+    handUmbrella, umbrella: false,
+    handCoffee, coffee: coffee || false, coffeePhase: Math.random() * 20, chatting: false,
     eyeY: eyeL.position.y, eyeZ: eyeL.position.z, armLz: armL.rotation.z, armRz: armR.rotation.z,
     legLy: legL.position.y, legLz: legL.position.z,
   };
@@ -198,6 +358,20 @@ export function animateAvatar(a, speed, dt) {
     u.armL.rotation.set(0, 0, u.armLz ?? 0);
     u.armR.rotation.set(0, 0, u.armRz ?? 0);
   }
+  const hasUmb = !!u.umbrella && !u.cat;
+  if (u.handUmbrella) {
+    u.handUmbrella.visible = hasUmb;
+    if (hasUmb) applyUmbrellaTheme(u.handUmbrella, u.umbrella);
+  }
+  const hasCoffee = !!u.coffee && !u.cat && !u.phoneOpen && !emote && !sit && !afk;
+  if (hasCoffee && !u.handCoffee && u.armL) {
+    const cup = createCoffeeCupProp(u.coffee === true ? 'iced' : u.coffee);
+    cup.position.set(0.02, -0.68, 0.09);
+    cup.rotation.set(Math.PI * 0.46, 0, -0.18);
+    u.armL.add(cup);
+    u.handCoffee = cup;
+  }
+  if (u.handCoffee) u.handCoffee.visible = hasCoffee;
 
   // 앉기 / 자동 대기모드(자리비움) 포즈
   if ((sit || afk) && !jumping && !u.cat) {
@@ -214,7 +388,7 @@ export function animateAvatar(a, speed, dt) {
       u.legL.rotation.x = -1.35;
       u.legR.rotation.x = -1.30;
       u.armL.rotation.x = -0.55;
-      u.armR.rotation.x = -0.65;
+      u.armR.rotation.x = hasUmb ? -1.15 : -0.65;
     } else if (sit === 'bench' || sit === 'ledge') {
       // 🪑 벤치(높이 0.44m) / ⛲ 분수대 턱(높이 0.58m)에 걸터앉기
       u.rig.position.y = sit === 'ledge' ? -0.14 : -0.26;
@@ -223,7 +397,7 @@ export function animateAvatar(a, speed, dt) {
       u.legL.rotation.x = -1.15 + Math.sin(t * 2.2) * 0.08;
       u.legR.rotation.x = -1.15 - Math.sin(t * 2.2) * 0.08;
       u.armL.rotation.x = -0.65;
-      u.armR.rotation.x = -0.65;
+      u.armR.rotation.x = hasUmb ? -1.18 : -0.65;
     } else {
       // 🧘 길바닥에 철푸덕 앉기 (다리가 수평으로 지면 위에 얹혀 땅속으로 묻히지 않게 보정)
       u.rig.position.y = -0.54;
@@ -234,9 +408,9 @@ export function animateAvatar(a, speed, dt) {
       u.legL.rotation.y = -0.18;
       u.legR.rotation.y = 0.18;
       u.armL.rotation.x = -0.72;
-      u.armR.rotation.x = -0.72;
+      u.armR.rotation.x = hasUmb ? -1.18 : -0.72;
       u.armL.rotation.z = (u.armLz ?? -0.28) * 0.6;
-      u.armR.rotation.z = (u.armRz ?? 0.28) * 0.6;
+      u.armR.rotation.z = hasUmb ? 0.14 : (u.armRz ?? 0.28) * 0.6;
     }
 
     if (afk) {
@@ -366,13 +540,32 @@ export function animateAvatar(a, speed, dt) {
   } else if (u.armL) {
     if (u.handPhone) u.handPhone.visible = false;
     if (jumping) {
-      u.armL.rotation.x = -0.65; u.armR.rotation.x = -0.65;
-      u.armL.rotation.z = u.armLz - 0.38; u.armR.rotation.z = u.armRz + 0.38;
+      u.armL.rotation.x = -0.65; u.armR.rotation.x = hasUmb ? -1.35 : -0.65;
+      u.armL.rotation.z = u.armLz - 0.38; u.armR.rotation.z = hasUmb ? 0.14 : (u.armRz + 0.38);
+      if (u.head) u.head.rotation.x = 0;
+    } else if (u.chatting && speed <= 0.08) {
+      u.coffeePhase = (u.coffeePhase || 0) + dt;
+      const ct = u.coffeePhase;
+      const sip = hasCoffee ? Math.max(0, Math.sin(ct * 0.72) - 0.65) / 0.35 : 0;
+      u.armL.rotation.x = hasCoffee ? (-1.02 - sip * 0.56 + Math.sin(ct * 2.4) * 0.06) : (-0.42 + Math.sin(ct * 3.1) * 0.25);
+      u.armL.rotation.z = hasCoffee ? (0.16 + sip * 0.22) : (u.armLz - Math.abs(Math.cos(ct * 2.3)) * 0.18);
+      u.armR.rotation.x = hasUmb ? -1.22 : (-0.52 + Math.sin(ct * 3.6 + 1.2) * 0.32);
+      u.armR.rotation.z = hasUmb ? 0.14 : (u.armRz + Math.cos(ct * 2.8) * 0.16);
+      if (u.head) {
+        u.head.rotation.x = sip > 0.1 ? (-0.16 * sip) : (Math.sin(ct * 3.4) * 0.09);
+        u.head.rotation.y = Math.sin(ct * 1.6) * 0.18;
+      }
+      u.rig.rotation.y = Math.sin(ct * 1.1) * 0.07;
     } else {
-      u.armL.rotation.x = -s * 0.8; u.armR.rotation.x = s * 0.8;
-      u.armL.rotation.z = u.armLz; u.armR.rotation.z = u.armRz;
+      u.coffeePhase = (u.coffeePhase || 0) + dt;
+      const ct = u.coffeePhase;
+      const sip = hasCoffee ? Math.max(0, Math.sin(ct * 0.62) - 0.75) / 0.25 : 0;
+      u.armL.rotation.x = hasCoffee ? (-0.96 - sip * 0.54 + s * 0.18) : (-s * 0.8);
+      u.armR.rotation.x = hasUmb ? (-1.22 + s * 0.12) : (s * 0.8);
+      u.armL.rotation.z = hasCoffee ? (0.15 + sip * 0.2) : u.armLz;
+      u.armR.rotation.z = hasUmb ? 0.14 : u.armRz;
+      if (u.head) u.head.rotation.x = sip > 0.1 ? (-0.14 * sip) : 0;
     }
-    if (u.head) u.head.rotation.x = 0;
     if (u.eyeL) {
       u.eyeL.position.y = u.eyeY; u.eyeR.position.y = u.eyeY;
       u.eyeL.position.z = u.eyeZ; u.eyeR.position.z = u.eyeZ;
@@ -402,6 +595,8 @@ export function animateRide(a, speed, dt) {
   u.armL.rotation.x = -1.15; u.armR.rotation.x = -1.15;
   u.armL.rotation.z = b.alz * 0.45; u.armR.rotation.z = b.arz * 0.45;
   if (u.handPhone) u.handPhone.visible = false;
+  if (u.handUmbrella) u.handUmbrella.visible = false;
+  if (u.handCoffee) u.handCoffee.visible = false;
   if (u.head) u.head.rotation.x = 0;
   if (u.eyeL && u.eyeY != null) {
     u.eyeL.position.y = u.eyeY; u.eyeR.position.y = u.eyeY;

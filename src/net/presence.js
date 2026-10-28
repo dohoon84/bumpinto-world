@@ -89,7 +89,8 @@ export class WebSocketPresence extends Emitter {
     const em = s.emote || '';
     const sit = s.sit || '';
     const afk = s.afk ? 1 : 0;
-    const discreteSig = `${s.riding ? 1 : 0},${em},${sit},${afk}`;
+    const umb = s.umb || '';
+    const discreteSig = `${s.riding ? 1 : 0},${em},${sit},${afk},${umb}`;
     const discreteChanged = discreteSig !== this.lastDiscreteSig;
     if (!force && !discreteChanged && now - this.lastSent < 1000 / STATE_HZ) return;
     const sig = `${s.x.toFixed(2)},${s.z.toFixed(2)},${s.ry.toFixed(2)},${s.moving ? 1 : 0},${discreteSig},${jy.toFixed(2)}`;

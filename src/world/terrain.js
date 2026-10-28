@@ -111,6 +111,13 @@ export function createTerrain(T, data) {
     }
     return best;
   }
+  function addDeckSegment({ ax: x0, az: z0, bx: x1, bz: z1, hw = 1.6, hw0 = null, hw1 = null, h = -6.0, h0 = null, h1 = null }) {
+    const pad = Math.max(hw, hw0 || 0, hw1 || 0);
+    const item = { ax: x0, az: z0, bx: x1, bz: z1, hw: pad, hw0, hw1, h, h0, h1, custom: true };
+    decks.push(item);
+    deckGrid.add(item, Math.min(x0, x1) - pad, Math.min(z0, z1) - pad, Math.max(x0, x1) + pad, Math.max(z0, z1) + pad);
+    return item;
+  }
   // 걸을 수 있는 표면 높이. refY(현재 높이)보다 너무 높은 다리 상판은 무시 -> 다리 밑 둔치를 걸을 수 있음
   function getGroundHeight(x, z, refY = Infinity) {
     let h; const st = stairAt(x, z);
@@ -319,7 +326,7 @@ export function createTerrain(T, data) {
 
     // 4) 다리 구조물: 상판 두께 + 교각 + 난간 (도로 리본은 world.js 가 그대로 그림)
     const slab = [], pier = [], para = [];
-    const bridgeRoads = [...new Set(decks.map((d) => d.road))];
+    const bridgeRoads = [...new Set(decks.map((d) => d.road).filter(Boolean))];
     function buildArched(r) {
       const th = 0.5, pts = r.p;
       for (let i = 1; i < pts.length; i++) {
@@ -430,5 +437,5 @@ export function createTerrain(T, data) {
     }
     return pts.length > 6 ? pts : null;
   }
-  return { params: P, baseHeight, renderHeight, getGroundHeight, groundY: getGroundHeight, canMove, annotate, build, stairs, decks, project, riversideRoute, bankPath, stairAt, grade };
+  return { params: P, baseHeight, renderHeight, getGroundHeight, groundY: getGroundHeight, canMove, annotate, build, stairs, decks, addDeckSegment, project, riversideRoute, bankPath, stairAt, grade };
 }

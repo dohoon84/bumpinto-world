@@ -12,6 +12,87 @@ const smooth = (e0, e1, x) => {
   return t * t * (3 - 2 * t);
 };
 
+// URL 쿼리(?weather=drizzle|rain|shower|heavy|storm|snow|fog|cloudy|partly|clear, ?wind=숫자, ?temp=숫자, ?hour=0~23)로 날씨·시각 강제 지정
+const WEATHER_PRESETS = {
+  clear: { code: 0, cloud: 5, precip: 0, temp: 18, wind: 2 },
+  sunny: { code: 0, cloud: 5, precip: 0, temp: 18, wind: 2 },
+  partly: { code: 2, cloud: 45, precip: 0, temp: 16, wind: 3 },
+  cloudy: { code: 3, cloud: 88, precip: 0, temp: 14, wind: 4 },
+  fog: { code: 45, cloud: 95, precip: 0, temp: 11, wind: 2 },
+  drizzle: { code: 53, cloud: 78, precip: 0.4, temp: 13, wind: 4 },
+  rain: { code: 61, cloud: 88, precip: 1.0, temp: 12, wind: 8 },
+  shower: { code: 80, cloud: 85, precip: 1.2, temp: 14, wind: 10 },
+  heavy: { code: 65, cloud: 98, precip: 4.5, temp: 11, wind: 18 },
+  storm: { code: 95, cloud: 100, precip: 6.0, temp: 11, wind: 22 },
+  snow: { code: 73, cloud: 90, precip: 1.5, temp: -2, wind: 6 },
+};
+
+function forcedWeatherFromUrl() {
+  if (typeof location === 'undefined') return null;
+  const params = new URLSearchParams(location.search);
+  const w = params.get('weather')?.trim().toLowerCase();
+  if (!w) return null;
+  let base = WEATHER_PRESETS[w];
+  if (!base && /^\d+$/.test(w)) {
+    const code = Number(w);
+    base = {
+      code,
+      cloud: code >= 51 ? 90 : code >= 2 ? 65 : 10,
+      precip: code >= 63 || code >= 95 ? 3.5 : code >= 51 ? 1.0 : 0,
+      temp: (code >= 71 && code <= 77) || code === 85 || code === 86 ? -2 : 13,
+      wind: code >= 63 || code >= 95 ? 16 : 6,
+    };
+  }
+  if (!base) return null;
+  const windParam = params.get('wind');
+  const tempParam = params.get('temp');
+  return {
+    ...base,
+    wind: windParam != null && windParam !== '' && Number.isFinite(Number(windParam)) ? Number(windParam) : base.wind,
+    temp: tempParam != null && tempParam !== '' && Number.isFinite(Number(tempParam)) ? Number(tempParam) : base.temp,
+  };
+}
+
+let manualHour = null;
+
+function forcedHourFromUrl() {
+  if (manualHour != null && Number.isFinite(Number(manualHour))) {
+    return clamp(Number(manualHour), 0, 23.99);
+  }
+  if (typeof location === 'undefined') return null;
+  const params = new URLSearchParams(location.search);
+  const h = params.get('hour');
+  if (h != null && h !== '' && Number.isFinite(Number(h))) {
+    return clamp(Number(h), 0, 23.99);
+  }
+  const rush = params.get('rush')?.trim().toLowerCase();
+  if (rush === 'morning' || rush === 'commute' || rush === 'in') return 8.5;
+  if (rush === 'lunch' || rush === 'noon') return 12.5;
+  if (rush === 'evening' || rush === 'out') return 18.5;
+  const ev = params.get('evening');
+  if (ev === '0' || ev === 'off' || ev === 'day') return 14;
+  if (ev === '1' || ev === 'on' || ev === 'night') return 21;
+  if (ev === 'dusk' || ev === 'sunset') return 18.25;
+  if (ev === 'dawn') return 5.5;
+  return null;
+}
+
+export function rushPeriod(hour) {
+  if (hour >= 7 && hour < 10) return 'morning';
+  if (hour >= 11 && hour < 14) return 'lunch';
+  if (hour >= 17 && hour < 20) return 'evening';
+  return 'normal';
+}
+
+function effectiveDate(now = new Date()) {
+  const fh = forcedHourFromUrl();
+  if (fh == null) return now;
+  const { hour, minute } = seoulClock(now);
+  const currentHours = hour + minute / 60;
+  const diffMs = (fh - currentHours) * 3600 * 1000;
+  return new Date(now.getTime() + diffMs);
+}
+
 // 태양 고도(alt)·방위(az, 북=0, 시계방향). x=동, z=남.
 export function solarPosition(date) {
   const days = date.getTime() / 86400000 + 2440587.5 - 2451545.0;
@@ -207,7 +288,12 @@ export function createAtmosphere({ scene, sun, hemi, skyGeo, getMode, clock }) {
     const phrase = state.live ? weatherPhrase(state.code) : '맑음';
     const shown = weatherWithTemp(phrase, state.live ? state.temp : null);
     const part = dayPart(hour, alt);
-    const label = `${part} ${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')} · ${shown}`;
+    const rush = rushPeriod(hour);
+    const rushBadge = rush === 'morning' ? ' · 🚇 출근' : rush === 'lunch' ? ' · ☕ 점심' : rush === 'evening' ? ' · 🌇 퇴근' : '';
+    const label = `${part} ${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')} · ${shown}${rushBadge}`;
+    state.hour = hour;
+    state.minute = minute;
+    state.rush = rush;
     state.alt = alt;
     state.part = part;
     const nightPart = eveningFromPart(part);
@@ -262,6 +348,16 @@ export function createAtmosphere({ scene, sun, hemi, skyGeo, getMode, clock }) {
   }
 
   async function pull() {
+    const forced = forcedWeatherFromUrl();
+    if (forced) {
+      state.code = forced.code;
+      state.cloud = forced.cloud;
+      state.precip = forced.precip;
+      state.temp = forced.temp;
+      state.wind = forced.wind;
+      state.live = true;
+      return;
+    }
     try {
       const res = await fetch(FORECAST, { cache: 'no-store' });
       if (!res.ok) throw new Error(String(res.status));
@@ -284,17 +380,50 @@ export function createAtmosphere({ scene, sun, hemi, skyGeo, getMode, clock }) {
     }
   }
 
+  function setWeather(presetOrOpts) {
+    if (!presetOrOpts) return;
+    const base = typeof presetOrOpts === 'string'
+      ? (WEATHER_PRESETS[presetOrOpts.toLowerCase()] || WEATHER_PRESETS.clear)
+      : presetOrOpts;
+    if (base.code != null) state.code = Number(base.code) || 0;
+    if (base.cloud != null) state.cloud = Number(base.cloud) || 0;
+    if (base.precip != null) state.precip = Number(base.precip) || 0;
+    if ('temp' in base) state.temp = base.temp == null ? null : Number(base.temp);
+    if (base.wind != null) state.wind = Number(base.wind) || 0;
+    state.live = true;
+  }
+
+  function setHour(h) {
+    manualHour = h == null || h === 'live' ? null : clamp(Number(h), 0, 23.99);
+    apply(effectiveDate(), null, 0);
+  }
+
+  if (clock) {
+    clock.style.cursor = 'pointer';
+    clock.title = '클릭하여 시간대 전환 (실시간 → 08:30 출근 → 12:30 점심 → 18:30 퇴근 → 21:30 밤)';
+    const cycle = [null, 8.5, 12.5, 18.5, 21.5];
+    let cIdx = 0;
+    clock.addEventListener('click', () => {
+      cIdx = (cIdx + 1) % cycle.length;
+      setHour(cycle[cIdx]);
+    });
+  }
+
   pull();
   setInterval(pull, 10 * 60 * 1000);
-  apply(new Date(), null, 0);
+  apply(effectiveDate(), null, 0);
 
   return {
     sunDir,
     state,
-    update(dt, camera) { apply(new Date(), camera, dt || 0); },
+    setWeather,
+    setHour,
+    presets: WEATHER_PRESETS,
+    update(dt, camera) { apply(effectiveDate(), camera, dt || 0); },
     sample(date) {
-      const { alt, az } = solarPosition(date);
-      const clock = seoulClock(date);
+      const d = date || effectiveDate();
+      const { alt, az } = solarPosition(d);
+      const clock = seoulClock(d);
       return { alt, az, day: dayPart(clock.hour, alt), ...clock };
     },
   };

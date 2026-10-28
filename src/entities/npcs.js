@@ -120,22 +120,56 @@ function ringCenter(ring) {
   return { x: x / ring.length, z: z / ring.length };
 }
 
-// 이름 있는 주민 뒤에 붙는 전역 행인. 대사는 짧은 묶음을 나눠 쓰고, 이름은 겹치지 않게 짓는다.
-export const CROWD_EXTRA = 100;
-const CROWD_LINES = [
-  '오늘은 그냥 동네 한 바퀴 도는 중이에요.',
-  '이 골목은 오후에 그늘이 좋아서 자주 걸어요.',
-  '신호 보고 건너요. 큰길은 차가 빨라요.',
-  '탄천 쪽 바람이 여기까지 올라와요.',
-  '점심이면 인도에 사람이 많아져요.',
-  '버스 시간이 애매해서 걷고 있어요.',
-  '편의점 들렀다 집으로 가는 길이에요.',
-  '정자동은 블록마다 분위기가 달라요.',
-  '해 지면 가로등이 먼저 켜져요.',
-  '공원 벤치까지 갔다 돌아올게요.',
-  '오피스 쪽은 퇴근 시간에 인도가 붐벼요.',
-  '아파트 단지는 안쪽 길이 조용해요.',
+// 탄천 동쪽 아파트(어른+아이)와 둔치 산책은 항상 두고, 역 서쪽 오피스는 출퇴근·점심에만 더한다.
+export const CROWD_APT = 300;
+export const CROWD_RIVER = 40;
+export const CROWD_OFFICE = 290;
+export const CROWD_BASE = CROWD_APT + CROWD_RIVER;
+export const CROWD_RUSH = CROWD_OFFICE;
+export const CROWD_EXTRA = CROWD_APT + CROWD_RIVER + CROWD_OFFICE;
+const OFFICE_LINES = [
+  '점심 먹으러 타워 밖으로 나왔어요. 인도에 사람이 가득해요.',
+  '아이스 아메리카노 들고 회의 전에 한 바퀴 도는 중이에요.',
+  '정자역 뒤쪽은 12시만 되면 커피 들고 이야기하는 사람들예요.',
+  '동료랑 잠깐 서서 이야기하고 들어갈게요.',
+  '출근길은 성남대로보다 이 골목이 덜 막혀요.',
+  '퇴근하면 여기서 정자역까지 걸어 나가요.',
+  '오늘 점심은 백궁 쪽에서 줄이 길어서 걸어서 나왔어요.',
+  '사원증 찍고 나와서 바람 좀 쐬고 있어요.',
+  '엘리베이터를 포기하고 계단으로 점심을 나왔어요.',
+  '커피 한 잔이면 오후 회의가 버텨져요.',
 ];
+const HOME_LINES = [
+  '회사에서 단지까지 걸어 들어왔어요.',
+  '아이 하교 시간에 맞춰 나왔어요.',
+  '탄천 건너 회사까지는 이 길이 익숙해요.',
+  '저녁에 단지 한 바퀴 도는 중이에요.',
+  '장보고 엘리베이터 기다리는 길이에요.',
+  '주말에 탄천으로 산책 나가요.',
+  '단지 안은 오후에 아이들이 많아요.',
+  '출근할 때는 탄천 쪽으로 걸어 나가요.',
+];
+const KID_LINES = [
+  '학교 끝나고 단지 안에서 친구랑 놀고 있어요.',
+  '엄마가 회사 갔다 오시면 같이 저녁 먹어요.',
+  '탄천까지 걸어가면 오리 볼 수 있어요.',
+  '아파트 놀이터에서 한 바퀴만 더 돌게요.',
+  '가방이 무거워서 천천히 걸어가요.',
+  '동생이랑 편의점 갔다 오는 길이에요.',
+  '학원 가기 전에 친구랑 이야기하는 중이에요.',
+];
+const RIVER_LINES = [
+  '탄천 따라 걷다 보면 바람이 시원해요.',
+  '둔치에 산책하는 사람이 많아요.',
+  '다리 밑까지 갔다 단지 쪽으로 올라갈게요.',
+  '오리들 피해서 천천히 걸어요.',
+  '회사에서 나와 강변으로 한 바퀴 돌아요.',
+  '아이랑 둔치까지 내려왔어요.',
+];
+const CUPS = ['iced', 'latte', 'hot'];
+const BADGES = ['#03c75a', '#1e3a5f', '#243044', '#006241', '#c0392b'];
+const PLAZA_X = -74;
+const PLAZA_Z = 34;
 const FAMILY = [...'김이박최정강조윤장임한오서신권황안송전홍'];
 const GIVEN_M = ['서준', '예준', '도현', '시윤', '주원', '건호', '민성', '현준', '우진', '승우', '지호', '준서', '은우', '준혁', '태양', '민규', '성민', '하율', '윤호', '재원', '승민', '동현', '정우', '시온', '규민', '태윤', '민석', '준영', '승현', '지환', '우빈', '현석', '도하', '시완', '재호', '강민', '성준', '지성', '민찬', '준우', '태현', '서우', '도겸', '시후', '은찬', '주호', '이현', '경민', '승호', '도준'];
 const GIVEN_F = ['서윤', '하윤', '지유', '채윤', '수빈', '다은', '예원', '소율', '아린', '윤아', '채아', '하림', '지안', '수연', '예진', '다인', '소민', '하영', '채린', '서희', '윤서', '지혜', '수민', '예빈', '다현', '소희', '채은', '서진', '윤지', '지수', '예슬', '다영', '소윤', '채민', '서영', '윤하', '수현', '예림', '다온', '소이', '서율', '윤채', '지율', '채이', '하빈', '나경', '예서', '다혜', '소정', '주아'];
@@ -147,34 +181,57 @@ const HAIR_F = ['long', 'pony', 'medium', 'long', 'short'];
 const TOPS = ['long', 'short', 'hoodie'];
 const FACES = ['round', 'square', 'long'];
 
-function crowdDef(i) {
+function inPlaza(x, z) {
+  const dx = x - PLAZA_X, dz = z - PLAZA_Z;
+  return dx * dx + dz * dz < 36 * 36;
+}
+function isOfficeCore(x, z) {
+  return x <= -58 && x >= -230 && z >= -200 && z <= 300;
+}
+function isBackBlock(x, z) {
+  return x <= -48 && x >= -370 && z >= -620 && z <= 920;
+}
+function crowdDef(i, zone, asChild) {
   const female = i % 2 === 1;
-  const given = (female ? GIVEN_F : GIVEN_M)[Math.floor(i / 2) % 50];
+  const office = zone === 'office';
+  const apt = zone === 'apt';
+  const river = zone === 'river';
+  const child = !!asChild || (apt && i % 5 < 2) || (river && i % 4 === 0);
+  const given = (child ? (female ? GIVEN_F : GIVEN_M) : (female ? GIVEN_F : GIVEN_M))[Math.floor(i / 2) % 50];
+  const coffee = !child && ((office && i % 5 < 2) || (apt && i % 8 === 0)) ? CUPS[i % 3] : null;
+  const badge = !child && ((office && i % 3 !== 2) || (apt && i % 5 === 1)) ? BADGES[i % BADGES.length] : null;
+  const social = child ? i % 3 !== 2 : office ? i % 4 < 2 : (apt && i % 6 === 0) || (river && i % 5 === 1);
+  const lines = child ? KID_LINES : office ? OFFICE_LINES : river ? RIVER_LINES : HOME_LINES;
   return {
     name: FAMILY[i % FAMILY.length] + given,
     crowd: true,
-    speed: 0.75 + (i % 8) * 0.12,
-    lines: CROWD_LINES,
+    role: office ? 'office' : zone,
+    child,
+    social,
+    speed: child ? 0.95 + (i % 5) * 0.12 : (social ? 0.78 : 0.9) + (i % 8) * 0.1,
+    lines,
     look: {
       color: SHIRTS[i % SHIRTS.length],
       pants: PANTS[(i * 5) % PANTS.length],
       skin: SKINS[(i * 3) % SKINS.length],
       gender: female ? 'f' : 'm',
       face: FACES[i % FACES.length],
-      hair: (female ? HAIR_F : HAIR_M)[i % 5],
-      top: TOPS[i % TOPS.length],
-      glasses: i % 7 === 0,
-      beard: !female && i % 11 === 0 ? 'full' : !female && i % 13 === 0 ? 'goatee' : 'none',
-      hat: i % 8 === 3 ? SHIRTS[(i + 5) % SHIRTS.length] : null,
-      bag: i % 4 === 0 ? '#2d3436' : null,
-      scale: 0.94 + (i % 5) * 0.03,
+      hair: child ? (female ? HAIR_F : HAIR_M)[i % 3] : (female ? HAIR_F : HAIR_M)[i % 5],
+      top: child ? (i % 2 ? 'hoodie' : 'short') : TOPS[i % TOPS.length],
+      glasses: !child && (i % 6 === 0 || !!badge),
+      beard: child || female ? 'none' : i % 11 === 0 ? 'full' : i % 13 === 0 ? 'goatee' : 'none',
+      hat: child || badge ? null : (i % 8 === 3 ? SHIRTS[(i + 5) % SHIRTS.length] : null),
+      bag: child ? (i % 2 === 0 ? '#3d5a80' : null) : (i % 4 === 0 ? '#2d3436' : null),
+      scale: child ? 0.62 + (i % 4) * 0.035 : 0.94 + (i % 5) * 0.03,
+      coffee,
+      badge,
     },
   };
 }
 
 export class NPCs {
-  constructor(scene, overlay, world, data, { count = NPC_DEFS.length + CROWD_EXTRA, seed = 7 } = {}) {
-    this.list = []; this.world = world;
+  constructor(scene, overlay, world, data, { count = NPC_DEFS.length + CROWD_EXTRA, seed = 7, terrain = null } = {}) {
+    this.list = []; this.world = world; this.terrain = terrain; this.rush = false; this.shown = 0;
     let sd = seed; const rnd = () => ((sd = (sd * 16807) % 2147483647) / 2147483647);
     const st = data.station;
     const near = (p, x, z) => Math.min(...p.pts.map(([px, pz]) => Math.hypot(px - x, pz - z)));
@@ -225,7 +282,7 @@ export class NPCs {
       }
       const mesh = def.cat ? createCat(def.look) : createAvatar(def.look);
       scene.add(mesh);
-      const npc = { def, mesh, path, len, lo, hi, s: s0, dir: rnd() < 0.5 ? -1 : 1, pos: new THREE.Vector3(), lineIdx: Math.floor(rnd() * def.lines.length), talking: false, cooldown: 0, pause: 0 };
+      const npc = { def, mesh, path, len, lo, hi, s: s0, dir: rnd() < 0.5 ? -1 : 1, pos: new THREE.Vector3(), lineIdx: Math.floor(rnd() * def.lines.length), talking: false, cooldown: 0, pause: 0, active: true };
       const head = () => npc.pos.clone().setY(npc.pos.y + (def.cat ? 0.9 : 2.25)); // [terrain] 높이 상대
       npc.tag = overlay.add({ cls: 'tag npc', text: def.name, getPos: () => npc.pos.clone().setY(npc.pos.y + (def.cat ? 0.75 : 2.05)), maxDist: 45 }); // [terrain]
       npc.bubble = new Bubble(overlay, 'npc', () => head().setY(head().y + 0.45), { name: def.name });
@@ -240,109 +297,201 @@ export class NPCs {
     const gy = this.world.groundY?.(x, z, 0);
     return gy != null && gy < -6.35;
   }
-  // 보도 옆으로 비켜 선 점 중, 건물·수면이 아닌 구간만 왕복 범위로 잡는다.
-  _crowdSpot(base, rnd, cell, cellOf, bb, minSpan) {
+  // 역 서쪽 오피스 블록은 보행로가 짧아서, 건물 앞 인도 구간을 따로 만든다.
+  _frontagePaths(data) {
+    const out = [];
+    const world = this.world;
+    for (const b of data.buildings) {
+      if ((b.mh || 0) >= 2.5 || !b.o || b.o.length < 4) continue;
+      let x0 = Infinity, z0 = Infinity, x1 = -Infinity, z1 = -Infinity;
+      for (const [x, z] of b.o) {
+        if (x < x0) x0 = x;
+        if (x > x1) x1 = x;
+        if (z < z0) z0 = z;
+        if (z > z1) z1 = z;
+      }
+      const cx = (x0 + x1) / 2, cz = (z0 + z1) / 2;
+      const back = isBackBlock(cx, cz);
+      if (!back && b.k !== 'commercial' && b.k !== 'office' && b.k !== 'retail') continue;
+      let cur = [];
+      const commit = () => {
+        if (polyLen(cur) >= 12) out.push({ pts: cur, offset: 0, side: 1, kind: 'footway', bridge: false, frontage: true });
+        cur = [];
+      };
+      for (let i = 0; i < b.o.length; i++) {
+        const [ax, az] = b.o[i], [bx, bz] = b.o[(i + 1) % b.o.length];
+        const L = Math.hypot(bx - ax, bz - az);
+        if (L < 3) continue;
+        const dx = (bx - ax) / L, dz = (bz - az) / L;
+        let nx = -dz, nz = dx;
+        const mx = (ax + bx) / 2, mz = (az + bz) / 2;
+        if ((mx + nx - cx) * (mx - cx) + (mz + nz - cz) * (mz - cz) < 0) { nx = -nx; nz = -nz; }
+        for (let u = 1.2; u <= L - 1.2; u += 3.6) {
+          let placed = null;
+          for (const gap of [2.1, 3.1, 1.5]) {
+            const px = ax + dx * u + nx * gap, pz = az + dz * u + nz * gap;
+            if (inPlaza(px, pz) || world.onRoad(px, pz) || world.isBlocked(px, pz, 0.4) || this._wet(px, pz, false)) continue;
+            placed = [px, pz, 0];
+            break;
+          }
+          if (!placed) { commit(); continue; }
+          const prev = cur[cur.length - 1];
+          if (prev && Math.hypot(placed[0] - prev[0], placed[1] - prev[1]) > 9) commit();
+          cur.push(placed);
+        }
+      }
+      commit();
+    }
+    return out;
+  }
+  _collectSpots(base, bb, push) {
     const len = polyLen(base.pts);
-    const step = 5;
+    if (len < (base.frontage ? 12 : 18)) return;
     const sides = base.offset ? [1, -1] : [1];
-    let best = null;
+    const tmp = {};
     for (const side of sides) {
       const path = { ...base, side };
       const samples = [];
-      const tmp = {};
-      for (let s = 3; s < len - 3; s += step) {
+      for (let s = 2; s < len - 2; s += 4) {
         pointAt(path, s, tmp);
         const x = tmp.x, z = tmp.z;
-        const inside = x > bb.x0 + 8 && x < bb.x1 - 8 && z > bb.z0 + 8 && z < bb.z1 - 8;
-        const inLane = base.offset > 0 && this.world.onRoad(x, z);
-        const ok = inside && !inLane && !this.world.isBlocked(x, z, 0.4) && !this._wet(x, z, base.bridge);
-        samples.push({ s, x, z, ok, cell: cellOf(x, z) });
+        const inside = x > bb.x0 + 6 && x < bb.x1 - 6 && z > bb.z0 + 6 && z < bb.z1 - 6;
+        const inLane = (base.offset > 0 || base.frontage) && this.world.onRoad(x, z);
+        let ok = inside && !inPlaza(x, z) && !this.world.isBlocked(x, z, 0.4);
+        if (base.river) {
+          const gy = this.world.groundY?.(x, z, -6);
+          ok = ok && gy != null && gy < -4.2 && gy > -6.45;
+        } else ok = ok && !inLane && !this._wet(x, z, base.bridge);
+        samples.push({ s, x, z, ok });
       }
-      const good = samples.filter((p) => p.ok);
-      if (!good.length) continue;
-      const inCell = good.filter((p) => p.cell === cell);
-      const pickFrom = inCell.length ? inCell : good;
-      const pick = pickFrom[Math.floor(rnd() * pickFrom.length)];
-      let lo = pick.s, hi = pick.s, idx = -1;
-      for (let i = 0; i < samples.length; i++) if (samples[i].s === pick.s) { idx = i; break; }
-      for (let i = idx - 1; i >= 0 && pick.s - samples[i].s <= 40; i--) {
-        if (!samples[i].ok) break;
-        lo = samples[i].s;
+      let run = -1;
+      const flush = (a, b) => {
+        if (a < 0 || samples[b].s - samples[a].s < 8) return;
+        const lo = samples[a].s, hi = samples[b].s;
+        for (let k = a; k <= b; k += 1) {
+          const p = samples[k];
+          push({ path, len, lo, hi, s: p.s, x: p.x, z: p.z });
+        }
+      };
+      for (let i = 0; i < samples.length; i++) {
+        if (samples[i].ok) { if (run < 0) run = i; }
+        else if (run >= 0) { flush(run, i - 1); run = -1; }
       }
-      for (let i = idx + 1; i < samples.length && samples[i].s - pick.s <= 40; i++) {
-        if (!samples[i].ok) break;
-        hi = samples[i].s;
-      }
-      if (hi - lo < minSpan) continue;
-      const score = (inCell.length ? 100 : 0) + (hi - lo);
-      if (!best || score > best.score) best = { path, len, lo, hi, s: (lo + hi) / 2, x: pick.x, z: pick.z, score };
+      if (run >= 0) flush(run, samples.length - 1);
     }
-    return best;
+  }
+  _mateSpot(spot) {
+    const s = Math.min(spot.hi - 0.25, spot.s + 1.75);
+    if (s - spot.s < 1.05) return null;
+    const p = pointAt(spot.path, s, {});
+    if (spot.path.river) {
+      const gy = this.world.groundY?.(p.x, p.z, -6);
+      if (this.world.isBlocked(p.x, p.z, 0.35) || gy == null || gy < -6.45 || gy > -4.2) return null;
+    } else if (this.world.isBlocked(p.x, p.z, 0.35) || this.world.onRoad(p.x, p.z) || this._wet(p.x, p.z, spot.path.bridge) || inPlaza(p.x, p.z)) return null;
+    return { path: spot.path, len: spot.len, lo: spot.lo, hi: spot.hi, s, x: p.x, z: p.z };
+  }
+  _riverPaths(station) {
+    const bank = this.terrain?.bankPath;
+    if (!bank || !station) return [];
+    const out = [];
+    for (const lane of [0.5, 2.2]) {
+      const raw = bank(station.x, station.z, lane);
+      if (!raw || raw.length < 8) continue;
+      out.push({ pts: raw.map(([x, z]) => [x, z, -6]), offset: 0, side: 1, kind: 'path', bridge: false, river: true });
+    }
+    return out;
+  }
+  _spawnCrowd(scene, overlay, rnd, spot, zone, buddy, asChild) {
+    const def = crowdDef(this._crowdI++, zone, asChild);
+    if (buddy) def.social = true;
+    const mesh = createAvatar(def.look);
+    mesh.traverse((o) => { if (o.isMesh) o.castShadow = false; });
+    scene.add(mesh);
+    const npc = {
+      def, mesh, path: spot.path, len: spot.len, lo: spot.lo, hi: spot.hi, s: spot.s,
+      dir: rnd() < 0.5 ? -1 : 1, pos: new THREE.Vector3(),
+      lineIdx: this._crowdI % def.lines.length, talking: false, cooldown: rnd() * 6,
+      pause: def.social ? 2.5 + rnd() * 7 : rnd() * 1.6, active: true, buddy: buddy || null,
+    };
+    if (buddy) buddy.buddy = npc;
+    const top = 2.05 * (def.look.scale || 1);
+    const head = () => npc.pos.clone().setY(npc.pos.y + top + 0.2);
+    npc.tag = overlay.add({ cls: 'tag npc', text: def.name, getPos: () => npc.pos.clone().setY(npc.pos.y + top), maxDist: 24 });
+    npc.tag.hidden = true;
+    npc.bubble = new Bubble(overlay, 'npc', () => head().setY(head().y + 0.45), { name: def.name });
+    this.list.push(npc);
+    this._place(npc);
+    return npc;
   }
   _addCrowd(scene, overlay, data, rnd, count) {
-    const all = this.world.cityWalkPaths || [];
-    if (!count || !all.length) return;
+    if (!count) return;
     const bb = data.meta.bboxLocal;
-    const COLS = 10, ROWS = 12;
-    const spanX = (bb.x1 - bb.x0) || 1, spanZ = (bb.z1 - bb.z0) || 1;
-    const cellOf = (x, z) => {
-      if (x < bb.x0 || x > bb.x1 || z < bb.z0 || z > bb.z1) return -1;
-      const cx = Math.min(COLS - 1, Math.max(0, Math.floor(((x - bb.x0) / spanX) * COLS)));
-      const cz = Math.min(ROWS - 1, Math.max(0, Math.floor(((z - bb.z0) / spanZ) * ROWS)));
-      return cz * COLS + cx;
+    const homes = (data.labels || []).filter((l) => (l.kind === 'apt' || l.kind === 'school') && l.x > 165);
+    const nearHome = (x, z, r) => {
+      const r2 = r * r;
+      for (const h of homes) if ((h.x - x) ** 2 + (h.z - z) ** 2 < r2) return true;
+      return false;
     };
-    const bins = Array.from({ length: COLS * ROWS }, () => []);
-    const scratch = {};
-    for (const p of all) {
-      const len = polyLen(p.pts);
-      if (len < 22) continue;
-      const seen = new Set();
-      for (let s = 0; s <= len; s += 24) {
-        pointAt({ ...p, side: 1 }, s, scratch);
-        const c = cellOf(scratch.x, scratch.z);
-        if (c < 0 || seen.has(c)) continue;
-        seen.add(c);
-        bins[c].push(p);
+    const spots = { office: [], officeOuter: [], apt: [], aptFar: [], river: [] };
+    const push = (spot) => {
+      if (spot.path.river) { spots.river.push(spot); return; }
+      const { x, z } = spot;
+      if (isOfficeCore(x, z)) spots.office.push(spot);
+      else if (isBackBlock(x, z)) spots.officeOuter.push(spot);
+      else if (x > 165 && nearHome(x, z, 110)) spots.apt.push(spot);
+      else if (x > 165 && x < 640 && z > -620 && z < 940) spots.aptFar.push(spot);
+    };
+    for (const p of this.world.cityWalkPaths || []) this._collectSpots(p, bb, push);
+    for (const p of this._frontagePaths(data)) this._collectSpots(p, bb, push);
+    for (const p of this._riverPaths(data.station)) this._collectSpots(p, bb, push);
+    const shuffle = (arr) => {
+      for (let i = arr.length - 1; i > 0; i--) {
+        const j = Math.floor(rnd() * (i + 1));
+        const t = arr[i]; arr[i] = arr[j]; arr[j] = t;
       }
-    }
-    const order = [];
-    for (let i = 0; i < bins.length; i++) if (bins[i].length) order.push(i);
-    for (let i = order.length - 1; i > 0; i--) {
-      const j = Math.floor(rnd() * (i + 1));
-      const t = order[i]; order[i] = order[j]; order[j] = t;
-    }
-    if (!order.length) return;
+    };
+    for (const list of Object.values(spots)) shuffle(list);
     const taken = [];
     for (const n of this.list) taken.push(n.pos.x, n.pos.z);
     const nearTaken = (x, z, gap) => {
       for (let i = 0; i < taken.length; i += 2) if ((taken[i] - x) ** 2 + (taken[i + 1] - z) ** 2 < gap * gap) return true;
       return false;
     };
-    let made = 0, spins = 0, minSpan = 8, gap = 14;
-    while (made < count && spins < count * 40) {
-      if (spins === count * 14) { minSpan = 4; gap = 6; }
-      const cell = order[spins % order.length];
-      spins++;
-      const pool = bins[cell];
-      const base = pool[Math.floor(rnd() * pool.length)];
-      const spot = this._crowdSpot(base, rnd, cell, cellOf, bb, minSpan);
-      if (!spot || nearTaken(spot.x, spot.z, gap)) continue;
-      const def = crowdDef(made);
-      const mesh = createAvatar(def.look);
-      scene.add(mesh);
-      const npc = {
-        def, mesh, path: spot.path, len: spot.len, lo: spot.lo, hi: spot.hi, s: spot.s,
-        dir: rnd() < 0.5 ? -1 : 1, pos: new THREE.Vector3(),
-        lineIdx: made % def.lines.length, talking: false, cooldown: rnd() * 5, pause: rnd() * 2,
-      };
-      const head = () => npc.pos.clone().setY(npc.pos.y + 2.25);
-      npc.tag = overlay.add({ cls: 'tag npc', text: def.name, getPos: () => npc.pos.clone().setY(npc.pos.y + 2.05), maxDist: 40 });
-      npc.bubble = new Bubble(overlay, 'npc', () => head().setY(head().y + 0.45), { name: def.name });
-      this.list.push(npc);
-      this._place(npc);
-      taken.push(npc.pos.x, npc.pos.z);
-      made++;
-    }
+    this._crowdI = 0;
+    let made = 0;
+    const fill = (list, limit, gap, zone) => {
+      let n = 0;
+      for (let i = 0; i < list.length && n < limit; i++) {
+        const spot = list[i];
+        if (nearTaken(spot.x, spot.z, gap)) continue;
+        const npc = this._spawnCrowd(scene, overlay, rnd, spot, zone, null, false);
+        taken.push(npc.pos.x, npc.pos.z);
+        n++; made++;
+        if (n >= limit) break;
+        let asChild = false;
+        if (zone === 'apt' && !npc.def.child && n % 3 === 0) asChild = true;
+        else if (!npc.def.social) continue;
+        const mate = this._mateSpot(spot);
+        if (!mate || nearTaken(mate.x, mate.z, 1.15)) continue;
+        const pal = this._spawnCrowd(scene, overlay, rnd, mate, zone, npc, asChild);
+        taken.push(pal.pos.x, pal.pos.z);
+        n++; made++;
+      }
+      return n;
+    };
+    const scale = count / CROWD_EXTRA;
+    const aptN = Math.round(CROWD_APT * scale);
+    const riverN = Math.round(CROWD_RIVER * scale);
+    const officeN = Math.max(0, count - aptN - riverN);
+    let aptMade = fill(spots.apt, aptN, 4.2, 'apt');
+    if (aptMade < aptN) aptMade += fill(spots.aptFar, aptN - aptMade, 5, 'apt');
+    const riverMade = fill(spots.river, riverN, 7, 'river');
+    let officeMade = fill(spots.office, officeN, 3.3, 'office');
+    if (officeMade < officeN) officeMade += fill(spots.officeOuter, officeN - officeMade, 4.6, 'office');
+    this.crowdMade = made;
+    this.crowdApt = aptMade;
+    this.crowdRiver = riverMade;
+    this.crowdOffice = officeMade;
   }
   // 특정 NPC에게 새 경로(예: 신호 횡단보도를 왕복하는 길)를 지정
   assignPath(i, pts) {
@@ -359,36 +508,103 @@ export class NPCs {
   _place(n) {
     const p = pointAt(n.path, n.s, {}); n.hx = p.dx * n.dir; n.hz = p.dz * n.dir;
     // 경로 점이 현재 발보다 높으면(신기교 아치) 그 높이를 기준으로 상판을 고른다. 둔치(음수)는 기존 높이를 유지
-    const ref = (p.y || 0) > n.pos.y + 0.05 ? p.y : n.pos.y;
+    const py = p.y || 0;
+    const ref = py < -1 ? py : (py > n.pos.y + 0.05 ? py : n.pos.y);
     n.pos.set(p.x, this.world.groundY ? this.world.groundY(p.x, p.z, ref) : 0, p.z); // [terrain] 지형 높이
     n.mesh.position.copy(n.pos); n.mesh.rotation.y = Math.atan2(p.dx * n.dir, p.dz * n.dir);
   }
-  update(dt, player) {
+  setCrowdLevel(mode) {
+    const rush = !!mode && mode !== 'normal';
+    if (this._leveled && rush === this.rush) return;
+    this.rush = rush;
+    this._leveled = true;
+    let shown = 0;
     for (const n of this.list) {
-      const dist = Math.hypot(player.x - n.pos.x, player.z - n.pos.z);
-      n.bubble.tick(); n.cooldown -= dt;
-      if (dist < 6.5 && n.cooldown <= 0 && !n.bubble.showing) {
+      if (!n.def.crowd) { n.active = true; shown++; continue; }
+      const on = n.def.role !== 'office' || rush;
+      n.active = on;
+      if (!on) {
+        n.mesh.visible = false;
+        if (n.tag) n.tag.hidden = true;
+        if (n.bubble) n.bubble.item.hidden = true;
+        n.talking = false;
+        if (n.mesh.userData) n.mesh.userData.chatting = false;
+      } else shown++;
+    }
+    this.shown = shown;
+  }
+  update(dt, player, camera) {
+    const overview = !!(camera && camera.position.y > 40);
+    const viewR2 = (overview ? 220 : 115) ** 2;
+    const animR2 = (overview ? 90 : 78) ** 2;
+    const tagNear = 24 * 24;
+    const tagFar = 45 * 45;
+    for (const n of this.list) {
+      if (n.active === false) {
+        if (n.mesh.visible) n.mesh.visible = false;
+        continue;
+      }
+      const dx = player.x - n.pos.x, dz = player.z - n.pos.z;
+      const d2 = dx * dx + dz * dz;
+      const shown = d2 < viewR2;
+      if (n.mesh.visible !== shown) n.mesh.visible = shown;
+      if (n.tag) {
+        const hideTag = d2 > (n.def.crowd ? tagNear : tagFar);
+        if (n.tag.hidden !== hideTag) n.tag.hidden = hideTag;
+      }
+      let step = dt;
+      if (!shown) {
+        n._skip = (n._skip || 0) + dt;
+        if (n._skip < 0.5) continue;
+        step = n._skip;
+        n._skip = 0;
+      }
+      const close = d2 < 42.25;
+      if (close || n.bubble.showing) n.bubble.tick();
+      n.cooldown -= step;
+      if (close && n.cooldown <= 0 && !n.bubble.showing) {
         n.bubble.say(n.def.lines[n.lineIdx++ % n.def.lines.length], 5000); n.cooldown = 8; n.talking = true;
       }
-      if (n.talking && (dist > 10 || (!n.bubble.showing && dist > 6.5))) n.talking = false;
+      if (n.talking && (d2 > 100 || (!n.bubble.showing && !close))) n.talking = false;
       let speed = 0;
+      if (n.mesh.userData) n.mesh.userData.chatting = false;
       if (n.talking || n.bubble.showing) {
-        // 플레이어 쪽 바라보기
         const target = Math.atan2(player.x - n.pos.x, player.z - n.pos.z);
-        n.mesh.rotation.y += Math.atan2(Math.sin(target - n.mesh.rotation.y), Math.cos(target - n.mesh.rotation.y)) * Math.min(1, dt * 6);
-      } else if (n.pause > 0) n.pause -= dt;
-      else if (this.guard && this._redLight(n)) {
-        // 신호 횡단보도: 빨간불(또는 깜빡이는 초록)이면 건너지 않고 대기
-        if (!n.waiting) { n.waiting = true; this.waitCount = (this.waitCount || 0) + 1; if (Math.random() < 0.35 && !n.bubble.showing) n.bubble.say('🚦 빨간불이네요, 잠깐 기다려요', 2500); }
+        n.mesh.rotation.y += Math.atan2(Math.sin(target - n.mesh.rotation.y), Math.cos(target - n.mesh.rotation.y)) * Math.min(1, step * 6);
+      } else if (n.buddy && n.buddy.active !== false && n.buddy.pause > 0.5 && n.pause <= 0) {
+        const bx = n.buddy.pos.x - n.pos.x, bz = n.buddy.pos.z - n.pos.z;
+        if (bx * bx + bz * bz < 20) n.pause = Math.min(6, n.buddy.pause);
       }
-      else {
+      if (n.talking || n.bubble.showing) {
+        // 말 거는 동안은 제자리
+      } else if (n.pause > 0) {
+        n.pause -= step;
+        if (n.def.social && n.mesh.userData) {
+          n.mesh.userData.chatting = true;
+          const face = n.buddy && n.buddy.active !== false ? n.buddy.pos : null;
+          if (face) {
+            const target = Math.atan2(face.x - n.pos.x, face.z - n.pos.z);
+            n.mesh.rotation.y += Math.atan2(Math.sin(target - n.mesh.rotation.y), Math.cos(target - n.mesh.rotation.y)) * Math.min(1, step * 4);
+          }
+        }
+      } else if (shown && this.guard && this._redLight(n)) {
+        if (!n.waiting) {
+          n.waiting = true;
+          this.waitCount = (this.waitCount || 0) + 1;
+          if (close && Math.random() < 0.35 && !n.bubble.showing) n.bubble.say('🚦 빨간불이네요, 잠깐 기다려요', 2500);
+        }
+      } else {
         n.waiting = false;
-        speed = n.def.speed; n.s += n.dir * speed * dt;
-        const lo = n.lo || 0, hi = n.hi ?? n.len;
-        if (n.s > hi || n.s < lo) { n.dir *= -1; n.s = Math.max(lo, Math.min(hi, n.s)); n.pause = 1 + Math.random() * 2; }
-        this._place(n);
+        if (n.def.social && (this.rush || n.def.role !== 'office') && Math.random() < step * 0.04) n.pause = 4 + Math.random() * 8;
+        else {
+          speed = n.def.speed;
+          n.s += n.dir * speed * step;
+          const lo = n.lo || 0, hi = n.hi ?? n.len;
+          if (n.s > hi || n.s < lo) { n.dir *= -1; n.s = Math.max(lo, Math.min(hi, n.s)); n.pause = n.def.social ? 2 + Math.random() * 5 : 0.6 + Math.random() * 1.6; }
+          this._place(n);
+        }
       }
-      animateAvatar(n.mesh, speed, dt);
+      if (d2 < animR2) animateAvatar(n.mesh, speed, step);
     }
   }
 }

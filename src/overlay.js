@@ -15,9 +15,13 @@ export class Overlay {
   update(w, h) {
     const cam = this.camera;
     for (const it of this.items) {
+      if (it.hidden) {
+        if (it.visible) { it.el.style.display = 'none'; it.visible = false; }
+        continue;
+      }
       const p = it.getPos();
       const d = p ? cam.position.distanceTo(p) : Infinity;
-      let show = !it.hidden && p && d < it.maxDist && d >= it.minDist;
+      let show = p && d < it.maxDist && d >= it.minDist;
       if (show) { v.copy(p).project(cam); show = v.z < 1 && v.z > -1 && Math.abs(v.x) < 1.2 && Math.abs(v.y) < 1.2; }
       if (show !== it.visible) { it.el.style.display = show ? '' : 'none'; it.visible = show; }
       if (show) it.el.style.transform = `translate(${((v.x + 1) / 2) * w}px, ${((1 - v.y) / 2) * h}px) translate(-50%, -100%)`;

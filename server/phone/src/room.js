@@ -90,6 +90,7 @@ export class Room extends DurableObject {
           riding: !!peer.riding,
           sit: peer.sit || "",
           afk: !!peer.afk,
+          umb: peer.umb || "",
         });
       }
     }
@@ -179,11 +180,12 @@ export class Room extends DurableObject {
       me.riding = !!m.riding;
       me.sit = typeof m.sit === "string" ? m.sit.slice(0, 16) : "";
       me.afk = !!m.afk;
+      me.umb = typeof m.umb === "string" ? m.umb.slice(0, 16) : (m.umb ? "yellow" : "");
       const jy = Math.max(0, Math.min(5, Number(m.jy) || 0));
       const emote = typeof m.emote === "string" ? m.emote.slice(0, 16) : "";
       ws.serializeAttachment(me);
       this.#broadcast(
-        { t: "state", id: me.id, x: me.x, z: me.z, ry: me.ry, moving: !!m.moving, riding: me.riding, jy, emote, sit: me.sit, afk: me.afk },
+        { t: "state", id: me.id, x: me.x, z: me.z, ry: me.ry, moving: !!m.moving, riding: me.riding, jy, emote, sit: me.sit, afk: me.afk, umb: me.umb },
         ws,
       );
       return;

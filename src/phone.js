@@ -73,6 +73,30 @@ function drawBaseMap(data) {
     ctx.fillStyle = BUILDING_COLOR[building.k] || '#e7e3dc';
     fillPoly(ctx, building, b.x0, b.z0, scale);
   }
+  // 탄천 반려견 놀이터 (소형견 / 중·대형견 구역) 미니맵 표시
+  {
+    const dx0 = (75.5 - b.x0) * scale;
+    const dx1 = (102.5 - b.x0) * scale;
+    const dz0 = (-302.0 - b.z0) * scale;
+    const dzMid = (-270.0 - b.z0) * scale;
+    const dz1 = (-240.0 - b.z0) * scale;
+    ctx.fillStyle = '#9be17b';
+    ctx.fillRect(dx0, dz0, dx1 - dx0, dz1 - dz0);
+    ctx.strokeStyle = '#ff922b';
+    ctx.lineWidth = 1.6;
+    ctx.strokeRect(dx0, dzMid, dx1 - dx0, dz1 - dzMid);
+    ctx.strokeStyle = '#339af0';
+    ctx.strokeRect(dx0, dz0, dx1 - dx0, dzMid - dz0);
+
+    // 탄천 징검다리(돌다리) 미니맵 점선 표시
+    const sy = (-196.0 - b.z0) * scale;
+    ctx.fillStyle = '#dcd6c8';
+    for (let sx = 21; sx <= 63; sx += 3.5) {
+      ctx.beginPath();
+      ctx.arc((sx - b.x0) * scale, sy, 1.3, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
   if (data.station) {
     const sx = (data.station.x - b.x0) * scale, sy = (data.station.z - b.z0) * scale;
     ctx.fillStyle = '#d4003b';

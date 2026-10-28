@@ -25,6 +25,8 @@ import { Police } from './entities/police.js';
 import { addRiversideFolk } from './entities/riversideFolk.js';
 import { addStationPlaza } from './world/stationPlaza.js';
 import { mountDonationBillboards } from './world/donationBillboard.js';
+import { mountUmbrellaSystem } from './entities/umbrellaVendor.js';
+import { addDogPark } from './world/dogPark.js';
 
 const params = new URLSearchParams(location.search);
 const shot = params.has('shot');
@@ -108,11 +110,12 @@ let joined = shot;
 player.visible = joined;
 scene.add(player);
 function wear(next) {
-  const pos = player.position.clone(), rotY = player.rotation.y, vis = player.visible, phoneOpen = player.userData.phoneOpen;
+  const pos = player.position.clone(), rotY = player.rotation.y, vis = player.visible, phoneOpen = player.userData.phoneOpen, umb = player.userData.umbrella || '';
   scene.remove(player);
   player = createAvatar(next);
   player.position.copy(pos); player.rotation.y = rotY; player.visible = vis;
   player.userData.phoneOpen = phoneOpen;
+  player.userData.umbrella = umb;
   scene.add(player);
 }
 const pos = new THREE.Vector3(world.signPos.x + 4, 0, world.signPos.z + 4);
@@ -130,11 +133,11 @@ const myBubble = new Bubble(overlay, 'me', () => player.position.clone().setY(pl
   getColor: () => me.color || '#4f7cff',
 }); // [terrain]
 
-// ?npcs=N 은 0부터 상한까지. 이름 있는 주민을 먼저 두고, 남은 수만큼 지도 전역 행인을 채운다.
+// ?npcs=N 은 0부터 상한까지. 이름 있는 주민을 먼저 두고, 나머지는 출퇴근·점심에 맞춰 켠다.
 const npcCap = NPC_DEFS.length + CROWD_EXTRA;
 const npcParam = params.get('npcs');
 const npcCount = npcParam == null ? npcCap : Math.max(0, Math.min(npcCap, Number(npcParam) || 0));
-const npcs = new NPCs(scene, overlay, world, data, { count: npcCount });
+const npcs = new NPCs(scene, overlay, world, data, { count: npcCount, terrain });
 const bikes = new KakaoBikes(scene, world, data);
 
 // --- 버스/횡단보도/신호 ---
@@ -176,14 +179,40 @@ const taxis = taxiCount ? new Taxis(scene, overlay, { drive: driveData, data, tr
 const police = params.get('police') === '0' ? null : new Police(scene, overlay, { drive: driveData, data, transit, world, count: 2 });
 const riverFolk = terrain ? addRiversideFolk(scene, overlay, terrain, world, st) : null;
 const stationPlaza = addStationPlaza(scene, overlay, world);
+const dogPark = addDogPark(scene, overlay, terrain);
 const donationBoards = mountDonationBillboards({ scene, overlay, world, camera, domElement: renderer.domElement });
-{
-  const origBlocked = world.isBlocked;
-  world.isBlocked = (x, z, r) => origBlocked(x, z, r) || stationPlaza.blocks(x, z) || donationBoards.blocks(x, z);
-}
+const cam = { yaw: Math.PI * 0.85, pitch: 0.32, dist: 14, mode: params.get('view') === 'overview' ? 'overview' : 'follow' };
+const atmosphere = createAtmosphere({
+  scene, sun, hemi, skyGeo,
+  getMode: () => cam.mode,
+  clock: document.getElementById('hud-clock'),
+});
+npcs.setCrowdLevel(atmosphere.state.rush || 'normal');
+let rushNow = atmosphere.state.rush || 'normal';
 
 // --- 멀티플레이 프레즌스(지금은 목업, ?ws=URL 이면 실서버) ---
 const emoteFx = new EmoteFX(scene, document.getElementById('overlay'), camera);
+const umbrellas = mountUmbrellaSystem({
+  scene,
+  overlay,
+  world,
+  terrain,
+  weather: atmosphere,
+  emoteFx,
+  onUmbrellaChange(holding) {
+    player.userData.umbrella = holding;
+    emitMyStateNow();
+  },
+});
+{
+  const origBlocked = world.isBlocked;
+  world.isBlocked = (x, z, r) =>
+    origBlocked(x, z, r) ||
+    stationPlaza.blocks(x, z) ||
+    dogPark.blocks(x, z) ||
+    donationBoards.blocks(x, z) ||
+    umbrellas.blocks(x, z);
+}
 const presence = createPresence({ station: st });
 if (npcs.guard) presence.setGuard?.(npcs.guard);
 const remotes = new RemotePlayers(scene, overlay, presence, () => player.position, (t) => myBubble.say(t, 6000), terrain?.getGroundHeight, emoteFx); // [terrain] 원격 플레이어도 지형 높이
@@ -753,12 +782,22 @@ function triggerEmote(emoteId, sendNet = true) {
   myEmoteUntil = now + 3400;
   player.userData.emote = myEmote;
   emoteFx.burst(player.position, def.id, emoteCombo);
+  umbrellas.onPlayerEmote(def.id, player.position);
   if (sendNet) {
     presence.sendEmote(def.id, emoteCombo);
     trackEvent('emote_use', { emote: def.id, combo: emoteCombo });
   }
   renderEmoteBar();
 }
+
+umbrellas.bindCallbacks({
+  onTriggerDance() {
+    triggerEmote('dance', true);
+  },
+  getPlayer() {
+    return { pos: player.position, ry: player.rotation.y };
+  },
+});
 
 emoteBar?.addEventListener('click', (e) => {
   const foldBtn = e.target.closest('[data-emote-fold]');
@@ -788,7 +827,6 @@ emoteBar?.addEventListener('click', (e) => {
 
 // --- 입력/카메라 ---
 const input = new Input(renderer.domElement);
-const cam = { yaw: Math.PI * 0.85, pitch: 0.32, dist: 14, mode: params.get('view') === 'overview' ? 'overview' : 'follow' };
 const viewBtn = document.getElementById('btn-view');
 const setMode = (m) => { cam.mode = m; viewBtn.textContent = m === 'overview' ? '🚶 걸어다니기' : '🗺️ 위에서 보기'; setShadowSpan(m === 'overview' ? 750 : 90); scene.fog.near = m === 'overview' ? 1500 : 350; scene.fog.far = m === 'overview' ? 4500 : 1600; };
 setMode(cam.mode);
@@ -869,10 +907,31 @@ function syncRideUi() {
 rideBtn.addEventListener('click', toggleRide);
 document.getElementById('btn-home').onclick = () => {
   if (bikes.riding) dismountBike();
+  standUpFromSeat();
+  wakeFromAfk();
   player.position.copy(pos);
   setMode('follow');
   rememberPlace(true);
 };
+const dogParkBtn = document.getElementById('btn-dogpark');
+if (dogParkBtn) {
+  dogParkBtn.onclick = () => {
+    if (bikes.riding) dismountBike();
+    standUpFromSeat();
+    wakeFromAfk();
+    const tx = 89.0;
+    const tz = -236.2;
+    const ty = terrain ? terrain.getGroundHeight(tx, tz, -6) : 0;
+    player.position.set(tx, ty, tz);
+    player.rotation.y = Math.PI;
+    setMode('follow');
+    cam.yaw = 0.0;
+    cam.pitch = 0.25;
+    cam.dist = 13.0;
+    rememberPlace(true);
+    emitMyStateNow();
+  };
+}
 leaveBtn.onclick = () => {
   if (!joined) return;
   if (bikes.riding) dismountBike();
@@ -906,9 +965,15 @@ leaveBtn.onclick = () => {
 input.onKey = (e) => {
   if (e.code === 'KeyM') viewBtn.onclick();
   if (e.code === 'KeyH') document.getElementById('btn-home').onclick();
+  if (e.code === 'KeyP' && !e.repeat) dogParkBtn?.onclick();
   if (e.code === 'Enter') { e.preventDefault(); chatInput.focus(); }
   if (e.code === 'KeyE' && !e.repeat) toggleRide();
-  if (e.code === 'KeyF' && !e.repeat && donationBoards.isNear) donationBoards.openModal('hotkey_f');
+  if (e.code === 'KeyU' && !e.repeat) umbrellas.handleHotkeyU();
+  if (e.code === 'KeyG' && !e.repeat && dogPark.nearGate) dogPark.toggleGate();
+  if (e.code === 'KeyF' && !e.repeat) {
+    if (donationBoards.isNear) donationBoards.openModal('hotkey_f');
+    else if (dogPark.nearGate) dogPark.toggleGate();
+  }
   if (e.code === 'KeyC' && !e.repeat) toggleSit();
   if (e.code === 'KeyZ' && !e.repeat) toggleAfk();
   if (e.code === 'Space' && !e.repeat) triggerJump();
@@ -940,11 +1005,6 @@ document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'hidden') rememberPlace(true);
 });
 
-const atmosphere = createAtmosphere({
-  scene, sun, hemi, skyGeo,
-  getMode: () => cam.mode,
-  clock: document.getElementById('hud-clock'),
-});
 function emitMyStateNow() {
   if (!joined) return;
   presence.sendState(
@@ -958,6 +1018,7 @@ function emitMyStateNow() {
       emote: bikes.riding ? '' : myEmote,
       sit: bikes.riding ? '' : mySit,
       afk: bikes.riding ? false : myAfk,
+      umb: bikes.riding ? '' : (umbrellas.umbrellaTheme || ''),
     },
     true,
   );
@@ -1138,19 +1199,27 @@ function frame() {
     player.userData.emote = myEmote;
     player.userData.sit = mySit;
     player.userData.afk = myAfk;
+    player.userData.umbrella = umbrellas.umbrellaTheme || '';
     animateAvatar(player, moveSpeed, dt);
   }
   syncRideUi();
-  if (joined) presence.sendState({ x: player.position.x, z: player.position.z, ry: player.rotation.y, moving: moveSpeed > 0, riding: !!bikes.riding, jy: Number(jumpY.toFixed(2)), emote: bikes.riding ? '' : myEmote, sit: bikes.riding ? '' : mySit, afk: bikes.riding ? false : myAfk });
+  if (joined) presence.sendState({ x: player.position.x, z: player.position.z, ry: player.rotation.y, moving: moveSpeed > 0, riding: !!bikes.riding, jy: Number(jumpY.toFixed(2)), emote: bikes.riding ? '' : myEmote, sit: bikes.riding ? '' : mySit, afk: bikes.riding ? false : myAfk, umb: bikes.riding ? '' : (umbrellas.umbrellaTheme || '') });
   rememberPlace();
 
-  npcs.update(dt, player.position);
+  const rush = atmosphere.state.rush || 'normal';
+  if (rush !== rushNow) {
+    rushNow = rush;
+    npcs.setCrowdLevel(rush);
+  }
+  npcs.update(dt, player.position, camera);
   transit?.update(dt, player.position);
   taxis?.update(dt); // [taxi]
   police?.update(dt, player.position, { riding: !!bikes.riding });
   riverFolk?.update(dt, player.position);
   stationPlaza.update(dt, player.position);
+  dogPark.update(dt, player.position);
   donationBoards.update(dt, joined ? player.position : null);
+  umbrellas.update(dt, joined ? player.position : null, player.rotation.y);
   remotes.update(dt);
   myBubble.tick();
 
@@ -1192,9 +1261,9 @@ requestAnimationFrame(frame);
 
 // 스크린샷/디버그용 훅
 window.__jj = {
-  ready: true, data, world, npcs, transit, camera, cam, ov, setMode, terrain, taxis, police, weather: atmosphere, // [terrain] [taxi]
+  ready: true, data, world, npcs, transit, camera, cam, ov, setMode, terrain, taxis, police, weather: atmosphere, umbrellas, dogPark, // [terrain] [taxi]
   get player() { return player; },
   teleport(x, z, y) { if (bikes.riding) dismountBike(); player.position.set(x, y ?? (terrain ? terrain.getGroundHeight(x, z, 0) : 0), z); }, // [terrain]
-  bikes, toggleRide,
+  bikes, toggleRide, triggerEmote,
   nearNpc(i = 0, d = 3) { const n = npcs.list[i]; player.position.set(n.pos.x + d, 0, n.pos.z + d * 0.5); },
 };

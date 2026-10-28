@@ -651,8 +651,8 @@ body.in-lobby #ride-btn { display: none !important; }
 #lobby, #world-gate { display: none; }
 body.in-lobby #lobby { position: fixed; inset: 0; z-index: 30; display: grid; place-items: center; overflow: auto; padding: 28px 16px 36px; background: linear-gradient(180deg, #070d1c, #1a2744); }
 body.in-gate #world-gate { position: fixed; inset: 0; z-index: 32; display: block; overflow: hidden; background: linear-gradient(180deg, #070d1c, #1a2744); color: #122033; }
-body.in-gate #hud, body.in-gate #buttons, body.in-gate #top-right-bar, body.in-gate #emote-bar, body.in-gate #chat, body.in-gate #chat-log-panel, body.in-gate #joystick, body.in-gate #presence-status, body.in-gate #presence-panel, body.in-gate #board-Launcher, body.in-gate #contribute-launcher, body.in-gate #board-modal, body.in-gate #donate-near-btn, body.in-gate #donate-modal, body.in-gate #stop-panel, body.in-gate #phone, body.in-gate #handset, body.in-gate #attribution,
-body.in-lobby #hud, body.in-lobby #buttons, body.in-lobby #top-right-bar, body.in-lobby #emote-bar, body.in-lobby #chat, body.in-lobby #chat-log-panel, body.in-lobby #joystick, body.in-lobby #presence-status, body.in-lobby #presence-panel, body.in-lobby #board-Launcher, body.in-lobby #contribute-launcher, body.in-lobby #board-modal, body.in-lobby #donate-near-btn, body.in-lobby #donate-modal, body.in-lobby #stop-panel, body.in-lobby #phone, body.in-lobby #handset { display: none; }
+body.in-gate #hud, body.in-gate #buttons, body.in-gate #top-right-bar, body.in-gate #emote-bar, body.in-gate #chat, body.in-gate #chat-log-panel, body.in-gate #joystick, body.in-gate #presence-status, body.in-gate #presence-panel, body.in-gate #board-Launcher, body.in-gate #contribute-launcher, body.in-gate #board-modal, body.in-gate #donate-near-btn, body.in-gate #donate-modal, body.in-gate #umbrella-actions, body.in-gate #dog-gate-btn, body.in-gate #stop-panel, body.in-gate #phone, body.in-gate #handset, body.in-gate #attribution,
+body.in-lobby #hud, body.in-lobby #buttons, body.in-lobby #top-right-bar, body.in-lobby #emote-bar, body.in-lobby #chat, body.in-lobby #chat-log-panel, body.in-lobby #joystick, body.in-lobby #presence-status, body.in-lobby #presence-panel, body.in-lobby #board-Launcher, body.in-lobby #contribute-launcher, body.in-lobby #board-modal, body.in-lobby #donate-near-btn, body.in-lobby #donate-modal, body.in-lobby #umbrella-actions, body.in-lobby #dog-gate-btn, body.in-lobby #stop-panel, body.in-lobby #phone, body.in-lobby #handset { display: none; }
 #world-gate[hidden] { display: none !important; }
 .gate-copy { position: absolute; left: 50%; bottom: 32px; z-index: 2; width: min(460px, calc(100% - 32px)); transform: translateX(-50%); text-align: center; pointer-events: none; padding: 14px 16px 16px; color: #122033; background: rgba(255,255,255,.88); border-radius: 12px; box-shadow: 0 2px 10px rgba(18,32,51,.16); }
 .gate-copy .kicker { display: inline-block; margin: 0; padding: 3px 8px; border-radius: 8px; background: #f5a200; color: #1b1b1b; font-size: 12px; font-weight: 800; letter-spacing: 0.04em; }
@@ -1972,4 +1972,194 @@ body.in-lobby #hud, body.in-lobby #buttons, body.in-lobby #top-right-bar, body.i
   line-height: 1.5;
   font-weight: 600;
   color: #485870;
+}
+
+/* 비 오는 날 우산장수 태그, 버려진 우산 태그, 우산 얻기/버리기 액션 버튼 */
+.tag.npc.umbrella-vendor {
+  font-size: 12px;
+  font-weight: 800;
+  color: #1b1b1b;
+  background: linear-gradient(90deg, #ffd43b, #ffe066);
+  border: 1.5px solid #f59f00;
+  padding: 2px 9px;
+  border-radius: 999px;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.25);
+}
+.tag.dropped-umbrella {
+  font-size: 11px;
+  font-weight: 700;
+  color: #fff9db;
+  background: rgba(30, 58, 95, 0.85);
+  border: 1px solid rgba(255, 212, 59, 0.6);
+  padding: 2px 7px;
+  border-radius: 8px;
+}
+#umbrella-actions {
+  position: fixed;
+  left: clamp(270px, min(50vw, calc(100vw - 735px)), 50vw);
+  bottom: 102px;
+  transform: translateX(-50%);
+  z-index: 8;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+#umbrella-actions[hidden] { display: none !important; }
+#umbrella-actions .umb-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 800;
+  border-radius: 999px;
+  padding: 8px 15px;
+  cursor: pointer;
+  user-select: none;
+  transition: transform .15s, box-shadow .15s;
+}
+#umbrella-actions .umb-btn:hover {
+  transform: translateY(-1.5px);
+}
+#umbrella-actions .umb-btn.ask {
+  color: #1b1b1b;
+  background: linear-gradient(90deg, #ffd43b, #fcc419);
+  border: 2px solid #fff3bf;
+  box-shadow: 0 5px 16px rgba(245, 159, 0, 0.42);
+}
+#umbrella-actions .umb-btn.dance-hint {
+  color: #fff;
+  background: linear-gradient(90deg, #cc5de8, #845ef7);
+  border: 2px solid #f3d9fa;
+  box-shadow: 0 5px 18px rgba(132, 94, 247, 0.48);
+  animation: umb-pulse .9s infinite ease-in-out;
+}
+#umbrella-actions .umb-btn.drop {
+  color: #fff;
+  background: rgba(30, 41, 59, 0.92);
+  border: 1.5px solid rgba(255, 212, 59, 0.65);
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.35);
+}
+#umbrella-actions .umb-btn kbd {
+  display: inline-grid;
+  place-items: center;
+  padding: 1px 6px;
+  border-radius: 6px;
+  background: rgba(12, 22, 38, 0.82);
+  color: #ffe066;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 900;
+}
+@keyframes umb-pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.05); }
+}
+
+/* 탄천 반려견 놀이터 라벨 & 강아지 이름 태그 */
+.label.dog-park-main {
+  font-size: 13px;
+  font-weight: 800;
+  color: #122033;
+  background: linear-gradient(90deg, #fff9db, #ffe066);
+  border: 2px solid #f59f00;
+  padding: 4px 11px;
+  border-radius: 999px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.22);
+}
+.label.dog-zone.small {
+  font-size: 11.5px;
+  font-weight: 800;
+  color: #fff;
+  background: rgba(230, 73, 128, 0.9);
+  border: 1.5px solid #ffdeeb;
+  padding: 3px 9px;
+  border-radius: 999px;
+}
+.label.dog-zone.large {
+  font-size: 11.5px;
+  font-weight: 800;
+  color: #fff;
+  background: rgba(25, 113, 194, 0.9);
+  border: 1.5px solid #d0ebff;
+  padding: 3px 9px;
+  border-radius: 999px;
+}
+.label.stepping-stones {
+  font-size: 11.5px;
+  font-weight: 800;
+  color: #122033;
+  background: rgba(248, 249, 250, 0.92);
+  border: 1.5px solid #868e96;
+  padding: 2.5px 9px;
+  border-radius: 999px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
+}
+.tag.npc.dog-tag {
+  font-size: 11px;
+  font-weight: 700;
+  color: #122033;
+  background: rgba(255, 255, 255, 0.9);
+  border: 1.5px solid rgba(245, 159, 0, 0.7);
+  padding: 1.5px 7px;
+  border-radius: 999px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.16);
+}
+.label.dog-gate-label {
+  font-size: 11.5px;
+  font-weight: 800;
+  color: #fff;
+  background: rgba(18, 32, 51, 0.9);
+  border: 1.5px solid #ffd43b;
+  padding: 3px 9px;
+  border-radius: 999px;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.25);
+  transition: transform .15s, background .15s;
+}
+.label.dog-gate-label.open {
+  background: rgba(32, 201, 151, 0.92);
+  color: #082019;
+  border-color: #c3fae8;
+}
+.label.dog-gate-label:hover {
+  transform: translate(-50%, -100%) scale(1.06) !important;
+}
+#dog-gate-btn {
+  position: fixed;
+  left: clamp(270px, min(50vw, calc(100vw - 735px)), 50vw);
+  bottom: 102px;
+  transform: translateX(-50%);
+  z-index: 8;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 800;
+  color: #122033;
+  background: linear-gradient(90deg, #ffd43b, #fcc419);
+  border: 2px solid #fff9db;
+  border-radius: 999px;
+  padding: 8px 16px;
+  cursor: pointer;
+  box-shadow: 0 5px 16px rgba(245, 159, 0, 0.4);
+  transition: transform .15s;
+}
+#dog-gate-btn.is-open {
+  color: #fff;
+  background: linear-gradient(90deg, #20c997, #12b886);
+  border-color: #c3fae8;
+  box-shadow: 0 5px 16px rgba(32, 201, 151, 0.4);
+}
+#dog-gate-btn[hidden] { display: none !important; }
+#dog-gate-btn kbd {
+  display: inline-grid;
+  place-items: center;
+  padding: 1px 6px;
+  border-radius: 6px;
+  background: rgba(12, 22, 38, 0.82);
+  color: #ffe066;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 900;
 }
