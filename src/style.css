@@ -1875,13 +1875,6 @@ body.in-lobby #hud, body.in-lobby #buttons, body.in-lobby #top-right-bar, body.i
   font-weight: 800;
   margin-bottom: 10px;
 }
-#donate-modal .qr-recipient {
-  display: block;
-  margin-top: 10px;
-  font-size: 15px;
-  font-weight: 900;
-  color: #122033;
-}
 #donate-modal .qr-frame {
   width: 196px;
   height: 196px;
