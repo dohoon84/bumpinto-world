@@ -237,25 +237,35 @@ function renderPresencePanel() {
         .join('')
     : `<li class="p-empty">현재 다른 접속자가 없습니다.<br><small>친구나 커뮤니티에 링크를 공유해 보세요!</small></li>`;
 
-  presencePanel.innerHTML = `
-    <div class="p-head">
-      <span>🟢 실시간 접속자 (${peers.length + 1}명)</span>
-      <button type="button" class="p-close" data-presence-close="1" aria-label="닫기">✕</button>
-    </div>
-    <ul class="p-list">
-      <li class="p-row me">
-        <div class="p-info">
-          <div class="p-title">
-            <span class="p-swatch" style="background:${escHtml(me.color || '#4f7cff')}"></span>
-            <strong>${escHtml(me.name || '나')}</strong>
-            <span class="p-me-badge">나</span>
-          </div>
-          <small>📍 ${escHtml(mySpot.name)} 근처 (${mySpot.dist}m)</small>
+  const listHtml = `
+    <li class="p-row me">
+      <div class="p-info">
+        <div class="p-title">
+          <span class="p-swatch" style="background:${escHtml(me.color || '#4f7cff')}"></span>
+          <strong>${escHtml(me.name || '나')}</strong>
+          <span class="p-me-badge">나</span>
         </div>
-      </li>
-      ${peerRows}
-    </ul>
-    <div class="p-foot">우측 하단 미니맵에도 접속자 위치·방향이 표시됩니다</div>`;
+        <small>📍 ${escHtml(mySpot.name)} 근처 (${mySpot.dist}m)</small>
+      </div>
+    </li>
+    ${peerRows}`;
+
+  let listEl = presencePanel.querySelector('.p-list');
+  if (!listEl) {
+    presencePanel.innerHTML = `
+      <div class="p-head">
+        <span class="p-head-title">🟢 실시간 접속자 (${peers.length + 1}명)</span>
+        <button type="button" class="p-close" data-presence-close="1" aria-label="닫기">✕</button>
+      </div>
+      <ul class="p-list">${listHtml}</ul>
+      <div class="p-foot">우측 하단 미니맵에도 접속자 위치·방향이 표시됩니다</div>`;
+  } else {
+    const prevScroll = listEl.scrollTop;
+    const headTitle = presencePanel.querySelector('.p-head-title');
+    if (headTitle) headTitle.textContent = `🟢 실시간 접속자 (${peers.length + 1}명)`;
+    listEl.innerHTML = listHtml;
+    listEl.scrollTop = prevScroll;
+  }
 }
 
 function setPresenceOpen(next) {
@@ -400,11 +410,8 @@ function syncChatUnread() {
   }
 }
 
-function renderChatLogPanel(scrollToBottom = false) {
+function renderChatLogPanel() {
   if (!chatLogPanel || !chatLogOpen) return;
-  const prevList = chatLogPanel.querySelector('.c-list');
-  const prevScroll = prevList ? prevList.scrollTop : 0;
-  const wasNearBottom = !prevList || (prevList.scrollHeight - prevList.scrollTop - prevList.clientHeight < 36);
 
   const visibleLogs = chatIncludeNpc ? chatLogs : chatLogs.filter((item) => item.kind !== 'npc');
   const rowsHtml = visibleLogs.length
@@ -435,25 +442,28 @@ function renderChatLogPanel(scrollToBottom = false) {
           : '아직 주고받은 플레이어 대화가 없습니다.<br><small>근처(30m) 접속자와 인사하거나 상단의 <b>NPC 대사 포함</b>을 켜보세요!</small>'
       }</li>`;
 
-  chatLogPanel.innerHTML = `
-    <div class="c-head">
-      <span class="c-title">💬 주변 대화 전체보기 <small>(30m)</small></span>
-      <div class="c-head-actions">
-        <button type="button" class="c-npc-toggle${chatIncludeNpc ? ' on' : ''}" data-chat-npc-toggle="1" aria-pressed="${chatIncludeNpc}">
-          🗣️ NPC 대사 포함
-        </button>
-        <button type="button" class="c-close" data-chat-close="1" aria-label="닫기">✕</button>
+  let listEl = chatLogPanel.querySelector('.c-list');
+  if (!listEl) {
+    chatLogPanel.innerHTML = `
+      <div class="c-head">
+        <span class="c-title">💬 주변 대화 전체보기 <small>(30m)</small></span>
+        <div class="c-head-actions">
+          <button type="button" class="c-npc-toggle${chatIncludeNpc ? ' on' : ''}" data-chat-npc-toggle="1" aria-pressed="${chatIncludeNpc}">
+            🗣️ NPC 대사 포함
+          </button>
+          <button type="button" class="c-close" data-chat-close="1" aria-label="닫기">✕</button>
+        </div>
       </div>
-    </div>
-    <ul class="c-list">${rowsHtml}</ul>`;
-
-  const nextList = chatLogPanel.querySelector('.c-list');
-  if (nextList) {
-    if (scrollToBottom || wasNearBottom) {
-      nextList.scrollTop = nextList.scrollHeight;
-    } else {
-      nextList.scrollTop = prevScroll;
+      <ul class="c-list">${rowsHtml}</ul>`;
+  } else {
+    const prevScroll = listEl.scrollTop;
+    const npcBtn = chatLogPanel.querySelector('[data-chat-npc-toggle]');
+    if (npcBtn) {
+      npcBtn.classList.toggle('on', chatIncludeNpc);
+      npcBtn.setAttribute('aria-pressed', String(chatIncludeNpc));
     }
+    listEl.innerHTML = rowsHtml;
+    listEl.scrollTop = prevScroll;
   }
 }
 
@@ -466,7 +476,7 @@ function setChatLogOpen(next) {
   if (chatLogOpen) {
     chatUnread = 0;
     syncChatUnread();
-    renderChatLogPanel(true);
+    renderChatLogPanel();
   }
 }
 
@@ -493,7 +503,7 @@ overlay.onSay = ({ cls, text, pos, meta }) => {
   if (chatLogs.length > MAX_CHAT_LOGS) chatLogs.shift();
 
   if (chatLogOpen) {
-    if (cls !== 'npc' || chatIncludeNpc) renderChatLogPanel(true);
+    if (cls !== 'npc' || chatIncludeNpc) renderChatLogPanel();
   } else if (cls === 'remote' || (cls === 'npc' && chatIncludeNpc)) {
     chatUnread++;
     syncChatUnread();
@@ -508,7 +518,7 @@ chatLogPanel?.addEventListener('click', (e) => {
   }
   if (e.target.closest('[data-chat-npc-toggle]')) {
     chatIncludeNpc = !chatIncludeNpc;
-    renderChatLogPanel(true);
+    renderChatLogPanel();
   }
 });
 
