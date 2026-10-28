@@ -2,10 +2,12 @@ import * as THREE from 'three';
 import { buildWorld } from './world.js';
 import { createAvatar, animateAvatar, animateRide, clearRidePose } from './entities/avatar.js';
 import { KakaoBikes } from './entities/bike.js';
-import { openLobby } from './lobby.js';
-import { openWorldGate } from './worldGate.js';
-import { sanitizeLook } from './look.js';
-import { NPCs, NPC_DEFS, CROWD_EXTRA } from './entities/npcs.js';
+import { openLobby, getEnterScreen } from './lobby.js';
+import { openWorldGate, isStarbaseLive } from './worldGate.js';
+import { getCurrentRegion, getRegion, navigateToRegion } from './regions/index.js';
+import { isEn, tr, toggleLang, onLangChange } from './i18n.js';
+import { sanitizeLook, readSavedPassport, isPassportActive, setPassportActive } from './look.js';
+import { NPCs, getNpcCapForRegion } from './entities/npcs.js';
 import { createAtmosphere } from './weather.js';
 import { Overlay, Bubble } from './overlay.js';
 import { EMOTE_LIST, EMOTE_BY_ID, EMOTE_BY_CODE, EmoteFX } from './emotes.js';
@@ -27,21 +29,88 @@ import { addStationPlaza } from './world/stationPlaza.js';
 import { mountDonationBillboards } from './world/donationBillboard.js';
 import { mountUmbrellaSystem } from './entities/umbrellaVendor.js';
 import { addDogPark } from './world/dogPark.js';
+import { createRoadsterShow } from './events/roadsterShow.js';
+import { createTowerAddon } from './entities/towerAddon.js';
+import { createLaunchShow } from './events/launchShow.js';
+import { createTrucks } from './entities/trucks.js';
 
 const params = new URLSearchParams(location.search);
+const region = getCurrentRegion();
 const shot = params.has('shot');
+const autoEnter = params.get('enter') === '1';
+const passportEnter = params.get('passport') === '1';
+const fromRegionId = params.get('from');
+const fromRegion = fromRegionId && fromRegionId !== region.id ? getRegion(fromRegionId) : null;
+if (autoEnter || passportEnter || fromRegionId) {
+  const cleanUrl = new URL(location.href);
+  cleanUrl.searchParams.delete('enter');
+  cleanUrl.searchParams.delete('passport');
+  cleanUrl.searchParams.delete('from');
+  history.replaceState(null, '', cleanUrl.toString());
+}
+function getFlightLines(targetRegion) {
+  if (isEn()) return targetRegion.enFlightLines || targetRegion.flightLines || targetRegion.enLobbyEnterLines;
+  return targetRegion.flightLines || targetRegion.lobbyEnterLines;
+}
+let arrivalFlightScreen = null;
+if (fromRegion && !shot) {
+  arrivalFlightScreen = getEnterScreen();
+  arrivalFlightScreen.show(getFlightLines(region), {
+    flight: { from: fromRegion, to: region },
+    minMs: 3400,
+    startProgress: 0.22,
+  });
+}
 let startLobby = null;
+let joinWithPassport = null;
 let lobbyQueued = false;
+let passportQueued = false;
+const handleGateEnter = (chosenRegionId = region.id) => {
+  const hasPassport = isPassportActive();
+  if (chosenRegionId && chosenRegionId !== region.id) {
+    const targetRegion = getRegion(chosenRegionId);
+    const screen = getEnterScreen();
+    screen.show(getFlightLines(targetRegion), {
+      flight: { from: region, to: targetRegion },
+      minMs: 3400,
+    });
+    setTimeout(() => {
+      navigateToRegion(chosenRegionId, {
+        ...(hasPassport ? { passport: 1 } : { enter: 1 }),
+        from: region.id,
+      });
+    }, 850);
+    return;
+  }
+  if (hasPassport) {
+    if (joinWithPassport) joinWithPassport();
+    else passportQueued = true;
+    return;
+  }
+  if (startLobby) startLobby();
+  else lobbyQueued = true;
+};
+const isLocalEnv = ['localhost', '127.0.0.1', '[::1]'].includes(location.hostname) || location.hostname.endsWith('.local');
+const lockedBeforeOpen = region.id === 'starbase' && !isStarbaseLive() && !isLocalEnv && !shot;
 if (shot) document.body.classList.remove('in-gate');
-else openWorldGate({ onEnter() { if (startLobby) startLobby(); else lobbyQueued = true; } });
+else if (lockedBeforeOpen) openWorldGate({ onEnter: handleGateEnter });
+else if (passportEnter && readSavedPassport()) passportQueued = true;
+else if (autoEnter) lobbyQueued = true;
+else openWorldGate({ onEnter: handleGateEnter });
+
+const worldFile = region.dataFiles?.world || 'jeongja.json';
+const transitFile = region.features?.transit ? region.dataFiles?.transit : null;
+const terrainFile = region.dataFiles?.terrain;
+const driveFile = region.dataFiles?.drive;
+
 const [data, transitData] = await Promise.all([
-  fetch(import.meta.env.BASE_URL + 'jeongja.json').then((r) => r.json()),
-  fetch(import.meta.env.BASE_URL + 'transit.json').then((r) => r.json()).catch(() => null),
+  fetch(import.meta.env.BASE_URL + worldFile).then((r) => r.json()),
+  transitFile ? fetch(import.meta.env.BASE_URL + transitFile).then((r) => r.json()).catch(() => null) : Promise.resolve(null),
 ]);
 // [terrain] [taxi] 추가 데이터 (없어도 동작). ?terrain=0 이면 평평한 기존 지형, ?taxis=0 이면 택시 없음
 const [terrainData, driveData] = await Promise.all([
-  params.get('terrain') === '0' ? null : fetch(import.meta.env.BASE_URL + 'terrain.json').then((r) => r.json()).catch(() => null),
-  params.get('taxis') === '0' ? null : fetch(import.meta.env.BASE_URL + 'drive.json').then((r) => r.json()).catch(() => null),
+  !terrainFile || params.get('terrain') === '0' ? null : fetch(import.meta.env.BASE_URL + terrainFile).then((r) => r.json()).catch(() => null),
+  !driveFile || params.get('taxis') === '0' ? null : fetch(import.meta.env.BASE_URL + driveFile).then((r) => r.json()).catch(() => null),
 ]);
 
 // --- 렌더러/씬 ---
@@ -77,11 +146,18 @@ function setShadowSpan(span) { const c = sun.shadow.camera; c.left = c.bottom = 
 // --- 월드 ---
 const terrain = terrainData ? createTerrain(terrainData, data) : null; // [terrain]
 terrain?.annotate(data); // [terrain] 도로/수면에 높이 부여 (buildWorld 전에)
-const world = buildWorld(scene, data);
+const tower = region.features?.launchTower && params.get('tower') !== '0' ? createTowerAddon(data) : null; // [tower] buildWorld 전에 _skip 마킹
+const world = buildWorld(scene, data, region);
+tower?.build(scene, renderer); // [tower] 발사탑 1·2기(메카질라), 스타십 풀스택, 부스터 캐치, OLM, 탱크 팜 생성
 const overlay = new Overlay(document.getElementById('overlay'), camera);
 if (terrain) { terrain.build(scene, world, overlay); world.groundY = terrain.getGroundHeight; } // [terrain] world.groundY(x,z,refY) — NPC/원격 플레이어/택시가 사용
 const st = data.station;
-overlay.add({ cls: 'label station', text: '🚇 정자역  신분당선 · 수인분당선', getPos: () => new THREE.Vector3(st.x, 10, st.z), maxDist: 4000 });
+overlay.add({
+  cls: 'label station',
+  text: region.stationOverlayText || (st.name === 'Starbase' ? '🚀 Starbase' : '🚇 정자역  신분당선 · 수인분당선'),
+  getPos: () => new THREE.Vector3(st.x, 10, st.z),
+  maxDist: 4000,
+});
 const LABEL_RANGE = {
   cafe: [160, 0], shop: [150, 0], mart: [170, 0], academy: [180, 0], hotel: [220, 0],
   plaza: [320, 16], public: [640, 20],
@@ -101,7 +177,7 @@ for (const l of data.labels) {
 const PALETTE = ['#4f7cff', '#ff6b6b', '#20c997', '#f59f00', '#845ef7', '#e64980'];
 const shotColor = shot && params.has('ws') ? PALETTE[Math.floor(Math.random() * PALETTE.length)] : PALETTE[0];
 const me = {
-  name: params.get('name') || (shot ? '나 (김도훈)' : ''),
+  name: params.get('name') || (shot ? (isEn() ? 'Explorer' : '나 (김도훈)') : ''),
   look: sanitizeLook(shot ? { color: shotColor, hat: '#ffd166', bag: '#ef476f', hair: 'short', top: 'long' } : { hair: 'short', top: 'hoodie' }),
 };
 me.color = me.look.color;
@@ -134,11 +210,25 @@ const myBubble = new Bubble(overlay, 'me', () => player.position.clone().setY(pl
 }); // [terrain]
 
 // ?npcs=N 은 0부터 상한까지. 이름 있는 주민을 먼저 두고, 나머지는 출퇴근·점심에 맞춰 켠다.
-const npcCap = NPC_DEFS.length + CROWD_EXTRA;
+const npcCap = getNpcCapForRegion(region.id);
 const npcParam = params.get('npcs');
 const npcCount = npcParam == null ? npcCap : Math.max(0, Math.min(npcCap, Number(npcParam) || 0));
-const npcs = new NPCs(scene, overlay, world, data, { count: npcCount, terrain });
+const npcs = new NPCs(scene, overlay, world, data, { count: npcCount, terrain, region });
 const bikes = new KakaoBikes(scene, world, data);
+
+// [roadster] 스타베이스 지역일 때 발사탑 남쪽 약 350m 빈터 (2730, -280) 에 로드스터 점프 쇼 무대 생성 (?roadster=0 으로 끔)
+const playerProxy = {
+  get position() { return player.position; },
+  get rotation() { return player.rotation; },
+  get visible() { return player.visible; },
+  set visible(v) { player.visible = v; },
+};
+const roadster = region.features?.roadsterShow && params.get('roadster') !== '0'
+  ? createRoadsterShow({ scene, overlay, player: playerProxy, camera, sun, params })
+  : null;
+const launch = tower && region.features?.launchShow
+  ? createLaunchShow({ scene, overlay, player: playerProxy, camera, sun, params, tower, roadster, world })
+  : null;
 
 // --- 버스/횡단보도/신호 ---
 // 기본은 실서버 프록시(jeongja-bus-proxy)를 통한 실시간 모드. 실패 시 RealtimeBusSource 가 시뮬로 자동 폴백.
@@ -173,37 +263,59 @@ if (terrain) {
   const wi = npcs.list.findIndex((n, i) => i >= 5 && !n.def.cat); // 기본 7명 중 '산책하는 동네 주민'
   if (route && wi >= 0) npcs.assignPath(wi, route);
 }
-// [taxi] 시뮬레이션 택시 (?taxis=N, 기본 24, ?taxis=0 끔)
-const taxiCount = params.get('taxis') === '0' ? 0 : Math.max(0, Math.min(80, Number(params.get('taxis') || 24) || 24));
+// [taxi] 시뮬레이션 택시 (?taxis=N, 기본 24, ?taxis=0 끔) — 택시 활성화 지역에서만
+const taxiCount = !region.features?.taxis || params.get('taxis') === '0'
+  ? 0
+  : Math.max(0, Math.min(80, Number(params.get('taxis') || 24) || 24));
 const taxis = taxiCount ? new Taxis(scene, overlay, { drive: driveData, data, transit, world, count: taxiCount }) : null;
-const police = params.get('police') === '0' ? null : new Police(scene, overlay, { drive: driveData, data, transit, world, count: 2 });
+const police = !region.features?.taxis || params.get('police') === '0'
+  ? null
+  : new Police(scene, overlay, { drive: driveData, data, transit, world, count: 2 });
 const riverFolk = terrain ? addRiversideFolk(scene, overlay, terrain, world, st) : null;
-const stationPlaza = addStationPlaza(scene, overlay, world);
-const dogPark = addDogPark(scene, overlay, terrain);
-const donationBoards = mountDonationBillboards({ scene, overlay, world, camera, domElement: renderer.domElement });
+const noopModule = {
+  blocks: () => false,
+  update() {},
+  findSeat: () => null,
+  closeModal() {},
+  isNear: false,
+  nearGate: false,
+  toggleGate() {},
+  bindCallbacks() {},
+  onPlayerEmote() {},
+  handleHotkeyU() {},
+  umbrellaTheme: '',
+};
+const stationPlaza = region.features?.stationPlaza ? addStationPlaza(scene, overlay, world) : noopModule;
+const dogPark = region.features?.dogPark ? addDogPark(scene, overlay, terrain) : noopModule;
+const donationBoards = region.features?.stationPlaza
+  ? mountDonationBillboards({ scene, overlay, world, camera, domElement: renderer.domElement })
+  : noopModule;
 const cam = { yaw: Math.PI * 0.85, pitch: 0.32, dist: 14, mode: params.get('view') === 'overview' ? 'overview' : 'follow' };
 const atmosphere = createAtmosphere({
   scene, sun, hemi, skyGeo,
   getMode: () => cam.mode,
   clock: document.getElementById('hud-clock'),
+  region,
 });
 npcs.setCrowdLevel(atmosphere.state.rush || 'normal');
 let rushNow = atmosphere.state.rush || 'normal';
 
 // --- 멀티플레이 프레즌스(지금은 목업, ?ws=URL 이면 실서버) ---
 const emoteFx = new EmoteFX(scene, document.getElementById('overlay'), camera);
-const umbrellas = mountUmbrellaSystem({
-  scene,
-  overlay,
-  world,
-  terrain,
-  weather: atmosphere,
-  emoteFx,
-  onUmbrellaChange(holding) {
-    player.userData.umbrella = holding;
-    emitMyStateNow();
-  },
-});
+const umbrellas = region.features?.umbrellas
+  ? mountUmbrellaSystem({
+      scene,
+      overlay,
+      world,
+      terrain,
+      weather: atmosphere,
+      emoteFx,
+      onUmbrellaChange(holding) {
+        player.userData.umbrella = holding;
+        emitMyStateNow();
+      },
+    })
+  : noopModule;
 {
   const origBlocked = world.isBlocked;
   world.isBlocked = (x, z, r) =>
@@ -213,9 +325,13 @@ const umbrellas = mountUmbrellaSystem({
     donationBoards.blocks(x, z) ||
     umbrellas.blocks(x, z);
 }
-const presence = createPresence({ station: st });
+const presence = createPresence({ station: st, region });
 if (npcs.guard) presence.setGuard?.(npcs.guard);
 const remotes = new RemotePlayers(scene, overlay, presence, () => player.position, (t) => myBubble.say(t, 6000), terrain?.getGroundHeight, emoteFx); // [terrain] 원격 플레이어도 지형 높이
+// [truck] 탈 수 있는 'Steel Truck' 주차 (스타베이스만, ?trucks=N 기본 20, ?trucks=0 끔, F 탑승/하차)
+const trucks = region.features?.trucks && params.get('trucks') !== '0'
+  ? createTrucks({ scene, overlay, world, data, params, camera, cam, player: playerProxy, renderer, terrain, presence, remotes, spawn: pos })
+  : null;
 const statusEl = document.getElementById('presence-status');
 const presencePanel = document.getElementById('presence-panel');
 let presenceOpen = false;
@@ -225,7 +341,7 @@ const escHtml = (s) =>
   String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
 function nearestSpotLabel(x, z) {
-  let bestText = '정자역 광장';
+  let bestText = isEn() ? (region.enDefaultSpotName || region.defaultSpotName || 'Center Plaza') : (region.defaultSpotName || '정자역 광장');
   let bestDist = Math.hypot(x - st.x, z - st.z);
   for (const l of data.labels || []) {
     const d = Math.hypot(x - l.x, z - l.z);
@@ -238,13 +354,16 @@ function nearestSpotLabel(x, z) {
 }
 
 function compassDir(dx, dz) {
-  const dirs = ['북', '북동', '동', '남동', '남', '남서', '서', '북서'];
+  const dirs = isEn()
+    ? ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW']
+    : ['북', '북동', '동', '남동', '남', '남서', '서', '북서'];
   const deg = ((Math.atan2(dx, -dz) * 180) / Math.PI + 360) % 360;
   return dirs[Math.round(deg / 45) % 8];
 }
 
 function renderPresencePanel() {
   if (!presencePanel || !presenceOpen) return;
+  const en = isEn();
   const peers = remotes.list();
   const mySpot = nearestSpotLabel(player.position.x, player.position.z);
   const peerRows = peers.length
@@ -254,14 +373,15 @@ function renderPresencePanel() {
           const dx = p.x - player.position.x;
           const dz = p.z - player.position.z;
           const dist = Math.round(Math.hypot(dx, dz));
-          const dir = dist > 3 ? `${compassDir(dx, dz)}쪽 ${dist}m` : '바로 옆';
+          const dir = dist > 3 ? (en ? `${compassDir(dx, dz)} ${dist}m` : `${compassDir(dx, dz)}쪽 ${dist}m`) : (en ? 'Right here' : '바로 옆');
           const statusBadge = p.riding
-            ? ' · 🚲 바이크 탑승 중'
+            ? (en ? ' · 🚲 Riding' : ' · 🚲 바이크 탑승 중')
             : p.afk
-              ? ' · 💤 자리비움'
+              ? (en ? ' · 💤 AFK' : ' · 💤 자리비움')
               : p.sit
-                ? ' · 🧘 휴식 중'
+                ? (en ? ' · 🧘 Sitting' : ' · 🧘 휴식 중')
                 : '';
+          const nearText = en ? `Near ${escHtml(spot.name)} (${spot.dist}m)` : `${escHtml(spot.name)} 근처 (${spot.dist}m)`;
           return `
             <li class="p-row">
               <div class="p-info">
@@ -270,43 +390,48 @@ function renderPresencePanel() {
                   <strong>${escHtml(p.name)}</strong>
                   <span class="p-dir">${escHtml(dir)}</span>
                 </div>
-                <small>📍 ${escHtml(spot.name)} 근처 (${spot.dist}m)${statusBadge}</small>
+                <small>📍 ${nearText}${statusBadge}</small>
               </div>
               <div class="p-actions">
-                <button type="button" class="p-btn" data-peer-look="${escHtml(p.id)}" title="그 방향 바라보기">방향</button>
-                <button type="button" class="p-btn go" data-peer-go="${escHtml(p.id)}" title="그 플레이어 옆으로 이동">이동</button>
+                <button type="button" class="p-btn" data-peer-look="${escHtml(p.id)}" title="${en ? 'Look toward player' : '그 방향 바라보기'}">${en ? 'Look' : '방향'}</button>
+                <button type="button" class="p-btn go" data-peer-go="${escHtml(p.id)}" title="${en ? 'Teleport next to player' : '그 플레이어 옆으로 이동'}">${en ? 'Go' : '이동'}</button>
               </div>
             </li>`;
         })
         .join('')
-    : `<li class="p-empty">현재 다른 접속자가 없습니다.<br><small>친구나 커뮤니티에 링크를 공유해 보세요!</small></li>`;
+    : `<li class="p-empty">${en ? 'No other players online right now.<br><small>Share the link with friends or your community!</small>' : '현재 다른 접속자가 없습니다.<br><small>친구나 커뮤니티에 링크를 공유해 보세요!</small>'}</li>`;
 
+  const myNearText = en ? `Near ${escHtml(mySpot.name)} (${mySpot.dist}m)` : `${escHtml(mySpot.name)} 근처 (${mySpot.dist}m)`;
   const listHtml = `
     <li class="p-row me">
       <div class="p-info">
         <div class="p-title">
           <span class="p-swatch" style="background:${escHtml(me.color || '#4f7cff')}"></span>
-          <strong>${escHtml(me.name || '나')}</strong>
-          <span class="p-me-badge">나</span>
+          <strong>${escHtml(me.name || (en ? 'Me' : '나'))}</strong>
+          <span class="p-me-badge">${en ? 'ME' : '나'}</span>
         </div>
-        <small>📍 ${escHtml(mySpot.name)} 근처 (${mySpot.dist}m)</small>
+        <small>📍 ${myNearText}</small>
       </div>
     </li>
     ${peerRows}`;
 
+  const headText = en ? `🟢 Online Players (${peers.length + 1})` : `🟢 실시간 접속자 (${peers.length + 1}명)`;
+  const footText = en ? 'Player locations & directions are also shown on the bottom-right minimap' : '우측 하단 미니맵에도 접속자 위치·방향이 표시됩니다';
   let listEl = presencePanel.querySelector('.p-list');
   if (!listEl) {
     presencePanel.innerHTML = `
       <div class="p-head">
-        <span class="p-head-title">🟢 실시간 접속자 (${peers.length + 1}명)</span>
-        <button type="button" class="p-close" data-presence-close="1" aria-label="닫기">✕</button>
+        <span class="p-head-title">${headText}</span>
+        <button type="button" class="p-close" data-presence-close="1" aria-label="Close">✕</button>
       </div>
       <ul class="p-list">${listHtml}</ul>
-      <div class="p-foot">우측 하단 미니맵에도 접속자 위치·방향이 표시됩니다</div>`;
+      <div class="p-foot">${footText}</div>`;
   } else {
     const prevScroll = listEl.scrollTop;
     const headTitle = presencePanel.querySelector('.p-head-title');
-    if (headTitle) headTitle.textContent = `🟢 실시간 접속자 (${peers.length + 1}명)`;
+    if (headTitle) headTitle.textContent = headText;
+    const footEl = presencePanel.querySelector('.p-foot');
+    if (footEl) footEl.textContent = footText;
     listEl.innerHTML = listHtml;
     listEl.scrollTop = prevScroll;
   }
@@ -380,23 +505,32 @@ presencePanel?.addEventListener('click', (e) => {
   }
 });
 
-presence.on('status', (s) => {
+let lastPresenceRawStatus = '';
+function paintPresenceStatus(s = lastPresenceRawStatus) {
+  lastPresenceRawStatus = s;
   if (!statusEl) return;
   if (!s) {
     statusEl.innerHTML = '';
     statusEl.className = '';
     return;
   }
-  const m = String(s).match(/^(현재 접속자\s*)(\d+명)$/);
+  const en = isEn();
+  const m = String(s).match(/^(현재 접속자\s*)(\d+)명$/);
   if (m) {
     statusEl.className = 'is-live' + (presenceOpen ? ' open' : '');
-    statusEl.innerHTML = `<span class="live-dot" aria-hidden="true"></span><span class="live-label">${m[1]}</span><strong class="live-count">${m[2]}</strong><span class="live-caret" aria-hidden="true">▾</span>`;
+    const lbl = en ? 'Online ' : m[1];
+    const cnt = en ? m[2] : `${m[2]}명`;
+    statusEl.innerHTML = `<span class="live-dot" aria-hidden="true"></span><span class="live-label">${lbl}</span><strong class="live-count">${cnt}</strong><span class="live-caret" aria-hidden="true">▾</span>`;
   } else {
+    const trStatus = en
+      ? (s.includes('확인 중') ? 'Connecting…' : s.includes('다른 탭') ? 'Active in another tab' : s.includes('끊김') ? 'Reconnecting…' : s)
+      : s;
     statusEl.className = (/끊김|재시도/.test(s) ? 'is-warn' : 'is-wait') + (presenceOpen ? ' open' : '');
-    statusEl.innerHTML = `<span class="live-dot" aria-hidden="true"></span><span class="live-label">${s}</span>`;
+    statusEl.innerHTML = `<span class="live-dot" aria-hidden="true"></span><span class="live-label">${trStatus}</span>`;
   }
   if (presenceOpen) renderPresencePanel();
-});
+}
+presence.on('status', (s) => paintPresenceStatus(s));
 const sms = createSms();
 const handset = mountHandset({ sms });
 const board = mountBoard({ sms, getMe: () => me });
@@ -427,33 +561,79 @@ function applySession(session) {
   player.position.set(px, py, pz);
   player.rotation.y = place.ry || 0;
 }
+const globeBtn = document.getElementById('btn-globe');
 const leaveBtn = document.getElementById('btn-leave');
+if (globeBtn) globeBtn.hidden = !joined;
 leaveBtn.hidden = !joined;
 const reopenGate = () => {
   document.body.classList.remove('in-lobby');
   document.body.classList.add('in-gate');
-  openWorldGate({ onEnter() { if (startLobby) startLobby(); else lobbyQueued = true; } });
+  openWorldGate({ onEnter: handleGateEnter });
 };
-startLobby = () => {
+function completeWorldJoin(name, look, session) {
+  setPassportActive(true);
+  me.name = name; me.color = look.color; me.look = look;
+  mySit = ''; myAfk = false; myEmote = ''; myEmoteUntil = 0; idleTime = 0;
+  wear(look);
+  if (session?.place) applySession(session);
+  else player.position.copy(pos);
+  player.visible = true;
+  nameTag.hidden = false;
+  nameTag.el.textContent = name;
+  nameTag.el.classList.remove('is-afk');
+  renderEmoteBar();
+  document.body.classList.remove('in-gate', 'in-lobby');
+  if (globeBtn) globeBtn.hidden = false;
+  leaveBtn.hidden = false;
+  handset.signIn();
+  presence.connect(me);
+  joined = true;
+  trackEvent('world_join', { region: region.id, has_pin: !!session?.hasPin, resumed: !!session?.place });
+}
+joinWithPassport = async () => {
+  const passport = readSavedPassport();
+  if (!passport) {
+    if (arrivalFlightScreen) {
+      await arrivalFlightScreen.finish();
+      arrivalFlightScreen = null;
+    }
+    startLobby?.();
+    return;
+  }
+  const screen = arrivalFlightScreen || getEnterScreen();
+  if (!arrivalFlightScreen) {
+    screen.show(getFlightLines(region), { minMs: 1100 });
+  }
+  arrivalFlightScreen = null;
+  document.body.classList.remove('in-gate', 'in-lobby');
+  let session = null;
+  try {
+    session = await sms.enter({ name: passport.name, look: passport.look, preview: false });
+  } catch {
+    session = { off: true, name: passport.name, look: passport.look, place: null };
+  }
+  completeWorldJoin(session?.name || passport.name, sanitizeLook(session?.look || passport.look), session);
+  await screen.finish();
+};
+startLobby = async () => {
   document.body.classList.remove('in-gate');
   document.body.classList.add('in-lobby');
+  if (arrivalFlightScreen) {
+    const s = arrivalFlightScreen;
+    arrivalFlightScreen = null;
+    await s.finish();
+  }
   openLobby({
     sms,
+    region,
     onBack: reopenGate,
     onJoin(name, look, session) {
-      me.name = name; me.color = look.color; me.look = look;
-      mySit = ''; myAfk = false; myEmote = ''; myEmoteUntil = 0; idleTime = 0;
-      wear(look); applySession(session); player.visible = true; nameTag.hidden = false; nameTag.el.textContent = name; nameTag.el.classList.remove('is-afk');
-      renderEmoteBar();
-      document.body.classList.remove('in-lobby');
-      leaveBtn.hidden = false;
-      handset.signIn();
-      presence.connect(me); joined = true;
-      trackEvent('world_join', { has_pin: !!session?.hasPin, resumed: !!session?.place });
+      completeWorldJoin(name, look, session);
     },
   });
 };
-if (lobbyQueued) startLobby();
+if (passportQueued) joinWithPassport();
+else if (lobbyQueued) startLobby();
 if (joined) presence.connect(me);
 
 // --- 채팅 & 주변 대화 전체보기 로그 ---
@@ -479,14 +659,14 @@ function syncChatUnread() {
 
 function renderChatLogPanel() {
   if (!chatLogPanel || !chatLogOpen) return;
-
+  const en = isEn();
   const visibleLogs = chatIncludeNpc ? chatLogs : chatLogs.filter((item) => item.kind !== 'npc');
   const rowsHtml = visibleLogs.length
     ? visibleLogs
         .map((item) => {
           const badge =
             item.kind === 'me'
-              ? '<span class="c-badge me">나</span>'
+              ? `<span class="c-badge me">${en ? 'ME' : '나'}</span>`
               : item.kind === 'npc'
                 ? '<span class="c-badge npc">NPC</span>'
                 : `<span class="c-swatch" style="background:${escHtml(item.color || '#20c997')}"></span>`;
@@ -505,27 +685,34 @@ function renderChatLogPanel() {
         .join('')
     : `<li class="c-empty">${
         chatIncludeNpc
-          ? '아직 근처(30m)에서 들린 대화가 없습니다.'
-          : '아직 주고받은 플레이어 대화가 없습니다.<br><small>근처(30m) 접속자와 인사하거나 상단의 <b>NPC 대사 포함</b>을 켜보세요!</small>'
+          ? (en ? 'No nearby (30m) messages yet.' : '아직 근처(30m)에서 들린 대화가 없습니다.')
+          : (en
+              ? 'No player messages yet.<br><small>Say hi to nearby players (30m) or turn on <b>Include NPCs</b> above!</small>'
+              : '아직 주고받은 플레이어 대화가 없습니다.<br><small>근처(30m) 접속자와 인사하거나 상단의 <b>NPC 대사 포함</b>을 켜보세요!</small>')
       }</li>`;
 
+  const headTitleHtml = en ? '💬 Nearby Chat Log <small>(30m)</small>' : '💬 주변 대화 전체보기 <small>(30m)</small>';
+  const npcToggleText = en ? '🗣️ Include NPCs' : '🗣️ NPC 대사 포함';
   let listEl = chatLogPanel.querySelector('.c-list');
   if (!listEl) {
     chatLogPanel.innerHTML = `
       <div class="c-head">
-        <span class="c-title">💬 주변 대화 전체보기 <small>(30m)</small></span>
+        <span class="c-title">${headTitleHtml}</span>
         <div class="c-head-actions">
           <button type="button" class="c-npc-toggle${chatIncludeNpc ? ' on' : ''}" data-chat-npc-toggle="1" aria-pressed="${chatIncludeNpc}">
-            🗣️ NPC 대사 포함
+            ${npcToggleText}
           </button>
-          <button type="button" class="c-close" data-chat-close="1" aria-label="닫기">✕</button>
+          <button type="button" class="c-close" data-chat-close="1" aria-label="Close">✕</button>
         </div>
       </div>
       <ul class="c-list">${rowsHtml}</ul>`;
   } else {
     const prevScroll = listEl.scrollTop;
+    const titleEl = chatLogPanel.querySelector('.c-title');
+    if (titleEl) titleEl.innerHTML = headTitleHtml;
     const npcBtn = chatLogPanel.querySelector('[data-chat-npc-toggle]');
     if (npcBtn) {
+      npcBtn.textContent = npcToggleText;
       npcBtn.classList.toggle('on', chatIncludeNpc);
       npcBtn.setAttribute('aria-pressed', String(chatIncludeNpc));
     }
@@ -625,8 +812,8 @@ function standUpFromSeat() {
 }
 
 function syncMyNameTag() {
-  const baseName = me.name || '나';
-  const want = myAfk ? `${baseName} 💤 자리비움` : baseName;
+  const baseName = me.name || tr('나', 'Me');
+  const want = myAfk ? `${baseName} 💤 ${tr('자리비움', 'AFK')}` : baseName;
   if (nameTag.el.textContent !== want) {
     nameTag.el.textContent = want;
     nameTag.el.classList.toggle('is-afk', myAfk);
@@ -644,30 +831,39 @@ function wakeFromAfk() {
 
 function renderEmoteBar() {
   if (!emoteBar) return;
+  const en = isEn();
   if (emoteFolded) {
     emoteBar.classList.add('folded');
     emoteBar.innerHTML = `
-      <button type="button" class="emote-fold-btn" data-emote-fold="0" title="리액션·앉기·자리비움 바 펼치기">
-        <span>🎉 리액션 (1~6) · 🧘 앉기 (C) · 💤 자리비움 (Z)</span>
+      <button type="button" class="emote-fold-btn" data-emote-fold="0" title="${en ? 'Expand Emotes · Sit · AFK bar' : '리액션·앉기·자리비움 바 펼치기'}">
+        <span>${en ? '🎉 Emotes (1~6) · 🧘 Sit (C) · 💤 AFK (Z)' : '🎉 리액션 (1~6) · 🧘 앉기 (C) · 💤 자리비움 (Z)'}</span>
         <span class="caret">▴</span>
       </button>`;
     return;
   }
   emoteBar.classList.remove('folded');
   const sitTitle = mySit
-    ? '일어나기 (단축키 C)'
+    ? (en ? 'Stand up (Key C)' : '일어나기 (단축키 C)')
     : nearSeatHint
-      ? `${nearSeatHint.label} (단축키 C)`
-      : '자리에 앉기 (단축키 C — 빈백·벤치 근처에선 맞춰 앉아요)';
-  const sitLabel = mySit ? '일어나기' : nearSeatHint ? nearSeatHint.label.replace(/\s*\(C\)$/, '').replace(/^.\s*/, '') : '앉기';
+      ? `${nearSeatHint.label} (C)`
+      : (en ? 'Sit down (Key C — snaps to nearby benches/beanbags)' : '자리에 앉기 (단축키 C — 빈백·벤치 근처에선 맞춰 앉아요)');
+  const sitLabel = mySit
+    ? (en ? 'Stand' : '일어나기')
+    : nearSeatHint
+      ? (en ? 'Sit' : nearSeatHint.label.replace(/\s*\(C\)$/, '').replace(/^.\s*/, ''))
+      : (en ? 'Sit' : '앉기');
   const sitIcon = mySit ? '🚶' : nearSeatHint ? nearSeatHint.label.split(' ')[0] : '🧘';
   const btns = EMOTE_LIST.map(
-    (e) => `
-      <button type="button" class="emote-btn ${myEmote === e.id ? 'active' : ''}" data-emote-id="${e.id}" title="${e.label} (단축키 ${e.digit} 연타 가능!)">
+    (e) => {
+      const lbl = en ? (e.enLabel || e.label) : e.label;
+      const tip = en ? `${lbl} (Key ${e.digit} — mash for combo!)` : `${lbl} (단축키 ${e.digit} 연타 가능!)`;
+      return `
+      <button type="button" class="emote-btn ${myEmote === e.id ? 'active' : ''}" data-emote-id="${e.id}" title="${escHtml(tip)}">
         <kbd>${e.digit}</kbd>
         <span class="em-ico">${e.icon}</span>
-        <span class="em-lbl">${e.label}</span>
-      </button>`,
+        <span class="em-lbl">${escHtml(lbl)}</span>
+      </button>`;
+    },
   ).join('');
   emoteBar.innerHTML = `
     <div class="emote-list">
@@ -676,15 +872,15 @@ function renderEmoteBar() {
         <span class="em-ico">${sitIcon}</span>
         <span class="em-lbl">${escHtml(sitLabel)}</span>
       </button>
-      <button type="button" class="emote-btn afk-btn ${myAfk ? 'active' : ''}" data-afk-toggle="1" title="자리비움/업무중 모드 전환 (단축키 Z)">
+      <button type="button" class="emote-btn afk-btn ${myAfk ? 'active' : ''}" data-afk-toggle="1" title="${en ? 'Toggle AFK mode (Key Z)' : '자리비움/업무중 모드 전환 (단축키 Z)'}">
         <kbd>Z</kbd>
         <span class="em-ico">💤</span>
-        <span class="em-lbl">${myAfk ? '복귀' : '자리비움'}</span>
+        <span class="em-lbl">${myAfk ? (en ? 'Back' : '복귀') : (en ? 'AFK' : '자리비움')}</span>
       </button>
       <span class="emote-sep" aria-hidden="true"></span>
       ${btns}
     </div>
-    <button type="button" class="emote-fold-btn icon-only" data-emote-fold="1" title="리액션 바 접기" aria-label="리액션 바 접기">▾</button>`;
+    <button type="button" class="emote-fold-btn icon-only" data-emote-fold="1" title="${en ? 'Collapse bar' : '리액션 바 접기'}" aria-label="Collapse">▾</button>`;
 }
 renderEmoteBar();
 
@@ -828,13 +1024,29 @@ emoteBar?.addEventListener('click', (e) => {
 // --- 입력/카메라 ---
 const input = new Input(renderer.domElement);
 const viewBtn = document.getElementById('btn-view');
-const setMode = (m) => { cam.mode = m; viewBtn.textContent = m === 'overview' ? '🚶 걸어다니기' : '🗺️ 위에서 보기'; setShadowSpan(m === 'overview' ? 750 : 90); scene.fog.near = m === 'overview' ? 1500 : 350; scene.fog.far = m === 'overview' ? 4500 : 1600; };
+const helpEl = document.querySelector('#hud .help');
+const HELP_WALK_KO = 'WASD/방향키 이동 · Shift 달리기 · Space 점프 · C 앉기 · Z 자리비움 · 1~6 호들갑 · Enter 채팅(!! 외침) · M 위에서 보기 · E 바이크';
+const HELP_WALK_EN = 'WASD/Arrows Move · Shift Run · Space Jump · C Sit · Z AFK · 1~6 Emotes · Enter Chat (!! Shout) · M Overview · E Bike';
+const HELP_RIDE_KO = '카카오바이크 · W 전진 · S 브레이크 · A/D 회전 · Shift 빠르게 · Space 점프 · E 내리기';
+const HELP_RIDE_EN = 'Bike · W Forward · S Brake · A/D Turn · Shift Boost · Space Jump · E Dismount';
+const getHelpWalk = () => (isEn() ? HELP_WALK_EN : HELP_WALK_KO);
+const getHelpRide = () => (isEn() ? HELP_RIDE_EN : HELP_RIDE_KO);
+const syncViewBtnText = () => {
+  if (!viewBtn) return;
+  viewBtn.textContent = cam.mode === 'overview'
+    ? tr('🚶 걸어다니기', '🚶 Walk')
+    : tr('🗺️ 위에서 보기', '🗺️ Overview');
+};
+const setMode = (m) => {
+  cam.mode = m;
+  syncViewBtnText();
+  setShadowSpan(m === 'overview' ? 750 : 90);
+  scene.fog.near = m === 'overview' ? 1500 : 350;
+  scene.fog.far = m === 'overview' ? 4500 : 1600;
+};
 setMode(cam.mode);
 viewBtn.onclick = () => setMode(cam.mode === 'overview' ? 'follow' : 'overview');
 
-const helpEl = document.querySelector('#hud .help');
-const HELP_WALK = helpEl.textContent;
-const HELP_RIDE = '카카오바이크 · W 전진 · S 브레이크 · A/D 회전 · Shift 빠르게 · Space 점프 · E 내리기';
 const rideBtn = document.getElementById('ride-btn');
 const RIDE_Y = 0.16;
 const JUMP_V = 6.2;
@@ -895,46 +1107,145 @@ function toggleRide() {
   animateRide(player, 0, 0);
   emitMyStateNow();
 }
-function syncRideUi() {
+function syncRideUi(force = false) {
   const near = joined && !bikes.riding && bikes.nearest(player.position.x, player.position.z, undefined, player.position.y);
   const mode = bikes.riding ? 'ride' : near ? 'near' : '';
-  if (mode === rideUi) return;
+  if (!force && mode === rideUi) return;
   rideUi = mode;
   rideBtn.hidden = !mode;
-  rideBtn.textContent = mode === 'ride' ? '🚲 내리기 (E)' : '🚲 카카오바이크 타기 (E)';
-  helpEl.textContent = mode === 'ride' ? HELP_RIDE : HELP_WALK;
+  rideBtn.textContent = mode === 'ride'
+    ? tr('🚲 내리기 (E)', '🚲 Dismount (E)')
+    : tr('🚲 카카오바이크 타기 (E)', '🚲 Ride Bike (E)');
+  helpEl.textContent = mode === 'ride' ? getHelpRide() : getHelpWalk();
 }
 rideBtn.addEventListener('click', toggleRide);
-document.getElementById('btn-home').onclick = () => {
+const homeBtn = document.getElementById('btn-home');
+const quickSpotBtns = [];
+function syncGameLocale() {
+  const en = isEn();
+  const langLauncher = document.getElementById('lang-launcher');
+  if (langLauncher) {
+    const lbl = langLauncher.querySelector('.board-label');
+    if (lbl) lbl.textContent = en ? 'KO' : 'EN';
+    langLauncher.title = en ? '한국어 UI로 전환 (Switch to Korean)' : 'Switch UI to English';
+  }
+  syncViewBtnText();
+  if (homeBtn) {
+    homeBtn.textContent = en
+      ? (region.enHomeBtnLabel || region.homeBtnLabel || '🚇 Station')
+      : (region.homeBtnLabel || '🚇 역으로');
+  }
+  if (dogParkBtn && !dogParkBtn.hidden) {
+    dogParkBtn.textContent = en ? '🐕 Dog Park' : '🐕 반려견운동장가기';
+  }
+  for (const { btn, qs } of quickSpotBtns) {
+    btn.textContent = en ? (qs.enLabel || qs.label) : qs.label;
+  }
+  if (globeBtn) {
+    globeBtn.textContent = en ? '🌏 Globe' : '🌏 지구본';
+    globeBtn.title = en ? 'Travel to another neighborhood with your character' : '내 캐릭터 그대로 다른 동네(지구본)로 이동';
+  }
+  if (leaveBtn) leaveBtn.textContent = en ? 'Leave' : '나가기';
+  if (chatInput) {
+    chatInput.placeholder = en
+      ? 'Say something (Enter) · end with !! to shout!'
+      : '말 걸기 (Enter) · 끝에 !! 붙이면 호들갑 외침!';
+  }
+  const chatToggleSpan = chatLogToggle?.querySelector('span:first-child');
+  if (chatToggleSpan) chatToggleSpan.textContent = en ? '💬 Chat Log' : '💬 전체보기';
+  const contribLbl = document.querySelector('#contribute-launcher .board-label');
+  if (contribLbl) contribLbl.textContent = en ? 'Contribute' : '함께 만들기';
+  const boardLbl = document.querySelector('#board-Launcher .board-label');
+  if (boardLbl) boardLbl.textContent = en ? 'Board' : '게시판';
+  const attrEl = document.getElementById('attribution');
+  if (attrEl) {
+    attrEl.innerHTML = en
+      ? '© <a href="https://crazylabs.co.kr" target="_blank" rel="noopener">CrazyLabs</a> · <a href="https://github.com/dohoon84/bumpinto-world" target="_blank" rel="noopener">Source Available</a> · Map © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> (ODbL)'
+      : '© <a href="https://crazylabs.co.kr" target="_blank" rel="noopener">CrazyLabs</a> · <a href="https://github.com/dohoon84/bumpinto-world" target="_blank" rel="noopener">소스 공개 (영리 서비스 금지)</a> · 지도 © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> (ODbL)';
+  }
+  syncRideUi(true);
+  syncMyNameTag();
+  renderEmoteBar();
+  paintPresenceStatus();
+  if (presenceOpen) renderPresencePanel();
+  if (chatLogOpen) renderChatLogPanel();
+}
+document.getElementById('lang-launcher')?.addEventListener('click', () => {
+  toggleLang();
+});
+onLangChange(() => syncGameLocale());
+homeBtn.onclick = () => {
   if (bikes.riding) dismountBike();
   standUpFromSeat();
   wakeFromAfk();
+  roadster?.stop?.();
+  launch?.setCinematic?.(false);
   player.position.copy(pos);
   setMode('follow');
   rememberPlace(true);
 };
 const dogParkBtn = document.getElementById('btn-dogpark');
 if (dogParkBtn) {
-  dogParkBtn.onclick = () => {
-    if (bikes.riding) dismountBike();
-    standUpFromSeat();
-    wakeFromAfk();
-    const tx = 89.0;
-    const tz = -236.2;
-    const ty = terrain ? terrain.getGroundHeight(tx, tz, -6) : 0;
-    player.position.set(tx, ty, tz);
-    player.rotation.y = Math.PI;
-    setMode('follow');
-    cam.yaw = 0.0;
-    cam.pitch = 0.25;
-    cam.dist = 13.0;
-    rememberPlace(true);
-    emitMyStateNow();
-  };
+  if (!region.features?.dogPark) {
+    dogParkBtn.hidden = true;
+  } else {
+    dogParkBtn.onclick = () => {
+      if (bikes.riding) dismountBike();
+      standUpFromSeat();
+      wakeFromAfk();
+      const tx = 89.0;
+      const tz = -236.2;
+      const ty = terrain ? terrain.getGroundHeight(tx, tz, -6) : 0;
+      player.position.set(tx, ty, tz);
+      player.rotation.y = Math.PI;
+      setMode('follow');
+      cam.yaw = 0.0;
+      cam.pitch = 0.25;
+      cam.dist = 13.0;
+      rememberPlace(true);
+      emitMyStateNow();
+    };
+  }
 }
-leaveBtn.onclick = () => {
-  if (!joined) return;
+if (Array.isArray(region.quickSpots) && region.quickSpots.length) {
+  const buttonsWrap = document.getElementById('buttons');
+  for (const qs of region.quickSpots) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.id = `btn-spot-${qs.id}`;
+    b.textContent = qs.label;
+    if (qs.title) b.title = qs.title;
+    b.onclick = () => {
+      if (bikes.riding) dismountBike();
+      standUpFromSeat();
+      wakeFromAfk();
+      roadster?.stop?.();
+      launch?.setCinematic?.(false);
+      let tx = qs.x, tz = qs.z;
+      for (let r = 0, a = 0; (world.isBlocked(tx, tz) || world.onRoad(tx, tz)) && r < 40; a += 0.65, r += 0.4) {
+        tx = qs.x + Math.cos(a) * r;
+        tz = qs.z + Math.sin(a) * r;
+      }
+      const ty = terrain ? terrain.getGroundHeight(tx, tz, 0) : 0;
+      player.position.set(tx, ty, tz);
+      if (qs.ry != null) player.rotation.y = qs.ry;
+      setMode('follow');
+      if (qs.camYaw != null) cam.yaw = qs.camYaw;
+      if (qs.camPitch != null) cam.pitch = qs.camPitch;
+      if (qs.camDist != null) cam.dist = qs.camDist;
+      rememberPlace(true);
+      emitMyStateNow();
+    };
+    buttonsWrap?.insertBefore(b, globeBtn || leaveBtn);
+    quickSpotBtns.push({ btn: b, qs });
+  }
+}
+syncGameLocale();
+function pauseWorldSession() {
   if (bikes.riding) dismountBike();
+  if (trucks?.driving) trucks.exit();
+  roadster?.stop?.();
+  launch?.stop?.();
   rememberPlace(true);
   board.close();
   donationBoards.closeModal();
@@ -956,16 +1267,30 @@ leaveBtn.onclick = () => {
   nameTag.hidden = true;
   myBubble.item.hidden = true;
   presence.close();
+  if (globeBtn) globeBtn.hidden = true;
   leaveBtn.hidden = true;
   rideUi = '';
   rideBtn.hidden = true;
-  helpEl.textContent = HELP_WALK;
+  helpEl.textContent = getHelpWalk();
+}
+if (globeBtn) {
+  globeBtn.onclick = () => {
+    if (!joined) return;
+    setPassportActive(true);
+    pauseWorldSession();
+    reopenGate();
+  };
+}
+leaveBtn.onclick = () => {
+  if (!joined) return;
+  setPassportActive(false);
+  pauseWorldSession();
   startLobby?.();
 };
 input.onKey = (e) => {
   if (e.code === 'KeyM') viewBtn.onclick();
   if (e.code === 'KeyH') document.getElementById('btn-home').onclick();
-  if (e.code === 'KeyP' && !e.repeat) dogParkBtn?.onclick();
+  if (e.code === 'KeyP' && !e.repeat && region.features?.dogPark) dogParkBtn?.onclick();
   if (e.code === 'Enter') { e.preventDefault(); chatInput.focus(); }
   if (e.code === 'KeyE' && !e.repeat) toggleRide();
   if (e.code === 'KeyU' && !e.repeat) umbrellas.handleHotkeyU();
@@ -981,7 +1306,7 @@ input.onKey = (e) => {
   if (emoteDef) triggerEmote(emoteDef.id, true);
 };
 const ov = { yaw: 0.35, pitch: 0.95, dist: 1000 };
-const phone = mountPhone({ data });
+const phone = mountPhone({ data, region });
 
 let placeAt = 0, placeMark = '';
 function rememberPlace(force = false) {
@@ -1019,6 +1344,7 @@ function emitMyStateNow() {
       sit: bikes.riding ? '' : mySit,
       afk: bikes.riding ? false : myAfk,
       umb: bikes.riding ? '' : (umbrellas.umbrellaTheme || ''),
+      ...trucks?.net(),
     },
     true,
   );
@@ -1081,7 +1407,12 @@ function frame() {
     }
   }
   moveSpeed = 0;
-  if (joined && bikes.riding) {
+  const driving = trucks?.update(dt, f, s, run, dy); // [truck] 운전 중이면 걷기/바이크 이동 대신 차량 물리
+  if (driving && bikes.riding) dismountBike();
+  if (driving) {
+    moveSpeed = Math.abs(trucks.current?.v || 0);
+    idleTime = 0;
+  } else if (joined && bikes.riding) {
     const b = bikes.riding;
     const turn = 2.5 / (1 + Math.abs(bikes.speed) * 0.09);
     b.ry -= s * turn * dt;
@@ -1203,7 +1534,7 @@ function frame() {
     animateAvatar(player, moveSpeed, dt);
   }
   syncRideUi();
-  if (joined) presence.sendState({ x: player.position.x, z: player.position.z, ry: player.rotation.y, moving: moveSpeed > 0, riding: !!bikes.riding, jy: Number(jumpY.toFixed(2)), emote: bikes.riding ? '' : myEmote, sit: bikes.riding ? '' : mySit, afk: bikes.riding ? false : myAfk, umb: bikes.riding ? '' : (umbrellas.umbrellaTheme || '') });
+  if (joined) presence.sendState({ x: player.position.x, z: player.position.z, ry: player.rotation.y, moving: moveSpeed > 0, riding: !!bikes.riding, jy: Number(jumpY.toFixed(2)), emote: bikes.riding ? '' : myEmote, sit: bikes.riding ? '' : mySit, afk: bikes.riding ? false : myAfk, umb: bikes.riding ? '' : (umbrellas.umbrellaTheme || ''), ...trucks?.net() });
   rememberPlace();
 
   const rush = atmosphere.state.rush || 'normal';
@@ -1236,7 +1567,10 @@ function frame() {
     camera.lookAt(P.x - bx * aim * cp, eye - aim * sp, P.z - bz * aim * cp); // [terrain] 시선 기준 높이는 P.y + 1.6
     sun.target.position.copy(P);
   } else {
-    const c = new THREE.Vector3(st.x, 0, st.z + 60);
+    const usePlayerCenter = region.id === 'starbase' && joined && st.x === 0 && st.z === 0;
+    const cx = usePlayerCenter ? P.x : st.x;
+    const cz = usePlayerCenter ? P.z : st.z + 60;
+    const c = new THREE.Vector3(cx, 0, cz);
     tmp.set(Math.sin(ov.yaw) * Math.cos(ov.pitch), Math.sin(ov.pitch), Math.cos(ov.yaw) * Math.cos(ov.pitch)).multiplyScalar(ov.dist);
     camera.position.copy(c).add(tmp); camera.lookAt(c);
     sun.target.position.copy(c);
@@ -1250,6 +1584,8 @@ function frame() {
     peers: remotes.list(),
   });
   atmosphere.update(dt, camera);
+  roadster?.update(dt); // [roadster] 시네마틱 카메라가 켜져 있으면 camera/sun.target 덮어씀
+  launch?.update(dt); // [launch] 5분 주기 발사·핫스테이징·젓가락 캐치 쇼
   sun.position.copy(sun.target.position).addScaledVector(atmosphere.sunDir, 500);
   renderer.render(scene, camera);
   overlay.update(innerWidth, innerHeight);
@@ -1261,7 +1597,7 @@ requestAnimationFrame(frame);
 
 // 스크린샷/디버그용 훅
 window.__jj = {
-  ready: true, data, world, npcs, transit, camera, cam, ov, setMode, terrain, taxis, police, weather: atmosphere, umbrellas, dogPark, // [terrain] [taxi]
+  ready: true, region, tower, launch, roadster, trucks, data, world, npcs, transit, camera, cam, ov, setMode, terrain, taxis, police, weather: atmosphere, umbrellas, dogPark, // [terrain] [taxi] [roadster] [tower] [launch] [truck]
   get player() { return player; },
   teleport(x, z, y) { if (bikes.riding) dismountBike(); player.position.set(x, y ?? (terrain ? terrain.getGroundHeight(x, z, 0) : 0), z); }, // [terrain]
   bikes, toggleRide, triggerEmote,

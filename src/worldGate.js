@@ -1,25 +1,19 @@
-// 입장 전 지구본. 해안선은 실제 국가 윤곽이고, 남한만 밝히고 정자동을 누르면 입장한다.
+// 입장 전 지구본. 해안선은 실제 국가 윤곽이고, 오픈된 동네(정자동 · Starbase, TX) 핀을 누르면 입장한다.
 // 다음 오픈 예정 지역(기여자 모집 중)은 오른쪽 상단 패널에 리스팅한다.
 import * as THREE from 'three';
 import { MAP_W, MAP_H, LAND, KOREA } from './worldLand.js';
 import { trackEvent } from './analytics.js';
+import { OPEN_REGIONS, UPCOMING_REGIONS, getCurrentRegion, getRegion } from './regions/index.js';
+import { isEn, tr, toggleLang, onLangChange } from './i18n.js';
+
+export { OPEN_REGIONS, UPCOMING_REGIONS };
 
 const LAT0 = -56, LAT1 = 82;
-const JEONGJA = { id: 'jeongja', name: '정자동', status: 'open', lat: 37.3665, lon: 127.10835 };
-
-export const UPCOMING_REGIONS = [
-  { id: 'sunae', name: '수내역', desc: '중앙공원 · 롯데백화점', lat: 37.3785, lon: 127.1144 },
-  { id: 'seohyeon', name: '서현역', desc: 'AK플라자 · 로데오거리', lat: 37.3851, lon: 127.1236 },
-  { id: 'imae', name: '이매역', desc: '성남아트센터 · 탄천', lat: 37.3958, lon: 127.1281 },
-  { id: 'yatap', name: '야탑역', desc: '성남종합버스터미널 · 먹자골목', lat: 37.4114, lon: 127.1287 },
-  { id: 'pangyo', name: '판교역', desc: '테크노밸리 · 화랑공원', lat: 37.3947, lon: 127.1112 },
-  { id: 'gangnam', name: '강남역', desc: '강남대로 · 테헤란로', lat: 37.4979, lon: 127.0276 },
-  { id: 'seongsu', name: '성수동', desc: '연무장길 · 서울숲', lat: 37.5445, lon: 127.0560 },
-  { id: 'hongdae', name: '홍대입구', desc: '경의선숲길 · 걷고싶은거리', lat: 37.5572, lon: 126.9245 },
-];
-
 export const REPO_URL = 'https://github.com/dohoon84/bumpinto-world';
 const DEFAULT_PHONE_BASE = import.meta.env?.VITE_PHONE_URL || 'https://jeongja-phone.xn0texn073.workers.dev';
+
+// 스타베이스 정식 오픈 시각: 2026-10-29 11:00:00 KST (UTC+9)
+export const STARBASE_OPEN_AT = Date.parse('2026-10-29T11:00:00+09:00');
 
 function isLocalHost() {
   if (typeof location === 'undefined') return false;
@@ -27,18 +21,42 @@ function isLocalHost() {
   return h === 'localhost' || h === '127.0.0.1' || h === '[::1]' || h.endsWith('.local');
 }
 
-function phoneStatsUrl() {
+function isForceUnlocked() {
+  if (typeof location === 'undefined') return false;
+  const params = new URLSearchParams(location.search);
+  return params.get('unlock') === '1' || params.get('starbase') === 'open';
+}
+
+export function starbaseRemainingMs(now = Date.now()) {
+  if (isForceUnlocked()) return 0;
+  return Math.max(0, STARBASE_OPEN_AT - now);
+}
+
+export function isStarbaseLive(now = Date.now()) {
+  return starbaseRemainingMs(now) <= 0;
+}
+
+function formatHms(ms) {
+  const totalSec = Math.max(0, Math.ceil(ms / 1000));
+  const hh = String(Math.floor(totalSec / 3600)).padStart(2, '0');
+  const mm = String(Math.floor((totalSec % 3600) / 60)).padStart(2, '0');
+  const ss = String(totalSec % 60).padStart(2, '0');
+  return { hh, mm, ss, text: `${hh}:${mm}:${ss}` };
+}
+
+function phoneStatsUrl(regionId = 'jeongja') {
   const params = new URLSearchParams(location.search);
   const smsParam = params.get('sms');
+  const q = `?region=${encodeURIComponent(regionId)}`;
   if (smsParam === 'off') return '';
-  if (smsParam === 'local') return 'http://127.0.0.1:8789/stats';
-  if (smsParam === 'prod' || smsParam === 'live') return `${DEFAULT_PHONE_BASE.replace(/\/$/, '')}/stats`;
+  if (smsParam === 'local') return `http://127.0.0.1:8789/stats${q}`;
+  if (smsParam === 'prod' || smsParam === 'live') return `${DEFAULT_PHONE_BASE.replace(/\/$/, '')}/stats${q}`;
   if (params.has('sms')) {
     const b = (smsParam || '').replace(/\/$/, '');
-    return b ? `${b}/stats` : '';
+    return b ? `${b}/stats${q}` : '';
   }
   if (isLocalHost()) return '';
-  return `${DEFAULT_PHONE_BASE.replace(/\/$/, '')}/stats`;
+  return `${DEFAULT_PHONE_BASE.replace(/\/$/, '')}/stats${q}`;
 }
 
 function unproj(px, py) {
@@ -88,6 +106,20 @@ function earthTexture() {
   ctx.fillRect(0, 0, w, h);
   paint(ctx, parseRings(LAND), w, h, '#9aafc0');
   paint(ctx, parseRings(KOREA), w, h, '#b6ef62');
+  // 텍사스 보카치카(Starbase) 주변 해안 하이라이트 글로우
+  for (const r of OPEN_REGIONS) {
+    if (r.id === 'jeongja') continue;
+    const gx = ((r.lon + 180) / 360) * w;
+    const gy = ((90 - r.lat) / 180) * h;
+    const grad = ctx.createRadialGradient(gx, gy, 2, gx, gy, 24);
+    grad.addColorStop(0, 'rgba(76, 201, 240, 0.95)');
+    grad.addColorStop(0.5, 'rgba(182, 239, 98, 0.55)');
+    grad.addColorStop(1, 'rgba(76, 201, 240, 0)');
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.arc(gx, gy, 24, 0, Math.PI * 2);
+    ctx.fill();
+  }
   const tex = new THREE.CanvasTexture(canvas);
   tex.colorSpace = THREE.SRGBColorSpace;
   tex.anisotropy = 8;
@@ -106,85 +138,121 @@ function lonLat(lon, lat, radius) {
 export function openWorldGate({ onEnter }) {
   const root = document.getElementById('world-gate');
   root.hidden = false;
+  const activeRegion = getCurrentRegion();
+  // 카운트다운 기간에는 지구본이 처음부터 스타베이스나 정자동을 볼 수 있게 하되, 배너 클릭 시 즉시 스타베이스로 포커스
+  let focusedRegionId = activeRegion.id;
 
-  const upcomingListHtml = UPCOMING_REGIONS.map(
+  const pinButtonsHtml = OPEN_REGIONS.map(
     (r) => `
-      <li>
-        <button type="button" class="gate-upcoming-item" data-region="${r.id}">
-          <span class="dot"></span>
-          <span class="name">${r.name}</span>
-          <small>${r.desc}</small>
-          <em>준비중</em>
-        </button>
-      </li>`,
+      <button
+        type="button"
+        id="${r.id === 'jeongja' ? 'gate-jeongja' : `gate-${r.id}`}"
+        class="gate-open-pin ${r.globePinStyle === 'us' ? 'pin-us' : 'pin-kr'}"
+        data-enter-region="${r.id}"
+        hidden
+      >
+        <span class="pin-text">${isEn() ? (r.enGlobePinText || r.globePinText) : r.globePinText}</span>
+        <span id="gate-pin-badge-${r.id}" class="gate-pin-badge" hidden></span>
+      </button>`,
   ).join('');
 
   root.innerHTML = `
     <div class="gate-telemetry" aria-live="polite">
       <div class="gate-telemetry-hd">
         <span class="gate-sat-dot"></span>
-        <span>🛰️ 위성 실시간 관측 · 정자동 (37.37°N)</span>
+        <span id="gate-telemetry-title"></span>
       </div>
       <div class="gate-telemetry-grid">
         <div class="gate-stat-card">
-          <small>현재 거리 산책 중</small>
-          <strong id="gate-stat-online">관측 중…</strong>
+          <small id="gate-stat-online-lbl"></small>
+          <strong id="gate-stat-online">…</strong>
         </div>
         <div class="gate-stat-card">
-          <small>누적 등록 입주민</small>
-          <strong id="gate-stat-residents">집계 중…</strong>
+          <small id="gate-stat-res-lbl"></small>
+          <strong id="gate-stat-residents">…</strong>
         </div>
       </div>
     </div>
-    <aside class="gate-regions" aria-label="월드 지역 목록">
-      <div class="gate-regions-hd">🌏 오픈 월드 지역 현황</div>
-      <ul class="gate-regions-list">
-        <li>
-          <button type="button" class="gate-upcoming-item is-open" data-enter-now="1">
-            <span class="dot open"></span>
-            <span class="name">정자동 (정자역)</span>
-            <small id="gate-jeongja-sub">성남시 분당구</small>
-            <em>열림 · 입장</em>
-          </button>
-        </li>
-        ${upcomingListHtml}
-      </ul>
-      <a href="${REPO_URL}/blob/main/CONTRIBUTING.md" target="_blank" rel="noopener" class="gate-regions-ft">
-        + 내 동네 개척자로 참여하기 (GitHub)
-      </a>
+    <div id="gate-launch-hero" class="gate-launch-hero" aria-live="polite">
+      <p id="gate-launch-kicker" class="gate-launch-kicker"></p>
+      <div class="gate-launch-clock" role="timer">
+        <div class="flip-group">
+          <div class="flip-pair">
+            <div class="flip-card" id="flip-h1"><span>0</span></div>
+            <div class="flip-card" id="flip-h2"><span>0</span></div>
+          </div>
+          <span class="flip-unit" id="flip-lbl-h">HOURS</span>
+        </div>
+        <span class="flip-sep">:</span>
+        <div class="flip-group">
+          <div class="flip-pair">
+            <div class="flip-card" id="flip-m1"><span>0</span></div>
+            <div class="flip-card" id="flip-m2"><span>0</span></div>
+          </div>
+          <span class="flip-unit" id="flip-lbl-m">MINUTES</span>
+        </div>
+        <span class="flip-sep">:</span>
+        <div class="flip-group">
+          <div class="flip-pair">
+            <div class="flip-card" id="flip-s1"><span>0</span></div>
+            <div class="flip-card" id="flip-s2"><span>0</span></div>
+          </div>
+          <span class="flip-unit" id="flip-lbl-s">SECONDS</span>
+        </div>
+      </div>
+      <h2 id="gate-launch-title" class="gate-launch-title"></h2>
+      <p id="gate-launch-sub" class="gate-launch-sub"></p>
+      <div id="gate-polaroids" class="gate-polaroids"></div>
+    </div>
+    <aside class="gate-regions" aria-label="World Regions">
+      <div class="gate-regions-top">
+        <div id="gate-regions-hd" class="gate-regions-hd"></div>
+        <button type="button" id="gate-lang-btn" class="lang-switch-btn" title="Switch UI Language (KO / EN)"></button>
+      </div>
+      <ul id="gate-regions-list" class="gate-regions-list"></ul>
+      <a id="gate-regions-ft" href="${REPO_URL}/blob/main/CONTRIBUTING.md" target="_blank" rel="noopener" class="gate-regions-ft"></a>
     </aside>
     <div class="gate-copy">
-      <p class="kicker">순차 오픈 · 오픈소스</p>
+      <p id="gate-kicker" class="kicker"></p>
       <h1>Bumpinto World</h1>
-      <p class="lead">다 같이 만들어 가는 오픈 월드</p>
+      <p id="gate-lead" class="lead"></p>
+      <div id="gate-focus-bar" class="gate-focus-bar" role="group"></div>
       <div class="rule"></div>
-      <p class="note">지구본의 <b>정자동 · 열림</b>을 눌러 입장하세요</p>
+      <p id="gate-note" class="note"></p>
       <div class="gate-links">
-        <a href="${REPO_URL}" target="_blank" rel="noopener" class="gate-gh-btn">⭐ GitHub에서 함께 만들기</a>
+        <a id="gate-gh-btn" href="${REPO_URL}" target="_blank" rel="noopener" class="gate-gh-btn"></a>
       </div>
     </div>
     <div id="gate-region-toast" class="gate-toast" hidden></div>
     <a class="studio" href="https://crazylabs.co.kr" target="_blank" rel="noopener">
-      <img src="${import.meta.env.BASE_URL}crazylabs-qr.svg" alt="크레이지랩스 사이트 QR" width="52" height="52" />
+      <img src="${import.meta.env.BASE_URL}crazylabs-qr.svg" alt="CrazyLabs QR" width="52" height="52" />
       <span>
-        <small>개발 · 오픈소스 허브</small>
-        <strong>크레이지랩스</strong>
+        <small id="gate-studio-sub"></small>
+        <strong id="gate-studio-name"></strong>
         <em>crazylabs.co.kr</em>
       </span>
     </a>
     <canvas id="gate-globe"></canvas>
-    <button type="button" id="gate-jeongja" hidden>
-      <span>정자동 · 열림</span>
-      <span id="gate-pin-badge" class="gate-pin-badge" hidden></span>
-    </button>`;
+    ${pinButtonsHtml}`;
 
   const canvas = root.querySelector('#gate-globe');
-  const label = root.querySelector('#gate-jeongja');
-  const pinBadge = root.querySelector('#gate-pin-badge');
   const statOnlineEl = root.querySelector('#gate-stat-online');
   const statResidentsEl = root.querySelector('#gate-stat-residents');
-  const jeongjaSubEl = root.querySelector('#gate-jeongja-sub');
+  const telemetryTitleEl = root.querySelector('#gate-telemetry-title');
+  const regionsListEl = root.querySelector('#gate-regions-list');
+  const focusBarEl = root.querySelector('#gate-focus-bar');
+  const langBtn = root.querySelector('#gate-lang-btn');
   const toast = root.querySelector('#gate-region-toast');
+  const heroEl = root.querySelector('#gate-launch-hero');
+  const flipCards = [
+    root.querySelector('#flip-h1'),
+    root.querySelector('#flip-h2'),
+    root.querySelector('#flip-m1'),
+    root.querySelector('#flip-m2'),
+    root.querySelector('#flip-s1'),
+    root.querySelector('#flip-s2'),
+  ];
+  const prevDigits = ['', '', '', '', '', ''];
 
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
   renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
@@ -205,59 +273,329 @@ export function openWorldGate({ onEnter }) {
     new THREE.SphereGeometry(1.06, 48, 32),
     new THREE.MeshBasicMaterial({ color: '#d4e2ff', transparent: true, opacity: 0.12, side: THREE.BackSide }),
   );
-  const spot = lonLat(JEONGJA.lon, JEONGJA.lat, 1.02);
-  const pin = new THREE.Mesh(new THREE.SphereGeometry(0.018, 12, 10), new THREE.MeshBasicMaterial({ color: '#d4003b' }));
-  pin.position.copy(spot);
-  const halo = new THREE.Mesh(new THREE.SphereGeometry(0.028, 16, 12), new THREE.MeshBasicMaterial({ color: '#f5a200', transparent: true, opacity: 0.7 }));
-  halo.position.copy(spot);
-  globe.add(earth, pin, halo);
-  scene.add(air, globe);
-  globe.rotation.y = -Math.atan2(spot.x, spot.z);
+  globe.add(earth);
 
-  let alive = true, raf = 0, drag = null, moved = 0, lastT = 0, toastTimer = 0, statsTimer = 0;
+  const pinMarkers = OPEN_REGIONS.map((r) => {
+    const spot = lonLat(r.lon, r.lat, 1.02);
+    const pinColor = r.id === 'starbase' ? '#0b3d91' : '#d4003b';
+    const haloColor = r.id === 'starbase' ? '#4cc9f0' : '#f5a200';
+    const pin = new THREE.Mesh(
+      new THREE.SphereGeometry(0.019, 12, 10),
+      new THREE.MeshBasicMaterial({ color: pinColor }),
+    );
+    pin.position.copy(spot);
+    const halo = new THREE.Mesh(
+      new THREE.SphereGeometry(0.03, 16, 12),
+      new THREE.MeshBasicMaterial({ color: haloColor, transparent: true, opacity: 0.72 }),
+    );
+    halo.position.copy(spot);
+    globe.add(pin, halo);
+    const btnEl = root.querySelector(r.id === 'jeongja' ? '#gate-jeongja' : `#gate-${r.id}`);
+    const badgeEl = root.querySelector(`#gate-pin-badge-${r.id}`);
+    return { region: r, spot, pin, halo, btnEl, badgeEl };
+  });
+
+  scene.add(air, globe);
+
+  const initialMarker = pinMarkers.find((m) => m.region.id === activeRegion.id) || pinMarkers[0];
+  globe.rotation.y = -Math.atan2(initialMarker.spot.x, initialMarker.spot.z);
+  globe.rotation.x = Math.max(-0.35, Math.min(0.35, (initialMarker.region.lat - 28) * 0.006));
+
+  let alive = true, raf = 0, drag = null, moved = 0, lastT = 0, toastTimer = 0, statsTimer = 0, countdownTimer = 0;
+  let targetRotY = null;
+  let targetRotX = null;
+  let pauseSpinUntil = 0;
+  let pinHovered = false;
+  let wasStarbaseLive = isStarbaseLive();
+
+  for (const m of pinMarkers) {
+    if (!m.btnEl) continue;
+    m.btnEl.addEventListener('pointerenter', () => { pinHovered = true; });
+    m.btnEl.addEventListener('pointerleave', () => { pinHovered = false; });
+  }
+
+  function updateCountdownUi() {
+    if (!alive) return;
+    const en = isEn();
+    const rem = starbaseRemainingMs();
+    const live = rem <= 0;
+    if (live !== wasStarbaseLive) {
+      wasStarbaseLive = live;
+      renderGateLocale();
+    }
+    const sbMarker = pinMarkers.find((m) => m.region.id === 'starbase');
+    const sbListEm = root.querySelector('[data-enter-region="starbase"] em');
+    const sbListItem = root.querySelector('[data-enter-region="starbase"]');
+
+    if (live) {
+      if (heroEl) heroEl.hidden = true;
+      if (sbMarker?.btnEl) {
+        sbMarker.btnEl.classList.remove('is-countdown');
+        const txt = sbMarker.btnEl.querySelector('.pin-text');
+        if (txt) txt.textContent = en ? (sbMarker.region.enGlobePinText || sbMarker.region.globePinText) : sbMarker.region.globePinText;
+      }
+      if (sbListItem) {
+        sbListItem.classList.remove('is-countdown');
+        sbListItem.classList.add('is-open');
+      }
+      if (sbListEm) sbListEm.textContent = en ? 'OPEN · Enter' : '열림 · 입장';
+      return;
+    }
+
+    if (heroEl) heroEl.hidden = false;
+    const { hh, mm, ss, text } = formatHms(rem);
+    const nextDigits = [hh[0], hh[1], mm[0], mm[1], ss[0], ss[1]];
+    for (let i = 0; i < 6; i++) {
+      const card = flipCards[i];
+      if (!card) continue;
+      if (prevDigits[i] !== nextDigits[i]) {
+        const hadPrev = prevDigits[i] !== '';
+        prevDigits[i] = nextDigits[i];
+        const span = card.querySelector('span');
+        if (span) span.textContent = nextDigits[i];
+        if (hadPrev) {
+          card.classList.remove('is-flipping');
+          void card.offsetWidth;
+          card.classList.add('is-flipping');
+        }
+      }
+    }
+
+    if (sbMarker?.btnEl) {
+      sbMarker.btnEl.classList.add('is-countdown');
+      const txt = sbMarker.btnEl.querySelector('.pin-text');
+      if (txt) txt.textContent = `Starbase, TX · ${text}`;
+      if (sbMarker.badgeEl) {
+        sbMarker.badgeEl.hidden = false;
+        sbMarker.badgeEl.textContent = '11:00 KST';
+      }
+    }
+    if (sbListItem) {
+      sbListItem.classList.add('is-countdown');
+    }
+    if (sbListEm) {
+      sbListEm.textContent = text;
+    }
+  }
+
+  function renderGateLocale() {
+    const en = isEn();
+    const live = isStarbaseLive();
+    const focused = getRegion(focusedRegionId);
+    if (telemetryTitleEl) {
+      telemetryTitleEl.textContent = en ? (focused.enTelemetryLabel || focused.telemetryLabel) : focused.telemetryLabel;
+    }
+    root.querySelector('#gate-stat-online-lbl').textContent = tr('현재 거리 산책 중', 'Exploring Now');
+    root.querySelector('#gate-stat-res-lbl').textContent = tr('누적 등록 입주민', 'Registered Citizens');
+    const openCount = live ? OPEN_REGIONS.length : 1;
+    root.querySelector('#gate-regions-hd').textContent = tr(
+      `🌏 오픈 월드 지역 현황 (${openCount}곳 오픈${live ? '' : ' · 1곳 카운트다운'})`,
+      `🌏 Open World Regions (${openCount} Live${live ? '' : ' · 1 Countdown'})`,
+    );
+    if (langBtn) langBtn.textContent = en ? '🌐 KO 한국어' : '🌐 EN English';
+    root.querySelector('#gate-regions-ft').textContent = tr(
+      '+ 내 동네 개척자로 참여하기 (GitHub)',
+      '+ Contribute Your Neighborhood (GitHub)',
+    );
+    root.querySelector('#gate-kicker').textContent = tr('순차 오픈 · 글로벌 오픈월드', 'OPEN SOURCE · 3D REAL-WORLD METAVERSE');
+    root.querySelector('#gate-lead').textContent = tr(
+      '다 같이 만들어 가는 오픈 월드 · Korea & USA',
+      'Walk real-world neighborhoods together · Korea & USA',
+    );
+    root.querySelector('#gate-note').innerHTML = live
+      ? tr(
+          '지구본의 <b>정자동 · 열림</b> 또는 <b>🚀 Starbase, TX · OPEN</b>을 눌러 입장하세요',
+          'Click <b>🇰🇷 Jeongja-dong</b> or <b>🚀 Starbase, TX</b> on the globe to enter',
+        )
+      : tr(
+          '지구본의 <b>정자동 · 열림</b>으로 입장하거나 <b>🚀 Starbase, TX 오픈 카운트다운</b>을 확인하세요',
+          'Enter <b>🇰🇷 Jeongja-dong</b> now or check the <b>🚀 Starbase, TX Launch Countdown</b>',
+        );
+    root.querySelector('#gate-gh-btn').textContent = tr('⭐ GitHub에서 함께 만들기', '⭐ Build Together on GitHub');
+    root.querySelector('#gate-studio-sub').textContent = tr('개발 · 오픈소스 허브', 'Created by · Open Source Hub');
+    root.querySelector('#gate-studio-name').textContent = tr('크레이지랩스', 'CrazyLabs');
+
+    const base = import.meta.env.BASE_URL;
+    root.querySelector('#gate-launch-kicker').textContent = en
+      ? 'STARBASE, TX · BOCA CHICA · GRAND OPENING'
+      : 'STARBASE, TX · 첫 해외 지역 오픈 카운트다운';
+    root.querySelector('#gate-launch-title').textContent = en
+      ? 'Starbase, Texas Opens at 11:00 AM KST (Oct 29)'
+      : '미국 텍사스 스타베이스 · 10월 29일 11:00 KST 정식 오픈';
+    root.querySelector('#gate-launch-sub').innerHTML = en
+      ? 'Direct flights from Incheon (ICN) to Starbase, TX (BRO) open at 11:00 AM KST — here is what awaits you inside:'
+      : '11시 정각 인천공항(ICN) → 텍사스 스타베이스(BRO) 노선이 열리면 아래 경험들을 직접 만나보실 수 있습니다';
+    const polaroidsEl = root.querySelector('#gate-polaroids');
+    if (polaroidsEl) {
+      const items = [
+        {
+          img: `${base}promo/starbase-launch.jpg`,
+          tag: 'EVERY 5 MIN LIVE',
+          title: en ? '145m Starship Launch & Catch' : '145m 스타십 발사 & 젓가락 캐치',
+          sub: en ? 'Full-stack liftoff, hot-staging & Mechazilla catch' : '33기 랩터 점화·이륙부터 메카질라 부스터 캐치까지',
+        },
+        {
+          img: `${base}promo/starbase-truck.jpg`,
+          tag: 'DRIVABLE · KEY F',
+          title: en ? 'Drive the Steel Truck' : '스틸 트럭(사이버트럭) 직접 운전',
+          sub: en ? '20 angular pickups parked across Starbase (130 km/h)' : '8가지 컬러 20대 배치 · F 키로 탑승해 130km/h 질주',
+        },
+        {
+          img: `${base}promo/starbase-roadster.jpg`,
+          tag: 'STUNT SHOW · KEY R',
+          title: en ? 'Rocket Roadster Jump Show' : '로켓 로드스터 점프 쇼',
+          sub: en ? 'Inverted loop ramp, air thrusters & 5-car jump' : '곡선 루프 흡착 주행·공중 백플립·차량 5대 점프',
+        },
+      ];
+      polaroidsEl.innerHTML = items
+        .map(
+          (p) => `
+          <div class="polaroid-card" data-focus-region="starbase">
+            <div class="polaroid-photo">
+              <img src="${p.img}" alt="${p.title}" loading="eager" />
+              <span class="polaroid-tag">${p.tag}</span>
+            </div>
+            <div class="polaroid-caption">
+              <strong>${p.title}</strong>
+              <span>${p.sub}</span>
+            </div>
+          </div>`,
+        )
+        .join('');
+    }
+
+    const openListHtml = OPEN_REGIONS.map(
+      (r) => {
+        const isSbCountdown = r.id === 'starbase' && !live;
+        return `
+        <li>
+          <button type="button" class="gate-upcoming-item ${isSbCountdown ? 'is-countdown' : 'is-open'} ${r.id === 'starbase' ? 'is-us' : ''}" data-enter-region="${r.id}">
+            <span class="dot ${isSbCountdown ? 'countdown' : 'open'}"></span>
+            <span class="name">${en ? (r.enName || r.name) : r.name}</span>
+            <small id="gate-sub-${r.id}">${en ? (r.enSub || r.sub) : r.sub}</small>
+            <em>${isSbCountdown ? '⏱️ 11:00 KST' : (en ? 'OPEN · Enter' : '열림 · 입장')}</em>
+          </button>
+        </li>`;
+      },
+    ).join('');
+
+    const upcomingListHtml = UPCOMING_REGIONS.map(
+      (r) => `
+        <li>
+          <button type="button" class="gate-upcoming-item" data-region="${r.id}">
+            <span class="dot"></span>
+            <span class="name">${en ? (r.enName || r.name) : r.name}</span>
+            <small>${en ? (r.enDesc || r.desc) : r.desc}</small>
+            <em>${en ? 'Soon' : '준비중'}</em>
+          </button>
+        </li>`,
+    ).join('');
+    regionsListEl.innerHTML = openListHtml + upcomingListHtml;
+
+    focusBarEl.innerHTML = OPEN_REGIONS.map(
+      (r) => `
+        <button type="button" class="gate-focus-chip ${r.id === focusedRegionId ? 'on' : ''}" data-focus-region="${r.id}">
+          ${r.id === 'starbase' ? tr('🇺🇸 Starbase, TX 보기', '🇺🇸 View Starbase, TX') : tr('🇰🇷 정자동 보기', '🇰🇷 View Jeongja, KR')}
+        </button>`,
+    ).join('');
+
+    for (const m of pinMarkers) {
+      const txtEl = m.btnEl?.querySelector('.pin-text');
+      if (txtEl) txtEl.textContent = en ? (m.region.enGlobePinText || m.region.globePinText) : m.region.globePinText;
+    }
+    updateCountdownUi();
+    refreshGateStats();
+  }
+
+  function focusRegionOnGlobe(regionId) {
+    const marker = pinMarkers.find((m) => m.region.id === regionId);
+    if (!marker) return;
+    focusedRegionId = marker.region.id;
+    const desiredY = -Math.atan2(marker.spot.x, marker.spot.z);
+    const diff = Math.atan2(Math.sin(desiredY - globe.rotation.y), Math.cos(desiredY - globe.rotation.y));
+    targetRotY = globe.rotation.y + diff;
+    targetRotX = Math.max(-0.35, Math.min(0.35, (marker.region.lat - 28) * 0.006));
+    pauseSpinUntil = performance.now() + 6000;
+    if (telemetryTitleEl) {
+      telemetryTitleEl.textContent = isEn() ? (marker.region.enTelemetryLabel || marker.region.telemetryLabel) : marker.region.telemetryLabel;
+    }
+    root.querySelectorAll('[data-focus-region]').forEach((el) => {
+      el.classList.toggle('on', el.dataset.focusRegion === regionId);
+    });
+  }
 
   async function refreshGateStats() {
     if (!alive) return;
-    const url = phoneStatsUrl();
-    if (!url) {
-      if (statOnlineEl) statOnlineEl.innerHTML = `<span class="idle-num">로컬 모드</span> · 집계 제외`;
-      if (statResidentsEl) statResidentsEl.innerHTML = `<span class="res-num">테스트 환경</span>`;
-      if (jeongjaSubEl) jeongjaSubEl.textContent = '성남시 분당구 · 🧪 로컬 테스트 모드';
-      if (pinBadge) {
-        pinBadge.hidden = false;
-        pinBadge.textContent = '🧪 로컬 모드';
+    const en = isEn();
+    const live = isStarbaseLive();
+    let totalOnline = 0;
+    let totalResidents = 0;
+    let anyLive = false;
+
+    for (const m of pinMarkers) {
+      const subEl = root.querySelector(`#gate-sub-${m.region.id}`);
+      const baseSub = en ? (m.region.enSub || m.region.sub) : m.region.sub;
+      if (m.region.id === 'starbase' && !live) {
+        if (subEl) subEl.textContent = en ? 'Opens Oct 29, 11:00 KST' : '10월 29일 11:00 KST 오픈';
+        continue;
       }
+      const url = phoneStatsUrl(m.region.id);
+      if (!url) {
+        if (subEl) subEl.textContent = `${baseSub} · ${en ? '🧪 Local Mode' : '🧪 로컬 테스트 모드'}`;
+        if (m.badgeEl) {
+          m.badgeEl.hidden = false;
+          m.badgeEl.textContent = en ? '🧪 Local' : '🧪 로컬 모드';
+        }
+        continue;
+      }
+      try {
+        const r = await fetch(url, { cache: 'no-store' });
+        const j = await r.json();
+        if (!alive || !j || !j.ok) continue;
+        anyLive = true;
+        const online = Math.max(0, Number(j.online || 0));
+        const residents = Math.max(0, Number(j.residents || 0));
+        totalOnline += online;
+        totalResidents += residents;
+        if (subEl) {
+          subEl.textContent = online > 0
+            ? `${baseSub} · 🟢 ${en ? `${online} online` : `${online}명 산책 중`}`
+            : `${baseSub} · ${en ? `${residents} citizens` : `입주민 ${residents}명`}`;
+        }
+        if (m.badgeEl) {
+          m.badgeEl.hidden = false;
+          m.badgeEl.textContent = online > 0
+            ? (en ? `🟢 ${online} online` : `🟢 ${online}명 산책 중`)
+            : (en ? `Citizens ${residents}` : `입주민 ${residents}명`);
+        }
+      } catch {
+        /* 네트워크 실패 시 조용히 무시 */
+      }
+    }
+
+    if (!anyLive) {
+      if (statOnlineEl) statOnlineEl.innerHTML = en ? `<span class="idle-num">Local Mode</span> · Offline` : `<span class="idle-num">로컬 모드</span> · 집계 제외`;
+      if (statResidentsEl) statResidentsEl.innerHTML = en ? `<span class="res-num">Test Env</span>` : `<span class="res-num">테스트 환경</span>`;
       return;
     }
-    try {
-      const r = await fetch(url, { cache: 'no-store' });
-      const j = await r.json();
-      if (!alive || !j || !j.ok) return;
-      const online = Math.max(0, Number(j.online || 0));
-      const residents = Math.max(0, Number(j.residents || 0));
-      if (statOnlineEl) {
-        statOnlineEl.innerHTML = online > 0
-          ? `<span class="live-num">${online}명</span> 활동 중`
-          : `<span class="idle-num">0명</span> · 첫 산책자 대기 중`;
-      }
-      if (statResidentsEl) {
-        statResidentsEl.innerHTML = `<span class="res-num">${residents.toLocaleString()}명</span>`;
-      }
-      if (jeongjaSubEl) {
-        jeongjaSubEl.textContent = online > 0
-          ? `성남시 분당구 · 🟢 ${online}명 산책 중`
-          : `성남시 분당구 · 입주민 ${residents}명`;
-      }
-      if (pinBadge) {
-        pinBadge.hidden = false;
-        pinBadge.textContent = online > 0 ? `🟢 ${online}명 산책 중` : `입주민 ${residents}명`;
-      }
-    } catch {
-      /* 네트워크 실패 시 조용히 무시 */
+    if (statOnlineEl) {
+      statOnlineEl.innerHTML = totalOnline > 0
+        ? (en ? `<span class="live-num">${totalOnline}</span> active` : `<span class="live-num">${totalOnline}명</span> 활동 중`)
+        : (en ? `<span class="idle-num">0</span> · Waiting for explorers` : `<span class="idle-num">0명</span> · 첫 산책자 대기 중`);
+    }
+    if (statResidentsEl) {
+      statResidentsEl.innerHTML = en
+        ? `<span class="res-num">${totalResidents.toLocaleString()}</span>`
+        : `<span class="res-num">${totalResidents.toLocaleString()}명</span>`;
     }
   }
-  refreshGateStats();
+
+  const unsubLang = onLangChange(() => {
+    if (alive) renderGateLocale();
+  });
+  renderGateLocale();
   statsTimer = setInterval(refreshGateStats, 12000);
+  countdownTimer = setInterval(updateCountdownUi, 250);
 
   const fit = () => {
     const w = root.clientWidth || innerWidth, h = root.clientHeight || innerHeight;
@@ -267,11 +605,19 @@ export function openWorldGate({ onEnter }) {
   };
   const onResize = () => fit();
   const clearDrag = () => { drag = null; };
-  const enter = () => {
+  const enter = (regionId = activeRegion.id, forceBypass = false) => {
     if (!alive) return;
+    const chosen = getRegion(regionId);
+    if (chosen.id === 'starbase' && !isStarbaseLive() && !forceBypass) {
+      focusRegionOnGlobe('starbase');
+      return;
+    }
+    trackEvent('globe_enter_region', { region: chosen.id });
     alive = false;
+    unsubLang();
     clearTimeout(toastTimer);
     clearInterval(statsTimer);
+    clearInterval(countdownTimer);
     cancelAnimationFrame(raf);
     removeEventListener('resize', onResize);
     removeEventListener('blur', clearDrag);
@@ -280,34 +626,102 @@ export function openWorldGate({ onEnter }) {
     earth.material.map.dispose();
     earth.material.dispose();
     root.hidden = true;
-    onEnter();
+    onEnter(chosen.id);
   };
+
+  function showStarbaseCountdownToast() {
+    trackEvent('starbase_countdown_click');
+    const en = isEn();
+    const { text } = formatHms(starbaseRemainingMs());
+    const localBtn = isLocalHost()
+      ? `<button type="button" class="gate-toast-btn primary" data-force-enter="starbase">${en ? '🧪 Local Test Enter' : '🧪 로컬 테스트 바로 입장'}</button>`
+      : '';
+    toast.innerHTML = en
+      ? `
+        <div class="gate-toast-head">
+          <strong>🚀 Starbase, TX — Grand Opening at 11:00 KST (<span id="gate-toast-cd">T−${text}</span>)</strong>
+          <button type="button" class="gate-toast-close" aria-label="Close">✕</button>
+        </div>
+        <p>Flights from Incheon (ICN) to Starbase, TX (BRO) open at <b>11:00 AM KST on Oct 29</b>! Experience the 145m Mechazilla Starship Launch &amp; Catch Show, Roadster Jump Show, and drivable Steel Trucks.</p>
+        <div class="gate-toast-actions">
+          ${localBtn}
+          <button type="button" class="gate-toast-btn ${localBtn ? '' : 'primary'}" data-enter-region="jeongja">Explore Jeongja, KR First</button>
+        </div>`
+      : `
+        <div class="gate-toast-head">
+          <strong>🚀 스타베이스 (Starbase, TX) — 11:00 정식 오픈 (<span id="gate-toast-cd">T−${text}</span>)</strong>
+          <button type="button" class="gate-toast-close" aria-label="닫기">✕</button>
+        </div>
+        <p><b>10월 29일 오전 11:00 (KST)</b>에 인천공항(ICN) → 텍사스 스타베이스(BRO) 직항 노선이 열립니다! 145m 메카질라 스타십 발사·젓가락 캐치 쇼, 로드스터 점프 쇼, 직접 운전하는 스틸 트럭(사이버트럭)을 만나보세요.</p>
+        <div class="gate-toast-actions">
+          ${localBtn}
+          <button type="button" class="gate-toast-btn ${localBtn ? '' : 'primary'}" data-enter-region="jeongja">정자동 먼저 산책하기</button>
+        </div>`;
+    toast.hidden = false;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => { toast.hidden = true; }, 14000);
+  }
 
   function showUpcomingToast(region) {
     trackEvent('upcoming_region_click', { region: region.id });
-    toast.innerHTML = `
-      <div class="gate-toast-head">
-        <strong>📍 ${region.name} (${region.desc}) — 개척자 모집 중!</strong>
-        <button type="button" class="gate-toast-close" aria-label="닫기">✕</button>
-      </div>
-      <p>이 지역의 OSM 데이터 변환·랜드마크·NPC를 첫 번째로 기여해 주시면 <b>${region.name} 개척자(Pioneer)</b>로 월드에 영구 등재됩니다.</p>
-      <div class="gate-toast-actions">
-        <a href="${REPO_URL}/blob/main/CONTRIBUTING.md" target="_blank" rel="noopener" class="gate-toast-btn primary">GitHub 기여 가이드 보기</a>
-        <button type="button" class="gate-toast-btn" data-enter-now="1">정자동 먼저 입장하기</button>
-      </div>`;
+    const en = isEn();
+    const rName = en ? (region.enName || region.name) : region.name;
+    const rDesc = en ? (region.enDesc || region.desc) : region.desc;
+    toast.innerHTML = en
+      ? `
+        <div class="gate-toast-head">
+          <strong>📍 ${rName} (${rDesc}) — Pioneer Wanted!</strong>
+          <button type="button" class="gate-toast-close" aria-label="Close">✕</button>
+        </div>
+        <p>Be the first to convert OSM data, landmarks, or NPCs for this district and get permanently credited as the <b>${rName} Pioneer</b>!</p>
+        <div class="gate-toast-actions">
+          <a href="${REPO_URL}/blob/main/CONTRIBUTING.md" target="_blank" rel="noopener" class="gate-toast-btn primary">Contributing Guide</a>
+          <button type="button" class="gate-toast-btn" data-enter-region="jeongja">Enter Jeongja, KR</button>
+        </div>`
+      : `
+        <div class="gate-toast-head">
+          <strong>📍 ${rName} (${rDesc}) — 개척자 모집 중!</strong>
+          <button type="button" class="gate-toast-close" aria-label="닫기">✕</button>
+        </div>
+        <p>이 지역의 OSM 데이터 변환·랜드마크·NPC를 첫 번째로 기여해 주시면 <b>${rName} 개척자(Pioneer)</b>로 월드에 영구 등재됩니다.</p>
+        <div class="gate-toast-actions">
+          <a href="${REPO_URL}/blob/main/CONTRIBUTING.md" target="_blank" rel="noopener" class="gate-toast-btn primary">GitHub 기여 가이드 보기</a>
+          <button type="button" class="gate-toast-btn" data-enter-region="jeongja">정자동 먼저 입장하기</button>
+        </div>`;
     toast.hidden = false;
     clearTimeout(toastTimer);
     toastTimer = setTimeout(() => { toast.hidden = true; }, 12000);
   }
 
   root.addEventListener('click', (e) => {
+    if (e.target.closest('#gate-lang-btn')) {
+      toggleLang();
+      return;
+    }
     if (e.target.closest('.gate-toast-close')) {
       toast.hidden = true;
       return;
     }
-    if (e.target.closest('[data-enter-now]')) {
+    const forceBtn = e.target.closest('[data-force-enter]');
+    if (forceBtn) {
       toast.hidden = true;
-      enter();
+      enter(forceBtn.dataset.forceEnter, true);
+      return;
+    }
+    if (e.target.closest('#gate-launch-hero')) {
+      focusRegionOnGlobe('starbase');
+      return;
+    }
+    const focusBtn = e.target.closest('[data-focus-region]');
+    if (focusBtn) {
+      focusRegionOnGlobe(focusBtn.dataset.focusRegion);
+      return;
+    }
+    const enterBtn = e.target.closest('[data-enter-region]') || e.target.closest('[data-enter-now]');
+    if (enterBtn) {
+      toast.hidden = true;
+      const targetId = enterBtn.dataset.enterRegion || 'jeongja';
+      enter(targetId);
       return;
     }
     const regionBtn = e.target.closest('[data-region]');
@@ -324,20 +738,39 @@ export function openWorldGate({ onEnter }) {
     raf = requestAnimationFrame(loop);
     const dt = lastT ? Math.min(0.08, Math.max(0.004, (t - lastT) / 1000)) : 1 / 60;
     lastT = t;
-    if (!drag) {
-      globe.rotation.y += dt * 0.22;
+    if (drag) {
+      targetRotY = null;
+      targetRotX = null;
+    } else if (targetRotY != null) {
+      const dy = targetRotY - globe.rotation.y;
+      const dx = (targetRotX ?? globe.rotation.x) - globe.rotation.x;
+      globe.rotation.y += dy * Math.min(1, dt * 7.5);
+      globe.rotation.x += dx * Math.min(1, dt * 7.5);
+      if (Math.abs(dy) < 0.004 && Math.abs(dx) < 0.004) {
+        globe.rotation.y = targetRotY;
+        if (targetRotX != null) globe.rotation.x = targetRotX;
+        targetRotY = null;
+        targetRotX = null;
+      }
+    } else if (!pinHovered && t > pauseSpinUntil) {
+      globe.rotation.y += dt * 0.18;
     }
-    halo.scale.setScalar(1 + Math.sin(t * 0.004) * 0.35);
+    const pulse = 1 + Math.sin(t * 0.004) * 0.35;
     globe.updateMatrixWorld(true);
     camDir.copy(camera.position).normalize();
 
-    const world = pin.getWorldPosition(ndc);
-    const facing = world.clone().normalize().dot(camDir) > 0.35;
-    label.hidden = !facing;
-    if (facing) {
-      world.project(camera);
-      label.style.left = `${(world.x * 0.5 + 0.5) * canvas.clientWidth}px`;
-      label.style.top = `${(-world.y * 0.5 + 0.5) * canvas.clientHeight}px`;
+    for (const m of pinMarkers) {
+      m.halo.scale.setScalar(pulse);
+      const world = m.pin.getWorldPosition(ndc);
+      const facing = world.clone().normalize().dot(camDir) > 0.32;
+      if (m.btnEl) {
+        m.btnEl.hidden = !facing;
+        if (facing) {
+          world.project(camera);
+          m.btnEl.style.left = `${(world.x * 0.5 + 0.5) * canvas.clientWidth}px`;
+          m.btnEl.style.top = `${(-world.y * 0.5 + 0.5) * canvas.clientHeight}px`;
+        }
+      }
     }
     renderer.render(scene, camera);
   };
@@ -367,12 +800,16 @@ export function openWorldGate({ onEnter }) {
     const hit = ray.intersectObject(earth)[0];
     if (!hit) return;
     const local = globe.worldToLocal(hit.point.clone());
-    if (local.angleTo(spot) < 0.12) enter();
+    for (const m of pinMarkers) {
+      if (local.angleTo(m.spot) < 0.14) {
+        enter(m.region.id);
+        return;
+      }
+    }
   });
   canvas.addEventListener('pointercancel', clearDrag);
   canvas.addEventListener('lostpointercapture', clearDrag);
   addEventListener('blur', clearDrag);
-  label.addEventListener('click', enter);
   fit();
   addEventListener('resize', onResize);
   requestAnimationFrame(loop);

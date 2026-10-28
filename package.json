@@ -7,6 +7,7 @@
   "scripts": {
     "fetch-osm": "bash data/fetch.sh",
     "convert": "node scripts/convert.mjs && node scripts/convert-transit.mjs",
+    "convert:starbase": "node scripts/convert-starbase.mjs",
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview --port 4173",

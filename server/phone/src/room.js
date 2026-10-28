@@ -183,9 +183,13 @@ export class Room extends DurableObject {
       me.umb = typeof m.umb === "string" ? m.umb.slice(0, 16) : (m.umb ? "yellow" : "");
       const jy = Math.max(0, Math.min(5, Number(m.jy) || 0));
       const emote = typeof m.emote === "string" ? m.emote.slice(0, 16) : "";
+      const veh = m.veh && typeof m.veh === "object"
+        ? { id: m.veh.id | 0, ry: Number(m.veh.ry) || 0, v: Number(m.veh.v) || 0, st: Number(m.veh.st) || 0 }
+        : null;
+      me.veh = veh;
       ws.serializeAttachment(me);
       this.#broadcast(
-        { t: "state", id: me.id, x: me.x, z: me.z, ry: me.ry, moving: !!m.moving, riding: me.riding, jy, emote, sit: me.sit, afk: me.afk, umb: me.umb },
+        { t: "state", id: me.id, x: me.x, z: me.z, ry: me.ry, moving: !!m.moving, riding: me.riding, jy, emote, sit: me.sit, afk: me.afk, umb: me.umb, ...(veh ? { veh } : {}) },
         ws,
       );
       return;
