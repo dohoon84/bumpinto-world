@@ -5,12 +5,11 @@
 export const DONATION_CONFIG = {
   // 1) 전광판 상단 LED에 흐르는 문구
   tickerText:
-    '☕ 무료로 운영되는 Bumpinto World 오픈월드! 24시간 쾌적한 월드 유지를 위해 토스(Toss) QR로 커피 한 잔 후원해 주세요 ♥   ·   받는 사람: 범프인투   ·   ',
-  subBannerText: '💙 토스(Toss) QR 스캔 · 받는 사람: 범프인투',
+    '☕ 무료로 운영되는 Bumpinto World 오픈월드! 24시간 쾌적한 월드 유지를 위해 토스(Toss) QR로 커피 한 잔 후원해 주세요 ♥   ·   하단 QR 전단지 또는 F 키를 눌러 후원 안내 보기   ·   ',
+  subBannerText: '💙 토스(Toss) QR 송금 · 100% 서버 인프라 운영 비용으로 사용됩니다',
 
-  // 2) 전단지/모달에 표시할 결제 수단 및 받는 사람 표기
+  // 2) 전단지/모달에 표시할 결제 수단 표기
   payMethod: '토스(Toss) QR 송금',
-  recipientName: '범프인투',
 
   // 3) QR코드 이미지 경로 (스마트폰 카메라 스캔 시 토스 앱 송금 화면 오픈)
   qrImageUrl: `${import.meta.env?.BASE_URL || '/'}donation-qr.svg`,
