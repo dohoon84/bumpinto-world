@@ -1778,7 +1778,7 @@ body.in-lobby #hud, body.in-lobby #buttons, body.in-lobby #top-right-bar, body.i
 #donate-modal .donate-dialog {
   position: relative;
   z-index: 1;
-  width: min(680px, 100%);
+  width: min(480px, 100%);
   max-height: min(88vh, 720px);
   display: flex;
   flex-direction: column;
@@ -1876,9 +1876,9 @@ body.in-lobby #hud, body.in-lobby #buttons, body.in-lobby #top-right-bar, body.i
   margin-bottom: 10px;
 }
 #donate-modal .qr-frame {
-  width: 156px;
-  height: 156px;
-  padding: 10px;
+  width: 196px;
+  height: 196px;
+  padding: 12px;
   background: #fff;
   border-radius: 12px;
   border: 2px solid #122033;

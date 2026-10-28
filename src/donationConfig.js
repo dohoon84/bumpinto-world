@@ -8,16 +8,11 @@ export const DONATION_CONFIG = {
     '☕ 무료로 운영되는 Bumpinto World 오픈월드! 24시간 쾌적한 월드 유지를 위해 커피 한 잔 후원해 주세요 ♥   ·   하단 QR 전단지 또는 F 키를 눌러 후원 안내 보기   ·   ',
   subBannerText: '100% 서버 · 도메인 · 인프라 운영 비용으로 사용됩니다',
 
-  // 2) 후원 계좌 정보 (복사 버튼 클릭 시 복사됨)
-  bankName: '카카오뱅크',
-  accountNumber: '3333-00-0000000', // ← 실제 계좌번호로 변경해 주세요
-  accountHolder: '김도훈 (크레이지랩스)',
-
-  // 3) QR코드 이미지 경로 (예: '/donation-qr.png' 또는 '/crazylabs-qr.svg')
-  //    별도 송금 QR 이미지를 public 폴더에 넣고 경로만 바꾸시면 전단지와 모달에 즉시 표시됩니다.
+  // 2) QR코드 이미지 경로 (예: '/donation-qr.png' 또는 '/crazylabs-qr.svg')
+  //    송금 QR 이미지를 public 폴더에 넣고 경로만 바꾸시면 전단지와 모달에 즉시 표시됩니다.
   qrImageUrl: `${import.meta.env?.BASE_URL || '/'}crazylabs-qr.svg`,
 
-  // 4) 모달 안내 문구
+  // 3) 모달 안내 문구
   modalTitle: '☕ Bumpinto World 인프라 후원 안내',
   modalLead:
     'Bumpinto World는 광고나 유료 결제 없이 누구나 무료로 산책하고 소통할 수 있도록 개인 사비로 운영 중인 오픈소스 3D 월드입니다.',
