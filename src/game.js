@@ -666,6 +666,7 @@ function toggleSit() {
   if (mySit) {
     standUpFromSeat();
     renderEmoteBar();
+    emitMyStateNow();
     return;
   }
   myEmote = '';
@@ -688,6 +689,7 @@ function toggleSit() {
   player.userData.sit = mySit;
   trackEvent('player_sit', { kind: mySit });
   renderEmoteBar();
+  emitMyStateNow();
 }
 
 function toggleAfk() {
@@ -699,6 +701,7 @@ function toggleAfk() {
     standUpFromSeat();
     syncMyNameTag();
     renderEmoteBar();
+    emitMyStateNow();
     return;
   }
   myEmote = '';
@@ -728,6 +731,7 @@ function toggleAfk() {
   emoteFx.spawnZzz(player.position);
   trackEvent('player_afk_toggle', { afk: true });
   renderEmoteBar();
+  emitMyStateNow();
 }
 
 function triggerEmote(emoteId, sendNet = true) {
@@ -837,7 +841,7 @@ function dismountBike() {
 function toggleRide() {
   if (!joined) return;
   wakeFromAfk();
-  if (bikes.riding) { dismountBike(); return; }
+  if (bikes.riding) { dismountBike(); emitMyStateNow(); return; }
   const b = bikes.nearest(player.position.x, player.position.z, undefined, player.position.y);
   if (!b) return;
   jumpY = 0;
@@ -851,6 +855,7 @@ function toggleRide() {
   bikes.mount(b);
   seatPlayer();
   animateRide(player, 0, 0);
+  emitMyStateNow();
 }
 function syncRideUi() {
   const near = joined && !bikes.riding && bikes.nearest(player.position.x, player.position.z, undefined, player.position.y);
@@ -940,10 +945,50 @@ const atmosphere = createAtmosphere({
   getMode: () => cam.mode,
   clock: document.getElementById('hud-clock'),
 });
+function emitMyStateNow() {
+  if (!joined) return;
+  presence.sendState(
+    {
+      x: player.position.x,
+      z: player.position.z,
+      ry: player.rotation.y,
+      moving: moveSpeed > 0,
+      riding: !!bikes.riding,
+      jy: Number(jumpY.toFixed(2)),
+      emote: bikes.riding ? '' : myEmote,
+      sit: bikes.riding ? '' : mySit,
+      afk: bikes.riding ? false : myAfk,
+    },
+    true,
+  );
+}
+
+// 백그라운드 탭에서도 30초 자동 자리비움 전환 및 멀티플레이 상태 동기화가 멈추지 않도록 보조 타이머 실행
+let lastFrameAt = performance.now();
+setInterval(() => {
+  if (!joined || document.body.classList.contains('in-gate') || document.body.classList.contains('in-lobby')) return;
+  const now = performance.now();
+  // requestAnimationFrame이 백그라운드에서 멈춘 경우(0.5초 이상 경과)
+  if (now - lastFrameAt > 500) {
+    if (!bikes.riding && !myEmote && !handset.open && !board.open) {
+      idleTime += 1.0;
+      if (!myAfk && idleTime >= AFK_TIMEOUT_SEC) {
+        myAfk = true;
+        if (!mySit) mySit = 'ground';
+        player.userData.sit = mySit;
+        player.userData.afk = true;
+        syncMyNameTag();
+        renderEmoteBar();
+      }
+    }
+    emitMyStateNow();
+  }
+}, 1000);
 const timer = new THREE.Timer();
 const tmp = new THREE.Vector3();
 let moveSpeed = 0;
 function frame() {
+  lastFrameAt = performance.now();
   timer.update(); const dt = Math.min(timer.getDelta(), 0.1);
   if (document.body.classList.contains('in-gate') || document.body.classList.contains('in-lobby')) {
     input.consumeLook();
@@ -1067,6 +1112,7 @@ function frame() {
         }
         syncMyNameTag();
         renderEmoteBar();
+        emitMyStateNow();
       }
     } else {
       idleTime = 0;
