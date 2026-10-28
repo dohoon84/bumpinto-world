@@ -31,7 +31,7 @@ function box(mat, w, h, d) {
   return m;
 }
 
-function createKakaoBike() {
+export function createKakaoBike() {
   const yel = new THREE.MeshLambertMaterial({ color: '#fee500' });
   const blk = new THREE.MeshLambertMaterial({ color: '#1a1a1a' });
   const rub = new THREE.MeshLambertMaterial({ color: '#141414' });
