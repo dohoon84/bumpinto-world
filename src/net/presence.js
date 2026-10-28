@@ -82,15 +82,19 @@ export class WebSocketPresence extends Emitter {
       this.retryTimer = setTimeout(() => this.connect(me), (this.retry = Math.min(this.retry * 2, 15000)));
     };
   }
-  sendState(s) {
+  sendState(s, force = false) {
+    if (this.ws?.readyState !== 1) return;
     const now = performance.now();
-    if (now - this.lastSent < 1000 / STATE_HZ || this.ws?.readyState !== 1) return;
     const jy = Number(s.jy) || 0;
     const em = s.emote || '';
     const sit = s.sit || '';
     const afk = s.afk ? 1 : 0;
-    const sig = `${s.x.toFixed(2)},${s.z.toFixed(2)},${s.ry.toFixed(2)},${s.moving ? 1 : 0},${s.riding ? 1 : 0},${jy.toFixed(2)},${em},${sit},${afk}`;
-    if (sig === this.lastSig && now - this.lastSent < 10000) return;
+    const discreteSig = `${s.riding ? 1 : 0},${em},${sit},${afk}`;
+    const discreteChanged = discreteSig !== this.lastDiscreteSig;
+    if (!force && !discreteChanged && now - this.lastSent < 1000 / STATE_HZ) return;
+    const sig = `${s.x.toFixed(2)},${s.z.toFixed(2)},${s.ry.toFixed(2)},${s.moving ? 1 : 0},${discreteSig},${jy.toFixed(2)}`;
+    if (!force && !discreteChanged && sig === this.lastSig && now - this.lastSent < 2500) return;
+    this.lastDiscreteSig = discreteSig;
     this.lastSig = sig;
     this.lastSent = now;
     this.ws.send(JSON.stringify({ t: 'state', ...s }));
