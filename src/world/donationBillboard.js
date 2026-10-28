@@ -501,7 +501,7 @@ export function mountDonationBillboards({ scene, overlay, world, camera, domElem
 
   function blocks(x, z) {
     for (const u of units) {
-      if (Math.hypot(x - u.x, z - u.z) < 0.95) return true;
+      if (Math.hypot(x - u.x, z - u.z) < 0.55) return true;
     }
     return false;
   }

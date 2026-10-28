@@ -196,6 +196,7 @@ function loadLocalBoardStore() {
       found.title = item.title;
       found.body = item.body;
       found.authorName = item.authorName || '크레이지랩스';
+      found.createdAt = createdAt;
     }
   }
   saveLocalBoardStore(store);
