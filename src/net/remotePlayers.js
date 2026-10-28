@@ -10,8 +10,9 @@ const RIDE_Y = 0.16;
 const RIDE_BACK = 0.12;
 
 export class RemotePlayers {
-  constructor(scene, overlay, presence, getMe, onMyChat, groundY = null) {
+  constructor(scene, overlay, presence, getMe, onMyChat, groundY = null, emoteFx = null) {
     this.groundY = groundY; // [terrain] (x, z, refY) -> 지면 높이 (탄천 둔치/계단/다리)
+    this.emoteFx = emoteFx;
     this.scene = scene; this.overlay = overlay; this.peers = new Map(); this.getMe = getMe;
     presence.on('welcome', (m) => { this.myId = m.id; m.peers.forEach((p) => this.add(p)); });
     presence.on('join', (m) => this.add(m.peer));
@@ -24,12 +25,28 @@ export class RemotePlayers {
       p.ry = m.ry;
       p.targetJy = Math.max(0, Number(m.jy) || 0);
       p.riding = !!m.riding;
+      if (typeof m.emote === 'string') {
+        p.emote = m.emote;
+        if (m.emote) p.emoteUntil = performance.now() + 1500;
+      }
+    });
+    presence.on('emote', (m) => {
+      const p = this.peers.get(m.id);
+      if (!p) return;
+      p.emote = m.kind || 'cheer';
+      p.emoteUntil = performance.now() + 3400;
+      this.emoteFx?.burst(p.mesh.position, p.emote, m.combo || 1);
     });
     presence.on('chat', (m) => {
       if (m.id === this.myId || m.id === 'me') return onMyChat?.(m.text);
       const p = this.peers.get(m.id); if (!p) return;
       const me = getMe();
-      if (Math.hypot(me.x - p.mesh.position.x, me.z - p.mesh.position.z) <= CHAT_RADIUS) p.bubble.say(m.text, 6000); // 근접 채팅
+      if (Math.hypot(me.x - p.mesh.position.x, me.z - p.mesh.position.z) <= CHAT_RADIUS) {
+        p.bubble.say(m.text, 6000); // 근접 채팅
+        if (p.bubble.item.el.classList.contains('shouting')) {
+          this.emoteFx?.burst(p.mesh.position, 'fuss', 2);
+        }
+      }
     });
   }
   add(peer) {
@@ -120,6 +137,11 @@ export class RemotePlayers {
         }
         p.mesh.position.set(p.pos.x, p.pos.y + p.jy, p.pos.z);
         p.mesh.userData.jumpY = p.jy;
+        if (p.emoteUntil && performance.now() > p.emoteUntil) {
+          p.emote = '';
+          p.emoteUntil = 0;
+        }
+        p.mesh.userData.emote = p.emote || '';
         animateAvatar(p.mesh, sp, dt);
       }
       p.bubble.tick();

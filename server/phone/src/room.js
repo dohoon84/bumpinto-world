@@ -176,11 +176,19 @@ export class Room extends DurableObject {
       me.ry = Number(m.ry) || 0;
       me.riding = !!m.riding;
       const jy = Math.max(0, Math.min(5, Number(m.jy) || 0));
+      const emote = typeof m.emote === "string" ? m.emote.slice(0, 16) : "";
       ws.serializeAttachment(me);
       this.#broadcast(
-        { t: "state", id: me.id, x: me.x, z: me.z, ry: me.ry, moving: !!m.moving, riding: me.riding, jy },
+        { t: "state", id: me.id, x: me.x, z: me.z, ry: me.ry, moving: !!m.moving, riding: me.riding, jy, emote },
         ws,
       );
+      return;
+    }
+    if (m.t === "emote") {
+      ws.serializeAttachment(me);
+      const kind = String(m.kind || "").trim().slice(0, 16);
+      const combo = Math.max(1, Math.min(99, Math.floor(Number(m.combo) || 1)));
+      if (kind) this.#broadcast({ t: "emote", id: me.id, kind, combo }, ws);
       return;
     }
     if (m.t === "chat") {

@@ -11,6 +11,47 @@ html, body { margin: 0; height: 100%; overflow: hidden; font-family: 'Pretendard
 .bubble::after { content: ''; position: absolute; left: 50%; bottom: -7px; margin-left: -7px; border: 7px solid transparent; border-bottom: 0; border-top-color: #fff; }
 .bubble.me { background: #fff8d6; } .bubble.me::after { border-top-color: #fff8d6; }
 .bubble.remote { background: #dcfff4; } .bubble.remote::after { border-top-color: #dcfff4; }
+.bubble.shouting {
+  font-size: 15px;
+  font-weight: 800;
+  padding: 9px 13px;
+  border: 2px solid #ff3b30;
+  box-shadow: 0 4px 16px rgba(255, 59, 48, .35);
+  z-index: 4;
+  animation: bubble-shout .28s infinite ease-in-out;
+}
+@keyframes bubble-shout {
+  0%, 100% { scale: 1.06; rotate: -1.8deg; }
+  50% { scale: 1.13; rotate: 1.8deg; }
+}
+.emote-floater {
+  position: absolute;
+  left: 0;
+  top: 0;
+  font-size: 26px;
+  line-height: 1;
+  pointer-events: none;
+  will-change: transform, opacity;
+  filter: drop-shadow(0 3px 6px rgba(0, 0, 0, .25));
+  z-index: 5;
+}
+.emote-combo-pop {
+  position: absolute;
+  left: 0;
+  top: 0;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #ff3b30, #f5a200);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 900;
+  white-space: nowrap;
+  pointer-events: none;
+  will-change: transform, opacity;
+  box-shadow: 0 4px 12px rgba(255, 59, 48, .4);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, .35);
+  z-index: 6;
+}
 .label { font-size: 12px; font-weight: 700; color: #33415c; background: rgba(255,255,255,.8); padding: 2px 7px; border-radius: 6px; border: 1px solid rgba(51,65,92,.15); }
 .label.station { font-size: 15px; color: #fff; background: linear-gradient(90deg, #d4003b 50%, #f5a200 50%); border: 0; padding: 4px 10px; text-shadow: 0 1px 2px rgba(0,0,0,.4); }
 .label.water { color: #1c5d99; background: rgba(220,240,255,.85); }
@@ -64,13 +105,105 @@ html, body { margin: 0; height: 100%; overflow: hidden; font-family: 'Pretendard
   line-height: 1;
 }
 #chat-log-toggle .chat-unread[hidden] { display: none !important; }
-#ride-btn { position: fixed; left: 50%; bottom: 62px; transform: translateX(-50%); z-index: 6; font: inherit; font-size: 14px; font-weight: 800; color: #3a2a00; background: #fee500; border: 0; border-radius: 999px; padding: 8px 14px; box-shadow: 0 2px 8px rgba(0,0,0,.18); cursor: pointer; }
+#emote-bar {
+  position: fixed;
+  left: 50%;
+  bottom: 58px;
+  transform: translateX(-50%);
+  z-index: 7;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 6px;
+  border-radius: 999px;
+  background: rgba(15, 25, 42, 0.78);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  box-shadow: 0 4px 14px rgba(12, 22, 38, 0.25);
+  backdrop-filter: blur(6px);
+  user-select: none;
+}
+#emote-bar.folded {
+  padding: 0;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+}
+#emote-bar .emote-list {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+#emote-bar .emote-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 800;
+  color: #e8f2f8;
+  background: rgba(255, 255, 255, 0.09);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 999px;
+  padding: 4px 9px 4px 6px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: transform .12s, background .12s, border-color .12s;
+}
+#emote-bar .emote-btn:hover {
+  transform: translateY(-2px) scale(1.04);
+  background: rgba(255, 255, 255, 0.2);
+  border-color: rgba(255, 225, 105, 0.65);
+}
+#emote-bar .emote-btn:active,
+#emote-bar .emote-btn.active {
+  background: linear-gradient(90deg, rgba(212, 0, 59, 0.75), rgba(245, 162, 0, 0.85));
+  border-color: #ffe169;
+  color: #fff;
+}
+#emote-bar .emote-btn kbd {
+  display: inline-grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: rgba(12, 22, 38, 0.7);
+  color: #ffe169;
+  font-family: inherit;
+  font-size: 10px;
+  font-weight: 900;
+}
+#emote-bar .emote-btn .em-ico { font-size: 14px; line-height: 1; }
+#emote-bar .emote-fold-btn {
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 800;
+  color: #dce8f5;
+  background: rgba(18, 32, 51, 0.88);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 999px;
+  padding: 4px 10px;
+  cursor: pointer;
+}
+#emote-bar .emote-fold-btn.icon-only {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  display: inline-grid;
+  place-items: center;
+  background: rgba(255, 255, 255, 0.08);
+  border-color: transparent;
+}
+#emote-bar .emote-fold-btn:hover {
+  background: rgba(255, 255, 255, 0.18);
+  color: #ffe169;
+}
+#ride-btn { position: fixed; left: 50%; bottom: 98px; transform: translateX(-50%); z-index: 6; font: inherit; font-size: 14px; font-weight: 800; color: #3a2a00; background: #fee500; border: 0; border-radius: 999px; padding: 8px 14px; box-shadow: 0 2px 8px rgba(0,0,0,.18); cursor: pointer; }
 #ride-btn[hidden] { display: none !important; }
 body.in-lobby #ride-btn { display: none !important; }
 #chat-log-panel {
   position: fixed;
   left: 50%;
-  bottom: 60px;
+  bottom: 98px;
   transform: translateX(-50%);
   z-index: 12;
   width: min(500px, calc(100vw - 24px));
@@ -83,7 +216,7 @@ body.in-lobby #ride-btn { display: none !important; }
   backdrop-filter: blur(8px);
   transition: bottom .18s ease;
 }
-#ride-btn:not([hidden]) ~ #chat-log-panel { bottom: 104px; }
+#ride-btn:not([hidden]) ~ #chat-log-panel { bottom: 142px; }
 #chat-log-panel[hidden] { display: none !important; }
 #chat-log-panel .c-head {
   display: flex;
@@ -471,8 +604,8 @@ body.in-lobby #ride-btn { display: none !important; }
 #lobby, #world-gate { display: none; }
 body.in-lobby #lobby { position: fixed; inset: 0; z-index: 30; display: grid; place-items: center; overflow: auto; padding: 28px 16px 36px; background: linear-gradient(180deg, #070d1c, #1a2744); }
 body.in-gate #world-gate { position: fixed; inset: 0; z-index: 32; display: block; overflow: hidden; background: linear-gradient(180deg, #070d1c, #1a2744); color: #122033; }
-body.in-gate #hud, body.in-gate #buttons, body.in-gate #top-right-bar, body.in-gate #chat, body.in-gate #chat-log-panel, body.in-gate #joystick, body.in-gate #presence-status, body.in-gate #presence-panel, body.in-gate #board-Launcher, body.in-gate #contribute-launcher, body.in-gate #board-modal, body.in-gate #stop-panel, body.in-gate #phone, body.in-gate #handset, body.in-gate #attribution,
-body.in-lobby #hud, body.in-lobby #buttons, body.in-lobby #top-right-bar, body.in-lobby #chat, body.in-lobby #chat-log-panel, body.in-lobby #joystick, body.in-lobby #presence-status, body.in-lobby #presence-panel, body.in-lobby #board-Launcher, body.in-lobby #contribute-launcher, body.in-lobby #board-modal, body.in-lobby #stop-panel, body.in-lobby #phone, body.in-lobby #handset { display: none; }
+body.in-gate #hud, body.in-gate #buttons, body.in-gate #top-right-bar, body.in-gate #emote-bar, body.in-gate #chat, body.in-gate #chat-log-panel, body.in-gate #joystick, body.in-gate #presence-status, body.in-gate #presence-panel, body.in-gate #board-Launcher, body.in-gate #contribute-launcher, body.in-gate #board-modal, body.in-gate #stop-panel, body.in-gate #phone, body.in-gate #handset, body.in-gate #attribution,
+body.in-lobby #hud, body.in-lobby #buttons, body.in-lobby #top-right-bar, body.in-lobby #emote-bar, body.in-lobby #chat, body.in-lobby #chat-log-panel, body.in-lobby #joystick, body.in-lobby #presence-status, body.in-lobby #presence-panel, body.in-lobby #board-Launcher, body.in-lobby #contribute-launcher, body.in-lobby #board-modal, body.in-lobby #stop-panel, body.in-lobby #phone, body.in-lobby #handset { display: none; }
 #world-gate[hidden] { display: none !important; }
 .gate-copy { position: absolute; left: 50%; bottom: 32px; z-index: 2; width: min(460px, calc(100% - 32px)); transform: translateX(-50%); text-align: center; pointer-events: none; padding: 14px 16px 16px; color: #122033; background: rgba(255,255,255,.88); border-radius: 12px; box-shadow: 0 2px 10px rgba(18,32,51,.16); }
 .gate-copy .kicker { display: inline-block; margin: 0; padding: 3px 8px; border-radius: 8px; background: #f5a200; color: #1b1b1b; font-size: 12px; font-weight: 800; letter-spacing: 0.04em; }

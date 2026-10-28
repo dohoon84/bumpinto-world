@@ -11,7 +11,7 @@
   <div id="app"></div>
   <div id="overlay"></div>
   <div id="hud">
-    <div class="help">WASD/방향키 이동 · Shift 달리기 · Space 점프 · 마우스 드래그 시점 · 휠 줌 · Enter 채팅 · M 위에서 보기 · E 카카오바이크</div>
+    <div class="help">WASD/방향키 이동 · Shift 달리기 · Space 점프 · 1~6 호들갑 리액션 · Enter 채팅(!! 외침) · M 위에서 보기 · E 카카오바이크</div>
     <div class="clock" id="hud-clock">--:--</div>
   </div>
   <div id="buttons">
@@ -19,8 +19,9 @@
     <button id="btn-home" title="H">🚇 역으로</button>
     <button id="btn-leave" type="button" hidden>나가기</button>
   </div>
+  <div id="emote-bar" aria-label="호들갑 리액션 퀵바"></div>
   <form id="chat" autocomplete="off">
-    <input id="chat-input" maxlength="80" placeholder="말 걸기 (Enter) — 근처 사람에게만 보여요" />
+    <input id="chat-input" maxlength="80" placeholder="말 걸기 (Enter) · 끝에 !! 붙이면 호들갑 외침!" />
     <button id="chat-log-toggle" type="button" title="주변 대화 전체보기 열기/닫기" aria-expanded="false">
       <span>💬 전체보기</span>
       <span id="chat-unread" class="chat-unread" hidden>0</span>
