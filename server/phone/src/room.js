@@ -87,6 +87,7 @@ export class Room extends DurableObject {
           x: peer.x,
           z: peer.z,
           ry: peer.ry,
+          riding: !!peer.riding,
         });
       }
     }
@@ -173,10 +174,11 @@ export class Room extends DurableObject {
       me.x = Number(m.x) || 0;
       me.z = Number(m.z) || 0;
       me.ry = Number(m.ry) || 0;
+      me.riding = !!m.riding;
       const jy = Math.max(0, Math.min(5, Number(m.jy) || 0));
       ws.serializeAttachment(me);
       this.#broadcast(
-        { t: "state", id: me.id, x: me.x, z: me.z, ry: me.ry, moving: !!m.moving, jy },
+        { t: "state", id: me.id, x: me.x, z: me.z, ry: me.ry, moving: !!m.moving, riding: me.riding, jy },
         ws,
       );
       return;

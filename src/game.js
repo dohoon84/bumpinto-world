@@ -217,6 +217,7 @@ function renderPresencePanel() {
           const dz = p.z - player.position.z;
           const dist = Math.round(Math.hypot(dx, dz));
           const dir = dist > 3 ? `${compassDir(dx, dz)}쪽 ${dist}m` : '바로 옆';
+          const rideBadge = p.riding ? ' · 🚲 바이크 탑승 중' : '';
           return `
             <li class="p-row">
               <div class="p-info">
@@ -225,7 +226,7 @@ function renderPresencePanel() {
                   <strong>${escHtml(p.name)}</strong>
                   <span class="p-dir">${escHtml(dir)}</span>
                 </div>
-                <small>📍 ${escHtml(spot.name)} 근처 (${spot.dist}m)</small>
+                <small>📍 ${escHtml(spot.name)} 근처 (${spot.dist}m)${rideBadge}</small>
               </div>
               <div class="p-actions">
                 <button type="button" class="p-btn" data-peer-look="${escHtml(p.id)}" title="그 방향 바라보기">방향</button>
@@ -738,7 +739,7 @@ function frame() {
     animateAvatar(player, moveSpeed, dt);
   }
   syncRideUi();
-  if (joined) presence.sendState({ x: player.position.x, z: player.position.z, ry: player.rotation.y, moving: moveSpeed > 0, jy: Number(jumpY.toFixed(2)) });
+  if (joined) presence.sendState({ x: player.position.x, z: player.position.z, ry: player.rotation.y, moving: moveSpeed > 0, riding: !!bikes.riding, jy: Number(jumpY.toFixed(2)) });
   rememberPlace();
 
   npcs.update(dt, player.position);
