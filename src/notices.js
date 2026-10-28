@@ -7,7 +7,7 @@ export const NOTICE_POSTS = [
     key: 'notice-2026-10-28-launch',
     title: '🎉 Bumpinto World 정자역 오픈월드 안내 및 이용 가이드',
     authorName: '크레이지랩스',
-    createdAt: Date.parse('2026-10-27T12:00:00+09:00'),
+    createdAt: Date.now() - 86400000,
     body: [
       '안녕하세요! 현실 지도(OpenStreetMap) 기반 3D 오픈월드 Bumpinto World에 오신 것을 환영합니다.',
       '',
@@ -20,9 +20,9 @@ export const NOTICE_POSTS = [
   },
   {
     key: 'notice-2026-10-28-chat-and-board',
-    title: '📢 [업데이트] 주변 대화 전체보기, 호들갑 리액션(1~6), 앉기·자리비움, 게시판 기능 및 후원 전광판 안내',
+    title: '📢 [업데이트] 전체 대화창, 호들갑 리액션(1~6), 앉기·자리비움, 게시판 및 후원 전광판 안내',
     authorName: '크레이지랩스',
-    createdAt: Date.parse('2026-10-28T20:30:00+09:00'),
+    createdAt: Date.now(),
     body: [
       '입주민 여러분의 소중한 피드백을 반영하여 월드 편의 기능과 커뮤니티가 대폭 업데이트되었습니다!',
       '',

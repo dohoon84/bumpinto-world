@@ -289,17 +289,17 @@ export class PhoneBook extends DurableObject {
       if (!key || !title || !body) continue;
       const authorName = cleanName(item?.authorName) || "크레이지랩스";
       const createdAt = Number.isFinite(item?.createdAt) ? Number(item.createdAt) : now;
-      const existing = sql.exec("SELECT id, title, body FROM posts WHERE notice_key = ?", key).toArray()[0];
+      const existing = sql.exec("SELECT id, title, body, created_at FROM posts WHERE notice_key = ?", key).toArray()[0];
       if (!existing) {
         sql.exec(
           `INSERT INTO posts (category, title, body, author_id, author_phone, author_name, views, created_at, updated_at, notice_key)
            VALUES ('notice', ?, ?, 'system', ?, ?, 1, ?, ?, ?)`,
           title, body, GUIDE_PHONE, authorName, createdAt, createdAt, key,
         );
-      } else if (existing.title !== title || existing.body !== body) {
+      } else if (existing.title !== title || existing.body !== body || existing.created_at !== createdAt) {
         sql.exec(
-          "UPDATE posts SET category = 'notice', title = ?, body = ?, author_name = ? WHERE id = ?",
-          title, body, authorName, existing.id,
+          "UPDATE posts SET category = 'notice', title = ?, body = ?, author_name = ?, created_at = ?, updated_at = ? WHERE id = ?",
+          title, body, authorName, createdAt, now, existing.id,
         );
       }
     }
@@ -780,6 +780,7 @@ export class PhoneBook extends DurableObject {
     const myPhone = user?.phone || null;
 
     if (op === "list") {
+      this.#syncNotices();
       const cat = String(input?.category || "all");
       const page = Math.max(1, Math.floor(Number(input?.page) || 1));
       const filterCat = BOARD_CATS.has(cat) ? cat : null;

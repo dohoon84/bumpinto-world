@@ -374,7 +374,28 @@ const board = mountBoard({ sms, getMe: () => me });
 function applySession(session) {
   const place = session?.place;
   if (!place) return;
-  player.position.set(place.x, place.y, place.z);
+  let px = Number(place.x) || 0;
+  let pz = Number(place.z) || 0;
+  let py = Number(place.y) || 0;
+  // 이전 위치에 구조물(전광판·분수대 등)이 새로 생겨 막혀 있으면 가장 가까운 안전 위치로 자동 이동
+  if (world.isBlocked(px, pz) || world.onRoad(px, pz)) {
+    for (let r = 0.6; r < 14; r += 0.5) {
+      let found = false;
+      for (let a = 0; a < Math.PI * 2; a += 0.45) {
+        const cx = px + Math.cos(a) * r;
+        const cz = pz + Math.sin(a) * r;
+        if (!world.isBlocked(cx, cz) && !world.onRoad(cx, cz)) {
+          px = cx;
+          pz = cz;
+          py = terrain ? terrain.getGroundHeight(cx, cz, py) : 0;
+          found = true;
+          break;
+        }
+      }
+      if (found) break;
+    }
+  }
+  player.position.set(px, py, pz);
   player.rotation.y = place.ry || 0;
 }
 const leaveBtn = document.getElementById('btn-leave');
@@ -1001,13 +1022,15 @@ function frame() {
       const sp = (run ? 9 : 4.2) * Math.min(1, Math.hypot(f, s)), step = sp * dt;
       const p = player.position, bb = world.bounds;
       const nx = THREE.MathUtils.clamp(p.x + mx * step, bb.x0, bb.x1), nz = THREE.MathUtils.clamp(p.z + mz * step, bb.z0, bb.z1);
+      // 현재 위치가 구조물 충돌 반경 내부에 끼어 있는 경우, 장애물에서 멀어지는 방향으로는 탈출 허용
+      const stuckNow = world.isBlocked(p.x, p.z);
       if (terrain) { // [terrain] 계단/경사/다리 판정 + 높이 따라가기 (축별 슬라이딩 유지)
         let y;
-        if (!world.isBlocked(nx, p.z) && !bikes.blocks(nx, p.z, null, p.y) && (y = terrain.canMove(p.x, p.z, p.y, nx, p.z)) != null) { p.x = nx; p.y = y; }
-        if (!world.isBlocked(p.x, nz) && !bikes.blocks(p.x, nz, null, p.y) && (y = terrain.canMove(p.x, p.z, p.y, p.x, nz)) != null) { p.z = nz; p.y = y; }
+        if ((!world.isBlocked(nx, p.z) || stuckNow) && !bikes.blocks(nx, p.z, null, p.y) && (y = terrain.canMove(p.x, p.z, p.y, nx, p.z)) != null) { p.x = nx; p.y = y; }
+        if ((!world.isBlocked(p.x, nz) || stuckNow) && !bikes.blocks(p.x, nz, null, p.y) && (y = terrain.canMove(p.x, p.z, p.y, p.x, nz)) != null) { p.z = nz; p.y = y; }
       } else {
-        if (!world.isBlocked(nx, p.z) && !bikes.blocks(nx, p.z, null, p.y)) p.x = nx;
-        if (!world.isBlocked(p.x, nz) && !bikes.blocks(p.x, nz, null, p.y)) p.z = nz;
+        if ((!world.isBlocked(nx, p.z) || stuckNow) && !bikes.blocks(nx, p.z, null, p.y)) p.x = nx;
+        if ((!world.isBlocked(p.x, nz) || stuckNow) && !bikes.blocks(p.x, nz, null, p.y)) p.z = nz;
       }
       const target = Math.atan2(mx, mz);
       player.rotation.y += Math.atan2(Math.sin(target - player.rotation.y), Math.cos(target - player.rotation.y)) * Math.min(1, dt * 12);
