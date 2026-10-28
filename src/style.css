@@ -651,8 +651,8 @@ body.in-lobby #ride-btn { display: none !important; }
 #lobby, #world-gate { display: none; }
 body.in-lobby #lobby { position: fixed; inset: 0; z-index: 30; display: grid; place-items: center; overflow: auto; padding: 28px 16px 36px; background: linear-gradient(180deg, #070d1c, #1a2744); }
 body.in-gate #world-gate { position: fixed; inset: 0; z-index: 32; display: block; overflow: hidden; background: linear-gradient(180deg, #070d1c, #1a2744); color: #122033; }
-body.in-gate #hud, body.in-gate #buttons, body.in-gate #top-right-bar, body.in-gate #emote-bar, body.in-gate #chat, body.in-gate #chat-log-panel, body.in-gate #joystick, body.in-gate #presence-status, body.in-gate #presence-panel, body.in-gate #board-Launcher, body.in-gate #contribute-launcher, body.in-gate #board-modal, body.in-gate #stop-panel, body.in-gate #phone, body.in-gate #handset, body.in-gate #attribution,
-body.in-lobby #hud, body.in-lobby #buttons, body.in-lobby #top-right-bar, body.in-lobby #emote-bar, body.in-lobby #chat, body.in-lobby #chat-log-panel, body.in-lobby #joystick, body.in-lobby #presence-status, body.in-lobby #presence-panel, body.in-lobby #board-Launcher, body.in-lobby #contribute-launcher, body.in-lobby #board-modal, body.in-lobby #stop-panel, body.in-lobby #phone, body.in-lobby #handset { display: none; }
+body.in-gate #hud, body.in-gate #buttons, body.in-gate #top-right-bar, body.in-gate #emote-bar, body.in-gate #chat, body.in-gate #chat-log-panel, body.in-gate #joystick, body.in-gate #presence-status, body.in-gate #presence-panel, body.in-gate #board-Launcher, body.in-gate #contribute-launcher, body.in-gate #board-modal, body.in-gate #donate-near-btn, body.in-gate #donate-modal, body.in-gate #stop-panel, body.in-gate #phone, body.in-gate #handset, body.in-gate #attribution,
+body.in-lobby #hud, body.in-lobby #buttons, body.in-lobby #top-right-bar, body.in-lobby #emote-bar, body.in-lobby #chat, body.in-lobby #chat-log-panel, body.in-lobby #joystick, body.in-lobby #presence-status, body.in-lobby #presence-panel, body.in-lobby #board-Launcher, body.in-lobby #contribute-launcher, body.in-lobby #board-modal, body.in-lobby #donate-near-btn, body.in-lobby #donate-modal, body.in-lobby #stop-panel, body.in-lobby #phone, body.in-lobby #handset { display: none; }
 #world-gate[hidden] { display: none !important; }
 .gate-copy { position: absolute; left: 50%; bottom: 32px; z-index: 2; width: min(460px, calc(100% - 32px)); transform: translateX(-50%); text-align: center; pointer-events: none; padding: 14px 16px 16px; color: #122033; background: rgba(255,255,255,.88); border-radius: 12px; box-shadow: 0 2px 10px rgba(18,32,51,.16); }
 .gate-copy .kicker { display: inline-block; margin: 0; padding: 3px 8px; border-radius: 8px; background: #f5a200; color: #1b1b1b; font-size: 12px; font-weight: 800; letter-spacing: 0.04em; }
@@ -1710,4 +1710,266 @@ body.in-lobby #hud, body.in-lobby #buttons, body.in-lobby #top-right-bar, body.i
 #board-modal .board-form textarea {
   resize: vertical;
   line-height: 1.5;
+}
+
+/* 후원 전광판 라벨, 근접 버튼, 확대 모달 */
+.label.donate-sign {
+  font-size: 12px;
+  font-weight: 800;
+  color: #ffe169;
+  background: linear-gradient(90deg, rgba(18, 32, 51, 0.94), rgba(212, 0, 59, 0.88));
+  border: 1.5px solid rgba(255, 225, 105, 0.7);
+  padding: 4px 10px;
+  border-radius: 999px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.28);
+  transition: transform .15s;
+}
+.label.donate-sign:hover {
+  transform: translate(-50%, -100%) scale(1.06) !important;
+}
+#donate-near-btn {
+  position: fixed;
+  left: clamp(270px, min(50vw, calc(100vw - 735px)), 50vw);
+  bottom: 138px;
+  transform: translateX(-50%);
+  z-index: 8;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 800;
+  color: #fff;
+  background: linear-gradient(90deg, #d4003b, #f59f00);
+  border: 1.5px solid #ffe169;
+  border-radius: 999px;
+  padding: 8px 16px;
+  cursor: pointer;
+  box-shadow: 0 6px 18px rgba(212, 0, 59, 0.35);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+}
+#donate-near-btn[hidden] { display: none !important; }
+#donate-near-btn kbd {
+  display: inline-grid;
+  place-items: center;
+  padding: 1px 6px;
+  border-radius: 6px;
+  background: rgba(12, 22, 38, 0.78);
+  color: #ffe169;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 900;
+}
+#donate-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 28;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+}
+#donate-modal[hidden] { display: none !important; }
+#donate-modal .donate-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(8, 16, 30, 0.56);
+  backdrop-filter: blur(4px);
+}
+#donate-modal .donate-dialog {
+  position: relative;
+  z-index: 1;
+  width: min(680px, 100%);
+  max-height: min(88vh, 720px);
+  display: flex;
+  flex-direction: column;
+  background: #fffdf9;
+  color: #122033;
+  border-radius: 18px;
+  box-shadow: 0 22px 54px rgba(8, 16, 30, 0.45);
+  overflow: hidden;
+  border: 2px solid rgba(245, 162, 0, 0.4);
+}
+#donate-modal .donate-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 22px 14px;
+  background: linear-gradient(135deg, #122033, #1f4277);
+  color: #fff;
+}
+#donate-modal .donate-kicker {
+  display: inline-block;
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  color: #ffe169;
+}
+#donate-modal .donate-head h2 {
+  margin: 3px 0 0;
+  font-size: 19px;
+  font-weight: 800;
+}
+#donate-modal .donate-close {
+  border: 0;
+  background: rgba(255, 255, 255, 0.14);
+  color: #fff;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  font-size: 15px;
+  font-weight: 800;
+  cursor: pointer;
+}
+#donate-modal .donate-close:hover { background: rgba(255, 255, 255, 0.25); }
+#donate-modal .donate-body {
+  padding: 18px 22px 20px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+#donate-modal .donate-lead {
+  margin: 0;
+  font-size: 13.5px;
+  line-height: 1.55;
+  font-weight: 600;
+  color: #33415c;
+}
+#donate-modal .donate-grid {
+  display: grid;
+  grid-template-columns: 230px 1fr;
+  gap: 16px;
+  align-items: stretch;
+}
+@media (max-width: 640px) {
+  #donate-modal .donate-grid { grid-template-columns: 1fr; }
+}
+#donate-modal .donate-qr-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 18px 14px 14px;
+  border-radius: 14px;
+  background: #fff9db;
+  border: 2px dashed #f59f00;
+  text-align: center;
+}
+#donate-modal .donate-tape {
+  position: absolute;
+  top: -9px;
+  width: 74px;
+  height: 18px;
+  background: rgba(255, 212, 59, 0.85);
+  transform: rotate(-3deg);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+}
+#donate-modal .qr-badge {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: #d4003b;
+  color: #fff;
+  font-size: 11.5px;
+  font-weight: 800;
+  margin-bottom: 10px;
+}
+#donate-modal .qr-frame {
+  width: 156px;
+  height: 156px;
+  padding: 10px;
+  background: #fff;
+  border-radius: 12px;
+  border: 2px solid #122033;
+  display: grid;
+  place-items: center;
+}
+#donate-modal .qr-frame img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+#donate-modal .donate-qr-card small {
+  margin-top: 8px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #5c6b82;
+}
+#donate-modal .donate-info-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+#donate-modal .donate-account-box {
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: #f1f5f9;
+  border: 1px solid rgba(18, 32, 51, 0.12);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+#donate-modal .donate-account-box small {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: #5c6b82;
+}
+#donate-modal .donate-account-box .acc-num {
+  font-size: 19px;
+  font-weight: 900;
+  color: #1f5fbf;
+  letter-spacing: 0.02em;
+}
+#donate-modal .donate-account-box .acc-holder {
+  font-size: 13px;
+  font-weight: 700;
+  color: #33415c;
+}
+#donate-modal .donate-copy-btn {
+  margin-top: 8px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 800;
+  padding: 9px 14px;
+  border-radius: 9px;
+  border: 0;
+  background: #122033;
+  color: #fff;
+  cursor: pointer;
+  transition: background .15s;
+}
+#donate-modal .donate-copy-btn:hover { background: #1f5fbf; }
+#donate-modal .donate-copy-btn.copied {
+  background: #20c997;
+  color: #082019;
+}
+#donate-modal .donate-usage {
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: rgba(31, 95, 191, 0.06);
+  border: 1px solid rgba(31, 95, 191, 0.15);
+}
+#donate-modal .donate-usage h3 {
+  margin: 0 0 6px;
+  font-size: 13px;
+  font-weight: 800;
+  color: #122033;
+}
+#donate-modal .donate-usage ul {
+  margin: 0;
+  padding-left: 16px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: #33415c;
+}
+#donate-modal .donate-note {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgba(245, 162, 0, 0.12);
+  font-size: 12px;
+  line-height: 1.5;
+  font-weight: 600;
+  color: #485870;
 }
