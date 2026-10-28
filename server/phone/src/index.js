@@ -66,8 +66,10 @@ export default {
     }
     if (request.method === "GET" && url.pathname === "/health") return json({ ok: true }, 200, cors);
     if (request.method === "GET" && url.pathname === "/stats") {
+      const detail = url.searchParams.get("detail") === "1";
       let online = 0;
       let residents = 0;
+      let extra = {};
       try {
         const r = await env.ROOM.getByName(queryRegion).fetch("https://room/stats");
         if (r.ok) {
@@ -76,13 +78,21 @@ export default {
         }
       } catch {}
       try {
-        const bookStats = await env.PHONE_BOOK.getByName(queryRegion).board({ op: "stats", region: queryRegion });
+        const bookStats = await env.PHONE_BOOK.getByName(queryRegion).board({ op: "stats", region: queryRegion, detail });
         if (bookStats?.ok) {
           residents = Number(bookStats.residents || 0);
           if (!online && bookStats.activeRecently) online = Number(bookStats.activeRecently || 0);
+          if (detail) {
+            extra = {
+              todayJoined: bookStats.todayJoined,
+              todayActive: bookStats.todayActive,
+              community: bookStats.community,
+              dailySignups: bookStats.dailySignups,
+            };
+          }
         }
       } catch {}
-      return json({ ok: true, region: queryRegion, online, residents }, 200, cors);
+      return json({ ok: true, region: queryRegion, online, residents, ...extra }, 200, cors);
     }
     const method = ROUTES[url.pathname];
     if (!method || request.method !== "POST") return json({ ok: false, error: "not_found" }, 404, cors);
