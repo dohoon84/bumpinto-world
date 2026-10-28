@@ -1,5 +1,5 @@
 * { box-sizing: border-box; }
-html, body { margin: 0; height: 100%; overflow: hidden; font-family: 'Pretendard', 'Apple SD Gothic Neo', 'Noto Sans KR', 'Malgun Gothic', system-ui, sans-serif; background: #bfe3f5; }
+html, body { margin: 0; height: 100%; overflow: hidden; font-family: 'Pretendard', 'Apple SD Gothic Neo', 'Noto Sans KR', 'Malgun Gothic', system-ui, sans-serif; background: #bfe3f5; -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
 #app { position: fixed; inset: 0; }
 #app canvas { display: block; touch-action: none; }
 #overlay { position: fixed; inset: 0; pointer-events: none; overflow: hidden; }
@@ -664,6 +664,7 @@ body.in-lobby #hud, body.in-lobby #buttons, body.in-lobby #top-right-bar, body.i
 .gate-focus-chip.on { background: #122033; color: #ffe169; border-color: #122033; }
 .gate-copy .rule { width: 48px; height: 1px; margin: 10px auto 0; background: rgba(18,32,51,.12); }
 .gate-copy .note { margin: 10px 0 0; font-size: 12.5px; font-weight: 600; letter-spacing: 0; color: #1a283c; white-space: nowrap; word-break: keep-all; }
+.gate-copy .note .gate-note-link { pointer-events: auto; cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
 .gate-copy .gate-links { margin-top: 10px; pointer-events: auto; }
 .gate-copy .gate-gh-btn { display: inline-flex; align-items: center; gap: 6px; padding: 6px 13px; border-radius: 999px; background: #122033; color: #fff; font-size: 12.5px; font-weight: 700; text-decoration: none; box-shadow: 0 2px 8px rgba(18,32,51,.2); }
 .gate-copy .gate-gh-btn:hover { background: #1f5fbf; }
@@ -1141,26 +1142,6 @@ body.in-lobby #hud, body.in-lobby #buttons, body.in-lobby #top-right-bar, body.i
 .gate-launch-btn.primary:hover {
   background: #ffba26;
 }
-@media (max-width: 860px) {
-  .gate-launch-hero {
-    top: 46%;
-  }
-  .flip-card {
-    width: 44px;
-    height: 62px;
-    font-size: 40px;
-  }
-  .flip-sep {
-    font-size: 28px;
-    margin-bottom: 18px;
-  }
-  .gate-launch-title { font-size: 16.5px; }
-  .gate-launch-sub { font-size: 12px; }
-  .gate-polaroids { gap: 8px; }
-  .polaroid-card { width: 112px; padding: 5px 5px 8px; }
-  .polaroid-caption strong { font-size: 10.5px; }
-  .polaroid-caption span { display: none; }
-}
 .gate-regions-ft {
   display: block;
   margin-top: 8px;
@@ -1182,20 +1163,166 @@ body.in-lobby #hud, body.in-lobby #buttons, body.in-lobby #top-right-bar, body.i
 .gate-toast-btn { flex: 1; text-align: center; font: inherit; font-size: 12.5px; font-weight: 700; padding: 7px 10px; border-radius: 8px; border: 1px solid rgba(255,255,255,.22); background: rgba(255,255,255,.1); color: #fff; text-decoration: none; cursor: pointer; }
 .gate-toast-btn.primary { background: #f5a200; color: #122033; border-color: #f5a200; }
 @media (max-width: 860px) {
-  .gate-copy { bottom: 10px; padding: 10px 13px 12px; }
-  .gate-copy h1 { font-size: 18px; }
-  .gate-copy .lead { font-size: 12px; }
-  .gate-telemetry {
-    left: 12px;
-    right: 12px;
-    top: 10px;
-    width: auto;
-    padding: 8px 10px;
+  body.in-gate #world-gate {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    padding: 8px 12px 10px;
+    gap: 6px;
+    overflow-y: auto;
+    overflow-x: hidden;
   }
-  .gate-telemetry-hd { margin-bottom: 5px; font-size: 11px; }
+  .gate-telemetry {
+    position: relative;
+    left: auto;
+    right: auto;
+    top: auto;
+    order: 1;
+    width: 100%;
+    padding: 6px 10px;
+    flex-shrink: 0;
+  }
+  .gate-telemetry-hd { margin-bottom: 4px; font-size: 11px; }
   .gate-stat-card { padding: 4px 8px; }
-  .gate-regions { right: 12px; left: 12px; top: 86px; width: auto; padding: 8px 10px; }
-  .gate-regions-list { max-height: 98px; }
+  .gate-stat-card small { font-size: 10px; }
+  .gate-stat-card strong { font-size: 11.5px; }
+  .gate-stat-card .live-num, .gate-stat-card .res-num { font-size: 12.5px; }
+  .gate-regions {
+    position: relative;
+    right: auto;
+    left: auto;
+    top: auto;
+    order: 2;
+    width: 100%;
+    padding: 6px 10px;
+    flex-shrink: 0;
+  }
+  .gate-regions-top {
+    margin-bottom: 6px;
+    cursor: pointer;
+  }
+  .gate-regions-hd {
+    font-size: 11px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  #world-gate.is-countdown-active .gate-regions .gate-regions-hd::after {
+    content: ' ▾';
+    color: #8ec8ef;
+  }
+  #world-gate.is-countdown-active .gate-regions.is-expanded .gate-regions-hd::after {
+    content: ' ▴';
+  }
+  #world-gate.is-countdown-active .gate-regions:not(.is-expanded) .gate-regions-top {
+    margin-bottom: 0;
+  }
+  #world-gate.is-countdown-active .gate-regions:not(.is-expanded) .gate-regions-list,
+  #world-gate.is-countdown-active .gate-regions:not(.is-expanded) .gate-regions-ft {
+    display: none;
+  }
+  .gate-regions-list { max-height: 92px; }
+  #world-gate.is-countdown-active .gate-open-pin {
+    display: none !important;
+  }
+  .gate-launch-hero {
+    position: relative;
+    left: auto;
+    top: auto;
+    transform: none;
+    order: 3;
+    width: 100%;
+    margin: auto 0;
+    flex-shrink: 1;
+  }
+  .gate-launch-kicker {
+    font-size: 10.5px;
+    letter-spacing: 0.12em;
+  }
+  .gate-launch-clock {
+    gap: 8px;
+    margin: 6px 0 8px;
+  }
+  .flip-group { gap: 4px; }
+  .flip-pair { gap: 4px; }
+  .flip-card {
+    width: 38px;
+    height: 52px;
+    font-size: 32px;
+    border-radius: 8px;
+  }
+  .flip-unit {
+    font-size: 8.5px;
+    letter-spacing: 0.14em;
+  }
+  .flip-sep {
+    font-size: 24px;
+    margin-bottom: 14px;
+  }
+  .gate-launch-title {
+    font-size: 15px;
+    line-height: 1.3;
+    word-break: keep-all;
+  }
+  .gate-launch-sub {
+    margin-top: 4px;
+    font-size: 11.5px;
+    line-height: 1.38;
+    white-space: normal;
+    word-break: keep-all;
+  }
+  .gate-polaroids {
+    margin-top: 10px;
+    gap: 6px;
+  }
+  .polaroid-card {
+    width: calc((100% - 12px) / 3);
+    max-width: 114px;
+    padding: 4px 4px 7px;
+  }
+  .polaroid-card:nth-child(1) { transform: rotate(-3deg) translateY(3px); }
+  .polaroid-card:nth-child(2) { transform: rotate(0.5deg) translateY(-2px); }
+  .polaroid-card:nth-child(3) { transform: rotate(3deg) translateY(3px); }
+  .polaroid-tag {
+    font-size: 8px;
+    padding: 1.5px 4px;
+  }
+  .polaroid-caption { margin-top: 5px; }
+  .polaroid-caption strong {
+    font-size: 10px;
+    line-height: 1.25;
+    word-break: keep-all;
+  }
+  .polaroid-caption span { display: none; }
+  .gate-copy {
+    position: relative;
+    left: auto;
+    bottom: auto;
+    transform: none;
+    order: 4;
+    width: 100%;
+    margin-top: auto;
+    padding: 9px 12px 10px;
+    flex-shrink: 0;
+  }
+  #world-gate.is-countdown-active .gate-copy {
+    margin-top: 0;
+  }
+  .gate-copy .kicker { font-size: 10.5px; padding: 2px 7px; }
+  .gate-copy h1 { margin-top: 4px; font-size: 16px; }
+  .gate-copy .lead { margin-top: 2px; font-size: 11px; }
+  .gate-focus-bar { margin-top: 6px; gap: 5px; }
+  .gate-focus-chip { font-size: 11px; padding: 3px 9px; }
+  .gate-copy .rule { margin-top: 6px; }
+  .gate-copy .note {
+    margin-top: 6px;
+    font-size: 11px;
+    line-height: 1.38;
+    white-space: normal;
+    word-break: keep-all;
+  }
+  .gate-copy .gate-links { margin-top: 6px; }
+  .gate-copy .gate-gh-btn { padding: 5px 11px; font-size: 11.5px; }
   #world-gate .studio { display: none; }
 }
 
