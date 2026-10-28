@@ -1867,13 +1867,20 @@ body.in-lobby #hud, body.in-lobby #buttons, body.in-lobby #top-right-bar, body.i
 }
 #donate-modal .qr-badge {
   display: inline-block;
-  padding: 3px 10px;
+  padding: 4px 12px;
   border-radius: 999px;
-  background: #d4003b;
+  background: #0064ff;
   color: #fff;
-  font-size: 11.5px;
+  font-size: 12.5px;
   font-weight: 800;
   margin-bottom: 10px;
+}
+#donate-modal .qr-recipient {
+  display: block;
+  margin-top: 10px;
+  font-size: 15px;
+  font-weight: 900;
+  color: #122033;
 }
 #donate-modal .qr-frame {
   width: 196px;
