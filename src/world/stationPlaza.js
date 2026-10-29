@@ -8,6 +8,7 @@ import * as THREE from 'three';
 import { createAvatar } from '../entities/avatar.js';
 import { Bubble } from '../overlay.js';
 import { watchEvening } from '../evening.js';
+import { createPlazaTree } from './trees.js';
 
 const PLAZA_X = -74.0;
 const PLAZA_Z = 25.0;
@@ -907,46 +908,6 @@ function createFoodTruck(x, z, overlay) {
   }
 
   return { group: g, x, z, hw: 2.5, hd: 1.6 };
-}
-function createPlazaTree(x, z, scale = 1, withBench = true) {
-  const g = new THREE.Group();
-  g.position.set(x, 0, z);
-  const trunkMat = M('#7c5c3e');
-  const leaf1 = M('#6ab056', { flatShading: true });
-  const leaf2 = M('#82c46c', { flatShading: true });
-  const woodBench = M('#b8895a');
-  const stoneCurb = M('#c8c2b6');
-
-  const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.24 * scale, 0.36 * scale, 3.6 * scale, 7), trunkMat);
-  trunk.position.y = 1.8 * scale;
-  trunk.castShadow = true;
-  g.add(trunk);
-
-  const c1 = new THREE.Mesh(new THREE.IcosahedronGeometry(2.3 * scale, 1), leaf1);
-  c1.position.set(0, 4.4 * scale, 0);
-  c1.scale.set(1.15, 0.82, 1.15);
-  c1.castShadow = true;
-
-  const c2 = new THREE.Mesh(new THREE.IcosahedronGeometry(1.65 * scale, 1), leaf2);
-  c2.position.set(0.9 * scale, 5.1 * scale, 0.4 * scale);
-  c2.castShadow = true;
-
-  const c3 = new THREE.Mesh(new THREE.IcosahedronGeometry(1.55 * scale, 1), leaf2);
-  c3.position.set(-0.85 * scale, 4.9 * scale, -0.5 * scale);
-  c3.castShadow = true;
-  g.add(c1, c2, c3);
-
-  if (withBench) {
-    const curb = new THREE.Mesh(new THREE.CylinderGeometry(1.35, 1.42, 0.28, 12), stoneCurb);
-    curb.position.y = 0.14;
-    curb.receiveShadow = true;
-    const seat = new THREE.Mesh(new THREE.CylinderGeometry(1.52, 1.52, 0.08, 12), woodBench);
-    seat.position.y = 0.42;
-    seat.castShadow = true;
-    seat.receiveShadow = true;
-    g.add(curb, seat);
-  }
-  return g;
 }
 
 function createPigeonMesh() {

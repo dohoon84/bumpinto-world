@@ -8,6 +8,7 @@ import { addWindowLights } from './world/windowLights.js';
 import { addPostOfficeMarks } from './world/postOffice.js';
 import { addStationCafeCrowd } from './world/cafeCrowd.js';
 import { addPlaceSigns } from './world/signs.js';
+import { addInstancedTrees } from './world/trees.js';
 
 const ROAD_STYLE = {
   primary: ['#8d939c', 0.06], secondary: ['#949aa3', 0.065], tertiary: ['#9ca1a9', 0.07], trunk: ['#8d939c', 0.06],
@@ -212,13 +213,17 @@ export function buildWorld(scene, data, region = null) {
       }
     }
   }
-  const crown = new THREE.IcosahedronGeometry(2.2, 0); crown.translate(0, 5, 0);
-  const trunk = new THREE.CylinderGeometry(0.2, 0.28, 3.6, 5); trunk.translate(0, 1.8, 0);
-  const crowns = new THREE.InstancedMesh(crown, mat('#7dbb6b', { flatShading: true }), treePts.length);
-  const trunks = new THREE.InstancedMesh(trunk, mat('#8a6b4e'), treePts.length);
-  const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), s = new THREE.Vector3();
-  treePts.forEach(([x, z], i) => { const k = 0.8 + rnd() * 0.5; q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), rnd() * 6); s.set(k, k, k); m4.compose(new THREE.Vector3(x, 0, z), q, s); crowns.setMatrixAt(i, m4); trunks.setMatrixAt(i, m4); });
-  crowns.castShadow = trunks.castShadow = true; scene.add(crowns, trunks);
+  addInstancedTrees(scene, treePts, {
+    rnd,
+    crownRadius: 2.2,
+    crownY: 5,
+    trunkTop: 0.2,
+    trunkBottom: 0.28,
+    trunkHeight: 3.6,
+    trunkColor: '#8a6b4e',
+    scaleMin: 0.8,
+    scaleSpan: 0.5,
+  });
 
   // 중심 표지(역/동네 중심 사인 기둥)
   const sp = { x: data.station.x, z: data.station.z };
