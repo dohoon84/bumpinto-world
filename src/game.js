@@ -29,6 +29,8 @@ import { addStationPlaza } from './world/stationPlaza.js';
 import { mountDonationBillboards } from './world/donationBillboard.js';
 import { mountUmbrellaSystem } from './entities/umbrellaVendor.js';
 import { addDogPark } from './world/dogPark.js';
+import { mountStationCafe, updateStarbucksDoor } from './world/starbucksGlass.js';
+import { addTrashBins } from './world/trashBins.js';
 import { createRoadsterShow } from './events/roadsterShow.js';
 import { createTowerAddon } from './entities/towerAddon.js';
 import { createLaunchShow } from './events/launchShow.js';
@@ -192,11 +194,13 @@ player.visible = joined;
 scene.add(player);
 function wear(next) {
   const pos = player.position.clone(), rotY = player.rotation.y, vis = player.visible, phoneOpen = player.userData.phoneOpen, umb = player.userData.umbrella || '';
+  const cup = player.userData.coffee || '';
   scene.remove(player);
   player = createAvatar(next);
   player.position.copy(pos); player.rotation.y = rotY; player.visible = vis;
   player.userData.phoneOpen = phoneOpen;
   player.userData.umbrella = umb;
+  player.userData.coffee = cup;
   scene.add(player);
 }
 const pos = new THREE.Vector3(world.signPos.x + 4, 0, world.signPos.z + 4);
@@ -213,6 +217,10 @@ const myBubble = new Bubble(overlay, 'me', () => player.position.clone().setY(pl
   getName: () => me.name || '나',
   getColor: () => me.color || '#4f7cff',
 }); // [terrain]
+const stationCafe = world.starbucksRooms?.door
+  ? mountStationCafe(world.starbucksRooms.door)
+  : { update() {}, order() {}, near: false, bind() {} };
+stationCafe.bind((id, outside) => stationCafe.order(player, (line) => myBubble.say(line, 3200), id, outside));
 
 // ?npcs=N 은 0부터 상한까지. 이름 있는 주민을 먼저 두고, 나머지는 출퇴근·점심에 맞춰 켠다.
 const npcCap = getNpcCapForRegion(region.id);
@@ -329,7 +337,15 @@ const umbrellas = region.features?.umbrellas
     stationPlaza.blocks(x, z) ||
     dogPark.blocks(x, z) ||
     donationBoards.blocks(x, z) ||
-    umbrellas.blocks(x, z);
+    umbrellas.blocks(x, z) ||
+    !!world.starbucksRooms?.door?.blocks?.(x, z, r);
+}
+const trashBins = region.id === 'jeongja'
+  ? addTrashBins(scene, overlay, world, world.starbucksRooms?.door || null)
+  : { near: () => null, blocks: () => false, bins: [] };
+{
+  const withBins = world.isBlocked;
+  world.isBlocked = (x, z, r) => withBins(x, z, r) || trashBins.blocks(x, z);
 }
 const presence = createPresence({ station: st, region });
 if (npcs.guard) presence.setGuard?.(npcs.guard);
@@ -1753,7 +1769,6 @@ input.onKey = (e) => {
     if (donationBoards.isNear) donationBoards.openModal('hotkey_f');
     else if (dogPark.nearGate) dogPark.toggleGate();
   }
-  if (e.code === 'KeyC' && !e.repeat) toggleSit();
   if (e.code === 'KeyZ' && !e.repeat) toggleAfk();
   if (e.code === 'Space' && !e.repeat) triggerJump();
   const emoteDef = EMOTE_BY_CODE[e.code];
@@ -2039,6 +2054,17 @@ function frame() {
   riverFolk?.update(dt, player.position);
   stationPlaza.update(dt, player.position);
   dogPark.update(dt, player.position);
+  {
+    const doorPeople = [player.position];
+    for (const n of npcs.list) if (n.active !== false) doorPeople.push(n.pos);
+    for (const p of remotes.list()) doorPeople.push(p);
+    updateStarbucksDoor(world.starbucksRooms?.door, dt, doorPeople);
+    stationCafe.update(
+      joined ? player.position : null,
+      !!player.userData.coffee,
+      !!(joined && trashBins.near(player.position.x, player.position.z)),
+    );
+  }
   donationBoards.update(dt, joined ? player.position : null);
   umbrellas.update(dt, joined ? player.position : null, player.rotation.y);
   remotes.update(dt);

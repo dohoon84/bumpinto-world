@@ -2,7 +2,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { addCafeSidewalks } from './world/cafeWalks.js';
-import { addStarbucksGlass, placeJeongjaStationStarbucks, ringKey, starbucksShells } from './world/starbucksGlass.js';
+import { addStarbucksGlass, placeJeongjaStationStarbucks, ringKey, starbucksShells, stationWallColliders } from './world/starbucksGlass.js';
 import { addNobiosShop, placeNobiosHotel } from './world/nobiosHotel.js';
 import { addWindowLights } from './world/windowLights.js';
 import { addPostOfficeMarks } from './world/postOffice.js';
@@ -145,9 +145,13 @@ export function buildWorld(scene, data, region = null) {
     const minH = shell?.mode === 'podium' ? 3.4 : shell?.mode === 'full' ? Math.max(origMin, b.h - 0.42) : origMin;
     const h = Math.max(0.35, b.h - minH);
     if (origMin < 2.5) {
-      let mnx = Infinity, mnz = Infinity, mxx = -Infinity, mxz = -Infinity;
-      for (const [x, z] of b.o) { mnx = Math.min(mnx, x); mxx = Math.max(mxx, x); mnz = Math.min(mnz, z); mxz = Math.max(mxz, z); }
-      colliders.add(b.o, mnx, mnz, mxx, mxz);
+      const doorWalls = shell?.name === '스타벅스 정자역' ? stationWallColliders(shell) : null;
+      const rings = doorWalls || [b.o];
+      for (const ring of rings) {
+        let mnx = Infinity, mnz = Infinity, mxx = -Infinity, mxz = -Infinity;
+        for (const [x, z] of ring) { mnx = Math.min(mnx, x); mxx = Math.max(mxx, x); mnz = Math.min(mnz, z); mxz = Math.max(mxz, z); }
+        colliders.add(ring, mnx, mnz, mxx, mxz);
+      }
     }
     if (b._skip) continue; // [tower] 발사탑/OLM/탱크 상세 모델로 교체될 건물은 기본 상자 생략
     let g;
