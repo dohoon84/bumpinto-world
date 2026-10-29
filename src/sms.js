@@ -11,7 +11,8 @@ const BOARD_CATS = new Set(['notice', 'intro', 'feedback', 'food', 'free']);
 const WRITABLE_BOARD_CATS = new Set(['intro', 'feedback', 'food', 'free']);
 
 function isBoardAdmin(session) {
-  return Boolean(session?.isAdmin);
+  if (!session || session.off) return false;
+  return Boolean(session.isAdmin);
 }
 
 function isLocalHost() {
@@ -431,6 +432,7 @@ export function createSms() {
       unread: data.unread || 0,
       hasPin: !!data.hasPin,
       isAdmin: !!data.isAdmin,
+      bikeTank: data.bikeTank === 'red' || data.bikeTank === 'black' ? data.bikeTank : null,
       updatedAt: data.updatedAt,
     };
   }

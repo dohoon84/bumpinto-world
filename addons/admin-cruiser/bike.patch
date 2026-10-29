@@ -1,0 +1,655 @@
+diff -ruN a/scripts/shots-bike.mjs b/scripts/shots-bike.mjs
+--- a/scripts/shots-bike.mjs	1970-01-01 09:00:00.000000000 +0900
++++ b/scripts/shots-bike.mjs	2026-10-29 16:21:19.717363308 +0900
+@@ -0,0 +1,55 @@
++// [bike] Admin Cruiser 스크린샷. 사용: npx vite --port 5179 & node scripts/shots-bike.mjs   (env: URL, ONLY=name,..)
++import { chromium } from 'playwright';
++const URL = process.env.URL || 'http://localhost:5179/';
++const ONLY = process.env.ONLY ? process.env.ONLY.split(',') : null;
++const browser = await chromium.launch({ args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
++const page = await browser.newPage({ viewport: { width: 1280, height: 720 }, deviceScaleFactor: 2 });
++const errs = [];
++page.on('pageerror', (e) => errs.push('[pageerror] ' + e.message));
++page.on('console', (m) => m.type() === 'error' && errs.push('[console] ' + m.text()));
++await page.goto(URL + '?shot=1&taxis=0&terrain=0&npcs=0&show=0&launch=0' + (process.env.Q || ''));
++await page.waitForFunction(() => window.__jj?.ready, null, { timeout: 120000 });
++await page.waitForTimeout(1500);
++const ev = (f, a) => page.evaluate(f, a);
++console.log(JSON.stringify(await ev(() => { const b = window.__jj.bike.bike, p = window.__jj.player.position; const box = new window.__jj.bike.mesh.constructor().constructor; void box;
++  return { x: +b.x.toFixed(1), z: +b.z.toFixed(1), h: +b.h.toFixed(2), spawn: [p.x, p.z] }; })));
++// 카메라 헬퍼: 바이크 기준 (side: 0=왼쪽 측면, π=오른쪽), 바라보는 높이 lookY
++await ev(() => { const css = document.createElement('style'); css.id = 'hideui'; css.textContent = '#bike-prompt,#trk-prompt,.tag{display:none!important}'; document.head.appendChild(css);
++  window.__side = (side, dist, pitch, lookY = 0.55, fwd = 0) => { const j = window.__jj, b = j.bike.bike, s = Math.sin(b.h), c = Math.cos(b.h);
++    j.player.visible = false; j.player.position.set(b.x + s * fwd, lookY - 1.6, b.z + c * fwd); j.cam.yaw = Math.atan2(c, -s) + side; j.cam.pitch = pitch; j.cam.dist = dist; }; });
++// zoom: 화면 중앙을 잘라 확대 (deviceScaleFactor 2 라 해상도 유지)
++const run = async (name, fn, zoom = 1, wait = 900, dy = 40) => { if (ONLY && !ONLY.includes(name)) return; await fn(); await page.waitForTimeout(wait);
++  const w = 1280 / zoom, h = 720 / zoom; await page.screenshot({ path: `shot-bike-${name}.png`, scale: zoom > 1 ? 'device' : 'css', clip: { x: (1280 - w) / 2, y: Math.min(720 - h, (720 - h) / 2 + (zoom > 1 ? dy : 0)), width: w, height: h } }); console.log('shot', name); };
++
++await run('parked', () => ev(() => window.__side(0, 4, 0.02, 0.55)), 2);
++await run('parked34', () => ev(() => window.__side(-0.75, 4.2, 0.18, 0.6)), 1.6);
++await run('rightside', () => ev(() => window.__side(Math.PI, 4, 0.04, 0.55)), 2);
++// 아바타와 크기 비교 (바이크 왼쪽 옆에 서 있음)
++await run('scale', () => ev(() => { const j = window.__jj, b = j.bike.bike, s = Math.sin(b.h), c = Math.cos(b.h);
++  j.player.visible = true; j.player.position.set(b.x + 0.8 * c + 0.2 * s, 0, b.z - 0.8 * s + 0.2 * c); j.player.rotation.y = b.h + Math.PI / 2;
++  j.cam.yaw = Math.atan2(c, -s) + 0.25; j.cam.pitch = 0.05; j.cam.dist = 5.2; }), 1.3);
++// 탑승 프롬프트
++await run('prompt', () => ev(() => { const j = window.__jj, b = j.bike.bike, s = Math.sin(b.h), c = Math.cos(b.h); document.getElementById('hideui').textContent = '.tag{display:none!important}';
++  j.player.visible = true; j.player.position.set(b.x + 1.3 * c + 0.2 * s, 0, b.z - 1.3 * s + 0.2 * c); j.player.rotation.y = b.h - Math.PI / 2;
++  j.cam.yaw = Math.atan2(c, -s) + 0.55; j.cam.pitch = 0.35; j.cam.dist = 6.5; }));
++// 탑승 → 주행 (앞이 트인 방향으로 돌려 세움)
++if (!ONLY || ONLY.some((n) => ['rideside', 'riding', 'lean', 'smoke', 'exited'].includes(n))) {
++  await ev(() => { const j = window.__jj, b = j.bike.bike; const clear = (h) => { for (let d = 3; d < 80; d += 2) { if (j.world.isBlocked(b.x + Math.sin(h) * d, b.z + Math.cos(h) * d, 0.8)) return d; } return 80; };
++    if (clear(b.h + Math.PI) > clear(b.h)) b.h += Math.PI; j.bike.mount(); });
++  // 공회전 연기
++  await page.waitForTimeout(2200);
++  await run('rideside', () => ev(() => { const j = window.__jj, b = j.bike.bike, s = Math.sin(b.h), c = Math.cos(b.h); j.bike.holdCam(30); j.cam.yaw = Math.atan2(c, -s) + 0.12; j.cam.pitch = 0.02; j.cam.dist = 5.5; }), 1.6, 600);
++  await run('smoke', () => ev(() => { const j = window.__jj, b = j.bike.bike; j.bike.holdCam(30); j.cam.yaw = b.h + Math.PI + 0.75; j.cam.pitch = 0.05; j.cam.dist = 4.4; }), 1.6, 6000, 400);
++  await ev(() => window.__jj.bike.holdCam(0));
++  await ev(() => { window.__jj.cam.dist = 6.8; window.__jj.cam.pitch = 0.17; });
++  await page.keyboard.down('KeyW'); await page.waitForTimeout(3200);
++  await run('riding', async () => { console.log('riding', JSON.stringify(await ev(() => { const b = window.__jj.bike.bike; return { kmh: +(b.v * 3.6).toFixed(1), lean: +b.lean.toFixed(2) }; }))); }, 1, 10);
++  await page.keyboard.down('KeyD'); await page.waitForTimeout(2200);
++  await run('lean', async () => { console.log('lean', JSON.stringify(await ev(() => { const b = window.__jj.bike.bike; return { kmh: +(b.v * 3.6).toFixed(1), leanDeg: +(b.lean * 57.3).toFixed(1), steerDeg: +(b.steer * 57.3).toFixed(1) }; }))); }, 1, 10);
++  await page.keyboard.up('KeyD'); await page.keyboard.up('KeyW');
++  await page.keyboard.down('KeyS'); await page.waitForTimeout(2500); await page.keyboard.up('KeyS'); await page.waitForTimeout(1200);
++  await page.keyboard.press('KeyF'); await page.waitForTimeout(300);
++  await run('exited', () => ev(() => { const j = window.__jj, b = j.bike.bike; j.cam.yaw = b.h + Math.PI / 2 + 0.6; j.cam.pitch = 0.25; j.cam.dist = 6; }));
++}
++console.log(errs.length ? errs.join('\n') : 'no console errors');
++await browser.close();
+diff -ruN a/src/entities/adminBike.js b/src/entities/adminBike.js
+--- a/src/entities/adminBike.js	1970-01-01 09:00:00.000000000 +0900
++++ b/src/entities/adminBike.js	2026-10-29 16:21:19.705363277 +0900
+@@ -0,0 +1,252 @@
++// [bike] 관리자용 크루저 바이크 1대: 주차 · F 탑승/하차 · 라이딩 자세 · 조향/린 · 머플러 연기 · 멀티플레이(veh id 900)
++//   ?bike=0 끔 (기본 1)
++import * as THREE from 'three';
++import { createBike, setBikeBrake, BDIM } from './bikeModel.js';
++
++export const BIKE_VEH_ID = 900; // trucks 의 veh.id(0~59) 와 겹치지 않는 번호 → 트럭 코드는 무시
++const MAX_V = 110 / 3.6, BOOST_V = 150 / 3.6, REV_V = 4 / 3.6, G = 9.81;
++const R_MIN = 2.7; // 최소 회전반경(m)
++const HL = 1.19, HW = 0.3;
++const HULL = [[0, HL], [0, -HL], [HW, 0.6], [-HW, 0.6], [HW, -0.5], [-HW, -0.5], [HW, 0], [-HW, 0]];
++const DRIVE_KINDS = new Set(['secondary', 'tertiary', 'residential', 'service', 'unclassified', 'primary', 'trunk']);
++
++// 아바타(createAvatar 결과)의 외형을 복제해 '크루저 자세' 라이더를 만든다: 상체 살짝 앞으로, 다리는 앞 발판, 손은 그립
++const HIP = new THREE.Vector3(0, 0.72, -0.27);
++function buildRider(src) {
++  const g = new THREE.Group(); g.name = 'rider';
++  const upper = new THREE.Group(); upper.position.copy(HIP); upper.rotation.x = 0.16; g.add(upper);
++  const rig = src.userData.rig, { legL, legR } = src.userData;
++  let bodyMat = null, pantsMat = legL?.material, skinMat = null;
++  for (const c of rig.children) {
++    if (c === legL || c === legR) continue;
++    const m = c.clone(); m.position.y -= 0.38; upper.add(m); m.castShadow = true;
++    if (c.geometry?.type === 'CapsuleGeometry' && !bodyMat) bodyMat = c.material;
++    if (c.geometry?.type === 'SphereGeometry' && Math.abs(c.position.y - 1.62) < 0.01) skinMat = c.material;
++  }
++  bodyMat ||= new THREE.MeshLambertMaterial({ color: '#4f7cff' }); pantsMat ||= new THREE.MeshLambertMaterial({ color: '#3b4252' }); skinMat ||= bodyMat;
++  const limbG = (r) => new THREE.CapsuleGeometry(r, 1, 3, 8);
++  const mk = (r, m) => { const o = new THREE.Mesh(limbG(r), m); o.castShadow = true; o.userData.r = r; g.add(o); return o; };
++  const legs = [1, -1].map((sx) => ({ sx, thigh: mk(0.1, pantsMat), shin: mk(0.09, pantsMat), foot: (() => { const f = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.08, 0.24), new THREE.MeshLambertMaterial({ color: '#222326' })); f.castShadow = true; g.add(f); return f; })() }));
++  const arms = [1, -1].map((sx) => ({ sx, upper: mk(0.075, bodyMat), fore: mk(0.068, bodyMat), hand: (() => { const h = new THREE.Mesh(new THREE.SphereGeometry(0.062, 8, 6), skinMat); g.add(h); return h; })() }));
++  g.userData = { upper, legs, arms };
++  return g;
++}
++const _a = new THREE.Vector3(), _b = new THREE.Vector3(), _d = new THREE.Vector3(), _up = new THREE.Vector3(0, 1, 0);
++function limb(o, a, b) { _d.subVectors(b, a); const L = _d.length(); o.position.addVectors(a, b).multiplyScalar(0.5); o.quaternion.setFromUnitVectors(_up, _d.normalize()); o.scale.set(1, Math.max(0.05, (L) / (1 + 2 * o.userData.r)), 1); }
++// 두 마디 팔다리: 시작 a → 끝 b, 관절은 bend 방향으로 꺾임
++function twoBone(o1, o2, a, b, l1, l2, bend) {
++  const d = _a.subVectors(b, a), L = Math.min(d.length(), l1 + l2 - 1e-3), dir = d.clone().normalize();
++  const x = (l1 * l1 - l2 * l2 + L * L) / (2 * L), h = Math.sqrt(Math.max(0, l1 * l1 - x * x));
++  const side = bend.clone().addScaledVector(dir, -bend.dot(dir)).normalize();
++  const j = a.clone().addScaledVector(dir, x).addScaledVector(side, h);
++  limb(o1, a, j); limb(o2, j, b);
++}
++function poseRider(rider, bike) {
++  const { upper, legs, arms } = rider.userData, lean = bike.userData.lean;
++  upper.updateMatrixWorld(true); bike.updateMatrixWorld(true);
++  for (const l of legs) {
++    const hip = _b.set(l.sx * 0.15, HIP.y, HIP.z + 0.02).clone();
++    const foot = new THREE.Vector3(l.sx * 0.3, 0.38, 0.38);
++    twoBone(l.thigh, l.shin, hip, foot, 0.46, 0.44, new THREE.Vector3(l.sx * 0.25, 1, 0.4));
++    l.foot.position.set(l.sx * 0.3, 0.34, 0.42); l.foot.rotation.x = 0.15;
++  }
++  for (const a of arms) {
++    const sh = lean.worldToLocal(upper.localToWorld(new THREE.Vector3(a.sx * 0.3, 1.0, 0.02)));
++    const grip = lean.worldToLocal(bike.userData.grips[a.sx > 0 ? 0 : 1].getWorldPosition(new THREE.Vector3()));
++    twoBone(a.upper, a.fore, sh, grip, 0.36, 0.36, new THREE.Vector3(a.sx * 1, -0.6, -0.4));
++    a.hand.position.copy(grip);
++  }
++}
++
++function pointInRing(x, z, r) { let c = false; for (let i = 0, j = r.length - 1; i < r.length; j = i++) { const [xi, zi] = r[i], [xj, zj] = r[j]; if ((zi > z) !== (zj > z) && x < ((xj - xi) * (z - zi)) / (zj - zi) + xi) c = !c; } return c; }
++
++export function createAdminBike({ scene, overlay, world, data, params, cam, player, renderer, terrain, presence, remotes, spawn, getTrucks }) {
++  if (params.get('bike') === '0') return null;
++  const baseBlocked = world.isBlocked; // 건물(+이후 트럭) 충돌
++  const ground = (x, z, ref = 0) => (terrain ? terrain.getGroundHeight(x, z, ref) : 0);
++  const inWater = (x, z) => (data.water || []).some((w) => pointInRing(x, z, w.o));
++
++  // ---------- 배치: 도착지점(스폰) 가까운 도로 가장자리, 비어 있는 곳 ----------
++  const fits = (x, z, h, m = 0.5) => { const c = Math.cos(h), s = Math.sin(h);
++    for (const [lx, lz] of [[-HW - m, -HL - m], [HW + m, -HL - m], [-HW - m, HL + m], [HW + m, HL + m], [HW + m + 0.8, 0], [-HW - m, 0], [0, 0]]) { const wx = x + lx * c + lz * s, wz = z - lx * s + lz * c; if (baseBlocked(wx, wz, 0.2) || inWater(wx, wz)) return false; }
++    return true; };
++  let place = null; const cands = [];
++  for (const r of data.roads || []) { if (!DRIVE_KINDS.has(r.k)) continue;
++    for (let i = 1; i < r.p.length; i++) { const [ax, az] = r.p[i - 1], [bx, bz] = r.p[i], len = Math.hypot(bx - ax, bz - az); if (len < 4) continue;
++      const ux = (bx - ax) / len, uz = (bz - az) / len, nx = -uz, nz = ux;
++      for (let t = 2; t < len - 2; t += 2) { const cx = ax + ux * t, cz = az + uz * t, d = Math.hypot(cx - spawn.x, cz - spawn.z); if (d > 120) continue;
++        for (const sd of [1, -1]) { const off = r.w >= 7 ? r.w / 2 - 0.9 : r.w / 2 + 0.9; cands.push({ x: cx + nx * off * sd, z: cz + nz * off * sd, h: Math.atan2(ux, uz) + (sd < 0 ? Math.PI : 0), d }); } } } }
++  cands.sort((a, b) => a.d - b.d);
++  for (const c of cands) { if (c.d < 5) continue; if (fits(c.x, c.z, c.h)) { place = c; break; } }
++  if (!place) { // 도로가 없으면 스폰 주변 빈 땅
++    for (let r = 5; r < 40 && !place; r += 1.5) for (let a = 0; a < 12 && !place; a++) { const x = spawn.x + Math.cos(a) * r, z = spawn.z + Math.sin(a) * r; if (fits(x, z, a)) place = { x, z, h: a }; } }
++  place ||= { x: spawn.x + 6, z: spawn.z + 3, h: 0 };
++
++  const mesh = createBike(renderer); scene.add(mesh);
++  const U = mesh.userData;
++  const b = { id: BIKE_VEH_ID, mesh, x: place.x, z: place.z, y: ground(place.x, place.z), h: place.h, v: 0, yaw: 0, steer: 0, si: 0, lean: -0.085, spin: [0, 0], pitch: 0, rider: null, remote: null, home: { ...place } };
++  const tmpV = new THREE.Vector3();
++  b.label = overlay.add({ cls: 'label bike', text: '🏍️ Admin Cruiser', getPos: () => tmpV.set(b.x, b.y + 1.75, b.z), maxDist: 40, minDist: 3 });
++
++  // 주차된 바이크도 걷는 사람/트럭이 통과하지 않도록 (타는 중엔 제외)
++  const bikeHit = (x, z, r) => { if (Math.abs(x - b.x) > 3 || Math.abs(z - b.z) > 3) return false; const s = Math.sin(b.h), c = Math.cos(b.h);
++    for (const o of [-0.75, 0, 0.75]) if (Math.hypot(b.x + s * o - x, b.z + c * o - z) < 0.42 + r) return true; return false; };
++  const me = { riding: false, saved: null, lastYawInput: -10, t: 0, puffT: 0 };
++  // 생성 직후(같은 프레임에 트럭 배치가 이어짐)엔 반경 3 m 를 예약해 트럭이 바로 옆/위에 주차되지 않게
++  let reserve = true;
++  world.isBlocked = (x, z, r = 0.35) => baseBlocked(x, z, r) || (reserve ? Math.hypot(x - b.x, z - b.z) < 3 + r : !me.riding && !b.remote && bikeHit(x, z, r));
++
++  // ---------- 라이더 ----------
++  let rider = buildRider(player); rider.visible = false; U.lean.add(rider);
++  const setRider = (src) => { U.lean.remove(rider); rider = buildRider(src); U.lean.add(rider); };
++
++  // ---------- 배기 연기(스프라이트 풀) ----------
++  const smokeTex = (() => { const c = document.createElement('canvas'); c.width = c.height = 64; const x = c.getContext('2d'); const g = x.createRadialGradient(32, 32, 2, 32, 32, 31); g.addColorStop(0, 'rgba(235,235,238,1)'); g.addColorStop(0.5, 'rgba(210,210,214,.45)'); g.addColorStop(1, 'rgba(200,200,205,0)'); x.fillStyle = g; x.fillRect(0, 0, 64, 64); const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t; })();
++  const puffs = [];
++  for (let i = 0; i < 26; i++) { const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: smokeTex, color: '#c9ccd1', transparent: true, opacity: 0, depthWrite: false })); s.visible = false; s.renderOrder = 3; scene.add(s); puffs.push({ s, life: 0, max: 1, vel: new THREE.Vector3() }); }
++  let pi = 0;
++  const puff = (strength) => {
++    const p = puffs[pi++ % puffs.length]; U.exhaust.getWorldPosition(p.s.position);
++    const s = Math.sin(b.h), c = Math.cos(b.h);
++    const out = 0.25 + Math.random() * 0.25; // 오른쪽(머플러 쪽) 바깥으로 살짝 퍼짐
++    p.vel.set(-s * (0.7 + Math.random() * 0.4) - c * out + (Math.random() - 0.5) * 0.2, 0.3 + Math.random() * 0.2, -c * (0.7 + Math.random() * 0.4) + s * out + (Math.random() - 0.5) * 0.2).addScaledVector(tmpV.set(s, 0, c), b.v * 0.35);
++    p.s.position.addScaledVector(p.vel, 0.12); p.life = 0; p.max = 1.3 + Math.random() * 0.9; p.str = strength; p.s.visible = true;
++  };
++  const updSmoke = (dt) => {
++    const engineOn = me.riding || !!b.remote;
++    if (engineOn) { me.puffT -= dt; if (me.puffT <= 0) { // 간헐적: 짧은 간격 퍼프 + 가끔 쉼
++      const load = Math.min(1, Math.abs(b.v) / 12 + (b.throttle || 0) * 0.5);
++      puff(0.5 - load * 0.18); /* 주행 중엔 흩어져 옅게 */ me.puffT = Math.random() < 0.18 ? 0.6 + Math.random() * 0.8 : 0.12 + Math.random() * 0.22 - load * 0.06; } }
++    for (const p of puffs) { if (!p.s.visible) continue; p.life += dt; const k = p.life / p.max; if (k >= 1) { p.s.visible = false; continue; }
++      p.vel.multiplyScalar(1 - dt * 1.2); p.vel.y += dt * 0.12; p.s.position.addScaledVector(p.vel, dt);
++      const sc = 0.2 + k * 1.05; p.s.scale.set(sc, sc, sc); p.s.material.opacity = p.str * (k < 0.15 ? k / 0.15 : 1 - (k - 0.15) / 0.85); }
++  };
++
++  // ---------- UI ----------
++  const css = document.createElement('style');
++  css.textContent = `.label.bike{font-size:11px;font-weight:700;background:rgba(20,20,22,.78);color:#fff}
++#bike-prompt{position:fixed;left:50%;bottom:108px;transform:translateX(-50%);display:none;font:600 14px system-ui,sans-serif;color:#fff;background:rgba(12,12,14,.86);padding:8px 14px;border-radius:12px;border:0;cursor:pointer;z-index:8;box-shadow:0 2px 10px #0004}
++#bike-prompt kbd{background:#fff;color:#222;border-radius:4px;padding:0 6px;margin-right:6px;font:700 13px system-ui}
++#bike-hud{position:fixed;right:16px;bottom:44px;display:none;text-align:right;color:#fff;font-family:system-ui,sans-serif;text-shadow:0 1px 4px #0009;z-index:7;pointer-events:none}
++#bike-hud .v{font:800 46px/1 system-ui}#bike-hud .u{font:600 14px system-ui;opacity:.85}#bike-hud .k{font:12px system-ui;opacity:.9;margin-top:4px}
++body.bike-near #trk-prompt, body.bike-riding #trk-prompt{display:none!important}`;
++  document.head.appendChild(css);
++  const prompt = document.createElement('button'); prompt.id = 'bike-prompt'; document.body.appendChild(prompt);
++  const hud = document.createElement('div'); hud.id = 'bike-hud'; hud.innerHTML = '<span class="v">0</span> <span class="u">km/h</span><div class="k">🏍️ Admin Cruiser · F: 내리기 / Get off · Shift: Boost · WASD/↑↓←→</div>'; document.body.appendChild(hud);
++  const hudV = hud.querySelector('.v');
++  const near = () => { if (b.remote || me.riding) return false; const P = player.position, s = Math.sin(b.h), c = Math.cos(b.h), dx = P.x - b.x, dz = P.z - b.z;
++    const lz = dx * s + dz * c, lx = dx * c - dz * s; return Math.hypot(Math.max(0, Math.abs(lx) - HW), Math.max(0, Math.abs(lz) - HL)) < 2.2; };
++  const toggle = () => { if (me.riding) dismount(); else if (!getTrucks?.()?.driving && near()) mount(); };
++  prompt.onclick = toggle;
++  // 캡처 단계에서 먼저 받아 트럭 F 와 겹치지 않게: 바이크를 타고 있거나 바이크가 가까우면 여기서 처리
++  addEventListener('keydown', (e) => {
++    if (e.code !== 'KeyF' || e.repeat || document.activeElement?.tagName === 'INPUT') return;
++    if (me.riding || (!getTrucks?.()?.driving && near())) { e.stopImmediatePropagation(); toggle(); }
++  }, true);
++
++  function mount() {
++    me.riding = true; b.v = 0; b.rider = 'me'; player.position.set(b.x, b.y, b.z); player.visible = false; setRider(player); rider.visible = true; U.stand.visible = false;
++    me.saved = { dist: cam.dist, pitch: cam.pitch }; cam.dist = 6.8; cam.pitch = 0.17; cam.yaw = b.h + Math.PI;
++    hud.style.display = 'block'; b.label.hidden = true; document.body.classList.add('bike-riding'); me.puffT = 0;
++  }
++  function dismount() {
++    if (!me.riding) return; me.riding = false; b.rider = null; b.v = 0; b.yaw = 0; b.si = 0; rider.visible = false; U.stand.visible = true; setBikeBrake(mesh, false);
++    player.visible = true; b.label.hidden = false; hud.style.display = 'none'; document.body.classList.remove('bike-riding');
++    const s = Math.sin(b.h), c = Math.cos(b.h);
++    const opts = [[0.95, 0.1], [-0.95, 0.1], [0.95, -0.8], [-0.95, -0.8], [0, -1.8], [0, 1.8], [1.8, 0], [-1.8, 0]]; // 왼쪽(킥스탠드 쪽) 먼저
++    let px = b.x + 0.95 * c, pz = b.z - 0.95 * s;
++    for (const [lx, lz] of opts) { const x = b.x + lx * c + lz * s, z = b.z - lx * s + lz * c; if (!world.isBlocked(x, z)) { px = x; pz = z; break; } }
++    // 내린 뒤엔 바이크가 다시 장애물이 되므로 위치 한 번 더 확인
++    player.position.set(px, ground(px, pz, b.y), pz); player.rotation.y = b.h;
++    if (me.saved) { cam.dist = me.saved.dist; cam.pitch = me.saved.pitch; }
++  }
++
++  // ---------- 물리(아케이드, 304 kg 묵직함: 요레이트/린에 관성) ----------
++  const poseFits = (x, z, h) => { const s = Math.sin(h), c = Math.cos(h), bd = world.bounds;
++    if (x < bd.x0 || x > bd.x1 || z < bd.z0 || z > bd.z1) return false;
++    for (const [lx, lz] of HULL) if (world.isBlocked(x + lx * c + lz * s, z - lx * s + lz * c, 0.06)) return false; return true; };
++  function ride(dt, f, s, boost) {
++    const vmax = boost ? BOOST_V : MAX_V;
++    if (f > 0) b.v += (b.v < -0.1 ? 9 : (boost ? 6.2 : 4.6) * (1 - Math.max(0, b.v) / vmax * 0.75)) * f * dt;
++    else if (f < 0) b.v += (b.v > 0.2 ? -8.5 : -1.5) * -f * dt;
++    else b.v -= Math.sign(b.v) * Math.min(Math.abs(b.v), (0.9 + 0.011 * b.v * b.v) * dt);
++    b.v = THREE.MathUtils.clamp(b.v, -REV_V, boost ? BOOST_V : Math.max(MAX_V, Math.min(b.v, BOOST_V) - 5 * dt));
++    b.throttle = Math.max(0, f);
++    b.si += THREE.MathUtils.clamp(s - b.si, -2.6 * dt, 2.6 * dt); // 입력 관성
++    const av = Math.abs(b.v), yawMax = Math.min(av / R_MIN, (0.78 * G) / Math.max(av, 0.1)); // 저속: 회전반경, 고속: 횡가속 한계(~38° 린)
++    const want = -b.si * yawMax * Math.sign(b.v || 1);
++    b.yaw += (want - b.yaw) * Math.min(1, dt * 3.2); // 무게감: 요레이트가 천천히 따라감
++    const nh = b.h + b.yaw * dt, nx = b.x + Math.sin(nh) * b.v * dt, nz = b.z + Math.cos(nh) * b.v * dt;
++    if (poseFits(nx, nz, nh)) { b.x = nx; b.z = nz; b.h = nh; }
++    else if (poseFits(nx, b.z, b.h)) { b.x = nx; b.v *= 0.6; }
++    else if (poseFits(b.x, nz, b.h)) { b.z = nz; b.v *= 0.6; }
++    else b.v = -b.v * 0.15;
++    b.brake = f < 0 && b.v > 0.2;
++  }
++  const pose = (dt, parked) => {
++    const s = Math.sin(b.h), c = Math.cos(b.h), A = BDIM.WB / 2;
++    const yf = ground(b.x + s * A, b.z + c * A, b.y), yr = ground(b.x - s * A, b.z - c * A, b.y);
++    b.y = (yf + yr) / 2; b.pitch += (-Math.atan2(yf - yr, BDIM.WB) - b.pitch) * Math.min(1, dt * 10);
++    mesh.position.set(b.x, b.y, b.z); mesh.rotation.set(b.pitch, b.h, 0, 'YXZ');
++    // 린: 원심력과 균형 (lean = atan(v·ω/g)), 주차 중엔 킥스탠드로 왼쪽 기울기
++    const av = Math.abs(b.v);
++    const leanT = parked ? -0.085 : THREE.MathUtils.clamp(Math.atan((b.v * -b.yaw) / G), -0.68, 0.68) * Math.min(1, av / 2.5);
++    b.lean += THREE.MathUtils.clamp(leanT - b.lean, -1.5 * dt, 1.5 * dt);
++    U.lean.rotation.z = b.lean;
++    // 조향각: δ ≈ atan(WB·ω/v) — 저속에선 핸들을 크게, 고속에선 거의 안 꺾음(카운터스티어 느낌의 작은 각)
++    const st = av > 0.3 ? Math.atan((BDIM.WB * -b.yaw) / av) : b.si * 0.55;
++    b.steer += (THREE.MathUtils.clamp(parked ? -0.32 : st, -0.62, 0.62) - b.steer) * Math.min(1, dt * 8); // 주차: 핸들 왼쪽으로 꺾어 둠 (b.steer: +오른쪽)
++    U.steer.rotation.y = -b.steer;
++    b.spin[0] += (b.v / BDIM.R) * dt; U.frontSpin.rotation.x = b.spin[0]; U.rearSpin.rotation.x = b.spin[0];
++    // 가감속 피칭(서스펜션)
++    const acc = (b.v - (b.pv ?? b.v)) / Math.max(dt, 1e-3); b.pv = b.v;
++    b.dive = THREE.MathUtils.lerp(b.dive || 0, THREE.MathUtils.clamp(acc * 0.004, -0.025, 0.02), Math.min(1, dt * 5));
++    U.body.rotation.x = b.dive;
++    if (rider.visible) poseRider(rider, mesh);
++  };
++  pose(1, true);
++
++  // ---------- 멀티플레이: state.veh = {id:900, ry, v, st(=요레이트)} ----------
++  if (presence) {
++    presence.on('state', (m) => {
++      if (m.veh && m.veh.id === BIKE_VEH_ID && !me.riding) {
++        if (b.rider !== m.id) { b.rider = m.id; const p = remotes?.peers.get(m.id); if (p) { setRider(p.mesh); p.mesh.visible = false; } rider.visible = true; U.stand.visible = false; b.label.hidden = true; }
++        b.remote = { tx: m.x, tz: m.z, th: +m.veh.ry || 0, v: +m.veh.v || 0, yaw: +m.veh.st || 0 };
++      } else if (b.remote && b.rider === m.id) release();
++    });
++    presence.on('leave', (m) => { if (b.remote && b.rider === m.id) release(); });
++  }
++  function release() { const p = remotes?.peers.get(b.rider); if (p) p.mesh.visible = true; b.remote = null; b.rider = null; b.v = 0; b.yaw = 0; rider.visible = false; U.stand.visible = true; b.label.hidden = false; }
++
++  return {
++    bike: b, mesh,
++    get riding() { return me.riding; },
++    mount, dismount, near,
++    holdCam(sec = 5) { me.lastYawInput = me.t + sec; }, // 스크린샷/연출용: 체이스캠 자동복귀 잠시 멈춤
++    update(dt, f, s, run, lookYaw) {
++      me.t += dt; reserve = false;
++      if (me.riding && Math.hypot(player.position.x - b.x, player.position.z - b.z) > 3) { const keep = player.position.clone(); dismount(); player.position.copy(keep); } // 쇼 텔레포트/H 키
++      if (me.riding) {
++        ride(dt, f, s, run);
++        player.position.set(b.x, b.y, b.z); player.rotation.y = b.h;
++        if (Math.abs(lookYaw) > 1e-4) me.lastYawInput = me.t;
++        if (cam.mode === 'follow' && me.t - me.lastYawInput > 1.2) { const want = b.h + Math.PI, d = Math.atan2(Math.sin(want - cam.yaw), Math.cos(want - cam.yaw)); cam.yaw += d * Math.min(1, dt * (Math.abs(b.v) > 1 ? 3.2 : 1)); }
++        hudV.textContent = Math.round(Math.abs(b.v) * 3.6); setBikeBrake(mesh, b.brake);
++        pose(dt, false);
++      } else if (b.remote) {
++        const r = b.remote, k = Math.min(1, dt * 8);
++        b.x += (r.tx - b.x) * k; b.z += (r.tz - b.z) * k; b.h += Math.atan2(Math.sin(r.th - b.h), Math.cos(r.th - b.h)) * k; b.v = r.v; b.yaw = r.yaw;
++        pose(dt, false);
++      } else if (me.wasActive || Math.abs(b.lean + 0.085) > 1e-3) pose(dt, true);
++      me.wasActive = me.riding || !!b.remote;
++      updSmoke(dt);
++      const n = !me.riding && !getTrucks?.()?.driving && near();
++      document.body.classList.toggle('bike-near', n);
++      if (me.riding) { prompt.style.display = 'block'; prompt.innerHTML = '<kbd>F</kbd>Get off / 내리기'; }
++      else if (n) { prompt.style.display = 'block'; prompt.innerHTML = '<kbd>F</kbd>Ride / 탑승 · Admin Cruiser'; }
++      else prompt.style.display = 'none';
++      return me.riding;
++    },
++    net() { return me.riding ? { ry: b.h, moving: Math.abs(b.v) > 0.3, veh: { id: BIKE_VEH_ID, ry: +b.h.toFixed(3), v: +b.v.toFixed(2), st: +b.yaw.toFixed(3) } } : null; },
++  };
++}
+diff -ruN a/src/entities/bikeModel.js b/src/entities/bikeModel.js
+--- a/src/entities/bikeModel.js	1970-01-01 09:00:00.000000000 +0900
++++ b/src/entities/bikeModel.js	2026-10-29 16:21:19.705363277 +0900
+@@ -0,0 +1,276 @@
++// [bike] 'Admin Cruiser' — 비비드 블랙 소프테일 팻보이 스타일 크루저 (사진 참고, 절차적 지오메트리 + 캔버스 텍스처, 로고/상표 없음)
++// 로컬 좌표: +z 앞, +x = 왼쪽(사진에서 보이는 쪽: 프라이머리 커버·킥스탠드), y 위. 원점 = 두 바퀴 접지점 중앙(지면).
++// 사양: 전장 2370 mm, 휠베이스 1665 mm, 차량중량 304 kg, 연료탱크 18.9 L, 앞 18" / 뒤 18" (160/60R18, 240/40R18)
++import * as THREE from 'three';
++import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
++
++export const BDIM = { L: 2.37, WB: 1.665, R: 0.325, RIM: 0.2286, FW: 0.16, RW: 0.24, SEAT: 0.675, MASS: 304, TANK_L: 18.9, RAKE: Math.PI / 6 };
++const AX = BDIM.WB / 2, R = BDIM.R;
++const NECK = new THREE.Vector3(0, 0.975, 0.399); // 조향축 상단(헤드파이프). 앞 차축 = NECK + (0,-0.65,0.4335)
++
++// ---------- 텍스처 ----------
++const cv = (w, h = w) => { const c = document.createElement('canvas'); c.width = w; c.height = h; return [c, c.getContext('2d')]; };
++const tex = (c, srgb = true) => { const t = new THREE.CanvasTexture(c); if (srgb) t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; return t; };
++// 솔리드 디스크 휠: 가공 알루미늄 + 림 둘레 사각 컷아웃 링 + 검은 허브 (로고 없음)
++function discTex(rear) {
++  const [c, x] = cv(512); x.translate(256, 256); const S = 252;
++  const g = x.createRadialGradient(-40, -60, 10, 0, 0, S); g.addColorStop(0, '#f3f4f5'); g.addColorStop(0.55, '#c9ccd0'); g.addColorStop(1, '#9ea2a7');
++  x.fillStyle = g; x.beginPath(); x.arc(0, 0, S, 0, 7); x.fill();
++  // 가공 동심원 결
++  for (let r = 40; r < S; r += 3) { x.strokeStyle = `rgba(255,255,255,${0.05 + (r % 7) * 0.012})`; x.lineWidth = 1; x.beginPath(); x.arc(0, 0, r, 0, 7); x.stroke(); }
++  x.strokeStyle = '#6c7075'; x.lineWidth = 5; x.beginPath(); x.arc(0, 0, S - 4, 0, 7); x.stroke();
++  // 사각 컷아웃 링
++  const n = rear ? 22 : 20, r0 = S * 0.73, r1 = S * 0.92;
++  for (let i = 0; i < n; i++) {
++    x.save(); x.rotate((i / n) * Math.PI * 2);
++    const w = ((2 * Math.PI * r0) / n) * 0.62;
++    x.fillStyle = '#101113'; x.fillRect(-w / 2, r0, w, r1 - r0);
++    x.strokeStyle = '#e9ebed'; x.lineWidth = 2; x.strokeRect(-w / 2 - 1, r0 - 1, w + 2, r1 - r0 + 2);
++    x.restore();
++  }
++  x.strokeStyle = '#2b2d30'; x.lineWidth = 4; x.beginPath(); x.arc(0, 0, S * 0.69, 0, 7); x.stroke();
++  // 안쪽 면: 뒤는 얇은 검은 링 두 줄, 허브
++  if (rear) { x.strokeStyle = '#33363a'; x.lineWidth = 3; x.beginPath(); x.arc(0, 0, S * 0.5, 0, 7); x.stroke(); }
++  x.fillStyle = '#1a1b1d'; x.beginPath(); x.arc(0, 0, S * 0.24, 0, 7); x.fill();
++  x.fillStyle = '#d9dbde'; x.beginPath(); x.arc(0, 0, S * 0.1, 0, 7); x.fill();
++  for (let i = 0; i < 5; i++) { const a = (i / 5) * Math.PI * 2; x.fillStyle = '#b8bbbf'; x.beginPath(); x.arc(Math.cos(a) * S * 0.17, Math.sin(a) * S * 0.17, 6, 0, 7); x.fill(); }
++  return tex(c);
++}
++function rotorTex() { // 드릴드 브레이크 디스크(검정 캐리어 + 은색 마찰면 + 구멍)
++  const [c, x] = cv(256); x.translate(128, 128);
++  x.fillStyle = '#9da1a6'; x.beginPath(); x.arc(0, 0, 126, 0, 7); x.fill();
++  x.fillStyle = '#18191b'; x.beginPath(); x.arc(0, 0, 88, 0, 7); x.fill();
++  for (let i = 0; i < 10; i++) { const a = (i / 10) * Math.PI * 2; x.fillStyle = '#2a2c2f'; x.beginPath(); x.arc(Math.cos(a) * 60, Math.sin(a) * 60, 9, 0, 7); x.fill(); }
++  x.fillStyle = '#26282b';
++  for (let k = 0; k < 2; k++) for (let i = 0; i < 24; i++) { const a = (i / 24) * Math.PI * 2 + k * 0.13, r = 100 + k * 14; x.beginPath(); x.arc(Math.cos(a) * r, Math.sin(a) * r, 3.2, 0, 7); x.fill(); }
++  const t = tex(c); return t;
++}
++function tireTex() { // 크루저 트레드(사이드 쪽은 매끈)
++  const [c, x] = cv(256, 32); x.fillStyle = '#1b1c1e'; x.fillRect(0, 0, 256, 32); x.fillStyle = '#0d0e0f';
++  for (let i = 0; i < 40; i++) { x.fillRect(i * 6.4, 9, 2.4, 6); x.fillRect(i * 6.4 + 3.2, 17, 2.4, 6); }
++  const t = tex(c); t.wrapS = THREE.RepeatWrapping; return t;
++}
++function finTex() { // 실린더 냉각핀: 검정 + 은색 핀 끝 (세로 반복)
++  const [c, x] = cv(16, 64); x.fillStyle = '#101113'; x.fillRect(0, 0, 16, 64);
++  for (let i = 0; i < 8; i++) { x.fillStyle = '#9a9ea3'; x.fillRect(0, i * 8, 16, 1); x.fillStyle = '#3a3d41'; x.fillRect(0, i * 8 + 1, 16, 1); }
++  const t = tex(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; return t;
++}
++function makeEnv(renderer) { // 야외 반사용 환경맵 (하늘 + 벽돌빛 수평선 + 모래 지면)
++  const sc = new THREE.Scene(), g = new THREE.SphereGeometry(10, 32, 16), col = [];
++  const top = new THREE.Color('#6aaee8'), hor = new THREE.Color('#f4f6f8'), gnd = new THREE.Color('#7f8184'), p = g.attributes.position;
++  for (let i = 0; i < p.count; i++) { const y = p.getY(i) / 10; const c = y > 0 ? hor.clone().lerp(top, Math.pow(y, 0.5)) : hor.clone().lerp(gnd, Math.min(1, -y * 5)); col.push(c.r, c.g, c.b); }
++  g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
++  sc.add(new THREE.Mesh(g, new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.BackSide })));
++  // 밝은 창/하늘 패널 몇 개 → 크롬에 하이라이트
++  const pl = new THREE.MeshBasicMaterial({ color: '#ffffff', side: THREE.DoubleSide });
++  for (const [x, y, z] of [[6, 4, 5], [-7, 3, -2], [0, 8, -6]]) { const m = new THREE.Mesh(new THREE.PlaneGeometry(4, 2), pl); m.position.set(x, y, z); m.lookAt(0, 0, 0); sc.add(m); }
++  const pm = new THREE.PMREMGenerator(renderer), rt = pm.fromScene(sc, 0.02); pm.dispose(); g.dispose();
++  return rt.texture;
++}
++
++// ---------- 지오메트리 헬퍼 ----------
++const V = (x, y, z) => new THREE.Vector3(x, y, z);
++const tube = (pts, r, seg = 24, rs = 8) => new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), seg, r, rs, false);
++// 휀더: 차축 기준 (z,y) 평면의 원호를 따라 둥근 단면(가운데 볼록 + 옆 스커트)을 스윕. a: +z 에서 +y 방향 각도
++function fenderGeo(r, halfW, depth, skirt, a0, a1, n = 28) {
++  const sec = [[-halfW, r - skirt], [-halfW, r]];
++  for (let i = 1; i < 12; i++) { const t = -Math.PI / 2 + (i / 12) * Math.PI; sec.push([halfW * Math.sin(t), r + depth * Math.cos(t)]); }
++  sec.push([halfW, r], [halfW, r - skirt]);
++  const pos = [], idx = [], uv = [];
++  for (let i = 0; i <= n; i++) { const a = a0 + ((a1 - a0) * i) / n, c = Math.cos(a), s = Math.sin(a); for (let j = 0; j < sec.length; j++) { const [x, rr] = sec[j]; pos.push(x, rr * s, rr * c); uv.push(i / n, j / (sec.length - 1)); } }
++  const m = sec.length;
++  for (let i = 0; i < n; i++) for (let j = 0; j < m - 1; j++) { const a = i * m + j, b = a + m; idx.push(a, a + 1, b, b, a + 1, b + 1); }
++  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); g.setIndex(idx); g.computeVertexNormals(); return g;
++}
++// 측면 프로파일(z,y)을 x 방향 두께로 돌출 + 둥근 베벨
++function sideExtrude(pts, depth, bevel = 0.03) {
++  const sh = new THREE.Shape(); pts.forEach(([z, y], i) => (i ? sh.lineTo(z, y) : sh.moveTo(z, y)));
++  const g = new THREE.ExtrudeGeometry(sh, { depth: depth - bevel * 2, bevelEnabled: true, bevelThickness: bevel, bevelSize: bevel * 0.9, bevelSegments: 4, curveSegments: 16 });
++  g.translate(0, 0, -(depth - bevel * 2) / 2); g.rotateY(-Math.PI / 2); // shape (z,y) → 로컬 (z,y), 돌출 방향 → x
++  return g;
++}
++function tyreGeo(halfW, rimR, outR) { // 둥근 사각 단면 회전체 (축 = x)
++  const pts = [], n = 18;
++  pts.push(new THREE.Vector2(rimR, -halfW * 0.82));
++  for (let i = 0; i <= n; i++) { const t = -Math.PI / 2 + (i / n) * Math.PI, e = 0.55; const cx = Math.sign(Math.cos(t)) * Math.pow(Math.abs(Math.cos(t)), e), sy = Math.sign(Math.sin(t)) * Math.pow(Math.abs(Math.sin(t)), e);
++    const midR = (rimR + outR) / 2 + 0.004, hr = (outR - rimR) / 2 + 0.006; pts.push(new THREE.Vector2(midR + hr * cx, halfW * sy)); }
++  pts.push(new THREE.Vector2(rimR, halfW * 0.82));
++  const g = new THREE.LatheGeometry(pts, 40); g.rotateZ(Math.PI / 2); return g;
++}
++
++let shared = null;
++function getShared(renderer) {
++  if (shared) return shared;
++  const env = makeEnv(renderer);
++  const std = (o) => new THREE.MeshStandardMaterial({ envMap: env, ...o });
++  const M = {
++    paint: new THREE.MeshPhysicalMaterial({ color: '#0b0c0e', metalness: 0.35, roughness: 0.32, clearcoat: 1, clearcoatRoughness: 0.08, envMap: env, envMapIntensity: 1.1 }), // 비비드 블랙
++    satin: std({ color: '#141518', metalness: 0.4, roughness: 0.55 }), // 프레임/스윙암
++    chrome: std({ color: '#eef0f2', metalness: 1, roughness: 0.09, envMapIntensity: 1.25 }),
++    alu: std({ color: '#c4c7cb', metalness: 0.9, roughness: 0.3 }),
++    eng: std({ color: '#ffffff', map: finTex(), metalness: 0.45, roughness: 0.5 }),
++    engDark: std({ color: '#17181a', metalness: 0.55, roughness: 0.45 }),
++    rubber: std({ color: '#ffffff', map: tireTex(), metalness: 0, roughness: 0.92 }),
++    rubberPlain: std({ color: '#151617', metalness: 0, roughness: 0.9 }),
++    seat: std({ color: '#0d0d0e', metalness: 0.05, roughness: 0.62 }),
++    discF: std({ color: '#ffffff', map: discTex(false), metalness: 0.55, roughness: 0.32, envMapIntensity: 1.2 }),
++    discR: std({ color: '#ffffff', map: discTex(true), metalness: 0.55, roughness: 0.32, envMapIntensity: 1.2 }),
++    rotor: std({ color: '#ffffff', map: rotorTex(), metalness: 0.8, roughness: 0.35, transparent: false }),
++    lamp: new THREE.MeshBasicMaterial({ color: '#fbfbf2' }),
++    tail: new THREE.MeshStandardMaterial({ color: '#7a0d10', emissive: '#c0141a', emissiveIntensity: 0.6, roughness: 0.3 }),
++    tailOn: new THREE.MeshBasicMaterial({ color: '#ff2a2a' }),
++    amber: new THREE.MeshStandardMaterial({ color: '#d9781c', emissive: '#7a3a05', emissiveIntensity: 0.6, roughness: 0.35 }),
++    glass: std({ color: '#cfd8e0', metalness: 1, roughness: 0.02 }),
++  };
++  const G = {
++    tyreF: tyreGeo(BDIM.FW / 2, BDIM.RIM, R), tyreR: tyreGeo(BDIM.RW / 2, BDIM.RIM, R),
++    discF: new THREE.CylinderGeometry(BDIM.RIM + 0.006, BDIM.RIM + 0.006, BDIM.FW * 0.8, 40).rotateZ(Math.PI / 2),
++    discR: new THREE.CylinderGeometry(BDIM.RIM + 0.006, BDIM.RIM + 0.006, BDIM.RW * 0.82, 40).rotateZ(Math.PI / 2),
++    rotor: new THREE.CylinderGeometry(0.15, 0.15, 0.008, 32).rotateZ(Math.PI / 2),
++  };
++  shared = { M, G };
++  return shared;
++}
++
++// 캡: CylinderGeometry 재질 그룹 [옆면, 윗캡, 아랫캡]
++const mesh = (g, m, cast = true) => { const o = new THREE.Mesh(g, m); o.castShadow = cast; return o; };
++
++export function createBike(renderer) {
++  const { M, G } = getShared(renderer);
++  const root = new THREE.Group(); root.name = 'adminCruiser';
++  const lean = new THREE.Group(); root.add(lean); // 롤(기울기) 피벗 = 접지선
++  const body = new THREE.Group(); lean.add(body);
++  const add = (g, m, p, r, parent = body) => { const o = mesh(g, m); if (p) o.position.copy(p); if (r) o.rotation.set(r[0], r[1], r[2] || 0); parent.add(o); return o; };
++
++  // ---- 바퀴 ----
++  const wheel = (front) => {
++    const spin = new THREE.Group();
++    spin.add(mesh(front ? G.tyreF : G.tyreR, M.rubber));
++    spin.add(mesh(front ? G.discF : G.discR, [M.alu, front ? M.discF : M.discR, front ? M.discF : M.discR]));
++    if (front) { const r = mesh(G.rotor, [M.alu, M.rotor, M.rotor]); r.position.x = BDIM.FW * 0.4 + 0.012; spin.add(r); }
++    else { // 왼쪽 벨트 풀리 링(검정) + 오른쪽 작은 디스크
++      const p = mesh(new THREE.CylinderGeometry(0.075, 0.075, 0.02, 24).rotateZ(Math.PI / 2), [M.satin, M.engDark, M.engDark]); p.position.x = BDIM.RW * 0.41 + 0.012; spin.add(p);
++      const rr = mesh(new THREE.CylinderGeometry(0.13, 0.13, 0.008, 28).rotateZ(Math.PI / 2), [M.alu, M.rotor, M.rotor]); rr.position.x = -(BDIM.RW * 0.41 + 0.01); spin.add(rr);
++    }
++    return spin;
++  };
++  const rearSpin = wheel(false); rearSpin.position.set(0, R, -AX); body.add(rearSpin);
++
++  // ---- 앞 조향부: 레이크 30° 축을 따라 회전 ----
++  const forkRoot = new THREE.Group(); forkRoot.position.copy(NECK); forkRoot.rotation.x = -BDIM.RAKE; body.add(forkRoot);
++  const steer = new THREE.Group(); forkRoot.add(steer);
++  const up = new THREE.Group(); up.rotation.x = BDIM.RAKE; steer.add(up); // 넥 기준 '차체 축' 좌표로 되돌림
++  const FA = V(0, R - NECK.y, AX - NECK.z); // 넥 기준 앞 차축
++  const frontSpin = wheel(true); frontSpin.position.copy(FA); up.add(frontSpin);
++  // 포크(축 방향 = steer 로컬 -y). 위: 크롬 이너튜브, 아래: 은색 슬라이더
++  for (const sx of [1, -1]) {
++    add(new THREE.CylinderGeometry(0.024, 0.024, 0.5, 12), M.chrome, V(sx * 0.105, -0.28, 0.05), null, steer);
++    add(new THREE.CylinderGeometry(0.034, 0.03, 0.34, 12), M.alu, V(sx * 0.105, -0.62, 0.05), null, steer);
++    add(new THREE.SphereGeometry(0.034, 10, 8), M.alu, V(sx * 0.105, -0.79, 0.05), null, steer);
++  }
++  add(new THREE.BoxGeometry(0.27, 0.035, 0.09), M.alu, V(0, -0.02, 0.03), null, steer); // 트리플 클램프
++  add(new THREE.CylinderGeometry(0.012, 0.012, 0.13, 8).rotateZ(Math.PI / 2), M.chrome, V(0, -0.79, 0.05), null, steer); // 차축
++  add(new THREE.BoxGeometry(0.03, 0.07, 0.05), M.satin, V(0.125, -0.67, -0.04), null, steer); // 캘리퍼(왼쪽)
++  add(new THREE.CylinderGeometry(0.012, 0.012, 0.05, 8), M.amber, V(0.14, -0.56, 0.085), [Math.PI / 2, 0, 0], steer); // 포크 리플렉터
++  // 헤드라이트 나셀(검정 페인트) + 둥근 헤드라이트
++  add(new THREE.SphereGeometry(1, 20, 14).scale(0.15, 0.16, 0.15), M.paint, V(0, -0.07, 0.05), null, up);
++  const bucket = add(new THREE.CylinderGeometry(0.125, 0.11, 0.1, 28).rotateX(Math.PI / 2), M.chrome, V(0, -0.08, 0.17), null, up);
++  add(new THREE.CircleGeometry(0.108, 28), M.lamp, V(0, -0.08, 0.222), null, up);
++  add(new THREE.TorusGeometry(0.109, 0.008, 6, 28), M.paint, V(0, -0.08, 0.222), null, up);
++  void bucket;
++  add(new THREE.BoxGeometry(0.11, 0.06, 0.05), M.chrome, V(0, 0.07, 0.02), null, up); // 라이저
++  // 핸들바(크롬, 풀백) + 그립 + 레버 + 미러
++  const barPts = (s) => [V(s * 0.44, 0.16, -0.21), V(s * 0.33, 0.165, -0.18), V(s * 0.16, 0.16, -0.05), V(s * 0.04, 0.12, 0.02)];
++  add(tube([...barPts(1), ...barPts(-1).reverse()], 0.016, 40), M.chrome, null, null, up);
++  const grips = [];
++  for (const sx of [1, -1]) {
++    const gp = add(new THREE.CylinderGeometry(0.021, 0.021, 0.13, 10).rotateZ(Math.PI / 2), M.rubberPlain, V(sx * 0.43, 0.16, -0.205), [0, sx * 0.25, 0], up);
++    const marker = new THREE.Object3D(); marker.position.set(sx * 0.41, 0.17, -0.2); up.add(marker); grips[sx > 0 ? 0 : 1] = marker;
++    add(new THREE.BoxGeometry(0.17, 0.012, 0.025), M.chrome, V(sx * 0.33, 0.15, -0.14), [0, -sx * 0.35, 0], up); // 레버
++    add(new THREE.BoxGeometry(0.06, 0.045, 0.05), M.chrome, V(sx * 0.27, 0.16, -0.16), null, up); // 스위치 하우징
++    add(tube([V(sx * 0.26, 0.17, -0.16), V(sx * 0.29, 0.3, -0.18), V(sx * 0.31, 0.42, -0.2)], 0.007, 8, 6), M.chrome, null, null, up);
++    const mir = add(new THREE.CylinderGeometry(0.055, 0.055, 0.025, 20).rotateX(Math.PI / 2), M.chrome, V(sx * 0.32, 0.46, -0.21), [0.2, sx * 0.25, 0], up);
++    void gp; void mir;
++    add(new THREE.SphereGeometry(0.028, 10, 8).scale(1, 1, 1.3), M.amber, V(sx * 0.17, -0.07, 0.12), null, up); // 앞 방향지시등
++  }
++  // 앞 휀더 (조향과 함께)
++  const ff = add(fenderGeo(0.348, 0.1, 0.03, 0.055, 0.42, 2.25), M.paint, FA, null, up); ff.material = M.paint;
++
++  // ---- 탱크(18.9 L 볼륨) + 크롬 콘솔 ----
++  add(new THREE.SphereGeometry(1, 28, 18).scale(0.185, 0.135, 0.34), M.paint, V(0, 0.85, 0.1), [-0.09, 0, 0]);
++  add(new THREE.SphereGeometry(1, 20, 10).scale(0.15, 0.07, 0.28), M.paint, V(0, 0.76, 0.1), [-0.08, 0, 0]); // 아래쪽 볼륨
++  add(new THREE.SphereGeometry(1, 16, 8).scale(0.045, 0.02, 0.22), M.chrome, V(0, 0.982, 0.06), [-0.09, 0, 0]); // 대시 콘솔
++  add(new THREE.CylinderGeometry(0.035, 0.035, 0.012, 16), M.chrome, V(0.08, 0.972, 0.24)); // 주유구 캡
++
++  // ---- 시트 (계단식: 낮은 라이더 디시 + 높은 텐덤 쿠션) ----
++  const seatG = sideExtrude([[-0.05, 0.79], [-0.12, 0.73], [-0.3, 0.68], [-0.44, 0.7], [-0.5, 0.76], [-0.53, 0.8], [-0.55, 0.62], [-0.2, 0.6], [-0.05, 0.7]], 0.36, 0.04);
++  add(seatG, M.seat);
++  add(sideExtrude([[-0.54, 0.79], [-0.6, 0.84], [-0.8, 0.84], [-0.86, 0.8], [-0.84, 0.76], [-0.56, 0.75]], 0.28, 0.05), M.seat);
++
++  // ---- 뒤 휀더 + 크롬 스트럿 커버 + 사이드 테일라이트 ----
++  add(fenderGeo(0.345, 0.15, 0.028, 0.07, 0.62, 2.72), M.paint, V(0, R, -AX));
++  for (const sx of [1, -1]) {
++    add(tube([V(sx * 0.16, 0.64, -0.5), V(sx * 0.165, 0.6, -0.82), V(sx * 0.165, 0.52, -1.06)], 0.014, 16, 6), M.chrome);
++    add(new THREE.BoxGeometry(0.012, 0.025, 0.11), M.tail, V(sx * 0.172, 0.565, -0.95), [0.35, 0, 0]);
++  }
++  const tailC = add(new THREE.BoxGeometry(0.1, 0.03, 0.025), M.tail, V(0, 0.53, -1.15), [-0.5, 0, 0]);
++  add(new THREE.BoxGeometry(0.17, 0.12, 0.006), M.satin, V(0, 0.38, -1.18), [-0.35, 0, 0]); // 번호판 자리(무지)
++  for (const sx of [1, -1]) add(new THREE.SphereGeometry(0.025, 10, 8).scale(1, 1, 1.4), M.amber, V(sx * 0.14, 0.47, -1.12));
++
++  // ---- 프레임/스윙암(검정) ----
++  add(tube([V(0, 0.95, 0.37), V(0, 0.8, 0.05), V(0, 0.66, -0.3), V(0, 0.64, -0.75)], 0.028, 24), M.satin); // 백본
++  for (const sx of [1, -1]) {
++    add(tube([V(sx * 0.03, 0.9, 0.37), V(sx * 0.08, 0.55, 0.32), V(sx * 0.1, 0.2, 0.18), V(sx * 0.1, 0.16, -0.1), V(sx * 0.11, 0.2, -0.4), V(sx * 0.12, 0.42, -0.5), V(sx * 0.12, 0.62, -0.4)], 0.022, 32), M.satin);
++    add(new THREE.BoxGeometry(0.035, 0.06, 0.42).translate(0, 0, -0.21), M.satin, V(sx * 0.15, 0.33, -0.42), [0.02, 0, 0]); // 스윙암
++  }
++  add(new THREE.BoxGeometry(0.02, 0.05, 0.5), M.satin, V(0.165, 0.39, -0.58), [0.17, 0, 0]); // 벨트(왼쪽, 사진의 검은 사선)
++  add(new THREE.CylinderGeometry(0.016, 0.016, 0.34, 8).rotateZ(Math.PI / 2), M.chrome, V(0, R, -AX)); // 뒤 차축
++  add(new THREE.SphereGeometry(1, 14, 10).scale(0.03, 0.12, 0.2), M.paint, V(0.11, 0.53, -0.3)); // 사이드 커버
++  add(new THREE.SphereGeometry(1, 14, 10).scale(0.03, 0.12, 0.2), M.paint, V(-0.11, 0.53, -0.3));
++
++  // ---- V-트윈 엔진 (45° V, 검정 핀 + 크롬 로커커버) ----
++  const finG = new THREE.CylinderGeometry(0.095, 0.1, 0.25, 20, 1, false);
++  const cyl = (z, tilt) => {
++    const g = new THREE.Group(); g.position.set(0, 0.43, z); g.rotation.x = tilt; body.add(g);
++    add(finG, [M.eng, M.engDark, M.engDark], V(0, 0.125, 0), null, g);
++    add(new THREE.BoxGeometry(0.21, 0.07, 0.2), M.engDark, V(0, 0.28, 0), null, g); // 헤드
++    add(new THREE.SphereGeometry(1, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2).scale(0.11, 0.06, 0.11), M.chrome, V(0, 0.315, 0), null, g); // 로커커버
++    return g;
++  };
++  cyl(0.17, 0.39); cyl(-0.02, -0.39);
++  add(new THREE.SphereGeometry(1, 20, 14).scale(0.15, 0.13, 0.2), M.alu, V(0, 0.33, 0.07)); // 크랭크케이스
++  add(new THREE.CylinderGeometry(0.075, 0.075, 0.03, 20).rotateZ(Math.PI / 2), M.chrome, V(0.15, 0.33, 0.14)); // 타이머 커버
++  add(new THREE.BoxGeometry(0.2, 0.16, 0.2), M.engDark, V(0, 0.36, -0.24)); // 미션
++  // 왼쪽 프라이머리 커버(크롬 빈 모양) + 더비 커버
++  add(new THREE.SphereGeometry(1, 24, 14).scale(0.06, 0.12, 0.27), M.chrome, V(0.135, 0.29, -0.16), [0.12, 0, 0]);
++  add(new THREE.CylinderGeometry(0.085, 0.085, 0.03, 24).rotateZ(Math.PI / 2), M.chrome, V(0.19, 0.29, -0.06));
++  add(new THREE.CylinderGeometry(0.06, 0.06, 0.03, 20).rotateZ(Math.PI / 2), M.chrome, V(0.17, 0.25, 0.04));
++  // 오른쪽 에어클리너(크롬 원판)
++  add(new THREE.CylinderGeometry(0.12, 0.12, 0.055, 28).rotateZ(Math.PI / 2), M.chrome, V(-0.15, 0.52, 0.08));
++  add(new THREE.SphereGeometry(1, 20, 10, 0, Math.PI * 2, 0, Math.PI / 2).rotateZ(Math.PI / 2).scale(0.025, 0.08, 0.08), M.chrome, V(-0.178, 0.52, 0.08));
++  add(new THREE.TorusGeometry(0.105, 0.006, 6, 28).rotateY(Math.PI / 2), M.engDark, V(-0.179, 0.52, 0.08));
++  add(new THREE.SphereGeometry(1, 12, 8).scale(0.04, 0.07, 0.06), M.satin, V(0.09, 0.52, -0.05)); // 혼/스로틀바디
++
++  // ---- 배기(오른쪽, 크롬 2-into-1 + 머플러) ----
++  add(tube([V(-0.04, 0.6, 0.3), V(-0.1, 0.48, 0.38), V(-0.17, 0.28, 0.3), V(-0.2, 0.22, 0.05), V(-0.21, 0.24, -0.2)], 0.024, 30), M.chrome);
++  add(tube([V(-0.06, 0.6, -0.12), V(-0.17, 0.5, -0.14), V(-0.21, 0.34, -0.17), V(-0.215, 0.26, -0.28)], 0.022, 24), M.chrome);
++  const muf = add(new THREE.CylinderGeometry(0.068, 0.072, 0.62, 20).rotateX(Math.PI / 2), M.chrome, V(-0.225, 0.275, -0.58), [-0.08, 0, 0]);
++  add(new THREE.CylinderGeometry(0.05, 0.05, 0.03, 16).rotateX(Math.PI / 2), M.engDark, V(-0.225, 0.3, -0.895), [-0.08, 0, 0]); // 팁 안쪽
++  void muf;
++  const exhaust = new THREE.Object3D(); exhaust.position.set(-0.225, 0.3, -0.92); body.add(exhaust); // 연기 발생 지점
++
++  // ---- 발판(플로어보드) + 페달 ----
++  for (const sx of [1, -1]) {
++    add(new THREE.BoxGeometry(0.11, 0.022, 0.28), M.rubberPlain, V(sx * 0.31, 0.3, 0.34), [0.12, 0, 0]);
++    add(new THREE.BoxGeometry(0.12, 0.012, 0.29), M.chrome, V(sx * 0.31, 0.285, 0.34), [0.12, 0, 0]);
++    add(tube([V(sx * 0.12, 0.25, 0.25), V(sx * 0.25, 0.28, 0.32)], 0.012, 4, 6), M.chrome);
++  }
++  add(tube([V(0.3, 0.32, 0.47), V(0.25, 0.36, 0.5), V(0.19, 0.3, 0.36)], 0.01, 8, 6), M.chrome); // 시프터
++  // 킥스탠드(왼쪽) — 주차 중일 때만
++  const stand = add(new THREE.CylinderGeometry(0.012, 0.014, 0.36, 8), M.satin, V(0.2, 0.13, 0.02), [0, 0, 0.95]);
++
++  // 범퍼 높이 체크용 그림자 받는 자체는 지면이 처리
++  root.userData = { lean, body, steer, frontSpin, rearSpin, grips, exhaust, stand, tail: [tailC], up };
++  return root;
++}
++export function setBikeBrake(bike, on, M = shared?.M) { if (!M) return; for (const t of bike.userData.tail) t.material = on ? M.tailOn : M.tail; }
+diff -ruN a/src/main.js b/src/main.js
+--- a/src/main.js	2026-10-29 16:21:19.717363308 +0900
++++ b/src/main.js	2026-10-29 16:21:19.705363277 +0900
+@@ -13,6 +13,7 @@
+ import { createTowerAddon } from './entities/towerAddon.js'; // [tower]
+ import { createLaunchShow } from './events/launchShow.js'; // [launch]
+ import { createTrucks } from './entities/trucks.js'; // [truck]
++import { createAdminBike } from './entities/adminBike.js'; // [bike]
+ 
+ const params = new URLSearchParams(location.search);
+ const [data, transitData] = await Promise.all([
+@@ -133,6 +134,8 @@
+ setMode(cam.mode);
+ viewBtn.onclick = () => setMode(cam.mode === 'overview' ? 'follow' : 'overview');
+ // [truck] 탈 수 있는 'Steel Truck' 주차 (스타베이스만, ?trucks=N 기본 20, ?trucks=0 끔, F 탑승/하차)
++// [bike] 관리자 크루저 바이크 1대 (?bike=0 끔). 트럭보다 먼저 만들어 트럭 배치/충돌이 바이크를 피하게 함
++const bike = data.station.name === 'Starbase' ? createAdminBike({ scene, overlay, world, data, params, cam, player, renderer, terrain, presence, remotes, spawn: pos, getTrucks: () => trucks }) : null;
+ const trucks = data.station.name === 'Starbase' && params.get('trucks') !== '0' ? createTrucks({ scene, overlay, world, data, params, camera, cam, player, renderer, terrain, presence, remotes, spawn: pos }) : null;
+ document.getElementById('btn-home').onclick = () => { player.position.copy(pos); setMode('follow'); };
+ input.onKey = (e) => {
+@@ -155,7 +158,8 @@
+   // 이동 (카메라 기준). 건물 안으로는 못 들어감(축별 슬라이딩)
+   const { f, s, run } = input.axes();
+   moveSpeed = 0;
+-  const driving = trucks?.update(dt, f, s, run, dy); // [truck] 운전 중이면 걷기 이동 대신 차량 물리
++  const riding = bike?.update(dt, f, s, run, dy); // [bike]
++  const driving = trucks?.update(dt, riding ? 0 : f, riding ? 0 : s, run, dy) || riding; // [truck] 운전 중이면 걷기 이동 대신 차량 물리 [bike]
+   if (!driving && (f || s)) { // [truck]
+     const yaw = cam.mode === 'follow' ? cam.yaw : ov.yaw;
+     const fx = -Math.sin(yaw), fz = -Math.cos(yaw), rx = -fz, rz = fx;
+@@ -175,7 +179,7 @@
+     moveSpeed = sp;
+   }
+   animateAvatar(player, moveSpeed, dt);
+-  presence.sendState({ x: player.position.x, z: player.position.z, ry: player.rotation.y, moving: moveSpeed > 0, ...trucks?.net() }); // [truck] 운전 중이면 veh 필드 추가
++  presence.sendState({ x: player.position.x, z: player.position.z, ry: player.rotation.y, moving: moveSpeed > 0, ...trucks?.net(), ...bike?.net() }); // [truck] 운전 중이면 veh 필드 추가 [bike]
+ 
+   npcs.update(dt, player.position);
+   transit?.update(dt, player.position);
+@@ -213,6 +217,7 @@
+   tower: towerAddon, // [tower]
+   launch, // [launch]
+   trucks, // [truck]
++  bike, // [bike]
+   transit, camera, player, cam, ov, setMode, terrain, taxis, // [terrain] [taxi]
+   teleport(x, z, y) { player.position.set(x, y ?? (terrain ? terrain.getGroundHeight(x, z, 0) : 0), z); }, // [terrain]
+   nearNpc(i = 0, d = 3) { const n = npcs.list[i]; player.position.set(n.pos.x + d, 0, n.pos.z + d * 0.5); },
+diff -ruN a/src/net/remotePlayers.js b/src/net/remotePlayers.js
+--- a/src/net/remotePlayers.js	2026-10-29 16:21:19.717363308 +0900
++++ b/src/net/remotePlayers.js	2026-10-29 16:21:19.705363277 +0900
+@@ -23,7 +23,8 @@
+   add(peer) {
+     if (this.peers.has(peer.id) || peer.id === this.myId) return;
+     const mesh = createAvatar({ color: peer.color || '#00b894', hat: '#ffffff' });
+-    mesh.position.set(peer.x || 0, this.groundY ? this.groundY(peer.x || 0, peer.z || 0, 0) : 0, peer.z || 0); // [terrain] this.scene.add(mesh);
++    mesh.position.set(peer.x || 0, this.groundY ? this.groundY(peer.x || 0, peer.z || 0, 0) : 0, peer.z || 0); // [terrain]
++    this.scene.add(mesh); // [bike] 버그 수정: 위 주석에 가려져 원격 아바타가 씬에 추가되지 않던 문제
+     const p = { mesh, target: mesh.position.clone(), ry: peer.ry || 0 };
+     p.tag = this.overlay.add({ cls: 'tag remote', text: peer.name || '손님', getPos: () => mesh.position.clone().setY(mesh.position.y + 2.05), maxDist: 80 }); // [terrain]
+     p.bubble = new Bubble(this.overlay, 'remote', () => mesh.position.clone().setY(mesh.position.y + 2.7)); // [terrain]

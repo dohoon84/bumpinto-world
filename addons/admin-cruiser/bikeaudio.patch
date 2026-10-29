@@ -1,0 +1,289 @@
+diff -ruN a/scripts/analyze-bike-audio.py b/scripts/analyze-bike-audio.py
+--- a/scripts/analyze-bike-audio.py	1970-01-01 09:00:00.000000000 +0900
++++ b/scripts/analyze-bike-audio.py	2026-10-29 17:57:21.454975535 +0900
+@@ -0,0 +1,44 @@
++# [bikeaudio] 합성 배기음 검증: 디코드 길이/루프 이음새/RMS/피크/점화 간격 + 스펙트로그램 PNG. 사용: python3 scripts/synth-bike-audio.py && python3 scripts/analyze-bike-audio.py [outdir]
++import subprocess, numpy as np, json, matplotlib
++matplotlib.use('Agg'); import matplotlib.pyplot as plt
++from scipy import signal
++import sys, os
++SR = 44100; OUT = sys.argv[1] if len(sys.argv) > 1 else 'audio-report'; os.makedirs(OUT, exist_ok=True); res = {}
++def dec(p):
++    r = subprocess.run(['ffmpeg', '-hide_banner', '-loglevel', 'error', '-i', p, '-f', 's16le', '-ac', '1', '-ar', str(SR), '-'], capture_output=True)
++    return np.frombuffer(r.stdout, np.int16) / 32768
++for name, rpm in (('bike_idle', 960), ('bike_ride', 2910)):
++    r = {}
++    for ext in ('ogg', 'mp3'):
++        x = dec(f'public/audio/{name}.{ext}')
++        d = np.abs(np.diff(x))
++        r[ext] = dict(samples=len(x), dur=round(len(x) / SR, 4), rms_db=round(20 * np.log10(np.sqrt((x ** 2).mean())), 2),
++                      peak_db=round(20 * np.log10(np.abs(x).max()), 2), loop_jump=round(abs(x[0] - x[-1]), 5),
++                      median_step=round(float(np.median(d)), 5), p99_step=round(float(np.percentile(d, 99)), 5))
++        if ext == 'ogg': xo = x
++    # 루프 이음새: 끝 0.25s + 처음 0.25s 붙여 보기
++    seam = np.concatenate([xo[-int(.25 * SR):], xo[:int(.25 * SR)]])
++    # 점화 간격 검출 (엔벌로프 피크)
++    env = signal.sosfiltfilt(signal.butter(2, 120, 'low', fs=SR, output='sos'), np.abs(xo))
++    minsep = int(SR * 60 / rpm * (300 / 360) * 0.6)
++    pk, _ = signal.find_peaks(env, distance=minsep, prominence=env.max() * 0.08)
++    ioi = np.diff(pk) / SR * 1000
++    ev = np.load(f'/tmp/{name}_events.npy'); gt = np.diff(np.sort(ev[:, 0])) / SR * 1000
++    exp315, exp405 = 60000 / rpm * 315 / 360, 60000 / rpm * 405 / 360
++    r['firing'] = dict(expected_ms=[round(exp315, 1), round(exp405, 1)], synth_gap_ms_mean_short=round(gt[gt < (exp315 + exp405) / 2].mean(), 1),
++                       synth_gap_ms_mean_long=round(gt[gt >= (exp315 + exp405) / 2].mean(), 1),
++                       detected_peaks=len(pk), detected_gap_ms_p25_p75=[round(np.percentile(ioi, 25), 1), round(np.percentile(ioi, 75), 1)])
++    res[name] = r
++    fig, ax = plt.subplots(4, 1, figsize=(11, 12), gridspec_kw=dict(height_ratios=[3, 1.4, 1.4, 1.4]))
++    f, tt, S = signal.spectrogram(xo, SR, nperseg=4096, noverlap=3584)
++    ax[0].pcolormesh(tt, f, 10 * np.log10(S + 1e-12), shading='auto', cmap='magma', vmin=-110); ax[0].set_ylim(0, 3000)
++    ax[0].set_title(f'{name}.ogg spectrogram (0-3 kHz)  rpm≈{rpm}'); ax[0].set_ylabel('Hz')
++    w = int(0.6 * SR); ax[1].plot(np.arange(w) / SR * 1000, xo[:w], lw=.6); ax[1].plot(np.arange(w) / SR * 1000, env[:w] * 3, 'r', lw=1)
++    for p in pk[pk < w]: ax[1].axvline(p / SR * 1000, color='g', alpha=.4)
++    ax[1].set_title('first 600 ms waveform + envelope (green = detected firing pulses)'); ax[1].set_xlabel('ms')
++    ax[2].hist(ioi, bins=60, color='tab:purple'); [ax[2].axvline(v, color='k', ls='--') for v in (exp315, exp405)]
++    ax[2].set_title(f'inter-pulse intervals (ms) — dashed = 315° {exp315:.1f} / 405° {exp405:.1f}')
++    ax[3].plot((np.arange(len(seam)) - len(seam) // 2) / SR * 1000, seam, lw=.6); ax[3].axvline(0, color='r')
++    ax[3].set_title(f'loop seam (end→start), |jump|={r["ogg"]["loop_jump"]} vs median step {r["ogg"]["median_step"]}'); ax[3].set_xlabel('ms around loop point')
++    plt.tight_layout(); plt.savefig(f'{OUT}/spectrogram_{name}.png', dpi=80); plt.close()
++print(json.dumps(res, indent=1))
+diff -ruN a/scripts/synth-bike-audio.py b/scripts/synth-bike-audio.py
+--- a/scripts/synth-bike-audio.py	1970-01-01 09:00:00.000000000 +0900
++++ b/scripts/synth-bike-audio.py	2026-10-29 17:57:21.454975535 +0900
+@@ -0,0 +1,104 @@
++#!/usr/bin/env python3
++# [bikeaudio] Admin Cruiser 배기음 합성기 — 샘플/녹음 없이 수식으로 생성 (저작권 이슈 없음)
++# 45° V-twin: 크랭크 0°/315° 점화 → 315°·405° 불균등 간격 ("potato-potato")
++# 루프는 '원형 버퍼'에서 생성: 정수 사이클 수 + 주기적 변조 + 순환 필터링 → 루프 경계 완전 연속
++# 사용: python3 scripts/synth-bike-audio.py [outdir]   (numpy, scipy, ffmpeg 필요)
++import sys, os, json, subprocess, numpy as np
++from scipy import signal
++SR = 44100
++OUT = sys.argv[1] if len(sys.argv) > 1 else 'public/audio'
++
++def circ_sos(sos, x):
++    """IIR 필터를 원형(주기) 신호로 적용: 두 바퀴 돌려 정상상태의 두 번째 바퀴만 사용"""
++    return signal.sosfilt(sos, np.concatenate([x, x, x]))[2 * len(x):]
++
++def bp(f, q):  # 대역통과(공명) 2차
++    return signal.butter(1, [f / (1 + 0.5 / q), f * (1 + 0.5 / q)], 'bandpass', fs=SR, output='sos')
++
++def synth(name, rpm, dur, seed, P):
++    rng = np.random.default_rng(seed)
++    N = int(SR * dur)
++    cyc_per_s = round(rpm / 120 * dur) / dur          # 4행정: 2회전=1사이클, 루프 안에 정수 사이클
++    rpm = cyc_per_s * 120
++    t = np.arange(N) / SR
++    # 느린 회전수 흔들림 — 루프 길이에 정수 주기인 사인만 사용해 위상 누적이 정확히 정수가 되게
++    wob = sum(a * np.sin(2 * np.pi * k * t / dur + ph) for k, a, ph in P['wobble'])
++    phase = np.cumsum(cyc_per_s * (1 + wob)) / SR      # 사이클 단위 위상
++    phase *= round(phase[-1]) / phase[-1]
++    x = np.zeros(N); env = np.zeros(N)
++    events = []
++    for cyl, off in ((0, 0.0), (1, 315 / 720)):        # 앞 실린더 0°, 뒤 실린더 315°
++        ks = np.arange(int(round(phase[-1])))  # 정확히 정수 사이클 (마지막=처음과 겹치지 않게)
++        idx = np.searchsorted(phase, ks + off)
++        for i in idx:
++            if i >= N: continue
++            j = int(round(i + rng.normal(0, P['tjit'] * SR))) % N
++            a = P['cyl_amp'][cyl] * (1 + rng.normal(0, P['ajit']))
++            if rng.random() < P['weak_p']: a *= rng.uniform(0.45, 0.7)   # 가끔 약한 폭발 (공회전 럼프)
++            events.append((j, a, cyl))
++    L = int(SR * P['plen'])
++    tt = np.arange(L) / SR
++    tau = P['tau']
++    bump = (tt / tau) * np.exp(1 - tt / tau)             # 압력 펄스
++    reb = (tt / (tau * 3)) * np.exp(1 - tt / (tau * 3))  # 완만한 부압(리바운드) → DC 0
++    kern = bump - reb * bump.sum() / reb.sum()
++    nenv = np.exp(-tt / P['ntau'])
++    for j, a, cyl in events:
++        nb = rng.normal(0, 1, L) * nenv * P['noise']
++        p = a * (kern + nb)
++        ids = (j + np.arange(L)) % N
++        np.add.at(x, ids, p)
++        np.add.at(env, ids, a * np.exp(-tt / 0.02))
++    # 머플러/배관 공명 포먼트 + 저역 통과 (디지털 버즈 억제)
++    y = P['direct'] * circ_sos(signal.butter(2, P['lp'], 'low', fs=SR, output='sos'), x)
++    for f, q, g in P['formants']:
++        y += g * circ_sos(bp(f, q), x)
++    # 낮은 럼블: 저역 노이즈를 점화 엔벌로프로 변조
++    rum = circ_sos(signal.butter(2, P['rum_f'], 'low', fs=SR, output='sos'), rng.normal(0, 1, N))
++    envs = circ_sos(signal.butter(1, 25, 'low', fs=SR, output='sos'), env)
++    y = y / (np.abs(y).max() + 1e-9) + P['rum'] * rum / (np.abs(rum).max() + 1e-9) * (0.4 + envs / (envs.max() + 1e-9))
++    # 부드러운 포화(스로틀 하중 → 굵은 배음), 마무리 필터
++    d = P['drive']
++    y = np.tanh(d * y / np.abs(y).max()) / np.tanh(d)
++    y = circ_sos(signal.butter(2, 28, 'high', fs=SR, output='sos'), y)
++    y = circ_sos(signal.butter(4, P['final_lp'], 'low', fs=SR, output='sos'), y)
++    return y, rpm, sorted(events)
++
++IDLE = dict(wobble=[(1, 0.012, 0.3), (3, 0.006, 1.1), (7, 0.004, 2.0)], tjit=0.0009, ajit=0.12, weak_p=0.06,
++            cyl_amp=(1.0, 0.86), plen=0.09, tau=0.0028, ntau=0.006, noise=0.18,
++            direct=0.35, lp=650, formants=[(62, 1.6, 1.0), (118, 2.5, 0.65), (230, 3.5, 0.32), (470, 4, 0.12)],
++            rum_f=70, rum=0.22, drive=1.6, final_lp=2600)
++RIDE = dict(wobble=[(1, 0.006, 0.7), (2, 0.004, 2.4), (5, 0.003, 0.2)], tjit=0.00035, ajit=0.07, weak_p=0.0,
++            cyl_amp=(1.0, 0.92), plen=0.06, tau=0.0022, ntau=0.009, noise=0.32,
++            direct=0.5, lp=1300, formants=[(78, 1.4, 1.0), (150, 2.2, 0.8), (300, 3, 0.5), (620, 3.5, 0.28), (1150, 4, 0.12)],
++            rum_f=110, rum=0.3, drive=2.6, final_lp=3500)
++
++def lufs(path):
++    r = subprocess.run(['ffmpeg', '-hide_banner', '-nostats', '-stream_loop', '2', '-i', path, '-af', 'ebur128', '-f', 'null', '-'], capture_output=True, text=True).stderr
++    return float(r.rsplit('I:', 1)[1].split('LUFS')[0])
++
++def write_wav(path, y):
++    from scipy.io import wavfile
++    wavfile.write(path, SR, (np.clip(y, -1, 1) * 32767).astype(np.int16))
++
++if __name__ == '__main__':
++    os.makedirs(OUT, exist_ok=True)
++    meta = {}
++    for name, rpm, dur, seed, P in (('bike_idle', 960, 4.0, 11, IDLE), ('bike_ride', 2900, 4.0, 23, RIDE)):
++        y, rpm, ev = synth(name, rpm, dur, seed, P)
++        tmp = f'/tmp/{name}.wav'
++        y = y / np.abs(y).max() * 10 ** (-1.5 / 20)                # 우선 피크 -1.5 dBFS (인코딩 오버슈트 여유 → 최종 ≤ -1 dBFS)
++        write_wav(tmp, y); L0 = lufs(tmp)
++        g = 10 ** ((-14 - L0) / 20)
++        if g > 1:  # -14 LUFS 까지 올리되, 넘치는 피크는 부드러운 리미터(tanh)로 -1.5 dBFS 이하
++            ceil = 10 ** (-1.5 / 20); z = y * g
++            y = np.where(np.abs(z) > 0.6 * ceil, np.sign(z) * (0.6 * ceil + 0.4 * ceil * np.tanh((np.abs(z) - 0.6 * ceil) / (0.4 * ceil))), z)
++        else:
++            y = y * g
++        write_wav(tmp, y)
++        meta[name] = dict(rpm=round(rpm, 1), dur=dur, events=len(ev), lufs_before=round(L0, 2), lufs=round(lufs(tmp), 2),
++                          peak_dbfs=round(20 * np.log10(np.abs(y).max()), 2))
++        np.save(f'/tmp/{name}_events.npy', np.array([(j, a, c) for j, a, c in ev]))
++        for ext, args in (('ogg', ['-c:a', 'libvorbis', '-q:a', '2']), ('mp3', ['-c:a', 'libmp3lame', '-b:a', '80k'])):
++            subprocess.run(['ffmpeg', '-y', '-hide_banner', '-loglevel', 'error', '-i', tmp, '-ac', '1', '-ar', str(SR), *args, f'{OUT}/{name}.{ext}'], check=True)
++    print(json.dumps(meta, indent=1))
+diff -ruN a/src/entities/adminBike.js b/src/entities/adminBike.js
+--- a/src/entities/adminBike.js	2026-10-29 17:57:21.450975525 +0900
++++ b/src/entities/adminBike.js	2026-10-29 17:57:21.454975535 +0900
+@@ -1,6 +1,7 @@
+ // [bike] 관리자용 크루저 바이크 1대: 주차 · F 탑승/하차 · 라이딩 자세 · 조향/린 · 머플러 연기 · 멀티플레이(veh id 900)
+ //   ?bike=0 끔 (기본 1)
+ import * as THREE from 'three';
++import { createBikeAudio } from './bikeAudio.js'; // [bikeaudio]
+ import { createBike, setBikeBrake, BDIM } from './bikeModel.js';
+ 
+ export const BIKE_VEH_ID = 900; // trucks 의 veh.id(0~59) 와 겹치지 않는 번호 → 트럭 코드는 무시
+@@ -60,7 +61,7 @@
+ 
+ function pointInRing(x, z, r) { let c = false; for (let i = 0, j = r.length - 1; i < r.length; j = i++) { const [xi, zi] = r[i], [xj, zj] = r[j]; if ((zi > z) !== (zj > z) && x < ((xj - xi) * (z - zi)) / (zj - zi) + xi) c = !c; } return c; }
+ 
+-export function createAdminBike({ scene, overlay, world, data, params, cam, player, renderer, terrain, presence, remotes, spawn, getTrucks }) {
++export function createAdminBike({ scene, overlay, world, data, params, cam, player, renderer, terrain, presence, remotes, spawn, getTrucks, camera }) { // [bikeaudio] camera
+   if (params.get('bike') === '0') return null;
+   const baseBlocked = world.isBlocked; // 건물(+이후 트럭) 충돌
+   const ground = (x, z, ref = 0) => (terrain ? terrain.getGroundHeight(x, z, ref) : 0);
+@@ -101,6 +102,7 @@
+   const setRider = (src) => { U.lean.remove(rider); rider = buildRider(src); U.lean.add(rider); };
+ 
+   // ---------- 배기 연기(스프라이트 풀) ----------
++  const audio = createBikeAudio({ camera, anchor: U.exhaust, params }); // [bikeaudio]
+   const smokeTex = (() => { const c = document.createElement('canvas'); c.width = c.height = 64; const x = c.getContext('2d'); const g = x.createRadialGradient(32, 32, 2, 32, 32, 31); g.addColorStop(0, 'rgba(235,235,238,1)'); g.addColorStop(0.5, 'rgba(210,210,214,.45)'); g.addColorStop(1, 'rgba(200,200,205,0)'); x.fillStyle = g; x.fillRect(0, 0, 64, 64); const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t; })();
+   const puffs = [];
+   for (let i = 0; i < 26; i++) { const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: smokeTex, color: '#c9ccd1', transparent: true, opacity: 0, depthWrite: false })); s.visible = false; s.renderOrder = 3; scene.add(s); puffs.push({ s, life: 0, max: 1, vel: new THREE.Vector3() }); }
+@@ -148,6 +150,7 @@
+     me.riding = true; b.v = 0; b.rider = 'me'; player.position.set(b.x, b.y, b.z); player.visible = false; setRider(player); rider.visible = true; U.stand.visible = false;
+     me.saved = { dist: cam.dist, pitch: cam.pitch }; cam.dist = 6.8; cam.pitch = 0.17; cam.yaw = b.h + Math.PI;
+     hud.style.display = 'block'; b.label.hidden = true; document.body.classList.add('bike-riding'); me.puffT = 0;
++    audio?.unlock(); // [bikeaudio] 탑승(F/클릭) = 사용자 제스처 → AudioContext 재개
+   }
+   function dismount() {
+     if (!me.riding) return; me.riding = false; b.rider = null; b.v = 0; b.yaw = 0; b.si = 0; rider.visible = false; U.stand.visible = true; setBikeBrake(mesh, false);
+@@ -220,6 +223,7 @@
+ 
+   return {
+     bike: b, mesh,
++    audio, // [bikeaudio]
+     get riding() { return me.riding; },
+     mount, dismount, near,
+     holdCam(sec = 5) { me.lastYawInput = me.t + sec; }, // 스크린샷/연출용: 체이스캠 자동복귀 잠시 멈춤
+@@ -240,6 +244,7 @@
+       } else if (me.wasActive || Math.abs(b.lean + 0.085) > 1e-3) pose(dt, true);
+       me.wasActive = me.riding || !!b.remote;
+       updSmoke(dt);
++      audio?.update(dt, { on: me.riding || !!b.remote, v: b.v, throttle: me.riding ? b.throttle || 0 : 0 }); // [bikeaudio]
+       const n = !me.riding && !getTrucks?.()?.driving && near();
+       document.body.classList.toggle('bike-near', n);
+       if (me.riding) { prompt.style.display = 'block'; prompt.innerHTML = '<kbd>F</kbd>Get off / 내리기'; }
+diff -ruN a/src/entities/bikeAudio.js b/src/entities/bikeAudio.js
+--- a/src/entities/bikeAudio.js	1970-01-01 09:00:00.000000000 +0900
++++ b/src/entities/bikeAudio.js	2026-10-29 17:57:21.454975535 +0900
+@@ -0,0 +1,65 @@
++// [bikeaudio] Admin Cruiser 배기음: 공회전(idle) / 주행(ride) 루프 2개를 속도·스로틀로 크로스페이드
++// - 소리 파일: public/audio/bike_idle.{ogg,mp3}, bike_ride.{ogg,mp3} (scripts/synth-bike-audio.py 로 합성)
++// - AudioContext 는 첫 사용자 입력(탑승 F/클릭) 이후에만 만들고 resume
++// - ?sound=0 이면 비활성, N 키 = 바이크 소리 음소거 토글 (M 은 기존 '위에서 보기')
++import * as THREE from 'three';
++
++const clamp = (x, a, b) => Math.min(b, Math.max(a, x));
++
++export function createBikeAudio({ camera, anchor, params, base = import.meta.env.BASE_URL, volume = 0.9 }) {
++  if (!camera || !anchor || params?.get('sound') === '0') return null;
++  const ext = (() => { try { return new Audio().canPlayType('audio/ogg; codecs="vorbis"') ? 'ogg' : 'mp3'; } catch { return 'mp3'; } })();
++  const st = { gestured: false, listener: null, idle: null, ride: null, ready: false, playing: false, on: 0, mix: 0, quiet: 0,
++    muted: (() => { try { return localStorage.getItem('bikeAudioMuted') === '1'; } catch { return false; } })() };
++  const onGesture = () => { st.gestured = true; st.listener?.context.state === 'suspended' && st.listener.context.resume(); };
++  addEventListener('pointerdown', onGesture, { capture: true }); addEventListener('keydown', onGesture, { capture: true });
++  addEventListener('keydown', (e) => {
++    if (e.code !== 'KeyN' || e.repeat || document.activeElement?.tagName === 'INPUT') return;
++    st.muted = !st.muted; try { localStorage.setItem('bikeAudioMuted', st.muted ? '1' : '0'); } catch {}
++  });
++
++  function init() {
++    if (st.listener) return;
++    st.listener = new THREE.AudioListener(); camera.add(st.listener);
++    const loader = new THREE.AudioLoader();
++    const mk = (name) => { const a = new THREE.PositionalAudio(st.listener); a.setRefDistance(4); a.setRolloffFactor(1.2); a.setLoop(true); a.setVolume(0); anchor.add(a);
++      loader.load(`${base}audio/${name}.${ext}`, (buf) => { a.setBuffer(buf); a.userData.loaded = true; st.ready = !!(st.idle?.userData.loaded && st.ride?.userData.loaded); }, undefined, (err) => console.warn('[bikeaudio] load failed', name, err)); return a; };
++    st.idle = mk('bike_idle'); st.ride = mk('bike_ride');
++  }
++  const ramp = (param, v, tc) => param.setTargetAtTime(v, st.listener.context.currentTime, tc);
++
++  return {
++    get muted() { return st.muted; },
++    setMuted(m) { st.muted = !!m; },
++    /** 탑승 순간(사용자 제스처 안)에서 호출: 컨텍스트 생성/재개 */
++    unlock() { st.gestured = true; init(); if (st.listener.context.state === 'suspended') st.listener.context.resume(); },
++    /** 매 프레임: on=시동(탑승 중/원격 탑승), v=속도(m/s), throttle 0..1 */
++    update(dt, { on, v = 0, throttle = 0 }) {
++      if (on && !st.listener && st.gestured) init();
++      if (!st.ready) return;
++      const ctx = st.listener.context;
++      const target = on && !st.muted ? 1 : 0;
++      st.on += clamp(target - st.on, -dt / 0.7, dt / 0.35);                 // 시동/하차: 0.35 s 페이드인, 0.7 s 페이드아웃
++      const av = Math.abs(v), wantMix = clamp(av / 7 + throttle * 0.35, 0, 1);
++      st.mix += (wantMix - st.mix) * Math.min(1, dt * 3);
++      if (st.on > 0.001 && !st.playing) {                                    // 필요할 때만 재생 (끝나면 정지해 CPU 절약)
++        if (ctx.state === 'suspended') ctx.resume();
++        st.idle.offset = Math.random() * 3; st.ride.offset = Math.random() * 3;
++        st.idle.play(); st.ride.play(); st.playing = true;
++      }
++      if (!st.playing) return;
++      const g = volume * st.on;
++      ramp(st.idle.gain.gain, g * Math.cos(st.mix * Math.PI / 2), 0.05);     // equal-power 크로스페이드
++      ramp(st.ride.gain.gain, g * Math.sin(st.mix * Math.PI / 2) * (0.85 + 0.15 * throttle), 0.05);
++      const rIdle = clamp(0.9 + 0.2 * clamp(throttle * 0.6 + av / 4, 0, 1), 0.9, 1.1);
++      const rRide = clamp(0.8 + 0.8 * clamp(av / 38, 0, 1) + throttle * 0.08, 0.8, 1.6);
++      if (st.idle.source) ramp(st.idle.source.playbackRate, rIdle, 0.08);
++      if (st.ride.source) ramp(st.ride.source.playbackRate, rRide, 0.12);
++      st.idle.playbackRate = rIdle; st.ride.playbackRate = rRide;
++      st.quiet = st.on <= 0.001 ? st.quiet + dt : 0;
++      if (st.quiet > 1) { st.idle.stop(); st.ride.stop(); st.playing = false; }
++    },
++    get state() { return { ctx: st.listener?.context.state || 'none', ready: st.ready, playing: st.playing, on: +st.on.toFixed(2), mix: +st.mix.toFixed(2), ext, muted: st.muted,
++      rate: [st.idle?.playbackRate, st.ride?.playbackRate].map((r) => +(+r || 0).toFixed(2)) }; },
++  };
++}
+diff -ruN a/src/main.js b/src/main.js
+--- a/src/main.js	2026-10-29 17:57:21.446975513 +0900
++++ b/src/main.js	2026-10-29 17:57:21.454975535 +0900
+@@ -135,7 +135,7 @@
+ viewBtn.onclick = () => setMode(cam.mode === 'overview' ? 'follow' : 'overview');
+ // [truck] 탈 수 있는 'Steel Truck' 주차 (스타베이스만, ?trucks=N 기본 20, ?trucks=0 끔, F 탑승/하차)
+ // [bike] 관리자 크루저 바이크 1대 (?bike=0 끔). 트럭보다 먼저 만들어 트럭 배치/충돌이 바이크를 피하게 함
+-const bike = data.station.name === 'Starbase' ? createAdminBike({ scene, overlay, world, data, params, cam, player, renderer, terrain, presence, remotes, spawn: pos, getTrucks: () => trucks }) : null;
++const bike = data.station.name === 'Starbase' ? createAdminBike({ scene, overlay, world, data, params, cam, player, renderer, terrain, presence, remotes, spawn: pos, getTrucks: () => trucks, camera /* [bikeaudio] */ }) : null;
+ const trucks = data.station.name === 'Starbase' && params.get('trucks') !== '0' ? createTrucks({ scene, overlay, world, data, params, camera, cam, player, renderer, terrain, presence, remotes, spawn: pos }) : null;
+ document.getElementById('btn-home').onclick = () => { player.position.copy(pos); setMode('follow'); };
+ input.onKey = (e) => {

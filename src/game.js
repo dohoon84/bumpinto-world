@@ -33,6 +33,8 @@ import { createRoadsterShow } from './events/roadsterShow.js';
 import { createTowerAddon } from './entities/towerAddon.js';
 import { createLaunchShow } from './events/launchShow.js';
 import { createTrucks } from './entities/trucks.js';
+import { createAdminBike } from './entities/adminCruiser/adminBike.js'; // [bike]
+import { mountInventory } from './inventory.js'; // [inventory]
 
 const params = new URLSearchParams(location.search);
 const region = getCurrentRegion();
@@ -222,6 +224,7 @@ const playerProxy = {
   get rotation() { return player.rotation; },
   get visible() { return player.visible; },
   set visible(v) { player.visible = v; },
+  get userData() { return player.userData; },
 };
 const roadster = region.features?.roadsterShow && params.get('roadster') !== '0'
   ? createRoadsterShow({ scene, overlay, player: playerProxy, camera, sun, params })
@@ -328,6 +331,20 @@ const umbrellas = region.features?.umbrellas
 const presence = createPresence({ station: st, region });
 if (npcs.guard) presence.setGuard?.(npcs.guard);
 const remotes = new RemotePlayers(scene, overlay, presence, () => player.position, (t) => myBubble.say(t, 6000), terrain?.getGroundHeight, emoteFx); // [terrain] 원격 플레이어도 지형 높이
+// [bike] 관리자 크루저 (인벤토리에서 어느 지역이든 소환/수납 가능, ?bike=0 끔)
+let canRideAdminBike = () => false;
+let getAdminBikeTank = () => 'red';
+let inventory = null;
+const adminBike = params.get('bike') !== '0'
+  ? createAdminBike({
+      scene, overlay, world, data, params, cam, player: playerProxy, renderer, terrain, presence, remotes, spawn: pos,
+      getTrucks: () => trucks,
+      camera, // [bikeaudio]
+      canRide: () => canRideAdminBike(),
+      getTankColor: () => getAdminBikeTank(),
+      onChange: () => inventory?.refresh(),
+    })
+  : null;
 // [truck] 탈 수 있는 'Steel Truck' 주차 (스타베이스만, ?trucks=N 기본 20, ?trucks=0 끔, F 탑승/하차)
 const trucks = region.features?.trucks && params.get('trucks') !== '0'
   ? createTrucks({ scene, overlay, world, data, params, camera, cam, player: playerProxy, renderer, terrain, presence, remotes, spawn: pos })
@@ -532,8 +549,64 @@ function paintPresenceStatus(s = lastPresenceRawStatus) {
 }
 presence.on('status', (s) => paintPresenceStatus(s));
 const sms = createSms();
+function resolveAdminTank() {
+  if (isLocalEnv) {
+    const q = (params.get('tank') || '').toLowerCase();
+    if (q === 'red' || q === 'black') return q;
+  }
+  const s = sms.session;
+  if (!s || s.off || !s.isAdmin) return null;
+  return s.bikeTank === 'black' ? 'black' : 'red';
+}
+getAdminBikeTank = () => resolveAdminTank() || 'red';
+canRideAdminBike = () =>
+  (isLocalEnv && (params.has('shot') || params.has('tank'))) ||
+  Boolean(sms.session && !sms.session.off && sms.session.isAdmin); // [bike] 실서버는 번호 서버에서 인증된 관리자 세션만 탑승
 const handset = mountHandset({ sms });
 const board = mountBoard({ sms, getMe: () => me });
+inventory = mountInventory({
+  capacity: 4,
+  isReady: () => joined,
+  getOwnerLabel: () => me.name || sms.session?.display || '',
+  items: adminBike
+    ? [
+        {
+          id: 'admin-cruiser',
+          icon: '🏍️',
+          name: 'Admin Cruiser',
+          enName: 'Admin Cruiser',
+          isAvailable: () => joined && canRideAdminBike(),
+          isActive: () => Boolean(adminBike.summoned || adminBike.riding),
+          isRiding: () => Boolean(adminBike.riding),
+          getBadge(en) {
+            const isRed = getAdminBikeTank() === 'red';
+            return {
+              color: isRed ? '#c9182b' : '#252830',
+              text: isRed ? (en ? 'RED TANK' : '레드 탱크') : (en ? 'BLACK TANK' : '블랙 탱크'),
+            };
+          },
+          getStatusText(en) {
+            if (adminBike.riding) return en ? 'Riding · Space Wheelie · F Dismount / Click to stow' : '탑승 중 · Space 앞바퀴 들기 · F 하차 / 누르면 수납';
+            if (adminBike.summoned) return en ? 'Parked nearby · F to ride / Click to stow' : '소환됨 · 근처에서 F 탑승 / 누르면 수납';
+            return en ? 'Summon next to you & press F to ride' : '내 옆에 꺼내 세워두고 F로 탑승';
+          },
+          getActionLabel(en, { active }) {
+            return active ? (en ? 'Stow' : '수납') : (en ? 'Summon' : '꺼내기');
+          },
+          onUse() {
+            if (bikes.riding) dismountBike();
+            if (mySit) {
+              standUpFromSeat();
+              renderEmoteBar();
+            }
+            wakeFromAfk();
+            adminBike.toggleSummon();
+            emitMyStateNow();
+          },
+        },
+      ]
+    : [],
+});
 function applySession(session) {
   const place = session?.place;
   if (!place) return;
@@ -588,6 +661,8 @@ function completeWorldJoin(name, look, session) {
   handset.signIn();
   presence.connect(me);
   joined = true;
+  adminBike?.refreshStyle?.();
+  inventory?.refresh();
   trackEvent('world_join', { region: region.id, has_pin: !!session?.hasPin, resumed: !!session?.place });
 }
 joinWithPassport = async () => {
@@ -885,7 +960,7 @@ function renderEmoteBar() {
 renderEmoteBar();
 
 function toggleSit() {
-  if (!joined || board.open) return;
+  if (!joined || board.open || adminBike?.riding) return;
   wakeFromAfk();
   if (bikes.riding) dismountBike();
   if (mySit) {
@@ -1029,8 +1104,11 @@ const HELP_WALK_KO = 'WASD/방향키 이동 · Shift 달리기 · Space 점프 �
 const HELP_WALK_EN = 'WASD/Arrows Move · Shift Run · Space Jump · C Sit · Z AFK · 1~6 Emotes · Enter Chat (!! Shout) · M Overview · E Bike';
 const HELP_RIDE_KO = '카카오바이크 · W 전진 · S 브레이크 · A/D 회전 · Shift 빠르게 · Space 점프 · E 내리기';
 const HELP_RIDE_EN = 'Bike · W Forward · S Brake · A/D Turn · Shift Boost · Space Jump · E Dismount';
+const HELP_CRUISER_KO = 'Admin Cruiser · W 가속 · S 브레이크 · A/D 조향 · Shift 부스트 · Space 앞바퀴 들기 · N 소리 · F 내리기';
+const HELP_CRUISER_EN = 'Admin Cruiser · W Throttle · S Brake · A/D Steer · Shift Boost · Space Wheelie · N Mute · F Dismount';
 const getHelpWalk = () => (isEn() ? HELP_WALK_EN : HELP_WALK_KO);
 const getHelpRide = () => (isEn() ? HELP_RIDE_EN : HELP_RIDE_KO);
+const getHelpCruiser = () => (isEn() ? HELP_CRUISER_EN : HELP_CRUISER_KO);
 const syncViewBtnText = () => {
   if (!viewBtn) return;
   viewBtn.textContent = cam.mode === 'overview'
@@ -1089,7 +1167,7 @@ function dismountBike() {
   player.position.set(x, terrain ? terrain.getGroundHeight(x, z, b.y) : 0, z);
 }
 function toggleRide() {
-  if (!joined) return;
+  if (!joined || adminBike?.riding) return;
   wakeFromAfk();
   if (bikes.riding) { dismountBike(); emitMyStateNow(); return; }
   const b = bikes.nearest(player.position.x, player.position.z, undefined, player.position.y);
@@ -1108,6 +1186,13 @@ function toggleRide() {
   emitMyStateNow();
 }
 function syncRideUi(force = false) {
+  if (adminBike?.riding) {
+    if (!force && rideUi === 'cruiser') return;
+    rideUi = 'cruiser';
+    rideBtn.hidden = true;
+    helpEl.textContent = getHelpCruiser();
+    return;
+  }
   const near = joined && !bikes.riding && bikes.nearest(player.position.x, player.position.z, undefined, player.position.y);
   const mode = bikes.riding ? 'ride' : near ? 'near' : '';
   if (!force && mode === rideUi) return;
@@ -1176,6 +1261,7 @@ document.getElementById('lang-launcher')?.addEventListener('click', () => {
 onLangChange(() => syncGameLocale());
 homeBtn.onclick = () => {
   if (bikes.riding) dismountBike();
+  if (adminBike?.riding) adminBike.dismount(); // [bike]
   standUpFromSeat();
   wakeFromAfk();
   roadster?.stop?.();
@@ -1217,6 +1303,7 @@ if (Array.isArray(region.quickSpots) && region.quickSpots.length) {
     if (qs.title) b.title = qs.title;
     b.onclick = () => {
       if (bikes.riding) dismountBike();
+      if (adminBike?.riding) adminBike.dismount(); // [bike]
       standUpFromSeat();
       wakeFromAfk();
       roadster?.stop?.();
@@ -1243,6 +1330,8 @@ if (Array.isArray(region.quickSpots) && region.quickSpots.length) {
 syncGameLocale();
 function pauseWorldSession() {
   if (bikes.riding) dismountBike();
+  if (adminBike?.summoned || adminBike?.riding) adminBike.stow();
+  inventory?.setOpen(false);
   if (trucks?.driving) trucks.exit();
   roadster?.stop?.();
   launch?.stop?.();
@@ -1272,6 +1361,7 @@ function pauseWorldSession() {
   rideUi = '';
   rideBtn.hidden = true;
   helpEl.textContent = getHelpWalk();
+  inventory?.refresh();
 }
 if (globeBtn) {
   globeBtn.onclick = () => {
@@ -1340,11 +1430,12 @@ function emitMyStateNow() {
       moving: moveSpeed > 0,
       riding: !!bikes.riding,
       jy: Number(jumpY.toFixed(2)),
-      emote: bikes.riding ? '' : myEmote,
-      sit: bikes.riding ? '' : mySit,
-      afk: bikes.riding ? false : myAfk,
-      umb: bikes.riding ? '' : (umbrellas.umbrellaTheme || ''),
+      emote: bikes.riding || adminBike?.riding ? '' : myEmote,
+      sit: bikes.riding || adminBike?.riding ? '' : mySit,
+      afk: bikes.riding || adminBike?.riding ? false : myAfk,
+      umb: bikes.riding || adminBike?.riding ? '' : (umbrellas.umbrellaTheme || ''),
       ...trucks?.net(),
+      ...adminBike?.net(), // [bike]
     },
     true,
   );
@@ -1357,7 +1448,7 @@ setInterval(() => {
   const now = performance.now();
   // requestAnimationFrame이 백그라운드에서 멈춘 경우(0.5초 이상 경과)
   if (now - lastFrameAt > 500) {
-    if (!bikes.riding && !myEmote && !handset.open && !board.open) {
+    if (!bikes.riding && !adminBike?.riding && !myEmote && !handset.open && !board.open) {
       idleTime += 1.0;
       if (!myAfk && idleTime >= AFK_TIMEOUT_SEC) {
         myAfk = true;
@@ -1391,7 +1482,7 @@ function frame() {
   // 이동. 걸을 때는 카메라 기준, 바이크는 핸들(W 전진 · A/D 회전). 건물 안으로는 못 들어감.
   const { f, s, run, jump } = input.axes();
   if (dy || dp || dz || f || s || jump) wakeFromAfk();
-  if (joined && jump && !board.open && jumpY <= 0.001) {
+  if (joined && jump && !board.open && jumpY <= 0.001 && !adminBike?.riding) { // [bike]
     if (mySit) {
       standUpFromSeat();
       renderEmoteBar();
@@ -1407,11 +1498,27 @@ function frame() {
     }
   }
   moveSpeed = 0;
-  const driving = trucks?.update(dt, f, s, run, dy); // [truck] 운전 중이면 걷기/바이크 이동 대신 차량 물리
-  if (driving && bikes.riding) dismountBike();
+  const cruising = !!adminBike?.update(dt, f, s, run, dy, jump && !board.open); // [bike] Space = 앞바퀴 들기(윌리)
+  const driving = trucks?.update(dt, cruising ? 0 : f, cruising ? 0 : s, run, dy) || cruising; // [truck] [bike]
+  if (cruising && bikes.riding) {
+    clearRidePose(player);
+    bikes.dismount();
+    jumpY = 0;
+    jumpVel = 0;
+  } else if (driving && bikes.riding) dismountBike();
   if (driving) {
-    moveSpeed = Math.abs(trucks.current?.v || 0);
+    moveSpeed = Math.abs((cruising ? adminBike.bike.v : trucks.current?.v) || 0);
     idleTime = 0;
+    if (cruising) {
+      mySit = '';
+      myAfk = false;
+      myEmote = '';
+      myEmoteUntil = 0;
+      player.userData.sit = '';
+      player.userData.afk = false;
+      player.userData.emote = '';
+      player.userData.jumpY = 0;
+    }
   } else if (joined && bikes.riding) {
     const b = bikes.riding;
     const turn = 2.5 / (1 + Math.abs(bikes.speed) * 0.09);
@@ -1534,7 +1641,7 @@ function frame() {
     animateAvatar(player, moveSpeed, dt);
   }
   syncRideUi();
-  if (joined) presence.sendState({ x: player.position.x, z: player.position.z, ry: player.rotation.y, moving: moveSpeed > 0, riding: !!bikes.riding, jy: Number(jumpY.toFixed(2)), emote: bikes.riding ? '' : myEmote, sit: bikes.riding ? '' : mySit, afk: bikes.riding ? false : myAfk, umb: bikes.riding ? '' : (umbrellas.umbrellaTheme || ''), ...trucks?.net() });
+  if (joined) presence.sendState({ x: player.position.x, z: player.position.z, ry: player.rotation.y, moving: moveSpeed > 0, riding: !!bikes.riding, jy: Number(jumpY.toFixed(2)), emote: bikes.riding || cruising ? '' : myEmote, sit: bikes.riding || cruising ? '' : mySit, afk: bikes.riding || cruising ? false : myAfk, umb: bikes.riding || cruising ? '' : (umbrellas.umbrellaTheme || ''), ...trucks?.net(), ...adminBike?.net() }); // [bike]
   rememberPlace();
 
   const rush = atmosphere.state.rush || 'normal';
@@ -1597,9 +1704,9 @@ requestAnimationFrame(frame);
 
 // 스크린샷/디버그용 훅
 window.__jj = {
-  ready: true, region, tower, launch, roadster, trucks, data, world, npcs, transit, camera, cam, ov, setMode, terrain, taxis, police, weather: atmosphere, umbrellas, dogPark, // [terrain] [taxi] [roadster] [tower] [launch] [truck]
+  ready: true, region, tower, launch, roadster, trucks, bike: adminBike, inventory, data, world, npcs, transit, camera, cam, ov, setMode, terrain, taxis, police, weather: atmosphere, umbrellas, dogPark, // [terrain] [taxi] [roadster] [tower] [launch] [truck] [bike] [inventory]
   get player() { return player; },
-  teleport(x, z, y) { if (bikes.riding) dismountBike(); player.position.set(x, y ?? (terrain ? terrain.getGroundHeight(x, z, 0) : 0), z); }, // [terrain]
+  teleport(x, z, y) { if (bikes.riding) dismountBike(); if (adminBike?.riding) adminBike.dismount(); player.position.set(x, y ?? (terrain ? terrain.getGroundHeight(x, z, 0) : 0), z); }, // [terrain] [bike]
   bikes, toggleRide, triggerEmote,
   nearNpc(i = 0, d = 3) { const n = npcs.list[i]; player.position.set(n.pos.x + d, 0, n.pos.z + d * 0.5); },
 };

@@ -1,6 +1,13 @@
 import { DurableObject } from "cloudflare:workers";
 
 const STALE_MS = 35000;
+const BIKE_VEH_BLACK = 900;
+const BIKE_VEH_RED = 901;
+const BOOK_KEY = "jeongja";
+
+function isBikeVeh(id) {
+  return id === BIKE_VEH_BLACK || id === BIKE_VEH_RED;
+}
 
 const SETS = {
   gender: ["f", "m"],
@@ -31,6 +38,41 @@ function sanitizeLook(raw = {}) {
 }
 
 export class Room extends DurableObject {
+  constructor(ctx, env) {
+    super(ctx, env);
+    this.env = env;
+  }
+
+  async #bikeAuth(deviceId) {
+    try {
+      const book = this.env?.PHONE_BOOK?.getByName(BOOK_KEY);
+      if (!book || !deviceId) return { isAdmin: false, bikeTank: null };
+      const spec = await book.adminForDevice(deviceId);
+      return {
+        isAdmin: Boolean(spec?.isAdmin),
+        bikeTank: spec?.bikeTank === "red" || spec?.bikeTank === "black" ? spec.bikeTank : null,
+      };
+    } catch {
+      return { isAdmin: false, bikeTank: null };
+    }
+  }
+
+  #relayVeh(raw, me) {
+    if (!raw || typeof raw !== "object") return null;
+    const id = raw.id | 0;
+    const body = {
+      id,
+      ry: Number(raw.ry) || 0,
+      v: Number(raw.v) || 0,
+      st: Number(raw.st) || 0,
+      ...(raw.wh ? { wh: Number(raw.wh) || 0 } : {}),
+    };
+    if (!isBikeVeh(id)) return body;
+    if (!me?.bikeAdmin) return null;
+    body.id = me.bikeTank === "red" ? BIKE_VEH_RED : BIKE_VEH_BLACK;
+    return body;
+  }
+
   async fetch(request) {
     const url = new URL(request.url);
     if (url.pathname === "/stats") {
@@ -139,6 +181,7 @@ export class Room extends DurableObject {
         ...(m.look || {}),
         color: m.color || m.look?.color,
       });
+      const auth = await this.#bikeAuth(rawDevice);
       me = {
         id,
         deviceId,
@@ -148,6 +191,8 @@ export class Room extends DurableObject {
         x: 0,
         z: 0,
         ry: 0,
+        bikeAdmin: auth.isAdmin,
+        bikeTank: auth.bikeTank,
         lastSeen: now,
       };
       const peers = this.#peers(ws);
@@ -183,9 +228,7 @@ export class Room extends DurableObject {
       me.umb = typeof m.umb === "string" ? m.umb.slice(0, 16) : (m.umb ? "yellow" : "");
       const jy = Math.max(0, Math.min(5, Number(m.jy) || 0));
       const emote = typeof m.emote === "string" ? m.emote.slice(0, 16) : "";
-      const veh = m.veh && typeof m.veh === "object"
-        ? { id: m.veh.id | 0, ry: Number(m.veh.ry) || 0, v: Number(m.veh.v) || 0, st: Number(m.veh.st) || 0 }
-        : null;
+      const veh = this.#relayVeh(m.veh, me);
       me.veh = veh;
       ws.serializeAttachment(me);
       this.#broadcast(

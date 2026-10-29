@@ -64,17 +64,27 @@ function phoneOk(value) {
   return /^010\d{8}$/.test(value);
 }
 
-const ADMIN_DIGEST = "6001b80b59ab45a1c919e5080a5285255009af2e29137e3af3bb280ee21b8dcf";
+// 관리자 번호 SHA-256 다이제스트 (크림슨 레드 탱크 / 비비드 블랙 탱크)
+const ADMIN_DIGEST_RED = "6001b80b59ab45a1c919e5080a5285255009af2e29137e3af3bb280ee21b8dcf";
+const ADMIN_DIGEST_BLACK = "3189d5bb7c8737f6bb6b4e9ad7b50b74cfc4d1d0b0e6e73902716e8bbb7f4565";
 
-async function isBoardAdmin(phone, env = null) {
+async function resolveAdminSpec(phone, env = null) {
   const d = digits(phone);
-  if (!phoneOk(d)) return false;
+  if (!phoneOk(d)) return null;
+  const digest = await hashPin("bumpinto-board-admin-v1", d);
+  if (sameHash(digest, ADMIN_DIGEST_RED)) return { isAdmin: true, bikeTank: "red" };
+  if (sameHash(digest, ADMIN_DIGEST_BLACK)) return { isAdmin: true, bikeTank: "black" };
   if (env?.ADMIN_PHONES) {
     const list = String(env.ADMIN_PHONES).split(",").map((s) => digits(s)).filter(Boolean);
-    if (list.includes(d)) return true;
+    const idx = list.indexOf(d);
+    if (idx >= 0) return { isAdmin: true, bikeTank: idx === 0 ? "red" : "black" };
   }
-  const digest = await hashPin("bumpinto-board-admin-v1", d);
-  return sameHash(digest, ADMIN_DIGEST);
+  return null;
+}
+
+async function isBoardAdmin(phone, env = null) {
+  const spec = await resolveAdminSpec(phone, env);
+  return Boolean(spec?.isAdmin);
 }
 
 function cleanPin(value) {
@@ -437,6 +447,15 @@ export class PhoneBook extends DurableObject {
     return { user: row };
   }
 
+  // 멀티플레이 방이 기기 id 로 관리자 여부를 확인할 때 사용. 번호는 반환하지 않는다.
+  async adminForDevice(deviceId) {
+    this.#migrate();
+    const found = this.#user(deviceId);
+    if (found.error || !found.user?.phone) return { ok: true, isAdmin: false, bikeTank: null };
+    const spec = await resolveAdminSpec(found.user.phone, this.env);
+    return { ok: true, isAdmin: Boolean(spec?.isAdmin), bikeTank: spec?.bikeTank || null };
+  }
+
   #byPhone(phone) {
     return this.ctx.storage.sql.exec("SELECT id, phone, name FROM users WHERE phone = ?", phone).toArray()[0] || null;
   }
@@ -490,7 +509,8 @@ export class PhoneBook extends DurableObject {
     let look = {};
     try { look = JSON.parse(row.look); } catch { look = {}; }
     const rKey = String(regionKey || row.region || DEFAULT_REGION).trim().toLowerCase() || DEFAULT_REGION;
-    const isAdmin = await isBoardAdmin(row.phone, this.env);
+    const adminSpec = await resolveAdminSpec(row.phone, this.env);
+    const isAdmin = Boolean(adminSpec?.isAdmin);
     return {
       ok: true,
       id: row.id,
@@ -502,6 +522,7 @@ export class PhoneBook extends DurableObject {
       place: this.#placeForRegion(row.id, rKey, row),
       hasPin: !!row.pin_hash,
       isAdmin,
+      bikeTank: adminSpec?.bikeTank || null,
       updatedAt: row.updated_at,
       unread: this.#unread(row.phone),
     };

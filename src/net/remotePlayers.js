@@ -58,7 +58,8 @@ export class RemotePlayers {
     if (!peer.look) look.hat = '#ffffff';
     const mesh = createAvatar(look);
     const y0 = this.groundY ? this.groundY(peer.x || 0, peer.z || 0, 0) : 0;
-    mesh.position.set(peer.x || 0, y0, peer.z || 0); this.scene.add(mesh); // [terrain]
+    mesh.position.set(peer.x || 0, y0, peer.z || 0); // [terrain]
+    this.scene.add(mesh); // 씬 추가는 주석 줄에 붙이지 않는다. 주석에 가려지면 원격 아바타가 안 보인다.
     const bikeMesh = createKakaoBike();
     bikeMesh.visible = false;
     const stand = bikeMesh.getObjectByName('stand');

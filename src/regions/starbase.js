@@ -78,6 +78,7 @@ export const STARBASE_REGION = {
     launchTower: true,  // 발사탑 1·2기(메카질라), 스타십 풀스택, 부스터 캐치, OLM, 극저온 탱크 3D 모델
     launchShow: true,   // 5분 주기 전체 동기화 로켓 발사 → 핫스테이징 → 부스터 귀환 → 젓가락 캐치 쇼
     trucks: true,       // 각진 픽업트럭 'Steel Truck' 20대 배치 & 탑승/운전(F 키)
+    adminBike: true,    // 관리자 전용 Admin Cruiser 1대 (F 탑승, ?bike=0 끔)
   },
   // 생산기지(Build Site), 발사장(Launch Pad), 로드스터 쇼 무대, 마을(Village) 간 빠른 이동 스팟
   quickSpots: [

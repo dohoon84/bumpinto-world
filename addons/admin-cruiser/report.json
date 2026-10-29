@@ -1,0 +1,68 @@
+{
+ "bike_idle": {
+  "ogg": {
+   "samples": 176400,
+   "dur": 4.0,
+   "rms_db": -10.62,
+   "peak_db": -1.05,
+   "loop_jump": 0.00211,
+   "median_step": 0.00092,
+   "p99_step": 0.01218
+  },
+  "mp3": {
+   "samples": 176400,
+   "dur": 4.0,
+   "rms_db": -11.04,
+   "peak_db": -2.11,
+   "loop_jump": 0.00067,
+   "median_step": 0.00085,
+   "p99_step": 0.01172
+  },
+  "firing": {
+   "expected_ms": [
+    54.7,
+    70.3
+   ],
+   "synth_gap_ms_mean_short": 54.9,
+   "synth_gap_ms_mean_long": 70.0,
+   "detected_peaks": 71,
+   "detected_gap_ms_p25_p75": [
+    53.1,
+    69.0
+   ]
+  }
+ },
+ "bike_ride": {
+  "ogg": {
+   "samples": 176400,
+   "dur": 4.0,
+   "rms_db": -10.9,
+   "peak_db": -2.77,
+   "loop_jump": 0.00211,
+   "median_step": 0.00262,
+   "p99_step": 0.01898
+  },
+  "mp3": {
+   "samples": 176400,
+   "dur": 4.0,
+   "rms_db": -11.3,
+   "peak_db": -3.24,
+   "loop_jump": 3e-05,
+   "median_step": 0.0025,
+   "p99_step": 0.01865
+  },
+  "firing": {
+   "expected_ms": [
+    18.0,
+    23.2
+   ],
+   "synth_gap_ms_mean_short": 18.1,
+   "synth_gap_ms_mean_long": 23.1,
+   "detected_peaks": 206,
+   "detected_gap_ms_p25_p75": [
+    16.7,
+    23.2
+   ]
+  }
+ }
+}

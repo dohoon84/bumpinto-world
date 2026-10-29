@@ -24,9 +24,11 @@ wss.on('connection', (ws) => {
       const emote = typeof m.emote === 'string' ? m.emote.slice(0, 16) : '';
       const sit = typeof m.sit === 'string' ? m.sit.slice(0, 16) : '';
       const afk = !!m.afk;
-      const veh = m.veh && typeof m.veh === 'object'
-        ? { id: m.veh.id | 0, ry: +m.veh.ry || 0, v: +m.veh.v || 0, st: +m.veh.st || 0 }
+      let veh = m.veh && typeof m.veh === 'object'
+        ? { id: m.veh.id | 0, ry: +m.veh.ry || 0, v: +m.veh.v || 0, st: +m.veh.st || 0, ...(m.veh.wh ? { wh: +m.veh.wh || 0 } : {}) }
         : null;
+      // 로컬 릴레이도 관리자 바이크 상태(900/901)는 기본으로 끊는다. 확인이 필요할 때만 ALLOW_BIKE_VEH=1
+      if (veh && (veh.id === 900 || veh.id === 901) && process.env.ALLOW_BIKE_VEH !== '1') veh = null;
       Object.assign(p, { x: +m.x || 0, z: +m.z || 0, ry: +m.ry || 0, riding: !!m.riding, sit, afk, veh });
       broadcast({ t: 'state', id: p.id, x: p.x, z: p.z, ry: p.ry, moving: !!m.moving, riding: p.riding, jy, emote, sit, afk, ...(veh ? { veh } : {}) }, ws);
     }

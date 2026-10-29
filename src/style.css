@@ -651,8 +651,8 @@ body.in-lobby #ride-btn { display: none !important; }
 #lobby, #world-gate { display: none; }
 body.in-lobby #lobby { position: fixed; inset: 0; z-index: 30; display: grid; place-items: center; overflow: auto; padding: 28px 16px 36px; background: linear-gradient(180deg, #070d1c, #1a2744); }
 body.in-gate #world-gate { position: fixed; inset: 0; z-index: 32; display: block; overflow: hidden; background: linear-gradient(180deg, #070d1c, #1a2744); color: #122033; }
-body.in-gate #hud, body.in-gate #buttons, body.in-gate #top-right-bar, body.in-gate #emote-bar, body.in-gate #chat, body.in-gate #chat-log-panel, body.in-gate #joystick, body.in-gate #presence-status, body.in-gate #presence-panel, body.in-gate #board-Launcher, body.in-gate #contribute-launcher, body.in-gate #board-modal, body.in-gate #donate-near-btn, body.in-gate #donate-modal, body.in-gate #umbrella-actions, body.in-gate #dog-gate-btn, body.in-gate #stop-panel, body.in-gate #phone, body.in-gate #handset, body.in-gate #attribution, body.in-gate #rs-hud, body.in-gate #rs-btns, body.in-gate #ls-hud, body.in-gate #trk-prompt, body.in-gate #trk-hud,
-body.in-lobby #hud, body.in-lobby #buttons, body.in-lobby #top-right-bar, body.in-lobby #emote-bar, body.in-lobby #chat, body.in-lobby #chat-log-panel, body.in-lobby #joystick, body.in-lobby #presence-status, body.in-lobby #presence-panel, body.in-lobby #board-Launcher, body.in-lobby #contribute-launcher, body.in-lobby #board-modal, body.in-lobby #donate-near-btn, body.in-lobby #donate-modal, body.in-lobby #umbrella-actions, body.in-lobby #dog-gate-btn, body.in-lobby #stop-panel, body.in-lobby #phone, body.in-lobby #handset, body.in-lobby #rs-hud, body.in-lobby #rs-btns, body.in-lobby #ls-hud, body.in-lobby #trk-prompt, body.in-lobby #trk-hud { display: none !important; }
+body.in-gate #hud, body.in-gate #buttons, body.in-gate #top-right-bar, body.in-gate #emote-bar, body.in-gate #chat, body.in-gate #chat-log-panel, body.in-gate #joystick, body.in-gate #presence-status, body.in-gate #presence-panel, body.in-gate #board-Launcher, body.in-gate #contribute-launcher, body.in-gate #board-modal, body.in-gate #donate-near-btn, body.in-gate #donate-modal, body.in-gate #umbrella-actions, body.in-gate #dog-gate-btn, body.in-gate #stop-panel, body.in-gate #phone, body.in-gate #handset, body.in-gate #attribution, body.in-gate #rs-hud, body.in-gate #rs-btns, body.in-gate #ls-hud, body.in-gate #trk-prompt, body.in-gate #trk-hud, body.in-gate #bike-prompt, body.in-gate #bike-hud, body.in-gate #inventory-dock,
+body.in-lobby #hud, body.in-lobby #buttons, body.in-lobby #top-right-bar, body.in-lobby #emote-bar, body.in-lobby #chat, body.in-lobby #chat-log-panel, body.in-lobby #joystick, body.in-lobby #presence-status, body.in-lobby #presence-panel, body.in-lobby #board-Launcher, body.in-lobby #contribute-launcher, body.in-lobby #board-modal, body.in-lobby #donate-near-btn, body.in-lobby #donate-modal, body.in-lobby #umbrella-actions, body.in-lobby #dog-gate-btn, body.in-lobby #stop-panel, body.in-lobby #phone, body.in-lobby #handset, body.in-lobby #rs-hud, body.in-lobby #rs-btns, body.in-lobby #ls-hud, body.in-lobby #trk-prompt, body.in-lobby #trk-hud, body.in-lobby #bike-prompt, body.in-lobby #bike-hud, body.in-lobby #inventory-dock { display: none !important; }
 #world-gate[hidden], .gate-copy[hidden] { display: none !important; }
 .gate-copy { position: absolute; left: 50%; bottom: 32px; z-index: 2; width: min(540px, calc(100% - 32px)); transform: translateX(-50%); text-align: center; pointer-events: none; padding: 14px 18px 16px; color: #122033; background: rgba(255,255,255,.88); border-radius: 12px; box-shadow: 0 2px 10px rgba(18,32,51,.16); }
 .gate-copy .kicker { display: inline-block; margin: 0; padding: 3px 8px; border-radius: 8px; background: #f5a200; color: #1b1b1b; font-size: 12px; font-weight: 800; letter-spacing: 0.04em; }
@@ -2484,3 +2484,251 @@ body.in-lobby #hud, body.in-lobby #buttons, body.in-lobby #top-right-bar, body.i
   font-size: 11px;
   font-weight: 900;
 }
+
+/* --- 플로팅 원형 인벤토리 런처 & 그 자리에서 펼쳐지는 포켓 독 --- */
+.inv-dock {
+  position: fixed;
+  z-index: 9;
+  width: 50px;
+  height: 50px;
+  user-select: none;
+  pointer-events: none;
+}
+.inv-dock[hidden] { display: none !important; }
+
+.inv-orb {
+  position: relative;
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(255, 255, 255, 0.28);
+  background: radial-gradient(circle at 32% 28%, rgba(44, 66, 98, 0.96), rgba(14, 24, 40, 0.94));
+  color: #ffffff;
+  display: grid;
+  place-items: center;
+  cursor: grab;
+  pointer-events: auto;
+  touch-action: none;
+  box-shadow: 0 8px 22px rgba(8, 16, 28, 0.42), inset 0 1px 1px rgba(255, 255, 255, 0.22);
+  backdrop-filter: blur(8px);
+  transition: transform .16s cubic-bezier(.2, .9, .3, 1.2), border-color .16s, box-shadow .16s;
+}
+.inv-dock.dragging .inv-orb {
+  cursor: grabbing;
+  transform: scale(1.08);
+  border-color: #ffe169;
+}
+.inv-orb:hover,
+.inv-dock.open .inv-orb {
+  transform: translateY(-1px) scale(1.04);
+  border-color: rgba(255, 225, 105, 0.85);
+  box-shadow: 0 10px 26px rgba(8, 16, 28, 0.52), 0 0 0 3px rgba(255, 225, 105, 0.18);
+}
+.inv-orb.has-active {
+  border-color: rgba(52, 199, 89, 0.85);
+}
+.inv-orb-ring {
+  position: absolute;
+  inset: 3px;
+  border-radius: 50%;
+  border: 1px dashed rgba(255, 225, 105, 0.32);
+  pointer-events: none;
+}
+.inv-orb-icon {
+  font-size: 22px;
+  line-height: 1;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.35));
+}
+.inv-orb-dot {
+  position: absolute;
+  right: 2px;
+  top: 2px;
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: #34c759;
+  border: 2px solid #0e1828;
+  box-shadow: 0 0 8px rgba(52, 199, 89, 0.8);
+}
+.inv-orb-dot[hidden] { display: none !important; }
+.inv-orb-count {
+  position: absolute;
+  right: -3px;
+  bottom: -2px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: #ffe169;
+  color: #122033;
+  border: 2px solid #0e1828;
+  font-size: 10.5px;
+  font-weight: 900;
+  line-height: 14px;
+  text-align: center;
+}
+.inv-orb-count[hidden] { display: none !important; }
+
+.inv-tray {
+  position: absolute;
+  width: 268px;
+  padding: 10px;
+  border-radius: 18px;
+  background: rgba(14, 23, 38, 0.94);
+  border: 1.5px solid rgba(255, 255, 255, 0.18);
+  box-shadow: 0 14px 34px rgba(6, 12, 24, 0.48);
+  backdrop-filter: blur(10px);
+  color: #eef5fc;
+  pointer-events: auto;
+  transform-origin: top right;
+  animation: inv-unfold .18s cubic-bezier(.18, .9, .32, 1.15);
+}
+.inv-tray[hidden] { display: none !important; }
+
+/* 아이콘 위치에 따라 자연스럽게 옆/아래로 펼쳐지도록 배치 */
+.inv-dock.expand-left .inv-tray {
+  right: 58px;
+}
+.inv-dock.expand-right .inv-tray {
+  left: 58px;
+}
+.inv-dock.expand-down .inv-tray {
+  top: 0;
+}
+.inv-dock.expand-up .inv-tray {
+  bottom: 0;
+}
+.inv-dock.expand-left.expand-down .inv-tray { transform-origin: top right; }
+.inv-dock.expand-right.expand-down .inv-tray { transform-origin: top left; }
+.inv-dock.expand-left.expand-up .inv-tray { transform-origin: bottom right; }
+.inv-dock.expand-right.expand-up .inv-tray { transform-origin: bottom left; }
+
+@keyframes inv-unfold {
+  from {
+    opacity: 0;
+    transform: scale(0.78);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.inv-tray-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 2px 4px 7px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  margin-bottom: 7px;
+}
+.inv-tray-title {
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  color: #ffe169;
+}
+.inv-tray-sub {
+  font-size: 10.5px;
+  font-weight: 700;
+  color: #9eb4c6;
+}
+.inv-tray-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.inv-slot {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: 13px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.06);
+  color: #eef5fc;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: transform .12s, background .14s, border-color .14s;
+}
+.inv-slot:hover {
+  transform: translateY(-1px);
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 225, 105, 0.55);
+}
+.inv-slot.is-active {
+  background: linear-gradient(135deg, rgba(28, 68, 52, 0.72), rgba(18, 38, 58, 0.85));
+  border-color: rgba(52, 199, 89, 0.7);
+}
+.inv-slot.is-empty {
+  cursor: default;
+  opacity: 0.56;
+  border-style: dashed;
+  background: rgba(255, 255, 255, 0.025);
+}
+.inv-slot.is-empty:hover {
+  transform: none;
+  background: rgba(255, 255, 255, 0.025);
+  border-color: rgba(255, 255, 255, 0.14);
+}
+.inv-slot-swatch {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-size: 9.5px;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  color: #fff;
+  vertical-align: middle;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+}
+.inv-slot-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: rgba(10, 18, 30, 0.68);
+  display: grid;
+  place-items: center;
+  font-size: 20px;
+  flex-shrink: 0;
+}
+.inv-slot-meta {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.inv-slot-meta strong {
+  font-size: 13px;
+  font-weight: 800;
+  color: #ffffff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.inv-slot-meta small {
+  font-size: 11px;
+  font-weight: 600;
+  color: #b4c7d9;
+  line-height: 1.25;
+}
+.inv-slot-pill {
+  padding: 4px 9px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 800;
+  background: rgba(255, 225, 105, 0.18);
+  color: #ffe169;
+  border: 1px solid rgba(255, 225, 105, 0.45);
+  flex-shrink: 0;
+}
+.inv-slot-pill.on {
+  background: rgba(52, 199, 89, 0.22);
+  color: #7ee797;
+  border-color: rgba(52, 199, 89, 0.6);
+}
+
