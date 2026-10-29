@@ -234,6 +234,8 @@ export function createAtmosphere({ scene, sun, hemi, skyGeo, getMode, clock, reg
   const tmpA = new THREE.Color();
   const tmpB = new THREE.Color();
   const state = { code: 0, cloud: 0, precip: 0, temp: null, wind: 0, live: false, phrase: '맑음', label: '', alt: 0, part: '낮', evening: false };
+  let manualWeather = null;
+  const rainBtn = document.getElementById('weather-rain');
   const dayTop = new THREE.Color('#7ec4ef');
   const dayBot = new THREE.Color('#e9f6fb');
   const duskTop = new THREE.Color('#3a4d7c');
@@ -323,6 +325,7 @@ export function createAtmosphere({ scene, sun, hemi, skyGeo, getMode, clock, reg
       ? (rush === 'morning' ? ' · 🚗 Morning' : rush === 'lunch' ? ' · ☕ Lunch' : rush === 'evening' ? ' · 🌇 Evening' : '')
       : (rush === 'morning' ? ' · 🚇 출근' : rush === 'lunch' ? ' · ☕ 점심' : rush === 'evening' ? ' · 🌇 퇴근' : '');
     const label = `${partDisplay} ${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')} · ${shown}${rushBadge}`;
+    syncRainBtn();
     state.hour = hour;
     state.minute = minute;
     state.rush = rush;
@@ -379,7 +382,44 @@ export function createAtmosphere({ scene, sun, hemi, skyGeo, getMode, clock, reg
     precip.geo.attributes.position.needsUpdate = true;
   }
 
+  function holdManual() {
+    const temp = state.temp;
+    setWeather(manualWeather);
+    if (temp != null) state.temp = temp;
+  }
+
+  function syncRainBtn() {
+    if (!rainBtn) return;
+    const en = isUiEn();
+    const on = manualWeather === 'rain';
+    const label = on ? (en ? 'Live' : '실시간') : (en ? 'Rain' : '비');
+    const title = on
+      ? (en ? 'Back to the fetched weather' : '받아온 날씨로 되돌리기')
+      : (en ? 'Show rain on this screen' : '이 화면을 비로 바꾸기');
+    if (rainBtn.textContent === label && rainBtn.title === title) return;
+    rainBtn.classList.toggle('on', on);
+    rainBtn.textContent = label;
+    rainBtn.title = title;
+    rainBtn.setAttribute('aria-pressed', on ? 'true' : 'false');
+  }
+
+  function toggleRain() {
+    if (manualWeather === 'rain') {
+      manualWeather = null;
+      syncRainBtn();
+      pull();
+      return;
+    }
+    manualWeather = 'rain';
+    holdManual();
+    syncRainBtn();
+  }
+
   async function pull() {
+    if (manualWeather) {
+      holdManual();
+      return;
+    }
     const forced = forcedWeatherFromUrl();
     if (forced) {
       state.code = forced.code;
@@ -393,7 +433,9 @@ export function createAtmosphere({ scene, sun, hemi, skyGeo, getMode, clock, reg
     try {
       const res = await fetch(forecastUrl, { cache: 'no-store' });
       if (!res.ok) throw new Error(String(res.status));
+      if (manualWeather) return;
       const body = await res.json();
+      if (manualWeather) return;
       const c = body.current || {};
       state.code = Number(c.weather_code) || 0;
       state.cloud = Number(c.cloud_cover) || 0;
@@ -402,6 +444,7 @@ export function createAtmosphere({ scene, sun, hemi, skyGeo, getMode, clock, reg
       state.wind = Number(c.wind_speed_10m) || 0;
       state.live = true;
     } catch {
+      if (manualWeather) return;
       state.code = 0;
       state.cloud = 0;
       state.precip = 0;
@@ -441,6 +484,14 @@ export function createAtmosphere({ scene, sun, hemi, skyGeo, getMode, clock, reg
       cIdx = (cIdx + 1) % cycle.length;
       setHour(cycle[cIdx]);
     });
+  }
+
+  if (rainBtn) {
+    rainBtn.addEventListener('click', () => {
+      toggleRain();
+      rainBtn.blur();
+    });
+    syncRainBtn();
   }
 
   pull();

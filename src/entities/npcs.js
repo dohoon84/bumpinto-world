@@ -20,13 +20,13 @@ export const NPC_DEFS = [
     lines: ['네이버 1784엔 로봇이 택배 갖다준대요. 저는 아직 로봇보다 늦게 출근해요 🤖', '그린팩토리 1층 도서관 가보셨어요? 앉기만 해도 코드가 잘 짜지는 기분…', '점심 메뉴 고르는 데 회의 2번 했어요. 결론은 또 국밥.'] },
   { name: '탄천 러너 수진', look: { color: '#ff7a59', hat: '#222', pants: '#222', skin: '#f6d7c3', gender: 'f', face: 'round', hair: 'pony', top: 'short' }, speed: 2.4, prefer: 'tancheon',
     lines: ['탄천 한 바퀴 뛰고 왔어요! 오리들이 저보다 페이스가 좋아요 🦆', '탄천 자전거길 타면 판교도 금방이에요. 바람만 안 불면요.', '해 질 녘 탄천 산책로는 진짜 정자동 최고 명소예요 🌇'] },
-  { name: '신분당선 출근러 지훈', look: { color: '#34495e', bag: '#7f8c8d', skin: '#e8c4a8', pants: '#2c3e50', gender: 'm', face: 'square', hair: 'short', glasses: true, top: 'long' }, speed: 1.6,
+  { name: '신분당선 출근러 지훈', look: { color: '#34495e', bag: '#7f8c8d', skin: '#e8c4a8', pants: '#2c3e50', gender: 'm', face: 'square', hair: 'short', glasses: true, top: 'long' }, speed: 1.6, badge: '1000명돌파',
     lines: ['신분당선 타면 강남 10분대! 요금은… 못 본 걸로 할게요 💸', '8시 반 정자역 개찰구는 마음의 준비가 필요합니다.', '수인분당선 탈까 신분당선 탈까, 매일 아침 인생 최대 고민이에요.'] },
   { name: '카페거리 바리스타 하은', look: { color: '#8e6e53', hat: '#f5f0e6', skin: '#f2d0b0', pants: '#3d342c', gender: 'f', face: 'round', hair: 'long', top: 'long' }, speed: 1.0, prefer: 'cafe', spot: '스타벅스 정자동',
     lines: ['스타벅스 정자동은 평림빌딩 앞에서 줄이 먼저 보여요.', '아이스 아메리카노는 오전이 제일 빨리 나가요.', '정자역에서 이어진 인도로 오면 문이 바로예요.'] },
   { name: '배달 라이더 성호', look: { color: '#ffd32a', hat: '#e84118', pants: '#2f3640', skin: '#d7a888', gender: 'm', face: 'square', hair: 'short', top: 'hoodie' }, speed: 2.0, spot: '백궁프라자1',
     lines: ['정자동 오피스텔 미로는 3년째 공략 중이에요 🛵', '백궁프라자 지하 맛집은 배달보다 직접 가는 게 빨라요.', '비 오는 날 콜이 터지면… 정자역이 제 사무실이에요.'] },
-  { name: '산책하는 동네 주민', look: { color: '#a29bfe', hat: '#dfe6e9', pants: '#636e72', skin: '#e8c4a8', gender: 'm', face: 'long', hair: 'short', beard: 'full', top: 'long' }, speed: 0.8,
+  { name: '산책하는 동네 주민', look: { color: '#a29bfe', hat: '#dfe6e9', pants: '#636e72', skin: '#e8c4a8', gender: 'm', face: 'long', hair: 'short', beard: 'full', top: 'long' }, speed: 0.8, badge: '1000명돌파',
     lines: ['여기 옛날엔 다 논밭이었어~ 지금은 빌딩 숲이지 뭐.', '분당두산타워 불 켜지면 퇴근 시간인 줄 알아.', '젊은이, 밥은 먹고 다니지? 정자동은 맛집이 많아요.'] },
   { name: '정자동 고양이 치즈', cat: true, look: { color: '#f0a050' }, speed: 0.7,
     lines: ['냐옹. (츄르는 행정복지센터 앞 벤치에서 받습니다)', '냥… 여기 화단은 내 구역이다옹 🐾', '…(무시하고 그루밍 중)'] },
@@ -54,7 +54,7 @@ export const NPC_DEFS = [
   { name: '스타벅스 문 여는 채원', look: { color: '#006241', hat: '#1e3932', pants: '#2d3436', skin: '#d7a888', gender: 'f', face: 'square', hair: 'long', top: 'long' }, speed: 1.0, spot: '스타벅스', spotKind: 'cafe',
     lines: ['이 스타벅스는 문 열자마자 아메리카노 줄이에요.', '그린팩토리 쪽이랑 정자역 쪽이 손님이 달라요. 지금은 출근 잔이에요.', '사이즈 고르다 뒤에 줄 서는 거, 매일 보는 풍경이에요.'] },
 
-  { name: '성남대로 점심 현우', look: { color: '#d35400', bag: '#2d3436', pants: '#3b4252', skin: '#f2d0b0', gender: 'm', face: 'square', hair: 'short', top: 'short' }, speed: 1.4,
+  { name: '성남대로 점심 현우', look: { color: '#d35400', bag: '#2d3436', pants: '#3b4252', skin: '#f2d0b0', gender: 'm', face: 'square', hair: 'short', top: 'short' }, speed: 1.4, badge: '1000명돌파',
     lines: ['성남대로 점심 시간엔 횡단보도마다 사람이 쌓여요.', '정자역 8시 반은 개찰구가 일이에요. 지금은 밥 먹으러 나온 거예요.', '수인분당선 놓치면 다음 차는 서서 가요. 그래서 걸어 나와요.'] },
   { name: '시그마타워 도시락 나연', look: { color: '#f4efe4', bag: '#c0392b', pants: '#5c5346', skin: '#f6d7c3', gender: 'f', face: 'round', hair: 'medium', top: 'long' }, speed: 1.15, spot: '시그마타워',
     lines: ['시그마타워 도시락 먹는 자리가 마땅치 않아서 밖으로 나왔어요.', '회의가 12시 넘어서 끝났어요. 점심이 오후 일정이 됐어요.', '정자역 방향으로 걸으면 바람이라도 쐬어요.'] },
@@ -80,9 +80,9 @@ export const NPC_DEFS = [
   { name: '오피스텔 장바구니 태민', look: { color: '#74b9ff', bag: '#dfe6e9', pants: '#2d3436', skin: '#e8c4a8', gender: 'm', face: 'long', hair: 'medium', top: 'hoodie' }, speed: 1.05, spot: '푸르지오시티오피스텔',
     lines: ['푸르지오시티오피스텔에 올려놓고 다시 정자역으로 나갈 일정이 있어요.', '1인 가구 장보기는 이틀치가 한계예요. 가방이 이미 꽉 찼어요.', '오피스텔 복도에서 택배랑 마주치면 엘베를 한 번 더 기다려요.'] },
 
-  { name: '수인분당선 환승 유나', look: { color: '#f59f00', bag: '#6c4a12', pants: '#3b4252', skin: '#f2d0b0', gender: 'f', face: 'square', hair: 'short', glasses: true, top: 'long' }, speed: 1.5,
+  { name: '수인분당선 환승 유나', look: { color: '#f59f00', bag: '#6c4a12', pants: '#3b4252', skin: '#f2d0b0', gender: 'f', face: 'square', hair: 'short', glasses: true, top: 'long' }, speed: 1.5, badge: '1000명돌파',
     lines: ['수인분당선에서 신분당선으로 갈아타는 동선, 아직 눈이 가요.', '정자역 환승 통로가 출근 시간엔 강물이에요.', '판교 가려면 여기서 내리는 사람이 많아서 문이 안 닫혀요.'] },
-  { name: '1303 기다리는 재민', look: { color: '#ee2737', pants: '#2c3e50', skin: '#d7a888', gender: 'm', face: 'round', hair: 'short', top: 'long' }, speed: 0.9,
+  { name: '1303 기다리는 재민', look: { color: '#ee2737', pants: '#2c3e50', skin: '#d7a888', gender: 'm', face: 'round', hair: 'short', top: 'long' }, speed: 0.9, badge: '1000명돌파',
     lines: ['1303 직행은 정자역 정류장에서 자리가 갈려요.', '좌석 버스라 서 있으면 아쉽죠. 한 대만 더 기다려 볼게요.', '성남대로 쪽 정류장 패널 보고 나오면 마음이 편해요.'] },
   { name: '행정복지센터 민서', look: { color: '#6c8eae', pants: '#3b4252', skin: '#f6d7c3', gender: 'f', face: 'round', hair: 'medium', top: 'long' }, speed: 1.0, spot: '정자1동행정복지센터',
     lines: ['정자1동행정복지센터 민원은 점심 직전에 몰려요.', '도장 하나 받으러 왔다가 번호표가 길어졌어요.', '일 보고 정자역으로 걸어 나가요. 이 길이 제일 단순해요.'] },
@@ -108,6 +108,23 @@ export const NPC_DEFS = [
     lines: ['머신 앞이 유리 안쪽이에요. 추출하는 게 보여요.', '포터필터 털고 바로 다음 샷이에요.', '카운터 너머로 주문이 들어와요.'] },
 ];
 
+function mountNpcTag(overlay, { text, getPos, maxDist, badge }) {
+  const tag = overlay.add({
+    cls: badge ? 'tag npc has-badge' : 'tag npc',
+    text: badge ? '' : text,
+    getPos,
+    maxDist,
+  });
+  if (!badge) return tag;
+  const mark = document.createElement('span');
+  mark.className = 'npc-badge';
+  mark.textContent = badge;
+  const name = document.createElement('span');
+  name.className = 'npc-name';
+  name.textContent = text;
+  tag.el.replaceChildren(mark, name);
+  return tag;
+}
 function polyLen(pts) { let L = 0; for (let i = 1; i < pts.length; i++) L += Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]); return L; }
 function pointAt(path, s, out) {
   const pts = path.pts; let acc = 0;
@@ -308,7 +325,12 @@ export class NPCs {
       scene.add(mesh);
       const npc = { def, mesh, path, len, lo, hi, s: s0, dir: rnd() < 0.5 ? -1 : 1, pos: new THREE.Vector3(), lineIdx: Math.floor(rnd() * def.lines.length), talking: false, cooldown: 0, pause: 0, active: true };
       const head = () => npc.pos.clone().setY(npc.pos.y + (def.cat ? 0.9 : 2.25)); // [terrain] 높이 상대
-      npc.tag = overlay.add({ cls: 'tag npc', text: def.name, getPos: () => npc.pos.clone().setY(npc.pos.y + (def.cat ? 0.75 : 2.05)), maxDist: 45 }); // [terrain]
+      npc.tag = mountNpcTag(overlay, {
+        text: def.name,
+        badge: def.badge,
+        getPos: () => npc.pos.clone().setY(npc.pos.y + (def.cat ? 0.75 : 2.05)),
+        maxDist: 45,
+      });
       npc.bubble = new Bubble(overlay, 'npc', () => head().setY(head().y + 0.45), { name: def.name });
       this.list.push(npc);
       this._place(npc);
