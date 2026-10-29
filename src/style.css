@@ -1606,6 +1606,7 @@ body.in-lobby #hud, body.in-lobby #buttons, body.in-lobby #top-right-bar, body.i
   display: flex;
   justify-content: space-between;
   align-items: center;
+  flex-shrink: 0;
   padding: 15px 20px 13px;
   border-bottom: 1px solid rgba(18, 32, 51, .1);
   background: linear-gradient(90deg, rgba(212,0,59,.06), rgba(245,162,0,.08));
@@ -1762,11 +1763,18 @@ body.in-lobby #hud, body.in-lobby #buttons, body.in-lobby #top-right-bar, body.i
 }
 #board-modal .board-close:hover { background: rgba(18, 32, 51, .16); }
 #board-modal .board-body {
+  flex: 1 1 auto;
+  min-height: 0;
   padding: 14px 20px 18px;
-  overflow: auto;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   display: flex;
   flex-direction: column;
   gap: 10px;
+}
+#board-modal .board-body > * {
+  flex-shrink: 0;
 }
 #board-modal .board-toolbar {
   display: flex;
@@ -1829,7 +1837,7 @@ body.in-lobby #hud, body.in-lobby #buttons, body.in-lobby #top-right-bar, body.i
 #board-modal .board-table-wrap {
   border: 1px solid rgba(18, 32, 51, .1);
   border-radius: 10px;
-  overflow: hidden;
+  overflow-x: auto;
   background: #fff;
 }
 #board-modal .board-table {
@@ -2118,7 +2126,7 @@ body.in-lobby #hud, body.in-lobby #buttons, body.in-lobby #top-right-bar, body.i
   border: 1px solid rgba(18, 32, 51, .16);
   background: #fff;
   color: #122033;
-  resize: vertical;
+  resize: none;
 }
 #board-modal .board-cmt-form button {
   flex-shrink: 0;
@@ -2156,7 +2164,7 @@ body.in-lobby #hud, body.in-lobby #buttons, body.in-lobby #top-right-bar, body.i
   background: #fff;
 }
 #board-modal .board-form textarea {
-  resize: vertical;
+  resize: none;
   line-height: 1.5;
 }
 
