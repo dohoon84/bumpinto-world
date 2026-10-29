@@ -10,10 +10,42 @@
 <body class="in-gate">
   <div id="app"></div>
   <div id="overlay"></div>
-  <div id="hud">
-    <div class="help">WASD/방향키 이동 · Shift 달리기 · Space 점프 · C 앉기 · Z 자리비움 · 1~6 호들갑 · Enter 채팅(!! 외침) · M 위에서 보기 · E 바이크</div>
-    <div class="clock" id="hud-clock">--:--</div>
+  <div id="hud" class="is-folded">
+      <div class="help">WASD/방향키 이동 · Shift 달리기 · Space 점프 · C 앉기 · Z 자리비움 · 1~9 리액션 · Enter 채팅(!! 외침) · M 위에서 보기 · E 바이크</div>
+    <div class="hud-meta">
+      <button type="button" id="help-fold" class="help-fold" aria-expanded="false" aria-label="조작 안내 펼치기" title="조작 안내 펼치기">
+        <span class="when-open">접기 ▴</span>
+        <span class="when-closed">조작 ▾</span>
+      </button>
+      <div class="clock" id="hud-clock">--:--</div>
+      <button type="button" id="weather-rain" class="weather-rain" aria-pressed="false" title="이 화면을 비로 바꾸기">비</button>
+    </div>
   </div>
+  <script>
+    try {
+      var hud = document.getElementById('hud');
+      var foldBtn = document.getElementById('help-fold');
+      var expanded = localStorage.getItem('jeongja3d.helpFolded') === '0';
+      var en = localStorage.getItem('jeongja3d.lang') === 'en';
+      if (expanded) {
+        if (hud) hud.classList.remove('is-folded');
+        if (foldBtn) {
+          foldBtn.setAttribute('aria-expanded', 'true');
+          foldBtn.title = en ? 'Hide controls' : '조작 안내 접기';
+          foldBtn.setAttribute('aria-label', foldBtn.title);
+          if (en) {
+            var open = foldBtn.querySelector('.when-open');
+            if (open) open.textContent = 'Hide ▴';
+          }
+        }
+      } else if (en && foldBtn) {
+        var closed = foldBtn.querySelector('.when-closed');
+        if (closed) closed.textContent = 'Keys ▾';
+        foldBtn.title = 'Show controls';
+        foldBtn.setAttribute('aria-label', 'Show controls');
+      }
+    } catch (e) {}
+  </script>
   <div id="buttons">
     <button id="btn-view" title="M">🗺️ 위에서 보기</button>
     <button id="btn-home" title="H">🚇 역으로</button>

@@ -717,10 +717,16 @@ const chatLogToggle = document.getElementById('chat-log-toggle');
 const chatUnreadEl = document.getElementById('chat-unread');
 const chatLogPanel = document.getElementById('chat-log-panel');
 const chatLogs = [];
-const MAX_CHAT_LOGS = 100;
+const MAX_CHAT_LOGS = 200;
+const CHAT_PAGE = 40;
+let chatSeq = 0;
+let chatFromId = 0;
 let chatLogOpen = false;
 let chatIncludeNpc = false;
 let chatUnread = 0;
+let chatPendingNew = 0;
+let chatStickToBottom = true;
+let chatLoadingOlder = false;
 
 function syncChatUnread() {
   if (!chatUnreadEl) return;
@@ -732,10 +738,75 @@ function syncChatUnread() {
   }
 }
 
-function renderChatLogPanel() {
+function filteredChatLogs() {
+  return chatIncludeNpc ? chatLogs : chatLogs.filter((item) => item.kind !== 'npc');
+}
+
+function chatWindowStart(filtered) {
+  if (!chatFromId) return Math.max(0, filtered.length - CHAT_PAGE);
+  const idx = filtered.findIndex((item) => item.id >= chatFromId);
+  return idx < 0 ? 0 : idx;
+}
+
+function pinChatWindow() {
+  if (chatFromId) return;
+  const filtered = filteredChatLogs();
+  const start = Math.max(0, filtered.length - CHAT_PAGE);
+  if (filtered[start]) chatFromId = filtered[start].id;
+}
+
+function syncChatNewBtn(en = isEn()) {
+  const btn = chatLogPanel?.querySelector('[data-chat-latest]');
+  if (!btn) return;
+  const n = chatPendingNew;
+  btn.hidden = n <= 0;
+  btn.textContent = n > 1
+    ? (en ? `New messages ${n} ↓` : `새 메시지 ${n} ↓`)
+    : (en ? 'New messages ↓' : '새 메시지 ↓');
+}
+
+function onChatListScroll() {
+  if (chatLoadingOlder) return;
+  const listEl = chatLogPanel?.querySelector('.c-list');
+  if (!listEl) return;
+  const atBottom = listEl.scrollHeight - listEl.scrollTop - listEl.clientHeight <= 16;
+  if (atBottom) {
+    chatStickToBottom = true;
+    if (chatPendingNew) {
+      chatPendingNew = 0;
+      syncChatNewBtn();
+    }
+    return;
+  }
+  if (chatStickToBottom) {
+    chatStickToBottom = false;
+    pinChatWindow();
+  }
+  if (listEl.scrollTop <= 40) loadOlderChat();
+}
+
+function loadOlderChat() {
+  if (chatLoadingOlder) return;
+  const listEl = chatLogPanel?.querySelector('.c-list');
+  if (!listEl) return;
+  const filtered = filteredChatLogs();
+  const start = chatWindowStart(filtered);
+  if (start <= 0) return;
+  chatLoadingOlder = true;
+  const prevHeight = listEl.scrollHeight;
+  const prevTop = listEl.scrollTop;
+  chatFromId = filtered[Math.max(0, start - CHAT_PAGE)].id;
+  renderChatLogPanel({ scrollMode: 'prepend', prevHeight, prevTop });
+  requestAnimationFrame(() => { chatLoadingOlder = false; });
+}
+
+function renderChatLogPanel({ scrollMode, prevHeight = 0, prevTop = 0 } = {}) {
   if (!chatLogPanel || !chatLogOpen) return;
+  if (!scrollMode) scrollMode = chatStickToBottom ? 'bottom' : 'preserve';
   const en = isEn();
-  const visibleLogs = chatIncludeNpc ? chatLogs : chatLogs.filter((item) => item.kind !== 'npc');
+  const filtered = filteredChatLogs();
+  const start = chatWindowStart(filtered);
+  const visibleLogs = filtered.slice(start);
   const rowsHtml = visibleLogs.length
     ? visibleLogs
         .map((item) => {
@@ -768,7 +839,11 @@ function renderChatLogPanel() {
 
   const headTitleHtml = en ? '💬 Nearby Chat Log <small>(30m)</small>' : '💬 주변 대화 전체보기 <small>(30m)</small>';
   const npcToggleText = en ? '🗣️ Include NPCs' : '🗣️ NPC 대사 포함';
+  const newBtnHtml = `<button type="button" class="c-new" data-chat-latest="1" hidden>${en ? 'New messages ↓' : '새 메시지 ↓'}</button>`;
   let listEl = chatLogPanel.querySelector('.c-list');
+  let anchor = null;
+  if (listEl && scrollMode === 'prepend') anchor = { h: prevHeight, t: prevTop };
+  else if (listEl && scrollMode === 'preserve') anchor = { t: listEl.scrollTop };
   if (!listEl) {
     chatLogPanel.innerHTML = `
       <div class="c-head">
@@ -780,9 +855,13 @@ function renderChatLogPanel() {
           <button type="button" class="c-close" data-chat-close="1" aria-label="Close">✕</button>
         </div>
       </div>
-      <ul class="c-list">${rowsHtml}</ul>`;
+      <div class="c-list-wrap">
+        <ul class="c-list">${rowsHtml}</ul>
+        ${newBtnHtml}
+      </div>`;
+    listEl = chatLogPanel.querySelector('.c-list');
+    listEl.addEventListener('scroll', onChatListScroll);
   } else {
-    const prevScroll = listEl.scrollTop;
     const titleEl = chatLogPanel.querySelector('.c-title');
     if (titleEl) titleEl.innerHTML = headTitleHtml;
     const npcBtn = chatLogPanel.querySelector('[data-chat-npc-toggle]');
@@ -792,8 +871,12 @@ function renderChatLogPanel() {
       npcBtn.setAttribute('aria-pressed', String(chatIncludeNpc));
     }
     listEl.innerHTML = rowsHtml;
-    listEl.scrollTop = prevScroll;
   }
+  if (scrollMode === 'bottom') listEl.scrollTop = listEl.scrollHeight;
+  else if (anchor?.h != null) listEl.scrollTop = anchor.t + (listEl.scrollHeight - anchor.h);
+  else if (anchor) listEl.scrollTop = anchor.t;
+  listEl.classList.toggle('fade-old', listEl.scrollHeight > listEl.clientHeight + 4);
+  syncChatNewBtn(en);
 }
 
 function setChatLogOpen(next) {
@@ -804,8 +887,13 @@ function setChatLogOpen(next) {
   chatLogToggle?.setAttribute('aria-expanded', String(chatLogOpen));
   if (chatLogOpen) {
     chatUnread = 0;
+    chatPendingNew = 0;
+    chatFromId = 0;
+    chatStickToBottom = true;
     syncChatUnread();
-    renderChatLogPanel();
+    renderChatLogPanel({ scrollMode: 'bottom' });
+  } else {
+    chatPendingNew = 0;
   }
 }
 
@@ -828,12 +916,21 @@ overlay.onSay = ({ cls, text, pos, meta }) => {
   const last = chatLogs[chatLogs.length - 1];
   if (cls === 'npc' && last && last.kind === 'npc' && last.name === name && last.text === text) return;
 
-  chatLogs.push({ kind: cls, name, color, text, time: `${hh}:${mm}` });
+  chatLogs.push({ id: ++chatSeq, kind: cls, name, color, text, time: `${hh}:${mm}` });
   if (chatLogs.length > MAX_CHAT_LOGS) chatLogs.shift();
 
-  if (chatLogOpen) {
-    if (cls !== 'npc' || chatIncludeNpc) renderChatLogPanel();
-  } else if (cls === 'remote' || (cls === 'npc' && chatIncludeNpc)) {
+  if (chatLogOpen && (cls !== 'npc' || chatIncludeNpc)) {
+    const follow = chatStickToBottom || cls === 'me';
+    if (follow) {
+      chatPendingNew = 0;
+      chatStickToBottom = true;
+      renderChatLogPanel({ scrollMode: 'bottom' });
+    } else {
+      pinChatWindow();
+      chatPendingNew += 1;
+      renderChatLogPanel({ scrollMode: 'preserve' });
+    }
+  } else if (!chatLogOpen && (cls === 'remote' || (cls === 'npc' && chatIncludeNpc))) {
     chatUnread++;
     syncChatUnread();
   }
@@ -845,9 +942,18 @@ chatLogPanel?.addEventListener('click', (e) => {
     setChatLogOpen(false);
     return;
   }
+  if (e.target.closest('[data-chat-latest]')) {
+    chatPendingNew = 0;
+    chatStickToBottom = true;
+    renderChatLogPanel({ scrollMode: 'bottom' });
+    return;
+  }
   if (e.target.closest('[data-chat-npc-toggle]')) {
     chatIncludeNpc = !chatIncludeNpc;
-    renderChatLogPanel();
+    chatFromId = 0;
+    chatPendingNew = 0;
+    chatStickToBottom = true;
+    renderChatLogPanel({ scrollMode: 'bottom' });
   }
 });
 
@@ -911,7 +1017,7 @@ function renderEmoteBar() {
     emoteBar.classList.add('folded');
     emoteBar.innerHTML = `
       <button type="button" class="emote-fold-btn" data-emote-fold="0" title="${en ? 'Expand Emotes · Sit · AFK bar' : '리액션·앉기·자리비움 바 펼치기'}">
-        <span>${en ? '🎉 Emotes (1~6) · 🧘 Sit (C) · 💤 AFK (Z)' : '🎉 리액션 (1~6) · 🧘 앉기 (C) · 💤 자리비움 (Z)'}</span>
+        <span>${en ? '🎉 Emotes (1~9) · 🧘 Sit (C) · 💤 AFK (Z)' : '🎉 리액션 (1~9) · 🧘 앉기 (C) · 💤 자리비움 (Z)'}</span>
         <span class="caret">▴</span>
       </button>`;
     return;
@@ -1071,6 +1177,10 @@ umbrellas.bindCallbacks({
 });
 
 emoteBar?.addEventListener('click', (e) => {
+  if (emoteBar.dataset.suppressClick === '1') {
+    delete emoteBar.dataset.suppressClick;
+    return;
+  }
   const foldBtn = e.target.closest('[data-emote-fold]');
   if (foldBtn) {
     emoteFolded = foldBtn.dataset.emoteFold === '1';
@@ -1096,12 +1206,75 @@ emoteBar?.addEventListener('click', (e) => {
   }
 });
 
+let emoteDrag = null;
+function emoteListEl() {
+  return emoteBar?.querySelector('.emote-list') || null;
+}
+emoteBar?.addEventListener('pointerdown', (e) => {
+  const list = emoteListEl();
+  if (!list || e.button !== 0) return;
+  emoteDrag = { x: e.clientX, left: list.scrollLeft, moved: false, pointerId: e.pointerId };
+});
+emoteBar?.addEventListener('pointermove', (e) => {
+  if (!emoteDrag || emoteDrag.pointerId !== e.pointerId) return;
+  const dx = e.clientX - emoteDrag.x;
+  if (!emoteDrag.moved && Math.abs(dx) < 5) return;
+  const list = emoteListEl();
+  if (!list) return;
+  emoteDrag.moved = true;
+  emoteBar.classList.add('dragging');
+  list.scrollLeft = emoteDrag.left - dx;
+});
+function endEmoteDrag(e) {
+  if (!emoteDrag || emoteDrag.pointerId !== e.pointerId) return;
+  if (emoteDrag.moved) emoteBar.dataset.suppressClick = '1';
+  emoteDrag = null;
+  emoteBar.classList.remove('dragging');
+}
+emoteBar?.addEventListener('pointerup', endEmoteDrag);
+emoteBar?.addEventListener('pointercancel', endEmoteDrag);
+emoteBar?.addEventListener('wheel', (e) => {
+  const list = emoteListEl();
+  if (!list || list.scrollWidth <= list.clientWidth + 1) return;
+  const delta = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
+  if (!delta) return;
+  list.scrollLeft += delta;
+  e.preventDefault();
+}, { passive: false });
+
 // --- 입력/카메라 ---
 const input = new Input(renderer.domElement);
 const viewBtn = document.getElementById('btn-view');
+const hudEl = document.getElementById('hud');
 const helpEl = document.querySelector('#hud .help');
-const HELP_WALK_KO = 'WASD/방향키 이동 · Shift 달리기 · Space 점프 · C 앉기 · Z 자리비움 · 1~6 호들갑 · Enter 채팅(!! 외침) · M 위에서 보기 · E 바이크';
-const HELP_WALK_EN = 'WASD/Arrows Move · Shift Run · Space Jump · C Sit · Z AFK · 1~6 Emotes · Enter Chat (!! Shout) · M Overview · E Bike';
+const helpFoldBtn = document.getElementById('help-fold');
+const HELP_FOLD_KEY = 'jeongja3d.helpFolded';
+let helpFolded = true;
+try { helpFolded = localStorage.getItem(HELP_FOLD_KEY) !== '0'; } catch {}
+function syncHelpFoldUi() {
+  hudEl?.classList.toggle('is-folded', helpFolded);
+  if (!helpFoldBtn) return;
+  const en = isEn();
+  const open = helpFoldBtn.querySelector('.when-open');
+  const closed = helpFoldBtn.querySelector('.when-closed');
+  if (open) open.textContent = en ? 'Hide ▴' : '접기 ▴';
+  if (closed) closed.textContent = en ? 'Keys ▾' : '조작 ▾';
+  const label = helpFolded
+    ? (en ? 'Show controls' : '조작 안내 펼치기')
+    : (en ? 'Hide controls' : '조작 안내 접기');
+  helpFoldBtn.title = label;
+  helpFoldBtn.setAttribute('aria-label', label);
+  helpFoldBtn.setAttribute('aria-expanded', helpFolded ? 'false' : 'true');
+}
+helpFoldBtn?.addEventListener('click', () => {
+  helpFolded = !helpFolded;
+  try { localStorage.setItem(HELP_FOLD_KEY, helpFolded ? '1' : '0'); } catch {}
+  syncHelpFoldUi();
+  helpFoldBtn.blur();
+});
+syncHelpFoldUi();
+const HELP_WALK_KO = 'WASD/방향키 이동 · Shift 달리기 · Space 점프 · C 앉기 · Z 자리비움 · 1~9 리액션 · Enter 채팅(!! 외침) · M 위에서 보기 · E 바이크';
+const HELP_WALK_EN = 'WASD/Arrows Move · Shift Run · Space Jump · C Sit · Z AFK · 1~9 Emotes · Enter Chat (!! Shout) · M Overview · E Bike';
 const HELP_RIDE_KO = '카카오바이크 · W 전진 · S 브레이크 · A/D 회전 · Shift 빠르게 · Space 점프 · E 내리기';
 const HELP_RIDE_EN = 'Bike · W Forward · S Brake · A/D Turn · Shift Boost · Space Jump · E Dismount';
 const HELP_CRUISER_KO = 'Admin Cruiser · W 가속 · S 브레이크 · A/D 조향 · Shift 부스트 · Space 앞바퀴 들기 · N 소리 · F 내리기';
@@ -1249,6 +1422,7 @@ function syncGameLocale() {
       : '© <a href="https://crazylabs.co.kr" target="_blank" rel="noopener">CrazyLabs</a> · <a href="https://github.com/dohoon84/bumpinto-world" target="_blank" rel="noopener">소스 공개 (영리 서비스 금지)</a> · 지도 © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> (ODbL)';
   }
   syncRideUi(true);
+  syncHelpFoldUi();
   syncMyNameTag();
   renderEmoteBar();
   paintPresenceStatus();
