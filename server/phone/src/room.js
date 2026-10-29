@@ -159,6 +159,14 @@ export class Room extends DurableObject {
     } catch {}
   }
 
+  async #weatherMode() {
+    if (this._weatherLoaded) return this._weather || "";
+    const saved = await this.ctx.storage.get("weather");
+    this._weather = saved === "rain" ? "rain" : "";
+    this._weatherLoaded = true;
+    return this._weather;
+  }
+
   #broadcast(msg, except) {
     const raw = JSON.stringify(msg);
     for (const ws of this.ctx.getWebSockets()) {
@@ -215,7 +223,7 @@ export class Room extends DurableObject {
         z: me.z,
         ry: me.ry,
       };
-      this.#send(ws, { t: "welcome", id: me.id, peers });
+      this.#send(ws, { t: "welcome", id: me.id, peers, weather: await this.#weatherMode() });
       this.#broadcast({ t: "join", peer: publicMe }, ws);
       return;
     }
@@ -257,6 +265,16 @@ export class Room extends DurableObject {
       ws.serializeAttachment(me);
       const text = String(m.text || "").trim().slice(0, 120);
       if (text) this.#broadcast({ t: "chat", id: me.id, text }, ws);
+      return;
+    }
+    if (m.t === "weather") {
+      if (!me.bikeAdmin) return;
+      const mode = m.mode === "rain" ? "rain" : "";
+      this._weather = mode;
+      this._weatherLoaded = true;
+      await this.ctx.storage.put("weather", mode);
+      const notice = { t: "weather", mode };
+      for (const sock of this.ctx.getWebSockets()) this.#send(sock, notice);
     }
   }
 

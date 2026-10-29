@@ -548,6 +548,10 @@ function paintPresenceStatus(s = lastPresenceRawStatus) {
   if (presenceOpen) renderPresencePanel();
 }
 presence.on('status', (s) => paintPresenceStatus(s));
+presence.on('welcome', (m) => {
+  if (m.weather === 'rain' || m.weather === '') atmosphere.setSharedWeather(m.weather);
+});
+presence.on('weather', (m) => atmosphere.setSharedWeather(m.mode));
 const sms = createSms();
 function resolveAdminTank() {
   if (isLocalEnv) {
@@ -562,6 +566,14 @@ getAdminBikeTank = () => resolveAdminTank() || 'red';
 canRideAdminBike = () =>
   (isLocalEnv && (params.has('shot') || params.has('tank'))) ||
   Boolean(sms.session && !sms.session.off && sms.session.isAdmin); // [bike] 실서버는 번호 서버에서 인증된 관리자 세션만 탑승
+function syncRainControl() {
+  atmosphere.setRainAllowed(canRideAdminBike());
+}
+atmosphere.setRainRequest(() => {
+  if (!canRideAdminBike()) return;
+  presence.sendWeather(atmosphere.state.override === 'rain' ? '' : 'rain');
+});
+syncRainControl();
 const handset = mountHandset({ sms });
 const board = mountBoard({ sms, getMe: () => me });
 inventory = mountInventory({
@@ -663,6 +675,7 @@ function completeWorldJoin(name, look, session) {
   joined = true;
   adminBike?.refreshStyle?.();
   inventory?.refresh();
+  syncRainControl();
   trackEvent('world_join', { region: region.id, has_pin: !!session?.hasPin, resumed: !!session?.place });
 }
 joinWithPassport = async () => {
