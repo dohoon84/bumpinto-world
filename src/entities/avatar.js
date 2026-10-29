@@ -445,6 +445,18 @@ export function animateAvatar(a, speed, dt) {
       u.eyeL.position.z = u.eyeZ; u.eyeR.position.z = u.eyeZ;
     }
     let emoteHop = 0;
+    u.rig.rotation.x = 0;
+    u.rig.rotation.y = 0;
+    u.rig.rotation.z = 0;
+    if (u.head) {
+      u.head.rotation.x = 0;
+      u.head.rotation.y = 0;
+      u.head.rotation.z = 0;
+    }
+    if (u.legL) {
+      u.legL.rotation.z = 0;
+      u.legR.rotation.z = 0;
+    }
     if (emote === 'cheer') {
       // 🙌 만세: 양팔 번쩍 들고 폴짝폴짝 환호
       emoteHop = Math.abs(Math.sin(t * 9.5)) * 0.22;
@@ -510,6 +522,49 @@ export function animateAvatar(a, speed, dt) {
       u.legL.rotation.x = Math.sin(t * 20) * 0.5;
       u.legR.rotation.x = -Math.sin(t * 20) * 0.5;
       if (u.head) u.head.rotation.x = -0.35 + Math.sin(t * 20) * 0.18;
+    } else if (emote === 'cry') {
+      // 😢 눈물: 고개 숙이고 양손으로 눈을 훔치며 어깨를 들썩임
+      const sob = Math.sin(t * 7);
+      u.rig.rotation.x = 0.22;
+      u.rig.rotation.z = sob * 0.04;
+      u.armL.rotation.x = -1.15;
+      u.armR.rotation.x = -1.15;
+      u.armL.rotation.z = 0.55 + Math.abs(sob) * 0.08;
+      u.armR.rotation.z = -0.55 - Math.abs(sob) * 0.08;
+      u.legL.rotation.x = 0.12;
+      u.legR.rotation.x = 0.12;
+      if (u.head) u.head.rotation.x = 0.42 + sob * 0.06;
+    } else if (emote === 'wail') {
+      // 😭 엉엉: 얼굴을 감싸고 몸을 크게 들썩임
+      emoteHop = Math.abs(Math.sin(t * 9)) * 0.06;
+      const sob = Math.sin(t * 14);
+      u.rig.rotation.x = 0.35 + Math.abs(sob) * 0.08;
+      u.rig.rotation.z = sob * 0.1;
+      u.armL.rotation.x = -1.35 + sob * 0.15;
+      u.armR.rotation.x = -1.35 - sob * 0.15;
+      u.armL.rotation.z = 0.72;
+      u.armR.rotation.z = -0.72;
+      u.legL.rotation.x = 0.28 + Math.abs(sob) * 0.12;
+      u.legR.rotation.x = 0.22;
+      if (u.head) {
+        u.head.rotation.x = 0.55;
+        u.head.rotation.z = sob * 0.16;
+      }
+    } else if (emote === 'pout') {
+      // 🥺 서운: 고개 갸웃하고 손을 모은 채 천천히 흔들기
+      const sway = Math.sin(t * 2.4);
+      u.rig.rotation.z = sway * 0.06;
+      u.rig.rotation.y = sway * 0.12;
+      u.armL.rotation.x = -0.85;
+      u.armR.rotation.x = -0.85;
+      u.armL.rotation.z = 0.35;
+      u.armR.rotation.z = -0.35;
+      u.legL.rotation.x = 0.05;
+      u.legR.rotation.x = 0.05;
+      if (u.head) {
+        u.head.rotation.x = -0.12;
+        u.head.rotation.z = sway * 0.18;
+      }
     }
     u.rig.position.y = emoteHop + jumpY;
     return;

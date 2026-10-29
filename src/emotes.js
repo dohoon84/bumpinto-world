@@ -61,6 +61,36 @@ export const EMOTE_LIST = [
     emojis: ['🤣', '😂', 'ㅋㅋㅋ', '⚡'],
     colors: ['#fcc419', '#ff922b', '#ffe066', '#fff3bf'],
   },
+  {
+    id: 'cry',
+    digit: '7',
+    code: 'Digit7',
+    icon: '😢',
+    label: '눈물',
+    enLabel: 'Cry',
+    emojis: ['😢', '💧', '😿'],
+    colors: ['#74c0fc', '#a5d8ff', '#d0ebff', '#4dabf7'],
+  },
+  {
+    id: 'wail',
+    digit: '8',
+    code: 'Digit8',
+    icon: '😭',
+    label: '엉엉',
+    enLabel: 'Sob',
+    emojis: ['😭', '💧', '💔', '😿'],
+    colors: ['#4dabf7', '#748ffc', '#91a7ff', '#e7f5ff'],
+  },
+  {
+    id: 'pout',
+    digit: '9',
+    code: 'Digit9',
+    icon: '🥺',
+    label: '서운',
+    enLabel: 'Pout',
+    emojis: ['🥺', '💧', '😔', '💔'],
+    colors: ['#b197fc', '#d0bfff', '#e5dbff', '#74c0fc'],
+  },
 ];
 
 export const EMOTE_BY_ID = Object.fromEntries(EMOTE_LIST.map((e) => [e.id, e]));
