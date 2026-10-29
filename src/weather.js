@@ -403,15 +403,17 @@ export function createAtmosphere({ scene, sun, hemi, skyGeo, getMode, clock, reg
     rainBtn.setAttribute('aria-pressed', on ? 'true' : 'false');
   }
 
-  function toggleRain() {
-    if (manualWeather === 'rain') {
-      manualWeather = null;
-      syncRainBtn();
-      pull();
-      return;
-    }
-    manualWeather = 'rain';
-    holdManual();
+  let requestRain = null;
+
+  function setRainAllowed(ok) {
+    if (rainBtn) rainBtn.hidden = !ok;
+  }
+
+  function setSharedWeather(mode) {
+    manualWeather = mode === 'rain' ? 'rain' : null;
+    state.override = manualWeather || '';
+    if (manualWeather) holdManual();
+    else pull();
     syncRainBtn();
   }
 
@@ -487,8 +489,9 @@ export function createAtmosphere({ scene, sun, hemi, skyGeo, getMode, clock, reg
   }
 
   if (rainBtn) {
+    rainBtn.hidden = true;
     rainBtn.addEventListener('click', () => {
-      toggleRain();
+      requestRain?.();
       rainBtn.blur();
     });
     syncRainBtn();
@@ -503,6 +506,9 @@ export function createAtmosphere({ scene, sun, hemi, skyGeo, getMode, clock, reg
     state,
     setWeather,
     setHour,
+    setSharedWeather,
+    setRainAllowed,
+    setRainRequest(fn) { requestRain = fn; },
     presets: WEATHER_PRESETS,
     update(dt, camera) { apply(effectiveDate(new Date(), rTz), camera, dt || 0); },
     sample(date) {
