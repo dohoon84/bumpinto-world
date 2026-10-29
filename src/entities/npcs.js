@@ -106,6 +106,19 @@ export const NPC_DEFS = [
     lines: ['이 매장은 벽 대신 유리라 홀이 통째로 보여요.', '창가를 닦고 나면 안이 더 잘 보여요.', '자리 치우는 동안에도 밖이 다 보여요.'] },
   { name: '머신 앞 태경', look: { color: '#16382c', pants: '#2d3436', skin: '#c4926e', gender: 'm', face: 'long', hair: 'short', glasses: true, top: 'long' }, speed: 0.28, spot: '스타벅스 매장', interior: 1,
     lines: ['머신 앞이 유리 안쪽이에요. 추출하는 게 보여요.', '포터필터 털고 바로 다음 샷이에요.', '카운터 너머로 주문이 들어와요.'] },
+
+  { name: '정자역점 손님 하윤', look: { color: '#f4efe4', pants: '#3b4252', skin: '#f6d7c3', gender: 'f', face: 'round', hair: 'long', top: 'long', coffee: 'iced' }, speed: 0.95, spot: '스타벅스 정자역', cafeVisit: true,
+    lines: ['여기 앉아서 한 잔 하고 나올게요.', '다 마시면 자리 비울게요.', '다음 손님 들어오면 이 자리예요.'] },
+  { name: '출근 전 준호', look: { color: '#2c3e50', bag: '#1e272e', pants: '#2d3436', skin: '#e8c4a8', gender: 'm', face: 'square', hair: 'short', top: 'long', coffee: 'hot' }, speed: 1.05, spot: '스타벅스 정자역', cafeVisit: true,
+    lines: ['빈자리 보면 들어가 앉아요.', '잔만 비우면 바로 나갑니다.', '밖이 추우면 안에서 다 마시고 나와요.'] },
+  { name: '노트북 손님 서윤', look: { color: '#845ef7', bag: '#2d3436', pants: '#3d342c', skin: '#f2d0b0', gender: 'f', face: 'long', hair: 'pony', top: 'hoodie', coffee: 'latte' }, speed: 0.85, spot: '스타벅스 정자역', cafeVisit: true,
+    lines: ['창가에 앉았다가 나갈게요.', '커피 끝나면 가방 싸고 일어나요.', '들어오는 사람 있으면 자리를 넘겨요.'] },
+  { name: '점심 손님 지민', look: { color: '#ffd43b', pants: '#2d3436', skin: '#f6d7c3', gender: 'f', face: 'round', hair: 'medium', top: 'short', coffee: 'iced' }, speed: 1.0, spot: '스타벅스 정자역', cafeVisit: true,
+    lines: ['잠깐 앉아서 식히고 회사 갈게요.', '자리 나면 바로 들어가요.', '다 마셨으면 나와야죠.'] },
+  { name: '약속 대기 예린', look: { color: '#74c0fc', pants: '#3b4252', skin: '#e8c4a8', gender: 'f', face: 'square', hair: 'long', top: 'long', coffee: 'latte' }, speed: 0.9, spot: '스타벅스 정자역', cafeVisit: true,
+    lines: ['친구 오기 전에 안에 앉아 있을게요.', '시간 되면 잔 두고 나갑니다.', '문 열리면 빈자리로 들어갈게요.'] },
+  { name: '정자역점 바리스타 도윤', look: { color: '#006241', hat: '#1e3932', pants: '#2d3436', skin: '#d7a888', gender: 'm', face: 'round', hair: 'short', top: 'short' }, speed: 0.55, spot: '스타벅스 정자역', cafeVisit: true, barista: true,
+    lines: ['주문 들어오면 이 카운터에서 내려요.', '손님 나가면 다음 분이 들어오세요.', '자리는 창가 쪽이에요.'] },
 ];
 
 function mountNpcTag(overlay, { text, getPos, maxDist, badge }) {
@@ -294,11 +307,15 @@ export class NPCs {
     defs.slice(0, totalCount).forEach((def, i) => {
       const named = def.spot ? spotOf(def.spot, def.spotKind) : null;
       const anchor = (def.prefer === 'tancheon' && tc) ? tc : named || (def.prefer === 'cafe' && cafe) || st;
-      const room = def.interior != null && world.starbucksRooms?.find((r) => r.spot === def.spot);
+      const cafeDoor = def.cafeVisit && world.starbucksRooms?.door;
+      const room = !cafeDoor && def.interior != null && world.starbucksRooms?.find((r) => r.spot === def.spot);
       const inside = room?.paths?.[def.interior];
       const linked = !inside && named && world.walkPaths.find((p) => p.name === def.spot && p.door != null);
       let path, len, s0, lo, hi;
-      if (inside) {
+      if (cafeDoor) {
+        path = { pts: [[cafeDoor.x, cafeDoor.z], [cafeDoor.counter.x, cafeDoor.counter.z]], offset: 0, side: 1 };
+        len = 1; lo = 0; hi = 1; s0 = 0;
+      } else if (inside) {
         path = { pts: inside, offset: 0, side: 1 };
         len = polyLen(path.pts);
         lo = 0; hi = len; s0 = (def.interior === 1 ? len * 0.5 : len * 0.2);
@@ -333,7 +350,8 @@ export class NPCs {
       });
       npc.bubble = new Bubble(overlay, 'npc', () => head().setY(head().y + 0.45), { name: def.name });
       this.list.push(npc);
-      this._place(npc);
+      if (def.cafeVisit && world.starbucksRooms?.door) this._seatCafe(npc, i);
+      else this._place(npc);
     });
     this._addCrowd(scene, overlay, data, rnd, Math.max(0, totalCount - defs.length));
   }
@@ -624,6 +642,179 @@ export class NPCs {
     n.pos.set(p.x, this.world.groundY ? this.world.groundY(p.x, p.z, ref) : 0, p.z); // [terrain] 지형 높이
     n.mesh.position.copy(n.pos); n.mesh.rotation.y = Math.atan2(p.dx * n.dir, p.dz * n.dir);
   }
+  _ground(x, z) {
+    return this.world.groundY ? this.world.groundY(x, z, 0) : 0;
+  }
+  _seatCafe(n, i) {
+    const door = this.world.starbucksRooms.door;
+    const phases = ['sit', 'sit', 'wait', 'wait', 'wait', 'wait'];
+    const phase = n.def.barista ? 'work' : phases[i % phases.length];
+    n.cafe = { phase, timer: 5, seat: null, leave: door.curb[i % door.curb.length], work: 0 };
+    const put = (x, z, yaw) => {
+      n.pos.set(x, this._ground(x, z), z);
+      n.mesh.position.copy(n.pos);
+      if (yaw != null) n.mesh.rotation.y = yaw;
+    };
+    if (phase === 'sit') {
+      const seat = door.seats.find((s) => !s.who);
+      if (seat) {
+        seat.who = n;
+        n.cafe.seat = seat;
+        n.mesh.userData.sit = 'bench';
+        n.mesh.userData.coffee = n.def.look.coffee || 'iced';
+        put(seat.x, seat.z, seat.yaw);
+        return;
+      }
+    }
+    if (phase === 'work') {
+      put(door.staff[0].x, door.staff[0].z, Math.atan2(-door.nx, -door.nz));
+      return;
+    }
+    if (phase === 'out') {
+      const seat = door.seats.find((s) => !s.who);
+      if (seat) {
+        seat.who = n;
+        n.cafe.seat = seat;
+        put(seat.x, seat.z, seat.yaw);
+        return;
+      }
+    }
+    const curb = door.curb[i % door.curb.length];
+    put(curb.x, curb.z);
+  }
+  _cafeArrive(n, tx, tz, speed, dt) {
+    const dx = tx - n.pos.x;
+    const dz = tz - n.pos.z;
+    const dist = Math.hypot(dx, dz);
+    if (dist < 0.42) return true;
+    const step = Math.min(dist, speed * dt);
+    const nx = n.pos.x + (dx / dist) * step;
+    const nz = n.pos.z + (dz / dist) * step;
+    const blocked = (x, z) => this.world.isBlocked(x, z, 0.28);
+    if (!blocked(nx, nz)) {
+      n.pos.x = nx;
+      n.pos.z = nz;
+    } else if (!blocked(nx, n.pos.z)) n.pos.x = nx;
+    else if (!blocked(n.pos.x, nz)) n.pos.z = nz;
+    n.pos.y = this._ground(n.pos.x, n.pos.z);
+    n.mesh.position.copy(n.pos);
+    n.mesh.rotation.y = Math.atan2(dx, dz);
+    n.cafe.moving = speed;
+    return false;
+  }
+  _cafeStuck(n, cafe, dt) {
+    const moved = Math.hypot(n.pos.x - (cafe.px ?? n.pos.x), n.pos.z - (cafe.pz ?? n.pos.z));
+    cafe.px = n.pos.x;
+    cafe.pz = n.pos.z;
+    cafe.stuck = moved < 0.03 ? (cafe.stuck || 0) + dt : 0;
+    return cafe.stuck > 1.1;
+  }
+  _putOutside(n, spot, door) {
+    const x = spot?.x ?? door.x - door.nx * 9;
+    const z = spot?.z ?? door.z - door.nz * 9;
+    n.pos.set(x, this._ground(x, z), z);
+    n.mesh.position.copy(n.pos);
+    if (n.mesh.userData) n.mesh.userData.sit = '';
+  }
+  _inShop(door, x, z) {
+    const inward = (x - door.x) * door.nx + (z - door.z) * door.nz;
+    const along = (x - door.x) * door.dx + (z - door.z) * door.dz;
+    return inward > 0.4 && inward < 17 && Math.abs(along) < 9;
+  }
+  _cafeStep(n, dt) {
+    const door = this.world.starbucksRooms?.door;
+    const cafe = n.cafe;
+    if (!door || !cafe) return;
+    const u = n.mesh.userData;
+    cafe.moving = 0;
+    if (n.def.barista) {
+      u.sit = '';
+      const a = door.staff[cafe.work % door.staff.length];
+      const b = door.staff[(cafe.work + 1) % door.staff.length];
+      if (this._cafeArrive(n, b.x, b.z, n.def.speed, dt)) cafe.work += 1;
+      n.mesh.rotation.y = Math.atan2(-door.nx, -door.nz);
+      return;
+    }
+    if (cafe.phase === 'sit') {
+      u.sit = 'bench';
+      u.coffee = n.def.look.coffee || 'iced';
+      if (cafe.seat) n.mesh.rotation.y = cafe.seat.yaw;
+      cafe.timer -= dt;
+      if (cafe.timer <= 0) {
+        u.sit = '';
+        if (cafe.seat) cafe.seat.who = null;
+        cafe.seat = null;
+        cafe.phase = 'out';
+        cafe.leave = door.curb[Math.floor(Math.random() * door.curb.length)];
+      }
+      return;
+    }
+    u.sit = '';
+    if (cafe.phase === 'in') {
+      if (!cafe.seat || cafe.seat.who !== n) {
+        const free = door.seats.find((s) => !s.who);
+        if (!free) {
+          cafe.phase = 'wait';
+          cafe.timer = 2 + Math.random() * 4;
+          cafe.started = false;
+          return;
+        }
+        free.who = n;
+        cafe.seat = free;
+      }
+      const ahead = this.list.some((o) => o !== n && o.cafe?.phase === 'in' && o.cafe.started && !o.def.barista);
+      if (ahead && !cafe.started) {
+        this._cafeArrive(n, cafe.leave.x, cafe.leave.z, n.def.speed, dt);
+        return;
+      }
+      cafe.started = true;
+      const inward = (n.pos.x - door.x) * door.nx + (n.pos.z - door.z) * door.nz;
+      const tx = inward > 0.8 ? cafe.seat.x : door.x + door.nx * 1.4;
+      const tz = inward > 0.8 ? cafe.seat.z : door.z + door.nz * 1.4;
+      const seated = this._cafeArrive(n, tx, tz, n.def.speed, dt)
+        && Math.hypot(n.pos.x - cafe.seat.x, n.pos.z - cafe.seat.z) < 0.45;
+      if (seated) {
+        cafe.phase = 'sit';
+        cafe.started = false;
+        cafe.timer = 7;
+        u.coffee = n.def.look.coffee || 'iced';
+        n.pos.set(cafe.seat.x, this._ground(cafe.seat.x, cafe.seat.z), cafe.seat.z);
+        n.mesh.position.copy(n.pos);
+        n.mesh.rotation.y = cafe.seat.yaw;
+      } else if (this._cafeStuck(n, cafe, dt) && Math.hypot(n.pos.x - door.x, n.pos.z - door.z) < 2.4) {
+        if (cafe.seat) cafe.seat.who = null;
+        cafe.seat = null;
+        cafe.started = false;
+        cafe.phase = 'wait';
+        cafe.timer = 3;
+        this._putOutside(n, cafe.leave, door);
+      }
+    } else if (cafe.phase === 'out') {
+      u.coffee = n.def.look.coffee || 'iced';
+      const inward = (n.pos.x - door.x) * door.nx + (n.pos.z - door.z) * door.nz;
+      const tx = inward > 2.2 ? door.x + door.nx * 1.2 : cafe.leave.x;
+      const tz = inward > 2.2 ? door.z + door.nz * 1.2 : cafe.leave.z;
+      const outside = inward < -5;
+      const stuck = this._cafeStuck(n, cafe, dt);
+      if ((this._cafeArrive(n, tx, tz, n.def.speed * 1.15, dt) && outside) || stuck) {
+        u.coffee = false;
+        u.sit = '';
+        if (u.handCoffee) {
+          u.handCoffee.removeFromParent();
+          u.handCoffee = null;
+        }
+        cafe.phase = 'wait';
+        cafe.timer = 6 + Math.random() * 8;
+        if (!outside) this._putOutside(n, cafe.leave, door);
+      }
+    } else {
+      u.coffee = false;
+      const inward = (n.pos.x - door.x) * door.nx + (n.pos.z - door.z) * door.nz;
+      if (inward > -4) this._putOutside(n, cafe.leave, door);
+      cafe.timer -= dt;
+      if (cafe.timer <= 0 && door.seats.some((s) => !s.who)) cafe.phase = 'in';
+    }
+  }
   setCrowdLevel(mode) {
     const rush = !!mode && mode !== 'normal';
     if (this._leveled && rush === this.rush) return;
@@ -671,6 +862,28 @@ export class NPCs {
         n._skip = 0;
       }
       const close = d2 < 42.25;
+      const shopDoor = this.world.starbucksRooms?.door;
+      if (shopDoor && !n.def.barista && !n.cafe && this._inShop(shopDoor, n.pos.x, n.pos.z)) {
+        n.cafe = {
+          phase: 'out',
+          timer: 0,
+          seat: null,
+          leave: shopDoor.curb[Math.floor(Math.random() * shopDoor.curb.length)],
+          work: 0,
+        };
+        n.def = { ...n.def, cafeVisit: true, interior: null };
+      }
+      if (n.def.cafeVisit) {
+        this._cafeStep(n, step);
+        if (close && n.cafe?.phase === 'sit' && n.cooldown <= 0 && !n.bubble.showing) {
+          n.bubble.say(n.def.lines[n.lineIdx++ % n.def.lines.length], 4200);
+          n.cooldown = 14;
+        }
+        if (close || n.bubble.showing) n.bubble.tick();
+        n.cooldown -= step;
+        if (d2 < animR2) animateAvatar(n.mesh, n.cafe?.moving || 0, step);
+        continue;
+      }
       if (close || n.bubble.showing) n.bubble.tick();
       n.cooldown -= step;
       if (close && n.cooldown <= 0 && !n.bubble.showing) {

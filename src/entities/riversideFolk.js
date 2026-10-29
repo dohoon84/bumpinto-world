@@ -118,6 +118,7 @@ export function addRiversideFolk(scene, overlay, terrain, world, station) {
   RIDERS.forEach((w, i) => place(w, ridePath, i % 2 ? 0.4 : -0.35, true));
 
   return {
+    actors: people,
     update(dt, player) {
       for (const p of people) {
         p.bubble.tick();

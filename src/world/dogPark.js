@@ -471,6 +471,7 @@ function createDogMesh(spec) {
     curlyTail = false,
     shortLegs = false,
     spots = false,
+    collarBalloon = null,
   } = spec;
 
   const g = new THREE.Group();
@@ -527,6 +528,33 @@ function createDogMesh(spec) {
   collar.rotation.x = Math.PI / 2 - 0.35;
   collar.position.set(0, bodyY + 0.09, 0.23);
   rig.add(collar);
+
+  // 목줄에 매달린 표식 풍선. 몸통 애니메이션에 같이 숙여지지 않게 루트에 단다.
+  let balloonPivot = null;
+  if (collarBalloon) {
+    balloonPivot = new THREE.Group();
+    balloonPivot.position.set(0.34, bodyY + 0.18, 0.08);
+    g.add(balloonPivot);
+
+    const stringLen = 0.48;
+    const string = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.016, 0.016, stringLen, 5),
+      M('#ffc2dd'),
+    );
+    string.position.y = stringLen / 2;
+    balloonPivot.add(string);
+
+    const balloonMat = M(collarBalloon);
+    const balloon = new THREE.Mesh(new THREE.SphereGeometry(0.125, 12, 10), balloonMat);
+    balloon.position.y = stringLen + 0.1;
+    balloon.castShadow = true;
+    balloonPivot.add(balloon);
+
+    const knot = new THREE.Mesh(new THREE.ConeGeometry(0.03, 0.05, 5), balloonMat);
+    knot.position.y = stringLen - 0.01;
+    knot.rotation.x = Math.PI;
+    balloonPivot.add(knot);
+  }
 
   // 머리 그룹
   const headPivot = new THREE.Group();
@@ -638,6 +666,7 @@ function createDogMesh(spec) {
     headPivot,
     tailPivot,
     legs,
+    balloonPivot,
     phase: Math.random() * Math.PI * 2,
   };
   return g;
@@ -700,11 +729,11 @@ const SMALL_DOGS = [
 
 const LARGE_DOGS = [
   {
-    name: '🐕 진돗개 백구',
-    breedLabel: '진돗개 (화이트)',
-    spec: { breed: 'jindo', scale: 1.65, coat: '#f8f9fa', earColor: '#fff3bf', collarColor: '#e03131', pointyEars: true, curlyTail: true },
+    name: '🐕 진도믹스 미미',
+    breedLabel: '진도믹스',
+    spec: { breed: 'jindo', scale: 1.65, coat: '#f8f9fa', earColor: '#fff3bf', collarColor: '#e03131', collarBalloon: '#ff4fa3', pointyEars: true, curlyTail: true },
     speed: 4.3,
-    barks: ['워우월!! 정자동 탄천 지킴이 백구 나가신다!! 🐕', '진돗개 백구의 늠름한 꼬리 말림을 보라멍! 🇰🇷', '넓은 대형견 운동장을 전력질주하니 속이 뻥 뚫린다멍! 💨'],
+    barks: ['워우월!! 정자동 탄천 지킴이 미미 나가신다!! 🐕', '진도믹스 미미의 핑크 풍선 좀 보라멍! 💗', '넓은 대형견 운동장을 전력질주하니 속이 뻥 뚫린다멍! 💨'],
   },
   {
     name: '🐺 시베리안 허스키 썰매',
@@ -718,7 +747,7 @@ const LARGE_DOGS = [
     breedLabel: '진돗개 (화이트)',
     spec: { breed: 'jindo', scale: 1.60, coat: '#ffffff', earColor: '#f1f3f5', collarColor: '#f59f00', pointyEars: true, curlyTail: true },
     speed: 4.2,
-    barks: ['멍멍! 허들쯤은 가볍게 뛰어넘는다멍! 🏅', '백구 형이랑 술래잡기 중이다멍! 🐾', '주인님~ 여기서 하루 종일 놀고 싶다멍! ☀️'],
+    barks: ['멍멍! 허들쯤은 가볍게 뛰어넘는다멍! 🏅', '미미랑 술래잡기 중이다멍! 🐾', '주인님~ 여기서 하루 종일 놀고 싶다멍! ☀️'],
   },
   {
     name: '🐺 허스키 태풍이',
@@ -1245,6 +1274,11 @@ export function addDogPark(scene, overlay, terrain) {
 
       // 꼬리는 언제나 살랑살랑
       u.tailPivot.rotation.y = Math.sin(clockT * 16 + d.barkIdx) * 0.55;
+
+      if (u.balloonPivot) {
+        u.balloonPivot.rotation.z = Math.sin(clockT * 1.7 + p) * 0.22;
+        u.balloonPivot.rotation.x = Math.cos(clockT * 1.25 + p) * 0.1;
+      }
 
       d.mesh.position.set(d.x, d.jumpY, d.z);
       d.mesh.rotation.y = d.ry;
