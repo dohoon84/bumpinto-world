@@ -25,7 +25,14 @@ wss.on('connection', (ws) => {
       const sit = typeof m.sit === 'string' ? m.sit.slice(0, 16) : '';
       const afk = !!m.afk;
       let veh = m.veh && typeof m.veh === 'object'
-        ? { id: m.veh.id | 0, ry: +m.veh.ry || 0, v: +m.veh.v || 0, st: +m.veh.st || 0, ...(m.veh.wh ? { wh: +m.veh.wh || 0 } : {}) }
+        ? {
+          id: m.veh.id | 0,
+          ry: +m.veh.ry || 0,
+          v: +m.veh.v || 0,
+          st: +m.veh.st || 0,
+          ...(m.veh.wh ? { wh: +m.veh.wh || 0 } : {}),
+          ...(m.veh.pk ? { pk: 1, x: +m.veh.x || 0, z: +m.veh.z || 0, v: 0 } : {}),
+        }
         : null;
       // 로컬 릴레이도 관리자 바이크 상태(900/901)는 기본으로 끊는다. 확인이 필요할 때만 ALLOW_BIKE_VEH=1
       if (veh && (veh.id === 900 || veh.id === 901) && process.env.ALLOW_BIKE_VEH !== '1') veh = null;

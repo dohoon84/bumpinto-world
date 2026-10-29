@@ -70,6 +70,15 @@ export class Room extends DurableObject {
     if (!isBikeVeh(id)) return body;
     if (!me?.bikeAdmin) return null;
     body.id = me.bikeTank === "red" ? BIKE_VEH_RED : BIKE_VEH_BLACK;
+    if (raw.pk) {
+      body.pk = 1;
+      body.v = 0;
+      delete body.wh;
+      const x = Number(raw.x);
+      const z = Number(raw.z);
+      if (Number.isFinite(x)) body.x = x;
+      if (Number.isFinite(z)) body.z = z;
+    }
     return body;
   }
 

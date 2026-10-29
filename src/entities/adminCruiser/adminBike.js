@@ -260,7 +260,7 @@ export function createAdminBike({ scene, overlay, world, data, params, cam, play
   };
 
   const updSmoke = (dt) => {
-    const engineOn = me.riding || !!b.remote;
+      const engineOn = me.riding || (!!b.remote && !b.remote.parked);
     if (engineOn) { me.puffT -= dt; if (me.puffT <= 0) { // 간헐적: 짧은 간격 퍼프 + 가끔 쉼
       const load = Math.min(1, Math.abs(b.v) / 12 + (b.throttle || 0) * 0.5 + (b.wheelie > 0.05 ? 0.35 : 0));
       puffFrom(U.exhaust, b.h, b.v, 0.5 - load * 0.18); /* 주행 중엔 흩어져 옅게 */ me.puffT = Math.random() < 0.18 ? 0.6 + Math.random() * 0.8 : 0.12 + Math.random() * 0.22 - load * 0.06; } }
@@ -510,59 +510,90 @@ body.bike-near #trk-prompt, body.bike-riding #trk-prompt{display:none!important}
     extraRemotes.delete(peerId);
   }
 
+  function remoteSpot(m, parked) {
+    const veh = m.veh || {};
+    const tx = parked && Number.isFinite(+veh.x) ? +veh.x : m.x;
+    const tz = parked && Number.isFinite(+veh.z) ? +veh.z : m.z;
+    return {
+      tx, tz,
+      th: +veh.ry || 0,
+      v: parked ? 0 : (+veh.v || 0),
+      yaw: parked ? 0 : (+veh.st || 0),
+      tw: parked ? 0 : THREE.MathUtils.clamp(Number(veh.wh ?? m.jy) || 0, 0, MAX_WHEELIE),
+      parked,
+    };
+  }
+  function dressRemote(uMesh, uRider, peer, parked) {
+    const stand = uMesh.userData.stand;
+    if (parked) {
+      if (uRider) uRider.visible = false;
+      if (stand) stand.visible = true;
+      if (peer) peer.mesh.visible = true;
+      return;
+    }
+    if (peer) {
+      const parent = uMesh.userData.wheelieFrame || uMesh.userData.lean;
+      if (uRider) parent.remove(uRider);
+      const next = buildRider(peer.mesh);
+      next.visible = true;
+      parent.add(next);
+      peer.mesh.visible = false;
+      if (stand) stand.visible = false;
+      return next;
+    }
+    if (uRider) uRider.visible = true;
+    if (stand) stand.visible = false;
+    return uRider;
+  }
+
   if (presence) {
     presence.on('state', (m) => {
       const vid = m.veh?.id;
       if (m.veh && isBikeVehId(vid)) {
         const tankColor = vid === BIKE_VEH_RED_ID ? 'red' : 'black';
-        const wh = THREE.MathUtils.clamp(Number(m.veh.wh ?? m.jy) || 0, 0, MAX_WHEELIE);
+        const parked = !!m.veh.pk;
+        const spot = remoteSpot(m, parked);
         // 내 바이크가 비어 있고(미탑승·미소환) 아직 주 원격 슬롯이 없거나 같은 피어면 주 바이크 메쉬를 재활용
         if (!me.riding && !summoned && (!b.remote || b.rider === m.id) && !extraRemotes.has(m.id)) {
-          if (b.rider !== m.id) {
+          const p = remotes?.peers.get(m.id);
+          const changed = b.rider !== m.id || !!b.remote?.parked !== parked;
+          if (changed) {
             b.rider = m.id;
-            const p = remotes?.peers.get(m.id);
-            if (p) { setRider(p.mesh); p.mesh.visible = false; }
-            b.x = m.x; b.z = m.z; b.h = +m.veh.ry || 0;
+            const nextRider = dressRemote(mesh, rider, p, parked);
+            if (nextRider) rider = nextRider;
+            b.x = spot.tx; b.z = spot.tz; b.h = spot.th; b.v = spot.v; b.wheelie = spot.tw;
             mesh.visible = true;
-            rider.visible = true;
-            U.stand.visible = false;
             b.label.hidden = true;
           }
           setBikeTankColor(mesh, tankColor);
-          b.remote = { tx: m.x, tz: m.z, th: +m.veh.ry || 0, v: +m.veh.v || 0, yaw: +m.veh.st || 0, tw: wh, tankColor };
+          b.remote = { ...spot, tankColor };
           return;
         }
-        // 내가 이미 바이크를 꺼내 두었거나 타고 있거나, 두 번째 관리자가 동시에 타는 경우 별도 바이크로 표시
+        // 내가 이미 바이크를 꺼내 두었거나 타고 있거나, 두 번째 관리자가 동시에 두는 경우 별도 바이크로 표시
         let rb = extraRemotes.get(m.id);
         if (!rb) {
           const rMesh = createBike(renderer, { tankColor });
           scene.add(rMesh);
           const p = remotes?.peers.get(m.id);
-          const rRider = buildRider(p?.mesh || player);
-          rRider.visible = true;
-          (rMesh.userData.wheelieFrame || rMesh.userData.lean).add(rRider);
-          rMesh.userData.stand.visible = false;
-          if (p) p.mesh.visible = false;
+          const rRider = dressRemote(rMesh, null, p, parked) || buildRider(p?.mesh || player);
+          if (!parked) rRider.visible = true;
           const rAudio = createBikeAudio({ camera, anchor: rMesh.userData.exhaust, params });
           const rFlame = attachExhaustFlame(rMesh.userData.exhaust);
           rb = {
-            peerId: m.id, mesh: rMesh, rider: rRider, audio: rAudio, flame: rFlame,
-            x: m.x, z: m.z, y: ground(m.x, m.z), h: +m.veh.ry || 0,
-            v: 0, yaw: 0, steer: 0, si: 0, lean: 0, wheelie: wh, spin: [0, 0], pitch: 0, puffT: 0,
-            tx: m.x, tz: m.z, th: +m.veh.ry || 0, tw: wh,
+            peerId: m.id, mesh: rMesh, rider: rRider, audio: rAudio, flame: rFlame, parked,
+            x: spot.tx, z: spot.tz, y: ground(spot.tx, spot.tz), h: spot.th,
+            v: spot.v, yaw: spot.yaw, steer: 0, si: 0, lean: 0, wheelie: spot.tw, spin: [0, 0], pitch: 0, puffT: 0,
+            ...spot,
           };
           extraRemotes.set(m.id, rb);
+        } else if (!!rb.parked !== parked) {
+          const p = remotes?.peers.get(m.id);
+          const nextRider = dressRemote(rb.mesh, rb.rider, p, parked);
+          if (nextRider) rb.rider = nextRider;
+          rb.parked = parked;
         }
         setBikeTankColor(rb.mesh, tankColor);
-        const p = remotes?.peers.get(m.id);
-        if (p && p.mesh.visible) {
-          (rb.mesh.userData.wheelieFrame || rb.mesh.userData.lean).remove(rb.rider);
-          rb.rider = buildRider(p.mesh);
-          rb.rider.visible = true;
-          (rb.mesh.userData.wheelieFrame || rb.mesh.userData.lean).add(rb.rider);
-          p.mesh.visible = false;
-        }
-        rb.tx = m.x; rb.tz = m.z; rb.th = +m.veh.ry || 0; rb.v = +m.veh.v || 0; rb.yaw = +m.veh.st || 0; rb.tw = wh;
+        Object.assign(rb, spot);
       } else {
         if (b.remote && b.rider === m.id) releasePrimaryRemote();
         if (extraRemotes.has(m.id)) removeExtraRemote(m.id);
@@ -597,7 +628,7 @@ body.bike-near #trk-prompt, body.bike-riding #trk-prompt{display:none!important}
         const r = b.remote, k = Math.min(1, dt * 8);
         b.x += (r.tx - b.x) * k; b.z += (r.tz - b.z) * k; b.h += Math.atan2(Math.sin(r.th - b.h), Math.cos(r.th - b.h)) * k;
         b.v = r.v; b.yaw = r.yaw; b.wheelie += ((r.tw || 0) - b.wheelie) * Math.min(1, dt * 10);
-        poseUnit(b, mesh, rider, dt, false);
+        poseUnit(b, mesh, rider, dt, !!r.parked);
       } else if (summoned && (me.wasActive || Math.abs(b.lean + 0.085) > 1e-3 || b.wheelie > 1e-3)) {
         b.wheelie = Math.max(0, b.wheelie - 3.5 * dt);
         poseUnit(b, mesh, rider, dt, true);
@@ -607,13 +638,13 @@ body.bike-near #trk-prompt, body.bike-riding #trk-prompt{display:none!important}
         rb.x += (rb.tx - rb.x) * k; rb.z += (rb.tz - rb.z) * k;
         rb.h += Math.atan2(Math.sin(rb.th - rb.h), Math.cos(rb.th - rb.h)) * k;
         rb.wheelie += ((rb.tw || 0) - rb.wheelie) * Math.min(1, dt * 10);
-        poseUnit(rb, rb.mesh, rb.rider, dt, false);
-        rb.audio?.update(dt, { on: true, v: rb.v, throttle: rb.wheelie > 0.05 ? 0.65 : 0.25 });
+        poseUnit(rb, rb.mesh, rb.rider, dt, !!rb.parked);
+        rb.audio?.update(dt, { on: !rb.parked, v: rb.v, throttle: rb.parked ? 0 : (rb.wheelie > 0.05 ? 0.65 : 0.25) });
       }
       me.wasActive = me.riding || !!b.remote;
       updSmoke(dt);
       const effThrottle = me.riding ? Math.max(b.throttle || 0, b.wheelie > 0.05 ? 0.7 : 0) : 0;
-      audio?.update(dt, { on: me.riding || !!b.remote, v: b.v, throttle: effThrottle }); // [bikeaudio]
+      audio?.update(dt, { on: me.riding || (!!b.remote && !b.remote.parked), v: b.v, throttle: effThrottle }); // [bikeaudio]
       const n = !me.riding && canMount();
       document.body.classList.toggle('bike-near', n);
       if (me.riding) { prompt.style.display = 'block'; prompt.innerHTML = '<kbd>F</kbd>Get off / 내리기'; }
@@ -622,8 +653,11 @@ body.bike-near #trk-prompt, body.bike-riding #trk-prompt{display:none!important}
       return me.riding;
     },
     net() {
-      if (!me.riding) return null;
+      if (!me.riding && !summoned) return null;
       const vid = resolveMyTank() === 'red' ? BIKE_VEH_RED_ID : BIKE_VEH_ID;
+      if (!me.riding) {
+        return { veh: { id: vid, pk: 1, x: +b.x.toFixed(2), z: +b.z.toFixed(2), ry: +b.h.toFixed(3), v: 0, st: 0 } };
+      }
       const wh = +b.wheelie.toFixed(3);
       return { ry: b.h, moving: Math.abs(b.v) > 0.3 || wh > 0.02, jy: wh, veh: { id: vid, ry: +b.h.toFixed(3), v: +b.v.toFixed(2), st: +b.yaw.toFixed(3), wh } };
     },

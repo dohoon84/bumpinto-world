@@ -91,7 +91,7 @@ export class WebSocketPresence extends Emitter {
     const afk = s.afk ? 1 : 0;
     const umb = s.umb || '';
     const vehId = s.veh ? s.veh.id : -1;
-    const vehSig = s.veh ? `${s.veh.id},${s.veh.ry},${s.veh.v},${s.veh.st},${s.veh.wh || 0}` : '';
+    const vehSig = s.veh ? `${s.veh.id},${s.veh.ry},${s.veh.v},${s.veh.st},${s.veh.wh || 0},${s.veh.pk || 0},${s.veh.x ?? ''},${s.veh.z ?? ''}` : '';
     const discreteSig = `${s.riding ? 1 : 0},${em},${sit},${afk},${umb},${vehId}`;
     const discreteChanged = discreteSig !== this.lastDiscreteSig;
     if (!force && !discreteChanged && now - this.lastSent < 1000 / STATE_HZ) return;
