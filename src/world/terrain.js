@@ -11,6 +11,7 @@
 //     build(scene, world, overlay) buildWorld 후 호출: 바닥 평면 구멍 + 하천 지형 메시 + 계단 + 다리 구조물
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { addInstancedTrees } from './trees.js';
 
 const MAX_STEP = 0.5;      // 한 번에 오르내릴 수 있는 단차(m)
 const MAX_GRADE = 0.4;     // 계단/다리 밖에서 걸을 수 있는 최대 경사 (약 22°) — 탄천 제방은 대부분 이보다 가팔라서 막힘
@@ -394,12 +395,18 @@ export function createTerrain(T, data) {
       }
     }
     if (tp.length) {
-      const crown = new THREE.IcosahedronGeometry(2.0, 0); crown.translate(0, 4.6, 0);
-      const trunk = new THREE.CylinderGeometry(0.18, 0.25, 3.4, 5); trunk.translate(0, 1.7, 0);
-      const cm = new THREE.InstancedMesh(crown, new THREE.MeshLambertMaterial({ color: '#6fae62', flatShading: true }), tp.length), tm = new THREE.InstancedMesh(trunk, new THREE.MeshLambertMaterial({ color: '#7d5f45' }), tp.length);
-      const m4 = new THREE.Matrix4(), qq = new THREE.Quaternion(), sc = new THREE.Vector3();
-      tp.forEach(([x, z], i) => { const k = 0.7 + rnd() * 0.5; qq.setFromAxisAngle(new THREE.Vector3(0, 1, 0), rnd() * 6); sc.set(k, k, k); m4.compose(new THREE.Vector3(x, baseHeight(x, z), z), qq, sc); cm.setMatrixAt(i, m4); tm.setMatrixAt(i, m4); });
-      cm.castShadow = tm.castShadow = true; scene.add(cm, tm);
+      addInstancedTrees(scene, tp, {
+        rnd,
+        crownRadius: 2.0,
+        crownY: 4.6,
+        trunkTop: 0.18,
+        trunkBottom: 0.25,
+        trunkHeight: 3.4,
+        trunkColor: '#7d5f45',
+        scaleMin: 0.7,
+        scaleSpan: 0.5,
+        getY: baseHeight,
+      });
     }
     return { channel, treeCount: tp.length };
   }

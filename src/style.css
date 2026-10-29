@@ -781,8 +781,8 @@ body.in-lobby #ride-btn { display: none !important; }
 #lobby, #world-gate { display: none; }
 body.in-lobby #lobby { position: fixed; inset: 0; z-index: 30; display: grid; place-items: center; overflow: auto; padding: 28px 16px 36px; background: linear-gradient(180deg, #070d1c, #1a2744); }
 body.in-gate #world-gate { position: fixed; inset: 0; z-index: 32; display: block; overflow: hidden; background: linear-gradient(180deg, #070d1c, #1a2744); color: #122033; }
-body.in-gate #hud, body.in-gate #buttons, body.in-gate #top-right-bar, body.in-gate #emote-bar, body.in-gate #chat, body.in-gate #chat-log-panel, body.in-gate #joystick, body.in-gate #presence-status, body.in-gate #presence-panel, body.in-gate #board-Launcher, body.in-gate #contribute-launcher, body.in-gate #board-modal, body.in-gate #donate-near-btn, body.in-gate #donate-modal, body.in-gate #umbrella-actions, body.in-gate #dog-gate-btn, body.in-gate #stop-panel, body.in-gate #phone, body.in-gate #handset, body.in-gate #attribution, body.in-gate #rs-hud, body.in-gate #rs-btns, body.in-gate #ls-hud, body.in-gate #trk-prompt, body.in-gate #trk-hud, body.in-gate #bike-prompt, body.in-gate #bike-hud, body.in-gate #inventory-dock,
-body.in-lobby #hud, body.in-lobby #buttons, body.in-lobby #top-right-bar, body.in-lobby #emote-bar, body.in-lobby #chat, body.in-lobby #chat-log-panel, body.in-lobby #joystick, body.in-lobby #presence-status, body.in-lobby #presence-panel, body.in-lobby #board-Launcher, body.in-lobby #contribute-launcher, body.in-lobby #board-modal, body.in-lobby #donate-near-btn, body.in-lobby #donate-modal, body.in-lobby #umbrella-actions, body.in-lobby #dog-gate-btn, body.in-lobby #stop-panel, body.in-lobby #phone, body.in-lobby #handset, body.in-lobby #rs-hud, body.in-lobby #rs-btns, body.in-lobby #ls-hud, body.in-lobby #trk-prompt, body.in-lobby #trk-hud, body.in-lobby #bike-prompt, body.in-lobby #bike-hud, body.in-lobby #inventory-dock { display: none !important; }
+body.in-gate #hud, body.in-gate #buttons, body.in-gate #top-right-bar, body.in-gate #emote-bar, body.in-gate #chat, body.in-gate #chat-log-panel, body.in-gate #joystick, body.in-gate #presence-status, body.in-gate #presence-panel, body.in-gate #board-Launcher, body.in-gate #contribute-launcher, body.in-gate #board-modal, body.in-gate #donate-near-btn, body.in-gate #donate-modal, body.in-gate #umbrella-actions, body.in-gate #dog-gate-btn, body.in-gate #coffee-order-bar, body.in-gate #coffee-toss-btn, body.in-gate #stop-panel, body.in-gate #phone, body.in-gate #handset, body.in-gate #attribution, body.in-gate #rs-hud, body.in-gate #rs-btns, body.in-gate #ls-hud, body.in-gate #trk-prompt, body.in-gate #trk-hud, body.in-gate #bike-prompt, body.in-gate #bike-hud, body.in-gate #inventory-dock,
+body.in-lobby #hud, body.in-lobby #buttons, body.in-lobby #top-right-bar, body.in-lobby #emote-bar, body.in-lobby #chat, body.in-lobby #chat-log-panel, body.in-lobby #joystick, body.in-lobby #presence-status, body.in-lobby #presence-panel, body.in-lobby #board-Launcher, body.in-lobby #contribute-launcher, body.in-lobby #board-modal, body.in-lobby #donate-near-btn, body.in-lobby #donate-modal, body.in-lobby #umbrella-actions, body.in-lobby #dog-gate-btn, body.in-lobby #coffee-order-bar, body.in-lobby #coffee-toss-btn, body.in-lobby #stop-panel, body.in-lobby #phone, body.in-lobby #handset, body.in-lobby #rs-hud, body.in-lobby #rs-btns, body.in-lobby #ls-hud, body.in-lobby #trk-prompt, body.in-lobby #trk-hud, body.in-lobby #bike-prompt, body.in-lobby #bike-hud, body.in-lobby #inventory-dock { display: none !important; }
 #world-gate[hidden], .gate-copy[hidden] { display: none !important; }
 .gate-copy { position: absolute; left: 50%; bottom: 32px; z-index: 2; width: min(540px, calc(100% - 32px)); transform: translateX(-50%); text-align: center; pointer-events: none; padding: 14px 18px 16px; color: #122033; background: rgba(255,255,255,.88); border-radius: 12px; box-shadow: 0 2px 10px rgba(18,32,51,.16); }
 .gate-copy .kicker { display: inline-block; margin: 0; padding: 3px 8px; border-radius: 8px; background: #f5a200; color: #1b1b1b; font-size: 12px; font-weight: 800; letter-spacing: 0.04em; }
@@ -2739,6 +2739,55 @@ body.in-lobby #hud, body.in-lobby #buttons, body.in-lobby #top-right-bar, body.i
   box-shadow: 0 5px 16px rgba(32, 201, 151, 0.4);
 }
 #dog-gate-btn[hidden] { display: none !important; }
+#coffee-order-bar {
+  position: fixed;
+  left: 50%;
+  bottom: 102px;
+  transform: translateX(-50%);
+  z-index: 8;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  width: min(640px, calc(100vw - 280px));
+}
+#coffee-order-bar[hidden] { display: none !important; }
+#coffee-order-bar button {
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 800;
+  color: #fff;
+  background: linear-gradient(90deg, #006241, #1e3932);
+  border: 2px solid #d4e9e2;
+  border-radius: 999px;
+  padding: 8px 14px;
+  cursor: pointer;
+  box-shadow: 0 5px 16px rgba(0, 98, 65, 0.35);
+}
+#coffee-order-bar button.is-drop {
+  color: #122033;
+  background: #f8f9fa;
+  border-color: #ced4da;
+  box-shadow: none;
+}
+#coffee-order-bar button[hidden] { display: none !important; }
+#coffee-toss-btn {
+  position: fixed;
+  left: 50%;
+  bottom: 102px;
+  transform: translateX(-50%);
+  z-index: 8;
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 800;
+  color: #122033;
+  background: #f8f9fa;
+  border: 2px solid #ced4da;
+  border-radius: 999px;
+  padding: 8px 14px;
+  cursor: pointer;
+}
+#coffee-toss-btn[hidden] { display: none !important; }
 #dog-gate-btn kbd {
   display: inline-grid;
   place-items: center;
