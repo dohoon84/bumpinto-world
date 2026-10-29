@@ -342,7 +342,7 @@ const adminBike = params.get('bike') !== '0'
       camera, // [bikeaudio]
       canRide: () => canRideAdminBike(),
       getTankColor: () => getAdminBikeTank(),
-      onChange: () => inventory?.refresh(),
+      onChange: () => { inventory?.refresh(); emitMyStateNow(); },
     })
   : null;
 // [truck] 탈 수 있는 'Steel Truck' 주차 (스타베이스만, ?trucks=N 기본 20, ?trucks=0 끔, F 탑승/하차)

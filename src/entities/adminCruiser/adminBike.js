@@ -523,6 +523,14 @@ body.bike-near #trk-prompt, body.bike-riding #trk-prompt{display:none!important}
       parked,
     };
   }
+  function applyOccupant(uMesh, uRider, peerId, parked) {
+    const peer = peerId ? remotes?.peers.get(peerId) : null;
+    const stand = uMesh.userData.stand;
+    uMesh.traverse((obj) => { if (obj.name === 'rider') obj.visible = !parked; });
+    if (uRider) uRider.visible = !parked;
+    if (stand) stand.visible = !!parked;
+    if (peer?.mesh) peer.mesh.visible = !!parked;
+  }
   function dressRemote(uMesh, uRider, peer, parked) {
     const stand = uMesh.userData.stand;
     if (parked) {
@@ -567,6 +575,7 @@ body.bike-near #trk-prompt, body.bike-riding #trk-prompt{display:none!important}
           }
           setBikeTankColor(mesh, tankColor);
           b.remote = { ...spot, tankColor };
+          applyOccupant(mesh, rider, m.id, parked);
           return;
         }
         // 내가 이미 바이크를 꺼내 두었거나 타고 있거나, 두 번째 관리자가 동시에 두는 경우 별도 바이크로 표시
@@ -594,6 +603,7 @@ body.bike-near #trk-prompt, body.bike-riding #trk-prompt{display:none!important}
         }
         setBikeTankColor(rb.mesh, tankColor);
         Object.assign(rb, spot);
+        applyOccupant(rb.mesh, rb.rider, m.id, parked);
       } else {
         if (b.remote && b.rider === m.id) releasePrimaryRemote();
         if (extraRemotes.has(m.id)) removeExtraRemote(m.id);
@@ -628,6 +638,7 @@ body.bike-near #trk-prompt, body.bike-riding #trk-prompt{display:none!important}
         const r = b.remote, k = Math.min(1, dt * 8);
         b.x += (r.tx - b.x) * k; b.z += (r.tz - b.z) * k; b.h += Math.atan2(Math.sin(r.th - b.h), Math.cos(r.th - b.h)) * k;
         b.v = r.v; b.yaw = r.yaw; b.wheelie += ((r.tw || 0) - b.wheelie) * Math.min(1, dt * 10);
+        applyOccupant(mesh, rider, b.rider, !!r.parked);
         poseUnit(b, mesh, rider, dt, !!r.parked);
       } else if (summoned && (me.wasActive || Math.abs(b.lean + 0.085) > 1e-3 || b.wheelie > 1e-3)) {
         b.wheelie = Math.max(0, b.wheelie - 3.5 * dt);
@@ -638,6 +649,7 @@ body.bike-near #trk-prompt, body.bike-riding #trk-prompt{display:none!important}
         rb.x += (rb.tx - rb.x) * k; rb.z += (rb.tz - rb.z) * k;
         rb.h += Math.atan2(Math.sin(rb.th - rb.h), Math.cos(rb.th - rb.h)) * k;
         rb.wheelie += ((rb.tw || 0) - rb.wheelie) * Math.min(1, dt * 10);
+        applyOccupant(rb.mesh, rb.rider, rb.peerId, !!rb.parked);
         poseUnit(rb, rb.mesh, rb.rider, dt, !!rb.parked);
         rb.audio?.update(dt, { on: !rb.parked, v: rb.v, throttle: rb.parked ? 0 : (rb.wheelie > 0.05 ? 0.65 : 0.25) });
       }
