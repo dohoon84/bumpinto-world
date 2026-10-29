@@ -326,6 +326,7 @@ export function openWorldGate({ onEnter }) {
     const sbMarker = pinMarkers.find((m) => m.region.id === 'starbase');
     const sbListEm = root.querySelector('[data-enter-region="starbase"] em');
     const sbListItem = root.querySelector('[data-enter-region="starbase"]');
+    root.classList.toggle('is-countdown-active', !live);
 
     if (live) {
       if (heroEl) heroEl.hidden = true;
@@ -404,12 +405,12 @@ export function openWorldGate({ onEnter }) {
     );
     root.querySelector('#gate-note').innerHTML = live
       ? tr(
-          '지구본의 <b>정자동 · 열림</b> 또는 <b>🚀 Starbase, TX · OPEN</b>을 눌러 입장하세요',
-          'Click <b>🇰🇷 Jeongja-dong</b> or <b>🚀 Starbase, TX</b> on the globe to enter',
+          '지구본의 <b class="gate-note-link" data-enter-region="jeongja">정자동 · 열림</b> 또는 <b class="gate-note-link" data-enter-region="starbase">🚀 Starbase, TX · OPEN</b>을 눌러 입장하세요',
+          'Click <b class="gate-note-link" data-enter-region="jeongja">🇰🇷 Jeongja-dong</b> or <b class="gate-note-link" data-enter-region="starbase">🚀 Starbase, TX</b> on the globe to enter',
         )
       : tr(
-          '지구본의 <b>정자동 · 열림</b>으로 입장하거나 <b>🚀 Starbase, TX 오픈 카운트다운</b>을 확인하세요',
-          'Enter <b>🇰🇷 Jeongja-dong</b> now or check the <b>🚀 Starbase, TX Launch Countdown</b>',
+          '지구본의 <b class="gate-note-link" data-enter-region="jeongja">정자동 · 열림</b>으로 입장하거나 <b>🚀 Starbase, TX 오픈 카운트다운</b>을 확인하세요',
+          'Enter <b class="gate-note-link" data-enter-region="jeongja">🇰🇷 Jeongja-dong</b> now or check the <b>🚀 Starbase, TX Launch Countdown</b>',
         );
     root.querySelector('#gate-gh-btn').textContent = tr('⭐ GitHub에서 함께 만들기', '⭐ Build Together on GitHub');
     root.querySelector('#gate-studio-sub').textContent = tr('개발 · 오픈소스 허브', 'Created by · Open Source Hub');
@@ -696,6 +697,11 @@ export function openWorldGate({ onEnter }) {
   root.addEventListener('click', (e) => {
     if (e.target.closest('#gate-lang-btn')) {
       toggleLang();
+      return;
+    }
+    if (e.target.closest('.gate-regions-top')) {
+      const regionsAside = root.querySelector('.gate-regions');
+      if (regionsAside) regionsAside.classList.toggle('is-expanded');
       return;
     }
     if (e.target.closest('.gate-toast-close')) {
