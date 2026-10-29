@@ -1,4 +1,5 @@
 import { DurableObject } from "cloudflare:workers";
+import { giftItem, giftItemByVeh, normalizeHoldings, qtyOf, withQty } from "../../../src/gifts/catalog.js";
 
 const STALE_MS = 35000;
 const BIKE_VEH_BLACK = 900;
@@ -66,10 +67,27 @@ export class Room extends DurableObject {
       v: Number(raw.v) || 0,
       st: Number(raw.st) || 0,
       ...(raw.wh ? { wh: Number(raw.wh) || 0 } : {}),
+      ...(raw.p ? { p: 1 } : {}),
     };
+    const gate = giftItemByVeh(id);
+    if (gate) {
+      if (qtyOf(me?.gifts, gate.id) < 1) return null;
+      if (raw.pk) {
+        body.pk = 1;
+        body.v = 0;
+        delete body.wh;
+        delete body.p;
+        const x = Number(raw.x);
+        const z = Number(raw.z);
+        if (Number.isFinite(x)) body.x = x;
+        if (Number.isFinite(z)) body.z = z;
+      }
+      return body;
+    }
     if (!isBikeVeh(id)) return body;
     if (!me?.bikeAdmin) return null;
     body.id = me.bikeTank === "red" ? BIKE_VEH_RED : BIKE_VEH_BLACK;
+    delete body.p;
     if (raw.pk) {
       body.pk = 1;
       body.v = 0;
@@ -80,6 +98,38 @@ export class Room extends DurableObject {
       if (Number.isFinite(z)) body.z = z;
     }
     return body;
+  }
+
+  #relayParked(raw, me) {
+    if (!Array.isArray(raw)) return [];
+    const out = [];
+    for (const item of raw.slice(0, 4)) {
+      const body = this.#relayVeh({ ...item, pk: 1 }, me);
+      if (body?.pk) out.push(body);
+    }
+    return out;
+  }
+
+  async #loadGifts(deviceId) {
+    try {
+      const book = this.env?.PHONE_BOOK?.getByName(BOOK_KEY);
+      if (!book || !deviceId) return { gifts: [], phone: "" };
+      const spec = await book.giftsForDevice(deviceId);
+      const gifts = normalizeHoldings(spec?.gifts);
+      const phone = String(spec?.phone || "").replace(/\D/g, "");
+      return { gifts, phone: /^010\d{8}$/.test(phone) ? phone : "" };
+    } catch {
+      return { gifts: [], phone: "" };
+    }
+  }
+
+  #socketByPeerId(id, except) {
+    for (const ws of this.ctx.getWebSockets()) {
+      if (ws === except) continue;
+      const peer = ws.deserializeAttachment();
+      if (peer?.id === id) return { ws, peer };
+    }
+    return null;
   }
 
   async fetch(request) {
@@ -199,6 +249,7 @@ export class Room extends DurableObject {
         color: m.color || m.look?.color,
       });
       const auth = await this.#bikeAuth(rawDevice);
+      const owned = await this.#loadGifts(rawDevice);
       me = {
         id,
         deviceId,
@@ -210,6 +261,8 @@ export class Room extends DurableObject {
         ry: 0,
         bikeAdmin: auth.isAdmin,
         bikeTank: auth.bikeTank,
+        gifts: owned.gifts,
+        phone: owned.phone,
         lastSeen: now,
       };
       const peers = this.#peers(ws);
@@ -223,7 +276,7 @@ export class Room extends DurableObject {
         z: me.z,
         ry: me.ry,
       };
-      this.#send(ws, { t: "welcome", id: me.id, peers, weather: await this.#weatherMode() });
+      this.#send(ws, { t: "welcome", id: me.id, peers, gifts: me.gifts || [], weather: await this.#weatherMode() });
       this.#broadcast({ t: "join", peer: publicMe }, ws);
       return;
     }
@@ -246,12 +299,70 @@ export class Room extends DurableObject {
       const jy = Math.max(0, Math.min(5, Number(m.jy) || 0));
       const emote = typeof m.emote === "string" ? m.emote.slice(0, 16) : "";
       const veh = this.#relayVeh(m.veh, me);
+      const pv = this.#relayParked(m.pv, me);
       me.veh = veh;
+      me.pv = pv;
       ws.serializeAttachment(me);
       this.#broadcast(
-        { t: "state", id: me.id, x: me.x, z: me.z, ry: me.ry, moving: !!m.moving, riding: me.riding, jy, emote, sit: me.sit, afk: me.afk, umb: me.umb, ...(veh ? { veh } : {}) },
+        {
+          t: "state",
+          id: me.id,
+          x: me.x,
+          z: me.z,
+          ry: me.ry,
+          moving: !!m.moving,
+          riding: me.riding,
+          jy,
+          emote,
+          sit: me.sit,
+          afk: me.afk,
+          umb: me.umb,
+          ...(veh ? { veh } : {}),
+          ...(pv.length ? { pv } : {}),
+        },
         ws,
       );
+      return;
+    }
+    if (m.t === "gift") {
+      const item = giftItem(m.item)?.id || "";
+      const typed = String(m.phone || "").replace(/\D/g, "");
+      const target = item ? this.#socketByPeerId(String(m.to || ""), ws) : null;
+      if (!item) {
+        this.#send(ws, { t: "gift", ok: false, error: "bad_item", item: String(m.item || "") });
+        return;
+      }
+      if (!/^010\d{8}$/.test(typed)) {
+        this.#send(ws, { t: "gift", ok: false, error: "bad_phone", item });
+        return;
+      }
+      if (!target?.peer?.deviceId) {
+        this.#send(ws, { t: "gift", ok: false, error: "offline", item });
+        return;
+      }
+      if (!target.peer.phone || target.peer.phone !== typed) {
+        this.#send(ws, { t: "gift", ok: false, error: "phone_mismatch", item });
+        return;
+      }
+      let result = { ok: false, error: "server" };
+      try {
+        const book = this.env?.PHONE_BOOK?.getByName(BOOK_KEY);
+        if (book) result = await book.transferGift({ fromDevice: me.deviceId, toDevice: target.peer.deviceId, item, phone: typed });
+      } catch {
+        result = { ok: false, error: "server" };
+      }
+      if (!result?.ok) {
+        this.#send(ws, { t: "gift", ok: false, error: result?.error || "server", item });
+        return;
+      }
+      const fromQty = Math.max(0, Math.floor(Number(result.fromQty) || 0));
+      const toQty = Math.max(0, Math.floor(Number(result.toQty) || 0));
+      me.gifts = withQty(me.gifts, item, fromQty);
+      target.peer.gifts = withQty(target.peer.gifts, item, toQty);
+      ws.serializeAttachment(me);
+      target.ws.serializeAttachment(target.peer);
+      this.#send(ws, { t: "gift", ok: true, item, mine: false, qty: fromQty, to: target.peer.id, toName: target.peer.name });
+      this.#send(target.ws, { t: "gift", ok: true, item, mine: true, qty: toQty, from: me.id, fromName: me.name });
       return;
     }
     if (m.t === "emote") {

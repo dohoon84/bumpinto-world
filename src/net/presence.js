@@ -4,6 +4,7 @@
 import { STATE_HZ } from './protocol.js';
 import { sanitizeLook } from '../look.js';
 import { deviceId } from '../sms.js';
+import { seedList } from '../gifts/catalog.js';
 
 class Emitter {
   constructor() { this.handlers = {}; }
@@ -41,7 +42,8 @@ export class WebSocketPresence extends Emitter {
     const ws = (this.ws = new WebSocket(this.url));
     ws.onopen = () => {
       this.retry = 1000;
-      ws.send(JSON.stringify({ t: 'hello', deviceId: deviceId(), name: me.name, color: me.color, look: me.look }));
+      const phone = String(me.phone || '').replace(/\D/g, '').slice(0, 11);
+      ws.send(JSON.stringify({ t: 'hello', deviceId: deviceId(), name: me.name, color: me.color, look: me.look, ...(phone ? { phone } : {}) }));
       this.pingTimer = setInterval(() => {
         if (this.ws === ws && ws.readyState === 1) {
           try { ws.send(JSON.stringify({ t: 'ping' })); } catch {}
@@ -91,8 +93,9 @@ export class WebSocketPresence extends Emitter {
     const afk = s.afk ? 1 : 0;
     const umb = s.umb || '';
     const vehId = s.veh ? s.veh.id : -1;
-    const vehSig = s.veh ? `${s.veh.id},${s.veh.ry},${s.veh.v},${s.veh.st},${s.veh.wh || 0},${s.veh.pk || 0},${s.veh.x ?? ''},${s.veh.z ?? ''}` : '';
-    const discreteSig = `${s.riding ? 1 : 0},${em},${sit},${afk},${umb},${vehId},${s.veh?.pk ? 1 : 0}`;
+    const vehSig = s.veh ? `${s.veh.id},${s.veh.ry},${s.veh.v},${s.veh.st},${s.veh.wh || 0},${s.veh.pk || 0},${s.veh.p || 0},${s.veh.x ?? ''},${s.veh.z ?? ''}` : '';
+    const pvSig = Array.isArray(s.pv) ? s.pv.map((v) => `${v.id},${v.pk || 0},${v.x ?? ''},${v.z ?? ''},${v.ry ?? ''}`).join('|') : '';
+    const discreteSig = `${s.riding ? 1 : 0},${em},${sit},${afk},${umb},${vehId},${s.veh?.pk ? 1 : 0},${pvSig}`;
     const discreteChanged = discreteSig !== this.lastDiscreteSig;
     if (!force && !discreteChanged && now - this.lastSent < 1000 / STATE_HZ) return;
     const sig = `${s.x.toFixed(2)},${s.z.toFixed(2)},${s.ry.toFixed(2)},${s.moving ? 1 : 0},${discreteSig},${jy.toFixed(2)},${vehSig}`;
@@ -107,6 +110,14 @@ export class WebSocketPresence extends Emitter {
   sendWeather(mode) {
     if (this.ws?.readyState !== 1) return;
     this.ws.send(JSON.stringify({ t: 'weather', mode: mode === 'rain' ? 'rain' : '' }));
+  }
+  sendGift(item, to, phone) {
+    if (this.ws?.readyState !== 1) {
+      this.emit('gift', { t: 'gift', ok: false, error: 'offline', item });
+      return;
+    }
+    const digits = String(phone || '').replace(/\D/g, '').slice(0, 11);
+    this.ws.send(JSON.stringify({ t: 'gift', item, to, phone: digits }));
   }
   close() {
     this.manualClose = true;
@@ -143,7 +154,7 @@ export class MockPresence extends Emitter {
       ry: 0,
     };
     this.helloTimer = setTimeout(() => {
-      this.emit('welcome', { t: 'welcome', id: 'me', peers: [] });
+      this.emit('welcome', { t: 'welcome', id: 'me', peers: [], gifts: seedList() });
       this.emit('join', { t: 'join', peer: this.peer });
       this.emit('status', '현재 접속자 2명');
     }, 300);
@@ -231,6 +242,14 @@ export class MockPresence extends Emitter {
   }
   sendWeather(mode) {
     this.emit('weather', { t: 'weather', mode: mode === 'rain' ? 'rain' : '' });
+  }
+  sendGift(item, to) {
+    if (!this.peer || to !== this.peer.id) {
+      this.emit('gift', { t: 'gift', ok: false, error: 'offline', item });
+      return;
+    }
+    // 목업 상대(판교러버)는 번호가 없다. 번호가 맞지 않으면 소유권을 넘기지 않는다.
+    this.emit('gift', { t: 'gift', ok: false, error: 'phone_mismatch', item });
   }
   close() {
     clearInterval(this.timer);

@@ -2837,7 +2837,7 @@ body.in-lobby #hud, body.in-lobby #buttons, body.in-lobby #top-right-bar, body.i
 
 .inv-tray {
   position: absolute;
-  width: 268px;
+  width: 300px;
   padding: 10px;
   border-radius: 18px;
   background: rgba(14, 23, 38, 0.94);
@@ -2899,11 +2899,141 @@ body.in-lobby #hud, body.in-lobby #buttons, body.in-lobby #top-right-bar, body.i
   font-weight: 700;
   color: #9eb4c6;
 }
+.inv-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  margin: 0 0 8px;
+}
+.inv-tab {
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.04);
+  color: #b7c9da;
+  border-radius: 999px;
+  padding: 5px 8px;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 800;
+  cursor: pointer;
+}
+.inv-tab.is-on {
+  color: #1a1404;
+  background: #ffe169;
+  border-color: #ffe169;
+}
 .inv-tray-list {
   display: flex;
   flex-direction: column;
   gap: 6px;
 }
+.inv-slot-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex-shrink: 0;
+}
+.inv-gift-pick {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.inv-gift-pick[hidden] { display: none !important; }
+.inv-gift-title {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 800;
+  color: #ffe169;
+}
+.inv-gift-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 180px;
+  overflow: auto;
+}
+.inv-peer {
+  width: 100%;
+  text-align: left;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.06);
+  color: #fff;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 800;
+  padding: 8px 10px;
+  cursor: pointer;
+}
+.inv-peer:hover { border-color: rgba(255, 225, 105, 0.7); }
+.inv-peer-empty {
+  margin: 0;
+  font-size: 12px;
+  color: #b4c7d9;
+}
+.inv-gift-confirm {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.inv-gift-confirm[hidden] { display: none !important; }
+.inv-gift-who,
+.inv-gift-warn {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.35;
+}
+.inv-gift-who { font-weight: 800; color: #fff; }
+.inv-gift-warn { color: #ffd0a8; font-weight: 650; }
+.inv-gift-phone {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 800;
+  color: #b7c9da;
+}
+.inv-gift-phone input {
+  width: 100%;
+  box-sizing: border-box;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(8, 14, 24, 0.72);
+  color: #fff;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  padding: 8px 10px;
+}
+.inv-gift-send {
+  border: 0;
+  border-radius: 999px;
+  background: #ff7aa6;
+  color: #2a0c16;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 900;
+  padding: 8px 10px;
+  cursor: pointer;
+}
+.inv-gift-cancel {
+  border: 0;
+  background: transparent;
+  color: #9eb4c6;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 4px 0 0;
+}
+.inv-notice {
+  margin: 8px 2px 0;
+  font-size: 11px;
+  font-weight: 700;
+  color: #ffb4b4;
+  line-height: 1.35;
+}
+.inv-notice[hidden] { display: none !important; }
 .inv-slot {
   display: flex;
   align-items: center;
@@ -2952,6 +3082,7 @@ body.in-lobby #hud, body.in-lobby #buttons, body.in-lobby #top-right-bar, body.i
   border: 1px solid rgba(255, 255, 255, 0.28);
 }
 .inv-slot-icon {
+  position: relative;
   width: 36px;
   height: 36px;
   border-radius: 10px;
@@ -2960,6 +3091,23 @@ body.in-lobby #hud, body.in-lobby #buttons, body.in-lobby #top-right-bar, body.i
   place-items: center;
   font-size: 20px;
   flex-shrink: 0;
+}
+.inv-slot-qty {
+  position: absolute;
+  right: -5px;
+  bottom: -5px;
+  min-width: 18px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: #d4003b;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 900;
+  line-height: 16px;
+  text-align: center;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
 }
 .inv-slot-meta {
   flex: 1;
@@ -2996,5 +3144,10 @@ body.in-lobby #hud, body.in-lobby #buttons, body.in-lobby #top-right-bar, body.i
   background: rgba(52, 199, 89, 0.22);
   color: #7ee797;
   border-color: rgba(52, 199, 89, 0.6);
+}
+.inv-slot-pill.gift {
+  background: rgba(255, 122, 166, 0.16);
+  color: #ffd0e0;
+  border-color: rgba(255, 143, 184, 0.55);
 }
 

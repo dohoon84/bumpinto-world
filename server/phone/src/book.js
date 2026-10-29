@@ -1,5 +1,6 @@
 import { DurableObject } from "cloudflare:workers";
 import { NOTICE_POSTS } from "../../../src/notices.js";
+import { GIFT_ITEMS, giftItem, giftUnit, normalizeHoldings } from "../../../src/gifts/catalog.js";
 
 // 정자역 번호부 하나. 번호는 여기서만 올라가서 겹치지 않는다.
 const ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -335,6 +336,36 @@ export class PhoneBook extends DurableObject {
         WHERE x IS NOT NULL AND z IS NOT NULL`);
       sql.exec(`INSERT INTO _sql_schema_migrations (id) VALUES (9)`);
     }
+    if (version < 10) {
+      sql.exec(`CREATE TABLE IF NOT EXISTS gifts (
+        item_key TEXT PRIMARY KEY,
+        owner_id TEXT,
+        updated_at INTEGER NOT NULL
+      )`);
+      sql.exec(`INSERT INTO _sql_schema_migrations (id) VALUES (10)`);
+    }
+    if (version < 11) {
+      sql.exec(`CREATE TABLE IF NOT EXISTS gift_holdings (
+        user_id TEXT NOT NULL,
+        item_key TEXT NOT NULL,
+        qty INTEGER NOT NULL DEFAULT 0,
+        updated_at INTEGER NOT NULL,
+        PRIMARY KEY (user_id, item_key)
+      )`);
+      // 예전 gifts(단일 주인) → 수량 재고로 옮김
+      const ROADBIKE = "roadbike-cr1";
+      const SEED = Math.max(0, Math.floor(Number(giftItem(ROADBIKE)?.seedQty) || 0));
+      const old = sql.exec("SELECT owner_id FROM gifts WHERE item_key = ?", ROADBIKE).toArray()[0];
+      if (old?.owner_id) {
+        sql.exec(
+          `INSERT INTO gift_holdings (user_id, item_key, qty, updated_at)
+           VALUES (?, ?, ?, ?)
+           ON CONFLICT(user_id, item_key) DO UPDATE SET qty = excluded.qty, updated_at = excluded.updated_at`,
+          old.owner_id, ROADBIKE, SEED, Date.now(),
+        );
+      }
+      sql.exec(`INSERT INTO _sql_schema_migrations (id) VALUES (11)`);
+    }
     this.#syncNotices();
   }
 
@@ -445,6 +476,92 @@ export class PhoneBook extends DurableObject {
     ).toArray()[0];
     if (!row) return { error: "not_found" };
     return { user: row };
+  }
+
+  async #ensureGiftSeeds() {
+    const sql = this.ctx.storage.sql;
+    const users = sql.exec("SELECT id, phone FROM users").toArray();
+    let redId = "";
+    for (const u of users) {
+      const spec = await resolveAdminSpec(u.phone, this.env);
+      if (spec?.bikeTank === "red") { redId = u.id; break; }
+    }
+    if (!redId) return;
+    // 카탈로그 항목마다, 세상에 수량이 하나도 없으면 레드 탱크 관리자에게 seedQty 를 넣는다
+    for (const def of GIFT_ITEMS) {
+      const seed = Math.max(0, Math.floor(Number(def.seedQty) || 0));
+      if (seed < 1) continue;
+      const held = sql.exec(
+        "SELECT COALESCE(SUM(qty), 0) AS n FROM gift_holdings WHERE item_key = ?",
+        def.id,
+      ).toArray()[0];
+      if (Number(held?.n || 0) > 0) continue;
+      this.#setHoldingQty(redId, def.id, seed);
+    }
+  }
+
+  #holdingQty(userId, item) {
+    const row = this.ctx.storage.sql.exec(
+      "SELECT qty FROM gift_holdings WHERE user_id = ? AND item_key = ?",
+      userId, item,
+    ).toArray()[0];
+    return Math.max(0, Math.floor(Number(row?.qty) || 0));
+  }
+
+  #setHoldingQty(userId, item, qty) {
+    const n = Math.max(0, Math.floor(Number(qty) || 0));
+    const now = Date.now();
+    if (n <= 0) {
+      this.ctx.storage.sql.exec(
+        "DELETE FROM gift_holdings WHERE user_id = ? AND item_key = ?",
+        userId, item,
+      );
+      return 0;
+    }
+    this.ctx.storage.sql.exec(
+      `INSERT INTO gift_holdings (user_id, item_key, qty, updated_at)
+       VALUES (?, ?, ?, ?)
+       ON CONFLICT(user_id, item_key) DO UPDATE SET qty = excluded.qty, updated_at = excluded.updated_at`,
+      userId, item, n, now,
+    );
+    return n;
+  }
+
+  // 멀티플레이 방이 기기 id 로 선물함 재고를 확인할 때 사용.
+  async giftsForDevice(deviceId) {
+    this.#migrate();
+    const found = this.#user(deviceId);
+    if (found.error || !found.user) return { ok: true, gifts: [] };
+    await this.#ensureGiftSeeds();
+    const rows = this.ctx.storage.sql.exec(
+      "SELECT item_key AS id, qty FROM gift_holdings WHERE user_id = ? AND qty > 0",
+      found.user.id,
+    ).toArray();
+    return {
+      ok: true,
+      gifts: normalizeHoldings(rows),
+      phone: digits(found.user.phone),
+    };
+  }
+
+  async transferGift({ fromDevice, toDevice, item, phone } = {}) {
+    this.#migrate();
+    const def = giftItem(item);
+    if (!def) return { ok: false, error: "bad_item" };
+    const unit = giftUnit(item);
+    const typed = digits(phone);
+    if (!phoneOk(typed)) return { ok: false, error: "bad_phone" };
+    const from = this.#user(fromDevice);
+    const to = this.#user(toDevice);
+    if (from.error || !from.user || to.error || !to.user) return { ok: false, error: "not_found" };
+    if (from.user.id === to.user.id) return { ok: false, error: "bad_item" };
+    if (digits(to.user.phone) !== typed) return { ok: false, error: "phone_mismatch" };
+    await this.#ensureGiftSeeds();
+    const fromQty = this.#holdingQty(from.user.id, item);
+    if (fromQty < unit) return { ok: false, error: "not_owner" };
+    const nextFrom = this.#setHoldingQty(from.user.id, item, fromQty - unit);
+    const toQty = this.#setHoldingQty(to.user.id, item, this.#holdingQty(to.user.id, item) + unit);
+    return { ok: true, item, fromQty: nextFrom, toQty, unit };
   }
 
   // 멀티플레이 방이 기기 id 로 관리자 여부를 확인할 때 사용. 번호는 반환하지 않는다.

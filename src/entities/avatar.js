@@ -315,6 +315,7 @@ export function createAvatar({
     handCoffee, coffee: coffee || false, coffeePhase: Math.random() * 20, chatting: false,
     eyeY: eyeL.position.y, eyeZ: eyeL.position.z, armLz: armL.rotation.z, armRz: armR.rotation.z,
     legLy: legL.position.y, legLz: legL.position.z,
+    look: { gender, face, hair, glasses: !!glasses, top, color, skin },
   };
   return g;
 }

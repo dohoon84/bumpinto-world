@@ -70,7 +70,7 @@ function poseRider(rider, bike) {
 
 function pointInRing(x, z, r) { let c = false; for (let i = 0, j = r.length - 1; i < r.length; j = i++) { const [xi, zi] = r[i], [xj, zj] = r[j]; if ((zi > z) !== (zj > z) && x < ((xj - xi) * (z - zi)) / (zj - zi) + xi) c = !c; } return c; }
 
-export function createAdminBike({ scene, overlay, world, data, params, cam, player, renderer, terrain, presence, remotes, spawn, getTrucks, camera, canRide, getTankColor, onChange }) { // [bikeaudio] camera
+export function createAdminBike({ scene, overlay, world, data, params, cam, player, renderer, terrain, presence, remotes, spawn, getTrucks, getRoadBike, camera, canRide, getTankColor, onChange }) { // [bikeaudio] camera
   if (params.get('bike') === '0') return null;
   const isLocal = typeof location !== 'undefined' && (['localhost', '127.0.0.1', '[::1]'].includes(location.hostname) || location.hostname.endsWith('.local'));
   const allowed = () => (typeof canRide === 'function' ? !!canRide() : true);
@@ -303,7 +303,7 @@ body.bike-near #trk-prompt, body.bike-riding #trk-prompt{display:none!important}
   const hudV = hud.querySelector('.v');
   const near = () => { if (!summoned || b.remote || me.riding) return false; const P = player.position, s = Math.sin(b.h), c = Math.cos(b.h), dx = P.x - b.x, dz = P.z - b.z;
     const lz = dx * s + dz * c, lx = dx * c - dz * s; return Math.hypot(Math.max(0, Math.abs(lx) - HW), Math.max(0, Math.abs(lz) - HL)) < 2.2; };
-  const canMount = () => summoned && allowed() && !getTrucks?.()?.driving && near();
+  const canMount = () => summoned && allowed() && !getTrucks?.()?.driving && !getRoadBike?.()?.riding && !getRoadBike?.()?.near?.() && near();
   const toggle = () => { if (me.riding) dismount(); else if (canMount()) mount(); };
   prompt.onclick = toggle;
   // 캡처 단계에서 먼저 받아 트럭 F 와 겹치지 않게: 탈 수 있을 때만 여기서 처리
@@ -556,11 +556,14 @@ body.bike-near #trk-prompt, body.bike-riding #trk-prompt{display:none!important}
 
   if (presence) {
     presence.on('state', (m) => {
-      const vid = m.veh?.id;
-      if (m.veh && isBikeVehId(vid)) {
+      const veh = (m.veh && isBikeVehId(m.veh.id))
+        ? m.veh
+        : (Array.isArray(m.pv) ? m.pv.find((v) => v && isBikeVehId(v.id)) : null);
+      if (veh) {
+        const parked = !!(veh.pk || (Array.isArray(m.pv) && m.pv.includes(veh)));
+        const vid = veh.id;
         const tankColor = vid === BIKE_VEH_RED_ID ? 'red' : 'black';
-        const parked = !!m.veh.pk;
-        const spot = remoteSpot(m, parked);
+        const spot = remoteSpot({ ...m, veh: parked ? { ...veh, pk: 1 } : veh }, parked);
         // 내 바이크가 비어 있고(미탑승·미소환) 아직 주 원격 슬롯이 없거나 같은 피어면 주 바이크 메쉬를 재활용
         if (!me.riding && !summoned && (!b.remote || b.rider === m.id) && !extraRemotes.has(m.id)) {
           const p = remotes?.peers.get(m.id);
