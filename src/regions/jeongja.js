@@ -71,6 +71,7 @@ export const JEONGJA_REGION = {
     jeongjaBuildings: true, // 정자역 스타벅스, 노비오스 호텔, 우체국 마크, 카페 보도
     stationPlaza: true,     // 정자역 광장 분수대·빈백·전광판
     dogPark: true,          // 탄천 반려견 놀이터 & 돌다리
+    strayCats: true,        // 탄천 둔치 도둑고양이
     transit: true,          // 경기도 실시간/시뮬 버스 & 신호 횡단보도
     taxis: true,            // 카카오T 스타일 택시 & 경찰차
     umbrellas: true,        // 우산 상인

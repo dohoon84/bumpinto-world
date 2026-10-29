@@ -29,6 +29,7 @@ import { addStationPlaza } from './world/stationPlaza.js';
 import { mountDonationBillboards } from './world/donationBillboard.js';
 import { mountUmbrellaSystem } from './entities/umbrellaVendor.js';
 import { addDogPark } from './world/dogPark.js';
+import { addStrayCats } from './world/strayCats.js';
 import { createRoadsterShow } from './events/roadsterShow.js';
 import { createTowerAddon } from './entities/towerAddon.js';
 import { createLaunchShow } from './events/launchShow.js';
@@ -293,6 +294,9 @@ const noopModule = {
 };
 const stationPlaza = region.features?.stationPlaza ? addStationPlaza(scene, overlay, world) : noopModule;
 const dogPark = region.features?.dogPark ? addDogPark(scene, overlay, terrain) : noopModule;
+const strayCats = region.features?.strayCats && terrain
+  ? addStrayCats(scene, overlay, terrain, world, st, dogPark.bounds || null, data)
+  : noopModule;
 const donationBoards = region.features?.stationPlaza
   ? mountDonationBillboards({ scene, overlay, world, camera, domElement: renderer.domElement })
   : noopModule;
@@ -2039,6 +2043,12 @@ function frame() {
   riverFolk?.update(dt, player.position);
   stationPlaza.update(dt, player.position);
   dogPark.update(dt, player.position);
+  strayCats.update(dt, {
+    player: player.position,
+    remotes: remotes.list(),
+    npcs: npcs.list,
+    folk: riverFolk?.actors,
+  });
   donationBoards.update(dt, joined ? player.position : null);
   umbrellas.update(dt, joined ? player.position : null, player.rotation.y);
   remotes.update(dt);
@@ -2087,7 +2097,7 @@ requestAnimationFrame(frame);
 
 // 스크린샷/디버그용 훅
 window.__jj = {
-  ready: true, region, tower, launch, roadster, trucks, bike: adminBike, roadbike, inventory, data, world, npcs, transit, camera, cam, ov, setMode, terrain, taxis, police, weather: atmosphere, umbrellas, dogPark, // [terrain] [taxi] [roadster] [tower] [launch] [truck] [bike] [roadbike] [inventory]
+  ready: true, region, tower, launch, roadster, trucks, bike: adminBike, roadbike, inventory, data, world, npcs, transit, camera, cam, ov, setMode, terrain, taxis, police, weather: atmosphere, umbrellas, dogPark, strayCats, // [terrain] [taxi] [roadster] [tower] [launch] [truck] [bike] [roadbike] [inventory]
   get player() { return player; },
   teleport(x, z, y) { if (bikes.riding) dismountBike(); if (adminBike?.riding) adminBike.dismount(); dismountRoadbikes(); player.position.set(x, y ?? (terrain ? terrain.getGroundHeight(x, z, 0) : 0), z); }, // [terrain] [bike] [roadbike]
   bikes, toggleRide, triggerEmote,

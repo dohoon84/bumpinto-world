@@ -36,6 +36,15 @@ const geo = {
   cupStraw: new THREE.CylinderGeometry(0.007, 0.007, 0.11, 6),
   lanyardStrap: new THREE.BoxGeometry(0.022, 0.28, 0.012),
   lanyardCard: new THREE.BoxGeometry(0.085, 0.11, 0.014),
+  catBody: new THREE.CapsuleGeometry(0.15, 0.4, 4, 8),
+  catHead: new THREE.SphereGeometry(0.15, 8, 6),
+  catEar: new THREE.ConeGeometry(0.06, 0.12, 4),
+  catTail: new THREE.CylinderGeometry(0.03, 0.03, 0.4, 5),
+  catLeg: new THREE.CylinderGeometry(0.04, 0.04, 0.2, 5),
+  catPatch: new THREE.SphereGeometry(0.1, 7, 6),
+  catStripe: new THREE.BoxGeometry(0.2, 0.03, 0.055),
+  catEye: new THREE.SphereGeometry(0.026, 6, 5),
+  catNose: new THREE.SphereGeometry(0.018, 5, 4),
 };
 const matCache = new Map();
 const M = (c) => { if (!matCache.has(c)) matCache.set(c, new THREE.MeshLambertMaterial({ color: c })); return matCache.get(c); };
@@ -320,18 +329,90 @@ export function createAvatar({
   return g;
 }
 
-export function createCat({ color = '#f0a050' } = {}) {
+const COAT_COLOR = {
+  white: '#f4f1ea',
+  black: '#171717',
+  calico: '#f7f4ee',
+  tuxedo: '#1b1b1b',
+  mackerel: '#b7bcc4',
+  cow: '#f7f7f5',
+};
+
+function catMark(rig, color, x, y, z, sx, sy, sz) {
+  const m = new THREE.Mesh(geo.catPatch, M(color));
+  m.position.set(x, y, z);
+  m.scale.set(sx, sy, sz);
+  rig.add(m);
+}
+
+function addCatCoat(rig, coat) {
+  const darkEyes = coat === 'black' || coat === 'tuxedo';
+  for (const sx of [-0.055, 0.055]) {
+    const eye = new THREE.Mesh(geo.catEye, M(darkEyes ? '#d6de55' : '#2b241c'));
+    eye.position.set(sx, 0.48, 0.43);
+    rig.add(eye);
+  }
+  const nose = new THREE.Mesh(geo.catNose, M('#e8a0ad'));
+  nose.position.set(0, 0.42, 0.445);
+  rig.add(nose);
+  if (coat === 'calico') {
+    catMark(rig, '#e07a28', 0.08, 0.38, 0.06, 1.15, 0.7, 0.85);
+    catMark(rig, '#1c1c1c', -0.09, 0.34, -0.08, 1.0, 0.62, 0.8);
+    catMark(rig, '#e07a28', 0.07, 0.5, 0.34, 0.55, 0.45, 0.4);
+    catMark(rig, '#1c1c1c', -0.06, 0.52, 0.36, 0.48, 0.4, 0.36);
+  } else if (coat === 'tuxedo') {
+    catMark(rig, '#f4f1ea', 0, 0.24, 0.2, 0.85, 0.55, 0.5);
+    catMark(rig, '#f4f1ea', 0, 0.42, 0.4, 0.55, 0.38, 0.42);
+    for (const [x, z] of [[-0.08, 0.17], [0.08, 0.17], [-0.08, -0.17], [0.08, -0.17]]) {
+      catMark(rig, '#f4f1ea', x, 0.04, z, 0.42, 0.28, 0.42);
+    }
+  } else if (coat === 'mackerel') {
+    for (let i = 0; i < 4; i++) {
+      const stripe = new THREE.Mesh(geo.catStripe, M('#343a42'));
+      stripe.position.set(0, 0.44, -0.08 + i * 0.09);
+      stripe.rotation.z = i % 2 ? 0.18 : -0.14;
+      rig.add(stripe);
+    }
+    catMark(rig, '#343a42', 0, 0.56, 0.32, 0.35, 0.18, 0.22);
+  } else if (coat === 'cow') {
+    catMark(rig, '#1a1a1a', 0.1, 0.4, 0.02, 1.35, 0.85, 1.05);
+    catMark(rig, '#1a1a1a', -0.08, 0.36, -0.14, 1.15, 0.7, 0.9);
+    catMark(rig, '#1a1a1a', 0.04, 0.52, 0.34, 0.5, 0.4, 0.38);
+  }
+}
+
+export function createCat({ color = '#f0a050', coat = null } = {}) {
   const g = new THREE.Group(), rig = new THREE.Group(); g.add(rig);
-  const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.15, 0.4, 4, 8), M(color)); body.rotation.x = Math.PI / 2; body.position.y = 0.3;
-  const head = new THREE.Mesh(new THREE.SphereGeometry(0.15, 8, 6), M(color)); head.position.set(0, 0.45, 0.3);
-  const earG = new THREE.ConeGeometry(0.06, 0.12, 4);
-  const e1 = new THREE.Mesh(earG, M(color)), e2 = e1.clone(); e1.position.set(-0.08, 0.6, 0.3); e2.position.set(0.08, 0.6, 0.3);
-  const tail = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.4, 5), M(color)); tail.position.set(0, 0.45, -0.38); tail.rotation.x = -0.6;
-  const legG = new THREE.CylinderGeometry(0.04, 0.04, 0.2, 5);
-  const legs = [[-0.08, 0.17], [0.08, 0.17], [-0.08, -0.17], [0.08, -0.17]].map(([x, z]) => { const l = new THREE.Mesh(legG, M(color)); l.position.set(x, 0.1, z); return l; });
-  rig.add(body, head, e1, e2, tail, ...legs);
-  rig.traverse((o) => { if (o.isMesh) o.castShadow = true; });
-  g.userData = { rig, legL: legs[0], legR: legs[1], phase: 0, cat: true };
+  const main = coat ? (COAT_COLOR[coat] || color) : color;
+  const body = new THREE.Mesh(geo.catBody, M(main)); body.rotation.x = Math.PI / 2; body.position.y = 0.3;
+  const head = new THREE.Mesh(geo.catHead, M(main)); head.position.set(0, 0.45, 0.3);
+  const e1 = new THREE.Mesh(geo.catEar, M(main)), e2 = new THREE.Mesh(geo.catEar, M(main));
+  e1.position.set(-0.08, 0.6, 0.3); e2.position.set(0.08, 0.6, 0.3);
+  const legs = [[-0.08, 0.17], [0.08, 0.17], [-0.08, -0.17], [0.08, -0.17]].map(([x, z]) => {
+    const l = new THREE.Mesh(geo.catLeg, M(main));
+    l.position.set(x, 0.1, z);
+    return l;
+  });
+  let tail = null;
+  if (coat) {
+    tail = new THREE.Group();
+    tail.position.set(0, 0.45, -0.22);
+    const tailMesh = new THREE.Mesh(geo.catTail, M(main));
+    tailMesh.position.set(0, 0.08, -0.16);
+    tailMesh.rotation.x = -0.6;
+    tail.add(tailMesh);
+    rig.add(body, head, e1, e2, tail, ...legs);
+    addCatCoat(rig, coat);
+    body.castShadow = true;
+    head.castShadow = true;
+  } else {
+    const tailMesh = new THREE.Mesh(geo.catTail, M(main));
+    tailMesh.position.set(0, 0.45, -0.38);
+    tailMesh.rotation.x = -0.6;
+    rig.add(body, head, e1, e2, tailMesh, ...legs);
+    rig.traverse((o) => { if (o.isMesh) o.castShadow = true; });
+  }
+  g.userData = { rig, legL: legs[0], legR: legs[1], phase: 0, cat: true, tail, coat };
   return g;
 }
 
