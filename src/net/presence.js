@@ -104,6 +104,10 @@ export class WebSocketPresence extends Emitter {
   }
   sendChat(text) { if (this.ws?.readyState === 1) this.ws.send(JSON.stringify({ t: 'chat', text })); }
   sendEmote(kind, combo = 1) { if (this.ws?.readyState === 1) this.ws.send(JSON.stringify({ t: 'emote', kind, combo })); }
+  sendWeather(mode) {
+    if (this.ws?.readyState !== 1) return;
+    this.ws.send(JSON.stringify({ t: 'weather', mode: mode === 'rain' ? 'rain' : '' }));
+  }
   close() {
     this.manualClose = true;
     clearTimeout(this.retryTimer);
@@ -224,6 +228,9 @@ export class MockPresence extends Emitter {
         this.emit('chat', { t: 'chat', id: this.peer.id, text: hypeLines[kind] || (this.isEn ? 'Woohoo!! 🎉' : '와아아!! 🎉') });
       }
     }, 320);
+  }
+  sendWeather(mode) {
+    this.emit('weather', { t: 'weather', mode: mode === 'rain' ? 'rain' : '' });
   }
   close() {
     clearInterval(this.timer);

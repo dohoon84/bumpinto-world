@@ -7,15 +7,17 @@ const PORT = Number(process.env.PORT || 8787);
 const wss = new WebSocketServer({ port: PORT });
 const peers = new Map(); // ws -> peer
 let seq = 0;
+let worldWeather = '';
 const send = (ws, m) => ws.readyState === 1 && ws.send(JSON.stringify(m));
 const broadcast = (m, except) => { for (const ws of peers.keys()) if (ws !== except) send(ws, m); };
+const broadcastAll = (m) => { for (const ws of peers.keys()) send(ws, m); };
 wss.on('connection', (ws) => {
   ws.on('message', (buf) => {
     let m; try { m = JSON.parse(buf); } catch { return; }
     if (m.t === 'hello' && !peers.has(ws)) {
       const look = sanitizeLook({ hair: 'short', top: 'hoodie', ...(m.look || {}), color: m.color || m.look?.color });
       const peer = { id: 'p' + ++seq, name: String(m.name || '손님').slice(0, 24), color: look.color, look, x: 0, z: 0, ry: 0 };
-      send(ws, { t: 'welcome', id: peer.id, peers: [...peers.values()] });
+      send(ws, { t: 'welcome', id: peer.id, peers: [...peers.values()], weather: worldWeather });
       peers.set(ws, peer); broadcast({ t: 'join', peer }, ws);
     }
     const p = peers.get(ws); if (!p) return;
@@ -45,6 +47,10 @@ wss.on('connection', (ws) => {
       if (kind) broadcast({ t: 'emote', id: p.id, kind, combo }, ws);
     }
     if (m.t === 'chat') broadcast({ t: 'chat', id: p.id, text: String(m.text).slice(0, 120) }, ws);
+    if (m.t === 'weather') {
+      worldWeather = m.mode === 'rain' ? 'rain' : '';
+      broadcastAll({ t: 'weather', mode: worldWeather });
+    }
   });
   ws.on('close', () => { const p = peers.get(ws); if (p) { peers.delete(ws); broadcast({ t: 'leave', id: p.id }); } });
 });
