@@ -124,6 +124,7 @@ export class RemotePlayers {
       p.mesh.rotation.y += Math.atan2(Math.sin(p.ry - p.mesh.rotation.y), Math.cos(p.ry - p.mesh.rotation.y)) * Math.min(1, dt * 8);
       p.jy += ((p.targetJy || 0) - p.jy) * Math.min(1, dt * 14);
       if (p.jy < 0.01) p.jy = 0;
+      if (this.rideHook && this.rideHook(p, dt, sp)) { p.bubble.tick(); continue; } // [ride] 버스·택시 좌석(코리더에서만 설정됨)
 
       if (p.riding) {
         p.wasRiding = true;
