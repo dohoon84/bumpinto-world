@@ -89,22 +89,35 @@ export function createCorridorBuses(root, T, { crossings, terrain, overlay, live
     return (mm ? `${mm}분 ` : '') + `${ss}초`;
   };
   let panelStop = null;
+  // [ride] 정류장 패널: 노선별 방면(이 구간 마지막 정류장)·다음 정류장 2곳. 탑승 안내는 rideHint(stop) 가 준다.
+  const stopById = new Map(stops.map((x) => [x.id, x]));
+  const routeInfo = (stop, ref) => {
+    const P = sim.paths.find((q) => q.ref === ref && q.stops.some((x) => x.stop === stop.id)); if (!P) return '';
+    const i = P.stops.findIndex((x) => x.stop === stop.id);
+    const nm = (k) => stopById.get(P.stops[k]?.stop)?.name || '';
+    const last = nm(P.stops.length - 1), next = [nm(i + 1), nm(i + 2)].filter(Boolean);
+    if (!last || i >= P.stops.length - 1) return '';
+    return `<div class="ride-dest">→ ${last} 방면 <i>toward</i>${next.length ? ` · 다음 Next: ${next.join(' › ')}` : ''}</div>`;
+  };
+  const rideHint = { fn: null };
   const renderPanel = (fx, fz) => {
     let best = null, bd = PANEL_R;
     for (const s of stops) { const d = Math.hypot(s._pos.x - fx, s._pos.z - fz); if (d < bd) { bd = d; best = s; } }
     panelStop = best;
     if (!best) { panel.classList.remove('open'); return; }
+    let infoN = 0; // [ride] 방면·다음 정류장 줄은 먼저 오는 3개 노선만(큰 환승센터에서 패널이 넘치지 않게)
     const rows = source.arrivals(best).map((a) => {
       const lv = liveryOf(a.type);
-      return `<tr><td><span class="chip" style="background:${lv.plain ? '#2c3e6b' : lv.color}">${a.ref}</span></td><td class="ty">${lv.label}</td><td class="eta">${fmt(a)}${a.kind === 'virtual' ? ' <i title="OSM에 노선 형상이 없어 3D 버스 없이 가상 배차로만 계산">가상</i>' : ''}</td></tr>`;
+      return `<tr><td><span class="chip" style="background:${lv.plain ? '#2c3e6b' : lv.color}">${a.ref}</span></td><td class="ty">${lv.label}</td><td class="eta">${fmt(a)}${a.kind === 'virtual' ? ' <i title="OSM에 노선 형상이 없어 3D 버스 없이 가상 배차로만 계산">가상</i>' : ''}</td></tr>${rideHint.fn && a.kind !== 'virtual' && infoN++ < 3 ? `<tr class="ride-row"><td colspan=3>${routeInfo(best, a.ref)}</td></tr>` : ''}`;
     }).join('');
     panel.innerHTML = `<div class="hd">🚏 ${best.name} <small>${best.ref ? '정류소번호 ' + best.ref.split(';')[0] : ''}</small></div>
       <table>${rows || '<tr><td colspan=3>등록된 노선 정보 없음 (OSM route_ref 없음)</td></tr>'}</table>
-      <div class="ft">${source.label} · 실제 시간표 아님</div>`;
+      ${rideHint.fn ? rideHint.fn(best) || '' : ''}<div class="ft">${source.label} · 실제 시간표 아님</div>`;
     panel.classList.add('open');
   };
 
   const ctx = { pedLight: crossings.pedLight };
+  const hideIds = new Set(); // [ride]
   let acc = 1, rendered = 0, nearAll = [];
   const focus = { x: 0, z: 0 };
   function update(dt, fx, fz, inLive) {
@@ -123,6 +136,8 @@ export function createCorridorBuses(root, T, { crossings, terrain, overlay, live
       const y = gy(v.x, v.z, a.m.position.y || 0);
       a.m.position.set(v.x, y + 0.08, v.z); a.m.rotation.y = v.heading; a.m.scale.setScalar(v.scale);
       a.m.userData.state = v.state;
+      const hide = hideIds.has(v.id); // [ride] 내가 타고 있는 버스는 탑승용 모델이 대신 그린다
+      if (a.m.visible === hide) { a.m.visible = !hide; a.tag.el.style.display = hide ? 'none' : ''; }
     }
     for (const [id, a] of active) if (!seen.has(id)) { give(a); active.delete(id); }
     rendered = active.size;
@@ -143,6 +158,10 @@ export function createCorridorBuses(root, T, { crossings, terrain, overlay, live
       rendered = 0; nearAll = [];
     },
     get panelStop() { return panelStop; },
+    // [ride] 탑승 연동
+    stops, stopById, hideIds, ctx, gy,
+    setRideHint(fn) { rideHint.fn = fn; },
+    refreshPanel() { acc = 1; },
     stats: () => ({ sim: sim.buses.length, rendered, stops: stops.length, paths: sim.paths.length, live: source.stats?.live || 0, livePolls: source.stats?.polls || 0, liveFail: source.stats?.fail || 0, pool: [...pool.values()].reduce((a, l) => a + l.length, 0) }),
   };
 }

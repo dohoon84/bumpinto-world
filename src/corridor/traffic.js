@@ -64,19 +64,34 @@ class CorridorCars extends Taxis {
     this._extend(t);
   }
   _tag() {}
+  // [ride] 호출(배차)된 택시: 정해진 경로(plan)만 따라가고, 상자/정자 영역 제한·재배치에서 빠진다.
+  _extend(t) {
+    if (!t.hired) return super._extend(t);
+    while (t.cum.length > 3 && t.cum[1] < t.s - 30) {
+      const d = t.cum[1]; t.pts.shift(); t.cum.shift(); for (let k = 0; k < t.cum.length; k++) t.cum[k] -= d;
+      t.s -= d; for (const g of t.segs) g.sEnd -= d; for (const q of t.sigQ) q.s -= d; if (t.stop) t.stop.s -= d;
+    }
+    t.segs = t.segs.filter((g) => g.sEnd > t.s - 5);
+    t.sigQ = t.sigQ.filter((q) => q.s > t.s - 10);
+  }
+  hire(t) { t.hired = true; t.cool = 1e9; t.stop = null; t.leaving = false; if (t.state === 'pickup') { t.state = 'drive'; t.latT = 0; } }
+  // edges: [{ from, to, way }] (from 은 t.node 부터 이어짐). 다 붙인 뒤 폴리라인 길이를 돌려준다.
+  appendRoute(t, edges) { for (const e of edges) this._append(t, e); return t.cum[t.cum.length - 1]; }
+  release(t) { t.hired = false; t.manual = false; t.stop = null; t.state = 'drive'; t.latT = 0; t.cool = 40; t.leaving = false; super._extend(t); }
   // 라이브 update 와 같되, 스폰할 차도가 없어 대기 중인 차는 건너뜀
   update(dt) {
     const act = this.list.filter((t) => !t.parked);
     const buses = this.transit?.source?.vehicles?.() || [];
     const others = act.map((t) => { const [x, z, dx, dz] = this._sample(t, t.s); return { x, z, dx, dz, t }; }).concat(buses.map((b) => ({ x: b.x, z: b.z, dx: Math.sin(b.heading ?? 0), dz: Math.cos(b.heading ?? 0), bus: true })));
-    for (const t of act) this._step(t, dt, others);
+    for (const t of act) if (!t.manual) this._step(t, dt, others); // [ride] 탑승 중인 택시는 ride 가 직접 움직임
   }
   tick(dt, fx, fz) {
     const moved = Math.hypot(fx - this.focus.x, fz - this.focus.z) > BOX * 1.5;
     this.focus.x = fx; this.focus.z = fz;
     this.box = { x0: fx - BOX, x1: fx + BOX, z0: fz - BOX, z1: fz + BOX };
-    if (!this.started || moved) { this.started = true; for (let i = 0; i < this.count; i++) this._spawn(i, true); }
+    if (!this.started || moved) { this.started = true; for (let i = 0; i < this.count; i++) if (!this.list[i]?.hired) this._spawn(i, true); } // [ride] 호출된 택시는 유지
     for (const t of this.list) {
+      if (t.hired) continue; // [ride]
       if (t.parked) { t.retry = (t.retry || 0) - dt; if (t.retry <= 0) { t.retry = 1; this._spawn(t.i, false); } continue; }
       const p = t.mesh.position;
       if (t.age > 0.5 && (Math.abs(p.x - fx) > BOX + 60 || Math.abs(p.z - fz) > BOX + 60)) this._spawn(t.i, false);

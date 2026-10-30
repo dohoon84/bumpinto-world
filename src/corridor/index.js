@@ -238,6 +238,7 @@ export function createCorridor({ scene, corridorData, terrain, world, renderer, 
   let life = null;
   const api = {
     root, bounds, stations, tiles, stats, crossings, landmarks, inLive,
+    liveBox: live, // [ride]
     get lotte() { return lotte; },
     isBlocked: corridorBlocked, onRoad: corridorOnRoad,
     afterTerrain() { addOuterGround(); },
