@@ -11,6 +11,7 @@ import { createLandmarks } from './landmarks/index.js';
 import { stationSign, Grid } from '../world.js';
 import { drawBaseMap } from '../phone.js';
 import { addInstancedTrees } from '../world/trees.js';
+import { createCorridorLife } from './life.js';
 
 export async function loadCorridorData(baseUrl) {
   const get = (f) => fetch(baseUrl + f).then((r) => (r.ok ? r.json() : null)).catch(() => null);
@@ -227,10 +228,18 @@ export function createCorridor({ scene, corridorData, terrain, world, renderer, 
 
   const stats = { builtDetail: 0, builtLod: 0, chRoads: ch.length, signals: crossings.signals, chTrees: 0 };
   let chTreesDone = false;
+  let life = null;
   const api = {
     root, bounds, stations, tiles, stats, crossings, landmarks, inLive,
     isBlocked: corridorBlocked, onRoad: corridorOnRoad,
     afterTerrain() { addOuterGround(); },
+    // 버스·차량·보행 NPC (수내 → 롯데). game.js 가 버스 프록시가 정해진 뒤 한 번 부른다. ?clife=0 이면 끔
+    attachLife({ proxy, mode } = {}) {
+      if (life || params?.get('clife') === '0') return life;
+      life = createCorridorLife({ root, baseUrl, crossings, terrain, terrainT: corridorData.terrainT, world, overlay, stations: index.stations, liveBox: live, params, proxy, mode });
+      return life;
+    },
+    get life() { return life; },
     update(dt, x, z, mode = 'follow') {
       if (!chTreesDone) { chTreesDone = true; stats.chTrees = chTrees(); }
       acc += dt;
@@ -239,6 +248,7 @@ export function createCorridor({ scene, corridorData, terrain, world, renderer, 
       updateSigns();
       crossings.update(dt);
       landmarks.update(dt);
+      life?.update(dt, x, z);
     },
     // 위치 주변 상세 타일을 즉시 로드·빌드 (텔레포트/스크린샷용)
     async preload(x, z, r = Q.detail) {

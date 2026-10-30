@@ -272,6 +272,7 @@ const busProxy = proxyParam === 'local'
     : (params.has('shot') && !busParam ? '' : DEFAULT_BUS_PROXY);
 const busMode = busParam === 'sim' ? 'sim' : (busParam === 'realtime' || busProxy) ? 'realtime' : 'sim';
 const transit = transitData ? buildTransit(scene, transitData, world, overlay, { mode: busMode, proxy: busProxy }) : null;
+corridor?.attachLife({ proxy: busProxy, mode: busMode }); // [corridor] 수내→롯데 버스·차량·보행 NPC (?clife=0 끔)
 if (transit) {
   corridorClock.simTime = () => transit.simTime; // [corridor] 코리더 신호등도 같은 시계
   npcs.guard = makeCrossingGuard(transit);
