@@ -69,11 +69,15 @@ function getEnterLines(targetRegion) {
   return targetRegion.lobbyEnterLines;
 }
 // [corridor] 지구본에서 역을 골랐으면 로비 제목·로딩 문구를 그 역 기준으로 (예: '서현역에 입장')
-function entryRegion() {
-  const st = corridorAt && region.id === 'jeongja' ? corridorStationLabel(corridorAt) : null;
-  if (!st) return region;
+function entryRegion(r = region, at = corridorAt) {
+  const st = at && r?.id === 'jeongja' ? corridorStationLabel(at) : null;
+  if (!st) return r;
+  const region = r;
   return {
     ...region,
+    // 보딩패스 도착지: 지역(성남 정자동) 대신 고른 역 (양 언어 병기)
+    airportName: `${st.ko} · ${st.short}`,
+    enAirportName: `${st.ko} · ${st.short}`,
     lobbyTitle: `${st.ko}에 입장`,
     enLobbyTitle: `Enter ${st.en}, KR`,
     lobbyEnterLines: [`${st.ko} 출구로 걸어 나가는 중`, ...(region.lobbyEnterLines || []).slice(1)],
@@ -86,13 +90,16 @@ function getFlightLines(targetRegion) {
   if (isEn()) return targetRegion.enFlightLines || targetRegion.flightLines || targetRegion.enLobbyEnterLines;
   return targetRegion.flightLines || targetRegion.lobbyEnterLines;
 }
+// 지구본(노선도·리스트·게임 안 🌏)에서 직접 고른 입장이면 서버에 저장된 마지막 위치 대신 고른 곳(역 / 기본 스폰)으로.
+// ?from= 은 다른 지역에서 지구본으로 고르고 넘어온 경우. ?passport=1 / ?enter=1 만 있는 진입은 기존처럼 마지막 위치 이어하기.
+let explicitPick = params.has('from');
 let arrivalFlightScreen = null;
 if (fromRegion && !shot) {
   arrivalFlightScreen = getEnterScreen();
   // 나라가 바뀌었을 때만 비행기(보딩패스), 같은 나라면 일반 입장 로딩
   if (isFlightBetween(fromRegion, region)) {
     arrivalFlightScreen.show(getFlightLines(entryRegion()), {
-      flight: { from: fromRegion, to: region },
+      flight: { from: fromRegion, to: entryRegion() }, // [corridor] 고른 역이 도착지
       minMs: 3400,
       startProgress: 0.22,
     });
@@ -107,12 +114,14 @@ let passportQueued = false;
 const handleGateEnter = (chosenRegionId = region.id, gateOpts = undefined) => {
   const hasPassport = isPassportActive();
   corridorAt = gateOpts?.at || null; // [corridor]
+  explicitPick = true;
   if (chosenRegionId && chosenRegionId !== region.id) {
     const targetRegion = getRegion(chosenRegionId);
     const screen = getEnterScreen();
     if (isFlightBetween(region, targetRegion)) {
-      screen.show(getFlightLines(targetRegion), {
-        flight: { from: region, to: targetRegion },
+      const dest = entryRegion(targetRegion, corridorAt); // [corridor] 고른 역이 있으면 그 역 이름
+      screen.show(getFlightLines(dest), {
+        flight: { from: region, to: dest },
         minMs: 3400,
       });
     } else {
@@ -892,7 +901,9 @@ function completeWorldJoin(name, look, session) {
   me.name = name; me.color = look.color; me.look = look;
   mySit = ''; myAfk = false; myEmote = ''; myEmoteUntil = 0; idleTime = 0;
   wear(look);
-  if (session?.place) applySession(session);
+  const picked = explicitPick;
+  explicitPick = false;
+  if (session?.place && !picked) applySession(session);
   else player.position.copy(pos);
   player.visible = true;
   nameTag.hidden = false;
@@ -910,7 +921,9 @@ function completeWorldJoin(name, look, session) {
   inventory?.refresh();
   syncRainControl();
   trackEvent('world_join', { region: region.id, has_pin: !!session?.hasPin, resumed: !!session?.place });
+  const toStation = !!corridorAt;
   corridorArrive?.(); // [corridor]
+  if (picked && !toStation) { try { rememberPlace(true); } catch {} } // 고른 기본 스폰을 새 마지막 위치로 저장 (역 이동은 teleport 가 저장)
 }
 joinWithPassport = async () => {
   const passport = readSavedPassport();

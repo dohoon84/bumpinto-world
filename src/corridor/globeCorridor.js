@@ -13,9 +13,9 @@ export const CORRIDOR_STATION_IDS = new Set(CORRIDOR_STATIONS.map((s) => s.id));
 export const CORRIDOR_STATION_COUNT = CORRIDOR_STATIONS.length + 1;
 // 입장 화면(로비 제목·로딩 문구)에 쓰는 역 이름 — ?at= 역 id 기준
 export function corridorStationLabel(id) {
-  if (id === CORRIDOR_LANDMARK.id) return { ko: CORRIDOR_LANDMARK.ko, en: CORRIDOR_LANDMARK.en };
+  if (id === CORRIDOR_LANDMARK.id) return { ko: CORRIDOR_LANDMARK.ko, en: CORRIDOR_LANDMARK.en, short: CORRIDOR_LANDMARK.en };
   const s = CORRIDOR_STATIONS.find((x) => x.id === id);
-  return s ? { ko: `${s.ko}역`, en: `${s.en} Station` } : null;
+  return s ? { ko: `${s.ko}역`, en: `${s.en} Station`, short: s.en } : null;
 }
 export const corridorName = (en) => (en ? 'Bundang–Jamsil Line' : '분당–잠실 구간');
 
