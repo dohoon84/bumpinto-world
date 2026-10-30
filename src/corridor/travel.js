@@ -1,4 +1,5 @@
 // [corridor] 📍 이동(Travel) 버튼 + T 키 패널: 정자 ↔ 코리더 역 / 롯데월드타워로 순간이동. ?at=<역 id>|lotte 로 바로 시작.
+import { lotteSiteLabel } from './lotteOpening.js';
 import { isEn, onLangChange } from '../i18n.js';
 
 const CSS = `
@@ -32,7 +33,9 @@ export function mountTravel({ corridor, home, teleport }) {
     panel.innerHTML = `<h4>${en ? 'Seongnam-daero → Songpa-daero' : '성남대로 → 송파대로'}</h4>`;
     for (const d of dests) {
       const b = document.createElement('button'); b.type = 'button';
-      b.innerHTML = `<span>${d.id === 'lotte' ? '🏙️' : '🚇'} ${en ? d.en : d.ko}</span><span class="ko">${en ? d.ko : d.en}</span>`;
+      const site = d.id === 'lotte' ? lotteSiteLabel(en) : null; // 오픈 전: 건설중 공정률
+      b.innerHTML = site ? `<span>🚧 ${site.main}</span><span class="ko">${site.sub}</span>`
+        : `<span>${d.id === 'lotte' ? '🏙️' : '🚇'} ${en ? d.en : d.ko}</span><span class="ko">${en ? d.ko : d.en}</span>`;
       b.onclick = () => go(d.id);
       panel.appendChild(b);
     }
@@ -65,7 +68,7 @@ export function mountTravel({ corridor, home, teleport }) {
     if (Math.hypot(q.x - p.x, q.z - p.z) > 0.01) teleport(q.x, q.z);
     return true;
   }
-  const toggle = () => { panel.hidden = !panel.hidden; };
+  const toggle = () => { panel.hidden = !panel.hidden; if (!panel.hidden) render(); }; // 열 때 다시 그림(공정률 갱신)
   btn.onclick = toggle;
   addEventListener('keydown', (e) => {
     if (e.code !== 'KeyT' || e.repeat || e.ctrlKey || e.metaKey || e.altKey) return;

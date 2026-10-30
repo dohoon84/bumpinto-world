@@ -4,6 +4,7 @@
 // 노선도의 정자는 기존 정자 입장(data-enter-region="jeongja")과 똑같다. ?corridor=0 이면 worldGate 가 이 모듈을 아예 마운트하지 않는다.
 import * as THREE from 'three';
 import { CORRIDOR_ORIGIN, CORRIDOR_STATIONS, CORRIDOR_LANDMARK } from './globeStations.js';
+import { lotteSiteLabel, lotteClock } from './lotteOpening.js';
 
 export function corridorGlobeEnabled(params = new URLSearchParams(location.search), region) {
   return !!region?.features?.corridor && params.get('corridor') !== '0';
@@ -13,7 +14,8 @@ export const CORRIDOR_STATION_IDS = new Set(CORRIDOR_STATIONS.map((s) => s.id));
 export const CORRIDOR_STATION_COUNT = CORRIDOR_STATIONS.length + 1;
 // 입장 화면(로비 제목·로딩 문구)에 쓰는 역 이름 — ?at= 역 id 기준
 export function corridorStationLabel(id) {
-  if (id === CORRIDOR_LANDMARK.id) return { ko: CORRIDOR_LANDMARK.ko, en: CORRIDOR_LANDMARK.en, short: CORRIDOR_LANDMARK.en };
+  if (id === CORRIDOR_LANDMARK.id) return lotteClock.isOpen() ? { ko: CORRIDOR_LANDMARK.ko, en: CORRIDOR_LANDMARK.en, short: CORRIDOR_LANDMARK.en }
+    : { ko: '잠실 랜드마크 공사현장', en: 'Jamsil Landmark site', short: 'Jamsil Landmark' }; // 오픈 전(lotteOpening.js)
   const s = CORRIDOR_STATIONS.find((x) => x.id === id);
   return s ? { ko: `${s.ko}역`, en: `${s.en} Station`, short: s.en } : null;
 }
@@ -89,7 +91,11 @@ export function mountGlobeCorridor({ root, camera, anchorSpot, globe, isEn, onEn
 
   function lineText(s) {
     if (s.live) return isEn() ? '🚇 Jeongja Stn. · Suin-Bundang · Shinbundang — the original Jeongja-dong (same entry as before)' : '🚇 정자역 · 수인분당선 · 신분당선 — 기존 정자동 그대로 입장';
-    if (s.landmark) return isEn() ? '🏙️ Lotte World Tower 555 m — start at the tower plaza (Jamsil)' : '🏙️ 롯데월드타워 555m — 타워 앞 광장에서 시작 (잠실)';
+    if (s.landmark) {
+      const site = lotteSiteLabel(isEn());
+      if (site) return isEn() ? `🚧 ${site.main} — grand opening countdown at the site (Jamsil)` : `🚧 ${site.main} — 현장에서 오픈 카운트다운 (잠실)`;
+      return isEn() ? '🏙️ Lotte World Tower 555 m — start at the tower plaza (Jamsil)' : '🏙️ 롯데월드타워 555m — 타워 앞 광장에서 시작 (잠실)';
+    }
     const lines = (s.lines || []).map((l) => (isEn() ? lineEn(l) : l)).join(' · ');
     return isEn() ? `🚇 ${s.en} Stn. · ${lines} — start on the sidewalk by an exit` : `🚇 ${s.ko}역 · ${lines} — 역 출구 앞 인도에서 시작`;
   }
@@ -110,11 +116,12 @@ export function mountGlobeCorridor({ root, camera, anchorSpot, globe, isEn, onEn
       ? `<rect data-dot="${s.id}" class="gcm-dot" x="${s.dx - 4}" y="${s.dy - 4}" width="8" height="8" transform="rotate(45 ${s.dx} ${s.dy})"/>`
       : `<circle data-dot="${s.id}" class="gcm-dot" cx="${s.dx}" cy="${s.dy}" r="${s.live ? 5 : 4.5}"/>`).join('');
     const labels = all.map((s) => {
-      const main = en ? s.en : s.ko, sub = en ? s.ko : s.en;
+      const site = s.landmark ? lotteSiteLabel(en) : null; // 오픈 전: '잠실 랜드마크 건설중… 공정률 NN%'
+      const main = site ? site.main : en ? s.en : s.ko, sub = site ? site.sub : en ? s.ko : s.en;
       const pos = s.side === 'left' ? `right:${L.width - L.colL}px` : `left:${L.colR}px`;
       const top = s.dy + (s.landmark ? -12 : 0);
       const attr = s.live ? 'data-enter-region="jeongja"' : `data-corridor-at="${s.id}"`;
-      return `<button type="button" class="gcm-stn ${s.side} ${s.live ? 'is-live' : ''}" ${attr} data-hot="${s.id}" style="${pos};top:${top}px">${s.landmark ? '🏙️ ' : ''}${main}<small>${sub}</small></button>`;
+      return `<button type="button" class="gcm-stn ${s.side} ${s.live ? 'is-live' : ''}${site ? ' is-site' : ''}" ${attr} data-hot="${s.id}" ${site ? `data-progress="${site.pct}"` : ''} style="${pos};top:${top}px">${s.landmark ? (site ? '🚧 ' : '🏙️ ') : ''}${main}<small>${sub}</small></button>`;
     }).join('');
     panel.innerHTML = `
       <div class="gcm-hd"><div>🚇 ${corridorName(en)}<small>${en ? `Jeongja → Jamsil · ${CORRIDOR_STATION_COUNT} stations · pick one to start` : `정자 → 잠실 · ${CORRIDOR_STATION_COUNT}개 역 · 시작할 역을 고르세요`}</small></div>

@@ -8,6 +8,7 @@ import { mergeTancheon, coveredFn, holeyGround, channelWaterMesh } from './tanch
 import { buildDetailTile, buildLodTile, roadMesh, CAR_KINDS } from './tileMesh.js';
 import { buildCorridorCrossings } from './crossings.js';
 import { createLandmarks } from './landmarks/index.js';
+import { createLotteEvent } from './landmarks/lotteEvent.js';
 import { stationSign, Grid } from '../world.js';
 import { drawBaseMap } from '../phone.js';
 import { addInstancedTrees } from '../world/trees.js';
@@ -218,9 +219,13 @@ export function createCorridor({ scene, corridorData, terrain, world, renderer, 
   const crossings = buildCorridorCrossings(root, base.crossings, { getSimTime });
   const landmarks = createLandmarks(root, index.landmarks, renderer);
   const tower = index.landmarks.find((l) => l.id === 'lotte-world-tower');
+  let lotte = null;
   if (tower) {
     const at = tower.fit || tower.pos;
-    overlay.add({ cls: 'label landmark', text: '🏙️ 롯데월드타워 Lotte World Tower · 555m', getPos: () => new THREE.Vector3(at.x, 570, at.z), maxDist: 9000, minDist: 60 });
+    const label = overlay.add({ cls: 'label landmark', text: '🏙️ 롯데월드타워 Lotte World Tower · 555m', getPos: () => new THREE.Vector3(at.x, 570, at.z), maxDist: 9000, minDist: 60 });
+    // 그랜드 오픈 이벤트: 오픈 전엔 타워 대신 카운트다운 (?lotteopen=now|done|pending, lotteOpening.js)
+    const item = landmarks.items.find(({ l }) => l.id === 'lotte-world-tower');
+    if (item) lotte = createLotteEvent({ root, tower: item.g, at, rotY: item.g.rotation.y, height: item.g.userData.params?.height || 555, halfM: tower.fit?.halfM || 36, label });
   }
 
   // ---------- 이동 가능 범위: 라이브 bbox ∪ 코리더 경계 ----------
@@ -233,6 +238,7 @@ export function createCorridor({ scene, corridorData, terrain, world, renderer, 
   let life = null;
   const api = {
     root, bounds, stations, tiles, stats, crossings, landmarks, inLive,
+    get lotte() { return lotte; },
     isBlocked: corridorBlocked, onRoad: corridorOnRoad,
     afterTerrain() { addOuterGround(); },
     // 버스·차량·보행 NPC (수내 → 롯데). game.js 가 버스 프록시가 정해진 뒤 한 번 부른다. ?clife=0 이면 끔
@@ -250,6 +256,7 @@ export function createCorridor({ scene, corridorData, terrain, world, renderer, 
       updateSigns();
       crossings.update(dt);
       landmarks.update(dt);
+      lotte?.update(dt);
       updateNight(dt); // [corridor] 저녁 건물 불빛 페이드
       life?.update(dt, x, z);
     },
