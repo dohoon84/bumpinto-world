@@ -5,7 +5,7 @@ import { MAP_W, MAP_H, LAND, KOREA } from './worldLand.js';
 import { trackEvent } from './analytics.js';
 import { OPEN_REGIONS, UPCOMING_REGIONS, getCurrentRegion, getRegion } from './regions/index.js';
 import { isEn, tr, toggleLang, onLangChange } from './i18n.js';
-import { corridorGlobeEnabled, mountGlobeCorridor, CORRIDOR_STATION_IDS } from './corridor/globeCorridor.js'; // [corridor]
+import { corridorGlobeEnabled, mountGlobeCorridor, CORRIDOR_STATION_IDS, CORRIDOR_STATION_COUNT, corridorName } from './corridor/globeCorridor.js'; // [corridor]
 
 export { OPEN_REGIONS, UPCOMING_REGIONS };
 
@@ -125,6 +125,18 @@ function earthTexture() {
   tex.colorSpace = THREE.SRGBColorSpace;
   tex.anisotropy = 8;
   return tex;
+}
+// [corridor] 지역 목록 국가 섹션 (country 필드가 없으면 좌표로 판단)
+const COUNTRY_META = {
+  KR: { flag: '🇰🇷', ko: '한국', en: 'Korea' },
+  US: { flag: '🇺🇸', ko: '미국', en: 'USA' },
+  ETC: { flag: '🌐', ko: '기타', en: 'Other' },
+};
+function countryOf(r) {
+  if (r.country) return r.country;
+  if (r.lat > 33 && r.lat < 39 && r.lon > 124 && r.lon < 132) return 'KR';
+  if (r.lat > 18 && r.lat < 72 && r.lon > -170 && r.lon < -60) return 'US';
+  return 'ETC';
 }
 function lonLat(lon, lat, radius) {
   const phi = (90 - lat) * Math.PI / 180;
@@ -298,7 +310,7 @@ export function openWorldGate({ onEnter }) {
 
   scene.add(air, globe);
 
-  // [corridor] 정자 핀 아래 '분당–송파 코리더' 묶음 핀 + 펼치는 역 노선도 (?corridor=0 이면 없음)
+  // [corridor] 정자 핀 자리에 '분당–잠실 구간' 묶음 핀 + 펼치는 역 노선도(정자 포함) (?corridor=0 이면 없음 → 기존 정자 핀)
   const jeongjaRegion = getRegion('jeongja');
   const corridorGlobe = corridorGlobeEnabled(new URLSearchParams(location.search), jeongjaRegion)
     ? mountGlobeCorridor({
@@ -308,6 +320,9 @@ export function openWorldGate({ onEnter }) {
         onFocus: () => focusRegionOnGlobe('jeongja'),
       })
     : null;
+
+  // [corridor] 국가 섹션: 기본은 한국 펼침
+  let openCountry = 'KR';
 
   const initialMarker = pinMarkers.find((m) => m.region.id === activeRegion.id) || pinMarkers[0];
   globe.rotation.y = -Math.atan2(initialMarker.spot.x, initialMarker.spot.z);
@@ -415,7 +430,13 @@ export function openWorldGate({ onEnter }) {
       '다 같이 만들어 가는 오픈 월드 · Korea & USA',
       'Walk real-world neighborhoods together · Korea & USA',
     );
-    root.querySelector('#gate-note').innerHTML = live
+    // [corridor] 구간이 켜져 있으면 정자 링크 대신 '분당–잠실 구간' (노선도를 펼친다)
+    const kLink = corridorGlobe ? `<b class="gate-note-link" data-corridor-open="1">${tr(`${corridorName(false)} · 열림`, `🇰🇷 ${corridorName(true)}`)}</b>` : null;
+    root.querySelector('#gate-note').innerHTML = kLink
+      ? (live
+        ? tr(`지구본의 ${kLink} 또는 <b class="gate-note-link" data-enter-region="starbase">🚀 Starbase, TX · OPEN</b>을 눌러 입장하세요`, `Click ${kLink} or <b class="gate-note-link" data-enter-region="starbase">🚀 Starbase, TX</b> on the globe to enter`)
+        : tr(`지구본의 ${kLink}으로 입장하거나 <b>🚀 Starbase, TX 오픈 카운트다운</b>을 확인하세요`, `Enter ${kLink} now or check the <b>🚀 Starbase, TX Launch Countdown</b>`))
+      : live
       ? tr(
           '지구본의 <b class="gate-note-link" data-enter-region="jeongja">정자동 · 열림</b> 또는 <b class="gate-note-link" data-enter-region="starbase">🚀 Starbase, TX · OPEN</b>을 눌러 입장하세요',
           'Click <b class="gate-note-link" data-enter-region="jeongja">🇰🇷 Jeongja-dong</b> or <b class="gate-note-link" data-enter-region="starbase">🚀 Starbase, TX</b> on the globe to enter',
@@ -477,8 +498,7 @@ export function openWorldGate({ onEnter }) {
         .join('');
     }
 
-    const openListHtml = OPEN_REGIONS.map(
-      (r) => {
+    const openItem = (r) => {
         const isSbCountdown = r.id === 'starbase' && !live;
         return `
         <li>
@@ -489,21 +509,20 @@ export function openWorldGate({ onEnter }) {
             <em>${isSbCountdown ? '⏱️ 11:00 KST' : (en ? 'OPEN · Enter' : '열림 · 입장')}</em>
           </button>
         </li>`;
-      },
-    ).join('');
+    };
+    const openListHtml = OPEN_REGIONS.map(openItem).join('');
 
-    // [corridor] 코리더로 열린 역(수내·서현·이매·야탑)은 '준비중' 목록 대신 코리더 항목 하나로 묶는다
+    // [corridor] 구간이 켜져 있으면: 정자 항목 → '분당–잠실 구간' 항목 하나(정자 포함), 구간 역(수내·서현·이매·야탑)은 '준비중'에서 뺀다
     const corridorListHtml = corridorGlobe ? `
         <li>
           <button type="button" class="gate-upcoming-item is-open" data-corridor-open="1">
             <span class="dot open"></span>
-            <span class="name">${en ? 'Bundang–Songpa Corridor' : '분당–송파 코리더'}</span>
-            <small>${en ? 'Sunae → Jamsil · 14 stations · Lotte World Tower' : '수내 → 잠실 · 14개 역 · 롯데월드타워'}</small>
+            <span class="name">${corridorName(en)}</span>
+            <small>${en ? `Jeongja → Jamsil · ${CORRIDOR_STATION_COUNT} stations · Lotte World Tower` : `정자 → 잠실 · ${CORRIDOR_STATION_COUNT}개 역 · 롯데월드타워`}</small>
             <em>${en ? 'OPEN · Enter' : '열림 · 입장'}</em>
           </button>
         </li>` : '';
-    const upcomingListHtml = UPCOMING_REGIONS.filter((r) => !corridorGlobe || !CORRIDOR_STATION_IDS.has(r.id)).map(
-      (r) => `
+    const upcomingItem = (r) => `
         <li>
           <button type="button" class="gate-upcoming-item" data-region="${r.id}">
             <span class="dot"></span>
@@ -511,14 +530,40 @@ export function openWorldGate({ onEnter }) {
             <small>${en ? (r.enDesc || r.desc) : r.desc}</small>
             <em>${en ? 'Soon' : '준비중'}</em>
           </button>
-        </li>`,
-    ).join('');
-    regionsListEl.innerHTML = openListHtml + corridorListHtml + upcomingListHtml;
+        </li>`;
+    if (!corridorGlobe) {
+      regionsListEl.innerHTML = openListHtml + UPCOMING_REGIONS.map(upcomingItem).join('');
+    } else {
+      // [corridor] 국가별 섹션(아코디언): 국가 머리글을 누르면 그 아래로 지역 목록이 펼쳐진다
+      const entries = [
+        { country: 'KR', open: true, html: corridorListHtml },
+        ...OPEN_REGIONS.filter((r) => r.id !== 'jeongja').map((r) => ({ country: countryOf(r), open: true, html: openItem(r) })),
+        ...UPCOMING_REGIONS.filter((r) => !CORRIDOR_STATION_IDS.has(r.id)).map((r) => ({ country: countryOf(r), open: false, html: upcomingItem(r) })),
+      ];
+      const order = [...new Set(['KR', 'US', ...entries.map((x) => x.country)])].filter((c) => entries.some((x) => x.country === c));
+      regionsListEl.innerHTML = order.map((c) => {
+        const meta = COUNTRY_META[c] || COUNTRY_META.ETC, items = entries.filter((x) => x.country === c);
+        const nOpen = items.filter((x) => x.open).length, nSoon = items.length - nOpen;
+        const expanded = openCountry === c;
+        const count = [nOpen ? tr(`열림 ${nOpen}`, `${nOpen} open`) : '', nSoon ? tr(`준비중 ${nSoon}`, `${nSoon} soon`) : ''].filter(Boolean).join(' · ');
+        return `
+        <li class="gate-country ${expanded ? 'is-expanded' : ''}" data-country-sec="${c}">
+          <button type="button" class="gate-country-hd" data-country="${c}" aria-expanded="${expanded}">
+            <span class="flag">${meta.flag}</span>
+            <span class="name">${en ? meta.en : meta.ko}</span>
+            <small>${en ? meta.ko : meta.en}</small>
+            <em>${count}</em>
+            <span class="chev">${expanded ? '▴' : '▾'}</span>
+          </button>
+          <ul class="gate-country-list" ${expanded ? '' : 'hidden'}>${items.map((x) => x.html).join('')}</ul>
+        </li>`;
+      }).join('');
+    }
 
     focusBarEl.innerHTML = OPEN_REGIONS.map(
       (r) => `
         <button type="button" class="gate-focus-chip ${r.id === focusedRegionId ? 'on' : ''}" data-focus-region="${r.id}">
-          ${r.id === 'starbase' ? tr('🇺🇸 Starbase, TX 보기', '🇺🇸 View Starbase, TX') : tr('🇰🇷 정자동 보기', '🇰🇷 View Jeongja, KR')}
+          ${r.id === 'starbase' ? tr('🇺🇸 Starbase, TX 보기', '🇺🇸 View Starbase, TX') : corridorGlobe ? tr(`🇰🇷 ${corridorName(false)} 보기`, `🇰🇷 View ${corridorName(true)}`) : tr('🇰🇷 정자동 보기', '🇰🇷 View Jeongja, KR')}
         </button>`,
     ).join('');
 
@@ -720,6 +765,20 @@ export function openWorldGate({ onEnter }) {
   }
 
   root.addEventListener('click', (e) => {
+    const countryBtn = corridorGlobe && e.target.closest('[data-country]');
+    if (countryBtn) { // [corridor] 국가 섹션 아코디언
+      const c = countryBtn.dataset.country;
+      openCountry = openCountry === c ? null : c;
+      root.querySelectorAll('[data-country-sec]').forEach((sec) => {
+        const on = sec.dataset.countrySec === openCountry;
+        sec.classList.toggle('is-expanded', on);
+        sec.querySelector('.gate-country-list').hidden = !on;
+        const hd = sec.querySelector('.gate-country-hd');
+        hd.setAttribute('aria-expanded', String(on));
+        hd.querySelector('.chev').textContent = on ? '▴' : '▾';
+      });
+      return;
+    }
     if (e.target.closest('#gate-lang-btn')) {
       toggleLang();
       return;
@@ -800,7 +859,7 @@ export function openWorldGate({ onEnter }) {
       const world = m.pin.getWorldPosition(ndc);
       const facing = world.clone().normalize().dot(camDir) > 0.32;
       if (m.btnEl) {
-        m.btnEl.hidden = !facing;
+        m.btnEl.hidden = !facing || (corridorGlobe && m.region.id === 'jeongja'); // [corridor] 정자 핀은 '분당–잠실 구간' 핀으로 합침
         if (facing) {
           world.project(camera);
           m.btnEl.style.left = `${(world.x * 0.5 + 0.5) * canvas.clientWidth}px`;
@@ -838,6 +897,7 @@ export function openWorldGate({ onEnter }) {
     const local = globe.worldToLocal(hit.point.clone());
     for (const m of pinMarkers) {
       if (local.angleTo(m.spot) < 0.14) {
+        if (corridorGlobe && m.region.id === 'jeongja') { corridorGlobe.toggle(true); return; } // [corridor] 노선도에서 역(정자 포함) 선택
         enter(m.region.id);
         return;
       }

@@ -17,8 +17,8 @@ const at = tower.fit || tower.pos;
 const lotte = { id: 'lotte', ko: '롯데월드타워', en: 'Lotte World Tower', x: at.x, z: at.z, ...unproj(at.x, at.z) };
 
 const out = `// [corridor] 자동 생성 — node scripts/corridor/build-globe.mjs (public/corridor/index.json 의 OSM 역 좌표)
-// 지구본의 '분당–송파 코리더' 묶음 핀과 펼친 노선도에 쓰인다. id 는 📍 이동(Travel)/?at= 의 역 id 와 같다.
-export const CORRIDOR_ORIGIN = ${JSON.stringify({ id: 'jeongja', ko: '정자', en: 'Jeongja', ...CENTER, x: 0, z: 0 })};
+// 지구본의 '분당–잠실 구간' 묶음 핀과 펼친 노선도에 쓰인다. id 는 📍 이동(Travel)/?at= 의 역 id 와 같다.
+export const CORRIDOR_ORIGIN = ${JSON.stringify({ id: 'jeongja', ko: '정자', en: 'Jeongja', lines: ['수인분당선', '신분당선'], ...CENTER, x: 0, z: 0 })};
 export const CORRIDOR_STATIONS = [
 ${stations.map((s) => '  ' + JSON.stringify(s) + ',').join('\n')}
 ];

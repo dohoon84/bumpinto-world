@@ -1,6 +1,6 @@
 // [corridor] 자동 생성 — node scripts/corridor/build-globe.mjs (public/corridor/index.json 의 OSM 역 좌표)
-// 지구본의 '분당–송파 코리더' 묶음 핀과 펼친 노선도에 쓰인다. id 는 📍 이동(Travel)/?at= 의 역 id 와 같다.
-export const CORRIDOR_ORIGIN = {"id":"jeongja","ko":"정자","en":"Jeongja","lat":37.3665,"lon":127.10835,"x":0,"z":0};
+// 지구본의 '분당–잠실 구간' 묶음 핀과 펼친 노선도에 쓰인다. id 는 📍 이동(Travel)/?at= 의 역 id 와 같다.
+export const CORRIDOR_ORIGIN = {"id":"jeongja","ko":"정자","en":"Jeongja","lines":["수인분당선","신분당선"],"lat":37.3665,"lon":127.10835,"x":0,"z":0};
 export const CORRIDOR_STATIONS = [
   {"id":"sunae","ko":"수내","en":"Sunae","lines":["수인분당선"],"x":522,"z":-1316.5,"lat":37.37841,"lon":127.11425},
   {"id":"seohyeon","ko":"서현","en":"Seohyeon","lines":["수인분당선"],"x":1325.3,"z":-2035,"lat":37.38491,"lon":127.12333},

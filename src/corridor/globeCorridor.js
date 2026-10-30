@@ -1,7 +1,7 @@
-// [corridor] 지구본(월드 게이트)에 코리더 역들을 추가한다 — 정자 핀 바로 아래 '분당–송파 코리더' 묶음 핀 1개.
-// 16km 코리더는 지구본 배율에서 1~2px 이라 역 핀을 따로 찍으면 정자 핀과 겹친다. 그래서 묶음 핀을 누르거나
+// [corridor] 지구본(월드 게이트)의 '분당–잠실 구간' 핀 — 정자 핀 자리를 대신하는 묶음 핀 1개(정자도 분당이라 구간의 첫 역).
+// 16km 구간은 지구본 배율에서 1~2px 이라 역 핀을 따로 찍으면 겹친다. 그래서 묶음 핀을 누르거나
 // 휠로 한국 쪽을 확대하면 실제 역 좌표(OSM)대로 그린 세로 노선도가 펼쳐지고, 역을 고르면 그 역 출구 앞 인도에서 시작한다.
-// 정자 핀·정자 입장 동작은 건드리지 않는다. ?corridor=0 이면 worldGate 가 이 모듈을 아예 마운트하지 않는다.
+// 노선도의 정자는 기존 정자 입장(data-enter-region="jeongja")과 똑같다. ?corridor=0 이면 worldGate 가 이 모듈을 아예 마운트하지 않는다.
 import * as THREE from 'three';
 import { CORRIDOR_ORIGIN, CORRIDOR_STATIONS, CORRIDOR_LANDMARK } from './globeStations.js';
 
@@ -9,11 +9,24 @@ export function corridorGlobeEnabled(params = new URLSearchParams(location.searc
   return !!region?.features?.corridor && params.get('corridor') !== '0';
 }
 export const CORRIDOR_STATION_IDS = new Set(CORRIDOR_STATIONS.map((s) => s.id));
+// 정자 포함 역 수 (롯데월드타워는 역이 아니라 랜드마크)
+export const CORRIDOR_STATION_COUNT = CORRIDOR_STATIONS.length + 1;
+export const corridorName = (en) => (en ? 'Bundang–Jamsil Line' : '분당–잠실 구간');
 
 const CSS = `
-.gate-open-pin.gate-corridor-pin { transform: translate(-50%, 55%); font-size: 13px; padding: 4px 10px; }
 .gate-open-pin.gate-corridor-pin.is-open { box-shadow: 0 0 0 2px #fff, 0 4px 14px rgba(0,0,0,.28); }
 .gate-corridor-pin .gate-pin-badge { color: #fff; }
+#world-gate .gate-country { list-style: none; display: flex; flex-direction: column; gap: 5px; }
+#world-gate .gate-country-hd { width: 100%; display: flex; align-items: center; gap: 7px; padding: 7px 8px; border-radius: 8px; border: 1px solid rgba(255,255,255,.14); background: rgba(255,255,255,.1); color: #fff; font: inherit; font-size: 12.5px; text-align: left; cursor: pointer; transition: background .15s, border-color .15s; }
+#world-gate .gate-country-hd:hover { background: rgba(31,95,191,.35); border-color: rgba(142,200,239,.45); }
+#world-gate .gate-country.is-expanded > .gate-country-hd { border-color: rgba(255,225,105,.55); background: rgba(255,225,105,.12); }
+#world-gate .gate-country-hd .flag { font-size: 14px; line-height: 1; }
+#world-gate .gate-country-hd .name { font-weight: 800; }
+#world-gate .gate-country-hd small { color: #9eb4c6; font-size: 10.5px; flex: 1; }
+#world-gate .gate-country-hd em { font-style: normal; font-size: 10.5px; font-weight: 700; color: #bcd0e4; }
+#world-gate .gate-country-hd .chev { color: #ffe169; font-size: 11px; width: 10px; text-align: center; }
+#world-gate .gate-country-list { list-style: none; margin: 0 0 3px; padding: 0 0 0 10px; display: flex; flex-direction: column; gap: 5px; border-left: 2px solid rgba(255,225,105,.28); margin-left: 8px; }
+#world-gate .gate-country-list[hidden] { display: none; }
 #gate-corridor-map { position: absolute; z-index: 5; width: 344px; padding: 10px 12px 10px; border-radius: 14px; background: rgba(10, 20, 36, .9); border: 1px solid rgba(110, 198, 255, .26); box-shadow: 0 10px 30px rgba(0,0,0,.4); color: #e8f2f8; pointer-events: auto; }
 #gate-corridor-map[hidden] { display: none !important; }
 #gate-corridor-map .gcm-hd { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 13px; font-weight: 800; }
@@ -32,8 +45,8 @@ const CSS = `
 #gate-corridor-map .gcm-ft { margin-top: 8px; min-height: 30px; font-size: 11.5px; font-weight: 600; color: #cfe0ee; line-height: 1.35; }
 `;
 
-const LINE_COLOR = { '수인분당선': '#f5a200', '8호선': '#e6186c', '2호선': '#33a23d', '3호선': '#fe5b10', '9호선': '#bdb092', '경강선': '#0054a6' };
-const lineEn = (l) => ({ '수인분당선': 'Suin-Bundang', '8호선': 'Line 8', '2호선': 'Line 2', '3호선': 'Line 3', '9호선': 'Line 9', '경강선': 'Gyeonggang' }[l] || l);
+const LINE_COLOR = { '수인분당선': '#f5a200', '신분당선': '#d31145', '8호선': '#e6186c', '2호선': '#33a23d', '3호선': '#fe5b10', '9호선': '#bdb092', '경강선': '#0054a6' };
+const lineEn = (l) => ({ '수인분당선': 'Suin-Bundang', '신분당선': 'Shinbundang', '8호선': 'Line 8', '2호선': 'Line 2', '3호선': 'Line 3', '9호선': 'Line 9', '경강선': 'Gyeonggang' }[l] || l);
 
 // 펼친 노선도 레이아웃(px): 실제 x(동)/z(남) 좌표를 같은 축척으로 옮기고, 이름표는 좌우로 번갈아 둔다(겹침 방지).
 export function layoutCorridorMap({ height = 430, width = 320 } = {}) {
@@ -61,21 +74,22 @@ export function mountGlobeCorridor({ root, camera, anchorSpot, globe, isEn, onEn
   root.append(pin, panel);
 
   const L = layoutCorridorMap();
-  let open = false, autoOpened = false, hovering = false, hot = null;
+  // dismissed: 사용자가 닫으면(✕·Esc·핀) 확대 상태여도 자동으로 다시 펼치지 않는다 — 한 번 줌아웃해야 다시 자동 펼침
+  let open = false, autoOpened = false, dismissed = false, hovering = false, hot = null;
   let dist = camera.position.length(), distTarget = dist, zoomed = false;
   const DIST0 = dist, DIST_MIN = 1.55, AUTO_OPEN = 2.35;
   const camDir0 = camera.position.clone().normalize(), camDir = camDir0.clone();
   const look0 = new THREE.Vector3(0, camera.position.y, 0), look = new THREE.Vector3(), aim = new THREE.Vector3();
 
   function lineText(s) {
-    if (s.live) return isEn() ? 'Jeongja Station — live neighbourhood (same as the Jeongja pin)' : '정자역 — 기존 정자동 (정자 핀과 같은 입장)';
+    if (s.live) return isEn() ? '🚇 Jeongja Stn. · Suin-Bundang · Shinbundang — the original Jeongja-dong (same entry as before)' : '🚇 정자역 · 수인분당선 · 신분당선 — 기존 정자동 그대로 입장';
     if (s.landmark) return isEn() ? '🏙️ Lotte World Tower 555 m — start at the tower plaza (Jamsil)' : '🏙️ 롯데월드타워 555m — 타워 앞 광장에서 시작 (잠실)';
     const lines = (s.lines || []).map((l) => (isEn() ? lineEn(l) : l)).join(' · ');
     return isEn() ? `🚇 ${s.en} Stn. · ${lines} — start on the sidewalk by an exit` : `🚇 ${s.ko}역 · ${lines} — 역 출구 앞 인도에서 시작`;
   }
   function render() {
     const en = isEn();
-    pin.querySelector('.pin-text').textContent = en ? `🚇 Bundang–Songpa Corridor · ${CORRIDOR_STATIONS.length} stations` : `🚇 분당–송파 코리더 · ${CORRIDOR_STATIONS.length}개 역`;
+    pin.querySelector('.pin-text').textContent = en ? `🚇 ${corridorName(true)} · ${CORRIDOR_STATION_COUNT} stations` : `🚇 ${corridorName(false)} · ${CORRIDOR_STATION_COUNT}개 역`;
     pin.querySelector('.gate-pin-badge').textContent = open ? '▴' : (en ? '▾ Expand' : '▾ 펼치기');
     pin.classList.toggle('is-open', open);
     const all = [...L.items, L.landmark];
@@ -97,7 +111,7 @@ export function mountGlobeCorridor({ root, camera, anchorSpot, globe, isEn, onEn
       return `<button type="button" class="gcm-stn ${s.side} ${s.live ? 'is-live' : ''}" ${attr} data-hot="${s.id}" style="${pos};top:${top}px">${s.landmark ? '🏙️ ' : ''}${main}<small>${sub}</small></button>`;
     }).join('');
     panel.innerHTML = `
-      <div class="gcm-hd"><div>${en ? '🚇 Bundang–Songpa Corridor' : '🚇 분당–송파 코리더'}<small>${en ? 'Seongnam-daero → Songpa-daero · pick a station' : '성남대로 → 송파대로 · 시작할 역을 고르세요'}</small></div>
+      <div class="gcm-hd"><div>🚇 ${corridorName(en)}<small>${en ? `Jeongja → Jamsil · ${CORRIDOR_STATION_COUNT} stations · pick one to start` : `정자 → 잠실 · ${CORRIDOR_STATION_COUNT}개 역 · 시작할 역을 고르세요`}</small></div>
         <button type="button" class="gcm-close" aria-label="${en ? 'Close' : '닫기'}">✕</button></div>
       <div class="gcm-body" style="height:${L.height}px;width:${L.width}px"><svg width="${L.width}" height="${L.height}">${seg}${leaders}${dots}</svg>${labels}</div>
       <div class="gcm-ft">${en ? 'Real station positions (OpenStreetMap). Scroll to zoom the globe.' : '실제 역 위치(OpenStreetMap) 기준 · 휠로 지구본 확대/축소'}</div>`;
@@ -113,6 +127,7 @@ export function mountGlobeCorridor({ root, camera, anchorSpot, globe, isEn, onEn
     if (ft) ft.textContent = s ? lineText(s) : (isEn() ? 'Real station positions (OpenStreetMap). Scroll to zoom the globe.' : '실제 역 위치(OpenStreetMap) 기준 · 휠로 지구본 확대/축소');
   }
   function setOpen(v, auto = false) {
+    if (!v && !auto) dismissed = true; else if (v && !auto) dismissed = false;
     if (open === v) return;
     open = v; autoOpened = v && auto;
     panel.hidden = !v;
@@ -129,7 +144,7 @@ export function mountGlobeCorridor({ root, camera, anchorSpot, globe, isEn, onEn
   panel.addEventListener('pointerleave', () => setHot(null));
   panel.addEventListener('focusin', (e) => { const b = e.target.closest('[data-hot]'); if (b) setHot(b.dataset.hot); });
   panel.addEventListener('click', (e) => {
-    if (e.target.closest('.gcm-close')) { e.stopPropagation(); setOpen(false); return; }
+    if (e.target.closest('.gcm-close')) { e.stopPropagation(); setOpen(false); hovering = false; return; }
     const b = e.target.closest('[data-corridor-at]');
     if (b) { e.stopPropagation(); b.classList.add('is-hot'); onEnterStation(b.dataset.corridorAt); }
     // 정자(data-enter-region="jeongja")는 기존 게이트 클릭 처리로 그대로 넘긴다
@@ -168,8 +183,9 @@ export function mountGlobeCorridor({ root, camera, anchorSpot, globe, isEn, onEn
       }
       const p = globe.localToWorld(world.copy(anchorSpot));
       const facing = p.clone().normalize().dot(camDir) > facingDot;
-      if (dist < AUTO_OPEN && facing && !open) setOpen(true, true);
-      else if (dist > AUTO_OPEN + 0.15 && open && autoOpened) setOpen(false);
+      if (dist > AUTO_OPEN + 0.15) dismissed = false;
+      if (dist < AUTO_OPEN && facing && !open && !dismissed) setOpen(true, true);
+      else if (dist > AUTO_OPEN + 0.15 && open && autoOpened) setOpen(false, true);
       pin.hidden = !facing;
       if (!facing) { panel.hidden = true; return; }
       p.project(camera);
