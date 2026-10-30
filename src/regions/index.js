@@ -24,6 +24,18 @@ export const UPCOMING_REGIONS = [
   { id: 'hongdae', name: '홍대입구', enName: 'Hongdae', desc: '경의선숲길 · 걷고싶은거리', enDesc: 'Hongik Univ. Street', lat: 37.5572, lon: 126.9245 },
 ];
 
+// 지역의 나라 (country 필드가 없으면 좌표로 판단) — 지구본 국가 섹션과 입장 화면(비행기/일반 로딩) 판단에 같이 쓴다
+export function countryOf(r) {
+  if (r?.country) return r.country;
+  if (r?.lat > 33 && r.lat < 39 && r.lon > 124 && r.lon < 132) return 'KR';
+  if (r?.lat > 18 && r.lat < 72 && r.lon > -170 && r.lon < -60) return 'US';
+  return 'ETC';
+}
+// 나라가 바뀌는 이동만 비행기(보딩패스) 화면, 같은 나라 안 이동은 일반 입장 로딩 화면
+export function isFlightBetween(from, to) {
+  return !!from && !!to && from.id !== to.id && countryOf(from) !== countryOf(to);
+}
+
 export function getRegionIdFromUrl() {
   if (typeof location === 'undefined') return DEFAULT_REGION_ID;
   const params = new URLSearchParams(location.search);

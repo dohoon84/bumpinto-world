@@ -4,16 +4,16 @@ import { createBus } from './busModel.js';
 import { createBusSource, TIME_COMPRESS } from './busSource.js';
 import { liveryOf } from './livery.js';
 
-const CYCLE = 60; // 신호 주기(초): 그룹0 보행 초록 0~20, 깜빡 20~26 / 그룹1 초록 30~50, 깜빡 50~56
-const hash = (s) => { let h = 2166136261; for (const ch of String(s)) h = Math.imul(h ^ ch.charCodeAt(0), 16777619); return (h >>> 0) / 4294967296; };
+export const CYCLE = 60; // 신호 주기(초): 그룹0 보행 초록 0~20, 깜빡 20~26 / 그룹1 초록 30~50, 깜빡 50~56
+export const hash = (s) => { let h = 2166136261; for (const ch of String(s)) h = Math.imul(h ^ ch.charCodeAt(0), 16777619); return (h >>> 0) / 4294967296; };
 
-function quad(pos, cx, cz, ax, az, bx, bz, hl, hw, y) { // 중심, 길이축(a), 폭축(b)
+export function quad(pos, cx, cz, ax, az, bx, bz, hl, hw, y) { // 중심, 길이축(a), 폭축(b)
   const p = [[-hl, -hw], [hl, -hw], [hl, hw], [-hl, hw]].map(([u, v]) => [cx + ax * u + bx * v, cz + az * u + bz * v]);
   const base = pos.length / 3;
   for (const [x, z] of p) pos.push(x, y, z);
   return [base, base + 2, base + 1, base, base + 3, base + 2];
 }
-function flatMesh(pos, idx, color) {
+export function flatMesh(pos, idx, color) {
   const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setIndex(idx); g.computeVertexNormals();
   const n = g.attributes.normal; for (let i = 0; i < n.count; i++) n.setXYZ(i, 0, 1, 0);
   const m = new THREE.Mesh(g, new THREE.MeshLambertMaterial({ color, polygonOffset: true, polygonOffsetFactor: -2 })); m.receiveShadow = true; return m;

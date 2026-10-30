@@ -217,6 +217,51 @@ NPC 대사 수정은 `src/entities/npcs.js`의 `NPC_DEFS` 배열만 고치면 �
 - ❌ 3D 버스 위치는 여전히 시뮬레이션. `getBusLocationListv2`는 좌표 없이 정류소 순번(`stationSeq`)만 주므로, 실제 위치를 그리려면 `getBusRouteStationListv2`(정류소 좌표) + `getBusRouteLineListv2`(형상)로 정류소 사이를 보간하는 작업이 추가로 필요합니다(`RealtimeBusSource.vehicles()` 자리).
 - 데이터 소스는 `src/transit/busSource.js`의 `update/vehicles/arrivals` 인터페이스만 맞추면 교체 가능합니다.
 
+## [corridor] 수내 → 롯데 코리더: 버스 · 실시간 위치 · 차량/보행 NPC
+
+정자 라이브 구간(정자 bbox)은 그대로이고, 코리더가 켜졌을 때(`?corridor=0` 이 아닐 때) 수내부터 잠실/롯데까지 아래가 추가로 돌아갑니다. 끄기: `?clife=0`(전부), `?cbus=0`, `?ccars=0`(차량 수, 기본 36), `?cwalkers=0`(보행 NPC 수, 기본 10).
+
+- **버스**: `npm run corridor:transit` → `public/corridor/transit.json`. 정자 프로토타입 transit 데이터 중 **OSM 노선 relation 형상이 있는 노선만** 쓰고, relation 의 ref 가 확인된 노선만 실제 번호로 표시(그 밖은 '시외버스' 같은 일반 표시). 정류장은 OSM 버스정류장 노드 좌표 그대로. 버스 모델·도색·쉘터·정류장 패널(`#corridor-stop-panel`)은 정자 것을 재사용.
+- **차량·택시**: `npm run corridor:drive` → `public/corridor/drive.json` (정자 `convert-taxi-terrain` 과 같은 규칙의 차도 그래프). 정자 택시 로직(`Taxis`)을 상속해 시점 주변 ±380m 상자 안에서만 스폰/디스폰, 인스턴싱으로 그림(차량 수와 무관하게 드로우콜 일정).
+- **보행 NPC**: 정자 아바타 모델, 차도 가장자리에서 떨어진 보도 + 탄천 둔치 길. 시점 140m 안에서만 표시.
+
+### 실시간 버스 위치 (공공데이터) — 코리더 전용 추가 경로
+같은 Worker(`server/bus-proxy/worker.js`)에 경로 2개를 추가했습니다(기존 경기 경로는 그대로). 키는 **Worker secret `DATA_GO_KR_KEY`** 하나(같은 data.go.kr 계정 키)이고 코드/브라우저에는 없습니다.
+
+| 경로 | 업스트림 | 캐시 |
+|---|---|---|
+| `GET /seoul/route-list?keyword=340` | `http://ws.bus.go.kr/api/rest/busRouteInfo/getBusRouteList?strSrch=` | 1일 |
+| `GET /seoul/positions?busRouteId=…` | `http://ws.bus.go.kr/api/rest/buspos/getBusPosByRtid?busRouteId=` (gpsX/gpsY, WGS84) | 30초 |
+
+추가로 활용신청할 서비스(data.go.kr, 무료 · 자동승인 · 개발계정 1,000건/일):
+- 서울특별시_버스위치정보조회 서비스 — [15000332](https://www.data.go.kr/data/15000332/openapi.do)
+- 서울특별시_노선정보조회 서비스 — [15000193](https://www.data.go.kr/data/15000193/openapi.do)
+- (경기 노선 위치까지 쓰려면) 위 표의 경기도_버스위치정보 조회 15080648 · 경기도_버스노선 조회 15080662 — 정자 실시간과 같은 것
+
+클라이언트(`src/corridor/busRealtime.js`):
+- 시점 1.2km 안 노선만, 한 번에 최대 3개 노선, 60초 주기. 같은 번호의 상·하행 relation 은 한 노선으로 묶음.
+- 서울 노선은 GPS 좌표를, 경기 노선은 정류소 순번 → 정류소 좌표를 그 노선의 OSM 경로에 투영(60m 이내)해서 놓고, 다음 조회까지 천천히 전진(추정).
+- 실패(Worker 에 경로 없음/404, 키 오류·한도 초과 502, 네트워크)면 그 노선은 10분 동안 조회하지 않고 시뮬레이션을 그대로 씀(화면 오류 없음).
+- 경기 노선 실시간은 **기본 꺼짐**(`?cbusgg=1` 로 켬): 정자 라이브 도착정보와 같은 경기 API 일일 한도를 나눠 쓰기 때문. 운영계정 트래픽을 받은 뒤 켜세요.
+- 노선 지역 판정은 OSM network 태그 → GBIS 목록 → 번호 체계(서울 간선 3자리·지선 4자리·광역 94xx·심야 N) 순서.
+
+직접 해야 할 일(이 저장소는 배포하지 않았습니다):
+```bash
+# 1) data.go.kr 에서 위 서울 2개 서비스 활용신청 (기존 키 그대로 사용, 동기화에 시간이 걸릴 수 있음)
+cd server/bus-proxy
+npx wrangler secret put DATA_GO_KR_KEY     # 이미 넣었다면 생략 (Decoding 키)
+npx wrangler deploy
+curl "https://jeongja-bus-proxy.<계정>.workers.dev/seoul/route-list?keyword=340"   # busRouteId 확인
+# 로컬: server/bus-proxy/.dev.vars 에 DATA_GO_KR_KEY=... (커밋 금지) 후 npm run bus-proxy → ?proxy=local
+```
+- 오프라인 테스트(네트워크·키 불필요): `npm run corridor:test` (탄천 합치기 · Worker 목업 · 실시간 어댑터 목업).
+- 기본 프록시 주소에 새 경로가 배포되기 전까지 코리더 실시간 요청은 404 → 조용히 시뮬레이션입니다.
+
+### 야간 연출 (코리더 전용)
+- **롯데월드타워 LED 쇼**: 저녁/밤(`evening.js`)이 되면 4초에 걸쳐 켜짐. 약 18초마다 3초 크로스페이드로 ① 흰 바탕 태극기(빨강·파랑 태극, 검은 4괘) ② 빨강/파랑 띠 ③ 어두운 외벽+창+큰 태극을 순환, 크라운은 파란 격자·꼭대기 빨강. 기존 타워 재질의 emissive 셰이더 패치(조명·블룸 없음) + 원경 가산 메시 1개(안개와 반대로 페이드, 5km 원평면 밖이면 4km 지점으로 축소 이동). 끄기 `?lotteled=0`.
+- **건물 불빛(수내부터)**: 코리더 타일 벽 재질을 라이브 파사드 재질에서 복제(텍스처 공유)해 emissive 셰이더로 상가 1층 쇼윈도·아파트/사무실 창(건물별 고정 시드, 따뜻/차가운 빛, 일부 깜빡임), LOD 타일은 점 무늬 불빛. 정자 bbox 북쪽 250m 안쪽 건물과 라이브 정자는 변경 없음. 끄기 `?cnight=0`.
+- 확인: `?hour=21` 또는 `?evening=1`.
+
 ## 멀티플레이(프레즌스 + 근접 채팅) 붙이는 법
 
 클라이언트는 이미 준비돼 있습니다. `src/net/protocol.js` 규격을 따르는 WebSocket 서버만 있으면 `?ws=wss://서버주소`로 바로 붙습니다.

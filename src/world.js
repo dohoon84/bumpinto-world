@@ -1,4 +1,5 @@
 // OSM 변환 데이터(public/jeongja.json) -> three.js 메시
+// [corridor] 도로/건물/공원 스타일과 지오메트리 헬퍼는 export 해서 코리더 타일(src/corridor)이 그대로 재사용한다.
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { addCafeSidewalks } from './world/cafeWalks.js';
@@ -10,13 +11,13 @@ import { addStationCafeCrowd } from './world/cafeCrowd.js';
 import { addPlaceSigns } from './world/signs.js';
 import { addInstancedTrees } from './world/trees.js';
 
-const ROAD_STYLE = {
+export const ROAD_STYLE = {
   primary: ['#8d939c', 0.06], secondary: ['#949aa3', 0.065], tertiary: ['#9ca1a9', 0.07], trunk: ['#8d939c', 0.06],
   residential: ['#a9adb4', 0.075], unclassified: ['#a9adb4', 0.075], service: ['#b4b7bc', 0.08], living_street: ['#b4b7bc', 0.08],
   footway: ['#e2d3b5', 0.1], pedestrian: ['#e6d8bb', 0.095], path: ['#d9c8a4', 0.1], cycleway: ['#d68c7a', 0.1], steps: ['#cbbd9f', 0.1], track: ['#c9b48d', 0.09],
 };
-const PARK_COLOR = { park: '#a8d59a', garden: '#b2dc9f', playground: '#c6e2a0', pitch: '#9fd08c', grass: '#b5dda3', forest: '#86bf7c', wood: '#86bf7c', scrub: '#9cc78a', meadow: '#bfe0a8', recreation_ground: '#b0d89c', village_green: '#b5dda3', grassland: '#bfe0a8', plaza: '#e9dfca' };
-const BUILDING_COLOR = {
+export const PARK_COLOR = { park: '#a8d59a', garden: '#b2dc9f', playground: '#c6e2a0', pitch: '#9fd08c', grass: '#b5dda3', forest: '#86bf7c', wood: '#86bf7c', scrub: '#9cc78a', meadow: '#bfe0a8', recreation_ground: '#b0d89c', village_green: '#b5dda3', grassland: '#bfe0a8', plaza: '#e9dfca' };
+export const BUILDING_COLOR = {
   apartments: '#f3e3d3', residential: '#f1e0cf', commercial: '#d8e2ee', office: '#d3deec',
   retail: '#eedccb', school: '#f4d7b8', kindergarten: '#f7d4c4', public: '#e8dcc8',
   house: '#efe6d6', civic: '#e4ddd0', church: '#efe8dc',
@@ -26,12 +27,12 @@ const BUILDING_COLOR = {
 };
 const FACADE_BAY = 3.2, FACADE_FLOOR = 3.2;
 
-const toShape = (ring, holes = []) => {
+export const toShape = (ring, holes = []) => {
   const s = new THREE.Shape(ring.map(([x, z]) => new THREE.Vector2(x, -z)));
   for (const h of holes) s.holes.push(new THREE.Path(h.map(([x, z]) => new THREE.Vector2(x, -z))));
   return s;
 };
-function flatGeo(polys, y) {
+export function flatGeo(polys, y) {
   const geos = [];
   for (const p of polys) {
     try { const g = new THREE.ShapeGeometry(toShape(p.o, p.holes || [])); g.rotateX(-Math.PI / 2); g.translate(0, y + (p.h || 0), 0); geos.push(g); } catch {} // [terrain] p.h = 폴리곤 높이(탄천 수면)
@@ -39,7 +40,7 @@ function flatGeo(polys, y) {
   return geos.length ? mergeGeometries(geos) : null;
 }
 // 폴리라인 -> 평평한 리본(도로). 꺾이는 지점엔 원판을 깔아 이음새를 메움
-function ribbonGeo(pts, w, y, caps = true) {
+export function ribbonGeo(pts, w, y, caps = true) {
   const pos = [], idx = [];
   const n = pts.length;
   const hwAt = (i) => { const p = pts[i], ww = p && p.length >= 4 && p[3] > 0 ? p[3] : w; return ww / 2; };
@@ -65,10 +66,10 @@ function ribbonGeo(pts, w, y, caps = true) {
   g.setIndex(idx); g.computeVertexNormals();
   return g;
 }
-function fixNormalsUp(g) { const nrm = g.attributes.normal; for (let i = 0; i < nrm.count; i++) nrm.setXYZ(i, 0, 1, 0); return g; }
+export function fixNormalsUp(g) { const nrm = g.attributes.normal; for (let i = 0; i < nrm.count; i++) nrm.setXYZ(i, 0, 1, 0); return g; }
 
 // 간단한 균일 격자 공간 인덱스(충돌용)
-class Grid {
+export class Grid {
   constructor(cell = 40) { this.cell = cell; this.map = new Map(); }
   add(item, minX, minZ, maxX, maxZ) {
     const c = this.cell;
@@ -78,7 +79,7 @@ class Grid {
   }
   query(x, z) { return this.map.get(Math.floor(x / this.cell) + ',' + Math.floor(z / this.cell)) || []; }
 }
-function pointInRing(x, z, r) {
+export function pointInRing(x, z, r) {
   let inside = false;
   for (let i = 0, j = r.length - 1; i < r.length; j = i++) {
     const [xi, zi] = r[i], [xj, zj] = r[j];
@@ -266,7 +267,7 @@ export function buildWorld(scene, data, region = null) {
   return { isBlocked, onRoad, walkPaths, cityWalkPaths, inWater, signPos: sp, bounds: { x0, x1, z0, z1 }, treeCount: treePts.length, ground, block, starbucksRooms }; // [terrain] ground/block: terrain.build 가 하천 구간을 비운 형상으로 교체
 }
 
-function stationSign(st, signCfg = null) {
+export function stationSign(st, signCfg = null) {
   const g = new THREE.Group();
   const cv = document.createElement('canvas'); cv.width = 512; cv.height = 256;
   const x = cv.getContext('2d');
@@ -297,7 +298,7 @@ function stationSign(st, signCfg = null) {
 }
 
 // 압출 벽의 UV를 가로 3.2m · 세로 한 층(3.2m) 칸으로 맞춘다. 모서리에서 칸이 다시 시작된다.
-const FACADE_UV = {
+export const FACADE_UV = {
   generateTopUV(_geometry, vertices, ia, ib, ic) {
     const v2 = (i) => new THREE.Vector2(vertices[i * 3], vertices[i * 3 + 1]);
     return [v2(ia), v2(ib), v2(ic)];
@@ -316,7 +317,7 @@ const FACADE_UV = {
   },
 };
 
-function facadeKey(k) {
+export function facadeKey(k) {
   if (k === 'office') return 'office';
   if (k === 'commercial') return 'commercial';
   if (k === 'apartments' || k === 'residential' || k === 'dormitory') return 'residential';
@@ -326,7 +327,7 @@ function facadeKey(k) {
   return 'yes';
 }
 
-function takeGroup(g, materialIndex) {
+export function takeGroup(g, materialIndex) {
   const group = g.groups.find((gr) => gr.materialIndex === materialIndex);
   if (!group || group.count <= 0) return null;
   const { start, count } = group;
@@ -341,7 +342,7 @@ function takeGroup(g, materialIndex) {
 }
 
 const facadeMats = new Map();
-function facadeMaterial(key) {
+export function facadeMaterial(key) {
   if (!facadeMats.has(key)) {
     const cv = document.createElement('canvas'); cv.width = 128; cv.height = 128;
     paintFacade(cv.getContext('2d'), key);

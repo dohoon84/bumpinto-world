@@ -38,7 +38,7 @@ function fillPoly(ctx, poly, x0, z0, scale) {
   ctx.fill('evenodd');
 }
 
-function drawBaseMap(data, region = null) {
+export function drawBaseMap(data, region = null) { // [corridor] 코리더 타일 미니맵도 같은 함수로 그린다
   const b = data.meta.bboxLocal;
   const maxSpan = Math.max(b.x1 - b.x0, b.z1 - b.z0, 1);
   const scale = Math.min(MAP_SCALE, 2400 / maxSpan);
@@ -259,7 +259,7 @@ function drawPeerMarkers(ctx, peers, x, z, w, h, viewW, viewH, now, s) {
   ctx.restore();
 }
 
-export function mountPhone({ data, region = null }) {
+export function mountPhone({ data, region = null, extraTiles = null }) { // [corridor] extraTiles(): [{ b, canvas }] (라이브 지도 아래에 깔림)
   const canvas = document.getElementById('phone-map');
   const ctx = canvas.getContext('2d');
   const map = drawBaseMap(data, region);
@@ -285,6 +285,14 @@ export function mountPhone({ data, region = null }) {
       ctx.setTransform(1, 0, 0, 1, 0, 0);
       ctx.fillStyle = '#ebe4d4';
       ctx.fillRect(0, 0, w, h);
+      if (extraTiles) {
+        const k = w / (viewW * scale);
+        for (const t of extraTiles()) {
+          const tx = ((t.b.x0 - b.x0) * scale - sx) * k, ty = ((t.b.z0 - b.z0) * scale - sy) * k, tw = t.canvas.width * k, th = t.canvas.height * k;
+          if (tx > w || ty > h || tx + tw < 0 || ty + th < 0) continue;
+          ctx.drawImage(t.canvas, tx, ty, tw, th);
+        }
+      }
       ctx.drawImage(src, sx, sy, viewW * scale, viewH * scale, 0, 0, w, h);
 
       const s = w / Math.max(1, canvas.clientWidth);

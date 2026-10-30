@@ -60,6 +60,7 @@ export const JEONGJA_REGION = {
     transit: 'transit.json',
     terrain: 'terrain.json',
     drive: 'drive.json',
+    corridor: 'corridor/', // [corridor] 정자 → 롯데월드타워 코리더 타일 (scripts/corridor/build-corridor.mjs)
   },
   signBoard: {
     topLeftColor: '#d4003b',
@@ -75,6 +76,7 @@ export const JEONGJA_REGION = {
     transit: true,          // 경기도 실시간/시뮬 버스 & 신호 횡단보도
     taxis: true,            // 카카오T 스타일 택시 & 경찰차
     umbrellas: true,        // 우산 상인
+    corridor: true,         // 성남대로·송파대로 코리더 (수내 ~ 잠실/롯데월드타워), ?corridor=0 으로 끔
     roadsterShow: false,
   },
   quickSpots: [],

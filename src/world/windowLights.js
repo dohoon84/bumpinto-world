@@ -91,5 +91,6 @@ export function addWindowLights(scene, buildings, shells = []) {
   mesh.name = 'windowLights';
   mesh.frustumCulled = true;
   scene.add(mesh);
-  watchEvening((on) => { mesh.visible = on; });
+  const stop = watchEvening((on) => { mesh.visible = on; });
+  return { mesh, stop }; // [corridor] 타일 언로드 때 구독 해제
 }
