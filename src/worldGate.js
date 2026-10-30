@@ -5,6 +5,7 @@ import { MAP_W, MAP_H, LAND, KOREA } from './worldLand.js';
 import { trackEvent } from './analytics.js';
 import { OPEN_REGIONS, UPCOMING_REGIONS, getCurrentRegion, getRegion } from './regions/index.js';
 import { isEn, tr, toggleLang, onLangChange } from './i18n.js';
+import { corridorGlobeEnabled, mountGlobeCorridor, CORRIDOR_STATION_IDS } from './corridor/globeCorridor.js'; // [corridor]
 
 export { OPEN_REGIONS, UPCOMING_REGIONS };
 
@@ -297,6 +298,17 @@ export function openWorldGate({ onEnter }) {
 
   scene.add(air, globe);
 
+  // [corridor] 정자 핀 아래 '분당–송파 코리더' 묶음 핀 + 펼치는 역 노선도 (?corridor=0 이면 없음)
+  const jeongjaRegion = getRegion('jeongja');
+  const corridorGlobe = corridorGlobeEnabled(new URLSearchParams(location.search), jeongjaRegion)
+    ? mountGlobeCorridor({
+        root, camera, globe, isEn,
+        anchorSpot: lonLat(jeongjaRegion.lon, jeongjaRegion.lat, 1.02),
+        onEnterStation: (at) => enter('jeongja', false, { at }),
+        onFocus: () => focusRegionOnGlobe('jeongja'),
+      })
+    : null;
+
   const initialMarker = pinMarkers.find((m) => m.region.id === activeRegion.id) || pinMarkers[0];
   globe.rotation.y = -Math.atan2(initialMarker.spot.x, initialMarker.spot.z);
   globe.rotation.x = Math.max(-0.35, Math.min(0.35, (initialMarker.region.lat - 28) * 0.006));
@@ -480,7 +492,17 @@ export function openWorldGate({ onEnter }) {
       },
     ).join('');
 
-    const upcomingListHtml = UPCOMING_REGIONS.map(
+    // [corridor] 코리더로 열린 역(수내·서현·이매·야탑)은 '준비중' 목록 대신 코리더 항목 하나로 묶는다
+    const corridorListHtml = corridorGlobe ? `
+        <li>
+          <button type="button" class="gate-upcoming-item is-open" data-corridor-open="1">
+            <span class="dot open"></span>
+            <span class="name">${en ? 'Bundang–Songpa Corridor' : '분당–송파 코리더'}</span>
+            <small>${en ? 'Sunae → Jamsil · 14 stations · Lotte World Tower' : '수내 → 잠실 · 14개 역 · 롯데월드타워'}</small>
+            <em>${en ? 'OPEN · Enter' : '열림 · 입장'}</em>
+          </button>
+        </li>` : '';
+    const upcomingListHtml = UPCOMING_REGIONS.filter((r) => !corridorGlobe || !CORRIDOR_STATION_IDS.has(r.id)).map(
       (r) => `
         <li>
           <button type="button" class="gate-upcoming-item" data-region="${r.id}">
@@ -491,7 +513,7 @@ export function openWorldGate({ onEnter }) {
           </button>
         </li>`,
     ).join('');
-    regionsListEl.innerHTML = openListHtml + upcomingListHtml;
+    regionsListEl.innerHTML = openListHtml + corridorListHtml + upcomingListHtml;
 
     focusBarEl.innerHTML = OPEN_REGIONS.map(
       (r) => `
@@ -504,6 +526,7 @@ export function openWorldGate({ onEnter }) {
       const txtEl = m.btnEl?.querySelector('.pin-text');
       if (txtEl) txtEl.textContent = en ? (m.region.enGlobePinText || m.region.globePinText) : m.region.globePinText;
     }
+    corridorGlobe?.render();
     updateCountdownUi();
     refreshGateStats();
   }
@@ -606,7 +629,7 @@ export function openWorldGate({ onEnter }) {
   };
   const onResize = () => fit();
   const clearDrag = () => { drag = null; };
-  const enter = (regionId = activeRegion.id, forceBypass = false) => {
+  const enter = (regionId = activeRegion.id, forceBypass = false, extra = undefined) => {
     if (!alive) return;
     const chosen = getRegion(regionId);
     if (chosen.id === 'starbase' && !isStarbaseLive() && !forceBypass) {
@@ -622,12 +645,14 @@ export function openWorldGate({ onEnter }) {
     cancelAnimationFrame(raf);
     removeEventListener('resize', onResize);
     removeEventListener('blur', clearDrag);
+    corridorGlobe?.dispose();
     renderer.dispose();
     earth.geometry.dispose();
     earth.material.map.dispose();
     earth.material.dispose();
     root.hidden = true;
-    onEnter(chosen.id);
+    if (extra) onEnter(chosen.id, extra); // [corridor] { at: 역 id }
+    else onEnter(chosen.id);
   };
 
   function showStarbaseCountdownToast() {
@@ -718,6 +743,10 @@ export function openWorldGate({ onEnter }) {
       focusRegionOnGlobe('starbase');
       return;
     }
+    if (corridorGlobe && e.target.closest('[data-corridor-open]')) {
+      corridorGlobe.toggle(true);
+      return;
+    }
     const focusBtn = e.target.closest('[data-focus-region]');
     if (focusBtn) {
       focusRegionOnGlobe(focusBtn.dataset.focusRegion);
@@ -758,11 +787,12 @@ export function openWorldGate({ onEnter }) {
         targetRotY = null;
         targetRotX = null;
       }
-    } else if (!pinHovered && t > pauseSpinUntil) {
+    } else if (!pinHovered && !corridorGlobe?.holding() && t > pauseSpinUntil) {
       globe.rotation.y += dt * 0.18;
     }
     const pulse = 1 + Math.sin(t * 0.004) * 0.35;
     globe.updateMatrixWorld(true);
+    corridorGlobe?.update(dt); // [corridor] 휠 확대 + 묶음 핀/노선도 위치
     camDir.copy(camera.position).normalize();
 
     for (const m of pinMarkers) {

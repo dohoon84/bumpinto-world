@@ -52,6 +52,9 @@ const autoEnter = params.get('enter') === '1';
 const passportEnter = params.get('passport') === '1';
 const fromRegionId = params.get('from');
 const fromRegion = fromRegionId && fromRegionId !== region.id ? getRegion(fromRegionId) : null;
+// [corridor] 지구본에서 코리더 역을 고르면 입장(로비/여권) 직후 그 역으로 이동. 다른 동네에서 오면 ?at= 로 넘어온다
+let corridorAt = !shot && params.get('corridor') !== '0' ? params.get('at') : null;
+let corridorArrive = null;
 if (autoEnter || passportEnter || fromRegionId) {
   const cleanUrl = new URL(location.href);
   cleanUrl.searchParams.delete('enter');
@@ -76,8 +79,9 @@ let startLobby = null;
 let joinWithPassport = null;
 let lobbyQueued = false;
 let passportQueued = false;
-const handleGateEnter = (chosenRegionId = region.id) => {
+const handleGateEnter = (chosenRegionId = region.id, gateOpts = undefined) => {
   const hasPassport = isPassportActive();
+  corridorAt = gateOpts?.at || null; // [corridor]
   if (chosenRegionId && chosenRegionId !== region.id) {
     const targetRegion = getRegion(chosenRegionId);
     const screen = getEnterScreen();
@@ -89,6 +93,7 @@ const handleGateEnter = (chosenRegionId = region.id) => {
       navigateToRegion(chosenRegionId, {
         ...(hasPassport ? { passport: 1 } : { enter: 1 }),
         from: region.id,
+        ...(corridorAt ? { at: corridorAt } : {}), // [corridor]
       });
     }, 850);
     return;
@@ -876,6 +881,7 @@ function completeWorldJoin(name, look, session) {
   inventory?.refresh();
   syncRainControl();
   trackEvent('world_join', { region: region.id, has_pin: !!session?.hasPin, resumed: !!session?.place });
+  corridorArrive?.(); // [corridor]
 }
 joinWithPassport = async () => {
   const passport = readSavedPassport();
@@ -1689,6 +1695,18 @@ const travel = corridor ? mountTravel({ corridor, home: () => homeBtn.onclick(),
 if (corridor) { corridor.place = (id) => travel?.go(id); corridor.placeOf = (id) => travel?.dests.find((d) => d.id === id) || null; }
 const perfHud = mountPerfHud({ renderer, corridor, params });
 if (travel && params.get('at')) travel.go(params.get('at'));
+// [corridor] 지구본 역 선택 → 입장 완료 후 역 출구 앞 인도로 (위치 저장 성공 여부와 무관)
+corridorArrive = () => {
+  if (!corridorAt || !travel) return;
+  const id = corridorAt;
+  corridorAt = null;
+  travel.go(id).then((ok) => {
+    if (!ok) return;
+    const u = new URL(location.href);
+    if (u.searchParams.get('at') === id) { u.searchParams.delete('at'); history.replaceState(null, '', u.toString()); }
+  });
+};
+if (joined) corridorArrive();
 const dogParkBtn = document.getElementById('btn-dogpark');
 if (dogParkBtn) {
   if (!region.features?.dogPark) {
