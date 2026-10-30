@@ -3,7 +3,7 @@
 import * as THREE from 'three';
 import { MAP_W, MAP_H, LAND, KOREA } from './worldLand.js';
 import { trackEvent } from './analytics.js';
-import { OPEN_REGIONS, UPCOMING_REGIONS, getCurrentRegion, getRegion } from './regions/index.js';
+import { OPEN_REGIONS, UPCOMING_REGIONS, getCurrentRegion, getRegion, countryOf } from './regions/index.js';
 import { isEn, tr, toggleLang, onLangChange } from './i18n.js';
 import { corridorGlobeEnabled, mountGlobeCorridor, CORRIDOR_STATION_IDS, CORRIDOR_STATION_COUNT, corridorName } from './corridor/globeCorridor.js'; // [corridor]
 
@@ -126,18 +126,12 @@ function earthTexture() {
   tex.anisotropy = 8;
   return tex;
 }
-// [corridor] 지역 목록 국가 섹션 (country 필드가 없으면 좌표로 판단)
+// [corridor] 지역 목록 국가 섹션 (나라 판단은 regions/index.js countryOf)
 const COUNTRY_META = {
   KR: { flag: '🇰🇷', ko: '한국', en: 'Korea' },
   US: { flag: '🇺🇸', ko: '미국', en: 'USA' },
   ETC: { flag: '🌐', ko: '기타', en: 'Other' },
 };
-function countryOf(r) {
-  if (r.country) return r.country;
-  if (r.lat > 33 && r.lat < 39 && r.lon > 124 && r.lon < 132) return 'KR';
-  if (r.lat > 18 && r.lat < 72 && r.lon > -170 && r.lon < -60) return 'US';
-  return 'ETC';
-}
 function lonLat(lon, lat, radius) {
   const phi = (90 - lat) * Math.PI / 180;
   const theta = (lon + 180) * Math.PI / 180;

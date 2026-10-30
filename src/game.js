@@ -4,7 +4,7 @@ import { createAvatar, animateAvatar, animateRide, clearRidePose } from './entit
 import { KakaoBikes } from './entities/bike.js';
 import { openLobby, getEnterScreen } from './lobby.js';
 import { openWorldGate, isStarbaseLive } from './worldGate.js';
-import { getCurrentRegion, getRegion, navigateToRegion } from './regions/index.js';
+import { getCurrentRegion, getRegion, navigateToRegion, isFlightBetween } from './regions/index.js';
 import { isEn, tr, toggleLang, onLangChange } from './i18n.js';
 import { sanitizeLook, readSavedPassport, isPassportActive, setPassportActive } from './look.js';
 import { NPCs, getNpcCapForRegion } from './entities/npcs.js';
@@ -44,6 +44,7 @@ import { mountInventory } from './inventory.js'; // [inventory]
 import { loadCorridorData, createCorridor, corridorTerrainData } from './corridor/index.js'; // [corridor]
 import { mountTravel } from './corridor/travel.js'; // [corridor]
 import { mountPerfHud } from './corridor/perfHud.js'; // [corridor]
+import { corridorStationLabel } from './corridor/globeCorridor.js'; // [corridor]
 
 const params = new URLSearchParams(location.search);
 const region = getCurrentRegion();
@@ -62,6 +63,25 @@ if (autoEnter || passportEnter || fromRegionId) {
   cleanUrl.searchParams.delete('from');
   history.replaceState(null, '', cleanUrl.toString());
 }
+// 일반 입장 로딩 문구 (처음 로그인해서 들어올 때와 같은 화면)
+function getEnterLines(targetRegion) {
+  if (isEn()) return targetRegion.enLobbyEnterLines || targetRegion.lobbyEnterLines;
+  return targetRegion.lobbyEnterLines;
+}
+// [corridor] 지구본에서 역을 골랐으면 로비 제목·로딩 문구를 그 역 기준으로 (예: '서현역에 입장')
+function entryRegion() {
+  const st = corridorAt && region.id === 'jeongja' ? corridorStationLabel(corridorAt) : null;
+  if (!st) return region;
+  return {
+    ...region,
+    lobbyTitle: `${st.ko}에 입장`,
+    enLobbyTitle: `Enter ${st.en}, KR`,
+    lobbyEnterLines: [`${st.ko} 출구로 걸어 나가는 중`, ...(region.lobbyEnterLines || []).slice(1)],
+    enLobbyEnterLines: [`Walking out of ${st.en}…`, ...(region.enLobbyEnterLines || []).slice(1)],
+    ...(region.flightLines ? { flightLines: [...region.flightLines.slice(0, -1), `🚇 ${st.ko} 도착 · 출구로 걸어 나가는 중…`] } : {}),
+    ...(region.enFlightLines ? { enFlightLines: [...region.enFlightLines.slice(0, -1), `🚇 Arrived at ${st.en} · Walking out of the exit…`] } : {}),
+  };
+}
 function getFlightLines(targetRegion) {
   if (isEn()) return targetRegion.enFlightLines || targetRegion.flightLines || targetRegion.enLobbyEnterLines;
   return targetRegion.flightLines || targetRegion.lobbyEnterLines;
@@ -69,11 +89,16 @@ function getFlightLines(targetRegion) {
 let arrivalFlightScreen = null;
 if (fromRegion && !shot) {
   arrivalFlightScreen = getEnterScreen();
-  arrivalFlightScreen.show(getFlightLines(region), {
-    flight: { from: fromRegion, to: region },
-    minMs: 3400,
-    startProgress: 0.22,
-  });
+  // 나라가 바뀌었을 때만 비행기(보딩패스), 같은 나라면 일반 입장 로딩
+  if (isFlightBetween(fromRegion, region)) {
+    arrivalFlightScreen.show(getFlightLines(entryRegion()), {
+      flight: { from: fromRegion, to: region },
+      minMs: 3400,
+      startProgress: 0.22,
+    });
+  } else {
+    arrivalFlightScreen.show(getEnterLines(entryRegion()));
+  }
 }
 let startLobby = null;
 let joinWithPassport = null;
@@ -85,10 +110,14 @@ const handleGateEnter = (chosenRegionId = region.id, gateOpts = undefined) => {
   if (chosenRegionId && chosenRegionId !== region.id) {
     const targetRegion = getRegion(chosenRegionId);
     const screen = getEnterScreen();
-    screen.show(getFlightLines(targetRegion), {
-      flight: { from: region, to: targetRegion },
-      minMs: 3400,
-    });
+    if (isFlightBetween(region, targetRegion)) {
+      screen.show(getFlightLines(targetRegion), {
+        flight: { from: region, to: targetRegion },
+        minMs: 3400,
+      });
+    } else {
+      screen.show(getEnterLines(targetRegion));
+    }
     setTimeout(() => {
       navigateToRegion(chosenRegionId, {
         ...(hasPassport ? { passport: 1 } : { enter: 1 }),
@@ -895,7 +924,8 @@ joinWithPassport = async () => {
   }
   const screen = arrivalFlightScreen || getEnterScreen();
   if (!arrivalFlightScreen) {
-    screen.show(getFlightLines(region), { minMs: 1100 });
+    // 같은 동네 재입장(여권): 비행기 문구가 아니라 처음 입장할 때와 같은 로딩 문구
+    screen.show(getEnterLines(entryRegion()));
   }
   arrivalFlightScreen = null;
   document.body.classList.remove('in-gate', 'in-lobby');
@@ -918,7 +948,7 @@ startLobby = async () => {
   }
   openLobby({
     sms,
-    region,
+    region: entryRegion(), // [corridor] 고른 역 이름으로 로비 제목·로딩 문구
     onBack: reopenGate,
     onJoin(name, look, session) {
       completeWorldJoin(name, look, session);
