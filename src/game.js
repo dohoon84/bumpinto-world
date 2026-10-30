@@ -1723,7 +1723,7 @@ homeBtn.onclick = () => {
   setMode('follow');
   rememberPlace(true);
 };
-// [corridor] 📍 이동 패널(T) · ?at=<역>|lotte · 성능 HUD(`)
+// [corridor] 순간이동(지구본 역 선택 · ?at=<역>|lotte) · 성능 HUD(`)
 function teleportTo(x, z) {
   if (bikes.riding) dismountBike();
   if (adminBike?.riding) adminBike.dismount();
@@ -1772,7 +1772,7 @@ if (dogParkBtn) {
       emitMyStateNow();
     };
   }
-  // 상단 '🐕 반려견운동장가기' 버튼은 노출하지 않음(사용자 요청). 기능·P 키·onclick 은 그대로
+  // 상단 '🐕 반려견운동장가기' 버튼과 P 단축키는 없앰(사용자 요청). onclick 코드는 남겨 둠
   dogParkBtn.hidden = true;
 }
 if (Array.isArray(region.quickSpots) && region.quickSpots.length) {
@@ -1864,7 +1864,6 @@ leaveBtn.onclick = () => {
 input.onKey = (e) => {
   if (e.code === 'KeyM') viewBtn.onclick();
   if (e.code === 'KeyH') document.getElementById('btn-home').onclick();
-  if (e.code === 'KeyP' && !e.repeat && region.features?.dogPark) dogParkBtn?.onclick();
   if (e.code === 'Enter') { e.preventDefault(); chatInput.focus(); }
   if (e.code === 'KeyE' && !e.repeat) toggleRide();
   if (e.code === 'KeyU' && !e.repeat) umbrellas.handleHotkeyU();

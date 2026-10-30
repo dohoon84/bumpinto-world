@@ -1,4 +1,4 @@
-// [corridor] 📍 이동(Travel) 버튼 + T 키 패널: 정자 ↔ 코리더 역 / 롯데월드타워로 순간이동. ?at=<역 id>|lotte 로 바로 시작.
+// [corridor] 이동 목적지/순간이동 (버튼·T 키는 없앰, 지구본·?at= 에서 go 사용): 정자 ↔ 코리더 역 / 롯데월드타워로 순간이동. ?at=<역 id>|lotte 로 바로 시작.
 import { lotteSiteLabel } from './lotteOpening.js';
 import { isEn, onLangChange } from '../i18n.js';
 
@@ -15,8 +15,8 @@ export function mountTravel({ corridor, home, teleport }) {
   const bar = document.getElementById('buttons');
   if (!bar) return null;
   const style = document.createElement('style'); style.textContent = CSS; document.head.appendChild(style);
-  const btn = document.createElement('button'); btn.id = 'btn-travel'; btn.type = 'button'; btn.title = 'T';
-  btn.hidden = true; // 상단 '📍 이동' 버튼은 노출하지 않음(사용자 요청). 패널은 T 키로 그대로, 역 이동은 지구본·?at= 로
+  const btn = document.createElement('button'); btn.id = 'btn-travel'; btn.type = 'button';
+  btn.hidden = true; // 상단 '📍 이동' 버튼과 T 단축키는 없앰(사용자 요청). 역 이동은 지구본·?at= (go) 로
   const homeEl = document.getElementById('btn-home');
   homeEl ? homeEl.after(btn) : bar.appendChild(btn);
   const panel = document.createElement('div'); panel.id = 'corridor-travel'; panel.hidden = true; bar.appendChild(panel);
@@ -71,11 +71,6 @@ export function mountTravel({ corridor, home, teleport }) {
   }
   const toggle = () => { panel.hidden = !panel.hidden; if (!panel.hidden) render(); }; // 열 때 다시 그림(공정률 갱신)
   btn.onclick = toggle;
-  addEventListener('keydown', (e) => {
-    if (e.code !== 'KeyT' || e.repeat || e.ctrlKey || e.metaKey || e.altKey) return;
-    const t = e.target; if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
-    toggle();
-  });
   onLangChange(render);
   render();
   return { go, dests, toggle, panel };
