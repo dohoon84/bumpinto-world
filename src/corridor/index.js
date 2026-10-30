@@ -4,6 +4,7 @@
 //   tiles/X_Z   : 상세(건물·도로·공원·물·바닥)   lod/X_Z   : 원경용 단순화 데이터
 // 라이브 정자 영역(liveBox + 탄천 띠) 안에는 아무것도 그리지 않으므로 기존 정자 화면/동작은 그대로다.
 import * as THREE from 'three';
+import { mergeTancheon, coveredFn, holeyGround, channelWaterMesh } from './tancheon.js';
 import { buildDetailTile, buildLodTile, roadMesh, CAR_KINDS } from './tileMesh.js';
 import { buildCorridorCrossings } from './crossings.js';
 import { createLandmarks } from './landmarks/index.js';
@@ -13,8 +14,15 @@ import { addInstancedTrees } from '../world/trees.js';
 
 export async function loadCorridorData(baseUrl) {
   const get = (f) => fetch(baseUrl + f).then((r) => (r.ok ? r.json() : null)).catch(() => null);
-  const [index, base] = await Promise.all([get('index.json'), get('base.json')]);
-  return index && base ? { index, base, baseUrl } : null;
+  const [index, base, tancheon] = await Promise.all([get('index.json'), get('base.json'), get('tancheon.json')]);
+  return index && base ? { index, base, baseUrl, tancheon } : null;
+}
+// [corridor] 탄천 지형: 코리더가 켜졌을 때만 라이브 terrain.json 뒤에 수내→잠실 축/단면을 이어 붙인다(라이브 구간 값은 그대로)
+export function corridorTerrainData(terrainData, corridorData) {
+  if (!terrainData || !corridorData?.tancheon) return terrainData;
+  const T = mergeTancheon(terrainData, corridorData.tancheon);
+  if (T !== terrainData) corridorData.terrainT = T;
+  return T;
 }
 
 const QUALITY = { low: { detail: 450, lod: 1500 }, med: { detail: 650, lod: 1800 }, high: { detail: 850, lod: 2400 } };
@@ -41,6 +49,8 @@ export function createCorridor({ scene, corridorData, terrain, world, renderer, 
   const ch = base.ch.map((r) => ({ ...r, p: r.p.map((p) => p.slice()) }));
   terrain?.annotate({ roads: ch, water: [], waterLines: [], parks: base.chParks.map((p) => ({ ...p })) });
   const chMesh = roadMesh(ch); if (chMesh) root.add(chMesh);
+  const chWater = corridorData.terrainT ? channelWaterMesh(corridorData.tancheon?.water, terrain) : null; // 탄천 수면(수내→잠실)
+  if (chWater) root.add(chWater);
   const chGrid = new Grid(30);
   for (const r of ch) if (CAR_KINDS.has(r.k)) for (let i = 1; i < r.p.length; i++) {
     const [ax, az] = r.p[i - 1], [bx, bz] = r.p[i], hw = r.w / 2 + 0.6;
@@ -143,8 +153,11 @@ export function createCorridor({ scene, corridorData, terrain, world, renderer, 
     const mat = world.ground?.material; if (!mat) return;
     const B = index.meta.bounds, M = 3000, P = 800;
     const rects = [[B.x0 - P, B.z0 - P, B.x1 + P, -M], [M, -M, B.x1 + P, M], [B.x0 - P, -M, -M, M]].filter(([a, b, c, d]) => c > a && d > b);
+    const TT = corridorData.terrainT, covered = TT ? coveredFn(terrain, TT) : null; // 탄천 연장 구간은 바닥에 구멍(라이브 바닥과 같은 방식)
     for (const [a, b, c, d] of rects) {
-      const g = new THREE.PlaneGeometry(c - a, d - b); g.rotateX(-Math.PI / 2); g.translate((a + c) / 2, 0, (b + d) / 2);
+      let g;
+      if (covered) g = holeyGround(a, b, c, d, 0, 8, covered, TT.axis);
+      else { g = new THREE.PlaneGeometry(c - a, d - b); g.rotateX(-Math.PI / 2); g.translate((a + c) / 2, 0, (b + d) / 2); }
       const m = new THREE.Mesh(g, mat); m.receiveShadow = true; m.name = 'corridorOuterGround'; root.add(m);
     }
   }

@@ -41,7 +41,7 @@ import { createRoadBike, ROADBIKE_GIFT_ID, ROADBIKE_WHITE_GIFT_ID, ROADBIKE_WHIT
 import { GIFT_ITEMS, giftItem, giftUnit } from './gifts/catalog.js';
 import { holdingQty, onHoldings, replaceHoldings, setHoldingQty } from './gifts/holdings.js';
 import { mountInventory } from './inventory.js'; // [inventory]
-import { loadCorridorData, createCorridor } from './corridor/index.js'; // [corridor]
+import { loadCorridorData, createCorridor, corridorTerrainData } from './corridor/index.js'; // [corridor]
 import { mountTravel } from './corridor/travel.js'; // [corridor]
 import { mountPerfHud } from './corridor/perfHud.js'; // [corridor]
 
@@ -157,7 +157,7 @@ scene.add(sun, sun.target);
 function setShadowSpan(span) { const c = sun.shadow.camera; c.left = c.bottom = -span; c.right = c.top = span; c.near = 1; c.far = span * 4 + 600; c.updateProjectionMatrix(); }
 
 // --- 월드 ---
-const terrain = terrainData ? createTerrain(terrainData, data) : null; // [terrain]
+const terrain = terrainData ? createTerrain(corridorTerrainData(terrainData, corridorData), data) : null; // [terrain] [corridor] 코리더 켜짐: 탄천 축 연장
 terrain?.annotate(data); // [terrain] 도로/수면에 높이 부여 (buildWorld 전에)
 const tower = region.features?.launchTower && params.get('tower') !== '0' ? createTowerAddon(data) : null; // [tower] buildWorld 전에 _skip 마킹
 const world = buildWorld(scene, data, region);

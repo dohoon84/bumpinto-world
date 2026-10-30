@@ -7,6 +7,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { ribbonGeo } from '../../src/world.js';
+import { createTerrain } from '../../src/world/terrain.js';
+import { mergeTancheon } from '../../src/corridor/tancheon.js';
 
 const arg = (k, d) => (process.argv.find((a) => a.startsWith(`--${k}=`)) || '').split('=')[1] || d;
 const DIR = arg('dir', 'public/corridor'), OUT = arg('out', '');
@@ -15,6 +17,16 @@ const live = JSON.parse(fs.readFileSync('public/jeongja.json', 'utf8'));
 const index = JSON.parse(fs.readFileSync(path.join(DIR, 'index.json'), 'utf8'));
 const base = JSON.parse(fs.readFileSync(path.join(DIR, 'base.json'), 'utf8'));
 const LB = index.meta.liveBox;
+// [corridor] 탄천 지형(라이브 + 연장): 경로가 하천 지형 아래로 꺼지지 않는지(다리 = 상판 높이) 확인용
+const T0 = JSON.parse(fs.readFileSync('public/terrain.json', 'utf8'));
+const tanF = path.join(DIR, 'tancheon.json');
+const TT = fs.existsSync(tanF) ? mergeTancheon(T0, JSON.parse(fs.readFileSync(tanF, 'utf8'))) : T0;
+const terr = createTerrain(TT, live);
+const chA = base.ch.map((r) => ({ ...r, p: r.p.map((q) => q.slice()) }));
+terr.annotate({ roads: chA, water: [], waterLines: [], parks: [] });
+const brSegs = [];
+for (const r of chA) if (r.br) for (let i = 1; i < r.p.length; i++) brSegs.push([r.p[i - 1][0], r.p[i - 1][1], r.p[i][0], r.p[i][1], r.w / 2 + 1]);
+const onBridge = (x, z) => brSegs.some(([ax, az, bx, bz, hw]) => { const dx = bx - ax, dz = bz - az, L2 = dx * dx + dz * dz || 1, t = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / L2)); return Math.hypot(ax + dx * t - x, az + dz * t - z) < hw; });
 
 const roads = []; // { src: live|tile|ch, key, k, w, p, o }
 for (const r of live.roads) if (CAR.has(r.k) && r.p.length >= 2) roads.push({ src: 'live', k: r.k, w: r.w, p: r.p, n: r.n });
@@ -98,7 +110,7 @@ const route = dijkstra(S, E);
 const res = { route: null, seams: null, junctions: null, liveSeam: null };
 if (!route) { console.log('ROUTE NOT FOUND'); process.exit(1); }
 {
-  let len = 0, gaps = [], lodGaps = 0, samples = 0, virtUsed = 0, named = 0;
+  let len = 0, gaps = [], lodGaps = 0, samples = 0, virtUsed = 0, named = 0, sunk = [], onDeck = 0;
   let carry = 0;
   for (const { a, b, e } of route) {
     const L = Math.hypot(b.x - a.x, b.z - a.z); if (e.virt) virtUsed++;
@@ -106,6 +118,7 @@ if (!route) { console.log('ROUTE NOT FOUND'); process.exit(1); }
     const ux = (b.x - a.x) / (L || 1), uz = (b.z - a.z) / (L || 1), nx = -uz, nz = ux, hw = e.w / 2;
     for (let s = carry; s <= L; s += 5) {
       const x = a.x + ux * s, z = a.z + uz * s; samples++;
+      if (terr.baseHeight(x, z) < -0.3) { if (onBridge(x, z)) onDeck++; else sunk.push([+x.toFixed(1), +z.toFixed(1)]); }
       for (const f of [0, 0.45, -0.45, 0.9, -0.9]) {
         const px = x + nx * hw * f, pz = z + nz * hw * f;
         if (!detailIdx.covered(px, pz)) gaps.push([+px.toFixed(1), +pz.toFixed(1), f]);
@@ -115,7 +128,7 @@ if (!route) { console.log('ROUTE NOT FOUND'); process.exit(1); }
     }
     len += L;
   }
-  res.route = { lengthM: Math.round(len), samples, points: samples * 5, gaps: gaps.length, gapList: gaps.slice(0, 30), lodGaps, virtualEdgesUsed: virtUsed, seongnamSongpaShare: +(named / len).toFixed(3), from: [S.x, S.z], to: [E.x, E.z] };
+  res.route = { lengthM: Math.round(len), samples, points: samples * 5, gaps: gaps.length, gapList: gaps.slice(0, 30), lodGaps, virtualEdgesUsed: virtUsed, seongnamSongpaShare: +(named / len).toFixed(3), tancheonAxis: TT.axis.length, overChannelOnDeck: onDeck, sunk: sunk.length, sunkList: sunk.slice(0, 20), from: [S.x, S.z], to: [E.x, E.z] };
 }
 
 // ---------- 2) 타일 경계 / 4) 라이브 경계 ----------
@@ -234,5 +247,5 @@ const inLive = (x, z) => x >= LB.x0 - 1 && x <= LB.x1 + 1 && z >= LB.z0 - 1 && z
 res.meta = { roads: roads.length, lodRoads: lodRoads.length, detailTris: detailIdx.count, lodTris: lodIdx.count, virtualEdges: virt };
 console.log(JSON.stringify(res, null, 1));
 if (OUT) fs.writeFileSync(OUT, JSON.stringify(res, null, 1));
-const fail = res.route.gaps + res.seams.cracks + res.junctions.holes + res.junctions.teeHoles + res.liveSeam.cracks;
+const fail = res.route.sunk + res.route.gaps + res.seams.cracks + res.junctions.holes + res.junctions.teeHoles + res.liveSeam.cracks;
 process.exit(fail ? 2 : 0);

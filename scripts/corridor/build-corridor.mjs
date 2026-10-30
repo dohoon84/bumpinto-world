@@ -31,8 +31,14 @@ const pTiles = {};
 for (const k of Object.keys(pIndex.tiles)) pTiles[k] = readJSON(path.join(SRC, 'tiles', k + '.json'));
 const live = readJSON(path.join(ROOT, 'public/jeongja.json'));
 const liveTransit = readJSON(path.join(ROOT, 'public/transit.json'));
-const T = readJSON(path.join(ROOT, 'public/terrain.json'));
+const T0 = readJSON(path.join(ROOT, 'public/terrain.json'));
+// 탄천 연장(수내→잠실, scripts/corridor/build-tancheon.mjs 결과). 있으면 런타임과 똑같이 라이브 축 뒤에 이어 붙여 띠/하천 판정에 쓴다.
+const TANCHEON = path.resolve(ROOT, arg('tancheon', path.join(OUT, 'tancheon.json')));
+const tancheonStr = fs.existsSync(TANCHEON) ? fs.readFileSync(TANCHEON, 'utf8') : null;
 const { createTerrain } = await import(pathToFileURL(path.join(ROOT, 'src/world/terrain.js')).href);
+const { mergeTancheon } = await import(pathToFileURL(path.join(ROOT, 'src/corridor/tancheon.js')).href);
+const T = tancheonStr ? mergeTancheon(T0, JSON.parse(tancheonStr)) : T0;
+if (tancheonStr && T === T0) throw new Error('tancheon.json 이 현재 public/terrain.json 과 맞지 않음 — build-tancheon.mjs 를 다시 실행');
 const terrain = createTerrain(T, live);
 const TS = pIndex.meta.tileSize;
 const r1 = (v) => Math.round(v * 10) / 10;
@@ -344,6 +350,7 @@ const landmarks = pIndex.landmarks.filter((l) => l.pos || l.fit).map((l) => ({ i
 // ---------- 쓰기 ----------
 fs.rmSync(OUT, { recursive: true, force: true });
 fs.mkdirSync(path.join(OUT, 'tiles'), { recursive: true });
+if (tancheonStr) fs.writeFileSync(path.join(OUT, 'tancheon.json'), tancheonStr);
 const tiles = {}; let tileBytes = 0;
 for (const key of tileKeys) {
   const t = { b: bOut[key] || [], r: rOut[key] || [], parks: parkOut[key]?.parks || [], water: waterOut[key]?.water || [], floor: floorOut[key] || [], wl: wlOut[key] || [] };
@@ -366,7 +373,7 @@ const index = {
     source: { corridorBake: pIndex.meta.generated, live: live.meta.generated },
     // 건물 높이 일부는 Vworld GIS건물통합정보(국토교통부)에서 보정됨 → 출처 표기 (이용 조건은 브이월드 약관 확인 필요)
     attribution: (pIndex.meta.sources?.attribution || '© OpenStreetMap contributors (ODbL)') + (pIndex.meta.sources?.vworld ? ' · 건물 높이: 브이월드 GIS건물통합정보 (국토교통부)' : ''),
-    stats: { ...stat, ...rstat, runs: runs.length, chRoads: chCount, chParks: chParks.length, crossings: crossings.length, tiles: Object.keys(tiles).length, tileMB: +(tileBytes / 1e6).toFixed(2) },
+    stats: { ...stat, ...rstat, tancheonAxis: T.axis.length, runs: runs.length, chRoads: chCount, chParks: chParks.length, crossings: crossings.length, tiles: Object.keys(tiles).length, tileMB: +(tileBytes / 1e6).toFixed(2) },
   },
   stations, landmarks, tiles,
 };
