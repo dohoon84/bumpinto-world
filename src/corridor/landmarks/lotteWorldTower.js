@@ -6,6 +6,7 @@
 // 파라미터: src/landmarks/landmarks.json 의 params (height, floors, baseHalfM, topHalfM, rotDeg)
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { ledUniforms, ledWeights, patchLed, buildLedFar } from './lotteLed.js'; // [corridor] 야간 LED 쇼
 
 const rng = (seed) => { let s = seed; return () => ((s = (s * 16807) % 2147483647) / 2147483647); };
 const PANELS = 8, FLOORS_PER_CELL = 4;
@@ -159,11 +160,26 @@ export function createLotteWorldTower(params = {}) {
   for (let c = 0; c < 4; c++) for (const v of [1, 0]) { const p = petalPoint(c, 0.5, v); const sg = new THREE.SphereGeometry(v ? 0.9 : 0.7, 8, 6); sg.translate(p.x, p.y + 0.8, p.z); lights.push(sg); }
   const lightMesh = new THREE.Mesh(mergeGeometries(lights), redMat); lightMesh.name = 'aviation-lights'; g.add(lightMesh);
 
+  // ---------- [corridor] 야간 LED 쇼: 같은 재질 emissive 패치 + 원경 메시 1개 (?lotteled=0 끔) ----------
+  const ledOn = typeof location === 'undefined' || new URLSearchParams(location.search).get('lotteled') !== '0';
+  const U = ledUniforms(P);
+  let ledFar = null;
+  if (ledOn) {
+    patchLed(bodyMat, U, 'body'); patchLed(crownMat, U, 'crown'); patchLed(glassMat, U, 'glass');
+    ledFar = buildLedFar(P, section, profile, seamAt, crownHalf, U); g.add(ledFar);
+  }
+
   let night = 0, t = 0;
   g.userData = {
-    params: P,
+    params: P, led: U, ledFar,
     setNight(v) { night = v; bodyMat.envMapIntensity = crownMat.envMapIntensity = glassMat.envMapIntensity = v ? 0.12 : 1; bodyMat.emissiveIntensity = v * 1.1; crownMat.emissiveIntensity = v * 0.75; glassMat.emissiveIntensity = v * 0.5; },
-    update(dt) { t += dt; const on = Math.floor(t * 1.0) % 2 === 0; redMat.color.set(on || night < 0.5 ? '#ff2a1a' : '#3a0a08'); },
+    update(dt) {
+      t += dt; const on = Math.floor(t * 1.0) % 2 === 0; redMat.color.set(on || night < 0.5 ? '#ff2a1a' : '#3a0a08');
+      if (ledOn) { // 저녁이 되면 4초에 걸쳐 켜짐/꺼짐
+        const L = U.uLed; L.value += Math.sign(night - L.value) * Math.min(Math.abs(night - L.value), dt / 4);
+        U.uLedT.value = t; ledWeights(t, U.uLedW.value); ledFar.visible = L.value > 0.001;
+      }
+    },
     stats: () => ({ bodyTris: idx.length / 3, crownMembers: members.length, crownDrawCalls: 1, meshes: g.children.length }), // 크라운 다이아그리드: 부재 전체가 병합 메시 1개
   };
   return g;
