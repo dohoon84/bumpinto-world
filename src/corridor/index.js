@@ -256,12 +256,18 @@ export function createCorridor({ scene, corridorData, terrain, world, renderer, 
     // 위치 주변 상세 타일을 즉시 로드·빌드 (텔레포트/스크린샷용)
     async preload(x, z, r = Q.detail) {
       const list = [...tiles.values()].filter((t) => rectDist(x, z, t.x0, t.z0, TS) < r);
-      await Promise.all(list.map(requestDetail));
-      stream(x, z, 'follow');
-      while (buildQueue.length) buildOne();
+      // 프레임 스트리머(아직 플레이어는 출발지)가 로딩 중인 먼 타일을 언로드하면 응답이 버려지므로, 빌드될 때까지 몇 번 다시 요청
+      for (let i = 0; i < 4; i++) {
+        await Promise.all(list.map(requestDetail));
+        stream(x, z, 'follow');
+        while (buildQueue.length) buildOne();
+        if (list.every((t) => t.dState === 3)) break;
+      }
       updateSigns();
     },
     // 차도·건물 밖(인도) 가장 가까운 지점 — 텔레포트 도착 위치
+    // 인도(차도·건물 밖)인지
+    isFree: (x, z) => !(onRoadAll(x, z) || liveBlocked(x, z, 1.2) || corridorBlocked(x, z, 1.2)),
     freeSpot(x0, z0) {
       const bad = (x, z) => onRoadAll(x, z) || liveBlocked(x, z, 1.2) || corridorBlocked(x, z, 1.2);
       if (!bad(x0, z0)) return { x: x0, z: z0 };

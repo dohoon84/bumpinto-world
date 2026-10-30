@@ -22,7 +22,7 @@ export function mountTravel({ corridor, home, teleport }) {
   const tower = corridor.landmarks.items.find(({ l }) => l.id === 'lotte-world-tower')?.l;
   const dests = [
     { id: 'jeongja', en: 'Jeongja', ko: '정자', home: true },
-    ...corridor.stations.map((s) => ({ id: s.id, en: s.nameEn, ko: s.name, x: (s.exits?.[0] || s).x, z: (s.exits?.[0] || s).z })),
+    ...corridor.stations.map((s) => ({ id: s.id, en: s.nameEn, ko: s.name, x: (s.exits?.[0] || s).x, z: (s.exits?.[0] || s).z, exits: s.exits || [] })),
   ];
   if (tower) { const at = tower.fit || tower.pos; dests.push({ id: 'lotte', en: 'Lotte World Tower', ko: '롯데월드타워', x: at.x + 70, z: at.z + 70 }); }
 
@@ -37,14 +37,32 @@ export function mountTravel({ corridor, home, teleport }) {
       panel.appendChild(b);
     }
   };
+  // 역 출구들 중 도착하기 좋은 곳: 출구에서 가장 가까운 인도 지점 + 주변이 트인 정도(골목·중앙분리대·건물 틈 피하기)
+  function bestSpot(d) {
+    const cands = d.exits?.length ? d.exits : [d];
+    if (!corridor.isFree || cands.length < 2) return corridor.freeSpot(d.x, d.z);
+    let best = null, bestScore = -Infinity;
+    for (const e of cands) {
+      const p = corridor.freeSpot(e.x, e.z), disp = Math.hypot(p.x - e.x, p.z - e.z);
+      let open = 0, n = 0;
+      for (const r of [3, 6, 10]) for (let k = 0; k < 12; k++) { const a = (k / 12) * Math.PI * 2; n++; if (corridor.isFree(p.x + Math.cos(a) * r, p.z + Math.sin(a) * r)) open++; }
+      const score = open / n - disp / 40;
+      if (score > bestScore) { bestScore = score; best = p; }
+    }
+    return best;
+  }
   async function go(id) {
     const d = dests.find((x) => x.id === id || x.ko === id || x.en.toLowerCase() === String(id).toLowerCase());
     if (!d) return false;
     panel.hidden = true;
     if (d.home) { home(); return true; }
     await corridor.preload(d.x, d.z);
-    const p = corridor.freeSpot(d.x, d.z);
+    const p = bestSpot(d);
     teleport(p.x, p.z);
+    // 도착 후 한 번 더: 타일이 늦게 빌드됐으면 인도(차도·건물 밖)로 다시 맞춘다
+    await corridor.preload(d.x, d.z);
+    const q = corridor.freeSpot(p.x, p.z);
+    if (Math.hypot(q.x - p.x, q.z - p.z) > 0.01) teleport(q.x, q.z);
     return true;
   }
   const toggle = () => { panel.hidden = !panel.hidden; };
