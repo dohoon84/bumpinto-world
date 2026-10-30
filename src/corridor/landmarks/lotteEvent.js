@@ -147,9 +147,11 @@ export function createLotteEvent({ root, tower, at, rotY = 0, height = 555, half
   const labelText = label?.el.textContent;
   let mode = 'wait', fwUntil = 0, reveal = -1, fade = -1, wasPending = false;
   tower.visible = false;
+  // 떠 있는 타워 이름표는 전광판/등장 연출을 가리므로 오픈 연출이 끝날 때까지 숨김 (그 뒤엔 원래 이름표, 타워 꼭대기 위 y=570)
+  if (label) label.hidden = true;
   function setPending() {
     mode = 'pending'; wasPending = true; tower.visible = false; site.visible = panel.visible = true;
-    if (label) label.el.textContent = '🚧 잠실 랜드마크 오픈까지 · Jamsil Landmark Grand Opening';
+    if (label) label.hidden = true;
   }
   function setOpen(animate) {
     mode = 'open'; tower.visible = true;
@@ -159,13 +161,13 @@ export function createLotteEvent({ root, tower, at, rotY = 0, height = 555, half
       tower.position.y = 0; site.visible = panel.visible = false;
       if (now - lotteClock.openAt < LOTTE_FIREWORKS_WINDOW_MS) fwUntil = performance.now() + LOTTE_FIREWORKS_MS;
     }
-    if (label) label.el.textContent = fwUntil > performance.now() ? '🎉 잠실 랜드마크 그랜드 오픈! · Grand Opening!' : labelText;
+    if (label) { label.el.textContent = labelText; label.hidden = fwUntil > performance.now() || reveal >= 0; }
   }
   const ease = (x) => 1 - Math.pow(1 - x, 3);
   return {
     get mode() { return mode; },
     get fireworks() { return fw.live; },
-    stats: () => ({ mode, towerVisible: tower.visible, towerY: +tower.position.y.toFixed(1), panel: panel.visible, site: site.visible, fireworksLive: fw.live, source: lotteClock.source, override: lotteClock.override, msLeft: lotteClock.msLeft() }),
+    stats: () => ({ mode, towerVisible: tower.visible, towerY: +tower.position.y.toFixed(1), panel: panel.visible, label: label ? !label.hidden : null, site: site.visible, fireworksLive: fw.live, source: lotteClock.source, override: lotteClock.override, msLeft: lotteClock.msLeft() }),
     update(dt) {
       if (mode === 'wait') { board.draw(0, false); if (lotteClock.isReady) (lotteClock.isOpen() ? setOpen(false) : setPending()); }
       else if (mode === 'pending') { if (lotteClock.isOpen()) setOpen(true); else board.draw(lotteClock.msLeft(), true); }
@@ -183,7 +185,7 @@ export function createLotteEvent({ root, tower, at, rotY = 0, height = 555, half
         }
         const active = performance.now() < fwUntil;
         fw.update(dt, active);
-        if (!active && label && label.el.textContent !== labelText && fw.live === 0) label.el.textContent = labelText;
+        if (label && label.hidden && !active && reveal < 0 && fw.live === 0) label.hidden = false;
       }
     },
   };
