@@ -12,6 +12,13 @@
     "build": "vite build",
     "preview": "vite preview --port 4173",
     "relay": "node server/dev-relay.mjs",
+    "corridor:build": "node --max-old-space-size=8192 scripts/corridor/build-corridor.mjs",
+    "corridor:check": "node --max-old-space-size=8192 scripts/corridor/check-roads.mjs",
+    "corridor:probe": "node scripts/corridor/probe.mjs",
+    "corridor:tancheon": "node --max-old-space-size=8192 scripts/corridor/build-tancheon.mjs",
+    "corridor:transit": "node scripts/corridor/build-transit.mjs",
+    "corridor:drive": "node scripts/corridor/build-drive.mjs",
+    "corridor:test": "node scripts/corridor/test/test-tancheon.mjs && node scripts/corridor/test/test-bus-proxy.mjs && node scripts/corridor/test/test-bus-realtime.mjs",
     "shots": "node scripts/shots.mjs",
     "zip": "npm run build && python3 -c \"import shutil; shutil.make_archive('jeongja3d-dist', 'zip', 'dist')\"",
     "fetch-transit": "bash data/fetch.sh query_transit.overpassql osm_transit_raw.json",
@@ -32,6 +39,7 @@
   },
   "devDependencies": {
     "playwright": "^1.64.1",
+    "polygon-clipping": "^0.15.7",
     "vite": "^8.3.5",
     "ws": "^8.22.0"
   }

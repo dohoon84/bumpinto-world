@@ -4,7 +4,7 @@ import { createAvatar, animateAvatar, animateRide, clearRidePose } from './entit
 import { KakaoBikes } from './entities/bike.js';
 import { openLobby, getEnterScreen } from './lobby.js';
 import { openWorldGate, isStarbaseLive } from './worldGate.js';
-import { getCurrentRegion, getRegion, navigateToRegion } from './regions/index.js';
+import { getCurrentRegion, getRegion, navigateToRegion, isFlightBetween } from './regions/index.js';
 import { isEn, tr, toggleLang, onLangChange } from './i18n.js';
 import { sanitizeLook, readSavedPassport, isPassportActive, setPassportActive } from './look.js';
 import { NPCs, getNpcCapForRegion } from './entities/npcs.js';
@@ -41,6 +41,10 @@ import { createRoadBike, ROADBIKE_GIFT_ID, ROADBIKE_WHITE_GIFT_ID, ROADBIKE_WHIT
 import { GIFT_ITEMS, giftItem, giftUnit } from './gifts/catalog.js';
 import { holdingQty, onHoldings, replaceHoldings, setHoldingQty } from './gifts/holdings.js';
 import { mountInventory } from './inventory.js'; // [inventory]
+import { loadCorridorData, createCorridor, corridorTerrainData } from './corridor/index.js'; // [corridor]
+import { mountTravel } from './corridor/travel.js'; // [corridor]
+import { mountPerfHud } from './corridor/perfHud.js'; // [corridor]
+import { corridorStationLabel } from './corridor/globeCorridor.js'; // [corridor]
 
 const params = new URLSearchParams(location.search);
 const region = getCurrentRegion();
@@ -49,6 +53,9 @@ const autoEnter = params.get('enter') === '1';
 const passportEnter = params.get('passport') === '1';
 const fromRegionId = params.get('from');
 const fromRegion = fromRegionId && fromRegionId !== region.id ? getRegion(fromRegionId) : null;
+// [corridor] 지구본에서 코리더 역을 고르면 입장(로비/여권) 직후 그 역으로 이동. 다른 동네에서 오면 ?at= 로 넘어온다
+let corridorAt = !shot && params.get('corridor') !== '0' ? params.get('at') : null;
+let corridorArrive = null;
 if (autoEnter || passportEnter || fromRegionId) {
   const cleanUrl = new URL(location.href);
   cleanUrl.searchParams.delete('enter');
@@ -56,36 +63,75 @@ if (autoEnter || passportEnter || fromRegionId) {
   cleanUrl.searchParams.delete('from');
   history.replaceState(null, '', cleanUrl.toString());
 }
+// 일반 입장 로딩 문구 (처음 로그인해서 들어올 때와 같은 화면)
+function getEnterLines(targetRegion) {
+  if (isEn()) return targetRegion.enLobbyEnterLines || targetRegion.lobbyEnterLines;
+  return targetRegion.lobbyEnterLines;
+}
+// [corridor] 지구본에서 역을 골랐으면 로비 제목·로딩 문구를 그 역 기준으로 (예: '서현역에 입장')
+function entryRegion(r = region, at = corridorAt) {
+  const st = at && r?.id === 'jeongja' ? corridorStationLabel(at) : null;
+  if (!st) return r;
+  const region = r;
+  return {
+    ...region,
+    // 보딩패스 도착지: 지역(성남 정자동) 대신 고른 역 (양 언어 병기)
+    airportName: `${st.ko} · ${st.short}`,
+    enAirportName: `${st.ko} · ${st.short}`,
+    lobbyTitle: `${st.ko}에 입장`,
+    enLobbyTitle: `Enter ${st.en}, KR`,
+    lobbyEnterLines: [`${st.ko} 출구로 걸어 나가는 중`, ...(region.lobbyEnterLines || []).slice(1)],
+    enLobbyEnterLines: [`Walking out of ${st.en}…`, ...(region.enLobbyEnterLines || []).slice(1)],
+    ...(region.flightLines ? { flightLines: [...region.flightLines.slice(0, -1), `🚇 ${st.ko} 도착 · 출구로 걸어 나가는 중…`] } : {}),
+    ...(region.enFlightLines ? { enFlightLines: [...region.enFlightLines.slice(0, -1), `🚇 Arrived at ${st.en} · Walking out of the exit…`] } : {}),
+  };
+}
 function getFlightLines(targetRegion) {
   if (isEn()) return targetRegion.enFlightLines || targetRegion.flightLines || targetRegion.enLobbyEnterLines;
   return targetRegion.flightLines || targetRegion.lobbyEnterLines;
 }
+// 지구본(노선도·리스트·게임 안 🌏)에서 직접 고른 입장이면 서버에 저장된 마지막 위치 대신 고른 곳(역 / 기본 스폰)으로.
+// ?from= 은 다른 지역에서 지구본으로 고르고 넘어온 경우. ?passport=1 / ?enter=1 만 있는 진입은 기존처럼 마지막 위치 이어하기.
+let explicitPick = params.has('from');
 let arrivalFlightScreen = null;
 if (fromRegion && !shot) {
   arrivalFlightScreen = getEnterScreen();
-  arrivalFlightScreen.show(getFlightLines(region), {
-    flight: { from: fromRegion, to: region },
-    minMs: 3400,
-    startProgress: 0.22,
-  });
+  // 나라가 바뀌었을 때만 비행기(보딩패스), 같은 나라면 일반 입장 로딩
+  if (isFlightBetween(fromRegion, region)) {
+    arrivalFlightScreen.show(getFlightLines(entryRegion()), {
+      flight: { from: fromRegion, to: entryRegion() }, // [corridor] 고른 역이 도착지
+      minMs: 3400,
+      startProgress: 0.22,
+    });
+  } else {
+    arrivalFlightScreen.show(getEnterLines(entryRegion()));
+  }
 }
 let startLobby = null;
 let joinWithPassport = null;
 let lobbyQueued = false;
 let passportQueued = false;
-const handleGateEnter = (chosenRegionId = region.id) => {
+const handleGateEnter = (chosenRegionId = region.id, gateOpts = undefined) => {
   const hasPassport = isPassportActive();
+  corridorAt = gateOpts?.at || null; // [corridor]
+  explicitPick = true;
   if (chosenRegionId && chosenRegionId !== region.id) {
     const targetRegion = getRegion(chosenRegionId);
     const screen = getEnterScreen();
-    screen.show(getFlightLines(targetRegion), {
-      flight: { from: region, to: targetRegion },
-      minMs: 3400,
-    });
+    if (isFlightBetween(region, targetRegion)) {
+      const dest = entryRegion(targetRegion, corridorAt); // [corridor] 고른 역이 있으면 그 역 이름
+      screen.show(getFlightLines(dest), {
+        flight: { from: region, to: dest },
+        minMs: 3400,
+      });
+    } else {
+      screen.show(getEnterLines(targetRegion));
+    }
     setTimeout(() => {
       navigateToRegion(chosenRegionId, {
         ...(hasPassport ? { passport: 1 } : { enter: 1 }),
         from: region.id,
+        ...(corridorAt ? { at: corridorAt } : {}), // [corridor]
       });
     }, 850);
     return;
@@ -116,9 +162,11 @@ const [data, transitData] = await Promise.all([
   transitFile ? fetch(import.meta.env.BASE_URL + transitFile).then((r) => r.json()).catch(() => null) : Promise.resolve(null),
 ]);
 // [terrain] [taxi] 추가 데이터 (없어도 동작). ?terrain=0 이면 평평한 기존 지형, ?taxis=0 이면 택시 없음
-const [terrainData, driveData] = await Promise.all([
+const corridorDir = region.features?.corridor && params.get('corridor') !== '0' ? region.dataFiles?.corridor : null; // [corridor] ?corridor=0 이면 정자만
+const [terrainData, driveData, corridorData] = await Promise.all([
   !terrainFile || params.get('terrain') === '0' ? null : fetch(import.meta.env.BASE_URL + terrainFile).then((r) => r.json()).catch(() => null),
   !driveFile || params.get('taxis') === '0' ? null : fetch(import.meta.env.BASE_URL + driveFile).then((r) => r.json()).catch(() => null),
+  corridorDir ? loadCorridorData(import.meta.env.BASE_URL + corridorDir) : null,
 ]);
 
 // --- 렌더러/씬 ---
@@ -152,13 +200,22 @@ scene.add(sun, sun.target);
 function setShadowSpan(span) { const c = sun.shadow.camera; c.left = c.bottom = -span; c.right = c.top = span; c.near = 1; c.far = span * 4 + 600; c.updateProjectionMatrix(); }
 
 // --- 월드 ---
-const terrain = terrainData ? createTerrain(terrainData, data) : null; // [terrain]
+const terrain = terrainData ? createTerrain(corridorTerrainData(terrainData, corridorData), data) : null; // [terrain] [corridor] 코리더 켜짐: 탄천 축 연장
 terrain?.annotate(data); // [terrain] 도로/수면에 높이 부여 (buildWorld 전에)
 const tower = region.features?.launchTower && params.get('tower') !== '0' ? createTowerAddon(data) : null; // [tower] buildWorld 전에 _skip 마킹
 const world = buildWorld(scene, data, region);
 tower?.build(scene, renderer); // [tower] 발사탑 1·2기(메카질라), 스타십 풀스택, 부스터 캐치, OLM, 탱크 팜 생성
 const overlay = new Overlay(document.getElementById('overlay'), camera);
-if (terrain) { terrain.build(scene, world, overlay); world.groundY = terrain.getGroundHeight; } // [terrain] world.groundY(x,z,refY) — NPC/원격 플레이어/택시가 사용
+const corridorClock = { simTime: () => null };
+// [corridor] 정자 → 롯데월드타워 코리더: 탄천 구간 도로는 terrain.build 전에 annotate 해야 다리 구조물이 같이 생긴다
+const corridor = corridorData ? createCorridor({ scene, corridorData, terrain, world, renderer, overlay, params, getSimTime: () => corridorClock.simTime() }) : null;
+if (terrain) { terrain.build(scene, world, overlay); world.groundY = terrain.getGroundHeight; }
+if (corridor) {
+  corridor.afterTerrain();
+  const liveBlocked = world.isBlocked, liveOnRoad = world.onRoad;
+  world.isBlocked = (x, z, r) => liveBlocked(x, z, r) || corridor.isBlocked(x, z, r);
+  world.onRoad = (x, z) => liveOnRoad(x, z) || corridor.onRoad(x, z);
+} // [terrain] world.groundY(x,z,refY) — NPC/원격 플레이어/택시가 사용
 const st = data.station;
 overlay.add({
   cls: 'label station',
@@ -258,7 +315,9 @@ const busProxy = proxyParam === 'local'
     : (params.has('shot') && !busParam ? '' : DEFAULT_BUS_PROXY);
 const busMode = busParam === 'sim' ? 'sim' : (busParam === 'realtime' || busProxy) ? 'realtime' : 'sim';
 const transit = transitData ? buildTransit(scene, transitData, world, overlay, { mode: busMode, proxy: busProxy }) : null;
+corridor?.attachLife({ proxy: busProxy, mode: busMode }); // [corridor] 수내→롯데 버스·차량·보행 NPC (?clife=0 끔)
 if (transit) {
+  corridorClock.simTime = () => transit.simTime; // [corridor] 코리더 신호등도 같은 시계
   npcs.guard = makeCrossingGuard(transit);
   // NPC 한 명(고양이 제외)은 역 앞 신호 횡단보도를 왕복 -> 빨간불이면 멈춰 기다림
   const sigC = transit.crossings.filter((c) => c.sig && c.w >= 9).sort((a, b) => Math.hypot(a.x - st.x, a.z - st.z) - Math.hypot(b.x - st.x, b.z - st.z))[0];
@@ -407,6 +466,8 @@ roadbikeWhite = params.get('roadbike') !== '0'
 const trucks = region.features?.trucks && params.get('trucks') !== '0'
   ? createTrucks({ scene, overlay, world, data, params, camera, cam, player: playerProxy, renderer, terrain, presence, remotes, spawn: pos })
   : null;
+// [corridor] 플레이어·바이크 이동 범위를 코리더까지 확장. 버스(transit)는 위에서 이미 라이브 bounds 를 잡아 두어 영향 없음
+if (corridor) { world.liveBounds = world.bounds; world.bounds = corridor.bounds; }
 const statusEl = document.getElementById('presence-status');
 const presencePanel = document.getElementById('presence-panel');
 let presenceOpen = false;
@@ -840,7 +901,9 @@ function completeWorldJoin(name, look, session) {
   me.name = name; me.color = look.color; me.look = look;
   mySit = ''; myAfk = false; myEmote = ''; myEmoteUntil = 0; idleTime = 0;
   wear(look);
-  if (session?.place) applySession(session);
+  const picked = explicitPick;
+  explicitPick = false;
+  if (session?.place && !picked) applySession(session);
   else player.position.copy(pos);
   player.visible = true;
   nameTag.hidden = false;
@@ -858,6 +921,9 @@ function completeWorldJoin(name, look, session) {
   inventory?.refresh();
   syncRainControl();
   trackEvent('world_join', { region: region.id, has_pin: !!session?.hasPin, resumed: !!session?.place });
+  const toStation = !!corridorAt;
+  corridorArrive?.(); // [corridor]
+  if (picked && !toStation) { try { rememberPlace(true); } catch {} } // 고른 기본 스폰을 새 마지막 위치로 저장 (역 이동은 teleport 가 저장)
 }
 joinWithPassport = async () => {
   const passport = readSavedPassport();
@@ -871,7 +937,8 @@ joinWithPassport = async () => {
   }
   const screen = arrivalFlightScreen || getEnterScreen();
   if (!arrivalFlightScreen) {
-    screen.show(getFlightLines(region), { minMs: 1100 });
+    // 같은 동네 재입장(여권): 비행기 문구가 아니라 처음 입장할 때와 같은 로딩 문구
+    screen.show(getEnterLines(entryRegion()));
   }
   arrivalFlightScreen = null;
   document.body.classList.remove('in-gate', 'in-lobby');
@@ -894,7 +961,7 @@ startLobby = async () => {
   }
   openLobby({
     sms,
-    region,
+    region: entryRegion(), // [corridor] 고른 역 이름으로 로비 제목·로딩 문구
     onBack: reopenGate,
     onJoin(name, look, session) {
       completeWorldJoin(name, look, session);
@@ -1627,6 +1694,10 @@ function syncGameLocale() {
     attrEl.innerHTML = en
       ? '© <a href="https://crazylabs.co.kr" target="_blank" rel="noopener">CrazyLabs</a> · <a href="https://github.com/dohoon84/bumpinto-world" target="_blank" rel="noopener">Source Available</a> · Map © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> (ODbL)'
       : '© <a href="https://crazylabs.co.kr" target="_blank" rel="noopener">CrazyLabs</a> · <a href="https://github.com/dohoon84/bumpinto-world" target="_blank" rel="noopener">소스 공개 (영리 서비스 금지)</a> · 지도 © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> (ODbL)';
+    // [corridor] 코리더 건물 높이 출처 (Overture footprint · 브이월드 GIS건물통합정보)
+    if (corridorDir) attrEl.innerHTML += en
+      ? ' · <a href="https://overturemaps.org" target="_blank" rel="noopener">Overture Maps</a> · Building heights: <a href="https://www.vworld.kr" target="_blank" rel="noopener">VWorld</a> (MOLIT)'
+      : ' · <a href="https://overturemaps.org" target="_blank" rel="noopener">Overture Maps</a> · 건물 높이: <a href="https://www.vworld.kr" target="_blank" rel="noopener">브이월드</a> (국토교통부)';
   }
   syncRideUi(true);
   syncHelpFoldUi();
@@ -1652,6 +1723,33 @@ homeBtn.onclick = () => {
   setMode('follow');
   rememberPlace(true);
 };
+// [corridor] 📍 이동 패널(T) · ?at=<역>|lotte · 성능 HUD(`)
+function teleportTo(x, z) {
+  if (bikes.riding) dismountBike();
+  if (adminBike?.riding) adminBike.dismount();
+  dismountRoadbikes();
+  standUpFromSeat();
+  wakeFromAfk();
+  player.position.set(x, terrain ? terrain.getGroundHeight(x, z, 0) : 0, z);
+  setMode('follow');
+  rememberPlace(true);
+}
+const travel = corridor ? mountTravel({ corridor, home: () => homeBtn.onclick(), teleport: teleportTo }) : null;
+if (corridor) { corridor.place = (id) => travel?.go(id); corridor.placeOf = (id) => travel?.dests.find((d) => d.id === id) || null; }
+const perfHud = mountPerfHud({ renderer, corridor, params });
+if (travel && params.get('at')) travel.go(params.get('at'));
+// [corridor] 지구본 역 선택 → 입장 완료 후 역 출구 앞 인도로 (위치 저장 성공 여부와 무관)
+corridorArrive = () => {
+  if (!corridorAt || !travel) return;
+  const id = corridorAt;
+  corridorAt = null;
+  travel.go(id).then((ok) => {
+    if (!ok) return;
+    const u = new URL(location.href);
+    if (u.searchParams.get('at') === id) { u.searchParams.delete('at'); history.replaceState(null, '', u.toString()); }
+  });
+};
+if (joined) corridorArrive();
 const dogParkBtn = document.getElementById('btn-dogpark');
 if (dogParkBtn) {
   if (!region.features?.dogPark) {
@@ -1779,7 +1877,7 @@ input.onKey = (e) => {
   if (emoteDef) triggerEmote(emoteDef.id, true);
 };
 const ov = { yaw: 0.35, pitch: 0.95, dist: 1000 };
-const phone = mountPhone({ data, region });
+const phone = mountPhone({ data, region, extraTiles: corridor ? () => corridor.mapTiles() : null }); // [corridor]
 
 let placeAt = 0, placeMark = '';
 function rememberPlace(force = false) {
@@ -2093,7 +2191,7 @@ function frame() {
     camera.lookAt(P.x - bx * aim * cp, eye - aim * sp, P.z - bz * aim * cp); // [terrain] 시선 기준 높이는 P.y + 1.6
     sun.target.position.copy(P);
   } else {
-    const usePlayerCenter = region.id === 'starbase' && joined && st.x === 0 && st.z === 0;
+    const usePlayerCenter = (region.id === 'starbase' && joined && st.x === 0 && st.z === 0) || (corridor && joined && !corridor.inLive(P.x, P.z)); // [corridor] 코리더에선 내 위치 중심
     const cx = usePlayerCenter ? P.x : st.x;
     const cz = usePlayerCenter ? P.z : st.z + 60;
     const c = new THREE.Vector3(cx, 0, cz);
@@ -2101,6 +2199,7 @@ function frame() {
     camera.position.copy(c).add(tmp); camera.lookAt(c);
     sun.target.position.copy(c);
   }
+  if (corridor) { const c = cam.mode === 'follow' ? P : sun.target.position; corridor.update(dt, c.x, c.z, cam.mode); } // [corridor] 타일 스트리밍(프레임당 최대 1개 빌드)
   const viewYaw = cam.mode === 'follow' ? cam.yaw : ov.yaw;
   const moveYaw = player.rotation.y + (bikes.riding && bikes.speed < -0.2 ? Math.PI : 0);
   phone.tick({
@@ -2114,6 +2213,7 @@ function frame() {
   launch?.update(dt); // [launch] 5분 주기 발사·핫스테이징·젓가락 캐치 쇼
   sun.position.copy(sun.target.position).addScaledVector(atmosphere.sunDir, 500);
   renderer.render(scene, camera);
+  perfHud.tick();
   overlay.update(innerWidth, innerHeight);
   emoteFx.update(dt, innerWidth, innerHeight);
   requestAnimationFrame(frame);
@@ -2123,7 +2223,8 @@ requestAnimationFrame(frame);
 
 // 스크린샷/디버그용 훅
 window.__jj = {
-  ready: true, region, tower, launch, roadster, trucks, bike: adminBike, roadbike, inventory, data, world, npcs, transit, camera, cam, ov, setMode, terrain, taxis, police, weather: atmosphere, umbrellas, dogPark, strayCats, // [terrain] [taxi] [roadster] [tower] [launch] [truck] [bike] [roadbike] [inventory]
+  ready: true, region, tower, renderer, corridor, // [corridor]
+  launch, roadster, trucks, bike: adminBike, roadbike, inventory, data, world, npcs, transit, camera, cam, ov, setMode, terrain, taxis, police, weather: atmosphere, umbrellas, dogPark, strayCats, // [terrain] [taxi] [roadster] [tower] [launch] [truck] [bike] [roadbike] [inventory]
   get player() { return player; },
   teleport(x, z, y) { if (bikes.riding) dismountBike(); if (adminBike?.riding) adminBike.dismount(); dismountRoadbikes(); player.position.set(x, y ?? (terrain ? terrain.getGroundHeight(x, z, 0) : 0), z); }, // [terrain] [bike] [roadbike]
   bikes, toggleRide, triggerEmote,

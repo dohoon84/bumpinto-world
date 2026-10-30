@@ -3200,3 +3200,14 @@ body.in-lobby #hud, body.in-lobby #buttons, body.in-lobby #top-right-bar, body.i
   border-color: rgba(255, 143, 184, 0.55);
 }
 
+
+/* [corridor] 수내→롯데 코리더 정류장 패널: 라이브 #stop-panel 과 같은 모양, 별도 요소 */
+#corridor-stop-panel { position: fixed; left: 12px; bottom: 62px; width: 270px; background: rgba(18,24,34,.88); color: #eef; border-radius: 12px; padding: 10px 12px; font-size: 12px; box-shadow: 0 4px 14px rgba(0,0,0,.25); transform: translateY(10px); opacity: 0; transition: .25s; pointer-events: none; }
+#corridor-stop-panel.open { opacity: 1; transform: none; }
+#corridor-stop-panel .hd { font-size: 14px; font-weight: 700; margin-bottom: 6px; } #corridor-stop-panel .hd small { font-weight: 400; opacity: .6; font-size: 11px; margin-left: 4px; }
+#corridor-stop-panel table { width: 100%; border-collapse: collapse; } #corridor-stop-panel td { padding: 2px 0; }
+#corridor-stop-panel .chip { display: inline-block; min-width: 46px; text-align: center; font-weight: 700; color: #fff; border-radius: 5px; padding: 1px 5px; }
+#corridor-stop-panel .ty { opacity: .7; font-size: 11px; padding-left: 6px; } #corridor-stop-panel .eta { text-align: right; color: #ffcf4a; font-weight: 600; }
+#corridor-stop-panel i { font-style: normal; font-size: 10px; color: #9ab; border: 1px solid #567; border-radius: 4px; padding: 0 3px; }
+#corridor-stop-panel .ft { margin-top: 6px; font-size: 10px; opacity: .55; }
+body.in-gate #corridor-stop-panel, body.in-lobby #corridor-stop-panel { display: none !important; }
