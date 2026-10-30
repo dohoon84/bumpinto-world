@@ -41,6 +41,9 @@ import { createRoadBike, ROADBIKE_GIFT_ID, ROADBIKE_WHITE_GIFT_ID, ROADBIKE_WHIT
 import { GIFT_ITEMS, giftItem, giftUnit } from './gifts/catalog.js';
 import { holdingQty, onHoldings, replaceHoldings, setHoldingQty } from './gifts/holdings.js';
 import { mountInventory } from './inventory.js'; // [inventory]
+import { loadCorridorData, createCorridor } from './corridor/index.js'; // [corridor]
+import { mountTravel } from './corridor/travel.js'; // [corridor]
+import { mountPerfHud } from './corridor/perfHud.js'; // [corridor]
 
 const params = new URLSearchParams(location.search);
 const region = getCurrentRegion();
@@ -116,9 +119,11 @@ const [data, transitData] = await Promise.all([
   transitFile ? fetch(import.meta.env.BASE_URL + transitFile).then((r) => r.json()).catch(() => null) : Promise.resolve(null),
 ]);
 // [terrain] [taxi] 추가 데이터 (없어도 동작). ?terrain=0 이면 평평한 기존 지형, ?taxis=0 이면 택시 없음
-const [terrainData, driveData] = await Promise.all([
+const corridorDir = region.features?.corridor && params.get('corridor') !== '0' ? region.dataFiles?.corridor : null; // [corridor] ?corridor=0 이면 정자만
+const [terrainData, driveData, corridorData] = await Promise.all([
   !terrainFile || params.get('terrain') === '0' ? null : fetch(import.meta.env.BASE_URL + terrainFile).then((r) => r.json()).catch(() => null),
   !driveFile || params.get('taxis') === '0' ? null : fetch(import.meta.env.BASE_URL + driveFile).then((r) => r.json()).catch(() => null),
+  corridorDir ? loadCorridorData(import.meta.env.BASE_URL + corridorDir) : null,
 ]);
 
 // --- 렌더러/씬 ---
@@ -158,7 +163,16 @@ const tower = region.features?.launchTower && params.get('tower') !== '0' ? crea
 const world = buildWorld(scene, data, region);
 tower?.build(scene, renderer); // [tower] 발사탑 1·2기(메카질라), 스타십 풀스택, 부스터 캐치, OLM, 탱크 팜 생성
 const overlay = new Overlay(document.getElementById('overlay'), camera);
-if (terrain) { terrain.build(scene, world, overlay); world.groundY = terrain.getGroundHeight; } // [terrain] world.groundY(x,z,refY) — NPC/원격 플레이어/택시가 사용
+const corridorClock = { simTime: () => null };
+// [corridor] 정자 → 롯데월드타워 코리더: 탄천 구간 도로는 terrain.build 전에 annotate 해야 다리 구조물이 같이 생긴다
+const corridor = corridorData ? createCorridor({ scene, corridorData, terrain, world, renderer, overlay, params, getSimTime: () => corridorClock.simTime() }) : null;
+if (terrain) { terrain.build(scene, world, overlay); world.groundY = terrain.getGroundHeight; }
+if (corridor) {
+  corridor.afterTerrain();
+  const liveBlocked = world.isBlocked, liveOnRoad = world.onRoad;
+  world.isBlocked = (x, z, r) => liveBlocked(x, z, r) || corridor.isBlocked(x, z, r);
+  world.onRoad = (x, z) => liveOnRoad(x, z) || corridor.onRoad(x, z);
+} // [terrain] world.groundY(x,z,refY) — NPC/원격 플레이어/택시가 사용
 const st = data.station;
 overlay.add({
   cls: 'label station',
@@ -259,6 +273,7 @@ const busProxy = proxyParam === 'local'
 const busMode = busParam === 'sim' ? 'sim' : (busParam === 'realtime' || busProxy) ? 'realtime' : 'sim';
 const transit = transitData ? buildTransit(scene, transitData, world, overlay, { mode: busMode, proxy: busProxy }) : null;
 if (transit) {
+  corridorClock.simTime = () => transit.simTime; // [corridor] 코리더 신호등도 같은 시계
   npcs.guard = makeCrossingGuard(transit);
   // NPC 한 명(고양이 제외)은 역 앞 신호 횡단보도를 왕복 -> 빨간불이면 멈춰 기다림
   const sigC = transit.crossings.filter((c) => c.sig && c.w >= 9).sort((a, b) => Math.hypot(a.x - st.x, a.z - st.z) - Math.hypot(b.x - st.x, b.z - st.z))[0];
@@ -407,6 +422,8 @@ roadbikeWhite = params.get('roadbike') !== '0'
 const trucks = region.features?.trucks && params.get('trucks') !== '0'
   ? createTrucks({ scene, overlay, world, data, params, camera, cam, player: playerProxy, renderer, terrain, presence, remotes, spawn: pos })
   : null;
+// [corridor] 플레이어·바이크 이동 범위를 코리더까지 확장. 버스(transit)는 위에서 이미 라이브 bounds 를 잡아 두어 영향 없음
+if (corridor) { world.liveBounds = world.bounds; world.bounds = corridor.bounds; }
 const statusEl = document.getElementById('presence-status');
 const presencePanel = document.getElementById('presence-panel');
 let presenceOpen = false;
@@ -1627,6 +1644,10 @@ function syncGameLocale() {
     attrEl.innerHTML = en
       ? '© <a href="https://crazylabs.co.kr" target="_blank" rel="noopener">CrazyLabs</a> · <a href="https://github.com/dohoon84/bumpinto-world" target="_blank" rel="noopener">Source Available</a> · Map © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> (ODbL)'
       : '© <a href="https://crazylabs.co.kr" target="_blank" rel="noopener">CrazyLabs</a> · <a href="https://github.com/dohoon84/bumpinto-world" target="_blank" rel="noopener">소스 공개 (영리 서비스 금지)</a> · 지도 © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> (ODbL)';
+    // [corridor] 코리더 건물 높이 출처 (Overture footprint · 브이월드 GIS건물통합정보)
+    if (corridorDir) attrEl.innerHTML += en
+      ? ' · <a href="https://overturemaps.org" target="_blank" rel="noopener">Overture Maps</a> · Building heights: <a href="https://www.vworld.kr" target="_blank" rel="noopener">VWorld</a> (MOLIT)'
+      : ' · <a href="https://overturemaps.org" target="_blank" rel="noopener">Overture Maps</a> · 건물 높이: <a href="https://www.vworld.kr" target="_blank" rel="noopener">브이월드</a> (국토교통부)';
   }
   syncRideUi(true);
   syncHelpFoldUi();
@@ -1652,6 +1673,21 @@ homeBtn.onclick = () => {
   setMode('follow');
   rememberPlace(true);
 };
+// [corridor] 📍 이동 패널(T) · ?at=<역>|lotte · 성능 HUD(`)
+function teleportTo(x, z) {
+  if (bikes.riding) dismountBike();
+  if (adminBike?.riding) adminBike.dismount();
+  dismountRoadbikes();
+  standUpFromSeat();
+  wakeFromAfk();
+  player.position.set(x, terrain ? terrain.getGroundHeight(x, z, 0) : 0, z);
+  setMode('follow');
+  rememberPlace(true);
+}
+const travel = corridor ? mountTravel({ corridor, home: () => homeBtn.onclick(), teleport: teleportTo }) : null;
+if (corridor) { corridor.place = (id) => travel?.go(id); corridor.placeOf = (id) => travel?.dests.find((d) => d.id === id) || null; }
+const perfHud = mountPerfHud({ renderer, corridor, params });
+if (travel && params.get('at')) travel.go(params.get('at'));
 const dogParkBtn = document.getElementById('btn-dogpark');
 if (dogParkBtn) {
   if (!region.features?.dogPark) {
@@ -1779,7 +1815,7 @@ input.onKey = (e) => {
   if (emoteDef) triggerEmote(emoteDef.id, true);
 };
 const ov = { yaw: 0.35, pitch: 0.95, dist: 1000 };
-const phone = mountPhone({ data, region });
+const phone = mountPhone({ data, region, extraTiles: corridor ? () => corridor.mapTiles() : null }); // [corridor]
 
 let placeAt = 0, placeMark = '';
 function rememberPlace(force = false) {
@@ -2093,7 +2129,7 @@ function frame() {
     camera.lookAt(P.x - bx * aim * cp, eye - aim * sp, P.z - bz * aim * cp); // [terrain] 시선 기준 높이는 P.y + 1.6
     sun.target.position.copy(P);
   } else {
-    const usePlayerCenter = region.id === 'starbase' && joined && st.x === 0 && st.z === 0;
+    const usePlayerCenter = (region.id === 'starbase' && joined && st.x === 0 && st.z === 0) || (corridor && joined && !corridor.inLive(P.x, P.z)); // [corridor] 코리더에선 내 위치 중심
     const cx = usePlayerCenter ? P.x : st.x;
     const cz = usePlayerCenter ? P.z : st.z + 60;
     const c = new THREE.Vector3(cx, 0, cz);
@@ -2101,6 +2137,7 @@ function frame() {
     camera.position.copy(c).add(tmp); camera.lookAt(c);
     sun.target.position.copy(c);
   }
+  if (corridor) { const c = cam.mode === 'follow' ? P : sun.target.position; corridor.update(dt, c.x, c.z, cam.mode); } // [corridor] 타일 스트리밍(프레임당 최대 1개 빌드)
   const viewYaw = cam.mode === 'follow' ? cam.yaw : ov.yaw;
   const moveYaw = player.rotation.y + (bikes.riding && bikes.speed < -0.2 ? Math.PI : 0);
   phone.tick({
@@ -2114,6 +2151,7 @@ function frame() {
   launch?.update(dt); // [launch] 5분 주기 발사·핫스테이징·젓가락 캐치 쇼
   sun.position.copy(sun.target.position).addScaledVector(atmosphere.sunDir, 500);
   renderer.render(scene, camera);
+  perfHud.tick();
   overlay.update(innerWidth, innerHeight);
   emoteFx.update(dt, innerWidth, innerHeight);
   requestAnimationFrame(frame);
@@ -2123,7 +2161,8 @@ requestAnimationFrame(frame);
 
 // 스크린샷/디버그용 훅
 window.__jj = {
-  ready: true, region, tower, launch, roadster, trucks, bike: adminBike, roadbike, inventory, data, world, npcs, transit, camera, cam, ov, setMode, terrain, taxis, police, weather: atmosphere, umbrellas, dogPark, strayCats, // [terrain] [taxi] [roadster] [tower] [launch] [truck] [bike] [roadbike] [inventory]
+  ready: true, region, tower, renderer, corridor, // [corridor]
+  launch, roadster, trucks, bike: adminBike, roadbike, inventory, data, world, npcs, transit, camera, cam, ov, setMode, terrain, taxis, police, weather: atmosphere, umbrellas, dogPark, strayCats, // [terrain] [taxi] [roadster] [tower] [launch] [truck] [bike] [roadbike] [inventory]
   get player() { return player; },
   teleport(x, z, y) { if (bikes.riding) dismountBike(); if (adminBike?.riding) adminBike.dismount(); dismountRoadbikes(); player.position.set(x, y ?? (terrain ? terrain.getGroundHeight(x, z, 0) : 0), z); }, // [terrain] [bike] [roadbike]
   bikes, toggleRide, triggerEmote,
