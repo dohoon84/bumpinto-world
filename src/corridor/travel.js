@@ -16,6 +16,7 @@ export function mountTravel({ corridor, home, teleport }) {
   if (!bar) return null;
   const style = document.createElement('style'); style.textContent = CSS; document.head.appendChild(style);
   const btn = document.createElement('button'); btn.id = 'btn-travel'; btn.type = 'button'; btn.title = 'T';
+  btn.hidden = true; // 상단 '📍 이동' 버튼은 노출하지 않음(사용자 요청). 패널은 T 키로 그대로, 역 이동은 지구본·?at= 로
   const homeEl = document.getElementById('btn-home');
   homeEl ? homeEl.after(btn) : bar.appendChild(btn);
   const panel = document.createElement('div'); panel.id = 'corridor-travel'; panel.hidden = true; bar.appendChild(panel);

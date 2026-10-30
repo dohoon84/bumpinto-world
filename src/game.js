@@ -1772,6 +1772,8 @@ if (dogParkBtn) {
       emitMyStateNow();
     };
   }
+  // 상단 '🐕 반려견운동장가기' 버튼은 노출하지 않음(사용자 요청). 기능·P 키·onclick 은 그대로
+  dogParkBtn.hidden = true;
 }
 if (Array.isArray(region.quickSpots) && region.quickSpots.length) {
   const buttonsWrap = document.getElementById('buttons');
