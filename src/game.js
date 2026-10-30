@@ -1730,6 +1730,7 @@ function teleportTo(x, z) {
   dismountRoadbikes();
   standUpFromSeat();
   wakeFromAfk();
+  renderEmoteBar(); // 앉아 있다 순간이동하면 C 칩 표시도 '앉기'로 되돌림
   player.position.set(x, terrain ? terrain.getGroundHeight(x, z, 0) : 0, z);
   setMode('follow');
   rememberPlace(true);
@@ -1872,6 +1873,7 @@ input.onKey = (e) => {
     if (donationBoards.isNear) donationBoards.openModal('hotkey_f');
     else if (dogPark.nearGate) dogPark.toggleGate();
   }
+  if (e.code === 'KeyC' && !e.repeat) toggleSit(); // 134e7c7(스타벅스 커밋)에서 실수로 빠졌던 앉기 단축키 복구
   if (e.code === 'KeyZ' && !e.repeat) toggleAfk();
   if (e.code === 'Space' && !e.repeat) triggerJump();
   const emoteDef = EMOTE_BY_CODE[e.code];
