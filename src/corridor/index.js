@@ -12,6 +12,7 @@ import { stationSign, Grid } from '../world.js';
 import { drawBaseMap } from '../phone.js';
 import { addInstancedTrees } from '../world/trees.js';
 import { createCorridorLife } from './life.js';
+import { setNightCut, updateNight } from './nightLights.js';
 
 export async function loadCorridorData(baseUrl) {
   const get = (f) => fetch(baseUrl + f).then((r) => (r.ok ? r.json() : null)).catch(() => null);
@@ -42,6 +43,7 @@ export function createCorridor({ scene, corridorData, terrain, world, renderer, 
   const { index, base, baseUrl } = corridorData;
   const TS = index.meta.tileSize;
   const live = index.meta.liveBox;
+  setNightCut(live.z0 - 250); // [corridor] 저녁 건물 불빛은 정자(liveBox) 북쪽 250m 밖부터 = 수내 쪽
   const Q = QUALITY[params?.get('corridorq')] || QUALITY.med;
   const root = new THREE.Group(); root.name = 'corridor'; scene.add(root);
   const liveOnRoad = world.onRoad, liveBlocked = world.isBlocked;
@@ -248,6 +250,7 @@ export function createCorridor({ scene, corridorData, terrain, world, renderer, 
       updateSigns();
       crossings.update(dt);
       landmarks.update(dt);
+      updateNight(dt); // [corridor] 저녁 건물 불빛 페이드
       life?.update(dt, x, z);
     },
     // 위치 주변 상세 타일을 즉시 로드·빌드 (텔레포트/스크린샷용)

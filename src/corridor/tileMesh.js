@@ -10,6 +10,7 @@ import {
 } from '../world.js';
 import { addInstancedTrees } from '../world/trees.js';
 import { addWindowLights } from '../world/windowLights.js';
+import { NIGHT_ON, nightKind, nightSeed, nightCut, nightFacade, nightLodMaterial } from './nightLights.js';
 
 export const CAR_KINDS = new Set(['primary', 'secondary', 'tertiary', 'trunk', 'residential', 'unclassified', 'service', 'motorway', 'primary_link', 'secondary_link', 'trunk_link', 'motorway_link']);
 const TREE_KINDS = new Set(['primary', 'secondary', 'tertiary']);
@@ -95,9 +96,15 @@ function buildingMeshes(list, seed0) {
       cols[i * 3] = cc.r; cols[i * 3 + 1] = cc.g; cols[i * 3 + 2] = cc.b;
     }
     g.setAttribute('color', new THREE.BufferAttribute(cols, 3));
+    if (NIGHT_ON) { // [corridor] 저녁 불빛 속성 (건물마다 고정)
+      const { seed, z } = nightSeed(b), kind = z > nightCut() ? 0 : nightKind(b);
+      const shop = !minH && (kind === 3 || (kind === 4 && b.h <= 15 && seed < 0.4)) ? 1 : 0;
+      const nl = new Float32Array(nrm.count * 3); for (let i = 0; i < nrm.count; i++) { nl[i * 3] = seed; nl[i * 3 + 1] = kind; nl[i * 3 + 2] = shop; }
+      g.setAttribute('aNL', new THREE.BufferAttribute(nl, 3));
+    }
     const cap = takeGroup(g, 0), side = takeGroup(g, 1);
     g.dispose();
-    if (cap) { if (cap.attributes.uv) cap.deleteAttribute('uv'); roofs.push(cap); }
+    if (cap) { if (cap.attributes.uv) cap.deleteAttribute('uv'); if (cap.attributes.aNL) cap.deleteAttribute('aNL'); roofs.push(cap); }
     if (side) (walls[facadeKey(b.k)] ||= []).push(side);
   }
   const out = [];
@@ -105,7 +112,7 @@ function buildingMeshes(list, seed0) {
   if (rg) { const m = new THREE.Mesh(rg, vcMat()); m.castShadow = m.receiveShadow = true; out.push(m); }
   for (const [key, geos] of Object.entries(walls)) {
     const g = merged(geos); if (!g) continue;
-    const m = new THREE.Mesh(g, facadeMaterial(key)); m.castShadow = m.receiveShadow = true; out.push(m);
+    const m = new THREE.Mesh(g, nightFacade(facadeMaterial(key), key)); m.castShadow = m.receiveShadow = true; out.push(m);
   }
   return out;
 }
@@ -181,11 +188,12 @@ export function buildDetailTile(key, t, { terrain, onRoadAll }) {
 const unflat = (a) => { const o = []; for (let i = 0; i < a.length; i += 2) o.push([a[i], a[i + 1]]); return o; };
 const FACADE_WALL = { office: '#a9bccf', commercial: '#c3cfdb', residential: '#e2d3c3', house: '#e3d9ca', school: '#ead9c4', public: '#d8d0c2', yes: '#d7d2c9' };
 function prismGeo(list, kinds) {
-  const pos = [], col = [], idx = [];
+  const pos = [], col = [], idx = [], nl = [];
   const c = new THREE.Color(), roof = new THREE.Color(), wall = new THREE.Color();
   for (const [h, mh, ki, fl] of list) {
     const ring = unflat(fl); if (ring.length < 3) continue;
     const k = kinds[ki] || 'yes';
+    const { seed, z: cz } = nightSeed({ o: ring }), kind = cz > nightCut() ? 0 : nightKind({ k }); let u = 0;
     c.set(BUILDING_COLOR[k] || BUILDING_COLOR.yes); roof.copy(c).offsetHSL(0, -0.05, -0.12);
     wall.set(FACADE_WALL[facadeKey(k)] || FACADE_WALL.yes);
     const y0 = mh || 0, y1 = Math.max(y0 + 0.35, h);
@@ -194,19 +202,21 @@ function prismGeo(list, kinds) {
       const [x0, z0] = ring[i], [x1, z1] = ring[(i + 1) % ring.length], b = pos.length / 3;
       pos.push(x0, y0, z0, x1, y0, z1, x1, y1, z1, x0, y1, z0);
       for (let j = 0; j < 4; j++) col.push(wall.r, wall.g, wall.b);
+      const L = Math.hypot(x1 - x0, z1 - z0); nl.push(u, seed, kind, u + L, seed, kind, u + L, seed, kind, u, seed, kind); u += L;
       idx.push(b, b + 1, b + 2, b, b + 2, b + 3, b, b + 2, b + 1, b, b + 3, b + 2); // 양면(링 방향 무관)
     }
     // 지붕
     const v2 = ring.map(([x, z]) => new THREE.Vector2(x, z));
     let tris; try { tris = THREE.ShapeUtils.triangulateShape(v2, []); } catch { tris = []; }
     const b = pos.length / 3;
-    for (const [x, z] of ring) { pos.push(x, y1, z); col.push(roof.r, roof.g, roof.b); }
+    for (const [x, z] of ring) { pos.push(x, y1, z); col.push(roof.r, roof.g, roof.b); nl.push(0, 0, 0); }
     for (const [a, bb, cc] of tris) idx.push(b + a, b + bb, b + cc, b + a, b + cc, b + bb);
   }
   if (!pos.length) return null;
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
   g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+  if (NIGHT_ON) g.setAttribute('aNL', new THREE.Float32BufferAttribute(nl, 3));
   g.setIndex(idx); g.computeVertexNormals();
   return g;
 }
@@ -225,7 +235,7 @@ export function buildLodTile(key, L, { roadKinds, buildingKinds }) {
   const roads = L.r.map(([w, ki, fl, br]) => ({ w, k: roadKinds[ki], p: unflat(fl), br }));
   const rm = roadMesh(roads, { lines: false }); if (rm) { rm.receiveShadow = false; group.add(rm); }
   const bg = prismGeo(L.b, buildingKinds);
-  if (bg) { const m = new THREE.Mesh(bg, vcMat()); m.name = 'corridorLodBuildings'; group.add(m); }
+  if (bg) { const m = new THREE.Mesh(bg, nightLodMaterial(vcMat())); m.name = 'corridorLodBuildings'; group.add(m); }
   return {
     group,
     dispose() { group.traverse((o) => { if (o.isMesh) o.geometry?.dispose(); }); group.removeFromParent(); },
