@@ -337,9 +337,11 @@ export default {
 - 그림자는 플레이어 주변(걷기)·전체(조감도)만 커버하는 단일 그림자맵이라 조감도에서 그림자가 흐릿합니다.
 
 ## 라이선스 / 출처
-- 자체 코드(`src/`, `server/`)는 [Bumpinto World Source License](./LICENSE)입니다. 개인·학습·내부 실행과 무료 공개는 가능합니다. 이 소스나 그 수정본으로 영리 서비스(유료, 구독, 광고·후원으로 제3자에게 제공하는 월드)를 운영할 수 없습니다.
+- 자체 코드(`src/`, `server/`, `scripts/` 등)와 직접 만든 에셋(`public/audio`, `public/promo`, QR·파비콘, 절차적 랜드마크 모델)은 [Bumpinto World Source License](./LICENSE)입니다(영문이 기준). 이름 "Bumpinto World"·"CrazyLabs"와 로고에 대한 권리는 포함되지 않습니다. 개인·학습·내부 실행과 무료 공개는 가능합니다. 이 소스나 그 수정본으로 영리 서비스(유료, 구독, 광고·후원으로 제3자에게 제공하는 월드)를 운영할 수 없습니다.
 - 공개 화면에는 CrazyLabs(https://crazylabs.co.kr)와 Bumpinto World(https://bumpinto.world) 표기를 유지합니다.
 - 이 문구로 바꾸기 전에 받은 복사본은 당시의 MIT License with Attribution Requirement가 적용됩니다.
 - 지도 데이터 © OpenStreetMap contributors, [ODbL](https://www.openstreetmap.org/copyright). 화면 오른쪽 아래에 표시됩니다. `public/jeongja.json`은 ODbL 파생 데이터베이스입니다.
+- 코리더(`public/corridor/`) 건물: Overture Maps buildings(ODbL) footprint 보조, 높이 일부는 브이월드 GIS건물통합정보(국토교통부).
 - three.js (MIT).
+- 기여 방법과 기여자 라이선스 약관(CLA, 초안)은 [CONTRIBUTING.md](./CONTRIBUTING.md)를 보세요.
 - 노선 유형: 경기버스정보(gbis.go.kr). 버스 도색 색상 출처는 위 "버스 도색 매핑과 출처" 참고. 실시간 데이터(사용 시): 공공데이터포털(data.go.kr) 경기도 버스 API, 공공누리 조건 확인 필요.

@@ -4,15 +4,76 @@ Attribution required. (Bumpinto World / CrazyLabs)
 
 Copyright (c) 2026 김도훈 (CrazyLabs, https://crazylabs.co.kr)
 
-This license applies to original Bumpinto World source code in this
-repository (the "Software"), including files under src/ and server/.
+The English text of this license is the binding version. Any
+translation or summary (including in README.md or CONTRIBUTING.md) is
+for convenience only.
 
+Scope
+This license applies to the following material in this repository,
+together called the "Software":
+
+(a) original Bumpinto World source code, including files under src/,
+    server/, scripts/, and addons/, and index.html;
+
+(b) original assets created by or for 김도훈 (CrazyLabs) (the
+    "Original Assets"), including:
+    - audio under public/audio/ (including recorded bus sound effects
+      under public/audio/bus/ and synthesized bike sounds);
+    - images and graphics, including public/promo/, public/favicon.svg,
+      public/crazylabs-qr.svg, public/donation-qr.svg, and the
+      screenshots (shot-*.png, addons/*/shots/);
+    - procedural designs of landmarks, buildings, vehicles, characters
+      and props as expressed in code, such as
+      src/corridor/landmarks/lotteWorldTower.js and src/world/*.js;
+    - original text and content, such as NPC dialogue, labels, UI text,
+      colour palettes, styling, and hand-authored parameters;
+
+(c) original data authored by CrazyLabs that is not derived from
+    OpenStreetMap or another third-party database, to the extent it is
+    kept as an independent work (see "Map data" below).
+
+Third-party material
 Other licenses stay in force for material that is not this Software:
-- third-party components keep their own licenses, including three.js (MIT);
-- OpenStreetMap-derived data in public/*.json remains under the Open
-  Database License (ODbL) by OpenStreetMap contributors
-  (https://www.openstreetmap.org/copyright).
+- third-party components keep their own licenses, including three.js
+  (MIT);
+- names, places, and brands of third parties that appear in the world
+  (for example buildings, shops, transit operators, or vehicles) belong
+  to their owners. They are used only to describe real-world places.
+  This license grants no rights in them.
 This license does not narrow those terms.
+
+Map data (OpenStreetMap / ODbL)
+Map data derived from OpenStreetMap is © OpenStreetMap contributors
+and is licensed under the Open Database License (ODbL) 1.0
+(https://www.openstreetmap.org/copyright). This includes, at least,
+public/*.json (jeongja.json, transit.json, drive.json, terrain.json,
+starbase.json), public/corridor/**, and the OSM extracts under data/.
+
+- Each of these databases, and any Derivative Database made from them,
+  is offered under the ODbL. Where CrazyLabs data is merged into one of
+  these databases (for example height corrections, labels, or
+  classifications stored in the same file), that database as a whole
+  is under the ODbL. This license does not change or add conditions to
+  the ODbL for that data.
+- Material that is not part of such a database stays under this
+  license: the Software that reads, processes, styles, or renders the
+  data; procedural models and textures; and CrazyLabs data kept in
+  separate, independent files or in code. Combining such material with
+  ODbL data in the same world is treated as a Collective Database or
+  Produced Work under the ODbL, and only the ODbL data needs to be
+  offered under the ODbL.
+- The rendered world is a Produced Work. Any public use must keep the
+  OpenStreetMap attribution visible, as the current attribution bar
+  does.
+
+public/corridor/** also contains building footprints from the Overture
+Maps Foundation buildings theme (ODbL; it includes OpenStreetMap and
+other sources listed at https://docs.overturemaps.org/attribution/) and
+building heights from VWorld GIS building data (국토교통부). Those
+sources keep their own terms.
+[TODO(김도훈): confirm VWorld (브이월드 GIS건물통합정보) redistribution
+terms (공공누리 type or VWorld terms of use) and whether they allow
+redistribution inside an ODbL database. Remove this note once checked.]
 
 1. Allowed use
 You may use, copy, modify, and run the Software privately, including
@@ -31,6 +92,9 @@ A copy with a different name, region, text, or branding is still
 subject to this section when it contains a substantial part of the
 Software.
 
+You may not sell, license, or otherwise commercially exploit the
+Original Assets on their own or as part of another product.
+
 This section does not limit 김도훈 (CrazyLabs) from operating or
 licensing the Software, including as a commercial service.
 
@@ -47,6 +111,20 @@ gate badge and the bottom attribution bar.
 Copies obtained under the previous "MIT License with Attribution
 Requirement (Bumpinto World / CrazyLabs)" remain under that license.
 This text applies to versions distributed with this file.
+
+5. Trademarks
+This license grants no rights to use the names "Bumpinto World" or
+"CrazyLabs", or any of their logos, marks, or domain names, except as
+required to give the attribution in section 3. You may not use them
+as the name of your deployment, product, or service, or in a way that
+suggests your copy is official or endorsed by 김도훈 (CrazyLabs).
+
+6. Contributions
+Contributions to this repository (for example pull requests, patches,
+assets, and data) are accepted under the Contributor License terms in
+CONTRIBUTING.md. Contributed code and Original Assets are distributed
+to the public under this license. Contributed data that is part of an
+ODbL database is distributed under the ODbL.
 
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
