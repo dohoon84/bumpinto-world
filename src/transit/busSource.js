@@ -3,7 +3,7 @@
 //   RealtimeBusSource  : 프록시 경유 실시간 위치. 실패하면 SimulatedBusSource 로 폴백
 //
 // 공통 인터페이스
-//   update(dt, ctx)            매 프레임 호출 (ctx.pedLightAt(crossing) 등)
+//   update(dt, ctx[, focus])   매 프레임 호출 (ctx.pedLightAt(crossing) 등, focus={x,z}: 간격 계산 반경 중심)
 //   vehicles()                 -> [{ id, ref, type, name, x, z, heading, scale, state }]
 //   arrivals(stop)             -> [{ ref, type, etaSec|null, text, kind: 'sim'|'virtual'|'live' }]
 //   label                      UI 표시용 이름
@@ -17,6 +17,9 @@ const ARRIVAL_TTL_MS = 60000; // 정류장 도착정보 캐시 60초
 const HEADWAY_MIN = { M: 12, express: 12, premium: 15, seat: 12, city: 12, village: 10, intercity: 20, airport: 30 };
 const VMAX = { M: 15, intercity: 18, express: 12, premium: 12, seat: 11, city: 11, village: 9.5, airport: 14 };
 const ACC = 1.3, DEC = 1.8, DWELL = 9, LANE_OFF = 1.7;
+const GRID = 24, LANE_W = 2.2, FOLLOW_GAP = 2.5, GIVE_UP = 8, LOOK = 40, MERGE_COS = 0.5; // [bus-net] 노선 간 간격(m)·차로 폭 허용·교착 포기(초)
+const SPACE_R = 650; // [bus-net] 코리더에서 간격 계산 반경(m) — 렌더 반경 450m 보다 넉넉히
+const gkey = (i, j) => i * 100003 + j;
 const hash = (s) => { let h = 2166136261; for (const ch of s) h = Math.imul(h ^ ch.charCodeAt(0), 16777619); return (h >>> 0) / 4294967296; };
 
 function prepPath(p, bounds) {
@@ -47,7 +50,10 @@ export function projectOnPath(p, x, z) {
 }
 
 export class SimulatedBusSource {
-  constructor(transit, bounds, { seed = 1 } = {}) {
+  constructor(transit, bounds, { seed = 1, spacing = false } = {}) {
+    // [bus-net] spacing: 다른 노선 버스와도 간격 유지·정류장 2번째 정차칸·노선 간 스폰 간격(?bus=sim 정자·코리더만 켬).
+    //   끄면(기본: 정자 실시간 모드의 폴백 시뮬) 예전과 완전히 같다.
+    this.spacing = spacing; this.stats = { done: 0, xfollow: 0, bay2: 0, giveUp: 0 };
     this.label = `시뮬레이션 (배차 1/${TIME_COMPRESS} 압축)`;
     this.t = 0; this.buses = []; this.nextId = 1;
     this.routes = new Map(transit.routes.map((r) => [r.id, r]));
@@ -72,19 +78,21 @@ export class SimulatedBusSource {
     }
   }
   _spawn(P, s = 0) {
-    const bus = { id: this.nextId++, P, s, v: s > 0 ? P.vmax * 0.7 : P.vmax * 0.6, dwell: 0, stopIdx: P.stops.findIndex((st) => st.s > s + 1), state: 'run', age: s > 0 ? 9 : 0, out: 0 };
+    const bus = { id: this.nextId++, P, s, v: s > 0 ? P.vmax * 0.7 : P.vmax * 0.6, dwell: 0, stopIdx: P.stops.findIndex((st) => st.s > s + 1), state: 'run', age: s > 0 ? 9 : 0, out: 0,
+      _q: null, _fut: null, _futT: -1, _si: 1, _near: false, _blk: null, _wait: 0, _ign: 0, _hit: null, _hitT: -1 - hash(String(s + P.id)) * 0.06, _hitS: 0 }; // [bus-net] 간격 계산용 필드(모양 고정 → V8 최적화 유지)
     if (bus.stopIdx < 0) bus.stopIdx = P.stops.length;
     this.buses.push(bus); return bus;
   }
-  update(dt, ctx) {
+  update(dt, ctx, focus) {
     this.t += dt;
     for (const P of this.paths) {
       P.nextSpawn -= dt;
       if (P.nextSpawn <= 0) {
-        const tooClose = this.buses.some((b) => b.P === P && b.s < P.blen + 12);
+        const tooClose = this.buses.some((b) => b.P === P && b.s < P.blen + 12) || (this.spacing && this._spawnBlocked(P));
         if (!tooClose) { this._spawn(P, 0); P.nextSpawn = P.headway; } else P.nextSpawn = 2;
       }
     }
+    if (this.spacing) this._buildGrid(focus);
     for (const b of this.buses) {
       const P = b.P; b.age += dt;
       if (b.dwell > 0) { b.dwell -= dt; b.v = 0; b.state = 'dwell'; if (b.dwell <= 0) b.stopIdx++; continue; }
@@ -103,16 +111,128 @@ export class SimulatedBusSource {
         break;
       }
       // 3) 앞 버스와 간격
-      for (const o of this.buses) if (o !== b && o.P === P && o.s > b.s) { const g = o.s - P.blen - 6 - b.s; if (g < limit) { limit = Math.max(0, g); reason = 'follow'; } }
+      let lead = null;
+      for (const o of this.buses) if (o !== b && o.P === P && o.s > b.s) { const g = o.s - P.blen - 6 - b.s; if (g < limit) { limit = Math.max(0, g); reason = 'follow'; lead = o; } }
+      // 4) [bus-net] 다른 노선 버스(같은 방향·같은 차로 앞)와 간격 + 정류장 2번째 정차칸
+      let blocker = null;
+      if (this.spacing && b._near) {
+        // 60fps 에선 ~16Hz 로만 다시 계산(버스마다 위상 분산), 사이 프레임은 지난 결과에서 내가 간 거리만큼 간격을 줄여 씀(보수적)
+        let hit;
+        if (this.t - b._hitT >= 0.06 || b._ign > 0) { hit = this._ahead(b, this.t - (b._hitT < 0 ? this.t - dt : b._hitT)); b._hit = hit; b._hitT = this.t; b._hitS = b.s; }
+        else if ((hit = b._hit)) hit = { o: hit.o, gap: hit.gap - (b.s - b._hitS) };
+        if (hit && hit.gap < limit) { limit = Math.max(0, hit.gap); reason = 'follow'; blocker = lead = hit.o; }
+        b._blk = reason === 'follow' ? lead : null;
+      }
       const vAllow = Math.sqrt(Math.max(0, 2 * DEC * limit));
       const target = Math.min(P.vmax, vAllow);
       b.v = b.v < target ? Math.min(target, b.v + ACC * dt) : Math.max(target, b.v - DEC * 2 * dt);
       b.s += b.v * dt;
       b.state = b.v < 0.2 ? (reason === 'xing' ? 'xing' : reason === 'follow' ? 'queue' : 'run') : 'run';
       if (reason === 'stop' && limit < 0.6 && b.v < 0.6) { b.dwell = DWELL * (0.8 + hash(b.id + 'd') * 0.5); b.v = 0; b.state = 'dwell'; }
-      if (b.s >= P.L) b.done = true;
+      // [bus-net] 앞 버스가 같은 정류장에 서 있으면 그 뒤(한 대 길이 뒤)에서 정차 = 2번째 정차칸
+      if (blocker && st && b.v < 0.6 && limit < 0.8 && blocker.state === 'dwell' && blocker.P.stops[blocker.stopIdx]?.stop === st.stop && st.s - b.s < blocker.P.blen + 12) {
+        b.dwell = DWELL * (0.8 + hash(b.id + 'd') * 0.5); b.v = 0; b.state = 'dwell'; this.stats.bay2++;
+      }
+      if (b.s >= P.L) { b.done = true; this.stats.done++; }
     }
     this.buses = this.buses.filter((b) => !b.done);
+  }
+  // ---- [bus-net] 노선 무관 간격 유지 (spacing 일 때만) ----
+  _seg(b, s) { // 경로 구간 인덱스(버스마다 마지막 위치를 기억해 앞으로만 훑음 — 긴 코리더 경로에서 선형 탐색 비용 제거)
+    const cum = b.P.cum; let i = b._si || 1; if (i >= cum.length || cum[i - 1] > s) i = 1;
+    while (i < cum.length - 1 && cum[i] < s) i++;
+    return i;
+  }
+  _pose(b) {
+    const P = b.P, { pts, cum } = P, s = Math.max(0, Math.min(P.L, b.s)), i = (b._si = this._seg(b, s)), q = b._q || (b._q = {});
+    const L = cum[i] - cum[i - 1] || 1, t = (s - cum[i - 1]) / L, [ax, az] = pts[i - 1], [bx, bz] = pts[i], dx = (bx - ax) / L, dz = (bz - az) / L;
+    q.x = ax + (bx - ax) * t - dz * LANE_OFF; q.z = az + (bz - az) * t + dx * LANE_OFF; q.dx = dx; q.dz = dz;
+    return q;
+  }
+  // focus(코리더: 플레이어 위치)가 있으면 SPACE_R 안쪽 버스만 간격 계산(화면 밖 원거리 버스는 예전 그대로 → 프레임 비용 절약)
+  _buildGrid(focus) {
+    const g = this._grid || (this._grid = new Map()); g.clear();
+    for (const b of this.buses) {
+      const q = this._pose(b);
+      if (focus) { const dx = q.x - focus.x, dz = q.z - focus.z, d2 = dx * dx + dz * dz; b._near = d2 < SPACE_R * SPACE_R; if (d2 > (SPACE_R + 80) ** 2) continue; } else b._near = true;
+      const k = gkey(Math.floor(q.x / GRID), Math.floor(q.z / GRID));
+      let c = g.get(k); if (!c) g.set(k, (c = [])); c.push(b);
+    }
+  }
+  // 다른 노선 버스와의 충돌은 "앞으로 지나갈 길" 끼리 비교한다(차체 뒤끝 ~ 앞 LOOK m, 2m 간격, 차로 오프셋 포함).
+  //   두 버스의 길이 처음 만나는 점(같은 방향: 진행 방향 내적 > MERGE_COS, 옆 거리 < LANE_W)에서
+  //   X = (내가 그 점까지 갈 거리) - (상대가 그 점까지 갈 거리) = 내 길 위에서 상대가 얼마나 앞서 있나.
+  //   X > 0 이면 상대가 앞 → 따라간다(같은 차로 추종·합류 모두 같은 식). X < 0 이면 내가 앞 → 무시.
+  //   |X| < 1(나란히·이미 겹침)이면 id 큰 쪽이 양보. 반대 차로·교차로를 가로지르는 버스는 무시.
+  //   8초 넘게 서 있고 앞차 사슬이 다시 나로 돌아오면(교착) 4초 동안 다른 노선 무시
+  _fut(b) {
+    if (b._futT === this.t) return b._fut;
+    const P = b.P, { pts, cum } = P, out = b._fut || (b._fut = []);
+    out.length = 0;
+    const s0 = Math.max(0, b.s - P.blen / 2), end = Math.min(P.L, b.s + P.blen / 2 + LOOK);
+    let i = this._seg(b, s0);
+    let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
+    for (let s = s0; s <= end; s += 2) {
+      while (i < cum.length - 1 && cum[i] < s) i++;
+      const L = cum[i] - cum[i - 1] || 1, t = Math.max(0, Math.min(1, (s - cum[i - 1]) / L));
+      const [ax, az] = pts[i - 1], [bx, bz] = pts[i], dx = (bx - ax) / L, dz = (bz - az) / L;
+      const x = ax + (bx - ax) * t - dz * LANE_OFF, z = az + (bz - az) * t + dx * LANE_OFF;
+      out.push({ d: s - b.s, x, z, dx, dz });
+      if (x < x0) x0 = x; if (x > x1) x1 = x; if (z < z0) z0 = z; if (z > z1) z1 = z;
+    }
+    out.box = [x0 - LANE_W, x1 + LANE_W, z0 - LANE_W, z1 + LANE_W];
+    b._futT = this.t; return out;
+  }
+  _conf(b, o) { // 내 길 위에서 o 가 앞선 거리 X (만나는 점 없으면 null)
+    const F = this._fut(b), G = this._fut(o), A = F.box, B = G.box;
+    if (A[1] < B[0] || B[1] < A[0] || A[3] < B[2] || B[3] < A[2]) return null;
+    const W2 = LANE_W * LANE_W;
+    for (const f of F) {
+      if (f.x < B[0] || f.x > B[1] || f.z < B[2] || f.z > B[3]) continue;
+      let bestD2 = W2, X = null;
+      for (const g of G) {
+        const ex = f.x - g.x, ez = f.z - g.z, d2 = ex * ex + ez * ez;
+        if (d2 < bestD2 && f.dx * g.dx + f.dz * g.dz > MERGE_COS) { bestD2 = d2; X = f.d - g.d; }
+      }
+      if (X !== null) return X;
+    }
+    return null;
+  }
+  _ahead(b, dt) {
+    if (b._ign > 0) { b._ign -= dt; return null; }
+    const q = b._q, cx = Math.floor(q.x / GRID), cz = Math.floor(q.z / GRID), R = LOOK + 20;
+    let best = null;
+    for (let i = -2; i <= 2; i++) for (let j = -2; j <= 2; j++) {
+      const c = this._grid.get(gkey(cx + i, cz + j)); if (!c) continue;
+      for (const o of c) {
+        if (o === b || o.P === b.P || o.done) continue;
+        const r = o._q; if (Math.abs(r.x - q.x) > R || Math.abs(r.z - q.z) > R) continue;
+        const X = this._conf(b, o); if (X === null) continue;
+        if (X < -1 || (X < 1 && o.id > b.id)) continue; // 내가 앞(또는 나란히인데 내가 우선)
+        const gap = Math.max(X, 0) - (b.P.blen + o.P.blen) / 2 - FOLLOW_GAP;
+        if (!best || gap < best.gap) best = { o, gap };
+      }
+    }
+    if (best && b.v < 0.2) {
+      b._wait = (b._wait || 0) + dt;
+      if (b._wait > GIVE_UP) {
+        b._wait = 0;
+        let o = best.o, cyc = false;
+        for (let k = 0; k < 24 && o; k++) { if (o === b) { cyc = true; break; } if (o.state === 'dwell' || o.v > 0.3) break; o = o._blk; }
+        if (cyc) { b._ign = 4; this.stats.giveUp++; return null; }
+      }
+    } else b._wait = 0;
+    if (best) this.stats.xfollow++;
+    return best;
+  }
+  _spawnBlocked(P) {
+    const q = samplePath(P, 0), R = P.blen + 12;
+    for (const o of this.buses) {
+      if (o.P === P) continue;
+      const r = o._q || this._pose(o);
+      if (Math.abs(r.x - q.x) < R && Math.abs(r.z - q.z) < R && Math.hypot(r.x - q.x, r.z - q.z) < R && q.dx * r.dx + q.dz * r.dz > 0.5) return true;
+    }
+    return false;
   }
   vehicles() {
     const out = [];
@@ -403,7 +523,8 @@ export class RealtimeBusSource {
   }
 }
 export function createBusSource(kind, transit, bounds, opts = {}) {
-  const sim = new SimulatedBusSource(transit, bounds);
+  // [bus-net] 노선 간 간격은 ?bus=sim(kind 'sim')에서만. 실시간 모드의 폴백 시뮬은 예전 그대로(정자 기본 모드 불변)
+  const sim = new SimulatedBusSource(transit, bounds, { spacing: kind === 'sim' && opts.spacing !== false });
   if (kind === 'realtime') return new RealtimeBusSource(transit, bounds, { ...opts, fallback: sim });
   return sim;
 }
