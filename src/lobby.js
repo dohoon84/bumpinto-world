@@ -1,5 +1,6 @@
 // 입장 전 닉네임 + 외형 선택. 고르기 전에는 프레즌스에 접속하지 않는다.
 import * as THREE from 'three';
+import { releaseRenderer } from './releaseRenderer.js';
 import { createAvatar } from './entities/avatar.js';
 import { LOOK_CHOICES, OUTFIT_COLORS, PROFILE_KEY, sanitizeLook } from './look.js';
 import { isEn, tr, toggleLang, onLangChange } from './i18n.js';
@@ -406,7 +407,7 @@ export function openLobby({ sms, region = null, onJoin, onBack }) {
     unsubLang();
     cancelAnimationFrame(raf);
     removeEventListener('resize', onResize);
-    renderer.dispose();
+    releaseRenderer(renderer);
   };
 
   langBtn?.addEventListener('click', () => {
