@@ -4,7 +4,8 @@ import * as THREE from 'three';
 import { createTruck, setBrake, DIM, COLORS } from './truckModel.js';
 
 const DRIVE_KINDS = new Set(['secondary', 'tertiary', 'residential', 'service', 'unclassified', 'primary', 'trunk']);
-const MAX_V = 100 / 3.6, BOOST_V = 130 / 3.6, REV_V = 25 / 3.6;
+// [hudfix] 최고 250 km/h(일반), Shift 부스트 280 km/h. 0→250 약 9초(ACC 11.8 m/s², 고속에서 0.4배까지 감소)
+const MAX_V = 250 / 3.6, BOOST_V = 280 / 3.6, REV_V = 25 / 3.6, ACC = 11.8, ACC_BOOST = 15;
 const HL = DIM.L / 2, HW = DIM.W / 2;
 // 차체 외곽 샘플 점(로컬 x,z) — 건물 충돌 판정용
 const HULL = [];
@@ -99,9 +100,9 @@ export function createTrucks({ scene, overlay, world, data, params, camera, cam,
   // ---------- UI ----------
   const css = document.createElement('style');
   css.textContent = `.label.truck{font-size:11px;font-weight:600;background:rgba(255,255,255,.72)}
-#trk-prompt{position:fixed;left:50%;bottom:64px;transform:translateX(-50%);display:none;font:600 14px system-ui,sans-serif;color:#fff;background:rgba(20,28,40,.82);padding:8px 14px;border-radius:12px;border:0;cursor:pointer;z-index:7;box-shadow:0 2px 10px #0004}
+#trk-prompt{position:fixed;left:50%;bottom:calc(var(--emote-top,100px) + 10px);transform:translateX(-50%);display:none;font:600 14px system-ui,sans-serif;color:#fff;background:rgba(20,28,40,.82);padding:8px 14px;border-radius:12px;border:0;cursor:pointer;z-index:7;box-shadow:0 2px 10px #0004}
 #trk-prompt kbd{background:#fff;color:#222;border-radius:4px;padding:0 6px;margin-right:6px;font:700 13px system-ui}
-#trk-hud{position:fixed;right:236px;bottom:18px;display:none;text-align:right;color:#fff;background:rgba(15,23,36,.84);padding:10px 16px;border-radius:14px;border:1px solid rgba(255,255,255,.16);font-family:system-ui,sans-serif;text-shadow:0 1px 4px #0009;box-shadow:0 4px 16px rgba(0,0,0,.28);z-index:7;pointer-events:none}
+#trk-hud{position:fixed;right:12px;bottom:calc(var(--minimap-top,236px) + 10px);display:none;text-align:right;color:#fff;background:rgba(15,23,36,.84);padding:10px 16px;border-radius:14px;border:1px solid rgba(255,255,255,.16);font-family:system-ui,sans-serif;text-shadow:0 1px 4px #0009;box-shadow:0 4px 16px rgba(0,0,0,.28);z-index:7;pointer-events:none}
 #trk-hud .v{font:800 46px/1 system-ui}#trk-hud .u{font:600 14px system-ui;opacity:.85}#trk-hud .k{font:12px system-ui;opacity:.9;margin-top:4px}`;
   document.head.appendChild(css);
   const prompt = document.createElement('button'); prompt.id = 'trk-prompt'; document.body.appendChild(prompt);
@@ -152,12 +153,13 @@ export function createTrucks({ scene, overlay, world, data, params, camera, cam,
   function drive(t, dt, f, s, boost) {
     const fwd = t.v >= 0;
     // 가속/브레이크/후진
-    if (f > 0) t.v += (t.v < 0 ? 14 : (boost ? 8.5 : 5.5) * (1 - Math.max(0, t.v) / (boost ? BOOST_V : MAX_V) * 0.6)) * f * dt;
-    else if (f < 0) t.v += (t.v > 0.3 ? -14 : -4) * -f * dt;
-    else t.v -= Math.sign(t.v) * Math.min(Math.abs(t.v), (1.2 + 0.012 * t.v * t.v) * dt); // 구름저항+공기저항
+    if (f > 0) t.v += (t.v < 0 ? 14 : (boost ? ACC_BOOST : ACC) * (1 - Math.max(0, t.v) / (boost ? BOOST_V : MAX_V) * 0.6)) * f * dt;
+    else if (f < 0) t.v += (t.v > 0.3 ? -(14 + 0.1 * t.v) : -4) * -f * dt; // 고속일수록 브레이크 조금 더 세게(250 km/h → 약 21 m/s²)
+    else t.v -= Math.sign(t.v) * Math.min(Math.abs(t.v), (1.2 + 0.012 * Math.min(t.v * t.v, 784) + 0.1 * Math.max(0, Math.abs(t.v) - 28)) * dt); // 구름저항+공기저항(100 km/h 까지는 예전과 같고, 그 위는 완만하게)
     t.v = THREE.MathUtils.clamp(t.v, -REV_V, boost ? BOOST_V : Math.max(MAX_V, Math.min(t.v, BOOST_V) - 6 * dt));
     // 조향: 저속에선 크게, 고속에선 작게 (최대 바퀴각 ~33°)
-    const maxSt = 0.58 / (1 + Math.abs(t.v) / 14);
+    // [hudfix] 100 km/h(28 m/s) 위에서는 조향각을 더 줄여 250 km/h 에서도 흔들리지 않게
+    const maxSt = 0.58 / (1 + Math.abs(t.v) / 14) / (1 + Math.max(0, Math.abs(t.v) - 28) / 14);
     t.steer += THREE.MathUtils.clamp(s * maxSt - t.steer, -2.5 * dt, 2.5 * dt);
     const yawRate = (t.v / DIM.WB) * Math.tan(-t.steer);
     const nh = t.h + yawRate * dt, nx = t.x + Math.sin(nh) * t.v * dt, nz = t.z + Math.cos(nh) * t.v * dt;
@@ -213,7 +215,9 @@ export function createTrucks({ scene, overlay, world, data, params, camera, cam,
         const keep = player.position.clone(); exit(); player.position.copy(keep);
       }
       if (me.truck) {
-        drive(t, dt, f, s, run);
+        // [hudfix] 고속에서 벽을 뚫지 않게 한 번에 0.6m 이하로 나눠 이동
+        const n = Math.min(8, Math.max(1, Math.ceil(Math.abs(t.v) * dt / 0.6)));
+        for (let i = 0; i < n; i++) drive(t, dt / n, f, s, run);
         player.position.set(t.x, t.y, t.z); player.rotation.y = t.h;
         if (Math.abs(lookYaw) > 1e-4) me.lastYawInput = me.t;
         if (cam.mode === 'follow' && me.t - me.lastYawInput > 1.5) { // 체이스 캠: 마우스로 돌려본 뒤 1.5초 지나면 차 뒤로 복귀
