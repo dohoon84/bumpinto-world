@@ -101,6 +101,7 @@ export function mountRide({ corridor, getPlayer, remotes, camera, cam, setMode, 
   //   같은 방향으로 이어지면 버스(차체·좌석·카메라)는 그대로 두고 다음 경로로 옮겨 탄다. 요금·탑승 기록은 한 번.
   //   정자 쪽은 정자 시뮬 버스(?bus=sim)가 있을 때만 후보가 생긴다(실시간 모드에선 예전처럼 경계에서 하차).
   const CONT_R = 8;
+  const DOOR_CLOSE_LEAD = 4; // [bus-sfx] 정차 끝나기 몇 초 전에 문 닫힘 소리
   const contCache = new Map();
   function contOf(P) {
     const key = (B() ? 1 : 0) + (JB() ? 2 : 0), hit = contCache.get(P);
@@ -168,6 +169,7 @@ export function mountRide({ corridor, getPlayer, remotes, camera, cam, setMode, 
   async function boardBus(c) {
     if (busy || !canBoard()) return false;
     if (ride?.mode === 'taxi') cancelTaxi(false);
+    sound.prepareBus(); // [bus-sfx] 첫 탑승(사용자 입력 안)에서만 효과음 내려받기 + 오디오 재개
     busy = true;
     const res = await charge({ code: 'bus.base', mode: 'bus', card: card().id, meta: { route: c.P.ref } });
     busy = false; stats.charges.push(res);
@@ -175,7 +177,7 @@ export function mountRide({ corridor, getPlayer, remotes, camera, cam, setMode, 
     prepare();
     const bs = sysOf(c.P), P = c.P;
     let b, follow = null;
-    if (c.kind === 'sim') { b = c.b; b._hold = 0; }
+    if (c.kind === 'sim') { b = c.b; b._hold = 0; b.dwell = Math.max(b.dwell, DOOR_CLOSE_LEAD + 1.5); } // 막 탄 사람 뒤로 문 닫히는 시간 확보
     else {
       const s = c.g.s;
       let si = P.stops.findIndex((st) => Math.abs(st.s - s) < 10); if (si < 0) si = P.stops.findIndex((st) => st.s > s);
@@ -189,6 +191,8 @@ export function mountRide({ corridor, getPlayer, remotes, camera, cam, setMode, 
     const seat = order.find((i) => !used.has(i)) ?? order[0];
     ride = { mode: 'bus', b, P, path: pathIdxOf(P), mesh, seat, follow, bell: false, fromIdx: b.stopIdx, startS: b.s, t0: performance.now(), at: Date.now(), fare: res, dwell: true, lastDwellIdx: b.stopIdx };
     stats.boards++;
+    ride.au = { prev: true, closed: false, brakeIdx: -1, taps: Math.floor(Math.random() * 3), tapT: 0.9 + Math.random() * 0.5 };
+    sound.sfx('card-tap-v2'); // 내 카드 찍는 소리
     if (c.kind === 'ghost') { ghosts.delete(c.g.key); c.g.mesh.parent?.remove(c.g.mesh); c.g.mesh.userData.releaseLights?.(); }
     placeBus(0);
     toast(L(`🚌 ${P.ref}번 탑승 · ${terminusOf(P)} 방면 — 요금 ${res.amount}원 (무료 체험 카드)`, `🚌 Boarded bus ${P.ref} toward ${terminusOf(P)} — fare ₩${res.amount} (Free Trial Card)`));
@@ -230,6 +234,7 @@ export function mountRide({ corridor, getPlayer, remotes, camera, cam, setMode, 
     const bs = sysOf(r.P);
     if (bs) { bs.hideIds.delete(r.b.id); }
     r.b.ride = false;
+    sound.stopBus();
     r.mesh.parent?.remove(r.mesh); r.mesh.userData.releaseLights?.();
     const toIdx = atIdx >= 0 ? atIdx : r.P.stops.reduce((bi, st, i) => (Math.abs(st.s - r.b.s) < Math.abs(r.P.stops[bi].s - r.b.s) ? i : bi), 0);
     log.add({ mode: 'bus', route: r.P.ref, routeName: `${terminusOf(r.P)} 방면`, from: (r.fromName ?? stopName(r.P, r.fromIdx)) || placeName(pl().position.x, pl().position.z), to: (atIdx >= 0 ? stopName(r.P, toIdx) : placeName(pl().position.x, pl().position.z)), distM: (r.dist0 || 0) + Math.max(0, r.b.s - r.startS), durSec: (performance.now() - r.t0) / 1000, at: r.at, end: Date.now(), fare: r.fare, speed: 'normal' });
@@ -281,11 +286,35 @@ export function mountRide({ corridor, getPlayer, remotes, camera, cam, setMode, 
     placeBus(dt);
     r.dwell = b.state === 'dwell' && b.dwell > 0;
     announce(r);
+    busAudio(r, dt);
     if (r.dwell && b.stopIdx !== r.fromIdx) {
       if (r.bell) { alightBus('bell'); return; }
       if (b.stopIdx >= P.stops.length - 1 && !contOf(P)) { alightBus('terminus'); return; }
     }
     if (!r.follow && b.stopIdx >= P.stops.length && P.L - b.s < 25 && !contOf(P)) { alightBus('end'); return; }
+  }
+
+  // [bus-sfx] 내가 탄 버스 효과음: 감속 진입=브레이크, 정차 시작=문 열림, 정차 중=다른 승객 카드(0.4–0.9초 간격),
+  //   정차 끝 DOOR_CLOSE_LEAD 초 전=문 닫힘, 정차→출발=출발음. 루프(공회전↔주행)는 매 프레임 속도로 크로스페이드
+  function busAudio(r, dt) {
+    const b = r.b, a = r.au || (r.au = { prev: r.dwell, closed: false, brakeIdx: -1, taps: 0, tapT: 0 });
+    sound.busEngine(b.v || 0, r.dwell);
+    if (r.dwell && !a.prev) {
+      a.closed = false; a.taps = Math.floor(Math.random() * 4); a.tapT = 2 + Math.random() * 0.6;
+      sound.sfx('door-open-v2');
+    } else if (!r.dwell && a.prev) {
+      if (!a.closed) { a.closed = true; sound.sfx('door-close-v2'); sound.sfx('bus-depart-v2', { delay: 1.2 }); } // 남은 정차 시간을 모를 때(함께 탄 사람)
+      else sound.sfx('bus-depart-v2');
+      a.brakeIdx = -1;
+    }
+    if (r.dwell) {
+      if (!a.closed && !r.follow && b.dwell > 0 && b.dwell <= DOOR_CLOSE_LEAD) { a.closed = true; sound.sfx('door-close-v2'); }
+      if (!a.closed && a.taps > 0 && (a.tapT -= dt) <= 0) { a.taps--; a.tapT = 0.4 + Math.random() * 0.5; sound.sfx('card-tap-v2', { gain: 0.45 }); }
+    } else {
+      const st = r.P.stops[b.stopIdx], v = b.v || 0;
+      if (st && a.brakeIdx !== b.stopIdx && v > 1.5) { const d = st.s - b.s; if (d > 0 && d < v * v / 3.6 + 6) { a.brakeIdx = b.stopIdx; sound.sfx('bus-brake-v2'); } }
+    }
+    a.prev = r.dwell;
   }
 
   // [ride] 정류장 안내 방송: 다음 정류장 도착 ANN_SEC 초 전(또는 80m 안)에 한 번. 내가 탄 버스만
@@ -303,7 +332,7 @@ export function mountRide({ corridor, getPlayer, remotes, camera, cam, setMode, 
     if (!txt) return;
     r.annName = cur;
     caption(txt);
-    const spoke = sound.say(txt, en);
+    const spoke = sound.announce(txt, en); // [bus-sfx] 차임 → 음성
     stats.announces.push({ idx: i, text: txt, spoke });
   }
 
