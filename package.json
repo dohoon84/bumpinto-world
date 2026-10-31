@@ -18,7 +18,7 @@
     "corridor:tancheon": "node --max-old-space-size=8192 scripts/corridor/build-tancheon.mjs",
     "corridor:transit": "node scripts/corridor/build-transit.mjs",
     "corridor:drive": "node scripts/corridor/build-drive.mjs",
-    "corridor:test": "node scripts/corridor/test/test-tancheon.mjs && node scripts/corridor/test/test-bus-proxy.mjs && node scripts/corridor/test/test-bus-realtime.mjs && node scripts/corridor/test/test-fare.mjs && node scripts/corridor/test/test-ridelog.mjs && node scripts/corridor/test/test-ride-extras.mjs",
+    "corridor:test": "node scripts/corridor/test/test-tancheon.mjs && node scripts/corridor/test/test-bus-proxy.mjs && node scripts/corridor/test/test-bus-realtime.mjs && node scripts/corridor/test/test-fare.mjs && node scripts/corridor/test/test-ridelog.mjs && node scripts/corridor/test/test-ride-extras.mjs && node scripts/corridor/test/test-life.mjs",
     "shots": "node scripts/shots.mjs",
     "zip": "npm run build && python3 -c \"import shutil; shutil.make_archive('jeongja3d-dist', 'zip', 'dist')\"",
     "fetch-transit": "bash data/fetch.sh query_transit.overpassql osm_transit_raw.json",
