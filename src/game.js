@@ -15,7 +15,7 @@ import { Input } from './input.js';
 import { createPresence } from './net/presence.js';
 import { RemotePlayers } from './net/remotePlayers.js';
 import { CHAT_RADIUS } from './net/protocol.js';
-import { buildTransit, makeCrossingGuard } from './transit/transit.js';
+import { buildTransit, makeCrossingGuard, mergeSimExtra } from './transit/transit.js';
 import { mountPhone } from './phone.js';
 import { mountHandset } from './handset.js';
 import { mountBoard } from './board.js';
@@ -316,7 +316,9 @@ const busProxy = proxyParam === 'local'
     ? (proxyParam || '')
     : (params.has('shot') && !busParam ? '' : DEFAULT_BUS_PROXY);
 const busMode = busParam === 'sim' ? 'sim' : (busParam === 'realtime' || busProxy) ? 'realtime' : 'sim';
-const transit = transitData ? buildTransit(scene, transitData, world, overlay, { mode: busMode, proxy: busProxy }) : null;
+// [bus-net] 시뮬 모드(?bus=sim)이고 코리더가 있을 때만 정자 안 GBIS 추가 경로(220 정자역→서현 방향·7007-1 미금→수내 방향·380)를 덧붙인다. 실시간(기본)은 원본 그대로
+const jzSimExtra = transitData && busMode === 'sim' && corridorDir && params.get('busnet') !== '0' ? await fetch(import.meta.env.BASE_URL + corridorDir + 'jz-sim.json').then((r) => (r.ok ? r.json() : null)).catch(() => null) : null;
+const transit = transitData ? buildTransit(scene, jzSimExtra ? mergeSimExtra(transitData, jzSimExtra) : transitData, world, overlay, { mode: busMode, proxy: busProxy }) : null;
 corridor?.attachLife({ proxy: busProxy, mode: busMode, ...(params.get('ride') !== '0' ? { liveDrive: driveData, liveCrossings: transitData?.crossings } : {}) }); // [corridor] 수내→롯데 버스·차량·보행 NPC (?clife=0 끔) · [ride] 정자 차도는 택시 호출용으로만 덧붙임
 if (transit) {
   corridorClock.simTime = () => transit.simTime; // [corridor] 코리더 신호등도 같은 시계

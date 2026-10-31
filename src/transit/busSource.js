@@ -17,7 +17,7 @@ const ARRIVAL_TTL_MS = 60000; // 정류장 도착정보 캐시 60초
 const HEADWAY_MIN = { M: 12, express: 12, premium: 15, seat: 12, city: 12, village: 10, intercity: 20, airport: 30 };
 const VMAX = { M: 15, intercity: 18, express: 12, premium: 12, seat: 11, city: 11, village: 9.5, airport: 14 };
 const ACC = 1.3, DEC = 1.8, DWELL = 9, LANE_OFF = 1.7;
-const GRID = 24, LANE_W = 2.2, FOLLOW_GAP = 2.5, GIVE_UP = 8, LOOK = 40, MERGE_COS = 0.5; // [bus-net] 노선 간 간격(m)·차로 폭 허용·교착 포기(초)
+const GRID = 24, LANE_W = 2.5, FOLLOW_GAP = 2.5, GIVE_UP = 8, LOOK = 40, MERGE_COS = 0.5; // [bus-net] 노선 간 간격(m)·차로 폭 허용·교착 포기(초)
 const SPACE_R = 650; // [bus-net] 코리더에서 간격 계산 반경(m) — 렌더 반경 450m 보다 넉넉히
 const gkey = (i, j) => i * 100003 + j;
 const hash = (s) => { let h = 2166136261; for (const ch of s) h = Math.imul(h ^ ch.charCodeAt(0), 16777619); return (h >>> 0) / 4294967296; };
