@@ -92,6 +92,7 @@ export function mountHandset({ sms } = {}) {
         <button type="button" class="app" data-app="threads"><span class="glyph msg">${badge(unread)}</span><em>${en ? 'Messages' : '메시지'}</em></button>
         <button type="button" class="app" data-app="contacts"><span class="glyph book"></span><em>${en ? 'Contacts' : '연락처'}</em></button>
         <button type="button" class="app" data-app="pin"><span class="glyph lock"></span><em>${en ? 'PIN' : '비밀번호'}</em></button>
+        ${extraApps.map((a) => `<button type="button" class="app" data-app="x:${esc(a.id)}"><span class="glyph xapp ${esc(a.cls || '')}">${a.glyph || ''}</span><em>${esc(en ? a.label.en : a.label.ko)}</em></button>`).join('')}
       </div>
       <p class="hint">${hintText}</p>
     </div>`;
@@ -106,7 +107,15 @@ export function mountHandset({ sms } = {}) {
     else if (view === 'contacts') loadContacts();
     else if (view === 'add') paintAdd();
     else if (view === 'pin') paintPin();
+    else if (view.startsWith('x:')) paintExtra(view.slice(2));
   };
+  // [ride] 추가 앱(교통카드 지갑·택시 등): addApp({ id, glyph, cls, label: { ko, en }, title?, render(en) → html, onAction?(name, el) })
+  const extraApps = [];
+  function paintExtra(id) {
+    const a = extraApps.find((x) => x.id === id); if (!a) { show('home'); return; }
+    const en = isEn();
+    body.innerHTML = `<div class="pane list xapp-pane" data-xapp="${esc(id)}"><p class="hd"><button type="button" data-app="home">‹</button> ${esc(en ? (a.title || a.label).en : (a.title || a.label).ko)}</p>${a.render(en)}</div>`;
+  }
 
   const paintThreads = (threads) => {
     const en = isEn();
@@ -223,6 +232,8 @@ export function mountHandset({ sms } = {}) {
   body.addEventListener('click', async (e) => {
     const app = e.target.closest('[data-app]');
     if (app) { show(app.dataset.app); return; }
+    const xact = e.target.closest('[data-xact]'); // [ride]
+    if (xact) { const a = extraApps.find((x) => x.id === view.slice(2)); a?.onAction?.(xact.dataset.xact, xact); return; }
     const openPeer = e.target.closest('[data-open]');
     if (openPeer) { show('thread', openPeer.dataset.open); return; }
     const drop = e.target.closest('[data-drop]');
@@ -335,6 +346,10 @@ export function mountHandset({ sms } = {}) {
   return {
     get open() { return open; },
     close() { setOpen(false); },
+    // [ride]
+    addApp(a) { if (!extraApps.some((x) => x.id === a.id)) extraApps.push(a); if (view === 'home') home(); },
+    openApp(id) { setOpen(true); show('x:' + id); },
+    refreshApp(id) { if (open && view === 'x:' + id) paintExtra(id); },
     signIn() {
       unread = sms?.session?.unread || 0;
       toastDismissed = false;

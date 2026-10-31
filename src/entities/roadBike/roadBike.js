@@ -1,7 +1,7 @@
 // [roadbike] 선물함 CR·1 에어로 로드바이크. 주인만 소환/탑승. 타거나 세워 두면 다른 사람에게 보임.
 //   최고 50 km/h · veh id 902 (관리자 바이크 900/901, 트럭 0~59 와 겹치지 않음) · ?roadbike=0 끔
 import * as THREE from 'three';
-import { createRoadBikeModel, drawComputer, RB } from './roadBikeModel.js';
+import { createRoadBikeModel, drawComputer, RB, prewarmRoadBikeDecals } from './roadBikeModel.js';
 import { createRoadHelmetHead } from './helmetHead.js';
 import { ROADBIKE_GIFT_ID, ROADBIKE_SEED_QTY, ROADBIKE_WHITE_GIFT_ID, ROADBIKE_WHITE_SEED_QTY } from './catalog.js';
 
@@ -276,10 +276,10 @@ export function createRoadBike({
     cssReady = true;
     const css = document.createElement('style');
     css.textContent = `.label.roadbike{font-size:11px;font-weight:700;background:rgba(20,20,22,.78);color:#fff}
-.rb-prompt{position:fixed;left:50%;bottom:108px;transform:translateX(-50%);display:none;font:600 14px system-ui,sans-serif;color:#fff;background:rgba(12,12,14,.86);padding:8px 14px;border-radius:12px;border:0;cursor:pointer;z-index:8;box-shadow:0 2px 10px #0004}
+.rb-prompt{position:fixed;left:50%;bottom:calc(var(--emote-top,100px) + 10px);transform:translateX(-50%);display:none;font:600 14px system-ui,sans-serif;color:#fff;background:rgba(12,12,14,.86);padding:8px 14px;border-radius:12px;border:0;cursor:pointer;z-index:8;box-shadow:0 2px 10px #0004}
 .rb-prompt kbd{background:#fff;color:#222;border-radius:4px;padding:0 6px;margin-right:6px;font:700 13px system-ui}
-.rb-hud{position:fixed;right:12px;bottom:236px;display:none;width:156px;color:#0b0b0c;font-family:system-ui,sans-serif;z-index:6;pointer-events:none;background:#141518;border-radius:16px;padding:8px 8px 6px;box-shadow:0 3px 14px #0007}
-@media (max-width:720px){.rb-hud{width:128px;bottom:258px}}
+.rb-hud{position:fixed;right:12px;bottom:calc(var(--minimap-top,226px) + 10px);display:none;width:156px;color:#0b0b0c;font-family:system-ui,sans-serif;z-index:6;pointer-events:none;background:#141518;border-radius:16px;padding:8px 8px 6px;box-shadow:0 3px 14px #0007}
+@media (max-width:720px){.rb-hud{width:128px}}
 .rb-hud .scr{background:#eef0ea;border-radius:6px;padding:6px 8px 4px}
 .rb-hud .lb{font:700 10px system-ui;color:#5b5e63;display:flex;justify-content:space-between}
 .rb-hud .v{font:900 44px/1 system-ui;text-align:center;letter-spacing:-1px}
@@ -609,6 +609,7 @@ body.roadbike-near #trk-prompt, body.roadbike-riding #trk-prompt, body.roadbike-
 
   function showRemote(m, veh, parked) {
     if (owned() && (me.riding || summoned)) return;
+    prewarmRoadBikeDecals(); // [memory] 다른 사람 바이크가 보이기 시작하면 데칼 미리 그리기(멀리서 첫 프레임은 onBeforeRender 가 보장)
     const peer = remotes?.peers.get(m.id);
     const changed = b.rider !== m.id || !!b.remote?.parked !== parked;
     if (changed) {

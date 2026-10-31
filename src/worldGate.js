@@ -1,6 +1,7 @@
 // 입장 전 지구본. 해안선은 실제 국가 윤곽이고, 오픈된 동네(정자동 · Starbase, TX) 핀을 누르면 입장한다.
 // 다음 오픈 예정 지역(기여자 모집 중)은 오른쪽 상단 패널에 리스팅한다.
 import * as THREE from 'three';
+import { releaseRenderer } from './releaseRenderer.js';
 import { MAP_W, MAP_H, LAND, KOREA } from './worldLand.js';
 import { trackEvent } from './analytics.js';
 import { OPEN_REGIONS, UPCOMING_REGIONS, getCurrentRegion, getRegion, countryOf } from './regions/index.js';
@@ -685,7 +686,7 @@ export function openWorldGate({ onEnter }) {
     removeEventListener('resize', onResize);
     removeEventListener('blur', clearDrag);
     corridorGlobe?.dispose();
-    renderer.dispose();
+    releaseRenderer(renderer);
     earth.geometry.dispose();
     earth.material.map.dispose();
     earth.material.dispose();

@@ -1,6 +1,6 @@
 // 버스 정류장 쉘터 / 횡단보도 / 보행 신호등 / 버스 렌더링 + 정류장 패널
 import * as THREE from 'three';
-import { createBus } from './busModel.js';
+import { createBus, disposeBus } from './busModel.js';
 import { createBusSource, TIME_COMPRESS } from './busSource.js';
 import { liveryOf } from './livery.js';
 
@@ -17,6 +17,18 @@ export function flatMesh(pos, idx, color) {
   const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setIndex(idx); g.computeVertexNormals();
   const n = g.attributes.normal; for (let i = 0; i < n.count; i++) n.setXYZ(i, 0, 1, 0);
   const m = new THREE.Mesh(g, new THREE.MeshLambertMaterial({ color, polygonOffset: true, polygonOffsetFactor: -2 })); m.receiveShadow = true; return m;
+}
+
+// [bus-net] 정자 ?bus=sim 전용 추가 경로(public/corridor/jz-sim.json: GBIS 정류소 순서 → OSM 차도)를 원본을 건드리지 않고 덧붙인 사본.
+//   경로 번호는 기존 뒤에 이어 붙여 기존 경로 인덱스는 그대로다. 실시간 모드(기본)는 이 함수를 부르지 않는다.
+export function mergeSimExtra(T, X) {
+  if (!X?.paths?.length) return T;
+  const routes = T.routes.map((r) => ({ ...r, paths: [...(r.paths || [])] })), byId = new Map(routes.map((r) => [r.id, r]));
+  for (const r of X.routes || []) if (!byId.has(r.id)) { const c = { ...r, paths: [] }; routes.push(c); byId.set(r.id, c); }
+  const paths = [...T.paths];
+  for (const p of X.paths) { const id = paths.length; paths.push({ ...p, id, simExtra: true }); byId.get(p.route)?.paths.push(id); }
+  const refTypes = { ...T.refTypes }; for (const r of X.routes || []) if (!refTypes[r.ref] && r.type) refTypes[r.ref] = { type: r.type, src: r.src, gbis: r.gbis };
+  return { ...T, routes, paths, refTypes };
 }
 
 export function buildTransit(scene, T, world, overlay, { mode = 'sim', proxy } = {}) {
@@ -107,8 +119,11 @@ export function buildTransit(scene, T, world, overlay, { mode = 'sim', proxy } =
   const meshes = new Map();
   const busTags = new Map();
   const ctx = { pedLight };
+  const hideIds = new Set(); // [ride] 정자 시뮬 버스 탑승 중이면 그 버스는 탑승용 모델이 대신 그린다(?bus=sim 일 때만 채워짐)
+  let visList = []; // [ride] 지금 보이는 버스(탑승 판정용, 읽기 전용)
   const syncBuses = () => {
     const seen = new Set();
+    const vis = [];
     for (const v of source.vehicles()) {
       seen.add(v.id);
       let m = meshes.get(v.id);
@@ -120,8 +135,11 @@ export function buildTransit(scene, T, world, overlay, { mode = 'sim', proxy } =
       }
       m.position.set(v.x, 0.08, v.z); m.rotation.y = v.heading; m.scale.setScalar(v.scale); m.visible = v.scale > 0.02;
       m.userData.state = v.state;
+      if (hideIds.size || busTags.get(v.id).hid) { const hide = hideIds.has(v.id); if (hide) m.visible = false; const tg = busTags.get(v.id); if (tg.hid !== hide) { tg.hid = hide; tg.el.style.display = hide ? 'none' : ''; } } // [ride]
+      if (m.visible) vis.push(v);
     }
-    for (const [id, m] of meshes) if (!seen.has(id)) { m.userData.releaseLights?.(); scene.remove(m); meshes.delete(id); overlay.remove(busTags.get(id)); busTags.delete(id); }
+    visList = vis;
+    for (const [id, m] of meshes) if (!seen.has(id)) { m.userData.releaseLights?.(); scene.remove(m); disposeBus(m); meshes.delete(id); overlay.remove(busTags.get(id)); busTags.delete(id); }
   };
 
   // ---------- 정류장 패널 ----------
@@ -159,7 +177,14 @@ export function buildTransit(scene, T, world, overlay, { mode = 'sim', proxy } =
     panelT -= dt; if (panelT <= 0) { panelT = 0.5; renderPanel(playerPos); }
   }
   function fastForward(sec, step = 0.1) { for (let t = 0; t < sec; t += step) { simTime += step; source.update(step, ctx); } syncBuses(); updateLamps(); }
-  return { update, fastForward, pedLight, source, crossings: T.crossings, stops: T.stops, meshes, get simTime() { return simTime; }, get panelStop() { return panelStop; }, TIME_COMPRESS };
+  // [ride] 정자 버스 탑승용 읽기 전용 훅 — 시뮬레이션 모드(?bus=sim)에서만. 실시간 버스는 정류장에 서지 않아 탈 수 없다.
+  //   코리더 버스(createCorridorBuses)와 같은 모양: sim·source·ctx·stopById·hideIds·near·group (gy 는 game.js 가 붙인다)
+  let rideSim = null;
+  if (mode === 'sim' && source.buses && source.paths) {
+    for (const P of source.paths) P._jz = true;
+    rideSim = { sim: source, source, ctx, group: scene, hideIds, stopById: new Map(T.stops.map((s) => [s.id, s])), get near() { return visList; } };
+  }
+  return { update, fastForward, pedLight, source, crossings: T.crossings, stops: T.stops, meshes, rideSim, get simTime() { return simTime; }, get panelStop() { return panelStop; }, TIME_COMPRESS };
 }
 
 // NPC가 빨간불이면 횡단보도 앞에서 기다리게 하는 판정 (근사)

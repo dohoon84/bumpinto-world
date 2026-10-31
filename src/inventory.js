@@ -1,7 +1,9 @@
 // [inventory] 인원당 1개씩 지급되는 개인 인벤토리 (드래그 이동 가능한 동그란 플로팅 아이콘 & 제자리 펼침 포켓 독)
 import { isEn, onLangChange } from './i18n.js';
 
-const POS_KEY = 'jeongja3d.inventory.pos.v1';
+// v2: 기본 위치는 왼쪽 아래(좌하단 HUD 위). v1 에 남은 예전 드래그 위치(화면 가운데 → 아바타 머리 위처럼 보임)는 무시
+const POS_KEY = 'jeongja3d.inventory.pos.v2';
+const DRAG_THRESHOLD = 8; // 이만큼 움직여야 드래그, 그보다 작으면 클릭(열기)
 const ORB_SIZE = 50;
 const EDGE_PAD = 10;
 const DEFAULT_CAPACITY = 4;
@@ -11,10 +13,15 @@ function esc(s) {
 }
 
 function defaultPos() {
-  return {
-    x: Math.max(EDGE_PAD, window.innerWidth - ORB_SIZE - 18),
-    y: 96,
-  };
+  // 왼쪽 아래, 좌하단 HUD 묶음(출처 표기 · 열린 정류장 패널 · 터치 조이스틱) 바로 위
+  let top = window.innerHeight - 62;
+  for (const sel of ['#attribution', '#joystick', '#stop-panel.open', '#corridor-stop-panel.open']) {
+    const el = document.querySelector(sel);
+    if (!el || getComputedStyle(el).display === 'none') continue;
+    const r = el.getBoundingClientRect();
+    if (r.width > 0 && r.height > 0 && r.left < 320 && r.top > window.innerHeight * 0.4) top = Math.min(top, r.top);
+  }
+  return { x: 12, y: Math.round(top - ORB_SIZE - 10) };
 }
 
 function clampPos(x, y) {
@@ -33,7 +40,7 @@ function readPos() {
       return clampPos(raw.x, raw.y);
     }
   } catch {}
-  return clampPos(defaultPos().x, defaultPos().y);
+  return null; // 사용자가 옮긴 적 없음 → 매번 내비게이션 위 기본 위치
 }
 
 function savePos(pos) {
@@ -51,7 +58,8 @@ export function mountInventory({
 } = {}) {
   const registry = [...items];
   let open = false;
-  let pos = readPos();
+  let custom = readPos();
+  let pos = custom || { x: 0, y: 0 };
   let tab = 'pocket';
   let giftPickId = null;
   let giftPeer = null;
@@ -121,7 +129,9 @@ export function mountInventory({
   }
 
   function applyPosition() {
-    pos = clampPos(pos.x, pos.y);
+    const p = custom || defaultPos();
+    pos = clampPos(p.x, p.y);
+    if (custom) custom = pos;
     root.style.left = `${pos.x}px`;
     root.style.top = `${pos.y}px`;
     const expandLeft = pos.x + ORB_SIZE / 2 > window.innerWidth * 0.5;
@@ -159,8 +169,8 @@ export function mountInventory({
     orbCount.hidden = avail.length === 0;
     orbCount.textContent = String(avail.length);
     orb.title = en
-      ? 'My Inventory (I) · Drag anywhere to move'
-      : '내 인벤토리 (I) · 드래그하여 원하는 위치로 이동';
+      ? 'My Inventory (I) · Drag anywhere to move · double-click to reset'
+      : '내 인벤토리 (I) · 드래그하여 원하는 위치로 이동 · 더블클릭하면 원래 자리';
 
     const owner = typeof getOwnerLabel === 'function' ? getOwnerLabel(en) : '';
     titleEl.textContent = owner
@@ -319,11 +329,11 @@ export function mountInventory({
     if (!drag || drag.id !== e.pointerId) return;
     const dx = e.clientX - drag.startX;
     const dy = e.clientY - drag.startY;
-    if (!drag.moved && Math.hypot(dx, dy) > 5) {
+    if (!drag.moved && Math.hypot(dx, dy) > DRAG_THRESHOLD) {
       drag.moved = true;
     }
     if (drag.moved) {
-      pos = clampPos(drag.origX + dx, drag.origY + dy);
+      custom = clampPos(drag.origX + dx, drag.origY + dy);
       applyPosition();
     }
   });
@@ -429,6 +439,16 @@ export function mountInventory({
   });
 
   addEventListener('resize', () => {
+    applyPosition();
+  });
+  // 기본 위치는 좌하단 HUD(정류장 패널이 열리면 그 위)를 따라감. 사용자가 옮긴 뒤엔 그 자리 고정
+  setInterval(() => { if (!custom && !drag) applyPosition(); }, 500);
+  // 더블클릭: 기본 위치로 되돌리기
+  orb.addEventListener('dblclick', (e) => {
+    e.preventDefault();
+    custom = null;
+    try { localStorage.removeItem(POS_KEY); } catch {}
+    setOpen(false);
     applyPosition();
   });
 

@@ -15,7 +15,7 @@ import { Input } from './input.js';
 import { createPresence } from './net/presence.js';
 import { RemotePlayers } from './net/remotePlayers.js';
 import { CHAT_RADIUS } from './net/protocol.js';
-import { buildTransit, makeCrossingGuard } from './transit/transit.js';
+import { buildTransit, makeCrossingGuard, mergeSimExtra } from './transit/transit.js';
 import { mountPhone } from './phone.js';
 import { mountHandset } from './handset.js';
 import { mountBoard } from './board.js';
@@ -38,6 +38,9 @@ import { createLaunchShow } from './events/launchShow.js';
 import { createTrucks } from './entities/trucks.js';
 import { createAdminBike } from './entities/adminCruiser/adminBike.js'; // [bike]
 import { createRoadBike, ROADBIKE_GIFT_ID, ROADBIKE_WHITE_GIFT_ID, ROADBIKE_WHITE_VEH_ID } from './entities/roadBike/roadBike.js'; // [roadbike]
+import { prewarmRoadBikeDecals, roadBikeDecalStats } from './entities/roadBike/roadBikeModel.js'; // [memory]
+import { mountMemHud } from './memHud.js'; // [memory] ?mem=1
+import { busTextureStats } from './transit/busModel.js'; // [memory]
 import { GIFT_ITEMS, giftItem, giftUnit } from './gifts/catalog.js';
 import { holdingQty, onHoldings, replaceHoldings, setHoldingQty } from './gifts/holdings.js';
 import { mountInventory } from './inventory.js'; // [inventory]
@@ -45,6 +48,7 @@ import { loadCorridorData, createCorridor, corridorTerrainData } from './corrido
 import { mountTravel } from './corridor/travel.js'; // [corridor]
 import { mountPerfHud } from './corridor/perfHud.js'; // [corridor]
 import { corridorStationLabel } from './corridor/globeCorridor.js'; // [corridor]
+import { mountRide } from './ride/index.js'; // [ride] 코리더 버스·택시 탑승
 
 const params = new URLSearchParams(location.search);
 const region = getCurrentRegion();
@@ -176,6 +180,10 @@ renderer.setSize(innerWidth, innerHeight);
 renderer.shadowMap.enabled = !params.has('noshadow');
 renderer.shadowMap.type = THREE.PCFShadowMap;
 document.getElementById('app').appendChild(renderer.domElement);
+const memHud = mountMemHud({ // [memory] ?mem=1 일 때만 설치 (기본 꺼짐)
+  renderer, params, getCorridor: () => corridor,
+  getExtra: () => { const b = busTextureStats(), r = roadBikeDecalStats(); return `bus tex routes ${b.routes} (in use ${b.inUse} · idle ${b.idle}/${b.idleMax}) · bike decals ${r.drawn}/${r.total}`; },
+});
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color('#bfe3f5');
@@ -208,8 +216,9 @@ tower?.build(scene, renderer); // [tower] 발사탑 1·2기(메카질라), 스�
 const overlay = new Overlay(document.getElementById('overlay'), camera);
 const corridorClock = { simTime: () => null };
 // [corridor] 정자 → 롯데월드타워 코리더: 탄천 구간 도로는 terrain.build 전에 annotate 해야 다리 구조물이 같이 생긴다
+let ride = null; // [ride] mountRide (코리더가 있을 때만)
 const corridor = corridorData ? createCorridor({ scene, corridorData, terrain, world, renderer, overlay, params, getSimTime: () => corridorClock.simTime() }) : null;
-if (terrain) { terrain.build(scene, world, overlay); world.groundY = terrain.getGroundHeight; }
+if (terrain) { terrain.build(scene, world, overlay); world.groundY = terrain.getGroundHeight; world.vehicleY = terrain.getVehicleHeight; }
 if (corridor) {
   corridor.afterTerrain();
   const liveBlocked = world.isBlocked, liveOnRoad = world.onRoad;
@@ -314,8 +323,10 @@ const busProxy = proxyParam === 'local'
     ? (proxyParam || '')
     : (params.has('shot') && !busParam ? '' : DEFAULT_BUS_PROXY);
 const busMode = busParam === 'sim' ? 'sim' : (busParam === 'realtime' || busProxy) ? 'realtime' : 'sim';
-const transit = transitData ? buildTransit(scene, transitData, world, overlay, { mode: busMode, proxy: busProxy }) : null;
-corridor?.attachLife({ proxy: busProxy, mode: busMode }); // [corridor] 수내→롯데 버스·차량·보행 NPC (?clife=0 끔)
+// [bus-net] 시뮬 모드(?bus=sim)이고 코리더가 있을 때만 정자 안 GBIS 추가 경로(220 정자역→서현 방향·7007-1 미금→수내 방향·380)를 덧붙인다. 실시간(기본)은 원본 그대로
+const jzSimExtra = transitData && busMode === 'sim' && corridorDir && params.get('busnet') !== '0' ? await fetch(import.meta.env.BASE_URL + corridorDir + 'jz-sim.json').then((r) => (r.ok ? r.json() : null)).catch(() => null) : null;
+const transit = transitData ? buildTransit(scene, jzSimExtra ? mergeSimExtra(transitData, jzSimExtra) : transitData, world, overlay, { mode: busMode, proxy: busProxy }) : null;
+corridor?.attachLife({ proxy: busProxy, mode: busMode, ...(params.get('ride') !== '0' ? { liveDrive: driveData, liveCrossings: transitData?.crossings } : {}) }); // [corridor] 수내→롯데 버스·차량·보행 NPC (?clife=0 끔) · [ride] 정자 차도는 택시 호출용으로만 덧붙임
 if (transit) {
   corridorClock.simTime = () => transit.simTime; // [corridor] 코리더 신호등도 같은 시계
   npcs.guard = makeCrossingGuard(transit);
@@ -860,6 +871,14 @@ inventory = mountInventory({
     ...plainGifts,
   ],
 });
+// [memory] 로드바이크 림·타이어 데칼은 지연 생성 — 인벤토리(꺼내기 버튼)에 다가가면 유휴 시간에 미리 그려 둔다.
+{
+  const warm = () => { if (roadbike || roadbikeWhite) prewarmRoadBikeDecals(); };
+  const orb = document.getElementById('inventory-orb');
+  orb?.addEventListener('pointerenter', warm);
+  orb?.addEventListener('pointerdown', warm);
+  addEventListener('keydown', (e) => { if (e.code === 'KeyI') warm(); });
+}
 function applySession(session) {
   const place = session?.place;
   if (!place) return;
@@ -1232,6 +1251,22 @@ chatForm.addEventListener('submit', (e) => {
 
 // --- 호들갑(리액션/이모트) 퀵바 & 단축키 (1~6) + 앉기(C) & 자동 대기모드(30초) ---
 const emoteBar = document.getElementById('emote-bar');
+// [hudfix] 하단 HUD 기준선: 리액션 바 윗변(--emote-top)·미니맵 윗변(--minimap-top)을 화면 아래에서 잰 px 로 CSS 변수에 기록.
+// 탈것 타기/내리기 안내(트럭·크루저·로드바이크)는 리액션 바 위, 속도계는 미니맵 위에 놓여 어떤 창 크기에서도 겹치지 않음.
+function syncHudBaselines() {
+  const root = document.documentElement.style;
+  const er = emoteBar?.getBoundingClientRect();
+  if (er && er.height > 0) root.setProperty('--emote-top', `${Math.round(innerHeight - er.top)}px`);
+  const pr = document.getElementById('phone')?.getBoundingClientRect();
+  if (pr && pr.height > 0) root.setProperty('--minimap-top', `${Math.round(innerHeight - pr.top)}px`);
+}
+addEventListener('resize', syncHudBaselines);
+if (typeof ResizeObserver !== 'undefined') {
+  const ro = new ResizeObserver(syncHudBaselines);
+  if (emoteBar) ro.observe(emoteBar);
+  const ph = document.getElementById('phone'); if (ph) ro.observe(ph);
+}
+requestAnimationFrame(syncHudBaselines);
 const AFK_TIMEOUT_SEC = 30;
 let emoteFolded = false;
 let myEmote = '';
@@ -1331,6 +1366,7 @@ renderEmoteBar();
 
 function toggleSit() {
   if (!joined || board.open || adminBike?.riding || roadRiding()) return;
+  if (ride?.active) return; // [ride] 탑승 중엔 이미 좌석
   wakeFromAfk();
   if (bikes.riding) dismountBike();
   if (mySit) {
@@ -1364,6 +1400,7 @@ function toggleSit() {
 
 function toggleAfk() {
   if (!joined || board.open) return;
+  if (ride?.active) return; // [ride]
   if (bikes.riding) dismountBike();
   if (myAfk) {
     myAfk = false;
@@ -1712,6 +1749,7 @@ document.getElementById('lang-launcher')?.addEventListener('click', () => {
 });
 onLangChange(() => syncGameLocale());
 homeBtn.onclick = () => {
+  ride?.forceAlight('teleport'); // [ride]
   if (bikes.riding) dismountBike();
   if (adminBike?.riding) adminBike.dismount(); // [bike]
   dismountRoadbikes();
@@ -1723,19 +1761,48 @@ homeBtn.onclick = () => {
   setMode('follow');
   rememberPlace(true);
 };
-// [corridor] 📍 이동 패널(T) · ?at=<역>|lotte · 성능 HUD(`)
+// [corridor] 순간이동(지구본 역 선택 · ?at=<역>|lotte) · 성능 HUD(`)
 function teleportTo(x, z) {
+  ride?.forceAlight('teleport'); // [ride] 순간이동·지구본 이동이면 자동 하차
   if (bikes.riding) dismountBike();
   if (adminBike?.riding) adminBike.dismount();
   dismountRoadbikes();
   standUpFromSeat();
   wakeFromAfk();
+  renderEmoteBar(); // 앉아 있다 순간이동하면 C 칩 표시도 '앉기'로 되돌림
   player.position.set(x, terrain ? terrain.getGroundHeight(x, z, 0) : 0, z);
   setMode('follow');
   rememberPlace(true);
 }
 const travel = corridor ? mountTravel({ corridor, home: () => homeBtn.onclick(), teleport: teleportTo }) : null;
 if (corridor) { corridor.place = (id) => travel?.go(id); corridor.placeOf = (id) => travel?.dests.find((d) => d.id === id) || null; }
+// [ride] 버스(E 탑승/하차 벨) · 택시(Y 호출) · V 시점. ?corridor=0 이면 corridor 가 없어 아무것도 붙지 않는다.
+ride = corridor && params.get('ride') !== '0' ? mountRide({
+  corridor, getPlayer: () => player, remotes, camera, cam, setMode, canvas: renderer.domElement, travel, handset,
+  prepare: () => {
+    if (bikes.riding) dismountBike();
+    if (adminBike?.riding) adminBike.dismount();
+    dismountRoadbikes();
+    standUpFromSeat();
+    wakeFromAfk();
+    myEmote = ''; myEmoteUntil = 0;
+    renderEmoteBar();
+  },
+  canBoard: () => joined && !board.open && !trucks?.current,
+  emitNow: () => emitMyStateNow(),
+  myId: () => remotes.myId,
+  // [ride] 정자 버스 탑승: ?bus=sim 일 때만(정자 시뮬 버스가 정류장에 섬). 기본 실시간 모드에선 null → 정자 동작 그대로
+  jzBuses: transit?.rideSim ? (() => { const a = Object.assign(Object.create(transit.rideSim), { gy: (x, z, ref = 0) => (terrain ? terrain.getGroundHeight(x, z, ref) : 0), vgy: (x, z, ref = 0) => (terrain ? terrain.getVehicleHeight(x, z, ref) : 0) }); return () => a; })() : null,
+  params,
+  // [ride] 정자 안을 달리는 호출 택시가 피해야 할 정자 라이브 택시·버스(읽기만)
+  liveObstacles: (x, z, R) => {
+    const out = [];
+    for (const t of taxis?.list || []) { const q = t.mesh.position; if (Math.abs(q.x - x) > R || Math.abs(q.z - z) > R) continue; const [sx, sz, dx, dz] = taxis._sample(t, t.s); out.push({ x: sx, z: sz, dx, dz, t }); }
+    for (const b of transit?.source?.vehicles?.() || []) if (Math.abs(b.x - x) < R && Math.abs(b.z - z) < R) out.push({ x: b.x, z: b.z, dx: Math.sin(b.heading ?? 0), dz: Math.cos(b.heading ?? 0), bus: true });
+    return out;
+  },
+}) : null;
+if (ride) { ride.setOverlay(overlay); remotes.rideHook = (p, dt) => ride.remoteHook(p, dt); }
 const perfHud = mountPerfHud({ renderer, corridor, params });
 if (travel && params.get('at')) travel.go(params.get('at'));
 // [corridor] 지구본 역 선택 → 입장 완료 후 역 출구 앞 인도로 (위치 저장 성공 여부와 무관)
@@ -1772,6 +1839,8 @@ if (dogParkBtn) {
       emitMyStateNow();
     };
   }
+  // 상단 '🐕 반려견운동장가기' 버튼과 P 단축키는 없앰(사용자 요청). onclick 코드는 남겨 둠
+  dogParkBtn.hidden = true;
 }
 if (Array.isArray(region.quickSpots) && region.quickSpots.length) {
   const buttonsWrap = document.getElementById('buttons');
@@ -1862,15 +1931,18 @@ leaveBtn.onclick = () => {
 input.onKey = (e) => {
   if (e.code === 'KeyM') viewBtn.onclick();
   if (e.code === 'KeyH') document.getElementById('btn-home').onclick();
-  if (e.code === 'KeyP' && !e.repeat && region.features?.dogPark) dogParkBtn?.onclick();
   if (e.code === 'Enter') { e.preventDefault(); chatInput.focus(); }
-  if (e.code === 'KeyE' && !e.repeat) toggleRide();
+  if (e.code === 'KeyE' && !e.repeat && !ride?.handleE()) toggleRide(); // [ride] 버스·택시 탑승/하차가 우선, 아니면 카카오바이크
+  if (e.code === 'KeyY' && !e.repeat && ride && joined) ride.hail(); // [ride] 택시 호출
+  if (e.code === 'KeyX' && !e.repeat && ride?.ride?.mode === 'taxi') ride.requestStop(); // [ride] 택시 '세워주세요'
+  if (e.code === 'KeyV' && !e.repeat && ride?.active) ride.toggleCam(); // [ride] 창가 1인칭 ↔ 뒤쪽 3인칭
   if (e.code === 'KeyU' && !e.repeat) umbrellas.handleHotkeyU();
   if (e.code === 'KeyG' && !e.repeat && dogPark.nearGate) dogPark.toggleGate();
   if (e.code === 'KeyF' && !e.repeat) {
     if (donationBoards.isNear) donationBoards.openModal('hotkey_f');
     else if (dogPark.nearGate) dogPark.toggleGate();
   }
+  if (e.code === 'KeyC' && !e.repeat) toggleSit(); // 134e7c7(스타벅스 커밋)에서 실수로 빠졌던 앉기 단축키 복구
   if (e.code === 'KeyZ' && !e.repeat) toggleAfk();
   if (e.code === 'Space' && !e.repeat) triggerJump();
   const emoteDef = EMOTE_BY_CODE[e.code];
@@ -1932,6 +2004,7 @@ function emitMyStateNow() {
       afk: bikes.riding || aboard ? false : myAfk,
       umb: bikes.riding || aboard ? '' : (umbrellas.umbrellaTheme || ''),
       ...mergeVehicleNets(trucks?.net(), adminBike?.net(), roadbike?.net(), roadbikeWhite?.net()),
+      ...(ride?.net() || {}), // [ride] 탑승 중: 차량 중심 x/z·방향 + sit='bus:…'/'taxi:…'
     },
     true,
   );
@@ -1944,7 +2017,7 @@ setInterval(() => {
   const now = performance.now();
   // requestAnimationFrame이 백그라운드에서 멈춘 경우(0.5초 이상 경과)
   if (now - lastFrameAt > 500) {
-    if (!bikes.riding && !adminBike?.riding && !roadRiding() && !myEmote && !handset.open && !board.open) {
+    if (!bikes.riding && !adminBike?.riding && !roadRiding() && !myEmote && !handset.open && !board.open && !ride?.active) { // [ride] 탑승 중엔 자리비움 없음
       idleTime += 1.0;
       if (!myAfk && idleTime >= AFK_TIMEOUT_SEC) {
         myAfk = true;
@@ -1976,7 +2049,8 @@ function frame() {
   } else { ov.yaw += dy; ov.pitch = THREE.MathUtils.clamp(ov.pitch + dp, 0.08, 1.5); ov.dist = THREE.MathUtils.clamp(ov.dist * (1 + dz), 150, 2500); }
 
   // 이동. 걸을 때는 카메라 기준, 바이크는 핸들(W 전진 · A/D 회전). 건물 안으로는 못 들어감.
-  const { f, s, run, jump } = input.axes();
+  let { f, s, run, jump } = input.axes();
+  if (ride?.active) { if (f || s || jump) idleTime = 0; f = 0; s = 0; jump = false; } // [ride] 탑승 중엔 걷기·점프 대신 차량이 움직임
   if (dy || dp || dz || f || s || jump) wakeFromAfk();
   if (joined && jump && !board.open && jumpY <= 0.001 && !adminBike?.riding && !roadRiding()) { // [bike] [roadbike]
     if (mySit) {
@@ -2087,7 +2161,7 @@ function frame() {
     }
 
     // 30초 동안 아무 입력이 없으면 자동 대기모드(자리비움/졸기) 전환
-    if (joined && moveSpeed < 0.05 && !myEmote && !handset.open && !board.open) {
+    if (joined && moveSpeed < 0.05 && !myEmote && !handset.open && !board.open && !ride?.active) { // [ride]
       idleTime += dt;
       if (!myAfk && idleTime >= AFK_TIMEOUT_SEC) {
         myAfk = true;
@@ -2132,15 +2206,15 @@ function frame() {
     player.userData.phoneOpen = handset.open;
     player.userData.jumpY = jumpY;
     player.userData.emote = myEmote;
-    player.userData.sit = mySit;
-    player.userData.afk = myAfk;
+    player.userData.sit = ride?.active ? 'bench' : mySit; // [ride] 버스·택시 좌석
+    player.userData.afk = ride?.active ? false : myAfk;
     player.userData.umbrella = umbrellas.umbrellaTheme || '';
     animateAvatar(player, moveSpeed, dt);
   }
   syncRideUi();
   if (joined) {
     const aboard = cruising || cycling;
-    presence.sendState({ x: player.position.x, z: player.position.z, ry: player.rotation.y, moving: moveSpeed > 0, riding: !!bikes.riding, jy: Number(jumpY.toFixed(2)), emote: bikes.riding || aboard ? '' : myEmote, sit: bikes.riding || aboard ? '' : mySit, afk: bikes.riding || aboard ? false : myAfk, umb: bikes.riding || aboard ? '' : (umbrellas.umbrellaTheme || ''), ...mergeVehicleNets(trucks?.net(), adminBike?.net(), roadbike?.net(), roadbikeWhite?.net()) }); // [bike] [roadbike]
+    presence.sendState({ x: player.position.x, z: player.position.z, ry: player.rotation.y, moving: moveSpeed > 0, riding: !!bikes.riding, jy: Number(jumpY.toFixed(2)), emote: bikes.riding || aboard ? '' : myEmote, sit: bikes.riding || aboard ? '' : mySit, afk: bikes.riding || aboard ? false : myAfk, umb: bikes.riding || aboard ? '' : (umbrellas.umbrellaTheme || ''), ...mergeVehicleNets(trucks?.net(), adminBike?.net(), roadbike?.net(), roadbikeWhite?.net()), ...(ride?.net() || {}) }); // [bike] [roadbike] [ride]
   }
   rememberPlace();
 
@@ -2175,12 +2249,14 @@ function frame() {
   });
   donationBoards.update(dt, joined ? player.position : null);
   umbrellas.update(dt, joined ? player.position : null, player.rotation.y);
+  ride?.update(dt); // [ride] 내 버스·택시 위치/좌석, 다른 사람의 탑승(유령 차량) — remotes.update 전에
   remotes.update(dt);
   myBubble.tick();
 
   // 카메라
   const P = player.position;
-  if (cam.mode === 'follow') {
+  if (ride?.camera(camera, dt)) sun.target.position.copy(P); // [ride] 창가 1인칭 / 뒤쪽 3인칭
+  else if (cam.mode === 'follow') {
     // 가슴 높이 피벗을 공전하고, 시선은 피벗을 지나 앞쪽으로 보낸다.
     // 그래서 좌우는 한 바퀴, 위는 하늘, 아래는 바닥까지 화면 가운데로 들어온다.
     const eye = P.y + 1.6, yaw = cam.yaw, pitch = cam.pitch, dist = cam.dist;
@@ -2214,6 +2290,7 @@ function frame() {
   sun.position.copy(sun.target.position).addScaledVector(atmosphere.sunDir, 500);
   renderer.render(scene, camera);
   perfHud.tick();
+  memHud.tick();
   overlay.update(innerWidth, innerHeight);
   emoteFx.update(dt, innerWidth, innerHeight);
   requestAnimationFrame(frame);
@@ -2226,7 +2303,8 @@ window.__jj = {
   ready: true, region, tower, renderer, corridor, // [corridor]
   launch, roadster, trucks, bike: adminBike, roadbike, inventory, data, world, npcs, transit, camera, cam, ov, setMode, terrain, taxis, police, weather: atmosphere, umbrellas, dogPark, strayCats, // [terrain] [taxi] [roadster] [tower] [launch] [truck] [bike] [roadbike] [inventory]
   get player() { return player; },
-  teleport(x, z, y) { if (bikes.riding) dismountBike(); if (adminBike?.riding) adminBike.dismount(); dismountRoadbikes(); player.position.set(x, y ?? (terrain ? terrain.getGroundHeight(x, z, 0) : 0), z); }, // [terrain] [bike] [roadbike]
+  teleport(x, z, y) { ride?.forceAlight('teleport'); if (bikes.riding) dismountBike(); if (adminBike?.riding) adminBike.dismount(); dismountRoadbikes(); player.position.set(x, y ?? (terrain ? terrain.getGroundHeight(x, z, 0) : 0), z); }, // [terrain] [bike] [roadbike]
   bikes, toggleRide, triggerEmote,
+  get ride() { return ride; }, remotes, presence, // [ride]
   nearNpc(i = 0, d = 3) { const n = npcs.list[i]; player.position.set(n.pos.x + d, 0, n.pos.z + d * 0.5); },
 };

@@ -180,3 +180,5 @@ export function createTruck(colorKey = 'stainless', renderer = null) {
   return g;
 }
 export function setBrake(truck, on) { truck.userData.rear.material = on ? shared.mat.rearOn : shared.mat.rear; }
+// [corridor] 코리더 인스턴싱용: 공유 지오메트리·재질(환경맵 포함)을 그대로 빌려 쓴다(스타베이스 동작 변화 없음)
+export const truckShared = (renderer = null) => getShared(renderer);

@@ -151,6 +151,9 @@ html, body { margin: 0; height: 100%; overflow: hidden; font-family: 'Pretendard
 #buttons { position: fixed; right: 12px; top: 10px; display: flex; gap: 6px; }
 #buttons button { font: inherit; font-size: 13px; border: 0; border-radius: 10px; padding: 7px 10px; background: rgba(255,255,255,.85); box-shadow: 0 1px 4px rgba(0,0,0,.15); cursor: pointer; }
 :root {
+  /* [hudfix] game.js 가 실제 리액션 바·미니맵 위치로 갱신(창 크기·바 접힘·줄바꿈 반영). 탈것 안내/속도계가 이 위에 놓임 */
+  --emote-top: 100px;
+  --minimap-top: 236px;
   --handset-right: 180px;
   --handset-w: calc(min(560px, 100vh - 96px) / 2.08);
   --dock-left: 296px;
@@ -1520,7 +1523,7 @@ body.in-lobby #hud, body.in-lobby #buttons, body.in-lobby #top-right-bar, body.i
 #handset .hd { display: flex; align-items: center; gap: 6px; margin: 4px 0 8px; font-size: 15px; font-weight: 800; }
 #handset .hd small { font-weight: 600; font-size: 11px; color: #5c6b82; }
 #handset .hd button, #handset .sideact { border: 0; background: transparent; font: inherit; font-size: 13px; font-weight: 700; color: #1f5fbf; cursor: pointer; }
-#handset .apps { display: flex; gap: 22px; padding: 18px 8px 0; }
+#handset .apps { display: grid; grid-template-columns: repeat(3, 58px); justify-content: space-evenly; row-gap: 16px; padding: 18px 4px 0; } /* [ride] 한 화면 3열: 메시지·연락처·비밀번호 / 교통카드·택시 */
 #handset .app { width: 58px; border: 0; background: transparent; padding: 0; text-align: center; cursor: pointer; font: inherit; }
 #handset .row { display: flex; align-items: center; gap: 8px; width: 100%; text-align: left; border: 0; background: rgba(255,255,255,.78); border-radius: 12px; padding: 8px 10px; margin: 4px 0; cursor: pointer; font: inherit; }
 #handset .row.static { cursor: default; }
@@ -3211,3 +3214,84 @@ body.in-lobby #hud, body.in-lobby #buttons, body.in-lobby #top-right-bar, body.i
 #corridor-stop-panel i { font-style: normal; font-size: 10px; color: #9ab; border: 1px solid #567; border-radius: 4px; padding: 0 3px; }
 #corridor-stop-panel .ft { margin-top: 6px; font-size: 10px; opacity: .55; }
 body.in-gate #corridor-stop-panel, body.in-lobby #corridor-stop-panel { display: none !important; }
+
+/* [ride] 코리더 버스·택시 탑승 HUD / 택시 목적지 패널 / 폰 교통카드·택시 앱 (데스크톱) */
+#corridor-stop-panel .ride-row td { padding: 0 0 4px; }
+#corridor-stop-panel .ride-dest { font-size: 10.5px; opacity: .75; line-height: 1.35; } #corridor-stop-panel .ride-dest i { border: 0; padding: 0; color: #9ab; }
+#corridor-stop-panel .ride-board { margin-top: 6px; padding: 5px 7px; border-radius: 7px; background: rgba(255,207,74,.18); color: #ffe08a; font-size: 12px; }
+#corridor-stop-panel .ride-tip { margin-top: 6px; font-size: 11px; opacity: .7; }
+#ride-hud { position: fixed; left: 50%; top: 96px; transform: translateX(-50%); z-index: 30; display: flex; align-items: center; gap: 8px; background: rgba(18,24,34,.88); color: #eef; border-radius: 12px; padding: 7px 10px; font-size: 13px; box-shadow: 0 4px 14px rgba(0,0,0,.25); max-width: min(760px, 94vw); }
+#ride-hud[hidden] { display: none; }
+#ride-hud .chip { display: inline-block; min-width: 46px; text-align: center; font-weight: 700; color: #fff; border-radius: 5px; padding: 2px 6px; }
+#ride-hud .where small { opacity: .55; font-size: 11px; margin-left: 3px; } #ride-hud .where b { color: #ffcf4a; font-weight: 700; margin-right: 3px; }
+#ride-hud button { border: 0; border-radius: 8px; padding: 5px 9px; font: inherit; font-size: 12px; cursor: pointer; background: rgba(255,255,255,.12); color: #eef; white-space: nowrap; }
+#ride-hud button:hover { background: rgba(255,255,255,.22); }
+#ride-hud button.bell.on { background: #e8423b; color: #fff; } #ride-hud button.board { background: #ffcf4a; color: #1b1b1b; font-weight: 700; }
+#ride-hud .co { font-size: 11px; opacity: .8; }
+#ride-toast { position: fixed; left: 50%; top: 146px; transform: translateX(-50%); z-index: 30; background: rgba(18,24,34,.9); color: #fff; border-radius: 10px; padding: 7px 12px; font-size: 13px; pointer-events: none; box-shadow: 0 4px 14px rgba(0,0,0,.25); }
+#ride-toast[hidden] { display: none; }
+#ride-taxi-panel { position: fixed; right: 14px; top: 96px; width: 300px; max-height: calc(100vh - 330px); display: flex; flex-direction: column; overflow: hidden; z-index: 31; background: rgba(18,24,34,.92); color: #eef; border-radius: 12px; padding: 10px 12px; font-size: 12px; box-shadow: 0 4px 14px rgba(0,0,0,.3); }
+#ride-taxi-panel[hidden] { display: none; }
+#ride-taxi-panel .hd { font-size: 14px; font-weight: 700; margin-bottom: 8px; } #ride-taxi-panel .hd small { font-weight: 400; opacity: .6; font-size: 11px; margin-left: 4px; }
+#ride-taxi-panel .dests { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; margin-bottom: 8px; overflow: auto; min-height: 90px; flex: 1 1 auto; }
+#ride-taxi-panel .dest.map { grid-column: 1 / -1; }
+#ride-taxi-panel .dest { flex-direction: column; }
+#ride-taxi-panel .dest { display: flex; justify-content: space-between; align-items: baseline; text-align: left; border: 1px solid transparent; border-radius: 8px; padding: 5px 8px; background: rgba(255,255,255,.07); color: #eef; font: inherit; cursor: pointer; }
+#ride-taxi-panel .dest small { opacity: .6; font-size: 10.5px; margin-left: 6px; } #ride-taxi-panel .dest.on { border-color: #ffcf4a; background: rgba(255,207,74,.16); }
+#ride-taxi-panel .go { display: grid; gap: 5px; } #ride-taxi-panel .go button, #ride-taxi-panel .ft button { border: 0; border-radius: 8px; padding: 7px 9px; font: inherit; font-weight: 700; cursor: pointer; background: #ffcf4a; color: #1b1b1b; text-align: left; }
+#ride-taxi-panel .go button[disabled] { opacity: .4; cursor: default; } #ride-taxi-panel .go button small { display: block; font-weight: 400; font-size: 10.5px; opacity: .75; }
+#ride-taxi-panel .go .premium { background: linear-gradient(90deg, #b48cff, #ffcf4a); }
+#ride-taxi-panel .ft { margin-top: 8px; } #ride-taxi-panel .ft button { background: rgba(255,255,255,.14); color: #eef; font-weight: 400; }
+body.in-gate #ride-hud, body.in-gate #ride-toast, body.in-gate #ride-taxi-panel, body.in-lobby #ride-hud, body.in-lobby #ride-toast, body.in-lobby #ride-taxi-panel { display: none !important; }
+#handset .glyph.xapp { display: flex; align-items: center; justify-content: center; font-size: 26px; font-style: normal; }
+#handset .glyph.wallet { background: linear-gradient(135deg, #1f5fbf, #34c3c7); } #handset .glyph.taxi { background: #f6c700; }
+#handset .tcard { border-radius: 14px; padding: 12px 14px; color: #fff; background: linear-gradient(135deg, #1f5fbf, #34c3c7); box-shadow: 0 6px 14px rgba(20,40,60,.2); position: relative; margin: 4px 0 8px; }
+#handset .tcard .nm { font-weight: 700; font-size: 14px; } #handset .tcard .bal { margin-top: 10px; font-size: 12px; opacity: .9; } #handset .tcard .bal b { font-size: 18px; margin-left: 4px; }
+#handset .tcard .un { font-size: 11px; opacity: .9; } #handset .tcard .no { position: absolute; right: 12px; top: 12px; font-size: 10px; letter-spacing: 1px; opacity: .75; }
+#handset .ride-rec { display: flex; gap: 6px; align-items: flex-start; padding: 6px 0; border-bottom: 1px solid rgba(0,0,0,.07); font-size: 12px; }
+#handset .ride-rec small { display: block; opacity: .6; font-size: 10.5px; } #handset .ride-rec .amt { margin-left: auto; white-space: nowrap; font-weight: 700; } #handset .ride-rec > div { min-width: 0; flex: 1; }
+#handset .ride-app-btn { width: 100%; border: 0; border-radius: 10px; padding: 10px; font: inherit; font-weight: 700; background: #f6c700; color: #1b1b1b; cursor: pointer; margin: 6px 0; }
+
+/* [ride] 택시 '세워주세요' · 앱 주행 상태 · 버스 안내 자막 · 좌측 하단 내 버스 · 노선도 */
+#ride-hud button.stop { background: #e8423b; color: #fff; font-weight: 700; } #ride-hud button.stop.on { background: rgba(232,66,59,.45); }
+#ride-hud button.chip.map { border: 0; cursor: pointer; padding: 2px 6px; font-size: 13px; } #ride-hud button.chip.map:hover { filter: brightness(1.15); }
+#ride-hud button.voice { padding: 5px 7px; }
+#handset .taxi-trip { border-radius: 14px; padding: 12px 14px; margin: 4px 0 6px; background: #1b2230; color: #fff; }
+#handset .taxi-trip .st { font-weight: 700; font-size: 13px; color: #f6c700; }
+#handset .taxi-trip .to { margin-top: 8px; } #handset .taxi-trip .to small { display: block; font-size: 10.5px; opacity: .6; } #handset .taxi-trip .to b { font-size: 15px; }
+#handset .taxi-trip .km { margin-top: 8px; font-size: 13px; } #handset .taxi-trip .km b { font-size: 28px; font-weight: 800; letter-spacing: -.5px; } #handset .taxi-trip .km small { opacity: .7; }
+#handset .taxi-trip .sp { font-size: 11px; opacity: .7; margin-top: 2px; }
+#handset .ride-app-btn.stop { background: #e8423b; color: #fff; } #handset .ride-app-btn[disabled] { opacity: .55; cursor: default; }
+#ride-caption { position: fixed; left: 50%; bottom: 120px; transform: translateX(-50%); z-index: 30; max-width: min(720px, 92vw); background: rgba(10,14,22,.86); color: #fff; border-radius: 10px; padding: 9px 16px; font-size: 16px; font-weight: 600; line-height: 1.4; text-align: center; pointer-events: none; box-shadow: 0 4px 14px rgba(0,0,0,.3); }
+#ride-caption[hidden] { display: none; } #ride-caption .ic { margin-right: 6px; }
+#ride-bus-card { position: fixed; left: 12px; bottom: 62px; z-index: 29; display: flex; align-items: center; gap: 10px; width: 270px; box-sizing: border-box; background: rgba(18,24,34,.9); color: #eef; border-radius: 12px; padding: 9px 11px; font-size: 12px; box-shadow: 0 4px 14px rgba(0,0,0,.25); }
+#ride-bus-card[hidden] { display: none; }
+#ride-bus-card .num { border: 0; border-radius: 7px; min-width: 54px; padding: 7px 8px; font: inherit; font-size: 17px; font-weight: 800; color: #fff; cursor: pointer; box-shadow: inset 0 -2px 0 rgba(0,0,0,.2); }
+#ride-bus-card .num:hover { filter: brightness(1.15); }
+#ride-bus-card .tx { flex: 1; min-width: 0; } #ride-bus-card .tx b { display: block; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } #ride-bus-card .tx small { display: block; opacity: .7; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#ride-bus-card .mp { border: 0; border-radius: 8px; padding: 6px 8px; font: inherit; font-size: 11px; background: rgba(255,255,255,.12); color: #eef; cursor: pointer; white-space: nowrap; }
+body.ride-bus #corridor-stop-panel { display: none !important; }
+#ride-route-map { position: fixed; inset: 0; z-index: 40; background: rgba(5,8,14,.45); display: flex; align-items: center; justify-content: center; }
+#ride-route-map[hidden] { display: none; }
+#ride-route-map .box { width: min(420px, 92vw); max-height: min(640px, calc(100vh - 80px)); display: flex; flex-direction: column; background: #f7f8fb; color: #182030; border-radius: 16px; box-shadow: 0 16px 40px rgba(0,0,0,.4); overflow: hidden; }
+#ride-route-map .hd { display: flex; align-items: center; gap: 10px; padding: 12px 14px; background: #fff; border-bottom: 1px solid #e3e6ee; }
+#ride-route-map .hd .chip { color: #fff; font-weight: 800; border-radius: 7px; padding: 5px 9px; font-size: 16px; }
+#ride-route-map .hd .tt { flex: 1; min-width: 0; } #ride-route-map .hd .tt b { display: block; font-size: 15px; } #ride-route-map .hd .tt small { display: block; font-size: 11px; color: #5b6578; }
+#ride-route-map .hd .x { border: 0; background: #eef0f5; border-radius: 50%; width: 30px; height: 30px; font-size: 15px; cursor: pointer; }
+#ride-route-map .geo { display: block; width: 100%; height: 120px; background: #eef1f6; }
+#ride-route-map .geo path { fill: none; stroke-width: 3; stroke-linejoin: round; stroke-linecap: round; opacity: .85; }
+#ride-route-map .geo circle { fill: #fff; stroke: #182030; stroke-width: 1.2; } #ride-route-map .geo circle.past { opacity: .35; } #ride-route-map .geo circle.next { fill: #ffcf4a; stroke: #e8423b; stroke-width: 1.6; }
+#ride-route-map .geo .me { font-size: 13px; text-anchor: middle; }
+#ride-route-map .line { list-style: none; margin: 0; padding: 10px 14px 10px 18px; overflow: auto; flex: 1; position: relative; }
+#ride-route-map .line li { position: relative; display: flex; align-items: center; gap: 10px; padding: 6px 0 6px 4px; font-size: 13px; }
+#ride-route-map .line li::before { content: ''; position: absolute; left: 10px; top: 0; bottom: 0; width: 4px; background: var(--c); }
+#ride-route-map .line li.first::before { top: 50%; } #ride-route-map .line li.last::before { bottom: 50%; }
+#ride-route-map .line li .dot { position: relative; z-index: 1; width: 12px; height: 12px; border-radius: 50%; background: #fff; border: 3px solid var(--c); flex: none; }
+#ride-route-map .line li.past { opacity: .38; } #ride-route-map .line li.past::before { background: #9aa3b5; }
+#ride-route-map .line li.next { font-weight: 800; } #ride-route-map .line li.next .dot { background: #ffcf4a; border-color: #e8423b; width: 14px; height: 14px; margin-left: -1px; }
+#ride-route-map .line li.here { font-weight: 800; } #ride-route-map .line li.here .dot { background: var(--c); }
+#ride-route-map .line li em { font-style: normal; font-size: 10.5px; font-weight: 700; border-radius: 6px; padding: 1px 6px; background: #ffcf4a; color: #1b1b1b; }
+#ride-route-map .line li em.h { background: var(--c); color: #fff; } #ride-route-map .line li em.t { background: #182030; color: #fff; }
+#ride-route-map .line li.bus { color: #e8423b; font-weight: 700; font-size: 12px; } #ride-route-map .line li.bus .dot { border: 0; background: transparent; width: 18px; height: 18px; font-size: 14px; display: flex; align-items: center; justify-content: center; margin-left: -3px; }
+#ride-route-map .ft { padding: 8px 14px; font-size: 11px; color: #5b6578; border-top: 1px solid #e3e6ee; background: #fff; }
+body.in-gate #ride-caption, body.in-gate #ride-bus-card, body.in-gate #ride-route-map, body.in-lobby #ride-caption, body.in-lobby #ride-bus-card, body.in-lobby #ride-route-map { display: none !important; }
