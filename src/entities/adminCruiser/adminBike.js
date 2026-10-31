@@ -292,9 +292,9 @@ export function createAdminBike({ scene, overlay, world, data, params, cam, play
   // ---------- UI ----------
   const css = document.createElement('style');
   css.textContent = `.label.bike{font-size:11px;font-weight:700;background:rgba(20,20,22,.78);color:#fff}
-#bike-prompt{position:fixed;left:50%;bottom:108px;transform:translateX(-50%);display:none;font:600 14px system-ui,sans-serif;color:#fff;background:rgba(12,12,14,.86);padding:8px 14px;border-radius:12px;border:0;cursor:pointer;z-index:8;box-shadow:0 2px 10px #0004}
+#bike-prompt{position:fixed;left:50%;bottom:calc(var(--emote-top,100px) + 10px);transform:translateX(-50%);display:none;font:600 14px system-ui,sans-serif;color:#fff;background:rgba(12,12,14,.86);padding:8px 14px;border-radius:12px;border:0;cursor:pointer;z-index:8;box-shadow:0 2px 10px #0004}
 #bike-prompt kbd{background:#fff;color:#222;border-radius:4px;padding:0 6px;margin-right:6px;font:700 13px system-ui}
-#bike-hud{position:fixed;right:16px;bottom:44px;display:none;text-align:right;color:#fff;font-family:system-ui,sans-serif;text-shadow:0 1px 4px #0009;z-index:7;pointer-events:none}
+#bike-hud{position:fixed;right:12px;bottom:calc(var(--minimap-top,236px) + 10px);display:none;text-align:right;color:#fff;font-family:system-ui,sans-serif;text-shadow:0 1px 4px #0009;z-index:7;pointer-events:none}
 #bike-hud .v{font:800 46px/1 system-ui}#bike-hud .u{font:600 14px system-ui;opacity:.85}#bike-hud .k{font:12px system-ui;opacity:.9;margin-top:4px}
 body.bike-near #trk-prompt, body.bike-riding #trk-prompt{display:none!important}`;
   document.head.appendChild(css);

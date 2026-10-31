@@ -151,6 +151,9 @@ html, body { margin: 0; height: 100%; overflow: hidden; font-family: 'Pretendard
 #buttons { position: fixed; right: 12px; top: 10px; display: flex; gap: 6px; }
 #buttons button { font: inherit; font-size: 13px; border: 0; border-radius: 10px; padding: 7px 10px; background: rgba(255,255,255,.85); box-shadow: 0 1px 4px rgba(0,0,0,.15); cursor: pointer; }
 :root {
+  /* [hudfix] game.js 가 실제 리액션 바·미니맵 위치로 갱신(창 크기·바 접힘·줄바꿈 반영). 탈것 안내/속도계가 이 위에 놓임 */
+  --emote-top: 100px;
+  --minimap-top: 236px;
   --handset-right: 180px;
   --handset-w: calc(min(560px, 100vh - 96px) / 2.08);
   --dock-left: 296px;

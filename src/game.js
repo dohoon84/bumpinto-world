@@ -1251,6 +1251,22 @@ chatForm.addEventListener('submit', (e) => {
 
 // --- 호들갑(리액션/이모트) 퀵바 & 단축키 (1~6) + 앉기(C) & 자동 대기모드(30초) ---
 const emoteBar = document.getElementById('emote-bar');
+// [hudfix] 하단 HUD 기준선: 리액션 바 윗변(--emote-top)·미니맵 윗변(--minimap-top)을 화면 아래에서 잰 px 로 CSS 변수에 기록.
+// 탈것 타기/내리기 안내(트럭·크루저·로드바이크)는 리액션 바 위, 속도계는 미니맵 위에 놓여 어떤 창 크기에서도 겹치지 않음.
+function syncHudBaselines() {
+  const root = document.documentElement.style;
+  const er = emoteBar?.getBoundingClientRect();
+  if (er && er.height > 0) root.setProperty('--emote-top', `${Math.round(innerHeight - er.top)}px`);
+  const pr = document.getElementById('phone')?.getBoundingClientRect();
+  if (pr && pr.height > 0) root.setProperty('--minimap-top', `${Math.round(innerHeight - pr.top)}px`);
+}
+addEventListener('resize', syncHudBaselines);
+if (typeof ResizeObserver !== 'undefined') {
+  const ro = new ResizeObserver(syncHudBaselines);
+  if (emoteBar) ro.observe(emoteBar);
+  const ph = document.getElementById('phone'); if (ph) ro.observe(ph);
+}
+requestAnimationFrame(syncHudBaselines);
 const AFK_TIMEOUT_SEC = 30;
 let emoteFolded = false;
 let myEmote = '';

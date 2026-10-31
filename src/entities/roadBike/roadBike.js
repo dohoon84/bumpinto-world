@@ -276,10 +276,10 @@ export function createRoadBike({
     cssReady = true;
     const css = document.createElement('style');
     css.textContent = `.label.roadbike{font-size:11px;font-weight:700;background:rgba(20,20,22,.78);color:#fff}
-.rb-prompt{position:fixed;left:50%;bottom:108px;transform:translateX(-50%);display:none;font:600 14px system-ui,sans-serif;color:#fff;background:rgba(12,12,14,.86);padding:8px 14px;border-radius:12px;border:0;cursor:pointer;z-index:8;box-shadow:0 2px 10px #0004}
+.rb-prompt{position:fixed;left:50%;bottom:calc(var(--emote-top,100px) + 10px);transform:translateX(-50%);display:none;font:600 14px system-ui,sans-serif;color:#fff;background:rgba(12,12,14,.86);padding:8px 14px;border-radius:12px;border:0;cursor:pointer;z-index:8;box-shadow:0 2px 10px #0004}
 .rb-prompt kbd{background:#fff;color:#222;border-radius:4px;padding:0 6px;margin-right:6px;font:700 13px system-ui}
-.rb-hud{position:fixed;right:12px;bottom:236px;display:none;width:156px;color:#0b0b0c;font-family:system-ui,sans-serif;z-index:6;pointer-events:none;background:#141518;border-radius:16px;padding:8px 8px 6px;box-shadow:0 3px 14px #0007}
-@media (max-width:720px){.rb-hud{width:128px;bottom:258px}}
+.rb-hud{position:fixed;right:12px;bottom:calc(var(--minimap-top,226px) + 10px);display:none;width:156px;color:#0b0b0c;font-family:system-ui,sans-serif;z-index:6;pointer-events:none;background:#141518;border-radius:16px;padding:8px 8px 6px;box-shadow:0 3px 14px #0007}
+@media (max-width:720px){.rb-hud{width:128px}}
 .rb-hud .scr{background:#eef0ea;border-radius:6px;padding:6px 8px 4px}
 .rb-hud .lb{font:700 10px system-ui;color:#5b5e63;display:flex;justify-content:space-between}
 .rb-hud .v{font:900 44px/1 system-ui;text-align:center;letter-spacing:-1px}
