@@ -85,7 +85,19 @@ export function createTaxi(liveryKey) {
   const sg = new THREE.BoxGeometry(L.sign.w, 0.26, 0.3);
   const sign = new THREE.Mesh(sg, signMaterials(L.sign)); sign.position.set(0, 1.65, -0.15); root.add(sign);
   root.userData.livery = liveryKey;
+  root.userData.own = { geos: [sg], cab };
   return root;
+}
+
+// [memory] 더 이상 쓰지 않는 택시(탑승 고스트 등) 해제: 이 택시만의 지붕 표시등 지오메트리와 저녁 조명 감시를 정리.
+//   차체 지오메트리·재질·표시등 재질은 모든 택시가 공유하므로 유지.
+export function disposeTaxi(root) {
+  const u = root?.userData; if (!u?.own || u.disposed) return;
+  u.disposed = true;
+  u.releaseLights?.();
+  root.removeFromParent();
+  for (const g of u.own.geos) g.dispose();
+  const i = cabs.indexOf(u.own.cab); if (i >= 0) cabs.splice(i, 1);
 }
 
 watchEvening((on) => {
