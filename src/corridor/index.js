@@ -13,6 +13,7 @@ import { stationSign, Grid } from '../world.js';
 import { drawBaseMap } from '../phone.js';
 import { addInstancedTrees } from '../world/trees.js';
 import { createCorridorLife } from './life.js';
+import { extractLifeHints, gatherLifeHints } from './lifeHints.js'; // [life] 동네별 보행자·주차 위치 힌트
 import { setNightCut, updateNight } from './nightLights.js';
 
 export async function loadCorridorData(baseUrl) {
@@ -90,6 +91,7 @@ export function createCorridor({ scene, corridorData, terrain, world, renderer, 
     if (job.kind === 'd' && t.dState === 2) {
       const tile = buildDetailTile(t.key, t.dData, { terrain, onRoadAll });
       tile.map = tileMap(t, t.dData);
+      tile.hints = extractLifeHints(t.dData, live); // [life]
       t.dData = null; t.detail = tile; t.dState = 3; root.add(tile.group); loaded.push(t);
       if (t.lod) t.lod.group.visible = false;
       stats.builtDetail++;
@@ -245,7 +247,7 @@ export function createCorridor({ scene, corridorData, terrain, world, renderer, 
     // 버스·차량·보행 NPC (수내 → 롯데). game.js 가 버스 프록시가 정해진 뒤 한 번 부른다. ?clife=0 이면 끔
     attachLife({ proxy, mode, liveDrive = null, liveCrossings = null } = {}) { // [ride] liveDrive: 정자 차도(읽기 전용, 정자 택시 호출용)
       if (life || params?.get('clife') === '0') return life;
-      life = createCorridorLife({ root, baseUrl, crossings, terrain, terrainT: corridorData.terrainT, world, overlay, stations: index.stations, liveBox: live, params, proxy, mode, liveDrive, liveCrossings });
+      life = createCorridorLife({ root, baseUrl, crossings, terrain, terrainT: corridorData.terrainT, world, overlay, stations: index.stations, liveBox: live, params, proxy, mode, liveDrive, liveCrossings, renderer, hints: (x, z, r) => gatherLifeHints(loaded, x, z, r) });
       return life;
     },
     get life() { return life; },
