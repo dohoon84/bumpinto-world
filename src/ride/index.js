@@ -11,7 +11,8 @@
 import * as THREE from 'three';
 import { samplePath, projectOnPath } from '../transit/busSource.js';
 import { liveryOf } from '../transit/livery.js';
-import { createTaxi, TAXI_LIVERIES } from '../entities/taxiModel.js';
+import { createTaxi, TAXI_LIVERIES, disposeTaxi } from '../entities/taxiModel.js';
+import { disposeBus } from '../transit/busModel.js';
 import { animateAvatar } from '../entities/avatar.js';
 import { isEn } from '../i18n.js';
 import { charge } from './fare.js';
@@ -64,6 +65,8 @@ export function mountRide({ corridor, getPlayer, remotes, camera, cam, setMode, 
   let ride = null; // 현재 탑승/호출 상태
   let busy = false;
   const ghosts = new Map(); // key -> { mesh, kind, P?, path?, pos, ry, dwell, peers, used }
+  // [memory] 고스트 메시 해제: 버스는 disposeBus(노선 텍스처 참조 반환), 택시는 disposeTaxi(공유 자원 유지)
+  const disposeGhostMesh = (g) => (g.kind === 'taxi' ? disposeTaxi(g.mesh) : disposeBus(g.mesh));
   let ghostSeq = 0;
   const tmpV = new THREE.Vector3(), tmpV2 = new THREE.Vector3();
   const stats = { boards: 0, alights: 0, charges: [], announces: [], bells: 0 };
@@ -206,7 +209,7 @@ export function mountRide({ corridor, getPlayer, remotes, camera, cam, setMode, 
     stats.boards++;
     ride.au = { prev: true, closed: false, brakeIdx: -1, taps: Math.floor(Math.random() * 3), tapT: 0.9 + Math.random() * 0.5 };
     sound.sfx('card-tap-v2'); // 내 카드 찍는 소리
-    if (c.kind === 'ghost') { ghosts.delete(c.g.key); c.g.mesh.parent?.remove(c.g.mesh); c.g.mesh.userData.releaseLights?.(); }
+    if (c.kind === 'ghost') { ghosts.delete(c.g.key); c.g.mesh.parent?.remove(c.g.mesh); c.g.mesh.userData.releaseLights?.(); disposeGhostMesh(c.g); }
     placeBus(0);
     toast(L(`🚌 ${P.ref}번 탑승 · ${terminusOf(P)} 방면 — 요금 ${res.amount}원 (무료 체험 카드)`, `🚌 Boarded bus ${P.ref} toward ${terminusOf(P)} — fare ₩${res.amount} (Free Trial Card)`));
     emitNow();
@@ -249,7 +252,7 @@ export function mountRide({ corridor, getPlayer, remotes, camera, cam, setMode, 
     if (bs) { bs.hideIds.delete(r.b.id); }
     r.b.ride = false;
     sound.stopBus();
-    r.mesh.parent?.remove(r.mesh); r.mesh.userData.releaseLights?.();
+    r.mesh.parent?.remove(r.mesh); r.mesh.userData.releaseLights?.(); disposeBus(r.mesh);
     const toIdx = atIdx >= 0 ? atIdx : r.P.stops.reduce((bi, st, i) => (Math.abs(st.s - r.b.s) < Math.abs(r.P.stops[bi].s - r.b.s) ? i : bi), 0);
     log.add({ mode: 'bus', route: r.P.ref, routeName: `${terminusOf(r.P)} 방면`, from: (r.fromName ?? stopName(r.P, r.fromIdx)) || placeName(pl().position.x, pl().position.z), to: (atIdx >= 0 ? stopName(r.P, toIdx) : placeName(pl().position.x, pl().position.z)), distM: (r.dist0 || 0) + Math.max(0, r.b.s - r.startS), durSec: (performance.now() - r.t0) / 1000, at: r.at, end: Date.now(), fare: r.fare, speed: 'normal' });
     ride = null; stats.alights++;
@@ -750,7 +753,7 @@ export function mountRide({ corridor, getPlayer, remotes, camera, cam, setMode, 
       }
     }
     for (const [k, g] of ghosts) {
-      if (!g.used) { g.mesh.parent?.remove(g.mesh); g.mesh.userData.releaseLights?.(); if (g.tag) g.tag.remove(); ghosts.delete(k); continue; }
+      if (!g.used) { g.mesh.parent?.remove(g.mesh); g.mesh.userData.releaseLights?.(); if (g.tag) g.tag.remove(); disposeGhostMesh(g); ghosts.delete(k); continue; }
       const m = g.mesh, a = Math.min(1, dt * 6), bs = g.kind === 'bus' ? sysOf(g.P) : bs0;
       m.position.x += (g.tx - m.position.x) * a; m.position.z += (g.tz - m.position.z) * a;
       m.position.y = (bs ? bs.gy(m.position.x, m.position.z, m.position.y) : g.ty) + (g.kind === 'bus' ? 0.08 : 0.05);

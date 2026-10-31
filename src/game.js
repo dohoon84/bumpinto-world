@@ -38,6 +38,9 @@ import { createLaunchShow } from './events/launchShow.js';
 import { createTrucks } from './entities/trucks.js';
 import { createAdminBike } from './entities/adminCruiser/adminBike.js'; // [bike]
 import { createRoadBike, ROADBIKE_GIFT_ID, ROADBIKE_WHITE_GIFT_ID, ROADBIKE_WHITE_VEH_ID } from './entities/roadBike/roadBike.js'; // [roadbike]
+import { prewarmRoadBikeDecals, roadBikeDecalStats } from './entities/roadBike/roadBikeModel.js'; // [memory]
+import { mountMemHud } from './memHud.js'; // [memory] ?mem=1
+import { busTextureStats } from './transit/busModel.js'; // [memory]
 import { GIFT_ITEMS, giftItem, giftUnit } from './gifts/catalog.js';
 import { holdingQty, onHoldings, replaceHoldings, setHoldingQty } from './gifts/holdings.js';
 import { mountInventory } from './inventory.js'; // [inventory]
@@ -177,6 +180,10 @@ renderer.setSize(innerWidth, innerHeight);
 renderer.shadowMap.enabled = !params.has('noshadow');
 renderer.shadowMap.type = THREE.PCFShadowMap;
 document.getElementById('app').appendChild(renderer.domElement);
+const memHud = mountMemHud({ // [memory] ?mem=1 일 때만 설치 (기본 꺼짐)
+  renderer, params, getCorridor: () => corridor,
+  getExtra: () => { const b = busTextureStats(), r = roadBikeDecalStats(); return `bus tex routes ${b.routes} (in use ${b.inUse} · idle ${b.idle}/${b.idleMax}) · bike decals ${r.drawn}/${r.total}`; },
+});
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color('#bfe3f5');
@@ -864,6 +871,14 @@ inventory = mountInventory({
     ...plainGifts,
   ],
 });
+// [memory] 로드바이크 림·타이어 데칼은 지연 생성 — 인벤토리(꺼내기 버튼)에 다가가면 유휴 시간에 미리 그려 둔다.
+{
+  const warm = () => { if (roadbike || roadbikeWhite) prewarmRoadBikeDecals(); };
+  const orb = document.getElementById('inventory-orb');
+  orb?.addEventListener('pointerenter', warm);
+  orb?.addEventListener('pointerdown', warm);
+  addEventListener('keydown', (e) => { if (e.code === 'KeyI') warm(); });
+}
 function applySession(session) {
   const place = session?.place;
   if (!place) return;
@@ -2259,6 +2274,7 @@ function frame() {
   sun.position.copy(sun.target.position).addScaledVector(atmosphere.sunDir, 500);
   renderer.render(scene, camera);
   perfHud.tick();
+  memHud.tick();
   overlay.update(innerWidth, innerHeight);
   emoteFx.update(dt, innerWidth, innerHeight);
   requestAnimationFrame(frame);

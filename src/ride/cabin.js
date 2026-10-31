@@ -40,6 +40,8 @@ export function createRideBus(ref, type, name = '') {
   const mk = (map) => new THREE.MeshLambertMaterial({ map, transparent: true, side: THREE.DoubleSide, depthWrite: false });
   const roof = body.material[2].clone(); roof.side = THREE.DoubleSide;
   body.material = [mk(gl), mk(gr), roof, body.material[3], mk(gf), mk(gb)];
+  const own = g.userData.own; // [memory] disposeBus 가 함께 해제(창 텍스처는 glassCache 공유라 제외)
+  if (own) for (const m of body.material) if (!own.mats.includes(m)) own.mats.push(m);
   body.renderOrder = 2; body.castShadow = true;
   // 저녁 실내등 판(불투명)은 창을 가리므로 숨김(헤드램프 등 다른 조명은 그대로)
   g.traverse((o) => { if (o.isMesh && o.material?.isMeshBasicMaterial && o.material.color?.getHex() === 0xffe3b8) o.visible = false; });
@@ -61,6 +63,7 @@ export function createRideBus(ref, type, name = '') {
     }
   }
   for (const z of [L / 2 - 2.8, 0, -L / 2 + 2]) { const p = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, bodyH, 6), poleMat); p.position.set(-0.2, b.floor + bodyH / 2, z); inner.add(p); }
+  if (own) { const gs = new Set(); inner.traverse((o) => { if (o.isMesh) gs.add(o.geometry); }); own.geos.push(...gs); }
   g.add(inner);
   // 창가 좌석을 앞에서부터 우선(좌석 번호 고정)
   const order = seats.map((s, i) => i).sort((a, c) => (seats[c].window - seats[a].window) || (seats[c].local.z - seats[a].local.z));

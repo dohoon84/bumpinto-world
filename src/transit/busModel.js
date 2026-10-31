@@ -91,13 +91,51 @@ function drawRear(ref, lv, b) {
   return tex(c);
 }
 
+// [memory] 노선(ref|type)별 도색 텍스처는 참조 카운트로 관리한다. 살아 있는 버스(보이는 것·풀에 숨긴 것)가
+//   하나라도 쓰면 절대 해제하지 않고, 아무도 안 쓰는 노선은 최근 사용 순으로 IDLE_MAX 개까지만 남긴다.
+//   해제된 노선이 다시 나오면 같은 그리기 함수로 다시 만든다(결과 동일).
+const IDLE_MAX = 12;
+let useSeq = 0;
 function textures(ref, type, name) {
   const k = ref + '|' + type;
-  if (!texCache.has(k)) {
+  let e = texCache.get(k);
+  if (!e) {
     const lv = liveryOf(type), b = BODY[lv.body];
-    texCache.set(k, { left: drawSide(ref, lv, b, false, false), right: drawSide(ref, lv, b, true, true), front: drawFront(ref, lv, b, name), rear: drawRear(ref, lv, b), lv, b });
+    e = { left: drawSide(ref, lv, b, false, false), right: drawSide(ref, lv, b, true, true), front: drawFront(ref, lv, b, name), rear: drawRear(ref, lv, b), lv, b, refs: 0, used: 0, key: k };
+    texCache.set(k, e);
   }
-  return texCache.get(k);
+  e.used = ++useSeq;
+  return e;
+}
+function freeEntry(e) {
+  for (const t of [e.left, e.right, e.front, e.rear]) {
+    t.dispose();
+    const c = t.image; if (c && 'width' in c) { c.width = 0; c.height = 0; } // 캔버스 백킹 메모리 반환
+    t.image = null;
+  }
+  texCache.delete(e.key);
+}
+function trimTextures() {
+  const idle = [...texCache.values()].filter((e) => e.refs <= 0);
+  if (idle.length <= IDLE_MAX) return;
+  idle.sort((a, b) => a.used - b.used);
+  for (let i = 0; i < idle.length - IDLE_MAX; i++) freeEntry(idle[i]);
+}
+export const busTextureStats = () => {
+  let refd = 0, idle = 0; for (const e of texCache.values()) (e.refs > 0 ? refd++ : idle++);
+  return { routes: texCache.size, inUse: refd, idle, idleMax: IDLE_MAX };
+};
+// 버스 하나가 만든 지오메트리·재질만 해제(공유 바퀴·허브·실내등 재질, 램프 공유 자원은 유지)하고 텍스처 참조를 돌려준다.
+export function disposeBus(g) {
+  const u = g?.userData; if (!u || u.disposed || !u.own) return;
+  u.disposed = true;
+  u.releaseLights?.(); u.releaseLights = null;
+  g.removeFromParent();
+  for (const x of u.own.geos) x.dispose();
+  for (const x of u.own.mats) x.dispose();
+  for (const x of u.own.texs || []) x.dispose();
+  const e = texCache.get(u.texKey);
+  if (e && e === u.texEntry) { e.refs--; trimTextures(); }
 }
 
 const wheelGeo = new THREE.CylinderGeometry(0.5, 0.5, 0.32, 10); wheelGeo.rotateZ(Math.PI / 2);
@@ -105,13 +143,13 @@ const hubGeo = new THREE.CylinderGeometry(0.24, 0.24, 0.34, 8); hubGeo.rotateZ(M
 const wheelMat = new THREE.MeshLambertMaterial({ color: '#1b1b1b' }), hubMat = new THREE.MeshLambertMaterial({ color: '#b9bec4' });
 const cabinMat = new THREE.MeshBasicMaterial({ color: '#ffe3b8' });
 
-function addEveningLights(g, b) {
+function addEveningLights(g, b, own) {
   const bodyH = b.H - b.floor;
   const band = b.winT - b.winB;
   const winH = bodyH * band * 0.88;
   const winY = b.floor + bodyH * (b.winB + band * 0.5);
   const lights = new THREE.Group();
-  const sideGeo = new THREE.BoxGeometry(0.05, winH, b.L * 0.82);
+  const sideGeo = new THREE.BoxGeometry(0.05, winH, b.L * 0.82); own.geos.push(sideGeo);
   for (const sx of [-1, 1]) {
     const pane = new THREE.Mesh(sideGeo, cabinMat);
     pane.position.set(sx * (b.W / 2 + 0.03), winY, -b.L * 0.02);
@@ -121,6 +159,7 @@ function addEveningLights(g, b) {
   frontWin.position.set(0, b.floor + bodyH * (b.winB + band * 0.52), b.L / 2 + 0.03);
   const rearWin = new THREE.Mesh(new THREE.BoxGeometry(b.W * 0.58, bodyH * band * 0.42, 0.045), cabinMat);
   rearWin.position.set(0, b.floor + bodyH * (b.winB + band * 0.62), -b.L / 2 - 0.03);
+  own.geos.push(frontWin.geometry, rearWin.geometry);
   lights.add(frontWin, rearWin);
   const headY = b.floor + bodyH * 0.16;
   const tailY = b.floor + bodyH * 0.26;
@@ -167,8 +206,12 @@ export function createBus(ref, type, name = '') {
   }
   // 사이드미러
   for (const sx of [-1, 1]) { const m = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.35, 0.18), wheelMat); m.position.set(sx * (b.W / 2 + 0.25), b.H - 0.7, b.L / 2 - 0.2); g.add(m); }
-  const releaseLights = addEveningLights(g, b);
-  g.userData = { L: b.L, type, ref, releaseLights };
+  // [memory] 이 버스가 직접 만든 자원 목록(disposeBus 가 해제). 공유 자원(wheelGeo/hubGeo/wheelMat/hubMat/cabinMat/램프)은 제외.
+  const own = { geos: [], mats: [...mats], texs: [] };
+  g.traverse((o) => { if (o.isMesh && o.geometry !== wheelGeo && o.geometry !== hubGeo) { own.geos.push(o.geometry); for (const m of [].concat(o.material)) if (m !== wheelMat && m !== hubMat && !own.mats.includes(m)) own.mats.push(m); } });
+  const releaseLights = addEveningLights(g, b, own);
+  T.refs++;
+  g.userData = { L: b.L, type, ref, releaseLights, own, texKey: ref + '|' + type, texEntry: T };
   return g;
 }
 export const busLength = (type) => BODY[liveryOf(type).body].L;

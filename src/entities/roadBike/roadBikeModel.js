@@ -228,6 +228,25 @@ function roundedRect(w, h, r) { const s = new THREE.Shape(), x = -w / 2, y = -h 
 
 // ---------- 공유 재질 ----------
 const sharedBy = {}; let envShared = null;
+// [memory] 림·타이어 데칼(2048²·1024² 캔버스)은 처음 그려질 때 만든다. 해상도·내용은 그대로이고,
+//   그 프레임의 렌더 직전(onBeforeRender)에 그려 같은 프레임에 업로드되므로 화면은 동일하다.
+//   인벤토리를 열거나 다른 사람이 바이크를 꺼내면 prewarmRoadBikeDecals() 가 유휴 시간에 하나씩 미리 그린다.
+const lazyDecals = [];
+function lazyTex(draw) {
+  const t = new THREE.Texture(); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8;
+  t.userData.ensure = () => { if (t.image) return false; t.image = draw().image; t.needsUpdate = true; return true; };
+  lazyDecals.push(t);
+  return t;
+}
+const ensureMap = (m) => () => m.map?.userData.ensure?.();
+export function prewarmRoadBikeDecals() {
+  const todo = lazyDecals.filter((t) => !t.image);
+  if (!todo.length) return;
+  const idle = window.requestIdleCallback || ((f) => setTimeout(() => f({ timeRemaining: () => 0 }), 16));
+  const step = () => { const t = todo.shift(); if (!t) return; t.userData.ensure(); if (todo.length) idle(step, { timeout: 1500 }); };
+  idle(step, { timeout: 1500 });
+}
+export const roadBikeDecalStats = () => ({ total: lazyDecals.length, drawn: lazyDecals.filter((t) => t.image).length });
 function getShared(renderer, cwName = 'black') {
   if (sharedBy[cwName]) return sharedBy[cwName];
   const cw = RB_COLORWAYS[cwName] || RB_COLORWAYS.black;
@@ -257,11 +276,11 @@ function getShared(renderer, cwName = 'black') {
     computer: std({ color: '#1c1d20', metalness: 0.3, roughness: 0.4 }),
     glass: new THREE.MeshPhysicalMaterial({ color: '#0a0b0c', metalness: 0, roughness: 0.05, transparent: true, opacity: 0.2, clearcoat: 1, envMap: env }),
   };
-  M.rimF = new THREE.MeshStandardMaterial({ map: rimDecalTex(RB.BSD - 0.003, RB.BSD - RB.DEPTH_F + 0.004, RB.BSD - 0.003), transparent: true, alphaTest: 0.35, roughness: 0.45, metalness: 0.1, envMap: env, polygonOffset: true, polygonOffsetFactor: -2 });
-  M.rimR = new THREE.MeshStandardMaterial({ map: rimDecalTex(RB.BSD - 0.003, RB.BSD - RB.DEPTH_R + 0.004, RB.BSD - 0.003), transparent: true, alphaTest: 0.35, roughness: 0.45, metalness: 0.1, envMap: env, polygonOffset: true, polygonOffsetFactor: -2 });
+  M.rimF = new THREE.MeshStandardMaterial({ map: lazyTex(() => rimDecalTex(RB.BSD - 0.003, RB.BSD - RB.DEPTH_F + 0.004, RB.BSD - 0.003)), transparent: true, alphaTest: 0.35, roughness: 0.45, metalness: 0.1, envMap: env, polygonOffset: true, polygonOffsetFactor: -2 });
+  M.rimR = new THREE.MeshStandardMaterial({ map: lazyTex(() => rimDecalTex(RB.BSD - 0.003, RB.BSD - RB.DEPTH_R + 0.004, RB.BSD - 0.003)), transparent: true, alphaTest: 0.35, roughness: 0.45, metalness: 0.1, envMap: env, polygonOffset: true, polygonOffsetFactor: -2 });
   M.cockpit = cw.cockpitBlack ? matteBlack(solid(FRAME_C)) : M.frame;
   M.post = cw.postBlack ? matteBlack(solid(FRAME_C)) : M.frame;
-  M.tyreTxt = new THREE.MeshStandardMaterial({ map: tyreDecalTex(R - 0.0125, R - 0.0215, R - 0.0125, cw.tyre), transparent: true, alphaTest: 0.3, roughness: 0.7, envMap: env, polygonOffset: true, polygonOffsetFactor: -2 });
+  M.tyreTxt = new THREE.MeshStandardMaterial({ map: lazyTex(() => tyreDecalTex(R - 0.0125, R - 0.0215, R - 0.0125, cw.tyre)), transparent: true, alphaTest: 0.3, roughness: 0.7, envMap: env, polygonOffset: true, polygonOffsetFactor: -2 });
   return (sharedBy[cwName] = { M, env });
 }
 
@@ -323,8 +342,8 @@ export function createRoadBikeModel(renderer, { colorway = 'black' } = {}) {
     spin.add(mesh(lathe(tp, 72), M.rubber));
     // 데칼: 림 양옆, 타이어 양옆
     for (const sx of [1, -1]) {
-      const d = mesh(ringX(ri + 0.004, ro - 0.003), front ? M.rimF : M.rimR, false); d.rotation.y = sx * Math.PI / 2; d.position.x = sx * (hw + 0.0004); spin.add(d);
-      const t = mesh(ringX(R - 0.0215, R - 0.0125, 120), M.tyreTxt, false); t.rotation.y = sx * Math.PI / 2; t.position.x = sx * (tw + 0.0003); spin.add(t);
+      const d = mesh(ringX(ri + 0.004, ro - 0.003), front ? M.rimF : M.rimR, false); d.onBeforeRender = ensureMap(d.material); d.rotation.y = sx * Math.PI / 2; d.position.x = sx * (hw + 0.0004); spin.add(d);
+      const t = mesh(ringX(R - 0.0215, R - 0.0125, 120), M.tyreTxt, false); t.onBeforeRender = ensureMap(M.tyreTxt); t.rotation.y = sx * Math.PI / 2; t.position.x = sx * (tw + 0.0003); spin.add(t);
     }
     // 허브
     const hubW = front ? 0.05 : 0.068;

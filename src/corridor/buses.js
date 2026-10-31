@@ -8,7 +8,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { SimulatedBusSource } from '../transit/busSource.js';
-import { createBus } from '../transit/busModel.js';
+import { createBus, disposeBus, busTextureStats } from '../transit/busModel.js';
 import { liveryOf } from '../transit/livery.js';
 import { CorridorRealtimeSource } from './busRealtime.js';
 
@@ -70,7 +70,7 @@ export function createCorridorBuses(root, T, { crossings, terrain, overlay, live
   const pool = new Map(); // key -> [mesh]
   const take = (v) => {
     const key = `${v.ref}|${v.type}`;
-    let m = pool.get(key)?.pop();
+    let m = pool.get(key)?.pop(); if (m) pooled--;
     if (!m) { m = createBus(v.ref, v.type, v.name); m.userData.key = key; }
     m.visible = true; group.add(m);
     const lv = liveryOf(v.type);
@@ -78,7 +78,23 @@ export function createCorridorBuses(root, T, { crossings, terrain, overlay, live
     tag.el.style.background = lv.plain ? '#2c3e6b' : lv.color;
     return { m, key, tag };
   };
-  const give = (a) => { a.m.userData.releaseLights?.(); group.remove(a.m); overlay.remove(a.tag); if (!pool.has(a.key)) pool.set(a.key, []); pool.get(a.key).push(a.m); };
+  // [memory] 풀 상한: 노선당 숨김 메시 POOL_PER_KEY 개, 전체 POOL_MAX 개. 넘치면 가장 오래 안 쓴 노선부터 해제(disposeBus).
+  //   풀에서 꺼낸 메시는 그대로 재사용하므로 보이는 버스는 영향이 없다.
+  const POOL_PER_KEY = 2, POOL_MAX = 12;
+  let pooled = 0;
+  const give = (a) => {
+    a.m.userData.releaseLights?.(); group.remove(a.m); overlay.remove(a.tag);
+    let l = pool.get(a.key);
+    if (l) pool.delete(a.key); else l = [];
+    pool.set(a.key, l); // Map 순서 = 최근 반납 순
+    if (l.length >= POOL_PER_KEY) { disposeBus(a.m); return; }
+    l.push(a.m); pooled++;
+    for (const [k, arr] of pool) {
+      if (pooled <= POOL_MAX) break;
+      while (arr.length && pooled > POOL_MAX) { disposeBus(arr.shift()); pooled--; }
+      if (!arr.length) pool.delete(k);
+    }
+  };
 
   // ---------- 정류장 패널 ----------
   let panel = document.getElementById('corridor-stop-panel');
@@ -163,6 +179,6 @@ export function createCorridorBuses(root, T, { crossings, terrain, overlay, live
     stops, stopById, hideIds, ctx, gy, vgy,
     setRideHint(fn) { rideHint.fn = fn; },
     refreshPanel() { acc = 1; },
-    stats: () => ({ sim: sim.buses.length, rendered, stops: stops.length, paths: sim.paths.length, live: source.stats?.live || 0, livePolls: source.stats?.polls || 0, liveFail: source.stats?.fail || 0, pool: [...pool.values()].reduce((a, l) => a + l.length, 0) }),
+    stats: () => ({ sim: sim.buses.length, rendered, stops: stops.length, paths: sim.paths.length, live: source.stats?.live || 0, livePolls: source.stats?.polls || 0, liveFail: source.stats?.fail || 0, pool: [...pool.values()].reduce((a, l) => a + l.length, 0), poolMax: POOL_MAX, tex: busTextureStats() }),
   };
 }

@@ -1,7 +1,7 @@
 // [roadbike] 선물함 CR·1 에어로 로드바이크. 주인만 소환/탑승. 타거나 세워 두면 다른 사람에게 보임.
 //   최고 50 km/h · veh id 902 (관리자 바이크 900/901, 트럭 0~59 와 겹치지 않음) · ?roadbike=0 끔
 import * as THREE from 'three';
-import { createRoadBikeModel, drawComputer, RB } from './roadBikeModel.js';
+import { createRoadBikeModel, drawComputer, RB, prewarmRoadBikeDecals } from './roadBikeModel.js';
 import { createRoadHelmetHead } from './helmetHead.js';
 import { ROADBIKE_GIFT_ID, ROADBIKE_SEED_QTY, ROADBIKE_WHITE_GIFT_ID, ROADBIKE_WHITE_SEED_QTY } from './catalog.js';
 
@@ -609,6 +609,7 @@ body.roadbike-near #trk-prompt, body.roadbike-riding #trk-prompt, body.roadbike-
 
   function showRemote(m, veh, parked) {
     if (owned() && (me.riding || summoned)) return;
+    prewarmRoadBikeDecals(); // [memory] 다른 사람 바이크가 보이기 시작하면 데칼 미리 그리기(멀리서 첫 프레임은 onBeforeRender 가 보장)
     const peer = remotes?.peers.get(m.id);
     const changed = b.rider !== m.id || !!b.remote?.parked !== parked;
     if (changed) {
