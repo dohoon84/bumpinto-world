@@ -48,12 +48,17 @@ export function parseRideSit(s) {
   return null;
 }
 
-export function mountRide({ corridor, getPlayer, remotes, camera, cam, setMode, canvas, travel, handset, prepare, canBoard, emitNow, myId, params = null, liveObstacles = null }) {
+export function mountRide({ corridor, getPlayer, remotes, camera, cam, setMode, canvas, travel, handset, prepare, canBoard, emitNow, myId, params = null, liveObstacles = null, jzBuses = null }) {
   const pl = getPlayer;
   const log = createRideLog();
   const wallet = createWallet();
   wallet.card(); // 무료 체험 카드 자동 발급
   const B = () => corridor.life?.buses || null;
+  // [ride] 정자 버스(?bus=sim 일 때만 game.js 가 넘김). 정자 경로는 P._jz, 방송용 경로 번호는 JZ_OFF + 인덱스
+  const JB = () => jzBuses?.() || null;
+  const JZ_OFF = 9000;
+  const sysOf = (P) => (P?._jz ? JB() : B());
+  const pathByIdx = (i) => (i >= JZ_OFF ? JB()?.sim.paths[i - JZ_OFF] : B()?.sim.paths[i]);
   const TR = () => corridor.life?.traffic || null;
   const camPref = { bus: '1p', taxi: '3p' };
   let ride = null; // 현재 탑승/호출 상태
@@ -89,8 +94,8 @@ export function mountRide({ corridor, getPlayer, remotes, camera, cam, setMode, 
   busCard.addEventListener('click', onHudClick);
   mapEl.addEventListener('click', (e) => { if (e.target.closest('[data-map=close]') || e.target === mapEl) closeRouteMap(); });
 
-  const stopName = (P, i) => B()?.stopById.get(P.stops[i]?.stop)?.name || '';
-  const pathIdxOf = (P) => B()?.sim.paths.indexOf(P) ?? -1;
+  const stopName = (P, i) => sysOf(P)?.stopById.get(P.stops[i]?.stop)?.name || '';
+  const pathIdxOf = (P) => { const bs = sysOf(P), i = bs ? bs.sim.paths.indexOf(P) : -1; return i >= 0 && P._jz ? JZ_OFF + i : i; };
   const terminusOf = (P) => stopName(P, P.stops.length - 1);
   const placeName = (x, z) => {
     let best = null, bd = 700;
@@ -101,9 +106,10 @@ export function mountRide({ corridor, getPlayer, remotes, camera, cam, setMode, 
 
   // ---------- 버스: 탈 수 있는 버스 찾기 ----------
   function boardable() {
-    const bs = B(); if (!bs || ride?.mode === 'bus') return null;
+    if (ride?.mode === 'bus') return null;
     const p = pl().position;
-    if (corridor.inLive(p.x, p.z)) return null;
+    const bs = corridor.inLive(p.x, p.z) ? JB() : B(); // [ride] 정자 안: 정자 시뮬 버스(?bus=sim)만, 없으면 탑승 없음(이전과 같음)
+    if (!bs) return null;
     const vis = new Set(bs.near.map((v) => v.id));
     let best = null, bd = BOARD_R;
     for (const b of bs.sim.buses) {
@@ -127,7 +133,7 @@ export function mountRide({ corridor, getPlayer, remotes, camera, cam, setMode, 
     busy = false; stats.charges.push(res);
     if (!res.ok) { toast(L('결제에 실패했어요: ', 'Payment failed: ') + res.error); return false; }
     prepare();
-    const bs = B(), P = c.P;
+    const bs = sysOf(c.P), P = c.P;
     let b, follow = null;
     if (c.kind === 'sim') { b = c.b; b._hold = 0; }
     else {
@@ -151,7 +157,7 @@ export function mountRide({ corridor, getPlayer, remotes, camera, cam, setMode, 
   }
 
   function placeBus(dt) {
-    const r = ride, b = r.b, q = samplePath(r.P, b.s), bs = B();
+    const r = ride, b = r.b, q = samplePath(r.P, b.s), bs = sysOf(r.P);
     const hd = Math.atan2(q.dx, q.dz);
     const y = bs.gy(q.x, q.z, r.mesh.position.y || 0) + 0.08;
     if (!r.placed) { r.mesh.rotation.y = hd; r.placed = true; }
@@ -165,7 +171,7 @@ export function mountRide({ corridor, getPlayer, remotes, camera, cam, setMode, 
 
   function alightBus(reason = 'bell') {
     const r = ride; if (!r || r.mode !== 'bus') return;
-    const bs = B(), P = r.P, b = r.b;
+    const bs = sysOf(r.P), P = r.P, b = r.b;
     const atIdx = r.dwell ? b.stopIdx : -1;
     // 하차 위치: 정차 중인 정류장 쉘터 앞 인도 → 아니면 차 오른쪽(문 쪽) 3.2m
     let x, z;
@@ -175,13 +181,13 @@ export function mountRide({ corridor, getPlayer, remotes, camera, cam, setMode, 
     else { x = q.x - q.dz * 3.4; z = q.z + q.dx * 3.4; }
     const sp = corridor.freeSpot(x, z);
     endBusRide(reason, atIdx);
-    pl().position.set(sp.x, B()?.gy(sp.x, sp.z, pl().position.y) ?? pl().position.y, sp.z);
+    pl().position.set(sp.x, bs?.gy(sp.x, sp.z, pl().position.y) ?? pl().position.y, sp.z);
     pl().rotation.y = Math.atan2(-q.dz, q.dx);
   }
 
   function endBusRide(reason, atIdx = -1) {
     const r = ride; if (!r || r.mode !== 'bus') return;
-    const bs = B();
+    const bs = sysOf(r.P);
     if (bs) { bs.hideIds.delete(r.b.id); }
     r.b.ride = false;
     r.mesh.parent?.remove(r.mesh); r.mesh.userData.releaseLights?.();
@@ -196,7 +202,7 @@ export function mountRide({ corridor, getPlayer, remotes, camera, cam, setMode, 
   }
 
   function updateBus(dt) {
-    const r = ride, bs = B();
+    const r = ride, bs = sysOf(r.P);
     if (!bs) { endBusRide('end'); return; }
     const b = r.b, P = r.P;
     if (r.follow) {
@@ -617,7 +623,7 @@ export function mountRide({ corridor, getPlayer, remotes, camera, cam, setMode, 
 
   // ---------- 다른 사람: 유령 버스·택시 ----------
   function updateGhosts(dt) {
-    const bs = B();
+    const bs = B(), bs0 = bs;
     for (const g of ghosts.values()) { g.used = false; g.peers = []; g.seats = []; }
     for (const p of remotes.peers.values()) {
       const info = parseRideSit(p.sit);
@@ -625,7 +631,8 @@ export function mountRide({ corridor, getPlayer, remotes, camera, cam, setMode, 
       if (!info || !bs) continue;
       const cx = p.target.x, cz = p.target.z;
       if (info.kind === 'bus') {
-        const P = bs.sim.paths[info.path]; if (!P) continue;
+        const P = pathByIdx(info.path); if (!P) continue;
+        const gbs = sysOf(P); // [ride] 정자 경로면 정자 버스 쪽
         if (ride?.mode === 'bus' && ride.path === info.path && Math.hypot(cx - ride.mesh.position.x, cz - ride.mesh.position.z) < CO_R) {
           p.rideHost = { mesh: ride.mesh, seat: info.seat === ride.seat ? ride.mesh.userData.ride.order.find((i) => i !== ride.seat) : info.seat, bus: true };
           continue;
@@ -633,7 +640,7 @@ export function mountRide({ corridor, getPlayer, remotes, camera, cam, setMode, 
         let g = null;
         for (const q of ghosts.values()) if (q.kind === 'bus' && q.path === info.path && Math.hypot(q.tx - cx, q.tz - cz) < GHOST_JOIN) { g = q; break; }
         if (!g) {
-          const mesh = createRideBus(P.ref, P.type, P.name); bs.group.add(mesh);
+          const mesh = createRideBus(P.ref, P.type, P.name); gbs.group.add(mesh);
           mesh.position.set(cx, p.target.y + 0.08, cz); mesh.rotation.y = p.ry;
           g = { key: 'g' + (++ghostSeq), kind: 'bus', mesh, P, path: info.path, tx: cx, tz: cz, ry: p.ry, peers: [], seats: [] };
           ghosts.set(g.key, g);
@@ -656,7 +663,7 @@ export function mountRide({ corridor, getPlayer, remotes, camera, cam, setMode, 
     }
     for (const [k, g] of ghosts) {
       if (!g.used) { g.mesh.parent?.remove(g.mesh); g.mesh.userData.releaseLights?.(); if (g.tag) g.tag.remove(); ghosts.delete(k); continue; }
-      const m = g.mesh, a = Math.min(1, dt * 6);
+      const m = g.mesh, a = Math.min(1, dt * 6), bs = g.kind === 'bus' ? sysOf(g.P) : bs0;
       m.position.x += (g.tx - m.position.x) * a; m.position.z += (g.tz - m.position.z) * a;
       m.position.y = (bs ? bs.gy(m.position.x, m.position.z, m.position.y) : g.ty) + (g.kind === 'bus' ? 0.08 : 0.05);
       m.rotation.y += Math.atan2(Math.sin(g.ry - m.rotation.y), Math.cos(g.ry - m.rotation.y)) * a;
@@ -852,11 +859,12 @@ export function mountRide({ corridor, getPlayer, remotes, camera, cam, setMode, 
       if (toastT > 0) { toastT -= dt; if (toastT <= 0) toastEl.hidden = true; }
       if (capT > 0) { capT -= dt; if (capT <= 0) capEl.hidden = true; }
       const bs = B();
-      if (bs) { bs.hideIds.clear(); if (ride?.mode === 'bus') bs.hideIds.add(ride.b.id); }
+      if (bs) { bs.hideIds.clear(); if (ride?.mode === 'bus' && !ride.P._jz) bs.hideIds.add(ride.b.id); }
+      const jb = JB(); if (jb) { jb.hideIds.clear(); if (ride?.mode === 'bus' && ride.P._jz) jb.hideIds.add(ride.b.id); }
       if (ride?.mode === 'bus') updateBus(dt);
       else if (ride?.mode === 'taxi') updateTaxi(dt);
       // 정차 중 버스 앞에서 기다리는 동안은 문을 조금 더 열어 둠
-      if (!ride && bs && dt > 0) {
+      if (!ride && (bs || jb) && dt > 0) {
         const c = boardable();
         if (c?.kind === 'sim' && (c.b._hold || 0) < HOLD_MAX) { c.b._hold = (c.b._hold || 0) + dt; c.b.dwell = Math.max(c.b.dwell, 0.6); }
       }
@@ -868,13 +876,13 @@ export function mountRide({ corridor, getPlayer, remotes, camera, cam, setMode, 
     log, wallet, stats,
     debug: {
       // 테스트용: 다가오는 버스가 있는 정류장 앞으로 이동 → { busId, stopId, ref }
-      setupBus(minAhead = 50, maxAhead = 260) {
-        const bs = B(); if (!bs) return null;
+      setupBus(minAhead = 50, maxAhead = 260, jz = false) {
+        const bs = jz ? JB() : B(); if (!bs) return null;
         const cands = [];
         for (const b of bs.sim.buses) {
           const st = b.P.stops[b.stopIdx]; if (!st || b.dwell > 0) continue;
           const d = st.s - b.s; if (d < minAhead || d > maxAhead || b.stopIdx >= b.P.stops.length - 3) continue;
-          const stop = bs.stopById.get(st.stop); if (!stop?._pos || corridor.inLive(stop._pos.x, stop._pos.z)) continue;
+          const stop = bs.stopById.get(st.stop); if (!stop?._pos || corridor.inLive(stop._pos.x, stop._pos.z) !== !!jz) continue;
           cands.push({ b, stop, d });
         }
         cands.sort((a, c) => a.d - c.d);
@@ -885,17 +893,17 @@ export function mountRide({ corridor, getPlayer, remotes, camera, cam, setMode, 
       },
       // 시뮬을 sec 초 앞당김(0.1초 단계, 매 단계 탑승 로직 포함). until(state) 가 true 면 멈춤
       ff(sec, until = null) {
-        const bs = B(); if (!bs) return 0;
+        const bs = B(), jb = JB(); if (!bs && !jb) return 0;
         let t = 0;
         for (; t < sec; t += 0.1) {
-          bs.source.update(0.1, bs.ctx, { x: pl().position.x, z: pl().position.z });
+          for (const x of [bs, jb]) x?.source.update(0.1, x.ctx, { x: pl().position.x, z: pl().position.z });
           if (ride?.mode === 'bus') updateBus(0.1);
           if (until && until()) break;
         }
         renderHud();
         return t;
       },
-      bus(id) { return B()?.sim.buses.find((b) => b.id === id) || null; },
+      bus(id, jz = false) { return (jz ? JB() : B())?.sim.buses.find((b) => b.id === id) || null; },
       state() {
         if (!ride) return { mode: null, cam: { ...camPref } };
         if (ride.mode === 'bus') return { mode: 'bus', ref: ride.P.ref, path: ride.path, seat: ride.seat, s: ride.b.s, stopIdx: ride.b.stopIdx, fromIdx: ride.fromIdx, dwell: ride.dwell, bell: ride.bell, follow: ride.follow, busId: ride.b.id, nextStop: stopName(ride.P, ride.dwell ? ride.b.stopIdx + 1 : ride.b.stopIdx), cam: camPref.bus };
