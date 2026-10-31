@@ -2,11 +2,52 @@ Bumpinto World Source License
 Personal use allowed. Commercial service use prohibited.
 Attribution required. (Bumpinto World / CrazyLabs)
 
-Copyright (c) 2026 김도훈 (CrazyLabs, https://crazylabs.co.kr)
+Copyright (c) 2026 김도훈 (Dohoon Kim, CrazyLabs, https://crazylabs.co.kr)
+All rights reserved, except as expressly granted in this license.
 
 The English text of this license is the binding version. Any
 translation or summary (including in README.md or CONTRIBUTING.md) is
 for convenience only.
+
+Definitions
+In this license:
+- "Licensor" means 김도훈 (Dohoon Kim), doing business as CrazyLabs,
+  and his successors and assignees.
+- "You" means any person or entity that uses, copies, modifies,
+  deploys, or distributes the Software, and anyone acting on its
+  behalf or under its control.
+- "Software" means the material described under "Scope" below, in
+  source, compiled, bundled, or deployed form, and any part of it.
+- "Original Assets" has the meaning given under "Scope" (b).
+- "Derivative" means any work, copy, or deployment that is based on,
+  derived from, or contains the Software or any part of it, including
+  modified, translated, ported, re-branded, or re-themed versions, and
+  material produced from the Software by automated tools (including AI
+  tools) in a way that reproduces or adapts its protected expression.
+- "Substantial Part" means any part of the Software that is not
+  trivial in quantity or in quality. It includes, for example, the game
+  client, the world rendering or streaming code, the region or
+  corridor build pipelines, the multiplayer or transit backend, any
+  landmark or vehicle model, and any Original Asset.
+- "Commercial Service" means making the Software or a Derivative, or
+  the world, client, backend, data, or content it provides, available
+  to anyone other than You, where You or anyone else receives or seeks
+  direct or indirect commercial advantage or payment. This includes,
+  without limitation:
+    - fees, subscriptions, paid features, paid items, or paid access;
+    - advertising, sponsorship, affiliate links, or paid placement;
+    - selling, licensing, or reselling data, assets, or content taken
+      or produced from the Software, or user data collected through it;
+    - hosting, operating, or white-labelling it for another party, or
+      offering it as part of a hosted or managed service; and
+    - using it as part of the marketing of a commercial product or
+      service.
+- "Public Deployment" means making the Software or a Derivative
+  accessible over a network to anyone outside Your own household or
+  organization.
+- "Third-Party Material" means material in this repository that is not
+  owned by Licensor, including the map data and components described
+  under "Third-party material" and "Map data" below.
 
 Scope
 This license applies to the following material in this repository,
@@ -40,7 +81,9 @@ Other licenses stay in force for material that is not this Software:
   (for example buildings, shops, transit operators, or vehicles) belong
   to their owners. They are used only to describe real-world places.
   This license grants no rights in them.
-This license does not narrow those terms.
+This license does not narrow those terms, and nothing in it restricts
+any right You have in Third-Party Material under that material's own
+license.
 
 Map data (OpenStreetMap / ODbL)
 Map data derived from OpenStreetMap is © OpenStreetMap contributors
@@ -69,27 +112,29 @@ starbase.json), public/corridor/**, and the OSM extracts under data/.
 public/corridor/** also contains building footprints from the Overture
 Maps Foundation buildings theme (ODbL; it includes OpenStreetMap and
 other sources listed at https://docs.overturemaps.org/attribution/) and
-building heights from VWorld GIS building data (국토교통부). Those
-sources keep their own terms.
-[TODO(김도훈): confirm VWorld (브이월드 GIS건물통합정보) redistribution
-terms (공공누리 type or VWorld terms of use) and whether they allow
-redistribution inside an ODbL database. Remove this note once checked.]
+building heights from VWorld GIS building data (브이월드
+GIS건물통합정보, 국토교통부). Some features also use transit
+information from GBIS (경기도 버스정보, gbis.go.kr) and data.go.kr
+(공공데이터포털). Third-party data remains subject to its provider's
+terms (VWorld/국토교통부, GBIS/경기도, data.go.kr); this license grants
+no rights in it, and You must comply with those terms.
 
 1. Allowed use
-You may use, copy, modify, and run the Software privately, including
-for personal, educational, and internal use. You may redistribute the
-Software and modified versions, and you may run a public deployment,
-only if you comply with sections 2, 3, and 4 and the deployment is not
-a commercial service.
+Subject to Your compliance with this license, Licensor grants You a
+worldwide, non-exclusive, non-transferable, non-sublicensable,
+royalty-free license to use, copy, modify, and run the Software
+privately, including for personal, educational, and internal use. You
+may redistribute the Software and modified versions, and you may run a
+Public Deployment, only if you comply with sections 2, 3, 4, and 5 and
+the deployment is not a Commercial Service. Each person who receives
+the Software from You receives this license directly from Licensor.
 
 2. No commercial service
-You may not use the Software, or a modified or derivative version, to
-provide a commercial service. A commercial service means offering the
-Software's world, client, or backend to third parties for a fee,
-subscription, advertising, sponsorship, or other commercial advantage.
+You may not use the Software, or a Derivative, to provide a Commercial
+Service.
 
 A copy with a different name, region, text, or branding is still
-subject to this section when it contains a substantial part of the
+subject to this section when it contains a Substantial Part of the
 Software.
 
 You may not sell, license, or otherwise commercially exploit the
@@ -97,6 +142,9 @@ Original Assets on their own or as part of another product.
 
 This section does not limit 김도훈 (CrazyLabs) from operating or
 licensing the Software, including as a commercial service.
+
+Commercial use requires a separate written license from Licensor.
+Contact CrazyLabs at https://crazylabs.co.kr.
 
 3. Attribution
 The copyright notice and this license must stay with every copy or
@@ -107,6 +155,12 @@ to "CrazyLabs (https://crazylabs.co.kr)" and "Bumpinto World
 (https://bumpinto.world)" in the user interface, including the world
 gate badge and the bottom attribution bar.
 
+You may not remove, alter, or obscure any copyright, license,
+authorship, or attribution notice in the Software, including file
+headers, this LICENSE file, generated data attribution fields (such as
+meta.attribution), the world gate badge, the bottom attribution bar,
+and the OpenStreetMap and other third-party attributions.
+
 4. Earlier versions
 Copies obtained under the previous "MIT License with Attribution
 Requirement (Bumpinto World / CrazyLabs)" remain under that license.
@@ -115,21 +169,123 @@ This text applies to versions distributed with this file.
 5. Trademarks
 This license grants no rights to use the names "Bumpinto World" or
 "CrazyLabs", or any of their logos, marks, or domain names, except as
-required to give the attribution in section 3. You may not use them
-as the name of your deployment, product, or service, or in a way that
-suggests your copy is official or endorsed by 김도훈 (CrazyLabs).
+required to give the attribution in section 3. You may not use them,
+or any confusingly similar name, mark, logo, or domain name (for
+example "Bumpinto", "Bump Into World", or a domain containing them),
+as the name of your deployment, product, service, account, or domain,
+or in a way that suggests your copy is official or endorsed by
+김도훈 (CrazyLabs).
+
+A fork, modified version, or Public Deployment must use its own name
+that is not confusingly similar, and must still give the attribution
+required by section 3. That attribution is a statement of origin and
+is not a trademark license.
 
 6. Contributions
 Contributions to this repository (for example pull requests, patches,
 assets, and data) are accepted under the Contributor License terms in
 CONTRIBUTING.md. Contributed code and Original Assets are distributed
 to the public under this license. Contributed data that is part of an
-ODbL database is distributed under the ODbL.
+ODbL database is distributed under the ODbL. Licensor will not merge a
+Contribution unless its contributor has agreed to those terms,
+including the commit sign-off described in CONTRIBUTING.md.
 
+7. Acceptance
+By using, copying, modifying, deploying, or distributing any part of
+the Software, You accept this license. If You do not accept it, You
+have no right to do any of those things, except as applicable law
+permits without a license.
+
+8. Termination
+Your rights under this license end automatically if You breach any of
+its terms.
+
+If it is Your first breach of this license and the breach was not
+willful, Your rights are reinstated if You fully cure the breach
+within 30 days after You first receive notice of it from Licensor or
+otherwise become aware of it. A later breach, or a willful breach,
+ends Your rights without a cure period.
+
+When Your rights end, You must immediately stop using, deploying, and
+distributing the Software and all Derivatives, and delete or destroy
+all copies in Your possession or control, except copies that
+applicable law requires You to keep. Termination does not end the
+license of anyone who received the Software from You in compliance
+with this license, as long as they continue to comply.
+
+Sections 2, 3, 5, 8, 9, 10, 11, 13, 14, and 15, and any liability for
+a breach that happened before termination, survive termination.
+
+9. Reservation of rights
+All rights not expressly granted in this license are reserved by
+Licensor. No license or right is granted by implication, estoppel, or
+otherwise. This license grants no patent license and no trademark
+rights, other than the limited use of names stated in sections 3 and
+5. Licensor may offer the Software under other terms, including
+commercial licenses.
+
+10. Remedies
+Any use, copying, modification, deployment, or distribution of the
+Software outside the scope of section 1, including any use in breach
+of section 2, is not licensed. It is an infringement of Licensor's
+copyright and other rights, and not only a breach of contract.
+
+Licensor may seek any remedy available under applicable law, including
+injunctive and other provisional relief (such as 가처분), damages, and
+the removal or destruction of infringing copies. You agree that a
+breach of section 2, 3, or 5 may cause Licensor harm that money alone
+cannot fully repair. To the extent permitted by applicable law, You
+will pay Licensor's reasonable costs of enforcing this license against
+You, including attorneys' fees.
+
+11. Authorship and provenance
+The Git history of the official repository
+(https://github.com/dohoon84/bumpinto-world), including its commit
+authors, dates, and sign-offs, together with the copyright, license,
+and attribution notices in the Software, is the record of the
+authorship of the Software and of when its parts were created and
+published, and You agree that it may be relied on as evidence of that
+authorship and those dates. Removing or altering those notices is prohibited (see
+section 3).
+
+12. New versions of this license
+Licensor may publish revised versions of this license. Each copy of
+the Software is governed by the version of this license distributed
+with it. Licensor may apply a revised version to later releases.
+Section 4 continues to apply to copies obtained under the earlier
+license.
+
+13. Governing law and jurisdiction
+This license, and any dispute arising out of or relating to it or to
+the Software, is governed by the laws of the Republic of Korea,
+without regard to its conflict-of-laws rules. The Seoul Central
+District Court (서울중앙지방법원) has exclusive jurisdiction as the
+court of first instance. This does not prevent Licensor from seeking
+injunctive or other provisional relief in any other court with
+jurisdiction.
+
+14. General
+- Severability. If any provision of this license is held invalid or
+  unenforceable, it will be enforced to the maximum extent permitted,
+  and the remaining provisions stay in full force.
+- Entire agreement. This license is the entire agreement between You
+  and Licensor about the Software, unless You and Licensor have signed
+  a separate written agreement, which then prevails to the extent it
+  conflicts with this license. For contributors, the Contributor
+  License terms in CONTRIBUTING.md also apply to their Contributions.
+- No waiver. Licensor's failure or delay in enforcing any provision is
+  not a waiver of that provision or of any other right. A waiver is
+  effective only if it is in writing and signed by Licensor.
+- Assignment. Licensor may assign or transfer this license and its
+  rights under it. You may not assign or transfer Your rights under
+  this license.
+
+15. No warranty; limitation of liability
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
 AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+SOFTWARE. THIS SECTION APPLIES TO THE MAXIMUM EXTENT PERMITTED BY
+APPLICABLE LAW.

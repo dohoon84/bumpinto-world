@@ -20,6 +20,7 @@
 - [ ] 네이버·카카오·구글 지도 등에서 데이터를 긁어오거나 트레이싱하지 않았습니다 — No data scraped or traced from Naver/Kakao/Google maps
 - [ ] 사용한 데이터 출처를 위에 적었고, OSM 출처 표기를 유지했습니다 — Data sources are listed above and OSM attribution is kept
 - [ ] API 키·토큰·`.env` 같은 비밀값이 없습니다 — No secrets committed
+- [ ] 모든 커밋에 `Signed-off-by` 서명이 있습니다 (`git commit -s`) — Every commit is signed off
 - [ ] **I agree to the Contributor License terms in [CONTRIBUTING.md](https://github.com/dohoon84/bumpinto-world/blob/develop/CONTRIBUTING.md#cla)** (CONTRIBUTING.md의 기여자 라이선스 약관에 동의합니다)
 
 ## 📸 스크린샷 (Screenshots)

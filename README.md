@@ -343,5 +343,5 @@ export default {
 - 지도 데이터 © OpenStreetMap contributors, [ODbL](https://www.openstreetmap.org/copyright). 화면 오른쪽 아래에 표시됩니다. `public/jeongja.json`은 ODbL 파생 데이터베이스입니다.
 - 코리더(`public/corridor/`) 건물: Overture Maps buildings(ODbL) footprint 보조, 높이 일부는 브이월드 GIS건물통합정보(국토교통부).
 - three.js (MIT).
-- 기여 방법과 기여자 라이선스 약관(CLA, 초안)은 [CONTRIBUTING.md](./CONTRIBUTING.md)를 보세요.
-- 노선 유형: 경기버스정보(gbis.go.kr). 버스 도색 색상 출처는 위 "버스 도색 매핑과 출처" 참고. 실시간 데이터(사용 시): 공공데이터포털(data.go.kr) 경기도 버스 API, 공공누리 조건 확인 필요.
+- 기여 방법과 기여자 라이선스 약관(CLA)은 [CONTRIBUTING.md](./CONTRIBUTING.md)를 보세요.
+- 노선 유형: 경기버스정보(gbis.go.kr). 버스 도색 색상 출처는 위 "버스 도색 매핑과 출처" 참고. 실시간 데이터(사용 시): 공공데이터포털(data.go.kr) 경기도 버스 API. 외부 데이터(브이월드/국토교통부, GBIS/경기도, data.go.kr)는 각 제공처의 이용 조건을 따르며, 이 저장소의 LICENSE는 그 데이터에 대한 권리를 주지 않습니다.
