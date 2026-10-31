@@ -211,7 +211,7 @@ const corridorClock = { simTime: () => null };
 // [corridor] 정자 → 롯데월드타워 코리더: 탄천 구간 도로는 terrain.build 전에 annotate 해야 다리 구조물이 같이 생긴다
 let ride = null; // [ride] mountRide (코리더가 있을 때만)
 const corridor = corridorData ? createCorridor({ scene, corridorData, terrain, world, renderer, overlay, params, getSimTime: () => corridorClock.simTime() }) : null;
-if (terrain) { terrain.build(scene, world, overlay); world.groundY = terrain.getGroundHeight; }
+if (terrain) { terrain.build(scene, world, overlay); world.groundY = terrain.getGroundHeight; world.vehicleY = terrain.getVehicleHeight; }
 if (corridor) {
   corridor.afterTerrain();
   const liveBlocked = world.isBlocked, liveOnRoad = world.onRoad;
@@ -1761,7 +1761,7 @@ ride = corridor && params.get('ride') !== '0' ? mountRide({
   emitNow: () => emitMyStateNow(),
   myId: () => remotes.myId,
   // [ride] 정자 버스 탑승: ?bus=sim 일 때만(정자 시뮬 버스가 정류장에 섬). 기본 실시간 모드에선 null → 정자 동작 그대로
-  jzBuses: transit?.rideSim ? (() => { const a = Object.assign(Object.create(transit.rideSim), { gy: (x, z, ref = 0) => (terrain ? terrain.getGroundHeight(x, z, ref) : 0) }); return () => a; })() : null,
+  jzBuses: transit?.rideSim ? (() => { const a = Object.assign(Object.create(transit.rideSim), { gy: (x, z, ref = 0) => (terrain ? terrain.getGroundHeight(x, z, ref) : 0), vgy: (x, z, ref = 0) => (terrain ? terrain.getVehicleHeight(x, z, ref) : 0) }); return () => a; })() : null,
   params,
   // [ride] 정자 안을 달리는 호출 택시가 피해야 할 정자 라이브 택시·버스(읽기만)
   liveObstacles: (x, z, R) => {

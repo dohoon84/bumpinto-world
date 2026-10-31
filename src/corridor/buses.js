@@ -28,6 +28,7 @@ function shelterGeos() {
 export function createCorridorBuses(root, T, { crossings, terrain, overlay, liveBox, proxy, mode = 'sim', gg = false }) {
   const group = new THREE.Group(); group.name = 'corridorBuses'; root.add(group);
   const gy = (x, z, ref = 0) => (terrain ? terrain.getGroundHeight(x, z, ref) : 0);
+  const vgy = (x, z, ref = 0) => (terrain ? (terrain.getVehicleHeight || terrain.getGroundHeight)(x, z, ref) : 0); // [vehicle-h] 버스는 다리 상판을 따라감
   const data = { ...T, crossings: crossings.crossings };
   const big = { x0: -1e6, x1: 1e6, z0: -1e6, z1: 1e6 };
   const sim = new SimulatedBusSource(data, big, { seed: 7, spacing: true }); // [bus-net] 노선 간 간격·정류장 2번째 칸
@@ -133,7 +134,7 @@ export function createCorridorBuses(root, T, { crossings, terrain, overlay, live
       seen.add(v.id);
       let a = active.get(v.id);
       if (!a) { a = take(v); active.set(v.id, a); }
-      const y = gy(v.x, v.z, a.m.position.y || 0);
+      const y = vgy(v.x, v.z, a.m.position.y || 0);
       a.m.position.set(v.x, y + 0.08, v.z); a.m.rotation.y = v.heading; a.m.scale.setScalar(v.scale);
       a.m.userData.state = v.state;
       const hide = hideIds.has(v.id); // [ride] 내가 타고 있는 버스는 탑승용 모델이 대신 그린다
@@ -159,7 +160,7 @@ export function createCorridorBuses(root, T, { crossings, terrain, overlay, live
     },
     get panelStop() { return panelStop; },
     // [ride] 탑승 연동
-    stops, stopById, hideIds, ctx, gy,
+    stops, stopById, hideIds, ctx, gy, vgy,
     setRideHint(fn) { rideHint.fn = fn; },
     refreshPanel() { acc = 1; },
     stats: () => ({ sim: sim.buses.length, rendered, stops: stops.length, paths: sim.paths.length, live: source.stats?.live || 0, livePolls: source.stats?.polls || 0, liveFail: source.stats?.fail || 0, pool: [...pool.values()].reduce((a, l) => a + l.length, 0) }),

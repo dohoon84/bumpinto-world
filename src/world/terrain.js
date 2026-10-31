@@ -6,6 +6,7 @@
 //     baseHeight(x, z)            지형(제방/둔치/하상) 높이 — 다리/계단 제외
 //     renderHeight(x, z)          메시에 쓰는 높이 (계단 자리만 살짝 깎음) — world.js 가 data.heightAt 으로 사용
 //     getGroundHeight(x, z, refY) 걸을 수 있는 표면 높이 (= groundY). 계단은 한 칸씩 계단식, 다리 상판은 refY 근처일 때만 선택
+//     getVehicleHeight(x, z, refY) 차량용 높이 — 다리 상판을 끝/옆 여유까지 이어서 따라감(refY 보다 V_UP(0.6m, 보행자 한 걸음과 같음) 넘게 높은 상판은 무시)
 //     canMove(x0, z0, y0, x1, z1) 플레이어 이동 판정 -> 새 y 또는 null(막힘: 가파른 제방, 다리 난간 밖, 큰 단차)
 //     annotate(data)              buildWorld 전에 호출: 도로 점에 높이(p[2]) 부여, 수면 높이, 하천 안 공원 폴리곤 분리
 //     build(scene, world, overlay) buildWorld 후 호출: 바닥 평면 구멍 + 하천 지형 메시 + 계단 + 다리 구조물
@@ -127,6 +128,43 @@ export function createTerrain(T, data) {
       const s = deckSample(d, x, z);
       if (!s || s.h <= h || s.h > refY + MAX_STEP + 0.1) continue;
       h = s.h;
+    }
+    return h;
+  }
+  // [vehicle-h] 차량 전용 높이: 차는 다리 상판을 끊김 없이 따라간다(보행자 getGroundHeight 는 그대로 — 다리 밑 둔치 걷기 유지).
+  //   - 상판 판정 범위를 옆으로 V_PAD, 양 끝으로 V_EXT 만큼 넓힌다 → 상판 시작 직전 낮아진 제방(차선 오프셋 쪽)에서 빠지지 않음
+  //   - refY(지금 차 높이)보다 V_UP(0.6m) 넘게 높은 상판은 무시 → 둔치(-6m)를 달리는 차는 다리 밑을 그대로 지나감
+  //   - 지형이 0m(제방 위·평지)인 곳은 상판을 보지 않으므로 정자 평지 도로에서는 getGroundHeight 와 같다
+  //   - 끝 연장 V_EXT 뒤로 V_RAMP_L 동안은 경사 V_RAMP 로 천천히 내려가는 가상 경사로(제방이 상판 끝보다 더 멀리 낮아진 곳에서도 뚝 떨어지지 않음)
+  const V_UP = 0.6, V_PAD = 2.0, V_EXT = 10, V_RAMP = 0.12, V_RAMP_L = 30;
+  let vGrid = null, vGridN = -1;
+  function vehicleGrid() {
+    if (vGrid && vGridN === decks.length) return vGrid;
+    vGrid = new SegGrid(20); vGridN = decks.length;
+    for (const d of decks) {
+      const dx = d.bx - d.ax, dz = d.bz - d.az, L = Math.hypot(dx, dz) || 1, ux = dx / L, uz = dz / L, pad = d.hw + V_PAD + 0.5;
+      const E = V_EXT + V_RAMP_L, x0 = d.ax - ux * E, z0 = d.az - uz * E, x1 = d.bx + ux * E, z1 = d.bz + uz * E;
+      vGrid.add(d, Math.min(x0, x1) - pad, Math.min(z0, z1) - pad, Math.max(x0, x1) + pad, Math.max(z0, z1) + pad);
+    }
+    return vGrid;
+  }
+  function deckSampleV(d, x, z) {
+    const x0 = d.ax, z0 = d.az, dx = d.bx - x0, dz = d.bz - z0, L2 = dx * dx + dz * dz || 1, L = Math.sqrt(L2);
+    const tr = ((x - x0) * dx + (z - z0) * dz) / L2;
+    const out = Math.max(-tr * L, (tr - 1) * L); // 상판 끝 밖으로 나간 거리(안쪽이면 음수)
+    if (out > V_EXT + V_RAMP_L) return null;
+    const t = Math.max(0, Math.min(1, tr));
+    const hw = d.hw0 != null ? d.hw0 + (d.hw1 - d.hw0) * t : d.hw;
+    const lat = Math.abs((x - x0) * dz - (z - z0) * dx) / L; // 상판 중심선까지 옆 거리(끝 연장 구간 포함)
+    if (lat > hw + V_PAD) return null;
+    return (d.h0 != null ? d.h0 + (d.h1 - d.h0) * t : d.h) - Math.max(0, out - V_EXT) * V_RAMP;
+  }
+  function getVehicleHeight(x, z, refY = Infinity) {
+    let h = getGroundHeight(x, z, refY);
+    if (h < -0.001) for (const d of vehicleGrid().query(x, z)) {
+      const dh = deckSampleV(d, x, z);
+      if (dh == null || dh <= h || dh > refY + V_UP) continue;
+      h = dh;
     }
     return h;
   }
@@ -444,5 +482,5 @@ export function createTerrain(T, data) {
     }
     return pts.length > 6 ? pts : null;
   }
-  return { params: P, baseHeight, renderHeight, getGroundHeight, groundY: getGroundHeight, canMove, annotate, build, stairs, decks, addDeckSegment, project, riversideRoute, bankPath, stairAt, grade };
+  return { params: P, baseHeight, renderHeight, getGroundHeight, groundY: getGroundHeight, getVehicleHeight, vehicleY: getVehicleHeight, deckAt, canMove, annotate, build, stairs, decks, addDeckSegment, project, riversideRoute, bankPath, stairAt, grade };
 }

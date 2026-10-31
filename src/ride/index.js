@@ -120,6 +120,16 @@ export function mountRide({ corridor, getPlayer, remotes, camera, cam, setMode, 
     contCache.set(P, { key, c: best });
     return best;
   }
+  function reparentBus(mesh, par) {
+    if (mesh.parent === par) return;
+    mesh.updateMatrixWorld(true); par.updateMatrixWorld(true);
+    const e = mesh.matrixWorld.elements, pe = par.matrixWorld.elements;
+    const wyaw = Math.atan2(e[8], e[10]), pyaw = Math.atan2(pe[8], pe[10]);
+    tmpV.setFromMatrixPosition(mesh.matrixWorld); par.worldToLocal(tmpV);
+    par.add(mesh);
+    mesh.position.copy(tmpV); mesh.rotation.set(0, wyaw - pyaw, 0); mesh.scale.set(1, 1, 1);
+    mesh.updateMatrixWorld(true);
+  }
   function transferBus(c) {
     const r = ride, old = sysOf(r.P), b = r.b, Q = c.Q, nbs = c.bs;
     const over = Math.max(0, b.s - r.P.L);
@@ -132,7 +142,10 @@ export function mountRide({ corridor, getPlayer, remotes, camera, cam, setMode, 
       nb = nbs.sim._spawn(Q, Math.max(0.01, over)); nb.v = b.v; nb.age = 9;
     }
     nb.stopIdx = Q.stops.findIndex((st) => st.s > nb.s + 1); if (nb.stopIdx < 0) nb.stopIdx = Q.stops.length;
-    (nbs.group.parent || nbs.group).attach(r.mesh); // 코리더 버스 그룹은 정자 안에서 숨으므로 그 부모(항상 보임)에 붙임
+    // 코리더 버스 그룹은 정자 안에서 숨으므로 그 부모(항상 보임)에 붙임.
+    // [bus-fix] attach() 는 월드 변환을 보존하며 회전을 (±180°, 180°-yaw, ±180°) 같은 다른 오일러로 풀어 버려,
+    //   이후 placeBus 가 rotation.y 만 고치면 차가 옆으로/거꾸로 달렸다 → add() 후 회전을 (0, 월드 yaw - 부모 yaw, 0) 으로 다시 세운다
+    reparentBus(r.mesh, nbs.group.parent || nbs.group);
     r.b = nb; r.P = Q; r.path = pathIdxOf(Q); r.startS = nb.s; r.fromIdx = -1; r.annIdx = -1; r.lastDwellIdx = -1; r.legs = (r.legs || 1) + 1;
     nbs.hideIds.add(nb.id);
     stats.transfers = (stats.transfers || 0) + 1;
@@ -203,8 +216,9 @@ export function mountRide({ corridor, getPlayer, remotes, camera, cam, setMode, 
   function placeBus(dt) {
     const r = ride, b = r.b, q = samplePath(r.P, b.s), bs = sysOf(r.P);
     const hd = Math.atan2(q.dx, q.dz);
-    const y = bs.gy(q.x, q.z, r.mesh.position.y || 0) + 0.08;
+    const y = (bs.vgy || bs.gy)(q.x, q.z, r.mesh.position.y || 0) + 0.08; // [vehicle-h] 차량 높이(다리 상판을 따라감)
     if (!r.placed) { r.mesh.rotation.y = hd; r.placed = true; }
+    r.mesh.rotation.x = 0; r.mesh.rotation.z = 0; // [bus-fix] 탑승 버스는 항상 수평(yaw 만)
     r.mesh.position.set(q.x, y, q.z);
     r.mesh.rotation.y += Math.atan2(Math.sin(hd - r.mesh.rotation.y), Math.cos(hd - r.mesh.rotation.y)) * Math.min(1, dt * 10 || 1);
     r.mesh.updateMatrixWorld(true);
