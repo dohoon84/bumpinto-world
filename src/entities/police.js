@@ -177,6 +177,7 @@ export class Police {
     this.transit = transit;
     this.world = world;
     this.groundY = world?.groundY || null;
+    this.vehicleY = world?.vehicleY || this.groundY; // [vehicle-h] 순찰차는 다리 상판을 따라감(경찰관 걷기는 groundY 그대로)
     this.list = [];
     this.cool = 8;
     this.busy = null;
@@ -461,7 +462,7 @@ export class Police {
     if (!car.posed) car.heading = hd;
     car.posed = true;
     car.heading += Math.atan2(Math.sin(hd - car.heading), Math.cos(hd - car.heading)) * Math.min(1, dt * 6);
-    const y = this.groundY ? this.groundY(x, z, car.mesh.position.y || 0) : 0;
+    const y = this.vehicleY ? this.vehicleY(x, z, car.mesh.position.y || 0) : 0;
     car.mesh.position.set(x, y + 0.02, z);
     car.mesh.rotation.y = car.heading;
     const spin = (car.v || 0) * dt / 0.33;

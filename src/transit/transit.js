@@ -19,6 +19,18 @@ export function flatMesh(pos, idx, color) {
   const m = new THREE.Mesh(g, new THREE.MeshLambertMaterial({ color, polygonOffset: true, polygonOffsetFactor: -2 })); m.receiveShadow = true; return m;
 }
 
+// [bus-net] 정자 ?bus=sim 전용 추가 경로(public/corridor/jz-sim.json: GBIS 정류소 순서 → OSM 차도)를 원본을 건드리지 않고 덧붙인 사본.
+//   경로 번호는 기존 뒤에 이어 붙여 기존 경로 인덱스는 그대로다. 실시간 모드(기본)는 이 함수를 부르지 않는다.
+export function mergeSimExtra(T, X) {
+  if (!X?.paths?.length) return T;
+  const routes = T.routes.map((r) => ({ ...r, paths: [...(r.paths || [])] })), byId = new Map(routes.map((r) => [r.id, r]));
+  for (const r of X.routes || []) if (!byId.has(r.id)) { const c = { ...r, paths: [] }; routes.push(c); byId.set(r.id, c); }
+  const paths = [...T.paths];
+  for (const p of X.paths) { const id = paths.length; paths.push({ ...p, id, simExtra: true }); byId.get(p.route)?.paths.push(id); }
+  const refTypes = { ...T.refTypes }; for (const r of X.routes || []) if (!refTypes[r.ref] && r.type) refTypes[r.ref] = { type: r.type, src: r.src, gbis: r.gbis };
+  return { ...T, routes, paths, refTypes };
+}
+
 export function buildTransit(scene, T, world, overlay, { mode = 'sim', proxy } = {}) {
   const bounds = world.bounds;
   let simTime = 0;

@@ -21,7 +21,7 @@ const VCAP = 27.8;
 export class Taxis {
   constructor(scene, overlay, { drive, data, transit, world, count = 24, seed = 7 }) {
     this.scene = scene; this.overlay = overlay; this.transit = transit; this.world = world; this.list = [];
-    this.groundY = world?.groundY || null;
+    this.groundY = world?.vehicleY || world?.groundY || null; // [vehicle-h] 차량: 다리 상판을 따라감
     let s = seed; this.rnd = () => ((s = (s * 16807) % 2147483647) / 2147483647);
     this.bb = data.meta.bboxLocal;
     this._graph(drive, data);
