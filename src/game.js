@@ -1773,6 +1773,8 @@ ride = corridor && params.get('ride') !== '0' ? mountRide({
   canBoard: () => joined && !board.open && !trucks?.current,
   emitNow: () => emitMyStateNow(),
   myId: () => remotes.myId,
+  // [ride] 정자 버스 탑승: ?bus=sim 일 때만(정자 시뮬 버스가 정류장에 섬). 기본 실시간 모드에선 null → 정자 동작 그대로
+  jzBuses: transit?.rideSim ? (() => { const a = Object.assign(Object.create(transit.rideSim), { gy: (x, z, ref = 0) => (terrain ? terrain.getGroundHeight(x, z, ref) : 0) }); return () => a; })() : null,
   params,
   // [ride] 정자 안을 달리는 호출 택시가 피해야 할 정자 라이브 택시·버스(읽기만)
   liveObstacles: (x, z, R) => {
