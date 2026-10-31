@@ -62,8 +62,31 @@ export function nearestCurbEdge(cars, x, z, { R = 60, allow = null } = {}) {
     const score = d + (right ? 0 : (w.ow ? 6 : 18));
     if (score < bd) { bd = score; best = { from, to: e.to, way: e.way, u, L, d, right, x: qx, z: qz }; }
   };
-  for (let i = c0; i <= c1; i++) for (let j = r0; j <= r1; j++) for (const e of cars.cells.get(i + ',' + j) || []) consider(e.from, e);
+  for (let i = c0; i <= c1; i++) for (let j = r0; j <= r1; j++) for (const e of (cars.curbCells || cars.cells).get(i + ',' + j) || []) consider(e.from, e); // [ride] curbCells: 정자 덧붙인 길 포함
   // cells 에는 정자 라이브 영역 간선이 없을 수 있다 → 근처에서 못 찾으면 노드 전수(가까운 것만)
   if (!best) for (let n = 0; n < cars.nodes.length; n++) { const a = cars.nodes[n]; if (Math.abs(a.x - x) > R * 2 || Math.abs(a.z - z) > R * 2) continue; for (const e of a.out) consider(n, e); }
   return best;
+}
+
+// [ride] '세워주세요': 지금 달리는 경로(t.cum/t.segs/t.sigQ)에서 안전하게 설 수 있는 첫 길가 지점.
+//   - 지금 속도로 편하게 멈출 수 있는 거리(v²/2·dec + margin) 이후
+//   - 고속도로·간선 램프(motorway/trunk/*_link) 제외, 다른 길로 바뀌는 지점(교차로) ±junction m 제외
+//   - 신호 횡단보도(sigQ) ±cross m, nearCrossing(s) 가 true 인 곳(일반 횡단보도 등) 제외
+//   - 목적지 정차 지점(endS) 보다 가까워야 함. 없으면 null(곧 목적지)
+// 반환: { s, seg(인덱스), way } — curb(길가 옆 거리)는 호출 쪽이 차선 오프셋으로 계산
+export function findStopAhead(t, ways, { dec = 3, margin = 14, minAhead = 22, junction = 16, cross = 18, step = 6, endS = null, nearCrossing = null } = {}) {
+  const end = endS ?? t.cum[t.cum.length - 1];
+  const segs = t.segs || [];
+  const joints = [];
+  for (let i = 0; i + 1 < segs.length; i++) if (segs[i + 1].way !== segs[i].way) joints.push(segs[i].sEnd);
+  for (let s = t.s + Math.max(minAhead, (t.v * t.v) / (2 * dec) + margin); s < end - 8; s += step) {
+    const gi = segs.findIndex((g) => g.sEnd >= s); if (gi < 0) return null;
+    const g = segs[gi], w = ways[g.way];
+    if (!w || /^(motorway|trunk)|_link$/.test(w.k)) continue;
+    if (joints.some((j) => Math.abs(j - s) < junction)) continue;
+    if ((t.sigQ || []).some((q) => Math.abs(q.s - s) < cross)) continue;
+    if (nearCrossing && nearCrossing(s)) continue;
+    return { s, seg: gi, way: g.way };
+  }
+  return null;
 }

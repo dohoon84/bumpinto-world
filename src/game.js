@@ -317,7 +317,7 @@ const busProxy = proxyParam === 'local'
     : (params.has('shot') && !busParam ? '' : DEFAULT_BUS_PROXY);
 const busMode = busParam === 'sim' ? 'sim' : (busParam === 'realtime' || busProxy) ? 'realtime' : 'sim';
 const transit = transitData ? buildTransit(scene, transitData, world, overlay, { mode: busMode, proxy: busProxy }) : null;
-corridor?.attachLife({ proxy: busProxy, mode: busMode }); // [corridor] 수내→롯데 버스·차량·보행 NPC (?clife=0 끔)
+corridor?.attachLife({ proxy: busProxy, mode: busMode, ...(params.get('ride') !== '0' ? { liveDrive: driveData, liveCrossings: transitData?.crossings } : {}) }); // [corridor] 수내→롯데 버스·차량·보행 NPC (?clife=0 끔) · [ride] 정자 차도는 택시 호출용으로만 덧붙임
 if (transit) {
   corridorClock.simTime = () => transit.simTime; // [corridor] 코리더 신호등도 같은 시계
   npcs.guard = makeCrossingGuard(transit);
@@ -1758,6 +1758,14 @@ ride = corridor && params.get('ride') !== '0' ? mountRide({
   canBoard: () => joined && !board.open && !trucks?.current,
   emitNow: () => emitMyStateNow(),
   myId: () => remotes.myId,
+  params,
+  // [ride] 정자 안을 달리는 호출 택시가 피해야 할 정자 라이브 택시·버스(읽기만)
+  liveObstacles: (x, z, R) => {
+    const out = [];
+    for (const t of taxis?.list || []) { const q = t.mesh.position; if (Math.abs(q.x - x) > R || Math.abs(q.z - z) > R) continue; const [sx, sz, dx, dz] = taxis._sample(t, t.s); out.push({ x: sx, z: sz, dx, dz, t }); }
+    for (const b of transit?.source?.vehicles?.() || []) if (Math.abs(b.x - x) < R && Math.abs(b.z - z) < R) out.push({ x: b.x, z: b.z, dx: Math.sin(b.heading ?? 0), dz: Math.cos(b.heading ?? 0), bus: true });
+    return out;
+  },
 }) : null;
 if (ride) { ride.setOverlay(overlay); remotes.rideHook = (p, dt) => ride.remoteHook(p, dt); }
 const perfHud = mountPerfHud({ renderer, corridor, params });
@@ -1891,6 +1899,7 @@ input.onKey = (e) => {
   if (e.code === 'Enter') { e.preventDefault(); chatInput.focus(); }
   if (e.code === 'KeyE' && !e.repeat && !ride?.handleE()) toggleRide(); // [ride] 버스·택시 탑승/하차가 우선, 아니면 카카오바이크
   if (e.code === 'KeyY' && !e.repeat && ride && joined) ride.hail(); // [ride] 택시 호출
+  if (e.code === 'KeyX' && !e.repeat && ride?.ride?.mode === 'taxi') ride.requestStop(); // [ride] 택시 '세워주세요'
   if (e.code === 'KeyV' && !e.repeat && ride?.active) ride.toggleCam(); // [ride] 창가 1인칭 ↔ 뒤쪽 3인칭
   if (e.code === 'KeyU' && !e.repeat) umbrellas.handleHotkeyU();
   if (e.code === 'KeyG' && !e.repeat && dogPark.nearGate) dogPark.toggleGate();

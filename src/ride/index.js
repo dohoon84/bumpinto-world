@@ -18,11 +18,24 @@ import { charge } from './fare.js';
 import { createRideLog } from './rideLog.js';
 import { createWallet } from './wallet.js';
 import { createRideBus } from './cabin.js';
-import { astar, routeLength, nearestCurbEdge } from './route.js';
+import { astar, routeLength, nearestCurbEdge, findStopAhead } from './route.js';
+import { createRideSound, announceText } from './sound.js';
 
 const BOARD_R = 12, HOLD_MAX = 20, CO_R = 40, GHOST_JOIN = 16, FF = 6;
 const TAXI_CALL_TIMEOUT = 240, TAXI_WALK_AWAY = 160, TAXI_BOARD_R = 10;
 const LIV_KEYS = Object.keys(TAXI_LIVERIES);
+// [ride] 일반 주행 택시 속도 배수: 도로 종류별 기본 속도(차량별 편차 vf 제외) × 2.2, 상한 100km/h(entities/taxis.js VCAP)
+//   → 간선(secondary) ≈95, primary/trunk 100, tertiary ≈79, 주택가 ≈55 km/h. 빨리감기 ×6·즉시 도착은 이 위에서 그대로
+const TAXI_VMUL = 2.2;
+const ANN_SEC = 9; // [ride] 정류장 도착 몇 초 전에 안내 방송
+// [ride] 정자(라이브) 목적지 — 정자 차도가 붙어 있을 때(cars.jz)만 목록에 나옴. 좌표는 jeongja.json 라벨/역 출구(같은 로컬 좌표계)
+const JZ_DESTS = [
+  { id: 'jz-station', ko: '정자역', en: 'Jeongja Stn.', x: 5.7, z: 31.4 },
+  { id: 'jz-naver', ko: '네이버 그린팩토리', en: 'Naver Green Factory', x: -288, z: 776 },
+  { id: 'jz-doosan', ko: '분당두산타워', en: 'Doosan Tower', x: -255, z: 256 },
+  { id: 'jz-cafe', ko: '정자동 카페거리', en: 'Jeongja Café Street', x: 512, z: 365 },
+  { id: 'jz-kftc', ko: '금융결제원', en: 'KFTC', x: -312, z: -366 },
+];
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 const L = (ko, en) => (isEn() ? en : ko);
 
@@ -35,7 +48,7 @@ export function parseRideSit(s) {
   return null;
 }
 
-export function mountRide({ corridor, getPlayer, remotes, camera, cam, setMode, canvas, travel, handset, prepare, canBoard, emitNow, myId }) {
+export function mountRide({ corridor, getPlayer, remotes, camera, cam, setMode, canvas, travel, handset, prepare, canBoard, emitNow, myId, params = null, liveObstacles = null }) {
   const pl = getPlayer;
   const log = createRideLog();
   const wallet = createWallet();
@@ -48,27 +61,40 @@ export function mountRide({ corridor, getPlayer, remotes, camera, cam, setMode, 
   const ghosts = new Map(); // key -> { mesh, kind, P?, path?, pos, ry, dwell, peers, used }
   let ghostSeq = 0;
   const tmpV = new THREE.Vector3(), tmpV2 = new THREE.Vector3();
-  const stats = { boards: 0, alights: 0, charges: [] };
+  const stats = { boards: 0, alights: 0, charges: [], announces: [], bells: 0 };
+  const sound = createRideSound({ params });
+  const JZ = () => !!TR()?.cars?.jz; // 정자 차도가 코리더 그래프에 붙어 있음(정자에서도 택시)
 
   // ---------- HUD ----------
   const hud = document.createElement('div'); hud.id = 'ride-hud'; hud.hidden = true; document.body.appendChild(hud);
   const toastEl = document.createElement('div'); toastEl.id = 'ride-toast'; toastEl.hidden = true; document.body.appendChild(toastEl);
   const panel = document.createElement('div'); panel.id = 'ride-taxi-panel'; panel.hidden = true; document.body.appendChild(panel);
-  let toastT = 0;
+  const capEl = document.createElement('div'); capEl.id = 'ride-caption'; capEl.hidden = true; document.body.appendChild(capEl); // 안내 방송 자막
+  const busCard = document.createElement('div'); busCard.id = 'ride-bus-card'; busCard.hidden = true; document.body.appendChild(busCard); // 좌측 하단 내 버스
+  const mapEl = document.createElement('div'); mapEl.id = 'ride-route-map'; mapEl.hidden = true; document.body.appendChild(mapEl); // 노선도
+  let toastT = 0, capT = 0;
   const toast = (msg, sec = 3.5) => { toastEl.textContent = msg; toastEl.hidden = false; toastT = sec; };
-  hud.addEventListener('click', (e) => {
+  const caption = (txt, sec = 7) => { capEl.innerHTML = `<span class="ic">📢</span>${esc(txt)}`; capEl.hidden = false; capT = sec; };
+  const onHudClick = (e) => {
     const b = e.target.closest('[data-ride]'); if (!b) return;
-    if (b.dataset.ride === 'cam') toggleCam();
-    else if (b.dataset.ride === 'e') handleE();
-    else if (b.dataset.ride === 'cancel') cancelTaxi(true);
-  });
+    const a = b.dataset.ride;
+    if (a === 'cam') toggleCam();
+    else if (a === 'e') handleE();
+    else if (a === 'cancel') cancelTaxi(true);
+    else if (a === 'stop') requestStop();
+    else if (a === 'voice') { sound.setMuted(!sound.muted); toast(sound.muted ? L('🔇 안내 방송·벨 소리 끔', '🔇 Announcements muted') : L('🔊 안내 방송·벨 소리 켬', '🔊 Announcements on'), 1.6); renderHud(); }
+    else if (a === 'map') toggleRouteMap();
+  };
+  hud.addEventListener('click', onHudClick);
+  busCard.addEventListener('click', onHudClick);
+  mapEl.addEventListener('click', (e) => { if (e.target.closest('[data-map=close]') || e.target === mapEl) closeRouteMap(); });
 
   const stopName = (P, i) => B()?.stopById.get(P.stops[i]?.stop)?.name || '';
   const pathIdxOf = (P) => B()?.sim.paths.indexOf(P) ?? -1;
   const terminusOf = (P) => stopName(P, P.stops.length - 1);
   const placeName = (x, z) => {
     let best = null, bd = 700;
-    for (const d of travel?.dests || []) { const dd = Math.hypot(d.x - x, d.z - z); if (dd < bd) { bd = dd; best = d; } }
+    for (const d of [...(travel?.dests || []), ...(JZ() ? JZ_DESTS : [])]) { if (d.x == null) continue; const dd = Math.hypot(d.x - x, d.z - z); if (dd < bd) { bd = dd; best = d; } }
     return best ? L(`${best.ko} 근처`, `near ${best.en}`) : L('길가', 'Roadside');
   };
   const card = () => wallet.card();
@@ -204,12 +230,73 @@ export function mountRide({ corridor, getPlayer, remotes, camera, cam, setMode, 
     bs.hideIds.add(b.id);
     placeBus(dt);
     r.dwell = b.state === 'dwell' && b.dwell > 0;
+    announce(r);
     if (r.dwell && b.stopIdx !== r.fromIdx) {
       if (r.bell) { alightBus('bell'); return; }
       if (b.stopIdx >= P.stops.length - 1) { alightBus('terminus'); return; }
     }
     if (!r.follow && b.stopIdx >= P.stops.length && P.L - b.s < 25) { alightBus('end'); return; }
   }
+
+  // [ride] 정류장 안내 방송: 다음 정류장 도착 ANN_SEC 초 전(또는 80m 안)에 한 번. 내가 탄 버스만
+  function announce(r) {
+    const P = r.P, b = r.b, i = b.stopIdx;
+    if (r.dwell || i >= P.stops.length || i === r.fromIdx || r.annIdx === i) return;
+    const d = P.stops[i].s - b.s;
+    if (d < 0 || d > Math.max(80, (b.v || 0) * ANN_SEC)) return;
+    r.annIdx = i;
+    const en = isEn(), cur = stopName(P, i);
+    if (!cur || cur === r.annName) return; // 같은 이름 정류장이 잇달아 있으면(OSM 양방향/중복 정류장) 한 번만
+    let next = ''; for (let j = i + 1; j < P.stops.length && !next; j++) { const nm = stopName(P, j); if (nm && nm !== cur) next = nm; }
+    const txt = announceText(cur, next, en);
+    if (!txt) return;
+    r.annName = cur;
+    caption(txt);
+    const spoke = sound.say(txt, en);
+    stats.announces.push({ idx: i, text: txt, spoke });
+  }
+
+  // ---------- 노선도 (좌측 하단 버스 번호 / 상단 번호 칩 클릭, X·Esc 닫기) ----------
+  let mapP = null, mapAcc = 0;
+  function toggleRouteMap() { if (!mapEl.hidden) closeRouteMap(); else openRouteMap(); }
+  function openRouteMap(P = ride?.mode === 'bus' ? ride.P : null) { if (!P) return false; mapP = P; renderRouteMap(true); mapEl.hidden = false; return true; }
+  function closeRouteMap() { mapEl.hidden = true; mapP = null; }
+  function renderRouteMap(scroll = false) {
+    const P = mapP; if (!P) return;
+    const en = isEn(), lv = liveryOf(P.type), mine = ride?.mode === 'bus' && ride.P === P ? ride : null;
+    const b = mine?.b, s = b ? b.s : -1, dwell = mine?.dwell;
+    const nextIdx = !b ? -1 : dwell ? b.stopIdx + 1 : b.stopIdx;
+    const n = P.stops.length, col = lv.plain ? '#2c3e6b' : lv.color;
+    // 지리 스케치(SVG): 경로 + 정류장 + 버스 위치
+    const pts = P.pts || []; let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
+    const stride = Math.max(1, Math.floor(pts.length / 160));
+    for (let k = 0; k < pts.length; k += stride) { const q = pts[k]; const x = q.x ?? q[0], z = q.z ?? q[1]; x0 = Math.min(x0, x); x1 = Math.max(x1, x); z0 = Math.min(z0, z); z1 = Math.max(z1, z); }
+    let svg = '';
+    if (pts.length > 1 && Number.isFinite(x0)) {
+      const W = 300, H = 120, sc = Math.min((W - 16) / Math.max(1, x1 - x0), (H - 16) / Math.max(1, z1 - z0));
+      const X = (x) => 8 + (x - x0) * sc + ((W - 16) - (x1 - x0) * sc) / 2, Z = (z) => 8 + (z - z0) * sc + ((H - 16) - (z1 - z0) * sc) / 2;
+      let dpath = ''; for (let k = 0; k < pts.length; k += stride) { const q = pts[k]; dpath += (k ? 'L' : 'M') + X(q.x ?? q[0]).toFixed(1) + ' ' + Z(q.z ?? q[1]).toFixed(1); }
+      const dots = P.stops.map((st, i) => { const q = samplePath(P, st.s); return `<circle cx="${X(q.x).toFixed(1)}" cy="${Z(q.z).toFixed(1)}" r="${i === nextIdx ? 3.6 : 2.2}" class="${b && st.s < s - 1 && i !== nextIdx ? 'past' : i === nextIdx ? 'next' : ''}"/>`; }).join('');
+      const me = b ? samplePath(P, s) : null;
+      svg = `<svg class="geo" viewBox="0 0 ${W} ${H}"><path d="${dpath}" stroke="${col}" /><g>${dots}</g>${me ? `<text x="${X(me.x).toFixed(1)}" y="${(Z(me.z) + 5).toFixed(1)}" class="me">🚌</text>` : ''}</svg>`;
+    }
+    const rows = P.stops.map((st, i) => {
+      const nm = stopName(P, i) || (en ? `Stop ${i + 1}` : `정류장 ${i + 1}`);
+      const past = b && (dwell ? i < b.stopIdx : i < b.stopIdx);
+      const cls = [past ? 'past' : '', i === nextIdx ? 'next' : '', dwell && i === b.stopIdx ? 'here' : '', i === 0 ? 'first' : '', i === n - 1 ? 'last' : ''].filter(Boolean).join(' ');
+      const tag = i === nextIdx ? `<em>${en ? 'Next' : '다음'}</em>` : dwell && i === b.stopIdx ? `<em class="h">${en ? 'Now' : '정차 중'}</em>` : i === n - 1 ? `<em class="t">${en ? 'Terminus' : '종점'}</em>` : '';
+      const bus = b && !dwell && i === b.stopIdx ? `<li class="bus" data-at="${i}"><span class="dot">🚌</span><span class="nm">${en ? 'Your bus' : '현재 위치'}</span></li>` : '';
+      return `${bus}<li class="${cls}" data-i="${i}"><span class="dot"></span><span class="nm">${esc(nm)}</span>${tag}</li>`;
+    }).join('') + (b && b.stopIdx >= n ? `<li class="bus"><span class="dot">🚌</span><span class="nm">${en ? 'Your bus' : '현재 위치'}</span></li>` : '');
+    const dir = terminusOf(P);
+    mapEl.innerHTML = `<div class="box" role="dialog" aria-label="${en ? 'Route map' : '노선도'}">
+      <div class="hd"><span class="chip" style="background:${col}">${esc(P.ref)}</span><div class="tt"><b>${en ? `Route ${esc(P.ref)} map` : `${esc(P.ref)}번 노선도`}</b><small>${en ? `${esc(stopName(P, 0))} → toward ${esc(dir)} (terminus)` : `${esc(stopName(P, 0))} → ${esc(dir)} 방면(종점)`} · ${n}${en ? ' stops' : '개 정류장'}</small></div><button type="button" class="x" data-map="close" aria-label="${en ? 'Close' : '닫기'}">✕</button></div>
+      ${svg}
+      <ol class="line" style="--c:${col}">${rows}</ol>
+      <div class="ft">${en ? 'Esc / ✕ to close · dimmed = passed · ⏵ next stop highlighted' : 'Esc / ✕ 닫기 · 흐린 정류장 = 지나옴 · 강조 = 다음 정류장'}</div></div>`;
+    if (scroll) { const el = mapEl.querySelector('li.next, li.here, li.bus'); el?.scrollIntoView?.({ block: 'center' }); }
+  }
+  addEventListener('keydown', (e) => { if (e.code === 'Escape' && !mapEl.hidden) { closeRouteMap(); e.stopPropagation(); } }, true);
 
   // ---------- 택시 ----------
   const liveNode = (cars, n) => corridor.inLive(cars.nodes[n].x, cars.nodes[n].z);
@@ -218,28 +305,52 @@ export function mountRide({ corridor, getPlayer, remotes, camera, cam, setMode, 
     if (ride?.mode === 'taxi') { toast(ride.phase === 'called' ? L('택시가 오고 있어요', 'Your taxi is on the way') : L('이미 택시를 이용 중이에요', 'You already have a taxi')); return false; }
     const tr = TR(), cars = tr?.cars; const p = pl().position;
     if (!cars) { toast(L('택시를 불러올 수 없어요(코리더 차량 로딩 중)', 'Taxis are not ready yet')); return false; }
-    if (corridor.inLive(p.x, p.z)) { toast(L('정자 라이브 구역에서는 택시 호출이 안 돼요 — 수내~잠실 구간에서 불러 주세요', 'Taxi hailing works on the Sunae–Jamsil corridor, not in the Jeongja live area')); return false; }
-    const allow = (n) => !liveNode(cars, n);
+    const inLiveP = corridor.inLive(p.x, p.z);
+    if (inLiveP && !JZ()) { toast(L('정자 라이브 구역에서는 택시 호출이 안 돼요 — 수내~잠실 구간에서 불러 주세요', 'Taxi hailing works on the Sunae–Jamsil corridor, not in the Jeongja live area')); return false; }
+    const allow = JZ() ? null : (n) => !liveNode(cars, n); // [ride] 정자 차도가 붙어 있으면 정자 안 노드도 지남
     const pick = nearestCurbEdge(cars, p.x, p.z, { R: 60, allow });
     if (!pick || pick.d > 45) { toast(L('차도 가까이(길가)에서 불러 주세요', 'Stand near a road to hail a taxi')); return false; }
-    const cand = cars.list.filter((t) => t.taxi && !t.parked && !t.hired && t.age > 0.5 && t.state === 'drive').map((t) => [Math.hypot(t.mesh.position.x - p.x, t.mesh.position.z - p.z), t]).sort((a, b) => a[0] - b[0]).slice(0, 5);
+    // 정자 안에선 코리더 차량이 멈춰 있으므로(라이브 화면 밖) 근처 빈 택시를 고르지 않고, 화면 밖 길 위에 빈 택시를 하나 세워 보냄
+    const cand = inLiveP ? [] : cars.list.filter((t) => t.taxi && !t.parked && !t.hired && t.age > 0.5 && t.state === 'drive').map((t) => [Math.hypot(t.mesh.position.x - p.x, t.mesh.position.z - p.z), t]).sort((a, b) => a[0] - b[0]).slice(0, 5);
     let best = null;
     for (const [, t] of cand) {
-      if (liveNode(cars, t.node)) continue;
+      if (allow && liveNode(cars, t.node)) continue;
       const route = astar(cars.nodes, cars.ways, t.node, pick.from, { allow });
       if (!route) continue;
       const len = routeLength(cars.nodes, route) + (t.cum[t.cum.length - 1] - t.s);
       if (!best || len < best.len) best = { t, route, len };
     }
+    if (!best && JZ()) best = spawnFor(cars, p, pick, allow);
     if (!best) { toast(L('근처에 빈 택시가 없어요. 잠시 후 다시 불러 주세요', 'No free taxi nearby — try again shortly')); return false; }
     const t = best.t;
-    cars.hire(t); t.manual = true; // 호출된 택시는 ride 가 직접 스텝(막히면 잠시 다른 차를 무시해 빠져나옴)
+    cars.hire(t); t.manual = true; t.vmul = TAXI_VMUL; // 호출된 택시는 ride 가 직접 스텝(막히면 잠시 다른 차를 무시해 빠져나옴)
+    if (best.edge) cars.placeOn(t, best.edge);
     cars.appendRoute(t, [...best.route, { from: pick.from, to: pick.to, way: pick.way }]);
     setTaxiStop(cars, t, pick);
     ride = { mode: 'taxi', phase: 'called', t, pick, t0: performance.now(), dist: 0 };
     toast(L(`🚕 택시를 불렀어요 — 약 ${Math.round(best.len)}m 거리에서 오는 중`, `🚕 Taxi called — about ${Math.round(best.len)} m away`));
     handset?.refreshApp('taxi');
     return true;
+  }
+  // [ride] 빈 택시를 플레이어에서 120~320m 떨어진 길 위에 세워 보냄(정자 등 근처 코리더 택시가 없을 때). → { t, route, len, edge }
+  function spawnFor(cars, p, pick, allow) {
+    cars.ensureTaxis?.();
+    const free = cars.list.filter((t) => t && t.taxi && !t.hired && !t.manual).sort((a, b) => (b.parked - a.parked) || (Math.hypot(b.mesh.position.x - p.x, b.mesh.position.z - p.z) - Math.hypot(a.mesh.position.x - p.x, a.mesh.position.z - p.z)));
+    const t = free[0]; if (!t) return null;
+    const C = 250, i0 = Math.floor(p.x / C), j0 = Math.floor(p.z / C), es = [];
+    for (let i = i0 - 2; i <= i0 + 2; i++) for (let j = j0 - 2; j <= j0 + 2; j++) for (const e of (cars.curbCells || cars.cells).get(i + ',' + j) || []) {
+      const n = cars.nodes[e.from], d = Math.hypot(n.x - p.x, n.z - p.z), k = cars.ways[e.way].k;
+      if (d < 120 || d > 320 || /^(motorway|trunk)|_link$|service/.test(k) || (allow && !allow(e.from))) continue;
+      es.push([d, e]);
+    }
+    es.sort((a, b) => a[0] - b[0]);
+    for (let k = 0; k < Math.min(14, es.length); k += 1 + (k > 4)) {
+      const e = es[k][1], route = astar(cars.nodes, cars.ways, e.to, pick.from, { allow });
+      if (!route) continue;
+      const len = routeLength(cars.nodes, route) + Math.hypot(cars.nodes[e.to].x - cars.nodes[e.from].x, cars.nodes[e.to].z - cars.nodes[e.from].z);
+      if (len < 1400) return { t, route, len, edge: { from: e.from, to: e.to, way: e.way } };
+    }
+    return null;
   }
   function setTaxiStop(cars, t, e) {
     const end = t.cum[t.cum.length - 1], w = cars.ways[e.way];
@@ -273,13 +384,13 @@ export function mountRide({ corridor, getPlayer, remotes, camera, cam, setMode, 
   }
   const destList = () => {
     const p = pl().position;
-    return (travel?.dests || []).map((d) => ({ ...d, dist: Math.hypot(d.x - p.x, d.z - p.z) })).filter((d) => d.dist > 120).sort((a, b) => a.dist - b.dist);
+    return [...(travel?.dests || []), ...(JZ() ? JZ_DESTS : [])].filter((d) => d.x != null).map((d) => ({ ...d, dist: Math.hypot(d.x - p.x, d.z - p.z) })).filter((d) => d.dist > 120).sort((a, b) => a.dist - b.dist);
   };
   function openTaxiPanel() {
     const r = ride; if (!r) return;
     const en = isEn();
     const sel = r.dest;
-    const rows = destList().map((d) => `<button type="button" class="dest${sel && sel.id === d.id ? ' on' : ''}" data-dest="${esc(d.id)}"><b>${esc(en ? d.en : d.ko)}</b><small>${(d.dist / 1000).toFixed(1)} km${corridor.inLive(d.x, d.z) ? (en ? ' · drop at Jeongja edge' : ' · 정자 경계 하차 후 이동') : ''}</small></button>`).join('');
+    const rows = destList().map((d) => `<button type="button" class="dest${sel && sel.id === d.id ? ' on' : ''}" data-dest="${esc(d.id)}"><b>${esc(en ? d.en : d.ko)}</b><small>${(d.dist / 1000).toFixed(1)} km${corridor.inLive(d.x, d.z) ? (JZ() ? (en ? ' · Jeongja' : ' · 정자') : (en ? ' · drop at Jeongja edge' : ' · 정자 경계 하차 후 이동')) : ''}</small></button>`).join('');
     panel.innerHTML = `<div class="hd">🚕 ${en ? 'Where to?' : '어디로 갈까요?'} <small>${en ? 'Free Trial Card · ₩0' : '무료 체험 카드 · 0원'}</small></div>
       <div class="dests">${rows}<button type="button" class="dest map${sel?.id === '@map' ? ' on' : ''}" data-dest="@map"><b>🗺️ ${en ? 'Pick on the map' : '지도에서 선택'}</b><small>${sel?.id === '@map' ? esc(sel.label) : (en ? 'Click a spot in map view' : '지도 보기에서 위치 클릭')}</small></button></div>
       <div class="go">
@@ -287,7 +398,7 @@ export function mountRide({ corridor, getPlayer, remotes, camera, cam, setMode, 
         <button type="button" data-go="fast" ${sel ? '' : 'disabled'}>⏩ ${en ? `Fast-forward ×${FF}` : `빨리감기 ×${FF}`}</button>
         <button type="button" data-go="instant" class="premium" ${sel ? '' : 'disabled'}>⚡ ${en ? 'Instant arrival' : '즉시 도착'}<small>${en ? 'future premium · ₩0 now' : '프리미엄 예정 · 지금 0원'}</small></button>
       </div>
-      <div class="ft"><button type="button" data-go="exit">${en ? 'Get out' : '내리기'}</button></div>`;
+      <div class="ft">${r.phase === 'drive' ? `<button type="button" data-go="stop">🛑 X · ${en ? 'Pull over here' : '세워주세요'}</button>` : ''}<button type="button" data-go="exit">${en ? 'Get out' : '내리기'}</button></div>`;
     panel.hidden = false;
   }
   panel.addEventListener('click', (e) => {
@@ -298,6 +409,7 @@ export function mountRide({ corridor, getPlayer, remotes, camera, cam, setMode, 
       const x = destList().find((q) => q.id === d.dataset.dest); if (x) { ride.dest = { id: x.id, x: x.x, z: x.z, label: isEn() ? x.en : x.ko, travelId: x.id }; openTaxiPanel(); }
     } else if (g) {
       if (g.dataset.go === 'exit') { taxiDrop('cancel'); return; }
+      if (g.dataset.go === 'stop') { requestStop(); return; }
       if (ride.dest) depart(g.dataset.go);
     }
   });
@@ -322,7 +434,7 @@ export function mountRide({ corridor, getPlayer, remotes, camera, cam, setMode, 
     if (!ride || ride.mode !== 'taxi') return;
     if (pt) {
       const live = corridor.inLive(pt.x, pt.z);
-      ride.dest = { id: '@map', x: pt.x, z: pt.z, label: `${placeName(pt.x, pt.z)}${live ? L(' (정자 구역)', ' (Jeongja area)') : ''}` };
+      ride.dest = { id: '@map', x: pt.x, z: pt.z, label: `${placeName(pt.x, pt.z)}${live && !JZ() ? L(' (정자 구역)', ' (Jeongja area)') : ''}` };
     }
     openTaxiPanel();
   }
@@ -336,21 +448,21 @@ export function mountRide({ corridor, getPlayer, remotes, camera, cam, setMode, 
 
   // 목적지 → 차도 간선. 정자 라이브 구역 안이면 경계 밖 가장 가까운 곳에서 내림(이후 역 앞으로 이동)
   function destEdge(cars, d) {
-    let x = d.x, z = d.z, live = corridor.inLive(x, z);
+    let x = d.x, z = d.z, live = corridor.inLive(x, z) && !JZ(); // [ride] 정자 차도가 붙어 있으면 정자 안까지 바로
     if (live) {
       const lb = corridor.liveBox;
       const cands = [[x, lb.z0 - 30], [x, lb.z1 + 30], [lb.x0 - 30, z], [lb.x1 + 30, z]];
       cands.sort((a, c) => Math.hypot(a[0] - x, a[1] - z) - Math.hypot(c[0] - x, c[1] - z));
       [x, z] = cands[0];
     }
-    const e = nearestCurbEdge(cars, x, z, { R: 160, allow: (n) => !liveNode(cars, n) });
+    const e = nearestCurbEdge(cars, x, z, { R: 160, allow: JZ() ? null : (n) => !liveNode(cars, n) });
     return e ? { e, live } : null;
   }
   async function depart(speed) {
     const r = ride, cars = TR()?.cars; if (!r || !cars || busy) return;
     const de = destEdge(cars, r.dest);
     if (!de) { toast(L('그 근처에는 택시가 설 수 있는 길이 없어요', 'No drivable road near there')); return; }
-    const allow = (n) => !liveNode(cars, n);
+    const allow = JZ() ? null : (n) => !liveNode(cars, n);
     const t = r.t;
     const route = astar(cars.nodes, cars.ways, t.node, de.e.from, { allow });
     if (!route) { toast(L('경로를 찾지 못했어요. 다른 목적지를 골라 주세요', 'No route found — pick another destination')); return; }
@@ -374,7 +486,7 @@ export function mountRide({ corridor, getPlayer, remotes, camera, cam, setMode, 
     t.stop = null; t.state = 'drive'; t.latT = 0;
     cars.appendRoute(t, [...route, { from: de.e.from, to: de.e.to, way: de.e.way }]);
     setTaxiStop(cars, t, de.e);
-    r.phase = 'drive'; r.last = t.mesh.position.clone(); r.stuck = 0;
+    r.phase = 'drive'; r.last = t.mesh.position.clone(); r.stuck = 0; r.stopReq = false; t.vmul = TAXI_VMUL;
     toast(speed === 'fast' ? L(`⏩ 빨리감기 ×${FF}로 이동 중 — ${r.dest.label}`, `⏩ Fast-forward ×${FF} to ${r.dest.label}`) : L(`🚕 ${r.dest.label}(으)로 출발`, `🚕 Heading to ${r.dest.label}`));
     emitNow();
   }
@@ -388,8 +500,11 @@ export function mountRide({ corridor, getPlayer, remotes, camera, cam, setMode, 
     const cars = TR()?.cars; if (!cars) return;
     const p = t.mesh.position, others = [];
     if (alone) { cars._step(t, dt, others); return; }
-    for (const o of cars.list) { if (o === t || o.parked) continue; const q = o.mesh.position; if (Math.abs(q.x - p.x) > 60 || Math.abs(q.z - p.z) > 60) continue; const [x, z, dx, dz] = cars._sample(o, o.s); others.push({ x, z, dx, dz, t: o }); }
-    for (const v of B()?.near || []) if (Math.abs(v.x - p.x) < 60 && Math.abs(v.z - p.z) < 60) others.push({ x: v.x, z: v.z, dx: Math.sin(v.heading), dz: Math.cos(v.heading), bus: true });
+    // 시야 120m(빠른 속도라 앞차를 더 멀리 봄). 정자 안에서는 멈춰 숨겨진 코리더 차는 무시하고 정자 라이브 택시·버스를 장애물로
+    const live = corridor.inLive(p.x, p.z), BX = 120;
+    for (const o of cars.list) { if (o === t || o.parked || (live && !o.hired && !o.keep)) continue; const q = o.mesh.position; if (Math.abs(q.x - p.x) > BX || Math.abs(q.z - p.z) > BX) continue; const [x, z, dx, dz] = cars._sample(o, o.s); others.push({ x, z, dx, dz, t: o }); }
+    if (!live) { for (const v of B()?.near || []) if (Math.abs(v.x - p.x) < BX && Math.abs(v.z - p.z) < BX) others.push({ x: v.x, z: v.z, dx: Math.sin(v.heading), dz: Math.cos(v.heading), bus: true }); }
+    else for (const o of liveObstacles?.(p.x, p.z, BX) || []) others.push(o);
     cars._step(t, dt, others);
   }
   function finishTaxi(x, z, ry) {
@@ -399,7 +514,7 @@ export function mountRide({ corridor, getPlayer, remotes, camera, cam, setMode, 
     pl().position.set(sp.x, B()?.gy(sp.x, sp.z, pl().position.y) ?? pl().position.y, sp.z);
     if (ry != null) pl().rotation.y = ry;
     pl().visible = true;
-    if (r.fare) log.add({ mode: 'taxi', route: 'TAXI', routeName: TAXI_LIVERIES[r.t.liv]?.label || '택시', from: r.from, to: r.dest?.label || placeName(sp.x, sp.z), distM: r.dist, durSec: r.speed === 'instant' ? 0 : (r.simT || 0) - (r.simT0 || 0), at: r.at, end: Date.now(), fare: r.fare, speed: r.speed });
+    if (r.fare) log.add({ mode: 'taxi', route: 'TAXI', routeName: TAXI_LIVERIES[r.t.liv]?.label || '택시', from: r.from, to: r.stopReq ? L(`${placeName(sp.x, sp.z)} (중간 하차)`, `${placeName(sp.x, sp.z)} (stopped early)`) : (r.dest?.label || placeName(sp.x, sp.z)), distM: r.dist, durSec: r.speed === 'instant' ? 0 : (r.simT || 0) - (r.simT0 || 0), at: r.at, end: Date.now(), fare: r.fare, speed: r.speed });
     const live = r.live, travelId = r.dest?.travelId;
     ride = null; panel.hidden = true; stats.alights++;
     handset?.refreshApp('wallet'); handset?.refreshApp('taxi');
@@ -412,6 +527,7 @@ export function mountRide({ corridor, getPlayer, remotes, camera, cam, setMode, 
     if (reason === 'cancel') r.fare = r.fare || null;
     finishTaxi(m.position.x - Math.cos(h) * 2.6, m.position.z + Math.sin(h) * 2.6, h);
     if (reason === 'arrive') toast(L('🚕 도착했어요', '🚕 You have arrived'));
+    else if (reason === 'stopreq') toast(L('🛑 요청하신 곳에 세웠어요 — 하차', '🛑 Pulled over as requested — you got out'));
     else if (reason === 'teleport') toast(L('이동하면서 택시에서 내렸어요', 'Left the taxi (teleport)'));
     else if (reason === 'stuck') toast(L('택시가 막혀서 근처에서 내렸어요', 'The taxi got stuck — dropped nearby'));
   }
@@ -437,7 +553,7 @@ export function mountRide({ corridor, getPlayer, remotes, camera, cam, setMode, 
       const alone = (r.alone || 0) > 0; r.alone = (r.alone || 0) - dt;
       for (let k = 0; k < n; k++) { stepTaxi(t, dt, alone); r.dist += tp.distanceTo(r.last); r.last.copy(tp); if (t.state === 'pickup') break; }
       if (t.v < 0.1 && !atSignal(cars, t)) r.stuck += dt; else if (t.v >= 0.1) { r.stuck = 0; r.stuckTot = 0; }
-      if (t.state === 'pickup') { seatTaxi(); taxiDrop('arrive'); return; }
+      if (t.state === 'pickup') { seatTaxi(); taxiDrop(r.stopReq ? 'stopreq' : 'arrive'); return; }
       if ((r.stuckTot || 0) + r.stuck > 45) { taxiDrop('stuck'); return; } // 45초 넘게 신호 아닌 이유로 못 움직이면 근처 하차
     } else if (r.phase === 'choose') {
       t.state = 'pickup'; t.wait = 1e9; t.v = 0; // 목적지 고르는 동안 길가에 서 있음
@@ -445,6 +561,24 @@ export function mountRide({ corridor, getPlayer, remotes, camera, cam, setMode, 
     seatTaxi();
   }
 
+  // [ride] '세워주세요'(X · HUD · 패널 · 폰 앱): 앞쪽 첫 안전한 길가에 세운 뒤 하차. 요금(0원)·기록은 실제 이동 거리/시간
+  function requestStop() {
+    const r = ride; if (!r || r.mode !== 'taxi' || r.phase !== 'drive') return false;
+    if (r.stopReq) { toast(L('🛑 곧 세워 드릴게요', '🛑 Pulling over shortly')); return true; }
+    const cars = TR()?.cars, t = r.t; if (!cars) return false;
+    const cr = cars.transit?.crossings || [];
+    const nearCrossing = (s) => { const [x, z] = cars._sample(t, s); for (const c of cr) if (Math.abs(c.x - x) < 12 && Math.abs(c.z - z) < 12) return true; return false; };
+    const at = findStopAhead(t, cars.ways, { endS: t.stop?.s, nearCrossing });
+    if (!at) { toast(L('곧 목적지예요 — 목적지에서 내려 드릴게요', 'Almost there — you will get out at the destination')); return true; }
+    const w = cars.ways[at.way], g = t.segs[at.seg];
+    t.stop = { s: at.s, curb: Math.max(0, w.w / 2 - 1.2 - (g?.off ?? cars._laneOffset(t, w))), dwell: 1e9 };
+    r.stopReq = true;
+    toast(L(`🛑 세워주세요 — ${Math.round(at.s - t.s)}m 앞 안전한 길가에 세울게요`, `🛑 Pulling over at a safe curb ${Math.round(at.s - t.s)} m ahead`));
+    renderHud(); refreshTaxiApp(true);
+    return true;
+  }
+  // 남은 거리(m): 정차 지점(목적지 또는 세워주세요 지점)까지 경로 길이
+  const remainM = (r) => Math.max(0, (r.t.stop ? r.t.stop.s : r.t.cum[r.t.cum.length - 1]) - r.t.s);
   function ffTaxiInner(sec, until) { // 테스트용(debug.ffTaxi)
     let t = 0;
     for (; t < sec && ride?.mode === 'taxi'; t += 0.1) { updateTaxi(0.1); if (until && until()) break; }
@@ -457,6 +591,7 @@ export function mountRide({ corridor, getPlayer, remotes, camera, cam, setMode, 
     if (ride?.mode === 'bus') {
       if (ride.dwell) { alightBus(ride.b.stopIdx === ride.fromIdx ? 'now' : 'bell'); return true; }
       ride.bell = !ride.bell;
+      if (ride.bell) { sound.bell(); stats.bells++; } // 딩동
       toast(ride.bell ? L('🔔 하차 벨 — 다음 정류장에서 내려요', '🔔 Stop requested — getting off at the next stop') : L('하차 벨 취소', 'Stop request cancelled'));
       return true;
     }
@@ -467,7 +602,7 @@ export function mountRide({ corridor, getPlayer, remotes, camera, cam, setMode, 
         if (ride.phase === 'wait') { toast(L('택시 가까이 가서 E', 'Walk up to the taxi and press E')); return true; }
         // 오는 중이면 E 는 버스/자전거에 양보
       } else if (ride.phase === 'choose') { openTaxiPanel(); return true; }
-      else if (ride.phase === 'drive') { toast(L('도착하면 자동으로 내려요 (지금 내리려면 패널의 내리기)', 'You will get out on arrival')); openTaxiPanel(); return true; }
+      else if (ride.phase === 'drive') { toast(L('도착하면 자동으로 내려요 (X: 세워주세요)', 'You will get out on arrival (X: pull over)')); openTaxiPanel(); return true; }
     }
     const c = boardable();
     if (c) { boardBus(c); return true; }
@@ -600,24 +735,42 @@ export function mountRide({ corridor, getPlayer, remotes, camera, cam, setMode, 
       const cur = r.dwell ? stopName(P, b.stopIdx) : '';
       const nextIdx = r.dwell ? b.stopIdx + 1 : b.stopIdx;
       const next = stopName(P, nextIdx) || (en ? 'End of line' : '종점');
-      html = `<span class="chip" style="background:${lv.plain ? '#2c3e6b' : lv.color}">${esc(P.ref)}</span>
+      html = `<button type="button" class="chip map" data-ride="map" title="${en ? 'Route map' : '노선도'}" style="background:${lv.plain ? '#2c3e6b' : lv.color}">${esc(P.ref)}</button>
         <span class="where">${r.dwell ? `<b>${en ? 'Now at' : '정차 중'}</b> ${esc(cur)} · ` : ''}<b>${en ? 'Next stop' : '다음 정류장'}</b> ${esc(next)} <small>${en ? '다음 정류장' : 'Next stop'}</small></span>
         <button type="button" data-ride="e" class="${r.bell ? 'bell on' : 'bell'}">${r.dwell ? (en ? 'E · Get off now' : 'E · 지금 내리기') : r.bell ? (en ? '🔔 Stop requested' : '🔔 하차 벨 눌림') : (en ? '🔔 E · Get off at next stop' : '🔔 E · 다음 정류장 하차')}</button>
-        <button type="button" data-ride="cam">🎥 V · ${camPref.bus === '1p' ? (en ? 'Window' : '창가 1인칭') : (en ? 'Behind' : '뒤쪽 3인칭')}</button>${r.follow ? `<span class="co">👥 ${en ? 'riding together' : '함께 탑승 중'}</span>` : ''}`;
+        <button type="button" data-ride="cam">🎥 V · ${camPref.bus === '1p' ? (en ? 'Window' : '창가 1인칭') : (en ? 'Behind' : '뒤쪽 3인칭')}</button>
+        <button type="button" data-ride="voice" class="voice" title="${en ? 'Announcements / bell sound' : '안내 방송·벨 소리'}">${sound.muted ? '🔇' : '🔊'}</button>${r.follow ? `<span class="co">👥 ${en ? 'riding together' : '함께 탑승 중'}</span>` : ''}`;
     } else if (ride?.mode === 'taxi') {
       const r = ride, lv = TAXI_LIVERIES[r.t.liv];
       const d = Math.round(Math.hypot(r.t.mesh.position.x - pl().position.x, r.t.mesh.position.z - pl().position.z));
       const st = r.phase === 'called' ? (en ? `Taxi on the way · ${d} m` : `택시 오는 중 · ${d}m`)
         : r.phase === 'wait' ? (en ? `Taxi is here · ${d} m — press E to get in` : `택시 도착 · ${d}m — E로 탑승`)
           : r.phase === 'choose' ? (en ? 'Choose a destination' : '목적지를 고르세요')
-            : (en ? `To ${r.dest?.label} · ${r.speed === 'fast' ? `⏩ ×${FF}` : '▶'}` : `${r.dest?.label}(으)로 이동 중 · ${r.speed === 'fast' ? `⏩ ×${FF}` : '▶'}`);
+            : (en ? `To ${r.dest?.label} · ${r.speed === 'fast' ? `⏩ ×${FF}` : '▶'} · ${(remainM(r) / 1000).toFixed(1)} km left · ${Math.round(r.t.v * 3.6)} km/h` : `${r.dest?.label}(으)로 이동 중 · ${r.speed === 'fast' ? `⏩ ×${FF}` : '▶'} · 남은 ${(remainM(r) / 1000).toFixed(1)}km · ${Math.round(r.t.v * 3.6)}km/h`);
       html = `<span class="chip taxi" style="background:${lv?.tag || '#f6c700'};color:${lv?.tagFg || '#111'}">🚕 ${en ? 'TAXI' : '택시'}</span><span class="where">${esc(st)}</span>`
-        + (r.phase === 'called' || r.phase === 'wait' ? `<button type="button" data-ride="cancel">${en ? 'Cancel' : '호출 취소'}</button>` : `<button type="button" data-ride="cam">🎥 V · ${camPref.taxi === '1p' ? (en ? 'Inside' : '차내 1인칭') : (en ? 'Behind' : '뒤쪽 3인칭')}</button>`);
+        + (r.phase === 'called' || r.phase === 'wait' ? `<button type="button" data-ride="cancel">${en ? 'Cancel' : '호출 취소'}</button>` : '')
+        + (r.phase === 'drive' ? `<button type="button" data-ride="stop" class="${r.stopReq ? 'stop on' : 'stop'}">${r.stopReq ? (en ? '🛑 Pulling over…' : '🛑 정차 요청됨') : (en ? '🛑 X · Pull over' : '🛑 X · 세워주세요')}</button>` : '')
+        + (r.phase === 'called' || r.phase === 'wait' ? '' : `<button type="button" data-ride="cam">🎥 V · ${camPref.taxi === '1p' ? (en ? 'Inside' : '차내 1인칭') : (en ? 'Behind' : '뒤쪽 3인칭')}</button>`);
     } else {
       const c = boardable();
       if (c) { const lv = liveryOf(c.P.type); html = `<span class="chip" style="background:${lv.plain ? '#2c3e6b' : lv.color}">${esc(c.P.ref)}</span><span class="where">${en ? `toward ${esc(terminusOf(c.P))} · stopped` : `${esc(terminusOf(c.P))} 방면 · 정차 중`}</span><button type="button" data-ride="e" class="board">E · ${en ? 'Board' : '탑승'}</button>`; }
     }
     if (html !== hudHtml) { hudHtml = html; hud.innerHTML = html; hud.hidden = !html; }
+    renderBusCard();
+  }
+  // 좌측 하단 '내 버스' 카드: 번호(클릭 → 노선도) · 방면 · 다음 정류장
+  let cardHtml = '';
+  function renderBusCard() {
+    let html = '';
+    if (ride?.mode === 'bus') {
+      const en = isEn(), r = ride, P = r.P, lv = liveryOf(P.type);
+      const next = stopName(P, r.dwell ? r.b.stopIdx + 1 : r.b.stopIdx) || (en ? 'End of line' : '종점');
+      html = `<button type="button" class="num" data-ride="map" style="background:${lv.plain ? '#2c3e6b' : lv.color}" title="${en ? 'Show route map' : '노선도 보기'}">${esc(P.ref)}</button>
+        <div class="tx"><b>${en ? `toward ${esc(terminusOf(P))}` : `${esc(terminusOf(P))} 방면`}</b><small>${en ? 'Next' : '다음'} · ${esc(next)}</small></div>
+        <button type="button" class="mp" data-ride="map">🗺️ ${en ? 'Route map' : '노선도'}</button>`;
+    }
+    if (html !== cardHtml) { cardHtml = html; busCard.innerHTML = html; busCard.hidden = !html; document.body.classList.toggle('ride-bus', !!html); }
+    if (!html && !mapEl.hidden && !mapP) closeRouteMap();
   }
   function stopHint(stop) {
     const en = isEn(), c = boardable();
@@ -626,6 +779,15 @@ export function mountRide({ corridor, getPlayer, remotes, camera, cam, setMode, 
   }
 
   // ---------- 폰 앱 ----------
+  // 택시 앱이 열려 있으면 남은 km 등 숫자만 갱신(버튼은 다시 그리지 않아 클릭이 끊기지 않음). phase 가 바뀌면 전체 갱신
+  let appPhase = '', appAcc = 0;
+  function refreshTaxiApp(force = false) {
+    const ph = ride?.mode === 'taxi' ? ride.phase + (ride.stopReq ? '!' : '') : '';
+    if (force || ph !== appPhase) { appPhase = ph; handset?.refreshApp('taxi'); }
+    if (ride?.mode !== 'taxi' || ride.phase !== 'drive' || typeof document === 'undefined') return;
+    const set = (k, v) => { const el = document.querySelector(`#handset [data-live="${k}"]`); if (el && el.textContent !== v) el.textContent = v; };
+    set('km', (remainM(ride) / 1000).toFixed(1)); set('kmh', String(Math.round(ride.t.v * 3.6))); set('gone', (ride.dist / 1000).toFixed(1));
+  }
   const fmtDur = (s) => (s >= 60 ? `${Math.floor(s / 60)}${isEn() ? 'm ' : '분 '}${Math.round(s % 60)}${isEn() ? 's' : '초'}` : `${Math.round(s)}${isEn() ? 's' : '초'}`);
   const fmtTime = (ms) => { const d = new Date(ms); return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
   if (handset?.addApp) {
@@ -642,12 +804,26 @@ export function mountRide({ corridor, getPlayer, remotes, camera, cam, setMode, 
     handset.addApp({
       id: 'taxi', cls: 'taxi', glyph: '🚕', label: { ko: '택시', en: 'Taxi' },
       render(en) {
-        const st = ride?.mode === 'taxi' ? ({ called: en ? 'On the way' : '오는 중', wait: en ? 'Arrived — press E near it' : '도착 — 가까이 가서 E', choose: en ? 'Choosing destination' : '목적지 선택 중', drive: en ? 'Driving' : '주행 중' })[ride.phase] : '';
-        return `<p class="hint">${en ? 'Call the nearest corridor taxi to the roadside (or press Y).' : '가장 가까운 택시를 길가로 부릅니다 (단축키 Y).'}</p>
+        const r = ride?.mode === 'taxi' ? ride : null, fare = `<p class="hint">${en ? 'Fare: ₩0 (Free Trial Card)' : '요금: 0원 (무료 체험 카드)'}</p>`;
+        if (r?.phase === 'drive') { // [ride] 주행 중: 이동 중 · 목적지 · 남은 km(실시간) · 세워주세요
+          return `<div class="taxi-trip"><div class="st">🚕 ${en ? 'In transit' : '이동 중'}${r.speed === 'fast' ? ` · ⏩ ×${FF}` : ''}</div>
+            <div class="to"><small>${en ? 'Destination' : '목적지'}</small><b>${esc(r.dest?.label || '')}</b></div>
+            <div class="km"><b data-live="km">${(remainM(r) / 1000).toFixed(1)}</b> km <small>${en ? 'left' : '남음'}</small></div>
+            <div class="sp"><span data-live="kmh">${Math.round(r.t.v * 3.6)}</span> km/h · <span data-live="gone">${(r.dist / 1000).toFixed(1)}</span> km ${en ? 'so far' : '이동'}</div></div>
+            <button type="button" class="ride-app-btn stop" data-xact="stop" ${r.stopReq ? 'disabled' : ''}>${r.stopReq ? (en ? '🛑 Pulling over…' : '🛑 정차 요청됨') : (en ? '🛑 Pull over here (X)' : '🛑 세워주세요 (X)')}</button>${fare}`;
+        }
+        if (r?.phase === 'choose') return `<p class="hint"><b>${en ? 'In the taxi — choose a destination' : '탑승 중 — 목적지를 골라 주세요'}</b></p><button type="button" class="ride-app-btn" data-xact="panel">${en ? 'Destinations' : '목적지 선택'}</button>${fare}`;
+        const st = r ? ({ called: en ? 'On the way' : '오는 중', wait: en ? 'Arrived — press E near it' : '도착 — 가까이 가서 E' })[r.phase] : '';
+        return `<p class="hint">${en ? 'Call the nearest taxi to the roadside (or press Y).' : '가장 가까운 택시를 길가로 부릅니다 (단축키 Y).'}</p>
           ${st ? `<p class="hint"><b>${esc(st)}</b></p><button type="button" class="ride-app-btn" data-xact="cancel">${en ? 'Cancel' : '호출 취소'}</button>` : `<button type="button" class="ride-app-btn" data-xact="hail">🚕 ${en ? 'Call a taxi' : '택시 호출'}</button>`}
-          <p class="hint">${en ? 'Fare: ₩0 (Free Trial Card)' : '요금: 0원 (무료 체험 카드)'}</p>`;
+          ${fare}`;
       },
-      onAction(a) { if (a === 'hail') { if (hail()) handset.close(); else handset.refreshApp('taxi'); } else if (a === 'cancel') { cancelTaxi(true); handset.refreshApp('taxi'); } },
+      onAction(a) {
+        if (a === 'hail') { if (hail()) handset.close(); else handset.refreshApp('taxi'); }
+        else if (a === 'cancel') { cancelTaxi(true); handset.refreshApp('taxi'); }
+        else if (a === 'stop') { requestStop(); handset.refreshApp('taxi'); }
+        else if (a === 'panel') { openTaxiPanel(); handset.close(); }
+      },
     });
   }
 
@@ -657,7 +833,8 @@ export function mountRide({ corridor, getPlayer, remotes, camera, cam, setMode, 
     get ride() { return ride; },
     get calling() { return ride?.mode === 'taxi' && (ride.phase === 'called' || ride.phase === 'wait'); },
     setOverlay(o) { overlayRef = o; },
-    handleE, hail, toggleCam, remoteHook,
+    handleE, hail, toggleCam, remoteHook, requestStop, openRouteMap, closeRouteMap, sound,
+    get routeMapOpen() { return !mapEl.hidden; },
     camera: updateCamera,
     // 방송용: 차량 중심 좌표·방향·탑승 코드
     net() {
@@ -673,6 +850,7 @@ export function mountRide({ corridor, getPlayer, remotes, camera, cam, setMode, 
     update(dt) {
       if (!hintSet && B()) { B().setRideHint(stopHint); hintSet = true; }
       if (toastT > 0) { toastT -= dt; if (toastT <= 0) toastEl.hidden = true; }
+      if (capT > 0) { capT -= dt; if (capT <= 0) capEl.hidden = true; }
       const bs = B();
       if (bs) { bs.hideIds.clear(); if (ride?.mode === 'bus') bs.hideIds.add(ride.b.id); }
       if (ride?.mode === 'bus') updateBus(dt);
@@ -684,6 +862,8 @@ export function mountRide({ corridor, getPlayer, remotes, camera, cam, setMode, 
       }
       updateGhosts(dt);
       hudAcc += dt; if (hudAcc > 0.2) { hudAcc = 0; renderHud(); }
+      appAcc += dt; if (appAcc > 0.25) { appAcc = 0; refreshTaxiApp(); }
+      if (!mapEl.hidden) { mapAcc += dt; if (mapAcc > 1) { mapAcc = 0; const sc = mapEl.querySelector('.line')?.scrollTop; renderRouteMap(); const l = mapEl.querySelector('.line'); if (l && sc != null) l.scrollTop = sc; } }
     },
     log, wallet, stats,
     debug: {
@@ -719,7 +899,7 @@ export function mountRide({ corridor, getPlayer, remotes, camera, cam, setMode, 
       state() {
         if (!ride) return { mode: null, cam: { ...camPref } };
         if (ride.mode === 'bus') return { mode: 'bus', ref: ride.P.ref, path: ride.path, seat: ride.seat, s: ride.b.s, stopIdx: ride.b.stopIdx, fromIdx: ride.fromIdx, dwell: ride.dwell, bell: ride.bell, follow: ride.follow, busId: ride.b.id, nextStop: stopName(ride.P, ride.dwell ? ride.b.stopIdx + 1 : ride.b.stopIdx), cam: camPref.bus };
-        return { mode: 'taxi', phase: ride.phase, speed: ride.speed, dest: ride.dest?.label, dist: ride.dist, taxiState: ride.t.state, tv: ride.t.v, cam: camPref.taxi, tx: ride.t.mesh.position.x, tz: ride.t.mesh.position.z };
+        return { mode: 'taxi', phase: ride.phase, speed: ride.speed, dest: ride.dest?.label, dist: ride.dist, taxiState: ride.t.state, tv: ride.t.v, stopReq: !!ride.stopReq, remainM: ride.phase === 'drive' ? remainM(ride) : null, simT: ride.simT, cam: camPref.taxi, tx: ride.t.mesh.position.x, tz: ride.t.mesh.position.z };
       },
       // 테스트용: 택시를 sec 초 앞당김(오는 중이면 그 택시만 스텝)
       ffTaxi(sec, until = null) {
