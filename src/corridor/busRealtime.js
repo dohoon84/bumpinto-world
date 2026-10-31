@@ -69,7 +69,7 @@ export class CorridorRealtimeSource {
     return out.sort((a, b) => a.d - b.d).map((o) => o.r);
   }
   update(dt, ctx, focus) {
-    this.fallback.update(dt, ctx);
+    this.fallback.update(dt, ctx, focus);
     if (focus) this.focus = focus;
     // 추정 전진
     for (const st of this.state.values()) for (const v of st.vehicles?.values() || []) {

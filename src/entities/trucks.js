@@ -21,6 +21,7 @@ export function createTrucks({ scene, overlay, world, data, params, camera, cam,
   const me = { truck: null, near: null, saved: null, lastYawInput: -10, t: 0 };
   const baseBlocked = world.isBlocked; // 트럭 자체는 제외한 건물 충돌
   const ground = (x, z, ref = 0) => (terrain ? terrain.getGroundHeight(x, z, ref) : 0);
+  const vground = (x, z, ref = 0) => (terrain ? (terrain.getVehicleHeight || terrain.getGroundHeight)(x, z, ref) : 0); // [vehicle-h] 차체는 다리 상판을 따라감(내린 사람은 ground)
   const inWater = (x, z) => (data.water || []).some((w) => pointInRing(x, z, w.o));
 
   // ---------- 배치: 앵커(도착지점·마을·빌드사이트·발사장) 근처 차도 가장자리에 평행 주차 ----------
@@ -170,7 +171,7 @@ export function createTrucks({ scene, overlay, world, data, params, camera, cam,
   // 지형 높이/기울기 + 바퀴 회전/조향 시각화
   const pose = (t, dt) => {
     const s = Math.sin(t.h), c = Math.cos(t.h);
-    const yf = ground(t.x + s * DIM.WB / 2, t.z + c * DIM.WB / 2, t.y), yr = ground(t.x - s * DIM.WB / 2, t.z - c * DIM.WB / 2, t.y);
+    const yf = vground(t.x + s * DIM.WB / 2, t.z + c * DIM.WB / 2, t.y), yr = vground(t.x - s * DIM.WB / 2, t.z - c * DIM.WB / 2, t.y);
     t.y = (yf + yr) / 2; const pitch = -Math.atan2(yf - yr, DIM.WB);
     t.pitch += (pitch - t.pitch) * Math.min(1, dt * 10);
     const m = t.mesh; m.position.set(t.x, t.y, t.z); m.rotation.set(t.pitch, t.h, 0, 'YXZ');

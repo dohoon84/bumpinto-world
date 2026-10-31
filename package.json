@@ -18,7 +18,7 @@
     "corridor:tancheon": "node --max-old-space-size=8192 scripts/corridor/build-tancheon.mjs",
     "corridor:transit": "node scripts/corridor/build-transit.mjs",
     "corridor:drive": "node scripts/corridor/build-drive.mjs",
-    "corridor:test": "node scripts/corridor/test/test-tancheon.mjs && node scripts/corridor/test/test-bus-proxy.mjs && node scripts/corridor/test/test-bus-realtime.mjs && node scripts/corridor/test/test-fare.mjs && node scripts/corridor/test/test-ridelog.mjs && node scripts/corridor/test/test-ride-extras.mjs",
+    "corridor:test": "node scripts/corridor/test/test-tancheon.mjs && node scripts/corridor/test/test-bus-proxy.mjs && node scripts/corridor/test/test-bus-realtime.mjs && node scripts/corridor/test/test-fare.mjs && node scripts/corridor/test/test-ridelog.mjs && node scripts/corridor/test/test-ride-extras.mjs && node scripts/corridor/test/test-bus-spacing.mjs 600 && node scripts/corridor/test/test-bus-network.mjs && node scripts/corridor/test/test-bus-sfx.mjs && node scripts/corridor/test/test-vehicle-height.mjs",
     "shots": "node scripts/shots.mjs",
     "zip": "npm run build && python3 -c \"import shutil; shutil.make_archive('jeongja3d-dist', 'zip', 'dist')\"",
     "fetch-transit": "bash data/fetch.sh query_transit.overpassql osm_transit_raw.json",
@@ -32,7 +32,8 @@
     "deploy:pages": "npm run build && npx --yes wrangler pages deploy dist --project-name jeongja3d --branch main",
     "deploy": "npm run deploy:phone && npm run deploy:bus-proxy && npm run deploy:pages",
     "convert-taxi-terrain": "node scripts/convert-taxi-terrain.mjs",
-    "shots-taxi-terrain": "node scripts/shots-taxi-terrain.mjs"
+    "shots-taxi-terrain": "node scripts/shots-taxi-terrain.mjs",
+    "ride:e2e": "node scripts/corridor/test/e2e-ride-220.mjs"
   },
   "dependencies": {
     "three": "^0.186.1"
