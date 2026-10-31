@@ -38,6 +38,7 @@ import { createLaunchShow } from './events/launchShow.js';
 import { createTrucks } from './entities/trucks.js';
 import { createAdminBike } from './entities/adminCruiser/adminBike.js'; // [bike]
 import { createRoadBike, ROADBIKE_GIFT_ID, ROADBIKE_WHITE_GIFT_ID, ROADBIKE_WHITE_VEH_ID } from './entities/roadBike/roadBike.js'; // [roadbike]
+import { prewarmRoadBikeDecals } from './entities/roadBike/roadBikeModel.js'; // [memory]
 import { GIFT_ITEMS, giftItem, giftUnit } from './gifts/catalog.js';
 import { holdingQty, onHoldings, replaceHoldings, setHoldingQty } from './gifts/holdings.js';
 import { mountInventory } from './inventory.js'; // [inventory]
@@ -862,6 +863,14 @@ inventory = mountInventory({
     ...plainGifts,
   ],
 });
+// [memory] 로드바이크 림·타이어 데칼은 지연 생성 — 인벤토리(꺼내기 버튼)에 다가가면 유휴 시간에 미리 그려 둔다.
+{
+  const warm = () => { if (roadbike || roadbikeWhite) prewarmRoadBikeDecals(); };
+  const orb = document.getElementById('inventory-orb');
+  orb?.addEventListener('pointerenter', warm);
+  orb?.addEventListener('pointerdown', warm);
+  addEventListener('keydown', (e) => { if (e.code === 'KeyI') warm(); });
+}
 function applySession(session) {
   const place = session?.place;
   if (!place) return;
