@@ -14,6 +14,9 @@ const SPEED = { motorway: 22, motorway_link: 13, trunk: 17, trunk_link: 12, prim
 const WEIGHT = { motorway: 0.5, motorway_link: 0.25, trunk: 0.8, trunk_link: 0.4, primary: 3, primary_link: 1, secondary: 2.4, secondary_link: 0.8, tertiary: 1.8, residential: 0.9, unclassified: 0.9, living_street: 0.3, service: 0.12 };
 const CAR_KINDS = new Set(Object.keys(SPEED));
 const ACC = 2.0, DEC = 3.0, GAP = 3.0;
+// [ride] 손님을 태운(호출된) 코리더 택시만 t.vmul(기본 없음 = 1)로 구간 제한속도를 올린다. 상한 VCAP(100 km/h).
+//   vmul > 1 이면 커브·신호·앞차를 더 멀리 보고 미리 감속한다(정지 거리 v²/2·DEC). vmul 이 없으면 기존 동작 그대로.
+const VCAP = 27.8;
 
 export class Taxis {
   constructor(scene, overlay, { drive, data, transit, world, count = 24, seed = 7 }) {
@@ -179,12 +182,15 @@ export class Taxis {
     // 속도 제한: 구간 제한속도, 앞 커브, 신호, 앞차, 정차
     let limit = Infinity; const vAllow = (d, v1 = 0) => Math.sqrt(Math.max(0, v1 * v1 + 2 * DEC * Math.max(0, d)));
     const seg = t.segs.find((g) => g.sEnd >= t.s) || t.segs[t.segs.length - 1];
-    let vmax = seg ? seg.vmax : 8;
+    const boost = t.vmul > 1 ? t.vmul : 1, vb = (v) => (boost > 1 ? Math.min(VCAP, (v / (t.vf || 1)) * boost) : v); // [ride]
+    const brake = boost > 1 ? (t.v * t.v) / (2 * DEC) + 15 : 0; // [ride] 빠를 때 더 멀리 봄
+    let vmax = seg ? vb(seg.vmax) : 8;
     // 다음 구간들이 더 느린 길이면 미리 감속
-    { let prevEnd = seg ? seg.sEnd : t.s; for (const g of t.segs) if (g.sEnd > prevEnd) { limit = Math.min(limit, vAllow(prevEnd - t.s, g.vmax)); prevEnd = g.sEnd; } }
+    { let prevEnd = seg ? seg.sEnd : t.s; for (const g of t.segs) if (g.sEnd > prevEnd) { limit = Math.min(limit, vAllow(prevEnd - t.s, vb(g.vmax))); prevEnd = g.sEnd; } }
     // 커브: 앞 40m 의 꺾임
+    const curveLook = Math.max(40, brake);
     for (let i = 1; i < t.pts.length - 1; i++) {
-      const d = t.cum[i] - t.s; if (d < 0) continue; if (d > 40) break;
+      const d = t.cum[i] - t.s; if (d < 0) continue; if (d > curveLook) break;
       const a = t.pts[i - 1], b = t.pts[i], c = t.pts[i + 1];
       const ux = b[0] - a[0], uz = b[1] - a[1], vx = c[0] - b[0], vz = c[1] - b[1];
       const ang = Math.acos(Math.max(-1, Math.min(1, (ux * vx + uz * vz) / ((Math.hypot(ux, uz) * Math.hypot(vx, vz)) || 1))));
@@ -193,14 +199,14 @@ export class Taxis {
     // 신호: 보행 신호(=차량 정지)면 정지선 앞에서
     const front = t.s + taxiLength() / 2;
     if (this.transit) for (const q of t.sigQ) {
-      const stopAt = q.s - ((q.c.depth || 2.2) + 2.3); if (stopAt < front - 1.5) continue; if (stopAt - front > 60) break;
+      const stopAt = q.s - ((q.c.depth || 2.2) + 2.3); if (stopAt < front - 1.5) continue; if (stopAt - front > Math.max(60, brake + 10)) break;
       if (this.transit.pedLight(q.c) !== 'red') { limit = Math.min(limit, vAllow(stopAt - front - 0.5)); break; }
     }
     // 앞차
     for (const o of others) {
       if (o.t === t) continue;
       const rx = o.x - x, rz = o.z - z, ahead = rx * dx + rz * dz, lat = Math.abs(rx * -dz + rz * dx);
-      if (ahead <= 0 || ahead > 45 || lat > 1.9 || o.dx * dx + o.dz * dz < 0.3) continue;
+      if (ahead <= 0 || ahead > Math.max(45, brake + 10) || lat > 1.9 || o.dx * dx + o.dz * dz < 0.3) continue;
       const half = o.bus ? 6 : taxiLength() / 2, gap = ahead - half - taxiLength() / 2 - GAP;
       limit = Math.min(limit, vAllow(gap, o.t ? o.t.v * 0.9 : 0));
     }
@@ -213,7 +219,7 @@ export class Taxis {
       if (t.state === 'pickup') { limit = 0; t.wait -= dt; if (t.wait <= 0) { t.state = 'drive'; t.stop = null; t.latT = 0; this._tag(t, '🚗 손님 태우고 출발'); setTimeout(() => this._tag(t), 6000); } }
     }
     const target = Math.min(vmax, limit);
-    t.v = t.v < target ? Math.min(target, t.v + ACC * dt) : Math.max(target, t.v - DEC * 1.6 * dt);
+    t.v = t.v < target ? Math.min(target, t.v + ACC * (boost > 1 ? 1.6 : 1) * dt) : Math.max(target, t.v - DEC * 1.6 * dt);
     if (t.v < 0.05 && target < 0.05) t.v = 0;
     t.s += t.v * dt;
     t.lat += Math.sign(t.latT - t.lat) * Math.min(Math.abs(t.latT - t.lat), 0.9 * dt);
