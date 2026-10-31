@@ -1694,10 +1694,10 @@ function syncGameLocale() {
     attrEl.innerHTML = en
       ? '© <a href="https://crazylabs.co.kr" target="_blank" rel="noopener">CrazyLabs</a> · <a href="https://github.com/dohoon84/bumpinto-world" target="_blank" rel="noopener">Source Available</a> · Map © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> (ODbL)'
       : '© <a href="https://crazylabs.co.kr" target="_blank" rel="noopener">CrazyLabs</a> · <a href="https://github.com/dohoon84/bumpinto-world" target="_blank" rel="noopener">소스 공개 (영리 서비스 금지)</a> · 지도 © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> (ODbL)';
-    // [corridor] 코리더 건물 높이 출처 (Overture footprint · 브이월드 GIS건물통합정보)
+    // [corridor] 코리더 건물 출처: Overture Maps buildings 테마(ODbL, footprint 보조) · 브이월드 GIS건물통합정보(높이 보정)
     if (corridorDir) attrEl.innerHTML += en
-      ? ' · <a href="https://overturemaps.org" target="_blank" rel="noopener">Overture Maps</a> · Building heights: <a href="https://www.vworld.kr" target="_blank" rel="noopener">VWorld</a> (MOLIT)'
-      : ' · <a href="https://overturemaps.org" target="_blank" rel="noopener">Overture Maps</a> · 건물 높이: <a href="https://www.vworld.kr" target="_blank" rel="noopener">브이월드</a> (국토교통부)';
+      ? ' · <a href="https://docs.overturemaps.org/attribution/" target="_blank" rel="noopener">Overture Maps Foundation</a> (ODbL) · Building heights: <a href="https://www.vworld.kr" target="_blank" rel="noopener">VWorld</a> (MOLIT)'
+      : ' · <a href="https://docs.overturemaps.org/attribution/" target="_blank" rel="noopener">Overture Maps Foundation</a> (ODbL) · 건물 높이: <a href="https://www.vworld.kr" target="_blank" rel="noopener">브이월드</a> (국토교통부)';
   }
   syncRideUi(true);
   syncHelpFoldUi();

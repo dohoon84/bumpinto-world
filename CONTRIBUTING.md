@@ -145,7 +145,7 @@ npm run build      # PR 전에 빌드가 통과하는지 꼭 확인
 | 경기버스정보 gbis.go.kr | 노선 유형(`data/gbis_route_types.json`), 노선 정류소 | 사실 정보를 수작업 정리. ⚠️ 이용 조건 확인 필요 <!-- TODO(김도훈): gbis/data.go.kr 공공누리 조건 확인 --> |
 | three.js | 렌더링 | MIT |
 
-> 참고: 코드 일부의 출처 표기(`index.json`의 `meta.attribution`)에 Overture가 "CDLA-Permissive-2.0 / ODbL"로 적혀 있습니다. CDLA는 Overture **places** 테마의 라이선스이고, 여기서 쓰는 **buildings** 테마는 ODbL입니다. <!-- TODO(김도훈): 다음 bake 때 attribution 문구를 'Overture Maps Foundation (ODbL)'로 정리할지 결정 -->
+> 참고: 코리더 출처 표기는 `© OpenStreetMap contributors, Overture Maps Foundation (ODbL)`입니다. CDLA-Permissive-2.0은 Overture **places** 테마의 라이선스이고, 여기서 쓰는 **buildings** 테마는 ODbL입니다. 게임 화면 하단 출처 표기에도 코리더가 켜져 있을 때 Overture가 함께 표시됩니다.
 
 ---
 

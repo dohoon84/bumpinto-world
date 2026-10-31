@@ -371,8 +371,9 @@ const index = {
     name: 'Jeongja → Lotte World Tower corridor', tileSize: TS, liveBox: LB, bounds,
     generated: new Date().toISOString(),
     source: { corridorBake: pIndex.meta.generated, live: live.meta.generated },
-    // 건물 높이 일부는 Vworld GIS건물통합정보(국토교통부)에서 보정됨 → 출처 표기 (이용 조건은 브이월드 약관 확인 필요)
-    attribution: (pIndex.meta.sources?.attribution || '© OpenStreetMap contributors (ODbL)') + (pIndex.meta.sources?.vworld ? ' · 건물 높이: 브이월드 GIS건물통합정보 (국토교통부)' : ''),
+    // 출처 표기. Overture buildings 테마는 ODbL(CDLA 는 places 테마 라이선스) → 프로토 bake 의 'CDLA-Permissive-2.0 / ODbL' 문구 대신 고정 문자열.
+    // 건물 높이 일부는 Vworld GIS건물통합정보(국토교통부)에서 보정됨 (이용 조건은 브이월드 약관 확인 필요)
+    attribution: (pIndex.meta.sources?.overture ? '© OpenStreetMap contributors, Overture Maps Foundation (ODbL)' : '© OpenStreetMap contributors (ODbL)') + (pIndex.meta.sources?.vworld ? ' · 건물 높이: 브이월드 GIS건물통합정보 (국토교통부)' : ''),
     stats: { ...stat, ...rstat, tancheonAxis: T.axis.length, runs: runs.length, chRoads: chCount, chParks: chParks.length, crossings: crossings.length, tiles: Object.keys(tiles).length, tileMB: +(tileBytes / 1e6).toFixed(2) },
   },
   stations, landmarks, tiles,
