@@ -1,6 +1,6 @@
 // 버스 정류장 쉘터 / 횡단보도 / 보행 신호등 / 버스 렌더링 + 정류장 패널
 import * as THREE from 'three';
-import { createBus } from './busModel.js';
+import { createBus, disposeBus } from './busModel.js';
 import { createBusSource, TIME_COMPRESS } from './busSource.js';
 import { liveryOf } from './livery.js';
 
@@ -121,7 +121,7 @@ export function buildTransit(scene, T, world, overlay, { mode = 'sim', proxy } =
       m.position.set(v.x, 0.08, v.z); m.rotation.y = v.heading; m.scale.setScalar(v.scale); m.visible = v.scale > 0.02;
       m.userData.state = v.state;
     }
-    for (const [id, m] of meshes) if (!seen.has(id)) { m.userData.releaseLights?.(); scene.remove(m); meshes.delete(id); overlay.remove(busTags.get(id)); busTags.delete(id); }
+    for (const [id, m] of meshes) if (!seen.has(id)) { m.userData.releaseLights?.(); scene.remove(m); disposeBus(m); meshes.delete(id); overlay.remove(busTags.get(id)); busTags.delete(id); }
   };
 
   // ---------- 정류장 패널 ----------
