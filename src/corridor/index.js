@@ -243,9 +243,9 @@ export function createCorridor({ scene, corridorData, terrain, world, renderer, 
     isBlocked: corridorBlocked, onRoad: corridorOnRoad,
     afterTerrain() { addOuterGround(); },
     // 버스·차량·보행 NPC (수내 → 롯데). game.js 가 버스 프록시가 정해진 뒤 한 번 부른다. ?clife=0 이면 끔
-    attachLife({ proxy, mode } = {}) {
+    attachLife({ proxy, mode, liveDrive = null, liveCrossings = null } = {}) { // [ride] liveDrive: 정자 차도(읽기 전용, 정자 택시 호출용)
       if (life || params?.get('clife') === '0') return life;
-      life = createCorridorLife({ root, baseUrl, crossings, terrain, terrainT: corridorData.terrainT, world, overlay, stations: index.stations, liveBox: live, params, proxy, mode });
+      life = createCorridorLife({ root, baseUrl, crossings, terrain, terrainT: corridorData.terrainT, world, overlay, stations: index.stations, liveBox: live, params, proxy, mode, liveDrive, liveCrossings });
       return life;
     },
     get life() { return life; },
