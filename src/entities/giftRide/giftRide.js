@@ -2,6 +2,7 @@
 //   탈것마다 다른 것(모델·가감속·라이더 자세·HUD·소리·연출)은 spec 으로 받는다. 예: roadBike/roadBike.js, superbike/superbike.js
 //   보유 수량은 src/gifts/catalog.js · holdings.js 가 기준이고, 여기는 setStock 으로 받기만 한다.
 import * as THREE from 'three';
+import { stepWheelie, wheelieSteerScale } from './wheelie.js';
 
 const G = 9.81;
 const MAX_STEP = 0.6; // 한 서브스텝 이동 상한(m). 트럭과 같이 고속에서 벽을 뚫지 않게
@@ -91,6 +92,7 @@ body.roadbike-near #trk-prompt, body.roadbike-riding #trk-prompt, body.roadbike-
  *   audio?(mesh) → { unlock, update(dt, { on, v, throttle }) }
  *   cam { dist, pitch }, netExtra?(b) → {} (주행 중 veh 에 더할 필드), throttleOf?(veh) → 원격 스로틀 0~1
  *   settling?(b) → 세워 둔 뒤에도 연출(크랭크 등)이 덜 멈췄으면 true
+ *   wheelie?: { max(rad) } — Space 로 앞바퀴 들기. 모델 userData.wheelie(뒷바퀴 접지점 축 그룹)·wheelieFrame(라이더가 붙는 곳) 필요
  */
 export function createGiftRide(env, spec) {
   const { scene, overlay, world, data, cam, player, renderer, terrain, presence, remotes, getTrucks, onChange } = env;
@@ -117,7 +119,7 @@ export function createGiftRide(env, spec) {
   const U = mesh.userData;
   const b = {
     id: spec.vehId, mesh, x: 0, z: 0, y: 0, h: 0, v: 0, yaw: 0, steer: 0, si: 0,
-    lean: 0, spinF: 0, spinR: 0, pitch: 0, rider: null, remote: null, throttle: 0, sprint: false,
+    lean: 0, spinF: 0, spinR: 0, pitch: 0, rider: null, remote: null, throttle: 0, sprint: false, wheelie: 0, wheelieVel: 0,
   };
   const stats = { dist: 0, time: 0 };
   const tmpV = new THREE.Vector3();
@@ -148,14 +150,16 @@ export function createGiftRide(env, spec) {
   const owned = () => stock > 0;
   blockers.push((x, z, r = 0.35) => !me.riding && !b.remote && summoned && hit(x, z, r));
 
+  const W = spec.wheelie && U.wheelie ? spec.wheelie : null;
+  const riderFrame = U.wheelieFrame || U.lean; // 윌리 때 라이더도 차체와 같이 들린다
   let rider = spec.rider.build(player);
   rider.visible = false;
-  U.lean.add(rider);
+  riderFrame.add(rider);
   const setRider = (src) => {
-    U.lean.remove(rider);
+    riderFrame.remove(rider);
     rider = spec.rider.build(src || player);
     rider.visible = true;
-    U.lean.add(rider);
+    riderFrame.add(rider);
   };
 
   const prompt = document.createElement('button');
@@ -202,6 +206,8 @@ export function createGiftRide(env, spec) {
     b.si = 0;
     b.throttle = 0;
     b.sprint = false;
+    b.wheelie = 0;
+    b.wheelieVel = 0;
   };
 
   function mount() {
@@ -378,15 +384,16 @@ export function createGiftRide(env, spec) {
     return false;
   }
 
-  function ride(dt, f, s, sprint) {
+  function ride(dt, f, s, sprint, wheelie) {
     b.sprint = !!sprint && f > 0;
     spec.throttle(b, dt, f, b.sprint);
     b.v = Math.max(b.v, -P.revV);
     b.throttle = Math.max(0, f);
+    if (W) stepWheelie(b, dt, !!wheelie, f, W.max, W);
     b.si += THREE.MathUtils.clamp(s - b.si, -P.steerIn * dt, P.steerIn * dt);
     const av = Math.abs(b.v);
     const yawMax = Math.min(av / P.rMin, Math.max((P.latG * G) / Math.max(av, 0.1), P.yawMin ?? 0));
-    const want = -b.si * yawMax * Math.sign(b.v || 1);
+    const want = -b.si * yawMax * wheelieSteerScale(b.wheelie) * Math.sign(b.v || 1);
     b.yaw += (want - b.yaw) * Math.min(1, dt * P.yawK);
     const n = substepsFor(b.v, dt);
     for (let i = 0; i < n; i++) if (!move(dt / n)) break;
@@ -411,7 +418,8 @@ export function createGiftRide(env, spec) {
     b.steer += (THREE.MathUtils.clamp(parked ? parkSteer : st, -P.steerMax, P.steerMax) - b.steer) * Math.min(1, dt * 9);
     U.steer.rotation.y = -b.steer;
     b.spinR += (b.v / D.R) * dt;
-    b.spinF += (b.v / RF) * dt;
+    b.spinF += (b.v / RF) * dt * (b.wheelie > 0.08 ? 0.35 : 1); // 들린 앞바퀴는 천천히 멎는다
+    if (W) U.wheelie.rotation.x = -b.wheelie; // -x 회전 = 앞바퀴 상승
     U.frontSpin.rotation.x = b.spinF;
     U.rearSpin.rotation.x = b.spinR;
     spec.animate?.(b, U, dt, parked);
@@ -467,6 +475,7 @@ export function createGiftRide(env, spec) {
       th: +veh.ry || 0,
       v: parked ? 0 : (+veh.v || 0),
       yaw: parked ? 0 : (+veh.st || 0),
+      wheelie: parked || !W ? 0 : THREE.MathUtils.clamp(+veh.wh || 0, 0, W.max),
       throttle: parked ? 0 : (spec.throttleOf?.(veh) ?? 0),
       parked,
     };
@@ -500,7 +509,7 @@ export function createGiftRide(env, spec) {
     summon,
     stow,
     toggleSummon,
-    update(dt, f, s, run, lookYaw) {
+    update(dt, f, s, run, lookYaw, wheelie = false) {
       me.t += dt;
       if (me.riding && Math.hypot(player.position.x - b.x, player.position.z - b.z) > 3) {
         const keep = player.position.clone();
@@ -508,7 +517,7 @@ export function createGiftRide(env, spec) {
         player.position.copy(keep);
       }
       if (me.riding) {
-        ride(dt, f, s, run);
+        ride(dt, f, s, run, wheelie);
         if (Math.abs(b.v) > 0.3) stats.time += dt;
         stats.dist += Math.abs(b.v) * dt;
         player.position.set(b.x, b.y, b.z);
@@ -530,13 +539,15 @@ export function createGiftRide(env, spec) {
         b.yaw = r.yaw;
         b.throttle = r.throttle;
         b.sprint = false;
+        b.wheelie += (r.wheelie - b.wheelie) * k;
         if (!r.parked && Math.abs(b.v) > 0.3) {
           stats.time += dt;
           stats.dist += Math.abs(b.v) * dt;
         }
         pose(dt, !!r.parked);
-      } else if (summoned && (me.wasActive || Math.abs(b.lean - parkLean) > 1e-3 || spec.settling?.(b))) {
+      } else if (summoned && (me.wasActive || Math.abs(b.lean - parkLean) > 1e-3 || b.wheelie > 1e-3 || spec.settling?.(b))) {
         b.throttle = 0;
+        b.wheelie = Math.max(0, b.wheelie - 3.5 * dt);
         b.sprint = false;
         pose(dt, true);
       }
@@ -562,7 +573,7 @@ export function createGiftRide(env, spec) {
       return {
         ry: b.h,
         moving: Math.abs(b.v) > 0.3,
-        veh: { id: spec.vehId, ry: +b.h.toFixed(3), v: +b.v.toFixed(2), st: +b.yaw.toFixed(3), ...(spec.netExtra?.(b) || {}) },
+        veh: { id: spec.vehId, ry: +b.h.toFixed(3), v: +b.v.toFixed(2), st: +b.yaw.toFixed(3), ...(W && b.wheelie > 1e-3 ? { wh: +b.wheelie.toFixed(3) } : {}), ...(spec.netExtra?.(b) || {}) },
       };
     },
   };

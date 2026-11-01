@@ -1,7 +1,9 @@
 # 슈퍼바이크 RR (선물함)
 
 1000cc 4기통 레플리카 슈퍼스포츠. 선물함 아이템 `superbike-rr`(veh 904), 이름은 **슈퍼바이크 RR / Superbike RR**.
-화이트 바탕, 검정 탱크·시트, 하늘·남색·빨강 3색 사선 스트라이프, 테일 옆 `RR`, 비대칭 트윈 헤드라이트, 엔진 밑 언더 배기, 골드 포크.
+화이트 바탕, 검정 탱크·시트, 하늘·남색·빨강 3색 사선 스트라이프, 테일 옆 `RR`, 비대칭 트윈 헤드라이트, 골드 포크.
+오른쪽(진행 방향 기준) 스윙암 피벗 아래에서 뒷바퀴 쪽으로 비스듬히 올라가는 은색 사일렌서, 은색 엔진 케이스(오른쪽 클러치·왼쪽 발전기 커버, 오일팬), 검정 프레임·서브프레임, 물결 디스크 + 골드 캘리퍼(앞 2·뒤 1), 금색 리어 쇼크, 번호판 홀더·호거·호박색 깜빡이가 있는 테일 정리.
+모델 좌표: +z 앞, **+x = 바이크 왼쪽, -x = 오른쪽**.
 모델·화면·소리 어디에도 제조사 로고나 모델명 글자는 넣지 않았다.
 
 ## 로컬에서 받기
@@ -25,6 +27,7 @@ npm run dev            # http://localhost:5173 → 로컬호스트는 자동으�
 | W / S | 가속 / 브레이크(정지 후 S 는 살짝 후진) |
 | Shift + W | 부스트 (최고 303 km/h) |
 | A / D | 조향 (속도에 따라 눕기·회전 반경 제한) |
+| Space | 앞바퀴 들기(윌리), 관리자 크루저와 같은 `giftRide/wheelie.js`. 최대 0.45 rad, 뒷바퀴 접지점 중심, 들린 동안 조향 둔화, 놓으면 착지 바운스. 원격에도 `wh` 로 중계 |
 | F | 탑승 / 하차 |
 | N | 바이크 소리 음소거 토글 |
 
@@ -46,6 +49,11 @@ npm run dev            # http://localhost:5173 → 로컬호스트는 자동으�
 브레이크 10.5 m/s²(≈1.07 g), 최소 회전 반경 3.0 m, 횡가속 한계 1.0 g, 고속 최소 요레이트 0.5 rad/s(고속에서도 조작이 되게), 최대 눕기 0.85 rad.
 이동은 한 서브스텝 0.6 m 이하(최대 8개)로 잘라 고속에서 벽을 뚫지 않는다. 트럭과 같은 방식이고 `giftRide.substepsFor` 하나를 쓴다.
 
+## 라이더 자세
+
+숙인 자세 IK(`riderRig.js`). 상체는 아바타 상체를 `upperScale [0.7, 0.72, 0.6]`, `torso 1.1` 로 줄여 탱크에 엎드리고,
+목(`neck` 옵션: 상체 꼭대기 앞쪽 → 헬멧, 반지름 0.06, 검정 슈트색)을 따로 그려 헬멧이 등에 붙지 않고 어깨 위·앞에서 스크린 너머 앞을 본다.
+
 ## 메모리
 
 텍스처·환경맵 없이 정점 색만. 부품은 움직이는 단위로 병합해 대수와 관계없이 지오메트리 6개(+헬멧 1개), 재질 2개(램버트, 발광)를 공유한다.
@@ -57,23 +65,36 @@ npm run dev            # http://localhost:5173 → 로컬호스트는 자동으�
 | CR·1 1대(데칼 미리 그림) | 218 | 120,678 | 113 | 15 | 1.9 MB | ≈60 MB |
 | 관리자 크루저 1대 | 204 | 34,658 | 87 | 6 | 512 KB | ≈6 MB |
 | 슈퍼바이크 10대 | 69 | 37,902 | 6 | 0 | 323 KB | 0 (힙 +0.15 MB) |
+
+위 표는 첫 버전. 디테일 추가 후(병합이라 메시 수 그대로): 모델 메시 6 → 6, 삼각형 3,060 → 3,536(+16%), 정점 버퍼 323 → 373 KB, 텍스처 0.
+탄 상태(바이크+라이더, 화면에 보이는 메시, 그림자 패스 제외): 메시 20 → 21(목 +1), 삼각형 4,552 → 5,140.
 | CR·1 10대 | 1,337 | 753,556 | 1,130 | 33 | 19 MB | (힙 +28 MB) |
 
 ## 소리
 
-원본 녹음 2개를 `scripts/superbike-audio.py` 로 잘라 `public/audio/superbike/` 에 ogg(vorbis q2) + m4a(aac 56k), 모노 32 kHz 로 둔다(각 13–18 KB).
+`scripts/superbike-audio.py` 로 만든 `public/audio/superbike/` 의 ogg(vorbis q2) + m4a(aac 56k), 모노 32 kHz.
 
 | 파일 | 원본 | 쓰임 |
 |------|------|------|
 | `idle` | 공회전 녹음(3.1 s) 0.12–3.0 s, 0.3 s 크로스페이드 루프 | 타고 서 있을 때 루프 |
 | `start` | 시동→출발 녹음(9.2 s) 0.05–1.96 s | 탈 때 1회 (시동) |
 | `launch` | 같은 녹음 1.93–4.20 s | 정지 0.4 s 이상 후 스로틀을 열면 1회. 0.25 s 넘게 놓으면 끊김 |
-| `ride` | 같은 녹음 4.2–6.1 s, 음높이 289→452 Hz 상승을 361 Hz 로 편 뒤 0.25 s 크로스페이드 루프 | 주행 루프 |
+| `gear1` | 1단 녹음(2.1 s) 0.35–1.95 s, 408→489 Hz 를 447 Hz 로 편 루프 1.30 s | 1단 (0–92 km/h) |
+| `gear2` | 2단 녹음(3.4 s) 0.15–2.3 s, 471→485 Hz → 478 Hz, 1.85 s | 2단 (–136) |
+| `gear3` | 3단 녹음(3.7 s) 0.6–3.15 s, 422→502 Hz → 460 Hz, 2.25 s | 3단 (–175) |
+| `gear4` | 4단 녹음(4.7 s) 0.25–3.85 s, 437→496 Hz → 466 Hz, 3.30 s | 4단 (–213) |
+| `gear5` | 5단 녹음(6.9 s) 2.0–4.8 s, 146→199 Hz → 170 Hz, 2.51 s | 5단 (–252), 6단은 3% 높여 재사용 |
 
-주행 루프 재생 속도는 속도로 고른 6단 기어(`engineNote.js`, 95/140/180/220/260/303 km/h) 안 회전 비율을 따르고(변속하면 떨어진다), 음량은 스로틀·속도를 따른다.
+각 기어 루프 10–24 KB, 0.3 s 등전력 크로스페이드로 이음매를 붙이고 RMS -19 dBFS 로 맞춰 변속해도 음량이 튀지 않는다.
+기어는 속도로 고른다(`engineNote.js`, 레드존 95/140/180/220/260/303 km/h 의 97% 에서 변속, 내릴 땐 4 km/h 히스테리시스).
+기어 안에서는 재생 속도를 0.90 → 1.12(+스로틀 0.02)로만 바꿔 녹음 음높이 근처에 머문다(예전 단일 루프는 0.62–1.6 으로 늘려서 거칠었다).
+변속하면 `bikeAudio` 가 이전 기어 루프(그 음높이 그대로)와 새 기어 루프(0.90 부터)를 0.22 s 등전력 크로스페이드, 동시에 최대 2개. 5→6단은 같은 루프라 재생 속도만 0.1 s 로 내려간다.
 공회전 ↔ 주행은 equal-power 크로스페이드, 1회 재생음이 나오는 동안 루프는 줄였다가 끝 0.35 s 동안 다시 올린다.
+`?sound=0` 이면 전부 끄고, `?rideSfx=0`(주행 효과음 끔)이면 슈퍼바이크 엔진음도 끈다. N = 음소거 토글.
 
-다시 만들기: `python3 scripts/superbike-audio.py <idle.m4a> <start-ride.m4a> [public/audio/superbike]` (numpy, scipy, ffmpeg).
+다시 만들기:
+`python3 scripts/superbike-audio.py <idle.m4a> <start-ride.m4a> [public/audio/superbike]` → idle/start/launch(/ride, 지금은 안 씀)
+`python3 scripts/superbike-audio.py --gears <1단> <2단> <3단> <4단> <5단> [public/audio/superbike]` → gear1–5 (numpy, scipy, ffmpeg)
 
 ## 코드
 
@@ -83,8 +104,9 @@ npm run dev            # http://localhost:5173 → 로컬호스트는 자동으�
 | `src/entities/giftRide/riderRig.js` | 아바타 복제 라이더 + 2관절 IK (CR·1·슈퍼바이크·크루저 공용) |
 | `src/entities/superbike/superbikeModel.js` | 저폴리 모델, 헬멧 |
 | `src/entities/superbike/superbike.js` | 가감속, 숙인 자세(클립온·리어셋), 속도계, 엔진음 연결 |
-| `src/entities/superbike/engineNote.js` | 기어·재생 속도·음량 곡선 (순수 함수) |
-| `src/entities/adminCruiser/bikeAudio.js` | 루프 2개 + 1회 재생음(start/launch), 파일·형식·곡선 옵션 |
-| `scripts/corridor/test/test-superbike.mjs` | 가속·최고 속도·서브스텝·기어음·카탈로그·음원 (`npm run corridor:test`) |
+| `src/entities/superbike/engineNote.js` | 기어(히스테리시스)·기어 루프 선택·재생 속도·음량 곡선 (순수 함수) |
+| `src/entities/giftRide/wheelie.js` | 윌리 물리 (관리자 크루저·슈퍼바이크 공용) |
+| `src/entities/adminCruiser/bikeAudio.js` | 공회전 + 주행 루프(배열이면 기어별, 크로스페이드) + 1회 재생음(start/launch), 음원 버퍼 공유 |
+| `scripts/corridor/test/test-superbike.mjs` | 가속·최고 속도·서브스텝·기어 루프·윌리·카탈로그·음원 (`npm run corridor:test`) |
 
 확인용 화면: `/workspace/bw-bike-shots/` (리포에는 넣지 않음).

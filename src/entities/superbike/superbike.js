@@ -6,7 +6,7 @@ import { createGiftRide } from '../giftRide/giftRide.js';
 import { buildTuckRider, poseTuckRider } from '../giftRide/riderRig.js';
 import { createBikeAudio } from '../adminCruiser/bikeAudio.js';
 import { createSuperbikeModel, createMotoHelmetHead, SB } from './superbikeModel.js';
-import { gearOf, rideGain, rideMix, rideRate } from './engineNote.js';
+import { gearOf, rideGain, rideLayer, rideMix, rideRate } from './engineNote.js';
 import { giftItem } from '../../gifts/catalog.js';
 
 /** 선물함 카탈로그 항목 (수량·단위·veh id 는 src/gifts/catalog.js 만 고친다) */
@@ -38,10 +38,12 @@ export function superbikeThrottle(b, dt, f, sprint) {
 
 const RIDER = {
   hip: new THREE.Vector3(0, 0.95, -0.36),
-  torso: 1.05,
-  upperScale: [0.7, 0.8, 0.6],
-  headScale: 0.78,
-  headPitch: -0.45,
+  torso: 1.1,
+  upperScale: [0.7, 0.72, 0.6],
+  headScale: 0.6,
+  headPitch: -0.12,
+  // 목: 몸통 윗끝에서 위·앞으로 띄워 헬멧이 등에 묻히지 않고 스크린 너머를 보게
+  neck: { base: [0, 1.08, 0.02], up: 0.12, fwd: 0.1, r: 0.06, color: '#1c1d20' },
   helmet: createMotoHelmetHead,
   shoe: '#1c1d20',
   glove: '#1c1d20',
@@ -54,7 +56,7 @@ const PEG = { x: 0.19, y: 0.43, z: -0.27 };
 function poseRider(rider, bike) {
   const U = bike.userData;
   poseTuckRider(rider, {
-    frame: U.lean,
+    frame: U.wheelieFrame || U.lean,
     grips: U.grips,
     foot: (sx, out) => out.set(sx * PEG.x, PEG.y, PEG.z + 0.06), // 발 앞꿈치를 리어셋 스텝에
     legLen: [0.5, 0.48],
@@ -81,7 +83,7 @@ function speedoHud(b) {
   hud.innerHTML = '<div class="v">0</div><div class="u">km/h</div><div class="bar"><i></i></div><div class="k"><span>GEAR <b class="g">N</b></span><span>RR</span></div>';
   document.body.appendChild(hud);
   const H = { v: hud.querySelector('.v'), bar: hud.querySelector('.bar i'), g: hud.querySelector('.g') };
-  let t = 0;
+  let t = 0, held = 0;
   return {
     show() { hud.style.display = 'block'; },
     hide() { hud.style.display = 'none'; },
@@ -89,13 +91,17 @@ function speedoHud(b) {
       if (!riding || (t -= dt) > 0) return;
       t = 0.08;
       const av = Math.abs(b.v);
-      const { gear, rev } = gearOf(av);
+      const { gear, rev } = gearOf(av, held); // 엔진음과 같은 히스테리시스
+      held = gear;
       H.v.textContent = Math.round(av * 3.6);
       H.g.textContent = av < 0.3 ? 'N' : String(gear);
       H.bar.style.width = `${Math.round(rev * 100)}%`;
     },
   };
 }
+
+/** 기어별 주행 루프 (6단은 engineNote SB_LAYERS 로 gear5 재사용) */
+const GEAR_LOOPS = [1, 2, 3, 4, 5].map((g) => `superbike/gear${g}`);
 
 export function createSuperbike({ params, camera, ...env }) {
   if (params.get('superbike') === '0') return null;
@@ -113,12 +119,14 @@ export function createSuperbike({ params, camera, ...env }) {
     throttle: superbikeThrottle,
     rider: { build: (src) => buildTuckRider(src, RIDER), pose: poseRider },
     hud: speedoHud,
-    audio: (mesh) => createBikeAudio({
+    // ?rideSfx=0 (주행 효과음 끔) 이면 버스처럼 슈퍼바이크 엔진음도 끈다. ?sound=0 은 bikeAudio 가 처리
+    audio: (mesh) => params.get('rideSfx') === '0' ? null : createBikeAudio({
       camera, anchor: mesh.userData.lean, params, volume: 0.8,
-      files: { idle: 'superbike/idle', ride: 'superbike/ride', start: 'superbike/start', launch: 'superbike/launch' },
+      files: { idle: 'superbike/idle', ride: GEAR_LOOPS, start: 'superbike/start', launch: 'superbike/launch' },
       formats: ['ogg', 'm4a'],
-      curves: { mix: rideMix, rideRate, rideGain, idleRate: (av, th) => 1 + 0.12 * Math.min(1, th + av / 3) },
+      curves: { mix: rideMix, rideRate, rideGain, layer: rideLayer, idleRate: (av, th) => 1 + 0.12 * Math.min(1, th + av / 3) },
     }),
+    wheelie: { max: 0.45 }, // Space: 관리자 크루저와 같은 윌리 (giftRide/wheelie.js)
     cam: { dist: 5.2, pitch: 0.18 },
     netExtra: (b) => ({ th: +b.throttle.toFixed(2) }),
     throttleOf: (veh) => Math.max(0, Math.min(1, +veh.th || 0)),

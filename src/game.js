@@ -476,8 +476,8 @@ const adminBike = params.get('bike') !== '0'
   add(ROADBIKE_GIFT_ID, createRoadBike({ ...env, colorway: 'black', name: 'CR·1' }), road);
   add(ROADBIKE_WHITE_GIFT_ID, createRoadBike({ ...env, vehId: ROADBIKE_WHITE_VEH_ID, colorway: 'white', name: 'CR·1 White' }), road);
   add(SUPERBIKE_GIFT.id, createSuperbike({ ...env, camera }), [
-    '슈퍼바이크 RR · W 가속 · S 브레이크 · A/D 조향 · Shift 풀스로틀(303 km/h) · 평소 270 km/h · N 소리 · F 내리기',
-    'Superbike RR · W Throttle · S Brake · A/D Steer · Shift Full throttle (303 km/h) · 270 km/h cruise · N Mute · F Dismount',
+    '슈퍼바이크 RR · W 가속 · S 브레이크 · A/D 조향 · Shift 풀스로틀(303 km/h) · 평소 270 km/h · Space 앞바퀴 들기 · N 소리 · F 내리기',
+    'Superbike RR · W Throttle · S Brake · A/D Steer · Shift Full throttle (303 km/h) · 270 km/h cruise · Space Wheelie · N Mute · F Dismount',
   ]);
 }
 // [truck] 탈 수 있는 'Steel Truck' 주차 (스타베이스만, ?trucks=N 기본 20, ?trucks=0 끔, F 탑승/하차)
@@ -2080,7 +2080,7 @@ function frame() {
   moveSpeed = 0;
   // [gift-ride] 모두 매 프레임 갱신(세워 둔 것·원격 중계도 움직이게). 하나라도 타는 중이면 그 입력을 쓴다
   let cycling = false;
-  for (const { ride } of giftRides) cycling = ride.update(dt, f, s, run, dy) || cycling;
+  for (const { ride } of giftRides) cycling = ride.update(dt, f, s, run, dy, jump && !board.open) || cycling; // Space = 앞바퀴 들기(윌리, 지원하는 탈것만)
   const cruising = !!adminBike?.update(dt, cycling ? 0 : f, cycling ? 0 : s, cycling ? false : run, dy, !cycling && jump && !board.open); // [bike] Space = 앞바퀴 들기(윌리)
   const driving = trucks?.update(dt, (cruising || cycling) ? 0 : f, (cruising || cycling) ? 0 : s, run, dy) || cruising || cycling; // [truck] [bike] [roadbike]
   if ((cruising || cycling) && bikes.riding) {

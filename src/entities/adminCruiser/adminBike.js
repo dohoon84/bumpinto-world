@@ -4,6 +4,7 @@ import * as THREE from 'three';
 import { createBikeAudio } from './bikeAudio.js'; // [bikeaudio]
 import { createBike, setBikeBrake, setBikeTankColor, BDIM } from './bikeModel.js';
 import { twoBone } from '../giftRide/riderRig.js';
+import { stepWheelie, wheelieSteerScale } from '../giftRide/wheelie.js';
 
 export const BIKE_VEH_ID = 900; // 블랙 탱크 — trucks 의 veh.id(0~59) 와 겹치지 않는 번호
 export const BIKE_VEH_RED_ID = 901; // 레드 탱크
@@ -412,29 +413,11 @@ body.bike-near #trk-prompt, body.bike-riding #trk-prompt{display:none!important}
     b.v = THREE.MathUtils.clamp(b.v, -REV_V, boost ? BOOST_V : Math.max(MAX_V, Math.min(b.v, BOOST_V) - 6 * dt));
     b.throttle = Math.max(0, f);
 
-    // 스페이스바 앞바퀴 들기(윌리): 뒷바퀴 축으로 묵직하게 들어 올리고 놓으면 중력으로 착지
-    if (wheelie && b.v >= -0.2) {
-      const targetW = MAX_WHEELIE * (0.82 + 0.18 * Math.min(1, Math.abs(b.v) / 8));
-      b.wheelieVel += (targetW - b.wheelie) * 18 * dt;
-      b.wheelieVel *= Math.max(0, 1 - 6.5 * dt);
-      // 정지 상태에서 앞바퀴를 들 때도 살짝 앞으로 치고 나가는 토크감
-      if (f <= 0 && b.v < 2.2) b.v = Math.min(2.2, b.v + 2.4 * dt);
-    } else {
-      b.wheelieVel -= 4.2 * dt; // 중력 복원
-    }
-    b.wheelie += b.wheelieVel * dt;
-    if (b.wheelie <= 0) {
-      if (b.wheelieVel < -0.45) b.dive = Math.min(0.032, (b.dive || 0) + Math.abs(b.wheelieVel) * 0.012); // 앞바퀴 착지 서스펜션 바운스
-      b.wheelie = 0;
-      b.wheelieVel = 0;
-    } else if (b.wheelie > MAX_WHEELIE) {
-      b.wheelie = MAX_WHEELIE;
-      if (b.wheelieVel > 0) b.wheelieVel = 0;
-    }
+    stepWheelie(b, dt, wheelie, f, MAX_WHEELIE); // 스페이스바 앞바퀴 들기: 뒷바퀴 축으로 묵직하게 들고 놓으면 중력으로 착지
 
     b.si += THREE.MathUtils.clamp(s - b.si, -2.6 * dt, 2.6 * dt); // 입력 관성
     const av = Math.abs(b.v), yawMax = Math.min(av / R_MIN, (0.78 * G) / Math.max(av, 0.1)); // 저속: 회전반경, 고속: 횡가속 한계(~38° 린)
-    const steerScale = b.wheelie > 0.1 ? 0.55 : 1; // 앞바퀴가 들려 있을 때는 조향이 둔해짐
+    const steerScale = wheelieSteerScale(b.wheelie);
     const want = -b.si * yawMax * steerScale * Math.sign(b.v || 1);
     b.yaw += (want - b.yaw) * Math.min(1, dt * 3.2); // 무게감: 요레이트가 천천히 따라감
     const nh = b.h + b.yaw * dt, nx = b.x + Math.sin(nh) * b.v * dt, nz = b.z + Math.cos(nh) * b.v * dt;

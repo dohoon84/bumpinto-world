@@ -22,7 +22,8 @@ const AF = SB.WB / 2;
 const AR = -SB.WB / 2;
 
 const SB_COLORS = {
-  white: '#eef0f2', black: '#15171a', grey: '#3a3d42', alu: '#a9adb3', ti: '#6d6a66', gold: '#d9a632',
+  white: '#eef0f2', black: '#15171a', grey: '#3a3d42', alu: '#a9adb3', chrome: '#c9ccd1', eng: '#7f848b', ti: '#6d6a66', gold: '#d9a632',
+  frame: '#25282d', plate: '#d6d8dc', amber: '#ffae2b',
   light: '#2f8fd8', dark: '#1d2d6b', red: '#d8262f', smoke: '#1f2833', tyre: '#1b1b1d',
 };
 const C = SB_COLORS;
@@ -91,6 +92,26 @@ function disc(r, w, col, x, seg = 16) {
   return paint(g, col);
 }
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
+/** 물결(웨이브) 디스크: 바깥 둘레가 n 번 물결친다 */
+function wavyDisc(r, w, col, x, n = 12) {
+  const g = new THREE.CylinderGeometry(r, r, w, n * 2, 1);
+  const p = g.attributes.position;
+  for (let i = 0; i < p.count; i++) {
+    const px = p.getX(i);
+    const pz = p.getZ(i);
+    const rr = Math.hypot(px, pz);
+    if (rr < r * 0.5) continue;
+    const k = 1 - 0.07 * (0.5 + 0.5 * Math.cos(n * Math.atan2(pz, px)));
+    p.setX(i, px * k);
+    p.setZ(i, pz * k);
+  }
+  g.computeVertexNormals();
+  g.rotateZ(Math.PI / 2);
+  g.translate(x, 0, 0);
+  return paint(g, col);
+}
+/** 엔진 옆 커버 (x 면에 붙는 납작한 원판) */
+const cover = (r, w, col, x, y, z, seg = 14) => disc(r, w, col, x, seg).translate(0, y, z);
 
 /** 이탤릭 블록 글자 'R' 윤곽 (높이 1) */
 function glyphR() {
@@ -148,9 +169,9 @@ function wheel(R, halfW, front) {
   }
   parts.push(disc(0.055, halfW * 1.7, C.alu, 0, 10));
   if (front) {
-    for (const x of [0.078, -0.078]) parts.push(disc(0.16, 0.006, C.alu, x, 20), disc(0.105, 0.008, C.grey, x, 10));
+    for (const x of [0.078, -0.078]) parts.push(wavyDisc(0.16, 0.006, C.chrome, x, 12), disc(0.1, 0.008, C.grey, x, 10));
   } else {
-    parts.push(disc(0.11, 0.006, C.alu, -0.08, 16), disc(0.095, 0.008, C.grey, 0.085, 14));
+    parts.push(wavyDisc(0.11, 0.006, C.chrome, -0.08, 9), disc(0.095, 0.008, C.grey, 0.085, 14));
   }
   return merge(parts);
 }
@@ -188,8 +209,16 @@ function getShared() {
   }
   // 언더카울(검정) · 엔진 · 알루미늄 프레임
   body.push(slab([[0.52, 0.38], [0.32, 0.18], [-0.02, 0.18], [-0.12, 0.3], [0.05, 0.37]], 0.16, C.black));
-  body.push(slab([[-0.14, 0.3], [0.25, 0.3], [0.3, 0.74], [-0.05, 0.76]], 0.165, C.grey));
-  body.push(slab([[0.42, 0.93], [0.4, 0.8], [-0.08, 0.52], [-0.2, 0.52], [-0.17, 0.67], [0.1, 0.83]], 0.17, C.alu));
+  body.push(slab([[-0.14, 0.3], [0.25, 0.3], [0.3, 0.74], [-0.05, 0.76]], 0.165, C.eng));
+  // 드러난 엔진 커버(은색): 오른쪽(-x) 클러치 커버가 크고, 왼쪽(+x)은 제너레이터 커버 + 스프라킷 커버. 아래 오일팬
+  body.push(cover(0.11, 0.03, C.chrome, -0.172, 0.47, -0.01, 16), cover(0.06, 0.036, C.alu, -0.176, 0.47, -0.01, 8));
+  body.push(cover(0.085, 0.03, C.chrome, 0.172, 0.5, 0.0, 14), box(0.03, 0.09, 0.1, C.alu, 0.168, 0.4, -0.12));
+  body.push(box(0.26, 0.06, 0.26, C.alu, 0, 0.27, 0.04));
+  // 트윈스파 프레임·피벗(검정)
+  body.push(slab([[0.42, 0.93], [0.4, 0.8], [-0.08, 0.52], [-0.2, 0.52], [-0.17, 0.67], [0.1, 0.83]], 0.17, C.frame));
+  body.push(slab([[-0.08, 0.6], [-0.2, 0.6], [-0.2, 0.3], [-0.1, 0.3]], 0.15, C.frame));
+  // 리어 쇼크(금색 스프링)
+  body.push(tube(V(0, 0.42, -0.2), V(0, 0.7, -0.1), 0.032, C.gold, 6));
   // 탱크(검정) · 시트 · 테일 카울(흰 + RR) · 서브프레임 · 테일램프
   body.push(slab([[0.43, 0.84], [0.43, 0.97], [0.3, 1.02], [0.1, 1.035], [-0.06, 0.95], [-0.12, 0.86], [0.0, 0.78], [0.25, 0.78]], 0.175, C.black, (z) => 1 - 0.32 * smooth(0.15, -0.12, z)));
   body.push(slab([[-0.06, 0.8], [-0.04, 0.85], [-0.44, 0.865], [-0.5, 0.845], [-0.48, 0.8]], 0.135, C.black));
@@ -198,10 +227,22 @@ function getShared() {
   body.push(...rrDecal(-0.52, 0.81, 0.131, 0.055, C.black));
   body.push(slab([[-0.08, 0.66], [-0.55, 0.76], [-0.8, 0.86], [-0.78, 0.82], [-0.5, 0.7], [-0.12, 0.58]], 0.1, C.black));
   glow.push(box(0.1, 0.022, 0.03, '#ff2b2b', 0, 0.955, -0.91, 0.45));
-  body.push(box(0.16, 0.11, 0.01, C.black, 0, 0.8, -0.96, 0.35), tube(V(0, 0.9, -0.84), V(0, 0.82, -0.95), 0.012, C.black, 4));
-  // 언더 배기: 엔진 밑 티타늄 머플러, 오른쪽(-x)으로 치우침
-  body.push(slab([[-0.3, 0.17], [0.06, 0.15], [0.1, 0.27], [-0.26, 0.31]], 0.12, C.ti, null, 0.02).translate(-0.05, 0, 0));
-  body.push(box(0.07, 0.06, 0.05, C.black, -0.06, 0.24, -0.33));
+  // 테일 정리(번호판 거치대): 테일 밑에서 뒤아래로 내려온 팔 + 빈 번호판(글자 없음) + 방향지시등
+  body.push(slab([[-0.78, 0.86], [-0.86, 0.88], [-1.02, 0.7], [-1.0, 0.64], [-0.96, 0.64]], 0.03, C.black, null, 0.008));
+  body.push(box(0.18, 0.11, 0.008, C.plate, 0, 0.6, -1.02, 0.18), box(0.2, 0.13, 0.006, C.black, 0, 0.6, -1.015, 0.18));
+  for (const sx of [1, -1]) glow.push(box(0.05, 0.022, 0.03, C.amber, sx * 0.07, 0.74, -0.99));
+  // 배기: 엔진 밑 은색 집합관 → 오른쪽(-x) 링크 파이프 → 스윙암 피벗 밑에서 뒷바퀴 쪽으로 비스듬히 올라가는 큰 사일런서
+  body.push(slab([[-0.24, 0.17], [0.1, 0.15], [0.14, 0.24], [-0.2, 0.27]], 0.11, C.alu, null, 0.02).translate(-0.03, 0, 0));
+  const ex0 = V(-0.2, 0.27, -0.16);
+  const ex1 = V(-0.235, 0.5, -0.66);
+  body.push(tube(V(-0.08, 0.2, -0.18), V(-0.16, 0.23, -0.12), 0.034, C.alu, 6), tube(V(-0.16, 0.23, -0.12), ex0, 0.036, C.alu, 6, 0.06));
+  body.push(tube(ex0, ex1, 0.068, C.chrome, 8));
+  const exDir = ex1.clone().sub(ex0).normalize();
+  body.push(tube(ex1, ex1.clone().addScaledVector(exDir, 0.035), 0.06, C.ti, 8, 0.045));
+  body.push(tube(ex1.clone().addScaledVector(exDir, 0.02), ex1.clone().addScaledVector(exDir, 0.06), 0.028, C.black, 6));
+  body.push(tube(V(-0.23, 0.44, -0.52), V(-0.16, 0.58, -0.45), 0.012, C.black, 4)); // 사일런서 행거
+  // 뒤 캘리퍼(금색, 오른쪽 디스크 위)
+  body.push(box(0.03, 0.06, 0.08, C.gold, -0.095, SB.RR + 0.085, AR + 0.05, 0.5));
   // 스윙암 · 체인 · 리어셋 스텝 · 미러
   for (const sx of [1, -1]) {
     body.push(slab([[-0.08, 0.5], [AR + 0.02, 0.36], [AR - 0.02, 0.28], [-0.08, 0.38]], 0.022, C.alu).translate(sx * 0.13, 0, 0));
@@ -221,7 +262,7 @@ function getShared() {
   for (const sx of [1, -1]) {
     steer.push(tube(along(0.98).setX(sx * 0.105), along(0.44).setX(sx * 0.105), 0.03, C.gold, 8));
     steer.push(tube(along(0.44).setX(sx * 0.105), along(SB.RF - 0.02).setX(sx * 0.105), 0.024, C.black, 8));
-    steer.push(box(0.035, 0.09, 0.05, C.grey, sx * 0.105, 0.36, AF - 0.12, -SB.RAKE));
+    steer.push(box(0.04, 0.11, 0.06, C.gold, sx * 0.1, 0.38, AF - 0.13, -SB.RAKE));
     steer.push(tube(V(sx * 0.1, 0.93, head.z + 0.01), V(sx * 0.3, 0.9, head.z - 0.04), 0.014, C.black, 5));
     steer.push(tube(V(sx * 0.24, 0.9, head.z - 0.025), V(sx * 0.33, 0.895, head.z - 0.045), 0.02, C.grey, 6));
   }
@@ -270,14 +311,21 @@ export function createSuperbikeModel() {
   root.name = 'superbike-rr';
   const lean = new THREE.Group();
   root.add(lean);
-  lean.add(mesh(S.body));
+  // 윌리: 뒷바퀴 접지점(z = AR) 축으로 wheelie 를 돌리면 wheelieFrame 안의 차체·라이더가 같이 들린다
+  const wheelie = new THREE.Group();
+  wheelie.position.z = AR;
+  lean.add(wheelie);
+  const frame = new THREE.Group();
+  frame.position.z = -AR;
+  wheelie.add(frame);
+  frame.add(mesh(S.body));
   const glow = mesh(S.glow, S.glowMat);
   glow.castShadow = false;
-  lean.add(glow);
+  frame.add(glow);
   const pivot = new THREE.Group();
   pivot.position.copy(S.head);
   pivot.rotation.x = -SB.RAKE;
-  lean.add(pivot);
+  frame.add(pivot);
   const steer = new THREE.Group();
   pivot.add(steer);
   steer.add(mesh(S.steer));
@@ -288,15 +336,15 @@ export function createSuperbikeModel() {
   const rearSpin = new THREE.Group();
   rearSpin.position.set(0, SB.RR, AR);
   rearSpin.add(mesh(S.wheelR));
-  lean.add(rearSpin);
+  frame.add(rearSpin);
   const stand = mesh(S.stand);
-  lean.add(stand);
+  frame.add(stand);
   const grips = S.grips.map((p) => {
     const o = new THREE.Object3D();
     o.position.copy(p);
     steer.add(o);
     return o;
   });
-  root.userData = { lean, steer, frontSpin, rearSpin, stand, grips };
+  root.userData = { lean, wheelie, wheelieFrame: frame, steer, frontSpin, rearSpin, stand, grips };
   return root;
 }

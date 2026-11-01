@@ -62,7 +62,8 @@ const capsule = (r) => shared(`c${r}`, () => new THREE.CapsuleGeometry(r, 1, 3, 
 /**
  * 숙인 자세 라이더. pose 로 매 프레임 손·발을 맞춘다.
  * @param {THREE.Object3D} src 내 아바타(createAvatar) 또는 원격 피어 메시
- * @param {object} o hip, torso(앞으로 숙이는 각, rad), upperScale, helmet(look)→Object3D, shoe, glove, foot [w,h,d], leg [허벅지 r, 정강이 r], arm [위팔 r, 아래팔 r]
+ * @param {object} o hip, torso(앞으로 숙이는 각, rad), upperScale, helmet(look)→Object3D, shoe, glove, foot [w,h,d], leg [허벅지 r, 정강이 r], arm [위팔 r, 아래팔 r],
+ *   neck?: { base [x,y,z] 몸통 좌표 목 밑동, up·fwd 탈것 좌표로 머리를 띄우는 양(m), r, color }
  */
 export function buildTuckRider(src, o) {
   const g = new THREE.Group();
@@ -112,7 +113,9 @@ export function buildTuckRider(src, o) {
     g.add(hand);
     return { sx, upper: mk(o.arm[0], bodyMat), fore: mk(o.arm[1], bodyMat), hand };
   });
-  g.userData = { upper, head, legs, arms };
+  // 목: 숙인 몸통 위로 머리를 띄워 앞을 보게 한다 (없으면 머리를 어깨 위에 바로 붙임)
+  const neck = o.neck ? mk(o.neck.r ?? 0.05, o.neck.color ? lambert(o.neck.color) : skinMat) : null;
+  g.userData = { upper, head, legs, arms, neck, neckOpt: o.neck || null };
   return g;
 }
 
@@ -121,10 +124,15 @@ export function buildTuckRider(src, o) {
  *   legLen [허벅지, 정강이], armLen [위팔, 아래팔], knee(sx)→Vector3, elbow(sx)→Vector3, footPitch
  */
 export function poseTuckRider(rider, p) {
-  const { upper, head, legs, arms } = rider.userData;
+  const { upper, head, legs, arms, neck, neckOpt: N } = rider.userData;
   const F = p.frame;
   F.updateMatrixWorld(true);
-  head.position.copy(F.worldToLocal(upper.localToWorld(_p.set(0, 0.9, 0.12))));
+  if (N) {
+    // 목 밑동(몸통 좌표) → 탈것 좌표로 위·앞으로 띄운 머리 중심. 몸통이 숙여도 머리는 들려 앞을 본다
+    const base = F.worldToLocal(upper.localToWorld(_p.set(...N.base))).clone();
+    head.position.set(base.x, base.y + N.up, base.z + N.fwd);
+    limb(neck, base, head.position);
+  } else head.position.copy(F.worldToLocal(upper.localToWorld(_p.set(0, 0.9, 0.12))));
   for (const l of legs) {
     const hip = F.worldToLocal(upper.localToWorld(_p.set(l.sx * 0.15, 0.14, 0.03))).clone();
     const foot = p.foot(l.sx, new THREE.Vector3());
