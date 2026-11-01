@@ -58,9 +58,11 @@ export const JEONGJA_REGION = {
   dataFiles: {
     world: 'jeongja.json',
     transit: 'transit.json',
+    colours: 'jeongja-colours.json', // [colours] 건물 외벽·지붕 색 (scripts/building-colours.mjs, ?colours=0 끔)
     terrain: 'terrain.json',
     drive: 'drive.json',
     corridor: 'corridor/', // [corridor] 정자 → 롯데월드타워 코리더 타일 (scripts/corridor/build-corridor.mjs)
+    shops: 'jeongja-shops.json', // [shops] 1층 상가 (scripts/ground-floor-shops.mjs, 소상공인시장진흥공단 상가(상권)정보)
   },
   signBoard: {
     topLeftColor: '#d4003b',

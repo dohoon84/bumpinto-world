@@ -252,6 +252,7 @@ export function addPlaceSigns(scene, data) {
     const along = (label.x - face.x0) * face.dx + (label.z - face.z0) * face.dz;
     const tex = mark ? markTexture(style.mark) : boardTexture(style.text, style.bg, style.fg, style.accent);
     const spot = addBoard(scene, face, along, y, w, h, tex, mark ? '#f6f3ee' : style.bg);
-    placed.push({ text: shown, x: spot.x, z: spot.z, w });
+    placed.push({ text: shown, x: spot.x, z: spot.z, w, host, face });
   }
+  return placed; // [shops] 1층 상가 간판/차양이 같은 건물·면을 피하도록
 }
