@@ -177,7 +177,7 @@ const corridorDir = region.features?.corridor && params.get('corridor') !== '0' 
 const [terrainData, driveData, corridorData, shopsData, coloursData] = await Promise.all([
   !terrainFile || params.get('terrain') === '0' ? null : fetch(import.meta.env.BASE_URL + terrainFile).then((r) => r.json()).catch(() => null),
   !driveFile || params.get('taxis') === '0' ? null : fetch(import.meta.env.BASE_URL + driveFile).then((r) => r.json()).catch(() => null),
-  corridorDir ? loadCorridorData(import.meta.env.BASE_URL + corridorDir) : null,
+  corridorDir ? loadCorridorData(import.meta.env.BASE_URL + corridorDir, { streams: params.get('streams') !== '0' }) : null,
   fetchOptionalJson(shopsFile), // [shops]
   fetchOptionalJson(coloursFile), // [colours]
 ]);

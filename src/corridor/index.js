@@ -6,6 +6,7 @@
 import * as THREE from 'three';
 import { mergeTancheon, coveredFn, holeyGround, channelWaterMesh } from './tancheon.js';
 import { buildDetailTile, buildLodTile, roadMesh, CAR_KINDS } from './tileMesh.js';
+import { applyTileCuts } from '../world/streams.js';
 import { buildCorridorCrossings } from './crossings.js';
 import { createLandmarks } from './landmarks/index.js';
 import { createLotteEvent } from './landmarks/lotteEvent.js';
@@ -16,17 +17,20 @@ import { createCorridorLife } from './life.js';
 import { extractLifeHints, gatherLifeHints } from './lifeHints.js'; // [life] 동네별 보행자·주차 위치 힌트
 import { setNightCut, updateNight } from './nightLights.js';
 
-export async function loadCorridorData(baseUrl) {
+// streams: 탄천 지류 하도(streams.json). ?streams=0 이면 false → 예전과 같은 데이터만
+export async function loadCorridorData(baseUrl, { streams = true } = {}) {
   const get = (f) => fetch(baseUrl + f).then((r) => (r.ok ? r.json() : null)).catch(() => null);
-  const [index, base, tancheon] = await Promise.all([get('index.json'), get('base.json'), get('tancheon.json')]);
-  return index && base ? { index, base, baseUrl, tancheon } : null;
+  const [index, base, tancheon, streamsData] = await Promise.all([get('index.json'), get('base.json'), get('tancheon.json'), streams ? get('streams.json') : null]);
+  return index && base ? { index, base, baseUrl, tancheon, streams: streamsData } : null;
 }
 // [corridor] 탄천 지형: 코리더가 켜졌을 때만 라이브 terrain.json 뒤에 수내→잠실 축/단면을 이어 붙인다(라이브 구간 값은 그대로)
 export function corridorTerrainData(terrainData, corridorData) {
   if (!terrainData || !corridorData?.tancheon) return terrainData;
   const T = mergeTancheon(terrainData, corridorData.tancheon);
-  if (T !== terrainData) corridorData.terrainT = T;
-  return T;
+  if (T === terrainData) return T;
+  corridorData.terrainT = T;
+  // [streams] 지류는 코리더 본류 축이 붙었을 때만 (합류 높이가 본류 단면에 기대므로)
+  return corridorData.streams?.streams?.length ? { ...T, streams: corridorData.streams } : T;
 }
 
 const QUALITY = { low: { detail: 450, lod: 1500 }, med: { detail: 650, lod: 1800 }, high: { detail: 850, lod: 2400 } };
@@ -51,8 +55,12 @@ export function createCorridor({ scene, corridorData, terrain, world, renderer, 
   const liveOnRoad = world.onRoad, liveBlocked = world.isBlocked;
 
   // ---------- 탄천 구간 도로(제방·다리) : 라이브 terrain 이 다리 상판/교각/난간을 만들도록 build 전에 annotate ----------
-  const ch = base.ch.map((r) => ({ ...r, p: r.p.map((p) => p.slice()) }));
-  terrain?.annotate({ roads: ch, water: [], waterLines: [], parks: base.chParks.map((p) => ({ ...p })) });
+  // [streams] 켜졌을 때(?streams=0 아님): base.ch 에 없던 탄천 본류 다리(분당수서로·여수대교 램프 등, streams.json mainBridges)도 같이 그림
+  const SD = terrain?.streams ? corridorData.streams : null;
+  const ch = base.ch.concat(SD?.mainBridges || []).map((r) => ({ ...r, p: r.p.map((p) => p.slice()) }));
+  // [streams] 지류 위 다리(타일에 br=1 로 이미 있는 길): 상판 높이·교각·난간만 terrain 이 만든다. 리본은 타일이 그대로 그림
+  const streamBridges = SD ? SD.bridges.map((r) => ({ ...r, p: r.p.map((p) => p.slice()) })) : [];
+  terrain?.annotate({ roads: ch.concat(streamBridges), water: [], waterLines: [], parks: base.chParks.map((p) => ({ ...p })) });
   const chMesh = roadMesh(ch); if (chMesh) root.add(chMesh);
   const chWater = corridorData.terrainT ? channelWaterMesh(corridorData.tancheon?.water, terrain) : null; // 탄천 수면(수내→잠실)
   if (chWater) root.add(chWater);
@@ -96,7 +104,7 @@ export function createCorridor({ scene, corridorData, terrain, world, renderer, 
       if (t.lod) t.lod.group.visible = false;
       stats.builtDetail++;
     } else if (job.kind === 'l' && t.lState === 2) {
-      const tile = buildLodTile(t.key, t.lData, base);
+      const tile = buildLodTile(t.key, t.lData, base, SD ? terrain : null);
       t.lData = null; t.lod = tile; t.lState = 3; root.add(tile.group);
       tile.group.visible = t.dState !== 3;
       stats.builtLod++;
@@ -116,6 +124,7 @@ export function createCorridor({ scene, corridorData, terrain, world, renderer, 
     return (t.dPromise = getJson('tiles/' + t.key + '.json').then((j) => {
       if (t.dState !== 1) return; // 그 사이 언로드
       if (!j) { t.dState = 0; return; }
+      if (SD) prepStreamTile(j, SD.tiles[t.key], 'tile');
       t.dData = j; t.dState = 2; buildQueue.push({ kind: 'd', key: t.key });
     }));
   }
@@ -125,8 +134,14 @@ export function createCorridor({ scene, corridorData, terrain, world, renderer, 
     getJson('lod/' + t.key + '.json').then((j) => {
       if (t.lState !== 1) return;
       if (!j) { t.lState = 0; return; }
+      if (SD) prepStreamTile(j, SD.lod[t.key], 'lod');
       t.lData = j; t.lState = 2; buildQueue.push({ kind: 'l', key: t.key });
     });
+  }
+  // [streams] 하도 띠를 뺀 바닥/공원/수면 폴리곤으로 바꾸고, 길에 지형 높이를 붙임 (다리 br 은 그대로 0m → 위 annotate 의 상판과 같음)
+  function prepStreamTile(j, rep, kind) {
+    applyTileCuts(j, rep, kind);
+    if (kind === 'tile') terrain.liftRoads(j.r || []);
   }
   function unloadDetail(t) {
     if (t.detail) { t.detail.dispose(); t.detail = null; loaded.splice(loaded.indexOf(t), 1); }
@@ -159,10 +174,11 @@ export function createCorridor({ scene, corridorData, terrain, world, renderer, 
     const mat = world.ground?.material; if (!mat) return;
     const B = index.meta.bounds, M = 3000, P = 800;
     const rects = [[B.x0 - P, B.z0 - P, B.x1 + P, -M], [M, -M, B.x1 + P, M], [B.x0 - P, -M, -M, M]].filter(([a, b, c, d]) => c > a && d > b);
-    const TT = corridorData.terrainT, covered = TT ? coveredFn(terrain, TT) : null; // 탄천 연장 구간은 바닥에 구멍(라이브 바닥과 같은 방식)
+    const TT = corridorData.terrainT, coveredMain = TT ? coveredFn(terrain, TT) : null; // 탄천 연장 구간은 바닥에 구멍(라이브 바닥과 같은 방식)
+    const S = terrain?.streams, covered = coveredMain && S ? (x, z) => coveredMain(x, z) || S.covered(x, z) : coveredMain;
     for (const [a, b, c, d] of rects) {
       let g;
-      if (covered) g = holeyGround(a, b, c, d, 0, 8, covered, TT.axis);
+      if (covered) g = holeyGround(a, b, c, d, 0, 8, covered, TT.axis, S ? S.near : null);
       else { g = new THREE.PlaneGeometry(c - a, d - b); g.rotateX(-Math.PI / 2); g.translate((a + c) / 2, 0, (b + d) / 2); }
       const m = new THREE.Mesh(g, mat); m.receiveShadow = true; m.name = 'corridorOuterGround'; root.add(m);
     }
