@@ -20,6 +20,7 @@ import { CHAT_RADIUS } from './net/protocol.js';
 import { buildTransit, makeCrossingGuard, mergeSimExtra } from './transit/transit.js';
 import { mountPhone } from './phone.js';
 import { mountHandset } from './handset.js';
+import { mountCamera } from './camera/index.js'; // [camera] 폰 카메라·사진 앱 (?camera=0 이면 끔, 본체는 처음 열 때 지연 로드)
 import { mountBoard } from './board.js';
 import { createSms } from './sms.js';
 import { trackEvent } from './analytics.js';
@@ -1814,6 +1815,10 @@ ride = corridor && params.get('ride') !== '0' ? mountRide({
 }) : null;
 if (ride) { ride.setOverlay(overlay); remotes.rideHook = (p, dt) => ride.remoteHook(p, dt); }
 const perfHud = mountPerfHud({ renderer, corridor, params });
+const cameraApp = mountCamera({ // [camera]
+  handset, renderer, scene, camera, cam, params, sms,
+  getInfo: () => ({ region: region.id, regionName: region.name, regionEnName: region.enName || region.name, x: player.position.x, z: player.position.z, name: me?.name || '' }),
+});
 if (travel && params.get('at')) travel.go(params.get('at'));
 // [corridor] 지구본 역 선택 → 입장 완료 후 역 출구 앞 인도로 (위치 저장 성공 여부와 무관)
 corridorArrive = () => {
@@ -1900,6 +1905,7 @@ function pauseWorldSession() {
   board.close();
   donationBoards.closeModal();
   handset.close();
+  cameraApp?.close(); // [camera]
   setPresenceOpen(false);
   setChatLogOpen(false);
   mySit = '';
@@ -2027,7 +2033,7 @@ setInterval(() => {
   const now = performance.now();
   // requestAnimationFrame이 백그라운드에서 멈춘 경우(0.5초 이상 경과)
   if (now - lastFrameAt > 500) {
-    if (!bikes.riding && !adminBike?.riding && !giftRiding() && !myEmote && !handset.open && !board.open && !ride?.active) { // [ride] 탑승 중엔 자리비움 없음
+    if (!bikes.riding && !adminBike?.riding && !giftRiding() && !myEmote && !handset.open && !cameraApp?.open && !board.open && !ride?.active) { // [ride] 탑승 중엔 자리비움 없음
       idleTime += 1.0;
       if (!myAfk && idleTime >= AFK_TIMEOUT_SEC) {
         myAfk = true;
@@ -2173,7 +2179,7 @@ function frame() {
     }
 
     // 30초 동안 아무 입력이 없으면 자동 대기모드(자리비움/졸기) 전환
-    if (joined && moveSpeed < 0.05 && !myEmote && !handset.open && !board.open && !ride?.active) { // [ride]
+    if (joined && moveSpeed < 0.05 && !myEmote && !handset.open && !cameraApp?.open && !board.open && !ride?.active) { // [ride]
       idleTime += dt;
       if (!myAfk && idleTime >= AFK_TIMEOUT_SEC) {
         myAfk = true;
@@ -2319,5 +2325,6 @@ window.__jj = {
   teleport(x, z, y) { ride?.forceAlight('teleport'); if (bikes.riding) dismountBike(); if (adminBike?.riding) adminBike.dismount(); dismountGiftRides(); player.position.set(x, y ?? (terrain ? terrain.getGroundHeight(x, z, 0) : 0), z); }, // [terrain] [bike] [roadbike]
   bikes, toggleRide, triggerEmote,
   get ride() { return ride; }, remotes, presence, // [ride]
+  cameraApp, // [camera]
   nearNpc(i = 0, d = 3) { const n = npcs.list[i]; player.position.set(n.pos.x + d, 0, n.pos.z + d * 0.5); },
 };

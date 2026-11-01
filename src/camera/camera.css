@@ -1,0 +1,83 @@
+/* [camera] 뷰파인더·촬영 확인·사진 보관함. 카메라를 처음 열 때만 로드된다. */
+body.cam-mode #hud, body.cam-mode #buttons, body.cam-mode #top-right-bar, body.cam-mode #emote-bar, body.cam-mode #chat, body.cam-mode #chat-log-panel,
+body.cam-mode #joystick, body.cam-mode #presence-status, body.cam-mode #presence-panel, body.cam-mode #board-Launcher, body.cam-mode #contribute-launcher,
+body.cam-mode #board-modal, body.cam-mode #donate-near-btn, body.cam-mode #donate-modal, body.cam-mode #umbrella-actions, body.cam-mode #dog-gate-btn,
+body.cam-mode #coffee-order-bar, body.cam-mode #coffee-toss-btn, body.cam-mode #stop-panel, body.cam-mode #phone, body.cam-mode #handset,
+body.cam-mode #attribution, body.cam-mode #rs-hud, body.cam-mode #rs-btns, body.cam-mode #ls-hud, body.cam-mode #trk-prompt, body.cam-mode #trk-hud,
+body.cam-mode #bike-prompt, body.cam-mode #bike-hud, body.cam-mode #inventory-dock, body.cam-mode #overlay, body.cam-mode #ride-btn { display: none !important; }
+
+.cam-root { position: fixed; inset: 0; z-index: 900; pointer-events: none; overflow: hidden; color: #fff; font-family: inherit; user-select: none; -webkit-user-select: none; }
+.cam-root button { font: inherit; pointer-events: auto; cursor: pointer; }
+.cam-frame { position: absolute; box-shadow: 0 0 0 200vmax rgba(0, 0, 0, .58); transition: left .22s, top .22s, width .22s, height .22s; }
+.cam-grid { position: absolute; inset: 0; opacity: 0; transition: opacity .2s;
+  background:
+    linear-gradient(90deg, transparent calc(33.333% - .5px), rgba(255,255,255,.45) calc(33.333% - .5px) calc(33.333% + .5px), transparent calc(33.333% + .5px) calc(66.666% - .5px), rgba(255,255,255,.45) calc(66.666% - .5px) calc(66.666% + .5px), transparent calc(66.666% + .5px)),
+    linear-gradient(180deg, transparent calc(33.333% - .5px), rgba(255,255,255,.45) calc(33.333% - .5px) calc(33.333% + .5px), transparent calc(33.333% + .5px) calc(66.666% - .5px), rgba(255,255,255,.45) calc(66.666% - .5px) calc(66.666% + .5px), transparent calc(66.666% + .5px)); }
+.cam-root.grid-on .cam-grid { opacity: 1; }
+.cam-top { position: absolute; left: 0; right: 0; top: 0; height: 56px; background: #000; display: flex; align-items: center; justify-content: space-between; padding: 0 22px; box-sizing: border-box; pointer-events: auto; }
+.cam-ic { width: 36px; height: 36px; border-radius: 50%; border: 0; background: rgba(255,255,255,.14); color: #fff; font-size: 17px; font-weight: 800; display: grid; place-items: center; }
+.cam-ic.on { color: #ffd60a; }
+.cam-title { font-size: 13px; font-weight: 700; letter-spacing: .1em; color: rgba(255,255,255,.82); display: flex; align-items: center; gap: 7px; }
+.cam-rec { width: 7px; height: 7px; border-radius: 50%; background: #30d158; }
+.cam-hint { position: absolute; left: 50%; top: 68px; transform: translateX(-50%); padding: 6px 14px; border-radius: 99px; background: rgba(0,0,0,.42); font-size: 12.5px; font-weight: 600; white-space: nowrap; }
+.cam-zoom { position: absolute; left: 50%; transform: translateX(-50%); display: flex; gap: 6px; padding: 5px; border-radius: 99px; background: rgba(0,0,0,.3); pointer-events: auto; }
+.cam-zoom button { min-width: 38px; height: 38px; border: 0; border-radius: 50%; background: rgba(0,0,0,.5); color: #fff; font-size: 12px; font-weight: 800; }
+.cam-zoom button.on { color: #ffd60a; font-size: 13.5px; }
+.cam-bottom { position: absolute; left: 0; right: 0; bottom: 0; height: 168px; background: #000; pointer-events: auto; }
+.cam-modes { position: absolute; top: 14px; left: 0; right: 0; display: flex; justify-content: center; gap: 30px; }
+.cam-modes button { border: 0; background: transparent; color: rgba(255,255,255,.66); font-size: 13.5px; font-weight: 800; letter-spacing: .08em; padding: 4px 2px; }
+.cam-modes button.on { color: #ffd60a; }
+.cam-shutter { position: absolute; left: 50%; bottom: 30px; width: 82px; height: 82px; margin-left: -41px; border-radius: 50%; border: 5px solid #fff; background: transparent; padding: 0; display: grid; place-items: center; }
+.cam-shutter i { display: block; width: 64px; height: 64px; border-radius: 50%; background: #fff; transition: transform .1s; }
+.cam-shutter:active i { transform: scale(.88); }
+.cam-thumb { position: absolute; left: calc(50% - 260px); bottom: 42px; width: 58px; height: 58px; border-radius: 10px; border: 2px solid rgba(255,255,255,.9); background: #222 center/cover no-repeat; padding: 0; }
+.cam-thumb.empty { background-image: none; border-color: rgba(255,255,255,.35); }
+.cam-flip { position: absolute; left: calc(50% + 202px); bottom: 42px; width: 58px; height: 58px; border-radius: 50%; border: 0; background: rgba(255,255,255,.14); color: #fff; font-size: 26px; font-weight: 800; }
+.cam-flash { position: absolute; inset: 0; background: #fff; opacity: 0; pointer-events: none; }
+.cam-flash.go { animation: cam-flash .42s ease-out; }
+@keyframes cam-flash { 0% { opacity: 0; } 12% { opacity: .95; } 100% { opacity: 0; } }
+.cam-toast { position: absolute; left: 50%; bottom: 188px; transform: translate(-50%, 8px); padding: 8px 16px; border-radius: 12px; background: rgba(28,28,30,.9); font-size: 13px; font-weight: 600; opacity: 0; transition: opacity .2s, transform .2s; }
+.cam-toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+.cam-review { position: absolute; inset: 0; background: rgba(0,0,0,.62); display: grid; place-items: center; pointer-events: auto; animation: cam-rv .32s ease-out; }
+.cam-review[hidden] { display: none; }
+@keyframes cam-rv { from { opacity: 0; transform: scale(1.03); } to { opacity: 1; transform: none; } }
+.cr-card { width: min(640px, 92vw); max-height: 94vh; overflow: auto; padding: 14px 16px 12px; border-radius: 22px; background: #1c1c1e; box-shadow: 0 24px 60px rgba(0,0,0,.5); box-sizing: border-box; }
+.cr-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; font-size: 15px; }
+.cr-head button { border: 0; background: transparent; color: #0a84ff; font-size: 14.5px; font-weight: 700; padding: 4px 2px; }
+.cr-photo { border-radius: 12px; overflow: hidden; background: #000; display: grid; place-items: center; }
+.cr-photo img { display: block; max-width: 100%; max-height: 52vh; }
+.cr-meta { margin: 8px 2px 10px; font-size: 12px; color: rgba(235,235,245,.6); }
+.cr-cap { display: flex; align-items: center; gap: 8px; padding: 0 12px; border-radius: 12px; background: #2c2c2e; }
+.cr-caption { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; color: #fff; font: inherit; font-size: 14.5px; padding: 11px 0; }
+.cr-count { font-size: 11px; color: rgba(235,235,245,.45); }
+.cr-row { display: flex; gap: 8px; margin-top: 10px; }
+.cr-btn { flex: 1; border: 0; border-radius: 12px; padding: 11px 8px; background: #2c2c2e; color: #fff; font-size: 14px; font-weight: 700; }
+.cr-btn.blue { background: #0a84ff; }
+.cr-btn.red { background: #ff453a; }
+.cr-btn:disabled { opacity: .55; cursor: default; }
+.cr-confirm { margin-top: 10px; padding: 12px; border-radius: 12px; background: #2c2c2e; }
+.cr-confirm p { margin: 0; font-size: 13px; line-height: 1.5; color: rgba(235,235,245,.85); }
+.cr-note { min-height: 16px; margin: 10px 2px 0; font-size: 12.5px; color: #30d158; }
+.cr-note.err { color: #ff6961; }
+
+/* 폰 속 사진 보관함 */
+#handset .ph-bar { display: flex; align-items: center; gap: 6px; margin: 0 0 8px; font-size: 13px; font-weight: 800; }
+#handset .ph-bar small { color: #5c6b82; font-weight: 600; }
+#handset .ph-bar .ph-camera, #handset .ph-bar .ph-back { margin-left: auto; border: 0; background: transparent; color: #1f5fbf; font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; padding: 0; }
+#handset .ph-bar .ph-back { margin-left: 0; }
+#handset .ph-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 2px; border-radius: 6px; overflow: hidden; }
+#handset .ph-cell { position: relative; aspect-ratio: 1; border: 0; padding: 0; background: #ccd center/cover no-repeat; cursor: pointer; }
+#handset .ph-tip { position: absolute; right: 3px; bottom: 3px; width: 14px; height: 14px; border-radius: 50%; background: #ff3b30; color: #fff; font-size: 9px; font-style: normal; display: grid; place-items: center; }
+#handset .ph-photo { border-radius: 10px; overflow: hidden; background: #000; }
+#handset .ph-photo img { display: block; width: 100%; }
+#handset .ph-meta { margin: 6px 2px; font-size: 11px; color: #3d4d63; }
+#handset .ph-caption { width: 100%; box-sizing: border-box; font-size: 13px; }
+#handset .ph-confirm { margin: 8px 2px 0; font-size: 11.5px; line-height: 1.45; color: #102033; }
+#handset .ph-tools { display: flex; justify-content: space-between; gap: 4px; margin-top: 8px; }
+#handset .ph-tools button { flex: 1; border: 0; border-radius: 10px; padding: 6px 2px; background: rgba(255,255,255,.85); color: #1f5fbf; font-size: 16px; font-weight: 800; cursor: pointer; }
+#handset .ph-tools button em { display: block; font-style: normal; font-size: 10.5px; font-weight: 700; }
+#handset .ph-tools button.red { background: #ff3b30; color: #fff; }
+#handset .ph-tools button:disabled { opacity: .45; cursor: default; }
+#handset .ph-note { min-height: 14px; margin: 6px 2px; }
+#handset .ph-note.err { color: #c62828; }

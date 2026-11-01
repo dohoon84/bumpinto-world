@@ -1,0 +1,9 @@
+/* [camera] 폰 홈 아이콘 두 개(카메라·사진). 일반적인 모양만 쓰고 상표·로고는 쓰지 않는다. */
+#handset .glyph.camera { background: linear-gradient(180deg, #d9dce1, #9ea3ab); }
+#handset .glyph.camera .cam-lens { position: absolute; left: 50%; top: 50%; width: 26px; height: 26px; margin: -13px 0 0 -13px; border-radius: 50%; background: radial-gradient(circle at 38% 36%, #5f6b7c 0 3px, #1b2230 4px 8px, #3a4352 9px 10px, #11151c 11px); box-shadow: 0 0 0 3px #2a2f37; }
+#handset .glyph.camera::before { content: ''; position: absolute; left: 9px; top: 11px; width: 8px; height: 4px; border-radius: 2px; background: #3a3f47; }
+#handset .glyph.camera::after { content: ''; position: absolute; right: 9px; top: 10px; width: 5px; height: 5px; border-radius: 50%; background: #f5c542; }
+#handset .glyph.photos { background: #fff; overflow: hidden; }
+#handset .glyph.photos .ph-petals { position: absolute; left: 7px; right: 7px; top: 9px; bottom: 9px; border-radius: 6px; overflow: hidden; background: linear-gradient(180deg, #6fc3ff, #bfe6ff); }
+#handset .glyph.photos .ph-petals::before { content: ''; position: absolute; right: 6px; top: 5px; width: 9px; height: 9px; border-radius: 50%; background: #ffcc33; }
+#handset .glyph.photos .ph-petals::after { content: ''; position: absolute; left: -6px; right: -6px; bottom: -12px; height: 26px; background: linear-gradient(135deg, transparent 45%, #3fae5a 46%), linear-gradient(225deg, transparent 45%, #2e8c47 46%); background-size: 55% 100%, 60% 100%; background-position: 0 0, 100% 0; background-repeat: no-repeat; }
