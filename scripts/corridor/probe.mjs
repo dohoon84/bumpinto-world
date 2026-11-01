@@ -45,7 +45,7 @@ await page.addInitScript(() => {
   const raf = window.requestAnimationFrame.bind(window);
   window.requestAnimationFrame = (cb) => raf((t) => { st.frames++; cb(t); });
 });
-const q = `?shot=1&npcs=0&taxis=0&police=0&trucks=0&bike=0&roadbike=0&evening=0${EXTRA ? '&' + EXTRA : ''}`;
+const q = `?shot=1&npcs=0&taxis=0&police=0&trucks=0&bike=0&roadbike=0&superbike=0&evening=0${EXTRA ? '&' + EXTRA : ''}`;
 await page.goto(URL + q);
 await page.waitForFunction(() => window.__jj?.ready, null, { timeout: 180000 });
 await page.waitForTimeout(4000);
