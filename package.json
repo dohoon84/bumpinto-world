@@ -15,6 +15,8 @@
     "corridor:build": "node --max-old-space-size=8192 scripts/corridor/build-corridor.mjs",
     "corridor:check": "node --max-old-space-size=8192 scripts/corridor/check-roads.mjs",
     "corridor:probe": "node scripts/corridor/probe.mjs",
+    "colours:build": "node scripts/building-colours.mjs",
+    "colours:test": "node scripts/test-building-colours.mjs",
     "corridor:tancheon": "node --max-old-space-size=8192 scripts/corridor/build-tancheon.mjs",
     "corridor:transit": "node scripts/corridor/build-transit.mjs",
     "corridor:drive": "node scripts/corridor/build-drive.mjs",
