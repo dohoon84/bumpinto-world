@@ -49,6 +49,7 @@ import { mountTravel } from './corridor/travel.js'; // [corridor]
 import { mountPerfHud } from './corridor/perfHud.js'; // [corridor]
 import { corridorStationLabel } from './corridor/globeCorridor.js'; // [corridor]
 import { mountRide } from './ride/index.js'; // [ride] 코리더 버스·택시 탑승
+import { prepareBuildingColours } from './world/buildingColours.js'; // [colours]
 
 const params = new URLSearchParams(location.search);
 const region = getCurrentRegion();
@@ -156,6 +157,8 @@ else if (passportEnter && readSavedPassport()) passportQueued = true;
 else if (autoEnter) lobbyQueued = true;
 else openWorldGate({ onEnter: handleGateEnter });
 
+// [colours] 건물 외벽·지붕 색 (브이월드 속성 추정 + 수동). ?colours=0 이면 받지 않아 기존 모습 그대로
+const coloursP = region.dataFiles?.colours && params.get('colours') !== '0' ? fetch(import.meta.env.BASE_URL + region.dataFiles.colours).then((r) => (r.ok ? r.json() : null)).catch(() => null) : null;
 const worldFile = region.dataFiles?.world || 'jeongja.json';
 const transitFile = region.features?.transit ? region.dataFiles?.transit : null;
 const terrainFile = region.dataFiles?.terrain;
@@ -208,6 +211,7 @@ scene.add(sun, sun.target);
 function setShadowSpan(span) { const c = sun.shadow.camera; c.left = c.bottom = -span; c.right = c.top = span; c.near = 1; c.far = span * 4 + 600; c.updateProjectionMatrix(); }
 
 // --- 월드 ---
+const buildingColours = prepareBuildingColours(data, await coloursP); // [colours] buildWorld 전에 data.buildings[i].fc
 const terrain = terrainData ? createTerrain(corridorTerrainData(terrainData, corridorData), data) : null; // [terrain] [corridor] 코리더 켜짐: 탄천 축 연장
 terrain?.annotate(data); // [terrain] 도로/수면에 높이 부여 (buildWorld 전에)
 const tower = region.features?.launchTower && params.get('tower') !== '0' ? createTowerAddon(data) : null; // [tower] buildWorld 전에 _skip 마킹
@@ -1731,6 +1735,9 @@ function syncGameLocale() {
     attrEl.innerHTML = en
       ? '© <a href="https://crazylabs.co.kr" target="_blank" rel="noopener">CrazyLabs</a> · <a href="https://github.com/dohoon84/bumpinto-world" target="_blank" rel="noopener">Source Available</a> · Map © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> (ODbL)'
       : '© <a href="https://crazylabs.co.kr" target="_blank" rel="noopener">CrazyLabs</a> · <a href="https://github.com/dohoon84/bumpinto-world" target="_blank" rel="noopener">소스 공개 (영리 서비스 금지)</a> · 지도 © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> (ODbL)';
+    if (buildingColours) attrEl.innerHTML += en // [colours] 건물 속성(구조·용도·사용승인일) → 외벽색 추정
+      ? ' · Building attributes: <a href="https://www.vworld.kr" target="_blank" rel="noopener">VWorld</a> GIS building data (MOLIT, KOGL Type 1)'
+      : ' · 건물 속성: <a href="https://www.vworld.kr" target="_blank" rel="noopener">브이월드</a> GIS건물통합정보 (국토교통부, 공공누리 제1유형)';
     // [corridor] 코리더 건물 높이 출처 (Overture footprint · 브이월드 GIS건물통합정보)
     if (corridorDir) attrEl.innerHTML += en
       ? ' · <a href="https://overturemaps.org" target="_blank" rel="noopener">Overture Maps</a> · Building heights: <a href="https://www.vworld.kr" target="_blank" rel="noopener">VWorld</a> (MOLIT)'

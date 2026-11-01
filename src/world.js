@@ -10,6 +10,7 @@ import { addPostOfficeMarks } from './world/postOffice.js';
 import { addStationCafeCrowd } from './world/cafeCrowd.js';
 import { addPlaceSigns } from './world/signs.js';
 import { addInstancedTrees } from './world/trees.js';
+import { tintFacadeShader } from './world/buildingColours.js'; // [colours]
 
 export const ROAD_STYLE = {
   primary: ['#8d939c', 0.06], secondary: ['#949aa3', 0.065], tertiary: ['#9ca1a9', 0.07], trunk: ['#8d939c', 0.06],
@@ -160,8 +161,9 @@ export function buildWorld(scene, data, region = null) {
     g.rotateX(-Math.PI / 2); g.translate(0, minH, 0);
     c.set(BUILDING_COLOR[b.k] || BUILDING_COLOR.yes).offsetHSL((rnd() - 0.5) * 0.04, (rnd() - 0.5) * 0.08, (rnd() - 0.5) * 0.06);
     if (b.s === 'default') c.offsetHSL(0, -0.05, 0.02);
+    if (b.fc) c.copy(b.fc.wall); // [colours] 브이월드 추정/수동 색 (rnd() 호출 수는 그대로)
     roof.copy(c).offsetHSL(0, -0.05, -0.12);
-    wallTint.setRGB(0.93 + c.r * 0.07, 0.93 + c.g * 0.07, 0.93 + c.b * 0.07);
+    if (b.fc) { roof.copy(b.fc.roof); wallTint.copy(b.fc.tint); } else wallTint.setRGB(0.93 + c.r * 0.07, 0.93 + c.g * 0.07, 0.93 + c.b * 0.07);
     const nrm = g.attributes.normal, cols = new Float32Array(nrm.count * 3);
     for (let i = 0; i < nrm.count; i++) {
       const ny = nrm.getY(i), cc = ny > 0.5 ? roof : ny < -0.5 ? c : wallTint;
@@ -178,7 +180,7 @@ export function buildWorld(scene, data, region = null) {
     bmesh.castShadow = true; bmesh.receiveShadow = true; scene.add(bmesh);
   }
   for (const [key, geos] of Object.entries(walls)) {
-    const mesh = new THREE.Mesh(mergeGeometries(geos), facadeMaterial(key));
+    const mesh = new THREE.Mesh(mergeGeometries(geos), facadeMaterial(key, !!data.buildingColours)); // [colours]
     mesh.castShadow = true; mesh.receiveShadow = true; scene.add(mesh);
   }
   const starbucksRooms = isJeongja ? addStarbucksGlass(scene, shells) : [];
@@ -342,7 +344,12 @@ export function takeGroup(g, materialIndex) {
 }
 
 const facadeMats = new Map();
-export function facadeMaterial(key) {
+export function facadeMaterial(key, tinted = false) {
+  if (tinted) { // [colours] 같은 텍스처, 벽/유리 구분해 버텍스 색을 곱하는 변형 (정자 외벽만, 기존 재질과 바꿔 씀 → draw 수 같음)
+    const ck = key + '|colours';
+    if (!facadeMats.has(ck)) { const m = facadeMaterial(key).clone(); m.map = facadeMaterial(key).map; facadeMats.set(ck, tintFacadeShader(m)); }
+    return facadeMats.get(ck);
+  }
   if (!facadeMats.has(key)) {
     const cv = document.createElement('canvas'); cv.width = 128; cv.height = 128;
     paintFacade(cv.getContext('2d'), key);
