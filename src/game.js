@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { buildWorld } from './world.js';
+import { prepareShops } from './world/groundFloorShops.js'; // [shops]
 import { createAvatar, animateAvatar, animateRide, clearRidePose } from './entities/avatar.js';
 import { KakaoBikes } from './entities/bike.js';
 import { openLobby, getEnterScreen } from './lobby.js';
@@ -160,6 +161,7 @@ const worldFile = region.dataFiles?.world || 'jeongja.json';
 const transitFile = region.features?.transit ? region.dataFiles?.transit : null;
 const terrainFile = region.dataFiles?.terrain;
 const driveFile = region.dataFiles?.drive;
+const shopsFile = params.get('shops') === '0' ? null : region.dataFiles?.shops; // [shops] ?shops=0 이면 1층 상가 표시 끔
 
 const [data, transitData] = await Promise.all([
   fetch(import.meta.env.BASE_URL + worldFile).then((r) => r.json()),
@@ -167,10 +169,11 @@ const [data, transitData] = await Promise.all([
 ]);
 // [terrain] [taxi] 추가 데이터 (없어도 동작). ?terrain=0 이면 평평한 기존 지형, ?taxis=0 이면 택시 없음
 const corridorDir = region.features?.corridor && params.get('corridor') !== '0' ? region.dataFiles?.corridor : null; // [corridor] ?corridor=0 이면 정자만
-const [terrainData, driveData, corridorData] = await Promise.all([
+const [terrainData, driveData, corridorData, shopsData] = await Promise.all([
   !terrainFile || params.get('terrain') === '0' ? null : fetch(import.meta.env.BASE_URL + terrainFile).then((r) => r.json()).catch(() => null),
   !driveFile || params.get('taxis') === '0' ? null : fetch(import.meta.env.BASE_URL + driveFile).then((r) => r.json()).catch(() => null),
   corridorDir ? loadCorridorData(import.meta.env.BASE_URL + corridorDir) : null,
+  shopsFile ? fetch(import.meta.env.BASE_URL + shopsFile).then((r) => r.json()).catch(() => null) : null, // [shops] 없어도 동작
 ]);
 
 // --- 렌더러/씬 ---
@@ -211,7 +214,7 @@ function setShadowSpan(span) { const c = sun.shadow.camera; c.left = c.bottom = 
 const terrain = terrainData ? createTerrain(corridorTerrainData(terrainData, corridorData), data) : null; // [terrain] [corridor] 코리더 켜짐: 탄천 축 연장
 terrain?.annotate(data); // [terrain] 도로/수면에 높이 부여 (buildWorld 전에)
 const tower = region.features?.launchTower && params.get('tower') !== '0' ? createTowerAddon(data) : null; // [tower] buildWorld 전에 _skip 마킹
-const world = buildWorld(scene, data, region);
+const world = buildWorld(scene, data, region, { shops: prepareShops(data, shopsData) }); // [shops] 1층 상가 띠/차양/간판
 tower?.build(scene, renderer); // [tower] 발사탑 1·2기(메카질라), 스타십 풀스택, 부스터 캐치, OLM, 탱크 팜 생성
 const overlay = new Overlay(document.getElementById('overlay'), camera);
 const corridorClock = { simTime: () => null };
@@ -1735,6 +1738,10 @@ function syncGameLocale() {
     if (corridorDir) attrEl.innerHTML += en
       ? ' · <a href="https://overturemaps.org" target="_blank" rel="noopener">Overture Maps</a> · Building heights: <a href="https://www.vworld.kr" target="_blank" rel="noopener">VWorld</a> (MOLIT)'
       : ' · <a href="https://overturemaps.org" target="_blank" rel="noopener">Overture Maps</a> · 건물 높이: <a href="https://www.vworld.kr" target="_blank" rel="noopener">브이월드</a> (국토교통부)';
+    // [shops] 1층 상가 출처 (상가(상권)정보, 공공데이터포털 15083033)
+    if (world.shops) attrEl.innerHTML += en
+      ? ' · Shops: <a href="https://www.data.go.kr/data/15083033/fileData.do" target="_blank" rel="noopener">SEMAS 상가(상권)정보</a>'
+      : ' · 상가: <a href="https://www.data.go.kr/data/15083033/fileData.do" target="_blank" rel="noopener">소상공인시장진흥공단 상가(상권)정보</a>';
   }
   syncRideUi(true);
   syncHelpFoldUi();
@@ -2276,6 +2283,7 @@ function frame() {
     sun.target.position.copy(c);
   }
   if (corridor) { const c = cam.mode === 'follow' ? P : sun.target.position; corridor.update(dt, c.x, c.z, cam.mode); } // [corridor] 타일 스트리밍(프레임당 최대 1개 빌드)
+  world.shops?.update(dt, P.x, P.z); // [shops] 주변 70m 상호 간판 풀
   const viewYaw = cam.mode === 'follow' ? cam.yaw : ov.yaw;
   const moveYaw = player.rotation.y + (bikes.riding && bikes.speed < -0.2 ? Math.PI : 0);
   phone.tick({
