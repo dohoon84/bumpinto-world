@@ -5,6 +5,7 @@ import * as THREE from 'three';
 const _a = new THREE.Vector3();
 const _d = new THREE.Vector3();
 const _p = new THREE.Vector3();
+const _q = new THREE.Vector3();
 const _j = new THREE.Vector3();
 const _s = new THREE.Vector3();
 const _up = new THREE.Vector3(0, 1, 0);
@@ -63,7 +64,7 @@ const capsule = (r) => shared(`c${r}`, () => new THREE.CapsuleGeometry(r, 1, 3, 
  * 숙인 자세 라이더. pose 로 매 프레임 손·발을 맞춘다.
  * @param {THREE.Object3D} src 내 아바타(createAvatar) 또는 원격 피어 메시
  * @param {object} o hip, torso(앞으로 숙이는 각, rad), upperScale, helmet(look)→Object3D, shoe, glove, foot [w,h,d], leg [허벅지 r, 정강이 r], arm [위팔 r, 아래팔 r],
- *   neck?: { base [x,y,z] 몸통 좌표 목 밑동, up·fwd 탈것 좌표로 머리를 띄우는 양(m), r, color }
+ *   neck?: { base [x,y,z] 몸통 좌표 목 밑동, up·fwd 탈것 좌표로 머리를 띄우는 양(m), into 헬멧 안으로 넣는 길이(m), r, color(없으면 슈트색) }
  */
 export function buildTuckRider(src, o) {
   const g = new THREE.Group();
@@ -114,7 +115,7 @@ export function buildTuckRider(src, o) {
     return { sx, upper: mk(o.arm[0], bodyMat), fore: mk(o.arm[1], bodyMat), hand };
   });
   // 목: 숙인 몸통 위로 머리를 띄워 앞을 보게 한다 (없으면 머리를 어깨 위에 바로 붙임)
-  const neck = o.neck ? mk(o.neck.r ?? 0.05, o.neck.color ? lambert(o.neck.color) : skinMat) : null;
+  const neck = o.neck ? mk(o.neck.r ?? 0.05, o.neck.color ? lambert(o.neck.color) : bodyMat) : null;
   g.userData = { upper, head, legs, arms, neck, neckOpt: o.neck || null };
   return g;
 }
@@ -131,7 +132,7 @@ export function poseTuckRider(rider, p) {
     // 목 밑동(몸통 좌표) → 탈것 좌표로 위·앞으로 띄운 머리 중심. 몸통이 숙여도 머리는 들려 앞을 본다
     const base = F.worldToLocal(upper.localToWorld(_p.set(...N.base))).clone();
     head.position.set(base.x, base.y + N.up, base.z + N.fwd);
-    limb(neck, base, head.position);
+    limb(neck, base, _q.set(head.position.x, head.position.y + (N.into ?? 0), head.position.z)); // 끝은 헬멧 안: 밑동만 살짝 보이게
   } else head.position.copy(F.worldToLocal(upper.localToWorld(_p.set(0, 0.9, 0.12))));
   for (const l of legs) {
     const hip = F.worldToLocal(upper.localToWorld(_p.set(l.sx * 0.15, 0.14, 0.03))).clone();

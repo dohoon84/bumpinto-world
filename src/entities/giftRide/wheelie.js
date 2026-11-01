@@ -33,5 +33,14 @@ export function stepWheelie(b, dt, held, f, max, o = {}) {
   }
 }
 
-/** 앞바퀴가 들려 있으면 조향이 둔해진다 */
+/** 앞바퀴가 들려 있으면 조향이 둔해진다 (관리자 크루저: 0.1 rad 넘으면 바로 0.55) */
 export const wheelieSteerScale = (w) => (w > 0.1 ? 0.55 : 1);
+
+/**
+ * 선물 탈것용: 실제로 들린 만큼만 둔해진다. 0.04 rad(사실상 접지) 이하는 1 = 윌리 없던 v1 조향 그대로,
+ * 0.3 rad 이상은 크루저와 같은 0.55. 놓고 내려오는 동안에도 계단 없이 바로 살아난다.
+ */
+export function wheelieSteerScaleSmooth(w) {
+  const t = Math.min(1, Math.max(0, (w - 0.04) / 0.26));
+  return 1 - 0.45 * t * t * (3 - 2 * t);
+}

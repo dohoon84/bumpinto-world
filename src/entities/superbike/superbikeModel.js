@@ -275,11 +275,15 @@ function getShared() {
   // 사이드스탠드(+x) — 세워 둘 때만 보인다
   const stand = merge([tube(V(0.13, 0.4, -0.06), V(0.27, 0.02, -0.16), 0.014, C.grey, 5), box(0.05, 0.012, 0.07, C.grey, 0.27, 0.01, -0.16)]);
 
+  // 풀페이스 헬멧 (머리 슬롯 좌표, 원점 = 목 위치, +z 앞): 둥근 쉘 + 턱까지 내려오는 아래 쉘·친가드 + 앞쪽 어두운 바이저
+  const shell = (g) => g.scale(1, 0.95, 1.1).translate(0, 0.3, -0.01);
   const helmet = merge([
-    paint(new THREE.SphereGeometry(0.3, 10, 7), C.white).scale(1, 0.95, 1.1).translate(0, 0.3, -0.01),
-    paint(new THREE.SphereGeometry(0.302, 10, 3, Math.PI * 0.12, Math.PI * 0.76, Math.PI * 0.32, Math.PI * 0.22), C.smoke).scale(1, 0.95, 1.1).translate(0, 0.3, -0.01),
+    shell(paint(new THREE.SphereGeometry(0.3, 12, 8), C.white)),
+    paint(new THREE.CylinderGeometry(0.272, 0.24, 0.2, 12, 1, true), C.white).scale(1, 1, 1.1).translate(0, 0.15, 0.0), // 아래 쉘: 옆·뒤를 턱 높이까지
+    paint(new THREE.CylinderGeometry(0.24, 0.24, 0.012, 12), C.black).scale(1, 1, 1.1).translate(0, 0.05, 0.0),         // 밑면(목 구멍 테두리)
+    paint(new THREE.SphereGeometry(0.2, 10, 6), C.white).scale(1.25, 0.6, 1).translate(0, 0.08, 0.12),                  // 둥근 친가드
+    shell(paint(new THREE.SphereGeometry(0.306, 14, 3, Math.PI * 0.12, Math.PI * 0.76, Math.PI * 0.43, Math.PI * 0.22), C.smoke)), // 바이저(눈높이)
     ...[[0, C.light], [0.17, C.dark], [-0.17, C.red]].map(([t, col]) => helmetStripe(t, col)),
-    box(0.26, 0.1, 0.12, C.white, 0, 0.1, 0.24, 0.3),
   ]);
 
   const mat = new THREE.MeshLambertMaterial({ vertexColors: true });

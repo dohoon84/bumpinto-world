@@ -5,7 +5,7 @@ import { superbikeThrottle, SB_DRIVE, SUPERBIKE_GIFT } from '../../../src/entiti
 import { SB, createSuperbikeModel } from '../../../src/entities/superbike/superbikeModel.js';
 import { gearOf, rideRate, rideMix, rideGain, rideLayer, SB_GEARS, SB_LAYERS } from '../../../src/entities/superbike/engineNote.js';
 import { substepsFor } from '../../../src/entities/giftRide/giftRide.js';
-import { stepWheelie, wheelieSteerScale } from '../../../src/entities/giftRide/wheelie.js';
+import { stepWheelie, wheelieSteerScale, wheelieSteerScaleSmooth } from '../../../src/entities/giftRide/wheelie.js';
 import { GIFT_ITEMS, seedList, qtyOf } from '../../../src/gifts/catalog.js';
 
 const dt = 1 / 60;
@@ -76,6 +76,16 @@ assert.ok(Math.abs(rideRate(SB_GEARS[4] * 0.97 / 3.6 + 1e-6, 0) - 0.9 * 1.03) < 
   assert.equal(wheelieSteerScale(0.3), 0.55); assert.equal(wheelieSteerScale(0), 1);
   const s = { v: 0, wheelie: 0, wheelieVel: 0 }; for (let k = 0; k < 30; k++) stepWheelie(s, dt, true, 0, MAX);
   assert.ok(s.v > 0 && s.v <= 2.2, 'kick from standstill'); }
+
+// 선물 탈것 조향 둔화: 앞바퀴가 실제로 들린 만큼만 (접지 = v1 조향 그대로), 크루저 계단형은 그대로
+{ for (const w of [0, 0.02, 0.04]) assert.equal(wheelieSteerScaleSmooth(w), 1, `no damping on ground ${w}`);
+  assert.ok(Math.abs(wheelieSteerScaleSmooth(0.3) - 0.55) < 1e-9 && Math.abs(wheelieSteerScaleSmooth(0.45) - 0.55) < 1e-9);
+  let prev = 1; for (let w = 0; w <= 0.45; w += 0.01) { const k = wheelieSteerScaleSmooth(w); assert.ok(k <= prev + 1e-12 && k >= 0.55 - 1e-12); prev = k; }
+  assert.ok(wheelieSteerScaleSmooth(0.1) > 0.85, 'barely lifted = barely damped');
+  assert.equal(wheelieSteerScale(0.1), 1); assert.equal(wheelieSteerScale(0.11), 0.55); // 크루저 불변
+  // 슈퍼바이크(fall 8)는 놓으면 크루저(4.2)보다 빨리 착지
+  const land = (o) => { const w = { v: 15, wheelie: 0.45, wheelieVel: 0 }; let t = 0; while (w.wheelie > 0) { stepWheelie(w, dt, false, 0, 0.45, o); t += dt; } return t; };
+  assert.ok(land({ fall: 8 }) < 0.36 && land({}) > 0.44, `land ${land({ fall: 8 })} vs ${land({})}`); }
 
 // 카탈로그: veh id 904, 기존 선물과 겹치지 않음, 이름은 상표 없이 '슈퍼바이크 RR'
 assert.equal(SUPERBIKE_GIFT.id, 'superbike-rr');

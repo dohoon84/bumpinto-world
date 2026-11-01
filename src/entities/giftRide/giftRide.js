@@ -2,7 +2,7 @@
 //   탈것마다 다른 것(모델·가감속·라이더 자세·HUD·소리·연출)은 spec 으로 받는다. 예: roadBike/roadBike.js, superbike/superbike.js
 //   보유 수량은 src/gifts/catalog.js · holdings.js 가 기준이고, 여기는 setStock 으로 받기만 한다.
 import * as THREE from 'three';
-import { stepWheelie, wheelieSteerScale } from './wheelie.js';
+import { stepWheelie, wheelieSteerScaleSmooth } from './wheelie.js';
 
 const G = 9.81;
 const MAX_STEP = 0.6; // 한 서브스텝 이동 상한(m). 트럭과 같이 고속에서 벽을 뚫지 않게
@@ -393,7 +393,7 @@ export function createGiftRide(env, spec) {
     b.si += THREE.MathUtils.clamp(s - b.si, -P.steerIn * dt, P.steerIn * dt);
     const av = Math.abs(b.v);
     const yawMax = Math.min(av / P.rMin, Math.max((P.latG * G) / Math.max(av, 0.1), P.yawMin ?? 0));
-    const want = -b.si * yawMax * wheelieSteerScale(b.wheelie) * Math.sign(b.v || 1);
+    const want = -b.si * yawMax * wheelieSteerScaleSmooth(b.wheelie) * Math.sign(b.v || 1);
     b.yaw += (want - b.yaw) * Math.min(1, dt * P.yawK);
     const n = substepsFor(b.v, dt);
     for (let i = 0; i < n; i++) if (!move(dt / n)) break;

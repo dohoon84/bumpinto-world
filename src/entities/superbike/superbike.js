@@ -42,8 +42,8 @@ const RIDER = {
   upperScale: [0.7, 0.72, 0.6],
   headScale: 0.6,
   headPitch: -0.12,
-  // 목: 몸통 윗끝에서 위·앞으로 띄워 헬멧이 등에 묻히지 않고 스크린 너머를 보게
-  neck: { base: [0, 1.08, 0.02], up: 0.12, fwd: 0.1, r: 0.06, color: '#1c1d20' },
+  // 목: 몸통 윗끝에서 위·앞으로 띄워 헬멧이 등에 묻히지 않고 스크린 너머를 보게. 슈트색·가늘게, 끝은 헬멧 안
+  neck: { base: [0, 1.08, 0.02], up: 0.1, fwd: 0.09, into: 0.08, r: 0.045 },
   helmet: createMotoHelmetHead,
   shoe: '#1c1d20',
   glove: '#1c1d20',
@@ -126,7 +126,8 @@ export function createSuperbike({ params, camera, ...env }) {
       formats: ['ogg', 'm4a'],
       curves: { mix: rideMix, rideRate, rideGain, layer: rideLayer, idleRate: (av, th) => 1 + 0.12 * Math.min(1, th + av / 3) },
     }),
-    wheelie: { max: 0.45 }, // Space: 관리자 크루저와 같은 윌리 (giftRide/wheelie.js)
+    // Space: 관리자 크루저와 같은 윌리 (giftRide/wheelie.js). 놓으면 크루저(4.2)보다 빨리 내려와 조향이 곧 돌아온다
+    wheelie: { max: 0.45, fall: 8 },
     cam: { dist: 5.2, pitch: 0.18 },
     netExtra: (b) => ({ th: +b.throttle.toFixed(2) }),
     throttleOf: (veh) => Math.max(0, Math.min(1, +veh.th || 0)),
