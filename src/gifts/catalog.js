@@ -28,6 +28,16 @@ export const GIFT_ITEMS = [
     unitName: '대',
     vehId: 903,
   },
+  {
+    id: 'superbike-rr',
+    icon: '🏍️',
+    name: '슈퍼바이크 RR',
+    enName: 'Superbike RR',
+    seedQty: 10,
+    unit: 1,
+    unitName: '대',
+    vehId: 904,
+  },
 ];
 
 const byId = new Map(GIFT_ITEMS.map((it) => [it.id, it]));

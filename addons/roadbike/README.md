@@ -26,7 +26,7 @@
 
 보유 모양은 항상 `{ id, qty }` 배열이다. 내 화면 수량은 `src/gifts/holdings.js`에 모이고, 서버에는 `gift_holdings` 테이블에 사람·아이템별로 저장된다.
 
-꺼내 쓰기·탑승처럼 수량 외에 동작이 있는 아이템은 카탈로그에 동작을 적지 않는다. `src/game.js`의 `customGiftIds`에 id를 넣고, 그 아래에서 소환 같은 버튼을 직접 연결한다. 로드바이크가 이 경우다. `vehId`가 있으면 보유가 1 이상일 때만 그 탈것을 다른 사람에게 보여 준다.
+꺼내 쓰기·탑승처럼 수량 외에 동작이 있는 아이템은 카탈로그에 동작을 적지 않는다. `src/game.js`의 `customGiftIds`에 id를 넣고, 그 아래에서 소환 같은 버튼을 직접 연결한다. 로드바이크와 슈퍼바이크 RR이 이 경우다. `vehId`가 있으면 보유가 1 이상일 때만 그 탈것을 다른 사람에게 보여 준다.
 
 ## 파일
 
@@ -36,7 +36,8 @@
 | `src/gifts/holdings.js` | 지금 내 보유. 접속(`welcome`)과 선물 응답이 여기로 들어온다 |
 | `src/game.js` | `customGiftIds`. 소환·탑승이 있는 아이템만 여기 연결 |
 | `src/inventory.js` | 선물함 탭, `×N` 뱃지, 선물 버튼 |
-| `src/entities/roadBike/` | CR·1 모델, 탑승, 헬멧 머리. `catalog.js`는 id 별칭일 뿐 수량의 기준이 아니다 |
+| `src/entities/giftRide/` | 선물 탈것 공통 틀(꺼내기·탑승·주행·중계)과 라이더 IK. 슈퍼바이크 RR(`addons/superbike/`)도 같은 틀을 쓴다 |
+| `src/entities/roadBike/` | CR·1 모델, 사양(가감속·자세·사이클 컴퓨터), 헬멧 머리. `catalog.js`는 id 별칭일 뿐 수량의 기준이 아니다 |
 | `server/phone/src/book.js` | 보유 저장·최초 수량·선물 차감 |
 | `server/phone/src/room.js`, `server/dev-relay.mjs` | 접속 시 보유 전달, 선물 1회 처리, 세워 둔 자전거 중계 |
 
