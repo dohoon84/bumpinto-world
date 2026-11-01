@@ -3,6 +3,7 @@
 import * as THREE from 'three';
 import { createBikeAudio } from './bikeAudio.js'; // [bikeaudio]
 import { createBike, setBikeBrake, setBikeTankColor, BDIM } from './bikeModel.js';
+import { twoBone } from '../giftRide/riderRig.js';
 
 export const BIKE_VEH_ID = 900; // 블랙 탱크 — trucks 의 veh.id(0~59) 와 겹치지 않는 번호
 export const BIKE_VEH_RED_ID = 901; // 레드 탱크
@@ -39,16 +40,7 @@ function buildRider(src) {
   g.userData = { upper, legs, arms };
   return g;
 }
-const _a = new THREE.Vector3(), _b = new THREE.Vector3(), _d = new THREE.Vector3(), _up = new THREE.Vector3(0, 1, 0);
-function limb(o, a, b) { _d.subVectors(b, a); const L = _d.length(); o.position.addVectors(a, b).multiplyScalar(0.5); o.quaternion.setFromUnitVectors(_up, _d.normalize()); o.scale.set(1, Math.max(0.05, (L) / (1 + 2 * o.userData.r)), 1); }
-// 두 마디 팔다리: 시작 a → 끝 b, 관절은 bend 방향으로 꺾임
-function twoBone(o1, o2, a, b, l1, l2, bend) {
-  const d = _a.subVectors(b, a), L = Math.min(d.length(), l1 + l2 - 1e-3), dir = d.clone().normalize();
-  const x = (l1 * l1 - l2 * l2 + L * L) / (2 * L), h = Math.sqrt(Math.max(0, l1 * l1 - x * x));
-  const side = bend.clone().addScaledVector(dir, -bend.dot(dir)).normalize();
-  const j = a.clone().addScaledVector(dir, x).addScaledVector(side, h);
-  limb(o1, a, j); limb(o2, j, b);
-}
+const _b = new THREE.Vector3();
 function poseRider(rider, bike) {
   const { upper, legs, arms } = rider.userData;
   if (!upper || !legs || !arms) return;

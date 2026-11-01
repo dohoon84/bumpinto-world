@@ -1,0 +1,87 @@
+// [superbike] 슈퍼바이크 RR: 가속(0→100 km/h)·최고 속도·서브스텝·엔진음 곡선·카탈로그·음원 파일
+import assert from 'node:assert/strict';
+import { existsSync, statSync } from 'node:fs';
+import { superbikeThrottle, SB_DRIVE, SUPERBIKE_GIFT } from '../../../src/entities/superbike/superbike.js';
+import { SB, createSuperbikeModel } from '../../../src/entities/superbike/superbikeModel.js';
+import { gearOf, rideRate, rideMix, rideGain, SB_GEARS } from '../../../src/entities/superbike/engineNote.js';
+import { substepsFor } from '../../../src/entities/giftRide/giftRide.js';
+import { GIFT_ITEMS, seedList, qtyOf } from '../../../src/gifts/catalog.js';
+
+const dt = 1 / 60;
+/** 정지에서 풀스로틀: 100 km/h 도달 시간, 60 s 뒤 속도(km/h) */
+function run(sprint) {
+  const b = { v: 0 };
+  let t100 = null;
+  for (let t = 0; t < 60; t += dt) {
+    superbikeThrottle(b, dt, 1, sprint);
+    if (t100 == null && b.v * 3.6 >= 100) t100 = t + dt;
+  }
+  return { t100, top: b.v * 3.6 };
+}
+const boost = run(true), walk = run(false);
+assert.ok(Math.abs(boost.t100 - 3.2) < 0.15, `Shift 0-100 ${boost.t100}`);
+assert.ok(Math.abs(walk.t100 - 3.9) < 0.2, `W 0-100 ${walk.t100}`);
+assert.ok(Math.abs(boost.top - 303) < 1.5 && boost.top <= 303 + 1e-6, `Shift top ${boost.top}`);
+assert.ok(Math.abs(walk.top - 270) < 1.5, `W top ${walk.top}`);
+// 놓으면 서서히, 브레이크는 빠르게 선다
+{ const b = { v: 30 }; superbikeThrottle(b, 1, 0, false); assert.ok(b.v < 30 && b.v > 28); }
+{ const b = { v: 30 }; let t = 0; while (b.v > 0.15 && t < 10) { superbikeThrottle(b, dt, -1, false); t += dt; } assert.ok(t < 3.2, `100→0 ${t}`); }
+// 후진 상한은 giftRide 가 drive.revV 로 자른다 (발로 미는 정도)
+assert.ok(SB_DRIVE.rev > 0 && SB_DRIVE.rev < 1);
+
+// 서브스텝: 한 번에 0.6 m 넘게 안 움직이고, 최대 8
+assert.equal(substepsFor(0, dt), 1);
+assert.equal(substepsFor(10, dt), 1);
+assert.equal(substepsFor(303 / 3.6, 1 / 30), 5);
+assert.equal(substepsFor(303 / 3.6, 1), 8);
+for (const v of [5, 30, 60, 84]) assert.ok((v * dt) / substepsFor(v, dt) <= 0.6 + 1e-9);
+
+// 엔진음: 기어 안에서 단조 증가, 변속 때 떨어짐, 6단 끝 = 303
+assert.equal(SB_GEARS.at(-1), 303);
+assert.deepEqual(gearOf(0), { gear: 1, rev: 0 });
+assert.equal(gearOf(303 / 3.6).gear, 6);
+for (let g = 0; g < SB_GEARS.length; g++) {
+  const lo = (g ? SB_GEARS[g - 1] * 0.97 : 0) + 1, hi = SB_GEARS[g] * 0.97 - 1;
+  let prev = -1;
+  for (let k = lo; k <= hi; k += 2) {
+    const r = rideRate(k / 3.6, 1);
+    assert.equal(gearOf(k / 3.6).gear, g + 1);
+    assert.ok(r > prev, `gear ${g + 1} @${k}`);
+    prev = r;
+  }
+  if (g < SB_GEARS.length - 1) assert.ok(rideRate((SB_GEARS[g] * 0.97 + 1) / 3.6, 1) < prev, `shift ${g + 1}→${g + 2}`);
+}
+for (let v = 0; v < 90; v += 3) {
+  const r = rideRate(v, 1); assert.ok(r >= 0.6 && r <= 1.6);
+  const m = rideMix(v, 0); assert.ok(m >= 0 && m <= 1);
+  assert.ok(rideGain(v, 1) >= rideGain(v, 0));
+}
+assert.equal(rideMix(0, 0), 0);
+assert.equal(rideMix(10, 0), 1);
+
+// 카탈로그: veh id 904, 기존 선물과 겹치지 않음, 이름은 상표 없이 '슈퍼바이크 RR'
+assert.equal(SUPERBIKE_GIFT.id, 'superbike-rr');
+assert.equal(SUPERBIKE_GIFT.vehId, 904);
+assert.equal(new Set(GIFT_ITEMS.map((g) => g.vehId).filter(Boolean)).size, GIFT_ITEMS.filter((g) => g.vehId).length);
+assert.ok(qtyOf(seedList(), 'superbike-rr') > 0, 'local mock seed');
+assert.equal(SUPERBIKE_GIFT.name, '슈퍼바이크 RR');
+assert.equal(SUPERBIKE_GIFT.enName, 'Superbike RR');
+
+// 모델: 실측 휠베이스·축 위치, 공유 지오메트리라 두 대째는 새로 안 만든다
+const a = createSuperbikeModel(), b2 = createSuperbikeModel();
+assert.ok(Math.abs(SB.WB - 1.457) < 1e-9);
+assert.ok(Math.abs(a.userData.rearSpin.position.z + SB.WB / 2) < 1e-9);
+a.updateMatrixWorld(true);
+const fa = a.userData.frontSpin.getWorldPosition(a.position.clone());
+assert.ok(Math.abs(fa.z - SB.WB / 2) < 1e-3 && Math.abs(fa.y - SB.RF) < 1e-3, `front axle ${fa.toArray()}`);
+const geos = (o) => { const s = new Set(); o.traverse((m) => m.isMesh && s.add(m.geometry)); return s; };
+assert.deepEqual([...geos(a)], [...geos(b2)]);
+assert.ok(geos(a).size <= 6);
+
+// 음원: ogg + m4a, 작게
+for (const n of ['idle', 'ride', 'start', 'launch']) for (const e of ['ogg', 'm4a']) {
+  const f = new URL(`../../../public/audio/superbike/${n}.${e}`, import.meta.url);
+  assert.ok(existsSync(f), `${n}.${e}`);
+  const sz = statSync(f).size; assert.ok(sz > 4000 && sz < 40000, `${n}.${e} ${sz}`);
+}
+console.log(`test-superbike: ok (0-100 Shift ${boost.t100.toFixed(2)} s, W ${walk.t100.toFixed(2)} s; top ${boost.top.toFixed(0)}/${walk.top.toFixed(0)} km/h)`);
