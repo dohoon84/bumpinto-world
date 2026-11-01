@@ -9,7 +9,10 @@ import { addWindowLights } from './world/windowLights.js';
 import { addPostOfficeMarks } from './world/postOffice.js';
 import { addStationCafeCrowd } from './world/cafeCrowd.js';
 import { addPlaceSigns } from './world/signs.js';
+import { shopBandHeight, bandTint, addGroundFloorShops } from './world/groundFloorShops.js'; // [shops]
 import { addInstancedTrees } from './world/trees.js';
+import { applyFacadeColour, tintFacadeShader } from './world/buildingColours.js'; // [colours]
+import { FACADE_WALL, FACADE_GLASS, FACADE_BAND, facadeKey } from './world/facadePalette.js';
 
 export const ROAD_STYLE = {
   primary: ['#8d939c', 0.06], secondary: ['#949aa3', 0.065], tertiary: ['#9ca1a9', 0.07], trunk: ['#8d939c', 0.06],
@@ -88,7 +91,8 @@ export function pointInRing(x, z, r) {
   return inside;
 }
 
-export function buildWorld(scene, data, region = null) {
+export function buildWorld(scene, data, region = null, opts = {}) {
+  const { shops = null, colours = null } = opts; // [shops] prepareShops() · [colours] prepareBuildingColours() 결과. 없으면 기존과 동일
   const isJeongja = region ? !!region.features?.jeongjaBuildings : data.station?.name !== 'Starbase';
   if (isJeongja) {
     addCafeSidewalks(data); // 역 보행망이 끊긴 카페 앞까지 인도
@@ -140,7 +144,8 @@ export function buildWorld(scene, data, region = null) {
   const shellByRing = new Map(shells.map((s) => [s.key, s]));
   const c = new THREE.Color(), roof = new THREE.Color(), wallTint = new THREE.Color();
   let seed = 1; const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
-  for (const b of data.buildings) {
+  const bandC = new THREE.Color();
+  for (const [bi, b] of data.buildings.entries()) { // bi = jeongja.json 원본 인덱스 (스타벅스/노비오스는 뒤에 push 되므로 0..N-1 은 그대로)
     const shell = shellByRing.get(ringKey(b.o));
     const origMin = b.mh || 0;
     const minH = shell?.mode === 'podium' ? 3.4 : shell?.mode === 'full' ? Math.max(origMin, b.h - 0.42) : origMin;
@@ -155,30 +160,32 @@ export function buildWorld(scene, data, region = null) {
       }
     }
     if (b._skip) continue; // [tower] 발사탑/OLM/탱크 상세 모델로 교체될 건물은 기본 상자 생략
-    let g;
-    try { g = new THREE.ExtrudeGeometry(toShape(b.o, b.holes || []), { depth: h, bevelEnabled: false, UVGenerator: FACADE_UV }); } catch { continue; }
-    g.rotateX(-Math.PI / 2); g.translate(0, minH, 0);
+    // [shops] 1층에 가게가 있으면 벽을 1층 띠 + 나머지로 나눠 뽑는다. 띠는 상가 창 타일 + 업종색(버텍스 색)
+    const shop = shell ? null : shops?.byIdx.get(bi);
+    const band = shopBandHeight(shop, b, h);
+    let g = null, gb = null;
+    try {
+      const shape = toShape(b.o, b.holes || []);
+      if (h - band > 0.01) g = new THREE.ExtrudeGeometry(shape, { depth: h - band, bevelEnabled: false, UVGenerator: FACADE_UV });
+      if (band) gb = new THREE.ExtrudeGeometry(shape, { depth: band, bevelEnabled: false, UVGenerator: FACADE_UV });
+    } catch { g?.dispose(); gb?.dispose(); continue; }
+    if (g) { g.rotateX(-Math.PI / 2); g.translate(0, minH + band, 0); }
+    if (gb) { gb.rotateX(-Math.PI / 2); gb.translate(0, minH, 0); }
     c.set(BUILDING_COLOR[b.k] || BUILDING_COLOR.yes).offsetHSL((rnd() - 0.5) * 0.04, (rnd() - 0.5) * 0.08, (rnd() - 0.5) * 0.06);
     if (b.s === 'default') c.offsetHSL(0, -0.05, 0.02);
     roof.copy(c).offsetHSL(0, -0.05, -0.12);
     wallTint.setRGB(0.93 + c.r * 0.07, 0.93 + c.g * 0.07, 0.93 + c.b * 0.07);
-    const nrm = g.attributes.normal, cols = new Float32Array(nrm.count * 3);
-    for (let i = 0; i < nrm.count; i++) {
-      const ny = nrm.getY(i), cc = ny > 0.5 ? roof : ny < -0.5 ? c : wallTint;
-      cols[i * 3] = cc.r; cols[i * 3 + 1] = cc.g; cols[i * 3 + 2] = cc.b;
-    }
-    g.setAttribute('color', new THREE.BufferAttribute(cols, 3));
-    const cap = takeGroup(g, 0), side = takeGroup(g, 1);
-    g.dispose();
-    if (cap) { if (cap.attributes.uv) cap.deleteAttribute('uv'); roofs.push(cap); }
-    if (side) (walls[facadeKey(b.k)] ||= []).push(side);
+    const fc = colours?.byIdx.get(bi);
+    if (fc) applyFacadeColour(fc, c, roof, wallTint); // [colours] rnd() 호출 수는 그대로 (나무 등 다른 배치 불변)
+    if (g) addBuildingPart(g, roof, c, wallTint, facadeKey(b.k), true, roofs, walls);
+    if (gb) addBuildingPart(gb, roof, c, bandTint(shop.cat, wallTint, bandC), 'commercial', !g, roofs, walls); // 이미 있는 commercial 묶음에 들어가 draw call 그대로
   }
   if (roofs.length) {
     const bmesh = new THREE.Mesh(mergeGeometries(roofs), new THREE.MeshLambertMaterial({ vertexColors: true }));
     bmesh.castShadow = true; bmesh.receiveShadow = true; scene.add(bmesh);
   }
   for (const [key, geos] of Object.entries(walls)) {
-    const mesh = new THREE.Mesh(mergeGeometries(geos), facadeMaterial(key));
+    const mesh = new THREE.Mesh(mergeGeometries(geos), facadeMaterial(key, !!colours)); // [colours]
     mesh.castShadow = true; mesh.receiveShadow = true; scene.add(mesh);
   }
   const starbucksRooms = isJeongja ? addStarbucksGlass(scene, shells) : [];
@@ -188,7 +195,8 @@ export function buildWorld(scene, data, region = null) {
     addStationCafeCrowd(scene, data);
   }
   addWindowLights(scene, data.buildings, shells);
-  addPlaceSigns(scene, data);
+  const placedSigns = addPlaceSigns(scene, data);
+  const shopsLayer = shops ? addGroundFloorShops(scene, data, shops, placedSigns, (b) => shellByRing.has(ringKey(b.o))) : null; // [shops] 스타벅스 유리 매장 제외 (띠와 같은 조건)
 
   // 차도 위 판정(가로수/표지판이 도로 한가운데 서지 않게)
   const roadGrid = new Grid(30);
@@ -264,7 +272,23 @@ export function buildWorld(scene, data, region = null) {
     }
     return false;
   };
-  return { isBlocked, onRoad, walkPaths, cityWalkPaths, inWater, signPos: sp, bounds: { x0, x1, z0, z1 }, treeCount: treePts.length, ground, block, starbucksRooms }; // [terrain] ground/block: terrain.build 가 하천 구간을 비운 형상으로 교체
+  return { isBlocked, onRoad, walkPaths, cityWalkPaths, inWater, signPos: sp, bounds: { x0, x1, z0, z1 }, treeCount: treePts.length, ground, block, starbucksRooms, shops: shopsLayer, colours }; // [terrain] ground/block: terrain.build 가 하천 구간을 비운 형상으로 교체
+}
+
+// 건물 한 덩이(ExtrudeGeometry)에 버텍스 색(윗면 top / 아랫면 bottom / 옆면 side)을 칠해 윗면은 roofs, 옆면은 walls[key] 에 넣고 geo 는 버린다.
+// withRoof=false 면 윗·아랫면도 버린다 (1층 띠 위에 층이 더 있을 때).
+// buildWorld 안 클로저로 두면 roofs/walls 가 반환되는 isBlocked 등과 같은 컨텍스트에 잡혀 합치기 전 조각(약 4 MB)이 계속 남으므로 모듈 함수로 둔다.
+function addBuildingPart(geo, top, bottom, side, key, withRoof, roofs, walls) {
+  const nrm = geo.attributes.normal, cols = new Float32Array(nrm.count * 3);
+  for (let i = 0; i < nrm.count; i++) {
+    const ny = nrm.getY(i), cc = ny > 0.5 ? top : ny < -0.5 ? bottom : side;
+    cols[i * 3] = cc.r; cols[i * 3 + 1] = cc.g; cols[i * 3 + 2] = cc.b;
+  }
+  geo.setAttribute('color', new THREE.BufferAttribute(cols, 3));
+  const cap = takeGroup(geo, 0), sides = takeGroup(geo, 1);
+  geo.dispose();
+  if (cap && withRoof) { if (cap.attributes.uv) cap.deleteAttribute('uv'); roofs.push(cap); } else cap?.dispose();
+  if (sides) (walls[key] ||= []).push(sides);
 }
 
 export function stationSign(st, signCfg = null) {
@@ -317,15 +341,7 @@ export const FACADE_UV = {
   },
 };
 
-export function facadeKey(k) {
-  if (k === 'office') return 'office';
-  if (k === 'commercial') return 'commercial';
-  if (k === 'apartments' || k === 'residential' || k === 'dormitory') return 'residential';
-  if (k === 'house') return 'house';
-  if (k === 'school' || k === 'kindergarten' || k === 'university' || k === 'college') return 'school';
-  if (k === 'public' || k === 'civic' || k === 'church' || k === 'hospital') return 'public';
-  return 'yes';
-}
+export { facadeKey }; // corridor/tileMesh.js 등 기존 import 경로 유지
 
 export function takeGroup(g, materialIndex) {
   const group = g.groups.find((gr) => gr.materialIndex === materialIndex);
@@ -342,7 +358,12 @@ export function takeGroup(g, materialIndex) {
 }
 
 const facadeMats = new Map();
-export function facadeMaterial(key) {
+export function facadeMaterial(key, tinted = false) {
+  if (tinted) { // [colours] 같은 텍스처, 벽/유리 구분해 버텍스 색을 곱하는 변형 (정자 외벽만, 기존 재질과 바꿔 씀 → draw 수 같음)
+    const ck = key + '|colours';
+    if (!facadeMats.has(ck)) facadeMats.set(ck, tintFacadeShader(facadeMaterial(key).clone())); // clone 은 같은 map 텍스처를 공유
+    return facadeMats.get(ck);
+  }
   if (!facadeMats.has(key)) {
     const cv = document.createElement('canvas'); cv.width = 128; cv.height = 128;
     paintFacade(cv.getContext('2d'), key);
@@ -356,9 +377,7 @@ export function facadeMaterial(key) {
 }
 
 function paintFacade(x, key) {
-  const wall = { office: '#c5d0dc', commercial: '#d5dee8', residential: '#f0e2d2', house: '#efe6d8', school: '#f6e7d4', public: '#e7e0d2', yes: '#e6e2da' }[key] || '#e6e2da';
-  const glass = { office: '#7fa4c4', commercial: '#6e93b0', residential: '#5f84a0', house: '#6a8eaa', school: '#6f92ae', public: '#5c7384', yes: '#7d93a6' }[key] || '#7d93a6';
-  const band = { office: '#aeb9c6', commercial: '#c4b29a', residential: '#cbb39a', house: '#e4d5c4', school: '#e7d4bc', public: '#d9d0c0', yes: '#d5d0c6' }[key] || '#d5d0c6';
+  const wall = FACADE_WALL[key] || FACADE_WALL.yes, glass = FACADE_GLASS[key] || FACADE_GLASS.yes, band = FACADE_BAND[key] || FACADE_BAND.yes;
   x.fillStyle = wall; x.fillRect(0, 0, 128, 128);
   if (key === 'school') { x.fillStyle = '#7d9a62'; x.fillRect(0, 0, 128, 10); }
   if (key === 'office') {

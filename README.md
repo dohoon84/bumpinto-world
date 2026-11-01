@@ -341,5 +341,7 @@ export default {
 - 공개 화면에는 CrazyLabs(https://crazylabs.co.kr)와 Bumpinto World(https://bumpinto.world) 표기를 유지합니다.
 - 이 문구로 바꾸기 전에 받은 복사본은 당시의 MIT License with Attribution Requirement가 적용됩니다.
 - 지도 데이터 © OpenStreetMap contributors, [ODbL](https://www.openstreetmap.org/copyright). 화면 오른쪽 아래에 표시됩니다. `public/jeongja.json`은 ODbL 파생 데이터베이스입니다.
+- 1층 상가(`public/jeongja-shops.json`): 소상공인시장진흥공단 상가(상권)정보 ([공공데이터포털 15083033](https://www.data.go.kr/data/15083033/fileData.do), 이용허락범위 제한 없음)의 층정보=1 점포를 `public/jeongja.json` 건물에 10 m 이내로 붙인 값이고, 상가정보가 없는 건물만 OSM POI로 채웁니다. OSM과 합쳐진 파생 데이터라 ODbL도 같이 따릅니다. 화면 오른쪽 아래 출처에 표시되며 `?shops=0`으로 끌 수 있습니다. 다시 만드는 법은 `scripts/ground-floor-shops.mjs` 머리말 참고 (원본 CSV는 저장소에 넣지 않습니다).
+- 건물 외벽·지붕 색(`public/jeongja-colours.json`, `scripts/building-colours.mjs`): 브이월드 GIS건물통합정보(국토교통부, 공공누리 제1유형 · 출처표시)의 구조·주용도·사용승인일로 **추정**한 색입니다(외벽 마감재 필드는 공공데이터에 없음). 화면 오른쪽 아래에 "건물 속성: 브이월드"(코리더가 켜져 있으면 "건물 높이·속성: 브이월드")로 표시됩니다. 네이버 그린팩토리 3동만 사진(Wikimedia Commons "Naver HQ.jpg" revi CC BY 2.0 KR, "서울 톨게이트 입갤 전에 NHN 본사 ^2 - panoramio.jpg" 이명민 CC BY 3.0)에서 읽은 색을 수동 지정했습니다(색 값만 사용, 이미지는 쓰지 않음). `?colours=0`이면 꺼집니다.
 - three.js (MIT).
 - 노선 유형: 경기버스정보(gbis.go.kr). 버스 도색 색상 출처는 위 "버스 도색 매핑과 출처" 참고. 실시간 데이터(사용 시): 공공데이터포털(data.go.kr) 경기도 버스 API, 공공누리 조건 확인 필요.
