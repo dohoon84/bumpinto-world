@@ -16,15 +16,13 @@
 //   - 키는 jeongja.json buildings 배열 인덱스. 런타임은 c(중심점)로 다시 확인해, jeongja.json 이 재생성돼 어긋나면 그 항목을 버린다.
 import fs from 'node:fs';
 import readline from 'node:readline';
+import { cliArg as arg, loadWorld, inPolygon, bboxOf, bboxGrid, ringCentroid } from './lib/world-geo.mjs';
 
-const arg = (k, d) => { const a = process.argv.find((s) => s.startsWith(`--${k}=`)); return a ? a.slice(k.length + 3) : d; };
 const CSV = arg('csv'), OUT = arg('out', 'public/jeongja-shops.json'), WORLD = arg('world', 'public/jeongja.json'), OSM = arg('osm', 'data/osm_raw_osmapi.json');
 if (!CSV) { console.error('usage: node scripts/ground-floor-shops.mjs --csv=<상가(상권)정보_경기_YYYYMM.csv>'); process.exit(1); }
 
-const world = JSON.parse(fs.readFileSync(WORLD, 'utf8'));
-const { center: C, bbox: BB, bboxLocal: BL } = world.meta;
-const kx = Math.cos((C.lat * Math.PI) / 180) * 111320, kz = 110540;
-const proj = (lat, lon) => [(lon - C.lon) * kx, -(lat - C.lat) * kz];
+const { world, proj } = loadWorld(WORLD);
+const { bbox: BB, bboxLocal: BL } = world.meta;
 const inBox = (x, z) => x >= BL.x0 && x <= BL.x1 && z >= BL.z0 && z <= BL.z1;
 const MATCH_M = 10;
 
@@ -61,23 +59,11 @@ function catOsm(t) {
 
 // --- 건물 공간 인덱스 ---
 const B = world.buildings;
-const cell = 25, grid = new Map();
-const bbOf = (r) => { let a = Infinity, b = Infinity, c = -Infinity, d = -Infinity; for (const [x, z] of r) { a = Math.min(a, x); b = Math.min(b, z); c = Math.max(c, x); d = Math.max(d, z); } return [a, b, c, d]; };
+const grid = bboxGrid(25);
 B.forEach((b, i) => {
-  const [a, bb, c, d] = bbOf(b.o);
-  for (let gx = Math.floor((a - MATCH_M) / cell); gx <= Math.floor((c + MATCH_M) / cell); gx++)
-    for (let gz = Math.floor((bb - MATCH_M) / cell); gz <= Math.floor((d + MATCH_M) / cell); gz++) {
-      const k = gx + ',' + gz; if (!grid.has(k)) grid.set(k, []); grid.get(k).push(i);
-    }
+  const { x0, z0, x1, z1 } = bboxOf(b.o);
+  grid.add({ x0: x0 - MATCH_M, z0: z0 - MATCH_M, x1: x1 + MATCH_M, z1: z1 + MATCH_M }, i);
 });
-function inRing(x, z, r) {
-  let ins = false;
-  for (let i = 0, j = r.length - 1; i < r.length; j = i++) {
-    const [xi, zi] = r[i], [xj, zj] = r[j];
-    if ((zi > z) !== (zj > z) && x < ((xj - xi) * (z - zi)) / (zj - zi) + xi) ins = !ins;
-  }
-  return ins;
-}
 function ringDist(x, z, r) {
   let best = Infinity;
   for (let i = 0, j = r.length - 1; i < r.length; j = i++) {
@@ -88,8 +74,8 @@ function ringDist(x, z, r) {
   return best;
 }
 function locate(x, z) {
-  const cand = grid.get(Math.floor(x / cell) + ',' + Math.floor(z / cell)) || [];
-  for (const i of cand) { const b = B[i]; if (inRing(x, z, b.o) && !(b.holes || []).some((h) => inRing(x, z, h))) return { i, d: 0 }; }
+  const cand = grid.at(x, z);
+  for (const i of cand) if (inPolygon(x, z, B[i].o, B[i].holes)) return { i, d: 0 };
   let best = null;
   for (const i of cand) { const d = ringDist(x, z, B[i].o); if (d <= MATCH_M && (!best || d < best.d)) best = { i, d }; }
   return best;
@@ -165,8 +151,7 @@ for (const [i, list] of [...per.entries()].sort((a, b) => a[0] - b[0])) {
     names.push(n); if (names.length >= 3) break;
   }
   const b = B[i];
-  let cx = 0, cz = 0; for (const [x, z] of b.o) { cx += x; cz += z; }
-  cx = Math.round(cx / b.o.length); cz = Math.round(cz / b.o.length);
+  const [cx, cz] = ringCentroid(b.o).map(Math.round);
   catCount[CI[main]]++;
   rows.push([i, CI[main], list.length, cx, cz, names.join('|'), list[0].src === 'o' ? 1 : 0]);
 }

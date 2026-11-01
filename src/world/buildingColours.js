@@ -1,43 +1,37 @@
 // [colours] 건물 외벽·지붕 색: public/jeongja-colours.json (scripts/building-colours.mjs 가 만든다)
 //   - 브이월드 GIS건물통합정보(구조·주용도·사용승인연도) 기반 추정색 + 사진 근거가 있는 랜드마크 수동색.
 //   - buildWorld 의 기존 버텍스 컬러에만 들어간다 (추가 draw call / 텍스처 0).
-//   - ?colours=0 이면 파일을 받지 않고 b.fc 도 없어서 기존 모습과 똑같다.
+//   - ?colours=0 이면 파일을 받지 않고 buildWorld 에 아무것도 넘기지 않아 기존 모습과 똑같다.
 import * as THREE from 'three';
-import { facadeKey } from '../world.js';
+import { FACADE_WALL, facadeKey } from './facadePalette.js';
+import { matchKeyedRows } from './keyedBuildings.js';
 
-// paintFacade() 의 벽 바탕색 (src/world.js). 버텍스 색 = 목표색 / 바탕색 으로 보정해 화면에서 목표색이 나오게 한다.
-const FACADE_WALL = { office: '#c5d0dc', commercial: '#d5dee8', residential: '#f0e2d2', house: '#efe6d8', school: '#f6e7d4', public: '#e7e0d2', yes: '#e6e2da' };
-const MAX_DRIFT = 2.5; // m: 중심점이 이보다 어긋나면 (jeongja.json 재생성) 그 항목은 버린다
-
-const centroid = (ring) => { let x = 0, z = 0; for (const p of ring) { x += p[0]; z += p[1]; } return [x / ring.length, z / ring.length]; };
-const _base = new THREE.Color();
+const SRCS = ['k-fallback', 'vworld-estimate', 'manual', 'mapillary']; // 파일 포맷의 src 코드 (meta.srcs 가 우선)
 
 /**
- * jeongja-colours.json 을 data.buildings[i].fc = { wall, roof, tint, src } 로 붙인다.
- * wall/roof/tint 는 THREE.Color (linear). tint 는 벽 텍스처에 곱할 버텍스 색.
- * @returns {{ applied:number, dropped:number, bySrc:Object, attribution:string } | null}
+ * jeongja-colours.json → { byIdx: Map<건물 인덱스, { wall, roof, tint, src }>, applied, dropped, bySrc } | null
+ * wall/roof/tint 는 THREE.Color (linear). tint = 목표 외벽색 / 텍스처 벽 바탕색 (화면에서 목표색이 나오게 하는 버텍스 색)
  */
 export function prepareBuildingColours(data, json) {
-  if (!json?.b?.length || !data?.buildings) return null;
-  const srcs = json.meta?.srcs || ['k-fallback', 'vworld-estimate', 'manual', 'mapillary'];
-  let applied = 0, dropped = 0; const bySrc = {};
-  for (const [idx, cx, cz, wall, roof, si] of json.b) {
-    const b = data.buildings[idx];
-    if (!b?.o?.length) { dropped++; continue; }
-    const [bx, bz] = centroid(b.o);
-    if (Math.hypot(bx - cx, bz - cz) > MAX_DRIFT) { dropped++; continue; }
-    const w = new THREE.Color(wall), r = new THREE.Color(roof);
-    _base.set(FACADE_WALL[facadeKey(b.k)] || FACADE_WALL.yes);
-    const tint = new THREE.Color(Math.min(1, w.r / _base.r), Math.min(1, w.g / _base.g), Math.min(1, w.b / _base.b));
-    const src = srcs[si] || 'vworld-estimate';
-    b.fc = { wall: w, roof: r, tint, src };
+  const m = matchKeyedRows(data?.buildings, json);
+  if (!m?.rows.length) return null;
+  const f = json.meta.fields, iw = f.indexOf('wall'), ir = f.indexOf('roof'), is = f.indexOf('src');
+  const srcs = json.meta.srcs || SRCS;
+  const byIdx = new Map(), bySrc = {}, base = new THREE.Color();
+  for (const { idx, b, row } of m.rows) {
+    const wall = new THREE.Color(row[iw]), roof = new THREE.Color(row[ir]);
+    base.set(FACADE_WALL[facadeKey(b.k)] || FACADE_WALL.yes);
+    const tint = new THREE.Color(Math.min(1, wall.r / base.r), Math.min(1, wall.g / base.g), Math.min(1, wall.b / base.b));
+    const src = srcs[row[is]] || 'vworld-estimate';
+    byIdx.set(idx, { wall, roof, tint, src });
     bySrc[src] = (bySrc[src] || 0) + 1;
-    applied++;
   }
-  if (!applied) return null;
-  const stats = { applied, dropped, bySrc, attribution: json.meta?.attribution || '' };
-  data.buildingColours = stats; // buildWorld 가 색 모드 외벽 재질을 고르는 신호
-  return stats;
+  return { byIdx, applied: byIdx.size, dropped: m.dropped, bySrc };
+}
+
+/** buildWorld 건물 루프: 기본색(c)·지붕(roof)·벽 버텍스 색(wallTint)을 파일 색으로 바꾼다. */
+export function applyFacadeColour(fc, c, roof, wallTint) {
+  c.copy(fc.wall); roof.copy(fc.roof); wallTint.copy(fc.tint);
 }
 
 /**
@@ -49,13 +43,13 @@ export function tintFacadeShader(mat) {
     sh.fragmentShader = sh.fragmentShader.replace('#include <color_fragment>', /* glsl */`
 #if defined( USE_COLOR ) || defined( USE_COLOR_ALPHA )
   {
+    const vec3 luma = vec3( 0.2126, 0.7152, 0.0722 );
     #ifdef USE_MAP
-      float wallness = smoothstep( 0.3, 0.6, dot( sampledDiffuseColor.rgb, vec3( 0.2126, 0.7152, 0.0722 ) ) );
+      float wallness = smoothstep( 0.3, 0.6, dot( sampledDiffuseColor.rgb, luma ) );
     #else
       float wallness = 1.0;
     #endif
-    float vl = dot( vColor.rgb, vec3( 0.2126, 0.7152, 0.0722 ) );
-    float glassMix = mix( 0.5, 0.85, smoothstep( 0.25, 0.1, vl ) );
+    float glassMix = mix( 0.5, 0.85, smoothstep( 0.25, 0.1, dot( vColor.rgb, luma ) ) );
     diffuseColor.rgb *= mix( mix( vec3( 1.0 ), vColor.rgb, glassMix ), vColor.rgb, wallness );
   }
 #endif`);

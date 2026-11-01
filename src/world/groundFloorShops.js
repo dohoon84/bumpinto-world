@@ -4,8 +4,17 @@
 //   c) 상호 간판 — 플레이어 주변(70 m)만, 풀 28개를 InstancedMesh 1개 + 캔버스 아틀라스 1장으로
 // ?shops=0 이면 파일을 받지 않아 기존과 똑같다.
 import * as THREE from 'three';
+import { matchKeyedRows, ringCentroid } from './keyedBuildings.js';
 
 export const SHOP_GF_H = 3.2; // 1층 높이(= FACADE_FLOOR)
+const MIN_SHOP_H = 2.6;      // 이보다 낮은 건물(정자·창고 등)엔 가게를 달지 않는다
+/** 지면에 붙어 있고 1층을 낼 만큼 높은 건물인가 (띠·차양·간판 공통 조건) */
+export const isShopFront = (b, h = b.h) => (b.mh || 0) < 0.5 && h >= MIN_SHOP_H;
+/** 1층 띠 높이(m). 가게가 없거나 조건이 안 되면 0, 낮은 건물은 벽 전체가 띠 */
+export function shopBandHeight(shop, b, h) {
+  if (!shop || !isShopFront(b, h)) return 0;
+  return h <= SHOP_GF_H + 0.8 ? h : SHOP_GF_H;
+}
 // 카테고리 순서는 jeongja-shops.json meta.cats 와 같아야 한다 (scripts/ground-floor-shops.mjs)
 const CAT_STYLE = {
   cafe: { color: '#b98a62', label: '카페' },
@@ -28,23 +37,17 @@ const COLS = ATLAS_W / SLOT_W, ROWS = ATLAS_H / SLOT_H;
 const AWN_TOP = 2.7, AWN_DEPTH = 1.1, AWN_DROP = 0.42;
 const SIGN_H = 0.7;
 
-const centroid = (ring) => { let x = 0, z = 0; for (const p of ring) { x += p[0]; z += p[1]; } return [x / ring.length, z / ring.length]; };
-
-/** jeongja-shops.json -> Map<buildingIndex, entry>. 중심점이 어긋나면(지도 재생성) 버린다. */
+/** jeongja-shops.json -> { byIdx: Map<buildingIndex, entry>, dropped } | null. 중심점이 어긋나면(지도 재생성) 버린다. */
 export function prepareShops(data, json) {
-  if (!json?.b?.length || !data?.buildings) return null;
-  const cats = json.meta?.cats || Object.keys(CAT_STYLE);
+  const m = matchKeyedRows(data?.buildings, json);
+  if (!m?.rows.length) return null;
+  const cats = json.meta.cats || Object.keys(CAT_STYLE);
   const byIdx = new Map();
-  let dropped = 0;
-  for (const [idx, ci, count, cx, cz, names, osmOnly] of json.b) {
-    const b = data.buildings[idx];
-    if (!b) { dropped++; continue; }
-    const [bx, bz] = centroid(b.o);
-    if (Math.hypot(bx - cx, bz - cz) > 2.5) { dropped++; continue; }
+  for (const { idx, b, row: [, ci, count, , , names, osmOnly] } of m.rows) {
     const cat = CAT_STYLE[cats[ci]] ? cats[ci] : 'other';
     byIdx.set(idx, { idx, b, cat, count, names: names ? names.split('|').filter(Boolean) : [], osmOnly: !!osmOnly });
   }
-  return { byIdx, dropped, attribution: json.meta?.attribution || '' };
+  return { byIdx, dropped: m.dropped };
 }
 
 const _c = new THREE.Color(), _w = new THREE.Color('#ffffff');
@@ -72,7 +75,7 @@ function roadIndex(roads) {
   return (x, z) => grid.get(Math.floor(x / cell) + ',' + Math.floor(z / cell)) || [];
 }
 function outwardEdges(ring) {
-  const [cx, cz] = centroid(ring);
+  const [cx, cz] = ringCentroid(ring);
   let a = 0; for (let i = 0; i < ring.length; i++) { const [x1, z1] = ring[i], [x2, z2] = ring[(i + 1) % ring.length]; a += x1 * z2 - x2 * z1; }
   const edges = [];
   for (let i = 0; i < ring.length; i++) {
@@ -129,8 +132,9 @@ function awningGeometry() {
 /**
  * 차양 + 간판 풀. buildWorld 끝에서 호출.
  * @param placedSigns addPlaceSigns 반환값 [{host, face, text}] — 같은 건물엔 이름 간판을 또 달지 않고, 차양은 다른 면에.
+ * @param isShell (b) => 스타벅스 유리 매장 건물인가. 그 건물은 1층 띠처럼 차양·간판도 달지 않는다 (유리 모델과 겹침)
  */
-export function addGroundFloorShops(scene, data, shops, placedSigns = []) {
+export function addGroundFloorShops(scene, data, shops, placedSigns = [], isShell = () => false) {
   if (!shops?.byIdx?.size) return null;
   const segsAt = roadIndex(data.roads || []);
   const signHosts = new Map();
@@ -141,7 +145,7 @@ export function addGroundFloorShops(scene, data, shops, placedSigns = []) {
   const spots = [];
   for (const e of shops.byIdx.values()) {
     const b = e.b;
-    if ((b.mh || 0) > 0.5 || b.h < 2.6) continue;
+    if (!isShopFront(b) || isShell(b)) continue;
     const avoid = signHosts.get(b);
     const face = pickStreetFace(b.o, segsAt, avoid);
     if (!face) continue;

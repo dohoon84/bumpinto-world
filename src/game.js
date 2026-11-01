@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { buildWorld } from './world.js';
 import { prepareShops } from './world/groundFloorShops.js'; // [shops]
+import { prepareBuildingColours } from './world/buildingColours.js'; // [colours]
 import { createAvatar, animateAvatar, animateRide, clearRidePose } from './entities/avatar.js';
 import { KakaoBikes } from './entities/bike.js';
 import { openLobby, getEnterScreen } from './lobby.js';
@@ -50,7 +51,6 @@ import { mountTravel } from './corridor/travel.js'; // [corridor]
 import { mountPerfHud } from './corridor/perfHud.js'; // [corridor]
 import { corridorStationLabel } from './corridor/globeCorridor.js'; // [corridor]
 import { mountRide } from './ride/index.js'; // [ride] 코리더 버스·택시 탑승
-import { prepareBuildingColours } from './world/buildingColours.js'; // [colours]
 
 const params = new URLSearchParams(location.search);
 const region = getCurrentRegion();
@@ -158,13 +158,14 @@ else if (passportEnter && readSavedPassport()) passportQueued = true;
 else if (autoEnter) lobbyQueued = true;
 else openWorldGate({ onEnter: handleGateEnter });
 
-// [colours] 건물 외벽·지붕 색 (브이월드 속성 추정 + 수동). ?colours=0 이면 받지 않아 기존 모습 그대로
-const coloursP = region.dataFiles?.colours && params.get('colours') !== '0' ? fetch(import.meta.env.BASE_URL + region.dataFiles.colours).then((r) => (r.ok ? r.json() : null)).catch(() => null) : null;
 const worldFile = region.dataFiles?.world || 'jeongja.json';
 const transitFile = region.features?.transit ? region.dataFiles?.transit : null;
 const terrainFile = region.dataFiles?.terrain;
 const driveFile = region.dataFiles?.drive;
 const shopsFile = params.get('shops') === '0' ? null : region.dataFiles?.shops; // [shops] ?shops=0 이면 1층 상가 표시 끔
+const coloursFile = params.get('colours') === '0' ? null : region.dataFiles?.colours; // [colours] ?colours=0 이면 건물 색 끔 (기존 모습)
+// 없어도 되는 작은 데이터 파일: 실패·404 면 null (기능만 꺼진다)
+const fetchOptionalJson = (file) => (file ? fetch(import.meta.env.BASE_URL + file).then((r) => (r.ok ? r.json() : null)).catch(() => null) : null);
 
 const [data, transitData] = await Promise.all([
   fetch(import.meta.env.BASE_URL + worldFile).then((r) => r.json()),
@@ -172,11 +173,12 @@ const [data, transitData] = await Promise.all([
 ]);
 // [terrain] [taxi] 추가 데이터 (없어도 동작). ?terrain=0 이면 평평한 기존 지형, ?taxis=0 이면 택시 없음
 const corridorDir = region.features?.corridor && params.get('corridor') !== '0' ? region.dataFiles?.corridor : null; // [corridor] ?corridor=0 이면 정자만
-const [terrainData, driveData, corridorData, shopsData] = await Promise.all([
+const [terrainData, driveData, corridorData, shopsData, coloursData] = await Promise.all([
   !terrainFile || params.get('terrain') === '0' ? null : fetch(import.meta.env.BASE_URL + terrainFile).then((r) => r.json()).catch(() => null),
   !driveFile || params.get('taxis') === '0' ? null : fetch(import.meta.env.BASE_URL + driveFile).then((r) => r.json()).catch(() => null),
   corridorDir ? loadCorridorData(import.meta.env.BASE_URL + corridorDir) : null,
-  shopsFile ? fetch(import.meta.env.BASE_URL + shopsFile).then((r) => r.json()).catch(() => null) : null, // [shops] 없어도 동작
+  fetchOptionalJson(shopsFile), // [shops]
+  fetchOptionalJson(coloursFile), // [colours]
 ]);
 
 // --- 렌더러/씬 ---
@@ -214,11 +216,13 @@ scene.add(sun, sun.target);
 function setShadowSpan(span) { const c = sun.shadow.camera; c.left = c.bottom = -span; c.right = c.top = span; c.near = 1; c.far = span * 4 + 600; c.updateProjectionMatrix(); }
 
 // --- 월드 ---
-const buildingColours = prepareBuildingColours(data, await coloursP); // [colours] buildWorld 전에 data.buildings[i].fc
 const terrain = terrainData ? createTerrain(corridorTerrainData(terrainData, corridorData), data) : null; // [terrain] [corridor] 코리더 켜짐: 탄천 축 연장
 terrain?.annotate(data); // [terrain] 도로/수면에 높이 부여 (buildWorld 전에)
 const tower = region.features?.launchTower && params.get('tower') !== '0' ? createTowerAddon(data) : null; // [tower] buildWorld 전에 _skip 마킹
-const world = buildWorld(scene, data, region, { shops: prepareShops(data, shopsData) }); // [shops] 1층 상가 띠/차양/간판
+const world = buildWorld(scene, data, region, { // [shops] 1층 상가 띠/차양/간판 · [colours] 건물 외벽·지붕 색
+  shops: prepareShops(data, shopsData),
+  colours: prepareBuildingColours(data, coloursData),
+});
 tower?.build(scene, renderer); // [tower] 발사탑 1·2기(메카질라), 스타십 풀스택, 부스터 캐치, OLM, 탱크 팜 생성
 const overlay = new Overlay(document.getElementById('overlay'), camera);
 const corridorClock = { simTime: () => null };
@@ -1738,17 +1742,16 @@ function syncGameLocale() {
     attrEl.innerHTML = en
       ? '© <a href="https://crazylabs.co.kr" target="_blank" rel="noopener">CrazyLabs</a> · <a href="https://github.com/dohoon84/bumpinto-world" target="_blank" rel="noopener">Source Available</a> · Map © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> (ODbL)'
       : '© <a href="https://crazylabs.co.kr" target="_blank" rel="noopener">CrazyLabs</a> · <a href="https://github.com/dohoon84/bumpinto-world" target="_blank" rel="noopener">소스 공개 (영리 서비스 금지)</a> · 지도 © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> (ODbL)';
-    if (buildingColours) attrEl.innerHTML += en // [colours] 건물 속성(구조·용도·사용승인일) → 외벽색 추정
-      ? ' · Building attributes: <a href="https://www.vworld.kr" target="_blank" rel="noopener">VWorld</a> GIS building data (MOLIT, KOGL Type 1)'
-      : ' · 건물 속성: <a href="https://www.vworld.kr" target="_blank" rel="noopener">브이월드</a> GIS건물통합정보 (국토교통부, 공공누리 제1유형)';
-    // [corridor] 코리더 건물 높이 출처 (Overture footprint · 브이월드 GIS건물통합정보)
-    if (corridorDir) attrEl.innerHTML += en
-      ? ' · <a href="https://overturemaps.org" target="_blank" rel="noopener">Overture Maps</a> · Building heights: <a href="https://www.vworld.kr" target="_blank" rel="noopener">VWorld</a> (MOLIT)'
-      : ' · <a href="https://overturemaps.org" target="_blank" rel="noopener">Overture Maps</a> · 건물 높이: <a href="https://www.vworld.kr" target="_blank" rel="noopener">브이월드</a> (국토교통부)';
-    // [shops] 1층 상가 출처 (상가(상권)정보, 공공데이터포털 15083033)
+    // [corridor] Overture footprint · 브이월드 건물 높이 / [colours] 브이월드 건물 속성(→ 외벽색 추정). 같은 브이월드 GIS건물통합정보라 한 번만 적는다
+    if (corridorDir) attrEl.innerHTML += ' · <a href="https://overturemaps.org" target="_blank" rel="noopener">Overture Maps</a>';
+    const vworldUse = [corridorDir && (en ? 'heights' : '높이'), world.colours && (en ? 'attributes' : '속성')].filter(Boolean);
+    if (vworldUse.length) attrEl.innerHTML += en
+      ? ` · Building ${vworldUse.join(' & ')}: <a href="https://www.vworld.kr" target="_blank" rel="noopener">VWorld</a> (MOLIT, KOGL Type 1)`
+      : ` · 건물 ${vworldUse.join('·')}: <a href="https://www.vworld.kr" target="_blank" rel="noopener">브이월드</a> (국토교통부, 공공누리 제1유형)`;
+    // [shops] 1층 상가 출처 (소상공인시장진흥공단 상가(상권)정보, 공공데이터포털 15083033)
     if (world.shops) attrEl.innerHTML += en
-      ? ' · Shops: <a href="https://www.data.go.kr/data/15083033/fileData.do" target="_blank" rel="noopener">SEMAS 상가(상권)정보</a>'
-      : ' · 상가: <a href="https://www.data.go.kr/data/15083033/fileData.do" target="_blank" rel="noopener">소상공인시장진흥공단 상가(상권)정보</a>';
+      ? ' · Shops: <a href="https://www.data.go.kr/data/15083033/fileData.do" target="_blank" rel="noopener">SEMAS</a> (data.go.kr)'
+      : ' · 상가: <a href="https://www.data.go.kr/data/15083033/fileData.do" target="_blank" rel="noopener">소상공인시장진흥공단</a>';
   }
   syncRideUi(true);
   syncHelpFoldUi();

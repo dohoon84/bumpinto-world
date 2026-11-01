@@ -20,33 +20,17 @@
 //   - 키는 jeongja.json buildings 배열 인덱스 + 중심점(cx, cz). 런타임은 중심점으로 다시 확인해 어긋나면 버린다.
 import fs from 'node:fs';
 import path from 'node:path';
+import { cliArg as arg, loadWorld, inPolygon as inPoly, bboxOf, bboxGrid, ringCentroid as centroid } from './lib/world-geo.mjs';
 
-const arg = (k, d) => { const a = process.argv.find((s) => s.startsWith(`--${k}=`)); return a ? a.slice(k.length + 3) : d; };
 const VW = arg('vworld'), WORLD = arg('world', 'public/jeongja.json'), OUT = arg('out', 'public/jeongja-colours.json'), MLY = arg('mapillary');
 if (!VW) { console.error('usage: node scripts/building-colours.mjs --vworld=<dt_d010 타일 캐시 폴더>'); process.exit(1); }
 
-const world = JSON.parse(fs.readFileSync(WORLD, 'utf8'));
-const C = world.meta.center;
-const kx = Math.cos((C.lat * Math.PI) / 180) * 111320, kz = 110540;
-const proj = (lon, lat) => [(lon - C.lon) * kx, -(lat - C.lat) * kz];
+const { world, proj } = loadWorld(WORLD);
 const OVERLAP = 0.3;
 
 // 소스 코드 (파일 포맷의 일부: 순서 고정, 새 항목은 뒤에)
 export const SRCS = ['k-fallback', 'vworld-estimate', 'manual', 'mapillary'];
 const PRIORITY = { 'k-fallback': 0, 'vworld-estimate': 1, mapillary: 2, manual: 3 };
-
-// --- 기하 ---
-const centroid = (ring) => { let x = 0, z = 0; for (const p of ring) { x += p[0]; z += p[1]; } return [x / ring.length, z / ring.length]; };
-function inRing(x, z, r) {
-  let ins = false;
-  for (let i = 0, j = r.length - 1; i < r.length; j = i++) {
-    const [xi, zi] = r[i], [xj, zj] = r[j];
-    if ((zi > z) !== (zj > z) && x < ((xj - xi) * (z - zi)) / (zj - zi) + xi) ins = !ins;
-  }
-  return ins;
-}
-const inPoly = (x, z, outer, holes) => inRing(x, z, outer) && !(holes || []).some((h) => inRing(x, z, h));
-const bboxOf = (ring) => { let x0 = Infinity, z0 = Infinity, x1 = -Infinity, z1 = -Infinity; for (const [x, z] of ring) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (z < z0) z0 = z; if (z > z1) z1 = z; } return { x0, z0, x1, z1 }; };
 
 // --- 브이월드 피처 읽기 (id 로 중복 제거) ---
 const vw = new Map();
@@ -54,7 +38,7 @@ for (const f of fs.readdirSync(VW).filter((s) => s.endsWith('.json'))) {
   for (const ft of JSON.parse(fs.readFileSync(path.join(VW, f), 'utf8')).features || []) {
     if (vw.has(ft.id) || !ft.g) continue;
     const polys = ft.g.type === 'MultiPolygon' ? ft.g.coordinates : ft.g.type === 'Polygon' ? [ft.g.coordinates] : [];
-    const parts = polys.map((pl) => ({ outer: pl[0].map((p) => proj(p[0], p[1])), holes: pl.slice(1).map((r) => r.map((p) => proj(p[0], p[1]))) })).filter((q) => q.outer.length >= 3);
+    const parts = polys.map((pl) => ({ outer: pl[0].map((p) => proj(p[1], p[0])), holes: pl.slice(1).map((r) => r.map((p) => proj(p[1], p[0]))) })).filter((q) => q.outer.length >= 3);
     if (!parts.length) continue;
     const bb = bboxOf(parts.flatMap((q) => q.outer));
     if (bb.x1 < -1500 || bb.x0 > 1500 || bb.z1 < -1500 || bb.z0 > 1500) continue;
@@ -62,21 +46,13 @@ for (const f of fs.readdirSync(VW).filter((s) => s.endsWith('.json'))) {
   }
 }
 const vwList = [...vw.values()];
-const CELL = 50, grid = new Map();
-vwList.forEach((v, i) => {
-  for (let gx = Math.floor(v.bb.x0 / CELL); gx <= Math.floor(v.bb.x1 / CELL); gx++)
-    for (let gz = Math.floor(v.bb.z0 / CELL); gz <= Math.floor(v.bb.z1 / CELL); gz++) {
-      const k = gx + ',' + gz; if (!grid.has(k)) grid.set(k, []); grid.get(k).push(i);
-    }
-});
+const grid = bboxGrid(50);
+vwList.forEach((v, i) => grid.add(v.bb, i));
 
 function matchBuilding(b) {
   const bb = bboxOf(b.o);
   const step = Math.max(0.5, Math.sqrt(Math.max(1, (bb.x1 - bb.x0) * (bb.z1 - bb.z0))) / 14);
-  const cand = new Set();
-  for (let gx = Math.floor(bb.x0 / CELL); gx <= Math.floor(bb.x1 / CELL); gx++)
-    for (let gz = Math.floor(bb.z0 / CELL); gz <= Math.floor(bb.z1 / CELL); gz++) for (const i of grid.get(gx + ',' + gz) || []) cand.add(i);
-  const cs = [...cand].filter((i) => { const v = vwList[i].bb; return v.x1 >= bb.x0 && v.x0 <= bb.x1 && v.z1 >= bb.z0 && v.z0 <= bb.z1; });
+  const cs = [...grid.near(bb)].filter((i) => { const v = vwList[i].bb; return v.x1 >= bb.x0 && v.x0 <= bb.x1 && v.z1 >= bb.z0 && v.z0 <= bb.z1; });
   const hits = new Map(); let total = 0;
   for (let x = bb.x0 + step / 2; x < bb.x1; x += step)
     for (let z = bb.z0 + step / 2; z < bb.z1; z += step) {
