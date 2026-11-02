@@ -6,15 +6,19 @@
 //   - 나머지는 차도(CLASS 표)를 따라 등급별 간격으로 생성: 큰길 35 m(넓으면 양쪽 마주보기, 아니면 지그재그), 작은 길은 한쪽 50 m.
 //   - 피하는 곳: 교차로 · 횡단보도 · 버스정류장/쉘터 · 가로수(런타임과 같은 규칙으로 계산한 자리 + OSM natural=tree) · 건물 · 다리(bridge=yes 구간과 그 주변) · 다른 차도 위.
 //     걸리면 길 따라 ±3/6/9 m 옮겨 보고, 그래도 안 되면 버린다(사유별 개수 기록).
+//   - 탄천 둔치 산책로·자전거길(footway/cycleway/path/pedestrian 중 탄천 단면 안, 물·하상 제외)엔 낮은 공원등(kind 3)을 30 m 간격 한쪽(물 반대편 우선).
+//     탄천 단면은 게임과 같은 지형(terrain.json + corridor/tancheon.json, src/world/terrain.js)으로 판정한다. 다리(bridge=yes)는 건너뜀.
 //   - 높이는 런타임에 지형(renderHeight)에 붙인다(여기선 x, z, 방향, 종류만). 결과는 입력이 같으면 항상 같다(난수 없음).
 //
 //   출력: { v, cell, meta:{counts…}, cells: { "cx_cz": [x, z, yaw, kind, …] } }  — 250 m 칸별 평면 배열
-//         kind 0 = 큰길(10 m), 1 = 작은 길(0.72배), 2 = OSM 가로등(큰길 크기)
+//         kind 0 = 큰길(10 m), 1 = 작은 길(0.72배), 2 = OSM 가로등(큰길 크기), 3 = 탄천 공원등(0.45배)
 //
 //   사용: npm run corridor:streetlights [-- --osm=../bumpinto-world/data/raw/osm_merged.json] [--out=public/corridor/streetlights.json] [--verbose]
 import fs from 'node:fs';
 import path from 'node:path';
 import { cliArg, inRing, bboxOf, bboxGrid } from '../lib/world-geo.mjs';
+import { createTerrain } from '../../src/world/terrain.js';
+import { mergeTancheon } from '../../src/corridor/tancheon.js';
 
 const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), '../..');
 const VERBOSE = process.argv.includes('--verbose');
@@ -50,6 +54,8 @@ const TREE_KINDS = new Set(['primary', 'secondary', 'tertiary']); // tileMesh.js
 const CURB = 0.7;          // 차도 가장자리에서 기둥까지
 const ARM = 2.0;           // 기둥에서 양쪽 팔 끝까지 (큰길 크기, 런타임과 같아야 함)
 const NUDGE = [0, 3, -3, 6, -6, 9, -9];
+// 탄천 공원등: 산책로 종류 · 간격 · 기둥 위치(길 가장자리에서) · 단면 판정 여유
+const PARK = { kinds: new Set(['footway', 'cycleway', 'path', 'pedestrian']), sp: 30, curb: 0.6, waterPad: 1.5, topPad: 8, dup: 25, steps: 2.5, walkPad: 0.3 };
 const CLEAR = { junction: 7, crossingAlong: 7, crossingAcross: 3, bus: 8, tree: 2.6, building: 0.8, bridge: 3, dup: 12, dupOsm: 15, osmRoad: 30 };
 
 // ---- 투영: 라이브(jeongja.json meta.center)와 같은 식 ----
@@ -117,16 +123,21 @@ for (const e of osm) {
 }
 
 // ---- 공간 색인 ----
-const carSegs = [], bridgeSegs = [];
+const carSegs = [], bridgeSegs = [], walkSegs = [], stepSegs = [];
 for (const r of roads) {
-  if (!CAR.has(r.k)) continue;
+  const car = CAR.has(r.k);
   for (let i = 1; i < r.p.length; i++) {
-    const s = { a: r.p[i - 1], b: r.p[i], hw: r.w / 2 };
-    (r.br ? bridgeSegs : carSegs).push(s);
+    const s = { a: r.p[i - 1], b: r.p[i], hw: r.w / 2, r };
+    if (r.br) bridgeSegs.push(s); // 다리는 차도·보행 다리 모두 비움(다리 조명은 따로)
+    else if (car) carSegs.push(s);
+    else if (r.k === 'steps') stepSegs.push(s);
+    else if (PARK.kinds.has(r.k)) walkSegs.push(s);
   }
 }
 const segBox = (s, m) => ({ x0: Math.min(s.a[0], s.b[0]) - m, x1: Math.max(s.a[0], s.b[0]) + m, z0: Math.min(s.a[1], s.b[1]) - m, z1: Math.max(s.a[1], s.b[1]) + m });
-const carGrid = bboxGrid(40), brGrid = bboxGrid(40), bGrid = bboxGrid(40);
+const carGrid = bboxGrid(40), brGrid = bboxGrid(40), bGrid = bboxGrid(40), walkGrid = bboxGrid(40), stepGrid = bboxGrid(40);
+walkSegs.forEach((s, i) => walkGrid.add(segBox(s, s.hw + 1), i));
+stepSegs.forEach((s, i) => stepGrid.add(segBox(s, s.hw + PARK.steps), i));
 carSegs.forEach((s, i) => carGrid.add(segBox(s, s.hw + 1), i));
 bridgeSegs.forEach((s, i) => brGrid.add(segBox(s, s.hw + CLEAR.bridge), i));
 blds.forEach((o, i) => bGrid.add(bboxOf(o), i));
@@ -140,6 +151,8 @@ function segDist(x, z, a, b) {
 const onCar = (x, z, pad) => { for (const i of carGrid.at(x, z)) { const s = carSegs[i]; if (segDist(x, z, s.a, s.b) < s.hw + pad) return true; } return false; };
 const nearBridge = (x, z) => { for (const i of brGrid.at(x, z)) { const s = bridgeSegs[i]; if (segDist(x, z, s.a, s.b) < s.hw + CLEAR.bridge) return true; } return false; };
 function ringDist(x, z, ring) { let d = Infinity; for (let i = 0; i < ring.length; i++) d = Math.min(d, segDist(x, z, ring[i], ring[(i + 1) % ring.length])); return d; }
+const onOtherWalk = (x, z, own) => { for (const i of walkGrid.at(x, z)) { const s = walkSegs[i]; if (s.r !== own && segDist(x, z, s.a, s.b) < s.hw + PARK.walkPad) return true; } return false; };
+const nearSteps = (x, z) => { for (const i of stepGrid.at(x, z)) { const s = stepSegs[i]; if (segDist(x, z, s.a, s.b) < s.hw + PARK.steps) return true; } return false; };
 const inBuilding = (x, z, pad) => { for (const i of bGrid.near({ x0: x - pad, x1: x + pad, z0: z - pad, z1: z + pad })) { const o = blds[i]; if (inRing(x, z, o) || ringDist(x, z, o) < pad) return true; } return false; };
 
 // ---- 가로수 자리(런타임 tileMesh.js / world.js / corridor index.js chTrees 와 같은 규칙, 필터 전 전체) ----
@@ -275,6 +288,71 @@ for (const { r, c } of lampRoads) {
   }
 }
 
+// 3) 탄천 둔치 공원등 — 게임 지형으로 단면(물 · 둔치 · 제방) 판정
+const TT = mergeTancheon(readJSON(path.join(ROOT, 'public/terrain.json')), readJSON(path.join(ROOT, 'public/corridor/tancheon.json')));
+const terrain = createTerrain(TT, live);
+const TN = TT.axis.length, TP = TT.prof, FLOOR = TT.params.FLOOR;
+/** 탄천 단면 안(물·하상 바깥 ~ 제방 위 topPad)이면 { d, top, w }, 아니면 null */
+function tancheonAt(x, z) {
+  const q = terrain.project(x, z); if (!q || q.end) return null;
+  const sd = q.d < 0 ? 'L' : 'R', j = Math.min(TN - 1, q.i + 1), f = (k) => TP[k + sd][q.i] * (1 - q.t) + TP[k + sd][j] * q.t;
+  const ad = Math.abs(q.d), top = f('top'), w = f('w');
+  if (ad < w + PARK.waterPad || ad > top + PARK.topPad) return null;
+  return { ad, top, w };
+}
+const parkGrid = bboxGrid(30), parkPts = [];
+const nearPark = (x, z, r) => { for (const i of parkGrid.near({ x0: x - r, x1: x + r, z0: z - r, z1: z + r })) if (Math.hypot(parkPts[i][0] - x, parkPts[i][1] - z) < r) return true; return false; };
+const PARK_SCALE = 0.45;
+function parkBlocked(x, z, nx, nz, own) {
+  if (!inArea(x, z)) return 'area';
+  if (!tancheonAt(x, z)) return 'park-band';
+  if (terrain.renderHeight(x, z) < FLOOR - 0.2) return 'park-bed';
+  if (nearBridge(x, z)) return 'bridge';
+  if (onCar(x, z, 0.3)) return 'road';
+  if (onOtherWalk(x, z, own)) return 'park-path';
+  if (nearSteps(x, z) || terrain.stairAt(x, z, PARK.steps)) return 'park-steps';
+  if (nearPt(trees, x, z, CLEAR.tree)) return 'tree';
+  if (inBuilding(x, z, CLEAR.building)) return 'building';
+  const a = ARM * PARK_SCALE;
+  if (inBuilding(x + nx * a, z + nz * a, 0.2) || inBuilding(x - nx * a, z - nz * a, 0.2)) return 'building';
+  return null;
+}
+const parkRoads = roads.filter((r) => PARK.kinds.has(r.k) && !r.br && r.p.length >= 2 && r.p.some(([x, z]) => tancheonAt(x, z)));
+parkRoads.sort((A, B) => B.w - A.w || (A.k < B.k ? -1 : A.k > B.k ? 1 : 0) || A.p[0][0] - B.p[0][0] || A.p[0][1] - B.p[0][1]);
+let parkN = 0;
+const parkBy = {};
+for (const r of parkRoads) {
+  const [oh, ot] = r.src === 'live' ? [0, 0] : r.o || [0, 0];
+  const segs = [];
+  for (let i = 1 + oh; i < r.p.length - ot; i++) {
+    const a = r.p[i - 1], b = r.p[i], L = Math.hypot(b[0] - a[0], b[1] - a[1]);
+    if (L > 1e-3) segs.push({ a, b, L, s0: segs.length ? segs[segs.length - 1].s0 + segs[segs.length - 1].L : 0 });
+  }
+  if (!segs.length) continue;
+  const total = segs[segs.length - 1].s0 + segs[segs.length - 1].L;
+  const at = (s) => { s = Math.max(0, Math.min(total, s)); let k = 0; while (k < segs.length - 1 && segs[k].s0 + segs[k].L < s) k++; const g = segs[k], t = (s - g.s0) / g.L; return { x: g.a[0] + (g.b[0] - g.a[0]) * t, z: g.a[1] + (g.b[1] - g.a[1]) * t, nx: -(g.b[1] - g.a[1]) / g.L, nz: (g.b[0] - g.a[0]) / g.L }; };
+  for (let s = Math.min(PARK.sp / 2, total / 2); s <= total; s += PARK.sp) {
+    let done = false, last = null;
+    for (const d of NUDGE) {
+      const ss = s + d; if (ss < 0 || ss > total) continue;
+      const q = at(ss), off = r.w / 2 + PARK.curb;
+      // 물 반대편(축에서 먼 쪽) 먼저
+      const cand = [1, -1].map((side) => ({ x: q.x + q.nx * side * off, z: q.z + q.nz * side * off }));
+      const da = tancheonAt(cand[0].x, cand[0].z)?.ad ?? 0, db = tancheonAt(cand[1].x, cand[1].z)?.ad ?? 0;
+      if (db > da) cand.reverse();
+      for (const { x, z } of cand) {
+        const b = parkBlocked(x, z, q.nx, q.nz, r) || (nearPlaced(x, z, CLEAR.dup) || nearPark(x, z, PARK.dup) ? 'dup' : null);
+        if (b) { last = b; continue; }
+        accept({ x, z, yaw: yawOf(q.nx, q.nz), kind: 3, src: 'park', cls: 'tancheon-' + r.k });
+        parkGrid.add({ x0: x, x1: x, z0: z, z1: z }, parkPts.length); parkPts.push([x, z]);
+        parkBy[r.k] = (parkBy[r.k] || 0) + 1; parkN++; done = true; break;
+      }
+      if (done || last === 'dup' || last === 'area') break;
+    }
+    if (!done) why(last);
+  }
+}
+
 // ---- 출력 ----
 const cells = {};
 placed.sort((a, b) => a.z - b.z || a.x - b.x);
@@ -283,10 +361,11 @@ for (const l of placed) {
   (cells[k] ||= []).push(x, z, r3(l.yaw), l.kind);
 }
 const sortedCells = Object.fromEntries(Object.keys(cells).sort().map((k) => [k, cells[k]]));
-const counts = { total: placed.length, osm: osmUsed, generated: placed.length - osmUsed, osmNodes: osmLamps.length, byClass, live: placed.filter((l) => inLive(l.x, l.z)).length, skipped: reasons, junctions: junctions.length, cells: Object.keys(cells).length };
+const counts = { total: placed.length, osm: osmUsed, generated: placed.length - osmUsed, osmNodes: osmLamps.length, byClass, tancheon: parkN, tancheonBy: parkBy, tancheonLive: placed.filter((l) => l.kind === 3 && inLive(l.x, l.z)).length, live: placed.filter((l) => inLive(l.x, l.z)).length, skipped: reasons, junctions: junctions.length, cells: Object.keys(cells).length };
 const out = { v: 1, cell: CELL, attribution: '© OpenStreetMap contributors (ODbL)', meta: { generated: 'scripts/corridor/build-streetlights.mjs', counts }, cells: sortedCells };
 fs.writeFileSync(OUT, JSON.stringify(out) + '\n');
 console.log(`streetlights: ${placed.length} lamps (OSM ${osmUsed}/${osmLamps.length}, generated ${placed.length - osmUsed}, live ${counts.live}) in ${counts.cells} cells → ${path.relative(ROOT, OUT)} (${(fs.statSync(OUT).size / 1024).toFixed(0)} KB)`);
 console.log('by class', byClass);
+console.log(`tancheon park lamps: ${parkN} (live ${counts.tancheonLive})`, parkBy);
 console.log('skipped', reasons);
 if (VERBOSE) console.log('junctions', junctions.length);

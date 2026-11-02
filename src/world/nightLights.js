@@ -26,16 +26,18 @@ export function createNightFade({ seconds = 4 } = {}) {
 }
 
 /**
- * 바닥 불빛 웅덩이 재질. 로컬 XZ 평면 사각형(-hx..hx, -hz..hz)에 초점(±focusX, 0) 두 개의 부드러운 원형 빛.
- * 초점이 하나면 focusX = 0. radius 는 로컬 단위(인스턴스 배율이 곱해진다).
+ * 바닥 불빛 웅덩이 재질. 로컬 XZ 평면 사각형(-hx..hx, -hz..hz)에 초점(±focusX, 0) 두 개의 부드러운 타원 빛.
+ * 초점이 하나면 focusX = 0. radius(X) · radiusZ 는 로컬 단위(인스턴스 배율이 곱해진다).
+ * 빛은 가장자리로 갈수록 천천히 줄어(가우스 비슷한 꼴) 이웃 웅덩이와 겹치면 길을 따라 이어진 은은한 빛이 된다.
  */
-export function lightPoolMaterial({ color = '#ffcf8a', intensity = 0.55, radius = 6, focusX = 0 } = {}) {
+export function lightPoolMaterial({ color = '#ffcf8a', intensity = 0.55, radius = 6, radiusZ = radius, focusX = 0 } = {}) {
   const m = new THREE.ShaderMaterial({
     uniforms: {
       uNight: { value: 0 },
       uColor: { value: new THREE.Color(color) },
       uIntensity: { value: intensity },
       uRadius: { value: radius },
+      uRadiusZ: { value: radiusZ },
       uFocus: { value: focusX },
       ...THREE.UniformsLib.fog,
     },
@@ -52,16 +54,17 @@ export function lightPoolMaterial({ color = '#ffcf8a', intensity = 0.55, radius 
         #include <fog_vertex>
       }`,
     fragmentShader: /* glsl */ `
-      uniform float uNight, uIntensity, uRadius, uFocus;
+      uniform float uNight, uIntensity, uRadius, uRadiusZ, uFocus;
       uniform vec3 uColor;
       varying vec2 vLocal;
       #include <fog_pars_fragment>
       #include <logdepthbuf_pars_fragment>
       void main() {
         #include <logdepthbuf_fragment>
-        float d = min(length(vLocal - vec2(uFocus, 0.0)), length(vLocal + vec2(uFocus, 0.0))) / uRadius;
-        float a = 1.0 - smoothstep(0.0, 1.0, d);
-        a *= a;
+        vec2 inv = vec2(1.0 / uRadius, 1.0 / uRadiusZ);
+        float d = min(length((vLocal - vec2(uFocus, 0.0)) * inv), length((vLocal + vec2(uFocus, 0.0)) * inv));
+        // 가운데는 둥글고 가장자리는 길게 꼬리를 끄는 감쇠(d = 1 에서 0)
+        float a = exp(-3.0 * d * d) * (1.0 - smoothstep(0.6, 1.0, d));
         float f = 1.0;
         #ifdef USE_FOG
           #ifdef FOG_EXP2

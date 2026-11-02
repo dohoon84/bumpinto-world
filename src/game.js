@@ -240,7 +240,7 @@ if (corridor) {
 } // [terrain] world.groundY(x,z,refY) — NPC/원격 플레이어/택시가 사용
 // [streetlights] 차도 T자 가로등 (scripts/corridor/build-streetlights.mjs). ?streetlights=0 이면 데이터 요청·메시 없음
 const streetlightsFile = params.get('streetlights') === '0' ? null : region.dataFiles?.streetlights;
-const streetlights = streetlightsFile ? createStreetlights({ scene, terrain, corridor, liveBox: data.meta.bboxLocal, url: import.meta.env.BASE_URL + streetlightsFile }) : null;
+const streetlights = streetlightsFile ? createStreetlights({ scene, terrain, corridor, camera, liveBox: data.meta.bboxLocal, url: import.meta.env.BASE_URL + streetlightsFile }) : null;
 const st = data.station;
 overlay.add({
   cls: 'label station',

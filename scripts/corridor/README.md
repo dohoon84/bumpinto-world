@@ -23,6 +23,10 @@ The live 정자 map (`public/data/*`, bbox x −606..597, z −608..940) is left
    junctions, crosswalks, bus stops, trees, buildings and bridges. The output is deterministic (`test-streetlights.mjs` re-bakes and
    compares). Runtime is `src/world/streetlights.js`: three InstancedMeshes (body, lens, ground pool) and no real lights. Night comes
    from `src/world/nightLights.js`, which follows `evening.js`. Turn it off with `?streetlights=0`, which skips the fetch and the meshes.
+   Tancheon park lamps (kind 3, smaller and lower) go on the riverside footway/cycleway/path every ~30 m on one side, only inside the
+   game terrain's Tancheon section (`terrain.json` + `corridor/tancheon.json`), never on the water or riverbed, and never on bridges.
+   In overview (위에서 보기) at night only the soft ground pools are drawn, around the overview camera and independent of detail
+   tiles (capped at 8192, reusing the pool mesh, so +1 draw call).
 
 ## Checks
 

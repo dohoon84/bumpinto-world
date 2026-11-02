@@ -8,6 +8,8 @@ import { execFileSync } from 'node:child_process';
 import * as THREE from 'three';
 import { setEvening } from '../../../src/evening.js';
 import { createStreetlights, buildStreetlightGeometries } from '../../../src/world/streetlights.js';
+import { createTerrain } from '../../../src/world/terrain.js';
+import { mergeTancheon } from '../../../src/corridor/tancheon.js';
 
 const ROOT = new URL('../../../', import.meta.url).pathname;
 const J = (f) => JSON.parse(fs.readFileSync(path.join(ROOT, f), 'utf8'));
@@ -29,14 +31,17 @@ for (const [k, a] of Object.entries(data.cells)) {
   for (let i = 0; i < a.length; i += 4) {
     const l = { x: a[i], z: a[i + 1], yaw: a[i + 2], kind: a[i + 3] };
     assert.equal(`${Math.floor(l.x / data.cell)}_${Math.floor(l.z / data.cell)}`, k, '칸 키가 좌표와 다름');
-    assert.ok(l.yaw >= 0 && l.yaw <= Math.PI + 1e-3 && [0, 1, 2].includes(l.kind));
+    assert.ok(l.yaw >= 0 && l.yaw <= Math.PI + 1e-3 && [0, 1, 2, 3].includes(l.kind));
     lamps.push(l);
   }
 }
 const c = data.meta.counts;
 assert.equal(lamps.length, c.total);
 assert.equal(c.osm + c.generated, c.total);
-assert.equal(Object.values(c.byClass).reduce((a, b) => a + b, 0), c.generated);
+assert.equal(Object.values(c.byClass).reduce((a, b) => a + b, 0) + c.tancheon, c.generated);
+assert.equal(lamps.filter((l) => l.kind === 3).length, c.tancheon, '탄천 공원등 수');
+assert.ok(c.tancheon > 500, `탄천 공원등이 너무 적음: ${c.tancheon}`);
+assert.ok(c.tancheonLive > 50, '정자 구간 탄천 공원등이 너무 적음');
 assert.equal(lamps.filter((l) => l.kind === 2).length, c.osm, 'OSM 가로등 수');
 assert.ok(c.osm > 0, 'OSM highway=street_lamp 노드를 하나도 안 씀');
 assert.ok(c.live > 300, '정자(라이브) 구간 가로등이 너무 적음');
@@ -51,7 +56,7 @@ const CAR = /^(motorway|trunk|primary|secondary|tertiary|residential|unclassifie
 const G = 50, grid = new Map(), add = (x, z, v) => { const key = Math.floor(x / G) + ',' + Math.floor(z / G); if (!grid.has(key)) grid.set(key, []); grid.get(key).push(v); };
 const near = (x, z) => { const out = []; for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) out.push(...(grid.get((Math.floor(x / G) + i) + ',' + (Math.floor(z / G) + j)) || [])); return out; };
 const sd = (x, z, a, b) => { const dx = b[0] - a[0], dz = b[1] - a[1], L2 = dx * dx + dz * dz || 1, t = Math.max(0, Math.min(1, ((x - a[0]) * dx + (z - a[1]) * dz) / L2)); return Math.hypot(a[0] + dx * t - x, a[1] + dz * t - z); };
-for (const r of roads) if (CAR.test(r.k)) for (let i = 1; i < r.p.length; i++) { const s = { a: r.p[i - 1], b: r.p[i], hw: r.w / 2, br: !!r.br }; for (let t = 0; t <= 1; t += 0.1) add(s.a[0] + (s.b[0] - s.a[0]) * t, s.a[1] + (s.b[1] - s.a[1]) * t, s); }
+for (const r of roads) if (CAR.test(r.k) || r.br) for (let i = 1; i < r.p.length; i++) { const s = { a: r.p[i - 1], b: r.p[i], hw: r.w / 2, br: !!r.br, k: r.k }; for (let t = 0; t <= 1; t += 0.1) add(s.a[0] + (s.b[0] - s.a[0]) * t, s.a[1] + (s.b[1] - s.a[1]) * t, s); }
 const inRing = (x, z, o) => { let q = false; for (let i = 0, j = o.length - 1; i < o.length; j = i++) { const [xi, zi] = o[i], [xj, zj] = o[j]; if ((zi > z) !== (zj > z) && x < ((xj - xi) * (z - zi)) / (zj - zi) + xi) q = !q; } return q; };
 const bgrid = new Map(); rings.forEach((o) => { const [x, z] = o[0], key = Math.floor(x / 100) + ',' + Math.floor(z / 100); if (!bgrid.has(key)) bgrid.set(key, []); bgrid.get(key).push(o); });
 const nearB = (x, z) => { const out = []; for (let i = -2; i <= 2; i++) for (let j = -2; j <= 2; j++) out.push(...(bgrid.get((Math.floor(x / 100) + i) + ',' + (Math.floor(z / 100) + j)) || [])); return out; };
@@ -61,11 +66,26 @@ for (const l of lamps) {
   for (const s of new Set(near(l.x, l.z))) {
     const d = sd(l.x, l.z, s.a, s.b);
     if (s.br && d < s.hw + 2.9) { bad.bridge++; break; }
-    if (l.kind !== 2 && d < s.hw + 0.25) { bad.road++; break; }
+    if (l.kind !== 2 && !s.br && CAR.test(s.k) && d < s.hw + 0.25) { bad.road++; break; }
   }
   if (nearB(l.x, l.z).some((o) => inRing(l.x, l.z, o))) bad.bld++;
 }
 assert.deepEqual(bad, { road: 0, bridge: 0, bld: 0, area: 0 }, '규칙 위반 가로등');
+// 탄천 공원등: 게임 지형의 탄천 단면 안(물·하상 아님), 다리 아님(위에서 확인)
+{
+  const T = mergeTancheon(J('public/terrain.json'), J('public/corridor/tancheon.json'));
+  const terrain = createTerrain(T, live), FLOOR = T.params.FLOOR, N = T.axis.length;
+  let off = 0, wet = 0;
+  for (const l of lamps) {
+    if (l.kind !== 3) continue;
+    const q = terrain.project(l.x, l.z);
+    if (!q || q.end) { off++; continue; }
+    const sd2 = q.d < 0 ? 'L' : 'R', j = Math.min(N - 1, q.i + 1), f = (k) => T.prof[k + sd2][q.i] * (1 - q.t) + T.prof[k + sd2][j] * q.t;
+    if (Math.abs(q.d) > f('top') + 8.5) off++;
+    if (Math.abs(q.d) < f('w') + 1.4 || terrain.renderHeight(l.x, l.z) < FLOOR - 0.2) wet++;
+  }
+  assert.deepEqual({ off, wet }, { off: 0, wet: 0 }, '탄천 공원등이 단면 밖이거나 물·하상 위');
+}
 // 횡단보도 바로 옆 없음
 const crossings = [...base.crossings, ...J('public/transit.json').crossings];
 const atCross = lamps.filter((l) => l.kind !== 2 && crossings.some((q) => { const [dx, dz] = q.dir || [1, 0], rx = l.x - q.x, rz = l.z - q.z; return Math.abs(rx * dx + rz * dz) < 4 && Math.abs(-rx * dz + rz * dx) < (q.w || 8) / 2 + 1.5; }));
@@ -121,10 +141,38 @@ sl.update(1, st.x, st.z);
 assert.ok(sl.stats.visible < n);
 sl.update(1, 50000, 50000);
 assert.equal(inst().length, 0, '보이는 게 없으면 메시 해제');
-sl.update(1, 0, 0, 'overview');
-assert.equal(inst().length, 0, '전체 지도에선 숨김');
+// 위에서 보기(밤): 상세 타일이 없어도 웅덩이만 그림(기둥·램프 0), 개수 상한, 낮엔 아무것도 없음
+sl.update(1, st.x, st.z, 'overview');
+const byName = (k) => inst().find((m) => m.name === 'streetlight-' + k);
+assert.equal(inst().length, 3);
+assert.ok(sl.stats.overview > 200 && sl.stats.overview <= 8192, `위에서 보기 웅덩이 수 ${sl.stats.overview}`);
+assert.equal(byName('pool').count, sl.stats.overview);
+assert.equal(byName('pool').visible, true);
+assert.equal(byName('body').visible, false, '위에서 보기엔 기둥 없음');
+assert.equal(byName('lens').visible, false);
+const ovN = sl.stats.overview;
+setEvening(false);
+for (let i = 0; i < 10; i++) sl.update(0.5, st.x, st.z, 'overview');
+assert.equal(inst().length, 0, '낮의 위에서 보기엔 메시 없음');
+setEvening(true);
+for (let i = 0; i < 10; i++) sl.update(0.5, st.x, st.z, 'overview');
+assert.equal(sl.stats.overview, ovN);
+tiles.get(tk).dState = 3;
+sl.update(1, st.x, st.z);
+assert.equal(byName('body').visible, true, '걸어다니기로 돌아오면 기둥 다시');
+assert.equal(sl.stats.visible, n);
 sl.dispose();
 assert.equal(scene.children.length, 0);
+// 둔치 바닥(-6 m): 차도 가로등은 건너뛰고 탄천 공원등(kind 3)만 선다
+{
+  const one = { v: 1, cell: data.cell, cells: { '0_0': [10, 10, 0, 0, 20, 20, 0, 3, 30, 30, 0, 1] } };
+  globalThis.fetch = async () => ({ ok: true, json: async () => one });
+  const sc = new THREE.Scene();
+  const s2 = createStreetlights({ scene: sc, terrain: { renderHeight: () => -6, params: { FLOOR: -6 } }, corridor: null, liveBox: { x0: 0, x1: 100, z0: 0, z1: 100 }, url: 'x' });
+  await s2.ready; s2.update(1, 20, 20);
+  assert.equal(s2.stats.visible, 1, '둔치에선 공원등만');
+  s2.dispose();
+}
 setEvening(false);
 
-console.log(`test-streetlights: ok (${c.total} lamps · OSM ${c.osm} · ${triCount} tris/lamp · Sunae visible ${n})`);
+console.log(`test-streetlights: ok (${c.total} lamps · OSM ${c.osm} · 탄천 ${c.tancheon} · ${triCount} tris/lamp · Sunae visible ${n} · overview ${ovN})`);
