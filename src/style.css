@@ -1571,6 +1571,15 @@ body.in-lobby #hud, body.in-lobby #buttons, body.in-lobby #top-right-bar, body.i
   #attribution { left: 8px; right: auto; }
 }
 #attribution { z-index: 40; }
+/* [attrib] "… OpenStreetMap" 뒤 ⓘ 버튼 — 누르면 나머지 출처가 오른쪽으로 펼쳐진다 */
+#attribution { white-space: nowrap; }
+#attribution .attr-more { display: inline-grid; place-items: center; width: 16px; height: 16px; margin: -2px 0 -2px 4px; padding: 0; border: 0; border-radius: 50%; background: none; color: #2a5db0; cursor: pointer; vertical-align: middle; opacity: .8; transition: opacity .15s, background-color .15s; }
+#attribution .attr-more:hover, #attribution.is-open .attr-more { opacity: 1; background: rgba(42, 93, 176, .12); }
+#attribution .attr-more:focus-visible { outline: 2px solid rgba(42, 93, 176, .6); outline-offset: 1px; }
+#attribution .attr-more svg { display: block; }
+#attribution .attr-more[hidden] { display: none; }
+#attribution .attr-rest { display: inline-block; vertical-align: bottom; max-width: 0; overflow: hidden; opacity: 0; transition: max-width .28s ease, opacity .2s ease, padding .28s ease; }
+#attribution.is-open .attr-rest { opacity: 1; padding-left: 4px; }
 #lobby-card { display: grid; grid-template-columns: 240px 1fr; gap: 18px; width: min(760px, 100%); background: rgba(255,255,255,.84); border-radius: 12px; padding: 16px; box-shadow: 0 2px 10px rgba(18,32,51,.16); }
 #lobby-preview { height: 420px; border-radius: 12px; overflow: hidden; background: #1a2744; }
 #lobby-preview canvas { display: block; width: 100%; height: 100%; }
@@ -3295,3 +3304,39 @@ body.ride-bus #corridor-stop-panel { display: none !important; }
 #ride-route-map .line li.bus { color: #e8423b; font-weight: 700; font-size: 12px; } #ride-route-map .line li.bus .dot { border: 0; background: transparent; width: 18px; height: 18px; font-size: 14px; display: flex; align-items: center; justify-content: center; margin-left: -3px; }
 #ride-route-map .ft { padding: 8px 14px; font-size: 11px; color: #5b6578; border-top: 1px solid #e3e6ee; background: #fff; }
 body.in-gate #ride-caption, body.in-gate #ride-bus-card, body.in-gate #ride-route-map, body.in-lobby #ride-caption, body.in-lobby #ride-bus-card, body.in-lobby #ride-route-map { display: none !important; }
+
+/* [bgm] 상단 가운데 배경음악 미니 플레이어 (Figma "BGM Player": 반투명 어두운 알약 + 블러, 위에서 24px)
+   디자인 시안(높이 100)보다 위아래 여백을 줄여(≈70px) 아래쪽 탑승 HUD(#ride-hud) 자리를 비워 둔다 */
+#bgm { position: fixed; left: calc(50% + var(--bgm-shift, 0px)); top: 24px; transform: translateX(-50%); z-index: 9; display: flex; align-items: center; gap: 14px; padding: 10px 18px 10px 10px; border-radius: 24px; background: rgba(17, 20, 29, .62); -webkit-backdrop-filter: blur(14px) saturate(1.2); backdrop-filter: blur(14px) saturate(1.2); box-shadow: 0 6px 20px rgba(8, 12, 22, .28), inset 0 0 0 1px rgba(255, 255, 255, .06); color: #fff; font-size: 12.5px; line-height: 15px; font-weight: 500; user-select: none; -webkit-user-select: none; white-space: nowrap; }
+#bgm[hidden], body.in-gate #bgm, body.in-lobby #bgm { display: none !important; }
+#bgm button { display: grid; place-items: center; padding: 0; margin: 0; border: 0; background: none; color: inherit; cursor: pointer; font: inherit; }
+#bgm button svg { display: block; }
+#bgm .bgm-play { width: 34px; height: 34px; border-radius: 50%; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .78); transition: background-color .15s; }
+#bgm .bgm-play svg { width: 14px; height: 14px; }
+#bgm .bgm-play:hover { background: rgba(255, 255, 255, .1); }
+#bgm .bgm-info { display: flex; flex-direction: column; gap: 5px; min-width: 118px; }
+#bgm .bgm-title { max-width: 190px; overflow: hidden; text-overflow: ellipsis; }
+#bgm .bgm-flag { opacity: .85; }
+#bgm .bgm-bars { display: flex; align-items: flex-end; gap: 2px; height: 24px; }
+#bgm .bgm-bars i { flex: none; width: 2px; height: 24px; border-radius: 1px; background: #fff; transform-origin: 50% 100%; transform: scaleY(.2); will-change: transform; }
+#bgm .bgm-progress { position: relative; width: 118px; height: 2px; border-radius: 1px; background: rgba(255, 255, 255, .22); overflow: hidden; pointer-events: none; }
+#bgm .bgm-progress i { position: absolute; inset: 0; border-radius: 1px; background: rgba(255, 255, 255, .9); transform-origin: 0 50%; transform: scaleX(0); }
+#bgm .bgm-vol { display: flex; align-items: center; }
+#bgm .bgm-mute { width: 22px; height: 22px; border-radius: 6px; opacity: .92; }
+#bgm .bgm-mute svg { width: 18px; height: 18px; }
+#bgm .bgm-mute:hover { opacity: 1; }
+/* 볼륨 슬라이더: 평소엔 접혀 있고 스피커에 마우스를 올리면 펼쳐진다 (손잡이가 있는 유일한 조작) */
+#bgm .bgm-slider { -webkit-appearance: none; appearance: none; width: 0; height: 14px; margin: 0; padding: 0; opacity: 0; background: transparent; cursor: pointer; transition: width .18s ease, margin .18s ease, opacity .18s ease; }
+#bgm .bgm-vol:hover .bgm-slider, #bgm .bgm-vol:focus-within .bgm-slider, #bgm .bgm-slider:active { width: 80px; margin-left: 14px; opacity: 1; }
+#bgm .bgm-slider:focus { outline: none; }
+#bgm .bgm-slider::-webkit-slider-runnable-track { height: 2px; border-radius: 1px; background: linear-gradient(90deg, #fff var(--bgm-vol, 55%), rgba(255, 255, 255, .25) var(--bgm-vol, 55%)); }
+#bgm .bgm-slider::-webkit-slider-thumb { -webkit-appearance: none; width: 10px; height: 10px; margin-top: -4px; border-radius: 50%; background: #fff; border: 0; box-shadow: 0 1px 3px rgba(0, 0, 0, .35); }
+#bgm .bgm-slider::-moz-range-track { height: 2px; border-radius: 1px; background: rgba(255, 255, 255, .25); }
+#bgm .bgm-slider::-moz-range-progress { height: 2px; border-radius: 1px; background: #fff; }
+#bgm .bgm-slider::-moz-range-thumb { width: 10px; height: 10px; border-radius: 50%; background: #fff; border: 0; }
+/* 멈춤·음소거: 막대는 낮고 흐리게, 음소거면 제목도 흐리게 */
+#bgm.is-paused .bgm-bars i, #bgm.is-muted .bgm-bars i { opacity: .38; }
+#bgm.is-muted .bgm-title { color: rgba(255, 255, 255, .6); }
+/* BGM 플레이어(위 24px, 높이 ≈70px)가 있을 때 탑승 HUD·토스트를 조금 내린다 */
+body.has-bgm #ride-hud { top: 104px; }
+body.has-bgm #ride-toast { top: 154px; }
