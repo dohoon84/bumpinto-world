@@ -238,9 +238,10 @@ if (corridor) {
   world.isBlocked = (x, z, r) => liveBlocked(x, z, r) || corridor.isBlocked(x, z, r);
   world.onRoad = (x, z) => liveOnRoad(x, z) || corridor.onRoad(x, z);
 } // [terrain] world.groundY(x,z,refY) — NPC/원격 플레이어/택시가 사용
-// [playgrounds] OSM 놀이터 세트 (scripts/corridor/build-playgrounds.mjs). ?playgrounds=0 이면 데이터 요청·메시 없음
+// [playgrounds] OSM 놀이터 세트 + 조경 (scripts/corridor/build-playgrounds.mjs). ?playgrounds=0 이면 데이터 요청·메시 없음
 const playgroundsFile = params.get('playgrounds') === '0' ? null : region.dataFiles?.playgrounds;
-const playgrounds = playgroundsFile ? createPlaygrounds({ scene, terrain, corridor, liveBox: data.meta.bboxLocal, url: import.meta.env.BASE_URL + playgroundsFile }) : null;
+const playgroundLandFile = params.get('pgland') === '0' ? null : region.dataFiles?.playgroundLand; // ?pgland=0: 조경만 끔
+const playgrounds = playgroundsFile ? createPlaygrounds({ scene, terrain, corridor, liveBox: data.meta.bboxLocal, url: import.meta.env.BASE_URL + playgroundsFile, landUrl: playgroundLandFile ? import.meta.env.BASE_URL + playgroundLandFile : null }) : null;
 const st = data.station;
 overlay.add({
   cls: 'label station',

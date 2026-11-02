@@ -2,9 +2,11 @@
 //   위치: public/corridor/playgrounds.json (scripts/corridor/build-playgrounds.mjs 가 OSM leisure=playground 폴리곤에서 굽는다)
 //   그리기: 부품 종류마다 InstancedMesh 1개(총 5개, 재질 1개 · 텍스처 없음 · 꼭짓점 색). 높이는 지형에 붙인다.
 //   보이기: 카메라 초점에서 VIS_R 안 + (코리더 구간이면) 그 칸의 상세 타일이 빌드됐을 때만. 하나도 안 보이면 GPU 버퍼를 해제한다.
+//   조경(나무·생울타리·덤불·풀숲·벤치)은 playgroundLand.js — landUrl 이 있을 때만(?pgland=0 이면 없음). 그때 세트 밑 고무칩 바닥도 깐다.
 //   ?playgrounds=0 이면 game.js 가 이 모듈을 부르지 않는다(데이터 요청·메시 없음).
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { createLandLayer } from './playgroundLand.js';
 
 export const SET_W = 15, SET_D = 10; // 배율 1 세트 바닥(m) — scripts/corridor/build-playgrounds.mjs 와 같아야 함
 const VIS_R = 450;       // 이 거리 밖 세트는 숨김 (코리더 상세 타일 반경 ~650m 안쪽)
@@ -13,7 +15,7 @@ const SINK = 0.3;        // 경사지에서 뜨지 않게 기둥을 땅속으로
 
 const C = {
   red: '#e5483c', yellow: '#f2c230', blue: '#2f7fd8', green: '#3aa05a', orange: '#f08a2c',
-  steel: '#9aa0a6', dark: '#3b3f46', wood: '#c9884a', sand: '#e6d29a', concrete: '#cfc8b8',
+  steel: '#9aa0a6', dark: '#3b3f46', wood: '#c9884a', sand: '#e6d29a', concrete: '#cfc8b8', rubber: '#c98a62',
 };
 
 // ---------- 저폴리 부품 (세트 로컬 좌표: x = 긴 변, z = 짧은 변, y = 위, 원점 = 세트 중심 바닥) ----------
@@ -91,6 +93,16 @@ function slide(ox, oz) {
   return g;
 }
 
+/** 세트 밑 고무칩 바닥 + 경계석 (세트 로컬 원점 중심, 아래로 두껍게 깔아 경사에서도 뜨지 않게). 60 tris */
+function safetyMat() {
+  const W = SET_W - 0.6, D = SET_D - 0.6, t = 0.18, top = 0.05, bot = -0.5, ct = top + 0.04;
+  const rim = (w, d, x, z) => box(w, ct - bot, d, x, (ct + bot) / 2, z, C.concrete);
+  return [
+    box(W, top - bot, D, 0, (top + bot) / 2, 0, C.rubber),
+    rim(W + t, t, 0, -D / 2), rim(W + t, t, 0, D / 2), rim(t, D, -W / 2, 0), rim(t, D, W / 2, 0),
+  ];
+}
+
 // 부품 정의: name, 세트 안 기준점(지형 높이를 재는 곳), 만드는 함수
 const PARTS = [
   { name: 'sandbox', at: [-4.6, -2.4], make: sandbox },
@@ -100,9 +112,10 @@ const PARTS = [
   { name: 'slide', at: [1.6, 2.6], make: slide },
 ];
 /** 부품별 병합 지오메트리 (세트 로컬). 테스트/측정용으로도 export */
-export function buildPartGeometries() {
+export function buildPartGeometries({ mat = false } = {}) {
   return PARTS.map((p) => {
     const parts = p.make(p.at[0], p.at[1]);
+    if (mat && p.name === 'sandbox') parts.push(...safetyMat()); // 바닥은 모래놀이터 메시에 합침 (드로우콜 0)
     const g = mergeGeometries(parts, false);
     for (const q of parts) q.dispose();
     g.computeBoundingSphere();
@@ -112,7 +125,7 @@ export function buildPartGeometries() {
 export const triangleCount = (geos) => geos.reduce((n, { geometry: g }) => n + (g.index ? g.index.count : g.attributes.position.count) / 3, 0);
 
 // ---------- 배치 / 스트리밍 ----------
-export function createPlaygrounds({ scene, terrain, corridor, liveBox, url }) {
+export function createPlaygrounds({ scene, terrain, corridor, liveBox, url, landUrl = null }) {
   const root = new THREE.Group(); root.name = 'playgrounds'; scene.add(root);
   let sets = null;          // [{ x, z, ry, s, tile, parts: [Matrix4 ×5] }]
   let meshes = null;        // 부품별 InstancedMesh (보일 때만 존재)
@@ -122,6 +135,8 @@ export function createPlaygrounds({ scene, terrain, corridor, liveBox, url }) {
   const TS = 500;
   const inLive = (x, z) => !!liveBox && x >= liveBox.x0 && x <= liveBox.x1 && z >= liveBox.z0 && z <= liveBox.z1;
   const groundAt = (x, z) => (terrain ? terrain.renderHeight(x, z) : 0);
+  const land = landUrl ? createLandLayer({ root, terrain, url: landUrl }) : null;
+  land?.ready.then(() => { lastKey = ''; acc = REFRESH; }); // 조경이 세트보다 늦게 오면 다음 갱신에서 다시 넘긴다
 
   const ready = fetch(url).then((r) => (r.ok ? r.json() : null)).catch(() => null).then((j) => {
     if (!j || disposed) return;
@@ -142,11 +157,11 @@ export function createPlaygrounds({ scene, terrain, corridor, liveBox, url }) {
   function ensureMeshes() {
     if (meshes) return;
     material = new THREE.MeshLambertMaterial({ vertexColors: true });
-    const geos = buildPartGeometries();
+    const geos = buildPartGeometries({ mat: !!land });
     stats.triangles = triangleCount(geos);
     meshes = geos.map(({ name, geometry }) => {
       const m = new THREE.InstancedMesh(geometry, material, sets.length);
-      m.name = 'playground-' + name; m.castShadow = name !== 'sandbox'; m.count = 0; // flat sandbox frame skips the shadow pass (-1 draw)
+      m.name = 'playground-' + name; m.castShadow = name !== 'sandbox'; m.receiveShadow = true; m.count = 0; // 납작한 모래놀이터(+바닥)는 그림자 패스 생략 (-1 draw)
       root.add(m); return m;
     });
   }
@@ -167,6 +182,7 @@ export function createPlaygrounds({ scene, terrain, corridor, liveBox, url }) {
     const key = vis.join(',');
     if (key === lastKey) return;
     lastKey = key; stats.visible = vis.length;
+    land?.show([...new Set(vis.map((i) => sets[i].id))]);
     if (!vis.length) { freeMeshes(); return; }
     ensureMeshes();
     meshes.forEach((m, k) => {
@@ -176,7 +192,7 @@ export function createPlaygrounds({ scene, terrain, corridor, liveBox, url }) {
   }
 
   return {
-    root, stats, ready,
+    root, stats, land, ready: Promise.all([ready, land?.ready]),
     get sets() { return sets; },
     update(dt, fx, fz, mode = 'follow') {
       if (!sets) return;
@@ -184,6 +200,6 @@ export function createPlaygrounds({ scene, terrain, corridor, liveBox, url }) {
       if (acc < REFRESH) return;
       acc = 0; refresh(fx, fz, mode);
     },
-    dispose() { disposed = true; freeMeshes(); scene.remove(root); sets = null; },
+    dispose() { disposed = true; freeMeshes(); land?.dispose(); scene.remove(root); sets = null; },
   };
 }
