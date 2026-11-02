@@ -282,15 +282,20 @@ export function createTerrain(T, data) {
     const covered = streams ? (x, z) => coveredMain(x, z) || streams.covered(x, z) : coveredMain;
     const axS = ax.filter((_, i) => i % 5 === 0);
     const nearMain = (x, z, r) => { const lim = (r + 140) ** 2; for (const [px, pz] of axS) if ((px - x) ** 2 + (pz - z) ** 2 < lim) return true; return false; };
-    const nearAxis = streams ? (x, z, r) => nearMain(x, z, r) || streams.near(x, z, r) : nearMain;
     function holeyPlane(x0, z0, x1, z1, y, minCell) {
       const pos = [];
       const quad = (a, b, c, d) => pos.push(a, y, b, a, y, d, c, y, b, c, y, b, a, y, d, c, y, d);
+      // 돌려주는 값: 구멍 없이 다 채워졌나. [streams] 지류 때문에만 쪼갠 셀은 네 조각이 다 채워지면 한 장으로 되돌림
+      // (평면이라 모양 그대로, 본류 근처 격자는 streams=0 과 똑같이)
       const rec = (a, b, c, d) => {
         const w = c - a, cx = (a + c) / 2, cz = (b + d) / 2, rad = Math.hypot(w, d - b) / 2;
-        if (!nearAxis(cx, cz, rad)) return quad(a, b, c, d);
-        if (w <= minCell) { if (![[a, b], [c, b], [a, d], [c, d], [cx, cz]].every(([x, z]) => covered(x, z))) quad(a, b, c, d); return; }
-        rec(a, b, cx, cz); rec(cx, b, c, cz); rec(a, cz, cx, d); rec(cx, cz, c, d);
+        const main = nearMain(cx, cz, rad);
+        if (!main && !(streams && streams.near(cx, cz, rad))) { quad(a, b, c, d); return true; }
+        if (w <= minCell) { if ([[a, b], [c, b], [a, d], [c, d], [cx, cz]].every(([x, z]) => covered(x, z))) return false; quad(a, b, c, d); return true; }
+        const start = pos.length;
+        const full = rec(a, b, cx, cz) & rec(cx, b, c, cz) & rec(a, cz, cx, d) & rec(cx, cz, c, d);
+        if (full && !main) { pos.length = start; quad(a, b, c, d); }
+        return !!full;
       };
       const S = Math.max(x1 - x0, z1 - z0), nx = Math.ceil((x1 - x0) / (S / 4)), nz = Math.ceil((z1 - z0) / (S / 4));
       const sx = (x1 - x0) / nx, sz = (z1 - z0) / nz;
@@ -358,15 +363,17 @@ export function createTerrain(T, data) {
       // 지배된 사각형: SUB×SUB 로 쪼개 지배 안 된 조각만 본류 높이·색으로 남김 (지류 메시 가장자리와 틈 없게)
       droppedQuads++;
       const at = (u, v) => [q[0][0] * (1 - u) * (1 - v) + q[1][0] * u * (1 - v) + q[2][0] * (1 - u) * v + q[3][0] * u * v, q[0][1] * (1 - u) * (1 - v) + q[1][1] * u * (1 - v) + q[2][1] * (1 - u) * v + q[3][1] * u * v];
-      const base = pos.length / 3;
-      for (let j = 0; j <= SUB; j++) for (let k = 0; k <= SUB; k++) {
-        const [x, z] = at(k / SUB, j / SUB), h = renderHeight(x, z), cc = mainColor(x, z, h);
-        pos.push(x, h > -0.02 ? 0.005 : h, z); col.push(cc.r, cc.g, cc.b);
-      }
-      const V = (j, k) => base + j * (SUB + 1) + k, P2 = (n) => [pos[n * 3], pos[n * 3 + 2]];
+      // 정점은 남는 조각이 쓰는 것만 만든다 (지배된 조각이 대부분이라 25점 다 만들면 버퍼만 큼)
+      const xz = [], vid = new Int32Array((SUB + 1) * (SUB + 1)).fill(-1);
+      for (let j = 0; j <= SUB; j++) for (let k = 0; k <= SUB; k++) xz.push(at(k / SUB, j / SUB));
+      const V = (j, k) => {
+        const n = j * (SUB + 1) + k;
+        if (vid[n] < 0) { const [x, z] = xz[n], h = renderHeight(x, z), cc = mainColor(x, z, h); vid[n] = pos.length / 3; pos.push(x, h > -0.02 ? 0.005 : h, z); col.push(cc.r, cc.g, cc.b); }
+        return vid[n];
+      };
       for (let j = 0; j < SUB; j++) for (let k = 0; k < SUB; k++) {
+        if (domPts([xz[j * (SUB + 1) + k], xz[j * (SUB + 1) + k + 1], xz[(j + 1) * (SUB + 1) + k], xz[(j + 1) * (SUB + 1) + k + 1]])) continue;
         const sa = V(j, k), sb = V(j, k + 1), sd = V(j + 1, k), se = V(j + 1, k + 1);
-        if (domPts([sa, sb, sd, se].map(P2))) continue;
         idx.push(sa, sd, sb, sb, sd, se); subQuads++;
       }
     }
