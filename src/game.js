@@ -22,7 +22,6 @@ import { mountPhone } from './phone.js';
 import { mountHandset } from './handset.js';
 import { mountCamera } from './camera/index.js'; // [camera] 폰 카메라·사진 앱 (?camera=0 이면 끔, 본체는 처음 열 때 지연 로드)
 import { mountBoard } from './board.js';
-import { NOTICE_POSTS } from './notices.js'; // [notice-popup]
 import { createNoticePopup } from './noticePopup.js'; // [notice-popup]
 import { createSms } from './sms.js';
 import { trackEvent } from './analytics.js';
@@ -772,8 +771,9 @@ const handset = mountHandset({ sms });
 let noticePopup = null; // [notice-popup]
 const board = mountBoard({ sms, getMe: () => me, onOpen: () => noticePopup?.markSeen() });
 noticePopup = createNoticePopup({
-  posts: NOTICE_POSTS,
   params,
+  // 게시판 공지 탭과 같은 소스(서버 /board 또는 로컬 테스트 게시판). 실패하면 팝업 없음.
+  fetchNotices: async () => (await sms.board('list', { category: 'notice', page: 1 }))?.items || [],
   open: () => !!board.openNotices?.(),
   busy: () => {
     try {
