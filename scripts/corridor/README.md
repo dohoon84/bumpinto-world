@@ -16,6 +16,17 @@ The live 정자 map (`public/data/*`, bbox x −606..597, z −608..940) is left
 3. **Runtime** (`src/corridor/`): builds one tile per frame, nearest first. Detail tiles are within ~650 m, LOD within ~1.8 km
    (4.2 km in overview), with unload hysteresis. It reuses the live `world.js` materials, ribbons, facades, trees and station signs.
    Quality: `?corridorq=low|med|high`. Turn it off with `?corridor=0`.
+4. **Streetlights**: `npm run corridor:streetlights` bakes `public/corridor/streetlights.json` from the corridor tiles, `base.json`,
+   `public/jeongja.json` (정자 live roads) and OSM nodes cached in `data/osm_streetlights_raw.json` (`highway=street_lamp`, bus stops,
+   shelters, trees; refresh with `--osm=<osm_merged.json>`). Real OSM lamps go first. Then T lamps follow the car roads by class
+   (motorway/trunk/primary/secondary ~35-40 m, both sides or zigzag; tertiary 40 m; residential 50 m one side), staying clear of
+   junctions, crosswalks, bus stops, trees, buildings and bridges. The output is deterministic (`test-streetlights.mjs` re-bakes and
+   compares). Runtime is `src/world/streetlights.js`: three InstancedMeshes (body, lens, ground pool) and no real lights. Night comes
+   from `src/world/nightLights.js`, which follows `evening.js`. Turn it off with `?streetlights=0`, which skips the fetch and the meshes.
+   Tancheon park lamps (kind 3, smaller and lower) go on the riverside footway/cycleway/path every ~30 m on one side, only inside the
+   game terrain's Tancheon section (`terrain.json` + `corridor/tancheon.json`), never on the water or riverbed, and never on bridges.
+   In overview (위에서 보기) at night only the soft ground pools are drawn, around the overview camera and independent of detail
+   tiles (capped at 8192, reusing the pool mesh, so +1 draw call).
 
 ## Playgrounds (`?playgrounds=0` turns them off)
 

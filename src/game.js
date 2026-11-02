@@ -52,6 +52,7 @@ import { mountTravel } from './corridor/travel.js'; // [corridor]
 import { mountPerfHud } from './corridor/perfHud.js'; // [corridor]
 import { createPlaygrounds } from './world/playgrounds.js'; // [playgrounds]
 import { corridorStationLabel } from './corridor/globeCorridor.js'; // [corridor]
+import { createStreetlights } from './world/streetlights.js'; // [streetlights]
 import { mountRide } from './ride/index.js'; // [ride] 코리더 버스·택시 탑승
 
 const params = new URLSearchParams(location.search);
@@ -242,6 +243,9 @@ if (corridor) {
 const playgroundsFile = params.get('playgrounds') === '0' ? null : region.dataFiles?.playgrounds;
 const playgroundLandFile = params.get('pgland') === '0' ? null : region.dataFiles?.playgroundLand; // ?pgland=0: 조경만 끔
 const playgrounds = playgroundsFile ? createPlaygrounds({ scene, terrain, corridor, liveBox: data.meta.bboxLocal, url: import.meta.env.BASE_URL + playgroundsFile, landUrl: playgroundLandFile ? import.meta.env.BASE_URL + playgroundLandFile : null }) : null;
+// [streetlights] 차도 T자 가로등 (scripts/corridor/build-streetlights.mjs). ?streetlights=0 이면 데이터 요청·메시 없음
+const streetlightsFile = params.get('streetlights') === '0' ? null : region.dataFiles?.streetlights;
+const streetlights = streetlightsFile ? createStreetlights({ scene, terrain, corridor, camera, liveBox: data.meta.bboxLocal, url: import.meta.env.BASE_URL + streetlightsFile }) : null;
 const st = data.station;
 overlay.add({
   cls: 'label station',
@@ -2294,6 +2298,7 @@ function frame() {
   }
   if (corridor) { const c = cam.mode === 'follow' ? P : sun.target.position; corridor.update(dt, c.x, c.z, cam.mode); } // [corridor] 타일 스트리밍(프레임당 최대 1개 빌드)
   if (playgrounds) { const c = cam.mode === 'follow' ? P : sun.target.position; playgrounds.update(dt, c.x, c.z, cam.mode); } // [playgrounds] 거리·타일 기준 표시
+  if (streetlights) { const c = cam.mode === 'follow' ? P : sun.target.position; streetlights.update(dt, c.x, c.z, cam.mode); } // [streetlights] 거리·타일 기준 표시 + 밤 페이드
   world.shops?.update(dt, P.x, P.z); // [shops] 주변 70m 상호 간판 풀
   const viewYaw = cam.mode === 'follow' ? cam.yaw : ov.yaw;
   const moveYaw = player.rotation.y + (bikes.riding && bikes.speed < -0.2 ? Math.PI : 0);
@@ -2319,7 +2324,7 @@ requestAnimationFrame(frame);
 
 // 스크린샷/디버그용 훅
 window.__jj = {
-  ready: true, region, tower, renderer, corridor, playgrounds, // [corridor] [playgrounds]
+  ready: true, region, tower, renderer, corridor, playgrounds, streetlights, // [corridor] [playgrounds] [streetlights]
   launch, roadster, trucks, bike: adminBike, giftRides, inventory, data, world, npcs, transit, camera, cam, ov, setMode, terrain, taxis, police, weather: atmosphere, umbrellas, dogPark, strayCats, // [terrain] [taxi] [roadster] [tower] [launch] [truck] [bike] [roadbike] [inventory]
   get player() { return player; },
   teleport(x, z, y) { ride?.forceAlight('teleport'); if (bikes.riding) dismountBike(); if (adminBike?.riding) adminBike.dismount(); dismountGiftRides(); player.position.set(x, y ?? (terrain ? terrain.getGroundHeight(x, z, 0) : 0), z); }, // [terrain] [bike] [roadbike]
