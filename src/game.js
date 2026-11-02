@@ -51,6 +51,7 @@ import { mountInventory } from './inventory.js'; // [inventory]
 import { loadCorridorData, createCorridor, corridorTerrainData } from './corridor/index.js'; // [corridor]
 import { mountTravel } from './corridor/travel.js'; // [corridor]
 import { mountPerfHud } from './corridor/perfHud.js'; // [corridor]
+import { mountBgm } from './bgm/index.js'; // [bgm] ?bgm=0 이면 끔
 import { createPlaygrounds } from './world/playgrounds.js'; // [playgrounds]
 import { corridorStationLabel } from './corridor/globeCorridor.js'; // [corridor]
 import { createStreetlights } from './world/streetlights.js'; // [streetlights]
@@ -192,6 +193,7 @@ renderer.setSize(innerWidth, innerHeight);
 renderer.shadowMap.enabled = !params.has('noshadow');
 renderer.shadowMap.type = THREE.PCFShadowMap;
 document.getElementById('app').appendChild(renderer.domElement);
+const bgm = mountBgm({ params }); // [bgm] 배경음악 + 상단 미니 플레이어 (입장 때 시작, ?bgm=0 이면 null)
 const memHud = mountMemHud({ // [memory] ?mem=1 일 때만 설치 (기본 꺼짐)
   renderer, params, getCorridor: () => corridor,
   getExtra: () => { const b = busTextureStats(), r = roadBikeDecalStats(); return `bus tex routes ${b.routes} (in use ${b.inUse} · idle ${b.idle}/${b.idleMax}) · bike decals ${r.drawn}/${r.total}`; },
@@ -951,6 +953,7 @@ function completeWorldJoin(name, look, session) {
   me.phone = sms.session?.phone || '';
   presence.connect(me);
   joined = true;
+  bgm?.enter(); // [bgm] 입장: opening_day 부터 (사용자 입력이 아직 없었으면 첫 클릭/키 입력 때)
   adminBike?.refreshStyle?.();
   inventory?.refresh();
   syncRainControl();
@@ -1928,6 +1931,7 @@ function pauseWorldSession() {
   nameTag.el.classList.remove('is-afk');
   renderEmoteBar();
   joined = false;
+  bgm?.leave(); // [bgm] 페이드아웃 후 정지
   player.visible = false;
   nameTag.hidden = true;
   myBubble.item.hidden = true;
@@ -2320,6 +2324,7 @@ function frame() {
   sun.position.copy(sun.target.position).addScaledVector(atmosphere.sunDir, 500);
   renderer.render(scene, camera);
   perfHud.tick();
+  bgm?.setDuck(!!ride?.active || !!adminBike?.riding || !!giftMount()); // [bgm] 버스·바이크 소리가 날 때 살짝 줄임 (바뀔 때만 동작)
   memHud.tick();
   overlay.update(innerWidth, innerHeight);
   emoteFx.update(dt, innerWidth, innerHeight);
@@ -2337,5 +2342,6 @@ window.__jj = {
   bikes, toggleRide, triggerEmote,
   get ride() { return ride; }, remotes, presence, // [ride]
   cameraApp, // [camera]
+  bgm, // [bgm]
   nearNpc(i = 0, d = 3) { const n = npcs.list[i]; player.position.set(n.pos.x + d, 0, n.pos.z + d * 0.5); },
 };
