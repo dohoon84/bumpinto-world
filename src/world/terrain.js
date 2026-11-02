@@ -10,11 +10,12 @@
 //     getVehicleHeight(x, z, refY) 차량용 높이 — 다리 상판을 끝/옆 여유까지 이어서 따라감(refY 보다 V_UP(0.6m, 보행자 한 걸음과 같음) 넘게 높은 상판은 무시)
 //     canMove(x0, z0, y0, x1, z1) 플레이어 이동 판정 -> 새 y 또는 null(막힘: 가파른 제방, 다리 난간 밖, 큰 단차)
 //     annotate(data)              buildWorld 전에 호출: 도로 점에 높이(p[2]) 부여, 수면 높이, 하천 안 공원 폴리곤 분리
-//     build(scene, world, overlay) buildWorld 후 호출: 바닥 평면 구멍 + 하천 지형 메시 + 계단 + 징검다리 + 다리 구조물
+//     build(scene, world, overlay) buildWorld 후 호출: 바닥 평면 구멍 + 하천 지형 메시 + 계단 + 징검다리 + 다리 구조물 + 저녁 다리 조명(bridgeLights.js)
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { addInstancedTrees } from './trees.js';
 import { createStreams } from './streams.js';
+import { buildBridgeLights } from './bridgeLights.js';
 
 const MAX_STEP = 0.5;      // 한 번에 오르내릴 수 있는 단차(m)
 const MAX_GRADE = 0.4;     // 계단/다리 밖에서 걸을 수 있는 최대 경사 (약 22°) — 탄천 제방은 대부분 이보다 가팔라서 막힘
@@ -527,8 +528,20 @@ export function createTerrain(T, data) {
     // 4) 다리 구조물: 상판 두께 + 교각 + 난간 (도로 리본은 world.js 가 그대로 그림)
     const slab = [], pier = [], para = [];
     const bridgeRoads = [...new Set(decks.map((d) => d.road).filter(Boolean))];
+    // [bridgeLights] 저녁 조명용 상판 조각/교각 기록. 본류(탄천) 차도교·신기교 = major, 지류 다리·보행교 = minor
+    const lightPieces = [], lightPiers = [];
+    const overMain = (r) => { // 탄천 본류 둔치/수로 위를 지나는가 (지류만 건너는 다리는 false)
+      for (let i = 1; i < r.p.length; i++) {
+        const [x0, z0] = r.p[i - 1], [x1, z1] = r.p[i], n = Math.ceil(Math.hypot(x1 - x0, z1 - z0) / 2);
+        for (let k = 0; k <= n; k++) if (mainBase(x0 + (x1 - x0) * k / n, z0 + (z1 - z0) * k / n) < FLOOR + 0.5) return true;
+      }
+      return false;
+    };
+    const lightTier = (r) => ((!FOOT.has(r.k) || r.arch) && overMain(r) ? 'major' : 'minor');
+    const lightSeed = (r) => { const m = r.p[0]; return (((Math.round(m[0]) * 73856093) ^ (Math.round(m[1]) * 19349663)) >>> 0) / 4294967296; };
     function buildArched(r) {
-      const th = 0.5, pts = r.p;
+      const th = 0.5, pts = r.p, cum = [0];
+      for (let i = 1; i < pts.length; i++) cum.push(cum[i - 1] + Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]));
       for (let i = 1; i < pts.length; i++) {
         const [x0, z0, h0, w0] = pts[i - 1], [x1, z1, h1, w1] = pts[i];
         const L = Math.hypot(x1 - x0, z1 - z0); if (L < 0.05) continue;
@@ -538,6 +551,7 @@ export function createTerrain(T, data) {
         const slope = Math.hypot(L, h1 - h0), pitch = Math.atan2(h0 - h1, L);
         const mx = (x0 + x1) / 2, mz = (z0 + z1) / 2;
         box(slab, wm, th, slope + 0.12, mx, hm + 0.06 - th / 2, mz, yaw, pitch);
+        lightPieces.push({ x0, z0, h0, x1, z1, h1, W: wm, th, foot: true, tier: lightTier(r), s0: cum[i - 1], seed: lightSeed(r) });
         for (const side of [-1, 1]) box(para, 0.22, 1.0, slope + 0.08, mx + rx * side * (wm / 2 - 0.05), hm + 0.55, mz + rz * side * (wm / 2 - 0.05), yaw, pitch);
       }
       let dist = 0, next = 11;
@@ -551,7 +565,7 @@ export function createTerrain(T, data) {
           const g = baseHeight(x, z), top = h + 0.06 - th;
           if (g < top - 1.5) {
             const spots = w > 6 ? [0, -0.28, 0.28] : [0];
-            for (const k of spots) box(pier, 0.7, top - g + 0.5, 0.7, x + rx * k * w, (top + g - 0.5) / 2, z + rz * k * w, yaw);
+            for (const k of spots) { box(pier, 0.7, top - g + 0.5, 0.7, x + rx * k * w, (top + g - 0.5) / 2, z + rz * k * w, yaw); lightPiers.push({ x: x + rx * k * w, z: z + rz * k * w, g, top, pw: 0.7, yaw, tier: lightTier(r) }); }
           }
           next += 22;
         }
@@ -560,9 +574,10 @@ export function createTerrain(T, data) {
     }
     for (const r of bridgeRoads) {
       if (r.arch) { buildArched(r); continue; }
-      const foot = FOOT.has(r.k), th = foot ? 0.5 : 1.1, h = r.deckH, W = r.deckW || r.w;
+      const foot = FOOT.has(r.k), th = foot ? 0.5 : 1.1, h = r.deckH, W = r.deckW || r.w, tier = lightTier(r), seed = lightSeed(r);
+      let sAcc = 0;
       for (let i = 1; i < r.p.length; i++) {
-        const [x0, z0] = r.p[i - 1], [x1, z1] = r.p[i], L = Math.hypot(x1 - x0, z1 - z0); if (L < 0.2) continue;
+        const [x0, z0] = r.p[i - 1], [x1, z1] = r.p[i], L = Math.hypot(x1 - x0, z1 - z0), s0 = sAcc; sAcc += L; if (L < 0.2) continue;
         const ux = (x1 - x0) / L, uz = (z1 - z0) / L, yaw = Math.atan2(ux, uz), rx = -uz, rz = ux;
         // 하천 위(지면이 낮은 구간)만 상판/난간 — 제방 위 도로 구간엔 안 그림
         const spans = []; let st0 = null;
@@ -571,6 +586,7 @@ export function createTerrain(T, data) {
         for (let [u0, u1] of spans) {
           u0 = Math.max(0, u0 - 1.5); u1 = Math.min(L, u1 + 1.5); const l = u1 - u0, mx = x0 + ux * (u0 + u1) / 2, mz = z0 + uz * (u0 + u1) / 2;
           box(slab, W, th, l, mx, h + 0.06 - th / 2, mz, yaw);
+          lightPieces.push({ x0: x0 + ux * u0, z0: z0 + uz * u0, h0: h, x1: x0 + ux * u1, z1: z0 + uz * u1, h1: h, W, th, foot, tier, s0: s0 + u0, seed });
           for (const side of [-1, 1]) box(para, 0.22, foot ? 1.0 : 0.7, l, mx + rx * side * (W / 2 - 0.05), h + (foot ? 0.55 : 0.4), mz + rz * side * (W / 2 - 0.05), yaw);
         }
         // 교각: 하천 안쪽에서 약 22m 간격
@@ -578,11 +594,17 @@ export function createTerrain(T, data) {
           const px = x0 + ux * s, pz = z0 + uz * s, g = baseHeight(px, pz), top = h + 0.06 - th;
           if (g > top - 1.5) continue;
           const pw = foot ? 0.6 : 1.4, offs = W > 6 ? [0, -0.33, 0.33] : [0];
-          for (const k of offs) box(pier, pw, top - g + 0.5, pw, px + rx * k * W, (top + g - 0.5) / 2, pz + rz * k * W, yaw);
+          for (const k of offs) { box(pier, pw, top - g + 0.5, pw, px + rx * k * W, (top + g - 0.5) / 2, pz + rz * k * W, yaw); lightPiers.push({ x: px + rx * k * W, z: pz + rz * k * W, g, top, pw, yaw, tier }); }
         }
       }
     }
     addMerged(slab, '#b9bcbf'); addMerged(pier, '#a7aaad'); addMerged(para, '#d5d8db');
+    // 4b) 저녁 다리 조명 (가산 발광 사각형 한 메시). 수면: 본류 수로 안 = WATER, 지류 = 지류 수면
+    const waterSurf = (x, z) => {
+      if (mainBase(x, z) < WATER - 0.05) return WATER;
+      const w = streams ? streams.waterAt(x, z) : null; return w != null && baseHeight(x, z) < w ? w : null;
+    };
+    const bridgeLights = buildBridgeLights(scene, { pieces: lightPieces, piers: lightPiers, waterAt: waterSurf });
 
     // 5) 제방 숲(OSM forest 폴리곤) 나무 — 지형 높이에 맞춰
     const tp = []; let sd = 11; const rnd = () => ((sd = (sd * 16807) % 2147483647) / 2147483647);
@@ -607,7 +629,7 @@ export function createTerrain(T, data) {
         getY: baseHeight,
       });
     }
-    return { channel, streamMesh, stoneMesh, treeCount: tp.length };
+    return { channel, streamMesh, stoneMesh, bridgeLights, treeCount: tp.length };
   }
 
   // NPC 산책 경로: 도로 -> 계단 -> 둔치를 따라 강변으로 (가까운 계단 기준)
