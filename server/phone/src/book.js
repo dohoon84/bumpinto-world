@@ -1,6 +1,7 @@
 import { DurableObject } from "cloudflare:workers";
 import { NOTICE_POSTS } from "../../../src/notices.js";
 import { GIFT_ITEMS, giftItem, giftUnit, normalizeHoldings } from "../../../src/gifts/catalog.js";
+import { photoOp } from "./photos.js";
 
 // 정자역 번호부 하나. 번호는 여기서만 올라가서 겹치지 않는다.
 const ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -1418,6 +1419,15 @@ export class PhoneBook extends DurableObject {
       return { ok: true, id: tipId, status };
     }
     return { ok: false, error: "bad_op" };
+  }
+
+  // [photo-cloud] 사진 보관함 메타데이터(목록·캡션·한도). 이미지는 Worker 가 R2 에 둔다(photos.js).
+  // 주인은 계정 id 로 여기서 찾은 사람뿐 — 요청에 실린 다른 owner 값은 쓰지 않는다.
+  async photos(input) {
+    this.#migrate();
+    const found = this.#user(input?.id);
+    if (found.error) return { ok: false, error: "unauthorized" };
+    return photoOp(this.ctx.storage.sql, found.user, input);
   }
 
   stats() {

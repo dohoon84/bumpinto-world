@@ -80,6 +80,20 @@ function wrapLines(g, text, maxW, maxLines) {
   return lines;
 }
 
+// [photo-cloud] 다른 PC 에서 받은 원본으로 보관함 썸네일을 만든다(촬영 때와 같은 크기·품질).
+export async function makeThumb(blob) {
+  const bmp = await createImageBitmap(blob);
+  try {
+    const [tw, th] = fit(bmp.width, bmp.height, THUMB_EDGE);
+    const [t, tg] = canvas2d(tw, th);
+    tg.imageSmoothingQuality = 'high';
+    tg.drawImage(bmp, 0, 0, tw, th);
+    try { return await toBlob(t, 'image/jpeg', 0.72); } finally { release(t); }
+  } finally {
+    bmp.close?.();
+  }
+}
+
 /** 내려받기·공유용: 캡션 띠 + 작은 게임 워터마크를 합성한 JPEG. */
 export async function composeExport(blob, { caption = '', watermark = 'Bumpinto World', sub = '' } = {}) {
   const bmp = await decode(blob);

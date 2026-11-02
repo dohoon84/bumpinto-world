@@ -4,8 +4,10 @@
 // 셔터 때만 한 번 더 그려 2D 캔버스로 복사하고, 쓰고 난 캔버스·Blob URL·AudioContext 는 닫을 때 모두 놓는다.
 import './camera.css';
 import { isEn, tr, onLangChange } from '../i18n.js';
-import { captureScene, composeExport, downloadBlob, shareOrDownload, fileName, playShutter } from './media.js';
+import { captureScene, composeExport, downloadBlob, shareOrDownload, fileName, playShutter, makeThumb } from './media.js';
+import * as photoStore from './photoStore.js';
 import { MAX_PHOTOS, addPhoto, listPhotos, getPhoto, updatePhoto, deletePhoto, newPhotoId, closeStore } from './photoStore.js';
+import { createPhotoCloud, photoCloudEnabled } from './photoCloud.js';
 import { ICONS } from './icons.js';
 import { sendNewsTip, tipErrorText, cleanCaption, TIP_CAPTION_MAX } from './newsTip.js';
 import { openPhotoViewer } from './photoViewer.js';
@@ -30,6 +32,13 @@ function fmtWhen(ms) {
 }
 
 export function createCameraApp({ handset, renderer, scene, camera, cam, sms, getInfo, newsTip = false }) {
+  // [photo-cloud] 로그인해 있으면 보관함을 번호 서버와 맞춘다. 기기 저장(IndexedDB)이 먼저고, 서버가 없거나 꺼져 있으면 조용히 기기만.
+  const cloud = createPhotoCloud({ sms, store: photoStore, makeThumb, enabled: photoCloudEnabled() });
+  const syncPhotos = () => cloud.sync().then((changed) => {
+    if (changed) { if (photos?.pane.isConnected && !viewer) paintGrid(); refreshThumb(); }
+    if (!root && !photos) closeStore();
+    return changed;
+  });
   let root = null; // 뷰파인더 DOM (열려 있을 때만 존재)
   let zoom = 1;
   let mode = 'photo';
@@ -96,7 +105,7 @@ export function createCameraApp({ handset, renderer, scene, camera, cam, sms, ge
     if (!root) return;
     const el = root.querySelector('.cam-thumb');
     try {
-      const list = await listPhotos();
+      const list = await cloud.visible(await listPhotos());
       if (!root) return;
       if (lastThumbUrl) URL.revokeObjectURL(lastThumbUrl);
       lastThumbUrl = list[0]?.thumb ? URL.createObjectURL(list[0].thumb) : '';
@@ -180,7 +189,7 @@ export function createCameraApp({ handset, renderer, scene, camera, cam, sms, ge
     offLang = onLangChange(() => paintChrome());
     paintChrome();
     layout();
-    refreshThumb();
+    refreshThumb(); syncPhotos();
   }
 
   function closeViewfinder() {
@@ -295,12 +304,13 @@ export function createCameraApp({ handset, renderer, scene, camera, cam, sms, ge
         r.savedId = id;
         paintReview(); toast(L('사진 앱에 저장했어요.', 'Saved to Photos.'));
         refreshThumb();
+        syncPhotos(); // 서버에도 올리기(백그라운드)
       } else if (name === 'tip-send') {
         const { tipId } = await sendNewsTip({ sms, blob: r.blob, caption, takenAt: r.takenAt, info: r.info });
         if (review !== r) return;
         r.tipId = tipId || 1;
         r.confirmTip = false;
-        if (r.savedId) await updatePhoto(r.savedId, { tipId: r.tipId, caption });
+        if (r.savedId) { await updatePhoto(r.savedId, { tipId: r.tipId, caption }); cloud.captioned(r.savedId, caption).catch(() => {}); }
         paintReview(); toast(L('제보를 보냈어요. 운영진 검토 후 소개될 수 있어요.', 'Tip sent. The operators will review it.'));
       } else if (name === 'download') {
         const out = await exportBlob(r.blob, caption, { ...r.info, takenAt: r.takenAt });
@@ -359,6 +369,7 @@ export function createCameraApp({ handset, renderer, scene, camera, cam, sms, ge
     photos.observer = new MutationObserver(() => { if (photos && !photos.pane.isConnected) detachPhotos(); });
     photos.observer.observe(host, { childList: true });
     paintGrid();
+    syncPhotos(); // 다른 PC 에서 찍은 사진 받기 · 이 기기 사진 처음 올리기(이주)
   }
 
   function phRoot() { return photos?.pane.querySelector('.ph-root'); }
@@ -367,7 +378,7 @@ export function createCameraApp({ handset, renderer, scene, camera, cam, sms, ge
     const p = photos;
     if (!p) return;
     let list = [];
-    try { list = await listPhotos(); } catch { list = null; }
+    try { list = await cloud.visible(await listPhotos()); } catch { list = null; }
     if (photos !== p || !p.pane.isConnected) return;
     releasePhotoUrls();
     const en = isEn();
@@ -404,15 +415,17 @@ export function createCameraApp({ handset, renderer, scene, camera, cam, sms, ge
     const en = isEn();
     const id = rec.id;
     try {
-      if (name === 'caption') { await updatePhoto(id, { caption }); return {}; }
+      if (name === 'caption') { await updatePhoto(id, { caption }); cloud.captioned(id, caption).catch(() => {}); return {}; }
       if (name === 'delete') {
+        const old = await getPhoto(id);
         await deletePhoto(id);
+        if (old) cloud.removed(old).catch(() => {}); // 서버에도 있던 사진이면 거기서도 (안 되면 다음 동기화 때)
         if (photos?.pane.isConnected) paintGrid();
         return { deleted: true, note: en ? 'Deleted.' : '삭제했어요.' };
       }
       const cur = await getPhoto(id);
       if (!cur) return { deleted: true };
-      if (caption !== (cur.caption || '')) await updatePhoto(id, { caption });
+      if (caption !== (cur.caption || '')) { await updatePhoto(id, { caption }); cloud.captioned(id, caption).catch(() => {}); }
       if (name === 'download' || name === 'share') {
         const out = await exportBlob(cur.blob, caption, { region: cur.region, regionName: cur.regionName, regionEnName: cur.regionEnName, takenAt: cur.takenAt });
         if (name === 'download') { downloadBlob(out, fileName(cur.takenAt)); return { note: en ? 'Downloaded.' : '내려받았어요.' }; }
@@ -448,5 +461,7 @@ export function createCameraApp({ handset, renderer, scene, camera, cam, sms, ge
     shoot,
     get review() { return review; },
     get viewer() { return viewer; },
+    get cloud() { return cloud; },
+    syncPhotos,
   };
 }
