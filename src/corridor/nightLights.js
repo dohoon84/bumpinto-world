@@ -7,7 +7,8 @@
 //   - 밤 정도 uNight(0..1): evening.js 저녁 여부를 4초에 걸쳐 따라감. ?cnight=0 이면 코리더 타일 불빛 끔(v2 정자 불빛은 ?nightLights=0 으로 끔).
 import * as THREE from 'three';
 import { watchEvening } from '../evening.js';
-import { isDoosan, DOOSAN_GLSL, doosanUniforms } from '../world/doosanNight.js';
+import { DOOSAN_GLSL, doosanUniforms } from '../world/doosanNight.js';
+import { isDoosan } from '../world/doosanGate.js';
 
 const QS = typeof location === 'undefined' ? null : new URLSearchParams(location.search);
 // [night-buildings] 새 야간 창 불빛(정자 라이브 포함, 층·건물별 점등률, 랜드마크). ?nightLights=0 → 예전 동작 그대로

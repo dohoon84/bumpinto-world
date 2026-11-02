@@ -7,6 +7,7 @@ import { addStarbucksGlass, placeJeongjaStationStarbucks, ringKey, starbucksShel
 import { addNobiosShop, placeNobiosHotel } from './world/nobiosHotel.js';
 import { addWindowLights } from './world/windowLights.js';
 import { NIGHT_V2, nightFacade, nightKind, nightSeed } from './corridor/nightLights.js'; // [night-buildings]
+import { doosanGate } from './world/doosanGate.js'; // [night-buildings]
 import { addPostOfficeMarks } from './world/postOffice.js';
 import { addStationCafeCrowd } from './world/cafeCrowd.js';
 import { addPlaceSigns } from './world/signs.js';
@@ -151,9 +152,11 @@ export function buildWorld(scene, data, region = null, opts = {}) {
     const origMin = b.mh || 0;
     const minH = shell?.mode === 'podium' ? 3.4 : shell?.mode === 'full' ? Math.max(origMin, b.h - 0.42) : origMin;
     const h = Math.max(0.35, b.h - minH);
+    const gate = shell ? null : doosanGate(b); // [night-buildings] 분당두산타워: 두 타워 + 브리지 (틈은 비움)
+    if (gate) b.gate = gate; // 표지판·차양이 solidRings(b) 로 실제 벽에 붙도록
     if (origMin < 2.5) {
       const doorWalls = shell?.name === '스타벅스 정자역' ? stationWallColliders(shell) : null;
-      const rings = doorWalls || [b.o];
+      const rings = doorWalls || gate?.towers || [b.o];
       for (const ring of rings) {
         let mnx = Infinity, mnz = Infinity, mxx = -Infinity, mxz = -Infinity;
         for (const [x, z] of ring) { mnx = Math.min(mnx, x); mxx = Math.max(mxx, x); mnz = Math.min(mnz, z); mxz = Math.max(mxz, z); }
@@ -164,28 +167,39 @@ export function buildWorld(scene, data, region = null, opts = {}) {
     // [shops] 1층에 가게가 있으면 벽을 1층 띠 + 나머지로 나눠 뽑는다. 띠는 상가 창 타일 + 업종색(버텍스 색)
     const shop = shell ? null : shops?.byIdx.get(bi);
     const band = shopBandHeight(shop, b, h);
-    let g = null, gb = null;
+    // 조각: 보통 건물은 외곽선 하나. 두산 문 형상은 두 타워(지붕 없음, 브리지가 덮음) + 외곽선 전체 브리지(윗면 지붕, 아랫면 = 브리지 하부 벽)
+    const pieces = gate
+      ? [...gate.towers.map((ring) => ({ ring, y0: minH, h: gate.yB - minH, band, roof: false })), { ring: b.o, y0: gate.yB, h: b.h - gate.yB, band: 0, roof: 'soffit' }]
+      : [{ ring: b.o, holes: b.holes, y0: minH, h, band, roof: true }];
+    const parts = [];
     try {
-      const shape = toShape(b.o, b.holes || []);
-      if (h - band > 0.01) g = new THREE.ExtrudeGeometry(shape, { depth: h - band, bevelEnabled: false, UVGenerator: FACADE_UV });
-      if (band) gb = new THREE.ExtrudeGeometry(shape, { depth: band, bevelEnabled: false, UVGenerator: FACADE_UV });
-    } catch { g?.dispose(); gb?.dispose(); continue; }
-    if (g) { g.rotateX(-Math.PI / 2); g.translate(0, minH + band, 0); }
-    if (gb) { gb.rotateX(-Math.PI / 2); gb.translate(0, minH, 0); }
+      for (const p of pieces) {
+        const shape = toShape(p.ring, p.holes || []), part = { p, g: null, gb: null };
+        parts.push(part);
+        if (p.h - p.band > 0.01) part.g = new THREE.ExtrudeGeometry(shape, { depth: p.h - p.band, bevelEnabled: false, UVGenerator: FACADE_UV });
+        if (p.band) part.gb = new THREE.ExtrudeGeometry(shape, { depth: p.band, bevelEnabled: false, UVGenerator: FACADE_UV });
+      }
+    } catch { for (const { g, gb } of parts) { g?.dispose(); gb?.dispose(); } continue; }
+    for (const { p, g, gb } of parts) {
+      if (g) { g.rotateX(-Math.PI / 2); g.translate(0, p.y0 + p.band, 0); }
+      if (gb) { gb.rotateX(-Math.PI / 2); gb.translate(0, p.y0, 0); }
+    }
     c.set(BUILDING_COLOR[b.k] || BUILDING_COLOR.yes).offsetHSL((rnd() - 0.5) * 0.04, (rnd() - 0.5) * 0.08, (rnd() - 0.5) * 0.06);
     if (b.s === 'default') c.offsetHSL(0, -0.05, 0.02);
     roof.copy(c).offsetHSL(0, -0.05, -0.12);
     wallTint.setRGB(0.93 + c.r * 0.07, 0.93 + c.g * 0.07, 0.93 + c.b * 0.07);
     const fc = colours?.byIdx.get(bi);
     if (fc) applyFacadeColour(fc, c, roof, wallTint); // [colours] rnd() 호출 수는 그대로 (나무 등 다른 배치 불변)
-    let nl = null, nlb = null; // [night-buildings] 창 불빛 속성 (시드, 종류, 1층 상가) — 셰이더만, 메시 추가 없음
-    if (NIGHT_V2) {
-      const { seed: ns } = nightSeed(b), kind = shell ? 0 : nightKind(b);
-      nl = [ns, kind, !gb && !minH && (kind === 3 || (kind === 4 && b.h <= 15 && ns < 0.4)) ? 1 : 0];
-      nlb = [ns, kind, kind === 5 ? 0 : 1];
+    const { seed: ns } = nightSeed(b), kind = shell ? 0 : nightKind(b);
+    for (const { p, g, gb } of parts) {
+      let nl = null, nlb = null; // [night-buildings] 창 불빛 속성 (시드, 종류, 1층 상가) — 셰이더만, 메시 추가 없음
+      if (NIGHT_V2) {
+        nl = [ns, kind, !gb && !p.y0 && (kind === 3 || (kind === 4 && b.h <= 15 && ns < 0.4)) ? 1 : 0];
+        nlb = [ns, kind, kind === 5 ? 0 : 1];
+      }
+      if (g) addBuildingPart(g, roof, c, wallTint, facadeKey(b.k), p.roof, roofs, walls, nl);
+      if (gb) addBuildingPart(gb, roof, c, bandTint(shop.cat, wallTint, bandC), 'commercial', p.roof === true && !g, roofs, walls, nlb); // 이미 있는 commercial 묶음에 들어가 draw call 그대로
     }
-    if (g) addBuildingPart(g, roof, c, wallTint, facadeKey(b.k), true, roofs, walls, nl);
-    if (gb) addBuildingPart(gb, roof, c, bandTint(shop.cat, wallTint, bandC), 'commercial', !g, roofs, walls, nlb); // 이미 있는 commercial 묶음에 들어가 draw call 그대로
   }
   if (roofs.length) {
     const bmesh = new THREE.Mesh(mergeGeometries(roofs), new THREE.MeshLambertMaterial({ vertexColors: true }));
@@ -285,6 +299,7 @@ export function buildWorld(scene, data, region = null, opts = {}) {
 
 // 건물 한 덩이(ExtrudeGeometry)에 버텍스 색(윗면 top / 아랫면 bottom / 옆면 side)을 칠해 윗면은 roofs, 옆면은 walls[key] 에 넣고 geo 는 버린다.
 // withRoof=false 면 윗·아랫면도 버린다 (1층 띠 위에 층이 더 있을 때).
+// withRoof='soffit' 이면 윗면만 roofs, 아랫면(공중에 뜬 덩어리의 밑면)은 walls[key] 에 넣어 파사드 셰이더(밤 하부 조명)를 받는다.
 // buildWorld 안 클로저로 두면 roofs/walls 가 반환되는 isBlocked 등과 같은 컨텍스트에 잡혀 합치기 전 조각(약 4 MB)이 계속 남으므로 모듈 함수로 둔다.
 // nl: [night-buildings] 벽 정점마다 넣을 aNL (시드, 종류, 1층 상가) 또는 null
 function addBuildingPart(geo, top, bottom, side, key, withRoof, roofs, walls, nl = null) {
@@ -299,11 +314,35 @@ function addBuildingPart(geo, top, bottom, side, key, withRoof, roofs, walls, nl
     for (let i = 0; i < a.length; i += 3) { a[i] = nl[0]; a[i + 1] = nl[1]; a[i + 2] = nl[2]; }
     geo.setAttribute('aNL', new THREE.BufferAttribute(a, 3));
   }
-  const cap = takeGroup(geo, 0), sides = takeGroup(geo, 1);
+  let cap = takeGroup(geo, 0);
+  const sides = takeGroup(geo, 1);
   geo.dispose();
+  if (cap && withRoof === 'soffit') {
+    const under = pickTriangles(cap, (ny) => ny < -0.5);
+    const over = pickTriangles(cap, (ny) => ny >= -0.5);
+    cap.dispose(); cap = over;
+    if (under && sides) { // 밑면 UV 는 파사드 텍스처의 벽면 한 점(픽셀 x4,y50: 창·띠 밖)으로 고정 (창 무늬가 깔리지 않게)
+      const uv = under.attributes.uv; for (let i = 0; i < uv.count; i++) uv.setXY(i, 0.03, 0.6);
+      (walls[key] ||= []).push(under);
+    } else under?.dispose();
+  }
   if (cap) cap.deleteAttribute('aNL');
   if (cap && withRoof) { if (cap.attributes.uv) cap.deleteAttribute('uv'); roofs.push(cap); } else cap?.dispose();
   if (sides) (walls[key] ||= []).push(sides);
+}
+
+// 비인덱스 지오메트리에서 삼각형 법선 y 로 골라 새 지오메트리 (없으면 null)
+function pickTriangles(g, keep) {
+  const nrm = g.attributes.normal, tris = [];
+  for (let t = 0; t < nrm.count / 3; t++) if (keep(nrm.getY(t * 3))) tris.push(t);
+  if (!tris.length) return null;
+  const out = new THREE.BufferGeometry();
+  for (const [name, src] of Object.entries(g.attributes)) {
+    const n = src.itemSize * 3, arr = new src.array.constructor(tris.length * n);
+    tris.forEach((t, i) => arr.set(src.array.subarray(t * n, t * n + n), i * n));
+    out.setAttribute(name, new THREE.BufferAttribute(arr, src.itemSize, src.normalized));
+  }
+  return out;
 }
 
 export function stationSign(st, signCfg = null) {
