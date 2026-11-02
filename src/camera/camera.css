@@ -73,33 +73,58 @@ body.cam-mode #bike-prompt, body.cam-mode #bike-hud, body.cam-mode #inventory-do
 /* 폰 속 사진 보관함 */
 #handset .ph-bar { display: flex; align-items: center; gap: 6px; margin: 0 0 8px; font-size: 13px; font-weight: 800; }
 #handset .ph-bar small { color: #5c6b82; font-weight: 600; }
-#handset .ph-bar .ph-camera, #handset .ph-bar .ph-back { margin-left: auto; border: 0; background: transparent; color: #1f5fbf; font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; padding: 0; }
-#handset .ph-bar .ph-back { margin-left: 0; display: inline-flex; align-items: center; gap: 1px; }
-#handset .ph-bar .ph-back .ic { width: 16px; height: 16px; stroke-width: 2.6; }
+#handset .ph-bar .ph-camera { margin-left: auto; border: 0; background: transparent; color: #1f5fbf; font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; padding: 0; }
 #handset .ph-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 2px; border-radius: 6px; overflow: hidden; }
 #handset .ph-cell { position: relative; aspect-ratio: 1; border: 0; padding: 0; background: #ccd center/cover no-repeat; cursor: pointer; }
 #handset .ph-tip { position: absolute; right: 3px; bottom: 3px; width: 14px; height: 14px; border-radius: 50%; background: #ff3b30; color: #fff; font-style: normal; display: grid; place-items: center; }
 #handset .ph-tip .ic { width: 10px; height: 10px; stroke-width: 3.2; }
-#handset .ph-photo { border-radius: 10px; overflow: hidden; background: #000; }
-#handset .ph-photo img { display: block; width: 100%; }
-#handset .ph-meta { margin: 6px 2px; font-size: 11px; color: #3d4d63; }
-#handset .ph-caption { width: 100%; box-sizing: border-box; font-size: 13px; }
-#handset .ph-confirm { margin: 8px 2px 0; font-size: 11.5px; line-height: 1.45; color: #102033; }
-/* 사진 상세 도구줄: iOS 사진 앱 하단 툴바처럼 같은 굵기 선 아이콘 + 아래 라벨, 고르게 배치 */
-#handset .ph-tools { display: flex; justify-content: space-around; align-items: stretch; gap: 2px; margin-top: 10px; padding: 4px 0 2px; border-top: 1px solid rgba(60,60,67,.14); }
-#handset .ph-tools button { flex: 1 1 0; min-width: 0; min-height: 52px; border: 0; border-radius: 12px; padding: 6px 2px; background: transparent; color: #0a6cff; font: inherit; cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; }
-#handset .ph-tools button:hover { background: rgba(10,108,255,.08); }
-#handset .ph-tools button .ic { width: 24px; height: 24px; }
-#handset .ph-tools button em { display: block; font-style: normal; font-size: 11px; font-weight: 700; line-height: 1.15; white-space: nowrap; }
-#handset .ph-tools button.del { color: #ff3b30; }
-#handset .ph-tools button.del:hover { background: rgba(255,59,48,.08); }
-#handset .ph-tools button.del.armed { background: #ff3b30; color: #fff; }
-/* 제보 확인(보내기/취소)은 글자 버튼 */
-#handset .ph-tools button.red { background: #ff3b30; color: #fff; }
-#handset .ph-tools button:not(:has(.ic)) { min-height: 40px; background: rgba(255,255,255,.85); font-size: 13px; font-weight: 800; }
-#handset .ph-tools button.red:not(:has(.ic)) { background: #ff3b30; }
-#handset .ph-tools button:disabled { opacity: .45; cursor: default; }
-#handset .ph-toast { position: absolute; left: 50%; bottom: 64px; transform: translate(-50%, 6px); max-width: 80%; padding: 7px 14px; border-radius: 14px; background: rgba(28,28,30,.86); color: #fff; font-size: 12px; font-weight: 600; text-align: center; z-index: 20; pointer-events: none; opacity: 0; transition: opacity .2s, transform .2s; }
-#handset .ph-toast.show { opacity: 1; transform: translate(-50%, 0); }
-#handset .ph-note { min-height: 14px; margin: 6px 2px; }
-#handset .ph-note.err { color: #c62828; }
+
+/* [camera] 사진 전체 화면 뷰어 (photoViewer.js) */
+.pv-root { position: fixed; inset: 0; z-index: 950; background: rgba(6, 8, 12, .94); color: #fff; font-family: inherit; user-select: none; -webkit-user-select: none; outline: none; animation: pv-in .18s ease; }
+@keyframes pv-in { from { opacity: 0; } to { opacity: 1; } }
+body.pv-open #attribution { display: none !important; }
+.pv-top { position: absolute; left: 0; right: 0; top: 0; height: 56px; display: flex; align-items: center; gap: 12px; padding: 0 14px 0 20px; background: linear-gradient(rgba(0,0,0,.55), rgba(0,0,0,0)); z-index: 3; }
+.pv-count { font-size: 15px; font-weight: 800; font-variant-numeric: tabular-nums; min-width: 44px; }
+.pv-meta { flex: 1; min-width: 0; font-size: 12.5px; color: rgba(255,255,255,.72); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pv-ic { display: inline-flex; align-items: center; gap: 6px; height: 36px; min-width: 36px; padding: 0 9px; border: 0; border-radius: 18px; background: rgba(255,255,255,.1); color: #fff; font: inherit; font-size: 12.5px; font-weight: 800; cursor: pointer; justify-content: center; }
+.pv-ic:hover { background: rgba(255,255,255,.2); }
+.pv-ic .ic { width: 20px; height: 20px; }
+.pv-ic:focus-visible, .pv-nav:focus-visible, .pv-tools button:focus-visible { outline: 2px solid #4da3ff; outline-offset: 2px; }
+.pv-stage { position: absolute; left: 0; right: 0; top: 56px; bottom: 132px; overflow: hidden; touch-action: none; cursor: grab; }
+.pv-stage:active { cursor: grabbing; }
+.pv-img { position: absolute; left: 50%; top: 50%; width: auto; height: auto; max-width: calc(100% - 128px); max-height: calc(100% - 16px); transform: translate(-50%, -50%); border-radius: 4px; box-shadow: 0 10px 40px rgba(0,0,0,.5); -webkit-user-drag: none; }
+.pv-img.snap { transition: transform .22s cubic-bezier(.2,.8,.2,1); }
+.pv-img.slide-l { animation: pv-slide-l .24s cubic-bezier(.2,.8,.2,1); }
+.pv-img.slide-r { animation: pv-slide-r .24s cubic-bezier(.2,.8,.2,1); }
+@keyframes pv-slide-l { from { transform: translate(calc(-50% + 70px), -50%); opacity: .3; } }
+@keyframes pv-slide-r { from { transform: translate(calc(-50% - 70px), -50%); opacity: .3; } }
+/* 1:1 원본 크기: 화면보다 크면 스크롤/드래그로 둘러본다 */
+.pv-root.is-actual .pv-stage { overflow: auto; display: grid; place-items: safe center; scrollbar-width: thin; }
+.pv-root.is-actual .pv-img { position: static; max-width: none; max-height: none; transform: none !important; animation: none; border-radius: 0; }
+.pv-nav { position: absolute; top: calc(56px + (100% - 188px) / 2); width: 48px; height: 48px; margin-top: -24px; border: 0; border-radius: 50%; background: rgba(255,255,255,.12); color: #fff; display: grid; place-items: center; cursor: pointer; z-index: 3; transition: background-color .15s, opacity .15s; }
+.pv-nav:hover { background: rgba(255,255,255,.24); }
+.pv-nav:disabled { opacity: .25; cursor: default; }
+.pv-nav[hidden] { display: none; }
+.pv-nav .ic { width: 26px; height: 26px; }
+.pv-nav.prev { left: 24px; }
+.pv-nav.next { right: 24px; }
+.pv-bottom { position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); width: min(460px, calc(100% - 32px)); z-index: 3; }
+.pv-caption { display: block; width: 100%; box-sizing: border-box; padding: 8px 12px; border: 1px solid rgba(255,255,255,.18); border-radius: 10px; background: rgba(255,255,255,.08); color: #fff; font: inherit; font-size: 13px; outline: none; }
+.pv-caption::placeholder { color: rgba(255,255,255,.45); }
+.pv-caption:focus { border-color: rgba(77,163,255,.7); background: rgba(255,255,255,.12); }
+.pv-tools { display: flex; justify-content: space-around; gap: 4px; margin-top: 8px; }
+.pv-tools button { flex: 1 1 0; min-width: 0; min-height: 52px; border: 0; border-radius: 12px; padding: 6px 2px; background: transparent; color: #4da3ff; font: inherit; cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; }
+.pv-tools button:hover { background: rgba(77,163,255,.12); }
+.pv-tools button .ic { width: 24px; height: 24px; }
+.pv-tools button em { font-style: normal; font-size: 11px; font-weight: 700; white-space: nowrap; }
+.pv-tools button.del { color: #ff6b61; }
+.pv-tools button.del:hover { background: rgba(255,59,48,.14); }
+.pv-tools button.del.armed, .pv-tools button.red { background: #ff3b30; color: #fff; }
+.pv-tools button:not(:has(.ic)) { min-height: 40px; background: rgba(255,255,255,.14); color: #fff; font-size: 13px; font-weight: 800; }
+.pv-tools button.red:not(:has(.ic)) { background: #ff3b30; }
+.pv-tools button:disabled { opacity: .45; cursor: default; }
+.pv-confirm { margin: 8px 2px 0; font-size: 12px; line-height: 1.45; color: rgba(255,255,255,.88); }
+.pv-note { min-height: 0; margin: 4px 2px 0; font-size: 12px; }
+.pv-note.err { color: #ff8a80; }
+.pv-toast { position: absolute; left: 50%; bottom: 150px; transform: translate(-50%, 6px); padding: 8px 16px; border-radius: 12px; background: rgba(40,40,44,.92); font-size: 13px; font-weight: 600; pointer-events: none; opacity: 0; transition: opacity .2s, transform .2s; z-index: 4; }
+.pv-toast.show { opacity: 1; transform: translate(-50%, 0); }

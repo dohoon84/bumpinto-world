@@ -8,6 +8,7 @@ import { captureScene, composeExport, downloadBlob, shareOrDownload, fileName, p
 import { MAX_PHOTOS, addPhoto, listPhotos, getPhoto, updatePhoto, deletePhoto, newPhotoId, closeStore } from './photoStore.js';
 import { ICONS } from './icons.js';
 import { sendNewsTip, tipErrorText, cleanCaption, TIP_CAPTION_MAX } from './newsTip.js';
+import { openPhotoViewer } from './photoViewer.js';
 
 const ZOOMS = [0.5, 1, 2, 3];
 const MODES = [
@@ -331,7 +332,8 @@ export function createCameraApp({ handset, renderer, scene, camera, cam, sms, ge
   }
 
   // ───────── 폰 속 사진 보관함 ─────────
-  let photos = null; // { pane, view: 'grid'|'detail', id, urls: [], observer }
+  let photos = null; // { pane, ids: [], urls: [], observer }
+  let viewer = null; // 전체 화면 사진 뷰어 (열려 있을 때만)
 
   function releasePhotoUrls() {
     if (!photos) return;
@@ -343,8 +345,7 @@ export function createCameraApp({ handset, renderer, scene, camera, cam, sms, ge
     if (!photos) return;
     releasePhotoUrls();
     photos.observer?.disconnect();
-    document.querySelector('#handset .ph-toast')?.remove();
-    clearTimeout(phToastTimer);
+    viewer?.close();
     photos = null;
     if (!root) closeStore();
   }
@@ -353,7 +354,7 @@ export function createCameraApp({ handset, renderer, scene, camera, cam, sms, ge
     detachPhotos();
     if (!pane?.isConnected) return;
     const host = pane.parentElement;
-    photos = { pane, view: 'grid', id: '', urls: [], observer: null, confirmDel: false };
+    photos = { pane, ids: [], urls: [], observer: null };
     // 폰이 다른 화면을 그리면(pane 교체) Blob URL 을 바로 놓는다.
     photos.observer = new MutationObserver(() => { if (photos && !photos.pane.isConnected) detachPhotos(); });
     photos.observer.observe(host, { childList: true });
@@ -362,10 +363,9 @@ export function createCameraApp({ handset, renderer, scene, camera, cam, sms, ge
 
   function phRoot() { return photos?.pane.querySelector('.ph-root'); }
 
-  async function paintGrid(note = '') {
+  async function paintGrid() {
     const p = photos;
     if (!p) return;
-    p.view = 'grid'; p.id = ''; p.confirmDel = false;
     let list = [];
     try { list = await listPhotos(); } catch { list = null; }
     if (photos !== p || !p.pane.isConnected) return;
@@ -373,6 +373,7 @@ export function createCameraApp({ handset, renderer, scene, camera, cam, sms, ge
     const en = isEn();
     const el = phRoot();
     if (!el) return;
+    p.ids = list ? list.map((m) => m.id) : [];
     if (!list) { el.innerHTML = `<p class="hint">${en ? 'Photo storage is not available in this browser.' : '이 브라우저에서는 사진을 보관할 수 없어요.'}</p>`; return; }
     const cells = list.map((m) => {
       const u = URL.createObjectURL(m.thumb); p.urls.push(u);
@@ -381,88 +382,60 @@ export function createCameraApp({ handset, renderer, scene, camera, cam, sms, ge
     el.innerHTML = `<div class="ph-bar"><span>${en ? 'Library' : '보관함'}</span><small>${list.length}/${MAX_PHOTOS}</small><button type="button" class="ph-camera" data-xact="ph-camera">${en ? 'Camera' : '카메라'}</button></div>
       ${list.length ? `<div class="ph-grid">${cells}</div>` : `<p class="hint">${en ? 'No photos yet. Open Camera and press the shutter (Space).' : '아직 사진이 없어요. 카메라를 열고 셔터(Space)를 눌러 보세요.'}</p>`}
 `;
-    if (note) phToast(note);
   }
 
-  // 사진 앱 상태 문구: 폰 화면 아래쪽에 잠깐 떴다 사라지는 작은 알림
-  let phToastTimer = 0;
-  function phToast(text) {
-    const host = photos?.pane?.closest('#handset');
-    if (!host) return;
-    let t = host.querySelector('.ph-toast');
-    if (!t) { t = document.createElement('div'); t.className = 'ph-toast'; t.setAttribute('role', 'status'); host.appendChild(t); }
-    t.textContent = text;
-    t.classList.add('show');
-    clearTimeout(phToastTimer);
-    phToastTimer = setTimeout(() => t.classList.remove('show'), 2200);
-  }
+  const photoWhere = (rec, en = isEn()) => `${(en ? rec.regionEnName || rec.regionName : rec.regionName || '').replace(/\s*\(.*\)\s*$/, '')} · ${fmtWhen(rec.takenAt)}`;
 
-  async function paintDetail(id, note = '', err = false) {
+  // 보관함 칸을 누르면 전체 화면 뷰어로 (원본 해상도 · 좌우 넘기기 · 같은 도구 막대)
+  function openViewer(id) {
     const p = photos;
-    if (!p) return;
-    let rec = null;
-    try { rec = await getPhoto(id); } catch { rec = null; }
-    if (photos !== p || !p.pane.isConnected) return;
-    if (!rec) { paintGrid(); return; }
-    releasePhotoUrls();
-    const keepCaption = p.view === 'detail' && p.id === id ? phRoot()?.querySelector('.ph-caption')?.value : null;
-    p.view = 'detail'; p.id = id;
-    const en = isEn();
-    const u = URL.createObjectURL(rec.blob); p.urls.push(u);
-    const where = `${(en ? rec.regionEnName || rec.regionName : rec.regionName || '').replace(/\s*\(.*\)\s*$/, '')} · ${fmtWhen(rec.takenAt)}`;
-    phRoot().innerHTML = `<div class="ph-bar"><button type="button" class="ph-back" data-xact="ph-back">${ICONS.back}${en ? 'Library' : '보관함'}</button></div>
-      <div class="ph-photo"><img src="${u}" alt="" /></div>
-      <p class="ph-meta">${esc(where)}${rec.tipId && newsTip ? ` · <b>${en ? 'Tip sent' : '제보함'}</b>` : ''}</p>
-      <input class="ph-caption" maxlength="${TIP_CAPTION_MAX}" placeholder="${en ? 'Caption' : '캡션'}" autocomplete="off" value="${esc(keepCaption ?? rec.caption ?? '')}" />
-      ${p.confirmTip ? `<p class="ph-confirm">${en ? 'Send to the news desk with your nickname, number and spot? Operators review tips before anything is featured.' : '닉네임·번호·위치와 함께 뉴스 데스크에 제보할까요? 운영진 검토 후에만 소개돼요.'}</p>
-        <div class="ph-tools"><button type="button" data-xact="ph-tip-cancel">${en ? 'Cancel' : '취소'}</button><button type="button" class="red" data-xact="ph-tip-send">${en ? 'Send' : '보내기'}</button></div>` : `<div class="ph-tools${newsTip ? ' four' : ''}">
-        <button type="button" data-xact="ph-share">${ICONS.share}<em>${en ? 'Share' : '공유'}</em></button>
-        <button type="button" data-xact="ph-download">${ICONS.download}<em>${en ? 'Download' : '내려받기'}</em></button>
-        ${newsTip ? `<button type="button" data-xact="ph-tip" ${rec.tipId ? 'disabled' : ''}>${ICONS.tip}<em>${rec.tipId ? (en ? 'Sent' : '제보함') : (en ? 'Tip' : '제보')}</em></button>` : ''}
-        <button type="button" class="del${p.confirmDel ? ' armed' : ''}" data-xact="ph-delete">${ICONS.trash}<em>${p.confirmDel ? (en ? 'Delete?' : '삭제할까요?') : (en ? 'Delete' : '삭제')}</em></button>
-      </div>`}
-      ${err && note ? `<p class="hint ph-note err">${esc(note)}</p>` : ''}`;
-    if (note && !err) phToast(note);
+    if (!p || viewer) return;
+    const index = Math.max(0, p.ids.indexOf(id));
+    viewer = openPhotoViewer({
+      ids: p.ids.length ? p.ids : [id], index, newsTip,
+      load: (pid) => getPhoto(pid),
+      meta: (rec) => photoWhere(rec),
+      act: viewerAction,
+      onClose: () => { viewer = null; if (photos === p && p.pane.isConnected) paintGrid(); else if (!photos && !root) closeStore(); },
+    });
   }
 
-  async function photosAction(name, el) {
-    const p = photos;
-    if (!p) return;
+  async function viewerAction(name, rec, caption) {
     const en = isEn();
-    if (name === 'ph-open') { p.confirmDel = false; p.confirmTip = false; paintDetail(el.dataset.id); return; }
-    if (name === 'ph-back') { paintGrid(); return; }
-    if (name === 'ph-camera') { setTimeout(() => { handset.close(); openViewfinder(); }, 0); return; } // 폰 클릭 처리가 끝난 뒤 닫기
-    const id = p.id;
-    if (!id) return;
-    const caption = cleanCaption(phRoot()?.querySelector('.ph-caption')?.value || '');
-    if (name === 'ph-tip') { if (!newsTip) return; p.confirmTip = true; p.confirmDel = false; paintDetail(id); return; }
-    if (name === 'ph-tip-cancel') { p.confirmTip = false; paintDetail(id); return; }
-    if (name === 'ph-delete' && !p.confirmDel) { p.confirmDel = true; paintDetail(id); return; }
-    if (name !== 'ph-delete') p.confirmDel = false;
-    el.disabled = true;
+    const id = rec.id;
     try {
-      const rec = await getPhoto(id);
-      if (!rec) { paintGrid(); return; }
-      if (caption !== (rec.caption || '')) await updatePhoto(id, { caption });
-      if (name === 'ph-delete') {
+      if (name === 'caption') { await updatePhoto(id, { caption }); return {}; }
+      if (name === 'delete') {
         await deletePhoto(id);
-        paintGrid(en ? 'Deleted.' : '삭제했어요.');
-      } else if (name === 'ph-download' || name === 'ph-share') {
-        const out = await exportBlob(rec.blob, caption, { region: rec.region, regionName: rec.regionName, regionEnName: rec.regionEnName, takenAt: rec.takenAt });
-        if (name === 'ph-download') { downloadBlob(out, fileName(rec.takenAt)); paintDetail(id, en ? 'Downloaded.' : '내려받았어요.'); }
-        else {
-          const how = await shareOrDownload(out, fileName(rec.takenAt), shareText(caption));
-          if (how !== 'cancelled') paintDetail(id, how === 'shared' ? (en ? 'Shared.' : '공유했어요.') : (en ? 'Sharing unsupported — downloaded instead.' : '바로 공유가 안 돼 내려받았어요.'));
-        }
-      } else if (name === 'ph-tip-send') {
-        p.confirmTip = false;
-        const { tipId } = await sendNewsTip({ sms, blob: rec.blob, caption, takenAt: rec.takenAt, info: { region: rec.region, x: rec.x, z: rec.z } });
-        await updatePhoto(id, { tipId: tipId || 1 });
-        paintDetail(id, en ? 'Tip sent. Operators will review it.' : '제보를 보냈어요. 운영진이 검토해요.');
+        if (photos?.pane.isConnected) paintGrid();
+        return { deleted: true, note: en ? 'Deleted.' : '삭제했어요.' };
       }
+      const cur = await getPhoto(id);
+      if (!cur) return { deleted: true };
+      if (caption !== (cur.caption || '')) await updatePhoto(id, { caption });
+      if (name === 'download' || name === 'share') {
+        const out = await exportBlob(cur.blob, caption, { region: cur.region, regionName: cur.regionName, regionEnName: cur.regionEnName, takenAt: cur.takenAt });
+        if (name === 'download') { downloadBlob(out, fileName(cur.takenAt)); return { note: en ? 'Downloaded.' : '내려받았어요.' }; }
+        const how = await shareOrDownload(out, fileName(cur.takenAt), shareText(caption));
+        if (how === 'cancelled') return {};
+        return { note: how === 'shared' ? (en ? 'Shared.' : '공유했어요.') : (en ? 'Sharing unsupported — downloaded instead.' : '바로 공유가 안 돼 내려받았어요.') };
+      }
+      if (name === 'tip-send') {
+        if (!newsTip) return {};
+        const { tipId } = await sendNewsTip({ sms, blob: cur.blob, caption, takenAt: cur.takenAt, info: { region: cur.region, x: cur.x, z: cur.z } });
+        await updatePhoto(id, { tipId: tipId || 1 });
+        return { tipId: tipId || 1, note: en ? 'Tip sent. Operators will review it.' : '제보를 보냈어요. 운영진이 검토해요.' };
+      }
+      return {};
     } catch (err) {
-      if (photos === p) paintDetail(id, name.startsWith('ph-tip') ? tipErrorText(err?.code) : (en ? 'Something went wrong.' : '처리하지 못했어요.'), true);
+      return { err: true, note: name.startsWith('tip') ? tipErrorText(err?.code) : (en ? 'Something went wrong.' : '처리하지 못했어요.') };
     }
+  }
+
+  function photosAction(name, el) {
+    if (!photos) return;
+    if (name === 'ph-open') { openViewer(el.dataset.id); return; }
+    if (name === 'ph-camera') { setTimeout(() => { handset.close(); openViewfinder(); }, 0); } // 폰 클릭 처리가 끝난 뒤 닫기
   }
 
   return {
@@ -474,5 +447,6 @@ export function createCameraApp({ handset, renderer, scene, camera, cam, sms, ge
     // 테스트용
     shoot,
     get review() { return review; },
+    get viewer() { return viewer; },
   };
 }
