@@ -11,18 +11,23 @@
 //           폴리곤 안 · 건물(라이브+코리더 타일) 밖 · 도로 리본(라이브+코리더 타일+탄천 구간 ch) 밖인 자리만 쓴다.
 //           큰 폴리곤은 겹치지 않게 2세트까지. 안 들어가면 SCALES 순서로 줄이고, 그래도 안 되면 건너뛴다(사유 기록).
 //   - 높이: 런타임에 지형(renderHeight)에 붙인다(여기선 x, z, 회전, 배율만).
+//   - 조경: playground-land.mjs 가 같은 장애물·세트 판정으로 나무·벤치·생울타리·덤불·풀숲을 놀이터(또는 그 공원) 폴리곤 안에 놓는다
+//           → public/corridor/playground-land.json (런타임 src/world/playgroundLand.js, ?pgland=0 끔).
 //
 //   사용: npm run corridor:playgrounds [-- --fetch | --osm=../bumpinto-world/data/raw/osm_merged.json] [--out=public/corridor/playgrounds.json] [--verbose]
 import fs from 'node:fs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { cliArg, inRing, bboxOf, bboxGrid } from '../lib/world-geo.mjs';
+import { area, centroid, minRect, rectPoly, ringsCross, polysOverlap, segPolyDist, ptSeg } from './lib/pg-geom.mjs';
+import { planLand, LAND } from './playground-land.mjs';
 
 const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), '../..');
 const FETCH = process.argv.includes('--fetch'), VERBOSE = process.argv.includes('--verbose');
 const CACHE = path.join(ROOT, 'data/osm_playgrounds_raw.json');
 const OSM = FETCH ? CACHE : path.resolve(ROOT, cliArg('osm', CACHE));
 const OUT = path.resolve(ROOT, cliArg('out', 'public/corridor/playgrounds.json'));
+const LAND_OUT = path.resolve(ROOT, cliArg('land-out', 'public/corridor/playground-land.json'));
 const readJSON = (f) => JSON.parse(fs.readFileSync(f, 'utf8'));
 
 // ---- 예외 목록 (한 곳) : OSM 에 leisure=playground 가 없지만 놀이터로 넣을 OSM 도형 ----
@@ -60,58 +65,12 @@ function overpassFetch() {
   const toLL = (x, z) => ({ lat: C.lat - z / kz, lon: C.lon + x / kx });
   const B = CI.meta.bounds, a = toLL(B.x0, B.z1), b = toLL(B.x1, B.z0);
   const ids = EXTRA_PLAYGROUNDS.filter((e) => e.type === 'way').map((e) => e.id);
-  const q = `[out:json][timeout:180][bbox:${a.lat.toFixed(4)},${a.lon.toFixed(4)},${b.lat.toFixed(4)},${b.lon.toFixed(4)}];\n(\n  nwr["leisure"="playground"];\n${ids.length ? `  way(id:${ids.join(',')});\n` : ''});\nout body geom;\n`;
+  const q = `[out:json][timeout:180][bbox:${a.lat.toFixed(4)},${a.lon.toFixed(4)},${b.lat.toFixed(4)},${b.lon.toFixed(4)}];\n(\n  nwr["leisure"="playground"];\n  way["leisure"~"^(park|garden)$"];\n  node["natural"="tree"];\n${ids.length ? `  way(id:${ids.join(',')});\n` : ''});\nout body geom;\n`;
   const qf = path.join(ROOT, 'data/query_playgrounds.overpassql');
   fs.writeFileSync(qf, q);
   execFileSync('bash', [path.join(ROOT, 'data/fetch.sh'), 'query_playgrounds.overpassql', 'osm_playgrounds_raw.json'], { stdio: 'inherit' });
 }
 if (FETCH) overpassFetch();
-
-// ---- 기하 ----
-const area = (r) => { let s = 0; for (let i = 0, j = r.length - 1; i < r.length; j = i++) s += (r[j][0] + r[i][0]) * (r[j][1] - r[i][1]); return Math.abs(s) / 2; };
-const centroid = (r) => { let x = 0, z = 0, a = 0; for (let i = 0, j = r.length - 1; i < r.length; j = i++) { const f = r[j][0] * r[i][1] - r[i][0] * r[j][1]; x += (r[j][0] + r[i][0]) * f; z += (r[j][1] + r[i][1]) * f; a += f; } return Math.abs(a) < 1e-9 ? r[0] : [x / (3 * a), z / (3 * a)]; };
-function hull(pts) {
-  const p = pts.slice().sort((a, b) => a[0] - b[0] || a[1] - b[1]);
-  const cr = (o, a, b) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
-  const lo = [], up = [];
-  for (const q of p) { while (lo.length >= 2 && cr(lo[lo.length - 2], lo[lo.length - 1], q) <= 0) lo.pop(); lo.push(q); }
-  for (const q of p.reverse()) { while (up.length >= 2 && cr(up[up.length - 2], up[up.length - 1], q) <= 0) up.pop(); up.push(q); }
-  return lo.slice(0, -1).concat(up.slice(0, -1));
-}
-/** 최소 면적 외접 사각형: ang = 긴 변 방향(x→z 라디안), [u0,u1]×[v0,v1] = 그 축으로 잰 범위 */
-function minRect(ring) {
-  const h = hull(ring); let best = null;
-  for (let i = 0; i < h.length; i++) {
-    const [ax, az] = h[i], [bx, bz] = h[(i + 1) % h.length];
-    const ang = Math.atan2(bz - az, bx - ax), c = Math.cos(ang), s = Math.sin(ang);
-    let u0 = Infinity, u1 = -Infinity, v0 = Infinity, v1 = -Infinity;
-    for (const [x, z] of h) { const u = x * c + z * s, v = -x * s + z * c; u0 = Math.min(u0, u); u1 = Math.max(u1, u); v0 = Math.min(v0, v); v1 = Math.max(v1, v); }
-    const A = (u1 - u0) * (v1 - v0);
-    if (!best || A < best.A) best = { A, ang, u0, u1, v0, v1 };
-  }
-  const { ang, u0, u1, v0, v1 } = best;
-  return (u1 - u0) >= (v1 - v0) ? { ang, u0, u1, v0, v1 } : { ang: ang + Math.PI / 2, u0: v0, u1: v1, v0: -u1, v1: -u0 };
-}
-// three.js rotation.y = ry 일 때 로컬 (lx, lz) → 월드: x = lx cosR + lz sinR, z = -lx sinR + lz cosR
-const toWorld = (cx, cz, ry, lx, lz) => [cx + lx * Math.cos(ry) + lz * Math.sin(ry), cz - lx * Math.sin(ry) + lz * Math.cos(ry)];
-const rectPoly = (cx, cz, ry, hx, hz) => [[-hx, -hz], [hx, -hz], [hx, hz], [-hx, hz]].map(([a, b]) => toWorld(cx, cz, ry, a, b));
-function segX(a, b, c, d) {
-  const o = (p, q, r) => Math.sign((q[0] - p[0]) * (r[1] - p[1]) - (q[1] - p[1]) * (r[0] - p[0]));
-  return o(a, b, c) !== o(a, b, d) && o(c, d, a) !== o(c, d, b);
-}
-const ringsCross = (A, B) => { for (let i = 0; i < A.length; i++) for (let j = 0; j < B.length; j++) if (segX(A[i], A[(i + 1) % A.length], B[j], B[(j + 1) % B.length])) return true; return false; };
-const polysOverlap = (A, B) => ringsCross(A, B) || A.some(([x, z]) => inRing(x, z, B)) || B.some(([x, z]) => inRing(x, z, A));
-const ptSeg = (px, pz, ax, az, bx, bz) => { const dx = bx - ax, dz = bz - az, L2 = dx * dx + dz * dz || 1e-9, t = Math.max(0, Math.min(1, ((px - ax) * dx + (pz - az) * dz) / L2)); return Math.hypot(ax + dx * t - px, az + dz * t - pz); };
-function segRectDist(a, b, R) {
-  if (inRing(a[0], a[1], R) || inRing(b[0], b[1], R)) return 0;
-  for (let i = 0; i < 4; i++) if (segX(a, b, R[i], R[(i + 1) % 4])) return 0;
-  let d = Infinity;
-  for (let i = 0; i < 4; i++) {
-    const p = R[i], q = R[(i + 1) % 4];
-    d = Math.min(d, ptSeg(p[0], p[1], a[0], a[1], b[0], b[1]), ptSeg(a[0], a[1], p[0], p[1], q[0], q[1]), ptSeg(b[0], b[1], p[0], p[1], q[0], q[1]));
-  }
-  return d;
-}
 
 // ---- 장애물: 라이브 + 코리더 타일 건물·도로·물 ----
 const blds = [], segs = [], waters = [];
@@ -133,15 +92,21 @@ waters.forEach((o, i) => wGrid.add(bboxOf(o), i));
 segs.forEach((s, i) => { const m = s.hw; sGrid.add({ x0: Math.min(s.a[0], s.b[0]) - m, x1: Math.max(s.a[0], s.b[0]) + m, z0: Math.min(s.a[1], s.b[1]) - m, z1: Math.max(s.a[1], s.b[1]) + m }, i); });
 
 // ---- 후보 판정 ----
+/** P 가 물·도로 리본(반폭+여유) 밖이고 Pb(기본 P) 가 건물 밖이면 null, 아니면 사유 */
+function clearOf(P, Pb = P) {
+  const bb = bboxOf(Pb);
+  for (const i of bGrid.near(bb)) if (polysOverlap(Pb, blds[i])) return 'building';
+  for (const i of wGrid.near(bboxOf(P))) if (polysOverlap(P, waters[i])) return 'water';
+  for (const i of sGrid.near(bboxOf(P))) { const s = segs[i]; if (segPolyDist(s.a, s.b, P) < s.hw) return 'road'; }
+  return null;
+}
 function fits(poly, R, Rb, others) {
   // 폴리곤 안 (모서리 + 변 교차 없음, 구멍 밖)
   if (!R.every(([x, z]) => inRing(x, z, poly.outer))) return 'edge';
   if (ringsCross(R, poly.outer)) return 'edge';
   for (const h of poly.holes) if (polysOverlap(R, h)) return 'edge';
-  const bb = bboxOf(Rb);
-  for (const i of bGrid.near(bb)) if (polysOverlap(Rb, blds[i])) return 'building';
-  for (const i of wGrid.near(bb)) if (polysOverlap(R, waters[i])) return 'water';
-  for (const i of sGrid.near(bboxOf(R))) { const s = segs[i]; if (segRectDist(s.a, s.b, R) < s.hw) return 'road'; }
+  const why = clearOf(R, Rb);
+  if (why) return why;
   for (const o of others) if (polysOverlap(R, o)) return 'overlap';
   return null;
 }
@@ -172,9 +137,17 @@ function place(poly, rect, others, scales) {
 const extraIds = new Map(EXTRA_PLAYGROUNDS.map((e) => [e.type + '/' + e.id, e]));
 const src = readJSON(OSM);
 const els = src.elements.filter((e) => e.tags?.leisure === 'playground' || extraIds.has(e.type + '/' + e.id));
+// 조경용 보조 도형: 놀이터를 품은 leisure=park/garden 폴리곤, 범위 안 natural=tree 노드 (캐시에 같이 남긴다)
+const PARKISH = new Set(['park', 'garden']);
+const pgCentroids = els.filter((e) => e.type === 'way' && e.geometry?.length >= 4).map((e) => centroid(e.geometry.map(proj)));
+const extrasLand = src.elements.filter((e) => {
+  if (e.type === 'node' && e.tags?.natural === 'tree') return inArea(proj(e));
+  if (e.type === 'way' && PARKISH.has(e.tags?.leisure) && e.geometry?.length >= 4 && !extraIds.has('way/' + e.id)) { const r = e.geometry.map(proj); return pgCentroids.some(([x, z]) => inRing(x, z, r)); }
+  return false;
+});
 const osmBase = src.newest_edit || src.osm3s?.timestamp_osm_base || null;
 if (OSM !== CACHE) { // 큰 원본에서 고른 입력을 캐시로 남겨 저장소만으로 다시 구울 수 있게
-  fs.writeFileSync(CACHE, JSON.stringify({ generator: 'build-playgrounds.mjs (filtered from ' + path.basename(OSM) + ')', osm3s: src.osm3s, newest_edit: osmBase, elements: els }));
+  fs.writeFileSync(CACHE, JSON.stringify({ generator: 'build-playgrounds.mjs (filtered from ' + path.basename(OSM) + ')', osm3s: src.osm3s, newest_edit: osmBase, elements: els.concat(extrasLand) }));
 }
 const ringOf = (geom) => geom.map(proj);
 const list = [];
@@ -220,6 +193,44 @@ for (const p of list.sort((a, b) => b.A - a.A)) {
 }
 out.sort((a, b) => a.sets[0][1] - b.sets[0][1] || a.sets[0][0] - b.sets[0][0]);
 
+// ---- 조경 (playground-land.mjs) ----
+const parks = extrasLand.filter((e) => e.type === 'way').map((e) => e.geometry.map(proj));
+const osmTrees = extrasLand.filter((e) => e.type === 'node').map(proj);
+const setGrid = bboxGrid(40);
+allSets.forEach((st, i) => setGrid.add({ x0: st.x - 12, x1: st.x + 12, z0: st.z - 12, z1: st.z + 12 }, i));
+const occ = [], occGrid = bboxGrid(20), treePts = [], treeGrid = bboxGrid(20);
+const landCtx = {
+  setW: SET_W, setD: SET_D,
+  clear: (P, Pb = P) => !clearOf(P, Pb),
+  nearSet(P, m) {
+    const bb = bboxOf(P);
+    for (const i of setGrid.near(bb)) { const st = allSets[i]; if (polysOverlap(P, rectPoly(st.x, st.z, st.ry, (SET_W * st.s) / 2 + m, (SET_D * st.s) / 2 + m))) return true; }
+    return false;
+  },
+  occupied: {
+    hits(P) { for (const i of occGrid.near(bboxOf(P))) if (polysOverlap(P, occ[i])) return true; return false; },
+    add(P) { occGrid.add(bboxOf(P), occ.length); occ.push(P); },
+  },
+  trees: {
+    tooClose(x, z, d) { for (const i of treeGrid.near({ x0: x - d, x1: x + d, z0: z - d, z1: z + d })) if (Math.hypot(treePts[i][0] - x, treePts[i][1] - z) < d) return true; return false; },
+    add(x, z) { treeGrid.add({ x0: x, x1: x, z0: z, z1: z }, treePts.length); treePts.push([x, z]); },
+  },
+  roadGap(x, z) { let d = Infinity; for (const i of sGrid.near({ x0: x - 60, x1: x + 60, z0: z - 60, z1: z + 60 })) { const g = segs[i]; d = Math.min(d, ptSeg(x, z, g.a[0], g.a[1], g.b[0], g.b[1]) - g.hw); } return d; },
+};
+const byId = new Map(list.map((p) => [p.id, p]));
+const land = [], landStats = { trees: 0, osmTrees: 0, benches: 0, hedgeRuns: 0, hedgeModules: 0, bushes: 0, grass: 0, withPark: 0 };
+for (const o of out) {
+  const p = byId.get(o.id);
+  const park = parks.find((r) => inRing(p.c[0], p.c[1], r)) || null;
+  const near = (q) => Math.abs(q[0] - p.c[0]) < 200 && Math.abs(q[1] - p.c[1]) < 200;
+  const L = planLand({ id: p.id, outer: p.outer, holes: p.holes, park, sets: o.sets.map(([x, z, ry, s]) => ({ x, z, ry, s })), osmTrees: osmTrees.filter(near) }, landCtx);
+  if (park) landStats.withPark++;
+  landStats.trees += L.t.length; landStats.osmTrees += L.t.filter((t) => t[3]).length; landStats.benches += L.b.length;
+  landStats.hedgeRuns += L.h.length; landStats.hedgeModules += L.h.reduce((n, h) => n + h[3], 0); landStats.bushes += L.u.length; landStats.grass += L.g.length;
+  const e = { id: o.id }; for (const k of ['t', 'b', 'h', 'u', 'g']) if (L[k].length) e[k] = L[k];
+  land.push(e);
+}
+
 const json = {
   meta: {
     generated: new Date().toISOString(),
@@ -232,6 +243,12 @@ const json = {
   skipped,
 };
 fs.writeFileSync(OUT, JSON.stringify(json));
+fs.writeFileSync(LAND_OUT, JSON.stringify({
+  meta: { generated: json.meta.generated, source: json.meta.source, osmBase, attribution: json.meta.attribution, land: LAND, stats: landStats,
+    keys: { t: 'trees [x,z,scale,osm?]', b: 'benches [x,z,ry]', h: 'hedge runs [x0,z0,ang,n] (step land.hedgeStep)', u: 'bushes [x,z,scale]', g: 'grass clumps [x,z]' } },
+  playgrounds: land,
+}));
 console.log(`[playgrounds] polygons ${list.length} (override ${EXTRA_PLAYGROUNDS.length}) · node-only ${nodesInArea} (not placed) · out of area ${outOfArea}`);
 console.log(`[playgrounds] placed ${cnt.one + cnt.two} (1 set ${cnt.one}, 2 sets ${cnt.two}, shrunk ${cnt.shrunk}) · skipped ${cnt.skip} · sets ${allSets.length} → ${path.relative(ROOT, OUT)} ${(fs.statSync(OUT).size / 1024).toFixed(1)} KB`);
+console.log(`[playgrounds] land: trees ${landStats.trees} (OSM ${landStats.osmTrees}) · benches ${landStats.benches} · hedges ${landStats.hedgeModules} in ${landStats.hedgeRuns} runs · bushes ${landStats.bushes} · grass ${landStats.grass} · in park ${landStats.withPark} → ${path.relative(ROOT, LAND_OUT)} ${(fs.statSync(LAND_OUT).size / 1024).toFixed(1)} KB`);
 if (VERBOSE) for (const s of skipped) console.log('  skip', s.id, s.name, s.area + 'm²', JSON.stringify(s.why));
