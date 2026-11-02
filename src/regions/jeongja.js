@@ -62,6 +62,7 @@ export const JEONGJA_REGION = {
     terrain: 'terrain.json',
     drive: 'drive.json',
     corridor: 'corridor/', // [corridor] 정자 → 롯데월드타워 코리더 타일 (scripts/corridor/build-corridor.mjs)
+    streetlights: 'corridor/streetlights.json', // [streetlights] 차도 가로등 배치 (scripts/corridor/build-streetlights.mjs, ?streetlights=0 끔)
     shops: 'jeongja-shops.json', // [shops] 1층 상가 (scripts/ground-floor-shops.mjs, 소상공인시장진흥공단 상가(상권)정보)
   },
   signBoard: {
