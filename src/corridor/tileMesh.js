@@ -10,7 +10,7 @@ import {
 } from '../world.js';
 import { addInstancedTrees } from '../world/trees.js';
 import { addWindowLights } from '../world/windowLights.js';
-import { NIGHT_ON, nightKind, nightSeed, nightCut, nightFacade, nightLodMaterial } from './nightLights.js';
+import { NIGHT_ON, NIGHT_V2, nightKind, nightSeed, nightCut, nightFacade, nightLodMaterial } from './nightLights.js';
 
 export const CAR_KINDS = new Set(['primary', 'secondary', 'tertiary', 'trunk', 'residential', 'unclassified', 'service', 'motorway', 'primary_link', 'secondary_link', 'trunk_link', 'motorway_link']);
 const TREE_KINDS = new Set(['primary', 'secondary', 'tertiary']);
@@ -169,7 +169,8 @@ export function buildDetailTile(key, t, { terrain, onRoadAll }) {
   const trees = addInstancedTrees(group, treePts, {
     rnd, crownRadius: 2.2, crownY: 5, trunkTop: 0.2, trunkBottom: 0.28, trunkHeight: 3.6, trunkColor: '#8a6b4e', scaleMin: 0.8, scaleSpan: 0.5,
   });
-  const lights = addWindowLights(group, t.b.filter((b) => !b.nr));
+  // [night-buildings] v2 는 벽 셰이더(nightFacade)가 창 불빛을 그리므로 사각 창 메시(+1 draw/타일)를 만들지 않는다
+  const lights = NIGHT_V2 && NIGHT_ON ? null : addWindowLights(group, t.b.filter((b) => !b.nr));
   return {
     group, colliders, onRoad, blocked, treeCount: treePts.length,
     dispose() {

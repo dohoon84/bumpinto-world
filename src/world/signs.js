@@ -1,5 +1,6 @@
 // 가게·건물 이름 간판. 스타벅스는 초록 보드에 '벅스'만 쓴다. 공식 로고는 쓰지 않는다.
 import * as THREE from 'three';
+import { solidRings } from './doosanGate.js'; // [night-buildings] 두산 문 형상이면 타워 벽에만 표지판
 
 const ROAD_KIND = new Set(['primary', 'secondary', 'tertiary', 'residential', 'unclassified', 'service', 'trunk']);
 const STRIP = { cafe: '#8a5a3a', shop: '#3d6d8c', mart: '#c46a2b', plaza: '#2c3e55', academy: '#3f6b4e', landmark: '#243044', public: '#6a3030' };
@@ -240,7 +241,7 @@ export function addPlaceSigns(scene, data) {
     if (placed.some((p) => p.text === shown && Math.hypot(p.x - label.x, p.z - label.z) < 12)) continue;
     const host = style.mark === 'police' ? policeHost(data.buildings, label) : hostBuilding(data.buildings, label.x, label.z);
     if (!host) continue;
-    const face = pickFace(outwardEdges(host.o), label, nearestRoad(segs, label.x, label.z));
+    const face = pickFace(solidRings(host).flatMap((r) => outwardEdges(r)), label, nearestRoad(segs, label.x, label.z));
     if (!face) continue;
     const mark = !!style.mark;
     const badge = style.mark === 'police';
