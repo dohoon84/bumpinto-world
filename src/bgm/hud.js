@@ -3,6 +3,7 @@
 //   · 스피커(음소거 토글) — 마우스를 올리면 볼륨 슬라이더가 펼쳐진다(손잡이가 있는 유일한 조작)
 //   막대는 재생 중 + 음소거 아님 + 탭 보임일 때만 requestAnimationFrame 으로 갱신, 아니면 낮고 흐린 고정 모양
 import { BAR_COUNT, barBins } from './playlist.js';
+import { hudButton } from '../ui-keys.js';
 
 const ICON = {
   play: '<svg viewBox="0 0 14 14" aria-hidden="true"><path d="M4.2 2.6v8.8L11.2 7z" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg>',
@@ -38,7 +39,8 @@ export function createBgmHud({ player, tr, onLangChange }) {
   const bins = barBins(player.binCount);
 
   // 버튼이 포커스를 가져가면 Space(점프)가 버튼을 눌러 버리므로 마우스 클릭으로는 포커스를 주지 않는다
-  for (const b of [playBtn, muteBtn]) b.addEventListener('mousedown', (e) => e.preventDefault());
+  // (Tab 으로 포커스했을 땐 Enter/Space 가 게임 단축키로 새지 않게 — ui-keys.js)
+  for (const b of [playBtn, muteBtn]) hudButton(b);
   playBtn.addEventListener('click', () => player.togglePause());
   muteBtn.addEventListener('click', () => player.setMuted(!player.muted));
   slider.addEventListener('input', () => player.setVolume(slider.value));

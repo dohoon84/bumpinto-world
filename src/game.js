@@ -51,6 +51,7 @@ import { mountInventory } from './inventory.js'; // [inventory]
 import { loadCorridorData, createCorridor, corridorTerrainData } from './corridor/index.js'; // [corridor]
 import { mountTravel } from './corridor/travel.js'; // [corridor]
 import { mountPerfHud } from './corridor/perfHud.js'; // [corridor]
+import { mountAttribution } from './attribution.js'; // [attrib]
 import { mountBgm } from './bgm/index.js'; // [bgm] ?bgm=0 이면 끔
 import { createPlaygrounds } from './world/playgrounds.js'; // [playgrounds]
 import { corridorStationLabel } from './corridor/globeCorridor.js'; // [corridor]
@@ -1707,6 +1708,7 @@ function syncRideUi(force = false) {
 rideBtn.addEventListener('click', toggleRide);
 const homeBtn = document.getElementById('btn-home');
 const quickSpotBtns = [];
+let attribution = null; // [attrib]
 function syncGameLocale() {
   const en = isEn();
   const langLauncher = document.getElementById('lang-launcher');
@@ -1745,19 +1747,23 @@ function syncGameLocale() {
   if (boardLbl) boardLbl.textContent = en ? 'Board' : '게시판';
   const attrEl = document.getElementById('attribution');
   if (attrEl) {
-    attrEl.innerHTML = en
-      ? '© <a href="https://crazylabs.co.kr" target="_blank" rel="noopener">CrazyLabs</a> · <a href="https://github.com/dohoon84/bumpinto-world" target="_blank" rel="noopener">Source Available</a> · Map © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> (ODbL)'
-      : '© <a href="https://crazylabs.co.kr" target="_blank" rel="noopener">CrazyLabs</a> · <a href="https://github.com/dohoon84/bumpinto-world" target="_blank" rel="noopener">소스 공개 (영리 서비스 금지)</a> · 지도 © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> (ODbL)';
+    // [attrib] "… OpenStreetMap" 까지는 늘 보이고 나머지는 ⓘ 버튼 뒤에 접힌다 (문구·링크는 그대로)
+    attribution ||= mountAttribution(attrEl);
+    const main = en
+      ? '© <a href="https://crazylabs.co.kr" target="_blank" rel="noopener">CrazyLabs</a> · <a href="https://github.com/dohoon84/bumpinto-world" target="_blank" rel="noopener">Source Available</a> · Map © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>'
+      : '© <a href="https://crazylabs.co.kr" target="_blank" rel="noopener">CrazyLabs</a> · <a href="https://github.com/dohoon84/bumpinto-world" target="_blank" rel="noopener">소스 공개 (영리 서비스 금지)</a> · 지도 © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>';
+    let rest = '(ODbL)';
     // [corridor] Overture footprint · 브이월드 건물 높이 / [colours] 브이월드 건물 속성(→ 외벽색 추정). 같은 브이월드 GIS건물통합정보라 한 번만 적는다
-    if (corridorDir) attrEl.innerHTML += ' · <a href="https://overturemaps.org" target="_blank" rel="noopener">Overture Maps</a>';
+    if (corridorDir) rest += ' · <a href="https://overturemaps.org" target="_blank" rel="noopener">Overture Maps</a>';
     const vworldUse = [corridorDir && (en ? 'heights' : '높이'), world.colours && (en ? 'attributes' : '속성')].filter(Boolean);
-    if (vworldUse.length) attrEl.innerHTML += en
+    if (vworldUse.length) rest += en
       ? ` · Building ${vworldUse.join(' & ')}: <a href="https://www.vworld.kr" target="_blank" rel="noopener">VWorld</a> (MOLIT, KOGL Type 1)`
       : ` · 건물 ${vworldUse.join('·')}: <a href="https://www.vworld.kr" target="_blank" rel="noopener">브이월드</a> (국토교통부, 공공누리 제1유형)`;
     // [shops] 1층 상가 출처 (소상공인시장진흥공단 상가(상권)정보, 공공데이터포털 15083033)
-    if (world.shops) attrEl.innerHTML += en
+    if (world.shops) rest += en
       ? ' · Shops: <a href="https://www.data.go.kr/data/15083033/fileData.do" target="_blank" rel="noopener">SEMAS</a> (data.go.kr)'
       : ' · 상가: <a href="https://www.data.go.kr/data/15083033/fileData.do" target="_blank" rel="noopener">소상공인시장진흥공단</a>';
+    attribution.set(main, rest, en);
   }
   syncRideUi(true);
   syncHelpFoldUi();
