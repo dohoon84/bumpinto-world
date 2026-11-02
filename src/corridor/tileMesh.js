@@ -48,7 +48,7 @@ function flatLayer(t, terrain) {
   for (const [k, list] of Object.entries(byKind)) add(flatGeo(list, parkY(k)), PARK_COLOR[k] || '#b5dda3');
   add(flatGeo(t.water || [], 0.04), WATER);
   for (const l of t.wl || []) {
-    const pts = terrain ? l.p.map(([x, z]) => [x, z, terrain.baseHeight(x, z) < -0.5 ? terrain.params.WATER - 0.005 : 0]) : l.p;
+    const pts = terrain ? l.p.map(([x, z]) => [x, z, terrain.waterLineY ? terrain.waterLineY(x, z) : terrain.baseHeight(x, z) < -0.5 ? terrain.params.WATER - 0.005 : 0]) : l.p;
     add(ribbonGeo(pts, l.w, 0.035), WATER);
   }
   const g = merged(geos);
@@ -220,7 +220,8 @@ function prismGeo(list, kinds) {
   g.setIndex(idx); g.computeVertexNormals();
   return g;
 }
-export function buildLodTile(key, L, { roadKinds, buildingKinds }) {
+// terrain: [streams] 지류 하도가 있으면 길에 지형 높이를 붙임 (terrain.liftRoads 는 지류가 없으면 아무것도 안 함)
+export function buildLodTile(key, L, { roadKinds, buildingKinds }, terrain = null) {
   const group = new THREE.Group(); group.name = 'corridorLod:' + key;
   const geos = [];
   const add = (g, color) => { if (g) geos.push(paint(fixNormalsUp(strip(g)), color)); };
@@ -233,6 +234,7 @@ export function buildLodTile(key, L, { roadKinds, buildingKinds }) {
   const fg = merged(geos);
   if (fg) { const m = new THREE.Mesh(fg, vcMat()); m.receiveShadow = true; group.add(m); }
   const roads = L.r.map(([w, ki, fl, br]) => ({ w, k: roadKinds[ki], p: unflat(fl), br }));
+  terrain?.liftRoads?.(roads);
   const rm = roadMesh(roads, { lines: false }); if (rm) { rm.receiveShadow = false; group.add(rm); }
   const bg = prismGeo(L.b, buildingKinds);
   if (bg) { const m = new THREE.Mesh(bg, nightLodMaterial(vcMat())); m.name = 'corridorLodBuildings'; group.add(m); }
