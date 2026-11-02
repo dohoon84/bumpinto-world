@@ -110,11 +110,14 @@ export function mountHandset({ sms } = {}) {
     else if (view.startsWith('x:')) paintExtra(view.slice(2));
   };
   // [ride] 추가 앱(교통카드 지갑·택시 등): addApp({ id, glyph, cls, label: { ko, en }, title?, render(en) → html, onAction?(name, el) })
+  // [camera] launch?() 가 있으면 폰을 그리지 않고 그 함수만 부른다. mounted?(paneEl, en) 은 그린 직후 불린다.
   const extraApps = [];
   function paintExtra(id) {
     const a = extraApps.find((x) => x.id === id); if (!a) { show('home'); return; }
+    if (a.launch) { view = 'home'; home(); a.launch(); return; } // [camera] 폰 밖 화면(뷰파인더)을 여는 앱
     const en = isEn();
     body.innerHTML = `<div class="pane list xapp-pane" data-xapp="${esc(id)}"><p class="hd"><button type="button" data-app="home">‹</button> ${esc(en ? (a.title || a.label).en : (a.title || a.label).ko)}</p>${a.render(en)}</div>`;
+    a.mounted?.(body.querySelector('.xapp-pane'), en); // [camera] 비동기로 채우는 앱(사진 보관함)
   }
 
   const paintThreads = (threads) => {
@@ -350,6 +353,7 @@ export function mountHandset({ sms } = {}) {
     addApp(a) { if (!extraApps.some((x) => x.id === a.id)) extraApps.push(a); if (view === 'home') home(); },
     openApp(id) { setOpen(true); show('x:' + id); },
     refreshApp(id) { if (open && view === 'x:' + id) paintExtra(id); },
+    get view() { return view; }, // [camera]
     signIn() {
       unread = sms?.session?.unread || 0;
       toastDismissed = false;
