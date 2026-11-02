@@ -145,6 +145,12 @@ export function createStreams(S, { P, mainBase }) {
     forEachNear(x, z, (s, q) => { const p = profOf(s, q); if (p.sc > 0 && Math.abs(q.d) < p.top) h = Math.min(h, hProfile(Math.abs(q.d), p) * p.sc); });
     return h;
   }
+  // 수면 높이(수면 리본과 같은 W + 0.02). 메우지 않은 지류의 물가(w + 1.2) 안일 때만, 아니면 null
+  function waterAt(x, z) {
+    let y = null;
+    forEachNear(x, z, (s, q) => { const p = profOf(s, q); if (p.sc > 0.99 && Math.abs(q.d) < p.w + 1.2) { const w = lerpA(s.W, q, s.N) + 0.02; if (y == null || w < y) y = w; } });
+    return y;
+  }
   // 바닥 평면 구멍 (top + MARGIN, 메운 곳 제외)
   function covered(x, z) {
     let c = false;
@@ -304,7 +310,7 @@ export function createStreams(S, { P, mainBase }) {
     return g;
   }
 
-  return { list, height, covered, inBand, near, buildGeometry, stairs: S.stairs || [], bridges: S.bridges || [], params: SP };
+  return { list, height, covered, inBand, near, waterAt, buildGeometry, stairs: S.stairs || [], bridges: S.bridges || [], fords: S.fords || [], params: SP };
 }
 
 // 코리더 타일/LOD 평면 레이어 교체 (하도 띠를 뺀 폴리곤) — build-streams.mjs 의 [원래 인덱스, 조각들]

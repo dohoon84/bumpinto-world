@@ -4,6 +4,8 @@
 //   - 차도(다리 아님)·건물 바닥 높이는 지류 때문에 바뀌지 않음 → 차가 빠지거나 건물이 가라앉지 않음
 //   - 지류 위 다리 상판 = 0m (보행자·차 모두), 야탑 터미널↔코오롱 보행교(OSM 380075432) 포함
 //   - 합류: 하류 끝 하상이 받는 하천 둔치 높이까지 이어짐 (단차 없음)
+//   - 보행교 상판 = OSM 폭 × 3 (옆 다리와 겹치는 곳만 덜), 넓힌 폭 안은 0m 로 걷고 난간 밖은 하천 높이
+//   - 징검다리(OSM ford=stepping_stones 1285367004, 여수천): 돌 윗면 = 수면 + 0.14m, 남쪽 둔치 → 북쪽 둔치를 막힘 없이 걸어 건넘
 import './dom-shim.mjs';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -90,4 +92,43 @@ assert.equal(bad, 0);
 const yt = br.find((r) => r.p.some((p) => Math.hypot(p[0] - 1616.2, p[1] + 5242.2) < 2) && r.p.some((p) => Math.hypot(p[0] - 1613.6, p[1] + 5298) < 2));
 assert.ok(yt && yt.deckH === 0, '야탑 터미널↔코오롱 보행교');
 ok(`${decked}/${br.length} stream bridges get a 0 m deck (walk/drive height 0 over the channel), incl. 380075432`);
+
+// 6) 보행교 폭 3배: 하천 위에서 중심선 ± (폭×1.5 − 0.4) 는 상판, 차도교는 OSM 폭 그대로
+const FOOT = new Set(['footway', 'cycleway', 'path', 'pedestrian']);
+let wide = 0, footN = 0;
+for (const r of br) {
+  if (r.deckH == null) continue;
+  if (!FOOT.has(r.k)) { assert.equal(r.deckW, r.w, 'car bridge width unchanged'); continue; }
+  footN++; assert.ok(r.deckW >= r.w && r.deckW <= r.w * 3 + 1e-9);
+  if (r.deckW < r.w * 3 - 0.05) continue; wide++;
+  const [a, b] = [r.p[0], r.p[r.p.length - 1]], L = Math.hypot(b[0] - a[0], b[1] - a[1]), nx = -(b[1] - a[1]) / L, nz = (b[0] - a[0]) / L;
+  for (const [x, z] of dens(r.p, 1)) {
+    if (on.baseHeight(x, z) > -0.3) continue;
+    for (const s of [-1, 1]) {
+      const v = s * (r.deckW / 2 - 0.4), px = x + nx * v, pz = z + nz * v;
+      if (on.baseHeight(px, pz) > -0.3) continue;
+      assert.ok(Math.abs(on.getGroundHeight(px, pz, 0) - r.deckH) < 0.01, `foot deck walkable at ${px.toFixed(1)},${pz.toFixed(1)}`);
+    }
+  }
+}
+assert.ok(wide >= footN * 0.6, `widened ${wide}/${footN}`);
+assert.equal(yt.deckW, yt.w * 3);
+ok(`${wide}/${footN} stream footbridges 3x wide (rest limited by an adjacent bridge), walkable to the parapets; car bridges unchanged`);
+
+// 7) 징검다리
+assert.equal(on.fords.length, S.fords.length); assert.ok(S.fords.some((f) => f.osm === 1285367004));
+const fd = on.fords.find((f) => f.osm === 1285367004), wy = on.streams.waterAt((fd.ax + fd.bx) / 2, (fd.az + fd.bz) / 2);
+assert.ok(fd.stones.length >= 6 && Math.abs(fd.h - wy - 0.14) < 0.01, `stones ${fd.stones.length}, top ${fd.h} vs water ${wy}`);
+{
+  const [x0, z0, x1, z1] = [1586.25, -5256.5, 1586.4, -5272]; let x = x0, z = z0, y = on.getGroundHeight(x, z, 0), minY = Infinity;
+  for (let k = 1; k <= 155; k++) {
+    const t = k / 155, nx = x0 + (x1 - x0) * t, nz = z0 + (z1 - z0) * t, ny = on.canMove(x, z, y, nx, nz);
+    assert.ok(ny != null, `ford walk blocked at ${nx.toFixed(2)},${nz.toFixed(2)}`); x = nx; z = nz; y = ny; minY = Math.min(minY, y);
+  }
+  assert.ok(minY >= fd.h - 1e-6, `never below stone tops (${minY.toFixed(2)})`);
+  // 돌 줄 옆 1.5m 는 예전처럼 물 (막힘 또는 하상)
+  const sx = fd.stones[Math.floor(fd.stones.length / 2)], side = on.getGroundHeight(sx[0] + 1.5, sx[1], fd.h);
+  assert.ok(side < fd.h - 0.5, 'beside the stones is still water');
+}
+ok(`stepping stones ${fd.river} (OSM ${fd.osm}): ${fd.stones.length} stones, top = water + 0.14 m, bank-to-bank walk never drops below the stones`);
 console.log(`streams: ${n} passed`);

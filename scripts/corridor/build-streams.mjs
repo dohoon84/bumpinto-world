@@ -14,6 +14,7 @@
 //   - 다리 아닌 차도·건물이 하천을 가로지르면(복개/암거) 그 폭만큼 하도를 메움(fill) → 차가 빠지지 않음
 //   - 다리: 코리더 타일 도로 중 br=1 이고 하도를 건너는 것 → 런타임 annotate 로 상판(0m)+상판 두께/교각/난간
 //   - 계단: 지류 제방에 걸친 OSM highway=steps
+//   - 징검다리: OSM ford=stepping_stones 선 중 지류 물길을 건너는 것 (돌·높이는 런타임)
 //   - 타일 교체 데이터: 하도 띠(top+0.3m)를 뺀 바닥/공원/물 폴리곤 (상세 타일·LOD 타일) — 평면 레이어가 하도를 덮지 않게
 //
 //   사용: node scripts/corridor/build-streams.mjs [--osm=../bumpinto-world/data/raw/osm_merged.json] [--out=public/corridor/streams.json]
@@ -377,6 +378,22 @@ for (const f of tileFiles) {
   }
 }
 
+// ---------- 5b) 징검다리: OSM ford=stepping_stones (또는 surface=stepping_stones) 중 지류 물길을 건너는 것 ----------
+//   선만 내보내고 돌 자리·높이는 런타임(terrain.js)이 지형·수면에서 정한다. OSM 에 근거 없는 곳엔 만들지 않음
+const isStones = (t) => t.ford === 'stepping_stones' || t.surface === 'stepping_stones' || t.highway === 'stepping_stones';
+const fords = [];
+for (const e of ways) {
+  if (!isStones(e.tags) || isBridge(e.tags)) continue;
+  const p = e.geometry.map(proj);
+  if (p.some((q) => inLive(q))) continue;
+  // 둔치(−D)보다 0.2m 넘게 낮은 점(물가·하상)이 있는 하천
+  let best = -1, bh = 0;
+  for (const [x, z] of densify(p, 0.5)) streams.forEach((s, k) => { const h = Hs[k](x, z); if (h < -s.D - 0.2 && h < bh) { bh = h; best = k; } });
+  if (best < 0) continue;
+  fords.push({ osm: e.id, river: streams[best].name || '지류', p: p.map((q) => q.map(r2)) });
+}
+console.log(`fords: ${fords.map((f) => `${f.osm} ${f.river}`).join(', ') || 'none'}`);
+
 // ---------- 6) 하도 띠 폴리곤 → 타일/LOD 평면 레이어 교체 ----------
 // Douglas–Peucker (띠 가장자리 단순화 → 잘린 폴리곤 점 수 감소)
 function dp(pts, tol) {
@@ -473,7 +490,7 @@ const out = {
     params: SP, liveBox: LIVE,
   },
   streams: streams.map((s) => ({ id: s.id, name: s.name, osm: s.osm, D: s.D, into: s.into, axis: s.axis.map((p) => p.map(r1)), prof: Object.fromEntries(Object.entries(s.prof).map(([k, v]) => [k, rp(v)])), sc: s.sc.map(r2) })),
-  stairs: stairsOut, bridges, mainBridges, tiles: tilesOut, lod: lodOut,
+  stairs: stairsOut, bridges, mainBridges, fords, tiles: tilesOut, lod: lodOut,
 };
 fs.mkdirSync(path.dirname(OUT), { recursive: true });
 fs.writeFileSync(OUT, JSON.stringify(out));
@@ -481,4 +498,4 @@ for (const s of streams) {
   const N = s.axis.length, m = (a) => (a.reduce((x, y) => x + y, 0) / a.length).toFixed(1);
   console.log(`${String(s.id).padEnd(11)} ${(s.name || '(이름없음)').padEnd(6)} L=${(N * 2 / 1000).toFixed(2)}km D=${s.D} into=${s.into} w=${m(s.prof.wL)}/${m(s.prof.wR)} toe=${m(s.prof.toeL)}/${m(s.prof.toeR)} top=${m(s.prof.topL)}/${m(s.prof.topR)} fill=${s.sc.filter((v) => v === 0).length} steps=${s.steps.length} lower=${s.lower} clamp=${s.clampN} start=${s.axis[0].map(Math.round)} end=${s.axis[N - 1].map(Math.round)}`);
 }
-console.log(JSON.stringify({ streams: streams.length, stairs: stairsOut.length, bridges: bridges.length, tiles: Object.keys(tilesOut).length, lod: Object.keys(lodOut).length, cutPolys: cutCount, kb: Math.round(fs.statSync(OUT).size / 1024) }));
+console.log(JSON.stringify({ streams: streams.length, stairs: stairsOut.length, bridges: bridges.length, fords: fords.length, tiles: Object.keys(tilesOut).length, lod: Object.keys(lodOut).length, cutPolys: cutCount, kb: Math.round(fs.statSync(OUT).size / 1024) }));
