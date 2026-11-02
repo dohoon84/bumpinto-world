@@ -17,6 +17,15 @@ The live 정자 map (`public/data/*`, bbox x −606..597, z −608..940) is left
    (4.2 km in overview), with unload hysteresis. It reuses the live `world.js` materials, ribbons, facades, trees and station signs.
    Quality: `?corridorq=low|med|high`. Turn it off with `?corridor=0`.
 
+## Playgrounds (`?playgrounds=0` turns them off)
+
+- `npm run corridor:playgrounds`: bakes `public/corridor/playgrounds.json` from OSM `leisure=playground` polygons
+  (`data/osm_playgrounds_raw.json`; `-- --fetch` refreshes it from Overpass, `-- --osm=<overpass json>` re-filters a bigger dump).
+  Each set is fitted to the polygon's minimum-area rectangle, kept inside the polygon and clear of buildings and road ribbons
+  (live + corridor tiles), 2 sets for large polygons, shrunk down to 0.6× or skipped. The override list (`EXTRA_PLAYGROUNDS`) is in that script.
+- Runtime `src/world/playgrounds.js`: 5 `InstancedMesh` (slide, swings, seesaw, jungle gym, sandbox; vertex colours, no textures),
+  shown within 450 m of the camera focus and, in the corridor, only once that cell's detail tile is built; GPU buffers are freed when none is visible.
+
 ## Checks
 
 - `npm run corridor:check -- --out=/tmp/check-roads.json`: road continuity over the exact ribbons the game renders.
