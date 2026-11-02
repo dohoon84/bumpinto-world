@@ -125,7 +125,7 @@ function fmtDate(ms) {
   return `${mo}.${da} ${hh}:${mm}`;
 }
 
-export function mountBoard({ sms, getMe } = {}) {
+export function mountBoard({ sms, getMe, onOpen } = {}) {
   const launcher = document.getElementById('board-Launcher');
   const launcherBadge = document.getElementById('board-new-badge');
   const contribLauncher = document.getElementById('contribute-launcher');
@@ -197,6 +197,7 @@ export function mountBoard({ sms, getMe } = {}) {
       render();
     } else {
       trackEvent('board_open');
+      try { onOpen?.(); } catch {} // [notice-popup] 게시판을 열면 공지 본 것으로 처리
       fetchList();
     }
   }
@@ -808,6 +809,14 @@ export function mountBoard({ sms, getMe } = {}) {
     },
     close() {
       setOpen(false);
+    },
+    // [notice-popup] 공지사항 탭으로 게시판 열기
+    openNotices() {
+      if (isOpen) return false;
+      category = 'notice';
+      page = 1;
+      setOpen(true, 'list');
+      return true;
     },
   };
 }

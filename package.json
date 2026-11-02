@@ -41,7 +41,8 @@
     "deploy": "npm run deploy:phone && npm run deploy:bus-proxy && npm run deploy:pages",
     "convert-taxi-terrain": "node scripts/convert-taxi-terrain.mjs",
     "shots-taxi-terrain": "node scripts/shots-taxi-terrain.mjs",
-    "ride:e2e": "node scripts/corridor/test/e2e-ride-220.mjs"
+    "ride:e2e": "node scripts/corridor/test/e2e-ride-220.mjs",
+    "notice-popup:test": "node scripts/test-notice-popup.mjs"
   },
   "dependencies": {
     "three": "^0.186.1"
