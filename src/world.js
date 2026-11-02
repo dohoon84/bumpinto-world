@@ -6,6 +6,7 @@ import { addCafeSidewalks } from './world/cafeWalks.js';
 import { addStarbucksGlass, placeJeongjaStationStarbucks, ringKey, starbucksShells, stationWallColliders } from './world/starbucksGlass.js';
 import { addNobiosShop, placeNobiosHotel } from './world/nobiosHotel.js';
 import { addWindowLights } from './world/windowLights.js';
+import { NIGHT_V2, nightFacade, nightKind, nightSeed } from './corridor/nightLights.js'; // [night-buildings]
 import { addPostOfficeMarks } from './world/postOffice.js';
 import { addStationCafeCrowd } from './world/cafeCrowd.js';
 import { addPlaceSigns } from './world/signs.js';
@@ -177,15 +178,22 @@ export function buildWorld(scene, data, region = null, opts = {}) {
     wallTint.setRGB(0.93 + c.r * 0.07, 0.93 + c.g * 0.07, 0.93 + c.b * 0.07);
     const fc = colours?.byIdx.get(bi);
     if (fc) applyFacadeColour(fc, c, roof, wallTint); // [colours] rnd() 호출 수는 그대로 (나무 등 다른 배치 불변)
-    if (g) addBuildingPart(g, roof, c, wallTint, facadeKey(b.k), true, roofs, walls);
-    if (gb) addBuildingPart(gb, roof, c, bandTint(shop.cat, wallTint, bandC), 'commercial', !g, roofs, walls); // 이미 있는 commercial 묶음에 들어가 draw call 그대로
+    let nl = null, nlb = null; // [night-buildings] 창 불빛 속성 (시드, 종류, 1층 상가) — 셰이더만, 메시 추가 없음
+    if (NIGHT_V2) {
+      const { seed: ns } = nightSeed(b), kind = shell ? 0 : nightKind(b);
+      nl = [ns, kind, !gb && !minH && (kind === 3 || (kind === 4 && b.h <= 15 && ns < 0.4)) ? 1 : 0];
+      nlb = [ns, kind, kind === 5 ? 0 : 1];
+    }
+    if (g) addBuildingPart(g, roof, c, wallTint, facadeKey(b.k), true, roofs, walls, nl);
+    if (gb) addBuildingPart(gb, roof, c, bandTint(shop.cat, wallTint, bandC), 'commercial', !g, roofs, walls, nlb); // 이미 있는 commercial 묶음에 들어가 draw call 그대로
   }
   if (roofs.length) {
     const bmesh = new THREE.Mesh(mergeGeometries(roofs), new THREE.MeshLambertMaterial({ vertexColors: true }));
     bmesh.castShadow = true; bmesh.receiveShadow = true; scene.add(bmesh);
   }
   for (const [key, geos] of Object.entries(walls)) {
-    const mesh = new THREE.Mesh(mergeGeometries(geos), facadeMaterial(key, !!colours)); // [colours]
+    const base = facadeMaterial(key, !!colours); // [colours]
+    const mesh = new THREE.Mesh(mergeGeometries(geos), nightFacade(base, key, { id: 'live-' + key + (colours ? '|c' : ''), live: true })); // [night-buildings] ?nightLights=0 이면 base 그대로
     mesh.castShadow = true; mesh.receiveShadow = true; scene.add(mesh);
   }
   const starbucksRooms = isJeongja ? addStarbucksGlass(scene, shells) : [];
@@ -194,7 +202,7 @@ export function buildWorld(scene, data, region = null, opts = {}) {
     addPostOfficeMarks(scene, data);
     addStationCafeCrowd(scene, data);
   }
-  addWindowLights(scene, data.buildings, shells);
+  if (!NIGHT_V2) addWindowLights(scene, data.buildings, shells); // [night-buildings] v2 는 벽 셰이더가 창 불빛을 그림
   const placedSigns = addPlaceSigns(scene, data);
   const shopsLayer = shops ? addGroundFloorShops(scene, data, shops, placedSigns, (b) => shellByRing.has(ringKey(b.o))) : null; // [shops] 스타벅스 유리 매장 제외 (띠와 같은 조건)
 
@@ -278,15 +286,22 @@ export function buildWorld(scene, data, region = null, opts = {}) {
 // 건물 한 덩이(ExtrudeGeometry)에 버텍스 색(윗면 top / 아랫면 bottom / 옆면 side)을 칠해 윗면은 roofs, 옆면은 walls[key] 에 넣고 geo 는 버린다.
 // withRoof=false 면 윗·아랫면도 버린다 (1층 띠 위에 층이 더 있을 때).
 // buildWorld 안 클로저로 두면 roofs/walls 가 반환되는 isBlocked 등과 같은 컨텍스트에 잡혀 합치기 전 조각(약 4 MB)이 계속 남으므로 모듈 함수로 둔다.
-function addBuildingPart(geo, top, bottom, side, key, withRoof, roofs, walls) {
+// nl: [night-buildings] 벽 정점마다 넣을 aNL (시드, 종류, 1층 상가) 또는 null
+function addBuildingPart(geo, top, bottom, side, key, withRoof, roofs, walls, nl = null) {
   const nrm = geo.attributes.normal, cols = new Float32Array(nrm.count * 3);
   for (let i = 0; i < nrm.count; i++) {
     const ny = nrm.getY(i), cc = ny > 0.5 ? top : ny < -0.5 ? bottom : side;
     cols[i * 3] = cc.r; cols[i * 3 + 1] = cc.g; cols[i * 3 + 2] = cc.b;
   }
   geo.setAttribute('color', new THREE.BufferAttribute(cols, 3));
+  if (nl) {
+    const a = new Float32Array(nrm.count * 3);
+    for (let i = 0; i < a.length; i += 3) { a[i] = nl[0]; a[i + 1] = nl[1]; a[i + 2] = nl[2]; }
+    geo.setAttribute('aNL', new THREE.BufferAttribute(a, 3));
+  }
   const cap = takeGroup(geo, 0), sides = takeGroup(geo, 1);
   geo.dispose();
+  if (cap) cap.deleteAttribute('aNL');
   if (cap && withRoof) { if (cap.attributes.uv) cap.deleteAttribute('uv'); roofs.push(cap); } else cap?.dispose();
   if (sides) (walls[key] ||= []).push(sides);
 }
