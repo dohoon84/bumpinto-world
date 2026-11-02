@@ -46,3 +46,10 @@
 - 운영자(게시판 관리자와 같은 판정): `op: "list" | "image" | "review"(approved/rejected)`.
 - 서버를 아직 배포하지 않았으면 `/news-tip` 이 404 → 앱에 "뉴스 제보 서버가 아직 준비되지 않았어요" 안내. 번호 서버 없이 접속한 로컬 모드면 "제보를 보낼 수 없어요(저장·내려받기는 가능)" 안내.
 - 로컬 확인: `cd server/phone && npx wrangler dev --port <p>` 후 게임에 `?sms=http://127.0.0.1:<p>`.
+
+## 뉴스 제보 버튼 (NEWS_TIP_ENABLED)
+
+- `src/camera/index.js` 의 `NEWS_TIP_ENABLED` 한 곳에서 켜고 끈다. 기본값 `false`: 촬영 후 화면·사진 앱 상세의 제보 버튼, 확인창, 제보함 표시가 모두 숨는다.
+- `false` 여도 주소에 `?newstip=1` 을 붙이면 그 세션에서만 다시 보인다(시험용).
+- `newsTip.js` 와 서버 `/news-tip` 코드는 그대로 둔다. 서버 배포 후 `true` 로 바꾸면 된다.
+- 아이콘은 `icons.js` 의 인라인 SVG(24×24, 같은 선 굵기)만 쓴다. 폰트 글리프·이모지는 쓰지 않는다.

@@ -4,13 +4,18 @@
 // ?camera=0 이면 아이콘조차 등록하지 않아 기존 화면과 완전히 같다.
 import './glyphs.css';
 
+// 뉴스 제보 버튼 노출 여부 (한 곳에서만 끄고 켠다). 서버 /news-tip 배포 전까지 false.
+// false 여도 주소에 ?newstip=1 을 붙이면 그 세션만 켠다(시험용). newsTip.js·서버 코드는 그대로 둔다.
+export const NEWS_TIP_ENABLED = false;
+
 export function cameraEnabled(params) {
   return params?.get?.('camera') !== '0';
 }
 
 export function mountCamera({ handset, renderer, scene, camera, cam, params, sms, getInfo } = {}) {
   if (!handset?.addApp || !cameraEnabled(params)) return null;
-  const ctx = { handset, renderer, scene, camera, cam, sms, getInfo };
+  const newsTip = NEWS_TIP_ENABLED || params?.get?.('newstip') === '1';
+  const ctx = { handset, renderer, scene, camera, cam, sms, getInfo, newsTip };
   let loading = null;
   let app = null;
   const load = () => (loading ||= import('./cameraApp.js').then((m) => (app = m.createCameraApp(ctx))));

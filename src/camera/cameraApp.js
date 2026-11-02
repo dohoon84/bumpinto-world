@@ -6,6 +6,7 @@ import './camera.css';
 import { isEn, tr, onLangChange } from '../i18n.js';
 import { captureScene, composeExport, downloadBlob, shareOrDownload, fileName, playShutter } from './media.js';
 import { MAX_PHOTOS, addPhoto, listPhotos, getPhoto, updatePhoto, deletePhoto, newPhotoId, closeStore } from './photoStore.js';
+import { ICONS } from './icons.js';
 import { sendNewsTip, tipErrorText, cleanCaption, TIP_CAPTION_MAX } from './newsTip.js';
 
 const ZOOMS = [0.5, 1, 2, 3];
@@ -27,7 +28,7 @@ function fmtWhen(ms) {
   return `${d.getFullYear()}.${p(d.getMonth() + 1)}.${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
 }
 
-export function createCameraApp({ handset, renderer, scene, camera, cam, sms, getInfo }) {
+export function createCameraApp({ handset, renderer, scene, camera, cam, sms, getInfo, newsTip = false }) {
   let root = null; // 뷰파인더 DOM (열려 있을 때만 존재)
   let zoom = 1;
   let mode = 'photo';
@@ -158,14 +159,14 @@ export function createCameraApp({ handset, renderer, scene, camera, cam, sms, ge
     root.className = 'cam-root';
     root.innerHTML = `
       <div class="cam-frame"><div class="cam-grid"></div></div>
-      <div class="cam-top"><button type="button" class="cam-ic" data-c="grid">#</button><span class="cam-title"></span><button type="button" class="cam-ic" data-c="close">✕</button></div>
+      <div class="cam-top"><button type="button" class="cam-ic" data-c="grid">${ICONS.grid}</button><span class="cam-title"></span><button type="button" class="cam-ic" data-c="close">${ICONS.close}</button></div>
       <div class="cam-hint"></div>
       <div class="cam-zoom"></div>
       <div class="cam-bottom">
         <div class="cam-modes"></div>
         <button type="button" class="cam-thumb empty" data-c="library"></button>
         <button type="button" class="cam-shutter" data-c="shoot"><i></i></button>
-        <button type="button" class="cam-flip" data-c="flip">⟲</button>
+        <button type="button" class="cam-flip" data-c="flip">${ICONS.flip}</button>
       </div>
       <div class="cam-flash"></div>
       <div class="cam-review" hidden></div>
@@ -245,7 +246,7 @@ export function createCameraApp({ handset, renderer, scene, camera, cam, sms, ge
     if (prev) r.caption = prev.value;
     const where = `${shortPlace(r.info)} · ${fmtWhen(r.takenAt)}`;
     box.innerHTML = `<div class="cr-card">
-      <div class="cr-head"><button type="button" data-r="retake">‹ ${r.savedId || r.tipId ? (en ? 'Camera' : '카메라') : (en ? 'Retake' : '다시 찍기')}</button><b>${en ? 'Photo' : '사진'}</b><button type="button" data-r="done">${en ? 'Done' : '완료'}</button></div>
+      <div class="cr-head"><button type="button" data-r="retake">${ICONS.back}${r.savedId || r.tipId ? (en ? 'Camera' : '카메라') : (en ? 'Retake' : '다시 찍기')}</button><b>${en ? 'Photo' : '사진'}</b><button type="button" data-r="done">${en ? 'Done' : '완료'}</button></div>
       <div class="cr-photo"><img src="${r.url}" alt="" /></div>
       <p class="cr-meta">${esc(where)} · ${r.w}×${r.h}</p>
       <label class="cr-cap"><input class="cr-caption" maxlength="${TIP_CAPTION_MAX}" placeholder="${en ? 'Add a caption…' : '캡션을 달아 보세요…'}" autocomplete="off" value="${esc(r.caption)}" /><small class="cr-count">${r.caption.length}/${TIP_CAPTION_MAX}</small></label>
@@ -254,13 +255,11 @@ export function createCameraApp({ handset, renderer, scene, camera, cam, sms, ge
           ? 'Send this photo and caption to the in-game news desk? Your nickname, phone number, neighborhood and spot go with it. Tips are reviewed by the operators and may be featured in game news — nothing is published automatically.'
           : '이 사진과 캡션을 게임 뉴스 데스크에 제보할까요? 닉네임·전화번호·동네·위치가 함께 전송됩니다. 운영진이 검토한 뒤 게임 뉴스에 소개될 수 있으며, 자동으로 게시되지는 않아요.'}</p>
         <div class="cr-row"><button type="button" class="cr-btn" data-r="tip-cancel">${en ? 'Cancel' : '취소'}</button><button type="button" class="cr-btn red" data-r="tip-send">${en ? 'Send tip' : '제보 보내기'}</button></div>
-      </div>` : `<div class="cr-row">
-        <button type="button" class="cr-btn blue" data-r="save" ${r.savedId ? 'disabled' : ''}>${r.savedId ? (en ? '✓ Saved' : '✓ 저장됨') : (en ? 'Save to Photos' : '사진에 저장')}</button>
-        <button type="button" class="cr-btn red" data-r="tip" ${r.tipId ? 'disabled' : ''}>${r.tipId ? (en ? '✓ Tip sent' : '✓ 제보함') : (en ? 'News tip' : '뉴스 제보')}</button>
-      </div>
-      <div class="cr-row">
-        <button type="button" class="cr-btn" data-r="download">⤓ ${en ? 'Download' : '내려받기'}</button>
-        <button type="button" class="cr-btn" data-r="share">⇪ ${en ? 'Share' : '공유'}</button>
+      </div>` : `<div class="cr-row cr-actions">
+        <button type="button" class="cr-btn blue" data-r="save" ${r.savedId ? 'disabled' : ''}>${r.savedId ? ICONS.check : ICONS.save}<span>${r.savedId ? (en ? 'Saved' : '저장됨') : (en ? 'Save' : '저장')}</span></button>
+        <button type="button" class="cr-btn" data-r="download">${ICONS.download}<span>${en ? 'Download' : '내려받기'}</span></button>
+        <button type="button" class="cr-btn" data-r="share">${ICONS.share}<span>${en ? 'Share' : '공유'}</span></button>
+        ${newsTip ? `<button type="button" class="cr-btn red" data-r="tip" ${r.tipId ? 'disabled' : ''}>${r.tipId ? ICONS.check : ICONS.tip}<span>${r.tipId ? (en ? 'Tip sent' : '제보함') : (en ? 'News tip' : '뉴스 제보')}</span></button>` : ''}
       </div>`}
       <p class="cr-note${err ? ' err' : ''}">${esc(note)}</p>
     </div>`;
@@ -284,7 +283,7 @@ export function createCameraApp({ handset, renderer, scene, camera, cam, sms, ge
     const caption = currentCaption();
     if (name === 'retake') { closeReview(); return; }
     if (name === 'done') { closeReview(); closeViewfinder(); return; }
-    if (name === 'tip') { r.confirmTip = true; paintReview(); return; }
+    if (name === 'tip') { if (!newsTip) return; r.confirmTip = true; paintReview(); return; }
     if (name === 'tip-cancel') { r.confirmTip = false; paintReview(); return; }
     btn.disabled = true;
     try {
@@ -293,7 +292,7 @@ export function createCameraApp({ handset, renderer, scene, camera, cam, sms, ge
         await addPhoto({ id, blob: r.blob, thumb: r.thumb, w: r.w, h: r.h, caption, takenAt: r.takenAt, region: r.info.region || '', regionName: r.info.regionName || '', regionEnName: r.info.regionEnName || '', x: r.info.x, z: r.info.z, tipId: r.tipId || 0 });
         if (review !== r) return;
         r.savedId = id;
-        paintReview(L('사진 앱에 저장했어요.', 'Saved to Photos.'));
+        paintReview(); toast(L('사진 앱에 저장했어요.', 'Saved to Photos.'));
         refreshThumb();
       } else if (name === 'tip-send') {
         const { tipId } = await sendNewsTip({ sms, blob: r.blob, caption, takenAt: r.takenAt, info: r.info });
@@ -301,15 +300,15 @@ export function createCameraApp({ handset, renderer, scene, camera, cam, sms, ge
         r.tipId = tipId || 1;
         r.confirmTip = false;
         if (r.savedId) await updatePhoto(r.savedId, { tipId: r.tipId, caption });
-        paintReview(L('제보를 보냈어요. 운영진 검토 후 소개될 수 있어요.', 'Tip sent. The operators will review it.'));
+        paintReview(); toast(L('제보를 보냈어요. 운영진 검토 후 소개될 수 있어요.', 'Tip sent. The operators will review it.'));
       } else if (name === 'download') {
         const out = await exportBlob(r.blob, caption, { ...r.info, takenAt: r.takenAt });
         downloadBlob(out, fileName(r.takenAt));
-        paintReview(L('내려받았어요. SNS에 올려 보세요!', 'Downloaded — share it on social media!'));
+        paintReview(); toast(L('내려받았어요. SNS에 올려 보세요!', 'Downloaded — share it on social media!'));
       } else if (name === 'share') {
         const out = await exportBlob(r.blob, caption, { ...r.info, takenAt: r.takenAt });
         const how = await shareOrDownload(out, fileName(r.takenAt), shareText(caption));
-        if (how !== 'cancelled') paintReview(how === 'shared' ? L('공유했어요.', 'Shared.') : L('이 브라우저는 바로 공유를 지원하지 않아 내려받았어요.', 'Sharing is not supported here, so the photo was downloaded.'));
+        if (how !== 'cancelled') toast(how === 'shared' ? L('공유했어요.', 'Shared.') : L('이 브라우저는 바로 공유를 지원하지 않아 내려받았어요.', 'Sharing is not supported here, so the photo was downloaded.'));
       }
     } catch (err) {
       const code = err?.code || '';
@@ -344,6 +343,8 @@ export function createCameraApp({ handset, renderer, scene, camera, cam, sms, ge
     if (!photos) return;
     releasePhotoUrls();
     photos.observer?.disconnect();
+    document.querySelector('#handset .ph-toast')?.remove();
+    clearTimeout(phToastTimer);
     photos = null;
     if (!root) closeStore();
   }
@@ -375,11 +376,25 @@ export function createCameraApp({ handset, renderer, scene, camera, cam, sms, ge
     if (!list) { el.innerHTML = `<p class="hint">${en ? 'Photo storage is not available in this browser.' : '이 브라우저에서는 사진을 보관할 수 없어요.'}</p>`; return; }
     const cells = list.map((m) => {
       const u = URL.createObjectURL(m.thumb); p.urls.push(u);
-      return `<button type="button" class="ph-cell" data-xact="ph-open" data-id="${esc(m.id)}" style="background-image:url('${u}')">${m.tipId ? '<i class="ph-tip">✓</i>' : ''}</button>`;
+      return `<button type="button" class="ph-cell" data-xact="ph-open" data-id="${esc(m.id)}" style="background-image:url('${u}')">${m.tipId && newsTip ? `<i class="ph-tip">${ICONS.check}</i>` : ''}</button>`;
     }).join('');
     el.innerHTML = `<div class="ph-bar"><span>${en ? 'Library' : '보관함'}</span><small>${list.length}/${MAX_PHOTOS}</small><button type="button" class="ph-camera" data-xact="ph-camera">${en ? 'Camera' : '카메라'}</button></div>
       ${list.length ? `<div class="ph-grid">${cells}</div>` : `<p class="hint">${en ? 'No photos yet. Open Camera and press the shutter (Space).' : '아직 사진이 없어요. 카메라를 열고 셔터(Space)를 눌러 보세요.'}</p>`}
-      <p class="hint ph-note">${esc(note)}</p>`;
+`;
+    if (note) phToast(note);
+  }
+
+  // 사진 앱 상태 문구: 폰 화면 아래쪽에 잠깐 떴다 사라지는 작은 알림
+  let phToastTimer = 0;
+  function phToast(text) {
+    const host = photos?.pane?.closest('#handset');
+    if (!host) return;
+    let t = host.querySelector('.ph-toast');
+    if (!t) { t = document.createElement('div'); t.className = 'ph-toast'; t.setAttribute('role', 'status'); host.appendChild(t); }
+    t.textContent = text;
+    t.classList.add('show');
+    clearTimeout(phToastTimer);
+    phToastTimer = setTimeout(() => t.classList.remove('show'), 2200);
   }
 
   async function paintDetail(id, note = '', err = false) {
@@ -395,18 +410,19 @@ export function createCameraApp({ handset, renderer, scene, camera, cam, sms, ge
     const en = isEn();
     const u = URL.createObjectURL(rec.blob); p.urls.push(u);
     const where = `${(en ? rec.regionEnName || rec.regionName : rec.regionName || '').replace(/\s*\(.*\)\s*$/, '')} · ${fmtWhen(rec.takenAt)}`;
-    phRoot().innerHTML = `<div class="ph-bar"><button type="button" class="ph-back" data-xact="ph-back">‹ ${en ? 'Library' : '보관함'}</button></div>
+    phRoot().innerHTML = `<div class="ph-bar"><button type="button" class="ph-back" data-xact="ph-back">${ICONS.back}${en ? 'Library' : '보관함'}</button></div>
       <div class="ph-photo"><img src="${u}" alt="" /></div>
-      <p class="ph-meta">${esc(where)}${rec.tipId ? ` · <b>${en ? 'Tip sent' : '제보함'}</b>` : ''}</p>
+      <p class="ph-meta">${esc(where)}${rec.tipId && newsTip ? ` · <b>${en ? 'Tip sent' : '제보함'}</b>` : ''}</p>
       <input class="ph-caption" maxlength="${TIP_CAPTION_MAX}" placeholder="${en ? 'Caption' : '캡션'}" autocomplete="off" value="${esc(keepCaption ?? rec.caption ?? '')}" />
       ${p.confirmTip ? `<p class="ph-confirm">${en ? 'Send to the news desk with your nickname, number and spot? Operators review tips before anything is featured.' : '닉네임·번호·위치와 함께 뉴스 데스크에 제보할까요? 운영진 검토 후에만 소개돼요.'}</p>
-        <div class="ph-tools"><button type="button" data-xact="ph-tip-cancel">${en ? 'Cancel' : '취소'}</button><button type="button" class="red" data-xact="ph-tip-send">${en ? 'Send' : '보내기'}</button></div>` : `<div class="ph-tools">
-        <button type="button" data-xact="ph-share" title="${en ? 'Share' : '공유'}">⇪<em>${en ? 'Share' : '공유'}</em></button>
-        <button type="button" data-xact="ph-download" title="${en ? 'Download' : '내려받기'}">⤓<em>${en ? 'Save' : '받기'}</em></button>
-        <button type="button" data-xact="ph-tip" ${rec.tipId ? 'disabled' : ''} title="${en ? 'News tip' : '뉴스 제보'}">✎<em>${en ? 'Tip' : '제보'}</em></button>
-        <button type="button" class="${p.confirmDel ? 'red' : ''}" data-xact="ph-delete" title="${en ? 'Delete' : '삭제'}">🗑<em>${p.confirmDel ? (en ? 'Sure?' : '삭제?') : (en ? 'Delete' : '삭제')}</em></button>
+        <div class="ph-tools"><button type="button" data-xact="ph-tip-cancel">${en ? 'Cancel' : '취소'}</button><button type="button" class="red" data-xact="ph-tip-send">${en ? 'Send' : '보내기'}</button></div>` : `<div class="ph-tools${newsTip ? ' four' : ''}">
+        <button type="button" data-xact="ph-share">${ICONS.share}<em>${en ? 'Share' : '공유'}</em></button>
+        <button type="button" data-xact="ph-download">${ICONS.download}<em>${en ? 'Download' : '내려받기'}</em></button>
+        ${newsTip ? `<button type="button" data-xact="ph-tip" ${rec.tipId ? 'disabled' : ''}>${ICONS.tip}<em>${rec.tipId ? (en ? 'Sent' : '제보함') : (en ? 'Tip' : '제보')}</em></button>` : ''}
+        <button type="button" class="del${p.confirmDel ? ' armed' : ''}" data-xact="ph-delete">${ICONS.trash}<em>${p.confirmDel ? (en ? 'Delete?' : '삭제할까요?') : (en ? 'Delete' : '삭제')}</em></button>
       </div>`}
-      <p class="hint ph-note${err ? ' err' : ''}">${esc(note)}</p>`;
+      ${err && note ? `<p class="hint ph-note err">${esc(note)}</p>` : ''}`;
+    if (note && !err) phToast(note);
   }
 
   async function photosAction(name, el) {
@@ -419,7 +435,7 @@ export function createCameraApp({ handset, renderer, scene, camera, cam, sms, ge
     const id = p.id;
     if (!id) return;
     const caption = cleanCaption(phRoot()?.querySelector('.ph-caption')?.value || '');
-    if (name === 'ph-tip') { p.confirmTip = true; p.confirmDel = false; paintDetail(id); return; }
+    if (name === 'ph-tip') { if (!newsTip) return; p.confirmTip = true; p.confirmDel = false; paintDetail(id); return; }
     if (name === 'ph-tip-cancel') { p.confirmTip = false; paintDetail(id); return; }
     if (name === 'ph-delete' && !p.confirmDel) { p.confirmDel = true; paintDetail(id); return; }
     if (name !== 'ph-delete') p.confirmDel = false;
