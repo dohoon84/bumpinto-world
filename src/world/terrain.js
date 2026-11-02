@@ -24,6 +24,7 @@ const FOOT_DECK = 3;
 // 징검다리 돌 (한국 하천 징검다리 크기 근사): 진행 방향 길이 along, 옆 폭 across, 돌 간격 pitch(중심 간), 윗면 = 수면 + up
 //   OSM 선을 양쪽으로 ext 까지 늘려서 지형이 윗면보다 낮은 구간(물·물가)에만 놓는다
 const STONE = { along: 0.6, across: 0.9, pitch: 0.95, up: 0.14, ext: 4 };
+const FORD_APRON = 1.0; // 돌 줄 옆 이 폭까지는 물가 경사 제한 없이 걸어서 돌로 오르내림
 const PARK_COLOR = { park: '#a8d59a', garden: '#b2dc9f', playground: '#c6e2a0', pitch: '#9fd08c', grass: '#b5dda3', forest: '#86bf7c', wood: '#86bf7c', scrub: '#9cc78a', meadow: '#bfe0a8', recreation_ground: '#b0d89c' };
 
 function pointInRing(x, z, r) {
@@ -121,15 +122,15 @@ export function createTerrain(T, data) {
     while (u1 < T && wet(u1 + 0.1)) u1 += 0.1;
     const n = Math.max(1, Math.round((u1 - u0) / STONE.pitch)), step = (u1 - u0) / n, stones = [];
     for (let k = 0; k < n; k++) { const [x, z] = at(u0 + step * (k + 0.5)); stones.push([x, z]); }
-    const [ax0, az0] = at(u0 - 0.5), [bx0, bz0] = at(u1 + 0.5), hw = STONE.across / 2;
+    const [ax0, az0] = at(u0 - 0.5), [bx0, bz0] = at(u1 + 0.5), hw = STONE.across / 2 + 0.15; // 걷는 반폭 0.6m = 돌 반폭 + 발 걸침
     const item = { ax: ax0, az: az0, bx: bx0, bz: bz0, hw, h: top, yaw: Math.atan2(ux, uz), stones, osm: f.osm, river: f.river };
     fords.push(item);
-    fordGrid.add(item, Math.min(ax0, bx0) - hw, Math.min(az0, bz0) - hw, Math.max(ax0, bx0) + hw, Math.max(az0, bz0) + hw);
+    { const r = hw + FORD_APRON; fordGrid.add(item, Math.min(ax0, bx0) - r, Math.min(az0, bz0) - r, Math.max(ax0, bx0) + r, Math.max(az0, bz0) + r); }
   }
-  function fordAt(x, z) {
+  function fordAt(x, z, pad = 0) { // pad: 줄 옆 여유(물가 경사 '진입로' 판정용)
     for (const f of fordGrid.query(x, z)) {
       const dx = f.bx - f.ax, dz = f.bz - f.az, L2 = dx * dx + dz * dz, t = ((x - f.ax) * dx + (z - f.az) * dz) / L2;
-      if (t >= 0 && t <= 1 && Math.abs((x - f.ax) * dz - (z - f.az) * dx) / Math.sqrt(L2) <= f.hw) return f;
+      if (t >= 0 && t <= 1 && Math.abs((x - f.ax) * dz - (z - f.az) * dx) / Math.sqrt(L2) <= f.hw + pad) return f;
     }
     return null;
   }
@@ -214,18 +215,31 @@ export function createTerrain(T, data) {
     return h;
   }
   const grade = (x, z) => { const e = 0.4; return Math.hypot(baseHeight(x + e, z) - baseHeight(x - e, z), baseHeight(x, z + e) - baseHeight(x, z - e)) / (2 * e); };
+  // 수면 높이(바닥이 물에 잠긴 곳만): 지류 = 지류 수면, 본류 수로 = WATER. 물 밖이면 null
+  function waterSurface(x, z) {
+    const g = baseHeight(x, z);
+    const w = streams ? streams.waterAt(x, z) : null; if (w != null && g < w - 0.02) return w;
+    return g < WATER - 0.02 && mainBase(x, z) < WATER - 0.02 ? WATER : null;
+  }
+  const submerged = (x, z, y) => { const w = waterSurface(x, z); return w != null && y < w - 0.02; };
   function canMove(x0, z0, y0, x1, z1) {
+    // 물속에 빠져 있으면(예전 버전·순간이동) 더 깊어지지 않는 쪽으로는 경사·단차(1m까지) 무시하고 올라와 빠져나오게
+    if (submerged(x0, z0, y0)) { const h = getGroundHeight(x1, z1, y0 + 1); return h >= y0 - 0.01 && h <= y0 + 1 ? h : null; }
     const h1 = getGroundHeight(x1, z1, y0);
     if (Math.abs(h1 - y0) > MAX_STEP) return null;
     if (stairAt(x1, z1) || fordAt(x1, z1)) return h1;
     const d = deckAt(x1, z1); if (d && Math.abs(d.h - h1) < 0.01) return h1;
+    if (submerged(x1, z1, h1)) return null; // 물속(수면 아래 바닥)으로는 못 들어감 = 다른 물가와 같음
+    if (fords.length && fordAt(x1, z1, FORD_APRON)) return h1; // 징검다리 양 끝 물가 경사(줄 옆 1m)는 비스듬히 와도 오르내림 (물속은 위에서 막힘)
     const g1 = grade(x1, z1);
     if (g1 > MAX_GRADE) {
-      // 이미 경사면 위에 있으면(순간이동 등) 내려가는 방향만 허용해서 빠져나올 수 있게
-      if (!(grade(x0, z0) > MAX_GRADE && h1 <= y0 + 0.01)) return null;
+      // 이미 경사면 위에 서 있으면(순간이동 등) 내려가는 방향만 허용해서 빠져나올 수 있게.
+      // 돌·다리·계단 위(y0 가 지형보다 높음)에서는 아래 경사가 가팔라도 이 예외를 안 씀 → 징검다리 옆 물가로 미끄러져 내려가지 않음
+      if (!(grade(x0, z0) > MAX_GRADE && Math.abs(y0 - baseHeight(x0, z0)) < 0.05 && h1 <= y0 + 0.01)) return null;
     }
     return h1;
   }
+
 
   // ---- buildWorld 전 데이터 주석 ----
   const corridorParks = [];
@@ -629,5 +643,5 @@ export function createTerrain(T, data) {
     }
     return pts.length > 6 ? pts : null;
   }
-  return { params: P, baseHeight, renderHeight, getGroundHeight, groundY: getGroundHeight, getVehicleHeight, vehicleY: getVehicleHeight, deckAt, canMove, annotate, liftRoads, waterLineY, streams, build, stairs, decks, addDeckSegment, project, riversideRoute, bankPath, stairAt, fords, fordAt, grade };
+  return { params: P, baseHeight, renderHeight, getGroundHeight, groundY: getGroundHeight, getVehicleHeight, vehicleY: getVehicleHeight, deckAt, canMove, annotate, liftRoads, waterLineY, streams, build, stairs, decks, addDeckSegment, project, riversideRoute, bankPath, stairAt, fords, fordAt, grade, waterSurface };
 }

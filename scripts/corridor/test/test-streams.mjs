@@ -131,4 +131,60 @@ assert.ok(fd.stones.length >= 6 && Math.abs(fd.h - wy - 0.14) < 0.01, `stones ${
   assert.ok(side < fd.h - 0.5, 'beside the stones is still water');
 }
 ok(`stepping stones ${fd.river} (OSM ${fd.osm}): ${fd.stones.length} stones, top = water + 0.14 m, bank-to-bank walk never drops below the stones`);
+
+// 8) 징검다리 실제 이동 재현 (game.js 와 같은 축별 이동: x 먼저 canMove, 그다음 z). 프레임 dt 1/60·0.1(저사양) 둘 다
+//    회귀: 돌 줄 옆으로 비켜서면 '경사면 위면 내려가기 허용' 예외 때문에 물가로 미끄러져 하상(물속)에 갇혔음
+{
+  const W = fd.h - 0.14, F = -2.5;
+  const move = (P, dirX, dirZ, step) => { // game.js 이동 한 프레임
+    const L = Math.hypot(dirX, dirZ), nx = P.x + dirX / L * step, nz = P.z + dirZ / L * step; let y;
+    if ((y = on.canMove(P.x, P.z, P.y, nx, P.z)) != null) { P.x = nx; P.y = y; }
+    if ((y = on.canMove(P.x, P.z, P.y, P.x, nz)) != null) { P.z = nz; P.y = y; }
+  };
+  const start = (x, z) => ({ x, z, y: on.getGroundHeight(x, z, 0) }); // = __jj.teleport
+  const dry = (P) => !(P.y < (on.waterSurface(P.x, P.z) ?? -Infinity) - 0.02);
+  for (const dt of [1 / 60, 0.1]) {
+    const step = 4.2 * dt;
+    for (const [name, x0, z0, dx, dz, zEnd] of [['S→N', 1586.3, -5255.5, 0, -1, -5271], ['N→S', 1586.4, -5273, 0, 1, -5257], ['S→N diagonal', 1587.6, -5256, -0.18, -1, -5271], ['N→S diagonal', 1585.2, -5273, 0.12, 1, -5257]]) {
+      // 비스듬히 오면 돌 줄에 올라선 뒤(사람이 하듯) 돌 줄 방향으로 고쳐 걷는다. 비스듬히 계속 밀면 줄 가장자리에서 멈출 뿐 물에 안 빠짐
+      const P = start(x0, z0); let minY = Infinity, k = 0, ddx = dx, ddz = dz, pushed = 0;
+      for (; k < 4000 && (dz < 0 ? P.z > zEnd : P.z < zEnd); k++) {
+        move(P, ddx, ddz, step); minY = Math.min(minY, P.y); assert.ok(dry(P), `${name} dt ${dt}: submerged at ${P.x.toFixed(2)},${P.z.toFixed(2)} y ${P.y}`);
+        if (ddx && on.fordAt(P.x, P.z) && P.y === fd.h && ++pushed > 40) { const L = Math.hypot(fd.bx - fd.ax, fd.bz - fd.az); ddx = (fd.bx - fd.ax) / L * -dz; ddz = (fd.bz - fd.az) / L * -dz; }
+      }
+      assert.ok(dz < 0 ? P.z <= zEnd : P.z >= zEnd, `${name} dt ${dt}: stuck at ${P.x.toFixed(2)},${P.z.toFixed(2)} y ${P.y.toFixed(2)}`);
+      assert.ok(Math.abs(P.y - F) < 0.06, `${name}: stepped off onto the far bank (${P.y})`);
+      assert.ok(minY >= W - 0.03, `${name}: never below water (${minY.toFixed(2)})`);
+    }
+    // 돌 위에서 옆으로 비켜서기(오른쪽·왼쪽), 그다음 앞뒤로: 물에 빠지지 않고 계속 움직일 수 있어야
+    for (const side of [1, -1]) for (const zs of [-5260.6, -5264.4, -5268.0]) {
+      const P = { x: 1586.33, z: zs, y: fd.h };
+      for (let k = 0; k < 60; k++) move(P, side, 0, step);
+      assert.ok(dry(P), `side ${side} at ${zs}: submerged`);
+      for (const [a, b] of [[0, -1], [0, 1], [-side, 0]]) { const P2 = { ...P }; for (let k = 0; k < 400; k++) { move(P2, a, b, step); assert.ok(dry(P2), `after side-step ${side}@${zs} dir ${a},${b}: submerged at ${P2.z.toFixed(2)}`); } }
+    }
+  }
+  // 무작위 걷기 2만 걸음(돌 주변 ±6m): 물속에 안 들어가고, 들른 자리에서 둔치(-2.5m)로 다시 걸어 나갈 길이 늘 있음
+  let sd = 3; const rnd = () => ((sd = (sd * 16807) % 2147483647) / 2147483647);
+  const P = start(1586.3, -5257); const visited = [];
+  for (let k = 0; k < 20000; k++) {
+    const a = rnd() * Math.PI * 2; move(P, Math.cos(a), Math.sin(a), 0.07 + rnd() * 0.35);
+    if (Math.hypot(P.x - 1586.3, P.z - 5264.4 * -1) > 9) { P.x = 1586.3; P.z = -5257; P.y = on.getGroundHeight(P.x, P.z, 0); }
+    assert.ok(dry(P), `random walk ${k}: submerged at ${P.x.toFixed(2)},${P.z.toFixed(2)} y ${P.y.toFixed(2)}`);
+    if (k % 1000 === 0) visited.push({ ...P });
+  }
+  const escapes = (S) => { // 0.25m 격자 BFS, 8방향, 둔치(평지, y≈F)에 닿으면 성공
+    const seen = new Set(), q = [S]; let n = 0;
+    while (q.length && n++ < 6000) {
+      const c = q.shift(); if (Math.abs(c.y - F) < 0.06 && on.grade(c.x, c.z) < 0.4 && !on.fordAt(c.x, c.z)) return true;
+      for (let d = 0; d < 8; d++) { const a = d * Math.PI / 4, N = { ...c }; move(N, Math.cos(a), Math.sin(a), 0.25); const key = Math.round(N.x * 4) + ',' + Math.round(N.z * 4); if (!seen.has(key)) { seen.add(key); q.push(N); } }
+    }
+    return false;
+  };
+  for (const v of visited) assert.ok(escapes(v), `no way back to the bank from ${v.x.toFixed(2)},${v.z.toFixed(2)} y ${v.y.toFixed(2)}`);
+  // 예전 버전에서 이미 물속에 빠진 플레이어도 걸어 나올 수 있음
+  const Q = { x: 1587.6, z: -5262, y: -3.5 }; for (let k = 0; k < 200 && !(Q.y > W); k++) move(Q, -1, 0, 0.07);
+  assert.ok(Q.y >= fd.h - 1e-6, `trapped player climbs out onto the stones (y ${Q.y})`);
+  ok('stepping stones under real (axis-split) movement: both ways + diagonals at 60/10 fps reach the far bank, side-steps and a 20k random walk never go underwater, always a way back, a trapped player climbs out');
+}
 console.log(`streams: ${n} passed`);
