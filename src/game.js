@@ -22,6 +22,8 @@ import { mountPhone } from './phone.js';
 import { mountHandset } from './handset.js';
 import { mountCamera } from './camera/index.js'; // [camera] 폰 카메라·사진 앱 (?camera=0 이면 끔, 본체는 처음 열 때 지연 로드)
 import { mountBoard } from './board.js';
+import { NOTICE_POSTS } from './notices.js'; // [notice-popup]
+import { createNoticePopup } from './noticePopup.js'; // [notice-popup]
 import { createSms } from './sms.js';
 import { trackEvent } from './analytics.js';
 import { createTerrain } from './world/terrain.js'; // [terrain]
@@ -767,7 +769,20 @@ atmosphere.setRainRequest(() => {
 });
 syncRainControl();
 const handset = mountHandset({ sms });
-const board = mountBoard({ sms, getMe: () => me });
+let noticePopup = null; // [notice-popup]
+const board = mountBoard({ sms, getMe: () => me, onOpen: () => noticePopup?.markSeen() });
+noticePopup = createNoticePopup({
+  posts: NOTICE_POSTS,
+  params,
+  open: () => !!board.openNotices?.(),
+  busy: () => {
+    try {
+      const b = document.body.classList;
+      return !joined || b.contains('in-gate') || b.contains('in-lobby') || board.open || handset.open ||
+        !!cameraApp?.open || !!donationBoards.open || !!ride?.active || !!adminBike?.riding || !!giftRiding();
+    } catch { return true; }
+  },
+});
 function requestGift(itemId) {
   return (peerId, phone) => {
     if (holdingQty(itemId) < giftUnit(itemId)) return;
@@ -961,6 +976,7 @@ function completeWorldJoin(name, look, session) {
   trackEvent('world_join', { region: region.id, has_pin: !!session?.hasPin, resumed: !!session?.place });
   const toStation = !!corridorAt;
   corridorArrive?.(); // [corridor]
+  noticePopup?.schedule(); // [notice-popup] 입장 1.5초 후, 안 본 공지가 있을 때만 게시판 공지 탭 1회
   if (picked && !toStation) { try { rememberPlace(true); } catch {} } // 고른 기본 스폰을 새 마지막 위치로 저장 (역 이동은 teleport 가 저장)
 }
 joinWithPassport = async () => {
