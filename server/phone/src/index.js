@@ -1,5 +1,6 @@
 import { PhoneBook } from "./book.js";
 import { Room } from "./room.js";
+import { handlePhotos } from "./photos.js";
 
 export { PhoneBook, Room };
 
@@ -49,12 +50,34 @@ function json(data, status, cors) {
   });
 }
 
+// [camera] 뉴스 제보: { op: "submit", id, region, caption, image(base64 JPEG), w, h, takenAt, x, z }
+// 사진이 들어 있어 일반 경로(8000자)보다 큰 본문을 받는다. 운영자용 op: list / image / review.
+const NEWS_TIP_MAX_BODY = 420_000;
+async function newsTip(request, env, cors) {
+  if (request.method !== "POST") return json({ ok: false, error: "not_found" }, 404, cors);
+  const declared = Number(request.headers.get("Content-Length") || 0);
+  if (declared > NEWS_TIP_MAX_BODY) return json({ ok: false, error: "too_big" }, 413, cors);
+  let text;
+  try { text = await request.text(); } catch { return json({ ok: false, error: "bad_body" }, 400, cors); }
+  if (text.length > NEWS_TIP_MAX_BODY) return json({ ok: false, error: "too_big" }, 413, cors);
+  let body;
+  try { body = JSON.parse(text || "{}"); } catch { return json({ ok: false, error: "bad_body" }, 400, cors); }
+  body.region = String(body?.region || "jeongja").trim().toLowerCase() || "jeongja";
+  try {
+    const out = await env.PHONE_BOOK.getByName("jeongja").newsTip(body);
+    return json(out, out.ok ? 200 : 400, cors);
+  } catch (error) {
+    return json({ ok: false, error: "server", detail: String(error?.message || error) }, 500, cors);
+  }
+}
+
 export default {
   async fetch(request, env) {
     const cors = {
       "Access-Control-Allow-Origin": allowOrigin(request, env),
-      "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-      "Access-Control-Allow-Headers": "Content-Type",
+      "Access-Control-Allow-Methods": "GET, POST, PUT, PATCH, DELETE, OPTIONS",
+      "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Photo-Meta", // [photo-cloud]
+      "Access-Control-Max-Age": "86400",
       "Access-Control-Allow-Private-Network": "true",
       Vary: "Origin",
     };
@@ -97,6 +120,8 @@ export default {
       } catch {}
       return json({ ok: true, region: queryRegion, online, residents, ...extra }, 200, cors);
     }
+    if (url.pathname === "/photos" || url.pathname.startsWith("/photos/")) return handlePhotos(request, env, cors, url); // [photo-cloud] 사진 보관함 (R2)
+    if (url.pathname === "/news-tip") return newsTip(request, env, cors); // [camera] 사진 뉴스 제보 (본문이 커서 따로 받음)
     const method = ROUTES[url.pathname];
     if (!method || request.method !== "POST") return json({ ok: false, error: "not_found" }, 404, cors);
     let text;

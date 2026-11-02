@@ -20,7 +20,9 @@ import { CHAT_RADIUS } from './net/protocol.js';
 import { buildTransit, makeCrossingGuard, mergeSimExtra } from './transit/transit.js';
 import { mountPhone } from './phone.js';
 import { mountHandset } from './handset.js';
+import { mountCamera } from './camera/index.js'; // [camera] 폰 카메라·사진 앱 (?camera=0 이면 끔, 본체는 처음 열 때 지연 로드)
 import { mountBoard } from './board.js';
+import { createNoticePopup } from './noticePopup.js'; // [notice-popup]
 import { createSms } from './sms.js';
 import { trackEvent } from './analytics.js';
 import { createTerrain } from './world/terrain.js'; // [terrain]
@@ -50,7 +52,11 @@ import { mountInventory } from './inventory.js'; // [inventory]
 import { loadCorridorData, createCorridor, corridorTerrainData } from './corridor/index.js'; // [corridor]
 import { mountTravel } from './corridor/travel.js'; // [corridor]
 import { mountPerfHud } from './corridor/perfHud.js'; // [corridor]
+import { mountAttribution } from './attribution.js'; // [attrib]
+import { mountBgm } from './bgm/index.js'; // [bgm] ?bgm=0 이면 끔
+import { createPlaygrounds } from './world/playgrounds.js'; // [playgrounds]
 import { corridorStationLabel } from './corridor/globeCorridor.js'; // [corridor]
+import { createStreetlights } from './world/streetlights.js'; // [streetlights]
 import { mountRide } from './ride/index.js'; // [ride] 코리더 버스·택시 탑승
 
 const params = new URLSearchParams(location.search);
@@ -177,7 +183,7 @@ const corridorDir = region.features?.corridor && params.get('corridor') !== '0' 
 const [terrainData, driveData, corridorData, shopsData, coloursData] = await Promise.all([
   !terrainFile || params.get('terrain') === '0' ? null : fetch(import.meta.env.BASE_URL + terrainFile).then((r) => r.json()).catch(() => null),
   !driveFile || params.get('taxis') === '0' ? null : fetch(import.meta.env.BASE_URL + driveFile).then((r) => r.json()).catch(() => null),
-  corridorDir ? loadCorridorData(import.meta.env.BASE_URL + corridorDir) : null,
+  corridorDir ? loadCorridorData(import.meta.env.BASE_URL + corridorDir, { streams: params.get('streams') !== '0' }) : null,
   fetchOptionalJson(shopsFile), // [shops]
   fetchOptionalJson(coloursFile), // [colours]
 ]);
@@ -189,6 +195,7 @@ renderer.setSize(innerWidth, innerHeight);
 renderer.shadowMap.enabled = !params.has('noshadow');
 renderer.shadowMap.type = THREE.PCFShadowMap;
 document.getElementById('app').appendChild(renderer.domElement);
+const bgm = mountBgm({ params }); // [bgm] 배경음악 + 상단 미니 플레이어 (입장 때 시작, ?bgm=0 이면 null)
 const memHud = mountMemHud({ // [memory] ?mem=1 일 때만 설치 (기본 꺼짐)
   renderer, params, getCorridor: () => corridor,
   getExtra: () => { const b = busTextureStats(), r = roadBikeDecalStats(); return `bus tex routes ${b.routes} (in use ${b.inUse} · idle ${b.idle}/${b.idleMax}) · bike decals ${r.drawn}/${r.total}`; },
@@ -237,6 +244,13 @@ if (corridor) {
   world.isBlocked = (x, z, r) => liveBlocked(x, z, r) || corridor.isBlocked(x, z, r);
   world.onRoad = (x, z) => liveOnRoad(x, z) || corridor.onRoad(x, z);
 } // [terrain] world.groundY(x,z,refY) — NPC/원격 플레이어/택시가 사용
+// [playgrounds] OSM 놀이터 세트 + 조경 (scripts/corridor/build-playgrounds.mjs). ?playgrounds=0 이면 데이터 요청·메시 없음
+const playgroundsFile = params.get('playgrounds') === '0' ? null : region.dataFiles?.playgrounds;
+const playgroundLandFile = params.get('pgland') === '0' ? null : region.dataFiles?.playgroundLand; // ?pgland=0: 조경만 끔
+const playgrounds = playgroundsFile ? createPlaygrounds({ scene, terrain, corridor, liveBox: data.meta.bboxLocal, url: import.meta.env.BASE_URL + playgroundsFile, landUrl: playgroundLandFile ? import.meta.env.BASE_URL + playgroundLandFile : null }) : null;
+// [streetlights] 차도 T자 가로등 (scripts/corridor/build-streetlights.mjs). ?streetlights=0 이면 데이터 요청·메시 없음
+const streetlightsFile = params.get('streetlights') === '0' ? null : region.dataFiles?.streetlights;
+const streetlights = streetlightsFile ? createStreetlights({ scene, terrain, corridor, camera, liveBox: data.meta.bboxLocal, url: import.meta.env.BASE_URL + streetlightsFile }) : null;
 const st = data.station;
 overlay.add({
   cls: 'label station',
@@ -754,7 +768,21 @@ atmosphere.setRainRequest(() => {
 });
 syncRainControl();
 const handset = mountHandset({ sms });
-const board = mountBoard({ sms, getMe: () => me });
+let noticePopup = null; // [notice-popup]
+const board = mountBoard({ sms, getMe: () => me, onOpen: () => noticePopup?.markSeen() });
+noticePopup = createNoticePopup({
+  params,
+  // 게시판 공지 탭과 같은 소스(서버 /board 또는 로컬 테스트 게시판). 실패하면 팝업 없음.
+  fetchNotices: async () => (await sms.board('list', { category: 'notice', page: 1 }))?.items || [],
+  open: () => !!board.openNotices?.(),
+  busy: () => {
+    try {
+      const b = document.body.classList;
+      return !joined || b.contains('in-gate') || b.contains('in-lobby') || board.open || handset.open ||
+        !!cameraApp?.open || !!donationBoards.open || !!ride?.active || !!adminBike?.riding || !!giftRiding();
+    } catch { return true; }
+  },
+});
 function requestGift(itemId) {
   return (peerId, phone) => {
     if (holdingQty(itemId) < giftUnit(itemId)) return;
@@ -941,12 +969,14 @@ function completeWorldJoin(name, look, session) {
   me.phone = sms.session?.phone || '';
   presence.connect(me);
   joined = true;
+  bgm?.enter(); // [bgm] 입장: opening_day 부터 (사용자 입력이 아직 없었으면 첫 클릭/키 입력 때)
   adminBike?.refreshStyle?.();
   inventory?.refresh();
   syncRainControl();
   trackEvent('world_join', { region: region.id, has_pin: !!session?.hasPin, resumed: !!session?.place });
   const toStation = !!corridorAt;
   corridorArrive?.(); // [corridor]
+  noticePopup?.schedule(); // [notice-popup] 입장 1.5초 후, 안 본 공지가 있을 때만 게시판 공지 탭 1회
   if (picked && !toStation) { try { rememberPlace(true); } catch {} } // 고른 기본 스폰을 새 마지막 위치로 저장 (역 이동은 teleport 가 저장)
 }
 joinWithPassport = async () => {
@@ -1694,6 +1724,7 @@ function syncRideUi(force = false) {
 rideBtn.addEventListener('click', toggleRide);
 const homeBtn = document.getElementById('btn-home');
 const quickSpotBtns = [];
+let attribution = null; // [attrib]
 function syncGameLocale() {
   const en = isEn();
   const langLauncher = document.getElementById('lang-launcher');
@@ -1732,19 +1763,23 @@ function syncGameLocale() {
   if (boardLbl) boardLbl.textContent = en ? 'Board' : '게시판';
   const attrEl = document.getElementById('attribution');
   if (attrEl) {
-    attrEl.innerHTML = en
-      ? '© <a href="https://crazylabs.co.kr" target="_blank" rel="noopener">CrazyLabs</a> · <a href="https://github.com/dohoon84/bumpinto-world" target="_blank" rel="noopener">Source Available</a> · Map © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> (ODbL)'
-      : '© <a href="https://crazylabs.co.kr" target="_blank" rel="noopener">CrazyLabs</a> · <a href="https://github.com/dohoon84/bumpinto-world" target="_blank" rel="noopener">소스 공개 (영리 서비스 금지)</a> · 지도 © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> (ODbL)';
+    // [attrib] "… OpenStreetMap" 까지는 늘 보이고 나머지는 ⓘ 버튼 뒤에 접힌다 (문구·링크는 그대로)
+    attribution ||= mountAttribution(attrEl);
+    const main = en
+      ? '© <a href="https://crazylabs.co.kr" target="_blank" rel="noopener">CrazyLabs</a> · <a href="https://github.com/dohoon84/bumpinto-world" target="_blank" rel="noopener">Source Available</a> · Map © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>'
+      : '© <a href="https://crazylabs.co.kr" target="_blank" rel="noopener">CrazyLabs</a> · <a href="https://github.com/dohoon84/bumpinto-world" target="_blank" rel="noopener">소스 공개 (영리 서비스 금지)</a> · 지도 © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>';
+    let rest = '(ODbL)';
     // [corridor] Overture footprint · 브이월드 건물 높이 / [colours] 브이월드 건물 속성(→ 외벽색 추정). 같은 브이월드 GIS건물통합정보라 한 번만 적는다
-    if (corridorDir) attrEl.innerHTML += ' · <a href="https://overturemaps.org" target="_blank" rel="noopener">Overture Maps</a>';
+    if (corridorDir) rest += ' · <a href="https://overturemaps.org" target="_blank" rel="noopener">Overture Maps</a>';
     const vworldUse = [corridorDir && (en ? 'heights' : '높이'), world.colours && (en ? 'attributes' : '속성')].filter(Boolean);
-    if (vworldUse.length) attrEl.innerHTML += en
+    if (vworldUse.length) rest += en
       ? ` · Building ${vworldUse.join(' & ')}: <a href="https://www.vworld.kr" target="_blank" rel="noopener">VWorld</a> (MOLIT, KOGL Type 1)`
       : ` · 건물 ${vworldUse.join('·')}: <a href="https://www.vworld.kr" target="_blank" rel="noopener">브이월드</a> (국토교통부, 공공누리 제1유형)`;
     // [shops] 1층 상가 출처 (소상공인시장진흥공단 상가(상권)정보, 공공데이터포털 15083033)
-    if (world.shops) attrEl.innerHTML += en
+    if (world.shops) rest += en
       ? ' · Shops: <a href="https://www.data.go.kr/data/15083033/fileData.do" target="_blank" rel="noopener">SEMAS</a> (data.go.kr)'
       : ' · 상가: <a href="https://www.data.go.kr/data/15083033/fileData.do" target="_blank" rel="noopener">소상공인시장진흥공단</a>';
+    attribution.set(main, rest, en);
   }
   syncRideUi(true);
   syncHelpFoldUi();
@@ -1814,6 +1849,10 @@ ride = corridor && params.get('ride') !== '0' ? mountRide({
 }) : null;
 if (ride) { ride.setOverlay(overlay); remotes.rideHook = (p, dt) => ride.remoteHook(p, dt); }
 const perfHud = mountPerfHud({ renderer, corridor, params });
+const cameraApp = mountCamera({ // [camera]
+  handset, renderer, scene, camera, cam, params, sms,
+  getInfo: () => ({ region: region.id, regionName: region.name, regionEnName: region.enName || region.name, x: player.position.x, z: player.position.z, name: me?.name || '' }),
+});
 if (travel && params.get('at')) travel.go(params.get('at'));
 // [corridor] 지구본 역 선택 → 입장 완료 후 역 출구 앞 인도로 (위치 저장 성공 여부와 무관)
 corridorArrive = () => {
@@ -1900,6 +1939,7 @@ function pauseWorldSession() {
   board.close();
   donationBoards.closeModal();
   handset.close();
+  cameraApp?.close(); // [camera]
   setPresenceOpen(false);
   setChatLogOpen(false);
   mySit = '';
@@ -1913,6 +1953,7 @@ function pauseWorldSession() {
   nameTag.el.classList.remove('is-afk');
   renderEmoteBar();
   joined = false;
+  bgm?.leave(); // [bgm] 페이드아웃 후 정지
   player.visible = false;
   nameTag.hidden = true;
   myBubble.item.hidden = true;
@@ -2027,7 +2068,7 @@ setInterval(() => {
   const now = performance.now();
   // requestAnimationFrame이 백그라운드에서 멈춘 경우(0.5초 이상 경과)
   if (now - lastFrameAt > 500) {
-    if (!bikes.riding && !adminBike?.riding && !giftRiding() && !myEmote && !handset.open && !board.open && !ride?.active) { // [ride] 탑승 중엔 자리비움 없음
+    if (!bikes.riding && !adminBike?.riding && !giftRiding() && !myEmote && !handset.open && !cameraApp?.open && !board.open && !ride?.active) { // [ride] 탑승 중엔 자리비움 없음
       idleTime += 1.0;
       if (!myAfk && idleTime >= AFK_TIMEOUT_SEC) {
         myAfk = true;
@@ -2173,7 +2214,7 @@ function frame() {
     }
 
     // 30초 동안 아무 입력이 없으면 자동 대기모드(자리비움/졸기) 전환
-    if (joined && moveSpeed < 0.05 && !myEmote && !handset.open && !board.open && !ride?.active) { // [ride]
+    if (joined && moveSpeed < 0.05 && !myEmote && !handset.open && !cameraApp?.open && !board.open && !ride?.active) { // [ride]
       idleTime += dt;
       if (!myAfk && idleTime >= AFK_TIMEOUT_SEC) {
         myAfk = true;
@@ -2288,6 +2329,8 @@ function frame() {
     sun.target.position.copy(c);
   }
   if (corridor) { const c = cam.mode === 'follow' ? P : sun.target.position; corridor.update(dt, c.x, c.z, cam.mode); } // [corridor] 타일 스트리밍(프레임당 최대 1개 빌드)
+  if (playgrounds) { const c = cam.mode === 'follow' ? P : sun.target.position; playgrounds.update(dt, c.x, c.z, cam.mode); } // [playgrounds] 거리·타일 기준 표시
+  if (streetlights) { const c = cam.mode === 'follow' ? P : sun.target.position; streetlights.update(dt, c.x, c.z, cam.mode); } // [streetlights] 거리·타일 기준 표시 + 밤 페이드
   world.shops?.update(dt, P.x, P.z); // [shops] 주변 70m 상호 간판 풀
   const viewYaw = cam.mode === 'follow' ? cam.yaw : ov.yaw;
   const moveYaw = player.rotation.y + (bikes.riding && bikes.speed < -0.2 ? Math.PI : 0);
@@ -2303,6 +2346,7 @@ function frame() {
   sun.position.copy(sun.target.position).addScaledVector(atmosphere.sunDir, 500);
   renderer.render(scene, camera);
   perfHud.tick();
+  bgm?.setDuck(!!ride?.active || !!adminBike?.riding || !!giftMount()); // [bgm] 버스·바이크 소리가 날 때 살짝 줄임 (바뀔 때만 동작)
   memHud.tick();
   overlay.update(innerWidth, innerHeight);
   emoteFx.update(dt, innerWidth, innerHeight);
@@ -2313,11 +2357,13 @@ requestAnimationFrame(frame);
 
 // 스크린샷/디버그용 훅
 window.__jj = {
-  ready: true, region, tower, renderer, corridor, // [corridor]
+  ready: true, region, tower, renderer, corridor, playgrounds, streetlights, // [corridor] [playgrounds] [streetlights]
   launch, roadster, trucks, bike: adminBike, giftRides, inventory, data, world, npcs, transit, camera, cam, ov, setMode, terrain, taxis, police, weather: atmosphere, umbrellas, dogPark, strayCats, // [terrain] [taxi] [roadster] [tower] [launch] [truck] [bike] [roadbike] [inventory]
   get player() { return player; },
   teleport(x, z, y) { ride?.forceAlight('teleport'); if (bikes.riding) dismountBike(); if (adminBike?.riding) adminBike.dismount(); dismountGiftRides(); player.position.set(x, y ?? (terrain ? terrain.getGroundHeight(x, z, 0) : 0), z); }, // [terrain] [bike] [roadbike]
   bikes, toggleRide, triggerEmote,
   get ride() { return ride; }, remotes, presence, // [ride]
+  cameraApp, // [camera]
+  bgm, // [bgm]
   nearNpc(i = 0, d = 3) { const n = npcs.list[i]; player.position.set(n.pos.x + d, 0, n.pos.z + d * 0.5); },
 };

@@ -27,7 +27,8 @@ export function coveredFn(terrain, T) {
 }
 
 // 하천 구간을 비운 평면 (terrain.js holeyPlane 과 같은 사분할 방식). 축 근처 판정은 격자로 가속.
-export function holeyGround(x0, z0, x1, z1, y, minCell, covered, axis) {
+// nearExtra(cx, cz, rad): [streams] 지류 띠 근처 판정 (없으면 본류 축만)
+export function holeyGround(x0, z0, x1, z1, y, minCell, covered, axis, nearExtra = null) {
   const C = 200, cells = new Set();
   for (let i = 0; i < axis.length; i += 5) { const [x, z] = axis[i]; cells.add(Math.floor(x / C) + ',' + Math.floor(z / C)); }
   const nearAxis = (cx, cz, rad) => {
@@ -37,11 +38,17 @@ export function holeyGround(x0, z0, x1, z1, y, minCell, covered, axis) {
   };
   const pos = [];
   const quad = (a, b, c, d) => pos.push(a, y, b, a, y, d, c, y, b, c, y, b, a, y, d, c, y, d);
+  // 돌려주는 값: 이 셀이 구멍 없이 다 채워졌나. nearExtra(지류) 때문에만 쪼갠 셀은 네 조각이 다 채워지면 한 장으로 되돌림
+  // (평면이라 모양 그대로, 축 근처 격자는 nearExtra 없을 때와 똑같이)
   const rec = (a, b, c, d) => {
     const w = c - a, cx = (a + c) / 2, cz = (b + d) / 2, rad = Math.hypot(w, d - b) / 2;
-    if (!nearAxis(cx, cz, rad)) return quad(a, b, c, d);
-    if (w <= minCell) { if (![[a, b], [c, b], [a, d], [c, d], [cx, cz]].every(([x, z]) => covered(x, z))) quad(a, b, c, d); return; }
-    rec(a, b, cx, cz); rec(cx, b, c, cz); rec(a, cz, cx, d); rec(cx, cz, c, d);
+    const main = nearAxis(cx, cz, rad);
+    if (!main && !(nearExtra && nearExtra(cx, cz, rad))) { quad(a, b, c, d); return true; }
+    if (w <= minCell) { if ([[a, b], [c, b], [a, d], [c, d], [cx, cz]].every(([x, z]) => covered(x, z))) return false; quad(a, b, c, d); return true; }
+    const start = pos.length;
+    const full = rec(a, b, cx, cz) & rec(cx, b, c, cz) & rec(a, cz, cx, d) & rec(cx, cz, c, d);
+    if (full && !main) { pos.length = start; quad(a, b, c, d); }
+    return !!full;
   };
   // 정사각형에 가까운 셀로 나눠 재귀
   const S = 512, nx = Math.max(1, Math.round((x1 - x0) / S)), nz = Math.max(1, Math.round((z1 - z0) / S)), sx = (x1 - x0) / nx, sz = (z1 - z0) / nz;

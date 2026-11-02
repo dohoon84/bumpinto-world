@@ -5,6 +5,7 @@
 // ?shops=0 이면 파일을 받지 않아 기존과 똑같다.
 import * as THREE from 'three';
 import { matchKeyedRows, ringCentroid } from './keyedBuildings.js';
+import { solidRings } from './doosanGate.js';
 
 export const SHOP_GF_H = 3.2; // 1층 높이(= FACADE_FLOOR)
 const MIN_SHOP_H = 2.6;      // 이보다 낮은 건물(정자·창고 등)엔 가게를 달지 않는다
@@ -90,9 +91,9 @@ function outwardEdges(ring) {
   }
   return edges;
 }
-function pickStreetFace(ring, segsAt, avoid) {
+function pickStreetFace(rings, segsAt, avoid) {
   let best = null, bestS = -Infinity;
-  for (const e of outwardEdges(ring)) {
+  for (const e of rings.flatMap((r) => outwardEdges(r))) {
     if (avoid && avoid.some((f) => Math.hypot(f.mx - e.mx, f.mz - e.mz) < 0.6)) continue;
     let s = 0, at = null;
     for (const g of segsAt(e.mx, e.mz)) {
@@ -147,7 +148,7 @@ export function addGroundFloorShops(scene, data, shops, placedSigns = [], isShel
     const b = e.b;
     if (!isShopFront(b) || isShell(b)) continue;
     const avoid = signHosts.get(b);
-    const face = pickStreetFace(b.o, segsAt, avoid);
+    const face = pickStreetFace(solidRings(b), segsAt, avoid); // [night-buildings] 두산 문 형상이면 타워 벽만
     if (!face) continue;
     const along = Math.max(0, Math.min(face.L, (face.road.x - face.x0) * face.dx + (face.road.z - face.z0) * face.dz));
     const w = Math.min(face.L - 0.6, Math.max(2.4, Math.min(9, 2 + e.count * 0.9)));

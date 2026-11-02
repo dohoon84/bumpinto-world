@@ -1,6 +1,7 @@
 import { DurableObject } from "cloudflare:workers";
 import { NOTICE_POSTS } from "../../../src/notices.js";
 import { GIFT_ITEMS, giftItem, giftUnit, normalizeHoldings } from "../../../src/gifts/catalog.js";
+import { photoOp } from "./photos.js";
 
 // 정자역 번호부 하나. 번호는 여기서만 올라가서 겹치지 않는다.
 const ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -55,6 +56,40 @@ function cleanCommentBody(value) {
     .trim()
     .slice(0, 500);
   return body || null;
+}
+
+// [camera] 뉴스 제보 상한: 사진 300KB(클라이언트는 긴 변 960px JPEG 로 줄여 보냄), 1인 하루 5건,
+// 검토 대기 최대 300건(넘으면 새 제보를 받지 않음), 30일 지나면 사진째 삭제.
+const NEWS_TIP_MAX_BYTES = 300 * 1024;
+const NEWS_TIP_DAILY = 5;
+const NEWS_TIP_MAX_PENDING = 300;
+const NEWS_TIP_KEEP_MS = 30 * 86400000;
+const NEWS_TIP_STATUSES = new Set(["pending", "approved", "rejected"]);
+
+function cleanTipCaption(value) {
+  const text = String(value || "").replace(/[\u0000-\u001f\u007f]/g, " ").replace(/\s+/g, " ").trim().slice(0, 120);
+  return text.length >= 2 ? text : null;
+}
+
+function decodeJpegBase64(value) {
+  if (typeof value !== "string" || !value) return null;
+  if (value.length > Math.ceil((NEWS_TIP_MAX_BYTES * 4) / 3) + 8) return "too_big";
+  let bin;
+  try { bin = atob(value); } catch { return null; }
+  if (bin.length > NEWS_TIP_MAX_BYTES) return "too_big";
+  if (bin.length < 200) return null;
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  // JPEG 시작(FFD8FF)·끝(FFD9) 표식만 확인한다.
+  if (bytes[0] !== 0xff || bytes[1] !== 0xd8 || bytes[2] !== 0xff) return null;
+  if (bytes[bytes.length - 2] !== 0xff || bytes[bytes.length - 1] !== 0xd9) return null;
+  return bytes;
+}
+
+function bytesToBase64(bytes) {
+  let bin = "";
+  for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+  return btoa(bin);
 }
 
 function digits(value) {
@@ -1286,6 +1321,113 @@ export class PhoneBook extends DurableObject {
     }
 
     return { ok: false, error: "bad_op" };
+  }
+
+  // [camera] 사진 뉴스 제보함. 받은 제보는 'pending' 으로만 쌓이고, 운영자가 검토(review)하기 전엔 어디에도 게시되지 않는다.
+  // 번호가 매겨진 마이그레이션(#migrate)과 섞이지 않게, 표는 처음 쓸 때 IF NOT EXISTS 로 만든다.
+  #ensureNewsTips() {
+    if (this.newsTipsReady) return;
+    const sql = this.ctx.storage.sql;
+    sql.exec(`CREATE TABLE IF NOT EXISTS news_tips (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id TEXT NOT NULL,
+      phone TEXT NOT NULL,
+      name TEXT NOT NULL,
+      region TEXT NOT NULL,
+      caption TEXT NOT NULL,
+      image BLOB NOT NULL,
+      bytes INTEGER NOT NULL,
+      w INTEGER, h INTEGER, x REAL, z REAL,
+      taken_at INTEGER,
+      created_at INTEGER NOT NULL,
+      status TEXT NOT NULL DEFAULT 'pending',
+      reviewed_at INTEGER,
+      reviewer TEXT
+    )`);
+    sql.exec(`CREATE INDEX IF NOT EXISTS news_tips_user ON news_tips (user_id, created_at)`);
+    sql.exec(`CREATE INDEX IF NOT EXISTS news_tips_status ON news_tips (status, id)`);
+    this.newsTipsReady = true;
+  }
+
+  async newsTip(input) {
+    this.#migrate();
+    this.#ensureNewsTips();
+    const sql = this.ctx.storage.sql;
+    const op = String(input?.op || "submit");
+    const found = this.#user(input?.id);
+    if (found.error) return { ok: false, error: found.error };
+    const user = found.user;
+    const now = Date.now();
+
+    if (op === "submit") {
+      const caption = cleanTipCaption(input?.caption);
+      if (!caption) return { ok: false, error: "empty" };
+      const bytes = decodeJpegBase64(input?.image);
+      if (bytes === "too_big") return { ok: false, error: "too_big" };
+      if (!bytes) return { ok: false, error: "bad_image" };
+      const recent = sql.exec(
+        "SELECT COUNT(*) AS n FROM news_tips WHERE user_id = ? AND created_at > ?",
+        user.id, now - 86400000,
+      ).toArray()[0];
+      if (Number(recent?.n || 0) >= NEWS_TIP_DAILY) return { ok: false, error: "tip_rate" };
+      // 보관 기한이 지난 제보(검토 여부와 무관)는 사진째 지운다.
+      sql.exec("DELETE FROM news_tips WHERE created_at < ?", now - NEWS_TIP_KEEP_MS);
+      const pending = sql.exec("SELECT COUNT(*) AS n FROM news_tips WHERE status = 'pending'").toArray()[0];
+      if (Number(pending?.n || 0) >= NEWS_TIP_MAX_PENDING) return { ok: false, error: "tip_full" };
+      const int = (v, lo, hi) => { if (v == null || v === "") return null; const n = Math.round(Number(v)); return Number.isFinite(n) && n >= lo && n <= hi ? n : null; };
+      sql.exec(
+        `INSERT INTO news_tips (user_id, phone, name, region, caption, image, bytes, w, h, x, z, taken_at, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        user.id, user.phone, user.name, String(input?.region || DEFAULT_REGION).slice(0, 24), caption,
+        bytes.buffer, bytes.byteLength,
+        int(input?.w, 1, 4096), int(input?.h, 1, 4096), int(input?.x, -1e6, 1e6), int(input?.z, -1e6, 1e6),
+        int(input?.takenAt, now - 30 * 86400000, now + 600000), now,
+      );
+      const tipId = Number(sql.exec("SELECT last_insert_rowid() AS id").toArray()[0]?.id || 0);
+      return { ok: true, tipId };
+    }
+
+    // 아래는 운영자 전용 (게시판 관리자와 같은 판정)
+    if (!(await isBoardAdmin(user.phone, this.env))) return { ok: false, error: "forbidden" };
+    if (op === "list") {
+      const status = NEWS_TIP_STATUSES.has(String(input?.status)) ? String(input.status) : "pending";
+      const rows = sql.exec(
+        `SELECT id, phone, name, region, caption, bytes, w, h, x, z, taken_at, created_at, status, reviewed_at
+         FROM news_tips WHERE status = ? ORDER BY id DESC LIMIT 50`,
+        status,
+      ).toArray();
+      return {
+        ok: true,
+        status,
+        items: rows.map((r) => ({
+          id: r.id, author: { name: r.name, display: displayPhone(r.phone) }, region: r.region, regionName: regionLabelOf(r.region),
+          caption: r.caption, bytes: r.bytes, w: r.w, h: r.h, x: r.x, z: r.z,
+          takenAt: r.taken_at, createdAt: r.created_at, status: r.status, reviewedAt: r.reviewed_at,
+        })),
+      };
+    }
+    const tipId = Math.floor(Number(input?.tipId) || 0);
+    const row = tipId ? sql.exec("SELECT id, image, status FROM news_tips WHERE id = ?", tipId).toArray()[0] : null;
+    if (!row) return { ok: false, error: "tip_not_found" };
+    if (op === "image") {
+      return { ok: true, id: row.id, image: bytesToBase64(new Uint8Array(row.image)), type: "image/jpeg" };
+    }
+    if (op === "review") {
+      const status = String(input?.status || "");
+      if (status !== "approved" && status !== "rejected") return { ok: false, error: "bad_status" };
+      sql.exec("UPDATE news_tips SET status = ?, reviewed_at = ?, reviewer = ? WHERE id = ?", status, now, user.phone, tipId);
+      return { ok: true, id: tipId, status };
+    }
+    return { ok: false, error: "bad_op" };
+  }
+
+  // [photo-cloud] 사진 보관함 메타데이터(목록·캡션·한도). 이미지는 Worker 가 R2 에 둔다(photos.js).
+  // 주인은 계정 id 로 여기서 찾은 사람뿐 — 요청에 실린 다른 owner 값은 쓰지 않는다.
+  async photos(input) {
+    this.#migrate();
+    const found = this.#user(input?.id);
+    if (found.error) return { ok: false, error: "unauthorized" };
+    return photoOp(this.ctx.storage.sql, found.user, input);
   }
 
   stats() {

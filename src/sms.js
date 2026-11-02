@@ -469,6 +469,7 @@ export function createSms() {
   return {
     get id() { return id; },
     get off() { return !base; },
+    get base() { return base; }, // [camera] 뉴스 제보(/news-tip) 전송용
     get session() { return session; },
     async enter({ name, look, pin, preview = false }) {
       if (!base) {

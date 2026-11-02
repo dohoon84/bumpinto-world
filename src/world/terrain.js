@@ -1,21 +1,31 @@
-// [terrain] 탄천 저수로/둔치 고도 + 제방(둑) + 계단 + 다리 구조물
+// [terrain] 탄천 저수로/둔치 고도 + 제방(둑) + 계단 + 징검다리 + 다리 구조물
 //   데이터: public/terrain.json (scripts/convert-taxi-terrain.mjs 로 생성)
 //   기준 높이(근사값, 실측 아님): 도로/제방 위 = 0m, 둔치(산책로·자전거길) = params.FLOOR(-6m), 수면 = WATER(-6.6m), 하상 = BED(-7.6m)
 //
 //   공개 API
 //     baseHeight(x, z)            지형(제방/둔치/하상) 높이 — 다리/계단 제외
 //     renderHeight(x, z)          메시에 쓰는 높이 (계단 자리만 살짝 깎음) — world.js 가 data.heightAt 으로 사용
-//     getGroundHeight(x, z, refY) 걸을 수 있는 표면 높이 (= groundY). 계단은 한 칸씩 계단식, 다리 상판은 refY 근처일 때만 선택
+//     getGroundHeight(x, z, refY) 걸을 수 있는 표면 높이 (= groundY). 계단은 한 칸씩 계단식, 다리 상판은 refY 근처일 때만 선택,
+//                                 징검다리 돌 줄 위는 돌 윗면(수면 + 0.14m)
 //     getVehicleHeight(x, z, refY) 차량용 높이 — 다리 상판을 끝/옆 여유까지 이어서 따라감(refY 보다 V_UP(0.6m, 보행자 한 걸음과 같음) 넘게 높은 상판은 무시)
 //     canMove(x0, z0, y0, x1, z1) 플레이어 이동 판정 -> 새 y 또는 null(막힘: 가파른 제방, 다리 난간 밖, 큰 단차)
 //     annotate(data)              buildWorld 전에 호출: 도로 점에 높이(p[2]) 부여, 수면 높이, 하천 안 공원 폴리곤 분리
-//     build(scene, world, overlay) buildWorld 후 호출: 바닥 평면 구멍 + 하천 지형 메시 + 계단 + 다리 구조물
+//     build(scene, world, overlay) buildWorld 후 호출: 바닥 평면 구멍 + 하천 지형 메시 + 계단 + 징검다리 + 다리 구조물 + 저녁 다리 조명(bridgeLights.js)
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { addInstancedTrees } from './trees.js';
+import { createStreams } from './streams.js';
+import { buildBridgeLights } from './bridgeLights.js';
 
 const MAX_STEP = 0.5;      // 한 번에 오르내릴 수 있는 단차(m)
 const MAX_GRADE = 0.4;     // 계단/다리 밖에서 걸을 수 있는 최대 경사 (약 22°) — 탄천 제방은 대부분 이보다 가팔라서 막힘
+// 보행·자전거 다리(차 없음): 상판 폭 = OSM 기본 폭(보도 2.2m) × FOOT_DECK. 옆 다리(차도교 옆 보도교 등)와 겹치면 그 앞까지만
+const FOOT = new Set(['footway', 'cycleway', 'path', 'pedestrian']);
+const FOOT_DECK = 3;
+// 징검다리 돌 (한국 하천 징검다리 크기 근사): 진행 방향 길이 along, 옆 폭 across, 돌 간격 pitch(중심 간), 윗면 = 수면 + up
+//   OSM 선을 양쪽으로 ext 까지 늘려서 지형이 윗면보다 낮은 구간(물·물가)에만 놓는다
+const STONE = { along: 0.6, across: 0.9, pitch: 0.95, up: 0.14, ext: 4 };
+const FORD_APRON = 1.0; // 돌 줄 옆 이 폭까지는 물가 경사 제한 없이 걸어서 돌로 오르내림
 const PARK_COLOR = { park: '#a8d59a', garden: '#b2dc9f', playground: '#c6e2a0', pitch: '#9fd08c', grass: '#b5dda3', forest: '#86bf7c', wood: '#86bf7c', scrub: '#9cc78a', meadow: '#bfe0a8', recreation_ground: '#b0d89c' };
 
 function pointInRing(x, z, r) {
@@ -69,19 +79,26 @@ export function createTerrain(T, data) {
     return BED;
   }
   const endFade = (i) => Math.min(1, Math.min(i, N - 1 - i) / 100); // 축 양 끝 200m 에서 서서히 지면으로 (bbox 에서 2km+ 떨어진 곳)
-  function baseHeight(x, z) {
+  function mainBase(x, z) {
     const q = project(x, z); if (!q || q.end) return 0;
     const p = profAt(q); if (Math.abs(q.d) >= p.top) return 0;
     return hProfile(Math.abs(q.d), p.toe, p.top, p.w) * endFade(q.i);
   }
+  // [streams] 지류 하도(T.streams, ?streams=0 이면 없음): 높이 = min(본류, 지류). 없으면 본류 그대로
+  const streams = T.streams ? createStreams(T.streams, { P, mainBase }) : null;
+  const baseHeight = streams ? (x, z) => { const a = mainBase(x, z), b = streams.height(x, z); return b < a ? b : a; } : mainBase;
 
   // ---- 계단 ----
-  const stairs = (T.stairs || []).map((s, k) => {
+  const mkStair = (s, k) => {
     const [a, b] = s.flight, L = Math.hypot(b[0] - a[0], b[1] - a[1]), ux = (b[0] - a[0]) / L, uz = (b[1] - a[1]) / L;
     return { ...s, k, ax: a[0], az: a[1], h0: a[2], h1: b[2], L, ux, uz, n: s.steps, hw: s.w / 2 };
-  });
+  };
+  const stairs = (T.stairs || []).map(mkStair);
+  // 지류 계단: 높이·메시에는 쓰지만 탄천 산책 경로(riversideRoute/bankPath, export stairs)에는 넣지 않음
+  const streamStairs = (streams ? streams.stairs : []).map((s, k) => mkStair(s, stairs.length + k));
+  const allStairs = stairs.concat(streamStairs);
   const stairGrid = new SegGrid(20);
-  for (const s of stairs) stairGrid.add(s, Math.min(s.ax, s.ax + s.ux * s.L) - 4, Math.min(s.az, s.az + s.uz * s.L) - 4, Math.max(s.ax, s.ax + s.ux * s.L) + 4, Math.max(s.az, s.az + s.uz * s.L) + 4);
+  for (const s of allStairs) stairGrid.add(s, Math.min(s.ax, s.ax + s.ux * s.L) - 4, Math.min(s.az, s.az + s.uz * s.L) - 4, Math.max(s.ax, s.ax + s.ux * s.L) + 4, Math.max(s.az, s.az + s.uz * s.L) + 4);
   const stairLocal = (s, x, z) => { const rx = x - s.ax, rz = z - s.az; return [rx * s.ux + rz * s.uz, -rx * s.uz + rz * s.ux]; };
   const stairLinear = (s, u) => s.h0 + (s.h1 - s.h0) * Math.max(0, Math.min(1, u / s.L));
   const stairStep = (s, u) => u <= 0 ? s.h0 : u >= s.L ? s.h1 : s.h0 + ((s.h1 - s.h0) * (Math.floor((u / s.L) * s.n) + 0.5)) / s.n;
@@ -89,8 +106,37 @@ export function createTerrain(T, data) {
     for (const s of stairGrid.query(x, z)) { const [u, v] = stairLocal(s, x, z); if (u >= -0.25 && u <= s.L + 0.25 && Math.abs(v) <= s.hw + pad) return { s, u, v }; }
     return null;
   }
+  // ---- 징검다리 (streams.json fords: OSM ford=stepping_stones, 지류) ----
+  //   걷기: 돌 줄(폭 STONE.across) 안에서는 높이 = max(지형, 돌 윗면), 경사 제한 없음 → 물가 경사를 지나 돌을 밟고 건넘.
+  //   줄 밖 물은 예전대로(물가 경사·하상 단차로 막힘). 돌 사이 틈(~0.35m)은 한 걸음이라 윗면 높이로 이어 걷는다
+  const fords = [], fordGrid = new SegGrid(20);
+  for (const f of streams ? streams.fords : []) {
+    const a = f.p[0], b = f.p[f.p.length - 1], L = Math.hypot(b[0] - a[0], b[1] - a[1]); if (L < 0.5) continue;
+    const ux = (b[0] - a[0]) / L, uz = (b[1] - a[1]) / L, T = L + 2 * STONE.ext;
+    const at = (u) => [a[0] + ux * (u - STONE.ext), a[1] + uz * (u - STONE.ext)];
+    let um = 0, gm = Infinity;
+    for (let u = 0; u <= T; u += 0.1) { const g = baseHeight(...at(u)); if (g < gm) { gm = g; um = u; } }
+    const wy = streams.waterAt(...at(um)); if (wy == null) continue;
+    const top = wy + STONE.up, wet = (u) => baseHeight(...at(u)) < top - 0.05;
+    let u0 = um, u1 = um;
+    while (u0 > 0 && wet(u0 - 0.1)) u0 -= 0.1;
+    while (u1 < T && wet(u1 + 0.1)) u1 += 0.1;
+    const n = Math.max(1, Math.round((u1 - u0) / STONE.pitch)), step = (u1 - u0) / n, stones = [];
+    for (let k = 0; k < n; k++) { const [x, z] = at(u0 + step * (k + 0.5)); stones.push([x, z]); }
+    const [ax0, az0] = at(u0 - 0.5), [bx0, bz0] = at(u1 + 0.5), hw = STONE.across / 2 + 0.15; // 걷는 반폭 0.6m = 돌 반폭 + 발 걸침
+    const item = { ax: ax0, az: az0, bx: bx0, bz: bz0, hw, h: top, yaw: Math.atan2(ux, uz), stones, osm: f.osm, river: f.river };
+    fords.push(item);
+    { const r = hw + FORD_APRON; fordGrid.add(item, Math.min(ax0, bx0) - r, Math.min(az0, bz0) - r, Math.max(ax0, bx0) + r, Math.max(az0, bz0) + r); }
+  }
+  function fordAt(x, z, pad = 0) { // pad: 줄 옆 여유(물가 경사 '진입로' 판정용)
+    for (const f of fordGrid.query(x, z)) {
+      const dx = f.bx - f.ax, dz = f.bz - f.az, L2 = dx * dx + dz * dz, t = ((x - f.ax) * dx + (z - f.az) * dz) / L2;
+      if (t >= 0 && t <= 1 && Math.abs((x - f.ax) * dz - (z - f.az) * dx) / Math.sqrt(L2) <= f.hw + pad) return f;
+    }
+    return null;
+  }
   function renderHeight(x, z) {
-    const h = baseHeight(x, z); if (h === 0 && !stairs.length) return 0;
+    const h = baseHeight(x, z); if (h === 0 && !allStairs.length) return 0;
     const st = stairAt(x, z, 0.4); if (st) return Math.min(h, stairLinear(st.s, st.u) - 0.1);
     return h;
   }
@@ -124,6 +170,7 @@ export function createTerrain(T, data) {
   function getGroundHeight(x, z, refY = Infinity) {
     let h; const st = stairAt(x, z);
     h = st ? stairStep(st.s, st.u) : baseHeight(x, z);
+    if (fords.length) { const f = fordAt(x, z); if (f && f.h > h && f.h <= refY + MAX_STEP + 0.1) h = f.h; }
     if (h < -0.05) for (const d of deckGrid.query(x, z)) {
       const s = deckSample(d, x, z);
       if (!s || s.h <= h || s.h > refY + MAX_STEP + 0.1) continue;
@@ -169,22 +216,53 @@ export function createTerrain(T, data) {
     return h;
   }
   const grade = (x, z) => { const e = 0.4; return Math.hypot(baseHeight(x + e, z) - baseHeight(x - e, z), baseHeight(x, z + e) - baseHeight(x, z - e)) / (2 * e); };
+  // 수면 높이(바닥이 물에 잠긴 곳만): 지류 = 지류 수면, 본류 수로 = WATER. 물 밖이면 null
+  function waterSurface(x, z) {
+    const g = baseHeight(x, z);
+    const w = streams ? streams.waterAt(x, z) : null; if (w != null && g < w - 0.02) return w;
+    return g < WATER - 0.02 && mainBase(x, z) < WATER - 0.02 ? WATER : null;
+  }
+  const submerged = (x, z, y) => { const w = waterSurface(x, z); return w != null && y < w - 0.02; };
   function canMove(x0, z0, y0, x1, z1) {
+    // 물속에 빠져 있으면(예전 버전·순간이동) 더 깊어지지 않는 쪽으로는 경사·단차(1m까지) 무시하고 올라와 빠져나오게
+    if (submerged(x0, z0, y0)) { const h = getGroundHeight(x1, z1, y0 + 1); return h >= y0 - 0.01 && h <= y0 + 1 ? h : null; }
     const h1 = getGroundHeight(x1, z1, y0);
     if (Math.abs(h1 - y0) > MAX_STEP) return null;
-    if (stairAt(x1, z1)) return h1;
+    if (stairAt(x1, z1) || fordAt(x1, z1)) return h1;
     const d = deckAt(x1, z1); if (d && Math.abs(d.h - h1) < 0.01) return h1;
+    if (submerged(x1, z1, h1)) return null; // 물속(수면 아래 바닥)으로는 못 들어감 = 다른 물가와 같음
+    if (fords.length && fordAt(x1, z1, FORD_APRON)) return h1; // 징검다리 양 끝 물가 경사(줄 옆 1m)는 비스듬히 와도 오르내림 (물속은 위에서 막힘)
     const g1 = grade(x1, z1);
     if (g1 > MAX_GRADE) {
-      // 이미 경사면 위에 있으면(순간이동 등) 내려가는 방향만 허용해서 빠져나올 수 있게
-      if (!(grade(x0, z0) > MAX_GRADE && h1 <= y0 + 0.01)) return null;
+      // 이미 경사면 위에 서 있으면(순간이동 등) 내려가는 방향만 허용해서 빠져나올 수 있게.
+      // 돌·다리·계단 위(y0 가 지형보다 높음)에서는 아래 경사가 가팔라도 이 예외를 안 씀 → 징검다리 옆 물가로 미끄러져 내려가지 않음
+      if (!(grade(x0, z0) > MAX_GRADE && Math.abs(y0 - baseHeight(x0, z0)) < 0.05 && h1 <= y0 + 0.01)) return null;
     }
     return h1;
   }
 
+
   // ---- buildWorld 전 데이터 주석 ----
   const corridorParks = [];
   const densify = (pts, step) => { const o = []; for (let i = 1; i < pts.length; i++) { const [ax0, az0] = pts[i - 1], [bx, bz] = pts[i], L = Math.hypot(bx - ax0, bz - az0), n = Math.max(1, Math.ceil(L / step)); for (let k = 0; k < n; k++) o.push([ax0 + ((bx - ax0) * k) / n, az0 + ((bz - az0) * k) / n]); } o.push(pts[pts.length - 1].slice(0, 2)); return o; };
+  // 다리가 아닌 길: 지형 높이를 점마다 붙임 (높이가 변하는 곳만 1.5m 로 촘촘하게, 나머지는 원래 점 유지)
+  function liftRoad(r) {
+    const dense = densify(r.p, 1.5), hs = dense.map(([x, z]) => renderHeight(x, z));
+    if (hs.every((h) => h === 0)) return;
+    const out = [];
+    for (let i = 0; i < dense.length; i++) {
+      const keep = i === 0 || i === dense.length - 1 || hs[i] !== 0 || hs[i - 1] !== 0 || hs[i + 1] !== 0 || r.p.some((p) => p[0] === dense[i][0] && p[1] === dense[i][1]);
+      if (keep) out.push([dense[i][0], dense[i][1], hs[i]]);
+    }
+    r.p = out;
+  }
+  // [streams] 코리더 타일 길(이미 annotate 된 데이터 밖)용. 지류가 없으면 아무것도 안 함 → 정자/기존 타일 동일
+  function liftRoads(roads) { if (!streams) return; for (const r of roads) if (!r.br && r.p.length >= 2 && r.p[0].length < 3) liftRoad(r); }
+  // 수로 선(waterway 리본) 높이: 본류 규칙 그대로(h < -0.5 → 본류 수면), 지류 띠 안이면 그 지형 바로 아래(리본은 지류 메시의 수면이 대신 그림)
+  function waterLineY(x, z) {
+    if (streams && streams.inBand(x, z)) { const m = mainBase(x, z); if (!(m < -0.5)) return renderHeight(x, z) - 0.08; }
+    return baseHeight(x, z) < -0.5 ? WATER - 0.005 : 0;
+  }
   function annotate(d) {
     d.heightAt = renderHeight;
     // 신기교(OSM 1229714855): 성남대로–황새울로 사이 탄천 보행교. 폭은 보도 기본 2.2m의 5배.
@@ -217,6 +295,27 @@ export function createTerrain(T, data) {
         decks.push(item); deckGrid.add(item, Math.min(x0, x1) - pad, Math.min(z0, z1) - pad, Math.max(x0, x1) + pad, Math.max(z0, z1) + pad);
       }
     }
+    // 보행교 폭: 나란한 옆 다리(이번 데이터 + 이미 만든 상판)와 겹치지 않는 만큼만 넓힘 (차도교 옆 보도교는 그대로)
+    const brSegs = decks.filter((q) => q.road && !q.road.arch).map((q) => ({ ...q, foot: FOOT.has(q.road.k) }));
+    for (const r of d.roads) if (r.br && !isSingi(r)) for (let i = 1; i < r.p.length; i++) brSegs.push({ ax: r.p[i - 1][0], az: r.p[i - 1][1], bx: r.p[i][0], bz: r.p[i][1], hw: r.w / 2 + 0.15, foot: FOOT.has(r.k), road: r });
+    function footDeckW(r) {
+      let half = (r.w * FOOT_DECK) / 2;
+      for (let i = 1; i < r.p.length; i++) {
+        const [x0, z0] = r.p[i - 1], [x1, z1] = r.p[i], L = Math.hypot(x1 - x0, z1 - z0); if (L < 0.2) continue;
+        const ux = (x1 - x0) / L, uz = (z1 - z0) / L;
+        for (let u = 0; u <= L; u += 1) {
+          const x = x0 + ux * u, z = z0 + uz * u; if (baseHeight(x, z) > -0.3) continue; // 하천 위(상판이 그려지는 곳)만
+          for (const o of brSegs) {
+            if (o.road === r) continue;
+            const dx = o.bx - o.ax, dz = o.bz - o.az, M = Math.hypot(dx, dz); if (M < 0.5 || Math.abs((dx * ux + dz * uz) / M) < 0.8) continue;
+            const t = ((x - o.ax) * dx + (z - o.az) * dz) / (M * M); if (t <= 0 || t >= 1) continue;
+            const lat = Math.abs((x - o.ax) * dz - (z - o.az) * dx) / M; if (lat < 0.5) continue;
+            half = Math.min(half, o.foot ? lat / 2 : lat - o.hw - 0.3);
+          }
+        }
+      }
+      return Math.max(r.w, Math.round(2 * half * 10) / 10);
+    }
     for (const r of d.roads) {
       if (r.br) {
         if (isSingi(r)) { shapeSingi(r); continue; }
@@ -225,21 +324,16 @@ export function createTerrain(T, data) {
         const ends = [baseHeight(...r.p[0]), baseHeight(...r.p[r.p.length - 1])];
         const h = Math.max(...ends) > FLOOR / 2 ? 0 : FLOOR + 0.4; // 제방 위끼리 잇는 다리 = 도로 높이, 둔치끼리 = 낮은 보도교
         r.p = r.p.map(([x, z]) => [x, z, h]); r.deckH = h;
+        // 상판 폭 deckW (리본은 OSM 폭 r.w 그대로). 걷는 반폭: 예전 r.w/2 + 0.15, 넓힌 보행교는 난간 안쪽(난간 두께 0.22 + 몸 여유)까지
+        const foot = FOOT.has(r.k); r.deckW = foot ? footDeckW(r) : r.w;
+        const hw = Math.max(r.w / 2 + 0.15, r.deckW / 2 - 0.3);
         for (let i = 1; i < r.p.length; i++) {
-          const [x0, z0] = r.p[i - 1], [x1, z1] = r.p[i], hw = r.w / 2 + 0.15, item = { ax: x0, az: z0, bx: x1, bz: z1, hw, h, road: r };
+          const [x0, z0] = r.p[i - 1], [x1, z1] = r.p[i], item = { ax: x0, az: z0, bx: x1, bz: z1, hw, h, road: r };
           decks.push(item); deckGrid.add(item, Math.min(x0, x1) - hw, Math.min(z0, z1) - hw, Math.max(x0, x1) + hw, Math.max(z0, z1) + hw);
         }
         continue;
       }
-      const dense = densify(r.p, 1.5), hs = dense.map(([x, z]) => renderHeight(x, z));
-      if (hs.every((h) => h === 0)) continue;
-      // 높이가 변하는 곳만 촘촘하게, 나머지는 원래 점 유지
-      const out = [];
-      for (let i = 0; i < dense.length; i++) {
-        const keep = i === 0 || i === dense.length - 1 || hs[i] !== 0 || hs[i - 1] !== 0 || hs[i + 1] !== 0 || r.p.some((p) => p[0] === dense[i][0] && p[1] === dense[i][1]);
-        if (keep) out.push([dense[i][0], dense[i][1], hs[i]]);
-      }
-      r.p = out;
+      liftRoad(r);
     }
     for (const w of d.water) {
       const hs = w.o.map(([x, z]) => baseHeight(x, z));
@@ -247,7 +341,7 @@ export function createTerrain(T, data) {
     }
     for (const l of d.waterLines) {
       const dense = densify(l.p, 4);
-      l.p = dense.map(([x, z]) => { const h = baseHeight(x, z); return [x, z, h < -0.5 ? WATER - 0.005 : 0]; });
+      l.p = dense.map(([x, z]) => [x, z, waterLineY(x, z)]);
     }
     d.parks = d.parks.filter((p) => {
       const inC = densify(p.o.concat([p.o[0]]), 3).some(([x, z]) => baseHeight(x, z) < -0.3);
@@ -260,17 +354,24 @@ export function createTerrain(T, data) {
   function build(scene, world, overlay) {
     const inBox = (x, z) => x >= bb.x0 && x <= bb.x1 && z >= bb.z0 && z <= bb.z1;
     // 1) 바닥 평면(world.ground / world.block)을 하천 구간만 비운 격자로 교체
-    const covered = (x, z) => { const q = project(x, z); if (!q || q.end) return false; const p = profAt(q); return Math.abs(q.d) < p.top + MARGIN; };
+    const coveredMain = (x, z) => { const q = project(x, z); if (!q || q.end) return false; const p = profAt(q); return Math.abs(q.d) < p.top + MARGIN; };
+    const covered = streams ? (x, z) => coveredMain(x, z) || streams.covered(x, z) : coveredMain;
     const axS = ax.filter((_, i) => i % 5 === 0);
-    const nearAxis = (x, z, r) => { const lim = (r + 140) ** 2; for (const [px, pz] of axS) if ((px - x) ** 2 + (pz - z) ** 2 < lim) return true; return false; };
+    const nearMain = (x, z, r) => { const lim = (r + 140) ** 2; for (const [px, pz] of axS) if ((px - x) ** 2 + (pz - z) ** 2 < lim) return true; return false; };
     function holeyPlane(x0, z0, x1, z1, y, minCell) {
       const pos = [];
       const quad = (a, b, c, d) => pos.push(a, y, b, a, y, d, c, y, b, c, y, b, a, y, d, c, y, d);
+      // 돌려주는 값: 구멍 없이 다 채워졌나. [streams] 지류 때문에만 쪼갠 셀은 네 조각이 다 채워지면 한 장으로 되돌림
+      // (평면이라 모양 그대로, 본류 근처 격자는 streams=0 과 똑같이)
       const rec = (a, b, c, d) => {
         const w = c - a, cx = (a + c) / 2, cz = (b + d) / 2, rad = Math.hypot(w, d - b) / 2;
-        if (!nearAxis(cx, cz, rad)) return quad(a, b, c, d);
-        if (w <= minCell) { if (![[a, b], [c, b], [a, d], [c, d], [cx, cz]].every(([x, z]) => covered(x, z))) quad(a, b, c, d); return; }
-        rec(a, b, cx, cz); rec(cx, b, c, cz); rec(a, cz, cx, d); rec(cx, cz, c, d);
+        const main = nearMain(cx, cz, rad);
+        if (!main && !(streams && streams.near(cx, cz, rad))) { quad(a, b, c, d); return true; }
+        if (w <= minCell) { if ([[a, b], [c, b], [a, d], [c, d], [cx, cz]].every(([x, z]) => covered(x, z))) return false; quad(a, b, c, d); return true; }
+        const start = pos.length;
+        const full = rec(a, b, cx, cz) & rec(cx, b, c, cz) & rec(a, cz, cx, d) & rec(cx, cz, c, d);
+        if (full && !main) { pos.length = start; quad(a, b, c, d); }
+        return !!full;
       };
       const S = Math.max(x1 - x0, z1 - z0), nx = Math.ceil((x1 - x0) / (S / 4)), nz = Math.ceil((z1 - z0) / (S / 4));
       const sx = (x1 - x0) / nx, sz = (z1 - z0) / nz;
@@ -317,15 +418,56 @@ export function createTerrain(T, data) {
         col.push(c.r, c.g, c.b);
       }
     }
+    // [streams] 본류 메시 색 규칙을 임의 점에서 (합류부 쪼갠 사각형 · 지류 메시의 본류 구간 정점)
+    const mainColor = (x, z, h) => {
+      const q = project(x, z), p = q && !q.end ? profAt(q) : null, ad = q ? Math.abs(q.d) : 0;
+      if (!p || h > -0.02) return inBox(x, z) ? cBlock : cGround;
+      if (ad > p.toe + 0.01) { const pk = parkAt(x, z); return FLOOR / (p.top - p.toe) < -1.0 ? cWall : pk && pk.p.k !== 'grass' ? tmpc.copy(cSlope).lerp(pk.col, 0.5) : cSlope; }
+      if (ad > p.w + 1.2) { const pk = parkAt(x, z); return pk ? pk.col : cFlood; }
+      return ad > p.w - 1 ? cBank : cBed;
+    };
+    // [streams] 지류가 본류보다 낮은(지배하는) 점이 걸린 사각형은 빼고 지류 메시가 그림 (합류부)
+    const dominated = streams ? (x, z) => { const s = streams.height(x, z); return s < -0.02 && s < mainBase(x, z) - 0.02; } : null;
+    // 네 모서리(xz) 사각형의 9점(모서리·변 중점·중심) 중 하나라도 지배되면 true
+    const domPts = (q) => [...q, [(q[0][0] + q[3][0]) / 2, (q[0][1] + q[3][1]) / 2], [(q[0][0] + q[1][0]) / 2, (q[0][1] + q[1][1]) / 2], [(q[0][0] + q[2][0]) / 2, (q[0][1] + q[2][1]) / 2], [(q[3][0] + q[1][0]) / 2, (q[3][1] + q[1][1]) / 2], [(q[3][0] + q[2][0]) / 2, (q[3][1] + q[2][1]) / 2]].some(([x, z]) => dominated(x, z));
+    const SUB = 4;
+    let droppedQuads = 0, subQuads = 0;
     for (let r = 1; r < rows.length; r++) for (let c = 1; c < C; c++) {
       const a = (r - 1) * C + c - 1, b = a + 1, d = r * C + c - 1, e = d + 1;
-      idx.push(a, d, b, b, d, e);
+      const q = [a, b, d, e].map((k) => [pos[k * 3], pos[k * 3 + 2]]);
+      if (!dominated || !domPts(q)) { idx.push(a, d, b, b, d, e); continue; }
+      // 지배된 사각형: SUB×SUB 로 쪼개 지배 안 된 조각만 본류 높이·색으로 남김 (지류 메시 가장자리와 틈 없게)
+      droppedQuads++;
+      const at = (u, v) => [q[0][0] * (1 - u) * (1 - v) + q[1][0] * u * (1 - v) + q[2][0] * (1 - u) * v + q[3][0] * u * v, q[0][1] * (1 - u) * (1 - v) + q[1][1] * u * (1 - v) + q[2][1] * (1 - u) * v + q[3][1] * u * v];
+      // 정점은 남는 조각이 쓰는 것만 만든다 (지배된 조각이 대부분이라 25점 다 만들면 버퍼만 큼)
+      const xz = [], vid = new Int32Array((SUB + 1) * (SUB + 1)).fill(-1);
+      for (let j = 0; j <= SUB; j++) for (let k = 0; k <= SUB; k++) xz.push(at(k / SUB, j / SUB));
+      const V = (j, k) => {
+        const n = j * (SUB + 1) + k;
+        if (vid[n] < 0) { const [x, z] = xz[n], h = renderHeight(x, z), cc = mainColor(x, z, h); vid[n] = pos.length / 3; pos.push(x, h > -0.02 ? 0.005 : h, z); col.push(cc.r, cc.g, cc.b); }
+        return vid[n];
+      };
+      for (let j = 0; j < SUB; j++) for (let k = 0; k < SUB; k++) {
+        if (domPts([xz[j * (SUB + 1) + k], xz[j * (SUB + 1) + k + 1], xz[(j + 1) * (SUB + 1) + k], xz[(j + 1) * (SUB + 1) + k + 1]])) continue;
+        const sa = V(j, k), sb = V(j, k + 1), sd = V(j + 1, k), se = V(j + 1, k + 1);
+        idx.push(sa, sd, sb, sb, sd, se); subQuads++;
+      }
     }
     const cg = new THREE.BufferGeometry();
     cg.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); cg.setAttribute('color', new THREE.Float32BufferAttribute(col, 3)); cg.setIndex(idx); cg.computeVertexNormals();
     // 축 방향에 따라 삼각형 감김이 뒤집힐 수 있으니 양면
     const channel = new THREE.Mesh(cg, new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide }));
     channel.receiveShadow = true; channel.name = 'tancheon-terrain'; scene.add(channel);
+    // [streams] 지류 하도 + 수면 (메시 1개, 본류와 같은 재질 종류)
+    let streamMesh = null;
+    if (streams) {
+    const sg = streams.buildGeometry({ renderHeight, mainBase, dominated, mainColor, colors: { cGround, cFlood, cSlope, cBank, cBed, cWater: new THREE.Color('#7ec3e6') } });
+      if (sg) {
+        streamMesh = new THREE.Mesh(sg, new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide }));
+        streamMesh.receiveShadow = true; streamMesh.name = 'stream-terrain'; scene.add(streamMesh);
+        Object.assign(streamMesh.userData, { droppedMainQuads: droppedQuads, mainSubQuads: subQuads });
+      }
+    }
 
     // 3) 계단 (디딤판 + 옆벽 + 난간)
     const tread = [], cheek = [], rail = [];
@@ -334,7 +476,7 @@ export function createTerrain(T, data) {
       const g = new THREE.CylinderGeometry(r, r, len, 6), v = new THREE.Vector3(x1 - x0, y1 - y0, z1 - z0).normalize();
       g.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), v)); g.translate((x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2); arr.push(g);
     };
-    for (const s of stairs) {
+    for (const s of allStairs) {
       const yaw = Math.atan2(s.ux, s.uz), td = s.L / s.n, rx = -s.uz, rz = s.ux; // rx,rz = 옆 방향
       const W = (u, v) => [s.ax + s.ux * u + rx * v, s.az + s.uz * u + rz * v];
       for (let k = 0; k < s.n; k++) {
@@ -358,16 +500,48 @@ export function createTerrain(T, data) {
         cyl(rail, 0.04, 1.2, x1, s.h1 + 0.3 + postH, z1, xb, s.h1 + 0.3 + postH, zb);
         cyl(rail, 0.035, postH, xt, s.h0, zt, xt, s.h0 + 0.3 + postH, zt); cyl(rail, 0.035, postH + 0.3, xb, s.h1, zb, xb, s.h1 + 0.3 + postH, zb);
       }
-      if (overlay) { const [lx, lz] = W(s.L * 0.15, 0); overlay.add({ cls: 'label stairs', text: `🪜 탄천 계단${s.osm ? '' : ' (위치 근사)'}`, getPos: () => new THREE.Vector3(lx, s.h0 + 2.6, lz), maxDist: 55 }); }
+      if (overlay) { const [lx, lz] = W(s.L * 0.15, 0); overlay.add({ cls: 'label stairs', text: `🪜 ${s.river || '탄천'} 계단${s.osm ? '' : ' (위치 근사)'}`, getPos: () => new THREE.Vector3(lx, s.h0 + 2.6, lz), maxDist: 55 }); }
     }
     const addMerged = (arr, color, cast = true) => { if (!arr.length) return null; const m = new THREE.Mesh(mergeGeometries(arr), new THREE.MeshLambertMaterial({ color })); m.castShadow = cast; m.receiveShadow = true; scene.add(m); return m; };
     addMerged(tread, '#d3cdc0'); addMerged(cheek, '#b4aea2'); addMerged(rail, '#5f6b78');
 
+    // 3b) 징검다리 돌: 칠각 기둥 하나를 InstancedMesh 로 (그리기 1번). 윗면 평평, 밑은 하상까지
+    let stoneMesh = null;
+    const nStones = fords.reduce((n, f) => n + f.stones.length, 0);
+    if (nStones) {
+      const g = new THREE.CylinderGeometry(0.5, 0.56, 1, 7, 1); g.translate(0, -0.5, 0); // 윗면 y = 0
+      stoneMesh = new THREE.InstancedMesh(g, new THREE.MeshLambertMaterial({ color: '#ffffff', flatShading: true }), nStones);
+      const m = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), v = new THREE.Vector3(), sc = new THREE.Vector3(), cc = new THREE.Color();
+      let k = 0, sd2 = 7; const rr = () => ((sd2 = (sd2 * 16807) % 2147483647) / 2147483647);
+      for (const f of fords) for (const [x, z] of f.stones) {
+        const depth = f.h - baseHeight(x, z) + 0.3;
+        e.set(0, f.yaw + (rr() - 0.5) * 0.3, 0); q.setFromEuler(e);
+        m.compose(v.set(x, f.h, z), q, sc.set(STONE.across * (0.92 + rr() * 0.16), depth, STONE.along * (0.92 + rr() * 0.16)));
+        stoneMesh.setMatrixAt(k, m); stoneMesh.setColorAt(k, cc.set('#a29d92').offsetHSL(0, 0, (rr() - 0.5) * 0.08)); k++;
+      }
+      stoneMesh.castShadow = false; stoneMesh.receiveShadow = true; // 그림자 패스 없음 → 그리기 1번
+      stoneMesh.instanceMatrix.needsUpdate = true; stoneMesh.computeBoundingSphere();
+      stoneMesh.name = 'stepping-stones'; scene.add(stoneMesh);
+      if (overlay) for (const f of fords) { const lx = (f.ax + f.bx) / 2, lz = (f.az + f.bz) / 2; overlay.add({ cls: 'label stairs', text: `🪨 ${f.river} 징검다리`, getPos: () => new THREE.Vector3(lx, f.h + 2.2, lz), maxDist: 45 }); }
+    }
+
     // 4) 다리 구조물: 상판 두께 + 교각 + 난간 (도로 리본은 world.js 가 그대로 그림)
     const slab = [], pier = [], para = [];
     const bridgeRoads = [...new Set(decks.map((d) => d.road).filter(Boolean))];
+    // [bridgeLights] 저녁 조명용 상판 조각/교각 기록. 본류(탄천) 차도교·신기교 = major, 지류 다리·보행교 = minor
+    const lightPieces = [], lightPiers = [];
+    const overMain = (r) => { // 탄천 본류 둔치/수로 위를 지나는가 (지류만 건너는 다리는 false)
+      for (let i = 1; i < r.p.length; i++) {
+        const [x0, z0] = r.p[i - 1], [x1, z1] = r.p[i], n = Math.ceil(Math.hypot(x1 - x0, z1 - z0) / 2);
+        for (let k = 0; k <= n; k++) if (mainBase(x0 + (x1 - x0) * k / n, z0 + (z1 - z0) * k / n) < FLOOR + 0.5) return true;
+      }
+      return false;
+    };
+    const lightTier = (r) => ((!FOOT.has(r.k) || r.arch) && overMain(r) ? 'major' : 'minor');
+    const lightSeed = (r) => { const m = r.p[0]; return (((Math.round(m[0]) * 73856093) ^ (Math.round(m[1]) * 19349663)) >>> 0) / 4294967296; };
     function buildArched(r) {
-      const th = 0.5, pts = r.p;
+      const th = 0.5, pts = r.p, cum = [0];
+      for (let i = 1; i < pts.length; i++) cum.push(cum[i - 1] + Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]));
       for (let i = 1; i < pts.length; i++) {
         const [x0, z0, h0, w0] = pts[i - 1], [x1, z1, h1, w1] = pts[i];
         const L = Math.hypot(x1 - x0, z1 - z0); if (L < 0.05) continue;
@@ -377,6 +551,7 @@ export function createTerrain(T, data) {
         const slope = Math.hypot(L, h1 - h0), pitch = Math.atan2(h0 - h1, L);
         const mx = (x0 + x1) / 2, mz = (z0 + z1) / 2;
         box(slab, wm, th, slope + 0.12, mx, hm + 0.06 - th / 2, mz, yaw, pitch);
+        lightPieces.push({ x0, z0, h0, x1, z1, h1, W: wm, th, foot: true, tier: lightTier(r), s0: cum[i - 1], seed: lightSeed(r) });
         for (const side of [-1, 1]) box(para, 0.22, 1.0, slope + 0.08, mx + rx * side * (wm / 2 - 0.05), hm + 0.55, mz + rz * side * (wm / 2 - 0.05), yaw, pitch);
       }
       let dist = 0, next = 11;
@@ -390,7 +565,7 @@ export function createTerrain(T, data) {
           const g = baseHeight(x, z), top = h + 0.06 - th;
           if (g < top - 1.5) {
             const spots = w > 6 ? [0, -0.28, 0.28] : [0];
-            for (const k of spots) box(pier, 0.7, top - g + 0.5, 0.7, x + rx * k * w, (top + g - 0.5) / 2, z + rz * k * w, yaw);
+            for (const k of spots) { box(pier, 0.7, top - g + 0.5, 0.7, x + rx * k * w, (top + g - 0.5) / 2, z + rz * k * w, yaw); lightPiers.push({ x: x + rx * k * w, z: z + rz * k * w, g, top, pw: 0.7, yaw, tier: lightTier(r) }); }
           }
           next += 22;
         }
@@ -399,9 +574,10 @@ export function createTerrain(T, data) {
     }
     for (const r of bridgeRoads) {
       if (r.arch) { buildArched(r); continue; }
-      const foot = ['footway', 'cycleway', 'path', 'pedestrian'].includes(r.k), th = foot ? 0.5 : 1.1, h = r.deckH;
+      const foot = FOOT.has(r.k), th = foot ? 0.5 : 1.1, h = r.deckH, W = r.deckW || r.w, tier = lightTier(r), seed = lightSeed(r);
+      let sAcc = 0;
       for (let i = 1; i < r.p.length; i++) {
-        const [x0, z0] = r.p[i - 1], [x1, z1] = r.p[i], L = Math.hypot(x1 - x0, z1 - z0); if (L < 0.2) continue;
+        const [x0, z0] = r.p[i - 1], [x1, z1] = r.p[i], L = Math.hypot(x1 - x0, z1 - z0), s0 = sAcc; sAcc += L; if (L < 0.2) continue;
         const ux = (x1 - x0) / L, uz = (z1 - z0) / L, yaw = Math.atan2(ux, uz), rx = -uz, rz = ux;
         // 하천 위(지면이 낮은 구간)만 상판/난간 — 제방 위 도로 구간엔 안 그림
         const spans = []; let st0 = null;
@@ -409,19 +585,26 @@ export function createTerrain(T, data) {
         if (st0 != null) spans.push([st0, L]);
         for (let [u0, u1] of spans) {
           u0 = Math.max(0, u0 - 1.5); u1 = Math.min(L, u1 + 1.5); const l = u1 - u0, mx = x0 + ux * (u0 + u1) / 2, mz = z0 + uz * (u0 + u1) / 2;
-          box(slab, r.w, th, l, mx, h + 0.06 - th / 2, mz, yaw);
-          for (const side of [-1, 1]) box(para, 0.22, foot ? 1.0 : 0.7, l, mx + rx * side * (r.w / 2 - 0.05), h + (foot ? 0.55 : 0.4), mz + rz * side * (r.w / 2 - 0.05), yaw);
+          box(slab, W, th, l, mx, h + 0.06 - th / 2, mz, yaw);
+          lightPieces.push({ x0: x0 + ux * u0, z0: z0 + uz * u0, h0: h, x1: x0 + ux * u1, z1: z0 + uz * u1, h1: h, W, th, foot, tier, s0: s0 + u0, seed });
+          for (const side of [-1, 1]) box(para, 0.22, foot ? 1.0 : 0.7, l, mx + rx * side * (W / 2 - 0.05), h + (foot ? 0.55 : 0.4), mz + rz * side * (W / 2 - 0.05), yaw);
         }
         // 교각: 하천 안쪽에서 약 22m 간격
         for (let s = 11; s < L; s += 22) {
           const px = x0 + ux * s, pz = z0 + uz * s, g = baseHeight(px, pz), top = h + 0.06 - th;
           if (g > top - 1.5) continue;
-          box(pier, foot ? 0.6 : 1.4, top - g + 0.5, foot ? 0.6 : 1.4, px, (top + g - 0.5) / 2, pz, yaw);
-          if (!foot && r.w > 6) for (const side of [-1, 1]) box(pier, 1.4, top - g + 0.5, 1.4, px + rx * side * r.w * 0.33, (top + g - 0.5) / 2, pz + rz * side * r.w * 0.33, yaw);
+          const pw = foot ? 0.6 : 1.4, offs = W > 6 ? [0, -0.33, 0.33] : [0];
+          for (const k of offs) { box(pier, pw, top - g + 0.5, pw, px + rx * k * W, (top + g - 0.5) / 2, pz + rz * k * W, yaw); lightPiers.push({ x: px + rx * k * W, z: pz + rz * k * W, g, top, pw, yaw, tier }); }
         }
       }
     }
     addMerged(slab, '#b9bcbf'); addMerged(pier, '#a7aaad'); addMerged(para, '#d5d8db');
+    // 4b) 저녁 다리 조명 (가산 발광 사각형 한 메시). 수면: 본류 수로 안 = WATER, 지류 = 지류 수면
+    const waterSurf = (x, z) => {
+      if (mainBase(x, z) < WATER - 0.05) return WATER;
+      const w = streams ? streams.waterAt(x, z) : null; return w != null && baseHeight(x, z) < w ? w : null;
+    };
+    const bridgeLights = buildBridgeLights(scene, { pieces: lightPieces, piers: lightPiers, waterAt: waterSurf });
 
     // 5) 제방 숲(OSM forest 폴리곤) 나무 — 지형 높이에 맞춰
     const tp = []; let sd = 11; const rnd = () => ((sd = (sd * 16807) % 2147483647) / 2147483647);
@@ -446,7 +629,7 @@ export function createTerrain(T, data) {
         getY: baseHeight,
       });
     }
-    return { channel, treeCount: tp.length };
+    return { channel, streamMesh, stoneMesh, bridgeLights, treeCount: tp.length };
   }
 
   // NPC 산책 경로: 도로 -> 계단 -> 둔치를 따라 강변으로 (가까운 계단 기준)
@@ -482,5 +665,5 @@ export function createTerrain(T, data) {
     }
     return pts.length > 6 ? pts : null;
   }
-  return { params: P, baseHeight, renderHeight, getGroundHeight, groundY: getGroundHeight, getVehicleHeight, vehicleY: getVehicleHeight, deckAt, canMove, annotate, build, stairs, decks, addDeckSegment, project, riversideRoute, bankPath, stairAt, grade };
+  return { params: P, baseHeight, renderHeight, getGroundHeight, groundY: getGroundHeight, getVehicleHeight, vehicleY: getVehicleHeight, deckAt, canMove, annotate, liftRoads, waterLineY, streams, build, stairs, decks, addDeckSegment, project, riversideRoute, bankPath, stairAt, fords, fordAt, grade, waterSurface };
 }
