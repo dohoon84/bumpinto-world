@@ -1,5 +1,6 @@
 import { PhoneBook } from "./book.js";
 import { Room } from "./room.js";
+import { handlePhotos } from "./photos.js";
 
 export { PhoneBook, Room };
 
@@ -74,8 +75,9 @@ export default {
   async fetch(request, env) {
     const cors = {
       "Access-Control-Allow-Origin": allowOrigin(request, env),
-      "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-      "Access-Control-Allow-Headers": "Content-Type",
+      "Access-Control-Allow-Methods": "GET, POST, PUT, PATCH, DELETE, OPTIONS",
+      "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Photo-Meta", // [photo-cloud]
+      "Access-Control-Max-Age": "86400",
       "Access-Control-Allow-Private-Network": "true",
       Vary: "Origin",
     };
@@ -118,6 +120,7 @@ export default {
       } catch {}
       return json({ ok: true, region: queryRegion, online, residents, ...extra }, 200, cors);
     }
+    if (url.pathname === "/photos" || url.pathname.startsWith("/photos/")) return handlePhotos(request, env, cors, url); // [photo-cloud] 사진 보관함 (R2)
     if (url.pathname === "/news-tip") return newsTip(request, env, cors); // [camera] 사진 뉴스 제보 (본문이 커서 따로 받음)
     const method = ROUTES[url.pathname];
     if (!method || request.method !== "POST") return json({ ok: false, error: "not_found" }, 404, cors);

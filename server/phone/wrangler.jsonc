@@ -10,6 +10,13 @@
       { "name": "ROOM", "class_name": "Room" }
     ]
   },
+  // [photo-cloud] 사진 보관함 원본 이미지(R2). 메타데이터는 위 PhoneBook DO 의 SQLite 에 들어간다.
+  //   처음 한 번: npx wrangler r2 bucket create bumpinto-photos
+  //   그다음 npm run deploy:phone. 이 바인딩이 없으면 /photos 는 404 → 게임은 기기 저장만 쓴다(문제 없음).
+  //   로컬(npm run phone = wrangler dev)은 같은 이름의 가짜 버킷을 .wrangler/state 에 만들어 쓰므로 실제 R2 를 건드리지 않는다.
+  "r2_buckets": [
+    { "binding": "PHOTOS", "bucket_name": "bumpinto-photos" }
+  ],
   "migrations": [
     { "tag": "v1", "new_sqlite_classes": ["PhoneBook"] },
     { "tag": "v2", "new_sqlite_classes": ["Room"] }
