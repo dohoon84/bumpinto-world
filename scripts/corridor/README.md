@@ -17,6 +17,22 @@ The live 정자 map (`public/data/*`, bbox x −606..597, z −608..940) is left
    (4.2 km in overview), with unload hysteresis. It reuses the live `world.js` materials, ribbons, facades, trees and station signs.
    Quality: `?corridorq=low|med|high`. Turn it off with `?corridor=0`.
 
+## Playgrounds (`?playgrounds=0` turns them off)
+
+- `npm run corridor:playgrounds`: bakes `public/corridor/playgrounds.json` from OSM `leisure=playground` polygons
+  (`data/osm_playgrounds_raw.json`; `-- --fetch` refreshes it from Overpass, `-- --osm=<overpass json>` re-filters a bigger dump).
+  Each set is fitted to the polygon's minimum-area rectangle, kept inside the polygon and clear of buildings and road ribbons
+  (live + corridor tiles), 2 sets for large polygons, shrunk down to 0.6× or skipped. The override list (`EXTRA_PLAYGROUNDS`) is in that script.
+- Runtime `src/world/playgrounds.js`: 5 `InstancedMesh` (slide, swings, seesaw, jungle gym, sandbox; vertex colours, no textures),
+  shown within 450 m of the camera focus and, in the corridor, only once that cell's detail tile is built; GPU buffers are freed when none is visible.
+- Landscaping (`?pgland=0` turns only this off): the same script writes `public/corridor/playground-land.json` via `scripts/corridor/playground-land.mjs`.
+  Inside each placed playground polygon (trees also in the 9 m margin of an enclosing OSM `leisure=park/garden`), seeded by the OSM id.
+  It places benches next to the sets, then trees around the edge (crowns kept off the equipment), then low hedges along the boundary
+  (left open at the point nearest a road), then bushes and grass clumps. Everything stays clear of buildings, water and road ribbons.
+  OSM `natural=tree` nodes inside go first. At runtime (`src/world/playgroundLand.js`) there are 3 `InstancedMesh`:
+  tree (50 tris, seasonal crowns like the street trees), green (20 tris, shared by hedge/bush/grass), and bench (48 tris, no shadow).
+  A rubber-chip safety mat (60 tris) is merged into the sandbox mesh.
+
 ## Checks
 
 - `npm run corridor:check -- --out=/tmp/check-roads.json`: road continuity over the exact ribbons the game renders.
