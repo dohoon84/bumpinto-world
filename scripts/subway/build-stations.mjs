@@ -202,6 +202,15 @@ for (const [id, name] of TARGETS) {
   report.stations.push({ id, name, lines: lines.map((k) => LINES[k].ko), exits: shown.map((e) => e.ref ?? '·').join(','), maxShift: Math.max(0, ...shown.map((e) => e.place?.shift || 0)), bad: shown.filter((e) => e.place?.bad).map((e) => `${e.ref}:${e.place.bad}`), clr: shown.filter((e) => e.place?.clr || e.place?.front).map((e) => `${e.ref}:${e.place.clr || 0}/${e.place.front || 0}`) });
 }
 
+function lineStops() {
+  const out = {};
+  for (const [line, rid] of Object.entries(ROUTE_REL)) {
+    const R = routeStops.get(rid); if (!R) throw new Error(`route ${line}/${rid} missing`);
+    const st = R.stops.slice(); if (R.circle && st[0] === st[st.length - 1]) st.pop();
+    out[line] = { rel: rid, name: R.name, circle: R.circle, stops: st };
+  }
+  return out;
+}
 const meta = { generated: new Date().toISOString().slice(0, 10), source: 'OpenStreetMap (© OpenStreetMap contributors, ODbL) via Overpass · data/osm_subway_corridor.json, data/osm_subway_routes.json', osmBase: rd('data/osm_subway_corridor.json').osm3s?.timestamp_osm_base };
 const js = `// [subway] 생성 파일 — 손으로 고치지 말 것. node scripts/subway/build-stations.mjs
 //   ${meta.source}
@@ -211,6 +220,8 @@ const js = `// [subway] 생성 파일 — 손으로 고치지 말 것. node scri
 //   route: 간이 노선도 (주 노선 relation 의 정차 순서, 이 역 앞뒤 5역)
 export const STATIONS_META = ${JSON.stringify(meta)};
 export const STATIONS = ${JSON.stringify(stations, null, 1).replace(/\n\s*(?=[\]}\d"-])/g, ' ').replace(/\[\s+/g, '[')};
+// 노선 전체 정차 순서 (승강장 앞뒤 역·열차 다음 역). relation 의 stop 순서 그대로 (from → to). circle = 순환선 (끝 = 처음 역 중복 제거)
+export const LINE_STOPS = ${JSON.stringify(lineStops())};
 `;
 fs.writeFileSync(OUT, js);
 console.log(JSON.stringify(report, null, 1));

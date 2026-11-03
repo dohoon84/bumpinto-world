@@ -2,12 +2,14 @@
 //   순수 함수(boardRows·simulatedRows) + 얇은 fetch (createArrivalFeed). 인증키는 여기 없다 (worker secret).
 //   ?subwayRt=0 이면 실시간 요청 안 함 (근사만).  대합실 안에 있을 때만 30초마다 요청 (worker 가 25초 캐시).
 import { LINES } from './lines.js';
+import { SIM_HEADWAY_MIN, SERVICE_MIN, simOffsetMin } from './ride.js';
 
 export const POLL_SEC = 30;
 // 시간표 근사: 실제 시간표가 아니다. 노선별 평일 낮 대략 배차(분)·운행 시간으로 '몇 분 후'를 흉내만 낸다.
 //   안내판에 '시간표 근사' 라고 함께 표시한다.
-export const SIM_HEADWAY_MIN = Object.freeze({ suin: 8, shin: 6, gg: 12, l2: 4, l3: 6, l8: 6, l9: 6 });
-const SERVICE = { start: 5 * 60 + 30, end: 24 * 60 }; // 05:30 ~ 24:00 (근사)
+//   (식은 ride.js — 승강장 열차도 같은 식으로 들어온다)
+export { SIM_HEADWAY_MIN };
+const SERVICE = SERVICE_MIN;
 
 // 실시간 열차 → 안내판 줄 (노선 순서 = theme.lines, 같은 방면 첫 열차만, 최대 n줄)
 //   now: 지금 (ms). fetchedAt 이후 흐른 시간만큼 etaSec 을 줄여 보여 준다
@@ -37,7 +39,6 @@ function rank(t) {
 // 시간표 근사 (실시간이 없을 때). minuteOfDay: 0..1439 (KST), seed: 역 id 로 역마다 조금 다르게
 export function simulatedRows(theme, minuteOfDay, seed = '', n = 4) {
   const rows = [];
-  const h = [...String(seed)].reduce((a, c) => (a * 31 + c.charCodeAt(0)) % 997, 7);
   for (const l of theme.lines.slice(0, 2)) {
     for (let d = 0; d < 2 && rows.length < n; d++) {
       const hw = SIM_HEADWAY_MIN[l.key] || 8;
@@ -45,7 +46,7 @@ export function simulatedRows(theme, minuteOfDay, seed = '', n = 4) {
       const m = minuteOfDay;
       let msg, en;
       if (m < SERVICE.start || m >= SERVICE.end) { msg = '운행 종료'; en = 'No service'; }
-      else { const off = (h + d * Math.floor(hw / 2) + l.key.length) % hw; const wait = (off - (m % hw) + hw) % hw; msg = wait ? `약 ${wait}분 후` : '곧 도착'; en = wait ? `~${wait} min` : 'Arriving'; }
+      else { const off = simOffsetMin(l.key, d, seed); const wait = (off - (m % hw) + hw) % hw; msg = wait ? `약 ${wait}분 후` : '곧 도착'; en = wait ? `~${wait} min` : 'Arriving'; }
       rows.push({ line: l.key, color: l.color, short: l.short, dest: dir.ko, msg, en, kind: '', last: false });
     }
   }
@@ -77,6 +78,7 @@ export function createArrivalFeed({ theme, base, enabled = true, fetchImpl = (u)
   }
   return {
     get, get version() { return version; },
+    raw: () => (data?.ok && Array.isArray(data.trains) ? { trains: data.trains, fetchedAt: data.fetchedAt } : null), // 승강장 열차 시각용
     tick(dt) { if (stopped) return; timer -= dt; if (timer <= 0) { timer = POLL_SEC; poll(); } },
     stop() { stopped = true; },
     _poll: poll,

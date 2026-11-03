@@ -18,6 +18,14 @@ export const ZONE_STRIDE = 10_000;
 const HALF = ZONE_STRIDE / 2;
 const BAND_MIN = ZONE_BASE - HALF;
 
+const PLATFORMS = [
+  ['jeongja', 'suin'], ['jeongja', 'shin'], ['sunae', 'suin'], ['seohyeon', 'suin'], ['imae', 'suin'], ['imae', 'gg'],
+  ['yatap', 'suin'], ['moran', 'suin'], ['moran', 'l8'], ['taepyeong', 'suin'], ['gachon', 'suin'], ['bokjeong', 'suin'], ['bokjeong', 'l8'],
+  ['munjeong', 'l8'], ['garak', 'l8'], ['garak', 'l3'], ['songpa', 'l8'], ['seokchon', 'l8'], ['seokchon', 'l9'], ['jamsil', 'l8'], ['jamsil', 'l2'],
+];
+const TRAIN_LINES = ['suin', 'shin', 'gg', 'l8', 'l3', 'l9', 'l2'];
+function PLATFORM_ZONES() { const z = []; for (const [id, l] of PLATFORMS) for (const d of [0, 1]) z.push(`${id}-station/p-${l}-${d}`); return z; } // 42개 (15~56)
+function TRAIN_ZONES() { const z = []; for (const l of TRAIN_LINES) for (const d of [0, 1]) for (let k = 0; k < 4; k++) z.push(`train:${l}-${d}-${k}`); return z; } // 56개 (57~112)
 export const ZONES = Object.freeze([
   '',                 // 0: 바깥 (쓰지 않음)
   'jeongja-station',  // 1: 정자역 대합실 (1단계)
@@ -35,6 +43,10 @@ export const ZONES = Object.freeze([
   'songpa-station',    // 12: 송파
   'seokchon-station',  // 13: 석촌
   'jamsil-station',    // 14: 잠실
+  // 2단계 승강장·열차 (2026-11-03 추가). 승강장 = 역 × 노선 × 방면(0/1, lines.js dirs 순), 열차 = 노선 × 방면 × 편성 슬롯 0..3
+  //   (아래 표를 펼친 순서 그대로 15번부터. 덧붙이기만 — 표 순서·내용을 바꾸지 말 것)
+  ...PLATFORM_ZONES(),
+  ...TRAIN_ZONES(),
 ]);
 const SLOT = new Map(ZONES.map((z, i) => [z, i]));
 

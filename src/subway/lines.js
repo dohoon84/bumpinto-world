@@ -21,6 +21,24 @@ export const LINES = Object.freeze({
     dirs: [{ ko: '중앙보훈병원 방면', en: 'for VHS Medical Center' }, { ko: '개화 방면', en: 'for Gaehwa' }] },
 });
 // 한 역에 여러 노선이면 이 순서로 (앞 = 주 노선: 대합실 승강장 안내·노선도). 정자 = 수인분당, 신분당 (기존 그대로)
+
+// [subway] 승강장·열차 (2단계). 편성 량수 = 실제 운행 편성 (출처: 보고서·DESIGN.md)
+//   cars   량수: 수인분당 6 (코레일 351000호대 6량 1편성) · 신분당 6 (D000호대) · 경강 4 (371000호대 4량) · 2호선 10 (본선)
+//          3호선 10 · 8호선 6 (8000호대 6량, 별내선 연장 후도 6량) · 9호선 6 (6량 편성, 8량 계획 없음)
+//   doors  한 량 한쪽 출입문 수 (모두 4) — 스크린도어 번호 1-1 … N-4 (앞 칸·앞 문부터)
+//   seq    dirs[i] 방면이 LINE_STOPS[line].stops (relation from → to) 에서 증가(+1)·감소(-1) 쪽인지
+//   updn   dirs[i] 방면의 실시간 도착 updnLine 값 (상행/하행, 2호선 내선/외선). 이매 실측: 수인분당 상행 = 왕십리, 경강 하행 = 여주
+export const TRAIN = Object.freeze({
+  suin: { cars: 6, doors: 4, seq: [-1, 1], updn: ['하행', '상행'] },
+  shin: { cars: 6, doors: 4, seq: [1, -1], updn: ['하행', '상행'] },
+  gg: { cars: 4, doors: 4, seq: [-1, 1], updn: ['상행', '하행'] },
+  l2: { cars: 10, doors: 4, seq: [1, -1], updn: ['내선', '외선'] },
+  l3: { cars: 10, doors: 4, seq: [-1, 1], updn: ['하행', '상행'] },
+  l8: { cars: 6, doors: 4, seq: [-1, 1], updn: ['하행', '상행'] },
+  l9: { cars: 6, doors: 4, seq: [1, -1], updn: ['하행', '상행'] },
+});
+export const CAR_LEN = 20;      // 한 량 길이 (m, 연결부 포함 근사 — 한국 표준 전동차 차체 ≈19.5m)
+export const DOOR_OFF = [7.05, 2.35, -2.35, -7.05]; // 한 량 안 출입문 중심 (앞 = +, m). 표준 4문 차량 문 간격 ≈4.7m 근사
 export const LINE_ORDER = ['suin', 'l8', 'l2', 'l3', 'l9', 'gg', 'shin'];
 export const OSM_REF_TO_LINE = Object.freeze(Object.fromEntries(Object.values(LINES).map((l) => [l.osmRef, l.key])));
 // 서울 열린데이터 실시간 도착 subwayId → 노선 (서울시 지하철 실시간 도착정보 명세)
