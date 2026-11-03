@@ -101,6 +101,8 @@ export class SimulatedBusSource {
       // 1) 다음 정류장
       const st = P.stops[b.stopIdx];
       if (st && st.s - b.s < limit) { limit = st.s - b.s; reason = 'stop'; }
+      // [pangyo-express] endStop: 경로 끝(고속도로 합류 뒤)에서 서서히 멈춘 뒤 3초 뒤 사라짐(페이드 1.5초)
+      if (P.endStop) { const g = P.L - 1 - b.s; if (g < limit) { limit = Math.max(0, g); reason = 'end'; } }
       // 2) 보행 신호가 초록/깜빡이면 횡단보도 앞 정지선에서 대기
       for (const q of P.xings) {
         const stopOffset = (q.c.depth || 2.2) + 1.8;
@@ -133,6 +135,7 @@ export class SimulatedBusSource {
       if (blocker && st && b.v < 0.6 && limit < 0.8 && blocker.state === 'dwell' && blocker.P.stops[blocker.stopIdx]?.stop === st.stop && st.s - b.s < blocker.P.blen + 12) {
         b.dwell = DWELL * (0.8 + hash(b.id + 'd') * 0.5); b.v = 0; b.state = 'dwell'; this.stats.bay2++;
       }
+      if (reason === 'end' && limit < 1.5 && b.v < 0.3) { b.endT = (b.endT || 0) + dt; b.state = 'end'; if (b.endT > 3) b.s = P.L; } // [pangyo-express]
       if (b.s >= P.L) { b.done = true; this.stats.done++; }
     }
     this.buses = this.buses.filter((b) => !b.done);
@@ -240,7 +243,8 @@ export class SimulatedBusSource {
       const p = samplePath(b.P, b.s);
       let scale = 1;
       if (b.P.fadeIn && b.s < 15 && b.age < 3) scale = Math.min(1, b.age / 1.2);
-      if (b.P.fadeOut && b.P.L - b.s < 12) scale = Math.max(0.01, (b.P.L - b.s) / 12);
+      if (b.P.endStop) { if (b.endT > 1.5) scale = Math.max(0.01, 1 - (b.endT - 1.5) / 1.5); } // [pangyo-express]
+      else if (b.P.fadeOut && b.P.L - b.s < 12) scale = Math.max(0.01, (b.P.L - b.s) / 12);
       out.push({ id: b.id, ref: b.P.ref, type: b.P.type, name: b.P.name, x: p.x, z: p.z, heading: Math.atan2(p.dx, p.dz), scale, state: b.state, v: b.v });
     }
     return out;
