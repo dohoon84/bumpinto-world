@@ -45,6 +45,9 @@ export function createSubwayState({ fade = FADE_SEC, exits = [] } = {}) {
       targetRef = id ?? entryRef; phase = 'leaving'; t = 0;
       return true;
     },
+    // [subway] 열차로 다른 역에 내림: 떠난 역은 조용히 바깥(대합실 없음)으로, 도착 역은 바로 안(들어온 출구 없음)으로
+    leaveByTrain() { if (phase !== 'inside') return false; phase = 'outside'; entryRef = null; targetRef = null; t = 0; return true; },
+    arriveByTrain() { if (phase !== 'outside') return false; phase = 'inside'; entryRef = null; targetRef = null; t = 0; return true; },
     // dt 초 진행. 반환: 이번에 일어난 이벤트 배열 ('load' | 'ready' | 'unload' | 'done')
     tick(dt) {
       const ev = [];

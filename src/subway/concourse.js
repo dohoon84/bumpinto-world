@@ -11,9 +11,11 @@ import { JEONGJA_THEME } from './stations.js';
 import { HALL, CEIL, GATE, GATE_X, OFFICE, WELLS, DROP, RUN, COLUMNS, PASSAGE_LEN, passageFor, staticBlockers, walkable, passageAt, laneAt, nearWellTop } from './layout.js';
 import { buildCrowd } from '../entities/avatarCrowd.js';
 import { createAvatar, animateAvatar } from '../entities/avatar.js';
+import { LOOKS } from './looks.js';
 
 const ESC_SPEED = 0.55, STEP_GAP = 0.42;
 const ESC_HALF = 0.5;
+export const TRANSFER = { x: 0, z: HALL.z1 - 1.3, hw: 2.2 }; // 갈아타는 곳 (남쪽 벽 안내판 앞)
 const SLOPE = Math.atan2(DROP, RUN);
 
 // 에스컬레이터 경로 (위 평지 1m → 경사 → 아래 평지 1m). s(0..len) → {x,y,z}
@@ -29,24 +31,9 @@ function escPath(w) {
   return { len, at, top: pts[0], bot: pts[3] };
 }
 
-const LOOKS = [
-  { color: '#2f3e46', top: 'long', hair: 'short', pants: '#22262b', bag: '#495057' },
-  { color: '#f1f3f5', top: 'short', hair: 'long', gender: 'f', pants: '#364fc7' },
-  { color: '#c92a2a', top: 'hoodie', hair: 'short', pants: '#343a40' },
-  { color: '#5f3dc4', top: 'long', hair: 'pony', gender: 'f', pants: '#212529', bag: '#e64980' },
-  { color: '#e9ecef', top: 'long', hair: 'medium', glasses: true, pants: '#495057' },
-  { color: '#2b8a3e', top: 'hoodie', hair: 'long', gender: 'f', pants: '#1c1c1c' },
-  { color: '#1864ab', top: 'short', hair: 'short', hat: '#212529', pants: '#495057' },
-  { color: '#868e96', top: 'long', hair: 'short', glasses: true, pants: '#212529', bag: '#212529' },
-  { color: '#ffd8a8', top: 'long', hair: 'long', gender: 'f', pants: '#495057' },
-  { color: '#343a40', top: 'hoodie', hair: 'medium', pants: '#868e96' },
-  { color: '#e64980', top: 'short', hair: 'pony', gender: 'f', pants: '#f8f9fa' },
-  { color: '#0b7285', top: 'long', hair: 'short', pants: '#343a40', bag: '#f08c00' },
-  { color: '#495057', top: 'long', hair: 'short', beard: 'stubble', pants: '#212529' },
-  { color: '#fff3bf', top: 'hoodie', hair: 'long', gender: 'f', pants: '#364fc7' },
-];
 
-export function buildConcourse({ exits, groups, entryId, look, renderer, onToast, theme = JEONGJA_THEME, board = null }) {
+
+export function buildConcourse({ exits, groups, entryId, look, renderer, onToast, theme = JEONGJA_THEME, board = null, spawn = null }) {
   const P = theme.primary, X = theme.transfer;
   const wellTxt = (w) => ({ ...w, ...(theme.wells[WELLS.indexOf(w)] || {}) }); // 승강장 계단 방면 = 주 노선 방면
   const scene = new THREE.Scene();
@@ -278,7 +265,7 @@ export function buildConcourse({ exits, groups, entryId, look, renderer, onToast
     let x = 150; x += lineBadge(c, x, 14, 30, P.color, P.short) + 10;
     const dirTxt = `← ${theme.wells[0].ko.replace(/ 방면$/, '')}    ${theme.wells[1].ko.replace(/ 방면$/, '')} →`;
     c.textAlign = 'left'; c.fillStyle = '#fff'; fitText(c, dirTxt, w - x - 10, 22, 700); c.fillText(dirTxt, x, 30);
-    if (X) { const bw = lineBadge(c, 150, 50, 28, X.color, X.short); c.textAlign = 'left'; c.fillStyle = '#ffa8a8'; c.font = `700 18px ${FONT}`; c.fillText('갈아타는 곳 준비 중 · Coming soon', Math.max(260, 162 + bw), 64); }
+    if (X) { const bw = lineBadge(c, 150, 50, 28, X.color, X.short); c.textAlign = 'left'; c.fillStyle = '#ffa8a8'; c.font = `700 18px ${FONT}`; c.fillText(`갈아타는 곳 ${X.dirs[0].ko.replace(/ 방면$/, '')} · ${X.dirs[1].ko.replace(/ 방면$/, '')} · Transfer`, Math.max(260, 162 + bw), 64); }
   });
   const wayOut = mkHang(640, 90, (c, w, h) => {
     c.fillStyle = '#FFC20E'; c.fillRect(0, 0, w, h); c.fillStyle = '#111'; c.textBaseline = 'middle'; c.textAlign = 'left';
@@ -302,12 +289,12 @@ export function buildConcourse({ exits, groups, entryId, look, renderer, onToast
       c.fillStyle = '#1d2228'; c.fillRect(0, 0, ww, h); c.textAlign = 'center'; c.textBaseline = 'middle';
       c.fillStyle = P.color; c.fillRect(0, 0, ww, 14);
       c.fillStyle = '#fff'; c.font = `800 34px ${FONT}`; c.fillText(`${w.ko} 승강장`, ww / 2, 54);
-      c.font = `700 24px ${FONT}`; c.fillStyle = '#ffd43b'; c.fillText('다음 업데이트에서 열려요', ww / 2, 96);
-      c.font = `600 20px ${FONT}`; c.fillStyle = '#c9d1d9'; c.fillText('Platform · coming soon', ww / 2, 132);
+      c.font = `700 24px ${FONT}`; c.fillStyle = '#ffd43b'; c.fillText('타는 곳 ↓', ww / 2, 96);
+      c.font = `600 20px ${FONT}`; c.fillStyle = '#c9d1d9'; c.fillText(`Platform · ${w.en}`, ww / 2, 132);
     });
     G.quad(w.cx, -2.6, HALL.z1 + 4.85, 4.4, 1.68, '#ffffff', { ry: Math.PI, uv: soon });
     // 위쪽 A형 안내판 (계단 앞 차단선)
-    const aSign = atlas.add(240, 150, (c, ww, h) => { c.fillStyle = '#ffd43b'; c.fillRect(0, 0, ww, h); c.fillStyle = '#111'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.font = `800 28px ${FONT}`; c.fillText('승강장 준비 중', ww / 2, 48); c.font = `600 20px ${FONT}`; c.fillText('Coming soon', ww / 2, 92); c.font = `600 16px ${FONT}`; c.fillText('↓ ' + w.ko, ww / 2, 126); });
+    const aSign = atlas.add(240, 150, (c, ww, h) => { c.fillStyle = '#ffd43b'; c.fillRect(0, 0, ww, h); c.fillStyle = '#111'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.font = `800 28px ${FONT}`; c.fillText('타는 곳 ↓', ww / 2, 48); c.font = `600 20px ${FONT}`; c.fillText('To platform', ww / 2, 92); c.font = `600 16px ${FONT}`; c.fillText('↓ ' + w.ko, ww / 2, 126); });
     const ax = w.escDir < 0 ? w.x0 - 0.9 : w.x1 + 0.9; // 계단 옆 (사람 다니는 길 밖)
     S.box(ax, 0.55, 3.25, 0.9, 1.1, 0.06, '#495057', { rx: 0.12 });
     G.quad(ax, 0.6, 3.2, 0.8, 0.5, '#ffffff', { ry: Math.PI, rx: -0.12, uv: aSign });
@@ -342,10 +329,11 @@ export function buildConcourse({ exits, groups, entryId, look, renderer, onToast
     S.box(w.cx, -DROP / 2 - 0.25, w.z0 + RUN / 2, 1.2, 0.3, hyp, '#495057', { rx: SLOPE }); // 디딤판 아래 트러스
     S.block(w.cx, -0.02, w.z0 - 1.05, 1.15, 0.03, 0.4, '#adb5bd'); S.block(w.cx, -DROP - 0.02, w.z0 + RUN + 1.05, 1.15, 0.03, 0.4, '#adb5bd'); // 콤 플레이트
   }
-  // 두 번째 노선 갈아타는 곳 (벽면 안내, 준비 중) — 정자 신분당, 이매 경강, 모란·복정·가락시장·석촌·잠실 …
+  // 두 번째 노선 갈아타는 곳 (남쪽 벽, 가까이 가면 방면 고르기) — 정자 신분당, 이매 경강, 모란·복정·가락시장·석촌·잠실 …
   if (X) {
-    const sh = atlas.add(420, 80, (c, w, h) => { c.fillStyle = '#1d2228'; c.fillRect(0, 0, w, h); c.textBaseline = 'middle'; const bw = lineBadge(c, 14, 20, 40, X.color, X.short); c.textAlign = 'left'; c.fillStyle = '#fff'; c.font = `700 24px ${FONT}`; c.fillText('갈아타는 곳 (준비 중)', 28 + bw, 30); c.fillStyle = '#c9d1d9'; fitText(c, `${X.en} transfer · coming soon`, w - 36 - bw, 16, 600); c.fillText(`${X.en} transfer · coming soon`, 28 + bw, 60); });
+    const sh = atlas.add(420, 80, (c, w, h) => { c.fillStyle = '#1d2228'; c.fillRect(0, 0, w, h); c.textBaseline = 'middle'; const bw = lineBadge(c, 14, 20, 40, X.color, X.short); c.textAlign = 'left'; c.fillStyle = '#fff'; c.font = `700 24px ${FONT}`; c.fillText('갈아타는 곳 ↓', 28 + bw, 30); c.fillStyle = '#c9d1d9'; const tt = `${X.dirs[0].ko.replace(/ 방면$/, '')} · ${X.dirs[1].ko.replace(/ 방면$/, '')} · ${X.en} transfer`; fitText(c, tt, w - 36 - bw, 16, 600); c.fillText(tt, 28 + bw, 60); });
     G.quad(0, 2.4, HALL.z1 - 0.01, 4.2, 0.8, '#ffffff', { ry: Math.PI, uv: sh });
+    S.block(TRANSFER.x, 0, TRANSFER.z + 0.55, TRANSFER.hw * 2, 0.008, 1.1, X.color); // 바닥 색 띠 (여기로 오면 방면 고르기)
   }
 
   // ---------- 메시 ----------
@@ -529,11 +517,14 @@ export function buildConcourse({ exits, groups, entryId, look, renderer, onToast
   me.position.set(entryPass.mouth.x - entryPass.out.x * 0.5, 0, entryPass.mouth.z - entryPass.out.z * 0.5);
   me.rotation.y = Math.atan2(-entryPass.out.x, -entryPass.out.z);
   const cam = { yaw: Math.atan2(entryPass.out.x, entryPass.out.z), pitch: 0.28, dist: 6.5 };
+  // [subway] 승강장에서 올라온 경우: 그 계단 위(유료 구역)에 북쪽을 보고 선다. transfer = 갈아타는 곳 앞
+  if (spawn?.well != null && WELLS[spawn.well]) { const w = WELLS[spawn.well]; me.position.set(w.cx, 0, 2.6); me.rotation.y = Math.PI; cam.yaw = 0; }
+  else if (spawn?.transfer && X) { me.position.set(0, 0, TRANSFER.z - 0.4); me.rotation.y = Math.PI; cam.yaw = 0; }
   const camera = new THREE.PerspectiveCamera(60, innerWidth / innerHeight, 0.1, 200);
   const laneOpen = (i) => lanes[i].open > 0.6;
   const canStand = (x, z) => walkable(x, z, 0.3, { passages, blockers, laneOpen });
   const inRoom = (x, z) => walkable(x, z, 0.12, { passages, blockers: [] }) || (x > HALL.x0 && x < HALL.x1 && z > HALL.z0 && z < HALL.z1);
-  let speed = 0, lastPass = null, wellHintT = 0;
+  let speed = 0, lastPass = null, lastWell = nearWellTop(me.position.x, me.position.z), lastTr = !!spawn?.transfer;
 
   function update(dt, { look: [dy, dp, dz], axes, allowMove, self = null }) {
     cam.yaw += dy; cam.pitch = THREE.MathUtils.clamp(cam.pitch + dp, -0.6, 1.3); cam.dist = THREE.MathUtils.clamp(cam.dist * (1 + dz), 2.2, 11);
@@ -570,10 +561,12 @@ export function buildConcourse({ exits, groups, entryId, look, renderer, onToast
     // 상태 신호
     const pass = passageAt(p.x, p.z, passages);
     const entered = pass && pass !== lastPass ? pass : null; lastPass = pass;
-    wellHintT -= dt;
+    // 승강장 계단 / 갈아타는 곳: 밖에서 걸어 들어올 때만 (올라온 직후엔 한 번 벗어나야)
     const well = nearWellTop(p.x, p.z);
-    let wellHint = null; if (well && wellHintT <= 0) { wellHint = wellTxt(well); wellHintT = 6; }
-    return { enteredPassage: entered, wellHint };
+    const wellEnter = well && well !== lastWell ? WELLS.indexOf(well) : -1; lastWell = well;
+    const tr = !!X && Math.abs(p.x - TRANSFER.x) < TRANSFER.hw && p.z > TRANSFER.z;
+    const transferEnter = tr && !lastTr; lastTr = tr;
+    return { enteredPassage: entered, wellEnter, transferEnter, wellHint: well ? wellTxt(well) : null };
   }
   function render() { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.render(scene, camera); }
   function dispose() {
