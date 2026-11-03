@@ -174,4 +174,20 @@ ok('globe station list + branch layout');
   assert.ok(n <= 5, 'ncsoft meshes ' + n);
   ok(`ncsoft: ${L.parts.length} OSM parts (0–58m), ${n} meshes, ${Math.round(tri)} tris, no sign/label/logo`);
 }
+// 12) [ncsoft-roads] HQ 둘레 도로(대왕판교로 · 대왕판교로644번길 · 판교역로)가 BOX 도로망(z > -3490)과 이어지고, 덧박스 바깥 변에 잘린 차도 끝이 없다
+{
+  const NB = pg.meta.boxes[1], FOOT = new Set(['footway', 'cycleway', 'path', 'steps', 'pedestrian', 'track']);
+  const R = Object.keys(pg.tiles).flatMap((k) => J(path.join(P, 'tiles', k + '.json')).r).filter((r) => !FOOT.has(r.k));
+  const key = ([x, z]) => `${x},${z}`, par = new Map(), find = (a) => { while (par.get(a) !== a) a = par.get(a); return a; };
+  const uni = (a, b) => { for (const k of [a, b]) if (!par.has(k)) par.set(k, k); par.set(find(a), find(b)); };
+  for (const r of R) for (let i = 1; i < r.p.length; i++) uni(key(r.p[i - 1]), key(r.p[i]));
+  const south = new Set([...par.keys()].filter((k) => +k.split(',')[1] > -3490).map(find));
+  const ring = R.filter((r) => ['대왕판교로', '대왕판교로644번길', '판교역로'].includes(r.n) && r.p.some(([, z]) => z < -3600));
+  assert.deepEqual([...new Set(ring.map((r) => r.n))].sort(), ['대왕판교로', '대왕판교로644번길', '판교역로'], 'HQ ring roads present');
+  for (const r of ring) assert.ok(south.has(find(key(r.p[0]))), `${r.n} connected to BOX network`);
+  const onEdge = ([x, z]) => z < B.z0 - 0.1 && (Math.abs(x - NB.x0) < 0.3 || Math.abs(x - NB.x1) < 0.3 || Math.abs(z - NB.z0) < 0.3);
+  const cut = R.flatMap((r) => [r.p[0], r.p[r.p.length - 1]]).filter(onEdge);
+  assert.equal(cut.length, 0, 'vehicle road ends cut at NC box edge: ' + JSON.stringify(cut));
+  ok(`ncsoft roads: ${ring.length} HQ ring pieces connected to BOX network, no cut ends at NC box edge`);
+}
 console.log('pangyo: all', n, 'checks passed');

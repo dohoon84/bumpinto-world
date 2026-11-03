@@ -44,7 +44,10 @@ const proj = (g) => [r1((g.lon - CENTER.lon) * kx), r1(-(g.lat - CENTER.lat) * k
 export const BOX = { x0: -250, x1: 1000, z0: -3500, z1: -2500 };
 // [ncsoft] 엔씨소프트 R&D센터(대왕판교로644번길 12, OSM w694434545 외 부분 4개: x -45..88, z -3668..-3600)는 BOX 남쪽 밖 →
 //   건물 둘레만 덮는 작은 덧박스(BOX 아래 변에 붙음 → 바닥 이어짐). 같은 ?pangyo=0 로 꺼짐. 1단계 박스 내용은 그대로
-export const NC_BOX = { x0: -60, x1: 105, z0: -3685, z1: -3500 };
+// [ncsoft-roads] 덧박스를 HQ 둘레 도로 고리까지 넓힘: 서 대왕판교로(x≈-120..-175) · 북 대왕판교로644번길(z≈-3685) · 동 판교역로(x≈117) 가
+//   BOX(z -3500) 쪽 도로망과 끊기지 않게. 원본 data/osm_pangyo_ncsoft_raw.json 의 bbox(x≈-208..234, z≈-3537..-3813) 안.
+//   덧박스 바깥 변에서 잘리는 도로는 가까운 OSM 교차 노드(≤ 80m 뒤)까지 되돌려 끝냄 → 허공에 잘린 끝 없음(아래 trimToJunction)
+export const NC_BOX = { x0: -180, x1: 125, z0: -3700, z1: -3500 };
 const BOXES = [BOX, NC_BOX];
 const inB = (B, x, z, m = 0) => x >= B.x0 - m && x <= B.x1 + m && z >= B.z0 - m && z <= B.z1 + m;
 const inBox = (x, z, m = 0) => BOXES.some((B) => inB(B, x, z, m));
@@ -282,9 +285,9 @@ for (const c of chains) {
     if (s.t === 'keep') {
       const A = s.cl[0] > 0 ? lerp(a, b, s.cl[0]) : a, B = s.cl[1] < 1 ? lerp(a, b, s.cl[1]) : b;
       if (s.cl[0] > 0) flush();
-      if (!cur) { cur = { c, pts: [], head: 0, tail: 0 }; if (i >= 2 && seg[i - 2].t === 'dup') { cur.pts.push(P[i - 2]); cur.head = 1; } cur.pts.push(A); }
+      if (!cur) { cur = { c, pts: [], head: 0, tail: 0, cutHead: s.cl[0] > 0 ? 1 : 0, cutTail: 0 }; if (i >= 2 && seg[i - 2].t === 'dup') { cur.pts.push(P[i - 2]); cur.head = 1; } cur.pts.push(A); }
       cur.pts.push(B);
-      if (s.cl[1] < 1) flush();
+      if (s.cl[1] < 1) { cur.cutTail = 1; flush(); }
       continue;
     }
     if (cur && s.t === 'dup') { cur.pts.push(b); cur.tail = 1; } // 기존 도로 위로 꼭짓점 하나 겹쳐 이음
@@ -292,6 +295,28 @@ for (const c of chains) {
   }
   flush();
 }
+// [ncsoft-roads] 덧박스(NC_BOX) 바깥 변에서 잘린 끝 → 가장 가까운 OSM 교차 노드(다른 길과 공유하는 꼭짓점, 80m 안)까지 되돌림
+//   (BOX 변 · BOX 와 맞닿은 변은 1단계 그대로). 교차 노드를 못 찾으면 그대로 둔다(공원 속 보행로 등 지면 높이라 허공 아님)
+const NC_ONLY = (x, z) => z < BOX.z0 - 0.1 && (Math.abs(x - NC_BOX.x0) < 0.25 || Math.abs(x - NC_BOX.x1) < 0.25 || Math.abs(z - NC_BOX.z0) < 0.25);
+const nodeUse = new Map();
+for (const e of raw.elements) if (e.type === 'way' && e.tags?.highway && e.nodes) for (const id of new Set(e.nodes)) nodeUse.set(id, (nodeUse.get(id) || 0) + 1);
+const jPts = new Set();
+for (const e of raw.elements) if (e.type === 'way' && e.tags?.highway && e.nodes && e.geometry) e.nodes.forEach((id, i) => { if (nodeUse.get(id) > 1 && e.geometry[i]) jPts.add(proj(e.geometry[i]).join(',')); });
+rstat.trimmed = 0; rstat.trimDrop = 0;
+function trimToJunction(run) {
+  for (const end of ['cutTail', 'cutHead']) {
+    if (!run[end]) continue;
+    const P = end === 'cutTail' ? run.pts : run.pts.slice().reverse(), last = P[P.length - 1];
+    if (!NC_ONLY(last[0], last[1])) continue;
+    let L = 0, k = -1;
+    for (let i = P.length - 2; i >= 0; i--) { L += Math.hypot(P[i + 1][0] - P[i][0], P[i + 1][1] - P[i][1]); if (L > 80) break; if (jPts.has(P[i].join(','))) { k = i; break; } }
+    if (k < 0) continue;
+    const Q = P.slice(0, k + 1); rstat.trimmed++;
+    run.pts = end === 'cutTail' ? Q : Q.reverse();
+  }
+  return run.pts.length >= 2;
+}
+for (let i = runs.length - 1; i >= 0; i--) if (!trimToJunction(runs[i])) { runs.splice(i, 1); rstat.trimDrop++; }
 const rec = (c, pts) => { const o = { p: pts.map(([x, z]) => [x, z]), w: c.w, k: c.k }; if (c.n) o.n = c.n; if (c.br) o.br = 1; if (c.walk) o.walk = 1; return o; };
 const addR = {};
 for (const run of runs) {
