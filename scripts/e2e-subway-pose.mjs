@@ -38,7 +38,7 @@ for (const pg of [A, Bp]) {
 }
 // ── 대합실: A 는 (2,-4), B 는 그 북쪽에서 A 를 봄
 await place(A, 2, -4, Math.PI);
-await place(Bp, 2, -8.2, Math.PI, 0.25, 3);
+await place(Bp, 6.5, -5.6, Math.PI / 2, 0.25, 3); // A 의 동남쪽에서 서쪽을 봄 (A 가 B 아바타 뒤에 가려지지 않게 비스듬히)
 await seenBy(Bp, '도훈A', 'return true;', 30000);
 await A.waitForTimeout(800);
 // 점프 (Space): 내 아바타와 B 화면의 A 둘 다 뛰어오름

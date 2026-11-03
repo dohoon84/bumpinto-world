@@ -1,6 +1,6 @@
 // [subway] 열차에서 실제 이동 입력(W 키)으로 내리기 — 정자 → 수내 (수인분당선 왕십리 방면)
 //   문이 열리면 문 자리가 비어 있어야 하고(창 아래 벽·문짝·스크린도어가 막지 않음), 걸어서 승강장으로 나와 몇 걸음 더 걸을 수 있어야 함
-//   BASE=http://127.0.0.1:4410/ OUT=/workspace/bw-subway-shots node scripts/e2e-subway-alight.mjs
+//   BASE=http://127.0.0.1:4410/ OUT=/workspace/bw-subway-shots [STOPS=all] node scripts/e2e-subway-alight.mjs
 import assert from 'node:assert/strict';
 import { chromium } from 'playwright';
 const B = process.env.BASE || 'http://127.0.0.1:4410/';
@@ -32,41 +32,66 @@ await page.evaluate(() => { const i = __jj.subway.inside, d = i.lay.doors.find((
 await page.keyboard.down('KeyW');
 await until(() => __jj.subway.room === 'train' && !__jj.subway.swapping, null, 60000);
 await page.keyboard.up('KeyW');
-// 열차: 수내까지 시간만 빨리 (내리기는 걷기로)
-await page.waitForTimeout(800);
-for (let k = 0; k < 200; k++) {
-  const st = await page.evaluate(() => { const i = __jj.subway.inside; if (i.stage !== 'stop') i.skip(1); return { stage: i.stage, open: i.doorOpen, can: i.canAlight }; });
-  if (st.stage === 'stop') break;
+// [feedback-10] STOPS=all 이면 정자에서 가천대 방면으로 한 역씩: 내려서 → 같은 승강장에서 다음 열차를 타고 → 다음 역에서 또 내림 (모든 역 왼쪽 문)
+const ALL = process.env.STOPS === 'all';
+const SLUG = { 수내: 'sunae', 서현: 'seohyeon', 이매: 'imae', 야탑: 'yatap', 모란: 'moran', 태평: 'taepyeong', 가천대: 'gachon', 복정: 'bokjeong' };
+const results = [];
+async function rideAndAlight() {
+  // 열차: 다음 내릴 수 있는 역까지 시간만 빨리 (내리기는 걷기로)
+  await page.waitForTimeout(800);
+  for (let k = 0; k < 200; k++) {
+    const st = await page.evaluate(() => { const i = __jj.subway.inside; if (i.stage !== 'stop' || !i.segs[i.stopIndex]?.game) i.skip(1); return { stage: i.stage, open: i.doorOpen, can: i.canAlight }; });
+    if (st.stage === 'stop' && (await page.evaluate(() => !!__jj.subway.inside.segs[__jj.subway.inside.stopIndex]?.game))) break;
+  }
+  await until(() => __jj.subway.inside?.canAlight === true, null, 30000);
+  // 가장 가까운 문 앞(가운데 기둥 옆 0.35m), 문(왼쪽 = -z)을 바라봄: yaw 0 = -z 로 걷기, 카메라는 뒤에서
+  const want = await page.evaluate(() => { const i = __jj.subway.inside; return i.segs[i.stopIndex].name; });
+  const at = await page.evaluate(() => { const i = __jj.subway.inside, p = i.player.position; const d = i.doors.reduce((b, x) => (Math.abs(x - p.x) < Math.abs(b - p.x) ? x : b), i.doors[0]); p.set(d + 0.35, 0, -0.2); i.player.rotation.y = 0; i.cam.yaw = 0; i.cam.pitch = 0.02; i.cam.dist = 0.9; return { d, hw: i.halfWidth, stop: i.stopIndex }; });
+  await page.waitForTimeout(900);
+  if (OUT) await page.screenshot({ path: `${OUT}/train-door-open-${SLUG[want] || want}.png` });
+  // 실제 W 로 걸어 나가기
+  const track = []; const t0 = Date.now();
+  await page.keyboard.down('KeyW');
+  while (Date.now() - t0 < 12000) {
+    await page.waitForTimeout(100);
+    const v = await pos(); track.push(v);
+    if (v.room === 'platform' && !v.swapping) break;
+  }
+  await page.keyboard.up('KeyW');
+  const last = track.at(-1);
+  assert.equal(last.room, 'platform', `문으로 못 나감: ${JSON.stringify(track.slice(-5))}`);
+  const inTrain = track.filter((v) => v.room === 'train');
+  assert.ok(inTrain.some((v) => v.z < -at.hw), `문턱을 넘지 못함 (최소 z ${Math.min(...inTrain.map((v) => v.z))}, 차 반폭 ${at.hw})`);
+  for (let k = 1; k < inTrain.length; k++) assert.ok(inTrain[k].z <= inTrain[k - 1].z + 1e-3, '문에서 뒤로 밀림');
+  assert.equal(await page.evaluate(() => __jj.subway.station.name), want, `${want}에서 내림`);
+  // 승강장에서 몇 걸음 더 (스크린도어·문 쪽 막힘 없음)
+  await page.waitForTimeout(700);
+  await until(() => __jj.subway.room === 'platform' && !__jj.subway.swapping);
+  const p0 = await pos();
+  await page.evaluate(() => { const i = __jj.subway.inside; i.cam.yaw = 0; });
+  await page.keyboard.down('KeyW'); await page.waitForTimeout(1500); await page.keyboard.up('KeyW');
+  const p1 = await pos();
+  assert.ok(p0.z - p1.z > 1.5, `승강장으로 걸어 나가지 못함 ${JSON.stringify([p0, p1])}`);
+  if (OUT) { await page.evaluate(() => { const i = __jj.subway.inside; i.cam.yaw = Math.PI; i.cam.pitch = 0.15; i.cam.dist = 5; }); await page.waitForTimeout(700); await page.screenshot({ path: `${OUT}/train-door-alighted-${SLUG[want] || want}.png` }); }
+  const r = { station: want, door: at, steps: inTrain.length, minZ: +Math.min(...inTrain.map((v) => v.z)).toFixed(2), platform: [p0, p1].map((p) => +p.z.toFixed(2)) };
+  results.push(r); console.log(JSON.stringify(r));
+  return want;
 }
-await until(() => __jj.subway.inside?.canAlight === true, null, 30000);
-// 가장 가까운 문 앞(가운데 기둥 옆 0.35m), 문(왼쪽 = -z)을 바라봄: yaw 0 = -z 로 걷기, 카메라는 뒤에서
-const at = await page.evaluate(() => { const i = __jj.subway.inside, p = i.player.position; const d = i.doors.reduce((b, x) => (Math.abs(x - p.x) < Math.abs(b - p.x) ? x : b), i.doors[0]); p.set(d + 0.35, 0, -0.2); i.player.rotation.y = 0; i.cam.yaw = 0; i.cam.pitch = 0.02; i.cam.dist = 0.9; return { d, hw: i.halfWidth, stop: i.stopIndex }; });
-await page.waitForTimeout(900);
-if (OUT) await page.screenshot({ path: `${OUT}/train-door-open-sunae.png` });
-// 실제 W 로 걸어 나가기
-const track = []; const t0 = Date.now();
-await page.keyboard.down('KeyW');
-while (Date.now() - t0 < 12000) {
-  await page.waitForTimeout(100);
-  const v = await pos(); track.push(v);
-  if (v.room === 'platform' && !v.swapping) break;
+let got = await rideAndAlight();
+if (!ALL) assert.equal(got, '수내', '정자 다음 역 수내');
+// 다음 역들: 내린 승강장(같은 방면)에서 다음 열차를 불러 걸어서 타고, 다음 역에서 또 걸어서 내림
+while (ALL) {
+  const more = await page.evaluate(() => { const i = __jj.subway.inside; return i?.kind === 'platform' && i.rides.some((q) => q.game); });
+  if (!more) break;
+  await page.evaluate(() => __jj.subway.inside.callTrain(13));
+  await until(() => document.getElementById('subway-sub').innerText.includes('내리는'), null, 60000).catch(() => {});
+  await page.waitForTimeout(3500);
+  await page.evaluate(() => { const i = __jj.subway.inside, d = i.lay.doors.find((q) => q.label === '3-2'); i.player.position.set(d.x, 0, -0.4); i.player.rotation.y = 0; i.cam.yaw = Math.PI; });
+  await page.keyboard.down('KeyW');
+  await until(() => __jj.subway.room === 'train' && !__jj.subway.swapping, null, 60000);
+  await page.keyboard.up('KeyW');
+  got = await rideAndAlight();
 }
-await page.keyboard.up('KeyW');
-const last = track.at(-1);
-assert.equal(last.room, 'platform', `문으로 못 나감: ${JSON.stringify(track.slice(-5))}`);
-const inTrain = track.filter((v) => v.room === 'train');
-assert.ok(inTrain.some((v) => v.z < -at.hw), `문턱을 넘지 못함 (최소 z ${Math.min(...inTrain.map((v) => v.z))}, 차 반폭 ${at.hw})`);
-for (let k = 1; k < inTrain.length; k++) assert.ok(inTrain[k].z <= inTrain[k - 1].z + 1e-3, '문에서 뒤로 밀림');
-assert.equal(await page.evaluate(() => __jj.subway.station.name), '수내', '수내에서 내림');
-// 승강장에서 몇 걸음 더 (스크린도어·문 쪽 막힘 없음)
-await page.waitForTimeout(700);
-const p0 = await pos();
-await page.evaluate(() => { const i = __jj.subway.inside; i.cam.yaw = 0; });
-await page.keyboard.down('KeyW'); await page.waitForTimeout(1500); await page.keyboard.up('KeyW');
-const p1 = await pos();
-assert.ok(p0.z - p1.z > 1.5, `승강장으로 걸어 나가지 못함 ${JSON.stringify([p0, p1])}`);
-if (OUT) { await page.evaluate(() => { const i = __jj.subway.inside; i.cam.yaw = Math.PI; i.cam.pitch = 0.15; i.cam.dist = 5; }); await page.waitForTimeout(700); await page.screenshot({ path: `${OUT}/train-door-alighted-sunae.png` }); }
 assert.deepEqual(errs, [], 'page errors');
-console.log(JSON.stringify({ door: at, steps: inTrain.length, minZ: +Math.min(...inTrain.map((v) => v.z)).toFixed(2), platform: [p0, p1].map((p) => +p.z.toFixed(2)) }));
-console.log('e2e-subway-alight OK');
+console.log(`e2e-subway-alight OK (${results.map((r) => r.station).join(', ')})`);
 await browser.close();

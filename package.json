@@ -48,7 +48,8 @@
     "subway:stairs": "node scripts/e2e-subway-stairs.mjs",
     "subway:camera": "node scripts/e2e-subway-camera.mjs",
     "subway:alight": "node scripts/e2e-subway-alight.mjs",
-    "subway:gate": "node scripts/e2e-subway-gate-exit.mjs"
+    "subway:gate": "node scripts/e2e-subway-gate-exit.mjs",
+    "subway:pose": "node scripts/e2e-subway-pose.mjs"
   },
   "dependencies": {
     "three": "^0.186.1"

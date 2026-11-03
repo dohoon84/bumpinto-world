@@ -539,10 +539,14 @@ export function buildConcourse({ exits, groups, entryId, look, renderer, onToast
       const fx = -Math.sin(cam.yaw), fz = -Math.cos(cam.yaw), rx = -fz, rz = fx;
       let mx = fx * f + rx * s, mz = fz * f + rz * s; const L = Math.hypot(mx, mz); mx /= L; mz /= L;
       const sp = (run ? 7.5 : 4.0) * Math.min(1, Math.hypot(f, s)), step = sp * dt;
-      const nx = p.x + mx * step, nz = p.z + mz * step;
-      const stuck = !canStand(p.x, p.z);
-      if (canStand(nx, p.z) || stuck) p.x = nx;
-      if (canStand(p.x, nz) || stuck) p.z = nz;
+      // 0.1m 씩 나눠 움직여 벽·차단선에 딱 붙는다 (느린 프레임에서 한 번에 0.4m 씩 뛰면 계단 입구 띠(0.25m)를 건너뛰고 멈춤)
+      const nSub = Math.max(1, Math.ceil(step / 0.1)), sx = (mx * step) / nSub, sz = (mz * step) / nSub;
+      for (let k = 0; k < nSub; k++) {
+        const nx = p.x + sx, nz = p.z + sz;
+        const stuck = !canStand(p.x, p.z);
+        if (canStand(nx, p.z) || stuck) p.x = nx;
+        if (canStand(p.x, nz) || stuck) p.z = nz;
+      }
       towardWell = mz > 0.35; // 남쪽(계단 쪽)으로 걸어 들어가는 중
       const want = Math.atan2(mx, mz); me.rotation.y += Math.atan2(Math.sin(want - me.rotation.y), Math.cos(want - me.rotation.y)) * Math.min(1, dt * 12);
       speed = sp;
