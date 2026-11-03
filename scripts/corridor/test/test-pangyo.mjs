@@ -164,15 +164,18 @@ ok('globe station list + branch layout');
 {
   const L = pg.landmarks.find((l) => l.model === 'ncsoftRnd');
   assert.ok(L && !L.label, 'ncsoft: 라벨 없음');
-  assert.deepEqual(L.parts.map((p) => [p.id, p.mh, p.h]).sort(), [['w478539437', 8, 40], ['w478539439', 8, 32], ['w694434544', 0, 8], ['w694434545', 32, 58], ['w694434546', 40, 48]], 'OSM height/min_height');
-  assert.ok(L.parts.every((p) => p.s === 'osm:height'), 'heights from OSM tags');
+  // [ncsoft-44m] 다리동 밑면 44m · 동동 윗면 44m 는 사진 기준값(참고 사진 ref/ncsoft-reference.png), 나머지 3개는 OSM 그대로. OSM 원래 값은 osm 에 남음
+  assert.deepEqual(L.parts.map((p) => [p.id, p.mh, p.h]).sort(), [['w478539437', 8, 40], ['w478539439', 8, 44], ['w694434544', 0, 8], ['w694434545', 44, 58], ['w694434546', 40, 48]], 'OSM height/min_height (+ photo 44m)');
+  assert.ok(L.parts.every((p) => (p.id === 'w694434545' || p.id === 'w478539439' ? p.s === 'photo:ref/ncsoft-reference.png' && p.osm : p.s === 'osm:height' && !p.osm)), 'heights from OSM tags except photo-based 2');
+  assert.deepEqual([L.parts.find((p) => p.id === 'w694434545').osm, L.parts.find((p) => p.id === 'w478539439').osm], [{ mh: 32, h: 58 }, { mh: 8, h: 32, fl: 6 }], 'OSM 원래 값 기록');
+  for (const t of Object.values(tiles)) for (const b of t.b) if (b.lm === 'ncsoft-rnd' && Math.abs(b.h - 58) < 0.01) assert.equal(b.mh, 44, '타일 충돌/LOD 도 44m');
   const NB = pg.meta.boxes[1]; assert.ok(L.parts.every((p) => p.o.every(([x, z]) => x >= NB.x0 && x <= NB.x1 && z >= NB.z0 && z <= NB.z1)), 'ncsoft 덧박스 안');
   const lm2 = createPangyoLandmarks(pg, { overlay: { add: () => {} } });
   // 이름 없는 메시 = 코리더 공용 office 파사드(창 텍스처) — 그 외엔 텍스처 없음
   const g = lm2.build('0_-8'); let n = 0, tri = 0; const names = [];
   g.traverse((o) => { if (o.isMesh) { n++; names.push(o.name); tri += (o.geometry.index ? o.geometry.index.count : o.geometry.attributes.position.count) / 3; assert.ok(!/sign|label|logo/i.test(o.name) && (!o.name || !o.material.map), 'ncsoft: 표지·글자·로고 텍스처 없음 ' + o.name); } });
   assert.ok(n <= 2, 'ncsoft meshes ' + n); // [ncsoft-v2] 본체 1 + 야간 불빛 1
-  ok(`ncsoft: ${L.parts.length} OSM parts (0–58m), ${n} meshes, ${Math.round(tri)} tris, no sign/label/logo`);
+  ok(`ncsoft: ${L.parts.length} OSM parts (0–58m, 다리동 밑면 44m = 사진 기준, OSM 32m), ${n} meshes, ${Math.round(tri)} tris, no sign/label/logo`);
 }
 // 12) [ncsoft-roads] HQ 둘레 도로(대왕판교로 · 대왕판교로644번길 · 판교역로)가 BOX 도로망(z > -3490)과 이어지고, 덧박스 바깥 변에 잘린 차도 끝이 없다
 {

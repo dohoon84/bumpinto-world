@@ -155,6 +155,15 @@ const LM_TOWERS = new Set(['w1087134311', 'w1087134310', 'w659687063', 'w6596870
 const LM_DECK = 'w1468711684';
 // [ncsoft] 엔씨소프트 R&D센터: OSM 에 이름 붙은 w694434545(32–58m) + 같은 단지 building 겹층 4개(포디움 0–8 · 서동 8–40 · 동동 8–32 · 서쪽 40–48)
 const LM_NC = new Set(['w694434544', 'w478539437', 'w478539439', 'w694434545', 'w694434546']);
+// [ncsoft-44m] 다리동 밑면 = 사진 기준값 44m (2026-11-03 도훈님 결정). OSM 값이 아님:
+//   - OSM w694434545 (name=엔씨소프트R&D센터): min_height=32, height=58 → 원래 값은 parts[].osm 에 그대로 남긴다.
+//   - 참고 사진 /workspace/bw-pangyo-shots/ref/ncsoft-reference.png (남쪽 정면): 다리동 두께 ≈ 전체 58m 의 1/4 → 밑면 ≈ 44m 로 읽힘
+//     (비교 /workspace/bw-pangyo-shots/ncsoft-v2/compare-side-by-side.png). 사진 비례 추정값이라 측량 값이 아님.
+//   - 다리동 밑을 받치는 동동(w478539439, OSM 8–32m)은 사진에서 다리동 밑면까지 한 덩어리로 올라가므로 윗면을 44m 로 같이 올린다
+//     (안 올리면 32–44m 가 빈 채 다리동이 떠 보임). 층 띠는 OSM 층 높이((32−8)/6 = 4m)를 유지해 층수 9로 계산.
+//   - 서동(8–40m)·서쪽 캡(40–48m)·포디움(0–8m)은 OSM 그대로 → 서동 위 40–44m 는 사진처럼 다리동 밑의 어두운 틈으로 남는다.
+const NC_PHOTO = { bridge: 'w694434545', under: 'w478539439', bridgeMh: 44, src: 'photo:ref/ncsoft-reference.png' };
+const NC_OSM = new Map(); // id → OSM 원래 { mh, h }
 // 데크 높이 (2026-11-03 도훈님 결정, deck-v2): 상판 10–12m = '3~4층 높이'. 실측(측량) 값은 없음 — 근거는 층수 서술뿐:
 //   - 연합뉴스 2021-11-17 (https://www.yna.co.kr/view/AKR20211117112000061), 한겨레 (https://www.hani.co.kr/arti/economy/property/1021511.html),
 //     경인일보 (https://www.kyeongin.com/article/1539230), KIRA 월간 2024-09 (https://kiramonthly.com/2073), 희림 (https://heerim.com/kr/project/project_view.php?idx=649):
@@ -195,6 +204,8 @@ for (const e of raw.elements) {
     let mh = num(t.min_height) ?? (num(t['building:min_level']) ? num(t['building:min_level']) * LEVEL_H : 0);
     if (t.building === 'roof' || t['building:part'] === 'roof') { if (!t.min_height && !t['building:min_level']) { mh = Math.max(0, h - 0.6); if (h < 3) h = 4.5, mh = 3.9; } }
     if (id === LM_DECK) { h = DECK.h; mh = DECK.mh; src = 'landmark:deck'; }
+    if (id === NC_PHOTO.bridge) { NC_OSM.set(id, { mh, h }); mh = NC_PHOTO.bridgeMh; src = NC_PHOTO.src; } // [ncsoft-44m]
+    if (id === NC_PHOTO.under) { NC_OSM.set(id, { mh, h }); h = NC_PHOTO.bridgeMh; src = NC_PHOTO.src; }
     if (mh >= h) mh = Math.max(0, h - 1);
     const part = !!t['building:part'] && t['building:part'] !== 'no' && (!t.building || LM_DEPT.has(id) && e.type === 'way');
     buildings.push({ id, o: poly.outer, holes: poly.holes, h: r1(h), mh: r1(mh), k: t.building && t.building !== 'yes' || !t['building:part'] ? (t.building || 'yes') : 'part:' + t['building:part'], s: src, a, c, n: t.name, part });
@@ -423,7 +434,11 @@ const centerOf = (parts) => { const all = parts.flatMap((p) => p.o); const bb = 
 const dept = lmParts('pangyo-dept'), towers = lmParts('alphadom-towers'), deck = deckB ? [{ id: deckB.id, o: deckB.o, holes: deckB.holes, h: DECK.h, mh: DECK.mh, s: 'landmark:deck' }] : [];
 // [ncsoft] 층수: OSM building:levels(꼭대기 층 번호) − building:min_level → 층 띠 간격 = (height − min_height) / 층수 (태그 값 그대로)
 const ncTags = new Map(raw.elements.filter((e) => LM_NC.has(`${e.type[0]}${e.id}`)).map((e) => [`${e.type[0]}${e.id}`, e.tags || {}]));
-const nc = lmParts('ncsoft-rnd').map((p) => { const t = ncTags.get(p.id) || {}, lv = num(t['building:levels']), ml = num(t['building:min_level']) || 0; return { ...p, fl: lv && lv > ml ? lv - ml : null }; });
+const nc0 = lmParts('ncsoft-rnd').map((p) => { const t = ncTags.get(p.id) || {}, lv = num(t['building:levels']), ml = num(t['building:min_level']) || 0; return { ...p, fl: lv && lv > ml ? lv - ml : null }; });
+const nc = nc0.map((p) => { // [ncsoft-44m] 사진 기준값으로 바꾼 두 부분은 OSM 원래 값을 osm 에 남김
+  const o = NC_OSM.get(p.id); if (!o) return p;
+  return { ...p, ...(p.id === NC_PHOTO.under ? { fl: Math.round((p.h - p.mh) / ((o.h - o.mh) / (p.fl || 1))) } : {}), osm: { ...o, ...(p.id === NC_PHOTO.under ? { fl: p.fl } : {}) } };
+});
 if (dept.length !== 4 || towers.length !== 4 || deck.length !== 1 || nc.length !== 5) throw new Error(`랜드마크 매칭 실패 dept=${dept.length} towers=${towers.length} deck=${deck.length} ncsoft=${nc.length}`);
 // 데크 안쪽 빈 곳(선큰 광장) — OSM 링의 구멍이 없으면 외곽 자체의 오목한 X 모양이라 중심 원형 마당을 가정하지 않는다
 const plazaPed = plazas.filter((p) => inBox(...centroid(p.o)));
