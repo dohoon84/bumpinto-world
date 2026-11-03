@@ -44,7 +44,10 @@ const proj = (g) => [r1((g.lon - CENTER.lon) * kx), r1(-(g.lat - CENTER.lat) * k
 export const BOX = { x0: -250, x1: 1000, z0: -3500, z1: -2500 };
 // [ncsoft] 엔씨소프트 R&D센터(대왕판교로644번길 12, OSM w694434545 외 부분 4개: x -45..88, z -3668..-3600)는 BOX 남쪽 밖 →
 //   건물 둘레만 덮는 작은 덧박스(BOX 아래 변에 붙음 → 바닥 이어짐). 같은 ?pangyo=0 로 꺼짐. 1단계 박스 내용은 그대로
-export const NC_BOX = { x0: -60, x1: 105, z0: -3685, z1: -3500 };
+// [ncsoft-roads] 덧박스를 HQ 둘레 도로 고리까지 넓힘: 서 대왕판교로(x≈-120..-175) · 북 대왕판교로644번길(z≈-3685) · 동 판교역로(x≈117) 가
+//   BOX(z -3500) 쪽 도로망과 끊기지 않게. 원본 data/osm_pangyo_ncsoft_raw.json 의 bbox(x≈-208..234, z≈-3537..-3813) 안.
+//   덧박스 바깥 변에서 잘리는 도로는 가까운 OSM 교차 노드(≤ 80m 뒤)까지 되돌려 끝냄 → 허공에 잘린 끝 없음(아래 trimToJunction)
+export const NC_BOX = { x0: -180, x1: 125, z0: -3700, z1: -3500 };
 const BOXES = [BOX, NC_BOX];
 const inB = (B, x, z, m = 0) => x >= B.x0 - m && x <= B.x1 + m && z >= B.z0 - m && z <= B.z1 + m;
 const inBox = (x, z, m = 0) => BOXES.some((B) => inB(B, x, z, m));
@@ -152,13 +155,14 @@ const LM_TOWERS = new Set(['w1087134311', 'w1087134310', 'w659687063', 'w6596870
 const LM_DECK = 'w1468711684';
 // [ncsoft] 엔씨소프트 R&D센터: OSM 에 이름 붙은 w694434545(32–58m) + 같은 단지 building 겹층 4개(포디움 0–8 · 서동 8–40 · 동동 8–32 · 서쪽 40–48)
 const LM_NC = new Set(['w694434544', 'w478539437', 'w478539439', 'w694434545', 'w694434546']);
-// 데크 높이 실측값 조사(2026-11-03): 공개 자료에 m 단위 실측값 없음 → 5.4–6.4m 표현값 유지(지어낸 값 아님, 게임 표현용).
-//   - VWorld 국가중점 GIS건물통합정보 WFS(dt_d010, 2026-10-05 갱신): 데크/광장 필지(판교동 132-18x, 백현동 4-1x) 폴리곤 24개 모두 hg=0·층수 0
-//     (건축물대장 높이 없음). 같은 박스에서 높이 있는 건 알파돔타워 67.6m·그레이츠 판교 67.5m 뿐.
-//   - OSM w1468711684: building=yes layer=1, height/min_height/levels 태그 없음.
-//   - 공개 기사·설계자료(연합뉴스 2021-11-17, 한겨레, 경인일보, KIRA 월간 2024-09, 희림 프로젝트 소개): 컬처밸리 = '지상 3층 실내 통로 + 4층 옥외 통로'
-//     로 층수만 있고 m 값은 없음. 층수만으로 m 를 환산하면 추정이라 쓰지 않았다(현재 5.4–6.4m 는 실제 3~4층보다 낮을 가능성 있음 → 결정 필요).
-const DECK = { mh: 5.4, h: 6.4 }; // 데크 아래(1층 광장) 걸어 다닐 수 있게 하단 5.4m (충돌 제외 기준 mh ≥ 2.5)
+// 데크 높이 (2026-11-03 도훈님 결정, deck-v2): 상판 10–12m = '3~4층 높이'. 실측(측량) 값은 없음 — 근거는 층수 서술뿐:
+//   - 연합뉴스 2021-11-17 (https://www.yna.co.kr/view/AKR20211117112000061), 한겨레 (https://www.hani.co.kr/arti/economy/property/1021511.html),
+//     경인일보 (https://www.kyeongin.com/article/1539230), KIRA 월간 2024-09 (https://kiramonthly.com/2073), 희림 (https://heerim.com/kr/project/project_view.php?idx=649):
+//     컬처밸리 = '지상 3층 실내 통로 + 4층 옥외 통로'. 층수 → m 는 게임 표현값(하단 10m · 상판 12m, 슬래브 2m).
+//   - VWorld GIS건물통합정보(dt_d010, 2026-10-05): 데크/광장 필지 hg=0·층수 0. OSM w1468711684: building=yes layer=1, 높이 태그 없음.
+//   - 엘리베이터: OSM highway=elevator 노드 3개(data/osm_pangyo_deck_elevators.json) — 데크와 지상을 잇는 곳. OSM 에 데크 계단(highway=steps)은 없음.
+const DECK = { mh: 10, h: 12 }; // 데크 아래(1층 광장) 걸어 다닐 수 있게 하단 10m (충돌 제외 기준 mh ≥ 2.5)
+const ELEV = path.resolve(ROOT, 'data/osm_pangyo_deck_elevators.json');
 
 // ---------- 1) 건물 (bake.mjs 규칙) ----------
 function defaultLevels(t, a) {
@@ -214,7 +218,7 @@ for (const b of buildings) {
   if (b.mh > 0) rec.mh = b.mh;
   if (b.s.startsWith('default')) rec.s = 'default';
   if (b.holes?.length) rec.holes = b.holes;
-  if (b.outline || lm) rec.nr = 1; // 랜드마크는 전용 모델이 그림(충돌은 유지, 데크는 mh 5.4 라 충돌 제외)
+  if (b.outline || lm) rec.nr = 1; // 랜드마크는 전용 모델이 그림(충돌은 유지, 데크는 mh 10 이라 충돌 제외)
   if (lm) { rec.lm = lm; stat.landmark++; }
   rec.id = b.id;
   (addB[tileOf(b.c[0], b.c[1])] ||= []).push(rec);
@@ -281,9 +285,9 @@ for (const c of chains) {
     if (s.t === 'keep') {
       const A = s.cl[0] > 0 ? lerp(a, b, s.cl[0]) : a, B = s.cl[1] < 1 ? lerp(a, b, s.cl[1]) : b;
       if (s.cl[0] > 0) flush();
-      if (!cur) { cur = { c, pts: [], head: 0, tail: 0 }; if (i >= 2 && seg[i - 2].t === 'dup') { cur.pts.push(P[i - 2]); cur.head = 1; } cur.pts.push(A); }
+      if (!cur) { cur = { c, pts: [], head: 0, tail: 0, cutHead: s.cl[0] > 0 ? 1 : 0, cutTail: 0 }; if (i >= 2 && seg[i - 2].t === 'dup') { cur.pts.push(P[i - 2]); cur.head = 1; } cur.pts.push(A); }
       cur.pts.push(B);
-      if (s.cl[1] < 1) flush();
+      if (s.cl[1] < 1) { cur.cutTail = 1; flush(); }
       continue;
     }
     if (cur && s.t === 'dup') { cur.pts.push(b); cur.tail = 1; } // 기존 도로 위로 꼭짓점 하나 겹쳐 이음
@@ -291,6 +295,28 @@ for (const c of chains) {
   }
   flush();
 }
+// [ncsoft-roads] 덧박스(NC_BOX) 바깥 변에서 잘린 끝 → 가장 가까운 OSM 교차 노드(다른 길과 공유하는 꼭짓점, 80m 안)까지 되돌림
+//   (BOX 변 · BOX 와 맞닿은 변은 1단계 그대로). 교차 노드를 못 찾으면 그대로 둔다(공원 속 보행로 등 지면 높이라 허공 아님)
+const NC_ONLY = (x, z) => z < BOX.z0 - 0.1 && (Math.abs(x - NC_BOX.x0) < 0.25 || Math.abs(x - NC_BOX.x1) < 0.25 || Math.abs(z - NC_BOX.z0) < 0.25);
+const nodeUse = new Map();
+for (const e of raw.elements) if (e.type === 'way' && e.tags?.highway && e.nodes) for (const id of new Set(e.nodes)) nodeUse.set(id, (nodeUse.get(id) || 0) + 1);
+const jPts = new Set();
+for (const e of raw.elements) if (e.type === 'way' && e.tags?.highway && e.nodes && e.geometry) e.nodes.forEach((id, i) => { if (nodeUse.get(id) > 1 && e.geometry[i]) jPts.add(proj(e.geometry[i]).join(',')); });
+rstat.trimmed = 0; rstat.trimDrop = 0;
+function trimToJunction(run) {
+  for (const end of ['cutTail', 'cutHead']) {
+    if (!run[end]) continue;
+    const P = end === 'cutTail' ? run.pts : run.pts.slice().reverse(), last = P[P.length - 1];
+    if (!NC_ONLY(last[0], last[1])) continue;
+    let L = 0, k = -1;
+    for (let i = P.length - 2; i >= 0; i--) { L += Math.hypot(P[i + 1][0] - P[i][0], P[i + 1][1] - P[i][1]); if (L > 80) break; if (jPts.has(P[i].join(','))) { k = i; break; } }
+    if (k < 0) continue;
+    const Q = P.slice(0, k + 1); rstat.trimmed++;
+    run.pts = end === 'cutTail' ? Q : Q.reverse();
+  }
+  return run.pts.length >= 2;
+}
+for (let i = runs.length - 1; i >= 0; i--) if (!trimToJunction(runs[i])) { runs.splice(i, 1); rstat.trimDrop++; }
 const rec = (c, pts) => { const o = { p: pts.map(([x, z]) => [x, z]), w: c.w, k: c.k }; if (c.n) o.n = c.n; if (c.br) o.br = 1; if (c.walk) o.walk = 1; return o; };
 const addR = {};
 for (const run of runs) {
@@ -401,10 +427,17 @@ const nc = lmParts('ncsoft-rnd').map((p) => { const t = ncTags.get(p.id) || {}, 
 if (dept.length !== 4 || towers.length !== 4 || deck.length !== 1 || nc.length !== 5) throw new Error(`랜드마크 매칭 실패 dept=${dept.length} towers=${towers.length} deck=${deck.length} ncsoft=${nc.length}`);
 // 데크 안쪽 빈 곳(선큰 광장) — OSM 링의 구멍이 없으면 외곽 자체의 오목한 X 모양이라 중심 원형 마당을 가정하지 않는다
 const plazaPed = plazas.filter((p) => inBox(...centroid(p.o)));
+// [deck-v2] OSM 엘리베이터 노드: 데크 외곽 안 또는 가장자리 6m 안인 것만 (지상 → 데크 상판)
+function deckElevators() {
+  if (!deckB || !fs.existsSync(ELEV)) return [];
+  const ring = deckB.o, inR = (x, z) => { let ins = false; for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) { const [xi, zi] = ring[i], [xj, zj] = ring[j]; if ((zi > z) !== (zj > z) && x < ((xj - xi) * (z - zi)) / (zj - zi) + xi) ins = !ins; } return ins; };
+  const edge = (x, z) => Math.min(...ring.map((a, i) => { const b = ring[(i + 1) % ring.length], dx = b[0] - a[0], dz = b[1] - a[1], L2 = dx * dx + dz * dz || 1e-9, t = Math.max(0, Math.min(1, ((x - a[0]) * dx + (z - a[1]) * dz) / L2)); return Math.hypot(a[0] + dx * t - x, a[1] + dz * t - z); }));
+  return readJSON(ELEV).elements.map((n) => { const [x, z] = proj(n); return { osm: n.id, x: r1(x), z: r1(z), inside: inR(x, z) }; }).filter((e) => e.inside || edge(e.x, e.z) < 6).map(({ osm, x, z, inside }) => ({ osm, x, z, inside }));
+}
 const landmarks = [
   { id: 'pangyo-dept', model: 'pangyoDept', label: { ko: '현대백화점', en: 'Hyundai Department Store' }, pos: centerOf(dept), parts: dept },
   { id: 'alphadom-towers', model: 'pangyoTowers', label: { ko: '알파돔시티', en: 'Alphadom City' }, pos: centerOf(towers.concat(deck)), parts: towers },
-  { id: 'pangyo-deck', model: 'pangyoDeck', label: { ko: '판교역 광장', en: 'Pangyo Station Plaza' }, pos: { ...centerOf(deck), y: DECK.h }, parts: deck },
+  { id: 'pangyo-deck', model: 'pangyoDeck', label: { ko: '판교역 광장', en: 'Pangyo Station Plaza' }, pos: { ...centerOf(deck), y: DECK.h }, parts: deck, elevators: deckElevators() },
   { id: 'pangyo-entrances', model: 'pangyoEntrances', entrances: exits, lines: station.lines },
   // 이름 표지·라벨 없음(도훈님 결정) · 로고 없음
   { id: 'ncsoft-rnd', model: 'ncsoftRnd', osm: 'w694434545', pos: centerOf(nc), parts: nc },
@@ -447,7 +480,7 @@ const index = {
     name: 'Pangyo station area (stage 1)', tileSize: TS, box: BOX, boxes: BOXES, generated: new Date().toISOString(),
     source: { osm: `Overpass API (osm_base ${raw.osm3s?.timestamp_osm_base || '?'})`, query: 'data/query_pangyo.overpassql', corridor: cIndex.meta.generated },
     attribution: '© OpenStreetMap contributors (ODbL)',
-    heightRule: 'OSM height → building:levels×3.2(+1.5 if >3F, else +0.6) → default levels by type/area (scripts/bake.mjs defaultLevels); deck = stylized 5.4–6.4 m (no measured height in public data: VWorld dt_d010 hg=0 on all deck/plaza parcels, OSM no height tags; sources only give floors 3F/4F)',
+    heightRule: 'OSM height → building:levels×3.2(+1.5 if >3F, else +0.6) → default levels by type/area (scripts/bake.mjs defaultLevels); deck = 10–12 m from press descriptions "3~4층 높이" (no measured survey value: VWorld dt_d010 hg=0 on all deck/plaza parcels, OSM no height tags)',
     stats: { ...stat, ...rstat, runs: runs.length, parks: P.n, water: W.n, tiles: Object.keys(tiles).length, tileKB: Math.round(bytes / 1024) },
     defaultHeights: defaultList,
   },

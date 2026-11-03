@@ -1,8 +1,8 @@
 // [pangyo] 판교역 일대 랜드마크 (확장 1단계, 데이터: public/corridor/pangyo/index.json ← scripts/corridor/build-pangyo.mjs)
 //   - 현대백화점(일반 매스, 로고·전용 서체·브랜드 색 없음): OSM building:part 높이 그대로 + 띠 장식·쇼윈도·입구 캐노피·'현대백화점' 글자 표지
 //   - 알파돔시티 타워 4동: OSM 높이 그대로 유리 커튼월(정자 office 파사드·야간 창 불빛 공유) + 세로 핀·포디움 캐노피·옥상 크라운
-//   - 판교역 광장 데크: OSM 외곽(높이 태그 없음 → 2층 높이 5.4–6.4m 로 표현) + 기둥·난간
-//   - 엔씨소프트 R&D센터: OSM building 겹층 5개(높이·min_height·층수 태그 그대로) + 층 띠·멀리언·로비 유리·필로티 밑면 조명·옥상 난간. 이름 표지/라벨/로고 없음
+//   - 판교역 광장 데크: OSM 외곽(높이 태그 없음 → 기사 서술 '3~4층 높이' 로 10–12m) + 기둥·난간 + OSM 엘리베이터 3곳(유리 승강로)
+//   - 엔씨소프트 R&D센터: OSM building 겹층 5개(높이·min_height·층수 태그 그대로), 참고 사진 맞춤 푸른 유리 커튼월 + 촘촘한 가로 띠 + 다리동 짙은 밑면. 메시 2개. 이름 표지/라벨/로고 없음
 //   - 지하철 출입구 4곳: OSM 출입구 노드 위치/번호, 방향 = 가까운 보행로. 유리 캐노피 + 노선색 띠 + 번호판
 //   모델은 해당 상세 타일이 빌드될 때 그 타일 그룹에 붙고 타일과 함께 해제된다(멀리선 LOD 상자). 재질은 모듈 공유,
 //   정점 색으로 합쳐 랜드마크 묶음당 draw 3~6 (+ 야간 발광 1, 낮에는 숨김).
@@ -17,7 +17,8 @@ const C = {
   stone: '#d8ccb8', stoneDark: '#bfb29c', reveal: '#a99c86', shopGlass: '#3e5566', cornice: '#efe8dc', canopy: '#5d646e',
   fin: '#dfe6ee', crown: '#eef2f6', mech: '#9aa3ad', podium: '#41586a', deckSide: '#9c9a96', deckTop: '#a8896b', rail: '#c9dbe4', column: '#c3c0ba',
   frame: '#4a525c', plate: '#1d2a44',
-  ncSlab: '#e4e8ec', ncMullion: '#b9c2cb', ncLobby: '#33495a', ncSoffit: '#c9ced3', ncParapet: '#eef1f4',
+  ncSlab: '#d9e0e7', ncMullion: '#9fb0c0', ncLobby: '#33495a', ncSoffit: '#c9ced3', ncParapet: '#eef1f4',
+  ncGlass: '#5f86a8', ncUnder: '#2b3138', ncCore: '#263039', ncRoof: '#a3abb3', ncPodiumTop: '#8f9c86',
 };
 
 // ---------- 공유 재질 / 텍스처 (모듈 1회) ----------
@@ -166,34 +167,59 @@ function buildTowers(l, { seed }) {
 // ---------- 엔씨소프트 R&D센터 ----------
 //   높이·하단 높이·층수 = OSM 태그(build-pangyo.mjs, fl = building:levels − building:min_level). 층 띠는 (h − mh)/fl 간격.
 //   게임 기본값(공개 자료 없음, 표현용): 멀리언 간격 3m · 로비 유리 높이(포디움 높이 −0.6m) · 옥상 난간 1.2m · 기계실 3m
-const NC_MULLION = 3;
-function buildNcsoft(l, { seed }) {
+// [ncsoft-v2] 참고 사진(남쪽 정면) 맞춤: 왼쪽 낮은 동(서동 8–40m) · 오른쪽 높은 동(동동 8–32m + 위 다리동) · 둘을 잇는 긴 다리동(32–58m)
+//   밑 큰 직사각 '하늘 구멍'. 절대 높이는 OSM 태그 그대로(사진 비례로는 다리동 밑면 ≈ 44m · 두께 ≈ 14m 로 보이나 OSM min_height 32 를 따름).
+//   파사드 = 푸른 유리 커튼월 + 촘촘한 가로 띠(OSM 층당 2줄) + 6m 세로 멀리언, 다리동 밑면 짙은 색, 구멍 쪽 짙은 코어 띠(사진 표현).
+//   이름 표지·'nc' 로고 없음. 메시 2개(정점 색 본체 1 + 야간 창 불빛 1, 낮엔 숨김) · 재질은 모듈 공유(vcMat/glow) → 코리더 office 파사드 메시를 쓰지 않음.
+const NC_MULLION = 6, NC_BANDS_PER_FLOOR = 2;
+const ncHash = (a, b, c) => { const v = Math.sin(a * 12.9898 + b * 78.233 + c * 37.719) * 43758.5453; return v - Math.floor(v); };
+function buildNcsoft(l, { seed = 0 } = {}) {
   const g = new THREE.Group(); g.name = 'ncsoftRnd';
-  for (const m of buildingMeshes(l.parts.map((p) => ({ o: p.o, holes: p.holes, h: p.h, mh: p.mh || 0, k: 'office' })), seed)) g.add(m); // office 파사드 + 야간 창 불빛 공유
   const bag = Bag(), lit = Bag();
   const top = l.parts.reduce((a, b) => (b.h > a.h ? b : a));
+  const hole = (() => { // 하늘 구멍: 다리동 밑, 동·서동 사이 x 구간 (OSM 외곽에서 계산)
+    const br = l.parts.find((p) => (p.mh || 0) >= 30 && p.h === top.h), tw = l.parts.filter((p) => (p.mh || 0) >= 1 && (p.mh || 0) < 30 && p.h > 30);
+    if (!br || tw.length < 2) return null;
+    const bx = tw.map((p) => [Math.min(...p.o.map((q) => q[0])), Math.max(...p.o.map((q) => q[0]))]).sort((a, b) => a[0] - b[0]);
+    return { x0: bx[0][1], x1: bx[1][0], y0: Math.max(...tw.map((p) => p.mh || 0)), y1: br.mh };
+  })();
   for (const p of l.parts) {
     const y0 = p.mh || 0, h = p.h, fl = p.fl || Math.max(1, Math.round((h - y0) / 4));
-    if (y0 < 1) { // 포디움: 로비 유리 + 밤 불빛
-      band(bag, p.o, 0.3, h - 0.6, 0.12, 0.2, C.ncLobby, { minLen: 3 });
-      band(lit, p.o, 0.6, h - 1.2, 0.25, 0.05, '#ffffff', { minLen: 4 });
-    } else { // 들린 매스 밑면: 테두리 띠 + 밤 간접등
-      band(bag, p.o, y0 - 0.5, y0, 0.2, 0.3, C.ncSoffit, { minLen: 1 });
-      band(lit, p.o, y0 - 0.08, y0 - 0.03, -0.5, 0.5, '#ffffff', { minLen: 3 });
+    if (y0 < 1) { // 포디움: 로비 유리 + 옥상 조경색 + 밤 불빛
+      bag.push(paintFaces(extrude(p.o, p.holes, 0, h), C.ncPodiumTop, C.ncLobby, C.ncLobby));
+      band(bag, p.o, h - 0.6, h, 0.1, 0.3, C.ncSlab, { minLen: 1 });
+      band(lit, p.o, 0.6, h - 1.2, 0.08, 0.05, '#ffffff', { minLen: 4 });
+      continue;
     }
-    for (let i = 1; i < fl; i++) { const y = y0 + ((h - y0) * i) / fl; band(bag, p.o, y - 0.18, y + 0.18, 0.16, 0.22, C.ncSlab, { minLen: 2 }); } // 층 띠
-    if (y0 >= 1) for (const e of edges(p.o, 3)) { // 멀리언
+    const bridge = y0 >= 30;
+    bag.push(paintFaces(extrude(p.o, p.holes, y0, h), C.ncRoof, C.ncGlass, bridge ? C.ncUnder : C.ncGlass));
+    const nb = fl * NC_BANDS_PER_FLOOR, step = (h - y0) / nb;
+    for (let i = 1; i < nb; i++) { const y = y0 + step * i; band(bag, p.o, y - 0.2, y + 0.2, 0.14, 0.3, C.ncSlab, { minLen: 2 }); } // 가로 띠
+    if (bridge) { band(bag, p.o, y0, y0 + 0.6, 0.12, 0.3, C.ncUnder, { minLen: 1 }); band(lit, p.o, y0 + 0.02, y0 + 0.08, -0.6, 0.6, '#ffffff', { minLen: 3 }); } // 밑면 테두리 + 밤 간접등
+    for (const e of edges(p.o, 3)) {
       const n = Math.floor(e.L / NC_MULLION);
-      for (let i = 1; i < n; i++) {
-        const t = i / n, x = e.ax + (e.bx - e.ax) * t + e.nx * 0.2, z = e.az + (e.bz - e.az) * t + e.nz * 0.2;
-        bag.box(x, (y0 + h) / 2, z, 0.16, h - y0, 0.35, -e.ang, C.ncMullion);
+      for (let i = 1; i < n; i++) { // 멀리언
+        const t = i / n, x = e.ax + (e.bx - e.ax) * t + e.nx * 0.16, z = e.az + (e.bz - e.az) * t + e.nz * 0.16;
+        bag.box(x, (y0 + h) / 2, z, 0.14, h - y0, 0.28, -e.ang, C.ncMullion);
+      }
+      // 야간 창 불빛: 띠 사이 6m 칸마다 결정적 해시로 약 45% 켬
+      const segN = Math.max(1, Math.round(e.L / 6));
+      for (let r = 0; r < nb; r++) for (let k = 0; k < segN; k++) {
+        if (ncHash(seed + e.mx, e.mz + r, k) > 0.45) continue;
+        const t = (k + 0.5) / segN, x = e.ax + (e.bx - e.ax) * t + e.nx * 0.08, z = e.az + (e.bz - e.az) * t + e.nz * 0.08;
+        lit.box(x, y0 + step * (r + 0.5), z, (e.L / segN) - 0.6, step - 0.7, 0.05, -e.ang, '#ffffff');
+      }
+      // 구멍 쪽 면: 사진의 짙은 세로 코어 띠(폭 5m, 앞쪽 = 남쪽 끝에서 8m)
+      if (hole && !bridge && Math.abs(e.nx) > 0.7 && e.mx > hole.x0 - 2 && e.mx < hole.x1 + 2) {
+        const [sx, sz] = e.az > e.bz ? [e.ax, e.az] : [e.bx, e.bz], dl = Math.min(8, e.L / 2) / e.L, ux = (e.bx - e.ax) * (e.az > e.bz ? 1 : -1), uz = (e.bz - e.az) * (e.az > e.bz ? 1 : -1);
+        bag.box(sx + ux * dl + e.nx * 0.2, (y0 + h) / 2, sz + uz * dl + e.nz * 0.2, 5, h - y0, 0.3, -e.ang, C.ncCore);
       }
     }
     band(bag, p.o, h, h + 1.2, 0.08, 0.3, C.ncParapet, { minLen: 1 }); // 옥상 난간
   }
-  bag.push(paintFaces(extrude(shrink(top.o, 0.4), [], top.h, top.h + 3), '#8d959e', C.mech)); // 기계실
+  bag.push(paintFaces(extrude(shrink(top.o, 0.4), [], top.h, top.h + 3), '#8d959e', C.mech)); // 기계실 (로고·표지 없음)
   band(lit, top.o, top.h + 0.7, top.h + 1.0, 0.3, 0.05, '#ffffff', { minLen: 4 });
-  const body = bag.mesh(vcMat(), 'ncsoftDetail'); if (body) g.add(body);
+  const body = bag.mesh(vcMat(), 'ncsoftBody'); if (body) g.add(body);
   const night = lit.mesh(glow(), 'ncsoftGlow'); if (night) { night.castShadow = night.receiveShadow = false; g.add(night); }
   return { group: g, night };
 }
@@ -203,7 +229,7 @@ function buildDeck(l) {
   const g = new THREE.Group(); g.name = 'pangyoDeck';
   const bag = Bag(), lit = Bag();
   for (const p of l.parts) {
-    const y0 = p.mh, y1 = p.h; // OSM layer=1, 높이 없음 → 5.4–6.4m (build-pangyo.mjs DECK)
+    const y0 = p.mh, y1 = p.h; // OSM layer=1, 높이 없음 → 10–12m (build-pangyo.mjs DECK, '3~4층 높이')
     bag.push(paintFaces(extrude(p.o, p.holes, y0, y1), C.deckTop, C.deckSide, C.deckSide)); // OSM roof:colour 갈색 · building:colour 회색
     // 난간은 데크 가장자리 안쪽: 외곽 링은 바깥 법선 반대(-), 구멍 링은 구멍 바깥(= 데크 쪽, +)
     for (const [r, sd] of [[p.o, -1], ...(p.holes || []).map((h) => [h, 1])]) {
@@ -219,6 +245,14 @@ function buildDeck(l) {
       if (!inside(x, z) || edgeD(x, z) < 2.5) continue;
       const c = new THREE.CylinderGeometry(0.42, 0.42, y0, 10); c.translate(x, y0 / 2, z); bag.push(c, C.column);
     }
+  }
+  // [deck-v2] 엘리베이터(OSM highway=elevator): 지상 → 데크 상판 + 기계실. 승강로 2.4 × 2.4m · 상판 위 2.6m 는 표현용 기본값(실측 아님)
+  const top = Math.max(...l.parts.map((p) => p.h)), EW = 2.4, EH = top + 2.6;
+  for (const e of l.elevators || []) {
+    for (const [dx, dz] of [[-1, -1], [-1, 1], [1, -1], [1, 1]]) bag.box(e.x + dx * EW / 2, EH / 2, e.z + dz * EW / 2, 0.16, EH, 0.16, 0, C.frame);
+    bag.box(e.x, EH + 0.15, e.z, EW + 0.3, 0.3, EW + 0.3, 0, C.frame);
+    bag.box(e.x, EH / 2, e.z, EW - 0.1, EH - 0.2, EW - 0.1, 0, C.podium); // 유리 승강로(불투명 짙은 유리색 — 투명 정렬 비용 없이)
+    for (let y = 3; y < EH - 1; y += 3) lit.box(e.x, y, e.z, EW + 0.02, 0.12, EW + 0.02, 0, '#ffffff'); // 야간 띠
   }
   const body = bag.mesh(vcMat(), 'pangyoDeckBody'); if (body) g.add(body);
   const night = lit.mesh(glow(), 'pangyoDeckGlow'); if (night) { night.castShadow = night.receiveShadow = false; g.add(night); }
