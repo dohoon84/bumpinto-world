@@ -7,14 +7,14 @@
 import { createCorridorBuses } from './buses.js';
 import { createCorridorTraffic } from './traffic.js';
 
-export function createCorridorLife({ root, baseUrl, crossings, terrain, terrainT, world, overlay, stations, liveBox, params, proxy, mode, liveDrive = null, liveCrossings = null, renderer = null, hints = null }) {
+export function createCorridorLife({ root, baseUrl, crossings, terrain, terrainT, world, overlay, stations, liveBox, params, proxy, mode, liveDrive = null, liveCrossings = null, renderer = null, hints = null, extraCrowd = null }) {
   let buses = null, traffic = null, ready = false, error = null;
   const inLive = (x, z) => x >= liveBox.x0 && x <= liveBox.x1 && z >= liveBox.z0 && z <= liveBox.z1;
   const get = (f) => fetch(baseUrl + f).then((r) => (r.ok ? r.json() : null)).catch(() => null);
   const wantBus = params.get('cbus') !== '0', wantCars = params.get('ccars') !== '0' || params.get('cwalkers') !== '0' || params.get('ctrucks') !== '0';
   const loading = Promise.all([wantBus ? get('transit.json') : null, wantCars ? get('drive.json') : null]).then(([T, drive]) => {
     if (T) buses = createCorridorBuses(root, T, { crossings, terrain, overlay, liveBox, proxy, mode, gg: params.get('cbusgg') === '1' });
-    if (drive) traffic = createCorridorTraffic(root, { drive, crossings, terrain, terrainT, world, stations, liveBox, params, overlay, getBuses: () => nearBuses, liveDrive, liveCrossings, renderer, hints });
+    if (drive) traffic = createCorridorTraffic(root, { drive, crossings, terrain, terrainT, world, stations, liveBox, params, overlay, getBuses: () => nearBuses, liveDrive, liveCrossings, renderer, hints, extraCrowd }); // [pangyo-npc] extraCrowd
     ready = true;
   }).catch((e) => { error = String(e); ready = true; console.warn('[corridor] life', e); });
   let nearBuses = [], busAcc = 0;

@@ -277,7 +277,7 @@ function buildCrowd(group) {
       root.traverse((o) => {
         if (!o.isMesh || Array.isArray(o.material)) return;
         const m = o.material;
-        const lam = m.isMeshLambertMaterial && !m.map && !m.transparent && m.side === THREE.FrontSide && (!m.emissive || m.emissive.getHex() === 0);
+        const lam = m.isMeshLambertMaterial && !m.vertexColors && !m.map && !m.transparent && m.side === THREE.FrontSide && (!m.emissive || m.emissive.getHex() === 0);
         const key = (lam ? 'L|' : 'M|' + m.uuid + '|') + o.geometry.uuid;
         let P = parts.get(key);
         if (!P) parts.set(key, (P = { geo: o.geometry, mat: lam ? null : m, lam, cast: o.castShadow, cap: 0, n: 0, im: null }));
@@ -318,7 +318,7 @@ function buildCrowd(group) {
 // 선분까지 거리
 const segDist = (x, z, ax, az, bx, bz) => { const dx = bx - ax, dz = bz - az, L2 = dx * dx + dz * dz || 1; const k = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / L2)); return Math.hypot(x - ax - dx * k, z - az - dz * k); };
 
-export function createCorridorTraffic(root, { drive, crossings, terrain, terrainT, world, stations, liveBox, getBuses, params, overlay, liveDrive = null, liveCrossings = null, renderer = null, hints = null }) {
+export function createCorridorTraffic(root, { drive, crossings, terrain, terrainT, world, stations, liveBox, getBuses, params, overlay, liveDrive = null, liveCrossings = null, renderer = null, hints = null, extraCrowd = null }) {
   const group = new THREE.Group(); group.name = 'corridorTraffic'; root.add(group);
   const num = (k, d, hi) => { const v = params?.get?.(k); return Math.max(0, Math.min(hi, v == null ? d : Math.round(Number(v)) || 0)); };
   // [life] 일반 차량 72대 중 택시 0.3(≈22대 — ride 패치와 같은 택시 수). 인스턴싱이라 draw call 은 대수와 무관. ?ccars= / ?ctaxi=(0~1)
@@ -369,6 +369,7 @@ export function createCorridorTraffic(root, { drive, crossings, terrain, terrain
     const mesh = createAvatar(lookFor(i, wrnd)); mesh.visible = false;
     walkers.push({ mesh, parts: crowd.register(mesh), path: null, s: 0, dir: 1, speed: 0.9 + ((i * 37) % 10) / 20, idle: 0, kind: null, cross: null });
   }
+  extraCrowd?.register(crowd); // [pangyo-npc] 판교 IT 직장인: 같은 crowd 공유(새 부품 종류만큼만 draw call)
   crowd.finalize();
   const blocked = (x, z) => world.onRoad?.(x, z) || world.isBlocked?.(x, z, 0.4);
   const river = (x, z) => terrain && terrain.renderHeight(x, z) < -0.3;
@@ -528,6 +529,7 @@ export function createCorridorTraffic(root, { drive, crossings, terrain, terrain
       const d = Math.hypot(x - fx, z - fz), near = d < SHOW_R; w.mesh.visible = near;
       if (near) { animateAvatar(w.mesh, v, dt); crowd.add(w.mesh, w.parts, d > LOD_R); }
     }
+    extraCrowd?.render(crowd, dt, fx, fz); // [pangyo-npc]
     crowd.end();
   }
 
@@ -617,7 +619,7 @@ export function createCorridorTraffic(root, { drive, crossings, terrain, terrain
       cars: cars ? cars.list.filter((t) => !t.parked).length : 0, taxis: cars ? cars.list.filter((t) => t.taxi && !t.parked).length : 0,
       trucks: cars ? cars.list.filter((t) => t.truck && !t.parked).length : 0, trucksParked: parked.length, trucksLot: parked.filter((p) => p.mode === 'lot').length,
       walkers: walkers.filter((w) => w.path).length, walkersVisible: walkers.filter((w) => w.mesh.visible).length, walkerKinds: Object.fromEntries(Object.entries(kinds).filter(([, v]) => v > 0)),
-      carParts: inst.parts.size, crowdParts: crowd.parts.size, jzWays: merged.added, jzSigs: liveSigs.length,
+      carParts: inst.parts.size, crowdParts: crowd.parts.size, extra: extraCrowd?.stats || null, jzWays: merged.added, jzSigs: liveSigs.length,
     }),
   };
 }
