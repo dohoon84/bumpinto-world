@@ -4,7 +4,7 @@ import path from 'node:path';
 import assert from 'node:assert/strict';
 import { createSubwayState, FADE_SEC } from '../src/subway/state.js';
 import { JEONGJA_EXITS, projectLatLon, compass, nearbyHints, resolveExits, groupExits, exitLabel, roadAxis, exitSide } from '../src/subway/exits.js';
-import { HALL, GATE, WELLS, passageFor, walkable, passageAt, laneAt, staticBlockers, wellMouth, WELL_MOUTH_Z } from '../src/subway/layout.js';
+import { HALL, GATE, WELLS, passageFor, walkable, passageAt, laneAt, staticBlockers, wellMouth, WELL_MOUTH_Z, nearWellTop, WELL_INTO, WELL_REARM, OFFICE } from '../src/subway/layout.js';
 import { placeEntrance, toWorld, toLocal, structureClear, CLEAR, ENTRANCE_DIM } from '../src/subway/entrance.js';
 import { gameTerrain } from './subway/gameTerrain.mjs';
 import * as THREE from 'three';
@@ -305,11 +305,27 @@ assert.equal(walkable(GATE.cab[2], 0, 0.25, { passages }), false, '개찰구 몸
   // feedback-11: 개찰구 앞뒤·계단 앞 통로·계단 옆은 승강장 트리거가 아니다. 계단 입구(폭 안, 차단선 바로 앞)만.
   for (let x = HALL.x0 + 0.5; x < HALL.x1; x += 0.25) for (let z = HALL.z0 + 0.5; z <= WELL_MOUTH_Z; z += 0.1) assert.equal(wellMouth(x, z), null, `no well trigger at ${x},${z}`);
   for (const w of WELLS) {
-    assert.equal(wellMouth(w.cx, 2.6), w, 'stair mouth triggers');
-    assert.equal(wellMouth(w.x0 - 0.3, 2.6), null, 'beside the stair (west) is not the stair');
-    assert.equal(wellMouth(w.x1 + 0.3, 2.6), null, 'beside the stair (east) is not the stair');
-    assert.ok(walkable(w.cx, 2.65, 0.3), 'stair mouth is reachable on foot');
+    // feedback-12: 트리거는 첫 계단 바로 앞 띠뿐 (계단 1m 앞 평지·스폰 지점 z=2.6 은 아님), 계단 폭 안
+    assert.equal(wellMouth(w.cx, 2.6), null, 'spawn spot (escalator top landing) is not a trigger');
+    for (const x of [w.x0 + 1.4, w.cx, w.x1 - 1.4]) {
+      assert.equal(wellMouth(x, w.z0 - 0.2), w, `stair edge triggers at x=${x}`);
+      assert.ok(walkable(x, w.z0 - 0.05, 0.3), `stair edge reachable on foot at x=${x}`);
+      assert.equal(walkable(x, w.z0 + 0.1, 0.3), false, 'cannot walk past the stair edge');
+    }
+    for (const z of [2.6, 3.4, w.z0 - 0.2]) {
+      assert.equal(wellMouth(w.x0 - 0.3, z), null, 'beside the stair (west) is not the stair');
+      assert.equal(wellMouth(w.x1 + 0.3, z), null, 'beside the stair (east) is not the stair');
+      assert.equal(wellMouth(w.x0 + 0.2, z), null, 'stair side rail is not the stair');
+    }
+    // 에스컬레이터 옆판은 못 지나감 (계단 ↔ 에스컬레이터 사이 벽)
+    assert.equal(walkable(w.cx + 0.72, 3.5, 0.3), false, 'escalator balustrade');
+    assert.ok(nearWellTop(w.cx, 2.6) === w && nearWellTop(w.cx, 1.5) === null, 'hint zone');
   }
+  assert.ok(WELL_INTO >= 0.7 && WELL_REARM >= 1.2, 'walk-into + re-arm thresholds');
+  // feedback-13: 역무실 남쪽 벽이 점자블록(z=2.4)보다 1m 이상 안쪽 → 계단 앞 통로가 넓다
+  assert.ok(OFFICE.z1 <= 1.4, `office wall pulled in (z1=${OFFICE.z1})`);
+  for (let x = OFFICE.x0 - 0.5; x <= OFFICE.x1 + 0.5; x += 0.25) for (let z = OFFICE.z1 + 0.35; z <= 2.7; z += 0.1) assert.ok(walkable(x, z, 0.3), `walkway beside office ${x},${z}`);
+  assert.equal(walkable(10, OFFICE.z1 - 0.1, 0.3), false, 'office wall collision matches');
   assert.deepEqual(JEONGJA_THEME.wells.map((w) => w.en), WELLS.map((w) => w.en));
   assert.equal(JEONGJA_THEME.transfer.key, 'shin'); assert.equal(JEONGJA_THEME.zone, 'jeongja-station');
   const jam = stationTheme(STATIONS.find((d) => d.id === 'jamsil'));

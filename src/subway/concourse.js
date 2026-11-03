@@ -8,7 +8,7 @@
 import * as THREE from 'three';
 import { createBuilder, createAtlas, FONT, fitText, lineBadge, roundRect } from './geom.js';
 import { JEONGJA_THEME } from './stations.js';
-import { HALL, CEIL, GATE, GATE_X, OFFICE, WELLS, DROP, RUN, COLUMNS, PASSAGE_LEN, passageFor, staticBlockers, walkable, passageAt, laneAt, nearWellTop, wellMouth, northGaps, cutSpans } from './layout.js';
+import { HALL, CEIL, GATE, GATE_X, OFFICE, WELLS, DROP, RUN, COLUMNS, PASSAGE_LEN, passageFor, staticBlockers, walkable, passageAt, laneAt, nearWellTop, wellMouth, WELL_INTO, WELL_REARM, northGaps, cutSpans } from './layout.js';
 import { buildCrowd } from '../entities/avatarCrowd.js';
 import { createAvatar, animateAvatar } from '../entities/avatar.js';
 import { LOOKS } from './looks.js';
@@ -236,14 +236,14 @@ export function buildConcourse({ exits, groups, entryId, look, renderer, onToast
   const fence = (x0, x1) => { const cx = (x0 + x1) / 2; S.block(cx, 0, 0, x1 - x0, 0.08, 0.12, '#868e96'); S.block(cx, 1.05, 0, x1 - x0, 0.06, 0.1, '#ced4da'); S.block(cx, 0.08, 0, x1 - x0, 0.97, 0.03, '#a5b4c3'); for (let x = x0; x <= x1 + 0.01; x += 2) S.block(x, 0, 0, 0.08, 1.08, 0.08, '#868e96'); };
   fence(HALL.x0, GATE_X[0]); fence(GATE_X[1], OFFICE.x0); fence(OFFICE.x1, HALL.x1);
   {
-    const { x0, x1, z0, z1 } = OFFICE, cx = (x0 + x1) / 2;
-    S.block(cx, 0, z1, x1 - x0, CEIL, 0.2, '#dee2e6'); S.block(x0, 0, 0, 0.2, CEIL, z1 - z0, '#dee2e6'); S.block(x1, 0, 0, 0.2, CEIL, z1 - z0, '#dee2e6');
+    const { x0, x1, z0, z1 } = OFFICE, cx = (x0 + x1) / 2, zc = (z0 + z1) / 2;
+    S.block(cx, 0, z1, x1 - x0, CEIL, 0.2, '#dee2e6'); S.block(x0, 0, zc, 0.2, CEIL, z1 - z0, '#dee2e6'); S.block(x1, 0, zc, 0.2, CEIL, z1 - z0, '#dee2e6');
     S.block(cx, 0, z0, x1 - x0, 1.05, 0.25, '#495057'); S.block(cx, 1.05, z0 - 0.05, x1 - x0, 0.06, 0.4, '#ced4da'); // 창구 아래·선반
     S.block(cx, 2.3, z0, x1 - x0, CEIL - 2.3, 0.2, '#dee2e6'); for (const x of [x0 + 0.1, cx, x1 - 0.1]) S.block(x, 1.05, z0, 0.1, 1.25, 0.1, '#868e96');
     S.block(cx + 1.2, 0, z0 + 1.1, 1.6, 0.75, 0.7, '#8d6e63'); S.block(cx + 1.2, 0.75, z0 + 1.25, 0.5, 0.35, 0.05, '#212529'); // 책상·모니터
     S.block(cx - 1.6, 0, z1 - 0.5, 1.2, 1.9, 0.5, '#868e96'); // 캐비닛
-    S.box(cx, -0.03, 0, x1 - x0, 0.02, z1 - z0, '#9c9486');
-    G.quad(cx, CEIL - 0.03, 0, 2.4, 0.3, '#ffffff', { rx: Math.PI / 2, uv: white });
+    S.box(cx, -0.03, zc, x1 - x0, 0.02, z1 - z0, '#9c9486');
+    G.quad(cx, CEIL - 0.03, zc, 2.4, 0.3, '#ffffff', { rx: Math.PI / 2, uv: white });
     const so = atlas.add(380, 72, (c, w, h) => { c.fillStyle = '#1f2a36'; c.fillRect(0, 0, w, h); c.fillStyle = '#fff'; c.textBaseline = 'middle'; c.textAlign = 'center'; c.font = `800 28px ${FONT}`; c.fillText('역무실  Station Office', w / 2, h / 2); });
     G.quad(cx, 2.75, z0 - 0.11, 4.2, 0.8, '#ffffff', { ry: Math.PI, uv: so });
     const help = atlas.add(200, 60, (c, w, h) => { c.fillStyle = '#ffd43b'; c.fillRect(0, 0, w, h); c.fillStyle = '#111'; c.textBaseline = 'middle'; c.textAlign = 'center'; c.font = `700 20px ${FONT}`; c.fillText('도움이 필요하세요?', w / 2, h / 2); });
@@ -528,6 +528,9 @@ export function buildConcourse({ exits, groups, entryId, look, renderer, onToast
   const canStand = (x, z) => walkable(x, z, 0.3, { passages, blockers, laneOpen });
   const inRoom = (x, z) => walkable(x, z, 0.12, { passages, blockers: [] }) || (x > HALL.x0 && x < HALL.x1 && z > HALL.z0 && z < HALL.z1);
   let speed = 0, lastPass = null, lastWell = wellMouth(me.position.x, me.position.z), lastTr = !!spawn?.transfer;
+  // [subway] feedback-12: 승강장에서 올라온 직후엔 계단 트리거를 끈다 → 스폰에서 WELL_REARM m 벗어나거나 계단 앞 구역을 나가야 다시 켜짐
+  const wellSpawn = spawn?.well != null && WELLS[spawn.well] ? { x: me.position.x, z: me.position.z } : null;
+  let wellArmed = !wellSpawn;
 
   function update(dt, { look: [dy, dp, dz], axes, allowMove, self = null }) {
     cam.yaw += dy; cam.pitch = THREE.MathUtils.clamp(cam.pitch + dp, -0.6, 1.3); cam.dist = THREE.MathUtils.clamp(cam.dist * (1 + dz), 2.2, 11);
@@ -547,7 +550,7 @@ export function buildConcourse({ exits, groups, entryId, look, renderer, onToast
         if (canStand(nx, p.z) || stuck) p.x = nx;
         if (canStand(p.x, nz) || stuck) p.z = nz;
       }
-      towardWell = mz > 0.35; // 남쪽(계단 쪽)으로 걸어 들어가는 중
+      towardWell = mz > WELL_INTO; // 남쪽(계단 아래쪽)으로 곧장 걸어 들어가는 중 (옆걸음·제자리 돌기는 아님)
       const want = Math.atan2(mx, mz); me.rotation.y += Math.atan2(Math.sin(want - me.rotation.y), Math.cos(want - me.rotation.y)) * Math.min(1, dt * 12);
       speed = sp;
     }
@@ -572,7 +575,8 @@ export function buildConcourse({ exits, groups, entryId, look, renderer, onToast
     const entered = pass && pass !== lastPass ? pass : null; lastPass = pass;
     // 승강장 계단 / 갈아타는 곳: 밖에서 걸어 들어올 때만 (올라온 직후엔 한 번 벗어나야)
     const well = nearWellTop(p.x, p.z), mouth = wellMouth(p.x, p.z);
-    const wellEnter = mouth && mouth !== lastWell && towardWell ? WELLS.indexOf(mouth) : -1;
+    if (!wellArmed && (!well || Math.hypot(p.x - wellSpawn.x, p.z - wellSpawn.z) > WELL_REARM)) wellArmed = true;
+    const wellEnter = wellArmed && mouth && mouth !== lastWell && towardWell ? WELLS.indexOf(mouth) : -1;
     if (!mouth || wellEnter >= 0) lastWell = mouth;
     const tr = !!X && Math.abs(p.x - TRANSFER.x) < TRANSFER.hw && p.z > TRANSFER.z;
     const transferEnter = tr && !lastTr; lastTr = tr;
@@ -588,5 +592,5 @@ export function buildConcourse({ exits, groups, entryId, look, renderer, onToast
   // [subway-pose] 대합실엔 앉을 의자가 없어 바닥에 앉는다 (바깥 '바닥 앉기'와 같은 자세)
   function sitDown() { if (!me.userData.sit) me.userData.sit = 'ground'; return me.userData.sit; }
   function standUp() { me.userData.sit = ''; }
-  return { get sitKind() { return me.userData.sit || ''; }, sitDown, standUp, get lastPass() { return lastPass; }, get speed() { return speed; }, scene, camera, player: me, cam, passages, lanes, update, render, dispose, setView, npcs, stats: () => ({ tris: S.count + G.count, parts: crowd.parts.size, npcs: npcs.length }) };
+  return { get sitKind() { return me.userData.sit || ''; }, sitDown, standUp, get lastPass() { return lastPass; }, get wellArmed() { return wellArmed; }, get speed() { return speed; }, scene, camera, player: me, cam, passages, lanes, update, render, dispose, setView, npcs, stats: () => ({ tris: S.count + G.count, parts: crowd.parts.size, npcs: npcs.length }) };
 }

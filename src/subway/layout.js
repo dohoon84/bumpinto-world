@@ -7,7 +7,8 @@ export const GATE = { z: 0, cab: [], lanes: [] };
 for (let k = 0; k < 8; k++) GATE.cab.push(-4.55 + k * 1.3);
 for (let k = 0; k < 7; k++) GATE.lanes.push(-3.9 + k * 1.3);
 export const GATE_X = [-5.0, 5.0];
-export const OFFICE = { x0: 7, x1: 13, z0: -2.2, z1: 2.2 };
+// [subway] feedback-13: 역무실 남쪽 벽을 점자블록(z=2.4) 안쪽으로 당겨(2.2→0.7) 계단 앞 통로를 넓힌다. 충돌도 같은 값.
+export const OFFICE = { x0: 7, x1: 13, z0: -2.2, z1: 0.7 };
 // 승강장 계단: 계단 | 에스컬레이터(가운데) | 계단. 위 z=4 → 아래 z=4+RUN, y=-DROP
 export const DROP = 4.2, RUN = DROP / Math.tan(Math.PI / 6);
 export const WELLS = [
@@ -59,7 +60,11 @@ export function staticBlockers(passages = []) {
   for (const x of GATE.cab) B.push({ x0: x - 0.16, x1: x + 0.16, z0: -0.9, z1: 0.9 }); // 개찰구 몸체
   B.push({ x0: -12.3, x1: -9.2, z0: -1.1, z1: -0.15 });         // 승차권 발매기
   for (const c of COLUMNS) B.push({ x0: c.x - 0.45, x1: c.x + 0.45, z0: c.z - 0.45, z1: c.z + 0.45 });
-  for (const w of WELLS) B.push({ x0: w.x0 - 0.1, x1: w.x1 + 0.1, z0: 3.0, z1: HALL.z1 }); // 계단 구멍 + 위 '준비 중' 차단선
+  // 계단 구멍: 실제 첫 계단(z0)까지 걸어간다 (예전엔 z=3.0 에 보이지 않는 차단선 → 계단 1m 앞 평지가 트리거였음, feedback-12)
+  for (const w of WELLS) {
+    B.push({ x0: w.x0 - 0.1, x1: w.x1 + 0.1, z0: w.z0 + STAIR_EDGE, z1: HALL.z1 });
+    for (const sg of [-1, 1]) B.push({ x0: w.cx + sg * 0.72 - 0.15, x1: w.cx + sg * 0.72 + 0.15, z0: w.z0 - 1.0, z1: w.z0 + 1 }); // 에스컬레이터 옆판(위 끝, 그림은 z0-1.2 부터지만 계단 앞 통로 z≤2.7 은 비움)
+  }
   return B;
 }
 export const COLUMNS = [
@@ -97,13 +102,19 @@ export function laneAt(x, z, zr = 1.4) {
 }
 // 계단 앞 안내(힌트)만 띄우는 넓은 구역
 export function nearWellTop(x, z) {
-  for (const w of WELLS) if (x > w.x0 - 0.6 && x < w.x1 + 0.6 && z > 1.6 && z < 3.6) return w;
+  for (const w of WELLS) if (x > w.x0 - 0.6 && x < w.x1 + 0.6 && z > 1.6 && z < w.z0 + 0.4) return w;
   return null;
 }
-// [subway] 실제로 계단 입구(차단선 z=3.0 바로 앞, 계단 폭 안)에 발을 디딘 경우만 → 승강장으로 내려감.
-//   계단 앞 통로(z<WELL_MOUTH_Z)나 계단 옆을 지나가는 건 대합실에 그대로 있는다 (feedback-11).
-export const WELL_MOUTH_Z = 2.45;
+// [subway] 실제로 첫 계단(z0) 바로 앞에, 계단/에스컬레이터 폭 안에서 발을 디딘 경우만 → 승강장으로 내려감.
+//   계단 앞 통로·계단 옆·계단 1m 앞 평지는 대합실 그대로 (feedback-11, feedback-12).
+//   몸(r 0.3)은 z0 + STAIR_EDGE - 0.3 = z0 까지 갈 수 있다. 띠 = [z0-0.45, z0+0.3)
+export const STAIR_EDGE = 0.3;
+export const WELL_MOUTH_Z = WELLS[0].z0 - 0.45;
 export function wellMouth(x, z) {
-  for (const w of WELLS) if (x > w.x0 + 0.2 && x < w.x1 - 0.2 && z > WELL_MOUTH_Z && z < 3.6) return w;
+  for (const w of WELLS) if (x > w.x0 + 0.35 && x < w.x1 - 0.35 && z > w.z0 - 0.45 && z < w.z0 + STAIR_EDGE) return w;
   return null;
 }
+// 걸어 들어가는 방향인가: 이동 단위벡터의 남쪽(계단 아래쪽) 성분. 옆걸음·대각 비비기는 아님
+export const WELL_INTO = 0.8; // ≈ 37° 이내 (45° 대각 비비기는 아님)
+// 승강장에서 올라온 직후: 스폰 지점에서 이만큼 벗어나거나 계단 앞 구역(nearWellTop)을 나가야 다시 내려갈 수 있다
+export const WELL_REARM = 1.5;

@@ -98,7 +98,7 @@ for (const name of names) {
   }
   // 3) 계단 입구로 걸어 들어가면 승강장 (회귀 방지)
   await place(16.5, 1.4, Math.PI);
-  const down = await walkTo([[16.5, 4.0]], { ms: 60000 });
+  const down = await walkTo([[16.5, 5.0]], { ms: 60000 }); // 첫 계단(z 4) 앞 띠까지 — 목표를 계단 안으로 둬서 끝까지 걸어 들어감
   assert.ok(down.last.room === 'platform' || down.last.swapping, `${name}: 계단 입구에서 승강장으로 안 내려감 ${JSON.stringify(down.last)}`);
   row.stairStillWorks = true;
   report.push(row); console.log('ok', JSON.stringify(row));
