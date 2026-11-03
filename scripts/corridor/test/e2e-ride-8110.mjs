@@ -80,15 +80,15 @@ await page.evaluate(() => {
 async function ride8110() {
   const setup = await page.evaluate(() => {
     const jj = window.__jj, J = jj.transit.rideSim;
-    const P = J.sim.paths.filter((p) => p.ref === '8110').at(-1);
-    if (!P) return { err: '정자 시뮬에 8110 경로 없음' };
+    const P = J.sim.paths.filter((p) => p.ref === 'G8110').at(-1);
+    if (!P) return { err: '정자 시뮬에 G8110 경로 없음' };
     const k = P.stops.findIndex((st) => /정자역/.test(J.stopById.get(st.stop)?.name)), st = P.stops[k], stop = J.stopById.get(st.stop);
     J.sim.buses = J.sim.buses.filter((b) => !(b.P === P && Math.abs(b.s - st.s) < 150));
     const b = J.sim._spawn(P, Math.max(0.01, st.s - 70));
     jj.teleport(stop._pos.x, stop._pos.z);
     return { k, busId: b.id, path: P.id, ref: P.ref, at: { x: stop._pos.x, z: stop._pos.z }, charges: jj.ride.stats.charges.length };
   });
-  assert.ok(!setup.err, setup.err); assert.equal(setup.ref, '8110');
+  assert.ok(!setup.err, setup.err); assert.equal(setup.ref, 'G8110');
   for (let i = 0; i < 300; i++) {
     const ok = await page.evaluate(({ busId, k }) => { const R = window.__jj.ride; R.debug.ff(0.3, () => { const b = R.debug.bus(busId, true); return b && b.state === 'dwell' && b.stopIdx === k; }); const b = R.debug.bus(busId, true); if (b?.state === 'dwell') b.dwell = Math.max(b.dwell, 8); return b?.state === 'dwell' && b.stopIdx === k; }, setup);
     if (ok) break;

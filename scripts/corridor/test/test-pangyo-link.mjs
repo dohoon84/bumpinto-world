@@ -41,7 +41,11 @@ const dirAt = (pts, i, j) => { const dx = pts[j][0] - pts[i][0], dz = pts[j][1] 
 // 2) 모양·정류장 순서
 const lp = L.live.paths[0], cp = L.corridor.paths[0];
 assert.equal(L.live.paths.length, 1); assert.equal(L.corridor.paths.length, 1);
-assert.ok(lp.ref === '8110' && cp.ref === '8110' && lp.route === 7090965 && cp.route === 7090965);
+assert.ok(lp.ref === 'G8110' && cp.ref === 'G8110' && lp.route === 7090965 && cp.route === 7090965);
+// [g8110] 화면 표기 G8110, 내부 id·osmRef 는 relation 그대로 · 정류장 목록의 구형 '8110' 은 G8110 으로 합침
+assert.ok(L.live.routes[0].ref === 'G8110' && L.live.routes[0].name === 'G8110번' && L.live.routes[0].osmRef === '8110' && L.live.aliasRefs['8110'] === 'G8110');
+{ const T0 = { routes: [], paths: [], stops: [{ id: 1, routes: ['102', 'G8110', '8110'] }, { id: 2, routes: ['8110'] }], refTypes: {} };
+  const M = mergeSimExtra(T0, L.live); assert.deepEqual(M.stops.map((s) => s.routes), [['102', 'G8110'], ['G8110']], 'alias 8110 → G8110'); }
 const inLB = ([x, z]) => x >= LB.x0 && x <= LB.x1 && z >= LB.z0 && z <= LB.z1;
 assert.ok(lp.pts.every(inLB), '정자 조각은 정자 bbox 안');
 assert.ok(Math.abs(lp.pts.at(-1)[1] - LB.z0) < 0.1, '정자 조각 끝 = 정자 bbox 북쪽 경계');
@@ -52,7 +56,7 @@ const seq = [...lp.stops, ...cp.stops].map((s) => stopName.get(s.stop));
 assert.deepEqual(seq, ['정자역', '롯데백화점.수내역', '서현역.AK플라자', '이매촌한신.서현역.AK프라자', '판교역.낙생육교.현대백화점'], 'relation 정류장 순서');
 for (const p of [lp, cp]) for (let i = 1; i < p.stops.length; i++) assert.ok(p.stops[i].s > p.stops[i - 1].s);
 const pgStop = L.corridor.stops.find((s) => /^판교역/.test(s.name));
-assert.ok(pgStop && pgStop.x > 0 && pgStop.x < 1000 && pgStop.z < -2500 && pgStop.z > -3500 && pgStop.routes.includes('8110'), '판교역 정류장(판교 박스 안)');
+assert.ok(pgStop && pgStop.x > 0 && pgStop.x < 1000 && pgStop.z < -2500 && pgStop.z > -3500 && pgStop.routes.includes('G8110'), '판교역 정류장(판교 박스 안)');
 assert.ok(cp.pts.at(-1)[0] >= -250, '판교 박스 안에서 끝남');
 ok(`shape: 정자 ${lp.len}m + 코리더 ${cp.len}m, 정류장 ${seq.join(' → ')}`);
 
@@ -77,10 +81,10 @@ ok(`shape: 정자 ${lp.len}m + 코리더 ${cp.len}m, 정류장 ${seq.join(' → 
   assert.equal(JSON.stringify(CO), before, '원본 불변');
   assert.equal(T.paths.length, CO.paths.length + 1); assert.ok(T.paths.slice(0, CO.paths.length).every((p, i) => p.id === i && p === CO.paths[i]), '기존 경로 번호 그대로');
   assert.equal(T.stops.length, CO.stops.length + L.corridor.stops.length);
-  for (const id of L.corridor.addRoute) assert.ok(T.stops.find((s) => s.id === id).routes.includes('8110') && !CO.stops.find((s) => s.id === id).routes.includes('8110'));
+  for (const id of L.corridor.addRoute) assert.ok(T.stops.find((s) => s.id === id).routes.includes('G8110') && !CO.stops.find((s) => s.id === id).routes.includes('G8110'));
   assert.equal(mergeLinkTransit(CO, null), CO, 'link 없으면 원본 그대로');
   const base = mergeSimExtra(JZ, X), TL = mergeSimExtra(base, L.live);
-  assert.equal(TL.paths.length, base.paths.length + 1); assert.equal(TL.paths.at(-1).ref, '8110'); assert.equal(mergeSimExtra(base, null), base);
+  assert.equal(TL.paths.length, base.paths.length + 1); assert.equal(TL.paths.at(-1).ref, 'G8110'); assert.equal(mergeSimExtra(base, null), base);
   assert.equal(base.paths.length, 14, 'e2e-ride-220 이 쓰는 정자 경로 번호(5·10) 앞쪽 그대로');
   ok('runtime merge keeps originals; ?pangyolink=0 / ?pangyo=0 off');
 }
@@ -117,7 +121,7 @@ ok(`shape: 정자 ${lp.len}m + 코리더 ${cp.len}m, 정류장 ${seq.join(' → 
 {
   const T = mergeLinkTransit(CO, L), ctx = { pedLight: () => 'red' };
   const sim = new SimulatedBusSource({ ...T, crossings: [] }, { x0: -1e6, x1: 1e6, z0: -1e6, z1: 1e6 }, { seed: 7, spacing: true }); // buses.js 와 같은 큰 상자
-  const P = sim.paths.find((p) => p.ref === '8110'), k = P.stops.length - 1;
+  const P = sim.paths.find((p) => p.ref === 'G8110'), k = P.stops.length - 1;
   let first = null, served = new Set(), track = null; // track: 경계 근처에서 처음 생긴 버스 하나를 끝까지 따라감
   for (let t = 0; t < SEC; t += 0.2) {
     sim.update(0.2, ctx);
@@ -127,13 +131,13 @@ ok(`shape: 정자 ${lp.len}m + 코리더 ${cp.len}m, 정류장 ${seq.join(' → 
       if (b.state === 'dwell' && b.dwell > 0) { served.add(b.stopIdx); if (track?.b === b && track.stops.at(-1) !== b.stopIdx) track.stops.push(b.stopIdx); if (track?.b === b && b.stopIdx === k && first == null) first = t - track.t0; }
     }
   }
-  assert.equal(served.size, P.stops.length, `코리더 8110 정차 ${[...served]}`);
+  assert.equal(served.size, P.stops.length, `코리더 G8110 정차 ${[...served]}`);
   assert.ok(first != null, '경계에서 출발한 버스가 판교역 정차');
   assert.deepEqual(track.stops, P.stops.map((_, i) => i), '같은 버스가 정류장을 순서대로');
   const live = mergeSimExtra(mergeSimExtra(JZ, X), L.live), js = new SimulatedBusSource(live, LB, { seed: 7, spacing: true });
-  const LP = js.paths.find((p) => p.ref === '8110'); let jz = false;
+  const LP = js.paths.find((p) => p.ref === 'G8110'); let jz = false;
   for (let t = 0; t < 900 && !jz; t += 0.2) { js.update(0.2, ctx); jz = js.buses.some((b) => b.P === LP && b.state === 'dwell' && b.dwell > 0); }
   assert.ok(jz, '정자 시뮬: 정자역 정차');
-  ok(`sim: 코리더 8110 정류장 ${served.size}/${P.stops.length} 정차, 경계(정자 bbox) → 판교역 한 대 ${(first / 60).toFixed(1)}분 정류장 ${track.stops.join('→')} · 정자 시뮬 정자역 정차`);
+  ok(`sim: 코리더 G8110 정류장 ${served.size}/${P.stops.length} 정차, 경계(정자 bbox) → 판교역 한 대 ${(first / 60).toFixed(1)}분 정류장 ${track.stops.join('→')} · 정자 시뮬 정자역 정차`);
 }
 console.log('pangyo-link: all', n, 'checks passed');

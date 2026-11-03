@@ -23,6 +23,7 @@ const OUT = path.resolve(ROOT, arg('out', 'public/corridor/pangyo/link.json'));
 const C = path.join(ROOT, 'public/corridor');
 const readJSON = (f) => JSON.parse(fs.readFileSync(f, 'utf8'));
 const REL = 7090965;
+const DISP_REF = 'G8110'; // [g8110] 화면 표기
 const LEAD_IN = 80;
 
 const CENTER = { lat: 37.3665, lon: 127.10835 };
@@ -205,9 +206,12 @@ function main() {
   if (bad.length) throw new Error('경로가 게임 범위 밖으로 나감: ' + bad.map((p) => `${p.pts[0]}…${p.pts.at(-1)}`).join(', '));
 
   const project1 = (p, x, z) => { let best = { d: Infinity, s: 0, dx: 1, dz: 0 }, a = 0; for (let i = 1; i < p.length; i++) { const [ax, az] = p[i - 1], [bx, bz] = p[i], dx = bx - ax, dz = bz - az, L = Math.hypot(dx, dz) || 1e-9, t = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / (L * L))), d = Math.hypot(ax + dx * t - x, az + dz * t - z); if (d < best.d) best = { d, s: a + t * L, dx: dx / L, dz: dz / L, px: ax + dx * t, pz: az + dz * t }; a += L; } return best; };
-  const route = { id: REL, ref: rel.tags.ref, name: `${rel.tags.ref}번`, network: '', operator: '', type: JZT.refTypes?.[rel.tags.ref]?.type || 'express', src: 'osm', gbis: null, geom: 'osm-routed', osmRef: rel.tags.ref, confirmed: true, paths: [] };
+  // [g8110] 화면 표기 = G8110 (도훈님 결정 2026-11-03): OSM relation ref 는 '8110'(구형 태그)이지만 같은 정류장 노드 route_ref ·
+  //   경기버스정보 인허가 목록(data/gbis_route_types.json)에는 G8110 만 있음. 내부 id(relation 7090965)·osmRef 는 그대로.
+  const route = { id: REL, ref: DISP_REF, name: `${DISP_REF}번`, network: '', operator: '', type: JZT.refTypes?.[DISP_REF]?.type || JZT.refTypes?.[rel.tags.ref]?.type || 'express', src: 'osm', gbis: null, geom: 'osm-routed', osmRef: rel.tags.ref, confirmed: true, paths: [] };
   const corStops = new Map(CT.stops.map((s) => [s.id, s]));
-  const live = { routes: [{ ...route }], paths: [] }, corridor = { routes: [{ ...route }], paths: [], stops: [], addRoute: [] };
+  const aliasRefs = rel.tags.ref !== DISP_REF ? { [rel.tags.ref]: DISP_REF } : {}; // 정류장 route_ref 의 '8110' → G8110 하나로 (중복 칩 방지)
+  const live = { routes: [{ ...route }], paths: [], aliasRefs }, corridor = { routes: [{ ...route }], paths: [], stops: [], addRoute: [], aliasRefs };
   const stopLog = [];
   for (const pc of pieces) {
     const stops = [];
@@ -241,7 +245,7 @@ function main() {
     meta: {
       generated: new Date().toISOString(),
       source: `OpenStreetMap relation ${REL} (type=route, route=bus, ref=${rel.tags.ref}) · 차도 그래프 ${path.relative(ROOT, OSM)} (ODbL)`,
-      refNote: `OSM relation ref 는 "${rel.tags.ref}" 이지만 같은 OSM 정류장 노드들의 route_ref 와 경기버스정보 인허가 목록(data/gbis_route_types.json, 2026-10-27)에는 G8110(오리역↔국가인권위)만 있다 — 노선 번호 개편(8110 → G8110) 가능성. 표기는 relation ref 그대로 둔다(결정 필요).`,
+      refNote: `OSM relation ref 는 "${rel.tags.ref}" 이지만 같은 OSM 정류장 노드들의 route_ref 와 경기버스정보 인허가 목록(data/gbis_route_types.json, 2026-10-27)에는 G8110(오리역↔국가인권위)만 있다 — 노선 번호 개편(8110 → G8110). 화면 표기는 G8110(도훈님 결정), 내부 id·osmRef 는 relation 그대로.`,
       direction: 'relation 한 방향(정자역→판교역→판교IC)만. 반대 방향은 OSM 에 없어 만들지 않음.',
       leadInM: LEAD_IN, tailTrimM: 15,
       legs: legLog, stops: stopLog,
