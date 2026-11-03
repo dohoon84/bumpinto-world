@@ -34,3 +34,32 @@ export async function fetchCorridorTile(getJson, t, kind) {
   if (t.pangyo === 'add') { const [a, b] = await Promise.all([getJson(file), getJson(PANGYO_DIR + file)]); return a ? mergeTileJson(a, b) : null; }
   return getJson(file);
 }
+
+// ---------- [pangyo-link] 2단계: 정자역 → 판교역 버스(OSM relation 7090965 · 8110) ----------
+//   pangyo/link.json (scripts/corridor/build-pangyo-link.mjs)
+//     live     : 정자 bbox 안 조각 — src/game.js 가 ?bus=sim 일 때만 mergeSimExtra 로 덧붙임(실시간 모드 정자는 그대로)
+//     corridor : 코리더/판교 조각 + 새 정류장 + 기존 정류장에 더할 노선 번호 — corridor life 가 mergeLinkTransit 으로 덧붙임
+//   ?pangyolink=0 (또는 ?pangyo=0) 이면 요청 없음 → 코리더/정자 버스 데이터 원본 그대로
+export const PANGYO_LINK_FILE = PANGYO_DIR + 'link.json';
+
+export function pangyoLinkEnabled(search = typeof location !== 'undefined' ? location.search : '') {
+  return pangyoEnabled(search) && new URLSearchParams(search).get('pangyolink') !== '0';
+}
+
+// 코리더 transit.json 사본에 link.corridor 를 덧붙인다. 기존 경로/정류장 번호·순서는 그대로(새 것은 뒤로).
+export function mergeLinkTransit(T, L) {
+  const X = L?.corridor;
+  if (!T || !X?.paths?.length) return T;
+  const routes = T.routes.map((r) => ({ ...r, paths: [...(r.paths || [])] })), byId = new Map(routes.map((r) => [r.id, r]));
+  for (const r of X.routes || []) if (!byId.has(r.id)) { const c = { ...r, paths: [] }; routes.push(c); byId.set(r.id, c); }
+  const paths = [...T.paths];
+  for (const p of X.paths) { const id = paths.length; paths.push({ ...p, id, pangyoLink: true }); byId.get(p.route)?.paths.push(id); }
+  const ref = X.routes?.[0]?.ref, add = new Set(X.addRoute || []);
+  const have = new Set(T.stops.map((s) => s.id));
+  let stops = T.stops.map((s) => (add.has(s.id) && ref && !(s.routes || []).includes(ref) ? { ...s, routes: [...(s.routes || []), ref] } : s));
+  if (X.aliasRefs) stops = stops.map((s) => (s.routes?.some((r) => X.aliasRefs[r]) ? { ...s, routes: [...new Set(s.routes.map((r) => X.aliasRefs[r] || r))] } : s)); // [g8110]
+  for (const s of X.stops || []) if (!have.has(s.id)) stops.push(s);
+  const refTypes = { ...T.refTypes };
+  for (const r of X.routes || []) if (!refTypes[r.ref] && r.type) refTypes[r.ref] = { type: r.type, src: r.src };
+  return { ...T, routes, paths, stops, refTypes };
+}

@@ -21,6 +21,7 @@ export function flatMesh(pos, idx, color) {
 
 // [bus-net] 정자 ?bus=sim 전용 추가 경로(public/corridor/jz-sim.json: GBIS 정류소 순서 → OSM 차도)를 원본을 건드리지 않고 덧붙인 사본.
 //   경로 번호는 기존 뒤에 이어 붙여 기존 경로 인덱스는 그대로다. 실시간 모드(기본)는 이 함수를 부르지 않는다.
+const aliasStops = (stops, A) => (A && Object.keys(A).length ? stops.map((s) => { if (!s.routes?.some((r) => A[r])) return s; const rs = []; for (const r of s.routes) { const v = A[r] || r; if (!rs.includes(v)) rs.push(v); } return { ...s, routes: rs }; }) : stops); // [g8110] 정류장 노선 목록 '8110' → 'G8110'
 export function mergeSimExtra(T, X) {
   if (!X?.paths?.length) return T;
   const routes = T.routes.map((r) => ({ ...r, paths: [...(r.paths || [])] })), byId = new Map(routes.map((r) => [r.id, r]));
@@ -28,7 +29,7 @@ export function mergeSimExtra(T, X) {
   const paths = [...T.paths];
   for (const p of X.paths) { const id = paths.length; paths.push({ ...p, id, simExtra: true }); byId.get(p.route)?.paths.push(id); }
   const refTypes = { ...T.refTypes }; for (const r of X.routes || []) if (!refTypes[r.ref] && r.type) refTypes[r.ref] = { type: r.type, src: r.src, gbis: r.gbis };
-  return { ...T, routes, paths, refTypes };
+  return { ...T, routes, paths, refTypes, ...(X.aliasRefs && T.stops ? { stops: aliasStops(T.stops, X.aliasRefs) } : {}) };
 }
 
 export function buildTransit(scene, T, world, overlay, { mode = 'sim', proxy } = {}) {

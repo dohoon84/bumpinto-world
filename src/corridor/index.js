@@ -16,8 +16,9 @@ import { addInstancedTrees } from '../world/trees.js';
 import { createCorridorLife } from './life.js';
 import { extractLifeHints, gatherLifeHints } from './lifeHints.js'; // [life] 동네별 보행자·주차 위치 힌트
 import { setNightCut, updateNight } from './nightLights.js';
-import { pangyoEnabled, mergePangyoIndex, fetchCorridorTile, PANGYO_DIR } from './pangyo.js'; // [pangyo]
+import { pangyoEnabled, pangyoLinkEnabled, mergePangyoIndex, fetchCorridorTile, PANGYO_DIR } from './pangyo.js'; // [pangyo]
 import { createPangyoLandmarks } from './landmarks/pangyo.js'; // [pangyo]
+import { isEn, onLangChange } from '../i18n.js'; // [pangyo-link] 판교역 라벨 KO/EN
 
 // streams: 탄천 지류 하도(streams.json). ?streams=0 이면 false → 예전과 같은 데이터만
 // [pangyo] pangyo: 판교역 일대(pangyo/index.json). ?pangyo=0 이면 false → 요청 없음
@@ -189,12 +190,26 @@ export function createCorridor({ scene, corridorData, terrain, world, renderer, 
   }
 
   // ---------- 역 표지판 + 라벨 ----------
-  // [pangyo] 판교역은 라벨·표지판·이동(?at=pangyo)에만 넣는다. 버스/차량 NPC(attachLife)는 index.stations 그대로
+  // [pangyo] 판교역은 라벨·표지판·이동(?at=pangyo)에 넣는다. 버스/차량 NPC(attachLife)에는 [pangyo-link] 가 켜졌을 때만 더한다
   const stations = index.stations.concat(corridorData.pangyo?.stations || []).map((s) => ({ ...s, sign: null }));
+  const pgLabels = []; // [pangyo-link] 판교역 라벨: '판교역  신분당선 · 경강선' / 'Pangyo Stn.  Shinbundang · Gyeonggang', 노선색 배경
   for (const s of stations) {
     const lines = s.lines || [];
-    overlay.add({ cls: 'label station', text: `🚇 ${s.name} ${s.nameEn}  ${lines.join(' · ')}`, getPos: () => new THREE.Vector3(s.x, 10, s.z), maxDist: 1500 });
+    const pg = s.id === 'pangyo' && pangyoLinkEnabled();
+    const text = pg ? () => (isEn() ? `🚇 ${s.nameEn} Stn.  ${lines.map((l) => LINE_EN[l] || l).join(' · ')}` : `🚇 ${s.name}역  ${lines.join(' · ')}`) : null;
+    const item = overlay.add({ cls: 'label station', text: text ? text() : `🚇 ${s.name} ${s.nameEn}  ${lines.join(' · ')}`, getPos: () => new THREE.Vector3(s.x, pg ? 20 : 10, s.z), maxDist: 1500 }); // 판교역: 광장 데크 라벨과 겹치지 않게 20m
+    if (pg) {
+      item.el.style.background = `linear-gradient(90deg, ${LINE_COLOR[lines[0]] || '#d4003b'} 50%, ${LINE_COLOR[lines[1] || lines[0]] || '#0054a6'} 50%)`;
+      pgLabels.push({ item, s, text });
+    }
   }
+  if (pgLabels.length) onLangChange(() => { for (const p of pgLabels) p.item.el.textContent = p.text(); });
+  let homeLabel = null; // game.js 의 정자역 라벨(maxDist 4000): 판교역이 더 가까우면 숨겨서 '정자역' 태그가 판교에 뜨지 않게
+  const homeLabelTick = (x, z) => {
+    if (!homeLabel || !pgLabels.length) return;
+    const h = homeLabel.getPos(), p = pgLabels[0].s;
+    homeLabel.hidden = Math.hypot(x - p.x, z - p.z) < Math.hypot(x - h.x, z - h.z);
+  };
   function placeSign(s) {
     // 라이브처럼 표지판이 차도/건물에 서지 않도록 출구(없으면 역 중심) 주변을 나선형으로 탐색
     const e = s.signAt || s.exits?.[0] || s; // [pangyo] signAt: 판교역은 출입구 캐노피와 안 겹치는 자리(build-pangyo.mjs)
@@ -269,8 +284,9 @@ export function createCorridor({ scene, corridorData, terrain, world, renderer, 
     afterTerrain() { addOuterGround(); },
     // 버스·차량·보행 NPC (수내 → 롯데). game.js 가 버스 프록시가 정해진 뒤 한 번 부른다. ?clife=0 이면 끔
     attachLife({ proxy, mode, liveDrive = null, liveCrossings = null } = {}) { // [ride] liveDrive: 정자 차도(읽기 전용, 정자 택시 호출용)
+      const pgLink = !!corridorData.pangyo && pangyoLinkEnabled(); // [pangyo-link] 판교역: 택시/보행 NPC 역 목록 + 버스 8110(정자역→판교역, 정자 쪽과 같이 ?bus=sim 일 때만) (?pangyolink=0 끔)
       if (life || params?.get('clife') === '0') return life;
-      life = createCorridorLife({ root, baseUrl, crossings, terrain, terrainT: corridorData.terrainT, world, overlay, stations: index.stations, liveBox: live, params, proxy, mode, liveDrive, liveCrossings, renderer, hints: (x, z, r) => gatherLifeHints(loaded, x, z, r) });
+      life = createCorridorLife({ root, baseUrl, crossings, terrain, terrainT: corridorData.terrainT, world, overlay, stations: pgLink ? index.stations.concat(corridorData.pangyo.stations || []) : index.stations, pangyoLink: pgLink && mode === 'sim', liveBox: live, params, proxy, mode, liveDrive, liveCrossings, renderer, hints: (x, z, r) => gatherLifeHints(loaded, x, z, r) });
       return life;
     },
     get life() { return life; },
@@ -285,7 +301,9 @@ export function createCorridor({ scene, corridorData, terrain, world, renderer, 
       lotte?.update(dt);
       updateNight(dt); // [corridor] 저녁 건물 불빛 페이드
       life?.update(dt, x, z);
+      homeLabelTick(x, z); // [pangyo-link]
     },
+    setHomeStationLabel(item) { homeLabel = item; }, // [pangyo-link] game.js 가 정자역 라벨을 넘긴다
     // 위치 주변 상세 타일을 즉시 로드·빌드 (텔레포트/스크린샷용)
     async preload(x, z, r = Q.detail) {
       const list = [...tiles.values()].filter((t) => rectDist(x, z, t.x0, t.z0, TS) < r);
