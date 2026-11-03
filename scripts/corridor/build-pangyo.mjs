@@ -133,7 +133,7 @@ for (const t of Object.values(existing)) {
 }
 
 // ---------- 랜드마크 지정 (OSM id) ----------
-//   백화점: 판교역 남쪽 대형 상업시설(relation 외곽 + building:part 4개). 상호·로고 없이 일반 '백화점' 매스로 그린다.
+//   백화점: 판교역 남쪽 대형 상업시설(relation 외곽 + building:part 4개). 로고·전용 서체·브랜드 색 없이 일반 매스 + '현대백화점' 글자 표지로 그린다.
 //   알파돔시티 타워 4동: 판교역 광장 데크를 둘러싼 업무 타워. 데크: building=yes layer=1 (높이 태그 없음 → 2층 높이 보행 데크로 표현)
 const LM_DEPT = new Set(['r6490334', 'w437195296', 'w437195297', 'w437195298', 'w437195299']);
 const LM_TOWERS = new Set(['w1087134311', 'w1087134310', 'w659687063', 'w659687065']);
@@ -370,7 +370,7 @@ if (dept.length !== 4 || towers.length !== 4 || deck.length !== 1) throw new Err
 // 데크 안쪽 빈 곳(선큰 광장) — OSM 링의 구멍이 없으면 외곽 자체의 오목한 X 모양이라 중심 원형 마당을 가정하지 않는다
 const plazaPed = plazas.filter((p) => inBox(...centroid(p.o)));
 const landmarks = [
-  { id: 'pangyo-dept', model: 'pangyoDept', label: { ko: '백화점', en: 'Department Store' }, pos: centerOf(dept), parts: dept },
+  { id: 'pangyo-dept', model: 'pangyoDept', label: { ko: '현대백화점', en: 'Hyundai Department Store' }, pos: centerOf(dept), parts: dept },
   { id: 'alphadom-towers', model: 'pangyoTowers', label: { ko: '알파돔시티', en: 'Alphadom City' }, pos: centerOf(towers.concat(deck)), parts: towers },
   { id: 'pangyo-deck', model: 'pangyoDeck', label: { ko: '판교역 광장', en: 'Pangyo Station Plaza' }, pos: { ...centerOf(deck), y: DECK.h }, parts: deck },
   { id: 'pangyo-entrances', model: 'pangyoEntrances', entrances: exits, lines: station.lines },

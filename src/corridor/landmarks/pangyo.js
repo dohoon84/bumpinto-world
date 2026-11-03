@@ -1,5 +1,5 @@
 // [pangyo] 판교역 일대 랜드마크 (확장 1단계, 데이터: public/corridor/pangyo/index.json ← scripts/corridor/build-pangyo.mjs)
-//   - 백화점(일반 매스, 상호·로고 없음): OSM building:part 높이 그대로 + 띠 장식·쇼윈도·입구 캐노피·'백화점' 표지
+//   - 현대백화점(일반 매스, 로고·전용 서체·브랜드 색 없음): OSM building:part 높이 그대로 + 띠 장식·쇼윈도·입구 캐노피·'현대백화점' 글자 표지
 //   - 알파돔시티 타워 4동: OSM 높이 그대로 유리 커튼월(정자 office 파사드·야간 창 불빛 공유) + 세로 핀·포디움 캐노피·옥상 크라운
 //   - 판교역 광장 데크: OSM 외곽(높이 태그 없음 → 2층 높이 5.4–6.4m 로 표현) + 기둥·난간
 //   - 지하철 출입구 4곳: OSM 출입구 노드 위치/번호, 방향 = 가까운 보행로. 유리 캐노피 + 노선색 띠 + 번호판
@@ -28,11 +28,11 @@ function canvasMat(w, h, draw) {
   const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 4;
   return new THREE.MeshBasicMaterial({ map: tex });
 }
-// 일반 명사 표지 (상호 아님) — 256×64 한 장
+// 상호 글자만 쓴 중립 표지 (로고·전용 서체·브랜드 색 없음, 게임 공통 표지 색) — 256×64 한 장
 const sign = () => (signMat ||= canvasMat(256, 64, (x) => {
   x.fillStyle = '#2f343b'; x.fillRect(0, 0, 256, 64);
-  x.fillStyle = '#f4efe6'; x.textAlign = 'center'; x.font = 'bold 34px sans-serif'; x.fillText('백화점', 128, 38);
-  x.font = '13px sans-serif'; x.fillText('DEPARTMENT STORE', 128, 56);
+  x.fillStyle = '#f4efe6'; x.textAlign = 'center'; x.font = 'bold 34px sans-serif'; x.fillText('현대백화점', 128, 38, 236);
+  x.font = '13px sans-serif'; x.fillText('HYUNDAI DEPARTMENT STORE', 128, 56, 236);
 }));
 // 출구 번호판 아틀라스: 1~8 번 (64px 칸)
 const PLATE_N = 8;
@@ -117,7 +117,7 @@ function buildDept(l, { towards }) {
     bag.box(e.mx + e.nx * 2.2, 5.6, e.mz + e.nz * 2.2, w, 0.45, 4.4, -e.ang, C.canopy);
     lit.box(e.mx + e.nx * 2.2, 5.33, e.mz + e.nz * 2.2, w - 1, 0.06, 3.6, -e.ang, '#ffffff');
   }
-  // 표지 '백화점': 가장 높은 동의 역 쪽 긴 변, 위에서 6m
+  // 표지 '현대백화점': 가장 높은 동의 역 쪽 긴 변, 위에서 6m
   let best = null, bs = -Infinity;
   for (const e of edges(tallest.o, 10)) { const tx = towards.x - e.mx, tz = towards.z - e.mz, d = (e.nx * tx + e.nz * tz) / (Math.hypot(tx, tz) || 1); if (d > bs) { bs = d; best = e; } }
   if (best) {

@@ -113,7 +113,9 @@ ok('edge normals point outward');
   const lm = createPangyoLandmarks(pg, { overlay: { add: (o) => labels.push(o.text) } });
   assert.deepEqual(lm.keys.sort(), ['0_-6', '0_-7']);
   assert.equal(labels.length, 3);
-  assert.ok(labels.every((s) => !/현대|Hyundai/i.test(s)), '상호 없음');
+  // 상호는 글자로만 허용(도훈님 승인): 백화점 라벨 = '현대백화점' 평문, 다른 라벨엔 상호 없음. 로고·이미지 텍스처는 없음(표지 = 캔버스 글자)
+  assert.ok(labels.some((s) => s.includes('현대백화점')), 'dept label = 현대백화점 ' + labels.join(','));
+  assert.ok(labels.filter((s) => /현대|Hyundai/i.test(s)).length === 1, 'brand name only on the dept label');
   let meshes = 0, tris = 0; const mats = new Set(), glow = [];
   for (const k of lm.keys) {
     const g = lm.build(k);

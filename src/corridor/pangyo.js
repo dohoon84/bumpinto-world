@@ -1,6 +1,6 @@
 // [pangyo] 판교역 일대 확장(1단계) — 코리더 데이터에 덧붙이는 로더. ?pangyo=0 이면 요청·메시·라벨 전부 없음(기존 코리더 그대로).
 //   pangyo/index.json  tiles{key:{x0,z0,nb,nr,mode}} : mode=new 새 칸 / mode=add 기존 코리더 타일 뒤에 이어 붙일 것
-//   stations[판교] · landmarks[백화점·알파돔시티·광장 데크·출입구]  (scripts/corridor/build-pangyo.mjs)
+//   stations[판교] · landmarks[현대백화점·알파돔시티·광장 데크·출입구]  (scripts/corridor/build-pangyo.mjs)
 export const PANGYO_DIR = 'pangyo/';
 
 export function pangyoEnabled(search = typeof location !== 'undefined' ? location.search : '') {
