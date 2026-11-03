@@ -10,6 +10,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { toShape } from '../../world.js';
 import { buildingMeshes, vcMat, paint } from '../tileMesh.js';
+import { buildPangyoDeckLights } from './pangyoDeckLights.js'; // [pangyo-deck-lights]
 import { watchEvening } from '../../evening.js';
 
 const LINE_COLOR = { 신분당선: '#d4003b', 경강선: '#0054a6' };
@@ -333,6 +334,7 @@ export function createPangyoLandmarks(pg, { overlay = null } = {}) {
         const r = BUILDERS[l.model](l, { towards, seed: 7919 });
         g.add(r.group);
         if (r.night) { r.night.visible = on; nights.add(r.night); }
+        if (l.model === 'pangyoDeck') { const dl = buildPangyoDeckLights(l); if (dl) g.add(dl); } // [pangyo-deck-lights] 데크 가장자리 야간 조명(별도 모듈)
       }
       stats.built++;
       return g;
