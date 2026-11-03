@@ -59,6 +59,7 @@ const CSS = `
 #gate-corridor-map .gcm-ft { margin-top: 8px; min-height: 30px; font-size: 11.5px; font-weight: 600; color: #cfe0ee; line-height: 1.35; }
 `;
 
+const LINE_COLOR = { '수인분당선': '#f5a200', '신분당선': '#d31145', '8호선': '#e6186c', '2호선': '#33a23d', '3호선': '#fe5b10', '9호선': '#bdb092', '경강선': '#0054a6' };
 const lineEn = (l) => ({ '수인분당선': 'Suin-Bundang', '신분당선': 'Shinbundang', '8호선': 'Line 8', '2호선': 'Line 2', '3호선': 'Line 3', '9호선': 'Line 9', '경강선': 'Gyeonggang' }[l] || l);
 
 // 펼친 노선도 레이아웃(px): 실제 x(동)/z(남) 좌표를 같은 축척으로 옮기고, 이름표는 좌우로 번갈아 둔다(겹침 방지).
@@ -113,7 +114,16 @@ export function mountGlobeCorridor({ root, camera, anchorSpot, globe, isEn, onEn
     pin.querySelector('.gate-pin-badge').textContent = open ? '▴' : (en ? '▾ Expand' : '▾ 펼치기');
     pin.classList.toggle('is-open', open);
     const all = [...L.items, ...L.branches, L.landmark];
-    // [globe-open] 노선 선(역 사이 색 선분 15개 + 판교 지선 1개)은 그리지 않는다 — 다른 지역처럼 역 점(마커)·이름표만. 선 요소를 아예 만들지 않음(숨김 아님)
+    let seg = '';
+    for (const b of L.branches) { // 지선(정자→판교 신분당선)
+      const shared = (b.from.lines || []).find((l) => (b.lines || []).includes(l)) || (b.lines || [])[0];
+      seg += `<line x1="${b.from.dx}" y1="${b.from.dy}" x2="${b.dx}" y2="${b.dy}" stroke="${LINE_COLOR[shared] || '#9eb4c6'}" stroke-width="4" stroke-linecap="round"/>`;
+    }
+    for (let i = 1; i < L.items.length; i++) {
+      const a = L.items[i - 1], b = L.items[i];
+      const shared = (a.lines || ['수인분당선']).find((l) => (b.lines || []).includes(l)) || (b.lines || [])[0];
+      seg += `<line x1="${a.dx}" y1="${a.dy}" x2="${b.dx}" y2="${b.dy}" stroke="${LINE_COLOR[shared] || '#9eb4c6'}" stroke-width="4" stroke-linecap="round"/>`;
+    }
     const leaders = all.map((s) => `<line x1="${s.dx}" y1="${s.dy}" x2="${s.side === 'left' ? L.colL : L.colR}" y2="${s.dy + (s.landmark ? -12 : 0)}" stroke="rgba(158,180,198,.45)" stroke-width="1"/>`).join('');
     const dots = all.map((s) => s.landmark
       ? `<rect data-dot="${s.id}" class="gcm-dot" x="${s.dx - 4}" y="${s.dy - 4}" width="8" height="8" transform="rotate(45 ${s.dx} ${s.dy})"/>`
@@ -129,7 +139,7 @@ export function mountGlobeCorridor({ root, camera, anchorSpot, globe, isEn, onEn
     panel.innerHTML = `
       <div class="gcm-hd"><div>🚇 ${corridorName(en)}<small>${en ? `Jeongja → Jamsil · ${CORRIDOR_STATION_COUNT} stations · pick one to start` : `정자 → 잠실 · ${CORRIDOR_STATION_COUNT}개 역 · 시작할 역을 고르세요`}</small></div>
         <button type="button" class="gcm-close" aria-label="${en ? 'Close' : '닫기'}">✕</button></div>
-      <div class="gcm-body" style="height:${L.height}px;width:${L.width}px"><svg width="${L.width}" height="${L.height}">${leaders}${dots}</svg>${labels}</div>
+      <div class="gcm-body" style="height:${L.height}px;width:${L.width}px"><svg width="${L.width}" height="${L.height}">${seg}${leaders}${dots}</svg>${labels}</div>
       <div class="gcm-ft">${en ? 'Real station positions (OpenStreetMap). Scroll to zoom the globe.' : '실제 역 위치(OpenStreetMap) 기준 · 휠로 지구본 확대/축소'}</div>`;
     hot = null;
   }
