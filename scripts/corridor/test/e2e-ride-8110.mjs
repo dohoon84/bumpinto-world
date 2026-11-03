@@ -4,6 +4,8 @@
 //   끝: 정차 순서 = relation 정류장 순서, 경계 이어 타기 1번, 요금 1번, 두 탄천 다리 상판 주행, 판교역에서 하차.
 //   ?ws=mock 만 씀. E2E_URL 이 없으면 vite 를 5480 부터 빈 포트에 직접 띄움(4173-4176·5391·5392·8787·8799 제외).
 //   SHOT_DIR(기본 /workspace/bw-pangyo-shots/stage2) → ride8110-*.png
+//   [g8110-return] 이어서 반대 방향(GBIS routeId 204000082): 판교역 탑승 → 이매촌한신 → 서현역 → 수내역 → 경계 이어 타기 → 정자역 종점 하차.
+//   REV_SHOT_DIR(기본 SHOT_DIR) → ride8110r-*.png · E2E_DIR=fwd|rev|both(기본 both)
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import net from 'node:net';
@@ -13,7 +15,8 @@ const { chromium } = await import('playwright');
 const ROOT = fileURLToPath(new URL('../../../', import.meta.url));
 const ONLY = !!process.env.E2E_SHOTS_ONLY;
 const SHOT_DIR = process.env.SHOT_DIR || '/workspace/bw-pangyo-shots/stage2';
-fs.mkdirSync(SHOT_DIR, { recursive: true });
+const REV_SHOT_DIR = process.env.REV_SHOT_DIR || SHOT_DIR, DIRS = process.env.E2E_DIR || 'both';
+fs.mkdirSync(SHOT_DIR, { recursive: true }); fs.mkdirSync(REV_SHOT_DIR, { recursive: true });
 const BAD_PORTS = new Set([4173, 4174, 4175, 4176, 5391, 5392, 8787, 8799]);
 const freePort = (p) => new Promise((res) => { const s = net.createServer(); s.once('error', () => res(freePort(p + 1))); s.listen(p, '127.0.0.1', () => s.close(() => res(p))); });
 let vite = null, BASE = process.env.E2E_URL;
@@ -31,6 +34,7 @@ const check = (ok, msg) => { if (!ok) fails.push(msg); };
 const LINK = JSON.parse(fs.readFileSync(ROOT + 'public/corridor/pangyo/link.json', 'utf8'));
 const norm = (s) => String(s || '').replace(/[\s().·]/g, '');
 const REL_STOPS = ['정자역', '롯데백화점.수내역', '서현역.AK플라자', '이매촌한신.서현역.AK프라자', '판교역.낙생육교.현대백화점'].map(norm); // OSM relation 7090965 정류장 순서
+const REV_STOPS = LINK.meta.reverse.gbisStops.map((s) => norm(s.name)); // [g8110-return] GBIS 204000082 seq 37~41
 
 const browser = await chromium.launch({ args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
 const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
@@ -43,7 +47,8 @@ await page.evaluate(() => document.getElementById('lobby-go').click());
 await page.waitForFunction(() => !document.body.classList.contains('in-lobby') && !document.body.classList.contains('in-gate'), null, { timeout: 60000 });
 await page.waitForFunction(() => window.__jj.transit?.rideSim && window.__jj.corridor?.life?.buses, null, { timeout: 180000 });
 await page.waitForTimeout(1500);
-const shot = (name) => page.screenshot({ path: `${SHOT_DIR}/ride8110-${name}.png` });
+let SHOT_PRE = `${SHOT_DIR}/ride8110-`;
+const shot = (name) => page.screenshot({ path: `${SHOT_PRE}${name}.png` });
 
 // 페이지 안 도우미: 탑승 버스 샘플(월드 방향·행렬식·위쪽·접선·상판)
 await page.evaluate(() => {
@@ -77,28 +82,34 @@ await page.evaluate(() => {
 });
 
 
-async function ride8110() {
-  const setup = await page.evaluate(() => {
-    const jj = window.__jj, J = jj.transit.rideSim;
-    const P = J.sim.paths.filter((p) => p.ref === 'G8110').at(-1);
-    if (!P) return { err: '정자 시뮬에 G8110 경로 없음' };
-    const k = P.stops.findIndex((st) => /정자역/.test(J.stopById.get(st.stop)?.name)), st = P.stops[k], stop = J.stopById.get(st.stop);
+async function ride8110(rev = false) {
+  SHOT_PRE = rev ? `${REV_SHOT_DIR}/ride8110r-` : `${SHOT_DIR}/ride8110-`;
+  const WANT = rev ? REV_STOPS : REL_STOPS;
+  if (rev) { // 판교역 근처로 먼저 옮겨 타일·정류장을 불러옴
+    await page.evaluate(() => { const jj = window.__jj, J = jj.corridor.life.buses, P = J.sim.paths.find((p) => p.ref === 'G8110' && p.dir === 1), st = J.stopById.get(P.stops[0].stop); jj.teleport(st._pos.x + 6, st._pos.z); });
+    await page.waitForTimeout(6000);
+  }
+  const setup = await page.evaluate((rev) => {
+    const jj = window.__jj, J = rev ? jj.corridor.life.buses : jj.transit.rideSim;
+    const P = rev ? J.sim.paths.find((p) => p.ref === 'G8110' && p.dir === 1) : J.sim.paths.filter((p) => p.ref === 'G8110' && p.dir !== 1).at(rev ? -1 : 0);
+    if (!P) return { err: (rev ? '코리더' : '정자') + ' 시뮬에 G8110 경로 없음' };
+    const k = rev ? 0 : P.stops.findIndex((st) => /정자역/.test(J.stopById.get(st.stop)?.name)), st = P.stops[k], stop = J.stopById.get(st.stop);
     J.sim.buses = J.sim.buses.filter((b) => !(b.P === P && Math.abs(b.s - st.s) < 150));
     const b = J.sim._spawn(P, Math.max(0.01, st.s - 70));
     jj.teleport(stop._pos.x, stop._pos.z);
-    return { k, busId: b.id, path: P.id, ref: P.ref, at: { x: stop._pos.x, z: stop._pos.z }, charges: jj.ride.stats.charges.length };
-  });
+    return { k, jz: !rev, busId: b.id, path: P.id, ref: P.ref, at: { x: stop._pos.x, z: stop._pos.z }, charges: jj.ride.stats.charges.length };
+  }, rev);
   assert.ok(!setup.err, setup.err); assert.equal(setup.ref, 'G8110');
   for (let i = 0; i < 300; i++) {
-    const ok = await page.evaluate(({ busId, k }) => { const R = window.__jj.ride; R.debug.ff(0.3, () => { const b = R.debug.bus(busId, true); return b && b.state === 'dwell' && b.stopIdx === k; }); const b = R.debug.bus(busId, true); if (b?.state === 'dwell') b.dwell = Math.max(b.dwell, 8); return b?.state === 'dwell' && b.stopIdx === k; }, setup);
+    const ok = await page.evaluate(({ busId, k, jz }) => { const R = window.__jj.ride; R.debug.ff(0.3, () => { const b = R.debug.bus(busId, jz); return b && b.state === 'dwell' && b.stopIdx === k; }); const b = R.debug.bus(busId, jz); if (b?.state === 'dwell') b.dwell = Math.max(b.dwell, 8); return b?.state === 'dwell' && b.stopIdx === k; }, setup);
     if (ok) break;
   }
-  await page.evaluate(({ busId, at }) => { const jj = window.__jj, b = jj.ride.debug.bus(busId, true), q = b._q || { x: at.x, z: at.z }; const sp = jj.corridor.freeSpot((q.x + at.x) / 2, (q.z + at.z) / 2); jj.teleport(sp.x, sp.z); }, setup);
+  await page.evaluate(({ busId, at, jz }) => { const jj = window.__jj, b = jj.ride.debug.bus(busId, jz), q = b._q || { x: at.x, z: at.z }; const sp = jj.corridor.freeSpot((q.x + at.x) / 2, (q.z + at.z) / 2); jj.teleport(sp.x, sp.z); }, setup);
   await page.waitForTimeout(1200);
-  await shot('0-board-jeongja');
+  await shot(rev ? '0-board-pangyo' : '0-board-jeongja');
   await page.keyboard.press('e'); await page.waitForTimeout(1200);
   const st0 = await page.evaluate(() => window.__jj.ride.debug.state());
-  assert.equal(st0.mode, 'bus', '정자역 탑승 실패');
+  assert.equal(st0.mode, 'bus', (rev ? '판교역' : '정자역') + ' 탑승 실패');
   if (st0.cam === '1p') await page.evaluate(() => window.__jj.ride.toggleCam());
   const res = { n: 0, maxHerr: 0, maxDrop: 0, minDet: 1, minUp: 1, deckN: 0, stops: [], transfers: 0, bridges: {}, paths: new Set() };
   let prev = null; const shotAt = new Set();
@@ -110,7 +121,8 @@ async function ride8110() {
       if (fin?.name && (!res.stops.length || res.stops.at(-1).key !== fin.path + ':' + fin.stopIdx)) {
         const p = await page.evaluate(() => window.__jj.player.position);
         res.stops.push({ key: fin.path + ':' + fin.stopIdx, name: fin.name, at: [Math.round(p.x), Math.round(p.z)], alight: 1 });
-        if (/^판교역/.test(fin.name)) await once('4-arrive-pangyo');
+        if (!rev && /^판교역/.test(fin.name)) await once('4-arrive-pangyo');
+        if (rev && /^정자역/.test(fin.name)) await once('4-arrive-jeongja');
       }
       break;
     }
@@ -125,16 +137,21 @@ async function ride8110() {
       if (r.y < r.deckH - 0.01) fails.push(`상판 아래 y ${r.y.toFixed(2)} < ${r.deckH} @(${r.x.toFixed(0)},${r.z.toFixed(0)})`);
       if (key === '양현교' && res.bridges[key] === 6) await once('2-on-yanghyeon-bridge');
       if (key === '궁내교' && res.bridges[key] === 6) await once('1-on-gungnae-bridge');
+      if (rev && key !== '궁내교' && key !== '양현교' && res.bridges[key] === 6) await once('2-on-' + (/[가-힣]/.test(key) ? 'bridge' : 'deck'));
     }
     if (prev) {
       const drop = prev.y - r.y; res.maxDrop = Math.max(res.maxDrop, drop);
       if (drop > 0.5) fails.push(`한 샘플 하강 ${drop.toFixed(2)}m @(${r.x.toFixed(0)},${r.z.toFixed(0)})`);
       if (r.path !== prev.path) res.transfers++;
     }
-    if (r.z < -2700 && r.x < 700 && !r.dwell) await once('3-seohyeonro-west-approach');
+    if (!rev && r.z < -2700 && r.x < 700 && !r.dwell) await once('3-seohyeonro-west-approach');
+    if (rev && r.z < -2200 && r.x > 700 && !r.dwell) await once('1-seohyeonro-east');
+    if (rev && prev && r.path !== prev.path) await once('3-boundary-into-jeongja');
     if (r.dwell && r.stop && (!res.stops.length || res.stops.at(-1).key !== r.path + ':' + r.stopIdx)) {
       res.stops.push({ key: r.path + ':' + r.stopIdx, name: r.stop, at: [Math.round(r.x), Math.round(r.z)] });
-      if (/^판교역/.test(r.stop)) await once('4-arrive-pangyo');
+      if (!rev && /^판교역/.test(r.stop)) await once('4-arrive-pangyo');
+      if (rev && /서현역/.test(r.stop)) await once('2-seohyeon-stop');
+      if (rev && /^정자역/.test(r.stop)) await once('4-arrive-jeongja');
     }
     prev = r;
   }
@@ -143,26 +160,40 @@ async function ride8110() {
   const after = await page.evaluate(() => ({ st: window.__jj.ride.debug.state(), charges: window.__jj.ride.stats.charges.length, p: window.__jj.player.position }));
   res.charges = after.charges - setup.charges; res.end = { mode: after.st.mode, x: Math.round(after.p.x), z: Math.round(after.p.z) };
   let gi = 0, ok = true; const seq = [];
-  for (const s of res.stops) { const nn = norm(s.name); let j = gi; while (j < REL_STOPS.length && REL_STOPS[j] !== nn) j++; if (j >= REL_STOPS.length) { ok = false; seq.push(`${s.name}✗`); } else { seq.push(`${s.name}#${j}`); gi = j + 1; } }
-  res.order = { ok, seq, complete: gi === REL_STOPS.length };
+  for (const s of res.stops) { const nn = norm(s.name); let j = gi; while (j < WANT.length && WANT[j] !== nn) j++; if (j >= WANT.length) { ok = false; seq.push(`${s.name}✗`); } else { seq.push(`${s.name}#${j}`); gi = j + 1; } }
+  res.order = { ok, seq, complete: gi === WANT.length };
   res.paths = [...res.paths];
   return res;
 }
 
-const r = await ride8110();
-console.log('[8110]', JSON.stringify({ ...r, stops: r.stops }));
+const pg = LINK.corridor.stops.find((s) => /^판교역/.test(s.name) && s.src !== 'gbis');
+let r = null, rr = null;
+if (DIRS !== 'rev') {
+  r = await ride8110(false);
+  console.log('[8110]', JSON.stringify({ ...r, stops: r.stops }));
+  check(r.n > 300, `샘플 ${r.n}`);
+  check(r.transfers === 1, `경계 이어 타기 ${r.transfers}번`);
+  check(r.charges === 1, `요금 ${r.charges}번`);
+  check(r.order.ok && r.order.complete, `정차 순서 ${r.order.seq.join(' → ')}`);
+  check(r.bridges['궁내교'] > 5 && r.bridges['양현교'] > 5, `다리 상판 주행 ${JSON.stringify(r.bridges)}`);
+  check(r.end.mode == null && Math.hypot(r.end.x - pg.x, r.end.z - pg.z) < 40, `판교역 하차 ${JSON.stringify(r.end)}`);
+}
+if (DIRS !== 'fwd') { // [g8110-return]
+  rr = await ride8110(true);
+  console.log('[8110 reverse]', JSON.stringify({ ...rr, stops: rr.stops }));
+  const JZT = JSON.parse(fs.readFileSync(ROOT + 'public/transit.json', 'utf8')), jzs = JZT.stops.find((s) => s.id === LINK.live.paths.find((p) => p.dir === 1).stops.at(-1).stop); // 반대 방향 정자역 정류장
+  check(rr.n > 300, `반대 샘플 ${rr.n}`);
+  check(rr.transfers === 1, `반대 경계 이어 타기 ${rr.transfers}번`);
+  check(rr.charges === 1, `반대 요금 ${rr.charges}번`);
+  check(rr.order.ok && rr.order.complete, `반대 정차 순서 ${rr.order.seq.join(' → ')}`);
+  check(rr.end.mode == null && Math.hypot(rr.end.x - jzs.x, rr.end.z - jzs.z) < 60, `정자역 하차 ${JSON.stringify(rr.end)}`);
+}
 console.log('page errors', errs.length, errs.slice(0, 3));
 await browser.close();
 stopVite();
-const pg = LINK.corridor.stops.find((s) => /^판교역/.test(s.name));
-check(r.n > 300, `샘플 ${r.n}`);
-check(r.transfers === 1, `경계 이어 타기 ${r.transfers}번`);
-check(r.charges === 1, `요금 ${r.charges}번`);
-check(r.order.ok && r.order.complete, `정차 순서 ${r.order.seq.join(' → ')}`);
-check(r.bridges['궁내교'] > 5 && r.bridges['양현교'] > 5, `다리 상판 주행 ${JSON.stringify(r.bridges)}`);
-check(r.end.mode == null && Math.hypot(r.end.x - pg.x, r.end.z - pg.z) < 40, `판교역 하차 ${JSON.stringify(r.end)}`);
 check(errs.length === 0, `페이지 오류 ${errs.slice(0, 3).join(' / ')}`);
+const fmt = (x) => `${x.n}샘플 최대 방향오차 ${x.maxHerr.toFixed(2)}° 최대 하강 ${x.maxDrop.toFixed(3)}m 상판 ${x.deckN}샘플 ${JSON.stringify(x.bridges)} · ${x.order.seq.join(' → ')}`;
 if (!ONLY) {
   if (fails.length) { console.error('FAIL\n  ' + [...new Set(fails)].slice(0, 40).join('\n  ')); process.exit(1); }
-  console.log(`e2e-ride-8110: ok — ${r.n}샘플 최대 방향오차 ${r.maxHerr.toFixed(2)}° 최대 하강 ${r.maxDrop.toFixed(3)}m 상판 ${r.deckN}샘플 ${JSON.stringify(r.bridges)} · ${r.order.seq.join(' → ')}`);
+  console.log(`e2e-ride-8110: ok — ${r ? '정방향 ' + fmt(r) : ''}${r && rr ? ' / ' : ''}${rr ? '반대 방향 ' + fmt(rr) : ''}`);
 } else console.log('기록만(E2E_SHOTS_ONLY) — 실패 후보', fails.length, [...new Set(fails)].slice(0, 8));

@@ -3,6 +3,7 @@
 //   3) 연속성: 경로 1m 마다 게임에 그려진 차도 폭 안  4) 런타임 합치기(원본 불변·번호 보존)와 ?pangyolink=0 / ?pangyo=0
 //   5) 탄천 다리 높이: 게임 상판·하상 vs 공개 자료(기록값) 허용 2m, 차량 높이 주행(하강 ≤ 0.5m, 상판 아래로 안 내려감)
 //   6) 시뮬: 8110 버스가 정자역에서 서고, 경계를 넘어 판교역.낙생육교.현대백화점에 정차
+//   [g8110-return] 7) 반대 방향(dir 1, GBIS routeId 204000082 정류소 순서): 판교역 → 이매촌한신 → 서현역 → 수내역 → 정자역, 연속성·높이·시뮬 정차
 import './dom-shim.mjs';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -22,6 +23,7 @@ const J = (f) => JSON.parse(fs.readFileSync(path.join(ROOT, 'public', f), 'utf8'
 const L = J('corridor/' + PANGYO_LINK_FILE), CO = J('corridor/transit.json'), JZ = J('transit.json'), X = J('corridor/jz-sim.json');
 const CI = J('corridor/index.json'), LB = CI.meta.liveBox;
 let n = 0; const ok = (m) => { n++; console.log('ok', n, m); };
+const norm = (s) => String(s || '').replace(/[\s().·]/g, '');
 const dist = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1]);
 const dirAt = (pts, i, j) => { const dx = pts[j][0] - pts[i][0], dz = pts[j][1] - pts[i][1], l = Math.hypot(dx, dz) || 1; return [dx / l, dz / l]; };
 
@@ -39,8 +41,9 @@ const dirAt = (pts, i, j) => { const dx = pts[j][0] - pts[i][0], dz = pts[j][1] 
 }
 
 // 2) 모양·정류장 순서
-const lp = L.live.paths[0], cp = L.corridor.paths[0];
-assert.equal(L.live.paths.length, 1); assert.equal(L.corridor.paths.length, 1);
+const lp = L.live.paths.find((p) => p.dir === 0), cp = L.corridor.paths.find((p) => p.dir === 0);
+const rlp = L.live.paths.find((p) => p.dir === 1), rcp = L.corridor.paths.find((p) => p.dir === 1); // [g8110-return]
+assert.equal(L.live.paths.length, 2); assert.equal(L.corridor.paths.length, 2);
 assert.ok(lp.ref === 'G8110' && cp.ref === 'G8110' && lp.route === 7090965 && cp.route === 7090965);
 // [g8110] 화면 표기 G8110, 내부 id·osmRef 는 relation 그대로 · 정류장 목록의 구형 '8110' 은 G8110 으로 합침
 assert.ok(L.live.routes[0].ref === 'G8110' && L.live.routes[0].name === 'G8110번' && L.live.routes[0].osmRef === '8110' && L.live.aliasRefs['8110'] === 'G8110');
@@ -53,6 +56,7 @@ assert.ok(dist(lp.pts.at(-1), cp.pts[0]) < 0.2, '코리더 조각이 정자 조�
 { const a = dirAt(lp.pts, lp.pts.length - 2, lp.pts.length - 1), b = dirAt(cp.pts, 0, 1); assert.ok(a[0] * b[0] + a[1] * b[1] > 0.9, '경계 방향 일치'); }
 const stopName = new Map([...JZ.stops, ...CO.stops, ...L.corridor.stops].map((s) => [s.id, s.name]));
 const seq = [...lp.stops, ...cp.stops].map((s) => stopName.get(s.stop));
+const rseq = [...rcp.stops, ...rlp.stops].map((s) => stopName.get(s.stop));
 assert.deepEqual(seq, ['정자역', '롯데백화점.수내역', '서현역.AK플라자', '이매촌한신.서현역.AK프라자', '판교역.낙생육교.현대백화점'], 'relation 정류장 순서');
 for (const p of [lp, cp]) for (let i = 1; i < p.stops.length; i++) assert.ok(p.stops[i].s > p.stops[i - 1].s);
 const pgStop = L.corridor.stops.find((s) => /^판교역/.test(s.name));
@@ -65,12 +69,12 @@ ok(`shape: 정자 ${lp.len}m + 코리더 ${cp.len}m, 정류장 ${seq.join(' → 
   const { near } = loadDrawnRoads();
   let worst = -Infinity, at = null, cnt = 0;
   const kinds = new Map();
-  for (const p of [lp, cp]) for (let i = 1; i < p.pts.length; i++) {
+  for (const p of [lp, cp, rcp, rlp]) for (let i = 1; i < p.pts.length; i++) {
     const a = p.pts[i - 1], b = p.pts[i], D = dist(a, b);
     for (let s = 0; s < D; s += 1) { const x = a[0] + (b[0] - a[0]) * s / D, z = a[1] + (b[1] - a[1]) * s / D, q = near(x, z); cnt++; kinds.set(q.road?.src, (kinds.get(q.road?.src) || 0) + 1); if (q.gap > worst) { worst = q.gap; at = [x.toFixed(0), z.toFixed(0)]; } }
   }
   assert.ok(worst <= 0, `경로가 그려진 차도 밖 ${worst.toFixed(1)}m @${at}`);
-  assert.ok(kinds.get('pangyo') > 300 && kinds.get('tancheon') > 50 && kinds.get('jeongja') > 300 && kinds.get('corridor') > 1000, JSON.stringify([...kinds]));
+  assert.ok(kinds.get('pangyo') > 600 && kinds.get('tancheon') > 50 && kinds.get('jeongja') > 300 && kinds.get('corridor') > 1000, JSON.stringify([...kinds]));
   ok(`continuity: ${cnt} samples (1m) all inside drawn road (worst edge gap ${worst.toFixed(1)}m) — ${JSON.stringify(Object.fromEntries(kinds))}`);
 }
 
@@ -79,12 +83,12 @@ ok(`shape: 정자 ${lp.len}m + 코리더 ${cp.len}m, 정류장 ${seq.join(' → 
   assert.equal(pangyoLinkEnabled(''), true); assert.equal(pangyoLinkEnabled('?pangyolink=0'), false); assert.equal(pangyoLinkEnabled('?pangyo=0'), false); assert.equal(pangyoLinkEnabled('?pangyolink=1'), true);
   const before = JSON.stringify(CO), T = mergeLinkTransit(CO, L);
   assert.equal(JSON.stringify(CO), before, '원본 불변');
-  assert.equal(T.paths.length, CO.paths.length + 1); assert.ok(T.paths.slice(0, CO.paths.length).every((p, i) => p.id === i && p === CO.paths[i]), '기존 경로 번호 그대로');
+  assert.equal(T.paths.length, CO.paths.length + 2); assert.ok(T.paths.slice(0, CO.paths.length).every((p, i) => p.id === i && p === CO.paths[i]), '기존 경로 번호 그대로');
   assert.equal(T.stops.length, CO.stops.length + L.corridor.stops.length);
   for (const id of L.corridor.addRoute) assert.ok(T.stops.find((s) => s.id === id).routes.includes('G8110') && !CO.stops.find((s) => s.id === id).routes.includes('G8110'));
   assert.equal(mergeLinkTransit(CO, null), CO, 'link 없으면 원본 그대로');
   const base = mergeSimExtra(JZ, X), TL = mergeSimExtra(base, L.live);
-  assert.equal(TL.paths.length, base.paths.length + 1); assert.equal(TL.paths.at(-1).ref, 'G8110'); assert.equal(mergeSimExtra(base, null), base);
+  assert.equal(TL.paths.length, base.paths.length + 2); assert.equal(TL.paths.at(-1).ref, 'G8110'); assert.equal(mergeSimExtra(base, null), base);
   assert.equal(base.paths.length, 14, 'e2e-ride-220 이 쓰는 정자 경로 번호(5·10) 앞쪽 그대로');
   ok('runtime merge keeps originals; ?pangyolink=0 / ?pangyo=0 off');
 }
@@ -102,6 +106,11 @@ ok(`shape: 정자 ${lp.len}m + 코리더 ${cp.len}m, 정류장 ${seq.join(' → 
   const rep = [];
   for (const [x, z] of dense) { const ny = terr.getVehicleHeight(x, z, y); maxDrop = Math.max(maxDrop, y - ny); const d = terr.deckAt(x, z); if (d && d.h > -0.05 && ny < d.h - 0.01) under++; y = ny; }
   assert.ok(maxDrop <= 0.5, `차량 높이 한 걸음 하강 ${maxDrop.toFixed(2)}`); assert.equal(under, 0, '상판 아래로 내려감');
+  { // [g8110-return] 반대 방향도 같은 기준
+    const rp = [...rcp.pts, ...rlp.pts.slice(1)]; let ry = 0, rd = 0, ru = 0;
+    for (let i = 1; i < rp.length; i++) { const a = rp[i - 1], b = rp[i], D = dist(a, b), k = Math.max(1, Math.ceil(D / 0.5)); for (let j = 0; j < k; j++) { const x = a[0] + (b[0] - a[0]) * j / k, z = a[1] + (b[1] - a[1]) * j / k, ny = terr.getVehicleHeight(x, z, ry); rd = Math.max(rd, ry - ny); const d = terr.deckAt(x, z); if (d && d.h > -0.05 && ny < d.h - 0.01) ru++; ry = ny; } }
+    assert.ok(rd <= 0.5, `반대 방향 한 걸음 하강 ${rd.toFixed(2)}`); assert.equal(ru, 0, '반대 방향 상판 아래로 내려감');
+  }
   for (const c of CROSSINGS) {
     const near = dense.filter(([x, z]) => Math.hypot(x - c.at[0], z - c.at[1]) < 110);
     assert.ok(near.length > 100, `${c.name} 경로가 지남`);
@@ -139,5 +148,32 @@ ok(`shape: 정자 ${lp.len}m + 코리더 ${cp.len}m, 정류장 ${seq.join(' → 
   for (let t = 0; t < 900 && !jz; t += 0.2) { js.update(0.2, ctx); jz = js.buses.some((b) => b.P === LP && b.state === 'dwell' && b.dwell > 0); }
   assert.ok(jz, '정자 시뮬: 정자역 정차');
   ok(`sim: 코리더 G8110 정류장 ${served.size}/${P.stops.length} 정차, 경계(정자 bbox) → 판교역 한 대 ${(first / 60).toFixed(1)}분 정류장 ${track.stops.join('→')} · 정자 시뮬 정자역 정차`);
+}
+// 7) [g8110-return] 반대 방향 판교역 → 정자역
+{
+  const R = L.meta.reverse;
+  assert.ok(/getBusRouteStationListv2/.test(R.source) && /204000082/.test(R.source), 'GBIS 출처 기록');
+  assert.deepEqual(R.gbisStops.map((s) => s.seq), [37, 38, 39, 40, 41], 'GBIS 반대 방향 seq 37~41');
+  assert.deepEqual(rseq.map(norm), R.gbisStops.map((s) => norm(s.name)), `GBIS 정류소 순서 ${rseq}`);
+  assert.ok(rcp.src === 'gbis-routed' && rlp.src === 'gbis-routed' && rcp.ref === 'G8110' && rlp.ref === 'G8110');
+  assert.ok(Math.abs(rcp.pts.at(-1)[1] - LB.z0) < 0.1 && dist(rcp.pts.at(-1), rlp.pts[0]) < 0.2, '코리더 조각 끝 = 정자 bbox 경계 = 정자 조각 시작');
+  { const a = dirAt(rcp.pts, rcp.pts.length - 2, rcp.pts.length - 1), b = dirAt(rlp.pts, 0, 1); assert.ok(a[0] * b[0] + a[1] * b[1] > 0.9, '경계 방향 일치(반대)'); }
+  assert.ok(rlp.pts.every(inLB), '정자 조각(반대)은 정자 bbox 안');
+  for (const p of [rcp, rlp]) for (let i = 1; i < p.stops.length; i++) assert.ok(p.stops[i].s > p.stops[i - 1].s);
+  assert.equal(rlp.stops.length, 1, '정자 조각의 정차는 정자역 하나(종점)');
+  // 정방향과 서로 다른 차로: 같은 곳에서 진행 방향이 반대
+  const mid = rcp.pts[Math.floor(rcp.pts.length / 2)]; let best = null;
+  for (let i = 1; i < cp.pts.length; i++) { const d = dist(cp.pts[i], mid); if (!best || d < best.d) best = { d, i }; }
+  { const j = rcp.pts.indexOf(mid), a = dirAt(rcp.pts, j - 1, j), b = dirAt(cp.pts, best.i - 1, best.i); assert.ok(a[0] * b[0] + a[1] * b[1] < -0.5, '반대 방향'); }
+  const T = mergeLinkTransit(CO, L), ctx = { pedLight: () => 'red' };
+  const sim = new SimulatedBusSource({ ...T, crossings: [] }, { x0: -1e6, x1: 1e6, z0: -1e6, z1: 1e6 }, { seed: 7, spacing: true });
+  const P = sim.paths.find((p) => p.ref === 'G8110' && p.dir === 1); let track = null;
+  for (let t = 0; t < SEC; t += 0.2) { sim.update(0.2, ctx); for (const b of sim.buses) { if (b.P !== P) continue; if (!track && b.s < 30) track = { b, stops: [] }; if (track?.b === b && b.state === 'dwell' && b.dwell > 0 && track.stops.at(-1) !== b.stopIdx) track.stops.push(b.stopIdx); } }
+  assert.deepEqual(track.stops, P.stops.map((_, i) => i), `반대 방향 같은 버스가 정류장을 순서대로 ${track.stops}`);
+  const live = mergeSimExtra(mergeSimExtra(JZ, X), L.live), js = new SimulatedBusSource(live, LB, { seed: 7, spacing: true });
+  const LP = js.paths.find((p) => p.ref === 'G8110' && p.dir === 1); let jz = false;
+  for (let t = 0; t < 900 && !jz; t += 0.2) { js.update(0.2, ctx); jz = js.buses.some((b) => b.P === LP && b.state === 'dwell' && b.dwell > 0); }
+  assert.ok(jz, '정자 시뮬(반대): 정자역 정차');
+  ok(`reverse (GBIS 204000082): 코리더 ${rcp.len}m + 정자 ${rlp.len}m, 정류장 ${rseq.join(' → ')} · 연속성 최대 ${R.continuity.maxGapM}m · 시뮬 정차 ${track.stops.join('→')} · 정자역 정차`);
 }
 console.log('pangyo-link: all', n, 'checks passed');
