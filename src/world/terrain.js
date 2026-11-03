@@ -103,7 +103,7 @@ export function createTerrain(T, data) {
     return { ...s, k, ax: a[0], az: a[1], h0: a[2], h1: b[2], L, ux, uz, n: s.steps, hw: s.w / 2 };
   };
   // [pangyo-water] 본류 계단 아래 끝(둔치)도 낙차만큼 내리고 단 수를 비례로 늘림
-  const dropStair = (s) => { const b = s.flight[1], d = mainDrop(b[0], b[1]); return d < 0 && b[2] < 0 ? { ...s, flight: [s.flight[0], [b[0], b[1], b[2] + d]], steps: Math.round((s.steps * (b[2] + d)) / b[2]) } : s; };
+  const dropStair = (s) => { const b = s.flight[1], d = mainDrop(b[0], b[1]); return d < 0 && b[2] < 0 ? { ...s, flight: [s.flight[0], [b[0], b[1], b[2] + d]], steps: Math.round((s.steps * (b[2] + d)) / b[2]), riser: +((s.flight[0][2] - b[2] - d) / Math.round((s.steps * (b[2] + d)) / b[2])).toFixed(3) } : s; };
   const stairs = (T.stairs || []).map((s, k) => mkStair(MD ? dropStair(s) : s, k));
   // 지류 계단: 높이·메시에는 쓰지만 탄천 산책 경로(riversideRoute/bankPath, export stairs)에는 넣지 않음
   const streamStairs = (streams ? streams.stairs : []).map((s, k) => mkStair(s, stairs.length + k));
@@ -592,8 +592,9 @@ export function createTerrain(T, data) {
         const [x0, z0] = r.p[i - 1], [x1, z1] = r.p[i], L = Math.hypot(x1 - x0, z1 - z0), s0 = sAcc; sAcc += L; if (L < 0.2) continue;
         const ux = (x1 - x0) / L, uz = (z1 - z0) / L, yaw = Math.atan2(ux, uz), rx = -uz, rz = ux;
         // 하천 위(지면이 낮은 구간)만 상판/난간 — 제방 위 도로 구간엔 안 그림
+        // [pangyo-water] 낮은 보도교(h<FLOOR/2): 둔치 높이가 구간마다 달라 그 자리 둔치(floorAt) 기준 — 꺼지면 예전 식
         const spans = []; let st0 = null;
-        for (let u = 0; u <= L + 0.01; u += 1) { const low = baseHeight(x0 + ux * u, z0 + uz * u) < h - 0.4; if (low && st0 == null) st0 = u; if (!low && st0 != null) { spans.push([st0, u]); st0 = null; } }
+        for (let u = 0; u <= L + 0.01; u += 1) { const qx = x0 + ux * u, qz = z0 + uz * u, low = MD && h < FLOOR / 2 ? baseHeight(qx, qz) < floorAt(qx, qz) - 0.01 : baseHeight(qx, qz) < h - 0.4; if (low && st0 == null) st0 = u; if (!low && st0 != null) { spans.push([st0, u]); st0 = null; } }
         if (st0 != null) spans.push([st0, L]);
         for (let [u0, u1] of spans) {
           u0 = Math.max(0, u0 - 1.5); u1 = Math.min(L, u1 + 1.5); const l = u1 - u0, mx = x0 + ux * (u0 + u1) / 2, mz = z0 + uz * (u0 + u1) / 2;
