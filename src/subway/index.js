@@ -214,6 +214,7 @@ export function mountSubway({ scene, overlay, data, world, terrain, renderer, ge
     swap.t += dt;
     if (swap.phase === 'out' && swap.t >= FADE_SEC) {
       swap.phase = 'wait';
+      sub.style.opacity = '0'; subT = 0; // 앞 방 안내 방송 자막은 지우기
       onInterior?.('', null);
       inside?.dispose(); inside = null;
       Promise.resolve().then(swap.make).then((r) => {

@@ -190,9 +190,9 @@ assert.equal(walkable(GATE.cab[2], 0, 0.25, { passages }), false, '개찰구 몸
   assert.deepEqual(decodeZone(4, 5, Z), { zone: Z, x: 4, z: 5 }, '나중에 서버가 zone 을 그대로 전달하면 그것도 이해');
   assert.equal(decodeZone(4, 5, '<script>').zone, '', '이상한 zone 문자열은 무시');
   assert.equal(isZoneId('a'.repeat(60)), false);
-  assert.equal(decodeZone(ZONE_BASE + 77 * 10000 + 3, 1).zone, 'zone#77', '모르는 슬롯도 바깥으로 새지 않음');
+  assert.equal(decodeZone(ZONE_BASE + 777 * 10000 + 3, 1).zone, 'zone#777', '모르는 슬롯도 바깥으로 새지 않음');
   // 코리더 역 대합실 슬롯 (덧붙이기만): 2..14 = 수내..잠실, 역 id 와 이름이 맞는다
-  assert.deepEqual(ZONES.slice(2), STATIONS.filter((d) => d.id !== 'jeongja').map((d) => stationZone(d.id)), '역 대합실 구역 = stationsData 순서');
+  assert.deepEqual(ZONES.slice(2, 15), STATIONS.filter((d) => d.id !== 'jeongja').map((d) => stationZone(d.id)), '역 대합실 구역 = stationsData 순서');
   for (const zid of ZONES.slice(1)) { assert.ok(isZoneId(zid)); const q = decodeZone(encodeZone(zid, 3, 4).x, 4); assert.equal(q.zone, zid); }
   assert.equal(zoneSlot('jamsil-station'), 14);
   assert.deepEqual(encodeZone('', 3, 4), { x: 3, z: 4 }, '바깥은 그대로');
