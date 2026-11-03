@@ -21,19 +21,23 @@ import { pangyoExpressEnabled, PANGYO_EXPRESS_FILE, filterExpressHidden, buildPa
 import { createPangyoLandmarks } from './landmarks/pangyo.js'; // [pangyo]
 import { isEn, onLangChange } from '../i18n.js'; // [pangyo-link] 판교역 라벨 KO/EN
 import { createPangyoNpc, pangyoNpcEnabled } from './pangyoNpc.js'; // [pangyo-npc]
+import { pangyoWaterEnabled, PANGYO_WATER_FILE, attachMainDrop, mergePangyoStreams, dropWaterGeometry } from './pangyoWater.js'; // [pangyo-water]
 
 // streams: 탄천 지류 하도(streams.json). ?streams=0 이면 false → 예전과 같은 데이터만
 // [pangyo] pangyo: 판교역 일대(pangyo/index.json). ?pangyo=0 이면 false → 요청 없음
 export async function loadCorridorData(baseUrl, { streams = true, pangyo = pangyoEnabled(), pangyoExpress = pangyo && pangyoExpressEnabled(), fetchFn = fetch } = {}) {
   const get = (f) => fetchFn(baseUrl + f).then((r) => (r.ok ? r.json() : null)).catch(() => null);
-  const [index, base, tancheon, streamsData, pg, pgx] = await Promise.all([get('index.json'), get('base.json'), get('tancheon.json'), streams ? get('streams.json') : null, pangyo ? get(PANGYO_DIR + 'index.json') : null, pangyo && pangyoExpress ? get(PANGYO_EXPRESS_FILE) : null]);
-  return index && base ? { index: mergePangyoIndex(index, pg), base, baseUrl, tancheon, streams: streamsData, pangyo: pg, pangyoExpress: pg ? pgx : null } : null; // [pangyo-express]
+  const pw = pangyo && pangyoWaterEnabled(); // [pangyo-water] ?pangyowater=0 이면 요청 없음
+  const [index, base, tancheon, streamsData, pg, pgx, water] = await Promise.all([get('index.json'), get('base.json'), get('tancheon.json'), streams ? get('streams.json') : null, pangyo ? get(PANGYO_DIR + 'index.json') : null, pangyo && pangyoExpress ? get(PANGYO_EXPRESS_FILE) : null, pw ? get(PANGYO_WATER_FILE) : null]);
+  const pgWater = pg ? water : null; // 판교 타일 없이 판교 지류 컷만 쓰지 않음
+  return index && base ? { index: mergePangyoIndex(index, pg), base, baseUrl, tancheon, streams: mergePangyoStreams(streamsData, pgWater), pangyo: pg, pangyoExpress: pg ? pgx : null, pangyoWater: pgWater } : null; // [pangyo-express] [pangyo-water]
 }
 // [corridor] 탄천 지형: 코리더가 켜졌을 때만 라이브 terrain.json 뒤에 수내→잠실 축/단면을 이어 붙인다(라이브 구간 값은 그대로)
 export function corridorTerrainData(terrainData, corridorData) {
   if (!terrainData || !corridorData?.tancheon) return terrainData;
-  const T = mergeTancheon(terrainData, corridorData.tancheon);
-  if (T === terrainData) return T;
+  const T0 = mergeTancheon(terrainData, corridorData.tancheon);
+  if (T0 === terrainData) return T0;
+  const T = attachMainDrop(T0, corridorData.pangyoWater); // [pangyo-water] 정자→판교 탄천 낙차 (없으면 T0 그대로)
   corridorData.terrainT = T;
   // [streams] 지류는 코리더 본류 축이 붙었을 때만 (합류 높이가 본류 단면에 기대므로)
   return corridorData.streams?.streams?.length ? { ...T, streams: corridorData.streams } : T;
@@ -69,6 +73,7 @@ export function createCorridor({ scene, corridorData, terrain, world, renderer, 
   terrain?.annotate({ roads: ch.concat(streamBridges), water: [], waterLines: [], parks: base.chParks.map((p) => ({ ...p })) });
   const chMesh = roadMesh(ch); if (chMesh) root.add(chMesh);
   const chWater = corridorData.terrainT ? channelWaterMesh(corridorData.tancheon?.water, terrain) : null; // 탄천 수면(수내→잠실)
+  if (chWater && terrain.mainDrop) { const g = dropWaterGeometry(chWater.geometry, terrain); if (g !== chWater.geometry) { chWater.geometry.dispose(); chWater.geometry = g; } } // [pangyo-water]
   if (chWater) root.add(chWater);
   const chGrid = new Grid(30);
   for (const r of ch) if (CAR_KINDS.has(r.k)) for (let i = 1; i < r.p.length; i++) {
