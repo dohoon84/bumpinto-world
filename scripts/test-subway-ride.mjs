@@ -4,7 +4,8 @@ import fs from 'node:fs';
 import { TRAIN, LINES, CAR_LEN, DOOR_OFF } from '../src/subway/lines.js';
 import { STATIONS, stationTheme } from '../src/subway/stations.js';
 import { LINE_STOPS } from '../src/subway/stationsData.js';
-import { neighbors, rideStops, nextStops, platformLayout, doorAt, signText, announce, trainMotion, boardable, MOTION, simNextArrival, liveNextArrival, segmentProfile, segmentDist, platformZone, trainZone, isGameStop } from '../src/subway/ride.js';
+import { neighbors, rideStops, nextStops, platformLayout, doorAt, signText, announce, trainMotion, boardable, MOTION, simNextArrival, liveNextArrival, segmentProfile, segmentDist, platformZone, trainZone, isGameStop, trainRunZone, rideTimeline, rideState, snapLive, calledArrival, stationOffsetSec, liveSlots } from '../src/subway/ride.js';
+import { createServerClock } from '../src/subway/clock.js';
 import { simulatedRows, kstMinute } from '../src/subway/arrivals.js';
 import { jaName, jaDir } from '../src/subway/ja.js';
 import { normalizeArrival } from '../server/phone/src/subway.js';
@@ -73,7 +74,7 @@ assert.ok(!boardable(0.5) && boardable(10) && !boardable(MOTION.CLOSE_AT + 1));
 for (const d of STATIONS) {
   const th = stationTheme(d);
   for (const ms of [Date.UTC(2026, 10, 3, 3, 7, 0), Date.UTC(2026, 10, 3, 9, 41, 0)]) {
-    const rows = simulatedRows(th, kstMinute(ms), th.id);
+    const rows = simulatedRows(th, ms, th.id);
     rows.forEach((row) => {
       const di = th.lines.find((l) => l.key === row.line).dirs.findIndex((x) => x.ko === row.dest);
       const a = simNextArrival(row.line, di, th.id, ms);
@@ -111,6 +112,57 @@ for (const z of ['jeongja-station/p-suin-1', 'train:l8-1-2', 'jamsil-station']) 
   assert.equal(segmentDist('모란', '수진'), 1200);
   const p = segmentProfile(1200); assert.ok(Math.abs(p.T - 76.5) < 1); assert.equal(p.at(p.T + 1).s, 1200); assert.equal(p.at(p.T / 2).v, p.vmax);
   const q = segmentProfile(300); assert.ok(q.vmax < 22 && Math.abs(q.at(q.T).s - 300) < 1e-6);
+}
+// [subway-sync] 같은 열차 = 같은 순간: 노선 시간표 · 열차 안 타임라인 · 실시간 격자 · 부른 열차 · 편성 구역 · 서버 시계
+{
+  const T0 = Date.UTC(2026, 10, 3, 3, 7, 0); // KST 12:07
+  for (const [line, dir, from] of [['suin', 1, '정자'], ['suin', 0, '수내'], ['l8', 0, '복정'], ['l2', 0, '잠실']]) {
+    const rides = rideStops(line, dir, from); if (!rides.length) continue;
+    const a = simNextArrival(line, dir, from, T0), segs = rideTimeline(from, rides);
+    assert.ok(a && Number.isInteger(a.run));
+    for (const g of segs) { // 탄 역 열차(run)가 다음 역들에 서는 순간 = 그 역 시간표의 같은 run
+      const b = simNextArrival(line, dir, g.name, a.at + g.arr * 1000 - 500);
+      if (!b) continue;
+      assert.equal(b.run, a.run, `${line}${dir} ${from}→${g.name} run`);
+      assert.ok(Math.abs(b.at - (a.at + g.arr * 1000)) < 1, `${line}${dir} ${from}→${g.name} at`);
+    }
+    assert.equal(simNextArrival(line, dir, from, a.at).at, a.at, '정차 순간은 그 열차'); assert.equal(simNextArrival(line, dir, from, a.at + 1).run, a.run + 1);
+  }
+  // 타임라인: board → close → run → stop … → 종착 문 닫힘 = 강제 하차. 같은 e 면 같은 상태 (순수 함수)
+  const segs = rideTimeline('정자', rideStops('suin', 1, '정자'));
+  assert.equal(rideState(segs, 10).stage, 'board'); assert.equal(rideState(segs, 10).open, 1);
+  assert.equal(rideState(segs, MOTION.CLOSE_AT + 3).stage, 'close'); assert.equal(rideState(segs, MOTION.CLOSE_AT + 3).open, 0);
+  const g0 = segs[0], mid = rideState(segs, (g0.dep + g0.arr) / 2);
+  assert.equal(mid.stage, 'run'); assert.ok(mid.v > 0 && mid.open === 0);
+  const st = rideState(segs, g0.arr + 10); assert.equal(st.stage, 'stop'); assert.equal(st.i, 0); assert.equal(st.open, 1);
+  assert.equal(rideState(segs, g0.arr + MOTION.DWELL + 1).stage, 'run');
+  const last = segs[segs.length - 1]; assert.ok(!rideState(segs, last.arr + 5).end && rideState(segs, last.arr + MOTION.CLOSE_AT + 0.1).end);
+  assert.deepEqual(rideState(segs, 123.4), rideState(segs, 123.4));
+  // 실시간: 같은 열차를 다른 역에서 봐도(격자 반 칸 안 오차) 같은 run, 같은 응답이면 조회 시각과 무관
+  const off = stationOffsetSec('suin', 1, '수내') - stationOffsetSec('suin', 1, '정자');
+  const o0 = stationOffsetSec('suin', 1, '정자') * 1000, base = T0 + o0 + 180e3 + 3e3;
+  const j = snapLive('suin', 1, 'jeongja', { at: base }), s2 = snapLive('suin', 1, '수내', { at: base + off * 1000 + 20e3 });
+  assert.equal(j.run, s2.run); assert.ok(j.live && Math.abs(j.at - base) <= 30e3);
+  const fx = [{ line: 'suin', updn: '상행', code: 99, etaSec: 120, trainNo: 'S1' }, { line: 'suin', updn: '상행', code: 1, trainNo: 'S0' }];
+  const ls = liveSlots(fx, 'suin', 1, T0); assert.deepEqual(ls.map((q) => q.at), [T0, T0 + 120e3]);
+  // 부른 열차: 공유 격자 → 1초 차이로 불러도 같은 열차
+  const c1 = calledArrival('suin', 1, 'jeongja', T0 + 100, 13), c2 = calledArrival('suin', 1, 'jeongja', T0 + 1100, 13);
+  assert.ok(c1.at - (T0 + 100) >= 13e3 && c1.at - (T0 + 100) < 18.1e3);
+  if (Math.floor((T0 + 100 + 13e3 - stationOffsetSec('suin', 1, '정자') * 1000) / 5000) === Math.floor((T0 + 1100 + 13e3 - stationOffsetSec('suin', 1, '정자') * 1000 - 1) / 5000)) assert.equal(c1.run, c2.run);
+  // 편성 구역: 슬롯(run%4) 그대로 + run%1000 은 z 에. 다른 run 이면 다른 구역, 예전 슬롯 구역과도 다름
+  for (const run of [0, 7, 999, 4123456, -3]) for (const zz of [-1.4, 0, 1.4]) {
+    const z = trainRunZone('suin', 1, run); assert.ok(isZoneId(z) && zoneSlot(z.split('/r')[0]) >= 57, z);
+    const e = encodeZone(z, 2.5, zz), b = decodeZone(e.x, e.z, e.zone);
+    assert.equal(b.zone, z); assert.ok(Math.abs(b.z - zz) < 1e-6 && Math.abs(b.x - 2.5) < 0.01);
+  }
+  assert.notEqual(trainRunZone('suin', 1, 1), trainRunZone('suin', 1, 5)); assert.equal(trainRunZone('suin', 1, 5).split('/r')[0], trainZone('suin', 1, 5));
+  // 서버 시계: offset = s − (c+r)/2, 왕복 짧은 샘플, 샘플 없으면 로컬
+  let L = 5e6; const ck = createServerClock({ local: () => L });
+  assert.equal(ck.serverNow(), L); assert.ok(!ck.synced);
+  ck.add({ c: L - 400, s: L + 8000 - 200 + 150, r: L }); assert.equal(ck.offset, 8150);
+  ck.add({ c: L - 20, s: L + 8000 - 10, r: L }); L += 600; assert.equal(ck.offset, 8000);
+  assert.ok(!ck.add({ c: L, s: L, r: L - 5 }), '거꾸로 된 샘플 무시');
+  assert.equal(ck.serverNow(), L + 8000);
 }
 // 열차로 다른 역: 떠난 역 = 바깥, 도착 역 = 안 (들어온 출구 없음)
 {

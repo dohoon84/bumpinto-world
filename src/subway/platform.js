@@ -5,7 +5,7 @@
 import * as THREE from 'three';
 import { createBuilder, createAtlas, FONT, fitText, lineBadge, roundRect } from './geom.js';
 import { LINES } from './lines.js';
-import { platformLayout, signText, announce, trainMotion, boardable, MOTION, simNextArrival, liveNextArrival, rideStops, platformZone, DOOR_W, BY_NAME } from './ride.js';
+import { platformLayout, signText, announce, trainMotion, boardable, MOTION, simNextArrival, liveSlots, snapLive, calledArrival, rideStops, platformZone, DOOR_W, BY_NAME } from './ride.js';
 import { buildConsist, buildScreenDoors, screenDoorFrame, CAR } from './trainParts.js';
 import { buildCrowd } from '../entities/avatarCrowd.js';
 import { createAvatar, animateAvatar } from '../entities/avatar.js';
@@ -151,11 +151,25 @@ export function buildPlatform({ def, line, dir, renderer, look, feed = null, arr
   const CZ = 0.25 + CAR.W / 2; // 차체 가운데 z (스크린도어와 0.25m 틈)
 
   // 열차 시각: 실시간(같은 방면 updn) → 없으면 시간표 근사. arrival = 하차해서 들어온 경우 이미 서 있는 열차
-  let sched = arrival ? { ...arrival } : null;
+  //   [subway-sync] 모두 서버 시계(now) 기준 순수 함수: 시간표 = 노선 격자(simNextArrival), 실시간 = 응답 시각 기준 절대 시각을 노선 격자에 맞춤(snapLive).
+  //   매 프레임 다시 고르되, 들어오기 FREEZE 초 전부터 떠날 때까지는 그 열차로 고정 (늦게 받은 응답에 흔들리지 않게)
+  let pinned = arrival ? { ...arrival } : null, floor = -Infinity; // pinned = 하차해서 들어온 열차 · callTrain
+  let sched = pinned;
   function nextSched(after) {
     const raw = feed?.raw?.();
-    const t = after + 1000;
-    return (raw && liveNextArrival(raw.trains, line, dir, t, raw.fetchedAt)) || simNextArrival(line, dir, def.id, t);
+    const t = Math.max(after, floor) + 1000;
+    const lv = raw ? liveSlots(raw.trains, line, dir, raw.fetchedAt).find((a) => a.at > t && a.at - t < 20 * 60 * 1000) : null;
+    return (lv && snapLive(line, dir, def.id, lv)) || simNextArrival(line, dir, def.id, t);
+  }
+  const FREEZE = (MOTION.APPROACH + 25) * 1000;
+  let pickedAt = -Infinity;
+  function pickSched(tNow) {
+    if (pinned && tNow - pinned.at <= gone()) return pinned;
+    if (pinned) { floor = pinned.at; pinned = null; }
+    const valid = sched && tNow - sched.at <= gone();
+    if (valid && (sched.at - tNow < FREEZE || Math.abs(tNow - pickedAt) < 500)) return sched; // 고정 · 0.5초마다만 다시 고름
+    pickedAt = tNow;
+    return nextSched(tNow - gone());
   }
   const gone = () => (MOTION.DWELL + 30) * 1000;
   let said = '';
@@ -256,7 +270,7 @@ export function buildPlatform({ def, line, dir, renderer, look, feed = null, arr
   function update(dt, { look: [dy, dp, dz], axes, allowMove, self = null }) {
     cam.yaw += dy; cam.pitch = THREE.MathUtils.clamp(cam.pitch + dp, -0.5, 1.2); cam.dist = THREE.MathUtils.clamp(cam.dist * (1 + dz), 2.2, 10);
     const tNow = now();
-    if (!sched || tNow - sched.at > gone()) sched = nextSched(sched ? sched.at : tNow - gone());
+    sched = pickSched(tNow);
     const tt = sched ? (tNow - sched.at) / 1000 : -1e9;
     const mo = trainMotion(tt);
     doorsOpen = mo.doors; canBoard = boardable(tt);
@@ -308,7 +322,7 @@ export function buildPlatform({ def, line, dir, renderer, look, feed = null, arr
     let ev = null;
     if (!boardedSent && rides.length && p.z > 0.3 && canBoard) {
       const d = lay.doors.find((q) => Math.abs(q.x - p.x) < DOOR_W / 2);
-      if (d) { boardedSent = true; ev = { board: { door: d, run: sched.run, live: !!sched.live, t: tt, rides } }; }
+      if (d) { boardedSent = true; ev = { board: { door: d, run: sched.run, live: !!sched.live, at: sched.at, t: tt, rides } }; }
     }
     if (p.z > -0.2 && !canBoard && doorsOpen < 0.85) p.z = Math.min(p.z, -0.46); // 문이 닫히면 밀려남
     p.y = inStair(p.x, p.z) ? stairY(p.z) : 0; // 계단 오르내리기 (예전엔 y=0 그대로라 단에 파묻혀 끼임)
@@ -327,11 +341,12 @@ export function buildPlatform({ def, line, dir, renderer, look, feed = null, arr
   function render() { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.render(scene, camera); }
   function dispose() { for (const d of disposables) d.dispose?.(); scene.clear(); }
   function setView(x, z, yaw, pitch = 0.3, dist = 6) { me.position.set(x, 0, z); cam.yaw = yaw; cam.pitch = pitch; cam.dist = dist; }
-  // 테스트·스크린샷: 다음 열차를 지금으로부터 sec 초 뒤 정차로
-  function callTrain(sec = MOTION.APPROACH + 2) { sched = { at: now() + sec * 1000, run: sched?.run ?? 0, live: false }; said = ''; }
+  // 테스트·스크린샷: 다음 열차를 지금으로부터 약 sec 초 뒤 정차로. [subway-sync] 서버 시계의 공유 격자(CALL_GRID_SEC) 칸 → 같은 칸에 부른 사람은 같은 열차·run
+  function callTrain(sec = MOTION.APPROACH + 2) { pinned = sched = calledArrival(line, dir, def.id, now(), sec); said = ''; }
   return {
     kind: 'platform', zone, def, line, dir, lay, sign, rides, scene, camera, player: me, cam, update, render, dispose, setView, callTrain,
-    get speed() { return speed; }, get sched() { return sched; }, get lastPass() { return null; }, get sitKind() { return me.userData.sit || ''; }, sitDown, standUp, benchSeats,
+    get speed() { return speed; }, get sched() { return sched; }, get doorsNow() { return sched ? trainMotion((now() - sched.at) / 1000).doors : 0; }, // [subway-sync] 테스트: 프레임과 무관한 지금 문 상태
+    get lastPass() { return null; }, get sitKind() { return me.userData.sit || ''; }, sitDown, standUp, benchSeats,
     stats: () => ({ tris: S.count + G.count, parts: crowd.parts.size, npcs: npcs.length, doors: lay.doors.length }),
   };
 }

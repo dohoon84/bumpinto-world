@@ -235,6 +235,11 @@ export class Room extends DurableObject {
       return;
     }
     const now = Date.now();
+    // [subway-sync] 시계 맞추기: { t:'time', c } → { t:'time', c, s } (클라이언트가 NTP 처럼 오프셋 계산). hello 전에도, 상태는 안 건드림
+    if (m.t === "time") {
+      this.#send(ws, { t: "time", c: Number(m.c) || 0, s: now });
+      return;
+    }
     let me = ws.deserializeAttachment();
     if (m.t === "hello" && !me) {
       const id = "p-" + crypto.randomUUID().slice(0, 8);

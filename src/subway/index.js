@@ -43,7 +43,7 @@ export function zoneLabel(z, en = false) {
   if (s) return en ? `${s.nameEn} Stn. concourse` : `${s.name}역 대합실`;
   const m = /^([a-z]+)-station\/p-([a-z0-9]+)-([01])$/.exec(z || '');
   if (m) { const d = STATIONS.find((q) => q.id === m[1]), L = LINES[m[2]]; if (d && L) { const w = L.dirs[+m[3]]; return en ? `${d.nameEn} Stn. ${L.en} platform (${w.en})` : `${d.name}역 ${L.short} 승강장 (${w.ko})`; } }
-  const t = /^train:([a-z0-9]+)-([01])-\d$/.exec(z || '');
+  const t = /^train:([a-z0-9]+)-([01])-\d(?:\/r\d{1,3})?$/.exec(z || ''); // [subway-sync] 편성 표식 /rN 포함
   if (t && LINES[t[1]]) { const L = LINES[t[1]], w = L.dirs[+t[2]]; return en ? `${L.en} train (${w.en})` : `${L.short} 열차 (${w.ko})`; }
   return null;
 }
@@ -74,7 +74,8 @@ const CSS = `
 body.in-subway #phone,body.in-subway #stop-panel,body.in-subway #corridor-stop-panel,body.in-subway #bike-prompt,body.in-subway #trk-prompt,body.in-subway #dog-gate-btn,body.in-subway #donate-near-btn,body.in-subway #coffee-order-bar,body.in-subway #coffee-toss-btn,body.in-subway #umbrella-actions{display:none!important}
 `;
 
-export function mountSubway({ scene, overlay, data, world, terrain, renderer, getLook, getPlayer, canEnter, onEnter, onExit, onInterior, getSelf, passKey, params, corridor = null, getAudioLevel = null }) {
+export function mountSubway({ scene, overlay, data, world, terrain, renderer, getLook, getPlayer, canEnter, onEnter, onExit, onInterior, getSelf, passKey, params, corridor = null, getAudioLevel = null, now = () => Date.now() }) {
+  // [subway-sync] now = 서버 시계 serverNow (game.js 가 프레즌스 time 핑으로 맞춤). 열차·승강장·도착 안내 시각은 모두 이걸로
   // 역 목록: 정자(런타임 배치, 라이브 영역) + 코리더가 켜져 있으면 코리더 역들
   const center = data?.meta?.center;
   const stations = [];
@@ -277,7 +278,7 @@ export function mountSubway({ scene, overlay, data, world, terrain, renderer, ge
   }
   function makePlatform(line, dir, extra = {}) {
     const st = cur;
-    return loadPlat().then((m) => m.buildPlatform({ def: st.def, line, dir, renderer, look: getLook?.(), feed, rides: platformRides(line, dir, st.def), lang: () => (isEn() ? 'en' : 'ko'), onEvent: (k, a) => { if (k === 'say') say2(a); }, ...extra }));
+    return loadPlat().then((m) => m.buildPlatform({ def: st.def, line, dir, renderer, look: getLook?.(), feed, now, rides: platformRides(line, dir, st.def), lang: () => (isEn() ? 'en' : 'ko'), onEvent: (k, a) => { if (k === 'say') say2(a); }, ...extra }));
   }
   function toPlatform(line, dir) {
     const L = LINES[line];
@@ -291,9 +292,9 @@ export function mountSubway({ scene, overlay, data, world, terrain, renderer, ge
     const pl = inside, L = LINES[pl.line];
     loadTrain();
     const origin = cur.def, line = pl.line, dir = pl.dir, rides = board.rides;
-    const kstHour = Math.floor(((Date.now() / 3600000) + 9) % 24);
+    const kstHour = Math.floor(((now() / 3600000) + 9) % 24);
     return swapTo(tr(`${L.short} ${L.dirs[dir].ko} 열차 · ${board.door.label}`, `${L.en} train ${L.dirs[dir].en} · door ${board.door.label}`),
-      () => loadTrain().then((m) => m.buildTrain({ origin, line, dir, rides, board, renderer, look: getLook?.(), kstHour, onEvent: (k, a) => { if (k === 'say') say2(a); } })), { lines: [L] });
+      () => loadTrain().then((m) => m.buildTrain({ origin, line, dir, rides, board, renderer, look: getLook?.(), kstHour, now, onEvent: (k, a) => { if (k === 'say') say2(a); } })), { lines: [L] });
   }
   function alightAt(a) {
     const tn = inside, st2 = stations.find((s) => s.def.id === a.id);
@@ -301,9 +302,10 @@ export function mountSubway({ scene, overlay, data, world, terrain, renderer, ge
     const L = LINES[tn.line];
     swapTo(tr(`${st2.theme.name}역 · ${a.door} 내림`, `${st2.theme.nameEn} Stn. · off at ${a.door}`), () => {
       // 역 바꾸기: 떠난 역은 바깥 상태로(대합실 없음), 도착 역은 바로 안
-      if (cur !== st2) { cur.state.leaveByTrain(); cur = st2; cur.state.arriveByTrain(); ensureStation(st2.def.id); feed?.stop(); feed = createArrivalFeed({ theme: cur.theme, base: PHONE_BASE, enabled: rtOn }); }
-      const now = Date.now(); // 열차는 이미 서서 문이 열려 있다 (정차 후 3초)
-      return makePlatform(tn.line, tn.dir, { arrival: { at: now - 3000, run: tn.run, live: false }, spawnDoor: a.doorX });
+      if (cur !== st2) { cur.state.leaveByTrain(); cur = st2; cur.state.arriveByTrain(); ensureStation(st2.def.id); feed?.stop(); feed = createArrivalFeed({ theme: cur.theme, base: PHONE_BASE, enabled: rtOn, now }); }
+      // [subway-sync] 열차가 이 역에 선 순간(서버 시계, 같은 run 이면 모두 같음) 그대로 → 승강장의 문·출발도 같은 순간
+      const at = Number.isFinite(a.arrAt) ? a.arrAt : now() - 3000;
+      return makePlatform(tn.line, tn.dir, { arrival: { at, run: tn.run, live: false }, spawnDoor: a.doorX });
     }, { lines: [L] });
   }
 
@@ -364,7 +366,7 @@ export function mountSubway({ scene, overlay, data, world, terrain, renderer, ge
     return c;
   }
   function buildInside() {
-    feed = createArrivalFeed({ theme: cur.theme, base: PHONE_BASE, enabled: rtOn });
+    feed = createArrivalFeed({ theme: cur.theme, base: PHONE_BASE, enabled: rtOn, now });
     inside = makeConcourse();
     // 바로 프레임 하나 갱신 (NPC 배치·카메라)
     inside.update(0, look0);

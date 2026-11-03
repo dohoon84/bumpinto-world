@@ -6,7 +6,7 @@
 import * as THREE from 'three';
 import { createBuilder, createAtlas, FONT, fitText, lineBadge } from './geom.js';
 import { LINES, DOOR_OFF, CAR_LEN } from './lines.js';
-import { platformLayout, announce, segmentDist, segmentProfile, RIDE, trainZone, DOOR_W, BY_NAME, signText } from './ride.js';
+import { platformLayout, announce, RIDE, trainRunZone, DOOR_W, BY_NAME, signText, MOTION, rideTimeline, rideState } from './ride.js';
 import { buildScreenDoors, screenDoorFrame, CAR } from './trainParts.js';
 import { buildCrowd } from '../entities/avatarCrowd.js';
 import { createAvatar, animateAvatar } from '../entities/avatar.js';
@@ -15,12 +15,13 @@ import { LOOKS } from './looks.js';
 export const CAB = Object.freeze({ HW: 1.45, CEIL: 2.15, HL: CAR.LEN / 2 - 0.15 });
 const PLAT_CZ = 0.25 + CAR.W / 2; // 승강장 Scene 에서 차체 가운데 z (platform.js 와 같게)
 
-// origin: 탄 역 def, rides: rideStops(...) [{ name, game, id }], board: { door:{car,door,x}, run, t(정차 후 초) }
+// origin: 탄 역 def, rides: rideStops(...) [{ name, game, id }], board: { door:{car,door,x}, run, at(탄 역 정차 시각, 서버 시계 ms), t(정차 후 초, at 없을 때) }
+//   now: 서버 시계 (serverNow)
 //   onEvent('say', {ko,en}) · update() 반환 { alight: { stop, def, doorX } }
-export function buildTrain({ origin, line, dir, rides, board, renderer, look, onEvent = () => {}, kstHour = 12 }) {
+export function buildTrain({ origin, line, dir, rides, board, renderer, look, onEvent = () => {}, kstHour = 12, now = () => Date.now() }) {
   const L = LINES[line], lay = platformLayout(line);
   const car = board.door.car, run = board.run || 0;
-  const zone = trainZone(line, dir, run);
+  const zone = trainRunZone(line, dir, run); // [subway-sync] 슬롯(run%4) + 편성 표식(run%1000, 프레즌스 z 에 실림)
   const carXc = lay.trainLen / 2 - (car - 0.5) * CAR_LEN; // 승강장 좌표에서 이 량 가운데 x (정차 때)
   const scene = new THREE.Scene();
   scene.background = new THREE.Color('#050607');
@@ -219,35 +220,36 @@ export function buildTrain({ origin, line, dir, rides, board, renderer, look, on
   for (const Pp of crowd.parts.values()) { disposables.push(Pp.im); if (Pp.lam) disposables.push(Pp.im.material); }
 
   // ---------- 운행 ----------
-  //   stage: 'board' (탄 역, 문 열림) → 'close' → 'run'(i) → 'stop'(i) → 'close' → 'run'(i+1) …
-  const segs = rides.map((r, i) => ({ ...r, prof: segmentProfile(segmentDist(i === 0 ? origin.name : rides[i - 1].name, r.name)) }));
-  let stage = 'board', i = 0, t = 0, sTot = 0, open = 1, sNow = 0, v = 0, alightSent = false;
-  const boardLeft = Math.max(4, 25 - (board.t || 0));
+  //   stage: 'board' (탄 역, 문 열림) → 'close' → 'run'(i) → 'stop'(i) → 'run'(i+1) …
+  //   [subway-sync] 프레임 적분이 아니라 (탄 역 정차 시각 board.at, serverNow) 의 순수 함수 → 같은 run 을 탄 사람은
+  //   같은 순간 출발·도착·문 열림. 늦게 들어오거나 재접속해도 now() 만 보면 그 자리. warp = 테스트용 건너뛰기(이 화면만)
+  const segs = rideTimeline(origin.name, rides);
+  const at0 = Number.isFinite(board.at) ? board.at : now() - (board.t || 0) * 1000;
+  let warp = 0;
+  const elapsed = () => (now() - at0) / 1000 + warp;
+  let stage = 'board', i = 0, t = 0, sTot = 0, open = 1, sNow = 0, v = 0, alightSent = false, endNow = false;
   const en = (n) => BY_NAME.get(n)?.nameEn || n;
   const transferOf = (n) => { const d = BY_NAME.get(n); const o = d?.lines.filter((k) => k !== line).map((k) => LINES[k]) || []; return o.length ? { ko: o.map((x) => x.ko).join(', '), en: o.map((x) => x.en).join(', '), ja: o.map((x) => x.ja).join('・') } : null; };
   const say = (k, o) => onEvent('say', announce(k, o));
-  let lastSaid = '';
-  const sayOnce = (id, k, o) => { if (lastSaid === id) return; lastSaid = id; say(k, o); };
+  const said = new Set();
+  const sayOnce = (id, k, o) => { if (said.has(id)) return; said.add(id); say(k, o); };
   const curStop = () => segs[i];
   const isLast = () => i === segs.length - 1;
-  function tick(dt) {
-    t += dt;
-    if (stage === 'board') { open = 1; if (t > boardLeft) { stage = 'close'; t = 0; sayOnce('c0', 'closing'); } }
-    else if (stage === 'close') { open = Math.max(0, 1 - t / 1.6); if (t > 2.4) { stage = 'run'; t = 0; sNow = 0; const n = curStop(); sayOnce('d' + i, 'depart', { name: n.name, nameEn: en(n.name) }); } }
+  function tick() {
+    const r = rideState(segs, elapsed());
+    ({ stage, i, t, sTot, v, open } = r); sNow = r.s; endNow = !!r.end;
+    const n = curStop();
+    if (stage === 'close') sayOnce('c0', 'closing');
     else if (stage === 'run') {
-      const n = curStop(), q = n.prof.at(t); const ds = q.s - sNow; sNow = q.s; sTot += ds; v = q.v; open = 0;
-      if (n.prof.d - q.s < 450) { const tr = transferOf(n.name); sayOnce('n' + i, 'next', { name: n.name, nameEn: en(n.name), transfer: tr?.ko, transferEn: tr?.en, transferJa: tr?.ja, door: n.game ? 'left' : '' /* [subway-ja] 내릴 수 있는 역 = 왼쪽 문 */ }); }
-      if (t >= n.prof.T) { stage = 'stop'; t = 0; v = 0; if (!n.game) sayOnce('x' + i, 'noAlight', { name: n.name, nameEn: en(n.name) }); else if (isLast()) sayOnce('l' + i, 'last', { name: n.name, nameEn: en(n.name) }); }
+      sayOnce('d' + i, 'depart', { name: n.name, nameEn: en(n.name) });
+      if (n.prof.d - sNow < 450) { const tr = transferOf(n.name); sayOnce('n' + i, 'next', { name: n.name, nameEn: en(n.name), transfer: tr?.ko, transferEn: tr?.en, transferJa: tr?.ja, door: n.game ? 'left' : '' /* [subway-ja] 내릴 수 있는 역 = 왼쪽 문 */ }); }
     } else if (stage === 'stop') {
-      open = Math.min(1, Math.max(0, (t - 1.2) / 1.6)) * Math.min(1, Math.max(0, (RIDE.DWELL - t) / 1.6));
-      if (t > RIDE.DWELL - 3.5) sayOnce('cl' + i, 'closing');
-      if (t > RIDE.DWELL) {
-        if (isLast()) return { forceAlight: true };
-        i++; stage = 'run'; t = 0; sNow = 0; const n = curStop(); sayOnce('d' + i, 'depart', { name: n.name, nameEn: en(n.name) });
-      }
+      if (!n.game) sayOnce('x' + i, 'noAlight', { name: n.name, nameEn: en(n.name) }); else if (isLast()) sayOnce('l' + i, 'last', { name: n.name, nameEn: en(n.name) });
+      if (t > MOTION.CLOSE_AT - 3.5 && !isLast()) sayOnce('cl' + i, 'closing');
     }
-    return null;
+    return endNow ? { forceAlight: true } : null;
   }
+  tick();
   function stationOffset() { // 창밖 승강장 x (이 량 기준). 탄 역은 뒤로 멀어지고, 다음 역은 앞에서 다가옴
     if (stage === 'board' || stage === 'close') return { x: -carXc, name: origin.name };
     if (stage === 'stop') return { x: -carXc, name: curStop().name };
@@ -279,7 +281,7 @@ export function buildTrain({ origin, line, dir, rides, board, renderer, look, on
   function update(dt, { look: [dy, dp, dz], axes, allowMove, self = null }) {
     clock += dt;
     cam.yaw += dy; cam.pitch = THREE.MathUtils.clamp(cam.pitch + dp, -0.5, 1.0); cam.dist = THREE.MathUtils.clamp(cam.dist * (1 + dz), 0.8, 4.5);
-    const r = tick(dt);
+    const r = tick();
     drawDoors(open);
     const so = stationOffset();
     drawTunnel(sTot, true, so ? so.x : null);
@@ -331,7 +333,9 @@ export function buildTrain({ origin, line, dir, rides, board, renderer, look, on
     if (!alightSent && ((canAlight() && p.z < -HW - 0.35) || r?.forceAlight)) {
       alightSent = true;
       const st = curStop(), k = doorAt(p.x) != null ? DOOR_OFF.indexOf(doorAt(p.x)) : DOOR_OFF.reduce((b, dd, j) => (Math.abs(dd - p.x) < Math.abs(DOOR_OFF[b] - p.x) ? j : b), 0);
-      return { alight: { stop: st, id: st.id, doorX: carXc + DOOR_OFF[k], door: `${car}-${k + 1}`, forced: !!r?.forceAlight } };
+      // [subway-sync] 이 역 정차 순간(서버 시계) → 내린 승강장이 같은 열차를 같은 순간으로 이어 받음
+      const arrAt = now() - (elapsed() - st.arr) * 1000;
+      return { alight: { stop: st, id: st.id, doorX: carXc + DOOR_OFF[k], door: `${car}-${k + 1}`, forced: !!r?.forceAlight, arrAt } };
     }
     return { stage, stop: n?.name, v };
   }
@@ -350,12 +354,13 @@ export function buildTrain({ origin, line, dir, rides, board, renderer, look, on
   function render() { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.render(scene, camera); }
   function dispose() { for (const d of disposables) d.dispose?.(); scene.clear(); }
   function setView(x, z, yaw, pitch = 0.2, dist = 3) { me.position.set(x, 0, z); cam.yaw = yaw; cam.pitch = pitch; cam.dist = dist; }
-  // 테스트·스크린샷: 시간 건너뛰기 (dt 초를 잘게 돌림)
-  function skip(sec) { let r = null; for (let k = 0; k < sec * 10 && !r; k++) { r = tick(0.1); } return r; }
+  // 테스트·스크린샷: 시간 건너뛰기 (이 화면의 타임라인만 앞당김 → 다른 사람과는 어긋남. 실제 플레이에선 안 씀)
+  function skip(sec) { warp += sec; return tick(); }
   return {
-    kind: 'train', zone, line, dir, car, run, segs, scene, camera, player: me, cam, update, render, dispose, setView, toggleSit, skip, doors: DOOR_OFF, halfWidth: HW,
+    kind: 'train', zone, line, dir, car, run, at: at0, segs, scene, camera, player: me, cam, update, render, dispose, setView, toggleSit, skip, doors: DOOR_OFF, halfWidth: HW,
     get speed() { return speed; }, get stage() { return stage; }, get stopIndex() { return i; }, get lastPass() { return null; }, get sitting() { return !!me.userData.sit; }, get sitKind() { return me.userData.sit || ''; }, sitDown, standUp,
-    get t() { return t; }, get sNow() { return sNow; }, get doorOpen() { return open; }, get canAlight() { return canAlight(); },
+    get t() { return t; }, get elapsed() { return elapsed(); }, get state() { return rideState(segs, elapsed()); }, // [subway-sync] 테스트: 프레임과 무관한 지금 상태
+     get sNow() { return sNow; }, get doorOpen() { return open; }, get canAlight() { return canAlight(); },
     stats: () => ({ tris: S.count + G.count, parts: crowd.parts.size, npcs: npcs.length, seats: seats.length }),
   };
 }

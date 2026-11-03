@@ -61,12 +61,17 @@ export function zoneSlot(zone) {
   return SLOT.get(zone) || 0;
 }
 
+// [subway-sync] 열차 편성: 'train:<l>-<d>-<k>/r<0..999>' — 슬롯은 앞부분(ZONES 그대로, 새 구역 없음),
+//   편성 번호는 z 띠에 (z = 실내z + RUN_Z·(r+1), 실내 |z| < 2). 예전 클라이언트는 z 가 멀리 떨어진 사람으로 볼 뿐 (같은 칸에 안 겹침)
+export const RUN_Z = 20;
+const RUN_RE = /^(train:[a-z0-9-]+)\/r(\d{1,3})$/;
 // 실내 좌표 → 전송 좌표. 모르는 구역이나 바깥이면 그대로.
 export function encodeZone(zone, x, z) {
-  const slot = zoneSlot(zone);
+  const rm = typeof zone === 'string' ? RUN_RE.exec(zone) : null;
+  const slot = zoneSlot(rm ? rm[1] : zone);
   if (!slot) return { x, z };
   const lx = Math.max(-HALF + 1, Math.min(HALF - 1, Number(x) || 0));
-  return { x: ZONE_BASE + slot * ZONE_STRIDE + lx, z: Number(z) || 0, zone };
+  return { x: ZONE_BASE + slot * ZONE_STRIDE + lx, z: (Number(z) || 0) + (rm ? RUN_Z * (Number(rm[2]) + 1) : 0), zone };
 }
 
 // 받은 좌표(+선택 zone 필드) → { zone, x, z } (실내면 실내 좌표)
@@ -76,6 +81,7 @@ export function decodeZone(x, z, zoneField) {
     const slot = Math.round((x - ZONE_BASE) / ZONE_STRIDE);
     const lx = x - ZONE_BASE - slot * ZONE_STRIDE;
     const zone = ZONES[slot] || (isZoneId(zoneField) ? zoneField : `zone#${slot}`);
+    if (zone.startsWith('train:') && Math.abs(z) >= RUN_Z / 2) { const r = Math.round(z / RUN_Z) - 1; return { zone: `${zone}/r${r}`, x: lx, z: z - RUN_Z * (r + 1) }; } // [subway-sync]
     return { zone, x: lx, z };
   }
   if (isZoneId(zoneField)) return { zone: zoneField, x, z };

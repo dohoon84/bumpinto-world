@@ -118,13 +118,15 @@ export function simOffsetMin(line, dir, seed = '') {
   return (h + dir * Math.floor(hw / 2) + line.length) % hw;
 }
 // ms 이후 첫 도착(정차 순간) 시각 ms. 운행 시간이 아니면 null
-export function simNextArrival(line, dir, seed, ms = Date.now()) {
-  const hw = (SIM_HEADWAY_MIN[line] || 8) * 60, off = simOffsetMin(line, dir, seed) * 60;
-  const kst = ms / 1000 + 9 * 3600, day = Math.floor(kst / 86400) * 86400, sod = kst - day;
-  const wait = (((off - (sod % hw)) % hw) + hw) % hw;
-  const at = sod + wait, m = at / 60;
+//   [subway-sync] 노선 단위 시간표: k 번째 열차가 이 방면 첫 역에 k·H + phase 초(에포크, 서버 시계)에 서고,
+//   역마다 '앞 역들 주행 + 정차' 만큼 늦게 선다 (stationOffsetSec). → 같은 열차(run = k)가 역을 따라 이어지고,
+//   어느 클라이언트든 같은 serverNow 면 같은 run·같은 도착 시각. station = 역 id 또는 역 이름
+export function simNextArrival(line, dir, station, ms = Date.now()) {
+  const H = (SIM_HEADWAY_MIN[line] || 8) * 60, base = simOffsetMin(line, dir, '') * 60 + stationOffsetSec(line, dir, station);
+  const k = Math.ceil((ms / 1000 - base) / H), atS = k * H + base;
+  const m = ((((atS + 9 * 3600) / 60) % 1440) + 1440) % 1440;
   if (m < SERVICE_MIN.start || m >= SERVICE_MIN.end) return null;
-  return { at: ms + wait * 1000, run: Math.floor((day + at) / hw) };
+  return { at: atS * 1000, run: k };
 }
 // 실시간 열차 (서버 정규화 trains) → 이 방면 다음 도착. elapsedSec = fetchedAt 이후 흐른 초
 export function liveNextArrival(trains, line, dir, ms, fetchedAt) {
@@ -142,6 +144,18 @@ export function liveNextArrival(trains, line, dir, ms, fetchedAt) {
   }
   if (!best || best.eta > 20 * 60) return null;
   return { at: ms + best.eta * 1000, run: Number(String(best.trainNo).replace(/\D/g, '')) || 0, trainNo: best.trainNo, dest: best.dest, live: true };
+}
+
+// [subway-sync] 실시간 열차 → 응답 시각(fetchedAt, 서버 시계) 기준 절대 도착 시각들. 조회 시각과 무관 → 같은 응답이면 모두 같은 값
+export function liveSlots(trains, line, dir, fetchedAt) {
+  const updn = TRAIN[line]?.updn?.[dir], out = [];
+  if (!Array.isArray(trains) || !updn || !Number.isFinite(fetchedAt)) return out;
+  for (const t of trains) {
+    if (t.line !== line || t.updn !== updn) continue;
+    const eta = t.code === 0 || t.code === 1 ? 0 : t.etaSec > 0 ? t.etaSec : null;
+    if (eta != null) out.push({ at: fetchedAt + eta * 1000, trainNo: t.trainNo || '', dest: t.dest || '', live: true });
+  }
+  return out.sort((a, b) => a.at - b.at);
 }
 
 // ---------- 역 사이 주행 ----------
@@ -170,3 +184,59 @@ export function segmentProfile(d, R = RIDE) {
 export const platformZone = (stationId, line, dir) => `${stationId}-station/p-${line}-${dir}`;
 export const TRAIN_RUNS = 4; // 같은 노선·방면 열차를 4편성 슬롯으로 (run % 4)
 export const trainZone = (line, dir, run) => `train:${line}-${dir}-${((run % TRAIN_RUNS) + TRAIN_RUNS) % TRAIN_RUNS}`;
+// [subway-sync] 프레즌스 구역 = 슬롯(append-only zones.js, run%4) + '/r' + run%1000 (zones.js 가 z 띠에 실어 보냄 → 새 구역 없음)
+//   같은 슬롯이라도 다른 편성(run)이면 서로 안 보임
+export const trainRunZone = (line, dir, run) => `${trainZone(line, dir, run)}/r${((Math.trunc(run) % 1000) + 1000) % 1000}`;
+
+// ---------- [subway-sync] 같은 열차 = 같은 시각 (모든 시각은 서버 시계 serverNow 기준 ms) ----------
+//   역 사이 오프셋: 이 방면 첫 역 = 0, 다음 역 = 앞 역 + 정차(MOTION.DWELL) + 주행(segmentProfile.T). 열차 안 타임라인(rideTimeline)과 같은 식
+const OFFS = new Map();
+export function lineOffsets(line, dir) {
+  const key = `${line}-${dir}`;
+  if (OFFS.has(key)) return OFFS.get(key);
+  const L = LINE_STOPS[line], seq = TRAIN[line]?.seq?.[dir], m = new Map();
+  if (L && seq) {
+    const order = seq > 0 ? L.stops.slice() : L.stops.slice().reverse();
+    let t = 0;
+    order.forEach((n, i) => { if (i) t += MOTION.DWELL + segmentProfile(segmentDist(order[i - 1], n)).T; if (!m.has(n)) m.set(n, t); });
+  }
+  OFFS.set(key, m);
+  return m;
+}
+const BY_ID = new Map(STATIONS.map((s) => [s.id, s]));
+export const stationOffsetSec = (line, dir, station) => lineOffsets(line, dir).get(BY_ID.get(station)?.name ?? station) ?? 0;
+// 실시간 도착(서버 응답 fetchedAt + ETA) → 노선 격자(LIVE_GRID_SEC)에 맞춘 열차. 같은 응답(서버 캐시 25초)을 받은 사람은 같은 run·시각
+//   격자는 역 오프셋을 뺀 '첫 역 기준' 시각 위에 있어서, 실제 같은 열차면 다른 역에서 봐도 같은 run (오차 < 격자/2 일 때)
+export const LIVE_GRID_SEC = 60;
+export function snapLive(line, dir, station, a) {
+  if (!a) return null;
+  const off = stationOffsetSec(line, dir, station), k = Math.round((a.at / 1000 - off) / LIVE_GRID_SEC);
+  return { ...a, at: (k * LIVE_GRID_SEC + off) * 1000, run: k, trainNo: a.run, live: true };
+}
+// 테스트용 '열차 부르기'(callTrain): 지금 + sec 뒤의 첫 공유 격자 칸 (CALL_GRID_SEC). 같은 칸에 부른 사람끼리 같은 열차
+export const CALL_GRID_SEC = 5;
+export function calledArrival(line, dir, station, ms, sec) {
+  const off = stationOffsetSec(line, dir, station), k = Math.ceil((ms / 1000 + sec - off) / CALL_GRID_SEC);
+  return { at: (k * CALL_GRID_SEC + off) * 1000, run: k, called: true };
+}
+// 열차 안 타임라인: 탄 역 정차 순간(at) 기준 초. 탄 역 정차 [0, DWELL) → 구간 i 주행 [dep, arr) → 역 i 정차 [arr, arr + DWELL) …
+export function rideTimeline(origin, rides) {
+  let t = MOTION.DWELL, s0 = 0;
+  return rides.map((r, i) => {
+    const prof = segmentProfile(segmentDist(i ? rides[i - 1].name : origin, r.name));
+    const g = { ...r, prof, dep: t, arr: t + prof.T, s0 };
+    t = g.arr + MOTION.DWELL; s0 += prof.d;
+    return g;
+  });
+}
+// e = 탄 역 정차 후 흐른 초 → { stage, i, t(그 단계 안 초), s(구간 안 거리), sTot, v, open(문 0..1), end(종착 문 닫힘 = 강제 하차) }
+export function rideState(segs, e) {
+  const M = MOTION;
+  if (e < M.DWELL || !segs.length) return { stage: e < M.CLOSE_AT ? 'board' : 'close', i: 0, t: e, s: 0, sTot: 0, v: 0, open: trainMotion(Math.max(e, M.OPEN_AT + M.DOOR_SEC)).doors };
+  for (let i = 0; i < segs.length; i++) {
+    const g = segs[i];
+    if (e < g.arr) { const q = g.prof.at(e - g.dep); return { stage: 'run', i, t: e - g.dep, s: q.s, sTot: g.s0 + q.s, v: q.v, open: 0 }; }
+    const u = e - g.arr;
+    if (u < M.DWELL || i === segs.length - 1) return { stage: 'stop', i, t: u, s: g.prof.d, sTot: g.s0 + g.prof.d, v: 0, open: trainMotion(Math.min(u, M.DWELL)).doors, end: i === segs.length - 1 && u >= M.CLOSE_AT };
+  }
+}

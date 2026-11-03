@@ -59,6 +59,7 @@ import { corridorStationLabel } from './corridor/globeCorridor.js'; // [corridor
 import { createStreetlights } from './world/streetlights.js'; // [streetlights]
 import { mountRide } from './ride/index.js'; // [ride] 코리더 버스·택시 탑승
 import { mountGyeongbuSoon } from './world/gyeongbuSoon.js'; // [gyeongbu] 경부고속도로 서울 방면 '준비 중' 안내 (?gyeongbu=0 끔)
+import { createServerClock } from './subway/clock.js'; // [subway-sync] 서버 시계 (같은 열차 = 같은 순간)
 import { mountSubway, zoneLabel as subwayZoneLabel } from './subway/index.js'; // [subway] 정자역·코리더 역 출입구(실제 OSM 출구) + 지하 대합실. ?subway=0 이면 끔
 
 const params = new URLSearchParams(location.search);
@@ -455,8 +456,9 @@ const trashBins = region.id === 'jeongja'
 }
 // [subway] 정자역 출입구 (실제 출구 위치·번호, OSM). 들어가면 별도 대합실 Scene, 그동안 바깥 월드는 갱신·렌더 건너뜀
 const subwayCanEnter = () => joined && !bikes.riding && !adminBike?.riding && !giftRiding() && !ride?.active && !trucks?.current;
+const serverClock = createServerClock(); // [subway-sync] presence 'time' 응답으로 맞춤 (아래 presence.on('time'))
 const subway = subwayOn ? mountSubway({
-  scene, overlay, data, world, terrain, renderer, params,
+  scene, overlay, data, world, terrain, renderer, params, now: serverClock.serverNow,
   getAudioLevel: () => (bgm ? { muted: bgm.player.muted, volume: bgm.player.volume } : null), // [subway-voice] 안내 방송 = BGM HUD 음소거·볼륨
   corridor, getPlayer: () => player, // [subway] 코리더 역(수내~잠실) 출입구. ?corridor=0 이면 정자역만
   getLook: () => me.look,
@@ -763,6 +765,7 @@ onHoldings(() => {
   for (const { id, ride } of giftRides) ride.setStock(holdingQty(id));
   inventory?.refresh();
 });
+presence.on('time', (m) => serverClock.add(m)); // [subway-sync]
 presence.on('welcome', (m) => {
   if (m.weather === 'rain' || m.weather === '') atmosphere.setSharedWeather(m.weather);
   if (Array.isArray(m.gifts)) replaceHoldings(m.gifts);
@@ -2491,7 +2494,7 @@ window.__jj = {
   bikes, toggleRide, triggerEmote,
   get ride() { return ride; }, remotes, presence, // [ride]
   cameraApp, // [camera]
-  subway, // [subway]
+  subway, serverClock, // [subway] [subway-sync]
   get pose() { return { sit: mySit, afk: myAfk, jy: jumpY }; }, // [subway-pose] 테스트용
   bgm, // [bgm]
   nearNpc(i = 0, d = 3) { const n = npcs.list[i]; player.position.set(n.pos.x + d, 0, n.pos.z + d * 0.5); },

@@ -2,7 +2,7 @@
 //   순수 함수(boardRows·simulatedRows) + 얇은 fetch (createArrivalFeed). 인증키는 여기 없다 (worker secret).
 //   ?subwayRt=0 이면 실시간 요청 안 함 (근사만).  대합실 안에 있을 때만 30초마다 요청 (worker 가 25초 캐시).
 import { LINES } from './lines.js';
-import { SIM_HEADWAY_MIN, SERVICE_MIN, simOffsetMin } from './ride.js';
+import { SIM_HEADWAY_MIN, SERVICE_MIN, simNextArrival } from './ride.js';
 
 export const POLL_SEC = 30;
 // 시간표 근사: 실제 시간표가 아니다. 노선별 평일 낮 대략 배차(분)·운행 시간으로 '몇 분 후'를 흉내만 낸다.
@@ -36,17 +36,19 @@ function rank(t) {
   return base * 1e5 + (t.etaSec > 0 ? t.etaSec : 9e4);
 }
 
-// 시간표 근사 (실시간이 없을 때). minuteOfDay: 0..1439 (KST), seed: 역 id 로 역마다 조금 다르게
-export function simulatedRows(theme, minuteOfDay, seed = '', n = 4) {
+// 시간표 근사 (실시간이 없을 때). when: 시각 ms (서버 시계) 또는 0..1439 (KST 분, 예전 호출 — 기준일 하루로 바꿔 계산), seed: 역 id
+//   [subway-sync] 승강장 열차와 같은 노선 시간표(simNextArrival) → 안내판 '몇 분 후' = 실제로 들어오는 열차
+const REF_DAY = Date.UTC(2026, 10, 3) - 9 * 3600e3; // KST 자정
+export function simulatedRows(theme, when, seed = '', n = 4) {
+  const ms = when >= 1440 ? when : REF_DAY + when * 60000;
   const rows = [];
   for (const l of theme.lines.slice(0, 2)) {
     for (let d = 0; d < 2 && rows.length < n; d++) {
-      const hw = SIM_HEADWAY_MIN[l.key] || 8;
       const dir = l.dirs[d];
-      const m = minuteOfDay;
+      const a = simNextArrival(l.key, d, seed, ms);
       let msg, en;
-      if (m < SERVICE.start || m >= SERVICE.end) { msg = '운행 종료'; en = 'No service'; }
-      else { const off = simOffsetMin(l.key, d, seed); const wait = (off - (m % hw) + hw) % hw; msg = wait ? `약 ${wait}분 후` : '곧 도착'; en = wait ? `~${wait} min` : 'Arriving'; }
+      if (!a) { msg = '운행 종료'; en = 'No service'; }
+      else { const wait = Math.round((a.at - ms) / 60000); msg = wait ? `약 ${wait}분 후` : '곧 도착'; en = wait ? `~${wait} min` : 'Arriving'; }
       rows.push({ line: l.key, color: l.color, short: l.short, dest: dir.ko, msg, en, kind: '', last: false });
     }
   }
@@ -71,7 +73,7 @@ export function createArrivalFeed({ theme, base, enabled = true, fetchImpl = (u)
   function get() {
     const t = now();
     const live = boardRows(theme, data, t);
-    const rows = live || simulatedRows(theme, kstMinute(t), theme.id);
+    const rows = live || simulatedRows(theme, t, theme.id);
     const key = JSON.stringify(rows) + !!live;
     if (key !== lastKey) { lastKey = key; version++; }
     return { rows, live: !!live, note: live ? '실시간 · 서울 열린데이터광장' : '시간표 근사 (실시간 아님)', noteEn: live ? 'Live · Seoul Open Data' : 'Approx. timetable (not live)' };
