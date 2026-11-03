@@ -253,12 +253,13 @@ const playgrounds = playgroundsFile ? createPlaygrounds({ scene, terrain, corrid
 const streetlightsFile = params.get('streetlights') === '0' ? null : region.dataFiles?.streetlights;
 const streetlights = streetlightsFile ? createStreetlights({ scene, terrain, corridor, camera, liveBox: data.meta.bboxLocal, url: import.meta.env.BASE_URL + streetlightsFile }) : null;
 const st = data.station;
-overlay.add({
+const homeStationLabel = overlay.add({
   cls: 'label station',
   text: region.stationOverlayText || (st.name === 'Starbase' ? '🚀 Starbase' : '🚇 정자역  신분당선 · 수인분당선'),
   getPos: () => new THREE.Vector3(st.x, 10, st.z),
   maxDist: 4000,
 });
+corridor?.setHomeStationLabel?.(homeStationLabel); // [pangyo-link] 판교역 근처에선 정자역 라벨 숨김
 const LABEL_RANGE = {
   cafe: [160, 0], shop: [150, 0], mart: [170, 0], academy: [180, 0], hotel: [220, 0],
   plaza: [320, 16], public: [640, 20],
