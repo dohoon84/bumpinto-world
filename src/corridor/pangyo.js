@@ -56,7 +56,8 @@ export function mergeLinkTransit(T, L) {
   for (const p of X.paths) { const id = paths.length; paths.push({ ...p, id, pangyoLink: true }); byId.get(p.route)?.paths.push(id); }
   const ref = X.routes?.[0]?.ref, add = new Set(X.addRoute || []);
   const have = new Set(T.stops.map((s) => s.id));
-  const stops = T.stops.map((s) => (add.has(s.id) && ref && !(s.routes || []).includes(ref) ? { ...s, routes: [...(s.routes || []), ref] } : s));
+  let stops = T.stops.map((s) => (add.has(s.id) && ref && !(s.routes || []).includes(ref) ? { ...s, routes: [...(s.routes || []), ref] } : s));
+  if (X.aliasRefs) stops = stops.map((s) => (s.routes?.some((r) => X.aliasRefs[r]) ? { ...s, routes: [...new Set(s.routes.map((r) => X.aliasRefs[r] || r))] } : s)); // [g8110]
   for (const s of X.stops || []) if (!have.has(s.id)) stops.push(s);
   const refTypes = { ...T.refTypes };
   for (const r of X.routes || []) if (!refTypes[r.ref] && r.type) refTypes[r.ref] = { type: r.type, src: r.src };
