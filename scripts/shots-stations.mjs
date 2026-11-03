@@ -59,7 +59,7 @@ for (const id of IDS) {
   r.concourseCalls = await calls(on);
   await on.screenshot({ path: `${OUT}/stations-${id}-concourse.png` });
   // 노선도 + 안내판 (서쪽 벽 쪽을 보기)
-  await on.evaluate(() => __jj.subway.inside.setView(-8.6, -7.2, Math.PI, 0.02, 3.2)); await on.waitForTimeout(2500);
+  await on.evaluate(() => __jj.subway.inside.setView(-6.9, -7.2, Math.PI, 0.02, 3.2)); await on.waitForTimeout(2500);
   r.board = await on.evaluate(() => document.querySelector('#subway-toast')?.textContent || '');
   await on.screenshot({ path: `${OUT}/stations-${id}-board.png` });
   // 나가기: 들어온 출구로
