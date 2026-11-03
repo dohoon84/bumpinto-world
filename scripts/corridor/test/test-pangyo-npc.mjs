@@ -31,7 +31,8 @@ let n = 0; const ok = (name) => { n++; console.log('ok', n, name); };
   for (const c of data.companies) {
     assert.match(c.osm, /^(node|way|relation)\/\d+$/);
     assert.match(c.initial, /^[A-Z]$/);
-    assert.ok(['platform', 'game', 'security'].includes(c.kind));
+    assert.ok(['platform', 'game', 'security', 'cloud'].includes(c.kind));
+    assert.ok(pg.tiles[`${Math.floor(c.x / 500)}_${Math.floor(c.z / 500)}`], `${c.key} 는 구운 판교 타일 안이어야 함`);
     assert.ok(c.x > -800 && c.x < 1200 && c.z < -2800 && c.z > -4200, `${c.key} 좌표 이상 ${c.x},${c.z}`);
     assert.ok(!('name' in c), '회사 이름은 데이터에 넣지 않는다');
   }
@@ -43,7 +44,7 @@ let n = 0; const ok = (name) => { n++; console.log('ok', n, name); };
 {
   const BAN = /카카오|kakao|크래프톤|krafton|네이버|naver|안랩|ahnlab|nhn|스마일게이트|smilegate|엔씨|ncsoft|더존|douzone|넥슨|nexon/i;
   const texts = [];
-  for (const kind of ['platform', 'game', 'security']) for (const role of rolePool(kind)) for (const en of [false, true]) texts.push(roleLabel({ initial: 'K', role }, en));
+  for (const kind of ['platform', 'game', 'security', 'cloud']) for (const role of rolePool(kind)) for (const en of [false, true]) texts.push(roleLabel({ initial: 'K', role }, en));
   for (const p of Object.values(LINES)) for (const [ko, en] of p) texts.push(ko, en);
   for (const t of texts) assert.ok(!BAN.test(t), `회사 이름 포함: ${t}`);
   assert.equal(roleLabel({ initial: 'N', role: ['디자이너', 'Designer'] }, false), 'N사 디자이너');

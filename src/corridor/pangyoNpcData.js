@@ -10,6 +10,7 @@ export const ROLES = {
     ['보안 엔지니어', 'Security Engineer'], ['iOS 개발자', 'iOS Developer'], ['안드로이드 개발자', 'Android Developer'], ['테크 리드', 'Tech Lead'],
     ['인프라 엔지니어', 'Infra Engineer'], ['테크니컬 라이터', 'Technical Writer'],
   ],
+  cloud: [['클라우드 엔지니어', 'Cloud Engineer'], ['솔루션 아키텍트', 'Solutions Architect'], ['플랫폼 엔지니어', 'Platform Engineer'], ['쿠버네티스 엔지니어', 'Kubernetes Engineer']],
   platform: [['서버 개발자', 'Server Developer'], ['검색 엔지니어', 'Search Engineer'], ['플랫폼 엔지니어', 'Platform Engineer'], ['UX 리서처', 'UX Researcher']],
   game: [['게임 기획자', 'Game Designer'], ['클라이언트 개발자', 'Client Programmer'], ['서버 개발자', 'Server Programmer'], ['테크니컬 아티스트', 'Technical Artist'],
     ['3D 아티스트', '3D Artist'], ['레벨 디자이너', 'Level Designer'], ['게임 QA', 'Game QA'], ['사운드 디자이너', 'Sound Designer']],

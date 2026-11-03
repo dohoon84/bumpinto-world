@@ -28,11 +28,15 @@ const COMPANIES = [
   { key: 'a1', initial: 'A', kind: 'security', osm: 'way/477387896', match: /안랩|AhnLab/ }, // office=it, 판교역로 220
   { key: 'n2', initial: 'N', kind: 'game', osm: 'way/468588694', match: /NHN엔터테인먼트/ }, // office=it, 대왕판교로645번길 16
   { key: 's1', initial: 'S', kind: 'game', osm: 'node/4718106609', match: /스마일게이트/ }, // office=it, 판교역로 220
+  // 도훈님 확인(2026-11-03): 판교테크원타워 C동 13–15층, 분당내곡로 131 — https://www.gov-ncloud.com/support/notice/all/240
+  //   OSM 은 동 구분 없이 한 건물(building=commercial, addr 분당내곡로 131). Overpass 장애로 OSM API(way/659687065/full) 의 노드 bbox 중심을 raw 에 덧붙임
+  { key: 'n3', initial: 'N', kind: 'cloud', osm: 'way/659687065', match: /테크원타워/ },
 ];
 // OSM(name·operator·brand·office, 판교 일대 bbox)에서 못 찾았거나 쓰지 않은 것
 const OMITTED = [
-  { initial: 'N', reason: 'naver-cloud: no OSM feature with matching name/operator/brand in bbox 37.385,127.085,37.415,127.125 (2026-11-03)' },
-  { initial: 'D', reason: 'douzone-bizon: no OSM feature with matching name/operator/brand in bbox 37.385,127.085,37.415,127.125 (2026-11-03)' },
+  // 도훈님 확인: 판교디지털센터, 판교로 253 — https://blog.naver.com/ajuaju123/224113623696 . OSM 엔 그 이름이 없고 addr 판교로 253 = way/481321373(판교이노밸리 클러스터)
+  //   → 게임 좌표 ≈ (-671, -4064), 타일 -2_-9: 지금 구운 판교 타일(-1..1, -8..-6) 밖이라 넣지 않음(베이크 확장은 따로 결정)
+  { initial: 'D', osm: 'way/481321373', reason: 'douzone-bizon: located (판교로 253) but outside the baked Pangyo tiles (-2_-9) — pending bake decision' },
   { initial: 'N', osm: 'way/455732653', reason: 'ncsoft global R&D center: landuse=construction, opening_date=2027 — not a workplace yet' },
 ];
 // 점심 장소: 판교 박스(build-pangyo BOX) ± 250m 안 식당·카페 점(이름은 저장하지 않음)
