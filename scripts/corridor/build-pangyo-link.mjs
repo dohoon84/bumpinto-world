@@ -10,7 +10,7 @@
 //         (gbis-route.mjs, 일방통행 반영) 위에서 잇는다. relation 구성 way 가 아닌 선분은 비용 3배 → relation 길을 그대로 따른다.
 //         마지막 정류장 뒤로는 relation 의 판교IC 방향 길을 게임에 그려진 도로 끝(판교 박스 안)까지 잇는다.
 //         정자역에서 정차하도록 앞쪽에 같은 차로 80m 진입 구간을 붙인다(시뮬 정차 규칙: 경로 시작 8m 안 정류장은 안 섬).
-//   방향: relation 은 한 방향(정자→판교→서울)뿐이라 반대 방향은 만들지 않는다(추정 경로를 지어내지 않음).
+//   방향: relation 은 한 방향(정자→판교→서울)뿐. 반대 방향(판교역→정자역, dir 1)은 [g8110-return] GBIS 정류소 순서(routeId 204000082)로 만든다 — 아래 main 참고.
 //   사용: node scripts/corridor/build-pangyo-link.mjs [--osm=...] [--out=public/corridor/pangyo/link.json]
 import fs from 'node:fs';
 import path from 'node:path';
@@ -183,25 +183,29 @@ function main() {
 
   // 조각: L(정자 bbox) / C(코리더·판교)
   const lab = (p) => (inLive(p) ? 'L' : ok(p) ? 'C' : 'X');
-  const pieces = []; let cur = null, acc = 0;
-  const start = (k, p, s) => { cur = { k, pts: [p], s0: s }; pieces.push(cur); };
-  start(lab(full[0]), full[0], 0);
-  for (let i = 1; i < full.length; i++) {
-    const a = full[i - 1], b = full[i], L = dist(a, b), n = Math.max(1, Math.ceil(L / 2));
-    for (let k = 1; k <= n; k++) {
-      const p = [a[0] + ((b[0] - a[0]) * k) / n, a[1] + ((b[1] - a[1]) * k) / n], s = acc + (L * k) / n, kk = lab(p);
-      if (kk !== cur.k) {
-        let lo = [a[0] + ((b[0] - a[0]) * (k - 1)) / n, a[1] + ((b[1] - a[1]) * (k - 1)) / n], hi = p;
-        for (let it = 0; it < 20; it++) { const m = [(lo[0] + hi[0]) / 2, (lo[1] + hi[1]) / 2]; if (lab(m) === lab(lo)) lo = m; else hi = m; }
-        const q = [(lo[0] + hi[0]) / 2, (lo[1] + hi[1]) / 2], sq = s - dist(q, p);
-        cur.pts.push(q); cur.s1 = sq; start(kk, q, sq);
-      }
-    }
-    cur.pts.push(b); acc += L;
-  }
-  cur.s1 = acc;
   const tidy = (a) => { const o = []; for (const p of a) { const q = [r1(p[0]), r1(p[1])]; const l = o[o.length - 1]; if (!l || dist(l, q) > 0.05) o.push(q); } return o; };
-  for (const pc of pieces) { pc.pts = tidy(pc.pts); pc.L = plen(pc.pts); }
+  const splitPieces = (full) => {
+    const pieces = []; let cur = null, acc = 0;
+    const start = (k, p, s) => { cur = { k, pts: [p], s0: s }; pieces.push(cur); };
+    start(lab(full[0]), full[0], 0);
+    for (let i = 1; i < full.length; i++) {
+      const a = full[i - 1], b = full[i], L = dist(a, b), n = Math.max(1, Math.ceil(L / 2));
+      for (let k = 1; k <= n; k++) {
+        const p = [a[0] + ((b[0] - a[0]) * k) / n, a[1] + ((b[1] - a[1]) * k) / n], s = acc + (L * k) / n, kk = lab(p);
+        if (kk !== cur.k) {
+          let lo = [a[0] + ((b[0] - a[0]) * (k - 1)) / n, a[1] + ((b[1] - a[1]) * (k - 1)) / n], hi = p;
+          for (let it = 0; it < 20; it++) { const m = [(lo[0] + hi[0]) / 2, (lo[1] + hi[1]) / 2]; if (lab(m) === lab(lo)) lo = m; else hi = m; }
+          const q = [(lo[0] + hi[0]) / 2, (lo[1] + hi[1]) / 2], sq = s - dist(q, p);
+          cur.pts.push(q); cur.s1 = sq; start(kk, q, sq);
+        }
+      }
+      cur.pts.push(b); acc += L;
+    }
+    cur.s1 = acc;
+    for (const pc of pieces) { pc.pts = tidy(pc.pts); pc.L = plen(pc.pts); }
+    return pieces;
+  };
+  const pieces = splitPieces(full);
   const bad = pieces.filter((p) => p.k === 'X');
   if (bad.length) throw new Error('경로가 게임 범위 밖으로 나감: ' + bad.map((p) => `${p.pts[0]}…${p.pts.at(-1)}`).join(', '));
 
@@ -241,12 +245,107 @@ function main() {
     const a = pc.pts[i - 1], b = pc.pts[i], L = dist(a, b);
     for (let s = 0; s < L; s += 1) { const x = a[0] + (b[0] - a[0]) * s / L, z = a[1] + (b[1] - a[1]) * s / L, g = drawn.near(x, z).gap; n++; if (g > maxGap) { maxGap = g; at = [r1(x), r1(z)]; } if (g > 2) gapsOver++; }
   }
+  // [g8110-return]
+  // ---------- 반대 방향 판교역 → 정자역 (GBIS 정류소 순서 + OSM 차도) ----------
+  //   OSM 에 반대 방향 relation 이 없어(7090965 한 방향뿐, route_master 없음) 경기버스정보(GBIS) 공개 자료로 만든다:
+  //   data/gbis_g8110_stations.json = busrouteservice/v2 getBusRouteStationListv2, routeId 204000082 (G8110, 경기도 성남시) —
+  //   scripts/corridor/fetch-gbis-routes.mjs --want='G8110:경기도 성남시' 로 받은 스냅샷. turnYn=Y(회차, seq 20) 뒤가 반대 방향.
+  //   GBIS 정류소 목록에는 형상이 없어 정류소 사이는 OSM 차도 그래프(gbis-route.mjs, 일방통행·진행 방향 오른쪽 차로) 위 최단 경로로 잇는다
+  //   (build-transit.mjs 의 220/9407 'gbis-routed' 와 같은 방식, relation 우대 없음). 게임 범위 안 정류소만: 판교역 → … → 정자역.
+  //   정류소는 같은 이름의 기존 게임 정류장이 45m 안에 있으면 그것을 쓰고, 없으면 GBIS 좌표로 새로 만든다(id 'g'+stationId).
+  //   앞쪽은 첫 정류장 진입 LEAD_IN m, 정자역 뒤는 GBIS 다음 정류소(미금역) 쪽으로 정자 bbox 끝 15m 안쪽까지.
+  const GB = readJSON(path.resolve(ROOT, arg('gbis', 'data/gbis_g8110_stations.json')));
+  const GR = GB.routes.find((r) => r.ref === DISP_REF);
+  if (!GR) throw new Error('GBIS G8110 스냅샷 없음');
+  const turn = GR.stations.findIndex((s) => s.turnYn === 'Y');
+  const back = GR.stations.slice(turn + 1);
+  const normN = (s) => String(s || '').replace(/[\s().·]/g, '');
+  const inGame = (p) => inLive(p) || ok(p);
+  const i0 = back.findIndex((s) => inGame(proj({ lon: s.lon, lat: s.lat }))), i1 = back.findIndex((s, i) => i > i0 && inLive(proj({ lon: s.lon, lat: s.lat })) && normN(s.name) === normN('정자역'));
+  const revG = back.slice(i0, i1 + 1), after = back[i1 + 1];
+  const G2 = buildRoadGraph(els, proj, near); // relation 우대(비용 3배) 없는 원래 그래프
+  const pool = [...CT.stops.map((s) => ({ s, sys: 'C' })), ...JZT.stops.map((s) => ({ s, sys: 'L' })), ...corridor.stops.map((s) => ({ s, sys: 'C' }))];
+  const rsts = revG.map((g) => {
+    const [gx, gz] = proj({ lon: g.lon, lat: g.lat });
+    const m = pool.filter(({ s }) => normN(s.name) === normN(g.name) && Math.hypot(s.x - gx, s.z - gz) < 45).sort((a, b) => Math.hypot(a.s.x - gx, a.s.z - gz) - Math.hypot(b.s.x - gx, b.s.z - gz))[0];
+    return { gbis: g, id: m ? m.s.id : 'g' + g.id, name: m ? m.s.name : g.name, ref: g.no || '', x: m ? m.s.x : gx, z: m ? m.s.z : gz, gx, gz, matched: m ? { id: m.s.id, d: r1(Math.hypot(m.s.x - gx, m.s.z - gz)) } : null };
+  });
+  const RC = [];
+  RC[0] = snapCandidates(G2, rsts[0].x, rsts[0].z).slice(0, 4).map((c) => ({ ...c, acc: c.score * 3 }));
+  for (let i = 1; i < rsts.length; i++) {
+    const straight = Math.hypot(rsts[i].x - rsts[i - 1].x, rsts[i].z - rsts[i - 1].z), cur = [];
+    for (const c of snapCandidates(G2, rsts[i].x, rsts[i].z).slice(0, 4)) {
+      let best = null;
+      for (const pc of RC[i - 1]) { const r = routeSegs(G2, pc, c, straight * 4 + 1500); if (!r) continue; const acc = pc.acc + r.cost + c.score * 3; if (!best || acc < best.acc) best = { ...c, acc, prev: pc, chain: r.chain }; }
+      if (best) cur.push(best);
+    }
+    if (!cur.length) throw new Error(`[반대] ${rsts[i - 1].name} → ${rsts[i].name}: 차도 경로 없음`);
+    RC[i] = cur;
+  }
+  let rc = RC[RC.length - 1].reduce((a, b) => (b.acc < a.acc ? b : a));
+  const rpicks = [rc]; while (rc.prev) { rc = rc.prev; rpicks.push(rc); } rpicks.reverse();
+  const rpts = [], rS = [];
+  const radd = (p) => { const l = rpts[rpts.length - 1]; if (!l || dist(l, p) > 0.3) rpts.push([p[0], p[1]]); };
+  { // 진입 LEAD_IN m (정방향과 같은 방식)
+    const S = G2.segs; let s = S[rpicks[0].si], bk = [[rpicks[0].x, rpicks[0].z], [s.ax, s.az]], acc = rpicks[0].t * s.len;
+    while (acc < LEAD_IN) { const prevs = S.filter((q) => q.b === s.a && q.a !== s.b).sort((a, b) => (b.dx * s.dx + b.dz * s.dz) - (a.dx * s.dx + a.dz * s.dz)); if (!prevs.length) break; s = prevs[0]; acc += s.len; bk.push([s.ax, s.az]); }
+    let Lb = 0; const lead = [bk[0]];
+    for (let i = 1; i < bk.length; i++) { const d = dist(bk[i - 1], bk[i]); if (Lb + d >= LEAD_IN) { const t = (LEAD_IN - Lb) / d; lead.push([bk[i - 1][0] + (bk[i][0] - bk[i - 1][0]) * t, bk[i - 1][1] + (bk[i][1] - bk[i - 1][1]) * t]); break; } lead.push(bk[i]); Lb += d; }
+    for (const p of lead.reverse()) radd(p);
+  }
+  rS.push(plen(rpts));
+  const rlegs = [];
+  for (let k = 1; k < rpicks.length; k++) {
+    const leg = chainPts(G2, rpicks[k - 1], rpicks[k], rpicks[k].chain);
+    rlegs.push({ from: rsts[k - 1].name, to: rsts[k].name, m: Math.round(plen(leg)), straight: Math.round(dist([rsts[k - 1].x, rsts[k - 1].z], [rsts[k].x, rsts[k].z])), roads: [...new Set(rpicks[k].chain.map((si) => wayById.get(G2.segs[si].way)?.tags?.name || G2.segs[si].k))] });
+    for (const p of leg) radd(p);
+    rS.push(plen(rpts));
+  }
+  if (after) { // 정자역 뒤: 다음 GBIS 정류소(미금역) 방향 경로를 정자 bbox 안쪽까지만
+    const [ax, az] = proj({ lon: after.lon, lat: after.lat }), last = rpicks[rpicks.length - 1];
+    const tc = snapCandidates(G2, ax, az, 80)[0], tr = tc ? routeSegs(G2, last, tc, 6000) : null;
+    if (tr) { const tp = chainPts(G2, last, tc, tr.chain); for (let i = 1; i < tp.length; i++) { const a = tp[i - 1], b = tp[i], D = dist(a, b), n = Math.max(1, Math.ceil(D)); let out = false; for (let j = 1; j <= n; j++) { const p = [a[0] + (b[0] - a[0]) * j / n, a[1] + (b[1] - a[1]) * j / n]; if (!inLive(p) || drawn.near(p[0], p[1]).gap > 2) { out = true; break; } radd(p); } if (out) break; } }
+  }
+  const rfull = trimTo(rpts, plen(rpts) - 15);
+  const rpieces = splitPieces(rfull);
+  const rbad = rpieces.filter((p) => p.k === 'X');
+  if (rbad.length) throw new Error('[반대] 경로가 게임 범위 밖으로 나감: ' + rbad.map((p) => `${p.pts[0]}…${p.pts.at(-1)}`).join(', '));
+  const rstopLog = [];
+  for (const pc of rpieces) {
+    const stops = [];
+    for (let k = 0; k < rsts.length; k++) {
+      const s = rS[k] - pc.s0; if (!(s > 8 && s < pc.L - 8)) continue;
+      const st = rsts[k], q = project1(pc.pts, st.x, st.z);
+      if (pc.k === 'L') { const js = JZT.stops.find((x) => x.id === st.id); if (!js) { rstopLog.push(`정자 정류장 없음 ${st.name}`); continue; } stops.push({ stop: js.id, s: r1(q.s) }); }
+      else {
+        let so = corStops.get(st.id) || corridor.stops.find((x) => x.id === st.id);
+        if (!so) {
+          const dx = st.x - q.px, dz = st.z - q.pz, dd = Math.hypot(dx, dz) || 1;
+          so = { id: st.id, name: st.name, ref: st.ref, x: r1(st.x), z: r1(st.z), routes: [route.ref], rd: [r3(q.dx), r3(q.dz)], tr: [r3(dx / dd), r3(dz / dd)], rdist: r1(dd), src: 'gbis', gbisStationId: st.gbis.id };
+          corridor.stops.push(so);
+        } else if (corStops.has(so.id) && !(so.routes || []).includes(route.ref) && !corridor.addRoute.includes(so.id)) corridor.addRoute.push(so.id);
+        stops.push({ stop: so.id, s: r1(q.s) });
+      }
+      rstopLog.push(`${pc.k} ${st.name} s=${q.s.toFixed(0)} d=${q.d.toFixed(1)}${st.matched ? ` (기존 ${st.matched.id}, GBIS 좌표와 ${st.matched.d}m)` : ' (새 정류장, GBIS 좌표)'}`);
+    }
+    (pc.k === 'L' ? live : corridor).paths.push({ route: REL, ref: route.ref, pts: pc.pts, len: Math.round(pc.L), stops, src: 'gbis-routed', dir: 1 });
+  }
+  let rmax = -Infinity, rat = null, rover = 0, rn = 0;
+  for (const pc of rpieces) for (let i = 1; i < pc.pts.length; i++) { const a = pc.pts[i - 1], b = pc.pts[i], L = dist(a, b); for (let s = 0; s < L; s += 1) { const x = a[0] + (b[0] - a[0]) * s / L, z = a[1] + (b[1] - a[1]) * s / L, g = drawn.near(x, z).gap; rn++; if (g > rmax) { rmax = g; rat = [r1(x), r1(z)]; } if (g > 2) rover++; } }
+  const reverse = {
+    source: `${GB.source} · routeId ${GR.routeId} (${GR.ref}, ${GR.adminName}, ${GR.start}↔${GR.end}) · fetched ${GB.fetched}`,
+    geometry: 'GBIS 정류소 목록에는 노선 형상이 없음 → 정류소 사이를 OSM 차도 그래프(ODbL) 위 최단 경로로 이음(추정 경로, relation 아님)',
+    gbisStops: revG.map((g) => ({ seq: g.seq, id: g.id, name: g.name, no: g.no })), after: after ? { seq: after.seq, name: after.name } : null,
+    legs: rlegs, stops: rstopLog, pieces: rpieces.map((p) => [p.k, Math.round(p.L)]),
+    continuity: { samples: rn, maxGapM: r1(rmax), at: rat, over2m: rover },
+  };
   const out = {
     meta: {
       generated: new Date().toISOString(),
       source: `OpenStreetMap relation ${REL} (type=route, route=bus, ref=${rel.tags.ref}) · 차도 그래프 ${path.relative(ROOT, OSM)} (ODbL)`,
       refNote: `OSM relation ref 는 "${rel.tags.ref}" 이지만 같은 OSM 정류장 노드들의 route_ref 와 경기버스정보 인허가 목록(data/gbis_route_types.json, 2026-10-27)에는 G8110(오리역↔국가인권위)만 있다 — 노선 번호 개편(8110 → G8110). 화면 표기는 G8110(도훈님 결정), 내부 id·osmRef 는 relation 그대로.`,
-      direction: 'relation 한 방향(정자역→판교역→판교IC)만. 반대 방향은 OSM 에 없어 만들지 않음.',
+      direction: '정방향(dir 0) 정자역→판교역→판교IC = OSM relation 7090965. 반대 방향(dir 1) 판교역→정자역 = OSM 에 relation 이 없어 GBIS 정류소 순서(routeId 204000082) + OSM 차도 최단 경로(meta.reverse).',
+      reverse,
       leadInM: LEAD_IN, tailTrimM: 15,
       legs: legLog, stops: stopLog,
       continuity: { samples: n, maxGapM: r1(maxGap), at, over2m: gapsOver },
