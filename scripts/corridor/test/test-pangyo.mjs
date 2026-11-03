@@ -138,4 +138,20 @@ for (const [k, t] of Object.entries(pg.tiles)) {
   for (const [, , ki] of L.b) assert.ok(base.buildingKinds[ki], `${k} lod kind`);
 }
 ok('lod tiles build');
+// 10) 지구본 노선도: 판교역 = 정자에서 갈라지는 지선 역(목록·역 수·이름), ?pangyo=0 이면 본선 목록 그대로
+{
+  const G = await import('../../../src/corridor/globeCorridor.js');
+  const S = await import('../../../src/corridor/globeStations.js');
+  assert.deepEqual(S.PANGYO_GLOBE_STATIONS.map((s) => [s.id, s.x, s.z]), pg.stations.map((s) => ['pangyo', s.x, s.z]), 'globe pangyo = pangyo index station');
+  assert.ok(G.CORRIDOR_STATION_IDS.has('pangyo') && G.CORRIDOR_STATION_COUNT === S.CORRIDOR_STATIONS.length + 2, 'pangyo in globe list');
+  assert.deepEqual(G.corridorStationLabel('pangyo'), { ko: '판교역', en: 'Pangyo Station', short: 'Pangyo' });
+  const on = G.layoutCorridorMap(), off = G.layoutCorridorMap({ branches: [] });
+  assert.deepEqual(on.items, off.items, 'main line layout unchanged');
+  assert.equal(off.branches.length, 0);
+  const b = on.branches[0];
+  assert.ok(b && b.id === 'pangyo' && b.from.id === 'jeongja' && b.side === 'left', 'branch from jeongja');
+  for (const it of on.items.filter((x) => x.side === b.side)) assert.ok(Math.abs(it.dy - b.dy) >= 14, `label gap ${it.id} ${Math.abs(it.dy - b.dy).toFixed(1)}px`);
+  assert.equal(pangyoEnabled('?pangyo=0'), false); // worldGate/globeCorridor 는 이 값으로 BRANCH_STATIONS=[] (본선 15역 그대로)
+}
+ok('globe station list + branch layout');
 console.log('pangyo: all', n, 'checks passed');
