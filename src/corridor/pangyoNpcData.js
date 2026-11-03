@@ -30,8 +30,8 @@ export const LINES = {
 
 // 시간대(게임 시계, 소수 시간) → 활성 인원 / 장소 비중 / 커피 비율
 //   출근 8–10 · 퇴근 18–20: 역 출구·광장·회사 입구에 몰림 / 점심 11:30–13:30: 광장·식당가 / 그 밖은 적게, 밤은 아주 적게
-export const MAX_NPC = 36;
-const CURVE = [[0, 2], [6, 2], [7, 8], [8, 34], [10, 34], [10.75, 12], [11.5, 30], [13.5, 30], [14.25, 12], [17, 12], [18, 32], [20, 32], [21, 10], [22.5, 3], [24, 2]];
+export const MAX_NPC = 48;
+const CURVE = [[0, 2], [6, 3], [7, 10], [8, 46], [10, 46], [10.75, 14], [11.5, 40], [13.5, 40], [14.25, 14], [17, 14], [18, 44], [20, 44], [21, 12], [22.5, 4], [24, 2]];
 export function npcCount(h) {
   h = ((h % 24) + 24) % 24;
   for (let i = 1; i < CURVE.length; i++) {
@@ -50,9 +50,9 @@ export function npcPeriod(h) {
 }
 // 장소 비중: station(역 출구) · deck(광장 데크 위) · company(회사 입구) · food(식당·카페 앞)
 export const MIX = {
-  morning: { station: 0.45, deck: 0.15, company: 0.35, food: 0.05 },
+  morning: { station: 0.55, deck: 0.15, company: 0.25, food: 0.05 },
   lunch: { station: 0.05, deck: 0.35, company: 0.1, food: 0.5 },
-  evening: { station: 0.5, deck: 0.15, company: 0.3, food: 0.05 },
+  evening: { station: 0.55, deck: 0.15, company: 0.25, food: 0.05 },
   day: { station: 0.15, deck: 0.25, company: 0.35, food: 0.25 },
   night: { station: 0.55, deck: 0.05, company: 0.4, food: 0 },
 };

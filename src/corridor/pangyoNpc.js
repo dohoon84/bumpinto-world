@@ -85,7 +85,7 @@ export function createPangyoNpc({ pg, baseUrl = '', overlay = null, terrain = nu
   const exits = (pg?.stations || []).flatMap((s) => s.exits || []);
   let spots = { station: [], company: [], food: [] };
   function buildSpots() {
-    const mk = (x, z, extra) => ({ x, z, key: tileKey(x, z), at: null, ...extra }); // at: 바닥이 생긴 뒤 freeSpot 으로 정한 보행 가능 지점(캐시)
+    const mk = (x, z, extra) => ({ x, z, key: tileKey(x, z), at: null, load: 0, ...extra }); // at: 바닥이 생긴 뒤 freeSpot 으로 정한 보행 가능 지점(캐시)
     return {
       station: exits.map((e) => mk(e.x, e.z, { ref: e.ref })),
       company: (data?.companies || []).map((c) => mk(c.x, c.z, { company: c })),
@@ -139,7 +139,7 @@ export function createPangyoNpc({ pg, baseUrl = '', overlay = null, terrain = nu
     const cup = prop(P.cup); cup.position.set(0.02, -0.68, 0.09); cup.rotation.set(Math.PI * 0.46, 0, -0.18); cup.visible = false; u.armL.add(cup);
     u.handCoffee = cup; u.coffee = false; // animateAvatar 의 컵 든 팔 자세·홀짝 애니를 그대로 쓴다(컵은 무지 소품)
     mesh.visible = false;
-    const a = { i, mesh, cup, badge, laptop, look, parts: null, path: null, cum: null, L: 0, s: 0, dir: 1, speed: 1, idle: 0, y: 0, yFix: null, active: false, leaving: false, shown: false, kind: null, who: null, cupRoll: rnd(), said: 0, tag: null, bubble: null };
+    const a = { i, mesh, cup, badge, laptop, look, parts: null, path: null, cum: null, L: 0, s: 0, dir: 1, speed: 1, idle: 0, y: 0, yFix: null, active: false, leaving: false, shown: false, kind: null, who: null, cupRoll: rnd(), said: 0, spot: null, tag: null, bubble: null };
     if (overlay) {
       const head = () => (a.shown && a.who && now() - lastRender < 500 ? a.mesh.position.clone().setY(a.mesh.position.y + 2.2) : null);
       a.tag = overlay.add({ cls: 'tag npc pangyo-worker', text: '', getPos: head, maxDist: LABEL_R });
@@ -171,13 +171,16 @@ export function createPangyoNpc({ pg, baseUrl = '', overlay = null, terrain = nu
       } else {
         const cand = (spots[kind] || []).filter(near);
         if (!cand.length) continue;
-        sp = cand[Math.floor(rnd() * cand.length)];
+        // 가장 한산한 곳부터(같으면 무작위) — 출구·식당마다 고르게 붐비도록
+        let best = Infinity;
+        for (const c of cand) { const n = c.load + rnd() * 0.9; if (n < best) { best = n; sp = c; } }
         const at = ready(sp); if (!at) continue;
-        path = freePath(at.x, at.z, isFree);
+        path = freePath(at.x, at.z, isFree, 2.5, kind === 'company' ? 24 : kind === 'station' ? 10 : 14); // 역·식당 앞은 짧게 오가며 붐비게
         if (path && rnd() < 0.5) path.reverse(); // 절반은 그 장소로 '향해' 걷는다
       }
       if (!path) continue;
       const cum = [0]; for (let k = 1; k < path.length; k++) cum.push(cum[k - 1] + Math.hypot(path[k][0] - path[k - 1][0], path[k][1] - path[k - 1][1]));
+      if (a.spot) a.spot.load--; a.spot = sp; if (sp) sp.load++;
       Object.assign(a, { path, cum, L: cum[cum.length - 1], s: rnd() * cum[cum.length - 1], dir: rnd() < 0.5 ? 1 : -1, yFix, kind, idle: 0, leaving: false });
       a.speed = (kind === 'station' && D.period !== 'lunch' ? 1.15 : 0.95) + rnd() * 0.3;
       a.who = companyOf(kind === 'company' ? sp : null);
@@ -193,7 +196,7 @@ export function createPangyoNpc({ pg, baseUrl = '', overlay = null, terrain = nu
     const p = a.path[k - 1], q = a.path[k], L = a.cum[k] - a.cum[k - 1] || 1, f = (s - a.cum[k - 1]) / L;
     return [p[0] + (q[0] - p[0]) * f, p[1] + (q[1] - p[1]) * f, (q[0] - p[0]) / L, (q[1] - p[1]) / L];
   };
-  const hide = (a) => { a.path = null; a.shown = false; a.mesh.visible = false; if (a.bubble) a.bubble.item.hidden = true; };
+  const hide = (a) => { if (a.spot) { a.spot.load--; a.spot = null; } a.path = null; a.shown = false; a.mesh.visible = false; if (a.bubble) a.bubble.item.hidden = true; };
 
   let lastRender = -1e9;
   let D = densityAt(getHour()), dAcc = 99, chk = 99, sayAcc = 0, lastSay = -99, clock = 0;
@@ -208,6 +211,7 @@ export function createPangyoNpc({ pg, baseUrl = '', overlay = null, terrain = nu
   return {
     actors, loading, stats, deck,
     get data() { return data; },
+    get spots() { return spots; }, // 디버그·테스트용
     // crowd.finalize() 전에 한 번: 아바타 부품을 공유 crowd 에 등록
     register(crowd) { for (const a of actors) a.parts = crowd.register(a.mesh); },
     // 매 프레임 crowd.begin() ~ crowd.end() 사이 (코리더 보행 NPC 갱신 직후)
