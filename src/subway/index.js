@@ -17,7 +17,7 @@
 import { resolveExits, groupExits, exitLabel } from './exits.js';
 import { createSubwayState } from './state.js';
 import { buildEntrances } from './entrance.js';
-import { STATIONS, stationTheme, corridorExits, entranceLod, stationZone, stationReach } from './stations.js';
+import { STATIONS, stationTheme, corridorExits, withStairs, entranceLod, stationZone, stationReach } from './stations.js';
 import { createArrivalFeed } from './arrivals.js';
 import { isEn, tr } from '../i18n.js';
 import { encodeZone } from '../net/zones.js';
@@ -60,7 +60,8 @@ export function mountSubway({ scene, overlay, data, world, terrain, renderer, ge
   for (const def of STATIONS) {
     if (def.id !== 'jeongja' && !corridor) continue; // ?corridor=0 → 정자만
     const theme = stationTheme(def);
-    const exits = def.id === 'jeongja' ? resolveExits(data) : corridorExits(def, center);
+    // 정자역: 런타임 배치. OSM 계단 방향(stairs)만 stationsData 에서 osm id 로 붙인다
+    const exits = def.id === 'jeongja' ? withStairs(resolveExits(data), def) : corridorExits(def, center);
     if (!exits.length) continue;
     stations.push({ def, theme, exits, groups: groupExits(exits), state: createSubwayState({ exits }), ent: null, x: def.x, z: def.z, d: Infinity, reach: stationReach(def, exits) });
   }

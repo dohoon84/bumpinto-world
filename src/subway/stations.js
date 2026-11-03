@@ -44,10 +44,16 @@ export function corridorExits(def, center) {
     const { x, z } = projectLatLon(center, e.lat, e.lon);
     const c = compass(x - def.x, z - def.z);
     return {
-      id: e.ref ? `${def.id}-x${e.ref}` : `${def.id}-n${i}`, ref: e.ref, osm: e.osm, lat: e.lat, lon: e.lon, x, z, place: e.place,
+      id: e.ref ? `${def.id}-x${e.ref}` : `${def.id}-n${i}`, ref: e.ref, osm: e.osm, lat: e.lat, lon: e.lon, x, z, place: e.place, stairs: e.stairs,
       dir: { id: c.id, ko: `역 ${c.ko}`, en: `${c.en} side of the station` }, hints: [],
     };
   });
+}
+
+// 정자역 (런타임 배치) 출구에 OSM 계단 방향만 붙이기 (stationsData 의 같은 osm 노드)
+export function withStairs(exits, def) {
+  const by = new Map(def.exits.map((e) => [e.osm, e]));
+  return exits.map((e) => (by.get(e.osm)?.stairs ? { ...e, stairs: by.get(e.osm).stairs } : e));
 }
 
 // 바깥 출입구를 만들/지울/보일 거리 (역 중심 기준, m). 출구는 역 중심에서 250m 안

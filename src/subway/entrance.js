@@ -41,30 +41,53 @@ function segDir(px, pz, roads) {
   return best;
 }
 
-// 출구 하나의 방향·위치 고르기: 가까운 큰길과 나란히, 역 쪽으로 내려가게. 건물·차도에 걸리면 돌리거나 조금 옮긴다.
-//   radii: 제자리에서 못 찾으면 옮겨 볼 거리들 (기본 = 정자 런타임 그대로)
-export function placeEntrance(exit, { roads, station, isFree, radii = [1.5, 3, 4.5, 6] }) {
+// 출구 하나의 방향·위치 고르기 (OSM 점에 최대한 가깝게)
+//   방향: 1) OSM 계단(highway=steps)이 출구 노드에서 시작하면 그 방향으로 내려간다 (실제 데이터)
+//         2) 없으면 가까운 큰길(= 보도가 따라가는 방향)과 나란히, 역 쪽으로 내려가게. 길에 직각(입구가 차도·벽을 보는 것)은 벌점
+//   입구(w<0) 앞 2m 는 걸을 수 있어야 한다 (벽·차도를 보지 않게)
+//   isClear: 다리 상판·보행교·하천 계단·제방 같은 구조물 판정 — 출입구 둘레 CLEAR m 안에 있으면 안 됨 (붙거나 파고들지 않게)
+//   radii: 제자리에서 못 찾으면 옮겨 볼 거리들
+export const CLEAR = 1.5;
+export function placeEntrance(exit, { roads, station, isFree, isClear = null, radii = [1.5, 3, 4.5, 6, 8, 10, 12] }) {
   const road = segDir(exit.x, exit.z, roads);
   const base = road ? road.a : 0;
   const toSt = { x: station.x - exit.x, z: station.z - exit.z };
-  const cands = [base, base + Math.PI, base + Math.PI / 2, base - Math.PI / 2]
-    .map((ry) => ({ ry, pref: Math.sin(ry) * toSt.x + Math.cos(ry) * toSt.z }))
-    .sort((a, b) => b.pref - a.pref);
-  const shifts = [[0, 0]];
-  for (const r of radii) for (let k = 0; k < 8; k++) shifts.push([Math.cos((k * Math.PI) / 4) * r, Math.sin((k * Math.PI) / 4) * r]);
+  const pref = (ry) => Math.sin(ry) * toSt.x + Math.cos(ry) * toSt.z;
+  let cands;
+  if (exit.stairs) {
+    const a = Math.atan2(exit.stairs[0], exit.stairs[1]);
+    cands = [{ ry: a, pen: 0 }, { ry: a + Math.PI / 2, pen: 30 }, { ry: a - Math.PI / 2, pen: 30 }, { ry: a + Math.PI, pen: 60 }];
+  } else {
+    const par = [base, base + Math.PI].sort((a, b) => pref(b) - pref(a));
+    const per = [base + Math.PI / 2, base - Math.PI / 2].sort((a, b) => pref(b) - pref(a));
+    cands = [{ ry: par[0], pen: 0 }, { ry: par[1], pen: 4 }, { ry: per[0], pen: 25 }, { ry: per[1], pen: 27 }];
+  }
+  const rings = [[0, [[0, 0]]]];
+  for (const r of radii) { const ring = []; for (let k = 0; k < 8; k++) ring.push([Math.cos((k * Math.PI) / 4) * r, Math.sin((k * Math.PI) / 4) * r]); rings.push([r, ring]); }
+  const C = CLEAR;
   let best = null;
-  for (const [sx, sz] of shifts) {
-    for (const c of cands) {
+  for (let ri = 0; ri < rings.length; ri++) {
+    const [r, ring] = rings[ri];
+    if (best && best.ok && best.score <= r) break; // 더 멀리 옮기면 점수가 이보다 좋아질 수 없음
+    for (const [sx, sz] of ring) for (const c of cands) {
       const e = { x: exit.x + sx, z: exit.z + sz, ry: c.ry };
-      let bad = 0;
+      let bad = 0, clr = 0, front = 0;
       for (let u = -2.0; u <= 2.01; u += 0.5) for (let w = -2.4; w <= L + 0.4; w += 0.5) { const p = toWorld(e, u, w); if (!isFree(p.x, p.z)) bad++; }
-      const score = bad * 10 + Math.hypot(sx, sz);
-      if (!best || score < best.score) best = { ...e, score, bad, shift: Math.hypot(sx, sz) };
-      if (bad === 0) break;
+      if (isClear) for (let u = -2.0 - C; u <= 2.01 + C; u += 0.5) for (let w = -2.4 - C; w <= L + 0.41 + C; w += 0.5) { const p = toWorld(e, u, w); if (!isClear(p.x, p.z)) clr++; }
+      for (let u = -1.0; u <= 1.01; u += 0.5) for (let w = -4.4; w < -2.4; w += 0.5) { const p = toWorld(e, u, w); if (!isFree(p.x, p.z)) front++; }
+      const shift = Math.hypot(sx, sz);
+      const score = (bad + clr) * 10 + front * 3 + c.pen + shift;
+      const ok = bad === 0 && clr === 0 && front === 0;
+      if (!best || (ok && !best.ok) || (ok === best.ok && score < best.score)) best = { ...e, score, bad, clr, front, ok, shift };
     }
-    if (best && best.bad === 0) break;
   }
   return best;
+}
+
+// 다리 상판·보행교·하천 계단·징검다리·제방 비탈 (terrain 기준). 없으면 늘 비어 있음
+export function structureClear(terrain) {
+  if (!terrain) return null;
+  return (x, z) => !terrain.deckAt?.(x, z) && !terrain.stairAt?.(x, z, 0.6) && !terrain.fordAt?.(x, z, 0.5) && !(terrain.baseHeight(x, z) < -0.25);
 }
 
 function drawFascia(ctx, w, h, ex, th) {
@@ -102,6 +125,7 @@ export function buildEntrances({ scene, overlay, exits, data, world, terrain, th
   const atlas = createAtlas(1024, 2 ** Math.ceil(Math.log2(Math.max(256, rowsH))), 'entrances-' + theme.id); // 정자역 6개 → 1024×1024
   const white = atlas.add(8, 8, (c, w, h) => { c.fillStyle = '#fff'; c.fillRect(0, 0, w, h); });
   const isFree = (x, z) => !world.isBlocked(x, z, 0.2) && !world.onRoad(x, z);
+  const isClear = structureClear(terrain);
   const gy = (x, z) => (terrain ? terrain.getGroundHeight(x, z, 0) : 0);
   const list = [], labels = [];
   const fm = new THREE.Matrix4();
@@ -110,9 +134,9 @@ export function buildEntrances({ scene, overlay, exits, data, world, terrain, th
   atlas.row(); // 홀수 개면 마지막 앞 간판 줄 옆에 기둥이 끼어 줄 높이가 384 로 커진다 → 기둥은 새 줄부터
   const pillarUv = new Map(exits.map((ex) => [ex, atlas.add(96, 384, (c, w, h) => drawPillar(c, w, h, ex, theme))]));
   for (const ex of exits) {
-    const p = ex.place ? { ...ex.place } : placeEntrance(ex, { roads: data?.roads, station: data?.station || { x: 0, z: 0 }, isFree });
+    let p = ex.place ? { ...ex.place } : placeEntrance(ex, { roads: data?.roads, station: data?.station || { x: 0, z: 0 }, isFree, isClear });
     if (!p) continue;
-    const e = { exit: ex, x: p.x, z: p.z, ry: p.ry, shift: p.shift, bad: p.bad };
+    const e = { exit: ex, x: p.x, z: p.z, ry: p.ry, shift: p.shift, bad: p.bad, ok: p.ok ?? !p.bad, clr: p.clr || 0, front: p.front || 0 };
     let y = -Infinity;
     for (const [u, w] of [[-1.9, -0.3], [1.9, -0.3], [-1.9, L + 0.3], [1.9, L + 0.3], [0, L / 2]]) { const q = toWorld(e, u, w); y = Math.max(y, gy(q.x, q.z)); }
     e.y = y;

@@ -9,6 +9,10 @@
 //   public/corridor/index.json     코리더 역 id·영문명·중심, 렌더링되는 타일 목록
 //   public/corridor/tiles/*.json   건물·도로 (출입구 방향·위치 고르기 = 런타임 placeEntrance 와 같은 함수)
 //   public/corridor/base.json      탄천 구간 도로 (차도 판정)
+//   public/terrain.json · public/corridor/{tancheon,streams}.json
+//                                  게임과 같은 지형 → 다리 상판·보행교·하천 계단·제방 (출입구 둘레 CLEAR m 여유)
+//   data/osm_subway_entrance_ways.json  Overpass (data/query_subway_entrance_ways.overpassql): 출구 노드에 붙은 계단(highway=steps)
+//                                  → 출구 노드에서 계단이 뻗는 방향 = 내려가는 방향 (stairs)
 //
 // 규칙
 //   - 노선은 지어내지 않는다: 역 노드/정차 위치를 stop 멤버로 가진 route relation 의 ref 로만 정한다.
@@ -18,7 +22,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { projectLatLon } from '../../src/subway/exits.js';
-import { placeEntrance } from '../../src/subway/entrance.js';
+import { placeEntrance, structureClear, CLEAR } from '../../src/subway/entrance.js';
+import { gameTerrain } from './gameTerrain.mjs';
 import { LINES, LINE_ORDER, OSM_REF_TO_LINE } from '../../src/subway/lines.js';
 
 const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), '../..');
@@ -42,6 +47,24 @@ const base = rd('public/corridor/base.json');
 const center = jz.meta.center;
 const live = jz.meta.bboxLocal;
 const TS = index.meta.tileSize;
+
+const { terrain } = gameTerrain(ROOT);
+const terrainClear = structureClear(terrain);
+
+// 출구 노드에서 시작/끝나는 계단 way → 노드에서 멀어지는 방향 (내려가는 방향)
+const stairsOf = new Map();
+{
+  const ew = rd('data/osm_subway_entrance_ways.json').elements;
+  for (const w of ew) {
+    if (w.type !== 'way' || w.tags?.highway !== 'steps' || !w.nodes || !w.geometry) continue;
+    for (const [end, far] of [[0, w.nodes.length - 1], [w.nodes.length - 1, 0]]) {
+      const id = w.nodes[end];
+      const a = projectLatLon(center, w.geometry[end].lat, w.geometry[end].lon), b = projectLatLon(center, w.geometry[far].lat, w.geometry[far].lon);
+      const dx = b.x - a.x, dz = b.z - a.z, len = Math.hypot(dx, dz);
+      if (len > 2 && !stairsOf.has(id)) stairsOf.set(id, { way: w.id, d: [Math.round((dx / len) * 1000) / 1000, Math.round((dz / len) * 1000) / 1000] });
+    }
+  }
+}
 
 const baseName = (s) => String(s || '').replace(/\s*[(（].*$/, '').replace(/역$/, '').trim();
 const nodes = new Map(corr.filter((e) => e.type === 'node').map((e) => [e.id, e]));
@@ -86,8 +109,15 @@ function areaWorld(x, z, R = 120) {
     const t = Math.max(0, Math.min(1, ((px - ax) * ddx + (pz - az) * ddz) / L2));
     return Math.hypot(ax + ddx * t - px, az + ddz * t - pz) < r.w / 2 + 0.6;
   }));
+  // 타일의 다리(br) 길 = 보행교·육교·지류 다리: 길 폭 안이면 구조물
+  const bridges = roads.filter((r) => r.br);
+  const onBridge = (px, pz) => bridges.some((r) => r.p.some((p, i) => {
+    if (!i) return false; const [ax, az] = r.p[i - 1], [bx, bz] = p, ddx = bx - ax, ddz = bz - az, L2 = ddx * ddx + ddz * ddz || 1;
+    const t = Math.max(0, Math.min(1, ((px - ax) * ddx + (pz - az) * ddz) / L2));
+    return Math.hypot(ax + ddx * t - px, az + ddz * t - pz) < (r.w || 3) / 2 + 0.3;
+  }));
   const blocked = (px, pz, r = 0.2) => [[0, 0], [r, 0], [-r, 0], [0, r], [0, -r]].some(([a, b]) => blds.some((o) => pip(px + a, pz + b, o)));
-  return { roads, isFree: (px, pz) => !blocked(px, pz) && !onRoad(px, pz) };
+  return { roads, isFree: (px, pz) => !blocked(px, pz) && !onRoad(px, pz), isClear: (px, pz) => terrainClear(px, pz) && !onBridge(px, pz) };
 }
 
 const natural = (a, b) => String(a.ref ?? '~').localeCompare(String(b.ref ?? '~'), 'en', { numeric: true });
@@ -140,7 +170,8 @@ for (const [id, name] of TARGETS) {
     const ref = n.tags.ref == null || n.tags.ref === '' ? null : String(n.tags.ref);
     if (ref == null && n.tags.highway === 'elevator') { report.droppedExits.push({ station: name, ref, osm: n.id, why: '번호 없는 엘리베이터 (출구 아님)' }); continue; }
     if (!rendered(p.x, p.z)) { report.droppedExits.push({ station: name, ref, osm: n.id, why: '게임에 그려지지 않는 곳' }); continue; }
-    exits.push({ ref, osm: n.id, lat: n.lat, lon: n.lon, x: p.x, z: p.z });
+    const sw = stairsOf.get(n.id);
+    exits.push({ ref, osm: n.id, lat: n.lat, lon: n.lon, x: p.x, z: p.z, ...(sw ? { stairs: sw.d, stairsWay: sw.way } : {}) });
   }
   exits.sort(natural);
   if (!exits.length) { report.skipped.push({ id, name, why: '렌더링 영역 안 출구 없음' }); continue; }
@@ -149,12 +180,12 @@ for (const [id, name] of TARGETS) {
   if (id !== 'jeongja') {
     for (const e of exits) {
       const W = areaWorld(e.x, e.z);
-      let p = placeEntrance(e, { roads: W.roads, station: st, isFree: W.isFree });
-      // OSM 점이 건물 footprint·차도 안 (지하상가·역 건물 안 출구 등) → 가장 가까운 빈 보도까지 최대 18m 옮겨 본다
-      if (p.bad) { const q = placeEntrance(e, { roads: W.roads, station: st, isFree: W.isFree, radii: [8, 10, 12, 14, 16, 18] }); if (q.bad < p.bad) p = q; }
+      let p = placeEntrance(e, { roads: W.roads, station: st, isFree: W.isFree, isClear: W.isClear });
+      // 자리가 없으면 (OSM 점이 건물 footprint·차도 안, 구조물에 붙음 (지하상가·역 건물 안 출구 등) → 가장 가까운 빈 보도까지 최대 18m 옮겨 본다
+      if (!p.ok) { const q = placeEntrance(e, { roads: W.roads, station: st, isFree: W.isFree, isClear: W.isClear, radii: [14, 16, 18] }); if ((q.ok && !p.ok) || q.score < p.score) p = q; }
       // 그래도 출입구 자리 대부분이 건물 안이면 = 실내(역사·상가 건물 안) 출구 → 지상 출입구를 그리지 않는다 (위치를 지어내지 않음)
       if (p.bad > 30) { e.indoor = true; report.droppedExits.push({ station: name, ref: e.ref, osm: e.osm, why: `OSM 위치가 건물 footprint 안 (실내 출구, 18m 안에 빈 보도 없음 bad=${p.bad})` }); continue; }
-      e.place = { x: Math.round(p.x * 10) / 10, z: Math.round(p.z * 10) / 10, ry: Math.round(p.ry * 1000) / 1000, shift: Math.round(p.shift * 10) / 10, bad: p.bad };
+      e.place = { x: Math.round(p.x * 10) / 10, z: Math.round(p.z * 10) / 10, ry: Math.round(p.ry * 1000) / 1000, shift: Math.round(p.shift * 10) / 10, bad: p.bad, ...(p.clr ? { clr: p.clr } : {}), ...(p.front ? { front: p.front } : {}) };
     }
   }
   const shown = exits.filter((e) => !e.indoor);
@@ -168,7 +199,7 @@ for (const [id, name] of TARGETS) {
     route: { line: prim, rel: route.rel, stops: route.stops },
     exits: shown.map(({ x, z, ...e }) => e),
   });
-  report.stations.push({ id, name, lines: lines.map((k) => LINES[k].ko), exits: shown.map((e) => e.ref ?? '·').join(','), maxShift: Math.max(0, ...shown.map((e) => e.place?.shift || 0)), bad: shown.filter((e) => e.place?.bad).map((e) => `${e.ref}:${e.place.bad}`) });
+  report.stations.push({ id, name, lines: lines.map((k) => LINES[k].ko), exits: shown.map((e) => e.ref ?? '·').join(','), maxShift: Math.max(0, ...shown.map((e) => e.place?.shift || 0)), bad: shown.filter((e) => e.place?.bad).map((e) => `${e.ref}:${e.place.bad}`), clr: shown.filter((e) => e.place?.clr || e.place?.front).map((e) => `${e.ref}:${e.place.clr || 0}/${e.place.front || 0}`) });
 }
 
 const meta = { generated: new Date().toISOString().slice(0, 10), source: 'OpenStreetMap (© OpenStreetMap contributors, ODbL) via Overpass · data/osm_subway_corridor.json, data/osm_subway_routes.json', osmBase: rd('data/osm_subway_corridor.json').osm3s?.timestamp_osm_base };

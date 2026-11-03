@@ -1,13 +1,15 @@
 // node scripts/test-subway.mjs — [subway] 들어가기/나오기 상태 · 실제 출구(OSM) 투영·안내 · 대합실 배치(걸을 수 있는 곳) 순수 로직
 import fs from 'node:fs';
+import path from 'node:path';
 import assert from 'node:assert/strict';
 import { createSubwayState, FADE_SEC } from '../src/subway/state.js';
 import { JEONGJA_EXITS, projectLatLon, compass, nearbyHints, resolveExits, groupExits, exitLabel, roadAxis, exitSide } from '../src/subway/exits.js';
 import { HALL, GATE, WELLS, passageFor, walkable, passageAt, laneAt, staticBlockers } from '../src/subway/layout.js';
-import { placeEntrance, toWorld, toLocal } from '../src/subway/entrance.js';
+import { placeEntrance, toWorld, toLocal, structureClear, CLEAR, ENTRANCE_DIM } from '../src/subway/entrance.js';
+import { gameTerrain } from './subway/gameTerrain.mjs';
 import * as THREE from 'three';
 import { ZONE_BASE, ZONES, encodeZone, decodeZone, isZoneId, zoneSlot } from '../src/net/zones.js';
-import { STATIONS, stationTheme, stationReach, corridorExits, stationZone, entranceLod, ENT_BUILD, ENT_DROP, ENT_SHOW, JEONGJA_THEME } from '../src/subway/stations.js';
+import { STATIONS, stationTheme, stationReach, corridorExits, withStairs, stationZone, entranceLod, ENT_BUILD, ENT_DROP, ENT_SHOW, JEONGJA_THEME } from '../src/subway/stations.js';
 import { LINES, LINE_ORDER, OSM_REF_TO_LINE } from '../src/subway/lines.js';
 import { gyeongbuSoonAt, GYEONGBU_SOON } from '../src/world/gyeongbuSoon.js';
 import { RemotePlayers } from '../src/net/remotePlayers.js';
@@ -93,6 +95,47 @@ assert.deepEqual(groups.map((g) => g.dir + ':' + g.exits.map((e) => e.ref).join(
   // 원래 자리가 막혔으면 조금 옮김
   const moved = placeEntrance({ x: 12, z: 0 }, { roads, station: { x: 0, z: 0 }, isFree: (x) => x > 15 });
   assert.ok(moved.shift > 0 && moved.shift <= 6.01 && moved.bad === 0);
+}
+
+// ---------- [fix 2026-11-03] 구조물 여유 · 방향 (도훈 피드백: 2번 출구가 다리에 붙음 · 광장 4번 방향) ----------
+{
+  const roads = [{ p: [[0, -50], [0, 50]], w: 16, k: 'primary' }];
+  const footprint = (e, C = 0) => { const out = []; for (let u = -2 - C; u <= 2.01 + C; u += 0.5) for (let w = -2.4 - C; w <= ENTRANCE_DIM.L + 0.41 + C; w += 0.5) out.push(toWorld(e, u, w)); return out; };
+  // 다리 상판(x 10..20, z -4..-1) 이 바로 옆 → 둘레 CLEAR m 안에 없게 옮김
+  const deck = (x, z) => x > 10 && x < 20 && z > -4 && z < -1;
+  const p = placeEntrance({ x: 12, z: 0 }, { roads, station: { x: 12, z: 30 }, isFree: () => true, isClear: (x, z) => !deck(x, z) });
+  assert.ok(p.ok && p.clr === 0 && p.shift > 0, 'clearance: 옮김');
+  assert.ok(footprint(p, CLEAR).every((q) => !deck(q.x, q.z)), 'clearance: 둘레에 상판 없음');
+  assert.ok(Math.abs(Math.sin(p.ry)) < 1e-6, 'clearance: 여전히 큰길과 나란히');
+  // OSM 계단 방향이 있으면 그대로 (역 쪽 선호·큰길 방향보다 먼저)
+  const s = placeEntrance({ x: 12, z: 0, stairs: [1, 0] }, { roads, station: { x: 12, z: -30 }, isFree: () => true });
+  assert.ok(Math.abs(Math.sin(s.ry) - 1) < 1e-6 && s.shift === 0, 'stairs: 동쪽으로 내려감');
+  // 나란히 자리가 조금만 옮기면 있으면, 제자리 직각보다 나란히를 고른다
+  const narrow = placeEntrance({ x: 12, z: 0 }, { roads, station: { x: 12, z: -30 }, isFree: (x, z) => z < -3 || z > 2 || x > 30 });
+  assert.ok(Math.abs(Math.sin(narrow.ry)) < 1e-6 && narrow.ok, 'parallel 우선');
+  // 입구 앞 2m 가 막혔으면(벽·차도를 봄) 그 방향은 안 씀
+  const wall = placeEntrance({ x: 12, z: 0 }, { roads, station: { x: 12, z: -30 }, isFree: (x, z) => !(z > 2.5 && z < 5 && Math.abs(x - 12) < 3) });
+  assert.ok(wall.ok && wall.front === 0, 'mouth 앞 비어 있음');
+  assert.ok(Math.cos(wall.ry) > 0.99 || wall.shift > 0, 'mouth 앞이 막힌 쪽을 피함');
+
+  // 실제 지형 (게임과 같은 terrain): 모든 역 출입구 둘레에 다리·계단·제방 없음
+  const { terrain, jz } = gameTerrain(path.resolve(path.dirname(new URL(import.meta.url).pathname), '..'));
+  const clear = structureClear(terrain);
+  for (const d of STATIONS) for (const e of d.exits) {
+    if (!e.place) continue;
+    const bad = footprint(e.place, CLEAR).filter((q) => !clear(q.x, q.z)).length;
+    assert.equal(bad, 0, `${d.name} ${e.ref} 둘레 ${CLEAR}m 에 구조물 ${bad}`);
+    if (e.stairs) assert.ok(Math.sin(e.place.ry) * e.stairs[0] + Math.cos(e.place.ry) * e.stairs[1] > 0.95, `${d.name} ${e.ref} OSM 계단 방향`);
+  }
+  // 정자 (런타임 배치): 도로만 막는 isFree 로 같은 함수 → 2번은 다리에서 떨어지고, 4번은 OSM 계단(way 317247246) 따라 남쪽으로
+  const jd = STATIONS[0];
+  const ex = withStairs(resolveExits(jz), jd);
+  const onRoad = (x, z) => jz.roads.some((r) => r.w >= 6 && r.p.some((q, i) => { if (!i) return false; const [ax, az] = r.p[i - 1], [bx, bz] = q, dx = bx - ax, dz = bz - az, L2 = dx * dx + dz * dz || 1, t = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / L2)); return Math.hypot(ax + dx * t - x, az + dz * t - z) < r.w / 2; }));
+  const pj = Object.fromEntries(ex.map((e) => [e.ref, placeEntrance(e, { roads: jz.roads, station: { x: 0, z: 0 }, isFree: (x, z) => !onRoad(x, z), isClear: clear })]));
+  for (const [ref, q] of Object.entries(pj)) assert.equal(footprint(q, CLEAR).filter((r) => !clear(r.x, r.z)).length, 0, `정자 ${ref} 구조물 여유`);
+  assert.ok(Math.cos(pj['4'].ry) > 0.99, '정자 4번: 남쪽으로 내려감 (입구는 북쪽 = 화살표 꼬리)');
+  assert.ok(Math.cos(pj['3'].ry) < -0.99, '정자 3번: OSM 계단 따라 북쪽으로');
+  assert.ok(pj['4'].shift === 0 && pj['3'].shift === 0);
 }
 
 // ---------- 대합실 배치 ----------
@@ -284,4 +327,4 @@ assert.equal(walkable(GATE.cab[2], 0, 0.25, { passages }), false, '개찰구 몸
 assert.equal(gyeongbuSoonAt(-446, -1800), true, '경부 북쪽 끝');
 assert.equal(gyeongbuSoonAt(-446, -1600), false); assert.equal(gyeongbuSoonAt(0, -1900), false, '경부 아닌 곳');
 assert.ok(GYEONGBU_SOON.z > -1834, '도로 끝(-1834)보다 앞에서');
-console.log('subway: state · exits · entrance placement · concourse layout · zone presence · corridor stations · gyeongbu OK');
+console.log('subway: state · exits · entrance placement · structure clearance · facing · concourse layout · zone presence · corridor stations · gyeongbu OK');
