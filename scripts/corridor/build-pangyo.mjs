@@ -19,9 +19,16 @@ const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), '../.
 const CORR = path.resolve(ROOT, arg('corridor', 'public/corridor'));
 const OUT = path.resolve(ROOT, arg('out', 'public/corridor/pangyo'));
 const RAW = path.resolve(ROOT, arg('raw', 'data/osm_pangyo_raw.json'));
-if (process.argv.includes('--fetch')) execFileSync('bash', [path.join(ROOT, 'data/fetch.sh'), 'query_pangyo.overpassql', path.basename(RAW)], { stdio: 'inherit' });
+// [ncsoft] 엔씨소프트 R&D센터 덧박스용 원본(작은 bbox, data/query_pangyo_ncsoft.overpassql). 1단계 원본에 없는 요소만 덧붙인다(같은 id 는 1단계 판 유지)
+const RAW_NC = path.resolve(ROOT, arg('rawNc', 'data/osm_pangyo_ncsoft_raw.json'));
+if (process.argv.includes('--fetch')) {
+  execFileSync('bash', [path.join(ROOT, 'data/fetch.sh'), 'query_pangyo.overpassql', path.basename(RAW)], { stdio: 'inherit' });
+  execFileSync('bash', [path.join(ROOT, 'data/fetch.sh'), 'query_pangyo_ncsoft.overpassql', path.basename(RAW_NC)], { stdio: 'inherit' });
+}
 const readJSON = (f) => JSON.parse(fs.readFileSync(f, 'utf8'));
 const raw = readJSON(RAW);
+const rawNc = fs.existsSync(RAW_NC) ? readJSON(RAW_NC) : null;
+if (rawNc) { const have = new Set(raw.elements.map((e) => e.type + e.id)); for (const e of rawNc.elements) if (!have.has(e.type + e.id)) raw.elements.push(e); }
 const cIndex = readJSON(path.join(CORR, 'index.json'));
 const cBase = readJSON(path.join(CORR, 'base.json'));
 const cStreams = fs.existsSync(path.join(CORR, 'streams.json')) ? readJSON(path.join(CORR, 'streams.json')) : null;
@@ -35,10 +42,15 @@ const proj = (g) => [r1((g.lon - CENTER.lon) * kx), r1(-(g.lat - CENTER.lat) * k
 
 // ---------- 판교 박스 (게임 좌표, m) : 판교역·알파돔시티·백화점 ± 500m 남짓. 2단계(정자→판교 연결 도로)는 별도 ----------
 export const BOX = { x0: -250, x1: 1000, z0: -3500, z1: -2500 };
-const inBox = (x, z, m = 0) => x >= BOX.x0 - m && x <= BOX.x1 + m && z >= BOX.z0 - m && z <= BOX.z1 + m;
+// [ncsoft] 엔씨소프트 R&D센터(대왕판교로644번길 12, OSM w694434545 외 부분 4개: x -45..88, z -3668..-3600)는 BOX 남쪽 밖 →
+//   건물 둘레만 덮는 작은 덧박스(BOX 아래 변에 붙음 → 바닥 이어짐). 같은 ?pangyo=0 로 꺼짐. 1단계 박스 내용은 그대로
+export const NC_BOX = { x0: -60, x1: 105, z0: -3685, z1: -3500 };
+const BOXES = [BOX, NC_BOX];
+const inB = (B, x, z, m = 0) => x >= B.x0 - m && x <= B.x1 + m && z >= B.z0 - m && z <= B.z1 + m;
+const inBox = (x, z, m = 0) => BOXES.some((B) => inB(B, x, z, m));
 const tileOf = (x, z) => `${Math.floor(x / TS)}_${Math.floor(z / TS)}`;
 const CELLS = [];
-for (let tx = Math.floor(BOX.x0 / TS); tx < Math.ceil(BOX.x1 / TS); tx++) for (let tz = Math.floor(BOX.z0 / TS); tz < Math.ceil(BOX.z1 / TS); tz++) CELLS.push(`${tx}_${tz}`);
+for (const B of BOXES) for (let tx = Math.floor(B.x0 / TS); tx < Math.ceil(B.x1 / TS); tx++) for (let tz = Math.floor(B.z0 / TS); tz < Math.ceil(B.z1 / TS); tz++) if (!CELLS.includes(`${tx}_${tz}`)) CELLS.push(`${tx}_${tz}`);
 const LEVEL_H = 3.2;
 
 // ---------- 기하 유틸 ----------
@@ -113,7 +125,7 @@ const streamTiles = new Set([...Object.keys(cStreams?.tiles || {}), ...Object.ke
 const existing = {}; // 박스 칸 ± 1칸의 기존 타일
 for (const k of Object.keys(cIndex.tiles)) {
   const t = cIndex.tiles[k];
-  if (t.x0 + TS < BOX.x0 - TS || t.x0 > BOX.x1 + TS || t.z0 + TS < BOX.z0 - TS || t.z0 > BOX.z1 + TS) continue;
+  if (BOXES.every((B) => t.x0 + TS < B.x0 - TS || t.x0 > B.x1 + TS || t.z0 + TS < B.z0 - TS || t.z0 > B.z1 + TS)) continue;
   existing[k] = readJSON(path.join(CORR, 'tiles', k + '.json'));
 }
 for (const k of CELLS) if (cIndex.tiles[k] && streamTiles.has(k)) throw new Error(`타일 ${k} 에 streams.json 하도 컷이 있음 — 덧붙이기 순서가 바뀔 수 있어 박스를 조정해야 함`);
@@ -138,6 +150,8 @@ for (const t of Object.values(existing)) {
 const LM_DEPT = new Set(['r6490334', 'w437195296', 'w437195297', 'w437195298', 'w437195299']);
 const LM_TOWERS = new Set(['w1087134311', 'w1087134310', 'w659687063', 'w659687065']);
 const LM_DECK = 'w1468711684';
+// [ncsoft] 엔씨소프트 R&D센터: OSM 에 이름 붙은 w694434545(32–58m) + 같은 단지 building 겹층 4개(포디움 0–8 · 서동 8–40 · 동동 8–32 · 서쪽 40–48)
+const LM_NC = new Set(['w694434544', 'w478539437', 'w478539439', 'w694434545', 'w694434546']);
 // 데크 높이 실측값 조사(2026-11-03): 공개 자료에 m 단위 실측값 없음 → 5.4–6.4m 표현값 유지(지어낸 값 아님, 게임 표현용).
 //   - VWorld 국가중점 GIS건물통합정보 WFS(dt_d010, 2026-10-05 갱신): 데크/광장 필지(판교동 132-18x, 백현동 4-1x) 폴리곤 24개 모두 hg=0·층수 0
 //     (건축물대장 높이 없음). 같은 박스에서 높이 있는 건 알파돔타워 67.6m·그레이츠 판교 67.5m 뿐.
@@ -187,7 +201,7 @@ for (const e of raw.elements) {
   const parts = buildings.filter((b) => b.part);
   for (const b of buildings) if (!b.part && parts.some((p) => p !== b && pointInRing(p.c[0], p.c[1], b.o))) { b.outline = 1; stat.outlines++; }
 }
-const lmOf = (b) => (LM_DEPT.has(b.id) ? 'pangyo-dept' : LM_TOWERS.has(b.id) ? 'alphadom-towers' : b.id === LM_DECK ? 'pangyo-deck' : null);
+const lmOf = (b) => (LM_DEPT.has(b.id) ? 'pangyo-dept' : LM_TOWERS.has(b.id) ? 'alphadom-towers' : b.id === LM_DECK ? 'pangyo-deck' : LM_NC.has(b.id) ? 'ncsoft-rnd' : null);
 const addB = {};
 const defaultList = [];
 for (const b of buildings) {
@@ -231,11 +245,19 @@ for (const e of raw.elements) {
 const DUP = 1.0;
 function nearEx(x, z, w) { for (const it of exR.q(x, z)) if (it.w >= w - 2 && segDist(x, z, it.ax, it.az, it.bx, it.bz) <= DUP) return true; return false; }
 const dupSeg = (a, b, w) => nearEx(a[0], a[1], w) && nearEx(b[0], b[1], w) && nearEx((a[0] + b[0]) / 2, (a[1] + b[1]) / 2, w);
-function clipBox(a, b) { // Liang–Barsky → 박스 안 [t0,t1] 또는 null
+function clipOne(B, a, b) { // Liang–Barsky → 박스 B 안 [t0,t1] 또는 null
   const dx = b[0] - a[0], dz = b[1] - a[1]; let t0 = 0, t1 = 1;
-  const p = [-dx, dx, -dz, dz], q = [a[0] - BOX.x0, BOX.x1 - a[0], a[1] - BOX.z0, BOX.z1 - a[1]];
+  const p = [-dx, dx, -dz, dz], q = [a[0] - B.x0, B.x1 - a[0], a[1] - B.z0, B.z1 - a[1]];
   for (let i = 0; i < 4; i++) { if (p[i] === 0) { if (q[i] < 0) return null; continue; } const t = q[i] / p[i]; if (p[i] < 0) t0 = Math.max(t0, t); else t1 = Math.min(t1, t); }
   return t0 < t1 ? [t0, t1] : null;
+}
+// 박스 합집합 안 구간: 박스별 구간을 이어 붙이고(맞닿으면 하나로) 가장 긴 구간 — 덧박스가 BOX 변에 붙어 있어 보통 한 구간
+function clipBox(a, b) {
+  const iv = BOXES.map((B) => clipOne(B, a, b)).filter(Boolean).sort((u, v) => u[0] - v[0]);
+  if (!iv.length) return null;
+  const m = [iv[0].slice()];
+  for (const [t0, t1] of iv.slice(1)) { const l = m[m.length - 1]; if (t0 <= l[1] + 1e-9) l[1] = Math.max(l[1], t1); else m.push([t0, t1]); }
+  return m.reduce((x, y) => (y[1] - y[0] > x[1] - x[0] ? y : x));
 }
 const lerp = (a, b, t) => [r1(a[0] + (b[0] - a[0]) * t), r1(a[1] + (b[1] - a[1]) * t)];
 const rstat = { segs: 0, dropDup: 0, dropMask: 0, clipped: 0 };
@@ -307,7 +329,8 @@ if (deckB) parks.push({ o: deckB.o, holes: [], k: 'plaza', deck: 1 });
 const cellGeom = {};
 for (const k of CELLS) {
   const [tx, tz] = k.split('_').map(Number);
-  const rect = rectGeom(Math.max(tx * TS, BOX.x0), Math.max(tz * TS, BOX.z0), Math.min((tx + 1) * TS, BOX.x1), Math.min((tz + 1) * TS, BOX.z1));
+  const rects = BOXES.map((B) => [Math.max(tx * TS, B.x0), Math.max(tz * TS, B.z0), Math.min((tx + 1) * TS, B.x1), Math.min((tz + 1) * TS, B.z1)]).filter(([a, b, c, d]) => c > a && d > b).map((r) => rectGeom(...r));
+  const rect = rects.length > 1 ? pc.union(...rects) : rects[0];
   cellGeom[k] = cellMode[k] === 'new' ? [rect] : pc.intersection([rect], ...(existing[k].floor || []).map((f) => [closeRing(f.o), ...(f.holes || []).map(closeRing)]));
 }
 const exParkGrid = new Grid(60); for (const p of exP) exParkGrid.add(p, ...bboxOf(p.o));
@@ -372,7 +395,10 @@ const station = { id: 'pangyo', name: '판교', nameEn: 'Pangyo', lines: stLines
 const lmParts = (lm) => buildings.filter((b) => lmOf(b) === lm && !b.outline).map((b) => ({ id: b.id, o: b.o, ...(b.holes?.length ? { holes: b.holes } : {}), h: b.h, mh: b.mh || 0, ...(b.n ? { n: b.n } : {}), s: b.s }));
 const centerOf = (parts) => { const all = parts.flatMap((p) => p.o); const bb = bboxOf(all); return { x: r1((bb[0] + bb[2]) / 2), z: r1((bb[1] + bb[3]) / 2), y: Math.max(...parts.map((p) => p.h)) }; };
 const dept = lmParts('pangyo-dept'), towers = lmParts('alphadom-towers'), deck = deckB ? [{ id: deckB.id, o: deckB.o, holes: deckB.holes, h: DECK.h, mh: DECK.mh, s: 'landmark:deck' }] : [];
-if (dept.length !== 4 || towers.length !== 4 || deck.length !== 1) throw new Error(`랜드마크 매칭 실패 dept=${dept.length} towers=${towers.length} deck=${deck.length}`);
+// [ncsoft] 층수: OSM building:levels(꼭대기 층 번호) − building:min_level → 층 띠 간격 = (height − min_height) / 층수 (태그 값 그대로)
+const ncTags = new Map(raw.elements.filter((e) => LM_NC.has(`${e.type[0]}${e.id}`)).map((e) => [`${e.type[0]}${e.id}`, e.tags || {}]));
+const nc = lmParts('ncsoft-rnd').map((p) => { const t = ncTags.get(p.id) || {}, lv = num(t['building:levels']), ml = num(t['building:min_level']) || 0; return { ...p, fl: lv && lv > ml ? lv - ml : null }; });
+if (dept.length !== 4 || towers.length !== 4 || deck.length !== 1 || nc.length !== 5) throw new Error(`랜드마크 매칭 실패 dept=${dept.length} towers=${towers.length} deck=${deck.length} ncsoft=${nc.length}`);
 // 데크 안쪽 빈 곳(선큰 광장) — OSM 링의 구멍이 없으면 외곽 자체의 오목한 X 모양이라 중심 원형 마당을 가정하지 않는다
 const plazaPed = plazas.filter((p) => inBox(...centroid(p.o)));
 const landmarks = [
@@ -380,6 +406,8 @@ const landmarks = [
   { id: 'alphadom-towers', model: 'pangyoTowers', label: { ko: '알파돔시티', en: 'Alphadom City' }, pos: centerOf(towers.concat(deck)), parts: towers },
   { id: 'pangyo-deck', model: 'pangyoDeck', label: { ko: '판교역 광장', en: 'Pangyo Station Plaza' }, pos: { ...centerOf(deck), y: DECK.h }, parts: deck },
   { id: 'pangyo-entrances', model: 'pangyoEntrances', entrances: exits, lines: station.lines },
+  // 이름 표지·라벨 없음(도훈님 결정) · 로고 없음
+  { id: 'ncsoft-rnd', model: 'ncsoftRnd', osm: 'w694434545', pos: centerOf(nc), parts: nc },
 ];
 
 // ---------- 5) 쓰기 ----------
@@ -416,7 +444,7 @@ for (const k of CELLS) {
 }
 const index = {
   meta: {
-    name: 'Pangyo station area (stage 1)', tileSize: TS, box: BOX, generated: new Date().toISOString(),
+    name: 'Pangyo station area (stage 1)', tileSize: TS, box: BOX, boxes: BOXES, generated: new Date().toISOString(),
     source: { osm: `Overpass API (osm_base ${raw.osm3s?.timestamp_osm_base || '?'})`, query: 'data/query_pangyo.overpassql', corridor: cIndex.meta.generated },
     attribution: '© OpenStreetMap contributors (ODbL)',
     heightRule: 'OSM height → building:levels×3.2(+1.5 if >3F, else +0.6) → default levels by type/area (scripts/bake.mjs defaultLevels); deck = stylized 5.4–6.4 m (no measured height in public data: VWorld dt_d010 hg=0 on all deck/plaza parcels, OSM no height tags; sources only give floors 3F/4F)',
