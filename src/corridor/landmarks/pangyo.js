@@ -1,7 +1,7 @@
 // [pangyo] 판교역 일대 랜드마크 (확장 1단계, 데이터: public/corridor/pangyo/index.json ← scripts/corridor/build-pangyo.mjs)
 //   - 현대백화점(일반 매스, 로고·전용 서체·브랜드 색 없음): OSM building:part 높이 그대로 + 띠 장식·쇼윈도·입구 캐노피·'현대백화점' 글자 표지
 //   - 알파돔시티 타워 4동: OSM 높이 그대로 유리 커튼월(정자 office 파사드·야간 창 불빛 공유) + 세로 핀·포디움 캐노피·옥상 크라운
-//   - 판교역 광장 데크: OSM 외곽(높이 태그 없음 → 2층 높이 5.4–6.4m 로 표현) + 기둥·난간
+//   - 판교역 광장 데크: OSM 외곽(높이 태그 없음 → 기사 서술 '3~4층 높이' 로 10–12m) + 기둥·난간 + OSM 엘리베이터 3곳(유리 승강로)
 //   - 엔씨소프트 R&D센터: OSM building 겹층 5개(높이·min_height·층수 태그 그대로) + 층 띠·멀리언·로비 유리·필로티 밑면 조명·옥상 난간. 이름 표지/라벨/로고 없음
 //   - 지하철 출입구 4곳: OSM 출입구 노드 위치/번호, 방향 = 가까운 보행로. 유리 캐노피 + 노선색 띠 + 번호판
 //   모델은 해당 상세 타일이 빌드될 때 그 타일 그룹에 붙고 타일과 함께 해제된다(멀리선 LOD 상자). 재질은 모듈 공유,
@@ -203,7 +203,7 @@ function buildDeck(l) {
   const g = new THREE.Group(); g.name = 'pangyoDeck';
   const bag = Bag(), lit = Bag();
   for (const p of l.parts) {
-    const y0 = p.mh, y1 = p.h; // OSM layer=1, 높이 없음 → 5.4–6.4m (build-pangyo.mjs DECK)
+    const y0 = p.mh, y1 = p.h; // OSM layer=1, 높이 없음 → 10–12m (build-pangyo.mjs DECK, '3~4층 높이')
     bag.push(paintFaces(extrude(p.o, p.holes, y0, y1), C.deckTop, C.deckSide, C.deckSide)); // OSM roof:colour 갈색 · building:colour 회색
     // 난간은 데크 가장자리 안쪽: 외곽 링은 바깥 법선 반대(-), 구멍 링은 구멍 바깥(= 데크 쪽, +)
     for (const [r, sd] of [[p.o, -1], ...(p.holes || []).map((h) => [h, 1])]) {
@@ -219,6 +219,14 @@ function buildDeck(l) {
       if (!inside(x, z) || edgeD(x, z) < 2.5) continue;
       const c = new THREE.CylinderGeometry(0.42, 0.42, y0, 10); c.translate(x, y0 / 2, z); bag.push(c, C.column);
     }
+  }
+  // [deck-v2] 엘리베이터(OSM highway=elevator): 지상 → 데크 상판 + 기계실. 승강로 2.4 × 2.4m · 상판 위 2.6m 는 표현용 기본값(실측 아님)
+  const top = Math.max(...l.parts.map((p) => p.h)), EW = 2.4, EH = top + 2.6;
+  for (const e of l.elevators || []) {
+    for (const [dx, dz] of [[-1, -1], [-1, 1], [1, -1], [1, 1]]) bag.box(e.x + dx * EW / 2, EH / 2, e.z + dz * EW / 2, 0.16, EH, 0.16, 0, C.frame);
+    bag.box(e.x, EH + 0.15, e.z, EW + 0.3, 0.3, EW + 0.3, 0, C.frame);
+    bag.box(e.x, EH / 2, e.z, EW - 0.1, EH - 0.2, EW - 0.1, 0, C.podium); // 유리 승강로(불투명 짙은 유리색 — 투명 정렬 비용 없이)
+    for (let y = 3; y < EH - 1; y += 3) lit.box(e.x, y, e.z, EW + 0.02, 0.12, EW + 0.02, 0, '#ffffff'); // 야간 띠
   }
   const body = bag.mesh(vcMat(), 'pangyoDeckBody'); if (body) g.add(body);
   const night = lit.mesh(glow(), 'pangyoDeckGlow'); if (night) { night.castShadow = night.receiveShadow = false; g.add(night); }
