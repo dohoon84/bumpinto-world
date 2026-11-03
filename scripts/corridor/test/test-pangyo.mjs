@@ -84,6 +84,10 @@ const tower = pg.landmarks.find((l) => l.model === 'pangyoTowers').parts[0], dec
 assert.ok(t07.blocked(...cen(tower.o)), 'tower collision');
 const deckPt = deck.o.map((p, i) => [(p[0] + deck.o[(i + 7) % deck.o.length][0]) / 2, (p[1] + deck.o[(i + 7) % deck.o.length][1]) / 2]).find(([x, z]) => inRing(x, z, deck.o));
 assert.ok(deckPt && !t07.blocked(...deckPt), 'deck walkable beneath');
+// [deck-v2] 데크 상판 10–12m('3~4층 높이' 기사 서술) · 엘리베이터는 OSM highway=elevator 노드만(지어내지 않음)
+assert.ok(deck.mh === 10 && deck.h === 12, `deck 10–12 m (got ${deck.mh}–${deck.h})`);
+const deckL = pg.landmarks.find((l) => l.model === 'pangyoDeck'), elevSrc = new Set(JSON.parse(fs.readFileSync(path.join(ROOT, 'data/osm_pangyo_deck_elevators.json'), 'utf8')).elements.map((e) => e.id));
+assert.ok(deckL.elevators.length >= 1 && deckL.elevators.every((e) => elevSrc.has(e.osm)), 'deck elevators from OSM');
 for (const e of st.exits) assert.ok(!t07.blocked(e.x, e.z) && !buildDetailTile('x', tiles[`${Math.floor(e.x / 500)}_${Math.floor(e.z / 500)}`], { terrain: null, onRoadAll: () => false }).onRoad(e.x, e.z), `exit ${e.ref} free`);
 t07.dispose();
 ok('station, exits free, landmark collisions');
@@ -167,7 +171,23 @@ ok('globe station list + branch layout');
   // 이름 없는 메시 = 코리더 공용 office 파사드(창 텍스처) — 그 외엔 텍스처 없음
   const g = lm2.build('0_-8'); let n = 0, tri = 0; const names = [];
   g.traverse((o) => { if (o.isMesh) { n++; names.push(o.name); tri += (o.geometry.index ? o.geometry.index.count : o.geometry.attributes.position.count) / 3; assert.ok(!/sign|label|logo/i.test(o.name) && (!o.name || !o.material.map), 'ncsoft: 표지·글자·로고 텍스처 없음 ' + o.name); } });
-  assert.ok(n <= 5, 'ncsoft meshes ' + n);
+  assert.ok(n <= 2, 'ncsoft meshes ' + n); // [ncsoft-v2] 본체 1 + 야간 불빛 1
   ok(`ncsoft: ${L.parts.length} OSM parts (0–58m), ${n} meshes, ${Math.round(tri)} tris, no sign/label/logo`);
+}
+// 12) [ncsoft-roads] HQ 둘레 도로(대왕판교로 · 대왕판교로644번길 · 판교역로)가 BOX 도로망(z > -3490)과 이어지고, 덧박스 바깥 변에 잘린 차도 끝이 없다
+{
+  const NB = pg.meta.boxes[1], FOOT = new Set(['footway', 'cycleway', 'path', 'steps', 'pedestrian', 'track']);
+  const R = Object.keys(pg.tiles).flatMap((k) => J(path.join(P, 'tiles', k + '.json')).r).filter((r) => !FOOT.has(r.k));
+  const key = ([x, z]) => `${x},${z}`, par = new Map(), find = (a) => { while (par.get(a) !== a) a = par.get(a); return a; };
+  const uni = (a, b) => { for (const k of [a, b]) if (!par.has(k)) par.set(k, k); par.set(find(a), find(b)); };
+  for (const r of R) for (let i = 1; i < r.p.length; i++) uni(key(r.p[i - 1]), key(r.p[i]));
+  const south = new Set([...par.keys()].filter((k) => +k.split(',')[1] > -3490).map(find));
+  const ring = R.filter((r) => ['대왕판교로', '대왕판교로644번길', '판교역로'].includes(r.n) && r.p.some(([, z]) => z < -3600));
+  assert.deepEqual([...new Set(ring.map((r) => r.n))].sort(), ['대왕판교로', '대왕판교로644번길', '판교역로'], 'HQ ring roads present');
+  for (const r of ring) assert.ok(south.has(find(key(r.p[0]))), `${r.n} connected to BOX network`);
+  const onEdge = ([x, z]) => z < B.z0 - 0.1 && (Math.abs(x - NB.x0) < 0.3 || Math.abs(x - NB.x1) < 0.3 || Math.abs(z - NB.z0) < 0.3);
+  const cut = R.flatMap((r) => [r.p[0], r.p[r.p.length - 1]]).filter(onEdge);
+  assert.equal(cut.length, 0, 'vehicle road ends cut at NC box edge: ' + JSON.stringify(cut));
+  ok(`ncsoft roads: ${ring.length} HQ ring pieces connected to BOX network, no cut ends at NC box edge`);
 }
 console.log('pangyo: all', n, 'checks passed');
