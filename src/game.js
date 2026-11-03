@@ -152,6 +152,7 @@ const handleGateEnter = (chosenRegionId = region.id, gateOpts = undefined) => {
     }, 850);
     return;
   }
+  startDeferredBoot(hasPassport); // [globe-startup]
   if (hasPassport) {
     if (joinWithPassport) joinWithPassport();
     else passportQueued = true;
@@ -162,6 +163,25 @@ const handleGateEnter = (chosenRegionId = region.id, gateOpts = undefined) => {
 };
 const isLocalEnv = ['localhost', '127.0.0.1', '[::1]'].includes(location.hostname) || location.hostname.endsWith('.local');
 const lockedBeforeOpen = region.id === 'starbase' && !isStarbaseLive() && !isLocalEnv && !shot;
+// [globe-startup] 첫 화면이 지구본이면 월드(건물·지형·코리더·NPC…) 빌드를 지구본을 떠날 때까지 미룬다.
+//   빌드는 메인 스레드를 수 초 동안 통째로 막는 동기 작업이라, 지구본과 동시에 돌면 회전이 그동안 멈칫거린다.
+//   데이터는 지금 내려받기만 하고(네트워크 스레드, 파싱 X), 입장을 누르면 로딩 화면을 띄운 뒤 빌드한다.
+//   다른 지역을 고르면 페이지가 바뀌므로 이 동네 월드는 아예 빌드하지 않는다. ?enter=1 · ?passport=1 · ?from= · ?shot 은 기존처럼 바로 빌드.
+let releaseBoot = null;
+const bootGate = (!shot && (lockedBeforeOpen || !((passportEnter && readSavedPassport()) || autoEnter)))
+  ? new Promise((resolve) => { releaseBoot = resolve; })
+  : null;
+const startDeferredBoot = (hasPassport) => {
+  if (!releaseBoot) return;
+  const go = releaseBoot;
+  releaseBoot = null;
+  if (!arrivalFlightScreen) {
+    arrivalFlightScreen = getEnterScreen();
+    arrivalFlightScreen.show(getEnterLines(entryRegion()), hasPassport ? null : { minMs: 400 });
+  }
+  // 로딩 화면이 한 번 그려진 다음에 무거운 빌드 시작
+  requestAnimationFrame(() => setTimeout(go, 0));
+};
 if (shot) document.body.classList.remove('in-gate');
 else if (lockedBeforeOpen) openWorldGate({ onEnter: handleGateEnter });
 else if (passportEnter && readSavedPassport()) passportQueued = true;
@@ -174,19 +194,37 @@ const terrainFile = region.dataFiles?.terrain;
 const driveFile = region.dataFiles?.drive;
 const shopsFile = params.get('shops') === '0' ? null : region.dataFiles?.shops; // [shops] ?shops=0 이면 1층 상가 표시 끔
 const coloursFile = params.get('colours') === '0' ? null : region.dataFiles?.colours; // [colours] ?colours=0 이면 건물 색 끔 (기존 모습)
+// [globe-startup] 지구본이 떠 있는 동안에는 받기만 하고(바이트), JSON 파싱은 빌드 직전에. 실패·!ok 는 null
+const bootBytes = new Map();
+const fetchBytes = (url) => {
+  if (!bootBytes.has(url)) bootBytes.set(url, fetch(url).then((r) => (r.ok ? r.arrayBuffer() : null)).catch(() => null));
+  return bootBytes.get(url);
+};
+const parseBytes = (buf) => (buf ? JSON.parse(new TextDecoder().decode(buf)) : null);
+const fetchJsonNull = async (url) => { try { return parseBytes(await fetchBytes(url)); } catch { return null; } };
+// [corridor] loadCorridorData 와 같은 규칙(r.ok 아니면 null)으로 응답을 흉내낸다
+const fetchPrefetched = async (url) => { const buf = await fetchBytes(url); return { ok: !!buf, json: async () => parseBytes(buf) }; };
+const dataUrl = (file) => (file ? import.meta.env.BASE_URL + file : null);
 // 없어도 되는 작은 데이터 파일: 실패·404 면 null (기능만 꺼진다)
-const fetchOptionalJson = (file) => (file ? fetch(import.meta.env.BASE_URL + file).then((r) => (r.ok ? r.json() : null)).catch(() => null) : null);
-
-const [data, transitData] = await Promise.all([
-  fetch(import.meta.env.BASE_URL + worldFile).then((r) => r.json()),
-  transitFile ? fetch(import.meta.env.BASE_URL + transitFile).then((r) => r.json()).catch(() => null) : Promise.resolve(null),
-]);
+const fetchOptionalJson = (file) => (file ? fetchJsonNull(dataUrl(file)) : null);
 // [terrain] [taxi] 추가 데이터 (없어도 동작). ?terrain=0 이면 평평한 기존 지형, ?taxis=0 이면 택시 없음
 const corridorDir = region.features?.corridor && params.get('corridor') !== '0' ? region.dataFiles?.corridor : null; // [corridor] ?corridor=0 이면 정자만
+const corridorStreams = params.get('streams') !== '0';
+const terrainUrl = !terrainFile || params.get('terrain') === '0' ? null : dataUrl(terrainFile);
+const driveUrl = !driveFile || params.get('taxis') === '0' ? null : dataUrl(driveFile);
+const bootUrls = [dataUrl(worldFile), dataUrl(transitFile), terrainUrl, driveUrl, dataUrl(shopsFile), dataUrl(coloursFile)];
+if (corridorDir) for (const f of ['index.json', 'base.json', 'tancheon.json', ...(corridorStreams ? ['streams.json'] : [])]) bootUrls.push(dataUrl(corridorDir) + f);
+for (const u of bootUrls) if (u) fetchBytes(u); // 바로 다운로드 시작 (파싱 없음)
+if (bootGate) await bootGate; // [globe-startup] 지구본을 떠날 때까지 빌드 대기
+
+const [data, transitData] = await Promise.all([
+  fetchBytes(dataUrl(worldFile)).then((buf) => { if (!buf) throw new Error(`failed to load ${worldFile}`); return parseBytes(buf); }),
+  transitFile ? fetchJsonNull(dataUrl(transitFile)) : Promise.resolve(null),
+]);
 const [terrainData, driveData, corridorData, shopsData, coloursData] = await Promise.all([
-  !terrainFile || params.get('terrain') === '0' ? null : fetch(import.meta.env.BASE_URL + terrainFile).then((r) => r.json()).catch(() => null),
-  !driveFile || params.get('taxis') === '0' ? null : fetch(import.meta.env.BASE_URL + driveFile).then((r) => r.json()).catch(() => null),
-  corridorDir ? loadCorridorData(import.meta.env.BASE_URL + corridorDir, { streams: params.get('streams') !== '0' }) : null,
+  terrainUrl ? fetchJsonNull(terrainUrl) : null,
+  driveUrl ? fetchJsonNull(driveUrl) : null,
+  corridorDir ? loadCorridorData(dataUrl(corridorDir), { streams: corridorStreams, fetchFn: fetchPrefetched }) : null,
   fetchOptionalJson(shopsFile), // [shops]
   fetchOptionalJson(coloursFile), // [colours]
 ]);

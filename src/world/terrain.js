@@ -55,16 +55,22 @@ export function createTerrain(T, data) {
     }
   }
   const segL = []; for (let i = 0; i < N - 1; i++) segL.push(Math.hypot(ax[i + 1][0] - ax[i][0], ax[i + 1][1] - ax[i][1]));
+  // [globe-startup] project() 는 지형 메시·제방 판정에서 수십만 번 불린다(입장 로딩의 가장 큰 단일 비용).
+  //   결과는 그대로 두고 내부 루프만 가볍게: 세그먼트 좌표를 평평한 배열로, 거리 비교는 제곱으로, 결과 객체는 마지막에 한 번만.
+  const SX = new Float64Array(N), SZ = new Float64Array(N), SDX = new Float64Array(N), SDZ = new Float64Array(N), SL2 = new Float64Array(N);
+  for (let i = 0; i < N - 1; i++) { SX[i] = ax[i][0]; SZ[i] = ax[i][1]; SDX[i] = ax[i + 1][0] - SX[i]; SDZ[i] = ax[i + 1][1] - SZ[i]; SL2[i] = SDX[i] * SDX[i] + SDZ[i] * SDZ[i]; }
   function project(x, z) {
     const list = grid.get(Math.floor(x / CELL) + ',' + Math.floor(z / CELL)); if (!list) return null;
-    let best = null, bd = Infinity;
-    for (const i of list) {
-      const ax0 = ax[i][0], az0 = ax[i][1], dx = ax[i + 1][0] - ax0, dz = ax[i + 1][1] - az0, L2 = dx * dx + dz * dz;
-      const t = ((x - ax0) * dx + (z - az0) * dz) / L2;
-      const tc = t < 0 ? 0 : t > 1 ? 1 : t, px = ax0 + dx * tc, pz = az0 + dz * tc, dist = Math.hypot(x - px, z - pz);
-      if (dist < bd) { bd = dist; best = { i, t: tc, dist, d: -(dx * (z - az0) - dz * (x - ax0)) / segL[i], end: (t < -0.05 && i === 0) || (t > 1.05 && i === N - 2) }; }
+    let bi = -1, bt = 0, btc = 0, bd2 = Infinity;
+    for (let k = 0, n = list.length; k < n; k++) {
+      const i = list[k], ax0 = SX[i], az0 = SZ[i], dx = SDX[i], dz = SDZ[i];
+      const t = ((x - ax0) * dx + (z - az0) * dz) / SL2[i];
+      const tc = t < 0 ? 0 : t > 1 ? 1 : t, ex = x - (ax0 + dx * tc), ez = z - (az0 + dz * tc), d2 = ex * ex + ez * ez;
+      if (d2 < bd2) { bd2 = d2; bi = i; bt = t; btc = tc; }
     }
-    return best;
+    if (bi < 0) return null;
+    const ax0 = SX[bi], az0 = SZ[bi], dx = SDX[bi], dz = SDZ[bi];
+    return { i: bi, t: btc, dist: Math.hypot(x - (ax0 + dx * btc), z - (az0 + dz * btc)), d: -(dx * (z - az0) - dz * (x - ax0)) / segL[bi], end: (bt < -0.05 && bi === 0) || (bt > 1.05 && bi === N - 2) };
   }
   const profAt = (q) => {
     const s = q.d < 0 ? 'L' : 'R', i = q.i, j = Math.min(N - 1, i + 1), t = q.t;
