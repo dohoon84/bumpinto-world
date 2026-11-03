@@ -1,0 +1,39 @@
+{
+ "source": "OpenStreetMap API 0.6 map.json bbox 127.084,37.388,127.114,37.414 (fetched 2026-11-03 17:40 KST) — highway=elevator nodes on/next to the Pangyo station deck (w1468711684)",
+ "license": "ODbL",
+ "elements": [
+  {
+   "type": "node",
+   "id": 5928942374,
+   "lat": 37.3948544,
+   "lon": 127.111459,
+   "tags": {
+    "highway": "elevator"
+   },
+   "timestamp": "2020-07-17T20:13:24Z",
+   "version": 2
+  },
+  {
+   "type": "node",
+   "id": 5928942375,
+   "lat": 37.3948587,
+   "lon": 127.1105873,
+   "tags": {
+    "highway": "elevator"
+   },
+   "timestamp": "2020-07-17T20:13:24Z",
+   "version": 2
+  },
+  {
+   "type": "node",
+   "id": 5928942376,
+   "lat": 37.3944644,
+   "lon": 127.1110191,
+   "tags": {
+    "highway": "elevator"
+   },
+   "timestamp": "2020-07-17T20:13:24Z",
+   "version": 2
+  }
+ ]
+}
