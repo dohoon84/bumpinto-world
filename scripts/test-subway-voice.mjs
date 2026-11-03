@@ -1,25 +1,26 @@
 // [subway-voice] 안내 방송 대기열·취소·설정 (가짜 speechSynthesis / AudioContext / 타이머 — 헤드리스는 소리를 못 들으므로 호출을 확인)
 import assert from 'node:assert/strict';
-import { createSubwayVoice, voiceItems, CHIME_SEC } from '../src/subway/voice.js';
+import { createSubwayVoice, voiceItems, CHIME_SEC, VOICE_WAIT_MS, loudness } from '../src/subway/voice.js';
 import { announce } from '../src/subway/ride.js';
 import { stairY, inStairArea, UP_Z, PLAT, STEP } from '../src/subway/platform.js';
 
-function rig({ params = '', voices = ['ko-KR', 'en-US'], level = { muted: false, volume: 0.55 }, synth = true, clips = null } = {}) {
+function rig({ params = '', voices = ['ko-KR', 'en-US'], level = { muted: false, volume: 0.55 }, synth = true, clips = null, acState = 'running' } = {}) {
   const spoken = [], log = { cancel: 0, osc: 0, gains: [], fetch: [], src: [] };
   const timers = []; let tid = 0;
   const T = { set: (f, ms) => { const id = ++tid; timers.push({ id, f, ms }); return id; }, clear: (id) => { const i = timers.findIndex((t) => t.id === id); if (i >= 0) timers.splice(i, 1); } };
   const fire = () => { const t = timers.shift(); assert.ok(t, 'timer'); t.f(); return t; };
-  const S = synth ? { getVoices: () => voices.map((lang) => ({ lang, name: lang })), speak: (u) => spoken.push(u), cancel: () => { log.cancel++; } } : null;
+  const vl = {}; const S = synth ? { getVoices: () => voices.map((lang) => ({ lang, name: lang })), speak: (u) => spoken.push(u), cancel: () => { log.cancel++; }, addEventListener: (e, f) => { vl[e] = f; }, removeEventListener() {} } : null;
+  const gl = {}; const target = { addEventListener: (e, f) => { (gl[e] ||= []).push(f); }, removeEventListener() {} };
   class U { constructor(t) { this.text = t; } }
   const param = (v) => { const g = { gain: { value: 0, setValueAtTime() {}, exponentialRampToValueAtTime(a) { if (a > 0.001) log.gains.push(a); } }, connect() {} }; return g; };
-  class AC { constructor() { this.currentTime = 0; this.destination = {}; this.state = 'running'; }
+  class AC { constructor() { this.currentTime = 0; this.destination = {}; this.state = acState; log.ac = this; }
     createGain() { return param(); } createOscillator() { log.osc++; return { type: '', frequency: { value: 0 }, connect() {}, start() {}, stop() {} }; }
     createBufferSource() { const s = { connect() {}, start() { log.src.push(s); }, stop() { s.stopped = true; } }; return s; }
-    decodeAudioData(ab, ok) { ok({ duration: 1 }); } resume() {} }
+    decodeAudioData(ab, ok) { ok({ duration: 1 }); } resume() { log.resumed = (log.resumed || 0) + 1; this.state = 'running'; return Promise.resolve(); } }
   const fetchFn = async (url) => { log.fetch.push(url); if (url.endsWith('clips.json')) return clips ? { ok: true, json: async () => clips } : { ok: false, json: async () => [] }; return { ok: true, arrayBuffer: async () => new ArrayBuffer(8) }; };
   const lv = { ...level };
-  const v = createSubwayVoice({ params: new URLSearchParams(params), getLevel: () => lv, synth: S, Utterance: U, AudioCtx: AC, fetchFn, base: '/', timers: T });
-  return { v, spoken, log, timers, fire, lv };
+  const v = createSubwayVoice({ params: new URLSearchParams(params), getLevel: () => lv, synth: S, Utterance: U, AudioCtx: AC, fetchFn, base: '/', timers: T, target, logFn: null });
+  return { v, spoken, log, timers, fire, lv, gl, vl, setVoices: (l) => { voices = l; } };
 }
 const tick = () => new Promise((r) => setTimeout(r, 0));
 const A = (k) => announce(k, { dirKo: '왕십리 방면', dirEn: 'for Wangsimni', name: '수내', nameEn: 'Sunae' });
@@ -36,10 +37,10 @@ assert.deepEqual(voiceItems({ ko: '', en: '' }), []);
   await tick();
   assert.equal(v.play(A('approach')), true);
   assert.equal(spoken.length, 0, '차임 동안은 말 안 함'); assert.ok(log.osc > 0, '차임 합성');
-  assert.ok(Math.abs(log.gains[0] - 0.16 * 0.55) < 1e-9, '차임 크기 = BGM 볼륨');
+  assert.ok(Math.abs(log.gains[0] - 0.22 * loudness(0.55)) < 1e-9, '차임 크기 = BGM 볼륨(바닥 있음)');
   assert.equal(timers[0].ms, CHIME_SEC * 1000);
   fire();
-  assert.equal(spoken.length, 1); assert.equal(spoken[0].lang, 'ko-KR'); assert.equal(spoken[0].text, A('approach').ko); assert.equal(spoken[0].volume, 0.55); assert.equal(spoken[0].voice.lang, 'ko-KR');
+  assert.equal(spoken.length, 1); assert.equal(spoken[0].lang, 'ko-KR'); assert.equal(spoken[0].text, A('approach').ko); assert.equal(spoken[0].volume, loudness(0.55)); assert.equal(spoken[0].voice.lang, 'ko-KR');
   assert.equal(v.active, true);
   spoken[0].onend();
   assert.equal(spoken.length, 2); assert.equal(spoken[1].lang, 'en-US'); assert.equal(spoken[1].text, A('approach').en);
@@ -81,12 +82,24 @@ assert.deepEqual(voiceItems({ ko: '', en: '' }), []);
   const { v, spoken, lv, log } = rig({ level: { muted: true, volume: 0.8 } });
   assert.equal(v.play(A('depart')), false); assert.equal(spoken.length, 0);
   lv.muted = false; lv.volume = 0; assert.equal(v.play(A('depart')), false);
-  lv.volume = 0.3; v.play(A('depart')); assert.equal(spoken[0].volume, 0.3);
+  lv.volume = 0.3; v.play(A('depart')); assert.equal(spoken[0].volume, loudness(0.3)); assert.ok(loudness(0.3) > 0.6 && loudness(1) === 1 && loudness(0) === 0, '볼륨 바닥');
   lv.muted = true; v.update(); assert.equal(v.active, false); assert.equal(log.cancel, 1);
 }
 { // 음성이 없으면 조용히 건너뜀 (자막은 index.js 가 따로)
-  const a = rig({ voices: [] }); assert.doesNotThrow(() => a.v.play(A('depart'))); assert.equal(a.spoken.length, 0); assert.equal(a.v.active, false);
-  assert.deepEqual(a.v.events.filter((e) => e.t === 'skip').map((e) => e.why), ['no-voice', 'no-voice']);
+  // 목록이 끝내 비면: VOICE_WAIT_MS 기다린 뒤 lang 만으로 말함 (브라우저 기본 음성) — 두 번째 줄은 다시 기다리지 않음
+  const a = rig({ voices: [] }); assert.doesNotThrow(() => a.v.play(A('depart'))); assert.equal(a.spoken.length, 0); assert.equal(a.v.active, true);
+  assert.equal(a.timers[0].ms, VOICE_WAIT_MS); a.fire(); assert.equal(a.spoken.length, 1); assert.equal(a.spoken[0].lang, 'ko-KR'); assert.equal(a.spoken[0].voice, undefined);
+  a.spoken[0].onend(); assert.equal(a.spoken.length, 2); assert.equal(a.spoken[1].lang, 'en-US'); a.spoken[1].onend(); assert.equal(a.v.active, false);
+  // 목록이 늦게 옴(macOS Chrome): voiceschanged 가 오면 바로 이어서, 순서 그대로
+  const w = rig({ voices: [] }); w.v.play(A('approach')); w.fire(); /* 차임 끝 */ assert.equal(w.spoken.length, 0);
+  assert.ok(w.v.events.some((e) => e.t === 'wait-voices'));
+  w.setVoices(['ko-KR', 'en-US']); w.vl.voiceschanged(); assert.equal(w.spoken.length, 1); assert.equal(w.spoken[0].voice.lang, 'ko-KR');
+  assert.equal(w.timers.length, 1, '대기 타이머는 치움 (안전 타이머만)'); w.spoken[0].onend(); assert.equal(w.spoken[1].lang, 'en-US');
+  // 사용자 입력(클릭·키)에서 AudioContext 를 만들고 resume (잠금 해제)
+  const g = rig({ acState: 'suspended' }); assert.equal(g.v.unlocked, false); g.gl.keydown[0](); assert.equal(g.v.unlocked, true); assert.equal(g.log.ac.state, 'running'); assert.ok(g.log.resumed >= 1);
+  assert.ok(g.gl.pointerdown?.length, 'pointerdown 도 (BGM 과 같은 입력)');
+  // 🔊 표시용 구독
+  const seen = []; g.v.on((e) => seen.push(e.t)); g.v.play(A('depart')); assert.ok(seen.includes('speak'));
   const b = rig({ synth: false }); b.v.play(A('depart')); assert.equal(b.v.active, false);
   const c = rig({ voices: ['en-GB'] }); c.v.play(A('depart')); assert.equal(c.spoken.length, 1); assert.equal(c.spoken[0].lang, 'en-US', '한국어 음성이 없으면 영어만');
 }

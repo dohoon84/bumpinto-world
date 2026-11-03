@@ -87,7 +87,15 @@ export function laneAt(x, z, zr = 1.4) {
   for (let i = 0; i < GATE.lanes.length; i++) if (Math.abs(x - GATE.lanes[i]) < 0.5) return i;
   return -1;
 }
+// 계단 앞 안내(힌트)만 띄우는 넓은 구역
 export function nearWellTop(x, z) {
   for (const w of WELLS) if (x > w.x0 - 0.6 && x < w.x1 + 0.6 && z > 1.6 && z < 3.6) return w;
+  return null;
+}
+// [subway] 실제로 계단 입구(차단선 z=3.0 바로 앞, 계단 폭 안)에 발을 디딘 경우만 → 승강장으로 내려감.
+//   계단 앞 통로(z<WELL_MOUTH_Z)나 계단 옆을 지나가는 건 대합실에 그대로 있는다 (feedback-11).
+export const WELL_MOUTH_Z = 2.45;
+export function wellMouth(x, z) {
+  for (const w of WELLS) if (x > w.x0 + 0.2 && x < w.x1 - 0.2 && z > WELL_MOUTH_Z && z < 3.6) return w;
   return null;
 }

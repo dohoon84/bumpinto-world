@@ -46,7 +46,9 @@
     "subway:test": "node scripts/test-subway.mjs && node scripts/test-subway-arrivals.mjs && node scripts/test-subway-ride.mjs && node scripts/test-subway-voice.mjs",
     "subway:mp": "node scripts/mp-subway.mjs",
     "subway:stairs": "node scripts/e2e-subway-stairs.mjs",
-    "subway:camera": "node scripts/e2e-subway-camera.mjs"
+    "subway:camera": "node scripts/e2e-subway-camera.mjs",
+    "subway:alight": "node scripts/e2e-subway-alight.mjs",
+    "subway:gate": "node scripts/e2e-subway-gate-exit.mjs"
   },
   "dependencies": {
     "three": "^0.186.1"

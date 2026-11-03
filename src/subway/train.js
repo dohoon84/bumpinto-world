@@ -32,12 +32,18 @@ export function buildTrain({ origin, line, dir, rides, board, renderer, look, on
   const { HW, CEIL, HL } = CAB;
 
   // ---------- 실내 ----------
+  const DOOR_TOP = 1.95; // 문 열림 높이 (문짝 높이와 같게)
+  const wallSegs = []; { let a = -HL; for (const x of DOOR_OFF.slice().sort((p, q) => p - q)) { wallSegs.push([a, x - DOOR_W / 2]); a = x + DOOR_W / 2; } wallSegs.push([a, HL]); }
   S.block(0, -0.12, 0, HL * 2, 0.12, HW * 2, '#8f8d86');                        // 바닥
   S.block(0, -0.002, 0, HL * 2 - 0.4, 0.004, 0.9, '#a3a19a');                   // 통로 매트
   S.block(0, CEIL, 0, HL * 2, 0.1, HW * 2 + 0.2, '#eef0f2');                     // 천장
   for (const s of [-1, 1]) {
-    S.block(0, 0, s * (HW + 0.05), HL * 2, 0.95, 0.1, '#dee2e6');                 // 창 아래 벽
-    S.block(0, 1.75, s * (HW + 0.05), HL * 2, CEIL - 1.75, 0.1, '#dee2e6');        // 창 위 벽
+    // 창 아래 벽·창 위 띠: 문 자리는 비운다 (예전엔 차 길이 통째라 열린 문 안에 0.95m 벽이 남아 내릴 수 없어 보였음)
+    for (const [a, b] of wallSegs) {
+      S.block((a + b) / 2, 0, s * (HW + 0.05), b - a, 0.95, 0.1, '#dee2e6');           // 창 아래 벽
+      S.block((a + b) / 2, 1.75, s * (HW + 0.05), b - a, DOOR_TOP - 1.75, 0.1, '#dee2e6'); // 창 위 (문 높이까지)
+    }
+    S.block(0, DOOR_TOP, s * (HW + 0.05), HL * 2, CEIL - DOOR_TOP, 0.1, '#dee2e6');  // 문 위 벽
     for (let i = 0; i <= DOOR_OFF.length; i++) {                                     // 창 사이 기둥 (문 옆)
       const xs = i === 0 ? HL - 0.25 : i === DOOR_OFF.length ? -HL + 0.25 : (DOOR_OFF[i - 1] + DOOR_OFF[i]) / 2;
       S.block(xs, 0.95, s * (HW + 0.05), 0.5, 0.8, 0.1, '#dee2e6');
@@ -342,9 +348,9 @@ export function buildTrain({ origin, line, dir, rides, board, renderer, look, on
   // 테스트·스크린샷: 시간 건너뛰기 (dt 초를 잘게 돌림)
   function skip(sec) { let r = null; for (let k = 0; k < sec * 10 && !r; k++) { r = tick(0.1); } return r; }
   return {
-    kind: 'train', zone, line, dir, car, run, segs, scene, camera, player: me, cam, update, render, dispose, setView, toggleSit, skip,
+    kind: 'train', zone, line, dir, car, run, segs, scene, camera, player: me, cam, update, render, dispose, setView, toggleSit, skip, doors: DOOR_OFF, halfWidth: HW,
     get speed() { return speed; }, get stage() { return stage; }, get stopIndex() { return i; }, get lastPass() { return null; }, get sitting() { return !!sitting; },
-    get t() { return t; }, get sNow() { return sNow; },
+    get t() { return t; }, get sNow() { return sNow; }, get doorOpen() { return open; }, get canAlight() { return canAlight(); },
     stats: () => ({ tris: S.count + G.count, parts: crowd.parts.size, npcs: npcs.length, seats: seats.length }),
   };
 }

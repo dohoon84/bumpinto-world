@@ -4,7 +4,7 @@ import path from 'node:path';
 import assert from 'node:assert/strict';
 import { createSubwayState, FADE_SEC } from '../src/subway/state.js';
 import { JEONGJA_EXITS, projectLatLon, compass, nearbyHints, resolveExits, groupExits, exitLabel, roadAxis, exitSide } from '../src/subway/exits.js';
-import { HALL, GATE, WELLS, passageFor, walkable, passageAt, laneAt, staticBlockers } from '../src/subway/layout.js';
+import { HALL, GATE, WELLS, passageFor, walkable, passageAt, laneAt, staticBlockers, wellMouth, WELL_MOUTH_Z } from '../src/subway/layout.js';
 import { placeEntrance, toWorld, toLocal, structureClear, CLEAR, ENTRANCE_DIM } from '../src/subway/entrance.js';
 import { gameTerrain } from './subway/gameTerrain.mjs';
 import * as THREE from 'three';
@@ -302,6 +302,14 @@ assert.equal(walkable(GATE.cab[2], 0, 0.25, { passages }), false, '개찰구 몸
   // 테마: 정자역은 1단계 문자열 그대로
   assert.equal(JEONGJA_THEME.map.title, '수인분당선 · 신분당선 (간략)'); assert.equal(JEONGJA_THEME.ad.sub, '정자역에서 걸어서 3분');
   assert.deepEqual(JEONGJA_THEME.wells.map((w) => w.ko), WELLS.map((w) => w.ko), '정자 승강장 방면 = layout WELLS');
+  // feedback-11: 개찰구 앞뒤·계단 앞 통로·계단 옆은 승강장 트리거가 아니다. 계단 입구(폭 안, 차단선 바로 앞)만.
+  for (let x = HALL.x0 + 0.5; x < HALL.x1; x += 0.25) for (let z = HALL.z0 + 0.5; z <= WELL_MOUTH_Z; z += 0.1) assert.equal(wellMouth(x, z), null, `no well trigger at ${x},${z}`);
+  for (const w of WELLS) {
+    assert.equal(wellMouth(w.cx, 2.6), w, 'stair mouth triggers');
+    assert.equal(wellMouth(w.x0 - 0.3, 2.6), null, 'beside the stair (west) is not the stair');
+    assert.equal(wellMouth(w.x1 + 0.3, 2.6), null, 'beside the stair (east) is not the stair');
+    assert.ok(walkable(w.cx, 2.65, 0.3), 'stair mouth is reachable on foot');
+  }
   assert.deepEqual(JEONGJA_THEME.wells.map((w) => w.en), WELLS.map((w) => w.en));
   assert.equal(JEONGJA_THEME.transfer.key, 'shin'); assert.equal(JEONGJA_THEME.zone, 'jeongja-station');
   const jam = stationTheme(STATIONS.find((d) => d.id === 'jamsil'));

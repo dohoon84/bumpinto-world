@@ -8,7 +8,7 @@
 import * as THREE from 'three';
 import { createBuilder, createAtlas, FONT, fitText, lineBadge, roundRect } from './geom.js';
 import { JEONGJA_THEME } from './stations.js';
-import { HALL, CEIL, GATE, GATE_X, OFFICE, WELLS, DROP, RUN, COLUMNS, PASSAGE_LEN, passageFor, staticBlockers, walkable, passageAt, laneAt, nearWellTop } from './layout.js';
+import { HALL, CEIL, GATE, GATE_X, OFFICE, WELLS, DROP, RUN, COLUMNS, PASSAGE_LEN, passageFor, staticBlockers, walkable, passageAt, laneAt, nearWellTop, wellMouth } from './layout.js';
 import { buildCrowd } from '../entities/avatarCrowd.js';
 import { createAvatar, animateAvatar } from '../entities/avatar.js';
 import { LOOKS } from './looks.js';
@@ -524,13 +524,13 @@ export function buildConcourse({ exits, groups, entryId, look, renderer, onToast
   const laneOpen = (i) => lanes[i].open > 0.6;
   const canStand = (x, z) => walkable(x, z, 0.3, { passages, blockers, laneOpen });
   const inRoom = (x, z) => walkable(x, z, 0.12, { passages, blockers: [] }) || (x > HALL.x0 && x < HALL.x1 && z > HALL.z0 && z < HALL.z1);
-  let speed = 0, lastPass = null, lastWell = nearWellTop(me.position.x, me.position.z), lastTr = !!spawn?.transfer;
+  let speed = 0, lastPass = null, lastWell = wellMouth(me.position.x, me.position.z), lastTr = !!spawn?.transfer;
 
   function update(dt, { look: [dy, dp, dz], axes, allowMove, self = null }) {
     cam.yaw += dy; cam.pitch = THREE.MathUtils.clamp(cam.pitch + dp, -0.6, 1.3); cam.dist = THREE.MathUtils.clamp(cam.dist * (1 + dz), 2.2, 11);
     const p = me.position;
     let { f, s, run } = allowMove ? axes : { f: 0, s: 0, run: false };
-    speed = 0;
+    speed = 0; let towardWell = false;
     if (f || s) {
       const fx = -Math.sin(cam.yaw), fz = -Math.cos(cam.yaw), rx = -fz, rz = fx;
       let mx = fx * f + rx * s, mz = fz * f + rz * s; const L = Math.hypot(mx, mz); mx /= L; mz /= L;
@@ -539,6 +539,7 @@ export function buildConcourse({ exits, groups, entryId, look, renderer, onToast
       const stuck = !canStand(p.x, p.z);
       if (canStand(nx, p.z) || stuck) p.x = nx;
       if (canStand(p.x, nz) || stuck) p.z = nz;
+      towardWell = mz > 0.35; // 남쪽(계단 쪽)으로 걸어 들어가는 중
       const want = Math.atan2(mx, mz); me.rotation.y += Math.atan2(Math.sin(want - me.rotation.y), Math.cos(want - me.rotation.y)) * Math.min(1, dt * 12);
       speed = sp;
     }
@@ -562,8 +563,9 @@ export function buildConcourse({ exits, groups, entryId, look, renderer, onToast
     const pass = passageAt(p.x, p.z, passages);
     const entered = pass && pass !== lastPass ? pass : null; lastPass = pass;
     // 승강장 계단 / 갈아타는 곳: 밖에서 걸어 들어올 때만 (올라온 직후엔 한 번 벗어나야)
-    const well = nearWellTop(p.x, p.z);
-    const wellEnter = well && well !== lastWell ? WELLS.indexOf(well) : -1; lastWell = well;
+    const well = nearWellTop(p.x, p.z), mouth = wellMouth(p.x, p.z);
+    const wellEnter = mouth && mouth !== lastWell && towardWell ? WELLS.indexOf(mouth) : -1;
+    if (!mouth || wellEnter >= 0) lastWell = mouth;
     const tr = !!X && Math.abs(p.x - TRANSFER.x) < TRANSFER.hw && p.z > TRANSFER.z;
     const transferEnter = tr && !lastTr; lastTr = tr;
     return { enteredPassage: entered, wellEnter, transferEnter, wellHint: well ? wellTxt(well) : null };
