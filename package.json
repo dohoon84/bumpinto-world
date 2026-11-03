@@ -43,7 +43,8 @@
     "shots-taxi-terrain": "node scripts/shots-taxi-terrain.mjs",
     "ride:e2e": "node scripts/corridor/test/e2e-ride-220.mjs",
     "notice-popup:test": "node scripts/test-notice-popup.mjs",
-    "subway:test": "node scripts/test-subway.mjs"
+    "subway:test": "node scripts/test-subway.mjs",
+    "subway:mp": "node scripts/mp-subway.mjs"
   },
   "dependencies": {
     "three": "^0.186.1"

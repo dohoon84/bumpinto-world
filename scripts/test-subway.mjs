@@ -5,6 +5,10 @@ import { createSubwayState, FADE_SEC } from '../src/subway/state.js';
 import { JEONGJA_EXITS, projectLatLon, compass, nearbyHints, resolveExits, groupExits, exitLabel, roadAxis, exitSide } from '../src/subway/exits.js';
 import { HALL, GATE, WELLS, passageFor, walkable, passageAt, laneAt, staticBlockers } from '../src/subway/layout.js';
 import { placeEntrance, toWorld, toLocal } from '../src/subway/entrance.js';
+import * as THREE from 'three';
+import { ZONE_BASE, ZONES, encodeZone, decodeZone, isZoneId } from '../src/net/zones.js';
+import { RemotePlayers } from '../src/net/remotePlayers.js';
+import { STATE_HZ } from '../src/net/protocol.js';
 
 // ---------- 상태 ----------
 const ex = [{ id: 'x1' }, { id: 'x2' }, { id: 'x6' }];
@@ -125,4 +129,88 @@ assert.equal(walkable(GATE.cab[2], 0, 0.25, { passages }), false, '개찰구 몸
   assert.ok(reach(lx, -1.5) && reach(lx, 1.5), '개찰구 앞뒤');
   for (const w of WELLS) assert.ok(reach(w.cx, 2.2), '승강장 계단 앞');
 }
-console.log('subway: state · exits · entrance placement · concourse layout OK');
+
+// ---------- [zone] 대합실 프레즌스 ----------
+{
+  const Z = 'jeongja-station';
+  assert.equal(ZONES[1], Z, '슬롯 번호는 바꾸지 않는다 (버전이 다른 클라이언트끼리 구역이 엇갈림)');
+  const e = encodeZone(Z, -12.3, 4.5);
+  assert.ok(e.x > ZONE_BASE - 5000 && e.zone === Z, '띠 좌표');
+  const d = decodeZone(e.x, e.z);
+  assert.equal(d.zone, Z); assert.ok(Math.abs(d.x + 12.3) < 1e-6 && d.z === 4.5, '실내 좌표 복원');
+  assert.deepEqual(decodeZone(e.x, e.z, 'something-else').zone, Z, '좌표 띠가 우선 (서버가 zone 을 버려도 같은 결과)');
+  assert.deepEqual(decodeZone(812.5, -3), { zone: '', x: 812.5, z: -3 }, '옛 클라이언트·바깥 = 구역 없음');
+  assert.deepEqual(decodeZone('12', undefined), { zone: '', x: 12, z: 0 });
+  assert.deepEqual(decodeZone(4, 5, Z), { zone: Z, x: 4, z: 5 }, '나중에 서버가 zone 을 그대로 전달하면 그것도 이해');
+  assert.equal(decodeZone(4, 5, '<script>').zone, '', '이상한 zone 문자열은 무시');
+  assert.equal(isZoneId('a'.repeat(60)), false);
+  assert.equal(decodeZone(ZONE_BASE + 7 * 10000 + 3, 1).zone, 'zone#7', '모르는 슬롯도 바깥으로 새지 않음');
+  assert.deepEqual(encodeZone('', 3, 4), { x: 3, z: 4 }, '바깥은 그대로');
+  assert.ok(Math.abs(decodeZone(encodeZone(Z, 1e9, 0).x, 0).x) < 5000, '실내 좌표는 띠 안으로 잘림');
+  // 서버(room.js / dev-relay)는 state 를 x,z,ry… 만 골라 다시 보낸다 → 띠 좌표만으로 동작해야 함
+  const relay = (m) => ({ t: 'state', id: m.id, x: Number(m.x) || 0, z: Number(m.z) || 0, ry: Number(m.ry) || 0, moving: !!m.moving, riding: false, jy: 0, emote: m.emote || '', sit: '', afk: false, umb: '' });
+
+  // RemotePlayers: 가짜 프레즌스·오버레이·Scene 두 개
+  const handlers = {};
+  const presence = { on: (t, fn) => ((handlers[t] ||= []).push(fn), presence) };
+  const emit = (t, m) => (handlers[t] || []).forEach((fn) => fn(m));
+  const el = () => ({ textContent: '', className: '', style: {}, classList: { toggle() {}, contains: () => false } });
+  const said = [];
+  const overlay = { items: new Set(), add(o) { const it = { ...o, el: el(), hidden: false, zone: o.zone || '' }; this.items.add(it); return it; }, remove(it) { this.items.delete(it); }, onSay: (m) => said.push(m) };
+  const outdoor = new THREE.Scene(), interior = new THREE.Scene();
+  let mePos = new THREE.Vector3(100, 0, 100);
+  const bursts = [];
+  const R = new RemotePlayers(outdoor, overlay, presence, () => mePos, null, null, { burst: (pos, k) => bursts.push(k), spawnZzz() {} });
+  emit('welcome', { id: 'me', peers: [
+    { id: 'A', name: '바깥A', x: 101, z: 100, ry: 0 },
+    { id: 'B', name: '역안B', x: encodeZone(Z, 2, 3).x, z: 3, ry: 0 }, // 이미 대합실에 있던 사람 (welcome 목록의 x,z 로 구역 유지)
+  ] });
+  const A = R.peers.get('A'), B = R.peers.get('B');
+  assert.equal(A.zone, ''); assert.equal(B.zone, Z);
+  assert.equal(A.mesh.parent, outdoor); assert.equal(A.mesh.visible, true);
+  assert.equal(B.mesh.visible, false, '바깥에서는 역 안 사람이 안 보임'); assert.notEqual(B.tag.zone, '', '이름표도 숨김');
+  assert.deepEqual(R.list().map((p) => p.id), ['A'], '바깥 시스템(문·고양이·미니맵)엔 같은 구역만');
+  assert.deepEqual(R.list({ all: true }).map((p) => `${p.id}:${p.zone}`), ['A:', `B:${Z}`]);
+  // 바깥에서 보는데 A 가 입구로 들어감 → 그 자리에서 가라앉고 사라짐
+  emit('state', relay({ id: 'A', ...encodeZone(Z, -20, 9), ry: 1 }));
+  assert.equal(A.zone, Z); assert.ok(A.fx?.down, '들어가는 연출');
+  R.update(0.2); assert.ok(A.mesh.visible && A.mesh.position.y < 0 && Math.abs(A.mesh.position.x - 101) < 0.5, '입구 자리에서 내려감');
+  for (let i = 0; i < 10; i++) R.update(0.1);
+  assert.equal(A.fx, null); assert.equal(A.mesh.visible, false, '다 내려가면 안 보임');
+  assert.deepEqual(R.list(), [], '역 안 사람은 바깥 목록에서 빠짐');
+  // 다른 구역 채팅·리액션은 안 보임
+  emit('chat', { id: 'A', text: '안녕' }); emit('emote', { id: 'A', kind: 'cheer', combo: 1 });
+  assert.equal(said.length, 0); assert.equal(bursts.length, 0);
+  // 나도 대합실로 → 같은 구역 사람이 대합실 Scene 에, 실내 좌표로
+  mePos = new THREE.Vector3(-18, 0, 8);
+  R.setZone(Z, interior);
+  assert.equal(A.mesh.parent, interior); assert.equal(A.mesh.visible, true); assert.equal(A.tag.zone, Z);
+  assert.equal(B.mesh.parent, interior);
+  R.update(0.05); assert.ok(Math.abs(A.mesh.position.x + 20) < 1e-6 && Math.abs(A.mesh.position.z - 9) < 1e-6 && A.mesh.position.y === 0, '실내 좌표');
+  emit('chat', { id: 'A', text: '안녕' }); emit('emote', { id: 'A', kind: 'cheer', combo: 1 });
+  assert.equal(said.length, 1); assert.equal(said[0].text, '안녕'); assert.deepEqual(bursts, ['cheer'], '같은 구역은 말풍선·리액션');
+  emit('chat', { id: 'B', text: '멀리' }); assert.equal(said.length, 2, 'B (2,3) 도 30m 안');
+  // 바깥 사람 C(옛 클라이언트, zone 없음)가 접속해서 돌아다님 → 안 보임
+  emit('join', { peer: { id: 'C', name: '옛클라', x: 5, z: 5 } });
+  const C = R.peers.get('C');
+  emit('state', relay({ id: 'C', x: -18, z: 8, ry: 0 })); // 우연히 실내 좌표와 같은 바깥 좌표여도
+  assert.equal(C.zone, ''); assert.equal(C.mesh.visible, false); assert.equal(C.mesh.parent, outdoor);
+  emit('chat', { id: 'C', text: '바깥말' }); assert.equal(said.length, 2, '바깥 사람 말은 역 안에서 안 들림');
+  assert.deepEqual(R.list().map((p) => p.id).sort(), ['A', 'B']);
+  // A 가 나감 (바깥 좌표) → 대합실에서 사라짐, 바깥 Scene 으로
+  emit('state', relay({ id: 'A', x: 1, z: -72.7, ry: 0 }));
+  assert.equal(A.zone, ''); assert.equal(A.mesh.visible, false); assert.equal(A.mesh.parent, outdoor); assert.equal(A.fx, null, '안에서 볼 때는 연출 없음');
+  // 나도 나감 → 바깥 사람 보이고, 역 안 B 는 숨김
+  mePos = new THREE.Vector3(0, 0, -70);
+  R.setZone('', null);
+  assert.equal(A.mesh.visible, true); assert.equal(C.mesh.visible, true); assert.equal(B.mesh.visible, false); assert.equal(B.mesh.parent, outdoor);
+  // B 가 나오면 출구 앞에서 올라옴
+  emit('state', relay({ id: 'B', x: 1, z: -72.7, ry: 0 }));
+  assert.ok(B.fx && !B.fx.down); R.update(0.1); assert.ok(B.mesh.visible && B.mesh.position.y < 0, '올라오는 중');
+  for (let i = 0; i < 10; i++) R.update(0.1);
+  assert.equal(B.mesh.position.y, 0); assert.equal(B.fx, null);
+  R.remove('A'); R.remove('B'); R.remove('C');
+  assert.equal(outdoor.children.filter((o) => o.isObject3D && o.type !== 'Scene').length, 0, '나간 사람 메시 정리');
+  assert.ok(STATE_HZ > 0);
+}
+console.log('subway: state · exits · entrance placement · concourse layout · zone presence OK');

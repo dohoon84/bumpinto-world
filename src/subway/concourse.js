@@ -500,7 +500,7 @@ export function buildConcourse({ exits, groups, entryId, look, renderer, onToast
   const inRoom = (x, z) => walkable(x, z, 0.12, { passages, blockers: [] }) || (x > HALL.x0 && x < HALL.x1 && z > HALL.z0 && z < HALL.z1);
   let speed = 0, lastPass = null, wellHintT = 0;
 
-  function update(dt, { look: [dy, dp, dz], axes, allowMove }) {
+  function update(dt, { look: [dy, dp, dz], axes, allowMove, self = null }) {
     cam.yaw += dy; cam.pitch = THREE.MathUtils.clamp(cam.pitch + dp, -0.6, 1.3); cam.dist = THREE.MathUtils.clamp(cam.dist * (1 + dz), 2.2, 11);
     const p = me.position;
     let { f, s, run } = allowMove ? axes : { f: 0, s: 0, run: false };
@@ -517,6 +517,7 @@ export function buildConcourse({ exits, groups, entryId, look, renderer, onToast
       speed = sp;
     }
     const li = laneAt(p.x, p.z, 1.3); if (li >= 0) tapLane(li, 'me');
+    if (self) { me.userData.emote = speed > 0 ? '' : (self.emote || ''); me.userData.afk = !!self.afk; } // [zone] 리액션·자리비움도 안에서 보이게
     animateAvatar(me, speed, dt);
     for (const ln of lanes) { ln.t -= dt; ln.ok -= dt; const want = ln.t > 0 ? 1 : 0; ln.open += Math.sign(want - ln.open) * Math.min(Math.abs(want - ln.open), dt * 4); }
     for (const n of npcs) updateNpc(n, dt);
@@ -546,5 +547,5 @@ export function buildConcourse({ exits, groups, entryId, look, renderer, onToast
   }
   // 스크린샷/디버그
   function setView(x, z, yaw, pitch = 0.3, dist = 6) { me.position.set(x, 0, z); cam.yaw = yaw; cam.pitch = pitch; cam.dist = dist; }
-  return { get lastPass() { return lastPass; }, scene, camera, player: me, cam, passages, lanes, update, render, dispose, setView, npcs, stats: () => ({ tris: S.count + G.count, parts: crowd.parts.size, npcs: npcs.length }) };
+  return { get lastPass() { return lastPass; }, get speed() { return speed; }, scene, camera, player: me, cam, passages, lanes, update, render, dispose, setView, npcs, stats: () => ({ tris: S.count + G.count, parts: crowd.parts.size, npcs: npcs.length }) };
 }

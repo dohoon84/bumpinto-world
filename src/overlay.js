@@ -4,18 +4,20 @@ import { isShoutText } from './emotes.js';
 const v = new THREE.Vector3();
 
 export class Overlay {
-  constructor(root, camera) { this.root = root; this.camera = camera; this.items = new Set(); }
-  add({ cls, text = '', getPos, maxDist = 90, minDist = 0 }) {
+  constructor(root, camera) { this.root = root; this.camera = camera; this.items = new Set(); this.zone = ''; this.homeCamera = camera; }
+  // [zone] 실내 구역(지하철 대합실 등)에 들어가면 그 구역 항목만 그 구역 카메라로 투영. '' = 바깥(원래 카메라)
+  setView(zone = '', camera = null) { this.zone = zone || ''; this.camera = camera || this.homeCamera; }
+  add({ cls, text = '', getPos, maxDist = 90, minDist = 0, zone = '' }) {
     const el = document.createElement('div'); el.className = cls; el.textContent = text;
     this.root.appendChild(el);
-    const item = { el, getPos, maxDist, minDist, visible: true, hidden: false };
+    const item = { el, getPos, maxDist, minDist, visible: true, hidden: false, zone };
     this.items.add(item); return item;
   }
   remove(item) { item.el.remove(); this.items.delete(item); }
   update(w, h) {
     const cam = this.camera;
     for (const it of this.items) {
-      if (it.hidden) {
+      if (it.hidden || (it.zone || '') !== this.zone) { // [zone] 다른 구역 항목은 숨김
         if (it.visible) { it.el.style.display = 'none'; it.visible = false; }
         continue;
       }

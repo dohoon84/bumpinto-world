@@ -8,10 +8,17 @@
 //     subway.busy                 들어가는/나오는 중 포함, 바깥 이동 입력을 막아야 하면 true
 //     subway.outdoorTick(dt)      바깥 프레임마다 (입구 근처 안내, 걸어 들어가면 진입)
 //     subway.frame(dt, look, axes) → true 이면 이번 프레임은 대합실을 그렸으니 바깥 갱신·렌더를 건너뛴다
+//     subway.netState()           [zone] 안에 있으면 프레즌스로 보낼 { x, z (구역 띠 좌표), ry, moving, zone }, 아니면 null
+//     onInterior(zone, inside)    [zone] 대합실이 생기면 ('jeongja-station', inside), 없어지기 직전 ('', null)
+//                                 → game.js 가 원격 플레이어·오버레이·리액션을 그 Scene/카메라로 옮긴다
+//     passKey(e) → true           안에서도 game.js 로 넘길 키 (리액션 숫자키)
 import { resolveExits, groupExits, exitLabel } from './exits.js';
 import { createSubwayState } from './state.js';
 import { buildEntrances } from './entrance.js';
 import { isEn, tr } from '../i18n.js';
+import { encodeZone } from '../net/zones.js';
+
+export const STATION_ZONE = 'jeongja-station'; // [zone] 대합실. 2단계부터 승강장·열차는 각자 구역 (src/net/zones.js)
 
 const CSS = `
 #subway-fade{position:fixed;inset:0;background:#000;opacity:0;pointer-events:none;z-index:200;display:flex;align-items:center;justify-content:center;color:#fff;font:700 20px/1.4 system-ui,sans-serif;letter-spacing:.02em}
@@ -33,10 +40,10 @@ const CSS = `
 #subway-chooser .t div{color:#adb5bd;font-size:12.5px}
 #subway-chooser .tag{flex:0 0 auto;font-size:11px;color:#FFC20E;white-space:nowrap}
 #subway-chooser .sc-f{padding:8px 16px 12px;color:#868e96;font-size:12px}
-body.in-subway #overlay,body.in-subway #phone,body.in-subway #stop-panel,body.in-subway #corridor-stop-panel,body.in-subway #bike-prompt,body.in-subway #trk-prompt,body.in-subway #dog-gate-btn,body.in-subway #donate-near-btn,body.in-subway #coffee-order-bar,body.in-subway #coffee-toss-btn,body.in-subway #umbrella-actions{display:none!important}
+body.in-subway #phone,body.in-subway #stop-panel,body.in-subway #corridor-stop-panel,body.in-subway #bike-prompt,body.in-subway #trk-prompt,body.in-subway #dog-gate-btn,body.in-subway #donate-near-btn,body.in-subway #coffee-order-bar,body.in-subway #coffee-toss-btn,body.in-subway #umbrella-actions{display:none!important}
 `;
 
-export function mountSubway({ scene, overlay, data, world, terrain, renderer, getLook, getPlayer, canEnter, onEnter, onExit, params }) {
+export function mountSubway({ scene, overlay, data, world, terrain, renderer, getLook, getPlayer, canEnter, onEnter, onExit, onInterior, getSelf, passKey, params }) {
   const exits = resolveExits(data);
   if (!exits.length) return null;
   const groups = groupExits(exits);
@@ -118,6 +125,7 @@ export function mountSubway({ scene, overlay, data, world, terrain, renderer, ge
         else buildInside();
       } else if (ev === 'unload') {
         const e = byId.get(state.target) || byId.get(state.entry);
+        onInterior?.('', null); // [zone] 원격 아바타를 바깥 Scene 으로 먼저 돌려놓고 dispose
         inside?.dispose(); inside = null;
         document.body.classList.remove('in-subway');
         setHint('');
@@ -127,7 +135,7 @@ export function mountSubway({ scene, overlay, data, world, terrain, renderer, ge
     if (state._waitLoad && mod) { state._waitLoad = false; buildInside(); }
     fade.style.opacity = String(state.phase === 'arriving' && !inside ? 1 : state.fadeAlpha());
     if (!state.interior || !inside) return state.interior; // 로드 대기 중이면 검은 화면 유지
-    const r = inside.update(dt, { look, axes, allowMove: state.canWalk });
+    const r = inside.update(dt, { look, axes, allowMove: state.canWalk, self: getSelf?.() });
     if (state.canWalk) {
       if (r.enteredPassage) openChooser();
       if (r.wellHint) say(tr(`${r.wellHint.ko} 승강장은 다음 업데이트에서 열려요`, `Platform (${r.wellHint.en}) — coming soon`), 2.6);
@@ -144,6 +152,13 @@ export function mountSubway({ scene, overlay, data, world, terrain, renderer, ge
     // 바로 프레임 하나 갱신 (NPC 배치·카메라)
     inside.update(0, { look: [0, 0, 0], axes: { f: 0, s: 0, run: false }, allowMove: false });
     document.body.classList.add('in-subway');
+    onInterior?.(STATION_ZONE, inside); // [zone]
+  }
+  // [zone] 대합실 안에 있는 동안 프레즌스로 보낼 위치 (실내 좌표 → 구역 띠 좌표)
+  function netState() {
+    if (!state.interior || !inside) return null;
+    const me = inside.player;
+    return { ...encodeZone(STATION_ZONE, me.position.x, me.position.z), ry: me.rotation.y, moving: inside.speed > 0 };
   }
 
   function onKey(e) {
@@ -160,6 +175,7 @@ export function mountSubway({ scene, overlay, data, world, terrain, renderer, ge
       return true;
     }
     if (state.phase === 'inside' && e.code === 'KeyE' && !e.repeat) { openChooser(); return true; }
+    if (state.phase === 'inside' && passKey?.(e)) return false;
     if (e.code === 'Enter') return false; // 채팅은 그대로
     return true;
   }
@@ -171,7 +187,8 @@ export function mountSubway({ scene, overlay, data, world, terrain, renderer, ge
     get interior() { return state.interior; },
     get inside() { return inside; },
     blocks: (x, z, r) => ent.blocks(x, z, r),
-    outdoorTick, frame, onKey,
+    outdoorTick, frame, onKey, netState,
+    get zone() { return state.interior && inside ? STATION_ZONE : ''; },
     enterById: (id) => enter(byId.get(id)),
     openChooser, choose: (id) => { const i = exits.findIndex((x) => x.id === id); if (i >= 0 && state.phase === 'choosing') { state.move(i - state.pick); renderChooser(); } },
     go,
