@@ -159,7 +159,7 @@ export function buildPlatform({ def, line, dir, renderer, look, feed = null, arr
   }
   const gone = () => (MOTION.DWELL + 30) * 1000;
   let said = '';
-  const say = (k, o = {}) => { if (said === k) return; said = k; onEvent('say', announce(k, { dirKo: sign.dirKo, dirEn: sign.dirEn, ...o })); };
+  const say = (k, o = {}) => { if (said === k) return; said = k; onEvent('say', announce(k, { dirKo: sign.dirKo, dirEn: sign.dirEn, dirJa: sign.dirJa, ...o })); };
 
   // ---------- 사람 ----------
   const crowdGroup = new THREE.Group(); scene.add(crowdGroup);
@@ -297,7 +297,7 @@ export function buildPlatform({ def, line, dir, renderer, look, feed = null, arr
       // 닫힌 문(또는 탈 수 없는 방면) 앞에서 밀면 안내
       if (mz > 0.5 && p.z > -0.75 && (pushT -= dt) <= 0) {
         const d = lay.doors.find((q) => Math.abs(q.x - p.x) < DOOR_W / 2);
-        if (d && !rides.length) { pushT = 4; onEvent('say', announce('noRide', { dirKo: sign.dirKo, dirEn: sign.dirEn })); }
+        if (d && !rides.length) { pushT = 4; onEvent('say', announce('noRide', { dirKo: sign.dirKo, dirEn: sign.dirEn, dirJa: sign.dirJa })); }
       }
     }
     // 탈 수 없는 방면이면 문 안으로 못 들어감

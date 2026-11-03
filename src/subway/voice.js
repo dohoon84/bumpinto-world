@@ -1,4 +1,4 @@
-// [subway-voice] 지하철 안내 방송 음성: 차임(WebAudio 합성, 자체 제작) → 한국어 → 영어 (Web Speech API)
+// [subway-voice] 지하철 안내 방송 음성: 차임(WebAudio 합성, 자체 제작) → 한국어 → 영어 → 일본어 (Web Speech API)
 //   - 자막과 같은 문구({ko,en,kind,clip} = ride.js announce) 를 줄 세워 하나씩 — 겹치지 않음
 //   - 지금 나오는 방송은 끝까지, 아직 시작 안 한 방송은 새 방송이 오면 최신 것으로 교체 (밀린 방송이 늦게 나오지 않게)
 //   - cancel(): 방을 옮기거나(열차·승강장을 떠남) 나갈 때 → 대기열 비우고 말하던 것도 멈춤
@@ -8,13 +8,14 @@
 //   - 음성 목록은 비동기로 오기도 함(macOS Chrome) → voiceschanged 를 최대 VOICE_WAIT_MS 기다렸다가 말함
 //   - 콘솔에 [subway-voice] 로 무엇을 했는지 남김 (들리지 않을 때 원인 확인용)
 //   - speechSynthesis 가 없거나 그 언어 음성이 없으면 그 줄만 조용히 건너뜀(자막은 항상)
+//   - [subway-ja] 일본어 줄은 ja 음성이 있을 때만 (목록이 끝내 비어도 lang 만으로 말하지 않음 — 다른 언어 음성이 일본어를 읽지 않게) · ?subwayJa=0 이면 끔
 //   - 녹음 교체 훅: public/audio/subway/clips.json 에 ["chime", "approach-wangsimni.ko", ...] 처럼 적고
 //     public/audio/subway/<이름>.ogg + .m4a 를 두면 그 줄은 TTS 대신 녹음 재생 (버스 public/audio/bus 와 같은 방식, 첫 방송 때만 목록 받음)
 export const CHIME_KINDS = Object.freeze(['approach', 'next']);
 export const CHIME_SEC = 1.5;
 export const VOICE_WAIT_MS = 2000;
 export const loudness = (v) => (v <= 0 ? 0 : +(0.45 + 0.55 * Math.min(1, v)).toFixed(3));
-const LANGS = [['ko', 'ko-KR'], ['en', 'en-US']];
+const LANGS = [['ko', 'ko-KR'], ['en', 'en-US'], ['ja', 'ja-JP']]; // [subway-ja] 한국어 → 영어 → 일본어
 
 // 차임: 자체 합성 — 부드러운 3음 상행 아르페지오(D5·F♯5·A5) + 옥타브 위 D6 여운. 어느 운영사 멜로디도 아님
 export const CHIME_NOTES = Object.freeze([[587.33, 0, 0.9], [739.99, 0.16, 0.9], [880, 0.32, 1.0], [1174.66, 0.5, 1.0]]);
@@ -53,6 +54,7 @@ export function createSubwayVoice({
 } = {}) {
   const off = params?.get?.('subwayVoice') === '0' || params?.get?.('sound') === '0';
   const sfxOff = params?.get?.('rideSfx') === '0';
+  const jaOff = params?.get?.('subwayJa') === '0';
   const q = [];          // 대기 항목들 (각 항목 .a = 어느 방송인지)
   let cur = null;        // 지금 재생 중인 항목
   let tok = 0, timer = null, src = null, ctx = null, spoke = false;
@@ -117,16 +119,16 @@ export function createSubwayVoice({
       waitTimer = timers.set(() => { waitTimer = null; voicesGaveUp = true; if (my === tok) resumeWait(); }, VOICE_WAIT_MS);
       return;
     }
-    const v = voiceFor(it.k), langOnly = !v && voicesGaveUp && !voices().length; // 기다려도 목록이 비면 lang 만으로
+    const v = voiceFor(it.k), langOnly = !v && it.k !== 'ja' && voicesGaveUp && !voices().length; // 기다려도 목록이 비면 lang 만으로 (일본어는 ja 음성이 있어야)
     if (!synth || !Utterance || (!v && !langOnly)) { log({ t: 'skip', why: !synth || !Utterance ? 'no-tts' : 'no-voice', lang: it.lang }); cur = null; return next(); }
     try {
       const u = new Utterance(it.text);
-      u.lang = it.lang; if (v) try { u.voice = v; } catch { /* lang 만으로 */ } u.rate = it.k === 'ko' ? 1.02 : 0.98; u.volume = lv.volume;
+      u.lang = it.lang; if (v) try { u.voice = v; } catch { /* lang 만으로 */ } u.rate = it.k === 'ko' ? 1.02 : it.k === 'ja' ? 1.0 : 0.98; u.volume = lv.volume;
       u.onend = () => { curU = null; finish(my); }; u.onerror = (e) => { curU = null; log({ t: 'tts-error', why: e?.error || 'error', lang: it.lang }); finish(my); };
       curU = u; spoke = true; synth.speak(u);
       log({ t: 'speak', lang: it.lang, text: it.text, volume: +lv.volume.toFixed(2) });
       // onend 가 안 오는 브라우저 대비 안전 타이머 (글자 수 기준 넉넉히)
-      timer = timers.set(() => { timer = null; log({ t: 'timeout', lang: it.lang }); finish(my); }, Math.round((3 + it.text.length * (it.k === 'ko' ? 0.2 : 0.09)) * 1000));
+      timer = timers.set(() => { timer = null; log({ t: 'timeout', lang: it.lang }); finish(my); }, Math.round((3 + it.text.length * (it.k === 'en' ? 0.09 : 0.2)) * 1000));
     } catch { log({ t: 'skip', why: 'error', lang: it.lang }); cur = null; next(); }
   }
   // 녹음 재생 (받아 둔 버퍼가 없으면 받아서 — 실패하면 그 줄은 TTS 로)
@@ -166,7 +168,7 @@ export function createSubwayVoice({
       if (off || !a?.ko) return false;
       if (level().muted) { log({ t: 'skip', why: 'muted' }); return false; }
       loadClips();
-      const items = voiceItems(a, { chime: !sfxOff });
+      const items = voiceItems(jaOff && a.ja ? { ...a, ja: '' } : a, { chime: !sfxOff });
       if (!items.length) return false;
       if (q.length) log({ t: 'replace', dropped: q.length });
       q.length = 0; q.push(...items);

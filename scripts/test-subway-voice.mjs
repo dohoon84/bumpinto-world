@@ -25,10 +25,11 @@ function rig({ params = '', voices = ['ko-KR', 'en-US'], level = { muted: false,
 const tick = () => new Promise((r) => setTimeout(r, 0));
 const A = (k) => announce(k, { dirKo: '왕십리 방면', dirEn: 'for Wangsimni', name: '수내', nameEn: 'Sunae' });
 
-// 항목: 차임은 도착 안내(approach·next)만, 그다음 한국어 → 영어
-assert.deepEqual(voiceItems(A('approach')).map((i) => i.t + (i.lang ? ':' + i.lang : '')), ['chime', 'line:ko-KR', 'line:en-US']);
-assert.deepEqual(voiceItems(A('depart')).map((i) => i.lang), ['ko-KR', 'en-US']);
-assert.deepEqual(voiceItems(A('approach'), { chime: false }).map((i) => i.t), ['line', 'line']);
+// 항목: 차임은 도착 안내(approach·next)만, 그다음 한국어 → 영어 → 일본어
+assert.deepEqual(voiceItems(A('approach')).map((i) => i.t + (i.lang ? ':' + i.lang : '')), ['chime', 'line:ko-KR', 'line:en-US', 'line:ja-JP']);
+assert.deepEqual(voiceItems(A('depart')).map((i) => i.lang), ['ko-KR', 'en-US', 'ja-JP']);
+assert.deepEqual(voiceItems(A('approach'), { chime: false }).map((i) => i.t), ['line', 'line', 'line']);
+assert.equal(voiceItems(A('depart')).at(-1).clip, 'depart-sunae.ja');
 assert.equal(A('depart').clip, 'depart-sunae'); assert.equal(A('approach').clip, 'approach-wangsimni'); assert.equal(A('closing').clip, 'closing');
 assert.deepEqual(voiceItems({ ko: '', en: '' }), []);
 
@@ -103,6 +104,22 @@ assert.deepEqual(voiceItems({ ko: '', en: '' }), []);
   const b = rig({ synth: false }); b.v.play(A('depart')); assert.equal(b.v.active, false);
   const c = rig({ voices: ['en-GB'] }); c.v.play(A('depart')); assert.equal(c.spoken.length, 1); assert.equal(c.spoken[0].lang, 'en-US', '한국어 음성이 없으면 영어만');
 }
+{ // [subway-ja] 일본어: ja 음성이 있으면 ko → en → ja 순서, 없으면 ja 만 건너뜀, ?subwayJa=0 이면 끔
+  const { v, spoken, fire } = rig({ voices: ['ko-KR', 'en-US', 'ja-JP'] });
+  v.play(A('approach')); fire();
+  spoken[0].onend(); spoken[1].onend();
+  assert.equal(spoken.length, 3); assert.equal(spoken[2].lang, 'ja-JP'); assert.equal(spoken[2].voice.lang, 'ja-JP'); assert.equal(spoken[2].text, A('approach').ja);
+  spoken[2].onend(); assert.equal(v.active, false);
+  const n = rig(); n.v.play(A('depart')); n.spoken[0].onend(); n.spoken[1].onend();
+  assert.equal(n.spoken.length, 2, 'ja 음성 없음 → 일본어 건너뜀'); assert.equal(n.v.active, false);
+  assert.ok(n.v.events.some((e) => e.t === 'skip' && e.why === 'no-voice' && e.lang === 'ja-JP'));
+  const e = rig({ voices: [] }); e.v.play(A('depart')); e.fire(); e.spoken[0].onend(); e.spoken[1].onend();
+  assert.equal(e.spoken.length, 2, '목록이 끝내 비면 ko·en 만 lang 으로, 일본어는 말하지 않음'); assert.equal(e.v.active, false);
+  const w = rig({ voices: [] }); w.v.play(A('depart')); w.setVoices(['ko-KR', 'en-US', 'ja-JP']); w.vl.voiceschanged();
+  w.spoken[0].onend(); w.spoken[1].onend(); assert.equal(w.spoken[2]?.lang, 'ja-JP', 'voiceschanged 뒤 ja 음성으로');
+  const o = rig({ params: 'subwayJa=0', voices: ['ko-KR', 'en-US', 'ja-JP'] }); o.v.play(A('depart')); o.spoken[0].onend(); o.spoken[1].onend();
+  assert.equal(o.spoken.length, 2, '?subwayJa=0'); assert.equal(o.v.active, false);
+}
 { // 녹음 교체 훅: clips.json 에 있는 줄은 public/audio/subway/<clip>.<ext> 재생, 없는 줄은 TTS
   const { v, spoken, log } = rig({ clips: ['depart-sunae.ko'] });
   v.play(A('closing')); spoken[0].onend(); spoken[1].onend(); // 목록 받기 (첫 방송)
@@ -125,4 +142,4 @@ assert.deepEqual(voiceItems({ ko: '', en: '' }), []);
   assert.ok(stairY(-100) === STEP.n * STEP.h);
   assert.ok(!inStairArea(PLAT.STAIR.x1, -6), '계단 옆벽');
 }
-console.log('subway voice: queue · no overlap · cancel · off flags · mute/volume · no voice · recording hook · stairs OK');
+console.log('subway voice: queue · no overlap · cancel · off flags · mute/volume · no voice · ja (order · no ja voice · subwayJa=0) · recording hook · stairs OK');

@@ -6,6 +6,7 @@ import { STATIONS, stationTheme } from '../src/subway/stations.js';
 import { LINE_STOPS } from '../src/subway/stationsData.js';
 import { neighbors, rideStops, nextStops, platformLayout, doorAt, signText, announce, trainMotion, boardable, MOTION, simNextArrival, liveNextArrival, segmentProfile, segmentDist, platformZone, trainZone, isGameStop } from '../src/subway/ride.js';
 import { simulatedRows, kstMinute } from '../src/subway/arrivals.js';
+import { jaName, jaDir } from '../src/subway/ja.js';
 import { normalizeArrival } from '../server/phone/src/subway.js';
 import { ZONES, zoneSlot, encodeZone, decodeZone, isZoneId } from '../src/net/zones.js';
 import { createSubwayState } from '../src/subway/state.js';
@@ -44,7 +45,24 @@ for (const d of STATIONS) for (const l of d.lines) assert.ok(isGameStop(l, d.nam
 // 간판·방송
 const sg = signText(STATIONS[0], 'suin', 1);
 assert.equal(sg.dirKo, LINES.suin.dirs[1].ko); assert.equal(sg.next, '수내'); assert.equal(sg.nextEn, 'Sunae'); assert.equal(sg.prevEn, null, '미금 = 게임 밖 → 영문 없음 (지어내지 않음)');
-for (const k of ['approach', 'arrived', 'closing', 'next', 'depart', 'noAlight', 'last', 'noRide']) { const a = announce(k, { dirKo: '왕십리 방면', dirEn: 'for Wangsimni', name: '수내', nameEn: 'Sunae' }); assert.ok(a.ko && a.en, k); }
+for (const k of ['approach', 'arrived', 'closing', 'next', 'depart', 'noAlight', 'last', 'noRide']) { const a = announce(k, { dirKo: '왕십리 방면', dirEn: 'for Wangsimni', name: '수내', nameEn: 'Sunae' }); assert.ok(a.ko && a.en && a.ja, k); assert.ok(!/[가-힣]/.test(a.ja), `${k}: 일본어에 한글 없음 ${a.ja}`); }
+{ // [subway-ja] 일본어 안내 문구 · 역 이름 가타카나 (한국어 발음)
+  assert.equal(sg.dirJa, 'ワンシムニ方面');
+  const o = { dirKo: '왕십리 방면', dirEn: 'for Wangsimni', dirJa: 'ワンシムニ方面', name: '수내', nameEn: 'Sunae' };
+  assert.equal(announce('depart', o).ja, '次は、スネ、スネです。');
+  assert.equal(announce('next', { ...o, name: '이매', transferJa: 'キョンガン線', door: 'left' }).ja, 'まもなく、イメ、イメです。キョンガン線にお乗り換えいただけます。お出口は左側です。');
+  assert.ok(announce('next', { ...o, door: 'left' }).ko.endsWith('내리실 문은 왼쪽입니다.') && announce('next', o).ko === '이번 역은 수내, 수내역입니다.', '문 안내는 door 줄 때만');
+  assert.ok(announce('approach', o).ja.startsWith('まもなく、ワンシムニ方面行きの電車が到着します。'));
+  assert.ok(announce('noAlight', { ...o, name: '미금' }).ja.includes('ミグム駅') && announce('noAlight', o).ja.includes('準備中'));
+  assert.equal(announce('arrived', { dirKo: '내선순환', dirEn: 'Inner Circle', dirJa: '内回り' }).ja, '内回りの電車です。お降りのお客様を先にお通しください。');
+  assert.equal(announce('closing').ja, 'ドアが閉まります。ご注意ください。');
+  assert.ok(announce('depart', { name: '정자' }).ja.includes('チョンジャ'), 'dirJa·nameJa 없으면 ja.js 규칙');
+  const K = { 정자: 'チョンジャ', 수내: 'スネ', 서현: 'ソヒョン', 이매: 'イメ', 야탑: 'ヤタプ', 모란: 'モラン', 태평: 'テピョン', 가천대: 'カチョンデ', 복정: 'ポクチョン', 왕십리: 'ワンシムニ', 강남: 'カンナム', 잠실: 'チャムシル', 판교: 'パンギョ', 수원: 'スウォン', 인천: 'インチョン', 광교: 'クァンギョ', 신림: 'シルリム', 독립문: 'トンニムムン', 종로3가: 'チョンノサムガ', 원인재: 'ウォニンジェ' };
+  for (const [ko, ja] of Object.entries(K)) assert.equal(jaName(ko), ja, ko);
+  assert.equal(jaDir('수원·인천 방면'), 'スウォン・インチョン方面'); assert.equal(jaDir('외선순환'), '外回り');
+  for (const L of Object.values(LINES)) { assert.ok(L.ja, L.key); for (const d of L.dirs) assert.ok(d.ja && !/[가-힣]/.test(d.ja), d.ko); }
+  for (const L of Object.values(LINE_STOPS)) for (const n of L.stops) assert.ok(/^[ァ-ヶー・0-9]+$/.test(jaName(n)), `${n} → ${jaName(n)}`);
+}
 // 열차 움직임
 assert.equal(trainMotion(-MOTION.APPROACH - 1).phase, 'away');
 assert.ok(trainMotion(-1).off < 0 && trainMotion(-1).doors === 0);

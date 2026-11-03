@@ -10,15 +10,16 @@ const browser = await chromium.launch({ args: ['--use-angle=swiftshader', '--ena
 const page = await browser.newPage({ viewport: { width: W, height: H } });
 const errs = [];
 page.on('pageerror', (e) => errs.push(e.message));
-// speechSynthesis 대역: 음성 2개(ko-KR·en-US), speak 를 기록하고 글자 수만큼 뒤에 onend
+// speechSynthesis 대역: 음성 3개(ko-KR·en-US·ja-JP), speak 를 기록하고 글자 수만큼 뒤에 onend
 await page.addInitScript(() => {
   const log = (window.__tts = []);
-  const fake = { speaking: false, getVoices: () => [{ lang: 'ko-KR', name: 'fake-ko' }, { lang: 'en-US', name: 'fake-en' }], addEventListener() {},
+  const fake = { speaking: false, getVoices: () => [{ lang: 'ko-KR', name: 'fake-ko' }, { lang: 'en-US', name: 'fake-en' }, { lang: 'ja-JP', name: 'fake-ja' }], addEventListener() {},
     speak(u) { log.push({ text: u.text, lang: u.lang, volume: u.volume, t: performance.now() }); fake.speaking = true; setTimeout(() => { fake.speaking = false; u.onend?.(); }, 300 + u.text.length * 25); },
     cancel() { log.push({ cancel: true, t: performance.now() }); fake.speaking = false; } };
   Object.defineProperty(window, 'speechSynthesis', { value: fake, configurable: true });
 });
-await page.goto(B + '?enter=1&name=Tester&ws=mock&lang=ko&subwayRt=0&noticePopup=0&bgmDebug=1', { timeout: 120000 });
+const JA = process.env.JA !== '0'; // JA=0 → ?subwayJa=0 (일본어 자막·음성 없음)
+await page.goto(B + `?enter=1&name=Tester&ws=mock&lang=ko&subwayRt=0&noticePopup=0&bgmDebug=1${JA ? '' : '&subwayJa=0'}`, { timeout: 120000 });
 await page.waitForFunction(() => window.__jj?.ready, null, { timeout: 240000 });
 await page.waitForTimeout(1500);
 await page.evaluate(() => document.getElementById('lobby-go')?.click());
@@ -47,14 +48,21 @@ await page.evaluate(() => __jj.subway.inside.callTrain(13));
 await page.evaluate(() => __jj.subway.inside.setView(-6, -2.4, -Math.PI / 2 - 0.4, 0.15, 6));
 await until(() => +getComputedStyle(document.getElementById('subway-sub')).opacity > 0.9, null, 30000);
 await page.waitForTimeout(600);
-let r = await rects(); report.steps.push({ k: 'platform', r }); checkLayout(r, 'platform');
+let r = await rects(); report.steps.push({ k: 'platform', r, sub: await page.evaluate(() => document.getElementById('subway-sub').innerText) }); checkLayout(r, 'platform');
+assert.equal(await page.evaluate(() => !!document.querySelector('#subway-sub small[lang=ja]')), JA, '일본어 자막 줄');
 await page.screenshot({ path: `${OUT}/subtitle-top-platform${SUF}.png` });
-// 음성: 차임 뒤 ko → en (겹치지 않게)
-await until(() => (window.__tts || []).filter((x) => x.text).length >= 2, null, 30000).catch(async (e) => { console.log('DEBUG', JSON.stringify(await page.evaluate(() => ({ tts: window.__tts, ev: __jj.subway.voice.events, en: __jj.subway.voice.enabled, bgm: __jj.bgm ? [__jj.bgm.player.muted, __jj.bgm.player.volume] : null, U: typeof SpeechSynthesisUtterance })))); throw e; });
+// 음성: 차임 뒤 ko → en → ja (겹치지 않게)
+await until((n) => (window.__tts || []).filter((x) => x.text).length >= n, JA ? 3 : 2, 30000).catch(async (e) => { console.log('DEBUG', JSON.stringify(await page.evaluate(() => ({ tts: window.__tts, ev: __jj.subway.voice.events, en: __jj.subway.voice.enabled, bgm: __jj.bgm ? [__jj.bgm.player.muted, __jj.bgm.player.volume] : null, U: typeof SpeechSynthesisUtterance })))); throw e; });
 report.duckWhileSpeaking = await page.evaluate(() => ({ active: __jj.subway.voiceActive, duck: __jj.bgm?.debug?.state?.().duck ?? null }));
 const tts1 = await page.evaluate(() => window.__tts.slice());
 const ev1 = await page.evaluate(() => __jj.subway.voice.events.slice());
-assert.equal(tts1[0].lang, 'ko-KR'); assert.equal(tts1[1].lang, 'en-US');
+// 앞에 다른 안내(취소된 것 포함)가 끼어 있을 수 있다 → '들어오고' 한국어 줄부터 본다
+const seq = tts1.filter((x) => x.text), i0 = seq.findIndex((x) => x.lang === 'ko-KR' && /들어오고/.test(x.text));
+assert.ok(i0 >= 0, 'approach ko line: ' + JSON.stringify(tts1));
+assert.equal(seq[i0 + 1]?.lang, 'en-US', JSON.stringify(tts1));
+for (let k = i0 + 1; k < Math.min(seq.length, i0 + 3); k++) assert.ok(seq[k].t - seq[k - 1].t >= 300, '겹치지 않음');
+if (JA) { assert.equal(seq[i0 + 2]?.lang, 'ja-JP', JSON.stringify(tts1)); assert.ok(seq[i0 + 2].text.startsWith('まもなく、'), seq[i0 + 2].text); }
+else { await page.waitForTimeout(4000); assert.ok(!(await page.evaluate(() => window.__tts.some((x) => x.lang === 'ja-JP'))), '?subwayJa=0 → 일본어 음성 없음'); }
 assert.ok(ev1.some((e) => e.t === 'chime'), '차임');
 report.tts = tts1; report.voiceEvents = ev1;
 // 문 열림 → 타기
@@ -72,6 +80,7 @@ await page.evaluate(() => __jj.subway.inside.skip(30));
 await until(() => document.getElementById('subway-sub').innerText.includes('다음 역은'), null, 60000);
 await page.evaluate(() => { const i = __jj.subway.inside; i.cam.pitch = 0.12; i.cam.dist = 2.2; i.cam.yaw = Math.PI / 2; });
 await page.waitForTimeout(900);
+assert.equal((await page.evaluate(() => document.getElementById('subway-sub').innerText)).includes('次は、スネ、スネです。'), JA, '열차 일본어 자막');
 r = await rects(); report.steps.push({ k: 'train', r, sub: await page.evaluate(() => document.getElementById('subway-sub').innerText), hint: await page.evaluate(() => document.getElementById('subway-hint').innerText) }); checkLayout(r, 'train');
 await page.screenshot({ path: `${OUT}/subtitle-top-train${SUF}.png` });
 report.tts2 = await page.evaluate(() => window.__tts.slice(-4));

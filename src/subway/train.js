@@ -224,7 +224,7 @@ export function buildTrain({ origin, line, dir, rides, board, renderer, look, on
   let stage = 'board', i = 0, t = 0, sTot = 0, open = 1, sNow = 0, v = 0, alightSent = false;
   const boardLeft = Math.max(4, 25 - (board.t || 0));
   const en = (n) => BY_NAME.get(n)?.nameEn || n;
-  const transferOf = (n) => { const d = BY_NAME.get(n); const o = d?.lines.filter((k) => k !== line).map((k) => LINES[k]) || []; return o.length ? { ko: o.map((x) => x.ko).join(', '), en: o.map((x) => x.en).join(', ') } : null; };
+  const transferOf = (n) => { const d = BY_NAME.get(n); const o = d?.lines.filter((k) => k !== line).map((k) => LINES[k]) || []; return o.length ? { ko: o.map((x) => x.ko).join(', '), en: o.map((x) => x.en).join(', '), ja: o.map((x) => x.ja).join('・') } : null; };
   const say = (k, o) => onEvent('say', announce(k, o));
   let lastSaid = '';
   const sayOnce = (id, k, o) => { if (lastSaid === id) return; lastSaid = id; say(k, o); };
@@ -236,7 +236,7 @@ export function buildTrain({ origin, line, dir, rides, board, renderer, look, on
     else if (stage === 'close') { open = Math.max(0, 1 - t / 1.6); if (t > 2.4) { stage = 'run'; t = 0; sNow = 0; const n = curStop(); sayOnce('d' + i, 'depart', { name: n.name, nameEn: en(n.name) }); } }
     else if (stage === 'run') {
       const n = curStop(), q = n.prof.at(t); const ds = q.s - sNow; sNow = q.s; sTot += ds; v = q.v; open = 0;
-      if (n.prof.d - q.s < 450) { const tr = transferOf(n.name); sayOnce('n' + i, 'next', { name: n.name, nameEn: en(n.name), transfer: tr?.ko, transferEn: tr?.en }); }
+      if (n.prof.d - q.s < 450) { const tr = transferOf(n.name); sayOnce('n' + i, 'next', { name: n.name, nameEn: en(n.name), transfer: tr?.ko, transferEn: tr?.en, transferJa: tr?.ja, door: n.game ? 'left' : '' /* [subway-ja] 내릴 수 있는 역 = 왼쪽 문 */ }); }
       if (t >= n.prof.T) { stage = 'stop'; t = 0; v = 0; if (!n.game) sayOnce('x' + i, 'noAlight', { name: n.name, nameEn: en(n.name) }); else if (isLast()) sayOnce('l' + i, 'last', { name: n.name, nameEn: en(n.name) }); }
     } else if (stage === 'stop') {
       open = Math.min(1, Math.max(0, (t - 1.2) / 1.6)) * Math.min(1, Math.max(0, (RIDE.DWELL - t) / 1.6));

@@ -55,7 +55,7 @@ const CSS = `
 #subway-hint{position:fixed;left:50%;bottom:var(--subway-hint-b,132px);transform:translateX(-50%);z-index:201;background:rgba(20,24,30,.86);color:#fff;padding:8px 14px;border-radius:12px;font:600 14px/1.3 system-ui,sans-serif;pointer-events:none;display:none;white-space:nowrap}
 #subway-hint kbd{display:inline-block;min-width:18px;padding:1px 6px;margin-right:6px;border-radius:5px;background:#FFC20E;color:#111;font:800 13px system-ui;text-align:center}
 #subway-sub{position:fixed;left:50%;top:var(--subway-sub-t,108px);transform:translateX(-50%);z-index:201;max-width:min(760px,92vw);background:rgba(10,12,16,.82);color:#fff;padding:8px 16px;border-radius:10px;font:600 15px/1.45 system-ui,sans-serif;pointer-events:none;opacity:0;transition:opacity .3s;text-align:center}
-#subway-sub small{display:block;color:#adb5bd;font-weight:500;font-size:13px}
+#subway-sub small{display:block;color:#adb5bd;font-weight:500;font-size:13px}#subway-sub small[lang=ja]{font-size:12.5px;line-height:1.35;margin-top:1px}
 #subway-sub[data-v=on]::before{content:'🔊 ';}#subway-sub[data-v=muted]::before{content:'🔇 ';}#subway-sub[data-vnote]::after{content:attr(data-vnote);display:block;margin-top:2px;color:#ffd43b;font-weight:500;font-size:12px}
 #subway-toast{position:fixed;left:50%;top:22%;transform:translateX(-50%);z-index:201;background:rgba(20,24,30,.9);color:#fff;padding:9px 16px;border-radius:12px;font:600 15px/1.3 system-ui,sans-serif;pointer-events:none;opacity:0;transition:opacity .25s}
 #subway-chooser{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:202;width:min(440px,92vw);background:#1d2228;color:#fff;border-radius:16px;box-shadow:0 18px 50px rgba(0,0,0,.5);font:500 14px/1.35 system-ui,sans-serif;overflow:hidden;display:none}
@@ -126,7 +126,9 @@ export function mountSubway({ scene, overlay, data, world, terrain, renderer, ge
     document.documentElement.style.setProperty('--subway-hint-b', Math.round(innerHeight - t + 14) + 'px');
   }
   addEventListener('resize', () => { placeSub(); placeHint(); });
-  const subtitle = (a, sec = 6) => { if (!a?.ko) return; const en = isEn(); sub.innerHTML = en ? `${a.en}<small>${a.ko}</small>` : `${a.ko}<small>${a.en}</small>`; placeSub(); sub.style.opacity = '1'; subT = sec; };
+  // [subway-ja] 세 줄: 화면 언어 줄(크게) → 나머지(작게) → 일본어(작게). ?subwayJa=0 이면 일본어 없음 (자막·음성 둘 다)
+  const jaOn = params?.get?.('subwayJa') !== '0';
+  const subtitle = (a, sec = 6) => { if (!a?.ko) return; const en = isEn(); sub.innerHTML = (en ? `${a.en}<small>${a.ko}</small>` : `${a.ko}<small>${a.en}</small>`) + (a.ja ? `<small lang="ja">${a.ja}</small>` : ''); placeSub(); sub.style.opacity = '1'; subT = sec + (a.ja ? 2 : 0); };
   // [subway-voice] 안내 방송 음성 (차임 → 한국어 → 영어). BGM HUD 음소거·볼륨을 따름
   const voice = createSubwayVoice({ params, getLevel: () => getAudioLevel?.() || { muted: false, volume: 1 } });
   // 🔊 표시: 안내 방송이 실제로 나가면 자막 앞에 🔊, BGM 음소거로 꺼졌으면 🔇 + 한 줄 안내 (들리지 않을 때 원인 확인)
@@ -264,7 +266,7 @@ export function mountSubway({ scene, overlay, data, world, terrain, renderer, ge
     } else if (swap.phase === 'in' && swap.t >= FADE_SEC) swap = null;
   }
   const swapAlpha = () => (!swap ? null : swap.phase === 'out' ? Math.min(1, swap.t / FADE_SEC) : swap.phase === 'wait' ? 1 : Math.max(0, 1 - swap.t / FADE_SEC));
-  const say2 = (a) => { setV(''); subtitle(a); voice.play(a); };
+  const say2 = (a0) => { const a = jaOn || !a0?.ja ? a0 : { ...a0, ja: '' }; setV(''); subtitle(a); voice.play(a); };
   function platformRides(line, dir, def) { // 이번 실행에서 쓸 수 있는 역(코리더 꺼짐 등)까지만
     const r = rideStops(line, dir, def.name);
     let last = -1; r.forEach((q, i) => { if (q.game && stations.some((s) => s.def.id === q.id)) last = i; });
