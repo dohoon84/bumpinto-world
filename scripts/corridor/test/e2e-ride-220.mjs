@@ -39,7 +39,7 @@ const browser = await chromium.launch({ args: ['--use-angle=swiftshader', '--ena
 const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
 const errs = [];
 page.on('pageerror', (e) => errs.push(e.message));
-await page.goto(BASE + '?enter=1&name=e2e&bus=sim&ws=mock&rideSfx=0&rideVoice=0');
+await page.goto(BASE + '?enter=1&name=e2e&bus=sim&ws=mock&rideSfx=0&rideVoice=0&noticePopup=0');
 await page.waitForFunction(() => window.__jj?.ready, null, { timeout: 240000 });
 await page.waitForTimeout(2000);
 await page.evaluate(() => document.getElementById('lobby-go').click());
