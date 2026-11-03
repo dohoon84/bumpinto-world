@@ -171,7 +171,7 @@ ok('globe station list + branch layout');
   // 이름 없는 메시 = 코리더 공용 office 파사드(창 텍스처) — 그 외엔 텍스처 없음
   const g = lm2.build('0_-8'); let n = 0, tri = 0; const names = [];
   g.traverse((o) => { if (o.isMesh) { n++; names.push(o.name); tri += (o.geometry.index ? o.geometry.index.count : o.geometry.attributes.position.count) / 3; assert.ok(!/sign|label|logo/i.test(o.name) && (!o.name || !o.material.map), 'ncsoft: 표지·글자·로고 텍스처 없음 ' + o.name); } });
-  assert.ok(n <= 5, 'ncsoft meshes ' + n);
+  assert.ok(n <= 2, 'ncsoft meshes ' + n); // [ncsoft-v2] 본체 1 + 야간 불빛 1
   ok(`ncsoft: ${L.parts.length} OSM parts (0–58m), ${n} meshes, ${Math.round(tri)} tris, no sign/label/logo`);
 }
 // 12) [ncsoft-roads] HQ 둘레 도로(대왕판교로 · 대왕판교로644번길 · 판교역로)가 BOX 도로망(z > -3490)과 이어지고, 덧박스 바깥 변에 잘린 차도 끝이 없다
