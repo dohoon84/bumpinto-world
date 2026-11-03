@@ -1,0 +1,10 @@
+{
+  "_note": "테스트 픽스처. 형식은 도훈이 받아 본 실제 이매역 realtimeStationArrival 응답(2026-11-03 15:55 KST)과 같은 필드. 값 일부는 그 응답에서, 나머지 줄은 같은 형식으로 테스트용으로 만든 것 (실제 운행 정보 아님).",
+  "errorMessage": { "status": 200, "code": "INFO-000", "message": "정상 처리되었습니다.", "link": "", "developerMessage": "", "total": 4 },
+  "realtimeArrivalList": [
+    { "beginRow": null, "endRow": null, "curPage": null, "pageRow": null, "totalCount": 4, "rowNum": 1, "selectedCount": 4, "subwayId": "1075", "subwayNm": null, "updnLine": "상행", "trainLineNm": "왕십리행 - 야탑방면", "subwayHeading": null, "statnFid": "1075075226", "statnTid": "1075075228", "statnId": "1075075227", "statnNm": "이매", "trainCo": null, "trnsitCo": "2", "ordkey": "01000왕십리0", "subwayList": "1075,1081", "statnList": "1075075227,1081080812", "btrainSttus": "일반", "barvlDt": "0", "btrainNo": "6130", "bstatnId": "10", "bstatnNm": "왕십리", "recptnDt": "2026-11-03 15:55:24", "arvlMsg2": "이매 도착", "arvlMsg3": "이매", "arvlCd": "1", "lstcarAt": "0" },
+    { "rowNum": 2, "subwayId": "1075", "updnLine": "상행", "trainLineNm": "왕십리행 - 야탑방면", "statnId": "1075075227", "statnNm": "이매", "subwayList": "1075,1081", "btrainSttus": "일반", "barvlDt": "420", "btrainNo": "6132", "bstatnNm": "왕십리", "recptnDt": "2026-11-03 15:55:24", "arvlMsg2": "[4]번째 전역 (미금)", "arvlMsg3": "미금", "arvlCd": "99", "lstcarAt": "0" },
+    { "rowNum": 3, "subwayId": "1075", "updnLine": "하행", "trainLineNm": "인천행 - 서현방면", "statnId": "1075075227", "statnNm": "이매", "subwayList": "1075,1081", "btrainSttus": "일반", "barvlDt": "0", "btrainNo": "6135", "bstatnNm": "인천", "recptnDt": "2026-11-03 15:55:24", "arvlMsg2": "전역 도착", "arvlMsg3": "야탑", "arvlCd": "5", "lstcarAt": "0" },
+    { "rowNum": 4, "subwayId": "1081", "updnLine": "하행", "trainLineNm": "여주행 - 삼동방면", "statnId": "1081080812", "statnNm": "이매", "subwayList": "1075,1081", "btrainSttus": "일반", "barvlDt": "180", "btrainNo": "K123", "bstatnNm": "여주", "recptnDt": "2026-11-03 15:55:24", "arvlMsg2": "3분 후 (판교)", "arvlMsg3": "판교", "arvlCd": "99", "lstcarAt": "0" }
+  ]
+}

@@ -42,7 +42,15 @@
     "convert-taxi-terrain": "node scripts/convert-taxi-terrain.mjs",
     "shots-taxi-terrain": "node scripts/shots-taxi-terrain.mjs",
     "ride:e2e": "node scripts/corridor/test/e2e-ride-220.mjs",
-    "notice-popup:test": "node scripts/test-notice-popup.mjs"
+    "notice-popup:test": "node scripts/test-notice-popup.mjs",
+    "subway:test": "node scripts/test-subway.mjs && node scripts/test-subway-arrivals.mjs && node scripts/test-subway-ride.mjs && node scripts/test-subway-voice.mjs",
+    "subway:mp": "node scripts/mp-subway.mjs",
+    "subway:stairs": "node scripts/e2e-subway-stairs.mjs",
+    "subway:camera": "node scripts/e2e-subway-camera.mjs",
+    "subway:alight": "node scripts/e2e-subway-alight.mjs",
+    "subway:gate": "node scripts/e2e-subway-gate-exit.mjs",
+    "subway:pose": "node scripts/e2e-subway-pose.mjs",
+    "subway:sync": "node scripts/e2e-subway-train-sync.mjs"
   },
   "dependencies": {
     "three": "^0.186.1"

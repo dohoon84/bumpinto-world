@@ -5,6 +5,8 @@ import { WebSocketServer } from 'ws';
 import { sanitizeLook } from '../src/look.js';
 import { giftItem, giftItemByVeh, giftUnit, qtyOf, seedList, withQty } from '../src/gifts/catalog.js';
 const PORT = Number(process.env.PORT || 8787);
+// [subway-sync] 테스트용: 서버 시계를 이만큼 옮김 (time 응답에만). 예) 낮 시간표를 밤에 시험할 때
+const TIME_SKEW_MS = Number(process.env.TIME_SKEW_MS || 0);
 const wss = new WebSocketServer({ port: PORT });
 const peers = new Map(); // ws -> peer
 const giftStock = new Map(); // deviceId -> [{ id, qty }]
@@ -17,6 +19,7 @@ const broadcastAll = (m) => { for (const ws of peers.keys()) send(ws, m); };
 wss.on('connection', (ws) => {
   ws.on('message', (buf) => {
     let m; try { m = JSON.parse(buf); } catch { return; }
+    if (m.t === 'time') { send(ws, { t: 'time', c: Number(m.c) || 0, s: Date.now() + TIME_SKEW_MS }); return; } // [subway-sync] 시계 맞추기 (hello 전에도)
     if (m.t === 'hello' && !peers.has(ws)) {
       const look = sanitizeLook({ hair: 'short', top: 'hoodie', ...(m.look || {}), color: m.color || m.look?.color });
       const id = 'p' + (++seq);

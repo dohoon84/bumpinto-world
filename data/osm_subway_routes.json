@@ -1,0 +1,8431 @@
+{
+  "version": 0.6,
+  "generator": "Overpass API 0.7.62.11 87bfad18",
+  "osm3s": {
+    "timestamp_osm_base": "2026-07-28T02:16:18Z",
+    "copyright": "The data included in this document is from www.openstreetmap.org. The data is made available under ODbL."
+  },
+  "elements": [
+
+{
+  "type": "relation",
+  "id": 2404374,
+  "members": [
+    {
+      "type": "node",
+      "ref": 1797562528,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 5826564342,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 355172855,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 5937884697,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 1918413725,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 5919544686,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 5916874392,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 6033312682,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 6033314402,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 6033314413,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 660878435,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 5907762741,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 6033314427,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 6033314468,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 6033314482,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 6033314702,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 6033314712,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 6033314725,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 6033314757,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 6033314783,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 6033314994,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 3355067054,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 5907762740,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 5812010548,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 5924284356,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 287525731,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 355172911,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 6033315012,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 8337914284,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 5933687061,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 5933687058,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 5933687294,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 5801559318,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 5935554452,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 5935554449,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 5935554434,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 5801559319,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 355172983,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 1797587546,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 5935738070,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 5349724970,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 5930698987,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 355172962,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 1797562528,
+      "role": "stop"
+    },
+    {
+      "type": "way",
+      "ref": 321173435,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 1032005336,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 261477607,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 183520272,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 529624805,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 167732855,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 277531461,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 640443232,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 489813614,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 474532418,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 1458437478,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 251118740,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 604536612,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 1458437480,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 604536614,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 1458437484,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 389658782,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 389658781,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 176922091,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 625534097,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 1458437483,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 625534096,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 628671359,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 168498720,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 1458437477,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 672454243,
+      "role": ""
+    }
+  ],
+  "tags": {
+    "colour": "#00A23F",
+    "name": "서울 지하철 2호선: 외선순환",
+    "name:en": "Seoul Subway Line 2: Outer Circle Line",
+    "name:es": "Línea 2 del metro de Seúl: Círculo externo",
+    "name:ja": "ソウル地下鉄2号線 外回り",
+    "name:ko": "서울 지하철 2호선: 외선순환",
+    "name:ko-Hani": "서울 地下鐵 2號線: 外線循環",
+    "name:zh": "首尔地铁2号线 外圈",
+    "name:zh-Hans": "首尔地铁2号线 外圈",
+    "name:zh-Hant": "首爾地鐵2號綫 外圈",
+    "network": "수도권 전철",
+    "network:en": "Seoul Metropolitan Subway",
+    "network:ko": "수도권 전철",
+    "network:metro": "Seoul Metropolitan Subway",
+    "network:wikidata": "Q16950",
+    "network:wikipedia": "ko:수도권 전철",
+    "network:zh": "韓國首都圈電鐵",
+    "operator": "서울교통공사",
+    "operator:en": "Seoul Metro",
+    "public_transport:version": "2",
+    "ref": "2",
+    "roundtrip": "yes",
+    "route": "subway",
+    "type": "route",
+    "wikidata": "Q17501"
+  }
+},
+{
+  "type": "relation",
+  "id": 2718888,
+  "members": [
+    {
+      "type": "node",
+      "ref": 5325300810,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 3278844040,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 1994677371,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 4604102197,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 1996406534,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 1994678935,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 1994679616,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 1994679915,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 1994680293,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 1994680392,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 1994680522,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 3439039804,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 8822741690,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 9181579787,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 5917210895,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 9482998436,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 1996430636,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 1996430673,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 1994702763,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 1996442195,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 1994703274,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 1994703290,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 3824606379,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 3824606383,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 3824606392,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 3454026413,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 3824606388,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 3824606380,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 3824606374,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 3824606393,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 6117347092,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 6102706816,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 6102706788,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 6117347089,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 6102706837,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 6102706374,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 6102706369,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 6102706367,
+      "role": "stop"
+    },
+    {
+      "type": "way",
+      "ref": 226245418,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 1162781116,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 226245430,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 321157205,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 337030426,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 669510777,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 380125459,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 380126117,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 215900323,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 380125458,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 379091123,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 379091121,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 379091114,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 379091147,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 379091117,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 898339755,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 379091107,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 379091104,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 379091120,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 379091115,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 551412129,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 652543146,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 650568208,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 652543141,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 650568204,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 551412128,
+      "role": ""
+    }
+  ],
+  "tags": {
+    "colour": "#A49D87",
+    "from": "개화",
+    "from:en": "Gaehwa",
+    "from:ja": "開花",
+    "name": "서울 지하철 9호선: 개화 → 중앙보훈병원",
+    "name:en": "Seoul Subway Line 9: Gaewha → VHS Medical Center",
+    "name:ja": "ソウル地下鉄9号線 各駅停車: 開花 → 中央報勲病院",
+    "name:ko": "서울 지하철 9호선: 개화 → 중앙보훈병원",
+    "network": "수도권 전철",
+    "network:en": "Seoul Metropolitan Subway",
+    "network:ko": "수도권 전철",
+    "network:metro": "Seoul Metropolitan Subway",
+    "network:wikidata": "Q16950",
+    "network:wikipedia": "ko:수도권 전철",
+    "network:zh": "韓國首都圈電鐵",
+    "note": "All-Stop Train",
+    "operator": "서울시메트로9호선;서울교통공사",
+    "operator:en": "Seoul Metro Line 9 Corporation",
+    "public_transport:version": "2",
+    "ref": "9",
+    "route": "subway",
+    "text_colour": "#FFFFFF",
+    "to": "중앙보훈병원",
+    "to:en": "VHS Medical Center",
+    "type": "route",
+    "wheelchair": "yes",
+    "wikidata": "Q17503",
+    "wikipedia": "en:Seoul Subway Line 9"
+  }
+},
+{
+  "type": "relation",
+  "id": 2718901,
+  "members": [
+    {
+      "type": "node",
+      "ref": 12119884929,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 12119884931,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 12119884932,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 12119884933,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 8445537865,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 8445537827,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 355173473,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 5801302006,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 414685028,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 414684814,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 5863378574,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 355173579,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 355173581,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 5930287079,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 355173577,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 5821684795,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 5408273776,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 3605365336,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 355173569,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 4809472051,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 355173593,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 355173595,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 355173590,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 5887972152,
+      "role": "stop"
+    },
+    {
+      "type": "way",
+      "ref": 202528116,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 1137808146,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 1458437487,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 321132020,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 434577630,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 970070473,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 970070472,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 434577612,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 434577606,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 434577588,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 354884725,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 70986660,
+      "role": ""
+    }
+  ],
+  "tags": {
+    "colour": "#D11D70",
+    "distance": "30.2",
+    "duration": "00:52:00",
+    "from": "별내",
+    "from:en": "Byeollae",
+    "name": "서울 지하철 8호선: 별내 → 모란",
+    "name:en": "Seoul Subway Line 8: Byeollae → Moran",
+    "name:ja": "ソウル地下鉄8号線: 別内 → 牡丹",
+    "name:ko": "서울 지하철 8호선: 별내 → 모란",
+    "network": "수도권 전철",
+    "network:en": "Seoul Metropolitan Subway",
+    "network:ko": "수도권 전철",
+    "network:wikidata": "Q16950",
+    "network:wikipedia": "ko:수도권 전철",
+    "network:zh": "韓國首都圈電鐵",
+    "official_ref": "8호선",
+    "operator": "서울교통공사",
+    "operator:en": "Seoul Metro",
+    "public_transport:version": "2",
+    "ref": "8",
+    "route": "subway",
+    "to": "모란",
+    "to:en": "Moran",
+    "type": "route",
+    "wikidata": "Q45086",
+    "wikipedia": "en:Seoul Subway Line 8"
+  }
+},
+{
+  "type": "relation",
+  "id": 4729409,
+  "members": [
+    {
+      "type": "node",
+      "ref": 5935738062,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 5935738081,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 5935738082,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 5935738066,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 5935738069,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 5935738300,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 5935738307,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 5935738291,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 5935554435,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 5935554448,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 5935554451,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 5933687362,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 5933687293,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 5933687059,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 5933687060,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 6033315024,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 6033315028,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 6033315031,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 6033315033,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 6033315041,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 6033315044,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 6033315045,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 6033315053,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 6033314992,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 6033315083,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 6033315314,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 6033315344,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 6033315353,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 6033315362,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 6033314750,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 6033314467,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 6033314428,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 6033314426,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 6033314424,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 6033315602,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 6033314401,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 6033312681,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 5937884687,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 5937884688,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 5937884722,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 5937884728,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 5937884729,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 5937884701,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 5935738062,
+      "role": "stop"
+    },
+    {
+      "type": "way",
+      "ref": 1458437476,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 628671362,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 1458437482,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 625534094,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 628671356,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 628671358,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 640443239,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 1458437485,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 640443237,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 1458437481,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 640443236,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 640443235,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 1458437479,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 640443234,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 640443233,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 640443231,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 640443230,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 640443225,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 640443240,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 640443223,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 640443224,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 1032005337,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 628689299,
+      "role": ""
+    }
+  ],
+  "tags": {
+    "colour": "#00A23F",
+    "name": "서울 지하철 2호선: 내선순환",
+    "name:en": "Seoul Subway Line 2: Inner Circle Line",
+    "name:es": "Línea 2 del metro de Seúl: Círculo interno",
+    "name:ja": "ソウル地下鉄2号線 内回り",
+    "name:ko": "서울 지하철 2호선: 내선순환",
+    "name:ko-Hani": "서울 地下鐵 2號線: 內線循環",
+    "name:zh": "首尔地铁2号线 内圈",
+    "name:zh-Hans": "首尔地铁2号线 内圈",
+    "name:zh-Hant": "首爾地鐵2號綫 内圈",
+    "network": "수도권 전철",
+    "network:en": "Seoul Metropolitan Subway",
+    "network:ko": "수도권 전철",
+    "network:metro": "Seoul Metropolitan Subway",
+    "network:wikidata": "Q16950",
+    "network:wikipedia": "ko:수도권 전철",
+    "network:zh": "韓國首都圈電鐵",
+    "operator": "서울교통공사",
+    "operator:en": "Seoul Metro",
+    "public_transport:version": "2",
+    "ref": "2",
+    "roundtrip": "yes",
+    "route": "subway",
+    "type": "route",
+    "wikidata": "Q17501"
+  }
+},
+{
+  "type": "relation",
+  "id": 4729445,
+  "members": [
+    {
+      "type": "node",
+      "ref": 6033544224,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 6033544228,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 6033544511,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 6033544236,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 6033544261,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 6033544526,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 6033544537,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 6033544538,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 6033544539,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 6033544268,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 6033544273,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 6033544550,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 6033544552,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 6033544282,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 6033544392,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 6033544573,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 6033544404,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 6033544408,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 6033544411,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 6033544415,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 6033544418,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 7171445626,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 6033544618,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 6033544620,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 6033544425,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 6033544430,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 6033544433,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 6033544441,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 6033544670,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 6033544681,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 6033544469,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 6033544692,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 6033544706,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 5991943873,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 5991943839,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 5991943836,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 5991942705,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 5991943794,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 5991942704,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 5991942749,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 5991942714,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 5991942740,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 5991942711,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 5991942716,
+      "role": "stop"
+    },
+    {
+      "type": "way",
+      "ref": 640473002,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 640473000,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 640473001,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 1025707745,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 640472999,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 1262614125,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 1262614122,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 1262614127,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 640473006,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 640473003,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 640473004,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 640473005,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 1116744903,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 635106188,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 635106275,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 635106238,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 635106251,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 635106224,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 635106229,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 635106220,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 635106214,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 635106215,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 635106211,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 1225419196,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 1225419197,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 635106234,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 635106201,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 635106206,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 1458437474,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 635106194,
+      "role": ""
+    }
+  ],
+  "tags": {
+    "colour": "#ED6C00",
+    "from": "오금",
+    "from:en": "Ogeum",
+    "from:ja": "梧琴",
+    "name": "수도권 전철 3호선: 오금 → 대화",
+    "name:en": "Seoul Metro Line 3: Ogeum → Daehwa",
+    "name:es": "Línea 3 del metro de Seúl: Ogeum → Daehwa",
+    "name:ja": "ソウル地下鉄3号線: 梧琴 → 大化",
+    "name:ko": "수도권 전철 3호선: 오금 → 대화",
+    "network": "수도권 전철",
+    "network:en": "Seoul Metropolitan Subway",
+    "network:ko": "수도권 전철",
+    "network:metro": "Seoul Metropolitan Subway",
+    "network:wikidata": "Q16950",
+    "network:wikipedia": "ko:수도권 전철",
+    "network:zh": "韓國首都圈電鐵",
+    "operator": "서울교통공사;한국철도공사",
+    "operator:en": "Seoul Metro",
+    "public_transport:version": "2",
+    "ref": "3",
+    "route": "subway",
+    "to": "대화",
+    "to:en": "Daehwa",
+    "to:ja": "大化",
+    "type": "route",
+    "wikidata": "Q20393",
+    "wikipedia": "en:Seoul Subway Line 3"
+  }
+},
+{
+  "type": "relation",
+  "id": 6060963,
+  "members": [
+    {
+      "type": "node",
+      "ref": 9776192973,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 7287842392,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 9776192970,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 5817783181,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 3087681529,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 1906756417,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 1906756403,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 5624997112,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 1915043092,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 5881397263,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 4820118359,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 6269743768,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 6152750623,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 3492346917,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 3642451903,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 3740158509,
+      "role": "stop"
+    },
+    {
+      "type": "way",
+      "ref": 304232223,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 391358773,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 949889490,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 675112943,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 549032652,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 549032653,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 669314230,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 669314229,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 669704821,
+      "role": ""
+    }
+  ],
+  "tags": {
+    "alt_name": "DX Line",
+    "alt_ref": "S",
+    "colour": "#B81B30",
+    "duration": "00:42",
+    "from": "신사",
+    "from:en": "Sinsa",
+    "name": "수도권 전철 신분당선: 신사 → 광교",
+    "name:en": "Seoul Metropolitan Subway Shinbundang Line: Sinsa→ Gwangyo",
+    "name:es": "Línea Shinbundang hacia Gwanggyo",
+    "name:ko": "수도권 전철 신분당선: 신사 → 광교",
+    "network": "수도권 전철",
+    "network:en": "Seoul Metropolitan Subway",
+    "network:ko": "수도권 전철",
+    "network:metro": "neotrans",
+    "network:wikidata": "Q16950",
+    "network:wikipedia": "ko:수도권 전철",
+    "network:zh": "韓國首都圈電鐵",
+    "note": "광역전철은 기차로 간주됩니다. 지하철로 바꾸지 마십시오.",
+    "official_ref": "신분당",
+    "operator": "네오트랜스주식회사",
+    "operator:en": "NeoTrans Co. Ltd.",
+    "operator:ko": "네오트랜스주식회사",
+    "operator:type": "private",
+    "operator:wikidata": "Q13709959",
+    "public_transport:version": "2",
+    "ref": "신분당",
+    "ref:en": "Shinbundang",
+    "ref:source": "https://www.shinbundang.co.kr/eng/index.jsp",
+    "route": "subway",
+    "service": "commuter",
+    "to": "광교(경기대)",
+    "to:en": "Gwangyo (Kyonggi Univ.)",
+    "type": "route",
+    "wikidata": "Q20388",
+    "wikipedia": "en:Shinbundang Line"
+  }
+},
+{
+  "type": "relation",
+  "id": 6462562,
+  "members": [
+    {
+      "type": "node",
+      "ref": 5927786495,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 5882162369,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 3541201420,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 5927814407,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 5927814399,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 5927813976,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 5930638509,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 5930638346,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 5930638311,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 5930629976,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 5930629962,
+      "role": "stop"
+    },
+    {
+      "type": "way",
+      "ref": 628040346,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 347901761,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 584256567,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 584256563,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 347947384,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 347947385,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 584256556,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 584256553,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 356889418,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 356890900,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 584256547,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 584256542,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 356890901,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 356890902,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 589046337,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 628199063,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 1434651157,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 584256527,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 584256519,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 584256518,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 435741294,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 584256509,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 584256501,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 584256505,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 584256498,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 584256495,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 584256491,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 584256482,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 584256488,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 435741296,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 435764400,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 584256477,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 584256476,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 584256475,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 584256472,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 584256470,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 584256468,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 584256467,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 584256466,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 1128363997,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 584256465,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 892900374,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 892900379,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 584256464,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 985113338,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 985113335,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 584256459,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 584256460,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 584251566,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 584251567,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 584256461,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 584256463,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 589046366,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 589046367,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 589031156,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 589031152,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 589046372,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 589046373,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 589031149,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 589031145,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 589031140,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 589031135,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 589046414,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 589046417,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 547410966,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 547410965,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 435765222,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 435765221,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 584356914,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 584248419,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 628199094,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 589046429,
+      "role": ""
+    }
+  ],
+  "tags": {
+    "colour": "#0B318F",
+    "from": "판교",
+    "from:en": "Pangyo",
+    "name": "수도권 전철 경강선: 판교 → 여주",
+    "name:en": "Seoul Metropolitan Subway Gyeonggang Line: Pangyo → Yeoju",
+    "name:es": "Línea Gyeonggang del metro de Seúl: Pangyo → Yeoju",
+    "name:ko": "수도권 전철 경강선: 판교 → 여주",
+    "network": "수도권 전철",
+    "network:en": "Seoul Metropolitan Subway",
+    "network:ko": "수도권 전철",
+    "network:metro": "Seoul Metropolitan Subway",
+    "network:wikidata": "Q16950",
+    "network:wikipedia": "ko:수도권 전철",
+    "network:zh": "韓國首都圈電鐵",
+    "operator": "한국철도공사",
+    "operator:en": "Korail",
+    "public_transport:version": "2",
+    "ref": "경강",
+    "route": "subway",
+    "to": "여주",
+    "to:en": "Yeoju",
+    "type": "route",
+    "wikidata": "Q23933857",
+    "wikipedia": "en:Gyeonggang Line"
+  }
+},
+{
+  "type": "relation",
+  "id": 11634611,
+  "members": [
+    {
+      "type": "node",
+      "ref": 7902543836,
+      "role": "stop_entry_only"
+    },
+    {
+      "type": "node",
+      "ref": 5910775261,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 5910775263,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 5910775268,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 5910775257,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 5910775683,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 5204050235,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 5907964979,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 5907964981,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 5907965000,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 1794667157,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 5907965078,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 5907965097,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 5347779074,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 5347790595,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 5338792759,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 5911861709,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 5855371072,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 5911861688,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 5349743240,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 7783726043,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 7863473571,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 7872218757,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 7872218777,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 7872228248,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 7872228249,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 5910050514,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 7287966330,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 7287966323,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 7287966313,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 7287966302,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 7287966296,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 7287966289,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 7287965175,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 1725220163,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 7287965143,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 7287965130,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 1914727373,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 5924431380,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 5438824808,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 5881397264,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 5225259408,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 1915043095,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 1915043090,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 5882162368,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 1915043091,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 5887972151,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 1914136597,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 1914136725,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 4733039958,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 5909995038,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 355173583,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 6312484935,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 1906684759,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 5772493740,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 6312484936,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 5924268023,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 7908597444,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 6312484938,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 6312484944,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 4963715631,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 7746266267,
+      "role": "stop_exit_only"
+    },
+    {
+      "type": "way",
+      "ref": 846867975,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 626070244,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 626070241,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 626070221,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 168174651,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 626070223,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 168174652,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 552858011,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 552858012,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 459515350,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 459515353,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 626070239,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 552857833,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 552857832,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 226702968,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 846859471,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 846859470,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 625745839,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 625745836,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 625745854,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 625745852,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 226702967,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 626070227,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 626070230,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 226702972,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 846882011,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 626070234,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 626070236,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 554098549,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 626520415,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 553277309,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 553277311,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 553277308,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 553277307,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 553032347,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 774616849,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 774616848,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 553032346,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 1221937581,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 226702955,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 848345070,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 848345069,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 777243261,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 774616857,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 774616856,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 226702976,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 226702982,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 226702980,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 226702964,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 226702952,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 833822502,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 700350356,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 833822494,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 833822492,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 833822490,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 486122611,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 843904506,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 843904507,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 843904511,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 843904510,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 843904515,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 843904514,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 843904519,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 843904516,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 486122595,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 833822484,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 833822488,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 486122591,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 843904523,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 843904524,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 846889792,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 843904525,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 843904526,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 843904529,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 843904530,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 486122599,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 486122605,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 618443477,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 833822475,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 843904533,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 843904536,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 843904537,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 843904540,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 843904543,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 843904541,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 843904545,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 843904546,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 843904549,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 843904551,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 843904554,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 843904555,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 833822472,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 848399330,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 977918172,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 833822470,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 778783897,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 471664442,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 537280234,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 537038709,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 537032656,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 847201131,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 847201129,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 194096063,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 847201127,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 847201125,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 942814979,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 194096064,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 840845289,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 840845302,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 848399334,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 627597464,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 462259722,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 779273845,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 778783903,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 405995678,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 778783909,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 778783908,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 1219949847,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 564521939,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 564520649,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 481607849,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 1056157663,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 566850131,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 829962028,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 829962030,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 482174009,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 405479640,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 405479643,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 1025048903,
+      "role": ""
+    }
+  ],
+  "tags": {
+    "colour": "#ECA300",
+    "distance": "108.1km",
+    "from": "인천",
+    "name": "수인·분당선: 인천 → 왕십리",
+    "name:en": "Suin-Bundang Line : Incheon → Wangsimni",
+    "name:ko": "수인·분당선: 인천 → 왕십리",
+    "network": "수도권 전철",
+    "network:en": "Seoul Metropolitan Subway",
+    "network:ko": "수도권 전철",
+    "network:wikidata": "Q16950",
+    "network:wikipedia": "ko:수도권 전철",
+    "network:zh": "韓國首都圈電鐵",
+    "note": "광역전철은 기차로 간주됩니다. 지하철로 바꾸지 마십시오.",
+    "operator": "한국철도공사",
+    "operator:en": "Korea Railroad Corporation",
+    "operator:ko": "한국철도공사",
+    "operator:short": "KORAIL",
+    "operator:type": "public",
+    "operator:wikidata": "Q18169",
+    "operator:wikipedia": "en:Korail",
+    "public_transport:version": "2",
+    "ref": "수인·분당",
+    "ref:en": "Suin-Bundang",
+    "route": "train",
+    "service": "commuter",
+    "to": "왕십리",
+    "type": "route",
+    "wikidata": "Q84389881",
+    "wikipedia": "en:Suin–Bundang Line"
+  }
+},
+{
+  "type": "relation",
+  "id": 17953734,
+  "members": [
+    {
+      "type": "node",
+      "ref": 6094327310,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 6094327302,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 6094327297,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 6094327288,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 6094326983,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 6094326966,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 6094327315,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 6094327328,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 6094327337,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 6094327338,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 6094327346,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 6094327349,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 6094327350,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 6094327359,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 6094327361,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 6094327368,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 6094327372,
+      "role": "stop"
+    },
+    {
+      "type": "node",
+      "ref": 6094327384,
+      "role": "stop"
+    },
+    {
+      "type": "way",
+      "ref": 649359342,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 649359343,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 649359344,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 649359345,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 649359346,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 649359347,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 970070471,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 970070470,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 649359348,
+      "role": ""
+    },
+    {
+      "type": "way",
+      "ref": 1458437486,
+      "role": ""
+    }
+  ],
+  "tags": {
+    "colour": "#D11D70",
+    "distance": "17.7",
+    "duration": "00:32:40",
+    "from": "모란",
+    "from:en": "Moran",
+    "name": "서울 지하철 8호선: 모란 → 암사",
+    "name:en": "Seoul Subway Line 8: Moran → Amsa",
+    "name:ko": "서울 지하철 8호선: 모란 → 암사",
+    "network": "수도권 전철",
+    "network:en": "Seoul Metropolitan Subway",
+    "network:ko": "수도권 전철",
+    "network:wikidata": "Q16950",
+    "network:wikipedia": "ko:수도권 전철",
+    "network:zh": "韓國首都圈電鐵",
+    "operator": "서울교통공사",
+    "operator:en": "Seoul Metro",
+    "public_transport:version": "2",
+    "ref": "8",
+    "route": "subway",
+    "to": "암사",
+    "to:en": "Amsa",
+    "type": "route",
+    "wikidata": "Q45086",
+    "wikipedia": "en:Seoul Subway Line 8"
+  }
+},
+{
+  "type": "node",
+  "id": 287525731,
+  "tags": {
+    "name": "삼성",
+    "name:en": "Samseong(World Trade Center Seoul)",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "219",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 355172855,
+  "tags": {
+    "name": "아현",
+    "name:en": "Ahyeon",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "242",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 355172911,
+  "tags": {
+    "name": "종합운동장",
+    "name:en": "Sports Complex",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "218",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 355172962,
+  "tags": {
+    "name": "을지로입구",
+    "name:en": "Euljiro 1(il)-ga (Industrial Bank of Korea)",
+    "name:ja": "ウルチロイック(乙支路入口)",
+    "name:ko": "을지로입구",
+    "name:ko-Hani": "乙支路入口",
+    "name:zh": "乙支路入口",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "202",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 355172983,
+  "tags": {
+    "name": "상왕십리",
+    "name:en": "Sangwangsimni",
+    "name:ja": "上往十里(サンワンシムニ)",
+    "name:ko": "상왕십리",
+    "name:ko-Hani": "上往十里",
+    "name:zh": "上往十里",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "207",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 355173473,
+  "tags": {
+    "name": "암사",
+    "name:en": "Amsa",
+    "name:ja": "岩寺",
+    "name:ko": "암사",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 355173569,
+  "tags": {
+    "name": "산성",
+    "name:en": "Sanseong",
+    "name:ja": "山城",
+    "name:ko": "산성",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 355173577,
+  "tags": {
+    "name": "문정",
+    "name:en": "Munjeong",
+    "name:ja": "文井",
+    "name:ko": "문정",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 355173579,
+  "tags": {
+    "bicycle": "yes",
+    "name": "석촌",
+    "name:en": "Seokchon",
+    "name:ja": "ソクチョン",
+    "name:ko": "석촌",
+    "name:ko-Latn": "Seokchon",
+    "name:zh": "石村",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 355173581,
+  "tags": {
+    "bicycle": "yes",
+    "name": "송파",
+    "name:en": "Songpa",
+    "name:ja": "松坡",
+    "name:ko": "송파",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 355173583,
+  "tags": {
+    "name": "대모산입구",
+    "name:en": "Daemosan",
+    "name:ja": "テモサンイック(大母山入口)",
+    "name:ko": "대모산입구",
+    "network": "Seoul Metropolitan Subway",
+    "operator": "한국철도공사",
+    "operator:en": "Korea Railroad Corporation",
+    "operator:ko": "한국철도공사",
+    "operator:short": "KORAIL",
+    "operator:type": "public",
+    "operator:wikidata": "Q18169",
+    "operator:wikipedia": "en:Korail",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "railway:ref": "대모산",
+    "ref": "K220",
+    "ref:AFC": "1028",
+    "ref:KROIS": "230094",
+    "ref:XROIS": "3900478",
+    "train": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 355173590,
+  "tags": {
+    "name": "수진",
+    "name:en": "Sujin",
+    "name:ja": "寿進",
+    "name:ko": "수진",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 355173593,
+  "tags": {
+    "alt_name": "신구대학교역",
+    "alt_name:en": "Shingu College Station",
+    "alt_name:ko": "신구대학교역",
+    "name": "단대오거리",
+    "name:en": "Dandaeogeori",
+    "name:ja": "丹岱オゴリ",
+    "name:ko": "단대오거리",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 355173595,
+  "tags": {
+    "name": "신흥",
+    "name:en": "Sinheung",
+    "name:ja": "新興",
+    "name:ko": "신흥",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 414684814,
+  "tags": {
+    "alt_name": "평화의문",
+    "alt_name:en": "World Peace Gate",
+    "alt_name:ko": "평화의문",
+    "name": "몽촌토성",
+    "name:en": "Mongchontoseong",
+    "name:ja": "モンチョントソン(夢村土城)",
+    "name:ko": "몽촌토성",
+    "name:zh": "梦村土城",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "813",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 414685028,
+  "tags": {
+    "name": "강동구청",
+    "name:en": "Gangdong-gu Office",
+    "name:ja": "カンドングチョン",
+    "name:ko": "강동구청",
+    "name:zh": "江东区厅",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 660878435,
+  "tags": {
+    "name": "신도림",
+    "name:en": "Sindorim",
+    "name:ja": "新道林",
+    "name:ko": "신도림",
+    "name:ko-Kana": "シンドリム",
+    "name:zh": "新道林",
+    "operator": "서울교통공사",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 1725220163,
+  "tags": {
+    "name": "기흥",
+    "name:en": "Giheung",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "K237",
+    "source": "bing 2010",
+    "train": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 1794667157,
+  "tags": {
+    "local_ref": "2",
+    "name": "소래포구",
+    "name:en": "Soraepogu",
+    "name:ko": "소래포구",
+    "operator": "한국철도공사",
+    "operator:en": "Korea Railroad Corporation",
+    "operator:ko": "한국철도공사",
+    "operator:short": "KORAIL",
+    "operator:type": "public",
+    "operator:wikidata": "Q18169",
+    "operator:wikipedia": "en:Korail",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "railway:ref": "소래포",
+    "ref": "K261",
+    "ref:AFC": "1880",
+    "ref:KROIS": "100049",
+    "ref:XROIS": "3900990",
+    "train": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 1797562528,
+  "tags": {
+    "name": "시청",
+    "name:en": "City Hall",
+    "name:ja": "市庁",
+    "name:ko": "시청",
+    "name:ko-Hani": "市廳",
+    "name:ko-Kana": "シチョン",
+    "name:zh": "市厅",
+    "name:zh-Hans": "市厅",
+    "name:zh-Hant": "市廳",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "201",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 1797587546,
+  "tags": {
+    "name": "신당",
+    "name:en": "Sindang",
+    "name:ja": "新堂(シンダン)",
+    "name:ko": "신당",
+    "name:ko-Hani": "新堂",
+    "name:zh": "新堂",
+    "name:zh-Hans": "新堂",
+    "name:zh-Hant": "新堂",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "206",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 1906684759,
+  "tags": {
+    "name": "구룡",
+    "name:en": "Guryong",
+    "name:ja": "九龍(クリョン)",
+    "name:ko": "구룡",
+    "operator": "한국철도공사",
+    "operator:en": "Korea Railroad Corporation",
+    "operator:ko": "한국철도공사",
+    "operator:short": "KORAIL",
+    "operator:type": "public",
+    "operator:wikidata": "Q18169",
+    "operator:wikipedia": "en:Korail",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "railway:ref": "구룡역",
+    "ref": "K218",
+    "ref:AFC": "1026",
+    "ref:KROIS": "230081",
+    "ref:XROIS": "3900476",
+    "train": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 1906756403,
+  "tags": {
+    "name": "청계산입구",
+    "name:en": "Cheonggyesan",
+    "name:ja": "チョンゲサンイック(清渓山入口)",
+    "name:ko": "청계산입구",
+    "name:zh": "清溪山",
+    "operator": "네오트랜스주식회사",
+    "operator:en": "NEO TRANS CO., LTD",
+    "operator:ko": "네오트랜스주식회사",
+    "operator:type": "private",
+    "operator:wikidata": "Q13709959",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "subway": "yes",
+    "train": "yes",
+    "wikidata": "Q492606"
+  }
+},
+{
+  "type": "node",
+  "id": 1906756417,
+  "tags": {
+    "name": "양재시민의숲",
+    "name:en": "Yangjae Citizen's Forest",
+    "name:ja": "ヤンジェシミネスプ(良才市民の森)",
+    "name:ko": "양재시민의숲",
+    "name:zh": "良才市民之林",
+    "operator": "네오트랜스주식회사",
+    "operator:en": "NEO TRANS CO., LTD",
+    "operator:ko": "네오트랜스주식회사",
+    "operator:type": "private",
+    "operator:wikidata": "Q13709959",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "subway": "yes",
+    "train": "yes",
+    "wikidata": "Q492402"
+  }
+},
+{
+  "type": "node",
+  "id": 1914136597,
+  "tags": {
+    "name": "태평",
+    "name:en": "Taepyeong",
+    "name:ja": "テピョン(太平)",
+    "name:ko": "태평",
+    "name:zh": "太平",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "K224",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 1914136725,
+  "tags": {
+    "name": "가천대",
+    "name:en": "Gachon Univ.",
+    "name:ja": "カチョンデ(嘉泉大)",
+    "name:ko": "가천대",
+    "name:zh": "嘉泉大",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "K223",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 1914727373,
+  "tags": {
+    "name": "보정",
+    "name:en": "Bojeong",
+    "name:ja": "宝亭",
+    "name:ko": "보정",
+    "name:zh": "寶亭",
+    "operator": "한국철도공사",
+    "operator:en": "Korea Railroad Corporation",
+    "operator:ko": "한국철도공사",
+    "operator:short": "KORAIL",
+    "operator:type": "public",
+    "operator:wikidata": "Q18169",
+    "operator:wikipedia": "en:Korail",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "train": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 1915043090,
+  "tags": {
+    "name": "서현",
+    "name:en": "Seohyeon",
+    "name:ja": "ソヒョン",
+    "name:ko": "서현",
+    "name:zh": "書峴",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "K228",
+    "train": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 1915043091,
+  "tags": {
+    "name": "야탑",
+    "name:en": "Yatap",
+    "name:ja": "野塔",
+    "name:ko": "야탑",
+    "name:zh": "野塔",
+    "network": "Korea Metropolitan Subway",
+    "operator": "한국철도공사",
+    "operator:en": "Korea Railroad Corporation",
+    "operator:ko": "한국철도공사",
+    "operator:short": "KORAIL",
+    "operator:type": "public",
+    "operator:wikidata": "Q18169",
+    "operator:wikipedia": "en:Korail",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "K226",
+    "train": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 1915043092,
+  "tags": {
+    "name": "정자",
+    "name:en": "Jeongja",
+    "name:ja": "チョンジャ(亭子)",
+    "name:ko": "정자",
+    "name:zh": "亭子",
+    "network": "Seoul Metropolitan Subway",
+    "operator": "네오트랜스주식회사",
+    "operator:en": "NEO TRANS CO., LTD",
+    "operator:ko": "네오트랜스주식회사",
+    "operator:type": "private",
+    "operator:wikidata": "Q13709959",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "D12",
+    "subway": "yes",
+    "train": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 1915043095,
+  "tags": {
+    "name": "수내",
+    "name:en": "Sunae",
+    "name:ja": "スネ",
+    "name:ko": "수내",
+    "name:zh": "藪內",
+    "network": "Seoul Metropolitan Subway",
+    "operator": "한국철도공사",
+    "operator:en": "Korea Railroad Corporation",
+    "operator:ko": "한국철도공사",
+    "operator:short": "KORAIL",
+    "operator:type": "public",
+    "operator:wikidata": "Q18169",
+    "operator:wikipedia": "en:Korail",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "K229",
+    "train": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 1918413725,
+  "tags": {
+    "name": "신촌",
+    "name:en": "Sinchon",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "240",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 1994677371,
+  "tags": {
+    "name": "공항시장",
+    "name:en": "Airport Market",
+    "name:ja": "空港市場",
+    "name:ja-Hira": "コンハンシジャン",
+    "name:ko": "공항시장",
+    "platforms": "2",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "subway": "yes",
+    "wikidata": "Q59980"
+  }
+},
+{
+  "type": "node",
+  "id": 1994678935,
+  "tags": {
+    "name": "양천향교",
+    "name:en": "Yangcheon Hyanggyo",
+    "name:ja": "ヤンチョンヒャンギョ(陽川郷校)",
+    "name:ko": "양천향교",
+    "name:zh": "阳川乡校",
+    "platforms": "2",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "subway": "yes",
+    "wikidata": "Q59985"
+  }
+},
+{
+  "type": "node",
+  "id": 1994679616,
+  "tags": {
+    "name": "가양",
+    "name:en": "Gayang",
+    "name:ja": "カヤン(加陽)",
+    "name:ko": "가양",
+    "platforms": "2",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "subway": "yes",
+    "wikidata": "Q59987"
+  }
+},
+{
+  "type": "node",
+  "id": 1994679915,
+  "tags": {
+    "name": "증미",
+    "name:en": "Jeungmi",
+    "name:ja": "チュンミ(曽米)",
+    "name:ko": "증미",
+    "platforms": "2",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "subway": "yes",
+    "wikidata": "Q59989"
+  }
+},
+{
+  "type": "node",
+  "id": 1994680293,
+  "tags": {
+    "name": "등촌",
+    "name:en": "Deungchon",
+    "name:ja": "トゥンチョン(登村)",
+    "name:ko": "등촌",
+    "platforms": "2",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "subway": "yes",
+    "wikidata": "Q59992"
+  }
+},
+{
+  "type": "node",
+  "id": 1994680392,
+  "tags": {
+    "name": "염창",
+    "name:en": "Yeomchang",
+    "name:ja": "ヨムチャン(塩倉)",
+    "name:ko": "염창",
+    "platforms": "2",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "subway": "yes",
+    "wikidata": "Q59993"
+  }
+},
+{
+  "type": "node",
+  "id": 1994680522,
+  "tags": {
+    "addr:city": "서울특별시",
+    "addr:district": "양천구",
+    "addr:housenumber": "지하217",
+    "addr:postcode": "07969",
+    "addr:street": "목동중앙로",
+    "addr:subdistrict": "목동",
+    "internet_access": "wlan",
+    "name": "신목동",
+    "name:en": "Sinmokdong",
+    "name:ja": "シンモクトン(新木洞)",
+    "name:ko": "신목동",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 1994702763,
+  "tags": {
+    "name": "흑석",
+    "name:en": "Heukseok",
+    "name:ja": "黒石",
+    "name:ko": "흑석",
+    "network": "Seoul Metropolitan Subway System",
+    "operator": "서울시메트로9호선",
+    "operator:en": "Seoul Metro Line 9 Corporation",
+    "operator:ko": "서울시메트로9호선",
+    "operator:wikidata": "Q13311220",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "919",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 1994703274,
+  "tags": {
+    "name": "구반포",
+    "name:en": "Gubanpo",
+    "network": "Seoul Metropolitan Subway System",
+    "operator": "서울시메트로9호선",
+    "operator:en": "Seoul Metro Line 9 Corporation",
+    "operator:ko": "서울시메트로9호선",
+    "operator:wikidata": "Q13311220",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "921",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 1994703290,
+  "tags": {
+    "name": "신반포",
+    "name:en": "Sinbanpo",
+    "name:ja": "新盤浦",
+    "network": "Seoul Metropolitan Subway System",
+    "operator": "서울시메트로9호선",
+    "operator:en": "Seoul Metro Line 9 Corporation",
+    "operator:ko": "서울시메트로9호선",
+    "operator:wikidata": "Q13311220",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "922",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 1996406534,
+  "tags": {
+    "name": "마곡나루",
+    "name:ko": "마곡나루",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "905",
+    "ref:AFC": "4105",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 1996430636,
+  "tags": {
+    "level": "-2",
+    "level:ref": "B2",
+    "name": "노량진",
+    "name:en": "Noryangjin",
+    "name:ja": "鷺梁津",
+    "name:ko": "노량진",
+    "network": "Seoul Metropolitan Subway System",
+    "operator": "서울시메트로9호선",
+    "operator:en": "Seoul Metro Line 9 Corporation",
+    "operator:ko": "서울시메트로9호선",
+    "operator:wikidata": "Q13311220",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "917",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 1996430673,
+  "tags": {
+    "name": "노들",
+    "name:en": "Nodeul",
+    "name:ja": "ノドゥル",
+    "network": "Seoul Metropolitan Subway System",
+    "operator": "서울시메트로9호선",
+    "operator:en": "Seoul Metro Line 9 Corporation",
+    "operator:ko": "서울시메트로9호선",
+    "operator:wikidata": "Q13311220",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "918",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 1996442195,
+  "tags": {
+    "name": "동작",
+    "name:en": "Dongjak",
+    "name:ja": "銅雀",
+    "network": "Seoul Metropolitan Subway System",
+    "note": "express train",
+    "operator": "서울시메트로9호선",
+    "operator:en": "Seoul Metro Line 9 Corporation",
+    "operator:ko": "서울시메트로9호선",
+    "operator:wikidata": "Q13311220",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "920",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 3087681529,
+  "tags": {
+    "alt_name": "양재역",
+    "alt_name:en": "Yangjae Station",
+    "alt_name:ko": "양재역",
+    "name": "양재",
+    "name:en": "Yangjae",
+    "name:ja": "ヤンジェ(良才)",
+    "name:ko": "양재",
+    "name:ko-Latn": "Yangjae",
+    "operator": "네오트랜스주식회사",
+    "operator:en": "NEO TRANS CO., LTD",
+    "operator:ko": "네오트랜스주식회사",
+    "operator:type": "private",
+    "operator:wikidata": "Q13709959",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "D08",
+    "subway": "yes",
+    "train": "yes",
+    "wikidata": "Q100852"
+  }
+},
+{
+  "type": "node",
+  "id": 3278844040,
+  "tags": {
+    "name": "김포공항",
+    "name:en": "Gimpo Int'l Airport",
+    "name:ja": "金浦空港",
+    "name:ko": "김포공항",
+    "operator": "서울시메트로9호선",
+    "operator:en": "Seoul Metro Line 9 Corporation",
+    "operator:ko": "서울시메트로9호선",
+    "operator:wikidata": "Q13311220",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "902",
+    "ref:AFC": "4102",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 3355067054,
+  "tags": {
+    "name": "교대",
+    "name:en": "Seoul Nat'l Univ. of Education (Court & Public Prosecutors' Office)",
+    "network": "Seoul Metropolitan Subway",
+    "operator": "서울교통공사",
+    "operator:en": "Seoul Metro",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "223",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 3439039804,
+  "tags": {
+    "name": "선유도",
+    "name:en": "Seonyudo",
+    "name:ja": "ソニュド(仙遊島)",
+    "name:ko": "선유도",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "subway": "yes",
+    "wikidata": "Q59995",
+    "wikipedia": "ko:선유도역"
+  }
+},
+{
+  "type": "node",
+  "id": 3454026413,
+  "tags": {
+    "layer": "-2",
+    "name": "언주",
+    "name:en": "Eonju",
+    "name:ja": "彦州",
+    "name:ko": "언주",
+    "network": "Seoul Metropolitan Subway System",
+    "note": "no stop for express trains",
+    "operator": "서울교통공사",
+    "operator:en": "Seoul Metro",
+    "operator:ko": "서울교통공사",
+    "operator:type": "public",
+    "operator:wikidata": "Q28699048",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "926",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 3492346917,
+  "tags": {
+    "name": "상현",
+    "name:en": "Sanghyeon",
+    "name:ja": "サンヒョン(上峴)",
+    "name:ko": "상현",
+    "name:zh": "上峴",
+    "operator": "네오트랜스주식회사",
+    "operator:en": "NEO TRANS CO., LTD",
+    "operator:ko": "네오트랜스주식회사",
+    "operator:type": "private",
+    "operator:wikidata": "Q13709959",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "subway": "yes",
+    "train": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 3541201420,
+  "tags": {
+    "local_ref": "2",
+    "name": "삼동",
+    "name:en": "Samdong",
+    "name:ko": "삼동",
+    "name:ko-Latn": "Samdongyeok",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "subway": "yes",
+    "train": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 3605365336,
+  "tags": {
+    "name": "남위례",
+    "name:en": "Namwirye",
+    "name:ko": "남위례",
+    "operator": "서울교통공사",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "start_date": "2021-12-18",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 3642451903,
+  "tags": {
+    "alt_name": "광교중앙",
+    "name": "광교중앙",
+    "name:en": "Gwanggyo Jungang",
+    "name:ko": "광교중앙",
+    "name:zh": "光敎中央(亞洲大)",
+    "operator": "네오트랜스주식회사",
+    "operator:en": "NEO TRANS CO., LTD",
+    "operator:ko": "네오트랜스주식회사",
+    "operator:type": "private",
+    "operator:wikidata": "Q13709959",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "subway": "yes",
+    "train": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 3740158509,
+  "tags": {
+    "alt_name": "Gwanggyo(Kyonggi Univ.)",
+    "alt_name:en": "광교(경기대)",
+    "name": "광교",
+    "name:en": "Gwanggyo",
+    "name:ja": "クァンギョ(光教)",
+    "name:ko": "광교",
+    "name:zh": "光敎(京畿大)",
+    "operator": "네오트랜스주식회사",
+    "operator:en": "NEO TRANS CO., LTD",
+    "operator:ko": "네오트랜스주식회사",
+    "operator:type": "private",
+    "operator:wikidata": "Q13709959",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "subway": "yes",
+    "train": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 3824606374,
+  "tags": {
+    "layer": "-2",
+    "level": "-2",
+    "level:ref": "B2",
+    "name": "봉은사역",
+    "name:en": "Bongeunsa",
+    "name:ko": "봉은사역",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "929",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 3824606379,
+  "tags": {
+    "level": "-5",
+    "level:ref": "B5",
+    "name": "고속터미널",
+    "name:en": "Express Bus Terminal",
+    "name:ja": "高速ターミナル駅",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "923",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 3824606380,
+  "tags": {
+    "name": "삼성중앙",
+    "name:en": "Samseong Jungang",
+    "name:ja": "三成中央駅",
+    "network": "Seoul Metropolitan Subway System",
+    "note": "no stop for express trains",
+    "operator": "서울교통공사",
+    "operator:en": "Seoul Metro",
+    "operator:ko": "서울교통공사",
+    "operator:type": "public",
+    "operator:wikidata": "Q28699048",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "928",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 3824606383,
+  "tags": {
+    "name": "사평",
+    "name:en": "Sapyeong",
+    "name:ja": "砂平",
+    "name:ko-Latn": "Sapyeong",
+    "network": "Seoul Metropolitan Subway System",
+    "note": "All-Stop trains only",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "924",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 3824606388,
+  "tags": {
+    "layer": "-2",
+    "name": "선정릉",
+    "name:en": "Seonjeongneung",
+    "name:ja": "宣靖陵",
+    "name:ko": "선정릉",
+    "network": "Seoul Metropolitan Subway System",
+    "operator": "서울교통공사",
+    "operator:en": "Seoul Metro",
+    "operator:ko": "서울교통공사",
+    "operator:type": "public",
+    "operator:wikidata": "Q28699048",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "927",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 3824606392,
+  "tags": {
+    "name": "신논현역 (Sinnonhyeon)",
+    "name:en": "Sinnonhyeon",
+    "name:ko": "신논현역",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "925",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 3824606393,
+  "tags": {
+    "layer": "-4",
+    "level": "-4",
+    "level:ref": "B4",
+    "name": "종합운동장",
+    "name:en": "Sports Complex",
+    "network": "Seoul Metropolitan Subway System",
+    "operator": "서울교통공사",
+    "operator:en": "Seoul Metro",
+    "operator:ko": "서울교통공사",
+    "operator:type": "public",
+    "operator:wikidata": "Q28699048",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "930",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 4604102197,
+  "tags": {
+    "name": "신방화",
+    "name:en": "Sinbanghwa",
+    "name:ja": "シンバンファ(新傍花)",
+    "name:ko": "신방화",
+    "platforms": "2",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "subway": "yes",
+    "wikidata": "Q59982"
+  }
+},
+{
+  "type": "node",
+  "id": 4733039958,
+  "tags": {
+    "name": "복정",
+    "name:en": "Bokjeong",
+    "name:ja": "ボクチョン(福井)",
+    "name:ko": "복정",
+    "name:zh": "福井",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "K222",
+    "train": "yes",
+    "wikidata": "Q46170"
+  }
+},
+{
+  "type": "node",
+  "id": 4809472051,
+  "tags": {
+    "alt_name": "성남법원·검찰청역",
+    "alt_name:en": "Seongnam Court & Public Prosecutor's Office Station",
+    "alt_name:ko": "성남법원·검찰청역",
+    "name": "남한산성입구",
+    "name:en": "Namhansanseong",
+    "name:ja": "南漢山城入口",
+    "name:ko": "남한산성입구",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 4820118359,
+  "tags": {
+    "name": "동천",
+    "name:en": "Dongcheon",
+    "name:ja": "ドンチョン(東川)",
+    "name:ko": "동천",
+    "name:zh": "東川",
+    "operator": "네오트랜스주식회사",
+    "operator:en": "NEO TRANS CO., LTD",
+    "operator:ko": "네오트랜스주식회사",
+    "operator:type": "private",
+    "operator:wikidata": "Q13709959",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "subway": "yes",
+    "train": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 4963715631,
+  "tags": {
+    "name": "서울숲",
+    "name:en": "Seoul-forest",
+    "name:ja": "ソウルスプ(ソウルの森)",
+    "name:ko": "서울숲",
+    "name:zh": "首尔林",
+    "network": "Seoul Metropolitan Subway",
+    "operator": "한국철도공사",
+    "operator:en": "Korea Railroad Corporation",
+    "operator:ko": "한국철도공사",
+    "operator:short": "KORAIL",
+    "operator:type": "public",
+    "operator:wikidata": "Q18169",
+    "operator:wikipedia": "en:Korail",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "K211",
+    "train": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 5204050235,
+  "tags": {
+    "local_ref": "1",
+    "name": "원인재",
+    "name:en": "Woninjae",
+    "name:ja": "源仁斎(ウォニンジェ)",
+    "name:zh": "源仁斋",
+    "operator": "한국철도공사",
+    "operator:en": "Korea Railroad Corporation",
+    "operator:ko": "한국철도공사",
+    "operator:short": "KORAIL",
+    "operator:type": "public",
+    "operator:wikidata": "Q18169",
+    "operator:wikipedia": "en:Korail",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "K265",
+    "train": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 5225259408,
+  "tags": {
+    "name": "정자",
+    "name:en": "Jeongja",
+    "name:ja": "チョンジャ(亭子)",
+    "name:ko": "정자",
+    "name:zh": "亭子",
+    "network": "Seoul Metropolitan Subway",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "K230",
+    "train": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 5325300810,
+  "tags": {
+    "alt_name:ja": "ケファ",
+    "name": "개화",
+    "name:en": "Gaehwa",
+    "name:ja": "開花",
+    "name:ko": "개화",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 5338792759,
+  "tags": {
+    "alt_name": "능길",
+    "alt_name:en": "Neunggil",
+    "alt_ref": "0888",
+    "local_ref": "1",
+    "name": "신길온천",
+    "name:en": "Singiloncheon",
+    "name:ko": "신길온천",
+    "operator": "한국철도공사",
+    "operator:en": "Korea Railroad Corporation",
+    "operator:ko": "한국철도공사",
+    "operator:short": "KORAIL",
+    "operator:type": "public",
+    "operator:wikidata": "Q18169",
+    "operator:wikipedia": "en:Korail",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "railway:ref": "신길온",
+    "ref": "454;K256",
+    "ref:KROIS": "210217",
+    "ref:XROIS": "3900462",
+    "subway": "yes",
+    "train": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 5347779074,
+  "tags": {
+    "local_ref": "3",
+    "name": "오이도",
+    "name:en": "Oido",
+    "name:ko": "오이도",
+    "operator": "한국철도공사",
+    "operator:en": "Korea Railroad Corporation",
+    "operator:ko": "한국철도공사",
+    "operator:short": "KORAIL",
+    "operator:type": "public",
+    "operator:wikidata": "Q18169",
+    "operator:wikipedia": "en:Korail",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "K258",
+    "train": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 5347790595,
+  "tags": {
+    "local_ref": "1",
+    "name": "정왕",
+    "name:en": "Jeongwang",
+    "name:ko": "정왕",
+    "operator": "서울교통공사",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "455;K257",
+    "subway": "yes",
+    "train": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 5349724970,
+  "tags": {
+    "name": "을지로4가",
+    "name:en": "Euljiro 4(sa)-ga",
+    "name:ja": "乙支路4街",
+    "name:ko": "을지로4가",
+    "name:ko-Hani": "乙支路4街",
+    "name:ko-Kana": "ウルチロサガ",
+    "name:zh": "乙支路4街",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "204",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 5349743240,
+  "tags": {
+    "name": "중앙",
+    "name:en": "Jungang",
+    "name:ja": "中央",
+    "name:ko": "중앙",
+    "network": "수도권 전철",
+    "operator": "한국철도공사",
+    "operator:en": "Korea Railroad Corporation",
+    "operator:ko": "한국철도공사",
+    "operator:short": "KORAIL",
+    "operator:type": "public",
+    "operator:wikidata": "Q18169",
+    "operator:wikipedia": "en:Korail",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "450;K252",
+    "subway": "yes",
+    "train": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 5408273776,
+  "tags": {
+    "name": "복정",
+    "name:en": "Bokjeong",
+    "name:ja": "ボクチョン",
+    "name:ko": "복정",
+    "name:zh": "福井",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "820",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 5438824808,
+  "tags": {
+    "name": "오리",
+    "name:en": "Ori",
+    "name:ja": "オリ",
+    "name:ko": "오리",
+    "name:zh": "梧里",
+    "network": "수도권 전철",
+    "operator": "한국철도공사",
+    "operator:en": "Korea Railroad Corporation",
+    "operator:ko": "한국철도공사",
+    "operator:short": "KORAIL",
+    "operator:type": "public",
+    "operator:wikidata": "Q18169",
+    "operator:wikipedia": "en:Korail",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "K232",
+    "train": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 5624997112,
+  "tags": {
+    "name": "판교",
+    "name:en": "Pangyo",
+    "name:ko": "판교",
+    "network": "Seoul Metropolitan Subway",
+    "operator": "네오트랜스주식회사",
+    "operator:en": "NEO TRANS CO., LTD",
+    "operator:ko": "네오트랜스주식회사",
+    "operator:type": "private",
+    "operator:wikidata": "Q13709959",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "D11",
+    "subway": "yes",
+    "train": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 5772493740,
+  "tags": {
+    "alt_ref": "0897",
+    "name": "도곡",
+    "name:en": "Dogok",
+    "name:ja": "道谷",
+    "name:ko": "도곡",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "railway:position": "8.4",
+    "railway:ref": "도곡",
+    "ref:KROIS": "230075",
+    "ref:XROIS": "3900475",
+    "start_date": "2003-09-03",
+    "train": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 5801302006,
+  "tags": {
+    "name": "천호",
+    "name:en": "Cheonho",
+    "name:ja": "千戸",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 5801559318,
+  "tags": {
+    "addr:city": "서울특별시",
+    "addr:district": "광진구",
+    "addr:housenumber": "243",
+    "addr:postcode": "05017",
+    "addr:street": "아차산로",
+    "addr:subdistrict": "화양동",
+    "bicycle": "yes",
+    "name": "건대입구",
+    "name:en": "Konkuk University",
+    "name:ja": "コンデイック",
+    "name:ko": "건대입구",
+    "name:zh": "建国大学",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "212",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 5801559319,
+  "tags": {
+    "addr:city": "서울특별시",
+    "addr:district": "성동구",
+    "addr:housenumber": "17",
+    "addr:postcode": "04750",
+    "addr:street": "왕십리광장로",
+    "addr:subdistrict": "행당동",
+    "name": "왕십리",
+    "name:en": "Wangsimni",
+    "name:ja": "ワンシムニ(往十里)",
+    "name:ko": "왕십리",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "208",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 5812010548,
+  "tags": {
+    "name": "역삼",
+    "name:en": "Yeoksam",
+    "name:ko": "역삼",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "221",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 5817783181,
+  "tags": {
+    "name": "강남",
+    "name:en": "Gangnam",
+    "name:ja": "カンナム(江南)",
+    "name:ko": "강남",
+    "name:ko-Latn": "Gangnam",
+    "name:zh": "江南",
+    "network": "Seoul Metropolitan Subway",
+    "operator": "네오트랜스주식회사",
+    "operator:en": "NEO TRANS CO., LTD",
+    "operator:ko": "네오트랜스주식회사",
+    "operator:type": "private",
+    "operator:wikidata": "Q13709959",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "D07",
+    "subway": "yes",
+    "train": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 5821684795,
+  "tags": {
+    "name": "장지",
+    "name:en": "Jangji",
+    "name:ja": "長旨",
+    "name:ko": "장지",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 5826564342,
+  "tags": {
+    "addr:city": "서울특별시",
+    "addr:district": "서대문구",
+    "addr:housenumber": "지하17",
+    "addr:postcode": "03742",
+    "addr:street": "서소문로",
+    "addr:subdistrict": "충정로3가",
+    "name": "충정로",
+    "name:en": "Chungjeongno(Kyonggi University)",
+    "name:ja": "チュンジョンノ(忠正路)",
+    "name:ko": "충정로",
+    "name:zh": "忠正路",
+    "operator": "서울교통공사",
+    "operator:en": "Seoul Metro",
+    "operator:ko": "서울교통공사",
+    "operator:type": "public",
+    "operator:wikidata": "Q28699048",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "243",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 5855371072,
+  "tags": {
+    "name": "초지",
+    "name:en": "Choji",
+    "name:ja": "チョジ",
+    "name:ko": "초지",
+    "name:ko-Hani": "草芝",
+    "name:zh": "草芝",
+    "network": "수도권 전철",
+    "operator": "한국철도공사",
+    "operator:en": "Korea Railroad Corporation",
+    "operator:ko": "한국철도공사",
+    "operator:short": "KORAIL",
+    "operator:type": "public",
+    "operator:wikidata": "Q18169",
+    "operator:wikipedia": "en:Korail",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "452",
+    "subway": "yes",
+    "train": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 5863378574,
+  "tags": {
+    "name": "잠실",
+    "name:ja": "蚕室",
+    "name:ko-Kana": "チャムシル",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 5881397263,
+  "tags": {
+    "name": "미금",
+    "name:en": "Migeum",
+    "name:ja": "ミグム(美金)",
+    "name:ko": "미금",
+    "name:zh": "美金",
+    "network": "Seoul Metropolitan Subway",
+    "operator": "네오트랜스주식회사",
+    "operator:en": "NEO TRANS CO., LTD",
+    "operator:ko": "네오트랜스주식회사",
+    "operator:type": "private",
+    "operator:wikidata": "Q13709959",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "D13",
+    "subway": "yes",
+    "train": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 5881397264,
+  "tags": {
+    "name": "미금",
+    "name:en": "Migeum",
+    "name:ja": "ミグム(美金)",
+    "name:ko": "미금",
+    "name:zh": "美金",
+    "network": "Seoul Metropolitan Subway",
+    "operator": "한국철도공사",
+    "operator:en": "Korea Railroad Corporation",
+    "operator:ko": "한국철도공사",
+    "operator:short": "KORAIL",
+    "operator:type": "public",
+    "operator:wikidata": "Q18169",
+    "operator:wikipedia": "en:Korail",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "K231",
+    "train": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 5882162368,
+  "tags": {
+    "name": "이매",
+    "name:en": "Imae",
+    "name:ja": "二梅",
+    "name:ko": "이매",
+    "name:zh": "二梅",
+    "network": "Seoul Metropolitan Subway",
+    "operator": "한국철도공사",
+    "operator:en": "Korea Railroad Corporation",
+    "operator:ko": "한국철도공사",
+    "operator:short": "KORAIL",
+    "operator:type": "public",
+    "operator:wikidata": "Q18169",
+    "operator:wikipedia": "en:Korail",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "K227",
+    "train": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 5882162369,
+  "tags": {
+    "name": "이매",
+    "name:en": "Imae",
+    "name:ja": "二梅",
+    "name:ko": "이매",
+    "name:zh": "二梅",
+    "network": "Seoul Metropolitan Subway",
+    "operator": "한국철도공사",
+    "operator:en": "Korea Railroad Corporation",
+    "operator:ko": "한국철도공사",
+    "operator:short": "KORAIL",
+    "operator:type": "public",
+    "operator:wikidata": "Q18169",
+    "operator:wikipedia": "en:Korail",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "K411",
+    "subway": "yes",
+    "train": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 5887972151,
+  "tags": {
+    "name": "모란",
+    "name:en": "Moran",
+    "name:ja": "牡丹(モラン)",
+    "name:ko": "모란",
+    "network": "Seoul Metropolitan Subway",
+    "operator": "한국철도공사",
+    "operator:en": "Korea Railroad Corporation",
+    "operator:ko": "한국철도공사",
+    "operator:short": "KORAIL",
+    "operator:type": "public",
+    "operator:wikidata": "Q18169",
+    "operator:wikipedia": "en:Korail",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "K225",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 5887972152,
+  "tags": {
+    "name": "모란",
+    "name:en": "Moran",
+    "name:ja": "牡丹(モラン)",
+    "name:ko": "모란",
+    "network": "Seoul Metropolitan Subway",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "826",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 5907762740,
+  "tags": {
+    "name": "강남",
+    "name:en": "Gangnam",
+    "name:ko": "강남",
+    "network": "Seoul Metropolitan Subway",
+    "operator": "서울교통공사",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "222",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 5907762741,
+  "tags": {
+    "name": "대림(구로구청)",
+    "name:en": "Daerim(Guro-gu Office)",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "233",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 5907964979,
+  "tags": {
+    "local_ref": "3",
+    "name": "남동인더스파크",
+    "name:en": "Namdong Induspark",
+    "name:ko": "남동인더스파크",
+    "operator": "한국철도공사",
+    "operator:en": "Korea Railroad Corporation",
+    "operator:ko": "한국철도공사",
+    "operator:short": "KORAIL",
+    "operator:type": "public",
+    "operator:wikidata": "Q18169",
+    "operator:wikipedia": "en:Korail",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "railway:ref": "남동인",
+    "ref": "K264",
+    "ref:AFC": "1883",
+    "ref:KROIS": "100085",
+    "ref:XROIS": "3900993",
+    "short_name": "남동산단",
+    "train": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 5907964981,
+  "tags": {
+    "local_ref": "1",
+    "name": "호구포",
+    "name:en": "Hogupo",
+    "name:ko": "호구포",
+    "operator": "한국철도공사",
+    "operator:en": "Korea Railroad Corporation",
+    "operator:ko": "한국철도공사",
+    "operator:short": "KORAIL",
+    "operator:type": "public",
+    "operator:wikidata": "Q18169",
+    "operator:wikipedia": "en:Korail",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "K263",
+    "train": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 5907965000,
+  "tags": {
+    "local_ref": "3",
+    "name": "인천논현",
+    "name:ko": "인천논현",
+    "operator": "한국철도공사",
+    "operator:en": "Korea Railroad Corporation",
+    "operator:ko": "한국철도공사",
+    "operator:short": "KORAIL",
+    "operator:type": "public",
+    "operator:wikidata": "Q18169",
+    "operator:wikipedia": "en:Korail",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "railway:ref": "인천논",
+    "ref": "K262",
+    "ref:AFC": "1881",
+    "ref:KROIS": "100059",
+    "ref:XROIS": "3900991",
+    "train": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 5907965078,
+  "tags": {
+    "local_ref": "3",
+    "name": "월곶",
+    "name:en": "Wolgot",
+    "name:ko": "월곶",
+    "operator": "한국철도공사",
+    "operator:en": "Korea Railroad Corporation",
+    "operator:ko": "한국철도공사",
+    "operator:short": "KORAIL",
+    "operator:type": "public",
+    "operator:wikidata": "Q18169",
+    "operator:wikipedia": "en:Korail",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "K260",
+    "train": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 5907965097,
+  "tags": {
+    "local_ref": "1",
+    "name": "달월",
+    "name:ko": "달월",
+    "operator": "한국철도공사",
+    "operator:en": "Korea Railroad Corporation",
+    "operator:ko": "한국철도공사",
+    "operator:short": "KORAIL",
+    "operator:type": "public",
+    "operator:wikidata": "Q18169",
+    "operator:wikipedia": "en:Korail",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "K259",
+    "train": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 5909995038,
+  "tags": {
+    "alt_ref": "0551",
+    "name": "수서",
+    "name:en": "Suseo",
+    "name:ja": "スソ(水西)",
+    "name:ko": "수서",
+    "network": "수도권 전철",
+    "operator": "한국철도공사",
+    "operator:en": "Korea Railroad Corporation",
+    "operator:ko": "한국철도공사",
+    "operator:short": "KORAIL",
+    "operator:type": "public",
+    "operator:wikidata": "Q18169",
+    "operator:wikipedia": "en:Korail",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "railway:ref": "수서",
+    "ref": "K221",
+    "ref:KROIS": "230124",
+    "ref:XROIS": "3900479",
+    "train": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 5910050514,
+  "tags": {
+    "name": "수원",
+    "name:en": "Suwon",
+    "name:ja": "水原(スウォン)",
+    "name:ko": "수원",
+    "network": "수도권전철",
+    "operator": "한국철도공사",
+    "operator:en": "Korea Railroad Corporation",
+    "operator:ko": "한국철도공사",
+    "operator:short": "KORAIL",
+    "operator:type": "public",
+    "operator:wikidata": "Q18169",
+    "operator:wikipedia": "en:Korail",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "railway:ref": "신수원",
+    "ref": "K245",
+    "ref:AFC": "1846",
+    "ref:KROIS": "230529",
+    "ref:XROIS": "3901014",
+    "train": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 5910775257,
+  "tags": {
+    "name": "송도",
+    "name:en": "Songdo",
+    "name:ko": "송도",
+    "operator": "한국철도공사",
+    "operator:en": "Korea Railroad Corporation",
+    "operator:ko": "한국철도공사",
+    "operator:short": "KORAIL",
+    "operator:type": "public",
+    "operator:wikidata": "Q18169",
+    "operator:wikipedia": "en:Korail",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "K267",
+    "train": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 5910775261,
+  "tags": {
+    "name": "신포",
+    "name:en": "Sinpo",
+    "name:ko": "신포",
+    "network": "K271",
+    "operator": "한국철도공사",
+    "operator:en": "Korea Railroad Corporation",
+    "operator:ko": "한국철도공사",
+    "operator:short": "KORAIL",
+    "operator:type": "public",
+    "operator:wikidata": "Q18169",
+    "operator:wikipedia": "en:Korail",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "train": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 5910775263,
+  "tags": {
+    "name": "숭의",
+    "name:en": "Sungui",
+    "name:ko": "숭의",
+    "operator": "한국철도공사",
+    "operator:en": "Korea Railroad Corporation",
+    "operator:ko": "한국철도공사",
+    "operator:short": "KORAIL",
+    "operator:type": "public",
+    "operator:wikidata": "Q18169",
+    "operator:wikipedia": "en:Korail",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "K270",
+    "train": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 5910775268,
+  "tags": {
+    "name": "인하대",
+    "name:en": "Inha University",
+    "name:ko": "인하대",
+    "operator": "한국철도공사",
+    "operator:en": "Korea Railroad Corporation",
+    "operator:ko": "한국철도공사",
+    "operator:short": "KORAIL",
+    "operator:type": "public",
+    "operator:wikidata": "Q18169",
+    "operator:wikipedia": "en:Korail",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "K269",
+    "train": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 5910775683,
+  "tags": {
+    "local_ref": "2",
+    "name": "연수",
+    "name:en": "Yeonsu",
+    "name:ko": "연수",
+    "operator": "한국철도공사",
+    "operator:en": "Korea Railroad Corporation",
+    "operator:ko": "한국철도공사",
+    "operator:short": "KORAIL",
+    "operator:type": "public",
+    "operator:wikidata": "Q18169",
+    "operator:wikipedia": "en:Korail",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "K266",
+    "train": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 5911861688,
+  "tags": {
+    "local_ref": "1",
+    "name": "고잔",
+    "name:en": "Gojan",
+    "name:ko": "고잔",
+    "network": "수도권 전철",
+    "operator": "한국철도공사",
+    "operator:en": "Korea Railroad Corporation",
+    "operator:ko": "한국철도공사",
+    "operator:short": "KORAIL",
+    "operator:type": "public",
+    "operator:wikidata": "Q18169",
+    "operator:wikipedia": "en:Korail",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "451;K253",
+    "subway": "yes",
+    "train": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 5911861709,
+  "tags": {
+    "local_ref": "2",
+    "name": "안산",
+    "name:en": "Ansan",
+    "name:ko": "안산",
+    "operator": "한국철도공사",
+    "operator:en": "Korea Railroad Corporation",
+    "operator:ko": "한국철도공사",
+    "operator:short": "KORAIL",
+    "operator:type": "public",
+    "operator:wikidata": "Q18169",
+    "operator:wikipedia": "en:Korail",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "453;K255",
+    "train": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 5916874392,
+  "tags": {
+    "name": "합정",
+    "name:en": "Hapjeong",
+    "name:ja": "合井",
+    "operator": "서울교통공사",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "238",
+    "source": "survey",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 5917210895,
+  "tags": {
+    "name": "여의도",
+    "name:ko": "여의도",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 5919544686,
+  "tags": {
+    "name": "홍대입구",
+    "name:en": "Hongik University",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "239",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 5924268023,
+  "tags": {
+    "name": "선릉",
+    "name:en": "Seolleung",
+    "name:ja": "宣陵(ソンルン)",
+    "name:ko": "선릉",
+    "name:zh": "宣陵",
+    "network": "Seoul Metropolitan Subway",
+    "operator": "한국철도공사",
+    "operator:en": "Korea Railroad Corporation",
+    "operator:ko": "한국철도공사",
+    "operator:short": "KORAIL",
+    "operator:type": "public",
+    "operator:wikidata": "Q18169",
+    "operator:wikipedia": "en:Korail",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "K215",
+    "train": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 5924284356,
+  "tags": {
+    "name": "선릉",
+    "name:en": "Seolleung",
+    "name:ja": "宣陵(ソンルン)",
+    "name:ko": "선릉",
+    "name:zh": "宣陵",
+    "network": "Seoul Metropolitan Subway",
+    "operator": "서울교통공사",
+    "operator:en": "Seoul Metro",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "220",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 5924431380,
+  "tags": {
+    "name": "죽전",
+    "name:en": "Jukjeon",
+    "name:ja": "竹田(チュクチョン)",
+    "name:ko": "죽전",
+    "name:zh": "竹田",
+    "network": "수도권 전철",
+    "operator": "한국철도공사",
+    "operator:en": "Korea Railroad Corporation",
+    "operator:ko": "한국철도공사",
+    "operator:short": "KORAIL",
+    "operator:type": "public",
+    "operator:wikidata": "Q18169",
+    "operator:wikipedia": "en:Korail",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "K233",
+    "train": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 5927786495,
+  "tags": {
+    "name": "판교",
+    "name:en": "Pangyo",
+    "name:ko": "판교",
+    "operator": "한국철도공사",
+    "operator:en": "Korea Railroad Corporation",
+    "operator:ko": "한국철도공사",
+    "operator:short": "KORAIL",
+    "operator:type": "public",
+    "operator:wikidata": "Q18169",
+    "operator:wikipedia": "en:Korail",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "railway:ref": "신판교",
+    "ref": "K409",
+    "ref:AFC": "1501",
+    "ref:KROIS": "250007",
+    "ref:XROIS": "3900959",
+    "subway": "yes",
+    "train": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 5927813976,
+  "tags": {
+    "local_ref": "2",
+    "name": "곤지암",
+    "name:ko": "곤지암",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "subway": "yes",
+    "train": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 5927814399,
+  "tags": {
+    "local_ref": "2",
+    "name": "초월",
+    "name:en": "Chowol",
+    "name:ko": "초월",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "subway": "yes",
+    "train": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 5927814407,
+  "tags": {
+    "local_ref": "2",
+    "name": "경기광주",
+    "name:ko": "경기광주",
+    "name:ko-Hani": "京畿廣州",
+    "name:ko-Latn": "Gyeonggigwangju",
+    "name:zh": "京畿广州",
+    "name:zh-Hans": "京畿广州",
+    "name:zh-Hant": "京畿廣州",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "subway": "yes",
+    "train": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 5930287079,
+  "tags": {
+    "name": "가락시장",
+    "name:en": "Garak Market",
+    "name:ko": "가락시장",
+    "network": "Seoul Metropolitan Subway",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "817",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 5930629962,
+  "tags": {
+    "name": "여주",
+    "name:ko": "여주",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "subway": "yes",
+    "train": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 5930629976,
+  "tags": {
+    "local_ref": "2",
+    "name": "세종대왕릉",
+    "name:en": "Sejongdaewangneung",
+    "name:ko": "세종대왕릉",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "subway": "yes",
+    "train": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 5930638311,
+  "tags": {
+    "alt_ref": "0529",
+    "local_ref": "2",
+    "name": "부발",
+    "name:en": "Bubal",
+    "name:ja": "夫鉢",
+    "name:ja-Hira": "ぷばる",
+    "name:ko": "부발",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "railway:ref": "부발",
+    "ref": "K418",
+    "ref:AFC": "1509",
+    "ref:KROIS": "250428",
+    "ref:XROIS": "3900967",
+    "subway": "yes",
+    "train": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 5930638346,
+  "tags": {
+    "local_ref": "2",
+    "name": "이천",
+    "name:ko": "이천",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "subway": "yes",
+    "train": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 5930638509,
+  "tags": {
+    "local_ref": "2",
+    "name": "신둔도예촌",
+    "name:ko": "신둔도예촌",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "subway": "yes",
+    "train": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 5930698987,
+  "tags": {
+    "name": "을지로3가",
+    "name:en": "Euljiro 3(sam)-ga",
+    "name:ja": "乙支路3街(ウルチロサムガ)",
+    "name:ko-Hani": "乙支路3街",
+    "name:zh": "乙支路3街",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "203",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 5933687058,
+  "tags": {
+    "name": "강변",
+    "name:en": "Gangbyeon(Dongseoul Bus Terminal)",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "214",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 5933687059,
+  "tags": {
+    "name": "강변(동서울터미널)",
+    "name:en": "Gangbyeon(Dongseoul Bus Terminal)",
+    "name:ko": "강변(동서울터미널)",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "214",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 5933687060,
+  "tags": {
+    "name": "잠실나루",
+    "name:en": "Jamsillaru",
+    "name:ja": "蚕室ナル",
+    "name:ko": "잠실나루",
+    "name:ko-Kana": "チャムシルナル",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "215",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 5933687061,
+  "tags": {
+    "name": "잠실나루",
+    "name:en": "Jamsillaru",
+    "name:ja": "蚕室ナル",
+    "name:ko-Kana": "チャムシルナル",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "215",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 5933687293,
+  "tags": {
+    "name": "구의(광진구청)",
+    "name:en": "Guui(Gwangjin-gu Office)",
+    "name:ko": "구의(광진구청)",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "213",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 5933687294,
+  "tags": {
+    "name": "구의",
+    "name:en": "Guui(Gwangjin-gu Office)",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "213",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 5933687362,
+  "tags": {
+    "addr:city": "서울특별시",
+    "addr:district": "광진구",
+    "addr:housenumber": "243",
+    "addr:postcode": "05017",
+    "addr:street": "아차산로",
+    "addr:subdistrict": "화양동",
+    "bicycle": "yes",
+    "name": "건대입구",
+    "name:en": "Konkuk University",
+    "name:ja": "コンデイック",
+    "name:ko": "건대입구",
+    "name:zh": "建国大学",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "212",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 5935554434,
+  "tags": {
+    "name": "한양대",
+    "name:en": "Hanyang University",
+    "name:ja": "ハニャンデ",
+    "name:ko": "한양대",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "209",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 5935554435,
+  "tags": {
+    "name": "한양대",
+    "name:en": "Hanyang University",
+    "name:ja": "ハニャンデ",
+    "name:ko": "한양대",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "209",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 5935554448,
+  "tags": {
+    "name": "뚝섬",
+    "name:en": "Ttukseom",
+    "name:ko": "뚝섬",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "210",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 5935554449,
+  "tags": {
+    "name": "뚝섬",
+    "name:en": "Ttukseom",
+    "name:ko": "뚝섬",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "210",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 5935554451,
+  "tags": {
+    "name": "성수",
+    "name:en": "Seongsu",
+    "name:ja": "ソンス",
+    "name:ko": "성수",
+    "name:zh": "圣水",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "211",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 5935554452,
+  "tags": {
+    "name": "성수",
+    "name:en": "Seongsu",
+    "name:ja": "ソンス",
+    "name:ko": "성수",
+    "name:zh": "圣水",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "211",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 5935738062,
+  "tags": {
+    "name": "시청",
+    "name:en": "City Hall",
+    "name:ja": "市庁",
+    "name:ko": "시청",
+    "name:ko-Hani": "市廳",
+    "name:ko-Kana": "シチョン",
+    "name:zh": "市厅",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "201",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 5935738066,
+  "tags": {
+    "name": "을지로4가",
+    "name:en": "Euljiro 4(sa)-ga",
+    "name:ja": "乙支路4街",
+    "name:ko": "을지로4가",
+    "name:ko-Hani": "乙支路4街",
+    "name:ko-Kana": "ウルチロサガ",
+    "name:zh": "乙支路4街",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "204",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 5935738069,
+  "tags": {
+    "addr:city": "서울특별시",
+    "addr:district": "중구",
+    "addr:housenumber": "지하279",
+    "addr:postcode": "04566",
+    "addr:street": "을지로",
+    "addr:subdistrict": "을지로7가",
+    "name": "동대문역사문화공원",
+    "name:en": "Dongdaemun History & Culture Park Station",
+    "name:ja": "東大門歴史文化公園",
+    "name:ko": "동대문역사문화공원",
+    "name:ko-Hani": "東大門歷史文化公園",
+    "name:ko-Kana": "トンデムンヨクサムンファゴンウォン",
+    "name:zh": "东大门历史文化公园",
+    "name:zh-Hans": "东大门历史文化公园",
+    "name:zh-Hant": "東大門歷史文化公園",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "205",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 5935738070,
+  "tags": {
+    "addr:city": "서울특별시",
+    "addr:district": "중구",
+    "addr:housenumber": "지하279",
+    "addr:postcode": "04566",
+    "addr:street": "을지로",
+    "addr:subdistrict": "을지로7가",
+    "name": "동대문역사문화공원",
+    "name:en": "Dongdaemun History & Culture Park Station (DDP)",
+    "name:ja": "東大門歴史文化公園",
+    "name:ko": "동대문역사문화공원",
+    "name:ko-Hani": "東大門歷史文化公園",
+    "name:ko-Kana": "トンデムンヨクサムンファゴンウォン",
+    "name:zh": "东大门历史文化公园",
+    "name:zh-Hans": "东大门历史文化公园",
+    "name:zh-Hant": "東大門歷史文化公園",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "205",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 5935738081,
+  "tags": {
+    "name": "을지로입구",
+    "name:en": "Euljiro 1(il)-ga (Industrial Bank of Korea)",
+    "name:ja": "ウルチロイック(乙支路入口)",
+    "name:ko": "을지로입구",
+    "name:ko-Hani": "乙支路入口",
+    "name:zh": "乙支路入口",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "202",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 5935738082,
+  "tags": {
+    "name": "을지로3가",
+    "name:en": "Euljiro 3(sam)-ga",
+    "name:ja": "乙支路3街(ウルチロサムガ)",
+    "name:ko": "을지로3가",
+    "name:ko-Hani": "乙支路3街",
+    "name:zh": "乙支路3街",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "203",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 5935738291,
+  "tags": {
+    "addr:city": "서울특별시",
+    "addr:district": "성동구",
+    "addr:housenumber": "17",
+    "addr:postcode": "04750",
+    "addr:street": "왕십리광장로",
+    "addr:subdistrict": "행당동",
+    "name": "왕십리(성동구청)",
+    "name:en": "Wangsimni(Seongdong-Gu Office)",
+    "name:ja": "ワンシムニ(往十里)",
+    "name:ko": "왕십리(성동구청)",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "208",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 5935738300,
+  "tags": {
+    "name": "신당",
+    "name:en": "Sindang",
+    "name:ja": "新堂(シンダン)",
+    "name:ko": "신당",
+    "name:ko-Hani": "新堂",
+    "name:zh": "新堂",
+    "name:zh-Hans": "新堂",
+    "name:zh-Hant": "新堂",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "206",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 5935738307,
+  "tags": {
+    "name": "상왕십리",
+    "name:en": "Sangwangsimni",
+    "name:ja": "上往十里(サンワンシムニ)",
+    "name:ko": "상왕십리",
+    "name:ko-Hani": "上往十里",
+    "name:zh": "上往十里",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "207",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 5937884687,
+  "tags": {
+    "name": "합정",
+    "name:en": "Hapjeong",
+    "name:ja": "合井",
+    "name:ko": "합정",
+    "operator": "서울교통공사",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "238",
+    "source": "survey",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 5937884688,
+  "tags": {
+    "name": "홍대입구",
+    "name:en": "Hongik University",
+    "name:ko": "홍대입구",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "239",
+    "subway": "yes",
+    "wikidata": "Q54267"
+  }
+},
+{
+  "type": "node",
+  "id": 5937884697,
+  "tags": {
+    "name": "이대",
+    "name:en": "Ewha Womans University",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "241",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 5937884701,
+  "tags": {
+    "addr:city": "서울특별시",
+    "addr:district": "서대문구",
+    "addr:housenumber": "지하17",
+    "addr:postcode": "03742",
+    "addr:street": "서소문로",
+    "addr:subdistrict": "충정로3가",
+    "name": "충정로(경기대입구)",
+    "name:en": "Chungjeongno(Kyonggi University)",
+    "name:ja": "チュンジョンノ(忠正路)",
+    "name:ko": "충정로(경기대입구)",
+    "name:zh": "忠正路",
+    "operator": "서울교통공사",
+    "operator:en": "Seoul Metro",
+    "operator:ko": "서울교통공사",
+    "operator:type": "public",
+    "operator:wikidata": "Q28699048",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "243",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 5937884722,
+  "tags": {
+    "name": "신촌(지하)",
+    "name:en": "Sinchon",
+    "name:ko": "신촌(지하)",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "240",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 5937884728,
+  "tags": {
+    "name": "이대",
+    "name:en": "Ewha Womans University",
+    "name:ko": "이대",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "241",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 5937884729,
+  "tags": {
+    "name": "아현(추계예술대)",
+    "name:en": "Ahyeon",
+    "name:ko": "아현(추계예술대)",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "242",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 5991942704,
+  "tags": {
+    "name": "대곡",
+    "name:en": "Daegok",
+    "name:ja": "大谷",
+    "operator": "한국철도공사",
+    "operator:en": "Korea Railroad Corporation",
+    "operator:ko": "한국철도공사",
+    "operator:short": "KORAIL",
+    "operator:type": "public",
+    "operator:wikidata": "Q18169",
+    "operator:wikipedia": "en:Korail",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "314",
+    "train": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 5991942705,
+  "tags": {
+    "name": "원당",
+    "name:en": "Wondang",
+    "name:ja": "元堂",
+    "name:ko": "원당",
+    "operator": "한국철도공사",
+    "operator:en": "Korea Railroad Corporation",
+    "operator:ko": "한국철도공사",
+    "operator:short": "KORAIL",
+    "operator:type": "public",
+    "operator:wikidata": "Q18169",
+    "operator:wikipedia": "en:Korail",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "316",
+    "train": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 5991942711,
+  "tags": {
+    "name": "주엽",
+    "name:el": "Τζούγιοπ",
+    "name:en": "Juyeop",
+    "name:ja": "注葉",
+    "name:ko": "주엽",
+    "operator": "한국철도공사",
+    "operator:en": "Korea Railroad Corporation",
+    "operator:ko": "한국철도공사",
+    "operator:short": "KORAIL",
+    "operator:type": "public",
+    "operator:wikidata": "Q18169",
+    "operator:wikipedia": "en:Korail",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "310",
+    "train": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 5991942714,
+  "tags": {
+    "name": "마두",
+    "name:el": "Μάντου",
+    "name:en": "Madu",
+    "name:ja": "馬頭",
+    "name:ko": "마두",
+    "operator": "한국철도공사",
+    "operator:en": "Korea Railroad Corporation",
+    "operator:ko": "한국철도공사",
+    "operator:short": "KORAIL",
+    "operator:type": "public",
+    "operator:wikidata": "Q18169",
+    "operator:wikipedia": "en:Korail",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "312",
+    "train": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 5991942716,
+  "tags": {
+    "name": "대화",
+    "name:el": "Ντέχουα",
+    "name:en": "Daehwa",
+    "name:ja": "テファ(大化)",
+    "name:ko": "대화",
+    "operator": "한국철도공사",
+    "operator:en": "Korea Railroad Corporation",
+    "operator:ko": "한국철도공사",
+    "operator:short": "KORAIL",
+    "operator:type": "public",
+    "operator:wikidata": "Q18169",
+    "operator:wikipedia": "en:Korail",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "309",
+    "train": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 5991942740,
+  "tags": {
+    "name": "정발산",
+    "name:el": "Τζόνγκμπαλσαν",
+    "name:en": "Jeongbalsan",
+    "name:ja": "鼎鉢山",
+    "name:ko": "정발산",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "train": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 5991942749,
+  "tags": {
+    "name": "백석",
+    "name:el": "Μπέκσοκ",
+    "name:en": "Baekseok",
+    "name:ja": "ペクソク(白石)",
+    "name:ko": "백석",
+    "network": "한국철도공사",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "train": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 5991943794,
+  "tags": {
+    "name": "화정",
+    "name:en": "Hwajeong",
+    "name:ja": "花井",
+    "name:ko": "화정",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "train": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 5991943836,
+  "tags": {
+    "name": "원흥",
+    "name:en": "Wonheung",
+    "name:ja": "元興",
+    "operator": "한국철도공사",
+    "operator:en": "Korea Railroad Corporation",
+    "operator:ko": "한국철도공사",
+    "operator:short": "KORAIL",
+    "operator:type": "public",
+    "operator:wikidata": "Q18169",
+    "operator:wikipedia": "en:Korail",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "train": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 5991943839,
+  "tags": {
+    "name": "삼송",
+    "name:en": "Samsong",
+    "name:ja": "三松",
+    "name:ko": "삼송",
+    "name:ko-Kana": "サムソン",
+    "operator": "한국철도공사",
+    "operator:en": "Korea Railroad Corporation",
+    "operator:ko": "한국철도공사",
+    "operator:short": "KORAIL",
+    "operator:type": "public",
+    "operator:wikidata": "Q18169",
+    "operator:wikipedia": "en:Korail",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "318",
+    "train": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 5991943873,
+  "tags": {
+    "name": "지축",
+    "name:en": "Jichuk",
+    "name:ja": "紙杻",
+    "name:ko": "지축",
+    "operator": "한국철도공사;서울교통공사",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "319",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 6033312681,
+  "tags": {
+    "name": "당산",
+    "name:en": "Dangsan",
+    "name:ko": "당산",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "237",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 6033312682,
+  "tags": {
+    "name": "당산",
+    "name:en": "Dangsan",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "237",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 6033314401,
+  "tags": {
+    "addr:city": "서울특별시",
+    "addr:district": "영등포구",
+    "addr:housenumber": "지하121",
+    "addr:postcode": "07260",
+    "addr:street": "당산로",
+    "addr:subdistrict": "당산동3가",
+    "name": "영등포구청",
+    "name:en": "Yeongdeungpo-gu Office",
+    "name:ja": "永登浦区庁(ヨンドゥンポグチョン)",
+    "name:ko": "영등포구청",
+    "name:zh": "永登浦区厅",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "236",
+    "subway": "yes",
+    "wikidata": "Q490667",
+    "wikipedia": "ko:영등포구청역"
+  }
+},
+{
+  "type": "node",
+  "id": 6033314402,
+  "tags": {
+    "addr:city": "서울특별시",
+    "addr:district": "영등포구",
+    "addr:housenumber": "지하121",
+    "addr:postcode": "07260",
+    "addr:street": "당산로",
+    "addr:subdistrict": "당산동3가",
+    "name": "영등포구청",
+    "name:en": "Yeongdeungpo-gu Office",
+    "name:ja": "永登浦区庁(ヨンドゥンポグチョン)",
+    "name:ko": "영등포구청",
+    "name:zh": "永登浦区厅",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "236",
+    "subway": "yes",
+    "wikidata": "Q490667",
+    "wikipedia": "ko:영등포구청역"
+  }
+},
+{
+  "type": "node",
+  "id": 6033314413,
+  "tags": {
+    "name": "문래",
+    "name:en": "Mullae",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "235",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 6033314424,
+  "tags": {
+    "name": "신도림",
+    "name:en": "Sindorim",
+    "name:ja": "新道林",
+    "name:ko": "신도림",
+    "name:ko-Kana": "シンドリム",
+    "name:zh": "新道林",
+    "operator": "서울교통공사",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 6033314426,
+  "tags": {
+    "name": "대림(구로구청)",
+    "name:en": "Daerim(Guro-gu Office)",
+    "name:ko": "대림(구로구청)",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "233",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 6033314427,
+  "tags": {
+    "name": "구로디지털단지",
+    "name:en": "Guro Digital Complex",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "232",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 6033314428,
+  "tags": {
+    "name": "구로디지털단지",
+    "name:en": "Guro Digital Complex",
+    "name:ko": "구로디지털단지",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "232",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 6033314467,
+  "tags": {
+    "name": "신대방",
+    "name:en": "Sindaebang",
+    "name:ko": "신대방",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "231",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 6033314468,
+  "tags": {
+    "name": "신대방",
+    "name:en": "Sindaebang",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "231",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 6033314482,
+  "tags": {
+    "name": "신림",
+    "name:en": "Sillim",
+    "name:ko": "신림",
+    "name:ko-Hani": "新林",
+    "name:zh": "新林",
+    "operator": "서울교통공사",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "230",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 6033314702,
+  "tags": {
+    "name": "봉천",
+    "name:en": "Bongcheon",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "229",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 6033314712,
+  "tags": {
+    "name": "서울대입구",
+    "name:en": "Seoul Nat'l University (Gwanak-gu Office)",
+    "name:es": "Universidad Nacionál de Seúl (Oficina de Gwanak-gu)",
+    "name:fr": "Université National de Séoul (Mairie de Gwanak-gu)",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "228",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 6033314725,
+  "tags": {
+    "name": "낙성대",
+    "name:en": "Nakseongdae",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "227",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 6033314750,
+  "tags": {
+    "name": "신림",
+    "name:en": "Sillim",
+    "name:ko": "신림",
+    "name:ko-Hani": "新林",
+    "name:zh": "新林",
+    "operator": "서울교통공사",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "230",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 6033314757,
+  "tags": {
+    "name": "사당",
+    "name:en": "Sadang",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "226",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 6033314783,
+  "tags": {
+    "name": "방배",
+    "name:en": "Bangbae",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "225",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 6033314992,
+  "tags": {
+    "name": "서초",
+    "name:en": "Seocho",
+    "name:ko": "서초",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "224",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 6033314994,
+  "tags": {
+    "name": "서초",
+    "name:en": "Seocho",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "224",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 6033315012,
+  "tags": {
+    "name": "잠실새내",
+    "name:en": "Jamsilsaenae",
+    "name:ja": "蚕室セネ",
+    "name:ko-Kana": "チャムシルセネ",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "217",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 6033315024,
+  "tags": {
+    "name": "잠실(송파구청)",
+    "name:en": "Jamsil(Songpa-gu Office)",
+    "name:ja": "蚕室（松坡区庁）",
+    "name:ko": "잠실(송파구청)",
+    "name:ko-Kana": "チャムシル（ソンパグチョン）",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "216",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 6033315028,
+  "tags": {
+    "name": "잠실새내",
+    "name:en": "Jamsilsaenae",
+    "name:ja": "蚕室セネ",
+    "name:ko": "잠실새내",
+    "name:ko-Kana": "チャムシルセネ",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "217",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 6033315031,
+  "tags": {
+    "name": "종합운동장",
+    "name:en": "Sports Complex",
+    "name:ko": "종합운동장",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "218",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 6033315033,
+  "tags": {
+    "name": "삼성(무역센터)",
+    "name:en": "Samseong(World Trade Center Seoul)",
+    "name:ko": "삼성(무역센터)",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "219",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 6033315041,
+  "tags": {
+    "name": "선릉",
+    "name:en": "Seolleung",
+    "name:ja": "宣陵(ソンルン)",
+    "name:ko": "선릉",
+    "name:zh": "宣陵",
+    "network": "Seoul Metropolitan Subway",
+    "operator": "서울교통공사",
+    "operator:en": "Seoul Metro",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "220",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 6033315044,
+  "tags": {
+    "name": "역삼",
+    "name:en": "Yeoksam",
+    "name:ko": "역삼",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "221",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 6033315045,
+  "tags": {
+    "name": "강남",
+    "name:en": "Gangnam",
+    "name:ko": "강남",
+    "network": "Seoul Metropolitan Subway",
+    "operator": "서울교통공사",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "222",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 6033315053,
+  "tags": {
+    "name": "교대(법원·검찰청)",
+    "name:en": "Seoul Nat'l Univ. of Education (Court & Public Prosecutors' Office)",
+    "name:ko": "교대(법원·검찰청)",
+    "network": "Seoul Metropolitan Subway",
+    "operator": "서울교통공사",
+    "operator:en": "Seoul Metro",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "223",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 6033315083,
+  "tags": {
+    "name": "방배 (백석예술대)",
+    "name:en": "Bangbae",
+    "name:ko": "방배 (백석예술대)",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "225",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 6033315314,
+  "tags": {
+    "name": "사당",
+    "name:en": "Sadang",
+    "name:ko": "사당",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "226",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 6033315344,
+  "tags": {
+    "name": "낙성대",
+    "name:en": "Nakseongdae",
+    "name:ko": "낙성대",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "227",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 6033315353,
+  "tags": {
+    "name": "서울대입구(관악구청)",
+    "name:en": "Seoul Nat'l University (Gwanak-gu Office)",
+    "name:es": "Universidad Nacionál de Seúl (Oficina de Gwanak-gu)",
+    "name:fr": "Université National de Séoul (Mairie de Gwanak-gu)",
+    "name:ko": "서울대입구(관악구청)",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "228",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 6033315362,
+  "tags": {
+    "name": "봉천",
+    "name:en": "Bongcheon",
+    "name:ko": "봉천",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "229",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 6033315602,
+  "tags": {
+    "name": "문래",
+    "name:en": "Mullae",
+    "name:ko": "문래",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "235",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 6033544224,
+  "tags": {
+    "name": "오금",
+    "name:en": "Ogeum",
+    "name:ja": "オグム(梧琴)",
+    "name:ko": "오금",
+    "network": "Seoul Metropolitan Subway",
+    "operator": "서울교통공사",
+    "operator:en": "Seoul Metro",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "352",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 6033544228,
+  "tags": {
+    "name": "경찰병원",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 6033544236,
+  "tags": {
+    "name": "수서",
+    "name:en": "Suseo",
+    "name:ja": "水西(スソ)",
+    "name:ko": "수서",
+    "network": "수도권 전철",
+    "operator": "서울교통공사",
+    "operator:en": "Seoul Metro",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "railway:ref": "3수서",
+    "ref": "349",
+    "ref:KROIS": "930352",
+    "ref:XROIS": "3900826",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 6033544261,
+  "tags": {
+    "name": "일원",
+    "name:en": "Irwon",
+    "name:ja": "イルォン",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "subway": "yes",
+    "wikidata": "Q100870",
+    "wikipedia": "ko:일원역"
+  }
+},
+{
+  "type": "node",
+  "id": 6033544268,
+  "tags": {
+    "name": "매봉",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 6033544273,
+  "tags": {
+    "alt_name": "양재역",
+    "alt_name:en": "Yangjae Station",
+    "alt_name:ko": "양재역",
+    "name": "양재",
+    "name:en": "Yangjae",
+    "name:ja": "ヤンジェ",
+    "name:ko": "양재",
+    "name:zh": "良才",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "342",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 6033544282,
+  "tags": {
+    "name": "고속터미널",
+    "name:en": "Express Bus Terminal",
+    "name:ja": "高速ターミナル",
+    "name:ko": "고속터미널",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "339",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 6033544392,
+  "tags": {
+    "name": "잠원",
+    "name:en": "Jamwon",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 6033544404,
+  "tags": {
+    "name": "압구정",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 6033544408,
+  "tags": {
+    "name": "옥수",
+    "name:en": "Oksu",
+    "name:ja": "オッス(玉水)",
+    "name:ko": "옥수",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 6033544411,
+  "tags": {
+    "name": "금호",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 6033544415,
+  "tags": {
+    "name": "약수",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 6033544418,
+  "tags": {
+    "name": "동대입구",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 6033544425,
+  "tags": {
+    "name": "안국",
+    "name:en": "Anguk",
+    "name:ja": "アングク",
+    "name:ko": "안국",
+    "name:zh": "安国",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "328",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 6033544430,
+  "tags": {
+    "name": "경복궁",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 6033544433,
+  "tags": {
+    "name": "독립문",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 6033544441,
+  "tags": {
+    "name": "무악재",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 6033544469,
+  "tags": {
+    "name": "불광",
+    "operator": "서울교통공사",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 6033544511,
+  "tags": {
+    "name": "가락시장",
+    "name:en": "Garak Market",
+    "name:ko": "가락시장",
+    "network": "Seoul Metropolitan Subway",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "350",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 6033544526,
+  "tags": {
+    "name": "대청",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 6033544537,
+  "tags": {
+    "name": "학여울",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 6033544538,
+  "tags": {
+    "name": "대치",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 6033544539,
+  "tags": {
+    "name": "도곡",
+    "name:en": "Dogok",
+    "name:ja": "道谷",
+    "name:ko": "도곡",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "railway:position": "29.7",
+    "railway:ref": "3도곡",
+    "ref": "344",
+    "ref:AFC": "334",
+    "ref:KROIS": "930298",
+    "ref:XROIS": "3900821",
+    "start_date": "1993-10-30",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 6033544550,
+  "tags": {
+    "name": "남부터미널(예술의전당)",
+    "name:en": "Nambu Bus Terminal (Seoul Arts Center)",
+    "name:ko": "남부터미널(예술의전당)",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "341",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 6033544552,
+  "tags": {
+    "name": "교대(법원·검찰청)",
+    "name:en": "Seoul Nat'l Univ. of Education (Court & Public Prosecutors' Office)",
+    "name:ko": "교대(법원·검찰청)",
+    "network": "Seoul Metropolitan Subway",
+    "operator": "서울교통공사",
+    "operator:en": "Seoul Metro",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "340",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 6033544573,
+  "tags": {
+    "name": "신사",
+    "name:en": "Sinsa",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 6033544618,
+  "tags": {
+    "name": "을지로3가",
+    "name:ja": "ウルチロサムガ(乙支路3街)",
+    "name:ko": "을지로3가",
+    "name:ko-Hani": "乙支路3街",
+    "name:zh": "乙支路3街",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 6033544620,
+  "tags": {
+    "bicycle": "yes",
+    "layer": "-4",
+    "level": "-4",
+    "level:ref": "B4",
+    "name": "종로3가",
+    "name:en": "Jongno 3(sam)-ga",
+    "name:ja": "鐘路3街",
+    "name:ko": "종로3가",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "329",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 6033544670,
+  "tags": {
+    "name": "홍제",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 6033544681,
+  "tags": {
+    "name": "녹번",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 6033544692,
+  "tags": {
+    "name": "연신내",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 6033544706,
+  "tags": {
+    "name": "구파발",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 6094326966,
+  "tags": {
+    "name": "산성",
+    "name:en": "Sanseong",
+    "name:ja": "山城",
+    "name:ko": "산성",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 6094326983,
+  "tags": {
+    "alt_name": "성남법원·검찰청역",
+    "alt_name:en": "Seongnam Court & Public Prosecutor's Office Station",
+    "alt_name:ko": "성남법원·검찰청역",
+    "name": "남한산성입구",
+    "name:en": "Namhansanseong",
+    "name:ja": "南漢山城入口",
+    "name:ko": "남한산성입구",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 6094327288,
+  "tags": {
+    "alt_name": "신구대학교역",
+    "alt_name:en": "Shingu College Station",
+    "alt_name:ko": "신구대학교역",
+    "name": "단대오거리",
+    "name:en": "Dandaeogeori",
+    "name:ja": "丹岱オゴリ",
+    "name:ko": "단대오거리",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 6094327297,
+  "tags": {
+    "name": "신흥",
+    "name:en": "Sinheung",
+    "name:ja": "新興",
+    "name:ko": "신흥",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 6094327302,
+  "tags": {
+    "name": "수진",
+    "name:en": "Sujin",
+    "name:ja": "寿進",
+    "name:ko": "수진",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 6094327310,
+  "tags": {
+    "name": "모란",
+    "name:en": "Moran",
+    "name:ja": "牡丹(モラン)",
+    "name:ko": "모란",
+    "network": "Seoul Metropolitan Subway",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "826",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 6094327315,
+  "tags": {
+    "name": "남위례",
+    "name:en": "Namwirye",
+    "name:ko": "남위례",
+    "operator": "서울교통공사",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "start_date": "2021-12-18",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 6094327328,
+  "tags": {
+    "name": "복정",
+    "name:en": "Bokjeong",
+    "name:ja": "ボクチョン",
+    "name:ko": "복정",
+    "name:zh": "福井",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "820",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 6094327337,
+  "tags": {
+    "name": "장지",
+    "name:en": "Jangji",
+    "name:ja": "長旨",
+    "name:ko": "장지",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 6094327338,
+  "tags": {
+    "name": "문정",
+    "name:en": "Munjeong",
+    "name:ja": "文井",
+    "name:ko": "문정",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 6094327346,
+  "tags": {
+    "name": "가락시장",
+    "name:en": "Garak Market",
+    "name:ko": "가락시장",
+    "network": "Seoul Metropolitan Subway",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "817",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 6094327349,
+  "tags": {
+    "bicycle": "yes",
+    "name": "송파",
+    "name:en": "Songpa",
+    "name:ja": "松坡",
+    "name:ko": "송파",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 6094327350,
+  "tags": {
+    "bicycle": "yes",
+    "name": "석촌",
+    "name:en": "Seokchon",
+    "name:ja": "ソクチョン",
+    "name:ko": "석촌",
+    "name:ko-Latn": "Seokchon",
+    "name:zh": "石村",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 6094327359,
+  "tags": {
+    "name": "잠실",
+    "name:ja": "蚕室",
+    "name:ko-Kana": "チャムシル",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 6094327361,
+  "tags": {
+    "alt_name": "평화의문",
+    "alt_name:en": "World Peace Gate",
+    "alt_name:ko": "평화의문",
+    "name": "몽촌토성",
+    "name:en": "Mongchontoseong",
+    "name:ja": "モンチョントソン(夢村土城)",
+    "name:ko": "몽촌토성",
+    "name:zh": "梦村土城",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "813",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 6094327368,
+  "tags": {
+    "name": "강동구청",
+    "name:en": "Gangdong-gu Office",
+    "name:ja": "カンドングチョン",
+    "name:ko": "강동구청",
+    "name:zh": "江东区厅",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 6094327372,
+  "tags": {
+    "name": "천호",
+    "name:en": "Cheonho",
+    "name:ja": "千戸",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 6094327384,
+  "tags": {
+    "name": "암사",
+    "name:en": "Amsa",
+    "name:ja": "岩寺",
+    "name:ko": "암사",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 6102706367,
+  "tags": {
+    "name": "중앙보훈병원",
+    "name:en": "VHS Medical Center",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 6102706369,
+  "tags": {
+    "name": "둔촌오륜",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 6102706374,
+  "tags": {
+    "name": "올림픽공원",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 6102706788,
+  "tags": {
+    "bicycle": "yes",
+    "name": "석촌",
+    "name:en": "Seokchon",
+    "name:ja": "ソクチョン",
+    "name:ko": "석촌",
+    "name:ko-Latn": "Seokchon",
+    "name:zh": "石村",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 6102706816,
+  "tags": {
+    "name": "석촌고분",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 6102706837,
+  "tags": {
+    "name": "한성백제",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 6117347089,
+  "tags": {
+    "name": "송파나루",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 6117347092,
+  "tags": {
+    "name": "삼전",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 6152750623,
+  "tags": {
+    "layer": "-1",
+    "name": "성복",
+    "name:en": "Seongbok",
+    "name:ja": "ソンボク(星福)",
+    "name:ko": "성복",
+    "name:zh": "星福",
+    "operator": "네오트랜스주식회사",
+    "operator:en": "NEO TRANS CO., LTD",
+    "operator:ko": "네오트랜스주식회사",
+    "operator:type": "private",
+    "operator:wikidata": "Q13709959",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "subway": "yes",
+    "train": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 6269743768,
+  "tags": {
+    "layer": "-1",
+    "name": "수지구청",
+    "name:en": "Suji-gu Office",
+    "name:ja": "スジグチョン(水枝区庁)",
+    "name:ko": "수지구청",
+    "name:zh": "水枝區廳",
+    "operator": "네오트랜스주식회사",
+    "operator:en": "NEO TRANS CO., LTD",
+    "operator:ko": "네오트랜스주식회사",
+    "operator:type": "private",
+    "operator:wikidata": "Q13709959",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "subway": "yes",
+    "train": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 6312484935,
+  "tags": {
+    "alt_ref": "0898",
+    "name": "개포동",
+    "name:en": "Gaepo-dong",
+    "name:ja": "開浦洞(ケポドン)",
+    "name:ko": "개포동",
+    "network": "Seoul Metropolitan Subway",
+    "operator": "한국철도공사",
+    "operator:en": "Korea Railroad Corporation",
+    "operator:ko": "한국철도공사",
+    "operator:short": "KORAIL",
+    "operator:type": "public",
+    "operator:wikidata": "Q18169",
+    "operator:wikipedia": "en:Korail",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "railway:ref": "개포동",
+    "ref": "K219",
+    "ref:KROIS": "230088",
+    "ref:XROIS": "3900477",
+    "train": "yes",
+    "wikidata": "Q46331"
+  }
+},
+{
+  "type": "node",
+  "id": 6312484936,
+  "tags": {
+    "alt_ref": "0896",
+    "name": "한티",
+    "name:en": "Hanti",
+    "name:ja": "ハンティ",
+    "name:ko": "한티",
+    "network": "Seoul Metropolitan Subway",
+    "operator": "한국철도공사",
+    "operator:en": "Korea Railroad Corporation",
+    "operator:ko": "한국철도공사",
+    "operator:short": "KORAIL",
+    "operator:type": "public",
+    "operator:wikidata": "Q18169",
+    "operator:wikipedia": "en:Korail",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "railway:ref": "한티",
+    "ref": "K216",
+    "ref:KROIS": "230068",
+    "ref:XROIS": "3900474",
+    "train": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 6312484938,
+  "tags": {
+    "name": "강남구청",
+    "name:en": "Gangnam-gu Office",
+    "name:ja": "江南区庁(カンナムグチョン)",
+    "name:ko": "강남구청",
+    "name:zh": "江南區廳",
+    "network": "Seoul Metropolitan Subway",
+    "operator": "한국철도공사",
+    "operator:en": "Korea Railroad Corporation",
+    "operator:ko": "한국철도공사",
+    "operator:short": "KORAIL",
+    "operator:type": "public",
+    "operator:wikidata": "Q18169",
+    "operator:wikipedia": "en:Korail",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "K213",
+    "train": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 6312484944,
+  "tags": {
+    "description:ja": "狎鴎亭ロデオ駅",
+    "name": "압구정로데오",
+    "name:en": "Apgujungrodeo",
+    "name:ja": "アプクジョンロデオ(狎鴎亭ロデオ)",
+    "name:ko": "압구정로데오",
+    "name:zh": "狎鸥亭罗德奥",
+    "network": "Seoul Metropolitan Subway",
+    "operator": "한국철도공사",
+    "operator:en": "Korea Railroad Corporation",
+    "operator:ko": "한국철도공사",
+    "operator:short": "KORAIL",
+    "operator:type": "public",
+    "operator:wikidata": "Q18169",
+    "operator:wikipedia": "en:Korail",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "railway:ref": "로데오",
+    "ref": "K212",
+    "ref:AFC": "1848",
+    "ref:KROIS": "230041",
+    "ref:XROIS": "3900999",
+    "train": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 7171445626,
+  "tags": {
+    "name": "충무로",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 7287842392,
+  "tags": {
+    "name": "논현",
+    "name:en": "Nonhyeon",
+    "name:ko": "논현",
+    "operator": "네오트랜스주식회사",
+    "operator:en": "NEO TRANS CO., LTD",
+    "operator:ko": "네오트랜스주식회사",
+    "operator:type": "private",
+    "operator:wikidata": "Q13709959",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "D05",
+    "start_date": "2022-05-28",
+    "subway": "yes",
+    "train": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 7287965130,
+  "tags": {
+    "name": "구성",
+    "name:ko": "구성",
+    "operator": "한국철도공사",
+    "operator:en": "Korea Railroad Corporation",
+    "operator:ko": "한국철도공사",
+    "operator:short": "KORAIL",
+    "operator:type": "public",
+    "operator:wikidata": "Q18169",
+    "operator:wikipedia": "en:Korail",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "train": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 7287965143,
+  "tags": {
+    "name": "신갈",
+    "name:ko": "신갈",
+    "operator": "한국철도공사",
+    "operator:en": "Korea Railroad Corporation",
+    "operator:ko": "한국철도공사",
+    "operator:short": "KORAIL",
+    "operator:type": "public",
+    "operator:wikidata": "Q18169",
+    "operator:wikipedia": "en:Korail",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "train": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 7287965175,
+  "tags": {
+    "name": "상갈",
+    "name:ko": "상갈",
+    "operator": "한국철도공사",
+    "operator:en": "Korea Railroad Corporation",
+    "operator:ko": "한국철도공사",
+    "operator:short": "KORAIL",
+    "operator:type": "public",
+    "operator:wikidata": "Q18169",
+    "operator:wikipedia": "en:Korail",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "train": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 7287966289,
+  "tags": {
+    "name": "청명",
+    "name:ko": "청명",
+    "operator": "한국철도공사",
+    "operator:en": "Korea Railroad Corporation",
+    "operator:ko": "한국철도공사",
+    "operator:short": "KORAIL",
+    "operator:type": "public",
+    "operator:wikidata": "Q18169",
+    "operator:wikipedia": "en:Korail",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "train": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 7287966296,
+  "tags": {
+    "name": "영통",
+    "name:ko": "영통",
+    "operator": "한국철도공사",
+    "operator:en": "Korea Railroad Corporation",
+    "operator:ko": "한국철도공사",
+    "operator:short": "KORAIL",
+    "operator:type": "public",
+    "operator:wikidata": "Q18169",
+    "operator:wikipedia": "en:Korail",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "train": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 7287966302,
+  "tags": {
+    "name": "망포",
+    "name:ko": "망포",
+    "operator": "한국철도공사",
+    "operator:en": "Korea Railroad Corporation",
+    "operator:ko": "한국철도공사",
+    "operator:short": "KORAIL",
+    "operator:type": "public",
+    "operator:wikidata": "Q18169",
+    "operator:wikipedia": "en:Korail",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "train": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 7287966313,
+  "tags": {
+    "name": "매탄권선",
+    "name:ko": "매탄권선",
+    "operator": "한국철도공사",
+    "operator:en": "Korea Railroad Corporation",
+    "operator:ko": "한국철도공사",
+    "operator:short": "KORAIL",
+    "operator:type": "public",
+    "operator:wikidata": "Q18169",
+    "operator:wikipedia": "en:Korail",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "train": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 7287966323,
+  "tags": {
+    "name": "수원시청",
+    "name:en": "Suwon City Hall",
+    "name:ko": "수원시청",
+    "operator": "한국철도공사",
+    "operator:en": "Korea Railroad Corporation",
+    "operator:ko": "한국철도공사",
+    "operator:short": "KORAIL",
+    "operator:type": "public",
+    "operator:wikidata": "Q18169",
+    "operator:wikipedia": "en:Korail",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "railway:ref": "수원시",
+    "ref:AFC": "1871",
+    "ref:KROIS": "230500",
+    "ref:XROIS": "3901012",
+    "train": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 7287966330,
+  "tags": {
+    "name": "매교",
+    "name:ko": "매교",
+    "operator": "한국철도공사",
+    "operator:en": "Korea Railroad Corporation",
+    "operator:ko": "한국철도공사",
+    "operator:short": "KORAIL",
+    "operator:type": "public",
+    "operator:wikidata": "Q18169",
+    "operator:wikipedia": "en:Korail",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "train": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 7783726043,
+  "tags": {
+    "name": "한대앞",
+    "name:en": "Hanyang University at Ansan",
+    "name:ja": "ハンデアプ",
+    "name:ko": "한대앞",
+    "name:zh": "汉阳大学(安山)",
+    "operator": "한국철도공사",
+    "operator:en": "Korea Railroad Corporation",
+    "operator:ko": "한국철도공사",
+    "operator:short": "KORAIL",
+    "operator:type": "public",
+    "operator:wikidata": "Q18169",
+    "operator:wikipedia": "en:Korail",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "K251",
+    "start_date": "2020-09-12",
+    "subway": "yes",
+    "train": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 7863473571,
+  "tags": {
+    "name": "사리",
+    "name:en": "Sari",
+    "name:ko": "사리",
+    "operator": "한국철도공사",
+    "operator:en": "Korea Railroad Corporation",
+    "operator:ko": "한국철도공사",
+    "operator:short": "KORAIL",
+    "operator:type": "public",
+    "operator:wikidata": "Q18169",
+    "operator:wikipedia": "en:Korail",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "K250",
+    "start_date": "2020-09-12",
+    "train": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 7872218757,
+  "tags": {
+    "name": "야목",
+    "name:en": "Yamok",
+    "name:ko": "야목",
+    "operator": "한국철도공사",
+    "operator:en": "Korea Railroad Corporation",
+    "operator:ko": "한국철도공사",
+    "operator:short": "KORAIL",
+    "operator:type": "public",
+    "operator:wikidata": "Q18169",
+    "operator:wikipedia": "en:Korail",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "K249",
+    "train": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 7872218777,
+  "tags": {
+    "name": "어천",
+    "name:en": "Eocheon",
+    "name:ko": "어천",
+    "operator": "한국철도공사",
+    "operator:en": "Korea Railroad Corporation",
+    "operator:ko": "한국철도공사",
+    "operator:short": "KORAIL",
+    "operator:type": "public",
+    "operator:wikidata": "Q18169",
+    "operator:wikipedia": "en:Korail",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "K248",
+    "start_date": "2020-09-12",
+    "train": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 7872228248,
+  "tags": {
+    "name": "오목천",
+    "name:en": "Omokcheon",
+    "name:ko": "오목천",
+    "operator": "한국철도공사",
+    "operator:en": "Korea Railroad Corporation",
+    "operator:ko": "한국철도공사",
+    "operator:short": "KORAIL",
+    "operator:type": "public",
+    "operator:wikidata": "Q18169",
+    "operator:wikipedia": "en:Korail",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "K247",
+    "start_date": "2020-09-12",
+    "train": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 7872228249,
+  "tags": {
+    "name": "고색",
+    "name:en": "Gosaek",
+    "name:ko": "고색",
+    "operator": "한국철도공사",
+    "operator:en": "Korea Railroad Corporation",
+    "operator:ko": "한국철도공사",
+    "operator:short": "KORAIL",
+    "operator:type": "public",
+    "operator:wikidata": "Q18169",
+    "operator:wikipedia": "en:Korail",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "K246",
+    "start_date": "2020-09-12",
+    "train": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 7908597444,
+  "tags": {
+    "description": "수인분당선",
+    "layer": "-2",
+    "name": "선정릉",
+    "name:en": "Seonjeongneung",
+    "name:ja": "宣靖陵",
+    "name:ko": "선정릉",
+    "network": "수도권 전철",
+    "operator": "한국철도공사",
+    "operator:en": "Korea Railroad Corporation",
+    "operator:ko": "한국철도공사",
+    "operator:short": "KORAIL",
+    "operator:type": "public",
+    "operator:wikidata": "Q18169",
+    "operator:wikipedia": "en:Korail",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "K214",
+    "train": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 8337914284,
+  "tags": {
+    "name": "잠실",
+    "name:en": "Jamsil(Songpa-gu Office)",
+    "name:ja": "蚕室（松坡区庁）",
+    "name:ko-Kana": "チャムシル（ソンパグチョン）",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "216",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 8445537827,
+  "tags": {
+    "name": "암사역사공원",
+    "name:en": "Amsa History Park",
+    "name:ja": "アムサヨクサゴンウォン(岩寺歴史公園)",
+    "name:ko": "암사역사공원",
+    "operator": "서울교통공사",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "808",
+    "start_date": "2024-08-10",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 8445537865,
+  "tags": {
+    "name": "장자호수공원",
+    "name:en": "Jangja Lake Park",
+    "name:ja": "チャンジャホスゴンウォン(長者湖水公園)",
+    "name:ko": "장자호수공원",
+    "operator": "구리도시공사",
+    "operator:en": "Guri Urban Corporation",
+    "operator:ko": "구리도시공사",
+    "operator:type": "public",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 8822741690,
+  "tags": {
+    "name": "당산",
+    "name:en": "Dangsan",
+    "name:ko": "당산",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "913",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 9181579787,
+  "tags": {
+    "name": "국회의사당",
+    "name:en": "National Assembly",
+    "name:ko": "국회의사당",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 9482998436,
+  "tags": {
+    "name": "샛강",
+    "name:en": "Saetgang",
+    "name:ja": "セッカン",
+    "name:ko": "샛강",
+    "name:zh": "赛江",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 9776192970,
+  "tags": {
+    "name": "신논현",
+    "name:en": "Sinnonhyeon",
+    "name:ja": "シンノンヒョン(新論峴)",
+    "name:ko": "신논현",
+    "operator": "네오트랜스주식회사",
+    "operator:en": "NEO TRANS CO., LTD",
+    "operator:ko": "네오트랜스주식회사",
+    "operator:type": "private",
+    "operator:wikidata": "Q13709959",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "D06",
+    "start_date": "2022-05-28",
+    "subway": "yes",
+    "train": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 9776192973,
+  "tags": {
+    "name": "신사",
+    "name:en": "Sinsa",
+    "name:ko": "신사",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "D04",
+    "start_date": "2022-05-28",
+    "subway": "yes",
+    "train": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 12119884929,
+  "tags": {
+    "name": "별내",
+    "name:en": "Byeollae",
+    "name:ja": "ピョルレ(別内)",
+    "name:ko": "별내",
+    "operator": "남양주도시공사",
+    "operator:en": "Namyangju City Urban Corporation",
+    "operator:ko": "남양주도시공사",
+    "operator:short": "NCUC",
+    "operator:type": "public",
+    "operator:wikidata": "Q20445816",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "804",
+    "start_date": "2024-08-10",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 12119884931,
+  "tags": {
+    "name": "다산",
+    "name:en": "Dasan",
+    "name:ja": "茶山",
+    "name:ko": "다산",
+    "name:ko-Kana": "タサン",
+    "operator": "남양주도시공사",
+    "operator:en": "Namyangju City Urban Corporation",
+    "operator:ko": "남양주도시공사",
+    "operator:short": "NCUC",
+    "operator:type": "public",
+    "operator:wikidata": "Q20445816",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "805",
+    "start_date": "2024-08-10",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 12119884932,
+  "tags": {
+    "name": "동구릉",
+    "name:en": "Donggureung",
+    "name:ko": "동구릉",
+    "operator": "구리도시공사",
+    "operator:en": "Guri Urban Corporation",
+    "operator:ko": "구리도시공사",
+    "operator:type": "public",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "806",
+    "start_date": "2024-08-10",
+    "subway": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 12119884933,
+  "tags": {
+    "name": "구리",
+    "name:en": "Guri",
+    "name:ja": "クリ(九里)",
+    "name:ko": "구리",
+    "operator": "구리도시공사",
+    "operator:en": "Guri Urban Corporation",
+    "operator:ko": "구리도시공사",
+    "operator:type": "public",
+    "public_transport": "stop_position",
+    "railway": "stop",
+    "ref": "807",
+    "start_date": "2024-08-10",
+    "subway": "yes"
+  }
+}
+
+  ]
+}

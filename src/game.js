@@ -58,6 +58,9 @@ import { createPlaygrounds } from './world/playgrounds.js'; // [playgrounds]
 import { corridorStationLabel } from './corridor/globeCorridor.js'; // [corridor]
 import { createStreetlights } from './world/streetlights.js'; // [streetlights]
 import { mountRide } from './ride/index.js'; // [ride] 코리더 버스·택시 탑승
+import { mountGyeongbuSoon } from './world/gyeongbuSoon.js'; // [gyeongbu] 경부고속도로 서울 방면 '준비 중' 안내 (?gyeongbu=0 끔)
+import { createServerClock } from './subway/clock.js'; // [subway-sync] 서버 시계 (같은 열차 = 같은 순간)
+import { mountSubway, zoneLabel as subwayZoneLabel } from './subway/index.js'; // [subway] 정자역·코리더 역 출입구(실제 OSM 출구) + 지하 대합실. ?subway=0 이면 끔
 
 const params = new URLSearchParams(location.search);
 const region = getCurrentRegion();
@@ -189,7 +192,8 @@ const [terrainData, driveData, corridorData, shopsData, coloursData] = await Pro
 ]);
 
 // --- 렌더러/씬 ---
-const renderer = new THREE.WebGLRenderer({ antialias: true, logarithmicDepthBuffer: true, preserveDrawingBuffer: params.has('shot') });
+const subwayOn = region.id === 'jeongja' && params.get('subway') !== '0'; // [subway]
+const renderer = new THREE.WebGLRenderer({ antialias: true, logarithmicDepthBuffer: true, preserveDrawingBuffer: params.has('shot'), ...(subwayOn ? { stencil: true } : {}) }); // [subway] 출입구 계단 구멍은 스텐실로 그림
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
 renderer.setSize(innerWidth, innerHeight);
 renderer.shadowMap.enabled = !params.has('noshadow');
@@ -299,14 +303,17 @@ function wear(next) {
 const pos = new THREE.Vector3(world.signPos.x + 4, 0, world.signPos.z + 4);
 for (let r = 0, a = 0; (world.isBlocked(pos.x, pos.z) || world.onRoad(pos.x, pos.z)) && r < 80; a += 0.7, r += 0.3) pos.set(world.signPos.x + Math.cos(a) * r, 0, world.signPos.z + Math.sin(a) * r);
 player.position.copy(pos);
+// [zone] 지하철 대합실 안에서는 내 이름표·말풍선·리액션이 대합실 속 내 아바타를 따라간다
+let selfInterior = null;
+const selfPos = () => selfInterior?.player.position || player.position;
 const nameTag = overlay.add({
   cls: 'tag',
   text: me.name || '나',
-  getPos: () => player.position.clone().setY(player.position.y + (player.userData.jumpY || 0) + (player.userData.sit || player.userData.afk ? 1.55 : 2.15)),
+  getPos: () => (selfInterior ? selfPos().clone().setY(selfPos().y + (selfInterior.player.userData.jumpY || 0) + (selfInterior.player.userData.sit ? 1.55 : 2.15)) : player.position.clone().setY(player.position.y + (player.userData.jumpY || 0) + (player.userData.sit || player.userData.afk ? 1.55 : 2.15))),
   maxDist: 60,
 }); // [terrain] 높이 상대
 nameTag.hidden = !joined;
-const myBubble = new Bubble(overlay, 'me', () => player.position.clone().setY(player.position.y + (player.userData.jumpY || 0) + (player.userData.sit || player.userData.afk ? 2.15 : 2.7)), {
+const myBubble = new Bubble(overlay, 'me', () => (selfInterior ? selfPos().clone().setY(selfPos().y + (selfInterior.player.userData.jumpY || 0) + (selfInterior.player.userData.sit ? 2.15 : 2.7)) : player.position.clone().setY(player.position.y + (player.userData.jumpY || 0) + (player.userData.sit || player.userData.afk ? 2.15 : 2.7))), {
   getName: () => me.name || '나',
   getColor: () => me.color || '#4f7cff',
 }); // [terrain]
@@ -447,9 +454,47 @@ const trashBins = region.id === 'jeongja'
   const withBins = world.isBlocked;
   world.isBlocked = (x, z, r) => withBins(x, z, r) || trashBins.blocks(x, z);
 }
+// [subway] 정자역 출입구 (실제 출구 위치·번호, OSM). 들어가면 별도 대합실 Scene, 그동안 바깥 월드는 갱신·렌더 건너뜀
+const subwayCanEnter = () => joined && !bikes.riding && !adminBike?.riding && !giftRiding() && !ride?.active && !trucks?.current;
+const serverClock = createServerClock(); // [subway-sync] presence 'time' 응답으로 맞춤 (아래 presence.on('time'))
+const subway = subwayOn ? mountSubway({
+  scene, overlay, data, world, terrain, renderer, params, now: serverClock.serverNow,
+  getAudioLevel: () => (bgm ? { muted: bgm.player.muted, volume: bgm.player.volume } : null), // [subway-voice] 안내 방송 = BGM HUD 음소거·볼륨
+  corridor, getPlayer: () => player, // [subway] 코리더 역(수내~잠실) 출입구. ?corridor=0 이면 정자역만
+  getLook: () => me.look,
+  canEnter: () => subwayCanEnter(),
+  onEnter: () => { trackEvent('subway_enter'); wakeFromAfk(); if (mySit) standUpFromSeat(); },
+  // [zone] 대합실 프레즌스: 같은 구역 사람만 대합실 Scene 에, 이름표·말풍선·리액션도 대합실 카메라로
+  onInterior: (zone, inside) => {
+    selfInterior = inside;
+    overlay.setView(zone, inside?.camera);
+    emoteFx.setView(inside?.scene, inside?.camera);
+    remotes.setZone(zone, inside?.scene);
+    nameTag.zone = zone;
+    myBubble.item.zone = zone;
+    if (zone) emitMyStateNow();
+  },
+  getSelf: () => ({ emote: myEmote, afk: myAfk, jy: jumpY }),
+  passKey: (e) => !!EMOTE_BY_CODE[e.code] || e.code === 'KeyC' || e.code === 'KeyZ' || e.code === 'Space', // 리액션 숫자키·C 앉기·Z 자리비움·Space 점프는 안에서도 (바깥과 같은 키)
+
+  onExit: (e) => {
+    if (mySit || jumpY) { mySit = ''; sitExitPos = null; player.userData.sit = ''; jumpY = 0; jumpVel = 0; renderEmoteBar(); } // [subway-pose] 지하에서 앉은 채 나오면 일어선 채로
+    if (!e) return;
+    const { x, z, ry } = e.spawn;
+    player.position.set(x, terrain ? terrain.getGroundHeight(x, z, e.y) : 0, z);
+    player.rotation.y = ry; // 계단을 등지고 선다
+    cam.yaw = ry + Math.PI / 2; cam.pitch = Math.max(cam.pitch, 0.35); cam.dist = Math.max(cam.dist, 9); // 카메라는 옆에서 (뒤는 캐노피 지붕이 가림). 앞으로 걸어도 다시 안 들어감
+    emitMyStateNow();
+  },
+}) : null;
+const gyeongbuSoon = corridor ? mountGyeongbuSoon({ getPos: () => player.position, params, isEn }) : null; // [gyeongbu] 코리더가 있을 때만 (경부 북쪽 끝이 코리더 타일)
+if (subway) {
+  const withSubway = world.isBlocked;
+  world.isBlocked = (x, z, r) => withSubway(x, z, r) || subway.blocks(x, z, r);
+}
 const presence = createPresence({ station: st, region });
 if (npcs.guard) presence.setGuard?.(npcs.guard);
-const remotes = new RemotePlayers(scene, overlay, presence, () => player.position, (t) => myBubble.say(t, 6000), terrain?.getGroundHeight, emoteFx); // [terrain] 원격 플레이어도 지형 높이
+const remotes = new RemotePlayers(scene, overlay, presence, () => selfPos(), (t) => myBubble.say(t, 6000), terrain?.getGroundHeight, emoteFx); // [terrain] 원격 플레이어도 지형 높이
 // [bike] 관리자 크루저 (인벤토리에서 어느 지역이든 소환/수납 가능, ?bike=0 끔)
 let canRideAdminBike = () => false;
 let getAdminBikeTank = () => 'red';
@@ -532,11 +577,28 @@ function compassDir(dx, dz) {
 function renderPresencePanel() {
   if (!presencePanel || !presenceOpen) return;
   const en = isEn();
-  const peers = remotes.list();
-  const mySpot = nearestSpotLabel(player.position.x, player.position.z);
+  const peers = remotes.list({ all: true }); // [zone] 역 안 사람도 목록에는 보임
+  const myZone = remotes.zone;
+  const zoneName = (z) => (subwayZoneLabel(z, en) || (z ? (en ? 'Indoors' : '실내') : (en ? 'Outside' : '바깥'))); // [zone] 역 대합실 이름
+  const mySpot = myZone ? { name: zoneName(myZone), dist: 0 } : nearestSpotLabel(player.position.x, player.position.z);
   const peerRows = peers.length
     ? peers
         .map((p) => {
+          if (p.zone || myZone) { // [zone] 다른 구역이면 위치·이동 버튼 없이 구역만
+            const same = p.zone === myZone;
+            const d = same ? Math.round(Math.hypot(p.x - selfPos().x, p.z - selfPos().z)) : null;
+            const where = `${p.zone ? '🚇' : '📍'} ${escHtml(zoneName(p.zone))}${same ? ` · ${d}m` : ''}`;
+            return `
+            <li class="p-row">
+              <div class="p-info">
+                <div class="p-title">
+                  <span class="p-swatch" style="background:${escHtml(p.color)}"></span>
+                  <strong>${escHtml(p.name)}</strong>
+                </div>
+                <small>${where}</small>
+              </div>
+            </li>`;
+          }
           const spot = nearestSpotLabel(p.x, p.z);
           const dx = p.x - player.position.x;
           const dz = p.z - player.position.z;
@@ -703,6 +765,7 @@ onHoldings(() => {
   for (const { id, ride } of giftRides) ride.setStock(holdingQty(id));
   inventory?.refresh();
 });
+presence.on('time', (m) => serverClock.add(m)); // [subway-sync]
 presence.on('welcome', (m) => {
   if (m.weather === 'rain' || m.weather === '') atmosphere.setSharedWeather(m.weather);
   if (Array.isArray(m.gifts)) replaceHoldings(m.gifts);
@@ -820,7 +883,7 @@ inventory = mountInventory({
   capacity: 4,
   isReady: () => joined,
   getOwnerLabel: () => me.name || sms.session?.display || '',
-  getPeers: () => remotes.list().map((p) => ({ id: p.id, name: p.name })),
+  getPeers: () => remotes.list({ all: true }).map((p) => ({ id: p.id, name: p.name })), // [zone] 역 안 사람 포함
   items: [
     ...(adminBike
     ? [
@@ -1316,6 +1379,7 @@ let myZzzTimer = 0;
 let nearSeatHint = null;
 
 function standUpFromSeat() {
+  if (subway?.active) { subway.standUp(); sitExitPos = null; mySit = ''; player.userData.sit = ''; return; } // [subway-pose]
   if (!mySit && !sitExitPos) return;
   if (sitExitPos) {
     const ty = terrain ? terrain.getGroundHeight(sitExitPos.x, sitExitPos.z, player.position.y) : 0;
@@ -1413,6 +1477,14 @@ function toggleSit() {
   myEmote = '';
   myEmoteUntil = 0;
   player.userData.emote = '';
+  if (subway?.active) { // [subway-pose] 대합실·승강장·열차: 벤치·좌석, 없으면 바닥
+    if (!subway.canPose) return;
+    mySit = subway.sitDown();
+    trackEvent('player_sit', { kind: mySit, subway: subway.room });
+    renderEmoteBar();
+    emitMyStateNow();
+    return;
+  }
   const seat = stationPlaza.findSeat?.(player.position.x, player.position.z);
   if (seat) {
     sitExitPos = {
@@ -1449,7 +1521,8 @@ function toggleAfk() {
   myEmote = '';
   myEmoteUntil = 0;
   player.userData.emote = '';
-  if (!mySit) {
+  if (!mySit && subway?.active) mySit = subway.canPose ? subway.sitDown() : ''; // [subway-pose]
+  else if (!mySit) {
     const seat = stationPlaza.findSeat?.(player.position.x, player.position.z);
     if (seat) {
       sitExitPos = {
@@ -1470,7 +1543,7 @@ function toggleAfk() {
   idleTime = AFK_TIMEOUT_SEC;
   myZzzTimer = 0;
   syncMyNameTag();
-  emoteFx.spawnZzz(player.position);
+  emoteFx.spawnZzz(selfPos()); // [zone]
   trackEvent('player_afk_toggle', { afk: true });
   renderEmoteBar();
   emitMyStateNow();
@@ -1494,7 +1567,7 @@ function triggerEmote(emoteId, sendNet = true) {
   myEmote = def.id;
   myEmoteUntil = now + 3400;
   player.userData.emote = myEmote;
-  emoteFx.burst(player.position, def.id, emoteCombo);
+  emoteFx.burst(selfPos(), def.id, emoteCombo); // [zone]
   umbrellas.onPlayerEmote(def.id, player.position);
   if (sendNet) {
     presence.sendEmote(def.id, emoteCombo);
@@ -1851,7 +1924,11 @@ if (ride) { ride.setOverlay(overlay); remotes.rideHook = (p, dt) => ride.remoteH
 const perfHud = mountPerfHud({ renderer, corridor, params });
 const cameraApp = mountCamera({ // [camera]
   handset, renderer, scene, camera, cam, params, sms,
-  getInfo: () => ({ region: region.id, regionName: region.name, regionEnName: region.enName || region.name, x: player.position.x, z: player.position.z, name: me?.name || '' }),
+  getInfo: () => {
+    const sp = subway?.active ? { ko: subway.place(false), en: subway.place(true) } : null; // [camera] 지하: '정자역 · 수인분당선 승강장' 등
+    return { region: region.id, regionName: sp?.ko || region.name, regionEnName: sp?.en || region.enName || region.name, x: player.position.x, z: player.position.z, name: me?.name || '' };
+  },
+  getView: () => subway?.view() || null, // [camera] 지하에서는 대합실·승강장·열차 장면을 찍는다 (바깥 장면 아님)
 });
 if (travel && params.get('at')) travel.go(params.get('at'));
 // [corridor] 지구본 역 선택 → 입장 완료 후 역 출구 앞 인도로 (위치 저장 성공 여부와 무관)
@@ -1980,6 +2057,7 @@ leaveBtn.onclick = () => {
   startLobby?.();
 };
 input.onKey = (e) => {
+  if (subway?.onKey(e)) return; // [subway] 입구 앞 E · 대합실 안에서는 출구 고르기 등
   if (e.code === 'KeyM') viewBtn.onclick();
   if (e.code === 'KeyH') document.getElementById('btn-home').onclick();
   if (e.code === 'Enter') { e.preventDefault(); chatInput.focus(); }
@@ -2039,8 +2117,15 @@ function mergeVehicleNets(...parts) {
   if (pv.length) out.pv = pv;
   return out;
 }
+// [zone] 대합실 안이면 실내 위치(구역 띠 좌표)와 리액션·자리비움만 보낸다. 바깥이면 null
+function subwayPresenceState() {
+  const zs = subway?.netState();
+  return zs ? { ...zs, riding: false, jy: Number(jumpY.toFixed(2)), emote: myEmote, sit: mySit, afk: myAfk, umb: '' } : null; // [subway-pose] 점프·앉기·자리비움도 같은 역 사람에게
+}
 function emitMyStateNow() {
   if (!joined) return;
+  const zs = subwayPresenceState();
+  if (zs) { presence.sendState(zs, true); return; }
   const aboard = !!(adminBike?.riding || giftRiding());
   presence.sendState(
     {
@@ -2072,8 +2157,8 @@ setInterval(() => {
       idleTime += 1.0;
       if (!myAfk && idleTime >= AFK_TIMEOUT_SEC) {
         myAfk = true;
-        if (!mySit) mySit = 'ground';
-        player.userData.sit = mySit;
+        if (!mySit) mySit = subway?.active ? (subway.canPose ? subway.sitDown() : '') : 'ground'; // [subway-pose]
+        player.userData.sit = subway?.active ? '' : mySit;
         player.userData.afk = true;
         syncMyNameTag();
         renderEmoteBar();
@@ -2082,6 +2167,30 @@ setInterval(() => {
     emitMyStateNow();
   }
 }, 1000);
+// [subway-pose] 지하(대합실·승강장·열차): 점프 물리·앉기 동기화·자동 자리비움 — 바깥 frame() 과 같은 규칙
+function subwayPoseTick(dt, looked) {
+  const { f, s, jump } = input.axes();
+  const can = subway.canPose && joined && !board.open;
+  if (f || s || (jump && can)) wakeFromAfk();
+  else if (looked) wakeFromAfk();
+  if (can && jump && jumpY <= 0.001) { if (mySit) { standUpFromSeat(); renderEmoteBar(); } jumpVel = JUMP_V; }
+  if (!subway.canPose) { jumpY = 0; jumpVel = 0; }
+  if (jumpY > 0 || jumpVel > 0) { jumpY += jumpVel * dt; jumpVel -= JUMP_GRAVITY * dt; if (jumpY <= 0) { jumpY = 0; jumpVel = 0; } }
+  // 방이 직접 일어나게 한 경우(걷기·방 바뀜·열차 E) 내 상태도 맞춘다
+  const k = subway.sitKind;
+  if (subway.canPose && k !== mySit) { mySit = k; player.userData.sit = ''; renderEmoteBar(); emitMyStateNow(); }
+  const moving = (subway.inside?.speed || 0) > 0.05;
+  if (joined && !moving && !jumpY && !myEmote && !handset.open && !cameraApp?.open && !board.open && subway.canPose) {
+    idleTime += dt;
+    if (!myAfk && idleTime >= AFK_TIMEOUT_SEC) {
+      myAfk = true;
+      if (!mySit) mySit = subway.sitDown();
+      myZzzTimer = 0;
+      syncMyNameTag(); renderEmoteBar(); emitMyStateNow();
+    }
+  } else if (moving) idleTime = 0;
+  if (myAfk && subway.canPose) { myZzzTimer -= dt; if (myZzzTimer <= 0) { myZzzTimer = 1.6; emoteFx.spawnZzz(selfPos()); } }
+}
 const timer = new THREE.Timer();
 const tmp = new THREE.Vector3();
 let moveSpeed = 0;
@@ -2094,6 +2203,24 @@ function frame() {
     return;
   }
   const [dy, dp, dz] = input.consumeLook();
+  // [subway] 대합실 안: 대합실만 갱신·렌더하고 바깥 월드(NPC·버스·코리더 타일·그림자)는 통째로 건너뜀
+  if (subway?.zone) remotes.update(dt); // [zone] 대합실에 있는 다른 사람 (그리기 전에 위치 갱신)
+  if (subway?.active && subway.frame(dt, [dy, dp, dz], input.axes())) {
+    subwayPoseTick(dt, dy || dp || dz);
+    if (myEmote && performance.now() > myEmoteUntil) {
+      myEmote = ''; myEmoteUntil = 0;
+      if (!emoteFolded) emoteBar?.querySelectorAll('.emote-btn.active').forEach((b) => b.classList.remove('active'));
+    }
+    if (joined) presence.sendState(subwayPresenceState() || { x: player.position.x, z: player.position.z, ry: player.rotation.y, moving: false, riding: false, jy: 0, emote: '', sit: '', afk: false, umb: '' });
+    myBubble.tick();
+    overlay.update(innerWidth, innerHeight);
+    emoteFx.update(dt, innerWidth, innerHeight);
+    perfHud.tick();
+    memHud.tick();
+    bgm?.setDuck(!!subway.voiceActive); // [subway-voice] 지하(대합실·승강장·열차)에선 이 경로로 돌므로 여기서도 안내 방송 중 BGM 줄임
+    requestAnimationFrame(frame);
+    return;
+  }
   if (cam.mode === 'follow') {
     // pitch +: 내려다보기, -: 올려다보기. ±90° 직전에서 멈춰 시점이 뒤집히지 않게 한다.
     cam.yaw += dy; cam.pitch = THREE.MathUtils.clamp(cam.pitch + dp, -1.2, 1.45); cam.dist = THREE.MathUtils.clamp(cam.dist * (1 + dz), 4, 120);
@@ -2102,6 +2229,7 @@ function frame() {
   // 이동. 걸을 때는 카메라 기준, 바이크는 핸들(W 전진 · A/D 회전). 건물 안으로는 못 들어감.
   let { f, s, run, jump } = input.axes();
   if (ride?.active) { if (f || s || jump) idleTime = 0; f = 0; s = 0; jump = false; } // [ride] 탑승 중엔 걷기·점프 대신 차량이 움직임
+  if (subway?.busy) { f = 0; s = 0; jump = false; } // [subway] 들어가는/나오는 페이드 동안
   if (dy || dp || dz || f || s || jump) wakeFromAfk();
   if (joined && jump && !board.open && jumpY <= 0.001 && !adminBike?.riding && !giftRiding()) { // [bike] [roadbike]
     if (mySit) {
@@ -2282,6 +2410,8 @@ function frame() {
   police?.update(dt, player.position, { riding: !!bikes.riding });
   riverFolk?.update(dt, player.position);
   stationPlaza.update(dt, player.position);
+  subway?.outdoorTick(dt, subwayCanEnter() ? player.position : null); // [subway] 입구 안내 + 걸어 들어가면 진입
+  gyeongbuSoon?.tick(dt); // [gyeongbu]
   dogPark.update(dt, player.position);
   {
     const doorPeople = [player.position];
@@ -2346,7 +2476,7 @@ function frame() {
   sun.position.copy(sun.target.position).addScaledVector(atmosphere.sunDir, 500);
   renderer.render(scene, camera);
   perfHud.tick();
-  bgm?.setDuck(!!ride?.active || !!adminBike?.riding || !!giftMount()); // [bgm] 버스·바이크 소리가 날 때 살짝 줄임 (바뀔 때만 동작)
+  bgm?.setDuck(!!ride?.active || !!adminBike?.riding || !!giftMount() || !!subway?.voiceActive); // [bgm] 버스·바이크 소리 · [subway-voice] 지하철 안내 방송 중 살짝 줄임 (바뀔 때만 동작)
   memHud.tick();
   overlay.update(innerWidth, innerHeight);
   emoteFx.update(dt, innerWidth, innerHeight);
@@ -2364,6 +2494,8 @@ window.__jj = {
   bikes, toggleRide, triggerEmote,
   get ride() { return ride; }, remotes, presence, // [ride]
   cameraApp, // [camera]
+  subway, serverClock, // [subway] [subway-sync]
+  get pose() { return { sit: mySit, afk: myAfk, jy: jumpY }; }, // [subway-pose] 테스트용
   bgm, // [bgm]
   nearNpc(i = 0, d = 3) { const n = npcs.list[i]; player.position.set(n.pos.x + d, 0, n.pos.z + d * 0.5); },
 };

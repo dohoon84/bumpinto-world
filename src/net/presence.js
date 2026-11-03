@@ -49,9 +49,11 @@ export class WebSocketPresence extends Emitter {
           try { ws.send(JSON.stringify({ t: 'ping' })); } catch {}
         }
       }, 15000);
+      this._timeSync(ws); // [subway-sync]
     };
     ws.onmessage = (ev) => {
       let m; try { m = JSON.parse(ev.data); } catch { return; }
+      if (m.t === 'time') { if (Number.isFinite(m.c) && Number.isFinite(m.s)) this.emit('time', { c: m.c, s: m.s, r: Date.now() }); return; } // [subway-sync]
       if (m.t === 'welcome') {
         this.id = m.id;
         this.peerIds = new Set((m.peers || []).map((p) => p.id).filter(Boolean));
@@ -67,6 +69,7 @@ export class WebSocketPresence extends Emitter {
     };
     ws.onclose = (ev) => {
       clearInterval(this.pingTimer);
+      this._timeStop();
       if (this.manualClose || this.ws !== ws) return;
       this.peerIds.clear();
       this.emit('reset');
@@ -119,7 +122,18 @@ export class WebSocketPresence extends Emitter {
     const digits = String(phone || '').replace(/\D/g, '').slice(0, 11);
     this.ws.send(JSON.stringify({ t: 'gift', item, to, phone: digits }));
   }
+  // [subway-sync] 서버 시계 샘플: 연결 직후 5번(0.3초 간격), 그 뒤 60초마다 1번. 예전 서버는 모르는 메시지라 무시 → 로컬 시계 그대로
+  _timeSync(ws) {
+    this._timeStop();
+    const ask = () => { if (this.ws === ws && ws.readyState === 1) { try { ws.send(JSON.stringify({ t: 'time', c: Date.now() })); } catch {} } };
+    let n = 0;
+    const burst = () => { ask(); if (++n < 5) this.timeBurst = setTimeout(burst, 300); };
+    burst();
+    this.timeTimer = setInterval(ask, 60000);
+  }
+  _timeStop() { clearTimeout(this.timeBurst); clearInterval(this.timeTimer); }
   close() {
+    this._timeStop?.();
     this.manualClose = true;
     clearTimeout(this.retryTimer);
     clearInterval(this.pingTimer);
