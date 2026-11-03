@@ -134,25 +134,36 @@ export function buildTrain({ origin, line, dir, rides, board, renderer, look, on
 
   // ---------- 창밖: 터널 ----------
   const T = createBuilder();
-  for (const s of [-1, 1]) { T.block(0, -1.4, s * 2.7, 600, 5, 0.3, '#1b1d1f'); T.block(0, -1.5, s * 1.4, 600, 0.1, 1.6, '#24262a'); }
+  T.block(0, -1.4, 2.7, 600, 5, 0.3, '#1b1d1f'); // 오른쪽(+z) 벽. 왼쪽(-z, 승강장 쪽) 벽은 승강장 자리만 비워 두는 두 토막 (아래 sideWall)
+  for (const s of [-1, 1]) T.block(0, -1.5, s * 1.4, 600, 0.1, 1.6, '#24262a');
   T.block(0, 3.0, 0, 600, 0.3, 5.6, '#141516');
   const tunnel = new THREE.Mesh(T.build(), staticMat); tunnel.name = 'tunnel';
   scene.add(tunnel); disposables.push(tunnel.geometry);
-  const SPAN = 480, LSTEP = 12, RSTEP = 6;
-  const lightGeo = new THREE.BoxGeometry(0.7, 0.12, 0.06), lightMat = new THREE.MeshBasicMaterial({ color: '#ffe8b0', toneMapped: false });
+  const wallGeo = new THREE.BoxGeometry(600, 5, 0.3), wallMat = new THREE.MeshLambertMaterial({ color: '#1b1d1f' });
+  const sideWall = new THREE.InstancedMesh(wallGeo, wallMat, 2); sideWall.name = 'tunnelWallL'; sideWall.frustumCulled = false;
+  scene.add(sideWall); disposables.push(wallGeo, wallMat);
+  function placeSideWall(sx) { // sx = 승강장 중심 x (없으면 null) → 승강장 앞뒤로만 벽
+    const m4 = new THREE.Matrix4();
+    if (sx == null) { m4.makeTranslation(0, 1.1, -2.7); sideWall.setMatrixAt(0, m4); sideWall.setMatrixAt(1, m4); }
+    else { m4.makeTranslation(sx - half - 300, 1.1, -2.7); sideWall.setMatrixAt(0, m4); m4.makeTranslation(sx + half + 300, 1.1, -2.7); sideWall.setMatrixAt(1, m4); }
+    sideWall.instanceMatrix.needsUpdate = true;
+  }
+  const SPAN = 480, LSTEP = 5, RSTEP = 6;
+  const lightGeo = new THREE.BoxGeometry(1.1, 0.14, 0.06), lightMat = new THREE.MeshBasicMaterial({ color: '#ffe8b0', toneMapped: false });
   const nL = Math.round(SPAN / LSTEP);
   const lights = new THREE.InstancedMesh(lightGeo, lightMat, nL * 2); lights.name = 'tunnelLights'; lights.frustumCulled = false;
   const ribGeo = new THREE.BoxGeometry(0.25, 3.4, 0.1), ribMat = new THREE.MeshLambertMaterial({ color: '#2f3236' });
   const nR = Math.round(SPAN / RSTEP);
   const ribs = new THREE.InstancedMesh(ribGeo, ribMat, nR * 2); ribs.name = 'tunnelRibs'; ribs.frustumCulled = false;
   scene.add(lights, ribs); disposables.push(lightGeo, lightMat, ribGeo, ribMat);
-  function drawTunnel(sTot, vis) {
+  const Z0 = new THREE.Vector3(0, 0, 0);
+  function drawTunnel(sTot, vis, sx = null) { // sx: 승강장 중심 x → 그 구간 왼쪽 조명·늑재는 숨김
     lights.visible = ribs.visible = vis;
     if (!vis) return;
     let k = 0;
-    for (const s of [-1, 1]) for (let i = 0; i < nL; i++) { const x = ((((i * LSTEP - sTot) % SPAN) + SPAN) % SPAN) - SPAN / 2; M4.compose(V.set(x, 1.5, s * 2.53), Q.identity(), S1); lights.setMatrixAt(k++, M4); }
+    for (const s of [-1, 1]) for (let i = 0; i < nL; i++) { const x = ((((i * LSTEP - sTot) % SPAN) + SPAN) % SPAN) - SPAN / 2; M4.compose(V.set(x, 1.5, s * 2.53), Q.identity(), s < 0 && sx != null && Math.abs(x - sx) < half + 1 ? Z0 : S1); lights.setMatrixAt(k++, M4); }
     k = 0;
-    for (const s of [-1, 1]) for (let i = 0; i < nR; i++) { const x = ((((i * RSTEP + 3 - sTot) % SPAN) + SPAN) % SPAN) - SPAN / 2; M4.compose(V.set(x, 0.3, s * 2.5), Q.identity(), S1); ribs.setMatrixAt(k++, M4); }
+    for (const s of [-1, 1]) for (let i = 0; i < nR; i++) { const x = ((((i * RSTEP + 3 - sTot) % SPAN) + SPAN) % SPAN) - SPAN / 2; M4.compose(V.set(x, 0.3, s * 2.5), Q.identity(), s < 0 && sx != null && Math.abs(x - sx) < half + 1 ? Z0 : S1); ribs.setMatrixAt(k++, M4); }
     lights.instanceMatrix.needsUpdate = ribs.instanceMatrix.needsUpdate = true;
   }
 
@@ -264,9 +275,10 @@ export function buildTrain({ origin, line, dir, rides, board, renderer, look, on
     cam.yaw += dy; cam.pitch = THREE.MathUtils.clamp(cam.pitch + dp, -0.5, 1.0); cam.dist = THREE.MathUtils.clamp(cam.dist * (1 + dz), 0.8, 4.5);
     const r = tick(dt);
     drawDoors(open);
-    drawTunnel(sTot, true);
     const so = stationOffset();
+    drawTunnel(sTot, true, so ? so.x : null);
     station.visible = !!so;
+    placeSideWall(so ? so.x : null);
     if (so) { station.position.set(so.x, 0, 0); psd.update(stage === 'stop' || stage === 'board' ? open : stage === 'close' ? open : 0); }
     hemi.intensity = so && Math.abs(so.x + carXc) < half ? 2.4 : 2.0;
     // LED
@@ -296,7 +308,6 @@ export function buildTrain({ origin, line, dir, rides, board, renderer, look, on
     if (self) { me.userData.emote = speed > 0 || sitting ? '' : (self.emote || ''); me.userData.afk = !!self.afk; }
     animateAvatar(me, speed, dt);
     for (const q of npcs) animateAvatar(q.mesh, 0, dt);
-    crowd.begin(); crowd.add(me, meParts, false); for (const q of npcs) crowd.add(q.mesh, q.parts, false); crowd.end();
     // 카메라 (실내 안, 흔들림)
     const sway = Math.sin(clock * 1.7) * 0.012 * (v / RIDE.VMAX) + THREE.MathUtils.clamp(-acc * 0.02, -0.03, 0.03);
     const eye = p.y + (sitting ? 1.15 : 1.55), bx = Math.sin(cam.yaw), bz = Math.cos(cam.yaw), cp = Math.cos(cam.pitch), spp = Math.sin(cam.pitch);
@@ -304,6 +315,11 @@ export function buildTrain({ origin, line, dir, rides, board, renderer, look, on
     for (; d > 0.5; d -= 0.15) { const cx = p.x + bx * d * cp, cz = p.z + bz * d * cp; if (inCar(cx, cz)) break; }
     camera.position.set(p.x + bx * d * cp + sway, THREE.MathUtils.clamp(eye + d * spp, 0.5, CEIL - 0.12) + sway * 0.5, p.z + bz * d * cp);
     camera.lookAt(p.x - bx * 3 * cp, eye - 3 * spp, p.z - bz * 3 * cp);
+    // 좁은 칸: 카메라가 내 머리에 붙으면 1인칭(내 아바타 숨김), 카메라 바로 앞(0.75m 안) 사람도 그리지 않음 (화면을 머리로 가리지 않게)
+    const firstPerson = d < 1.3, C = camera.position;
+    crowd.begin(); if (!firstPerson) crowd.add(me, meParts, false);
+    for (const q of npcs) { const m = q.mesh.position; if (Math.hypot(m.x - C.x, m.z - C.z) > 0.75) crowd.add(q.mesh, q.parts, false); }
+    crowd.end();
     // 하차
     if (!alightSent && ((canAlight() && p.z < -HW - 0.35) || r?.forceAlight)) {
       alightSent = true;
