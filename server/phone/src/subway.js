@@ -9,7 +9,7 @@
 //   upstream: http://swopenapi.seoul.go.kr/api/subway/{KEY}/json/realtimeStationArrival/0/{N}/{역명}
 //     응답 errorMessage.code 'INFO-000' = 정상, 'INFO-200' = 해당 데이터 없음, 'ERROR-*' = 키·요청 오류
 export const SUBWAY_CACHE_SEC = 25;
-export const ALLOWED = Object.freeze(['정자', '수내', '서현', '이매', '야탑', '모란', '태평', '가천대', '복정', '문정', '가락시장', '송파', '석촌', '잠실']);
+export const ALLOWED = Object.freeze(['정자', '수내', '서현', '이매', '야탑', '모란', '태평', '가천대', '복정', '장지', '문정', '가락시장', '송파', '석촌', '잠실']);
 const UPSTREAM = 'http://swopenapi.seoul.go.kr/api/subway';
 const ROWS = 20;
 // subwayId → 게임 노선 키 (src/subway/lines.js SUBWAY_ID 와 같아야 함 — scripts/test-subway-arrivals.mjs 가 확인)

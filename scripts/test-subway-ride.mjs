@@ -57,7 +57,7 @@ for (const k of ['approach', 'arrived', 'closing', 'next', 'depart', 'noAlight',
   assert.equal(announce('arrived', { dirKo: '내선순환', dirEn: 'Inner Circle', dirJa: '内回り' }).ja, '内回りの電車です。お降りのお客様を先にお通しください。');
   assert.equal(announce('closing').ja, 'ドアが閉まります。ご注意ください。');
   assert.ok(announce('depart', { name: '정자' }).ja.includes('チョンジャ'), 'dirJa·nameJa 없으면 ja.js 규칙');
-  const K = { 정자: 'チョンジャ', 수내: 'スネ', 서현: 'ソヒョン', 이매: 'イメ', 야탑: 'ヤタプ', 모란: 'モラン', 태평: 'テピョン', 가천대: 'カチョンデ', 복정: 'ポクチョン', 왕십리: 'ワンシムニ', 강남: 'カンナム', 잠실: 'チャムシル', 판교: 'パンギョ', 수원: 'スウォン', 인천: 'インチョン', 광교: 'クァンギョ', 신림: 'シルリム', 독립문: 'トンニムムン', 종로3가: 'チョンノサムガ', 원인재: 'ウォニンジェ' };
+  const K = { 정자: 'チョンジャ', 수내: 'スネ', 서현: 'ソヒョン', 이매: 'イメ', 야탑: 'ヤタプ', 모란: 'モラン', 태평: 'テピョン', 가천대: 'カチョンデ', 복정: 'ポクチョン', 장지: 'チャンジ', 왕십리: 'ワンシムニ', 강남: 'カンナム', 잠실: 'チャムシル', 판교: 'パンギョ', 수원: 'スウォン', 인천: 'インチョン', 광교: 'クァンギョ', 신림: 'シルリム', 독립문: 'トンニムムン', 종로3가: 'チョンノサムガ', 원인재: 'ウォニンジェ' };
   for (const [ko, ja] of Object.entries(K)) assert.equal(jaName(ko), ja, ko);
   assert.equal(jaDir('수원·인천 방면'), 'スウォン・インチョン方面'); assert.equal(jaDir('외선순환'), '外回り');
   for (const L of Object.values(LINES)) { assert.ok(L.ja, L.key); for (const d of L.dirs) assert.ok(d.ja && !/[가-힣]/.test(d.ja), d.ko); }
@@ -95,8 +95,8 @@ assert.equal(simNextArrival('suin', 1, 'jeongja', Date.UTC(2026, 10, 3, 18, 0, 0
   assert.equal(liveNextArrival(n.trains, 'l2', 0, 5000, 5000), null);
   assert.equal(liveNextArrival(null, 'suin', 1, 0, 0), null);
 }
-// 구역: 1단계(0..14) 그대로, 승강장 42 + 열차 56 덧붙임 (113)
-assert.equal(ZONES.length, 113); assert.equal(ZONES[1], 'jeongja-station'); assert.equal(ZONES[14], 'jamsil-station');
+// 구역: 1단계(0..14) 그대로, 승강장 42 + 열차 56 덧붙임 (113) + 장지 대합실·승강장 2 (116)
+assert.equal(ZONES.length, 116); assert.equal(ZONES[113], 'jangji-station'); assert.equal(ZONES[114], 'jangji-station/p-l8-0'); assert.equal(ZONES[115], 'jangji-station/p-l8-1'); assert.equal(ZONES[1], 'jeongja-station'); assert.equal(ZONES[14], 'jamsil-station');
 assert.equal(ZONES[15], 'jeongja-station/p-suin-0'); assert.equal(ZONES[57], 'train:suin-0-0'); assert.equal(ZONES[112], 'train:l2-1-3');
 assert.equal(new Set(ZONES).size, ZONES.length);
 for (const d of STATIONS) for (const l of d.lines) for (const di of [0, 1]) { const z = platformZone(d.id, l, di); assert.ok(isZoneId(z) && zoneSlot(z) > 14, z); }

@@ -32,9 +32,10 @@ await page.evaluate(() => { const i = __jj.subway.inside, d = i.lay.doors.find((
 await page.keyboard.down('KeyW');
 await until(() => __jj.subway.room === 'train' && !__jj.subway.swapping, null, 60000);
 await page.keyboard.up('KeyW');
-// [feedback-10] STOPS=all 이면 정자에서 가천대 방면으로 한 역씩: 내려서 → 같은 승강장에서 다음 열차를 타고 → 다음 역에서 또 내림 (모든 역 왼쪽 문)
+// [feedback-10] STOPS=all 이면 (+ 복정에서 8호선 잠실 방면으로 잠실까지, 다시 모란 방면으로 장지까지 — 장지 정차·안내 확인)
+//   정자에서 가천대 방면으로 한 역씩: 내려서 → 같은 승강장에서 다음 열차를 타고 → 다음 역에서 또 내림 (모든 역 왼쪽 문)
 const ALL = process.env.STOPS === 'all';
-const SLUG = { 수내: 'sunae', 서현: 'seohyeon', 이매: 'imae', 야탑: 'yatap', 모란: 'moran', 태평: 'taepyeong', 가천대: 'gachon', 복정: 'bokjeong' };
+const SLUG = { 수내: 'sunae', 서현: 'seohyeon', 이매: 'imae', 야탑: 'yatap', 모란: 'moran', 태평: 'taepyeong', 가천대: 'gachon', 복정: 'bokjeong', 장지: 'jangji', 문정: 'munjeong', 가락시장: 'garak', 송파: 'songpa', 석촌: 'seokchon', 잠실: 'jamsil' };
 const results = [];
 async function rideAndAlight() {
   // 열차: 다음 내릴 수 있는 역까지 시간만 빨리 (내리기는 걷기로)
@@ -80,9 +81,22 @@ async function rideAndAlight() {
 let got = await rideAndAlight();
 if (!ALL) assert.equal(got, '수내', '정자 다음 역 수내');
 // 다음 역들: 내린 승강장(같은 방면)에서 다음 열차를 불러 걸어서 타고, 다음 역에서 또 걸어서 내림
+// 자막 기록 (장지 안내 KO/EN/JA 확인)
+await page.evaluate(() => { window.__subs = []; const el = document.getElementById('subway-sub'); new MutationObserver(() => { const t = el.innerText; if (t && window.__subs.at(-1) !== t) window.__subs.push(t); }).observe(el, { childList: true, subtree: true, characterData: true }); });
+// 8호선 구간: 복정 → 잠실 방면(1) 끝까지, 잠실 → 모란 방면(0) 으로 장지까지
+const L8 = [['l8', 1, null], ['l8', 0, '장지']];
+let leg = -1;
 while (ALL) {
-  const more = await page.evaluate(() => { const i = __jj.subway.inside; return i?.kind === 'platform' && i.rides.some((q) => q.game); });
-  if (!more) break;
+  let more = await page.evaluate(() => { const i = __jj.subway.inside; return i?.kind === 'platform' && i.rides.some((q) => q.game); });
+  if (leg >= 0 && L8[leg][2] && got === L8[leg][2]) more = false;
+  if (!more) {
+    if (++leg >= L8.length) break;
+    const [line, dir] = L8[leg];
+    if (got !== (leg === 0 ? '복정' : '잠실')) break;
+    await page.evaluate(([l, d]) => __jj.subway.toPlatform(l, d), [line, dir]);
+    await until(() => __jj.subway.room === 'platform' && !__jj.subway.swapping);
+    await page.waitForTimeout(800);
+  }
   await page.evaluate(() => __jj.subway.inside.callTrain(13));
   await until(() => document.getElementById('subway-sub').innerText.includes('내리는'), null, 60000).catch(() => {});
   await page.waitForTimeout(3500);
@@ -91,6 +105,15 @@ while (ALL) {
   await until(() => __jj.subway.room === 'train' && !__jj.subway.swapping, null, 60000);
   await page.keyboard.up('KeyW');
   got = await rideAndAlight();
+}
+if (ALL) {
+  const names = results.map((r) => r.station);
+  for (const n of ['복정', '장지', '문정', '가락시장', '송파', '석촌', '잠실']) assert.ok(names.includes(n), `8호선 ${n} 에서 내림 ${names}`);
+  assert.equal(names.filter((n) => n === '장지').length, 2, '장지: 잠실 방면·모란 방면 둘 다 정차');
+  const subs = await page.evaluate(() => window.__subs);
+  const jj = subs.filter((t) => t.includes('장지'));
+  assert.ok(jj.some((t) => t.includes('Jangji') && t.includes('チャンジ')), `장지 안내 KO/EN/JA ${JSON.stringify(jj.slice(0, 4))}`);
+  console.log('jangji subtitles', JSON.stringify(jj.slice(0, 3)));
 }
 assert.deepEqual(errs, [], 'page errors');
 console.log(`e2e-subway-alight OK (${results.map((r) => r.station).join(', ')})`);

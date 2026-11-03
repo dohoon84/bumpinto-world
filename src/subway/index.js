@@ -218,6 +218,9 @@ export function mountSubway({ scene, overlay, data, world, terrain, renderer, ge
       if (act === 'build') buildEnt(st);
       else if (act === 'drop' && !st.state.active) dropEnt(st);
       if (st.ent) st.ent.group.visible = act !== 'hide';
+      // 코리더 옛 역 표지판(기둥+캐노피 상자)이 실제 출입구와 겹친다 → 출입구가 보이는 동안 숨김 (멀면 그대로 이정표)
+      const legacy = (st.legacy ??= corridor?.stations?.find((c) => c.name === st.def.name) || false)?.sign;
+      if (legacy) legacy.visible = !st.ent?.group.visible;
     }
   }
 

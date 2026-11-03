@@ -30,10 +30,10 @@ const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), '../.
 const rd = (f) => JSON.parse(fs.readFileSync(path.join(ROOT, f), 'utf8'));
 const OUT = path.join(ROOT, 'src/subway/stationsData.js');
 
-// 도훈 요청 (2026-11-03): 지금 게임에 뚫려 있는 역까지만. 장지는 코리더에 그려지지만 요청 목록에 없어 뺀다(한 줄 추가로 켤 수 있음).
+// 도훈 요청 (2026-11-03): 지금 게임에 뚫려 있는 역까지만. 장지(8호선 복정~문정)는 처음에 실수로 빠졌다가 같은 날 추가.
 export const TARGETS = [
   ['jeongja', '정자'], ['sunae', '수내'], ['seohyeon', '서현'], ['imae', '이매'], ['yatap', '야탑'], ['moran', '모란'],
-  ['taepyeong', '태평'], ['gachon', '가천대'], ['bokjeong', '복정'], ['munjeong', '문정'], ['garak', '가락시장'],
+  ['taepyeong', '태평'], ['gachon', '가천대'], ['bokjeong', '복정'], ['jangji', '장지'], ['munjeong', '문정'], ['garak', '가락시장'],
   ['songpa', '송파'], ['seokchon', '석촌'], ['jamsil', '잠실'],
 ];
 // 간이 노선도에 쓸 relation (방향 하나, 정차 순서). data/osm_subway_routes.json 에 있는 것

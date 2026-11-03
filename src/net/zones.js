@@ -47,6 +47,10 @@ export const ZONES = Object.freeze([
   //   (아래 표를 펼친 순서 그대로 15번부터. 덧붙이기만 — 표 순서·내용을 바꾸지 말 것)
   ...PLATFORM_ZONES(),
   ...TRAIN_ZONES(),
+  // 장지 (8호선 복정~문정, 2026-11-03 같은 날 추가 — 처음에 실수로 빠졌던 역). 덧붙이기만: 113 대합실, 114·115 승강장 방면 0/1
+  'jangji-station',          // 113
+  'jangji-station/p-l8-0',   // 114
+  'jangji-station/p-l8-1',   // 115
 ]);
 const SLOT = new Map(ZONES.map((z, i) => [z, i]));
 

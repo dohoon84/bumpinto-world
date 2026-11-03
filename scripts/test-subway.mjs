@@ -192,7 +192,10 @@ assert.equal(walkable(GATE.cab[2], 0, 0.25, { passages }), false, '개찰구 몸
   assert.equal(isZoneId('a'.repeat(60)), false);
   assert.equal(decodeZone(ZONE_BASE + 777 * 10000 + 3, 1).zone, 'zone#777', '모르는 슬롯도 바깥으로 새지 않음');
   // 코리더 역 대합실 슬롯 (덧붙이기만): 2..14 = 수내..잠실, 역 id 와 이름이 맞는다
-  assert.deepEqual(ZONES.slice(2, 15), STATIONS.filter((d) => d.id !== 'jeongja').map((d) => stationZone(d.id)), '역 대합실 구역 = stationsData 순서');
+  //   장지는 나중에 추가돼 113 (덧붙이기만) — 나머지 순서는 stationsData 순서와 같다
+  assert.deepEqual(ZONES.slice(2, 15), STATIONS.filter((d) => d.id !== 'jeongja' && d.id !== 'jangji').map((d) => stationZone(d.id)), '역 대합실 구역 = stationsData 순서');
+  assert.equal(zoneSlot(stationZone('jangji')), 113, '장지 대합실 = 덧붙인 슬롯');
+  for (const d of STATIONS) assert.ok(zoneSlot(stationZone(d.id)) > 0, `${d.id} 대합실 구역 있음`);
   for (const zid of ZONES.slice(1)) { assert.ok(isZoneId(zid)); const q = decodeZone(encodeZone(zid, 3, 4).x, 4); assert.equal(q.zone, zid); }
   assert.equal(zoneSlot('jamsil-station'), 14);
   assert.deepEqual(encodeZone('', 3, 4), { x: 3, z: 4 }, '바깥은 그대로');
@@ -269,9 +272,9 @@ assert.equal(walkable(GATE.cab[2], 0, 0.25, { passages }), false, '개찰구 몸
   const byId = new Map(corr.map((e) => [e.type + e.id, e]));
   const index = JSON.parse(fs.readFileSync('public/corridor/index.json', 'utf8'));
   const center = data.meta.center;
-  const want = ['정자', '수내', '서현', '이매', '야탑', '모란', '태평', '가천대', '복정', '문정', '가락시장', '송파', '석촌', '잠실'];
-  assert.deepEqual(STATIONS.map((d) => d.name), want, '도훈 요청 14역 (장지는 요청에 없어 뺌)');
-  const expectLines = { 정자: 'suin,shin', 수내: 'suin', 서현: 'suin', 이매: 'suin,gg', 야탑: 'suin', 모란: 'suin,l8', 태평: 'suin', 가천대: 'suin', 복정: 'suin,l8', 문정: 'l8', 가락시장: 'l8,l3', 송파: 'l8', 석촌: 'l8,l9', 잠실: 'l8,l2' };
+  const want = ['정자', '수내', '서현', '이매', '야탑', '모란', '태평', '가천대', '복정', '장지', '문정', '가락시장', '송파', '석촌', '잠실'];
+  assert.deepEqual(STATIONS.map((d) => d.name), want, '도훈 요청 14역 + 장지 (처음에 실수로 빠짐, 같은 날 추가) = 15역');
+  const expectLines = { 정자: 'suin,shin', 수내: 'suin', 서현: 'suin', 이매: 'suin,gg', 야탑: 'suin', 모란: 'suin,l8', 태평: 'suin', 가천대: 'suin', 복정: 'suin,l8', 장지: 'l8', 문정: 'l8', 가락시장: 'l8,l3', 송파: 'l8', 석촌: 'l8,l9', 잠실: 'l8,l2' };
   for (const d of STATIONS) {
     assert.equal(d.lines.join(','), expectLines[d.name], `${d.name} 노선`);
     // 노선 근거: osmRoutes 의 relation 이 실제로 그 ref 이고, 이 역 노드를 stop 으로 가짐
