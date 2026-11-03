@@ -14,6 +14,11 @@ export function corridorGlobeEnabled(params = new URLSearchParams(location.searc
 export const BRANCH_STATIONS = pangyoEnabled() ? PANGYO_GLOBE_STATIONS : [];
 const ALL_STATIONS = CORRIDOR_STATIONS.concat(BRANCH_STATIONS);
 export const CORRIDOR_STATION_IDS = new Set(ALL_STATIONS.map((s) => s.id));
+// [globe-open] 지역 현황 목록에서 '열림'으로 따로 보이는 지선 역 (판교역 → 입장하면 ?at=pangyo 와 같은 자리). ?pangyo=0 이면 빈 목록 → 기존 그대로
+export const OPEN_BRANCH_IDS = new Set(BRANCH_STATIONS.map((s) => s.id));
+// [globe-open] 지구본 '오픈' 수는 지역이 아니라 열린 역 수로 센다 — 노선도에 점으로 그려지는 본선 역(정자~잠실) + 지선 역(판교). 롯데월드타워는 랜드마크라 뺀다
+export const OPEN_MAINLINE_STATIONS = [CORRIDOR_ORIGIN, ...CORRIDOR_STATIONS];
+export const OPEN_BRANCH_STATIONS = BRANCH_STATIONS;
 // 정자 포함 역 수 (롯데월드타워는 역이 아니라 랜드마크)
 export const CORRIDOR_STATION_COUNT = ALL_STATIONS.length + 1;
 // 입장 화면(로비 제목·로딩 문구)에 쓰는 역 이름 — ?at= 역 id 기준
