@@ -58,6 +58,7 @@ import { createPlaygrounds } from './world/playgrounds.js'; // [playgrounds]
 import { corridorStationLabel } from './corridor/globeCorridor.js'; // [corridor]
 import { createStreetlights } from './world/streetlights.js'; // [streetlights]
 import { mountRide } from './ride/index.js'; // [ride] 코리더 버스·택시 탑승
+import { mountSubway } from './subway/index.js'; // [subway] 정자역 출입구(실제 OSM 출구) + 지하 대합실. ?subway=0 이면 끔
 
 const params = new URLSearchParams(location.search);
 const region = getCurrentRegion();
@@ -189,7 +190,8 @@ const [terrainData, driveData, corridorData, shopsData, coloursData] = await Pro
 ]);
 
 // --- 렌더러/씬 ---
-const renderer = new THREE.WebGLRenderer({ antialias: true, logarithmicDepthBuffer: true, preserveDrawingBuffer: params.has('shot') });
+const subwayOn = region.id === 'jeongja' && params.get('subway') !== '0'; // [subway]
+const renderer = new THREE.WebGLRenderer({ antialias: true, logarithmicDepthBuffer: true, preserveDrawingBuffer: params.has('shot'), ...(subwayOn ? { stencil: true } : {}) }); // [subway] 출입구 계단 구멍은 스텐실로 그림
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
 renderer.setSize(innerWidth, innerHeight);
 renderer.shadowMap.enabled = !params.has('noshadow');
@@ -446,6 +448,26 @@ const trashBins = region.id === 'jeongja'
 {
   const withBins = world.isBlocked;
   world.isBlocked = (x, z, r) => withBins(x, z, r) || trashBins.blocks(x, z);
+}
+// [subway] 정자역 출입구 (실제 출구 위치·번호, OSM). 들어가면 별도 대합실 Scene, 그동안 바깥 월드는 갱신·렌더 건너뜀
+const subwayCanEnter = () => joined && !bikes.riding && !adminBike?.riding && !giftRiding() && !ride?.active && !trucks?.current;
+const subway = subwayOn ? mountSubway({
+  scene, overlay, data, world, terrain, renderer, params,
+  getLook: () => me.look,
+  canEnter: () => subwayCanEnter(),
+  onEnter: () => { trackEvent('subway_enter'); if (mySit) standUpFromSeat(); },
+  onExit: (e) => {
+    if (!e) return;
+    const { x, z, ry } = e.spawn;
+    player.position.set(x, terrain ? terrain.getGroundHeight(x, z, e.y) : 0, z);
+    player.rotation.y = ry; // 계단을 등지고 선다
+    cam.yaw = ry + Math.PI / 2; cam.pitch = Math.max(cam.pitch, 0.35); cam.dist = Math.max(cam.dist, 9); // 카메라는 옆에서 (뒤는 캐노피 지붕이 가림). 앞으로 걸어도 다시 안 들어감
+    emitMyStateNow();
+  },
+}) : null;
+if (subway) {
+  const withSubway = world.isBlocked;
+  world.isBlocked = (x, z, r) => withSubway(x, z, r) || subway.blocks(x, z, r);
 }
 const presence = createPresence({ station: st, region });
 if (npcs.guard) presence.setGuard?.(npcs.guard);
@@ -1980,6 +2002,7 @@ leaveBtn.onclick = () => {
   startLobby?.();
 };
 input.onKey = (e) => {
+  if (subway?.onKey(e)) return; // [subway] 입구 앞 E · 대합실 안에서는 출구 고르기 등
   if (e.code === 'KeyM') viewBtn.onclick();
   if (e.code === 'KeyH') document.getElementById('btn-home').onclick();
   if (e.code === 'Enter') { e.preventDefault(); chatInput.focus(); }
@@ -2094,6 +2117,14 @@ function frame() {
     return;
   }
   const [dy, dp, dz] = input.consumeLook();
+  // [subway] 대합실 안: 대합실만 갱신·렌더하고 바깥 월드(NPC·버스·코리더 타일·그림자)는 통째로 건너뜀
+  if (subway?.active && subway.frame(dt, [dy, dp, dz], input.axes())) {
+    if (joined) presence.sendState({ x: player.position.x, z: player.position.z, ry: player.rotation.y, moving: false, riding: false, jy: 0, emote: '', sit: '', afk: false, umb: '' });
+    perfHud.tick();
+    memHud.tick();
+    requestAnimationFrame(frame);
+    return;
+  }
   if (cam.mode === 'follow') {
     // pitch +: 내려다보기, -: 올려다보기. ±90° 직전에서 멈춰 시점이 뒤집히지 않게 한다.
     cam.yaw += dy; cam.pitch = THREE.MathUtils.clamp(cam.pitch + dp, -1.2, 1.45); cam.dist = THREE.MathUtils.clamp(cam.dist * (1 + dz), 4, 120);
@@ -2102,6 +2133,7 @@ function frame() {
   // 이동. 걸을 때는 카메라 기준, 바이크는 핸들(W 전진 · A/D 회전). 건물 안으로는 못 들어감.
   let { f, s, run, jump } = input.axes();
   if (ride?.active) { if (f || s || jump) idleTime = 0; f = 0; s = 0; jump = false; } // [ride] 탑승 중엔 걷기·점프 대신 차량이 움직임
+  if (subway?.busy) { f = 0; s = 0; jump = false; } // [subway] 들어가는/나오는 페이드 동안
   if (dy || dp || dz || f || s || jump) wakeFromAfk();
   if (joined && jump && !board.open && jumpY <= 0.001 && !adminBike?.riding && !giftRiding()) { // [bike] [roadbike]
     if (mySit) {
@@ -2282,6 +2314,7 @@ function frame() {
   police?.update(dt, player.position, { riding: !!bikes.riding });
   riverFolk?.update(dt, player.position);
   stationPlaza.update(dt, player.position);
+  subway?.outdoorTick(dt, subwayCanEnter() ? player.position : null); // [subway] 입구 안내 + 걸어 들어가면 진입
   dogPark.update(dt, player.position);
   {
     const doorPeople = [player.position];
@@ -2364,6 +2397,7 @@ window.__jj = {
   bikes, toggleRide, triggerEmote,
   get ride() { return ride; }, remotes, presence, // [ride]
   cameraApp, // [camera]
+  subway, // [subway]
   bgm, // [bgm]
   nearNpc(i = 0, d = 3) { const n = npcs.list[i]; player.position.set(n.pos.x + d, 0, n.pos.z + d * 0.5); },
 };
