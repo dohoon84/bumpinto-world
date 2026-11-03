@@ -91,6 +91,10 @@ export function createPangyoNpc({ pg, baseUrl = '', overlay = null, terrain = nu
   const deckL = pg?.landmarks?.find((l) => l.model === 'pangyoDeck');
   // 데크 높이 = 공유 데이터(pangyo/index.json 의 landmark part h — landmarks/pangyo.js buildDeck 이 같은 값으로 상판을 만든다). 하드코딩 없음
   const deckParts = (deckL?.parts || []).filter((p) => p.o?.length >= 3 && Number.isFinite(p.h)).map((p) => ({ o: p.o, holes: p.holes || [], y: p.h }));
+  // 데크 엘리베이터 승강로(공유 데이터 landmark.elevators, 2.4m 각) 주변 1.8m 는 걷지 않는다
+  const lifts = (deckL?.elevators || []).filter((e) => Number.isFinite(e.x) && Number.isFinite(e.z));
+  const clearOfLifts = (x, z) => lifts.every((e) => Math.abs(x - e.x) > 3 || Math.abs(z - e.z) > 3);
+  const groundOk = (x, z) => clearOfLifts(x, z) && isFree(x, z);
   const deck = deckParts.length ? { parts: deckParts, y: Math.max(...deckParts.map((p) => p.y)), key: tileKey(deckL.pos.x, deckL.pos.z), x: deckL.pos.x, z: deckL.pos.z } : null;
   const exits = (pg?.stations || []).flatMap((s) => s.exits || []);
   let spots = { station: [], company: [], food: [] };
@@ -104,7 +108,7 @@ export function createPangyoNpc({ pg, baseUrl = '', overlay = null, terrain = nu
   }
   const ready = (s) => {
     if (!tileReady(s.key)) return null;
-    if (!s.at) { const p = freeSpot(s.x, s.z); s.at = Math.hypot(p.x - s.x, p.z - s.z) < 90 && isFree(p.x, p.z) ? p : false; }
+    if (!s.at) { const p = freeSpot(s.x, s.z); s.at = Math.hypot(p.x - s.x, p.z - s.z) < 90 && groundOk(p.x, p.z) ? p : false; }
     return s.at || null;
   };
 
@@ -125,7 +129,7 @@ export function createPangyoNpc({ pg, baseUrl = '', overlay = null, terrain = nu
     }
     return pts.length >= 6 ? pts : null;
   }
-  const partOk = (d) => (x, z) => inRing(x, z, d.o) && !d.holes.some((h) => inRing(x, z, h)) && [d.o, ...d.holes].every((r) => r.every((p, i) => segD(x, z, p[0], p[1], r[(i + 1) % r.length][0], r[(i + 1) % r.length][1]) > 1.6));
+  const partOk = (d) => (x, z) => clearOfLifts(x, z) && inRing(x, z, d.o) && !d.holes.some((h) => inRing(x, z, h)) && [d.o, ...d.holes].every((r) => r.every((p, i) => segD(x, z, p[0], p[1], r[(i + 1) % r.length][0], r[(i + 1) % r.length][1]) > 1.6));
   // 데크 위 경로: 상판 하나를 골라 그 안(가장자리 1.6m 안쪽)만 걷는다 → [경로, 그 상판 높이]
   function deckPath() {
     for (let t = 0; t < 20; t++) {
@@ -193,7 +197,7 @@ export function createPangyoNpc({ pg, baseUrl = '', overlay = null, terrain = nu
         let best = Infinity;
         for (const c of cand) { const n = c.load + rnd() * 0.9; if (n < best) { best = n; sp = c; } }
         const at = ready(sp); if (!at) continue;
-        path = freePath(at.x, at.z, isFree, 2.5, kind === 'company' ? 24 : kind === 'station' ? 10 : 14); // 역·식당 앞은 짧게 오가며 붐비게
+        path = freePath(at.x, at.z, groundOk, 2.5, kind === 'company' ? 24 : kind === 'station' ? 10 : 14); // 역·식당 앞은 짧게 오가며 붐비게
         if (path && rnd() < 0.5) path.reverse(); // 절반은 그 장소로 '향해' 걷는다
       }
       if (!path) continue;
