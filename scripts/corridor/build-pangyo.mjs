@@ -138,6 +138,12 @@ for (const t of Object.values(existing)) {
 const LM_DEPT = new Set(['r6490334', 'w437195296', 'w437195297', 'w437195298', 'w437195299']);
 const LM_TOWERS = new Set(['w1087134311', 'w1087134310', 'w659687063', 'w659687065']);
 const LM_DECK = 'w1468711684';
+// 데크 높이 실측값 조사(2026-11-03): 공개 자료에 m 단위 실측값 없음 → 5.4–6.4m 표현값 유지(지어낸 값 아님, 게임 표현용).
+//   - VWorld 국가중점 GIS건물통합정보 WFS(dt_d010, 2026-10-05 갱신): 데크/광장 필지(판교동 132-18x, 백현동 4-1x) 폴리곤 24개 모두 hg=0·층수 0
+//     (건축물대장 높이 없음). 같은 박스에서 높이 있는 건 알파돔타워 67.6m·그레이츠 판교 67.5m 뿐.
+//   - OSM w1468711684: building=yes layer=1, height/min_height/levels 태그 없음.
+//   - 공개 기사·설계자료(연합뉴스 2021-11-17, 한겨레, 경인일보, KIRA 월간 2024-09, 희림 프로젝트 소개): 컬처밸리 = '지상 3층 실내 통로 + 4층 옥외 통로'
+//     로 층수만 있고 m 값은 없음. 층수만으로 m 를 환산하면 추정이라 쓰지 않았다(현재 5.4–6.4m 는 실제 3~4층보다 낮을 가능성 있음 → 결정 필요).
 const DECK = { mh: 5.4, h: 6.4 }; // 데크 아래(1층 광장) 걸어 다닐 수 있게 하단 5.4m (충돌 제외 기준 mh ≥ 2.5)
 
 // ---------- 1) 건물 (bake.mjs 규칙) ----------
@@ -413,7 +419,7 @@ const index = {
     name: 'Pangyo station area (stage 1)', tileSize: TS, box: BOX, generated: new Date().toISOString(),
     source: { osm: `Overpass API (osm_base ${raw.osm3s?.timestamp_osm_base || '?'})`, query: 'data/query_pangyo.overpassql', corridor: cIndex.meta.generated },
     attribution: '© OpenStreetMap contributors (ODbL)',
-    heightRule: 'OSM height → building:levels×3.2(+1.5 if >3F, else +0.6) → default levels by type/area (scripts/bake.mjs defaultLevels); deck = stylized 5.4–6.4 m',
+    heightRule: 'OSM height → building:levels×3.2(+1.5 if >3F, else +0.6) → default levels by type/area (scripts/bake.mjs defaultLevels); deck = stylized 5.4–6.4 m (no measured height in public data: VWorld dt_d010 hg=0 on all deck/plaza parcels, OSM no height tags; sources only give floors 3F/4F)',
     stats: { ...stat, ...rstat, runs: runs.length, parks: P.n, water: W.n, tiles: Object.keys(tiles).length, tileKB: Math.round(bytes / 1024) },
     defaultHeights: defaultList,
   },
