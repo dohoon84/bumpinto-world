@@ -26,7 +26,7 @@ const e2 = ents.find((e) => e.ref === '2'), e4 = ents.find((e) => e.ref === '4')
 // 2번: 피드백 1 처럼 비스듬히 위에서 (출입구 + 남쪽 다리 난간이 같이 보이게)
 //   중심 = 출입구와 북쪽 다리 상판 사이, 비스듬히 (다리 난간까지 간격이 보이게)
 const Y2 = (process.env.Y2 || '0.6').split(',').map(Number);
-for (const y of Y2) await shot(Y2.length > 1 ? `fix-exit2-yaw${y}.png` : 'stations-fix-exit2.png', e2.x + 1, e2.z - 4, y, 0.85, 20, 4000);
+for (const y of Y2) await shot(Y2.length > 1 ? `fix-exit2-yaw${y}.png` : 'stations-fix-exit2.png', e2.x + 1, e2.z - 1.5, y, 0.85, 20, 4000);
 // 광장 4번: 피드백 2 처럼 위에서 (화면 오른쪽 = 북)
 for (const y of YAWS.length ? YAWS : [1.57]) await shot(YAWS.length ? `fix-plaza-yaw${y}.png` : 'stations-fix-plaza.png', -60, 20, y, 1.42, 42, 4000);
 // 4번 입구를 북쪽(화살표 꼬리 쪽)에서 비스듬히: 계단 입구가 보이는지

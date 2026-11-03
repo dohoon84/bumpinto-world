@@ -54,7 +54,8 @@ export function placeEntrance(exit, { roads, station, isFree, isClear = null, ra
   const toSt = { x: station.x - exit.x, z: station.z - exit.z };
   const pref = (ry) => Math.sin(ry) * toSt.x + Math.cos(ry) * toSt.z;
   let cands;
-  if (exit.stairs) {
+  if (exit.face != null) cands = [{ ry: exit.face, pen: 0 }]; // 출구별 지정 (exits.js face) — 돌리지 않고 자리만 옮겨 맞춘다
+  else if (exit.stairs) {
     const a = Math.atan2(exit.stairs[0], exit.stairs[1]);
     cands = [{ ry: a, pen: 0 }, { ry: a + Math.PI / 2, pen: 30 }, { ry: a - Math.PI / 2, pen: 30 }, { ry: a + Math.PI, pen: 60 }];
   } else {

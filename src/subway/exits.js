@@ -8,7 +8,9 @@
 
 export const JEONGJA_EXITS = [
   { ref: '1', osm: 3406785261, lat: 37.3662159, lon: 127.1084146 },
-  { ref: '2', osm: 3406785262, lat: 37.3660485, lon: 127.1084119 },
+  // face: 출입구 방향 직접 지정 (rad, 계단이 내려가는 쪽 = sin·cos → +x·+z). OSM 에 계단 방향이 없고 자동(길과 나란히)이 틀린 곳만.
+  //   2번: 도훈 피드백 (2026-11-03) — 입구가 북쪽 횡단보도 쪽을 보고 남쪽(+z)으로 내려가게
+  { ref: '2', osm: 3406785262, lat: 37.3660485, lon: 127.1084119, face: 0 },
   { ref: '3', osm: 3234938504, lat: 37.3659366, lon: 127.1077875 },
   { ref: '4', osm: 3234938506, lat: 37.3663960, lon: 127.1077861 },
   { ref: '5', osm: 3406785264, lat: 37.3681909, lon: 127.1078861 },
@@ -92,7 +94,7 @@ export function resolveExits(data, list = JEONGJA_EXITS) {
     const { x, z } = projectLatLon(center, e.lat, e.lon);
     const dir = exitSide(x, z, st, axis);
     const ref = e.ref == null || e.ref === '' ? null : String(e.ref);
-    return { id: ref ? 'x' + ref : 'n' + i, ref, osm: e.osm, lat: e.lat, lon: e.lon, x, z, dir, hints: nearbyHints(x, z, data.labels) };
+    return { id: ref ? 'x' + ref : 'n' + i, ref, osm: e.osm, lat: e.lat, lon: e.lon, x, z, dir, hints: nearbyHints(x, z, data.labels), ...(e.face != null ? { face: e.face } : {}) };
   });
 }
 

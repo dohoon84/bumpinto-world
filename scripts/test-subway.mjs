@@ -323,6 +323,9 @@ assert.equal(walkable(GATE.cab[2], 0, 0.25, { passages }), false, '개찰구 몸
   assert.ok(ENT_SHOW < ENT_BUILD && ENT_BUILD < ENT_DROP);
   { const jd = STATIONS.find((d) => d.id === 'jamsil'); const r = stationReach(jd, corridorExits(jd, center)); assert.ok(r > 380 && r < 430, `잠실 reach ${r}`); }
 }
+// 출구별 방향 지정 (exits.js face): 정자 2번 = 남쪽(+z)으로 내려감 (도훈 피드백), 돌리지 않음
+assert.equal(JEONGJA_EXITS.find((e) => e.ref === '2').face, 0);
+{ const p = placeEntrance({ x: 0, z: 0, face: 0 }, { roads: [], station: { x: 50, z: 0 }, isFree: () => true }); assert.equal(p.ry, 0, 'face 우선 (역 쪽 선호보다)'); }
 // ---------- [gyeongbu] 서울 방면 준비 중 ----------
 assert.equal(gyeongbuSoonAt(-446, -1800), true, '경부 북쪽 끝');
 assert.equal(gyeongbuSoonAt(-446, -1600), false); assert.equal(gyeongbuSoonAt(0, -1900), false, '경부 아닌 곳');
