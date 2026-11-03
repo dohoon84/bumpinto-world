@@ -165,16 +165,26 @@ export function buildEntrances({ scene, overlay, exits, data, world, terrain, th
     const DARK = (y0) => (ly) => Math.max(0.25, 1 + (y0 + ly) * 0.16);
     for (const sx of [-1, 1]) pit.box(sx * (W / 2 + 0.02), -2.1, L / 2, 0.04, 4.2, L + 0.2, '#b9b3a7', { shade: (ly) => Math.max(0.3, 1 + (-2.1 + ly * 4.2) * 0.17) });
     pit.box(0, -0.6, STEP_W0 / 2, W, 1.2, STEP_W0, '#c8c2b6');
+    // 단: 디딤판(윗면) 밝게 · 챌판(앞면)은 어둡게 + 아래로 갈수록 어두워짐 → 위에서 봐도 '내려가는 계단' 으로 읽힘 (도훈 피드백: 평평한 바닥처럼 보임)
+    const riser = (ly, i) => (Math.floor(i / 4) === 2 ? 1 : 0.42 + 0.3 * (ly + 0.5));
     for (let i = 0; i < STEP_N; i++) {
       const yTop = -(i + 1) * STEP_RISE, w0 = STEP_W0 + i * STEP_RUN;
-      const k = Math.max(0.3, 1 - i * 0.038);
-      const c = new THREE.Color('#cfc8bb').multiplyScalar(k);
-      pit.box(0, yTop - 0.3, w0 + STEP_RUN / 2, W, 0.6, STEP_RUN, '#' + c.getHexString());
-      pit.box(0, yTop + 0.006, w0 + 0.03, W, 0.012, 0.05, '#' + new THREE.Color('#d9a400').multiplyScalar(k).getHexString()); // 계단 코 미끄럼 방지 띠
+      const k = Math.max(0.16, 1 - i * 0.048);
+      const c = new THREE.Color('#d6cfc2').multiplyScalar(k);
+      pit.box(0, yTop - 0.3, w0 + STEP_RUN / 2, W, 0.6, STEP_RUN, '#' + c.getHexString(), { shade: riser });
+      pit.box(0, yTop + 0.006, w0 + 0.045, W - 0.1, 0.014, 0.08, '#' + new THREE.Color('#e5ad00').multiplyScalar(Math.max(0.3, k)).getHexString()); // 계단 코 미끄럼 방지 띠
     }
+    // 구멍 안 난간 (양옆 벽 + 가운데) — 손잡이·기둥. 지상 난간과 이어짐
+    const RUN_ALL = STEP_N * STEP_RUN, DROP_ALL = STEP_N * STEP_RISE, SLOPE = Math.atan2(DROP_ALL, RUN_ALL), RL = Math.hypot(RUN_ALL, DROP_ALL);
+    for (const u of [-(W / 2 - 0.09), 0, W / 2 - 0.09]) {
+      pit.box(u, 0.9 - DROP_ALL / 2 - STEP_RISE / 2, STEP_W0 + RUN_ALL / 2, 0.06, 0.06, RL, '#c3c9cf', { rx: SLOPE });
+      for (let j = 0; j <= 4; j++) { const t = j / 4, w = STEP_W0 + 0.15 + t * (RUN_ALL - 0.3), yb = -STEP_RISE * Math.ceil((w - STEP_W0) / STEP_RUN); pit.box(u, yb + 0.45, w, 0.04, 0.9, 0.04, '#9aa1a8'); }
+    }
+    // 바닥 쪽 깊이감: 아래 3분의 1 을 덮는 어두운 그라데이션 판 (아래로 갈수록 검게)
+    pit.box(0, -DROP_ALL - 0.2, L - 0.9, W, 1.6, 1.8, '#0e1114', { shade: (ly) => 0.4 + 0.6 * (ly + 0.5) });
     pit.box(0, -2.4, L + 0.02, W, 4.8, 0.04, '#15181c');               // 아래 통로 (어둠)
     pit.box(0, -0.5, L - 0.02, W, 1.0, 0.04, '#8d877c', { shade: DARK(-0.5) });
-    mark.quad(0, 0.04, L / 2, W, L, '#ffffff', { rx: -Math.PI / 2 });
+    mark.quad(0, 0.135, L / 2, W, L, '#ffffff', { rx: -Math.PI / 2 }); // 인도 바닥 덧칠(0.08~0.12m)보다 위 — 예전 0.04 는 인도에 가려 구멍 절반만 뚫렸음
     // --- 간판·조명 (아틀라스) ---
     const fascia = fasciaUv.get(ex);
     glow.quad(0, 2.45, -0.09, W + 0.4, (W + 0.4) * (96 / 504), '#ffffff', { ry: Math.PI, uv: fascia });
