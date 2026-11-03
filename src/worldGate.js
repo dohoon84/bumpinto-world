@@ -317,7 +317,7 @@ export function openWorldGate({ onEnter }) {
     : null;
 
   // [corridor] 국가 섹션: 기본은 한국 펼침
-  let openCountry = 'KR';
+  const collapsedCountries = new Set(); // [globe-open] 처음엔 모든 나라 목록을 펼친다. 머리글을 누르면 그 나라만 접기/펼치기
 
   const initialMarker = pinMarkers.find((m) => m.region.id === activeRegion.id) || pinMarkers[0];
   globe.rotation.y = -Math.atan2(initialMarker.spot.x, initialMarker.spot.z);
@@ -557,7 +557,7 @@ export function openWorldGate({ onEnter }) {
       regionsListEl.innerHTML = order.map((c) => {
         const meta = COUNTRY_META[c] || COUNTRY_META.ETC, items = entries.filter((x) => x.country === c);
         const nOpen = items.filter((x) => x.open).reduce((n, x) => n + x.n, 0), nSoon = items.filter((x) => !x.open).reduce((n, x) => n + x.n, 0); // [globe-open] 역 수
-        const expanded = openCountry === c;
+        const expanded = !collapsedCountries.has(c);
         const count = [nOpen ? tr(`열림 ${nOpen}`, `${nOpen} open`) : '', nSoon ? tr(`준비중 ${nSoon}`, `${nSoon} soon`) : ''].filter(Boolean).join(' · ');
         return `
         <li class="gate-country ${expanded ? 'is-expanded' : ''}" data-country-sec="${c}">
@@ -781,9 +781,9 @@ export function openWorldGate({ onEnter }) {
     const countryBtn = corridorGlobe && e.target.closest('[data-country]');
     if (countryBtn) { // [corridor] 국가 섹션 아코디언
       const c = countryBtn.dataset.country;
-      openCountry = openCountry === c ? null : c;
+      if (collapsedCountries.has(c)) collapsedCountries.delete(c); else collapsedCountries.add(c);
       root.querySelectorAll('[data-country-sec]').forEach((sec) => {
-        const on = sec.dataset.countrySec === openCountry;
+        const on = !collapsedCountries.has(sec.dataset.countrySec);
         sec.classList.toggle('is-expanded', on);
         sec.querySelector('.gate-country-list').hidden = !on;
         const hd = sec.querySelector('.gate-country-hd');
