@@ -1,7 +1,7 @@
 // [pangyo-express] 판교 확장 3단계(판교IC고가차도 → 판교TG → 경부 서울 방향 합류) 데이터·런타임 테스트: node scripts/corridor/test/test-pangyo-express.mjs
 //   1) express.json = build-pangyo-express.mjs 결과(OSM·DEM 추출본이 있을 때 --check)
 //   2) 높이 규칙: 위로 넘는 교차마다 상판 6.0m = 시설한계 4.5 + 상판 1.5, 경사 ≤ 5%(+여유), 모든 선 양 끝 0m(지면에 닿음)
-//   3) 합류 연속: 램프 끝 = 본선(서울 방향) 위 한 점(위치 1m · 높이 0.3m 안)
+//   3) 합류 연속: 램프 끝 = 본선(서울 방향) 위 한 점(위치 1m · 높이 0.3m 안), 반대 방향 연결로 시작 = 하행 본선 분기점
 //   4) 숨김: hide 서명마다 해당 타일(tiles/lod)에서 정확히 1개만 빠짐, 다른 타일·?pangyoexpress=0 은 그대로
 //   5) 플래그: ?pangyoexpress=0 · ?pangyo=0 이면 꺼짐
 //   6) 버스: G8110 경로 연장(2단계 끝에서 이어짐, 연장 구간 0.5m 마다 고속도로 선 폭 안), 높이 프록시로 주행(한 걸음 변화 ≤ 0.5m, 최고 6m), 고가 밑 대왕판교로 차량은 0m 유지,
@@ -51,6 +51,8 @@ if (fs.existsSync(path.join(ROOT, 'data/osm_pangyo_express.json')) && fs.existsS
   const r = line('route'), nb = line('mainNB'), e = r.pts.at(-1);
   let best = 1e9, y = 0; for (let i = 1; i < nb.pts.length; i++) { const a = nb.pts[i - 1], b = nb.pts[i], dx = b[0] - a[0], dz = b[1] - a[1], t = Math.max(0, Math.min(1, ((e[0] - a[0]) * dx + (e[1] - a[1]) * dz) / (dx * dx + dz * dz || 1))), d = Math.hypot(a[0] + dx * t - e[0], a[1] + dz * t - e[1]); if (d < best) { best = d; y = a[2] + (b[2] - a[2]) * t; } }
   assert.ok(best < 1, `램프 끝 - 본선 거리 ${best.toFixed(2)}`); assert.ok(Math.abs(y - e[2]) < 0.3, `램프 끝 높이 ${e[2]} vs 본선 ${y.toFixed(2)}`);
+  const eb0 = line('eb').pts[0], sb = line('mainSB'); let bd = 1e9, by = 0; for (const p of sb.pts) { const d = d2(p, eb0); if (d < bd) { bd = d; by = p[2]; } }
+  assert.ok(bd < 3 && Math.abs(by - eb0[2]) < 0.3, `반대 방향 연결로 시작 - 하행 본선 ${bd.toFixed(1)}m 높이 ${eb0[2]} vs ${by}`);
   ok(`merge: 램프 끝이 본선(서울 방향) 위 ${best.toFixed(2)}m · 높이차 ${Math.abs(y - e[2]).toFixed(2)}m`);
 }
 

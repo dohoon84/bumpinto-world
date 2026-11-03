@@ -167,7 +167,9 @@ function main() {
   const sbAll = chain(G.mainSB);
   const pa = project(sbAll, nbAll[mi].x, nbAll[mi].z);
   const pb0 = project(sbAll, at(nbAll, sM - RULE.mainBefore).x, at(nbAll, sM - RULE.mainBefore).z), pb1 = project(sbAll, at(nbAll, sM + RULE.mainAfter).x, at(nbAll, sM + RULE.mainAfter).z);
-  const [q0s, q1s] = landed(sbAll, Math.min(pb0.s, pb1.s), Math.max(pb0.s, pb1.s), crossAll.concat(G.mainNB.map((id) => ({ id })), rtIds, ebIds));
+  // 하행은 반대 방향 연결로(eb) 분기점(eb 첫 노드) 뒤 80m 까지는 있어야 함
+  const di = sbAll.findIndex((p) => p.nid === W.get(G.eb[0]).nodes[0]), sDiv = di >= 0 ? sbAll[di].s + 80 : 0;
+  const [q0s, q1s] = landed(sbAll, Math.min(pb0.s, pb1.s), Math.max(pb0.s, pb1.s, sDiv), crossAll.concat(G.mainNB.map((id) => ({ id })), rtIds, ebIds));
   const sb = slice(sbAll, q0s, q1s); void pa;
   const route = chain(G.route), eb = chain(G.eb);
   const lines = { route, eb, mainNB: nb, mainSB: sb };
