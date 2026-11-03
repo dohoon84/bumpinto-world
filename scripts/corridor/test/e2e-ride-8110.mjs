@@ -61,6 +61,7 @@ await page.evaluate(() => {
       const sx = Math.hypot(e[0], e[1], e[2]), sy = Math.hypot(e[4], e[5], e[6]), sz = Math.hypot(e[8], e[9], e[10]);
       const det = e[0] * (e[5] * e[10] - e[6] * e[9]) - e[4] * (e[1] * e[10] - e[2] * e[9]) + e[8] * (e[1] * e[6] - e[2] * e[5]);
       const wyaw = Math.atan2(e[8], e[10]), b = r.b, P = r.P;
+      this.lastB = b; this.lastP = P; // 종점 자동 하차로 ride 가 끝난 뒤에도 마지막 버스 상태를 읽게
       // 도로 접선: 차 길이(±6m) 안의 접선들. 꺾이는 교차로에서는 이웃 접선 사이(회전 중) 방향이면 0, 아니면 가장 가까운 접선과의 각
       let herr = 180;
       for (let k = -12; k < 12; k++) {
@@ -104,7 +105,15 @@ async function ride8110() {
   const once = async (name) => { if (shotAt.has(name)) return; shotAt.add(name); await page.waitForTimeout(400); await shot(name); };
   for (let i = 0; i < 6000; i++) {
     const r = await page.evaluate(() => new Promise((ok) => { window.__jj.ride.debug.ff(0.2); requestAnimationFrame(() => ok(window.__e2e.snap())); }));
-    if (!r) break;
+    if (!r) { // 하차(종점 자동 하차 포함) — 같은 프레임에 정차 중이던 정류장도 기록
+      const fin = await page.evaluate(() => { const E = window.__e2e, b = E.lastB; return b && b.state === 'dwell' ? { path: E.lastP?.id, stopIdx: b.stopIdx, name: E.nameOf(E.lastP, b.stopIdx) } : null; });
+      if (fin?.name && (!res.stops.length || res.stops.at(-1).key !== fin.path + ':' + fin.stopIdx)) {
+        const p = await page.evaluate(() => window.__jj.player.position);
+        res.stops.push({ key: fin.path + ':' + fin.stopIdx, name: fin.name, at: [Math.round(p.x), Math.round(p.z)], alight: 1 });
+        if (/^판교역/.test(fin.name)) await once('4-arrive-pangyo');
+      }
+      break;
+    }
     res.n++; res.paths.add(r.path);
     if (process.env.E2E_PROGRESS && res.n % 100 === 0) console.log('…', res.n, r.path, r.s?.toFixed(0), Math.round(r.x), Math.round(r.z), r.dwell ? 'dwell ' + r.stop : '');
     res.maxHerr = Math.max(res.maxHerr, r.herr); res.minDet = Math.min(res.minDet, r.det); res.minUp = Math.min(res.minUp, r.upY);
