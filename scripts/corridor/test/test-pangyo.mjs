@@ -84,6 +84,10 @@ const tower = pg.landmarks.find((l) => l.model === 'pangyoTowers').parts[0], dec
 assert.ok(t07.blocked(...cen(tower.o)), 'tower collision');
 const deckPt = deck.o.map((p, i) => [(p[0] + deck.o[(i + 7) % deck.o.length][0]) / 2, (p[1] + deck.o[(i + 7) % deck.o.length][1]) / 2]).find(([x, z]) => inRing(x, z, deck.o));
 assert.ok(deckPt && !t07.blocked(...deckPt), 'deck walkable beneath');
+// [deck-v2] 데크 상판 10–12m('3~4층 높이' 기사 서술) · 엘리베이터는 OSM highway=elevator 노드만(지어내지 않음)
+assert.ok(deck.mh === 10 && deck.h === 12, `deck 10–12 m (got ${deck.mh}–${deck.h})`);
+const deckL = pg.landmarks.find((l) => l.model === 'pangyoDeck'), elevSrc = new Set(JSON.parse(fs.readFileSync(path.join(ROOT, 'data/osm_pangyo_deck_elevators.json'), 'utf8')).elements.map((e) => e.id));
+assert.ok(deckL.elevators.length >= 1 && deckL.elevators.every((e) => elevSrc.has(e.osm)), 'deck elevators from OSM');
 for (const e of st.exits) assert.ok(!t07.blocked(e.x, e.z) && !buildDetailTile('x', tiles[`${Math.floor(e.x / 500)}_${Math.floor(e.z / 500)}`], { terrain: null, onRoadAll: () => false }).onRoad(e.x, e.z), `exit ${e.ref} free`);
 t07.dispose();
 ok('station, exits free, landmark collisions');
