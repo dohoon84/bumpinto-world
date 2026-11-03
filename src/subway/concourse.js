@@ -8,7 +8,7 @@
 import * as THREE from 'three';
 import { createBuilder, createAtlas, FONT, fitText, lineBadge, roundRect } from './geom.js';
 import { JEONGJA_THEME } from './stations.js';
-import { HALL, CEIL, GATE, GATE_X, OFFICE, WELLS, DROP, RUN, COLUMNS, PASSAGE_LEN, passageFor, staticBlockers, walkable, passageAt, laneAt, nearWellTop, wellMouth } from './layout.js';
+import { HALL, CEIL, GATE, GATE_X, OFFICE, WELLS, DROP, RUN, COLUMNS, PASSAGE_LEN, passageFor, staticBlockers, walkable, passageAt, laneAt, nearWellTop, wellMouth, northGaps, cutSpans } from './layout.js';
 import { buildCrowd } from '../entities/avatarCrowd.js';
 import { createAvatar, animateAvatar } from '../entities/avatar.js';
 import { LOOKS } from './looks.js';
@@ -45,7 +45,7 @@ export function buildConcourse({ exits, groups, entryId, look, renderer, onToast
   const atlas = createAtlas(2048, 1024, 'concourse'); // 대합실 글자 전부 한 장 (안에 있을 때만, 나가면 dispose)
   const white = atlas.add(8, 8, (c, w, h) => { c.fillStyle = '#fff'; c.fillRect(0, 0, w, h); });
   const passages = groups.map((g) => ({ ...passageFor(g.dir), exits: g.exits }));
-  const blockers = staticBlockers();
+  const blockers = staticBlockers(passages);
 
   // ---------- 바닥 (1m 타일, 계단 구멍 제외) + 점자 블록 ----------
   const inWell = (x, z) => WELLS.some((w) => x >= w.x0 && x < w.x1 && z >= w.z0 && z < w.z1);
@@ -182,7 +182,10 @@ export function buildConcourse({ exits, groups, entryId, look, renderer, onToast
   }
   // 화장실 (x 4 ~ 11) + 물품보관함 (x 13 ~ 19) + 광고 (x 21 ~ 28)
   {
-    S.block(15, 0, -10.75, 30, CEIL, 0.3, '#e6e1d6'); S.block(15, 0, -10.58, 30, 1.3, 0.05, '#6f7a85');
+    const gaps = northGaps(passages); // 남쪽 출구(s 슬롯) 통로가 이 벽 뒤로 나 있으면 그 앞을 틔움
+    for (const [x0, x1] of cutSpans(0, 30, gaps)) { S.block((x0 + x1) / 2, 0, -10.75, x1 - x0, CEIL, 0.3, '#e6e1d6'); if (x1 > 3.5) S.block((Math.max(x0, 0) + x1) / 2, 0, -10.58, x1 - Math.max(x0, 0), 1.3, 0.05, '#6f7a85'); }
+    for (const [g0, g1] of gaps) if (g1 > 0) { for (const sx of [g0, g1]) S.block(sx, 0, (HALL.z0 - 10.6) / 2, 0.3, CEIL, -10.6 - HALL.z0, '#e6e1d6'); } // 틈 양옆 벽 (보관함 뒤 빈 공간 가림)
+    const inGap = (x0, x1) => gaps.some(([g0, g1]) => x1 > g0 && x0 < g1);
     for (const [x, col, ko, en] of [[5.8, '#1c7ed6', '남자', 'Men'], [9.2, '#e03131', '여자', 'Women']]) {
       S.block(x, 0, -10.56, 1.3, 2.3, 0.06, '#495057'); // 문틀(어두운 통로)
       const icon = atlas.add(96, 128, (c, w, h) => {
@@ -196,9 +199,9 @@ export function buildConcourse({ exits, groups, entryId, look, renderer, onToast
     }
     const wc = atlas.add(360, 72, (c, w, h) => { c.fillStyle = '#1f2a36'; c.fillRect(0, 0, w, h); c.fillStyle = '#fff'; c.textBaseline = 'middle'; c.textAlign = 'center'; c.font = `800 30px ${FONT}`; c.fillText('화장실  Restroom', w / 2, h / 2); });
     G.quad(7.5, 3.35, -10.55, 3.2, 0.64, '#ffffff', { uv: wc });
-    for (let i = 0; i < 4; i++) for (let j = 0; j < 4; j++) S.block(13.6 + i * 1.3, 0.2 + j * 0.55, -10.45, 1.2, 0.5, 0.25, ['#74c0fc', '#4dabf7', '#a5d8ff'][(i + j) % 3]);
+    let lkN = 0; for (let i = 0; i < 4; i++) { if (inGap(13.6 + i * 1.3 - 0.6, 13.6 + i * 1.3 + 0.6)) continue; lkN++; for (let j = 0; j < 4; j++) S.block(13.6 + i * 1.3, 0.2 + j * 0.55, -10.45, 1.2, 0.5, 0.25, ['#74c0fc', '#4dabf7', '#a5d8ff'][(i + j) % 3]); }
     const lk = atlas.add(300, 60, (c, w, h) => { c.fillStyle = '#1f2a36'; c.fillRect(0, 0, w, h); c.fillStyle = '#fff'; c.textBaseline = 'middle'; c.textAlign = 'center'; c.font = `700 26px ${FONT}`; c.fillText('물품보관함  Lockers', w / 2, h / 2); });
-    G.quad(15.5, 2.75, -10.55, 3.0, 0.6, '#ffffff', { uv: lk });
+    G.quad(lkN < 4 ? 14.2 : 15.5, 2.75, -10.55, lkN < 4 ? 2.4 : 3.0, lkN < 4 ? 0.48 : 0.6, '#ffffff', { uv: lk });
     const ad = atlas.add(420, 180, (c, w, h) => {
       const g = c.createLinearGradient(0, 0, w, h); g.addColorStop(0, '#845ef7'); g.addColorStop(1, '#22b8cf'); c.fillStyle = g; c.fillRect(0, 0, w, h);
       c.fillStyle = '#fff'; c.textAlign = 'left'; c.textBaseline = 'alphabetic'; c.font = `800 40px ${FONT}`; c.fillText(theme.ad.title, 24, 80);
@@ -531,6 +534,7 @@ export function buildConcourse({ exits, groups, entryId, look, renderer, onToast
     const p = me.position;
     let { f, s, run } = allowMove ? axes : { f: 0, s: 0, run: false };
     speed = 0; let towardWell = false;
+    if ((f || s) && me.userData.sit) me.userData.sit = ''; // [subway-pose] 걸으면 일어남 (바깥과 같게)
     if (f || s) {
       const fx = -Math.sin(cam.yaw), fz = -Math.cos(cam.yaw), rx = -fz, rz = fx;
       let mx = fx * f + rx * s, mz = fz * f + rz * s; const L = Math.hypot(mx, mz); mx /= L; mz /= L;
@@ -544,7 +548,7 @@ export function buildConcourse({ exits, groups, entryId, look, renderer, onToast
       speed = sp;
     }
     const li = laneAt(p.x, p.z, 1.3); if (li >= 0) tapLane(li, 'me');
-    if (self) { me.userData.emote = speed > 0 ? '' : (self.emote || ''); me.userData.afk = !!self.afk; } // [zone] 리액션·자리비움도 안에서 보이게
+    if (self) { me.userData.emote = speed > 0 ? '' : (self.emote || ''); me.userData.afk = !!self.afk; me.userData.jumpY = me.userData.sit ? 0 : (self.jy || 0); } // [zone] 리액션·자리비움·점프도 안에서 보이게
     animateAvatar(me, speed, dt);
     for (const ln of lanes) { ln.t -= dt; ln.ok -= dt; const want = ln.t > 0 ? 1 : 0; ln.open += Math.sign(want - ln.open) * Math.min(Math.abs(want - ln.open), dt * 4); }
     for (const n of npcs) updateNpc(n, dt);
@@ -577,5 +581,8 @@ export function buildConcourse({ exits, groups, entryId, look, renderer, onToast
   }
   // 스크린샷/디버그
   function setView(x, z, yaw, pitch = 0.3, dist = 6) { me.position.set(x, 0, z); cam.yaw = yaw; cam.pitch = pitch; cam.dist = dist; }
-  return { get lastPass() { return lastPass; }, get speed() { return speed; }, scene, camera, player: me, cam, passages, lanes, update, render, dispose, setView, npcs, stats: () => ({ tris: S.count + G.count, parts: crowd.parts.size, npcs: npcs.length }) };
+  // [subway-pose] 대합실엔 앉을 의자가 없어 바닥에 앉는다 (바깥 '바닥 앉기'와 같은 자세)
+  function sitDown() { if (!me.userData.sit) me.userData.sit = 'ground'; return me.userData.sit; }
+  function standUp() { me.userData.sit = ''; }
+  return { get sitKind() { return me.userData.sit || ''; }, sitDown, standUp, get lastPass() { return lastPass; }, get speed() { return speed; }, scene, camera, player: me, cam, passages, lanes, update, render, dispose, setView, npcs, stats: () => ({ tris: S.count + G.count, parts: crowd.parts.size, npcs: npcs.length }) };
 }

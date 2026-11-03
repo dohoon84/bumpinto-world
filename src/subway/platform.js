@@ -238,6 +238,19 @@ export function buildPlatform({ def, line, dir, renderer, look, feed = null, arr
     return true;
   }
   let speed = 0, upArmed = spawnDoor != null, pushT = 0, boardedSent = false;
+  // [subway-pose] 벤치 자리 (한 벤치 3자리, 앉아 있는 손님 자리는 피함). 없거나 멀면 바닥에 앉기
+  const benchSeats = benches.flatMap((xc) => [-1, 0, 1].map((k) => ({ x: xc + k * 1.0, z: Z0 + 0.55, ry: 0 })));
+  let seat = null;
+  function sitDown() {
+    if (me.userData.sit) return me.userData.sit;
+    const p = me.position;
+    const free = benchSeats.filter((q) => !npcs.some((n) => n.mode === 'sit' && n.mesh.visible && Math.hypot(n.mesh.position.x - q.x, n.mesh.position.z - q.z) < 0.6));
+    const q = free.sort((a, b) => Math.hypot(a.x - p.x, a.z - p.z) - Math.hypot(b.x - p.x, b.z - p.z))[0];
+    if (q && Math.hypot(q.x - p.x, q.z - p.z) < 1.6 && !inStair(p.x, p.z)) { seat = { ...q, back: { x: p.x, z: Math.max(p.z, Z0 + 1.15) } }; p.set(q.x, 0, q.z); me.rotation.y = q.ry; me.userData.sit = 'bench'; }
+    else me.userData.sit = 'ground';
+    return me.userData.sit;
+  }
+  function standUp() { if (seat) { me.position.set(seat.back.x, 0, seat.back.z); seat = null; } me.userData.sit = ''; }
   const inRoom = (x, z) => x > -half && x < half && z > Z0 + 0.1 && z < WALL_Z - 0.4;
 
   function update(dt, { look: [dy, dp, dz], axes, allowMove, self = null }) {
@@ -270,6 +283,7 @@ export function buildPlatform({ def, line, dir, renderer, look, feed = null, arr
     const p = me.position;
     let { f, s, run } = allowMove ? axes : { f: 0, s: 0, run: false };
     speed = 0;
+    if ((f || s) && me.userData.sit) standUp(); // [subway-pose] 걸으면 일어남
     if (f || s) {
       const fx = -Math.sin(cam.yaw), fz = -Math.cos(cam.yaw), rx = -fz, rz = fx;
       let mx = fx * f + rx * s, mz = fz * f + rz * s; const Lm = Math.hypot(mx, mz); mx /= Lm; mz /= Lm;
@@ -288,7 +302,7 @@ export function buildPlatform({ def, line, dir, renderer, look, feed = null, arr
     }
     // 탈 수 없는 방면이면 문 안으로 못 들어감
     if (!rides.length && p.z > -0.3) p.z = -0.3;
-    if (self) { me.userData.emote = speed > 0 ? '' : (self.emote || ''); me.userData.afk = !!self.afk; }
+    if (self) { me.userData.emote = speed > 0 ? '' : (self.emote || ''); me.userData.afk = !!self.afk; me.userData.jumpY = me.userData.sit ? 0 : (self.jy || 0); }
     animateAvatar(me, speed, dt);
     // 탑승 / 올라가기
     let ev = null;
@@ -317,7 +331,7 @@ export function buildPlatform({ def, line, dir, renderer, look, feed = null, arr
   function callTrain(sec = MOTION.APPROACH + 2) { sched = { at: now() + sec * 1000, run: sched?.run ?? 0, live: false }; said = ''; }
   return {
     kind: 'platform', zone, def, line, dir, lay, sign, rides, scene, camera, player: me, cam, update, render, dispose, setView, callTrain,
-    get speed() { return speed; }, get sched() { return sched; }, get lastPass() { return null; },
+    get speed() { return speed; }, get sched() { return sched; }, get lastPass() { return null; }, get sitKind() { return me.userData.sit || ''; }, sitDown, standUp, benchSeats,
     stats: () => ({ tris: S.count + G.count, parts: crowd.parts.size, npcs: npcs.length, doors: lay.doors.length }),
   };
 }

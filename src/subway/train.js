@@ -297,8 +297,9 @@ export function buildTrain({ origin, line, dir, rides, board, renderer, look, on
     drawStraps(THREE.MathUtils.clamp(-acc * 0.12, -0.25, 0.25) + Math.sin(clock * 2.1) * 0.02 * (v / RIDE.VMAX));
     // 이동
     const p = me.position;
-    let { f, s, run: runK } = allowMove && !sitting ? axes : { f: 0, s: 0, run: false };
+    let { f, s, run: runK } = allowMove ? axes : { f: 0, s: 0, run: false };
     speed = 0;
+    if ((f || s) && me.userData.sit) standUp(); // [subway-pose] 걸으면 일어남 (바깥과 같게)
     if (f || s) {
       const fx = -Math.sin(cam.yaw), fz = -Math.cos(cam.yaw), rx = -fz, rz = fx;
       let mx = fx * f + rx * s, mz = fz * f + rz * s; const Lm = Math.hypot(mx, mz); mx /= Lm; mz /= Lm;
@@ -311,12 +312,12 @@ export function buildTrain({ origin, line, dir, rides, board, renderer, look, on
       speed = sp;
     }
     if (!canAlight() && p.z < -(HW - 0.3)) p.z = -(HW - 0.3); // 문이 닫히면 안으로
-    if (self) { me.userData.emote = speed > 0 || sitting ? '' : (self.emote || ''); me.userData.afk = !!self.afk; }
+    if (self) { me.userData.emote = speed > 0 || sitting ? '' : (self.emote || ''); me.userData.afk = !!self.afk; me.userData.jumpY = me.userData.sit ? 0 : (self.jy || 0); }
     animateAvatar(me, speed, dt);
     for (const q of npcs) animateAvatar(q.mesh, 0, dt);
     // 카메라 (실내 안, 흔들림)
     const sway = Math.sin(clock * 1.7) * 0.012 * (v / RIDE.VMAX) + THREE.MathUtils.clamp(-acc * 0.02, -0.03, 0.03);
-    const eye = p.y + (sitting ? 1.15 : 1.55), bx = Math.sin(cam.yaw), bz = Math.cos(cam.yaw), cp = Math.cos(cam.pitch), spp = Math.sin(cam.pitch);
+    const eye = p.y + (me.userData.sit ? 1.15 : 1.55), bx = Math.sin(cam.yaw), bz = Math.cos(cam.yaw), cp = Math.cos(cam.pitch), spp = Math.sin(cam.pitch);
     let d = cam.dist;
     for (; d > 0.5; d -= 0.15) { const cx = p.x + bx * d * cp, cz = p.z + bz * d * cp; if (inCar(cx, cz)) break; }
     camera.position.set(p.x + bx * d * cp + sway, THREE.MathUtils.clamp(eye + d * spp, 0.5, CEIL - 0.12) + sway * 0.5, p.z + bz * d * cp);
@@ -338,10 +339,14 @@ export function buildTrain({ origin, line, dir, rides, board, renderer, look, on
   function toggleSit() {
     const p = me.position;
     if (sitting) { sitting.taken = false; p.z = Math.sign(sitting.z) * 0.4; sitting = null; me.userData.sit = ''; return 'stand'; }
+    if (me.userData.sit) { me.userData.sit = ''; return 'stand'; } // 바닥에 앉아 있었으면 일어나기
     const s = seats.filter((q) => !q.taken).sort((a, b) => Math.hypot(a.x - p.x, a.z - p.z) - Math.hypot(b.x - p.x, b.z - p.z))[0];
     if (!s || Math.hypot(s.x - p.x, s.z - p.z) > 1.6) return null;
     s.taken = true; sitting = s; p.set(s.x, 0, s.z); me.rotation.y = s.ry; me.userData.sit = 'bench'; return 'sit';
   }
+  // [subway-pose] C/앉기 버튼: 가까운 빈 좌석, 없으면 바닥 (바깥과 같게)
+  function sitDown() { if (me.userData.sit) return me.userData.sit; if (toggleSit() === 'sit') return 'bench'; me.userData.sit = 'ground'; return 'ground'; }
+  function standUp() { if (me.userData.sit) toggleSit(); }
   function render() { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.render(scene, camera); }
   function dispose() { for (const d of disposables) d.dispose?.(); scene.clear(); }
   function setView(x, z, yaw, pitch = 0.2, dist = 3) { me.position.set(x, 0, z); cam.yaw = yaw; cam.pitch = pitch; cam.dist = dist; }
@@ -349,7 +354,7 @@ export function buildTrain({ origin, line, dir, rides, board, renderer, look, on
   function skip(sec) { let r = null; for (let k = 0; k < sec * 10 && !r; k++) { r = tick(0.1); } return r; }
   return {
     kind: 'train', zone, line, dir, car, run, segs, scene, camera, player: me, cam, update, render, dispose, setView, toggleSit, skip, doors: DOOR_OFF, halfWidth: HW,
-    get speed() { return speed; }, get stage() { return stage; }, get stopIndex() { return i; }, get lastPass() { return null; }, get sitting() { return !!sitting; },
+    get speed() { return speed; }, get stage() { return stage; }, get stopIndex() { return i; }, get lastPass() { return null; }, get sitting() { return !!me.userData.sit; }, get sitKind() { return me.userData.sit || ''; }, sitDown, standUp,
     get t() { return t; }, get sNow() { return sNow; }, get doorOpen() { return open; }, get canAlight() { return canAlight(); },
     stats: () => ({ tris: S.count + G.count, parts: crowd.parts.size, npcs: npcs.length, seats: seats.length }),
   };

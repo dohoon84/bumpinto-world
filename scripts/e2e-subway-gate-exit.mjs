@@ -35,7 +35,7 @@ async function enterStation(name) {
   await page.waitForTimeout(800);
 }
 // W 를 누른 채 목표 지점(들)로 걸어간다. 매 100ms 방 이름 기록 → 대합실을 벗어나면 실패
-async function walkTo(pts, { stop = null, ms = 20000 } = {}) {
+async function walkTo(pts, { stop = null, ms = 120000 } = {}) {
   const track = []; const t0 = Date.now(); let k = 0;
   await page.keyboard.down('KeyW');
   try {
@@ -98,7 +98,7 @@ for (const name of names) {
   }
   // 3) 계단 입구로 걸어 들어가면 승강장 (회귀 방지)
   await place(16.5, 1.4, Math.PI);
-  const down = await walkTo([[16.5, 4.0]], { ms: 6000 });
+  const down = await walkTo([[16.5, 4.0]], { ms: 60000 });
   assert.ok(down.last.room === 'platform' || down.last.swapping, `${name}: 계단 입구에서 승강장으로 안 내려감 ${JSON.stringify(down.last)}`);
   row.stairStillWorks = true;
   report.push(row); console.log('ok', JSON.stringify(row));

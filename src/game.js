@@ -308,11 +308,11 @@ const selfPos = () => selfInterior?.player.position || player.position;
 const nameTag = overlay.add({
   cls: 'tag',
   text: me.name || '나',
-  getPos: () => (selfInterior ? selfPos().clone().setY(selfPos().y + 2.15) : player.position.clone().setY(player.position.y + (player.userData.jumpY || 0) + (player.userData.sit || player.userData.afk ? 1.55 : 2.15))),
+  getPos: () => (selfInterior ? selfPos().clone().setY(selfPos().y + (selfInterior.player.userData.jumpY || 0) + (selfInterior.player.userData.sit ? 1.55 : 2.15)) : player.position.clone().setY(player.position.y + (player.userData.jumpY || 0) + (player.userData.sit || player.userData.afk ? 1.55 : 2.15))),
   maxDist: 60,
 }); // [terrain] 높이 상대
 nameTag.hidden = !joined;
-const myBubble = new Bubble(overlay, 'me', () => (selfInterior ? selfPos().clone().setY(selfPos().y + 2.7) : player.position.clone().setY(player.position.y + (player.userData.jumpY || 0) + (player.userData.sit || player.userData.afk ? 2.15 : 2.7))), {
+const myBubble = new Bubble(overlay, 'me', () => (selfInterior ? selfPos().clone().setY(selfPos().y + (selfInterior.player.userData.jumpY || 0) + (selfInterior.player.userData.sit ? 2.15 : 2.7)) : player.position.clone().setY(player.position.y + (player.userData.jumpY || 0) + (player.userData.sit || player.userData.afk ? 2.15 : 2.7))), {
   getName: () => me.name || '나',
   getColor: () => me.color || '#4f7cff',
 }); // [terrain]
@@ -472,10 +472,11 @@ const subway = subwayOn ? mountSubway({
     myBubble.item.zone = zone;
     if (zone) emitMyStateNow();
   },
-  getSelf: () => ({ emote: myEmote, afk: myAfk }),
-  passKey: (e) => !!EMOTE_BY_CODE[e.code], // 리액션 숫자키는 안에서도
+  getSelf: () => ({ emote: myEmote, afk: myAfk, jy: jumpY }),
+  passKey: (e) => !!EMOTE_BY_CODE[e.code] || e.code === 'KeyC' || e.code === 'KeyZ' || e.code === 'Space', // 리액션 숫자키·C 앉기·Z 자리비움·Space 점프는 안에서도 (바깥과 같은 키)
 
   onExit: (e) => {
+    if (mySit || jumpY) { mySit = ''; sitExitPos = null; player.userData.sit = ''; jumpY = 0; jumpVel = 0; renderEmoteBar(); } // [subway-pose] 지하에서 앉은 채 나오면 일어선 채로
     if (!e) return;
     const { x, z, ry } = e.spawn;
     player.position.set(x, terrain ? terrain.getGroundHeight(x, z, e.y) : 0, z);
@@ -1375,6 +1376,7 @@ let myZzzTimer = 0;
 let nearSeatHint = null;
 
 function standUpFromSeat() {
+  if (subway?.active) { subway.standUp(); sitExitPos = null; mySit = ''; player.userData.sit = ''; return; } // [subway-pose]
   if (!mySit && !sitExitPos) return;
   if (sitExitPos) {
     const ty = terrain ? terrain.getGroundHeight(sitExitPos.x, sitExitPos.z, player.position.y) : 0;
@@ -1472,6 +1474,14 @@ function toggleSit() {
   myEmote = '';
   myEmoteUntil = 0;
   player.userData.emote = '';
+  if (subway?.active) { // [subway-pose] 대합실·승강장·열차: 벤치·좌석, 없으면 바닥
+    if (!subway.canPose) return;
+    mySit = subway.sitDown();
+    trackEvent('player_sit', { kind: mySit, subway: subway.room });
+    renderEmoteBar();
+    emitMyStateNow();
+    return;
+  }
   const seat = stationPlaza.findSeat?.(player.position.x, player.position.z);
   if (seat) {
     sitExitPos = {
@@ -1508,7 +1518,8 @@ function toggleAfk() {
   myEmote = '';
   myEmoteUntil = 0;
   player.userData.emote = '';
-  if (!mySit) {
+  if (!mySit && subway?.active) mySit = subway.canPose ? subway.sitDown() : ''; // [subway-pose]
+  else if (!mySit) {
     const seat = stationPlaza.findSeat?.(player.position.x, player.position.z);
     if (seat) {
       sitExitPos = {
@@ -2106,7 +2117,7 @@ function mergeVehicleNets(...parts) {
 // [zone] 대합실 안이면 실내 위치(구역 띠 좌표)와 리액션·자리비움만 보낸다. 바깥이면 null
 function subwayPresenceState() {
   const zs = subway?.netState();
-  return zs ? { ...zs, riding: false, jy: 0, emote: myEmote, sit: '', afk: myAfk, umb: '' } : null;
+  return zs ? { ...zs, riding: false, jy: Number(jumpY.toFixed(2)), emote: myEmote, sit: mySit, afk: myAfk, umb: '' } : null; // [subway-pose] 점프·앉기·자리비움도 같은 역 사람에게
 }
 function emitMyStateNow() {
   if (!joined) return;
@@ -2143,8 +2154,8 @@ setInterval(() => {
       idleTime += 1.0;
       if (!myAfk && idleTime >= AFK_TIMEOUT_SEC) {
         myAfk = true;
-        if (!mySit) mySit = 'ground';
-        player.userData.sit = mySit;
+        if (!mySit) mySit = subway?.active ? (subway.canPose ? subway.sitDown() : '') : 'ground'; // [subway-pose]
+        player.userData.sit = subway?.active ? '' : mySit;
         player.userData.afk = true;
         syncMyNameTag();
         renderEmoteBar();
@@ -2153,6 +2164,30 @@ setInterval(() => {
     emitMyStateNow();
   }
 }, 1000);
+// [subway-pose] 지하(대합실·승강장·열차): 점프 물리·앉기 동기화·자동 자리비움 — 바깥 frame() 과 같은 규칙
+function subwayPoseTick(dt, looked) {
+  const { f, s, jump } = input.axes();
+  const can = subway.canPose && joined && !board.open;
+  if (f || s || (jump && can)) wakeFromAfk();
+  else if (looked) wakeFromAfk();
+  if (can && jump && jumpY <= 0.001) { if (mySit) { standUpFromSeat(); renderEmoteBar(); } jumpVel = JUMP_V; }
+  if (!subway.canPose) { jumpY = 0; jumpVel = 0; }
+  if (jumpY > 0 || jumpVel > 0) { jumpY += jumpVel * dt; jumpVel -= JUMP_GRAVITY * dt; if (jumpY <= 0) { jumpY = 0; jumpVel = 0; } }
+  // 방이 직접 일어나게 한 경우(걷기·방 바뀜·열차 E) 내 상태도 맞춘다
+  const k = subway.sitKind;
+  if (subway.canPose && k !== mySit) { mySit = k; player.userData.sit = ''; renderEmoteBar(); emitMyStateNow(); }
+  const moving = (subway.inside?.speed || 0) > 0.05;
+  if (joined && !moving && !jumpY && !myEmote && !handset.open && !cameraApp?.open && !board.open && subway.canPose) {
+    idleTime += dt;
+    if (!myAfk && idleTime >= AFK_TIMEOUT_SEC) {
+      myAfk = true;
+      if (!mySit) mySit = subway.sitDown();
+      myZzzTimer = 0;
+      syncMyNameTag(); renderEmoteBar(); emitMyStateNow();
+    }
+  } else if (moving) idleTime = 0;
+  if (myAfk && subway.canPose) { myZzzTimer -= dt; if (myZzzTimer <= 0) { myZzzTimer = 1.6; emoteFx.spawnZzz(selfPos()); } }
+}
 const timer = new THREE.Timer();
 const tmp = new THREE.Vector3();
 let moveSpeed = 0;
@@ -2168,6 +2203,7 @@ function frame() {
   // [subway] 대합실 안: 대합실만 갱신·렌더하고 바깥 월드(NPC·버스·코리더 타일·그림자)는 통째로 건너뜀
   if (subway?.zone) remotes.update(dt); // [zone] 대합실에 있는 다른 사람 (그리기 전에 위치 갱신)
   if (subway?.active && subway.frame(dt, [dy, dp, dz], input.axes())) {
+    subwayPoseTick(dt, dy || dp || dz);
     if (myEmote && performance.now() > myEmoteUntil) {
       myEmote = ''; myEmoteUntil = 0;
       if (!emoteFolded) emoteBar?.querySelectorAll('.emote-btn.active').forEach((b) => b.classList.remove('active'));
@@ -2456,6 +2492,7 @@ window.__jj = {
   get ride() { return ride; }, remotes, presence, // [ride]
   cameraApp, // [camera]
   subway, // [subway]
+  get pose() { return { sit: mySit, afk: myAfk, jy: jumpY }; }, // [subway-pose] 테스트용
   bgm, // [bgm]
   nearNpc(i = 0, d = 3) { const n = npcs.list[i]; player.position.set(n.pos.x + d, 0, n.pos.z + d * 0.5); },
 };

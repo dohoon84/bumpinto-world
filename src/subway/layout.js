@@ -40,10 +40,18 @@ export function passageWalkRect(p, r = 0) {
 const inR = (r, x, z, m = 0) => x > r.x0 - m && x < r.x1 + m && z > r.z0 - m && z < r.z1 + m;
 
 // 고정 장애물 (상가·역무실·기둥·발매기·펜스). r: 원(기둥) 또는 사각형
-export function staticBlockers() {
+// 북쪽 벽 통로(n·s 슬롯) 앞을 비운 x 구간들 ([a,b] 를 통로 폭 +0.2 만큼 잘라냄)
+export function northGaps(passages = []) { return passages.filter((p) => p.wall === 'n').map((p) => [p.rect.x0 - 0.2, p.rect.x1 + 0.2]); }
+export function cutSpans(a, b, gaps) {
+  let out = [[a, b]];
+  for (const [g0, g1] of gaps) out = out.flatMap(([x0, x1]) => (g1 <= x0 || g0 >= x1 ? [[x0, x1]] : [[x0, g0], [g1, x1]].filter(([u, v]) => v - u > 0.05)));
+  return out;
+}
+export function staticBlockers(passages = []) {
   const B = [];
-  B.push({ x0: HALL.x0, x1: -5.5, z0: HALL.z0, z1: -8.6 });   // 북쪽 상가 줄 (편의점·분식) — 북쪽 통로 앞은 비움
-  B.push({ x0: 3.5, x1: HALL.x1, z0: HALL.z0, z1: -10.6 });   // 화장실·보관함 벽면
+  const gaps = northGaps(passages);
+  for (const [x0, x1] of cutSpans(HALL.x0, -5.5, gaps)) B.push({ x0, x1, z0: HALL.z0, z1: -8.6 });   // 북쪽 상가 줄 (편의점·분식) — 북쪽 통로 앞은 비움
+  for (const [x0, x1] of cutSpans(3.5, HALL.x1, gaps)) B.push({ x0, x1, z0: HALL.z0, z1: -10.6 });   // 화장실·보관함 벽면 — 남쪽 출구(s 슬롯) 통로 앞은 비움
   B.push({ ...OFFICE });
   B.push({ x0: HALL.x0, x1: GATE_X[0], z0: -0.15, z1: 0.15 }); // 펜스
   B.push({ x0: GATE_X[1], x1: OFFICE.x0, z0: -0.15, z1: 0.15 });

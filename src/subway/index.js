@@ -420,6 +420,11 @@ export function mountSubway({ scene, overlay, data, world, terrain, renderer, ge
     get inside() { return inside; },
     blocks: (x, z, r) => { for (const st of stations) if (st.ent && st.ent.blocks(x, z, r)) return true; return false; },
     outdoorTick, frame, onKey, netState,
+    // [subway-pose] 앉기(벤치·좌석, 없으면 바닥)·일어나기 — 지금 방(대합실·승강장·열차)에 맡김
+    get canPose() { return cur.state.phase === 'inside' && !!inside && !swap; },
+    sitDown() { return cur.state.phase === 'inside' && inside && !swap ? inside.sitDown?.() || '' : ''; },
+    standUp() { inside?.standUp?.(); },
+    get sitKind() { return inside && !swap ? inside.sitKind || '' : ''; },
     get zone() { return cur.state.interior && inside ? inside.zone || cur.theme.zone : ''; },
     get room() { return inside?.kind || ''; },
     get swapping() { return !!swap; },
