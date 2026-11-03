@@ -6,7 +6,7 @@ import { MAP_W, MAP_H, LAND, KOREA } from './worldLand.js';
 import { trackEvent } from './analytics.js';
 import { OPEN_REGIONS, UPCOMING_REGIONS, getCurrentRegion, getRegion, countryOf } from './regions/index.js';
 import { isEn, tr, toggleLang, onLangChange } from './i18n.js';
-import { corridorGlobeEnabled, mountGlobeCorridor, CORRIDOR_STATION_IDS, CORRIDOR_STATION_COUNT, corridorName, OPEN_BRANCH_IDS } from './corridor/globeCorridor.js'; // [corridor]
+import { corridorGlobeEnabled, mountGlobeCorridor, CORRIDOR_STATION_IDS, CORRIDOR_STATION_COUNT, corridorName, OPEN_BRANCH_IDS, OPEN_MAINLINE_STATIONS, OPEN_BRANCH_STATIONS } from './corridor/globeCorridor.js'; // [corridor]
 
 export { OPEN_REGIONS, UPCOMING_REGIONS };
 
@@ -410,12 +410,17 @@ export function openWorldGate({ onEnter }) {
     }
     root.querySelector('#gate-stat-online-lbl').textContent = tr('현재 거리 산책 중', 'Exploring Now');
     root.querySelector('#gate-stat-res-lbl').textContent = tr('누적 등록 입주민', 'Registered Citizens');
-    // [globe-open] 열린 지선 역(판교역)도 '오픈' 수에 넣는다 — 데이터(UPCOMING_REGIONS ∩ OPEN_BRANCH_IDS)에서 계산
+    // [globe-open] '오픈' 수 = 지역 수가 아니라 실제로 열린 역(입장 지점) 수. 같은 규칙으로 모든 나라를 센다:
+    //  - 구간(분당–잠실)이 켜진 지역: 노선도에 점으로 그려지는 역(OPEN_MAINLINE_STATIONS: 정자~잠실) + 열린 지선 역(OPEN_BRANCH_STATIONS: 판교)
+    //  - 그 밖의 열린 지역(예: Starbase): 역 목록(r.stations)이 있으면 그 수, 없으면 입장 지점 1곳
+    //  - 준비중: 아직 안 열린 장소(UPCOMING_REGIONS 중 구간 역이 아닌 것) 각 1곳 — 카운트다운 중인 Starbase 는 '열림'에서 빼고 따로 표시
     const openBranches = corridorGlobe ? UPCOMING_REGIONS.filter((r) => OPEN_BRANCH_IDS.has(r.id)) : [];
-    const openCount = (live ? OPEN_REGIONS.length : 1) + openBranches.length;
+    const stationsOf = (r) => (corridorGlobe && r.features?.corridor ? OPEN_MAINLINE_STATIONS.length : (r.stations?.length || 1));
+    const openCount = OPEN_REGIONS.filter((r) => live || r.id !== 'starbase').reduce((n, r) => n + stationsOf(r), 0)
+      + (corridorGlobe ? OPEN_BRANCH_STATIONS.length : 0);
     root.querySelector('#gate-regions-hd').textContent = tr(
-      `🌏 오픈 월드 지역 현황 (${openCount}곳 오픈${live ? '' : ' · 1곳 카운트다운'})`,
-      `🌏 Open World Regions (${openCount} Live${live ? '' : ' · 1 Countdown'})`,
+      `🌏 오픈 월드 지역 현황 (${openCount}개 역 오픈${live ? '' : ' · 1곳 카운트다운'})`,
+      `🌏 Open World Regions (${openCount} stations open${live ? '' : ' · 1 countdown'})`,
     );
     if (langBtn) langBtn.textContent = en ? '🌐 KO 한국어' : '🌐 EN English';
     root.querySelector('#gate-regions-ft').textContent = tr(
@@ -543,15 +548,15 @@ export function openWorldGate({ onEnter }) {
     } else {
       // [corridor] 국가별 섹션(아코디언): 국가 머리글을 누르면 그 아래로 지역 목록이 펼쳐진다
       const entries = [
-        { country: 'KR', open: true, html: corridorListHtml },
-        ...OPEN_REGIONS.filter((r) => r.id !== 'jeongja').map((r) => ({ country: countryOf(r), open: true, html: openItem(r) })),
-        ...openBranches.map((r) => ({ country: countryOf(r), open: true, html: branchOpenItem(r) })),
-        ...UPCOMING_REGIONS.filter((r) => !CORRIDOR_STATION_IDS.has(r.id)).map((r) => ({ country: countryOf(r), open: false, html: upcomingItem(r) })),
+        { country: 'KR', open: true, n: stationsOf(getRegion('jeongja')), html: corridorListHtml },
+        ...OPEN_REGIONS.filter((r) => r.id !== 'jeongja').map((r) => ({ country: countryOf(r), open: live || r.id !== 'starbase', n: stationsOf(r), html: openItem(r) })),
+        ...openBranches.map((r) => ({ country: countryOf(r), open: true, n: 1, html: branchOpenItem(r) })),
+        ...UPCOMING_REGIONS.filter((r) => !CORRIDOR_STATION_IDS.has(r.id)).map((r) => ({ country: countryOf(r), open: false, n: 1, html: upcomingItem(r) })),
       ];
       const order = [...new Set(['KR', 'US', ...entries.map((x) => x.country)])].filter((c) => entries.some((x) => x.country === c));
       regionsListEl.innerHTML = order.map((c) => {
         const meta = COUNTRY_META[c] || COUNTRY_META.ETC, items = entries.filter((x) => x.country === c);
-        const nOpen = items.filter((x) => x.open).length, nSoon = items.length - nOpen;
+        const nOpen = items.filter((x) => x.open).reduce((n, x) => n + x.n, 0), nSoon = items.filter((x) => !x.open).reduce((n, x) => n + x.n, 0); // [globe-open] 역 수
         const expanded = openCountry === c;
         const count = [nOpen ? tr(`열림 ${nOpen}`, `${nOpen} open`) : '', nSoon ? tr(`준비중 ${nSoon}`, `${nSoon} soon`) : ''].filter(Boolean).join(' · ');
         return `
