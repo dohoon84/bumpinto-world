@@ -6,7 +6,7 @@ import { MAP_W, MAP_H, LAND, KOREA } from './worldLand.js';
 import { trackEvent } from './analytics.js';
 import { OPEN_REGIONS, UPCOMING_REGIONS, getCurrentRegion, getRegion, countryOf } from './regions/index.js';
 import { isEn, tr, toggleLang, onLangChange } from './i18n.js';
-import { corridorGlobeEnabled, mountGlobeCorridor, CORRIDOR_STATION_IDS, CORRIDOR_STATION_COUNT, corridorName } from './corridor/globeCorridor.js'; // [corridor]
+import { corridorGlobeEnabled, mountGlobeCorridor, CORRIDOR_STATION_IDS, CORRIDOR_STATION_COUNT, corridorName, OPEN_BRANCH_IDS } from './corridor/globeCorridor.js'; // [corridor]
 
 export { OPEN_REGIONS, UPCOMING_REGIONS };
 
@@ -410,7 +410,9 @@ export function openWorldGate({ onEnter }) {
     }
     root.querySelector('#gate-stat-online-lbl').textContent = tr('현재 거리 산책 중', 'Exploring Now');
     root.querySelector('#gate-stat-res-lbl').textContent = tr('누적 등록 입주민', 'Registered Citizens');
-    const openCount = live ? OPEN_REGIONS.length : 1;
+    // [globe-open] 열린 지선 역(판교역)도 '오픈' 수에 넣는다 — 데이터(UPCOMING_REGIONS ∩ OPEN_BRANCH_IDS)에서 계산
+    const openBranches = corridorGlobe ? UPCOMING_REGIONS.filter((r) => OPEN_BRANCH_IDS.has(r.id)) : [];
+    const openCount = (live ? OPEN_REGIONS.length : 1) + openBranches.length;
     root.querySelector('#gate-regions-hd').textContent = tr(
       `🌏 오픈 월드 지역 현황 (${openCount}곳 오픈${live ? '' : ' · 1곳 카운트다운'})`,
       `🌏 Open World Regions (${openCount} Live${live ? '' : ' · 1 Countdown'})`,
@@ -517,6 +519,16 @@ export function openWorldGate({ onEnter }) {
             <em>${en ? 'OPEN · Enter' : '열림 · 입장'}</em>
           </button>
         </li>` : '';
+    // [globe-open] 열린 지선 역(판교역): '열림 · 입장' → 정자 월드에 ?at=<역 id> 와 같은 자리로 입장
+    const branchOpenItem = (r) => `
+        <li>
+          <button type="button" class="gate-upcoming-item is-open" data-enter-at="${r.id}">
+            <span class="dot open"></span>
+            <span class="name">${en ? (r.enName || r.name) : r.name}</span>
+            <small>${en ? (r.enDesc || r.desc) : r.desc}</small>
+            <em>${en ? 'OPEN · Enter' : '열림 · 입장'}</em>
+          </button>
+        </li>`;
     const upcomingItem = (r) => `
         <li>
           <button type="button" class="gate-upcoming-item" data-region="${r.id}">
@@ -533,6 +545,7 @@ export function openWorldGate({ onEnter }) {
       const entries = [
         { country: 'KR', open: true, html: corridorListHtml },
         ...OPEN_REGIONS.filter((r) => r.id !== 'jeongja').map((r) => ({ country: countryOf(r), open: true, html: openItem(r) })),
+        ...openBranches.map((r) => ({ country: countryOf(r), open: true, html: branchOpenItem(r) })),
         ...UPCOMING_REGIONS.filter((r) => !CORRIDOR_STATION_IDS.has(r.id)).map((r) => ({ country: countryOf(r), open: false, html: upcomingItem(r) })),
       ];
       const order = [...new Set(['KR', 'US', ...entries.map((x) => x.country)])].filter((c) => entries.some((x) => x.country === c));
@@ -797,6 +810,8 @@ export function openWorldGate({ onEnter }) {
       focusRegionOnGlobe('starbase');
       return;
     }
+    const atBtn = corridorGlobe && e.target.closest('[data-enter-at]');
+    if (atBtn) { enter('jeongja', false, { at: atBtn.dataset.enterAt }); return; } // [globe-open] 판교역 → ?at=pangyo 와 같은 입장
     if (corridorGlobe && e.target.closest('[data-corridor-open]')) {
       corridorGlobe.toggle(true);
       return;
