@@ -168,7 +168,8 @@ function buildTowers(l, { seed }) {
 //   높이·하단 높이·층수 = OSM 태그(build-pangyo.mjs, fl = building:levels − building:min_level). 층 띠는 (h − mh)/fl 간격.
 //   게임 기본값(공개 자료 없음, 표현용): 멀리언 간격 3m · 로비 유리 높이(포디움 높이 −0.6m) · 옥상 난간 1.2m · 기계실 3m
 // [ncsoft-v2] 참고 사진(남쪽 정면) 맞춤: 왼쪽 낮은 동(서동 8–40m) · 오른쪽 높은 동(동동 8–32m + 위 다리동) · 둘을 잇는 긴 다리동(32–58m)
-//   밑 큰 직사각 '하늘 구멍'. 절대 높이는 OSM 태그 그대로(사진 비례로는 다리동 밑면 ≈ 44m · 두께 ≈ 14m 로 보이나 OSM min_height 32 를 따름).
+//   밑 큰 직사각 '하늘 구멍'. 높이는 OSM 태그 그대로, 단 [ncsoft-44m] 다리동 밑면만 사진 기준값 44m(OSM min_height 32 → parts[].osm)
+//   + 그 밑 동동 윗면 32 → 44m (build-pangyo.mjs NC_PHOTO, 참고 사진 /workspace/bw-pangyo-shots/ref/ncsoft-reference.png).
 //   파사드 = 푸른 유리 커튼월 + 촘촘한 가로 띠(OSM 층당 2줄) + 6m 세로 멀리언, 다리동 밑면 짙은 색, 구멍 쪽 짙은 코어 띠(사진 표현).
 //   이름 표지·'nc' 로고 없음. 메시 2개(정점 색 본체 1 + 야간 창 불빛 1, 낮엔 숨김) · 재질은 모듈 공유(vcMat/glow) → 코리더 office 파사드 메시를 쓰지 않음.
 const NC_MULLION = 6, NC_BANDS_PER_FLOOR = 2;
