@@ -12,10 +12,10 @@ export function cameraEnabled(params) {
   return params?.get?.('camera') !== '0';
 }
 
-export function mountCamera({ handset, renderer, scene, camera, cam, params, sms, getInfo } = {}) {
+export function mountCamera({ handset, renderer, scene, camera, cam, params, sms, getInfo, getView } = {}) {
   if (!handset?.addApp || !cameraEnabled(params)) return null;
   const newsTip = NEWS_TIP_ENABLED || params?.get?.('newstip') === '1';
-  const ctx = { handset, renderer, scene, camera, cam, sms, getInfo, newsTip };
+  const ctx = { handset, renderer, scene, camera, cam, sms, getInfo, getView, newsTip };
   let loading = null;
   let app = null;
   const load = () => (loading ||= import('./cameraApp.js').then((m) => (app = m.createCameraApp(ctx))));

@@ -21,7 +21,7 @@ const until = (fn, arg, t = 60000) => page.waitForFunction(fn, arg, { timeout: t
 const settled = (room) => until((r) => __jj.subway.room === r && !__jj.subway.swapping, room, 40000);
 const info = () => page.evaluate(() => { const s = __jj.subway, i = s.inside, p = i?.player?.position; return { room: s.room, line: i?.line, dir: i?.dir, p: p ? [+p.x.toFixed(2), +p.y.toFixed(2), +p.z.toFixed(2)] : null }; });
 // W 를 누른 채 조건이 될 때까지 (매 100ms 기록: 최고 높이·멈춤 여부)
-async function walk(yaw, doneFn, arg, ms = 15000) {
+async function walk(yaw, doneFn, arg, ms = 15000, midShot = '') {
   await page.evaluate((y) => { const i = __jj.subway.inside; i.cam.yaw = y; }, yaw);
   const track = []; const t0 = Date.now();
   await page.keyboard.down('KeyW');
@@ -30,6 +30,7 @@ async function walk(yaw, doneFn, arg, ms = 15000) {
     await page.waitForTimeout(100);
     const v = await page.evaluate(({ y, arg, src }) => { const s = __jj.subway; if (s.inside && !s.swapping) s.inside.cam.yaw = y; const p = s.inside?.player?.position; return { done: new Function('arg', src)(arg), room: s.room, swapping: s.swapping, y: p?.y ?? 0, z: p?.z ?? 0, x: p?.x ?? 0 }; }, { y: yaw, arg, src: `return (${doneFn.toString()})(arg)` });
     track.push(v);
+    if (midShot && v.room === 'platform' && v.y > 0.45) { await page.screenshot({ path: midShot }); midShot = ''; }
     if (v.done) { ok = true; break; }
   }
   await page.keyboard.up('KeyW');
@@ -68,7 +69,9 @@ for (const name of ['정자', '수내']) {
     // 승강장: 플랫폼으로 3m 걸어 나왔다가(입구 틈 확인) 돌아서 '나가는 곳' 계단으로 걸어 올라가기
     const outW = await walk(Math.PI, (z) => __jj.subway.inside.player.position.z > z, onPlat.p[2] + 3, 4000);
     assert.ok(outW.ok, `${name} dir${dir}: 계단 아래에서 승강장으로 못 나옴`);
-    const up = await walk(0, () => __jj.subway.room === 'concourse' && !__jj.subway.swapping, null);
+    const tag = `${name === '정자' ? 'jeongja' : 'sunae'}-${dir}`;
+    if (SHOTS) { await page.evaluate(() => { const c = __jj.subway.inside.cam; c.yaw = 0; c.pitch = 0.12; c.dist = 5; }); await page.waitForTimeout(700); await page.screenshot({ path: `${SHOTS}/stairs-${tag}-wayout-opening.png` }); }
+    const up = await walk(0, () => __jj.subway.room === 'concourse' && !__jj.subway.swapping, null, 15000, SHOTS ? `${SHOTS}/stairs-${tag}-climbing.png` : '');
     const maxY = Math.max(...up.track.filter((v) => v.room === 'platform').map((v) => v.y));
     const stairSteps = up.track.filter((v) => v.room === 'platform' && v.z < -5);
     if (SHOTS) await page.screenshot({ path: `${SHOTS}/stairs-${name === '정자' ? 'jeongja' : 'sunae'}-${dir}-back-in-concourse.png` });

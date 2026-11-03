@@ -457,6 +457,7 @@ const trashBins = region.id === 'jeongja'
 const subwayCanEnter = () => joined && !bikes.riding && !adminBike?.riding && !giftRiding() && !ride?.active && !trucks?.current;
 const subway = subwayOn ? mountSubway({
   scene, overlay, data, world, terrain, renderer, params,
+  getAudioLevel: () => (bgm ? { muted: bgm.player.muted, volume: bgm.player.volume } : null), // [subway-voice] 안내 방송 = BGM HUD 음소거·볼륨
   corridor, getPlayer: () => player, // [subway] 코리더 역(수내~잠실) 출입구. ?corridor=0 이면 정자역만
   getLook: () => me.look,
   canEnter: () => subwayCanEnter(),
@@ -1909,7 +1910,11 @@ if (ride) { ride.setOverlay(overlay); remotes.rideHook = (p, dt) => ride.remoteH
 const perfHud = mountPerfHud({ renderer, corridor, params });
 const cameraApp = mountCamera({ // [camera]
   handset, renderer, scene, camera, cam, params, sms,
-  getInfo: () => ({ region: region.id, regionName: region.name, regionEnName: region.enName || region.name, x: player.position.x, z: player.position.z, name: me?.name || '' }),
+  getInfo: () => {
+    const sp = subway?.active ? { ko: subway.place(false), en: subway.place(true) } : null; // [camera] 지하: '정자역 · 수인분당선 승강장' 등
+    return { region: region.id, regionName: sp?.ko || region.name, regionEnName: sp?.en || region.enName || region.name, x: player.position.x, z: player.position.z, name: me?.name || '' };
+  },
+  getView: () => subway?.view() || null, // [camera] 지하에서는 대합실·승강장·열차 장면을 찍는다 (바깥 장면 아님)
 });
 if (travel && params.get('at')) travel.go(params.get('at'));
 // [corridor] 지구본 역 선택 → 입장 완료 후 역 출구 앞 인도로 (위치 저장 성공 여부와 무관)
@@ -2173,6 +2178,7 @@ function frame() {
     emoteFx.update(dt, innerWidth, innerHeight);
     perfHud.tick();
     memHud.tick();
+    bgm?.setDuck(!!subway.voiceActive); // [subway-voice] 지하(대합실·승강장·열차)에선 이 경로로 돌므로 여기서도 안내 방송 중 BGM 줄임
     requestAnimationFrame(frame);
     return;
   }
@@ -2431,7 +2437,7 @@ function frame() {
   sun.position.copy(sun.target.position).addScaledVector(atmosphere.sunDir, 500);
   renderer.render(scene, camera);
   perfHud.tick();
-  bgm?.setDuck(!!ride?.active || !!adminBike?.riding || !!giftMount()); // [bgm] 버스·바이크 소리가 날 때 살짝 줄임 (바뀔 때만 동작)
+  bgm?.setDuck(!!ride?.active || !!adminBike?.riding || !!giftMount() || !!subway?.voiceActive); // [bgm] 버스·바이크 소리 · [subway-voice] 지하철 안내 방송 중 살짝 줄임 (바뀔 때만 동작)
   memHud.tick();
   overlay.update(innerWidth, innerHeight);
   emoteFx.update(dt, innerWidth, innerHeight);

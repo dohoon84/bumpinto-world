@@ -88,7 +88,7 @@ export function createSubwayVoice({
     if (!synth || !Utterance || !v) { log({ t: 'skip', why: !synth || !Utterance ? 'no-tts' : 'no-voice', lang: it.lang }); cur = null; return next(); }
     try {
       const u = new Utterance(it.text);
-      u.lang = it.lang; u.voice = v; u.rate = it.k === 'ko' ? 1.02 : 0.98; u.volume = lv.volume;
+      u.lang = it.lang; try { u.voice = v; } catch { /* lang 만으로 */ } u.rate = it.k === 'ko' ? 1.02 : 0.98; u.volume = lv.volume;
       u.onend = () => finish(my); u.onerror = () => finish(my);
       spoke = true; synth.speak(u);
       log({ t: 'speak', lang: it.lang, text: it.text, volume: +lv.volume.toFixed(2) });

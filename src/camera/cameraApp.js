@@ -31,7 +31,10 @@ function fmtWhen(ms) {
   return `${d.getFullYear()}.${p(d.getMonth() + 1)}.${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
 }
 
-export function createCameraApp({ handset, renderer, scene, camera, cam, sms, getInfo, newsTip = false }) {
+export function createCameraApp({ handset, renderer, scene, camera, cam, sms, getInfo, getView, newsTip = false }) {
+  // [camera] 지금 화면에 그려지는 장면·카메라. 지하(대합실·승강장·열차)는 자기 장면·카메라를 쓰므로 getView 가 그것을 준다
+  const view = () => { let v = null; try { v = getView?.(); } catch {} return v?.scene && v?.camera ? { scene: v.scene, camera: v.camera, cam: v.cam ?? cam } : { scene, camera, cam }; };
+  let zCam = camera; // 줌(fov)을 바꾼 카메라 — 닫을 때 이 카메라의 fov 를 되돌린다
   // [photo-cloud] 로그인해 있으면 보관함을 번호 서버와 맞춘다. 기기 저장(IndexedDB)이 먼저고, 서버가 없거나 꺼져 있으면 조용히 기기만.
   const cloud = createPhotoCloud({ sms, store: photoStore, makeThumb, enabled: photoCloudEnabled() });
   const syncPhotos = () => cloud.sync().then((changed) => {
@@ -75,10 +78,18 @@ export function createCameraApp({ handset, renderer, scene, camera, cam, sms, ge
 
   function applyZoom(z) {
     zoom = z;
+    const camera = syncZoomCam();
     const half = (baseFov * Math.PI) / 360;
     camera.fov = (Math.atan(Math.tan(half) / z) * 360) / Math.PI;
     camera.updateProjectionMatrix();
     root?.querySelectorAll('.cam-zoom button').forEach((b) => b.classList.toggle('on', Number(b.dataset.z) === z));
+  }
+
+  // 방이 바뀌면(승강장 → 열차) 앞 카메라 fov 를 되돌리고 새 카메라 기준으로 다시
+  function syncZoomCam() {
+    const c = view().camera;
+    if (c !== zCam) { zCam.fov = baseFov; zCam.updateProjectionMatrix(); zCam = c; baseFov = c.fov; }
+    return c;
   }
 
   function zoomLabel(z, on) {
@@ -153,7 +164,7 @@ export function createCameraApp({ handset, renderer, scene, camera, cam, sms, ge
       case 'close': closeViewfinder(); break;
       case 'shoot': shoot(); break;
       case 'grid': grid = !grid; root.classList.toggle('grid-on', grid); b.classList.toggle('on', grid); break;
-      case 'flip': if (cam) cam.yaw += Math.PI; break;
+      case 'flip': { const c = view().cam; if (c) c.yaw += Math.PI; } break;
       case 'library': closeViewfinder(); handset.openApp('photos'); break;
       default: break;
     }
@@ -163,7 +174,8 @@ export function createCameraApp({ handset, renderer, scene, camera, cam, sms, ge
   function openViewfinder() {
     if (root) return;
     if (document.body.classList.contains('in-gate') || document.body.classList.contains('in-lobby')) return;
-    baseFov = camera.fov;
+    zCam = view().camera;
+    baseFov = zCam.fov;
     zoom = 1;
     root = document.createElement('div');
     root.className = 'cam-root';
@@ -203,8 +215,9 @@ export function createCameraApp({ handset, renderer, scene, camera, cam, sms, ge
     root.remove();
     root = null;
     document.body.classList.remove('cam-mode');
-    camera.fov = baseFov;
-    camera.updateProjectionMatrix();
+    zCam.fov = baseFov;
+    zCam.updateProjectionMatrix();
+    zCam = camera;
     zoom = 1;
     if (lastThumbUrl) { URL.revokeObjectURL(lastThumbUrl); lastThumbUrl = ''; }
     if (audio) { audio.close().catch(() => {}); audio = null; }
@@ -219,7 +232,9 @@ export function createCameraApp({ handset, renderer, scene, camera, cam, sms, ge
       playShutter(audio);
       const fl = root.querySelector('.cam-flash');
       fl.classList.remove('go'); void fl.offsetWidth; fl.classList.add('go');
-      const shot = await captureScene({ renderer, scene, camera, rect: frameRect() });
+      if (zoom !== 1) applyZoom(zoom); // 방이 바뀌었으면 새 카메라에도 같은 줌
+      const v = view();
+      const shot = await captureScene({ renderer, scene: v.scene, camera: v.camera, rect: frameRect() });
       if (!root) return;
       openReview({ ...shot, takenAt: Date.now(), info: info() });
     } catch (err) {
