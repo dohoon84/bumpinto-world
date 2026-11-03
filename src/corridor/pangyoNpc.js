@@ -71,7 +71,15 @@ const SHOW_R = 140, LOD_R = 55, PLACE_R = 170, REPLACE_R = 230, LABEL_R = 28, TA
 const now = () => (typeof performance !== 'undefined' ? performance.now() : Date.now());
 
 // opts: pg(판교 index.json) · baseUrl · overlay · terrain · isFree(x,z) · freeSpot(x,z) · tileReady(key) · seed · getHour · fetchJson
-export function createPangyoNpc({ pg, baseUrl = '', overlay = null, terrain = null, isFree = () => true, freeSpot = (x, z) => ({ x, z }), tileReady = () => true, seed = 4242, getHour = gameHour, fetchJson = null, count = MAX_NPC } = {}) {
+// 성능 측정용: ?pangyonpcn=N → 시간대와 무관하게 N명 상시 (배우 풀도 N). 평소엔 없음
+export function pangyoNpcForce(search = typeof location !== 'undefined' ? location.search : '') {
+  const n = parseInt(new URLSearchParams(search).get('pangyonpcn'), 10);
+  return n > 0 ? Math.min(n, 400) : 0;
+}
+
+export function createPangyoNpc({ pg, baseUrl = '', overlay = null, terrain = null, isFree = () => true, freeSpot = (x, z) => ({ x, z }), tileReady = () => true, seed = 4242, getHour = gameHour, fetchJson = null, count = 0, force = pangyoNpcForce() } = {}) {
+  count = force || count || MAX_NPC;
+  const dens = (h) => { const d = densityAt(h); return force ? { ...d, count: force } : d; };
   let rs = seed; const rnd = () => ((rs = (rs * 16807) % 2147483647) / 2147483647);
   const pick = (a) => a[Math.floor(rnd() * a.length)];
   const P = propShared();
@@ -81,7 +89,9 @@ export function createPangyoNpc({ pg, baseUrl = '', overlay = null, terrain = nu
 
   // ---------- 장소 ----------
   const deckL = pg?.landmarks?.find((l) => l.model === 'pangyoDeck');
-  const deck = deckL?.parts?.[0] ? { o: deckL.parts[0].o, holes: deckL.parts[0].holes || [], y: deckL.parts[0].h, key: tileKey(deckL.pos.x, deckL.pos.z), x: deckL.pos.x, z: deckL.pos.z } : null;
+  // 데크 높이 = 공유 데이터(pangyo/index.json 의 landmark part h — landmarks/pangyo.js buildDeck 이 같은 값으로 상판을 만든다). 하드코딩 없음
+  const deckParts = (deckL?.parts || []).filter((p) => p.o?.length >= 3 && Number.isFinite(p.h)).map((p) => ({ o: p.o, holes: p.holes || [], y: p.h }));
+  const deck = deckParts.length ? { parts: deckParts, y: Math.max(...deckParts.map((p) => p.y)), key: tileKey(deckL.pos.x, deckL.pos.z), x: deckL.pos.x, z: deckL.pos.z } : null;
   const exits = (pg?.stations || []).flatMap((s) => s.exits || []);
   let spots = { station: [], company: [], food: [] };
   function buildSpots() {
@@ -115,19 +125,21 @@ export function createPangyoNpc({ pg, baseUrl = '', overlay = null, terrain = nu
     }
     return pts.length >= 6 ? pts : null;
   }
-  const deckOk = (x, z) => inRing(x, z, deck.o) && !deck.holes.some((h) => inRing(x, z, h)) && [deck.o, ...deck.holes].every((r) => r.every((p, i) => segD(x, z, p[0], p[1], r[(i + 1) % r.length][0], r[(i + 1) % r.length][1]) > 1.6));
+  const partOk = (d) => (x, z) => inRing(x, z, d.o) && !d.holes.some((h) => inRing(x, z, h)) && [d.o, ...d.holes].every((r) => r.every((p, i) => segD(x, z, p[0], p[1], r[(i + 1) % r.length][0], r[(i + 1) % r.length][1]) > 1.6));
+  // 데크 위 경로: 상판 하나를 골라 그 안(가장자리 1.6m 안쪽)만 걷는다 → [경로, 그 상판 높이]
   function deckPath() {
-    const xs = deck.o.map((p) => p[0]), zs = deck.o.map((p) => p[1]);
     for (let t = 0; t < 20; t++) {
+      const d = deck.parts[Math.floor(rnd() * deck.parts.length)], ok = partOk(d);
+      const xs = d.o.map((p) => p[0]), zs = d.o.map((p) => p[1]);
       const x = Math.min(...xs) + rnd() * (Math.max(...xs) - Math.min(...xs)), z = Math.min(...zs) + rnd() * (Math.max(...zs) - Math.min(...zs));
-      if (deckOk(x, z)) { const p = freePath(x, z, deckOk, 2, 18); if (p) return p; }
+      if (ok(x, z)) { const p = freePath(x, z, ok, 2, 18); if (p) return [p, d.y]; }
     }
-    return null;
+    return [null, null];
   }
 
   // ---------- 배우(아바타 풀) ----------
   const actors = [];
-  for (let i = 0; i < Math.min(MAX_NPC, count); i++) {
+  for (let i = 0; i < count; i++) {
     const look = officeLook(rnd);
     const b = rnd(); if (b < 0.4) look.bag = pick(BAGS); // 백팩(기존 아바타 bag 부품)
     const mesh = createAvatar(look);
@@ -151,9 +163,15 @@ export function createPangyoNpc({ pg, baseUrl = '', overlay = null, terrain = nu
   const relabel = () => { for (const a of actors) if (a.tag) a.tag.el.textContent = labelOf(a); };
   const stopLang = onLangChange(relabel);
 
+  // 회사 입구 NPC 는 그 회사 이니셜. 역·식당·데크 NPC 는 '위치가 확인된 모든 회사' 중 이니셜을 고르게(K 가 여러 곳이어도 K 한 표) 뽑는다
+  const byInitial = () => {
+    const m = new Map(); for (const c of data?.companies || []) { if (!m.has(c.initial)) m.set(c.initial, []); m.get(c.initial).push(c); }
+    return [...m.values()];
+  };
+  let groups = null;
   const companyOf = (s) => {
-    const list = data?.companies || [];
-    const c = s?.company || (list.length ? list[Math.floor(rnd() * list.length)] : { initial: 'K', kind: 'platform' });
+    groups ||= byInitial();
+    const c = s?.company || (groups.length ? pick(pick(groups)) : { initial: 'K', kind: 'platform' });
     return { initial: c.initial, kind: c.kind, role: pick(rolePool(c.kind)) };
   };
   function chooseKind(mix) {
@@ -167,7 +185,7 @@ export function createPangyoNpc({ pg, baseUrl = '', overlay = null, terrain = nu
       let path = null, yFix = null, sp = null;
       if (kind === 'deck') {
         if (!deck || !near(deck) || !tileReady(deck.key)) continue;
-        path = deckPath(); yFix = deck.y;
+        [path, yFix] = deckPath();
       } else {
         const cand = (spots[kind] || []).filter(near);
         if (!cand.length) continue;
@@ -199,8 +217,8 @@ export function createPangyoNpc({ pg, baseUrl = '', overlay = null, terrain = nu
   const hide = (a) => { if (a.spot) { a.spot.load--; a.spot = null; } a.path = null; a.shown = false; a.mesh.visible = false; if (a.bubble) a.bubble.item.hidden = true; };
 
   let lastRender = -1e9;
-  let D = densityAt(getHour()), dAcc = 99, chk = 99, sayAcc = 0, lastSay = -99, clock = 0;
-  const stats = { active: 0, placed: 0, visible: 0, period: D.period, target: D.count, byKind: {}, props: 3 };
+  let D = dens(getHour()), dAcc = 99, chk = 99, sayAcc = 0, lastSay = -99, clock = 0;
+  const stats = { active: 0, placed: 0, visible: 0, period: D.period, target: D.count, byKind: {}, props: 3, cpuMs: 0, pool: count };
   function say(a) {
     if (!a.bubble || !a.shown) return false;
     const pool = LINES[D.period] || [], all = pool.concat(LINES.any), l = all[Math.floor(rnd() * all.length)];
@@ -216,8 +234,8 @@ export function createPangyoNpc({ pg, baseUrl = '', overlay = null, terrain = nu
     register(crowd) { for (const a of actors) a.parts = crowd.register(a.mesh); },
     // 매 프레임 crowd.begin() ~ crowd.end() 사이 (코리더 보행 NPC 갱신 직후)
     render(crowd, dt, fx, fz) {
-      lastRender = now(); clock += dt; dAcc += dt; chk += dt; sayAcc += dt;
-      if (dAcc > 2) { dAcc = 0; D = densityAt(getHour()); stats.period = D.period; stats.target = D.count; }
+      const t0 = now(); lastRender = t0; clock += dt; dAcc += dt; chk += dt; sayAcc += dt;
+      if (dAcc > 2) { dAcc = 0; D = dens(getHour()); stats.period = D.period; stats.target = D.count; }
       if (!data) return;
       let have = 0; for (const a of actors) if (a.path) have++;
       const check = chk > 1 || have < D.count / 2; if (check) chk = 0; // 처음 채울 땐 매 프레임
@@ -259,6 +277,7 @@ export function createPangyoNpc({ pg, baseUrl = '', overlay = null, terrain = nu
       // 가끔 근처(25m) 사람 한 명이 혼잣말
       if (sayAcc > 9) { sayAcc = 0; const c = actors.filter((a) => a.shown && !a.said && Math.hypot(a.mesh.position.x - fx, a.mesh.position.z - fz) < 25); if (c.length && rnd() < 0.6 && clock - lastSay > 5) say(c[Math.floor(rnd() * c.length)]); }
       Object.assign(stats, { active: act, placed, visible: vis, byKind });
+      stats.cpuMs = stats.cpuMs * 0.95 + (now() - t0) * 0.05; // 프레임당 NPC 갱신 비용(지수 평균)
     },
     say: (i) => say(actors[i]),
     dispose() { stopLang(); for (const a of actors) { if (a.tag) overlay.remove(a.tag); if (a.bubble) overlay.remove(a.bubble.item); } },

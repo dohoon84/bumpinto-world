@@ -103,8 +103,23 @@ let n = 0; const ok = (name) => { n++; console.log('ok', n, name); };
   const ex = pg.stations.flatMap((s) => s.exits);
   for (const a of N.actors) if (a.kind === 'station') assert.ok(ex.some((e) => Math.hypot(a.path[0][0] - e.x, a.path[0][1] - e.z) < 2 || Math.hypot(a.path.at(-1)[0] - e.x, a.path.at(-1)[1] - e.z) < 2));
   for (const a of N.actors) if (a.path) assert.match(a.tag ? a.tag.el.textContent : 'K', /^[A-Z]/);
-  const deckActors = N.actors.filter((a) => a.kind === 'deck');
-  assert.ok(deckActors.every((a) => a.yFix === N.deck.y), '데크 위 사람은 데크 높이');
+  const deckActors = N.actors.filter((a) => a.kind === 'deck' && a.path);
+  const deckH = pg.landmarks.find((l) => l.model === 'pangyoDeck').parts.map((q) => q.h);
+  assert.ok(deckActors.length > 0 && deckActors.every((a) => deckH.includes(a.yFix)), '데크 위 사람은 데이터의 데크 상판 높이');
+  // 이니셜: 역·식당·데크 NPC 는 위치 확인된 모든 회사 이니셜이 고르게, 회사 입구는 자기 회사
+  const mix = {}, inits = [...new Set(data.companies.map((c) => c.initial))];
+  for (let r = 0; r < 12; r++) {
+    for (const a of N.actors) if (a.path) {
+      if (a.kind === 'company') assert.equal(a.who.initial, a.spot.company.initial);
+      else mix[a.who.initial] = (mix[a.who.initial] || 0) + 1;
+    }
+    for (const a of N.actors) a.path && (a.leaving = true);
+    run(265, -3110, 120);
+  }
+  const tot = Object.values(mix).reduce((s, v) => s + v, 0);
+  for (const i of inits) assert.ok((mix[i] || 0) / tot > 0.5 / inits.length, `이니셜 ${i} 비율 ${JSON.stringify(mix)}`);
+  assert.ok((mix.K || 0) / tot < 1.6 / inits.length, `K 쏠림 ${JSON.stringify(mix)}`);
+  console.log('   initial mix (station/food/deck):', JSON.stringify(mix));
   // 점심: 식당·광장 위주
   hour = 12.5; run(265, -3110, 30);
   for (const a of N.actors) a.path && (a.leaving = true);
@@ -122,7 +137,14 @@ let n = 0; const ok = (name) => { n++; console.log('ok', n, name); };
   await N2.loading; N2.register(crowd);
   for (let i = 0; i < 100; i++) N2.render(crowd, 0.1, 265, -3110);
   assert.equal(N2.stats.placed, 0);
-  ok('runtime placement, density, culling, tile gating');
+  // 데크를 올리면(다른 작업: 10–12m) NPC 도 데이터 높이를 따라간다
+  const pgHi = JSON.parse(JSON.stringify(pg)); for (const q of pgHi.landmarks.find((l) => l.model === 'pangyoDeck').parts) { q.mh = 10.5; q.h = 11.5; }
+  const N3 = createPangyoNpc({ pg: pgHi, fetchJson: async () => data, getHour: () => 12.5 });
+  await N3.loading; N3.register(crowd);
+  for (let i = 0; i < 400; i++) N3.render(crowd, 0.1, 255, -3115);
+  const d3 = N3.actors.filter((a) => a.kind === 'deck' && a.path);
+  assert.ok(d3.length > 0 && d3.every((a) => a.yFix === 11.5 && Math.abs(a.mesh.position.y - 11.5) < 1e-6), '데크 높이 변경 추종');
+  ok('runtime placement, density, culling, tile gating, initial mix, deck height follows data');
 }
 
 // 8) 데이터 없으면 조용히 비활성
