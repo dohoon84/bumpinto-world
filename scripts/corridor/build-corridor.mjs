@@ -348,7 +348,8 @@ const stations = pIndex.stations.filter((s) => s.id !== 'jeongja').map((s) => ({
 const landmarks = pIndex.landmarks.filter((l) => l.pos || l.fit).map((l) => ({ id: l.id, label: l.label || null, model: l.model || null, params: l.params || null, fit: l.fit || null, pos: l.pos || null, hide: l.hide || null }));
 
 // ---------- 쓰기 ----------
-fs.rmSync(OUT, { recursive: true, force: true });
+// [pangyo] pangyo/ (build-pangyo.mjs 결과)는 남긴다 — 코리더를 다시 구우면 npm run corridor:pangyo 도 다시 실행(중복 제거 기준이 코리더 타일)
+for (const f of fs.existsSync(OUT) ? fs.readdirSync(OUT) : []) if (f !== 'pangyo') fs.rmSync(path.join(OUT, f), { recursive: true, force: true });
 fs.mkdirSync(path.join(OUT, 'tiles'), { recursive: true });
 if (tancheonStr) fs.writeFileSync(path.join(OUT, 'tancheon.json'), tancheonStr);
 const tiles = {}; let tileBytes = 0;
