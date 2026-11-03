@@ -103,7 +103,12 @@ export function createTerrain(T, data) {
     return { ...s, k, ax: a[0], az: a[1], h0: a[2], h1: b[2], L, ux, uz, n: s.steps, hw: s.w / 2 };
   };
   // [pangyo-water] 본류 계단 아래 끝(둔치)도 낙차만큼 내리고 단 수를 비례로 늘림
-  const dropStair = (s) => { const b = s.flight[1], d = mainDrop(b[0], b[1]); return d < 0 && b[2] < 0 ? { ...s, flight: [s.flight[0], [b[0], b[1], b[2] + d]], steps: Math.round((s.steps * (b[2] + d)) / b[2]), riser: +((s.flight[0][2] - b[2] - d) / Math.round((s.steps * (b[2] + d)) / b[2])).toFixed(3) } : s; };
+  const dropStair = (s) => {
+    const [a, b] = s.flight, d = mainDrop(b[0], b[1]);
+    if (!(d < 0 && b[2] < 0)) return s;
+    const steps = Math.round((s.steps * (b[2] + d)) / b[2]);
+    return { ...s, flight: [a, [b[0], b[1], b[2] + d]], steps, riser: +((a[2] - b[2] - d) / steps).toFixed(3) };
+  };
   const stairs = (T.stairs || []).map((s, k) => mkStair(MD ? dropStair(s) : s, k));
   // 지류 계단: 높이·메시에는 쓰지만 탄천 산책 경로(riversideRoute/bankPath, export stairs)에는 넣지 않음
   const streamStairs = (streams ? streams.stairs : []).map((s, k) => mkStair(s, stairs.length + k));
