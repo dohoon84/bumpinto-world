@@ -10,6 +10,7 @@ import * as THREE from 'three';
 import { Taxis } from '../entities/taxis.js';
 import { createTaxi, pickLivery, TAXI_LIVERIES } from '../entities/taxiModel.js';
 import { createAvatar, animateAvatar } from '../entities/avatar.js';
+import { buildCrowd } from '../entities/avatarCrowd.js'; // [life] 보행 NPC 인스턴싱 (붕어빵 줄 손님도 같이 씀)
 import { createTruck, truckShared, COLORS as TRUCK_PAINT, DIM } from '../entities/truckModel.js'; // [life] 스타베이스 'Steel Truck' (로고 없음)
 import { isEvening, watchEvening } from '../evening.js';
 
@@ -264,56 +265,6 @@ function lookFor(i, r) {
   return look;
 }
 
-// [life] 보행 NPC 인스턴싱: 아바타(장면 밖 Object3D)를 그대로 애니메이션한 뒤, 부품(공유 지오메트리)별 InstancedMesh 에 행렬·색을 쓴다.
-//   → 보행자 수와 무관하게 draw call 은 부품 종류 수(≈20)로 고정. 55m 밖에서는 눈·안경 같은 작은 부품은 생략(LOD)
-function buildCrowd(group) {
-  const parts = new Map();
-  const shown = (o, root) => { for (let p = o; p && p !== root; p = p.parent) if (!p.visible) return false; return true; };
-  return {
-    parts,
-    register(root) {
-      root.updateMatrixWorld(true);
-      const list = [];
-      root.traverse((o) => {
-        if (!o.isMesh || Array.isArray(o.material)) return;
-        const m = o.material;
-        const lam = m.isMeshLambertMaterial && !m.map && !m.transparent && m.side === THREE.FrontSide && (!m.emissive || m.emissive.getHex() === 0);
-        const key = (lam ? 'L|' : 'M|' + m.uuid + '|') + o.geometry.uuid;
-        let P = parts.get(key);
-        if (!P) parts.set(key, (P = { geo: o.geometry, mat: lam ? null : m, lam, cast: o.castShadow, cap: 0, n: 0, im: null }));
-        P.cap++;
-        if (!o.geometry.boundingSphere) o.geometry.computeBoundingSphere();
-        list.push({ o, P, small: o.geometry.boundingSphere.radius < 0.09 });
-      });
-      return list;
-    },
-    finalize() {
-      for (const P of parts.values()) {
-        const im = new THREE.InstancedMesh(P.geo, P.lam ? new THREE.MeshLambertMaterial({ color: '#ffffff' }) : P.mat, Math.max(1, P.cap));
-        im.count = 0; im.castShadow = P.cast; im.receiveShadow = true; im.frustumCulled = false; im.name = 'corridorCrowd';
-        if (P.lam) im.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(Math.max(1, P.cap) * 3), 3);
-        P.im = im; group.add(im);
-      }
-    },
-    begin() { for (const P of parts.values()) P.n = 0; },
-    add(root, list, far) {
-      root.updateMatrixWorld(true);
-      for (const it of list) {
-        if ((far && it.small) || !shown(it.o, root)) continue;
-        const P = it.P; if (P.n >= P.im.instanceMatrix.count) continue;
-        P.im.setMatrixAt(P.n, it.o.matrixWorld);
-        if (P.lam) P.im.setColorAt(P.n, it.o.material.color);
-        P.n++;
-      }
-    },
-    end() {
-      for (const P of parts.values()) {
-        P.im.count = P.n; P.im.visible = P.n > 0;
-        if (P.n) { P.im.instanceMatrix.needsUpdate = true; if (P.im.instanceColor) P.im.instanceColor.needsUpdate = true; }
-      }
-    },
-  };
-}
 
 // 선분까지 거리
 const segDist = (x, z, ax, az, bx, bz) => { const dx = bx - ax, dz = bz - az, L2 = dx * dx + dz * dz || 1; const k = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / L2)); return Math.hypot(x - ax - dx * k, z - az - dz * k); };
