@@ -62,7 +62,16 @@ export function signText(def, line, dir) {
   };
 }
 // 안내 방송 (자막). 한국 지하철 안내 방송 형식을 따른 일반 문구 (특정 운영사 녹음 원문 아님)
+// [subway-voice] 녹음 파일 이름용 슬러그 (영문 역명/방면 → 'wangsimni', 'jamsil-sports-complex')
+export const clipSlug = (s) => String(s || '').toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+// 안내 방송 문구 + kind·clip(녹음 교체용 이름: public/audio/subway/<clip>.<ko|en>.<ogg|m4a>)
 export function announce(kind, o = {}) {
+  const a = announceText(kind, o);
+  if (!a.ko) return a;
+  const key = clipSlug(['approach', 'arrived', 'noRide'].includes(kind) ? (o.dirEn || '').replace(/^for /, '') : kind === 'closing' ? '' : (o.nameEn || o.name));
+  return { ...a, kind, clip: key ? `${kind}-${key}` : kind };
+}
+function announceText(kind, o = {}) {
   const dKo = (o.dirKo || '').replace(/ 방면$/, ''), dEn = (o.dirEn || '').replace(/^for /, '');
   switch (kind) {
     case 'approach': return { ko: `지금 ${dKo} 방면으로 가는 열차가 들어오고 있습니다. 안전선 밖으로 한 걸음 물러서 주시기 바랍니다.`, en: `The train bound for ${dEn} is now approaching. Please step back from the platform screen doors.` };
