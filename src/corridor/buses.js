@@ -73,6 +73,7 @@ export function createCorridorBuses(root, T, { crossings, terrain, overlay, live
     let m = pool.get(key)?.pop(); if (m) pooled--;
     if (!m) { m = createBus(v.ref, v.type, v.name); m.userData.key = key; }
     m.visible = true; group.add(m);
+    { const r = terrain?.freshRef?.(v.x, v.z, v.heading); if (r != null) m.position.y = r; } // [pangyo-express] 풀 메시의 지난 높이 대신 고속도로 상판/지면 기준
     const lv = liveryOf(v.type);
     const tag = overlay.add({ cls: 'tag bus', text: `🚌 ${v.ref} · ${lv.label}${v.live ? ' · 실시간' : ''}`, getPos: () => m.position.clone().setY(m.position.y + 4.4), maxDist: 70 });
     tag.el.style.background = lv.plain ? '#2c3e6b' : lv.color;

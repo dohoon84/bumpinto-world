@@ -17,15 +17,16 @@ import { createCorridorLife } from './life.js';
 import { extractLifeHints, gatherLifeHints } from './lifeHints.js'; // [life] 동네별 보행자·주차 위치 힌트
 import { setNightCut, updateNight } from './nightLights.js';
 import { pangyoEnabled, pangyoLinkEnabled, mergePangyoIndex, fetchCorridorTile, PANGYO_DIR } from './pangyo.js'; // [pangyo]
+import { pangyoExpressEnabled, PANGYO_EXPRESS_FILE, filterExpressHidden, buildPangyoExpress } from './pangyoExpress.js'; // [pangyo-express]
 import { createPangyoLandmarks } from './landmarks/pangyo.js'; // [pangyo]
 import { isEn, onLangChange } from '../i18n.js'; // [pangyo-link] 판교역 라벨 KO/EN
 
 // streams: 탄천 지류 하도(streams.json). ?streams=0 이면 false → 예전과 같은 데이터만
 // [pangyo] pangyo: 판교역 일대(pangyo/index.json). ?pangyo=0 이면 false → 요청 없음
-export async function loadCorridorData(baseUrl, { streams = true, pangyo = pangyoEnabled() } = {}) {
+export async function loadCorridorData(baseUrl, { streams = true, pangyo = pangyoEnabled(), pangyoExpress = pangyo && pangyoExpressEnabled() } = {}) {
   const get = (f) => fetch(baseUrl + f).then((r) => (r.ok ? r.json() : null)).catch(() => null);
-  const [index, base, tancheon, streamsData, pg] = await Promise.all([get('index.json'), get('base.json'), get('tancheon.json'), streams ? get('streams.json') : null, pangyo ? get(PANGYO_DIR + 'index.json') : null]);
-  return index && base ? { index: mergePangyoIndex(index, pg), base, baseUrl, tancheon, streams: streamsData, pangyo: pg } : null;
+  const [index, base, tancheon, streamsData, pg, pgx] = await Promise.all([get('index.json'), get('base.json'), get('tancheon.json'), streams ? get('streams.json') : null, pangyo ? get(PANGYO_DIR + 'index.json') : null, pangyo && pangyoExpress ? get(PANGYO_EXPRESS_FILE) : null]);
+  return index && base ? { index: mergePangyoIndex(index, pg), base, baseUrl, tancheon, streams: streamsData, pangyo: pg, pangyoExpress: pg ? pgx : null } : null; // [pangyo-express]
 }
 // [corridor] 탄천 지형: 코리더가 켜졌을 때만 라이브 terrain.json 뒤에 수내→잠실 축/단면을 이어 붙인다(라이브 구간 값은 그대로)
 export function corridorTerrainData(terrainData, corridorData) {
@@ -129,6 +130,7 @@ export function createCorridor({ scene, corridorData, terrain, world, renderer, 
     return (t.dPromise = fetchCorridorTile(getJson, t, 'tiles').then((j) => {
       if (t.dState !== 1) return; // 그 사이 언로드
       if (!j) { t.dState = 0; return; }
+      j = filterExpressHidden(corridorData.pangyoExpress, t.key, 'tiles', j); // [pangyo-express] 평면 고가차도 리본 빼기
       if (SD) prepStreamTile(j, SD.tiles[t.key], 'tile');
       t.dData = j; t.dState = 2; buildQueue.push({ kind: 'd', key: t.key });
     }));
@@ -139,6 +141,7 @@ export function createCorridor({ scene, corridorData, terrain, world, renderer, 
     fetchCorridorTile(getJson, t, 'lod').then((j) => {
       if (t.lState !== 1) return;
       if (!j) { t.lState = 0; return; }
+      j = filterExpressHidden(corridorData.pangyoExpress, t.key, 'lod', j); // [pangyo-express]
       if (SD) prepStreamTile(j, SD.lod[t.key], 'lod');
       t.lData = j; t.lState = 2; buildQueue.push({ kind: 'l', key: t.key });
     });
@@ -257,6 +260,8 @@ export function createCorridor({ scene, corridorData, terrain, world, renderer, 
   const crossings = buildCorridorCrossings(root, base.crossings, { getSimTime });
   const landmarks = createLandmarks(root, index.landmarks, renderer);
   const pangyoLm = corridorData.pangyo ? createPangyoLandmarks(corridorData.pangyo, { overlay }) : null; // [pangyo]
+  const pangyoEx = corridorData.pangyoExpress ? buildPangyoExpress(corridorData.pangyoExpress) : null; // [pangyo-express] 판교IC~경부 합류(메시 2개, 늘 붙어 있음)
+  if (pangyoEx) root.add(pangyoEx.group);
   const tower = index.landmarks.find((l) => l.id === 'lotte-world-tower');
   let lotte = null;
   if (tower) {
@@ -278,6 +283,7 @@ export function createCorridor({ scene, corridorData, terrain, world, renderer, 
   const api = {
     root, bounds, stations, tiles, stats, crossings, landmarks, inLive,
     pangyo: pangyoLm, // [pangyo] null 이면 꺼짐(?pangyo=0)
+    pangyoExpress: pangyoEx, // [pangyo-express] null 이면 꺼짐(?pangyoexpress=0 · ?pangyo=0)
     liveBox: live, // [ride]
     get lotte() { return lotte; },
     isBlocked: corridorBlocked, onRoad: corridorOnRoad,
@@ -286,7 +292,7 @@ export function createCorridor({ scene, corridorData, terrain, world, renderer, 
     attachLife({ proxy, mode, liveDrive = null, liveCrossings = null } = {}) { // [ride] liveDrive: 정자 차도(읽기 전용, 정자 택시 호출용)
       const pgLink = !!corridorData.pangyo && pangyoLinkEnabled(); // [pangyo-link] 판교역: 택시/보행 NPC 역 목록 + 버스 8110(정자역→판교역, 정자 쪽과 같이 ?bus=sim 일 때만) (?pangyolink=0 끔)
       if (life || params?.get('clife') === '0') return life;
-      life = createCorridorLife({ root, baseUrl, crossings, terrain, terrainT: corridorData.terrainT, world, overlay, stations: pgLink ? index.stations.concat(corridorData.pangyo.stations || []) : index.stations, pangyoLink: pgLink && mode === 'sim', liveBox: live, params, proxy, mode, liveDrive, liveCrossings, renderer, hints: (x, z, r) => gatherLifeHints(loaded, x, z, r) });
+      life = createCorridorLife({ root, baseUrl, crossings, terrain, terrainT: corridorData.terrainT, world, overlay, stations: pgLink ? index.stations.concat(corridorData.pangyo.stations || []) : index.stations, pangyoLink: pgLink && mode === 'sim', express: corridorData.pangyoExpress, liveBox: live, params, proxy, mode, liveDrive, liveCrossings, renderer, hints: (x, z, r) => gatherLifeHints(loaded, x, z, r) });
       return life;
     },
     get life() { return life; },
