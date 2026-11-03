@@ -16,7 +16,7 @@ import { addInstancedTrees } from '../world/trees.js';
 import { createCorridorLife } from './life.js';
 import { extractLifeHints, gatherLifeHints } from './lifeHints.js'; // [life] 동네별 보행자·주차 위치 힌트
 import { setNightCut, updateNight } from './nightLights.js';
-import { pangyoEnabled, mergePangyoIndex, fetchCorridorTile, PANGYO_DIR } from './pangyo.js'; // [pangyo]
+import { pangyoEnabled, pangyoLinkEnabled, mergePangyoIndex, fetchCorridorTile, PANGYO_DIR } from './pangyo.js'; // [pangyo]
 import { createPangyoLandmarks } from './landmarks/pangyo.js'; // [pangyo]
 
 // streams: 탄천 지류 하도(streams.json). ?streams=0 이면 false → 예전과 같은 데이터만
@@ -189,7 +189,7 @@ export function createCorridor({ scene, corridorData, terrain, world, renderer, 
   }
 
   // ---------- 역 표지판 + 라벨 ----------
-  // [pangyo] 판교역은 라벨·표지판·이동(?at=pangyo)에만 넣는다. 버스/차량 NPC(attachLife)는 index.stations 그대로
+  // [pangyo] 판교역은 라벨·표지판·이동(?at=pangyo)에 넣는다. 버스/차량 NPC(attachLife)에는 [pangyo-link] 가 켜졌을 때만 더한다
   const stations = index.stations.concat(corridorData.pangyo?.stations || []).map((s) => ({ ...s, sign: null }));
   for (const s of stations) {
     const lines = s.lines || [];
@@ -269,8 +269,9 @@ export function createCorridor({ scene, corridorData, terrain, world, renderer, 
     afterTerrain() { addOuterGround(); },
     // 버스·차량·보행 NPC (수내 → 롯데). game.js 가 버스 프록시가 정해진 뒤 한 번 부른다. ?clife=0 이면 끔
     attachLife({ proxy, mode, liveDrive = null, liveCrossings = null } = {}) { // [ride] liveDrive: 정자 차도(읽기 전용, 정자 택시 호출용)
+      const pgLink = !!corridorData.pangyo && pangyoLinkEnabled(); // [pangyo-link] 판교역: 택시/보행 NPC 역 목록 + 버스 8110(정자역→판교역, 정자 쪽과 같이 ?bus=sim 일 때만) (?pangyolink=0 끔)
       if (life || params?.get('clife') === '0') return life;
-      life = createCorridorLife({ root, baseUrl, crossings, terrain, terrainT: corridorData.terrainT, world, overlay, stations: index.stations, liveBox: live, params, proxy, mode, liveDrive, liveCrossings, renderer, hints: (x, z, r) => gatherLifeHints(loaded, x, z, r) });
+      life = createCorridorLife({ root, baseUrl, crossings, terrain, terrainT: corridorData.terrainT, world, overlay, stations: pgLink ? index.stations.concat(corridorData.pangyo.stations || []) : index.stations, pangyoLink: pgLink && mode === 'sim', liveBox: live, params, proxy, mode, liveDrive, liveCrossings, renderer, hints: (x, z, r) => gatherLifeHints(loaded, x, z, r) });
       return life;
     },
     get life() { return life; },
