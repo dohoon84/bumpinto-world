@@ -13,6 +13,13 @@
 //   출력: { v, cell, meta:{counts…}, cells: { "cx_cz": [x, z, yaw, kind, …] } }  — 250 m 칸별 평면 배열
 //         kind 0 = 큰길(10 m), 1 = 작은 길(0.72배), 2 = OSM 가로등(큰길 크기), 3 = 탄천 공원등(0.45배)
 //
+//   [pangyo] --pangyo: 판교역 일대(public/corridor/pangyo/index.json 의 meta.boxes) 안만 다시 굽는다 → public/corridor/pangyo/streetlights.json
+//     - 도로·건물: 코리더 타일 + 판교 타일(mode new 는 판교 것만, add 는 뒤에 덧붙임) + 판교 랜드마크 부품(백화점·알파돔·데크·NCSOFT)
+//     - 판교에선 밑면이 11 m 보다 낮은 매스(광장 데크 10 m, NCSOFT 8 m 다리동 등)도 장애물 → 데크·다리 밑엔 10 m 기둥을 세우지 않는다
+//     - OSM 가로등: data/osm_pangyo_streetlights_raw.json (data/query_pangyo_streetlights.overpassql) — 2026-11-03 기준 0개라 규칙 배치
+//     - 범위 밖 코리더 가로등(public/corridor/streetlights.json)을 먼저 깔아 경계에서 겹치지 않게 함(출력엔 안 넣음)
+//     - 광장 데크 위: 가장자리에서 DECK.inset 안쪽으로 DECK.sp 간격 보행등(kind 4, 4.5 m, y = 데크 윗면)
+//     출력: { v, meta, boxes, lamps: [x, z, yaw, kind, y, …] } (y = -1 이면 지형 높이)
 //   사용: npm run corridor:streetlights [-- --osm=../bumpinto-world/data/raw/osm_merged.json] [--out=public/corridor/streetlights.json] [--verbose]
 import fs from 'node:fs';
 import path from 'node:path';
@@ -24,7 +31,10 @@ const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), '../.
 const VERBOSE = process.argv.includes('--verbose');
 const CACHE = path.join(ROOT, 'data/osm_streetlights_raw.json');
 const OSM_SRC = cliArg('osm', null);
-const OUT = path.resolve(ROOT, cliArg('out', 'public/corridor/streetlights.json'));
+const PG = process.argv.includes('--pangyo'); // [pangyo]
+const OUT = path.resolve(ROOT, cliArg('out', PG ? 'public/corridor/pangyo/streetlights.json' : 'public/corridor/streetlights.json'));
+const PG_CACHE = path.join(ROOT, 'data/osm_pangyo_streetlights_raw.json');
+const DECK = { sp: 18, inset: 1.6, elev: 4, dup: 10, scale: 0.45 }; // [pangyo] 데크 위 보행등
 const readJSON = (f) => JSON.parse(fs.readFileSync(f, 'utf8'));
 
 export const CELL = 250; // 런타임 src/world/streetlights.js 와 같아야 함
@@ -68,7 +78,10 @@ const r1 = (v) => Math.round(v * 10) / 10, r3 = (v) => Math.round(v * 1000) / 10
 const CI = readJSON(path.join(ROOT, 'public/corridor/index.json'));
 const LB = CI.meta.liveBox, TS = CI.meta.tileSize, BB = CI.meta.bounds;
 const inLive = (x, z) => x >= LB.x0 && x <= LB.x1 && z >= LB.z0 && z <= LB.z1;
-const inArea = (x, z) => inLive(x, z) || !!CI.tiles[`${Math.floor(x / TS)}_${Math.floor(z / TS)}`];
+const PGI = PG ? readJSON(path.join(ROOT, 'public/corridor/pangyo/index.json')) : null; // [pangyo]
+const PGB = PGI?.meta.boxes || [];
+const inPangyo = (x, z) => PGB.some((b) => x >= b.x0 && x <= b.x1 && z >= b.z0 && z <= b.z1);
+const inArea = PG ? inPangyo : (x, z) => inLive(x, z) || !!CI.tiles[`${Math.floor(x / TS)}_${Math.floor(z / TS)}`];
 
 // ---- OSM 캐시 (가로등 · 정류장 · 쉘터 · 나무) ----
 function rewriteCache(src) {
@@ -91,6 +104,7 @@ function rewriteCache(src) {
 }
 if (OSM_SRC) rewriteCache(OSM_SRC);
 const osm = fs.existsSync(CACHE) ? readJSON(CACHE).elements : [];
+if (PG) osm.push(...readJSON(PG_CACHE).elements.filter((e) => !osm.some((o) => o.id === e.id))); // [pangyo]
 
 // ---- 입력: 도로 · 건물 · 횡단보도 · 정류장 ----
 const roads = [];   // { p, w, k, br, o:[oh,ot], src }
@@ -99,10 +113,24 @@ for (const r of live.roads) roads.push({ ...r, src: 'live' });
 for (const b of live.buildings) if (!((b.mh || 0) >= 2.5)) blds.push(b.o);
 const base = readJSON(path.join(ROOT, 'public/corridor/base.json'));
 for (const r of base.ch) roads.push({ ...r, src: 'ch' });
+const MH_MAX = PG ? 11 : 2.5; // [pangyo] 판교: 밑면 11 m 미만 매스(데크 10 m 등)도 막음
 for (const key of Object.keys(CI.tiles).sort()) {
   const t = readJSON(path.join(ROOT, 'public/corridor/tiles', key + '.json'));
   for (const r of t.r) roads.push({ ...r, src: 'tile' });
-  for (const b of t.b) if (!((b.mh || 0) >= 2.5)) blds.push(b.o);
+  for (const b of t.b) if (!((b.mh || 0) >= MH_MAX)) blds.push(b.o);
+}
+const deckParts = [];
+if (PG) { // [pangyo] 판교 타일(new = 판교만, add = 덧붙임) + 랜드마크 부품
+  for (const [key, ti] of Object.entries(PGI.tiles).sort()) {
+    const t = readJSON(path.join(ROOT, 'public/corridor/pangyo/tiles', key + '.json'));
+    if (ti.mode !== 'add' && CI.tiles[key]) continue;
+    for (const r of t.r || []) roads.push({ ...r, src: 'tile' });
+    for (const b of t.b || []) if (!((b.mh || 0) >= MH_MAX)) blds.push(b.o);
+  }
+  for (const l of PGI.landmarks) for (const p of l.parts || []) {
+    if (!((p.mh || 0) >= MH_MAX)) blds.push(p.o);
+    if (l.id === 'pangyo-deck') deckParts.push({ ...p, elevators: l.elevators || [] });
+  }
 }
 const liveTransit = readJSON(path.join(ROOT, 'public/transit.json'));
 const corTransit = readJSON(path.join(ROOT, 'public/corridor/transit.json'));
@@ -236,6 +264,15 @@ function blockedAt(x, z, nx, nz, s, own) {
   return null;
 }
 
+// [pangyo] 0) 범위 밖 코리더 가로등을 먼저 깐다(겹침 판정용, 출력 안 함)
+if (PG) {
+  const main = readJSON(path.join(ROOT, 'public/corridor/streetlights.json'));
+  for (const arr of Object.values(main.cells)) for (let i = 0; i < arr.length; i += 4) {
+    const x = arr[i], z = arr[i + 1];
+    if (!inPangyo(x, z) && PGB.some((b) => x > b.x0 - 60 && x < b.x1 + 60 && z > b.z0 - 60 && z < b.z1 + 60)) accept({ x, z, yaw: arr[i + 2], kind: arr[i + 3], src: 'seed', cls: 'seed' });
+  }
+}
+
 // 1) OSM 가로등
 let osmUsed = 0;
 for (const L of osmLamps.sort((a, b) => a.id - b.id)) {
@@ -353,7 +390,49 @@ for (const r of parkRoads) {
   }
 }
 
+// [pangyo] 4) 광장 데크 위 보행등 — 데크 외곽에서 안쪽으로 inset, 둘레를 따라 sp 간격. 엘리베이터·구멍 근처 · 다른 매스 안은 건너뜀
+let deckN = 0;
+if (PG) for (const part of deckParts) {
+  const o = part.o, n = o.length;
+  let area = 0; for (let i = 0; i < n; i++) { const a = o[i], b = o[(i + 1) % n]; area += a[0] * b[1] - b[0] * a[1]; }
+  const per = []; let tot = 0;
+  for (let i = 0; i < n; i++) { const a = o[i], b = o[(i + 1) % n], L = Math.hypot(b[0] - a[0], b[1] - a[1]); if (L > 1e-3) { per.push({ a, b, L, s0: tot }); tot += L; } }
+  const elev = (part.elevators || []).map((e) => [e.x, e.z]);
+  for (let s = DECK.sp / 2; s < tot; s += DECK.sp) {
+    let done = false, last = null;
+    for (const d of NUDGE) {
+      const ss = (s + d + tot) % tot; let k = 0; while (k < per.length - 1 && per[k].s0 + per[k].L < ss) k++;
+      const g = per[k], t = (ss - g.s0) / g.L, tx = (g.b[0] - g.a[0]) / g.L, tz = (g.b[1] - g.a[1]) / g.L;
+      let nx = -tz, nz = tx; // 왼쪽 법선. 안쪽 판정은 점 검사로
+      const px = g.a[0] + (g.b[0] - g.a[0]) * t, pz = g.a[1] + (g.b[1] - g.a[1]) * t;
+      if (!inRing(px + nx * DECK.inset, pz + nz * DECK.inset, o)) { nx = -nx; nz = -nz; }
+      const x = px + nx * DECK.inset, z = pz + nz * DECK.inset;
+      let b = null;
+      if (!inRing(x, z, o) || ringDist(x, z, o) < DECK.inset - 0.3) b = 'deck-edge';
+      else if ((part.holes || []).some((h) => inRing(x, z, h) || ringDist(x, z, h) < 1.5)) b = 'deck-hole';
+      else if (elev.some(([ex, ez]) => Math.hypot(ex - x, ez - z) < DECK.elev)) b = 'deck-elevator';
+      else if (!inPangyo(x, z)) b = 'area';
+      else if (placed.some((l) => l.kind === 4 && Math.hypot(l.x - x, l.z - z) < DECK.dup)) b = 'dup';
+      if (b) { last = b; continue; }
+      accept({ x, z, yaw: yawOf(nx, nz), kind: 4, y: part.h, src: 'deck', cls: 'deck' }); deckN++; done = true; break;
+    }
+    if (!done) why(last);
+  }
+}
+
 // ---- 출력 ----
+if (PG) { // [pangyo] 판교 범위 안만 평면 배열 하나로
+  const mine = placed.filter((l) => l.src !== 'seed' && inPangyo(l.x, l.z)).sort((a, b) => a.z - b.z || a.x - b.x);
+  const lamps = mine.flatMap((l) => [r1(l.x), r1(l.z), r3(((l.yaw % Math.PI) + Math.PI) % Math.PI), l.kind, l.kind === 4 ? r1(l.y) : -1]);
+  const by = {}; for (const l of mine) by[l.cls] = (by[l.cls] || 0) + 1;
+  const counts = { total: mine.length, osm: mine.filter((l) => l.src === 'osm').length, osmNodes: osmLamps.filter((L) => inPangyo(...L.p)).length, road: mine.filter((l) => l.src === 'gen').length, deck: deckN, tancheon: mine.filter((l) => l.kind === 3).length, byClass: by, skipped: reasons };
+  const pgOsm = readJSON(PG_CACHE);
+  const out = { v: 1, attribution: '© OpenStreetMap contributors (ODbL)', meta: { generated: 'scripts/corridor/build-streetlights.mjs --pangyo', osm: { query: 'data/query_pangyo_streetlights.overpassql', osm_base: pgOsm.osm_base, streetLampNodes: counts.osmNodes }, spacing: { ...Object.fromEntries(Object.entries(CLASS).map(([k, c]) => [k, c.sp])), deck: DECK.sp }, counts }, boxes: PGB, lamps };
+  fs.writeFileSync(OUT, JSON.stringify(out) + '\n');
+  console.log(`pangyo streetlights: ${mine.length} lamps (OSM ${counts.osm}/${counts.osmNodes}, road ${counts.road}, deck ${deckN}, tancheon ${counts.tancheon}) → ${path.relative(ROOT, OUT)} (${(fs.statSync(OUT).size / 1024).toFixed(1)} KB)`);
+  console.log('by class', by); console.log('skipped', reasons);
+  process.exit(0);
+}
 const cells = {};
 placed.sort((a, b) => a.z - b.z || a.x - b.x);
 for (const l of placed) {
