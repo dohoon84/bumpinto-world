@@ -12,6 +12,13 @@ import { createAvatar, animateAvatar } from '../entities/avatar.js';
 import { LOOKS } from './looks.js';
 
 export const PLAT = Object.freeze({ Z0: -5, Z1: 0, CEIL: 3.6, TRACK_Z: 1.8, WALL_Z: 4.4, STAIR: { x0: -2.6, x1: 2.6, depth: 6 } });
+// 계단 단: z0 에서 -z 로 n 단 (단 깊이 d, 높이 h). 올라가기 = 계단 UP_Z 보다 안쪽 → 대합실
+export const STEP = Object.freeze({ z0: PLAT.Z0 - 1.05, n: 14, d: 0.3, h: 0.17 });
+export const UP_Z = PLAT.Z0 - 2.6;
+// 계단 위 발 높이 (순수 함수 — 테스트용): 단 윗면을 부드럽게 (경사)
+export const stairY = (z) => Math.max(0, Math.min(STEP.n, (STEP.z0 - z) / STEP.d)) * STEP.h;
+// 계단 안 걸을 수 있는 곳 (승강장 바닥과 겹치게 — 사이에 틈이 있으면 입구에서 막힘)
+export const inStairArea = (x, z, r = 0.3) => x > PLAT.STAIR.x0 + r && x < PLAT.STAIR.x1 - r && z <= PLAT.Z0 + 0.6 && z > PLAT.Z0 - PLAT.STAIR.depth + 0.4 + r;
 
 // def: stationsData 역, line: 노선 키, dir: 0/1, feed: createArrivalFeed (raw()), arrival: { at, run } 이미 서 있는 열차(하차) 또는 null
 //   onEvent(kind, data): 'board' {door, run, live} · 'up' · 'say' {ko,en}
@@ -38,17 +45,22 @@ export function buildPlatform({ def, line, dir, renderer, look, feed = null, arr
   for (let x = -half - TUN; x < half + TUN; x += 1.2) S.block(x, -1.3, TRACK_Z, 0.25, 0.06, 2.4, '#55524c'); // 침목
   S.block(0, -1.45, WALL_Z + 0.2, half * 2 + TUN * 2, CEIL + 1.6, 0.4, '#5c6166');  // 선로 건너 벽
   S.block(0, CEIL, (Z0 + WALL_Z) / 2, half * 2 + TUN * 2, 0.3, WALL_Z - Z0, '#d3d6d9'); // 천장
-  S.block(0, -0.3, Z0 - 0.2, half * 2, CEIL + 0.6, 0.4, '#e6e1d8', { shade: (y) => (y < 0 ? 0.85 : 1) }); // 뒷벽 (계단 구멍은 아래에서 덮어 그림)
+  // 뒷벽: 계단 입구(STAIR.x0~x1) 자리는 비워 둠 — 예전엔 통짜 벽이 입구를 막았음 (도훈 피드백)
+  for (const [a, b] of [[-half, STAIR.x0 - 0.4], [STAIR.x1 + 0.4, half]]) S.block((a + b) / 2, -0.3, Z0 - 0.2, b - a, CEIL + 0.6, 0.4, '#e6e1d8', { shade: (y) => (y < 0 ? 0.85 : 1) });
   for (const s of [-1, 1]) {
     S.block(s * (half + 0.2), -0.3, Z0 / 2, 0.4, CEIL + 0.6, -Z0, '#c9c4ba');     // 승강장 끝 벽
     S.block(s * (half + TUN / 2), -1.45, 2.0, TUN, CEIL + 1.6, 0.3, '#2a2d30');    // 터널 안쪽 벽(어둡게) — 승강장 쪽
   }
   // 계단·에스컬레이터 입구 (뒷벽 가운데): 바닥 → 위로 올라가는 계단
   const SX0 = STAIR.x0, SX1 = STAIR.x1, SD = STAIR.depth;
+  const SH = CEIL + 2.6; // 계단실 높이 (올라갈수록 머리 위 공간)
   S.block(0, -0.3, Z0 - SD / 2, SX1 - SX0 + 0.4, 0.3, SD, '#a9a49a');
-  for (const s of [-1, 1]) S.block(s * ((SX1 - SX0) / 2 + 0.2), -0.3, Z0 - SD / 2, 0.4, CEIL + 0.6, SD, '#d8d3ca');
-  for (let i = 0; i < 14; i++) S.block(0, i * 0.17, Z0 - 1.2 - i * 0.3, SX1 - SX0, 0.17, 0.3, i % 2 ? '#8f8a80' : '#9b968c'); // 계단
-  S.block(0, CEIL - 0.6, Z0 - 0.25, SX1 - SX0 + 0.4, 0.9, 0.5, '#e6e1d8');
+  for (const s of [-1, 1]) S.block(s * ((SX1 - SX0) / 2 + 0.2), -0.3, Z0 - SD / 2, 0.4, SH, SD, '#d8d3ca');
+  for (let i = 0; i < STEP.n; i++) S.block(0, 0, STEP.z0 - (i + 0.5) * STEP.d, SX1 - SX0, (i + 1) * STEP.h, STEP.d, i % 2 ? '#8f8a80' : '#9b968c'); // 계단 (속이 찬 단 — 틈 없음)
+  for (const s of [-1, 1]) S.block(s * ((SX1 - SX0) / 2 - 0.08), 0.9, Z0 - SD / 2, 0.06, 0.06, SD, '#adb5bd');          // 난간
+  S.block(0, SH - 0.6, Z0 - SD / 2, SX1 - SX0 + 0.8, 0.3, SD, '#d3d6d9');                                                   // 계단실 천장
+  S.block(0, -0.3, Z0 - SD - 0.2, SX1 - SX0 + 0.8, SH, 0.4, '#cfcac0');                                                      // 계단 끝 벽
+  S.block(0, CEIL - 0.6, Z0 - 0.25, SX1 - SX0 + 0.4, SH - CEIL + 0.3, 0.5, '#e6e1d8');                                      // 입구 위 (표지판 자리)
   // 기둥 (량 경계)
   const pillars = [];
   for (let c = 0; c <= lay.cars; c++) { const x = lay.trainLen / 2 - c * lay.carLen; if (Math.abs(x) < SX1 + 1) continue; pillars.push(x); S.block(x, 0, -3.3, 0.7, CEIL, 0.7, '#e9ecef'); S.box(x, 2.2, -3.3, 0.72, 0.18, 0.72, L.color); }
@@ -164,7 +176,7 @@ export function buildPlatform({ def, line, dir, renderer, look, feed = null, arr
   const stairPt = () => ({ x: (rnd() - 0.5) * 3, z: Z0 - 2.2 });
   function spawnWaiting(n) { // 문 앞 줄 서기 (계단에서 걸어와서)
     const dx = doorsX[Math.floor(rnd() * doorsX.length)], q = rnd() < 0.5 ? -1 : 1;
-    const s = stairPt(); n.mesh.position.set(s.x, 0, s.z); n.mesh.visible = true;
+    const s = stairPt(); n.mesh.position.set(s.x, stairY(s.z), s.z); n.mesh.visible = true;
     n.mode = 'walk'; n.path = [{ x: s.x, z: -4.2 }, { x: dx + q * 0.95, z: -1.3 - rnd() * 1.6 }]; n.then = 'wait'; n.door = dx;
   }
   function spawnBench(n) { // 의자에 앉아 기다리기
@@ -178,7 +190,7 @@ export function buildPlatform({ def, line, dir, renderer, look, feed = null, arr
     if (!tgt) return true;
     const dx = tgt.x - p.x, dz = tgt.z - p.z, d = Math.hypot(dx, dz);
     if (d < 0.08) { n.path.shift(); return !n.path.length; }
-    const st = Math.min(d, sp * dt); p.x += (dx / d) * st; p.z += (dz / d) * st;
+    const st = Math.min(d, sp * dt); p.x += (dx / d) * st; p.z += (dz / d) * st; p.y = p.z < Z0 && Math.abs(p.x) < SX1 ? stairY(p.z) : 0;
     const want = Math.atan2(dx, dz); n.mesh.rotation.y += Math.atan2(Math.sin(want - n.mesh.rotation.y), Math.cos(want - n.mesh.rotation.y)) * Math.min(1, dt * 10);
     animateAvatar(n.mesh, sp, dt); return false;
   }
@@ -213,7 +225,7 @@ export function buildPlatform({ def, line, dir, renderer, look, feed = null, arr
   if (spawnDoor != null) cam.yaw = -0.9; // 문을 등지고, 카메라는 승강장 비스듬히
   const camera = new THREE.PerspectiveCamera(60, innerWidth / innerHeight, 0.1, 400);
   let doorsOpen = 0, canBoard = false;
-  const inStair = (x, z) => x > SX0 + 0.3 && x < SX1 - 0.3 && z <= Z0 + 0.2 && z > Z0 - 3.0;
+  const inStair = (x, z) => inStairArea(x, z);
   function canStand(x, z, r = 0.3) {
     if (inStair(x, z)) return true;
     if (x < -half + 0.5 + r || x > half - 0.5 - r || z < Z0 + 0.2 + r || z > -0.15 - r) {
@@ -285,8 +297,9 @@ export function buildPlatform({ def, line, dir, renderer, look, feed = null, arr
       if (d) { boardedSent = true; ev = { board: { door: d, run: sched.run, live: !!sched.live, t: tt, rides } }; }
     }
     if (p.z > -0.2 && !canBoard && doorsOpen < 0.85) p.z = Math.min(p.z, -0.46); // 문이 닫히면 밀려남
-    if (!inStair(p.x, p.z)) upArmed = true;
-    if (upArmed && inStair(p.x, p.z) && p.z < Z0 - 1.6) { upArmed = false; ev = { up: true }; }
+    p.y = inStair(p.x, p.z) ? stairY(p.z) : 0; // 계단 오르내리기 (예전엔 y=0 그대로라 단에 파묻혀 끼임)
+    if (p.z > UP_Z + 1.2) upArmed = true;        // 계단 아래쪽(또는 승강장)에 한 번 서야 다시 올라가기 — 계단에서 막 내려온 직후 되돌아가지 않게
+    if (upArmed && inStair(p.x, p.z) && p.z < UP_Z) { upArmed = false; ev = { up: true }; }
     updateNpcs(dt, mo, tt);
     crowd.begin(); crowd.add(me, meParts, false); for (const n of npcs) if (n.mesh.visible) crowd.add(n.mesh, n.parts, false); crowd.end();
     // 카메라

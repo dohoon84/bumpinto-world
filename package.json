@@ -44,7 +44,8 @@
     "ride:e2e": "node scripts/corridor/test/e2e-ride-220.mjs",
     "notice-popup:test": "node scripts/test-notice-popup.mjs",
     "subway:test": "node scripts/test-subway.mjs && node scripts/test-subway-arrivals.mjs && node scripts/test-subway-ride.mjs",
-    "subway:mp": "node scripts/mp-subway.mjs"
+    "subway:mp": "node scripts/mp-subway.mjs",
+    "subway:stairs": "node scripts/e2e-subway-stairs.mjs"
   },
   "dependencies": {
     "three": "^0.186.1"
