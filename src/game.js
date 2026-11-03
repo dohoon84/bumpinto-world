@@ -58,7 +58,8 @@ import { createPlaygrounds } from './world/playgrounds.js'; // [playgrounds]
 import { corridorStationLabel } from './corridor/globeCorridor.js'; // [corridor]
 import { createStreetlights } from './world/streetlights.js'; // [streetlights]
 import { mountRide } from './ride/index.js'; // [ride] 코리더 버스·택시 탑승
-import { mountSubway } from './subway/index.js'; // [subway] 정자역 출입구(실제 OSM 출구) + 지하 대합실. ?subway=0 이면 끔
+import { mountGyeongbuSoon } from './world/gyeongbuSoon.js'; // [gyeongbu] 경부고속도로 서울 방면 '준비 중' 안내 (?gyeongbu=0 끔)
+import { mountSubway, zoneLabel as subwayZoneLabel } from './subway/index.js'; // [subway] 정자역·코리더 역 출입구(실제 OSM 출구) + 지하 대합실. ?subway=0 이면 끔
 
 const params = new URLSearchParams(location.search);
 const region = getCurrentRegion();
@@ -456,6 +457,7 @@ const trashBins = region.id === 'jeongja'
 const subwayCanEnter = () => joined && !bikes.riding && !adminBike?.riding && !giftRiding() && !ride?.active && !trucks?.current;
 const subway = subwayOn ? mountSubway({
   scene, overlay, data, world, terrain, renderer, params,
+  corridor, getPlayer: () => player, // [subway] 코리더 역(수내~잠실) 출입구. ?corridor=0 이면 정자역만
   getLook: () => me.look,
   canEnter: () => subwayCanEnter(),
   onEnter: () => { trackEvent('subway_enter'); wakeFromAfk(); if (mySit) standUpFromSeat(); },
@@ -481,6 +483,7 @@ const subway = subwayOn ? mountSubway({
     emitMyStateNow();
   },
 }) : null;
+const gyeongbuSoon = corridor ? mountGyeongbuSoon({ getPos: () => player.position, params, isEn }) : null; // [gyeongbu] 코리더가 있을 때만 (경부 북쪽 끝이 코리더 타일)
 if (subway) {
   const withSubway = world.isBlocked;
   world.isBlocked = (x, z, r) => withSubway(x, z, r) || subway.blocks(x, z, r);
@@ -572,7 +575,7 @@ function renderPresencePanel() {
   const en = isEn();
   const peers = remotes.list({ all: true }); // [zone] 역 안 사람도 목록에는 보임
   const myZone = remotes.zone;
-  const zoneName = (z) => (z === 'jeongja-station' ? (en ? 'Jeongja Stn. concourse' : '정자역 대합실') : z ? (en ? 'Indoors' : '실내') : (en ? 'Outside' : '바깥'));
+  const zoneName = (z) => (subwayZoneLabel(z, en) || (z ? (en ? 'Indoors' : '실내') : (en ? 'Outside' : '바깥'))); // [zone] 역 대합실 이름
   const mySpot = myZone ? { name: zoneName(myZone), dist: 0 } : nearestSpotLabel(player.position.x, player.position.z);
   const peerRows = peers.length
     ? peers
@@ -2363,6 +2366,7 @@ function frame() {
   riverFolk?.update(dt, player.position);
   stationPlaza.update(dt, player.position);
   subway?.outdoorTick(dt, subwayCanEnter() ? player.position : null); // [subway] 입구 안내 + 걸어 들어가면 진입
+  gyeongbuSoon?.tick(dt); // [gyeongbu]
   dogPark.update(dt, player.position);
   {
     const doorPeople = [player.position];

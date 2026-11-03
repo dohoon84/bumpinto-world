@@ -6,7 +6,10 @@ import { JEONGJA_EXITS, projectLatLon, compass, nearbyHints, resolveExits, group
 import { HALL, GATE, WELLS, passageFor, walkable, passageAt, laneAt, staticBlockers } from '../src/subway/layout.js';
 import { placeEntrance, toWorld, toLocal } from '../src/subway/entrance.js';
 import * as THREE from 'three';
-import { ZONE_BASE, ZONES, encodeZone, decodeZone, isZoneId } from '../src/net/zones.js';
+import { ZONE_BASE, ZONES, encodeZone, decodeZone, isZoneId, zoneSlot } from '../src/net/zones.js';
+import { STATIONS, stationTheme, stationReach, corridorExits, stationZone, entranceLod, ENT_BUILD, ENT_DROP, ENT_SHOW, JEONGJA_THEME } from '../src/subway/stations.js';
+import { LINES, LINE_ORDER, OSM_REF_TO_LINE } from '../src/subway/lines.js';
+import { gyeongbuSoonAt, GYEONGBU_SOON } from '../src/world/gyeongbuSoon.js';
 import { RemotePlayers } from '../src/net/remotePlayers.js';
 import { STATE_HZ } from '../src/net/protocol.js';
 
@@ -144,7 +147,11 @@ assert.equal(walkable(GATE.cab[2], 0, 0.25, { passages }), false, '개찰구 몸
   assert.deepEqual(decodeZone(4, 5, Z), { zone: Z, x: 4, z: 5 }, '나중에 서버가 zone 을 그대로 전달하면 그것도 이해');
   assert.equal(decodeZone(4, 5, '<script>').zone, '', '이상한 zone 문자열은 무시');
   assert.equal(isZoneId('a'.repeat(60)), false);
-  assert.equal(decodeZone(ZONE_BASE + 7 * 10000 + 3, 1).zone, 'zone#7', '모르는 슬롯도 바깥으로 새지 않음');
+  assert.equal(decodeZone(ZONE_BASE + 77 * 10000 + 3, 1).zone, 'zone#77', '모르는 슬롯도 바깥으로 새지 않음');
+  // 코리더 역 대합실 슬롯 (덧붙이기만): 2..14 = 수내..잠실, 역 id 와 이름이 맞는다
+  assert.deepEqual(ZONES.slice(2), STATIONS.filter((d) => d.id !== 'jeongja').map((d) => stationZone(d.id)), '역 대합실 구역 = stationsData 순서');
+  for (const zid of ZONES.slice(1)) { assert.ok(isZoneId(zid)); const q = decodeZone(encodeZone(zid, 3, 4).x, 4); assert.equal(q.zone, zid); }
+  assert.equal(zoneSlot('jamsil-station'), 14);
   assert.deepEqual(encodeZone('', 3, 4), { x: 3, z: 4 }, '바깥은 그대로');
   assert.ok(Math.abs(decodeZone(encodeZone(Z, 1e9, 0).x, 0).x) < 5000, '실내 좌표는 띠 안으로 잘림');
   // 서버(room.js / dev-relay)는 state 를 x,z,ry… 만 골라 다시 보낸다 → 띠 좌표만으로 동작해야 함
@@ -213,4 +220,68 @@ assert.equal(walkable(GATE.cab[2], 0, 0.25, { passages }), false, '개찰구 몸
   assert.equal(outdoor.children.filter((o) => o.isObject3D && o.type !== 'Scene').length, 0, '나간 사람 메시 정리');
   assert.ok(STATE_HZ > 0);
 }
-console.log('subway: state · exits · entrance placement · concourse layout · zone presence OK');
+// ---------- 코리더 역 (stationsData.js = scripts/subway/build-stations.mjs, OSM) ----------
+{
+  const corr = JSON.parse(fs.readFileSync('data/osm_subway_corridor.json', 'utf8')).elements;
+  const byId = new Map(corr.map((e) => [e.type + e.id, e]));
+  const index = JSON.parse(fs.readFileSync('public/corridor/index.json', 'utf8'));
+  const center = data.meta.center;
+  const want = ['정자', '수내', '서현', '이매', '야탑', '모란', '태평', '가천대', '복정', '문정', '가락시장', '송파', '석촌', '잠실'];
+  assert.deepEqual(STATIONS.map((d) => d.name), want, '도훈 요청 14역 (장지는 요청에 없어 뺌)');
+  const expectLines = { 정자: 'suin,shin', 수내: 'suin', 서현: 'suin', 이매: 'suin,gg', 야탑: 'suin', 모란: 'suin,l8', 태평: 'suin', 가천대: 'suin', 복정: 'suin,l8', 문정: 'l8', 가락시장: 'l8,l3', 송파: 'l8', 석촌: 'l8,l9', 잠실: 'l8,l2' };
+  for (const d of STATIONS) {
+    assert.equal(d.lines.join(','), expectLines[d.name], `${d.name} 노선`);
+    // 노선 근거: osmRoutes 의 relation 이 실제로 그 ref 이고, 이 역 노드를 stop 으로 가짐
+    for (const k of d.lines) {
+      assert.ok(d.osmRoutes[k].length > 0);
+      for (const rid of d.osmRoutes[k]) { const r = byId.get('relation' + rid); assert.ok(r, `rel ${rid}`); assert.equal(OSM_REF_TO_LINE[r.tags.ref], k); assert.equal(r.tags.colour?.toUpperCase(), LINES[k].osmColour, `${k} OSM colour`); }
+    }
+    assert.ok(LINE_ORDER.indexOf(d.lines[0]) <= Math.min(...d.lines.map((k) => LINE_ORDER.indexOf(k))));
+    assert.ok(d.route.stops.includes(d.name), `${d.name} 노선도에 자기 역`);
+    // 출구: OSM subway_entrance 노드, ref 그대로, 렌더링 영역 안, 역 중심 300m 안
+    assert.ok(d.exits.length >= 1);
+    const refs = new Set();
+    for (const e of d.exits) {
+      const n = byId.get('node' + e.osm); assert.ok(n && n.tags.railway === 'subway_entrance', `${d.name} ${e.ref} OSM`);
+      assert.equal(n.tags.ref == null ? null : String(n.tags.ref), e.ref); assert.ok(Math.abs(n.lat - e.lat) < 1e-7 && Math.abs(n.lon - e.lon) < 1e-7);
+      assert.ok(!refs.has(e.ref), `${d.name} ${e.ref} 중복`); refs.add(e.ref);
+      const p = projectLatLon(center, e.lat, e.lon);
+      assert.ok(Math.hypot(p.x - d.x, p.z - d.z) < 450, `${d.name} ${e.ref} 역에서 450m 안 (잠실 롯데 쪽 출구는 ~410m)`);
+      if (d.id === 'jeongja') { assert.equal(e.place, undefined, '정자역은 런타임 배치 (기존 그대로)'); continue; }
+      assert.ok(index.tiles[Math.floor(p.x / 500) + '_' + Math.floor(p.z / 500)], `${d.name} ${e.ref} 코리더 타일 안`);
+      assert.ok(e.place && e.place.bad === 0 && e.place.shift <= 18, `${d.name} ${e.ref} 출입구 자리 (bad ${e.place?.bad})`);
+      assert.ok(Math.hypot(e.place.x - p.x, e.place.z - p.z) <= 18.1);
+    }
+    if (d.id !== 'jeongja') { const ix = index.stations.find((s) => s.id === d.id); assert.ok(ix && ix.x === d.x && ix.z === d.z && ix.nameEn === d.nameEn, `${d.name} 코리더 역 중심`); }
+  }
+  // 정자역 데이터는 1단계 출구 목록과 같다
+  assert.deepEqual(STATIONS[0].exits.map((e) => [e.ref, e.osm]), JEONGJA_EXITS.map((e) => [e.ref, e.osm]));
+  // 테마: 정자역은 1단계 문자열 그대로
+  assert.equal(JEONGJA_THEME.map.title, '수인분당선 · 신분당선 (간략)'); assert.equal(JEONGJA_THEME.ad.sub, '정자역에서 걸어서 3분');
+  assert.deepEqual(JEONGJA_THEME.wells.map((w) => w.ko), WELLS.map((w) => w.ko), '정자 승강장 방면 = layout WELLS');
+  assert.deepEqual(JEONGJA_THEME.wells.map((w) => w.en), WELLS.map((w) => w.en));
+  assert.equal(JEONGJA_THEME.transfer.key, 'shin'); assert.equal(JEONGJA_THEME.zone, 'jeongja-station');
+  const jam = stationTheme(STATIONS.find((d) => d.id === 'jamsil'));
+  assert.equal(jam.primary.key, 'l8'); assert.equal(jam.transfer.key, 'l2'); assert.equal(jam.zone, 'jamsil-station'); assert.equal(jam.map.me, '잠실');
+  assert.equal(stationTheme(STATIONS.find((d) => d.id === 'munjeong')).transfer, null, '문정 = 8호선만');
+  // 코리더 출구 → 대합실 통로 (나침반 방위), id 는 역마다 다름
+  const allIds = new Set();
+  for (const d of STATIONS.slice(1)) {
+    const ex = corridorExits(d, center);
+    for (const e of ex) { assert.ok(!allIds.has(e.id)); allIds.add(e.id); assert.ok(['n', 'e', 's', 'w'].includes(e.dir.id)); assert.ok(e.place); }
+    const g = groupExits(ex); assert.equal(g.reduce((n, x) => n + x.exits.length, 0), ex.length);
+    const ps = g.map((x) => ({ ...passageFor(x.dir), exits: x.exits }));
+    for (const p of ps) assert.ok(walkable(p.mouth.x + p.out.x * 3, p.mouth.z + p.out.z * 3, 0.3, { passages: ps }), `${d.name} ${p.dir} 통로`);
+    const sc = createSubwayState({ exits: ex }); assert.ok(sc.enter(ex[0].id)); assert.equal(sc.enter('x1'), false, '다른 역 출구 id 로는 안 됨');
+  }
+  // 거리별 출입구 만들기/지우기 (히스테리시스)
+  assert.equal(entranceLod(ENT_BUILD + 1, false), 'none'); assert.equal(entranceLod(ENT_BUILD - 1, false), 'build');
+  assert.equal(entranceLod(ENT_DROP - 1, true), 'hide'); assert.equal(entranceLod(ENT_DROP + 1, true), 'drop'); assert.equal(entranceLod(ENT_SHOW - 1, true), 'show');
+  assert.ok(ENT_SHOW < ENT_BUILD && ENT_BUILD < ENT_DROP);
+  { const jd = STATIONS.find((d) => d.id === 'jamsil'); const r = stationReach(jd, corridorExits(jd, center)); assert.ok(r > 380 && r < 430, `잠실 reach ${r}`); }
+}
+// ---------- [gyeongbu] 서울 방면 준비 중 ----------
+assert.equal(gyeongbuSoonAt(-446, -1800), true, '경부 북쪽 끝');
+assert.equal(gyeongbuSoonAt(-446, -1600), false); assert.equal(gyeongbuSoonAt(0, -1900), false, '경부 아닌 곳');
+assert.ok(GYEONGBU_SOON.z > -1834, '도로 끝(-1834)보다 앞에서');
+console.log('subway: state · exits · entrance placement · concourse layout · zone presence · corridor stations · gyeongbu OK');

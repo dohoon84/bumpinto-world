@@ -1,10 +1,13 @@
-// [subway] 정자역 지하 대합실 (별도 Scene). 들어갈 때 만들고 나올 때 dispose.
+// [subway] 지하철역 지하 대합실 (별도 Scene). 들어갈 때 만들고 나올 때 dispose.
+//   정자역 대합실 틀 하나를 모든 역이 같이 쓴다: theme(stations.js stationTheme) 으로 역 이름·노선 색·방면·노선도·광고만 바뀜
+//   (기본 theme = 정자역 1단계 문자열 그대로)
 //
 //   draw call 예산 (실측은 보고서): 정적 구조 1 · 간판/조명(아틀라스) 1 · 개찰구 날개 1 · 카드 단말 LED 1 · 에스컬레이터 디딤판 1
 //                                + 아바타 인스턴싱 부품 수(≈20, 사람 수와 무관, 플레이어 포함)
 //   그림자·안개 없음. 조명은 반구광 + 약한 평행광(그림자 X).
 import * as THREE from 'three';
-import { createBuilder, createAtlas, FONT, LINE, fitText, lineBadge, roundRect } from './geom.js';
+import { createBuilder, createAtlas, FONT, fitText, lineBadge, roundRect } from './geom.js';
+import { JEONGJA_THEME } from './stations.js';
 import { HALL, CEIL, GATE, GATE_X, OFFICE, WELLS, DROP, RUN, COLUMNS, PASSAGE_LEN, passageFor, staticBlockers, walkable, passageAt, laneAt, nearWellTop } from './layout.js';
 import { buildCrowd } from '../entities/avatarCrowd.js';
 import { createAvatar, animateAvatar } from '../entities/avatar.js';
@@ -43,7 +46,9 @@ const LOOKS = [
   { color: '#fff3bf', top: 'hoodie', hair: 'long', gender: 'f', pants: '#364fc7' },
 ];
 
-export function buildConcourse({ exits, groups, entryId, look, renderer, onToast }) {
+export function buildConcourse({ exits, groups, entryId, look, renderer, onToast, theme = JEONGJA_THEME, board = null }) {
+  const P = theme.primary, X = theme.transfer;
+  const wellTxt = (w) => ({ ...w, ...(theme.wells[WELLS.indexOf(w)] || {}) }); // 승강장 계단 방면 = 주 노선 방면
   const scene = new THREE.Scene();
   scene.background = new THREE.Color('#2a2c30');
   scene.add(new THREE.HemisphereLight('#ffffff', '#9a9184', 2.1));
@@ -209,8 +214,8 @@ export function buildConcourse({ exits, groups, entryId, look, renderer, onToast
     G.quad(15.5, 2.75, -10.55, 3.0, 0.6, '#ffffff', { uv: lk });
     const ad = atlas.add(420, 180, (c, w, h) => {
       const g = c.createLinearGradient(0, 0, w, h); g.addColorStop(0, '#845ef7'); g.addColorStop(1, '#22b8cf'); c.fillStyle = g; c.fillRect(0, 0, w, h);
-      c.fillStyle = '#fff'; c.textAlign = 'left'; c.textBaseline = 'alphabetic'; c.font = `800 40px ${FONT}`; c.fillText('탄천 가을 산책', 24, 80);
-      c.font = `600 22px ${FONT}`; c.fillText('정자역에서 걸어서 3분', 26, 120); c.fillText('Bumpinto World', 26, 156);
+      c.fillStyle = '#fff'; c.textAlign = 'left'; c.textBaseline = 'alphabetic'; c.font = `800 40px ${FONT}`; c.fillText(theme.ad.title, 24, 80);
+      c.font = `600 22px ${FONT}`; fitText(c, theme.ad.sub, w - 40, 22, 600); c.fillText(theme.ad.sub, 26, 120); c.font = `600 22px ${FONT}`; c.fillText('Bumpinto World', 26, 156);
     });
     G.quad(24.5, 1.8, -10.55, 5.6, 2.4, '#ffffff', { uv: ad });
   }
@@ -218,15 +223,15 @@ export function buildConcourse({ exits, groups, entryId, look, renderer, onToast
   {
     const map = atlas.add(700, 150, (c, w, h) => {
       c.fillStyle = '#f8f9fa'; c.fillRect(0, 0, w, h);
-      c.fillStyle = '#212529'; c.font = `800 22px ${FONT}`; c.textAlign = 'left'; c.textBaseline = 'middle'; c.fillText('수인분당선 · 신분당선 (간략)', 16, 22);
-      const st = ['왕십리', '선릉', '수서', '야탑', '서현', '수내', '정자', '미금', '오리', '죽전', '수원', '인천'];
+      c.fillStyle = '#212529'; c.font = `800 22px ${FONT}`; c.textAlign = 'left'; c.textBaseline = 'middle'; c.fillText(theme.map.title, 16, 22);
+      const st = theme.map.stops, M = theme.map;
       const y = 84, x0 = 40, dx = (w - 80) / (st.length - 1);
-      c.strokeStyle = LINE.suin; c.lineWidth = 10; c.beginPath(); c.moveTo(x0, y); c.lineTo(x0 + dx * (st.length - 1), y); c.stroke();
-      c.strokeStyle = LINE.shin; c.lineWidth = 6; c.beginPath(); c.moveTo(x0 + dx * 6, y + 30); c.lineTo(x0 + dx * 7, y + 30); c.moveTo(x0 + dx * 6, y); c.lineTo(x0 + dx * 6, y + 30); c.stroke();
+      c.strokeStyle = M.color; c.lineWidth = 10; c.beginPath(); c.moveTo(x0, y); c.lineTo(x0 + dx * (st.length - 1), y); c.stroke();
+      if (M.branch) { const b = M.branch.at; c.strokeStyle = M.branch.color; c.lineWidth = 6; c.beginPath(); c.moveTo(x0 + dx * b, y + 30); c.lineTo(x0 + dx * (b + 1), y + 30); c.moveTo(x0 + dx * b, y); c.lineTo(x0 + dx * b, y + 30); c.stroke(); }
       st.forEach((n, i) => {
-        const x = x0 + dx * i, me = n === '정자';
-        c.fillStyle = '#fff'; c.strokeStyle = me ? '#212529' : LINE.suin; c.lineWidth = me ? 5 : 3; c.beginPath(); c.arc(x, y, me ? 11 : 8, 0, Math.PI * 2); c.fill(); c.stroke();
-        c.fillStyle = me ? '#d6336c' : '#212529'; c.font = `${me ? 900 : 700} ${me ? 20 : 16}px ${FONT}`; c.textAlign = 'center'; c.fillText(n, x, y - 26);
+        const x = x0 + dx * i, me = n === M.me;
+        c.fillStyle = '#fff'; c.strokeStyle = me ? '#212529' : M.color; c.lineWidth = me ? 5 : 3; c.beginPath(); c.arc(x, y, me ? 11 : 8, 0, Math.PI * 2); c.fill(); c.stroke();
+        c.fillStyle = me ? '#d6336c' : '#212529'; c.font = `${me ? 900 : 700} ${me ? 20 : 16}px ${FONT}`; c.textAlign = 'center'; fitText(c, n, dx - 4, me ? 20 : 16, me ? 900 : 700); c.fillText(n, x, y - 26);
       });
       c.font = `600 14px ${FONT}`; c.fillStyle = '#868e96'; c.textAlign = 'right'; c.fillText('일부 역만 표시 · 실제 노선도 아님', w - 12, h - 14);
     });
@@ -270,21 +275,24 @@ export function buildConcourse({ exits, groups, entryId, look, renderer, onToast
   const toPlat = mkHang(640, 90, (c, w, h) => {
     c.fillStyle = '#1d2228'; c.fillRect(0, 0, w, h); c.textBaseline = 'middle'; c.textAlign = 'left';
     c.fillStyle = '#fff'; c.font = `800 30px ${FONT}`; c.fillText('타는 곳', 16, 32); c.font = `600 18px ${FONT}`; c.fillStyle = '#c9d1d9'; c.fillText('Platforms', 18, 64);
-    let x = 150; x += lineBadge(c, x, 14, 30, LINE.suin, '수인분당') + 10;
-    c.textAlign = 'left'; c.fillStyle = '#fff'; c.font = `700 22px ${FONT}`; c.fillText('← 수원·인천    왕십리 →', x, 30);
-    lineBadge(c, 150, 50, 28, LINE.shin, '신분당'); c.textAlign = 'left'; c.fillStyle = '#ffa8a8'; c.font = `700 18px ${FONT}`; c.fillText('갈아타는 곳 준비 중 · Coming soon', 260, 64);
+    let x = 150; x += lineBadge(c, x, 14, 30, P.color, P.short) + 10;
+    const dirTxt = `← ${theme.wells[0].ko.replace(/ 방면$/, '')}    ${theme.wells[1].ko.replace(/ 방면$/, '')} →`;
+    c.textAlign = 'left'; c.fillStyle = '#fff'; fitText(c, dirTxt, w - x - 10, 22, 700); c.fillText(dirTxt, x, 30);
+    if (X) { const bw = lineBadge(c, 150, 50, 28, X.color, X.short); c.textAlign = 'left'; c.fillStyle = '#ffa8a8'; c.font = `700 18px ${FONT}`; c.fillText('갈아타는 곳 준비 중 · Coming soon', Math.max(260, 162 + bw), 64); }
   });
   const wayOut = mkHang(640, 90, (c, w, h) => {
     c.fillStyle = '#FFC20E'; c.fillRect(0, 0, w, h); c.fillStyle = '#111'; c.textBaseline = 'middle'; c.textAlign = 'left';
     c.font = `800 30px ${FONT}`; c.fillText('나가는 곳', 16, 32); c.font = `600 18px ${FONT}`; c.fillText('Way Out', 18, 64);
     let x = 170;
-    for (const e of exits) { if (!e.ref) continue; c.fillStyle = '#111'; roundRect(c, x, 18, 54, 54, 7); c.fill(); c.fillStyle = '#FFC20E'; c.font = `900 40px ${FONT}`; c.textAlign = 'center'; c.fillText(e.ref, x + 27, 47); c.textAlign = 'left'; x += 62; }
+    const refs = exits.map((e) => e.ref).filter(Boolean), sz = Math.min(54, Math.floor((w - 176) / Math.max(1, refs.length)) - 6), y0 = 18 + (54 - sz) / 2; // 출구가 많으면 (잠실 14개) 칸을 줄인다
+    for (const r of refs) { c.fillStyle = '#111'; roundRect(c, x, y0, sz, sz, 7); c.fill(); c.fillStyle = '#FFC20E'; fitText(c, r, sz - 4, Math.round(sz * 0.74), 900); c.textAlign = 'center'; c.fillText(r, x + sz / 2, y0 + sz / 2 + 2); c.textAlign = 'left'; x += sz + 6; }
   });
   hang(0, 0, 4.8, { ...toPlat, back: wayOut.uv }, Math.PI); // 앞(북, 들어오는 쪽) 타는 곳 · 뒤(남, 나오는 쪽) 나가는 곳
-  for (const w of WELLS) {
+  for (const w0 of WELLS) {
+    const w = wellTxt(w0);
     const s = mkHang(560, 96, (c, ww, h) => {
       c.fillStyle = '#1d2228'; c.fillRect(0, 0, ww, h); c.textBaseline = 'middle';
-      const bw = lineBadge(c, 14, 14, 34, LINE.suin, '수인분당');
+      const bw = lineBadge(c, 14, 14, 34, P.color, P.short);
       c.textAlign = 'left'; c.fillStyle = '#fff'; c.font = `800 34px ${FONT}`; c.fillText(w.ko, 28 + bw, 33);
       c.font = `600 20px ${FONT}`; c.fillStyle = '#c9d1d9'; c.fillText(w.en + '  ↓', 30 + bw, 70);
     });
@@ -292,7 +300,7 @@ export function buildConcourse({ exits, groups, entryId, look, renderer, onToast
     // 아래 끝: 준비 중 안내판
     const soon = atlas.add(420, 160, (c, ww, h) => {
       c.fillStyle = '#1d2228'; c.fillRect(0, 0, ww, h); c.textAlign = 'center'; c.textBaseline = 'middle';
-      c.fillStyle = LINE.suin; c.fillRect(0, 0, ww, 14);
+      c.fillStyle = P.color; c.fillRect(0, 0, ww, 14);
       c.fillStyle = '#fff'; c.font = `800 34px ${FONT}`; c.fillText(`${w.ko} 승강장`, ww / 2, 54);
       c.font = `700 24px ${FONT}`; c.fillStyle = '#ffd43b'; c.fillText('다음 업데이트에서 열려요', ww / 2, 96);
       c.font = `600 20px ${FONT}`; c.fillStyle = '#c9d1d9'; c.fillText('Platform · coming soon', ww / 2, 132);
@@ -334,9 +342,9 @@ export function buildConcourse({ exits, groups, entryId, look, renderer, onToast
     S.box(w.cx, -DROP / 2 - 0.25, w.z0 + RUN / 2, 1.2, 0.3, hyp, '#495057', { rx: SLOPE }); // 디딤판 아래 트러스
     S.block(w.cx, -0.02, w.z0 - 1.05, 1.15, 0.03, 0.4, '#adb5bd'); S.block(w.cx, -DROP - 0.02, w.z0 + RUN + 1.05, 1.15, 0.03, 0.4, '#adb5bd'); // 콤 플레이트
   }
-  // 신분당선 갈아타는 곳 (벽면 안내, 준비 중)
-  {
-    const sh = atlas.add(420, 80, (c, w, h) => { c.fillStyle = '#1d2228'; c.fillRect(0, 0, w, h); c.textBaseline = 'middle'; const bw = lineBadge(c, 14, 20, 40, LINE.shin, '신분당'); c.textAlign = 'left'; c.fillStyle = '#fff'; c.font = `700 24px ${FONT}`; c.fillText('갈아타는 곳 (준비 중)', 28 + bw, 30); c.font = `600 16px ${FONT}`; c.fillStyle = '#c9d1d9'; c.fillText('Shinbundang Line transfer · coming soon', 28 + bw, 60); });
+  // 두 번째 노선 갈아타는 곳 (벽면 안내, 준비 중) — 정자 신분당, 이매 경강, 모란·복정·가락시장·석촌·잠실 …
+  if (X) {
+    const sh = atlas.add(420, 80, (c, w, h) => { c.fillStyle = '#1d2228'; c.fillRect(0, 0, w, h); c.textBaseline = 'middle'; const bw = lineBadge(c, 14, 20, 40, X.color, X.short); c.textAlign = 'left'; c.fillStyle = '#fff'; c.font = `700 24px ${FONT}`; c.fillText('갈아타는 곳 (준비 중)', 28 + bw, 30); c.fillStyle = '#c9d1d9'; fitText(c, `${X.en} transfer · coming soon`, w - 36 - bw, 16, 600); c.fillText(`${X.en} transfer · coming soon`, 28 + bw, 60); });
     G.quad(0, 2.4, HALL.z1 - 0.01, 4.2, 0.8, '#ffffff', { ry: Math.PI, uv: sh });
   }
 
@@ -347,6 +355,33 @@ export function buildConcourse({ exits, groups, entryId, look, renderer, onToast
   const sm = new THREE.Mesh(S.build(), staticMat); sm.name = 'subwayStatic';
   const gm = new THREE.Mesh(G.build(), glowMat); gm.name = 'subwayGlow';
   scene.add(sm, gm); disposables.push(sm.geometry, gm.geometry, staticMat, glowMat);
+
+  // [subway] 도착 안내판 (실시간 또는 시간표 근사). 캔버스 1장 + 평면 1개 = draw call +1. 들어오는 쪽(북)을 본다
+  let boardTick = () => {};
+  if (board) {
+    const cv = document.createElement('canvas'); cv.width = 640; cv.height = 200;
+    const bt = new THREE.CanvasTexture(cv); bt.colorSpace = THREE.SRGBColorSpace; bt.anisotropy = 4;
+    const bg = new THREE.PlaneGeometry(3.2, 1.0), bm = new THREE.MeshBasicMaterial({ map: bt, toneMapped: false });
+    const bmesh = new THREE.Mesh(bg, bm); bmesh.name = 'subwayBoard'; bmesh.position.set(-7.5, 3.0, -3.6); bmesh.rotation.y = Math.PI;
+    scene.add(bmesh); disposables.push(bt, bg, bm);
+    let seen = -1, acc = 1;
+    const draw = (b) => {
+      const c = cv.getContext('2d'); if (!c) return;
+      c.fillStyle = '#0b0d10'; c.fillRect(0, 0, 640, 200);
+      c.textBaseline = 'middle'; c.textAlign = 'left';
+      c.fillStyle = '#fff'; c.font = `800 22px ${FONT}`; c.fillText(`${theme.name}역 열차 도착`, 14, 20);
+      c.textAlign = 'right'; c.fillStyle = b.live ? '#69db7c' : '#ffd43b'; fitText(c, `${b.note} · ${b.noteEn}`, 380, 15, 600); c.fillText(`${b.note} · ${b.noteEn}`, 626, 20);
+      b.rows.slice(0, 4).forEach((r, i) => {
+        const y = 60 + i * 38;
+        c.textAlign = 'left'; const bw = lineBadge(c, 14, y - 14, 28, r.color, r.short);
+        c.textAlign = 'left'; c.fillStyle = '#ffe066'; fitText(c, r.dest + (r.kind ? ` (${r.kind})` : ''), 300 - bw, 22, 700); c.fillText(r.dest + (r.kind ? ` (${r.kind})` : ''), 26 + bw, y);
+        c.textAlign = 'right'; c.fillStyle = r.last ? '#ff8787' : '#ffa94d'; fitText(c, (r.last ? '막차 · ' : '') + r.msg, 250, 22, 700); c.fillText((r.last ? '막차 · ' : '') + r.msg, 626, y);
+      });
+      bt.needsUpdate = true;
+    };
+    boardTick = (dt) => { acc += dt; if (acc < 1) return; acc = 0; board.tick?.(1); const b = board.get(); if (board.version !== seen) { seen = board.version; draw(b); } };
+    boardTick(1);
+  }
 
   // 개찰구 날개 (통로마다 2장) + LED
   const flapGeo = new THREE.BoxGeometry(0.42, 0.55, 0.04);
@@ -521,7 +556,7 @@ export function buildConcourse({ exits, groups, entryId, look, renderer, onToast
     animateAvatar(me, speed, dt);
     for (const ln of lanes) { ln.t -= dt; ln.ok -= dt; const want = ln.t > 0 ? 1 : 0; ln.open += Math.sign(want - ln.open) * Math.min(Math.abs(want - ln.open), dt * 4); }
     for (const n of npcs) updateNpc(n, dt);
-    drawGates(); drawSteps(dt);
+    drawGates(); drawSteps(dt); boardTick(dt);
     crowd.begin();
     crowd.add(me, meParts, false);
     for (const n of npcs) if (n.fixed || n.route) crowd.add(n.mesh, n.parts, false);
@@ -537,7 +572,7 @@ export function buildConcourse({ exits, groups, entryId, look, renderer, onToast
     const entered = pass && pass !== lastPass ? pass : null; lastPass = pass;
     wellHintT -= dt;
     const well = nearWellTop(p.x, p.z);
-    let wellHint = null; if (well && wellHintT <= 0) { wellHint = well; wellHintT = 6; }
+    let wellHint = null; if (well && wellHintT <= 0) { wellHint = wellTxt(well); wellHintT = 6; }
     return { enteredPassage: entered, wellHint };
   }
   function render() { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.render(scene, camera); }

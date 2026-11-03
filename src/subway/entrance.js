@@ -1,6 +1,6 @@
-// [subway] 바깥 월드의 정자역 출입구 (실제 OSM 출구 위치마다 하나씩)
+// [subway] 바깥 월드의 지하철역 출입구 (실제 OSM 출구 위치마다 하나씩, 역마다 buildEntrances 한 번)
 //
-//   한 출입구 = 낮은 화강석 벽 + 캐노피 + 앞쪽 간판(출구 번호·정자역·노선 색) + 옆 기둥 간판 + 내려가는 계단 구덩이.
+//   한 출입구 = 낮은 화강석 벽 + 캐노피 + 앞쪽 간판(출구 번호·역 이름·노선 색) + 옆 기둥 간판 + 내려가는 계단 구덩이.
 //   계단 구덩이는 지면을 실제로 파지 않는다: 스텐실로 '입구 구멍' 픽셀만 표시 → 그 픽셀의 깊이를 비우고 → 계단을 그린다.
 //     mark (renderOrder 1000): 구멍 사각형, 색·깊이 안 씀, 보이는 픽셀에 stencil=1
 //     clear (1001): stencil==1 인 곳 깊이를 맨 뒤(1.0)로
@@ -8,7 +8,8 @@
 //   → 앞에 서 있는 사람(renderOrder 0, 먼저 그림)은 mark 에서 가려져 그대로 남는다.
 //   전체 출구 수와 무관하게 draw call ≈ 6 (위 구조 1 · 글자/조명 1 · mark · clear · pit · 지붕 유리 없음)
 import * as THREE from 'three';
-import { createBuilder, createAtlas, FONT, LINE, lineBadge, exitNumber } from './geom.js';
+import { createBuilder, createAtlas, FONT, fitText, lineBadge, exitNumber } from './geom.js';
+import { JEONGJA_THEME } from './stations.js';
 
 const W = 3.0;       // 계단 폭
 const L = 5.6;       // 구멍 길이 (앞 → 뒤)
@@ -41,7 +42,8 @@ function segDir(px, pz, roads) {
 }
 
 // 출구 하나의 방향·위치 고르기: 가까운 큰길과 나란히, 역 쪽으로 내려가게. 건물·차도에 걸리면 돌리거나 조금 옮긴다.
-export function placeEntrance(exit, { roads, station, isFree }) {
+//   radii: 제자리에서 못 찾으면 옮겨 볼 거리들 (기본 = 정자 런타임 그대로)
+export function placeEntrance(exit, { roads, station, isFree, radii = [1.5, 3, 4.5, 6] }) {
   const road = segDir(exit.x, exit.z, roads);
   const base = road ? road.a : 0;
   const toSt = { x: station.x - exit.x, z: station.z - exit.z };
@@ -49,7 +51,7 @@ export function placeEntrance(exit, { roads, station, isFree }) {
     .map((ry) => ({ ry, pref: Math.sin(ry) * toSt.x + Math.cos(ry) * toSt.z }))
     .sort((a, b) => b.pref - a.pref);
   const shifts = [[0, 0]];
-  for (const r of [1.5, 3, 4.5, 6]) for (let k = 0; k < 8; k++) shifts.push([Math.cos((k * Math.PI) / 4) * r, Math.sin((k * Math.PI) / 4) * r]);
+  for (const r of radii) for (let k = 0; k < 8; k++) shifts.push([Math.cos((k * Math.PI) / 4) * r, Math.sin((k * Math.PI) / 4) * r]);
   let best = null;
   for (const [sx, sz] of shifts) {
     for (const c of cands) {
@@ -65,47 +67,50 @@ export function placeEntrance(exit, { roads, station, isFree }) {
   return best;
 }
 
-function drawFascia(ctx, w, h, ex) {
+function drawFascia(ctx, w, h, ex, th) {
   ctx.fillStyle = '#1d2228'; ctx.fillRect(0, 0, w, h);
   exitNumber(ctx, 8, 8, h - 16, ex.ref);
   let x = h + 6;
+  const bx = w - 236; // 노선 뱃지 (최대 2개, 위·아래)
   ctx.fillStyle = '#fff'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
-  ctx.font = `800 ${Math.round(h * 0.42)}px ${FONT}`; ctx.fillText('정자역', x, h * 0.38);
-  ctx.font = `600 ${Math.round(h * 0.22)}px ${FONT}`; ctx.fillStyle = '#c9d1d9'; ctx.fillText('Jeongja', x + 2, h * 0.76);
-  const bx = w - 236;
-  lineBadge(ctx, bx, h * 0.14, h * 0.32, LINE.suin, '수인분당');
-  lineBadge(ctx, bx + 4, h * 0.54, h * 0.32, LINE.shin, '신분당');
+  fitText(ctx, th.name + '역', bx - x - 8, Math.round(h * 0.42), 800); ctx.fillText(th.name + '역', x, h * 0.38);
+  ctx.fillStyle = '#c9d1d9'; fitText(ctx, th.nameEn, bx - x - 8, Math.round(h * 0.22), 600); ctx.fillText(th.nameEn, x + 2, h * 0.76);
+  th.lines.slice(0, 2).forEach((l, i) => lineBadge(ctx, bx + i * 4, h * (th.lines.length > 1 ? 0.14 + i * 0.4 : 0.34), h * 0.32, l.color, l.short));
   ctx.textAlign = 'left';
 }
-function drawPillar(ctx, w, h, ex) {
+function drawPillar(ctx, w, h, ex, th) {
   ctx.fillStyle = '#1d2228'; ctx.fillRect(0, 0, w, h);
   exitNumber(ctx, 10, 10, w - 20, ex.ref);
-  ctx.fillStyle = LINE.suin; ctx.fillRect(10, w + 4, w - 20, 22);
-  ctx.fillStyle = LINE.shin; ctx.fillRect(10, w + 30, w - 20, 22);
+  const bars = th.lines.slice(0, 2);
+  bars.forEach((l, i) => { ctx.fillStyle = l.color; ctx.fillRect(10, w + 4 + i * 26, w - 20, bars.length > 1 ? 22 : 48); });
   ctx.fillStyle = '#fff'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  ctx.font = `800 ${Math.round(w * 0.3)}px ${FONT}`;
-  const t = '정자역';
-  for (let i = 0; i < t.length; i++) ctx.fillText(t[i], w / 2, w + 90 + i * w * 0.36);
-  ctx.font = `600 ${Math.round(w * 0.15)}px ${FONT}`; ctx.fillStyle = '#c9d1d9';
-  ctx.fillText('Jeongja', w / 2, h - 26);
+  const t = th.name + '역';
+  const step = Math.min(w * 0.36, (h - 60 - (w + 90)) / Math.max(1, t.length - 1)); // 가락시장역(5자)까지 영문 위에 들어가게
+  ctx.font = `800 ${Math.round(Math.min(w * 0.3, step * 0.86))}px ${FONT}`;
+  for (let i = 0; i < t.length; i++) ctx.fillText(t[i], w / 2, w + 90 + i * step);
+  ctx.fillStyle = '#c9d1d9'; fitText(ctx, th.nameEn, w - 8, Math.round(w * 0.15), 600);
+  ctx.fillText(th.nameEn, w / 2, h - 26);
   ctx.textAlign = 'left';
 }
 
-export function buildEntrances({ scene, overlay, exits, data, world, terrain }) {
+// exits: resolveExits / corridorExits 결과. exit.place 가 있으면 (코리더 역, 미리 구운 위치) 그대로 쓰고 없으면 런타임에 고른다 (정자역)
+// theme: stationTheme() (기본 = 정자역 1단계 그대로)
+export function buildEntrances({ scene, overlay, exits, data, world, terrain, theme = JEONGJA_THEME }) {
   const group = new THREE.Group(); group.name = 'subwayEntrances';
   const top = createBuilder(), pit = createBuilder(), mark = createBuilder(), glow = createBuilder();
   const rowsH = Math.ceil(exits.length / 2) * 98 + Math.ceil(exits.length / 10) * 386 + 4; // 앞 간판 504×96 2개씩 + 기둥 96×384 10개씩
-  const atlas = createAtlas(1024, 2 ** Math.ceil(Math.log2(Math.max(256, rowsH))), 'entrances'); // 정자역 6개 → 1024×1024
+  const atlas = createAtlas(1024, 2 ** Math.ceil(Math.log2(Math.max(256, rowsH))), 'entrances-' + theme.id); // 정자역 6개 → 1024×1024
   const white = atlas.add(8, 8, (c, w, h) => { c.fillStyle = '#fff'; c.fillRect(0, 0, w, h); });
   const isFree = (x, z) => !world.isBlocked(x, z, 0.2) && !world.onRoad(x, z);
   const gy = (x, z) => (terrain ? terrain.getGroundHeight(x, z, 0) : 0);
-  const list = [];
+  const list = [], labels = [];
   const fm = new THREE.Matrix4();
   // 같은 크기끼리 먼저 모아 그려야 행이 낭비되지 않는다 (앞 간판 줄 → 기둥 간판 줄)
-  const fasciaUv = new Map(exits.map((ex) => [ex, atlas.add(504, 96, (c, w, h) => drawFascia(c, w, h, ex))]));
-  const pillarUv = new Map(exits.map((ex) => [ex, atlas.add(96, 384, (c, w, h) => drawPillar(c, w, h, ex))]));
+  const fasciaUv = new Map(exits.map((ex) => [ex, atlas.add(504, 96, (c, w, h) => drawFascia(c, w, h, ex, theme))]));
+  atlas.row(); // 홀수 개면 마지막 앞 간판 줄 옆에 기둥이 끼어 줄 높이가 384 로 커진다 → 기둥은 새 줄부터
+  const pillarUv = new Map(exits.map((ex) => [ex, atlas.add(96, 384, (c, w, h) => drawPillar(c, w, h, ex, theme))]));
   for (const ex of exits) {
-    const p = placeEntrance(ex, { roads: data.roads, station: data.station, isFree });
+    const p = ex.place ? { ...ex.place } : placeEntrance(ex, { roads: data?.roads, station: data?.station || { x: 0, z: 0 }, isFree });
     if (!p) continue;
     const e = { exit: ex, x: p.x, z: p.z, ry: p.ry, shift: p.shift, bad: p.bad };
     let y = -Infinity;
@@ -154,8 +159,8 @@ export function buildEntrances({ scene, overlay, exits, data, world, terrain }) 
     glow.quad(-2.25, 1.7, -0.24, 0.5, 2.0, '#ffffff', { uv: pillar });
     glow.quad(0, 3.02, L / 2, 0.35, L - 0.6, '#fff4dc', { rx: Math.PI / 2, uv: white }); // 캐노피 아래 조명
     if (overlay) {
-      const label = ex.ref ? `🚇 정자역 ${ex.ref}번 출구` : '🚇 정자역 출구';
-      overlay.add({ cls: 'label subway-exit', text: label, getPos: () => new THREE.Vector3(e.x, e.y + 4.2, e.z), maxDist: 70, minDist: 0 });
+      const label = ex.ref ? `🚇 ${theme.name}역 ${ex.ref}번 출구` : `🚇 ${theme.name}역 출구`;
+      labels.push(overlay.add({ cls: 'label subway-exit', text: label, getPos: () => new THREE.Vector3(e.x, e.y + 4.2, e.z), maxDist: 70, minDist: 0 }));
     }
   }
   const tex = atlas.texture();
@@ -197,6 +202,6 @@ export function buildEntrances({ scene, overlay, exits, data, world, terrain }) 
   };
   return {
     group, list, blocks, zoneAt, near, texture: tex,
-    dispose() { scene.remove(group); group.traverse((o) => o.geometry?.dispose()); for (const m of mats) m.dispose(); tex.dispose(); },
+    dispose() { scene.remove(group); group.traverse((o) => o.geometry?.dispose()); for (const m of mats) m.dispose(); tex.dispose(); for (const it of labels) overlay?.remove(it); labels.length = 0; },
   };
 }

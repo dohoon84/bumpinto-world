@@ -1,6 +1,7 @@
 import { PhoneBook } from "./book.js";
 import { Room } from "./room.js";
 import { handlePhotos } from "./photos.js";
+import { subwayArrival } from "./subway.js";
 
 export { PhoneBook, Room };
 
@@ -72,7 +73,7 @@ async function newsTip(request, env, cors) {
 }
 
 export default {
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
     const cors = {
       "Access-Control-Allow-Origin": allowOrigin(request, env),
       "Access-Control-Allow-Methods": "GET, POST, PUT, PATCH, DELETE, OPTIONS",
@@ -121,6 +122,7 @@ export default {
       return json({ ok: true, region: queryRegion, online, residents, ...extra }, 200, cors);
     }
     if (url.pathname === "/photos" || url.pathname.startsWith("/photos/")) return handlePhotos(request, env, cors, url); // [photo-cloud] 사진 보관함 (R2)
+    if (url.pathname === "/subway/arrival") return subwayArrival(request, env, cors, url, ctx); // [subway] 실시간 도착 (secret SEOUL_SUBWAY_KEY, 25초 캐시)
     if (url.pathname === "/news-tip") return newsTip(request, env, cors); // [camera] 사진 뉴스 제보 (본문이 커서 따로 받음)
     const method = ROUTES[url.pathname];
     if (!method || request.method !== "POST") return json({ ok: false, error: "not_found" }, 404, cors);

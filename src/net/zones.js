@@ -21,6 +21,20 @@ const BAND_MIN = ZONE_BASE - HALF;
 export const ZONES = Object.freeze([
   '',                 // 0: 바깥 (쓰지 않음)
   'jeongja-station',  // 1: 정자역 대합실 (1단계)
+  // 코리더 역 대합실 (2026-11-03 추가, 정자역 대합실 틀 재사용). 순서 = 정자 → 잠실 노선 순, 덧붙이기만
+  'sunae-station',     // 2: 수내
+  'seohyeon-station',  // 3: 서현
+  'imae-station',      // 4: 이매
+  'yatap-station',     // 5: 야탑
+  'moran-station',     // 6: 모란
+  'taepyeong-station', // 7: 태평
+  'gachon-station',    // 8: 가천대
+  'bokjeong-station',  // 9: 복정
+  'munjeong-station',  // 10: 문정
+  'garak-station',     // 11: 가락시장
+  'songpa-station',    // 12: 송파
+  'seokchon-station',  // 13: 석촌
+  'jamsil-station',    // 14: 잠실
 ]);
 const SLOT = new Map(ZONES.map((z, i) => [z, i]));
 

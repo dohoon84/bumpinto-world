@@ -79,6 +79,7 @@ export function createAtlas(size = 1024, height = size, name = 'atlas') {
       x += w + PAD; rowH = Math.max(rowH, h);
       return r;
     },
+    row() { if (x > 0) { x = 0; y += rowH + PAD; rowH = 0; } }, // 다음 add 는 새 줄에서
     used: () => ({ w: size, h: height, y: y + rowH }),
     texture() {
       const t = new THREE.CanvasTexture(cv);
@@ -114,5 +115,5 @@ export function exitNumber(ctx, x, y, s, ref) {
   ctx.fillStyle = '#FFC20E'; roundRect(ctx, x, y, s, s, s * 0.12); ctx.fill();
   if (!ref) return;
   ctx.fillStyle = '#111'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  ctx.font = `900 ${Math.round(s * 0.78)}px ${FONT}`; ctx.fillText(ref, x + s / 2, y + s / 2 + s * 0.04);
+  fitText(ctx, ref, s * 0.9, Math.round(s * 0.78), 900); ctx.fillText(ref, x + s / 2, y + s / 2 + s * 0.04); // '2-1' 같은 긴 번호는 줄여서
 }
