@@ -18,8 +18,8 @@ import { extractLifeHints, gatherLifeHints } from './lifeHints.js'; // [life] �
 import { setNightCut, updateNight } from './nightLights.js';
 
 // streams: 탄천 지류 하도(streams.json). ?streams=0 이면 false → 예전과 같은 데이터만
-export async function loadCorridorData(baseUrl, { streams = true } = {}) {
-  const get = (f) => fetch(baseUrl + f).then((r) => (r.ok ? r.json() : null)).catch(() => null);
+export async function loadCorridorData(baseUrl, { streams = true, fetchFn = fetch } = {}) {
+  const get = (f) => fetchFn(baseUrl + f).then((r) => (r.ok ? r.json() : null)).catch(() => null);
   const [index, base, tancheon, streamsData] = await Promise.all([get('index.json'), get('base.json'), get('tancheon.json'), streams ? get('streams.json') : null]);
   return index && base ? { index, base, baseUrl, tancheon, streams: streamsData } : null;
 }

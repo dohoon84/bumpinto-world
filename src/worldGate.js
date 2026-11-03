@@ -323,7 +323,7 @@ export function openWorldGate({ onEnter }) {
   globe.rotation.y = -Math.atan2(initialMarker.spot.x, initialMarker.spot.z);
   globe.rotation.x = Math.max(-0.35, Math.min(0.35, (initialMarker.region.lat - 28) * 0.006));
 
-  let alive = true, raf = 0, drag = null, moved = 0, lastT = 0, toastTimer = 0, statsTimer = 0, countdownTimer = 0;
+  let alive = true, raf = 0, drag = null, moved = 0, lastT = 0, frameNo = 0, toastTimer = 0, statsTimer = 0, countdownTimer = 0;
   let targetRotY = null;
   let targetRotX = null;
   let pauseSpinUntil = 0;
@@ -825,8 +825,10 @@ export function openWorldGate({ onEnter }) {
   const loop = (t) => {
     if (!alive) return;
     raf = requestAnimationFrame(loop);
-    const dt = lastT ? Math.min(0.08, Math.max(0.004, (t - lastT) / 1000)) : 1 / 60;
+    // [globe-startup] 첫 몇 프레임(셰이더·텍스처 업로드가 끼는 구간)의 긴 간격은 회전 '점프'로 이어지지 않게 1/60 로
+    const dt = lastT && frameNo > 2 ? Math.min(0.08, Math.max(0.004, (t - lastT) / 1000)) : 1 / 60;
     lastT = t;
+    frameNo += 1;
     if (drag) {
       targetRotY = null;
       targetRotX = null;
@@ -903,5 +905,19 @@ export function openWorldGate({ onEnter }) {
   addEventListener('blur', clearDrag);
   fit();
   addEventListener('resize', onResize);
-  requestAnimationFrame(loop);
+  // [globe-startup] 셰이더 프리웜: KHR_parallel_shader_compile 이 있으면 지구본 셰이더를 백그라운드에서 링크하고,
+  //   지구 텍스처도 미리 올린 뒤 첫 프레임을 그린다 → 첫 render() 가 링크/업로드를 기다리며 메인 스레드를 막지 않음.
+  //   확장이 없으면(동기 컴파일) 기다릴 이유가 없으니 바로 시작, 있어도 최대 300ms 만 기다린다.
+  let started = false;
+  const start = () => {
+    if (started || !alive) return;
+    started = true;
+    raf = requestAnimationFrame(loop);
+  };
+  try {
+    renderer.initTexture(earth.material.map);
+    if (renderer.extensions.has('KHR_parallel_shader_compile')) renderer.compileAsync(scene, camera).then(start, start);
+    else start();
+  } catch { /* 구형 three/드라이버: 바로 시작 */ start(); }
+  setTimeout(start, 300);
 }
