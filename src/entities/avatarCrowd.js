@@ -16,7 +16,7 @@ export function buildCrowd(group, { name = 'corridorCrowd', cast = null } = {}) 
       root.traverse((o) => {
         if (!o.isMesh || Array.isArray(o.material)) return;
         const m = o.material;
-        const lam = m.isMeshLambertMaterial && !m.map && !m.transparent && m.side === THREE.FrontSide && (!m.emissive || m.emissive.getHex() === 0);
+        const lam = m.isMeshLambertMaterial && !m.vertexColors && !m.map && !m.transparent && m.side === THREE.FrontSide && (!m.emissive || m.emissive.getHex() === 0);
         const key = (lam ? 'L|' : 'M|' + m.uuid + '|') + o.geometry.uuid;
         let P = parts.get(key);
         if (!P) parts.set(key, (P = { geo: o.geometry, mat: lam ? null : m, lam, cast: o.castShadow, cap: 0, n: 0, im: null }));
