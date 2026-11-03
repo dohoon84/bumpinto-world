@@ -2,6 +2,7 @@
 //   - 현대백화점(일반 매스, 로고·전용 서체·브랜드 색 없음): OSM building:part 높이 그대로 + 띠 장식·쇼윈도·입구 캐노피·'현대백화점' 글자 표지
 //   - 알파돔시티 타워 4동: OSM 높이 그대로 유리 커튼월(정자 office 파사드·야간 창 불빛 공유) + 세로 핀·포디움 캐노피·옥상 크라운
 //   - 판교역 광장 데크: OSM 외곽(높이 태그 없음 → 2층 높이 5.4–6.4m 로 표현) + 기둥·난간
+//   - 엔씨소프트 R&D센터: OSM building 겹층 5개(높이·min_height·층수 태그 그대로) + 층 띠·멀리언·로비 유리·필로티 밑면 조명·옥상 난간. 이름 표지/라벨/로고 없음
 //   - 지하철 출입구 4곳: OSM 출입구 노드 위치/번호, 방향 = 가까운 보행로. 유리 캐노피 + 노선색 띠 + 번호판
 //   모델은 해당 상세 타일이 빌드될 때 그 타일 그룹에 붙고 타일과 함께 해제된다(멀리선 LOD 상자). 재질은 모듈 공유,
 //   정점 색으로 합쳐 랜드마크 묶음당 draw 3~6 (+ 야간 발광 1, 낮에는 숨김).
@@ -16,6 +17,7 @@ const C = {
   stone: '#d8ccb8', stoneDark: '#bfb29c', reveal: '#a99c86', shopGlass: '#3e5566', cornice: '#efe8dc', canopy: '#5d646e',
   fin: '#dfe6ee', crown: '#eef2f6', mech: '#9aa3ad', podium: '#41586a', deckSide: '#9c9a96', deckTop: '#a8896b', rail: '#c9dbe4', column: '#c3c0ba',
   frame: '#4a525c', plate: '#1d2a44',
+  ncSlab: '#e4e8ec', ncMullion: '#b9c2cb', ncLobby: '#33495a', ncSoffit: '#c9ced3', ncParapet: '#eef1f4',
 };
 
 // ---------- 공유 재질 / 텍스처 (모듈 1회) ----------
@@ -161,6 +163,41 @@ function buildTowers(l, { seed }) {
   return { group: g, night };
 }
 
+// ---------- 엔씨소프트 R&D센터 ----------
+//   높이·하단 높이·층수 = OSM 태그(build-pangyo.mjs, fl = building:levels − building:min_level). 층 띠는 (h − mh)/fl 간격.
+//   게임 기본값(공개 자료 없음, 표현용): 멀리언 간격 3m · 로비 유리 높이(포디움 높이 −0.6m) · 옥상 난간 1.2m · 기계실 3m
+const NC_MULLION = 3;
+function buildNcsoft(l, { seed }) {
+  const g = new THREE.Group(); g.name = 'ncsoftRnd';
+  for (const m of buildingMeshes(l.parts.map((p) => ({ o: p.o, holes: p.holes, h: p.h, mh: p.mh || 0, k: 'office' })), seed)) g.add(m); // office 파사드 + 야간 창 불빛 공유
+  const bag = Bag(), lit = Bag();
+  const top = l.parts.reduce((a, b) => (b.h > a.h ? b : a));
+  for (const p of l.parts) {
+    const y0 = p.mh || 0, h = p.h, fl = p.fl || Math.max(1, Math.round((h - y0) / 4));
+    if (y0 < 1) { // 포디움: 로비 유리 + 밤 불빛
+      band(bag, p.o, 0.3, h - 0.6, 0.12, 0.2, C.ncLobby, { minLen: 3 });
+      band(lit, p.o, 0.6, h - 1.2, 0.25, 0.05, '#ffffff', { minLen: 4 });
+    } else { // 들린 매스 밑면: 테두리 띠 + 밤 간접등
+      band(bag, p.o, y0 - 0.5, y0, 0.2, 0.3, C.ncSoffit, { minLen: 1 });
+      band(lit, p.o, y0 - 0.08, y0 - 0.03, -0.5, 0.5, '#ffffff', { minLen: 3 });
+    }
+    for (let i = 1; i < fl; i++) { const y = y0 + ((h - y0) * i) / fl; band(bag, p.o, y - 0.18, y + 0.18, 0.16, 0.22, C.ncSlab, { minLen: 2 }); } // 층 띠
+    if (y0 >= 1) for (const e of edges(p.o, 3)) { // 멀리언
+      const n = Math.floor(e.L / NC_MULLION);
+      for (let i = 1; i < n; i++) {
+        const t = i / n, x = e.ax + (e.bx - e.ax) * t + e.nx * 0.2, z = e.az + (e.bz - e.az) * t + e.nz * 0.2;
+        bag.box(x, (y0 + h) / 2, z, 0.16, h - y0, 0.35, -e.ang, C.ncMullion);
+      }
+    }
+    band(bag, p.o, h, h + 1.2, 0.08, 0.3, C.ncParapet, { minLen: 1 }); // 옥상 난간
+  }
+  bag.push(paintFaces(extrude(shrink(top.o, 0.4), [], top.h, top.h + 3), '#8d959e', C.mech)); // 기계실
+  band(lit, top.o, top.h + 0.7, top.h + 1.0, 0.3, 0.05, '#ffffff', { minLen: 4 });
+  const body = bag.mesh(vcMat(), 'ncsoftDetail'); if (body) g.add(body);
+  const night = lit.mesh(glow(), 'ncsoftGlow'); if (night) { night.castShadow = night.receiveShadow = false; g.add(night); }
+  return { group: g, night };
+}
+
 // ---------- 광장 데크 ----------
 function buildDeck(l) {
   const g = new THREE.Group(); g.name = 'pangyoDeck';
@@ -228,7 +265,7 @@ function buildEntrances(l) {
   return { group: g, night };
 }
 
-const BUILDERS = { pangyoDept: buildDept, pangyoTowers: buildTowers, pangyoDeck: buildDeck, pangyoEntrances: buildEntrances };
+const BUILDERS = { pangyoDept: buildDept, pangyoTowers: buildTowers, pangyoDeck: buildDeck, pangyoEntrances: buildEntrances, ncsoftRnd: buildNcsoft };
 const TS = 500;
 const tileKeyOf = (l) => { const p = l.pos || l.entrances?.[0]; return `${Math.floor(p.x / TS)}_${Math.floor(p.z / TS)}`; };
 

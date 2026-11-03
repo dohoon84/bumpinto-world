@@ -29,8 +29,9 @@ let n = 0; const ok = (name) => { n++; console.log('ok', n, name); };
 }
 
 // 2) 타일 구성: add = 기존 코리더 타일(하도 컷 없음), new = 코리더에 없던 칸. 박스는 코리더 이동 경계 안
-const B = pg.meta.box, CB = cIndex.meta.bounds;
-assert.ok(B.x0 >= CB.x0 && B.x1 <= CB.x1 && B.z0 >= CB.z0 && B.z1 <= CB.z1, '판교 박스가 코리더 이동 범위 밖');
+const B = pg.meta.box, CB = cIndex.meta.bounds, BOXES = pg.meta.boxes || [B]; // [ncsoft] 덧박스 포함
+for (const X of BOXES) assert.ok(X.x0 >= CB.x0 && X.x1 <= CB.x1 && X.z0 >= CB.z0 && X.z1 <= CB.z1, '판교 박스가 코리더 이동 범위 밖');
+const nearBox = (x, z, m) => BOXES.some((X) => x >= X.x0 - m && x <= X.x1 + m && z >= X.z0 - m && z <= X.z1 + m);
 const tiles = {};
 for (const [k, t] of Object.entries(pg.tiles)) {
   assert.equal(t.mode, cIndex.tiles[k] ? 'add' : 'new', k);
@@ -40,7 +41,7 @@ for (const [k, t] of Object.entries(pg.tiles)) {
   if (t.mode === 'add') assert.equal(add.floor.length, 0, `${k}: add 타일은 바닥을 다시 깔지 않음`);
   else assert.ok(add.floor.length > 0, `${k}: 새 타일 바닥`);
   for (const b of add.b) { assert.ok(b.o.length >= 3 && b.h > 0 && (b.mh || 0) < b.h, `${k} 건물 높이`); }
-  for (const r of add.r) { assert.ok(r.p.length >= 2 && r.w > 0, `${k} 도로`); for (const [x, z] of r.p) assert.ok(x >= B.x0 - 30 && x <= B.x1 + 30 && z >= B.z0 - 30 && z <= B.z1 + 30, `${k} 도로가 박스 밖`); }
+  for (const r of add.r) { assert.ok(r.p.length >= 2 && r.w > 0, `${k} 도로`); for (const [x, z] of r.p) assert.ok(nearBox(x, z, 30), `${k} 도로가 박스 밖`); }
 }
 ok('tile modes, floors, buildings, roads inside box');
 
@@ -75,7 +76,7 @@ ok('no duplicates of existing corridor buildings');
 // 5) 역·랜드마크: 판교역(신분당선·경강선) 출구 4개, 랜드마크 4종, 랜드마크 건물은 타일에서 nr(전용 모델), 충돌 유지(데크는 아래로 통과)
 const st = pg.stations[0];
 assert.equal(st.id, 'pangyo'); assert.deepEqual(st.lines, ['신분당선', '경강선']); assert.equal(st.exits.length, 4);
-assert.deepEqual(pg.landmarks.map((l) => l.model).sort(), ['pangyoDeck', 'pangyoDept', 'pangyoEntrances', 'pangyoTowers']);
+assert.deepEqual(pg.landmarks.map((l) => l.model).sort(), ['ncsoftRnd', 'pangyoDeck', 'pangyoDept', 'pangyoEntrances', 'pangyoTowers']);
 const lmB = Object.values(tiles).flatMap((t) => t.b.filter((b) => b.lm));
 assert.ok(lmB.length >= 9 && lmB.every((b) => b.nr), 'landmark footprints nr');
 const t07 = buildDetailTile('0_-7', tiles['0_-7'], { terrain: null, onRoadAll: () => false });
@@ -111,7 +112,7 @@ ok('edge normals point outward');
 {
   const labels = [];
   const lm = createPangyoLandmarks(pg, { overlay: { add: (o) => labels.push(o.text) } });
-  assert.deepEqual(lm.keys.sort(), ['0_-6', '0_-7']);
+  assert.deepEqual(lm.keys.sort(), ['0_-6', '0_-7', '0_-8']);
   assert.equal(labels.length, 3);
   // 상호는 글자로만 허용(도훈님 승인): 백화점 라벨 = '현대백화점' 평문, 다른 라벨엔 상호 없음. 로고·이미지 텍스처는 없음(표지 = 캔버스 글자)
   assert.ok(labels.some((s) => s.includes('현대백화점')), 'dept label = 현대백화점 ' + labels.join(','));
@@ -121,8 +122,8 @@ ok('edge normals point outward');
     const g = lm.build(k);
     g.traverse((o) => { if (!o.isMesh) return; meshes++; mats.add(o.material); const gi = o.geometry; tris += (gi.index ? gi.index.count : gi.attributes.position.count) / 3; if (/Glow/.test(o.name)) glow.push(o); });
   }
-  assert.ok(meshes <= 16, 'landmark meshes ' + meshes);
-  assert.ok(tris < 60000, 'landmark tris ' + tris);
+  assert.ok(meshes <= 20, 'landmark meshes ' + meshes);
+  assert.ok(tris < 80000, 'landmark tris ' + tris);
   assert.ok(glow.length >= 3 && glow.every((m) => !m.visible), 'glow off by day');
   // build() 로 만든 그룹이 씬에 붙어 있어야 토글됨 → 붙인 뒤 확인
   const THREE = await import('three'); const scene = new THREE.Scene(); const roots = new Set(glow.map((m) => { let o = m; while (o.parent) o = o.parent; return o; })); for (const o of roots) scene.add(o);
@@ -154,4 +155,19 @@ ok('lod tiles build');
   assert.equal(pangyoEnabled('?pangyo=0'), false); // worldGate/globeCorridor 는 이 값으로 BRANCH_STATIONS=[] (본선 15역 그대로)
 }
 ok('globe station list + branch layout');
+
+// 11) [ncsoft] 엔씨소프트 R&D센터: 덧박스 안, OSM 부분 5개 높이 그대로, 이름 표지·라벨·로고 없음, 작은 메시 수
+{
+  const L = pg.landmarks.find((l) => l.model === 'ncsoftRnd');
+  assert.ok(L && !L.label, 'ncsoft: 라벨 없음');
+  assert.deepEqual(L.parts.map((p) => [p.id, p.mh, p.h]).sort(), [['w478539437', 8, 40], ['w478539439', 8, 32], ['w694434544', 0, 8], ['w694434545', 32, 58], ['w694434546', 40, 48]], 'OSM height/min_height');
+  assert.ok(L.parts.every((p) => p.s === 'osm:height'), 'heights from OSM tags');
+  const NB = pg.meta.boxes[1]; assert.ok(L.parts.every((p) => p.o.every(([x, z]) => x >= NB.x0 && x <= NB.x1 && z >= NB.z0 && z <= NB.z1)), 'ncsoft 덧박스 안');
+  const lm2 = createPangyoLandmarks(pg, { overlay: { add: () => {} } });
+  // 이름 없는 메시 = 코리더 공용 office 파사드(창 텍스처) — 그 외엔 텍스처 없음
+  const g = lm2.build('0_-8'); let n = 0, tri = 0; const names = [];
+  g.traverse((o) => { if (o.isMesh) { n++; names.push(o.name); tri += (o.geometry.index ? o.geometry.index.count : o.geometry.attributes.position.count) / 3; assert.ok(!/sign|label|logo/i.test(o.name) && (!o.name || !o.material.map), 'ncsoft: 표지·글자·로고 텍스처 없음 ' + o.name); } });
+  assert.ok(n <= 5, 'ncsoft meshes ' + n);
+  ok(`ncsoft: ${L.parts.length} OSM parts (0–58m), ${n} meshes, ${Math.round(tri)} tris, no sign/label/logo`);
+}
 console.log('pangyo: all', n, 'checks passed');
