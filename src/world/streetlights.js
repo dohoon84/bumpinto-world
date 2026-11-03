@@ -63,7 +63,7 @@ export function createStreetlights({ scene, terrain = null, corridor = null, liv
   const groundAt = (x, z) => (terrain ? terrain.renderHeight(x, z) : 0);
   // 강 둔치(높이 < -0.3)는 차도 가로등을 건너뜀(가로수와 같은 규칙). 탄천 공원등(kind 3)은 둔치 바닥까지 서고 물·하상만 피함
   const FLOOR = terrain?.params?.FLOOR ?? -6;
-  const skipAt = (h, kind) => !!terrain && (kind === 3 ? h < FLOOR - 0.4 : h < -0.3);
+  const skipAt = (h, kind, x, z) => !!terrain && (kind === 3 ? h < (terrain.mainDrop ? terrain.floorAt(x, z) : FLOOR) - 0.4 : h < -0.3); // [pangyo-water] 둔치 = 낙차 반영
 
   const ready = fetch(url).then((r) => (r.ok ? r.json() : null)).catch(() => null).then((j) => {
     if (!j || disposed) return;
@@ -95,7 +95,7 @@ export function createStreetlights({ scene, terrain = null, corridor = null, liv
     for (let i = 0; i < n; i++) {
       const x = g.data[i * 4], z = g.data[i * 4 + 1], yaw = g.data[i * 4 + 2], kind = g.data[i * 4 + 3], s = SCALE[kind] ?? 1, ps = POOL_SCALE[kind] ?? 1;
       const h = groundAt(x, z);
-      if (skipAt(h, kind)) continue;
+      if (skipAt(h, kind, x, z)) continue;
       q.setFromAxisAngle(up, yaw);
       m4.compose(p.set(x, h, z), q, s3.set(s, s, s)).toArray(body, k * 16);
       // 웅덩이: 팔 방향(ux,uz)·직각(vx,vz) 경사를 따라 기울임
@@ -145,7 +145,7 @@ export function createStreetlights({ scene, terrain = null, corridor = null, liv
     for (let i = 0; i < g.data.length && k < room; i += 4) {
       const x = g.data[i], z = g.data[i + 1], kind = g.data[i + 3], s = (POOL_SCALE[kind] ?? 1) * OV_SCALE;
       const h = groundAt(x, z);
-      if (skipAt(h, kind)) continue;
+      if (skipAt(h, kind, x, z)) continue;
       q.setFromAxisAngle(up, g.data[i + 2]);
       m4.compose(p.set(x, h + OV_LIFT, z), q, s3.set(s, s, s)).toArray(arr, (n0 + k) * 16);
       k++;

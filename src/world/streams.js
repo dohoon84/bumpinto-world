@@ -48,7 +48,8 @@ function simplifyRows(rows, a, b, C, tolXZ, tolY, maxSpan, edgeIn = -1) {
   return out;
 }
 
-export function createStreams(S, { P, mainBase }) {
+// [pangyo-water] mainFloor/mainWater(x, z): 본류 둔치·수면 높이(정자→판교 낙차). 없으면 P.FLOOR / P.WATER 상수 (예전과 같음)
+export function createStreams(S, { P, mainBase, mainFloor = () => P.FLOOR, mainWater = () => P.WATER }) {
   const SP = S.meta.params;
   const list = S.streams.map((s) => ({ ...s, N: s.axis.length }));
   const byId = new Map(list.map((s) => [s.id, s]));
@@ -117,7 +118,7 @@ export function createStreams(S, { P, mainBase }) {
   const RN = Math.round(SP.RAMP / SP.STEP);
   for (const s of list) {
     const N = s.N, F = (s.F = new Float32Array(N)), W = (s.W = new Float32Array(N)), B = (s.B = new Float32Array(N));
-    const recv = s.into === 'tancheon' ? { h: mainBase, F: () => P.FLOOR } : s.into && byId.get(s.into)?.F ? (() => {
+    const recv = s.into === 'tancheon' ? { h: mainBase, F: mainFloor } : s.into && byId.get(s.into)?.F ? (() => {
       const r = byId.get(s.into);
       return { h: (x, z) => heightOne(r, x, z), F: (x, z) => { let bi = 0, bd = Infinity; r.axis.forEach((p, i) => { const d = (p[0] - x) ** 2 + (p[1] - z) ** 2; if (d < bd) { bd = d; bi = i; } }); return r.F[bi]; } };
     })() : null;
@@ -294,11 +295,11 @@ export function createStreams(S, { P, mainBase }) {
       const wc = new Float32Array([c.cWater.r, c.cWater.g, c.cWater.b, c.cWater.r, c.cWater.g, c.cWater.b]);
       for (let i = 0; i < N; i++) {
         const [x, z] = ax[i];
-        const inRiver = s.into === 'tancheon' && mainBase(x, z) < P.WATER - 0.2;
+        const inRiver = s.into === 'tancheon' && mainBase(x, z) < mainWater(x, z) - 0.2;
         if (s.sc[i] < 0.99 || inRiver) { flush(); continue; }
         if (i % 3 && i !== N - 1 && wRows.length && s.sc[i + 1] >= 0.99) continue;
         const [nx, nz] = nrm(i), hl = pr.wL[i] + 0.3, hr = pr.wR[i] + 0.3;
-        const y = s.iE >= 0 && i >= s.iE ? Math.max(renderHeight(x, z) + 0.03, P.WATER + 0.01) : s.W[i] + 0.02;
+        const y = s.iE >= 0 && i >= s.iE ? Math.max(renderHeight(x, z) + 0.03, mainWater(x, z) + 0.01) : s.W[i] + 0.02;
         wRows.push({ p: new Float32Array([x - nx * hl, y, z - nz * hl, x + nx * hr, y, z + nz * hr]), cl: wc, lock: false });
       }
       flush();
