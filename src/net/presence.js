@@ -111,6 +111,8 @@ export class WebSocketPresence extends Emitter {
   }
   sendChat(text) { if (this.ws?.readyState === 1) this.ws.send(JSON.stringify({ t: 'chat', text })); }
   sendEmote(kind, combo = 1) { if (this.ws?.readyState === 1) this.ws.send(JSON.stringify({ t: 'emote', kind, combo })); }
+  // [economy] 상점에서 탈것을 산 직후: 서버(Room)가 계정 보유를 다시 읽어 { t:'holdings' } 로 돌려준다
+  syncGifts() { if (this.ws?.readyState === 1) this.ws.send(JSON.stringify({ t: 'gifts_sync' })); }
   sendWeather(mode) {
     if (this.ws?.readyState !== 1) return;
     this.ws.send(JSON.stringify({ t: 'weather', mode: mode === 'rain' ? 'rain' : '' }));
@@ -255,6 +257,7 @@ export class MockPresence extends Emitter {
       }
     }, 320);
   }
+  syncGifts() {}
   sendWeather(mode) {
     this.emit('weather', { t: 'weather', mode: mode === 'rain' ? 'rain' : '' });
   }

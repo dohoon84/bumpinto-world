@@ -184,6 +184,12 @@ export class Room extends DurableObject {
     return out;
   }
 
+  // [economy] 상점에서 산 탈것(계정 귀속, D1). 선물함 보유에 합쳐 같은 #relayVeh 검사로 탈 수 있게 한다. 선물로 넘길 수는 없음(PhoneBook 에 없음)
+  async #shopGifts(accountId) {
+    if (!accountId || !this.env?.DB || !featureOn(this.env, "shop")) return [];
+    try { return normalizeHoldings(await accountVehicleGifts(this.env.DB, accountId)); } catch { return []; }
+  }
+
   async #loadGifts(deviceId) {
     try {
       const book = this.env?.PHONE_BOOK?.getByName(BOOK_KEY);
@@ -343,12 +349,8 @@ export class Room extends DurableObject {
       let auth = await this.#bikeAuth(rawDevice);
       if (!auth.isAdmin && userId && userId !== rawDevice) auth = await this.#bikeAuth(userId);
       const owned = await this.#loadGifts(userId);
-      // [economy] 상점에서 산 탈것(계정 귀속, D1)을 선물함 보유에 합친다 → 같은 #relayVeh 검사로 탈 수 있음. 선물로 넘길 수는 없음(PhoneBook 에 없음)
-      let shopGifts = [];
-      if (accountId && featureOn(this.env, "shop")) {
-        try { shopGifts = normalizeHoldings(await accountVehicleGifts(this.env.DB, accountId)); } catch {}
-        if (shopGifts.length) owned.gifts = normalizeHoldings([...owned.gifts, ...shopGifts]);
-      }
+      const shopGifts = await this.#shopGifts(accountId);
+      if (shopGifts.length) owned.gifts = normalizeHoldings([...owned.gifts, ...shopGifts]);
       me = {
         id,
         deviceId: userId || deviceId,
@@ -472,6 +474,20 @@ export class Room extends DurableObject {
       const kind = String(m.kind || "").trim().slice(0, 16);
       const combo = Math.max(1, Math.min(99, Math.floor(Number(m.combo) || 1)));
       if (kind) this.#broadcast({ t: "emote", id: me.id, kind, combo }, ws);
+      return;
+    }
+    // [economy] 상점 구매 직후 클라이언트가 보낸다: 재접속 없이 산 탈것을 바로 타도록 서버 쪽 보유(me.gifts)를 다시 읽고 돌려준다.
+    //   보유는 D1(account_vehicles) + PhoneBook 에서만 읽는다 — 클라이언트가 보낸 값은 쓰지 않음. 2초에 1번.
+    if (m.t === "gifts_sync") {
+      if (!me.accountId || now - (me.giftSyncAt || 0) < 2000) return;
+      me.giftSyncAt = now;
+      const owned = await this.#loadGifts(me.deviceId);
+      const shopGifts = await this.#shopGifts(me.accountId);
+      me.gifts = normalizeHoldings([...owned.gifts, ...shopGifts]);
+      if (shopGifts.length) me.shopGifts = shopGifts;
+      else delete me.shopGifts;
+      ws.serializeAttachment(me);
+      this.#send(ws, { t: "holdings", gifts: me.gifts });
       return;
     }
     if (m.t === "chat") {
