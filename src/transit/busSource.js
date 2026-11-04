@@ -17,6 +17,11 @@ const ARRIVAL_TTL_MS = 60000; // 정류장 도착정보 캐시 60초
 const HEADWAY_MIN = { M: 12, express: 12, premium: 15, seat: 12, city: 12, village: 10, intercity: 20, airport: 30 };
 const VMAX = { M: 15, intercity: 18, express: 12, premium: 12, seat: 11, city: 11, village: 9.5, airport: 14 };
 const ACC = 1.3, DEC = 1.8, DWELL = 9, LANE_OFF = 1.7;
+// [live-ride] 실시간 위치로 '운전되는' 버스(syncLive): 조회 사이엔 경로 위를 시뮬처럼 달리되 마지막 실시간 위치에서 LIVE_LEAD+1 번째
+//   정류장(cap)까지만 간다 → 다음 조회가 더 앞을 알려 주면 이어서 달리고, 아직이면 그 정류장에서 문 열고 기다린다(LIVE_HOLD 초까지).
+//   실시간 위치가 SNAP_M 넘게 어긋나면(조회 공백·순간이동) 그 자리로 옮긴다(페이드) — 단 누가 타고 있으면(b.ride) 절대 옮기지 않고
+//   경로를 따라 계속 달린다(고무줄 없음). 실시간에서 사라진 차량은 페이드아웃(타고 있으면 경로 끝까지 계속).
+export const LIVE_DWELL = 18, LIVE_LEAD = 1, LIVE_HOLD = 60, SNAP_M = 600, FADE_S = 1.2;
 const GRID = 24, LANE_W = 2.5, FOLLOW_GAP = 2.5, GIVE_UP = 8, LOOK = 40, MERGE_COS = 0.5; // [bus-net] 노선 간 간격(m)·차로 폭 허용·교착 포기(초)
 const SPACE_R = 650; // [bus-net] 코리더에서 간격 계산 반경(m) — 렌더 반경 450m 보다 넉넉히
 const gkey = (i, j) => i * 100003 + j;
@@ -50,7 +55,8 @@ export function projectOnPath(p, x, z) {
 }
 
 export class SimulatedBusSource {
-  constructor(transit, bounds, { seed = 1, spacing = false } = {}) {
+  constructor(transit, bounds, { seed = 1, spacing = false, dwell = DWELL } = {}) {
+    this.dwellBase = dwell; this.liveAll = false; this.livePaths = null; // [live-ride] liveAll: 모든 경로 실시간 제어(정자) · livePaths: 일부 경로만(코리더 노선별)
     // [bus-net] spacing: 다른 노선 버스와도 간격 유지·정류장 2번째 정차칸·노선 간 스폰 간격(?bus=sim 정자·코리더만 켬).
     //   끄면(기본: 정자 실시간 모드의 폴백 시뮬) 예전과 완전히 같다.
     this.spacing = spacing; this.stats = { done: 0, xfollow: 0, bay2: 0, giveUp: 0 };
@@ -86,6 +92,7 @@ export class SimulatedBusSource {
   update(dt, ctx, focus) {
     this.t += dt;
     for (const P of this.paths) {
+      if (this.liveAll || this.livePaths?.has(P)) continue; // [live-ride] 실시간이 맡은 경로엔 시뮬 버스를 새로 내지 않음
       P.nextSpawn -= dt;
       if (P.nextSpawn <= 0) {
         const tooClose = this.buses.some((b) => b.P === P && b.s < P.blen + 12) || (this.spacing && this._spawnBlocked(P));
@@ -95,12 +102,20 @@ export class SimulatedBusSource {
     if (this.spacing) this._buildGrid(focus);
     for (const b of this.buses) {
       const P = b.P; b.age += dt;
-      if (b.dwell > 0) { b.dwell -= dt; b.v = 0; b.state = 'dwell'; if (b.dwell <= 0) b.stopIdx++; continue; }
+      if (b.leave != null && !b.ride) { b.leave -= dt; if (b.leave <= 0) { b.done = true; continue; } } // [live-ride] 페이드아웃 후 제거
+      if (b.dwell > 0) {
+        b.dwell -= dt; b.v = 0; b.state = 'dwell';
+        // [live-ride] 실시간 버스가 cap 정류장에 서 있으면 다음 조회까지 문 열고 기다림(최대 LIVE_HOLD 초) — 타고 있으면 기다리지 않음
+        if (b.dwell <= 0 && b.live && !b.ride && b.capS != null && b.capS - b.s < 3 && (b.held || 0) < LIVE_HOLD) { b.held = (b.held || 0) + 0.5; b.dwell = 0.5; }
+        if (b.dwell <= 0) { b.stopIdx++; b.held = 0; }
+        continue;
+      }
       const front = b.s + P.blen / 2;
       let limit = P.L + 50, reason = 'run';
       // 1) 다음 정류장
       const st = P.stops[b.stopIdx];
       if (st && st.s - b.s < limit) { limit = st.s - b.s; reason = 'stop'; }
+      if (b.capS != null && !b.ride) { const g = b.capS - b.s; if (g < limit) { limit = Math.max(0, g); reason = 'cap'; } } // [live-ride] 실시간 위치보다 너무 앞서지 않게
       // [pangyo-express] endStop: 경로 끝(고속도로 합류 뒤)에서 서서히 멈춘 뒤 3초 뒤 사라짐(페이드 1.5초)
       if (P.endStop) { const g = P.L - 1 - b.s; if (g < limit) { limit = Math.max(0, g); reason = 'end'; } }
       // 2) 보행 신호가 초록/깜빡이면 횡단보도 앞 정지선에서 대기
@@ -130,10 +145,10 @@ export class SimulatedBusSource {
       b.v = b.v < target ? Math.min(target, b.v + ACC * dt) : Math.max(target, b.v - DEC * 2 * dt);
       b.s += b.v * dt;
       b.state = b.v < 0.2 ? (reason === 'xing' ? 'xing' : reason === 'follow' ? 'queue' : 'run') : 'run';
-      if (reason === 'stop' && limit < 0.6 && b.v < 0.6) { b.dwell = DWELL * (0.8 + hash(b.id + 'd') * 0.5); b.v = 0; b.state = 'dwell'; }
+      if (reason === 'stop' && limit < 0.6 && b.v < 0.6) { b.dwell = (b.live ? LIVE_DWELL : this.dwellBase) * (0.8 + hash(b.id + 'd') * 0.5); b.v = 0; b.state = 'dwell'; }
       // [bus-net] 앞 버스가 같은 정류장에 서 있으면 그 뒤(한 대 길이 뒤)에서 정차 = 2번째 정차칸
       if (blocker && st && b.v < 0.6 && limit < 0.8 && blocker.state === 'dwell' && blocker.P.stops[blocker.stopIdx]?.stop === st.stop && st.s - b.s < blocker.P.blen + 12) {
-        b.dwell = DWELL * (0.8 + hash(b.id + 'd') * 0.5); b.v = 0; b.state = 'dwell'; this.stats.bay2++;
+        b.dwell = (b.live ? LIVE_DWELL : this.dwellBase) * (0.8 + hash(b.id + 'd') * 0.5); b.v = 0; b.state = 'dwell'; this.stats.bay2++;
       }
       if (reason === 'end' && limit < 1.5 && b.v < 0.3) { b.endT = (b.endT || 0) + dt; b.state = 'end'; if (b.endT > 3) b.s = P.L; } // [pangyo-express]
       if (b.s >= P.L) { b.done = true; this.stats.done++; }
@@ -237,6 +252,55 @@ export class SimulatedBusSource {
     }
     return false;
   }
+  // ---- [live-ride] 실시간 위치로 버스 운전 ----
+  // items: [{ id, P, s, atStop? }] — 이번 조회에서 받은 차량(경로 P 위 s). scope: 이번 조회가 맡은 경로 Set(없으면 전부)
+  syncLive(items, scope = null) {
+    const inScope = (P) => !scope || scope.has(P);
+    const byId = new Map(); for (const b of this.buses) if (b.live) byId.set(b.live, b);
+    const seen = new Set();
+    for (const it of items) {
+      seen.add(it.id);
+      let b = byId.get(it.id);
+      if (b && b.ride) continue; // 타고 있는 버스: 실시간이 어디라고 하든 경로를 따라 계속(내린 뒤 다음 조회에서 다시 맞춘다)
+      if (b && b.P !== it.P) { b.live = null; b.leave = FADE_S; b = null; } // 방향(경로)이 바뀜 → 옛 차는 페이드아웃
+      if (!b) { this._spawnLive(it); continue; }
+      b.leave = null;
+      // 조회 공백·순간이동: 실시간이 SNAP_M 넘게 앞서면, 또는 우리가 허용 선행거리(cap)보다 더 뒤에 있다고 하면 그 자리로(페이드인).
+      //   cap 안쪽으로 뒤처진 실시간(정류소 순번은 '마지막으로 지난 정류장')은 점프하지 않고 다음 정류장에서 기다린다(고무줄 없음)
+      const lead = this._leadEnd(b.P, it.s) - it.s;
+      if (it.s - b.s > SNAP_M || b.s - it.s > lead + 50) this._place(b, it);
+      b.capS = this._capFor(b, it.s);
+    }
+    for (const [id, b] of byId) if (!seen.has(id) && inScope(b.P) && !b.ride && b.leave == null) { b.leave = FADE_S; b.capS = null; } // 실시간에서 사라짐
+    // 실시간이 맡은 경로의 시뮬 버스는 페이드아웃(타고 있으면 그대로)
+    for (const b of this.buses) if (!b.live && !b.ride && b.leave == null && (this.liveAll || this.livePaths?.has(b.P)) && inScope(b.P)) b.leave = FADE_S;
+  }
+  // 실시간 제어를 놓음(조회 실패·백오프): 실시간 버스는 cap 없이 시뮬처럼 계속 달려 경로 끝에서 사라진다
+  releaseLive(scope = null) {
+    for (const b of this.buses) if (b.live && (!scope || scope.has(b.P))) { b.live = null; b.capS = null; b.held = 0; }
+  }
+  _spawnLive(it) {
+    const b = this._spawn(it.P, Math.max(0.01, it.s));
+    b.id = it.id; b.live = it.id; b.age = 0; b.v = 0;
+    this._place(b, it);
+    b.capS = this._capFor(b, it.s);
+    return b;
+  }
+  _place(b, it) {
+    const P = b.P; b.s = Math.max(0.01, Math.min(P.L, it.s)); b.v = 0; b.age = 0; b.dwell = 0; b.held = 0; b.state = 'run';
+    let k = P.stops.findIndex((st) => st.s > b.s + 1); if (k < 0) k = P.stops.length;
+    b.stopIdx = k;
+    // 정류소 순번(경기 GBIS)으로 받은 위치 = 그 정류장에 막 도착/정차 → 그 정류장에서 정차(dwell)부터
+    if (it.atStop) { const j = P.stops.findIndex((st) => Math.abs(st.s - b.s) < 25); if (j >= 0) { b.stopIdx = j; b.dwell = LIVE_DWELL * (0.8 + hash(String(b.id) + 'd') * 0.5); b.state = 'dwell'; } }
+  }
+  // cap = 실시간 위치 다음 정류장에서 LIVE_LEAD 개 더 간 정류장(없으면 경로 끝). 이미 지나쳤으면 버스의 다음 정류장에서 기다림
+  _leadEnd(P, s) { const k = P.stops.findIndex((st) => st.s > s + 1); return k < 0 ? P.L : (P.stops[k + LIVE_LEAD]?.s ?? P.L); }
+  _capFor(b, s) {
+    const P = b.P;
+    let cap = this._leadEnd(P, s);
+    if (cap < b.s + 1) cap = P.stops[b.stopIdx]?.s ?? P.L;
+    return cap;
+  }
   vehicles() {
     const out = [];
     for (const b of this.buses) {
@@ -245,7 +309,11 @@ export class SimulatedBusSource {
       if (b.P.fadeIn && b.s < 15 && b.age < 3) scale = Math.min(1, b.age / 1.2);
       if (b.P.endStop) { if (b.endT > 1.5) scale = Math.max(0.01, 1 - (b.endT - 1.5) / 1.5); } // [pangyo-express]
       else if (b.P.fadeOut && b.P.L - b.s < 12) scale = Math.max(0.01, (b.P.L - b.s) / 12);
-      out.push({ id: b.id, ref: b.P.ref, type: b.P.type, name: b.P.name, x: p.x, z: p.z, heading: Math.atan2(p.dx, p.dz), scale, state: b.state, v: b.v });
+      if (b.live) { if (b.age < FADE_S) scale = Math.min(scale, Math.max(0.01, b.age / FADE_S)); }
+      if (b.leave != null && !b.ride) scale = Math.min(scale, Math.max(0.01, b.leave / FADE_S));
+      const o = { id: b.id, ref: b.P.ref, type: b.P.type, name: b.P.name, x: p.x, z: p.z, heading: Math.atan2(p.dx, p.dz), scale, state: b.state, v: b.v };
+      if (b.live) o.live = true;
+      out.push(o);
     }
     return out;
   }
@@ -374,7 +442,7 @@ export class RealtimeBusSource {
     return this._liveLabel;
   }
   update(dt, ctx) {
-    this.fallback?.update(dt, ctx);
+    this.fallback?.update(dt, ctx); // [live-ride] 실시간 버스도 fallback(시뮬) 안에서 '운전'된다(syncLive) — 탑승·정차·벨이 시뮬과 같은 코드로
     if (!this.proxy) { this.locState = 'error'; this.locError = 'proxy URL 없음'; return; }
     const now = performance.now();
     if (this.inflight || now < this.nextPoll) return;
@@ -387,13 +455,17 @@ export class RealtimeBusSource {
         this.nextPoll = performance.now() + LIVE_BACKOFF_MS;
       })
       .finally(() => {
-        if (this.locState === 'error') this.nextPoll = Math.max(this.nextPoll, performance.now() + LIVE_BACKOFF_MS);
+        if (this.locState === 'error') { this.nextPoll = Math.max(this.nextPoll, performance.now() + LIVE_BACKOFF_MS); this._release(); }
         this.inflight = false;
       });
   }
+  // [live-ride] 실시간을 못 쓰게 되면(백오프) 시뮬로 돌아감: 실시간 버스는 cap 없이 끝까지 달리고 시뮬 배차가 다시 시작
+  _release() { if (this.fallback) { this.fallback.livePaths = null; this.fallback.releaseLive(); } }
+  // 실시간이 맡는 경로 = GBIS 노선 정류소 순번과 맞춰진 경로만(나머지 노선은 시뮬 그대로 — 탈 수 있음)
+  _sync(items) { const F = this.fallback; if (!F) return; F.livePaths = this.livePathSet; F.syncLive(items, this.livePathSet); }
   vehicles() {
-    if (this.locState === 'ok') return this.liveVehicles;
-    return this.fallback ? this.fallback.vehicles() : [];
+    // 실시간 정상이면 fallback 안의 실시간 운전 버스만(시뮬 버스는 페이드아웃), 아니면 시뮬
+    return this.fallback ? this.fallback.vehicles() : this.liveVehicles;
   }
   arrivals(stop) {
     const key = stop.ref.split(';')[0];
@@ -417,7 +489,9 @@ export class RealtimeBusSource {
       }
       const j = await proxyJson(`${this.proxy}/arrivals?stationId=${stationId}`);
       const items = [].concat(j?.response?.msgBody?.busArrivalList || []);
-      prev.list = items.map((it) => ({ ref: String(it.routeName), type: ROUTE_TYPE_CD[it.routeTypeCd] || 'city', etaSec: it.predictTimeSec1 ?? (it.predictTime1 != null ? it.predictTime1 * 60 : null), kind: 'live', text: it.locationNo1 ? `${it.locationNo1}정거장 전` : '', seats: it.remainSeatCnt1 }))
+      // [live-ride] 운행 없는 노선은 GBIS 가 predictTimeSec1 를 빈 문자열("")로 준다 → 예전엔 "" < 8 이라 '곧 도착' 으로 보였음. 빈 값 = 정보 없음
+      const num = (x) => (x === '' || x == null || !Number.isFinite(Number(x)) ? null : Number(x));
+      prev.list = items.map((it) => ({ ref: String(it.routeName), type: ROUTE_TYPE_CD[it.routeTypeCd] || 'city', etaSec: num(it.predictTimeSec1) ?? (num(it.predictTime1) != null ? num(it.predictTime1) * 60 : null), kind: 'live', text: num(it.locationNo1) ? `${it.locationNo1}정거장 전` : '도착 정보 없음', seats: it.remainSeatCnt1 }))
         .sort((a, b) => (a.etaSec ?? 1e9) - (b.etaSec ?? 1e9));
       prev.error = null;
     } catch (e) { prev.error = String(e.message || e); }
@@ -488,10 +562,12 @@ export class RealtimeBusSource {
     }
     this.seqIndex = index;
     this.trackedRouteIds = routeIds;
+    this.livePathSet = new Set([...index.values()].map((v) => v.path));
   }
   async _pollLocations() {
     if (!this.trackedRouteIds.length) {
       this.liveVehicles = [];
+      this._sync([]);
       this.locState = 'ok';
       this.locError = '';
       return;
@@ -513,15 +589,13 @@ export class RealtimeBusSource {
         if (!pose) continue;
         const vid = it.vehId != null && String(it.vehId) !== '' ? String(it.vehId) : (it.plateNo ? String(it.plateNo).trim() : '');
         if (!vid) continue;
-        const p = samplePath(pose.path, pose.s);
-        vehicles.push({
-          id: `live-${routeId}-${vid}`, ref: pose.path.ref, type: pose.path.type, name: pose.path.name,
-          x: p.x, z: p.z, heading: Math.atan2(p.dx, p.dz), scale: 1, state: 'live', v: 0, live: true,
-        });
+        // GBIS 위치 = 정류소 순번(그 정류장에 도착/통과) → 경로 위 그 정류장 s. 실제 움직임은 fallback 이 운전(syncLive)
+        vehicles.push({ id: `live-${routeId}-${vid}`, P: pose.path, s: pose.s, atStop: true });
       }
     }
     if (!any) throw new Error('locations failed');
     this.liveVehicles = vehicles;
+    this._sync(vehicles);
     this.locState = 'ok';
     this.locError = '';
   }

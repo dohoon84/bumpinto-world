@@ -66,6 +66,9 @@
     "perf:test": "node scripts/perf/test-perf-memory.mjs",
     "bungeo:test": "node scripts/test-bungeo-queue.mjs",
     "jz:test": "node scripts/test-jz-traffic.mjs",
+    "buslive:test": "node scripts/test-bus-live-ride.mjs",
+    "buslive:e2e": "node scripts/e2e-bus-realtime-replay.mjs",
+    "buslive:record": "node scripts/record-bus-replay.mjs",
     "shots-jz-traffic": "node scripts/shots-jz-traffic.mjs"
   },
   "dependencies": {

@@ -151,6 +151,7 @@ export function mountRide({ corridor, getPlayer, remotes, camera, cam, setMode, 
     // [bus-fix] attach() 는 월드 변환을 보존하며 회전을 (±180°, 180°-yaw, ±180°) 같은 다른 오일러로 풀어 버려,
     //   이후 placeBus 가 rotation.y 만 고치면 차가 옆으로/거꾸로 달렸다 → add() 후 회전을 (0, 월드 yaw - 부모 yaw, 0) 으로 다시 세운다
     reparentBus(r.mesh, nbs.group.parent || nbs.group);
+    r.b.ride = false; nb.ride = true;
     r.b = nb; r.P = Q; r.path = pathIdxOf(Q); r.startS = nb.s; r.fromIdx = -1; r.annIdx = -1; r.lastDwellIdx = -1; r.legs = (r.legs || 1) + 1;
     nbs.hideIds.add(nb.id);
     stats.transfers = (stats.transfers || 0) + 1;
@@ -167,7 +168,7 @@ export function mountRide({ corridor, getPlayer, remotes, camera, cam, setMode, 
   function boardable() {
     if (ride?.mode === 'bus') return null;
     const p = pl().position;
-    const bs = corridor.inLive(p.x, p.z) ? JB() : B(); // [ride] 정자 안: 정자 시뮬 버스(?bus=sim)만, 없으면 탑승 없음(이전과 같음)
+    const bs = corridor.inLive(p.x, p.z) ? JB() : B(); // [ride] 정자 안: 정자 버스(시뮬 또는 [live-ride] 실시간을 운전하는 시뮬)
     if (!bs) return null;
     const vis = new Set(bs.near.map((v) => v.id));
     let best = null, bd = BOARD_R;
@@ -195,7 +196,7 @@ export function mountRide({ corridor, getPlayer, remotes, camera, cam, setMode, 
     prepare();
     const bs = sysOf(c.P), P = c.P;
     let b, follow = null;
-    if (c.kind === 'sim') { b = c.b; b._hold = 0; b.dwell = Math.max(b.dwell, DOOR_CLOSE_LEAD + 1.5); } // 막 탄 사람 뒤로 문 닫히는 시간 확보
+    if (c.kind === 'sim') { b = c.b; b._hold = 0; b.ride = true; /* [live-ride] 타고 있는 버스: 실시간 위치로 옮기지 않음(고무줄 없음)·cap/페이드아웃 안 함 */ b.dwell = Math.max(b.dwell, DOOR_CLOSE_LEAD + 1.5); } // 막 탄 사람 뒤로 문 닫히는 시간 확보
     else {
       const s = c.g.s;
       let si = P.stops.findIndex((st) => Math.abs(st.s - s) < 10); if (si < 0) si = P.stops.findIndex((st) => st.s > s);

@@ -5,12 +5,13 @@
 //   - 서울 노선: /seoul/route-list → busRouteId, /seoul/positions → 차량 GPS(gpsX/gpsY)
 //     경기 노선: /route-list → routeId, /route-stations(정류소 좌표) + /locations(정류소 순번)
 //     → 차량이 있는 정류소 좌표
-//   - 좌표를 같은 노선의 코리더 경로(OSM 형상)에 투영(MATCH_D 이내)해서 그 위에 놓고, 다음 조회까지 천천히 전진(추정)
+//   - 좌표를 같은 노선의 코리더 경로(OSM 형상)에 투영(MATCH_D 이내)해서 그 위에 놓고, [live-ride] 그 위치로 fallback 시뮬 안의 버스를
+//     '운전'한다(syncLive: 다음 정류장 너머까지 시뮬처럼 달리며 정류장마다 정차 → 탑승·벨·하차가 시뮬과 같은 코드로 된다)
 //   - 실패(프록시 없음/404/한도 초과/키 오류/네트워크)면 그 노선은 BACKOFF_MS 동안 조회하지 않고 시뮬레이션을 그대로 쓴다.
 //     화면에 오류를 띄우지 않는다(조용한 폴백).
 import { samplePath, projectOnPath } from '../transit/busSource.js';
 
-export const POLL_MS = 60000, BACKOFF_MS = 600000, MAX_ROUTES = 3, FOCUS_R = 1200, MATCH_D = 60, DRIFT_V = 5, DRIFT_MAX = 250;
+export const POLL_MS = 60000, BACKOFF_MS = 600000, MAX_ROUTES = 3, FOCUS_R = 1200, MATCH_D = 60;
 const CENTER = { lat: 37.36650, lon: 127.10835 };
 const kx = Math.cos((CENTER.lat * Math.PI) / 180) * 111320, kz = 110540;
 export const lonLatToXZ = (lon, lat) => [(lon - CENTER.lon) * kx, -(lat - CENTER.lat) * kz];
@@ -69,12 +70,8 @@ export class CorridorRealtimeSource {
     return out.sort((a, b) => a.d - b.d).map((o) => o.r);
   }
   update(dt, ctx, focus) {
-    this.fallback.update(dt, ctx, focus);
+    this.fallback.update(dt, ctx, focus); // 실시간 노선 버스도 여기서 움직인다(추정 전진 = 시뮬 주행, 실시간 위치 cap 까지)
     if (focus) this.focus = focus;
-    // 추정 전진
-    for (const st of this.state.values()) for (const v of st.vehicles?.values() || []) {
-      if (v.drift < DRIFT_MAX && v.s < v.P.L - 2) { const d = DRIFT_V * dt; v.s += d; v.drift += d; }
-    }
     if (!this.proxy || this.inflight || !this.focus) return;
     if (typeof document !== 'undefined' && document.hidden) return;
     const t = this.now();
@@ -83,8 +80,16 @@ export class CorridorRealtimeSource {
     this.inflight = true;
     Promise.all(due.map((r) => this._poll(r).then(
       () => { this.stats.ok++; },
-      () => { const s = this._st(r); s.ok = false; s.vehicles = new Map(); s.next = this.now() + BACKOFF_MS; this.stats.fail++; },
+      () => { const s = this._st(r); s.ok = false; s.vehicles = new Map(); s.next = this.now() + BACKOFF_MS; this.stats.fail++; this._setLive(r, false); },
     ))).finally(() => { this.inflight = false; this._count(); });
+  }
+  // [live-ride] 이 노선 경로를 실시간 제어로(시뮬 배차 멈춤) / 해제(시뮬로 복귀, 실시간 버스는 끝까지 달림)
+  _setLive(r, on, items = []) {
+    const scope = new Set(this.pathsByRoute.get(r.id) || []), F = this.fallback;
+    if (!F.syncLive) return;
+    if (!F.livePaths) F.livePaths = new Set();
+    for (const P of scope) { if (on) F.livePaths.add(P); else F.livePaths.delete(P); }
+    if (on) F.syncLive(items, scope); else F.releaseLive(scope);
   }
   _st(r) { if (!this.state.has(r.id)) this.state.set(r.id, { vehicles: new Map(), next: 0, ok: false }); return this.state.get(r.id); }
   _count() { let n = 0; for (const s of this.state.values()) if (s.ok) n += s.vehicles.size; this.stats.live = n; }
@@ -147,24 +152,13 @@ export class CorridorRealtimeSource {
         if (p.next) { const qn = projectOnPath(P, p.next[0], p.next[1]); if (qn.d < MATCH_D * 2 && qn.s < q.s) score += 100; } // 다음 정류소가 뒤쪽이면 반대 방향
         if (!best || score < best.score) best = { P, s: q.s, score };
       }
-      if (best) vehicles.set(p.id, { id: p.id, P: best.P, s: best.s, drift: 0, plate: p.plate });
+      if (best) vehicles.set(p.id, { id: p.id, P: best.P, s: best.s, plate: p.plate, atStop: s.kind === 'gg' });
     }
     s.vehicles = vehicles; s.ok = true;
+    this._setLive(r, true, [...vehicles.values()].map((v) => ({ id: 'L' + v.id, P: v.P, s: v.s, atStop: v.atStop })));
   }
 
-  vehicles() {
-    const liveIds = new Set(); const out = [];
-    for (const [rid, st] of this.state) if (st.ok) {
-      liveIds.add(rid);
-      for (const v of st.vehicles.values()) {
-        const p = samplePath(v.P, v.s);
-        out.push({ id: 'L' + v.id, ref: v.P.ref, type: v.P.type, name: v.P.name, x: p.x, z: p.z, heading: Math.atan2(p.dx, p.dz), scale: 1, state: 'run', v: DRIFT_V, live: true });
-      }
-    }
-    // 실시간이 정상인 노선은 시뮬 버스를 숨김(중복 방지). 나머지 노선은 시뮬 그대로.
-    const bs = this.fallback.buses, sim = this.fallback.vehicles(); // vehicles() 는 buses 와 같은 순서
-    for (let i = 0; i < sim.length; i++) if (!liveIds.has(this.keyByRoute.get(bs[i]?.P.route))) out.push(sim[i]);
-    return out;
-  }
+  // 실시간 노선 버스(id 'L…', live) + 그 노선의 시뮬 버스는 페이드아웃 후 사라짐 · 나머지 노선은 시뮬 그대로 — 전부 fallback 한 곳에서
+  vehicles() { return this.fallback.vehicles(); }
   arrivals(stop) { return this.fallback.arrivals(stop); }
 }

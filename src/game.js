@@ -403,7 +403,7 @@ const launch = tower && region.features?.launchShow
   : null;
 
 // --- 버스/횡단보도/신호 ---
-// 기본은 실서버 프록시(jeongja-bus-proxy)를 통한 실시간 모드. 실패 시 RealtimeBusSource 가 시뮬로 자동 폴백.
+// 공개 호스트 기본은 실서버 프록시(jeongja-bus-proxy)를 통한 실시간 모드(로컬/LAN 은 시뮬 — 아래 localBusHost). 실패 시 시뮬로 자동 폴백.
 // ?bus=sim 이면 시뮬만. ?proxy= 로 프록시 주소를 바꾼다 (?proxy=local 이면 로컬 8788).
 const DEFAULT_BUS_PROXY = import.meta.env?.VITE_BUS_PROXY_URL || 'https://jeongja-bus-proxy.xn0texn073.workers.dev';
 const busParam = params.get('bus');
@@ -413,11 +413,11 @@ const busProxy = proxyParam === 'local'
   : params.has('proxy')
     ? (proxyParam || '')
     : (params.has('shot') && !busParam ? '' : DEFAULT_BUS_PROXY);
-// [mobile] 버스 탑승(ride: 정류장에 '정차(dwell)'한 버스 + 정자 rideSim · 미금/판교 연결 노선)은 시뮬 모드에서만 된다 — 실시간 버스는
-//   GPS 위치만 따라가서 정류장에 서지 않으므로 '버스 타기' 가 영영 안 뜬다. 그래서 모바일은 ?bus / ?proxy 를 안 줬으면 시뮬이 기본
-//   (?bus=realtime 으로 실시간을 고르면 실시간 — 대신 탑승 불가). PC 기본값은 그대로(실시간).
-const mobileBusSim = mobileMode && !busParam && !params.has('proxy');
-const busMode = busParam === 'sim' || mobileBusSim ? 'sim' : (busParam === 'realtime' || busProxy) ? 'realtime' : 'sim';
+// [live-ride] 기본 버스 모드는 '호스트'로 정함(PC·모바일 같음): 로컬/개발(localhost·127.x·사설 LAN 10.x/172.16–31.x/192.168.x·*.local·Vite dev)
+//   = 시뮬(실시간 데이터 없이도 바로 탐) · 공개 호스트(bumpinto.world 등) = 실시간. ?bus=sim / ?bus=realtime 은 어디서나 우선.
+const isLocalHost = (h, dev = false) => dev || /^(localhost|127\.|0\.0\.0\.0$|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|\[?::1\]?$)/.test(h) || /\.local$/.test(h);
+const localBusHost = isLocalHost(location.hostname, !!import.meta.env?.DEV);
+const busMode = busParam === 'sim' ? 'sim' : busParam === 'realtime' ? (busProxy ? 'realtime' : 'sim') : (localBusHost && !proxyParam) ? 'sim' : busProxy ? 'realtime' : 'sim'; // ?proxy=… 를 직접 주면(로컬 워커 등) 실시간
 // [bus-net] 시뮬 모드(?bus=sim)이고 코리더가 있을 때만 정자 안 GBIS 추가 경로(220 정자역→서현 방향·7007-1 미금→수내 방향·380)를 덧붙인다. 실시간(기본)은 원본 그대로
 const jzSimExtra = transitData && busMode === 'sim' && corridorDir && params.get('busnet') !== '0' ? await fetch(import.meta.env.BASE_URL + corridorDir + 'jz-sim.json').then((r) => (r.ok ? r.json() : null)).catch(() => null) : null;
 const pgLinkLive = transitData && busMode === 'sim' && corridorDir && pangyoLinkEnabled() ? await fetch(import.meta.env.BASE_URL + corridorDir + PANGYO_LINK_FILE).then((r) => (r.ok ? r.json() : null)).then((j) => j?.live || null).catch(() => null) : null; // [pangyo-link] 시뮬일 때만 정자 안 8110 조각(정자역→코리더 경계)
