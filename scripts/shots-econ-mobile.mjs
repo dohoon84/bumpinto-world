@@ -32,6 +32,9 @@ const closeAll = () => p.evaluate(() => { document.querySelectorAll('.ve-toast, 
 const ACT = {
   'hud-guest': async () => { await guest(); await p.waitForTimeout(600); },
   hud: async () => { await acct(); await p.waitForTimeout(800); },
+  // 서버 pickDaily 풀 배정(D-LOGIN + WALK20·BUS1): 칩 x/total 이 배정 슬롯 기준인지
+  'hud-pool': async () => { await acct(); await p.evaluate(() => window.__bwEconDemo.suppress(4000)); await dev('setDailyPick', ['D-WALK20', 'D-BUS1']); await p.waitForTimeout(1200); await closeAll(); await p.waitForTimeout(300);
+    console.log('hud-pool →', JSON.stringify(await p.evaluate(async () => ({ chip: document.querySelector('.m-econ-q .m-econ-n')?.textContent, aria: document.querySelector('.m-econ-q')?.getAttribute('aria-label'), daily: (await window.__bwEconDemo.econ.listQuests('daily'))?.quests?.map((q) => `${q.id}:${q.state}`) })))); },
   'menu-guest': async () => { await guest(); await p.waitForTimeout(300); await tap('#m-hud [data-tg="menu"]'); },
   menu: async () => { await acct(); await p.waitForTimeout(300); await tap('#m-hud [data-tg="menu"]'); },
   '01a': async () => { await D('01a'); await p.waitForTimeout(600); },
