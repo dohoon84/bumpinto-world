@@ -3,7 +3,8 @@
 //     북쪽 방향(dir 0): 미금 첫 정류장(코리더) 탑승 → 미금 정류장들 → 정자 bbox 경계 이어 타기 → 정자 첫 정류장에서 하차(E)
 //     남쪽 방향(dir 1): 정자 마지막 정류장 탑승 → 경계 이어 타기 → 미금 정류장들 → 게임 범위 끝 종점 하차
 //   매 샘플: 차 방향 vs 도로 접선 < 20°, 행렬식 > 0·위쪽 ≈ +Y, 한 샘플 하강 ≤ 0.5m, 상판 위 Y ≥ 상판 (e2e-ride-8110 과 같은 기준)
-//   정차 기록은 버스가 그 정류장 위치 ±6m 에 있을 때만(정차 끝 프레임의 다음 번호 오기록 방지).
+//   정차 기록은 버스가 그 정류장 6m 뒤~30m 앞(2번째 정차칸 포함)에 있을 때만(정차 끝 프레임의 다음 번호 오기록 방지).
+//   정차 순서는 기대 정류장을 하나도 건너뛰지 않아야 통과.
 //   E2E_URL 이 없으면 vite 를 4451 부터 빈 포트에 직접 띄움(4173-4176·5391·5392·8787·8799 제외). SHOT_DIR(기본 /workspace/bw-migeum-shots/bus) → ride-*.png
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -146,7 +147,7 @@ async function ride(ref, dir) {
       if (r.path !== prev.path) { res.transfers++; await once('2-boundary'); }
     }
     if (r.z > 1700 && r.z < 1900 && !r.dwell) await once('1-migeum');
-    if (r.dwell && r.stop && r.stopS != null && Math.abs(r.s - r.stopS) < 6 && (!res.stops.length || res.stops.at(-1).key !== r.path + ':' + r.stopIdx)) {
+    if (r.dwell && r.stop && r.stopS != null && r.s - r.stopS < 6 && r.stopS - r.s < 30 && (!res.stops.length || res.stops.at(-1).key !== r.path + ':' + r.stopIdx)) {
       res.stops.push({ key: r.path + ':' + r.stopIdx, name: r.stop, at: [Math.round(r.x), Math.round(r.z)] });
       if (/미금역/.test(r.stop)) await once('1-migeum-stop');
       if (dir === 0 && res.transfers >= 1 && norm(r.stop) === WANT.at(-1)) { // 정자 첫 정류장 → 하차
@@ -161,7 +162,7 @@ async function ride(ref, dir) {
   const after = await page.evaluate(() => ({ st: window.__jj.ride.debug.state(), charges: window.__jj.ride.stats.charges.length, p: window.__jj.player.position }));
   res.charges = after.charges - setup.charges; res.end = { mode: after.st.mode, x: Math.round(after.p.x), z: Math.round(after.p.z) };
   let gi = 0, ok = true; const seq = [];
-  for (const s of res.stops) { const nn = norm(s.name); let j = gi; while (j < WANT.length && WANT[j] !== nn) j++; if (j >= WANT.length) { ok = false; seq.push(`${s.name}✗`); } else { seq.push(`${s.name}#${j}`); gi = j + 1; } }
+  for (const s of res.stops) { const nn = norm(s.name); let j = gi; while (j < WANT.length && WANT[j] !== nn) j++; if (j >= WANT.length || j !== gi) { ok = false; seq.push(`${s.name}✗`); if (j < WANT.length) gi = j + 1; } else { seq.push(`${s.name}#${j}`); gi = j + 1; } }
   res.order = { ok, seq, complete: gi === WANT.length, want: pl.want };
   res.paths = [...res.paths]; res.endWant = pl.end;
   return res;
