@@ -57,6 +57,10 @@ body.mobile .m-btn:disabled { opacity: .6; }
 #m-landing .m-logo p { margin: 8px 0 0; font-size: 14px; font-weight: 700; color: #e8f2f8; }
 #m-landing .m-start-sheet { position: absolute; right: var(--m-r); top: 50%; transform: translateY(-50%); width: min(300px, 40vw); display: grid; gap: 10px; padding: 16px; }
 #m-landing h2 { margin: 0; font-size: 16px; font-weight: 900; color: #ffe169; }
+/* [mobile-google] Google 공식 라이트 버튼 모양(흰 바탕 · #747775 테두리 · 4색 G) */
+#m-landing .m-google { display: flex; align-items: center; justify-content: center; gap: 10px; background: #fff; color: #1f1f1f; border: 1px solid #747775; border-radius: 12px; font-family: 'Google Sans', Roboto, Arial, 'Pretendard', 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif; font-weight: 500; }
+#m-landing .m-google svg { flex: none; }
+#m-landing .m-start-sheet .m-gmsg { color: #ffd27a; }
 #m-landing .m-start-sheet small { font-size: 12px; color: #9eb4c6; line-height: 1.45; }
 #m-landing .m-acct { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 12px; background: rgba(255, 255, 255, .08); } /* [econ-mobile] ?ui=v2 로그인 계정 줄 */
 #m-landing .m-acct-av { flex: none; display: grid; place-items: center; width: 32px; height: 32px; border-radius: 50%; background: #1f5fbf; color: #fff; font-weight: 900; }
