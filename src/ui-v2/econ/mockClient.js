@@ -160,6 +160,13 @@ export function createMockClient({ storage, now = () => Date.now(), key = MOCK_K
       state: s.claimed[qid] ? 'claimed' : (v >= d.target ? 'complete' : 'active'), bonus: !!d.bonus, autoClaim: true };
   };
   const addLedger = (kind, delta, title, sub = null) => { const e = { id: id('lg'), at: now(), kind, delta, title, sub }; s.ledger.push(e); bus.emit('balance', { balance: balance(), delta, reason: kind }); return e; };
+  // 요금 줄(#30 44dcb3b 서버와 같은 모양): rideId · mode · code · listAmount(정가) · charged(실제 차감, 양수) · free.
+  //   무료 탑승은 잔액이 안 바뀌는 delta 0 줄(id 'e{n}', 서버는 econ_events 에서 합침) → balance 이벤트 없음
+  const addFare = ({ rideId = null, mode, code, listAmount, charged, free }, title, sub = null) => {
+    const extra = { rideId: rideId || null, mode, code, listAmount, charged: free ? 0 : charged, free: !!free };
+    if (free) { const e = { id: `e${(s.evSeq = (s.evSeq || 0) + 1)}`, at: now(), kind: 'fare', delta: 0, title, sub, ...extra }; s.ledger.push(e); return e; }
+    return Object.assign(addLedger('fare', -charged, title, sub), extra);
+  };
   const addKarma = (axis, pts) => { if (axis && pts) s.karma[axis] = (s.karma[axis] || 0) + pts; };
 
   // 완료된 퀘스트 자동 지급 (서버의 자동 완료 판정을 흉내)
@@ -313,7 +320,7 @@ export function createMockClient({ storage, now = () => Date.now(), key = MOCK_K
       if (!q.free && balance().locked) return errR(ERR.SPEND_LOCKED);
       if (!q.free && balance().total < q.amount) return short(q.amount);
       const receiptId = id('rcpt');
-      if (s.signedIn && !q.free) addLedger('fare', -q.amount, T(`${q.label.ko}${req.meta?.where ? ' · ' + req.meta.where : ''}`, `${q.label.en}${req.meta?.whereEn || req.meta?.where ? ' · ' + (req.meta.whereEn || req.meta.where) : ''}`), q.mode === 'bus' ? T('하차 태그 포함', 'Exit tap included') : null);
+      if (s.signedIn) addFare({ rideId: req.rideId, mode: q.mode, code: q.code, listAmount: q.listAmount, charged: q.amount, free: q.free }, T(`${q.label.ko}${req.meta?.where ? ' · ' + req.meta.where : ''}`, `${q.label.en}${req.meta?.whereEn || req.meta?.where ? ' · ' + (req.meta.whereEn || req.meta.where) : ''}`), q.mode === 'bus' ? T('하차 태그 포함', 'Exit tap included') : null);
       const reward = markTransit(q.mode);
       const pay = { receiptId, mode: q.mode, code: q.code, free: q.free, amount: q.amount, listAmount: q.listAmount, balance: balance(), reward };
       if (req.rideId) s.receipts[req.rideId] = { ...pay, reward: [] };
@@ -327,7 +334,7 @@ export function createMockClient({ storage, now = () => Date.now(), key = MOCK_K
       if (!q.free && !s.signedIn) return guestErr();
       if (!q.free && balance().total < q.amount) return short(q.amount);
       const holdId = id('hold');
-      s.holds[holdId] = { amount: q.amount, listAmount: q.listAmount, code: q.code, night: !!req.night, free: q.free };
+      s.holds[holdId] = { amount: q.amount, listAmount: q.listAmount, code: q.code, night: !!req.night, free: q.free, rideId: req.rideId || null };
       save();
       if (!q.free && s.signedIn) bus.emit('balance', { balance: balance(), delta: -q.amount, reason: 'fare' });
       return okR({ holdId, code: q.code, free: q.free, amount: q.amount, listAmount: q.listAmount, balance: balance() });
@@ -338,7 +345,7 @@ export function createMockClient({ storage, now = () => Date.now(), key = MOCK_K
       delete s.holds[holdId];
       const actual = Math.min(h.listAmount, taxiFare(actualMeters || 0, { night: h.night, mult: FARE_TABLE[h.code].mult }));
       const charged = h.free ? 0 : actual;
-      if (s.signedIn && !h.free) addLedger('fare', -charged, T(`택시 · ${FARE_TABLE[h.code].label.ko} ${(actualMeters / 1000).toFixed(1)} km`, `Taxi · ${FARE_TABLE[h.code].label.en} ${(actualMeters / 1000).toFixed(1)} km`), T(`예상 ${fmt(h.amount)} 홀드 → 실제 정산, ${fmt(h.amount - charged)} 반환`, `Held ${fmt(h.amount)} → settled, ${fmt(h.amount - charged)} returned`));
+      if (s.signedIn) addFare({ rideId: h.rideId, mode: 'taxi', code: h.code, listAmount: actual, charged, free: h.free }, T(`택시 · ${FARE_TABLE[h.code].label.ko} ${(actualMeters / 1000).toFixed(1)} km`, `Taxi · ${FARE_TABLE[h.code].label.en} ${(actualMeters / 1000).toFixed(1)} km`), h.free ? null : T(`예상 ${fmt(h.amount)} 홀드 → 실제 정산, ${fmt(h.amount - charged)} 반환`, `Held ${fmt(h.amount)} → settled, ${fmt(h.amount - charged)} returned`));
       const reward = markTransit('taxi');
       const st8 = { receiptId: id('rcpt'), free: h.free, held: h.amount, charged, listAmount: actual, refunded: h.amount - charged, distanceM: Math.round(actualMeters || 0), balance: balance(), reward, mode: 'taxi', code: h.code };
       save(); bus.emit('payment', st8);
@@ -422,11 +429,15 @@ export function createMockClient({ storage, now = () => Date.now(), key = MOCK_K
         s.travel.sec = 10 * 60; s.travel.meters = 800; s.claimed['D-WALK10'] = t0; s.progress['D-SUB1'] = 1; s.claimed['D-SUB1'] = t0; s.claimed['D-ALL3'] = t0; s.progress['W-DAILY'] = 3;
         s.transitKinds = ['bus', 'subway', 'taxi']; s.claimed['W-TRANSIT'] = t0;
         add('quest', 1000, '할 일 · 걷기 인정 10분', 'Quest · Walk 10 counted minutes');
+        const fare = (x) => Object.assign(s.ledger[s.ledger.length - 1], { free: false, ...x }); // 요금 줄 = 서버 모양(rideId 는 탑승 시각 기반 — 예시 탑승 기록과 맞출 수 있게 시각을 rideId 에 넣음)
         add('fare', -1650, '시내버스 · 정자역 07624', 'City bus · Jeongja 07624', T('하차 태그 포함', 'Exit tap included'));
+        fare({ rideId: `bus-${t0 - 1800e3}`, mode: 'bus', code: 'bus.city', listAmount: 1650, charged: 1650 });
         add('fare', -1550, '지하철 · 정자역 기본요금', 'Subway · Jeongja base fare');
+        fare({ rideId: `sub-${Math.floor((t0 - 900e3) / 60000)}`, mode: 'subway', code: 'subway.base', listAmount: 1550, charged: 1550 });
         add('quest', 800, '할 일 · 지하철 1회', 'Quest · Ride the subway once');
         add('quest', 1000, '할 일 · 3개 모두 완료', 'Quest · All 3 done');
         add('fare', -7100, '택시 · 일반 주행 4.6 km', 'Taxi · Normal drive 4.6 km', T('예상 7,400 홀드 → 실제 정산, 300 반환', 'Held 7,400 → settled, 300 returned'));
+        fare({ rideId: `taxi-${t0 - 1500e3}`, mode: 'taxi', code: 'taxi.drive', listAmount: 7100, charged: 7100 });
         s.karma = { health: 10, explore: 0, transit: 15, neighbor: 0, streak: 3 };
       }
       if (name === 'day45') { s.karma = { health: 1240, explore: 26, transit: 85, neighbor: 12, streak: 54 }; s.streakDays = 23; }

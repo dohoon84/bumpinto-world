@@ -78,7 +78,10 @@ export const errR = (code, extra = {}) => ({ ok: false, error: { code, ...extra 
  *   coins = 코인 버스트 개수(UI 연출용, 보통 8). progressText·coins·balanceAfter 는 선택(서버 보상에는 progressText 가 없음).
  *   게시판 글 보상: 원장 kind 'board' 행 + RewardEvent kind 'board'(토스트가 떴다가 사라짐). 회수(음수 행)는 이벤트 없음.
  * @typedef {{ id: string, at: number, kind: 'welcome'|'beta'|'quest'|'move'|'ach'|'fare'|'purchase'|'refund'|'board', delta: number,
- *             title: Text, sub: Text|null }} LedgerEntry
+ *             title: Text, sub: Text|null,
+ *             rideId?: string|null, mode?: TransitMode|null, code?: string, listAmount?: number, charged?: number, free?: boolean }} LedgerEntry
+ *   kind 'fare' 줄에만: rideId(payFare·holdTaxi 에 넘긴 rideId, 모르면 null) · mode · code · listAmount(정가) · charged(실제 차감, 양수, 무료면 0).
+ *   무료 탑승은 잔액이 안 바뀌는 delta 0 · free:true 줄(id 'e{n}'). 유료 줄은 free 가 없거나 false. 교통카드 앱은 rideId 로 탑승 기록과 맞춘다.
  * @typedef {{ guest: boolean, weekEarned: number, weekSpent: number, avgDailyIncome: number, avgDailyTransit: number }} WalletSummary
  * @typedef {{ mode: TransitMode, code: string, free: boolean, amount: number, listAmount: number, balance: number, after: number, sufficient: boolean, label: Text, priceVer: number,
  *             options?: Array<{ code: string, amount: number, listAmount: number, label: Text }> }} FareQuote
