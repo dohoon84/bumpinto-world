@@ -60,6 +60,7 @@ import { createPlaygrounds } from './world/playgrounds.js'; // [playgrounds]
 import { corridorStationLabel } from './corridor/globeCorridor.js'; // [corridor]
 import { createStreetlights } from './world/streetlights.js'; // [streetlights]
 import { createPangyoStreetlights, pangyoLampsEnabled, PANGYO_LAMPS_FILE } from './corridor/pangyoStreetlights.js'; // [pangyo-streetlights]
+import { createMigeumStreetlights, migeumLampsEnabled, MIGEUM_LAMPS_FILE } from './corridor/migeumStreetlights.js'; // [migeum-lamps]
 import { mountRide } from './ride/index.js'; // [ride] 코리더 버스·택시 탑승
 import { mountGyeongbuSoon } from './world/gyeongbuSoon.js'; // [gyeongbu] 경부고속도로 서울 방면 '준비 중' 안내 (?gyeongbu=0 끔)
 import { createServerClock } from './subway/clock.js'; // [subway-sync] 서버 시계 (같은 열차 = 같은 순간)
@@ -297,8 +298,12 @@ const playgrounds = playgroundsFile ? createPlaygrounds({ scene, terrain, corrid
 const streetlightsFile = params.get('streetlights') === '0' ? null : region.dataFiles?.streetlights;
 // [pangyo-streetlights] 판교역 일대는 판교 데이터(도로·데크)로 따로 굽은 가로등으로 바꿔 그린다 — 데크 LED 와 같은 저녁 값. ?pangyo=0 · ?pangyolamps=0 이면 기존 그대로
 const pangyoLampsOn = !!(streetlightsFile && corridor && corridorData?.pangyo && pangyoLampsEnabled());
-const streetlights = streetlightsFile ? createStreetlights({ scene, terrain, corridor, camera, liveBox: data.meta.bboxLocal, url: import.meta.env.BASE_URL + streetlightsFile, skipBoxes: pangyoLampsOn ? corridorData.pangyo.meta.boxes : [] }) : null;
+// [migeum-lamps] 미금역 일대도 같은 방식(미금 데이터로 구운 가로등으로 바꿔 그림). ?migeum=0 · ?migeumlamps=0 이면 기존 코리더 가로등 그대로
+const migeumLampsOn = !!(streetlightsFile && corridor && corridorData?.migeum && migeumLampsEnabled());
+const lampSkipBoxes = [...(pangyoLampsOn ? corridorData.pangyo.meta.boxes : []), ...(migeumLampsOn ? corridorData.migeum.meta.boxes : [])];
+const streetlights = streetlightsFile ? createStreetlights({ scene, terrain, corridor, camera, liveBox: data.meta.bboxLocal, url: import.meta.env.BASE_URL + streetlightsFile, skipBoxes: lampSkipBoxes }) : null;
 const pangyoLamps = pangyoLampsOn ? createPangyoStreetlights({ scene, terrain, corridor, url: import.meta.env.BASE_URL + corridorDir + PANGYO_LAMPS_FILE }) : null;
+const migeumLamps = migeumLampsOn ? createMigeumStreetlights({ scene, terrain, corridor, url: import.meta.env.BASE_URL + corridorDir + MIGEUM_LAMPS_FILE }) : null;
 const st = data.station;
 const homeStationLabel = overlay.add({
   cls: 'label station',
@@ -2511,6 +2516,7 @@ function frame() {
   if (playgrounds) { const c = cam.mode === 'follow' ? P : sun.target.position; playgrounds.update(dt, c.x, c.z, cam.mode); } // [playgrounds] 거리·타일 기준 표시
   if (streetlights) { const c = cam.mode === 'follow' ? P : sun.target.position; streetlights.update(dt, c.x, c.z, cam.mode); } // [streetlights] 거리·타일 기준 표시 + 밤 페이드
   if (pangyoLamps) { const c = cam.mode === 'follow' ? P : sun.target.position; pangyoLamps.update(dt, c.x, c.z, cam.mode); } // [pangyo-streetlights]
+  if (migeumLamps) { const c = cam.mode === 'follow' ? P : sun.target.position; migeumLamps.update(dt, c.x, c.z, cam.mode); } // [migeum-lamps]
   world.shops?.update(dt, P.x, P.z); // [shops] 주변 70m 상호 간판 풀
   const viewYaw = cam.mode === 'follow' ? cam.yaw : ov.yaw;
   const moveYaw = player.rotation.y + (bikes.riding && bikes.speed < -0.2 ? Math.PI : 0);
@@ -2537,7 +2543,7 @@ requestAnimationFrame(frame);
 
 // 스크린샷/디버그용 훅
 window.__jj = {
-  ready: true, region, tower, renderer, corridor, playgrounds, streetlights, pangyoLamps, // [corridor] [playgrounds] [streetlights]
+  ready: true, region, tower, renderer, corridor, playgrounds, streetlights, pangyoLamps, migeumLamps, // [corridor] [playgrounds] [streetlights]
   bungeo, // [bungeo]
   launch, roadster, trucks, bike: adminBike, giftRides, inventory, data, world, npcs, transit, camera, cam, ov, setMode, terrain, taxis, police, weather: atmosphere, umbrellas, dogPark, strayCats, // [terrain] [taxi] [roadster] [tower] [launch] [truck] [bike] [roadbike] [inventory]
   get player() { return player; },

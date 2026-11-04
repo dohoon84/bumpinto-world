@@ -4,6 +4,8 @@
 //   보이기: 500 m 코리더 타일 단위 — 카메라 초점에서 VIS_R 안 + 그 타일 상세가 빌드됐을 때만(코리더 가로등과 같은 규칙). 보이는 게 없으면 GPU 버퍼 해제
 //   켜짐: world/nightFade.js nightFade() — landmarks/pangyoDeckLights.js 와 같은 공용 값(evening.js 저녁 스위치를 4초에 걸쳐 따라감) → 데크 LED 와 같은 순간에 켜지고 꺼짐
 //   이 범위 안의 코리더 가로등은 world/streetlights.js 가 skipBoxes 로 건너뛴다(겹침 방지). ?pangyo=0 · ?pangyolamps=0 · ?streetlights=0 이면 안 만듦(기존 그대로)
+//   [migeum-lamps] 미금역 일대도 같은 함수(name: 'migeum', banks: true) — corridor/migeumStreetlights.js.
+//     banks: 탄천 둑 비탈의 공원등(kind 3)이 있어 코리더 가로등(world/streetlights.js)과 같은 규칙으로 물 아래 등은 빼고 웅덩이를 경사 따라 기울임
 import * as THREE from 'three';
 import { buildStreetlightGeometries, SCALE, POOL_SCALE, LENS_DAY, LENS_NIGHT, POOL_R, POOL_RZ, POOL_GAIN, ARM, OV_SCALE, OV_GAIN, OV_LIFT } from '../world/streetlights.js';
 import { lightPoolMaterial } from '../world/nightLights.js';
@@ -18,27 +20,33 @@ const TS = 500, VIS_R = 420, REFRESH = 0.25;
 const tris = (g) => (g.index ? g.index.count : g.attributes.position.count) / 3;
 
 /** lamps = [x, z, yaw, kind, y, …] (y = -1 → 지형 높이) */
-export function createPangyoStreetlights({ scene, terrain = null, corridor = null, url }) {
-  const root = new THREE.Group(); root.name = 'pangyoLamps';
+export function createPangyoStreetlights({ scene, terrain = null, corridor = null, url, name = 'pangyo', banks = false }) {
+  const prefix = name; // 메시 이름 앞(pangyoLamp-body · migeumLamp-body …)
+  const root = new THREE.Group(); root.name = name + 'Lamps';
   scene.add(root);
   const stats = { loaded: false, lamps: 0, deck: 0, visible: 0, overview: 0, trisPerLamp: 0, night: 0, boxes: [] };
   let groups = null, meshes = null, mats = null, cap = 0, lastKey = '', acc = REFRESH, disposed = false, lastNight = -1;
   const groundAt = (x, z) => (terrain ? terrain.renderHeight(x, z) : 0);
+  // [migeum-lamps] banks: world/streetlights.js skipAt 과 같은 규칙(공원등은 하상·둔치 바닥 아래, 나머지는 물 아래면 뺌)
+  const FLOOR = terrain?.params?.FLOOR ?? -6;
+  const underWater = (x, z, kind, y) => banks && !!terrain && y < 0 && (kind === 3 ? groundAt(x, z) < (terrain.mainDrop ? terrain.floorAt(x, z) : FLOOR) - 0.4 : groundAt(x, z) < -0.3);
 
   const ready = fetch(url).then((r) => (r.ok ? r.json() : null)).catch(() => null).then((j) => {
     if (!j || disposed) return;
     const by = new Map();
     for (let i = 0; i < j.lamps.length; i += 5) {
+      if (underWater(j.lamps[i], j.lamps[i + 1], j.lamps[i + 3], j.lamps[i + 4])) { stats.skipped = (stats.skipped || 0) + 1; continue; }
       const x = j.lamps[i], z = j.lamps[i + 1], key = `${Math.floor(x / TS)}_${Math.floor(z / TS)}`;
       if (!by.has(key)) by.set(key, []);
       by.get(key).push(x, z, j.lamps[i + 2], j.lamps[i + 3], j.lamps[i + 4]);
       if (j.lamps[i + 3] === 4) stats.deck++;
     }
     groups = [...by.entries()].sort().map(([key, a]) => { const [tx, tz] = key.split('_').map(Number); return { key, tx, tz, data: new Float32Array(a), body: null, pool: null }; });
-    stats.lamps = j.lamps.length / 5; stats.boxes = j.boxes || []; stats.loaded = true;
+    stats.lamps = j.lamps.length / 5 - (stats.skipped || 0); stats.boxes = j.boxes || []; stats.loaded = true;
   });
 
   const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), up = new THREE.Vector3(0, 1, 0), p = new THREE.Vector3(), s3 = new THREE.Vector3();
+  const ax = new THREE.Vector3(), ay = new THREE.Vector3(), az = new THREE.Vector3();
   const yAt = (x, z, y) => (y >= 0 ? y : groundAt(x, z));
   function bake(g) { // 데크 위는 평평(데크 윗면), 땅은 지형 높이. 웅덩이는 평평하게(판교 일대는 거의 평지)
     const n = g.data.length / 5; g.body = new Float32Array(n * 16); g.pool = new Float32Array(n * 16);
@@ -47,6 +55,14 @@ export function createPangyoStreetlights({ scene, terrain = null, corridor = nul
       const s = SCALE[kind] ?? 1, ps = POOL_SCALE[kind] ?? 1;
       q.setFromAxisAngle(up, yaw);
       m4.compose(p.set(x, h, z), q, s3.set(s, s, s)).toArray(g.body, i * 16);
+      if (banks && g.data[i * 5 + 4] < 0) { // [migeum-lamps] 웅덩이를 지형 경사 따라 기울임(world/streetlights.js 와 같은 식)
+        const ux = Math.cos(yaw), uz = -Math.sin(yaw), vx = -uz, vz = ux, d = (ARM + POOL_R) * 0.5 * ps;
+        const hx = (groundAt(x + ux * d, z + uz * d) - groundAt(x - ux * d, z - uz * d)) / (2 * d);
+        const hz = (groundAt(x + vx * d, z + vz * d) - groundAt(x - vx * d, z - vz * d)) / (2 * d);
+        ax.set(ux, hx, uz).normalize(); az.set(vx, hz, vz).normalize(); ay.crossVectors(az, ax).normalize();
+        m4.makeBasis(ax.multiplyScalar(ps), ay.multiplyScalar(ps), az.multiplyScalar(ps)).setPosition(x, h + 0.14, z).toArray(g.pool, i * 16);
+        continue;
+      }
       m4.compose(p.set(x, h + 0.14, z), q, s3.set(ps, ps, ps)).toArray(g.pool, i * 16);
     }
   }
@@ -61,7 +77,7 @@ export function createPangyoStreetlights({ scene, terrain = null, corridor = nul
       lens: new THREE.MeshBasicMaterial({ color: LENS_DAY.clone() }),
       pool: lightPoolMaterial({ color: '#ffd59a', intensity: POOL_GAIN, radius: POOL_R, radiusZ: POOL_RZ, focusX: ARM }),
     };
-    const mk = (name, g, m) => { const im = new THREE.InstancedMesh(g, m, cap); im.name = 'pangyoLamp-' + name; im.count = 0; im.castShadow = false; im.receiveShadow = name === 'body'; im.frustumCulled = true; root.add(im); return im; };
+    const mk = (name, g, m) => { const im = new THREE.InstancedMesh(g, m, cap); im.name = prefix + 'Lamp-' + name; im.count = 0; im.castShadow = false; im.receiveShadow = name === 'body'; im.frustumCulled = true; root.add(im); return im; };
     meshes = { body: mk('body', geo.body, mats.body), lens: mk('lens', geo.lens, mats.lens), pool: mk('pool', geo.pool, mats.pool) };
     meshes.pool.renderOrder = 2;
     lastNight = -1;
