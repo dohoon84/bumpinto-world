@@ -29,6 +29,6 @@ export async function mountMobileEcon({ handset } = {}) {
   const wallet = { open: () => { closeLayer(true); handset?.openApp?.('wallet'); } };
   ui.OPEN['07'] = () => wallet.open();
   mountMenuSection({ open: api.open, link: api.link, isDemo: ui.isDemo, econ, tr, esc, EI, GOOGLE_G_SVG });
-  window.__bwEconMobile = { open: api.open, link: api.link, wallet, econ: econ.isMock ? econ : undefined }; // 점검·스크린샷용(econ 은 mock 일 때만)
+  window.__bwEconMobile = { open: api.open, link: api.link, wallet, closePhone: () => handset?.close?.(), econ: econ.isMock ? econ : undefined }; // 점검·스크린샷용(econ 은 mock 일 때만)
   return api;
 }

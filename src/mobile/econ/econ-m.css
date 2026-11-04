@@ -76,6 +76,12 @@ body.mobile.m-econ .ve-float { font-size: 16px; }
 body.mobile.m-econ .ve-welcome { width: 100%; max-width: 440px; }
 body.mobile.m-econ .ve-welcome h2 { font-size: 20px; }
 body.mobile.m-econ .ve-welcome .ve-rays { top: -90px; }
+body.mobile.m-econ .ve-welcome > .ve-col.c { flex-direction: row; flex-wrap: wrap; justify-content: center; align-items: center; gap: 4px 8px; }
+body.mobile.m-econ .ve-welcome > .ve-col.c > .v2-ic { width: 52px !important; height: 52px !important; }
+body.mobile.m-econ .ve-welcome > .ve-col.c > :is(h2, p) { flex-basis: 100%; margin: 0; }
+body.mobile.m-econ .ve-welcome .ve-rays { width: 220px !important; height: 220px !important; top: -70px; }
+body.mobile.m-econ :is(.ve-welcome, .ve-tip) .ve-rowc { min-height: 44px; padding: 6px 12px; }
+body.mobile.m-econ .ve-welcome .ve-note { font-size: 11px; margin: 0; }
 body.mobile.m-econ .ve-sum { font-size: 14px; padding: 6px 12px; } body.mobile.m-econ .ve-sum .ve-gold { font-size: 20px; }
 body.mobile.m-econ .ve-tip { width: min(300px, calc(100vw - 2 * var(--m-l))); padding: 12px; }
 body.mobile.m-econ .ve-gwait, body.mobile.m-econ .ve-migrate, body.mobile.m-econ .ve-block, body.mobile.m-econ .ve-settle { width: 100%; max-width: 460px; }
@@ -94,10 +100,11 @@ body.mobile.m-econ .ve-items { grid-template-columns: repeat(2, minmax(0, 1fr));
 body.mobile.m-econ .ve-item { padding: 10px; gap: 6px; }
 body.mobile.m-econ .ve-thumb { height: 64px; }
 body.mobile.m-econ .ve-thumb svg { max-height: 56px; width: auto; }
+body.mobile.m-econ .ve-thumb img { height: 64px !important; max-height: 64px !important; width: 100%; object-fit: contain; }
 body.mobile.m-econ .ve-goal { padding: 10px 12px; }
 
 /* 08 · 09 교통: 탑승 카드 = 가운데 아래(조이스틱·버튼 사이), 결제 카드 = 오른쪽 위(행동 버튼 위까지만) */
-body.mobile.m-econ .ve-board { position: fixed; left: 50%; bottom: var(--m-b); transform: translateX(-50%); width: min(460px, calc(100vw - var(--me-l) - var(--me-r))); max-height: calc(100vh - var(--m-t) - 48px - var(--m-b)); }
+body.mobile.m-econ .ve-board { position: fixed; left: var(--me-l); right: var(--me-r); margin-inline: auto; bottom: var(--m-b); transform: none; width: min(460px, calc(100vw - var(--me-l) - var(--me-r))); max-height: calc(100vh - var(--m-t) - 48px - var(--m-b)); }
 body.mobile.m-econ .ve-wrap:has(.ve-board) { padding: 0; }
 body.mobile.m-econ .ve-fare { padding: 8px 12px; gap: 10px; }
 body.mobile.m-econ .ve-paystack { right: var(--m-r); top: calc(var(--m-t) + 48px); width: min(320px, calc(100vw - var(--m-l) - var(--m-r) - 300px)); max-height: calc(100vh - var(--m-t) - 48px - var(--m-b) - 144px); overflow: hidden; gap: 6px; }
@@ -115,7 +122,7 @@ body.mobile.m-econ .ve-mini { right: var(--m-r); top: calc(var(--m-t) + 48px); }
 body.mobile.m-econ .ve-short b { font-size: 18px; }
 /* 10a 택시 앱(폰 모양 패널): 가운데 기둥 높이에 맞춤 */
 body.mobile.m-econ .ve-wrap:has(.ve-phone) { place-items: center; padding: var(--m-t) var(--me-r) var(--m-b) var(--me-l); }
-body.mobile.m-econ .ve-phone { width: min(360px, 100%); height: 100%; padding: 6px; border-radius: 22px; }
+body.mobile.m-econ .ve-phone { width: min(360px, 100%); height: calc(100vh - var(--m-t) - var(--m-b)); max-height: calc(100vh - var(--m-t) - var(--m-b)); padding: 6px; border-radius: 22px; }
 body.mobile.m-econ .ve-phone-scr { border-radius: 16px; padding: 8px 12px 12px; gap: 8px; overflow: auto; }
 
 /* 개발용 demo 막대: 아래 가운데(조이스틱·버튼 사이), 작게 */
@@ -130,3 +137,5 @@ body.mobile.m-econ .ve-panel > .v2-hrow:first-child > .v2-close { position: abso
 body.mobile.m-econ .ve-shop .ve-bum.lg { height: 28px; font-size: 13px; }
 /* 경제 시트가 열려 있으면 게임 안내 말풍선(지하철 입구 등)은 잠시 숨김 — 시트 위로 겹쳐 보이지 않게 */
 body.mobile.m-econ:has(#ve-layer .ve-wrap) :is(#subway-hint, #umbrella-actions, #coffee-order-bar, #dog-gate-btn, #donate-near-btn, #coffee-toss-btn) { visibility: hidden !important; }
+/* 상점: bum 가격만. 실제 원화 가격 줄은 모바일에서 그리지 않음(사용자 규칙 · PC 쪽도 제거 예정) */
+body.mobile.m-econ .ve-shop .ve-real { display: none !important; }
