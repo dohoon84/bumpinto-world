@@ -95,8 +95,10 @@ async function plan(ref, dir) {
     const P = cps.find((p) => J.sim.paths.some((q) => q.ref === ref && (q.dir == null || q.dir === dir) && near(q.pts.at(-1), p.pts[0])));
     if (!P) return { err: `${ref} dir1 경계에서 시작하는 코리더 조각 없음` };
     const Q = J.sim.paths.find((q) => q.ref === ref && (q.dir == null || q.dir === dir) && near(q.pts.at(-1), P.pts[0]));
-    const k = Q.stops.length - 1;
-    return { jz: true, path: Q.id, k, want: [nm(J, Q, k), ...P.stops.map((_, i) => nm(C, P, i))], endSys: 'corridor', end: (() => { const s = C.stopById.get(P.stops.at(-1).stop); return [s.x, s.z]; })() };
+    // 마지막 정자 정류장이 정자 범위 끝(15m 안)이면 탑승 자리가 범위 밖으로 잡혀 코리더 버스만 찾음 → 한 정류장 앞에서 탄다
+    const inner = (st) => { const s = J.stopById.get(st.stop)._pos; return [[15, 0], [-15, 0], [0, 15], [0, -15]].every(([dx, dz]) => jj.corridor.inLive(s.x + dx, s.z + dz)); };
+    let k = Q.stops.length - 1; while (k > 0 && !inner(Q.stops[k])) k--;
+    return { jz: true, path: Q.id, k, want: [...Q.stops.slice(k).map((_, i) => nm(J, Q, k + i)), ...P.stops.map((_, i) => nm(C, P, i))], endSys: 'corridor', end: (() => { const s = C.stopById.get(P.stops.at(-1).stop); return [s.x, s.z]; })() };
   }, { ref, dir });
 }
 
