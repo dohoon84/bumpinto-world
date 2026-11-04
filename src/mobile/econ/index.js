@@ -39,9 +39,9 @@ export async function mountMobileEcon({ handset } = {}) {
   const ui = await import('../../ui-v2/econ-ui/index.js');
   const api = ui.mountEconUi({ mobile: true });
   if (!api) return null;
-  // 07 지갑 = 게임 폰의 기존 '교통카드' 앱을 그대로 연다(모바일은 별도 지갑 화면·장식 없음, PC walletApp.js 도 모바일에서는 등록 안 함)
-  const wallet = { open: () => { closeLayer(true); handset?.openApp?.('wallet'); } };
-  ui.OPEN['07'] = () => wallet.open();
+  // 07 지갑 = 게임 폰의 기존 '교통카드' 앱. 내용(bum 잔액·무료(베타)·이번 주·전체/탑승/보상 내역·게스트 연동)은 PC walletApp.js 장식을
+  //   그대로 쓰고(mountEconUi({ mobile:true }) → mountWalletApp({ mobile:true })), 모바일 폰 오버레이 배치만 econ-m.css 에서 맞춘다.
+  const wallet = { open: () => ui.OPEN['07']() };
   mountMenuSection({ open: api.open, link: api.link, isDemo: ui.isDemo, econ, tr, esc, EI, GOOGLE_G_SVG });
   window.__bwEconMobile = { open: api.open, link: api.link, wallet, closePhone: () => handset?.close?.(), coin, econ: econ.isMock ? econ : undefined }; // 점검·스크린샷용(econ 은 mock 일 때만)
   return api;

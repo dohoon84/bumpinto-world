@@ -58,6 +58,9 @@ body.mobile .m-btn:disabled { opacity: .6; }
 #m-landing .m-start-sheet { position: absolute; right: var(--m-r); top: 50%; transform: translateY(-50%); width: min(300px, 40vw); display: grid; gap: 10px; padding: 16px; }
 #m-landing h2 { margin: 0; font-size: 16px; font-weight: 900; color: #ffe169; }
 #m-landing .m-start-sheet small { font-size: 12px; color: #9eb4c6; line-height: 1.45; }
+#m-landing .m-acct { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 12px; background: rgba(255, 255, 255, .08); } /* [econ-mobile] ?ui=v2 로그인 계정 줄 */
+#m-landing .m-acct-av { flex: none; display: grid; place-items: center; width: 32px; height: 32px; border-radius: 50%; background: #1f5fbf; color: #fff; font-weight: 900; }
+#m-landing .m-acct b { display: block; font-size: 14px; color: #fff; } #m-landing .m-acct span { font-size: 11.5px; color: #9eb4c6; }
 #m-landing .m-pick-top { position: absolute; left: var(--m-l); top: var(--m-t); display: flex; align-items: center; gap: 10px; }
 #m-landing .m-pick-top h2 { color: #fff; font-size: 18px; }
 #m-landing .m-regions { position: absolute; left: var(--m-l); top: calc(var(--m-t) + 52px); bottom: var(--m-b); width: min(200px, 26vw); padding: 10px; display: flex; flex-direction: column; gap: 8px; overflow: auto; }

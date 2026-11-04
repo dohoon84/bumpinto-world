@@ -146,7 +146,7 @@ export function mountEconUi({ mobile = false } = {}) {
   if (document.body.classList.contains('mobile') !== mobile) return null;
   document.body.classList.add(mobile ? 'm-econ' : 'v2-econ');
   mountEconHud({ link, open });
-  mountWalletApp({ link });
+  mountWalletApp({ link, mobile });
   coinSound.get(); // 첫 입력 때 소리 잠금 해제 + 코인 효과음 버퍼 1번 디코드
   let t = 0;
   const soon = () => { clearTimeout(t); t = setTimeout(refresh, 30); };
