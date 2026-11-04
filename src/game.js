@@ -29,6 +29,9 @@ import { createSms } from './sms.js';
 import { trackEvent } from './analytics.js';
 import { createTerrain } from './world/terrain.js'; // [terrain]
 import { Taxis } from './entities/taxis.js'; // [taxi]
+import { mountJzTraffic, deliveryStops } from './entities/jzTraffic.js'; // [jz-traffic]
+import { gameHour } from './weather.js'; // [jz-traffic]
+import { watchEvening as watchEveningJz } from './evening.js'; // [jz-traffic]
 import { Police } from './entities/police.js';
 import { addRiversideFolk } from './entities/riversideFolk.js';
 import { addStationPlaza } from './world/stationPlaza.js';
@@ -440,6 +443,12 @@ const taxiCount = !region.features?.taxis || params.get('taxis') === '0'
   ? 0
   : Math.max(0, Math.min(80, Number(params.get('taxis') || 24) || 24));
 const taxis = taxiCount ? new Taxis(scene, overlay, { drive: driveData, data, transit, world, count: taxiCount }) : null;
+// [jz-traffic] 정자 일반 차량 NPC(배달 오토바이·경차·승용차·포터·전기차 등). ?jzcars=0 끔(기존 그대로), ?jzcars=N 기본 대수
+const jzTraffic = region.id === 'jeongja' && region.features?.taxis ? mountJzTraffic(scene, {
+  params, drive: driveData, data, transit, world, taxis, hour: () => gameHour(), stops: deliveryStops(shopsData, data), watchEvening: watchEveningJz,
+  peds: () => { const a = []; for (const n of npcs.list) if (n.active !== false && n.pos) a.push(n.pos); return a; },
+  extra: () => { const a = []; for (const t of corridor?.life?.traffic?.cars?.list || []) if (!t.parked && (t.hired || t.keep)) { const p = t.mesh.position, h = t.mesh.rotation.y; a.push({ x: p.x, z: p.z, hx: Math.sin(h), hz: Math.cos(h), hl: 2.35, hw: 0.9, v: t.v || 0, ext: true }); } return a; },
+}) : null;
 const police = !region.features?.taxis || params.get('police') === '0'
   ? null
   : new Police(scene, overlay, { drive: driveData, data, transit, world, count: 2 });
@@ -1973,6 +1982,7 @@ ride = corridor && params.get('ride') !== '0' ? mountRide({
     const out = [];
     for (const t of taxis?.list || []) { const q = t.mesh.position; if (Math.abs(q.x - x) > R || Math.abs(q.z - z) > R) continue; const [sx, sz, dx, dz] = taxis._sample(t, t.s); out.push({ x: sx, z: sz, dx, dz, t }); }
     for (const b of transit?.source?.vehicles?.() || []) if (Math.abs(b.x - x) < R && Math.abs(b.z - z) < R) out.push({ x: b.x, z: b.z, dx: Math.sin(b.heading ?? 0), dz: Math.cos(b.heading ?? 0), bus: true });
+    for (const o of jzTraffic?.obstacles(x, z, R) || []) out.push(o); // [jz-traffic]
     return out;
   },
 }) : null;
@@ -2462,7 +2472,7 @@ function frame() {
   }
   npcs.update(dt, player.position, camera);
   transit?.update(dt, player.position);
-  taxis?.update(dt); // [taxi]
+  if (jzTraffic) jzTraffic.update(dt, camera.position); else taxis?.update(dt); // [taxi] [jz-traffic] 일반 차량이 있으면 택시도 함께(충돌 안전망)
   police?.update(dt, player.position, { riding: !!bikes.riding });
   riverFolk?.update(dt, player.position);
   stationPlaza.update(dt, player.position);
@@ -2548,7 +2558,7 @@ requestAnimationFrame(frame);
 window.__jj = {
   ready: true, region, tower, renderer, corridor, playgrounds, streetlights, pangyoLamps, migeumLamps, // [corridor] [playgrounds] [streetlights]
   bungeo, // [bungeo]
-  launch, roadster, trucks, bike: adminBike, giftRides, inventory, data, world, npcs, transit, camera, cam, ov, setMode, terrain, taxis, police, weather: atmosphere, umbrellas, dogPark, strayCats, // [terrain] [taxi] [roadster] [tower] [launch] [truck] [bike] [roadbike] [inventory]
+  launch, roadster, trucks, bike: adminBike, giftRides, inventory, data, world, npcs, transit, camera, cam, ov, setMode, terrain, taxis, jzTraffic, police, weather: atmosphere, umbrellas, dogPark, strayCats, // [terrain] [taxi] [roadster] [tower] [launch] [truck] [bike] [roadbike] [inventory]
   get player() { return player; },
   teleport(x, z, y) { ride?.forceAlight('teleport'); if (bikes.riding) dismountBike(); if (adminBike?.riding) adminBike.dismount(); dismountGiftRides(); player.position.set(x, y ?? (terrain ? terrain.getGroundHeight(x, z, 0) : 0), z); }, // [terrain] [bike] [roadbike]
   bikes, toggleRide, triggerEmote,
