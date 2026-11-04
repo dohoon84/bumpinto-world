@@ -471,9 +471,12 @@ export function mountMobileHud({ handset } = {}) {
       add(off ? t('내리기', 'Get off') : t('타기', 'Ride'), 'bike', clk(el));
     }
     if (shown($('trk-hud')) || shown($('bike-hud')) || [...document.querySelectorAll('.rb-hud')].some(shown)) { A.riding = true; if (!A.some((x) => /내리기|Get off/.test(x.label))) add(t('내리기', 'Get off'), 'bike', key('KeyF')); }
-    if (rideBtn && !rideBtn.hidden) { const off = /내리기|Dismount|Get off/i.test(rideBtn.textContent); if (off) A.riding = true; add(off ? t('내리기', 'Get off') : t('자전거', 'Bike'), 'bike', clk(rideBtn)); }
-    const sh = $('subway-hint');
-    if (shown(sh) && sh.querySelector('kbd')) add(t('내려가기', 'Go down'), 'train', key('KeyE'));
+    // 지하철 입구 안내가 떠 있으면 '내려가기'가 먼저, 근처 자전거는 두 번째 버튼으로 (자전거 타는 중이면 '내리기'가 먼저)
+    const sh = $('subway-hint'), rbOn = rideBtn && !rideBtn.hidden, rbOff = rbOn && /내리기|Dismount|Get off/i.test(rideBtn.textContent);
+    const goDown = () => { if (shown(sh) && sh.querySelector('kbd')) add(t('내려가기', 'Go down'), 'train', key('KeyE')); };
+    if (!rbOff) goDown();
+    if (rbOn) { if (rbOff) A.riding = true; add(rbOff ? t('내리기', 'Get off') : t('자전거', 'Bike'), 'bike', clk(rideBtn)); }
+    if (rbOff) goDown();
     const dp = J?.dogPark?.nearGate;
     if (dp) add(dp.open ? t('문 닫기', 'Close gate') : t('문 열기', 'Open gate'), 'door', key('KeyG'), false);
     const dn = $('donate-near-btn');

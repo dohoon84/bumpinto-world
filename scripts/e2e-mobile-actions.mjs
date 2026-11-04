@@ -29,6 +29,7 @@ await p.waitForSelector('#nick', { state: 'visible', timeout: 120000 });
 await p.fill('#nick', '폰테스트'); await tap('#lobby-go');
 await p.waitForFunction(() => window.__jj?.ready && !document.body.classList.contains('in-lobby') && !document.body.classList.contains('in-gate'), null, { timeout: 150000 });
 await p.waitForTimeout(4000);
+const HOME = await ev(() => ({ x: __jj.player.position.x, z: __jj.player.position.z }));
 
 if (ONLY.includes('pinch')) {
   // 장면 위 두 손가락 핀치 + 조이스틱 손가락을 동시에 (식별자별로 따로)
@@ -92,6 +93,7 @@ if (ONLY.includes('bus')) {
 }
 
 if (ONLY.includes('taxi')) {
+  await ev((h) => { __jj.teleport(h.x, h.z); }, HOME); await p.waitForTimeout(1500); // 버스 시나리오가 길가에서 먼 정류장에 내려 줄 수 있어 처음 자리로
   await tap('#m-hud [data-tg="phone"]'); await p.waitForTimeout(700);
   const opened = await ev(() => { const a = [...document.querySelectorAll('#handset [data-app], #handset button')].find((x) => /택시|taxi/i.test(x.dataset.app || x.textContent)); a?.click(); return !!a; });
   await p.waitForTimeout(800);
@@ -100,7 +102,7 @@ if (ONLY.includes('taxi')) {
   ok('taxi: phone app has 부르기 button', opened && hb > 0);
   if (hb) await tap('#handset [data-xact="hail"]');
   const called = await until(() => __jj.ride.ride?.mode === 'taxi', null, 8000);
-  ok('taxi: called from phone', called);
+  ok('taxi: called from phone', called, called ? '' : await ev(() => [...document.querySelectorAll('[class*=toast],[id*=toast]')].map((x) => x.textContent.trim()).filter(Boolean).join(' | ').slice(0, 300)));
   if (called) {
     await ev(() => __jj.ride.debug.ffTaxi(180, () => __jj.ride.ride?.phase === 'wait'));
     await ev(() => { const t = __jj.ride.ride.t.mesh.position; __jj.player.position.set(t.x + 1.6, __jj.player.position.y, t.z + 1.6); });
@@ -143,6 +145,7 @@ if (ONLY.includes('bike')) {
 if (ONLY.includes('subway')) {
   await ev(() => { const e = __jj.subway.entrances.find((q) => q.exit.ref === '4'); const s = Math.sin(e.ry), c = Math.cos(e.ry); __jj.teleport(e.x - s * 3, e.z - c * 3); __jj.player.rotation.y = e.ry; __jj.setMode('follow'); __jj.cam.yaw = e.ry + Math.PI; });
   await p.waitForTimeout(1200);
+  await until(() => /내려가기/.test(document.querySelector('#m-hud [data-act="ride"]')?.textContent || ''), null, 6000);
   const l0 = await label(); ok('subway: primary = 내려가기', /내려가기/.test(l0), l0 + ' ' + JSON.stringify(await ev(() => ({ act: __jj.subway.active, hint: document.getElementById('subway-hint')?.innerHTML?.slice(0, 80) }))));
   await shot('subway-0-entrance');
   await tap('#m-hud [data-act="ride"]');
