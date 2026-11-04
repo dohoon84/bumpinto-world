@@ -28,10 +28,12 @@ export function mergeTileJson(main, add) {
 }
 
 // 타일 하나 가져오기 (kind = 'tiles' | 'lod'). t.pangyo: new → 판교 파일만, add → 원본 + 판교 덧붙임
+//   [migeum] t.ext(폴더) + t.extMode(new|add) 도 같은 규칙 (migeum.js mergeMigeumIndex)
 export async function fetchCorridorTile(getJson, t, kind) {
   const file = `${kind}/${t.key}.json`;
-  if (t.pangyo === 'new') return getJson(PANGYO_DIR + file);
-  if (t.pangyo === 'add') { const [a, b] = await Promise.all([getJson(file), getJson(PANGYO_DIR + file)]); return a ? mergeTileJson(a, b) : null; }
+  const dir = t.pangyo ? PANGYO_DIR : t.ext, mode = t.pangyo || t.extMode;
+  if (dir && mode === 'new') return getJson(dir + file);
+  if (dir && mode === 'add') { const [a, b] = await Promise.all([getJson(file), getJson(dir + file)]); return a ? mergeTileJson(a, b) : null; }
   return getJson(file);
 }
 

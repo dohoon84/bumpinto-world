@@ -19,18 +19,20 @@ import { setNightCut, updateNight } from './nightLights.js';
 import { pangyoEnabled, pangyoLinkEnabled, mergePangyoIndex, fetchCorridorTile, PANGYO_DIR } from './pangyo.js'; // [pangyo]
 import { pangyoExpressEnabled, PANGYO_EXPRESS_FILE, filterExpressHidden, buildPangyoExpress } from './pangyoExpress.js'; // [pangyo-express]
 import { createPangyoLandmarks } from './landmarks/pangyo.js'; // [pangyo]
+import { migeumEnabled, mergeMigeumIndex, MIGEUM_DIR } from './migeum.js'; // [migeum]
 import { isEn, onLangChange } from '../i18n.js'; // [pangyo-link] 판교역 라벨 KO/EN
 import { createPangyoNpc, pangyoNpcEnabled } from './pangyoNpc.js'; // [pangyo-npc]
 import { pangyoWaterEnabled, PANGYO_WATER_FILE, attachMainDrop, mergePangyoStreams, dropWaterGeometry } from './pangyoWater.js'; // [pangyo-water]
 
 // streams: 탄천 지류 하도(streams.json). ?streams=0 이면 false → 예전과 같은 데이터만
 // [pangyo] pangyo: 판교역 일대(pangyo/index.json). ?pangyo=0 이면 false → 요청 없음
-export async function loadCorridorData(baseUrl, { streams = true, pangyo = pangyoEnabled(), pangyoExpress = pangyo && pangyoExpressEnabled(), fetchFn = fetch } = {}) {
+// [migeum] migeum: 미금역 일대(migeum/index.json). ?migeum=0 이면 false → 요청 없음
+export async function loadCorridorData(baseUrl, { streams = true, pangyo = pangyoEnabled(), pangyoExpress = pangyo && pangyoExpressEnabled(), migeum = migeumEnabled(), fetchFn = fetch } = {}) {
   const get = (f) => fetchFn(baseUrl + f).then((r) => (r.ok ? r.json() : null)).catch(() => null);
   const pw = pangyo && pangyoWaterEnabled(); // [pangyo-water] ?pangyowater=0 이면 요청 없음
-  const [index, base, tancheon, streamsData, pg, pgx, water] = await Promise.all([get('index.json'), get('base.json'), get('tancheon.json'), streams ? get('streams.json') : null, pangyo ? get(PANGYO_DIR + 'index.json') : null, pangyo && pangyoExpress ? get(PANGYO_EXPRESS_FILE) : null, pw ? get(PANGYO_WATER_FILE) : null]);
+  const [index, base, tancheon, streamsData, pg, pgx, water, mg] = await Promise.all([get('index.json'), get('base.json'), get('tancheon.json'), streams ? get('streams.json') : null, pangyo ? get(PANGYO_DIR + 'index.json') : null, pangyo && pangyoExpress ? get(PANGYO_EXPRESS_FILE) : null, pw ? get(PANGYO_WATER_FILE) : null, migeum ? get(MIGEUM_DIR + 'index.json') : null]);
   const pgWater = pg ? water : null; // 판교 타일 없이 판교 지류 컷만 쓰지 않음
-  return index && base ? { index: mergePangyoIndex(index, pg), base, baseUrl, tancheon, streams: mergePangyoStreams(streamsData, pgWater), pangyo: pg, pangyoExpress: pg ? pgx : null, pangyoWater: pgWater } : null; // [pangyo-express] [pangyo-water]
+  return index && base ? { index: mergeMigeumIndex(mergePangyoIndex(index, pg), mg), migeum: mg, base, baseUrl, tancheon, streams: mergePangyoStreams(streamsData, pgWater), pangyo: pg, pangyoExpress: pg ? pgx : null, pangyoWater: pgWater } : null; // [pangyo-express] [pangyo-water]
 }
 // [corridor] 탄천 지형: 코리더가 켜졌을 때만 라이브 terrain.json 뒤에 수내→잠실 축/단면을 이어 붙인다(라이브 구간 값은 그대로)
 export function corridorTerrainData(terrainData, corridorData) {
@@ -110,6 +112,7 @@ export function createCorridor({ scene, corridorData, terrain, world, renderer, 
     if (job.kind === 'd' && t.dState === 2) {
       const tile = buildDetailTile(t.key, t.dData, { terrain, onRoadAll });
       const pgLm = pangyoLm?.build(t.key); if (pgLm) tile.group.add(pgLm); // [pangyo] 랜드마크는 그 타일과 같이 생기고 해제
+      const mgLm = migeumLm?.build(t.key); if (mgLm) tile.group.add(mgLm); // [migeum] 출입구 캐노피
       tile.map = tileMap(t, t.dData);
       tile.hints = extractLifeHints(t.dData, live); // [life]
       t.dData = null; t.detail = tile; t.dState = 3; root.add(tile.group); loaded.push(t);
@@ -200,7 +203,7 @@ export function createCorridor({ scene, corridorData, terrain, world, renderer, 
 
   // ---------- 역 표지판 + 라벨 ----------
   // [pangyo] 판교역은 라벨·표지판·이동(?at=pangyo)에 넣는다. 버스/차량 NPC(attachLife)에는 [pangyo-link] 가 켜졌을 때만 더한다
-  const stations = index.stations.concat(corridorData.pangyo?.stations || []).map((s) => ({ ...s, sign: null }));
+  const stations = index.stations.concat(corridorData.pangyo?.stations || [], corridorData.migeum?.stations || []).map((s) => ({ ...s, sign: null }));
   const pgLabels = []; // [pangyo-link] 판교역 라벨: '판교역  신분당선 · 경강선' / 'Pangyo Stn.  Shinbundang · Gyeonggang', 노선색 배경
   for (const s of stations) {
     const lines = s.lines || [];
@@ -266,6 +269,7 @@ export function createCorridor({ scene, corridorData, terrain, world, renderer, 
   const crossings = buildCorridorCrossings(root, base.crossings, { getSimTime });
   const landmarks = createLandmarks(root, index.landmarks, renderer);
   const pangyoLm = corridorData.pangyo ? createPangyoLandmarks(corridorData.pangyo, { overlay }) : null; // [pangyo]
+  const migeumLm = corridorData.migeum ? createPangyoLandmarks(corridorData.migeum, { overlay, prefix: 'migeum' }) : null; // [migeum] 같은 빌더(출입구만)
   const pangyoEx = corridorData.pangyoExpress ? buildPangyoExpress(corridorData.pangyoExpress) : null; // [pangyo-express] 판교IC~경부 합류(메시 2개, 늘 붙어 있음)
   if (pangyoEx) root.add(pangyoEx.group);
   const tower = index.landmarks.find((l) => l.id === 'lotte-world-tower');
@@ -289,6 +293,7 @@ export function createCorridor({ scene, corridorData, terrain, world, renderer, 
   const api = {
     root, bounds, stations, tiles, stats, crossings, landmarks, inLive,
     pangyo: pangyoLm, // [pangyo] null 이면 꺼짐(?pangyo=0)
+    migeum: migeumLm, // [migeum] null 이면 꺼짐(?migeum=0)
     pangyoExpress: pangyoEx, // [pangyo-express] null 이면 꺼짐(?pangyoexpress=0 · ?pangyo=0)
     liveBox: live, // [ride]
     get lotte() { return lotte; },
