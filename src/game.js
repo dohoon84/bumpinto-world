@@ -69,10 +69,12 @@ import { createMigeumStreetlights, migeumLampsEnabled, MIGEUM_LAMPS_FILE } from 
 import { mountRide } from './ride/index.js'; // [ride] 코리더 버스·택시 탑승
 import { mountGyeongbuSoon } from './world/gyeongbuSoon.js'; // [gyeongbu] 경부고속도로 서울 방면 '준비 중' 안내 (?gyeongbu=0 끔)
 import { createServerClock } from './subway/clock.js'; // [subway-sync] 서버 시계 (같은 열차 = 같은 순간)
+import { isMobileMode } from './mobile/flag.js'; // [mobile]
 import { mountSubway, zoneLabel as subwayZoneLabel } from './subway/index.js'; // [subway] 정자역·코리더 역 출입구(실제 OSM 출구) + 지하 대합실. ?subway=0 이면 끔
 import { isUiV2 } from './ui-v2/flag.js'; // [ui-v2] ?ui=v2 게임 UI v2 (기본 꺼짐)
 
 const params = new URLSearchParams(location.search);
+const mobileMode = isMobileMode(); // [mobile] 모바일 모드(핸드폰·?mobile=1): 가벼운 렌더 + 모바일 HUD
 const region = getCurrentRegion();
 const shot = params.has('shot');
 const uiV2 = !shot && isUiV2() ? await import('./ui-v2/index.js') : null; // [ui-v2] 시작화면 → 월드 → 역 → 입장 → 로딩 → HUD
@@ -245,9 +247,9 @@ const [terrainData, driveData, corridorData, shopsData, coloursData] = await Pro
 // --- 렌더러/씬 ---
 const subwayOn = region.id === 'jeongja' && params.get('subway') !== '0'; // [subway]
 const renderer = new THREE.WebGLRenderer({ antialias: true, logarithmicDepthBuffer: true, preserveDrawingBuffer: params.has('shot'), ...(subwayOn ? { stencil: true } : {}) }); // [subway] 출입구 계단 구멍은 스텐실로 그림
-renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setPixelRatio(Math.min(devicePixelRatio, mobileMode ? 1.5 : 2)); // [mobile] 폰은 1.5배까지만
 renderer.setSize(innerWidth, innerHeight);
-renderer.shadowMap.enabled = !params.has('noshadow');
+renderer.shadowMap.enabled = !params.has('noshadow') && !(mobileMode && params.get('shadow') !== '1'); // [mobile] 폰은 그림자 끔 (?shadow=1 로 켬)
 renderer.shadowMap.type = THREE.PCFShadowMap;
 document.getElementById('app').appendChild(renderer.domElement);
 const bgm = mountBgm({ params }); // [bgm] 배경음악 + 상단 미니 플레이어 (입장 때 시작, ?bgm=0 이면 null)
@@ -384,7 +386,7 @@ stationCafe.bind((id, outside) => stationCafe.order(player, (line) => myBubble.s
 // ?npcs=N 은 0부터 상한까지. 이름 있는 주민을 먼저 두고, 나머지는 출퇴근·점심에 맞춰 켠다.
 const npcCap = getNpcCapForRegion(region.id);
 const npcParam = params.get('npcs');
-const npcCount = npcParam == null ? npcCap : Math.max(0, Math.min(npcCap, Number(npcParam) || 0));
+const npcCount = npcParam == null ? (mobileMode ? Math.ceil(npcCap * 0.4) : npcCap) : Math.max(0, Math.min(npcCap, Number(npcParam) || 0)); // [mobile] 폰은 상한의 40%
 const npcs = new NPCs(scene, overlay, world, data, { count: npcCount, terrain, region });
 const bikes = new KakaoBikes(scene, world, data);
 if (corridorData?.migeumTaxiBike?.bike) bikes.addInstanced(scene, corridorData.migeumTaxiBike.bike.spots, world.groundY); // [migeum-taxibike] 미금역 카카오바이크(인스턴스 1개) · ?migeumbike=0 / ?migeum=0 끔
@@ -415,7 +417,11 @@ const busProxy = proxyParam === 'local'
   : params.has('proxy')
     ? (proxyParam || '')
     : (params.has('shot') && !busParam ? '' : DEFAULT_BUS_PROXY);
-const busMode = busParam === 'sim' ? 'sim' : (busParam === 'realtime' || busProxy) ? 'realtime' : 'sim';
+// [mobile] 버스 탑승(ride: 정류장에 '정차(dwell)'한 버스 + 정자 rideSim · 미금/판교 연결 노선)은 시뮬 모드에서만 된다 — 실시간 버스는
+//   GPS 위치만 따라가서 정류장에 서지 않으므로 '버스 타기' 가 영영 안 뜬다. 그래서 모바일은 ?bus / ?proxy 를 안 줬으면 시뮬이 기본
+//   (?bus=realtime 으로 실시간을 고르면 실시간 — 대신 탑승 불가). PC 기본값은 그대로(실시간).
+const mobileBusSim = mobileMode && !busParam && !params.has('proxy');
+const busMode = busParam === 'sim' || mobileBusSim ? 'sim' : (busParam === 'realtime' || busProxy) ? 'realtime' : 'sim';
 // [bus-net] 시뮬 모드(?bus=sim)이고 코리더가 있을 때만 정자 안 GBIS 추가 경로(220 정자역→서현 방향·7007-1 미금→수내 방향·380)를 덧붙인다. 실시간(기본)은 원본 그대로
 const jzSimExtra = transitData && busMode === 'sim' && corridorDir && params.get('busnet') !== '0' ? await fetch(import.meta.env.BASE_URL + corridorDir + 'jz-sim.json').then((r) => (r.ok ? r.json() : null)).catch(() => null) : null;
 const pgLinkLive = transitData && busMode === 'sim' && corridorDir && pangyoLinkEnabled() ? await fetch(import.meta.env.BASE_URL + corridorDir + PANGYO_LINK_FILE).then((r) => (r.ok ? r.json() : null)).then((j) => j?.live || null).catch(() => null) : null; // [pangyo-link] 시뮬일 때만 정자 안 8110 조각(정자역→코리더 경계)
@@ -1077,6 +1083,12 @@ const leaveBtn = document.getElementById('btn-leave');
 if (globeBtn) globeBtn.hidden = !joined;
 leaveBtn.hidden = !joined;
 const reopenGate = () => {
+  if (mobileMode) { // [mobile] 모바일은 지구본 대신 모바일 시작화면으로
+    const u = new URL(location.href);
+    for (const k of ['enter', 'passport', 'from', 'at']) u.searchParams.delete(k);
+    location.href = u.toString();
+    return;
+  }
   document.body.classList.remove('in-lobby');
   document.body.classList.add('in-gate');
   openWorldGate({ onEnter: handleGateEnter });
@@ -1370,6 +1382,7 @@ overlay.onSay = ({ cls, text, pos, meta }) => {
 
   chatLogs.push({ id: ++chatSeq, kind: cls, name, color, text, time: `${hh}:${mm}` });
   if (chatLogs.length > MAX_CHAT_LOGS) chatLogs.shift();
+  if (mobileMode && (cls !== 'npc' || chatIncludeNpc)) dispatchEvent(new CustomEvent('bw:chat', { detail: chatLogs[chatLogs.length - 1] })); // [mobile] 모바일 채팅 미리보기·패널
 
   if (chatLogOpen && (cls !== 'npc' || chatIncludeNpc)) {
     const follow = chatStickToBottom || cls === 'me';
@@ -2149,6 +2162,7 @@ input.onKey = (e) => {
   const emoteDef = EMOTE_BY_CODE[e.code];
   if (emoteDef) triggerEmote(emoteDef.id, true);
 };
+if (mobileMode) import('./mobile/hud.js').then((m) => m.mountMobileHud({ handset })); // [mobile]
 const ov = { yaw: 0.35, pitch: 0.95, dist: 1000 };
 const phone = mountPhone({ data, region, extraTiles: corridor ? () => corridor.mapTiles() : null }); // [corridor]
 
