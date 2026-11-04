@@ -10,6 +10,7 @@ import { migeumTaxiEnabled, migeumBikeEnabled, pickMigeumTaxiBike, migeumTaxiExi
 import { loadCorridorData } from '../../../src/corridor/index.js';
 import { createCorridorTraffic } from '../../../src/corridor/traffic.js';
 import { KakaoBikes } from '../../../src/entities/bike.js';
+import { setEvening } from '../../../src/evening.js';
 
 const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), '../../..');
 const J = (f) => JSON.parse(fs.readFileSync(path.join(ROOT, f), 'utf8'));
@@ -125,16 +126,23 @@ ok(`카카오바이크 ${S.length}자리 (반경 ${RULE.RADIUS}m · 간격 ≥${
   assert.ok(n0 > 0);
   assert.equal(k2.addInstanced(s2, S, () => 12.5), S.length);
   assert.deepEqual(k2.list.slice(0, n0).map((b) => [b.x, b.z, b.y, b.ry]), k1.list.map((b) => [b.x, b.z, b.y, b.ry]), '정자 자전거 동일');
-  assert.equal(s2.children.length, kids + 1, '미금 자전거는 객체 1개');
-  const im = s2.children.at(-1); assert.ok(im.isInstancedMesh && im.count === S.length && im.castShadow);
+  assert.equal(s2.children.length, kids + 2, '미금 자전거는 몸체 인스턴스 1개 + 등 인스턴스 1개');
+  const im = s2.children.at(-2), lm = s2.children.at(-1); assert.ok(im.isInstancedMesh && im.count === S.length && im.castShadow);
+  assert.ok(lm.isInstancedMesh && lm.count === S.length && !lm.castShadow && lm.material.isMeshBasicMaterial);
+  // 저녁: 정자 세워 둔 자전거 등과 같이 켜짐/꺼짐
+  setEvening(true); assert.equal(lm.visible, true); assert.ok(k2.list.slice(0, n0).every((q) => q.lampF.visible), '정자 등도 켜짐');
+  setEvening(false); assert.equal(lm.visible, false); setEvening(true);
   const b = k2.list[n0 + 3]; assert.equal(b.y, 12.5); assert.equal(b.mesh, null);
   assert.equal(k2.nearest(b.x + 1, b.z), b);
   k2.mount(b); assert.ok(b.mesh && b.wheelF && b.stand && s2.children.includes(b.mesh) && k2.riding === b);
+  assert.equal(b.lampF.visible, true, '저녁에 탄 자전거 등 켜짐');
   const e = im.instanceMatrix.array; assert.equal(e[(n0 + 3 - n0) * 16], 0, '탄 자전거 인스턴스 숨김');
+  assert.equal(lm.instanceMatrix.array[3 * 16], 0, '탄 자전거 등 인스턴스도 숨김');
   b.x += 20; k2.place(b); k2.spin(0.1);
-  k2.dismount(); assert.equal(b.mesh, null); assert.equal(s2.children.length, kids + 1);
-  assert.ok(Math.abs(e[3 * 16 + 12] - b.x) < 1e-4, '내린 자리로 인스턴스 이동');
+  k2.dismount(); assert.equal(b.mesh, null); assert.equal(s2.children.length, kids + 2);
+  assert.ok(Math.abs(e[3 * 16 + 12] - b.x) < 1e-4 && Math.abs(lm.instanceMatrix.array[3 * 16 + 12] - b.x) < 1e-4, '내린 자리로 인스턴스(몸체·등) 이동');
+  setEvening(false);
   assert.equal(new KakaoBikes(new Scene(), w, data).addInstanced(new Scene(), [], null), 0);
 }
-ok('KakaoBikes.addInstanced: 정자 목록 동일 · InstancedMesh 1개 · 탈 때만 개별 메시 → 내리면 인스턴스로');
+ok('KakaoBikes.addInstanced: 정자 목록 동일 · InstancedMesh 몸체 1 + 저녁 등 1(낮엔 숨김) · 탈 때만 개별 메시 → 내리면 인스턴스로');
 console.log('test-migeum-taxibike: all', n, 'ok');
