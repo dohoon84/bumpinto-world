@@ -13,6 +13,7 @@ const E = await import('../server/phone/src/account/economy.js');
 const L = await import('../server/phone/src/account/ledger.js');
 const S = await import('../server/phone/src/account/session.js');
 const fare = await import('../src/ride/fare.js');
+const ST = await import('../server/phone/src/account/store.js');
 
 let n = 0;
 const ok = (m) => console.log('  ok', ++n, m);
@@ -254,6 +255,78 @@ console.log('econ server client tests');
   const plain = await fare.charge({ code: 'bus.base', mode: 'bus' });
   assert.equal(plain.ok, true); assert.equal(plain.free, true);
   ok('ride bridge: free = fire-and-forget ok, paid = await (taxi hold→settle with route meters), insufficient blocks; no provider = old behaviour');
+}
+
+// ── 웰컴(구글 계정 연결 시 계정당 1회 자동) → 로그인 직후 sinceAt 으로 토스트 1번. 재로그인·기기 추가 연결·새로고침에도 다시 안 줌 ──
+{
+  const openAt = NOW - 3 * 86400_000;
+  const env = makeEnv({ ECONOMY_OPEN_AT: new Date(openAt).toISOString() });
+  await account(env, 'w');
+  const devs = ['11111111-1111-4111-8111-111111111111', '22222222-2222-4222-8222-222222222222'];
+  await env.DB.prepare('INSERT INTO account_devices (device_id, account_id, linked_at, merge_status) VALUES (?, ?, ?, ?)').bind(devs[0], 'w', NOW, 'primary').run();
+  const book = { async accountDevices({ ids }) { return { devices: Object.fromEntries(ids.map((id) => [id, { exists: true, createdAt: openAt - 86400_000, giftQty: 0, photoCount: 0 }])) }; } };
+  const jar = { token: null };
+  const store = memStore();
+  const c = mk(env, jar, { storage: store });
+  const ev = collect(c);
+  assert.equal((await c.getSession()).isGuest, true);
+  // 로그인: /auth/google 이 grantStarters 를 부른 것과 같다
+  const startedAt = NOW - 5000;
+  jar.token = await S.signSession({ accountId: 'w', sessionVersion: 1, now: NOW }, SECRET);
+  const g1 = await ST.grantStarters(env.DB, env, book, 'w', NOW);
+  assert.deepEqual(g1.granted.map((x) => x.reason), ['welcome', 'beta']);
+  // 폴링이 이미 돌고 있어도 로그인 직후 sinceAt 요청은 묻히지 않는다
+  const poll = c.refresh();
+  await Promise.all([poll, c.refresh({ sinceAt: startedAt })]);
+  const kinds = () => ev.reward.map((r) => r.kind);
+  assert.equal(kinds().filter((k) => k === 'welcome').length, 1, JSON.stringify(kinds()));
+  assert.equal(kinds().filter((k) => k === 'beta').length, 1);
+  assert.equal(ev.reward.find((r) => r.kind === 'welcome').amount, 20000);
+  // 재로그인(/auth/google 다시) · /auth/me · 기기 하나 더 연결 → 추가 지급 없음
+  await env.DB.prepare('INSERT INTO account_devices (device_id, account_id, linked_at, merge_status) VALUES (?, ?, ?, ?)').bind(devs[1], 'w', NOW + 1000, 'merged').run();
+  for (let i = 0; i < 3; i++) assert.deepEqual((await ST.grantStarters(env.DB, env, book, 'w', NOW + 2000 + i)).granted, []);
+  const rows = (await env.DB.prepare("SELECT idempotency_key AS k FROM ledger WHERE account_id = 'w' AND reason IN ('welcome','beta') ORDER BY k").all()).results.map((r) => r.k);
+  assert.deepEqual(rows, ['beta:w', 'welcome:w']);
+  jar.now = NOW + 60_000;
+  await c.refresh({ sinceAt: NOW + 55_000 });
+  assert.equal(kinds().filter((k) => k === 'welcome').length, 1, 're-login → no second toast');
+  // 새로고침(같은 저장소의 새 클라이언트) → 다시 안 뜸
+  const c2 = mk(env, jar, { storage: store });
+  const ev2 = collect(c2);
+  await c2.getSession();
+  assert.equal(ev2.reward.filter((r) => r.kind === 'welcome' || r.kind === 'beta').length, 0);
+  ok('welcome: auto once per account (welcome:{acc}), beta once; re-login / /auth/me / 2nd device / reload → no repeat; sinceAt toast survives an in-flight poll');
+}
+
+// ── 게임 쪽 신호: 구매 성공 → bw:econ-owned (보유 다시 받기), bw:econ-changed → 바로 새로 읽기(게시판 보상 토스트) ──
+{
+  const env = makeEnv();
+  await account(env, 'v');
+  const jar = { token: await S.signSession({ accountId: 'v', sessionVersion: 1, now: NOW }, SECRET) };
+  const win = new EventTarget();
+  const owned = [];
+  win.addEventListener('bw:econ-owned', (e) => owned.push(e.detail));
+  const log = [];
+  const c = mk(env, jar, { win, log });
+  const ev = collect(c);
+  await c.getSession();
+  const p = await c.purchase('roadbike');
+  assert.equal(p.ok, true, JSON.stringify(p));
+  assert.deepEqual(owned, [{ itemId: 'roadbike' }]);
+  const bad = await c.purchase('roadbike');
+  assert.equal(bad.error.code, 'already_claimed'); assert.equal(owned.length, 1);
+  // 게시판 글 보상(서버가 /board 처리 중 원장에 넣음) → board.js 가 bw:econ-changed → 토스트
+  const acc = await env.DB.prepare("SELECT * FROM accounts WHERE id = 'v'").first();
+  const r = await E.rewardBoardPost(env.DB, env, acc, { id: 9, category: 'free', title: 't', body: '판교 가는 길 탄천 자전거도로가 새로 포장돼서 아주 부드러워요. 밤엔 가로등도 밝습니다. 강아지 산책하는 분들이 많으니 천천히 달리세요!' }, NOW);
+  assert.equal(r.rewarded, true);
+  const before = ev.reward.length;
+  win.dispatchEvent(new CustomEvent('bw:econ-changed', { detail: { source: 'board' } }));
+  await new Promise((res) => setTimeout(res, 20));
+  const boardEv = ev.reward.slice(before).filter((x) => x.kind === 'board');
+  assert.equal(boardEv.length, 1); assert.equal(boardEv[0].amount, 1000);
+  const wl = await c.getLedger({ limit: 10 });
+  assert.ok(wl.some((e) => e.kind === 'board' && e.delta === 1000));
+  ok('signals: purchase → bw:econ-owned once (not on already_claimed); bw:econ-changed → immediate refresh → board reward toast, wallet kind board');
 }
 
 console.log(`\necon client: ${n} checks passed`);

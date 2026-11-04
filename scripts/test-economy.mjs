@@ -88,27 +88,24 @@ console.log('economy tests');
   const sum = await L.ledgerSum(env.DB, 'a1'); assert.equal(sum.free, 1000);
   ok('ledger: same idempotency key twice → one row, balance cache = ledger sum');
 
-  for (let i = 0; i < 12; i++) await E.grantCapped(env.DB, { accountId: 'a1', reason: 'quest', amount: 1000, key: `q${i}`, now: NOW });
-  assert.equal(await bal(env, 'a1'), C.CAPS.daily.quest, 'quest daily cap 12,000');
-  const last = await E.grantCapped(env.DB, { accountId: 'a1', reason: 'quest', amount: 1000, key: 'qx', now: NOW });
+  // v3: 퀘스트에는 bum 상한이 없다(정의가 상한 — 주간·월간 보상이 같은 날 몰려도 잘리지 않음)
+  for (let i = 0; i < 12; i++) await E.grantCapped(env.DB, { accountId: 'a1', reason: 'quest', amount: 6000, key: `q${i}`, now: NOW });
+  assert.equal(await bal(env, 'a1'), 1000 + 72000, 'quests not truncated by a bum cap');
+  assert.equal(C.CAPS.daily.quest, undefined); assert.equal(C.CAPS.daily.total, undefined);
+  // 게시판 하루 상한 = 글 수 × 글당 보상, 남은 몫만큼 잘라 준다
+  assert.equal(C.CAPS.daily.board, C.BOARD.dailyPosts * C.BOARD.reward);
+  for (let i = 0; i < 3; i++) await E.grantCapped(env.DB, { accountId: 'a1', reason: 'board', amount: 1000, key: `b${i}`, now: NOW });
+  const last = await E.grantCapped(env.DB, { accountId: 'a1', reason: 'board', amount: 1000, key: 'bx', now: NOW });
   assert.equal(last.applied, false); assert.equal(last.capped, true);
-  // 부분 지급: 다음 날 11,500 받은 뒤 1,000 → 500 만
   const D2 = NOW + 86400_000;
-  await E.grantCapped(env.DB, { accountId: 'a1', reason: 'quest', amount: 11500, key: 'big', now: D2 });
-  const part = await E.grantCapped(env.DB, { accountId: 'a1', reason: 'quest', amount: 1000, key: 'part', now: D2 });
+  await E.grantCapped(env.DB, { accountId: 'a1', reason: 'board', amount: 2500, key: 'big', now: D2 });
+  const part = await E.grantCapped(env.DB, { accountId: 'a1', reason: 'board', amount: 1000, key: 'part', now: D2 });
   assert.equal(part.amount, 500); assert.equal(part.capped, true);
-  ok('caps: daily quest cap enforced, remainder clamped (partial grant), over-cap grant refused');
+  ok('caps (v3): quests uncapped in bum (definition-bounded), board daily cap = posts × reward, remainder clamped, over-cap refused');
 
-  // 주 상한: 주 60,000 — 5일간 12,000 씩 + 금요일 → 0
-  const { env: e2 } = makeEnv();
-  await account(e2, 'w');
-  const mon = Date.parse('2026-11-02T03:00:00Z');
-  for (let d = 0; d < 5; d++) await E.grantCapped(e2.DB, { accountId: 'w', reason: 'quest', amount: 12000, key: `d${d}`, now: mon + d * 86400_000 });
-  const sat = await E.grantCapped(e2.DB, { accountId: 'w', reason: 'quest', amount: 1000, key: 'sat', now: mon + 5 * 86400_000 });
-  assert.equal(sat.applied, false);
-  const nextMon = await E.grantCapped(e2.DB, { accountId: 'w', reason: 'quest', amount: 1000, key: 'nm', now: mon + 7 * 86400_000 });
-  assert.equal(nextMon.applied, true);
-  ok('caps: weekly cap (ISO week, KST) blocks, resets next Monday');
+  // 주 bum 상한은 없다(기획 §6 의 주 상한은 이동 300 인정분 — 이동 테스트에서 확인). 표시값만 남는다.
+  assert.deepEqual(Object.keys(C.CAPS.weekly), ['move']); assert.equal(C.CAPS.weekly.move, 51600);
+  ok('caps: no weekly bum cap except the displayed move value (300 min × 172 = 51,600)');
 
   // 경합: 상한 검사가 INSERT 안에서 다시 돈다 — 미리 계산한 몫을 넘겨도 SQL 조건이 막는다
   const { env: e3 } = makeEnv();
@@ -269,7 +266,7 @@ console.log('economy tests');
   assert.equal(await bal(env, 'p'), before - 5900, 'hold reduces available balance');
   const s = await E.settleTaxi(env.DB, env, 'p', { holdId: h.data.hold.holdId, actualMeters: 2000 }, NOW + 60_000);
   assert.equal(s.data.settlement.charged, E.taxiFare(2000)); assert.equal(s.data.settlement.refunded, 5900 - E.taxiFare(2000));
-  const won = s.data.rewards.reduce((a, g) => a + g.amount, 0); // D-TAXI1 이 배정됐으면 퀘스트 보상이 같이 들어옴
+  const won = s.data.rewards.reduce((a, g) => a + g.amount, 0); // 배정된 교통 퀘스트(D-BUS1·D-SUB1)가 있으면 그 보상이 같이 들어옴
   assert.equal(await bal(env, 'p', NOW + 60_000), before - E.taxiFare(2000) + won);
   const rows = await env.DB.prepare("SELECT COUNT(*) AS n FROM ledger WHERE account_id = 'p' AND reason = 'fare' AND idempotency_key LIKE 'taxi:%'").first();
   assert.equal(rows.n, 1);
@@ -302,7 +299,7 @@ console.log('economy tests');
   const buy = await E.purchase(env.DB, env, 's', 'roadbike', NOW);
   assert.equal(buy.ok, true); assert.equal(buy.data.free, true); assert.equal(buy.data.amount, 0); assert.equal(buy.data.listAmount, 1000000);
   assert.equal(await bal(env, 's'), 0);
-  assert.deepEqual(await E.accountVehicleGifts(env.DB, 's'), [{ itemId: 'roadbike-cr1', qty: 1 }]);
+  assert.deepEqual(await E.accountVehicleGifts(env.DB, 's'), [{ id: 'roadbike-cr1', qty: 1 }]);
   assert.equal((await E.purchase(env.DB, env, 's', 'roadbike', NOW)).error.code, 'already_claimed');
   assert.equal((await E.purchase(env.DB, env, 's', 'bike', NOW)).error.code, 'not_eligible', 'no 3D model yet');
   assert.equal((await E.purchase(env.DB, env, 's', 'nope', NOW)).error.code, 'unknown');
@@ -400,17 +397,30 @@ console.log('economy tests');
   assert.ok(d2.quests.every((x) => x.state === 'claimed'), JSON.stringify(d2.quests.map((x) => [x.id, x.state])));
   ok('quests: completing all 3 dailies auto-pays each + D-ALL3 bonus');
 
-  // 업적: 교통 10회 → ACH-RIDE10 자동 지급
+  // 업적(기획 §4 · Figma Note 06 의 두 개만): 현실 환산 100 km 걸음 +5,000 · 30일 연속 +10,000. 카르마: 교통 1회 = 5, 건강은 인정 분에서만
+  assert.deepEqual(C.ACHIEVEMENTS.map((a) => [a.id, a.threshold, a.reward]), [['ACH-WALK100', 100, 5000], ['ACH-STREAK30', 30, 10000]]);
   const { env: e2 } = makeEnv();
   await account(e2, 'ach');
   for (let i = 0; i < 10; i++) await E.payFare(e2.DB, e2, 'ach', { code: 'subway.base', rideId: `a${i}` }, NOW + i * 60_000);
+  await e2.DB.prepare("INSERT INTO stat_mode_totals (account_id, mode, distance_m, seconds, updated_at) VALUES ('ach', 'walk', 100000, 72000, ?)").bind(NOW).run();
+  for (let d = 0; d < 30; d++) {
+    const day = F.kstDate(NOW - d * 86400_000);
+    await e2.DB.prepare('INSERT INTO login_days (account_id, kst_date, first_at) VALUES (?, ?, ?)').bind('ach', day, NOW - d * 86400_000).run();
+  }
+  await e2.DB.prepare("INSERT INTO quest_claims (account_id, quest_id, period, cadence, amount, karma_axis, karma_points, created_at) VALUES ('ach', 'D-WALK10', 'x', 'daily', 1000, 'health', 10, ?)").bind(NOW).run();
+  await E.autoSettleAchievements(e2.DB, 'ach', NOW + 600_000);
+  await E.autoSettleAchievements(e2.DB, 'ach', NOW + 600_000);
   const k = await E.getKarma(e2.DB, 'ach', NOW + 600_000);
-  assert.equal(k.achievements.find((a) => a.id === 'ACH-RIDE10').state, 'unlocked');
-  assert.ok(k.axes.transit.points >= 50);
+  assert.equal(k.achievements.find((a) => a.id === 'ACH-WALK100').state, 'unlocked');
+  assert.equal(k.achievements.find((a) => a.id === 'ACH-STREAK30').state, 'unlocked');
+  assert.ok(k.axes.transit.points >= 50, 'transit 5 per ride (+ quest transit karma)');
+  assert.equal(k.axes.health.points, 0, 'quest health karma is display-only (plan §5 *)');
+  assert.equal(k.axes.neighbor.points, 0);
+  assert.equal(k.axes.streak.days, 30);
   assert.deepEqual(Object.keys(k.axes), ['health', 'explore', 'transit', 'neighbor', 'streak']);
-  const achRow = await e2.DB.prepare("SELECT amount FROM ledger WHERE account_id = 'ach' AND reason = 'ach'").first();
-  assert.equal(achRow.amount, 2000);
-  ok('achievements: 10 rides → ACH-RIDE10 +2,000 once; karma 5 axes with ladders');
+  const achRows = (await e2.DB.prepare("SELECT ref, amount FROM ledger WHERE account_id = 'ach' AND reason = 'ach' ORDER BY ref").all()).results;
+  assert.deepEqual(achRows.map((r) => [r.ref, r.amount]), [['ACH-STREAK30', 10000], ['ACH-WALK100', 5000]]);
+  ok('achievements (plan): 100 km walk +5,000 · 30-day streak +10,000, once each; karma transit 5/ride, health from minutes only, neighbor 0');
 }
 
 // ── /econ 라우트 (게스트 · 로그인 · 결과 모양) ──
@@ -450,6 +460,102 @@ console.log('economy tests');
   const off = await handleEcon(new Request('http://localhost:8789/econ/state'), { ...env, ECONOMY_ENABLED: '0' }, new URL('http://localhost:8789/econ/state'), { now: NOW });
   assert.equal(off.status, 404);
   ok('routes (signed in): state + events, 402 insufficient_balance shape, credentialed CORS, JSON-only POST, 404 when economy off');
+}
+
+// ── 튜닝 값 = 기획 (bw-economy-v1/plan.html v1 · Figma 13:2 Note). 바꾸면 이 표와 PR 표를 같이 고친다 ──
+{
+  assert.equal(C.ECON_CONFIG_VERSION, 3);
+  assert.equal(C.MOVE.perMinute, 172); assert.equal(C.movePerMinute('2026-12-31'), 172); assert.equal(C.movePerMinute('2027-01-01'), 178);
+  assert.equal(C.MOVE.dailyMinutes, 60); assert.equal(C.MOVE.weeklyMinutes, 300);
+  assert.equal(C.CAPS.daily.move, 10320); assert.equal(C.CAPS.weekly.move, 51600);
+  assert.deepEqual({ ...C.MOVE.multiplier }, { walk: 1, bike: 1, roadbike: 1, superbike: 0.5, truck: 0.5, bus: 0, taxi: 0 });
+  assert.equal(C.MOVE.perMinute * C.MOVE.multiplier.superbike, 86);
+  assert.equal(C.MOVE.windowMinNetM, 30); assert.equal(STAT.TELEPORT_M, 50);
+  assert.equal(C.WELCOME_FREE_BUM, 20000); assert.equal(C.BETA_FREE_BUM, 10000); assert.equal(C.BETA_WINDOW_DAYS, 30);
+  const fares = Object.fromEntries(Object.entries(C.FARES).filter(([, f]) => f.amount).map(([k, f]) => [k, f.amount]));
+  assert.deepEqual(fares, { 'bus.city': 1650, 'bus.village': 1550, 'bus.seat': 2650, 'bus.wide': 3200, 'bus.circular': 3450, 'bus.long': 3200, 'subway.base': 1550 });
+  assert.deepEqual([2000, 5000, 10000].map((m) => E.taxiFare(m)), [5200, 7400, 11300]);
+  assert.deepEqual([2000, 5000, 10000].map((m) => E.taxiFare(m, { night: true })), [6760, 9620, 14690]);
+  assert.deepEqual([2000, 5000, 10000].map((m) => E.taxiFare(m, { factor: 1.5 })), [7800, 11100, 16950]);
+  assert.equal(E.taxiFare(4600), 7100);
+  assert.deepEqual(C.SHOP.map((x) => [x.id, x.price, x.realPrice, x.days]), [['bike', 160000, 320000, 18], ['roadbike', 1000000, 2000000, 113], ['scooter', 2500000, 4999000, 280], ['car', 7450000, 14900000, 836]]);
+  assert.deepEqual({ ...C.DISPLAY }, { typicalDailyNet: 8916, avgDailyIncome: 11202, avgDailyTransit: 2286 });
+  const q = (x) => [x.id, x.target, x.reward, ...(x.karma || [])];
+  assert.deepEqual(C.QUESTS.daily.pool.map(q), [['D-LOGIN', 1, 500, 'streak', 1], ['D-WALK10', 10, 1000, 'health', 10], ['D-WALK20', 20, 1500, 'health', 20], ['D-SUB1', 1, 800, 'transit', 5], ['D-BUS1', 1, 800, 'transit', 5], ['D-RIDE10', 10, 1000, 'health', 10]]);
+  assert.deepEqual(q(C.QUESTS.daily.bonus), ['D-ALL3', 3, 1000, 'streak', 2]);
+  assert.deepEqual(C.QUESTS.weekly.map(q), [['W-WALK', 120, 6000, 'health', 10], ['W-DAYS', 5, 4000, 'streak', 5], ['W-DAILY', 15, 5000, 'streak', 5], ['W-TRANSIT', 3, 3000, 'transit', 10], ['W-PLACES', 5, 4000, 'explore', 5]]);
+  assert.deepEqual(C.QUESTS.monthly.map(q), [['M-WALK', 600, 15000, 'health', 30], ['M-DAYS', 20, 15000, 'streak', 20], ['M-WEEKLY', 10, 10000, 'streak', 10]]);
+  assert.equal(C.QUESTS.weekly.reduce((a, x) => a + x.reward, 0), 22000, 'plan: weekly max 22,000');
+  assert.equal(C.QUESTS.monthly.reduce((a, x) => a + x.reward, 0), 40000, 'plan: monthly max 40,000');
+  assert.ok(C.QUESTS.daily.pool.every((x) => x.metric !== 'ride' || x.reward < 1550), 'plan: transit quest reward < fare');
+  assert.equal(C.BOARD.reward, 1000);
+  ok('tuning = plan v1 / Figma 13:2: 172→178 bum/min (2027), 60/300 min, ×0.5 powered, fares, taxi 2/5/10 km, shop ×0.5, quest pool & rewards, achievements, welcome/beta');
+
+  // 2027-01-01 부터 분당 178 (plan §6 — 새 표 버전 자동 반영)
+  const { env } = makeEnv();
+  await account(env, 'y27');
+  await credit(env, 'y27', '2027-01-04', 'walk', 600);
+  await E.settleMove(env.DB, env, 'y27', '2027-01-04', Date.parse('2027-01-05T03:00:00Z'));
+  assert.equal(await bal(env, 'y27', Date.parse('2027-01-05T03:00:00Z')), 10 * 178);
+  ok('move reward: 2027 days pay 178/min');
+}
+
+// ── 게시판 보상 → 보상 이벤트(kind 'board', 토스트). 회수(−)는 이벤트 없음 ──
+{
+  assert.deepEqual(E.rewardEventOf({ reason: 'board', amount: 1000, ref: '7' }, 5000), { kind: 'board', amount: 1000, karma: null, title: { ko: '동네 글 보상', en: 'Board post reward' }, coins: 8, balanceAfter: 5000 });
+  assert.equal(E.rewardEventOf({ reason: 'board', amount: -1000, ref: '7' }, 4000), null);
+  assert.equal(E.rewardEventOf({ reason: 'clawback', amount: -1000 }, 4000), null);
+  const { env } = makeEnv();
+  const acc = await account(env, 'bd');
+  const token = await S.signSession({ accountId: 'bd', sessionVersion: 1, now: NOW }, SECRET);
+  const st = async (q) => (await (await handleEcon(new Request(`http://localhost:8789/econ/state${q}`, { headers: { Cookie: `bw_s=${token}`, Origin: 'http://localhost:5173' } }), env, new URL(`http://localhost:8789/econ/state${q}`), { now: NOW + 1000 })).json()).data;
+  const s0 = await st('');
+  const r = await E.rewardBoardPost(env.DB, env, acc, { id: 77, category: 'free', title: 't', body: '정자동 탄천 산책길에 새로 생긴 벤치가 아주 편해요. 저녁에 가 보세요. 노을이 예쁩니다! 다리 밑 오리 가족도 매일 보여요. 주말엔 자전거가 많으니 조심하세요.' }, NOW);
+  assert.equal(r.rewarded, true, JSON.stringify(r));
+  const s1 = await st(`?since=${s0.lastId}`);
+  const evs = s1.events.map((e) => e.reward).filter(Boolean);
+  assert.equal(evs.length, 1); assert.equal(evs[0].kind, 'board'); assert.equal(evs[0].amount, 1000); assert.equal(evs[0].balanceAfter, s1.balance.total);
+  assert.equal(s1.events[0].entry.kind, 'board');
+  await E.clawbackBoardPost(env.DB, 'bd', 77, 'deleted', NOW + 2000);
+  const s2 = await (async () => (await (await handleEcon(new Request(`http://localhost:8789/econ/state?since=${s1.lastId}`, { headers: { Cookie: `bw_s=${token}`, Origin: 'http://localhost:5173' } }), env, new URL(`http://localhost:8789/econ/state?since=${s1.lastId}`), { now: NOW + 3000 })).json()).data)();
+  assert.equal(s2.events.filter((e) => e.reward).length, 0, 'clawback → no toast');
+  assert.equal(s2.events.length, 1); assert.ok(s2.events[0].entry.delta < 0);
+  ok('board reward → reward event kind board (toast) via /econ/state; clawback → ledger line only');
+}
+
+// ── 산 탈것: 재접속 없이 바로 탄다 (Room gifts_sync → holdings) + hello 에도 들어감 ──
+{
+  const { registerHooks } = await import('node:module');
+  registerHooks({
+    resolve(spec, ctx, next) {
+      if (spec === 'cloudflare:workers') return { url: 'data:text/javascript,export class DurableObject { constructor(ctx, env) { this.ctx = ctx; this.env = env; } }', shortCircuit: true };
+      return next(spec, ctx);
+    },
+  });
+  const { Room } = await import('../server/phone/src/room.js');
+  const { env } = makeEnv();
+  await account(env, 'rv');
+  const ws = { att: null, sent: [], send(x) { this.sent.push(JSON.parse(x)); }, serializeAttachment(v) { this.att = structuredClone(v); }, deserializeAttachment() { return this.att; } };
+  const ctx = { getTags: () => ['a:rv'], getWebSockets: () => [ws], storage: { get: async () => null, put: async () => {} }, waitUntil: () => {} };
+  const room = new Room(ctx, env);
+  await room.webSocketMessage(ws, JSON.stringify({ t: 'hello', deviceId: 'dev-rv', name: 'rv' }));
+  assert.deepEqual(ws.sent.find((m) => m.t === 'welcome').gifts, []);
+  assert.equal((await E.purchase(env.DB, env, 'rv', 'roadbike', Date.now())).ok, true);
+  await room.webSocketMessage(ws, JSON.stringify({ t: 'gifts_sync' }));
+  const h = ws.sent.filter((m) => m.t === 'holdings');
+  assert.equal(h.length, 1); assert.deepEqual(h[0].gifts, [{ id: 'roadbike-cr1', qty: 1 }]);
+  assert.deepEqual(ws.att.gifts, [{ id: 'roadbike-cr1', qty: 1 }]); assert.deepEqual(ws.att.shopGifts, [{ id: 'roadbike-cr1', qty: 1 }]);
+  await room.webSocketMessage(ws, JSON.stringify({ t: 'gifts_sync' }));
+  assert.equal(ws.sent.filter((m) => m.t === 'holdings').length, 1, 'rate limited (2 s)');
+  // 다시 접속해도 보유에 있음(예전엔 { itemId } 모양이라 걸러져 안 보였다)
+  const ws2 = { ...ws, att: null, sent: [] };
+  await room.webSocketMessage(ws2, JSON.stringify({ t: 'hello', deviceId: 'dev-rv', name: 'rv' }));
+  assert.deepEqual(ws2.sent.find((m) => m.t === 'welcome').gifts, [{ id: 'roadbike-cr1', qty: 1 }]);
+  // 게스트 연결은 무시
+  const ws3 = { ...ws, att: { id: 'p-x', deviceId: 'g' }, sent: [] };
+  await room.webSocketMessage(ws3, JSON.stringify({ t: 'gifts_sync' }));
+  assert.equal(ws3.sent.length, 0);
+  ok('shop vehicle rideable without reconnect: gifts_sync → holdings from D1 (not client), rate-limited, also in hello; guests ignored');
 }
 
 console.log(`\neconomy: ${n} checks passed`);
