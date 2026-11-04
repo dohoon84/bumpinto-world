@@ -20,6 +20,7 @@
     "colours:test": "node scripts/test-building-colours.mjs",
     "shops:test": "node scripts/test-ground-floor-shops.mjs",
     "photo-cloud:test": "node scripts/test-photo-cloud.mjs",
+    "accounts:test": "node scripts/test-accounts.mjs",
     "bgm:test": "node scripts/test-bgm.mjs",
     "corridor:tancheon": "node --max-old-space-size=8192 scripts/corridor/build-tancheon.mjs",
     "corridor:transit": "node scripts/corridor/build-transit.mjs",
