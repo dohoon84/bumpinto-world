@@ -11,6 +11,7 @@ import { openWelcome, openChipTip, openQuests, pushReward, openKarma, openShop, 
 import { shownInPay, shownReceipts, showPay, payAndShow, openTaxiApp, openSettle, holdToast, openBoard, openGate } from './transit.js';
 import { close, openKey } from './layer.js';
 import { mountWalletApp, openWalletApp } from './walletApp.js';
+import { coinSound } from './coinSound.js';
 
 let suppressRewards = 0;
 let welcomeEvAt = 0; // 서버가 연동 순간 자동 지급한 웰컴의 reward 이벤트(sinceAt 따라잡기)를 받은 시각
@@ -145,6 +146,7 @@ export function mountEconUi() {
   document.body.classList.add('v2-econ');
   mountEconHud({ link, open });
   mountWalletApp({ link });
+  coinSound.get(); // 첫 입력 때 소리 잠금 해제 + 코인 효과음 버퍼 1번 디코드
   let t = 0;
   const soon = () => { clearTimeout(t); t = setTimeout(refresh, 30); };
   for (const ev of ['balance', 'quest', 'travel', 'session', 'mode']) econ.on(ev, soon);
