@@ -3,6 +3,12 @@ import { CONTRIBUTORS, CONTRIBUTION_AREAS, REPO_URL } from './contributors.js';
 import { NOTICE_POSTS, NOTICE_BY_KEY } from './notices.js';
 import { isEn, tr, toggleLang, onLangChange } from './i18n.js';
 
+// [economy] 서버가 글 보상·회수를 원장에 넣었으면(res.econ) 경제 클라이언트가 바로 새로 읽게 알린다 → 보상 토스트(kind 'board')
+function econChanged(res) {
+  if (!res?.econ) return;
+  try { dispatchEvent(new CustomEvent('bw:econ-changed', { detail: { source: 'board' } })); } catch { /* noop */ }
+}
+
 // 게임 내 커뮤니티 게시판 (우측 버튼 클릭 시 모달 오픈, 카테고리·20행 페이징·등록/수정/삭제 + 함께 만들기/명예의 전당)
 
 const CATEGORIES = [
@@ -632,7 +638,7 @@ export function mountBoard({ sms, getMe, onOpen } = {}) {
         errorMsg = '';
         render();
         try {
-          await sms.board('delete', { postId: currentPost.id });
+          econChanged(await sms.board('delete', { postId: currentPost.id }));
           currentPost = null;
           currentComments = [];
           view = 'list';
@@ -770,6 +776,7 @@ export function mountBoard({ sms, getMe, onOpen } = {}) {
         });
         currentPost = res.post;
         if (Array.isArray(res.comments)) currentComments = res.comments;
+        econChanged(res);
         editingPost = null;
         view = 'detail';
       } else {
@@ -782,6 +789,7 @@ export function mountBoard({ sms, getMe, onOpen } = {}) {
         currentPost = res.post;
         currentComments = res.comments || [];
         if (currentPost?.id) writeSeenPostId(currentPost.id);
+        econChanged(res);
         view = 'detail';
         page = 1;
         trackEvent('board_post_create', { category: cat });

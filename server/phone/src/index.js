@@ -2,6 +2,11 @@ import { PhoneBook } from "./book.js";
 import { Room } from "./room.js";
 import { handlePhotos } from "./photos.js";
 import { subwayArrival } from "./subway.js";
+import { handleAuth } from "./account/routes.js"; // [accounts] 구글 로그인·세션·계정 (ACCOUNTS_ENABLED 일 때만)
+import { handleEcon } from "./account/econRoutes.js"; // [economy] /econ/* (ECONOMY_ENABLED 일 때만, 단계는 ECON_FEATURES)
+import { featureOn } from "./account/flags.js";
+import { accountForDevice } from "./account/store.js";
+import { clawbackBoardPost, onBoardUpdate, rewardBoardPost } from "./account/economy.js";
 
 export { PhoneBook, Room };
 
@@ -82,8 +87,11 @@ export default {
       "Access-Control-Allow-Private-Network": "true",
       Vary: "Origin",
     };
-    if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: cors });
     const url = new URL(request.url);
+    // [accounts] /auth/* 는 쿠키를 쓰므로 CORS 를 따로(허용 출처만 + credentials) 처리한다 — OPTIONS 포함
+    if (url.pathname.startsWith("/auth/")) return handleAuth(request, env, url, { waitUntil: ctx?.waitUntil?.bind(ctx) });
+    if (url.pathname.startsWith("/econ/")) return handleEcon(request, env, url);
+    if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: cors });
     const queryRegion = (url.searchParams.get("region") || "jeongja").trim().toLowerCase() || "jeongja";
     const GLOBAL_BOOK_KEY = "jeongja"; // 단일 글로벌 번호부/패스포트 DB (모든 동네가 캐릭터·번호·문자 공유)
     if (url.pathname === "/ws") {
@@ -121,7 +129,7 @@ export default {
       } catch {}
       return json({ ok: true, region: queryRegion, online, residents, ...extra }, 200, cors);
     }
-    if (url.pathname === "/photos" || url.pathname.startsWith("/photos/")) return handlePhotos(request, env, cors, url); // [photo-cloud] 사진 보관함 (R2)
+    if (url.pathname === "/photos" || url.pathname.startsWith("/photos/")) return handlePhotos(request, env, cors, url, ctx); // [photo-cloud] 사진 보관함 (R2)
     if (url.pathname === "/subway/arrival") return subwayArrival(request, env, cors, url, ctx); // [subway] 실시간 도착 (secret SEOUL_SUBWAY_KEY, 25초 캐시)
     if (url.pathname === "/news-tip") return newsTip(request, env, cors); // [camera] 사진 뉴스 제보 (본문이 커서 따로 받음)
     const method = ROUTES[url.pathname];
@@ -135,9 +143,25 @@ export default {
     body.region = regionKey;
     try {
       const out = await env.PHONE_BOOK.getByName(GLOBAL_BOOK_KEY)[method](body);
+      if (out?.ok && method === "board") await boardEconomy(env, body, out); // [economy] 게시판 보상(ECON_FEATURES 에 board 일 때만)
       return json(out, out.ok ? 200 : 400, cors);
     } catch (error) {
       return json({ ok: false, error: "server", detail: String(error?.message || error) }, 500, cors);
     }
   },
 };
+
+// [economy] 게시판 글 보상 · 회수. 글쓴이 기기(body.id)가 계정에 연결돼 있을 때만. 실패해도 글쓰기 자체는 그대로 성공.
+async function boardEconomy(env, body, out) {
+  const op = String(body?.op || "");
+  if (!["create", "update", "delete"].includes(op) || !env?.DB || !featureOn(env, "board")) return;
+  try {
+    const account = await accountForDevice(env.DB, String(body?.id || "").toLowerCase());
+    if (!account) return;
+    let r = null;
+    if (op === "create" && out.post) r = await rewardBoardPost(env.DB, env, account, { id: out.post.id, category: out.post.category, title: out.post.title, body: out.post.body });
+    else if (op === "update" && out.post) r = await onBoardUpdate(env.DB, env, account, { id: out.post.id, category: out.post.category, title: out.post.title, body: out.post.body });
+    else if (op === "delete") r = await clawbackBoardPost(env.DB, account.id, body.postId, "deleted");
+    if (r) out.econ = r;
+  } catch {}
+}

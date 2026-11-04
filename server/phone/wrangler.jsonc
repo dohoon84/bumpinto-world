@@ -17,6 +17,29 @@
   "r2_buckets": [
     { "binding": "PHOTOS", "bucket_name": "bumpinto-photos" }
   ],
+  // [accounts] 구글 로그인·계정·원장·칭호용 기록 (D1). 순서·명령은 server/phone/DEPLOY.md.
+  //   database_id: bumpinto-accounts (2026-11-04 생성)
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "bumpinto-accounts",
+      "database_id": "9b602209-cc47-44a4-aa81-320fe056290b",
+      "migrations_dir": "migrations"
+    }
+  ],
+  // [accounts] 기본값은 전부 "꺼짐" — 배포해도 정자는 그대로다. SESSION_SECRET 은 secret 으로만(wrangler secret put).
+  //   대시보드에서 넣은 다른 값(ADMIN_PHONES, ALLOWED_ORIGINS 등)이 배포 때 지워지지 않게 keep_vars 를 켠다.
+  "keep_vars": true,
+  "vars": {
+    "GOOGLE_CLIENT_ID": "1011905802733-qpjjglquapnuacrq5v7tqordlotpdso3.apps.googleusercontent.com",
+    "ACCOUNTS_ENABLED": "0",
+    "ACCOUNT_MIGRATE": "on",
+    "ECONOMY_ENABLED": "0",
+    "ECON_FEATURES": "",
+    "ECON_PAID": "0",
+    "ECONOMY_OPEN_AT": "",
+    "STATS_ENABLED": "1"
+  },
   "migrations": [
     { "tag": "v1", "new_sqlite_classes": ["PhoneBook"] },
     { "tag": "v2", "new_sqlite_classes": ["Room"] }

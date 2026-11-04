@@ -5,6 +5,7 @@ import { STATE_HZ } from './protocol.js';
 import { sanitizeLook } from '../look.js';
 import { deviceId } from '../sms.js';
 import { seedList } from '../gifts/catalog.js';
+import { accountWsUrl } from '../account/flags.js'; // [accounts]
 
 class Emitter {
   constructor() { this.handlers = {}; }
@@ -110,6 +111,8 @@ export class WebSocketPresence extends Emitter {
   }
   sendChat(text) { if (this.ws?.readyState === 1) this.ws.send(JSON.stringify({ t: 'chat', text })); }
   sendEmote(kind, combo = 1) { if (this.ws?.readyState === 1) this.ws.send(JSON.stringify({ t: 'emote', kind, combo })); }
+  // [economy] 상점에서 탈것을 산 직후: 서버(Room)가 계정 보유를 다시 읽어 { t:'holdings' } 로 돌려준다
+  syncGifts() { if (this.ws?.readyState === 1) this.ws.send(JSON.stringify({ t: 'gifts_sync' })); }
   sendWeather(mode) {
     if (this.ws?.readyState !== 1) return;
     this.ws.send(JSON.stringify({ t: 'weather', mode: mode === 'rain' ? 'rain' : '' }));
@@ -254,6 +257,7 @@ export class MockPresence extends Emitter {
       }
     }, 320);
   }
+  syncGifts() {}
   sendWeather(mode) {
     this.emit('weather', { t: 'weather', mode: mode === 'rain' ? 'rain' : '' });
   }
@@ -292,7 +296,7 @@ export function createPresence({ station, region = null }) {
       ? 'ws://127.0.0.1:8787'
       : wsParam === 'prod' || wsParam === 'live'
         ? DEFAULT_WS_URL
-        : (wsParam || DEFAULT_WS_URL);
+        : (wsParam || accountWsUrl() || DEFAULT_WS_URL); // [accounts] 계정 API 를 커스텀 도메인으로 띄웠으면 웹소켓도 그쪽(세션 쿠키가 실림)
   const regionId = region?.id || params.get('region') || 'jeongja';
   const sep = base.includes('?') ? '&' : '?';
   const url = `${base}${sep}region=${encodeURIComponent(regionId)}`;

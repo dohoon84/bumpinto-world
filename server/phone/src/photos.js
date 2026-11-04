@@ -12,6 +12,10 @@
 //
 // 이 파일은 cloudflare:workers 를 가져오지 않는다 — node 단위 테스트(scripts/test-photo-cloud.mjs)가 그대로 불러 쓴다.
 
+import { statsEnabled } from "./account/flags.js"; // [accounts]
+import { accountForDevice } from "./account/store.js";
+import { logPhoto } from "./account/stats.js";
+
 export const PHOTO_MAX_BYTES = 2 * 1024 * 1024; // 클라이언트 원본(긴 변 1280, JPEG 0.9)은 보통 150–400 KB
 export const PHOTO_MAX_PER_USER = 20; // 기기 보관함(MAX_PHOTOS)과 같게 — 어느 PC 에서 봐도 같은 한도
 export const PHOTO_UPLOADS_PER_HOUR = 60; // 지웠다 올리기를 반복하는 남용 방지
@@ -183,13 +187,25 @@ function reply(data, status, cors, extra = {}) {
 }
 const fail = (error, cors, extra) => reply({ ok: false, error: error === "not_found" || error === "bad_id" ? "unauthorized" : error }, STATUS[error] || 400, cors, extra);
 
+// [accounts] 새 사진이 저장되면 그 기기(또는 대표 캐릭터)가 붙은 계정에 photo_point_log 한 줄. 실패해도 업로드엔 영향 없음.
+function onPhotoSaved(env, ctx, userId, photo) {
+  if (!statsEnabled(env)) return;
+  const job = (async () => {
+    const acc =
+      (await accountForDevice(env.DB, userId)) ||
+      (await env.DB.prepare("SELECT * FROM accounts WHERE primary_user_id = ? AND status = 'active'").bind(userId).first());
+    if (acc) await logPhoto(env.DB, acc.id, photo);
+  })().catch(() => {});
+  if (ctx?.waitUntil) ctx.waitUntil(job);
+}
+
 export function bearerOf(request) {
   const m = /^Bearer\s+(\S+)$/i.exec(request.headers.get("Authorization") || "");
   return m && ACCOUNT_ID_RE.test(m[1]) ? m[1] : "";
 }
 
 /** /photos 와 /photos/<photoId> 를 처리한다. env.PHOTOS(R2) 가 없으면 아직 배포 안 된 것으로 보고 404. */
-export async function handlePhotos(request, env, cors, url) {
+export async function handlePhotos(request, env, cors, url, ctx) {
   // 클라이언트는 404 를 "이 서버엔 아직 사진 저장이 없음"으로 보고 조용히 기기 저장만 쓴다.
   if (!env?.PHOTOS) return reply({ ok: false, error: "not_found" }, 404, cors);
   const rest = url.pathname.replace(/^\/photos\/?/, "");
@@ -255,6 +271,7 @@ export async function handlePhotos(request, env, cors, url) {
         await env.PHOTOS.delete(begin.key).catch(() => {});
         if (!saved.ok) return fail(saved.error, cors);
       }
+      if (!saved.dedup && saved.photo) onPhotoSaved(env, ctx, id, saved.photo); // [accounts] 칭호용 사진 기록 (로그인 계정에 연결된 기기만)
       return reply({ ok: true, dedup: !!saved.dedup, photo: saved.photo, used: saved.used, max: saved.max }, saved.dedup ? 200 : 201, cors);
     }
 

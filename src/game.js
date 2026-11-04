@@ -26,6 +26,7 @@ import { mountCamera } from './camera/index.js'; // [camera] 폰 카메라·사�
 import { mountBoard } from './board.js';
 import { createNoticePopup } from './noticePopup.js'; // [notice-popup]
 import { createSms } from './sms.js';
+import { accountsOn } from './account/flags.js'; // [accounts]
 import { trackEvent } from './analytics.js';
 import { createTerrain } from './world/terrain.js'; // [terrain]
 import { Taxis } from './entities/taxis.js'; // [taxi]
@@ -841,6 +842,12 @@ presence.on('welcome', (m) => {
   if (Array.isArray(m.gifts)) replaceHoldings(m.gifts);
   inventory?.refresh();
 });
+// [economy] 산 탈것: 구매 성공 → 서버에 보유 다시 요청 → 받은 보유로 교체(재접속 없이 바로 탈 수 있음)
+presence.on('holdings', (m) => {
+  if (Array.isArray(m.gifts)) replaceHoldings(m.gifts);
+  inventory?.refresh();
+});
+addEventListener('bw:econ-owned', () => presence.syncGifts?.());
 let giftWait = 0;
 presence.on('gift', (m) => {
   clearTimeout(giftWait);
@@ -879,6 +886,8 @@ presence.on('gift', (m) => {
 });
 presence.on('weather', (m) => atmosphere.setSharedWeather(m.mode));
 const sms = createSms();
+// [accounts] 구글 로그인 칩 — ?accounts=1 (또는 VITE_ACCOUNTS=1) 일 때만 불러온다. 기본은 아무것도 안 바뀜.
+if (accountsOn()) import('./account/ui.js').then((m) => m.mountAccount({ sms })).catch(() => {});
 function resolveAdminTank() {
   if (isLocalEnv) {
     const q = (params.get('tank') || '').toLowerCase();
