@@ -35,6 +35,7 @@ import { mountBungeoStall } from './world/bungeoStall.js'; // [bungeo] 우체통
 import { mountDonationBillboards } from './world/donationBillboard.js';
 import { mountUmbrellaSystem } from './entities/umbrellaVendor.js';
 import { addDogPark } from './world/dogPark.js';
+import { mountPerfMem } from './perf/index.js'; // [perf-memory]
 import { mountStationCafe, updateStarbucksDoor } from './world/starbucksGlass.js';
 import { addTrashBins } from './world/trashBins.js';
 import { addStrayCats } from './world/strayCats.js';
@@ -2532,11 +2533,14 @@ function frame() {
   emoteFx.update(dt, innerWidth, innerHeight);
   requestAnimationFrame(frame);
 }
+// [perf-memory] 정적 병합·인스턴싱·먼 소품 숨기기 (?perfmem=0 이면 null, 예전과 같음). 첫 프레임 전에 한 번
+const perfMem = mountPerfMem({ scene, renderer, camera, params, getPlayer: () => player, corridor, bikes });
 addEventListener('resize', () => { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); });
 requestAnimationFrame(frame);
 
 // 스크린샷/디버그용 훅
 window.__jj = {
+  perfmem: perfMem, // [perf-memory]
   ready: true, region, tower, renderer, corridor, playgrounds, streetlights, pangyoLamps, // [corridor] [playgrounds] [streetlights]
   bungeo, // [bungeo]
   launch, roadster, trucks, bike: adminBike, giftRides, inventory, data, world, npcs, transit, camera, cam, ov, setMode, terrain, taxis, police, weather: atmosphere, umbrellas, dogPark, strayCats, // [terrain] [taxi] [roadster] [tower] [launch] [truck] [bike] [roadbike] [inventory]

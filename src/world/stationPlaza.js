@@ -493,6 +493,7 @@ function createOutdoorGym(x, z, overlay) {
   pedalL.add(rodL, footL);
   const pedalR = pedalL.clone();
   pedalR.position.x = 0.22;
+  pedalL.userData.perfDynamic = pedalR.userData.perfDynamic = true; // [perf-memory] 흔들리는 발판: 정적 병합 제외
   aw.add(awArch, awBar, pedalL, pedalR);
   g.add(aw);
 
@@ -668,6 +669,7 @@ function createBasketballCourt(x, z, overlay) {
 
   const ball = new THREE.Mesh(new THREE.SphereGeometry(0.14, 10, 8), M('#e8590c'));
   ball.castShadow = true;
+  ball.userData.perfDynamic = true; // [perf-memory] 튀는 공: 정적 병합 제외
   g.add(ball);
 
   if (overlay) {
@@ -960,6 +962,7 @@ function createPigeonMesh() {
 
 export function addStationPlaza(scene, overlay, world) {
   const root = new THREE.Group();
+  root.name = 'jeongja-station-plaza'; // [perf-memory] 정적 병합 대상 이름(src/perf/index.js)
   scene.add(root);
 
   // 1) 중앙 분수대
