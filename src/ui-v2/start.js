@@ -8,6 +8,7 @@ import { regionSummary, readLastStation, stationLabel } from './data.js';
 import { tr, isEn, onLangChange } from '../i18n.js';
 import { REPO_URL } from '../worldGate.js';
 import { trackEvent } from '../analytics.js';
+import { mountBgVideo } from '../landing/bgVideo.js';
 
 const SCENES = [
   { img: 'ui-v2/start-a.jpg', ko: '정자역 광장 · 실제 게임 화면', en: 'Jeongja Station Plaza · in-game' },
@@ -42,6 +43,8 @@ export function openStart({ region, onGuest, onContinue, onGoogle, onAccount, de
   const studio = root.querySelector('.v2-studio');
   const bgs = [...root.querySelectorAll('.v2-bg')];
   let scene = 0, msg = '', alive = true;
+  // PC 배경 영상(기본 · ?bgvideo=0 끔). 재생('playing') 전·실패 시엔 기존 이미지 크로스페이드 그대로. 모바일에선 안 불러옴.
+  const bgv = mountBgVideo({ host: root.querySelector('.v2-start-bg'), className: 'v2-bgvideo', onPlaying: () => root.classList.add('bgv-on') });
   // 계정 상태: null = 확인 중(아주 잠깐, 버튼을 숨겨 '게스트로 계속'이 번쩍 보이지 않게) → 게스트/로그인. 1.5초 안에 답이 없으면 게스트 화면
   let ses = null, checking = !document.body.classList.contains('mobile');
   let offSes = null;
@@ -111,6 +114,7 @@ export function openStart({ region, onGuest, onContinue, onGoogle, onAccount, de
     alive = false;
     clearInterval(timer);
     unsub();
+    if (bgv) bgv.destroy();
     offSes?.();
     document.body.classList.remove('v2-in-start');
     root.classList.add('is-leaving');
