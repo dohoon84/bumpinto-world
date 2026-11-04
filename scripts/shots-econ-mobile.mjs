@@ -28,7 +28,7 @@ const D = (code) => p.evaluate((c) => window.__bwEconDemo.open(c), code);
 const dev = (fn, ...a) => p.evaluate(([f, a]) => window.__bwEconDemo.dev[f](...a), [fn, a]);
 const guest = () => p.evaluate(() => { window.__bwEconDemo.suppress(4000); window.__bwEconDemo.dev.reset(); });
 const acct = (seed = 'fig03') => p.evaluate((s) => { window.__bwEconDemo.suppress(4000); window.__bwEconDemo.dev.seed(s); }, seed);
-const closeAll = () => p.evaluate(() => { document.querySelector('.ve-wrap [data-ve="close"]')?.click(); window.__jjHandset?.close?.(); document.querySelector('#m-hud .m-scrim:not([hidden])')?.click(); });
+const closeAll = () => p.evaluate(() => { document.querySelectorAll('.ve-toast, .ve-next, .ve-float, .v2-coinfly, .ve-paystack, .ve-mini').forEach((e) => e.remove()); document.querySelector('.ve-wrap [data-ve="close"]')?.click(); window.__jjHandset?.close?.(); document.querySelector('#m-hud .m-scrim:not([hidden])')?.click(); });
 const ACT = {
   'hud-guest': async () => { await guest(); await p.waitForTimeout(600); },
   hud: async () => { await acct(); await p.waitForTimeout(800); },

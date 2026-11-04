@@ -60,8 +60,8 @@ body.mobile.m-econ .ve-qfoot { flex-wrap: wrap; padding: 8px 12px; }
 body.mobile.m-econ .ve-info { font-size: 12px; }
 body.mobile.m-econ .ve-empty { padding: 20px 12px; }
 
-/* 05 보상 토스트: 1행 가운데 빈자리, 작게 */
-body.mobile.m-econ .ve-toast { top: var(--m-t); width: min(360px, calc(100vw - 2 * (var(--m-l) + 236px))); min-width: 280px; gap: 10px; padding: 8px 12px; }
+/* 05 보상 토스트: 2행 높이 가운데(1행 칩·버튼을 덮지 않게), 작게 */
+body.mobile.m-econ .ve-toast { top: calc(var(--m-t) + 48px); width: min(360px, calc(100vw - 2 * (var(--m-l) + 236px))); min-width: 300px; gap: 10px; padding: 8px 12px; }
 body.mobile.m-econ .ve-toast .ve-tcoin, body.mobile.m-econ .ve-toast .ve-tcoin svg { width: 36px !important; height: 36px !important; }
 body.mobile.m-econ .ve-toast .ve-rays { left: 30px; width: 90px !important; height: 90px !important; }
 body.mobile.m-econ .ve-toast .ve-t28, body.mobile.m-econ .ve-toast .ve-t22 { font-size: 17px; }
@@ -121,3 +121,12 @@ body.mobile.m-econ .ve-phone-scr { border-radius: 16px; padding: 8px 12px 12px; 
 /* 개발용 demo 막대: 아래 가운데(조이스틱·버튼 사이), 작게 */
 body.mobile.m-econ .ve-demo { bottom: 2px; max-width: calc(100vw - 2 * (var(--m-l) + 150px)); max-height: 30vh; overflow: auto; font-size: 11px; }
 body.mobile.m-econ.ve-shot .ve-demo { display: none; }
+body.mobile.m-econ .ve-toast .ve-stamp { width: 44px; height: 44px; border-width: 2px; } body.mobile.m-econ .ve-toast .ve-stamp b { font-size: 11px; } body.mobile.m-econ .ve-toast .ve-stamp small { font-size: 6px; }
+body.mobile.m-econ .ve-toast .v2-hrow { flex-wrap: wrap; gap: 4px; }
+/* 패널 머리줄: 좁은 폭에서 줄바꿈(제목·태그 겹침 방지) */
+body.mobile.m-econ .ve-panel > .v2-hrow:first-child, body.mobile.m-econ .ve-panel > .ve-qhead { flex-wrap: wrap; row-gap: 6px; padding-right: 40px; }
+body.mobile.m-econ .ve-panel .v2-head { flex: none; }
+body.mobile.m-econ .ve-panel > .v2-hrow:first-child > .v2-close { position: absolute; right: 12px; top: 12px; }
+body.mobile.m-econ .ve-shop .ve-bum.lg { height: 28px; font-size: 13px; }
+/* 경제 시트가 열려 있으면 게임 안내 말풍선(지하철 입구 등)은 잠시 숨김 — 시트 위로 겹쳐 보이지 않게 */
+body.mobile.m-econ:has(#ve-layer .ve-wrap) :is(#subway-hint, #umbrella-actions, #coffee-order-bar, #dog-gate-btn, #donate-near-btn, #coffee-toss-btn) { visibility: hidden !important; }
