@@ -13,11 +13,14 @@ export const BETA_WINDOW_DAYS = 30;
 export const LEDGER_KINDS = new Set(["paid", "free"]);
 
 // ── 2단계 이후 (이 파일에서 새로 정함) ──
-export const ECON_CONFIG_VERSION = 3; // 이동·퀘스트·업적·요금·상점·게시판 행의 price_table_version
+export const ECON_CONFIG_VERSION = 4; // 이동·퀘스트·업적·요금·상점·게시판 행의 price_table_version
 
 /**
  * 이동 보상: "인정 이동 시간" 방식(v1 §6). 서버가 웹소켓 위치로 잰 인정 초만 센다.
  *   지급 = floor(인정분 × 배율) × perMinute, 하루·주 인정분 상한.
+ *   원장에는 날짜마다 딱 1행(plan "일 단위 이벤트 move(mode, sec) → 원장 move:{date}", 키 move:{acc}:{date}) — 토스트도 하루 1번.
+ *     · 그날 인정분이 하루 몫(min(60분, 이번 주 남은 분))에 닿으면 그 자리에서 지급
+ *     · 못 닿은 날은 날짜가 지나고 settleGraceMin 뒤, 다음 접속 때(최근 catchUpDays 일) 그날 인정분 그대로 지급
  *   인정 조건(stats.js MoveStats): 수단별 속도 상한, 순간이동 버림, 5초 넘는 공백 버림, 80ms 보다 촘촘한 표본 버림,
  *   60초 창의 순변위 30m 미만(제자리 맴돌기) 버림.
  */
@@ -41,18 +44,19 @@ export const MOVE = Object.freeze({
   windowSec: 60,
   windowMinNetM: 30,
   minSampleMs: 80,
-  settleStepMinutes: 10, // 오늘 몫은 10분 단위로 원장에 넣고(행 수 절약), 지난 날짜는 남은 분까지 모두 정산
+  settleGraceMin: 15, // 자정 직후 Room 이 늦게 쓰는 어제 통계를 기다리는 시간
+  catchUpDays: 7, // 접속하지 않은 날 몫을 며칠 전까지 찾아 지급하나
 });
 
 /**
  * 하루·주 상한 (bum). 기획(plan §5·§6)이 정한 상한은 이동의 "인정 분" 상한뿐이다(하루 60분 · 주 300분) — 이동은 분 단위로 막는다.
  *   퀘스트·업적은 정의 자체가 상한이다(퀘스트마다 기간당 1회, 업적은 계정당 1회). 기획 최대치: 일일 약 5,000~6,000 · 주간 22,000 · 월간 40,000.
  *   그래서 v3 에서 근거 없는 퀘스트·업적·총합 bum 상한(12,000/60,000/50,000 등)을 없앴다(주간·월간 보상이 같은 날 몰리면 잘려 나가던 문제).
- *   게시판만 bum 상한을 둔다 = 하루 글 수 × 글당 보상.
+ *   게시판만 bum 상한을 둔다 = 하루 1번 × 글당 보상.
  *   move 값은 표시용(2026 기준 10,320 / 51,600).
  */
 export const CAPS = Object.freeze({
-  daily: Object.freeze({ move: MOVE.perMinute * MOVE.dailyMinutes, board: 3 * 1000 }),
+  daily: Object.freeze({ move: MOVE.perMinute * MOVE.dailyMinutes, board: 1 * 1000 }), // board = BOARD.dailyRewards × BOARD.reward
   weekly: Object.freeze({ move: MOVE.perMinute * MOVE.weeklyMinutes }),
 });
 /** 상한 계산에 들어가는 원장 reason. welcome/beta/fare/shop/refund/clawback 은 상한과 무관. */
@@ -90,8 +94,8 @@ export const QUESTS = Object.freeze({
     { id: "W-DAYS", metric: "login_days", target: 5, unit: "day", reward: 4000, karma: ["streak", 5], title: T("5일 출석", "Visit 5 days") },
     { id: "W-DAILY", metric: "daily_claims", target: 15, unit: "count", reward: 5000, karma: ["streak", 5], title: T("일일 할 일 15개", "15 daily quests") },
     { id: "W-TRANSIT", metric: "ride_modes", target: 3, unit: "kind", reward: 3000, karma: ["transit", 10], title: T("교통수단 3종 타기", "Ride 3 kinds of transit") },
-    // mock 의 '장소 5곳 방문'은 서버가 검증할 방문 데이터가 없어, 서버가 기록하는 사진 위치(100m 칸)로 판정한다.
-    { id: "W-PLACES", metric: "photo_spots", target: 5, unit: "place", reward: 4000, karma: ["explore", 5], title: T("다른 장소 5곳에서 사진 찍기", "Take photos at 5 places") },
+    // 기획의 W-PLACES(서로 다른 지정 장소 5곳, 4,000 · 탐험 5)는 지정 장소 목록 · Room 위치 판정이 아직 없어 활성 목록에서 뺐다(v4).
+    //   사진 위치로 대신 세던 v3 방식은 사진 위치를 클라이언트가 보내서(셔터 토큰 P 없음) 서버 검증이 아니다.
   ]),
   monthly: Object.freeze([
     { id: "M-WALK", metric: "move_min", modes: ["walk"], target: 600, unit: "min", reward: 15000, karma: ["health", 30], title: T("월간 걷기 600분", "Walk 600 min this month") },
@@ -157,8 +161,16 @@ export const TAXI = Object.freeze({
   maxM: 30000, // 클라이언트가 보낸 거리 상한
   holdTtlSec: 3 * 3600, // 홀드 만료(정산·취소 없으면 잔액에서 다시 풀림)
 });
-/** 교통 이용 기록 도배 방지: 게임 진행은 막지 않고, 너무 잦거나 하루 상한을 넘은 이용은 퀘스트·카르마에 안 셈(qty=0). */
+/**
+ * 교통 이용 기록 도배 방지: 게임 진행은 막지 않고, 너무 잦거나 하루 상한을 넘은 이용은 퀘스트·카르마에 안 셈(qty=0).
+ *   ⚠️ 기획에 없는 값(어뷰징 방지용으로 PR #30 에서 넣음). env RIDE_MIN_GAP_SEC · RIDE_DAILY_COUNTED 로 바꿀 수 있다.
+ */
 export const RIDE_LIMITS = Object.freeze({ minGapSec: 30, dailyCounted: 40 });
+/** env 를 반영한 탑승 제한 (잘못된 값은 기본값) */
+export function rideLimits(env = {}) {
+  const num = (v, d, min, max) => { const n = Math.floor(Number(v)); return v != null && v !== "" && Number.isFinite(n) && n >= min && n <= max ? n : d; };
+  return { minGapSec: num(env?.RIDE_MIN_GAP_SEC, RIDE_LIMITS.minGapSec, 0, 3600), dailyCounted: num(env?.RIDE_DAILY_COUNTED, RIDE_LIMITS.dailyCounted, 1, 1000) };
+}
 
 /**
  * 탈것 상점 — id·이름·가격은 mock SHOP_ITEMS 와 같음(가격 = 현실가 × 0.5 초기값).
@@ -174,14 +186,17 @@ export const SHOP = Object.freeze([
 /** 표시용 가정값(mock RULES 와 같음) — 상점 목표 '며칠 남음' 계산에만 씀. 실측 아님. */
 export const DISPLAY = Object.freeze({ typicalDailyNet: 8916, avgDailyIncome: 11202, avgDailyTransit: 2286 });
 
-/** 게시판 보상 (5단계). 도배 방지: 최소 글자 수, 연속 작성 간격, 하루 개수, 가입 후 대기, 같은 글 반복 금지, 삭제·짧게 수정 시 회수. */
-/**   ⚠️ 기획 v1(plan §5)은 게시판 보상을 0 으로 두고 6단계에서 다시 보자고 했다. 1,000 은 PLAN.md 5단계 + 도훈 승인(PR #30)으로 정한 임시값.
- *      리뷰(bw-economy-review §3) 제안대로 하루 게시판 합계는 8,400 아래(지금 3 × 1,000 = 3,000). */
+/**
+ * 게시판 보상 (5단계) — 하루 1번(도훈 결정, PR #30). 글은 얼마든지 쓰고, 그날 조건을 처음 통과한 글 하나만 보상.
+ *   그 뒤 글은 보상·토스트 없음. 도배 방지: 최소 글자 수, 가입 후 대기, 같은 글 반복 금지. 보상 받은 글을 지우거나 짧게 고치면 회수
+ *   (회수해도 그날 보상 기회는 다시 열리지 않음 — 원장 키 board:{acc}:{kst_date}).
+ */
+/**   ⚠️ 기획 v1(plan §5)은 게시판 보상을 0 으로 두고 6단계에서 다시 보자고 했다(0 이 아닌 금액은 기획에 없음).
+ *      1,000 은 PLAN.md 5단계 + 도훈 승인(PR #30)으로 정한 값. 리뷰(bw-economy-review §3) 상한 8,400/일 아래(1 × 1,000). */
 export const BOARD = Object.freeze({
   reward: 1000,
   minChars: 40, // 공백 제거·같은 글자 3번 이상 반복 압축 후 글자 수
-  cooldownSec: 600,
-  dailyPosts: 3,
+  dailyRewards: 1,
   accountMinAgeHours: 24,
 });
 

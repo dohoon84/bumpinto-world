@@ -6,7 +6,7 @@
 // 이 파일은 cloudflare:workers 를 가져오지 않는다 — node 단위 테스트가 D1 대역으로 그대로 불러 쓴다.
 import {
   ACHIEVEMENTS, BOARD, CAPS, DISPLAY, ECON_CONFIG_VERSION, FARES, FARE_ALIASES, KARMA_AXES, LADDERS, MOVE, movePerMinute, PHOTO_SPOT_M,
-  QUESTS, RIDE_LIMITS, SHOP, TAXI, WELCOME_FREE_BUM, BETA_FREE_BUM, WELCOME_TEXT,
+  QUESTS, rideLimits, SHOP, TAXI, WELCOME_FREE_BUM, BETA_FREE_BUM, WELCOME_TEXT,
 } from "./econ.js";
 import { appendLedgerWhere, getBalance } from "./ledger.js";
 import { econPaid, economyEnabled, economyOpenAt, featureOn, kstDate, kstPeriods } from "./flags.js";
@@ -123,37 +123,46 @@ async function moveFacts(db, accountId, date) {
 }
 
 /**
- * 날짜 하나의 이동 보상 정산(멱등). 오늘은 settleStepMinutes 단위(상한에 닿으면 바로), 지난 날짜는 남은 분까지 모두.
- * 키 move:{acc}:{date}:{새 누적분} — 이전 누적분이 그대로일 때만 들어간다.
+ * 날짜 하나의 이동 보상 정산 — 날짜당 원장 1행(키 move:{acc}:{date}), 토스트도 1번.
+ *   오늘: 인정분이 하루 몫(min(60, 주 남은 분))에 닿았을 때만. 지난 날짜(자정 + settleGraceMin 지남): 인정분 그대로.
  */
 export async function settleMove(db, env, accountId, date, now = Date.now()) {
   const f = await moveFacts(db, accountId, date);
-  let target = f.minutes;
-  const final = date < kstDate(now);
-  if (!final && target < f.limit) target = Math.floor(target / MOVE.settleStepMinutes) * MOVE.settleStepMinutes;
-  if (target <= f.paid) return { added: 0, minutes: f.paid };
-  const key = `move:${accountId}:${date}:${target}`;
+  if (f.paid > 0) return { added: 0, minutes: f.paid, settled: true };
+  const dayEnd = Date.parse(`${date}T00:00:00+09:00`) + 86400000;
+  const final = now >= dayEnd + MOVE.settleGraceMin * 60000;
+  if (f.minutes <= 0 || (!final && f.minutes < f.limit)) return { added: 0, minutes: 0, pending: f.minutes, settled: false };
+  const key = `move:${accountId}:${date}`;
   const r = await grantCapped(db, {
-    accountId, reason: "move", amount: (target - f.paid) * movePerMinute(date), key, ref: `${date}:${target - f.paid}`, now, reasonCap: false,
-    extraWhere: { sql: "COALESCE((SELECT minutes_paid FROM move_rewards WHERE account_id = ? AND kst_date = ?), 0) = ?", params: [accountId, date, f.paid] },
+    accountId, reason: "move", amount: f.minutes * movePerMinute(date), key, ref: `${date}:${f.minutes}`, now, reasonCap: false,
+    extraWhere: { sql: "NOT EXISTS (SELECT 1 FROM move_rewards WHERE account_id = ? AND kst_date = ? AND minutes_paid > 0)", params: [accountId, date] },
     after: [
       db.prepare(
         `INSERT INTO move_rewards (account_id, kst_date, minutes_paid, updated_at)
          SELECT ?, ?, ?, ? WHERE EXISTS (SELECT 1 FROM ledger WHERE idempotency_key = ?)
          ON CONFLICT(account_id, kst_date) DO UPDATE SET minutes_paid = excluded.minutes_paid, updated_at = excluded.updated_at
-         WHERE move_rewards.minutes_paid = ?`,
-      ).bind(accountId, date, target, now, key, f.paid),
+         WHERE move_rewards.minutes_paid = 0`,
+      ).bind(accountId, date, f.minutes, now, key),
     ],
   });
-  return { added: r.applied ? target - f.paid : 0, amount: r.amount, minutes: r.applied ? target : f.paid, capped: r.capped };
+  return { added: r.applied ? f.minutes : 0, amount: r.amount, minutes: r.applied ? f.minutes : 0, settled: !!r.applied, capped: r.capped };
 }
 
-/** Room 이 통계를 쓴 뒤 부른다. 최근 2일만(늦게 온 어제 몫 포함). */
-export async function settleMoveForDates(db, env, accountId, dates, now = Date.now()) {
-  const today = kstDate(now);
-  const yday = kstDate(now - 86400000);
+/** 아직 지급 안 된(인정분이 있는) 날짜들 — 최근 catchUpDays 일 + 오늘, 오래된 날부터(주 상한 계산 순서) */
+export async function unpaidMoveDates(db, accountId, now = Date.now()) {
+  const from = kstDate(now - MOVE.catchUpDays * 86400000);
+  const { results } = await db.prepare(
+    `SELECT DISTINCT kst_date AS d FROM stat_credit_daily WHERE account_id = ? AND kst_date >= ? AND credited_sec > 0
+       AND kst_date NOT IN (SELECT kst_date FROM move_rewards WHERE account_id = ? AND minutes_paid > 0) ORDER BY kst_date`,
+  ).bind(accountId, from, accountId).all();
+  return (results || []).map((r) => r.d);
+}
+
+/** Room 이 통계를 쓴 뒤 · /econ/state 에서 부른다. dates 는 참고만 — 항상 미지급 날짜를 오래된 순으로 본다. */
+export async function settleMoveForDates(db, env, accountId, dates = [], now = Date.now()) {
+  void dates;
   const out = [];
-  for (const d of dates) if (d === today || d === yday) out.push(await settleMove(db, env, accountId, d, now));
+  for (const d of await unpaidMoveDates(db, accountId, now)) out.push(await settleMove(db, env, accountId, d, now));
   if (featureOn(env, "quests")) await autoSettle(db, env, accountId, now);
   return out;
 }
@@ -163,8 +172,8 @@ export async function travelToday(db, accountId, now = Date.now()) {
   const f = await moveFacts(db, accountId, date);
   return {
     guest: false, kstDate: date, minutes: f.minutes, capMinutes: MOVE.dailyMinutes, ratePerMin: movePerMinute(date),
-    pendingBum: Math.max(0, f.minutes - f.paid) * movePerMinute(date), distanceM: f.distanceM,
-    weekMinutes: Math.min(MOVE.weeklyMinutes, f.weekOther + f.minutes), weekCapMinutes: MOVE.weeklyMinutes, settled: f.paid >= f.minutes,
+    pendingBum: f.paid > 0 ? 0 : f.minutes * movePerMinute(date), distanceM: f.distanceM,
+    weekMinutes: Math.min(MOVE.weeklyMinutes, f.weekOther + Math.max(f.paid, f.minutes)), weekCapMinutes: MOVE.weeklyMinutes, settled: f.paid > 0,
   };
 }
 export const GUEST_TRAVEL = (now = Date.now()) => ({
@@ -443,11 +452,12 @@ export function listFare(code, { meters = 0, night = false } = {}) {
 
 const RIDE_ID_RE = /^[\w.:@-]{1,80}$/;
 
-async function rideQty(db, accountId, now) {
+async function rideQty(db, env, accountId, now) {
+  const L = rideLimits(env);
   const last = await db.prepare("SELECT created_at FROM econ_events WHERE account_id = ? AND kind = 'ride' AND qty > 0 ORDER BY id DESC LIMIT 1").bind(accountId).first();
-  if (last && now - Number(last.created_at) < RIDE_LIMITS.minGapSec * 1000) return 0;
+  if (last && now - Number(last.created_at) < L.minGapSec * 1000) return 0;
   const today = await db.prepare("SELECT COALESCE(SUM(qty), 0) AS n FROM econ_events WHERE account_id = ? AND kind = 'ride' AND kst_date = ?").bind(accountId, kstDate(now)).first();
-  return Number(today?.n || 0) >= RIDE_LIMITS.dailyCounted ? 0 : 1;
+  return Number(today?.n || 0) >= L.dailyCounted ? 0 : 1;
 }
 
 function rideEventStmt(db, { accountId, mode, ref, qty, listed, charged, key, now, requireLedgerKey = null }) {
@@ -477,7 +487,7 @@ export async function payFare(db, env, accountId, { code, rideId, meta } = {}, n
   const prev = await db.prepare("SELECT id, mode, ref, listed_amount, charged_amount FROM econ_events WHERE idempotency_key = ?").bind(key).first();
   if (prev) return ok({ receipt: receiptOf(prev, lf), rewards: [], replay: true });
   const paid = econPaid(env);
-  const qty = await rideQty(db, accountId, now);
+  const qty = await rideQty(db, env, accountId, now);
   const ref = lf.code;
   if (!paid || lf.listAmount <= 0) {
     await rideEventStmt(db, { accountId, mode: lf.mode, ref, qty, listed: lf.listAmount, charged: 0, key, now }).run();
@@ -544,7 +554,7 @@ export async function settleTaxi(db, env, accountId, { holdId, actualMeters } = 
   const actualList = Math.min(Number(h.list_amount), taxiFare(actualMeters, { night: !!h.night, factor: f?.factor || 1 }));
   const dist = Math.round(Math.max(0, Math.min(TAXI.maxM, Number(actualMeters) || 0)));
   const charged = h.free ? 0 : actualList;
-  const qty = await rideQty(db, accountId, now);
+  const qty = await rideQty(db, env, accountId, now);
   const evKey = `ride:taxi:${h.hold_id}`;
   const upd = db.prepare("UPDATE taxi_holds SET status = 'settled', charged = ?, distance_m = ? WHERE hold_id = ? AND status = 'held'");
   if (charged > 0) {
@@ -691,20 +701,19 @@ export async function rewardBoardPost(db, env, account, post, now = Date.now()) 
   const hash = await textHash(`${post.title || ""}\n${post.body || ""}`);
   const dup = await db.prepare("SELECT 1 AS n FROM board_rewards WHERE account_id = ? AND body_hash = ?").bind(accountId, hash).first();
   if (dup) return { rewarded: false, reason: "duplicate" };
-  const last = await db.prepare("SELECT MAX(created_at) AS t FROM board_rewards WHERE account_id = ?").bind(accountId).first();
-  if (last?.t && now - Number(last.t) < BOARD.cooldownSec * 1000) return { rewarded: false, reason: "cooldown" };
   const P = kstPeriods(now);
+  // 하루 1번: 오늘 이미 보상한 글이 있으면(회수된 글 포함) 이 글은 그냥 글
   const today = await db.prepare("SELECT COUNT(*) AS n FROM board_rewards WHERE account_id = ? AND created_at >= ? AND created_at < ?").bind(accountId, P.day.start, P.day.end).first();
-  if (Number(today?.n || 0) >= BOARD.dailyPosts) return { rewarded: false, reason: "daily_limit" };
-  const key = `board:${postId}`;
+  if (Number(today?.n || 0) >= BOARD.dailyRewards) return { rewarded: false, reason: "daily_limit" };
+  const key = `board:${accountId}:${P.day.key}`; // 동시에 두 글이 와도 원장 키가 하루 1행만 허용
   const r = await grantCapped(db, {
     accountId, reason: "board", amount: BOARD.reward, key, ref: String(postId), now,
     after: [db.prepare(
       `INSERT INTO board_rewards (post_id, account_id, amount, body_hash, status, created_at, updated_at)
-       SELECT ?, ?, amount, ?, 'paid', ?, ? FROM ledger WHERE idempotency_key = ? ON CONFLICT(post_id) DO NOTHING`,
-    ).bind(postId, accountId, hash, now, now, key)],
+       SELECT ?, ?, amount, ?, 'paid', ?, ? FROM ledger WHERE idempotency_key = ? AND ref = ? ON CONFLICT(post_id) DO NOTHING`,
+    ).bind(postId, accountId, hash, now, now, key, String(postId))],
   });
-  if (!r.applied) return { rewarded: false, reason: r.capped ? "cap" : "already" };
+  if (!r.applied) return { rewarded: false, reason: "daily_limit" };
   return { rewarded: true, amount: r.amount };
 }
 
@@ -835,6 +844,8 @@ export function publicConfig(env) {
     fares: Object.fromEntries(Object.entries(FARES).map(([code, f]) => [code, { mode: f.mode, amount: f.amount ?? null, meter: !!f.meter, factor: f.factor || 1, label: f.label }])),
     taxi: { base: TAXI.base, baseM: TAXI.baseM, stepM: TAXI.stepM, stepFare: TAXI.stepFare, nightFactor: TAXI.nightFactor, nightFromHour: TAXI.nightFromHour, nightToHour: TAXI.nightToHour, maxM: TAXI.maxM },
     aliases: FARE_ALIASES,
-    move: { perMinute: MOVE.perMinute, dailyMinutes: MOVE.dailyMinutes, weeklyMinutes: MOVE.weeklyMinutes },
+    move: { perMinute: MOVE.perMinute, dailyMinutes: MOVE.dailyMinutes, weeklyMinutes: MOVE.weeklyMinutes, payout: "daily" },
+    rideLimits: rideLimits(env),
+    board: { reward: BOARD.reward, dailyRewards: BOARD.dailyRewards, minChars: BOARD.minChars },
   };
 }
