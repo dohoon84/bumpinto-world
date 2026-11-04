@@ -19,6 +19,8 @@ const { stationTheme } = await import('../src/subway/stations.js');
 assert.equal(migeumSubEnabled('?migeumsub=0'), false); assert.equal(migeumSubEnabled('?migeum=0'), false);
 assert.equal(migeumSubEnabled('?migeum=0&migeumsub=1'), false, '?migeum=0 이 지하철도 끈다');
 assert.equal(migeumSubEnabled(''), true); assert.equal(migeumSubEnabled('?ws=mock&migeumsub=1'), true);
+{ const { migeumSubwayDrawsEntrances: D } = await import('../src/corridor/migeum.js'); // 1단계 출입구 캐노피와 겹치지 않게
+  assert.equal(D(''), true); assert.equal(D('?migeumsub=0'), false); assert.equal(D('?migeum=0'), false); assert.equal(D('?subway=0'), false, '지하철 전체 끔 → 1단계 캐노피 유지'); }
 assert.equal(STATIONS_BASE.length, 15); assert.ok(STATIONS_BASE.every((d) => !d.ext));
 assert.equal(STATIONS.length, ON ? 16 : 15); assert.deepEqual(EXT_STATIONS.map((d) => d.id), ON ? ['migeum'] : []);
 assert.deepEqual(ALL.slice(0, 15).map((d) => d.id), STATIONS_BASE.map((d) => d.id), '기존 역 순서 그대로, 미금은 맨 뒤');

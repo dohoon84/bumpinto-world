@@ -19,7 +19,7 @@ import { setNightCut, updateNight } from './nightLights.js';
 import { pangyoEnabled, pangyoLinkEnabled, mergePangyoIndex, fetchCorridorTile, PANGYO_DIR } from './pangyo.js'; // [pangyo]
 import { pangyoExpressEnabled, PANGYO_EXPRESS_FILE, filterExpressHidden, buildPangyoExpress } from './pangyoExpress.js'; // [pangyo-express]
 import { createPangyoLandmarks } from './landmarks/pangyo.js'; // [pangyo]
-import { migeumEnabled, mergeMigeumIndex, MIGEUM_DIR } from './migeum.js'; // [migeum]
+import { migeumEnabled, mergeMigeumIndex, MIGEUM_DIR, migeumSubwayDrawsEntrances } from './migeum.js'; // [migeum] [migeum-sub]
 import { isEn, onLangChange } from '../i18n.js'; // [pangyo-link] 판교역 라벨 KO/EN
 import { createPangyoNpc, pangyoNpcEnabled } from './pangyoNpc.js'; // [pangyo-npc]
 import { pangyoWaterEnabled, PANGYO_WATER_FILE, attachMainDrop, mergePangyoStreams, dropWaterGeometry } from './pangyoWater.js'; // [pangyo-water]
@@ -269,7 +269,7 @@ export function createCorridor({ scene, corridorData, terrain, world, renderer, 
   const crossings = buildCorridorCrossings(root, base.crossings, { getSimTime });
   const landmarks = createLandmarks(root, index.landmarks, renderer);
   const pangyoLm = corridorData.pangyo ? createPangyoLandmarks(corridorData.pangyo, { overlay }) : null; // [pangyo]
-  const migeumLm = corridorData.migeum ? createPangyoLandmarks(corridorData.migeum, { overlay, prefix: 'migeum' }) : null; // [migeum] 같은 빌더(출입구만)
+  const migeumLm = corridorData.migeum && !migeumSubwayDrawsEntrances() ? createPangyoLandmarks(corridorData.migeum, { overlay, prefix: 'migeum' }) : null; // [migeum] 같은 빌더(출입구만). [migeum-sub] 지하철이 출입구를 그리면 안 만듦
   const pangyoEx = corridorData.pangyoExpress ? buildPangyoExpress(corridorData.pangyoExpress) : null; // [pangyo-express] 판교IC~경부 합류(메시 2개, 늘 붙어 있음)
   if (pangyoEx) root.add(pangyoEx.group);
   const tower = index.landmarks.find((l) => l.id === 'lotte-world-tower');
