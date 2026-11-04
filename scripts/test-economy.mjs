@@ -70,7 +70,7 @@ console.log('economy tests');
   assert.deepEqual(F.econFeatures(base), []);
   assert.deepEqual(F.econFeatures({ ...base, ECONOMY_ENABLED: '0', ECON_FEATURES: 'move,quests' }), [], 'economy off → no features');
   assert.deepEqual(F.econFeatures({ ...base, ECON_FEATURES: 'board, move,bogus' }), ['move', 'board']);
-  assert.deepEqual(E.econMode(base), { transitPaid: false, shopPaid: false, beta: true });
+  assert.deepEqual(E.econMode(base), { transitPaid: false, shopPaid: true, beta: true }, 'shop is not part of the free launch');
   assert.deepEqual(E.econMode({ ...base, ECON_PAID: '1' }), { transitPaid: true, shopPaid: true, beta: false });
   assert.equal(F.devLoginAllowed({ DEV_LOGIN: '1' }, new URL('http://localhost:8789/auth/dev')), true);
   assert.equal(F.devLoginAllowed({ DEV_LOGIN: '1' }, new URL('https://api.bumpinto.world/auth/dev')), false);
@@ -342,34 +342,38 @@ console.log('economy tests');
   ok('paid mode: negative balance → spend_locked');
 }
 
-// ── 상점 ──
+// ── 상점: 미리보기 전용(아무것도 공짜로 주지 않음, 무료·유료 모두 구매 거절, 아무것도 안 씀) ──
 {
-  const { env } = makeEnv();
-  await account(env, 's');
-  const items = await E.listShop(env.DB, env, 's', NOW);
-  const rb = items.find((i) => i.id === 'roadbike');
-  assert.deepEqual([rb.free, rb.price, rb.listPrice, rb.giftable, rb.affordable], [true, 0, 1000000, false, true]);
-  const buy = await E.purchase(env.DB, env, 's', 'roadbike', NOW);
-  assert.equal(buy.ok, true); assert.equal(buy.data.free, true); assert.equal(buy.data.amount, 0); assert.equal(buy.data.listAmount, 1000000);
-  assert.equal(await bal(env, 's'), 0);
-  assert.deepEqual(await E.accountVehicleGifts(env.DB, 's'), [{ id: 'roadbike-cr1', qty: 1 }]);
-  assert.equal((await E.purchase(env.DB, env, 's', 'roadbike', NOW)).error.code, 'already_claimed');
-  assert.equal((await E.purchase(env.DB, env, 's', 'bike', NOW)).error.code, 'not_eligible', 'no 3D model yet');
-  assert.equal((await E.purchase(env.DB, env, 's', 'nope', NOW)).error.code, 'unknown');
-  const goal = await E.shopGoal(env.DB, env, 's', NOW); assert.equal(goal.itemId, 'bike');
-  ok('shop (free mode): price 0 + listPrice, ownership recorded (rideable gift id), duplicate/unavailable/unknown errors');
-
-  const { env: e2 } = makeEnv({ ECON_PAID: '1' });
-  await account(e2, 'sp');
-  await give(e2, 'sp', 400000, 'seed-sp');
-  const r = await E.purchase(e2.DB, e2, 'sp', 'roadbike', NOW);
-  assert.deepEqual([r.error.code, r.error.need, r.error.balance, r.error.shortBy], ['insufficient_balance', 1000000, 400000, 600000]);
-  await give(e2, 'sp', 700000, 'seed-sp2');
-  const r2 = await E.purchase(e2.DB, e2, 'sp', 'roadbike', NOW);
-  assert.equal(r2.ok, true); assert.equal(r2.data.amount, 1000000); assert.equal(await bal(e2, 'sp'), 100000);
-  assert.equal((await E.purchase(e2.DB, e2, 'sp', 'roadbike', NOW)).error.code, 'already_claimed');
-  assert.equal(await bal(e2, 'sp'), 100000);
-  ok('shop (paid mode): insufficient_balance, debit once, no double purchase');
+  const counts = async (env) => {
+    const one = async (sql) => Number((await env.DB.prepare(sql).first()).n);
+    return { ledger: await one('SELECT COUNT(*) AS n FROM ledger'), owned: await one('SELECT COUNT(*) AS n FROM account_vehicles'), events: await one("SELECT COUNT(*) AS n FROM econ_events WHERE kind = 'shop'") };
+  };
+  for (const paidFlag of ['0', '1']) {
+    const { env } = makeEnv({ ECON_PAID: paidFlag });
+    await account(env, 's');
+    await give(env, 's', 9_000_000, 'seed-s'); // 유료 모드라도 잔액 충분 — 그래도 거절
+    const items = await E.listShop(env.DB, env, 's', NOW);
+    assert.deepEqual(items.map((i) => [i.id, i.name.ko, i.price, i.listPrice]), [['bike', '첫 자전거', 160000, 160000], ['roadbike', 'CR·1 로드바이크', 1000000, 1000000], ['scooter', '스쿠터', 2500000, 2500000], ['car', '경차', 7450000, 7450000]]);
+    for (const i of items) assert.deepEqual([i.available, i.comingSoon, i.status, i.statusText.ko, i.free, i.affordable, i.giftable, i.owned], [false, true, 'coming_soon', '준비중', false, false, false, false], i.id);
+    assert.deepEqual(E.econMode(env).shopPaid, true);
+    const before = await counts(env), b0 = await bal(env, 's');
+    for (const id of ['bike', 'roadbike', 'scooter', 'car']) {
+      const r = await E.purchase(env.DB, env, 's', id, NOW);
+      assert.deepEqual([r.ok, r.error.code, r.error.reason, r.error.message.ko], [false, 'not_eligible', 'coming_soon', '탈것 상점은 준비중이에요'], `${id} paid=${paidFlag}`);
+    }
+    assert.equal((await E.purchase(env.DB, env, 's', 'nope', NOW)).error.code, 'unknown');
+    assert.deepEqual(await counts(env), before, 'no ledger / ownership / event rows');
+    assert.equal(await bal(env, 's'), b0);
+    assert.deepEqual(await E.accountVehicleGifts(env.DB, 's'), []);
+    // HTTP 도 같은 거절(409)
+    const tok = await S.signSession({ accountId: 's', sessionVersion: 1, now: NOW }, SECRET);
+    const res = await handleEcon(new Request('http://localhost:8789/econ/shop/buy', { method: 'POST', headers: { Cookie: `bw_s=${tok}`, 'Content-Type': 'application/json', Origin: 'http://localhost:5173' }, body: JSON.stringify({ itemId: 'roadbike' }) }), env, new URL('http://localhost:8789/econ/shop/buy'), { now: NOW });
+    const j = await res.json();
+    assert.deepEqual([res.status, j.error.code, j.error.reason], [409, 'not_eligible', 'coming_soon']);
+    assert.deepEqual(await counts(env), before);
+    const goal = await E.shopGoal(env.DB, env, 's', NOW); assert.deepEqual([goal.itemId, goal.comingSoon], ['bike', true]);
+  }
+  ok('shop = preview only: 4 items at plan prices, available:false · comingSoon · 준비중; buy rejected (not_eligible/coming_soon) in free AND paid mode, HTTP 409, no ledger/ownership/event rows');
 }
 
 // ── 게시판 도배 방지 ──
@@ -648,7 +652,9 @@ console.log('economy tests');
   const room = new Room(ctx, env);
   await room.webSocketMessage(ws, JSON.stringify({ t: 'hello', deviceId: 'dev-rv', name: 'rv' }));
   assert.deepEqual(ws.sent.find((m) => m.t === 'welcome').gifts, []);
-  assert.equal((await E.purchase(env.DB, env, 'rv', 'roadbike', Date.now())).ok, true);
+  // 예전에 이미 받은 탈것(account_vehicles 행)은 그대로 보인다 — 상점은 미리보기라 구매로는 못 만듦
+  assert.equal((await E.purchase(env.DB, env, 'rv', 'roadbike', Date.now())).error.reason, 'coming_soon');
+  await env.DB.prepare("INSERT INTO account_vehicles (account_id, item_id, gift_id, source, price, listed_price, bound, acquired_at) VALUES ('rv', 'roadbike', 'roadbike-cr1', 'shop', 0, 1000000, 1, ?)").bind(Date.now()).run();
   await room.webSocketMessage(ws, JSON.stringify({ t: 'gifts_sync' }));
   const h = ws.sent.filter((m) => m.t === 'holdings');
   assert.equal(h.length, 1); assert.deepEqual(h[0].gifts, [{ id: 'roadbike-cr1', qty: 1 }]);
