@@ -22,6 +22,8 @@ import { createWallet } from './wallet.js';
 import { createRideBus } from './cabin.js';
 import { astar, routeLength, nearestCurbEdge, findStopAhead } from './route.js';
 import { createRideSound, announceText } from './sound.js';
+import { sharedAudioUnlock } from '../audio/unlock.js';
+import { isMobileMode } from '../mobile/flag.js';
 
 const BOARD_R = 12, HOLD_MAX = 20, CO_R = 40, GHOST_JOIN = 16, FF = 6;
 const TAXI_CALL_TIMEOUT = 240, TAXI_WALK_AWAY = 160, TAXI_BOARD_R = 10;
@@ -81,7 +83,7 @@ export function mountRide({ corridor, getPlayer, remotes, camera, cam, setMode, 
   let ghostSeq = 0;
   const tmpV = new THREE.Vector3(), tmpV2 = new THREE.Vector3();
   const stats = { boards: 0, alights: 0, charges: [], announces: [], bells: 0 };
-  const sound = createRideSound({ params });
+  const sound = createRideSound({ params, unlock: isMobileMode() ? sharedAudioUnlock() : null }); // [mobile-audio] iOS: 첫 탭에서 컨텍스트·음성 잠금 해제
   const JZ = () => !!TR()?.cars?.jz; // 정자 차도가 코리더 그래프에 붙어 있음(정자에서도 택시)
 
   // ---------- HUD ----------

@@ -4,6 +4,8 @@
 // [bus-sfx] 실제 버스 녹음(오너 제공) 효과음: 차내 주행/공회전 루프 + 정차·문·카드·출발 원샷 + 안내 차임
 //   - public/audio/bus/*.{ogg,m4a} (canPlayType 으로 ogg 우선, 안 되면 m4a) · 첫 탑승 때만 내려받음(시작 시 X)
 //   - 내가 탄 버스에서만(위치 음향 없음) · ?rideSfx=0 이면 효과음만 끔(안내 음성·하차벨은 그대로)
+import { pickAudioExt } from '../audio/unlock.js';
+
 export const RIDE_VOICE_KEY = 'bw.rideVoice';
 export const BUS_SFX = ['bus-interior-loop', 'bus-idle-loop', 'announce-chime-synth-v2', 'bus-brake-v2', 'door-open-v2', 'card-tap-v2', 'door-close-v2', 'bus-depart-v2'];
 const LOOP_GAIN = 0.55, SFX_GAIN = 0.7, CHIME_GAIN = 0.6;
@@ -21,7 +23,8 @@ export function announceText(cur, next, en = false) {
   return next ? `이번 정류장은 ${cur}입니다. 다음 정류장은 ${next}입니다.` : `이번 정류장은 종점, ${cur}입니다.`;
 }
 
-export function createRideSound({ params = null, storage = null, base = import.meta.env?.BASE_URL || './' } = {}) {
+// unlock: [mobile-audio] 공용 잠금 해제(sharedAudioUnlock) — 모바일 모드에서만 넘김. 없으면(PC) 예전처럼 첫 탑승·하차벨 때 컨텍스트를 만든다
+export function createRideSound({ params = null, storage = null, base = import.meta.env?.BASE_URL || './', unlock = null } = {}) {
   const st = storage || (() => { try { return localStorage; } catch { return null; } })();
   const sfxOff = params?.get?.('rideSfx') === '0';
   let muted = params?.get?.('rideVoice') === '0';
@@ -34,6 +37,8 @@ export function createRideSound({ params = null, storage = null, base = import.m
     try { ctx = new C(); } catch { ctx = null; }
     return ctx;
   };
+  // 'suspended' 뿐 아니라 iOS 의 'interrupted' 도 다시 깨움 (PC 는 suspended/running 뿐이라 동작 같음)
+  const wake = (c) => { try { if (c && c.state !== 'running' && c.state !== 'closed') c.resume()?.catch?.(() => {}); } catch { /* noop */ } };
   const synth = typeof window !== 'undefined' && 'speechSynthesis' in window ? window.speechSynthesis : null;
   const voiceFor = (lang) => {
     try { const vs = synth?.getVoices?.() || []; return vs.find((v) => v.lang?.toLowerCase().startsWith(lang)) || null; } catch { return null; }
@@ -50,7 +55,7 @@ export function createRideSound({ params = null, storage = null, base = import.m
   }
   // ---- [bus-sfx] ----
   const fx = { bufs: new Map(), loading: null, failed: 0, pending: [], loops: null, events: [], chimeT: 0, sayT: null, requests: 0 };
-  const ext = (() => { try { const a = new Audio(); return a.canPlayType('audio/ogg; codecs="vorbis"') ? 'ogg' : a.canPlayType('audio/mp4; codecs="mp4a.40.2"') ? 'm4a' : 'ogg'; } catch { return 'ogg'; } })();
+  const ext = pickAudioExt(); // [mobile-audio] Safari(ogg 'maybe'/'') → m4a
   const sfxOn = () => !sfxOff && !muted;
   const logEv = (name, played) => { fx.events.push({ name, t: Math.round(performance.now()), played }); if (fx.events.length > 300) fx.events.splice(0, 100); };
   function loadSfx() {
@@ -71,7 +76,7 @@ export function createRideSound({ params = null, storage = null, base = import.m
     const c = ctx, buf = fx.bufs.get(name);
     if (!c || !buf || !sfxOn()) { logEv(name, false); return false; }
     try {
-      if (c.state === 'suspended') c.resume();
+      wake(c);
       const src = c.createBufferSource(), g = c.createGain(); src.buffer = buf; g.gain.value = gain;
       src.connect(g); g.connect(c.destination); src.start(c.currentTime + 0.01 + delay);
       logEv(name, true); return true;
@@ -94,6 +99,9 @@ export function createRideSound({ params = null, storage = null, base = import.m
     for (const l of [L.interior, L.idle]) if (l) { try { l.g.gain.cancelScheduledValues(t); l.g.gain.setTargetAtTime(0, t, fade / 4); l.src.stop(t + fade + 0.05); } catch { /* noop */ } }
     logEv('loops-stop', true);
   }
+  // [mobile-audio] 탭(touchend/click) 핸들러 안에서 동기로: 컨텍스트를 만들고/깨움 — 이후 프레임·타이머에서 내는 소리(하차벨·차임·루프)가 들림
+  const onUnlock = () => { if (muted && !ctx) return; wake(ac()); };
+  const offUnlock = unlock?.add?.(onUnlock) || null;
   const cancelSay = () => { if (fx.sayT) { clearTimeout(fx.sayT); fx.sayT = null; } };
 
   return {
@@ -101,10 +109,12 @@ export function createRideSound({ params = null, storage = null, base = import.m
     get canSpeak() { return !!synth; },
     get sfxEnabled() { return !sfxOff; },
     get sfxEvents() { return fx.events; },
+    get unlockWired() { return !!offUnlock; },
+    unlock: onUnlock,
     get sfxStats() { return { ext, requests: fx.requests, loaded: fx.bufs.size, failed: fx.failed, loops: !!fx.loops, ctx: ctx?.state || null }; },
     setMuted(v) { muted = !!v; try { st?.setItem(RIDE_VOICE_KEY, muted ? '0' : '1'); } catch { /* noop */ } if (muted) { try { synth?.cancel(); } catch { /* noop */ } cancelSay(); } },
     // 첫 탑승 순간(사용자 입력 안)에 호출: 컨텍스트 재개 + 효과음 내려받기(한 번만)
-    prepareBus() { if (sfxOff) return; const c = ac(); try { if (c?.state === 'suspended') c.resume(); } catch { /* noop */ } loadSfx(); },
+    prepareBus() { if (sfxOff) return; wake(ac()); loadSfx(); },
     sfx,
     // 매 프레임(탑승 중): 정차/저속은 공회전, 달리면 차내 주행음 — 속도에 따라 크로스페이드·재생 속도 0.85–1.1
     busEngine(v, dwell) {
@@ -112,7 +122,7 @@ export function createRideSound({ params = null, storage = null, base = import.m
       const on = sfxOn();
       if (!fx.loops) {
         if (!on || !fx.bufs.has('bus-interior-loop') || !fx.bufs.has('bus-idle-loop')) return;
-        try { if (ctx.state === 'suspended') ctx.resume(); fx.loops = { interior: mkLoop(ctx, 'bus-interior-loop'), idle: mkLoop(ctx, 'bus-idle-loop') }; logEv('loops-start', true); } catch { fx.loops = null; return; }
+        try { wake(ctx); fx.loops = { interior: mkLoop(ctx, 'bus-interior-loop'), idle: mkLoop(ctx, 'bus-idle-loop') }; logEv('loops-start', true); } catch { fx.loops = null; return; }
       }
       const m = busLoopMix(v, dwell), t = ctx.currentTime, k = on ? LOOP_GAIN : 0;
       const L = fx.loops;
@@ -138,7 +148,7 @@ export function createRideSound({ params = null, storage = null, base = import.m
     bell() {
       if (muted) return false;
       const c = ac(); if (!c) return false;
-      try { if (c.state === 'suspended') c.resume(); const t = c.currentTime + 0.02; tone(c, 659.25, t, 0.9, 0.16); tone(c, 523.25, t + 0.38, 1.2, 0.16); return true; } catch { return false; }
+      try { wake(c); const t = c.currentTime + 0.02; tone(c, 659.25, t, 0.9, 0.16); tone(c, 523.25, t + 0.38, 1.2, 0.16); return true; } catch { return false; }
     },
     say(text, en = false) {
       if (muted || !synth || !text) return false;
