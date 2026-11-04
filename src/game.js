@@ -907,6 +907,9 @@ noticePopup = createNoticePopup({
   busy: () => {
     try {
       const b = document.body.classList;
+      // [mobile] 세로 화면의 '가로로 돌려 주세요' 안내가 덮고 있으면 보이지 않으므로 기다린다(본 것으로 처리 X)
+      const rot = document.getElementById('m-rotate');
+      if (rot && getComputedStyle(rot).display !== 'none') return true;
       return !joined || b.contains('in-gate') || b.contains('in-lobby') || board.open || handset.open ||
         !!cameraApp?.open || !!donationBoards.open || !!ride?.active || !!adminBike?.riding || !!giftRiding();
     } catch { return true; }
