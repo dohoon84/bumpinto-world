@@ -4,6 +4,7 @@ import { releaseRenderer } from './releaseRenderer.js';
 import { createAvatar } from './entities/avatar.js';
 import { LOOK_CHOICES, OUTFIT_COLORS, PROFILE_KEY, sanitizeLook } from './look.js';
 import { isEn, tr, toggleLang, onLangChange } from './i18n.js';
+import { accountsOn } from './account/flags.js'; // [accounts] 가벼운 스위치만 — 계정 입장 UI 는 켜졌을 때만 동적으로
 
 const ENTER_LINES = [
   '정자역 광장으로 걸어 들어가는 중',
@@ -197,6 +198,10 @@ export function openLobby({ sms, region = null, onJoin, onBack }) {
           </div>
         </div>
         <p id="lobby-sub" class="sub"></p>
+        <div id="lobby-acct" hidden>
+          <div class="lobby-acct-who"><b id="lobby-acct-name"></b><span id="lobby-acct-note"></span></div>
+          <button type="button" id="lobby-acct-edit" class="sub-btn"></button>
+        </div>
         <div class="lobby-tabs" role="tablist">
           <button type="button" id="lobby-tab-join" class="tab on" data-mode="join" role="tab" aria-selected="true"></button>
           <button type="button" id="lobby-tab-login" class="tab" data-mode="login" role="tab" aria-selected="false"></button>
@@ -206,7 +211,7 @@ export function openLobby({ sms, region = null, onJoin, onBack }) {
             <label class="nick"><span id="lobby-nick-lbl"></span>
               <input id="nick" maxlength="16" />
             </label>
-            <label class="nick"><span id="lobby-pin-lbl"></span>
+            <label class="nick lobby-pin-field"><span id="lobby-pin-lbl"></span>
               <input id="lobby-pin" type="password" inputmode="numeric" maxlength="6" />
             </label>
           </div>
@@ -361,6 +366,42 @@ export function openLobby({ sms, region = null, onJoin, onBack }) {
     }
   };
 
+  // [accounts] 구글 계정으로 로그인돼 있으면(/auth/me) 번호·PIN·캐릭터 고르기 없이 계정 캐릭터로 바로 입장.
+  //   acct = null(게스트 — 지금 흐름 그대로) | { me, hasChar, editing, place }
+  //   계정 캐릭터 = 번호부의 대표 캐릭터(me.primaryUserId). 아직 없으면(첫 로그인) 편집기를 PIN 없이 한 번 보여 주고, 입장할 때 계정에 저장한다.
+  let acct = null;
+  const card = root.querySelector('#lobby-card');
+  const acctBox = root.querySelector('#lobby-acct');
+  const acctEdit = root.querySelector('#lobby-acct-edit');
+  function renderAccount() {
+    const on = !!acct;
+    card.classList.toggle('is-account', on);
+    if (on) document.body.classList.add('bw-signed-in'); // ui-v2 상단 칩·로딩 문구가 '게스트' 대신 계정으로 (계정 세션은 입장 뒤에도 그대로)
+    acctBox.hidden = !on;
+    if (!on) return;
+    const en = isEn();
+    const who = acct.me?.account?.email || acct.me?.account?.name || '';
+    root.querySelector('#lobby-sub').textContent = acct.hasChar
+      ? tr('Google 계정으로 로그인됨 · 저장된 캐릭터로 바로 들어가요.', 'Signed in with Google · jump in with your saved character.')
+      : tr('Google 계정으로 로그인됨 · 처음이네요! 캐릭터를 만들면 계정에 저장돼요.', 'Signed in with Google · first time here! Your character is saved to your account.');
+    root.querySelector('#lobby-acct-name').textContent = nick.value.trim() || (acct.me?.account?.name || '');
+    const again = acct.place ? (en ? ' · Resumes at last position' : ' · 지난 위치에서 이어집니다') : '';
+    root.querySelector('#lobby-acct-note').textContent = `${en ? 'Google account' : 'Google 계정'}${who ? ` · ${who}` : ''}${again}`;
+    acctEdit.hidden = !acct.hasChar;
+    acctEdit.textContent = acct.editing ? tr('캐릭터 바꾸기 접기', 'Hide character editor') : tr('캐릭터 바꾸기', 'Change character');
+    paneJoin.hidden = !acct.editing;
+    paneLogin.hidden = true;
+    mode = 'join';
+    go.textContent = tr('입장하기', 'Enter World');
+  }
+  acctEdit.addEventListener('click', () => {
+    if (!acct) return;
+    acct.editing = !acct.editing;
+    renderAccount();
+    if (acct.editing) nick.focus();
+  });
+  nick.addEventListener('input', () => { if (acct) root.querySelector('#lobby-acct-name').textContent = nick.value.trim(); });
+
   function renderLobbyLocale() {
     const en = isEn();
     const title = en
@@ -396,6 +437,7 @@ export function openLobby({ sms, region = null, onJoin, onBack }) {
       : tr('입장하기', 'Enter World');
     renderPicks();
     showNumber();
+    renderAccount();
   }
 
   const unsubLang = onLangChange(() => renderLobbyLocale());
@@ -500,7 +542,25 @@ export function openLobby({ sms, region = null, onJoin, onBack }) {
       return session;
     });
   };
-  issue(saved?.name, true).catch((err) => { phoneLine.textContent = err.message; });
+  const guestPreview = () => issue(saved?.name, true).catch((err) => { phoneLine.textContent = err.message; });
+  if (!accountsOn()) guestPreview();
+  else {
+    // 계정 확인이 끝날 때까지(최대 2.5초) 탭·PIN 을 숨겨 둔다 → 게스트면 지금 화면 그대로, 로그인돼 있으면 계정 입장
+    card.classList.add('is-acct-checking');
+    import('./account/lobbyAccount.js')
+      .then((m) => m.detectLobbyAccount({ sms, saved, look, fallbackName: isEn() ? 'Guest' : '손님' }))
+      .catch(() => null)
+      .then((found) => {
+        card.classList.remove('is-acct-checking');
+        if (!found || !root.contains(card)) { if (root.contains(card)) guestPreview(); return; }
+        ticket += 1; // 게스트 미리보기가 늦게 와서 덮어쓰지 않게
+        acct = { me: found.me, hasChar: found.hasChar, editing: !found.hasChar, place: found.session?.place || null };
+        if (found.session) applyLoadedSession(found.session);
+        else if (found.name) nick.value = found.name;
+        if (found.look) { Object.assign(look, sanitizeLook(found.look)); syncLookButtons(); show(); }
+        renderAccount();
+      });
+  }
 
   const getRegionEnterLines = () => {
     if (isEn()) return region?.enLobbyEnterLines || region?.lobbyEnterLines || ENTER_LINES_EN;
@@ -555,7 +615,7 @@ export function openLobby({ sms, region = null, onJoin, onBack }) {
       nick.focus();
       return;
     }
-    const pin = pinInput.value.trim();
+    const pin = acct ? '' : pinInput.value.trim(); // [accounts] 로그인 상태에선 PIN 을 묻지도 쓰지도 않는다
     if (pin && !/^\d{4,6}$/.test(pin)) {
       error.textContent = tr('비밀번호(PIN)는 숫자 4~6자리로 입력해 주세요.', 'PIN must be 4 to 6 digits.');
       pinInput.focus();
@@ -574,6 +634,10 @@ export function openLobby({ sms, region = null, onJoin, onBack }) {
       go.disabled = false;
       joining = false;
       return;
+    }
+    if (acct && !acct.hasChar) {
+      // [accounts] 첫 로그인: 방금 만든 캐릭터를 계정의 대표 캐릭터로 (서버가 이 기기 캐릭터를 primary 로 잡는다)
+      try { const m = await import('./account/lobbyAccount.js'); await m.saveFirstCharacter({ sms }); } catch { /* 실패해도 입장은 된다 */ }
     }
     const picked = session.look || pickedLook();
     try { localStorage.setItem(PROFILE_KEY, JSON.stringify({ name, look: picked, phone: session.phone, display: session.display })); } catch { /* 저장이 막혀 있어도 입장은 된다 */ }

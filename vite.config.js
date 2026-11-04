@@ -25,6 +25,8 @@ const local = !LOCAL ? {} : {
     'import.meta.env.VITE_ACCOUNT_API_URL': here('/_phone'),
     'import.meta.env.VITE_WS_URL': here('/_phone/ws', true),
     'import.meta.env.VITE_ACCOUNTS': JSON.stringify('1'),
+    // [accounts] 로컬 스택 표시: localhost 에서도 번호부(sms)를 위 /_phone 으로 쓴다(src/sms.js smsBase). 없으면 localhost = 로컬 테스트 모드(번호부 꺼짐)
+    'import.meta.env.VITE_LOCAL_STACK': JSON.stringify('1'),
   },
 };
 
