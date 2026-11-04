@@ -4,6 +4,8 @@
 //   - 비동기 인터페이스: charge() 는 Promise<{ ok, amount, currency, receiptId, code, ... }> 를 돌려준다.
 //     지갑(서버 잔액·결제)이 생기면 setPaymentProvider(async (req) => ({ ok, receiptId?, error? })) 로 끼운다.
 //     0원 결제는 provider 를 부르지 않고 바로 영수증을 만든다.
+//     [economy] setPaymentProvider(fn, { always: true }) 면 0원 요금도 provider 를 거친다(서버 원장에 탑승 기록·유료 모드 차감).
+//     provider 가 { amount } 를 돌려주면 그 금액(서버가 정한 값)을 영수증에 쓴다.
 export const CURRENCY = 'KRW';
 
 // code -> { amount, mode, premium?, label }
@@ -16,11 +18,12 @@ export const FARES = Object.freeze({
 });
 
 let provider = null;
+let providerAlways = false;
 let seq = 0;
 const listeners = new Set();
 const history = []; // 최근 결제 시도(디버그·테스트용, 메모리만)
 
-export function setPaymentProvider(fn) { provider = typeof fn === 'function' ? fn : null; }
+export function setPaymentProvider(fn, { always = false } = {}) { provider = typeof fn === 'function' ? fn : null; providerAlways = !!(provider && always); }
 export function onCharge(fn) { listeners.add(fn); return () => listeners.delete(fn); }
 export function recentCharges() { return history.slice(); }
 export function fareOf(code) { return FARES[code] || null; }
@@ -34,12 +37,14 @@ export async function charge(req = {}) {
   let res;
   if (!f) res = { ok: false, error: 'unknown_fare', amount: 0, currency: CURRENCY, code: req.code || '', receiptId: null };
   else if (req.mode && req.mode !== f.mode) res = { ok: false, error: 'mode_mismatch', amount: f.amount, currency: CURRENCY, code: req.code, receiptId: null };
-  else if (f.amount === 0) res = { ok: true, amount: 0, currency: CURRENCY, code: req.code, receiptId: newReceipt(now), free: true };
+  else if (f.amount === 0 && !providerAlways) res = { ok: true, amount: 0, currency: CURRENCY, code: req.code, receiptId: newReceipt(now), free: true };
   else if (!provider) res = { ok: false, error: 'no_wallet', amount: f.amount, currency: CURRENCY, code: req.code, receiptId: null };
   else {
     try {
       const r = (await provider({ code: req.code, mode: f.mode, amount: f.amount, currency: CURRENCY, card: req.card || null, meta: req.meta || null })) || {};
-      res = { ok: !!r.ok, amount: f.amount, currency: CURRENCY, code: req.code, receiptId: r.ok ? (r.receiptId || newReceipt(now)) : null, error: r.ok ? undefined : (r.error || 'declined') };
+      const amount = Number.isFinite(r.amount) ? r.amount : f.amount;
+      res = { ok: !!r.ok, amount, currency: CURRENCY, code: req.code, receiptId: r.ok ? (r.receiptId || newReceipt(now)) : null, error: r.ok ? undefined : (r.error || 'declined') };
+      if (r.ok && r.free !== undefined) res.free = !!r.free;
     } catch (e) {
       res = { ok: false, amount: f.amount, currency: CURRENCY, code: req.code, receiptId: null, error: String(e?.message || e) };
     }

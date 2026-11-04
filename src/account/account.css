@@ -37,3 +37,14 @@
 }
 #account-panel .acct-btn.primary { background: #ffe169; border-color: #f5a200; }
 #account-panel .acct-btn:disabled { opacity: .6; cursor: default; }
+
+/* [accounts] ui-v2 registerGoogleSignIn 훅이 띄우는 작은 로그인 창 (signin.js) */
+.acct-signin { position: fixed; inset: 0; z-index: 90; display: grid; place-items: center; background: rgba(18, 32, 51, .28); }
+.acct-signin-card { width: min(320px, calc(100vw - 32px)); padding: 16px; border-radius: 16px; color: #122033; background: rgba(255, 255, 255, .97);
+  border: 1.5px solid rgba(18, 32, 51, .16); box-shadow: 0 10px 30px rgba(18, 32, 51, .22); font-size: 13.5px; }
+.acct-signin .acct-head { font-weight: 900; font-size: 15px; margin-bottom: 8px; }
+.acct-signin .acct-gis { margin: 8px 0; min-height: 44px; }
+.acct-signin .acct-msg { margin: 6px 0; color: #34465e; line-height: 1.4; }
+.acct-signin .acct-msg:empty { display: none; }
+.acct-signin .acct-actions { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; margin-top: 8px; }
+.acct-signin .acct-btn { height: 40px; padding: 0 14px; border-radius: 999px; border: 1.5px solid rgba(18, 32, 51, .16); background: #fff; color: #122033; font: inherit; font-weight: 800; cursor: pointer; }

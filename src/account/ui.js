@@ -4,26 +4,10 @@
 import { tr, onLangChange } from '../i18n.js';
 import { accountApi } from './api.js';
 import { GOOGLE_CLIENT_ID } from './flags.js';
+import { loadGis } from './signin.js';
 import './account.css';
 
 const DEVICE_KEY = 'jeongja3d.device'; // src/sms.js 와 같은 키
-const GIS_SRC = 'https://accounts.google.com/gsi/client';
-
-let gisPromise = null;
-function loadGis() {
-  if (window.google?.accounts?.id) return Promise.resolve(window.google);
-  if (!gisPromise) {
-    gisPromise = new Promise((resolve, reject) => {
-      const s = document.createElement('script');
-      s.src = GIS_SRC;
-      s.async = true;
-      s.onload = () => (window.google?.accounts?.id ? resolve(window.google) : reject(new Error('gis')));
-      s.onerror = () => { gisPromise = null; reject(new Error('gis')); };
-      document.head.appendChild(s);
-    });
-  }
-  return gisPromise;
-}
 
 const LINK_TEXT = {
   linked: () => tr('이 PC 를 계정에 연결했어요.', 'This PC is now linked to your account.'),

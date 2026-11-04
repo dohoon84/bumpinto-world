@@ -564,11 +564,12 @@ export function mountRide({ corridor, getPlayer, remotes, camera, cam, setMode, 
     const route = astar(cars.nodes, cars.ways, t.node, de.e.from, { allow });
     if (!route) { toast(L('경로를 찾지 못했어요. 다른 목적지를 골라 주세요', 'No route found — pick another destination')); return; }
     const code = speed === 'instant' ? 'taxi.instant' : speed === 'fast' ? 'taxi.fast' : 'taxi.drive';
+    const routeLen = routeLength(cars.nodes, route) + (t.cum[t.cum.length - 1] - t.s);
     busy = true;
-    const res = await charge({ code, mode: 'taxi', card: card().id, meta: { to: r.dest.label } });
+    const res = await charge({ code, mode: 'taxi', card: card().id, meta: { to: r.dest.label, meters: Math.round(routeLen) } });
     busy = false; stats.charges.push(res);
     if (!res.ok) { toast(L('결제에 실패했어요: ', 'Payment failed: ') + res.error); return; }
-    r.fare = res; r.speed = speed; r.live = de.live; r.routeLen = routeLength(cars.nodes, route) + (t.cum[t.cum.length - 1] - t.s);
+    r.fare = res; r.speed = speed; r.live = de.live; r.routeLen = routeLen;
     r.t0 = performance.now(); r.at = Date.now(); r.simT0 = r.simT || 0;
     panel.hidden = true;
     if (speed === 'instant') {
