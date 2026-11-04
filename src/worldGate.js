@@ -429,8 +429,8 @@ export function openWorldGate({ onEnter }) {
     );
     root.querySelector('#gate-kicker').textContent = tr('순차 오픈 · 글로벌 오픈월드', 'OPEN SOURCE · 3D REAL-WORLD METAVERSE');
     root.querySelector('#gate-lead').textContent = tr(
-      '다 같이 만들어 가는 오픈 월드 · Korea & USA',
-      'Walk real-world neighborhoods together · Korea & USA',
+      '다 같이 만들어 가는 오픈 월드',
+      'Walk real-world neighborhoods together',
     );
     // [corridor] 구간이 켜져 있으면 정자 링크 대신 '분당–잠실 구간' (노선도를 펼친다)
     const kLink = corridorGlobe ? `<b class="gate-note-link" data-corridor-open="1">${tr(`${corridorName(false)} · 열림`, `🇰🇷 ${corridorName(true)}`)}</b>` : null;
