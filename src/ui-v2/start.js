@@ -69,7 +69,7 @@ export function openStart({ region, onGuest, onContinue, onGoogle, onAccount }) 
     logo.innerHTML = `
       ${tagHtml(tr('순차 오픈 · 글로벌 오픈월드', 'OPEN SOURCE · GLOBAL OPEN WORLD'), '#ffe169', { size: 14, cls: 'v2-logo-tag' })}
       <div class="v2-logo-row">${ICON.coin(96)}<h1>Bumpinto World</h1></div>
-      <p class="v2-logo-sub">${esc(tr('다 같이 만들어 가는 오픈 월드 · Korea & USA', 'Walk real-world neighborhoods together · Korea & USA'))}</p>`;
+      <p class="v2-logo-sub">${esc(tr('다 같이 만들어 가는 오픈 월드', 'Walk real-world neighborhoods together'))}</p>`;
     panel.innerHTML = `
       ${headHtml(tr('시작하기', 'Start'), { size: 20 })}
       ${last ? `<button type="button" class="v2-btn ${signedIn() ? 'secondary' : 'primary'} v2-full" data-v2="continue">${esc(tr(`마지막 역으로 이어하기 · ${last.label}`, `Continue at ${last.label}`))}</button>
