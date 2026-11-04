@@ -8,6 +8,7 @@ import { regionSummary, readLastStation } from './data.js';
 import { tr, isEn, onLangChange } from '../i18n.js';
 import { REPO_URL } from '../worldGate.js';
 import { trackEvent } from '../analytics.js';
+import { mountBgVideo } from '../landing/bgVideo.js';
 
 const SCENES = [
   { img: 'ui-v2/start-a.jpg', ko: '정자역 광장 · 실제 게임 화면', en: 'Jeongja Station Plaza · in-game' },
@@ -38,6 +39,8 @@ export function openStart({ region, onGuest, onContinue, onGoogle }) {
   const studio = root.querySelector('.v2-studio');
   const bgs = [...root.querySelectorAll('.v2-bg')];
   let scene = 0, msg = '', alive = true;
+  // ?bgvideo=1 미리보기: 이미지 2장 위에 영상 레이어. 재생('playing') 전·실패 시엔 기존 크로스페이드 그대로.
+  const bgv = mountBgVideo({ host: root.querySelector('.v2-start-bg'), className: 'v2-bgvideo', onPlaying: () => root.classList.add('bgv-on') });
 
   const last = readLastStation();
   function render() {
@@ -86,6 +89,7 @@ export function openStart({ region, onGuest, onContinue, onGoogle }) {
     alive = false;
     clearInterval(timer);
     unsub();
+    if (bgv) bgv.destroy();
     document.body.classList.remove('v2-in-start');
     root.classList.add('is-leaving');
     setTimeout(() => root.remove(), 260);

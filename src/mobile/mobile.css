@@ -47,6 +47,9 @@ body.mobile .m-btn:disabled { opacity: .6; }
 
 /* ---------- 시작화면 ---------- */
 #m-landing { position: fixed; inset: 0; z-index: 60; overflow: hidden; color: #fff; background: #0b1424 url('/mobile/landing.jpg') center / cover no-repeat; font-family: inherit; user-select: none; -webkit-user-select: none; }
+/* ?bgvideo=1 미리보기: 배경 영상은 #m-landing 바로 앞 형제(같은 z-index → 아래), 재생되면 이미지 배경을 걷는다 */
+.bw-bgvideo.m-bgvideo { position: fixed; inset: 0; z-index: 60; width: 100%; height: 100%; object-fit: cover; background: #0b1424; pointer-events: none; }
+body.m-bgvideo-on #m-landing { background: transparent; }
 #m-landing .m-shade { position: absolute; inset: 0; background: linear-gradient(90deg, rgba(7, 13, 28, .78), rgba(7, 13, 28, .25) 55%, rgba(7, 13, 28, .6)); }
 #m-landing .m-shade.is-dim { background: rgba(7, 13, 28, .62); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); }
 #m-landing .m-tr { position: absolute; top: var(--m-t); right: var(--m-r); }

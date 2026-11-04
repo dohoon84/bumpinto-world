@@ -8,6 +8,7 @@ import { OPEN_MAINLINE_STATIONS, OPEN_BRANCH_STATIONS, corridorName } from '../c
 import { readSavedPassport, isPassportActive } from '../look.js';
 import { isStarbaseLive } from '../worldGate.js';
 import { isEn, toggleLang } from '../i18n.js';
+import { mountBgVideo } from '../landing/bgVideo.js';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const t = (ko, en) => (isEn() ? en : ko);
@@ -36,10 +37,13 @@ export function mountLanding() {
     root.id = 'm-landing';
     document.body.classList.add('in-mobile-landing');
     document.body.appendChild(root);
+    // ?bgvideo=1 미리보기: 재생이 시작돼야 배경 이미지를 걷는다 (그 전·실패 시엔 기존 landing.jpg 그대로)
+    const bgv = mountBgVideo({ host: document.body, before: root, className: 'm-bgvideo', onPlaying: () => document.body.classList.add('m-bgvideo-on') });
+    const dropBgv = () => { if (bgv) bgv.destroy(); document.body.classList.remove('m-bgvideo-on'); };
     const current = getCurrentRegion();
     const st = { view: 'start', region: current.id, station: 'jeongja' };
 
-    const finish = () => { root.remove(); document.body.classList.remove('in-mobile-landing'); resolve(); };
+    const finish = () => { dropBgv(); root.remove(); document.body.classList.remove('in-mobile-landing'); resolve(); };
     const go = () => {
       try { goInner(); } catch (e) {
         // 안전망: 고른 값을 URL 에 못 넣었더라도 로비는 연다 (기본 입장)
@@ -64,6 +68,7 @@ export function mountLanding() {
       const url = new URL(location.href);
       url.searchParams.set('passport', '1');
       history.replaceState(null, '', url.toString());
+      dropBgv();
       root.remove();
       document.body.classList.remove('in-mobile-landing');
       resolve();
