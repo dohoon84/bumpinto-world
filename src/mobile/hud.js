@@ -5,6 +5,7 @@
 // 기존 PC DOM 은 지우지 않고 body.mobile CSS 로 숨기거나 옮긴다. 버튼은 원래 버튼을 대신 눌러 준다(.click / 키 입력).
 import { virtualPad } from '../input.js';
 import { isEn, onLangChange } from '../i18n.js';
+import { canFullscreen, isFullscreen, toggleFullscreen, onFullscreenChange } from './fullscreen.js';
 
 const t = (ko, en) => (isEn() ? en : ko);
 const I = {
@@ -114,6 +115,7 @@ export function mountMobileHud({ handset } = {}) {
       return;
     }
     if (act === 'talk') { if (chatOpen) closeChat(); else openChat(); return; }
+    if (b.dataset.fs) { toggleFullscreen().then(() => setTimeout(fillMenu, 120)); return; }
     if (b.dataset.menu) { const src = $(b.dataset.menu); setOpen(open); src?.click(); return; }
     const ev = b.dataset.ev;
     if (ev === 'cam') { $('rs-cam')?.click(); setTimeout(paintEvent, 50); return; }
@@ -207,6 +209,12 @@ export function mountMobileHud({ handset } = {}) {
       b.textContent = label;
       list.appendChild(b);
     }
+    if (canFullscreen()) { // iOS 에선 숨김 (요소 전체 화면이 없다)
+      const b = document.createElement('button');
+      b.type = 'button'; b.className = 'm-menu-item' + (isFullscreen() ? ' on' : ''); b.dataset.fs = '1';
+      b.textContent = isFullscreen() ? t('전체 화면 끄기', 'Exit full screen') : t('전체 화면', 'Full screen');
+      list.prepend(b);
+    }
     const attr = $('attribution');
     if (attr) q('.m-attr').innerHTML = attr.innerHTML;
   };
@@ -279,5 +287,6 @@ export function mountMobileHud({ handset } = {}) {
   tick();
   setInterval(tick, 500);
   onLangChange(() => { fillMenu(); tick(); });
+  onFullscreenChange(() => { if (open === 'menu') fillMenu(); });
   return { root, setOpen };
 }

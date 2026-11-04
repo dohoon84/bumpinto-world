@@ -2,6 +2,7 @@
 //   1) 시작: 로고 + [입장할 곳 고르기] (+ 이 폰에 캐릭터가 있으면 [이어서 입장])
 //   2) 지역 · 역 고르기: 왼쪽 지역 리스트, 오른쪽 역 칩 + 고른 역 카드 + 입장 버튼
 // 고르면 PC 지구본과 같은 URL 규칙으로 game.js 에 넘긴다 (같은 지역이면 history.replaceState, 다른 지역이면 페이지 이동).
+import { enterFullscreen, shouldShowHomeScreenHint, dismissHomeScreenHint } from './fullscreen.js';
 import { OPEN_REGIONS, getCurrentRegion, getRegion, navigateToRegion } from '../regions/index.js';
 import { OPEN_MAINLINE_STATIONS, OPEN_BRANCH_STATIONS, corridorName } from '../corridor/globeCorridor.js';
 import { readSavedPassport, isPassportActive } from '../look.js';
@@ -38,7 +39,16 @@ export function mountLanding() {
     const current = getCurrentRegion();
     const st = { view: 'start', region: current.id, station: 'jeongja' };
 
+    const finish = () => { root.remove(); document.body.classList.remove('in-mobile-landing'); resolve(); };
     const go = () => {
+      try { goInner(); } catch (e) {
+        // 안전망: 고른 값을 URL 에 못 넣었더라도 로비는 연다 (기본 입장)
+        console.error('[mobile] landing go', e);
+        try { const u = new URL(location.href); u.searchParams.set('enter', '1'); history.replaceState(null, '', u.toString()); } catch { /* noop */ }
+        finish();
+      }
+    };
+    const goInner = () => {
       const target = getRegion(st.region);
       const passport = isPassportActive() && !!readSavedPassport();
       const extra = { ...(passport ? { passport: 1 } : { enter: 1 }), from: current.id };
@@ -48,9 +58,7 @@ export function mountLanding() {
       const url = new URL(location.href);
       for (const [k, v] of Object.entries(extra)) url.searchParams.set(k, String(v));
       history.replaceState(null, '', url.toString());
-      root.remove();
-      document.body.classList.remove('in-mobile-landing');
-      resolve();
+      finish();
     };
     const resume = () => {
       const url = new URL(location.href);
@@ -78,6 +86,7 @@ export function mountLanding() {
             ${saved ? `<button type="button" class="m-btn m-secondary" data-act="resume">${t('이어서 입장', 'Continue as')} · ${esc(saved.name)}</button>` : ''}
             <small>${saved ? t('이 폰에 저장된 캐릭터로 바로 들어가요', 'Jump back in with the character saved on this phone') : t('다음 화면에서 지역과 역을 고르고, 캐릭터를 만들어요', 'Pick a region and station, then make your character')}</small>
           </div>
+          ${shouldShowHomeScreenHint() ? `<div class="m-a2hs" role="note"><span>${t('홈 화면에 추가하면 전체 화면으로 플레이할 수 있어요', 'Add to Home Screen to play in full screen')}</span><button type="button" data-act="a2hs-x" aria-label="${t('닫기', 'Close')}">✕</button></div>` : ''}
           <a class="m-chip m-bl" href="https://github.com/dohoon84/bumpinto-world" target="_blank" rel="noopener">⭐ ${t('GitHub에서 함께 만들기', 'Build it with us on GitHub')}</a>`;
         return;
       }
@@ -110,6 +119,9 @@ export function mountLanding() {
       const b = e.target.closest('button');
       if (!b) return;
       const act = b.dataset.act;
+      // 시작·입장 탭(사용자 제스처)에서 전체 화면 시도 (Android Chrome. iOS 는 아무 일 없음)
+      if (act === 'pick' || act === 'go' || act === 'resume') enterFullscreen();
+      if (act === 'a2hs-x') { dismissHomeScreenHint(); b.parentElement?.remove(); return; }
       if (act === 'lang') { toggleLang(); render(); return; }
       if (act === 'pick') { st.view = 'pick'; render(); return; }
       if (act === 'resume') { resume(); return; }
