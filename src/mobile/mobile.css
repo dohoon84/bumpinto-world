@@ -1,0 +1,193 @@
+/* [mobile] 모바일 모드 전용 스타일 — 전부 body.mobile 아래라 PC 화면에는 영향 없음 */
+body.mobile {
+  --m-l: max(16px, env(safe-area-inset-left));
+  --m-r: max(16px, env(safe-area-inset-right));
+  --m-t: max(10px, env(safe-area-inset-top));
+  --m-b: max(10px, env(safe-area-inset-bottom));
+  --m-hud: rgba(255, 255, 255, .92);
+  --m-ink: #122033;
+  --m-navy: rgba(14, 24, 44, .9);
+  --m-gold: linear-gradient(180deg, #ffe169, #f5a200);
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+  overscroll-behavior: none;
+}
+
+/* ---------- 세로 화면: 가로로 돌려 달라는 안내 ---------- */
+#m-rotate { display: none; }
+@media (orientation: portrait) {
+  body.mobile #m-rotate { position: fixed; inset: 0; z-index: 1000; display: grid; place-items: center; padding: 32px; background: linear-gradient(180deg, #0b1530, #1a2744); color: #e8f2f8; text-align: center; }
+}
+#m-rotate .m-rotate-card { display: grid; justify-items: center; gap: 14px; max-width: 330px; }
+#m-rotate b { font-size: 24px; font-weight: 900; color: #ffe169; }
+#m-rotate p { margin: 0; font-size: 15px; line-height: 1.5; }
+#m-rotate small { margin-top: 24px; font-size: 12px; color: #9eb4c6; }
+
+/* ---------- 공통 조각 ---------- */
+body.mobile .m-icon-btn, body.mobile .m-tg { position: relative; display: inline-grid; place-items: center; grid-auto-flow: column; gap: 4px; min-width: 40px; height: 40px; padding: 0 10px; border: 0; border-radius: 12px; background: var(--m-hud); color: var(--m-ink); font: inherit; font-size: 13px; font-weight: 800; box-shadow: 0 2px 8px rgba(8, 16, 30, .22); cursor: pointer; }
+body.mobile .m-tg { padding: 0; width: 40px; }
+body.mobile .m-tg.on { background: var(--m-gold); color: #3a2a00; }
+/* 터치 영역은 48px: 보이는 칩(40)보다 4px씩 크게 */
+body.mobile .m-tg::after, body.mobile .m-icon-btn::after, body.mobile .m-chip::after, body.mobile .m-act::after { content: ''; position: absolute; inset: -4px; }
+body.mobile .m-chip { position: relative; display: inline-flex; align-items: center; gap: 6px; height: 40px; padding: 0 12px; border: 0; border-radius: 12px; background: var(--m-hud); color: var(--m-ink); font: inherit; font-size: 13px; font-weight: 800; text-decoration: none; box-shadow: 0 2px 8px rgba(8, 16, 30, .22); cursor: pointer; }
+body.mobile .m-badge { position: absolute; top: 4px; right: 4px; width: 10px; height: 10px; border-radius: 50%; background: #d4003b; box-shadow: 0 0 0 2px #fff; }
+body.mobile .m-badge[hidden] { display: none; }
+body.mobile .m-sheet { background: var(--m-navy); color: #fff; border: 1px solid rgba(255, 255, 255, .16); border-radius: 16px; box-shadow: 0 12px 30px rgba(0, 0, 0, .38); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); }
+body.mobile .m-sheet[hidden] { display: none; }
+body.mobile .m-btn { min-height: 48px; padding: 0 20px; border: 0; border-radius: 12px; font: inherit; font-size: 15px; font-weight: 900; cursor: pointer; }
+body.mobile .m-primary { background: var(--m-gold); color: #3a2a00; box-shadow: 0 3px 0 #a65f00, 0 6px 14px rgba(8, 16, 30, .28); }
+body.mobile .m-secondary { background: rgba(255, 255, 255, .1); color: #fff; border: 1px solid rgba(255, 255, 255, .22); }
+body.mobile .m-btn:disabled { opacity: .6; }
+
+/* ---------- 시작화면 ---------- */
+#m-landing { position: fixed; inset: 0; z-index: 60; overflow: hidden; color: #fff; background: #0b1424 url('/mobile/landing.jpg') center / cover no-repeat; font-family: inherit; user-select: none; -webkit-user-select: none; }
+#m-landing .m-shade { position: absolute; inset: 0; background: linear-gradient(90deg, rgba(7, 13, 28, .78), rgba(7, 13, 28, .25) 55%, rgba(7, 13, 28, .6)); }
+#m-landing .m-shade.is-dim { background: rgba(7, 13, 28, .62); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); }
+#m-landing .m-tr { position: absolute; top: var(--m-t); right: var(--m-r); }
+#m-landing .m-bl { position: absolute; left: var(--m-l); bottom: var(--m-b); }
+#m-landing .m-logo { position: absolute; left: var(--m-l); top: 50%; transform: translateY(-58%); max-width: 46%; text-shadow: 0 2px 6px rgba(0, 0, 0, .55); }
+#m-landing .m-logo h1 { margin: 0; font-size: clamp(24px, 4.2vw, 34px); font-weight: 900; line-height: 1.1; }
+#m-landing .m-logo h1::before { content: ''; display: block; width: 40px; height: 10px; margin-bottom: 10px; border-radius: 3px; background: linear-gradient(90deg, #d4003b 50%, #f5a200 50%); }
+#m-landing .m-logo p { margin: 8px 0 0; font-size: 14px; font-weight: 700; color: #e8f2f8; }
+#m-landing .m-start-sheet { position: absolute; right: var(--m-r); top: 50%; transform: translateY(-50%); width: min(300px, 40vw); display: grid; gap: 10px; padding: 16px; }
+#m-landing h2 { margin: 0; font-size: 16px; font-weight: 900; color: #ffe169; }
+#m-landing .m-start-sheet small { font-size: 12px; color: #9eb4c6; line-height: 1.45; }
+#m-landing .m-pick-top { position: absolute; left: var(--m-l); top: var(--m-t); display: flex; align-items: center; gap: 10px; }
+#m-landing .m-pick-top h2 { color: #fff; font-size: 18px; }
+#m-landing .m-regions { position: absolute; left: var(--m-l); top: calc(var(--m-t) + 52px); bottom: var(--m-b); width: min(200px, 26vw); padding: 10px; display: flex; flex-direction: column; gap: 8px; overflow: auto; }
+#m-landing .m-sec { font-size: 12px; font-weight: 800; color: #9eb4c6; }
+#m-landing .m-region { display: grid; gap: 2px; min-height: 56px; padding: 0 12px; text-align: left; border-radius: 12px; border: 1px solid rgba(255, 255, 255, .1); background: rgba(255, 255, 255, .06); color: #fff; font: inherit; cursor: pointer; align-content: center; }
+#m-landing .m-region b { font-size: 14px; font-weight: 900; }
+#m-landing .m-region span { font-size: 12px; color: #9eb4c6; }
+#m-landing .m-region.on { background: rgba(255, 225, 105, .14); border-color: rgba(255, 225, 105, .6); }
+#m-landing .m-region.on b { color: #ffe169; }
+#m-landing .m-region:disabled { opacity: .45; }
+#m-landing .m-stations { position: absolute; left: calc(var(--m-l) + min(200px, 26vw) + 16px); right: var(--m-r); top: calc(var(--m-t) + 52px); bottom: var(--m-b); padding: 12px; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+#m-landing .m-line { height: 6px; border-radius: 3px; background: linear-gradient(90deg, #f5a200 60%, #e6186c); flex: none; }
+#m-landing .m-stn-scroll { flex: 1; min-height: 0; display: grid; grid-auto-flow: column; grid-template-rows: repeat(2, 44px); gap: 8px; overflow-x: auto; overflow-y: hidden; align-content: start; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+#m-landing .m-stn-scroll::-webkit-scrollbar { display: none; }
+#m-landing .m-stn { height: 44px; padding: 0 14px; border: 1px solid rgba(18, 32, 51, .12); border-radius: 22px; background: rgba(255, 255, 255, .92); color: var(--m-ink); font: inherit; font-size: 14px; font-weight: 900; white-space: nowrap; cursor: pointer; }
+#m-landing .m-stn.on { background: var(--m-gold); color: #3a2a00; border-color: transparent; }
+#m-landing .m-region-card { flex: 1; min-height: 0; border-radius: 12px; background: #1a2744 center / cover no-repeat; }
+#m-landing .m-picked { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 12px; border: 1px solid rgba(255, 255, 255, .1); background: rgba(255, 255, 255, .06); flex: none; }
+#m-landing .m-picked > div { flex: 1; display: grid; gap: 2px; min-width: 0; }
+#m-landing .m-picked b { font-size: 16px; font-weight: 900; }
+#m-landing .m-picked span { font-size: 12px; color: #9eb4c6; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* ---------- 로비(캐릭터 입장) · 입장 로딩 — 기존 DOM 을 가로 한 화면에 맞게 ---------- */
+body.mobile.in-lobby #lobby { padding: var(--m-t) var(--m-r) var(--m-b) var(--m-l); place-items: stretch; overflow: hidden; }
+body.mobile #lobby-card { width: 100%; height: 100%; max-height: 100%; grid-template-columns: minmax(150px, 26vw) 1fr; gap: 12px; padding: 10px; background: rgba(255, 255, 255, .9); }
+body.mobile #lobby-preview { height: 100%; min-height: 0; }
+body.mobile #lobby-fields { min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; padding-right: 2px; }
+body.mobile #lobby-fields h1 { font-size: 18px; }
+body.mobile #lobby-fields .sub { margin: 2px 0 6px; font-size: 12px; }
+body.mobile #lobby-fields input { font-size: 16px !important; min-height: 44px; }
+body.mobile #lobby-fields .tab, body.mobile .lobby-back-btn, body.mobile #lobby-go, body.mobile #lobby-fields .sub-btn { min-height: 44px; }
+body.mobile #lobby-go { position: sticky; bottom: 0; }
+body.mobile #enter-loading { padding: var(--m-t) var(--m-r) var(--m-b) var(--m-l); }
+body.mobile #enter-loading .enter-card { width: min(400px, 100%); padding: 16px 18px; }
+
+/* ---------- 게임 HUD: PC 요소는 숨기고 #m-hud 로 ---------- */
+#m-hud { display: none; }
+body.mobile #m-hud { display: block; position: fixed; inset: 0; z-index: 8; pointer-events: none; font-family: inherit; user-select: none; -webkit-user-select: none; }
+body.mobile.in-gate #m-hud, body.mobile.in-lobby #m-hud, body.mobile.in-mobile-landing #m-hud { display: none; }
+#m-hud > *, #m-hud .m-top-r > *, #m-hud .m-actions > * { pointer-events: auto; }
+#m-hud .m-top-l, #m-hud .m-top-r { pointer-events: none; }
+#m-hud .m-top-l { position: absolute; left: var(--m-l); top: var(--m-t); display: flex; gap: 8px; }
+#m-hud .m-clock { font-variant-numeric: tabular-nums; }
+#m-hud .m-top-r { position: absolute; right: var(--m-r); top: var(--m-t); display: flex; gap: 8px; align-items: center; }
+#m-hud .m-live { background: rgba(14, 24, 44, .82); color: #fff; }
+#m-hud .m-live[hidden] { display: none; }
+#m-hud .m-live-dot { width: 8px; height: 8px; border-radius: 50%; background: #34c759; }
+#m-hud .m-live-n { min-width: 14px; padding: 2px 8px; border-radius: 8px; background: rgba(255, 255, 255, .14); color: #ffe169; font-size: 13px; }
+#m-hud .m-live-n:empty { display: none; }
+#m-hud .m-menu-btn { background: var(--m-gold); color: #3a2a00; }
+#m-hud [hidden] { display: none !important; }
+/* 스타베이스 이벤트 버튼: 오른쪽 2행 (화면 가운데는 비워 둔다) */
+#m-event-btn { position: absolute; right: var(--m-r); top: calc(var(--m-t) + 48px); }
+#m-event-btn .m-badge { top: -2px; right: -2px; }
+
+/* 조이스틱 (라벨 없음) */
+#m-joy { position: absolute; left: calc(var(--m-l) + 8px); bottom: calc(var(--m-b) + 8px); width: 112px; height: 112px; border-radius: 50%; background: rgba(255, 255, 255, .22); border: 2px solid rgba(255, 255, 255, .55); box-shadow: 0 4px 14px rgba(8, 16, 30, .2); touch-action: none; }
+#m-joy::before { content: ''; position: absolute; inset: -24px; }
+#m-joy-knob { position: absolute; left: 50%; top: 50%; width: 48px; height: 48px; margin: -24px 0 0 -24px; border-radius: 50%; background: #fff; box-shadow: 0 2px 8px rgba(8, 16, 30, .3); pointer-events: none; }
+#m-joy.on #m-joy-knob { background: #ffe169; }
+
+/* 오른쪽 행동 버튼 */
+#m-hud .m-actions { position: absolute; right: var(--m-r); bottom: var(--m-b); display: grid; grid-template-columns: repeat(2, 64px); grid-auto-rows: auto; gap: 8px; pointer-events: none; }
+#m-hud .m-act { position: relative; display: grid; place-items: center; align-content: center; gap: 2px; border: 0; border-radius: 16px; background: var(--m-hud); color: var(--m-ink); font: inherit; font-size: 12px; font-weight: 800; box-shadow: 0 2px 8px rgba(8, 16, 30, .22); cursor: pointer; touch-action: manipulation; }
+#m-hud .m-act.on { background: var(--m-gold); color: #3a2a00; }
+#m-hud .m-act-ride { grid-column: 1 / span 2; height: 52px; background: var(--m-gold); color: #3a2a00; grid-auto-flow: column; justify-content: center; gap: 8px; font-size: 15px; font-weight: 900; }
+#m-hud .m-act-ride.is-off { background: #fff; color: #d4003b; }
+#m-hud .m-act[data-tg="emote"] { grid-column: 1 / span 2; grid-auto-flow: column; justify-content: center; gap: 8px; }
+#m-hud .m-act:not(.m-act-ride):not([data-tg]) { height: 60px; }
+#m-hud .m-act[data-tg="emote"] { height: 48px; }
+/* 탈것 탄 동안에는 달리기·앉기·이모트를 숨기고 내리기만 크게 */
+body.mobile.m-riding #m-hud .m-act:not(.m-act-ride) { display: none; }
+#m-hud .m-talk { position: absolute; left: 50%; bottom: var(--m-b); transform: translateX(-50%); }
+#m-hud .m-talk .m-badge { top: -2px; right: -2px; }
+/* 채팅 미리보기: 칩 바로 위, 터치는 통과 */
+#m-hud .m-chat-toast { position: absolute; left: 50%; bottom: calc(var(--m-b) + 48px); transform: translateX(-50%); width: min(340px, 42vw); display: flex; flex-direction: column; gap: 3px; pointer-events: none !important; opacity: 0; transition: opacity .5s; }
+#m-hud .m-chat-toast.on { opacity: 1; transition: opacity .15s; }
+#m-hud .m-chat-toast .m-chat-line { align-self: center; max-width: 100%; padding: 3px 10px; border-radius: 10px; background: rgba(14, 24, 44, .55); color: #fff; font-size: 12px; line-height: 17px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+body.mobile.m-chat-open #m-hud .m-chat-toast { display: none; }
+#m-hud .m-chat-line b { margin-right: 6px; font-weight: 800; }
+/* 채팅 패널: 칩 자리에서 위로 펼친다. 폭은 좁게 */
+#m-hud .m-sheet.m-chat-panel { position: absolute; left: 50%; right: auto; top: auto; bottom: calc(var(--m-b) + var(--m-kb, 0px)); transform: translateX(-50%); width: min(420px, 52vw); display: flex; flex-direction: column; padding: 8px 10px 10px; overflow: hidden; z-index: 3; }
+#m-hud .m-sheet.m-chat-panel .m-sheet-head { min-height: 40px; margin: 0; }
+#m-hud .m-chat-hist { flex: 0 1 auto; height: 122px; min-height: 40px; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; padding: 4px 2px; font-size: 13px; line-height: 18px; -webkit-overflow-scrolling: touch; }
+#m-hud .m-chat-hist .m-chat-line { word-break: break-word; }
+#m-hud .m-chat-empty { color: #9eb4c6; font-size: 12px; }
+#m-hud .m-chat-form-slot #chat { display: flex !important; position: static; transform: none; width: 100%; margin: 6px 0 0; padding: 0; background: none; box-shadow: none; }
+#m-hud .m-chat-form-slot #chat-input { flex: 1; width: auto; min-height: 44px; font-size: 16px; border-radius: 12px; }
+#m-hud .m-chat-form-slot #chat-log-toggle { display: none; }
+body.mobile.m-chat-open #m-hud .m-talk, body.mobile.m-chat-open #m-joy, body.mobile.m-chat-open #m-hud .m-actions { display: none; }
+body.mobile.m-riding #m-hud .m-talk { display: none; }
+
+/* 시트: 1행(버튼줄) 아래에서 열리고, 열리면 행동 버튼은 숨긴다 */
+#m-hud .m-sheet { position: absolute; right: var(--m-r); top: calc(var(--m-t) + 52px); width: min(320px, 44vw); max-height: calc(100% - var(--m-t) - var(--m-b) - 60px); overflow: auto; padding: 12px; }
+#m-hud .m-event-sheet { right: calc(var(--m-r) + 56px); width: min(304px, 42vw); }
+body.mobile.m-sheet-open #m-hud .m-actions { display: none; }
+#m-hud .m-sheet-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 44px; margin-bottom: 4px; }
+#m-hud .m-sheet-head b { font-size: 15px; font-weight: 900; color: #ffe169; }
+#m-hud .m-x { width: 44px; height: 44px; display: grid; place-items: center; border: 0; border-radius: 12px; background: rgba(255, 255, 255, .1); color: #e8f2f8; cursor: pointer; }
+#m-hud .m-menu-list { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+#m-hud .m-menu-item { min-height: 48px; padding: 0 12px; text-align: left; border-radius: 12px; border: 1px solid rgba(255, 255, 255, .1); background: rgba(255, 255, 255, .06); color: #fff; font: inherit; font-size: 13px; font-weight: 800; cursor: pointer; }
+#m-hud .m-menu-item.is-leave { color: #ffb4b4; }
+#m-hud .m-attr { margin-top: 10px; font-size: 11px; line-height: 1.5; color: #9eb4c6; }
+#m-hud .m-attr a { color: #cfe3f3; }
+#m-hud .m-ev-record { display: flex; align-items: center; gap: 8px; min-height: 44px; padding: 8px 12px; margin-bottom: 8px; border-radius: 12px; background: rgba(255, 225, 105, .1); border: 1px solid rgba(255, 225, 105, .45); color: #ffe169; font-size: 13px; font-weight: 800; }
+#m-hud .m-ev-record .m-ev-rec-v { flex: 1; font-variant-numeric: tabular-nums; }
+#m-hud .m-ev-record em { font-style: normal; font-size: 12px; padding: 3px 8px; border-radius: 6px; background: rgba(255, 255, 255, .1); color: #e8f2f8; }
+#m-hud .m-ev-row { display: flex; align-items: center; gap: 8px; min-height: 52px; padding: 4px 4px 4px 12px; margin-top: 8px; border-radius: 12px; border: 1px solid rgba(255, 255, 255, .1); background: rgba(255, 255, 255, .06); font-size: 13px; font-weight: 800; }
+#m-hud .m-ev-row > span { flex: 1; }
+#m-hud .m-btn-s { min-height: 44px; max-width: 60%; padding: 0 14px; border: 0; border-radius: 10px; background: var(--m-gold); color: #3a2a00; font: inherit; font-size: 12px; font-weight: 900; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#m-hud .m-switch { position: relative; width: 56px; height: 44px; border: 0; background: none; cursor: pointer; }
+#m-hud .m-switch::before { content: ''; position: absolute; left: 2px; right: 2px; top: 6px; bottom: 6px; border-radius: 16px; background: rgba(255, 255, 255, .25); }
+#m-hud .m-switch i { position: absolute; left: 6px; top: 10px; width: 24px; height: 24px; border-radius: 50%; background: #fff; transition: left .15s; }
+#m-hud .m-switch.on::before { background: #34c759; }
+#m-hud .m-switch.on i { left: 26px; }
+#m-hud .m-emote-slot { max-height: 200px; overflow: auto; }
+
+/* PC HUD 요소: 모바일에선 숨기거나 옮긴다 */
+body.mobile #hud, body.mobile #buttons, body.mobile #top-right-bar, body.mobile #attribution, body.mobile #joystick, body.mobile #ride-btn,
+body.mobile #rs-hud, body.mobile #rs-btns, body.mobile #ls-hud { display: none !important; }
+body.mobile #chat { display: none; }
+body.mobile #chat-input { font-size: 16px; min-height: 44px; }
+body.mobile #emote-bar { display: none; }
+body.mobile #m-hud .m-emote-slot #emote-bar { display: flex !important; position: static; transform: none; flex-wrap: wrap; gap: 8px; width: auto; max-width: none; margin: 0; padding: 0; background: none; box-shadow: none; }
+body.mobile #m-hud .m-emote-slot #emote-bar button { min-width: 44px; min-height: 44px; }
+body.mobile #phone { display: none; }
+body.mobile.m-show-map #phone { display: block; right: var(--m-r); top: calc(var(--m-t) + 52px); bottom: auto; width: min(240px, 30vw); z-index: 9; }
+body.mobile #bgm { display: none !important; }
+body.mobile.m-show-bgm:not(.in-gate):not(.in-lobby) #bgm:not([hidden]) { display: flex !important; left: auto; right: var(--m-r); top: calc(var(--m-t) + 52px); transform: none; }
+body.mobile #handset:not(.open) { display: none; }
+body.mobile #handset { --h: calc(100vh - var(--m-t) - var(--m-b) - 52px); right: var(--m-r); bottom: var(--m-b); z-index: 12; }
+body.mobile #presence-panel { right: var(--m-r); top: calc(var(--m-t) + 52px); max-height: calc(100vh - 80px); }
+
+/* 가방(인벤토리)은 조이스틱 위로 비켜 둔다 */
+body.mobile #inventory-dock { left: var(--m-l) !important; right: auto !important; top: auto !important; bottom: calc(var(--m-b) + 150px) !important; transform: none !important; }
+body.mobile.m-chat-open #inventory-dock { display: none !important; }
+/* 지하철 출입구 안내: 키보드 글자(E) 대신 오른쪽 '들어가기' 버튼을 쓴다 */
+body.mobile #subway-hint kbd { display: none; }
+body.mobile.m-chat-open #subway-hint { display: none !important; }

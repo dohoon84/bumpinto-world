@@ -1,4 +1,6 @@
 // 키보드(WASD/방향키)와 마우스 드래그 카메라
+// [mobile] 모바일 가상 조이스틱·버튼이 채우는 입력. PC 에선 늘 0/false 라 기존 동작 그대로
+export const virtualPad = { f: 0, s: 0, run: false, jump: false };
 export class Input {
   constructor(canvas) {
     this.keys = new Set(); this.yawDelta = 0; this.pitchDelta = 0; this.zoomDelta = 0;
@@ -26,8 +28,9 @@ export class Input {
     const k = this.keys; let f = 0, s = 0;
     if (k.has('KeyW') || k.has('ArrowUp')) f += 1; if (k.has('KeyS') || k.has('ArrowDown')) f -= 1;
     if (k.has('KeyD') || k.has('ArrowRight')) s += 1; if (k.has('KeyA') || k.has('ArrowLeft')) s -= 1;
-    const run = k.has('ShiftLeft') || k.has('ShiftRight');
-    const jump = k.has('Space');
+    f += virtualPad.f; s += virtualPad.s; // [mobile]
+    const run = k.has('ShiftLeft') || k.has('ShiftRight') || virtualPad.run;
+    const jump = k.has('Space') || virtualPad.jump;
     return { f: Math.max(-1, Math.min(1, f)), s: Math.max(-1, Math.min(1, s)), run, jump };
   }
   consumeLook() { const r = [this.yawDelta, this.pitchDelta, this.zoomDelta]; this.yawDelta = this.pitchDelta = this.zoomDelta = 0; return r; }
