@@ -8,8 +8,9 @@ import { createCorridorBuses } from './buses.js';
 import { createCorridorTraffic } from './traffic.js';
 import { mergeLinkTransit, PANGYO_LINK_FILE } from './pangyo.js'; // [pangyo-link]
 import { extendLinkWithExpress, withExpressTerrain } from './pangyoExpress.js'; // [pangyo-express]
+import { mergeMigeumDrive, migeumTaxiExits } from './migeum.js'; // [migeum-taxibike]
 
-export function createCorridorLife({ root, baseUrl, crossings, terrain, terrainT, world, overlay, stations, liveBox, params, proxy, mode, liveDrive = null, liveCrossings = null, renderer = null, hints = null, pangyoLink = false, express = null, extraCrowd = null }) {
+export function createCorridorLife({ root, baseUrl, crossings, terrain, terrainT, world, overlay, stations, liveBox, params, proxy, mode, liveDrive = null, liveCrossings = null, renderer = null, hints = null, pangyoLink = false, express = null, extraCrowd = null, migeumTaxi = null }) {
   let buses = null, traffic = null, ready = false, error = null;
   const inLive = (x, z) => x >= liveBox.x0 && x <= liveBox.x1 && z >= liveBox.z0 && z <= liveBox.z1;
   const get = (f) => fetch(baseUrl + f).then((r) => (r.ok ? r.json() : null)).catch(() => null);
@@ -18,7 +19,8 @@ export function createCorridorLife({ root, baseUrl, crossings, terrain, terrainT
     if (link && express) link = extendLinkWithExpress(link, express); // [pangyo-express] G8110 을 경부 합류 뒤까지 연장(끝에서 정차 후 사라짐)
     if (T && link) T = mergeLinkTransit(T, link); // [pangyo-link] 정자역→판교역 8110 (경로·정류장은 뒤에 덧붙임)
     if (T) buses = createCorridorBuses(root, T, { crossings, terrain: link && express ? withExpressTerrain(terrain, express) : terrain, overlay, liveBox, proxy, mode, gg: params.get('cbusgg') === '1' });
-    if (drive) traffic = createCorridorTraffic(root, { drive, crossings, terrain, terrainT, world, stations, liveBox, params, overlay, getBuses: () => nearBuses, liveDrive, liveCrossings, renderer, hints, extraCrowd }); // [pangyo-npc] extraCrowd
+    if (drive && migeumTaxi) drive = mergeMigeumDrive(drive, migeumTaxi.drive); // [migeum-taxibike] 성남대로 남쪽·돌마로(미금역 앞) 차도 연장
+    if (drive) traffic = createCorridorTraffic(root, { drive, crossings, terrain, terrainT, world, stations, liveBox, params, overlay, getBuses: () => nearBuses, liveDrive, liveCrossings, renderer, hints, extraCrowd, extraExits: migeumTaxi ? migeumTaxiExits(migeumTaxi) : null }); // [pangyo-npc] extraCrowd · [migeum-taxibike] 미금 승차 지점
     ready = true;
   }).catch((e) => { error = String(e); ready = true; console.warn('[corridor] life', e); });
   let nearBuses = [], busAcc = 0;
