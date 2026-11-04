@@ -32,7 +32,8 @@ await p.waitForFunction(() => !document.getElementById('m-landing'), null, { tim
 await p.waitForTimeout(4000);
 const go = await p.evaluate(() => ({ url: location.search, lobby: document.body.classList.contains('in-lobby'), lobbyVisible: !!document.querySelector('#lobby') && getComputedStyle(document.querySelector('#lobby')).display !== 'none' && document.body.classList.contains('in-lobby') }));
 console.log('resume-account →', JSON.stringify(go));
-await p.waitForFunction(() => window.__jj?.ready, null, { timeout: 150000 }).catch(() => {});
+await p.waitForFunction(() => window.__jj?.ready && !!document.querySelector('#m-hud .m-econ-bal') && !document.body.classList.contains('in-lobby'), null, { timeout: 150000 }).catch(() => console.log('enter wait timeout'));
+console.log('entered →', JSON.stringify(await p.evaluate(() => ({ lobby: document.body.classList.contains('in-lobby'), acct: document.body.classList.contains('m-econ-guest') ? 'guest' : 'account', zone: document.querySelector('#m-hud')?.innerText.match(/[가-힣]+역[^\n]*/)?.[0] || '' }))));
 await p.waitForTimeout(2000); await p.screenshot({ path: `${OUT}-landing-acct-entered-${tag}.png` });
 await p.evaluate(() => localStorage.removeItem('bw.uiv2.econ.mock.v1')); // mock 상태 지움 = 게스트
 await land('&ui=v2', 'landing-guest');
