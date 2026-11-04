@@ -70,7 +70,7 @@ console.log('economy tests');
   assert.deepEqual(F.econFeatures(base), []);
   assert.deepEqual(F.econFeatures({ ...base, ECONOMY_ENABLED: '0', ECON_FEATURES: 'move,quests' }), [], 'economy off → no features');
   assert.deepEqual(F.econFeatures({ ...base, ECON_FEATURES: 'board, move,bogus' }), ['move', 'board']);
-  assert.deepEqual(E.econMode(base), { transitPaid: false, shopPaid: true, beta: true }, 'shop is not part of the free launch');
+  assert.deepEqual(E.econMode(base), { transitPaid: false, shopPaid: false, beta: true });
   assert.deepEqual(E.econMode({ ...base, ECON_PAID: '1' }), { transitPaid: true, shopPaid: true, beta: false });
   assert.equal(F.devLoginAllowed({ DEV_LOGIN: '1' }, new URL('http://localhost:8789/auth/dev')), true);
   assert.equal(F.devLoginAllowed({ DEV_LOGIN: '1' }, new URL('https://api.bumpinto.world/auth/dev')), false);
@@ -342,6 +342,41 @@ console.log('economy tests');
   ok('paid mode: negative balance → spend_locked');
 }
 
+// ── 지갑 내역: 요금 줄에 rideId (무료 = 0원 줄도, 유료 = 원장 줄) ──
+{
+  const fares = (rows) => rows.filter((x) => x.kind === 'fare').map((x) => [x.rideId, x.mode, x.code, x.delta, x.listAmount, x.charged]);
+  const { env } = makeEnv();
+  await account(env, 'lf');
+  assert.equal((await E.payFare(env.DB, env, 'lf', { code: 'bus.city', rideId: 'ride-a1' }, NOW)).ok, true);
+  assert.equal((await E.payFare(env.DB, env, 'lf', { code: 'subway.base', rideId: 'ride-b2' }, NOW + 60_000)).ok, true);
+  const h = await E.holdTaxi(env.DB, env, 'lf', { code: 'taxi.drive', estimateMeters: 3000, rideId: 'ride-c3' }, NOW + 120_000);
+  const st = await E.settleTaxi(env.DB, env, 'lf', { holdId: h.data.hold.holdId, actualMeters: 2500 }, NOW + 180_000);
+  assert.equal(st.ok, true);
+  await E.payFare(env.DB, env, 'lf', { code: 'bus.city', rideId: 'ride-a1' }, NOW + 200_000); // 같은 rideId 다시 → 줄 안 늘어남
+  const lv = await E.ledgerView(env.DB, 'lf', 30);
+  const taxiList = st.data.settlement.listAmount;
+  assert.deepEqual(fares(lv), [['ride-c3', 'taxi', 'taxi.drive', 0, taxiList, 0], ['ride-b2', 'subway', 'subway.base', 0, 1550, 0], ['ride-a1', 'bus', 'bus.city', 0, 1650, 0]]);
+  assert.ok(lv.filter((x) => x.kind === 'fare').every((x) => x.free === true && /^e\d+$/.test(x.id) && x.title.ko));
+  for (let i = 1; i < lv.length; i++) assert.ok(lv[i - 1].at >= lv[i].at, 'newest first');
+  assert.equal((await E.ledgerView(env.DB, 'lf', 2)).length, 2, 'limit applies to merged list');
+
+  const { env: ep } = makeEnv({ ECON_PAID: '1' });
+  await account(ep, 'lp');
+  await give(ep, 'lp', 100000, 'seed-lp');
+  assert.equal((await E.payFare(ep.DB, ep, 'lp', { code: 'bus.city', rideId: 'ride-p1' }, NOW)).ok, true);
+  const hp = await E.holdTaxi(ep.DB, ep, 'lp', { code: 'taxi.drive', estimateMeters: 3000, rideId: 'ride-p2' }, NOW + 60_000);
+  const sp = await E.settleTaxi(ep.DB, ep, 'lp', { holdId: hp.data.hold.holdId, actualMeters: 2500 }, NOW + 120_000);
+  const lp = await E.ledgerView(ep.DB, 'lp', 30);
+  const ch = sp.data.settlement.charged;
+  assert.deepEqual(fares(lp), [['ride-p2', 'taxi', 'taxi.drive', -ch, sp.data.settlement.listAmount, ch], ['ride-p1', 'bus', 'bus.city', -1650, 1650, 1650]]);
+  assert.ok(lp.filter((x) => x.kind === 'fare').every((x) => /^\d+$/.test(x.id) && !x.free), 'paid rows are real ledger rows');
+  // 라우트도 같은 모양
+  const tok = await S.signSession({ accountId: 'lp', sessionVersion: 1, now: NOW }, SECRET);
+  const res = await handleEcon(new Request('http://localhost:8789/econ/ledger?limit=10', { headers: { Cookie: `bw_s=${tok}`, Origin: 'http://localhost:5173' } }), ep, new URL('http://localhost:8789/econ/ledger?limit=10'), { now: NOW });
+  assert.deepEqual(fares((await res.json()).data), fares(lp));
+  ok('ledger: fare rows carry rideId · mode · code · listAmount · charged — free rides as 0-delta rows (from econ_events), paid as ledger rows; bus/subway/taxi; route same');
+}
+
 // ── 상점: 미리보기 전용(아무것도 공짜로 주지 않음, 무료·유료 모두 구매 거절, 아무것도 안 씀) ──
 {
   const counts = async (env) => {
@@ -355,11 +390,10 @@ console.log('economy tests');
     const items = await E.listShop(env.DB, env, 's', NOW);
     assert.deepEqual(items.map((i) => [i.id, i.name.ko, i.price, i.listPrice]), [['bike', '첫 자전거', 160000, 160000], ['roadbike', 'CR·1 로드바이크', 1000000, 1000000], ['scooter', '스쿠터', 2500000, 2500000], ['car', '경차', 7450000, 7450000]]);
     for (const i of items) assert.deepEqual([i.available, i.comingSoon, i.status, i.statusText.ko, i.free, i.affordable, i.giftable, i.owned], [false, true, 'coming_soon', '준비중', false, false, false, false], i.id);
-    assert.deepEqual(E.econMode(env).shopPaid, true);
     const before = await counts(env), b0 = await bal(env, 's');
     for (const id of ['bike', 'roadbike', 'scooter', 'car']) {
       const r = await E.purchase(env.DB, env, 's', id, NOW);
-      assert.deepEqual([r.ok, r.error.code, r.error.reason, r.error.message.ko], [false, 'not_eligible', 'coming_soon', '탈것 상점은 준비중이에요'], `${id} paid=${paidFlag}`);
+      assert.deepEqual([r.ok, r.error.code, r.error.message.ko], [false, 'coming_soon', '탈것 상점은 준비중이에요'], `${id} paid=${paidFlag}`);
     }
     assert.equal((await E.purchase(env.DB, env, 's', 'nope', NOW)).error.code, 'unknown');
     assert.deepEqual(await counts(env), before, 'no ledger / ownership / event rows');
@@ -369,7 +403,7 @@ console.log('economy tests');
     const tok = await S.signSession({ accountId: 's', sessionVersion: 1, now: NOW }, SECRET);
     const res = await handleEcon(new Request('http://localhost:8789/econ/shop/buy', { method: 'POST', headers: { Cookie: `bw_s=${tok}`, 'Content-Type': 'application/json', Origin: 'http://localhost:5173' }, body: JSON.stringify({ itemId: 'roadbike' }) }), env, new URL('http://localhost:8789/econ/shop/buy'), { now: NOW });
     const j = await res.json();
-    assert.deepEqual([res.status, j.error.code, j.error.reason], [409, 'not_eligible', 'coming_soon']);
+    assert.deepEqual([res.status, j.error.code], [409, 'coming_soon']);
     assert.deepEqual(await counts(env), before);
     const goal = await E.shopGoal(env.DB, env, 's', NOW); assert.deepEqual([goal.itemId, goal.comingSoon], ['bike', true]);
   }
@@ -653,7 +687,7 @@ console.log('economy tests');
   await room.webSocketMessage(ws, JSON.stringify({ t: 'hello', deviceId: 'dev-rv', name: 'rv' }));
   assert.deepEqual(ws.sent.find((m) => m.t === 'welcome').gifts, []);
   // 예전에 이미 받은 탈것(account_vehicles 행)은 그대로 보인다 — 상점은 미리보기라 구매로는 못 만듦
-  assert.equal((await E.purchase(env.DB, env, 'rv', 'roadbike', Date.now())).error.reason, 'coming_soon');
+  assert.equal((await E.purchase(env.DB, env, 'rv', 'roadbike', Date.now())).error.code, 'coming_soon');
   await env.DB.prepare("INSERT INTO account_vehicles (account_id, item_id, gift_id, source, price, listed_price, bound, acquired_at) VALUES ('rv', 'roadbike', 'roadbike-cr1', 'shop', 0, 1000000, 1, ?)").bind(Date.now()).run();
   await room.webSocketMessage(ws, JSON.stringify({ t: 'gifts_sync' }));
   const h = ws.sent.filter((m) => m.t === 'holdings');

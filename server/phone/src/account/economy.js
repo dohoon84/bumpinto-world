@@ -20,8 +20,8 @@ const qs = (n) => Array(n).fill("?").join(", ");
 
 export function econMode(env) {
   const paid = econPaid(env);
-  // 상점은 무료 오픈 대상이 아님(미리보기 전용, 0원으로 주지 않음) → shopPaid 는 항상 true
-  return { transitPaid: paid, shopPaid: true, beta: !paid };
+  // shopPaid 는 계약(EconMode)에 남지만 상점은 쓰지 않는다 — 상점은 미리보기 전용(coming_soon), 무료 지급 없음
+  return { transitPaid: paid, shopPaid: paid, beta: !paid };
 }
 
 export const NOT_SIGNED_IN = Object.freeze({
@@ -637,9 +637,12 @@ export async function shopGoal(db, env, accountId, now = Date.now()) {
   return { guest: false, itemId: it.id, price: it.price, balance: b, remaining, daysLeft: Math.ceil(remaining / DISPLAY.typicalDailyNet), typicalDailyNet: DISPLAY.typicalDailyNet, comingSoon: true };
 }
 
-const COMING_SOON = () => err("not_eligible", { reason: "coming_soon", message: T("탈것 상점은 준비중이에요", "The vehicle shop is coming soon") });
+export const COMING_SOON_MSG = T("탈것 상점은 준비중이에요", "The vehicle shop is coming soon");
+const COMING_SOON = () => err("coming_soon", { message: COMING_SOON_MSG });
+/** 상점 미리보기: 있는 id = coming_soon, 없는 id = unknown (게스트·기능 꺼짐 포함, 아무것도 안 씀) */
+export function previewPurchase(itemId) { return SHOP.some((x) => x.id === itemId) ? COMING_SOON() : err("unknown"); }
 
-/** 구매 — 지금은 미리보기 전용이라 무료·유료 모드 모두 거절하고 아무것도 쓰지 않는다(SHOP_PREVIEW_ONLY).
+/** 구매 — 지금은 미리보기 전용이라 무료·유료 모드 모두 거절(coming_soon)하고 아무것도 쓰지 않는다(SHOP_PREVIEW_ONLY).
  *  아래(계정당 1개, 멱등키 shop:{acc}:{itemId}, 유료 차감)는 상점을 다시 열 때를 위해 남겨 둔다 — 다시 열 때 무료(0원) 지급 경로는 빼야 함. */
 export async function purchase(db, env, accountId, itemId, now = Date.now()) {
   const it = SHOP.find((x) => x.id === itemId);
@@ -801,10 +804,47 @@ export async function ledgerSinceAt(db, accountId, sinceAt, limit = 20) {
     .bind(accountId, Math.floor(Number(sinceAt) || 0), Math.max(1, Math.min(50, limit | 0))).all();
   return (results || []);
 }
+/**
+ * 지갑 내역(최신순). 원장 행 + **무료 탑승**(0원이라 원장 행이 없는 econ_events ride 행)을 합쳐 보여 준다.
+ *   요금 줄(kind 'fare')에는 rideId · mode · code · listAmount(정가) · charged 가 붙는다 → UI 가 탑승 기록과 정확히 맞춘다.
+ *   rideId: 버스·지하철 = 멱등키 fare:{acc}:{rideId}, 택시 = taxi_holds.ride_id (원장 taxi:{holdId} / 이벤트 ride:taxi:{holdId}).
+ *   무료 탑승 줄은 delta 0, id 는 'e{이벤트 id}'(원장 id 와 겹치지 않게). 잔액·폴링(ledgerSince)은 원장만 본다.
+ */
 export async function ledgerView(db, accountId, limit = 20) {
-  const { results } = await db.prepare("SELECT id, amount, reason, ref, created_at FROM ledger WHERE account_id = ? ORDER BY id DESC LIMIT ?")
-    .bind(accountId, Math.max(1, Math.min(100, Number(limit) | 0 || 20))).all();
-  return (results || []).map(ledgerEntry);
+  const lim = Math.max(1, Math.min(100, Number(limit) | 0 || 20));
+  const [L, F] = await db.batch([
+    db.prepare(
+      `SELECT l.id, l.amount, l.reason, l.ref, l.created_at, l.idempotency_key AS ikey,
+              th.ride_id AS taxi_ride, COALESCE(e.listed_amount, et.listed_amount) AS listed
+       FROM ledger l
+       LEFT JOIN econ_events e ON l.reason = 'fare' AND e.idempotency_key = l.idempotency_key
+       LEFT JOIN taxi_holds th ON l.reason = 'fare' AND l.idempotency_key = 'taxi:' || th.hold_id
+       LEFT JOIN econ_events et ON th.hold_id IS NOT NULL AND et.idempotency_key = 'ride:taxi:' || th.hold_id
+       WHERE l.account_id = ? ORDER BY l.id DESC LIMIT ?`,
+    ).bind(accountId, lim),
+    db.prepare(
+      `SELECT e.id, e.mode, e.ref, e.listed_amount AS listed, e.created_at, e.idempotency_key AS ikey, th.ride_id AS taxi_ride
+       FROM econ_events e LEFT JOIN taxi_holds th ON e.idempotency_key = 'ride:taxi:' || th.hold_id
+       WHERE e.account_id = ? AND e.kind = 'ride' AND e.charged_amount = 0 ORDER BY e.created_at DESC, e.id DESC LIMIT ?`,
+    ).bind(accountId, lim),
+  ]);
+  const farePrefix = `fare:${accountId}:`;
+  const rideIdOf = (r) => r.taxi_ride || (String(r.ikey || "").startsWith(farePrefix) ? String(r.ikey).slice(farePrefix.length) : null);
+  const fareExtra = (r, code, charged) => {
+    const f = FARES[code];
+    return { rideId: rideIdOf(r), mode: f?.mode || r.mode || null, code, listAmount: Number(r.listed ?? f?.amount ?? 0), charged };
+  };
+  const rows = [
+    ...(L?.results || []).map((r) => {
+      const e = ledgerEntry(r);
+      return r.reason === "fare" ? { ...e, ...fareExtra(r, String(r.ref || "").split("|")[0], -Number(r.amount)) } : e;
+    }),
+    ...(F?.results || []).map((r) => {
+      const { title, sub } = ledgerTitle({ reason: "fare", ref: r.ref, amount: 0 });
+      return { id: `e${r.id}`, at: Number(r.created_at), kind: "fare", delta: 0, title, sub, free: true, ...fareExtra(r, String(r.ref || ""), 0) };
+    }),
+  ];
+  return rows.sort((a, b) => b.at - a.at).slice(0, lim);
 }
 export async function lastLedgerId(db, accountId) {
   return Number((await db.prepare("SELECT MAX(id) AS n FROM ledger WHERE account_id = ?").bind(accountId).first())?.n || 0);
