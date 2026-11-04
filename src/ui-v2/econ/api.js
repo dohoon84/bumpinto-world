@@ -78,7 +78,7 @@ export const errR = (code, extra = {}) => ({ ok: false, error: { code, ...extra 
  *             title: Text, sub: Text|null }} LedgerEntry
  * @typedef {{ guest: boolean, weekEarned: number, weekSpent: number, avgDailyIncome: number, avgDailyTransit: number }} WalletSummary
  * @typedef {{ mode: TransitMode, code: string, free: boolean, amount: number, listAmount: number, balance: number, after: number, sufficient: boolean, label: Text, priceVer: number,
- *             options?: Array<{ code: string, amount: number, label: Text }> }} FareQuote
+ *             options?: Array<{ code: string, amount: number, listAmount: number, label: Text }> }} FareQuote
  *   free=true 면 amount=0 (listAmount=정가), sufficient=true. code 예: 'bus.city' 'bus.village' 'bus.seat' 'bus.wide' 'bus.circular' 'subway.base' 'taxi.drive' 'taxi.fast' 'taxi.instant'
  * @typedef {{ receiptId: string, mode: TransitMode, code: string, free: boolean, amount: number, listAmount: number, balance: Balance, reward: RewardEvent[] }} Payment
  * @typedef {{ holdId: string, free: boolean, amount: number, listAmount: number, balance: Balance }} TaxiHold

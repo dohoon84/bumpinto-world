@@ -170,7 +170,7 @@ export function createMockClient({ storage, now = () => Date.now(), key = MOCK_K
     return ev;
   }
 
-  // 날짜가 바뀌면 이동 보상 정산 + 데일리 리셋
+  // 날짜가 바뀌면 이동 보상 정산 + 매일 할 일 리셋
   function roll() {
     const t = now(); const day = kstDate(t);
     if (day === s.day) return;
@@ -372,7 +372,7 @@ export function createMockClient({ storage, now = () => Date.now(), key = MOCK_K
     setMode(m) { s.mode = { ...s.mode, ...m }; save(); bus.emit('mode', { ...s.mode }); },
     addWalkMinutes(min) { s.travel.sec = Math.min(RULES.dayCapMin * 60, s.travel.sec + min * 60); s.travel.meters += min * 80; addKarma('health', min); bus.emit('travel', travel()); const r = settleQuests(); save(); return r; },
     setBalance(total) { const d = total - balance().total; if (d) addLedger(d > 0 ? 'refund' : 'fare', d, T('예시 잔액 조정', 'Example balance adjust')); save(); },
-    /** Figma 예시 상태로 채우기 (모두 '예시 데이터'). name: 'fig03' (30,500 · 할 일 1/3 · 이동 7분) | 'day45' (카르마 45일차) */
+    /** Figma 예시 상태로 채우기 (모두 '예시 데이터'). name: 'fig03' (30,500 · 할 일 1/3 · 이동 7분) | 'fig07' (지갑 내역 · 23,000) | 'day45' (카르마 45일차) */
     seed(name = 'fig03') {
       const keepMode = s.mode;
       s = freshState(now()); s.mode = keepMode; s.signedIn = true; s.accountId = 'mock-account'; s.displayName = '예시 계정'; s.example = name;
@@ -383,6 +383,17 @@ export function createMockClient({ storage, now = () => Date.now(), key = MOCK_K
       s.progress['D-LOGIN'] = 1; s.claimed['D-LOGIN'] = t0; add('quest', 500, '할 일 · 오늘 첫 접속', 'Quest · First visit today');
       s.daysVisited = { week: 1, month: 1 }; s.streakDays = 1; s.progress['W-DAILY'] = 1;
       s.travel.sec = 7 * 60; s.travel.meters = 560; s.karma = { health: 7, explore: 0, transit: 0, neighbor: 0, streak: 1 };
+      if (name === 'fig07') { // Figma 07 지갑 예시 내역 (합계 23,000)
+        s.travel.sec = 10 * 60; s.travel.meters = 800; s.claimed['D-WALK10'] = t0; s.progress['D-SUB1'] = 1; s.claimed['D-SUB1'] = t0; s.claimed['D-ALL3'] = t0; s.progress['W-DAILY'] = 3;
+        s.transitKinds = ['bus', 'subway', 'taxi']; s.claimed['W-TRANSIT'] = t0;
+        add('quest', 1000, '할 일 · 걷기 인정 10분', 'Quest · Walk 10 counted minutes');
+        add('fare', -1650, '시내버스 · 정자역 07624', 'City bus · Jeongja 07624', T('하차 태그 포함', 'Exit tap included'));
+        add('fare', -1550, '지하철 · 정자역 기본요금', 'Subway · Jeongja base fare');
+        add('quest', 800, '할 일 · 지하철 1회', 'Quest · Ride the subway once');
+        add('quest', 1000, '할 일 · 3개 모두 완료', 'Quest · All 3 done');
+        add('fare', -7100, '택시 · 일반 주행 4.6 km', 'Taxi · Normal drive 4.6 km', T('예상 7,400 홀드 → 실제 정산, 300 반환', 'Held 7,400 → settled, 300 returned'));
+        s.karma = { health: 10, explore: 0, transit: 15, neighbor: 0, streak: 3 };
+      }
       if (name === 'day45') { s.karma = { health: 1240, explore: 26, transit: 85, neighbor: 12, streak: 54 }; s.streakDays = 23; }
       save(); bus.emit('session', session()); bus.emit('balance', { balance: balance(), delta: 0, reason: 'welcome' }); bus.emit('travel', travel());
     },
