@@ -73,7 +73,7 @@ import { mountGyeongbuSoon } from './world/gyeongbuSoon.js'; // [gyeongbu] 경�
 import { createServerClock } from './subway/clock.js'; // [subway-sync] 서버 시계 (같은 열차 = 같은 순간)
 import { isMobileMode } from './mobile/flag.js'; // [mobile]
 import { mountSubway, zoneLabel as subwayZoneLabel } from './subway/index.js'; // [subway] 정자역·코리더 역 출입구(실제 OSM 출구) + 지하 대합실. ?subway=0 이면 끔
-import { isUiV2 } from './ui-v2/flag.js'; // [ui-v2] ?ui=v2 게임 UI v2 (기본 꺼짐)
+import { isUiV2, uiV2Wanted } from './ui-v2/flag.js'; // [ui-v2] 게임 UI v2 (기본 켜짐 · ?ui=v1 끔)
 
 const params = new URLSearchParams(location.search);
 const mobileMode = isMobileMode(); // [mobile] 모바일 모드(핸드폰·?mobile=1): 가벼운 렌더 + 모바일 HUD
@@ -2179,7 +2179,7 @@ input.onKey = (e) => {
   if (emoteDef) triggerEmote(emoteDef.id, true);
 };
 if (mobileMode) import('./mobile/hud.js').then((m) => m.mountMobileHud({ handset })); // [mobile]
-if (mobileMode && !shot && params.get('ui') === 'v2') import('./mobile/econ/index.js').then((m) => m.mountMobileEcon({ handset })).catch((e) => console.warn('[econ-mobile]', e)); // [econ-mobile] 모바일 경제 UI (?ui=v2)
+if (mobileMode && !shot && uiV2Wanted()) import('./mobile/econ/index.js').then((m) => m.mountMobileEcon({ handset })).catch((e) => console.warn('[econ-mobile]', e)); // [econ-mobile] 모바일 경제 UI (?ui=v2)
 const ov = { yaw: 0.35, pitch: 0.95, dist: 1000 };
 const phone = mountPhone({ data, region, extraTiles: corridor ? () => corridor.mapTiles() : null }); // [corridor]
 

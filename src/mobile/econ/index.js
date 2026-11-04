@@ -4,6 +4,7 @@
 //   - 지갑(07): 게임 폰의 기존 '교통카드' 앱을 연다
 //   - 스타일: PC CSS 를 body.mobile.m-econ 범위로 다시 쓰고(rescope.js) 모바일 시트·토스트 배치로 덮음(econ-m.css)
 //   - ☰ 메뉴에 'bum' 묶음(할 일 · 교통카드 · 카르마·업적 · 탈것 상점 · 계정 연동)
+import { uiV2Wanted } from '../../ui-v2/flag.js'; // [ui-v2-default]
 import './econ-m.css';
 import { injectEconCss } from './rescope.js';
 import * as mhud from './hud.js';
@@ -29,7 +30,7 @@ function useMobileCoinSound() {
 }
 
 export function isMobileEcon(search = location.search) {
-  return document.body.classList.contains('mobile') && new URLSearchParams(search).get('ui') === 'v2';
+  return document.body.classList.contains('mobile') && uiV2Wanted(search);
 }
 
 export async function mountMobileEcon({ handset } = {}) {
