@@ -61,7 +61,7 @@ export function readLastStation() {
     if (!v || typeof v.region !== 'string') return null;
     const region = getRegion(v.region);
     if (!region || region.id !== v.region) return null;
-    return { region: region.id, at: typeof v.at === 'string' ? v.at : null, label: stationLabel(region.id, v.at) };
+    return { region: region.id, at: typeof v.at === 'string' ? v.at : null, label: stationLabel(region.id, v.at), t: Number(v.t) || 0 };
   } catch { return null; }
 }
 

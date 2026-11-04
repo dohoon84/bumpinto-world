@@ -7,7 +7,8 @@ import { makeGateDecorator, setGateView } from './gate.js';
 import { openStart } from './start.js';
 import { mountEntryWatch, setEntryStation, beforeLobby as entryBeforeLobby, peekFrame as entryPeekFrame } from './entry.js';
 import { mountHudV2 } from './hud.js';
-import { saveLastStation } from './data.js';
+import { saveLastStation, readLastStation } from './data.js';
+import { startResumeSaver, readResume, whoOf } from './resume.js';
 
 export { registerGoogleSignIn } from './google.js'; // #21 연결 지점
 export { coinFly } from './kit.js';
@@ -24,12 +25,19 @@ export function openEntryFlow(o) {
   const showStart = () => openStart({
     region: o.region,
     onGuest: () => o.openGate(),
-    onContinue: (last) => o.enter(last.region, last.at ? { at: last.at } : undefined),
-    onAccount: (d) => o.enter(d.region, d.at ? { at: d.at } : undefined), // 로그인된 계정: 게이트·캐릭터/PIN 고르기 없이 바로 그 역 입장 카드
+    onContinue: (last, ses) => enterResume(o, last, ses),
+    onAccount: (d, ses) => enterResume(o, d, ses), // 로그인된 계정: 게이트·캐릭터/PIN 고르기 없이 바로 그 역 입장 카드 (+그만둔 자리)
     defaultAt: o.at || null,
   });
   setGateDecorator(makeGateDecorator({ onBackToStart: showStart }));
   showStart();
+}
+
+/** '계속하기'·'이어하기': 그 역 입장 카드로. 이 월드에서 그만둔 자리(7일 이내, 그 뒤에 다른 역을 고르지 않음)가 있으면 입장 때 그 자리로 */
+function enterResume(o, d, ses) {
+  const last = readLastStation();
+  const place = d.region === o.region.id ? readResume(whoOf(ses), o.region.id, { since: last?.t || 0 }) : null;
+  o.enter(d.region, d.at || place ? { ...(d.at ? { at: d.at } : {}), ...(place ? { place } : {}) } : undefined);
 }
 
 /** handleGateEnter 가 부른다: 마지막 역 저장 + 입장 카드/로딩의 역 이름 */
@@ -46,6 +54,10 @@ export function initUiV2() {
   document.body.classList.add('ui-v2');
   mountEntryWatch();
   mountHudV2();
+  // 그만둔 자리 저장 (계정/게스트 · 월드별). 계정은 econ 세션을 따라간다
+  let ses = null;
+  import('./econ/index.js').then(({ econ }) => { econ.getSession().then((x) => { ses = x; }).catch(() => {}); econ.on('session', (x) => { ses = x; }); }).catch(() => {});
+  startResumeSaver(new URLSearchParams(location.search).get('region') || 'jeongja', () => whoOf(ses));
   // [econ-ui] 경제 UI (bum 잔액·할 일·교통 결제·상점) — PC 전용, 별도 청크
   if (!document.body.classList.contains('mobile')) import('./econ-ui/index.js').then((m) => m.mountEconUi()).catch(() => {});
   if (!flow) setGateDecorator(makeGateDecorator({ onBackToStart: () => location.reload() }));

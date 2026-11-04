@@ -123,7 +123,7 @@ export function openStart({ region, onGuest, onContinue, onGoogle, onAccount, de
     const k = b.dataset.v2;
     if (k === 'guest') { trackEvent('uiv2_start_guest'); close(); onGuest(); return; }
     if (k === 'account') { const d = dest(); trackEvent('uiv2_start_account', { region: d.region, at: d.at || '', last: last ? 1 : 0 }); close(); (onAccount || onContinue)(d, ses); return; }
-    if (k === 'continue' && last) { trackEvent('uiv2_start_continue', { region: last.region, at: last.at || '' }); close(); onContinue(last); return; }
+    if (k === 'continue' && last) { trackEvent('uiv2_start_continue', { region: last.region, at: last.at || '' }); close(); onContinue(last, ses); return; }
     if (k === 'google') {
       trackEvent('uiv2_start_google');
       b.disabled = true;
