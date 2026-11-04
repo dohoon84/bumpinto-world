@@ -15,5 +15,10 @@ for b in "${BRANCHES[@]}"; do
   git merge --no-ff --no-edit -m "통합 테스트: $b ($(git rev-parse --short origin/$b))" "origin/$b" || {
     echo "충돌: 고친 뒤 git add … && git commit, 그리고 다시 실행하세요. 보통 src/ui-v2/econ/index.js(계정 켜짐 → createServerClient 줄 유지) · src/mobile/hud.js(메뉴 '함께' 의 account-chip 타일 유지)."; exit 1; }
 done
-cmp -s src/ui-v2/econ/api.js <(git show origin/feat/econ-ui-v2:src/ui-v2/econ/api.js) && echo "api.js = feat/econ-ui-v2 과 같음" || echo "주의: api.js 가 feat/econ-ui-v2 와 다름"
+# api.js 기준 = 지금 feat/econ-ui-v2 끝(고정 해시 아님). 통합 브랜치와 feat/economy-server 둘 다 같아야 한다.
+API=src/ui-v2/econ/api.js; TIP=$(git rev-parse --short origin/feat/econ-ui-v2)
+cmp -s "$API" <(git show "origin/feat/econ-ui-v2:$API") && echo "api.js = feat/econ-ui-v2 ($TIP) 과 같음" || echo "주의: api.js 가 feat/econ-ui-v2 ($TIP) 와 다름"
+if git rev-parse -q --verify origin/feat/economy-server >/dev/null; then
+  cmp -s <(git show "origin/feat/economy-server:$API") <(git show "origin/feat/econ-ui-v2:$API") && echo "feat/economy-server api.js = feat/econ-ui-v2 ($TIP)" || echo "주의: feat/economy-server 의 api.js 가 feat/econ-ui-v2 ($TIP) 와 다름"
+fi
 echo "끝. npm install(의존성 바뀌었으면) 후 npm run dev:all"

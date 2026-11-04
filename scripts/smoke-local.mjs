@@ -43,11 +43,20 @@ async function pc(mode) {
     await click(p, 'text=개발용 로그인 (로컬)');
     await p.waitForTimeout(4000);
     // 이미 있는 계정(같은 dev sub)에 새 기기로 들어오면 대표 캐릭터를 맞추려고 새로고침 → 시작 화면으로 돌아온다(2번째 기기와 같은 흐름)
-    if (await p.locator('[data-v2=guest]').first().isVisible().catch(() => false)) {
+    // 시작 화면(12dd645~): 로그인된 계정이면 '계속하기 · {이름}'([data-v2=account]), 예전 빌드는 '게스트로 계속'([data-v2=guest])
+    const back = await p.waitForFunction(() => {
+      const vis = (sel) => { const e = document.querySelector(sel); return !!(e && e.getClientRects().length); };
+      return vis('[data-v2=account]') ? 'account' : vis('[data-v2=guest]') ? 'guest' : vis('[data-enter-at=pangyo]') ? 'gate' : null;
+    }, null, { timeout: 60000, polling: 300 }).then((h) => h.jsonValue()).catch(() => null);
+    if (back === 'account' || back === 'guest') {
       const s0 = await api(p, '/econ/state');
-      check(`${tag}: (기존 계정 · 새 기기) 새로고침 뒤 로그인 유지`, s0.body?.session?.signedIn === true, '시작 화면 → 게스트로 계속(쿠키 세션)');
+      await shot(p, `${tag}-0-start-signed-in`);
+      if (back === 'account') {
+        const label = ((await p.locator('[data-v2=account]').first().textContent().catch(() => '')) || '').trim();
+        check(`${tag}: (기존 계정 · 새 기기) 시작 화면 '계속하기 · 이름'`, /^계속하기 · .+/.test(label) && s0.body?.session?.signedIn === true, label);
+      } else check(`${tag}: (기존 계정 · 새 기기) 새로고침 뒤 로그인 유지`, s0.body?.session?.signedIn === true, '시작 화면 → 게스트로 계속(쿠키 세션, 12dd645 이전 빌드)');
       globalThis.__adopted = true;
-      await click(p, '[data-v2=guest]');
+      await click(p, `[data-v2=${back}]`);
     }
     await shot(p, `${tag}-0a-signed-in-gate`);
   }
