@@ -35,12 +35,23 @@ export const TARGETS = [
   ['jeongja', '정자'], ['sunae', '수내'], ['seohyeon', '서현'], ['imae', '이매'], ['yatap', '야탑'], ['moran', '모란'],
   ['taepyeong', '태평'], ['gachon', '가천대'], ['bokjeong', '복정'], ['jangji', '장지'], ['munjeong', '문정'], ['garak', '가락시장'],
   ['songpa', '송파'], ['seokchon', '석촌'], ['jamsil', '잠실'],
+  // [migeum-sub] 2026-11-04 도훈 요청: 미금(수인분당 K231 · 신분당 D13). 맨 뒤에 덧붙이기만 (앞 역 데이터·순서 그대로).
+  //   런타임에서 ?migeumsub=0 또는 ?migeum=0 이면 빠진다 (src/subway/roster.js, ext 필드)
+  ['migeum', '미금'],
 ];
+// [migeum-sub] 코리더 밖(정자~잠실 bbox 남쪽) 확장 역: 출구·역 노드·계단·타일은 확장 지역 데이터에서 읽는다
+//   osm    data/osm_migeum_raw.json (data/query_migeum.overpassql, PR #17) — subway_entrance · station 노드, highway=steps
+//   lines  data/osm_subway_routes.json 의 노선 relation (신분당 6060963 · 수인분당 11634611) 이 미금 stop_position 을 멤버로 가짐
+//          (osm_subway_corridor.json 에는 미금이 없음 → 그 relation 만 osmRoutes 에 들어간다)
+//   tiles  public/corridor/migeum/ (mode new = 그 파일만, add = 코리더 타일 + 미금 파일 = 런타임 mergeTileJson 과 같은 합)
+const EXT = { migeum: { index: 'public/corridor/migeum/index.json', tiles: 'public/corridor/migeum/tiles', osm: 'data/osm_migeum_raw.json' } };
 // 간이 노선도에 쓸 relation (방향 하나, 정차 순서). data/osm_subway_routes.json 에 있는 것
 const ROUTE_REL = { suin: 11634611, l8: 17953734, l2: 4729409, l3: 4729445, l9: 2718888, gg: 6462562, shin: 6060963 };
 
 const corr = rd('data/osm_subway_corridor.json').elements;
 const routes = rd('data/osm_subway_routes.json').elements;
+const extData = Object.fromEntries(Object.entries(EXT).map(([id, e]) => [id, { index: rd(e.index), osm: rd(e.osm), tilesDir: e.tiles }]));
+const extName = new Map(TARGETS.filter(([id]) => EXT[id]).map(([id, n]) => [n, id]));
 const jz = rd('public/jeongja.json');
 const index = rd('public/corridor/index.json');
 const base = rd('public/corridor/base.json');
@@ -55,7 +66,10 @@ const terrainClear = structureClear(terrain);
 const stairsOf = new Map();
 {
   const ew = rd('data/osm_subway_entrance_ways.json').elements;
-  for (const w of ew) {
+  // [migeum-sub] 확장 지역 계단: 그 지역 OSM 의 highway=steps 중 subway_entrance 노드에서 시작/끝나는 것만
+  const extEnt = new Set(Object.values(extData).flatMap((d) => d.osm.elements.filter((e) => e.type === 'node' && e.tags?.railway === 'subway_entrance').map((e) => e.id)));
+  const extSteps = Object.values(extData).flatMap((d) => d.osm.elements.filter((w) => w.type === 'way' && w.tags?.highway === 'steps' && w.nodes && (extEnt.has(w.nodes[0]) || extEnt.has(w.nodes[w.nodes.length - 1]))));
+  for (const w of [...ew, ...extSteps]) {
     if (w.type !== 'way' || w.tags?.highway !== 'steps' || !w.nodes || !w.geometry) continue;
     for (const [end, far] of [[0, w.nodes.length - 1], [w.nodes.length - 1, 0]]) {
       const id = w.nodes[end];
@@ -69,6 +83,10 @@ const stairsOf = new Map();
 const baseName = (s) => String(s || '').replace(/\s*[(（].*$/, '').replace(/역$/, '').trim();
 const nodes = new Map(corr.filter((e) => e.type === 'node').map((e) => [e.id, e]));
 const rels = corr.filter((e) => e.type === 'relation');
+// [migeum-sub] 확장 역 노드: 지역 OSM 의 subway_entrance · 그 역 이름 station 노드만 (다른 역 노드는 더하지 않음)
+//   노선 relation 데이터(osm_subway_routes.json)의 stop_position 노드는 좌표가 없어(out body) 위치엔 안 쓰고 노선 판정에만 쓴다 (아래 ownIds)
+for (const d of Object.values(extData)) for (const e of d.osm.elements) if (e.type === 'node' && !nodes.has(e.id) && (e.tags?.railway === 'subway_entrance' || (extName.has(baseName(e.tags?.name)) && (e.tags?.railway === 'station' || e.tags?.public_transport === 'station')))) nodes.set(e.id, e);
+const routeRels = routes.filter((e) => e.type === 'relation');
 const P = (n) => projectLatLon(center, n.lat, n.lon);
 const dist = (a, b) => Math.hypot(a.x - b.x, a.z - b.z);
 
@@ -81,16 +99,28 @@ const anchors = [...nodes.values()].filter((n) => {
 // 렌더링 여부: 라이브 정자 bbox 또는 코리더 상세 타일
 const tileKey = (x, z) => Math.floor(x / TS) + '_' + Math.floor(z / TS);
 const inLive = (x, z) => x >= live.x0 && x <= live.x1 && z >= live.z0 && z <= live.z1;
-const rendered = (x, z) => inLive(x, z) || !!index.tiles[tileKey(x, z)];
+const extTile = (x, z) => Object.values(extData).some((d) => !!d.index.tiles[tileKey(x, z)]);
+const rendered = (x, z) => inLive(x, z) || !!index.tiles[tileKey(x, z)] || extTile(x, z);
 
 // 타일 데이터 (출입구 배치용 isFree · 가까운 큰길)
 const tileCache = new Map();
+const readTile = (dir, k) => { const f = path.join(ROOT, dir, k + '.json'); return fs.existsSync(f) ? JSON.parse(fs.readFileSync(f, 'utf8')) : null; };
 const tile = (k) => {
-  if (!tileCache.has(k)) { const f = path.join(ROOT, 'public/corridor/tiles', k + '.json'); tileCache.set(k, fs.existsSync(f) ? JSON.parse(fs.readFileSync(f, 'utf8')) : null); }
+  if (!tileCache.has(k)) tileCache.set(k, readTile('public/corridor/tiles', k));
   return tileCache.get(k);
 };
+// [migeum-sub] 확장 역 둘레 타일: new = 확장 파일만, add = 코리더 타일 b·r 뒤에 확장 파일 b·r (런타임 mergeTileJson 과 같은 합)
+const extTileOf = (ext) => (k) => {
+  const ck = ext + ':' + k;
+  if (!tileCache.has(ck)) {
+    const d = extData[ext], m = d.index.tiles[k]?.mode, e = m ? readTile(d.tilesDir, k) : null, b = tile(k);
+    tileCache.set(ck, m === 'new' ? e : m === 'add' && b && e ? { ...b, b: [...b.b, ...e.b], r: [...b.r, ...e.r] } : b);
+  }
+  return tileCache.get(ck);
+};
+const TILE0 = tile;
 const CAR = new Set(['primary', 'secondary', 'tertiary', 'trunk', 'residential', 'unclassified', 'service', 'motorway', 'primary_link', 'secondary_link', 'trunk_link', 'motorway_link']); // = tileMesh CAR_KINDS
-function areaWorld(x, z, R = 120) {
+function areaWorld(x, z, R = 120, tile = TILE0) {
   const keys = new Set();
   for (let dx = -R; dx <= R; dx += R) for (let dz = -R; dz <= R; dz += R) keys.add(tileKey(x + dx, z + dz));
   const roads = [], blds = [];
@@ -143,14 +173,16 @@ function routeWindow(line, name, k = 5) {
 const report = { stations: [], skipped: [], droppedExits: [] };
 const stations = [];
 for (const [id, name] of TARGETS) {
-  const ix = index.stations.find((s) => s.id === id);
+  const ext = EXT[id] ? id : null;
+  const ix = ext ? extData[ext].index.stations.find((s) => s.id === id) : index.stations.find((s) => s.id === id);
   const ref0 = id === 'jeongja' ? { x: 0, z: 0 } : { x: ix.x, z: ix.z };
   const own = anchors.filter((a) => a.name === name && dist(a, ref0) < 1200);
   if (!own.length) { report.skipped.push({ id, name, why: 'OSM 역 노드 없음' }); continue; }
   const ownIds = new Set(own.map((a) => a.id));
+  if (ext) for (const e of routes) if (e.type === 'node' && baseName(e.tags?.name) === name && (e.tags?.railway === 'stop' || e.tags?.public_transport === 'stop_position')) ownIds.add(e.id);
   // 노선: 이 역의 노드를 stop 멤버로 가진 route relation
   const lineSet = new Map();
-  for (const r of rels) {
+  for (const r of ext ? [...rels, ...routeRels.filter((q) => !rels.some((o) => o.id === q.id))] : rels) {
     if (!/^(subway|train|light_rail)$/.test(r.tags.route)) continue;
     if (!r.members.some((m) => m.type === 'node' && m.role.startsWith('stop') && ownIds.has(m.ref))) continue;
     if (!r.tags.ref && /KTX|SRT/.test(r.tags.name || '')) continue; // 고속철 (지하철 출입구와 무관)
@@ -179,7 +211,7 @@ for (const [id, name] of TARGETS) {
   // 코리더 역: 출입구 방향·위치를 미리 정한다 (런타임엔 타일이 아직 안 불렸을 수 있음). 정자는 런타임(기존 그대로)
   if (id !== 'jeongja') {
     for (const e of exits) {
-      const W = areaWorld(e.x, e.z);
+      const W = areaWorld(e.x, e.z, 120, ext ? extTileOf(ext) : TILE0);
       let p = placeEntrance(e, { roads: W.roads, station: st, isFree: W.isFree, isClear: W.isClear });
       // 자리가 없으면 (OSM 점이 건물 footprint·차도 안, 구조물에 붙음 (지하상가·역 건물 안 출구 등) → 가장 가까운 빈 보도까지 최대 18m 옮겨 본다
       if (!p.ok) { const q = placeEntrance(e, { roads: W.roads, station: st, isFree: W.isFree, isClear: W.isClear, radii: [14, 16, 18] }); if ((q.ok && !p.ok) || q.score < p.score) p = q; }
@@ -198,6 +230,7 @@ for (const [id, name] of TARGETS) {
     lines, osmLineColours: Object.fromEntries(lines.map((k) => [k, lineSet.get(k).colour])), osmRoutes: Object.fromEntries(lines.map((k) => [k, lineSet.get(k).rels.sort((a, b) => a - b)])),
     route: { line: prim, rel: route.rel, stops: route.stops },
     exits: shown.map(({ x, z, ...e }) => e),
+    ...(ext ? { ext } : {}), // [migeum-sub] 확장 역 표시 (런타임 플래그로 뺄 수 있음)
   });
   report.stations.push({ id, name, lines: lines.map((k) => LINES[k].ko), exits: shown.map((e) => e.ref ?? '·').join(','), maxShift: Math.max(0, ...shown.map((e) => e.place?.shift || 0)), bad: shown.filter((e) => e.place?.bad).map((e) => `${e.ref}:${e.place.bad}`), clr: shown.filter((e) => e.place?.clr || e.place?.front).map((e) => `${e.ref}:${e.place.clr || 0}/${e.place.front || 0}`) });
 }
@@ -211,7 +244,8 @@ function lineStops() {
   }
   return out;
 }
-const meta = { generated: new Date().toISOString().slice(0, 10), source: 'OpenStreetMap (© OpenStreetMap contributors, ODbL) via Overpass · data/osm_subway_corridor.json, data/osm_subway_routes.json', osmBase: rd('data/osm_subway_corridor.json').osm3s?.timestamp_osm_base };
+const meta = { generated: new Date().toISOString().slice(0, 10), source: 'OpenStreetMap (© OpenStreetMap contributors, ODbL) via Overpass · data/osm_subway_corridor.json, data/osm_subway_routes.json', osmBase: rd('data/osm_subway_corridor.json').osm3s?.timestamp_osm_base,
+  ext: Object.fromEntries(Object.entries(EXT).map(([id, e]) => [id, { osm: e.osm, osmBase: extData[id].osm.osm3s?.timestamp_osm_base }])) }; // [migeum-sub]
 const js = `// [subway] 생성 파일 — 손으로 고치지 말 것. node scripts/subway/build-stations.mjs
 //   ${meta.source}
 //   OSM 기준 시각 ${meta.osmBase} · 생성 ${meta.generated}

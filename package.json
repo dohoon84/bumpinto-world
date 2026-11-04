@@ -50,7 +50,7 @@
     "ride:e2e": "node scripts/corridor/test/e2e-ride-220.mjs",
     "ride:e2e:8110": "node scripts/corridor/test/e2e-ride-8110.mjs",
     "notice-popup:test": "node scripts/test-notice-popup.mjs",
-    "subway:test": "node scripts/test-subway.mjs && node scripts/test-subway-arrivals.mjs && node scripts/test-subway-ride.mjs && node scripts/test-subway-voice.mjs",
+    "subway:test": "node scripts/test-subway.mjs && node scripts/test-subway-arrivals.mjs && node scripts/test-subway-ride.mjs && node scripts/test-subway-voice.mjs && MIGEUMSUB=0 node scripts/test-subway-ride.mjs && node scripts/test-subway-migeum.mjs",
     "subway:mp": "node scripts/mp-subway.mjs",
     "subway:stairs": "node scripts/e2e-subway-stairs.mjs",
     "subway:camera": "node scripts/e2e-subway-camera.mjs",
@@ -58,6 +58,7 @@
     "subway:gate": "node scripts/e2e-subway-gate-exit.mjs",
     "subway:pose": "node scripts/e2e-subway-pose.mjs",
     "subway:sync": "node scripts/e2e-subway-train-sync.mjs",
+    "subway:sync:migeum": "ROUTE=migeum-suin node scripts/e2e-subway-train-sync.mjs && ROUTE=migeum-shin node scripts/e2e-subway-train-sync.mjs",
     "bungeo:test": "node scripts/test-bungeo-queue.mjs"
   },
   "dependencies": {

@@ -7,6 +7,12 @@ export const MIGEUM_DIR = 'migeum/';
 export function migeumEnabled(search = typeof location !== 'undefined' ? location.search : '') {
   return new URLSearchParams(search).get('migeum') !== '0';
 }
+// [migeum-sub] 미금 지하철(src/subway, ?migeumsub=0 로 끔)이 켜지면 실제 출입구(계단·대합실 진입)를 지하철 쪽이 그린다
+//   → 1단계 출입구 캐노피(landmarks)는 겹치므로 안 만든다. ?subway=0 (지하철 전체 끔) 이면 1단계 캐노피 그대로
+export function migeumSubwayDrawsEntrances(search = typeof location !== 'undefined' ? location.search : '') {
+  const p = new URLSearchParams(search);
+  return p.get('migeum') !== '0' && p.get('migeumsub') !== '0' && p.get('subway') !== '0';
+}
 
 // 코리더 index 에 미금 타일을 합친 새 index (원본 객체는 바꾸지 않음).
 //   t.ext / t.extMode → fetchCorridorTile(pangyo.js)이 migeum/ 파일을 읽는다.

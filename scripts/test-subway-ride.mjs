@@ -11,6 +11,7 @@ import { jaName, jaDir } from '../src/subway/ja.js';
 import { normalizeArrival } from '../server/phone/src/subway.js';
 import { ZONES, zoneSlot, encodeZone, decodeZone, isZoneId } from '../src/net/zones.js';
 import { createSubwayState } from '../src/subway/state.js';
+const MG = STATIONS.some((d) => d.id === 'migeum'); // [migeum-sub] 미금 지하철 켜짐 (기본). MIGEUMSUB=0 이면 확장 전 그대로 확인
 
 // 량 수 (출처는 lines.js 주석): 수인분당·신분당·8·9 = 6, 2·3 = 10, 경강 = 4
 assert.deepEqual(Object.fromEntries(Object.entries(TRAIN).map(([k, v]) => [k, v.cars])), { suin: 6, shin: 6, gg: 4, l2: 10, l3: 10, l8: 6, l9: 6 });
@@ -38,14 +39,24 @@ assert.equal(nextStops('l2', 0, '잠실', 60).length, LINE_STOPS.l2.stops.length
 const rs = rideStops('suin', 1, '정자');
 assert.deepEqual(rs.filter((q) => q.game).map((q) => q.id), ['sunae', 'seohyeon', 'imae', 'yatap', 'moran', 'taepyeong', 'gachon', 'bokjeong']);
 assert.ok(rs.every((q) => q.game), '정자 → 복정은 모두 게임 역');
-assert.deepEqual(rideStops('suin', 0, '정자'), [], '정자 인천 방면: 내릴 게임 역 없음 → 탑승 막음');
+if (MG) { // [migeum-sub] 미금이 켜지면 정자 남쪽 방면(수인분당 수원·인천, 신분당 광교)은 미금까지 탈 수 있다
+  assert.deepEqual(rideStops('suin', 0, '정자'), [{ name: '미금', game: true, id: 'migeum' }], '정자 인천 방면: 미금에서 내림');
+  assert.deepEqual(rideStops('shin', 0, '정자'), [{ name: '미금', game: true, id: 'migeum' }], '정자 광교 방면: 미금에서 내림');
+  assert.deepEqual(rideStops('shin', 1, '정자'), [], '정자 신사 방면: 아직 없음 (판교 지하철 없음)');
+  assert.deepEqual(rideStops('suin', 1, '미금')[0], { name: '정자', game: true, id: 'jeongja' });
+  assert.deepEqual(rideStops('shin', 1, '미금'), [{ name: '정자', game: true, id: 'jeongja' }]);
+  assert.deepEqual(rideStops('suin', 0, '미금'), [], '미금 수원 방면: 오리~ 게임 역 없음');
+} else {
+  assert.deepEqual(rideStops('suin', 0, '정자'), [], '정자 인천 방면: 내릴 게임 역 없음 → 탑승 막음');
+  assert.deepEqual(rideStops('shin', 0, '정자'), [], '정자 광교 방면: 내릴 게임 역 없음');
+}
 const r8 = rideStops('l8', 1, '모란');
 assert.equal(r8.at(-1).id, 'jamsil'); assert.ok(r8.some((q) => !q.game), '8호선 모란→잠실: 게임 밖 역(수진 등) 지나감');
 assert.deepEqual(rideStops('gg', 1, '이매'), []); assert.deepEqual(rideStops('l2', 0, '잠실'), []); assert.deepEqual(rideStops('l9', 1, '석촌'), []);
 for (const d of STATIONS) for (const l of d.lines) assert.ok(isGameStop(l, d.name), `${d.name} ${l}`);
 // 간판·방송
 const sg = signText(STATIONS[0], 'suin', 1);
-assert.equal(sg.dirKo, LINES.suin.dirs[1].ko); assert.equal(sg.next, '수내'); assert.equal(sg.nextEn, 'Sunae'); assert.equal(sg.prevEn, null, '미금 = 게임 밖 → 영문 없음 (지어내지 않음)');
+assert.equal(sg.dirKo, LINES.suin.dirs[1].ko); assert.equal(sg.next, '수내'); assert.equal(sg.nextEn, 'Sunae'); assert.equal(sg.prevEn, MG ? 'Migeum' : null, MG ? '미금 = 게임 역 (OSM name:en)' : '미금 = 게임 밖 → 영문 없음 (지어내지 않음)');
 for (const k of ['approach', 'arrived', 'closing', 'next', 'depart', 'noAlight', 'last', 'noRide']) { const a = announce(k, { dirKo: '왕십리 방면', dirEn: 'for Wangsimni', name: '수내', nameEn: 'Sunae' }); assert.ok(a.ko && a.en && a.ja, k); assert.ok(!/[가-힣]/.test(a.ja), `${k}: 일본어에 한글 없음 ${a.ja}`); }
 { // [subway-ja] 일본어 안내 문구 · 역 이름 가타카나 (한국어 발음)
   assert.equal(sg.dirJa, 'ワンシムニ方面');
@@ -97,7 +108,7 @@ assert.equal(simNextArrival('suin', 1, 'jeongja', Date.UTC(2026, 10, 3, 18, 0, 0
   assert.equal(liveNextArrival(null, 'suin', 1, 0, 0), null);
 }
 // 구역: 1단계(0..14) 그대로, 승강장 42 + 열차 56 덧붙임 (113) + 장지 대합실·승강장 2 (116)
-assert.equal(ZONES.length, 116); assert.equal(ZONES[113], 'jangji-station'); assert.equal(ZONES[114], 'jangji-station/p-l8-0'); assert.equal(ZONES[115], 'jangji-station/p-l8-1'); assert.equal(ZONES[1], 'jeongja-station'); assert.equal(ZONES[14], 'jamsil-station');
+assert.equal(ZONES.length, 121); assert.deepEqual(ZONES.slice(116), ['migeum-station', 'migeum-station/p-suin-0', 'migeum-station/p-suin-1', 'migeum-station/p-shin-0', 'migeum-station/p-shin-1'], '[migeum-sub] 미금 116..120 덧붙임'); assert.equal(ZONES[113], 'jangji-station'); assert.equal(ZONES[114], 'jangji-station/p-l8-0'); assert.equal(ZONES[115], 'jangji-station/p-l8-1'); assert.equal(ZONES[1], 'jeongja-station'); assert.equal(ZONES[14], 'jamsil-station');
 assert.equal(ZONES[15], 'jeongja-station/p-suin-0'); assert.equal(ZONES[57], 'train:suin-0-0'); assert.equal(ZONES[112], 'train:l2-1-3');
 assert.equal(new Set(ZONES).size, ZONES.length);
 for (const d of STATIONS) for (const l of d.lines) for (const di of [0, 1]) { const z = platformZone(d.id, l, di); assert.ok(isZoneId(z) && zoneSlot(z) > 14, z); }
