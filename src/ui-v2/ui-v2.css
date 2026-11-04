@@ -293,3 +293,12 @@ body.ui-v2:not(.mobile) .v2-start-acct b { display: block; font-size: 17px; font
 body.ui-v2:not(.mobile) .v2-start-acct .v2-note { display: inline-flex; align-items: center; gap: 6px; }
 body.ui-v2:not(.mobile) .v2-start-av { width: 40px; height: 40px; font-size: 18px; flex-shrink: 0; }
 body.ui-v2:not(.mobile) .v2-checking { min-height: 48px; display: flex; align-items: center; }
+/* 입장 카드 계정 모드(#30 lobby.js 가 #lobby-card.is-account · body.bw-signed-in 을 붙임 — 이 브랜치만 있을 때는 클래스가 안 붙어 아무 영향 없음).
+   ui-v2 가 넣는 줄(.v2-phone-row 번호+Google 저장, .v2-ghint)과 탭·PIN·번호를 계정 모드에서는 숨긴다(#30 account/lobby.css 와 같은 목록) */
+body.ui-v2:not(.mobile) #lobby-card.is-account .lobby-tabs,
+body.ui-v2:not(.mobile) #lobby-card.is-account #lobby-pane-login,
+body.ui-v2:not(.mobile) #lobby-card.is-account .lobby-pin-field,
+body.ui-v2:not(.mobile) #lobby-card.is-account #lobby-phone,
+body.ui-v2:not(.mobile) #lobby-card.is-account .v2-phone-row,
+body.ui-v2:not(.mobile) #lobby-card.is-account .v2-ghint,
+body.ui-v2:not(.mobile).bw-signed-in #lobby-card .v2-save-google { display: none !important; }

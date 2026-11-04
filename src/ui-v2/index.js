@@ -25,6 +25,8 @@ export function openEntryFlow(o) {
     region: o.region,
     onGuest: () => o.openGate(),
     onContinue: (last) => o.enter(last.region, last.at ? { at: last.at } : undefined),
+    onAccount: (d) => o.enter(d.region, d.at ? { at: d.at } : undefined), // 로그인된 계정: 게이트·캐릭터/PIN 고르기 없이 바로 그 역 입장 카드
+    defaultAt: o.at || null,
   });
   setGateDecorator(makeGateDecorator({ onBackToStart: showStart }));
   showStart();
