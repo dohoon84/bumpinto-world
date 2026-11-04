@@ -16,7 +16,8 @@ const VIEWS = [
   { name: 'migeum-station', x: 92, z: 1806, dist: 70, pitch: 0.7, yaw: 2.4 },
   { name: 'migeum-bikes', x: 84, z: 1842, dist: 16, pitch: 0.45, yaw: 1.2 },
 ];
-const RUNS = [['on', ''], ['off', 'migeumtaxi=0&migeumbike=0'], ['nomg', 'migeum=0']];
+const RUNS = [['on', ''], ['off', 'migeumtaxi=0&migeumbike=0'], ['nomg', 'migeum=0']].filter(([t]) => !process.env.SMOKE_RUNS || process.env.SMOKE_RUNS.split(',').includes(t)); // SMOKE_RUNS=on 이면 on 만
+const VIEWS_ON = process.env.SMOKE_VIEWS !== '0';
 const Q = '?enter=1&name=e2e&ws=mock&bus=sim&rideSfx=0&rideVoice=0&noticePopup=0&npcs=0&taxis=0&police=0&trucks=0&bike=0&roadbike=0&superbike=0&evening=0';
 const out = { runs: {}, taxi: null, bike: null, errors: [] };
 
@@ -31,6 +32,9 @@ for (const [tag, extra] of RUNS) {
   });
   await page.goto(BASE + Q + (extra ? '&' + extra : ''));
   await page.waitForFunction(() => window.__jj?.ready, null, { timeout: 240000 });
+  await page.waitForTimeout(2000);
+  await page.evaluate(() => document.getElementById('lobby-go').click());
+  await page.waitForFunction(() => !document.body.classList.contains('in-lobby') && !document.body.classList.contains('in-gate'), null, { timeout: 60000 });
   await page.waitForFunction(() => window.__jj.corridor?.life?.traffic || !window.__jj.corridor, null, { timeout: 120000 }).catch(() => {});
   await page.waitForTimeout(3000);
   const info = await page.evaluate(() => {
@@ -38,7 +42,7 @@ for (const [tag, extra] of RUNS) {
     return { bikes: J.bikes.list.length, bikesInst: J.bikes.list.filter((b) => b.inst).length, instMeshes: J.bikes._inst ? 1 : 0, exits: tr?.cars?.exits?.length ?? null, migeumExits: tr?.cars?.exits?.filter((e) => String(e.ref).startsWith('미금')).length ?? null, ways: tr?.cars?.ways?.length ?? null, mgWays: tr?.cars?.ways?.filter((w) => w.mg).length ?? null };
   });
   const views = {};
-  for (const v of VIEWS) {
+  for (const v of VIEWS_ON ? VIEWS : []) {
     if (tag === 'nomg' && v.name !== 'jeongja-street') continue;
     await page.evaluate(async (v) => {
       const J = window.__jj; J.setMode('follow');
@@ -64,14 +68,14 @@ for (const [tag, extra] of RUNS) {
     const T = {};
     T.hail = await page.evaluate(async () => {
       const J = window.__jj; const x = 106.2, z = 1803.5; await J.corridor.preload(x, z); J.teleport(x, z);
-      await new Promise((r) => setTimeout(r, 1500));
-      return J.ride.hail();
+      for (let k = 0; k < 20; k++) { await new Promise((r) => setTimeout(r, 2000)); if (J.ride.hail()) return true; } // 차량이 막 생겼으면 빈 택시가 없을 수 있음
+      return false;
     });
     if (T.hail) {
       T.called = await page.evaluate(() => window.__jj.ride.debug.state());
       T.ffArrive = await page.evaluate(() => window.__jj.ride.debug.ffTaxi(240, () => window.__jj.ride.debug.state().phase === 'wait'));
       T.wait = await page.evaluate(() => window.__jj.ride.debug.state());
-      await page.evaluate(() => { const s = window.__jj.ride.debug.state(); window.__jj.teleport(s.tx + 1.5, s.tz + 1.5); Object.assign(window.__jj.cam, { dist: 18, pitch: 0.45, yaw: 2.0 }); });
+      await page.evaluate(() => { const s = window.__jj.ride.debug.state(), p = window.__jj.player.position; p.set(s.tx + 1.5, window.__jj.terrain.getGroundHeight(s.tx + 1.5, s.tz + 1.5, p.y), s.tz + 1.5); Object.assign(window.__jj.cam, { dist: 18, pitch: 0.45, yaw: 2.0 }); });
       await page.waitForTimeout(2500); await page.screenshot({ path: path.join(SHOT_DIR, 'taxi-1-arrived-exit2.png') });
       T.board = await page.evaluate(() => window.__jj.ride.handleE());
       T.choose = await page.evaluate(() => window.__jj.ride.debug.state());
@@ -107,5 +111,5 @@ for (const [tag, extra] of RUNS) {
   await page.close();
 }
 await browser.close();
-fs.writeFileSync(path.join(SHOT_DIR, 'smoke.json'), JSON.stringify(out, null, 1));
+fs.writeFileSync(path.join(SHOT_DIR, process.env.SMOKE_OUT || 'smoke.json'), JSON.stringify(out, null, 1));
 console.log('errors', out.errors.length, out.errors.slice(0, 5));
