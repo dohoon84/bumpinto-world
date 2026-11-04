@@ -111,7 +111,7 @@ export async function rewardSequence(ev, { stopAt = null } = {}) {
   const weekly = ev.period === 'weekly' || ev.period === 'monthly';
   const t = el('div', 'v2-panel ve-toast', `${rays(240)}
     <span class="ve-tcoin">${EI.coin(64)}</span>
-    <div class="ve-col">${tag(weekly ? (ev.period === 'monthly' ? tr('월간 달성!', 'Monthly done!') : tr('주간 달성!', 'Weekly done!')) : ev.kind === 'achievement' ? tr('업적 달성!', 'Achievement!') : ev.kind === 'welcome' ? tr('웰컴 보상', 'Welcome reward') : ev.kind === 'beta' ? tr('베타 감사', 'Beta thank-you') : ev.kind === 'board' ? tr('게시판 글 보상', 'Board post reward') : tr('할 일 달성!', 'Quest done!'), '#ffe169')}
+    <div class="ve-col">${tag(weekly ? (ev.period === 'monthly' ? tr('월간 달성!', 'Monthly done!') : tr('주간 달성!', 'Weekly done!')) : ev.kind === 'achievement' ? tr('업적 달성!', 'Achievement!') : ev.kind === 'welcome' ? tr('웰컴 보상', 'Welcome reward') : ev.kind === 'beta' ? tr('베타 감사', 'Beta thank-you') : ev.kind === 'board' ? tr('게시판 글 보상', 'Board post reward') : ev.kind === 'travel' ? tr('이동 보상 · 오늘', 'Travel reward · today') : tr('할 일 달성!', 'Quest done!'), '#ffe169')}
       <b class="ve-t20">${esc(T(ev.title))}</b>
       <div class="v2-hrow">${bumPill(amount, { cls: 'lg' })}${karmaPill(ev.karma)}${mockTag()}</div>
       ${ev.progressText ? `<small class="ve-sub">${esc(T(ev.progressText))}</small>` : ''}</div>${ev.kind === 'quest' || ev.kind === 'achievement' ? stamp() : ''}`);

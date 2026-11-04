@@ -16,6 +16,16 @@ export const RULES = Object.freeze({
 /** 분당 이동 보상 (기획: 2026 최저시급 10,320 ÷ 60 = 172, 2027-01-01부터 178). KST 날짜(YYYY-MM-DD)로 고른다. */
 export const MOVE_RATES = Object.freeze([{ from: '2026-01-01', perMinute: 172 }, { from: '2027-01-01', perMinute: 178 }]);
 export function movePerMinute(date) { let r = MOVE_RATES[0].perMinute; for (const x of MOVE_RATES) if (String(date) >= x.from) r = x.perMinute; return r; }
+/**
+ * 서버 /econ/config 의 추가 필드를 흉내(#30 v4, 13a897f). 인터페이스(api.js) 밖 — mock 상수와 dev.config() 로만 노출.
+ *   move.payout 'daily' = 하루 몫(min(60분, 이번 주 남은 분))에 닿는 순간 원장 1행 + reward kind 'travel', 못 채운 날은 날짜가 바뀐 뒤 1번.
+ *   rideLimits = 탑승 도배 방지(30초 간격 · 하루 40회까지 퀘스트·카르마에 셈; mock 은 값만 둠). board = 하루 1번 1,000 (40자).
+ */
+export const ECON_CONFIG = Object.freeze({
+  move: Object.freeze({ perMinute: 172, dailyMinutes: 60, weeklyMinutes: 300, payout: 'daily' }),
+  rideLimits: Object.freeze({ minGapSec: 30, dailyCounted: 40 }),
+  board: Object.freeze({ reward: 1000, dailyRewards: 1, minChars: 40 }),
+});
 export const FARE_TABLE = Object.freeze({
   'bus.city': { mode: 'bus', amount: 1650, label: T('시내버스', 'City bus') },
   'bus.village': { mode: 'bus', amount: 1550, label: T('마을버스', 'Village bus') },
@@ -39,6 +49,7 @@ const QUEST_DEFS = {
   'D-LOGIN': { period: 'daily', title: T('오늘 첫 접속', 'First visit today'), target: 1, unit: 'count', bum: 500, axis: 'streak', k: 1 },
   'D-WALK10': { period: 'daily', title: T('걷기 인정 10분', 'Walk 10 counted minutes'), target: 10, unit: 'min', bum: 1000, axis: 'health', k: 10 },
   'D-WALK20': { period: 'daily', title: T('걷기 인정 20분', 'Walk 20 counted minutes'), target: 20, unit: 'min', bum: 1500, axis: 'health', k: 20 },
+  'D-RIDE10': { period: 'daily', title: T('자전거 인정 10분', 'Ride a bike 10 counted minutes'), target: 10, unit: 'min', bum: 1000, axis: 'health', k: 10 },
   'D-SUB1': { period: 'daily', title: T('지하철 1회 타기', 'Ride the subway once'), target: 1, unit: 'count', bum: 800, axis: 'transit', k: 5 },
   'D-BUS1': { period: 'daily', title: T('버스 1회 타기', 'Ride a bus once'), target: 1, unit: 'count', bum: 800, axis: 'transit', k: 5 },
   'D-ALL3': { period: 'daily', title: T('보너스 · 3개 모두 완료', 'Bonus · all 3 done'), target: 3, unit: 'count', bum: 1000, axis: 'streak', k: 2, bonus: true },
@@ -46,15 +57,15 @@ const QUEST_DEFS = {
   'W-DAYS': { period: 'weekly', title: T('5일 출석', 'Visit 5 days'), target: 5, unit: 'day', bum: 4000, axis: 'streak', k: 5 },
   'W-DAILY': { period: 'weekly', title: T('일일 할 일 15개', '15 daily quests'), target: 15, unit: 'count', bum: 5000, axis: 'streak', k: 5 },
   'W-TRANSIT': { period: 'weekly', title: T('교통수단 3종 타기', 'Ride 3 kinds of transit'), target: 3, unit: 'kind', bum: 3000, axis: 'transit', k: 10 },
-  'W-PLACES': { period: 'weekly', title: T('장소 5곳 방문', 'Visit 5 places'), target: 5, unit: 'place', bum: 4000, axis: 'explore', k: 5 },
   'M-WALK': { period: 'monthly', title: T('월간 걷기 600분', 'Walk 600 min this month'), target: 600, unit: 'min', bum: 15000, axis: 'health', k: 30 },
   'M-DAYS': { period: 'monthly', title: T('20일 출석', 'Visit 20 days'), target: 20, unit: 'day', bum: 15000, axis: 'streak', k: 20 },
   'M-WEEKLY': { period: 'monthly', title: T('주간 할 일 10개', '10 weekly quests'), target: 10, unit: 'count', bum: 10000, axis: 'streak', k: 10 },
 };
-/** 일일 풀(기획 v1): LOGIN·WALK10·WALK20·SUB1·BUS1 (+ALL3 보너스). D-TAXI1 은 기획에 없음. mock 배정은 Figma 예시대로 3개. */
-export const DAILY_POOL = Object.freeze(['D-LOGIN', 'D-WALK10', 'D-WALK20', 'D-SUB1', 'D-BUS1']);
+/** 일일 풀(#30 v4 = 기획 v1): LOGIN·WALK10·WALK20·RIDE10·SUB1·BUS1 (+ALL3 보너스). D-TAXI1 은 기획에 없음. mock 배정은 Figma 예시대로 3개.
+ *  주간은 W-WALK·W-DAYS·W-DAILY·W-TRANSIT (합 18,000). W-PLACES 는 서버 판정이 없어 뺐다(v4). */
+export const DAILY_POOL = Object.freeze(['D-LOGIN', 'D-WALK10', 'D-WALK20', 'D-RIDE10', 'D-SUB1', 'D-BUS1']);
 const DAILY_ASSIGNED = ['D-LOGIN', 'D-WALK10', 'D-SUB1'];
-const PERIOD_IDS = { daily: [...DAILY_ASSIGNED, 'D-ALL3'], weekly: ['W-WALK', 'W-DAYS', 'W-DAILY', 'W-TRANSIT', 'W-PLACES'], monthly: ['M-WALK', 'M-DAYS', 'M-WEEKLY'] };
+const PERIOD_IDS = { daily: [...DAILY_ASSIGNED, 'D-ALL3'], weekly: ['W-WALK', 'W-DAYS', 'W-DAILY', 'W-TRANSIT'], monthly: ['M-WALK', 'M-DAYS', 'M-WEEKLY'] };
 
 export const SHOP_ITEMS = Object.freeze([
   { id: 'bike', name: T('첫 자전거', 'First bicycle'), listPrice: 160000, realPrice: 320000, days: 18 },
@@ -91,7 +102,7 @@ function freshState(now) {
     welcomeClaimed: false, betaEligible: true,
     ledger: [], holds: {}, receipts: {}, owned: [],
     day: kstDate(now), week: kstWeek(now), month: kstMonth(now),
-    travel: { sec: 0, meters: 0, weekMin: 0, monthMin: 0, settledDay: null },
+    travel: { sec: 0, rideSec: 0, meters: 0, weekMin: 0, weekPaid: 0, monthMin: 0, settledDay: null },
     progress: {}, claimed: {}, transitKinds: [], places: [], daysVisited: { week: 0, month: 0 },
     karma: { health: 0, explore: 0, transit: 0, neighbor: 0, streak: 0 }, streakDays: 0, walkRealKm: 0, achClaimed: {},
     example: null, seq: 0,
@@ -109,6 +120,7 @@ export function createMockClient({ storage, now = () => Date.now(), key = MOCK_K
   const load = () => { try { const v = JSON.parse(st?.getItem(key) || 'null'); if (v?.v === 1) return v; } catch { /* noop */ } return freshState(now()); };
   const save = () => { try { st?.setItem(key, JSON.stringify(s)); } catch { /* noop */ } };
   s = load();
+  let serverRides = false; // dev.setServerRides — 저장하지 않음
   const tick = Promise.resolve();
   const later = (v) => tick.then(() => v);
   const id = (p) => `${p}-${now().toString(36)}-${(++s.seq).toString(36)}`;
@@ -122,19 +134,22 @@ export function createMockClient({ storage, now = () => Date.now(), key = MOCK_K
     return { guest: false, total, free: total, paid: 0, currency: 'bum', locked: total < 0, updatedAt: now() };
   };
   const travelMin = () => Math.min(RULES.dayCapMin, Math.floor(s.travel.sec / 60));
+  /** 하루 몫 = min(60분, 이번 주 남은 분) — 여기에 닿는 순간 지급 (#30 v4 move.payout 'daily') */
+  const dayTarget = () => Math.max(0, Math.min(RULES.dayCapMin, RULES.weekCapMin - (s.travel.weekPaid || 0)));
+  const settledToday = () => s.travel.settledDay === s.day;
   const travel = () => ({
     guest: !s.signedIn, kstDate: s.day, minutes: s.signedIn ? travelMin() : 0, capMinutes: RULES.dayCapMin, ratePerMin: movePerMinute(s.day),
-    pendingBum: s.signedIn ? travelMin() * movePerMinute(s.day) : 0, distanceM: s.signedIn ? Math.round(s.travel.meters) : 0,
-    weekMinutes: s.signedIn ? Math.min(RULES.weekCapMin, s.travel.weekMin + travelMin()) : 0, weekCapMinutes: RULES.weekCapMin, settled: s.travel.settledDay === s.day,
+    pendingBum: s.signedIn && !settledToday() ? Math.min(travelMin(), dayTarget()) * movePerMinute(s.day) : 0, distanceM: s.signedIn ? Math.round(s.travel.meters) : 0,
+    weekMinutes: s.signedIn ? Math.min(RULES.weekCapMin, s.travel.weekMin + travelMin()) : 0, weekCapMinutes: RULES.weekCapMin, settled: settledToday(),
   });
   const prog = (qid) => {
     const d = QUEST_DEFS[qid];
     if (qid === 'D-ALL3') return DAILY_ASSIGNED.filter((q) => s.claimed[q]).length;
     if (qid === 'D-WALK10' || qid === 'D-WALK20') return Math.min(d.target, travelMin());
+    if (qid === 'D-RIDE10') return Math.min(d.target, Math.floor((s.travel.rideSec || 0) / 60));
     if (qid === 'W-WALK') return Math.min(d.target, s.travel.weekMin + travelMin());
     if (qid === 'M-WALK') return Math.min(d.target, s.travel.monthMin + travelMin());
     if (qid === 'W-TRANSIT') return Math.min(d.target, s.transitKinds.length);
-    if (qid === 'W-PLACES') return Math.min(d.target, s.places.length);
     if (qid === 'W-DAYS') return Math.min(d.target, s.daysVisited.week);
     if (qid === 'M-DAYS') return Math.min(d.target, s.daysVisited.month);
     return Math.min(d.target, s.progress[qid] || 0);
@@ -177,14 +192,30 @@ export function createMockClient({ storage, now = () => Date.now(), key = MOCK_K
     return ev;
   }
 
-  // 날짜가 바뀌면 이동 보상 정산 + 매일 할 일 리셋
+  /**
+   * 이동 보상 = 하루 1번(#30 v4). final=false(오늘): 인정분이 하루 몫에 닿았을 때만. final=true(날짜가 바뀜): 그날 인정분 그대로(주 남은 분까지).
+   * 원장 'move' 1행 + reward 이벤트 kind 'travel' 1번. 그 뒤 같은 날 더 걸어도 이동 보상은 없음(퀘스트 진행은 계속).
+   */
+  function settleTravel(final = false) {
+    if (!s.signedIn || settledToday()) return null;
+    const m = travelMin(); const tgt = dayTarget();
+    if (m <= 0 || tgt <= 0 || (!final && m < tgt)) return null;
+    const min = Math.min(m, tgt); const amount = min * movePerMinute(s.day);
+    const title = T(`이동 보상 ${min}분`, `Travel reward ${min} min`);
+    addLedger('move', amount, title, T(`분당 ${movePerMinute(s.day)} bum · 하루 1번 지급`, `${movePerMinute(s.day)} bum/min · paid once a day`));
+    s.travel.settledDay = s.day; s.travel.weekPaid = (s.travel.weekPaid || 0) + min;
+    const ev = { kind: 'travel', amount, karma: null, title, coins: 8, balanceAfter: balance().total };
+    bus.emit('travel', travel()); bus.emit('reward', ev);
+    return ev;
+  }
+  // 날짜가 바뀌면 (못 채운 날의) 이동 보상 정산 + 매일 할 일 리셋
   function roll() {
     const t = now(); const day = kstDate(t);
     if (day === s.day) return;
-    if (s.signedIn && travelMin() > 0 && s.travel.settledDay !== s.day) addLedger('move', travelMin() * movePerMinute(s.day), T(`이동 보상 ${travelMin()}분`, `Travel reward ${travelMin()} min`));
-    s.travel.weekMin += travelMin(); s.travel.monthMin += travelMin(); s.travel.sec = 0; s.travel.meters = 0;
+    settleTravel(true);
+    s.travel.weekMin += travelMin(); s.travel.monthMin += travelMin(); s.travel.sec = 0; s.travel.rideSec = 0; s.travel.meters = 0;
     for (const q of PERIOD_IDS.daily) { delete s.claimed[q]; delete s.progress[q]; }
-    if (kstWeek(t) !== s.week) { s.week = kstWeek(t); s.travel.weekMin = 0; s.transitKinds = []; s.places = []; s.daysVisited.week = 0; for (const q of PERIOD_IDS.weekly) { delete s.claimed[q]; delete s.progress[q]; } }
+    if (kstWeek(t) !== s.week) { s.week = kstWeek(t); s.travel.weekMin = 0; s.travel.weekPaid = 0; s.transitKinds = []; s.places = []; s.daysVisited.week = 0; for (const q of PERIOD_IDS.weekly) { delete s.claimed[q]; delete s.progress[q]; } }
     if (kstMonth(t) !== s.month) { s.month = kstMonth(t); s.travel.monthMin = 0; s.daysVisited.month = 0; for (const q of PERIOD_IDS.monthly) { delete s.claimed[q]; delete s.progress[q]; } }
     s.day = day;
     if (s.signedIn) visitToday();
@@ -238,9 +269,10 @@ export function createMockClient({ storage, now = () => Date.now(), key = MOCK_K
         const before = travelMin();
         const sec = Math.max(0, Math.min(10, +a.seconds || 0)) * (a.kind === 'vehicle' ? 0.5 : 1);
         s.travel.sec = Math.min(RULES.dayCapMin * 60, s.travel.sec + sec); s.travel.meters += Math.max(0, +a.meters || 0);
+        if (a.kind === 'vehicle') s.travel.rideSec = Math.min(RULES.dayCapMin * 60, (s.travel.rideSec || 0) + Math.max(0, Math.min(10, +a.seconds || 0)));
         s.walkRealKm = s.travel.meters / 1000;
         const after = travelMin();
-        if (after !== before) { addKarma('health', after - before); bus.emit('travel', travel()); for (const qid of ['D-WALK10', 'W-WALK', 'M-WALK'].filter((q) => q[0] !== 'D' || DAILY_ASSIGNED.includes(q))) bus.emit('quest', { period: QUEST_DEFS[qid].period, quest: quest(qid) }); settleQuests(); save(); }
+        if (after !== before) { addKarma('health', after - before); bus.emit('travel', travel()); for (const qid of ['D-WALK10', 'W-WALK', 'M-WALK'].filter((q) => q[0] !== 'D' || DAILY_ASSIGNED.includes(q))) bus.emit('quest', { period: QUEST_DEFS[qid].period, quest: quest(qid) }); settleQuests(); settleTravel(); save(); }
       } else if (a.kind === 'visit' && a.placeId && !s.places.includes(a.placeId)) { s.places.push(a.placeId); addKarma('explore', 1); settleQuests(); save(); }
       else if (a.kind === 'photo') { addKarma('explore', 1); save(); }
       else if (a.kind === 'neighbor') { addKarma('neighbor', 1); save(); }
@@ -251,7 +283,7 @@ export function createMockClient({ storage, now = () => Date.now(), key = MOCK_K
       if (!s.signedIn) return later({ guest: true, period, resetsAt: nextReset(period, now()), quests: [], maxBum: 0, claimedBum: 0, info: T('구글 계정을 연동하면 할 일과 보상이 열려요', 'Link a Google account to unlock quests and rewards') });
       const quests = ids.map(quest);
       const tv = travel();
-      const info = period === 'daily' ? T(`매일 00:00 KST에 3개 배정 · 오늘 이동 ${tv.minutes}/60분 (정산 예정 ${fmt(tv.pendingBum)} bum · 하루 상한 10,320)`, `3 assigned daily at 00:00 KST · travel today ${tv.minutes}/60 min (pending ${fmt(tv.pendingBum)} bum · daily cap 10,320)`)
+      const info = period === 'daily' ? T(`매일 00:00 KST에 3개 배정 · 오늘 이동 ${tv.minutes}/60분 (${tv.settled ? '오늘 이동 보상 지급 완료' : `60분 채우면 바로 ${fmt(60 * tv.ratePerMin)} bum`} · 하루 1번)`, `3 assigned daily at 00:00 KST · travel today ${tv.minutes}/60 min (${tv.settled ? 'travel reward paid today' : `reach 60 min for ${fmt(60 * tv.ratePerMin)} bum`} · once a day)`)
         : period === 'weekly' ? T(`월요일 00:00 KST 리셋 · 이번 주 이동 ${tv.weekMinutes}/300분 (주 상한 51,600 bum)`, `Resets Monday 00:00 KST · travel this week ${tv.weekMinutes}/300 min (weekly cap 51,600 bum)`)
           : T('매월 1일 00:00 KST 리셋 (월 단위 KST 집계)', 'Resets on the 1st at 00:00 KST');
       return { guest: false, period, resetsAt: nextReset(period, now()), quests, maxBum: quests.reduce((a, q) => a + q.reward.bum, 0), claimedBum: quests.filter((q) => q.state === 'claimed').reduce((a, q) => a + q.reward.bum, 0), info };
@@ -379,7 +411,9 @@ export function createMockClient({ storage, now = () => Date.now(), key = MOCK_K
     signIn({ name = '예시 계정' } = {}) { s.signedIn = true; s.accountId = 'mock-account'; s.displayName = name; save(); bus.emit('session', session()); bus.emit('balance', { balance: balance(), delta: 0, reason: 'welcome' }); },
     signOut() { s.signedIn = false; s.accountId = null; s.displayName = null; save(); bus.emit('session', session()); bus.emit('balance', { balance: balance(), delta: 0, reason: 'refund' }); },
     setMode(m) { s.mode = { ...s.mode, ...m }; save(); bus.emit('mode', { ...s.mode }); },
-    addWalkMinutes(min) { s.travel.sec = Math.min(RULES.dayCapMin * 60, s.travel.sec + min * 60); s.travel.meters += min * 80; addKarma('health', min); bus.emit('travel', travel()); const r = settleQuests(); save(); return r; },
+    addWalkMinutes(min) { s.travel.sec = Math.min(RULES.dayCapMin * 60, s.travel.sec + min * 60); s.travel.meters += min * 80; addKarma('health', min); bus.emit('travel', travel()); const r = settleQuests(); const tv = settleTravel(); if (tv) r.push(tv); save(); return r; },
+    addRideMinutes(min) { s.travel.rideSec = Math.min(RULES.dayCapMin * 60, (s.travel.rideSec || 0) + min * 60); s.travel.sec = Math.min(RULES.dayCapMin * 60, s.travel.sec + min * 30); bus.emit('travel', travel()); const r = settleQuests(); const tv = settleTravel(); if (tv) r.push(tv); save(); return r; },
+    config: () => JSON.parse(JSON.stringify({ ...ECON_CONFIG, move: { ...ECON_CONFIG.move, perMinute: movePerMinute(s.day) } })),
     setBalance(total) { const d = total - balance().total; if (d) addLedger(d > 0 ? 'refund' : 'fare', d, T('예시 잔액 조정', 'Example balance adjust')); save(); },
     /** Figma 예시 상태로 채우기 (모두 '예시 데이터'). name: 'fig03' (30,500 · 할 일 1/3 · 이동 7분) | 'fig07' (지갑 내역 · 23,000) | 'day45' (카르마 45일차) */
     seed(name = 'fig03') {
@@ -408,11 +442,31 @@ export function createMockClient({ storage, now = () => Date.now(), key = MOCK_K
     },
     emitReward(ev) { bus.emit('reward', ev); },
     /** 게시판 글 보상 흉내: 서버처럼 원장 kind 'board' 한 줄 + reward 이벤트 kind 'board' (#30 46a4b3b) */
-    boardPost(amount = 1000) {
+    /** 하루 1번(#30 v4 board.dailyRewards 1): 그날 첫 글만 보상·토스트. 그 뒤 글은 null(원장·이벤트·오류 없음). */
+    boardPost(amount = ECON_CONFIG.board.reward) {
+      roll();
       if (!s.signedIn) return null;
-      const e = addLedger('board', amount, T('동네 글 보상', 'Board post reward'), T('40자 이상 · 하루 3회까지', '40+ chars · up to 3 a day')); save();
+      if (s.boardDay === s.day) return null;
+      s.boardDay = s.day;
+      const e = addLedger('board', amount, T('동네 글 보상', 'Board post reward'), T('40자 이상 · 하루 1번', '40+ chars · once a day')); save();
       bus.emit('reward', { kind: 'board', amount, karma: null, title: T('동네 글 보상', 'Board post reward'), coins: 8, balanceAfter: balance().total });
       return e;
+    },
+    /**
+     * 서버식 게임 탑승 흉내(#30 543f195 serverClient rideProvider): on 이면 UI 는 버스·택시를 직접 결제하지 않고 'payment' 이벤트만 본다.
+     * gameRide 는 서버처럼 결제하고, 실패하면 'payment' 이벤트 PaymentFailed 를 1번 낸다(직접 payFare/holdTaxi 호출은 이벤트 없음).
+     */
+    setServerRides(on = true) { serverRides = !!on; },
+    serverRides: () => serverRides,
+    async gameRide({ mode = 'bus', code = mode === 'taxi' ? 'taxi.drive' : 'bus.city', rideId = `game-${mode}-${now()}`, meters = 4600 } = {}) {
+      const r = mode === 'taxi' ? await client.holdTaxi({ code, estimateMeters: meters, rideId }) : await client.payFare({ mode, code, rideId });
+      if (!r.ok) {
+        const e = r.error; const ins = e.code === ERR.INSUFFICIENT;
+        bus.emit('payment', { status: ins ? 'insufficient' : 'failed', ok: false, receiptId: null, mode, code, rideId, ...(ins ? { need: e.need, balance: e.balance, shortBy: e.shortBy } : {}), error: e });
+        return r;
+      }
+      if (mode === 'taxi') return client.settleTaxi({ holdId: r.data.holdId, actualMeters: meters });
+      return r;
     },
     /** 상점에서 팔지 않는 물건 지정(서버: available:false · 구매 시 not_eligible). 예: setShopAvailable(['roadbike']) */
     setShopAvailable(ids = null) { s.unavailable = ids ? SHOP_ITEMS.map((x) => x.id).filter((x) => !ids.includes(x)) : []; save(); bus.emit('mode', { ...s.mode }); },

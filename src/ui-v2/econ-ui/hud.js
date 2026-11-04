@@ -91,7 +91,7 @@ export function render(delta = null) {
   const m = travel.minutes;
   row.innerHTML = `<button type="button" class="v2-chip ve-bal${dShow ? ' v2-glow' : ''}" data-ve="bal" title="${esc(tr('교통카드 · 지갑 열기', 'Open transit card · wallet'))}">${EI.coin(24)}<b data-ve="bal-v">${n(anim ? shown : bal.total)}</b><small>bum</small>${dShow ? `<span class="v2-sub ve-d ${dShow < 0 ? 'neg' : ''}">${sgn(dShow)}</span>` : ''}${mockTag('mini')}</button>
     <button type="button" class="v2-chip ve-move" data-ve="move"><span class="ve-tile" style="--c:#20c997">${EI.walk(16)}</span><small>${esc(tr('이동 인정', 'Counted travel'))}</small><b>${esc(tr(`${m} / ${travel.capMinutes}분`, `${m} / ${travel.capMinutes} min`))}</b>${bar(m, travel.capMinutes, { w: 56, h: 6, cls: 'mint' })}
-      <span class="v2-sub ve-pend">${m ? esc(tr(`정산 예정 ${n(travel.pendingBum)}`, `Pending ${n(travel.pendingBum)}`)) : esc(tr(`걸으면 분당 ${travel.ratePerMin} bum`, `${travel.ratePerMin} bum per walking min`))}</span></button>
+      <span class="v2-sub ve-pend">${m && travel.settled ? esc(tr('오늘 지급 완료', 'Paid today')) : m ? esc(tr(`정산 예정 ${n(travel.pendingBum)}`, `Pending ${n(travel.pendingBum)}`)) : esc(tr(`걸으면 분당 ${travel.ratePerMin} bum`, `${travel.ratePerMin} bum per walking min`))}</span></button>
     <button type="button" class="v2-chip ve-qchip" data-ve="quest" aria-expanded="${trackerOpen}">${EI.quest(20)}<small>${esc(tr('할 일', 'Quests'))}</small><b>${done}/3</b><span class="ve-caret">${trackerOpen ? '▴' : '▾'}</span></button>`;
   if (!trackerOpen) { trk.innerHTML = ''; return; }
   const all3 = daily.quests.find((q) => q.id === 'D-ALL3');

@@ -78,7 +78,7 @@ async function onTransit(e) {
   try {
     // 서버 원장 클라이언트(#30)는 ride/fare.js 결제 계층(rideProvider)으로 버스·택시를 직접 결제한다.
     // 여기서 또 결제하면 이중 기록 → 결제는 하지 않고, 'payment' 이벤트(onServerPayment)로 화면만 띄운다.
-    if (!econ.isMock && (d.mode === 'bus' || d.mode === 'taxi')) {
+    if (clientPaysRides() && (d.mode === 'bus' || d.mode === 'taxi')) {
       if (d.mode === 'taxi' && d.phase === 'depart') taxiRiding = true;
       if (d.mode === 'taxi' && d.phase === 'arrive') {
         taxiRiding = false;
@@ -105,8 +105,16 @@ async function onTransit(e) {
   } catch { /* 결제 화면 오류는 게임 진행과 무관 */ }
 }
 
+/** 버스·택시 게임 탑승을 econ 클라이언트가 직접 결제하나(서버 클라이언트, 또는 mock dev.setServerRides(true)) */
+const clientPaysRides = () => !econ.isMock || !!econ.dev?.serverRides?.();
 function onServerPayment(p) {
-  if (econ.isMock || !p) return;
+  if (!clientPaysRides() || !p) return;
+  // 결제 실패(PaymentFailed, #30 543f195): 게임 탑승에서만 1번 온다. 잔액 부족이면 08c, 어떤 실패든 showPay 로는 보내지 않는다.
+  // (UI 가 payFare/holdTaxi 를 직접 부른 경우는 이벤트가 없고 결과로 08c 를 띄우므로 두 번 뜨지 않는다.)
+  if (p.ok === false) {
+    if (p.status === 'insufficient') import('./transit.js').then(({ openBlock }) => openBlock({ mode: p.mode, code: p.code, err: p.error, onQuests: OPEN['04a'] }));
+    return;
+  }
   setTimeout(() => {
     if (p.receiptId && shownReceipts.has(p.receiptId)) return; // 지하철 등 이 화면이 직접 결제해서 이미 띄운 것
     if (p.receiptId) shownReceipts.add(p.receiptId);
@@ -141,7 +149,7 @@ export function mountEconUi() {
   econ.on('payment', onServerPayment);
   econ.on('reward', (ev) => {
     if (ev?.kind === 'welcome') welcomeEvAt = Date.now();
-    if (!ev || !['quest', 'achievement', 'welcome', 'beta', 'board'].includes(ev.kind)) return; // board = 게시판 글 보상(#30: reward 이벤트로 옴)
+    if (!ev || !['quest', 'achievement', 'welcome', 'beta', 'board', 'travel'].includes(ev.kind)) return; // board = 게시판 글 보상(하루 1번), travel = 이동 보상(하루 1번, #30 v4)
     if (Date.now() < suppressRewards) return; // 로그인 직후 자동 지급(웰컴·베타·D-LOGIN)·데모 시드 중에는 토스트 없이
     if ((ev.kind === 'welcome' || ev.kind === 'beta') && ['01a', '01b', '02a', '02b'].includes(openKey())) return;
     // 결제 카드(08b·09b·10b)가 같은 보상을 '할 일 달성' 줄로 보여 주면 05a 토스트는 생략
