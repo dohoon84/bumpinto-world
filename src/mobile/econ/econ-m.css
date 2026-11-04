@@ -139,3 +139,8 @@ body.mobile.m-econ .ve-shop .ve-bum.lg { height: 28px; font-size: 13px; }
 body.mobile.m-econ:has(#ve-layer .ve-wrap) :is(#subway-hint, #umbrella-actions, #coffee-order-bar, #dog-gate-btn, #donate-near-btn, #coffee-toss-btn) { visibility: hidden !important; }
 /* 상점: bum 가격만. 실제 원화 가격 줄은 모바일에서 그리지 않음(사용자 규칙 · PC 쪽도 제거 예정) */
 body.mobile.m-econ .ve-shop .ve-real { display: none !important; }
+/* 06 닫기 버튼: 마지막 자식이라 sticky 가 위에 붙지 않음 → 맨 앞으로 */
+body.mobile.m-econ .ve-karma > .v2-close { order: -1; }
+/* 08b/09b 금액 줄: '0 bum' 이 두 줄로 깨지지 않게 */
+body.mobile.m-econ .ve-pay .ve-amt-big { white-space: nowrap; font-size: 18px; }
+body.mobile.m-econ .ve-pay .ve-amtrow { flex-wrap: wrap; row-gap: 2px; }
