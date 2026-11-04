@@ -39,9 +39,10 @@ export function mountLanding() {
     const current = getCurrentRegion();
     const st = { view: 'start', region: current.id, station: 'jeongja' };
     // [econ-mobile] ?ui=v2: 로그인된 계정이면 '이어서 입장' 대신 계정 이름이 붙은 '계속하기'(PC 시작화면 12dd645 과 같은 규칙). 기본 UI 는 그대로.
-    let ses = null;
+    let ses = null, lastSt = null, v2data = null; // lastSt: PC 와 같은 '마지막 역'(bw.uiv2.lastStation)
     const signedIn = () => !!(ses && !ses.isGuest && (ses.signedIn ?? true));
     if (new URLSearchParams(location.search).get('ui') === 'v2') {
+      import('../ui-v2/data.js').then((d) => { v2data = d; lastSt = d.readLastStation(); if (signedIn() && root.isConnected && st.view === 'start') render(); }).catch(() => {});
       import('../ui-v2/econ/index.js').then(({ econ }) => econ.getSession()).then((s) => { ses = s || null; if (signedIn() && root.isConnected && st.view === 'start') render(); }).catch(() => {});
     }
 
@@ -60,8 +61,25 @@ export function mountLanding() {
       const extra = { ...(passport ? { passport: 1 } : { enter: 1 }), from: current.id };
       const corridor = !!target.features?.corridor;
       if (corridor && st.station && st.station !== 'jeongja') extra.at = st.station;
+      v2data?.saveLastStation(target.id, extra.at || null); // [econ-mobile] ?ui=v2: 로그인 '계속하기'가 이 역으로 바로 들어가게
       if (target.id !== current.id) { navigateToRegion(target.id, extra); return; }
       const url = new URL(location.href);
+      for (const [k, v] of Object.entries(extra)) url.searchParams.set(k, String(v));
+      history.replaceState(null, '', url.toString());
+      finish();
+    };
+    // [econ-mobile] 로그인 계정 '계속하기'(PC 9d48af4 와 같음): 지역·역 고르기를 거치지 않고 마지막 역의 입장 카드로 바로, 마지막 역이 없으면 정자역.
+    //   입장 카드의 계정 모드(#30: #lobby-card.is-account · body.bw-signed-in → 계정 캐릭터로 바로 입장, 캐릭터·PIN 고르기 없음)는 lobby 쪽이 판단한다.
+    const acctDest = () => lastSt || { region: current.id, at: null, label: v2data?.stationLabel?.(current.id, null) || t('정자역', 'Jeongja Stn.') };
+    const resumeAccount = () => {
+      const last = acctDest();
+      st.region = last.region; st.station = last.at || 'jeongja';
+      const target = getRegion(st.region);
+      const extra = { enter: 1, from: current.id };
+      if (target.features?.corridor && last.at && last.at !== 'jeongja') extra.at = last.at;
+      if (target.id !== current.id) { navigateToRegion(target.id, extra); return; }
+      const url = new URL(location.href);
+      for (const k of ['enter', 'passport', 'at']) url.searchParams.delete(k);
       for (const [k, v] of Object.entries(extra)) url.searchParams.set(k, String(v));
       history.replaceState(null, '', url.toString());
       finish();
@@ -81,7 +99,10 @@ export function mountLanding() {
       const saved = readSavedPassport();
       if (st.view === 'start') {
         root.className = 'm-view-start';
-        const resumeBtn = (saved ? `<button type="button" class="m-btn ${signedIn() ? 'm-primary m-acct-go' : 'm-secondary'}" data-act="resume">${signedIn() ? esc(t(`계속하기 · ${acctName()}`, `Continue · ${acctName()}`)) : `${t('이어서 입장', 'Continue as')} · ${esc(saved.name)}`}</button>` : ''); // [econ-mobile] ?ui=v2 로그인 계정이면 '계속하기 · {계정}'(primary, 맨 위) · 아니면 기존 '이어서 입장'
+        // [econ-mobile] ?ui=v2 로그인 계정이면 '계속하기 · {계정}'(primary, 맨 위, 마지막 역 표시) · 아니면 기존 '이어서 입장'
+        const resumeBtn = signedIn()
+          ? `<button type="button" class="m-btn m-primary m-acct-go" data-act="resume">${esc(t(`계속하기 · ${acctName()}`, `Continue · ${acctName()}`))}<span class="m-acct-at">${esc(acctDest().label)}</span></button>`
+          : saved ? `<button type="button" class="m-btn m-secondary" data-act="resume">${t('이어서 입장', 'Continue as')} · ${esc(saved.name)}</button>` : '';
         root.innerHTML = `
           <div class="m-shade"></div>
           <button type="button" class="m-icon-btn m-tr" data-act="lang" aria-label="${t('언어 바꾸기', 'Switch language')}">${GLOBE}<span>${isEn() ? 'KO' : 'EN'}</span></button>
@@ -93,9 +114,9 @@ export function mountLanding() {
             <h2>${t('시작하기', 'Start')}</h2>
             ${signedIn() ? acctLine() : ''}
             ${signedIn() ? resumeBtn : ''}
-            <button type="button" class="m-btn ${signedIn() && saved ? 'm-secondary' : 'm-primary'}" data-act="pick">${t('입장할 곳 고르기', 'Choose where to start')}</button>
+            <button type="button" class="m-btn ${signedIn() ? 'm-secondary' : 'm-primary'}" data-act="pick">${t('입장할 곳 고르기', 'Choose where to start')}</button>
             ${signedIn() ? '' : resumeBtn}
-            ${signedIn() ? `<small>${t('로그인된 계정의 잔액·기록으로 이어서 들어가요', 'You continue with your signed-in account\'s balance and records')}${saved ? ` · ${t('캐릭터', 'Character')} ${esc(saved.name)}` : ''}</small>` : `<small>${saved ? t('이 폰에 저장된 캐릭터로 바로 들어가요', 'Jump back in with the character saved on this phone') : t('다음 화면에서 지역과 역을 고르고, 캐릭터를 만들어요', 'Pick a region and station, then make your character')}</small>`}
+            ${signedIn() ? `<small>${esc(lastSt ? t(`지난번 역 · ${lastSt.label} 입장 카드로 바로 · 이 계정 캐릭터·잔액 그대로`, `Straight to ${lastSt.label} (your last station) · same account character and balance`) : t(`${acctDest().label} 입장 카드로 바로 · 이 계정 캐릭터·잔액 그대로`, `Straight to ${acctDest().label} · same account character and balance`))}</small>` : `<small>${saved ? t('이 폰에 저장된 캐릭터로 바로 들어가요', 'Jump back in with the character saved on this phone') : t('다음 화면에서 지역과 역을 고르고, 캐릭터를 만들어요', 'Pick a region and station, then make your character')}</small>`}
           </div>
           ${shouldShowHomeScreenHint() ? `<div class="m-a2hs" role="note"><span>${t('홈 화면에 추가하면 전체 화면으로 플레이할 수 있어요', 'Add to Home Screen to play in full screen')}</span><button type="button" data-act="a2hs-x" aria-label="${t('닫기', 'Close')}">✕</button></div>` : ''}
           <a class="m-chip m-bl" href="https://github.com/dohoon84/bumpinto-world" target="_blank" rel="noopener">⭐ ${t('GitHub에서 함께 만들기', 'Build it with us on GitHub')}</a>`;
@@ -135,7 +156,7 @@ export function mountLanding() {
       if (act === 'a2hs-x') { dismissHomeScreenHint(); b.parentElement?.remove(); return; }
       if (act === 'lang') { toggleLang(); render(); return; }
       if (act === 'pick') { st.view = 'pick'; render(); return; }
-      if (act === 'resume') { resume(); return; }
+      if (act === 'resume') { if (signedIn()) resumeAccount(); else resume(); return; }
       if (act === 'back') { st.view = 'start'; render(); return; }
       if (act === 'go') { b.disabled = true; go(); return; }
       if (b.dataset.region) { st.region = b.dataset.region; st.station = 'jeongja'; render(); return; }

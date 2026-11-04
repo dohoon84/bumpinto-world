@@ -24,6 +24,29 @@ const land = async (qs, name) => {
 await p.evaluate(() => window.__bwEconDemo.dev.seed('fig03'));
 await land('&ui=v2', 'landing-acct');
 await land('', 'landing-default-acct');
+// 로그인 '계속하기' → 지역·역 고르기·게스트 게이트 없이 마지막 역(야탑)의 입장 카드로 바로 (PC 9d48af4 와 같음)
+const resumeTo = async (name) => {
+  const r = await p.locator('#m-landing [data-act="resume"]').boundingBox(); await p.touchscreen.tap(r.x + r.width / 2, r.y + r.height / 2);
+  await p.waitForFunction(() => !document.getElementById('m-landing'), null, { timeout: 30000 });
+  await p.waitForFunction(() => document.body.classList.contains('in-lobby') && !!document.querySelector('#lobby-card'), null, { timeout: 150000 }).catch(() => console.log('entry card wait timeout'));
+  await p.waitForTimeout(1500);
+  console.log(name, '→', JSON.stringify(await p.evaluate(() => ({ url: location.search, entryCard: document.body.classList.contains('in-lobby'), gate: document.body.classList.contains('in-gate'), title: document.querySelector('#lobby-fields h1')?.innerText || '' }))));
+  await p.screenshot({ path: `${OUT}-${name}-${tag}.png` });
+  // #30 계정 모드 흉내(이 브랜치엔 lobby.js 계정 모드가 없음): 클래스만 붙여 숨김 규칙 확인
+  const hid = await p.evaluate(() => {
+    document.body.classList.add('bw-signed-in'); document.querySelector('#lobby-card').classList.add('is-account');
+    const vis = (sel) => [...document.querySelectorAll(sel)].some((e) => e.getClientRects().length && getComputedStyle(e).display !== 'none');
+    return Object.fromEntries(['.lobby-tabs', '#lobby-pane-login', '.lobby-pin-field', '#lobby-phone', '.v2-phone-row', '.v2-ghint', '.v2-save-google'].map((s) => [s, vis(s) ? 'VISIBLE' : 'hidden']));
+  });
+  console.log(name, 'is-account hide →', JSON.stringify(hid));
+  await p.screenshot({ path: `${OUT}-${name}-is-account-${tag}.png` });
+};
+await p.evaluate(() => localStorage.setItem('bw.uiv2.lastStation', JSON.stringify({ region: 'jeongja', at: 'yatap', t: Date.now() })));
+await land('&ui=v2', 'landing-acct-last');
+await resumeTo('landing-acct-entry');
+await p.evaluate(() => localStorage.removeItem('bw.uiv2.lastStation'));
+await land('&ui=v2', 'landing-acct-nolast');
+await resumeTo('landing-acct-entry-nolast');
 await p.evaluate(() => localStorage.removeItem('bw.uiv2.econ.mock.v1')); // mock 상태 지움 = 게스트
 await land('&ui=v2', 'landing-guest');
 console.log(errs.length ? errs.join('\n') : 'no page errors');
