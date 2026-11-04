@@ -286,3 +286,10 @@ body.ui-v2:not(.mobile) #presence-panel { top: 106px; }
 .v2-coinfly-badge { position: fixed; padding: 3px 8px; border-radius: 8px; background: rgba(32, 201, 151, .16); border: 1px solid rgba(32, 201, 151, .5); color: #0f8a66; font-size: 13px; font-weight: 900; animation: v2-pop .9s ease-out forwards; }
 @keyframes v2-pop { 0% { transform: translateY(6px); opacity: 0; } 20% { opacity: 1; } 100% { transform: translateY(-12px); opacity: 0; } }
 .v2-glow { box-shadow: 0 0 18px 2px rgba(255, 225, 105, .95), inset 0 0 0 2px #f5a200, 0 2px 10px rgba(18, 32, 51, .16) !important; transition: box-shadow .2s; }
+
+/* 01 시작화면 — 로그인된 계정 (두 번째 기기 등): 계정 줄 + '계속하기 · 이름' */
+body.ui-v2:not(.mobile) .v2-start-acct { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 12px; background: rgba(255, 255, 255, .06); border: 1px solid rgba(255, 255, 255, .1); }
+body.ui-v2:not(.mobile) .v2-start-acct b { display: block; font-size: 17px; font-weight: 900; line-height: 22px; }
+body.ui-v2:not(.mobile) .v2-start-acct .v2-note { display: inline-flex; align-items: center; gap: 6px; }
+body.ui-v2:not(.mobile) .v2-start-av { width: 40px; height: 40px; font-size: 18px; flex-shrink: 0; }
+body.ui-v2:not(.mobile) .v2-checking { min-height: 48px; display: flex; align-items: center; }

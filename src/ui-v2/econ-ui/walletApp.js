@@ -39,15 +39,17 @@ const KIND_IC = { quest: '✅', ach: '🏅', welcome: '🎁', beta: '🎁', boar
 const KIND_T = { board: ['동네 글 보상', 'Board post reward'], move: ['이동 보상', 'Travel reward'], ach: ['업적 보너스', 'Achievement bonus'], refund: ['반환', 'Refund'] };
 const RIDE_KINDS = new Set(['fare', 'refund']);
 const amt = (v) => `<span class="amt ${v > 0 ? 'v2w-plus' : v < 0 ? 'v2w-minus' : ''}">${sgn(v)} bum</span>`;
+// 무료 탑승 요금 줄(delta 0, free:true)은 '무료 0 bum'
+const fareAmt = (f) => (f?.free || (f && f.delta === 0) ? `<span class="amt v2w-fz"><i>${esc(tr('무료', 'Free'))}</i>0 bum</span>` : amt(f ? f.delta : 0));
 
 function rowHtml(x, en, guest) {
   if (x.t === 'ride') {
     const e = x.r;
-    return `<div class="ride-rec"><span class="ic">${e.mode === 'taxi' ? '🚕' : '🚌'}</span><div><b>${esc(e.mode === 'taxi' ? (en ? 'Taxi' : '택시') : e.route)}</b> ${esc(e.from)} → ${esc(e.to)}<small>${(e.distM / 1000).toFixed(2)} km · ${fmtDur(e.durSec)} · ${fmtTime(e.at)}${e.speed && e.speed !== 'normal' ? ` · ${e.speed === 'fast' ? '⏩' : '⚡'}` : ''}</small></div>${guest ? `<span class="amt">${e.fare ? e.fare.amount : 0}${en ? ' KRW' : '원'}</span>` : amt(x.fare ? x.fare.delta : 0)}</div>`; // 게스트는 기존 줄 그대로
+    return `<div class="ride-rec"${x.fare ? ` data-fare="${esc(x.fare.id)}" data-by="${x.by}"` : ''}><span class="ic">${e.mode === 'taxi' ? '🚕' : '🚌'}</span><div><b>${esc(e.mode === 'taxi' ? (en ? 'Taxi' : '택시') : e.route)}</b> ${esc(e.from)} → ${esc(e.to)}<small>${(e.distM / 1000).toFixed(2)} km · ${fmtDur(e.durSec)} · ${fmtTime(e.at)}${e.speed && e.speed !== 'normal' ? ` · ${e.speed === 'fast' ? '⏩' : '⚡'}` : ''}</small></div>${guest ? `<span class="amt">${e.fare ? e.fare.amount : 0}${en ? ' KRW' : '원'}</span>` : fareAmt(x.fare)}</div>`; // 게스트는 기존 줄 그대로
   }
   const e = x.e, ic = e.kind === 'fare' ? MODE_IC[fareMode(e)] : KIND_IC[e.kind] || '💰';
   const title = T(e.title) || (KIND_T[e.kind] ? tr(...KIND_T[e.kind]) : e.kind);
-  return `<div class="ride-rec v2w-led" data-kind="${esc(e.kind)}"><span class="ic">${ic}</span><div><b>${esc(title)}</b><small>${e.sub ? `${esc(T(e.sub))} · ` : ''}${fmtTime(e.at)}</small></div>${amt(e.delta)}</div>`;
+  return `<div class="ride-rec v2w-led" data-kind="${esc(e.kind)}"><span class="ic">${ic}</span><div><b>${esc(title)}</b><small>${e.sub ? `${esc(T(e.sub))} · ` : ''}${fmtTime(e.at)}</small></div>${e.kind === 'fare' ? fareAmt(e) : amt(e.delta)}</div>`;
 }
 
 function render(en, base) {
