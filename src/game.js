@@ -26,6 +26,7 @@ import { mountCamera } from './camera/index.js'; // [camera] 폰 카메라·사�
 import { mountBoard } from './board.js';
 import { createNoticePopup } from './noticePopup.js'; // [notice-popup]
 import { createSms } from './sms.js';
+import { accountsOn } from './account/flags.js'; // [accounts]
 import { trackEvent } from './analytics.js';
 import { createTerrain } from './world/terrain.js'; // [terrain]
 import { Taxis } from './entities/taxis.js'; // [taxi]
@@ -875,6 +876,8 @@ presence.on('gift', (m) => {
 });
 presence.on('weather', (m) => atmosphere.setSharedWeather(m.mode));
 const sms = createSms();
+// [accounts] 구글 로그인 칩 — ?accounts=1 (또는 VITE_ACCOUNTS=1) 일 때만 불러온다. 기본은 아무것도 안 바뀜.
+if (accountsOn()) import('./account/ui.js').then((m) => m.mountAccount({ sms })).catch(() => {});
 function resolveAdminTank() {
   if (isLocalEnv) {
     const q = (params.get('tank') || '').toLowerCase();

@@ -2,6 +2,7 @@ import { PhoneBook } from "./book.js";
 import { Room } from "./room.js";
 import { handlePhotos } from "./photos.js";
 import { subwayArrival } from "./subway.js";
+import { handleAuth } from "./account/routes.js"; // [accounts] 구글 로그인·세션·계정 (ACCOUNTS_ENABLED 일 때만)
 
 export { PhoneBook, Room };
 
@@ -82,8 +83,10 @@ export default {
       "Access-Control-Allow-Private-Network": "true",
       Vary: "Origin",
     };
-    if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: cors });
     const url = new URL(request.url);
+    // [accounts] /auth/* 는 쿠키를 쓰므로 CORS 를 따로(허용 출처만 + credentials) 처리한다 — OPTIONS 포함
+    if (url.pathname.startsWith("/auth/")) return handleAuth(request, env, url, { waitUntil: ctx?.waitUntil?.bind(ctx) });
+    if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: cors });
     const queryRegion = (url.searchParams.get("region") || "jeongja").trim().toLowerCase() || "jeongja";
     const GLOBAL_BOOK_KEY = "jeongja"; // 단일 글로벌 번호부/패스포트 DB (모든 동네가 캐릭터·번호·문자 공유)
     if (url.pathname === "/ws") {
@@ -121,7 +124,7 @@ export default {
       } catch {}
       return json({ ok: true, region: queryRegion, online, residents, ...extra }, 200, cors);
     }
-    if (url.pathname === "/photos" || url.pathname.startsWith("/photos/")) return handlePhotos(request, env, cors, url); // [photo-cloud] 사진 보관함 (R2)
+    if (url.pathname === "/photos" || url.pathname.startsWith("/photos/")) return handlePhotos(request, env, cors, url, ctx); // [photo-cloud] 사진 보관함 (R2)
     if (url.pathname === "/subway/arrival") return subwayArrival(request, env, cors, url, ctx); // [subway] 실시간 도착 (secret SEOUL_SUBWAY_KEY, 25초 캐시)
     if (url.pathname === "/news-tip") return newsTip(request, env, cors); // [camera] 사진 뉴스 제보 (본문이 커서 따로 받음)
     const method = ROUTES[url.pathname];

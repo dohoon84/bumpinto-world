@@ -1,0 +1,39 @@
+/* [accounts] 로그인 칩·패널 — game-ui-spec 의 라이트 글라스(#122033 글자, 노랑 포인트) 를 따른다. 로고 없음. */
+.account-chip .board-label { max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.account-chip:disabled { opacity: .55; cursor: default; transform: none; }
+#account-panel {
+  position: fixed;
+  top: 64px;
+  right: 16px;
+  z-index: 60;
+  width: 300px;
+  padding: 16px;
+  border-radius: 16px;
+  color: #122033;
+  background: rgba(255, 255, 255, .94);
+  border: 1.5px solid rgba(18, 32, 51, .16);
+  box-shadow: 0 10px 30px rgba(18, 32, 51, .22);
+  font-size: 13.5px;
+}
+#account-panel[hidden] { display: none; }
+#account-panel .acct-head { font-weight: 900; font-size: 15px; margin-bottom: 8px; }
+#account-panel .acct-note { margin: 0 0 8px; line-height: 1.45; color: #34465e; }
+#account-panel .acct-row { display: flex; justify-content: space-between; gap: 8px; padding: 4px 0; border-bottom: 1px solid rgba(18, 32, 51, .08); }
+#account-panel .acct-row b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 170px; }
+#account-panel .acct-gis { margin: 8px 0; min-height: 40px; }
+#account-panel .acct-msg { min-height: 0; margin: 6px 0; color: #34465e; line-height: 1.4; }
+#account-panel .acct-msg:empty { display: none; }
+#account-panel .acct-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 8px; }
+#account-panel .acct-btn {
+  height: 40px;
+  padding: 0 14px;
+  border-radius: 999px;
+  border: 1.5px solid rgba(18, 32, 51, .16);
+  background: #fff;
+  color: #122033;
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+}
+#account-panel .acct-btn.primary { background: #ffe169; border-color: #f5a200; }
+#account-panel .acct-btn:disabled { opacity: .6; cursor: default; }

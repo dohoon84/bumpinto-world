@@ -2,6 +2,7 @@ import { DurableObject } from "cloudflare:workers";
 import { NOTICE_POSTS } from "../../../src/notices.js";
 import { GIFT_ITEMS, giftItem, giftUnit, normalizeHoldings } from "../../../src/gifts/catalog.js";
 import { photoOp } from "./photos.js";
+import { deviceInfo, mergeUser } from "./accountMerge.js"; // [accounts]
 
 // 정자역 번호부 하나. 번호는 여기서만 올라가서 겹치지 않는다.
 const ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -1428,6 +1429,27 @@ export class PhoneBook extends DurableObject {
     const found = this.#user(input?.id);
     if (found.error) return { ok: false, error: "unauthorized" };
     return photoOp(this.ctx.storage.sql, found.user, input);
+  }
+
+  // [accounts] 로그인 연결 때 Worker 가 기기 상태를 묻는다(번호는 끝 4자리만). ids 최대 10개.
+  accountDevices({ ids } = {}) {
+    this.#migrate();
+    const list = Array.isArray(ids) ? ids.slice(0, 10) : [];
+    const out = {};
+    for (const id of list) out[String(id)] = deviceInfo(this.ctx.storage.sql, String(id));
+    return { ok: true, devices: out };
+  }
+
+  // [accounts] 기기 → 대표 캐릭터 이전. 한 트랜잭션, 기기당 한 번(account_merges). dry 이면 쓰지 않음.
+  accountMerge({ fromId, toId, accountId, dry } = {}) {
+    this.#migrate();
+    const sql = this.ctx.storage.sql;
+    return mergeUser(sql, (fn) => this.ctx.storage.transactionSync(fn), {
+      fromId: String(fromId || ""),
+      toId: String(toId || ""),
+      accountId: accountId ? String(accountId) : null,
+      dry: !!dry,
+    });
   }
 
   stats() {
