@@ -181,9 +181,11 @@ export function buildTransit(scene, T, world, overlay, { mode = 'sim', proxy } =
   // [ride] 정자 버스 탑승용 읽기 전용 훅 — 시뮬레이션 모드(?bus=sim)에서만. 실시간 버스는 정류장에 서지 않아 탈 수 없다.
   //   코리더 버스(createCorridorBuses)와 같은 모양: sim·source·ctx·stopById·hideIds·near·group (gy 는 game.js 가 붙인다)
   let rideSim = null;
-  if (mode === 'sim' && source.buses && source.paths) {
-    for (const P of source.paths) P._jz = true;
-    rideSim = { sim: source, source, ctx, group: scene, hideIds, stopById: new Map(T.stops.map((s) => [s.id, s])), get near() { return visList; } };
+  // [live-ride] 실시간 모드도 탑승 가능: 실시간 버스는 fallback 시뮬 안에서 운전되므로(syncLive) 그 시뮬을 탑승용으로 넘긴다
+  const rs = source.buses && source.paths ? source : source.fallback?.buses ? source.fallback : null;
+  if (rs) {
+    for (const P of rs.paths) P._jz = true;
+    rideSim = { sim: rs, source, ctx, group: scene, hideIds, stopById: new Map(T.stops.map((s) => [s.id, s])), get near() { return visList; } };
   }
   return { update, fastForward, pedLight, source, crossings: T.crossings, stops: T.stops, meshes, rideSim, get simTime() { return simTime; }, get panelStop() { return panelStop; }, TIME_COMPRESS };
 }

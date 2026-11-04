@@ -57,14 +57,18 @@ const json = (o) => ({ ok: true, status: 200, json: async () => o });
   const mine = live.filter((v) => v.id === 'LSA1');
   assert.equal(mine.length, 1, 'vehicle on path'); assert.ok(!live.some((v) => v.id === 'LSA2' || v.id === 'LSA3'), 'far / not-running dropped');
   const q = src.pathsByRoute.get('seoul|' + seoul.ref).map((pp) => projectOnPath(pp, mine[0].x, mine[0].z)).sort((a, b) => a.d - b.d)[0]; assert.ok(q.d < 1.8, 'snapped onto a path of that route (either direction; sample adds 1.7m lane offset)'); assert.ok(Math.hypot(mine[0].x - at.x, mine[0].z - at.z) < 3, 'at GPS position along path');
-  // 실시간 노선의 시뮬 버스는 숨김, 다른 노선 시뮬은 유지
-  const simOfRoute = sim.buses.filter((b) => src.keyByRoute.get(b.P.route) === 'seoul|' + seoul.ref).length;
+  // 실시간 노선의 시뮬 버스는 페이드아웃 후 사라짐(새로 내지도 않음), 다른 노선 시뮬은 유지 — [live-ride] 전부 fallback 시뮬 안
+  const keyOf = (b) => src.keyByRoute.get(b.P.route);
+  const fading = sim.buses.filter((b) => !b.live && keyOf(b) === 'seoul|' + seoul.ref);
+  assert.ok(fading.every((b) => b.leave > 0), 'sim buses of the live route fade out');
+  src.update(1.5, {}, null);
+  assert.equal(sim.buses.filter((b) => !b.live && keyOf(b) === 'seoul|' + seoul.ref).length, 0, 'sim buses of the live route gone after fade');
   const others = src.vehicles().filter((v) => !v.live).length;
-  assert.equal(others, sim.vehicles().length - simOfRoute);
-  ok(`seoul ${seoul.ref}: GPS 6m off path → snapped (d=${q.d.toFixed(2)}m), far/not-running dropped, sim of that route hidden`);
-  // 추정 전진 + 다음 폴링 주기
-  const st = [...src.state.values()].find((x) => x.vehicles.has('SA1')).vehicles.get('SA1'); const s0 = st.s; src.update(2, {}, null);
-  assert.ok(st.s > s0, 'dead reckoning forward');
+  assert.equal(others, sim.buses.filter((b) => !b.live).length);
+  ok(`seoul ${seoul.ref}: GPS 6m off path → snapped (d=${q.d.toFixed(2)}m), far/not-running dropped, sim of that route faded out (${fading.length})`);
+  // 추정 전진(= 시뮬 주행, cap 까지) + 다음 폴링 주기
+  const st = sim.buses.find((b) => b.live === 'LSA1'); const s0 = st.s; for (let i = 0; i < 20; i++) src.update(0.25, {}, null);
+  assert.ok(st.s > s0, 'dead reckoning forward'); assert.ok(st.s <= st.capS + 0.01, 'never past the cap');
   const before = calls.length; adv(POLL_MS - 1000); src.update(0.1, {}, null); await flush(); assert.equal(calls.filter((c) => c.includes('/seoul/positions')).length, calls.slice(0, before).filter((c) => c.includes('/seoul/positions')).length, 'no poll before POLL_MS');
   adv(2000); src.update(0.1, {}, null); await flush(); assert.ok(calls.length > before && !calls.slice(before).some((c) => c.includes('route-list')), 'repoll positions only (busRouteId remembered)');
   ok('dead reckoning between polls, poll interval respected, busRouteId cached');

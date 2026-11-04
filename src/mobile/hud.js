@@ -214,9 +214,11 @@ export function mountMobileHud({ handset } = {}) {
     const soon = etas.find((r) => /곧|정차|Arriv|Now/.test(r.eta)) || etas[0];
     stopChip.querySelector('b').textContent = nm;
     stopChip.querySelector('small').textContent = soon ? `${soon.ref} ${soon.eta}` : '';
-    // 정류장에서 기다리는 중 안내(칩 아래 한 줄): 버스가 서면 오른쪽에 '버스 타기' 가 뜬다 · 실시간 모드(?bus=realtime)는 탑승 불가
+    // 정류장에서 기다리는 중 안내(칩 아래 한 줄): 시뮬·실시간 모두 — 버스가 서면 오른쪽에 '버스 타기' 가 뜬다.
+    //   [live-ride] 다음 도착(실시간이면 정류장 패널의 실제 도착 정보, 시뮬이면 시뮬 예상)을 붙인다
     const w = stopChip.querySelector('.m-bus-wait'), J = window.__jj;
-    const txt = J?.ride?.canBoardBus ? '' : J?.transit && !J.transit.rideSim ? t('실시간 버스 — 탑승은 시뮬 모드에서만', 'Live buses — boarding in sim mode only') : t('버스 기다리는 중 · 서면 \'버스 타기\'', 'Waiting · tap Board when a bus stops');
+    const nx = soon?.eta ? ` · ${soon.ref} ${soon.eta}` : '';
+    const txt = J?.ride?.canBoardBus ? '' : t('버스 기다리는 중', 'Waiting for a bus') + nx;
     if (w.textContent !== txt) w.textContent = txt;
     w.hidden = !txt;
   };
@@ -225,7 +227,7 @@ export function mountMobileHud({ handset } = {}) {
     const openNear = !!sp?.classList.contains('open');
     const name = sp?.querySelector('.hd')?.childNodes;
     let title = '', sub = '';
-    if (openNear && name) { title = [...name].filter((n) => n.nodeType === 3).map((n) => n.textContent).join('').replace(/^\W+/u, '').trim(); sub = sp.querySelector('.hd small')?.textContent?.trim() || ''; }
+    if (openNear && name) { title = [...name].filter((n) => n.nodeType === 3).map((n) => n.textContent).join('').replace(/^[^\p{L}\p{N}]+/u, '').trim(); sub = sp.querySelector('.hd small')?.textContent?.trim() || ''; }
     const rows = openNear ? [...sp.querySelectorAll('tr')].map((tr) => ({ ref: tr.querySelector('.chip')?.textContent?.trim(), bg: tr.querySelector('.chip')?.style.background, ty: tr.querySelector('.ty')?.textContent?.trim(), eta: tr.querySelector('.eta')?.childNodes?.[0]?.textContent?.trim() || tr.textContent.trim() })) : [];
     for (const card of root.querySelectorAll('.m-stop-card')) {
       const full = card.classList.contains('is-full');
