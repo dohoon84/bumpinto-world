@@ -2,7 +2,8 @@
 import http from 'node:http';
 const station = { response: { msgHeader: { resultCode: 0 }, msgBody: { busStationList: [{ stationId: 206000999, mobileNo: '07624', stationName: '정자역(목업)' }] } } };
 const arrivals = { response: { msgHeader: { resultCode: 0 }, msgBody: { busArrivalList: [
-  { routeName: '1303', routeTypeCd: 11, predictTimeSec1: 95, locationNo1: 2, remainSeatCnt1: 12 },
+  { routeName: '220', routeTypeCd: 13, predictTimeSec1: 70, locationNo1: 1, vehId1: 'M220A', predictTimeSec2: 520, locationNo2: 6, vehId2: 'M220B', remainSeatCnt1: 20 }, // [bus-rt] 차량 id·2번째 버스
+  { routeName: '1303', routeTypeCd: 11, predictTimeSec1: 95, locationNo1: 2, remainSeatCnt1: 12, vehId1: 'M1303A' },
   { routeName: 'M4102', routeTypeCd: 14, predictTimeSec1: 410, locationNo1: 5, remainSeatCnt1: 30 },
   { routeName: '8100', routeTypeCd: 11, predictTimeSec1: 30, locationNo1: 1, remainSeatCnt1: 3 },
 ] } } };

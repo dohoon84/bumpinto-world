@@ -14,6 +14,12 @@ export const TIME_COMPRESS = 8; // 실제 배차간격을 1/8로 압축(화면�
 const LIVE_POLL_MS = 120000; // 일일 1,000건 한도 보호를 위해 2분 주기로 위치 폴링
 const LIVE_BACKOFF_MS = 600000; // 한도 초과/오류 시 10분 백오프
 const ARRIVAL_TTL_MS = 60000; // 정류장 도착정보 캐시 60초
+// [bus-rt] ETA 구동 모드(기본 켬, ?busrt=0 이면 위 예전 동작 그대로)
+const RT_POLL_MS = 25000; // 플레이어 주변 정류장 도착정보 주기(프록시가 30초 캐시 → 모든 플레이어가 같은 상류 호출 공유)
+const RT_BACKOFF_MS = 120000; // 전부 실패 시 2분 뒤 재시도(그동안 시뮬 폴백)
+const RT_FOCUS_R = 450, RT_FOCUS_N = 6; // 플레이어 반경·정류장 수 상한
+const RT_MAX_BUS = 36, RT_MAX_ETA = 1200; // ETA 버스 상한·20분 넘는 ETA 무시
+const RT_PENDING_TTL = 180; // 갱신 안 된 대기(아직 지도 밖) 항목 수명(초)
 const HEADWAY_MIN = { M: 12, express: 12, premium: 15, seat: 12, city: 12, village: 10, intercity: 20, airport: 30 };
 const VMAX = { M: 15, intercity: 18, express: 12, premium: 12, seat: 11, city: 11, village: 9.5, airport: 14 };
 const ACC = 1.3, DEC = 1.8, DWELL = 9, LANE_OFF = 1.7;
@@ -49,8 +55,40 @@ export function projectOnPath(p, x, z) {
   return best;
 }
 
+// ---- [bus-rt] ETA → 위치/속도 모델 (순수 함수, 테스트용 export) ----
+const XWAIT = 6;
+export const RT_VAVG = 0.6; // 배치용 평균 주행속도 = vmax × 0.6 (신호 대기·가감속 포함, 시뮬 도착 계산 0.7 보다 보수적 → 늦지 않게 가까이 배치)
+// 정류장 idx 에 eta 초 뒤 도착하려면 지금 경로 위 어디(s)에 있어야 하나 — 앞 정류장 정차(DWELL)를 거슬러 계산. 경로 시작 이전이면 음수.
+export function upstreamS(P, idx, eta, vAvg = P.vmax * RT_VAVG) {
+  let t = Math.max(0, eta), s = P.stops[idx].s;
+  for (let k = idx - 1; k >= 0; k--) {
+    const seg = (s - P.stops[k].s) / vAvg;
+    if (seg >= t) return s - t * vAvg;
+    t -= seg + DWELL; s = P.stops[k].s;
+    if (t <= 0) return s;
+  }
+  return s - t * vAvg;
+}
+// 버스 b 가 지금 위치에서 정류장 idx 까지 걸릴 예상 시간(초)
+export function etaFrom(P, b, idx, vAvg = P.vmax * RT_VAVG) {
+  const st = P.stops[idx]; if (!st) return Infinity;
+  let between = 0; for (let k = Math.max(0, b.stopIdx + (b.dwell > 0 ? 1 : 0)); k < idx; k++) between++;
+  return Math.max(0, st.s - b.s) / vAvg + between * DWELL + (b.dwell > 0 ? b.dwell : 0);
+}
+// 목표 시각(보다 10초 일찍)에 닿기 위한 속도 상한(가감속·신호 손실 보정 ×1.15), 최저 1.5m/s ~ 최고 vmax×1.3
+export function etaSpeed(P, b, g, now) {
+  const st = P.stops[g.idx]; if (!st) return P.vmax;
+  let between = 0; for (let k = Math.max(0, b.stopIdx + (b.dwell > 0 ? 1 : 0)); k < g.idx; k++) between++;
+  let nx = 0; for (const q of P.xings || []) if (q.s > b.s && q.s < st.s) nx++; // 앞 신호 횡단보도 기대 대기(주기 60초 중 보행 26초 → 평균 ~6초)
+  const left = g.at - now, T = left - between * DWELL - nx * XWAIT - (b.dwell > 0 ? b.dwell : 0) - Math.min(10, Math.max(0, left - 3)), D = Math.max(0, st.s - b.s); // 신호 대기 여유: 조금 일찍 닿고 정류장에서 ETA 까지 대기
+  const v = T > 1 ? (D / T) * 1.15 : P.vmax * 1.3;
+  return Math.max(1.5, Math.min(P.vmax * 1.3, v));
+}
+
 export class SimulatedBusSource {
-  constructor(transit, bounds, { seed = 1, spacing = false } = {}) {
+  constructor(transit, bounds, { seed = 1, spacing = false, eta = false } = {}) {
+    // [bus-rt] eta: 자동 배차 없이 바깥(RealtimeBusSource)이 도착 ETA 로 버스를 넣고(spawnEta) 목표 시각에 맞춰 속도를 조절한다.
+    this.eta = eta;
     // [bus-net] spacing: 다른 노선 버스와도 간격 유지·정류장 2번째 정차칸·노선 간 스폰 간격(?bus=sim 정자·코리더만 켬).
     //   끄면(기본: 정자 실시간 모드의 폴백 시뮬) 예전과 완전히 같다.
     this.spacing = spacing; this.stats = { done: 0, xfollow: 0, bay2: 0, giveUp: 0 };
@@ -70,7 +108,7 @@ export class SimulatedBusSource {
     });
     function c_hw(c) { return c.w / 2 + 3; }
     // 시작 시점에 이미 노선 위에 버스가 깔려 있도록 미리 배치
-    for (const P of this.paths) {
+    if (!eta) for (const P of this.paths) {
       const gap = P.headway * P.vmax * 0.75;
       let k = 0;
       for (let s = P.L - 30 - hash(P.ref + 'o') * gap; s > 10 && k < 3; s -= gap, k++) this._spawn(P, s);
@@ -79,13 +117,14 @@ export class SimulatedBusSource {
   }
   _spawn(P, s = 0) {
     const bus = { id: this.nextId++, P, s, v: s > 0 ? P.vmax * 0.7 : P.vmax * 0.6, dwell: 0, stopIdx: P.stops.findIndex((st) => st.s > s + 1), state: 'run', age: s > 0 ? 9 : 0, out: 0,
-      _q: null, _fut: null, _futT: -1, _si: 1, _near: false, _blk: null, _wait: 0, _ign: 0, _hit: null, _hitT: -1 - hash(String(s + P.id)) * 0.06, _hitS: 0 }; // [bus-net] 간격 계산용 필드(모양 고정 → V8 최적화 유지)
+      _q: null, _fut: null, _futT: -1, _si: 1, _near: false, _blk: null, _wait: 0, _ign: 0, _hit: null, _hitT: -1 - hash(String(s + P.id)) * 0.06, _hitS: 0, key: null, tgt: null, vcap: null, fade: false, seen: 0, _mb: '' }; // [bus-net] · [bus-rt] key·tgt·vcap(ETA 맞춤 속도 상한) 간격 계산용 필드(모양 고정 → V8 최적화 유지)
     if (bus.stopIdx < 0) bus.stopIdx = P.stops.length;
     this.buses.push(bus); return bus;
   }
   update(dt, ctx, focus) {
     this.t += dt;
-    for (const P of this.paths) {
+    if (this.eta) this._etaSteer(dt);
+    else for (const P of this.paths) {
       P.nextSpawn -= dt;
       if (P.nextSpawn <= 0) {
         const tooClose = this.buses.some((b) => b.P === P && b.s < P.blen + 12) || (this.spacing && this._spawnBlocked(P));
@@ -126,7 +165,7 @@ export class SimulatedBusSource {
         b._blk = reason === 'follow' ? lead : null;
       }
       const vAllow = Math.sqrt(Math.max(0, 2 * DEC * limit));
-      const target = Math.min(P.vmax, vAllow);
+      const target = Math.min(b.vcap ?? P.vmax, vAllow);
       b.v = b.v < target ? Math.min(target, b.v + ACC * dt) : Math.max(target, b.v - DEC * 2 * dt);
       b.s += b.v * dt;
       b.state = b.v < 0.2 ? (reason === 'xing' ? 'xing' : reason === 'follow' ? 'queue' : 'run') : 'run';
@@ -237,12 +276,37 @@ export class SimulatedBusSource {
     }
     return false;
   }
+  // ---- [bus-rt] ETA 구동 (eta 일 때만) ----
+  // 목표: 버스 b 가 P.stops[tgt.idx] 에 this.t == tgt.at 에 도착. 남은 거리/남은 시간(중간 정류장 정차 시간 뺌)으로
+  //   속도 상한 vcap 을 부드럽게(초당 ~40%) 맞춘다. 위치는 절대 옮기지 않음(순간이동 없음). 일찍 도착하면 목표 시각까지 정차를 늘림(최대 40초).
+  _etaSteer(dt) {
+    const k = Math.min(1, dt * 0.4);
+    for (const b of this.buses) {
+      const g = b.tgt, P = b.P;
+      if (!g) { if (b.vcap != null) { b.vcap += (P.vmax - b.vcap) * k; if (Math.abs(b.vcap - P.vmax) < 0.05) b.vcap = null; } continue; }
+      if (b.stopIdx > g.idx) { b.tgt = null; continue; } // 목표 정류장 지남 → 평소 속도로 계속 운행
+      if (b.dwell > 0 && b.stopIdx === g.idx) { // 목표 정류장 정차 중: 일찍 왔으면 ETA(+3초)까지 대기
+        if (!g.held) { g.held = true; const w = Math.min(40, g.at - this.t + 3); if (w > b.dwell) b.dwell = w; }
+        continue;
+      }
+      b.vcap = b.vcap == null ? Math.min(P.vmax, b.v || P.vmax) : b.vcap;
+      const want = etaSpeed(P, b, g, this.t);
+      b.vcap += (want - b.vcap) * k;
+    }
+  }
+  // ETA 로 버스 넣기: 경로 위 위치 s 에 생성(페이드인), 목표 지정
+  spawnEta(P, s, tgt, key = null) {
+    const b = this._spawn(P, Math.max(0.01, s));
+    b.age = 0; b.fade = true; b.key = key; b.tgt = tgt; b.seen = this.t;
+    b.vcap = etaSpeed(P, b, tgt, this.t); b.v = Math.min(b.vcap, P.vmax * 0.7);
+    return b;
+  }
   vehicles() {
     const out = [];
     for (const b of this.buses) {
       const p = samplePath(b.P, b.s);
       let scale = 1;
-      if (b.P.fadeIn && b.s < 15 && b.age < 3) scale = Math.min(1, b.age / 1.2);
+      if ((b.fade || (b.P.fadeIn && b.s < 15)) && b.age < 3) scale = Math.min(1, b.age / 1.2);
       if (b.P.endStop) { if (b.endT > 1.5) scale = Math.max(0.01, 1 - (b.endT - 1.5) / 1.5); } // [pangyo-express]
       else if (b.P.fadeOut && b.P.L - b.s < 12) scale = Math.max(0.01, (b.P.L - b.s) / 12);
       out.push({ id: b.id, ref: b.P.ref, type: b.P.type, name: b.P.name, x: p.x, z: p.z, heading: Math.atan2(p.dx, p.dz), scale, state: b.state, v: b.v });
@@ -347,8 +411,12 @@ async function proxyJson(url) {
 }
 
 export class RealtimeBusSource {
-  constructor(transit, bounds, { proxy, stationIds = {}, fallback } = {}) {
+  constructor(transit, bounds, { proxy, stationIds = {}, fallback, etaDriven = false, rtData = null } = {}) {
     this._liveLabel = '실시간(경기도 버스 API)';
+    // [bus-rt] 도착 ETA 로 움직이는 버스: 별도 시뮬(eta 모드, 자동 배차 없음). 탑승(ride)도 이 시뮬을 그대로 쓴다
+    this.rt = etaDriven ? new SimulatedBusSource(rtData || transit, bounds, { spacing: true, eta: true }) : null;
+    if (this.rt) this.rt.nextId = 1000000; // 폴백 시뮬 버스 id 와 겹치지 않게(메시 캐시·탑승 판정이 id 기준)
+    if (this.rt) { this.rtState = 'init'; this.rtNext = 0; this.rtInflight = false; this.pending = new Map(); this.rtBatch = 0; this.rtCalls = 0; this._rtLabel = '실시간 도착정보 연동(경기도 버스 API)'; }
     this.proxy = proxy?.replace(/\/$/, '');
     this.stationIds = stationIds; // { '07624': '206000xxx', ... }
     this.cache = new Map();
@@ -364,16 +432,18 @@ export class RealtimeBusSource {
     this.inflight = false;
   }
   get label() {
+    if (this.rt) return this.rtState === 'ok' ? this._rtLabel : (this.fallback?.label || this._rtLabel);
     return this.locState === 'ok' ? this._liveLabel : (this.fallback?.label || this._liveLabel);
   }
   panelLabel(stop) {
     const key = stop?.ref?.split(';')[0];
     const c = key ? this.cache.get(key) : null;
-    if (c?.list) return this._liveLabel;
+    if (c?.list) return this.rt ? this._rtLabel : this._liveLabel;
     if (c?.error) return `${this.fallback?.label || '시뮬레이션'} · 실시간 한도 초과/지연 폴백`;
     return this._liveLabel;
   }
   update(dt, ctx) {
+    if (this.rt) return this._rtUpdate(dt, ctx);
     this.fallback?.update(dt, ctx);
     if (!this.proxy) { this.locState = 'error'; this.locError = 'proxy URL 없음'; return; }
     const now = performance.now();
@@ -392,19 +462,30 @@ export class RealtimeBusSource {
       });
   }
   vehicles() {
+    if (this.rt) return this.rtState === 'ok' ? this.rt.vehicles() : (this.fallback ? this.fallback.vehicles() : []);
     if (this.locState === 'ok') return this.liveVehicles;
     return this.fallback ? this.fallback.vehicles() : [];
   }
   arrivals(stop) {
     const key = stop.ref.split(';')[0];
     const c = this.cache.get(key);
-    if (!c || performance.now() - c.at > ARRIVAL_TTL_MS) this._fetch(key);
+    if (!c || performance.now() - c.at > (this.rt ? RT_POLL_MS : ARRIVAL_TTL_MS)) this._fetch(key);
+    if (c?.list && this.rt) { // [bus-rt] 받은 뒤 지난 시간만큼 줄여 보여 줌(화면 버스와 같은 시계)
+      const age = (performance.now() - c.got) / 1000;
+      return c.list.map((a) => (a.etaSec == null ? a : { ...a, etaSec: Math.max(0, a.etaSec - age) })).sort((a, b) => (a.etaSec ?? 1e9) - (b.etaSec ?? 1e9));
+    }
     if (c?.list) return c.list;
     if (c?.error) return this.fallback ? this.fallback.arrivals(stop) : [{ ref: '⚠', type: 'city', etaSec: null, kind: 'live', text: c.error }];
     return [{ ref: '…', type: 'city', etaSec: null, kind: 'live', text: '실시간 정보 불러오는 중' }];
   }
-  async _fetch(mobileNo) {
-    const prev = this.cache.get(mobileNo) || {}; prev.at = performance.now(); this.cache.set(mobileNo, prev);
+  _fetch(mobileNo) {
+    const prev = this.cache.get(mobileNo);
+    if (prev?.p) return prev.p; // 진행 중이면 같은 요청 공유
+    const c = prev || {}; c.at = performance.now(); this.cache.set(mobileNo, c);
+    c.p = this._fetchOne(mobileNo, c).finally(() => { c.p = null; });
+    return c.p;
+  }
+  async _fetchOne(mobileNo, prev) {
     try {
       if (!this.proxy) throw new Error('proxy URL 없음 (?proxy=)');
       let stationId = this.stationIds[mobileNo];
@@ -416,11 +497,134 @@ export class RealtimeBusSource {
         this.stationIds[mobileNo] = stationId;
       }
       const j = await proxyJson(`${this.proxy}/arrivals?stationId=${stationId}`);
+      if (this.rt) this.rtCalls++;
       const items = [].concat(j?.response?.msgBody?.busArrivalList || []);
+      prev.items = items; prev.got = performance.now(); // [bus-rt] 원본(차량 id·2번째 버스 포함)
       prev.list = items.map((it) => ({ ref: String(it.routeName), type: ROUTE_TYPE_CD[it.routeTypeCd] || 'city', etaSec: it.predictTimeSec1 ?? (it.predictTime1 != null ? it.predictTime1 * 60 : null), kind: 'live', text: it.locationNo1 ? `${it.locationNo1}정거장 전` : '', seats: it.remainSeatCnt1 }))
         .sort((a, b) => (a.etaSec ?? 1e9) - (b.etaSec ?? 1e9));
       prev.error = null;
     } catch (e) { prev.error = String(e.message || e); }
+  }
+  // ---- [bus-rt] ETA 구동 ----
+  _rtUpdate(dt, ctx) {
+    const rt = this.rt;
+    if (this.rtState !== 'ok') this.fallback?.update(dt, ctx); // 폴백이 보일 때만 폴백 시뮬 계산
+    rt.update(dt, ctx, ctx?.focus);
+    this._rtPending();
+    if (!this.proxy) { this.rtState = 'error'; return; }
+    const now = performance.now();
+    if (this.rtInflight || now < this.rtNext) return;
+    this.rtNext = now + RT_POLL_MS;
+    this.rtInflight = true;
+    this._rtPoll(ctx?.focus).then((okN) => {
+      if (okN > 0) this.rtState = 'ok';
+      else if (okN === 0) { this.rtState = this.rtState === 'ok' ? 'ok' : 'error'; this.rtNext = performance.now() + RT_BACKOFF_MS; }
+    }).catch(() => { this.rtState = 'error'; this.rtNext = performance.now() + RT_BACKOFF_MS; })
+      .finally(() => { this.rtInflight = false; });
+  }
+  // 플레이어 주변(없으면 맵 중앙) 정류소번호 있는 정류장 최대 RT_FOCUS_N 개
+  focusStops(focus) {
+    const f = focus || { x: 0, z: 0 };
+    const seen = new Set(), out = [];
+    const list = (this.transit.stops || []).filter((s) => mobileOf(s)).map((s) => ({ s, d: Math.hypot(s.x - f.x, s.z - f.z) })).sort((a, b) => a.d - b.d);
+    for (const { s, d } of list) {
+      if (out.length >= RT_FOCUS_N || (out.length && d > RT_FOCUS_R)) break;
+      const k = mobileOf(s); if (seen.has(k)) continue; seen.add(k); out.push(s);
+    }
+    return out;
+  }
+  // 반환: 성공한 정류장 수(-1: 대상 없음)
+  async _rtPoll(focus) {
+    const stops = this.focusStops(focus);
+    if (!stops.length) return -1;
+    await Promise.all(stops.map((s) => this._fetch(mobileOf(s))));
+    const obs = [];
+    let okN = 0;
+    for (const s of stops) {
+      const c = this.cache.get(mobileOf(s));
+      if (!c?.items || c.error) continue;
+      okN++;
+      obs.push(...this.observe(s, c.items, (performance.now() - c.got) / 1000));
+    }
+    if (okN) this.reconcile(obs);
+    return okN;
+  }
+  // 도착정보 한 줄(1·2번째 버스) → 관측 { key, P, idx, at } (이 정류장을 지나는 OSM 경로가 있는 노선만)
+  observe(stop, items, ageSec = 0) {
+    const rt = this.rt, out = [];
+    for (const it of items) {
+      const ref = String(it.routeName ?? '').trim(); if (!ref) continue;
+      let best = null;
+      for (const P of rt.paths) {
+        if (P.ref !== ref && P.ref !== ref.replace(/^G(?=\d)/, '') && 'G' + P.ref !== ref) continue;
+        const idx = P.stops.findIndex((st) => st.stop === stop.id);
+        if (idx >= 0 && (!best || P.stops[idx].s > best.P.stops[best.idx].s)) best = { P, idx }; // 상류 여유가 가장 긴 경로
+      }
+      if (!best) continue;
+      for (const n of [1, 2]) {
+        const sec = it[`predictTimeSec${n}`] != null && it[`predictTimeSec${n}`] !== '' ? Number(it[`predictTimeSec${n}`]) : (it[`predictTime${n}`] != null && it[`predictTime${n}`] !== '' ? Number(it[`predictTime${n}`]) * 60 : NaN);
+        const loc = Number(it[`locationNo${n}`]);
+        let eta = Number.isFinite(sec) ? sec - ageSec : NaN;
+        if (!Number.isFinite(eta) && Number.isFinite(loc) && loc > 0) { // ETA 없고 몇 정거장 전만 있으면: 그 정류장 위치 기준
+          const k = best.idx - loc; eta = k >= 0 ? etaFrom(best.P, { s: best.P.stops[k].s, stopIdx: k, dwell: 0 }, best.idx) : NaN;
+        }
+        if (!Number.isFinite(eta) || eta > RT_MAX_ETA) continue;
+        const vid = String(it[`vehId${n}`] ?? '').trim() || String(it[`plateNo${n}`] ?? '').trim();
+        out.push({ key: vid ? `${ref}:${vid}` : null, P: best.P, idx: best.idx, at: rt.t + Math.max(0, eta), stop: stop.id });
+      }
+    }
+    return out;
+  }
+  // 관측 → 기존 버스에 목표 갱신 / 새 버스(또는 아직 지도 밖이면 대기) — 같은 차량은 여러 정류장에서 보여도 한 대
+  reconcile(obs) {
+    const rt = this.rt, t = rt.t, batch = ++this.rtBatch;
+    obs.sort((a, b) => (a.at - t) - (b.at - t)); // 가까운(정확한) ETA 먼저
+    for (const o of obs) {
+      const P = o.P;
+      let b = o.key ? rt.buses.find((x) => x.key === o.key) : null;
+      if (!b) { // 차량 id 없음/처음 봄: 같은 경로·아직 안 지난 버스 중 예상 도착이 비슷한 것
+        const tol = Math.max(60, 0.3 * (o.at - t));
+        let bd = tol;
+        for (const x of rt.buses) {
+          if (x.P !== P || x.stopIdx > o.idx || x._mb === `${batch}:${o.idx}` || (o.key && x.key && x.key !== o.key)) continue;
+          const d = Math.abs(t + etaFrom(P, x, o.idx) - o.at); if (d < bd) { bd = d; b = x; }
+        }
+      }
+      if (b) {
+        if (b.stopIdx > o.idx) continue;
+        b._mb = `${batch}:${o.idx}`; b.seen = t; if (o.key && !b.key) b.key = o.key;
+        if (b._batch !== batch || !b.tgt || o.idx <= b.tgt.idx) { b.tgt = { idx: o.idx, at: o.at, held: false }; b._batch = batch; }
+        continue;
+      }
+      // 대기 목록(아직 경로 시작 전)
+      const pk = o.key || this._pendingMatch(o);
+      const pe = this.pending.get(pk);
+      if (pe && pe._batch === batch && pe.idx < o.idx) continue; // 이번에 더 가까운 정류장 관측이 이미 있음
+      this.pending.set(pk, { key: o.key, P, idx: o.idx, at: o.at, seen: t, _batch: batch });
+    }
+    this._rtPending();
+  }
+  _pendingMatch(o) {
+    const t = this.rt.t;
+    for (const [k, pe] of this.pending) if (!pe.key && pe.P === o.P && pe.idx === o.idx && Math.abs(pe.at - o.at) < Math.max(60, 0.3 * (o.at - t))) return k;
+    return `anon:${o.P.id}:${o.idx}:${Math.round(o.at)}`;
+  }
+  // 대기 항목: 지금 있어야 할 위치가 경로 위로 들어오면 그 자리에 생성(지도 경계면 경계에서 페이드인)
+  _rtPending() {
+    const rt = this.rt, t = rt.t;
+    for (const [k, pe] of this.pending) {
+      if (t - pe.seen > RT_PENDING_TTL || pe.at < t - 5) { this.pending.delete(k); continue; }
+      const s0 = upstreamS(pe.P, pe.idx, pe.at - t);
+      if (s0 < 0) continue;
+      if (!pe.key) { // 같은 차를 다른 정류장에서 본 것일 수 있음 → 이미 달리는 버스와 예상 도착이 비슷하면 합침
+        const tol = Math.max(60, 0.3 * (pe.at - t));
+        if (rt.buses.some((x) => x.P === pe.P && x.stopIdx <= pe.idx && Math.abs(t + etaFrom(pe.P, x, pe.idx) - pe.at) < tol)) { this.pending.delete(k); continue; }
+      }
+      if (rt.buses.length >= RT_MAX_BUS) break;
+      if (rt.buses.some((x) => x.P === pe.P && Math.abs(x.s - s0) < pe.P.blen + 4)) continue; // 바로 겹치면 다음 프레임
+      rt.spawnEta(pe.P, s0, { idx: pe.idx, at: pe.at, held: false }, pe.key);
+      this.pending.delete(k);
+    }
   }
   async _refresh() {
     try {
@@ -529,7 +733,7 @@ export class RealtimeBusSource {
 export function createBusSource(kind, transit, bounds, opts = {}) {
   // [bus-net] 노선 간 간격은 ?bus=sim(kind 'sim')에서만. 실시간 모드의 폴백 시뮬은 예전 그대로(정자 기본 모드 불변)
   const sim = new SimulatedBusSource(transit, bounds, { spacing: kind === 'sim' && opts.spacing !== false });
-  if (kind === 'realtime') return new RealtimeBusSource(transit, bounds, { ...opts, fallback: sim });
+  if (kind === 'realtime') return new RealtimeBusSource(transit, bounds, { ...opts, fallback: sim }); // [bus-rt] opts.etaDriven·rtData
   return sim;
 }
 export { liveryOf };

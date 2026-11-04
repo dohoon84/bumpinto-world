@@ -32,7 +32,7 @@ export function mergeSimExtra(T, X) {
   return { ...T, routes, paths, refTypes, ...(X.aliasRefs && T.stops ? { stops: aliasStops(T.stops, X.aliasRefs) } : {}) };
 }
 
-export function buildTransit(scene, T, world, overlay, { mode = 'sim', proxy } = {}) {
+export function buildTransit(scene, T, world, overlay, { mode = 'sim', proxy, etaDriven = false, rtData = null } = {}) {
   const bounds = world.bounds;
   let simTime = 0;
   // ---------- 신호 ----------
@@ -116,7 +116,7 @@ export function buildTransit(scene, T, world, overlay, { mode = 'sim', proxy } =
   }
 
   // ---------- 버스 ----------
-  const source = createBusSource(mode, T, bounds, { proxy });
+  const source = createBusSource(mode, T, bounds, mode === 'realtime' && etaDriven ? { proxy, etaDriven: true, rtData } : { proxy }); // [bus-rt]
   const meshes = new Map();
   const busTags = new Map();
   const ctx = { pedLight };
@@ -173,6 +173,7 @@ export function buildTransit(scene, T, world, overlay, { mode = 'sim', proxy } =
 
   function update(dt, playerPos) {
     simTime += dt;
+    if (source.rt) ctx.focus = playerPos; // [bus-rt] 주변 정류장 도착정보만 조회
     source.update(dt, ctx);
     syncBuses(); updateLamps();
     panelT -= dt; if (panelT <= 0) { panelT = 0.5; renderPanel(playerPos); }
@@ -184,6 +185,9 @@ export function buildTransit(scene, T, world, overlay, { mode = 'sim', proxy } =
   if (mode === 'sim' && source.buses && source.paths) {
     for (const P of source.paths) P._jz = true;
     rideSim = { sim: source, source, ctx, group: scene, hideIds, stopById: new Map(T.stops.map((s) => [s.id, s])), get near() { return visList; } };
+  } else if (source.rt) { // [bus-rt] 실시간 ETA 버스도 정류장에 서므로 같은 탑승 코드로 탈 수 있다(폴백 시뮬 버스는 탑승 불가: near 에 안 잡힘)
+    for (const P of source.rt.paths) P._jz = true;
+    rideSim = { sim: source.rt, source, ctx, group: scene, hideIds, stopById: new Map(T.stops.map((s) => [s.id, s])), get near() { return source.rtState === 'ok' ? visList : []; } };
   }
   return { update, fastForward, pedLight, source, crossings: T.crossings, stops: T.stops, meshes, rideSim, get simTime() { return simTime; }, get panelStop() { return panelStop; }, TIME_COMPRESS };
 }

@@ -401,10 +401,14 @@ const busProxy = proxyParam === 'local'
     ? (proxyParam || '')
     : (params.has('shot') && !busParam ? '' : DEFAULT_BUS_PROXY);
 const busMode = busParam === 'sim' ? 'sim' : (busParam === 'realtime' || busProxy) ? 'realtime' : 'sim';
+// [bus-rt] 실시간 모드에서 정류장 도착 ETA 로 버스를 움직인다(기본 켬). ?busrt=0 이면 예전 실시간 동작(2분 위치 폴링·정적 배치) 그대로
+const busRt = busMode === 'realtime' && params.get('busrt') !== '0';
 // [bus-net] 시뮬 모드(?bus=sim)이고 코리더가 있을 때만 정자 안 GBIS 추가 경로(220 정자역→서현 방향·7007-1 미금→수내 방향·380)를 덧붙인다. 실시간(기본)은 원본 그대로
-const jzSimExtra = transitData && busMode === 'sim' && corridorDir && params.get('busnet') !== '0' ? await fetch(import.meta.env.BASE_URL + corridorDir + 'jz-sim.json').then((r) => (r.ok ? r.json() : null)).catch(() => null) : null;
-const pgLinkLive = transitData && busMode === 'sim' && corridorDir && pangyoLinkEnabled() ? await fetch(import.meta.env.BASE_URL + corridorDir + PANGYO_LINK_FILE).then((r) => (r.ok ? r.json() : null)).then((j) => j?.live || null).catch(() => null) : null; // [pangyo-link] 시뮬일 때만 정자 안 8110 조각(정자역→코리더 경계)
-const transit = transitData ? buildTransit(scene, mergeSimExtra(jzSimExtra ? mergeSimExtra(transitData, jzSimExtra) : transitData, pgLinkLive), world, overlay, { mode: busMode, proxy: busProxy }) : null;
+const jzSimExtra = transitData && (busMode === 'sim' || busRt) && corridorDir && params.get('busnet') !== '0' ? await fetch(import.meta.env.BASE_URL + corridorDir + 'jz-sim.json').then((r) => (r.ok ? r.json() : null)).catch(() => null) : null;
+const pgLinkLive = transitData && (busMode === 'sim' || busRt) && corridorDir && pangyoLinkEnabled() ? await fetch(import.meta.env.BASE_URL + corridorDir + PANGYO_LINK_FILE).then((r) => (r.ok ? r.json() : null)).then((j) => j?.live || null).catch(() => null) : null; // [pangyo-link] 시뮬일 때만 정자 안 8110 조각(정자역→코리더 경계)
+const jzMerged = transitData ? mergeSimExtra(jzSimExtra ? mergeSimExtra(transitData, jzSimExtra) : transitData, pgLinkLive) : null;
+// [bus-rt] 추가 경로(220 반대 방향·7007-1·380·G8110 조각)는 ETA 버스(rtData)에만 — 정류장·폴백 시뮬은 예전처럼 원본
+const transit = transitData ? buildTransit(scene, busRt ? transitData : jzMerged, world, overlay, { mode: busMode, proxy: busProxy, etaDriven: busRt, rtData: busRt ? jzMerged : null }) : null;
 corridor?.attachLife({ proxy: busProxy, mode: busMode, ...(params.get('ride') !== '0' ? { liveDrive: driveData, liveCrossings: transitData?.crossings } : {}) }); // [corridor] 수내→롯데 버스·차량·보행 NPC (?clife=0 끔) · [ride] 정자 차도는 택시 호출용으로만 덧붙임
 if (transit) {
   corridorClock.simTime = () => transit.simTime; // [corridor] 코리더 신호등도 같은 시계

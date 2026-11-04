@@ -1,6 +1,7 @@
 // 경기도 버스 API(data.go.kr) 프록시 — Cloudflare Worker 예시 (배포하지 않았음, 직접 배포 필요)
 //  - 서비스키는 코드/브라우저에 노출하지 않고 Worker secret(DATA_GO_KR_KEY)로만 보관
-//  - 아래 경로만 중계(오픈 프록시 방지) + 짧은 캐시(일일 트래픽 1,000건 절약) + CORS
+//  - 아래 경로만 중계(오픈 프록시 방지) + 짧은 공유 캐시(caches.default, 키=경로+파라미터 → 모든 플레이어가 같은 상류 호출 공유) + CORS
+//  - [bus-rt] 운영계 일 100,000건: /arrivals 30초 TTL → 정자 정류소번호 있는 정류장 20곳을 24시간 내내 불러도 57,600건/일 이하
 //  GET /arrivals?stationId=...        -> busarrivalservice/v2/getBusArrivalListv2
 //  GET /stations?keyword=...          -> busstationservice/v2/getBusStationListv2   (정류소번호 mobileNo -> stationId)
 //  GET /locations?routeId=...         -> buslocationservice/v2/getBusLocationListv2 (정류소 순번, 좌표 없음)
@@ -13,7 +14,7 @@
 const BASE = 'https://apis.data.go.kr/6410000';
 const SEOUL_BASE = 'http://ws.bus.go.kr/api/rest';
 const ROUTES = {
-  '/arrivals': { path: '/busarrivalservice/v2/getBusArrivalListv2', param: 'stationId', ttl: 45 },
+  '/arrivals': { path: '/busarrivalservice/v2/getBusArrivalListv2', param: 'stationId', ttl: 30 }, // [bus-rt] 30초 공유 캐시(정류장당 상류 최대 2,880건/일·콜로)
   '/stations': { path: '/busstationservice/v2/getBusStationListv2', param: 'keyword', ttl: 86400 },
   '/locations': { path: '/buslocationservice/v2/getBusLocationListv2', param: 'routeId', ttl: 120 },
   '/route-list': { path: '/busrouteservice/v2/getBusRouteListv2', param: 'keyword', ttl: 86400 },
