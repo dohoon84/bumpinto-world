@@ -329,7 +329,7 @@ export function mountMobileHud({ handset } = {}) {
   // ---- 메뉴 (Figma 02): 섹션 '이동' · '함께' · '설정' 의 80x56 타일. 원래 PC 버튼을 그대로 누른다 (숨겨진 건 빼고) ----
   const SECTIONS = [
     [t('이동', 'Go'), [['btn-view', 'map'], ['btn-home', 'train'], ['btn-globe', 'globe'], ['btn-dogpark', 'paw']]],
-    [t('함께', 'Together'), [['contribute-launcher', 'heart', 'gold'], ['board-Launcher', 'board'], ['presence-status', 'users'], ['lang-launcher', 'globe']]],
+    [t('함께', 'Together'), [['contribute-launcher', 'heart', 'gold'], ['board-Launcher', 'board'], ['presence-status', 'users'], ['lang-launcher', 'globe'], ['account-chip', 'users']]],
     [t('설정', 'Settings'), [['fs', 'expand'], ['chat-log-toggle', 'log'], ['weather-rain', 'rain']]],
   ];
   const clean = (el) => {
