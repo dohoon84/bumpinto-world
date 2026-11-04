@@ -71,15 +71,27 @@ const ERRORS = {
   server: '번호 서버 오류입니다.',
 };
 
+// crypto.randomUUID 는 보안 컨텍스트(https·localhost)에서만 있다. LAN http(폰에서 http://192.168.x.x 로 접속)·구형 iOS 에선
+// 없어서 게임 시작이 통째로 멈췄다 → getRandomValues 로 같은 형식(v4 UUID)을 만든다.
+function uuid() {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') return crypto.randomUUID();
+  const b = new Uint8Array(16);
+  if (typeof crypto !== 'undefined' && crypto.getRandomValues) crypto.getRandomValues(b);
+  else for (let i = 0; i < 16; i++) b[i] = Math.floor(Math.random() * 256);
+  b[6] = (b[6] & 0x0f) | 0x40; b[8] = (b[8] & 0x3f) | 0x80;
+  const h = [...b].map((x) => x.toString(16).padStart(2, '0')).join('');
+  return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
+}
+
 export function deviceId() {
   try {
     const cur = localStorage.getItem(DEVICE_KEY);
     if (cur && ID_RE.test(cur)) return cur;
-    const id = crypto.randomUUID();
+    const id = uuid();
     localStorage.setItem(DEVICE_KEY, id);
     return id;
   } catch {
-    return crypto.randomUUID();
+    return uuid();
   }
 }
 

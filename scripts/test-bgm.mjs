@@ -45,3 +45,17 @@ for (let i = 0; i < bins.length; i++) {
   if (i) assert.ok(s >= bins[i - 1][1] - 1);
 }
 console.log('test-bgm: ok', order.join(' → '), `bins ${bins.map(([s, e]) => e - s).join(',')}`);
+
+// [mobile] 합성 스펙트럼(iOS 분석기 0 대체): 범위 0..255, 저음 > 고음, 시간에 따라 움직임, 결정적
+{
+  const { synthSpectrum } = await import('../src/bgm/player.js');
+  const a = synthSpectrum(1.234), b = synthSpectrum(1.734), a2 = synthSpectrum(1.234);
+  assert.equal(a.length, 128);
+  assert.ok(a.every((v) => v >= 0 && v <= 255));
+  assert.deepEqual([...a], [...a2]);
+  const avg = (x, i, j) => x.slice(i, j).reduce((p, v) => p + v, 0) / (j - i);
+  assert.ok(avg(a, 0, 16) > avg(a, 96, 128), '저음이 더 커야 함');
+  assert.ok(Math.max(...a) > 40, '보일 만큼 커야 함');
+  assert.ok(a.some((v, i) => v !== b[i]), '시간에 따라 움직여야 함');
+  console.log('test-bgm: ok synthSpectrum');
+}

@@ -22,6 +22,20 @@ export function pickFormat(probe) {
   } catch { return 'webm'; }
 }
 
+/**
+ * 합성 스펙트럼(0..255, 길이 out.length) — 분석기가 0 만 줄 때(iOS WebKit) 막대를 대신 움직이는 용도.
+ * 곡 시간 t(초)만의 순수 함수: 저음이 크고 고음으로 갈수록 줄며, 120bpm 박자로 숨쉬고 대역마다 다르게 일렁인다.
+ */
+export function synthSpectrum(t, out = new Uint8Array(128)) {
+  const n = out.length, beat = 0.62 + 0.38 * Math.pow(Math.abs(Math.sin(Math.PI * 2 * t)), 3);
+  for (let k = 0; k < n; k++) {
+    const env = Math.exp(-k / (n * 0.42));
+    const wob = 0.55 + 0.25 * Math.sin(t * (2.3 + (k % 7) * 0.61) + k * 1.73) + 0.2 * Math.sin(t * (5.1 + (k % 5) * 0.9) + k * 0.37);
+    out[k] = Math.max(0, Math.min(255, Math.round(255 * env * beat * wob)));
+  }
+  return out;
+}
+
 function readPrefs(st) {
   let volume = DEFAULT_VOLUME, muted = false;
   try {
@@ -32,7 +46,7 @@ function readPrefs(st) {
   return { volume, muted };
 }
 
-export function createBgmPlayer({ base = './', storage = null, onChange = () => {}, debug = false } = {}) {
+export function createBgmPlayer({ base = './', storage = null, onChange = () => {}, debug = false, fixedVolume = false } = {}) {
   const store = storage || (() => { try { return localStorage; } catch { return null; } })();
   const order = playOrder();
   const ext = pickFormat();
@@ -42,6 +56,8 @@ export function createBgmPlayer({ base = './', storage = null, onChange = () => 
     started: false, playing: false, waitGesture: false, gestured: false, duck: false, fadeInTok: -1,
     ...readPrefs(store),
   };
+  // [mobile] 볼륨은 기기 하드웨어 버튼으로 — 게임 안 볼륨은 기본값 고정(예전에 저장된 값에 묶여 못 키우는 일 없게). 음소거는 그대로
+  if (fixedVolume) s.volume = DEFAULT_VOLUME;
   const emit = (kind) => { try { onChange(kind); } catch (e) { console.warn('[bgm]', e); } };
   const now = () => s.ctx.currentTime;
 
@@ -58,6 +74,8 @@ export function createBgmPlayer({ base = './', storage = null, onChange = () => 
   function ensureCtx() {
     if (s.ctx) return s.ctx;
     const C = window.AudioContext || window.webkitAudioContext;
+    // [mobile] iOS 17+ : 웹오디오 세션을 '재생'으로 — 기본(ambient)이면 무음 스위치에 묶이고 다른 소리에 밀린다
+    try { if (navigator.audioSession && navigator.audioSession.type !== 'playback') navigator.audioSession.type = 'playback'; } catch { /* noop */ }
     s.ctx = new C({ latencyHint: 'playback' });
     s.bus = s.ctx.createGain(); s.bus.gain.value = 0;
     s.an = s.ctx.createAnalyser(); s.an.fftSize = 256; s.an.smoothingTimeConstant = 0.78;
@@ -186,9 +204,16 @@ export function createBgmPlayer({ base = './', storage = null, onChange = () => 
       else if (!s.playing) resume();
     } else if (s.started && s.playing) pause();
   }
-  const onGesture = () => { s.gestured = true; if (s.waitGesture) apply(); };
-  addEventListener('pointerdown', onGesture, { capture: true });
-  addEventListener('keydown', onGesture, { capture: true });
+  // [mobile] iOS WebKit 은 pointerdown/touchstart 를 오디오 잠금 해제용 사용자 입력으로 치지 않는다 — touchend/click 에서
+  // (핸들러 안에서 동기로) 멈춰 있거나 'interrupted' 인 AudioContext 를 다시 깨우고, 멈춰 버린 덱도 다시 재생한다.
+  // 입장 직후 start() 는 비동기(월드 로딩 뒤)라 거기서 부른 resume() 이 iOS 에선 그냥 무시되기 때문.
+  function unlock() {
+    if (!s.ctx || !s.playing) return;
+    if (s.ctx.state !== 'running') s.ctx.resume().catch(() => {});
+    for (const d of activeDecks()) if (d.el.paused && d.el.src) play(d);
+  }
+  const onGesture = () => { s.gestured = true; if (s.waitGesture) apply(); else unlock(); };
+  for (const ev of ['pointerdown', 'touchend', 'click', 'keydown']) addEventListener(ev, onGesture, { capture: true, passive: true });
   document.addEventListener('visibilitychange', () => { s.hidden = document.hidden; apply(); });
 
   // ---- 볼륨 · 음소거 · 덕킹 ----
@@ -197,6 +222,22 @@ export function createBgmPlayer({ base = './', storage = null, onChange = () => 
   const save = (k, v) => { try { store?.setItem(k, v); } catch { /* noop */ } };
 
   const levels = new Uint8Array(128);
+  // [mobile] iOS WebKit 에선 MediaElementSource → AnalyserNode 가 (소리는 나는데도) 0 만 돌려주거나, 컨텍스트가
+  // 멈춰 분석이 안 되는 경우가 있다 — 막대가 바닥에 붙은 채로 '파형이 안 보인다'. 곡은 실제로 흘러가는데(currentTime 증가)
+  // 분석값이 FLAT_MS 넘게 전부 0 이면, 곡 시간에 맞춰 움직이는 합성 스펙트럼으로 대신 그린다(진짜 값이 들어오면 즉시 복귀).
+  const FLAT_MS = 1200;
+  const viz = { flatSince: 0, lastT: -1, synthetic: false, out: new Uint8Array(128) };
+  function vizFallback(real) {
+    let max = 0; for (let k = 0; k < real.length; k++) if (real[k] > max) max = real[k];
+    const el = s.cur?.el, t = el ? el.currentTime : 0, moving = !!el && !el.paused && t > 0 && t !== viz.lastT;
+    viz.lastT = t;
+    const ms = typeof performance !== 'undefined' ? performance.now() : Date.now();
+    if (max > 0 || !moving) { if (max > 0) { viz.flatSince = 0; viz.synthetic = false; } if (!viz.synthetic) return real; }
+    else if (!viz.flatSince) viz.flatSince = ms;
+    if (!viz.synthetic && !(viz.flatSince && ms - viz.flatSince >= FLAT_MS)) return real;
+    viz.synthetic = true;
+    return synthSpectrum(t, viz.out);
+  }
   const api = {
     get ext() { return ext; },
     get started() { return s.started; },
@@ -213,7 +254,13 @@ export function createBgmPlayer({ base = './', storage = null, onChange = () => 
       return Number.isFinite(dur) && dur > skip ? Math.min(1, Math.max(0, (d.el.currentTime - skip) / (dur - skip))) : 0;
     },
     /** 주파수 크기(0..255) — 재생 중이 아니면 null */
-    spectrum() { if (!s.an || !s.playing) return null; s.an.getByteFrequencyData(levels); return levels; },
+    spectrum() {
+      if (!s.an || !s.playing) return null;
+      s.an.getByteFrequencyData(levels);
+      return vizFallback(levels);
+    },
+    /** 'analyser' | 'synthetic' — 마지막 spectrum() 이 어디서 왔는지 (표시·테스트용) */
+    get spectrumSource() { return viz.synthetic ? 'synthetic' : 'analyser'; },
     get binCount() { return 128; },
     enter() { s.entered = true; apply(); },
     leave() { s.entered = false; s.userPaused = false; s.waitGesture = false; if (s.started) stop(); },
@@ -224,6 +271,7 @@ export function createBgmPlayer({ base = './', storage = null, onChange = () => 
     },
     setMuted(m) { s.muted = !!m; save(BGM_MUTED_KEY, s.muted ? '1' : '0'); applyVol(0.08); emit('state'); },
     setVolume(v) {
+      if (fixedVolume) return;
       s.volume = Math.min(1, Math.max(0, Number(v) || 0)); save(BGM_VOLUME_KEY, String(Math.round(s.volume * 100) / 100));
       if (s.muted && s.volume > 0) { s.muted = false; save(BGM_MUTED_KEY, '0'); }
       applyVol(); emit('state');

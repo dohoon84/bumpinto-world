@@ -11,6 +11,8 @@
 //   - [subway-ja] 일본어 줄은 ja 음성이 있을 때만 (목록이 끝내 비어도 lang 만으로 말하지 않음 — 다른 언어 음성이 일본어를 읽지 않게) · ?subwayJa=0 이면 끔
 //   - 녹음 교체 훅: public/audio/subway/clips.json 에 ["chime", "approach-wangsimni.ko", ...] 처럼 적고
 //     public/audio/subway/<이름>.ogg + .m4a 를 두면 그 줄은 TTS 대신 녹음 재생 (버스 public/audio/bus 와 같은 방식, 첫 방송 때만 목록 받음)
+import { pickAudioExt } from '../audio/unlock.js';
+export const GESTURE_EVS = ['pointerdown', 'touchend', 'click', 'keydown'];
 export const CHIME_KINDS = Object.freeze(['approach', 'next']);
 export const CHIME_SEC = 1.5;
 export const VOICE_WAIT_MS = 2000;
@@ -50,6 +52,7 @@ export function createSubwayVoice({
   base = import.meta.env?.BASE_URL || './',
   timers = { set: (f, ms) => setTimeout(f, ms), clear: (id) => clearTimeout(id) },
   target = typeof window !== 'undefined' ? window : null, // 사용자 입력(잠금 해제)을 들을 곳
+  unlockHub = null, // [mobile-audio] 공용 잠금 해제(모바일 모드) — 탭 안에서 컨텍스트 깨우기 + speechSynthesis 프라임
   logFn = typeof console !== 'undefined' ? (...a) => console.info('[subway-voice]', ...a) : null,
 } = {}) {
   const off = params?.get?.('subwayVoice') === '0' || params?.get?.('sound') === '0';
@@ -64,7 +67,7 @@ export function createSubwayVoice({
   // 녹음 목록 (없으면 빈 집합 → 전부 TTS)
   let clips = null, clipsP = null;
   const bufs = new Map();
-  const ext = (() => { try { const a = new Audio(); return a.canPlayType('audio/ogg; codecs="vorbis"') ? 'ogg' : 'm4a'; } catch { return 'ogg'; } })();
+  const ext = typeof Audio !== 'undefined' ? pickAudioExt() : 'ogg'; // [mobile-audio] Safari → m4a
   function loadClips() {
     if (clipsP || !fetchFn) return clipsP;
     clipsP = fetchFn(`${base}audio/subway/clips.json`).then((r) => (r.ok ? r.json() : [])).catch(() => []).then((l) => { clips = new Set(Array.isArray(l) ? l : []); });
@@ -80,11 +83,13 @@ export function createSubwayVoice({
   function unlock() {
     if (off) return;
     const c = ac();
-    if (c && c.state !== 'running') { try { const r = c.resume(); r?.catch?.(() => {}); } catch { /* noop */ } }
+    if (c && c.state !== 'running' && c.state !== 'closed') { try { const r = c.resume(); r?.catch?.(() => {}); } catch { /* noop */ } }
     if (!unlocked) { unlocked = true; log({ t: 'unlock', why: c ? c.state : 'no-audio' }); }
   }
+  // [mobile-audio] iOS 는 pointerdown 으로는 resume 이 안 됨 → touchend/click 도 (PC 는 pointerdown 에서 이미 running 이라 그대로)
   const onGesture = () => unlock();
-  if (!off && target?.addEventListener) for (const ev of ['pointerdown', 'keydown']) target.addEventListener(ev, onGesture, { capture: true, passive: true });
+  if (!off && target?.addEventListener) for (const ev of GESTURE_EVS) target.addEventListener(ev, onGesture, { capture: true, passive: true });
+  const offHub = !off ? unlockHub?.add?.(onGesture) || null : null;
   // 음성 목록: 비동기로 채워지면 기다리던 줄을 이어서
   let voicesReady = false, voicesGaveUp = false, waitTimer = null, waiting = false;
   // 기다리던 줄(cur)을 다시 맨 앞에 두고 이어서 — 목록이 끝내 비어 있으면 lang 만으로 말함(브라우저 기본 음성)
@@ -109,7 +114,7 @@ export function createSubwayVoice({
     if (it.t === 'chime') {
       const c = ac();
       if (!c) { log({ t: 'skip', why: 'no-audio', clip: 'chime' }); cur = null; return next(); }
-      try { if (c.state === 'suspended') c.resume()?.catch?.(() => {}); synthChime(c, 0.22 * lv.volume); log({ t: 'chime', gain: +(0.22 * lv.volume).toFixed(3), why: c.state }); } catch { /* noop */ }
+      try { if (c.state !== 'running' && c.state !== 'closed') c.resume()?.catch?.(() => {}); synthChime(c, 0.22 * lv.volume); log({ t: 'chime', gain: +(0.22 * lv.volume).toFixed(3), why: c.state }); } catch { /* noop */ }
       timer = timers.set(() => { timer = null; finish(my); }, CHIME_SEC * 1000);
       return;
     }
@@ -137,7 +142,7 @@ export function createSubwayVoice({
     const go = (buf) => {
       if (my !== tok) return;
       try {
-        if (c.state === 'suspended') c.resume();
+        if (c.state !== 'running' && c.state !== 'closed') c.resume()?.catch?.(() => {});
         const s = c.createBufferSource(), g = c.createGain(); s.buffer = buf; g.gain.value = lv.volume;
         s.connect(g); g.connect(c.destination); s.onended = () => finish(my); s.start(); src = s;
         log({ t: 'clip', clip: it.clip });
@@ -157,11 +162,12 @@ export function createSubwayVoice({
     get active() { return !!cur || q.length > 0; },
     get queued() { return q.map((i) => i.text || i.t); },
     get unlocked() { return unlocked; },
+    get hubWired() { return !!offHub; },
     /** 이벤트 구독 (🔊 표시용) — 해제 함수 반환 */
     on(f) { subs.add(f); return () => subs.delete(f); },
     unlock,
     /** 리스너 정리 */
-    dispose() { api.cancel(); if (target?.removeEventListener) for (const ev of ['pointerdown', 'keydown']) target.removeEventListener(ev, onGesture, { capture: true }); try { synth?.removeEventListener?.('voiceschanged', onVoices); } catch { /* noop */ } subs.clear(); },
+    dispose() { api.cancel(); if (target?.removeEventListener) for (const ev of GESTURE_EVS) target.removeEventListener(ev, onGesture, { capture: true }); offHub?.(); try { synth?.removeEventListener?.('voiceschanged', onVoices); } catch { /* noop */ } subs.clear(); },
     get events() { return events; },
     /** 안내 방송 하나 (자막과 같은 {ko,en,kind,clip}). 대기 중인 이전 방송은 이것으로 교체 */
     play(a) {
