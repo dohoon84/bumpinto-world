@@ -245,13 +245,16 @@ function main() {
           const startEdge = pc0 === kept[0] && headCut === 'prev' && !onLiveEdge(pc0.pts[0]), endEdge = pc0 === kept.at(-1) && tailCut === 'next' && !onLiveEdge(pc0.pts.at(-1));
           iv.forEach(([x0, x1, cutStart], ii) => {
             const cutEnd = x1 < pc0.L - 0.01;
-            const a0 = x0 + ((cutStart || (x0 === 0 && startEdge)) ? EDGE_TRIM : 0), a1 = x1 - ((cutEnd || endEdge) ? EDGE_TRIM : 0);
+            // 끝 가까이(15m+10m 안)에 정류장이 있으면 그 정류장이 경로 안(끝에서 10m)에 들도록 덜 깎음
+            const rel = stS.map((v) => v - pc0.s0).filter((v) => v > x0 && v < x1);
+            const t0 = Math.max(1, Math.min(EDGE_TRIM, Math.min(Infinity, ...rel.map((v) => v - x0)) - 10)), t1 = Math.max(1, Math.min(EDGE_TRIM, Math.min(Infinity, ...rel.map((v) => x1 - v)) - 10));
+            const a0 = x0 + ((cutStart || (x0 === 0 && startEdge)) ? t0 : 0), a1 = x1 - ((cutEnd || endEdge) ? t1 : 0);
             if (a1 - a0 < 1) return;
             const sub = tidy(subRange(pc0.pts, a0, a1));
             pieces.push({ k: 'C', pts: sub, s0: pc0.s0 + a0, L: plen(sub) });
           });
-          if (startEdge) drep.cuts.push(`시작: 게임 범위 경계 ${pc0.pts[0]} (이전 정류소 ${prev?.g.name ?? '-'} 방향) — 15m 안쪽에서 시작`);
-          if (endEdge) drep.cuts.push(`끝: 게임 범위 경계 ${pc0.pts.at(-1)} (다음 정류소 ${next?.g.name ?? '-'} 방향) — 15m 안쪽에서 끝`);
+          if (startEdge) drep.cuts.push(`시작: 게임 범위 경계 ${pc0.pts[0]} (이전 정류소 ${prev?.g.name ?? '-'} 방향) — 15m(가까운 정류장이 있으면 그 10m 앞까지) 안쪽에서 시작`);
+          if (endEdge) drep.cuts.push(`끝: 게임 범위 경계 ${pc0.pts.at(-1)} (다음 정류소 ${next?.g.name ?? '-'} 방향) — 15m(가까운 정류장이 있으면 그 10m 뒤까지) 안쪽에서 끝`);
         }
         for (const pc of pieces) {
           const sys = pc.k === 'L' ? 'live' : 'corridor';
