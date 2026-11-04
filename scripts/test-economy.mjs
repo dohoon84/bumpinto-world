@@ -93,15 +93,16 @@ console.log('economy tests');
   assert.equal(await bal(env, 'a1'), 1000 + 72000, 'quests not truncated by a bum cap');
   assert.equal(C.CAPS.daily.quest, undefined); assert.equal(C.CAPS.daily.total, undefined);
   // 게시판 하루 상한 = 글 수 × 글당 보상, 남은 몫만큼 잘라 준다
-  assert.equal(C.CAPS.daily.board, C.BOARD.dailyPosts * C.BOARD.reward);
-  for (let i = 0; i < 3; i++) await E.grantCapped(env.DB, { accountId: 'a1', reason: 'board', amount: 1000, key: `b${i}`, now: NOW });
+  assert.equal(C.CAPS.daily.board, C.BOARD.dailyRewards * C.BOARD.reward);
+  assert.equal(C.CAPS.daily.board, 1000);
+  assert.equal((await E.grantCapped(env.DB, { accountId: 'a1', reason: 'board', amount: 1000, key: 'b0', now: NOW })).applied, true);
   const last = await E.grantCapped(env.DB, { accountId: 'a1', reason: 'board', amount: 1000, key: 'bx', now: NOW });
   assert.equal(last.applied, false); assert.equal(last.capped, true);
   const D2 = NOW + 86400_000;
-  await E.grantCapped(env.DB, { accountId: 'a1', reason: 'board', amount: 2500, key: 'big', now: D2 });
+  await E.grantCapped(env.DB, { accountId: 'a1', reason: 'board', amount: 700, key: 'big', now: D2 });
   const part = await E.grantCapped(env.DB, { accountId: 'a1', reason: 'board', amount: 1000, key: 'part', now: D2 });
-  assert.equal(part.amount, 500); assert.equal(part.capped, true);
-  ok('caps (v3): quests uncapped in bum (definition-bounded), board daily cap = posts × reward, remainder clamped, over-cap refused');
+  assert.equal(part.amount, 300); assert.equal(part.capped, true);
+  ok('caps (v4): quests uncapped in bum (definition-bounded), board daily cap = 1 × reward, remainder clamped, over-cap refused');
 
   // 주 bum 상한은 없다(기획 §6 의 주 상한은 이동 300 인정분 — 이동 테스트에서 확인). 표시값만 남는다.
   assert.deepEqual(Object.keys(C.CAPS.weekly), ['move']); assert.equal(C.CAPS.weekly.move, 51600);
@@ -163,36 +164,61 @@ console.log('economy tests');
   await account(env, 'm');
   const today = F.kstDate(NOW);
   await credit(env, 'm', today, 'walk', 25 * 60);
+  // 하루 1번: 오늘은 하루 몫(60분)에 닿기 전엔 지급 없음(대기 금액만 보임)
   let r = await E.settleMove(env.DB, env, 'm', today, NOW);
-  assert.equal(r.minutes, 20, 'today settles in 10-min steps'); assert.equal(await bal(env, 'm'), 20 * 172);
-  r = await E.settleMove(env.DB, env, 'm', today, NOW);
-  assert.equal(r.added, 0);
-  const tv = await E.travelToday(env.DB, 'm', NOW);
-  assert.equal(tv.minutes, 25); assert.equal(tv.pendingBum, 5 * 172); assert.equal(tv.settled, false);
+  assert.equal(r.added, 0); assert.equal(r.pending, 25); assert.equal(await bal(env, 'm'), 0, 'no payout before the daily target');
+  let tv = await E.travelToday(env.DB, 'm', NOW);
+  assert.equal(tv.minutes, 25); assert.equal(tv.pendingBum, 25 * 172); assert.equal(tv.settled, false);
   await credit(env, 'm', today, 'walk', 50 * 60);
   r = await E.settleMove(env.DB, env, 'm', today, NOW);
-  assert.equal(r.minutes, 60); assert.equal(await bal(env, 'm'), C.CAPS.daily.move, 'daily cap 60 min = 10,320');
-  ok('move reward: 172/min, 10-min steps today, idempotent, daily cap 60 min');
+  assert.equal(r.minutes, 60); assert.equal(await bal(env, 'm'), C.CAPS.daily.move, 'daily cap 60 min = 10,320 paid at once');
+  await credit(env, 'm', today, 'walk', 30 * 60);
+  r = await E.settleMove(env.DB, env, 'm', today, NOW + 60_000);
+  assert.equal(r.added, 0); assert.equal(await bal(env, 'm'), 10320, 'once per day: later minutes earn nothing');
+  const mrows = (await env.DB.prepare("SELECT idempotency_key AS k, amount FROM ledger WHERE account_id = 'm' AND reason = 'move'").all()).results;
+  assert.deepEqual(mrows.map((x) => [x.k, x.amount]), [[`move:m:${today}`, 10320]], 'exactly one ledger row per day');
+  tv = await E.travelToday(env.DB, 'm', NOW);
+  assert.equal(tv.settled, true); assert.equal(tv.pendingBum, 0);
+  ok('move reward: once per day — paid in one row (move:{acc}:{date}) when 60 min reached, nothing before/after');
 
-  // 지난 날짜는 남은 분까지 · 동력 탈것 0.5 · 버스 0
+  // 못 채운 날: 날짜가 지나고(자정 + 15분) 다음 접속 때 인정분 그대로 1번 · 동력 탈것 0.5 · 버스 0
   const yday = F.kstDate(NOW - 86400_000);
   await credit(env, 'm', yday, 'walk', 7 * 60);
   await credit(env, 'm', yday, 'superbike', 10 * 60);
   await credit(env, 'm', yday, 'bus', 30 * 60);
+  const ydayEnd = Date.parse(`${yday}T00:00:00+09:00`) + 86400_000;
+  r = await E.settleMove(env.DB, env, 'm', yday, ydayEnd + 5 * 60_000);
+  assert.equal(r.added, 0, 'grace after midnight for late stats');
   r = await E.settleMove(env.DB, env, 'm', yday, NOW);
   assert.equal(r.minutes, 12, '7 walk + 10×0.5 superbike + bus 0');
-  ok('move reward: past day settles remainder; superbike/truck ×0.5, bus/taxi ×0');
+  r = await E.settleMove(env.DB, env, 'm', yday, NOW);
+  assert.equal(r.added, 0);
+  ok('move reward: short day pays once after the day ends (+15 min grace); superbike/truck ×0.5, bus/taxi ×0');
 
-  // 주 상한 300분
+  // 접속 안 한 날들 따라잡기: settleMoveForDates 가 최근 7일 미지급 날짜를 오래된 순으로
+  const { env: e3 } = makeEnv();
+  await account(e3, 'cu');
+  const d3 = F.kstDate(NOW - 3 * 86400_000), d9 = F.kstDate(NOW - 9 * 86400_000);
+  await credit(e3, 'cu', d3, 'walk', 30 * 60);
+  await credit(e3, 'cu', d9, 'walk', 30 * 60);
+  await credit(e3, 'cu', today, 'walk', 5 * 60);
+  assert.deepEqual(await E.unpaidMoveDates(e3.DB, 'cu', NOW), [d3, today]);
+  await E.settleMoveForDates(e3.DB, e3, 'cu', [today], NOW);
+  assert.equal(await bal(e3, 'cu'), 30 * 172, 'd-3 paid on next visit, today still pending, older than 7 days ignored');
+  assert.deepEqual(await E.unpaidMoveDates(e3.DB, 'cu', NOW), [today]);
+  ok('move reward: catch-up of unpaid past days (7-day window) on next visit');
+
+  // 주 상한 300분: 하루 몫 = min(60, 이번 주 남은 분) → 남은 분에 닿으면 지급
   const { env: e2 } = makeEnv();
   await account(e2, 'wk');
-  const days = ['2026-11-02', '2026-11-03'];
-  for (const d of days) { await credit(e2, 'wk', d, 'walk', 60 * 60); await E.settleMove(e2.DB, e2, 'wk', d, NOW); }
-  await e2.DB.prepare("UPDATE move_rewards SET minutes_paid = 140 WHERE account_id = 'wk' AND kst_date = '2026-11-02'").run();
-  await e2.DB.prepare("UPDATE move_rewards SET minutes_paid = 140 WHERE account_id = 'wk' AND kst_date = '2026-11-03'").run();
-  await credit(e2, 'wk', today, 'walk', 60 * 60);
+  for (const d of ['2026-11-02', '2026-11-03']) await e2.DB.prepare("INSERT INTO move_rewards (account_id, kst_date, minutes_paid, updated_at) VALUES ('wk', ?, 140, ?)").bind(d, NOW).run();
+  await credit(e2, 'wk', today, 'walk', 20 * 60);
   r = await E.settleMove(e2.DB, e2, 'wk', today, NOW);
-  assert.equal(r.minutes, 20, 'only 300 − 280 left this week');
+  assert.equal(r.minutes, 20, 'only 300 − 280 left this week → paid at 20 min');
+  await credit(e2, 'wk', today, 'walk', 40 * 60);
+  assert.equal((await E.settleMove(e2.DB, e2, 'wk', today, NOW)).added, 0);
+  const tw = await E.travelToday(e2.DB, 'wk', NOW);
+  assert.equal(tw.weekMinutes, 300);
   ok('move reward: weekly 300-min cap across days');
 }
 
@@ -222,7 +248,13 @@ console.log('economy tests');
   await E.payFare(env.DB, env, 'f', { code: 'subway.base', rideId: 'ride-3' }, NOW + 60_000);
   const q3 = await env.DB.prepare("SELECT qty FROM econ_events WHERE idempotency_key = 'fare:f:ride-3'").first();
   assert.equal(q3.qty, 1);
-  ok('fare: rides < 30 s apart still allowed but not counted for quests/karma (anti-farm)');
+  // env 로 바꾼 값을 따른다 (RIDE_MIN_GAP_SEC=0 · RIDE_DAILY_COUNTED=2)
+  const { env: eL } = makeEnv({ RIDE_MIN_GAP_SEC: '0', RIDE_DAILY_COUNTED: '2' });
+  await account(eL, 'fl');
+  for (let i = 0; i < 3; i++) await E.payFare(eL.DB, eL, 'fl', { code: 'bus.city', rideId: `l${i}` }, NOW + i * 1000);
+  const qs3 = (await eL.DB.prepare("SELECT qty FROM econ_events WHERE account_id = 'fl' ORDER BY id").all()).results.map((x) => x.qty);
+  assert.deepEqual(qs3, [1, 1, 0]);
+  ok('fare: rides < 30 s apart still allowed but not counted for quests/karma (anti-farm); limits from env config');
 
   // 택시 요금 = mock 과 같은 계산
   assert.equal(E.taxiFare(1600), 4800); assert.equal(E.taxiFare(1601), 4900); assert.equal(E.taxiFare(3000), 4800 + Math.ceil(1400 / 131) * 100);
@@ -332,20 +364,35 @@ console.log('economy tests');
   const r = await E.rewardBoardPost(env.DB, env, acc, { id: 3, title: 't', body: long }, NOW);
   assert.equal(r.rewarded, true); assert.equal(r.amount, 1000);
   assert.equal((await E.rewardBoardPost(env.DB, env, acc, { id: 3, title: 't', body: long }, NOW)).reason, 'already');
-  assert.equal((await E.rewardBoardPost(env.DB, env, acc, { id: 4, title: 't2', body: long + ' 또' }, NOW + 60_000)).reason, 'cooldown');
-  assert.equal((await E.rewardBoardPost(env.DB, env, acc, { id: 5, title: 't', body: long }, NOW + 700_000)).reason, 'duplicate');
-  await E.rewardBoardPost(env.DB, env, acc, { id: 6, title: 'a', body: long + ' 둘째' }, NOW + 700_000);
-  await E.rewardBoardPost(env.DB, env, acc, { id: 7, title: 'b', body: long + ' 셋째' }, NOW + 1400_000);
-  assert.equal((await E.rewardBoardPost(env.DB, env, acc, { id: 8, title: 'c', body: long + ' 넷째' }, NOW + 2100_000)).reason, 'daily_limit');
-  assert.equal(await bal(env, 'b', NOW + 2100_000), 3000);
-  ok('board reward: account age, min length (repeats compressed), once per post, cooldown, duplicate text, daily limit');
+  // 하루 1번: 그날 뒤 글은 그냥 글(보상·원장 행·토스트 없음). 쿨다운 없음
+  assert.equal((await E.rewardBoardPost(env.DB, env, acc, { id: 4, title: 't2', body: long + ' 또' }, NOW + 60_000)).reason, 'daily_limit');
+  assert.equal((await E.rewardBoardPost(env.DB, env, acc, { id: 5, title: 't3', body: long + ' 셋째' }, NOW + 3600_000)).reason, 'daily_limit');
+  assert.equal(await bal(env, 'b', NOW + 3600_000), 1000);
+  // 다음 날: 같은 글 다시 올리기는 막고, 새 글 하나만
+  const D2 = NOW + 86400_000;
+  assert.equal((await E.rewardBoardPost(env.DB, env, acc, { id: 6, title: 't', body: long }, D2)).reason, 'duplicate');
+  assert.equal((await E.rewardBoardPost(env.DB, env, acc, { id: 7, title: 'a', body: long + ' 둘째 날' }, D2 + 1000)).rewarded, true);
+  assert.equal((await E.rewardBoardPost(env.DB, env, acc, { id: 8, title: 'b', body: long + ' 둘째 날 또' }, D2 + 2000)).reason, 'daily_limit');
+  assert.equal(await bal(env, 'b', D2 + 2000), 2000);
+  const keys = (await env.DB.prepare("SELECT idempotency_key AS k FROM ledger WHERE account_id = 'b' AND reason = 'board' ORDER BY id").all()).results.map((x) => x.k);
+  assert.deepEqual(keys, [`board:b:${F.kstDate(NOW)}`, `board:b:${F.kstDate(D2)}`]);
+  // 동시에 두 글 → 하나만 보상, board_rewards 도 하나만
+  const accR = await account(env, 'race');
+  const both = await Promise.all([11, 12].map((id) => E.rewardBoardPost(env.DB, env, accR, { id, title: `r${id}`, body: `${long} 경주 ${id}` }, NOW)));
+  assert.equal(both.filter((x) => x.rewarded).length, 1, JSON.stringify(both));
+  assert.equal(Number((await env.DB.prepare("SELECT COUNT(*) AS n FROM board_rewards WHERE account_id = 'race'").first()).n), 1);
+  assert.equal(await bal(env, 'race'), 1000);
+  ok('board reward: once per KST day (first qualifying post), later posts plain (no row, no toast), account age, min length, duplicate text, race-safe');
 
-  const cb = await E.clawbackBoardPost(env.DB, 'b', 3, 'deleted', NOW + 3000_000);
-  assert.equal(cb.clawed, true); assert.equal(await bal(env, 'b', NOW + 3000_000), 2000);
-  assert.equal((await E.clawbackBoardPost(env.DB, 'b', 3, 'deleted', NOW + 3000_000)).clawed, false);
-  const up = await E.onBoardUpdate(env.DB, env, acc, { id: 6, title: 'a', body: '짧게' }, NOW + 3100_000);
-  assert.equal(up.clawed, true); assert.equal(await bal(env, 'b', NOW + 3100_000), 1000);
-  assert.equal((await E.clawbackBoardPost(env.DB, 'other', 7, 'deleted', NOW)).clawed, false, 'only the author account');
+  // 회수: 보상 받은 글 삭제 → 음수 행 1번, 그날 기회는 다시 안 열림 · 짧게 고쳐도 회수
+  const cb = await E.clawbackBoardPost(env.DB, 'b', 3, 'deleted', D2 + 3000);
+  assert.equal(cb.clawed, true); assert.equal(await bal(env, 'b', D2 + 3000), 1000);
+  assert.equal((await E.clawbackBoardPost(env.DB, 'b', 3, 'deleted', D2 + 3000)).clawed, false);
+  assert.equal((await E.clawbackBoardPost(env.DB, 'b', 4, 'deleted', D2 + 3000)).clawed, false, 'unrewarded post: nothing to claw back');
+  const up = await E.onBoardUpdate(env.DB, env, acc, { id: 7, title: 'a', body: '짧게' }, D2 + 4000);
+  assert.equal(up.clawed, true); assert.equal(await bal(env, 'b', D2 + 4000), 0);
+  assert.equal((await E.rewardBoardPost(env.DB, env, acc, { id: 9, title: 'z', body: long + ' 지운 뒤 새 글' }, D2 + 5000)).reason, 'daily_limit', 'clawback does not reopen the day');
+  assert.equal((await E.clawbackBoardPost(env.DB, 'other', 11, 'deleted', NOW)).clawed, false, 'only the author account');
   ok('board reward: delete or edit below minimum → clawback once (negative row)');
 }
 
@@ -371,7 +418,7 @@ console.log('economy tests');
   }
   assert.equal((await E.claimQuest(env.DB, env, 'q', 'X-NOPE', NOW)).error.code, 'unknown');
   const w = await E.listQuests(env.DB, env, 'q', 'weekly', NOW);
-  assert.deepEqual(w.quests.map((x) => x.id), ['W-WALK', 'W-DAYS', 'W-DAILY', 'W-TRANSIT', 'W-PLACES']);
+  assert.deepEqual(w.quests.map((x) => x.id), ['W-WALK', 'W-DAYS', 'W-DAILY', 'W-TRANSIT']);
   assert.equal(w.quests[1].progress.value, 1); assert.equal(w.quests[2].progress.value, 1, 'daily claims counted');
   assert.equal(w.resetsAt, Date.parse('2026-11-08T15:00:00Z'), 'resets Monday 00:00 KST');
   ok('quests: D-LOGIN auto-claimed 500, assignment fixed per day, not_complete/unknown/already, weekly counts');
@@ -464,7 +511,7 @@ console.log('economy tests');
 
 // ── 튜닝 값 = 기획 (bw-economy-v1/plan.html v1 · Figma 13:2 Note). 바꾸면 이 표와 PR 표를 같이 고친다 ──
 {
-  assert.equal(C.ECON_CONFIG_VERSION, 3);
+  assert.equal(C.ECON_CONFIG_VERSION, 4);
   assert.equal(C.MOVE.perMinute, 172); assert.equal(C.movePerMinute('2026-12-31'), 172); assert.equal(C.movePerMinute('2027-01-01'), 178);
   assert.equal(C.MOVE.dailyMinutes, 60); assert.equal(C.MOVE.weeklyMinutes, 300);
   assert.equal(C.CAPS.daily.move, 10320); assert.equal(C.CAPS.weekly.move, 51600);
@@ -483,19 +530,32 @@ console.log('economy tests');
   const q = (x) => [x.id, x.target, x.reward, ...(x.karma || [])];
   assert.deepEqual(C.QUESTS.daily.pool.map(q), [['D-LOGIN', 1, 500, 'streak', 1], ['D-WALK10', 10, 1000, 'health', 10], ['D-WALK20', 20, 1500, 'health', 20], ['D-SUB1', 1, 800, 'transit', 5], ['D-BUS1', 1, 800, 'transit', 5], ['D-RIDE10', 10, 1000, 'health', 10]]);
   assert.deepEqual(q(C.QUESTS.daily.bonus), ['D-ALL3', 3, 1000, 'streak', 2]);
-  assert.deepEqual(C.QUESTS.weekly.map(q), [['W-WALK', 120, 6000, 'health', 10], ['W-DAYS', 5, 4000, 'streak', 5], ['W-DAILY', 15, 5000, 'streak', 5], ['W-TRANSIT', 3, 3000, 'transit', 10], ['W-PLACES', 5, 4000, 'explore', 5]]);
+  assert.deepEqual(C.QUESTS.weekly.map(q), [['W-WALK', 120, 6000, 'health', 10], ['W-DAYS', 5, 4000, 'streak', 5], ['W-DAILY', 15, 5000, 'streak', 5], ['W-TRANSIT', 3, 3000, 'transit', 10]]);
   assert.deepEqual(C.QUESTS.monthly.map(q), [['M-WALK', 600, 15000, 'health', 30], ['M-DAYS', 20, 15000, 'streak', 20], ['M-WEEKLY', 10, 10000, 'streak', 10]]);
-  assert.equal(C.QUESTS.weekly.reduce((a, x) => a + x.reward, 0), 22000, 'plan: weekly max 22,000');
+  assert.equal(C.QUESTS.weekly.reduce((a, x) => a + x.reward, 0), 18000, 'plan weekly max 22,000 − W-PLACES 4,000 (not server-verifiable yet)');
   assert.equal(C.QUESTS.monthly.reduce((a, x) => a + x.reward, 0), 40000, 'plan: monthly max 40,000');
   assert.ok(C.QUESTS.daily.pool.every((x) => x.metric !== 'ride' || x.reward < 1550), 'plan: transit quest reward < fare');
-  assert.equal(C.BOARD.reward, 1000);
-  ok('tuning = plan v1 / Figma 13:2: 172→178 bum/min (2027), 60/300 min, ×0.5 powered, fares, taxi 2/5/10 km, shop ×0.5, quest pool & rewards, achievements, welcome/beta');
+  assert.equal(C.BOARD.reward, 1000); assert.equal(C.BOARD.dailyRewards, 1); assert.equal(C.BOARD.minChars, 40); assert.equal(C.BOARD.accountMinAgeHours, 24);
+  assert.equal(C.BOARD.cooldownSec, undefined); assert.equal(C.BOARD.dailyPosts, undefined);
+  // 활성 퀘스트 = 기획에 있고 지금 서버가 확인할 수 있는 것만. 판정 수단이 없는 것은 목록에 없음
+  const all = [...C.QUESTS.daily.pool, C.QUESTS.daily.bonus, ...C.QUESTS.weekly, ...C.QUESTS.monthly];
+  const VERIFIABLE = new Set(['login', 'move_min', 'ride', 'ride_modes', 'login_days', 'daily_claims', 'weekly_claims', 'daily_all']);
+  assert.ok(all.every((x) => VERIFIABLE.has(x.metric)), all.filter((x) => !VERIFIABLE.has(x.metric)).map((x) => x.id).join());
+  for (const id of ['D-PLACE', 'D-NEIGHBOR', 'D-PHOTO', 'D-TAXI1', 'W-PLACES']) assert.ok(!all.some((x) => x.id === id), id);
+  assert.equal(C.QUESTS.daily.slots, 3); assert.deepEqual(C.QUESTS.daily.fixed, ['D-LOGIN']);
+  assert.equal(C.MOVE.settleStepMinutes, undefined); assert.equal(C.MOVE.settleGraceMin, 15); assert.equal(C.MOVE.catchUpDays, 7);
+  // 탑승 제한(기획에 없음, 어뷰징 방지) — 설정값 + env 로 바꿈
+  assert.deepEqual({ ...C.RIDE_LIMITS }, { minGapSec: 30, dailyCounted: 40 });
+  assert.deepEqual(C.rideLimits({}), { minGapSec: 30, dailyCounted: 40 });
+  assert.deepEqual(C.rideLimits({ RIDE_MIN_GAP_SEC: '10', RIDE_DAILY_COUNTED: '60' }), { minGapSec: 10, dailyCounted: 60 });
+  assert.deepEqual(C.rideLimits({ RIDE_MIN_GAP_SEC: 'x', RIDE_DAILY_COUNTED: '0' }), { minGapSec: 30, dailyCounted: 40 }, 'bad values → defaults');
+  ok('tuning v4 = plan v1 / Figma 13:2: 172→178 bum/min (2027), 60/300 min, ×0.5 powered, fares, taxi, shop ×0.5, verifiable quest sets & rewards, board 1×1,000/day, ride limits config');
 
   // 2027-01-01 부터 분당 178 (plan §6 — 새 표 버전 자동 반영)
   const { env } = makeEnv();
   await account(env, 'y27');
   await credit(env, 'y27', '2027-01-04', 'walk', 600);
-  await E.settleMove(env.DB, env, 'y27', '2027-01-04', Date.parse('2027-01-05T03:00:00Z'));
+  await E.settleMove(env.DB, env, 'y27', '2027-01-04', Date.parse('2027-01-05T03:00:00Z')); // 지난 날 → 10분 그대로 1번
   assert.equal(await bal(env, 'y27', Date.parse('2027-01-05T03:00:00Z')), 10 * 178);
   ok('move reward: 2027 days pay 178/min');
 }
@@ -520,7 +580,34 @@ console.log('economy tests');
   const s2 = await (async () => (await (await handleEcon(new Request(`http://localhost:8789/econ/state?since=${s1.lastId}`, { headers: { Cookie: `bw_s=${token}`, Origin: 'http://localhost:5173' } }), env, new URL(`http://localhost:8789/econ/state?since=${s1.lastId}`), { now: NOW + 3000 })).json()).data)();
   assert.equal(s2.events.filter((e) => e.reward).length, 0, 'clawback → no toast');
   assert.equal(s2.events.length, 1); assert.ok(s2.events[0].entry.delta < 0);
-  ok('board reward → reward event kind board (toast) via /econ/state; clawback → ledger line only');
+  // 같은 날 두 번째 글 → 원장 행도 이벤트도 없음(토스트 없음)
+  const r2 = await E.rewardBoardPost(env.DB, env, acc, { id: 78, category: 'free', title: 't2', body: '오늘 두 번째 글입니다. 정자역 앞 붕어빵 가게가 다시 문을 열었어요. 팥이랑 슈크림 둘 다 맛있고 줄이 길지 않아요!' }, NOW + 4000);
+  assert.equal(r2.rewarded, false); assert.equal(r2.reason, 'daily_limit');
+  const s3 = await (async () => (await (await handleEcon(new Request(`http://localhost:8789/econ/state?since=${s2.lastId}`, { headers: { Cookie: `bw_s=${token}`, Origin: 'http://localhost:5173' } }), env, new URL(`http://localhost:8789/econ/state?since=${s2.lastId}`), { now: NOW + 5000 })).json()).data)();
+  assert.equal(s3.events.length, 0, 'second post that day → nothing');
+  ok('board reward → reward event kind board (toast) via /econ/state; clawback → ledger line only; 2nd post same day → no event');
+}
+
+// ── 이동 보상 → 하루 1번 토스트(kind travel) via /econ/state ──
+{
+  const { env } = makeEnv({ ECON_FEATURES: 'move' });
+  await account(env, 'mv');
+  const token = await S.signSession({ accountId: 'mv', sessionVersion: 1, now: NOW }, SECRET);
+  const st = async (q, now) => (await (await handleEcon(new Request(`http://localhost:8789/econ/state${q}`, { headers: { Cookie: `bw_s=${token}`, Origin: 'http://localhost:5173' } }), env, new URL(`http://localhost:8789/econ/state${q}`), { now })).json()).data;
+  const today = F.kstDate(NOW);
+  await give(env, 'mv', 1, 'seed-mv'); // since 커서가 0 이 아니게(웰컴 행 대신)
+  let last = (await st('', NOW)).lastId;
+  const travelEvents = [];
+  for (const [i, min] of [[1, 20], [2, 20], [3, 20], [4, 15]].entries()) {
+    await credit(env, 'mv', today, 'walk', min[1] * 60);
+    const d = await st(`?since=${last}`, NOW + (i + 1) * 60_000);
+    last = d.lastId;
+    travelEvents.push(...d.events.map((e) => e.reward).filter((x) => x?.kind === 'travel'));
+  }
+  assert.equal(travelEvents.length, 1, JSON.stringify(travelEvents));
+  assert.equal(travelEvents[0].amount, 10320); assert.deepEqual(travelEvents[0].title, { ko: '이동 보상 60분', en: 'Travel reward 60 min' });
+  ok('move reward: 20+20+20+15 min through the day → one travel toast (10,320) when 60 min reached, nothing after');
+
 }
 
 // ── 산 탈것: 재접속 없이 바로 탄다 (Room gifts_sync → holdings) + hello 에도 들어감 ──
