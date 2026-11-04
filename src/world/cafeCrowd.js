@@ -76,6 +76,7 @@ export function addStationCafeCrowd(scene, data) {
   if (!host || host.crowd) return;
   host.crowd = 1;
   const g = new THREE.Group();
+  g.name = 'jeongja-starbucks-crowd'; // [perf-memory] 정적 병합 대상 이름(의자·컵·노트북 등; 앉은 사람은 제외)
   scene.add(g);
 
   const wood = mat('#c4a07a');

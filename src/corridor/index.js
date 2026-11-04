@@ -24,6 +24,9 @@ import { migeumBusEnabled } from './migeumBus.js'; // [migeum-bus]
 import { isEn, onLangChange } from '../i18n.js'; // [pangyo-link] 판교역 라벨 KO/EN
 import { createPangyoNpc, pangyoNpcEnabled } from './pangyoNpc.js'; // [pangyo-npc]
 import { migeumNpcEnabled, migeumNpcLoader, createMigeumPeds, combineCrowds, mountMigeumNpc } from './migeumNpc.js'; import { migeumCorridorRoadsOn } from './migeumRoads.js'; // [migeum-npc] [migeum-roads]
+import { perfFlags } from '../perf/flags.js'; // [perf-memory]
+import { createRegionRegistry } from '../perf/regions.js'; // [perf-memory]
+import { lazyExtraCrowd } from '../perf/lazyCrowd.js'; // [perf-memory]
 import { pangyoWaterEnabled, PANGYO_WATER_FILE, attachMainDrop, mergePangyoStreams, dropWaterGeometry } from './pangyoWater.js'; // [pangyo-water]
 import { migeumWaterEnabled, MIGEUM_WATER_FILE, migeumChRoads, mergeMigeumWater, applyMigeumBank } from './migeumWater.js'; // [migeum-water]
 
@@ -273,8 +276,20 @@ export function createCorridor({ scene, corridorData, terrain, world, renderer, 
   const landmarks = createLandmarks(root, index.landmarks, renderer);
   const pangyoLm = corridorData.pangyo ? createPangyoLandmarks(corridorData.pangyo, { overlay }) : null; // [pangyo]
   const migeumLm = corridorData.migeum && !migeumSubwayDrawsEntrances() ? createPangyoLandmarks(corridorData.migeum, { overlay, prefix: 'migeum' }) : null; // [migeum] 같은 빌더(출입구만). [migeum-sub] 지하철이 출입구를 그리면 안 만듦
-  const pangyoEx = corridorData.pangyoExpress ? buildPangyoExpress(corridorData.pangyoExpress) : null; // [pangyo-express] 판교IC~경부 합류(메시 2개, 늘 붙어 있음)
-  if (pangyoEx) root.add(pangyoEx.group);
+  // [perf-memory] 지역 지연 로드/해제 레지스트리. ?lazyregion=0 · ?perfmem=0 이면 null → 아래는 전부 예전 그대로(즉시 생성)
+  const PF = perfFlags(params || (typeof location !== 'undefined' ? location.search : ''));
+  const regions = PF.lazyregion ? createRegionRegistry() : null;
+  let pangyoEx = null;
+  if (corridorData.pangyoExpress && !regions) { pangyoEx = buildPangyoExpress(corridorData.pangyoExpress); root.add(pangyoEx.group); } // [pangyo-express] 판교IC~경부 합류(메시 2개)
+  else if (corridorData.pangyoExpress) {
+    // [perf-memory] 고속도로 메시는 LOD 타일 거리 안(+여유)일 때만 만들고, 멀어지면 dispose
+    const E = corridorData.pangyoExpress; let b = { x0: Infinity, x1: -Infinity, z0: Infinity, z1: -Infinity };
+    for (const l of E.lines || []) for (const p of l.pts || []) { b.x0 = Math.min(b.x0, p[0]); b.x1 = Math.max(b.x1, p[0]); b.z0 = Math.min(b.z0, p[1]); b.z1 = Math.max(b.z1, p[1]); }
+    if (!Number.isFinite(b.x0)) b = { x0: -1e9, x1: 1e9, z0: -1e9, z1: 1e9 };
+    regions.register({ id: 'pangyo-express', boxes: [b], near: Q.lod + 300, far: Q.lod + 900,
+      onEnter() { if (!pangyoEx) { pangyoEx = buildPangyoExpress(E); root.add(pangyoEx.group); } },
+      onLeave() { if (pangyoEx) { pangyoEx.dispose(); pangyoEx = null; } } });
+  }
   const tower = index.landmarks.find((l) => l.id === 'lotte-world-tower');
   let lotte = null;
   if (tower) {
@@ -293,11 +308,13 @@ export function createCorridor({ scene, corridorData, terrain, world, renderer, 
   const stats = { builtDetail: 0, builtLod: 0, chRoads: ch.length, signals: crossings.signals, chTrees: 0 };
   let chTreesDone = false;
   let life = null, pangyoNpc = null, migeumPeds = null, migeumNpc = null;
+  let rx = null, rz = null; // [perf-memory] 지난 프레임 위치(진행 방향 추정)
   const api = {
     root, bounds, stations, tiles, stats, crossings, landmarks, inLive,
     pangyo: pangyoLm, // [pangyo] null 이면 꺼짐(?pangyo=0)
     migeum: migeumLm, // [migeum] null 이면 꺼짐(?migeum=0)
-    pangyoExpress: pangyoEx, // [pangyo-express] null 이면 꺼짐(?pangyoexpress=0 · ?pangyo=0)
+    get pangyoExpress() { return pangyoEx; }, // [pangyo-express] null 이면 꺼짐(?pangyoexpress=0 · ?pangyo=0) · [perf-memory] 지연 로드면 멀 때 null
+    regions, // [perf-memory] 지역 지연 로드 레지스트리(null 이면 꺼짐). 미금 등은 regions.register({...}) 로 붙는다 — docs/perf-memory.md
     liveBox: live, // [ride]
     get lotte() { return lotte; },
     isBlocked: corridorBlocked, onRoad: corridorOnRoad,
@@ -310,7 +327,14 @@ export function createCorridor({ scene, corridorData, terrain, world, renderer, 
       // [migeum-npc] 미금역 출입구·보도 보행 NPC: 같은 crowd(draw call 0 추가). ?migeumnpc=0 / ?migeum=0 이면 없음
       const mgLoader = corridorData.migeum && migeumNpcEnabled() ? migeumNpcLoader({ mg: corridorData.migeum, baseUrl, ext: migeumCorridorRoadsOn(params) }) : null;
       migeumPeds = mgLoader ? createMigeumPeds({ mg: corridorData.migeum, loader: mgLoader, terrain, isFree: api.isFree, freeSpot: api.freeSpot, tileReady: (k) => tiles.get(k)?.dState === 3 }) : null;
-      pangyoNpc = corridorData.pangyo && pangyoNpcEnabled() ? createPangyoNpc({ pg: corridorData.pangyo, baseUrl, overlay, terrain, isFree: api.isFree, freeSpot: api.freeSpot, tileReady: (k) => tiles.get(k)?.dState === 3 }) : null;
+      const mkPgNpc = () => corridorData.pangyo && pangyoNpcEnabled() ? createPangyoNpc({ pg: corridorData.pangyo, baseUrl, overlay, terrain, isFree: api.isFree, freeSpot: api.freeSpot, tileReady: (k) => tiles.get(k)?.dState === 3 }) : null;
+      // [perf-memory] 판교 NPC 풀(아바타 96명·라벨·pangyo-npc.json)은 판교 상자 근처일 때만 만들고 멀어지면 버린다
+      if (regions && corridorData.pangyo && pangyoNpcEnabled()) {
+        pangyoNpc = lazyExtraCrowd(mkPgNpc);
+        const boxes = corridorData.pangyo.meta?.boxes || (corridorData.pangyo.meta?.box ? [corridorData.pangyo.meta.box] : null);
+        if (boxes) regions.register({ id: 'pangyo-npc', boxes, near: 350, far: 800, onEnter: () => { pangyoNpc.load(); }, onLeave: () => pangyoNpc.unload() });
+        else pangyoNpc.load();
+      } else pangyoNpc = mkPgNpc();
       life = createCorridorLife({ root, baseUrl, crossings, terrain, terrainT: corridorData.terrainT, world, overlay, stations: pgLink ? index.stations.concat(corridorData.pangyo.stations || []) : index.stations, pangyoLink: pgLink && mode === 'sim', migeumBus: !!corridorData.migeum && migeumBusEnabled() && mode === 'sim', express: corridorData.pangyoExpress, liveBox: live, params, proxy, mode, liveDrive, liveCrossings, renderer, hints: (x, z, r) => gatherLifeHints(loaded, x, z, r), extraCrowd: combineCrowds([pangyoNpc, migeumPeds]), migeumTaxi: corridorData.migeumTaxiBike?.taxi || null }); // [migeum-taxibike] null 이면 예전과 같음
       // [migeum-npc] 미금 차량(jz-traffic 시뮬 · 미금 차도 그래프). 박스 근처에 처음 올 때 만든다
       if (mgLoader) migeumNpc = mountMigeumNpc(root, { mg: corridorData.migeum, loader: mgLoader, params, world, transit: { crossings: crossings.crossings, pedLight: crossings.pedLight, source: { vehicles: () => life?.buses?.near || [] } }, getLife: () => life });
@@ -331,11 +355,17 @@ export function createCorridor({ scene, corridorData, terrain, world, renderer, 
       updateNight(dt); // [corridor] 저녁 건물 불빛 페이드
       life?.update(dt, x, z);
       migeumNpc?.update(dt, x, z); // [migeum-npc]
+      if (regions) { // [perf-memory] 진행 방향(초당 이동량)도 같이 넘겨 '향하는' 지역을 미리 로드
+        const vx = rx == null || !dt ? 0 : (x - rx) / dt, vz = rz == null || !dt ? 0 : (z - rz) / dt; rx = x; rz = z;
+        const fast = Math.hypot(vx, vz) > 400; // 텔레포트 한 프레임은 속도로 치지 않음
+        regions.update(x, z, fast ? 0 : vx, fast ? 0 : vz, dt, fast);
+      }
       homeLabelTick(x, z); // [pangyo-link]
     },
     setHomeStationLabel(item) { homeLabel = item; }, // [pangyo-link] game.js 가 정자역 라벨을 넘긴다
     // 위치 주변 상세 타일을 즉시 로드·빌드 (텔레포트/스크린샷용)
     async preload(x, z, r = Q.detail) {
+      regions?.update(x, z, 0, 0, 0, true); // [perf-memory] 텔레포트 도착지 지역을 바로 로드
       const list = [...tiles.values()].filter((t) => rectDist(x, z, t.x0, t.z0, TS) < r);
       // 프레임 스트리머(아직 플레이어는 출발지)가 로딩 중인 먼 타일을 언로드하면 응답이 버려지므로, 빌드될 때까지 몇 번 다시 요청
       for (let i = 0; i < 4; i++) {

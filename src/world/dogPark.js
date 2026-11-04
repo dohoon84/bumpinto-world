@@ -230,6 +230,7 @@ function buildGateArch(x, z, yaw, labelText, color = '#4dabf7') {
 
   const leftDoor = makeDoorLeaf(-1);
   const rightDoor = makeDoorLeaf(1);
+  leftDoor.userData.perfDynamic = rightDoor.userData.perfDynamic = true; // [perf-memory] 여닫는 문: 정적 병합 제외
   g.add(leftDoor, rightDoor);
 
   return { group: g, leftDoor, rightDoor };
