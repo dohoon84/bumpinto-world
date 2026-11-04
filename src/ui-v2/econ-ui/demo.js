@@ -57,7 +57,7 @@ export function mountDemo({ open, link, setSuppress }) {
     if (st === 'guest') dev.reset();
     else if (st === 'mode') { const p = await paid(); dev.setMode({ transitPaid: !p, shopPaid: !p }); }
     else if (st === 'walk') { await ensureSigned(); dev.addWalkMinutes(5); }
-    else if (st === 'board') { await ensureSigned(); dev.boardPost(1000); open('07'); } // 서버처럼 원장 'board' 행만(보상 토스트 없음)
+    else if (st === 'board') { await ensureSigned(); dev.boardPost(); open('07'); } // 하루 1번: 첫 글만 원장 'board' 행 + 토스트, 그 뒤 글은 아무것도 없음
     else if (st === 'srv') { setSuppress(20000); dev.reset(); dev.signIn({ name: '예시 계정' }); await econ.claimWelcome(); open('01b'); } // 서버: 로그인 때 웰컴 자동 지급 → 02a 는 '확인'
     else if (st === 'shopna') { await ensureSigned(); const all = !(await econ.listShopItems()).every((i) => i.available !== false); dev.setShopAvailable(all ? null : ['roadbike']); open('11'); }
     else { setSuppress(4000); dev.seed(st); }
@@ -67,5 +67,5 @@ export function mountDemo({ open, link, setSuppress }) {
   document.body.appendChild(bar);
   draw();
   addEventListener('keydown', (e) => { if (e.key === '`' && !/INPUT|TEXTAREA/.test(document.activeElement?.tagName || '')) bar.classList.toggle('min'); });
-  window.__bwEconDemo = { open: go, openRaw: open, frames: FRAMES, econ, dev, link, showPay, suppress: setSuppress };
+  window.__bwEconDemo = { open: go, openRaw: open, frames: FRAMES, econ, dev, link, showPay, suppress: setSuppress, rewardSequence };
 }
