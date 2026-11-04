@@ -269,7 +269,7 @@ function lookFor(i, r) {
 // 선분까지 거리
 const segDist = (x, z, ax, az, bx, bz) => { const dx = bx - ax, dz = bz - az, L2 = dx * dx + dz * dz || 1; const k = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / L2)); return Math.hypot(x - ax - dx * k, z - az - dz * k); };
 
-export function createCorridorTraffic(root, { drive, crossings, terrain, terrainT, world, stations, liveBox, getBuses, params, overlay, liveDrive = null, liveCrossings = null, renderer = null, hints = null, extraCrowd = null }) {
+export function createCorridorTraffic(root, { drive, crossings, terrain, terrainT, world, stations, liveBox, getBuses, params, overlay, liveDrive = null, liveCrossings = null, renderer = null, hints = null, extraCrowd = null, extraExits = null }) {
   const group = new THREE.Group(); group.name = 'corridorTraffic'; root.add(group);
   const num = (k, d, hi) => { const v = params?.get?.(k); return Math.max(0, Math.min(hi, v == null ? d : Math.round(Number(v)) || 0)); };
   // [life] 일반 차량 72대 중 택시 0.3(≈22대 — ride 패치와 같은 택시 수). 인스턴싱이라 draw call 은 대수와 무관. ?ccars= / ?ctaxi=(0~1)
@@ -282,6 +282,7 @@ export function createCorridorTraffic(root, { drive, crossings, terrain, terrain
   const WALKERS = num('cwalkers', 48, 120);
   const COUNT = CARS + TDRIVE;
   const exits = stations.flatMap((s) => s.exits || []);
+  if (extraExits?.length) exits.push(...extraExits); // [migeum-taxibike] 미금역 갓길 승차 지점(택시만 씀, 보행 NPC 힌트 exitPts 는 그대로)
   const transit = { crossings: crossings.crossings, pedLight: crossings.pedLight, source: { vehicles: getBuses } };
   const inLB = (c) => liveBox && c.x >= liveBox.x0 && c.x <= liveBox.x1 && c.z >= liveBox.z0 && c.z <= liveBox.z1;
   const merged = liveDrive ? mergeLiveDrive(drive, liveDrive, liveBox) : { drive, added: 0 };

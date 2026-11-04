@@ -2,6 +2,7 @@
 // 보도(footway/path/pedestrian)를 따라 간격을 두고 하나씩 놓는다.
 import * as THREE from 'three';
 import { watchEvening } from '../evening.js';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'; // [migeum-taxibike] 세워 둔 자전거 1 draw
 
 const RADIUS = 115;
 const GAP = 36;
@@ -128,6 +129,25 @@ function distPointSeg(px, pz, ax, az, bx, bz) {
   return Math.hypot(ax + dx * t - px, az + dz * t - pz);
 }
 
+const _M = new THREE.Matrix4(), _P = new THREE.Vector3(), _Q = new THREE.Quaternion(), _S1 = new THREE.Vector3(1, 1, 1), _S0 = new THREE.Vector3(0, 0, 0);
+// [migeum-taxibike] 자전거 모형 → 한 덩어리 지오메트리(재질 색은 꼭짓점 색, 등은 뺌 — 세워 둔 자전거는 등이 꺼져 있음)
+//   lamps=true 면 반대로 전조등·후미등만(저녁 켜짐용 별도 인스턴스, MeshBasic 색 그대로)
+export function mergedBike(proto, { lamps = false } = {}) {
+  proto.updateMatrixWorld(true);
+  const parts = [];
+  proto.traverse((o) => {
+    if (!o.isMesh || (o.name === 'lampF' || o.name === 'lampR') !== lamps) return;
+    let g = o.geometry.index ? o.geometry.toNonIndexed() : o.geometry.clone();
+    g.applyMatrix4(o.matrixWorld);
+    for (const k of Object.keys(g.attributes)) if (k !== 'position' && k !== 'normal') g.deleteAttribute(k);
+    const c = o.material.color || new THREE.Color('#888'), n = g.attributes.position.count, col = new Float32Array(n * 3);
+    for (let i = 0; i < n; i++) { col[i * 3] = c.r; col[i * 3 + 1] = c.g; col[i * 3 + 2] = c.b; }
+    g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+    parts.push(g);
+  });
+  return mergeGeometries(parts);
+}
+
 export class KakaoBikes {
   constructor(scene, world, data) {
     this.list = [];
@@ -203,6 +223,8 @@ export class KakaoBikes {
       });
     }
     this._unwatch = watchEvening((on) => {
+      this._eve = on; // [migeum-taxibike] 인스턴스 자전거를 탈 때 만든 메시도 같은 상태로
+      if (this._lamps) this._lamps.visible = on; // [migeum-taxibike] 세워 둔 미금 자전거 등
       for (const b of this.list) {
         if (b.lampF) b.lampF.visible = on;
         if (b.lampR) b.lampR.visible = on;
@@ -230,7 +252,44 @@ export class KakaoBikes {
     return false;
   }
 
+  // [migeum-taxibike] 미금역 카카오바이크: 빌드 때 규칙으로 정한 자리(spots [x, z, ry])에 세워 둔다.
+  //   세워 둔 동안은 자전거 전체를 꼭짓점 색으로 합친 InstancedMesh 1개(draw 1 + 그림자 1) — 정자 자전거(개별 메시)는 그대로.
+  //   탈 때만 그 자리에 정자와 같은 개별 메시(바퀴·크랭크·스탠드·등)를 만들고 인스턴스는 숨김, 내리면 다시 인스턴스로.
+  addInstanced(scene, spots, groundY = null) {
+    if (!spots?.length || this._inst) return 0;
+    const geo = mergedBike(this._proto);
+    const im = new THREE.InstancedMesh(geo, new THREE.MeshLambertMaterial({ vertexColors: true }), spots.length);
+    im.name = 'kakaoBikes:migeum'; im.castShadow = true;
+    // 저녁 등: 정자 세워 둔 자전거와 같이 watchEvening 으로 켜고 끔(낮엔 숨김 → draw 0, 저녁 +1). 그림자 없음
+    const lm = new THREE.InstancedMesh(mergedBike(this._proto, { lamps: true }), new THREE.MeshBasicMaterial({ vertexColors: true }), spots.length);
+    lm.name = 'kakaoBikes:migeum:lamps'; lm.castShadow = false; lm.visible = !!this._eve;
+    this._scene = scene; this._inst = im; this._lamps = lm;
+    for (const [i, [x, z, ry]] of spots.entries()) {
+      const y = groundY ? groundY(x, z) : 0;
+      const b = { mesh: null, inst: im, idx: i, x, z, y: Number.isFinite(y) ? y : 0, ry, wheelF: null, wheelR: null, crank: null, stand: null, lampF: null, lampR: null };
+      this.list.push(b); this._setInst(b, true);
+    }
+    im.computeBoundingSphere(); lm.computeBoundingSphere();
+    scene.add(im, lm);
+    return spots.length;
+  }
+
+  _setInst(b, show) {
+    _M.compose(_P.set(b.x, b.y || 0, b.z), _Q.setFromAxisAngle(Y_AXIS, b.ry), show ? _S1 : _S0);
+    b.inst.setMatrixAt(b.idx, _M); b.inst.instanceMatrix.needsUpdate = true;
+    if (this._lamps) { this._lamps.setMatrixAt(b.idx, _M); this._lamps.instanceMatrix.needsUpdate = true; }
+    if (show) { b.inst.computeBoundingSphere(); this._lamps?.computeBoundingSphere(); }
+  }
+
   mount(b) {
+    if (b.inst && !b.mesh) {
+      const mesh = this._proto.clone(true);
+      mesh.position.set(b.x, b.y || 0, b.z); mesh.rotation.y = b.ry;
+      this._scene.add(mesh);
+      Object.assign(b, { mesh, wheelF: mesh.getObjectByName('wheelF'), wheelR: mesh.getObjectByName('wheelR'), crank: mesh.getObjectByName('crank'), stand: mesh.getObjectByName('stand'), lampF: mesh.getObjectByName('lampF'), lampR: mesh.getObjectByName('lampR') });
+      b.lampF.visible = b.lampR.visible = !!this._eve;
+      this._setInst(b, false);
+    }
     this.riding = b;
     this.speed = 0;
     if (b.stand) b.stand.visible = false;
@@ -240,6 +299,11 @@ export class KakaoBikes {
     const b = this.riding;
     if (!b) return;
     if (b.stand) b.stand.visible = true;
+    if (b.inst && b.mesh) { // [migeum-taxibike] 내린 자리에 다시 인스턴스로
+      this._scene.remove(b.mesh);
+      Object.assign(b, { mesh: null, wheelF: null, wheelR: null, crank: null, stand: null, lampF: null, lampR: null });
+      this._setInst(b, true);
+    }
     this.riding = null;
     this.speed = 0;
   }
