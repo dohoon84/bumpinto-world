@@ -22,6 +22,7 @@ import { createPangyoLandmarks } from './landmarks/pangyo.js'; // [pangyo]
 import { migeumEnabled, mergeMigeumIndex, MIGEUM_DIR } from './migeum.js'; // [migeum]
 import { isEn, onLangChange } from '../i18n.js'; // [pangyo-link] 판교역 라벨 KO/EN
 import { createPangyoNpc, pangyoNpcEnabled } from './pangyoNpc.js'; // [pangyo-npc]
+import { migeumNpcEnabled, migeumNpcLoader, createMigeumPeds, combineCrowds, mountMigeumNpc } from './migeumNpc.js'; // [migeum-npc]
 import { pangyoWaterEnabled, PANGYO_WATER_FILE, attachMainDrop, mergePangyoStreams, dropWaterGeometry } from './pangyoWater.js'; // [pangyo-water]
 
 // streams: 탄천 지류 하도(streams.json). ?streams=0 이면 false → 예전과 같은 데이터만
@@ -289,7 +290,7 @@ export function createCorridor({ scene, corridorData, terrain, world, renderer, 
 
   const stats = { builtDetail: 0, builtLod: 0, chRoads: ch.length, signals: crossings.signals, chTrees: 0 };
   let chTreesDone = false;
-  let life = null, pangyoNpc = null;
+  let life = null, pangyoNpc = null, migeumPeds = null, migeumNpc = null;
   const api = {
     root, bounds, stations, tiles, stats, crossings, landmarks, inLive,
     pangyo: pangyoLm, // [pangyo] null 이면 꺼짐(?pangyo=0)
@@ -304,12 +305,18 @@ export function createCorridor({ scene, corridorData, terrain, world, renderer, 
       const pgLink = !!corridorData.pangyo && pangyoLinkEnabled(); // [pangyo-link] 판교역: 택시/보행 NPC 역 목록 + 버스 8110(정자역→판교역, 정자 쪽과 같이 ?bus=sim 일 때만) (?pangyolink=0 끔)
       if (life || params?.get('clife') === '0') return life;
       // [pangyo-npc] 판교 IT 직장인 NPC: 코리더 보행 NPC crowd 를 같이 쓴다. ?pangyonpc=0 / ?pangyo=0 이면 없음
+      // [migeum-npc] 미금역 출입구·보도 보행 NPC: 같은 crowd(draw call 0 추가). ?migeumnpc=0 / ?migeum=0 이면 없음
+      const mgLoader = corridorData.migeum && migeumNpcEnabled() ? migeumNpcLoader({ mg: corridorData.migeum, baseUrl }) : null;
+      migeumPeds = mgLoader ? createMigeumPeds({ mg: corridorData.migeum, loader: mgLoader, terrain, isFree: api.isFree, freeSpot: api.freeSpot, tileReady: (k) => tiles.get(k)?.dState === 3 }) : null;
       pangyoNpc = corridorData.pangyo && pangyoNpcEnabled() ? createPangyoNpc({ pg: corridorData.pangyo, baseUrl, overlay, terrain, isFree: api.isFree, freeSpot: api.freeSpot, tileReady: (k) => tiles.get(k)?.dState === 3 }) : null;
-      life = createCorridorLife({ root, baseUrl, crossings, terrain, terrainT: corridorData.terrainT, world, overlay, stations: pgLink ? index.stations.concat(corridorData.pangyo.stations || []) : index.stations, pangyoLink: pgLink && mode === 'sim', express: corridorData.pangyoExpress, liveBox: live, params, proxy, mode, liveDrive, liveCrossings, renderer, hints: (x, z, r) => gatherLifeHints(loaded, x, z, r), extraCrowd: pangyoNpc });
+      life = createCorridorLife({ root, baseUrl, crossings, terrain, terrainT: corridorData.terrainT, world, overlay, stations: pgLink ? index.stations.concat(corridorData.pangyo.stations || []) : index.stations, pangyoLink: pgLink && mode === 'sim', express: corridorData.pangyoExpress, liveBox: live, params, proxy, mode, liveDrive, liveCrossings, renderer, hints: (x, z, r) => gatherLifeHints(loaded, x, z, r), extraCrowd: combineCrowds([pangyoNpc, migeumPeds]) });
+      // [migeum-npc] 미금 차량(jz-traffic 시뮬 · 미금 차도 그래프). 박스 근처에 처음 올 때 만든다
+      if (mgLoader) migeumNpc = mountMigeumNpc(root, { mg: corridorData.migeum, loader: mgLoader, params, world, transit: { crossings: crossings.crossings, pedLight: crossings.pedLight, source: { vehicles: () => life?.buses?.near || [] } }, getLife: () => life });
       return life;
     },
     get life() { return life; },
     get pangyoNpc() { return pangyoNpc; }, // [pangyo-npc]
+    get migeumPeds() { return migeumPeds; }, get migeumNpc() { return migeumNpc; }, // [migeum-npc]
     update(dt, x, z, mode = 'follow') {
       if (!chTreesDone) { chTreesDone = true; stats.chTrees = chTrees(); }
       acc += dt;
@@ -321,6 +328,7 @@ export function createCorridor({ scene, corridorData, terrain, world, renderer, 
       lotte?.update(dt);
       updateNight(dt); // [corridor] 저녁 건물 불빛 페이드
       life?.update(dt, x, z);
+      migeumNpc?.update(dt, x, z); // [migeum-npc]
       homeLabelTick(x, z); // [pangyo-link]
     },
     setHomeStationLabel(item) { homeLabel = item; }, // [pangyo-link] game.js 가 정자역 라벨을 넘긴다
