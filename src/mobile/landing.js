@@ -68,12 +68,14 @@ export function mountLanding() {
       history.replaceState(null, '', url.toString());
       finish();
     };
-    // [econ-mobile] 로그인 계정 '계속하기': 게스트 입장 화면을 거치지 않고 마지막 역으로 바로(캐릭터가 이 폰에 있으면 passport, 없으면 로비 — 로그인 로비는 #lobby-card.is-account)
+    // [econ-mobile] 로그인 계정 '계속하기'(PC 9d48af4 와 같음): 지역·역 고르기를 거치지 않고 마지막 역의 입장 카드로 바로, 마지막 역이 없으면 정자역.
+    //   입장 카드의 계정 모드(#30: #lobby-card.is-account · body.bw-signed-in → 계정 캐릭터로 바로 입장, 캐릭터·PIN 고르기 없음)는 lobby 쪽이 판단한다.
+    const acctDest = () => lastSt || { region: current.id, at: null, label: v2data?.stationLabel?.(current.id, null) || t('정자역', 'Jeongja Stn.') };
     const resumeAccount = () => {
-      const last = lastSt || { region: current.id, at: null };
+      const last = acctDest();
       st.region = last.region; st.station = last.at || 'jeongja';
       const target = getRegion(st.region);
-      const extra = { ...(readSavedPassport() ? { passport: 1 } : { enter: 1 }), from: current.id };
+      const extra = { enter: 1, from: current.id };
       if (target.features?.corridor && last.at && last.at !== 'jeongja') extra.at = last.at;
       if (target.id !== current.id) { navigateToRegion(target.id, extra); return; }
       const url = new URL(location.href);
@@ -99,7 +101,7 @@ export function mountLanding() {
         root.className = 'm-view-start';
         // [econ-mobile] ?ui=v2 로그인 계정이면 '계속하기 · {계정}'(primary, 맨 위, 마지막 역 표시) · 아니면 기존 '이어서 입장'
         const resumeBtn = signedIn()
-          ? `<button type="button" class="m-btn m-primary m-acct-go" data-act="resume">${esc(t(`계속하기 · ${acctName()}`, `Continue · ${acctName()}`))}${lastSt ? `<span class="m-acct-at">${esc(lastSt.label)}</span>` : ''}</button>`
+          ? `<button type="button" class="m-btn m-primary m-acct-go" data-act="resume">${esc(t(`계속하기 · ${acctName()}`, `Continue · ${acctName()}`))}<span class="m-acct-at">${esc(acctDest().label)}</span></button>`
           : saved ? `<button type="button" class="m-btn m-secondary" data-act="resume">${t('이어서 입장', 'Continue as')} · ${esc(saved.name)}</button>` : '';
         root.innerHTML = `
           <div class="m-shade"></div>
@@ -114,7 +116,7 @@ export function mountLanding() {
             ${signedIn() ? resumeBtn : ''}
             <button type="button" class="m-btn ${signedIn() ? 'm-secondary' : 'm-primary'}" data-act="pick">${t('입장할 곳 고르기', 'Choose where to start')}</button>
             ${signedIn() ? '' : resumeBtn}
-            ${signedIn() ? `<small>${t('로그인된 계정의 잔액·기록으로 이어서 들어가요', 'You continue with your signed-in account\'s balance and records')}${saved ? ` · ${t('캐릭터', 'Character')} ${esc(saved.name)}` : ''}</small>` : `<small>${saved ? t('이 폰에 저장된 캐릭터로 바로 들어가요', 'Jump back in with the character saved on this phone') : t('다음 화면에서 지역과 역을 고르고, 캐릭터를 만들어요', 'Pick a region and station, then make your character')}</small>`}
+            ${signedIn() ? `<small>${esc(lastSt ? t(`지난번 역 · ${lastSt.label} 입장 카드로 바로 · 이 계정 캐릭터·잔액 그대로`, `Straight to ${lastSt.label} (your last station) · same account character and balance`) : t(`${acctDest().label} 입장 카드로 바로 · 이 계정 캐릭터·잔액 그대로`, `Straight to ${acctDest().label} · same account character and balance`))}</small>` : `<small>${saved ? t('이 폰에 저장된 캐릭터로 바로 들어가요', 'Jump back in with the character saved on this phone') : t('다음 화면에서 지역과 역을 고르고, 캐릭터를 만들어요', 'Pick a region and station, then make your character')}</small>`}
           </div>
           ${shouldShowHomeScreenHint() ? `<div class="m-a2hs" role="note"><span>${t('홈 화면에 추가하면 전체 화면으로 플레이할 수 있어요', 'Add to Home Screen to play in full screen')}</span><button type="button" data-act="a2hs-x" aria-label="${t('닫기', 'Close')}">✕</button></div>` : ''}
           <a class="m-chip m-bl" href="https://github.com/dohoon84/bumpinto-world" target="_blank" rel="noopener">⭐ ${t('GitHub에서 함께 만들기', 'Build it with us on GitHub')}</a>`;
