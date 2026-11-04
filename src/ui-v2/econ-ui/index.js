@@ -139,9 +139,10 @@ function trackWalk() {
   }, 1000);
 }
 
-export function mountEconUi() {
-  if (document.body.classList.contains('mobile')) return null; // PC 전용
-  document.body.classList.add('v2-econ');
+export function mountEconUi({ mobile = false } = {}) {
+  // PC 전용. 모바일은 src/mobile/econ/index.js 가 HUD 를 바꿔 끼우고(useAltHud) mobile:true 로 부른다.
+  if (document.body.classList.contains('mobile') !== mobile) return null;
+  document.body.classList.add(mobile ? 'm-econ' : 'v2-econ');
   mountEconHud({ link, open });
   let t = 0;
   const soon = () => { clearTimeout(t); t = setTimeout(refresh, 30); };
