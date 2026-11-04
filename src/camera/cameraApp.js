@@ -59,8 +59,25 @@ export function createCameraApp({ handset, renderer, scene, camera, cam, sms, ge
   const shortPlace = (i) => placeLabel(i).replace(/\s*\(.*\)\s*$/, '');
 
   // ───────── 뷰파인더 ─────────
+  // [mobile] 가로 폰: 오른쪽 셔터 열(96) 을 뺀 안전 영역 전체가 뷰파인더
+  const isMob = () => document.body.classList.contains('mobile');
+  const MOB_COL = 96;
+  function safeBox() {
+    const pr = document.createElement('div');
+    pr.style.cssText = 'position:fixed;left:var(--m-l,16px);right:var(--m-r,16px);top:var(--m-t,12px);bottom:var(--m-b,12px);pointer-events:none;visibility:hidden';
+    document.body.appendChild(pr); const b = pr.getBoundingClientRect(); pr.remove();
+    return b;
+  }
   function frameRect() {
     const W = innerWidth, H = innerHeight;
+    if (isMob()) {
+      const sb = safeBox(), a = MODES.find((m) => m.id === mode)?.aspect || 4 / 3;
+      const x0 = sb.left + 52, x1 = sb.right - MOB_COL - 8, y0 = sb.top, y1 = sb.bottom; // 왼쪽 52 = 모드 고르기 칸
+      const aw = Math.max(80, x1 - x0), ah = Math.max(80, y1 - y0);
+      let w = aw, h = aw / a;
+      if (h > ah) { h = ah; w = h * a; }
+      return { x: x0 + (aw - w) / 2, y: y0 + (ah - h) / 2, w, h };
+    }
     const availH = Math.max(80, H - TOP_BAR - BOTTOM_BAR);
     const a = MODES.find((m) => m.id === mode)?.aspect || 4 / 3;
     let w = W, h = W / a;
@@ -73,7 +90,9 @@ export function createCameraApp({ handset, renderer, scene, camera, cam, sms, ge
     const r = frameRect();
     const f = root.querySelector('.cam-frame');
     Object.assign(f.style, { left: `${r.x}px`, top: `${r.y}px`, width: `${r.w}px`, height: `${r.h}px` });
-    root.querySelector('.cam-zoom').style.top = `${r.y + r.h - 58}px`;
+    const zm = root.querySelector('.cam-zoom');
+    if (isMob()) { zm.style.top = `${r.y + r.h / 2}px`; zm.style.left = `${r.x + r.w - 8}px`; }
+    else { zm.style.top = `${r.y + r.h - 58}px`; zm.style.left = ''; }
   }
 
   function applyZoom(z) {
@@ -101,7 +120,7 @@ export function createCameraApp({ handset, renderer, scene, camera, cam, sms, ge
     if (!root) return;
     const en = isEn();
     root.querySelector('.cam-title').innerHTML = `<i class="cam-rec"></i>${en ? 'Camera' : '카메라'}`;
-    root.querySelector('.cam-hint').textContent = L('Space 촬영 · 드래그로 구도 · 휠로 거리 · Esc 닫기', 'Space to shoot · drag to frame · wheel to dolly · Esc to close');
+    root.querySelector('.cam-hint').textContent = isMob() ? L('드래그 구도 · 핀치 거리', 'Drag to frame · pinch to dolly') : L('Space 촬영 · 드래그로 구도 · 휠로 거리 · Esc 닫기', 'Space to shoot · drag to frame · wheel to dolly · Esc to close');
     root.querySelector('[data-c="grid"]').title = L('격자', 'Grid');
     root.querySelector('[data-c="close"]').title = L('닫기 (Esc)', 'Close (Esc)');
     root.querySelector('[data-c="flip"]').title = L('반대편에서 보기 (셀카)', 'Flip view (selfie)');
@@ -273,7 +292,7 @@ export function createCameraApp({ handset, renderer, scene, camera, cam, sms, ge
     box.innerHTML = `<div class="cr-card">
       <div class="cr-head"><button type="button" data-r="retake">${ICONS.back}${r.savedId || r.tipId ? (en ? 'Camera' : '카메라') : (en ? 'Retake' : '다시 찍기')}</button><b>${en ? 'Photo' : '사진'}</b><button type="button" data-r="done">${en ? 'Done' : '완료'}</button></div>
       <div class="cr-photo"><img src="${r.url}" alt="" /></div>
-      <p class="cr-meta">${esc(where)} · ${r.w}×${r.h}</p>
+      <div class="cr-side"><p class="cr-meta">${esc(where)} · ${r.w}×${r.h}</p>
       <label class="cr-cap"><input class="cr-caption" maxlength="${TIP_CAPTION_MAX}" placeholder="${en ? 'Add a caption…' : '캡션을 달아 보세요…'}" autocomplete="off" value="${esc(r.caption)}" /><small class="cr-count">${r.caption.length}/${TIP_CAPTION_MAX}</small></label>
       ${r.confirmTip ? `<div class="cr-confirm">
         <p>${en
@@ -286,7 +305,7 @@ export function createCameraApp({ handset, renderer, scene, camera, cam, sms, ge
         <button type="button" class="cr-btn" data-r="share">${ICONS.share}<span>${en ? 'Share' : '공유'}</span></button>
         ${newsTip ? `<button type="button" class="cr-btn red" data-r="tip" ${r.tipId ? 'disabled' : ''}>${r.tipId ? ICONS.check : ICONS.tip}<span>${r.tipId ? (en ? 'Tip sent' : '제보함') : (en ? 'News tip' : '뉴스 제보')}</span></button>` : ''}
       </div>`}
-      <p class="cr-note${err ? ' err' : ''}">${esc(note)}</p>
+      <p class="cr-note${err ? ' err' : ''}">${esc(note)}</p></div>
     </div>`;
     const input = box.querySelector('.cr-caption');
     input.addEventListener('input', () => { r.caption = input.value; box.querySelector('.cr-count').textContent = `${input.value.length}/${TIP_CAPTION_MAX}`; });
@@ -393,7 +412,7 @@ export function createCameraApp({ handset, renderer, scene, camera, cam, sms, ge
     const p = photos;
     if (!p) return;
     let list = [];
-    try { list = await cloud.visible(await listPhotos()); } catch { list = null; }
+    try { list = await cloud.visible(await listPhotos()); } catch (err) { console.warn('[camera] photo list failed', err); list = null; }
     if (photos !== p || !p.pane.isConnected) return;
     releasePhotoUrls();
     const en = isEn();
@@ -406,7 +425,7 @@ export function createCameraApp({ handset, renderer, scene, camera, cam, sms, ge
       return `<button type="button" class="ph-cell" data-xact="ph-open" data-id="${esc(m.id)}" style="background-image:url('${u}')">${m.tipId && newsTip ? `<i class="ph-tip">${ICONS.check}</i>` : ''}</button>`;
     }).join('');
     el.innerHTML = `<div class="ph-bar"><span>${en ? 'Library' : '보관함'}</span><small>${list.length}/${MAX_PHOTOS}</small><button type="button" class="ph-camera" data-xact="ph-camera">${en ? 'Camera' : '카메라'}</button></div>
-      ${list.length ? `<div class="ph-grid">${cells}</div>` : `<p class="hint">${en ? 'No photos yet. Open Camera and press the shutter (Space).' : '아직 사진이 없어요. 카메라를 열고 셔터(Space)를 눌러 보세요.'}</p>`}
+      ${list.length ? `<div class="ph-grid">${cells}</div>` : `<p class="hint">${isMob() ? (en ? 'No photos yet. Open Camera and tap the shutter.' : '아직 사진이 없어요. 카메라를 열고 셔터를 눌러 보세요.') : en ? 'No photos yet. Open Camera and press the shutter (Space).' : '아직 사진이 없어요. 카메라를 열고 셔터(Space)를 눌러 보세요.'}</p>`}
 `;
   }
 

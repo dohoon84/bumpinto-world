@@ -128,3 +128,37 @@ body.pv-open #attribution { display: none !important; }
 .pv-note.err { color: #ff8a80; }
 .pv-toast { position: absolute; left: 50%; bottom: 150px; transform: translate(-50%, 6px); padding: 8px 16px; border-radius: 12px; background: rgba(40,40,44,.92); font-size: 13px; font-weight: 600; pointer-events: none; opacity: 0; transition: opacity .2s, transform .2s; z-index: 4; }
 .pv-toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+/* ───────── [mobile] 가로 폰 카메라: 뷰파인더 = 안전 영역 전체, 오른쪽 열(사진첩·셔터·뒤집기), 왼쪽 모드 세로, 줌은 화면 오른쪽 가장자리 세로 ───────── */
+body.mobile .cam-root { touch-action: none; }
+body.mobile .cam-frame { box-shadow: 0 0 0 200vmax rgba(0, 0, 0, .5); border-radius: 6px; }
+body.mobile .cam-top { left: var(--m-l); right: auto; top: var(--m-t); height: auto; width: 44px; padding: 0; background: transparent; flex-direction: column; gap: 8px; justify-content: flex-start; pointer-events: none; }
+body.mobile .cam-top .cam-title { display: none; }
+body.mobile .cam-top .cam-ic { width: 40px; height: 40px; background: rgba(15, 25, 42, .6); }
+body.mobile .cam-top [data-c="close"] { order: -1; }
+body.mobile .cam-hint { top: calc(var(--m-t) + 6px); left: 50%; font-size: 12px; padding: 5px 12px; pointer-events: none; }
+body.mobile .cam-zoom { flex-direction: column; transform: translate(-100%, -50%); gap: 4px; padding: 4px; }
+body.mobile .cam-zoom button { min-width: 34px; height: 34px; font-size: 11px; }
+body.mobile .cam-bottom { left: auto; right: var(--m-r); top: var(--m-t); bottom: var(--m-b); width: 96px; height: auto; background: transparent; display: flex; flex-direction: column; align-items: center; justify-content: space-between; padding: 4px 0; box-sizing: border-box; pointer-events: none; }
+body.mobile .cam-bottom > * { position: static; margin: 0; pointer-events: auto; }
+body.mobile .cam-shutter { width: 72px; height: 72px; border-width: 4px; }
+body.mobile .cam-shutter i { width: 56px; height: 56px; }
+body.mobile .cam-thumb { width: 48px; height: 48px; order: 3; }
+body.mobile .cam-flip { width: 48px; height: 48px; order: 1; }
+body.mobile .cam-flip .ic { width: 26px; height: 26px; }
+body.mobile .cam-shutter { order: 2; }
+body.mobile .cam-modes { position: fixed; left: var(--m-l); top: 50%; right: auto; transform: translateY(-50%); flex-direction: column; gap: 6px; padding: 6px 4px; border-radius: 14px; background: rgba(15, 25, 42, .55); width: 44px; box-sizing: border-box; pointer-events: auto; }
+body.mobile .cam-modes button { font-size: 11px; letter-spacing: 0; padding: 6px 0; writing-mode: horizontal-tb; }
+body.mobile .cam-toast { bottom: calc(var(--m-b) + 8px); }
+/* 촬영 확인: 사진 왼쪽 · 캡션·버튼 오른쪽, 화면 안에 다 보이게 (넘치면 오른쪽만 스크롤) */
+body.mobile .cam-review { padding: var(--m-t) var(--m-r) var(--m-b) var(--m-l); box-sizing: border-box; }
+body.mobile .cr-card { width: 100%; max-width: 780px; height: 100%; max-height: none; display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(230px, 1fr); grid-template-rows: auto minmax(0, 1fr); column-gap: 14px; padding: 10px 12px; border-radius: 16px; overflow: hidden; }
+body.mobile .cr-head { grid-column: 1 / -1; margin-bottom: 6px; }
+body.mobile .cr-photo { grid-column: 1; grid-row: 2; min-height: 0; height: 100%; }
+body.mobile .cr-photo img { max-height: 100%; max-width: 100%; object-fit: contain; }
+body.mobile .cr-side { grid-column: 2; grid-row: 2; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; }
+body.mobile .cr-meta { margin: 0 2px 8px; }
+body.mobile .cr-caption { font-size: 16px; padding: 8px 0; }
+body.mobile .cr-actions { display: grid; grid-template-columns: repeat(2, 1fr); }
+body.mobile .cr-actions .cr-btn { min-height: 48px; flex-direction: row; gap: 6px; font-size: 12.5px; }
+body.mobile .cr-actions .cr-btn .ic { width: 20px; height: 20px; }

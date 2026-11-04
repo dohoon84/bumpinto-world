@@ -1,0 +1,17 @@
+{
+  "name": "Bumpinto World",
+  "short_name": "Bumpinto",
+  "description": "다 같이 만들어 가는 오픈 월드 · Korea & USA",
+  "start_url": "/",
+  "scope": "/",
+  "display": "fullscreen",
+  "display_override": ["fullscreen", "standalone"],
+  "orientation": "landscape",
+  "background_color": "#0e182c",
+  "theme_color": "#0e182c",
+  "icons": [
+    { "src": "/favicon.svg", "type": "image/svg+xml", "sizes": "any", "purpose": "any" },
+    { "src": "/mobile/icon-192.png", "type": "image/png", "sizes": "192x192" },
+    { "src": "/mobile/icon-512.png", "type": "image/png", "sizes": "512x512" }
+  ]
+}
