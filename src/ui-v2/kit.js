@@ -43,9 +43,28 @@ export function chipBtn(label, iconHtml = '', { cls = '', title = '' } = {}) {
   return b;
 }
 
-/** 손님(게스트) 계정 칩: ? 원 + 게스트 + 서브칩 */
+/**
+ * 계정 칩 (월드·역 선택 · 입장 카드 · 로딩 왼쪽 위). 이름은 guestChip 그대로 두고, econ 'session' 이벤트를 받아
+ * 로그인 뒤에는 '이름 · 구글 계정 연결됨' 으로 바뀐다(이미 화면에 있는 칩도 함께 갱신).
+ */
+let acctSession = null, acctSub = false;
+function acctHtml(s) {
+  if (!s || s.isGuest) return `<span class="v2-acct-q" aria-hidden="true">?</span><b>${esc(tr('게스트', 'Guest'))}</b><span class="v2-sub v2-sub-muted">${esc(tr('이 기기에만 저장', 'Saved on this device'))}</span>`;
+  const name = s.displayName || tr('내 계정', 'My account');
+  return `<span class="v2-acct-q on" aria-hidden="true">${esc([...name][0] || '•')}</span><b>${esc(name)}</b><span class="v2-sub v2-sub-muted">${esc(tr('구글 계정 연결됨', 'Google account linked'))}</span>`;
+}
+function paintAcct() { document.querySelectorAll('.v2-acct').forEach((c) => { c.innerHTML = acctHtml(acctSession); c.classList.toggle('is-guest', !acctSession || acctSession.isGuest); }); }
+function watchAcct() {
+  if (acctSub) return; acctSub = true;
+  import('./econ/index.js').then(({ econ }) => {
+    econ.on('session', (s) => { acctSession = s; paintAcct(); });
+    econ.getSession().then((s) => { acctSession = s; paintAcct(); }).catch(() => {});
+  }).catch(() => {});
+}
 export function guestChip() {
-  const c = el('div', 'v2-chip v2-acct', `<span class="v2-acct-q" aria-hidden="true">?</span><b>${esc(tr('게스트', 'Guest'))}</b><span class="v2-sub v2-sub-muted">${esc(tr('이 기기에만 저장', 'Saved on this device'))}</span>`);
+  watchAcct();
+  const c = el('div', 'v2-chip v2-acct', acctHtml(acctSession));
+  c.classList.toggle('is-guest', !acctSession || acctSession.isGuest);
   return c;
 }
 

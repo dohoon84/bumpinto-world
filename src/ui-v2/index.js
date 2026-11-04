@@ -44,6 +44,8 @@ export function initUiV2() {
   document.body.classList.add('ui-v2');
   mountEntryWatch();
   mountHudV2();
+  // [econ-ui] 경제 UI (bum 잔액·할 일·교통 결제·상점) — PC 전용, 별도 청크
+  if (!document.body.classList.contains('mobile')) import('./econ-ui/index.js').then((m) => m.mountEconUi()).catch(() => {});
   if (!flow) setGateDecorator(makeGateDecorator({ onBackToStart: () => location.reload() }));
 }
 initUiV2();

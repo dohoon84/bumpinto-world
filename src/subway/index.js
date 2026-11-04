@@ -24,6 +24,7 @@ import { STATIONS, stationTheme, corridorExits, withStairs, entranceLod, station
 import { createArrivalFeed } from './arrivals.js';
 import { isEn, tr } from '../i18n.js';
 import { encodeZone } from '../net/zones.js';
+import { emitTransit } from '../econHook.js'; // [econ-ui] trigger point
 
 export const STATION_ZONE = 'jeongja-station'; // [zone] 정자역 대합실. 다른 역은 stationZone(id) (src/net/zones.js)
 const PHONE_BASE = import.meta.env?.VITE_PHONE_URL || 'https://jeongja-phone.xn0texn073.workers.dev';
@@ -360,7 +361,7 @@ export function mountSubway({ scene, overlay, data, world, terrain, renderer, ge
   function makeConcourse(spawn = null) {
     const c = mod.buildConcourse({
       exits: cur.exits, groups: cur.groups, entryId: cur.state.entry, look: getLook?.(), renderer, theme: cur.theme, board: feed, spawn,
-      onToast: (kind) => { if (kind === 'tap') { beep(); say(tr('삑 — 교통카드 태그', 'Beep — card tapped'), 1.3); } },
+      onToast: (kind) => { if (kind === 'tap') { beep(); say(tr('삑 — 교통카드 태그', 'Beep — card tapped'), 1.3); emitTransit({ mode: 'subway', phase: 'tap' }); } }, // [econ-ui] trigger point
     });
     c.kind = 'concourse'; c.zone = cur.theme.zone;
     return c;

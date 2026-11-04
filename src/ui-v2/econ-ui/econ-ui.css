@@ -1,0 +1,266 @@
+/* [econ-ui] 경제 UI (Figma iAyaJYqkedi7wtbY8Zj1NW 13-2 · 키트 14-3). 1920 기준 px 그대로, 1440 에서는 가운데 정렬.
+   전부 body.ui-v2:not(.mobile) 아래 → ?ui=v2 가 아니거나 모바일이면 영향 없음. DOM/CSS 만(WebGL 없음). */
+body.ui-v2:not(.mobile).v2-econ #bgm { top: 58px; }
+body.ui-v2:not(.mobile).in-gate #ve-hud, body.ui-v2:not(.mobile).in-lobby #ve-hud, body.ui-v2:not(.mobile).in-gate #ve-layer, body.ui-v2:not(.mobile).in-lobby #ve-layer { display: none; }
+body.ui-v2:not(.mobile) #ve-hud { position: fixed; left: 0; top: 0; z-index: 12; pointer-events: none; }
+body.ui-v2:not(.mobile) #ve-hud .ve-row { position: fixed; top: 10px; display: flex; gap: 8px; pointer-events: auto; }
+body.ui-v2:not(.mobile) #ve-hud .ve-trk { position: fixed; left: 12px; width: 344px; pointer-events: auto; }
+body.ui-v2:not(.mobile) #ve-hud button.v2-chip { font: inherit; border: 0; cursor: pointer; }
+body.ui-v2:not(.mobile) #ve-hud .v2-chip small { font-size: 12px; font-weight: 700; color: var(--v2-hudsub); }
+body.ui-v2:not(.mobile) #ve-hud .v2-chip b { font-size: 15px; font-weight: 900; color: var(--v2-ink); }
+body.ui-v2:not(.mobile) .ve-bal b[data-ve="bal-v"] { font-size: 17px; font-variant-numeric: tabular-nums; }
+body.ui-v2:not(.mobile) .ve-bal { background: rgba(255, 248, 224, .95); box-shadow: inset 0 0 0 1px rgba(245, 162, 0, .4), var(--v2-hud-fx); }
+body.ui-v2:not(.mobile) .ve-bal-guest { gap: 8px; padding-right: 6px; }
+body.ui-v2:not(.mobile) .ve-gst { display: flex; flex-direction: column; line-height: 1.1; }
+body.ui-v2:not(.mobile) .ve-gst small { font-size: 11px !important; }
+body.ui-v2:not(.mobile) .ve-gst b { font-size: 13px !important; color: var(--v2-hudsub) !important; }
+body.ui-v2:not(.mobile) .ve-d { height: 24px; padding: 0 8px; color: #1a8f5c; font-weight: 900; }
+body.ui-v2:not(.mobile) .ve-d.neg { color: #d4003b; }
+body.ui-v2:not(.mobile) .ve-tile { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 8px; background: color-mix(in srgb, var(--c) 18%, white); color: var(--c); flex: none; }
+body.ui-v2:not(.mobile) .ve-tile svg { color: var(--c); }
+body.ui-v2:not(.mobile) .ve-pend { height: 24px; font-size: 12px; color: var(--v2-hudsub); }
+body.ui-v2:not(.mobile) .ve-caret { font-size: 11px; color: var(--v2-hudsub); }
+body.ui-v2:not(.mobile) .ve-mock { display: inline-flex; align-items: center; height: 20px; padding: 0 6px; border-radius: 6px; font-size: 11px; font-weight: 700; line-height: 1; white-space: nowrap; color: #b25b00; background: rgba(255, 225, 105, .22); border: 1px dashed #f5a200; }
+body.ui-v2:not(.mobile) .ve-mock.mini { height: 16px; padding: 0 4px; font-size: 10px; }
+body.ui-v2:not(.mobile) .v2-panel .ve-mock, body.ui-v2:not(.mobile) .ve-demo .ve-mock { color: #ffe169; background: rgba(255, 225, 105, .12); }
+body.ui-v2:not(.mobile) .ve-free { display: inline-flex; align-items: center; height: 22px; padding: 0 8px; border-radius: 6px; font-size: 12px; font-weight: 900; white-space: nowrap; color: #05263a; background: linear-gradient(180deg, #7ff0c8, #20c997); }
+body.ui-v2:not(.mobile) .ve-bum { display: inline-flex; align-items: center; gap: 4px; height: 24px; padding: 0 8px; border-radius: 12px; background: rgba(255, 225, 105, .16); border: 1px solid rgba(255, 225, 105, .5); color: #ffe169; font-size: 13px; font-weight: 900; white-space: nowrap; }
+body.ui-v2:not(.mobile) .ve-bum.lg { height: 32px; padding: 0 12px; border-radius: 16px; font-size: 16px; }
+body.ui-v2:not(.mobile) .ve-kp { display: inline-flex; align-items: center; gap: 4px; height: 24px; padding: 0 8px; border-radius: 12px; color: var(--c); background: color-mix(in srgb, var(--c) 16%, transparent); border: 1px solid color-mix(in srgb, var(--c) 50%, transparent); font-size: 12px; font-weight: 900; white-space: nowrap; }
+body.ui-v2:not(.mobile) .ve-kp svg { color: var(--c); }
+body.ui-v2:not(.mobile) .ve-bar { position: relative; display: inline-block; flex: none; border-radius: 99px; background: rgba(18, 32, 51, .12); overflow: hidden; vertical-align: middle; }
+body.ui-v2:not(.mobile) .v2-panel .ve-bar { background: rgba(255, 255, 255, .12); }
+body.ui-v2:not(.mobile) .ve-bar i { position: absolute; inset: 0 auto 0 0; border-radius: inherit; background: var(--v2-gold); }
+body.ui-v2:not(.mobile) .ve-bar.mint i { background: #20c997; } body.ui-v2:not(.mobile) .ve-bar.blue i { background: #3b82f6; } body.ui-v2:not(.mobile) .ve-bar.gold i { background: linear-gradient(90deg, #ffe169, #f5a200); }
+body.ui-v2:not(.mobile) .ve-bar.green i { background: #2fbf71; } body.ui-v2:not(.mobile) .ve-bar.violet i { background: #8b6cff; } body.ui-v2:not(.mobile) .ve-bar.red i { background: #ff6b6b; }
+body.ui-v2:not(.mobile) .ve-bar.ve-wide { width: 100% !important; }
+body.ui-v2:not(.mobile) .ve-stamp { flex: none; display: grid; place-items: center; align-content: center; width: 72px; height: 72px; border-radius: 50%; border: 3px solid #e8423b; color: #e8423b; transform: rotate(-14deg); line-height: 1; box-shadow: inset 0 0 0 2px rgba(232, 66, 59, .35); }
+body.ui-v2:not(.mobile) .ve-stamp b { font-size: 18px; font-weight: 900; } body.ui-v2:not(.mobile) .ve-stamp small { font-size: 9px; font-weight: 900; letter-spacing: 1px; }
+body.ui-v2:not(.mobile) .ve-stamp.sm { width: 48px; height: 48px; border-width: 2px; } body.ui-v2:not(.mobile) .ve-stamp.sm b { font-size: 13px; } body.ui-v2:not(.mobile) .ve-stamp.sm small { font-size: 7px; }
+body.ui-v2:not(.mobile) .ve-stamp-sp { width: 72px; flex: none; }
+body.ui-v2:not(.mobile) .ve-axt { display: grid; place-items: center; flex: none; border-radius: 12px; color: var(--c); background: color-mix(in srgb, var(--c) 20%, transparent); border: 1px solid color-mix(in srgb, var(--c) 55%, transparent); }
+body.ui-v2:not(.mobile) .ve-axt svg { color: var(--c); }
+
+/* 트래커 · 게스트 카드 (밝은 HUD 카드) */
+body.ui-v2:not(.mobile) .ve-card { box-sizing: border-box; display: flex; flex-direction: column; gap: 8px; padding: 12px; border-radius: 12px; background: var(--v2-hud-fill); box-shadow: var(--v2-hud-fx); color: var(--v2-ink); }
+body.ui-v2:not(.mobile) .ve-trk-h { display: flex; align-items: center; gap: 8px; font-size: 15px; }
+body.ui-v2:not(.mobile) .ve-trk-h b { font-weight: 900; }
+body.ui-v2:not(.mobile) .ve-blue { color: #3b82f6; }
+body.ui-v2:not(.mobile) .ve-lnk { border: 0; background: none; padding: 0; font: inherit; font-size: 12px; font-weight: 700; color: #3b82f6; cursor: pointer; }
+body.ui-v2:not(.mobile) .ve-trow { display: flex; align-items: center; gap: 8px; min-height: 40px; }
+body.ui-v2:not(.mobile) .ve-chk { flex: none; display: grid; place-items: center; width: 20px; height: 20px; border-radius: 6px; border: 2px solid rgba(18, 32, 51, .25); box-sizing: border-box; color: #fff; }
+body.ui-v2:not(.mobile) .ve-trow.done .ve-chk { background: #2fbf71; border-color: #2fbf71; }
+body.ui-v2:not(.mobile) .ve-tt { flex: 1; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+body.ui-v2:not(.mobile) .ve-tt > span { display: flex; align-items: baseline; gap: 6px; }
+body.ui-v2:not(.mobile) .ve-tt b { font-size: 13px; font-weight: 700; }
+body.ui-v2:not(.mobile) .ve-tt em { font-style: normal; font-size: 12px; color: var(--v2-hudsub); }
+body.ui-v2:not(.mobile) .ve-trow.done .ve-tt b { color: var(--v2-hudsub); text-decoration: line-through; }
+body.ui-v2:not(.mobile) .ve-ok { color: #1a8f5c !important; font-weight: 700; }
+body.ui-v2:not(.mobile) .ve-amt { display: inline-flex; align-items: center; gap: 2px; font-size: 13px; font-weight: 900; color: #b25b00; }
+body.ui-v2:not(.mobile) .ve-foot { margin: 0; padding-top: 6px; border-top: 1px solid rgba(18, 32, 51, .1); font-size: 12px; font-weight: 700; color: var(--v2-hudsub); }
+body.ui-v2:not(.mobile) .ve-guest p { margin: 0; font-size: 13px; line-height: 18px; color: #3b4a60; }
+body.ui-v2:not(.mobile) .ve-guest .ve-gnote { font-size: 12px; color: var(--v2-hudsub); }
+body.ui-v2:not(.mobile) .ve-guest .v2-btn { align-self: flex-start; }
+
+/* 패널 레이어 */
+body.ui-v2:not(.mobile) #ve-layer { position: fixed; inset: 0; z-index: 40; pointer-events: none; }
+body.ui-v2:not(.mobile) .ve-wrap { position: fixed; inset: 0; display: grid; place-items: center; pointer-events: none; }
+body.ui-v2:not(.mobile) .ve-wrap.dim { background: rgba(7, 13, 28, .55); pointer-events: auto; }
+body.ui-v2:not(.mobile) .ve-wrap.fading { background: transparent; transition: background .3s; }
+body.ui-v2:not(.mobile) .ve-wrap > * { pointer-events: auto; }
+body.ui-v2:not(.mobile) .ve-panel { position: relative; display: flex; flex-direction: column; gap: 12px; padding: 24px; }
+body.ui-v2:not(.mobile) .ve-panel .v2-btn[disabled] { opacity: .55; cursor: default; }
+body.ui-v2:not(.mobile) .ve-col { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+body.ui-v2:not(.mobile) .ve-col.c { align-items: center; text-align: center; }
+body.ui-v2:not(.mobile) .ve-col.r { align-items: flex-end; }
+body.ui-v2:not(.mobile) .ve-note { margin: 0; font-size: 13px; line-height: 18px; color: var(--v2-sub); }
+body.ui-v2:not(.mobile) .ve-sub { margin: 0; font-size: 13px; color: var(--v2-sub); }
+body.ui-v2:not(.mobile) .ve-gold { color: var(--v2-gold); } body.ui-v2:not(.mobile) .ve-green { color: #4ee39a; } body.ui-v2:not(.mobile) .ve-green2 { color: #4ee39a; } body.ui-v2:not(.mobile) .ve-red { color: #ff8a80; }
+body.ui-v2:not(.mobile) .ve-t12 { font-size: 12px; } body.ui-v2:not(.mobile) .ve-t13 { font-size: 13px; margin: 0; } body.ui-v2:not(.mobile) .ve-t15 { font-size: 15px; margin: 0; line-height: 21px; }
+body.ui-v2:not(.mobile) .ve-t17 { font-size: 17px; font-weight: 900; } body.ui-v2:not(.mobile) .ve-t20 { font-size: 20px; font-weight: 900; } body.ui-v2:not(.mobile) .ve-t22 { font-size: 22px; font-weight: 900; } body.ui-v2:not(.mobile) .ve-t28 { font-size: 28px; font-weight: 900; }
+body.ui-v2:not(.mobile) .ve-mono { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12px; color: var(--v2-sub); }
+body.ui-v2:not(.mobile) .ve-rowc { display: flex; align-items: center; justify-content: space-between; gap: 12px; box-sizing: border-box; min-height: 56px; padding: 8px 16px; border-radius: 12px; background: rgba(255, 255, 255, .06); border: 1px solid rgba(255, 255, 255, .12); }
+body.ui-v2:not(.mobile) .ve-rowc > span:first-child { display: flex; flex-direction: column; gap: 2px; }
+body.ui-v2:not(.mobile) .ve-rowc small { font-size: 12px; color: var(--v2-sub); }
+body.ui-v2:not(.mobile) .ve-rowc.gold { background: rgba(255, 225, 105, .1); border-color: rgba(255, 225, 105, .45); }
+body.ui-v2:not(.mobile) .ve-g2 { flex: 1; }
+body.ui-v2:not(.mobile) .ve-key { display: inline-grid; place-items: center; width: 22px; height: 22px; margin-right: 8px; border-radius: 6px; background: rgba(58, 42, 0, .18); font-size: 12px; font-weight: 900; }
+
+/* 02a 웰컴 */
+body.ui-v2:not(.mobile) .ve-welcome { width: 560px; overflow: hidden; align-items: stretch; }
+body.ui-v2:not(.mobile) .ve-welcome h2 { margin: 4px 0 0; font-size: 26px; font-weight: 900; color: var(--v2-gold); }
+body.ui-v2:not(.mobile) .ve-rays { position: absolute; left: 50%; top: -60px; transform: translateX(-50%); border-radius: 50%; background: repeating-conic-gradient(rgba(255, 225, 105, .16) 0 10deg, transparent 10deg 20deg); -webkit-mask: radial-gradient(circle, #000 30%, transparent 70%); mask: radial-gradient(circle, #000 30%, transparent 70%); pointer-events: none; }
+body.ui-v2:not(.mobile) .ve-welcome > *:not(.ve-rays) { position: relative; }
+body.ui-v2:not(.mobile) .ve-sum { display: flex; justify-content: space-between; align-items: center; padding: 8px 16px; font-size: 18px; border-top: 1px dashed rgba(255, 255, 255, .25); }
+body.ui-v2:not(.mobile) .ve-sum b { font-weight: 900; } body.ui-v2:not(.mobile) .ve-sum .ve-gold { font-size: 26px; }
+
+/* 02b 잔액 칩 안내 */
+body.ui-v2:not(.mobile) .ve-tip { position: fixed; width: 360px; gap: 8px; padding: 16px; }
+body.ui-v2:not(.mobile) .ve-tip-arrow { position: absolute; left: 24px; top: -9px; width: 16px; height: 16px; transform: rotate(45deg); background: #1d2e4b; border-left: 1.5px solid rgba(255, 255, 255, .18); border-top: 1.5px solid rgba(255, 255, 255, .18); }
+body.ui-v2:not(.mobile) .ve-tip .v2-btn { align-self: flex-end; }
+
+/* 04 할 일 시트 */
+body.ui-v2:not(.mobile) .ve-quests { width: 1040px; max-width: calc(100vw - 48px); max-height: calc(100vh - 140px); }
+body.ui-v2:not(.mobile) .ve-qhead { gap: 16px; }
+body.ui-v2:not(.mobile) .ve-tabs { display: flex; gap: 4px; padding: 4px; border-radius: 12px; background: rgba(255, 255, 255, .08); }
+body.ui-v2:not(.mobile) .ve-tab { height: 32px; padding: 0 16px; border: 0; border-radius: 8px; background: none; font: inherit; font-size: 14px; font-weight: 900; color: var(--v2-sub); cursor: pointer; }
+body.ui-v2:not(.mobile) .ve-tab.on { color: #3a2a00; background: linear-gradient(180deg, #ffe169, #f5a200); }
+body.ui-v2:not(.mobile) .ve-info { margin: 0; font-size: 13px; color: var(--v2-sub); }
+body.ui-v2:not(.mobile) .ve-qlist { display: flex; flex-direction: column; gap: 8px; overflow: auto; }
+body.ui-v2:not(.mobile) .ve-qcard { display: flex; align-items: center; gap: 16px; box-sizing: border-box; min-height: 88px; padding: 8px 16px; border-radius: 12px; background: rgba(255, 255, 255, .06); border: 1px solid rgba(255, 255, 255, .12); }
+body.ui-v2:not(.mobile) .ve-qcard.done { background: rgba(47, 191, 113, .08); border-color: rgba(47, 191, 113, .35); }
+body.ui-v2:not(.mobile) .ve-qmain { flex: 1; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+body.ui-v2:not(.mobile) .ve-id { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 11px; color: var(--v2-sub); opacity: .7; }
+body.ui-v2:not(.mobile) .ve-prog { font-size: 13px; font-weight: 700; color: var(--v2-sub); white-space: nowrap; }
+body.ui-v2:not(.mobile) .ve-prog.ok { color: #4ee39a; }
+body.ui-v2:not(.mobile) .ve-qrw { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; flex: none; width: 140px; }
+body.ui-v2:not(.mobile) .ve-qfoot { display: flex; align-items: center; gap: 8px; padding: 12px 16px; border-radius: 12px; background: rgba(255, 225, 105, .08); border: 1px solid rgba(255, 225, 105, .3); }
+body.ui-v2:not(.mobile) .ve-qfoot b { color: var(--v2-gold); font-size: 15px; } body.ui-v2:not(.mobile) .ve-qfoot small { color: var(--v2-sub); font-size: 13px; }
+body.ui-v2:not(.mobile) .ve-empty { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 40px 16px; text-align: center; }
+body.ui-v2:not(.mobile) .ve-empty.sm { padding: 12px; align-items: flex-start; text-align: left; }
+
+/* 05 보상 */
+body.ui-v2:not(.mobile) .ve-toast { position: fixed; left: 50%; top: 120px; transform: translateX(-50%); display: flex; align-items: center; gap: 16px; width: 560px; box-sizing: border-box; padding: 16px 24px; overflow: hidden; pointer-events: auto; animation: ve-in .25s ease-out; }
+body.ui-v2:not(.mobile) .ve-toast > *:not(.ve-rays) { position: relative; }
+body.ui-v2:not(.mobile) .ve-toast .ve-rays { left: 56px; top: 50%; transform: translate(-50%, -50%); }
+body.ui-v2:not(.mobile) .ve-toast .ve-col { flex: 1; }
+body.ui-v2:not(.mobile) .ve-tcoin { flex: none; filter: drop-shadow(0 4px 10px rgba(245, 162, 0, .5)); }
+body.ui-v2:not(.mobile) .ve-float { position: fixed; z-index: 91; font-size: 20px; font-weight: 900; color: #1a8f5c; text-shadow: 0 1px 0 #fff, 0 0 8px rgba(255, 255, 255, .9); animation: ve-up 1.6s ease-out forwards; pointer-events: none; }
+body.ui-v2:not(.mobile) .ve-float.ve-freeze { animation: none; }
+body.ui-v2:not(.mobile) .ve-next { position: fixed; left: 50%; bottom: 120px; transform: translateX(-50%); display: flex; align-items: center; gap: 12px; padding: 12px 16px; pointer-events: auto; }
+body.ui-v2:not(.mobile) .ve-next b { font-size: 15px; }
+.v2-coinfly.ve-freeze .v2-coinfly-c { transition: none !important; }
+@keyframes ve-in { from { opacity: 0; transform: translate(-50%, -12px); } }
+@keyframes ve-up { 0% { opacity: 0; transform: translateY(6px); } 15% { opacity: 1; } 100% { opacity: 0; transform: translateY(-28px); } }
+
+/* 06 카르마 */
+body.ui-v2:not(.mobile) .ve-karma { flex-direction: row; align-items: flex-start; gap: 24px; width: 1200px; max-width: calc(100vw - 48px); }
+body.ui-v2:not(.mobile) .ve-karma > .v2-close { position: absolute; right: 16px; top: 16px; }
+body.ui-v2:not(.mobile) .ve-kl { flex: 1; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+body.ui-v2:not(.mobile) .ve-kr { width: 440px; flex: none; display: flex; flex-direction: column; gap: 12px; padding-top: 48px; }
+body.ui-v2:not(.mobile) .ve-asof { position: absolute; right: 72px; top: 26px; font-size: 12px; color: var(--v2-sub); }
+body.ui-v2:not(.mobile) .ve-krow { display: flex; align-items: center; gap: 12px; min-height: 64px; padding: 8px 12px; border-radius: 12px; background: rgba(255, 255, 255, .05); }
+body.ui-v2:not(.mobile) .ve-kmain { flex: 1; display: flex; flex-direction: column; gap: 6px; }
+body.ui-v2:not(.mobile) .ve-kmain small { font-size: 12px; color: var(--v2-sub); }
+body.ui-v2:not(.mobile) .ve-ach { display: flex; flex-direction: column; gap: 6px; padding: 16px; border-radius: 12px; background: rgba(255, 255, 255, .05); border: 1px solid rgba(255, 255, 255, .12); }
+body.ui-v2:not(.mobile) .ve-ach.on { align-items: flex-start; background: rgba(255, 225, 105, .1); border-color: rgba(255, 225, 105, .5); }
+body.ui-v2:not(.mobile) .ve-ach small { font-size: 12px; color: var(--v2-sub); }
+body.ui-v2:not(.mobile) .ve-ach-coin { position: absolute; }
+body.ui-v2:not(.mobile) .ve-ach.on { position: relative; } body.ui-v2:not(.mobile) .ve-ach.on .ve-ach-coin { right: 16px; top: 16px; }
+body.ui-v2:not(.mobile) .ve-lad { flex-wrap: wrap; gap: 4px; }
+body.ui-v2:not(.mobile) .ve-dot { display: grid; place-items: center; width: 18px; height: 18px; border-radius: 50%; color: #fff; flex: none; }
+body.ui-v2:not(.mobile) .ve-dot svg { color: #fff; }
+body.ui-v2:not(.mobile) .ve-step { display: inline-flex; align-items: center; gap: 3px; height: 22px; padding: 0 6px; border-radius: 6px; font-size: 11px; font-weight: 700; color: var(--v2-sub); background: rgba(255, 255, 255, .06); }
+body.ui-v2:not(.mobile) .ve-step.on { color: var(--c); background: color-mix(in srgb, var(--c) 18%, transparent); }
+
+/* 11 상점 */
+body.ui-v2:not(.mobile) .ve-shop { width: 1240px; max-width: calc(100vw - 48px); }
+body.ui-v2:not(.mobile) .ve-goal { display: flex; flex-direction: column; gap: 8px; padding: 16px; border-radius: 12px; background: rgba(255, 225, 105, .08); border: 1px solid rgba(255, 225, 105, .35); }
+body.ui-v2:not(.mobile) .ve-goal small { font-size: 12px; color: var(--v2-sub); }
+body.ui-v2:not(.mobile) .ve-freenote { color: #7ff0c8 !important; }
+body.ui-v2:not(.mobile) .ve-items { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+body.ui-v2:not(.mobile) .ve-item { display: flex; flex-direction: column; gap: 8px; padding: 12px; border-radius: 12px; text-align: left; font: inherit; color: var(--v2-txt); background: rgba(255, 255, 255, .06); border: 1.5px solid rgba(255, 255, 255, .12); cursor: pointer; }
+body.ui-v2:not(.mobile) .ve-item.on { border-color: var(--v2-gold); background: rgba(255, 225, 105, .1); }
+body.ui-v2:not(.mobile) .ve-item b { font-size: 16px; font-weight: 900; }
+body.ui-v2:not(.mobile) .ve-item small { font-size: 12px; color: var(--v2-sub); }
+body.ui-v2:not(.mobile) .ve-thumb { display: grid; place-items: center; height: 120px; border-radius: 8px; background: linear-gradient(160deg, rgba(76, 201, 240, .25), rgba(255, 255, 255, .04)); font-size: 13px; font-weight: 700; color: var(--v2-sub); }
+body.ui-v2:not(.mobile) .ve-iprice { display: inline-flex; align-items: center; gap: 6px; color: var(--v2-gold); }
+body.ui-v2:not(.mobile) .ve-iprice s { font-size: 12px; color: var(--v2-sub); }
+body.ui-v2:not(.mobile) .ve-sfoot small { font-size: 12px; color: var(--v2-sub); }
+body.ui-v2:not(.mobile) .ve-locked { gap: 6px; }
+body.ui-v2:not(.mobile) .ve-msg { margin: 0; padding: 8px 12px; border-radius: 8px; background: rgba(32, 201, 151, .12); font-size: 13px; color: #7ff0c8; }
+
+/* 01a · 01b */
+body.ui-v2:not(.mobile) .ve-gwait { width: 520px; }
+body.ui-v2:not(.mobile) .ve-gbox { display: flex; align-items: center; gap: 12px; padding: 16px; border-radius: 12px; background: rgba(255, 255, 255, .06); font-size: 13px; color: var(--v2-sub); }
+body.ui-v2:not(.mobile) .ve-spin { flex: none; width: 24px; height: 24px; border-radius: 50%; border: 3px solid rgba(255, 255, 255, .2); border-top-color: var(--v2-gold); animation: ve-spin 1s linear infinite; }
+@keyframes ve-spin { to { transform: rotate(360deg); } }
+body.ui-v2:not(.mobile) .ve-demo-acc { display: flex; align-items: center; gap: 8px; justify-content: center; }
+body.ui-v2:not(.mobile) .ve-migrate { width: 600px; align-items: stretch; }
+body.ui-v2:not(.mobile) .ve-migrate > .v2-tag { align-self: flex-start; }
+body.ui-v2:not(.mobile) .ve-warn { display: flex; flex-direction: column; gap: 4px; padding: 12px 16px; border-radius: 12px; background: rgba(212, 0, 59, .12); border: 1px solid rgba(255, 122, 107, .45); }
+body.ui-v2:not(.mobile) .ve-warn b { font-size: 13px; color: #ffb3a8; } body.ui-v2:not(.mobile) .ve-warn small { font-size: 12px; color: var(--v2-sub); }
+
+/* 08 · 09 · 10 교통 */
+body.ui-v2:not(.mobile) .ve-board { width: 560px; position: fixed; left: 50%; bottom: 140px; transform: translateX(-50%); }
+body.ui-v2:not(.mobile) .ve-wrap:has(.ve-board) { place-items: end center; }
+body.ui-v2:not(.mobile) .ve-fare { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-radius: 12px; background: rgba(255, 255, 255, .06); border: 1px solid rgba(255, 255, 255, .12); }
+body.ui-v2:not(.mobile) .ve-fare small { font-size: 12px; color: var(--v2-sub); }
+body.ui-v2:not(.mobile) .ve-fare .ve-col.r b { font-size: 15px; }
+body.ui-v2:not(.mobile) .ve-price { display: inline-flex; align-items: baseline; gap: 8px; }
+body.ui-v2:not(.mobile) .ve-s, body.ui-v2:not(.mobile) .ve-panel s, body.ui-v2:not(.mobile) .ve-pay s { color: var(--v2-sub); font-weight: 700; text-decoration-thickness: 2px; }
+body.ui-v2:not(.mobile) .ve-paystack { position: fixed; right: 24px; top: 120px; display: flex; flex-direction: column; gap: 8px; width: 480px; pointer-events: auto; animation: ve-in2 .25s ease-out; }
+@keyframes ve-in2 { from { opacity: 0; transform: translateY(-12px); } }
+body.ui-v2:not(.mobile) .ve-pay { display: flex; align-items: center; gap: 16px; padding: 16px 20px; border-color: color-mix(in srgb, var(--c) 60%, transparent); }
+body.ui-v2:not(.mobile) .ve-pay .ve-col { flex: 1; }
+body.ui-v2:not(.mobile) .ve-pay .v2-tag { align-self: flex-start; }
+body.ui-v2:not(.mobile) .ve-amtrow { align-items: baseline; gap: 10px; }
+body.ui-v2:not(.mobile) .ve-amt-big { font-size: 28px; font-weight: 900; color: #ff8a80; }
+body.ui-v2:not(.mobile) .ve-amt-big.free { color: #7ff0c8; }
+body.ui-v2:not(.mobile) .ve-after { font-size: 13px; color: var(--v2-sub); }
+body.ui-v2:not(.mobile) .ve-beep { position: relative; flex: none; display: grid; place-items: center; width: 88px; height: 88px; color: var(--c); }
+body.ui-v2:not(.mobile) .ve-beep svg { color: var(--c); }
+body.ui-v2:not(.mobile) .ve-beep i { position: absolute; inset: 0; border-radius: 50%; border: 2px solid var(--c); opacity: .55; }
+body.ui-v2:not(.mobile) .ve-beep i:nth-child(2) { inset: 12px; opacity: .75; } body.ui-v2:not(.mobile) .ve-beep i:nth-child(3) { inset: 24px; opacity: 1; background: color-mix(in srgb, var(--c) 20%, transparent); }
+body.ui-v2:not(.mobile) .ve-beep b { position: absolute; right: -6px; top: -4px; font-size: 15px; font-weight: 900; color: #fff; text-shadow: 0 1px 2px rgba(0, 0, 0, .5); }
+body.ui-v2:not(.mobile) .ve-qtoast { display: flex; align-items: center; gap: 12px; padding: 12px 16px; }
+body.ui-v2:not(.mobile) .ve-qtoast > svg { flex: none; width: 28px; height: 28px; padding: 6px; box-sizing: border-box; border-radius: 50%; background: #2fbf71; }
+body.ui-v2:not(.mobile) .ve-qtoast .ve-col { flex: 1; } body.ui-v2:not(.mobile) .ve-qtoast b { font-size: 15px; }
+body.ui-v2:not(.mobile) .ve-sumline { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 10px 16px; font-size: 13px; color: var(--v2-sub); }
+body.ui-v2:not(.mobile) .ve-sumline b { font-size: 17px; }
+body.ui-v2:not(.mobile) .ve-mini { position: fixed; right: 24px; top: 120px; display: flex; align-items: center; gap: 8px; padding: 10px 14px; }
+body.ui-v2:not(.mobile) .ve-block { width: 560px; }
+body.ui-v2:not(.mobile) .ve-bang { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 50%; background: #e8423b; color: #fff; font-weight: 900; font-size: 18px; flex: none; }
+body.ui-v2:not(.mobile) .ve-short { display: flex; flex-direction: column; gap: 4px; padding: 12px 16px; border-radius: 12px; background: rgba(212, 0, 59, .14); border: 1px solid rgba(255, 122, 107, .5); }
+body.ui-v2:not(.mobile) .ve-short small { font-size: 13px; color: var(--v2-sub); } body.ui-v2:not(.mobile) .ve-short b { font-size: 22px; font-weight: 900; color: #ff8a80; }
+body.ui-v2:not(.mobile) .ve-block .ve-rowc { min-height: 48px; }
+body.ui-v2:not(.mobile) .ve-settle { width: 520px; }
+body.ui-v2:not(.mobile) .ve-kv { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 0; font-size: 14px; border-bottom: 1px solid rgba(255, 255, 255, .08); }
+body.ui-v2:not(.mobile) .ve-kv span { color: var(--v2-sub); } body.ui-v2:not(.mobile) .ve-kv b { font-size: 15px; }
+body.ui-v2:not(.mobile) .ve-kv.big { justify-content: flex-start; padding: 12px 0; border-bottom: 0; }
+body.ui-v2:not(.mobile) .ve-kv.big span { color: var(--v2-txt); font-weight: 900; }
+
+/* 07 · 10a 폰 패널 (게임 폰 크기 · 오른쪽) */
+body.ui-v2:not(.mobile) .ve-wrap:has(.ve-phone) { place-items: center end; padding-right: 48px; }
+body.ui-v2:not(.mobile) .ve-phone { width: 400px; height: min(820px, calc(100vh - 80px)); box-sizing: border-box; padding: 12px; border-radius: 40px; background: #0b1220; box-shadow: 0 20px 48px rgba(8, 16, 30, .55), inset 0 0 0 2px rgba(255, 255, 255, .12); }
+body.ui-v2:not(.mobile) .ve-phone-scr { height: 100%; box-sizing: border-box; display: flex; flex-direction: column; gap: 12px; padding: 12px 16px 16px; border-radius: 30px; overflow: auto; background: linear-gradient(180deg, #16243b, #0f192a); color: var(--v2-txt); scrollbar-width: none; }
+body.ui-v2:not(.mobile) .ve-phone-st { display: flex; justify-content: space-between; font-size: 12px; color: var(--v2-sub); padding: 0 8px; }
+body.ui-v2:not(.mobile) .ve-bh { gap: 8px; }
+body.ui-v2:not(.mobile) .ve-back { width: 32px; height: 32px; border: 0; border-radius: 8px; background: rgba(255, 255, 255, .08); color: var(--v2-txt); font-size: 22px; line-height: 1; cursor: pointer; }
+body.ui-v2:not(.mobile) .ve-tcard { position: relative; display: flex; flex-direction: column; gap: 6px; padding: 16px; border-radius: 16px; background: linear-gradient(135deg, #2b4c7e, #13213a); border: 1px solid rgba(255, 255, 255, .2); overflow: hidden; }
+body.ui-v2:not(.mobile) .ve-tcard small { font-size: 12px; color: var(--v2-sub); }
+body.ui-v2:not(.mobile) .ve-stripe { height: 4px; border-radius: 2px; background: linear-gradient(90deg, #ffe169, #f5a200 40%, #4cc9f0); margin: 4px 0; }
+body.ui-v2:not(.mobile) .ve-pbox { display: flex; flex-direction: column; gap: 8px; padding: 12px; border-radius: 12px; background: rgba(255, 255, 255, .06); border: 1px solid rgba(255, 255, 255, .1); }
+body.ui-v2:not(.mobile) .ve-pbox small { font-size: 12px; color: var(--v2-sub); }
+body.ui-v2:not(.mobile) .ve-pbox .ve-bar.ve-wide { width: 100% !important; }
+body.ui-v2:not(.mobile) .ve-lrow { display: flex; align-items: center; gap: 10px; padding: 6px 0; border-bottom: 1px solid rgba(255, 255, 255, .06); }
+body.ui-v2:not(.mobile) .ve-lrow b { font-size: 13px; } body.ui-v2:not(.mobile) .ve-lrow small { font-size: 11px; }
+body.ui-v2:not(.mobile) .ve-opt { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 12px; font: inherit; color: var(--v2-txt); text-align: left; background: rgba(255, 255, 255, .06); border: 1.5px solid rgba(255, 255, 255, .12); cursor: pointer; }
+body.ui-v2:not(.mobile) .ve-opt.on { border-color: var(--v2-gold); background: rgba(255, 225, 105, .1); }
+body.ui-v2:not(.mobile) .ve-opt small { font-size: 12px; color: var(--v2-sub); } body.ui-v2:not(.mobile) .ve-opt s { font-size: 12px; }
+body.ui-v2:not(.mobile) .ve-radio { width: 16px; height: 16px; border-radius: 50%; border: 2px solid rgba(255, 255, 255, .4); box-sizing: border-box; flex: none; }
+body.ui-v2:not(.mobile) .ve-opt.on .ve-radio { border: 5px solid var(--v2-gold); }
+body.ui-v2:not(.mobile) .ve-chkline { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-radius: 8px; font-size: 12px; }
+body.ui-v2:not(.mobile) .ve-chkline.ok { background: rgba(47, 191, 113, .12); color: #7ff0c8; }
+body.ui-v2:not(.mobile) .ve-chkline.bad { background: rgba(212, 0, 59, .14); color: #ff8a80; }
+
+/* demo=econ 막대 (개발용) */
+body.ui-v2:not(.mobile) .ve-demo { position: fixed; left: 50%; bottom: 8px; transform: translateX(-50%); z-index: 95; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; max-width: calc(100vw - 32px); padding: 6px 10px; border-radius: 12px; background: rgba(7, 13, 28, .86); border: 1px dashed #f5a200; color: var(--v2-txt); font-size: 12px; }
+body.ui-v2:not(.mobile) .ve-demo.min > :not(.ve-demo-t) { display: none; }
+body.ui-v2:not(.mobile) .ve-demo button { height: 24px; padding: 0 8px; border-radius: 6px; border: 1px solid rgba(255, 255, 255, .2); background: rgba(255, 255, 255, .08); color: inherit; font: inherit; cursor: pointer; }
+body.ui-v2:not(.mobile) .ve-demo button:hover { background: rgba(255, 255, 255, .18); }
+body.ui-v2:not(.mobile) .ve-demo-g { display: inline-flex; gap: 4px; flex-wrap: wrap; }
+body.ui-v2:not(.mobile) .ve-demo-mode { color: #05263a !important; background: #7ff0c8 !important; font-weight: 900 !important; }
+body.ui-v2:not(.mobile) .ve-demo-mode.paid { background: #ffb3a8 !important; }
+body.ui-v2:not(.mobile) .ve-demo-who { color: var(--v2-sub); }
+body.ui-v2:not(.mobile).ve-shot .ve-demo { display: none; }
+body.ui-v2:not(.mobile) .ve-phone-scr > * { flex: none; }
+body.ui-v2:not(.mobile) .ve-col > .v2-tag, body.ui-v2:not(.mobile) .ve-panel > .v2-tag { align-self: flex-start; }
+body.ui-v2:not(.mobile) .ve-col.c > .v2-tag { align-self: center; }
+/* #30 대응: 상점 미판매(available:false) · 상한 적용 퀘스트(paidBum) · 오류 문구 */
+body.ui-v2:not(.mobile) .ve-item.na { opacity: .55; }
+body.ui-v2:not(.mobile) .ve-item.na .v2-tag { margin-left: 4px; }
+body.ui-v2:not(.mobile) .ve-capnote { font-size: 11px; color: #9eb4c6; margin-left: 6px; }
+body.ui-v2:not(.mobile) .ve-msg.err { color: #ff8a8a; }
+/* 데모 막대는 게임 안에서만 (시작·로비 버튼을 가리지 않게) */
+body.ui-v2:not(.mobile).in-lobby .ve-demo, body.ui-v2:not(.mobile).in-gate .ve-demo { display: none; }

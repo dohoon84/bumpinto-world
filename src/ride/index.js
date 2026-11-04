@@ -16,6 +16,7 @@ import { disposeBus } from '../transit/busModel.js';
 import { animateAvatar } from '../entities/avatar.js';
 import { isEn } from '../i18n.js';
 import { charge } from './fare.js';
+import { emitTransit, busFareCode } from '../econHook.js'; // [econ-ui] trigger point
 import { createRideLog } from './rideLog.js';
 import { createWallet } from './wallet.js';
 import { createRideBus } from './cabin.js';
@@ -209,6 +210,7 @@ export function mountRide({ corridor, getPlayer, remotes, camera, cam, setMode, 
     stats.boards++;
     ride.au = { prev: true, closed: false, brakeIdx: -1, taps: Math.floor(Math.random() * 3), tapT: 0.9 + Math.random() * 0.5 };
     sound.sfx('card-tap-v2'); // 내 카드 찍는 소리
+    emitTransit({ mode: 'bus', phase: 'board', code: busFareCode(P.type), route: P.ref, rideId: res.receiptId || `bus-${ride.at}` }); // [econ-ui] trigger point
     if (c.kind === 'ghost') { ghosts.delete(c.g.key); c.g.mesh.parent?.remove(c.g.mesh); c.g.mesh.userData.releaseLights?.(); disposeGhostMesh(c.g); }
     placeBus(0);
     toast(L(`🚌 ${P.ref}번 탑승 · ${terminusOf(P)} 방면 — 요금 ${res.amount}원 (무료 체험 카드)`, `🚌 Boarded bus ${P.ref} toward ${terminusOf(P)} — fare ₩${res.amount} (Free Trial Card)`));
@@ -571,6 +573,7 @@ export function mountRide({ corridor, getPlayer, remotes, camera, cam, setMode, 
     r.fare = res; r.speed = speed; r.live = de.live; r.routeLen = routeLength(cars.nodes, route) + (t.cum[t.cum.length - 1] - t.s);
     r.t0 = performance.now(); r.at = Date.now(); r.simT0 = r.simT || 0;
     panel.hidden = true;
+    emitTransit({ mode: 'taxi', phase: 'depart', code, meters: r.routeLen, rideId: `taxi-${r.at}`, dest: r.dest?.label ? { ko: r.dest.label, en: r.dest.label } : null }); // [econ-ui] trigger point
     if (speed === 'instant') {
       // 즉시 도착: 목적지 길가로 바로(경로 길이는 기록용 추정)
       const e = de.e, hx = (cars.nodes[e.to].x - cars.nodes[e.from].x) / e.L, hz = (cars.nodes[e.to].z - cars.nodes[e.from].z) / e.L;
@@ -612,6 +615,7 @@ export function mountRide({ corridor, getPlayer, remotes, camera, cam, setMode, 
     if (ry != null) pl().rotation.y = ry;
     pl().visible = true;
     if (r.fare) log.add({ mode: 'taxi', route: 'TAXI', routeName: TAXI_LIVERIES[r.t.liv]?.label || '택시', from: r.from, to: r.stopReq ? L(`${placeName(sp.x, sp.z)} (중간 하차)`, `${placeName(sp.x, sp.z)} (stopped early)`) : (r.dest?.label || placeName(sp.x, sp.z)), distM: r.dist, durSec: r.speed === 'instant' ? 0 : (r.simT || 0) - (r.simT0 || 0), at: r.at, end: Date.now(), fare: r.fare, speed: r.speed });
+    if (r.fare) emitTransit({ mode: 'taxi', phase: 'arrive', meters: r.dist || 0, rideId: `taxi-${r.at}`, dest: r.dest?.label ? { ko: r.dest.label, en: r.dest.label } : null }); // [econ-ui] trigger point
     const live = r.live, travelId = r.dest?.travelId;
     ride = null; panel.hidden = true; stats.alights++;
     handset?.refreshApp('wallet'); handset?.refreshApp('taxi');
@@ -943,7 +947,7 @@ export function mountRide({ corridor, getPlayer, remotes, camera, cam, setMode, 
     forceAlight(reason = 'teleport') {
       picking = null;
       if (ride?.mode === 'bus') endBusRide(reason);
-      else if (ride?.mode === 'taxi') { if (ride.phase === 'choose' || ride.phase === 'drive') { const r = ride; r.t.manual = false; TR()?.cars?.release(r.t); pl().visible = true; if (r.fare) log.add({ mode: 'taxi', route: 'TAXI', routeName: TAXI_LIVERIES[r.t.liv]?.label || '택시', from: r.from, to: placeName(r.t.mesh.position.x, r.t.mesh.position.z), distM: r.dist, durSec: (r.simT || 0) - (r.simT0 || 0), at: r.at, end: Date.now(), fare: r.fare, speed: r.speed }); ride = null; panel.hidden = true; toast(L('이동하면서 택시에서 내렸어요', 'Left the taxi (teleport)')); emitNow(); } else cancelTaxi(false); }
+      else if (ride?.mode === 'taxi') { if (ride.phase === 'choose' || ride.phase === 'drive') { const r = ride; r.t.manual = false; TR()?.cars?.release(r.t); pl().visible = true; if (r.fare) log.add({ mode: 'taxi', route: 'TAXI', routeName: TAXI_LIVERIES[r.t.liv]?.label || '택시', from: r.from, to: placeName(r.t.mesh.position.x, r.t.mesh.position.z), distM: r.dist, durSec: (r.simT || 0) - (r.simT0 || 0), at: r.at, end: Date.now(), fare: r.fare, speed: r.speed }); if (r.fare) emitTransit({ mode: 'taxi', phase: 'arrive', meters: r.dist || 0, rideId: `taxi-${r.at}` }); /* [econ-ui] trigger point */ ride = null; panel.hidden = true; toast(L('이동하면서 택시에서 내렸어요', 'Left the taxi (teleport)')); emitNow(); } else cancelTaxi(false); }
     },
     update(dt) {
       if (!hintSet && B()) { B().setRideHint(stopHint); hintSet = true; }
