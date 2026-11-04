@@ -17,8 +17,26 @@ function npc(kind, color) { // 게임 NPC 차량: 병합 지오메트리 + 공�
   const m = new THREE.InstancedMesh(KINDS[kind].build(), vehicleMaterial(), 1);
   m.setMatrixAt(0, new THREE.Matrix4()); m.setColorAt(0, new THREE.Color(color)); return m;
 }
+// 첫 자전거: 게임 자전거(createKakaoBike) 모양을 그대로 쓰되 썸네일용 복제본만 동네 장바구니 자전거로 다시 칠한다(게임 코드는 그대로).
+//   노란 차체·펜더 → 파스텔 민트, 앞 바구니 → 은색(철망 바구니 느낌), 공유 자전거 잠금장치 상자(뒷바퀴 앞 상자+검은 면)는 뺀다. 로고·글자 데칼은 원래 없음.
+const MINT = '#8fd3c1', SILVER = '#c9ced6';
+function everydayBike() {
+  const g = createKakaoBike().clone(true);
+  const frame = new THREE.MeshLambertMaterial({ color: MINT }), wire = new THREE.MeshLambertMaterial({ color: SILVER });
+  const drop = [];
+  g.traverse((o) => {
+    if (!o.isMesh) return;
+    const yellow = o.material?.color?.getHexString() === 'fee500';
+    const p = o.position;
+    const lock = o.parent === g && Math.abs(p.y - 0.5) < 1e-3 && (Math.abs(p.z + 0.36) < 1e-3 || Math.abs(p.z + 0.28) < 1e-3);
+    if (lock) { drop.push(o); return; }
+    if (yellow) o.material = o.parent !== g ? wire : frame; // 바구니는 그룹 안 → 은색
+  });
+  for (const o of drop) o.removeFromParent();
+  return g;
+}
 const ITEMS = [
-  { id: 'bike', make: () => createKakaoBike(), az: 62 },
+  { id: 'bike', make: () => everydayBike(), az: 62 },
   { id: 'roadbike', make: () => createRoadBikeModel(renderer, { colorway: 'black' }), az: 62 },
   { id: 'scooter', make: () => npc('scooter', '#c8202a'), az: 50 },
   { id: 'car', make: () => npc('kei', '#9cc3dc'), az: 40 },
