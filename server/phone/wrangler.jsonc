@@ -35,6 +35,8 @@
     "ACCOUNTS_ENABLED": "0",
     "ACCOUNT_MIGRATE": "on",
     "ECONOMY_ENABLED": "0",
+    "ECON_FEATURES": "",
+    "ECON_PAID": "0",
     "ECONOMY_OPEN_AT": "",
     "STATS_ENABLED": "1"
   },
