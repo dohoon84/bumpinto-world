@@ -2,6 +2,7 @@
 //   - 로비 배경 = 고른 역의 실제 장면: 로비를 열기 전에(로딩 화면 아래) 그 역으로 순간이동해 둔다(beforeLobby).
 //   - 상단 HUD 줄: ‹ 노선 · 역 선택 / 역 칩(노선 배지) / 게스트 칩 · 오른쪽 EN.
 //   - 게스트: '로컬 테스트 모드' 줄 오른쪽에 작은 Google 버튼(공식 가이드), 기존 번호 탭에 Google 안내 한 줄.
+//   - 로그인된 계정(body.bw-signed-in — lobby.js 계정 모드가 붙임): '게스트' 칩·Google 저장 버튼 대신 계정 칩, 로딩 안내도 계정 기준.
 //   - 로딩 카드: 금색 제목('○○역에 입장하는 중') + 단계 점 5개 + 저장 위치 안내. 진행 막대·문구는 lobby.js 그대로.
 import { el, esc, guestChip, lineMark } from './kit.js';
 import { setTop, hideTop, backChip, langChip } from './topbar.js';
@@ -37,6 +38,13 @@ export async function beforeLobby({ at, go }) {
   try { await Promise.race([go(at), new Promise((r) => setTimeout(r, 8000))]); } catch { /* 실패하면 기본 장면 그대로 */ }
 }
 
+const signedIn = () => document.body.classList.contains('bw-signed-in');
+function accountChip() {
+  const name = document.getElementById('lobby-acct-name')?.textContent?.trim() || tr('내 계정', 'My account');
+  return el('div', 'v2-chip v2-acct is-signed-in', `<span class="v2-acct-q on" aria-hidden="true">${esc([...name][0] || '•')}</span><b>${esc(name)}</b><span class="v2-sub v2-sub-muted">${GOOGLE_G_SVG(12)} ${esc(tr('계정에 저장', 'Saved to account'))}</span>`);
+}
+const whoChip = () => (signedIn() ? accountChip() : guestChip());
+
 function decorateLobby(root) {
   const card = root.querySelector('#lobby-card');
   if (!card || card.dataset.v2) return;
@@ -48,6 +56,7 @@ function decorateLobby(root) {
     phone.replaceWith(row);
     row.appendChild(phone);
     const g = googleButton({ size: 'sm', label: 'save' });
+    g.classList.add('v2-save-google'); // 로그인 상태면 lobby 계정 모드 CSS 가 줄째 숨긴다
     g.addEventListener('click', async () => {
       const r = await requestGoogleSignIn();
       if (!r.ok) { const err = card.querySelector('#lobby-error'); if (err) err.textContent = r.reason === 'not_ready' ? googleNotReadyText() : tr('로그인하지 못했어요.', 'Sign-in failed.'); }
@@ -70,7 +79,7 @@ function lobbyTop() {
   setTop([
     backChip(tr('노선 · 역 선택', 'Line · Station'), () => document.getElementById('lobby-back-globe')?.click()),
     stationChip(),
-    guestChip(),
+    whoChip(),
   ], [langChip()]);
 }
 
@@ -94,9 +103,11 @@ function decorateLoading(load) {
   }
   const label = stationLabel(state.region, state.at);
   card.querySelector('.v2-enter-title').textContent = tr(`${label}에 입장하는 중`, `Entering ${label}`);
-  card.querySelector('.v2-enter-foot').textContent = tr('모습·닉네임은 이 기기에 저장돼요 · 게스트', 'Look and nickname are saved on this device · Guest');
+  card.querySelector('.v2-enter-foot').textContent = signedIn()
+    ? tr('모습·닉네임·위치는 Google 계정에 저장돼요', 'Look, nickname and position are saved to your Google account')
+    : tr('모습·닉네임은 이 기기에 저장돼요 · 게스트', 'Look and nickname are saved on this device · Guest');
 }
-function loadingTop() { setTop([stationChip(), guestChip()], []); }
+function loadingTop() { setTop([stationChip(), whoChip()], []); }
 
 /** body 클래스·로딩 화면 상태를 보고 상단 줄을 맞춘다(시작·지구본 화면은 각자 그린다) */
 export function mountEntryWatch() {
@@ -106,10 +117,11 @@ export function mountEntryWatch() {
     const load = document.getElementById('enter-loading');
     const loading = load && !load.hidden;
     const mode = loading ? 'loading' : b.contains('in-lobby') ? 'lobby' : b.contains('v2-in-start') || b.contains('in-gate') ? 'gate' : 'game';
+    const key = `${mode}${b.contains('bw-signed-in') ? ':acct' : ''}`; // 계정 확인이 늦게 끝나도 상단 칩을 다시 그린다
     if (loading) decorateLoading(load);
     if (mode === 'lobby') { const lb = document.getElementById('lobby'); if (lb) decorateLobby(lb); }
-    if (mode === lastMode) return;
-    lastMode = mode;
+    if (key === lastMode) return;
+    lastMode = key;
     if (mode === 'loading') loadingTop();
     else if (mode === 'lobby') lobbyTop();
     else if (mode === 'game') hideTop();
