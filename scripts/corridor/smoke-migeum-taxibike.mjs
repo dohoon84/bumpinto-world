@@ -18,7 +18,8 @@ const VIEWS = [
 ];
 const RUNS = [['on', ''], ['off', 'migeumtaxi=0&migeumbike=0'], ['nomg', 'migeum=0']].filter(([t]) => !process.env.SMOKE_RUNS || process.env.SMOKE_RUNS.split(',').includes(t)); // SMOKE_RUNS=on 이면 on 만
 const VIEWS_ON = process.env.SMOKE_VIEWS !== '0';
-const Q = '?enter=1&name=e2e&ws=mock&bus=sim&rideSfx=0&rideVoice=0&noticePopup=0&npcs=0&taxis=0&police=0&trucks=0&bike=0&roadbike=0&superbike=0&evening=0';
+const NIGHT = process.env.SMOKE_NIGHT === '1'; // SMOKE_NIGHT=1: hour=21(저녁) 으로 뷰만 찍고 택시·자전거 시나리오는 건너뜀, 파일 이름 night-*
+const Q = '?enter=1&name=e2e&ws=mock&bus=sim&rideSfx=0&rideVoice=0&noticePopup=0&npcs=0&taxis=0&police=0&trucks=0&bike=0&roadbike=0&superbike=0' + (NIGHT ? '&hour=21' : '&evening=0');
 const out = { runs: {}, taxi: null, bike: null, errors: [] };
 
 const browser = await chromium.launch({ args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
@@ -39,7 +40,7 @@ for (const [tag, extra] of RUNS) {
   await page.waitForTimeout(3000);
   const info = await page.evaluate(() => {
     const J = window.__jj, tr = J.corridor?.life?.traffic;
-    return { bikes: J.bikes.list.length, bikesInst: J.bikes.list.filter((b) => b.inst).length, instMeshes: J.bikes._inst ? 1 : 0, exits: tr?.cars?.exits?.length ?? null, migeumExits: tr?.cars?.exits?.filter((e) => String(e.ref).startsWith('미금')).length ?? null, ways: tr?.cars?.ways?.length ?? null, mgWays: tr?.cars?.ways?.filter((w) => w.mg).length ?? null };
+    return { bikes: J.bikes.list.length, bikesInst: J.bikes.list.filter((b) => b.inst).length, instMeshes: J.bikes._inst ? 1 : 0, lampInst: J.bikes._lamps ? { visible: J.bikes._lamps.visible, count: J.bikes._lamps.count } : null, exits: tr?.cars?.exits?.length ?? null, migeumExits: tr?.cars?.exits?.filter((e) => String(e.ref).startsWith('미금')).length ?? null, ways: tr?.cars?.ways?.length ?? null, mgWays: tr?.cars?.ways?.filter((w) => w.mg).length ?? null };
   });
   const views = {};
   for (const v of VIEWS_ON ? VIEWS : []) {
@@ -58,12 +59,12 @@ for (const [tag, extra] of RUNS) {
       const dt = (performance.now() - t0) / 1000, ri = window.__jj.renderer.info;
       return { fps: +(st.frames / dt).toFixed(1), drawsPerFrame: Math.round(st.draws / Math.max(1, st.frames)), calls: ri.render.calls, triangles: ri.render.triangles, geometries: ri.memory.geometries };
     });
-    const file = path.join(SHOT_DIR, `${tag}-${v.name}.png`); await page.screenshot({ path: file });
+    const file = path.join(SHOT_DIR, `${NIGHT ? 'night-' : ''}${tag}-${v.name}.png`); await page.screenshot({ path: file });
     views[v.name] = { ...m, file }; console.log(tag, v.name, JSON.stringify(m));
   }
   out.runs[tag] = { info, views }; console.log(tag, JSON.stringify(info));
 
-  if (tag === 'on') {
+  if (tag === 'on' && !NIGHT) {
     // --- 택시: 2번 출구(돌마로 갓길) ---
     const T = {};
     T.hail = await page.evaluate(async () => {
