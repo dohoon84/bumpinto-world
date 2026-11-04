@@ -24,6 +24,16 @@ const land = async (qs, name) => {
 await p.evaluate(() => window.__bwEconDemo.dev.seed('fig03'));
 await land('&ui=v2', 'landing-acct');
 await land('', 'landing-default-acct');
+// 로그인 '계속하기' → 게스트 입장 화면 없이 마지막 역(야탑)으로 바로
+await p.evaluate(() => localStorage.setItem('bw.uiv2.lastStation', JSON.stringify({ region: 'jeongja', at: 'yatap', t: Date.now() })));
+await land('&ui=v2', 'landing-acct-last');
+{ const r = await p.locator('#m-landing [data-act="resume"]').boundingBox(); await p.touchscreen.tap(r.x + r.width / 2, r.y + r.height / 2); }
+await p.waitForFunction(() => !document.getElementById('m-landing'), null, { timeout: 30000 });
+await p.waitForTimeout(4000);
+const go = await p.evaluate(() => ({ url: location.search, lobby: document.body.classList.contains('in-lobby'), lobbyVisible: !!document.querySelector('#lobby') && getComputedStyle(document.querySelector('#lobby')).display !== 'none' && document.body.classList.contains('in-lobby') }));
+console.log('resume-account →', JSON.stringify(go));
+await p.waitForFunction(() => window.__jj?.ready, null, { timeout: 150000 }).catch(() => {});
+await p.waitForTimeout(2000); await p.screenshot({ path: `${OUT}-landing-acct-entered-${tag}.png` });
 await p.evaluate(() => localStorage.removeItem('bw.uiv2.econ.mock.v1')); // mock 상태 지움 = 게스트
 await land('&ui=v2', 'landing-guest');
 console.log(errs.length ? errs.join('\n') : 'no page errors');
