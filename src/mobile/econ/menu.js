@@ -22,7 +22,7 @@ export function mountMenuSection({ open, link, isDemo, econ, tr, esc, GOOGLE_G_S
       ['11', svg(IC.bike), tr('탈것 상점', 'Vehicle shop')],
     ];
     if (guest) tiles.push(['link', `<span class="m-econ-gt">${GOOGLE_G_SVG(18)}</span>`, tr('구글 계정 연동하고 bum 받기', 'Link Google account to earn bum'), 'gold']);
-    else if (econ.isMock && econ.dev && isDemo()) tiles.push(['devout', svg(IC.out), tr('로그아웃 (개발용)', 'Sign out (dev)')]);
+    else if (econ.isMock && econ.dev && isDemo()) tiles.push(['devout', svg(IC.out), tr('개발 로그아웃', 'Dev sign out')]);
     const sec = document.createElement('div');
     sec.className = 'm-econ-sec';
     sec.innerHTML = `<p class="m-sec">bum</p><div class="m-tiles m-econ-tiles">${tiles.map(([k, ic, label, tone]) => `<button type="button" class="m-tile${tone ? ` is-${tone}` : ''}" data-econ="${k}">${ic}<span>${esc(label)}</span></button>`).join('')}</div>`;
