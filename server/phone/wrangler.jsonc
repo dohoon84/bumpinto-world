@@ -18,12 +18,12 @@
     { "binding": "PHOTOS", "bucket_name": "bumpinto-photos" }
   ],
   // [accounts] 구글 로그인·계정·원장·칭호용 기록 (D1). 순서·명령은 server/phone/DEPLOY.md.
-  //   database_id 는 자리표시자다 — `npx wrangler d1 create bumpinto-accounts` 가 준 id 로 바꾸기 전에는 배포가 실패한다.
+  //   database_id: bumpinto-accounts (2026-11-04 생성)
   "d1_databases": [
     {
       "binding": "DB",
       "database_name": "bumpinto-accounts",
-      "database_id": "00000000-0000-0000-0000-000000000000",
+      "database_id": "9b602209-cc47-44a4-aa81-320fe056290b",
       "migrations_dir": "migrations"
     }
   ],
