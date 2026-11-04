@@ -71,12 +71,16 @@ export async function openChipTip(delta = null) {
 
 // ---------- 04 할 일 시트 (매일 · 주간 · 월간)
 const PERIOD = [['daily', '매일', 'Daily'], ['weekly', '주간', 'Weekly'], ['monthly', '월간', 'Monthly']];
-export async function openQuests(period = 'daily', { link } = {}) {
-  const list = await econ.listQuests(period);
-  const p = panel('ve-quests', '');
+// 탭 전환을 즉시: 받아 둔 목록을 먼저 그리고, 서버 응답이 오면 같은 패널 안에서만 갈아 끼운다(패널을 다시 띄우지 않음). 세 탭은 처음 열 때 미리 받는다.
+const questCache = new Map();
+let questView = null; // { p, period, link }
+// 로그인·로그아웃·할 일 진행이 바뀌면 받아 둔 목록을 버린다(다음에 열 때 새로 받음)
+try { econ.on?.('session', () => questCache.clear()); econ.on?.('quest', ({ period } = {}) => { if (period) questCache.delete(period); }); } catch { /* 목 클라이언트 등 */ }
+function questsHtml(period, list) {
   const tabs = PERIOD.map(([k, ko, en]) => `<button type="button" class="ve-tab${k === period ? ' on' : ''}" data-tab="${k}">${esc(tr(ko, en))}</button>`).join('');
   let body;
-  if (list.guest) {
+  if (!list) body = `<p class="ve-info">${esc(tr('불러오는 중…', 'Loading…'))}</p>`;
+  else if (list.guest) {
     body = `<div class="ve-empty">${EI.lock(28, '#9eb4c6')}<b>${esc(T(list.info))}</b><button type="button" class="v2-btn primary" data-ve="link">${esc(tr('구글 계정 연동하고 bum 받기', 'Link Google account to earn bum'))}</button></div>`;
   } else {
     body = `<p class="ve-info">${esc(T(list.info))}</p>
@@ -89,12 +93,39 @@ export async function openQuests(period = 'daily', { link } = {}) {
       }).join('')}</div>
       <div class="ve-qfoot">${EI.coin(20)}<b>${esc(period === 'daily' ? tr(`오늘 할 일 보상 최대 ${n(list.maxBum)} bum`, `Today's quest rewards up to ${n(list.maxBum)} bum`) : period === 'weekly' ? tr(`이번 주 할 일 보상 최대 ${n(list.maxBum)} bum`, `This week's quest rewards up to ${n(list.maxBum)} bum`) : tr(`이번 달 할 일 보상 최대 ${n(list.maxBum)} bum`, `This month's quest rewards up to ${n(list.maxBum)} bum`))}</b><span class="v2-grow"></span><small>${esc(tr(`받은 보상 ${n(list.claimedBum)} · 남은 보상 ${n(list.maxBum - list.claimedBum)}`, `Claimed ${n(list.claimedBum)} · Left ${n(list.maxBum - list.claimedBum)}`))}</small></div>`;
   }
-  p.innerHTML = `<div class="v2-hrow ve-qhead">${head(tr('할 일', 'Quests'), { icon: EI.quest(24), size: 24 })}<div class="ve-tabs">${tabs}</div>${mockTag()}<span class="v2-grow"></span>${closeBtn()}</div>${body}`;
-  p.addEventListener('click', (e) => {
-    const t = e.target.closest('[data-tab]'); if (t) openQuests(t.dataset.tab, { link });
-    if (e.target.closest('[data-ve="link"]')) link?.();
-  });
-  show(p, { key: `04${period[0] === 'd' ? 'a' : period[0] === 'w' ? 'b' : 'c'}` });
+  return `<div class="v2-hrow ve-qhead">${head(tr('할 일', 'Quests'), { icon: EI.quest(24), size: 24 })}<div class="ve-tabs">${tabs}</div>${mockTag()}<span class="v2-grow"></span>${closeBtn()}</div>${body}`;
+}
+function prefetchQuests(skip) {
+  for (const [k] of PERIOD) if (k !== skip && !questCache.has(k)) econ.listQuests(k).then((l) => { questCache.set(k, l); }).catch(() => {});
+}
+export async function openQuests(period = 'daily', { link } = {}) {
+  const live = questView && questView.p.isConnected ? questView : null;
+  let p;
+  if (live) { p = live.p; live.period = period; live.link = link; }
+  else {
+    p = panel('ve-quests', '');
+    questView = { p, period, link };
+    p.addEventListener('click', (e) => {
+      const v = questView; if (!v || v.p !== p) return;
+      const t = e.target.closest('[data-tab]'); if (t) { if (t.dataset.tab !== v.period) openQuests(t.dataset.tab, { link: v.link }); return; }
+      if (e.target.closest('[data-ve="link"]')) v.link?.();
+    });
+  }
+  const cached = questCache.get(period);
+  if (cached || !live) {
+    // 처음 열 때 캐시가 없으면 서버 응답을 기다렸다가 띄운다(빈 패널 깜빡임 없이 예전과 같게)
+    if (!cached) { const l = await econ.listQuests(period); questCache.set(period, l); if (questView?.p !== p || questView.period !== period) return; p.innerHTML = questsHtml(period, l); }
+    else p.innerHTML = questsHtml(period, cached);
+  } else p.innerHTML = questsHtml(period, null);
+  if (!live) show(p, { key: `04${period[0] === 'd' ? 'a' : period[0] === 'w' ? 'b' : 'c'}` });
+  prefetchQuests(period);
+  if (cached || live) {
+    const fresh = await econ.listQuests(period).catch(() => null);
+    if (!fresh) return;
+    const changed = JSON.stringify(fresh) !== JSON.stringify(questCache.get(period));
+    questCache.set(period, fresh);
+    if (questView?.p === p && questView.period === period && (changed || !cached)) p.innerHTML = questsHtml(period, fresh);
+  }
 }
 
 // ---------- 05a 보상 토스트 → 05a2 코인 버스트·흡수 → 05b 잔액 올라가기 + 다음 안내
