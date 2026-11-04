@@ -17,7 +17,7 @@ assert.equal((await c.getBalance()).guest, true); assert.equal((await c.getBalan
 const gq = await c.listQuests('daily'); assert.equal(gq.guest, true); assert.equal(gq.quests.length, 0);
 assert.equal((await c.claimQuest('D-LOGIN')).error.code, ERR.NOT_SIGNED_IN);
 assert.equal((await c.claimWelcome()).error.code, ERR.NOT_SIGNED_IN);
-assert.equal((await c.purchase('bike')).error.code, ERR.NOT_SIGNED_IN);
+assert.equal((await c.purchase('bike')).error.code, ERR.COMING_SOON); // 상점 미리보기: 게스트도 coming_soon
 const gp = await c.payFare({ mode: 'bus', code: 'bus.city', rideId: 'g1' }); assert.equal(gp.ok, true); assert.equal(gp.data.free, true); assert.equal(gp.data.amount, 0); assert.equal(gp.data.listAmount, 1650);
 assert.equal((await c.getLedger()).length, 0); ok('guest: empty shapes, not_signed_in on writes, free ride allowed without ledger');
 
@@ -63,11 +63,18 @@ ok('taxi: fare formula, hold 7,400 → settle 7,100, refund 300 (one ledger row)
 c.dev.setBalance(23000);
 
 // shop
-const items = await c.listShopItems(); assert.equal(items[0].price, 160000); assert.equal(items[0].affordable, false);
-const pu = await c.purchase('bike'); assert.equal(pu.error.code, ERR.INSUFFICIENT); assert.equal(pu.error.shortBy, 137000);
+const items = await c.listShopItems();
+assert.deepEqual(items.map((i) => [i.id, i.price, i.realPrice]), [['bike', 160000, 320000], ['roadbike', 1000000, 2000000], ['scooter', 2500000, 4999000], ['car', 7450000, 14900000]]);
+assert.ok(items.every((i) => i.available === false && i.comingSoon === true && i.free === false && i.affordable === false));
 const goal = await c.getShopGoal(); assert.equal(goal.daysLeft, 16);
-c.dev.setMode({ shopPaid: false }); const pf = await c.purchase('bike'); assert.equal(pf.ok, true); assert.equal(pf.data.free, true); assert.equal(pf.data.amount, 0); assert.equal((await c.getBalance()).total, 23000);
-ok('shop: paid insufficient (16 days left), free beta purchase does not deduct');
+for (const mode of [{ shopPaid: true }, { shopPaid: false }]) {
+  c.dev.setMode(mode);
+  for (const i of items) { const r = await c.purchase(i.id); assert.deepEqual([r.ok, r.error.code], [false, ERR.COMING_SOON]); }
+  assert.equal((await c.getBalance()).total, 23000, 'nothing deducted, nothing given');
+}
+assert.equal((await c.purchase('nope')).error.code, ERR.UNKNOWN);
+assert.ok((await c.listShopItems()).every((i) => !i.owned));
+ok('shop preview: 4 items with prices, all comingSoon, purchase always coming_soon (no free give-away)');
 
 // karma
 const k = await c.getKarma(); assert.ok(['health', 'explore', 'transit', 'neighbor', 'streak'].every((a) => typeof k.axes[a].points === 'number')); assert.ok(k.axes.health.points >= 60);
@@ -79,10 +86,6 @@ const after = (await c.getBalance()).total; assert.equal(after - before, 7 * 172
 const led = await c.getLedger({ limit: 3 }); assert.ok(led.some((e) => e.kind === 'move'));
 
 // #30 서버 모양: 상점 available / not_eligible · 원장 'board' · TaxiHold.code · 웰컴 already_claimed
-c.dev.setShopAvailable(['roadbike']);
-const it2 = await c.listShopItems(); assert.equal(it2.find((i) => i.id === 'roadbike').available, true); assert.equal(it2.find((i) => i.id === 'scooter').available, false); assert.equal(it2.find((i) => i.id === 'scooter').affordable, false);
-const ne = await c.purchase('scooter'); assert.equal(ne.ok, false); assert.equal(ne.error.code, ERR.NOT_ELIGIBLE);
-c.dev.setShopAvailable(null); assert.ok((await c.listShopItems()).every((i) => i.available === true));
 let rewards = 0; const off = c.on('reward', () => rewards++);
 const b1 = (await c.getBalance()).total; const bp = c.dev.boardPost(1000); assert.equal(bp.kind, 'board'); assert.equal((await c.getBalance()).total, b1 + 1000); assert.equal(rewards, 1, 'board: ledger row + reward event kind board'); off?.();
 assert.ok((await c.getLedger({ limit: 1 }))[0].kind === 'board');
@@ -131,5 +134,15 @@ ok('tuning v3: scooter 4,999,000 · D-WALK20 in pool, no D-TAXI1 · achievements
   cp.dev.signOut(); const g3 = await cp.dev.gameRide({ mode: 'bus', rideId: 'g3' }); assert.equal(pe[2].status, 'failed'); assert.equal(pe[2].error.code, ERR.NOT_SIGNED_IN); assert.ok(!('need' in pe[2])); assert.equal(g3.ok, false);
   cp.dev.signIn({ name: 'p' }); cp.dev.setBalance(5000); const g4 = await cp.dev.gameRide({ mode: 'bus', rideId: 'g4' }); assert.equal(g4.ok, true); assert.ok(!('status' in pe.at(-1)) && pe.at(-1).receiptId);
   ok('paid game ride failure → one payment event PaymentFailed (insufficient/failed), direct call → Result only, success has no status'); }
-ok('#30 shapes: shop available/not_eligible, ledger board + reward event, hold.code, welcome already_claimed');
+ok('#30 shapes: ledger board + reward event, hold.code, welcome already_claimed');
+{ // 07 = 게임 폰 교통카드 앱: 탑승 기록 + 원장 한 목록 (유료 요금은 같은 탑승 줄에 붙음, 지하철 등 기록 없는 요금은 따로)
+  const { mergeHistory } = await import('../src/ui-v2/econ-ui/walletMerge.js');
+  const t = 1_800_000_000_000, tx = (ko) => ({ ko, en: ko });
+  const rides = [{ id: 'r1', mode: 'bus', route: '1303', at: t, end: t + 300e3 }, { id: 'r2', mode: 'taxi', route: 'TAXI', at: t + 900e3, end: t + 1200e3 }];
+  const led = [{ id: 'f1', kind: 'fare', at: t + 5e3, delta: -1650, title: tx('시내버스 · 정자역') }, { id: 'f2', kind: 'fare', at: t + 1210e3, delta: -7100, title: tx('택시 · 일반 주행 4.6 km') },
+    { id: 'f3', kind: 'fare', at: t + 600e3, delta: -1550, title: tx('지하철 · 정자역 기본요금') }, { id: 'q', kind: 'quest', at: t + 2000e3, delta: 500, title: tx('할 일') }, { id: 'old', kind: 'fare', at: t - 3600e3, delta: -1650, title: tx('시내버스') }];
+  const m = mergeHistory(rides, led);
+  assert.deepEqual(m.map((x) => (x.t === 'ride' ? `${x.r.id}:${x.fare?.id || '-'}` : x.e.id)), ['q', 'r2:f2', 'f3', 'r1:f1', 'old']);
+  assert.deepEqual(mergeHistory(rides, []).map((x) => x.fare), [null, null]);
+  ok('wallet app history: rides + ledger merged by date, paid fare attached to its ride (no duplicate row)'); }
 console.log(`econ mock: ${n} passed`);

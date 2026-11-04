@@ -1,4 +1,4 @@
-// [econ-ui] 교통 결제 화면: 08a 버스 탑승 카드 · 08b 태그 완료 · 08c 잔액 부족 · 09a 개찰구 · 09b 통과 · 10a 택시 앱 · 10b 택시 정산 · 07 교통카드 앱
+// [econ-ui] 교통 결제 화면: 08a 버스 탑승 카드 · 08b 태그 완료 · 08c 잔액 부족 · 09a 개찰구 · 09b 통과 · 10a 택시 앱 · 10b 택시 정산 (07 교통카드는 walletApp.js)
 //   베타 무료 모드(getEconMode().transitPaid === false)에서는 정가에 줄을 긋고 '무료(베타)' 배지, 차감 없음.
 //   유료 모드 화면(잔액 부족 포함)은 demo=econ 의 모드 토글로 볼 수 있다.
 import { econ } from '../econ/index.js';
@@ -103,26 +103,7 @@ const phone = (inner, key) => {
 };
 const backHead = (t) => `<div class="v2-hrow ve-bh"><button type="button" class="ve-back" data-ve="close" aria-label="${esc(tr('닫기', 'Close'))}">‹</button>${head(t, { size: 18 })}${mockTag()}</div>`;
 
-export async function openWallet({ link } = {}) {
-  const [b, s, led, mode] = await Promise.all([econ.getBalance(), econ.getWalletSummary(), econ.getLedger({ limit: 12 }), econ.getEconMode()]);
-  const mx = Math.max(1, s.weekEarned, s.weekSpent);
-  const icon = (e) => (e.kind === 'fare' || e.kind === 'purchase' ? EI.card(20) : e.kind === 'board' ? EI.board(20) : EI.coin(20));
-  const KIND = { board: ['게시판 글 보상', 'Board post reward'], move: ['이동 보상', 'Travel reward'], ach: ['업적 보너스', 'Achievement bonus'], refund: ['반환', 'Refund'] };
-  const title = (e) => T(e.title) || (KIND[e.kind] ? tr(...KIND[e.kind]) : e.kind);
-  const inner = `${backHead(tr('교통카드 · 지갑', 'Transit card · Wallet'))}
-    <div class="ve-tcard"><div class="v2-hrow">${EI.card(20)}<b>${esc(tr('범프 교통카드', 'Bump transit card'))}</b><span class="v2-grow"></span>${b.guest ? tag(tr('게스트', 'Guest'), '#9eb4c6') : tag(tr('계정 연결됨', 'Account linked'), '#20c997')}</div><span class="ve-stripe"></span>
-      <small>${esc(tr('잔액', 'Balance'))}</small><div class="v2-hrow">${EI.coin(28)}<b class="ve-t28 ve-gold">${n(b.total)} bum</b></div>
-      <small>${esc(tr(`무료 ${n(b.free)} · 유료 ${n(b.paid)} · 외상 없음`, `Free ${n(b.free)} · Paid ${n(b.paid)} · No credit`))}</small>
-      ${mode.transitPaid ? '' : `<div class="v2-hrow">${freeBadge()}<small>${esc(tr('베타 기간 버스·지하철·택시 요금 0', 'Bus, subway and taxi fares are 0 during the beta'))}</small></div>`}</div>
-    ${b.guest ? `<div class="ve-pbox"><b>${esc(tr('게스트는 지갑이 없어요', 'Guests have no wallet'))}</b><button type="button" class="v2-btn sm primary v2-full" data-ve="link">${esc(tr('구글 계정 연동하고 bum 받기', 'Link Google account to earn bum'))}</button></div>` : `
-    <div class="ve-pbox"><b>${esc(tr('이번 주', 'This week'))}</b>
-      <div class="v2-hrow"><small>${esc(tr('번 돈', 'Earned'))}</small><span class="v2-grow"></span><b class="ve-green">${sgn(s.weekEarned)}</b></div>${bar(s.weekEarned, mx, { w: 340, h: 6, cls: 'green ve-wide' })}
-      <div class="v2-hrow"><small>${esc(tr('쓴 돈 (교통)', 'Spent (transit)'))}</small><span class="v2-grow"></span><b class="ve-red">${sgn(-s.weekSpent)}</b></div>${bar(s.weekSpent, mx, { w: 340, h: 6, cls: 'red ve-wide' })}
-      <small>${esc(tr(`보통 플레이어 하루 평균: 수입 ${n(s.avgDailyIncome)} · 교통비 ${n(s.avgDailyTransit)}`, `Typical player per day: income ${n(s.avgDailyIncome)} · transit ${n(s.avgDailyTransit)}`))}</small></div>
-    <div class="ve-pbox ve-led"><b>${esc(tr('최근 내역', 'Recent'))}</b>${led.map((e) => `<div class="ve-lrow">${icon(e)}<span class="ve-col"><b>${esc(title(e))}</b>${e.sub ? `<small>${esc(T(e.sub))}</small>` : ''}</span>${e.kind === 'board' ? tag(tr('게시판', 'Board'), '#ec5f9a') : ''}<span class="v2-grow"></span><b class="${e.delta < 0 ? 've-red' : 've-green2'}">${sgn(e.delta)}</b></div>`).join('') || `<small>${esc(tr('아직 내역이 없어요', 'No history yet'))}</small>`}</div>`}`;
-  const w = phone(inner, '07');
-  w.addEventListener('click', (e) => { if (e.target.closest('[data-ve="link"]')) link?.(); });
-}
+// 07 교통카드 · 지갑 → walletApp.js (게임 폰의 기존 '교통카드' 앱에 덧붙임. 별도 화면 없음)
 
 // ---------- 10a 택시 앱 (목적지 · 옵션 · 홀드)
 export async function openTaxiApp({ dest = { ko: '판교역', en: 'Pangyo Stn.' }, meters = 5000, onCall } = {}) {

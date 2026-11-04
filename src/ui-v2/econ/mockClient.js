@@ -250,10 +250,9 @@ export function createMockClient({ storage, now = () => Date.now(), key = MOCK_K
     if (mode === 'taxi') q.options = ['taxi.drive', 'taxi.fast', 'taxi.instant'].map((c) => { const la = taxiFare(req.meters || 0, { night: !!req.night, mult: FARE_TABLE[c].mult }); return { code: c, amount: free ? 0 : la, listAmount: la, label: FARE_TABLE[c].label }; });
     return q;
   }
-  const avail = (it) => !(s.unavailable || []).includes(it.id); // 서버처럼 팔지 않는 물건은 available:false
+  // 상점은 미리보기 전용(서버와 같음): 모든 물건 available:false · comingSoon:true, 가격만 보여 주고 구매는 coming_soon
   function itemView(it) {
-    const free = !s.mode.shopPaid; const b = balance().total;
-    return { id: it.id, name: it.name, free, price: free ? 0 : it.listPrice, listPrice: it.listPrice, realPrice: it.realPrice, daysForTypical: it.days, owned: s.owned.includes(it.id), affordable: s.signedIn && avail(it) && !s.owned.includes(it.id) && (free || b >= it.listPrice), giftable: false, available: avail(it) };
+    return { id: it.id, name: it.name, free: false, price: it.listPrice, listPrice: it.listPrice, realPrice: it.realPrice, daysForTypical: it.days, owned: s.owned.includes(it.id), affordable: false, giftable: false, available: false, comingSoon: true };
   }
 
   const client = {
@@ -350,21 +349,14 @@ export function createMockClient({ storage, now = () => Date.now(), key = MOCK_K
     async getShopGoal() {
       roll();
       if (!s.signedIn) return null;
-      const it = SHOP_ITEMS.find((x) => !s.owned.includes(x.id) && avail(x)); if (!it) return null;
+      const it = SHOP_ITEMS.find((x) => !s.owned.includes(x.id)); if (!it) return null; // 모으기 목표(미리보기 가격 기준)
       const b = Math.max(0, balance().total); const remaining = Math.max(0, it.listPrice - b);
       return { guest: false, itemId: it.id, price: it.listPrice, balance: b, remaining, daysLeft: Math.ceil(remaining / RULES.typicalDailyNet), typicalDailyNet: RULES.typicalDailyNet };
     },
     async purchase(itemId) {
       roll();
-      if (!s.signedIn) return guestErr();
       const it = SHOP_ITEMS.find((x) => x.id === itemId); if (!it) return errR(ERR.UNKNOWN);
-      if (!avail(it)) return errR(ERR.NOT_ELIGIBLE, { message: T('아직 준비 중인 탈것이에요', 'This vehicle is not available yet') });
-      if (s.owned.includes(itemId)) return errR(ERR.ALREADY);
-      const free = !s.mode.shopPaid;
-      if (!free && balance().total < it.listPrice) return short(it.listPrice);
-      if (!free) addLedger('purchase', -it.listPrice, T(`탈것 · ${it.name.ko}`, `Vehicle · ${it.name.en}`));
-      s.owned.push(itemId); save();
-      return okR({ item: itemView(it), free, amount: free ? 0 : it.listPrice, listAmount: it.listPrice, balance: balance() });
+      return errR(ERR.COMING_SOON, { message: T('준비중인 탈것이에요', 'Coming soon') }); // 미리보기 전용 — 무료 지급·차감 없음
     },
     async getKarma() {
       roll();
@@ -468,8 +460,6 @@ export function createMockClient({ storage, now = () => Date.now(), key = MOCK_K
       if (mode === 'taxi') return client.settleTaxi({ holdId: r.data.holdId, actualMeters: meters });
       return r;
     },
-    /** 상점에서 팔지 않는 물건 지정(서버: available:false · 구매 시 not_eligible). 예: setShopAvailable(['roadbike']) */
-    setShopAvailable(ids = null) { s.unavailable = ids ? SHOP_ITEMS.map((x) => x.id).filter((x) => !ids.includes(x)) : []; save(); bus.emit('mode', { ...s.mode }); },
   };
   return client;
 }
