@@ -3,7 +3,7 @@
 // 휠로 한국 쪽을 확대하면 실제 역 좌표(OSM)대로 그린 세로 노선도가 펼쳐지고, 역을 고르면 그 역 출구 앞 인도에서 시작한다.
 // 노선도의 정자는 기존 정자 입장(data-enter-region="jeongja")과 똑같다. ?corridor=0 이면 worldGate 가 이 모듈을 아예 마운트하지 않는다.
 import * as THREE from 'three';
-import { CORRIDOR_ORIGIN, CORRIDOR_STATIONS, CORRIDOR_LANDMARK, PANGYO_GLOBE_STATIONS } from './globeStations.js';
+import { CORRIDOR_ORIGIN, CORRIDOR_STATIONS, CORRIDOR_LANDMARK, PANGYO_GLOBE_STATIONS, MIGEUM_GLOBE_STATIONS } from './globeStations.js';
 import { pangyoEnabled } from './pangyo.js';
 import { lotteSiteLabel, lotteClock } from './lotteOpening.js';
 
@@ -11,7 +11,11 @@ export function corridorGlobeEnabled(params = new URLSearchParams(location.searc
   return !!region?.features?.corridor && params.get('corridor') !== '0';
 }
 // [pangyo] 판교역은 정자에서 갈라지는 신분당선 지선 역으로 목록·노선도에 넣는다 (?pangyo=0 이면 기존 목록 그대로)
-export const BRANCH_STATIONS = pangyoEnabled() ? PANGYO_GLOBE_STATIONS : [];
+// [migeum] 미금역(정자 남쪽, 수인분당선·신분당선)도 같은 방식으로 정자에서 갈라지는 역으로 넣는다 (?migeum=0 이면 뺀다 — src/corridor/migeum.js 의 migeumEnabled 와 같은 규칙)
+export function migeumGlobeEnabled(search = typeof location !== 'undefined' ? location.search : '') {
+  return new URLSearchParams(search).get('migeum') !== '0';
+}
+export const BRANCH_STATIONS = [...(pangyoEnabled() ? PANGYO_GLOBE_STATIONS : []), ...(migeumGlobeEnabled() ? MIGEUM_GLOBE_STATIONS : [])];
 const ALL_STATIONS = CORRIDOR_STATIONS.concat(BRANCH_STATIONS);
 export const CORRIDOR_STATION_IDS = new Set(ALL_STATIONS.map((s) => s.id));
 // [globe-open] 지역 현황 목록에서 '열림'으로 따로 보이는 지선 역 (판교역 → 입장하면 ?at=pangyo 와 같은 자리). ?pangyo=0 이면 빈 목록 → 기존 그대로
@@ -66,9 +70,11 @@ const LINE_COLOR = { '수인분당선': '#f5a200', '신분당선': '#d31145', '8
 const lineEn = (l) => ({ '수인분당선': 'Suin-Bundang', '신분당선': 'Shinbundang', '8호선': 'Line 8', '2호선': 'Line 2', '3호선': 'Line 3', '9호선': 'Line 9', '경강선': 'Gyeonggang' }[l] || l);
 
 // 펼친 노선도 레이아웃(px): 실제 x(동)/z(남) 좌표를 같은 축척으로 옮기고, 이름표는 좌우로 번갈아 둔다(겹침 방지).
-export function layoutCorridorMap({ height = 430, width = 320, branches = BRANCH_STATIONS } = {}) {
+//   extent: 노선도 범위에 넣을 지선 역(기본 = 켜진 지선 역 전체). 미금역은 정자보다 남쪽이라 범위를 넓혀야 보인다.
+//   branches 를 비워도 extent 는 그대로라 본선 배치는 지선 표시 여부와 상관없이 같다(?migeum=0 이면 기존 배치 그대로)
+export function layoutCorridorMap({ height = 430, width = 320, branches = BRANCH_STATIONS, extent = BRANCH_STATIONS } = {}) {
   const pts = [{ ...CORRIDOR_ORIGIN, live: true }, ...CORRIDOR_STATIONS];
-  const zs = pts.map((p) => p.z).concat(CORRIDOR_LANDMARK.z), xs = pts.map((p) => p.x).concat(CORRIDOR_LANDMARK.x);
+  const zs = pts.map((p) => p.z).concat(CORRIDOR_LANDMARK.z, extent.map((b) => b.z)), xs = pts.map((p) => p.x).concat(CORRIDOR_LANDMARK.x, extent.map((b) => b.x));
   const zMin = Math.min(...zs), zMax = Math.max(...zs), xMin = Math.min(...xs), xMax = Math.max(...xs);
   const pad = 12, k = (height - pad * 2) / (zMax - zMin);
   const mapW = (xMax - xMin) * k, x0 = (width - mapW) / 2;
@@ -118,7 +124,7 @@ export function mountGlobeCorridor({ root, camera, anchorSpot, globe, isEn, onEn
     pin.classList.toggle('is-open', open);
     const all = [...L.items, ...L.branches, L.landmark];
     let seg = '';
-    for (const b of L.branches) { // 지선(정자→판교 신분당선)
+    for (const b of L.branches) { // 지선(정자→판교 신분당선, 정자→미금)
       const shared = (b.from.lines || []).find((l) => (b.lines || []).includes(l)) || (b.lines || [])[0];
       seg += `<line x1="${b.from.dx}" y1="${b.from.dy}" x2="${b.dx}" y2="${b.dy}" stroke="${LINE_COLOR[shared] || '#9eb4c6'}" stroke-width="4" stroke-linecap="round"/>`;
     }
