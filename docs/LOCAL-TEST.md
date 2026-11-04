@@ -51,9 +51,12 @@ npm run dev:all -- --tunnel  # + cloudflared https 터널(아이폰에서 진짜
 | PC | 게스트 | http://localhost:5173/?ui=v2&noticePopup=0 | 시작화면 **게스트로 계속** |
 | PC | 계정(개발용) | 같은 주소 | **Google 계정으로 로그인** → 창의 **개발용 로그인 (로컬)** |
 | PC | 계정(진짜 구글) | 같은 주소 | 같은 창의 구글 버튼 (아래 7번 원본 추가 필요) |
-| 아이폰 | 게스트 | http://172.30.1.24:5173/?mobile=1&noticePopup=0 | 그냥 입장 |
-| 아이폰 | 계정(개발용) | 같은 주소 | 입장 → 메뉴(☰) → **계정** 타일 → **개발용 로그인 (로컬)** |
-| 아이폰 | 계정(진짜 구글, 선택) | `--tunnel` 이 찍어 준 `https://….trycloudflare.com/?mobile=1&noticePopup=0` | 메뉴 → 계정 → 구글 |
+| 아이폰 | 게스트 (경제 UI) | http://172.30.1.24:5173/?mobile=1&ui=v2&noticePopup=0 | 그냥 입장 → 프로필 칩 '게스트' |
+| 아이폰 | 계정(개발용, 경제 UI) | 같은 주소 | 입장 → 메뉴(☰) → bum 묶음 **구글 계정 연동하고 bum 받기** → **개발용 로그인 (로컬)** |
+| 아이폰 | 경제 UI 없이 | http://172.30.1.24:5173/?mobile=1&noticePopup=0 | 메뉴 → '함께' 의 **계정** 타일 → 개발용 로그인 |
+| 아이폰 | 계정(진짜 구글, 선택) | `--tunnel` 이 찍어 준 `https://….trycloudflare.com/?mobile=1&ui=v2&noticePopup=0` | 메뉴 → 구글 계정 연동 → 구글 |
+
+모바일 경제 UI(`feat/econ-ui-mobile`)는 PC 와 같은 `?ui=v2` 플래그일 때만 켜집니다.
 
 - 서버 상태 확인: `http://localhost:5173/_phone/auth/config` → `"devLogin":true`, `"economy":true`.
 - 아이폰에서 안 열리면: 맥 방화벽(시스템 설정 → 네트워크 → 방화벽)에서 node 수신 허용, 같은 와이파이인지 확인.
@@ -72,20 +75,25 @@ npm run dev:all -- --tunnel  # + cloudflared https 터널(아이폰에서 진짜
 PC (계정 기능 켜짐 → econ 은 서버 클라이언트, mock 아님)
 - [ ] 게스트: 잔액 칩 자리에 **'구글 계정 연동하고 bum 받기'**, 잔액 0. 버스를 타도 적립 없음.
 - [ ] 개발용 로그인: **웰컴 20,000 토스트**, 잔액 칩 20,500(웰컴 + 오늘 첫 접속 500).
+  개발용 로그인은 늘 같은 계정(`dev:local`)입니다. 두 번째 기기·브라우저(아이폰, 시크릿 창)로 들어가면 대표 캐릭터를 맞추려고 **한 번 새로고침되어 시작 화면으로 돌아옵니다** — 로그인은 유지돼 있으니 **게스트로 계속**을 누르면 계정 잔액으로 들어갑니다(웰컴은 계정당 1번). 웰컴을 다시 보려면 `npm run dev:all:reset`.
 - [ ] 할 일 칩/이동 칩 → **할 일 시트**(매일·주간·월간), 오늘 첫 접속 완료.
 - [ ] 버스 탑승(무료 오픈): 0원 결제, 서버에 정가로 기록(`econ_events.listed_amount` = 1,650, `charged_amount` = 0). 잔액 그대로.
+  지갑 내역(`/_phone/econ/ledger`)에 0원 요금 줄이 `rideId` · 정가(`listAmount`)와 함께 나옵니다.
+- [ ] **탈것 상점 = 미리보기 전용**: 첫 자전거 · CR·1 로드바이크 · 스쿠터 · 경차 4개가 기획 가격과 **준비중**으로만 보이고, 구매 버튼은 잠김. 서버도 구매를 거절(`coming_soon`, 게스트 포함) — 아무것도 공짜로 받지 않습니다. 이미 받은 선물 탈것은 그대로.
 - [ ] 새로고침해도 로그인 유지.
 
-아이폰 (`?mobile=1`)
-- [ ] 게스트로 입장, 메뉴에 **계정** 타일.
-- [ ] 메뉴 → 계정 → **개발용 로그인 (로컬)** → 로그인됨 · 잔액 표시. 새로고침해도 유지(쿠키).
+아이폰 (`?mobile=1&ui=v2`)
+- [ ] 게스트: 프로필 칩 '게스트', 2행에 '구글 계정 연동하고 bum 받기' 칩. 메뉴(☰) 맨 위에 **bum** 묶음(할 일 · 교통카드 · 카르마·업적 · 탈것 상점 · 계정 연동).
+- [ ] 메뉴 → 구글 계정 연동 → **개발용 로그인 (로컬)** → 프로필 칩에 잔액(20,500), 보상 토스트. 새로고침해도 유지(쿠키).
+- [ ] 2행 할 일 칩 → 할 일 시트. 프로필 칩 잔액 → 폰 '교통카드' 앱(지갑). 탈것 상점 → 4개 준비중.
+- [ ] `?ui=v2` 없이(`?mobile=1`)도 메뉴 '함께' 의 **계정** 타일로 로그인·잔액은 확인됩니다.
 - [ ] **버스는 PC·모바일 모두 실시간이 기본**입니다(모바일 실시간 탑승은 feat/mobile 에서 작업 중 — 들어오면 이 브랜치에 다시 머지. 지금 머지된 f7abc6f 는 아직 모바일 시뮬 기본이라, 실시간을 보려면 `&bus=realtime`). `&bus=sim` 은 시뮬 버스만.
   실시간 버스 데이터는 로컬 워커가 아니라 배포된 버스 프록시(`jeongja-bus-proxy…workers.dev`)에서 옵니다 → 인터넷만 되면 로컬 키는 필요 없습니다. 프록시가 실패하면 자동으로 시뮬로 바뀝니다. `&proxy=local` 은 로컬 8788 프록시(따로 실행 + 공공데이터 키 필요).
-- [ ] 모바일에는 경제 UI(잔액 칩·할 일·토스트·결제창)가 없습니다 — #28/#29 설계상 PC 전용. 모바일 계정 모드 = 계정 창의 로그인·잔액까지.
 
 자동 확인(선택, dev:all 이 켜진 상태에서):
 ```bash
-MBASE=http://<맥 LAN IP>:5173 OUT=/tmp/bw-smoke node scripts/smoke-local.mjs   # PC chromium 1440x900 + 아이폰 WebKit 852x393, 스크린샷
+MBASE=http://<맥 LAN IP>:5173 OUT=/tmp/bw-smoke node scripts/smoke-local.mjs   # PC chromium 1440x900 + 아이폰 WebKit 852x393(게스트·계정 × 경제 UI 유무), 스크린샷
+# WebKit 이 안 깔리는 리눅스면 MENGINE=chromium (아이폰 UA·터치 흉내)
 ```
 
 ## 7. Google Cloud Console (진짜 구글 로그인을 시험할 때만)
@@ -105,4 +113,4 @@ API 및 서비스 → 사용자 인증 정보 → OAuth 2.0 클라이언트 ID(�
 - **기능 브랜치가 갱신되면(한 줄)** — 보통은 제가 올린 걸 `git pull` 만 하면 되고, 직접 갱신하려면: `git checkout test/integration-all && git pull --ff-only && bash scripts/integration-update.sh`
   develop · #28 · #29 · #30 · #25 · (생기면) `feat/econ-ui-mobile` 을 차례로 `--no-ff` 머지하고, 이미 들어간 건 건너뜁니다. 하나만: `bash scripts/integration-update.sh feat/mobile`.
   충돌은 거의 `src/ui-v2/econ/index.js`(계정 켜짐 → `createServerClient` 줄 유지)와 `src/mobile/hud.js`(메뉴 '함께' 의 `account-chip` 타일 유지)입니다.
-- 모바일 경제 UI(잔액·할 일·토스트)는 퍼블리셔님이 `feat/econ-ui-mobile` 에서 만드는 중 — 올라오면 위 명령으로 들어옵니다. 그 전까지 모바일 계정 모드는 계정 창의 로그인·잔액까지입니다.
+- 모바일 경제 UI(`feat/econ-ui-mobile`)는 이미 머지돼 있고, 퍼블리셔님이 더 올리면 위 명령으로 다시 들어옵니다.
