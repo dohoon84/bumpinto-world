@@ -4,8 +4,8 @@
 import { econ } from '../econ/index.js';
 import { el } from '../kit.js';
 import { n, sgn, T, tr, esc, EI, mockTag, bar, unitText } from './kit.js';
+import { dailySlots } from './questSlots.js';
 
-const DAILY = ['D-LOGIN', 'D-WALK10', 'D-SUB1'];
 let root = null, row = null, trk = null, ctx = null;
 let shown = 0, anim = 0, deltaT = 0, trackerOpen = true;
 let last = { session: null, bal: null, travel: null, daily: null };
@@ -87,20 +87,20 @@ export function render(delta = null) {
   }
   const dShow = delta ?? (Date.now() < deltaT ? row.dataset.delta && +row.dataset.delta : null);
   if (delta != null) row.dataset.delta = String(delta);
-  const done = daily.quests.filter((q) => DAILY.includes(q.id) && q.state !== 'active').length;
+  const { slots, done, total } = dailySlots(daily.quests); // 서버가 배정한 일일 슬롯 (계정·날짜마다 다름)
   const m = travel.minutes;
   row.innerHTML = `<button type="button" class="v2-chip ve-bal${dShow ? ' v2-glow' : ''}" data-ve="bal" title="${esc(tr('교통카드 · 지갑 열기', 'Open transit card · wallet'))}">${EI.coin(24)}<b data-ve="bal-v">${n(anim ? shown : bal.total)}</b><small>bum</small>${dShow ? `<span class="v2-sub ve-d ${dShow < 0 ? 'neg' : ''}">${sgn(dShow)}</span>` : ''}${mockTag('mini')}</button>
     <button type="button" class="v2-chip ve-move" data-ve="move"><span class="ve-tile" style="--c:#20c997">${EI.walk(16)}</span><small>${esc(tr('이동 인정', 'Counted travel'))}</small><b>${esc(tr(`${m} / ${travel.capMinutes}분`, `${m} / ${travel.capMinutes} min`))}</b>${bar(m, travel.capMinutes, { w: 56, h: 6, cls: 'mint' })}
       <span class="v2-sub ve-pend">${m && travel.settled ? esc(tr('오늘 지급 완료', 'Paid today')) : m ? esc(tr(`정산 예정 ${n(travel.pendingBum)}`, `Pending ${n(travel.pendingBum)}`)) : esc(tr(`걸으면 분당 ${travel.ratePerMin} bum`, `${travel.ratePerMin} bum per walking min`))}</span></button>
-    <button type="button" class="v2-chip ve-qchip" data-ve="quest" aria-expanded="${trackerOpen}">${EI.quest(20)}<small>${esc(tr('할 일', 'Quests'))}</small><b>${done}/3</b><span class="ve-caret">${trackerOpen ? '▴' : '▾'}</span></button>`;
+    <button type="button" class="v2-chip ve-qchip" data-ve="quest" aria-expanded="${trackerOpen}">${EI.quest(20)}<small>${esc(tr('할 일', 'Quests'))}</small><b>${done}/${total}</b><span class="ve-caret">${trackerOpen ? '▴' : '▾'}</span></button>`;
   if (!trackerOpen) { trk.innerHTML = ''; return; }
   const all3 = daily.quests.find((q) => q.id === 'D-ALL3');
   trk.innerHTML = `<div class="ve-card">
-    <div class="ve-trk-h">${EI.quest(20)}<b>${esc(tr('오늘의 할 일', "Today's quests"))}</b><b class="ve-blue">${done}/3</b>${mockTag('mini')}<span class="v2-grow"></span><button type="button" class="ve-lnk" data-ve="all">${esc(tr('전체 보기 ›', 'View all ›'))}</button></div>
-    ${daily.quests.filter((q) => DAILY.includes(q.id)).map((q) => {
+    <div class="ve-trk-h">${EI.quest(20)}<b>${esc(tr('오늘의 할 일', "Today's quests"))}</b><b class="ve-blue">${done}/${total}</b>${mockTag('mini')}<span class="v2-grow"></span><button type="button" class="ve-lnk" data-ve="all">${esc(tr('전체 보기 ›', 'View all ›'))}</button></div>
+    ${slots.map((q) => {
       const ok = q.state !== 'active';
       return `<div class="ve-trow${ok ? ' done' : ''}"><span class="ve-chk">${ok ? EI.check(14) : ''}</span><span class="ve-tt"><span><b>${esc(T(q.title))}</b>${ok ? `<em class="ve-ok">${esc(tr('완료', 'Done'))}</em>` : `<em>${esc(unitText(q.progress, q.id))}</em>`}</span>${ok ? '' : bar(q.progress.value, q.progress.target, { w: 168, h: 6, cls: 'blue' })}</span><span class="ve-amt">${EI.coin(16)}+${n(q.reward.bum)}</span></div>`;
     }).join('')}
-    ${all3 ? `<p class="ve-foot">${esc(tr(`3개 모두 완료 +${n(all3.reward.bum)} · 꾸준함 ${all3.reward.karma.points}`, `All 3 done +${n(all3.reward.bum)} · Streak ${all3.reward.karma.points}`))}${all3.state !== 'active' ? ` · ${esc(tr('받음', 'claimed'))}` : ''}</p>` : ''}
+    ${all3 ? `<p class="ve-foot">${esc(tr(`${total}개 모두 완료 +${n(all3.reward.bum)} · 꾸준함 ${all3.reward.karma.points}`, `All ${total} done +${n(all3.reward.bum)} · Streak ${all3.reward.karma.points}`))}${all3.state !== 'active' ? ` · ${esc(tr('받음', 'claimed'))}` : ''}</p>` : ''}
   </div>`;
 }

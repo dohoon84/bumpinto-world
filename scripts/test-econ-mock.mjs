@@ -196,4 +196,24 @@ ok('#30 shapes: ledger board + reward event, hold.code, welcome already_claimed'
   assert.equal(coinPlan('quest', { now: 0, level: { muted: true, volume: 1 } }).why, 'muted'); assert.equal(coinPlan('quest', { now: 0, level: { muted: false, volume: 0 } }).why, 'muted');
   assert.equal(coinPlan('quest', { now: 0, sfxOff: true }).why, 'sfx-off'); assert.equal(coinPlan('quest', { now: 0, level: { muted: false, volume: 0.5 } }).gain, +(loudness(0.5) * 0.6).toFixed(3));
   ok('reward coin sound plan: 400 ms throttle, travel/board short+quieter, respects mute/volume/sfx-off'); }
+{ // 일일 슬롯은 서버 배정(pickDaily)을 그대로: D-LOGIN + 풀 2개(+D-ALL3 보너스). 하드코딩 목록에 없는 D-WALK20·D-BUS1 도 HUD 에 3개 다 나와야 한다
+  const { dailySlots } = await import('../src/ui-v2/econ-ui/questSlots.js');
+  const Q = (id, state = 'active', bonus = false) => ({ id, state, bonus });
+  const srv = dailySlots([Q('D-LOGIN', 'claimed'), Q('D-WALK20'), Q('D-BUS1'), Q('D-ALL3', 'active', true)]);
+  assert.deepEqual(srv.slots.map((q) => q.id), ['D-LOGIN', 'D-WALK20', 'D-BUS1']); assert.equal(`${srv.done}/${srv.total}`, '1/3');
+  assert.equal(dailySlots([]).total, 3); assert.equal(dailySlots([Q('D-LOGIN'), Q('D-RIDE10', 'complete'), Q('D-SUB1', 'claimed'), Q('D-ALL3', 'active', true)]).done, 2);
+  let t = Date.UTC(2026, 10, 4, 3, 0, 0); const m = createMockClient({ storage: mem(), now: () => t });
+  m.dev.signIn(); await m.claimWelcome();
+  assert.deepEqual(m.dev.setDailyPick(['D-WALK20', 'D-BUS1']), ['D-LOGIN', 'D-WALK20', 'D-BUS1']);
+  assert.equal(m.dev.setDailyPick(['D-LOGIN', 'D-BUS1']).join(), 'D-LOGIN,D-WALK10,D-SUB1', 'invalid pick → default'); m.dev.setDailyPick(['D-WALK20', 'D-BUS1']);
+  const d = await m.listQuests('daily'); assert.deepEqual(d.quests.map((q) => q.id), ['D-LOGIN', 'D-WALK20', 'D-BUS1', 'D-ALL3']);
+  const a = dailySlots(d.quests); assert.equal(a.slots.length, 3); assert.equal(`${a.done}/${a.total}`, '1/3');
+  const rw = []; m.on('reward', (e) => rw.push(e));
+  await m.payFare({ mode: 'bus', code: 'bus.city', rideId: 'pool-bus-1' });
+  const b = dailySlots((await m.listQuests('daily')).quests); assert.equal(`${b.done}/${b.total}`, '2/3');
+  assert.ok(rw.some((e) => e.questId === 'D-BUS1' && /2\/3/.test(e.progressText.ko) && /걷기 인정 20분/.test(e.progressText.ko)), 'toast progress uses the assigned pool');
+  m.dev.addWalkMinutes(20);
+  const c3 = await m.listQuests('daily'); assert.equal(`${dailySlots(c3.quests).done}/3`, '3/3'); assert.equal(c3.quests.find((q) => q.id === 'D-ALL3').state, 'claimed');
+  assert.equal((await m.listQuests('daily')).quests.some((q) => q.id === 'D-SUB1' || q.id === 'D-WALK10'), false);
+  ok('daily slots data-driven: pool pick D-LOGIN·D-WALK20·D-BUS1 (+D-ALL3) → chip x/3, all 3 listed, toast x/3, ALL3 counts assigned'); }
 console.log(`econ mock: ${n} passed`);
