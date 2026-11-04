@@ -13,6 +13,9 @@ const ONLY = process.env.ONLY || '';
 mkdirSync(OUT, { recursive: true });
 const results = [];
 const check = (name, ok, info = '') => { results.push({ name, ok: !!ok, info }); console.log(`${ok ? '✓' : '✗'} ${name}${info ? ' — ' + info : ''}`); };
+const chipTotal = (t) => { const m = /(\d+)\s*\/\s*(\d+)/.exec(t || ''); return m ? +m[2] : -1; };
+// 할 일 시트(매일 탭)의 목록 행 수 — 보너스 D-ALL3 카드는 칩 total 에 들어가지 않으므로 뺌
+const qRows = (p) => p.locator('.ve-quests .ve-qlist .ve-qcard:not([data-quest="D-ALL3"])').count().catch(() => 0);
 const shot = (p, name) => p.screenshot({ path: `${OUT}/${name}.png`, timeout: 120000 }).catch((e) => console.log(`  (스크린샷 ${name} 실패: ${e.message.split('\n')[0]})`));
 const api = (p, path, init) => p.evaluate(async ([path, init]) => { const r = await fetch('/_phone' + path, { credentials: 'include', ...(init || {}) }); const j = await r.json().catch(() => null); return { status: r.status, body: j?.data ?? j }; }, [path, init || null]);
 const click = (p, sel) => p.locator(sel).first().click({ force: true, timeout: 20000 });
@@ -135,12 +138,17 @@ async function pc(mode) {
     await shot(p, `${tag}-3-quest-sheet`);
     const sheet = await p.locator('[data-tab=daily]').first().isVisible().catch(() => false);
     check(`${tag}: 할 일 시트 열림(매일·주간·월간)`, sheet);
-    { // 참고만: HUD 할 일 개수는 feat/econ-ui-v2 hud.js 알려진 버그(DAILY id 하드코딩·'/3') — 실패로 세지 않음
-      const chip = (await p.locator('[data-ve=quest] b').first().textContent().catch(() => '')) || '';
-      const daily = await p.locator('[data-tab=daily]').count().catch(() => 0);
-      const q = await api(p, '/econ/quests').catch(() => null);
-      const n = Array.isArray(q?.body) ? q.body.length : (q?.body?.quests?.length ?? q?.body?.daily?.length ?? '?');
-      console.log(`  (참고·실패 아님) HUD 할 일 칩 '${chip.trim()}' · 시트 탭 ${daily} · 서버 /econ/quests HTTP ${q?.status ?? '-'} 항목 ${n} — hud.js 알려진 버그, PR 작성자 수정 중`);
+    { // HUD 할 일 칩 total = 목록 행 수 (dcd7925 dailySlots 고침 확인)
+      const chip = ((await p.locator('[data-ve=quest] b').first().textContent().catch(() => '')) || '').trim();
+      const sheetRows = await qRows(p);
+      check(`${tag}: 할 일 칩 total = 시트 매일 목록 행 수(보너스 D-ALL3 제외)`, chipTotal(chip) === sheetRows, `칩 '${chip}' · 시트 행 ${sheetRows}`);
+      await p.keyboard.press('Escape'); await p.waitForTimeout(600);
+      await click(p, '[data-ve=quest]').catch(() => {}); await p.waitForTimeout(1000);
+      const trk = await p.locator('.ve-trow').count().catch(() => 0);
+      const chip2 = ((await p.locator('[data-ve=quest] b').first().textContent().catch(() => '')) || '').trim();
+      await shot(p, `${tag}-3b-quest-tracker`);
+      check(`${tag}: 할 일 칩 total = 트래커 목록 행 수`, chipTotal(chip2) === trk, `칩 '${chip2}' · 트래커 행 ${trk}`);
+      await click(p, '[data-ve=quest]').catch(() => {}); await p.waitForTimeout(500);
     }
     await p.keyboard.press('Escape');
     const before = await api(p, '/econ/state');
@@ -365,10 +373,12 @@ async function mobileV2(p, ctx, b, tag, mode, tap, errs) {
     const st = await api(p, '/econ/state');
     const chip = await balTxt();
     check(`${tag}: 로그인됨 · 칩 잔액 = 서버`, st.body?.session?.signedIn === true && chip.replace(/\D/g, '').includes(String(st.body?.balance?.total)), `칩 '${chip}' · 서버 ${st.body?.balance?.total}`);
+    const mchip = ((await p.locator('.m-econ-n').first().textContent().catch(() => '')) || '').trim();
     await p.locator('.m-econ-q').first().click({ force: true }).catch(() => {});
     await p.waitForTimeout(1500);
     await shot(p, `${tag}-6-quests`);
     check(`${tag}: 할 일 시트`, await p.locator('[data-tab=daily]').first().isVisible().catch(() => false));
+    { const rows = await qRows(p); check(`${tag}: 할 일 칩 total = 시트 매일 목록 행 수(보너스 D-ALL3 제외)`, chipTotal(mchip) === rows, `칩 '${mchip}' · 시트 행 ${rows}`); }
     await p.reload(); await p.waitForTimeout(5000);
     check(`${tag}: 새로고침 뒤 로그인 유지`, (await api(p, '/econ/state')).body?.session?.signedIn === true);
   }
