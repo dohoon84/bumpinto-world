@@ -132,4 +132,14 @@ ok('tuning v3: scooter 4,999,000 · D-WALK20 in pool, no D-TAXI1 · achievements
   cp.dev.signIn({ name: 'p' }); cp.dev.setBalance(5000); const g4 = await cp.dev.gameRide({ mode: 'bus', rideId: 'g4' }); assert.equal(g4.ok, true); assert.ok(!('status' in pe.at(-1)) && pe.at(-1).receiptId);
   ok('paid game ride failure → one payment event PaymentFailed (insufficient/failed), direct call → Result only, success has no status'); }
 ok('#30 shapes: shop available/not_eligible, ledger board + reward event, hold.code, welcome already_claimed');
+{ // 07 = 게임 폰 교통카드 앱: 탑승 기록 + 원장 한 목록 (유료 요금은 같은 탑승 줄에 붙음, 지하철 등 기록 없는 요금은 따로)
+  const { mergeHistory } = await import('../src/ui-v2/econ-ui/walletMerge.js');
+  const t = 1_800_000_000_000, tx = (ko) => ({ ko, en: ko });
+  const rides = [{ id: 'r1', mode: 'bus', route: '1303', at: t, end: t + 300e3 }, { id: 'r2', mode: 'taxi', route: 'TAXI', at: t + 900e3, end: t + 1200e3 }];
+  const led = [{ id: 'f1', kind: 'fare', at: t + 5e3, delta: -1650, title: tx('시내버스 · 정자역') }, { id: 'f2', kind: 'fare', at: t + 1210e3, delta: -7100, title: tx('택시 · 일반 주행 4.6 km') },
+    { id: 'f3', kind: 'fare', at: t + 600e3, delta: -1550, title: tx('지하철 · 정자역 기본요금') }, { id: 'q', kind: 'quest', at: t + 2000e3, delta: 500, title: tx('할 일') }, { id: 'old', kind: 'fare', at: t - 3600e3, delta: -1650, title: tx('시내버스') }];
+  const m = mergeHistory(rides, led);
+  assert.deepEqual(m.map((x) => (x.t === 'ride' ? `${x.r.id}:${x.fare?.id || '-'}` : x.e.id)), ['q', 'r2:f2', 'f3', 'r1:f1', 'old']);
+  assert.deepEqual(mergeHistory(rides, []).map((x) => x.fare), [null, null]);
+  ok('wallet app history: rides + ledger merged by date, paid fare attached to its ride (no duplicate row)'); }
 console.log(`econ mock: ${n} passed`);
