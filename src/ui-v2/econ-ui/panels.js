@@ -1,6 +1,12 @@
 // [econ-ui] 패널: 02a 웰컴 · 02b 잔액 칩 안내 · 04 할 일 시트 · 05a/05a2/05b 보상 · 06 카르마·업적 · 11 탈것 상점 · 01a/01b 로그인
 import { econ } from '../econ/index.js';
 import { el, coinFly } from '../kit.js';
+// 상점 썸네일: 게임 탈것 모델을 오프라인으로 한 번 그린 정적 WebP (scripts/render-shop-thumbs.mjs). 상점에 3D 없음
+import thumbBike from './assets/shop/bike.webp';
+import thumbRoadbike from './assets/shop/roadbike.webp';
+import thumbScooter from './assets/shop/scooter.webp';
+import thumbCar from './assets/shop/car.webp';
+const SHOP_THUMB = { bike: thumbBike, roadbike: thumbRoadbike, scooter: thumbScooter, car: thumbCar };
 import { n, sgn, T, tr, esc, EI, AXIS, axisName, axisTile, mockTag, bumPill, karmaPill, bar, stamp, tag, head, closeBtn, unitText } from './kit.js';
 import { show, close, toastLayer } from './layer.js';
 import { balanceChip, countUp, refresh } from './hud.js';
@@ -188,7 +194,7 @@ export async function openShop({ link } = {}) {
       ${goal && gItem ? `<div class="ve-goal"><div class="v2-hrow"><b>${esc(tr(`목표: ${T(items.find((i) => i.id === goal.itemId).name)} ${n(goal.price)} bum`, `Goal: ${T(items.find((i) => i.id === goal.itemId).name)} ${n(goal.price)} bum`))}</b><span class="v2-grow"></span><b class="ve-gold ve-t20">${esc(tr(`${goal.daysLeft}일 남음`, `${goal.daysLeft} days left`))}</b></div>
         ${bar(goal.balance, goal.price, { w: 1180, h: 10, cls: 'gold ve-wide' })}<div class="v2-hrow"><small>${esc(tr(`${n(goal.balance)} / ${n(goal.price)} (${pct}%) · 남은 ${n(goal.remaining)} bum`, `${n(goal.balance)} / ${n(goal.price)} (${pct}%) · ${n(goal.remaining)} bum to go`))}</small><span class="v2-grow"></span><small>${esc(tr(`보통 페이스 하루 순 +${n(goal.typicalDailyNet)} 기준`, `At a typical net +${n(goal.typicalDailyNet)} per day`))}</small></div>
         <small class="ve-freenote">${esc(tr('상점은 준비중이에요. 지금은 가격만 볼 수 있고, 열리면 모은 bum으로 살 수 있어요.', 'The shop is coming soon. Prices are a preview; you can buy with saved bum once it opens.'))}</small></div>` : ''}
-      <div class="ve-items">${items.map((i) => `<button type="button" class="ve-item${i.id === sel ? ' on' : ''}${i.available === false ? ' na' : ''}" data-item="${i.id}"><span class="ve-thumb">${esc(T(i.name))}</span>
+      <div class="ve-items">${items.map((i) => `<button type="button" class="ve-item${i.id === sel ? ' on' : ''}${i.available === false ? ' na' : ''}" data-item="${i.id}"><span class="ve-thumb">${SHOP_THUMB[i.id] ? `<img src="${SHOP_THUMB[i.id]}" alt="${esc(T(i.name))}" width="200" height="120" loading="lazy" decoding="async">` : esc(T(i.name))}</span>
         <span class="v2-hrow"><b>${esc(T(i.name))}</b>${!i.owned && (i.comingSoon !== false || i.available === false || !i.affordable) ? EI.lock(12) : ''}${i.owned ? tag(tr('보유', 'Owned'), '#20c997') : ''}${i.comingSoon !== false || i.available === false ? tag(tr('준비중', 'Coming soon'), '#9eb4c6') : ''}</span>
         <span class="ve-iprice">${EI.coin(18)}<b>${n(i.price)} bum</b></span>
         <small>${esc(tr(`보통 플레이어 약 ${n(i.daysForTypical)}일`, `About ${n(i.daysForTypical)} days for a typical player`))}</small></button>`).join('')}</div>
