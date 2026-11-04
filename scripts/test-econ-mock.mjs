@@ -145,4 +145,12 @@ ok('#30 shapes: ledger board + reward event, hold.code, welcome already_claimed'
   assert.deepEqual(m.map((x) => (x.t === 'ride' ? `${x.r.id}:${x.fare?.id || '-'}` : x.e.id)), ['q', 'r2:f2', 'f3', 'r1:f1', 'old']);
   assert.deepEqual(mergeHistory(rides, []).map((x) => x.fare), [null, null]);
   ok('wallet app history: rides + ledger merged by date, paid fare attached to its ride (no duplicate row)'); }
+{ // 보상 코인 효과음: 겹침 방지 400 ms · 이동/게시판은 짧고 작게 · 음소거/볼륨 0/효과음 끔이면 안 울림
+  const { coinPlan, THROTTLE_MS, loudness } = await import('../src/ui-v2/econ-ui/coinPlan.js');
+  const full = coinPlan('quest', { now: 1000 }); assert.equal(full.play, true); assert.equal(full.short, false); assert.equal(full.dur, null); assert.equal(full.gain, 0.6);
+  const sh = coinPlan('travel', { now: 1000 }); assert.equal(sh.short, true); assert.equal(sh.dur, 0.6); assert.ok(sh.gain < full.gain); assert.equal(coinPlan('board', { now: 0 }).short, true);
+  assert.equal(coinPlan('achievement', { now: 1000, lastAt: 1000 - THROTTLE_MS + 1 }).why, 'throttled'); assert.equal(coinPlan('welcome', { now: 1000, lastAt: 1000 - THROTTLE_MS }).play, true);
+  assert.equal(coinPlan('quest', { now: 0, level: { muted: true, volume: 1 } }).why, 'muted'); assert.equal(coinPlan('quest', { now: 0, level: { muted: false, volume: 0 } }).why, 'muted');
+  assert.equal(coinPlan('quest', { now: 0, sfxOff: true }).why, 'sfx-off'); assert.equal(coinPlan('quest', { now: 0, level: { muted: false, volume: 0.5 } }).gain, +(loudness(0.5) * 0.6).toFixed(3));
+  ok('reward coin sound plan: 400 ms throttle, travel/board short+quieter, respects mute/volume/sfx-off'); }
 console.log(`econ mock: ${n} passed`);
