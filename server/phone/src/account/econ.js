@@ -173,14 +173,16 @@ export function rideLimits(env = {}) {
 }
 
 /**
- * 탈것 상점 — id·이름·가격은 mock SHOP_ITEMS 와 같음(가격 = 현실가 × 0.5 초기값).
- *   giftId 가 있으면 산 뒤 게임에서 바로 탈 수 있는 기존 모델(src/gifts/catalog.js). 없으면 available:false (구매 불가, 목록엔 보임).
- *   산 탈것은 계정 귀속(giftable:false).
+ * 탈것 상점 — **미리보기 전용**(도훈 결정 2026-11-05): 무엇도 공짜로 주지 않는다. 4개 모두 기획 가격만 보여 주고 available:false · comingSoon:true.
+ *   POST /econ/shop/buy 는 무료·유료 모드 모두 서버에서 거절(not_eligible, reason 'coming_soon') — 원장·소유 기록 없음.
+ *   무료 오픈 규칙(0원 + 기록)은 교통에만 적용. 상점은 여기에 들어가지 않는다.
+ *   가격 = 현실가 × 0.5 초기값(mock SHOP_ITEMS 와 같음). giftId = 예전에 이미 받은 탈것(account_vehicles)을 게임 모델로 보여 줄 때만 씀.
  */
+export const SHOP_PREVIEW_ONLY = true; // env 로 못 바꿈 — 다시 열려면 코드 변경 + 리뷰
 export const SHOP = Object.freeze([
   { id: "bike", name: T("첫 자전거", "First bicycle"), price: 160000, realPrice: 320000, days: 18, giftId: null, available: false },
-  { id: "roadbike", name: T("CR·1 로드바이크", "CR·1 road bike"), price: 1000000, realPrice: 2000000, days: 113, giftId: "roadbike-cr1", available: true },
-  { id: "scooter", name: T("스쿠터(125cc급)", "Scooter (125cc)"), price: 2500000, realPrice: 4999000, days: 280, giftId: null, available: false },
+  { id: "roadbike", name: T("CR·1 로드바이크", "CR·1 road bike"), price: 1000000, realPrice: 2000000, days: 113, giftId: "roadbike-cr1", available: false },
+  { id: "scooter", name: T("스쿠터", "Scooter"), price: 2500000, realPrice: 4999000, days: 280, giftId: null, available: false },
   { id: "car", name: T("경차", "City car"), price: 7450000, realPrice: 14900000, days: 836, giftId: null, available: false },
 ]);
 /** 표시용 가정값(mock RULES 와 같음) — 상점 목표 '며칠 남음' 계산에만 씀. 실측 아님. */

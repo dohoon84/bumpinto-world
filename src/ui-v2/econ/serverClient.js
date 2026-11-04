@@ -10,7 +10,7 @@ import { ECON_API_VERSION, ERR, okR, errR, createEmitter } from './api.js';
 
 const T = (ko, en) => ({ ko, en });
 const NOT_SIGNED_IN_MSG = T('구글 계정을 연동하면 bum을 받을 수 있어요', 'Link a Google account to earn bum');
-const FREE_MODE = Object.freeze({ transitPaid: false, shopPaid: false, beta: true });
+const FREE_MODE = Object.freeze({ transitPaid: false, shopPaid: true, beta: true }); // 상점은 무료 오픈 대상 아님(미리보기 전용)
 const LAST_KEY = 'bw.econ.last.v1';
 
 const guestSession = () => ({ isGuest: true, signedIn: false, accountId: null, displayName: null, provider: null });

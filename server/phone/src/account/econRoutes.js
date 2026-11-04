@@ -187,7 +187,7 @@ export async function handleEcon(request, env, url, deps = {}) {
     if (path === "/econ/shop/buy" && POST) {
       const { body, error } = await readBody(request);
       if (error) return errJ(error, 400, cors);
-      if (!featureOn(env, "shop")) return errJ("not_eligible", 409, cors, { message: { ko: "탈것 상점은 곧 열려요", en: "The vehicle shop opens soon" } });
+      if (!featureOn(env, "shop")) return errJ("not_eligible", 409, cors, { reason: "coming_soon", message: { ko: "탈것 상점은 준비중이에요", en: "The vehicle shop is coming soon" } });
       return resultJ(await E.purchase(db, env, id, String(body.itemId || ""), now), cors);
     }
 

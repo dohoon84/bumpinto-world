@@ -89,7 +89,7 @@ curl -s https://api.bumpinto.world/auth/config      # {"ok":true,"enabled":false
 | `STATS_ENABLED` | `"1"` (기본) | 이동·접속일·사진 기록 (보상 없음) |
 | `ECONOMY_ENABLED` | `"0"` 유지 → 9단계 | 켜면 웰컴 20,000 / 베타 10,000 지급과 잔액 표시, `/econ/*` 동작 |
 | `ECON_FEATURES` | (없음) → 9단계 | `move,quests,shop,board` 중 켤 것 |
-| `ECON_PAID` | `"0"` (기본, 무료 오픈) | 9단계 참고. 결제·충전이 아님 — 교통·상점 차감 여부만 |
+| `ECON_PAID` | `"0"` (기본, 무료 오픈) | 9단계 참고. 결제·충전이 아님 — 교통 차감 여부만(상점은 미리보기 전용이라 이 값과 무관) |
 | `ECONOMY_OPEN_AT` | 예 `"2026-12-01T00:00:00+09:00"` | 베타 감사 지급 기준일(오픈 후 30일까지). 비우면 베타 지급 없음 |
 | `ACCOUNT_MAX_DEVICES` | (없음 = 5) | 계정당 PC 수 |
 | `SESSION_COOKIE_SAMESITE` / `SESSION_COOKIE_DOMAIN` | (없음) | 기본 `Lax`/호스트 전용. 바꿀 일이 없어야 정상 |
@@ -130,14 +130,17 @@ npx wrangler d1 migrations apply bumpinto-accounts --remote    # 0002 만 적용
 | 1 | `ECONOMY_ENABLED="1"` (`ECON_FEATURES` 비움) | 로그인 + 원장 + 잔액, 웰컴·베타 지급, 0원 탑승 기록 |
 | 2 | `ECON_FEATURES="move"` | 서버가 웹소켓 위치로 검증한 이동 보상 (172 bum/분, 하루 60분 · 주 300분 상한). 하루 1번 지급: 60분(또는 주 남은 분)에 닿으면 바로, 못 닿은 날은 다음 접속 때(최근 7일) |
 | 3 | `ECON_FEATURES="move,quests"` | 일/주/월 할 일 + 업적 (bum 상한 없음 — 할 일은 기간당 1회, 업적은 계정당 1회가 상한. 기획 최대치 일 약 6,000 · 주 22,000 · 월 40,000) |
-| 4 | `ECON_FEATURES="move,quests,shop"` | 상점(지금은 CR·1 로드바이크만) |
+| 4 | `ECON_FEATURES="move,quests,shop"` | 상점 **미리보기**: 첫 자전거 · CR·1 로드바이크 · 스쿠터 · 경차를 기획 가격으로 보여 주기만(`available:false` · `comingSoon:true` · '준비중'). 구매는 서버가 항상 거절(`not_eligible`, `reason:'coming_soon'`) — 원장·보유 기록 없음 |
 | 5 | `ECON_FEATURES="move,quests,shop,board"` | 게시판 글 보상 하루 1번 1,000(그날 처음 조건을 통과한 글 하나 — 40자 이상, 가입 24시간 뒤부터, 같은 글 반복 금지. 그 뒤 글은 보상 없음. 지우면 회수) |
-| 나중 | `ECON_PAID="1"` | 교통·상점 실제 차감. **법무 검토 전에는 켜지 않는다.** 현금 충전·결제는 이 브랜치에 없음 |
+| 나중 | `ECON_PAID="1"` | 교통 실제 차감(상점은 여전히 미리보기 — 다시 열려면 코드 `SHOP_PREVIEW_ONLY` 변경 + 리뷰). **법무 검토 전에는 켜지 않는다.** 현금 충전·결제는 이 브랜치에 없음 |
 
 - 탑승 기록 도배 방지(기획에 없는 값): `RIDE_MIN_GAP_SEC`(기본 30) · `RIDE_DAILY_COUNTED`(기본 40). 넘은 탑승은 막지 않고 퀘스트·카르마에만 안 셈.
-- **무료 오픈(`ECON_PAID` 꺼짐, 기본)**: 받는 쪽(이동·할 일·업적·게시판)은 원장에 실제로 쌓인다. 교통 요금·상점 가격은 0원이지만
+- **무료 오픈(`ECON_PAID` 꺼짐, 기본)**: 받는 쪽(이동·할 일·업적·게시판)은 원장에 실제로 쌓인다. 교통 요금은 0원이지만
   `econ_events` 에 정가(`listAmount`)와 함께 기록된다 — 나중에 유료로 바꿀 때 실제 사용량을 본다. 유료 경로(잔액 부족 `insufficient_balance` ·
-  택시 홀드/정산/취소 · 상점 차감)는 코드와 테스트에 그대로 있고 스위치 하나로 켜진다.
+  택시 홀드/정산/취소)는 코드와 테스트에 그대로 있고 스위치 하나로 켜진다.
+- **상점은 무료 오픈 대상이 아니다(도훈 결정 2026-11-05)**: 아무것도 공짜로 주지 않는다. 미리보기 전용(`SHOP_PREVIEW_ONLY`, env 로 못 바꿈) —
+  무료·유료 모드 모두 `POST /econ/shop/buy` 거절(409 `not_eligible`, `reason:'coming_soon'`), 원장·`account_vehicles`·`econ_events` 에 아무것도 안 씀.
+  `mode.shopPaid` 는 항상 `true`. 이미 받은 선물 탈것(CR·1/RR 선물 · 예전 `account_vehicles` 행)은 그대로 보이고 탈 수 있다.
 - **게스트(구글 미연동)는 서버 보상이 없다.** 나중에 연동해도 그 전 게스트 활동은 소급 지급하지 않는다. 클라이언트는 `getSession().isGuest` 로 안내한다.
 - 금액·상한은 모두 `src/account/econ.js` 한 파일 (`ECON_CONFIG_VERSION`). **초기 튜닝값**이다 — 바꾸면 버전을 올린다.
 - 끄기(롤백): `ECON_FEATURES` 에서 빼거나 `ECONOMY_ENABLED="0"`. 원장은 남고, 다시 켜면 이어서 쌓인다(멱등키라 이중 지급 없음).
@@ -188,5 +191,5 @@ curl -s -b /tmp/jar -X POST http://127.0.0.1:8789/econ/fare -H 'Content-Type: ap
 
 ```bash
 npm run accounts:test     # 토큰 검증(가짜 JWKS)·세션·연결/이전 규칙·원장 멱등·이동 기록
-npm run economy:test      # 원장 상한·이동 검증·요금(무료/유료)·택시 홀드·상점·게시판 도배 방지·퀘스트/업적·/econ 라우트 + ui-v2 서버 클라이언트
+npm run economy:test      # 원장 상한·이동 검증·요금(무료/유료)·택시 홀드·상점 미리보기(구매 거절)·게시판 도배 방지·퀘스트/업적·/econ 라우트 + ui-v2 서버 클라이언트
 ```

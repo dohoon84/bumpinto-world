@@ -6,7 +6,7 @@
 // 이 파일은 cloudflare:workers 를 가져오지 않는다 — node 단위 테스트가 D1 대역으로 그대로 불러 쓴다.
 import {
   ACHIEVEMENTS, BOARD, CAPS, DISPLAY, ECON_CONFIG_VERSION, FARES, FARE_ALIASES, KARMA_AXES, LADDERS, MOVE, movePerMinute, PHOTO_SPOT_M,
-  QUESTS, rideLimits, SHOP, TAXI, WELCOME_FREE_BUM, BETA_FREE_BUM, WELCOME_TEXT,
+  QUESTS, rideLimits, SHOP, SHOP_PREVIEW_ONLY, TAXI, WELCOME_FREE_BUM, BETA_FREE_BUM, WELCOME_TEXT,
 } from "./econ.js";
 import { appendLedgerWhere, getBalance } from "./ledger.js";
 import { econPaid, economyEnabled, economyOpenAt, featureOn, kstDate, kstPeriods } from "./flags.js";
@@ -20,7 +20,8 @@ const qs = (n) => Array(n).fill("?").join(", ");
 
 export function econMode(env) {
   const paid = econPaid(env);
-  return { transitPaid: paid, shopPaid: paid, beta: !paid };
+  // 상점은 무료 오픈 대상이 아님(미리보기 전용, 0원으로 주지 않음) → shopPaid 는 항상 true
+  return { transitPaid: paid, shopPaid: true, beta: !paid };
 }
 
 export const NOT_SIGNED_IN = Object.freeze({
@@ -612,18 +613,19 @@ export async function accountVehicleGifts(db, accountId) {
   return (results || []).map((r) => ({ id: r.gift_id, qty: 1 }));
 }
 
-function itemView(it, { free, owned, balance, signedIn }) {
+function itemView(it, { owned }) {
+  // 미리보기: 기획 가격 그대로(0원 아님), 살 수 없음
+  const soon = SHOP_PREVIEW_ONLY || !it.available;
   return {
-    id: it.id, name: it.name, free, price: free ? 0 : it.price, listPrice: it.price, realPrice: it.realPrice, daysForTypical: it.days,
-    owned, affordable: !!signedIn && it.available && !owned && (free || balance >= it.price), giftable: false, available: it.available,
+    id: it.id, name: it.name, free: false, price: it.price, listPrice: it.price, realPrice: it.realPrice, daysForTypical: it.days,
+    owned, affordable: false, giftable: false, available: false, comingSoon: soon, status: soon ? "coming_soon" : "available",
+    statusText: soon ? T("준비중", "Coming soon") : null,
   };
 }
 
 export async function listShop(db, env, accountId, now = Date.now()) {
-  const free = !econPaid(env);
   const owned = await ownedItems(db, accountId);
-  const balance = accountId ? (await balanceView(db, accountId, now)).total : 0;
-  return SHOP.map((it) => itemView(it, { free, owned: owned.has(it.id), balance, signedIn: !!accountId }));
+  return SHOP.map((it) => itemView(it, { owned: owned.has(it.id) }));
 }
 
 export async function shopGoal(db, env, accountId, now = Date.now()) {
@@ -632,14 +634,17 @@ export async function shopGoal(db, env, accountId, now = Date.now()) {
   if (!it) return null;
   const b = Math.max(0, (await balanceView(db, accountId, now)).total);
   const remaining = Math.max(0, it.price - b);
-  return { guest: false, itemId: it.id, price: it.price, balance: b, remaining, daysLeft: Math.ceil(remaining / DISPLAY.typicalDailyNet), typicalDailyNet: DISPLAY.typicalDailyNet };
+  return { guest: false, itemId: it.id, price: it.price, balance: b, remaining, daysLeft: Math.ceil(remaining / DISPLAY.typicalDailyNet), typicalDailyNet: DISPLAY.typicalDailyNet, comingSoon: true };
 }
 
-/** 구매. 계정당 상품 1개(멱등키 shop:{acc}:{itemId}). 무료 모드 = 0원 + 소유 기록. */
+const COMING_SOON = () => err("not_eligible", { reason: "coming_soon", message: T("탈것 상점은 준비중이에요", "The vehicle shop is coming soon") });
+
+/** 구매 — 지금은 미리보기 전용이라 무료·유료 모드 모두 거절하고 아무것도 쓰지 않는다(SHOP_PREVIEW_ONLY).
+ *  아래(계정당 1개, 멱등키 shop:{acc}:{itemId}, 유료 차감)는 상점을 다시 열 때를 위해 남겨 둔다 — 다시 열 때 무료(0원) 지급 경로는 빼야 함. */
 export async function purchase(db, env, accountId, itemId, now = Date.now()) {
   const it = SHOP.find((x) => x.id === itemId);
   if (!it) return err("unknown");
-  if (!it.available) return err("not_eligible", { message: T("아직 준비 중인 탈것이에요", "This vehicle is not available yet") });
+  if (SHOP_PREVIEW_ONLY || !it.available) return COMING_SOON();
   const owned = await ownedItems(db, accountId);
   if (owned.has(it.id)) return err("already_claimed");
   const paid = econPaid(env);
@@ -672,7 +677,7 @@ export async function purchase(db, env, accountId, itemId, now = Date.now()) {
     }
   }
   const balance = await balanceView(db, accountId, now);
-  return ok({ item: itemView(it, { free: !paid, owned: true, balance: balance.total, signedIn: true }), free: !paid, amount: paid ? it.price : 0, listAmount: it.price, balance });
+  return ok({ item: itemView(it, { owned: true }), free: !paid, amount: paid ? it.price : 0, listAmount: it.price, balance });
 }
 
 // ───────────────────────── 게시판 보상 ─────────────────────────

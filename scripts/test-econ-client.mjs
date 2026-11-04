@@ -76,7 +76,7 @@ console.log('econ server client tests');
   const off = createServerClient({ enabled: false, base: '', storage: null, autoRegister: false, rideBridge: false });
   assert.deepEqual(missingMethods(off), []);
   assert.equal((await off.getSession()).isGuest, true);
-  assert.deepEqual(await off.getEconMode(), { transitPaid: false, shopPaid: false, beta: true });
+  assert.deepEqual(await off.getEconMode(), { transitPaid: false, shopPaid: true, beta: true }); // 상점은 무료 오픈 대상 아님
   const p = await off.payFare({ mode: 'bus', code: 'bus.city', rideId: 'r1' });
   assert.equal(p.ok, true); assert.equal(p.data.free, true); assert.equal(p.data.amount, 0);
   assert.equal((await off.claimQuest('D-LOGIN')).error.code, 'not_signed_in');
@@ -312,11 +312,12 @@ console.log('econ server client tests');
   const c = mk(env, jar, { win, log });
   const ev = collect(c);
   await c.getSession();
+  // 상점 = 미리보기 전용: 서버가 거절 → 보유 신호 없음
   const p = await c.purchase('roadbike');
-  assert.equal(p.ok, true, JSON.stringify(p));
-  assert.deepEqual(owned, [{ itemId: 'roadbike' }]);
-  const bad = await c.purchase('roadbike');
-  assert.equal(bad.error.code, 'already_claimed'); assert.equal(owned.length, 1);
+  assert.deepEqual([p.ok, p.error.code, p.error.reason], [false, 'not_eligible', 'coming_soon']);
+  assert.deepEqual(owned, []);
+  const shop = await c.listShopItems();
+  assert.deepEqual(shop.map((i) => [i.id, i.available, i.comingSoon, i.price]), [['bike', false, true, 160000], ['roadbike', false, true, 1000000], ['scooter', false, true, 2500000], ['car', false, true, 7450000]]);
   // 게시판 글 보상(서버가 /board 처리 중 원장에 넣음) → board.js 가 bw:econ-changed → 토스트
   const acc = await env.DB.prepare("SELECT * FROM accounts WHERE id = 'v'").first();
   const r = await E.rewardBoardPost(env.DB, env, acc, { id: 9, category: 'free', title: 't', body: '판교 가는 길 탄천 자전거도로가 새로 포장돼서 아주 부드러워요. 밤엔 가로등도 밝습니다. 강아지 산책하는 분들이 많으니 천천히 달리세요!' }, NOW);
@@ -328,7 +329,7 @@ console.log('econ server client tests');
   assert.equal(boardEv.length, 1); assert.equal(boardEv[0].amount, 1000);
   const wl = await c.getLedger({ limit: 10 });
   assert.ok(wl.some((e) => e.kind === 'board' && e.delta === 1000));
-  ok('signals: purchase → bw:econ-owned once (not on already_claimed); bw:econ-changed → immediate refresh → board reward toast, wallet kind board');
+  ok('signals: shop preview → purchase rejected coming_soon, no bw:econ-owned, items passthrough comingSoon; bw:econ-changed → immediate refresh → board reward toast, wallet kind board');
 }
 
 // ── 유료 모드 잔액 부족: 게임 탑승은 막히고, 'payment' 이벤트(status insufficient)로 08c 를 띄울 값이 온다 ──
