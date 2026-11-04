@@ -810,12 +810,14 @@ export function mountBoard({ sms, getMe, onOpen } = {}) {
     close() {
       setOpen(false);
     },
-    // [notice-popup] 공지사항 탭으로 게시판 열기
-    openNotices() {
+    // [notice-popup] 공지사항 탭으로 게시판 열기. postId 가 있으면 그 공지 본문을 바로 연다(목록은 '목록' 버튼으로).
+    openNotices(postId) {
       if (isOpen) return false;
       category = 'notice';
       page = 1;
       setOpen(true, 'list');
+      const id = Number(postId);
+      if (Number.isSafeInteger(id) && id > 0) openPost(id);
       return true;
     },
   };

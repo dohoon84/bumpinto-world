@@ -903,7 +903,7 @@ noticePopup = createNoticePopup({
   params,
   // 게시판 공지 탭과 같은 소스(서버 /board 또는 로컬 테스트 게시판). 실패하면 팝업 없음.
   fetchNotices: async () => (await sms.board('list', { category: 'notice', page: 1 }))?.items || [],
-  open: () => !!board.openNotices?.(),
+  open: () => !!board.openNotices?.(noticePopup?.latest), // 최신 공지 본문을 바로 표시
   busy: () => {
     try {
       const b = document.body.classList;
