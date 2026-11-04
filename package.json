@@ -57,6 +57,7 @@
     "subway:gate": "node scripts/e2e-subway-gate-exit.mjs",
     "subway:pose": "node scripts/e2e-subway-pose.mjs",
     "subway:sync": "node scripts/e2e-subway-train-sync.mjs",
+    "perf:test": "node scripts/perf/test-perf-memory.mjs",
     "bungeo:test": "node scripts/test-bungeo-queue.mjs"
   },
   "dependencies": {
