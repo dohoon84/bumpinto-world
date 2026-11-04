@@ -12,6 +12,7 @@ import { shownInPay, shownReceipts, showPay, payAndShow, openWallet, openTaxiApp
 import { close, openKey } from './layer.js';
 
 let suppressRewards = 0;
+let welcomeEvAt = 0; // 서버가 연동 순간 자동 지급한 웰컴의 reward 이벤트(sinceAt 따라잡기)를 받은 시각
 let busy = false;
 
 /** 게스트 → 구글 연동. 핸들러(#21)가 있으면 실제 GIS, 없으면 대기/준비 중 카드(+ demo 에서는 예시 계정). */
@@ -38,8 +39,14 @@ async function afterSignIn(account) {
   if (econ.isMock && econ.dev && (await econ.getSession()).isGuest) econ.dev.signIn({ name: account.name || '예시 계정' });
   suppressRewards = Date.now() + 20000;
   const w = await econ.getWelcome();
-  // eligible = 아직 안 받음(mock), claimed = 서버가 로그인 때 이미 지급 → 둘 다 01b→02a 로 안내(02a 는 '확인' 으로 연출만)
-  if (!w.eligible && !(w.claimed && w.grants?.length)) { suppressRewards = 0; refresh(); return; }
+  // 웰컴은 구글 연동 때 계정당 1번 자동 지급(서버). eligible = 아직 안 받음(mock 은 02a '받기'로 지급),
+  // claimed = 이미 지급 → '이번 연동에서 막 지급된 경우'에만 01b→02a('확인', 연출만). 예전에 받은 계정의 재로그인은 안내 없이 끝.
+  const sess = await econ.getSession();
+  const key = `bw.uiv2.econ.welcomeShown.${sess.accountId || ''}`;
+  let seen = false; try { seen = !econ.isMock && !!localStorage.getItem(key); } catch { /* noop */ }
+  const justGranted = w.claimed && w.grants?.length && (econ.isMock || Date.now() - welcomeEvAt < 60000);
+  if (seen || !(w.eligible || justGranted)) { suppressRewards = 0; refresh(); return; }
+  try { if (!econ.isMock) localStorage.setItem(key, String(Date.now())); } catch { /* noop */ }
   openMigrate({ onContinue: () => welcome(), onLater: () => welcome() });
 }
 function welcome() { suppressRewards = Math.max(suppressRewards, Date.now() + 8000); openWelcome(); }
@@ -133,7 +140,8 @@ export function mountEconUi() {
   for (const ev of ['balance', 'quest', 'travel', 'session', 'mode']) econ.on(ev, soon);
   econ.on('payment', onServerPayment);
   econ.on('reward', (ev) => {
-    if (!ev || !['quest', 'achievement', 'welcome', 'beta'].includes(ev.kind)) return;
+    if (ev?.kind === 'welcome') welcomeEvAt = Date.now();
+    if (!ev || !['quest', 'achievement', 'welcome', 'beta', 'board'].includes(ev.kind)) return; // board = 게시판 글 보상(#30: reward 이벤트로 옴)
     if (Date.now() < suppressRewards) return; // 로그인 직후 자동 지급(웰컴·베타·D-LOGIN)·데모 시드 중에는 토스트 없이
     if ((ev.kind === 'welcome' || ev.kind === 'beta') && ['01a', '01b', '02a', '02b'].includes(openKey())) return;
     // 결제 카드(08b·09b·10b)가 같은 보상을 '할 일 달성' 줄로 보여 주면 05a 토스트는 생략
@@ -143,6 +151,6 @@ export function mountEconUi() {
   addEventListener('bw:transit', onTransit);
   trackWalk();
   refresh();
-  if (isDemo()) import('./demo.js').then((m) => m.mountDemo({ open, link, setSuppress: (ms) => { suppressRewards = Date.now() + ms; } }));
+  if (isDemo() && econ.dev) import('./demo.js').then((m) => m.mountDemo({ open, link, setSuppress: (ms) => { suppressRewards = Date.now() + ms; } }));
   return { open, link };
 }

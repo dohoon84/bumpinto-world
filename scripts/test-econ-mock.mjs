@@ -80,9 +80,20 @@ const it2 = await c.listShopItems(); assert.equal(it2.find((i) => i.id === 'road
 const ne = await c.purchase('scooter'); assert.equal(ne.ok, false); assert.equal(ne.error.code, ERR.NOT_ELIGIBLE);
 c.dev.setShopAvailable(null); assert.ok((await c.listShopItems()).every((i) => i.available === true));
 let rewards = 0; const off = c.on('reward', () => rewards++);
-const b1 = (await c.getBalance()).total; const bp = c.dev.boardPost(1000); assert.equal(bp.kind, 'board'); assert.equal((await c.getBalance()).total, b1 + 1000); assert.equal(rewards, 0, 'board: ledger row only, no reward event'); off?.();
+const b1 = (await c.getBalance()).total; const bp = c.dev.boardPost(1000); assert.equal(bp.kind, 'board'); assert.equal((await c.getBalance()).total, b1 + 1000); assert.equal(rewards, 1, 'board: ledger row + reward event kind board'); off?.();
 assert.ok((await c.getLedger({ limit: 1 }))[0].kind === 'board');
 const h2 = await c.holdTaxi({ code: 'taxi.drive', estimateMeters: 2000, rideId: 't2' }); assert.equal(h2.data.code, 'taxi.drive'); await c.cancelTaxi(h2.data.holdId);
 const wc = await c.claimWelcome(); assert.equal(wc.ok, false); assert.equal(wc.error.code, ERR.ALREADY); assert.equal((await c.getWelcome()).claimed, true);
-ok('#30 shapes: shop available/not_eligible, ledger board (no reward event), hold.code, welcome already_claimed');
+// 튜닝 v3 (#30 46a4b3b · 기획 v1)
+const T3 = await import('../src/ui-v2/econ/mockClient.js');
+assert.equal(T3.SHOP_ITEMS.find((i) => i.id === 'scooter').realPrice, 4999000);
+assert.ok(T3.DAILY_POOL.includes('D-WALK20') && !T3.DAILY_POOL.includes('D-TAXI1'));
+assert.equal(T3.FARE_TABLE['bus.long'].amount, 3200);
+assert.equal(T3.movePerMinute('2026-12-31'), 172); assert.equal(T3.movePerMinute('2027-01-01'), 178);
+const kk = await c.getKarma(); assert.deepEqual(kk.achievements.map((a) => [a.id, a.bonus]), [['ACH-WALK100', 5000], ['ACH-STREAK30', 10000]]);
+assert.equal((await c.quoteFare({ mode: 'bus', code: 'bus.long' })).listAmount, 3200);
+{ const m = new Map(); const c27 = T3.createMockClient({ storage: { getItem: (k) => m.get(k) ?? null, setItem: (k, v) => m.set(k, v), removeItem: (k) => m.delete(k) }, now: () => Date.parse('2027-01-01T03:00:00Z') });
+  c27.dev.signIn({ name: 't' }); c27.dev.addWalkMinutes(5); const t27 = await c27.getTravelToday(); assert.equal(t27.ratePerMin, 178); assert.equal(t27.pendingBum, 5 * 178); }
+ok('tuning v3: scooter 4,999,000 · D-WALK20 in pool, no D-TAXI1 · achievements WALK100/STREAK30 only · bus.long 3,200 · 172→178 from 2027-01-01');
+ok('#30 shapes: shop available/not_eligible, ledger board + reward event, hold.code, welcome already_claimed');
 console.log(`econ mock: ${n} passed`);

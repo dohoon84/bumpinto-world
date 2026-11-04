@@ -111,7 +111,7 @@ export async function rewardSequence(ev, { stopAt = null } = {}) {
   const weekly = ev.period === 'weekly' || ev.period === 'monthly';
   const t = el('div', 'v2-panel ve-toast', `${rays(240)}
     <span class="ve-tcoin">${EI.coin(64)}</span>
-    <div class="ve-col">${tag(weekly ? (ev.period === 'monthly' ? tr('월간 달성!', 'Monthly done!') : tr('주간 달성!', 'Weekly done!')) : ev.kind === 'achievement' ? tr('업적 달성!', 'Achievement!') : ev.kind === 'welcome' ? tr('웰컴 보상', 'Welcome reward') : ev.kind === 'beta' ? tr('베타 감사', 'Beta thank-you') : tr('할 일 달성!', 'Quest done!'), '#ffe169')}
+    <div class="ve-col">${tag(weekly ? (ev.period === 'monthly' ? tr('월간 달성!', 'Monthly done!') : tr('주간 달성!', 'Weekly done!')) : ev.kind === 'achievement' ? tr('업적 달성!', 'Achievement!') : ev.kind === 'welcome' ? tr('웰컴 보상', 'Welcome reward') : ev.kind === 'beta' ? tr('베타 감사', 'Beta thank-you') : ev.kind === 'board' ? tr('게시판 글 보상', 'Board post reward') : tr('할 일 달성!', 'Quest done!'), '#ffe169')}
       <b class="ve-t20">${esc(T(ev.title))}</b>
       <div class="v2-hrow">${bumPill(amount, { cls: 'lg' })}${karmaPill(ev.karma)}${mockTag()}</div>
       ${ev.progressText ? `<small class="ve-sub">${esc(T(ev.progressText))}</small>` : ''}</div>${ev.kind === 'quest' || ev.kind === 'achievement' ? stamp() : ''}`);
@@ -167,7 +167,7 @@ export async function openKarma({ link } = {}) {
 
 // ---------- 11 탈것 상점
 export async function openShop({ link } = {}) {
-  const [items, goal, bal, mode] = await Promise.all([econ.listShopItems(), econ.getShopGoal(), econ.getBalance(), econ.getEconMode()]);
+  let [items, goal, bal, mode] = await Promise.all([econ.listShopItems(), econ.getShopGoal(), econ.getBalance(), econ.getEconMode()]);
   let sel = items.find((i) => !i.owned && i.available !== false)?.id || items[0]?.id;
   if (!items.length) { const p0 = panel('ve-shop', `<div class="v2-hrow">${head(tr('탈것 상점', 'Vehicle shop'), { size: 24 })}${mockTag()}<span class="v2-grow"></span>${closeBtn()}</div><p class="ve-note">${esc(tr('지금은 상점을 열 수 없어요. 잠시 뒤 다시 열어 주세요.', 'The shop is unavailable right now. Please try again later.'))}</p>`); show(p0, { key: '11' }); return; }
   const p = panel('ve-shop', '');
@@ -200,7 +200,18 @@ export async function openShop({ link } = {}) {
     if (e.target.closest('[data-ve="buy"]')) {
       const r = await econ.purchase(sel);
       const m = p.querySelector('.ve-msg');
-      if (r.ok) { const i = items.findIndex((x) => x.id === sel); items[i] = r.data.item || { ...items[i], owned: true, affordable: false }; Object.assign(bal, r.data.balance || {}); draw(); const m2 = p.querySelector('.ve-msg'); m2.hidden = false; m2.textContent = r.data.free ? tr(`${T(items[i].name)}을(를) 받았어요 (무료 베타, 차감 없음). 탈것 기능은 아직 게임에 연결 전이에요.`, `You got ${T(items[i].name)} (free beta, nothing deducted). Vehicles are not wired into the game yet.`) : tr(`${T(items[i].name)} 구매 완료 · −${n(r.data.amount)} bum`, `Bought ${T(items[i].name)} · −${n(r.data.amount)} bum`); }
+      if (r.ok) {
+        // 산 탈것은 바로 탈 수 있다(서버 클라이언트가 'bw:econ-owned' 로 게임 보유를 다시 받음) → 보유 목록·목표·잔액을 바로 다시 읽는다
+        const name = T((r.data.item || items.find((x) => x.id === sel) || {}).name);
+        const [it2, g2, b2] = await Promise.all([econ.listShopItems(), econ.getShopGoal(), econ.getBalance()]).catch(() => [null, goal, bal]);
+        if (Array.isArray(it2) && it2.length) items = it2; else { const i = items.findIndex((x) => x.id === sel); if (i >= 0) items[i] = r.data.item || { ...items[i], owned: true, affordable: false }; }
+        goal = g2 ?? null; bal = b2 || { ...bal, ...(r.data.balance || {}) };
+        refresh();
+        draw();
+        const m2 = p.querySelector('.ve-msg'); m2.hidden = false;
+        const ride = econ.isMock ? tr('(예시 데이터: 이 화면에서는 게임 탈것과 아직 연결 전)', '(example data: not linked to in-game vehicles here)') : tr('지금 바로 탈 수 있어요.', 'You can ride it right away.');
+        m2.textContent = r.data.free ? tr(`${name}을(를) 받았어요 (무료 베타, 차감 없음). ${ride}`, `You got ${name} (free beta, nothing deducted). ${ride}`) : tr(`${name} 구매 완료 · −${n(r.data.amount)} bum. ${ride}`, `Bought ${name} · −${n(r.data.amount)} bum. ${ride}`);
+      }
       else {
         m.hidden = false;
         const c = r.error.code;

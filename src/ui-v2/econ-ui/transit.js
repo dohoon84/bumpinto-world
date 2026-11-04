@@ -82,13 +82,14 @@ export function showPay(pay, { where = '', before = null, hold = false } = {}) {
 // ---------- 08c 잔액 부족 (유료 모드)
 export async function openBlock({ mode = 'bus', code = 'bus.city', err, onQuests } = {}) {
   const d = await econ.listQuests('daily');
+  const rate = (await econ.getTravelToday().catch(() => null))?.ratePerMin || 172; // 2027-01-01부터 178
   const left = d.guest ? [] : d.quests.filter((q) => q.state === 'active' && !q.bonus).slice(0, 2);
   const lab = mode === 'subway' ? tr('지하철 기본요금', 'Subway base fare') : tr('시내버스 요금', 'City bus fare');
   const p = panel('ve-block', `<div class="v2-hrow"><span class="ve-bang">!</span><b class="ve-t22">${esc(mode === 'subway' ? tr('잔액이 부족해서 통과할 수 없어요', "Not enough bum to pass the gate") : tr('잔액이 부족해서 탈 수 없어요', "Not enough bum to board"))}</b>${mockTag()}<span class="v2-grow"></span>${closeBtn()}</div>
     <div class="ve-short"><small>${esc(tr(`${lab} ${n(err.need)} · 내 잔액 ${n(err.balance)}`, `${lab} ${n(err.need)} · balance ${n(err.balance)}`))}</small><b>${esc(tr(`잔액 ${n(err.shortBy)} bum 부족`, `${n(err.shortBy)} bum short`))}</b></div>
     <p class="ve-note">${esc(tr('외상 탑승은 없어요. 오늘 남은 할 일로 바로 채울 수 있어요.', 'No riding on credit. You can top up with the quests left today.'))}</p>
     ${left.length ? `<b class="ve-t13 ve-gold">${esc(tr('오늘 남은 할 일', 'Quests left today'))}</b>${left.map((q) => `<div class="ve-rowc">${EI.quest(20)}<span class="ve-col"><b>${esc(T(q.title))}</b><small>${n(q.progress.value)} / ${n(q.progress.target)}</small></span><span class="v2-grow"></span>${bumPill(q.reward.bum)}</div>`).join('')}` : ''}
-    <p class="ve-note">${esc(tr('걷기만 해도 분당 172 bum이 정산돼요 (하루 60분까지).', 'Walking alone earns 172 bum per minute (up to 60 min a day).'))}</p>
+    <p class="ve-note">${esc(tr(`걷기만 해도 분당 ${rate} bum이 정산돼요 (하루 60분까지).`, `Walking alone earns ${rate} bum per minute (up to 60 min a day).`))}</p>
     <div class="v2-hrow"><button type="button" class="v2-btn primary ve-g2" data-ve="quests">${esc(tr('할 일 보기', 'See quests'))}</button><button type="button" class="v2-btn secondary ve-g2" data-ve="close">${esc(tr('걸어서 가기', 'Walk instead'))}</button></div>`);
   p.querySelector('[data-ve="quests"]').addEventListener('click', () => { close(true); onQuests?.(); });
   show(p, { key: '08c' });

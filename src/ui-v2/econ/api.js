@@ -72,10 +72,10 @@ export const errR = (code, extra = {}) => ({ ok: false, error: { code, ...extra 
  *   paidBum?: number — (선택) 상한에 걸려 reward.bum 보다 덜 들어간 경우 실제 받은 금액. UI 는 이 값을 보여 준다.
  * @typedef {{ guest: boolean, period: QuestPeriod, resetsAt: number, quests: Quest[], maxBum: number, claimedBum: number, info: Text }} QuestList
  *   게스트: guest:true, quests:[] , maxBum/claimedBum 0 (UI 는 '구글 계정 연동하고 bum 받기' 안내)
- * @typedef {{ kind: 'quest'|'achievement'|'welcome'|'beta'|'travel', amount: number, karma: { axis: KarmaAxis, points: number } | null,
+ * @typedef {{ kind: 'quest'|'achievement'|'welcome'|'beta'|'travel'|'board', amount: number, karma: { axis: KarmaAxis, points: number } | null,
  *             title: Text, questId?: string, period?: QuestPeriod, progressText?: Text, coins?: number, balanceAfter?: number }} RewardEvent
  *   coins = 코인 버스트 개수(UI 연출용, 보통 8). progressText·coins·balanceAfter 는 선택(서버 보상에는 progressText 가 없음).
- *   게시판 글 보상은 RewardEvent 없이 원장 kind 'board' 행으로만 남는다.
+ *   게시판 글 보상: 원장 kind 'board' 행 + RewardEvent kind 'board'(토스트가 떴다가 사라짐). 회수(음수 행)는 이벤트 없음.
  * @typedef {{ id: string, at: number, kind: 'welcome'|'beta'|'quest'|'move'|'ach'|'fare'|'purchase'|'refund'|'board', delta: number,
  *             title: Text, sub: Text|null }} LedgerEntry
  * @typedef {{ guest: boolean, weekEarned: number, weekSpent: number, avgDailyIncome: number, avgDailyTransit: number }} WalletSummary
