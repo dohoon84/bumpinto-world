@@ -166,6 +166,10 @@ const OFF = mk(false), ON = mk(true), P = ON.t.params;
   assert.equal(carBad, 0, `둑 위 차도 점 ${carBad}/${carPts}`);
   const brE = ON.roads.find((r) => r.osm === 186410768).p.map(([x, z]) => ON.t.baseHeight(x, z));
   assert.ok(brE.every((h) => h === 0), '돌마교 양끝 교대 = 둑 위 ' + brE);
-  ok(`둑 위치: 오른쪽 둑 축 ${B.from}..${B.from + B.top.length - 1} (기본 top 54m → 최소 ${Math.min(...B.top)}m, 근거 OSM ${W.meta.bank.sides.R.evidenceOsm.join('/')}) · 띠 안 차도 ${carPts}점 전부 0m (기본 단면이면 최저 ${worstOff.toFixed(2)}m) · 돌마교 양끝 0m`);
+  // 미금 타일 차도(띠 밖에 그려진 길)의 둑 쪽 가장자리: 기본 단면이면 비탈에 걸리던 점
+  let tS = 0, tOn = 0, tOff = 0;
+  for (const r of tileRoads) { if (!CAR.has(r.k) || r.p.length < 2) continue; for (let i = 1; i < r.p.length; i++) { const [ax, az] = r.p[i - 1], [bx, bz] = r.p[i], L = Math.hypot(bx - ax, bz - az); if (L < 0.05) continue; const vx = (bx - ax) / L, vz = (bz - az) / L; for (let u = 0; u < L; u += 2) for (const f of [0.45, -0.45]) { const x = ax + vx * u - vz * f * r.w, z = az + vz * u + vx * f * r.w; if (x < BOX.x0 || x > BOX.x1 || z < BOX.z0 || z > BOX.z1) continue; tS++; if (ON.t.getGroundHeight(x, z, 0.5) < -0.05) tOn++; if (OFF.t.getGroundHeight(x, z, 0.5) < -0.05) tOff++; } } }
+  assert.ok(tOn <= tOff, `타일 차도 가장자리 ${tOn} > ${tOff}`);
+  ok(`둑 위치: 오른쪽 둑 축 ${B.from}..${B.from + B.top.length - 1} (기본 top 54m → 최소 ${Math.min(...B.top)}m, 근거 OSM ${W.meta.bank.sides.R.evidenceOsm.join('/')}) · 띠 안 차도 ${carPts}점 전부 0m (기본 단면이면 최저 ${worstOff.toFixed(2)}m) · 돌마교 양끝 0m · 미금 타일 차도 가장자리(±0.45폭) ${tS}점 중 둑 아래 ${tOff} → ${tOn}`);
 }
 console.log(`test-migeum-water: all ${n} ok`);

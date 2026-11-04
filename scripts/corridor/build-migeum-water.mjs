@@ -102,7 +102,8 @@ const TUNNEL_OK = new Set(['trunk', 'primary', 'secondary', 'tertiary', 'trunk_l
 // 기존 타일 도로(코리더 + 미금): 같은 자리 중복 제거용 (build-pangyo dupSeg 와 같은 1.0m)
 const cIndex = readJSON(path.join(CORR, 'index.json')), mIndex = readJSON(path.join(MDIR, 'index.json'));
 const exSegs = [];
-const addTile = (f) => { if (!fs.existsSync(f)) return; for (const r of readJSON(f).r || []) for (let i = 1; i < r.p.length; i++) exSegs.push([r.p[i - 1][0], r.p[i - 1][1], r.p[i][0], r.p[i][1], r.w]); };
+const tileRoads = [];
+const addTile = (f) => { if (!fs.existsSync(f)) return; for (const r of readJSON(f).r || []) { tileRoads.push(r); } for (const r of readJSON(f).r || []) for (let i = 1; i < r.p.length; i++) exSegs.push([r.p[i - 1][0], r.p[i - 1][1], r.p[i][0], r.p[i][1], r.w]); };
 for (const k of Object.keys(mIndex.tiles)) { addTile(path.join(MDIR, 'tiles', k + '.json')); if (cIndex.tiles[k]) addTile(path.join(CORR, 'tiles', k + '.json')); }
 const nearEx = (x, z, w) => exSegs.some(([ax, az, bx, bz, ew]) => ew >= w - 2 && segDist(x, z, ax, az, bx, bz) <= 1.0);
 function clipOne(B, a, b) {
@@ -162,21 +163,25 @@ function axProject(x, z) {
   for (let i = BANK_IDX[0]; i < Math.min(BANK_IDX[1], ax.length - 1); i++) {
     const [x0, z0] = ax[i], dx = ax[i + 1][0] - x0, dz = ax[i + 1][1] - z0, L2 = dx * dx + dz * dz || 1e-9, L = Math.sqrt(L2);
     const t = Math.max(0, Math.min(1, ((x - x0) * dx + (z - z0) * dz) / L2)), dist = Math.hypot(x0 + dx * t - x, z0 + dz * t - z);
-    if (!best || dist < best.dist) best = { i: t < 0.5 ? i : i + 1, dist, d: -(dx * (z - z0) - dz * (x - x0)) / L };
+    if (!best || dist < best.dist) best = { i: t < 0.5 ? i : i + 1, dist, d: -(dx * (z - z0) - dz * (x - x0)) / L, ux: dx / L, uz: dz / L };
   }
   return best;
 }
-const dens = (p) => { const o = []; for (let i = 1; i < p.length; i++) { const [a, b] = [p[i - 1], p[i]], n = Math.max(1, Math.ceil(Math.hypot(b[0] - a[0], b[1] - a[1]) / 2)); for (let k = 0; k < n; k++) o.push([a[0] + ((b[0] - a[0]) * k) / n, a[1] + ((b[1] - a[1]) * k) / n]); } o.push(p[p.length - 1]); return o; };
+// 근거 점: 2m 간격 + 그 점의 도로 방향 → 도로 반폭을 축 법선 방향으로 투영(축과 나란한 길 = 반폭 전부, 직각 = 0)
+const dens = (p) => { const o = []; for (let i = 1; i < p.length; i++) { const [a, b] = [p[i - 1], p[i]], L = Math.hypot(b[0] - a[0], b[1] - a[1]), n = Math.max(1, Math.ceil(L / 2)); if (L < 0.05) continue; for (let k = 0; k <= n; k++) o.push([a[0] + ((b[0] - a[0]) * k) / n, a[1] + ((b[1] - a[1]) * k) / n, (b[0] - a[0]) / L, (b[1] - a[1]) / L]); } return o; };
+const inBox = (x, z) => x >= BOX.x0 && x <= BOX.x1 && z >= BOX.z0 && z <= BOX.z1;
 const bankEv = { R: [], L: [] }, flEv = { R: [], L: [] };
-for (const r of ch) {
-  const car = CAR.has(r.k), fl = FLOODPLAIN.has(r.k) && !r.br;
-  if (!car && !fl) continue;
-  const pts = r.br ? [r.p[0], r.p[r.p.length - 1]] : dens(r.p);
-  for (const [x, z] of pts) {
+// 띠 조각(ch) 차도 + 미금 타일 차도(띠 밖이지만 반폭이 둑 안으로 들어오는 길) / 둔치 길 = ch 보행·자전거길
+for (const [r, src] of [...ch.map((r) => [r, 'ch']), ...tileRoads.map((r) => [r, 'tile'])]) {
+  const car = CAR.has(r.k), fl = src === 'ch' && FLOODPLAIN.has(r.k) && !r.br;
+  if ((!car && !fl) || r.p.length < 2) continue;
+  const pts = r.br ? [[...r.p[0], 0, 0], [...r.p[r.p.length - 1], 0, 0]] : dens(r.p);
+  for (const [x, z, vx, vz] of pts) {
+    if (!inBox(x, z)) continue;
     const q = axProject(x, z); if (!q) continue;
-    const s = q.d >= 0 ? 'R' : 'L', ad = Math.abs(q.d);
-    if (car && ad < T.prof['top' + s][q.i] + 0.6) bankEv[s].push({ i: q.i, d: ad - 0.5, osm: r.osm });
-    if (fl && !car) flEv[s].push({ i: q.i, d: ad + r.w / 2 + 0.5 });
+    const s = q.d >= 0 ? 'R' : 'L', ad = Math.abs(q.d), hwN = r.br ? 0 : (r.w / 2) * Math.abs(vx * q.ux + vz * q.uz);
+    if (car && ad - hwN < T.prof['top' + s][q.i] + 0.6) bankEv[s].push({ i: q.i, d: ad - hwN - 0.5, osm: r.osm ?? null, src });
+    if (fl) flEv[s].push({ i: q.i, d: ad + r.w / 2 + 0.5 });
   }
 }
 const bank = { idx: [], side: {} };
@@ -198,7 +203,7 @@ for (const s of ['R', 'L']) {
     return r1(Math.min(v, tp - 2));
   });
   const changed = top.some((v, k) => v !== top0[lo + k]);
-  if (changed) bank.side[s] = { from: lo, top, toe, minTop: Math.min(...top), ev: [...new Set(bankEv[s].map((e) => e.osm))] };
+  if (changed) bank.side[s] = { from: lo, top, toe, minTop: Math.min(...top), ev: [...new Set(bankEv[s].filter((e) => e.osm != null).map((e) => e.osm))], tilePts: bankEv[s].filter((e) => e.src === 'tile').length };
 }
 bank.axisN = T0.axis.length; bank.axisAt = Object.values(bank.side).map((b) => T0.axis[b.from]);
 if ((T0.stairs || []).some((st) => Object.values(bank.side).some((b) => { const q = axProject(...st.top); return q && q.dist < 80 && q.i >= b.from && q.i < b.from + b.top.length; }))) throw new Error('둑 조정 구간에 라이브 계단이 있음');
@@ -229,7 +234,7 @@ const out = {
     box: BOX, waterZ0: LZ1,
     level: { dz: 0, water: GAME.WATER, bankToBed: GAME.bankToBed, demReliefMedian: DEM_RELIEF_MED, demRelief: DEM_RELIEF, demRefGunnae: DEM_REF_GUNNAE, tol: LEVEL_TOL, source: 'scripts/corridor/dem/sample-migeum-water.py (Copernicus GLO-30 DSM cop_N37E127)' },
     dolma: { osm: OSM_BRIDGE, osmLenM: r1(brLen), public: PUBLIC_DOLMA },
-    bank: { axisN: bank.axisN, axisAt: bank.axisAt, win: BANK_WIN, taper: BANK_TAPER, sides: Object.fromEntries(Object.entries(bank.side).map(([k, b]) => [k, { from: b.from, n: b.top.length, minTop: b.minTop, evidenceOsm: b.ev }])) },
+    bank: { axisN: bank.axisN, axisAt: bank.axisAt, win: BANK_WIN, taper: BANK_TAPER, sides: Object.fromEntries(Object.entries(bank.side).map(([k, b]) => [k, { from: b.from, n: b.top.length, minTop: b.minTop, evidenceOsm: b.ev, tileEvidencePts: b.tilePts }])) },
     dongmak: { osm: OSM_DONGMAK, pointsInBox: 0, note: '박스 밖 — 다루지 않음' },
     stat: { ...stat, ch: ch.length, water: water.length, waterM2: Math.round(areaOf(waterMP)), riverInBoxM2: Math.round(riverInBox) },
   },
