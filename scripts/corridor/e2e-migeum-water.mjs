@@ -13,6 +13,7 @@ const SHOT_DIR = process.env.SHOT_DIR; const BASE = process.env.E2E_URL;
 if (!SHOT_DIR || !BASE) { console.error('SHOT_DIR, E2E_URL 필요'); process.exit(2); }
 fs.mkdirSync(SHOT_DIR, { recursive: true });
 const NIGHT = process.env.E2E_NIGHT === '1';
+const WALK_MS = +(process.env.E2E_WALK_MS || 240000), BIKE_MS = +(process.env.E2E_BIKE_MS || 150000), SKIP_VIEWS = process.env.E2E_VIEWS === '0';
 const ROUTE = [[868, 1334], [786.8, 1454], [773.3, 1473.2]]; // 동쪽 둑 위 돌마로(타일) → 돌마교(OSM 186410768) 서쪽 교대 → 돌마로 접속부(OSM 522780985) 끝
 const VIEWS = [
   { name: 'dolma', x: 815, z: 1411, y: 0, dist: 95, pitch: 0.5, yaw: 0.55 },
@@ -27,7 +28,7 @@ async function travel(page, mode, maxMs) {
     const J = window.__jj, T = J.terrain, p = J.player.position;
     const [sx, sz] = ROUTE[0], [ex, ez] = ROUTE[1];
     await J.corridor.preload(sx, sz); await J.corridor.preload(ex, ez);
-    J.teleport(sx, sz, 0); J.setMode('follow');
+    J.teleport(sx, sz, 0); J.setMode('follow'); Object.assign(J.cam, { dist: 7, pitch: 1.25 }); // 이동 중엔 내려다보는 짧은 카메라(소프트웨어 렌더 프레임 확보)
     await new Promise((r) => setTimeout(r, 1500));
     let bike = null;
     if (mode === 'bike') {
@@ -87,7 +88,7 @@ for (const [tag, extra] of RUNS) {
     return { dolmaDeck: T.decks.filter((d) => d.road?.osm === 186410768).length, westAbutBase: T.baseHeight(786.8, 1454), geumgokBase: T.baseHeight(782.8, 1459.4) };
   });
   const views = {};
-  for (const v of VIEWS) {
+  for (const v of SKIP_VIEWS ? [] : VIEWS) {
     await page.evaluate(async (v) => {
       const J = window.__jj; J.setMode('follow'); await J.corridor?.preload(v.x, v.z);
       J.teleport(v.x, v.z, v.y ?? undefined); Object.assign(J.cam, { dist: v.dist, pitch: v.pitch, yaw: v.yaw });
@@ -105,14 +106,14 @@ for (const [tag, extra] of RUNS) {
   const res = { info, views };
   if (!NIGHT && tag !== 'nomg') {
     res.walk0 = await travel(page, 'walk');
-    res.walk = await drive(page, tag === 'on' ? 90000 : 40000);
+    res.walk = await drive(page, tag === 'on' ? WALK_MS : 40000);
     await page.screenshot({ path: path.join(SHOT_DIR, `${tag}-walk-end.png`) });
     console.log(tag, 'walk', JSON.stringify({ ...res.walk, path: undefined }));
     if (tag === 'on') {
       res.bike0 = await travel(page, 'bike');
       if (!res.bike0.err) {
         await page.waitForTimeout(300);
-        res.bike = await drive(page, 60000);
+        res.bike = await drive(page, BIKE_MS);
         await page.screenshot({ path: path.join(SHOT_DIR, 'on-bike-end.png') });
         await page.evaluate(() => { if (window.__jj.bikes.riding) window.__jj.toggleRide(); });
       }
