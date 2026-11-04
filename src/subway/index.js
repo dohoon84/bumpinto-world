@@ -15,6 +15,8 @@
 //                                 → game.js 가 원격 플레이어·오버레이·리액션을 그 Scene/카메라로 옮긴다
 //     passKey(e) → true           안에서도 game.js 로 넘길 키 (리액션 숫자키)
 import { createSubwayVoice } from './voice.js';
+import { sharedAudioUnlock } from '../audio/unlock.js';
+import { isMobileMode } from '../mobile/flag.js';
 import { resolveExits, groupExits, exitLabel } from './exits.js';
 import { createSubwayState, FADE_SEC } from './state.js';
 import { rideStops } from './ride.js';
@@ -131,7 +133,7 @@ export function mountSubway({ scene, overlay, data, world, terrain, renderer, ge
   const jaOn = params?.get?.('subwayJa') !== '0';
   const subtitle = (a, sec = 6) => { if (!a?.ko) return; const en = isEn(); sub.innerHTML = (en ? `${a.en}<small>${a.ko}</small>` : `${a.ko}<small>${a.en}</small>`) + (a.ja ? `<small lang="ja">${a.ja}</small>` : ''); placeSub(); sub.style.opacity = '1'; subT = sec + (a.ja ? 2 : 0); };
   // [subway-voice] 안내 방송 음성 (차임 → 한국어 → 영어). BGM HUD 음소거·볼륨을 따름
-  const voice = createSubwayVoice({ params, getLevel: () => getAudioLevel?.() || { muted: false, volume: 1 } });
+  const voice = createSubwayVoice({ params, getLevel: () => getAudioLevel?.() || { muted: false, volume: 1 }, unlockHub: isMobileMode() ? sharedAudioUnlock() : null }); // [mobile-audio]
   // 🔊 표시: 안내 방송이 실제로 나가면 자막 앞에 🔊, BGM 음소거로 꺼졌으면 🔇 + 한 줄 안내 (들리지 않을 때 원인 확인)
   const setV = (v, note = '') => { if (v) sub.dataset.v = v; else delete sub.dataset.v; if (note) sub.dataset.vnote = note; else delete sub.dataset.vnote; };
   voice.on((e) => {
