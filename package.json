@@ -58,7 +58,9 @@
     "subway:gate": "node scripts/e2e-subway-gate-exit.mjs",
     "subway:pose": "node scripts/e2e-subway-pose.mjs",
     "subway:sync": "node scripts/e2e-subway-train-sync.mjs",
-    "bungeo:test": "node scripts/test-bungeo-queue.mjs"
+    "bungeo:test": "node scripts/test-bungeo-queue.mjs",
+    "jz:test": "node scripts/test-jz-traffic.mjs",
+    "shots-jz-traffic": "node scripts/shots-jz-traffic.mjs"
   },
   "dependencies": {
     "three": "^0.186.1"

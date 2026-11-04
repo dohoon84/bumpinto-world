@@ -169,7 +169,14 @@ export class Taxis {
   update(dt) {
     const buses = this.transit?.source?.vehicles?.() || [];
     const others = this.list.map((t) => { const [x, z, dx, dz] = this._sample(t, t.s); return { x, z, dx, dz, t }; }).concat(buses.map((b) => ({ x: b.x, z: b.z, dx: Math.sin(b.heading ?? 0), dz: Math.cos(b.heading ?? 0), bus: true })));
-    for (const t of this.list) this._step(t, dt, others);
+    for (const t of this.list) { if (this.guard) this._guarded(t, dt, others); else this._step(t, dt, others); } // [jz-traffic] guard 는 정자 일반 차량이 있을 때만
+  }
+  // [jz-traffic] 안전망: 한 걸음 움직인 자세가 다른 차량 외곽(footprint)과 겹치면 그 걸음을 되돌리고 멈춘다(재배치된 경우 제외)
+  _guarded(t, dt, others) {
+    const l0 = t.lat, h0 = t.heading, p = t.mesh.position, x0 = p.x, y0 = p.y, z0 = p.z, ry0 = t.mesh.rotation.y, a0 = t.age;
+    this._step(t, dt, others);
+    if (t.age < a0 || a0 < 0.15) return; // 새로 나타난 택시(재배치)
+    if (this.guard(t)) { t.s -= t.v * dt; t.lat = l0; t.heading = h0; t.v = 0; p.set(x0, y0, z0); t.mesh.rotation.y = ry0; }
   }
   fastForward(sec, step = 0.1) {
     for (let k = 0; k < sec; k += step) { this.transit?.fastForward?.(step, step); this.update(step); }
@@ -218,6 +225,7 @@ export class Taxis {
       if (t.state === 'drive') limit = Math.min(limit, vAllow(d));
       if (t.state === 'pickup') { limit = 0; t.wait -= dt; if (t.wait <= 0) { t.state = 'drive'; t.stop = null; t.latT = 0; this._tag(t, '🚗 손님 태우고 출발'); setTimeout(() => this._tag(t), 6000); } }
     }
+    if (this.extraLimit) limit = Math.min(limit, this.extraLimit(t, x, z, dx, dz)); // [jz-traffic] 정자 일반 차량(앞차·교차로 점유)
     const target = Math.min(vmax, limit);
     t.v = t.v < target ? Math.min(target, t.v + ACC * (boost > 1 ? 1.6 : 1) * dt) : Math.max(target, t.v - DEC * 1.6 * dt);
     if (t.v < 0.05 && target < 0.05) t.v = 0;
