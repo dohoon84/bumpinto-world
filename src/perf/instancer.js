@@ -71,7 +71,7 @@ export function createInstancer(scene, { name = 'perfInstanced', pixelCull = fal
       repairClone(o);
       if (!meshInstanceable(o)) return;
       const P = part(o);
-      list.push({ o, P, mat: o.material, geo: o.geometry, lam: P.lam });
+      list.push({ o, P, mat: o.material, geo: o.geometry });
       setHidden(o, R, true);
       if (!o.geometry.boundingBox) o.geometry.computeBoundingBox();
       tmp.copy(o.geometry.boundingBox).applyMatrix4(rel.multiplyMatrices(inv, o.matrixWorld)); box.union(tmp);
@@ -99,6 +99,14 @@ export function createInstancer(scene, { name = 'perfInstanced', pixelCull = fal
     rec.active = on; for (const it of rec.list) setHidden(it.o, R, on);
   }
 
+  // 떠난 루트(판교 NPC·스트리밍 타일 등)만 쓰던 부품은 InstancedMesh 와 geometry 참조를 놓는다 (메모리 누수 방지)
+  function prune() {
+    for (const [key, P] of parts) {
+      if (P.need > 0) continue;
+      if (P.im) { group.remove(P.im); P.im.dispose(); P.im = null; }
+      parts.delete(key);
+    }
+  }
   function sync(renderer, camera, fog = null) {
     const tS = performance.now();
     // 한 프레임에 render 가 여러 번이어도(카메라 앱 등) 매번 그 카메라 기준으로 다시 채운다
@@ -135,6 +143,7 @@ export function createInstancer(scene, { name = 'perfInstanced', pixelCull = fal
       }
       if (stale) { stats.rescanStale++; rec = scan(root, rec); roots.set(root, rec); } // 재질이 바뀐 부품: 다음 프레임부터 새 키로 (이번 프레임은 그 부품만 빠짐)
     }
+    if (doRescan) prune();
     let inst = 0;
     for (const P of parts.values()) {
       if (!P.im) continue;
