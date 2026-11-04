@@ -65,7 +65,7 @@ export function mountMobileHud({ handset } = {}) {
     <div class="m-row2-l">
       <button type="button" class="m-tg m-bag" data-act="bag" aria-label="${t('가방', 'Bag')}">${svg('bag', 20)}<i class="m-count" hidden></i></button>
       <div class="m-chip m-ride-strip" hidden></div>
-      <button type="button" class="m-chip m-stop-chip" data-act="stop" hidden>${svg('bus', 18)}<b></b><small></small></button>
+      <button type="button" class="m-chip m-stop-chip" data-act="stop" hidden>${svg('bus', 18)}<b></b><small></small><span class="m-bus-wait" hidden></span></button>
     </div>
     <div class="m-top-r">
       <button type="button" class="m-tg" data-tg="bgm" aria-label="BGM">${svg('music', 20)}</button>
@@ -209,11 +209,16 @@ export function mountMobileHud({ handset } = {}) {
     const on = !!sp?.classList.contains('open') && shown(sp) && !window.__jj?.ride?.active;
     stopChip.hidden = !on;
     if (!on) return;
-    const nm = [...(sp.querySelector('.hd')?.childNodes || [])].filter((n) => n.nodeType === 3).map((n) => n.textContent).join('').replace(/^\W+/u, '').trim();
+    const nm = [...(sp.querySelector('.hd')?.childNodes || [])].filter((n) => n.nodeType === 3).map((n) => n.textContent).join('').replace(/^[^\p{L}\p{N}]+/u, '').trim(); // \W 는 한글도 지워서 정류장 이름이 비었음
     const etas = [...sp.querySelectorAll('tr')].map((tr) => ({ ref: tr.querySelector('.chip')?.textContent?.trim(), eta: tr.querySelector('.eta')?.textContent?.trim() || '' })).filter((r) => r.ref);
     const soon = etas.find((r) => /곧|정차|Arriv|Now/.test(r.eta)) || etas[0];
     stopChip.querySelector('b').textContent = nm;
     stopChip.querySelector('small').textContent = soon ? `${soon.ref} ${soon.eta}` : '';
+    // 정류장에서 기다리는 중 안내(칩 아래 한 줄): 버스가 서면 오른쪽에 '버스 타기' 가 뜬다 · 실시간 모드(?bus=realtime)는 탑승 불가
+    const w = stopChip.querySelector('.m-bus-wait'), J = window.__jj;
+    const txt = J?.ride?.canBoardBus ? '' : J?.transit && !J.transit.rideSim ? t('실시간 버스 — 탑승은 시뮬 모드에서만', 'Live buses — boarding in sim mode only') : t('버스 기다리는 중 · 서면 \'버스 타기\'', 'Waiting · tap Board when a bus stops');
+    if (w.textContent !== txt) w.textContent = txt;
+    w.hidden = !txt;
   };
   const paintStops = () => {
     const sp = stopPanel();

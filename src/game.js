@@ -413,7 +413,11 @@ const busProxy = proxyParam === 'local'
   : params.has('proxy')
     ? (proxyParam || '')
     : (params.has('shot') && !busParam ? '' : DEFAULT_BUS_PROXY);
-const busMode = busParam === 'sim' ? 'sim' : (busParam === 'realtime' || busProxy) ? 'realtime' : 'sim';
+// [mobile] 버스 탑승(ride: 정류장에 '정차(dwell)'한 버스 + 정자 rideSim · 미금/판교 연결 노선)은 시뮬 모드에서만 된다 — 실시간 버스는
+//   GPS 위치만 따라가서 정류장에 서지 않으므로 '버스 타기' 가 영영 안 뜬다. 그래서 모바일은 ?bus / ?proxy 를 안 줬으면 시뮬이 기본
+//   (?bus=realtime 으로 실시간을 고르면 실시간 — 대신 탑승 불가). PC 기본값은 그대로(실시간).
+const mobileBusSim = mobileMode && !busParam && !params.has('proxy');
+const busMode = busParam === 'sim' || mobileBusSim ? 'sim' : (busParam === 'realtime' || busProxy) ? 'realtime' : 'sim';
 // [bus-net] 시뮬 모드(?bus=sim)이고 코리더가 있을 때만 정자 안 GBIS 추가 경로(220 정자역→서현 방향·7007-1 미금→수내 방향·380)를 덧붙인다. 실시간(기본)은 원본 그대로
 const jzSimExtra = transitData && busMode === 'sim' && corridorDir && params.get('busnet') !== '0' ? await fetch(import.meta.env.BASE_URL + corridorDir + 'jz-sim.json').then((r) => (r.ok ? r.json() : null)).catch(() => null) : null;
 const pgLinkLive = transitData && busMode === 'sim' && corridorDir && pangyoLinkEnabled() ? await fetch(import.meta.env.BASE_URL + corridorDir + PANGYO_LINK_FILE).then((r) => (r.ok ? r.json() : null)).then((j) => j?.live || null).catch(() => null) : null; // [pangyo-link] 시뮬일 때만 정자 안 8110 조각(정자역→코리더 경계)
