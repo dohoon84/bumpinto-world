@@ -4,6 +4,8 @@ import { accountsReady, statsEnabled } from "./account/flags.js"; // [accounts]
 import { sessionFromRequest } from "./account/session.js";
 import { accountById, accountForSession } from "./account/store.js";
 import { MoveStats, classifyMode, flushMoves, logLoginDay } from "./account/stats.js";
+import { featureOn } from "./account/flags.js"; // [economy]
+import { accountVehicleGifts, settleMoveForDates } from "./account/economy.js";
 
 const STALE_MS = 35000;
 const BIKE_VEH_BLACK = 900;
@@ -99,13 +101,20 @@ export class Room extends DurableObject {
   #flushMoves(slot, accountId) {
     const rows = slot?.stats.drain() || [];
     if (!rows.length || !accountId) return;
-    this.ctx.waitUntil(flushMoves(this.env.DB, accountId, rows).catch(() => {}));
+    // [economy] 통계를 쓴 다음, 이동 보상(인정분) 정산 — ECON_FEATURES 에 move 가 있을 때만. 멱등.
+    const env = this.env;
+    this.ctx.waitUntil(
+      flushMoves(env.DB, accountId, rows)
+        .then(() => (featureOn(env, "move") ? settleMoveForDates(env.DB, env, accountId, [...new Set(rows.map((r) => r.date))]) : null))
+        .catch(() => {}),
+    );
   }
 
   #dropMoves(ws, me) {
     const slot = this.moves.get(ws);
     if (!slot) return;
     this.moves.delete(ws);
+    slot.stats.finish(); // [economy] 마지막 창도 순변위 조건으로 닫는다
     if (me?.accountId) this.#flushMoves(slot, me.accountId);
   }
 
@@ -334,6 +343,12 @@ export class Room extends DurableObject {
       let auth = await this.#bikeAuth(rawDevice);
       if (!auth.isAdmin && userId && userId !== rawDevice) auth = await this.#bikeAuth(userId);
       const owned = await this.#loadGifts(userId);
+      // [economy] 상점에서 산 탈것(계정 귀속, D1)을 선물함 보유에 합친다 → 같은 #relayVeh 검사로 탈 수 있음. 선물로 넘길 수는 없음(PhoneBook 에 없음)
+      let shopGifts = [];
+      if (accountId && featureOn(this.env, "shop")) {
+        try { shopGifts = normalizeHoldings(await accountVehicleGifts(this.env.DB, accountId)); } catch {}
+        if (shopGifts.length) owned.gifts = normalizeHoldings([...owned.gifts, ...shopGifts]);
+      }
       me = {
         id,
         deviceId: userId || deviceId,
@@ -347,6 +362,7 @@ export class Room extends DurableObject {
         bikeAdmin: auth.isAdmin,
         bikeTank: auth.bikeTank,
         gifts: owned.gifts,
+        ...(shopGifts.length ? { shopGifts } : {}), // [economy] 산 탈것(양도 불가) — 선물을 보낸 뒤에도 보유에 남긴다
         phone: owned.phone,
         lastSeen: now,
       };
@@ -443,8 +459,8 @@ export class Room extends DurableObject {
       }
       const fromQty = Math.max(0, Math.floor(Number(result.fromQty) || 0));
       const toQty = Math.max(0, Math.floor(Number(result.toQty) || 0));
-      me.gifts = withQty(me.gifts, item, fromQty);
-      target.peer.gifts = withQty(target.peer.gifts, item, toQty);
+      me.gifts = withQty(me.gifts, item, fromQty + qtyOf(me.shopGifts || [], item));
+      target.peer.gifts = withQty(target.peer.gifts, item, toQty + qtyOf(target.peer.shopGifts || [], item));
       ws.serializeAttachment(me);
       target.ws.serializeAttachment(target.peer);
       this.#send(ws, { t: "gift", ok: true, item, mine: false, qty: fromQty, to: target.peer.id, toName: target.peer.name });

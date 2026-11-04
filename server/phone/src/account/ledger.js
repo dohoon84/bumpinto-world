@@ -78,6 +78,30 @@ export async function appendLedger(db, entry, { now = Date.now(), requireClaim =
   return { applied, balance: await getBalance(db, e.accountId) };
 }
 
+/**
+ * [economy] 조건부 원장 행. where = { sql, params } 가 참일 때만 들어간다(같은 batch = 한 트랜잭션 안에서 판정).
+ * before / after = 같은 batch 에 넣을 문장들(after 는 ledger 행이 실제로 들어갔는지 idempotency_key 로 확인해서 쓰면 된다).
+ * @returns {Promise<{applied:boolean, balance, results}>}
+ */
+export async function appendLedgerWhere(db, entry, { now = Date.now(), where = null, before = [], after = [] } = {}) {
+  const e = cleanEntry(entry);
+  const cond = where?.sql ? `WHERE ${where.sql}` : "WHERE 1"; // SELECT … ON CONFLICT 는 WHERE 가 있어야 파싱이 안 헷갈림
+  const stmts = [...before];
+  stmts.push(
+    db.prepare(
+      `INSERT INTO ledger (account_id, amount, kind, reason, ref, idempotency_key, price_table_version, created_at)
+       SELECT ?, ?, ?, ?, ?, ?, ?, ? ${cond}
+       ON CONFLICT(idempotency_key) DO NOTHING`,
+    ).bind(e.accountId, e.amount, e.kind, e.reason, e.ref, e.key, e.ver, now, ...(where?.params || [])),
+  );
+  const insertIdx = stmts.length - 1;
+  stmts.push(recomputeBalance(db, e.accountId, now));
+  stmts.push(...after);
+  const results = await db.batch(stmts);
+  const applied = Number(results[insertIdx]?.meta?.changes || 0) > 0;
+  return { applied, balance: await getBalance(db, e.accountId), results };
+}
+
 export async function getBalance(db, accountId) {
   const row = await db.prepare("SELECT free_balance, paid_balance FROM account_balances WHERE account_id = ?").bind(accountId).first();
   const free = Number(row?.free_balance || 0);
