@@ -34,9 +34,9 @@ export const QUEST_PERIODS = Object.freeze(['daily', 'weekly', 'monthly']);
  * - 'insufficient_balance' : { need, balance, shortBy }      결제·구매 금액이 잔액보다 큼 (외상 없음)
  * - 'not_signed_in'        : {}                              게스트 — 보상 받기·웰컴·구매·유료 모드 결제 (UI 는 Google 연동 안내)
  * - 'spend_locked'         : {}                              잔액이 음수가 된 계정 (회수 등) → 지출 잠금
- * - 'already_claimed'      : {}                              퀘스트·웰컴·구매 중복 (멱등키 충돌)
+ * - 'already_claimed'      : {}                              퀘스트·웰컴·구매 중복 (멱등키 충돌). 서버는 로그인 때 웰컴·D-LOGIN 을 자동 지급 → 정상 결과로 취급
  * - 'not_complete'         : { value, target }               아직 완료되지 않은 퀘스트를 받으려 함
- * - 'not_eligible'         : {}                              웰컴/베타 대상 아님
+ * - 'not_eligible'         : {}                              웰컴/베타 대상 아님 · 상점에서 팔지 않는 물건(available:false)
  * - 'unknown'              : {}                              없는 퀘스트·상품·요금 코드
  * - 'hold_not_found'       : {}                              택시 홀드 없음/만료
  * - 'network'              : { status? }                     서버 연결 실패 (mock 은 쓰지 않음)
@@ -67,24 +67,26 @@ export const errR = (code, extra = {}) => ({ ok: false, error: { code, ...extra 
  * @typedef {{ value: number, target: number, unit: 'min'|'count'|'day'|'kind'|'place' }} Progress
  * @typedef {{ bum: number, karma: { axis: KarmaAxis, points: number } | null }} Reward
  * @typedef {{ id: string, period: QuestPeriod, title: Text, progress: Progress, reward: Reward,
- *             state: 'active'|'complete'|'claimed', bonus: boolean, autoClaim: boolean }} Quest
+ *             state: 'active'|'complete'|'claimed', bonus: boolean, autoClaim: boolean, paidBum?: number }} Quest
  *   state: complete = 완료했지만 아직 안 받음(autoClaim=false 일 때만), claimed = 원장 기록됨.
+ *   paidBum?: number — (선택) 상한에 걸려 reward.bum 보다 덜 들어간 경우 실제 받은 금액. UI 는 이 값을 보여 준다.
  * @typedef {{ guest: boolean, period: QuestPeriod, resetsAt: number, quests: Quest[], maxBum: number, claimedBum: number, info: Text }} QuestList
  *   게스트: guest:true, quests:[] , maxBum/claimedBum 0 (UI 는 '구글 계정 연동하고 bum 받기' 안내)
  * @typedef {{ kind: 'quest'|'achievement'|'welcome'|'beta'|'travel', amount: number, karma: { axis: KarmaAxis, points: number } | null,
- *             title: Text, questId?: string, period?: QuestPeriod, progressText?: Text, coins: number, balanceAfter: number }} RewardEvent
- *   coins = 코인 버스트 개수(UI 연출용, 보통 8).
- * @typedef {{ id: string, at: number, kind: 'welcome'|'beta'|'quest'|'move'|'ach'|'fare'|'purchase'|'refund', delta: number,
+ *             title: Text, questId?: string, period?: QuestPeriod, progressText?: Text, coins?: number, balanceAfter?: number }} RewardEvent
+ *   coins = 코인 버스트 개수(UI 연출용, 보통 8). progressText·coins·balanceAfter 는 선택(서버 보상에는 progressText 가 없음).
+ *   게시판 글 보상은 RewardEvent 없이 원장 kind 'board' 행으로만 남는다.
+ * @typedef {{ id: string, at: number, kind: 'welcome'|'beta'|'quest'|'move'|'ach'|'fare'|'purchase'|'refund'|'board', delta: number,
  *             title: Text, sub: Text|null }} LedgerEntry
  * @typedef {{ guest: boolean, weekEarned: number, weekSpent: number, avgDailyIncome: number, avgDailyTransit: number }} WalletSummary
  * @typedef {{ mode: TransitMode, code: string, free: boolean, amount: number, listAmount: number, balance: number, after: number, sufficient: boolean, label: Text, priceVer: number,
  *             options?: Array<{ code: string, amount: number, listAmount: number, label: Text }> }} FareQuote
  *   free=true 면 amount=0 (listAmount=정가), sufficient=true. code 예: 'bus.city' 'bus.village' 'bus.seat' 'bus.wide' 'bus.circular' 'subway.base' 'taxi.drive' 'taxi.fast' 'taxi.instant'
  * @typedef {{ receiptId: string, mode: TransitMode, code: string, free: boolean, amount: number, listAmount: number, balance: Balance, reward: RewardEvent[] }} Payment
- * @typedef {{ holdId: string, free: boolean, amount: number, listAmount: number, balance: Balance }} TaxiHold
+ * @typedef {{ holdId: string, code?: string, free: boolean, amount: number, listAmount: number, balance: Balance }} TaxiHold
  * @typedef {{ receiptId: string, free: boolean, held: number, charged: number, listAmount: number, refunded: number, distanceM: number, balance: Balance, reward: RewardEvent[] }} TaxiSettlement
- * @typedef {{ id: string, name: Text, free: boolean, price: number, listPrice: number, realPrice: number, daysForTypical: number, owned: boolean, affordable: boolean, giftable: false }} ShopItem
- *   free=true(베타) 면 price=0, listPrice=정가, affordable=true
+ * @typedef {{ id: string, name: Text, free: boolean, price: number, listPrice: number, realPrice: number, daysForTypical: number, owned: boolean, affordable: boolean, giftable: false, available?: boolean }} ShopItem
+ *   free=true(베타) 면 price=0, listPrice=정가, affordable=true(available 일 때). available === false 면 지금 팔지 않는 물건 → purchase 는 not_eligible
  * @typedef {{ guest: boolean, itemId: string, price: number, balance: number, remaining: number, daysLeft: number, typicalDailyNet: number }} ShopGoal
  * @typedef {{ points: number, title: Text|null, next: { title: Text, at: number } | null }} KarmaAxisState
  * @typedef {{ id: string, title: Text, rule: string, bonus: number, state: 'locked'|'progress'|'unlocked', progress: Progress | null }} Achievement

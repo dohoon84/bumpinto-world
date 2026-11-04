@@ -8,7 +8,7 @@ import { requestGoogleSignIn } from '../google.js';
 import { onLangChange } from '../../i18n.js';
 import { mountEconHud, refresh, render } from './hud.js';
 import { openWelcome, openChipTip, openQuests, pushReward, openKarma, openShop, openGoogleWait, openMigrate } from './panels.js';
-import { payAndShow, openWallet, openTaxiApp, openSettle, holdToast, openBoard, openGate } from './transit.js';
+import { shownInPay, shownReceipts, showPay, payAndShow, openWallet, openTaxiApp, openSettle, holdToast, openBoard, openGate } from './transit.js';
 import { close, openKey } from './layer.js';
 
 let suppressRewards = 0;
@@ -19,9 +19,12 @@ export async function link() {
   if (busy) return; busy = true;
   try {
     const demo = isDemo();
+    // 서버는 로그인 순간 웰컴·베타·D-LOGIN 을 자동 지급하고 sinceAt 로 reward 이벤트를 다시 보낸다 → 01b/02a 흐름이 보여 주므로 토스트는 잠시 끔
+    suppressRewards = Date.now() + 20000;
     openGoogleWait({ notReady: false, onDemoAccount: demo ? () => afterSignIn({ name: '예시 계정' }) : null });
     const r = await requestGoogleSignIn();
     if (r.ok) { await afterSignIn(r.account || {}); return; }
+    suppressRewards = 0;
     if (r.reason === 'not_ready' && openKey() === '01a') openGoogleWait({ notReady: true, onDemoAccount: demo ? () => afterSignIn({ name: '예시 계정' }) : null });
     else if (openKey() === '01a') close(true);
   } finally { busy = false; }
@@ -33,11 +36,13 @@ export async function link() {
 async function afterSignIn(account) {
   close(true);
   if (econ.isMock && econ.dev && (await econ.getSession()).isGuest) econ.dev.signIn({ name: account.name || '예시 계정' });
+  suppressRewards = Date.now() + 20000;
   const w = await econ.getWelcome();
-  if (!w.eligible) { refresh(); return; }
+  // eligible = 아직 안 받음(mock), claimed = 서버가 로그인 때 이미 지급 → 둘 다 01b→02a 로 안내(02a 는 '확인' 으로 연출만)
+  if (!w.eligible && !(w.claimed && w.grants?.length)) { suppressRewards = 0; refresh(); return; }
   openMigrate({ onContinue: () => welcome(), onLater: () => welcome() });
 }
-function welcome() { suppressRewards = Date.now() + 8000; openWelcome(); }
+function welcome() { suppressRewards = Math.max(suppressRewards, Date.now() + 8000); openWelcome(); }
 
 export const OPEN = {
   '03': () => close(), '03g': () => close(),
@@ -59,9 +64,21 @@ export const isDemo = () => new URLSearchParams(location.search).get('demo') ===
 // ---------- 게임 교통 훅 (bw:transit) → 결제 화면
 const taxiHolds = new Map();
 let lastSubTap = 0;
+let pendingSettle = null; // 서버 모드: 게임 택시는 출발 때 바로 정산(rideProvider) → 도착 때 10b 로 보여 준다
+let taxiRiding = false;
 async function onTransit(e) {
   const d = e.detail || {};
   try {
+    // 서버 원장 클라이언트(#30)는 ride/fare.js 결제 계층(rideProvider)으로 버스·택시를 직접 결제한다.
+    // 여기서 또 결제하면 이중 기록 → 결제는 하지 않고, 'payment' 이벤트(onServerPayment)로 화면만 띄운다.
+    if (!econ.isMock && (d.mode === 'bus' || d.mode === 'taxi')) {
+      if (d.mode === 'taxi' && d.phase === 'depart') taxiRiding = true;
+      if (d.mode === 'taxi' && d.phase === 'arrive') {
+        taxiRiding = false;
+        if (pendingSettle) { const st = pendingSettle; pendingSettle = null; openSettle(st, { dest: d.dest || { ko: '목적지', en: 'Destination' }, example: false, onWallet: OPEN['07'] }); }
+      }
+      return;
+    }
     if (d.mode === 'bus' && d.phase === 'board') {
       await payAndShow({ mode: 'bus', code: d.code || 'bus.city', rideId: d.rideId || `bus-${Date.now()}`, where: d.where || '' });
     } else if (d.mode === 'subway' && d.phase === 'tap') {
@@ -79,6 +96,18 @@ async function onTransit(e) {
       if (s.ok) openSettle(s.data, { dest: d.dest || { ko: '목적지', en: 'Destination' }, example: false, onWallet: OPEN['07'] });
     }
   } catch { /* 결제 화면 오류는 게임 진행과 무관 */ }
+}
+
+function onServerPayment(p) {
+  if (econ.isMock || !p) return;
+  setTimeout(() => {
+    if (p.receiptId && shownReceipts.has(p.receiptId)) return; // 지하철 등 이 화면이 직접 결제해서 이미 띄운 것
+    if (p.receiptId) shownReceipts.add(p.receiptId);
+    if (p.mode === 'taxi' || 'charged' in p) {
+      if (taxiRiding) pendingSettle = p;
+      else openSettle(p, { dest: { ko: '목적지', en: 'Destination' }, example: false, onWallet: OPEN['07'] });
+    } else showPay({ ...p, reward: p.reward || [] });
+  }, 300);
 }
 
 // ---------- 이동 인정 (mock 힌트): 1초마다 플레이어가 걸은 거리. 서버는 자체 검증한다.
@@ -102,7 +131,14 @@ export function mountEconUi() {
   let t = 0;
   const soon = () => { clearTimeout(t); t = setTimeout(refresh, 30); };
   for (const ev of ['balance', 'quest', 'travel', 'session', 'mode']) econ.on(ev, soon);
-  econ.on('reward', (ev) => { if (ev.kind !== 'quest' && ev.kind !== 'achievement') return; if (Date.now() < suppressRewards && ev.questId === 'D-LOGIN') return; if (Date.now() < suppressRewards && ev.kind !== 'quest') return; pushReward(ev); });
+  econ.on('payment', onServerPayment);
+  econ.on('reward', (ev) => {
+    if (!ev || !['quest', 'achievement', 'welcome', 'beta'].includes(ev.kind)) return;
+    if (Date.now() < suppressRewards) return; // 로그인 직후 자동 지급(웰컴·베타·D-LOGIN)·데모 시드 중에는 토스트 없이
+    if ((ev.kind === 'welcome' || ev.kind === 'beta') && ['01a', '01b', '02a', '02b'].includes(openKey())) return;
+    // 결제 카드(08b·09b·10b)가 같은 보상을 '할 일 달성' 줄로 보여 주면 05a 토스트는 생략
+    setTimeout(() => { const t = shownInPay.get(ev.questId); if (t && Date.now() - t < 5000) return; pushReward(ev); }, 400);
+  });
   onLangChange(() => render());
   addEventListener('bw:transit', onTransit);
   trackWalk();

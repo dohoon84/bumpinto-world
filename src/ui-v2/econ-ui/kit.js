@@ -28,6 +28,7 @@ export const EI = {
   check: (s = 14, c = '#fff') => ICON.check(s, c),
   lock: (s = 12, c = '#9eb4c6') => ICON.lock(s, c),
   close: (s = 16) => ICON.close(s),
+  board: (s = 20) => sv(s, 20, `<rect x="2" y="3" width="16" height="11" rx="2.6" fill="#ec5f9a"/><path d="M6 14 L6 17.5 L10 14 Z" fill="#ec5f9a"/><rect x="5" y="6.4" width="10" height="1.5" rx=".75" fill="#fff"/><rect x="5" y="9.4" width="6.5" height="1.5" rx=".75" fill="#fff"/>`),
   nfc: (s = 20, c = '#fff') => sv(s, 20, `<path d="M6 5 A7 7 0 0 1 6 15 M9.5 3 A10 10 0 0 1 9.5 17 M13 1.5 A12.5 12.5 0 0 1 13 18.5" fill="none" stroke="${c}" stroke-width="1.8" stroke-linecap="round"/>`),
   // 5축 아이콘 (흰색, 축 색 타일 위)
   health: (s = 16, c = '#fff') => sv(s, 16, `<path d="M3 13 C3 6 8 2.5 14 2.5 C14 8.5 10.5 13 3.8 13 Z" fill="${c}"/><path d="M3 13 L9 7" stroke="#2fbf71" stroke-width="1.4" stroke-linecap="round"/>`),

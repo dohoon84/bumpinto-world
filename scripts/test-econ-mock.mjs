@@ -73,4 +73,16 @@ c.dev.seed('day45'); const k45 = await c.getKarma(); assert.equal(k45.axes.healt
 c.dev.seed('fig03'); const before = (await c.getBalance()).total; clock += 86400e3;
 const after = (await c.getBalance()).total; assert.equal(after - before, 7 * 172 + 500, 'move 1,204 + new day first visit 500'); ok('KST day roll settles travel reward once + resets dailies');
 const led = await c.getLedger({ limit: 3 }); assert.ok(led.some((e) => e.kind === 'move'));
+
+// #30 서버 모양: 상점 available / not_eligible · 원장 'board' · TaxiHold.code · 웰컴 already_claimed
+c.dev.setShopAvailable(['roadbike']);
+const it2 = await c.listShopItems(); assert.equal(it2.find((i) => i.id === 'roadbike').available, true); assert.equal(it2.find((i) => i.id === 'scooter').available, false); assert.equal(it2.find((i) => i.id === 'scooter').affordable, false);
+const ne = await c.purchase('scooter'); assert.equal(ne.ok, false); assert.equal(ne.error.code, ERR.NOT_ELIGIBLE);
+c.dev.setShopAvailable(null); assert.ok((await c.listShopItems()).every((i) => i.available === true));
+let rewards = 0; const off = c.on('reward', () => rewards++);
+const b1 = (await c.getBalance()).total; const bp = c.dev.boardPost(1000); assert.equal(bp.kind, 'board'); assert.equal((await c.getBalance()).total, b1 + 1000); assert.equal(rewards, 0, 'board: ledger row only, no reward event'); off?.();
+assert.ok((await c.getLedger({ limit: 1 }))[0].kind === 'board');
+const h2 = await c.holdTaxi({ code: 'taxi.drive', estimateMeters: 2000, rideId: 't2' }); assert.equal(h2.data.code, 'taxi.drive'); await c.cancelTaxi(h2.data.holdId);
+const wc = await c.claimWelcome(); assert.equal(wc.ok, false); assert.equal(wc.error.code, ERR.ALREADY); assert.equal((await c.getWelcome()).claimed, true);
+ok('#30 shapes: shop available/not_eligible, ledger board (no reward event), hold.code, welcome already_claimed');
 console.log(`econ mock: ${n} passed`);

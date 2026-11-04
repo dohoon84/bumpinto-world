@@ -254,3 +254,13 @@ body.ui-v2:not(.mobile) .ve-demo-mode { color: #05263a !important; background: #
 body.ui-v2:not(.mobile) .ve-demo-mode.paid { background: #ffb3a8 !important; }
 body.ui-v2:not(.mobile) .ve-demo-who { color: var(--v2-sub); }
 body.ui-v2:not(.mobile).ve-shot .ve-demo { display: none; }
+body.ui-v2:not(.mobile) .ve-phone-scr > * { flex: none; }
+body.ui-v2:not(.mobile) .ve-col > .v2-tag, body.ui-v2:not(.mobile) .ve-panel > .v2-tag { align-self: flex-start; }
+body.ui-v2:not(.mobile) .ve-col.c > .v2-tag { align-self: center; }
+/* #30 대응: 상점 미판매(available:false) · 상한 적용 퀘스트(paidBum) · 오류 문구 */
+body.ui-v2:not(.mobile) .ve-item.na { opacity: .55; }
+body.ui-v2:not(.mobile) .ve-item.na .v2-tag { margin-left: 4px; }
+body.ui-v2:not(.mobile) .ve-capnote { font-size: 11px; color: #9eb4c6; margin-left: 6px; }
+body.ui-v2:not(.mobile) .ve-msg.err { color: #ff8a8a; }
+/* 데모 막대는 게임 안에서만 (시작·로비 버튼을 가리지 않게) */
+body.ui-v2:not(.mobile).in-lobby .ve-demo, body.ui-v2:not(.mobile).in-gate .ve-demo { display: none; }

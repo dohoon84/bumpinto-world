@@ -6,6 +6,10 @@ import { el } from '../kit.js';
 import { n, sgn, T, tr, esc, EI, mockTag, freeBadge, bumPill, karmaPill, stamp, tag, head, closeBtn, priceHtml, bar } from './kit.js';
 import { show, close, toastLayer } from './layer.js';
 
+/** 결제 카드에 이미 '할 일 달성' 줄로 보여 준 보상 (중복 05a 토스트 방지) */
+export const shownInPay = new Map();
+/** 화면에 띄운 영수증 id (서버 'payment' 이벤트와 중복 표시 방지) */
+export const shownReceipts = new Set();
 const panel = (cls, html) => el('div', `v2-panel ve-panel ${cls}`, html);
 const MODE_TAG = { bus: ['시내버스', 'City bus', '#20c997'], subway: ['지하철', 'Subway', '#f5a200'], taxi: ['택시', 'Taxi', '#ffe169'] };
 const modeTag = (m, code) => {
@@ -55,6 +59,9 @@ export async function payAndShow({ mode, code, rideId, where = '', hold = false 
 
 // ---------- 08b 버스 태그 완료 · 09b 개찰구 통과 (+ 할 일 달성 줄 + 합계)
 export function showPay(pay, { where = '', before = null, hold = false } = {}) {
+  pay = { ...pay, reward: pay.reward || [] };
+  if (pay.receiptId) shownReceipts.add(pay.receiptId);
+  for (const e of pay.reward || []) shownInPay.set(e.questId, Date.now());
   const sub = pay.mode === 'subway';
   const col = sub ? '#f5a200' : '#4cc9f0';
   const title = sub ? tr(`${where || '개찰구'} 통과`, `Passed ${where || 'the gates'}`) : tr(`${T({ ko: '시내버스', en: 'City bus' })} · 카드 태그 완료`, 'City bus · card tapped');
@@ -98,7 +105,9 @@ const backHead = (t) => `<div class="v2-hrow ve-bh"><button type="button" class=
 export async function openWallet({ link } = {}) {
   const [b, s, led, mode] = await Promise.all([econ.getBalance(), econ.getWalletSummary(), econ.getLedger({ limit: 12 }), econ.getEconMode()]);
   const mx = Math.max(1, s.weekEarned, s.weekSpent);
-  const icon = (e) => (e.kind === 'fare' || e.kind === 'purchase' ? EI.card(20) : EI.coin(20));
+  const icon = (e) => (e.kind === 'fare' || e.kind === 'purchase' ? EI.card(20) : e.kind === 'board' ? EI.board(20) : EI.coin(20));
+  const KIND = { board: ['게시판 글 보상', 'Board post reward'], move: ['이동 보상', 'Travel reward'], ach: ['업적 보너스', 'Achievement bonus'], refund: ['반환', 'Refund'] };
+  const title = (e) => T(e.title) || (KIND[e.kind] ? tr(...KIND[e.kind]) : e.kind);
   const inner = `${backHead(tr('교통카드 · 지갑', 'Transit card · Wallet'))}
     <div class="ve-tcard"><div class="v2-hrow">${EI.card(20)}<b>${esc(tr('범프 교통카드', 'Bump transit card'))}</b><span class="v2-grow"></span>${b.guest ? tag(tr('게스트', 'Guest'), '#9eb4c6') : tag(tr('계정 연결됨', 'Account linked'), '#20c997')}</div><span class="ve-stripe"></span>
       <small>${esc(tr('잔액', 'Balance'))}</small><div class="v2-hrow">${EI.coin(28)}<b class="ve-t28 ve-gold">${n(b.total)} bum</b></div>
@@ -109,7 +118,7 @@ export async function openWallet({ link } = {}) {
       <div class="v2-hrow"><small>${esc(tr('번 돈', 'Earned'))}</small><span class="v2-grow"></span><b class="ve-green">${sgn(s.weekEarned)}</b></div>${bar(s.weekEarned, mx, { w: 340, h: 6, cls: 'green ve-wide' })}
       <div class="v2-hrow"><small>${esc(tr('쓴 돈 (교통)', 'Spent (transit)'))}</small><span class="v2-grow"></span><b class="ve-red">${sgn(-s.weekSpent)}</b></div>${bar(s.weekSpent, mx, { w: 340, h: 6, cls: 'red ve-wide' })}
       <small>${esc(tr(`보통 플레이어 하루 평균: 수입 ${n(s.avgDailyIncome)} · 교통비 ${n(s.avgDailyTransit)}`, `Typical player per day: income ${n(s.avgDailyIncome)} · transit ${n(s.avgDailyTransit)}`))}</small></div>
-    <div class="ve-pbox ve-led"><b>${esc(tr('최근 내역', 'Recent'))}</b>${led.map((e) => `<div class="ve-lrow">${icon(e)}<span class="ve-col"><b>${esc(T(e.title))}</b>${e.sub ? `<small>${esc(T(e.sub))}</small>` : ''}</span><span class="v2-grow"></span><b class="${e.delta < 0 ? 've-red' : 've-green2'}">${sgn(e.delta)}</b></div>`).join('') || `<small>${esc(tr('아직 내역이 없어요', 'No history yet'))}</small>`}</div>`}`;
+    <div class="ve-pbox ve-led"><b>${esc(tr('최근 내역', 'Recent'))}</b>${led.map((e) => `<div class="ve-lrow">${icon(e)}<span class="ve-col"><b>${esc(title(e))}</b>${e.sub ? `<small>${esc(T(e.sub))}</small>` : ''}</span>${e.kind === 'board' ? tag(tr('게시판', 'Board'), '#ec5f9a') : ''}<span class="v2-grow"></span><b class="${e.delta < 0 ? 've-red' : 've-green2'}">${sgn(e.delta)}</b></div>`).join('') || `<small>${esc(tr('아직 내역이 없어요', 'No history yet'))}</small>`}</div>`}`;
   const w = phone(inner, '07');
   w.addEventListener('click', (e) => { if (e.target.closest('[data-ve="link"]')) link?.(); });
 }
@@ -147,6 +156,9 @@ export async function openTaxiApp({ dest = { ko: '판교역', en: 'Pangyo Stn.' 
 
 // ---------- 10b 택시 정산
 export function openSettle(st, { dest = { ko: '판교역', en: 'Pangyo Stn.' }, example = true, onWallet } = {}) {
+  st = { ...st, reward: st.reward || [], balance: st.balance || { total: 0 } };
+  if (st.receiptId) shownReceipts.add(st.receiptId);
+  for (const e of st.reward || []) shownInPay.set(e.questId, Date.now());
   const p = panel('ve-settle', `<div class="v2-hrow">${tag(tr('택시', 'Taxi'), '#ffe169')}<b class="ve-t20">${esc(tr(`도착했어요 · ${T(dest)}`, `Arrived · ${T(dest)}`))}${example ? esc(tr(' (예시)', ' (example)')) : ''}</b>${mockTag()}<span class="v2-grow"></span>${closeBtn()}</div>
     <div class="ve-kv"><span>${esc(tr('실제 거리', 'Actual distance'))}</span><b>${(st.distanceM / 1000).toFixed(1)} km</b></div>
     <div class="ve-kv"><span>${esc(tr('예상 요금 (탑승 시 홀드)', 'Estimate (held on boarding)'))}</span><b>${st.free ? '0' : n(st.held)}</b></div>

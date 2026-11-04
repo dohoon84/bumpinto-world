@@ -16,25 +16,30 @@ export async function openWelcome({ onDone } = {}) {
   const p = panel('ve-welcome', `${rays(360)}
     <div class="ve-col c">${EI.coin(96)}${tag(tr('웰컴 보상', 'Welcome reward'), '#ffe169')}${mockTag()}
     <h2>${esc(tr('환영해요! 첫 bum이 도착했어요', 'Welcome! Your first bum has arrived'))}</h2>
-    <p class="ve-sub">${esc(tr('계정 연결이 끝나서 아래 금액이 교통카드에 들어왔어요.', 'Your account is linked, so the amounts below go onto your transit card.'))}</p></div>
+    <p class="ve-sub">${esc(w.claimed ? tr('계정 연결과 함께 아래 금액이 교통카드에 들어왔어요.', 'With your account linked, the amounts below are on your transit card.') : tr('계정 연결이 끝나서 아래 금액이 교통카드에 들어왔어요.', 'Your account is linked, so the amounts below go onto your transit card.'))}</p></div>
     ${w.grants.map((g) => `<div class="ve-rowc"><span><b>${esc(T(g.title))}</b><small>${esc(T(g.sub))}</small></span>${bumPill(g.amount, { cls: 'lg' })}</div>`).join('')}
     <div class="ve-sum"><b>${esc(tr('합계', 'Total'))}</b><b class="ve-gold">${n(w.total)} bum</b></div>
     <p class="ve-note">${esc(tr('bum은 게임 안에서만 쓰는 돈이에요. 다른 계정으로 보낼 수 없어요.', 'bum is in-game money only. It cannot be sent to other accounts.'))}</p>
-    <button type="button" class="v2-btn primary v2-full" data-ve="take"${w.eligible ? '' : ' disabled'}>${esc(w.claimed ? tr('이미 받았어요', 'Already claimed') : tr('받기', 'Claim'))}</button>`);
+    <button type="button" class="v2-btn primary v2-full" data-ve="take"${w.eligible || w.claimed ? '' : ' disabled'}>${esc(w.claimed ? tr('확인', 'OK') : tr('받기', 'Claim'))}</button>`);
   const wrap = show(p, { key: '02a', dim: true, sticky: true });
   p.querySelector('[data-ve="take"]').addEventListener('click', async (e) => {
     e.currentTarget.disabled = true;
-    const before = (await econ.getBalance()).total;
-    const r = await econ.claimWelcome();
-    if (!r.ok) { close(); return; }
+    let before = (await econ.getBalance()).total;
+    if (!w.claimed) {
+      const r = await econ.claimWelcome();
+      // 서버는 로그인 때 웰컴을 자동 지급 → already_claimed 는 정상(이미 들어온 금액으로 연출만)
+      if (!r.ok && r.error.code !== 'already_claimed') { close(); return; }
+      if (!r.ok) before = Math.max(0, before - w.total);
+    } else before = Math.max(0, before - w.total);
+    const after = (await econ.getBalance()).total;
     const coin = p.querySelector('.ve-col .v2-ic');
     const to = balanceChip();
     wrap.classList.add('fading');
     await refresh();
     if (to) await coinFly(coin, balanceChip() || to, { count: 8 });
-    countUp(before, r.data.balance.total);
+    countUp(before, after);
     close(true);
-    openChipTip(r.data.balance.total - before);
+    openChipTip(after - before);
     onDone?.();
   });
 }
@@ -73,7 +78,7 @@ export async function openQuests(period = 'daily', { link } = {}) {
         return `<div class="ve-qcard${ok ? ' done' : ''}">${axisTile(q.reward.karma?.axis || 'streak', 48)}
           <div class="ve-qmain"><div class="v2-hrow"><b class="ve-t17">${esc(T(q.title))}</b><span class="ve-id">${esc(q.id)}</span></div>
           <div class="v2-hrow">${bar(q.progress.value, q.progress.target, { w: 340, h: 10, cls: ok ? 'green' : 'gold' })}<span class="ve-prog${ok ? ' ok' : ''}">${ok ? esc(tr('완료', 'Done')) : esc(unitText(q.progress, q.id))}</span></div></div>
-          <div class="ve-qrw">${bumPill(q.reward.bum)}${karmaPill(q.reward.karma)}</div>${ok ? stamp() : '<span class="ve-stamp-sp"></span>'}</div>`;
+          <div class="ve-qrw">${q.paidBum != null && q.paidBum !== q.reward.bum ? `<span class="v2-hrow"><s class="ve-s">${n(q.reward.bum)}</s>${bumPill(q.paidBum)}</span><small class="ve-capnote">${esc(tr('상한 적용', 'Cap applied'))}</small>` : bumPill(q.reward.bum)}${karmaPill(q.reward.karma)}</div>${ok ? stamp() : '<span class="ve-stamp-sp"></span>'}</div>`;
       }).join('')}</div>
       <div class="ve-qfoot">${EI.coin(20)}<b>${esc(period === 'daily' ? tr(`오늘 할 일 보상 최대 ${n(list.maxBum)} bum`, `Today's quest rewards up to ${n(list.maxBum)} bum`) : period === 'weekly' ? tr(`이번 주 할 일 보상 최대 ${n(list.maxBum)} bum`, `This week's quest rewards up to ${n(list.maxBum)} bum`) : tr(`이번 달 할 일 보상 최대 ${n(list.maxBum)} bum`, `This month's quest rewards up to ${n(list.maxBum)} bum`))}</b><span class="v2-grow"></span><small>${esc(tr(`받은 보상 ${n(list.claimedBum)} · 남은 보상 ${n(list.maxBum - list.claimedBum)}`, `Claimed ${n(list.claimedBum)} · Left ${n(list.maxBum - list.claimedBum)}`))}</small></div>`;
   }
@@ -91,21 +96,27 @@ let running = false;
 export function pushReward(ev) { queue.push(ev); if (!running) drain(); }
 async function drain() {
   running = true;
-  while (queue.length) { const ev = queue.shift(); await rewardSequence(ev); }
+  while (queue.length) {
+    // 시작화면·월드 선택·입장 카드 중에 온 보상(로그인 직후 sinceAt 따라잡기)은 게임에 들어온 뒤 보여 준다
+    while (document.body.classList.contains('in-gate') || document.body.classList.contains('in-lobby')) await wait(1000);
+    const ev = queue.shift(); await rewardSequence(ev);
+  }
   running = false;
 }
 /** stopAt: '05a' | '05a2' | '05b' (데모 캡처용으로 그 단계에서 멈춤) */
 export async function rewardSequence(ev, { stopAt = null } = {}) {
   const L = toastLayer();
+  if (!Number.isFinite(ev.balanceAfter)) ev = { ...ev, balanceAfter: (await econ.getBalance()).total }; // 서버 보상에 없을 수 있음
+  const amount = Number(ev.amount) || 0;
   const weekly = ev.period === 'weekly' || ev.period === 'monthly';
   const t = el('div', 'v2-panel ve-toast', `${rays(240)}
     <span class="ve-tcoin">${EI.coin(64)}</span>
-    <div class="ve-col">${tag(weekly ? (ev.period === 'monthly' ? tr('월간 달성!', 'Monthly done!') : tr('주간 달성!', 'Weekly done!')) : ev.kind === 'achievement' ? tr('업적 달성!', 'Achievement!') : tr('할 일 달성!', 'Quest done!'), '#ffe169')}
+    <div class="ve-col">${tag(weekly ? (ev.period === 'monthly' ? tr('월간 달성!', 'Monthly done!') : tr('주간 달성!', 'Weekly done!')) : ev.kind === 'achievement' ? tr('업적 달성!', 'Achievement!') : ev.kind === 'welcome' ? tr('웰컴 보상', 'Welcome reward') : ev.kind === 'beta' ? tr('베타 감사', 'Beta thank-you') : tr('할 일 달성!', 'Quest done!'), '#ffe169')}
       <b class="ve-t20">${esc(T(ev.title))}</b>
-      <div class="v2-hrow">${bumPill(ev.amount, { cls: 'lg' })}${karmaPill(ev.karma)}${mockTag()}</div>
-      ${ev.progressText ? `<small class="ve-sub">${esc(T(ev.progressText))}</small>` : ''}</div>${stamp()}`);
+      <div class="v2-hrow">${bumPill(amount, { cls: 'lg' })}${karmaPill(ev.karma)}${mockTag()}</div>
+      ${ev.progressText ? `<small class="ve-sub">${esc(T(ev.progressText))}</small>` : ''}</div>${ev.kind === 'quest' || ev.kind === 'achievement' ? stamp() : ''}`);
   L.appendChild(t);
-  const before = ev.balanceAfter - ev.amount;
+  const before = ev.balanceAfter - amount;
   if (stopAt === '05a') return;
   await wait(1400);
   const fly = coinFly(t.querySelector('.ve-tcoin'), balanceChip() || t, { count: ev.coins || 8 });
@@ -113,9 +124,9 @@ export async function rewardSequence(ev, { stopAt = null } = {}) {
   await fly;
   t.remove();
   await refresh();
-  countUp(before, ev.balanceAfter, { delta: ev.amount });
+  countUp(before, ev.balanceAfter, { delta: amount });
   const chip = balanceChip();
-  const fl = el('span', 've-float', `+${n(ev.amount)}`);
+  const fl = el('span', 've-float', `+${n(amount)}`);
   if (chip) { const r = chip.getBoundingClientRect(); fl.style.left = `${r.left + 24}px`; fl.style.top = `${r.bottom + 2}px`; }
   L.appendChild(fl);
   const hint = el('div', 'v2-panel ve-next', `${EI.coin(20)}<b>${esc(tr(`잔액 ${n(before)} → ${n(ev.balanceAfter)} bum`, `Balance ${n(before)} → ${n(ev.balanceAfter)} bum`))}</b>${mockTag()}<button type="button" class="v2-btn sm primary">${esc(tr('계속', 'Continue'))}</button>`);
@@ -157,22 +168,26 @@ export async function openKarma({ link } = {}) {
 // ---------- 11 탈것 상점
 export async function openShop({ link } = {}) {
   const [items, goal, bal, mode] = await Promise.all([econ.listShopItems(), econ.getShopGoal(), econ.getBalance(), econ.getEconMode()]);
-  let sel = items.find((i) => !i.owned)?.id || items[0].id;
+  let sel = items.find((i) => !i.owned && i.available !== false)?.id || items[0]?.id;
+  if (!items.length) { const p0 = panel('ve-shop', `<div class="v2-hrow">${head(tr('탈것 상점', 'Vehicle shop'), { size: 24 })}${mockTag()}<span class="v2-grow"></span>${closeBtn()}</div><p class="ve-note">${esc(tr('지금은 상점을 열 수 없어요. 잠시 뒤 다시 열어 주세요.', 'The shop is unavailable right now. Please try again later.'))}</p>`); show(p0, { key: '11' }); return; }
   const p = panel('ve-shop', '');
   const draw = () => {
     const it = items.find((i) => i.id === sel);
-    const can = !bal.guest && !it.owned && (it.free || it.affordable);
+    const na = it.available === false; // 서버: 지금 팔지 않는 물건
+    const can = !bal.guest && !it.owned && !na && (it.free || it.affordable);
     const btn = bal.guest ? `<button type="button" class="v2-btn primary" data-ve="link">${esc(tr('구글 계정 연동하고 bum 받기', 'Link Google account to earn bum'))}</button>`
       : it.owned ? `<button type="button" class="v2-btn secondary" disabled>${EI.check(14)}${esc(tr('보유 중', 'Owned'))}</button>`
+      : na ? `<button type="button" class="v2-btn secondary ve-locked" disabled>${EI.lock(12)}${esc(tr('준비 중 · 아직 팔지 않아요', 'Coming soon · not on sale yet'))}</button>`
         : can ? `<button type="button" class="v2-btn primary" data-ve="buy">${esc(it.free ? tr(`${T(it.name)} 받기 · 무료(베타)`, `Get ${T(it.name)} · Free (Beta)`) : tr(`${T(it.name)} 구매 · ${n(it.price)} bum`, `Buy ${T(it.name)} · ${n(it.price)} bum`))}</button>`
           : `<button type="button" class="v2-btn secondary ve-locked" disabled>${EI.lock(12)}${esc(tr('잔액 부족 · 구매 불가', 'Not enough bum · cannot buy'))}</button>`;
+    const gItem = goal ? items.find((i) => i.id === goal.itemId) : null;
     const pct = goal ? Math.floor((goal.balance / goal.price) * 100) : 0;
     p.innerHTML = `<div class="v2-hrow">${head(tr('탈것 상점', 'Vehicle shop'), { size: 24 })}${tag(tr('실제 가격의 50%', '50% of real price'), '#4cc9f0')}${mode.shopPaid ? '' : freeBadge()}${mockTag()}<span class="v2-grow"></span>${bal.guest ? '' : `<span class="ve-bum lg">${EI.coin(16)}<b>${esc(tr(`내 잔액 ${n(bal.total)} bum`, `Balance ${n(bal.total)} bum`))}</b></span>`}${closeBtn()}</div>
-      ${goal ? `<div class="ve-goal"><div class="v2-hrow"><b>${esc(tr(`목표: ${T(items.find((i) => i.id === goal.itemId).name)} ${n(goal.price)} bum`, `Goal: ${T(items.find((i) => i.id === goal.itemId).name)} ${n(goal.price)} bum`))}</b><span class="v2-grow"></span><b class="ve-gold ve-t20">${esc(tr(`${goal.daysLeft}일 남음`, `${goal.daysLeft} days left`))}</b></div>
+      ${goal && gItem ? `<div class="ve-goal"><div class="v2-hrow"><b>${esc(tr(`목표: ${T(items.find((i) => i.id === goal.itemId).name)} ${n(goal.price)} bum`, `Goal: ${T(items.find((i) => i.id === goal.itemId).name)} ${n(goal.price)} bum`))}</b><span class="v2-grow"></span><b class="ve-gold ve-t20">${esc(tr(`${goal.daysLeft}일 남음`, `${goal.daysLeft} days left`))}</b></div>
         ${bar(goal.balance, goal.price, { w: 1180, h: 10, cls: 'gold ve-wide' })}<div class="v2-hrow"><small>${esc(tr(`${n(goal.balance)} / ${n(goal.price)} (${pct}%) · 남은 ${n(goal.remaining)} bum`, `${n(goal.balance)} / ${n(goal.price)} (${pct}%) · ${n(goal.remaining)} bum to go`))}</small><span class="v2-grow"></span><small>${esc(tr(`보통 페이스 하루 순 +${n(goal.typicalDailyNet)} 기준`, `At a typical net +${n(goal.typicalDailyNet)} per day`))}</small></div>
         ${mode.shopPaid ? '' : `<small class="ve-freenote">${esc(tr('베타 기간에는 탈것을 무료로 받을 수 있어요. 목표는 유료 전환 후 기준이에요.', 'During the beta, vehicles are free. The goal shows the post-beta price.'))}</small>`}</div>` : ''}
-      <div class="ve-items">${items.map((i) => `<button type="button" class="ve-item${i.id === sel ? ' on' : ''}" data-item="${i.id}"><span class="ve-thumb">${esc(T(i.name))}</span>
-        <span class="v2-hrow"><b>${esc(T(i.name))}</b>${!i.owned && !i.affordable && !i.free ? EI.lock(12) : ''}${i.owned ? tag(tr('보유', 'Owned'), '#20c997') : ''}</span>
+      <div class="ve-items">${items.map((i) => `<button type="button" class="ve-item${i.id === sel ? ' on' : ''}${i.available === false ? ' na' : ''}" data-item="${i.id}"><span class="ve-thumb">${esc(T(i.name))}</span>
+        <span class="v2-hrow"><b>${esc(T(i.name))}</b>${!i.owned && (i.available === false || (!i.affordable && !i.free)) ? EI.lock(12) : ''}${i.owned ? tag(tr('보유', 'Owned'), '#20c997') : ''}${i.available === false ? tag(tr('준비 중', 'Coming soon'), '#9eb4c6') : ''}</span>
         <span class="ve-iprice">${EI.coin(18)}${i.free ? `<b>0 bum</b><s>${n(i.listPrice)}</s>` : `<b>${n(i.price)} bum</b>`}</span>
         <small>${esc(tr(`보통 플레이어 약 ${n(i.daysForTypical)}일`, `About ${n(i.daysForTypical)} days for a typical player`))}</small></button>`).join('')}</div>
       <div class="v2-hrow ve-sfoot"><small>${esc(tr('첫 자전거 기준: 라이트 80일 · 헤비 14일 · 구매한 탈것은 선물 불가', 'First bicycle: light player 80 days · heavy 14 days · bought vehicles cannot be gifted'))}</small><span class="v2-grow"></span>${btn}</div>
@@ -185,8 +200,19 @@ export async function openShop({ link } = {}) {
     if (e.target.closest('[data-ve="buy"]')) {
       const r = await econ.purchase(sel);
       const m = p.querySelector('.ve-msg');
-      if (r.ok) { const i = items.findIndex((x) => x.id === sel); items[i] = r.data.item; Object.assign(bal, r.data.balance); draw(); const m2 = p.querySelector('.ve-msg'); m2.hidden = false; m2.textContent = r.data.free ? tr(`${T(r.data.item.name)}을(를) 받았어요 (무료 베타, 차감 없음). 탈것 기능은 아직 게임에 연결 전이에요.`, `You got ${T(r.data.item.name)} (free beta, nothing deducted). Vehicles are not wired into the game yet.`) : tr(`${T(r.data.item.name)} 구매 완료 · −${n(r.data.amount)} bum`, `Bought ${T(r.data.item.name)} · −${n(r.data.amount)} bum`); }
-      else { m.hidden = false; m.textContent = r.error.code === 'insufficient_balance' ? tr(`잔액 ${n(r.error.shortBy)} bum 부족`, `${n(r.error.shortBy)} bum short`) : T(r.error.message) || r.error.code; }
+      if (r.ok) { const i = items.findIndex((x) => x.id === sel); items[i] = r.data.item || { ...items[i], owned: true, affordable: false }; Object.assign(bal, r.data.balance || {}); draw(); const m2 = p.querySelector('.ve-msg'); m2.hidden = false; m2.textContent = r.data.free ? tr(`${T(items[i].name)}을(를) 받았어요 (무료 베타, 차감 없음). 탈것 기능은 아직 게임에 연결 전이에요.`, `You got ${T(items[i].name)} (free beta, nothing deducted). Vehicles are not wired into the game yet.`) : tr(`${T(items[i].name)} 구매 완료 · −${n(r.data.amount)} bum`, `Bought ${T(items[i].name)} · −${n(r.data.amount)} bum`); }
+      else {
+        m.hidden = false;
+        const c = r.error.code;
+        if (c === 'not_eligible') { const i = items.findIndex((x) => x.id === sel); if (i >= 0) items[i] = { ...items[i], available: false, affordable: false }; draw(); }
+        const m3 = p.querySelector('.ve-msg'); m3.hidden = false;
+        m3.textContent = c === 'insufficient_balance' ? tr(`잔액 ${n(r.error.shortBy)} bum 부족`, `${n(r.error.shortBy)} bum short`)
+          : c === 'not_eligible' ? (T(r.error.message) || tr('아직 준비 중인 탈것이에요', 'This vehicle is not available yet'))
+            : c === 'already_claimed' ? tr('이미 가진 탈것이에요', 'You already own this vehicle')
+              : c === 'not_signed_in' ? tr('구글 계정을 연동하면 살 수 있어요', 'Link a Google account to buy')
+                : c === 'network' ? tr('연결이 불안정해요. 잠시 뒤 다시 시도해 주세요.', 'Connection problem. Please try again.') : (T(r.error.message) || c);
+        m3.classList.add('err');
+      }
     }
   });
   show(p, { key: '11' });
