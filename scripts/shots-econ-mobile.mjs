@@ -1,6 +1,6 @@
 // [econ-mobile] 모바일 경제 UI 점검 스크린샷: 터치 · body.mobile · ?ui=v2&demo=econ (mock) 으로 입장 → 프레임별 스크린샷
 // 사용: BASE=http://127.0.0.1:5191 OUT=/workspace/bw-econ-mobile-shots/m [W=852 H=393] [SAFE=59] [STATES=hud,04a,...] node scripts/shots-econ-mobile.mjs
-//   상태 이름: hud-guest · hud · menu · menu-guest · 01a · 01b · 02a · 02b · 04a · 04b · 04c · 05a · 05a2 · 05b · 06 · 07 · 07-guest · 08a · 08b · 08c · 09a · 09b · 10a · 10b · 11 · travel · board
+//   상태 이름: hud-guest · hud · menu · menu-guest · 01a · 01b · 02a · 02b · 04a · 04b · 04c · 05a · 05a2 · 05b · 06 · 07 · 07-hist · 07-ride · 07-guest · 08a · 08b · 08c · 09a · 09b · 10a · 10b · 11 · travel · board
 import { chromium } from 'playwright';
 const BASE = process.env.BASE || 'http://127.0.0.1:5191', OUT = process.env.OUT || '/tmp/em';
 const W = +(process.env.W || 852), H = +(process.env.H || 393), SAFE = process.env.SAFE ?? '';
@@ -47,6 +47,8 @@ const ACT = {
   '06': async () => { await D('06'); await p.waitForTimeout(600); },
   '07': async () => { await acct('fig07'); await p.waitForTimeout(300); await tap('#m-hud .m-econ-bal'); await p.waitForTimeout(900); },
   '07-guest': async () => { await guest(); await p.waitForTimeout(300); await p.evaluate(() => window.__bwEconMobile.wallet.open()); await p.waitForTimeout(900); },
+  '07-hist': async () => { await ACT['07'](); await p.evaluate(() => { const pn = document.querySelector('#handset .xapp-pane'); const t = pn?.querySelector('.v2w-tabs'); if (pn && t) pn.scrollTop = t.offsetTop - 4; }); await p.waitForTimeout(300); },
+  '07-ride': async () => { await ACT['07-hist'](); await tap('#handset [data-wtab="ride"]'); await p.waitForTimeout(500); await p.evaluate(() => { const pn = document.querySelector('#handset .xapp-pane'); const t = pn?.querySelector('.v2w-tabs'); if (pn && t) pn.scrollTop = t.offsetTop - 4; }); await p.waitForTimeout(200); },
   '08a': async () => { await D('08a'); await p.waitForTimeout(600); },
   '08b': async () => { await D('08b'); await p.waitForTimeout(900); },
   '08c': async () => { await D('08c'); await p.waitForTimeout(900); },

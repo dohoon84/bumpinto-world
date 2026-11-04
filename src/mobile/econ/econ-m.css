@@ -147,3 +147,16 @@ body.mobile.m-econ .ve-pay .ve-amtrow { flex-wrap: wrap; row-gap: 2px; }
 
 /* 08a: PC 키 힌트(E) 는 터치에서 의미 없음 → 숨김 */
 body.mobile.m-econ .ve-board .ve-key { display: none !important; }
+
+/* ── 07 교통카드 앱(PC walletApp.js 장식 재사용): 모바일 폰 오버레이(344×241)에 맞춰 촘촘하게 — 내용은 PC 와 같음 ── */
+body.mobile.m-econ #handset .v2w-card { padding: 10px 12px; margin-bottom: 0; }
+body.mobile.m-econ #handset .v2w-card .no { display: none; }
+body.mobile.m-econ #handset .v2w-card .nm { padding-right: 0; }
+body.mobile.m-econ #handset .v2w-link { margin: 6px 0 0; padding: 8px; min-height: 36px; }
+body.mobile.m-econ #handset .v2w-free { margin-top: 4px; }
+body.mobile.m-econ #handset .v2w-week { margin: 6px 2px 0; padding-bottom: 6px; gap: 0 10px; }
+body.mobile.m-econ #handset .v2w-week > b { width: auto; }
+body.mobile.m-econ #handset .v2w-week small { display: none; } /* 보통 플레이어 평균: 좁은 폰에서는 뺌 */
+body.mobile.m-econ #handset .v2w-sum { margin: 6px 2px 4px; }
+body.mobile.m-econ #handset .v2w-tabs { position: sticky; top: 0; z-index: 1; padding: 2px 0 4px; background: #e3eefb; }
+body.mobile.m-econ #handset .v2w-tabs button { min-height: 32px; } /* 터치 크기 */
