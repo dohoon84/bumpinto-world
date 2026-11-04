@@ -40,12 +40,20 @@ export function mountLanding() {
     const current = getCurrentRegion();
     const st = { view: 'start', region: current.id, station: 'jeongja' };
     // [econ-mobile] ?ui=v2: 로그인된 계정이면 '이어서 입장' 대신 계정 이름이 붙은 '계속하기'(PC 시작화면 12dd645 과 같은 규칙). 기본 UI 는 그대로.
-    let ses = null, lastSt = null, v2data = null, rmod = null; // rmod: ui-v2/resume.js (그만둔 자리, PC bf72209) // lastSt: PC 와 같은 '마지막 역'(bw.uiv2.lastStation)
+    let ses = null, lastSt = null, v2data = null, rmod = null, gmod = null, gMsg = ''; // gmod: ui-v2/google.js (계정 기능이 켜졌을 때만 로그인 버튼) // rmod: ui-v2/resume.js (그만둔 자리, PC bf72209) // lastSt: PC 와 같은 '마지막 역'(bw.uiv2.lastStation)
     const signedIn = () => !!(ses && !ses.isGuest && (ses.signedIn ?? true));
     if (uiV2Wanted()) { // [ui-v2-default] 기본 v2 · ?ui=v1 끔
       import('../ui-v2/data.js').then((d) => { v2data = d; lastSt = d.readLastStation(); if (signedIn() && root.isConnected && st.view === 'start') render(); }).catch(() => {});
       import('../ui-v2/resume.js').then((m) => { rmod = m; }).catch(() => {});
       import('../ui-v2/econ/index.js').then(({ econ }) => econ.getSession()).then((s) => { ses = s || null; if (signedIn() && root.isConnected && st.view === 'start') render(); }).catch(() => {});
+      // [mobile-google] 게스트 시작화면에도 PC 와 같은 'Google 계정으로 로그인'. 로그인 훅이 등록된 뒤(계정 기능 켜짐)에만 보인다
+      import('../ui-v2/google.js').then((g) => {
+        gmod = g;
+        const rr = () => { if (root.isConnected && st.view === 'start' && !signedIn()) render(); };
+        if (g.googleSignInReady()) rr();
+        const off = g.onGoogleReady(rr);
+        const stop = () => { if (!root.isConnected) off(); else setTimeout(stop, 2000); }; setTimeout(stop, 2000);
+      }).catch(() => {});
     }
 
     const finish = () => { root.remove(); document.body.classList.remove('in-mobile-landing'); resolve(); };
@@ -120,6 +128,8 @@ export function mountLanding() {
             <h2>${t('시작하기', 'Start')}</h2>
             ${signedIn() ? acctLine() : ''}
             ${signedIn() ? resumeBtn : ''}
+            ${!signedIn() && gmod?.googleSignInReady() ? `<button type="button" class="m-btn m-google" data-act="google">${gmod.GOOGLE_G_SVG(20)}<span>${t('Google 계정으로 로그인', 'Sign in with Google')}</span></button>` : ''}
+            ${!signedIn() && gMsg ? `<small class="m-gmsg" role="status">${esc(gMsg)}</small>` : ''}
             <button type="button" class="m-btn ${signedIn() ? 'm-secondary' : 'm-primary'}" data-act="pick">${t('입장할 곳 고르기', 'Choose where to start')}</button>
             ${signedIn() ? '' : resumeBtn}
             ${signedIn() ? `<small>${esc(lastSt ? t(`지난번 역 · ${lastSt.label} 입장 카드로 바로 · 이 계정 캐릭터·잔액 그대로`, `Straight to ${lastSt.label} (your last station) · same account character and balance`) : t(`${acctDest().label} 입장 카드로 바로 · 이 계정 캐릭터·잔액 그대로`, `Straight to ${acctDest().label} · same account character and balance`))}</small>` : `<small>${saved ? t('이 폰에 저장된 캐릭터로 바로 들어가요', 'Jump back in with the character saved on this phone') : t('다음 화면에서 지역과 역을 고르고, 캐릭터를 만들어요', 'Pick a region and station, then make your character')}</small>`}
@@ -161,6 +171,17 @@ export function mountLanding() {
       if (act === 'pick' || act === 'go' || act === 'resume') enterFullscreen();
       if (act === 'a2hs-x') { dismissHomeScreenHint(); b.parentElement?.remove(); return; }
       if (act === 'lang') { toggleLang(); render(); return; }
+      if (act === 'google') {
+        b.disabled = true; gMsg = '';
+        gmod.requestGoogleSignIn().then(async (r) => {
+          if (r.ok) {
+            try { const { econ } = await import('../ui-v2/econ/index.js'); ses = (await econ.getSession()) || ses; } catch { /* noop */ }
+            if (!signedIn()) ses = { ...(ses || {}), isGuest: false, signedIn: true, displayName: r.account?.name || ses?.displayName };
+          } else if (r.reason !== 'cancelled') gMsg = r.reason === 'not_ready' ? gmod.googleNotReadyText() : t('로그인하지 못했어요. 다시 시도하거나 게스트로 계속해 주세요.', 'Sign-in failed. Try again or continue as a guest.');
+          if (root.isConnected && st.view === 'start') render();
+        });
+        return;
+      }
       if (act === 'pick') { st.view = 'pick'; render(); return; }
       if (act === 'resume') { if (signedIn()) resumeAccount(); else resume(); return; }
       if (act === 'back') { st.view = 'start'; render(); return; }
