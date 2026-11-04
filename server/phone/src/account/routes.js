@@ -4,11 +4,11 @@
 //   POST /auth/link    { deviceId }            → (로그인 상태) 이 기기를 계정에 붙이고 이전
 //   POST /auth/logout  { all? }                → 쿠키 삭제. all:true 면 모든 기기의 세션 무효(session_version+1)
 //   GET  /auth/me                              → 계정, 기기(가림), 대표 캐릭터 id, 잔액(경제 켜짐), 칭호용 기록 요약
-//   POST /auth/dev     { name?, sub?, deviceId } → [economy] 로컬 시험용 가짜 로그인. DEV_LOGIN=1 이고 요청 주소가 localhost 일 때만(배포 환경 404)
+//   POST /auth/dev     { name?, sub?, deviceId } → [economy] 로컬 시험용 가짜 로그인. DEV_LOGIN=1 이고 요청 주소·Origin 이 localhost/사설 LAN 일 때만(배포 환경 404)
 // 쿠키를 쓰므로 CORS 는 허용 목록의 출처만, Allow-Credentials: true. "*" 는 쓰지 않는다.
 import { verifyGoogleIdToken } from "./google.js";
 import { clearSessionCookie, sessionCookie, sessionFromRequest, signSession } from "./session.js";
-import { accountsEnabled, accountsReady, devLoginAllowed, econFeatures, economyEnabled, statsEnabled } from "./flags.js";
+import { accountsEnabled, accountsReady, devLoginAllowed, econFeatures, economyEnabled, devLoginOn, isPrivateDevHost, statsEnabled } from "./flags.js";
 import { econMode } from "./economy.js";
 import {
   accountForSession,
@@ -36,6 +36,7 @@ export function credentialedOrigin(request, env) {
     const u = new URL(origin);
     const host = u.hostname.replace(/^\[|\]$/g, "");
     if (host === "localhost" || host === "127.0.0.1" || host === "::1") return origin;
+    if (devLoginOn(env) && u.protocol === "http:" && isPrivateDevHost(host)) return origin; // 로컬 시험: 같은 와이파이 아이폰(http://172.x)
     if (u.protocol !== "https:") return "";
     if (host === "bumpinto.world" || host.endsWith(".bumpinto.world")) return origin;
     if (host === "jeongja3d.pages.dev" || host.endsWith(".jeongja3d.pages.dev")) return origin;
@@ -141,7 +142,7 @@ export async function handleAuth(request, env, url, deps = {}) {
     return json(
       {
         ok: true, enabled: ready, clientId: ready ? String(env.GOOGLE_CLIENT_ID).trim() : "", economy: economyEnabled(env),
-        econ: { mode: econMode(env), features: econFeatures(env) }, devLogin: devLoginAllowed(env, url),
+        econ: { mode: econMode(env), features: econFeatures(env) }, devLogin: devLoginAllowed(env, url, request.headers.get("Origin") || ""),
       },
       200,
       cors,
@@ -158,7 +159,7 @@ export async function handleAuth(request, env, url, deps = {}) {
   const db = env.DB;
   const waitUntil = deps.waitUntil;
   try {
-    const isDev = path === "/auth/dev" && request.method === "POST" && devLoginAllowed(env, url);
+    const isDev = path === "/auth/dev" && request.method === "POST" && devLoginAllowed(env, url, request.headers.get("Origin") || "");
     if ((path === "/auth/google" && request.method === "POST") || isDev) {
       const { body, error } = await readBody(request);
       if (error) return json({ ok: false, error }, 400, cors);

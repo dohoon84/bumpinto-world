@@ -74,7 +74,27 @@ console.log('economy tests');
   assert.equal(F.devLoginAllowed({ DEV_LOGIN: '1' }, new URL('http://localhost:8789/auth/dev')), true);
   assert.equal(F.devLoginAllowed({ DEV_LOGIN: '1' }, new URL('https://api.bumpinto.world/auth/dev')), false);
   assert.equal(F.devLoginAllowed({}, new URL('http://localhost:8789/auth/dev')), false);
-  ok('flags: features empty by default, ECON_PAID default free, DEV_LOGIN localhost only');
+  // 사설 LAN(아이폰 시험) — DEV_LOGIN=1 일 때만, 요청 주소와 Origin 이 모두 사설이어야
+  const D = { DEV_LOGIN: '1' };
+  for (const h of ['127.0.0.1', '10.0.0.5', '172.16.0.1', '172.30.1.24', '172.31.255.255', '192.168.0.10']) assert.equal(F.devLoginAllowed(D, new URL(`http://${h}:8789/auth/dev`), `http://${h}:5173`), true, h);
+  for (const h of ['172.15.0.1', '172.32.0.1', '8.8.8.8', '192.169.0.1', '100.64.0.1', 'example.com', '0.0.0.0']) assert.equal(F.devLoginAllowed(D, new URL(`http://${h}:8789/auth/dev`)), false, h);
+  assert.equal(F.isPrivateDevHost('10.0.0.256'), false);
+  assert.equal(F.devLoginAllowed({}, new URL('http://172.30.1.24:8789/auth/dev')), false, 'LAN without DEV_LOGIN');
+  assert.equal(F.devLoginAllowed(D, new URL('http://127.0.0.1:8789/auth/dev'), 'https://abc.trycloudflare.com'), false, 'public tunnel origin → no dev login');
+  assert.equal(F.devLoginAllowed(D, new URL('http://127.0.0.1:8789/auth/dev'), 'garbage'), false);
+  // 쿠키 Secure: 기본·운영은 항상, DEV_LOGIN+SESSION_COOKIE_INSECURE 둘 다일 때만 뺀다
+  assert.match(S.sessionCookie('t', {}), /; Secure;/);
+  assert.match(S.sessionCookie('t', { SESSION_COOKIE_INSECURE: '1' }), /; Secure;/, 'insecure alone is ignored');
+  assert.match(S.sessionCookie('t', { DEV_LOGIN: '1' }), /; Secure;/);
+  assert.doesNotMatch(S.sessionCookie('t', { DEV_LOGIN: '1', SESSION_COOKIE_INSECURE: '1' }), /Secure/);
+  const { credentialedOrigin } = await import('../server/phone/src/account/routes.js');
+  const req = (o) => new Request('http://127.0.0.1:8789/auth/me', { headers: { Origin: o } });
+  assert.equal(credentialedOrigin(req('http://172.30.1.24:5173'), D), 'http://172.30.1.24:5173');
+  assert.equal(credentialedOrigin(req('http://172.30.1.24:5173'), {}), '', 'LAN http origin only with DEV_LOGIN');
+  assert.equal(credentialedOrigin(req('http://8.8.8.8:5173'), D), '');
+  assert.equal(credentialedOrigin(req('https://abc.trycloudflare.com'), D), '', 'tunnel needs ALLOWED_ORIGINS');
+  assert.equal(credentialedOrigin(req('https://abc.trycloudflare.com'), { ...D, ALLOWED_ORIGINS: 'https://abc.trycloudflare.com' }), 'https://abc.trycloudflare.com');
+  ok('flags: features empty by default, ECON_PAID default free, DEV_LOGIN localhost + RFC1918 LAN only (origin too), dev-only insecure cookie');
 }
 
 // ── 원장 멱등 · 상한 ──
