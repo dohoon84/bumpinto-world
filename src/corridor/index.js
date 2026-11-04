@@ -20,6 +20,7 @@ import { pangyoEnabled, pangyoLinkEnabled, mergePangyoIndex, fetchCorridorTile, 
 import { pangyoExpressEnabled, PANGYO_EXPRESS_FILE, filterExpressHidden, buildPangyoExpress } from './pangyoExpress.js'; // [pangyo-express]
 import { createPangyoLandmarks } from './landmarks/pangyo.js'; // [pangyo]
 import { migeumEnabled, mergeMigeumIndex, MIGEUM_DIR } from './migeum.js'; // [migeum]
+import { migeumBusEnabled } from './migeumBus.js'; // [migeum-bus]
 import { isEn, onLangChange } from '../i18n.js'; // [pangyo-link] 판교역 라벨 KO/EN
 import { createPangyoNpc, pangyoNpcEnabled } from './pangyoNpc.js'; // [pangyo-npc]
 import { pangyoWaterEnabled, PANGYO_WATER_FILE, attachMainDrop, mergePangyoStreams, dropWaterGeometry } from './pangyoWater.js'; // [pangyo-water]
@@ -305,7 +306,7 @@ export function createCorridor({ scene, corridorData, terrain, world, renderer, 
       if (life || params?.get('clife') === '0') return life;
       // [pangyo-npc] 판교 IT 직장인 NPC: 코리더 보행 NPC crowd 를 같이 쓴다. ?pangyonpc=0 / ?pangyo=0 이면 없음
       pangyoNpc = corridorData.pangyo && pangyoNpcEnabled() ? createPangyoNpc({ pg: corridorData.pangyo, baseUrl, overlay, terrain, isFree: api.isFree, freeSpot: api.freeSpot, tileReady: (k) => tiles.get(k)?.dState === 3 }) : null;
-      life = createCorridorLife({ root, baseUrl, crossings, terrain, terrainT: corridorData.terrainT, world, overlay, stations: pgLink ? index.stations.concat(corridorData.pangyo.stations || []) : index.stations, pangyoLink: pgLink && mode === 'sim', express: corridorData.pangyoExpress, liveBox: live, params, proxy, mode, liveDrive, liveCrossings, renderer, hints: (x, z, r) => gatherLifeHints(loaded, x, z, r), extraCrowd: pangyoNpc });
+      life = createCorridorLife({ root, baseUrl, crossings, terrain, terrainT: corridorData.terrainT, world, overlay, stations: pgLink ? index.stations.concat(corridorData.pangyo.stations || []) : index.stations, pangyoLink: pgLink && mode === 'sim', migeumBus: !!corridorData.migeum && migeumBusEnabled() && mode === 'sim', express: corridorData.pangyoExpress, liveBox: live, params, proxy, mode, liveDrive, liveCrossings, renderer, hints: (x, z, r) => gatherLifeHints(loaded, x, z, r), extraCrowd: pangyoNpc });
       return life;
     },
     get life() { return life; },
