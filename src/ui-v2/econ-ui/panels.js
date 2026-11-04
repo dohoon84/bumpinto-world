@@ -190,7 +190,7 @@ export async function openShop({ link } = {}) {
         <small class="ve-freenote">${esc(tr('상점은 준비중이에요. 지금은 가격만 볼 수 있고, 열리면 모은 bum으로 살 수 있어요.', 'The shop is coming soon. Prices are a preview; you can buy with saved bum once it opens.'))}</small></div>` : ''}
       <div class="ve-items">${items.map((i) => `<button type="button" class="ve-item${i.id === sel ? ' on' : ''}${i.available === false ? ' na' : ''}" data-item="${i.id}"><span class="ve-thumb">${esc(T(i.name))}</span>
         <span class="v2-hrow"><b>${esc(T(i.name))}</b>${!i.owned && (i.comingSoon !== false || i.available === false || !i.affordable) ? EI.lock(12) : ''}${i.owned ? tag(tr('보유', 'Owned'), '#20c997') : ''}${i.comingSoon !== false || i.available === false ? tag(tr('준비중', 'Coming soon'), '#9eb4c6') : ''}</span>
-        <span class="ve-iprice">${EI.coin(18)}<b>${n(i.price)} bum</b></span><small class="ve-real">${esc(tr(`실제 가격 ${n(i.realPrice)}원`, `Real price ₩${n(i.realPrice)}`))}</small>
+        <span class="ve-iprice">${EI.coin(18)}<b>${n(i.price)} bum</b></span>
         <small>${esc(tr(`보통 플레이어 약 ${n(i.daysForTypical)}일`, `About ${n(i.daysForTypical)} days for a typical player`))}</small></button>`).join('')}</div>
       <div class="v2-hrow ve-sfoot"><small>${esc(tr('첫 자전거 기준: 라이트 80일 · 헤비 14일 · 구매한 탈것은 선물 불가', 'First bicycle: light player 80 days · heavy 14 days · bought vehicles cannot be gifted'))}</small><span class="v2-grow"></span>${btn}</div>
       <p class="ve-msg" hidden></p>`;
