@@ -162,7 +162,8 @@ body.ui-v2:not(.mobile) .ve-item { display: flex; flex-direction: column; gap: 8
 body.ui-v2:not(.mobile) .ve-item.on { border-color: var(--v2-gold); background: rgba(255, 225, 105, .1); }
 body.ui-v2:not(.mobile) .ve-item b { font-size: 16px; font-weight: 900; }
 body.ui-v2:not(.mobile) .ve-item small { font-size: 12px; color: var(--v2-sub); }
-body.ui-v2:not(.mobile) .ve-thumb { display: grid; place-items: center; height: 120px; border-radius: 8px; background: linear-gradient(160deg, rgba(76, 201, 240, .25), rgba(255, 255, 255, .04)); font-size: 13px; font-weight: 700; color: var(--v2-sub); }
+body.ui-v2:not(.mobile) .ve-thumb { display: grid; place-items: center; height: 120px; overflow: hidden; border-radius: 8px; background: linear-gradient(160deg, rgba(76, 201, 240, .25), rgba(255, 255, 255, .04)); font-size: 13px; font-weight: 700; color: var(--v2-sub); }
+body.ui-v2:not(.mobile) .ve-thumb img { display: block; width: 100%; height: 120px; max-height: 120px; object-fit: contain; filter: drop-shadow(0 6px 8px rgba(0, 0, 0, .35)); }
 body.ui-v2:not(.mobile) .ve-iprice { display: inline-flex; align-items: center; gap: 6px; color: var(--v2-gold); }
 body.ui-v2:not(.mobile) .ve-iprice s { font-size: 12px; color: var(--v2-sub); }
 body.ui-v2:not(.mobile) .ve-sfoot small { font-size: 12px; color: var(--v2-sub); }
@@ -252,7 +253,7 @@ body.ui-v2:not(.mobile) .ve-phone-scr > * { flex: none; }
 body.ui-v2:not(.mobile) .ve-col > .v2-tag, body.ui-v2:not(.mobile) .ve-panel > .v2-tag { align-self: flex-start; }
 body.ui-v2:not(.mobile) .ve-col.c > .v2-tag { align-self: center; }
 /* #30 대응: 상점 미판매(available:false) · 상한 적용 퀘스트(paidBum) · 오류 문구 */
-body.ui-v2:not(.mobile) .ve-item.na { opacity: .55; }
+body.ui-v2:not(.mobile) .ve-item.na { opacity: .92; } body.ui-v2:not(.mobile) .ve-item.na .v2-hrow b, body.ui-v2:not(.mobile) .ve-item.na .ve-iprice { opacity: .9; }
 body.ui-v2:not(.mobile) .ve-item.na .v2-tag { margin-left: 4px; }
 body.ui-v2:not(.mobile) .ve-capnote { font-size: 11px; color: #9eb4c6; margin-left: 6px; }
 body.ui-v2:not(.mobile) .ve-msg.err { color: #ff8a8a; }
