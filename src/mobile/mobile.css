@@ -19,6 +19,9 @@ body.mobile {
   overscroll-behavior: none;
 }
 
+/* [mobile-scroll-lock] 게임 화면은 문서가 움직일 일이 없다: 당겨서 밀리기·바운스 막기 */
+html:has(> body.mobile) { overscroll-behavior: none; }
+
 /* ---------- 세로 화면: 가로로 돌려 달라는 안내 ---------- */
 #m-rotate { display: none; }
 @media (orientation: portrait) {
