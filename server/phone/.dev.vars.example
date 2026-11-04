@@ -9,5 +9,7 @@ ECONOMY_ENABLED=1
 ECON_FEATURES=move,quests,shop,board
 # 0(기본) = 무료 오픈: 교통·상점 0원(기록만). 1 = 유료 차감 — 운영에서는 아직 켜지 않는다
 ECON_PAID=0
-# 로컬 전용 개발 로그인(POST /auth/dev). localhost 요청에서만 동작. 운영에는 절대 넣지 않는다
+# 로컬 전용 개발 로그인(POST /auth/dev). localhost · 사설 LAN(10.x / 172.16–31.x / 192.168.x) 요청에서만 동작. 운영에는 절대 넣지 않는다
 DEV_LOGIN=1
+# 로컬 전용: 세션 쿠키에서 Secure 를 뺀다(아이폰 Safari/Chrome 은 http://172.x 에서 Secure 쿠키를 저장하지 않음). DEV_LOGIN=1 일 때만 효과. 운영에는 절대 넣지 않는다
+SESSION_COOKIE_INSECURE=1

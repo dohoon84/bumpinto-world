@@ -46,6 +46,8 @@
     "mock-bus-proxy": "node server/bus-proxy/mock-proxy.mjs",
     "bus-proxy": "cd server/bus-proxy && npx --yes wrangler dev --ip 127.0.0.1 --port 8788",
     "phone": "cd server/phone && npx --yes wrangler dev --ip 127.0.0.1 --port 8789",
+    "dev:all": "node scripts/dev-all.mjs",
+    "dev:all:reset": "node scripts/dev-all.mjs --reset",
     "deploy:phone": "cd server/phone && npx --yes wrangler deploy",
     "deploy:bus-proxy": "cd server/bus-proxy && npx --yes wrangler deploy",
     "deploy:pages": "npm run build && npx --yes wrangler pages deploy dist --project-name jeongja3d --branch main",

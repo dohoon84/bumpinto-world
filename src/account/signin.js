@@ -1,7 +1,7 @@
 // [accounts] 구글 로그인(GIS ID 토큰) 공용 함수 — 계정 칩(ui.js)과 ui-v2 의 registerGoogleSignIn 훅(econ serverClient)이 같이 쓴다.
 //   - GIS 스크립트는 처음 부를 때만 받는다(?accounts=1 이 아니면 아무도 부르지 않음).
 //   - One Tap 이 안 뜨는 환경(쿨다운·서드파티 쿠키 차단)을 위해 작은 창에 Google 공식 버튼을 그린다.
-//   - 로컬(localhost) + 서버 DEV_LOGIN=1 이면 같은 창에 '개발용 로그인' 버튼(POST /auth/dev)도 보인다 — 배포 주소에서는 서버가 404.
+//   - 로컬(localhost·사설 LAN) + 서버 DEV_LOGIN=1 이면 같은 창에 '개발용 로그인' 버튼(POST /auth/dev)도 보인다 — 배포 주소에서는 서버가 404.
 import { tr } from '../i18n.js';
 import { accountApi, accountBase } from './api.js';
 import { GOOGLE_CLIENT_ID } from './flags.js';
@@ -37,9 +37,11 @@ export function adoptPrimary(primaryUserId, { delayMs = 1200 } = {}) {
   return true;
 }
 
-const isLocal = () => /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname);
+// localhost · 사설 LAN(RFC1918, 같은 와이파이의 아이폰). 실제 허용은 서버가 정한다(/auth/config devLogin, DEV_LOGIN=1 일 때만)
+export const isLocalHost = (h = location.hostname) => /^(localhost|\[::1\]|127\.\d+\.\d+\.\d+|10\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+)$/.test(h);
+const isLocal = () => isLocalHost();
 
-async function devLogin(deviceId) {
+export async function devLogin(deviceId) {
   const base = accountBase();
   if (!base) return { ok: false, error: 'offline' };
   try {
@@ -88,7 +90,7 @@ export async function googleSignIn({ deviceId = currentDeviceId(), clientId } = 
     close.addEventListener('click', () => finish(null));
     if (showDev) {
       const dev = document.createElement('button');
-      dev.type = 'button'; dev.className = 'acct-btn'; dev.textContent = tr('개발용 로그인 (localhost)', 'Dev sign-in (localhost)');
+      dev.type = 'button'; dev.className = 'acct-btn'; dev.textContent = tr('개발용 로그인 (로컬)', 'Dev sign-in (local)');
       dev.addEventListener('click', async () => onResult(await devLogin(deviceId)));
       $('.acct-actions').append(dev);
     }
