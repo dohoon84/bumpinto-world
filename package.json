@@ -58,6 +58,7 @@
     "subway:gate": "node scripts/e2e-subway-gate-exit.mjs",
     "subway:pose": "node scripts/e2e-subway-pose.mjs",
     "subway:sync": "node scripts/e2e-subway-train-sync.mjs",
+    "subway:sync:migeum": "ROUTE=migeum-suin node scripts/e2e-subway-train-sync.mjs && ROUTE=migeum-shin node scripts/e2e-subway-train-sync.mjs",
     "bungeo:test": "node scripts/test-bungeo-queue.mjs"
   },
   "dependencies": {
