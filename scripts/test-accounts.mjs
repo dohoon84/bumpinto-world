@@ -44,7 +44,8 @@ function d1Of(db) {
   });
   return {
     prepare: (q) => make(q),
-    async batch(stmts) {
+    async batch(stmts) { if (!stmts.length) throw new Error('D1_ERROR: No SQL statements detected.'); // 실제 D1 과 같게
+
       db.exec('BEGIN');
       try { const out = stmts.map((s) => exec1(s._q, s._p)); db.exec('COMMIT'); return out; }
       catch (e) { db.exec('ROLLBACK'); throw e; }
