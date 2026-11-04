@@ -120,8 +120,8 @@ async function ride(ref, dir) {
     const ok = await page.evaluate(({ busId, k, jz }) => { const R = window.__jj.ride; R.debug.ff(0.3, () => { const b = R.debug.bus(busId, jz); return b && b.state === 'dwell' && b.stopIdx === k; }); const b = R.debug.bus(busId, jz); if (b?.state === 'dwell') b.dwell = Math.max(b.dwell, 8); return b?.state === 'dwell' && b.stopIdx === k; }, setup);
     if (ok) break;
   }
-  // 정류장이 차도에서 멀면(7007-1 상록마을 ~8m) 가운데 점이 탑승 반경 12m 밖으로 밀림 → 버스 쪽 5m
-  await page.evaluate(({ busId, at, jz }) => { const jj = window.__jj, b = jj.ride.debug.bus(busId, jz), q = b._q || { x: at.x, z: at.z }, d = Math.hypot(at.x - q.x, at.z - q.z), f = d > 1 ? Math.min(0.5, 5 / d) : 0; const sp = jj.corridor.freeSpot(q.x + (at.x - q.x) * f, q.z + (at.z - q.z) * f); jj.teleport(sp.x, sp.z); }, setup);
+  // 정류장이 차도에서 멀면(7007-1 상록마을 ~8m) freeSpot 이 인도 안쪽으로 밀어 탑승 반경 12m 밖(12.2m) → 버스 쪽 5m, 그래도 10m 넘으면 정류장 자리 그대로
+  await page.evaluate(({ busId, at, jz }) => { const jj = window.__jj, b = jj.ride.debug.bus(busId, jz), q = b._q || { x: at.x, z: at.z }, d = Math.hypot(at.x - q.x, at.z - q.z), f = d > 1 ? Math.min(0.5, 5 / d) : 0; let sp = jj.corridor.freeSpot(q.x + (at.x - q.x) * f, q.z + (at.z - q.z) * f); if (Math.hypot(sp.x - q.x, sp.z - q.z) > 10) sp = at; jj.teleport(sp.x, sp.z); }, setup);
   await page.waitForTimeout(1200);
   await shot('0-board');
   await page.keyboard.press('e'); await page.waitForTimeout(1200);
