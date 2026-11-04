@@ -23,23 +23,24 @@ import { migeumEnabled, mergeMigeumIndex, MIGEUM_DIR, migeumSubwayDrawsEntrances
 import { isEn, onLangChange } from '../i18n.js'; // [pangyo-link] 판교역 라벨 KO/EN
 import { createPangyoNpc, pangyoNpcEnabled } from './pangyoNpc.js'; // [pangyo-npc]
 import { pangyoWaterEnabled, PANGYO_WATER_FILE, attachMainDrop, mergePangyoStreams, dropWaterGeometry } from './pangyoWater.js'; // [pangyo-water]
+import { migeumWaterEnabled, MIGEUM_WATER_FILE, migeumChRoads, mergeMigeumWater, applyMigeumBank } from './migeumWater.js'; // [migeum-water]
 
 // streams: 탄천 지류 하도(streams.json). ?streams=0 이면 false → 예전과 같은 데이터만
 // [pangyo] pangyo: 판교역 일대(pangyo/index.json). ?pangyo=0 이면 false → 요청 없음
 // [migeum] migeum: 미금역 일대(migeum/index.json). ?migeum=0 이면 false → 요청 없음
-export async function loadCorridorData(baseUrl, { streams = true, pangyo = pangyoEnabled(), pangyoExpress = pangyo && pangyoExpressEnabled(), migeum = migeumEnabled(), fetchFn = fetch } = {}) {
+export async function loadCorridorData(baseUrl, { streams = true, pangyo = pangyoEnabled(), pangyoExpress = pangyo && pangyoExpressEnabled(), migeum = migeumEnabled(), migeumWater = migeum && migeumWaterEnabled(), fetchFn = fetch } = {}) {
   const get = (f) => fetchFn(baseUrl + f).then((r) => (r.ok ? r.json() : null)).catch(() => null);
   const pw = pangyo && pangyoWaterEnabled(); // [pangyo-water] ?pangyowater=0 이면 요청 없음
-  const [index, base, tancheon, streamsData, pg, pgx, water, mg] = await Promise.all([get('index.json'), get('base.json'), get('tancheon.json'), streams ? get('streams.json') : null, pangyo ? get(PANGYO_DIR + 'index.json') : null, pangyo && pangyoExpress ? get(PANGYO_EXPRESS_FILE) : null, pw ? get(PANGYO_WATER_FILE) : null, migeum ? get(MIGEUM_DIR + 'index.json') : null]);
+  const [index, base, tancheon, streamsData, pg, pgx, water, mg, mgw] = await Promise.all([get('index.json'), get('base.json'), get('tancheon.json'), streams ? get('streams.json') : null, pangyo ? get(PANGYO_DIR + 'index.json') : null, pangyo && pangyoExpress ? get(PANGYO_EXPRESS_FILE) : null, pw ? get(PANGYO_WATER_FILE) : null, migeum ? get(MIGEUM_DIR + 'index.json') : null, migeum && migeumWater ? get(MIGEUM_WATER_FILE) : null]); // [migeum-water]
   const pgWater = pg ? water : null; // 판교 타일 없이 판교 지류 컷만 쓰지 않음
-  return index && base ? { index: mergeMigeumIndex(mergePangyoIndex(index, pg), mg), migeum: mg, base, baseUrl, tancheon, streams: mergePangyoStreams(streamsData, pgWater), pangyo: pg, pangyoExpress: pg ? pgx : null, pangyoWater: pgWater } : null; // [pangyo-express] [pangyo-water]
+  return index && base ? { index: mergeMigeumIndex(mergePangyoIndex(index, pg), mg), migeum: mg, base, baseUrl, tancheon, streams: mergePangyoStreams(streamsData, pgWater), pangyo: pg, pangyoExpress: pg ? pgx : null, pangyoWater: pgWater, migeumWater: mg ? mgw : null } : null; // [pangyo-express] [pangyo-water] [migeum-water]
 }
 // [corridor] 탄천 지형: 코리더가 켜졌을 때만 라이브 terrain.json 뒤에 수내→잠실 축/단면을 이어 붙인다(라이브 구간 값은 그대로)
 export function corridorTerrainData(terrainData, corridorData) {
   if (!terrainData || !corridorData?.tancheon) return terrainData;
   const T0 = mergeTancheon(terrainData, corridorData.tancheon);
   if (T0 === terrainData) return T0;
-  const T = attachMainDrop(T0, corridorData.pangyoWater); // [pangyo-water] 정자→판교 탄천 낙차 (없으면 T0 그대로)
+  const T = attachMainDrop(applyMigeumBank(T0, corridorData.migeumWater, terrainData), corridorData.pangyoWater); // [migeum-water] 미금 둑 위치 (없으면 T0 그대로) // [pangyo-water] 정자→판교 탄천 낙차 (없으면 T0 그대로)
   corridorData.terrainT = T;
   // [streams] 지류는 코리더 본류 축이 붙었을 때만 (합류 높이가 본류 단면에 기대므로)
   return corridorData.streams?.streams?.length ? { ...T, streams: corridorData.streams } : T;
@@ -69,12 +70,12 @@ export function createCorridor({ scene, corridorData, terrain, world, renderer, 
   // ---------- 탄천 구간 도로(제방·다리) : 라이브 terrain 이 다리 상판/교각/난간을 만들도록 build 전에 annotate ----------
   // [streams] 켜졌을 때(?streams=0 아님): base.ch 에 없던 탄천 본류 다리(분당수서로·여수대교 램프 등, streams.json mainBridges)도 같이 그림
   const SD = terrain?.streams ? corridorData.streams : null;
-  const ch = base.ch.concat(SD?.mainBridges || []).map((r) => ({ ...r, p: r.p.map((p) => p.slice()) }));
+  const ch = base.ch.concat(SD?.mainBridges || []).map((r) => ({ ...r, p: r.p.map((p) => p.slice()) })).concat(migeumChRoads(corridorData.migeumWater)); // [migeum-water] 미금 탄천 띠 길·돌마교
   // [streams] 지류 위 다리(타일에 br=1 로 이미 있는 길): 상판 높이·교각·난간만 terrain 이 만든다. 리본은 타일이 그대로 그림
   const streamBridges = SD ? SD.bridges.map((r) => ({ ...r, p: r.p.map((p) => p.slice()) })) : [];
   terrain?.annotate({ roads: ch.concat(streamBridges), water: [], waterLines: [], parks: base.chParks.map((p) => ({ ...p })) });
   const chMesh = roadMesh(ch); if (chMesh) root.add(chMesh);
-  const chWater = corridorData.terrainT ? channelWaterMesh(corridorData.tancheon?.water, terrain) : null; // 탄천 수면(수내→잠실)
+  const chWater = corridorData.terrainT ? channelWaterMesh(mergeMigeumWater(corridorData.tancheon?.water, corridorData.migeumWater), terrain) : null; // [migeum-water] 미금 수면도 같은 메시 // 탄천 수면(수내→잠실)
   if (chWater && terrain.mainDrop) { const g = dropWaterGeometry(chWater.geometry, terrain); if (g !== chWater.geometry) { chWater.geometry.dispose(); chWater.geometry = g; } } // [pangyo-water]
   if (chWater) root.add(chWater);
   const chGrid = new Grid(30);
