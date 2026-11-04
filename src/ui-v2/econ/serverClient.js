@@ -448,7 +448,8 @@ export function rideProvider(client, getMode, { emit = null, alias = (c) => c } 
       // 게임 택시는 경로가 정해진 뒤 결제(경로 길이 = 실제 거리) → 바로 정산
       return client.settleTaxi({ holdId: h.data.holdId, actualMeters: meters });
     };
-    if (!getMode().transitPaid) { run().catch(() => {}); return { ok: true, amount: 0, free: true }; }
+    // receiptId = 서버에 보낸 rideId → 게임 탑승 기록 fare.receiptId = 원장 요금 줄 rideId (무료·유료 같음). 교통카드 앱은 이 값으로 맞춘다.
+    if (!getMode().transitPaid) { run().catch(() => {}); return { ok: true, amount: 0, free: true, receiptId: rideId }; }
     const r = await run().catch(() => errR(ERR.NETWORK));
     if (!r.ok) {
       const error = { ...(r.error || {}), code: r.error?.code || ERR.NETWORK };
@@ -458,6 +459,6 @@ export function rideProvider(client, getMode, { emit = null, alias = (c) => c } 
       try { emit?.(ev); } catch {}
       return { ok: false, error };
     }
-    return { ok: true, receiptId: r.data.receiptId, amount: taxi ? r.data.charged : r.data.amount, free: !!r.data.free };
+    return { ok: true, receiptId: rideId, serverReceiptId: r.data.receiptId, amount: taxi ? r.data.charged : r.data.amount, free: !!r.data.free };
   };
 }

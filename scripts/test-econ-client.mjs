@@ -252,7 +252,8 @@ console.log('econ server client tests');
   assert.equal(calls[0][0], 'pay'); assert.equal(calls[0][1].meta.where, '정자역');
   mode = { transitPaid: true };
   const t = await fare.charge({ code: 'taxi.drive', mode: 'taxi', meta: { meters: 2345 } });
-  assert.equal(t.ok, true); assert.equal(t.amount, 7000); assert.equal(t.receiptId, 'rt');
+  assert.equal(t.ok, true); assert.equal(t.amount, 7000); assert.equal(t.receiptId, calls[1][1].rideId, 'game receiptId = rideId sent to server');
+  assert.equal(a.receiptId, calls[0][1].rideId, 'free mode too');
   assert.deepEqual(calls.slice(1).map((c) => c[0]), ['hold', 'settle']);
   assert.equal(calls[2][1].actualMeters, 2345);
   fakeClient.payFare = async () => ({ ok: false, error: { code: 'insufficient_balance', need: 1650, balance: 0, shortBy: 1650 } });
@@ -396,6 +397,43 @@ console.log('econ server client tests');
   assert.equal(g0.status, 'failed'); assert.equal(g0.error.code, 'not_signed_in'); assert.equal('need' in g0, false);
   fare.setPaymentProvider(null);
   ok('paid mode insufficient: game ride blocked, hook gets {ok:false,error:{code,need,balance,shortBy}}, one payment event status insufficient (bus & taxi, no hold left), direct payFare → Result only, top-up → success event, guest → status failed');
+}
+
+// ── rideId 맞춤: 게임 탑승 기록(fare.receiptId) = 서버 원장 요금 줄 rideId — 무료(e{n} 줄)·유료(원장 줄), 버스·지하철·택시 ──
+for (const paid of [false, true]) {
+  const id = paid ? 'rp' : 'rf';
+  const env = makeEnv(paid ? { ECON_PAID: '1' } : {});
+  await account(env, id);
+  if (paid) await L.appendLedger(env.DB, { accountId: id, amount: 50000, kind: 'free', reason: 'refund', idempotencyKey: `seed-${id}` }, { now: NOW });
+  const jar = { token: await S.signSession({ accountId: id, sessionVersion: 1, now: NOW }, SECRET) };
+  const c = mk(env, jar);
+  await c.getSession();
+  assert.equal((await c.getEconMode()).transitPaid, paid);
+  fare.setPaymentProvider(rideProvider(c, () => ({ transitPaid: paid })), { always: true });
+  const bus = await fare.charge({ code: 'bus.base', mode: 'bus', meta: { to: '정자역' } }); // ride/index.js: ride.fare = res → rideLog fare.receiptId
+  jar.now = NOW + 60e3;
+  const taxi = await fare.charge({ code: 'taxi.drive', mode: 'taxi', meta: { meters: 3000 } });
+  jar.now = NOW + 120e3;
+  const subId = `sub-${Math.floor(jar.now / 60000)}`; // econ-ui index.js 지하철 개찰구 = UI 가 rideId 를 만들어 payFare
+  const sub = await c.payFare({ mode: 'subway', code: 'subway.base', rideId: subId });
+  fare.setPaymentProvider(null);
+  await new Promise((r) => setTimeout(r, 30)); // 무료 모드는 서버 기록이 뒤에서 끝난다
+  assert.ok(bus.ok && taxi.ok && sub.ok);
+  assert.equal(bus.free, !paid); assert.equal(taxi.free, !paid);
+  await c.refresh();
+  const rows = (await c.getLedger({ limit: 30 })).filter((e) => e.kind === 'fare');
+  const by = Object.fromEntries(rows.map((e) => [e.mode, e]));
+  assert.equal(rows.length, 3);
+  assert.equal(by.bus.rideId, bus.receiptId, 'bus: ledger rideId = rideLog fare.receiptId');
+  assert.equal(by.taxi.rideId, taxi.receiptId, 'taxi: ledger rideId = rideLog fare.receiptId');
+  assert.equal(by.subway.rideId, subId, 'subway: ledger rideId = rideId the UI sent');
+  for (const e of rows) {
+    if (paid) { assert.match(String(e.id), /^\d+$/); assert.ok(!e.free && e.charged > 0 && e.delta === -e.charged); }
+    else { assert.match(String(e.id), /^e\d+$/); assert.ok(e.free && e.charged === 0 && e.delta === 0); }
+  }
+  // 게임이 emitTransit 에 넣는 버스 rideId(res.receiptId || bus-{at}) 도 같은 값
+  assert.equal(bus.receiptId || 'bus-x', by.bus.rideId);
+  ok(`rideId match (${paid ? 'paid' : 'free'}): bus/taxi ledger rideId = charge().receiptId (rideLog fare.receiptId), subway = UI rideId; ${paid ? 'ledger ids numeric' : 'e{n} 0-delta rows'}`);
 }
 
 console.log(`\necon client: ${n} checks passed`);
