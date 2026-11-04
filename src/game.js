@@ -71,11 +71,13 @@ import { mountGyeongbuSoon } from './world/gyeongbuSoon.js'; // [gyeongbu] 경�
 import { createServerClock } from './subway/clock.js'; // [subway-sync] 서버 시계 (같은 열차 = 같은 순간)
 import { isMobileMode } from './mobile/flag.js'; // [mobile]
 import { mountSubway, zoneLabel as subwayZoneLabel } from './subway/index.js'; // [subway] 정자역·코리더 역 출입구(실제 OSM 출구) + 지하 대합실. ?subway=0 이면 끔
+import { isUiV2 } from './ui-v2/flag.js'; // [ui-v2] ?ui=v2 게임 UI v2 (기본 꺼짐)
 
 const params = new URLSearchParams(location.search);
 const mobileMode = isMobileMode(); // [mobile] 모바일 모드(핸드폰·?mobile=1): 가벼운 렌더 + 모바일 HUD
 const region = getCurrentRegion();
 const shot = params.has('shot');
+const uiV2 = !shot && isUiV2() ? await import('./ui-v2/index.js') : null; // [ui-v2] 시작화면 → 월드 → 역 → 입장 → 로딩 → HUD
 const autoEnter = params.get('enter') === '1';
 const passportEnter = params.get('passport') === '1';
 const fromRegionId = params.get('from');
@@ -141,6 +143,7 @@ let passportQueued = false;
 const handleGateEnter = (chosenRegionId = region.id, gateOpts = undefined) => {
   const hasPassport = isPassportActive();
   corridorAt = gateOpts?.at || null; // [corridor]
+  uiV2?.noteEnter(chosenRegionId || region.id, corridorAt); // [ui-v2] 마지막 역(이어하기) · 입장 카드 역 이름
   explicitPick = true;
   if (chosenRegionId && chosenRegionId !== region.id) {
     const targetRegion = getRegion(chosenRegionId);
@@ -197,6 +200,7 @@ if (shot) document.body.classList.remove('in-gate');
 else if (lockedBeforeOpen) openWorldGate({ onEnter: handleGateEnter });
 else if (passportEnter && readSavedPassport()) passportQueued = true;
 else if (autoEnter) lobbyQueued = true;
+else if (uiV2) uiV2.openEntryFlow({ region, at: corridorAt, openGate: () => openWorldGate({ onEnter: handleGateEnter }), enter: handleGateEnter }); // [ui-v2]
 else openWorldGate({ onEnter: handleGateEnter });
 
 const worldFile = region.dataFiles?.world || 'jeongja.json';
@@ -1149,6 +1153,7 @@ joinWithPassport = async () => {
 startLobby = async () => {
   document.body.classList.remove('in-gate');
   document.body.classList.add('in-lobby');
+  if (uiV2) await uiV2.beforeLobby({ at: corridorAt, go: (id) => travel?.go(id) }); // [ui-v2] 입장 카드 뒤 = 고른 역 장면 (로딩 화면 아래에서 이동)
   if (arrivalFlightScreen) {
     const s = arrivalFlightScreen;
     arrivalFlightScreen = null;
@@ -2278,7 +2283,7 @@ let moveSpeed = 0;
 function frame() {
   lastFrameAt = performance.now();
   timer.update(); const dt = Math.min(timer.getDelta(), 0.1);
-  if (document.body.classList.contains('in-gate') || document.body.classList.contains('in-lobby')) {
+  if ((document.body.classList.contains('in-gate') || document.body.classList.contains('in-lobby')) && !uiV2?.peekFrame()) { // [ui-v2] 입장 카드 뒤 역 장면: 잠깐만 그리고 멈춤
     input.consumeLook();
     requestAnimationFrame(frame);
     return;

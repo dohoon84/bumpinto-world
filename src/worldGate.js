@@ -46,7 +46,7 @@ function formatHms(ms) {
   return { hh, mm, ss, text: `${hh}:${mm}:${ss}` };
 }
 
-function phoneStatsUrl(regionId = 'jeongja') {
+export function phoneStatsUrl(regionId = 'jeongja') {
   const params = new URLSearchParams(location.search);
   const smsParam = params.get('sms');
   const q = `?region=${encodeURIComponent(regionId)}`;
@@ -142,6 +142,10 @@ function lonLat(lon, lat, radius) {
     radius * Math.sin(phi) * Math.sin(theta),
   );
 }
+
+// [ui-v2] ?ui=v2 일 때 ui-v2/gate.js 가 지구본 위에 게임 패널(월드 선택 · 역 선택)을 얹는다. 없으면 null → 기존 그대로
+let gateDecorator = null;
+export function setGateDecorator(fn) { gateDecorator = typeof fn === 'function' ? fn : null; }
 
 export function openWorldGate({ onEnter }) {
   const root = document.getElementById('world-gate');
@@ -323,6 +327,7 @@ export function openWorldGate({ onEnter }) {
   globe.rotation.y = -Math.atan2(initialMarker.spot.x, initialMarker.spot.z);
   globe.rotation.x = Math.max(-0.35, Math.min(0.35, (initialMarker.region.lat - 28) * 0.006));
 
+  let decor = null; // [ui-v2]
   let alive = true, raf = 0, drag = null, moved = 0, lastT = 0, frameNo = 0, toastTimer = 0, statsTimer = 0, countdownTimer = 0;
   let targetRotY = null;
   let targetRotX = null;
@@ -695,7 +700,15 @@ export function openWorldGate({ onEnter }) {
       return;
     }
     trackEvent('globe_enter_region', { region: chosen.id });
+    teardown();
+    if (extra) onEnter(chosen.id, extra); // [corridor] { at: 역 id }
+    else onEnter(chosen.id);
+  };
+  // 지구본을 닫고 자원을 놓는다 (입장 / [ui-v2] ‹ 시작화면)
+  function teardown() {
+    if (!alive) return;
     alive = false;
+    decor?.dispose?.(); // [ui-v2]
     unsubLang();
     clearTimeout(toastTimer);
     clearInterval(statsTimer);
@@ -709,9 +722,7 @@ export function openWorldGate({ onEnter }) {
     earth.material.map.dispose();
     earth.material.dispose();
     root.hidden = true;
-    if (extra) onEnter(chosen.id, extra); // [corridor] { at: 역 id }
-    else onEnter(chosen.id);
-  };
+  }
 
   function showStarbaseCountdownToast() {
     trackEvent('starbase_countdown_click');
@@ -920,6 +931,8 @@ export function openWorldGate({ onEnter }) {
       }
     }
   });
+  // [ui-v2] 게임 패널 얹기 (기본 꺼짐: gateDecorator 가 null)
+  decor = gateDecorator ? gateDecorator({ root, corridorGlobe, enter, focus: focusRegionOnGlobe, teardown }) : null;
   canvas.addEventListener('pointercancel', clearDrag);
   canvas.addEventListener('lostpointercapture', clearDrag);
   addEventListener('blur', clearDrag);
