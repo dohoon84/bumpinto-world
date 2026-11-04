@@ -3,7 +3,9 @@
 //         코리더 보행 NPC 의 crowd(부품별 InstancedMesh)에 같이 등록된다(traffic.js extraCrowd 훅) → draw call 추가 0.
 //         소품·라벨·말풍선·로고 없음. 위치: 미금역 출입구 1–8번 앞 · 보도(migeum/npc.json walk) · 1층 상가 앞(stops)
 //         밀도: migeumNpcData.js 밀도표(게임 시계). 시점 140m 밖은 그리지 않고 230m 밖은 재배치. 미금 박스에서 멀면 아무것도 안 함
-//   차량: jz-traffic(정자 일반 차량, src/entities/jzTraffic.js JzCars)을 그대로 상속해 '미금 차도 그래프'(migeum/npc.json drive)로 돌린다.
+//   차량: jz-traffic(정자 일반 차량, src/entities/jzTraffic.js JzCars)을 그대로 상속해 '미금 차도 그래프'로 돌린다.
+//         그래프 = 공유 migeum/roads.json 의 '미금 몫' 조각(migeumRoads.js migeumLocalGraph — 코리더 차량·택시(#24)와 같은 파일·같은 주인 규칙).
+//         ?migeumtaxi 켜짐(기본): 돌마로·성남대로 남쪽 연장 7 way 는 코리더 차량 몫이라 빠지고 그 끝이 포털. ?migeumtaxi=0 이면 미금 차량이 맡는다.
 //         같은 차로·일방통행·커브 감속·앞차 추종·교차로 양보·무겹침 안전망·배달 오토바이 정차. 영역 = 미금 박스(meta.box):
 //         박스 경계 노드와 코리더 차량이 다니는 큰길과 만나는 노드는 '포털' — 그 앞에서 서서히 사라지고 박스 안 다른 곳에 나타남.
 //         코리더 차량·버스는 장애물로 본다(읽기만, 양보). 렌더: 11종 모델을 BatchedMesh 1개(공유 재질·인스턴스 색) → draw call 1
@@ -15,6 +17,7 @@ import { KINDS, kindGeometry } from '../entities/vehicleKinds.js';
 import { watchEvening } from '../evening.js';
 import { gameHour } from '../weather.js';
 import { MIGEUM_DIR } from './migeum.js';
+import { MIGEUM_ROADS_FILE, migeumCorridorRoadsOn, migeumLocalGraph } from './migeumRoads.js'; // [migeum-roads]
 import { MAX_PEDS, pedDensityAt, parseMigeumCars } from './migeumNpcData.js';
 
 export const MIGEUM_NPC_FILE = MIGEUM_DIR + 'npc.json';
@@ -30,14 +33,21 @@ export function migeumNpcForce(search = typeof location !== 'undefined' ? locati
 const boxDist = (b, x, z) => Math.hypot(Math.max(b.x0 - x, 0, x - b.x1), Math.max(b.z0 - z, 0, z - b.z1));
 const WAKE_R = 250;
 
-// ---------- 공유 로더: npc.json 은 박스 근처에 처음 올 때 한 번 ----------
-export function migeumNpcLoader({ mg, baseUrl = '', fetchJson = null }) {
+// npc.json(보도·상가) + roads.json(공유 차도 그래프) → { ...npc, drive: 미금 몫 그래프 } . ext: 미금 연장을 코리더 차량이 맡는가
+export function withMigeumDrive(npc, roads, { ext = migeumCorridorRoadsOn() } = {}) {
+  if (!npc || !roads?.ways?.length) return null;
+  const drive = migeumLocalGraph(roads, { ext });
+  return drive.nodes.length ? { ...npc, drive, ext } : null;
+}
+
+// ---------- 공유 로더: npc.json · roads.json 은 박스 근처에 처음 올 때 한 번 ----------
+export function migeumNpcLoader({ mg, baseUrl = '', fetchJson = null, ext = migeumCorridorRoadsOn() }) {
   const box = mg?.meta?.box; let p = null, data = null;
   const get = fetchJson || ((f) => fetch(baseUrl + f).then((r) => (r.ok ? r.json() : null)).catch(() => null));
   return {
-    box, get data() { return data; },
+    box, ext, get data() { return data; },
     near: (x, z, r = WAKE_R) => !!box && boxDist(box, x, z) < r,
-    load() { return (p ||= Promise.resolve(get(MIGEUM_NPC_FILE)).then((j) => (data = j?.drive?.nodes?.length ? j : null))); },
+    load() { return (p ||= Promise.all([get(MIGEUM_NPC_FILE), get(MIGEUM_ROADS_FILE)]).then(([j, roads]) => (data = withMigeumDrive(j, roads, { ext })))); },
   };
 }
 
@@ -200,7 +210,7 @@ export class MigeumCars extends JzCars {
   constructor({ npc, mg = null, transit = null, world = null, base, hour = () => gameHour(), extra = null, seed = 41 }) {
     const box = npc.meta.box, st = npc.meta.station;
     const drive = { nodes: npc.drive.nodes, ways: npc.drive.ways, exits: (mg?.stations || []).flatMap((s) => s.exits || []) };
-    PENDING = new Set((npc.drive.portals || []).map((i) => pkey(npc.drive.nodes[i][0], npc.drive.nodes[i][1])));
+    PENDING = new Map((npc.drive.portals || []).map((i, k) => [pkey(npc.drive.nodes[i][0], npc.drive.nodes[i][1]), npc.drive.clear?.[k] || 0]));
     try {
       super({ drive, data: { meta: { bboxLocal: box }, station: st }, transit, world, base, hour, stops: npc.stops || [], extra, seed });
     } finally { this._pk = PENDING; PENDING = null; }
@@ -208,6 +218,15 @@ export class MigeumCars extends JzCars {
   }
   // 박스 안이고 포털(박스 경계·코리더 큰길과 만나는 노드)이 아니어야 '영역 안'
   _inBox(x, z, m = 0) { const pk = this._pk || PENDING; return super._inBox(x, z, Math.min(m, 0)) && !(pk && pk.has(pkey(x, z))); }
+  // 코리더 몫 큰길과 만나는 포털: 차 앞머리가 그 길 띠(폭/2 + 1 m)에 닿기 전에 사라진다 → 두 시스템 차가 한 차로를 나눠 쓰지 않음
+  _stepVeh(t, dt) {
+    const e = t.leaving && !(t.fade > 0) ? this.nodes[t.node] : null; // 경로 끝 = 마지막에 붙인 노드(포털)
+    if (e) {
+      const c = this._pk.get(pkey(e.x, e.z)) || 0;
+      if (c > 0 && t.cum[t.cum.length - 1] - t.s < c + 1 + (t.K?.L || 4.6) / 2) { this.stats0.portalExits = (this.stats0.portalExits || 0) + 1; this._despawn(t); if (!t.retire) this._spawnVeh(t.i, false); else t.retire = false; return; }
+    }
+    return super._stepVeh(t, dt);
+  }
 }
 
 // 배치 재질: vehicleMaterial 과 같은 셰이더 수정(차체만 인스턴스 색 · 저녁 등 발광)을 BatchedMesh 색(getBatchingColor)으로
