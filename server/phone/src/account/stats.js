@@ -3,6 +3,7 @@
 // 슈퍼·트럭은 실제 최고속도까지 다 세면 기록이 튀므로 상한을 별도로 둔다(칭호 기록용, 보상 아님).
 // 이 파일은 cloudflare:workers 를 가져오지 않는다.
 import { kstDate } from "./flags.js";
+import { MOVE } from "./econ.js"; // [economy] 인정 이동 시간(보상용) 조건
 
 export const MODE_CAP_MPS = Object.freeze({
   walk: 4.62,
@@ -15,7 +16,7 @@ export const MODE_CAP_MPS = Object.freeze({
 });
 export const MODES = Object.keys(MODE_CAP_MPS);
 const GAP_SEC = 5; // 이보다 오래 소식이 없으면 그 구간은 버림
-const TELEPORT_M = 50; // 한 번에 이만큼 넘게 + 상한 1.5배 넘게 움직이면 순간이동으로 보고 버림
+export const TELEPORT_M = 50; // 한 번에 이만큼 넘게 + 상한 1.5배 넘게 움직이면 순간이동으로 보고 버림
 const IDLE_M = 0.05;
 const ADMIN_VEH = new Set([900, 901]);
 
@@ -44,47 +45,81 @@ export function classifyMode(s, vehMode = () => null) {
 export class MoveStats {
   constructor() {
     this.last = null; // { x, z, t, mode }
-    this.acc = new Map(); // `${date}|${mode}` → { m, s }
-    this.dropped = { teleport: 0, gap: 0 };
+    this.acc = new Map(); // `${date}|${mode}` → { m, s, cs }  (cs = [economy] 인정 초, 보상용)
+    this.dropped = { teleport: 0, gap: 0, fast: 0, idleWin: 0 };
+    this.win = null; // [economy] { x, z, t, pend: Map(key → 초) } — 60초 창의 순변위를 본다(제자리 맴돌기 제외)
+  }
+
+  // [economy] 창 끝: 순변위가 충분하면 보류한 초를 인정 초(cs)로 옮긴다. 아니면 버린다.
+  #closeWindow(x, z, now, force = false) {
+    const w = this.win;
+    if (!w) return;
+    if (!force && now - w.t < MOVE.windowSec * 1000) return;
+    if (Math.hypot(x - w.x, z - w.z) >= MOVE.windowMinNetM) {
+      for (const [key, sec] of w.pend) {
+        const cur = this.acc.get(key) || { m: 0, s: 0, cs: 0 };
+        cur.cs = (cur.cs || 0) + sec;
+        this.acc.set(key, cur);
+      }
+    } else if (w.pend.size) this.dropped.idleWin++;
+    this.win = { x, z, t: now, pend: new Map() };
+  }
+
+  #resetWindow(x, z, now) {
+    this.win = Number.isFinite(x) ? { x, z, t: now, pend: new Map() } : null;
   }
 
   /** @returns {number} 이번에 센 거리(m) */
   push({ x, z, mode, now = Date.now() }) {
     if (!Number.isFinite(x) || !Number.isFinite(z)) return 0;
     const prev = this.last;
+    // [economy] 표본 간격 하한(초당 표본 수 제한). 너무 촘촘한 표본은 통째로 무시(직전 표본 유지)
+    if (prev && now - prev.t < MOVE.minSampleMs) return 0;
     this.last = { x, z, t: now, mode };
-    if (!prev || !mode || prev.mode !== mode) return 0;
+    if (!prev || !mode || prev.mode !== mode) { this.#resetWindow(x, z, now); return 0; }
     const dt = (now - prev.t) / 1000;
     if (!(dt > 0)) return 0;
-    if (dt > GAP_SEC) { this.dropped.gap++; return 0; }
+    if (dt > GAP_SEC) { this.dropped.gap++; this.#resetWindow(x, z, now); return 0; }
     const d = Math.hypot(x - prev.x, z - prev.z);
-    if (d < IDLE_M) return 0;
+    if (d < IDLE_M) { this.#closeWindow(x, z, now); return 0; }
     const cap = MODE_CAP_MPS[mode] || 0;
     if (!cap) return 0;
-    if (d > Math.max(TELEPORT_M, cap * dt * 1.5)) { this.dropped.teleport++; return 0; }
+    if (d > Math.max(TELEPORT_M, cap * dt * 1.5)) { this.dropped.teleport++; this.#resetWindow(x, z, now); return 0; }
     const counted = Math.min(d, cap * dt);
     const key = `${kstDate(now)}|${mode}`;
-    const cur = this.acc.get(key) || { m: 0, s: 0 };
+    const cur = this.acc.get(key) || { m: 0, s: 0, cs: 0 };
     cur.m += counted;
     cur.s += dt;
     this.acc.set(key, cur);
+    // [economy] 속도 상한을 넘은 구간(Shift 질주 등)은 인정 시간에서 뺀다. 거리 통계는 상한으로 잘라 그대로 센다.
+    if (!this.win) this.#resetWindow(prev.x, prev.z, prev.t);
+    if (d <= cap * dt * 1.02) this.win.pend.set(key, (this.win.pend.get(key) || 0) + dt);
+    else this.dropped.fast++;
+    this.#closeWindow(x, z, now);
     return counted;
   }
 
-  /** 정수 m·초만 떼어 내고 소수점 나머지는 다음 번으로 남긴다. */
+  /** 정수 m·초만 떼어 내고 소수점 나머지는 다음 번으로 남긴다. cs = 인정 초(보상용). */
   drain() {
     const rows = [];
     for (const [key, v] of this.acc) {
       const m = Math.floor(v.m);
       const s = Math.floor(v.s);
-      if (m <= 0 && s <= 0) continue;
+      const cs = Math.floor(v.cs || 0);
+      if (m <= 0 && s <= 0 && cs <= 0) continue;
       const [date, mode] = key.split("|");
-      rows.push({ date, mode, m, s });
+      rows.push({ date, mode, m, s, cs });
       v.m -= m;
       v.s -= s;
+      v.cs = (v.cs || 0) - cs;
     }
-    for (const [key, v] of this.acc) if (v.m < 1 && v.s < 1 && !key.startsWith(kstDate())) this.acc.delete(key);
+    for (const [key, v] of this.acc) if (v.m < 1 && v.s < 1 && (v.cs || 0) < 1 && !key.startsWith(kstDate())) this.acc.delete(key);
     return rows;
+  }
+
+  /** [economy] 연결이 끝날 때: 진행 중인 창을 지금 위치로 닫는다(순변위 조건은 그대로). */
+  finish() {
+    if (this.last && this.win) this.#closeWindow(this.last.x, this.last.z, this.last.t, true);
   }
 
   toJSON() {
@@ -93,7 +128,7 @@ export class MoveStats {
 
   static from(json) {
     const ms = new MoveStats();
-    if (Array.isArray(json?.acc)) for (const [k, v] of json.acc.slice(0, 32)) ms.acc.set(String(k), { m: +v?.m || 0, s: +v?.s || 0 });
+    if (Array.isArray(json?.acc)) for (const [k, v] of json.acc.slice(0, 32)) ms.acc.set(String(k), { m: +v?.m || 0, s: +v?.s || 0, cs: +v?.cs || 0 });
     return ms;
   }
 }
@@ -120,6 +155,17 @@ export async function flushMoves(db, accountId, rows, now = Date.now()) {
     );
   }
   if (stmts.length) await db.batch(stmts);
+  // [economy] 인정 초는 0002 마이그레이션의 별도 표에 따로 쓴다(표가 아직 없어도 위 통계는 이미 들어감).
+  const credit = rows.filter((r) => MODE_CAP_MPS[r.mode] && (r.cs | 0) > 0);
+  if (credit.length) {
+    try {
+      await db.batch(credit.map((r) =>
+        db.prepare(
+          `INSERT INTO stat_credit_daily (account_id, kst_date, mode, credited_sec) VALUES (?, ?, ?, ?)
+           ON CONFLICT(account_id, kst_date, mode) DO UPDATE SET credited_sec = stat_credit_daily.credited_sec + excluded.credited_sec`,
+        ).bind(accountId, r.date, r.mode, r.cs | 0)));
+    } catch { /* 0002 미적용 — 보상용 인정 초만 빠짐 */ }
+  }
   return stmts.length / 2;
 }
 

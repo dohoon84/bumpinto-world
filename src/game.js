@@ -844,6 +844,12 @@ presence.on('welcome', (m) => {
   if (Array.isArray(m.gifts)) replaceHoldings(m.gifts);
   inventory?.refresh();
 });
+// [economy] 산 탈것: 구매 성공 → 서버에 보유 다시 요청 → 받은 보유로 교체(재접속 없이 바로 탈 수 있음)
+presence.on('holdings', (m) => {
+  if (Array.isArray(m.gifts)) replaceHoldings(m.gifts);
+  inventory?.refresh();
+});
+addEventListener('bw:econ-owned', () => presence.syncGifts?.());
 let giftWait = 0;
 presence.on('gift', (m) => {
   clearTimeout(giftWait);

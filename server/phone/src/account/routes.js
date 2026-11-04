@@ -4,10 +4,12 @@
 //   POST /auth/link    { deviceId }            → (로그인 상태) 이 기기를 계정에 붙이고 이전
 //   POST /auth/logout  { all? }                → 쿠키 삭제. all:true 면 모든 기기의 세션 무효(session_version+1)
 //   GET  /auth/me                              → 계정, 기기(가림), 대표 캐릭터 id, 잔액(경제 켜짐), 칭호용 기록 요약
+//   POST /auth/dev     { name?, sub?, deviceId } → [economy] 로컬 시험용 가짜 로그인. DEV_LOGIN=1 이고 요청 주소·Origin 이 localhost/사설 LAN 일 때만(배포 환경 404)
 // 쿠키를 쓰므로 CORS 는 허용 목록의 출처만, Allow-Credentials: true. "*" 는 쓰지 않는다.
 import { verifyGoogleIdToken } from "./google.js";
 import { clearSessionCookie, sessionCookie, sessionFromRequest, signSession } from "./session.js";
-import { accountsEnabled, accountsReady, economyEnabled, statsEnabled } from "./flags.js";
+import { accountsEnabled, accountsReady, devLoginAllowed, econFeatures, economyEnabled, devLoginOn, isPrivateDevHost, statsEnabled } from "./flags.js";
+import { econMode } from "./economy.js";
 import {
   accountForSession,
   devicesOf,
@@ -34,6 +36,7 @@ export function credentialedOrigin(request, env) {
     const u = new URL(origin);
     const host = u.hostname.replace(/^\[|\]$/g, "");
     if (host === "localhost" || host === "127.0.0.1" || host === "::1") return origin;
+    if (devLoginOn(env) && u.protocol === "http:" && isPrivateDevHost(host)) return origin; // 로컬 시험: 같은 와이파이 아이폰(http://172.x)
     if (u.protocol !== "https:") return "";
     if (host === "bumpinto.world" || host.endsWith(".bumpinto.world")) return origin;
     if (host === "jeongja3d.pages.dev" || host.endsWith(".jeongja3d.pages.dev")) return origin;
@@ -137,7 +140,10 @@ export async function handleAuth(request, env, url, deps = {}) {
   if (path === "/auth/config" && request.method === "GET") {
     const ready = accountsReady(env);
     return json(
-      { ok: true, enabled: ready, clientId: ready ? String(env.GOOGLE_CLIENT_ID).trim() : "", economy: economyEnabled(env) },
+      {
+        ok: true, enabled: ready, clientId: ready ? String(env.GOOGLE_CLIENT_ID).trim() : "", economy: economyEnabled(env),
+        econ: { mode: econMode(env), features: econFeatures(env) }, devLogin: devLoginAllowed(env, url, request.headers.get("Origin") || ""),
+      },
       200,
       cors,
     );
@@ -153,16 +159,25 @@ export async function handleAuth(request, env, url, deps = {}) {
   const db = env.DB;
   const waitUntil = deps.waitUntil;
   try {
-    if (path === "/auth/google" && request.method === "POST") {
+    const isDev = path === "/auth/dev" && request.method === "POST" && devLoginAllowed(env, url, request.headers.get("Origin") || "");
+    if ((path === "/auth/google" && request.method === "POST") || isDev) {
       const { body, error } = await readBody(request);
       if (error) return json({ ok: false, error }, 400, cors);
-      const verified = await verifyGoogleIdToken(body.credential, {
-        clientId: String(env.GOOGLE_CLIENT_ID).trim(),
-        jwks: jwksFor(deps),
-        now,
-      });
-      if (!verified.ok) return json({ ok: false, error: verified.error }, 401, cors);
-      const { account, created } = await upsertAccount(db, verified.claims, now);
+      let claims;
+      if (isDev) {
+        // 로컬 시험용: 구글 없이 고정 sub 로 계정을 만든다(google_sub = "dev:<sub>" — 실제 구글 sub 는 숫자라 겹치지 않음)
+        const sub = String(body.sub || "local").replace(/[^\w.-]/g, "").slice(0, 40) || "local";
+        claims = { sub: `dev:${sub}`, email: `${sub}@dev.localhost`, name: String(body.name || `Dev ${sub}`).slice(0, 40) };
+      } else {
+        const verified = await verifyGoogleIdToken(body.credential, {
+          clientId: String(env.GOOGLE_CLIENT_ID).trim(),
+          jwks: jwksFor(deps),
+          now,
+        });
+        if (!verified.ok) return json({ ok: false, error: verified.error }, 401, cors);
+        claims = verified.claims;
+      }
+      const { account, created } = await upsertAccount(db, claims, now);
       if (!account) return json({ ok: false, error: "server" }, 500, cors);
       const linked = await linkAndMigrate(env, account.id, body.deviceId, now, waitUntil);
       let grants = null;

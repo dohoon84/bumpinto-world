@@ -1,0 +1,27 @@
+/* [accounts] 입장 카드 계정 모드 (lobby.js · lobbyAccount.js). 게스트 카드는 건드리지 않는다. */
+#lobby-card.is-acct-checking .lobby-tabs,
+#lobby-card.is-acct-checking #lobby-pane-join,
+#lobby-card.is-acct-checking #lobby-pane-login,
+#lobby-card.is-acct-checking #lobby-go { visibility: hidden; }
+#lobby-card.is-account .lobby-tabs,
+#lobby-card.is-account #lobby-pane-login,
+#lobby-card.is-account .lobby-pin-field,
+#lobby-card.is-account #lobby-phone,
+#lobby-card.is-account .v2-phone-row,
+#lobby-card.is-account .v2-ghint { display: none !important; }
+#lobby-card.is-account .lobby-row2 { grid-template-columns: 1fr; }
+#lobby-acct[hidden] { display: none !important; }
+#lobby-acct { display: flex; flex-direction: column; gap: 8px; margin: 6px 0 4px; }
+#lobby-acct .lobby-acct-who { display: flex; flex-direction: column; gap: 4px; padding: 12px 14px; border-radius: 12px; background: rgba(18, 32, 51, .06); border: 1px solid rgba(18, 32, 51, .12); }
+#lobby-acct .lobby-acct-who b { font-size: 22px; font-weight: 900; line-height: 1.2; color: #122033; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#lobby-acct .lobby-acct-who span { font-size: 12.5px; font-weight: 700; color: #1f5fbf; }
+#lobby-acct .sub-btn { margin-top: 0; }
+#lobby-card.is-account #lobby-go { font-size: 17px; padding-top: 14px; padding-bottom: 14px; }
+/* ui-v2 PC 다크 패널 */
+body.ui-v2:not(.mobile) #lobby-acct .lobby-acct-who { background: rgba(0, 0, 0, .22); border-color: rgba(255, 255, 255, .16); }
+body.ui-v2:not(.mobile) #lobby-acct .lobby-acct-who b { color: #fff; font-size: 26px; }
+body.ui-v2:not(.mobile) #lobby-acct .lobby-acct-who span { color: var(--v2-cyan, #7fe3ff); }
+body.ui-v2:not(.mobile) #lobby-card.is-account #lobby-go { height: 56px; font-size: 18px; }
+/* 모바일(가로): 이름 상자를 줄여 입장 버튼이 한 화면에 */
+body.mobile #lobby-acct .lobby-acct-who { padding: 8px 12px; }
+body.mobile #lobby-acct .lobby-acct-who b { font-size: 18px; }

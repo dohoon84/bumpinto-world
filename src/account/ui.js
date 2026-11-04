@@ -4,26 +4,10 @@
 import { tr, onLangChange } from '../i18n.js';
 import { accountApi } from './api.js';
 import { GOOGLE_CLIENT_ID } from './flags.js';
+import { loadGis, devLogin, isLocalHost } from './signin.js';
 import './account.css';
 
 const DEVICE_KEY = 'jeongja3d.device'; // src/sms.js 와 같은 키
-const GIS_SRC = 'https://accounts.google.com/gsi/client';
-
-let gisPromise = null;
-function loadGis() {
-  if (window.google?.accounts?.id) return Promise.resolve(window.google);
-  if (!gisPromise) {
-    gisPromise = new Promise((resolve, reject) => {
-      const s = document.createElement('script');
-      s.src = GIS_SRC;
-      s.async = true;
-      s.onload = () => (window.google?.accounts?.id ? resolve(window.google) : reject(new Error('gis')));
-      s.onerror = () => { gisPromise = null; reject(new Error('gis')); };
-      document.head.appendChild(s);
-    });
-  }
-  return gisPromise;
-}
 
 const LINK_TEXT = {
   linked: () => tr('이 PC 를 계정에 연결했어요.', 'This PC is now linked to your account.'),
@@ -111,6 +95,8 @@ export function mountAccount({ sms } = {}) {
         'Sign in to keep the same character, gifts and photos across PCs. You can keep playing as a guest.',
       )}</p>`;
       actions.append(button(tr('구글로 계속', 'Continue with Google'), startLogin, 'primary'));
+      // 로컬 시험(localhost·같은 와이파이 아이폰): 서버 DEV_LOGIN=1 일 때만 — 구글은 http LAN 출처를 받지 않음
+      if (state.cfg?.devLogin && isLocalHost()) actions.append(button(tr('개발용 로그인 (로컬)', 'Dev sign-in (local)'), startDevLogin));
     }
     actions.append(button(tr('닫기', 'Close'), () => toggle(false)));
     $('.acct-msg').textContent = state.msg;
@@ -159,6 +145,7 @@ export function mountAccount({ sms } = {}) {
     state.msg = [linkMsg, granted ? tr(`${fmt(granted)} bum 을 받았어요.`, `You received ${fmt(granted)} bum.`) : ''].filter(Boolean).join(' ');
     $('.acct-gis').hidden = true;
     await refresh();
+    try { dispatchEvent(new CustomEvent('bw:econ-changed', { detail: { reason: 'login' } })); } catch {}
     if (r.link?.status !== 'linked_to_other_account') adoptIfNeeded(r.primaryUserId);
   }
 
@@ -188,6 +175,20 @@ export function mountAccount({ sms } = {}) {
     host.replaceChildren();
     google.accounts.id.renderButton(host, { type: 'standard', theme: 'outline', size: 'medium', text: 'continue_with', shape: 'pill' });
     google.accounts.id.prompt();
+  }
+
+  async function startDevLogin() {
+    state.busy = true;
+    state.msg = tr('확인 중…', 'Checking…');
+    render();
+    const r = await devLogin(deviceId());
+    state.busy = false;
+    if (!r.ok) { state.msg = errText(r.error); render(); return; }
+    const granted = (r.granted || []).reduce((a, g) => a + g.amount, 0);
+    state.msg = granted ? tr(`${fmt(granted)} bum 을 받았어요.`, `You received ${fmt(granted)} bum.`) : '';
+    await refresh();
+    try { dispatchEvent(new CustomEvent('bw:econ-changed', { detail: { reason: 'login' } })); } catch {}
+    if (r.link?.status !== 'linked_to_other_account') adoptIfNeeded(r.primaryUserId);
   }
 
   async function logout() {

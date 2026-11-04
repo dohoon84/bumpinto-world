@@ -1,8 +1,9 @@
 // [accounts] 세션 쿠키 bw_s — 서버만 아는 SESSION_SECRET 으로 HMAC-SHA256 서명한 짧은 토큰.
 //   값 = "v1.<base64url(JSON {a, sv, iat, exp})>.<base64url(HMAC)>"
 //   a = 계정 id, sv = 계정의 session_version(전체 로그아웃 때 올려서 예전 쿠키를 무효로 만든다)
-// 구글 토큰은 담지 않는다. 쿠키: HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=30일.
+// 구글 토큰은 담지 않는다. 쿠키: HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=30일. (로컬 DEV_LOGIN+SESSION_COOKIE_INSECURE 때만 Secure 없음)
 // 이 파일은 cloudflare:workers 를 가져오지 않는다 — node 단위 테스트가 그대로 불러 쓴다.
+import { insecureDevCookie } from "./flags.js";
 import { b64urlToBytes, bytesToB64url } from "./google.js";
 
 export const SESSION_COOKIE = "bw_s";
@@ -75,7 +76,7 @@ export function sessionCookie(value, env, maxAgeSec = SESSION_TTL_SEC) {
     "Path=/",
     `Max-Age=${Math.max(0, maxAgeSec | 0)}`,
     "HttpOnly",
-    "Secure",
+    ...(insecureDevCookie(env) ? [] : ["Secure"]), // 로컬 http(LAN) 시험 때만 뺀다 — flags.js insecureDevCookie
     `SameSite=${sameSiteOf(env)}`,
     ...(domain && /^[a-z0-9.-]+$/i.test(domain) ? [`Domain=${domain}`] : []),
   ].join("; ");
