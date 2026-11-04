@@ -52,6 +52,11 @@ function onFoot(j) {
   return true;
 }
 
+// [econ-mobile] 모바일 시작화면(src/mobile/landing.js)은 PC 처럼 gateOpts 로 넘길 수 없어서, 입장 직전 한 번 넘겨준다 (game.js completeWorldJoin 이 꺼냄)
+let handoff = null;
+export const setResumePlace = (p) => { handoff = p || null; };
+export const takeResumePlace = () => { const p = handoff; handoff = null; return p; };
+
 let started = false;
 /** initUiV2 가 한 번 부른다. getWho = () => who (econ 세션을 따라감) */
 export function startResumeSaver(region, getWho) {
