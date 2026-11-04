@@ -1,5 +1,6 @@
 // [migeum-bus] 미금 버스 탑승 e2e: npm run ride:e2e:migeum
-//   ?bus=sim · ?ws=mock. 미금을 지나는 노선을 양방향으로 탄다(기본 G8110, 7007-1 — E2E_REFS=G8110,7007-1).
+//   ?bus=sim · ?ws=mock. 미금을 지나는 노선을 양방향으로 탄다(기본 G8110, 7007-1 — E2E_REFS=G8110,7007-1, E2E_DIRS=0,1).
+//   정자 쪽 경로는 dir 이 없을 수 있음(transit.json) — 게임 contOf 처럼 끝점(8m)으로만 잇는다.
 //     북쪽 방향(dir 0): 미금 첫 정류장(코리더) 탑승 → 미금 정류장들 → 정자 bbox 경계 이어 타기 → 정자 첫 정류장에서 하차(E)
 //     남쪽 방향(dir 1): 정자 마지막 정류장 탑승 → 경계 이어 타기 → 미금 정류장들 → 게임 범위 끝 종점 하차
 //   매 샘플: 차 방향 vs 도로 접선 < 20°, 행렬식 > 0·위쪽 ≈ +Y, 한 샘플 하강 ≤ 0.5m, 상판 위 Y ≥ 상판 (e2e-ride-8110 과 같은 기준)
@@ -86,14 +87,14 @@ async function plan(ref, dir) {
     if (!cps.length) return { err: `코리더 시뮬에 미금 ${ref} dir${dir} 없음` };
     const nm = (bs, P, i) => bs.stopById.get(P.stops[i].stop)?.name;
     if (dir === 0) { // 미금 → 정자: 정자 bbox 경계에서 끝나는 코리더 조각
-      const P = cps.find((p) => J.sim.paths.some((q) => q.ref === ref && q.dir === dir && near(q.pts[0], p.pts.at(-1))));
+      const P = cps.find((p) => J.sim.paths.some((q) => q.ref === ref && (q.dir == null || q.dir === dir) && near(q.pts[0], p.pts.at(-1))));
       if (!P) return { err: `${ref} dir0 경계 이어지는 코리더 조각 없음` };
-      const Q = J.sim.paths.find((q) => q.ref === ref && q.dir === dir && near(q.pts[0], P.pts.at(-1)));
+      const Q = J.sim.paths.find((q) => q.ref === ref && (q.dir == null || q.dir === dir) && near(q.pts[0], P.pts.at(-1)));
       return { jz: false, path: P.id, k: 0, want: [...P.stops.map((_, i) => nm(C, P, i)), nm(J, Q, 0)], endSys: 'live' };
     }
-    const P = cps.find((p) => J.sim.paths.some((q) => q.ref === ref && q.dir === dir && near(q.pts.at(-1), p.pts[0])));
+    const P = cps.find((p) => J.sim.paths.some((q) => q.ref === ref && (q.dir == null || q.dir === dir) && near(q.pts.at(-1), p.pts[0])));
     if (!P) return { err: `${ref} dir1 경계에서 시작하는 코리더 조각 없음` };
-    const Q = J.sim.paths.find((q) => q.ref === ref && q.dir === dir && near(q.pts.at(-1), P.pts[0]));
+    const Q = J.sim.paths.find((q) => q.ref === ref && (q.dir == null || q.dir === dir) && near(q.pts.at(-1), P.pts[0]));
     const k = Q.stops.length - 1;
     return { jz: true, path: Q.id, k, want: [nm(J, Q, k), ...P.stops.map((_, i) => nm(C, P, i))], endSys: 'corridor', end: (() => { const s = C.stopById.get(P.stops.at(-1).stop); return [s.x, s.z]; })() };
   }, { ref, dir });
@@ -169,7 +170,8 @@ async function ride(ref, dir) {
 }
 
 const out = [];
-for (const ref of REFS) for (const dir of [0, 1]) {
+const DIRS = (process.env.E2E_DIRS || '0,1').split(',').map(Number);
+for (const ref of REFS) for (const dir of DIRS) {
   const r = await ride(ref, dir); out.push(r);
   console.log(`[${ref} dir${dir}]`, JSON.stringify(r));
   check(r.n > 150, `${ref}/${dir} 샘플 ${r.n}`);
