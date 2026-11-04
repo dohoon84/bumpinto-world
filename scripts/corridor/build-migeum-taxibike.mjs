@@ -3,29 +3,23 @@
 //   택시(정자 taxis.js 규칙과 같은 방식): OSM 출입구마다 가장 가까운 primary/secondary 차도(코리더 차도 그래프 + 아래 미금 연장)를
 //     TAXI_D(40m) 안에서 찾아, 그 차도 가장자리(중심선 투영점 + 출입구 쪽으로 폭/2)에 승차 지점 1개. 없으면 skipped 에 이유와 함께 남김.
 //     런타임은 이 점들을 코리더 택시의 '출입구' 목록에 덧붙인다(진행방향 오른쪽 갓길일 때만 정차 — taxis.js 그대로).
-//   미금 차도 연장: 코리더 drive.json 은 성남대로가 돌마로 교차점(z≈1820.6)에서 끝나고 돌마로가 없다. data/osm_migeum_raw.json 의
-//     primary/secondary 중 역에서 DRIVE_R(320m) 안 구간을 build-drive.mjs 와 같은 규칙(폭·차로·oneway·터널 제외)으로 넣는다.
-//     이미 코리더 그래프에 있는 way id 는 넣지 않고, 노드는 좌표(0.1m 반올림)가 같으면 런타임에서 하나로 이어 붙인다.
+//   미금 차도 연장: 코리더 drive.json 은 성남대로가 돌마로 교차점(z≈1820.6)에서 끝나고 돌마로가 없다. 연장(역 320m 안 primary/secondary 7 way)은
+//     공용 미금 차도 그래프 public/corridor/migeum/roads.json 의 x 몫(scripts/corridor/build-migeum-roads.mjs)을 그대로 쓴다 → 택시·코리더 차·미금 차량 NPC 가 같은 길 목록.
+//     런타임 합치기는 life.js(withMigeumCorridorRoads) 한 곳. 이 파일에는 더 이상 차도를 싣지 않는다.
 //   자전거(정자 bike.js 규칙): 역 중심 RADIUS 115m 안의 보도(footway/path/pedestrian)를 3m 간격으로 표본 → 길마다 첫 점 +4m 뒤 GAP 36m 간격,
 //     길 옆 ±0.5m/0 중 건물(아래 뜬 건물 제외)·차도(폭/2+0.6) 밖인 곳, 역 표지판 3.5m 안 제외, 역에서 가까운 순으로 SEPARATION 18m · 최대 24대.
 //   사용: node scripts/corridor/build-migeum-taxibike.mjs [--check]  (--check: 파일과 빌드 결과가 같은지만 확인)
 import fs from 'node:fs';
 import path from 'node:path';
+import { migeumCorridorExt, MIGEUM_ROADS_FILE } from '../../src/corridor/migeumRoads.js';
 
 const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), '../..');
 const rd = (p) => JSON.parse(fs.readFileSync(path.join(ROOT, p), 'utf8'));
 const OUT = 'public/corridor/migeum/taxibike.json';
-const CENTER = { lat: 37.36650, lon: 127.10835 };
-const kx = Math.cos((CENTER.lat * Math.PI) / 180) * 111320, kz = 110540;
+const MIGEUM_ROADS = 'public/corridor/' + MIGEUM_ROADS_FILE;
 const r1 = (v) => Math.round(v * 10) / 10, r2 = (v) => Math.round(v * 100) / 100;
-const proj = (g) => [(g.lon - CENTER.lon) * kx, -(g.lat - CENTER.lat) * kz];
-const num = (v) => { const n = parseFloat(v); return Number.isFinite(n) ? n : null; };
 
 export const RULE = { TAXI_D: 40, TAXI_KINDS: ['primary', 'secondary'], DRIVE_R: 320, RADIUS: 115, GAP: 36, SEPARATION: 18, MAX: 24, SIDEWALK: ['footway', 'path', 'pedestrian'], SEED: 23 };
-// build-drive.mjs 와 같은 폭·oneway 규칙
-const ROAD_W = { primary: 16, secondary: 12 };
-const widthOf = (t) => { let w = ROAD_W[t.highway] ?? 4; const l = num(t.lanes); if (l && w >= 6) w = Math.max(w, l * 3.2); return w; };
-const skipHw = (t) => (t.tunnel && t.tunnel !== 'no') || num(t.layer) < 0;
 const CAR_KINDS = new Set(['primary', 'secondary', 'tertiary', 'trunk', 'residential', 'unclassified', 'service', 'motorway', 'primary_link', 'secondary_link', 'trunk_link', 'motorway_link']); // tileMesh.js 와 같음
 
 const seg = (x, z, ax, az, bx, bz) => { const dx = bx - ax, dz = bz - az, L2 = dx * dx + dz * dz || 1e-9; const t = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / L2)); const px = ax + dx * t, pz = az + dz * t; return { d: Math.hypot(x - px, z - pz), px, pz, t }; };
@@ -36,32 +30,12 @@ export function buildTaxiBike() {
   const mi = rd('public/corridor/migeum/index.json');
   const st = mi.stations.find((s) => s.name === '미금') || mi.stations[0];
   const cd = rd('public/corridor/drive.json');
-  const osm = rd('data/osm_migeum_raw.json');
   const q = rd('data/osm_migeum_taxibike_raw.json');
   const tiles = Object.keys(mi.tiles || {}).length ? Object.keys(mi.tiles) : fs.readdirSync(path.join(ROOT, 'public/corridor/migeum/tiles')).map((f) => f.replace('.json', ''));
   const T = tiles.sort().map((k) => rd(`public/corridor/migeum/tiles/${k}.json`));
 
-  // --- 미금 차도 연장 (코리더 그래프에 없는 primary/secondary, 역 반경 DRIVE_R 안) ---
-  const have = new Set(cd.ways.map((w) => w.id));
-  const nodes = [], nidx = new Map(), ways = [];
-  const nid = (p) => { const k = p[0] + ',' + p[1]; if (!nidx.has(k)) { nidx.set(k, nodes.length); nodes.push(p); } return nidx.get(k); };
-  const inR = ([x, z]) => Math.hypot(x - st.x, z - st.z) <= RULE.DRIVE_R;
-  for (const e of osm.elements) {
-    if (e.type !== 'way' || !e.geometry || !e.tags || have.has(e.id)) continue;
-    const t = e.tags;
-    if (!RULE.TAXI_KINDS.includes(t.highway) || skipHw(t) || t.area === 'yes' || t.access === 'private' || t.access === 'no') continue;
-    const P = e.geometry.map((g) => proj(g).map(r1));
-    const ow = t.oneway === 'yes' || t.oneway === '1' || t.junction === 'roundabout' ? 1 : t.oneway === '-1' ? -1 : 0;
-    let run = [];
-    const flush = () => { if (run.length >= 2) { const w = { id: e.id, k: t.highway, n: run, w: r1(widthOf(t)), ow }; if (t.name) w.name = t.name; if (t.bridge && t.bridge !== 'no') w.br = 1; if (num(t.lanes)) w.lanes = num(t.lanes); ways.push(w); } run = []; };
-    for (let i = 0; i < P.length; i++) {
-      // 반경 밖 점이라도 바로 안쪽 점과 이어지는 한 칸은 남겨 끊긴 끝이 반경 경계 밖에 오도록
-      const keep = inR(P[i]) || (i > 0 && inR(P[i - 1])) || (i < P.length - 1 && inR(P[i + 1]));
-      if (!keep) { flush(); continue; }
-      run.push(nid(P[i]));
-    }
-    flush();
-  }
+  // --- 미금 차도 연장 = 공용 roads.json 의 x 몫(코리더 그래프에 없는 primary/secondary, 역 반경 DRIVE_R 안) ---
+  const { nodes, ways } = migeumCorridorExt(rd(MIGEUM_ROADS));
   const cdKey = new Set(cd.nodes.map((n) => r1(n[0]) + ',' + r1(n[1])));
   const joined = nodes.filter((n) => cdKey.has(n[0] + ',' + n[1])).length;
 
@@ -140,7 +114,7 @@ export function buildTaxiBike() {
       rule: RULE,
       station: { name: st.name, x: st.x, z: st.z },
     },
-    taxi: { points, skipped, drive: { nodes, ways, joined } },
+    taxi: { points, skipped, ext: { ways: ways.length, nodes: nodes.length, joined, from: MIGEUM_ROADS } },
     bike: { centre: { x: st.x, z: st.z }, radius: RULE.RADIUS, max: RULE.MAX, raw: raw.length, spots: bikes },
   };
 }
@@ -154,6 +128,6 @@ if (process.argv[1] && path.resolve(process.argv[1]) === path.resolve(new URL(im
   } else {
     fs.writeFileSync(path.join(ROOT, OUT), out);
     const d = JSON.parse(out);
-    console.log(OUT, (out.length / 1024).toFixed(1) + 'KB', 'taxi', d.taxi.points.length, 'skip', d.taxi.skipped.length, 'drive ways', d.taxi.drive.ways.length, 'nodes', d.taxi.drive.nodes.length, 'joined', d.taxi.drive.joined, 'bikes', d.bike.spots.length, '/ raw', d.bike.raw);
+    console.log(OUT, (out.length / 1024).toFixed(1) + 'KB', 'taxi', d.taxi.points.length, 'skip', d.taxi.skipped.length, 'ext ways', d.taxi.ext.ways, 'nodes', d.taxi.ext.nodes, 'joined', d.taxi.ext.joined, 'bikes', d.bike.spots.length, '/ raw', d.bike.raw);
   }
 }

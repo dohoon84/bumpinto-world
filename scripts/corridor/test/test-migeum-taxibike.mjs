@@ -6,7 +6,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { Group, Scene } from 'three';
 import { buildTaxiBike, RULE } from '../build-migeum-taxibike.mjs';
-import { migeumTaxiEnabled, migeumBikeEnabled, pickMigeumTaxiBike, migeumTaxiExits, mergeMigeumDrive, MIGEUM_TAXIBIKE_FILE } from '../../../src/corridor/migeum.js';
+import { migeumTaxiEnabled, migeumBikeEnabled, pickMigeumTaxiBike, migeumTaxiExits, MIGEUM_TAXIBIKE_FILE } from '../../../src/corridor/migeum.js';
+import { mergeMigeumDrive, migeumCorridorExt, withMigeumCorridorRoads } from '../../../src/corridor/migeumRoads.js'; // [migeum-roads] 연장은 공용 roads.json 의 x 몫
 import { loadCorridorData } from '../../../src/corridor/index.js';
 import { createCorridorTraffic } from '../../../src/corridor/traffic.js';
 import { KakaoBikes } from '../../../src/entities/bike.js';
@@ -14,7 +15,7 @@ import { setEvening } from '../../../src/evening.js';
 
 const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), '../../..');
 const J = (f) => JSON.parse(fs.readFileSync(path.join(ROOT, f), 'utf8'));
-const TB = J('public/corridor/migeum/taxibike.json'), mi = J('public/corridor/migeum/index.json'), drive = J('public/corridor/drive.json');
+const TB = J('public/corridor/migeum/taxibike.json'), mi = J('public/corridor/migeum/index.json'), drive = J('public/corridor/drive.json'), roads = J('public/corridor/migeum/roads.json');
 const cIndex = J('public/corridor/index.json'), base = J('public/corridor/base.json');
 const st = mi.stations.find((s) => s.name === '미금');
 let n = 0; const ok = (name) => { n++; console.log('ok', n, name); };
@@ -55,7 +56,9 @@ assert.equal(pickMigeumTaxiBike(TB, { taxi: false }).taxi, null); assert.equal(p
 ok('?migeumtaxi=0 · ?migeumbike=0 · ?migeum=0 (끄면 파일 요청도 없음)');
 
 // 4) 택시 승차 지점: 출입구 8곳 모두 · 출입구에서 TAXI_D 안 · primary/secondary 가장자리(중심선에서 폭/2) · 진행방향 오른쪽
-const ext = TB.taxi.drive, merged = mergeMigeumDrive(drive, ext);
+const ext = { ...migeumCorridorExt(roads), joined: TB.taxi.ext.joined }, merged = mergeMigeumDrive(drive, ext);
+assert.deepEqual(merged, withMigeumCorridorRoads(drive, roads), 'life.js 와 같은 합치기'); assert.ok(!TB.taxi.drive, 'taxibike.json 에 차도 없음(roads.json 하나)');
+assert.deepEqual([TB.taxi.ext.ways, TB.taxi.ext.nodes], [ext.ways.length, ext.nodes.length]);
 const P = TB.taxi.points;
 assert.equal(P.length + TB.taxi.skipped.length, st.exits.length);
 assert.equal(P.length, 8, '출입구 8곳 모두 승차 지점');

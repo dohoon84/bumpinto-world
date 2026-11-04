@@ -43,15 +43,4 @@ export function migeumTaxiExits(taxi) {
   return (taxi?.points || []).map((p) => ({ ref: '미금 ' + p.ref, x: p.x, z: p.z }));
 }
 
-// 코리더 차도 그래프에 미금 연장(성남대로 남쪽·돌마로)을 덧붙인 새 그래프. 원본은 바꾸지 않음.
-//   노드는 좌표(0.1m)가 같으면 하나로 → 성남대로 끝(돌마로 교차점)에서 이어진다. 이미 있는 way id 는 건너뜀
-export function mergeMigeumDrive(drive, ext) {
-  if (!drive?.nodes || !ext?.ways?.length) return drive;
-  const nodes = drive.nodes.slice(), ways = drive.ways.slice();
-  const key = (p) => Math.round(p[0] * 10) + ',' + Math.round(p[1] * 10);
-  const idx = new Map(); drive.nodes.forEach((n, i) => { const k = key(n); if (!idx.has(k)) idx.set(k, i); });
-  const map = ext.nodes.map((p) => { const k = key(p); let j = idx.get(k); if (j == null) { j = nodes.length; nodes.push([p[0], p[1]]); idx.set(k, j); } return j; });
-  const have = new Set(drive.ways.map((w) => w.id));
-  for (const w of ext.ways) if (!have.has(w.id)) ways.push({ ...w, n: w.n.map((i) => map[i]), mg: 1 });
-  return { ...drive, nodes, ways };
-}
+// 코리더 차도 그래프의 미금 연장(성남대로 남쪽·돌마로)은 공용 roads.json 의 x 몫 → migeumRoads.js(mergeMigeumDrive · withMigeumCorridorRoads), 합치기는 life.js 한 곳
