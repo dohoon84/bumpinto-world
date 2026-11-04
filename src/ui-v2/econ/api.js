@@ -36,16 +36,17 @@ export const QUEST_PERIODS = Object.freeze(['daily', 'weekly', 'monthly']);
  * - 'spend_locked'         : {}                              잔액이 음수가 된 계정 (회수 등) → 지출 잠금
  * - 'already_claimed'      : {}                              퀘스트·웰컴·구매 중복 (멱등키 충돌). 서버는 로그인 때 웰컴·D-LOGIN 을 자동 지급 → 정상 결과로 취급
  * - 'not_complete'         : { value, target }               아직 완료되지 않은 퀘스트를 받으려 함
- * - 'not_eligible'         : {}                              웰컴/베타 대상 아님 · 상점에서 팔지 않는 물건(available:false)
+ * - 'not_eligible'         : {}                              웰컴/베타 대상 아님
+ * - 'coming_soon'          : {}                              상점 미리보기 기간 — 모든 탈것 구매 불가(comingSoon:true). 무료 지급 없음
  * - 'unknown'              : {}                              없는 퀘스트·상품·요금 코드
  * - 'hold_not_found'       : {}                              택시 홀드 없음/만료
  * - 'network'              : { status? }                     서버 연결 실패 (mock 은 쓰지 않음)
- * @typedef {'insufficient_balance'|'not_signed_in'|'spend_locked'|'already_claimed'|'not_complete'|'not_eligible'|'unknown'|'hold_not_found'|'network'} EconErrorCode
+ * @typedef {'insufficient_balance'|'not_signed_in'|'spend_locked'|'already_claimed'|'not_complete'|'not_eligible'|'coming_soon'|'unknown'|'hold_not_found'|'network'} EconErrorCode
  * @typedef {{ code: EconErrorCode, message?: Text, need?: number, balance?: number, shortBy?: number, value?: number, target?: number, status?: number }} EconError
  */
 export const ERR = Object.freeze({
   INSUFFICIENT: 'insufficient_balance', NOT_SIGNED_IN: 'not_signed_in', SPEND_LOCKED: 'spend_locked', ALREADY: 'already_claimed',
-  NOT_COMPLETE: 'not_complete', NOT_ELIGIBLE: 'not_eligible', UNKNOWN: 'unknown', HOLD_NOT_FOUND: 'hold_not_found', NETWORK: 'network',
+  NOT_COMPLETE: 'not_complete', NOT_ELIGIBLE: 'not_eligible', COMING_SOON: 'coming_soon', UNKNOWN: 'unknown', HOLD_NOT_FOUND: 'hold_not_found', NETWORK: 'network',
 });
 
 /**
@@ -90,8 +91,9 @@ export const errR = (code, extra = {}) => ({ ok: false, error: { code, ...extra 
  *   결제 실패: 유료 모드에서 게임으로 탑승할 때만 'payment' 이벤트로 1번 온다. need·balance·shortBy 는 status 'insufficient' 일 때만.
  *   택시는 홀드 단계에서 막힌다(need = 예상 요금, 홀드는 남지 않음). 결제 성공(Payment · TaxiSettlement)에는 status 필드가 없다(없으면 성공).
  *   UI 에서 payFare/holdTaxi 를 직접 부르면 이벤트는 오지 않고 Result {ok:false,error} 만 온다 → 08c 가 두 번 뜨지 않는다.
- * @typedef {{ id: string, name: Text, free: boolean, price: number, listPrice: number, realPrice: number, daysForTypical: number, owned: boolean, affordable: boolean, giftable: false, available?: boolean }} ShopItem
- *   free=true(베타) 면 price=0, listPrice=정가, affordable=true(available 일 때). available === false 면 지금 팔지 않는 물건 → purchase 는 not_eligible
+ * @typedef {{ id: string, name: Text, free: boolean, price: number, listPrice: number, realPrice: number, daysForTypical: number, owned: boolean, affordable: boolean, giftable: false, available: boolean, comingSoon: boolean }} ShopItem
+ *   상점은 미리보기 전용: 모든 물건이 available:false, comingSoon:true, free:false, price=listPrice(가격 표시용), affordable:false.
+ *   purchase 는 항상 { ok:false, error:{ code:'coming_soon' } } (게스트 포함). 상점 무료 지급 없음 — 무료(베타)는 교통에만.
  * @typedef {{ guest: boolean, itemId: string, price: number, balance: number, remaining: number, daysLeft: number, typicalDailyNet: number }} ShopGoal
  * @typedef {{ points: number, title: Text|null, next: { title: Text, at: number } | null }} KarmaAxisState
  * @typedef {{ id: string, title: Text, rule: string, bonus: number, state: 'locked'|'progress'|'unlocked', progress: Progress | null }} Achievement
@@ -137,7 +139,7 @@ export const EVENTS = Object.freeze(['balance', 'reward', 'quest', 'travel', 'pa
  * @property {(holdId: string) => Promise<Result<{ balance: Balance }>>} cancelTaxi
  * @property {() => Promise<ShopItem[]>} listShopItems
  * @property {() => Promise<ShopGoal|null>} getShopGoal
- * @property {(itemId: string) => Promise<Result<{ item: ShopItem, free: boolean, amount: number, listAmount: number, balance: Balance }>>} purchase   게스트는 항상 not_signed_in
+ * @property {(itemId: string) => Promise<Result<{ item: ShopItem, free: boolean, amount: number, listAmount: number, balance: Balance }>>} purchase   미리보기 기간: 있는 물건은 항상 coming_soon, 없는 id 는 unknown
  * @property {() => Promise<Karma>} getKarma
  * @property {() => Promise<WelcomeState>} getWelcome
  * @property {() => Promise<Result<{ reward: RewardEvent[], balance: Balance }>>} claimWelcome

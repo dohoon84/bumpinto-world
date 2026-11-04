@@ -45,7 +45,7 @@ export function mountDemo({ open, link, setSuppress }) {
   const draw = async () => {
     const [s, m] = await Promise.all([econ.getSession(), econ.getEconMode()]);
     bar.innerHTML = `<b class="ve-demo-t">${esc(tr('경제 UI 데모', 'Econ UI demo'))}</b><span class="ve-mock">${esc(tr('예시 데이터', 'Example data'))}</span>
-      <span class="ve-demo-g">${[['guest', '게스트', 'Guest'], ['fig03', 'Figma 예시', 'Figma sample'], ['fig07', '지갑 예시', 'Wallet sample'], ['day45', '45일차', 'Day 45'], ['walk', '+걷기 5분', '+Walk 5 min'], ['board', '+게시판 글', '+Board post'], ['srv', '서버식 로그인', 'Server-style login'], ['shopna', '상점: 로드바이크만', 'Shop: road bike only']].map(([k, ko, en]) => `<button type="button" data-st="${k}">${esc(tr(ko, en))}</button>`).join('')}</span>
+      <span class="ve-demo-g">${[['guest', '게스트', 'Guest'], ['fig03', 'Figma 예시', 'Figma sample'], ['fig07', '지갑 예시', 'Wallet sample'], ['day45', '45일차', 'Day 45'], ['walk', '+걷기 5분', '+Walk 5 min'], ['board', '+게시판 글', '+Board post'], ['srv', '서버식 로그인', 'Server-style login']].map(([k, ko, en]) => `<button type="button" data-st="${k}">${esc(tr(ko, en))}</button>`).join('')}</span>
       <button type="button" class="ve-demo-mode${m.transitPaid ? ' paid' : ''}" data-st="mode">${esc(m.transitPaid ? tr('유료 모드', 'Paid mode') : tr('무료(베타) 모드', 'Free (beta) mode'))}</button>
       <span class="ve-demo-who">${esc(s.isGuest ? tr('게스트', 'Guest') : s.displayName || '')}</span>
       <span class="ve-demo-g ve-demo-f">${FRAMES.map((c) => `<button type="button" data-fr="${c}">${c}</button>`).join('')}</span>`;
@@ -59,7 +59,6 @@ export function mountDemo({ open, link, setSuppress }) {
     else if (st === 'walk') { await ensureSigned(); dev.addWalkMinutes(5); }
     else if (st === 'board') { await ensureSigned(); dev.boardPost(); open('07'); } // 하루 1번: 첫 글만 원장 'board' 행 + 토스트, 그 뒤 글은 아무것도 없음
     else if (st === 'srv') { setSuppress(20000); dev.reset(); dev.signIn({ name: '예시 계정' }); await econ.claimWelcome(); open('01b'); } // 서버: 로그인 때 웰컴 자동 지급 → 02a 는 '확인'
-    else if (st === 'shopna') { await ensureSigned(); const all = !(await econ.listShopItems()).every((i) => i.available !== false); dev.setShopAvailable(all ? null : ['roadbike']); open('11'); }
     else { setSuppress(4000); dev.seed(st); }
     draw();
   });

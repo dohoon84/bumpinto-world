@@ -8,8 +8,9 @@ import { requestGoogleSignIn } from '../google.js';
 import { onLangChange } from '../../i18n.js';
 import { mountEconHud, refresh, render } from './hud.js';
 import { openWelcome, openChipTip, openQuests, pushReward, openKarma, openShop, openGoogleWait, openMigrate } from './panels.js';
-import { shownInPay, shownReceipts, showPay, payAndShow, openWallet, openTaxiApp, openSettle, holdToast, openBoard, openGate } from './transit.js';
+import { shownInPay, shownReceipts, showPay, payAndShow, openTaxiApp, openSettle, holdToast, openBoard, openGate } from './transit.js';
 import { close, openKey } from './layer.js';
+import { mountWalletApp, openWalletApp } from './walletApp.js';
 
 let suppressRewards = 0;
 let welcomeEvAt = 0; // 서버가 연동 순간 자동 지급한 웰컴의 reward 이벤트(sinceAt 따라잡기)를 받은 시각
@@ -59,7 +60,7 @@ export const OPEN = {
   '02b': () => openChipTip(),
   '04a': () => openQuests('daily', { link }), '04b': () => openQuests('weekly', { link }), '04c': () => openQuests('monthly', { link }),
   '06': () => openKarma({ link }),
-  '07': () => openWallet({ link }),
+  '07': () => { close(true); return openWalletApp(); }, // 별도 화면이 아니라 게임 폰의 기존 '교통카드' 앱
   '11': () => openShop({ link }),
   '08a': () => openBoard(),
   '09a': () => openGate(),
@@ -143,6 +144,7 @@ export function mountEconUi() {
   if (document.body.classList.contains('mobile')) return null; // PC 전용
   document.body.classList.add('v2-econ');
   mountEconHud({ link, open });
+  mountWalletApp({ link });
   let t = 0;
   const soon = () => { clearTimeout(t); t = setTimeout(refresh, 30); };
   for (const ev of ['balance', 'quest', 'travel', 'session', 'mode']) econ.on(ev, soon);
