@@ -78,7 +78,7 @@ export function mountLanding() {
           <button type="button" class="m-icon-btn m-tr" data-act="lang" aria-label="${t('언어 바꾸기', 'Switch language')}">${GLOBE}<span>${isEn() ? 'KO' : 'EN'}</span></button>
           <div class="m-logo">
             <h1>Bumpinto World</h1>
-            <p>${t('다 같이 만들어 가는 오픈 월드 · Korea & USA', 'An open world we build together · Korea & USA')}</p>
+            <p>${t('다 같이 만들어 가는 오픈 월드', 'An open world we build together')}</p>
           </div>
           <div class="m-sheet m-start-sheet">
             <h2>${t('시작하기', 'Start')}</h2>
