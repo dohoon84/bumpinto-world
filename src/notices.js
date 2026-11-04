@@ -71,31 +71,6 @@ export const NOTICE_POSTS = [
       'Have ideas or want to pioneer your own neighborhood? Check out [🌍 Contribute] or leave a post in [Feedback]!',
     ].join('\n'),
   },
-  {
-    // 배열 끝에 둬야 새 로컬 게시판에서도 가장 큰 id 를 받아 '최신 공지'로 팝업된다.
-    key: 'notice-2026-11-05-mobile-launch',
-    title: '📱 모바일 버전이 열렸어요!',
-    enTitle: '📱 The mobile version is here!',
-    authorName: '크레이지랩스',
-    enAuthorName: 'CrazyLabs',
-    createdAt: Date.UTC(2026, 10, 4, 18, 0, 0), // 2026-11-05 03:00 KST (고정값: 매 동기화마다 갱신되지 않도록)
-    body: [
-      '여러분의 관심 덕분에 모바일 버전을 예정보다 먼저 열게 되었습니다.',
-      '관심 가져 주셔서 진심으로 감사드립니다.',
-      '',
-      '■ 안내 말씀 드립니다',
-      '• 기존에 PC로 이용하시던 분은 PC에서 먼저 구글 로그인을 해 주세요.',
-      '• 그다음 모바일에서 같은 구글 계정으로 로그인하시면, 쓰시던 전화번호와 캐릭터, 기록을 그대로 이어서 이용하실 수 있습니다.',
-    ].join('\n'),
-    enBody: [
-      'Thanks to your interest, we were able to open the mobile version earlier than planned.',
-      'Thank you so much for your support.',
-      '',
-      '■ A quick note',
-      '• If you have been playing on PC, please sign in with Google on your PC first.',
-      '• Then sign in on mobile with the same Google account, and your phone number, character and records will carry over just as they are.',
-    ].join('\n'),
-  },
 ];
 
 export const NOTICE_BY_KEY = Object.fromEntries(NOTICE_POSTS.map((n) => [n.key, n]));

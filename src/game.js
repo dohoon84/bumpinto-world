@@ -903,13 +903,10 @@ noticePopup = createNoticePopup({
   params,
   // 게시판 공지 탭과 같은 소스(서버 /board 또는 로컬 테스트 게시판). 실패하면 팝업 없음.
   fetchNotices: async () => (await sms.board('list', { category: 'notice', page: 1 }))?.items || [],
-  open: () => !!board.openNotices?.(noticePopup?.latest), // 최신 공지 본문을 바로 표시
+  open: () => !!board.openNotices?.(),
   busy: () => {
     try {
       const b = document.body.classList;
-      // [mobile] 세로 화면의 '가로로 돌려 주세요' 안내가 덮고 있으면 보이지 않으므로 기다린다(본 것으로 처리 X)
-      const rot = document.getElementById('m-rotate');
-      if (rot && getComputedStyle(rot).display !== 'none') return true;
       return !joined || b.contains('in-gate') || b.contains('in-lobby') || board.open || handset.open ||
         !!cameraApp?.open || !!donationBoards.open || !!ride?.active || !!adminBike?.riding || !!giftRiding();
     } catch { return true; }
