@@ -34,6 +34,20 @@ export function buildCrowd(group, { name = 'corridorCrowd', cast = null } = {}) 
         P.im = im; group.add(im);
       }
     },
+    // [perf-memory] finalize() 뒤에 register 한 부품(지연 로드 지역 NPC)을 위해 InstancedMesh 를 늘린다. 늘릴 게 없으면 아무것도 안 함
+    grow() {
+      for (const P of parts.values()) {
+        if (P.im && P.im.instanceMatrix.count >= P.cap) continue;
+        const cap = Math.max(1, P.cap), old = P.im;
+        const im = new THREE.InstancedMesh(P.geo, old ? old.material : P.lam ? new THREE.MeshLambertMaterial({ color: '#ffffff' }) : P.mat, cap);
+        im.count = 0; im.castShadow = cast ? cast(P) && P.cast : P.cast; im.receiveShadow = true; im.frustumCulled = false; im.name = name;
+        if (P.lam) im.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(cap * 3), 3);
+        if (old) { group.remove(old); old.dispose(); }
+        P.im = im; group.add(im);
+      }
+    },
+    // [perf-memory] register 의 반대: 자리(cap)만 돌려준다(InstancedMesh 는 줄이지 않음 → 다시 들어오면 grow 없이 재사용)
+    unregister(list) { for (const it of list || []) it.P.cap = Math.max(0, it.P.cap - 1); },
     begin() { for (const P of parts.values()) P.n = 0; },
     add(root, list, far) {
       root.updateMatrixWorld(true);

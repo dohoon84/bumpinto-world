@@ -5,6 +5,7 @@ import fs from 'node:fs';
 import { normalizeArrival, subwayArrival, ALLOWED, SUBWAY_ID as WORKER_IDS, SUBWAY_CACHE_SEC } from '../server/phone/src/subway.js';
 import { SUBWAY_ID, LINES } from '../src/subway/lines.js';
 import { STATIONS, stationTheme } from '../src/subway/stations.js';
+import { STATIONS as STATIONS_DATA } from '../src/subway/stationsData.js';
 import { boardRows, simulatedRows, kstMinute, createArrivalFeed, POLL_SEC } from '../src/subway/arrivals.js';
 
 const fx = JSON.parse(fs.readFileSync(new URL('./fixtures/subway-arrival-imae.json', import.meta.url), 'utf8'));
@@ -12,7 +13,8 @@ const KEY = 'TESTKEY-not-real-0123456789abc';
 
 // 노선 id 표는 클라이언트·worker 가 같다, 허용 역 = 게임 역
 assert.deepEqual({ ...WORKER_IDS }, { ...SUBWAY_ID });
-assert.deepEqual([...ALLOWED], STATIONS.map((d) => d.name));
+assert.deepEqual([...ALLOWED], STATIONS_DATA.map((d) => d.name)); // [migeum-sub] worker 허용 역 = 생성된 역 전체 (미금 포함, 플래그와 무관)
+assert.equal(ALLOWED.at(-1), '미금');
 for (const k of Object.values(SUBWAY_ID)) assert.ok(LINES[k]);
 assert.ok(SUBWAY_CACHE_SEC >= 20 && SUBWAY_CACHE_SEC <= 30 && POLL_SEC >= SUBWAY_CACHE_SEC);
 
