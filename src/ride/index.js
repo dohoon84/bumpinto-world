@@ -39,6 +39,14 @@ const JZ_DESTS = [
 ];
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 const L = (ko, en) => (isEn() ? en : ko);
+// 결제 실패 안내 — 잔액 부족은 금액까지(외상 탑승 없음), 그 밖은 코드
+const payFailText = (res) => {
+  const i = res.errorInfo;
+  if (res.error === 'insufficient_balance') return i && Number.isFinite(i.shortBy) ? L(`잔액이 부족해서 탈 수 없어요 (${i.shortBy.toLocaleString()} bum 부족)`, `Not enough bum to board (${i.shortBy.toLocaleString()} short)`) : L('잔액이 부족해서 탈 수 없어요', 'Not enough bum to board');
+  if (res.error === 'not_signed_in') return L('구글 계정을 연동하면 탈 수 있어요', 'Link a Google account to ride');
+  if (res.error === 'spend_locked') return L('잔액이 마이너스라 지금은 탈 수 없어요', 'Balance is negative — riding is locked');
+  return L('결제에 실패했어요: ', 'Payment failed: ') + res.error;
+};
 
 export function parseRideSit(s) {
   if (typeof s !== 'string') return null;
@@ -189,7 +197,7 @@ export function mountRide({ corridor, getPlayer, remotes, camera, cam, setMode, 
     busy = true;
     const res = await charge({ code: 'bus.base', mode: 'bus', card: card().id, meta: { route: c.P.ref } });
     busy = false; stats.charges.push(res);
-    if (!res.ok) { toast(L('결제에 실패했어요: ', 'Payment failed: ') + res.error); return false; }
+    if (!res.ok) { toast(payFailText(res)); return false; } // 유료 모드 잔액 부족 → 탑승 막음(v2 UI 는 'payment' insufficient 로 08c 카드)
     prepare();
     const bs = sysOf(c.P), P = c.P;
     let b, follow = null;
@@ -568,7 +576,7 @@ export function mountRide({ corridor, getPlayer, remotes, camera, cam, setMode, 
     busy = true;
     const res = await charge({ code, mode: 'taxi', card: card().id, meta: { to: r.dest.label, meters: Math.round(routeLen) } });
     busy = false; stats.charges.push(res);
-    if (!res.ok) { toast(L('결제에 실패했어요: ', 'Payment failed: ') + res.error); return; }
+    if (!res.ok) { toast(payFailText(res)); return; } // 출발 안 함(택시 패널 그대로)
     r.fare = res; r.speed = speed; r.live = de.live; r.routeLen = routeLen;
     r.t0 = performance.now(); r.at = Date.now(); r.simT0 = r.simT || 0;
     panel.hidden = true;

@@ -420,7 +420,7 @@ export function createServerClient(o = {}) {
       try { (await import('../google.js')).registerGoogleSignIn(() => client.signInWithGoogle()); } catch {}
     }
     if (o.rideBridge !== false) {
-      try { (await import('../../ride/fare.js')).setPaymentProvider(rideProvider(client, () => S.mode), { always: true }); } catch {}
+      try { (await import('../../ride/fare.js')).setPaymentProvider(rideProvider(client, () => S.mode, { emit: (ev) => bus.emit('payment', ev), alias: (c) => S.config?.aliases?.[c] || c }), { always: true }); } catch {}
     }
   });
 
@@ -429,9 +429,13 @@ export function createServerClient(o = {}) {
 
 /**
  * 게임 탑승(src/ride: charge('bus.base' | 'taxi.*')) → 서버 결제. 무료 모드는 기다리지 않는다(기록만 뒤에서) — 탑승이 느려지지 않게.
- * 유료 모드는 결과를 기다리고, 실패하면 탑승을 막는다(error = 오류 코드).
+ * 유료 모드는 결과를 기다리고, 실패하면 탑승을 막는다.
+ *   실패 반환: { ok:false, error:{ code, need?, balance?, shortBy? } } (fare.js 가 error=코드 문자열 + errorInfo=객체로 펼침)
+ *   실패 이벤트: emit(PaymentFailed) — 'payment' 이벤트에 status 'insufficient'(잔액 부족) | 'failed'(그 밖) 를 실어 보낸다.
+ *     { status, ok:false, receiptId:null, mode, code, rideId, need?, balance?, shortBy?, error }
+ *     게임 탑승에서만 낸다(UI 가 payFare/holdTaxi 를 직접 부른 경우는 Result 로만 알림 → 08c 가 두 번 뜨지 않게).
  */
-export function rideProvider(client, getMode) {
+export function rideProvider(client, getMode, { emit = null, alias = (c) => c } = {}) {
   return async (req) => {
     const taxi = req.mode === 'taxi';
     const rideId = `ride-${Date.now().toString(36)}-${Math.floor(Math.random() * 1679616).toString(36)}`;
@@ -445,7 +449,14 @@ export function rideProvider(client, getMode) {
     };
     if (!getMode().transitPaid) { run().catch(() => {}); return { ok: true, amount: 0, free: true }; }
     const r = await run().catch(() => errR(ERR.NETWORK));
-    if (!r.ok) return { ok: false, error: r.error?.code || 'network' };
+    if (!r.ok) {
+      const error = { ...(r.error || {}), code: r.error?.code || ERR.NETWORK };
+      const insufficient = error.code === ERR.INSUFFICIENT;
+      const ev = { status: insufficient ? 'insufficient' : 'failed', ok: false, receiptId: null, mode: req.mode, code: alias(req.code), rideId, error };
+      if (insufficient) Object.assign(ev, { need: error.need, balance: error.balance, shortBy: error.shortBy });
+      try { emit?.(ev); } catch {}
+      return { ok: false, error };
+    }
     return { ok: true, receiptId: r.data.receiptId, amount: taxi ? r.data.charged : r.data.amount, free: !!r.data.free };
   };
 }

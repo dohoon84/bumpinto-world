@@ -43,7 +43,10 @@ export async function charge(req = {}) {
     try {
       const r = (await provider({ code: req.code, mode: f.mode, amount: f.amount, currency: CURRENCY, card: req.card || null, meta: req.meta || null })) || {};
       const amount = Number.isFinite(r.amount) ? r.amount : f.amount;
-      res = { ok: !!r.ok, amount, currency: CURRENCY, code: req.code, receiptId: r.ok ? (r.receiptId || newReceipt(now)) : null, error: r.ok ? undefined : (r.error || 'declined') };
+      // provider 의 error 는 코드 문자열 또는 { code, need?, balance?, shortBy? } — res.error 는 항상 문자열, 객체는 res.errorInfo
+      const err = r.ok ? undefined : (r.error && typeof r.error === 'object' ? String(r.error.code || 'declined') : (r.error || 'declined'));
+      res = { ok: !!r.ok, amount, currency: CURRENCY, code: req.code, receiptId: r.ok ? (r.receiptId || newReceipt(now)) : null, error: err };
+      if (!r.ok && r.error && typeof r.error === 'object') res.errorInfo = { ...r.error };
       if (r.ok && r.free !== undefined) res.free = !!r.free;
     } catch (e) {
       res = { ok: false, amount: f.amount, currency: CURRENCY, code: req.code, receiptId: null, error: String(e?.message || e) };

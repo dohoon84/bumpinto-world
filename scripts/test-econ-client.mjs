@@ -251,6 +251,7 @@ console.log('econ server client tests');
   fakeClient.payFare = async () => ({ ok: false, error: { code: 'insufficient_balance', need: 1650, balance: 0, shortBy: 1650 } });
   const no = await fare.charge({ code: 'bus.base', mode: 'bus' });
   assert.equal(no.ok, false); assert.equal(no.error, 'insufficient_balance');
+  assert.deepEqual(no.errorInfo, { code: 'insufficient_balance', need: 1650, balance: 0, shortBy: 1650 });
   fare.setPaymentProvider(null);
   const plain = await fare.charge({ code: 'bus.base', mode: 'bus' });
   assert.equal(plain.ok, true); assert.equal(plain.free, true);
@@ -327,6 +328,66 @@ console.log('econ server client tests');
   const wl = await c.getLedger({ limit: 10 });
   assert.ok(wl.some((e) => e.kind === 'board' && e.delta === 1000));
   ok('signals: purchase → bw:econ-owned once (not on already_claimed); bw:econ-changed → immediate refresh → board reward toast, wallet kind board');
+}
+
+// ── 유료 모드 잔액 부족: 게임 탑승은 막히고, 'payment' 이벤트(status insufficient)로 08c 를 띄울 값이 온다 ──
+{
+  const env = makeEnv({ ECON_PAID: '1' });
+  await account(env, 'pp');
+  const jar = { token: await S.signSession({ accountId: 'pp', sessionVersion: 1, now: NOW }, SECRET) };
+  const c = mk(env, jar);
+  const ev = collect(c);
+  await c.getSession();
+  assert.equal((await c.getEconMode()).transitPaid, true);
+  const bridge = rideProvider(c, () => ({ transitPaid: true }), { emit: (e) => ev.payment.push(e), alias: (x) => ({ 'bus.base': 'bus.city' })[x] || x });
+  fare.setPaymentProvider(bridge, { always: true });
+  // 잔액 +400 (버스 1,650 에 모자람)
+  await L.appendLedger(env.DB, { accountId: 'pp', amount: 400, kind: 'free', reason: 'refund', idempotencyKey: 'seed-pp' }, { now: NOW });
+  await c.refresh();
+  const b0 = (await c.getBalance()).total; // account() 시드 포함
+  assert.ok(b0 < 1650);
+  const pick = (e) => ({ code: e.code, need: e.need, balance: e.balance, shortBy: e.shortBy });
+  const before = ev.payment.length;
+  const bus = await fare.charge({ code: 'bus.base', mode: 'bus', meta: { to: '정자역' } });
+  assert.equal(bus.ok, false); assert.equal(bus.error, 'insufficient_balance'); assert.equal(bus.receiptId, null);
+  assert.deepEqual(pick(bus.errorInfo), { code: 'insufficient_balance', need: 1650, balance: b0, shortBy: 1650 - b0 });
+  const fail = ev.payment.slice(before);
+  assert.equal(fail.length, 1, 'exactly one payment event');
+  const f0 = fail[0];
+  assert.deepEqual([f0.status, f0.ok, f0.receiptId, f0.mode, f0.code, f0.need, f0.balance, f0.shortBy], ['insufficient', false, null, 'bus', 'bus.city', 1650, b0, 1650 - b0]);
+  assert.deepEqual(pick(f0.error), pick(bus.errorInfo)); assert.equal(typeof f0.error.message?.ko, 'string');
+  assert.ok(String(f0.rideId).startsWith('ride-'));
+  assert.equal((await c.getBalance()).total, b0, 'nothing charged');
+  // 택시: 홀드 단계에서 부족 → 정산 안 감, 같은 모양
+  const taxi = await fare.charge({ code: 'taxi.drive', mode: 'taxi', meta: { meters: 5000 } });
+  assert.equal(taxi.ok, false); assert.equal(taxi.error, 'insufficient_balance');
+  const t0 = ev.payment.at(-1);
+  assert.deepEqual([t0.status, t0.mode, t0.code, t0.need, t0.balance, t0.shortBy], ['insufficient', 'taxi', 'taxi.drive', t0.need, b0, t0.need - b0]); assert.ok(t0.need > b0);
+  assert.equal(Number((await env.DB.prepare("SELECT COUNT(*) AS n FROM taxi_holds WHERE account_id = 'pp'").first()).n), 0, 'no hold left behind');
+  // UI 가 직접 부른 payFare 는 Result 로만(이벤트 없음 → 08c 중복 없음)
+  const n0 = ev.payment.length;
+  const direct = await c.payFare({ mode: 'subway', code: 'subway.base', rideId: 'sub-direct' });
+  assert.equal(direct.error.code, 'insufficient_balance'); assert.equal(ev.payment.length, n0);
+  // 잔액을 채우면 같은 탑승이 성공 → 성공 payment 이벤트(status 없음 = 성공)
+  await L.appendLedger(env.DB, { accountId: 'pp', amount: 5000, kind: 'free', reason: 'refund', idempotencyKey: 'seed-pp2' }, { now: NOW });
+  await c.refresh();
+  const okBus = await fare.charge({ code: 'bus.base', mode: 'bus' });
+  assert.equal(okBus.ok, true); assert.equal(okBus.amount, 1650); assert.equal(okBus.free, false);
+  const s0 = ev.payment.at(-1);
+  assert.equal(s0.status, undefined); assert.equal(s0.amount, 1650); assert.ok(s0.receiptId);
+  // 막힌 탑승은 탑승 퀘스트(D-BUS1)를 채우지 않는다 → 성공한 첫 탑승에서만 800
+  const keys = (await env.DB.prepare("SELECT idempotency_key AS k FROM ledger WHERE account_id = 'pp' ORDER BY id").all()).results.map((r) => r.k);
+  assert.equal(keys.filter((k) => k.startsWith('fare:')).length, 1, 'only the successful ride debited');
+  assert.ok(keys.indexOf(keys.find((k) => k.startsWith('quest:pp:D-BUS1'))) > keys.indexOf(keys.find((k) => k.startsWith('fare:'))));
+  assert.equal((await c.getBalance()).total, b0 + 5000 - 1650 + 800);
+  // 다른 실패(게스트 유료 모드 → not_signed_in): status failed, 금액 필드 없음
+  jar.token = null; await c.refresh();
+  const g = await fare.charge({ code: 'bus.base', mode: 'bus' });
+  assert.equal(g.ok, false); assert.equal(g.error, 'not_signed_in');
+  const g0 = ev.payment.at(-1);
+  assert.equal(g0.status, 'failed'); assert.equal(g0.error.code, 'not_signed_in'); assert.equal('need' in g0, false);
+  fare.setPaymentProvider(null);
+  ok('paid mode insufficient: game ride blocked, hook gets {ok:false,error:{code,need,balance,shortBy}}, one payment event status insufficient (bus & taxi, no hold left), direct payFare → Result only, top-up → success event, guest → status failed');
 }
 
 console.log(`\necon client: ${n} checks passed`);
