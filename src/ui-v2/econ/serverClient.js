@@ -50,7 +50,10 @@ export function createServerClient(o = {}) {
   const doc = o.doc !== undefined ? o.doc : (typeof document !== 'undefined' ? document : null);
   const st = o.storage !== undefined ? o.storage : (() => { try { return localStorage; } catch { return null; } })();
   const pollMs = o.pollMs ?? 30000;
+  const win = o.win !== undefined ? o.win : (typeof window !== 'undefined' ? window : null);
   const bus = createEmitter();
+  // 게임 쪽 신호(window CustomEvent). 'bw:econ-owned' = 탈것을 산 직후(게임이 웹소켓으로 보유를 다시 받음)
+  const signal = (name, detail) => { try { win?.dispatchEvent?.(new CustomEvent(name, { detail })); } catch { /* noop */ } };
 
   // 계정 기능 스위치·주소는 기본값이면 src/account 에서 읽는다(동적 import — 이 파일을 node 테스트에서 그대로 쓰려고)
   let enabled = o.enabled;
@@ -108,7 +111,12 @@ export function createServerClient(o = {}) {
 
   /** /econ/state 를 읽어 바뀐 것만 이벤트로 낸다. sinceAt = 로그인 직후(그 뒤 원장 행을 보상 이벤트로) */
   async function refresh({ sinceAt = 0, reason = null } = {}) {
-    if (S.refreshing) return S.refreshing;
+    // 로그인 직후(sinceAt) 요청은 진행 중인 폴링에 묻히면 안 된다 — 묻히면 웰컴·베타·첫 접속 토스트가 사라짐. 끝나길 기다렸다가 따로 보낸다.
+    while (S.refreshing) {
+      const p = S.refreshing;
+      if (!sinceAt) return p;
+      await p.catch(() => {});
+    }
     S.refreshing = (async () => {
       await ready;
       if (!enabled) { S.fetchedAt = now(); return; }
@@ -171,7 +179,10 @@ export function createServerClient(o = {}) {
     if (S.started) return;
     S.started = true;
     ready.then(() => {
-      if (!enabled || !pollMs) return;
+      if (!enabled) return;
+      // 서버가 다른 경로(게시판 글 보상 등)로 원장을 바꿨다는 게임 쪽 신호 → 바로 새로 읽어 보상 토스트를 띄운다
+      win?.addEventListener?.('bw:econ-changed', () => { refresh({ reason: 'external' }).catch(() => {}); });
+      if (!pollMs) return;
       const tick = () => { if (!doc?.hidden) refresh().catch(() => {}); };
       S.timer = setInterval(tick, pollMs);
       S.timer?.unref?.();
@@ -347,7 +358,10 @@ export function createServerClient(o = {}) {
       await fresh();
       if (isGuest()) return guestErr();
       const r = await req('/econ/shop/buy', { method: 'POST', body: { itemId } });
-      if (r.ok) await afterWrite('purchase');
+      if (r.ok) {
+        signal('bw:econ-owned', { itemId: r.data?.item?.id || itemId }); // 재접속 없이 바로 타도록(room.js gifts_sync)
+        await afterWrite('purchase');
+      }
       return r;
     },
 
