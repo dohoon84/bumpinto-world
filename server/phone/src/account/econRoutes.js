@@ -92,6 +92,8 @@ export async function handleEcon(request, env, url, deps = {}) {
   try {
     // ── 게스트 ──
     if (!acc) {
+      // 상점 미리보기: 게스트도 같은 답(coming_soon / unknown) — 아무것도 안 씀
+      if (POST && path === "/econ/shop/buy") { const { body } = await readBody(request); return resultJ(E.previewPurchase(String(body?.itemId || "")), cors); }
       if (POST) return errJ("not_signed_in", 401, cors, { message: E.NOT_SIGNED_IN.message });
       if (path === "/econ/state") {
         return okJ({ enabled: true, mode, features, session: { isGuest: true, signedIn: false, accountId: null, displayName: null, provider: null }, balance: E.GUEST_BALANCE(now), travel: E.GUEST_TRAVEL(now), lastId: 0, events: [] }, cors);
@@ -187,7 +189,7 @@ export async function handleEcon(request, env, url, deps = {}) {
     if (path === "/econ/shop/buy" && POST) {
       const { body, error } = await readBody(request);
       if (error) return errJ(error, 400, cors);
-      if (!featureOn(env, "shop")) return errJ("not_eligible", 409, cors, { reason: "coming_soon", message: { ko: "탈것 상점은 준비중이에요", en: "The vehicle shop is coming soon" } });
+      if (!featureOn(env, "shop")) return resultJ(E.previewPurchase(String(body.itemId || "")), cors);
       return resultJ(await E.purchase(db, env, id, String(body.itemId || ""), now), cors);
     }
 

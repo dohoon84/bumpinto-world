@@ -10,7 +10,7 @@ import { ECON_API_VERSION, ERR, okR, errR, createEmitter } from './api.js';
 
 const T = (ko, en) => ({ ko, en });
 const NOT_SIGNED_IN_MSG = T('구글 계정을 연동하면 bum을 받을 수 있어요', 'Link a Google account to earn bum');
-const FREE_MODE = Object.freeze({ transitPaid: false, shopPaid: true, beta: true }); // 상점은 무료 오픈 대상 아님(미리보기 전용)
+const FREE_MODE = Object.freeze({ transitPaid: false, shopPaid: false, beta: true }); // shopPaid 는 계약에만 남음 — 상점은 미리보기 전용(coming_soon)
 const LAST_KEY = 'bw.econ.last.v1';
 
 const guestSession = () => ({ isGuest: true, signedIn: false, accountId: null, displayName: null, provider: null });
@@ -356,7 +356,8 @@ export function createServerClient(o = {}) {
     },
     async purchase(itemId) {
       await fresh();
-      if (isGuest()) return guestErr();
+      // 상점은 미리보기 전용(v1.4): 게스트도 서버가 coming_soon/unknown 을 준다. 서버 없음(계정 꺼짐) → coming_soon
+      if (!enabled) return errR(ERR.COMING_SOON);
       const r = await req('/econ/shop/buy', { method: 'POST', body: { itemId } });
       if (r.ok) {
         signal('bw:econ-owned', { itemId: r.data?.item?.id || itemId }); // 재접속 없이 바로 타도록(room.js gifts_sync)

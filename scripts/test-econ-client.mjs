@@ -76,7 +76,7 @@ console.log('econ server client tests');
   const off = createServerClient({ enabled: false, base: '', storage: null, autoRegister: false, rideBridge: false });
   assert.deepEqual(missingMethods(off), []);
   assert.equal((await off.getSession()).isGuest, true);
-  assert.deepEqual(await off.getEconMode(), { transitPaid: false, shopPaid: true, beta: true }); // 상점은 무료 오픈 대상 아님
+  assert.deepEqual(await off.getEconMode(), { transitPaid: false, shopPaid: false, beta: true });
   const p = await off.payFare({ mode: 'bus', code: 'bus.city', rideId: 'r1' });
   assert.equal(p.ok, true); assert.equal(p.data.free, true); assert.equal(p.data.amount, 0);
   assert.equal((await off.claimQuest('D-LOGIN')).error.code, 'not_signed_in');
@@ -116,7 +116,8 @@ console.log('econ server client tests');
   const st8 = await c.settleTaxi({ holdId: h.data.holdId, actualMeters: 2500 });
   assert.equal(st8.ok, true); assert.equal(st8.data.charged, 0); assert.equal(st8.data.mode, 'taxi');
   assert.equal((await c.settleTaxi({ holdId: h.data.holdId })).error.code, 'hold_not_found');
-  assert.equal((await c.purchase('roadbike')).error.code, 'not_signed_in');
+  assert.equal((await c.purchase('roadbike')).error.code, 'coming_soon', 'shop preview: guests get coming_soon too');
+  assert.equal((await c.purchase('nope')).error.code, 'unknown');
   assert.equal((await c.claimWelcome()).error.message.ko.length > 0, true);
   const rows = env.DB && (await env.DB.prepare('SELECT COUNT(*) AS n FROM ledger').first()).n;
   assert.equal(rows, 0, 'guest wrote no ledger');
@@ -148,8 +149,9 @@ console.log('econ server client tests');
   jar.down = false; jar.token = await S.signSession({ accountId: 'nope', sessionVersion: 1, now: NOW }, SECRET);
   await c.refresh();
   jar.down = true;
+  assert.equal((await c.getSession()).isGuest, true, 'unknown account → still guest');
   const r = await c.purchase('roadbike');
-  assert.equal(r.ok, false); assert.equal(r.error.code, 'not_signed_in', 'unknown account → still guest');
+  assert.equal(r.ok, false); assert.equal(r.error.code, 'network');
   const broken = createServerClient({ fetch: async () => new Response('oops', { status: 502 }), base: BASE, enabled: true, storage: null, pollMs: 0, autoRegister: false, rideBridge: false });
   assert.equal((await broken.getSession()).isGuest, true);
   ok('network down / 502 → guest, no throw');
@@ -199,6 +201,8 @@ console.log('econ server client tests');
   const ledger = await c.getLedger({ limit: 50 });
   assert.ok(ledger.length >= 3);
   for (const e of ledger) { assert.ok(!ids.has(e.id)); ids.add(e.id); }
+  const pf = ledger.find((x) => x.kind === 'fare' && x.rideId === 'r1');
+  assert.ok(pf && pf.delta === -1650 && pf.listAmount === 1650 && pf.charged === 1650 && pf.mode === 'bus', 'paid fare row carries rideId');
   // 같은 계정으로 새로고침(새 클라이언트, 같은 저장소) → 그 사이 원장 행만 보상 이벤트
   await L.appendLedger(env.DB, { accountId: 'u', amount: 500, kind: 'free', reason: 'quest', ref: 'X', idempotencyKey: 'q-x' }, { now: NOW });
   const c2 = mk(env, jar, { storage: store });
@@ -225,9 +229,11 @@ console.log('econ server client tests');
   assert.equal(p.ok, true); assert.equal(p.data.free, true); assert.equal(p.data.amount, 0); assert.equal(p.data.listAmount, 1650);
   const n1 = (await env.DB.prepare("SELECT COUNT(*) AS n FROM econ_events WHERE account_id = 'f'").first()).n;
   assert.ok(n1 >= 1, 'free ride still logged');
+  const fl = (await c.getLedger()).filter((x) => x.kind === 'fare');
+  assert.deepEqual(fl.map((x) => [x.rideId, x.mode, x.code, x.delta, x.listAmount, x.charged, x.free]), [['fr1', 'bus', 'bus.city', 0, 1650, 0, true]], 'free ride in wallet with rideId');
   const q = await c.listQuests('daily');
   assert.equal(q.guest, false); assert.ok(q.quests.length > 0);
-  ok('free mode signed in: fare free:true amount:0 listAmount, event logged, quests listed');
+  ok('free mode signed in: fare free:true amount:0 listAmount, event logged, wallet fare row rideId/listAmount (delta 0), quests listed');
 }
 
 // ── 탑승 다리 + fare.js always ──
@@ -314,7 +320,7 @@ console.log('econ server client tests');
   await c.getSession();
   // 상점 = 미리보기 전용: 서버가 거절 → 보유 신호 없음
   const p = await c.purchase('roadbike');
-  assert.deepEqual([p.ok, p.error.code, p.error.reason], [false, 'not_eligible', 'coming_soon']);
+  assert.deepEqual([p.ok, p.error.code], [false, 'coming_soon']);
   assert.deepEqual(owned, []);
   const shop = await c.listShopItems();
   assert.deepEqual(shop.map((i) => [i.id, i.available, i.comingSoon, i.price]), [['bike', false, true, 160000], ['roadbike', false, true, 1000000], ['scooter', false, true, 2500000], ['car', false, true, 7450000]]);
