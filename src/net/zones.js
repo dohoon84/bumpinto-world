@@ -51,6 +51,13 @@ export const ZONES = Object.freeze([
   'jangji-station',          // 113
   'jangji-station/p-l8-0',   // 114
   'jangji-station/p-l8-1',   // 115
+  // [migeum-sub] 미금 (수인분당 K231 · 신분당 D13, 2026-11-04 추가). 덧붙이기만: 116 대합실, 117·118 수인분당 방면 0/1, 119·120 신분당 방면 0/1
+  //   ?migeumsub=0 이어도 슬롯은 그대로 둔다 (번호 고정 — 그 구역에 들어갈 길만 없음). 열차 구역은 기존 suin·shin 슬롯 그대로
+  'migeum-station',          // 116
+  'migeum-station/p-suin-0', // 117
+  'migeum-station/p-suin-1', // 118
+  'migeum-station/p-shin-0', // 119
+  'migeum-station/p-shin-1', // 120
 ]);
 const SLOT = new Map(ZONES.map((z, i) => [z, i]));
 

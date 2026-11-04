@@ -3,7 +3,8 @@
 //   열차 움직임(진입 감속 → 정차·문 열림 → 출발 가속) · 다음 열차 시각(실시간 도착 또는 시간표 근사) · 역 사이 주행 시간
 //   좌표(승강장 Scene): x = 선로 방향, 열차 진행 방향 = +x (1호차 = +x 끝), 승강장 쪽 z < 0, 스크린도어 z = 0, 선로 z > 0
 import { LINES, TRAIN, CAR_LEN, DOOR_OFF } from './lines.js';
-import { STATIONS, LINE_STOPS } from './stationsData.js';
+import { LINE_STOPS } from './stationsData.js';
+import { STATIONS, STATIONS_BASE, EXT_STATIONS } from './roster.js'; // [migeum-sub] 플래그 반영 역 목록 · 확장 전 역 목록
 import { jaName, jaDir } from './ja.js';
 
 export const BY_NAME = new Map(STATIONS.map((s) => [s.name, s]));
@@ -160,11 +161,13 @@ export function liveSlots(trains, line, dir, fetchedAt) {
 
 // ---------- 역 사이 주행 ----------
 export const RIDE = Object.freeze({ VMAX: 22, ACC: 1.0, DEC: 1.0, GAP_DEFAULT: 1200, DWELL: 22 });
-export function segmentDist(a, b) {
-  const A = BY_NAME.get(a), B = BY_NAME.get(b);
+export function segmentDist(a, b, byName = BY_NAME) {
+  const A = byName.get(a), B = byName.get(b);
   if (A && B) return Math.max(500, Math.hypot(A.x - B.x, A.z - B.z));
   return RIDE.GAP_DEFAULT; // 게임 밖 역: 대략 1.2km (근사)
 }
+// [migeum-sub] 확장 전 역 목록 기준 거리 (기존 역 시간표 = lineOffsets 는 늘 이것으로 → 확장 역을 켜도 기존 역 오프셋은 그대로)
+const BASE_BY_NAME = new Map(STATIONS_BASE.map((s) => [s.name, s]));
 // 거리 d 를 가속-순항-감속으로 달리는 시간과 t 초의 위치(0..d)
 export function segmentProfile(d, R = RIDE) {
   let v = R.VMAX, ta = v / R.ACC, td = v / R.DEC, da = 0.5 * R.ACC * ta * ta, dd = 0.5 * R.DEC * td * td;
@@ -198,7 +201,24 @@ export function lineOffsets(line, dir) {
   if (L && seq) {
     const order = seq > 0 ? L.stops.slice() : L.stops.slice().reverse();
     let t = 0;
-    order.forEach((n, i) => { if (i) t += MOTION.DWELL + segmentProfile(segmentDist(order[i - 1], n)).T; if (!m.has(n)) m.set(n, t); });
+    order.forEach((n, i) => { if (i) t += MOTION.DWELL + segmentProfile(segmentDist(order[i - 1], n, BASE_BY_NAME)).T; if (!m.has(n)) m.set(n, t); });
+    // [migeum-sub] 확장 역(미금): 기존 역 오프셋은 위 그대로 두고, 확장 역 하나만 가장 가까운 기존 게임 역(같은 노선) 기준으로
+    //   실제 거리(segmentDist, 역 좌표 직선) 주행 + 정차로 다시 잡는다. 앞(먼저 서는) 쪽 기존 역이 있으면 그것 기준(+), 없으면 뒤쪽 역 기준(−).
+    //   → 정자 ↔ 미금 열차 안 타임라인(rideTimeline)과 두 역 승강장 시각이 같은 열차(run)로 이어진다. lineOffsets 원점(첫 역 = 0) 그대로
+    for (const E of EXT_STATIONS) {
+      if (!E.lines.includes(line)) continue;
+      const i = order.indexOf(E.name);
+      if (i < 0) continue;
+      const isBase = (n) => !!BASE_BY_NAME.get(n)?.lines.includes(line);
+      let j = -1;
+      for (let k = i - 1; k >= 0; k--) if (isBase(order[k])) { j = k; break; }
+      if (j < 0) for (let k = i + 1; k < order.length; k++) if (isBase(order[k])) { j = k; break; }
+      if (j < 0) continue;
+      const [a0, a1] = j < i ? [j, i] : [i, j];
+      let dt = 0;
+      for (let k = a0 + 1; k <= a1; k++) dt += MOTION.DWELL + segmentProfile(segmentDist(order[k - 1], order[k])).T;
+      m.set(E.name, m.get(order[j]) + (j < i ? dt : -dt));
+    }
   }
   OFFS.set(key, m);
   return m;

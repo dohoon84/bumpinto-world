@@ -9,7 +9,7 @@ import { placeEntrance, toWorld, toLocal, structureClear, CLEAR, ENTRANCE_DIM } 
 import { gameTerrain } from './subway/gameTerrain.mjs';
 import * as THREE from 'three';
 import { ZONE_BASE, ZONES, encodeZone, decodeZone, isZoneId, zoneSlot } from '../src/net/zones.js';
-import { STATIONS, stationTheme, stationReach, corridorExits, withStairs, stationZone, entranceLod, ENT_BUILD, ENT_DROP, ENT_SHOW, JEONGJA_THEME } from '../src/subway/stations.js';
+import { STATIONS, STATIONS as STATIONS_ALL, stationTheme, stationReach, corridorExits, withStairs, stationZone, entranceLod, ENT_BUILD, ENT_DROP, ENT_SHOW, JEONGJA_THEME } from '../src/subway/stations.js';
 import { LINES, LINE_ORDER, OSM_REF_TO_LINE } from '../src/subway/lines.js';
 import { gyeongbuSoonAt, GYEONGBU_SOON } from '../src/world/gyeongbuSoon.js';
 import { RemotePlayers } from '../src/net/remotePlayers.js';
@@ -193,7 +193,7 @@ assert.equal(walkable(GATE.cab[2], 0, 0.25, { passages }), false, '개찰구 몸
   assert.equal(decodeZone(ZONE_BASE + 777 * 10000 + 3, 1).zone, 'zone#777', '모르는 슬롯도 바깥으로 새지 않음');
   // 코리더 역 대합실 슬롯 (덧붙이기만): 2..14 = 수내..잠실, 역 id 와 이름이 맞는다
   //   장지는 나중에 추가돼 113 (덧붙이기만) — 나머지 순서는 stationsData 순서와 같다
-  assert.deepEqual(ZONES.slice(2, 15), STATIONS.filter((d) => d.id !== 'jeongja' && d.id !== 'jangji').map((d) => stationZone(d.id)), '역 대합실 구역 = stationsData 순서');
+  assert.deepEqual(ZONES.slice(2, 15), STATIONS.filter((d) => d.id !== 'jeongja' && d.id !== 'jangji' && !d.ext).map((d) => stationZone(d.id)), '역 대합실 구역 = stationsData 순서'); // [migeum-sub] 확장 역(미금 116~)은 scripts/test-subway-migeum.mjs
   assert.equal(zoneSlot(stationZone('jangji')), 113, '장지 대합실 = 덧붙인 슬롯');
   for (const d of STATIONS) assert.ok(zoneSlot(stationZone(d.id)) > 0, `${d.id} 대합실 구역 있음`);
   for (const zid of ZONES.slice(1)) { assert.ok(isZoneId(zid)); const q = decodeZone(encodeZone(zid, 3, 4).x, 4); assert.equal(q.zone, zid); }
@@ -272,6 +272,7 @@ assert.equal(walkable(GATE.cab[2], 0, 0.25, { passages }), false, '개찰구 몸
   const byId = new Map(corr.map((e) => [e.type + e.id, e]));
   const index = JSON.parse(fs.readFileSync('public/corridor/index.json', 'utf8'));
   const center = data.meta.center;
+  const STATIONS = STATIONS_ALL.filter((d) => !d.ext); // [migeum-sub] 기존 15역 그대로 확인 (확장 역 미금은 test-subway-migeum.mjs)
   const want = ['정자', '수내', '서현', '이매', '야탑', '모란', '태평', '가천대', '복정', '장지', '문정', '가락시장', '송파', '석촌', '잠실'];
   assert.deepEqual(STATIONS.map((d) => d.name), want, '도훈 요청 14역 + 장지 (처음에 실수로 빠짐, 같은 날 추가) = 15역');
   const expectLines = { 정자: 'suin,shin', 수내: 'suin', 서현: 'suin', 이매: 'suin,gg', 야탑: 'suin', 모란: 'suin,l8', 태평: 'suin', 가천대: 'suin', 복정: 'suin,l8', 장지: 'l8', 문정: 'l8', 가락시장: 'l8,l3', 송파: 'l8', 석촌: 'l8,l9', 잠실: 'l8,l2' };
@@ -301,7 +302,7 @@ assert.equal(walkable(GATE.cab[2], 0, 0.25, { passages }), false, '개찰구 몸
     if (d.id !== 'jeongja') { const ix = index.stations.find((s) => s.id === d.id); assert.ok(ix && ix.x === d.x && ix.z === d.z && ix.nameEn === d.nameEn, `${d.name} 코리더 역 중심`); }
   }
   // 정자역 데이터는 1단계 출구 목록과 같다
-  assert.deepEqual(STATIONS[0].exits.map((e) => [e.ref, e.osm]), JEONGJA_EXITS.map((e) => [e.ref, e.osm]));
+  assert.deepEqual(STATIONS_ALL[0].exits.map((e) => [e.ref, e.osm]), JEONGJA_EXITS.map((e) => [e.ref, e.osm]));
   // 테마: 정자역은 1단계 문자열 그대로
   assert.equal(JEONGJA_THEME.map.title, '수인분당선 · 신분당선 (간략)'); assert.equal(JEONGJA_THEME.ad.sub, '정자역에서 걸어서 3분');
   assert.deepEqual(JEONGJA_THEME.wells.map((w) => w.ko), WELLS.map((w) => w.ko), '정자 승강장 방면 = layout WELLS');

@@ -19,6 +19,9 @@ const lotte = { id: 'lotte', ko: '롯데월드타워', en: 'Lotte World Tower', 
 // [pangyo] 판교역(신분당선 정자 다음 역) — public/corridor/pangyo/index.json 의 역. 지구본은 ?pangyo=0 이면 안 쓴다(globeCorridor.js)
 const pgFile = resolve(root, 'public/corridor/pangyo/index.json');
 const pangyo = existsSync(pgFile) ? JSON.parse(readFileSync(pgFile, 'utf8')).stations.map((s) => ({ id: s.id, ko: s.name, en: s.nameEn, lines: s.lines, x: s.x, z: s.z, ...unproj(s.x, s.z), branch: 'jeongja' })) : [];
+// [migeum] 미금역(정자 남쪽, 수인분당선·신분당선) — public/corridor/migeum/index.json 의 역. 지구본은 ?migeum=0 이면 안 쓴다(globeCorridor.js)
+const mgFile = resolve(root, 'public/corridor/migeum/index.json');
+const migeum = existsSync(mgFile) ? JSON.parse(readFileSync(mgFile, 'utf8')).stations.map((s) => ({ id: s.id, ko: s.name, en: s.nameEn, lines: s.lines, x: s.x, z: s.z, ...unproj(s.x, s.z), branch: 'jeongja' })) : [];
 
 const out = `// [corridor] 자동 생성 — node scripts/corridor/build-globe.mjs (public/corridor/index.json 의 OSM 역 좌표)
 // 지구본의 '분당–잠실 구간' 묶음 핀과 펼친 노선도에 쓰인다. id 는 📍 이동(Travel)/?at= 의 역 id 와 같다.
@@ -31,6 +34,10 @@ export const CORRIDOR_LANDMARK = ${JSON.stringify(lotte)};
 export const PANGYO_GLOBE_STATIONS = [
 ${pangyo.map((s) => '  ' + JSON.stringify(s) + ',').join('\n')}
 ];
+// [migeum] 정자에서 남쪽으로 이어지는 미금역 (?migeum=0 이면 지구본에서 뺀다)
+export const MIGEUM_GLOBE_STATIONS = [
+${migeum.map((s) => '  ' + JSON.stringify(s) + ',').join('\n')}
+];
 `;
 writeFileSync(resolve(root, 'src/corridor/globeStations.js'), out);
-console.log('globeStations.js:', stations.length, 'stations +', lotte.id, '+ pangyo', pangyo.length);
+console.log('globeStations.js:', stations.length, 'stations +', lotte.id, '+ pangyo', pangyo.length, '+ migeum', migeum.length);

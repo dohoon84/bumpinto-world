@@ -4,7 +4,7 @@
 //   코리더 역(수내~잠실): stationsData.js (scripts/subway/build-stations.mjs 가 OSM 에서 생성)
 //     - 출구 위치·방향은 미리 구워 둠 (place) → 타일이 아직 안 불렸어도 같은 자리
 //     - 대합실은 정자역 대합실 틀을 그대로 쓰고 역 이름·노선 색·방면·노선도만 바꾼다
-import { STATIONS } from './stationsData.js';
+import { STATIONS } from './roster.js'; // [migeum-sub] 플래그 반영 목록 (stationsData.js 의 확장 역은 ?migeumsub=0 이면 빠짐)
 import { LINES } from './lines.js';
 import { compass, projectLatLon } from './exits.js';
 

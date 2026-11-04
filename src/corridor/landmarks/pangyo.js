@@ -13,7 +13,7 @@ import { buildingMeshes, vcMat, paint } from '../tileMesh.js';
 import { buildPangyoDeckLights } from './pangyoDeckLights.js'; // [pangyo-deck-lights]
 import { watchEvening } from '../../evening.js';
 
-const LINE_COLOR = { 신분당선: '#d4003b', 경강선: '#0054a6' };
+const LINE_COLOR = { 신분당선: '#d4003b', 경강선: '#0054a6', 수인분당선: '#f5a200' }; // [migeum] 수인분당선
 const C = {
   stone: '#d8ccb8', stoneDark: '#bfb29c', reveal: '#a99c86', shopGlass: '#3e5566', cornice: '#efe8dc', canopy: '#5d646e',
   fin: '#dfe6ee', crown: '#eef2f6', mech: '#9aa3ad', podium: '#41586a', deckSide: '#9c9a96', deckTop: '#a8896b', rail: '#c9dbe4', column: '#c3c0ba',
@@ -266,7 +266,8 @@ function segD(px, pz, [ax, az], [bx, bz]) { const dx = bx - ax, dz = bz - az, L2
 // ---------- 지하철 출입구 ----------
 //   캐노피 3.4 × 7.5m, 길이 방향 = 가까운 보행로 방향(dir). 뒤쪽 벽 + 양옆 유리 + 지붕 유리, 앞 이마에 노선색 띠·번호판
 function buildEntrances(l) {
-  const g = new THREE.Group(); g.name = 'pangyoEntrances';
+  const P = l.model === 'migeumEntrances' ? 'migeum' : 'pangyo'; // [migeum] 같은 캐노피, 메시 이름만 다르게
+  const g = new THREE.Group(); g.name = P + 'Entrances';
   const bag = Bag(), gl = Bag(), lit = Bag();
   const plates = [];
   const lines = l.lines || [];
@@ -280,33 +281,33 @@ function buildEntrances(l) {
     { const [x, z] = at(0, 0); bag.box(x, H + 0.12, z, Lh + 0.4, 0.24, W + 0.4, rot, C.frame); gl.box(x, H + 0.3, z, Lh, 0.06, W, rot, '#ffffff'); lit.box(x, H - 0.03, z, Lh - 0.6, 0.04, W - 0.8, rot, '#ffffff'); }
     { const [x, z] = at(-Lh / 2, 0); bag.box(x, H / 2, z, 0.2, H, W, rot, C.frame); } // 뒤 벽
     for (const s of [-1, 1]) { const [x, z] = at(0, (s * W) / 2); gl.box(x, H / 2 + 0.2, z, Lh, H - 0.4, 0.05, rot, '#ffffff'); }
-    // 앞 이마 띠: 노선색 (신분당선 / 경강선)
+    // 앞 이마 띠: 노선색 (판교 신분당선 / 경강선 · 미금 수인분당선 / 신분당선)
     lines.slice(0, 2).forEach((ln, i) => { const [x, z] = at(Lh / 2 + 0.12, 0); bag.box(x, H + 0.55 + i * 0.32, z, 0.12, 0.3, W + 0.4, rot, LINE_COLOR[ln] || '#f5a200'); });
     // 바닥(계단 입구 어둡게)
     { const [x, z] = at(0.3, 0); bag.box(x, 0.06, z, Lh - 1.2, 0.08, W - 0.6, rot, '#3a3f46'); }
     const n = Math.max(1, Math.min(PLATE_N, parseInt(e.ref, 10) || 1));
     plates.push({ x: at(Lh / 2 + 0.2, 0), rot, n, y: H + 1.35 });
   }
-  const body = bag.mesh(vcMat(), 'pangyoEntranceFrame'); if (body) g.add(body);
-  const gm = gl.mesh(glass(), 'pangyoEntranceGlass'); if (gm) { gm.castShadow = false; gm.renderOrder = 2; g.add(gm); }
+  const body = bag.mesh(vcMat(), P + 'EntranceFrame'); if (body) g.add(body);
+  const gm = gl.mesh(glass(), P + 'EntranceGlass'); if (gm) { gm.castShadow = false; gm.renderOrder = 2; g.add(gm); }
   if (plates.length) { // 번호판: 한 장 아틀라스, 한 메시
     const geos = plates.map(({ x: [px, pz], rot, n, y }) => {
       const q = new THREE.PlaneGeometry(1.1, 1.1); const uv = q.attributes.uv;
       for (let i = 0; i < uv.count; i++) uv.setX(i, (n - 1 + uv.getX(i)) / PLATE_N);
       q.rotateY(rot + Math.PI / 2); q.translate(px, y, pz); return q;
     });
-    const m = new THREE.Mesh(mergeGeometries(geos), plate()); geos.forEach((q) => q.dispose()); m.name = 'pangyoExitPlates'; g.add(m);
+    const m = new THREE.Mesh(mergeGeometries(geos), plate()); geos.forEach((q) => q.dispose()); m.name = P + 'ExitPlates'; g.add(m);
   }
-  const night = lit.mesh(glow(), 'pangyoEntranceGlow'); if (night) { night.castShadow = night.receiveShadow = false; g.add(night); }
+  const night = lit.mesh(glow(), P + 'EntranceGlow'); if (night) { night.castShadow = night.receiveShadow = false; g.add(night); }
   return { group: g, night };
 }
 
-const BUILDERS = { pangyoDept: buildDept, pangyoTowers: buildTowers, pangyoDeck: buildDeck, pangyoEntrances: buildEntrances, ncsoftRnd: buildNcsoft };
+const BUILDERS = { pangyoDept: buildDept, pangyoTowers: buildTowers, pangyoDeck: buildDeck, pangyoEntrances: buildEntrances, migeumEntrances: buildEntrances, ncsoftRnd: buildNcsoft };
 const TS = 500;
 const tileKeyOf = (l) => { const p = l.pos || l.entrances?.[0]; return `${Math.floor(p.x / TS)}_${Math.floor(p.z / TS)}`; };
 
 // 판교 랜드마크: 타일 키별로 모아 두었다가 그 타일 상세가 빌드되면 build(key) 가 그룹을 돌려준다(타일 그룹에 붙여 같이 해제)
-export function createPangyoLandmarks(pg, { overlay = null } = {}) {
+export function createPangyoLandmarks(pg, { overlay = null, prefix = 'pangyo' } = {}) { // [migeum] prefix: 그룹 이름(미금도 같은 모듈)
   const byTile = new Map();
   const station = pg?.stations?.[0];
   const towards = station ? { x: station.x, z: station.z } : { x: 0, z: 0 };
@@ -329,7 +330,7 @@ export function createPangyoLandmarks(pg, { overlay = null } = {}) {
     stats,
     build(key) {
       const list = byTile.get(key); if (!list) return null;
-      const g = new THREE.Group(); g.name = 'pangyoLandmarks:' + key;
+      const g = new THREE.Group(); g.name = prefix + 'Landmarks:' + key;
       for (const l of list) {
         const r = BUILDERS[l.model](l, { towards, seed: 7919 });
         g.add(r.group);

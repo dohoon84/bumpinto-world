@@ -174,6 +174,7 @@ export function starbucksRooms(shells) {
 
 function mullions(ring, gh, frame) {
   const group = new THREE.Group();
+  group.name = 'starbucks-mullions'; // [perf-memory] 정적 병합 대상 이름
   const postGeo = new THREE.BoxGeometry(0.08, gh, 0.08);
     const railGeo = new THREE.BoxGeometry(0.08, 0.08, 1);
   for (let i = 0; i < ring.length; i++) {
