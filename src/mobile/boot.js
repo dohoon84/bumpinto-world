@@ -4,9 +4,11 @@ import './mobile.css';
 import { mountLanding } from './landing.js';
 import { isEn } from '../i18n.js';
 import { installWebAppMeta } from './fullscreen.js';
+import { installScrollLock } from './scrollLock.js'; // [mobile-scroll-lock]
 
 function prepDocument() {
   document.body.classList.add('mobile');
+  try { installScrollLock(); } catch { /* 없어도 게임은 된다 */ }
   try { installWebAppMeta(); } catch { /* 머리 태그는 없어도 된다 */ }
   // 노치·홈 인디케이터 영역까지 그리고 env(safe-area-inset-*) 로 피한다 (데스크톱 브라우저에선 효과 없음)
   const vp = document.querySelector('meta[name="viewport"]');

@@ -5,6 +5,7 @@
 // 기존 PC DOM 은 지우지 않고 body.mobile CSS 로 숨기거나 옮긴다. 버튼은 원래 버튼을 대신 눌러 준다(.click / 키 입력).
 import { virtualPad } from '../input.js';
 import { isEn, onLangChange } from '../i18n.js';
+import { resetDocScroll } from './scrollLock.js'; // [mobile-scroll-lock]
 import { canFullscreen, isFullscreen, toggleFullscreen, onFullscreenChange } from './fullscreen.js';
 
 const t = (ko, en) => (isEn() ? en : ko);
@@ -311,7 +312,7 @@ export function mountMobileHud({ handset } = {}) {
     panel.hidden = false;
     document.body.classList.add('m-chat-open');
     paintHist(); placePanel();
-    chatInput?.focus();
+    chatInput?.focus({ preventScroll: true }); // [mobile-scroll-lock] 문서를 밀어 올리지 않게
   };
   const closeChat = () => {
     if (!chatOpen) return;
@@ -319,6 +320,7 @@ export function mountMobileHud({ handset } = {}) {
     panel.hidden = true;
     document.body.classList.remove('m-chat-open');
     chatInput?.blur();
+    resetDocScroll(); setTimeout(resetDocScroll, 300); // [mobile-scroll-lock] iOS 키보드가 밀어 둔 문서를 되돌려 터치 판정 어긋남 방지
     if (chatForm && chatForm.parentElement !== document.body) document.body.insertBefore(chatForm, $('ride-btn'));
   };
   q('[data-chat-close]').addEventListener('click', (e) => { e.stopPropagation(); closeChat(); });
