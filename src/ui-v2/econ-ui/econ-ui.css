@@ -110,7 +110,6 @@ body.ui-v2:not(.mobile) .ve-qlist { display: flex; flex-direction: column; gap: 
 body.ui-v2:not(.mobile) .ve-qcard { display: flex; align-items: center; gap: 16px; box-sizing: border-box; min-height: 88px; padding: 8px 16px; border-radius: 12px; background: rgba(255, 255, 255, .06); border: 1px solid rgba(255, 255, 255, .12); }
 body.ui-v2:not(.mobile) .ve-qcard.done { background: rgba(47, 191, 113, .08); border-color: rgba(47, 191, 113, .35); }
 body.ui-v2:not(.mobile) .ve-qmain { flex: 1; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
-body.ui-v2:not(.mobile) .ve-id { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 11px; color: var(--v2-sub); opacity: .7; }
 body.ui-v2:not(.mobile) .ve-prog { font-size: 13px; font-weight: 700; color: var(--v2-sub); white-space: nowrap; }
 body.ui-v2:not(.mobile) .ve-prog.ok { color: #4ee39a; }
 body.ui-v2:not(.mobile) .ve-qrw { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; flex: none; width: 140px; }
