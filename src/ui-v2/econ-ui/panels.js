@@ -1,6 +1,7 @@
 // [econ-ui] 패널: 02a 웰컴 · 02b 잔액 칩 안내 · 04 할 일 시트 · 05a/05a2/05b 보상 · 06 카르마·업적 · 11 탈것 상점 · 01a/01b 로그인
 import { econ } from '../econ/index.js';
 import { el, coinFly } from '../kit.js';
+import { coinSound } from './coinSound.js';
 // 상점 썸네일: 게임 탈것 모델을 오프라인으로 한 번 그린 정적 WebP (scripts/render-shop-thumbs.mjs). 상점에 3D 없음
 import thumbBike from './assets/shop/bike.webp';
 import thumbRoadbike from './assets/shop/roadbike.webp';
@@ -42,7 +43,7 @@ export async function openWelcome({ onDone } = {}) {
     const to = balanceChip();
     wrap.classList.add('fading');
     await refresh();
-    if (to) await coinFly(coin, balanceChip() || to, { count: 8 });
+    if (to) { coinSound.play('welcome'); await coinFly(coin, balanceChip() || to, { count: 8 }); } // 소리는 코인이 튀어나올 때
     countUp(before, after);
     close(true);
     openChipTip(after - before);
@@ -125,6 +126,7 @@ export async function rewardSequence(ev, { stopAt = null } = {}) {
   const before = ev.balanceAfter - amount;
   if (stopAt === '05a') return;
   await wait(1400);
+  if (!stopAt) coinSound.play(ev.kind); // 코인 효과음: 코인이 튀어나오는 순간(이동·게시판은 짧게) · 400 ms 안 겹침은 1번
   const fly = coinFly(t.querySelector('.ve-tcoin'), balanceChip() || t, { count: ev.coins || 8 });
   if (stopAt === '05a2') { await wait(450); const c = document.querySelector('.v2-coinfly')?.cloneNode(true); if (c) { c.classList.add('ve-freeze'); document.body.appendChild(c); } return; }
   await fly;
