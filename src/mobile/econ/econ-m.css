@@ -144,3 +144,6 @@ body.mobile.m-econ .ve-karma > .v2-close { order: -1; }
 /* 08b/09b 금액 줄: '0 bum' 이 두 줄로 깨지지 않게 */
 body.mobile.m-econ .ve-pay .ve-amt-big { white-space: nowrap; font-size: 18px; }
 body.mobile.m-econ .ve-pay .ve-amtrow { flex-wrap: wrap; row-gap: 2px; }
+
+/* 08a: PC 키 힌트(E) 는 터치에서 의미 없음 → 숨김 */
+body.mobile.m-econ .ve-board .ve-key { display: none !important; }
