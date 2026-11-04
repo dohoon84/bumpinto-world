@@ -25,6 +25,11 @@ const clock = (at) => {
   return `${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`;
 };
 
+// [econ-ui] 기존 폰 앱에 내용을 덧붙이는 지점. ?ui=v2(PC)의 경제 UI만 window.__bwHandset.setAppDecorator 로 등록한다
+//   (import 하지 않아 기본 번들 청크는 그대로). 등록이 없으면 앱은 기존 그대로.
+//   setAppDecorator(id, { render(en, baseHtml) → html, mounted?(paneEl, en) }) · openApp(id) · refreshApp(id) · view
+const appDecorators = new Map();
+
 export function mountHandset({ sms } = {}) {
   const el = document.getElementById('handset');
   const timeEl = document.getElementById('handset-time');
@@ -116,8 +121,10 @@ export function mountHandset({ sms } = {}) {
     const a = extraApps.find((x) => x.id === id); if (!a) { show('home'); return; }
     if (a.launch) { view = 'home'; home(); a.launch(); return; } // [camera] 폰 밖 화면(뷰파인더)을 여는 앱
     const en = isEn();
-    body.innerHTML = `<div class="pane list xapp-pane" data-xapp="${esc(id)}"><p class="hd"><button type="button" data-app="home">‹</button> ${esc(en ? (a.title || a.label).en : (a.title || a.label).ko)}</p>${a.render(en)}</div>`;
+    const deco = appDecorators.get(id), html = a.render(en); // [econ-ui] 장식이 없으면(기본 UI·모바일) 기존 html 그대로
+    body.innerHTML = `<div class="pane list xapp-pane" data-xapp="${esc(id)}"><p class="hd"><button type="button" data-app="home">‹</button> ${esc(en ? (a.title || a.label).en : (a.title || a.label).ko)}</p>${deco ? deco.render(en, html) : html}</div>`;
     a.mounted?.(body.querySelector('.xapp-pane'), en); // [camera] 비동기로 채우는 앱(사진 보관함)
+    deco?.mounted?.(body.querySelector('.xapp-pane'), en);
   }
 
   const paintThreads = (threads) => {
@@ -346,7 +353,7 @@ export function mountHandset({ sms } = {}) {
     if (open && view === 'home') home();
   });
 
-  return {
+  const api = {
     get open() { return open; },
     close() { setOpen(false); },
     // [ride]
@@ -367,4 +374,11 @@ export function mountHandset({ sms } = {}) {
       }
     },
   };
+  try { // [econ-ui]
+    window.__bwHandset = {
+      setAppDecorator(id, d) { if (d) appDecorators.set(id, d); else appDecorators.delete(id); api.refreshApp(id); },
+      openApp: (id) => api.openApp(id), refreshApp: (id) => api.refreshApp(id), get view() { return open ? view : ''; },
+    };
+  } catch { /* noop */ }
+  return api;
 }

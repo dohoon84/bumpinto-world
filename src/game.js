@@ -121,6 +121,7 @@ function getFlightLines(targetRegion) {
 // 지구본(노선도·리스트·게임 안 🌏)에서 직접 고른 입장이면 서버에 저장된 마지막 위치 대신 고른 곳(역 / 기본 스폰)으로.
 // ?from= 은 다른 지역에서 지구본으로 고르고 넘어온 경우. ?passport=1 / ?enter=1 만 있는 진입은 기존처럼 마지막 위치 이어하기.
 let explicitPick = params.has('from');
+let resumePlace = null; // [ui-v2] 그만둔 자리 {x,y,z,ry} — handleGateEnter(gateOpts.place) 가 넣고 completeWorldJoin 이 한 번 쓴다
 let arrivalFlightScreen = null;
 if (fromRegion && !shot) {
   arrivalFlightScreen = getEnterScreen();
@@ -144,6 +145,7 @@ const handleGateEnter = (chosenRegionId = region.id, gateOpts = undefined) => {
   corridorAt = gateOpts?.at || null; // [corridor]
   uiV2?.noteEnter(chosenRegionId || region.id, corridorAt); // [ui-v2] 마지막 역(이어하기) · 입장 카드 역 이름
   explicitPick = true;
+  resumePlace = gateOpts?.place && (chosenRegionId || region.id) === region.id ? gateOpts.place : null; // [ui-v2] '계속하기'·'이어하기' = 그만둔 자리 (입장 때 지도 범위 확인)
   if (chosenRegionId && chosenRegionId !== region.id) {
     const targetRegion = getRegion(chosenRegionId);
     const screen = getEnterScreen();
@@ -1091,7 +1093,11 @@ function completeWorldJoin(name, look, session) {
   wear(look);
   const picked = explicitPick;
   explicitPick = false;
-  if (session?.place && !picked) applySession(session);
+  const rp = resumePlace; resumePlace = null;
+  const rb = corridor?.bounds || world.bounds;
+  const resumed = !!rp && [rp.x, rp.z].every(Number.isFinite) && (!rb || (rp.x >= rb.x0 && rp.x <= rb.x1 && rp.z >= rb.z0 && rp.z <= rb.z1)) && !world.inWater?.(rp.x, rp.z);
+  if (resumed) { corridorAt = null; applySession({ place: rp }); } // [ui-v2] 그만둔 자리 — 역 출구로 옮기지 않음 (범위 밖·물 위면 아래 역 입장 그대로)
+  else if (session?.place && !picked) applySession(session);
   else player.position.copy(pos);
   player.visible = true;
   nameTag.hidden = false;
