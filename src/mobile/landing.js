@@ -2,6 +2,7 @@
 //   1) 시작: 로고 + [입장할 곳 고르기] (+ 이 폰에 캐릭터가 있으면 [이어서 입장])
 //   2) 지역 · 역 고르기: 왼쪽 지역 리스트, 오른쪽 역 칩 + 고른 역 카드 + 입장 버튼
 // 고르면 PC 지구본과 같은 URL 규칙으로 game.js 에 넘긴다 (같은 지역이면 history.replaceState, 다른 지역이면 페이지 이동).
+import { uiV2Wanted } from '../ui-v2/flag.js'; // [ui-v2-default]
 import { enterFullscreen, shouldShowHomeScreenHint, dismissHomeScreenHint } from './fullscreen.js';
 import { OPEN_REGIONS, getCurrentRegion, getRegion, navigateToRegion } from '../regions/index.js';
 import { OPEN_MAINLINE_STATIONS, OPEN_BRANCH_STATIONS, corridorName } from '../corridor/globeCorridor.js';
@@ -41,7 +42,7 @@ export function mountLanding() {
     // [econ-mobile] ?ui=v2: 로그인된 계정이면 '이어서 입장' 대신 계정 이름이 붙은 '계속하기'(PC 시작화면 12dd645 과 같은 규칙). 기본 UI 는 그대로.
     let ses = null, lastSt = null, v2data = null, rmod = null; // rmod: ui-v2/resume.js (그만둔 자리, PC bf72209) // lastSt: PC 와 같은 '마지막 역'(bw.uiv2.lastStation)
     const signedIn = () => !!(ses && !ses.isGuest && (ses.signedIn ?? true));
-    if (new URLSearchParams(location.search).get('ui') === 'v2') {
+    if (uiV2Wanted()) { // [ui-v2-default] 기본 v2 · ?ui=v1 끔
       import('../ui-v2/data.js').then((d) => { v2data = d; lastSt = d.readLastStation(); if (signedIn() && root.isConnected && st.view === 'start') render(); }).catch(() => {});
       import('../ui-v2/resume.js').then((m) => { rmod = m; }).catch(() => {});
       import('../ui-v2/econ/index.js').then(({ econ }) => econ.getSession()).then((s) => { ses = s || null; if (signedIn() && root.isConnected && st.view === 'start') render(); }).catch(() => {});
