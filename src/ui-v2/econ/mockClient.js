@@ -64,8 +64,11 @@ const QUEST_DEFS = {
 /** 일일 풀(#30 v4 = 기획 v1): LOGIN·WALK10·WALK20·RIDE10·SUB1·BUS1 (+ALL3 보너스). D-TAXI1 은 기획에 없음. mock 배정은 Figma 예시대로 3개.
  *  주간은 W-WALK·W-DAYS·W-DAILY·W-TRANSIT (합 18,000). W-PLACES 는 서버 판정이 없어 뺐다(v4). */
 export const DAILY_POOL = Object.freeze(['D-LOGIN', 'D-WALK10', 'D-WALK20', 'D-RIDE10', 'D-SUB1', 'D-BUS1']);
-const DAILY_ASSIGNED = ['D-LOGIN', 'D-WALK10', 'D-SUB1'];
-const PERIOD_IDS = { daily: [...DAILY_ASSIGNED, 'D-ALL3'], weekly: ['W-WALK', 'W-DAYS', 'W-DAILY', 'W-TRANSIT'], monthly: ['M-WALK', 'M-DAYS', 'M-WEEKLY'] };
+// 기본 배정은 Figma 예시(WALK10·SUB1). 서버 pickDaily 는 D-LOGIN + 풀에서 2개를 계정·날짜마다 고른다 → dev.setDailyPick(['D-WALK20','D-BUS1']) 로 바꿔 볼 수 있다.
+const DEFAULT_PICK = ['D-WALK10', 'D-SUB1'];
+const pickOk = (p) => Array.isArray(p) && p.length === 2 && new Set(p).size === 2 && p.every((q) => q !== 'D-LOGIN' && DAILY_POOL.includes(q));
+const DAILY_ALL = [...DAILY_POOL, 'D-ALL3']; // 날짜 리셋 때는 풀 전체를 지운다
+const PERIOD_IDS = { weekly: ['W-WALK', 'W-DAYS', 'W-DAILY', 'W-TRANSIT'], monthly: ['M-WALK', 'M-DAYS', 'M-WEEKLY'] };
 
 export const SHOP_ITEMS = Object.freeze([
   { id: 'bike', name: T('첫 자전거', 'First bicycle'), listPrice: 160000, realPrice: 320000, days: 18 },
@@ -137,6 +140,8 @@ export function createMockClient({ storage, now = () => Date.now(), key = MOCK_K
   /** 하루 몫 = min(60분, 이번 주 남은 분) — 여기에 닿는 순간 지급 (#30 v4 move.payout 'daily') */
   const dayTarget = () => Math.max(0, Math.min(RULES.dayCapMin, RULES.weekCapMin - (s.travel.weekPaid || 0)));
   const settledToday = () => s.travel.settledDay === s.day;
+  const assigned = () => ['D-LOGIN', ...(pickOk(s.dailyPick) ? s.dailyPick : DEFAULT_PICK)];
+  const periodIds = (period) => (period === 'daily' ? [...assigned(), 'D-ALL3'] : PERIOD_IDS[period] || []);
   const travel = () => ({
     guest: !s.signedIn, kstDate: s.day, minutes: s.signedIn ? travelMin() : 0, capMinutes: RULES.dayCapMin, ratePerMin: movePerMinute(s.day),
     pendingBum: s.signedIn && !settledToday() ? Math.min(travelMin(), dayTarget()) * movePerMinute(s.day) : 0, distanceM: s.signedIn ? Math.round(s.travel.meters) : 0,
@@ -144,7 +149,7 @@ export function createMockClient({ storage, now = () => Date.now(), key = MOCK_K
   });
   const prog = (qid) => {
     const d = QUEST_DEFS[qid];
-    if (qid === 'D-ALL3') return DAILY_ASSIGNED.filter((q) => s.claimed[q]).length;
+    if (qid === 'D-ALL3') return assigned().filter((q) => s.claimed[q]).length;
     if (qid === 'D-WALK10' || qid === 'D-WALK20') return Math.min(d.target, travelMin());
     if (qid === 'D-RIDE10') return Math.min(d.target, Math.floor((s.travel.rideSec || 0) / 60));
     if (qid === 'W-WALK') return Math.min(d.target, s.travel.weekMin + travelMin());
@@ -174,7 +179,7 @@ export function createMockClient({ storage, now = () => Date.now(), key = MOCK_K
     if (!s.signedIn) return [];
     const out = [];
     for (let pass = 0; pass < 2; pass++) {
-      for (const qid of [...PERIOD_IDS.daily, ...PERIOD_IDS.weekly, ...PERIOD_IDS.monthly]) {
+      for (const qid of [...periodIds('daily'), ...PERIOD_IDS.weekly, ...PERIOD_IDS.monthly]) {
         if (s.claimed[qid]) continue;
         const q = quest(qid);
         if (q.state !== 'complete') continue;
@@ -190,10 +195,11 @@ export function createMockClient({ storage, now = () => Date.now(), key = MOCK_K
     if (d.period === 'weekly') s.progress['M-WEEKLY'] = (s.progress['M-WEEKLY'] || 0) + 1;
     addLedger('quest', d.bum, T(`할 일 · ${d.title.ko}`, `Quest · ${d.title.en}`));
     addKarma(d.axis, d.k);
-    const doneN = DAILY_ASSIGNED.filter((q) => s.claimed[q]).length;
-    const left = DAILY_ASSIGNED.find((q) => !s.claimed[q]);
+    const slots = assigned(), total = slots.length;
+    const doneN = slots.filter((q) => s.claimed[q]).length;
+    const left = slots.find((q) => !s.claimed[q]);
     const ev = { kind: 'quest', amount: d.bum, karma: { axis: d.axis, points: d.k }, title: d.title, questId: qid, period: d.period, coins: 8, balanceAfter: balance().total,
-      progressText: d.period === 'daily' ? (left ? T(`오늘의 할 일 ${doneN}/3 · 남은 할 일: ${QUEST_DEFS[left].title.ko}`, `Today ${doneN}/3 · next: ${QUEST_DEFS[left].title.en}`) : T('오늘의 할 일 3/3 완료', 'All 3 daily quests done')) : null };
+      progressText: d.period === 'daily' ? (left ? T(`오늘의 할 일 ${doneN}/${total} · 남은 할 일: ${QUEST_DEFS[left].title.ko}`, `Today ${doneN}/${total} · next: ${QUEST_DEFS[left].title.en}`) : T(`오늘의 할 일 ${total}/${total} 완료`, `All ${total} daily quests done`)) : null };
     bus.emit('quest', { period: d.period, quest: quest(qid) });
     bus.emit('reward', ev);
     return ev;
@@ -221,7 +227,7 @@ export function createMockClient({ storage, now = () => Date.now(), key = MOCK_K
     if (day === s.day) return;
     settleTravel(true);
     s.travel.weekMin += travelMin(); s.travel.monthMin += travelMin(); s.travel.sec = 0; s.travel.rideSec = 0; s.travel.meters = 0;
-    for (const q of PERIOD_IDS.daily) { delete s.claimed[q]; delete s.progress[q]; }
+    for (const q of DAILY_ALL) { delete s.claimed[q]; delete s.progress[q]; }
     if (kstWeek(t) !== s.week) { s.week = kstWeek(t); s.travel.weekMin = 0; s.travel.weekPaid = 0; s.transitKinds = []; s.places = []; s.daysVisited.week = 0; for (const q of PERIOD_IDS.weekly) { delete s.claimed[q]; delete s.progress[q]; } }
     if (kstMonth(t) !== s.month) { s.month = kstMonth(t); s.travel.monthMin = 0; s.daysVisited.month = 0; for (const q of PERIOD_IDS.monthly) { delete s.claimed[q]; delete s.progress[q]; } }
     s.day = day;
@@ -278,14 +284,14 @@ export function createMockClient({ storage, now = () => Date.now(), key = MOCK_K
         if (a.kind === 'vehicle') s.travel.rideSec = Math.min(RULES.dayCapMin * 60, (s.travel.rideSec || 0) + Math.max(0, Math.min(10, +a.seconds || 0)));
         s.walkRealKm = s.travel.meters / 1000;
         const after = travelMin();
-        if (after !== before) { addKarma('health', after - before); bus.emit('travel', travel()); for (const qid of ['D-WALK10', 'W-WALK', 'M-WALK'].filter((q) => q[0] !== 'D' || DAILY_ASSIGNED.includes(q))) bus.emit('quest', { period: QUEST_DEFS[qid].period, quest: quest(qid) }); settleQuests(); settleTravel(); save(); }
+        if (after !== before) { addKarma('health', after - before); bus.emit('travel', travel()); for (const qid of ['D-WALK10', 'D-WALK20', 'D-RIDE10', 'W-WALK', 'M-WALK'].filter((q) => q[0] !== 'D' || assigned().includes(q))) bus.emit('quest', { period: QUEST_DEFS[qid].period, quest: quest(qid) }); settleQuests(); settleTravel(); save(); }
       } else if (a.kind === 'visit' && a.placeId && !s.places.includes(a.placeId)) { s.places.push(a.placeId); addKarma('explore', 1); settleQuests(); save(); }
       else if (a.kind === 'photo') { addKarma('explore', 1); save(); }
       else if (a.kind === 'neighbor') { addKarma('neighbor', 1); save(); }
     },
     async listQuests(period) {
       roll();
-      const ids = PERIOD_IDS[period] || [];
+      const ids = periodIds(period);
       if (!s.signedIn) return later({ guest: true, period, resetsAt: nextReset(period, now()), quests: [], maxBum: 0, claimedBum: 0, info: T('구글 계정을 연동하면 할 일과 보상이 열려요', 'Link a Google account to unlock quests and rewards') });
       const quests = ids.map(quest);
       const tv = travel();
@@ -404,6 +410,8 @@ export function createMockClient({ storage, now = () => Date.now(), key = MOCK_K
 
   // ---- dev 전용 (demo=econ 메뉴 · 테스트). 서버 클라이언트에는 없다.
   client.dev = {
+    /** 서버 pickDaily 흉내: D-LOGIN 말고 풀에서 고른 2개 (예: ['D-WALK20','D-BUS1']). null 이면 기본(WALK10·SUB1). 오늘 진행은 유지 */
+    setDailyPick(pick = null) { s.dailyPick = pick && pickOk(pick) ? [...pick] : null; save(); for (const q of assigned()) bus.emit('quest', { period: 'daily', quest: quest(q) }); settleQuests(); save(); return assigned(); },
     state: () => JSON.parse(JSON.stringify(s)),
     reset() { s = freshState(now()); save(); bus.emit('session', session()); bus.emit('mode', { ...s.mode }); bus.emit('balance', { balance: balance(), delta: 0, reason: 'refund' }); },
     /** 로그인 흉내: 실제 Google 로그인은 registerGoogleSignIn 훅(#21) */
