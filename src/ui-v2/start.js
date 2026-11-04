@@ -3,7 +3,7 @@
 //   배경은 JPG 2장(DOM)이라 WebGL 드로우콜 0. 화면을 떠나면 노드를 지워 이미지 메모리도 놓는다.
 import { el, esc, ICON, headHtml, tagHtml } from './kit.js';
 import { setTop, liveChip, langChip, contributeChip } from './topbar.js';
-import { googleButton, requestGoogleSignIn, googleNotReadyText } from './google.js';
+import { googleButton, requestGoogleSignIn, googleNotReadyText, GOOGLE_G_SVG } from './google.js';
 import { regionSummary, readLastStation } from './data.js';
 import { tr, isEn, onLangChange } from '../i18n.js';
 import { REPO_URL } from '../worldGate.js';
@@ -16,9 +16,11 @@ const SCENES = [
 const SCENE_MS = 3000;
 
 /**
- * @param {{ region: object, onGuest: () => void, onContinue: (last: {region:string, at:string|null}) => void, onGoogle?: (account) => void }} o
+ * 로그인된 계정(econ.getSession() 이 게스트가 아님)이면 '게스트로 계속' 대신 계정 이름이 붙은 '계속하기'(primary) — 두 번째 기기에서 로그인한 뒤 시작화면으로
+ *   한 번 돌아왔을 때 '게스트'로 들어가 계정 잔액이 보이는 혼란을 없앤다. Google 버튼은 이 상태에서 숨긴다. 게스트 화면은 그대로.
+ * @param {{ region: object, onGuest: () => void, onContinue: (last: {region:string, at:string|null}) => void, onGoogle?: (account) => void, onAccount?: (session) => void }} o
  */
-export function openStart({ region, onGuest, onContinue, onGoogle }) {
+export function openStart({ region, onGuest, onContinue, onGoogle, onAccount }) {
   const base = import.meta.env.BASE_URL;
   const root = el('div', 'v2-screen v2-start');
   root.id = 'v2-start';
@@ -38,8 +40,28 @@ export function openStart({ region, onGuest, onContinue, onGoogle }) {
   const studio = root.querySelector('.v2-studio');
   const bgs = [...root.querySelectorAll('.v2-bg')];
   let scene = 0, msg = '', alive = true;
+  // 계정 상태: null = 확인 중(아주 잠깐, 버튼을 숨겨 '게스트로 계속'이 번쩍 보이지 않게) → 게스트/로그인. 1.5초 안에 답이 없으면 게스트 화면
+  let ses = null, checking = !document.body.classList.contains('mobile');
+  let offSes = null;
+  const signedIn = () => !!(ses && !ses.isGuest && (ses.signedIn ?? true));
+  if (checking) {
+    const done = (s) => { if (!alive) return; if (s) ses = s; if (checking || s) { checking = false; render(); } };
+    setTimeout(() => done(null), 1500);
+    import('./econ/index.js').then(({ econ }) => {
+      if (!alive) return;
+      offSes = econ.on('session', (s) => done(s));
+      econ.getSession().then(done).catch(() => done(null));
+    }).catch(() => done(null));
+  }
 
   const last = readLastStation();
+  function acctBlock() {
+    const name = ses.displayName || tr('내 계정', 'My account');
+    const av = `<span class="v2-acct-q on v2-start-av" aria-hidden="true">${esc([...name][0] || '•')}</span>`;
+    return `<div class="v2-start-acct">${av}<div><b>${esc(name)}</b><span class="v2-note">${ses.provider === 'google' || !ses.provider ? `${GOOGLE_G_SVG(14)} ${esc(tr('Google 계정 · 로그인됨', 'Google account · signed in'))}` : esc(tr('계정 · 로그인됨', 'Account · signed in'))}</span></div></div>
+      <button type="button" class="v2-btn primary v2-full v2-acct-go" data-v2="account">${esc(tr(`계속하기 · ${name}`, `Continue · ${name}`))}</button>
+      <p class="v2-note">${esc(tr('이 계정의 잔액·기록으로 이어서 들어가요', 'You continue with this account\'s balance and records'))}</p>`;
+  }
   function render() {
     const sum = regionSummary();
     const kr = sum.by.KR || { open: 0, soon: 0 }, us = sum.by.US || { open: 0, soon: 0 };
@@ -50,12 +72,12 @@ export function openStart({ region, onGuest, onContinue, onGoogle }) {
       <p class="v2-logo-sub">${esc(tr('다 같이 만들어 가는 오픈 월드 · Korea & USA', 'Walk real-world neighborhoods together · Korea & USA'))}</p>`;
     panel.innerHTML = `
       ${headHtml(tr('시작하기', 'Start'), { size: 20 })}
-      ${last ? `<button type="button" class="v2-btn primary v2-full" data-v2="continue">${esc(tr(`마지막 역으로 이어하기 · ${last.label}`, `Continue at ${last.label}`))}</button>
+      ${last ? `<button type="button" class="v2-btn ${signedIn() ? 'secondary' : 'primary'} v2-full" data-v2="continue">${esc(tr(`마지막 역으로 이어하기 · ${last.label}`, `Continue at ${last.label}`))}</button>
         <p class="v2-note">${esc(tr('지난번에 들어간 역 · 이 기기에 저장된 기록', 'Your last station · saved on this device'))}</p>` : ''}
-      <div class="v2-gsi-slot"></div>
+      ${checking ? `<p class="v2-note v2-checking">${esc(tr('계정 확인 중…', 'Checking your account…'))}</p>` : signedIn() ? acctBlock() : `<div class="v2-gsi-slot"></div>
       <p class="v2-note">${esc(tr('잔액·기록이 계정에 저장돼요 · 다른 기기에서도 이어하기', 'Balance and records are saved to your account · continue on any device'))}</p>
       <button type="button" class="v2-btn secondary v2-full" data-v2="guest">${esc(tr('게스트로 계속', 'Continue as Guest'))}</button>
-      <p class="v2-note">${esc(tr('게스트는 이 기기에만 저장 · 나중에 Google 연결 가능', 'Guests are saved on this device only · link Google later'))}</p>
+      <p class="v2-note">${esc(tr('게스트는 이 기기에만 저장 · 나중에 Google 연결 가능', 'Guests are saved on this device only · link Google later'))}</p>`}
       <p class="v2-msg" role="status" ${msg ? '' : 'hidden'}>${esc(msg)}</p>
       <div class="v2-open-now">
         <span class="v2-open-k">${esc(tr('지금 열린 곳', 'Open now'))}</span>
@@ -63,9 +85,10 @@ export function openStart({ region, onGuest, onContinue, onGoogle }) {
         ${tagHtml(tr(`미국 열림 ${us.open}`, `USA ${us.open} open`), '#4cc9f0')}
         ${tagHtml(tr(`준비중 ${soon}`, `${soon} soon`), '#9eb4c6')}
       </div>`;
-    const g = googleButton({ size: 'lg', label: 'signin', full: true });
-    g.dataset.v2 = 'google';
-    panel.querySelector('.v2-gsi-slot').replaceWith(g);
+    const slot = panel.querySelector('.v2-gsi-slot');
+    if (slot) { const g = googleButton({ size: 'lg', label: 'signin', full: true }); g.dataset.v2 = 'google'; slot.replaceWith(g); }
+    panel.classList.toggle('is-account', signedIn());
+    if (signedIn() && last) panel.querySelector('.v2-acct-go + .v2-note')?.after(panel.querySelector('[data-v2="continue"]'), panel.querySelector('[data-v2="continue"] + .v2-note'));
     panel.classList.toggle('has-continue', !!last);
     dots.innerHTML = SCENES.map((s, i) => `<i class="${i === scene ? 'on' : ''}"></i>`).join('') + `<span>${esc(isEn() ? SCENES[scene].en : SCENES[scene].ko)}</span>`;
     studio.innerHTML = `<small>${esc(tr('개발', 'Studio'))}</small><b>${esc(tr('크레이지랩스', 'CrazyLabs'))}</b>`;
@@ -86,6 +109,7 @@ export function openStart({ region, onGuest, onContinue, onGoogle }) {
     alive = false;
     clearInterval(timer);
     unsub();
+    offSes?.();
     document.body.classList.remove('v2-in-start');
     root.classList.add('is-leaving');
     setTimeout(() => root.remove(), 260);
@@ -96,6 +120,7 @@ export function openStart({ region, onGuest, onContinue, onGoogle }) {
     if (!b) return;
     const k = b.dataset.v2;
     if (k === 'guest') { trackEvent('uiv2_start_guest'); close(); onGuest(); return; }
+    if (k === 'account') { trackEvent('uiv2_start_account'); close(); (onAccount || onGuest)(ses); return; }
     if (k === 'continue' && last) { trackEvent('uiv2_start_continue', { region: last.region, at: last.at || '' }); close(); onContinue(last); return; }
     if (k === 'google') {
       trackEvent('uiv2_start_google');
