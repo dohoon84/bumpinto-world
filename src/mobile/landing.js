@@ -81,6 +81,7 @@ export function mountLanding() {
       const saved = readSavedPassport();
       if (st.view === 'start') {
         root.className = 'm-view-start';
+        const resumeBtn = (saved ? `<button type="button" class="m-btn ${signedIn() ? 'm-primary m-acct-go' : 'm-secondary'}" data-act="resume">${signedIn() ? esc(t(`계속하기 · ${acctName()}`, `Continue · ${acctName()}`)) : `${t('이어서 입장', 'Continue as')} · ${esc(saved.name)}`}</button>` : ''); // [econ-mobile] ?ui=v2 로그인 계정이면 '계속하기 · {계정}'(primary, 맨 위) · 아니면 기존 '이어서 입장'
         root.innerHTML = `
           <div class="m-shade"></div>
           <button type="button" class="m-icon-btn m-tr" data-act="lang" aria-label="${t('언어 바꾸기', 'Switch language')}">${GLOBE}<span>${isEn() ? 'KO' : 'EN'}</span></button>
@@ -91,8 +92,9 @@ export function mountLanding() {
           <div class="m-sheet m-start-sheet">
             <h2>${t('시작하기', 'Start')}</h2>
             ${signedIn() ? acctLine() : ''}
+            ${signedIn() ? resumeBtn : ''}
             <button type="button" class="m-btn ${signedIn() && saved ? 'm-secondary' : 'm-primary'}" data-act="pick">${t('입장할 곳 고르기', 'Choose where to start')}</button>
-            ${saved ? `<button type="button" class="m-btn ${signedIn() ? 'm-primary m-acct-go' : 'm-secondary'}" data-act="resume">${signedIn() ? esc(t(`계속하기 · ${acctName()}`, `Continue · ${acctName()}`)) : `${t('이어서 입장', 'Continue as')} · ${esc(saved.name)}`}</button>` : ''}
+            ${signedIn() ? '' : resumeBtn}
             ${signedIn() ? `<small>${t('로그인된 계정의 잔액·기록으로 이어서 들어가요', 'You continue with your signed-in account\'s balance and records')}${saved ? ` · ${t('캐릭터', 'Character')} ${esc(saved.name)}` : ''}</small>` : `<small>${saved ? t('이 폰에 저장된 캐릭터로 바로 들어가요', 'Jump back in with the character saved on this phone') : t('다음 화면에서 지역과 역을 고르고, 캐릭터를 만들어요', 'Pick a region and station, then make your character')}</small>`}
           </div>
           ${shouldShowHomeScreenHint() ? `<div class="m-a2hs" role="note"><span>${t('홈 화면에 추가하면 전체 화면으로 플레이할 수 있어요', 'Add to Home Screen to play in full screen')}</span><button type="button" data-act="a2hs-x" aria-label="${t('닫기', 'Close')}">✕</button></div>` : ''}
