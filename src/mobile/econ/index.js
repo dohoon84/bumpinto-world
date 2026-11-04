@@ -14,6 +14,7 @@ import { GOOGLE_G_SVG } from '../../ui-v2/google.js';
 import { mountMenuSection } from './menu.js';
 import { close as closeLayer } from '../../ui-v2/econ-ui/layer.js';
 import { coinSound, createCoinSound } from '../../ui-v2/econ-ui/coinSound.js';
+import { startResumeSaver, whoOf } from '../../ui-v2/resume.js';
 
 /** 모바일 코인 효과음: PC 와 같은 createCoinSound(400 ms 겹침 방지 · 이동/게시판 짧게)를 기기 볼륨만으로.
  *  PC 패널(panels.js)이 부르는 공용 coinSound.play / get 을 이 인스턴스로 돌린다(모바일에서만 실행 → PC 무관, BGM 볼륨 슬라이더와 무관).
@@ -32,6 +33,10 @@ export function isMobileEcon(search = location.search) {
 }
 
 export async function mountMobileEcon({ handset } = {}) {
+  // [econ-mobile] 그만둔 자리 저장 (PC bf72209 와 같은 키·규칙: bw.uiv2.resume.v1, 계정/게스트 × 월드, 4초 타이머 1개 · 탑승·지하·입장 전 제외)
+  let rses = null;
+  econ.getSession().then((x) => { rses = x; }).catch(() => {}); econ.on('session', (x) => { rses = x; });
+  startResumeSaver(new URLSearchParams(location.search).get('region') || 'jeongja', () => whoOf(rses));
   if (!isMobileEcon()) return null;
   injectEconCss();
   useAltHud(mhud);

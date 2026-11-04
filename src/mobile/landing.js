@@ -39,10 +39,11 @@ export function mountLanding() {
     const current = getCurrentRegion();
     const st = { view: 'start', region: current.id, station: 'jeongja' };
     // [econ-mobile] ?ui=v2: 로그인된 계정이면 '이어서 입장' 대신 계정 이름이 붙은 '계속하기'(PC 시작화면 12dd645 과 같은 규칙). 기본 UI 는 그대로.
-    let ses = null, lastSt = null, v2data = null; // lastSt: PC 와 같은 '마지막 역'(bw.uiv2.lastStation)
+    let ses = null, lastSt = null, v2data = null, rmod = null; // rmod: ui-v2/resume.js (그만둔 자리, PC bf72209) // lastSt: PC 와 같은 '마지막 역'(bw.uiv2.lastStation)
     const signedIn = () => !!(ses && !ses.isGuest && (ses.signedIn ?? true));
     if (new URLSearchParams(location.search).get('ui') === 'v2') {
       import('../ui-v2/data.js').then((d) => { v2data = d; lastSt = d.readLastStation(); if (signedIn() && root.isConnected && st.view === 'start') render(); }).catch(() => {});
+      import('../ui-v2/resume.js').then((m) => { rmod = m; }).catch(() => {});
       import('../ui-v2/econ/index.js').then(({ econ }) => econ.getSession()).then((s) => { ses = s || null; if (signedIn() && root.isConnected && st.view === 'start') render(); }).catch(() => {});
     }
 
@@ -71,6 +72,8 @@ export function mountLanding() {
     // [econ-mobile] 로그인 계정 '계속하기'(PC 9d48af4 와 같음): 지역·역 고르기를 거치지 않고 마지막 역의 입장 카드로 바로, 마지막 역이 없으면 정자역.
     //   입장 카드의 계정 모드(#30: #lobby-card.is-account · body.bw-signed-in → 계정 캐릭터로 바로 입장, 캐릭터·PIN 고르기 없음)는 lobby 쪽이 판단한다.
     const acctDest = () => lastSt || { region: current.id, at: null, label: v2data?.stationLabel?.(current.id, null) || t('정자역', 'Jeongja Stn.') };
+    // PC enterResume 과 같음: 이 월드에서 그만둔 자리(7일 이내, 그 뒤에 다른 역을 고르지 않음)가 있으면 입장 때 그 자리로
+    const handResume = () => { if (rmod) rmod.setResumePlace(rmod.readResume(rmod.whoOf(ses), new URLSearchParams(location.search).get('region') || 'jeongja', { since: lastSt?.t || 0 })); };
     const resumeAccount = () => {
       const last = acctDest();
       st.region = last.region; st.station = last.at || 'jeongja';
@@ -82,12 +85,14 @@ export function mountLanding() {
       for (const k of ['enter', 'passport', 'at']) url.searchParams.delete(k);
       for (const [k, v] of Object.entries(extra)) url.searchParams.set(k, String(v));
       history.replaceState(null, '', url.toString());
+      handResume();
       finish();
     };
     const resume = () => {
       const url = new URL(location.href);
       url.searchParams.set('passport', '1');
       history.replaceState(null, '', url.toString());
+      handResume();
       root.remove();
       document.body.classList.remove('in-mobile-landing');
       resolve();

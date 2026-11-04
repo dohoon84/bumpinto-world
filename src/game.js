@@ -26,6 +26,7 @@ import { mountCamera } from './camera/index.js'; // [camera] 폰 카메라·사�
 import { mountBoard } from './board.js';
 import { createNoticePopup } from './noticePopup.js'; // [notice-popup]
 import { createSms } from './sms.js';
+import { takeResumePlace } from './ui-v2/resume.js'; // [econ-mobile] 모바일 '계속하기'·'이어서 입장' = 그만둔 자리
 import { trackEvent } from './analytics.js';
 import { createTerrain } from './world/terrain.js'; // [terrain]
 import { Taxis } from './entities/taxis.js'; // [taxi]
@@ -1102,7 +1103,7 @@ function completeWorldJoin(name, look, session) {
   wear(look);
   const picked = explicitPick;
   explicitPick = false;
-  const rp = resumePlace; resumePlace = null;
+  const rp = resumePlace ?? (mobileMode ? takeResumePlace() : null); resumePlace = null; // [econ-mobile] 모바일은 시작화면이 넘겨준 자리
   const rb = corridor?.bounds || world.bounds;
   const resumed = !!rp && [rp.x, rp.z].every(Number.isFinite) && (!rb || (rp.x >= rb.x0 && rp.x <= rb.x1 && rp.z >= rb.z0 && rp.z <= rb.z1)) && !world.inWater?.(rp.x, rp.z);
   if (resumed) { corridorAt = null; applySession({ place: rp }); } // [ui-v2] 그만둔 자리 — 역 출구로 옮기지 않음 (범위 밖·물 위면 아래 역 입장 그대로)
