@@ -20,20 +20,34 @@
 //     - 범위 밖 코리더 가로등(public/corridor/streetlights.json)을 먼저 깔아 경계에서 겹치지 않게 함(출력엔 안 넣음)
 //     - 광장 데크 위: 가장자리에서 DECK.inset 안쪽으로 DECK.sp 간격 보행등(kind 4, 4.5 m, y = 데크 윗면)
 //     출력: { v, meta, boxes, lamps: [x, z, yaw, kind, y, …] } (y = -1 이면 지형 높이)
+//   [migeum] --migeum (= --region=migeum): 같은 규칙으로 미금역 일대(public/corridor/migeum/index.json meta.boxes) → public/corridor/migeum/streetlights.json
+//     - 판교와 같은 입력 규칙(코리더 타일 + 미금 타일 new/add, 밑면 11 m 미만 매스도 장애물). 데크는 없음 → 도로 규칙 배치 + 탄천 공원등만
+//     - OSM 가로등: data/osm_migeum_streetlights_raw.json (data/query_migeum_streetlights.overpassql) — 2026-11-04 기준 0개라 규칙 배치
+//     - 지하철 출입구 캐노피(3.4×7.5 m, 건물 안 출입구 제외) 둘레 CLEAR.entrance 안은 비움
+//     - 탄천 제방 띠(build-pangyo.mjs --region=migeum 의 STRIP 과 같은 계산) 안: 새로 만들지 않고, 기존 코리더 가로등(공원등)을 그대로 옮겨 담음(src keep)
+//       → 미금 켜짐/꺼짐과 상관없이 띠 안 가로등은 같은 자리
 //   사용: npm run corridor:streetlights [-- --osm=../bumpinto-world/data/raw/osm_merged.json] [--out=public/corridor/streetlights.json] [--verbose]
 import fs from 'node:fs';
 import path from 'node:path';
 import { cliArg, inRing, bboxOf, bboxGrid } from '../lib/world-geo.mjs';
 import { createTerrain } from '../../src/world/terrain.js';
 import { mergeTancheon } from '../../src/corridor/tancheon.js';
+import pc from 'polygon-clipping'; // [migeum] 탄천 띠
 
 const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), '../..');
 const VERBOSE = process.argv.includes('--verbose');
 const CACHE = path.join(ROOT, 'data/osm_streetlights_raw.json');
 const OSM_SRC = cliArg('osm', null);
-const PG = process.argv.includes('--pangyo'); // [pangyo]
-const OUT = path.resolve(ROOT, cliArg('out', PG ? 'public/corridor/pangyo/streetlights.json' : 'public/corridor/streetlights.json'));
-const PG_CACHE = path.join(ROOT, 'data/osm_pangyo_streetlights_raw.json');
+// [pangyo] [migeum] 확장 지역: --pangyo | --migeum | --region=pangyo|migeum. 없으면 코리더 전체(public/corridor/streetlights.json)
+const REGION = process.argv.includes('--pangyo') ? 'pangyo' : process.argv.includes('--migeum') ? 'migeum' : cliArg('region', null);
+if (REGION && !['pangyo', 'migeum'].includes(REGION)) throw new Error('--region=pangyo|migeum');
+const PG = !!REGION; // 지역 굽기(판교·미금 공통 경로)
+const RG = REGION ? { // 지역별 차이
+  pangyo: { deck: true, entrances: false, strip: false },
+  migeum: { deck: false, entrances: true, strip: true },
+}[REGION] : null;
+const OUT = path.resolve(ROOT, cliArg('out', PG ? `public/corridor/${REGION}/streetlights.json` : 'public/corridor/streetlights.json'));
+const PG_CACHE = path.join(ROOT, `data/osm_${REGION}_streetlights_raw.json`);
 const DECK = { sp: 18, inset: 1.6, elev: 4, dup: 10, scale: 0.45 }; // [pangyo] 데크 위 보행등
 const readJSON = (f) => JSON.parse(fs.readFileSync(f, 'utf8'));
 
@@ -66,7 +80,7 @@ const ARM = 2.0;           // 기둥에서 양쪽 팔 끝까지 (큰길 크기, 
 const NUDGE = [0, 3, -3, 6, -6, 9, -9];
 // 탄천 공원등: 산책로 종류 · 간격 · 기둥 위치(길 가장자리에서) · 단면 판정 여유
 const PARK = { kinds: new Set(['footway', 'cycleway', 'path', 'pedestrian']), sp: 30, curb: 0.6, waterPad: 1.5, topPad: 8, dup: 25, steps: 2.5, walkPad: 0.3 };
-const CLEAR = { junction: 7, crossingAlong: 7, crossingAcross: 3, bus: 8, tree: 2.6, building: 0.8, bridge: 3, dup: 12, dupOsm: 15, osmRoad: 30 };
+const CLEAR = { junction: 7, crossingAlong: 7, crossingAcross: 3, bus: 8, tree: 2.6, building: 0.8, bridge: 3, dup: 12, dupOsm: 15, osmRoad: 30, entrance: 5 }; // entrance: [migeum] 출입구 캐노피 중심에서(반대각 4.1 m + 여유)
 
 // ---- 투영: 라이브(jeongja.json meta.center)와 같은 식 ----
 const live = readJSON(path.join(ROOT, 'public/jeongja.json'));
@@ -78,10 +92,10 @@ const r1 = (v) => Math.round(v * 10) / 10, r3 = (v) => Math.round(v * 1000) / 10
 const CI = readJSON(path.join(ROOT, 'public/corridor/index.json'));
 const LB = CI.meta.liveBox, TS = CI.meta.tileSize, BB = CI.meta.bounds;
 const inLive = (x, z) => x >= LB.x0 && x <= LB.x1 && z >= LB.z0 && z <= LB.z1;
-const PGI = PG ? readJSON(path.join(ROOT, 'public/corridor/pangyo/index.json')) : null; // [pangyo]
+const PGI = PG ? readJSON(path.join(ROOT, `public/corridor/${REGION}/index.json`)) : null; // [pangyo] [migeum]
 const PGB = PGI?.meta.boxes || [];
-const inPangyo = (x, z) => PGB.some((b) => x >= b.x0 && x <= b.x1 && z >= b.z0 && z <= b.z1);
-const inArea = PG ? inPangyo : (x, z) => inLive(x, z) || !!CI.tiles[`${Math.floor(x / TS)}_${Math.floor(z / TS)}`];
+const inRegion = (x, z) => PGB.some((b) => x >= b.x0 && x <= b.x1 && z >= b.z0 && z <= b.z1);
+const inArea = PG ? inRegion : (x, z) => inLive(x, z) || !!CI.tiles[`${Math.floor(x / TS)}_${Math.floor(z / TS)}`];
 
 // ---- OSM 캐시 (가로등 · 정류장 · 쉘터 · 나무) ----
 function rewriteCache(src) {
@@ -113,16 +127,17 @@ for (const r of live.roads) roads.push({ ...r, src: 'live' });
 for (const b of live.buildings) if (!((b.mh || 0) >= 2.5)) blds.push(b.o);
 const base = readJSON(path.join(ROOT, 'public/corridor/base.json'));
 for (const r of base.ch) roads.push({ ...r, src: 'ch' });
-const MH_MAX = PG ? 11 : 2.5; // [pangyo] 판교: 밑면 11 m 미만 매스(데크 10 m 등)도 막음
+const MH_MAX = PG ? 11 : 2.5; // [pangyo] [migeum] 지역: 밑면 11 m 미만 매스(데크 10 m 등)도 막음
 for (const key of Object.keys(CI.tiles).sort()) {
   const t = readJSON(path.join(ROOT, 'public/corridor/tiles', key + '.json'));
   for (const r of t.r) roads.push({ ...r, src: 'tile' });
   for (const b of t.b) if (!((b.mh || 0) >= MH_MAX)) blds.push(b.o);
 }
 const deckParts = [];
-if (PG) { // [pangyo] 판교 타일(new = 판교만, add = 덧붙임) + 랜드마크 부품
+const entrancePts = []; // [migeum] 지하철 출입구 캐노피 자리
+if (PG) { // [pangyo] [migeum] 지역 타일(new = 지역 것만, add = 덧붙임) + 랜드마크 부품
   for (const [key, ti] of Object.entries(PGI.tiles).sort()) {
-    const t = readJSON(path.join(ROOT, 'public/corridor/pangyo/tiles', key + '.json'));
+    const t = readJSON(path.join(ROOT, `public/corridor/${REGION}/tiles`, key + '.json'));
     if (ti.mode !== 'add' && CI.tiles[key]) continue;
     for (const r of t.r || []) roads.push({ ...r, src: 'tile' });
     for (const b of t.b || []) if (!((b.mh || 0) >= MH_MAX)) blds.push(b.o);
@@ -131,7 +146,23 @@ if (PG) { // [pangyo] 판교 타일(new = 판교만, add = 덧붙임) + 랜드�
     if (!((p.mh || 0) >= MH_MAX)) blds.push(p.o);
     if (l.id === 'pangyo-deck') deckParts.push({ ...p, elevators: l.elevators || [] });
   }
+  if (RG.entrances) for (const l of PGI.landmarks) for (const e of l.entrances || []) if (!e.indoor) entrancePts.push([e.x, e.z]); // 건물 안 출입구는 건물이 막음
 }
+// [migeum] 탄천 제방 띠 — build-pangyo.mjs --region=migeum 의 STRIP 과 같은 계산(라이브 terrain.json 축 + 코리더 tancheon.json, 제방 위 + 0.6 m)
+let stripRings = null;
+if (RG?.strip) {
+  const T = mergeTancheon(readJSON(path.join(ROOT, 'public/terrain.json')), readJSON(path.join(ROOT, 'public/corridor/tancheon.json')));
+  const ax = T.axis, prof = T.prof, N = ax.length, left = [], right = [];
+  for (let i = 0; i < N; i += 2) {
+    const a = ax[Math.max(0, i - 1)], b = ax[Math.min(N - 1, i + 1)], L = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1;
+    const nx = (b[1] - a[1]) / L, nz = -(b[0] - a[0]) / L, pad = 0.6;
+    right.push([ax[i][0] + nx * (prof.topR[i] + pad), ax[i][1] + nz * (prof.topR[i] + pad)]);
+    left.push([ax[i][0] - nx * (prof.topL[i] + pad), ax[i][1] - nz * (prof.topL[i] + pad)]);
+  }
+  const ring = [...right, ...left.reverse()]; ring.push(ring[0]);
+  stripRings = pc.union([[ring]]);
+}
+const inStrip = (x, z) => !!stripRings && stripRings.some((poly) => inRing(x, z, poly[0]) && !poly.slice(1).some((h) => inRing(x, z, h)));
 const liveTransit = readJSON(path.join(ROOT, 'public/transit.json'));
 const corTransit = readJSON(path.join(ROOT, 'public/corridor/transit.json'));
 const crossings = [...base.crossings, ...(liveTransit.crossings || [])];
@@ -193,7 +224,7 @@ for (const r of roads) {
     for (let s = 6; s < L; s += 14) for (const side of [-1, 1]) treePts.push([ax + ((bx - ax) * s) / L + nx * side * (r.w / 2 + 1.6), az + ((bz - az) * s) / L + nz * side * (r.w / 2 + 1.6)]);
   }
 }
-const trees = ptGrid(treePts, 20), buses = ptGrid(busPts, 20);
+const trees = ptGrid(treePts, 20), buses = ptGrid(busPts, 20), entrances = ptGrid(entrancePts, 20);
 const cross = { pts: crossings.map((c) => [c.x, c.z]), g: null }; cross.g = ptGrid(cross.pts, 40).g;
 // 횡단보도 로컬 좌표: dir = 도로 방향, 줄무늬는 법선으로 ±w/2 (corridor/crossings.js). 신호등 기둥(w/2+0.9, dir 쪽 ~2.7 m)까지 비움
 const nearCrossing = (x, z) => {
@@ -252,6 +283,8 @@ function accept(l) { placedGrid.add({ x0: l.x, x1: l.x, z0: l.z, z1: l.z }, plac
 /** 기둥 + 양쪽 팔 끝(법선 방향 ±ARM*s)이 다 비었는지. 이유 문자열 또는 null */
 function blockedAt(x, z, nx, nz, s, own) {
   if (!inArea(x, z)) return 'area';
+  if (inStrip(x, z)) return 'strip'; // [migeum] 탄천 띠는 기존 코리더 가로등 그대로
+  if (entrancePts.length && nearPt(entrances, x, z, CLEAR.entrance)) return 'entrance'; // [migeum]
   if (nearBridge(x, z)) return 'bridge';
   if (onCar(x, z, 0.3)) return 'road';
   if (nearPt(junc, x, z, own.w / 2 + CLEAR.junction)) return 'junction';
@@ -265,11 +298,14 @@ function blockedAt(x, z, nx, nz, s, own) {
 }
 
 // [pangyo] 0) 범위 밖 코리더 가로등을 먼저 깐다(겹침 판정용, 출력 안 함)
+//   [migeum] 범위 안 탄천 띠의 코리더 가로등은 그대로 옮겨 담는다(src keep, 출력함) — 띠 안은 새로 만들지 않음
+const keepPark = [];
 if (PG) {
   const main = readJSON(path.join(ROOT, 'public/corridor/streetlights.json'));
   for (const arr of Object.values(main.cells)) for (let i = 0; i < arr.length; i += 4) {
     const x = arr[i], z = arr[i + 1];
-    if (!inPangyo(x, z) && PGB.some((b) => x > b.x0 - 60 && x < b.x1 + 60 && z > b.z0 - 60 && z < b.z1 + 60)) accept({ x, z, yaw: arr[i + 2], kind: arr[i + 3], src: 'seed', cls: 'seed' });
+    if (!inRegion(x, z) && PGB.some((b) => x > b.x0 - 60 && x < b.x1 + 60 && z > b.z0 - 60 && z < b.z1 + 60)) accept({ x, z, yaw: arr[i + 2], kind: arr[i + 3], src: 'seed', cls: 'seed' });
+    else if (inRegion(x, z) && inStrip(x, z)) { accept({ x, z, yaw: arr[i + 2], kind: arr[i + 3], src: 'keep', cls: 'keep-strip' }); if (arr[i + 3] === 3) keepPark.push([x, z]); }
   }
 }
 
@@ -338,10 +374,13 @@ function tancheonAt(x, z) {
   return { ad, top, w };
 }
 const parkGrid = bboxGrid(30), parkPts = [];
+for (const [x, z] of keepPark) { parkGrid.add({ x0: x, x1: x, z0: z, z1: z }, parkPts.length); parkPts.push([x, z]); } // [migeum] 옮겨 담은 띠 공원등
 const nearPark = (x, z, r) => { for (const i of parkGrid.near({ x0: x - r, x1: x + r, z0: z - r, z1: z + r })) if (Math.hypot(parkPts[i][0] - x, parkPts[i][1] - z) < r) return true; return false; };
 const PARK_SCALE = 0.45;
 function parkBlocked(x, z, nx, nz, own) {
   if (!inArea(x, z)) return 'area';
+  if (inStrip(x, z)) return 'strip'; // [migeum]
+  if (entrancePts.length && nearPt(entrances, x, z, CLEAR.entrance)) return 'entrance'; // [migeum]
   if (!tancheonAt(x, z)) return 'park-band';
   if (terrain.renderHeight(x, z) < FLOOR - 0.2) return 'park-bed';
   if (nearBridge(x, z)) return 'bridge';
@@ -411,7 +450,7 @@ if (PG) for (const part of deckParts) {
       if (!inRing(x, z, o) || ringDist(x, z, o) < DECK.inset - 0.3) b = 'deck-edge';
       else if ((part.holes || []).some((h) => inRing(x, z, h) || ringDist(x, z, h) < 1.5)) b = 'deck-hole';
       else if (elev.some(([ex, ez]) => Math.hypot(ex - x, ez - z) < DECK.elev)) b = 'deck-elevator';
-      else if (!inPangyo(x, z)) b = 'area';
+      else if (!inRegion(x, z)) b = 'area';
       else if (placed.some((l) => l.kind === 4 && Math.hypot(l.x - x, l.z - z) < DECK.dup)) b = 'dup';
       if (b) { last = b; continue; }
       accept({ x, z, yaw: yawOf(nx, nz), kind: 4, y: part.h, src: 'deck', cls: 'deck' }); deckN++; done = true; break;
@@ -422,14 +461,19 @@ if (PG) for (const part of deckParts) {
 
 // ---- 출력 ----
 if (PG) { // [pangyo] 판교 범위 안만 평면 배열 하나로
-  const mine = placed.filter((l) => l.src !== 'seed' && inPangyo(l.x, l.z)).sort((a, b) => a.z - b.z || a.x - b.x);
+  const mine = placed.filter((l) => l.src !== 'seed' && inRegion(l.x, l.z)).sort((a, b) => a.z - b.z || a.x - b.x);
   const lamps = mine.flatMap((l) => [r1(l.x), r1(l.z), r3(((l.yaw % Math.PI) + Math.PI) % Math.PI), l.kind, l.kind === 4 ? r1(l.y) : -1]);
   const by = {}; for (const l of mine) by[l.cls] = (by[l.cls] || 0) + 1;
-  const counts = { total: mine.length, osm: mine.filter((l) => l.src === 'osm').length, osmNodes: osmLamps.filter((L) => inPangyo(...L.p)).length, road: mine.filter((l) => l.src === 'gen').length, deck: deckN, tancheon: mine.filter((l) => l.kind === 3).length, byClass: by, skipped: reasons };
+  const counts = { total: mine.length, osm: mine.filter((l) => l.src === 'osm').length, osmNodes: osmLamps.filter((L) => inRegion(...L.p)).length, road: mine.filter((l) => l.src === 'gen').length, deck: deckN, tancheon: mine.filter((l) => l.kind === 3).length, byClass: by, skipped: reasons };
+  if (RG.strip) { // [migeum] 띠 안 옮겨 담은 코리더 가로등 · 범위 안 코리더 가로등(런타임이 건너뛰는 것) 수
+    counts.keptStrip = mine.filter((l) => l.src === 'keep').length;
+    counts.corridorReplaced = Object.values(readJSON(path.join(ROOT, 'public/corridor/streetlights.json')).cells).reduce((n, a) => { for (let i = 0; i < a.length; i += 4) if (inRegion(a[i], a[i + 1])) n++; return n; }, 0);
+  }
   const pgOsm = readJSON(PG_CACHE);
-  const out = { v: 1, attribution: '© OpenStreetMap contributors (ODbL)', meta: { generated: 'scripts/corridor/build-streetlights.mjs --pangyo', osm: { query: 'data/query_pangyo_streetlights.overpassql', osm_base: pgOsm.osm_base, streetLampNodes: counts.osmNodes }, spacing: { ...Object.fromEntries(Object.entries(CLASS).map(([k, c]) => [k, c.sp])), deck: DECK.sp }, counts }, boxes: PGB, lamps };
+  const spacing = { ...Object.fromEntries(Object.entries(CLASS).map(([k, c]) => [k, c.sp])), ...(RG.deck ? { deck: DECK.sp } : {}) };
+  const out = { v: 1, attribution: '© OpenStreetMap contributors (ODbL)', meta: { generated: `scripts/corridor/build-streetlights.mjs --${REGION}`, osm: { query: `data/query_${REGION}_streetlights.overpassql`, osm_base: pgOsm.osm_base, streetLampNodes: counts.osmNodes }, spacing, counts }, boxes: PGB, lamps };
   fs.writeFileSync(OUT, JSON.stringify(out) + '\n');
-  console.log(`pangyo streetlights: ${mine.length} lamps (OSM ${counts.osm}/${counts.osmNodes}, road ${counts.road}, deck ${deckN}, tancheon ${counts.tancheon}) → ${path.relative(ROOT, OUT)} (${(fs.statSync(OUT).size / 1024).toFixed(1)} KB)`);
+  console.log(`${REGION} streetlights: ${mine.length} lamps (OSM ${counts.osm}/${counts.osmNodes}, road ${counts.road}, deck ${deckN}, tancheon ${counts.tancheon}) → ${path.relative(ROOT, OUT)} (${(fs.statSync(OUT).size / 1024).toFixed(1)} KB)`);
   console.log('by class', by); console.log('skipped', reasons);
   process.exit(0);
 }
