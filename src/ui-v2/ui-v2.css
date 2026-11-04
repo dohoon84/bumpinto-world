@@ -92,6 +92,10 @@ body.ui-v2:not(.mobile).v2-in-start #world-gate { visibility: hidden; }
 body.ui-v2:not(.mobile) .v2-start-bg { position: absolute; inset: 0; }
 body.ui-v2:not(.mobile) .v2-bg { position: absolute; inset: -2.5% -5% -5% -2.5%; background-size: cover; background-position: center; opacity: 0; transition: opacity 1.6s ease-in-out; animation: v2-pan 12s ease-in-out infinite alternate; will-change: opacity, transform; }
 body.ui-v2:not(.mobile) .v2-bg.on { opacity: 1; }
+/* PC 배경 영상 (실제 게임 루프) — 재생되면 페이드 인, 장면 점·캡션은 숨김 */
+body.ui-v2:not(.mobile) .v2-bgvideo { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0; transition: opacity .6s ease-out; pointer-events: none; }
+body.ui-v2:not(.mobile) .v2-bgvideo.is-on { opacity: 1; }
+body.ui-v2:not(.mobile) .v2-start.bgv-on .v2-scene-dots { display: none; }
 body.ui-v2:not(.mobile) .v2-bg:nth-child(2) { animation-delay: -6s; }
 @keyframes v2-pan { from { transform: translate(0, 0); } to { transform: translate(2.5%, 2.5%); } }
 body.ui-v2:not(.mobile) .v2-shade-l { position: absolute; inset: 0 auto 0 0; width: 57.3%; background: linear-gradient(90deg, rgba(7, 13, 28, .82), rgba(7, 13, 28, .45) 60%, rgba(7, 13, 28, 0)); }
