@@ -13,14 +13,38 @@ export class Input {
     });
     addEventListener('keyup', (e) => this.keys.delete(e.code));
     addEventListener('blur', () => this.keys.clear());
-    let drag = null;
-    canvas.addEventListener('pointerdown', (e) => { drag = { x: e.clientX, y: e.clientY, id: e.pointerId }; canvas.setPointerCapture(e.pointerId); });
+    // 한 손가락(마우스) 드래그 = 카메라 회전. [mobile] 두 손가락 = 핀치 줌 (터치를 identifier 별로 따로 본다 →
+    // 조이스틱(#m-joy, 캔버스 밖)을 한 손으로 쓰면서 다른 손으로 핀치해도 된다)
+    const pts = new Map();
+    let drag = null, pinch = 0;
+    const pinchDist = () => { const [a, b] = [...pts.values()]; return Math.hypot(a.x - b.x, a.y - b.y) || 1; };
+    canvas.addEventListener('pointerdown', (e) => {
+      pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      try { canvas.setPointerCapture(e.pointerId); } catch { /* 이미 끝난 포인터 */ }
+      if (pts.size === 2) { drag = null; pinch = pinchDist(); } else if (pts.size === 1) drag = { x: e.clientX, y: e.clientY, id: e.pointerId };
+    });
     canvas.addEventListener('pointermove', (e) => {
+      const pt = pts.get(e.pointerId);
+      if (!pt) return;
+      pt.x = e.clientX; pt.y = e.clientY;
+      if (pts.size >= 2 && pinch) {
+        const d = pinchDist();
+        this.zoomDelta += pinch / d - 1; // 벌리면 가까이, 오므리면 멀리 (거리 범위는 휠과 같은 곳에서 자른다)
+        pinch = d;
+        return;
+      }
       if (!drag || drag.id !== e.pointerId) return;
       this.yawDelta -= (e.clientX - drag.x) * 0.006; this.pitchDelta += (e.clientY - drag.y) * 0.005;
       drag.x = e.clientX; drag.y = e.clientY;
     });
-    canvas.addEventListener('pointerup', () => (drag = null));
+    const up = (e) => {
+      pts.delete(e.pointerId);
+      if (pts.size < 2) pinch = 0;
+      // 핀치하다 한 손가락만 남으면 그 손가락으로 다시 회전 (튀지 않게 지금 위치부터)
+      if (pts.size === 1) { const [[id, q]] = [...pts.entries()]; drag = { x: q.x, y: q.y, id }; } else drag = null;
+    };
+    canvas.addEventListener('pointerup', up);
+    canvas.addEventListener('pointercancel', up);
     canvas.addEventListener('wheel', (e) => { this.zoomDelta += e.deltaY * 0.002; e.preventDefault(); }, { passive: false });
   }
   // 반환: {f, s, run, jump}

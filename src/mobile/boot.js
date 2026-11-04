@@ -11,6 +11,18 @@ function prepDocument() {
   // 노치·홈 인디케이터 영역까지 그리고 env(safe-area-inset-*) 로 피한다 (데스크톱 브라우저에선 효과 없음)
   const vp = document.querySelector('meta[name="viewport"]');
   if (vp && !/viewport-fit/.test(vp.content)) vp.content += ', viewport-fit=cover';
+  // iOS Safari/Chrome: 두 손가락 핀치가 페이지 확대로 새지 않게 (게임 핀치 줌은 캔버스 pointer 이벤트로)
+  for (const t of ['gesturestart', 'gesturechange', 'gestureend']) document.addEventListener(t, (e) => e.preventDefault(), { passive: false });
+  // 테스트용 안전 영역 흉내: ?safe=59 (좌우 59 · 아래 21, iPhone 가로) 또는 ?safe=왼,오,아래
+  const sp = new URLSearchParams(location.search).get('safe');
+  if (sp) {
+    const px = (v) => `${parseInt(v, 10) || 0}px`;
+    const [l, r = l, b = '21'] = sp.split(',');
+    const st = document.body.style;
+    st.setProperty('--sa-l', px(l)); st.setProperty('--sa-r', px(r)); st.setProperty('--sa-b', px(b));
+    document.body.classList.add('m-safe-sim');
+    if ((parseInt(r, 10) || 0) > (parseInt(l, 10) || 0)) document.body.classList.add('m-safe-r'); // 아일랜드가 오른쪽
+  }
   if (!document.getElementById('m-rotate')) {
     const r = document.createElement('div');
     r.id = 'm-rotate';

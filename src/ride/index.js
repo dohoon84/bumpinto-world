@@ -49,6 +49,8 @@ export function parseRideSit(s) {
   return null;
 }
 
+// [mobile] 터치 화면에서는 키 안내(E·X·V·Y·Esc) 대신 버튼 이름으로
+const MOB = () => document.body.classList.contains('mobile');
 export function mountRide({ corridor, getPlayer, remotes, camera, cam, setMode, canvas, travel, handset, prepare, canBoard, emitNow, myId, params = null, liveObstacles = null, jzBuses = null }) {
   const pl = getPlayer;
   const log = createRideLog();
@@ -390,7 +392,7 @@ export function mountRide({ corridor, getPlayer, remotes, camera, cam, setMode, 
       <div class="hd"><span class="chip" style="background:${col}">${esc(P.ref)}</span><div class="tt"><b>${en ? `Route ${esc(P.ref)} map` : `${esc(P.ref)}번 노선도`}</b><small>${en ? `${esc(stopName(P, 0))} → toward ${esc(dir)} (terminus)` : `${esc(stopName(P, 0))} → ${esc(dir)} 방면(종점)`} · ${n}${en ? ' stops' : '개 정류장'}</small></div><button type="button" class="x" data-map="close" aria-label="${en ? 'Close' : '닫기'}">✕</button></div>
       ${svg}
       <ol class="line" style="--c:${col}">${rows}</ol>
-      <div class="ft">${en ? 'Esc / ✕ to close · dimmed = passed · ⏵ next stop highlighted' : 'Esc / ✕ 닫기 · 흐린 정류장 = 지나옴 · 강조 = 다음 정류장'}</div></div>`;
+      <div class="ft">${en ? `${MOB() ? '✕' : 'Esc / ✕'} to close · dimmed = passed · ⏵ next stop highlighted` : `${MOB() ? '✕' : 'Esc / ✕'} 닫기 · 흐린 정류장 = 지나옴 · 강조 = 다음 정류장`}</div></div>`;
     if (scroll) { const el = mapEl.querySelector('li.next, li.here, li.bus'); el?.scrollIntoView?.({ block: 'center' }); }
   }
   addEventListener('keydown', (e) => { if (e.code === 'Escape' && !mapEl.hidden) { closeRouteMap(); e.stopPropagation(); } }, true);
@@ -495,7 +497,7 @@ export function mountRide({ corridor, getPlayer, remotes, camera, cam, setMode, 
         <button type="button" data-go="fast" ${sel ? '' : 'disabled'}>⏩ ${en ? `Fast-forward ×${FF}` : `빨리감기 ×${FF}`}</button>
         <button type="button" data-go="instant" class="premium" ${sel ? '' : 'disabled'}>⚡ ${en ? 'Instant arrival' : '즉시 도착'}<small>${en ? 'future premium · ₩0 now' : '프리미엄 예정 · 지금 0원'}</small></button>
       </div>
-      <div class="ft">${r.phase === 'drive' ? `<button type="button" data-go="stop">🛑 X · ${en ? 'Pull over here' : '세워주세요'}</button>` : ''}<button type="button" data-go="exit">${en ? 'Get out' : '내리기'}</button></div>`;
+      <div class="ft">${r.phase === 'drive' ? `<button type="button" data-go="stop">🛑 ${MOB() ? '' : 'X · '}${en ? 'Pull over here' : '세워주세요'}</button>` : ''}<button type="button" data-go="exit">${en ? 'Get out' : '내리기'}</button></div>`;
     panel.hidden = false;
   }
   panel.addEventListener('click', (e) => {
@@ -516,7 +518,7 @@ export function mountRide({ corridor, getPlayer, remotes, camera, cam, setMode, 
     picking = { down: null };
     setMode('overview');
     panel.hidden = true;
-    toast(L('지도를 클릭해 목적지를 고르세요 (Esc 취소)', 'Click the map to choose a destination (Esc to cancel)'), 6);
+    toast(MOB() ? L('지도를 눌러 목적지를 고르세요', 'Tap the map to choose a destination') : L('지도를 클릭해 목적지를 고르세요 (Esc 취소)', 'Click the map to choose a destination (Esc to cancel)'), 6);
   }
   const ray = new THREE.Raycaster(), plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), ndc = new THREE.Vector2();
   function pickAt(clientX, clientY) {
@@ -696,7 +698,7 @@ export function mountRide({ corridor, getPlayer, remotes, camera, cam, setMode, 
       if (ride.phase === 'wait' || ride.phase === 'called') {
         const tp = ride.t.mesh.position, p = pl().position;
         if (ride.phase === 'wait' && Math.hypot(tp.x - p.x, tp.z - p.z) < TAXI_BOARD_R) return boardTaxi();
-        if (ride.phase === 'wait') { toast(L('택시 가까이 가서 E', 'Walk up to the taxi and press E')); return true; }
+        if (ride.phase === 'wait') { toast(MOB() ? L('택시 가까이 가서 \'택시 타기\'', 'Walk up to the taxi and tap Get in') : L('택시 가까이 가서 E', 'Walk up to the taxi and press E')); return true; }
         // 오는 중이면 E 는 버스/자전거에 양보
       } else if (ride.phase === 'choose') { openTaxiPanel(); return true; }
       else if (ride.phase === 'drive') { toast(L('도착하면 자동으로 내려요 (X: 세워주세요)', 'You will get out on arrival (X: pull over)')); openTaxiPanel(); return true; }
@@ -835,23 +837,23 @@ export function mountRide({ corridor, getPlayer, remotes, camera, cam, setMode, 
       const next = stopName(P, nextIdx) || (en ? 'End of line' : '종점');
       html = `<button type="button" class="chip map" data-ride="map" title="${en ? 'Route map' : '노선도'}" style="background:${lv.plain ? '#2c3e6b' : lv.color}">${esc(P.ref)}</button>
         <span class="where">${r.dwell ? `<b>${en ? 'Now at' : '정차 중'}</b> ${esc(cur)} · ` : ''}<b>${en ? 'Next stop' : '다음 정류장'}</b> ${esc(next)} <small>${en ? '다음 정류장' : 'Next stop'}</small></span>
-        <button type="button" data-ride="e" class="${r.bell ? 'bell on' : 'bell'}">${r.dwell ? (en ? 'E · Get off now' : 'E · 지금 내리기') : r.bell ? (en ? '🔔 Stop requested' : '🔔 하차 벨 눌림') : (en ? '🔔 E · Get off at next stop' : '🔔 E · 다음 정류장 하차')}</button>
-        <button type="button" data-ride="cam">🎥 V · ${camPref.bus === '1p' ? (en ? 'Window' : '창가 1인칭') : (en ? 'Behind' : '뒤쪽 3인칭')}</button>
+        <button type="button" data-ride="e" class="${r.bell ? 'bell on' : 'bell'}">${(MOB() ? (x) => x.replace('E · ', '') : (x) => x)(r.dwell ? (en ? 'E · Get off now' : 'E · 지금 내리기') : r.bell ? (en ? '🔔 Stop requested' : '🔔 하차 벨 눌림') : (en ? '🔔 E · Get off at next stop' : '🔔 E · 다음 정류장 하차'))}</button>
+        <button type="button" data-ride="cam">🎥 ${MOB() ? '' : 'V · '}${camPref.bus === '1p' ? (en ? 'Window' : '창가 1인칭') : (en ? 'Behind' : '뒤쪽 3인칭')}</button>
         <button type="button" data-ride="voice" class="voice" title="${en ? 'Announcements / bell sound' : '안내 방송·벨 소리'}">${sound.muted ? '🔇' : '🔊'}</button>${r.follow ? `<span class="co">👥 ${en ? 'riding together' : '함께 탑승 중'}</span>` : ''}`;
     } else if (ride?.mode === 'taxi') {
       const r = ride, lv = TAXI_LIVERIES[r.t.liv];
       const d = Math.round(Math.hypot(r.t.mesh.position.x - pl().position.x, r.t.mesh.position.z - pl().position.z));
       const st = r.phase === 'called' ? (en ? `Taxi on the way · ${d} m` : `택시 오는 중 · ${d}m`)
-        : r.phase === 'wait' ? (en ? `Taxi is here · ${d} m — press E to get in` : `택시 도착 · ${d}m — E로 탑승`)
+        : r.phase === 'wait' ? (MOB() ? (en ? `Taxi is here · ${d} m` : `택시 도착 · ${d}m`) : en ? `Taxi is here · ${d} m — press E to get in` : `택시 도착 · ${d}m — E로 탑승`)
           : r.phase === 'choose' ? (en ? 'Choose a destination' : '목적지를 고르세요')
             : (en ? `To ${r.dest?.label} · ${r.speed === 'fast' ? `⏩ ×${FF}` : '▶'} · ${(remainM(r) / 1000).toFixed(1)} km left · ${Math.round(r.t.v * 3.6)} km/h` : `${r.dest?.label}(으)로 이동 중 · ${r.speed === 'fast' ? `⏩ ×${FF}` : '▶'} · 남은 ${(remainM(r) / 1000).toFixed(1)}km · ${Math.round(r.t.v * 3.6)}km/h`);
       html = `<span class="chip taxi" style="background:${lv?.tag || '#f6c700'};color:${lv?.tagFg || '#111'}">🚕 ${en ? 'TAXI' : '택시'}</span><span class="where">${esc(st)}</span>`
         + (r.phase === 'called' || r.phase === 'wait' ? `<button type="button" data-ride="cancel">${en ? 'Cancel' : '호출 취소'}</button>` : '')
-        + (r.phase === 'drive' ? `<button type="button" data-ride="stop" class="${r.stopReq ? 'stop on' : 'stop'}">${r.stopReq ? (en ? '🛑 Pulling over…' : '🛑 정차 요청됨') : (en ? '🛑 X · Pull over' : '🛑 X · 세워주세요')}</button>` : '')
-        + (r.phase === 'called' || r.phase === 'wait' ? '' : `<button type="button" data-ride="cam">🎥 V · ${camPref.taxi === '1p' ? (en ? 'Inside' : '차내 1인칭') : (en ? 'Behind' : '뒤쪽 3인칭')}</button>`);
+        + (r.phase === 'drive' ? `<button type="button" data-ride="stop" class="${r.stopReq ? 'stop on' : 'stop'}">${r.stopReq ? (en ? '🛑 Pulling over…' : '🛑 정차 요청됨') : (MOB() ? (en ? '🛑 Pull over' : '🛑 세워주세요') : en ? '🛑 X · Pull over' : '🛑 X · 세워주세요')}</button>` : '')
+        + (r.phase === 'called' || r.phase === 'wait' ? '' : `<button type="button" data-ride="cam">🎥 ${MOB() ? '' : 'V · '}${camPref.taxi === '1p' ? (en ? 'Inside' : '차내 1인칭') : (en ? 'Behind' : '뒤쪽 3인칭')}</button>`);
     } else {
       const c = boardable();
-      if (c) { const lv = liveryOf(c.P.type); html = `<span class="chip" style="background:${lv.plain ? '#2c3e6b' : lv.color}">${esc(c.P.ref)}</span><span class="where">${en ? `toward ${esc(terminusOf(c.P))} · stopped` : `${esc(terminusOf(c.P))} 방면 · 정차 중`}</span><button type="button" data-ride="e" class="board">E · ${en ? 'Board' : '탑승'}</button>`; }
+      if (c) { const lv = liveryOf(c.P.type); html = `<span class="chip" style="background:${lv.plain ? '#2c3e6b' : lv.color}">${esc(c.P.ref)}</span><span class="where">${en ? `toward ${esc(terminusOf(c.P))} · stopped` : `${esc(terminusOf(c.P))} 방면 · 정차 중`}</span><button type="button" data-ride="e" class="board">${MOB() ? '' : 'E · '}${en ? 'Board' : '탑승'}</button>`; }
     }
     if (html !== hudHtml) { hudHtml = html; hud.innerHTML = html; hud.hidden = !html; }
     renderBusCard();
@@ -872,8 +874,8 @@ export function mountRide({ corridor, getPlayer, remotes, camera, cam, setMode, 
   }
   function stopHint(stop) {
     const en = isEn(), c = boardable();
-    if (c && c.kind === 'sim' && c.P.stops[c.stopIdx]?.stop === stop.id) return `<div class="ride-board">🚌 <b>${esc(c.P.ref)}</b> ${en ? 'is stopped here — press <b>E</b> to board' : '정차 중 — <b>E</b> 탑승'}</div>`;
-    return `<div class="ride-tip">${en ? 'Press E when a bus stops · Y: call a taxi' : '버스가 서면 E로 탑승 · Y 택시 호출'}</div>`;
+    if (c && c.kind === 'sim' && c.P.stops[c.stopIdx]?.stop === stop.id) return `<div class="ride-board">🚌 <b>${esc(c.P.ref)}</b> ${MOB() ? (en ? 'is stopped here — tap Board' : '정차 중 — \'버스 타기\'') : en ? 'is stopped here — press <b>E</b> to board' : '정차 중 — <b>E</b> 탑승'}</div>`;
+    return `<div class="ride-tip">${MOB() ? (en ? 'Tap Board when a bus stops · taxi: phone app' : '버스가 서면 \'버스 타기\' · 택시는 폰 앱') : en ? 'Press E when a bus stops · Y: call a taxi' : '버스가 서면 E로 탑승 · Y 택시 호출'}</div>`;
   }
 
   // ---------- 폰 앱 ----------
@@ -911,8 +913,8 @@ export function mountRide({ corridor, getPlayer, remotes, camera, cam, setMode, 
             <button type="button" class="ride-app-btn stop" data-xact="stop" ${r.stopReq ? 'disabled' : ''}>${r.stopReq ? (en ? '🛑 Pulling over…' : '🛑 정차 요청됨') : (en ? '🛑 Pull over here (X)' : '🛑 세워주세요 (X)')}</button>${fare}`;
         }
         if (r?.phase === 'choose') return `<p class="hint"><b>${en ? 'In the taxi — choose a destination' : '탑승 중 — 목적지를 골라 주세요'}</b></p><button type="button" class="ride-app-btn" data-xact="panel">${en ? 'Destinations' : '목적지 선택'}</button>${fare}`;
-        const st = r ? ({ called: en ? 'On the way' : '오는 중', wait: en ? 'Arrived — press E near it' : '도착 — 가까이 가서 E' })[r.phase] : '';
-        return `<p class="hint">${en ? 'Call the nearest taxi to the roadside (or press Y).' : '가장 가까운 택시를 길가로 부릅니다 (단축키 Y).'}</p>
+        const st = r ? ({ called: en ? 'On the way' : '오는 중', wait: MOB() ? (en ? 'Arrived — walk up and tap Get in' : '도착 — 가까이 가서 \'택시 타기\'') : en ? 'Arrived — press E near it' : '도착 — 가까이 가서 E' })[r.phase] : '';
+        return `<p class="hint">${MOB() ? (en ? 'Call the nearest taxi to the roadside.' : '가장 가까운 택시를 길가로 부릅니다.') : en ? 'Call the nearest taxi to the roadside (or press Y).' : '가장 가까운 택시를 길가로 부릅니다 (단축키 Y).'}</p>
           ${st ? `<p class="hint"><b>${esc(st)}</b></p><button type="button" class="ride-app-btn" data-xact="cancel">${en ? 'Cancel' : '호출 취소'}</button>` : `<button type="button" class="ride-app-btn" data-xact="hail">🚕 ${en ? 'Call a taxi' : '택시 호출'}</button>`}
           ${fare}`;
       },
@@ -930,6 +932,7 @@ export function mountRide({ corridor, getPlayer, remotes, camera, cam, setMode, 
     get active() { return active(); },
     get ride() { return ride; },
     get calling() { return ride?.mode === 'taxi' && (ride.phase === 'called' || ride.phase === 'wait'); },
+    get canBoardBus() { return !ride && !!boardable(); }, // [mobile] 정차 중인 버스 앞 → '버스 타기' 버튼
     setOverlay(o) { overlayRef = o; },
     handleE, hail, toggleCam, remoteHook, requestStop, openRouteMap, closeRouteMap, sound,
     get routeMapOpen() { return !mapEl.hidden; },
