@@ -129,7 +129,7 @@ npx wrangler d1 migrations apply bumpinto-accounts --remote    # 0002 만 적용
 |---|---|---|
 | 1 | `ECONOMY_ENABLED="1"` (`ECON_FEATURES` 비움) | 로그인 + 원장 + 잔액, 웰컴·베타 지급, 0원 탑승 기록 |
 | 2 | `ECON_FEATURES="move"` | 서버가 웹소켓 위치로 검증한 이동 보상 (172 bum/분, 하루 60분 · 주 300분 상한) |
-| 3 | `ECON_FEATURES="move,quests"` | 일/주/월 할 일 + 업적 (일 12,000 · 주 60,000 · 하루 전체 50,000 상한) |
+| 3 | `ECON_FEATURES="move,quests"` | 일/주/월 할 일 + 업적 (bum 상한 없음 — 할 일은 기간당 1회, 업적은 계정당 1회가 상한. 기획 최대치 일 약 6,000 · 주 22,000 · 월 40,000) |
 | 4 | `ECON_FEATURES="move,quests,shop"` | 상점(지금은 CR·1 로드바이크만) |
 | 5 | `ECON_FEATURES="move,quests,shop,board"` | 게시판 글 보상(40자 이상, 10분 간격, 하루 3회, 가입 24시간 뒤부터, 지우면 회수) |
 | 나중 | `ECON_PAID="1"` | 교통·상점 실제 차감. **법무 검토 전에는 켜지 않는다.** 현금 충전·결제는 이 브랜치에 없음 |

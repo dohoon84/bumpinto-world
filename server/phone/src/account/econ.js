@@ -13,7 +13,7 @@ export const BETA_WINDOW_DAYS = 30;
 export const LEDGER_KINDS = new Set(["paid", "free"]);
 
 // ── 2단계 이후 (이 파일에서 새로 정함) ──
-export const ECON_CONFIG_VERSION = 2; // 이동·퀘스트·업적·요금·상점·게시판 행의 price_table_version
+export const ECON_CONFIG_VERSION = 3; // 이동·퀘스트·업적·요금·상점·게시판 행의 price_table_version
 
 /**
  * 이동 보상: "인정 이동 시간" 방식(v1 §6). 서버가 웹소켓 위치로 잰 인정 초만 센다.
@@ -21,8 +21,19 @@ export const ECON_CONFIG_VERSION = 2; // 이동·퀘스트·업적·요금·상�
  *   인정 조건(stats.js MoveStats): 수단별 속도 상한, 순간이동 버림, 5초 넘는 공백 버림, 80ms 보다 촘촘한 표본 버림,
  *   60초 창의 순변위 30m 미만(제자리 맴돌기) 버림.
  */
+/** 분당 금액 표 (plan §6 "1분 = 172 bum (2026 최저시급 10,320 ÷ 60). 2027-01-01에 178로" · Figma 13:2 Note 03). KST 날짜로 고른다. */
+export const MOVE_RATES = Object.freeze([
+  Object.freeze({ from: "2026-01-01", perMinute: 172 }),
+  Object.freeze({ from: "2027-01-01", perMinute: 178 }),
+]);
+/** 그 KST 날짜(YYYY-MM-DD)의 분당 금액 */
+export function movePerMinute(date) {
+  let r = MOVE_RATES[0].perMinute;
+  for (const x of MOVE_RATES) if (String(date) >= x.from) r = x.perMinute;
+  return r;
+}
 export const MOVE = Object.freeze({
-  perMinute: 172, // 초기값: 2026 최저시급 10,320 ÷ 60 내림
+  perMinute: 172, // 2026 값. 날짜별 금액은 movePerMinute(date) 로 읽는다
   dailyMinutes: 60,
   weeklyMinutes: 300,
   // 수단별 배율 (0 = 보상 없음, 통계만)
@@ -33,10 +44,16 @@ export const MOVE = Object.freeze({
   settleStepMinutes: 10, // 오늘 몫은 10분 단위로 원장에 넣고(행 수 절약), 지난 날짜는 남은 분까지 모두 정산
 });
 
-/** 카테고리별 하루·주 상한 (bum). 지급할 때 남은 몫만큼만 들어간다(잘림). total = 회로 차단기(모든 획득 합계). */
+/**
+ * 하루·주 상한 (bum). 기획(plan §5·§6)이 정한 상한은 이동의 "인정 분" 상한뿐이다(하루 60분 · 주 300분) — 이동은 분 단위로 막는다.
+ *   퀘스트·업적은 정의 자체가 상한이다(퀘스트마다 기간당 1회, 업적은 계정당 1회). 기획 최대치: 일일 약 5,000~6,000 · 주간 22,000 · 월간 40,000.
+ *   그래서 v3 에서 근거 없는 퀘스트·업적·총합 bum 상한(12,000/60,000/50,000 등)을 없앴다(주간·월간 보상이 같은 날 몰리면 잘려 나가던 문제).
+ *   게시판만 bum 상한을 둔다 = 하루 글 수 × 글당 보상.
+ *   move 값은 표시용(2026 기준 10,320 / 51,600).
+ */
 export const CAPS = Object.freeze({
-  daily: Object.freeze({ move: MOVE.perMinute * MOVE.dailyMinutes, quest: 12000, ach: 30000, board: 3000, total: 50000 }),
-  weekly: Object.freeze({ move: MOVE.perMinute * MOVE.weeklyMinutes, quest: 60000, ach: 100000, board: 15000, total: 250000 }),
+  daily: Object.freeze({ move: MOVE.perMinute * MOVE.dailyMinutes, board: 3 * 1000 }),
+  weekly: Object.freeze({ move: MOVE.perMinute * MOVE.weeklyMinutes }),
 });
 /** 상한 계산에 들어가는 원장 reason. welcome/beta/fare/shop/refund/clawback 은 상한과 무관. */
 export const CAP_REASONS = Object.freeze(["move", "quest", "ach", "board"]);
@@ -59,10 +76,12 @@ export const QUESTS = Object.freeze({
     pool: [
       { id: "D-LOGIN", metric: "login", target: 1, unit: "count", reward: 500, karma: ["streak", 1], title: T("오늘 첫 접속", "First visit today") },
       { id: "D-WALK10", metric: "move_min", modes: ["walk"], target: 10, unit: "min", reward: 1000, karma: ["health", 10], title: T("걷기 인정 10분", "Walk 10 counted minutes") },
+      { id: "D-WALK20", metric: "move_min", modes: ["walk"], target: 20, unit: "min", reward: 1500, karma: ["health", 20], title: T("걷기 인정 20분", "Walk 20 counted minutes") },
       { id: "D-SUB1", metric: "ride", modes: ["subway"], target: 1, unit: "count", reward: 800, karma: ["transit", 5], title: T("지하철 1회 타기", "Ride the subway once") },
       { id: "D-BUS1", metric: "ride", modes: ["bus"], target: 1, unit: "count", reward: 800, karma: ["transit", 5], title: T("버스 1회 타기", "Ride a bus once") },
       { id: "D-RIDE10", metric: "move_min", modes: ["bike", "roadbike"], target: 10, unit: "min", reward: 1000, karma: ["health", 10], title: T("자전거 인정 10분", "Cycle 10 counted minutes") },
-      { id: "D-TAXI1", metric: "ride", modes: ["taxi"], target: 1, unit: "count", reward: 800, karma: ["transit", 5], title: T("택시 1회 타기", "Take a taxi once") },
+      // 기획 풀의 D-PLACE(오늘의 장소 30m, 1,500 · 탐험 2) · D-NEIGHBOR(다른 계정 10m 30초, 800 · 이웃 2) · D-PHOTO(지정 장소 사진, 1,000 · 탐험 2)는
+      // 서버 판정 데이터(오늘의 장소 목록 · 계정 간 근접 · 셔터 토큰)가 아직 없어 넣지 않았다. 판정이 생기면 이 풀에 추가.
     ],
     bonus: { id: "D-ALL3", metric: "daily_all", target: 3, unit: "count", reward: 1000, karma: ["streak", 2], title: T("보너스 · 3개 모두 완료", "Bonus · all 3 done") },
   }),
@@ -82,13 +101,17 @@ export const QUESTS = Object.freeze({
 });
 export const PHOTO_SPOT_M = 100;
 
-/** 카르마 5축 (v1 §4). 원시 기록에서 다시 계산하는 파생값 + 받은 퀘스트의 카르마. */
+/**
+ * 카르마 5축 (v1 §4). 원시 기록에서 다시 계산하는 파생값 + 받은 퀘스트의 카르마.
+ *   건강은 인정 이동 분에서만 쌓는다 — plan §5 "* 건강 카르마는 인정 이동 시간에서 자동으로 쌓임(퀘스트 보상과 중복이 아님)".
+ *   이웃은 기획상 "다른 계정과 함께"인데 판정이 아직 없어 0 부터 시작(퀘스트 카르마만).
+ */
 export const KARMA_AXES = Object.freeze(["health", "explore", "transit", "neighbor", "streak"]);
 export const KARMA_RULES = Object.freeze({
   health: { per: "move_min", points: 1 }, // 인정 이동 1분(걷기·자전거) = 1
   explore: { per: "photo", points: 1 }, // 사진 1장 = 1 (mock 과 같음)
   transit: { per: "ride", points: 5 }, // 교통 이용 1회 = 5
-  neighbor: { per: "board_reward", points: 1 }, // 보상 받은 게시글 1개 = 1 (함께 있기 판정 전까지 임시)
+  neighbor: { per: "together", points: 0 }, // 계정 간 근접 판정 전까지 0
   streak: { per: "login_day", points: 1 }, // 접속일 1일 = 1
 });
 /** 칭호 사다리 — mock LADDERS 와 같음. streak 축은 연속 접속 일수로 판정. */
@@ -107,9 +130,7 @@ export const LADDERS = Object.freeze([
 export const ACHIEVEMENTS = Object.freeze([
   { id: "ACH-WALK100", metric: "walk_km_total", threshold: 100, unit: "count", reward: 5000, title: T("현실 환산 100 km 걸음", "Walk 100 real km"), rule: "walk_km_total ≥ 100" },
   { id: "ACH-STREAK30", metric: "streak_days", threshold: 30, unit: "day", reward: 10000, title: T("30일 연속 출석", "30-day streak"), rule: "streak_days ≥ 30" },
-  { id: "ACH-RIDE10", metric: "ride_total", threshold: 10, unit: "count", reward: 2000, title: T("대중교통 10회", "10 transit rides"), rule: "ride_total ≥ 10" },
-  { id: "ACH-PHOTO20", metric: "photo_total", threshold: 20, unit: "count", reward: 3000, title: T("사진 20장", "20 photos"), rule: "photo_total ≥ 20" },
-  { id: "ACH-BOARD5", metric: "board_total", threshold: 5, unit: "count", reward: 2000, title: T("동네 글 5개", "5 board posts"), rule: "board_total ≥ 5" },
+  // v2 에 있던 ACH-RIDE10 · ACH-PHOTO20 · ACH-BOARD5 는 기획에 없는 값이라 v3 에서 뺐다(plan §4 · Figma 13:2 Note 06 은 위 두 개만).
 ]);
 
 /**
@@ -123,6 +144,7 @@ export const FARES = Object.freeze({
   "bus.seat": { mode: "bus", amount: 2650, label: T("좌석버스", "Express seat bus") },
   "bus.wide": { mode: "bus", amount: 3200, label: T("광역버스", "Metropolitan bus") },
   "bus.circular": { mode: "bus", amount: 3450, label: T("순환버스", "Circular bus") },
+  "bus.long": { mode: "bus", amount: 3200, label: T("시외·공항버스", "Intercity / airport bus") },
   "subway.base": { mode: "subway", amount: 1550, label: T("지하철 기본요금", "Subway base fare") },
   "taxi.drive": { mode: "taxi", meter: true, factor: 1, label: T("일반 주행", "Normal drive") },
   "taxi.fast": { mode: "taxi", meter: true, factor: 1, label: T("빨리감기", "Fast-forward") },
@@ -146,13 +168,15 @@ export const RIDE_LIMITS = Object.freeze({ minGapSec: 30, dailyCounted: 40 });
 export const SHOP = Object.freeze([
   { id: "bike", name: T("첫 자전거", "First bicycle"), price: 160000, realPrice: 320000, days: 18, giftId: null, available: false },
   { id: "roadbike", name: T("CR·1 로드바이크", "CR·1 road bike"), price: 1000000, realPrice: 2000000, days: 113, giftId: "roadbike-cr1", available: true },
-  { id: "scooter", name: T("스쿠터(125cc급)", "Scooter (125cc)"), price: 2500000, realPrice: 5000000, days: 280, giftId: null, available: false },
+  { id: "scooter", name: T("스쿠터(125cc급)", "Scooter (125cc)"), price: 2500000, realPrice: 4999000, days: 280, giftId: null, available: false },
   { id: "car", name: T("경차", "City car"), price: 7450000, realPrice: 14900000, days: 836, giftId: null, available: false },
 ]);
 /** 표시용 가정값(mock RULES 와 같음) — 상점 목표 '며칠 남음' 계산에만 씀. 실측 아님. */
 export const DISPLAY = Object.freeze({ typicalDailyNet: 8916, avgDailyIncome: 11202, avgDailyTransit: 2286 });
 
 /** 게시판 보상 (5단계). 도배 방지: 최소 글자 수, 연속 작성 간격, 하루 개수, 가입 후 대기, 같은 글 반복 금지, 삭제·짧게 수정 시 회수. */
+/**   ⚠️ 기획 v1(plan §5)은 게시판 보상을 0 으로 두고 6단계에서 다시 보자고 했다. 1,000 은 PLAN.md 5단계 + 도훈 승인(PR #30)으로 정한 임시값.
+ *      리뷰(bw-economy-review §3) 제안대로 하루 게시판 합계는 8,400 아래(지금 3 × 1,000 = 3,000). */
 export const BOARD = Object.freeze({
   reward: 1000,
   minChars: 40, // 공백 제거·같은 글자 3번 이상 반복 압축 후 글자 수

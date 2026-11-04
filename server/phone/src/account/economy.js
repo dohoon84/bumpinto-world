@@ -5,7 +5,7 @@
 //   - 게스트(계정 없음)는 여기까지 오지 않는다(라우트가 not_signed_in). 게스트의 예전 진행은 소급 지급하지 않는다.
 // 이 파일은 cloudflare:workers 를 가져오지 않는다 — node 단위 테스트가 D1 대역으로 그대로 불러 쓴다.
 import {
-  ACHIEVEMENTS, BOARD, CAPS, DISPLAY, ECON_CONFIG_VERSION, FARES, FARE_ALIASES, KARMA_AXES, LADDERS, MOVE, PHOTO_SPOT_M,
+  ACHIEVEMENTS, BOARD, CAPS, DISPLAY, ECON_CONFIG_VERSION, FARES, FARE_ALIASES, KARMA_AXES, LADDERS, MOVE, movePerMinute, PHOTO_SPOT_M,
   QUESTS, RIDE_LIMITS, SHOP, TAXI, WELCOME_FREE_BUM, BETA_FREE_BUM, WELCOME_TEXT,
 } from "./econ.js";
 import { appendLedgerWhere, getBalance } from "./ledger.js";
@@ -50,7 +50,6 @@ export async function balanceView(db, accountId, now = Date.now()) {
 export const GUEST_BALANCE = (now = Date.now()) => ({ guest: true, total: 0, free: 0, paid: 0, currency: "bum", locked: false, updatedAt: now });
 
 // ───────────────────────── 상한 ─────────────────────────
-const CAP_LIST = ["move", "quest", "ach", "board"];
 function sumSql(reasons) {
   return `(SELECT COALESCE(SUM(amount), 0) FROM ledger WHERE account_id = ? AND reason IN (${qs(reasons.length)}) AND created_at >= ? AND created_at < ?)`;
 }
@@ -58,11 +57,10 @@ function capChecks(accountId, reason, now, reasonCap) {
   const P = kstPeriods(now);
   const out = [];
   if (reasonCap) {
-    out.push({ reasons: [reason], from: P.day.start, to: P.day.end, cap: CAPS.daily[reason] });
-    out.push({ reasons: [reason], from: P.week.start, to: P.week.end, cap: CAPS.weekly[reason] });
+    // 기획에 bum 상한이 있는 카테고리만 검사한다(econ.js CAPS 주석). 없으면 정의(기간당 1회 등)가 상한.
+    if (Number.isFinite(CAPS.daily[reason])) out.push({ reasons: [reason], from: P.day.start, to: P.day.end, cap: CAPS.daily[reason] });
+    if (Number.isFinite(CAPS.weekly[reason])) out.push({ reasons: [reason], from: P.week.start, to: P.week.end, cap: CAPS.weekly[reason] });
   }
-  out.push({ reasons: CAP_LIST, from: P.day.start, to: P.day.end, cap: CAPS.daily.total });
-  out.push({ reasons: CAP_LIST, from: P.week.start, to: P.week.end, cap: CAPS.weekly.total });
   return out;
 }
 
@@ -72,7 +70,7 @@ export async function capRoom(db, accountId, reason, now = Date.now(), { reasonC
   const rows = await db.batch(checks.map((c) => db.prepare(`SELECT ${sumSql(c.reasons)} AS n`).bind(accountId, ...c.reasons, c.from, c.to)));
   let room = Infinity;
   checks.forEach((c, i) => { room = Math.min(room, c.cap - Number(rows[i]?.results?.[0]?.n || 0)); });
-  return Math.max(0, room === Infinity ? 0 : room);
+  return Math.max(0, room);
 }
 
 function capWhere(accountId, reason, amount, now, reasonCap) {
@@ -95,7 +93,8 @@ export async function grantCapped(db, { accountId, reason, amount, key, ref = nu
   const grant = Math.min(amount, room);
   if (grant <= 0) return { applied: false, amount: 0, capped: true };
   const w = capWhere(accountId, reason, grant, now, reasonCap);
-  const where = extraWhere ? { sql: `${w.sql} AND ${extraWhere.sql}`, params: [...w.params, ...extraWhere.params] } : w;
+  const parts = [w, extraWhere].filter((x) => x && x.sql);
+  const where = parts.length ? { sql: parts.map((x) => x.sql).join(" AND "), params: parts.flatMap((x) => x.params) } : null;
   const r = await appendLedgerWhere(db, { accountId, amount: grant, kind: "free", reason, ref, idempotencyKey: key, priceTableVersion: V }, { now, where, after });
   return { applied: r.applied, amount: r.applied ? grant : 0, capped: grant < amount };
 }
@@ -135,7 +134,7 @@ export async function settleMove(db, env, accountId, date, now = Date.now()) {
   if (target <= f.paid) return { added: 0, minutes: f.paid };
   const key = `move:${accountId}:${date}:${target}`;
   const r = await grantCapped(db, {
-    accountId, reason: "move", amount: (target - f.paid) * MOVE.perMinute, key, ref: `${date}:${target - f.paid}`, now, reasonCap: false,
+    accountId, reason: "move", amount: (target - f.paid) * movePerMinute(date), key, ref: `${date}:${target - f.paid}`, now, reasonCap: false,
     extraWhere: { sql: "COALESCE((SELECT minutes_paid FROM move_rewards WHERE account_id = ? AND kst_date = ?), 0) = ?", params: [accountId, date, f.paid] },
     after: [
       db.prepare(
@@ -163,13 +162,13 @@ export async function travelToday(db, accountId, now = Date.now()) {
   const date = kstDate(now);
   const f = await moveFacts(db, accountId, date);
   return {
-    guest: false, kstDate: date, minutes: f.minutes, capMinutes: MOVE.dailyMinutes, ratePerMin: MOVE.perMinute,
-    pendingBum: Math.max(0, f.minutes - f.paid) * MOVE.perMinute, distanceM: f.distanceM,
+    guest: false, kstDate: date, minutes: f.minutes, capMinutes: MOVE.dailyMinutes, ratePerMin: movePerMinute(date),
+    pendingBum: Math.max(0, f.minutes - f.paid) * movePerMinute(date), distanceM: f.distanceM,
     weekMinutes: Math.min(MOVE.weeklyMinutes, f.weekOther + f.minutes), weekCapMinutes: MOVE.weeklyMinutes, settled: f.paid >= f.minutes,
   };
 }
 export const GUEST_TRAVEL = (now = Date.now()) => ({
-  guest: true, kstDate: kstDate(now), minutes: 0, capMinutes: MOVE.dailyMinutes, ratePerMin: MOVE.perMinute, pendingBum: 0, distanceM: 0,
+  guest: true, kstDate: kstDate(now), minutes: 0, capMinutes: MOVE.dailyMinutes, ratePerMin: movePerMinute(kstDate(now)), pendingBum: 0, distanceM: 0,
   weekMinutes: 0, weekCapMinutes: MOVE.weeklyMinutes, settled: true,
 });
 
@@ -257,9 +256,9 @@ export async function listQuests(db, env, accountId, cadence, now = Date.now()) 
   const quests = list.map(questView);
   const tv = await travelToday(db, accountId, now);
   const info = cadence === "daily"
-    ? T(`매일 00:00 KST에 3개 배정 · 오늘 이동 ${tv.minutes}/60분 (정산 예정 ${fmt(tv.pendingBum)} bum · 하루 상한 ${fmt(CAPS.daily.move)})`, `3 assigned daily at 00:00 KST · travel today ${tv.minutes}/60 min (pending ${fmt(tv.pendingBum)} bum · daily cap ${fmt(CAPS.daily.move)})`)
+    ? T(`매일 00:00 KST에 3개 배정 · 오늘 이동 ${tv.minutes}/60분 (정산 예정 ${fmt(tv.pendingBum)} bum · 하루 상한 ${fmt(tv.ratePerMin * MOVE.dailyMinutes)})`, `3 assigned daily at 00:00 KST · travel today ${tv.minutes}/60 min (pending ${fmt(tv.pendingBum)} bum · daily cap ${fmt(tv.ratePerMin * MOVE.dailyMinutes)})`)
     : cadence === "weekly"
-      ? T(`월요일 00:00 KST 리셋 · 이번 주 이동 ${tv.weekMinutes}/300분 (주 상한 ${fmt(CAPS.weekly.move)} bum)`, `Resets Monday 00:00 KST · travel this week ${tv.weekMinutes}/300 min (weekly cap ${fmt(CAPS.weekly.move)} bum)`)
+      ? T(`월요일 00:00 KST 리셋 · 이번 주 이동 ${tv.weekMinutes}/300분 (주 상한 ${fmt(tv.ratePerMin * MOVE.weeklyMinutes)} bum)`, `Resets Monday 00:00 KST · travel this week ${tv.weekMinutes}/300 min (weekly cap ${fmt(tv.ratePerMin * MOVE.weeklyMinutes)} bum)`)
       : T("매월 1일 00:00 KST 리셋 (월 단위 KST 집계)", "Resets on the 1st at 00:00 KST");
   return {
     guest: false, period: cadence, resetsAt: r.resetsAt, quests,
@@ -384,10 +383,10 @@ export async function autoSettleAchievements(db, accountId, now = Date.now()) {
 export async function getKarma(db, accountId, now = Date.now()) {
   const t = await karmaTotals(db, accountId, now);
   const pts = {
-    health: t.humanMin + t.questKarma.health,
+    health: t.humanMin, // 퀘스트의 건강 카르마는 표시만(plan §5 * — 인정 분과 중복 아님)
     explore: t.photos + t.questKarma.explore,
     transit: t.rides * 5 + t.questKarma.transit,
-    neighbor: t.boards + t.questKarma.neighbor,
+    neighbor: t.questKarma.neighbor, // 계정 간 근접 판정 전까지 퀘스트 카르마만
     streak: t.loginDays + t.questKarma.streak,
   };
   const axes = {};
@@ -598,7 +597,8 @@ export async function ownedItems(db, accountId) {
 /** Room 이 hello 때 부른다: 산 탈것 → 선물함 보유 모양 [{ itemId, qty }] (게임 모델이 있는 것만) */
 export async function accountVehicleGifts(db, accountId) {
   const { results } = await db.prepare("SELECT gift_id FROM account_vehicles WHERE account_id = ? AND gift_id IS NOT NULL AND (expires_at IS NULL OR expires_at > ?)").bind(accountId, Date.now()).all();
-  return (results || []).map((r) => ({ itemId: r.gift_id, qty: 1 }));
+  // normalizeHoldings(src/gifts/catalog.js)가 읽는 모양 { id, qty } — itemId 로 주면 전부 걸러져 산 탈것이 안 보였다
+  return (results || []).map((r) => ({ id: r.gift_id, qty: 1 }));
 }
 
 function itemView(it, { free, owned, balance, signedIn }) {
@@ -796,7 +796,8 @@ export async function lastLedgerId(db, accountId) {
 }
 
 /** 원장 행 → UI RewardEvent (지급 행만. 지출·회수·게시판은 null) */
-const REWARD_KIND = { quest: "quest", ach: "achievement", welcome: "welcome", beta: "beta", move: "travel" };
+// board = 게시판 글 보상(+) → 토스트. 회수(clawback, −)는 금액이 음수라 이벤트를 만들지 않는다(지갑 내역에만).
+const REWARD_KIND = { quest: "quest", ach: "achievement", welcome: "welcome", beta: "beta", move: "travel", board: "board" };
 export function rewardEventOf(row, balanceAfter) {
   const kind = REWARD_KIND[row.reason];
   if (!kind || !(Number(row.amount) > 0)) return null;

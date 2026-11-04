@@ -16,7 +16,7 @@ export const MODE_CAP_MPS = Object.freeze({
 });
 export const MODES = Object.keys(MODE_CAP_MPS);
 const GAP_SEC = 5; // 이보다 오래 소식이 없으면 그 구간은 버림
-const TELEPORT_M = 50; // 한 번에 이만큼 넘게 + 상한 1.5배 넘게 움직이면 순간이동으로 보고 버림
+export const TELEPORT_M = 50; // 한 번에 이만큼 넘게 + 상한 1.5배 넘게 움직이면 순간이동으로 보고 버림
 const IDLE_M = 0.05;
 const ADMIN_VEH = new Set([900, 901]);
 
