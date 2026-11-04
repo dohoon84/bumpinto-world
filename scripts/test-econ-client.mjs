@@ -32,7 +32,8 @@ function d1Of(db) {
   const make = (q, params = []) => ({ _q: q, _p: params, bind: (...p) => make(q, p), async first() { return exec1(q, params).results[0] ?? null; }, async all() { return exec1(q, params); }, async run() { return exec1(q, params); } });
   return {
     prepare: (q) => make(q),
-    async batch(stmts) { db.exec('BEGIN'); try { const o = stmts.map((s) => exec1(s._q, s._p)); db.exec('COMMIT'); return o; } catch (e) { db.exec('ROLLBACK'); throw e; } },
+    async batch(stmts) { if (!stmts.length) throw new Error('D1_ERROR: No SQL statements detected.'); // 실제 D1 과 같게
+ db.exec('BEGIN'); try { const o = stmts.map((s) => exec1(s._q, s._p)); db.exec('COMMIT'); return o; } catch (e) { db.exec('ROLLBACK'); throw e; } },
   };
 }
 const MIG = ['0001_accounts.sql', '0002_economy.sql'].map((f) => readFileSync(new URL(`../server/phone/migrations/${f}`, import.meta.url), 'utf8'));

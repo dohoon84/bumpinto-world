@@ -67,6 +67,7 @@ function capChecks(accountId, reason, now, reasonCap) {
 /** 이 카테고리에 지금 더 줄 수 있는 몫 */
 export async function capRoom(db, accountId, reason, now = Date.now(), { reasonCap = true } = {}) {
   const checks = capChecks(accountId, reason, now, reasonCap);
+  if (!checks.length) return Infinity; // 실제 D1 은 빈 batch([]) 를 거부한다(No SQL statements detected)
   const rows = await db.batch(checks.map((c) => db.prepare(`SELECT ${sumSql(c.reasons)} AS n`).bind(accountId, ...c.reasons, c.from, c.to)));
   let room = Infinity;
   checks.forEach((c, i) => { room = Math.min(room, c.cap - Number(rows[i]?.results?.[0]?.n || 0)); });
