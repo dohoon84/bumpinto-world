@@ -70,7 +70,7 @@ export function showPay(pay, { where = '', before = null, hold = false } = {}) {
   const node = el('div', `ve-paystack${sub ? ' sub' : ''}`, `<div class="v2-panel ve-pay" style="--c:${col}">${tapBeep(col)}
       <div class="ve-col">${tag(sub ? tr('지하철', 'Subway') : tr('시내버스', 'City bus'), sub ? '#f5a200' : '#20c997')}<b class="ve-t20">${esc(title)}</b><small class="ve-sub">${esc(where ? (sub ? tr('지하철 기본요금', 'Subway base fare') : tr(`${where} 승차`, `Boarded at ${where}`)) : '')}</small>
       <div class="v2-hrow ve-amtrow">${amount}<span class="ve-after">${esc(tr(`잔액 ${n(pay.balance.total)} bum`, `Balance ${n(pay.balance.total)} bum`))}</span></div>
-      <div class="v2-hrow">${karmaPill({ axis: 'transit', points: 5 })}${mockTag()}</div></div></div>
+      <div class="v2-hrow">${pay.balance?.guest ? '' : karmaPill({ axis: 'transit', points: 5 })}${mockTag()}</div></div></div>
     ${pay.reward.map((e) => `<div class="v2-panel ve-qtoast">${EI.check(16, '#fff')}<div class="ve-col"><b>${esc(e.period === 'weekly' ? tr(`주간 달성 · ${T(e.title)}`, `Weekly · ${T(e.title)}`) : tr(`할 일 달성 · ${T(e.title)}`, `Quest · ${T(e.title)}`))}</b><div class="v2-hrow">${bumPill(e.amount)}${karmaPill(e.karma)}</div></div>${stamp(true)}</div>`).join('')}
     ${sumParts ? `<div class="v2-panel ve-sumline"><span>${esc(sumParts)}</span><b class="ve-gold">= ${n(pay.balance.total)} bum</b></div>` : ''}`);
   const L = toastLayer(); L.querySelectorAll('.ve-paystack').forEach((x) => x.remove());
@@ -166,7 +166,7 @@ export function openSettle(st, { dest = { ko: '판교역', en: 'Pangyo Stn.' }, 
     <div class="ve-kv"><span>${esc(tr('실제 요금', 'Actual fare'))}</span><b>${st.free ? `<s>${n(st.listAmount)}</s> 0` : n(st.charged)}</b></div>
     <div class="ve-kv"><span>${esc(tr('반환', 'Returned'))}</span><b class="ve-green">${st.free ? '0' : sgn(st.refunded)}</b></div>
     <div class="ve-kv big">${EI.card(20)}<span>${esc(tr('결제', 'Paid'))}</span><span class="v2-grow"></span>${st.free ? `<b class="ve-amt-big free">0 bum</b>${freeBadge()}` : `<b class="ve-amt-big">${sgn(-st.charged)} bum</b>`}</div>
-    <div class="v2-hrow">${bumPill(st.balance.total, { sign: false, cls: 'lg' })}${karmaPill({ axis: 'transit', points: 5 })}${st.reward.map((e) => tag(tr(`${T(e.title)} 달성 +${n(e.amount)}`, `${T(e.title)} +${n(e.amount)}`), '#20c997')).join('')}</div>
+    <div class="v2-hrow">${bumPill(st.balance.total, { sign: false, cls: 'lg' })}${st.balance?.guest ? '' : karmaPill({ axis: 'transit', points: 5 })}${st.reward.map((e) => tag(tr(`${T(e.title)} 달성 +${n(e.amount)}`, `${T(e.title)} +${n(e.amount)}`), '#20c997')).join('')}</div>
     <p class="ve-note">${esc(tr('실제 요금은 예상 요금보다 높아지지 않아요. 심야(23–04시)엔 +30%.', 'The actual fare never exceeds the estimate. Night (23–04) +30%.'))}</p>
     <button type="button" class="v2-btn secondary v2-full" data-ve="wallet">${esc(tr('교통카드에서 보기', 'View on transit card'))}</button>`);
   p.querySelector('[data-ve="wallet"]').addEventListener('click', () => { close(true); onWallet?.(); });
