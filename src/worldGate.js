@@ -411,7 +411,7 @@ export function openWorldGate({ onEnter }) {
     root.querySelector('#gate-stat-online-lbl').textContent = tr('현재 거리 산책 중', 'Exploring Now');
     root.querySelector('#gate-stat-res-lbl').textContent = tr('누적 등록 입주민', 'Registered Citizens');
     // [globe-open] '오픈' 수 = 지역 수가 아니라 실제로 열린 역(입장 지점) 수. 같은 규칙으로 모든 나라를 센다:
-    //  - 구간(분당–잠실)이 켜진 지역: 노선도에 점으로 그려지는 역(OPEN_MAINLINE_STATIONS: 정자~잠실) + 열린 지선 역(OPEN_BRANCH_STATIONS: 판교)
+    //  - 구간(분당–잠실)이 켜진 지역: 노선도에 점으로 그려지는 역(OPEN_MAINLINE_STATIONS: 정자~잠실) + 열린 지선 역(OPEN_BRANCH_STATIONS: 판교·미금)
     //  - 그 밖의 열린 지역(예: Starbase): 역 목록(r.stations)이 있으면 그 수, 없으면 입장 지점 1곳
     //  - 준비중: 아직 안 열린 장소(UPCOMING_REGIONS 중 구간 역이 아닌 것) 각 1곳 — 카운트다운 중인 Starbase 는 '열림'에서 빼고 따로 표시
     const openBranches = corridorGlobe ? UPCOMING_REGIONS.filter((r) => OPEN_BRANCH_IDS.has(r.id)) : [];
@@ -524,7 +524,7 @@ export function openWorldGate({ onEnter }) {
             <em>${en ? 'OPEN · Enter' : '열림 · 입장'}</em>
           </button>
         </li>` : '';
-    // [globe-open] 열린 지선 역(판교역): '열림 · 입장' → 정자 월드에 ?at=<역 id> 와 같은 자리로 입장
+    // [globe-open] 열린 지선 역(판교역·미금역): '열림 · 입장' → 정자 월드에 ?at=<역 id> 와 같은 자리로 입장
     const branchOpenItem = (r) => `
         <li>
           <button type="button" class="gate-upcoming-item is-open" data-enter-at="${r.id}">
@@ -816,7 +816,7 @@ export function openWorldGate({ onEnter }) {
       return;
     }
     const atBtn = corridorGlobe && e.target.closest('[data-enter-at]');
-    if (atBtn) { enter('jeongja', false, { at: atBtn.dataset.enterAt }); return; } // [globe-open] 판교역 → ?at=pangyo 와 같은 입장
+    if (atBtn) { enter('jeongja', false, { at: atBtn.dataset.enterAt }); return; } // [globe-open] 판교역 → ?at=pangyo, 미금역 → ?at=migeum 과 같은 입장
     if (corridorGlobe && e.target.closest('[data-corridor-open]')) {
       corridorGlobe.toggle(true);
       return;
