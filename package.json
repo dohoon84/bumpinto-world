@@ -29,6 +29,7 @@
     "corridor:pangyo": "node scripts/corridor/build-pangyo.mjs",
     "corridor:migeum": "node scripts/corridor/build-pangyo.mjs --region=migeum",
     "corridor:migeumwater": "node scripts/corridor/build-migeum-water.mjs",
+    "corridor:migeum-npc": "node scripts/corridor/build-migeum-npc.mjs",
     "corridor:pangyolink": "node scripts/corridor/build-pangyo-link.mjs",
     "corridor:pangyo-npc": "node scripts/corridor/build-pangyo-npc.mjs",
     "corridor:pangyoexpress": "node scripts/corridor/build-pangyo-express.mjs",
