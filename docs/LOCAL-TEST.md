@@ -118,5 +118,5 @@ API 및 서비스 → 사용자 인증 정보 → OAuth 2.0 클라이언트 ID(�
 - `ECON_PAID=1` 로 바꾸면 유료 차감(잔액 부족 → 08c 안내)을 시험할 수 있습니다. 바꾼 뒤 dev:all 을 다시 켜세요.
 - **기능 브랜치가 갱신되면(한 줄)** — 보통은 제가 올린 걸 `git pull` 만 하면 되고, 직접 갱신하려면: `git checkout test/integration-all && git pull --ff-only && bash scripts/integration-update.sh`
   develop · #28 · #29 · #30 · #25 · (생기면) `feat/econ-ui-mobile` 을 차례로 `--no-ff` 머지하고, 이미 들어간 건 건너뜁니다. 하나만: `bash scripts/integration-update.sh feat/mobile`.
-  충돌은 거의 `src/ui-v2/econ/index.js`(계정 켜짐 → `createServerClient` 줄 유지)와 `src/mobile/hud.js`(메뉴 '함께' 의 `account-chip` 타일 유지)입니다.
+  충돌은 거의 `src/ui-v2/econ/index.js`(계정 켜짐 → `createServerClient` 줄 유지)와 `src/mobile/hud.js`(메뉴 '함께' 의 `account-chip` 타일 유지)입니다. `package.json` 의 scripts 충돌은 양쪽 줄을 모두 남기면 됩니다.
 - 모바일 경제 UI(`feat/econ-ui-mobile`)는 이미 머지돼 있고, 퍼블리셔님이 더 올리면 위 명령으로 다시 들어옵니다.
