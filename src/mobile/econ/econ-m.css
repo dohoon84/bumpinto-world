@@ -100,6 +100,7 @@ body.mobile.m-econ .ve-items { grid-template-columns: repeat(2, minmax(0, 1fr));
 body.mobile.m-econ .ve-item { padding: 10px; gap: 6px; }
 body.mobile.m-econ .ve-thumb { height: 64px; }
 body.mobile.m-econ .ve-thumb svg { max-height: 56px; width: auto; }
+body.mobile.m-econ .ve-thumb img { height: 64px !important; max-height: 64px !important; width: 100%; object-fit: contain; }
 body.mobile.m-econ .ve-goal { padding: 10px 12px; }
 
 /* 08 · 09 교통: 탑승 카드 = 가운데 아래(조이스틱·버튼 사이), 결제 카드 = 오른쪽 위(행동 버튼 위까지만) */
