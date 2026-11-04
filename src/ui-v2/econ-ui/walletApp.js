@@ -18,6 +18,8 @@ const rideLog = {
   totals: () => { const l = readRides(); return { rides: l.length, distM: l.reduce((a, e) => a + (e.distM || 0), 0) }; },
 };
 let registered = false;
+let mobileOk = false; // [econ-mobile] 모바일 경제 UI(src/mobile/econ)가 mountWalletApp({ mobile:true }) 로 켤 때만 모바일에서도 그림
+const blocked = () => document.body.classList.contains('mobile') && !mobileOk;
 let snap = null, snapAt = 0, loading = null, tab = 'all', linkFn = null;
 
 const visible = () => handsetAppView() === 'x:' + ID;
@@ -53,7 +55,7 @@ function rowHtml(x, en, guest) {
 }
 
 function render(en, base) {
-  if (document.body.classList.contains('mobile') || !snap) return base; // 첫 그림은 기존 앱 → 곧 경제 내용으로 다시 그림
+  if (blocked() || !snap) return base; // 첫 그림은 기존 앱 → 곧 경제 내용으로 다시 그림
   const { guest, b, s, led, mode } = snap;
   const free = !mode?.transitPaid;
   const rides = rideLog.list({ limit: 30 }), tot = rideLog.totals();
@@ -74,7 +76,10 @@ function render(en, base) {
   if (!guest && tab === 'ride') list = list.filter((x) => x.t === 'ride' || RIDE_KINDS.has(x.e.kind));
   if (!guest && tab === 'reward') list = list.filter((x) => x.t === 'led' && x.e.delta > 0 && !RIDE_KINDS.has(x.e.kind));
   const tabs = guest ? '' : `<div class="v2w-tabs">${[['all', '전체', 'All'], ['ride', '탑승', 'Rides'], ['reward', '보상', 'Rewards']].map(([k, ko, enl]) => `<button type="button" data-wtab="${k}" class="${tab === k ? 'on' : ''}">${esc(tr(ko, enl))}</button>`).join('')}</div>`;
-  const empty = tab === 'reward' ? tr('아직 받은 보상이 없어요.', 'No rewards yet.') : tr('아직 탑승 기록이 없어요. 정류장에서 E로 버스, Y로 택시.', 'No rides yet. Board a bus with E at a stop, or press Y for a taxi.');
+  const empty = tab === 'reward' ? tr('아직 받은 보상이 없어요.', 'No rewards yet.') : document.body.classList.contains('mobile')
+    // 모바일: 키 안내 대신 실제 터치 버튼 이름 (mobile/hud.js '버스 타기'/'Board', 택시 앱 '택시 호출'/'Call a taxi')
+    ? tr("아직 탑승 기록이 없어요. 정류장에서 '버스 타기' 버튼으로 버스를, 폰 택시 앱의 '택시 호출'로 택시를 타 보세요.", "No rides yet. Tap 'Board' at a bus stop, or 'Call a taxi' in the phone's Taxi app.")
+    : tr('아직 탑승 기록이 없어요. 정류장에서 E로 버스, Y로 택시.', 'No rides yet. Board a bus with E at a stop, or press Y for a taxi.');
   return `${card}${week}
     <p class="hint v2w-sum">${en ? `${tot.rides} rides · ${(tot.distM / 1000).toFixed(1)} km` : `탑승 ${tot.rides}회 · ${(tot.distM / 1000).toFixed(1)} km`} ${mockTag('mini')}</p>${tabs}
     <div class="ride-recs">${list.map((x) => rowHtml(x, en, guest)).join('') || `<p class="hint">${esc(empty)}</p>`}</div>`;
@@ -91,8 +96,9 @@ function mounted(pane) {
 }
 
 /** 경제 UI mount 시 1번. 기존 교통카드 앱에 장식을 등록하고, 잔액·내역이 바뀌면 앱이 열려 있을 때만 다시 읽는다. */
-export function mountWalletApp({ link } = {}) {
-  if (document.body.classList.contains('mobile')) return;
+export function mountWalletApp({ link, mobile = false } = {}) {
+  if (document.body.classList.contains('mobile') !== mobile) return;
+  mobileOk = mobile;
   linkFn = link;
   let tries = 0;
   const reg = () => { if (H()) { H().setAppDecorator(ID, { render, mounted }); registered = true; } else if (++tries < 240) setTimeout(reg, 500); }; // 폰은 입장 뒤에 생긴다

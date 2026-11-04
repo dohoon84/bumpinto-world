@@ -58,6 +58,20 @@ body.mobile .m-btn:disabled { opacity: .6; }
 #m-landing .m-start-sheet { position: absolute; right: var(--m-r); top: 50%; transform: translateY(-50%); width: min(300px, 40vw); display: grid; gap: 10px; padding: 16px; }
 #m-landing h2 { margin: 0; font-size: 16px; font-weight: 900; color: #ffe169; }
 #m-landing .m-start-sheet small { font-size: 12px; color: #9eb4c6; line-height: 1.45; }
+#m-landing .m-acct { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 12px; background: rgba(255, 255, 255, .08); } /* [econ-mobile] ?ui=v2 로그인 계정 줄 */
+#m-landing .m-acct-av { flex: none; display: grid; place-items: center; width: 32px; height: 32px; border-radius: 50%; background: #1f5fbf; color: #fff; font-weight: 900; }
+#m-landing .m-acct b { display: block; font-size: 14px; color: #fff; } #m-landing .m-acct span { font-size: 11.5px; color: #9eb4c6; }
+#m-landing .m-acct-go { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; line-height: 1.2; }
+#m-landing .m-acct-go .m-acct-at { font-size: 11.5px; font-weight: 700; opacity: .8; }
+/* [econ-mobile] 로그인(Google) 계정 입장 카드: 캐릭터 선택·PIN 없이 입장(#30 lobby.js 가 #lobby-card.is-account · body.bw-signed-in 을 붙임).
+   PC ui-v2.css(9d48af4)와 같은 목록 — 탭·번호로 이어하기·PIN·번호·번호+Google 저장 줄·Google 안내·Google 저장 버튼 숨김. 클래스가 없으면 아무 영향 없음 */
+body.mobile #lobby-card.is-account .lobby-tabs,
+body.mobile #lobby-card.is-account #lobby-pane-login,
+body.mobile #lobby-card.is-account .lobby-pin-field,
+body.mobile #lobby-card.is-account #lobby-phone,
+body.mobile #lobby-card.is-account .v2-phone-row,
+body.mobile #lobby-card.is-account .v2-ghint,
+body.mobile.bw-signed-in #lobby-card .v2-save-google { display: none !important; }
 #m-landing .m-pick-top { position: absolute; left: var(--m-l); top: var(--m-t); display: flex; align-items: center; gap: 10px; }
 #m-landing .m-pick-top h2 { color: #fff; font-size: 18px; }
 #m-landing .m-regions { position: absolute; left: var(--m-l); top: calc(var(--m-t) + 52px); bottom: var(--m-b); width: min(200px, 26vw); padding: 10px; display: flex; flex-direction: column; gap: 8px; overflow: auto; }

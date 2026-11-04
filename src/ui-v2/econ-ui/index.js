@@ -141,11 +141,12 @@ function trackWalk() {
   }, 1000);
 }
 
-export function mountEconUi() {
-  if (document.body.classList.contains('mobile')) return null; // PC 전용
-  document.body.classList.add('v2-econ');
+export function mountEconUi({ mobile = false } = {}) {
+  // PC 전용. 모바일은 src/mobile/econ/index.js 가 HUD 를 바꿔 끼우고(useAltHud) mobile:true 로 부른다.
+  if (document.body.classList.contains('mobile') !== mobile) return null;
+  document.body.classList.add(mobile ? 'm-econ' : 'v2-econ');
   mountEconHud({ link, open });
-  mountWalletApp({ link });
+  mountWalletApp({ link, mobile });
   coinSound.get(); // 첫 입력 때 소리 잠금 해제 + 코인 효과음 버퍼 1번 디코드
   let t = 0;
   const soon = () => { clearTimeout(t); t = setTimeout(refresh, 30); };

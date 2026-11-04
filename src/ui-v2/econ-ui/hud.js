@@ -10,10 +10,15 @@ let root = null, row = null, trk = null, ctx = null;
 let shown = 0, anim = 0, deltaT = 0, trackerOpen = true;
 let last = { session: null, bal: null, travel: null, daily: null };
 
-export function balanceChip() { return row?.querySelector('[data-ve="bal"]') || null; }
-export function balanceCoin() { return row?.querySelector('[data-ve="bal"] .v2-ic') || null; }
+// [econ-mobile] 모바일(body.mobile)은 HUD 모양만 다르다: src/mobile/econ/hud.js 가 같은 함수들을 대신 제공한다(패널·보상 흐름은 그대로).
+let alt = null;
+export function useAltHud(a) { alt = a; }
+
+export function balanceChip() { if (alt) return alt.balanceChip(); return row?.querySelector('[data-ve="bal"]') || null; }
+export function balanceCoin() { if (alt) return alt.balanceCoin?.() || null; return row?.querySelector('[data-ve="bal"] .v2-ic') || null; }
 
 export function mountEconHud(o) {
+  if (alt) return alt.mount(o);
   ctx = o;
   root = el('div', 've-hud'); root.id = 've-hud';
   row = el('div', 've-row'); trk = el('div', 've-trk');
@@ -47,6 +52,7 @@ export function mountEconHud(o) {
 }
 
 export async function refresh() {
+  if (alt) return alt.refresh();
   const [session, bal, travel, daily] = await Promise.all([econ.getSession(), econ.getBalance(), econ.getTravelToday(), econ.listQuests('daily')]);
   last = { session, bal, travel, daily };
   if (!anim) shown = bal.total;
@@ -56,6 +62,7 @@ export async function refresh() {
 
 /** 05b: 잔액 숫자 올라가기 + 델타 서브칩 */
 export function countUp(from, to, { ms = 900, delta = to - from } = {}) {
+  if (alt) return alt.countUp(from, to, { ms, delta });
   cancelAnimationFrame(anim);
   const t0 = performance.now();
   deltaT = Date.now() + 4000;
@@ -71,6 +78,7 @@ export function countUp(from, to, { ms = 900, delta = to - from } = {}) {
 }
 
 export function render(delta = null) {
+  if (alt) return alt.render(delta);
   if (!row || !last.session) return;
   const { session, bal, travel, daily } = last;
   const guest = session.isGuest;
