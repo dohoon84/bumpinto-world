@@ -85,6 +85,11 @@ export const errR = (code, extra = {}) => ({ ok: false, error: { code, ...extra 
  * @typedef {{ receiptId: string, mode: TransitMode, code: string, free: boolean, amount: number, listAmount: number, balance: Balance, reward: RewardEvent[] }} Payment
  * @typedef {{ holdId: string, code?: string, free: boolean, amount: number, listAmount: number, balance: Balance }} TaxiHold
  * @typedef {{ receiptId: string, free: boolean, held: number, charged: number, listAmount: number, refunded: number, distanceM: number, balance: Balance, reward: RewardEvent[] }} TaxiSettlement
+ * @typedef {{ status: 'insufficient'|'failed', ok: false, receiptId: null, mode: TransitMode, code: string, rideId: string,
+ *             need?: number, balance?: number, shortBy?: number, error: EconError }} PaymentFailed
+ *   결제 실패: 유료 모드에서 게임으로 탑승할 때만 'payment' 이벤트로 1번 온다. need·balance·shortBy 는 status 'insufficient' 일 때만.
+ *   택시는 홀드 단계에서 막힌다(need = 예상 요금, 홀드는 남지 않음). 결제 성공(Payment · TaxiSettlement)에는 status 필드가 없다(없으면 성공).
+ *   UI 에서 payFare/holdTaxi 를 직접 부르면 이벤트는 오지 않고 Result {ok:false,error} 만 온다 → 08c 가 두 번 뜨지 않는다.
  * @typedef {{ id: string, name: Text, free: boolean, price: number, listPrice: number, realPrice: number, daysForTypical: number, owned: boolean, affordable: boolean, giftable: false, available?: boolean }} ShopItem
  *   free=true(베타) 면 price=0, listPrice=정가, affordable=true(available 일 때). available === false 면 지금 팔지 않는 물건 → purchase 는 not_eligible
  * @typedef {{ guest: boolean, itemId: string, price: number, balance: number, remaining: number, daysLeft: number, typicalDailyNet: number }} ShopGoal
@@ -102,7 +107,7 @@ export const errR = (code, extra = {}) => ({ ok: false, error: { code, ...extra 
  * - 'reward'   : RewardEvent                                                      보상 지급(퀘스트 완료·업적·웰컴) — 토스트/코인 버스트
  * - 'quest'    : { period: QuestPeriod, quest: Quest }                             진행값/상태 변경
  * - 'travel'   : TravelToday                                                      인정 이동 갱신
- * - 'payment'  : Payment | TaxiSettlement                                          결제 성공
+ * - 'payment'  : Payment | TaxiSettlement | PaymentFailed                          결제 성공 · (게임 탑승) 결제 실패 — status 가 있으면 실패
  * - 'session'  : Session                                                          로그인/로그아웃 (isGuest 변경)
  * - 'mode'     : EconMode                                                         무료/유료 전환
  * @typedef {'balance'|'reward'|'quest'|'travel'|'payment'|'session'|'mode'} EconEvent
