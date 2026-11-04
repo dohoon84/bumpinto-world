@@ -145,6 +145,38 @@ ok('#30 shapes: ledger board + reward event, hold.code, welcome already_claimed'
   assert.deepEqual(m.map((x) => (x.t === 'ride' ? `${x.r.id}:${x.fare?.id || '-'}` : x.e.id)), ['q', 'r2:f2', 'f3', 'r1:f1', 'old']);
   assert.deepEqual(mergeHistory(rides, []).map((x) => x.fare), [null, null]);
   ok('wallet app history: rides + ledger merged by date, paid fare attached to its ride (no duplicate row)'); }
+{ // #30 44dcb3b 요금 줄 모양: rideId · mode · code · listAmount · charged · free, 무료 탑승 = delta 0 줄(id e{n})
+  const cf = createMockClient({ storage: mem(), now }); cf.dev.signIn({ name: 'f' });
+  const b0 = (await cf.getBalance()).total;
+  await cf.payFare({ mode: 'bus', code: 'bus.city', rideId: 'bus-111' }); await cf.payFare({ mode: 'bus', code: 'bus.city', rideId: 'bus-111' });
+  const fr = (await cf.getLedger()).filter((e) => e.kind === 'fare');
+  assert.equal(fr.length, 1, 'same rideId twice = one row');
+  assert.deepEqual({ ...fr[0], id: fr[0].id.replace(/\d+$/, 'N'), at: 0, title: 0, sub: 0 }, { id: 'eN', at: 0, kind: 'fare', delta: 0, title: 0, sub: 0, rideId: 'bus-111', mode: 'bus', code: 'bus.city', listAmount: 1650, charged: 0, free: true });
+  assert.equal((await cf.getBalance()).total, b0, 'free ride: balance unchanged');
+  cf.dev.setMode({ transitPaid: true }); cf.dev.setBalance(20000);
+  await cf.payFare({ mode: 'subway', code: 'subway.base', rideId: 'sub-9' });
+  const h = await cf.holdTaxi({ code: 'taxi.drive', estimateMeters: 3000, rideId: 'taxi-222' }); const st = await cf.settleTaxi({ holdId: h.data.holdId, actualMeters: 2500 });
+  const L = (await cf.getLedger()).filter((e) => e.kind === 'fare' && e.rideId);
+  const sub = L.find((e) => e.rideId === 'sub-9'), tx = L.find((e) => e.rideId === 'taxi-222');
+  assert.equal(sub.delta, -1550); assert.equal(sub.charged, 1550); assert.equal(sub.free, false); assert.equal(sub.mode, 'subway'); assert.equal(sub.listAmount, 1550);
+  assert.equal(tx.mode, 'taxi'); assert.equal(tx.code, 'taxi.drive'); assert.equal(tx.charged, st.data.charged); assert.equal(tx.delta, -st.data.charged); assert.equal(tx.free, false);
+  ok('fare ledger rows carry rideId/mode/code/listAmount/charged/free; free ride = delta 0 row e{n}, idempotent by rideId'); }
+{ // 교통카드 앱: rideId 먼저, rideId 없는 줄만 ±2분
+  const { mergeHistory, rideKeys } = await import('../src/ui-v2/econ-ui/walletMerge.js');
+  const t = 1_800_000_000_000, tx = (ko) => ({ ko, en: ko });
+  const A = { id: 'a', mode: 'bus', route: '220', at: t, end: t + 120e3 }, B = { id: 'b', mode: 'bus', route: '1303', at: t + 60e3, end: t + 200e3, fare: { receiptId: 'rc-B' } }, X = { id: 'x', mode: 'taxi', route: 'TAXI', at: t - 3600e3, end: t - 3300e3 };
+  assert.deepEqual(rideKeys(B), ['rc-B', `bus-${B.at}`, 'b']); assert.deepEqual(rideKeys(X), [`taxi-${X.at}`, 'x']);
+  const led = [
+    { id: 'f1', kind: 'fare', at: t + 10e3, delta: -1650, title: tx('시내버스'), rideId: 'rc-B', mode: 'bus' }, // A 시간대지만 rideId 는 B
+    { id: 'e7', kind: 'fare', at: t + 5000e3, delta: 0, free: true, title: tx('택시'), rideId: `taxi-${X.at}`, mode: 'taxi' }, // 시간은 멀어도 rideId 로
+    { id: 'f2', kind: 'fare', at: t + 30e3, delta: -1650, title: tx('시내버스') }, // rideId 없음 → A 에 시간으로
+    { id: 'f3', kind: 'fare', at: t + 20e3, delta: -1650, title: tx('시내버스'), rideId: 'bus-nope', mode: 'bus' }, // 맞는 탑승 없음 → 시간으로 붙이지 않고 따로
+  ];
+  const m = mergeHistory([A, B, X], led);
+  const byRide = Object.fromEntries(m.filter((x) => x.t === 'ride').map((x) => [x.r.id, `${x.fare?.id || '-'}/${x.by || '-'}`]));
+  assert.deepEqual(byRide, { a: 'f2/time', b: 'f1/rideId', x: 'e7/rideId' });
+  assert.deepEqual(m.filter((x) => x.t === 'led').map((x) => x.e.id), ['f3']);
+  ok('wallet merge: rideId first (bus receiptId/bus-{at}, taxi-{at}), ±2 min only for rows without rideId, free 0 rows attach'); }
 { // 보상 코인 효과음: 겹침 방지 400 ms · 이동/게시판은 짧고 작게 · 음소거/볼륨 0/효과음 끔이면 안 울림
   const { coinPlan, THROTTLE_MS, loudness } = await import('../src/ui-v2/econ-ui/coinPlan.js');
   const full = coinPlan('quest', { now: 1000 }); assert.equal(full.play, true); assert.equal(full.short, false); assert.equal(full.dur, null); assert.equal(full.gain, 0.6);
