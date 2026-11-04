@@ -166,6 +166,17 @@ ok('#30 shapes: ledger board + reward event, hold.code, welcome already_claimed'
   const t = 1_800_000_000_000, tx = (ko) => ({ ko, en: ko });
   const A = { id: 'a', mode: 'bus', route: '220', at: t, end: t + 120e3 }, B = { id: 'b', mode: 'bus', route: '1303', at: t + 60e3, end: t + 200e3, fare: { receiptId: 'rc-B' } }, X = { id: 'x', mode: 'taxi', route: 'TAXI', at: t - 3600e3, end: t - 3300e3 };
   assert.deepEqual(rideKeys(B), ['rc-B', `bus-${B.at}`, 'b']); assert.deepEqual(rideKeys(X), [`taxi-${X.at}`, 'x']);
+  { // #30 8006645: 택시도 fare.receiptId(= 게임이 보낸 rideId)가 먼저 — 택시 r.at 은 결제 뒤라 'taxi-{at}' 이 안 맞는다
+    const T1 = { id: 't1', mode: 'taxi', route: 'TAXI', at: t + 9000e3, end: t + 9300e3, fare: { receiptId: `taxi-${t + 8990e3}` } };
+    assert.deepEqual(rideKeys(T1), [`taxi-${t + 8990e3}`, `taxi-${T1.at}`, 't1']);
+    const S1 = { id: 's1', mode: 'subway', at: t + 125e3, end: t + 400e3 }, mi = Math.floor(S1.at / 60000);
+    assert.deepEqual(rideKeys(S1).slice(0, 3), [`sub-${mi}`, `sub-${mi - 1}`, `sub-${mi + 1}`]);
+    const mt = mergeHistory([T1, S1], [
+      { id: 'e9', kind: 'fare', at: t + 20000e3, delta: 0, free: true, title: tx('택시'), rideId: `taxi-${t + 8990e3}`, mode: 'taxi' }, // 시간 멀어도 receiptId 로
+      { id: 'f9', kind: 'fare', at: t + 30000e3, delta: -1550, title: tx('지하철'), rideId: `sub-${mi}`, mode: 'subway' },
+    ]);
+    assert.deepEqual(mt.filter((x) => x.t === 'ride').map((x) => `${x.r.id}:${x.fare?.id}:${x.by}`).sort(), ['s1:f9:rideId', 't1:e9:rideId']);
+    assert.equal(mt.filter((x) => x.t === 'led').length, 0); }
   const led = [
     { id: 'f1', kind: 'fare', at: t + 10e3, delta: -1650, title: tx('시내버스'), rideId: 'rc-B', mode: 'bus' }, // A 시간대지만 rideId 는 B
     { id: 'e7', kind: 'fare', at: t + 5000e3, delta: 0, free: true, title: tx('택시'), rideId: `taxi-${X.at}`, mode: 'taxi' }, // 시간은 멀어도 rideId 로
@@ -176,7 +187,7 @@ ok('#30 shapes: ledger board + reward event, hold.code, welcome already_claimed'
   const byRide = Object.fromEntries(m.filter((x) => x.t === 'ride').map((x) => [x.r.id, `${x.fare?.id || '-'}/${x.by || '-'}`]));
   assert.deepEqual(byRide, { a: 'f2/time', b: 'f1/rideId', x: 'e7/rideId' });
   assert.deepEqual(m.filter((x) => x.t === 'led').map((x) => x.e.id), ['f3']);
-  ok('wallet merge: rideId first (bus receiptId/bus-{at}, taxi-{at}), ±2 min only for rows without rideId, free 0 rows attach'); }
+  ok('wallet merge: rideId first (bus receiptId/bus-{at}, taxi-{at}), ±2 min only for rows without rideId, free 0 rows attach, taxi/bus fare.receiptId first, subway sub-{minute}'); }
 { // 보상 코인 효과음: 겹침 방지 400 ms · 이동/게시판은 짧고 작게 · 음소거/볼륨 0/효과음 끔이면 안 울림
   const { coinPlan, THROTTLE_MS, loudness } = await import('../src/ui-v2/econ-ui/coinPlan.js');
   const full = coinPlan('quest', { now: 1000 }); assert.equal(full.play, true); assert.equal(full.short, false); assert.equal(full.dur, null); assert.equal(full.gain, 0.6);
