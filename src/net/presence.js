@@ -5,6 +5,7 @@ import { STATE_HZ } from './protocol.js';
 import { sanitizeLook } from '../look.js';
 import { deviceId } from '../sms.js';
 import { seedList } from '../gifts/catalog.js';
+import { accountWsUrl } from '../account/flags.js'; // [accounts]
 
 class Emitter {
   constructor() { this.handlers = {}; }
@@ -292,7 +293,7 @@ export function createPresence({ station, region = null }) {
       ? 'ws://127.0.0.1:8787'
       : wsParam === 'prod' || wsParam === 'live'
         ? DEFAULT_WS_URL
-        : (wsParam || DEFAULT_WS_URL);
+        : (wsParam || accountWsUrl() || DEFAULT_WS_URL); // [accounts] 계정 API 를 커스텀 도메인으로 띄웠으면 웹소켓도 그쪽(세션 쿠키가 실림)
   const regionId = region?.id || params.get('region') || 'jeongja';
   const sep = base.includes('?') ? '&' : '?';
   const url = `${base}${sep}region=${encodeURIComponent(regionId)}`;

@@ -104,7 +104,7 @@ export function currentRegion() {
   }
 }
 
-function smsBase() {
+export function smsBase() { // [accounts] 계정 API 기본 주소로도 씀
   const params = new URLSearchParams(location.search);
   const smsParam = params.get('sms');
   if (smsParam === 'off') return '';
