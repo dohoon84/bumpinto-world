@@ -373,6 +373,7 @@ const npcParam = params.get('npcs');
 const npcCount = npcParam == null ? npcCap : Math.max(0, Math.min(npcCap, Number(npcParam) || 0));
 const npcs = new NPCs(scene, overlay, world, data, { count: npcCount, terrain, region });
 const bikes = new KakaoBikes(scene, world, data);
+if (corridorData?.migeumTaxiBike?.bike) bikes.addInstanced(scene, corridorData.migeumTaxiBike.bike.spots, world.groundY); // [migeum-taxibike] 미금역 카카오바이크(인스턴스 1개) · ?migeumbike=0 / ?migeum=0 끔
 
 // [roadster] 스타베이스 지역일 때 발사탑 남쪽 약 350m 빈터 (2730, -280) 에 로드스터 점프 쇼 무대 생성 (?roadster=0 으로 끔)
 const playerProxy = {
