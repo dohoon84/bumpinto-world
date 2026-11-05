@@ -74,7 +74,8 @@ export async function loadCityHallGlb(url, { env = null, decoderPath } = {}) {
       const m = mats[i];
       if (!m) continue;
       const n = (m.name || '').toLowerCase();
-      const isGlass = /glass|curtain|atrium/.test(n) || o.name === 'CityHallGlass' || o.name === 'cityhallBlueFacade';
+      const isGlass = (/glass|atrium/.test(n) || (/curtain/.test(n) && !/east/.test(n))) && !/eastwindow|eastsilver/.test(n)
+        || o.name === 'CityHallGlass' || o.name === 'cityhallBlueFacade';
       const isSlant = /slantface/i.test(n) || /SlantFace/i.test(o.name);
       const isEdge = /slantedge/i.test(n) || /SlantEdge/i.test(o.name);
       if (isGlass) {
@@ -96,7 +97,16 @@ export async function loadCityHallGlb(url, { env = null, decoderPath } = {}) {
         const se = new THREE.MeshStandardMaterial({ color: '#1a1e24', roughness: 0.55, metalness: 0.05 });
         se.name = 'SlantEdge';
         mats[i] = se; m.dispose?.();
+      } else if (/eastwindow/.test(n)) {
+        m.color?.set?.('#1e2630');
+        m.metalness = 0.04; m.roughness = 0.6; m.emissive?.set?.('#000000');
+        m.needsUpdate = true;
+      } else if (/eastsilver|spandrel/.test(n)) {
+        m.color?.set?.(/spandrel/.test(n) ? '#a8b0b8' : '#9aa4ae');
+        m.metalness = 0.28; m.roughness = 0.4; m.emissive?.set?.('#000000');
+        m.needsUpdate = true;
       } else if (m.isMeshStandardMaterial || m.isMeshPhysicalMaterial) {
+        if (/^frame$/.test(n)) { m.color?.set?.('#b0b8c0'); m.emissive?.set?.('#000000'); }
         if (env) { m.envMap = env; m.envMapIntensity = (m.envMapIntensity || 0.4) * 1.15; }
         m.metalness = Math.min(m.metalness ?? 0.1, 0.25);
         m.needsUpdate = true;

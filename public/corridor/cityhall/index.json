@@ -246,12 +246,9 @@
       "x": 1700,
       "z": -5898
     },
-    "round": {
-      "cx": 1718,
-      "cz": -5888,
-      "r": 15
-    },
-    "edgePath": true
+    "round": null,
+    "edgePath": true,
+    "useOutline": true
   },
   "fountain": {
     "cx": 1610,
@@ -261,14 +258,14 @@
   },
   "promenade": {
     "from": [
-      1678,
-      -5848
+      1700,
+      -5835
     ],
     "to": [
-      1628,
-      -5902
+      1645,
+      -5900
     ],
-    "width": 8.5
+    "width": 9.5
   },
   "vehicleGate": {
     "x": 1532,

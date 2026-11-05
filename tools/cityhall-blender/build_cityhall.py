@@ -115,9 +115,11 @@ def join_named(names, out_name):
 
 def build():
     clear()
-    m_frame = mat('Frame', (0.88,0.90,0.92), 0.12, 0.42)
+    m_frame = mat('Frame', (0.82,0.84,0.86), 0.12, 0.45)
+    m_east  = mat('EastSilver', (0.62,0.66,0.70), 0.25, 0.40)  # mid silver-grey (ref/04)
+    m_win   = mat('EastWindow', (0.16,0.20,0.26), 0.05, 0.55)  # dark window rows
     m_dark  = mat('FrameDark', (0.58,0.60,0.64), 0.18, 0.4)
-    m_span  = mat('Spandrel', (0.80,0.82,0.84), 0.05, 0.55)
+    m_span  = mat('Spandrel', (0.72,0.75,0.78), 0.08, 0.5)
     m_sof   = mat('Soffit', (0.74,0.76,0.78), 0.05, 0.65)
     m_pil   = mat('Pilotis', (0.96,0.97,0.98), 0.05, 0.32)
     m_sol   = mat('Solar', (0.07,0.09,0.12), 0.8, 0.28)
@@ -142,9 +144,9 @@ def build():
     # East mass on pilotis
     east_cx=(mx1+x_max)/2; east_sx=abs(x_max-mx1)-2; east_sy=depth-2.5
     opaque.append(box('EastSoffit', east_cx, y_c, PH-0.2, east_sx+1.2, east_sy+1.2, 0.45, m_sof, 0.05))
-    opaque.append(box('EastMass', east_cx, y_c, (PH+EAST_H)/2, east_sx, east_sy, EAST_H-PH, m_frame, 0.18))
+    opaque.append(box('EastMass', east_cx, y_c, (PH+EAST_H)/2, east_sx, east_sy, EAST_H-PH, m_east, 0.12))
     # East end solid wall (banner face)
-    opaque.append(box('EastEnd', x_max-1.0, y_c, (PH+EAST_H)/2, 1.2, east_sy+0.5, EAST_H-PH, m_frame, 0.1))
+    opaque.append(box('EastEnd', x_max-1.0, y_c, (PH+EAST_H)/2, 1.2, east_sy+0.5, EAST_H-PH, m_east, 0.1))
     # Roof + solar
     opaque.append(box('Roof', (x_min+x_max)/2, y_c, EAST_H+0.2, abs(x_max-x_min)+3, depth+3, 0.4, m_frame, 0.05))
     for i,sx in enumerate(range(int(x_min)+5, int(x_max)-3, 9)):
@@ -153,11 +155,18 @@ def build():
     # Canopy over entrance
     opaque.append(box('Canopy', (wx1+mx1)/2, y_min-5, 6.8, 36, 11, 0.3, m_frame, 0.06))
     # East frame thick
-    opaque.append(box('EFTop', east_cx, y_min-0.5, EAST_H+0.25, east_sx+0.8, 0.8, 0.6, m_frame))
-    opaque.append(box('EFL', mx1+0.8, y_min-0.5, (PH+EAST_H)/2, 0.8, 0.8, EAST_H-PH, m_frame))
-    opaque.append(box('EFR', x_max-1.5, y_min-0.5, (PH+EAST_H)/2, 0.8, 0.8, EAST_H-PH, m_frame))
-    for k,zy in enumerate(range(int(PH)+3, int(EAST_H)-1, 3)):
-        opaque.append(box(f'EBand{k}', east_cx, y_min-0.4, zy, east_sx-1.2, 0.4, 0.32, m_span))
+    opaque.append(box('EFTop', east_cx, y_min-0.5, EAST_H+0.25, east_sx+0.8, 0.8, 0.6, m_east))
+    opaque.append(box('EFL', mx1+0.8, y_min-0.5, (PH+EAST_H)/2, 0.8, 0.8, EAST_H-PH, m_east))
+    opaque.append(box('EFR', x_max-1.5, y_min-0.5, (PH+EAST_H)/2, 0.8, 0.8, EAST_H-PH, m_east))
+    # South facade: readable floor bands + dark window rows (ref/04 east block)
+    for k, zy in enumerate(range(int(PH) + 2, int(EAST_H) - 1, 3)):
+        opaque.append(box(f'EBand{k}', east_cx, y_min - 0.55, zy, east_sx - 0.8, 0.55, 0.55, m_span))
+        # dark window strip between bands
+        opaque.append(box(f'EWin{k}', east_cx, y_min - 0.72, zy + 1.4, east_sx - 1.4, 0.35, 2.2, m_win))
+    # Vertical mullion hints
+    for i in range(8):
+        px = mx1 + 3 + i * ((x_max - mx1 - 6) / 7)
+        opaque.append(box(f'EMul{i}', px, y_min - 0.6, (PH + EAST_H) / 2, 0.28, 0.4, EAST_H - PH - 1, m_span))
     # Pilotis
     for i in range(12):
         px = mx1 + 2 + i*((x_max-mx1-4)/11)
@@ -216,7 +225,8 @@ def build():
     bpy.ops.mesh.primitive_plane_add(size=1, location=(east_cx, y_min-0.6, (PH+EAST_H)/2))
     ec=bpy.context.active_object; ec.name='EastCurtain'
     ec.scale=(east_sx-1.8,1,EAST_H-PH-0.8); ec.rotation_euler=(math.radians(90),0,0)
-    bpy.ops.object.transform_apply(scale=True, rotation=True); ec.data.materials.append(m_gc); glass.append(ec)
+    bpy.ops.object.transform_apply(scale=True, rotation=True); # East south face is silver+window bands (opaque), not blue glass
+    ec.data.materials.append(m_win); opaque.append(ec)
     # North curtain
     bpy.ops.mesh.primitive_plane_add(size=1, location=((x_min+x_max)/2, y_max+0.5, EAST_H/2))
     nc=bpy.context.active_object; nc.name='NorthCurtain'

@@ -18,6 +18,7 @@ const C = {
   hedge: '#3d6b3a', trunk: '#4a3428', foliage: '#3f7a38', pine: '#2d5a30',
   asphalt: '#5a5e64', line: '#e8e8e8', curb: '#9a9ea4', sculpture: '#2a6db5',
   kiosk: '#6fa86a', slantFace: '#4a9ec8', slantEdge: '#2e3540',
+  eastSilver: '#aeb6be', eastWindow: '#2a323c',
   nightWarm: '#ffe3ad', nightCool: '#a8c8ff',
 };
 
@@ -123,6 +124,7 @@ function mats() {
     kiosk: S(C.kiosk, { roughness: 0.5, metalness: 0.2 }),
     slantFace: S(C.slantFace, { roughness: 0.55, metalness: 0.08 }),
     slantEdge: S(C.slantEdge, { roughness: 0.45, metalness: 0.05 }),
+    eastFacade: null,
     glow: B('#ffffff', { vertexColors: true }),
     jet: B('#ffffff', { transparent: true, opacity: 0.7, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide }),
     mist: B('#b8e0ff', { transparent: true, opacity: 0.22, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending }),
@@ -150,6 +152,23 @@ function mats() {
       transparent: true, opacity: 0.9, roughness: 0.32, metalness: 0.18, emissive: '#3a7aa8', emissiveIntensity: 0.45, envMapIntensity: env ? 0.85 : 0,
     });
     shared._curtainTex = shared.glassCurtain.map;
+    // East silver frame + dark window rows (ref/04) — not blue glass
+    shared.eastFacade = S(C.eastSilver, {
+      map: canvasTex(256, 512, (x, w, h) => {
+        x.fillStyle = '#aeb6be'; x.fillRect(0, 0, w, h);
+        const rows = 10;
+        for (let i = 0; i < rows; i++) {
+          const y = (i + 0.15) * (h / rows);
+          const bh = h / rows * 0.55;
+          x.fillStyle = '#2a323c'; x.fillRect(6, y, w - 12, bh);
+          x.fillStyle = '#c5ccd3'; x.fillRect(0, y + bh, w, h / rows * 0.22);
+        }
+        x.strokeStyle = '#8a929a'; x.lineWidth = 2;
+        for (let i = 1; i < 8; i++) { x.beginPath(); x.moveTo(i * (w / 8), 0); x.lineTo(i * (w / 8), h); x.stroke(); }
+      }, 4, 6),
+      roughness: 0.4, metalness: 0.25, envMapIntensity: env ? 0.5 : 0,
+    });
+
 
     // Blue faceted glass atlas (diagonal mullions + reflection)
     shared.glassBlue.map = canvasTex(512, 512, (x, w, h) => {
@@ -483,7 +502,7 @@ function buildBuilding(data, M) {
   // East upright curtain wall (south face) — tall glass box with deep pilotis recess
   const eastCurtain = new THREE.PlaneGeometry(xMax - midX1 - 1.5, eastH - pilotisH - 0.5, 1, 1);
   eastCurtain.translate((midX1 + xMax) / 2, (pilotisH + eastH) / 2, zMax + 0.55);
-  const eastCurtainMesh = new THREE.Mesh(eastCurtain, M.glassCurtain || M.glassLite);
+  const eastCurtainMesh = new THREE.Mesh(eastCurtain, M.eastFacade || M.frame);
   eastCurtainMesh.name = 'cityhallEastCurtain'; eastCurtainMesh.castShadow = false; g.add(eastCurtainMesh);
   // Thick light-grey frame around east box (top + sides)
   frameBag.box((midX1 + xMax) / 2, eastH + 0.15, zMax + 0.7, xMax - midX1 - 0.5, 0.55, 0.7, 0, C.frame);
@@ -641,32 +660,52 @@ function buildGrounds(data, M) {
   const d = data.deck;
   bag.box((d.x0 + d.x1) / 2, 0.06, d.seatsZ - 5, d.x1 - d.x0 + 8, 0.08, 3.5, 0, C.path);
 
-  // Single straight paved promenade → city hall (shifted LEFT off pond; ref/11·12)
+  // One clear straight paved strip → city hall (ref/12): consistent width, lawn both sides
   const pr = data.promenade;
   {
     const dx = pr.to[0] - pr.from[0], dz = pr.to[1] - pr.from[1], L = Math.hypot(dx, dz), ang = Math.atan2(dz, dx);
-    const geo = new THREE.BoxGeometry(L, 0.1, pr.width);
-    geo.rotateY(-ang); geo.translate((pr.from[0] + pr.to[0]) / 2, 0.06, (pr.from[1] + pr.to[1]) / 2);
-    const m = new THREE.Mesh(geo, M.plaza); m.name = 'cityhallPromenade'; m.receiveShadow = true; g.add(m);
+    const geo = new THREE.BoxGeometry(L, 0.14, pr.width);
+    geo.rotateY(-ang); geo.translate((pr.from[0] + pr.to[0]) / 2, 0.09, (pr.from[1] + pr.to[1]) / 2);
+    const promMat = (M.path || M.plaza).clone();
+    if (promMat.color) promMat.color.set('#d8d2c6');
+    promMat.roughness = 0.92;
+    const m = new THREE.Mesh(geo, promMat); m.name = 'cityhallPromenade'; m.receiveShadow = true; g.add(m);
+    // Soft curb lines both sides
+    const ux = dx / L, uz = dz / L, px = -uz, pz = ux;
+    for (const side of [-1, 1]) {
+      bag.box(
+        (pr.from[0] + pr.to[0]) / 2 + px * side * (pr.width / 2 + 0.15),
+        0.12,
+        (pr.from[1] + pr.to[1]) / 2 + pz * side * (pr.width / 2 + 0.15),
+        L, 0.08, 0.35, -ang, C.curb,
+      );
+    }
+  }
+
+  // Lawn flanks both sides of promenade
+  {
+    const dx = pr.to[0] - pr.from[0], dz = pr.to[1] - pr.from[1], L = Math.hypot(dx, dz) || 1;
+    const ux = dx / L, uz = dz / L, px = -uz, pz = ux;
+    const midX = (pr.from[0] + pr.to[0]) / 2, midZ = (pr.from[1] + pr.to[1]) / 2;
+    for (const side of [-1, 1]) {
+      const ox = px * side * (pr.width / 2 + 9);
+      const oz = pz * side * (pr.width / 2 + 9);
+      const hx = ux * (L / 2 - 2), hz = uz * (L / 2 - 2);
+      const poly = [
+        [midX + ox - hx - px * side * 7, midZ + oz - hz - pz * side * 7],
+        [midX + ox + hx - px * side * 7, midZ + oz + hz - pz * side * 7],
+        [midX + ox + hx + px * side * 7, midZ + oz + hz + pz * side * 7],
+        [midX + ox - hx + px * side * 7, midZ + oz - hz + pz * side * 7],
+      ];
+      bag.push(paintFaces(extrude(poly, [], 0.12, 0.18), C.lawn, C.lawnDark));
+    }
   }
 
   // Pink/brick strip crossing the lawn (ref/12)
   {
-    const bx0 = 1668, bz0 = -5868, bx1 = 1725, bz1 = -5875;
+    const bx0 = 1660, bz0 = -5865, bx1 = 1710, bz1 = -5872;
     const dx = bx1 - bx0, dz = bz1 - bz0, L = Math.hypot(dx, dz), ang = Math.atan2(dz, dx);
-    bag.box((bx0 + bx1) / 2, 0.07, (bz0 + bz1) / 2, L, 0.09, 2.4, -ang, C.brick);
-  }
-
-  // Thin curved path along pond edge (east of promenade, west lip of pond)
-  {
-    const pcx = data.pond?.round?.cx ?? 1710, pcz = data.pond?.round?.cz ?? -5925, prr = (data.pond?.round?.r ?? 16) + 3.2;
-    for (let i = 0; i < 14; i++) {
-      const a0 = -2.2 + i * 0.18, a1 = a0 + 0.18;
-      const x0 = pcx + Math.cos(a0) * prr, z0 = pcz + Math.sin(a0) * prr;
-      const x1 = pcx + Math.cos(a1) * prr, z1 = pcz + Math.sin(a1) * prr;
-      const dx = x1 - x0, dz = z1 - z0, L = Math.hypot(dx, dz) || 1, ang = Math.atan2(dz, dx);
-      bag.box((x0 + x1) / 2, 0.06, (z0 + z1) / 2, L, 0.08, 2.0, -ang, C.path);
-    }
+    bag.box((bx0 + bx1) / 2, 0.14, (bz0 + bz1) / 2, L, 0.1, 2.6, -ang, C.brick);
   }
 
   // Small green kiosk on lawn (photo 04/05) — keep west of new path
@@ -682,7 +721,7 @@ function buildBanners(data, M) {
   const pr = data.promenade;
   const dx = pr.to[0] - pr.from[0], dz = pr.to[1] - pr.from[1], L = Math.hypot(dx, dz);
   const ux = dx / L, uz = dz / L, px = -uz, pz = ux;
-  const n = 14;
+  const n = 16;
   const poles = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.07, 0.09, 7.8, 6), M.pole, n * 2 + 10);
   const banners = new THREE.InstancedMesh(new THREE.PlaneGeometry(0.95, 2.4), M.banner, n * 2 + 10);
   const dummy = new THREE.Object3D();
@@ -710,31 +749,56 @@ function buildBanners(data, M) {
 function buildPond(data, M) {
   const g = new THREE.Group(); g.name = 'cityhallPond';
   const bag = Bag();
-  // Photo-matching round / soft-kidney pond on east
-  const rd = data.pond.round || { cx: 1710, cz: -5925, r: 14 };
-  const cx = rd.cx, cz = rd.cz, r = rd.r;
-  // Stepped stone edge (3 rings)
-  for (let i = 0; i < 3; i++) {
-    const rr = r + 1.2 - i * 0.55;
-    const ring = new THREE.Mesh(new THREE.TorusGeometry(rr, 0.32, 6, 32), M.curb);
-    ring.rotation.x = Math.PI / 2; ring.position.set(cx, 0.25 + i * 0.22, cz); g.add(ring);
+  // Half-moon / D-shape hugging east of building (ref/04·12) — prefer OSM outline
+  const outline = data.pond?.o;
+  let ring = outline;
+  if (!ring || ring.length < 5) {
+    // Fallback D: flat west edge near building, curved east lobe
+    const bx = 1694, z0 = -5952, z1 = -5892, bulge = 28;
+    ring = [];
+    ring.push([bx, z0], [bx, z1]);
+    for (let i = 0; i <= 12; i++) {
+      const t = i / 12;
+      const z = z1 + (z0 - z1) * t;
+      const u = Math.sin(t * Math.PI);
+      ring.push([bx + bulge * u, z]);
+    }
   }
-  const water = new THREE.Mesh(new THREE.CylinderGeometry(r - 0.4, r - 0.4, 0.35, 32), M.water);
-  water.position.set(cx, 0.22, cz); water.name = 'cityhallRoundPond'; g.add(water);
+  const xs = ring.map((p) => p[0]), zs = ring.map((p) => p[1]);
+  const cx = xs.reduce((a, b) => a + b, 0) / xs.length;
+  const cz = zs.reduce((a, b) => a + b, 0) / zs.length;
 
-  // Skip raw OSM pond outline — it reads as a broken quarter-ring; round pond above is the photo match.
+  // Stone edge (raised curb along outline)
+  band(bag, ring, 0.15, 0.42, 0.55, 0.7, C.curb, { minLen: 0.8 });
+  // Water fill
+  bag.push(paintFaces(extrude(ring, [], 0.05, 0.32), C.water, C.waterDeep, C.water));
+  const waterMesh = new THREE.Mesh(extrude(ring, [], 0.28, 0.34), M.water);
+  waterMesh.name = 'cityhallDPond'; g.add(waterMesh);
+  const edgeBody = bag.mesh(M.vc, 'cityhallPondEdge'); if (edgeBody) g.add(edgeBody);
 
-  // Blue abstract sculpture
-  const sc = data.pond.sculpture || { x: cx - 12, z: cz + 8 };
-  bag.cyl(sc.x, 0.35, sc.z, 0.85, 0.7, 10, C.curb);
+  // Curved stone path along west (plaza) lip of pond
+  const westEdge = ring.filter((p) => p[0] < cx + 2).sort((a, b) => a[1] - b[1]);
+  for (let i = 0; i < westEdge.length - 1; i++) {
+    const [ax, az] = westEdge[i], [bx, bz] = westEdge[i + 1];
+    const dx = bx - ax, dz = bz - az, L = Math.hypot(dx, dz) || 1, ang = Math.atan2(dz, dx);
+    // offset further west (plaza side) ~3.5 m
+    const ox = -dz / L * 3.5, oz = dx / L * 3.5;
+    bag.box((ax + bx) / 2 + ox, 0.08, (az + bz) / 2 + oz, L, 0.1, 2.4, -ang, C.path);
+  }
+  const pathM = bag.mesh(M.vc, 'cityhallPondPath'); if (pathM) g.add(pathM);
+
+  // Blue abstract sculpture near north of pond
+  const sc = data.pond.sculpture || { x: cx - 8, z: Math.min(...zs) + 8 };
+  const sbag = Bag();
+  sbag.cyl(sc.x, 0.35, sc.z, 0.85, 0.7, 10, C.curb);
   const wing = new THREE.SphereGeometry(1.5, 10, 8, 0, Math.PI);
   wing.scale(1, 0.35, 0.7); wing.rotateZ(0.5); wing.translate(sc.x - 0.6, 2.3, sc.z);
-  bag.push(wing, C.sculpture);
+  sbag.push(wing, C.sculpture);
   const wing2 = new THREE.SphereGeometry(1.5, 10, 8, 0, Math.PI);
   wing2.scale(1, 0.35, 0.7); wing2.rotateZ(-0.5); wing2.rotateY(Math.PI); wing2.translate(sc.x + 0.6, 2.3, sc.z);
-  bag.push(wing2, C.sculpture);
-  bag.cyl(sc.x, 1.5, sc.z, 0.15, 2.3, 6, C.sculpture);
-  const sm = bag.mesh(M.vc, 'cityhallSculpture'); if (sm) g.add(sm);
+  sbag.push(wing2, C.sculpture);
+  sbag.cyl(sc.x, 1.5, sc.z, 0.15, 2.3, 6, C.sculpture);
+  const sm = sbag.mesh(M.vc, 'cityhallSculpture'); if (sm) g.add(sm);
   return g;
 }
 
@@ -963,7 +1027,10 @@ function buildLandscape(data, M) {
   const f = data.fountain || { cx: 1610, cz: -5965, len: 58 };
 
   // Clear: north fountain corridor + south plaza strip + pond apron (ref/11·12 — open water)
-  const pondCx = data.pond?.round?.cx ?? 1710, pondCz = data.pond?.round?.cz ?? -5925, pondR = data.pond?.round?.r ?? 16;
+  const _po = data.pond?.o || [[1710, -5925]];
+  const pondCx = _po.reduce((a, p) => a + p[0], 0) / _po.length;
+  const pondCz = _po.reduce((a, p) => a + p[1], 0) / _po.length;
+  const pondR = 28;
   const inKeepClear = (x, z) => (
     x > f.cx - f.len / 2 - 10 && x < f.cx + f.len / 2 + 10 && z < zMin + 2 && z > seatsZ - 8
   ) || (
