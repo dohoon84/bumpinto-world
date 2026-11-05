@@ -209,6 +209,17 @@ body.mobile.m-chat-open #m-hud .m-chat-toast, body.mobile.m-chat-open #m-hud .m-
 #m-hud .m-tile .m-dot { position: absolute; top: 6px; right: 8px; width: 8px; height: 8px; border-radius: 50%; background: #d4003b; }
 #m-hud .m-attr { margin-top: 4px; font-size: 11px; line-height: 1.5; color: #9eb4c6; }
 #m-hud .m-attr a { color: #cfe3f3; }
+/* 시트 안 출처: PC 용 ⓘ 접기 버튼은 필요 없음(전부 펼쳐 보임) — 버튼이 글자를 덮던 문제 */
+#m-hud .m-attr .attr-more { display: none !important; }
+#m-hud .m-attr .attr-rest { display: inline !important; max-width: none !important; opacity: 1 !important; padding: 0 !important; overflow: visible !important; }
+/* 계정 타일: 두 칸 · 아이콘 왼쪽 + 이름/잔액 두 줄 */
+#m-hud .m-tile.m-tile-wide { grid-column: span 2; grid-template-columns: auto minmax(0, 1fr); grid-template-rows: auto auto; justify-items: start; align-content: center; column-gap: 10px; row-gap: 1px; padding: 0 12px; text-align: left; }
+#m-hud .m-tile.m-tile-wide > svg { grid-row: 1 / span 2; align-self: center; }
+#m-hud .m-tile.m-tile-wide small { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; line-height: 14px; font-weight: 800; color: #ffe169; }
+/* [game-icons] 공용 게임 아이콘: 남색 시트 위 금색 포인트 */
+#m-hud { --gi-a: #ffd54a; --gi-k: #13213a; }
+#m-hud .m-tile .m-gi { filter: drop-shadow(0 1px 0 rgba(0, 0, 0, .3)); }
+#m-hud .m-leave .m-gi { --gi-a: #ff8a7a; --gi-k: #3a1512; }
 /* 03a 지도 시트 304 — 지도 캔버스(#phone-map)는 PC 요소를 이 자리로 옮겨 그린다 */
 #m-hud .m-map-sheet { right: var(--m-r); top: calc(var(--m-t) + 48px); width: 304px; max-height: calc(100% - var(--m-t) - 48px - var(--m-b)); padding: 10px 12px 12px; }
 #m-hud .m-map-sheet .m-sheet-head { margin-bottom: 8px; }

@@ -7,6 +7,7 @@ import { virtualPad } from '../input.js';
 import { isEn, onLangChange } from '../i18n.js';
 import { resetDocScroll } from './scrollLock.js'; // [mobile-scroll-lock]
 import { canFullscreen, isFullscreen, toggleFullscreen, onFullscreenChange } from './fullscreen.js';
+import { GI, gicon, giOn } from '../ui-v2/gameIcons.js'; // [game-icons]
 
 const t = (ko, en) => (isEn() ? en : ko);
 const I = {
@@ -46,6 +47,9 @@ const I = {
   hourglass: '<path d="M6 3 H18 M6 21 H18 M7.5 3 C7.5 9 16.5 9 16.5 12 C16.5 15 7.5 15 7.5 21 M16.5 3 C16.5 9 7.5 9 7.5 12 C7.5 15 16.5 15 16.5 21" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>',
 };
 const svg = (k, s = 22) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" aria-hidden="true">${I[k]}</svg>`;
+// [game-icons] ☰ 메뉴 시트 · 가방 · 나가기는 공용 게임 아이콘(기본). ?icons=v2 이면 예전 선 아이콘
+const MENU_GI = { 'btn-view': 'top', 'presence-status': 'people', 'lang-launcher': 'lang', 'account-chip': 'user', 'chat-log-toggle': 'chat' };
+const gsvg = (k, s = 22, id = '') => { const g = MENU_GI[id] || k; return giOn() && GI[g] ? gicon(g, s, 'm-gi') : svg(k, s); };
 const $ = (id) => document.getElementById(id);
 const shown = (el) => !!el && !el.hidden && el.style.display !== 'none' && el.getClientRects().length > 0; // fixed 요소는 offsetParent 가 null 이라 rect 로 본다
 
@@ -64,7 +68,7 @@ export function mountMobileHud({ handset } = {}) {
       <div class="m-chip m-profile"><span class="m-avatar"></span><i class="m-div"></i><span class="m-wx"></span><span class="m-clock">--:--</span></div>
     </div>
     <div class="m-row2-l">
-      <button type="button" class="m-tg m-bag" data-act="bag" aria-label="${t('가방', 'Bag')}">${svg('bag', 20)}<i class="m-count" hidden></i></button>
+      <button type="button" class="m-tg m-bag" data-act="bag" aria-label="${t('가방', 'Bag')}">${gsvg('bag', 20)}<i class="m-count" hidden></i></button>
       <div class="m-chip m-ride-strip" hidden></div>
       <button type="button" class="m-chip m-stop-chip" data-act="stop" hidden>${svg('bus', 18)}<b></b><small></small><span class="m-bus-wait" hidden></span></button>
     </div>
@@ -93,7 +97,7 @@ export function mountMobileHud({ handset } = {}) {
     </div>
     <div class="m-scrim" hidden></div>
     <div class="m-sheet m-menu-sheet" data-sheet="menu" hidden>
-      ${head('메뉴', 'Menu', `<button type="button" class="m-leave" data-menu="btn-leave">${svg('door', 16)}<span>${t('나가기', 'Leave')}</span></button>`)}
+      ${head('메뉴', 'Menu', `<button type="button" class="m-leave" data-menu="btn-leave">${gsvg('door', 16)}<span>${t('나가기', 'Leave')}</span></button>`)}
       <div class="m-menu-body"></div>
       <div class="m-attr"></div>
     </div>
@@ -360,8 +364,15 @@ export function mountMobileHud({ handset } = {}) {
         const b = document.createElement('button');
         b.type = 'button'; b.className = 'm-tile' + (tone ? ' is-' + tone : '') + (on ? ' on' : '');
         if (id === 'fs') b.dataset.fs = '1'; else b.dataset.menu = id;
-        b.innerHTML = `${svg(icon, 20)}<span></span>${dot ? '<i class="m-dot"></i>' : ''}`;
-        b.querySelector('span').textContent = label;
+        b.innerHTML = `${gsvg(icon, 20, id)}<span></span>${dot ? '<i class="m-dot"></i>' : ''}`;
+        // 계정 타일: '이름 · 잔액' 이 80px 에 잘리던 것 → 두 칸 너비 · 두 줄(이름 / 잔액)
+        const parts = id === 'account-chip' ? label.split(/\s*·\s*/) : [];
+        if (parts.length > 1) {
+          b.classList.add('m-tile-wide');
+          const sp = b.querySelector('span'); sp.textContent = parts[0];
+          const sm = document.createElement('small'); sm.textContent = parts.slice(1).join(' · '); sp.after(sm);
+          b.setAttribute('aria-label', label);
+        } else b.querySelector('span').textContent = label;
         tiles.push(b);
       }
       if (!tiles.length) continue;

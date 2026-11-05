@@ -1,6 +1,10 @@
 // [econ-mobile] ☰ 메뉴 시트(Figma 02)에 'bum' 묶음을 덧붙인다. src/mobile/hud.js 의 fillMenu 가 다시 그릴 때마다 붙인다.
 //   타일 모양은 기존 .m-tile 그대로. 누르면 메뉴를 닫고(스크림 클릭) 해당 시트를 연다.
-const svg = (body, s = 20) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" aria-hidden="true">${body}</svg>`;
+import { GI, gicon, giOn } from '../../ui-v2/gameIcons.js'; // [game-icons]
+const svgOld = (body, s = 20) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" aria-hidden="true">${body}</svg>`;
+// [game-icons] 공용 게임 아이콘(기본) · ?icons=v2 이면 예전 선 아이콘
+const GI_KEY = new Map([['quest', 'quest'], ['card', 'card'], ['karma', 'karma'], ['bike', 'bike'], ['out', 'door']]);
+const svg = (body, s = 20) => { const k = [...Object.entries(IC)].find(([, v]) => v === body)?.[0]; const g = GI_KEY.get(k); return giOn() && g && GI[g] ? gicon(g, s, 'm-gi') : svgOld(body, s); };
 const IC = {
   quest: '<rect x="4" y="4" width="16" height="17" rx="3" fill="none" stroke="currentColor" stroke-width="2"/><rect x="8.5" y="2.5" width="7" height="4" rx="1.5" fill="currentColor"/><path d="M8 13 L11 16 L16.5 10" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>',
   card: '<rect x="2.5" y="5.5" width="19" height="13" rx="2.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M2.5 10 H21.5" stroke="currentColor" stroke-width="2.4"/><path d="M6 15 H11" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>',
