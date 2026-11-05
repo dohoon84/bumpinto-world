@@ -212,6 +212,7 @@ export function buildWorld(scene, data, region = null, opts = {}) {
   }
   if (roofs.length) {
     const bmesh = new THREE.Mesh(mergeGeometries(roofs), new THREE.MeshLambertMaterial({ vertexColors: true }));
+    bmesh.name = 'building-roofs'; // [snowpile]
     bmesh.castShadow = true; bmesh.receiveShadow = true; scene.add(bmesh);
   }
   for (const [key, geos] of Object.entries(walls)) {

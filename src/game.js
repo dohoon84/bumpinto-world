@@ -498,9 +498,11 @@ const atmosphere = createAtmosphere({
   clock: document.getElementById('hud-clock'),
   region,
 });
-const snowPile = mountSnowPile({ // [snowpile] ?snowpile=0..1|ramp — 기본 꺼짐, 재질 색 lerp만
-  world, scene, region, params,
+const snowPile = mountSnowPile({ // [snowpile] v2 — OBC 윗면 눈·안개·Points 눈송이 (?snowpile 없으면 무동작)
+  world, scene, region, params, atmosphere, camera,
+  mobile: mobileMode,
   getPrecipKind: () => atmosphere.state.kind || 'clear',
+  getHidden: () => !!(typeof subway !== 'undefined' && subway?.interiorActive),
 });
 
 npcs.setCrowdLevel(atmosphere.state.rush || 'normal');
@@ -2583,7 +2585,7 @@ function frame() {
     peers: remotes.list(),
   });
   atmosphere.update(dt, camera);
-  snowPile.update(dt); // [snowpile]
+  snowPile.update(dt, camera); // [snowpile]
   roadster?.update(dt); // [roadster] 시네마틱 카메라가 켜져 있으면 camera/sun.target 덮어씀
   launch?.update(dt); // [launch] 5분 주기 발사·핫스테이징·젓가락 캐치 쇼
   sun.position.copy(sun.target.position).addScaledVector(atmosphere.sunDir, 500);
@@ -2597,6 +2599,8 @@ function frame() {
 }
 // [perf-memory] 정적 병합·인스턴싱·먼 소품 숨기기 (?perfmem=0 이면 null, 예전과 같음). 첫 프레임 전에 한 번
 const perfMem = mountPerfMem({ scene, renderer, camera, params, getPlayer: () => player, corridor, bikes });
+// [snowpile] mergeStatic 이후 최종 재질에 OBC 패치 (draw call 유지)
+try { snowPile.install?.(); } catch (e) { console.warn('[snowpile] install', e); }
 addEventListener('resize', () => { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); });
 requestAnimationFrame(frame);
 

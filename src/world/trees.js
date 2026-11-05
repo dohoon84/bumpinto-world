@@ -68,6 +68,7 @@ export function addInstancedTrees(scene, points, {
 
   // InstancedMesh에서 instanceColor를 쓰려면 기본 material 색상은 흰색이어야 곱해졌을 때 원래 색이 나온다
   const crownMat = new THREE.MeshLambertMaterial({ color: '#ffffff', flatShading: true });
+  crownMat.userData.snowPile = 'foliage'; // [snowpile]
   const trunkMat = M(trunkColor);
 
   const crowns = new THREE.InstancedMesh(crownGeo, crownMat, points.length);
@@ -91,6 +92,7 @@ export function addInstancedTrees(scene, points, {
   });
 
   if (crowns.instanceColor) crowns.instanceColor.needsUpdate = true;
+  crowns.name = 'tree-crowns'; trunks.name = 'tree-trunks'; // [snowpile]
   crowns.castShadow = trunks.castShadow = true;
   scene.add(crowns, trunks);
   return { crowns, trunks };
@@ -120,6 +122,7 @@ export function createPlazaTree(x, z, scale = 1, withBench = true, {
   const leaf1 = new THREE.MeshLambertMaterial({ color: baseCol, flatShading: true });
   const leaf2 = new THREE.MeshLambertMaterial({ color: subCol1, flatShading: true });
   const leaf3 = new THREE.MeshLambertMaterial({ color: subCol2, flatShading: true });
+  leaf1.userData.snowPile = leaf2.userData.snowPile = leaf3.userData.snowPile = 'foliage'; // [snowpile]
 
   const trunk = new THREE.Mesh(
     new THREE.CylinderGeometry(0.24 * scale, 0.36 * scale, 3.6 * scale, 7),

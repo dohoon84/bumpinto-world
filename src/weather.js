@@ -360,8 +360,10 @@ export function createAtmosphere({ scene, sun, hemi, skyGeo, getMode, clock, reg
     const wet = kind === 'rain' || kind === 'snow';
     const heavy = state.code >= 63 || state.code >= 95 || state.precip >= 1.5;
     const amount = !wet ? 0 : state.code >= 51 && state.code <= 57 ? 0.4 : heavy ? 1 : 0.72;
-    precip.lines.visible = amount > 0;
-    if (!wet) return;
+    // [snowpile] softSnow 켜면 라인 눈 대신 Points 눈송이( snowPile.js )를 씀 — 비는 그대로
+    const softSnow = !!(state.softSnow && snow);
+    precip.lines.visible = amount > 0 && !softSnow;
+    if (!wet || softSnow) return;
     precip.mat.color.set(snow ? '#f4f7fb' : '#c5d7e6');
     precip.mat.opacity = snow ? 0.75 : heavy ? 0.55 : 0.38;
     if (!camera) return;
