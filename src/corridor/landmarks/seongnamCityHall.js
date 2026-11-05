@@ -9,7 +9,7 @@ import { vcMat, paint } from '../tileMesh.js';
 import { watchEvening } from '../../evening.js';
 
 const C = {
-  glassBlue: '#3a7aa8', glassTeal: '#3a7aa8', glassLite: '#3a7aa8',
+  glassBlue: '#6bb8dc', glassTeal: '#6bb8dc', glassLite: '#6bb8dc',
   frame: '#e6eaee', frameDark: '#c5ced6', spandrel: '#d5dbe2',
   soffit: '#b8bec6', pilotis: '#f2f4f6', solar: '#1a2330', solarFrame: '#4a5560',
   plaza: '#ddd8ce', plazaDark: '#c2bdb2', lawn: '#5f9a58', lawnDark: '#4a7f45',
@@ -17,7 +17,8 @@ const C = {
   water: '#2a7fa8', waterDeep: '#154a66', pole: '#5a6068', banner: '#2f6db5',
   hedge: '#3d6b3a', trunk: '#4a3428', foliage: '#3f7a38', pine: '#2d5a30',
   asphalt: '#5a5e64', line: '#e8e8e8', curb: '#9a9ea4', sculpture: '#2a6db5',
-  kiosk: '#6fa86a', nightWarm: '#ffe3ad', nightCool: '#a8c8ff',
+  kiosk: '#6fa86a', slantFace: '#4a9ec8', slantEdge: '#2e3540',
+  nightWarm: '#ffe3ad', nightCool: '#a8c8ff',
 };
 
 let shared = null;
@@ -91,7 +92,7 @@ function mats() {
     vc: vcMat(),
     env,
     // Reflective blue glass (faceted / atrium)
-    glassBlue: S(C.glassBlue, { transparent: true, opacity: 0.92, roughness: 0.08, metalness: 0.9, envMapIntensity: env ? 1.6 : 0, side: THREE.DoubleSide, depthWrite: true }),
+    glassBlue: S(C.glassBlue, { transparent: true, opacity: 0.9, roughness: 0.32, metalness: 0.18, emissive: '#3a7aa8', emissiveIntensity: 0.75, envMapIntensity: env ? 0.85 : 0, side: THREE.DoubleSide, depthWrite: true }),
     // Silver curtain with spandrel atlas
     glassCurtain: null,
     glassLite: S(C.glassLite, { transparent: true, opacity: 0.55, roughness: 0.18, metalness: 0.7, envMapIntensity: env ? 0.9 : 0 }),
@@ -120,6 +121,8 @@ function mats() {
     curb: S(C.curb, { roughness: 0.7, metalness: 0.05 }),
     sculpture: S(C.sculpture, { roughness: 0.35, metalness: 0.4, emissive: C.sculpture, emissiveIntensity: 0.12, envMapIntensity: env ? 0.7 : 0 }),
     kiosk: S(C.kiosk, { roughness: 0.5, metalness: 0.2 }),
+    slantFace: S(C.slantFace, { roughness: 0.55, metalness: 0.08 }),
+    slantEdge: S(C.slantEdge, { roughness: 0.45, metalness: 0.05 }),
     glow: B('#ffffff', { vertexColors: true }),
     jet: B('#ffffff', { transparent: true, opacity: 0.7, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide }),
     mist: B('#b8e0ff', { transparent: true, opacity: 0.22, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending }),
@@ -127,7 +130,7 @@ function mats() {
 
   if (hasDoc) {
     // Curtain wall atlas: silver glass + grey horizontal spandrels + mullions
-    shared.glassCurtain = S('#3a7aa8', {
+    shared.glassCurtain = S('#5aa8d0', {
       map: canvasTex(256, 256, (x, w, h) => {
         const g = x.createLinearGradient(0, 0, 0, h);
         g.addColorStop(0, '#5a9cc4'); g.addColorStop(0.5, '#3a7aa8'); g.addColorStop(1, '#2a6288');
@@ -144,14 +147,14 @@ function mats() {
         x.fillStyle = 'rgba(255,255,255,0.18)';
         for (let i = 0; i < 5; i++) x.fillRect(i * 48 + 10, 0, 10, h);
       }, 8, 5),
-      transparent: true, opacity: 0.88, roughness: 0.2, metalness: 0.75, envMapIntensity: env ? 1.0 : 0,
+      transparent: true, opacity: 0.9, roughness: 0.32, metalness: 0.18, emissive: '#3a7aa8', emissiveIntensity: 0.45, envMapIntensity: env ? 0.85 : 0,
     });
     shared._curtainTex = shared.glassCurtain.map;
 
     // Blue faceted glass atlas (diagonal mullions + reflection)
     shared.glassBlue.map = canvasTex(512, 512, (x, w, h) => {
       const bg = x.createLinearGradient(0, 0, w, h);
-      bg.addColorStop(0, '#2a6288'); bg.addColorStop(0.35, '#3a7aa8'); bg.addColorStop(0.65, '#4a8eb8'); bg.addColorStop(1, '#2a6288');
+      bg.addColorStop(0, '#3a7aa8'); bg.addColorStop(0.35, '#5aa8d0'); bg.addColorStop(0.65, '#8ec8e8'); bg.addColorStop(1, '#3a7aa8');
       x.fillStyle = bg; x.fillRect(0, 0, w, h);
       x.strokeStyle = 'rgba(190,220,240,0.55)'; x.lineWidth = 2;
       for (let i = -12; i < 28; i++) { x.beginPath(); x.moveTo(i * 24, 0); x.lineTo(i * 24 + 220, h); x.stroke(); }
@@ -525,20 +528,20 @@ function buildBuilding(data, M) {
 
   // Front annex (앞쪽 조그만한 건물) — south of west wing, right/east face diagonally cut (v5)
   {
-    const frontH = 14.0;
+    const frontH = 16.0;
     const frontRing = [
       [1526.0, -5906.0],
-      [1526.0, -5886.0],
-      [1542.0, -5886.0],
-      [1582.0, -5906.0], // long diagonal right cut
+      [1526.0, -5884.0],
+      [1536.0, -5884.0],
+      [1584.0, -5906.0], // long diagonal right cut
     ];
     frameBag.push(paintFaces(extrude(frontRing, [], 0, frontH), C.frame, C.frameDark, C.soffit));
     frameBag.push(paintFaces(extrude(frontRing, [], frontH, frontH + 0.35), C.frame, C.frame, C.soffit));
-    const southGeo = new THREE.PlaneGeometry(1542 - 1526 - 0.5, frontH - 0.7);
+    const southGeo = new THREE.PlaneGeometry(1536 - 1526 - 0.5, frontH - 0.7);
     const southM = new THREE.Mesh(southGeo, M.glassBlue);
-    southM.position.set((1526 + 1542) / 2, frontH / 2, -5886.0 + 0.12);
+    southM.position.set((1526 + 1536) / 2, frontH / 2, -5884.0 + 0.12);
     southM.name = 'cityhallFrontSouthGlass'; g.add(southM);
-    const ax = 1542, az = -5886.0, bx = 1582, bz = -5906.0;
+    const ax = 1536, az = -5884.0, bx = 1584, bz = -5906.0;
     const y0 = 0.3, y1 = frontH - 0.3;
     const slantGeo = new THREE.BufferGeometry();
     const sv = new Float32Array([
@@ -576,6 +579,22 @@ function buildBuilding(data, M) {
     slantGeo.computeVertexNormals();
     const csm = new THREE.Mesh(slantGeo, M.glassBlue);
     csm.name = 'cityhallCouncilSlantGlass'; g.add(csm);
+    // Opaque slant panel + crisp dark edge lines (reads even without glass)
+    const faceGeo = slantGeo.clone();
+    const faceM = new THREE.Mesh(faceGeo, M.slantFace || M.frameDark);
+    faceM.position.x += 0.15; // slight outward
+    faceM.name = 'cityhallCouncilSlantFace'; g.add(faceM);
+    const edgeH = 0.45;
+    for (const [ey, en] of [[ch - 0.2, 'T'], [0.25, 'B']]) {
+      const eg = new THREE.BufferGeometry();
+      eg.setAttribute('position', new THREE.BufferAttribute(new Float32Array([
+        ax, ey - edgeH / 2, az, bx, ey - edgeH / 2, bz, bx, ey + edgeH / 2, bz,
+        ax, ey - edgeH / 2, az, bx, ey + edgeH / 2, bz, ax, ey + edgeH / 2, az,
+      ]), 3));
+      eg.computeVertexNormals();
+      const em = new THREE.Mesh(eg, M.slantEdge || M.frameDark);
+      em.name = 'cityhallCouncilSlantEdge' + en; g.add(em);
+    }
   }
 
   return { group: g, night, facade: atriumMesh };
@@ -590,35 +609,28 @@ function buildGrounds(data, M) {
   const xMin = Math.min(...xs), xMax = Math.max(...xs);
   const zMin = Math.min(...zs), zMax = Math.max(...zs);
 
-  // Large SE granite plaza (photo 04/05) — thick enough to sit above terrain
+  // SE granite plaza near building (ref/04) — stop short of pond so lawn/path read (ref/11·12)
   const plaza = [
-    [xMin - 8, zMax + 0.3], [xMax + 55, zMax + 0.3],
-    [xMax + 70, zMax + 95], [xMin - 5, zMax + 100],
+    [xMin - 8, zMax + 0.3], [xMax + 28, zMax + 0.3],
+    [xMax + 38, zMax + 55], [xMin - 5, zMax + 70],
   ];
   {
     const geo = extrude(plaza, [], 0.08, 0.16);
     const m = new THREE.Mesh(geo, M.plaza); m.name = 'cityhallPlaza'; m.receiveShadow = true; g.add(m);
   }
 
-  // Lawns
-  const lawnSE = [[xMax + 5, zMax + 8], [xMax + 50, zMax + 10], [xMax + 58, zMax + 65], [xMax + 8, zMax + 60]];
-  bag.push(paintFaces(extrude(lawnSE, [], 0.01, 0.05), C.lawn, C.lawnDark));
+  // Lawns — open green beside SE approach (ref/12): west of pond, both sides of promenade
+  const lawnSE = [[xMax + 2, zMax + 4], [xMax + 55, zMax + 6], [xMax + 72, zMax + 78], [xMax + 4, zMax + 70]];
+  bag.push(paintFaces(extrude(lawnSE, [], 0.12, 0.18), C.lawn, C.lawnDark));
+  // Explicit lawn band between promenade and pond (ref/11·12)
+  const lawnPathPond = [[1635, -5912], [1675, -5850], [1708, -5860], [1708, -5938], [1650, -5940]];
+  bag.push(paintFaces(extrude(lawnPathPond, [], 0.12, 0.18), C.lawn, C.lawnDark));
   const lawnN = [[xMin - 25, zMin - 60], [xMax + 15, zMin - 60], [xMax + 15, zMin - 2], [xMin - 25, zMin - 2]];
   bag.push(paintFaces(extrude(lawnN, [], 0.01, 0.05), C.lawn, C.lawnDark));
   const lawnW = [[xMin - 95, zMin - 45], [xMin - 5, zMin - 45], [xMin - 5, zMax + 45], [xMin - 95, zMax + 45]];
   bag.push(paintFaces(extrude(lawnW, [], 0.01, 0.05), C.lawnDark, C.lawn));
 
-  // Red-brick paths through lawns
-  const brickPts = [
-    [xMax + 20, zMax + 20], [xMax + 35, zMax + 40], [xMax + 42, zMax + 55],
-  ];
-  for (let i = 0; i < brickPts.length - 1; i++) {
-    const [ax, az] = brickPts[i], [bx, bz] = brickPts[i + 1];
-    const dx = bx - ax, dz = bz - az, L = Math.hypot(dx, dz), ang = Math.atan2(dz, dx);
-    bag.box((ax + bx) / 2, 0.06, (az + bz) / 2, L, 0.08, 2.2, -ang, C.brick);
-  }
-
-  // Loop path
+  // Loop path (west park)
   const pathPts = data.westParkLoop?.pts || [];
   for (let i = 0; i < pathPts.length - 1; i++) {
     const [ax, az] = pathPts[i], [bx, bz] = pathPts[i + 1];
@@ -629,18 +641,37 @@ function buildGrounds(data, M) {
   const d = data.deck;
   bag.box((d.x0 + d.x1) / 2, 0.06, d.seatsZ - 5, d.x1 - d.x0 + 8, 0.08, 3.5, 0, C.path);
 
-  // East diagonal promenade
+  // Single straight paved promenade → city hall (shifted LEFT off pond; ref/11·12)
   const pr = data.promenade;
   {
     const dx = pr.to[0] - pr.from[0], dz = pr.to[1] - pr.from[1], L = Math.hypot(dx, dz), ang = Math.atan2(dz, dx);
-    const geo = new THREE.BoxGeometry(L, 0.09, pr.width);
-    geo.rotateY(-ang); geo.translate((pr.from[0] + pr.to[0]) / 2, 0.05, (pr.from[1] + pr.to[1]) / 2);
+    const geo = new THREE.BoxGeometry(L, 0.1, pr.width);
+    geo.rotateY(-ang); geo.translate((pr.from[0] + pr.to[0]) / 2, 0.06, (pr.from[1] + pr.to[1]) / 2);
     const m = new THREE.Mesh(geo, M.plaza); m.name = 'cityhallPromenade'; m.receiveShadow = true; g.add(m);
   }
 
-  // Small green kiosk on lawn (photo 04/05)
-  bag.box(xMax + 22, 1.4, zMax + 28, 4.5, 2.8, 3.2, 0.3, C.kiosk);
-  bag.box(xMax + 22, 2.9, zMax + 28, 5.0, 0.15, 3.6, 0.3, C.frame);
+  // Pink/brick strip crossing the lawn (ref/12)
+  {
+    const bx0 = 1668, bz0 = -5868, bx1 = 1725, bz1 = -5875;
+    const dx = bx1 - bx0, dz = bz1 - bz0, L = Math.hypot(dx, dz), ang = Math.atan2(dz, dx);
+    bag.box((bx0 + bx1) / 2, 0.07, (bz0 + bz1) / 2, L, 0.09, 2.4, -ang, C.brick);
+  }
+
+  // Thin curved path along pond edge (east of promenade, west lip of pond)
+  {
+    const pcx = data.pond?.round?.cx ?? 1710, pcz = data.pond?.round?.cz ?? -5925, prr = (data.pond?.round?.r ?? 16) + 3.2;
+    for (let i = 0; i < 14; i++) {
+      const a0 = -2.2 + i * 0.18, a1 = a0 + 0.18;
+      const x0 = pcx + Math.cos(a0) * prr, z0 = pcz + Math.sin(a0) * prr;
+      const x1 = pcx + Math.cos(a1) * prr, z1 = pcz + Math.sin(a1) * prr;
+      const dx = x1 - x0, dz = z1 - z0, L = Math.hypot(dx, dz) || 1, ang = Math.atan2(dz, dx);
+      bag.box((x0 + x1) / 2, 0.06, (z0 + z1) / 2, L, 0.08, 2.0, -ang, C.path);
+    }
+  }
+
+  // Small green kiosk on lawn (photo 04/05) — keep west of new path
+  bag.box(xMax + 18, 1.4, zMax + 22, 4.5, 2.8, 3.2, 0.3, C.kiosk);
+  bag.box(xMax + 18, 2.9, zMax + 22, 5.0, 0.15, 3.6, 0.3, C.frame);
 
   const body = bag.mesh(M.vc, 'cityhallGroundBody'); if (body) g.add(body);
   return g;
@@ -670,19 +701,7 @@ function buildBanners(data, M) {
       i++;
     }
   }
-  // Extra banner row on SE plaza approach (purple/blue poles like photo)
-  const b = data.building;
-  const bxs = b.o.map((p) => p[0]), bzs = b.o.map((p) => p[1]);
-  const bxMax = Math.max(...bxs), bzMax = Math.max(...bzs);
-  for (let k = 0; k < 10; k++) {
-    const x = bxMax + 8 + k * 4.2;
-    const z = bzMax + 18 + k * 3.5;
-    dummy.position.set(x, 3.9, z); dummy.rotation.set(0, 0, 0); dummy.scale.set(1, 1, 1); dummy.updateMatrix();
-    poles.setMatrixAt(i, dummy.matrix);
-    dummy.position.set(x, 5.4, z); dummy.rotation.set(0, 0.6, 0); dummy.updateMatrix();
-    banners.setMatrixAt(i, dummy.matrix);
-    i++;
-  }
+  // Banner poles only along the (shifted) promenade — matches ref/12
   poles.count = i; banners.count = i;
   poles.castShadow = true; g.add(poles, banners);
   return g;
@@ -943,11 +962,17 @@ function buildLandscape(data, M) {
   const seatsZ = data.deck?.seatsZ ?? -5978;
   const f = data.fountain || { cx: 1610, cz: -5965, len: 58 };
 
-  // Clear: north fountain view corridor (seats→fountain→hall) + south plaza facade strip
+  // Clear: north fountain corridor + south plaza strip + pond apron (ref/11·12 — open water)
+  const pondCx = data.pond?.round?.cx ?? 1710, pondCz = data.pond?.round?.cz ?? -5925, pondR = data.pond?.round?.r ?? 16;
   const inKeepClear = (x, z) => (
     x > f.cx - f.len / 2 - 10 && x < f.cx + f.len / 2 + 10 && z < zMin + 2 && z > seatsZ - 8
   ) || (
     x > xMin - 5 && x < xMax + 5 && z > zMax && z < zMax + 32
+  ) || (
+    Math.hypot(x - pondCx, z - pondCz) < pondR + 40
+  ) || (
+    // lawn strip between shifted promenade and pond — keep open (ref/12)
+    x > 1645 && x < 1725 && z > -5935 && z < -5855
   );
 
   const positions = [];
@@ -956,26 +981,32 @@ function buildLandscape(data, M) {
   // Dense edges
   for (let x = xMin - 80; x < xMax + 60; x += 6.5) {
     pushT(x, zMin - 55 + Math.sin(x * 0.2) * 3, 2); // far north forest belt
-    pushT(x, zMax + 70 + Math.cos(x * 0.15) * 4, 0);
+    // South belt: stop before SE pond/plaza quadrant (ref/11 — no tree crowd by water)
+    if (x < xMax + 5) pushT(x, zMax + 70 + Math.cos(x * 0.15) * 4, 0);
   }
-  for (let z = seatsZ - 55; z < zMax + 55; z += 7.5) {
+  for (let z = seatsZ - 55; z < zMax + 55; z += 9) {
     pushT(xMin - 72 + Math.sin(z * 0.1) * 4, z, 1);
-    pushT(xMax + 50 + Math.cos(z * 0.12) * 3, z, 0);
+    // east belt stays far from pond (xMax+70); keepClear still drops near-pond hits
+    pushT(xMax + 70 + Math.cos(z * 0.12) * 3, z, 0);
   }
   // Forest BEHIND seats (further north of seats/path)
   for (let x = 1570; x < 1650; x += 4) pushT(x, seatsZ - 22 + Math.sin(x) * 1.5, 2);
   for (let x = 1572; x < 1648; x += 4.5) pushT(x, seatsZ - 22 + Math.cos(x) * 2, 1);
   for (let x = 1565; x < 1655; x += 5.5) pushT(x, seatsZ - 32 + Math.sin(x * 0.3) * 2, 0);
-  // SE lawn grove by round pond
-  for (let x = xMax + 8; x < xMax + 58; x += 5.5) {
-    for (let z = zMax + 12; z < zMax + 72; z += 7) pushT(x + Math.sin(z) * 2, z, x % 11 < 5 ? 2 : 0);
-  }
-  // Promenade flanks
+  // SE lawn: sparse accent trees only (pond apron already cleared by inKeepClear)
+  for (const [tx, tz, k] of [
+    [xMax + 12, zMax + 28, 0], [xMax + 18, zMax + 48, 1], [xMax + 28, zMax + 62, 0],
+    [xMax + 8, zMax + 55, 1],
+  ]) pushT(tx, tz, k);
+  // Promenade flanks — one light row on plaza side only (not toward water)
   const pr = data.promenade;
-  for (let t = 0; t < 1; t += 0.07) {
+  for (let t = 0.1; t < 0.9; t += 0.14) {
     const x = pr.from[0] + (pr.to[0] - pr.from[0]) * t;
     const z = pr.from[1] + (pr.to[1] - pr.from[1]) * t;
-    pushT(x + 9, z + 7, 0); pushT(x - 8, z - 6, 1);
+    // left/plaza side (west-ish of path direction)
+    const dx = pr.to[0] - pr.from[0], dz = pr.to[1] - pr.from[1], L = Math.hypot(dx, dz) || 1;
+    const px = -dz / L, pz = dx / L; // perpendicular
+    pushT(x + px * -10, z + pz * -10, t < 0.5 ? 0 : 1);
   }
 
   const N = positions.length;
@@ -1124,7 +1155,7 @@ export function buildSeongnamCityHall(data, { env = null, glbUrl = null } = {}) 
   let glbPending = null;
   if (glbUrl) {
     glbPending = import('./loadCityHallGlb.js').then(({ loadCityHallGlb }) =>
-      loadCityHallGlb(glbUrl, { env }).then((glb) => {
+      loadCityHallGlb(glbUrl, { env: env || (typeof document !== 'undefined' ? makeEnvCube() : null) }).then((glb) => {
         if (!glb || disposed) return;
         // Place at building center (GLB origin = center)
         const p = data.building.pos;

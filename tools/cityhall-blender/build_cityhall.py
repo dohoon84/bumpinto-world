@@ -45,6 +45,21 @@ def box(name, cx,cy,cz, sx,sy,sz, m, bevel=0.0):
         bpy.ops.object.modifier_apply(modifier='Bevel')
     o.data.materials.append(m); return o
 
+
+def slant_slab(name, a, b, z0, z1, thick, m):
+    """Vertical slab along edge a→b in XY, height z0..z1, thickness outward."""
+    mid = ((a[0]+b[0])/2, (a[1]+b[1])/2)
+    elen = math.hypot(b[0]-a[0], b[1]-a[1])
+    ang = math.atan2(b[1]-a[1], b[0]-a[0])
+    h = z1 - z0
+    bpy.ops.mesh.primitive_cube_add(size=1, location=(mid[0], mid[1], (z0+z1)/2))
+    o = bpy.context.active_object; o.name = name
+    o.scale = (elen, thick, h)
+    o.rotation_euler = (0, 0, ang)
+    bpy.ops.object.transform_apply(scale=True, rotation=True)
+    o.data.materials.append(m)
+    return o
+
 def cyl(name, cx,cy,cz, r,h, m, segs=10):
     bpy.ops.mesh.primitive_cylinder_add(radius=r, depth=h, location=(cx,cy,cz), vertices=segs)
     o = bpy.context.active_object; o.name=name; o.data.materials.append(m); return o
@@ -107,8 +122,11 @@ def build():
     m_pil   = mat('Pilotis', (0.96,0.97,0.98), 0.05, 0.32)
     m_sol   = mat('Solar', (0.07,0.09,0.12), 0.8, 0.28)
     # Single glass hue sampled from ref/04 west prism (~#3a7aa8) — 도훈 v5: unify all glazing
-    m_glass = mat('Glass', (0.227, 0.478, 0.659), 0.88, 0.06, 0.48)
+    m_glass = mat('Glass', (0.35, 0.66, 0.82), 0.15, 0.28, 0.75)
     m_gb = m_ga = m_gc = m_glass
+    # Cool mid-grey for slant cut faces — reads against light frame
+    m_slant = mat('SlantFace', (0.42, 0.52, 0.60), 0.08, 0.55)
+    m_edge  = mat('SlantEdge', (0.22, 0.26, 0.30), 0.05, 0.45)
 
     pts=[rel(x,z) for x,z in FOOT]
     xs=[p[0] for p in pts]; ys=[p[1] for p in pts]
@@ -151,10 +169,10 @@ def build():
     # Council
     cpts=[rel(x,z) for x,z in COUNCIL]
     opaque.append(extrude_poly('Council', cpts, 0, 18, m_frame))
-    opaque.append(box('CouncilSlantFrame', 
-        ((rel(1588.2,-5890.0)[0]+rel(1555.0,-5859.0)[0])/2),
-        ((rel(1588.2,-5890.0)[1]+rel(1555.0,-5859.0)[1])/2),
-        9.0, 0.35, math.hypot(rel(1555.0,-5859.0)[0]-rel(1588.2,-5890.0)[0], rel(1555.0,-5859.0)[1]-rel(1588.2,-5890.0)[1])*0.98, 17.5, m_dark, 0.03))
+    _c0,_c1 = rel(1588.2,-5890.0), rel(1555.0,-5859.0)
+    opaque.append(slant_slab('CouncilSlantFace', _c0, _c1, 0.2, 17.8, 0.9, m_glass))
+    opaque.append(slant_slab('CouncilSlantEdgeT', _c0, _c1, 17.3, 18.2, 1.35, m_edge))
+    opaque.append(slant_slab('CouncilSlantEdgeB', _c0, _c1, 0.0, 0.65, 1.35, m_edge))
 
     # --- Glass ---
     glass=[]
@@ -222,23 +240,24 @@ def build():
     # --- Front annex (앞쪽 조그만한 건물): south of west wing, RIGHT side diagonally cut ---
     # Corridor: X=east, Z=south+. Blender: X=east, Y=north=(-Z).
     # Looking from SE plaza: annex sits in front of west prism; its east (right) face is a plan chamfer.
-    front_h = 14.0
+    front_h = 16.0
     # Polygon in corridor (x,z), then rel() → Blender (x,y)
     # SW protrusion ~14m south of main south face (~-5943); east face slants from NE attach to SE tip.
     # Plaza/south face is zMax≈-5906 (+Z south). Annex protrudes further south (larger z).
     # When viewed from SE plaza, annex is in front of west wing; its RIGHT (east) edge is chamfered.
     FRONT_CORRIDOR = [
         (1526.0, -5906.0),  # attach west on main south face
-        (1526.0, -5886.0),  # SW — out into plaza
-        (1542.0, -5886.0),  # short south before long slant
-        (1582.0, -5906.0),  # long diagonal cut to SE attach (비스듬히 깎인 우측)
+        (1526.0, -5884.0),  # SW — out into plaza
+        (1536.0, -5884.0),  # short south stub
+        (1584.0, -5906.0),  # long diagonal — dominant right cut
     ]
     front_pts = [rel(x, z) for x, z in FRONT_CORRIDOR]
     opaque.append(extrude_poly('FrontAnnex', front_pts, 0.0, front_h, m_frame))
+    # Override: rebuild slant as distinct-tone solid face (see FrontSlantFace below)
     opaque.append(extrude_poly('FrontAnnexRoof', front_pts, front_h, front_h + 0.35, m_frame))
     # South glass wall
-    fx0, fy_s = rel(1526.0, -5886.0)
-    fx1, _ = rel(1542.0, -5886.0)
+    fx0, fy_s = rel(1526.0, -5884.0)
+    fx1, _ = rel(1536.0, -5884.0)
     # In Blender after rel: south ≈ smaller or larger Y? FOOT south z=-5906 → Y=-(z-CZ)=-( -5906+5930.3)= -24.3
     # Further south z=-5888 → Y=-( -5888+5930.3)= -42.3  (more negative Y = further south in this mapping)
     bpy.ops.mesh.primitive_plane_add(size=1, location=((fx0+fx1)/2, fy_s - 0.12, front_h/2))
@@ -246,7 +265,7 @@ def build():
     fs.scale = (abs(fx1-fx0)-0.5, 1, front_h-0.7); fs.rotation_euler = (math.radians(90), 0, 0)
     bpy.ops.object.transform_apply(scale=True, rotation=True); fs.data.materials.append(m_glass); glass.append(fs)
     # Slanted east face along (1554,-5888)→(1578,-5900)
-    a = rel(1542.0, -5886.0); b = rel(1582.0, -5906.0)
+    a = rel(1536.0, -5884.0); b = rel(1584.0, -5906.0)
     mid = ((a[0]+b[0])/2, (a[1]+b[1])/2)
     edge_len = math.hypot(b[0]-a[0], b[1]-a[1])
     ang = math.atan2(b[1]-a[1], b[0]-a[0])
@@ -256,9 +275,9 @@ def build():
     fe.rotation_euler = (math.radians(90), 0, ang)
     bpy.ops.object.transform_apply(scale=True, rotation=True); fe.data.materials.append(m_glass); glass.append(fe)
     # Thick dark frame along the slant edge so the cut reads even at distance
-    opaque.append(box('FrontSlantFrame', mid[0], mid[1], front_h/2, 0.45, edge_len*0.98, front_h-0.2, m_dark, 0.04))
-    # Roof edge strip along slant
-    opaque.append(box('FrontSlantRoofEdge', mid[0], mid[1], front_h + 0.2, 0.6, edge_len*0.98, 0.35, m_frame, 0.02))
+    opaque.append(slant_slab('FrontSlantFace', a, b, 0.2, front_h - 0.2, 0.95, m_glass))
+    opaque.append(slant_slab('FrontSlantEdgeT', a, b, front_h - 0.5, front_h + 0.2, 1.4, m_edge))
+    opaque.append(slant_slab('FrontSlantEdgeB', a, b, 0.0, 0.6, 1.4, m_edge))
 
     # Join
     join_named([o.name for o in opaque], 'CityHallOpaque')
