@@ -1,4 +1,6 @@
-// [hud-v3] 상단 HUD v3 아이콘 (24 그리드 · 선 2px · currentColor). 브랜드 로고 없음.
+// [hud-v3] 상단 HUD v3 아이콘. [game-icons] 기본은 공용 게임 아이콘(../gameIcons.js, 반투명 몸통 + 금색 포인트).
+//   ?icons=v2 이면 아래 예전 선 아이콘(24 그리드 · 선 2px · currentColor). 브랜드 로고 없음.
+import { GI, gicon, giOn } from '../gameIcons.js';
 const SV = (body, s) => `<svg class="h3-ic" width="${s}" height="${s}" viewBox="0 0 24 24" aria-hidden="true">${body}</svg>`;
 const P = {
   map: `<path d="M3 6.5 9 4l6 2.5L21 4v13.5L15 20l-6-2.5L3 20z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M9 4v13.5M15 6.5V20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>`,
@@ -27,4 +29,4 @@ const P = {
   plus: `<path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>`,
   minus: `<path d="M5 12h14" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>`,
 };
-export const icon = (k, s = 24) => SV(P[k] || '', s);
+export const icon = (k, s = 24) => (giOn() && GI[k] ? gicon(k, s, 'h3-ic') : SV(P[k] || '', s));

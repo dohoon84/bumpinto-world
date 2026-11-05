@@ -3,6 +3,11 @@
 import { tr, isEn } from '../../i18n.js';
 import { ICON, esc } from '../kit.js';
 import { econ } from '../econ/index.js';
+import { gicon, giOn } from '../gameIcons.js';
+
+/** [game-icons] PC HUD v3(?hud=v3) 에서만 공용 게임 아이콘. 예전 HUD·모바일 패널은 그대로 */
+export const v3i = () => typeof document !== 'undefined' && !!document.body?.classList.contains('hud-v3') && giOn();
+export const gi = (k, s = 16, cls = '') => gicon(k, s, `ve-gi${cls ? ' ' + cls : ''}`);
 
 export const n = (v) => Math.round(+v || 0).toLocaleString('en-US');
 export const sgn = (v) => `${v > 0 ? '+' : v < 0 ? '−' : ''}${n(Math.abs(v))}`;
@@ -26,7 +31,7 @@ export const EI = {
   card: (s = 20) => sv(s, 20, `<rect x="1.5" y="4" width="17" height="12" rx="2.4" fill="#fff"/><rect x="1.5" y="6.6" width="17" height="2.4" fill="#d4003b"/><rect x="1.5" y="9" width="17" height="1.4" fill="#f5a200"/><rect x="4" y="12" width="5" height="1.6" rx=".8" fill="#9eb4c6"/>`),
   karma: (s = 16, c = '#ffe169') => sv(s, 16, `<path d="M8 1 L9.8 6.2 L15 8 L9.8 9.8 L8 15 L6.2 9.8 L1 8 L6.2 6.2 Z" fill="${c}"/>`),
   check: (s = 14, c = '#fff') => ICON.check(s, c),
-  lock: (s = 12, c = '#9eb4c6') => ICON.lock(s, c),
+  lock: (s = 12, c = '#9eb4c6') => (v3i() ? gi('lock', Math.round(s * 1.25), 've-gi-lock') : ICON.lock(s, c)),
   close: (s = 16) => ICON.close(s),
   board: (s = 20) => sv(s, 20, `<rect x="2" y="3" width="16" height="11" rx="2.6" fill="#ec5f9a"/><path d="M6 14 L6 17.5 L10 14 Z" fill="#ec5f9a"/><rect x="5" y="6.4" width="10" height="1.5" rx=".75" fill="#fff"/><rect x="5" y="9.4" width="6.5" height="1.5" rx=".75" fill="#fff"/>`),
   nfc: (s = 20, c = '#fff') => sv(s, 20, `<path d="M6 5 A7 7 0 0 1 6 15 M9.5 3 A10 10 0 0 1 9.5 17 M13 1.5 A12.5 12.5 0 0 1 13 18.5" fill="none" stroke="${c}" stroke-width="1.8" stroke-linecap="round"/>`),

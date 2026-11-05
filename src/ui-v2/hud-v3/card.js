@@ -6,6 +6,9 @@ import { n, sgn, tr, esc, EI, mockTag } from '../econ-ui/kit.js';
 import { trackerHtml, guestTrackerHtml } from '../econ-ui/hud.js';
 import { dailySlots } from '../econ-ui/questSlots.js';
 import { icon } from './icons.js';
+import { gicon, giOn } from '../gameIcons.js';
+// [game-icons] 칸 이름 앞 작은 아이콘 (?icons=v2 이면 없음)
+const ci = (k) => (giOn() ? gicon(k, 13, 'h3-ci') : '');
 
 let card = null, cells = null, trkRoot = null, trk = null, ctx = null;
 let shown = 0, anim = 0, deltaT = 0, trackerOpen = true;
@@ -118,7 +121,7 @@ function render(delta = null) {
   const m = travel.minutes, cap = travel.capMinutes || 60;
   const pct = (v, t) => Math.round(Math.max(0, Math.min(1, t ? v / t : 0)) * 100);
   cells.innerHTML = `<button type="button" class="h3-cell h3-bal${dShow ? ' v2-glow' : ''}" data-ve="bal" title="${esc(tr('교통카드 · 지갑 열기', 'Open transit card · wallet'))}">${EI.coin(24)}<span class="h3-v"><b data-ve="bal-v">${n(anim ? shown : bal.total)}</b><small>bum${dShow ? ` <em class="h3-d${dShow < 0 ? ' neg' : ''}">${sgn(dShow)}</em>` : ''}</small></span>${mockTag('mini')}</button>
-    <button type="button" class="h3-cell h3-q" data-ve="quest" aria-expanded="${trackerOpen}" title="${esc(trackerOpen ? tr('할 일 접기', 'Hide quests') : tr('할 일 펼치기', 'Show quests'))}"><span class="h3-v"><small>${esc(tr('할 일', 'Quests'))}</small><b>${done}/${total}</b></span><span class="h3-prog"><i style="width:${pct(done, total)}%"></i></span><span class="h3-caret${trackerOpen ? ' up' : ''}">${icon('caret', 14)}</span></button>
-    <button type="button" class="h3-cell h3-walk" data-ve="move" title="${esc(tr('할 일 · 이동 인정 보기', 'Quests · counted travel'))}"><span class="h3-v"><small>${esc(tr('걸음', 'Walk'))}</small><b>${esc(tr(`${m}/${cap}분`, `${m}/${cap} min`))}</b></span><span class="h3-prog mint"><i style="width:${pct(m, cap)}%"></i></span></button>`;
+    <button type="button" class="h3-cell h3-q" data-ve="quest" aria-expanded="${trackerOpen}" title="${esc(trackerOpen ? tr('할 일 접기', 'Hide quests') : tr('할 일 펼치기', 'Show quests'))}"><span class="h3-v"><small>${ci('quest')}${esc(tr('할 일', 'Quests'))}</small><b>${done}/${total}</b></span><span class="h3-prog"><i style="width:${pct(done, total)}%"></i></span><span class="h3-caret${trackerOpen ? ' up' : ''}">${icon('caret', 14)}</span></button>
+    <button type="button" class="h3-cell h3-walk" data-ve="move" title="${esc(tr('할 일 · 이동 인정 보기', 'Quests · counted travel'))}"><span class="h3-v"><small>${ci('walk')}${esc(tr('걸음', 'Walk'))}</small><b>${esc(tr(`${m}/${cap}분`, `${m}/${cap} min`))}</b></span><span class="h3-prog mint"><i style="width:${pct(m, cap)}%"></i></span></button>`;
   trk.innerHTML = trackerOpen ? trackerHtml(daily) : '';
 }

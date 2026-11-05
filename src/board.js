@@ -2,6 +2,21 @@ import { trackEvent } from './analytics.js';
 import { CONTRIBUTORS, CONTRIBUTION_AREAS, REPO_URL } from './contributors.js';
 import { NOTICE_POSTS, NOTICE_BY_KEY } from './notices.js';
 import { isEn, tr, toggleLang, onLangChange } from './i18n.js';
+import { gicon, giOn } from './ui-v2/gameIcons.js';
+
+// [game-icons] PC HUD v3(?hud=v3) 에서만: 머리·버튼·탭의 이모지를 공용 게임 아이콘으로 바꾼다. 예전 HUD·모바일은 그대로.
+const BOARD_EMOJI = { '📋': 'board', '🌍': 'heart', '🌐': 'lang', '📢': 'megaphone', '📌': 'pushpin' };
+function v3BoardIcons(root) {
+  if (!document.body.classList.contains('hud-v3') || !giOn()) return;
+  root.classList.add('bd-v3');
+  root.querySelectorAll('.board-header h1, .board-header .board-btn, .board-cat, .pin-icon, .board-btn[data-action]').forEach((el) => {
+    const t = el.firstChild;
+    if (!t || t.nodeType !== 3) return;
+    const m = /^\s*(📋|🌍|🌐|📢|📌)\uFE0F?\s*/u.exec(t.data);
+    if (m) { t.data = t.data.slice(m[0].length); el.insertAdjacentHTML('afterbegin', gicon(BOARD_EMOJI[m[1]], el.tagName === 'H1' ? 22 : 16, 'bd-gi')); }
+    else if (el.dataset.action === 'write' && /^\s*\+\s*/.test(t.data)) { t.data = t.data.replace(/^\s*\+\s*/, ''); el.insertAdjacentHTML('afterbegin', gicon('pencil', 16, 'bd-gi')); }
+  });
+}
 
 // [economy] 서버가 글 보상·회수를 원장에 넣었으면(res.econ) 경제 클라이언트가 바로 새로 읽게 알린다 → 보상 토스트(kind 'board')
 function econChanged(res) {
@@ -562,6 +577,7 @@ export function mountBoard({ sms, getMe, onOpen } = {}) {
         </header>
         <div class="board-body">${bodyHtml}</div>
       </section>`;
+    v3BoardIcons(modal);
 
     const nextBodyEl = modal.querySelector('.board-body');
     if (nextBodyEl) {
