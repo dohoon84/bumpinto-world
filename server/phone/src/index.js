@@ -111,7 +111,23 @@ export default {
         }
       } catch {}
       try {
-        const bookStats = await env.PHONE_BOOK.getByName(GLOBAL_BOOK_KEY).board({ op: "stats", region: queryRegion, detail });
+        // [retention] ?since=<ms 또는 ISO> — 그 이후 신규 가입·활동, 그리고 그 이후 처음 구글 로그인한 계정의 캐릭터가 신규/기존인지
+        let since = null;
+        let googleIds = null;
+        const sinceRaw = detail ? url.searchParams.get("since") : null;
+        if (sinceRaw) {
+          const n = /^\d+$/.test(sinceRaw) ? Number(sinceRaw) : Date.parse(sinceRaw);
+          if (Number.isFinite(n) && n > 0) since = n;
+        }
+        if (since && env.DB) {
+          try {
+            const rs = await env.DB.prepare(
+              "SELECT primary_user_id AS uid FROM accounts WHERE first_login_at >= ? AND primary_user_id IS NOT NULL",
+            ).bind(since).all();
+            googleIds = (rs?.results || []).map((r) => String(r.uid));
+          } catch {}
+        }
+        const bookStats = await env.PHONE_BOOK.getByName(GLOBAL_BOOK_KEY).board({ op: "stats", region: queryRegion, detail, since, googleIds });
         if (bookStats?.ok) {
           residents = Number(bookStats.residents || 0);
           if (!online && bookStats.activeRecently) online = Number(bookStats.activeRecently || 0);
@@ -123,6 +139,8 @@ export default {
               byRegion: bookStats.byRegion,
               community: bookStats.community,
               dailySignups: bookStats.dailySignups,
+              retention: bookStats.retention,
+              ...(bookStats.sinceStats ? { sinceStats: bookStats.sinceStats } : {}),
             };
           }
         }
