@@ -7,6 +7,12 @@
 //   - 보행 신호(=차량 정지)·횡단 중인 NPC 앞에서 정지. 배달 오토바이는 가끔 상가·아파트 앞 갓길에 잠깐 정차
 //   - 렌더: 종류별 병합 지오메트리 InstancedMesh 1개(공유 재질, 차체 색 = 인스턴스 색) → draw call ≤ 종류 수(11). 멀면 숨김
 //   - ?jzcars=0 끔(기존 동작 그대로), ?jzcars=N 기본 대수(시간대 배수 전). 기본 90대 × 시간대(출퇴근·점심·저녁 ↑, 심야 ↓)
+//   - [traffic-fix] 교착(gridlock) 해소 — 기본 켬, ?trafficfix=0 이면 예전 동작 그대로
+//     ① 라이브 택시끼리도 교차로 점유 양보(예전엔 택시는 일반 차량만 보고 택시끼리는 안 봐서, 교차로에서 맞닿으면 안전망이 두 택시 걸음을
+//        영원히 취소 → 그 뒤 줄 전체가 '택시 뒤 대기'로 분류돼 막힘 타이머가 안 돌았음) ② 안전망에 막힌 택시는 4초 뒤,
+//        택시끼리만 서로 양보하며 멈춘 고리는 3초 뒤 번호 큰 택시가 다른 곳에 재등장
+//     ③ 양보 사슬(A→B→C→…)을 끝까지 따라가 머리가 신호·보행자·정차·움직이는 차가 아니면 '대기'가 아닌 '막힘'으로 셈, 고리(순환 양보)면
+//        고리 안 후순위 차가 3초 뒤 사라짐 ④ 최후 안전망: 정차(배달)·보행자 앞이 아닌데 75초 넘게 서 있으면 사라졌다 다른 곳에 나타남
 import * as THREE from 'three';
 import { Taxis } from './taxis.js';
 import { taxiLength } from './taxiModel.js';
@@ -16,6 +22,9 @@ const DEC = 3.0, CELL = 16, SHOW_R = 300, BUS_L = 11.5, BUS_W = 2.5;
 export const JZ_DEFAULT = 120, JZ_MAX = 200;
 const FADE = 0.6, RECYCLE_R = 330;
 const SWEEP = [0.5, 1.2, 2.2, 3.5, 5.5, 8, 11.5, 16, 21];
+const TAXI_LOCK = 4, CHAIN_MAX = 60, STILL_MAX = 75; // [traffic-fix]
+// [traffic-fix] ?trafficfix=0|off|false → 예전 동작(교착 해소 없음). 없으면 켬
+export const parseTrafficFix = (params) => { const v = params?.get?.('trafficfix'); return !(v === '0' || v === 'off' || v === 'false'); };
 
 // ?jzcars: '0'/'off' → 끔, 숫자 → 기본 대수, 없으면 기본
 export function parseJzCars(params) {
@@ -57,11 +66,12 @@ const inObb = (px, pz, o, ex, el) => { const dx = px - o.x, dz = pz - o.z; retur
 const gkey = (ix, iz) => (ix + 4096) * 8192 + (iz + 4096);
 
 export class JzCars extends Taxis {
-  constructor({ drive, data, transit, world, taxis = null, base = JZ_DEFAULT, hour = () => 12, stops = [], peds = null, extra = null, seed = 23 }) {
+  constructor({ drive, data, transit, world, taxis = null, base = JZ_DEFAULT, hour = () => 12, stops = [], peds = null, extra = null, seed = 23, fix = true }) {
     super(null, null, { drive, data, transit, world, count: 0, seed });
+    this.fix = fix !== false; // [traffic-fix]
     this.taxis = taxis; this.base = base; this.hour = hour; this.peds = peds; this.extra = extra;
     this.cap = Math.min(JZ_MAX, Math.ceil(base * 1.3));
-    this.grid = new Map(); this.recs = []; this.busV = new Map(); this.stats0 = { reverts: 0, respawns: 0, busHits: 0, stuck: 0, yields: 0, deadlocks: 0 };
+    this.grid = new Map(); this.recs = []; this.busV = new Map(); this.stats0 = { reverts: 0, respawns: 0, busHits: 0, stuck: 0, yields: 0, deadlocks: 0, ...(this.fix ? { taxiUnlocks: 0, chainStuck: 0, cycles: 0, stillMax: 0 } : {}) };
     // 스폰 가중치: 정자역 가까운 큰길 위주
     const st = data.station || { x: 0, z: 0 };
     this.spawnW = this.edges.map((e) => { const n = this.nodes[e.from]; return e.wt * (1 + 3 * Math.exp(-Math.hypot(n.x - st.x, n.z - st.z) / 350)); });
@@ -96,7 +106,7 @@ export class JzCars extends Taxis {
   _spawnVeh(i, initial) {
     let t = this.list[i];
     if (!t) { t = this.list[i] = { i, mesh: new THREE.Object3D(), v: 0, lane: 0, state: 'drive', cool: 0, lat: 0, latT: 0, age: 0, heading: 0, parked: true, pts: [[0, 0], [0, 0.01]], cum: [0, 0.01], segs: [], sigQ: [], s: 0, rec: null }; }
-    t.retire = false; t.stuckT = 0; t.busT = 0; t.yieldTo = null;
+    t.retire = false; t.stuckT = 0; t.busT = 0; t.yieldTo = null; if (this.fix) { t.stillT = 0; t.cycT = 0; t.hitBy = null; t.dlT = 0; }
     const kind = pickWeighted(this.mix, this.rnd()), K = KINDS[kind];
     t.kind = kind; t.K = K; t.hl = K.L / 2; t.hw = K.W / 2; t.moto = !!K.moto;
     t.color = new THREE.Color(pickWeighted(K.paint, this.rnd()));
@@ -157,13 +167,14 @@ export class JzCars extends Taxis {
   _taxiGuard(t) {
     const r = t._jzRec; if (!r) return false;
     const h = t.mesh.rotation.y, r1 = { x: t.mesh.position.x, z: t.mesh.position.z, hx: Math.sin(h), hz: Math.cos(h), hl: r.hl, hw: r.hw };
-    if (this._blocked(r, r1, r)) { this.stats0.reverts++; return true; }
+    if (this._blocked(r, r1, r)) { this.stats0.reverts++; if (this.fix) t._jzLockT = (t._jzLockT || 0) + (this._dt || 0.016); return true; }
+    if (this.fix) t._jzLockT = 0;
     Object.assign(r, r1); r.v = t.v; return false;
   }
   _taxiLimit(t, x, z, dx, dz) {
     const r = t._jzRec; if (!r) return Infinity;
     const me = { x: r.x, z: r.z, hx: r.hx, hz: r.hz, hl: r.hl, hw: r.hw, v: t.v, rec: r, taxi: true, lat: t.lat };
-    const res = this._limit(me, (d) => this._sample(t, t.s + d), true);
+    const res = this._limit(me, (d) => this._sample(t, t.s + d), !this.fix); // [traffic-fix] 택시끼리도 교차로 점유 양보
     t._jzYield = res.yieldTo; return res.limit;
   }
   // 앞차 추종 + 경로 점유(교차로·합류) 제한 속도. front(d) = 경로 위 중심에서 d 앞 점
@@ -186,7 +197,7 @@ export class JzCars extends Taxis {
       if (cos < -0.6 && Math.abs(lat) > me.hw + o.hw - 0.15) return; // 마주 오는 차(다른 차로)
       // 양보 순서: 택시 > 번호 작은 일반 차량. 상대가 이미 나에게 양보 중이고 내가 우선이면 무시
       const oy = o.mine ? o.ref.yieldTo : o.taxi ? o.ref._jzYield : null;
-      const prio = oy === me.rec && (o.v || 0) < 1.5 && (me.taxi || (o.mine && me.rec?.ref?.i < o.ref.i)); // 우선이면 바로 앞 몸통만 봄
+      const prio = oy === me.rec && (o.v || 0) < 1.5 && (this.fix && me.taxi && o.taxi ? me.rec.ref.i < o.ref.i : me.taxi || (o.mine && me.rec?.ref?.i < o.ref.i)); // 우선이면 바로 앞 몸통만 봄 · [traffic-fix] 택시끼리는 번호 작은 쪽
       const g0 = obbGap(me, o), pr = (o.v || 0) > 0.5 && cos < 0.6 ? Math.min(8, 1.2 * o.v) : 0;
       const q = pr && !prio ? { x: o.x + o.hx * pr, z: o.z + o.hz * pr, hx: o.hx, hz: o.hz, hl: o.hl, hw: o.hw } : null; // 엇갈려 오는 차의 1.2초 뒤 자리
       for (const [d, r] of sweep()) {
@@ -234,6 +245,14 @@ export class JzCars extends Taxis {
       this._syncTaxi(t, t._jzRec);
       // 새로 나타난 택시(원래 스폰 로직 그대로) 자리에 겹친 일반 차량은 서서히 사라짐
       if (t.age < 0.3) this._near(t._jzRec.x, t._jzRec.z, (o) => { if (o.mine && !o.off && obbGap(o, t._jzRec) < 0.05) { this.stats0.taxiSpawnClears = (this.stats0.taxiSpawnClears || 0) + 1; this._fadeOut(o.ref); } });
+      // [traffic-fix] 안전망에 막혀(다른 차와 맞닿아) 4초 넘게 못 움직인 택시는 다른 곳에 재등장(택시 원래 스폰 로직)
+      if (this.fix) {
+        t._jzStillT = t.v < 0.1 && t.state !== 'pickup' ? (t._jzStillT || 0) + dt : 0;
+        // 택시끼리만 서로 양보하는 고리(일반 차량 없음): 번호 큰 택시가 3초 뒤 재등장
+        let cyc = false; if (t.v < 0.1 && t._jzYield) { const c = this._chain(t._jzRec); cyc = !!c.cycle && !c.low && c.lowTaxi === t; }
+        t._jzCycT = cyc ? (t._jzCycT || 0) + dt : 0;
+        if ((t._jzLockT > TAXI_LOCK || t._jzCycT > 3 || t._jzStillT > STILL_MAX) && t.state !== 'pickup') { t._jzLockT = t._jzStillT = t._jzCycT = 0; t._jzYield = null; this.taxis._spawn(t.i, false); this._syncTaxi(t, t._jzRec); this.stats0.taxiUnlocks++; }
+      }
     }
     this.pedPts = this.peds?.() || null;
     for (const t of this.list) {
@@ -300,8 +319,16 @@ export class JzCars extends Taxis {
     } else { t.busT = 0; this._commit(t, r1); }
     // 막힘 해소: 신호·정차가 아닌데 25초 넘게 못 움직이면 다른 곳으로
     // 줄 서 있음(신호·보행자·정차 대기 중인 앞차 뒤): 막힘으로 세지 않음
-    const ly = t.yieldTo; t.queued = why === 'sig' || why === 'ped' || why === 'stop' || (why === 'veh' && !!ly && (!ly.mine || (ly.ref.queued && ly.ref !== t)));
+    t.why = why; const ly = t.yieldTo; t.queued = why === 'sig' || why === 'ped' || why === 'stop' || (why === 'veh' && !!ly && (!ly.mine || (ly.ref.queued && ly.ref !== t)));
+    if (this.fix && t.v < 0.1 && why === 'veh' && ly) { // [traffic-fix] 앞 차의 '대기' 표시만 믿지 않고 양보 사슬을 끝까지 따라가 판정
+      const c = this._chain(t.rec);
+      if (c.cycle) { t.queued = false; if (c.low === t) { t.cycT += dt; if (t.cycT > 3) { this.stats0.cycles++; this._fadeOut(t); return; } } else t.cycT = 0; } // 고리: 후순위만 3초 뒤 사라짐
+      else { t.cycT = 0; t.queued = c.ok || c.depth > 1; if (!t.queued && t.stuckT + dt > 25) this.stats0.chainStuck++; } // 막힌 머리 바로 뒤 차만 막힘으로(줄 전체가 한꺼번에 사라지지 않게)
+    } else t.cycT = 0;
     if (t.v < 0.1 && (hit || (why === 'veh' && !t.queued))) { t.stuckT += dt; if (t.stuckT > 25) { this.stats0.stuck++; this._fadeOut(t); return; } } else t.stuckT = 0;
+    if (this.fix) { // [traffic-fix] 최후 안전망: 배달 정차·보행자 앞이 아닌데 너무 오래 서 있음
+      if (t.v < 0.1 && why !== 'stop' && why !== 'ped') { t.stillT += dt; if (t.stillT > STILL_MAX) { this.stats0.stillMax++; this._fadeOut(t); return; } } else t.stillT = 0;
+    }
     // 서로 막힘(교차로 안에서 엇갈려 멈춤): 우선순위 낮은 쪽이 3초 뒤 사라짐(서서히)
     const o = hit || t.yieldTo, lowPrio = o && (o.taxi || (o.mine && o.ref.i < t.i));
     if (t.v < 0.1 && lowPrio && (o.taxi ? o.ref._jzYield === t.rec : o.ref.yieldTo === t.rec || o.ref.hitBy === t.rec)) { t.dlT = (t.dlT || 0) + dt; if (t.dlT > 3) { this.stats0.deadlocks++; this._fadeOut(t); return; } } else t.dlT = 0;
@@ -312,6 +339,30 @@ export class JzCars extends Taxis {
     t.mesh.position.set(t.rec.x, y + 0.05, t.rec.z); t.mesh.rotation.y = Math.atan2(t.rec.hx, t.rec.hz);
     t.mesh.scale.setScalar(Math.max(0.01, Math.min(1, t.age / 0.8)));
     void v0;
+  }
+  // [traffic-fix] t 의 양보 사슬(yieldTo/hitBy, 택시는 _jzYield)을 따라감
+  //   ok: 머리가 정당한 대기(신호·보행자·정차·버스·호출 택시·움직이는 차·안전망에 안 막힌 택시), depth: 머리까지 몇 대
+  //   cycle: me 가 고리(순환 양보) 안 → low: 고리 안 후순위(번호 큰 일반 차량, 없으면 null) · lowTaxi: 고리 안 번호 큰 택시
+  _chain(me) {
+    const nx = (r) => (r.mine ? r.ref.yieldTo || r.ref.hitBy : r.taxi ? r.ref._jzYield : null);
+    const seen = new Set([me]); let r = me;
+    for (let k = 1; k <= CHAIN_MAX; k++) {
+      const o = nx(r);
+      if (!o) {
+        if (!r.mine && !r.taxi) return { ok: true, depth: k - 1 }; // 버스·호출 택시
+        if ((r.v || 0) > 0.3) return { ok: true, depth: k - 1 };
+        if (r.mine) { const w = r.ref.why; return { ok: r === me || w === 'sig' || w === 'ped' || w === 'stop', depth: k - 1 }; }
+        return { ok: (r.ref._jzLockT || 0) < 1, depth: k - 1 };
+      }
+      if (o === me) { // 고리
+        let low = null, lowTaxi = null, q = me;
+        for (let j = 0; j < CHAIN_MAX && q; j++) { if (q.mine && (!low || q.ref.i > low.i)) low = q.ref; if (q.taxi && (!lowTaxi || q.ref.i > lowTaxi.i)) lowTaxi = q.ref; q = nx(q); if (q === me) break; }
+        return { cycle: true, low, lowTaxi };
+      }
+      if (seen.has(o) || (o.v || 0) > 0.3) return { ok: true, depth: k }; // 내 앞 고리(그 안 차가 해소) · 앞차가 움직임
+      seen.add(o); r = o;
+    }
+    return { ok: true, depth: CHAIN_MAX };
   }
   // 정자 호출 택시(ride)가 피할 장애물(읽기만)
   obstacles(x, z, R) {
@@ -359,7 +410,7 @@ export function createJzTraffic(scene, opts) {
 export function mountJzTraffic(scene, { params, ...opts }) {
   const c = parseJzCars(params);
   if (!c.on || !opts.drive?.nodes?.length) return null;
-  return createJzTraffic(scene, { ...opts, base: c.base });
+  return createJzTraffic(scene, { ...opts, base: c.base, fix: opts.fix ?? parseTrafficFix(params) }); // [traffic-fix] ?trafficfix=0 → 예전 동작
 }
 // 정자 상가(1층 상가 데이터 [.., x, z, ..])·아파트(건물 외곽 첫 점) → 배달 정차 후보 [x, z]
 export function deliveryStops(shopsData, data) {
