@@ -71,11 +71,18 @@ export async function openChipTip(delta = null) {
 
 // ---------- 04 할 일 시트 (매일 · 주간 · 월간)
 const PERIOD = [['daily', '매일', 'Daily'], ['weekly', '주간', 'Weekly'], ['monthly', '월간', 'Monthly']];
-// 탭 전환을 즉시: 받아 둔 목록을 먼저 그리고, 서버 응답이 오면 같은 패널 안에서만 갈아 끼운다(패널을 다시 띄우지 않음). 세 탭은 처음 열 때 미리 받는다.
+// 열기·탭 전환 모두 즉시: 받아 둔 목록(또는 스켈레톤)을 먼저 그리고, 서버 응답이 오면 같은 패널만 갈아 끼운다.
+// PR #34 는 탭만 즉시였고, 첫 오픈은 서버를 기다렸음(아래 questOpenFast). ?questfast=0 이면 예전처럼 첫 오픈도 대기.
 const questCache = new Map();
 let questView = null; // { p, period, link }
+function questOpenFast() {
+  try { return new URLSearchParams(location.search).get('questfast') !== '0'; } catch { return true; }
+}
 // 로그인·로그아웃·할 일 진행이 바뀌면 받아 둔 목록을 버린다(다음에 열 때 새로 받음)
-try { econ.on?.('session', () => questCache.clear()); econ.on?.('quest', ({ period } = {}) => { if (period) questCache.delete(period); }); } catch { /* 목 클라이언트 등 */ }
+try {
+  econ.on?.('session', () => questCache.clear());
+  econ.on?.('quest', ({ period } = {}) => { if (period) questCache.delete(period); });
+} catch { /* 목 클라이언트 등 */ }
 function questsHtml(period, list) {
   const tabs = PERIOD.map(([k, ko, en]) => `<button type="button" class="ve-tab${k === period ? ' on' : ''}" data-tab="${k}">${esc(tr(ko, en))}</button>`).join('');
   let body;
@@ -95,10 +102,22 @@ function questsHtml(period, list) {
   }
   return `<div class="v2-hrow ve-qhead">${head(tr('할 일', 'Quests'), { icon: EI.quest(24), size: 24 })}<div class="ve-tabs">${tabs}</div>${mockTag()}<span class="v2-grow"></span>${closeBtn()}</div>${body}`;
 }
+function rememberQuests(period, list) {
+  if (!list) return;
+  questCache.set(period, list);
+}
 function prefetchQuests(skip) {
-  for (const [k] of PERIOD) if (k !== skip && !questCache.has(k)) econ.listQuests(k).then((l) => { questCache.set(k, l); }).catch(() => {});
+  for (const [k] of PERIOD) {
+    if (k === skip) continue;
+    econ.listQuests(k).then((l) => rememberQuests(k, l)).catch(() => {});
+  }
+}
+/** 월드 입장·HUD 마운트 직후 세 탭을 미리 받아 둔다(열 때 서버 대기 없음). */
+export function prefetchAllQuests() {
+  for (const [k] of PERIOD) econ.listQuests(k).then((l) => rememberQuests(k, l)).catch(() => {});
 }
 export async function openQuests(period = 'daily', { link } = {}) {
+  const fast = questOpenFast();
   const live = questView && questView.p.isConnected ? questView : null;
   let p;
   if (live) { p = live.p; live.period = period; live.link = link; }
@@ -112,20 +131,25 @@ export async function openQuests(period = 'daily', { link } = {}) {
     });
   }
   const cached = questCache.get(period);
-  if (cached || !live) {
-    // 처음 열 때 캐시가 없으면 서버 응답을 기다렸다가 띄운다(빈 패널 깜빡임 없이 예전과 같게)
-    if (!cached) { const l = await econ.listQuests(period); questCache.set(period, l); if (questView?.p !== p || questView.period !== period) return; p.innerHTML = questsHtml(period, l); }
-    else p.innerHTML = questsHtml(period, cached);
-  } else p.innerHTML = questsHtml(period, null);
+  // 느린 경로(?questfast=0 · 예전): 캐시 없는 첫 오픈만 서버를 기다린 뒤 띄움
+  if (!fast && !live && !cached) {
+    const l = await econ.listQuests(period);
+    rememberQuests(period, l);
+    if (questView?.p !== p || questView.period !== period) return;
+    p.innerHTML = questsHtml(period, l);
+    show(p, { key: `04${period[0] === 'd' ? 'a' : period[0] === 'w' ? 'b' : 'c'}` });
+    prefetchQuests(period);
+    return;
+  }
+  // 빠른 경로: 캐시·스켈레톤으로 바로 보이게 한 뒤 백그라운드 갱신
+  p.innerHTML = questsHtml(period, cached || null);
   if (!live) show(p, { key: `04${period[0] === 'd' ? 'a' : period[0] === 'w' ? 'b' : 'c'}` });
   prefetchQuests(period);
-  if (cached || live) {
-    const fresh = await econ.listQuests(period).catch(() => null);
-    if (!fresh) return;
-    const changed = JSON.stringify(fresh) !== JSON.stringify(questCache.get(period));
-    questCache.set(period, fresh);
-    if (questView?.p === p && questView.period === period && (changed || !cached)) p.innerHTML = questsHtml(period, fresh);
-  }
+  const fresh = await econ.listQuests(period).catch(() => null);
+  if (!fresh) return;
+  const changed = JSON.stringify(fresh) !== JSON.stringify(questCache.get(period));
+  rememberQuests(period, fresh);
+  if (questView?.p === p && questView.period === period && (changed || !cached)) p.innerHTML = questsHtml(period, fresh);
 }
 
 // ---------- 05a 보상 토스트 → 05a2 코인 버스트·흡수 → 05b 잔액 올라가기 + 다음 안내

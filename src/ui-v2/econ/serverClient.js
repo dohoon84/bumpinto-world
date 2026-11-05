@@ -256,6 +256,12 @@ export function createServerClient(o = {}) {
     async listQuests(period) {
       await fresh();
       if (isGuest()) return guestQuests(period, now());
+      // HUD·이전 열기가 이미 받아 둔 목록이 있으면 바로 주고, 백그라운드로만 새로 받는다(열기 대기 제거).
+      const cached = S.quests[period];
+      if (cached) {
+        fetchQuests(period, true).catch(() => {});
+        return cached;
+      }
       return (await fetchQuests(period)) || { ...guestQuests(period, now()), guest: false, info: T('서버에 연결하지 못했어요', 'Could not reach the server') };
     },
     async claimQuest(questId) {
