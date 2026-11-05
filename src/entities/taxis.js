@@ -214,6 +214,7 @@ export class Taxis {
       if (o.t === t) continue;
       const rx = o.x - x, rz = o.z - z, ahead = rx * dx + rz * dz, lat = Math.abs(rx * -dz + rz * dx);
       if (ahead <= 0 || ahead > Math.max(45, brake + 10) || lat > 1.9 || o.dx * dx + o.dz * dz < 0.3) continue;
+      if (this.mutualYield && o.t && o.t.i > t.i && this._seesMe(o, x, z)) { this.mutualSkips = (this.mutualSkips || 0) + 1; continue; } // [traffic-fix] 서로를 앞차로 보면(합류·교차로에서 겹침) 번호 작은 쪽이 먼저 감
       const half = o.bus ? 6 : taxiLength() / 2, gap = ahead - half - taxiLength() / 2 - GAP;
       limit = Math.min(limit, vAllow(gap, o.t ? o.t.v * 0.9 : 0));
     }
@@ -241,6 +242,12 @@ export class Taxis {
     const y = this.groundY ? this.groundY(fx, fz, t.mesh.position.y || 0) : 0;
     t.mesh.position.set(fx, y + 0.05, fz); t.mesh.rotation.y = t.heading;
     const sc = Math.min(1, t.age / 1.0); t.mesh.scale.setScalar(Math.max(0.01, sc));
+  }
+  // [traffic-fix] o 의 앞차 판정(_step 과 같은 식)에 내 위치(x, z)가 걸리는가
+  _seesMe(o, x, z) {
+    const u = o.t, rx = x - o.x, rz = z - o.z, ahead = rx * o.dx + rz * o.dz, lat = Math.abs(rx * -o.dz + rz * o.dx);
+    const brake = u.vmul > 1 ? (u.v * u.v) / (2 * DEC) + 15 : 0;
+    return ahead > 0 && ahead <= Math.max(45, brake + 10) && lat <= 1.9;
   }
   _tag(t, extra) { if (t.tag) t.tag.el.textContent = `🚕 ${TAXI_LIVERIES[t.liv].label}` + (extra ? ' · ' + extra : ''); }
   stats() { const c = {}; for (const t of this.list) c[t.liv] = (c[t.liv] || 0) + 1; return { count: this.list.length, byLivery: c, pickups: this.list.filter((t) => t.state === 'pickup').length }; }

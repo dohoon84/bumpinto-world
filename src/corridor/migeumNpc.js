@@ -13,6 +13,7 @@
 import * as THREE from 'three';
 import { createAvatar, animateAvatar } from '../entities/avatar.js';
 import { JzCars, densityFor } from '../entities/jzTraffic.js';
+import { parseTrafficFix } from '../trafficFix.js'; // [traffic-fix]
 import { KINDS, kindGeometry } from '../entities/vehicleKinds.js';
 import { watchEvening } from '../evening.js';
 import { gameHour } from '../weather.js';
@@ -207,12 +208,12 @@ export function combineCrowds(list) {
 let PENDING = null; // super() 안에서 _inBox 가 불리므로 포털 표를 잠깐 여기 둔다
 const pkey = (x, z) => Math.round(x * 10) + ',' + Math.round(z * 10);
 export class MigeumCars extends JzCars {
-  constructor({ npc, mg = null, transit = null, world = null, base, hour = () => gameHour(), extra = null, seed = 41 }) {
+  constructor({ npc, mg = null, transit = null, world = null, base, hour = () => gameHour(), extra = null, seed = 41, fix = true }) {
     const box = npc.meta.box, st = npc.meta.station;
     const drive = { nodes: npc.drive.nodes, ways: npc.drive.ways, exits: (mg?.stations || []).flatMap((s) => s.exits || []) };
     PENDING = new Map((npc.drive.portals || []).map((i, k) => [pkey(npc.drive.nodes[i][0], npc.drive.nodes[i][1]), npc.drive.clear?.[k] || 0]));
     try {
-      super({ drive, data: { meta: { bboxLocal: box }, station: st }, transit, world, base, hour, stops: npc.stops || [], extra, seed });
+      super({ drive, data: { meta: { bboxLocal: box }, station: st }, transit, world, base, hour, stops: npc.stops || [], extra, seed, fix }); // [traffic-fix] ?trafficfix=0 → 정자와 같이 예전 동작
     } finally { this._pk = PENDING; PENDING = null; }
     this.portalCount = this._pk.size;
   }
@@ -305,7 +306,7 @@ export function mountMigeumNpc(parent, { mg, loader, params, world, transit = nu
       if (!loader.near(x, z)) { if (traffic) traffic.group.visible = false; return; }
       if (!traffic) {
         if (!loader.data) { loader.load().then((d) => { if (!d) failed = true; }); return; }
-        traffic = createMigeumTraffic(parent, { npc: loader.data, mg, transit: tr, world, base: c.base, hour, extra, watchEvening });
+        traffic = createMigeumTraffic(parent, { npc: loader.data, mg, transit: tr, world, base: c.base, hour, extra, watchEvening, fix: parseTrafficFix(params) });
       }
       traffic.group.visible = true;
       traffic.update(Math.min(dt, 0.1), { x, z });

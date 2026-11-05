@@ -32,7 +32,7 @@ export function mergeSimExtra(T, X) {
   return { ...T, routes, paths, refTypes, ...(X.aliasRefs && T.stops ? { stops: aliasStops(T.stops, X.aliasRefs) } : {}) };
 }
 
-export function buildTransit(scene, T, world, overlay, { mode = 'sim', proxy } = {}) {
+export function buildTransit(scene, T, world, overlay, { mode = 'sim', proxy, fix = true } = {}) {
   const bounds = world.bounds;
   let simTime = 0;
   // ---------- 신호 ----------
@@ -116,7 +116,7 @@ export function buildTransit(scene, T, world, overlay, { mode = 'sim', proxy } =
   }
 
   // ---------- 버스 ----------
-  const source = createBusSource(mode, T, bounds, { proxy });
+  const source = createBusSource(mode, T, bounds, { proxy, fix }); // [traffic-fix]
   const meshes = new Map();
   const busTags = new Map();
   const ctx = { pedLight };

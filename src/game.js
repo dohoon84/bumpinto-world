@@ -32,6 +32,7 @@ import { trackEvent } from './analytics.js';
 import { createTerrain } from './world/terrain.js'; // [terrain]
 import { Taxis } from './entities/taxis.js'; // [taxi]
 import { mountJzTraffic, deliveryStops } from './entities/jzTraffic.js'; // [jz-traffic]
+import { parseTrafficFix } from './trafficFix.js'; // [traffic-fix]
 import { gameHour } from './weather.js'; // [jz-traffic]
 import { watchEvening as watchEveningJz } from './evening.js'; // [jz-traffic]
 import { Police } from './entities/police.js';
@@ -430,7 +431,7 @@ const busMode = busParam === 'sim' ? 'sim' : busParam === 'realtime' ? (busProxy
 const jzSimExtra = transitData && busMode === 'sim' && corridorDir && params.get('busnet') !== '0' ? await fetch(import.meta.env.BASE_URL + corridorDir + 'jz-sim.json').then((r) => (r.ok ? r.json() : null)).catch(() => null) : null;
 const pgLinkLive = transitData && busMode === 'sim' && corridorDir && pangyoLinkEnabled() ? await fetch(import.meta.env.BASE_URL + corridorDir + PANGYO_LINK_FILE).then((r) => (r.ok ? r.json() : null)).then((j) => j?.live || null).catch(() => null) : null; // [pangyo-link] 시뮬일 때만 정자 안 8110 조각(정자역→코리더 경계)
 const mgBusLive = transitData && busMode === 'sim' && corridorDir && corridorData?.migeum && migeumBusEnabled() ? await fetch(import.meta.env.BASE_URL + corridorDir + MIGEUM_BUS_FILE).then((r) => (r.ok ? r.json() : null)).then((j) => j?.live || null).catch(() => null) : null; // [migeum-bus] 시뮬일 때만 정자 안 미금 노선 조각(G8110 정자역↔남쪽 경계 · 마을 2)
-const transit = transitData ? buildTransit(scene, mergeMigeumBus(mergeSimExtra(jzSimExtra ? mergeSimExtra(transitData, jzSimExtra) : transitData, pgLinkLive), mgBusLive, { flag: 'simExtra' }), world, overlay, { mode: busMode, proxy: busProxy }) : null;
+const transit = transitData ? buildTransit(scene, mergeMigeumBus(mergeSimExtra(jzSimExtra ? mergeSimExtra(transitData, jzSimExtra) : transitData, pgLinkLive), mgBusLive, { flag: 'simExtra' }), world, overlay, { mode: busMode, proxy: busProxy, fix: parseTrafficFix(params) }) : null; // [traffic-fix] ?trafficfix=0 → 버스 교착 판정도 예전대로
 corridor?.attachLife({ proxy: busProxy, mode: busMode, ...(params.get('ride') !== '0' ? { liveDrive: driveData, liveCrossings: transitData?.crossings } : {}) }); // [corridor] 수내→롯데 버스·차량·보행 NPC (?clife=0 끔) · [ride] 정자 차도는 택시 호출용으로만 덧붙임
 if (transit) {
   corridorClock.simTime = () => transit.simTime; // [corridor] 코리더 신호등도 같은 시계

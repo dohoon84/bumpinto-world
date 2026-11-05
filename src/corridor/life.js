@@ -11,6 +11,7 @@ import { mergeLinkTransit, PANGYO_LINK_FILE } from './pangyo.js'; // [pangyo-lin
 import { extendLinkWithExpress, withExpressTerrain } from './pangyoExpress.js'; // [pangyo-express]
 import { mergeMigeumBus, MIGEUM_BUS_FILE } from './migeumBus.js'; // [migeum-bus]
 import { migeumTaxiExits } from './migeum.js'; // [migeum-taxibike]
+import { parseTrafficFix } from '../trafficFix.js'; // [traffic-fix]
 
 export function createCorridorLife({ root, baseUrl, crossings, terrain, terrainT, world, overlay, stations, liveBox, params, proxy, mode, liveDrive = null, liveCrossings = null, renderer = null, hints = null, pangyoLink = false, migeumBus = false, express = null, extraCrowd = null, migeumTaxi = null }) {
   let buses = null, traffic = null, ready = false, error = null;
@@ -22,7 +23,7 @@ export function createCorridorLife({ root, baseUrl, crossings, terrain, terrainT
     if (link && express) link = extendLinkWithExpress(link, express); // [pangyo-express] G8110 을 경부 합류 뒤까지 연장(끝에서 정차 후 사라짐)
     if (T && link) T = mergeLinkTransit(T, link); // [pangyo-link] 정자역→판교역 8110 (경로·정류장은 뒤에 덧붙임)
     if (T && mgBus) T = mergeMigeumBus(T, mgBus.corridor); // [migeum-bus] 미금 일대 G8110·7007-1·380·9407·마을 7-1·2·14 (시뮬 전용)
-    if (T) buses = createCorridorBuses(root, T, { crossings, terrain: link && express ? withExpressTerrain(terrain, express) : terrain, overlay, liveBox, proxy, mode, gg: params.get('cbusgg') === '1' });
+    if (T) buses = createCorridorBuses(root, T, { crossings, terrain: link && express ? withExpressTerrain(terrain, express) : terrain, overlay, liveBox, proxy, mode, gg: params.get('cbusgg') === '1', fix: parseTrafficFix(params) });
     if (drive) traffic = createCorridorTraffic(root, { drive, crossings, terrain, terrainT, world, stations, liveBox, params, overlay, getBuses: () => nearBuses, liveDrive, liveCrossings, renderer, hints, extraCrowd, extraExits: migeumTaxi ? migeumTaxiExits(migeumTaxi) : null }); // [pangyo-npc] extraCrowd · [migeum-taxibike] 미금 승차 지점
     ready = true;
   }).catch((e) => { error = String(e); ready = true; console.warn('[corridor] life', e); });

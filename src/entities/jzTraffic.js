@@ -17,14 +17,15 @@ import * as THREE from 'three';
 import { Taxis } from './taxis.js';
 import { taxiLength } from './taxiModel.js';
 import { KINDS, kindGeometry, vehicleMaterial, pickWeighted } from './vehicleKinds.js';
+import { parseTrafficFix } from '../trafficFix.js'; // [traffic-fix]
 
 const DEC = 3.0, CELL = 16, SHOW_R = 300, BUS_L = 11.5, BUS_W = 2.5;
 export const JZ_DEFAULT = 120, JZ_MAX = 200;
 const FADE = 0.6, RECYCLE_R = 330;
 const SWEEP = [0.5, 1.2, 2.2, 3.5, 5.5, 8, 11.5, 16, 21];
 const TAXI_LOCK = 4, CHAIN_MAX = 60, STILL_MAX = 75; // [traffic-fix]
-// [traffic-fix] ?trafficfix=0|off|false → 예전 동작(교착 해소 없음). 없으면 켬
-export const parseTrafficFix = (params) => { const v = params?.get?.('trafficfix'); return !(v === '0' || v === 'off' || v === 'false'); };
+// [traffic-fix] ?trafficfix=0|off|false → 예전 동작(교착 해소 없음). 없으면 켬 (src/trafficFix.js — 다른 차량 시스템과 공통)
+export { parseTrafficFix };
 
 // ?jzcars: '0'/'off' → 끔, 숫자 → 기본 대수, 없으면 기본
 export function parseJzCars(params) {

@@ -23,6 +23,7 @@ const ACC = 1.3, DEC = 1.8, DWELL = 9, LANE_OFF = 1.7;
 //   경로를 따라 계속 달린다(고무줄 없음). 실시간에서 사라진 차량은 페이드아웃(타고 있으면 경로 끝까지 계속).
 export const LIVE_DWELL = 18, LIVE_LEAD = 1, LIVE_HOLD = 60, SNAP_M = 600, FADE_S = 1.2;
 const GRID = 24, LANE_W = 2.5, FOLLOW_GAP = 2.5, GIVE_UP = 8, LOOK = 40, MERGE_COS = 0.5; // [bus-net] 노선 간 간격(m)·차로 폭 허용·교착 포기(초)
+const CHAIN_FIX = 600, STILL_MAX = 30; // [traffic-fix] 교착 사슬을 끝까지(최대 CHAIN_FIX 대) 따라감 · 다른 노선 버스 뒤에서 STILL_MAX 초(신호 한 번 26초 + 출발) 넘게 서면 4초 무시(잠실처럼 끼어들 틈이 안 나는 합류 기아 해소)
 const SPACE_R = 650; // [bus-net] 코리더에서 간격 계산 반경(m) — 렌더 반경 450m 보다 넉넉히
 const gkey = (i, j) => i * 100003 + j;
 const hash = (s) => { let h = 2166136261; for (const ch of s) h = Math.imul(h ^ ch.charCodeAt(0), 16777619); return (h >>> 0) / 4294967296; };
@@ -55,11 +56,12 @@ export function projectOnPath(p, x, z) {
 }
 
 export class SimulatedBusSource {
-  constructor(transit, bounds, { seed = 1, spacing = false, dwell = DWELL } = {}) {
+  constructor(transit, bounds, { seed = 1, spacing = false, dwell = DWELL, fix = true } = {}) {
     this.dwellBase = dwell; this.liveAll = false; this.livePaths = null; // [live-ride] liveAll: 모든 경로 실시간 제어(정자) · livePaths: 일부 경로만(코리더 노선별)
     // [bus-net] spacing: 다른 노선 버스와도 간격 유지·정류장 2번째 정차칸·노선 간 스폰 간격(?bus=sim 정자·코리더만 켬).
     //   끄면(기본: 정자 실시간 모드의 폴백 시뮬) 예전과 완전히 같다.
     this.spacing = spacing; this.stats = { done: 0, xfollow: 0, bay2: 0, giveUp: 0 };
+    this.fix = fix !== false; if (this.fix) this.stats.stillMax = 0; // [traffic-fix] ?trafficfix=0 이면 예전 동작(사슬 24대까지만·최후 안전망 없음)
     this.label = `시뮬레이션 (배차 1/${TIME_COMPRESS} 압축)`;
     this.t = 0; this.buses = []; this.nextId = 1;
     this.routes = new Map(transit.routes.map((r) => [r.id, r]));
@@ -85,7 +87,7 @@ export class SimulatedBusSource {
   }
   _spawn(P, s = 0) {
     const bus = { id: this.nextId++, P, s, v: s > 0 ? P.vmax * 0.7 : P.vmax * 0.6, dwell: 0, stopIdx: P.stops.findIndex((st) => st.s > s + 1), state: 'run', age: s > 0 ? 9 : 0, out: 0,
-      _q: null, _fut: null, _futT: -1, _si: 1, _near: false, _blk: null, _wait: 0, _ign: 0, _hit: null, _hitT: -1 - hash(String(s + P.id)) * 0.06, _hitS: 0 }; // [bus-net] 간격 계산용 필드(모양 고정 → V8 최적화 유지)
+      _q: null, _fut: null, _futT: -1, _si: 1, _near: false, _blk: null, _wait: 0, _ign: 0, _hit: null, _hitT: -1 - hash(String(s + P.id)) * 0.06, _hitS: 0, _still: 0 }; // [bus-net] 간격 계산용 필드(모양 고정 → V8 최적화 유지)
     if (bus.stopIdx < 0) bus.stopIdx = P.stops.length;
     this.buses.push(bus); return bus;
   }
@@ -145,6 +147,7 @@ export class SimulatedBusSource {
       b.v = b.v < target ? Math.min(target, b.v + ACC * dt) : Math.max(target, b.v - DEC * 2 * dt);
       b.s += b.v * dt;
       b.state = b.v < 0.2 ? (reason === 'xing' ? 'xing' : reason === 'follow' ? 'queue' : 'run') : 'run';
+      b._still = b.v < 0.2 && reason === 'follow' ? b._still + dt : 0; // [traffic-fix] 앞차 때문에 서 있는 시간(정차·신호·실시간 cap 대기는 0)
       if (reason === 'stop' && limit < 0.6 && b.v < 0.6) { b.dwell = (b.live ? LIVE_DWELL : this.dwellBase) * (0.8 + hash(b.id + 'd') * 0.5); b.v = 0; b.state = 'dwell'; }
       // [bus-net] 앞 버스가 같은 정류장에 서 있으면 그 뒤(한 대 길이 뒤)에서 정차 = 2번째 정차칸
       if (blocker && st && b.v < 0.6 && limit < 0.8 && blocker.state === 'dwell' && blocker.P.stops[blocker.stopIdx]?.stop === st.stop && st.s - b.s < blocker.P.blen + 12) {
@@ -235,13 +238,18 @@ export class SimulatedBusSource {
       b._wait = (b._wait || 0) + dt;
       if (b._wait > GIVE_UP) {
         b._wait = 0;
-        let o = best.o, cyc = false;
-        for (let k = 0; k < 24 && o; k++) { if (o === b) { cyc = true; break; } if (o.state === 'dwell' || o.v > 0.3) break; o = o._blk; }
-        if (cyc) { b._ign = 4; this.stats.giveUp++; return null; }
+        if (this._cycle(b, best.o)) { b._ign = 4; this.stats.giveUp++; return null; }
       }
+      // [traffic-fix] 최후 안전망: 정류장 정차·신호 대기가 아닌데 다른 노선 버스 뒤에서 STILL_MAX 초 넘게 못 움직임 → 4초 동안 다른 노선 무시(같은 노선 추종은 그대로)
+      if (this.fix && b._still > STILL_MAX && best.o.P !== b.P) { b._still = 0; b._ign = 4; this.stats.stillMax++; return null; }
     } else b._wait = 0;
     if (best) this.stats.xfollow++;
     return best;
+  }
+  // 앞차 사슬(_blk)이 다시 b 로 돌아오는가(정차 중이거나 움직이는 버스에서 끊김). [traffic-fix] 예전엔 24대까지만 → 잠실처럼 큰 순환은 못 찾았음
+  _cycle(b, o) {
+    for (let k = 0, n = this.fix ? CHAIN_FIX : 24; k < n && o; k++) { if (o === b) return true; if (o.state === 'dwell' || o.v > 0.3) return false; o = o._blk; }
+    return false;
   }
   _spawnBlocked(P) {
     const q = samplePath(P, 0), R = P.blen + 12;
@@ -602,7 +610,7 @@ export class RealtimeBusSource {
 }
 export function createBusSource(kind, transit, bounds, opts = {}) {
   // [bus-net] 노선 간 간격은 ?bus=sim(kind 'sim')에서만. 실시간 모드의 폴백 시뮬은 예전 그대로(정자 기본 모드 불변)
-  const sim = new SimulatedBusSource(transit, bounds, { spacing: kind === 'sim' && opts.spacing !== false });
+  const sim = new SimulatedBusSource(transit, bounds, { spacing: kind === 'sim' && opts.spacing !== false, fix: opts.fix !== false }); // [traffic-fix]
   if (kind === 'realtime') return new RealtimeBusSource(transit, bounds, { ...opts, fallback: sim });
   return sim;
 }
