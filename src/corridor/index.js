@@ -218,7 +218,9 @@ export function createCorridor({ scene, corridorData, terrain, world, renderer, 
     const lines = s.lines || [];
     const pg = s.id === 'pangyo' && pangyoLinkEnabled();
     const text = pg ? () => (isEn() ? `🚇 ${s.nameEn} Stn.  ${lines.map((l) => LINE_EN[l] || l).join(' · ')}` : `🚇 ${s.name}역  ${lines.join(' · ')}`) : null;
-    const item = overlay.add({ cls: 'label station', text: text ? text() : `🚇 ${s.name} ${s.nameEn}  ${lines.join(' · ')}`, getPos: () => new THREE.Vector3(s.x, pg ? 20 : 10, s.z), maxDist: 1500 }); // 판교역: 광장 데크 라벨과 겹치지 않게 20m
+    // [cityhall] 야탑 라벨이 시청(~1km) 위로 겹쳐 보이지 않게 maxDist 축소
+    const stMax = (corridorData.cityhall && s.id === 'yatap') ? 700 : 1500;
+    const item = overlay.add({ cls: 'label station', text: text ? text() : `🚇 ${s.name} ${s.nameEn}  ${lines.join(' · ')}`, getPos: () => new THREE.Vector3(s.x, pg ? 20 : 10, s.z), maxDist: stMax }); // 판교역: 광장 데크 라벨과 겹치지 않게 20m
     if (pg) {
       item.el.style.background = `linear-gradient(90deg, ${LINE_COLOR[lines[0]] || '#d4003b'} 50%, ${LINE_COLOR[lines[1] || lines[0]] || '#0054a6'} 50%)`;
       pgLabels.push({ item, s, text });

@@ -1,8 +1,7 @@
-// [cityhall] 성남시청 절차적 랜드마크 (로고·브랜드 엠블럼 없음). OSM 외곽 + 참고 사진 매싱.
-//   - 유리 커튼월 · 파란 사선 유리 · 필로티 · 옥상 태양광 · 동측 원형 연못/조각
-//   - 동쪽 배너 폴 보행 광장 · 북쪽 음악분수(+야간 조명) · 데크·계단의자 · 산책로·조경
-//   - 서쪽 시청공원 루프 · 주차장 · 남쪽 차량 출입구
-//   성능: 재질 공유 · 정적 메시 병합 · 반복 소품 InstancedMesh · 캔버스 텍스처 소형
+// [cityhall] 성남시청 절차적 랜드마크 v2 — 참고사진(ref/04·05) 실루엣 우선.
+//   넓은 저층(~10층)·서측 접힌 파란 유리·중앙 사선 아트리움·동측 커튼월+흰 프레임·필로티·태양광
+//   광장 화강암·배너 보행로·원형 연못·음악분수·데크·계단의자. 브랜드 로고 없음.
+//   성능: 공유 재질 · 병합 · InstancedMesh · 소형 캔버스/큐브 env
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { toShape } from '../../world.js';
@@ -10,125 +9,172 @@ import { vcMat, paint } from '../tileMesh.js';
 import { watchEvening } from '../../evening.js';
 
 const C = {
-  glass: '#9ec4d8', glassBlue: '#3a7eb8', mullion: '#c5ced6', slab: '#d8dee4',
-  pilotis: '#c8cbcf', soffit: '#aeb4ba', solar: '#1a2330', solarFrame: '#4a5560',
-  plaza: '#c9c4b8', plazaDark: '#b0aa9c', lawn: '#6fa86a', lawnDark: '#5a8f56',
-  path: '#b8b3a6', brick: '#c4b5a0', brickDark: '#a8947c', wood: '#6b4e32', woodDark: '#4a3520',
-  water: '#3a8fb5', waterDeep: '#1e5f7a', pole: '#8a9098', banner: '#2f6db5',
-  hedge: '#3d6b3a', trunk: '#5a4030', foliage: '#4f8a48', lamp: '#e8eef2',
+  glassBlue: '#1e6aab', glassTeal: '#3a8fc4', glassLite: '#a8c8dc',
+  frame: '#e6eaee', frameDark: '#c5ced6', spandrel: '#d5dbe2',
+  soffit: '#b8bec6', pilotis: '#f2f4f6', solar: '#1a2330', solarFrame: '#4a5560',
+  plaza: '#c8c4ba', plazaDark: '#aea99e', lawn: '#5f9a58', lawnDark: '#4a7f45',
+  path: '#b8b3a6', brick: '#a07058', brickDark: '#8a5a42', wood: '#5c4030', woodDark: '#3e2a1e',
+  water: '#2a7fa8', waterDeep: '#154a66', pole: '#5a6068', banner: '#2f6db5',
+  hedge: '#3d6b3a', trunk: '#4a3428', foliage: '#3f7a38', pine: '#2d5a30',
   asphalt: '#5a5e64', line: '#e8e8e8', curb: '#9a9ea4', sculpture: '#2a6db5',
-  nightWarm: '#ffe3ad', nightCool: '#a8c8ff',
+  kiosk: '#6fa86a', nightWarm: '#ffe3ad', nightCool: '#a8c8ff',
 };
 
 let shared = null;
+
+function makeEnvCube() {
+  // Cheap procedural sky/ground cube for glass reflections (64² × 6)
+  const s = 64;
+  const mk = (fn) => {
+    const cv = document.createElement('canvas'); cv.width = cv.height = s;
+    const x = cv.getContext('2d'); fn(x, s); return cv;
+  };
+  const sky = (x, n) => {
+    const g = x.createLinearGradient(0, 0, 0, n);
+    g.addColorStop(0, '#7eb6e8'); g.addColorStop(0.55, '#c5dcec'); g.addColorStop(1, '#e8eef2');
+    x.fillStyle = g; x.fillRect(0, 0, n, n);
+  };
+  const gnd = (x, n) => {
+    const g = x.createLinearGradient(0, 0, 0, n);
+    g.addColorStop(0, '#d0d6c8'); g.addColorStop(1, '#8a9a78');
+    x.fillStyle = g; x.fillRect(0, 0, n, n);
+  };
+  const imgs = [
+    mk(sky), mk(sky), mk(sky), // +X -X +Y
+    mk(gnd), // -Y
+    mk(sky), mk(sky), // +Z -Z
+  ];
+  const tex = new THREE.CubeTexture(imgs);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.needsUpdate = true;
+  return tex;
+}
+
+function canvasTex(w, h, draw, repeatX = 1, repeatY = 1) {
+  const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
+  draw(cv.getContext('2d'), w, h);
+  const t = new THREE.CanvasTexture(cv);
+  t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4;
+  t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(repeatX, repeatY);
+  return t;
+}
+
 function mats() {
   if (shared) return shared;
-  const L = (c, extra = {}) => new THREE.MeshLambertMaterial({ color: c, ...extra });
+  const hasDoc = typeof document !== 'undefined';
+  const env = hasDoc ? makeEnvCube() : null;
+  const S = (c, extra = {}) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.45, metalness: 0.1, envMap: env, envMapIntensity: env ? 0.55 : 0, ...extra });
   const B = (c, extra = {}) => new THREE.MeshBasicMaterial({ color: c, ...extra });
+
   shared = {
     vc: vcMat(),
-    glass: L(C.glass, { transparent: true, opacity: 0.78, depthWrite: true }),
-    glassBody: null, // silver curtain atlas for massing sides
-    glassBlue: null, // set below with map
-    mullion: L(C.mullion),
-    slab: L(C.slab),
-    pilotis: L(C.pilotis),
-    soffit: L(C.soffit),
-    solar: L(C.solar),
+    env,
+    // Reflective blue glass (faceted / atrium)
+    glassBlue: S(C.glassBlue, { transparent: true, opacity: 0.92, roughness: 0.08, metalness: 0.9, envMapIntensity: env ? 1.6 : 0, side: THREE.DoubleSide, depthWrite: true }),
+    // Silver curtain with spandrel atlas
+    glassCurtain: null,
+    glassLite: S(C.glassLite, { transparent: true, opacity: 0.55, roughness: 0.18, metalness: 0.7, envMapIntensity: env ? 0.9 : 0 }),
+    frame: S(C.frame, { roughness: 0.55, metalness: 0.15, envMapIntensity: env ? 0.3 : 0 }),
+    frameDark: S(C.frameDark, { roughness: 0.5, metalness: 0.2 }),
+    spandrel: S(C.spandrel, { roughness: 0.6, metalness: 0.05 }),
+    soffit: S(C.soffit, { roughness: 0.7, metalness: 0.05 }),
+    pilotis: S(C.pilotis, { roughness: 0.4, metalness: 0.05 }),
+    solar: S(C.solar, { roughness: 0.35, metalness: 0.7, envMapIntensity: env ? 0.6 : 0 }),
     plaza: null,
-    lawn: L(C.lawn),
-    path: L(C.path),
-    brick: L(C.brick),
-    wood: L(C.wood),
-    water: L(C.water, { transparent: true, opacity: 0.85, emissive: C.waterDeep, emissiveIntensity: 0.2 }),
-    pole: L(C.pole),
+    lawn: S(C.lawn, { roughness: 0.95, metalness: 0 }),
+    path: S(C.path, { roughness: 0.9, metalness: 0 }),
+    brick: S(C.brick, { roughness: 0.85, metalness: 0 }),
+    wood: S(C.wood, { roughness: 0.8, metalness: 0 }),
+    water: S(C.water, { transparent: true, opacity: 0.78, roughness: 0.15, metalness: 0.6, envMapIntensity: env ? 1.1 : 0, emissive: C.waterDeep, emissiveIntensity: 0.15 }),
+    pole: S(C.pole, { roughness: 0.5, metalness: 0.4 }),
     banner: null,
-    hedge: L(C.hedge),
-    trunk: L(C.trunk),
-    foliage: L(C.foliage),
-    lamp: B(C.lamp),
-    asphalt: L(C.asphalt),
+    hedge: S(C.hedge, { roughness: 0.95, metalness: 0 }),
+    trunk: S(C.trunk, { roughness: 0.9, metalness: 0 }),
+    foliage: S(C.foliage, { roughness: 0.95, metalness: 0 }),
+    pine: S(C.pine, { roughness: 0.95, metalness: 0 }),
+    asphalt: S(C.asphalt, { roughness: 0.95, metalness: 0 }),
     line: B(C.line),
-    curb: L(C.curb),
-    sculpture: L(C.sculpture, { emissive: C.sculpture, emissiveIntensity: 0.15 }),
+    curb: S(C.curb, { roughness: 0.7, metalness: 0.05 }),
+    sculpture: S(C.sculpture, { roughness: 0.35, metalness: 0.4, emissive: C.sculpture, emissiveIntensity: 0.12, envMapIntensity: env ? 0.7 : 0 }),
+    kiosk: S(C.kiosk, { roughness: 0.5, metalness: 0.2 }),
     glow: B('#ffffff', { vertexColors: true }),
-    jet: B('#eaf8ff', { transparent: true, opacity: 0.88, depthWrite: false }),
+    jet: B('#dff2ff', { transparent: true, opacity: 0.85, depthWrite: false }),
+    mist: B('#c8e8ff', { transparent: true, opacity: 0.16, depthWrite: false, side: THREE.DoubleSide }),
   };
-  // facade curtain + blue diagonal (512×512 atlas)
-  if (typeof document !== 'undefined') {
-    const cv = document.createElement('canvas'); cv.width = 512; cv.height = 512;
-    const x = cv.getContext('2d');
-    // base silver glass
-    const g = x.createLinearGradient(0, 0, 0, 512);
-    g.addColorStop(0, '#d5e4ef'); g.addColorStop(0.5, '#a8c2d4'); g.addColorStop(1, '#8eadc0');
-    x.fillStyle = g; x.fillRect(0, 0, 512, 512);
-    // mullion grid
-    x.strokeStyle = 'rgba(180,190,200,0.85)'; x.lineWidth = 2;
-    for (let i = 0; i <= 16; i++) { x.beginPath(); x.moveTo(i * 32, 0); x.lineTo(i * 32, 512); x.stroke(); }
-    for (let j = 0; j <= 12; j++) { x.beginPath(); x.moveTo(0, j * 42.67); x.lineTo(512, j * 42.67); x.stroke(); }
-    // blue diagonal glass band (photo 04/05 signature) — bold, Instagram-recognizable
-    x.save();
-    x.beginPath();
-    x.moveTo(0, 340); x.lineTo(512, 40); x.lineTo(512, 260); x.lineTo(0, 520); x.closePath();
-    x.clip();
-    const bg = x.createLinearGradient(0, 100, 512, 420);
-    bg.addColorStop(0, '#1a5a9a'); bg.addColorStop(0.35, '#2f8ad4'); bg.addColorStop(0.65, '#4aa3e0'); bg.addColorStop(1, '#17508a');
-    x.fillStyle = bg; x.fillRect(0, 0, 512, 512);
-    // brighter glass reflections in the blue band
-    x.fillStyle = 'rgba(200,230,255,0.22)';
-    for (let i = 0; i < 8; i++) x.fillRect(i * 64 + 8, 0, 18, 512);
-    x.strokeStyle = 'rgba(210,235,255,0.65)'; x.lineWidth = 1.8;
-    for (let i = -10; i < 26; i++) {
-      x.beginPath(); x.moveTo(i * 26, 0); x.lineTo(i * 26 + 200, 512); x.stroke();
-    }
-    for (let j = 0; j <= 12; j++) { x.beginPath(); x.moveTo(0, j * 42.67); x.lineTo(512, j * 42.67); x.stroke(); }
-    x.restore();
-    // floor frit bands
-    x.fillStyle = 'rgba(230,235,240,0.55)';
-    for (let j = 0; j < 12; j++) x.fillRect(0, j * 42.67 + 36, 512, 6);
-    const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 4; tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
-    shared.glassBlue = new THREE.MeshLambertMaterial({ map: tex, transparent: true, opacity: 0.94 });
-    shared._facadeTex = tex;
-    // silver curtain for other faces (no diagonal)
-    const cv2 = document.createElement('canvas'); cv2.width = 256; cv2.height = 256;
-    const x2 = cv2.getContext('2d');
-    const g2 = x2.createLinearGradient(0, 0, 0, 256);
-    g2.addColorStop(0, '#d8e6f0'); g2.addColorStop(0.5, '#b0c8d8'); g2.addColorStop(1, '#8eacbe');
-    x2.fillStyle = g2; x2.fillRect(0, 0, 256, 256);
-    x2.strokeStyle = 'rgba(170,180,190,0.9)'; x2.lineWidth = 2;
-    for (let i = 0; i <= 8; i++) { x2.beginPath(); x2.moveTo(i * 32, 0); x2.lineTo(i * 32, 256); x2.stroke(); }
-    for (let j = 0; j <= 6; j++) { x2.beginPath(); x2.moveTo(0, j * 42.67); x2.lineTo(256, j * 42.67); x2.stroke(); }
-    x2.fillStyle = 'rgba(230,235,240,0.6)';
-    for (let j = 0; j < 6; j++) x2.fillRect(0, j * 42.67 + 34, 256, 7);
-    const tex2 = new THREE.CanvasTexture(cv2); tex2.colorSpace = THREE.SRGBColorSpace; tex2.anisotropy = 4; tex2.wrapS = tex2.wrapT = THREE.RepeatWrapping; tex2.repeat.set(6, 4);
-    shared.glassBody = new THREE.MeshLambertMaterial({ map: tex2, transparent: true, opacity: 0.9 });
-    shared._bodyTex = tex2;
 
-    // plaza paving
-    const pv = document.createElement('canvas'); pv.width = 256; pv.height = 256;
-    const p = pv.getContext('2d');
-    p.fillStyle = '#c9c4b8'; p.fillRect(0, 0, 256, 256);
-    p.strokeStyle = '#a8a296'; p.lineWidth = 1;
-    for (let i = 0; i <= 8; i++) { p.beginPath(); p.moveTo(i * 32, 0); p.lineTo(i * 32, 256); p.stroke(); p.beginPath(); p.moveTo(0, i * 32); p.lineTo(256, i * 32); p.stroke(); }
-    p.fillStyle = '#b8b2a4';
-    for (let i = 0; i < 8; i++) for (let j = 0; j < 8; j++) if ((i + j) % 2 === 0) p.fillRect(i * 32 + 1, j * 32 + 1, 30, 30);
-    const ptex = new THREE.CanvasTexture(pv); ptex.colorSpace = THREE.SRGBColorSpace; ptex.wrapS = ptex.wrapT = THREE.RepeatWrapping; ptex.repeat.set(20, 12);
-    shared.plaza = new THREE.MeshLambertMaterial({ map: ptex }); shared._plazaTex = ptex;
+  if (hasDoc) {
+    // Curtain wall atlas: silver glass + grey horizontal spandrels + mullions
+    shared.glassCurtain = S('#c5d8e6', {
+      map: canvasTex(256, 256, (x, w, h) => {
+        const g = x.createLinearGradient(0, 0, 0, h);
+        g.addColorStop(0, '#d8e8f2'); g.addColorStop(0.5, '#a8c4d6'); g.addColorStop(1, '#8eafc4');
+        x.fillStyle = g; x.fillRect(0, 0, w, h);
+        x.strokeStyle = 'rgba(160,175,190,0.9)'; x.lineWidth = 2;
+        for (let i = 0; i <= 8; i++) { x.beginPath(); x.moveTo(i * 32, 0); x.lineTo(i * 32, h); x.stroke(); }
+        for (let j = 0; j <= 6; j++) {
+          x.fillStyle = 'rgba(200,208,216,0.85)';
+          x.fillRect(0, j * 42.67 + 32, w, 9);
+          x.strokeStyle = 'rgba(150,160,170,0.7)'; x.beginPath();
+          x.moveTo(0, j * 42.67); x.lineTo(w, j * 42.67); x.stroke();
+        }
+        // fake reflection streaks
+        x.fillStyle = 'rgba(255,255,255,0.18)';
+        for (let i = 0; i < 5; i++) x.fillRect(i * 48 + 10, 0, 10, h);
+      }, 8, 5),
+      transparent: true, opacity: 0.88, roughness: 0.2, metalness: 0.75, envMapIntensity: env ? 1.0 : 0,
+    });
+    shared._curtainTex = shared.glassCurtain.map;
 
-    // generic blue banner (no emblem)
-    const bv = document.createElement('canvas'); bv.width = 64; bv.height = 128;
-    const b = bv.getContext('2d');
-    b.fillStyle = '#2f6db5'; b.fillRect(0, 0, 64, 128);
-    b.fillStyle = '#ffffff'; b.fillRect(8, 10, 48, 48);
-    b.beginPath(); b.arc(32, 34, 16, 0, Math.PI * 2); b.fillStyle = '#2f6db5'; b.fill();
-    b.fillStyle = 'rgba(255,255,255,0.9)'; b.fillRect(12, 70, 40, 8); b.fillRect(16, 86, 32, 6); b.fillRect(20, 100, 24, 6);
-    const btex = new THREE.CanvasTexture(bv); btex.colorSpace = THREE.SRGBColorSpace;
-    shared.banner = new THREE.MeshLambertMaterial({ map: btex, side: THREE.DoubleSide, transparent: true }); shared._bannerTex = btex;
+    // Blue faceted glass atlas (diagonal mullions + reflection)
+    shared.glassBlue.map = canvasTex(512, 512, (x, w, h) => {
+      const bg = x.createLinearGradient(0, 0, w, h);
+      bg.addColorStop(0, '#155a9a'); bg.addColorStop(0.35, '#2a82c4'); bg.addColorStop(0.65, '#3e9ad4'); bg.addColorStop(1, '#124e88');
+      x.fillStyle = bg; x.fillRect(0, 0, w, h);
+      x.strokeStyle = 'rgba(190,220,240,0.55)'; x.lineWidth = 2;
+      for (let i = -12; i < 28; i++) { x.beginPath(); x.moveTo(i * 24, 0); x.lineTo(i * 24 + 220, h); x.stroke(); }
+      for (let j = 0; j <= 10; j++) { x.beginPath(); x.moveTo(0, j * 51.2); x.lineTo(w, j * 51.2); x.stroke(); }
+      x.fillStyle = 'rgba(220,240,255,0.25)';
+      for (let i = 0; i < 10; i++) x.fillRect(i * 50 + 6, 0, 14, h);
+      // facet edge highlights
+      x.strokeStyle = 'rgba(255,255,255,0.35)'; x.lineWidth = 3;
+      x.beginPath(); x.moveTo(0, h * 0.7); x.lineTo(w, h * 0.15); x.stroke();
+      x.beginPath(); x.moveTo(0, h * 0.95); x.lineTo(w, h * 0.4); x.stroke();
+    }, 1, 1);
+    shared.glassBlue.needsUpdate = true;
+    shared._blueTex = shared.glassBlue.map;
+
+    // Plaza granite grid
+    shared.plaza = S(C.plaza, {
+      map: canvasTex(256, 256, (x, w, h) => {
+        x.fillStyle = '#c9c5bb'; x.fillRect(0, 0, w, h);
+        x.strokeStyle = '#a8a296'; x.lineWidth = 1.5;
+        for (let i = 0; i <= 8; i++) {
+          x.beginPath(); x.moveTo(i * 32, 0); x.lineTo(i * 32, h); x.stroke();
+          x.beginPath(); x.moveTo(0, i * 32); x.lineTo(w, i * 32); x.stroke();
+        }
+        x.fillStyle = '#b9b4a8';
+        for (let i = 0; i < 8; i++) for (let j = 0; j < 8; j++) if ((i + j) % 2 === 0) x.fillRect(i * 32 + 1, j * 32 + 1, 30, 30);
+      }, 24, 16),
+      roughness: 0.85, metalness: 0.05, envMapIntensity: env ? 0.15 : 0,
+    });
+    shared._plazaTex = shared.plaza.map;
+
+    // Generic banner (no city emblem — abstract circle + bars)
+    shared.banner = new THREE.MeshStandardMaterial({
+      map: canvasTex(64, 128, (x, w, h) => {
+        x.fillStyle = '#2f6db5'; x.fillRect(0, 0, w, h);
+        x.fillStyle = '#ffffff'; x.fillRect(8, 12, 48, 48);
+        x.beginPath(); x.arc(32, 36, 14, 0, Math.PI * 2); x.fillStyle = '#2f6db5'; x.fill();
+        x.fillStyle = 'rgba(255,255,255,0.92)';
+        x.fillRect(12, 72, 40, 8); x.fillRect(16, 88, 32, 6); x.fillRect(20, 102, 24, 6);
+      }, 1, 1),
+      side: THREE.DoubleSide, roughness: 0.7, metalness: 0.05, transparent: true,
+    });
+    shared._bannerTex = shared.banner.map;
   } else {
-    shared.glassBlue = L(C.glassBlue);
-    shared.glassBody = L(C.glass);
-    shared.plaza = L(C.plaza);
-    shared.banner = L(C.banner, { side: THREE.DoubleSide });
+    shared.glassCurtain = S(C.glassLite);
+    shared.plaza = S(C.plaza);
+    shared.banner = S(C.banner, { side: THREE.DoubleSide });
   }
   return shared;
 }
@@ -162,191 +208,299 @@ function extrude(ring, holes, y0, y1) {
   const g = new THREE.ExtrudeGeometry(toShape(ring, holes || []), { depth: Math.max(0.1, y1 - y0), bevelEnabled: false });
   g.rotateX(-Math.PI / 2); g.translate(0, y0, 0); return g;
 }
-const ringCenter = (r) => { let x = 0, z = 0; for (const p of r) { x += p[0]; z += p[1]; } return [x / r.length, z / r.length]; };
-const ringArea = (r) => { let a = 0; for (let i = 0, n = r.length; i < n; i++) { const [x1, z1] = r[i], [x2, z2] = r[(i + 1) % n]; a += x1 * z2 - x2 * z1; } return a / 2; };
-function edges(ring, minLen = 0.8) {
-  const s = Math.sign(ringArea(ring)) || 1, out = [];
+function ringCenter(r) { let x = 0, z = 0; for (const p of r) { x += p[0]; z += p[1]; } return [x / r.length, z / r.length]; }
+function edges(ring, minLen = 2) {
+  const out = [];
   for (let i = 0; i < ring.length; i++) {
-    const [ax, az] = ring[i], [bx, bz] = ring[(i + 1) % ring.length], dx = bx - ax, dz = bz - az, L = Math.hypot(dx, dz);
+    const [ax, az] = ring[i], [bx, bz] = ring[(i + 1) % ring.length];
+    const dx = bx - ax, dz = bz - az, L = Math.hypot(dx, dz);
     if (L < minLen) continue;
-    out.push({ ax, az, bx, bz, mx: (ax + bx) / 2, mz: (az + bz) / 2, L, ang: Math.atan2(dz, dx), nx: (dz / L) * s, nz: (-dx / L) * s });
+    const nx = -dz / L, nz = dx / L;
+    out.push({ ax, az, bx, bz, L, nx, nz, ang: Math.atan2(dz, dx), mx: (ax + bx) / 2, mz: (az + bz) / 2 });
   }
   return out;
 }
-function band(bag, ring, y0, y1, out, depth, color, { minLen = 0.8 } = {}) {
-  for (const e of edges(ring, minLen)) bag.box(e.mx + e.nx * out, (y0 + y1) / 2, e.mz + e.nz * out, e.L + depth, y1 - y0, depth, -e.ang, color);
-}
-const shrink = (ring, k) => { const [cx, cz] = ringCenter(ring); return ring.map(([x, z]) => [cx + (x - cx) * k, cz + (z - cz) * k]); };
 function inRing(x, z, r) { let ins = false; for (let i = 0, j = r.length - 1; i < r.length; j = i++) { const [xi, zi] = r[i], [xj, zj] = r[j]; if ((zi > z) !== (zj > z) && x < ((xj - xi) * (z - zi)) / (zj - zi) + xi) ins = !ins; } return ins; }
+function band(bag, ring, y0, y1, inset, thick, color, { minLen = 2 } = {}) {
+  for (const e of edges(ring, minLen)) {
+    bag.box(e.mx + e.nx * inset, (y0 + y1) / 2, e.mz + e.nz * inset, e.L, y1 - y0, thick, -e.ang, color);
+  }
+}
 
-// ---------- Building ----------
+/** Faceted folded blue glass: lean-back south facade with crisp triangular folds (no wavy top). */
+function makeSlopedGlass(x0, x1, zFront, y0, y1, lean, cols, rows, foldAmp = 4.2) {
+  const pos = [], uv = [], idx = [];
+  // Vertical strips; alternate deep V-folds so facets read as tilted glass prisms
+  for (let i = 0; i <= cols; i++) {
+    const u = i / cols, x = x0 + (x1 - x0) * u;
+    const fold = (i % 2 === 0 ? 0 : foldAmp);
+    for (let j = 0; j <= rows; j++) {
+      const v = j / rows, y = y0 + (y1 - y0) * v;
+      // Lean grows with height; fold also — top edge stays flat (no sine)
+      const zLean = zFront - lean * v - fold * v;
+      pos.push(x, y, zLean);
+      uv.push(u, v);
+    }
+  }
+  // index: columns major — vertex at (i,j) = i*(rows+1)+j
+  for (let i = 0; i < cols; i++) {
+    for (let j = 0; j < rows; j++) {
+      const a = i * (rows + 1) + j;
+      const b = (i + 1) * (rows + 1) + j;
+      idx.push(a, b, b + 1, a, b + 1, a + 1);
+    }
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+  g.setIndex(idx);
+  g.computeVertexNormals();
+  return g;
+}
+
+// ---------- Building (photo 04/05 silhouette) ----------
 function buildBuilding(data, M) {
   const g = new THREE.Group(); g.name = 'cityhallBuilding';
-  const bag = Bag(), lit = Bag(), glassBag = Bag();
-  const { o, h, massing } = data.building;
+  const frameBag = Bag(), lit = Bag();
+  const { o, massing } = data.building;
   const xs = o.map((p) => p[0]), zs = o.map((p) => p[1]);
   const xMin = Math.min(...xs), xMax = Math.max(...xs);
-  const zMin = Math.min(...zs), zMax = Math.max(...zs); // zMin more north (more neg)
-  const { westX1, midX1, westH, midH, eastH, pilotisH } = massing;
+  const zMin = Math.min(...zs), zMax = Math.max(...zs);
+  const { westX1, midX1, westH, midH, eastH, pilotisH, canopyDepth = 8, canopyY = 6.5 } = massing;
+  const H = Math.max(westH, midH, eastH);
 
-  // Split footprint into west / mid / east slabs by x cuts (axis-aligned approx of OSM ring)
-  const clipX = (ring, x0, x1) => {
-    // simple: keep points with x in range, add edge intersections
-    const pts = [];
-    for (let i = 0; i < ring.length; i++) {
-      const [ax, az] = ring[i], [bx, bz] = ring[(i + 1) % ring.length];
-      const aIn = ax >= x0 && ax <= x1, bIn = bx >= x0 && bx <= x1;
-      if (aIn) pts.push([ax, az]);
-      if (aIn !== bIn) {
-        const t = (x0 - ax) / ((bx - ax) || 1e-9);
-        if (t > 0 && t < 1 && ax < x0 !== bx < x0) pts.push([x0, az + (bz - az) * t]);
-        const t2 = (x1 - ax) / ((bx - ax) || 1e-9);
-        if (t2 > 0 && t2 < 1 && ax < x1 !== bx < x1) pts.push([x1, az + (bz - az) * t2]);
-      }
-    }
-    // fallback rectangle if clip failed
-    if (pts.length < 3) {
-      return [[x0, zMin], [x1, zMin], [x1, zMax], [x0, zMax]];
-    }
-    // sort CW around centroid
-    const [cx, cz] = ringCenter(pts);
-    pts.sort((a, b) => Math.atan2(a[1] - cz, a[0] - cx) - Math.atan2(b[1] - cz, b[0] - cx));
-    return pts;
+  // --- Solid floor plates / roof (light grey frame language, NOT beige punched windows) ---
+  // West+mid podium (filled) — glass skins added as separate meshes
+  const westMid = [[xMin, zMin], [midX1, zMin], [midX1, zMax], [xMin, zMax]];
+  frameBag.push(paintFaces(extrude(westMid, [], 0.0, 0.6), C.frame, C.frame, C.soffit)); // plaza-level plinth
+  // Interior mass (slightly inset) as light frame — provides volume behind glass
+  const inset = (ring, d) => {
+    const [cx, cz] = ringCenter(ring);
+    return ring.map(([x, z]) => {
+      const dx = x - cx, dz = z - cz, L = Math.hypot(dx, dz) || 1;
+      return [x - (dx / L) * d, z - (dz / L) * d];
+    });
   };
-
-  // West+mid solid podium (NOT east — keep pilotis open like photos 04/05)
-  const westMidRing = [[xMin, zMin], [midX1, zMin], [midX1, zMax], [xMin, zMax]];
-  bag.push(paintFaces(extrude(westMidRing, [], 0, westH), C.slab, C.glass, C.soffit));
-
-  // Mid section raised tower
+  // West mass lower + stepped back south face (silhouette lean, not just glass skin)
+  const westRing = [[xMin, zMin], [westX1, zMin], [westX1, zMax], [xMin, zMax]];
   const midRing = [[westX1, zMin], [midX1, zMin], [midX1, zMax], [westX1, zMax]];
-  if (midH > westH) bag.push(paintFaces(extrude(midRing, [], westH, midH), C.slab, C.glass, C.glass));
+  // Base podiums full depth
+  frameBag.push(paintFaces(extrude(inset(westRing, 1.0), [], 0.6, 8), C.spandrel, C.frameDark, C.soffit));
+  // Mid band stepped 4m north
+  const westMidStep = [[xMin + 1.2, zMin + 1], [westX1 - 1, zMin + 1], [westX1 - 1, zMax - 4], [xMin + 1.2, zMax - 4]];
+  frameBag.push(paintFaces(extrude(westMidStep, [], 8, 20), C.spandrel, C.frameDark, C.soffit));
+  // Upper band stepped 9m north (lean silhouette)
+  const westTopStep = [[xMin + 1.5, zMin + 1.5], [westX1 - 1.2, zMin + 1.5], [westX1 - 1.2, zMax - 9], [xMin + 1.5, zMax - 9]];
+  frameBag.push(paintFaces(extrude(westTopStep, [], 20, westH - 0.4), C.spandrel, C.frameDark, C.soffit));
+  // Mid atrium — slight step
+  frameBag.push(paintFaces(extrude(inset(midRing, 1.2), [], 0.6, 7), C.spandrel, C.frameDark, C.soffit));
+  const midUpper = [[westX1 + 1, zMin + 1], [midX1 - 1, zMin + 1], [midX1 - 1, zMax - 6], [westX1 + 1, zMax - 6]];
+  frameBag.push(paintFaces(extrude(midUpper, [], 7, midH - 0.4), C.spandrel, C.frameDark, C.soffit));
 
-  // East wing elevated on pilotis (signature open undercroft)
-  const eastRing = [[midX1, zMin], [xMax - 1.5, zMin], [xMax - 1.5, zMax], [midX1, zMax]];
-  const colR = 0.85, colN = 9;
+  // East wing on pilotis: soffit + upper mass only
+  const eastRing = [[midX1, zMin], [xMax - 1.2, zMin], [xMax - 1.2, zMax], [midX1, zMax]];
+  frameBag.push(paintFaces(extrude(eastRing, [], pilotisH - 0.45, pilotisH), C.soffit, C.soffit, C.soffit));
+  frameBag.push(paintFaces(extrude(inset(eastRing, 1.0), [], pilotisH, eastH - 0.4), C.spandrel, C.frameDark, C.soffit));
+  // Thin plaza pad under pilotis
+  frameBag.push(paintFaces(extrude(eastRing, [], 0, 0.2), C.plaza, C.plaza, C.plaza));
+
+  // Roof slabs per wing + thin overhang canopy line
+  frameBag.push(paintFaces(extrude(inset(westRing, 0.2), [], westH - 0.35, westH + 0.2), C.frame, C.frame, C.soffit));
+  frameBag.push(paintFaces(extrude(inset(midRing, 0.2), [], midH - 0.35, midH + 0.2), C.frame, C.frame, C.soffit));
+  frameBag.push(paintFaces(extrude(inset(eastRing, 0.2), [], eastH - 0.35, eastH + 0.25), C.frame, C.frame, C.soffit));
+  // Continuous thin overhang along south top edge
+  frameBag.box((xMin + xMax) / 2, eastH + 0.15, zMax + 1.0, xMax - xMin + 2, 0.22, 2.4, 0, C.frame);
+
+  // Pilotis (slender white columns) under east + mid entrance
+  const colR = 0.55, colN = 10;
   for (let i = 0; i < colN; i++) {
     for (let j = 0; j < 3; j++) {
-      const x = midX1 + 4 + i * ((xMax - midX1 - 7) / Math.max(1, colN - 1));
+      const x = midX1 + 3.5 + i * ((xMax - midX1 - 6) / Math.max(1, colN - 1));
       const z = zMin + 4 + j * ((zMax - zMin - 8) / 2);
-      bag.cyl(x, pilotisH / 2, z, colR, pilotisH, 10, '#e8ecf0');
+      frameBag.cyl(x, pilotisH / 2, z, colR, pilotisH, 10, C.pilotis);
     }
   }
-  // cross beams under soffit for readability
-  for (let i = 0; i < colN - 1; i++) {
-    const x0 = midX1 + 4 + i * ((xMax - midX1 - 7) / Math.max(1, colN - 1));
-    const x1 = midX1 + 4 + (i + 1) * ((xMax - midX1 - 7) / Math.max(1, colN - 1));
-    for (let j = 0; j < 3; j++) {
-      const z = zMin + 4 + j * ((zMax - zMin - 8) / 2);
-      bag.box((x0 + x1) / 2, pilotisH - 0.7, z, Math.abs(x1 - x0), 0.35, 0.35, 0, '#d0d5da');
-    }
-  }
-  // soffit under east wing
-  bag.push(paintFaces(extrude(eastRing, [], pilotisH - 0.5, pilotisH), C.soffit, C.soffit, C.soffit));
-  // east body above pilotis
-  bag.push(paintFaces(extrude(eastRing, [], pilotisH, eastH), C.slab, C.glass, C.glass));
-  // thin ground pad under pilotis (plaza continuity, not a wall)
-  bag.push(paintFaces(extrude(eastRing, [], 0, 0.25), C.plaza, C.plaza, C.plaza));
-
-  // South facade: glassBody curtain for west/mid + bold blue diagonal overlay spanning full face
-  const southY0 = 0.5, southY1 = Math.max(westH, midH, eastH) - 0.4;
-  const facadeW = xMax - xMin - 1.5, facadeH = southY0 + (southY1 - southY0);
-  // base silver curtain (full height west/mid, above pilotis on east — one plane for recognition)
-  const curtain = new THREE.PlaneGeometry(facadeW, southY1 - southY0, 1, 1);
-  curtain.translate((xMin + xMax) / 2, (southY0 + southY1) / 2, zMax + 0.25);
-  const curtainMesh = new THREE.Mesh(curtain, M.glassBody || M.glass);
-  curtainMesh.name = 'cityhallSouthCurtain'; curtainMesh.castShadow = false; g.add(curtainMesh);
-  // Blue diagonal hero plane slightly in front
-  const facade = new THREE.PlaneGeometry(facadeW, southY1 - southY0, 1, 1);
-  facade.translate((xMin + xMax) / 2, (southY0 + southY1) / 2, zMax + 0.55);
-  const facadeMesh = new THREE.Mesh(facade, M.glassBlue);
-  facadeMesh.name = 'cityhallBlueFacade';
-  facadeMesh.castShadow = false; facadeMesh.receiveShadow = false;
-  g.add(facadeMesh);
-  // Projecting blue fins for depth (3 diagonal boxes)
+  // A few pilotis under center entrance
   for (let i = 0; i < 5; i++) {
-    const t = (i + 0.5) / 5;
-    const x = xMin + 4 + t * (xMax - xMin - 8);
-    const y = southY0 + 4 + (1 - t) * (southY1 - southY0 - 10);
-    bag.box(x, y, zMax + 0.9, 2.2, 7.5, 0.35, 0.35, C.glassBlue);
+    const x = westX1 + 4 + i * ((midX1 - westX1 - 8) / 4);
+    frameBag.cyl(x, canopyY / 2, zMax - 2, 0.48, canopyY, 10, C.pilotis);
   }
-  // North face lighter curtain (env reflect)
-  const north = new THREE.PlaneGeometry(facadeW * 0.95, westH - 2, 1, 1);
-  north.translate((xMin + xMax) / 2, westH / 2, zMin - 0.35);
-  north.rotateY(Math.PI);
-  const northMesh = new THREE.Mesh(north, M.glassBody || M.glass);
-  northMesh.name = 'cityhallNorthGlass'; northMesh.castShadow = false; g.add(northMesh);
-  // East end curtain (pilotis wing face) — glassBody atlas
-  const eastFace = new THREE.PlaneGeometry(zMax - zMin - 2, eastH - pilotisH - 1, 1, 1);
-  eastFace.rotateY(-Math.PI / 2);
-  eastFace.translate(xMax + 0.4, (pilotisH + eastH) / 2, (zMin + zMax) / 2);
-  const eastMesh = new THREE.Mesh(eastFace, M.glassBody || M.glass);
-  eastMesh.name = 'cityhallEastGlass'; eastMesh.castShadow = false; g.add(eastMesh);
-  // West face
-  const westFace = new THREE.PlaneGeometry(zMax - zMin - 2, westH - 2, 1, 1);
-  westFace.rotateY(Math.PI / 2);
-  westFace.translate(xMin - 0.35, westH / 2, (zMin + zMax) / 2);
-  const westMesh = new THREE.Mesh(westFace, M.glassBody || M.glass);
-  westMesh.name = 'cityhallWestGlass'; westMesh.castShadow = false; g.add(westMesh);
 
-  // Horizontal floor bands (west/mid only below pilotis; east only above)
-  for (let y = 3.6; y < westH - 1; y += 3.6) band(bag, westMidRing, y - 0.1, y + 0.1, 0.15, 0.22, C.mullion, { minLen: 3 });
-  for (let y = westH + 3.6; y < midH - 1; y += 3.6) band(bag, midRing, y - 0.1, y + 0.1, 0.15, 0.22, C.mullion, { minLen: 3 });
-  for (let y = pilotisH + 3.6; y < eastH - 1; y += 3.6) band(bag, eastRing, y - 0.1, y + 0.1, 0.15, 0.22, C.mullion, { minLen: 3 });
+  // Long flat entrance canopy
+  const canW = midX1 - westX1 + 10;
+  frameBag.box((westX1 + midX1) / 2, canopyY, zMax + canopyDepth / 2 - 1, canW, 0.35, canopyDepth, 0, C.frame);
+  frameBag.box((westX1 + midX1) / 2, canopyY - 0.2, zMax + canopyDepth / 2 - 1, canW - 0.4, 0.12, canopyDepth - 0.4, 0, C.soffit);
 
-  // Night windows (deterministic hash)
+  // East end solid light-grey wall (thick vertical frame)
+  const eastWallX = xMax - 0.4;
+  frameBag.box(eastWallX, eastH / 2, (zMin + zMax) / 2, 1.6, eastH, zMax - zMin - 1, 0, C.frame);
+  // Horizontal slit windows on east end
+  for (let y = 4; y < eastH - 2; y += 3.8) {
+    frameBag.box(eastWallX + 0.75, y, (zMin + zMax) / 2, 0.15, 0.55, zMax - zMin - 6, 0, C.glassLite);
+  }
+
+  // Solar panels
+  const solarBag = Bag();
+  for (let xi = xMin + 6; xi < xMax - 6; xi += 3.6) {
+    for (let zi = zMin + 3; zi < zMax - 3; zi += 2.9) {
+      if (!inRing(xi, zi, o) && !(xi > midX1 && xi < xMax)) continue;
+      const panel = new THREE.BoxGeometry(3.2, 0.08, 2.3);
+      panel.rotateX(-0.4); panel.translate(xi, H + 0.7, zi);
+      solarBag.push(panel, C.solar);
+      frameBag.box(xi, H + 0.25, zi, 0.12, 0.5, 0.12, 0, C.solarFrame);
+    }
+  }
+
+  // Night windows (warm/cool) on interior mass faces — not punched beige look
   const hash = (a, b, c) => { const v = Math.sin(a * 12.9898 + b * 78.233 + c * 37.719) * 43758.5453; return v - Math.floor(v); };
-  for (const e of edges(o, 4)) {
-    if (e.L < 5) continue;
-    const segs = Math.max(1, Math.round(e.L / 5.5));
-    const maxY = e.mx < westX1 ? westH : e.mx < midX1 ? midH : eastH;
-    const y0 = e.mx >= midX1 ? pilotisH + 1 : 1.5;
-    for (let f = 0; f < Math.floor((maxY - y0) / 3.6); f++) {
+  for (const e of edges(inset(westMid, 1.0), 5)) {
+    const segs = Math.max(1, Math.round(e.L / 5));
+    for (let f = 1; f < Math.floor(H / 3.6); f++) {
       for (let k = 0; k < segs; k++) {
-        if (hash(e.mx, e.mz + f, k) > 0.38) continue;
+        if (hash(e.mx, f, k) > 0.4) continue;
         const t = (k + 0.5) / segs;
-        const x = e.ax + (e.bx - e.ax) * t + e.nx * 0.1;
-        const z = e.az + (e.bz - e.az) * t + e.nz * 0.1;
-        lit.box(x, y0 + f * 3.6 + 1.5, z, (e.L / segs) - 0.8, 2.2, 0.08, -e.ang, hash(e.mx, f, k) > 0.2 ? C.nightWarm : C.nightCool);
+        const x = e.ax + (e.bx - e.ax) * t + e.nx * 0.15;
+        const z = e.az + (e.bz - e.az) * t + e.nz * 0.15;
+        lit.box(x, f * 3.6 + 1.4, z, e.L / segs - 0.9, 2.0, 0.06, -e.ang, hash(e.mx, f, k) > 0.18 ? C.nightWarm : C.nightCool);
       }
     }
   }
 
-  // Rooftop solar panels (photo 04/05 dark array)
-  const roofY = eastH + 0.2;
-  const solarBag = Bag();
-  for (let xi = xMin + 6; xi < xMax - 6; xi += 3.8) {
-    for (let zi = zMin + 3.5; zi < zMax - 3.5; zi += 3.0) {
-      if (!inRing(xi, zi, o)) continue;
-      const panel = new THREE.BoxGeometry(3.4, 0.1, 2.4);
-      panel.rotateX(-0.42); panel.translate(xi, roofY + 0.85, zi);
-      solarBag.push(panel, C.solar);
-      bag.box(xi, roofY + 0.35, zi, 0.14, 0.7, 0.14, 0, C.solarFrame);
-      bag.box(xi, roofY + 0.08, zi, 3.5, 0.06, 2.5, 0, C.solarFrame);
-    }
-  }
-  // Parapet
-  band(bag, westMidRing, westH, westH + 1.1, 0.1, 0.3, C.slab, { minLen: 2 });
-  band(bag, midRing, midH, midH + 1.0, 0.1, 0.3, C.slab, { minLen: 2 });
-  band(bag, eastRing, eastH, eastH + 1.2, 0.1, 0.3, C.slab, { minLen: 2 });
-
-  const body = bag.mesh(M.vc, 'cityhallBody'); if (body) g.add(body);
+  const body = frameBag.mesh(M.vc, 'cityhallBody'); if (body) g.add(body);
   const solar = solarBag.mesh(M.vc, 'cityhallSolar'); if (solar) g.add(solar);
   const night = lit.mesh(M.glow, 'cityhallGlow'); if (night) { night.castShadow = night.receiveShadow = false; g.add(night); }
 
-  // Council annex
+  // --- Glass skins (the recognizable look) ---
+  // West wing: huge sloped/folded blue glass prism (lean ~12 m, deep V-folds)
+  const westGlass = makeSlopedGlass(xMin + 0.2, westX1 + 10, zMax + 2.0, 0.5, westH - 0.1, 14, 16, 8, 6.5);
+  const westMesh = new THREE.Mesh(westGlass, M.glassBlue);
+  westMesh.name = 'cityhallWestFacet';
+  westMesh.castShadow = false;
+  g.add(westMesh);
+  // Extra large triangular prism facets (readable silhouette from aerial / plaza)
+  {
+    const span = westX1 - xMin;
+    const facets = 4;
+    for (let i = 0; i < facets; i++) {
+      const u0 = i / facets, u1 = (i + 1) / facets;
+      const xA = xMin + span * u0, xB = xMin + span * u1, xM = (xA + xB) / 2;
+      const leanBot = 0.4, leanTop = 11 + (i % 2) * 3.5;
+      const foldOut = (i % 2 === 0) ? 0.6 : 5.5;
+      const geo = new THREE.BufferGeometry();
+      // triangle strip: bottom-left, bottom-right, top-mid (folded), top-left, top-right via two tris + side
+      const y0 = 0.5, y1 = westH - 0.2;
+      const zBot = zMax + 1.5;
+      const zTop = zMax + 1.5 - leanTop;
+      const zFold = zMax + 1.5 - leanTop + foldOut; // alternate push forward for facet catch-light
+      const pos = new Float32Array([
+        xA, y0, zBot - leanBot,
+        xB, y0, zBot - leanBot,
+        xM, y1, zFold,
+        xA, y0, zBot - leanBot,
+        xM, y1, zFold,
+        xA, y1, zTop,
+        xB, y0, zBot - leanBot,
+        xB, y1, zTop,
+        xM, y1, zFold,
+      ]);
+      geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+      geo.computeVertexNormals();
+      const m = new THREE.Mesh(geo, M.glassBlue);
+      m.name = 'cityhallWestPrism' + i;
+      m.castShadow = false;
+      g.add(m);
+    }
+  }
+  // West wrap corner (west-facing facet, leans into building)
+  const westSideMesh = new THREE.Mesh(
+    (() => {
+      const geo = makeSlopedGlass(zMin + 1, zMax - 1, xMin - 0.4, 1.0, H - 0.5, 8, 5, 7);
+      // swap x/z: geometry was along x facing +z; we need along z facing -x
+      const pos = geo.attributes.position;
+      for (let i = 0; i < pos.count; i++) {
+        const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i);
+        // original: x along edge, z = front - lean; map to: z along edge, x = westFront - lean
+        pos.setXYZ(i, z, y, x); // will fix below differently
+      }
+      // Simpler: PlaneGeometry rotated
+      geo.dispose();
+      const p = new THREE.PlaneGeometry(zMax - zMin - 2, H - 1.5, 4, 6);
+      p.rotateY(Math.PI / 2);
+      // lean: rotate around Z slightly so top moves east (into building)
+      p.translate(0, (H + 1) / 2, 0);
+      // custom lean via morphing
+      const pp = p.attributes.position;
+      for (let i = 0; i < pp.count; i++) {
+        const y = pp.getY(i);
+        const t = Math.max(0, (y - 1) / (H - 1));
+        pp.setX(i, pp.getX(i) + t * t * 7); // lean inward (+x)
+      }
+      p.translate(xMin - 0.5, 0, (zMin + zMax) / 2);
+      p.computeVertexNormals();
+      return p;
+    })(),
+    M.glassBlue,
+  );
+  westSideMesh.name = 'cityhallWestSideGlass'; westSideMesh.castShadow = false; g.add(westSideMesh);
+
+  // Center atrium: big diagonal blue glass over entrance (continues the west fold language)
+  const atrium = makeSlopedGlass(westX1 - 4, midX1 + 6, zMax + 2.2, 0.8, midH - 0.1, 12, 14, 8, 4.5);
+  const atriumMesh = new THREE.Mesh(atrium, M.glassBlue);
+  atriumMesh.name = 'cityhallBlueFacade'; atriumMesh.castShadow = false; g.add(atriumMesh);
+
+  // East upright curtain wall (south face)
+  const eastCurtain = new THREE.PlaneGeometry(xMax - midX1 - 2, eastH - pilotisH - 1, 1, 1);
+  eastCurtain.translate((midX1 + xMax) / 2, (pilotisH + eastH) / 2, zMax + 0.45);
+  const eastCurtainMesh = new THREE.Mesh(eastCurtain, M.glassCurtain || M.glassLite);
+  eastCurtainMesh.name = 'cityhallEastCurtain'; eastCurtainMesh.castShadow = false; g.add(eastCurtainMesh);
+
+  // North curtain (whole length)
+  const northCurtain = new THREE.PlaneGeometry(xMax - xMin - 3, H - 2, 1, 1);
+  northCurtain.translate((xMin + xMax) / 2, H / 2, zMin - 0.35);
+  northCurtain.rotateY(Math.PI);
+  const northMesh = new THREE.Mesh(northCurtain, M.glassCurtain || M.glassLite);
+  northMesh.name = 'cityhallNorthCurtain'; northMesh.castShadow = false; g.add(northMesh);
+
+  // Low glass base along south plaza
+  const baseGlass = new THREE.PlaneGeometry(xMax - xMin - 4, 3.2, 1, 1);
+  baseGlass.translate((xMin + xMax) / 2, 2.0, zMax + 0.5);
+  const baseMesh = new THREE.Mesh(baseGlass, M.glassLite);
+  baseMesh.name = 'cityhallBaseGlass'; baseMesh.castShadow = false; g.add(baseMesh);
+
+  // Tall vertical banner panel on east end wall (generic emblem, no city logo)
+  const ban = new THREE.PlaneGeometry(3.2, eastH * 0.55, 1, 1);
+  ban.translate(eastWallX + 0.85, eastH * 0.48, (zMin + zMax) / 2);
+  ban.rotateY(-Math.PI / 2);
+  const banMesh = new THREE.Mesh(ban, M.banner);
+  banMesh.name = 'cityhallEastBanner'; banMesh.castShadow = false; g.add(banMesh);
+
+  // Horizontal frame/spandrel bands on east curtain (readable from distance)
+  for (let y = pilotisH + 3.5; y < eastH - 1; y += 3.6) {
+    frameBag.box((midX1 + xMax) / 2, y, zMax + 0.55, xMax - midX1 - 2.5, 0.4, 0.28, 0, C.spandrel);
+  }
+  // Re-merge remaining frame pieces? bands pushed after body mesh — add as separate small mesh
+  const bands = frameBag.mesh(M.vc, 'cityhallBands'); if (bands) g.add(bands);
+
+  // Council annex — glass/grey, attached west (no beige punched windows)
   if (data.council?.o) {
     const cb = Bag();
-    cb.push(paintFaces(extrude(data.council.o, [], 0, data.council.h), C.slab, C.glass, C.soffit));
-    for (let y = 3.6; y < data.council.h - 1; y += 3.6) band(cb, data.council.o, y - 0.1, y + 0.1, 0.12, 0.18, C.mullion, { minLen: 2 });
-    band(cb, data.council.o, data.council.h, data.council.h + 0.9, 0.08, 0.25, C.slab, { minLen: 1 });
+    const ch = Math.min(data.council.h || 18, 22);
+    cb.push(paintFaces(extrude(data.council.o, [], 0, ch), C.frame, C.frameDark, C.soffit));
+    band(cb, data.council.o, ch, ch + 0.8, 0.08, 0.25, C.frame, { minLen: 1 });
     const cm = cb.mesh(M.vc, 'cityhallCouncil'); if (cm) g.add(cm);
+    // glass skin south
+    const cxs = data.council.o.map((p) => p[0]), czs = data.council.o.map((p) => p[1]);
+    const cx0 = Math.min(...cxs), cx1 = Math.max(...cxs), cz1 = Math.max(...czs);
+    const cg = new THREE.PlaneGeometry(cx1 - cx0 - 1, ch - 1.5, 1, 1);
+    cg.translate((cx0 + cx1) / 2, ch / 2, cz1 + 0.3);
+    const cgm = new THREE.Mesh(cg, M.glassCurtain || M.glassLite);
+    cgm.name = 'cityhallCouncilGlass'; cgm.castShadow = false; g.add(cgm);
   }
 
-  return { group: g, night, facade: facadeMesh };
+  return { group: g, night, facade: atriumMesh };
 }
 
-// ---------- Grounds: plaza, lawn, paths ----------
+// ---------- Grounds ----------
 function buildGrounds(data, M) {
   const g = new THREE.Group(); g.name = 'cityhallGrounds';
   const bag = Bag();
@@ -355,31 +509,35 @@ function buildGrounds(data, M) {
   const xMin = Math.min(...xs), xMax = Math.max(...xs);
   const zMin = Math.min(...zs), zMax = Math.max(...zs);
 
-  // South plaza (in front of south facade)
+  // Large SE granite plaza (photo 04/05) — thick enough to sit above terrain
   const plaza = [
-    [xMin - 5, zMax + 2], [xMax + 25, zMax + 2],
-    [xMax + 25, zMax + 55], [xMin - 5, zMax + 55],
+    [xMin - 8, zMax + 0.3], [xMax + 55, zMax + 0.3],
+    [xMax + 70, zMax + 95], [xMin - 5, zMax + 100],
   ];
   {
-    const geo = extrude(plaza, [], 0.02, 0.06);
-    // keep a simple plaza mesh with paving texture
-    const m = new THREE.Mesh(geo, M.plaza);
-    m.name = 'cityhallPlaza'; m.receiveShadow = true; g.add(m);
+    const geo = extrude(plaza, [], 0.08, 0.16);
+    const m = new THREE.Mesh(geo, M.plaza); m.name = 'cityhallPlaza'; m.receiveShadow = true; g.add(m);
   }
 
-  // Lawns flanking east promenade
-  const lawnL = [[xMax + 2, zMax - 5], [xMax + 55, zMax - 5], [xMax + 55, zMax + 50], [xMax + 2, zMax + 50]];
-  bag.push(paintFaces(extrude(lawnL, [], 0.01, 0.04), C.lawn, C.lawnDark));
+  // Lawns
+  const lawnSE = [[xMax + 5, zMax + 8], [xMax + 50, zMax + 10], [xMax + 58, zMax + 65], [xMax + 8, zMax + 60]];
+  bag.push(paintFaces(extrude(lawnSE, [], 0.01, 0.05), C.lawn, C.lawnDark));
+  const lawnN = [[xMin - 25, zMin - 60], [xMax + 15, zMin - 60], [xMax + 15, zMin - 2], [xMin - 25, zMin - 2]];
+  bag.push(paintFaces(extrude(lawnN, [], 0.01, 0.05), C.lawn, C.lawnDark));
+  const lawnW = [[xMin - 95, zMin - 45], [xMin - 5, zMin - 45], [xMin - 5, zMax + 45], [xMin - 95, zMax + 45]];
+  bag.push(paintFaces(extrude(lawnW, [], 0.01, 0.05), C.lawnDark, C.lawn));
 
-  // North lawn around fountain
-  const lawnN = [[xMin - 20, zMin - 55], [xMax + 10, zMin - 55], [xMax + 10, zMin - 2], [xMin - 20, zMin - 2]];
-  bag.push(paintFaces(extrude(lawnN, [], 0.01, 0.04), C.lawn, C.lawnDark));
+  // Red-brick paths through lawns
+  const brickPts = [
+    [xMax + 20, zMax + 20], [xMax + 35, zMax + 40], [xMax + 42, zMax + 55],
+  ];
+  for (let i = 0; i < brickPts.length - 1; i++) {
+    const [ax, az] = brickPts[i], [bx, bz] = brickPts[i + 1];
+    const dx = bx - ax, dz = bz - az, L = Math.hypot(dx, dz), ang = Math.atan2(dz, dx);
+    bag.box((ax + bx) / 2, 0.06, (az + bz) / 2, L, 0.08, 2.2, -ang, C.brick);
+  }
 
-  // West park strip
-  const lawnW = [[xMin - 90, zMin - 40], [xMin - 5, zMin - 40], [xMin - 5, zMax + 40], [xMin - 90, zMax + 40]];
-  bag.push(paintFaces(extrude(lawnW, [], 0.01, 0.04), C.lawnDark, C.lawn));
-
-  // Loop path (3–4 m)
+  // Loop path
   const pathPts = data.westParkLoop?.pts || [];
   for (let i = 0; i < pathPts.length - 1; i++) {
     const [ax, az] = pathPts[i], [bx, bz] = pathPts[i + 1];
@@ -387,44 +545,44 @@ function buildGrounds(data, M) {
     const ang = Math.atan2(dz, dx);
     bag.box((ax + bx) / 2, 0.05, (az + bz) / 2, L, 0.08, 3.5, -ang, C.path);
   }
-  // Path behind step seats
   const d = data.deck;
   bag.box((d.x0 + d.x1) / 2, 0.06, d.seatsZ - 5, d.x1 - d.x0 + 8, 0.08, 3.5, 0, C.path);
 
-  // East promenade paving
+  // East diagonal promenade
   const pr = data.promenade;
   {
     const dx = pr.to[0] - pr.from[0], dz = pr.to[1] - pr.from[1], L = Math.hypot(dx, dz), ang = Math.atan2(dz, dx);
-    const geo = new THREE.BoxGeometry(L, 0.08, pr.width);
+    const geo = new THREE.BoxGeometry(L, 0.09, pr.width);
     geo.rotateY(-ang); geo.translate((pr.from[0] + pr.to[0]) / 2, 0.05, (pr.from[1] + pr.to[1]) / 2);
     const m = new THREE.Mesh(geo, M.plaza); m.name = 'cityhallPromenade'; m.receiveShadow = true; g.add(m);
   }
+
+  // Small green kiosk on lawn (photo 04/05)
+  bag.box(xMax + 22, 1.4, zMax + 28, 4.5, 2.8, 3.2, 0.3, C.kiosk);
+  bag.box(xMax + 22, 2.9, zMax + 28, 5.0, 0.15, 3.6, 0.3, C.frame);
 
   const body = bag.mesh(M.vc, 'cityhallGroundBody'); if (body) g.add(body);
   return g;
 }
 
-// ---------- Banner poles (instanced) ----------
 function buildBanners(data, M) {
   const g = new THREE.Group(); g.name = 'cityhallBanners';
   const pr = data.promenade;
   const dx = pr.to[0] - pr.from[0], dz = pr.to[1] - pr.from[1], L = Math.hypot(dx, dz);
   const ux = dx / L, uz = dz / L, px = -uz, pz = ux;
-  const n = 10;
-  const poleGeo = new THREE.CylinderGeometry(0.08, 0.1, 7.5, 6);
-  const poles = new THREE.InstancedMesh(poleGeo, M.pole, n * 2);
-  const banGeo = new THREE.PlaneGeometry(0.9, 2.2);
-  const banners = new THREE.InstancedMesh(banGeo, M.banner, n * 2);
+  const n = 12;
+  const poles = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.07, 0.09, 7.8, 6), M.pole, n * 2);
+  const banners = new THREE.InstancedMesh(new THREE.PlaneGeometry(0.95, 2.4), M.banner, n * 2);
   const dummy = new THREE.Object3D();
   let i = 0;
-  for (let side of [-1, 1]) {
+  for (const side of [-1, 1]) {
     for (let k = 0; k < n; k++) {
       const t = (k + 0.5) / n;
-      const x = pr.from[0] + dx * t + px * side * (pr.width / 2 + 1.2);
-      const z = pr.from[1] + dz * t + pz * side * (pr.width / 2 + 1.2);
-      dummy.position.set(x, 3.75, z); dummy.rotation.set(0, 0, 0); dummy.scale.set(1, 1, 1); dummy.updateMatrix();
+      const x = pr.from[0] + dx * t + px * side * (pr.width / 2 + 1.3);
+      const z = pr.from[1] + dz * t + pz * side * (pr.width / 2 + 1.3);
+      dummy.position.set(x, 3.9, z); dummy.rotation.set(0, 0, 0); dummy.scale.set(1, 1, 1); dummy.updateMatrix();
       poles.setMatrixAt(i, dummy.matrix);
-      dummy.position.set(x + px * side * 0.15, 5.2, z + pz * side * 0.15);
+      dummy.position.set(x + px * side * 0.15, 5.4, z + pz * side * 0.15);
       dummy.rotation.set(0, Math.atan2(px * side, pz * side), 0);
       dummy.updateMatrix();
       banners.setMatrixAt(i, dummy.matrix);
@@ -435,125 +593,153 @@ function buildBanners(data, M) {
   return g;
 }
 
-// ---------- Pond + sculpture ----------
 function buildPond(data, M) {
   const g = new THREE.Group(); g.name = 'cityhallPond';
   const bag = Bag();
-  const o = data.pond.o;
-  bag.push(paintFaces(extrude(o, [], 0.02, 0.35), C.water, C.curb, C.waterDeep));
-  // rim
-  band(bag, o, 0.35, 0.55, 0.3, 0.4, C.curb, { minLen: 1 });
-  const body = bag.mesh(M.vc, 'cityhallPondBody'); if (body) g.add(body);
-  // water surface with water mat
-  const water = new THREE.Mesh(extrude(shrink(o, 0.92), [], 0.28, 0.32), M.water);
-  water.name = 'cityhallPondWater'; g.add(water);
-  // blue abstract sculpture
-  const sc = data.pond.sculpture;
-  const sbag = Bag();
-  sbag.cyl(sc.x, 0.4, sc.z, 0.9, 0.8, 10, C.curb);
-  // bird/butterfly-ish abstract (generic, not a logo)
-  const wing = new THREE.SphereGeometry(1.4, 10, 8, 0, Math.PI);
-  wing.scale(1, 0.35, 0.7); wing.rotateZ(0.5); wing.translate(sc.x - 0.6, 2.2, sc.z);
-  sbag.push(wing, C.sculpture);
-  const wing2 = new THREE.SphereGeometry(1.4, 10, 8, 0, Math.PI);
-  wing2.scale(1, 0.35, 0.7); wing2.rotateZ(-0.5); wing2.rotateY(Math.PI); wing2.translate(sc.x + 0.6, 2.2, sc.z);
-  sbag.push(wing2, C.sculpture);
-  sbag.cyl(sc.x, 1.5, sc.z, 0.15, 2.2, 6, C.sculpture);
-  const sm = sbag.mesh(M.vc, 'cityhallSculpture'); if (sm) g.add(sm);
-  // Round reflecting pond accent near sculpture (photo 04/05) — OSM outline is irregular; this is the photo-matching circle
-  const cx = sc.x + 6, cz = sc.z + 8;
-  const round = new THREE.Mesh(new THREE.CylinderGeometry(9.5, 9.5, 0.35, 28), M.water);
-  round.position.set(cx, 0.2, cz); round.name = 'cityhallRoundPond'; g.add(round);
-  const rim = new THREE.Mesh(new THREE.TorusGeometry(9.5, 0.28, 6, 28), M.curb);
-  rim.rotation.x = Math.PI / 2; rim.position.set(cx, 0.4, cz); g.add(rim);
+  // Photo-matching round / soft-kidney pond on east
+  const rd = data.pond.round || { cx: 1710, cz: -5925, r: 14 };
+  const cx = rd.cx, cz = rd.cz, r = rd.r;
+  // Stepped stone edge (3 rings)
+  for (let i = 0; i < 3; i++) {
+    const rr = r + 1.2 - i * 0.55;
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(rr, 0.32, 6, 32), M.curb);
+    ring.rotation.x = Math.PI / 2; ring.position.set(cx, 0.25 + i * 0.22, cz); g.add(ring);
+  }
+  const water = new THREE.Mesh(new THREE.CylinderGeometry(r - 0.4, r - 0.4, 0.35, 32), M.water);
+  water.position.set(cx, 0.22, cz); water.name = 'cityhallRoundPond'; g.add(water);
+
+  // Skip raw OSM pond outline — it reads as a broken quarter-ring; round pond above is the photo match.
+
+  // Blue abstract sculpture
+  const sc = data.pond.sculpture || { x: cx - 12, z: cz + 8 };
+  bag.cyl(sc.x, 0.35, sc.z, 0.85, 0.7, 10, C.curb);
+  const wing = new THREE.SphereGeometry(1.5, 10, 8, 0, Math.PI);
+  wing.scale(1, 0.35, 0.7); wing.rotateZ(0.5); wing.translate(sc.x - 0.6, 2.3, sc.z);
+  bag.push(wing, C.sculpture);
+  const wing2 = new THREE.SphereGeometry(1.5, 10, 8, 0, Math.PI);
+  wing2.scale(1, 0.35, 0.7); wing2.rotateZ(-0.5); wing2.rotateY(Math.PI); wing2.translate(sc.x + 0.6, 2.3, sc.z);
+  bag.push(wing2, C.sculpture);
+  bag.cyl(sc.x, 1.5, sc.z, 0.15, 2.3, 6, C.sculpture);
+  const sm = bag.mesh(M.vc, 'cityhallSculpture'); if (sm) g.add(sm);
   return g;
 }
 
-// ---------- Music fountain + deck + step seats ----------
 function buildFountainComplex(data, M) {
   const g = new THREE.Group(); g.name = 'cityhallFountain';
   const f = data.fountain, d = data.deck;
   const bag = Bag();
 
-  // elongated pool
   const pool = [
     [f.cx - f.len / 2, f.cz - f.wid / 2],
     [f.cx + f.len / 2, f.cz - f.wid / 2],
     [f.cx + f.len / 2, f.cz + f.wid / 2],
     [f.cx - f.len / 2, f.cz + f.wid / 2],
   ];
-  bag.push(paintFaces(extrude(pool, [], 0.02, 0.4), C.waterDeep, C.curb, C.waterDeep));
-  band(bag, pool, 0.4, 0.55, 0.25, 0.35, C.brick, { minLen: 1 });
+  bag.push(paintFaces(extrude(pool, [], 0.02, 0.45), C.waterDeep, C.curb, C.waterDeep));
+  band(bag, pool, 0.45, 0.6, 0.28, 0.35, C.brick, { minLen: 1 });
   const body = bag.mesh(M.vc, 'cityhallFountainBasin'); if (body) g.add(body);
 
-  const water = new THREE.Mesh(extrude(shrink(pool, 0.96), [], 0.3, 0.36), M.water);
+  const water = new THREE.Mesh(extrude(
+    [[f.cx - f.len / 2 + 0.4, f.cz - f.wid / 2 + 0.3], [f.cx + f.len / 2 - 0.4, f.cz - f.wid / 2 + 0.3],
+      [f.cx + f.len / 2 - 0.4, f.cz + f.wid / 2 - 0.3], [f.cx - f.len / 2 + 0.4, f.cz + f.wid / 2 - 0.3]],
+    [], 0.32, 0.38,
+  ), M.water);
   water.name = 'cityhallFountainWater'; g.add(water);
 
-  // Wooden deck (south / building side of fountain)
+  // Wooden deck
   const deckBag = Bag();
-  const deckRing = [[d.x0, d.deckZ - 1.5], [d.x1, d.deckZ - 1.5], [d.x1, d.deckZ + 1.2], [d.x0, d.deckZ + 1.2]];
-  deckBag.push(paintFaces(extrude(deckRing, [], 0.4, 0.55), C.wood, C.woodDark, C.woodDark));
-  // plank lines
-  for (let x = d.x0 + 1; x < d.x1; x += 0.9) deckBag.box(x, 0.56, d.deckZ, 0.06, 0.02, 2.5, 0, C.woodDark);
+  const deckRing = [[d.x0, d.deckZ - 1.6], [d.x1, d.deckZ - 1.6], [d.x1, d.deckZ + 1.4], [d.x0, d.deckZ + 1.4]];
+  deckBag.push(paintFaces(extrude(deckRing, [], 0.4, 0.58), C.wood, C.woodDark, C.woodDark));
+  for (let x = d.x0 + 1; x < d.x1; x += 0.85) deckBag.box(x, 0.59, d.deckZ, 0.06, 0.02, 2.7, 0, C.woodDark);
   const deckM = deckBag.mesh(M.vc, 'cityhallDeck'); if (deckM) g.add(deckM);
 
-  // 3–4 tier brick step-seats facing city hall (south / +z), on north side of fountain
+  // 4-tier stone/brick step-seats south of fountain, facing north toward fountain + city hall; forest further south
   const seatBag = Bag();
-  const tiers = 4, tierD = 0.85, tierH = 0.42;
+  const tiers = 4, tierD = 1.25, tierH = 0.55;
   for (let t = 0; t < tiers; t++) {
-    const z0 = d.seatsZ - t * tierD;
+    const z0 = d.seatsZ + t * tierD; // rise away from water (south = +z)
     const y0 = 0.4 + t * tierH;
-    seatBag.box((d.x0 + d.x1) / 2, y0 + tierH / 2, z0, d.x1 - d.x0, tierH, tierD - 0.05, 0, t % 2 ? C.brick : C.brickDark);
+    seatBag.box((d.x0 + d.x1) / 2, y0 + tierH / 2, z0, d.x1 - d.x0 + 4, tierH, tierD - 0.08, 0, t % 2 ? C.frame : '#d8dde4');
   }
-  // wooden base at waterline
-  seatBag.box((d.x0 + d.x1) / 2, 0.35, d.seatsZ + 0.6, d.x1 - d.x0, 0.3, 0.5, 0, C.wood);
+  seatBag.box((d.x0 + d.x1) / 2, 0.35, d.seatsZ - 0.6, d.x1 - d.x0 + 4, 0.3, 0.55, 0, C.wood);
   const seatM = seatBag.mesh(M.vc, 'cityhallSeats'); if (seatM) g.add(seatM);
 
-  // Animated jets (instanced)
-  const JET_N = 32;
-  const jetGeo = new THREE.CylinderGeometry(0.12, 0.2, 1, 6);
+  // Jets: many vertical columns + left/right arching pairs (multi-segment bends)
+  const JET_N = 48;
+  const jetGeo = new THREE.CylinderGeometry(0.08, 0.14, 1, 5);
   jetGeo.translate(0, 0.5, 0);
   const jets = new THREE.InstancedMesh(jetGeo, M.jet, JET_N);
-  jets.name = 'cityhallJets';
-  jets.frustumCulled = false;
-  g.add(jets);
+  jets.name = 'cityhallJets'; jets.frustumCulled = false; g.add(jets);
 
-  // Night underwater lights (3 shared mats, few meshes) + 1 InstancedMesh shafts
-  const lightGeo = new THREE.CircleGeometry(0.7, 10);
+  // Arch segments (torus quarter approx via tilted short cylinders) — 2 banks × 8 arcs × 5 segs
+  const ARCH_N = 60;
+  const archGeo = new THREE.CylinderGeometry(0.07, 0.1, 1, 5);
+  archGeo.translate(0, 0.5, 0);
+  const arches = new THREE.InstancedMesh(archGeo, M.jet, ARCH_N);
+  arches.name = 'cityhallArches'; arches.frustumCulled = false; g.add(arches);
+
+  // Mist discs
+  const mistGeo = new THREE.PlaneGeometry(2.2, 2.2);
+  const mists = new THREE.InstancedMesh(mistGeo, M.mist, 16);
+  mists.name = 'cityhallMist'; mists.frustumCulled = false; g.add(mists);
+
+  // Underwater lights + shafts
+  const lightGeo = new THREE.CircleGeometry(0.65, 10);
   lightGeo.rotateX(-Math.PI / 2);
-  const shaftGeo = new THREE.CylinderGeometry(0.4, 0.6, 1, 6, 1, true);
+  const shaftGeo = new THREE.CylinderGeometry(0.35, 0.55, 1, 6, 1, true);
   shaftGeo.translate(0, 0.5, 0);
   const lightMats = [
-    new THREE.MeshBasicMaterial({ color: '#3aa0ff', transparent: true, opacity: 0.85 }),
-    new THREE.MeshBasicMaterial({ color: '#b44cff', transparent: true, opacity: 0.85 }),
-    new THREE.MeshBasicMaterial({ color: '#3dff7a', transparent: true, opacity: 0.85 }),
+    new THREE.MeshBasicMaterial({ color: '#3aa0ff', transparent: true, opacity: 0.9 }),
+    new THREE.MeshBasicMaterial({ color: '#ff4db8', transparent: true, opacity: 0.9 }),
+    new THREE.MeshBasicMaterial({ color: '#4dff7a', transparent: true, opacity: 0.9 }),
   ];
-  const shaftMat = new THREE.MeshBasicMaterial({ color: '#6ab0ff', transparent: true, opacity: 0.3, side: THREE.DoubleSide, depthWrite: false });
+  const shaftMat = new THREE.MeshBasicMaterial({ color: '#6ab0ff', transparent: true, opacity: 0.32, side: THREE.DoubleSide, depthWrite: false });
   const lights = [];
-  for (let i = 0; i < JET_N; i++) {
-    const t = (i + 0.5) / JET_N;
+  const LIGHT_N = 16;
+  for (let i = 0; i < LIGHT_N; i++) {
+    const t = (i + 0.5) / LIGHT_N;
     const x = f.cx - f.len / 2 + 2 + t * (f.len - 4);
     const m = new THREE.Mesh(lightGeo, lightMats[i % 3]);
-    m.position.set(x, 0.38, f.cz); m.visible = false; g.add(m); lights.push(m);
+    m.position.set(x, 0.4, f.cz); m.visible = false; g.add(m); lights.push(m);
   }
   const shafts = new THREE.InstancedMesh(shaftGeo, shaftMat, JET_N);
   shafts.name = 'cityhallShafts'; shafts.visible = false; shafts.frustumCulled = false; g.add(shafts);
 
-  // Ambient night glow plane
   const glow = new THREE.Mesh(
-    new THREE.PlaneGeometry(f.len * 1.15, f.wid * 2.2),
-    new THREE.MeshBasicMaterial({ color: '#3a8fff', transparent: true, opacity: 0.45, side: THREE.DoubleSide, depthWrite: false }),
+    new THREE.PlaneGeometry(f.len * 1.2, f.wid * 2.4),
+    new THREE.MeshBasicMaterial({ color: '#3a8fff', transparent: true, opacity: 0.4, side: THREE.DoubleSide, depthWrite: false }),
   );
-  glow.rotation.x = -Math.PI / 2; glow.position.set(f.cx, 0.37, f.cz); glow.visible = false;
-  g.add(glow);
+  glow.rotation.x = -Math.PI / 2; glow.position.set(f.cx, 0.39, f.cz); glow.visible = false; g.add(glow);
 
   const dummy = new THREE.Object3D();
   const seeds = Array.from({ length: JET_N }, (_, i) => ({
-    x: f.cx - f.len / 2 + 2 + ((i + 0.5) / JET_N) * (f.len - 4),
-    z: f.cz + Math.sin(i * 1.7) * 1.2,
+    x: f.cx - f.len / 2 + 1.5 + ((i + 0.5) / JET_N) * (f.len - 3),
+    z: f.cz + ((i % 3) - 1) * 1.8,
     phase: i / JET_N,
-    h: 5.5 + (i % 5) * 1.6 + (i % 4 === 0 ? 6.5 : 0),
+    h: 5 + (i % 7) * 1.35 + (i % 5 === 0 ? 5 : 0),
+    arch: 0,
   }));
+  // Arch banks: left (+z lean) and right (−z lean) pairs meeting above center
+  const archSeeds = [];
+  for (let bank = 0; bank < 2; bank++) {
+    for (let a = 0; a < 6; a++) {
+      const x = f.cx - 18 + a * 5.0;
+      for (let seg = 0; seg < 5; seg++) {
+        const u = seg / 4; // 0..1 along arc
+        const ang = u * Math.PI; // half-circle
+        const radius = 5.5 + (a % 3) * 0.6;
+        archSeeds.push({
+          x,
+          y0: 0.4,
+          z0: f.cz + (bank === 0 ? -2.2 : 2.2),
+          side: bank === 0 ? 1 : -1,
+          radius,
+          seg,
+          phase: (a + bank * 8) / 16,
+        });
+      }
+    }
+  }
 
   let nightOn = false;
   const stopEve = watchEvening((on) => {
@@ -561,183 +747,239 @@ function buildFountainComplex(data, M) {
     glow.visible = on;
     shafts.visible = on;
     for (const m of lights) m.visible = on;
-    M.water.emissiveIntensity = on ? 0.85 : 0.2;
+    M.water.emissiveIntensity = on ? 0.9 : 0.15;
   });
 
   function update(t) {
-    // color cycle at night: blue → purple → green
     if (nightOn) {
-      const phase = (t * 0.15) % 3;
-      const cols = ['#3aa0ff', '#b44cff', '#3dff7a'];
-      const idx = Math.floor(phase);
-      const mix = phase - idx;
+      const phase = (t * 0.22) % 3;
+      const cols = ['#2a9aff', '#ff4db8', '#40e88a'];
+      const idx = Math.floor(phase), mix = phase - idx;
       const c0 = new THREE.Color(cols[idx]), c1 = new THREE.Color(cols[(idx + 1) % 3]);
       glow.material.color.copy(c0).lerp(c1, mix);
-      M.jet.color.copy(c0).lerp(c1, mix);
+      M.jet.color.copy(c0).lerp(c1, mix).multiplyScalar(nightOn ? 1.4 : 1);
+      shaftMat.color.copy(M.jet.color);
+      M.mist.color.copy(c0).lerp(c1, mix);
+      for (let i = 0; i < lights.length; i++) {
+        lights[i].material.color.copy(c0).lerp(c1, (mix + i * 0.05) % 1);
+      }
     } else {
-      M.jet.color.set('#d7f3ff');
+      M.jet.color.set('#d8eefc');
+      M.mist.color.set('#c8e8ff');
     }
     for (let i = 0; i < JET_N; i++) {
       const s = seeds[i];
-      const h = s.h * (0.55 + 0.45 * Math.sin(t * 1.6 + s.phase * Math.PI * 2));
-      dummy.position.set(s.x, 0.36, s.z);
-      dummy.scale.set(1, Math.max(0.2, h), 1);
+      const h = s.h * (0.5 + 0.5 * Math.sin(t * 2.1 + s.phase * Math.PI * 2));
+      dummy.position.set(s.x, 0.4, s.z);
       dummy.rotation.set(0, 0, 0);
+      dummy.scale.set(1.0, Math.max(0.3, h), 1.0);
       dummy.updateMatrix();
       jets.setMatrixAt(i, dummy.matrix);
-      // shaft follows jet height at night
-      dummy.scale.set(nightOn ? 1.5 : 1, Math.max(0.2, h * 1.08), nightOn ? 1.5 : 1);
+      dummy.scale.set(nightOn ? 1.8 : 1.1, Math.max(0.3, h * 1.05), nightOn ? 1.8 : 1.1);
       dummy.updateMatrix();
       shafts.setMatrixAt(i, dummy.matrix);
     }
     jets.instanceMatrix.needsUpdate = true;
     shafts.instanceMatrix.needsUpdate = true;
-    if (nightOn) shaftMat.color.copy(M.jet.color);
+    // Arching jets
+    for (let i = 0; i < archSeeds.length && i < ARCH_N; i++) {
+      const a = archSeeds[i];
+      const pulse = 0.65 + 0.35 * Math.sin(t * 1.9 + a.phase * Math.PI * 2);
+      const u = a.seg / 4;
+      const ang = u * Math.PI;
+      const rr = a.radius * pulse;
+      const y = a.y0 + Math.sin(ang) * rr;
+      const z = a.z0 + a.side * (1 - Math.cos(ang)) * rr * 0.55;
+      // segment tangent for orientation
+      const tangY = Math.cos(ang);
+      const tangZ = a.side * Math.sin(ang) * 0.55;
+      const lean = Math.atan2(tangZ, Math.max(0.05, tangY));
+      dummy.position.set(a.x, y, z);
+      dummy.rotation.set(lean, 0, 0);
+      dummy.scale.set(1, 1.35 * pulse, 1);
+      dummy.updateMatrix();
+      arches.setMatrixAt(i, dummy.matrix);
+    }
+    arches.count = Math.min(ARCH_N, archSeeds.length);
+    arches.instanceMatrix.needsUpdate = true;
+    // mist billboards
+    for (let i = 0; i < 16; i++) {
+      const s = seeds[i * 2 % JET_N];
+      const h = s.h * (0.5 + 0.4 * Math.sin(t * 1.3 + s.phase * 6));
+      dummy.position.set(s.x, 0.6 + h * 0.5, s.z);
+      dummy.scale.set(1.6 + (i % 3) * 0.35, 1.3, 1);
+      dummy.rotation.set(0, t * 0.25 + i, 0);
+      dummy.updateMatrix();
+      mists.setMatrixAt(i, dummy.matrix);
+    }
+    mists.instanceMatrix.needsUpdate = true;
   }
 
-  return { group: g, update, disposeExtra: () => { stopEve(); lightGeo.dispose(); shaftGeo.dispose(); jetGeo.dispose(); for (const m of lightMats) m.dispose(); shaftMat.dispose(); glow.geometry.dispose(); glow.material.dispose(); } };
+  return {
+    group: g, update,
+    disposeExtra: () => {
+      stopEve(); lightGeo.dispose(); shaftGeo.dispose(); jetGeo.dispose(); archGeo.dispose(); mistGeo.dispose();
+      for (const m of lightMats) m.dispose(); shaftMat.dispose();
+      glow.geometry.dispose(); glow.material.dispose();
+    },
+  };
 }
 
-// ---------- Trees / hedges (instanced) ----------
 function buildLandscape(data, M) {
   const g = new THREE.Group(); g.name = 'cityhallLandscape';
   const b = data.building;
   const xs = b.o.map((p) => p[0]), zs = b.o.map((p) => p[1]);
   const xMin = Math.min(...xs), xMax = Math.max(...xs);
   const zMin = Math.min(...zs), zMax = Math.max(...zs);
+  const seatsZ = data.deck?.seatsZ ?? -5862;
+  const f = data.fountain || { cx: 1610, cz: -5875, len: 56 };
+
+  // Keep south plaza + fountain view corridor CLEAR (x near fountain, z from facade to seats)
+  const inKeepClear = (x, z) => (
+    x > f.cx - f.len / 2 - 8 && x < f.cx + f.len / 2 + 8 && z > zMax - 2 && z < seatsZ + 10
+  ) || (
+    // also clear immediate south facade strip so glass reads from plaza
+    x > xMin - 5 && x < xMax + 5 && z > zMax && z < zMax + 28
+  );
 
   const positions = [];
-  // North treeline behind seats
-  for (let x = xMin - 15; x < xMax + 5; x += 6.5) positions.push([x, zMin - 18 - (Math.abs(Math.sin(x)) * 4), 1]);
-  // West park trees
-  for (let x = xMin - 80; x < xMin - 15; x += 9) for (let z = zMin - 30; z < zMax + 30; z += 10) {
-    if ((Math.abs(x * 3.1 + z * 7.7) % 1) > 0.55) continue;
-    positions.push([x, z, 0.85 + (Math.abs(Math.sin(x + z)) * 0.4)]);
+  const pushT = (x, z, pine) => { if (!inKeepClear(x, z)) positions.push([x, z, pine]); };
+
+  // Dense edges like photo — north belt and far-south belt (beyond seats)
+  for (let x = xMin - 80; x < xMax + 60; x += 7) {
+    pushT(x, zMin - 48 + (Math.sin(x * 0.2) * 3), 1);
+    pushT(x, seatsZ + 28 + (Math.cos(x * 0.15) * 4), 0);
   }
-  // East lawn trees
-  for (let i = 0; i < 8; i++) positions.push([xMax + 15 + (i % 3) * 8, zMax + 15 + Math.floor(i / 3) * 10, 1]);
+  for (let z = zMin - 40; z < seatsZ + 45; z += 8) {
+    pushT(xMin - 70 + Math.sin(z * 0.1) * 4, z, 1);
+    pushT(xMax + 52 + Math.cos(z * 0.12) * 3, z, 0);
+  }
+  // Forest BEHIND seats only
+  for (let x = 1575; x < 1645; x += 4.5) pushT(x, seatsZ + 16 + Math.sin(x) * 1.5, 1);
+  for (let x = 1578; x < 1642; x += 5) pushT(x, seatsZ + 24 + Math.cos(x) * 2, 0);
+  for (let x = 1568; x < 1650; x += 6) pushT(x, seatsZ + 34 + Math.sin(x * 0.3) * 2, 1);
+  // Lawn SE grove (east of pond), not in front of facade
+  for (let x = xMax + 10; x < xMax + 55; x += 6) {
+    for (let z = zMax + 15; z < zMax + 70; z += 8) pushT(x + Math.sin(z) * 2, z, x % 12 < 6 ? 1 : 0);
+  }
+  // Promenade flanks
+  const pr = data.promenade;
+  for (let t = 0; t < 1; t += 0.08) {
+    const x = pr.from[0] + (pr.to[0] - pr.from[0]) * t;
+    const z = pr.from[1] + (pr.to[1] - pr.from[1]) * t;
+    pushT(x + 9, z + 7, 0); pushT(x - 8, z - 6, 1);
+  }
 
   const N = positions.length;
-  const trunkGeo = new THREE.CylinderGeometry(0.18, 0.28, 2.2, 5);
-  trunkGeo.translate(0, 1.1, 0);
-  const leafGeo = new THREE.SphereGeometry(1.6, 7, 5);
-  leafGeo.translate(0, 3.2, 0);
-  const trunks = new THREE.InstancedMesh(trunkGeo, M.trunk, N);
-  const leaves = new THREE.InstancedMesh(leafGeo, M.foliage, N);
+  const trunk = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.25, 0.35, 1, 5), M.trunk, N);
+  const broad = new THREE.InstancedMesh(new THREE.SphereGeometry(1, 7, 6), M.foliage, N);
+  const pine = new THREE.InstancedMesh(new THREE.ConeGeometry(1.3, 3.2, 7), M.pine, N);
   const dummy = new THREE.Object3D();
-  positions.forEach(([x, z, s], i) => {
-    dummy.position.set(x, 0, z); dummy.scale.set(s, s, s); dummy.rotation.set(0, (x * 0.1) % 6.28, 0); dummy.updateMatrix();
-    trunks.setMatrixAt(i, dummy.matrix); leaves.setMatrixAt(i, dummy.matrix);
-  });
-  trunks.castShadow = leaves.castShadow = true;
-  g.add(trunks, leaves);
+  let pi = 0, bi = 0;
+  for (let i = 0; i < N; i++) {
+    const [x, z, isPine] = positions[i];
+    const h = 3.5 + (i % 5) * 0.7;
+    dummy.position.set(x, h / 2, z); dummy.scale.set(1, h, 1); dummy.rotation.set(0, 0, 0); dummy.updateMatrix();
+    trunk.setMatrixAt(i, dummy.matrix);
+    if (isPine) {
+      dummy.position.set(x, h + 1.2, z); dummy.scale.set(1.1 + (i % 3) * 0.15, 1.3 + (i % 4) * 0.1, 1.1); dummy.updateMatrix();
+      pine.setMatrixAt(pi++, dummy.matrix);
+    } else {
+      dummy.position.set(x, h + 1.4, z); dummy.scale.set(2.2 + (i % 3) * 0.3, 2.0, 2.2); dummy.updateMatrix();
+      broad.setMatrixAt(bi++, dummy.matrix);
+    }
+  }
+  pine.count = pi; broad.count = bi;
+  trunk.castShadow = true; broad.castShadow = pine.castShadow = true;
+  g.add(trunk, broad, pine);
 
-  // Hedge along promenade
-  const hedgeBag = Bag();
-  const pr = data.promenade;
-  const dx = pr.to[0] - pr.from[0], dz = pr.to[1] - pr.from[1], L = Math.hypot(dx, dz);
-  const ux = dx / L, uz = dz / L, px = -uz, pz = ux;
+  // Hedges along promenade
+  const hedgeN = 20;
+  const hedges = new THREE.InstancedMesh(new THREE.BoxGeometry(2.2, 0.9, 0.7), M.hedge, hedgeN * 2);
+  let hi = 0;
   for (const side of [-1, 1]) {
-    hedgeBag.box(
-      (pr.from[0] + pr.to[0]) / 2 + px * side * (pr.width / 2 + 2.5),
-      0.45,
-      (pr.from[1] + pr.to[1]) / 2 + pz * side * (pr.width / 2 + 2.5),
-      L * 0.9, 0.9, 0.7, -Math.atan2(dz, dx), C.hedge,
-    );
+    for (let k = 0; k < hedgeN; k++) {
+      const t = (k + 0.5) / hedgeN;
+      const x = pr.from[0] + (pr.to[0] - pr.from[0]) * t;
+      const z = pr.from[1] + (pr.to[1] - pr.from[1]) * t;
+      const dx = pr.to[0] - pr.from[0], dz = pr.to[1] - pr.from[1], L = Math.hypot(dx, dz);
+      const px = -dz / L, pz = dx / L;
+      dummy.position.set(x + px * side * (pr.width / 2 + 2.5), 0.45, z + pz * side * (pr.width / 2 + 2.5));
+      dummy.scale.set(1, 1, 1); dummy.rotation.set(0, Math.atan2(dz, dx), 0); dummy.updateMatrix();
+      hedges.setMatrixAt(hi++, dummy.matrix);
+    }
   }
-  const hm = hedgeBag.mesh(M.vc, 'cityhallHedge'); if (hm) g.add(hm);
-
-  // Path lamps (instanced)
-  const lampN = 16;
-  const poleG = new THREE.CylinderGeometry(0.07, 0.09, 4.2, 5); poleG.translate(0, 2.1, 0);
-  const headG = new THREE.SphereGeometry(0.25, 6, 4); headG.translate(0, 4.3, 0);
-  const lampPoles = new THREE.InstancedMesh(poleG, M.pole, lampN);
-  const lampHeads = new THREE.InstancedMesh(headG, M.lamp, lampN);
-  const lampPos = [];
-  for (let i = 0; i < 8; i++) {
-    const t = (i + 0.5) / 8;
-    lampPos.push([pr.from[0] + dx * t + px * (pr.width / 2 + 1.8), pr.from[1] + dz * t + pz * (pr.width / 2 + 1.8)]);
-    lampPos.push([data.deck.x0 + 2 + i * ((data.deck.x1 - data.deck.x0 - 4) / 7), data.deck.seatsZ - 6]);
-  }
-  lampPos.slice(0, lampN).forEach(([x, z], i) => {
-    dummy.position.set(x, 0, z); dummy.scale.set(1, 1, 1); dummy.rotation.set(0, 0, 0); dummy.updateMatrix();
-    lampPoles.setMatrixAt(i, dummy.matrix); lampHeads.setMatrixAt(i, dummy.matrix);
-  });
-  g.add(lampPoles, lampHeads);
-
-  return { group: g, disposeGeo: () => { trunkGeo.dispose(); leafGeo.dispose(); poleG.dispose(); headG.dispose(); } };
+  g.add(hedges);
+  return g;
 }
 
-// ---------- Parking ----------
 function buildParking(data, M) {
   const g = new THREE.Group(); g.name = 'cityhallParking';
-  const bag = Bag(), lineBag = Bag();
-  const carGeo = new THREE.BoxGeometry(1.8, 0.65, 4.2);
-  const carPositions = [];
-  for (const lot of data.parking || []) {
-    const ring = [[lot.x0, lot.z0], [lot.x1, lot.z0], [lot.x1, lot.z1], [lot.x0, lot.z1]];
-    bag.push(paintFaces(extrude(ring, [], 0.01, 0.04), C.asphalt, C.asphalt));
-    const stallW = 2.5, stallL = 5.2;
-    for (let r = 0; r < lot.rows; r++) {
-      for (let c = 0; c < lot.cols; c++) {
-        const x = lot.x0 + 2 + c * stallW;
-        const z = lot.z0 + 2 + r * stallL;
-        if (x > lot.x1 - 2 || z > lot.z1 - 2) continue;
-        lineBag.box(x, 0.05, z, 0.08, 0.02, stallL - 0.4, 0, C.line);
-        lineBag.box(x + stallW - 0.3, 0.05, z, 0.08, 0.02, stallL - 0.4, 0, C.line);
-        // parked cars ~55%
-        if (Math.sin(x * 12.1 + z * 7.7) * 10000 % 1 > 0.45) continue;
-        carPositions.push([x + 1.1, z]);
-      }
+  if (!data.parking?.length) return g;
+  const bag = Bag();
+  const lineBag = Bag();
+  let carN = 0;
+  for (const lot of data.parking) {
+    if (!lot.o) continue;
+    bag.push(paintFaces(extrude(lot.o, [], 0.01, 0.04), C.asphalt, C.asphalt));
+    const xs = lot.o.map((p) => p[0]), zs = lot.o.map((p) => p[1]);
+    const x0 = Math.min(...xs), x1 = Math.max(...xs), z0 = Math.min(...zs), z1 = Math.max(...zs);
+    for (let x = x0 + 3; x < x1 - 3; x += 3.2) {
+      lineBag.box(x, 0.05, (z0 + z1) / 2, 0.08, 0.02, Math.max(2, z1 - z0 - 2), 0, C.line);
+      carN++;
     }
   }
   const body = bag.mesh(M.vc, 'cityhallParkingBody'); if (body) g.add(body);
-  const lines = lineBag.mesh(M.line, 'cityhallParkingLines'); if (lines) { lines.castShadow = false; g.add(lines); }
-
-  if (carPositions.length) {
-    const colors = ['#6b7280', '#374151', '#1f2937', '#9ca3af', '#b91c1c', '#1d4ed8', '#f5f5f4'];
-    const cars = new THREE.InstancedMesh(carGeo, new THREE.MeshLambertMaterial({ color: '#6b7280' }), carPositions.length);
-    // vertex colors would need per-instance color — use instanceColor
-    cars.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(carPositions.length * 3), 3);
+  const lines = lineBag.mesh(M.line, 'cityhallParkingLines'); if (lines) g.add(lines);
+  // Instanced cars
+  const n = Math.min(40, carN);
+  if (n > 0) {
+    const colors = ['#c45c5c', '#5c7ac4', '#e8e8e8', '#2a2a2a', '#c4a05c'];
+    const carGeo = new THREE.BoxGeometry(1.8, 0.7, 4.2);
+    const carMat = new THREE.MeshLambertMaterial({ color: '#888' });
+    const cars = new THREE.InstancedMesh(carGeo, carMat, n);
+    cars.name = 'cityhallCars';
     const dummy = new THREE.Object3D();
-    const col = new THREE.Color();
-    carPositions.forEach(([x, z], i) => {
-      dummy.position.set(x, 0.4, z); dummy.rotation.y = (i % 3) * 0.02; dummy.updateMatrix();
-      cars.setMatrixAt(i, dummy.matrix);
-      col.set(colors[i % colors.length]);
-      cars.setColorAt(i, col);
-    });
-    cars.castShadow = true; cars.name = 'cityhallCars';
+    const color = new THREE.Color();
+    let i = 0;
+    for (const lot of data.parking) {
+      if (!lot.o || i >= n) break;
+      const xs = lot.o.map((p) => p[0]), zs = lot.o.map((p) => p[1]);
+      const x0 = Math.min(...xs), x1 = Math.max(...xs), z0 = Math.min(...zs), z1 = Math.max(...zs);
+      for (let x = x0 + 4; x < x1 - 4 && i < n; x += 6.5) {
+        dummy.position.set(x, 0.4, (z0 + z1) / 2); dummy.rotation.set(0, (i % 2) * 0.05, 0); dummy.scale.set(1, 1, 1); dummy.updateMatrix();
+        cars.setMatrixAt(i, dummy.matrix);
+        color.set(colors[i % colors.length]); cars.setColorAt(i, color);
+        i++;
+      }
+    }
+    if (cars.instanceColor) cars.instanceColor.needsUpdate = true;
     g.add(cars);
-    g.userData._carGeo = carGeo;
   }
   return g;
 }
 
-// ---------- Vehicle gate ----------
 function buildVehicleGate(data, M) {
   const g = new THREE.Group(); g.name = 'cityhallVehicleGate';
-  const v = data.vehicleGate;
+  const gate = data.vehicleGate;
+  if (!gate) return g;
   const bag = Bag();
-  // gate posts + boom hint
-  bag.box(v.x - v.width / 2, 1.6, v.z, 0.4, 3.2, 0.4, 0, C.curb);
-  bag.box(v.x + v.width / 2, 1.6, v.z, 0.4, 3.2, 0.4, 0, C.curb);
-  bag.box(v.x, 3.3, v.z, v.width + 0.8, 0.25, 0.35, 0, C.slab);
-  // asphalt apron
-  bag.box(v.x, 0.04, v.z + 8, v.width + 4, 0.08, 20, 0, C.asphalt);
-  // entry/exit arrows (generic chevrons, not text logos)
-  bag.box(v.x - 2, 0.06, v.z + 4, 1.2, 0.02, 0.35, 0, C.line);
-  bag.box(v.x + 2, 0.06, v.z + 4, 1.2, 0.02, 0.35, 0, C.line);
+  const [x, z] = gate.pos || [1532, -5835];
+  bag.box(x - 4, 1.5, z, 0.4, 3, 0.4, 0, C.frame);
+  bag.box(x + 4, 1.5, z, 0.4, 3, 0.4, 0, C.frame);
+  bag.box(x, 3.2, z, 9, 0.35, 0.4, 0, C.frame);
   const m = bag.mesh(M.vc, 'cityhallGate'); if (m) g.add(m);
   return g;
 }
 
-// ---------- Public API ----------
 export function buildSeongnamCityHall(data, { env = null } = {}) {
   const M = mats();
-  if (env && M.glassBlue) { M.glassBlue.envMap = env; M.glassBlue.envMapIntensity = 0.7; if (M.glassBody) { M.glassBody.envMap = env; M.glassBody.envMapIntensity = 0.5; } M.glass.envMap = env; M.glass.envMapIntensity = 0.45; }
+  if (env) {
+    for (const k of ['glassBlue', 'glassCurtain', 'glassLite', 'water', 'frame', 'solar', 'sculpture']) {
+      if (M[k]) { M[k].envMap = env; M[k].envMapIntensity = (M[k].envMapIntensity || 0.5) * 1.1; }
+    }
+  }
   const root = new THREE.Group(); root.name = 'seongnamCityHall';
-
   const building = buildBuilding(data, M);
   root.add(building.group);
   root.add(buildGrounds(data, M));
@@ -745,44 +987,45 @@ export function buildSeongnamCityHall(data, { env = null } = {}) {
   root.add(buildPond(data, M));
   const fountain = buildFountainComplex(data, M);
   root.add(fountain.group);
-  const landscape = buildLandscape(data, M);
-  root.add(landscape.group);
+  root.add(buildLandscape(data, M));
   root.add(buildParking(data, M));
   root.add(buildVehicleGate(data, M));
 
-  let nightMeshes = [];
-  root.traverse((o) => { if (o.name && /Glow$/.test(o.name)) nightMeshes.push(o); });
-  if (building.night) nightMeshes.push(building.night);
-  let on = false;
-  const stopEve = watchEvening((v) => { on = v; for (const m of nightMeshes) m.visible = v; });
+  const stopEve = watchEvening((on) => {
+    if (building.night) building.night.visible = on;
+  });
+  if (building.night) building.night.visible = false;
 
-  const stats = { meshes: 0, instanced: 0 };
-  root.traverse((o) => { if (o.isInstancedMesh) stats.instanced++; else if (o.isMesh) stats.meshes++; });
+  let meshes = 0, instanced = 0;
+  root.traverse((o) => {
+    if (o.isInstancedMesh) instanced++;
+    else if (o.isMesh) meshes++;
+  });
 
+  let disposed = false;
   return {
     group: root,
-    stats,
-    update: (dt, t) => fountain.update(t),
+    stats: { name: 'seongnamCityHall', meshes, instanced },
+    update(dt, t) { if (!disposed) fountain.update(t ?? performance.now() / 1000); },
     dispose() {
-      stopEve();
-      fountain.disposeExtra?.();
-      landscape.disposeGeo?.();
+      if (disposed) return; disposed = true;
+      stopEve(); fountain.disposeExtra?.();
       root.traverse((o) => {
         if (o.geometry) o.geometry.dispose();
-        if (o.userData?._carGeo) o.userData._carGeo.dispose();
       });
-      // shared mats kept for remount; textures disposed only on full module reset
-      root.clear();
+      root.removeFromParent();
     },
   };
 }
 
 export function disposeCityHallMaterials() {
   if (!shared) return;
-  for (const k of Object.keys(shared)) {
-    const v = shared[k];
-    if (v && v.isMaterial) { if (v.map) v.map.dispose(); v.dispose(); }
-    if (v && v.isTexture) v.dispose();
+  for (const v of Object.values(shared)) {
+    if (v && v.isMaterial) {
+      if (v.map) v.map.dispose();
+      v.dispose();
+    }
   }
+  if (shared.env?.dispose) shared.env.dispose();
   shared = null;
 }
