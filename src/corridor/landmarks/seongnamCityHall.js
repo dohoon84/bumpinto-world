@@ -9,7 +9,7 @@ import { vcMat, paint } from '../tileMesh.js';
 import { watchEvening } from '../../evening.js';
 
 const C = {
-  glassBlue: '#1e6aab', glassTeal: '#3a8fc4', glassLite: '#a8c8dc',
+  glassBlue: '#3a7aa8', glassTeal: '#3a7aa8', glassLite: '#3a7aa8',
   frame: '#e6eaee', frameDark: '#c5ced6', spandrel: '#d5dbe2',
   soffit: '#b8bec6', pilotis: '#f2f4f6', solar: '#1a2330', solarFrame: '#4a5560',
   plaza: '#ddd8ce', plazaDark: '#c2bdb2', lawn: '#5f9a58', lawnDark: '#4a7f45',
@@ -127,10 +127,10 @@ function mats() {
 
   if (hasDoc) {
     // Curtain wall atlas: silver glass + grey horizontal spandrels + mullions
-    shared.glassCurtain = S('#c5d8e6', {
+    shared.glassCurtain = S('#3a7aa8', {
       map: canvasTex(256, 256, (x, w, h) => {
         const g = x.createLinearGradient(0, 0, 0, h);
-        g.addColorStop(0, '#d8e8f2'); g.addColorStop(0.5, '#a8c4d6'); g.addColorStop(1, '#8eafc4');
+        g.addColorStop(0, '#5a9cc4'); g.addColorStop(0.5, '#3a7aa8'); g.addColorStop(1, '#2a6288');
         x.fillStyle = g; x.fillRect(0, 0, w, h);
         x.strokeStyle = 'rgba(160,175,190,0.9)'; x.lineWidth = 2;
         for (let i = 0; i <= 8; i++) { x.beginPath(); x.moveTo(i * 32, 0); x.lineTo(i * 32, h); x.stroke(); }
@@ -151,7 +151,7 @@ function mats() {
     // Blue faceted glass atlas (diagonal mullions + reflection)
     shared.glassBlue.map = canvasTex(512, 512, (x, w, h) => {
       const bg = x.createLinearGradient(0, 0, w, h);
-      bg.addColorStop(0, '#155a9a'); bg.addColorStop(0.35, '#2a82c4'); bg.addColorStop(0.65, '#3e9ad4'); bg.addColorStop(1, '#124e88');
+      bg.addColorStop(0, '#2a6288'); bg.addColorStop(0.35, '#3a7aa8'); bg.addColorStop(0.65, '#4a8eb8'); bg.addColorStop(1, '#2a6288');
       x.fillStyle = bg; x.fillRect(0, 0, w, h);
       x.strokeStyle = 'rgba(190,220,240,0.55)'; x.lineWidth = 2;
       for (let i = -12; i < 28; i++) { x.beginPath(); x.moveTo(i * 24, 0); x.lineTo(i * 24 + 220, h); x.stroke(); }
@@ -523,6 +523,34 @@ function buildBuilding(data, M) {
   // Re-merge remaining frame pieces? bands pushed after body mesh — add as separate small mesh
   const bands = frameBag.mesh(M.vc, 'cityhallBands'); if (bands) g.add(bands);
 
+  // Front annex (앞쪽 조그만한 건물) — south of west wing, right/east face diagonally cut (v5)
+  {
+    const frontH = 14.0;
+    const frontRing = [
+      [1526.0, -5906.0],
+      [1526.0, -5886.0],
+      [1542.0, -5886.0],
+      [1582.0, -5906.0], // long diagonal right cut
+    ];
+    frameBag.push(paintFaces(extrude(frontRing, [], 0, frontH), C.frame, C.frameDark, C.soffit));
+    frameBag.push(paintFaces(extrude(frontRing, [], frontH, frontH + 0.35), C.frame, C.frame, C.soffit));
+    const southGeo = new THREE.PlaneGeometry(1542 - 1526 - 0.5, frontH - 0.7);
+    const southM = new THREE.Mesh(southGeo, M.glassBlue);
+    southM.position.set((1526 + 1542) / 2, frontH / 2, -5886.0 + 0.12);
+    southM.name = 'cityhallFrontSouthGlass'; g.add(southM);
+    const ax = 1542, az = -5886.0, bx = 1582, bz = -5906.0;
+    const y0 = 0.3, y1 = frontH - 0.3;
+    const slantGeo = new THREE.BufferGeometry();
+    const sv = new Float32Array([
+      ax, y0, az,  bx, y0, bz,  bx, y1, bz,
+      ax, y0, az,  bx, y1, bz,  ax, y1, az,
+    ]);
+    slantGeo.setAttribute('position', new THREE.BufferAttribute(sv, 3));
+    slantGeo.computeVertexNormals();
+    const slantM = new THREE.Mesh(slantGeo, M.glassBlue);
+    slantM.name = 'cityhallFrontSlantGlass'; g.add(slantM);
+  }
+
   // Council annex — glass/grey, attached west (no beige punched windows)
   if (data.council?.o) {
     const cb = Bag();
@@ -530,13 +558,24 @@ function buildBuilding(data, M) {
     cb.push(paintFaces(extrude(data.council.o, [], 0, ch), C.frame, C.frameDark, C.soffit));
     band(cb, data.council.o, ch, ch + 0.8, 0.08, 0.25, C.frame, { minLen: 1 });
     const cm = cb.mesh(M.vc, 'cityhallCouncil'); if (cm) g.add(cm);
-    // glass skin south
+    // glass skin south + slanted right (east) face — 도훈 v5
     const cxs = data.council.o.map((p) => p[0]), czs = data.council.o.map((p) => p[1]);
     const cx0 = Math.min(...cxs), cx1 = Math.max(...cxs), cz1 = Math.max(...czs);
     const cg = new THREE.PlaneGeometry(cx1 - cx0 - 1, ch - 1.5, 1, 1);
     cg.translate((cx0 + cx1) / 2, ch / 2, cz1 + 0.3);
-    const cgm = new THREE.Mesh(cg, M.glassCurtain || M.glassLite);
+    const cgm = new THREE.Mesh(cg, M.glassBlue);
     cgm.name = 'cityhallCouncilGlass'; cgm.castShadow = false; g.add(cgm);
+    // Diagonal right cut glass (matches index.json council outline)
+    const ax = 1588.2, az = -5890.0, bx = 1555.0, bz = -5859.0;
+    const y0 = 0.4, y1 = ch - 0.4;
+    const slantGeo = new THREE.BufferGeometry();
+    slantGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array([
+      ax, y0, az, bx, y0, bz, bx, y1, bz,
+      ax, y0, az, bx, y1, bz, ax, y1, az,
+    ]), 3));
+    slantGeo.computeVertexNormals();
+    const csm = new THREE.Mesh(slantGeo, M.glassBlue);
+    csm.name = 'cityhallCouncilSlantGlass'; g.add(csm);
   }
 
   return { group: g, night, facade: atriumMesh };

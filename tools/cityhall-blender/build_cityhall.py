@@ -10,7 +10,7 @@ PREV = os.environ.get('CITYHALL_PREV', '/workspace/bw-cityhall-shots/blender')
 os.makedirs(OUT, exist_ok=True); os.makedirs(PREV, exist_ok=True)
 CX, CZ = 1610.7, -5930.3
 FOOT = [(1521.7,-5905.9),(1522.1,-5942.6),(1530.4,-5942.7),(1628.7,-5943.9),(1633.1,-5943.9),(1663.4,-5944.0),(1693.4,-5943.1),(1693.1,-5924.3),(1690.5,-5906.4),(1530.1,-5905.9)]
-COUNCIL = [(1545.6,-5892.8),(1557.1,-5892.8),(1588.2,-5892.9),(1588.2,-5890.0),(1588.0,-5859.0),(1562.5,-5859.4),(1545.7,-5864.3)]
+COUNCIL = [(1545.6,-5892.8),(1557.1,-5892.8),(1588.2,-5892.9),(1588.2,-5890.0),(1555.0,-5859.0),(1545.7,-5864.3)]
 WEST_X1, MID_X1 = 1582.0, 1632.0
 WEST_H, MID_H, EAST_H, PH = 36.0, 38.0, 40.0, 8.0
 
@@ -106,9 +106,9 @@ def build():
     m_sof   = mat('Soffit', (0.74,0.76,0.78), 0.05, 0.65)
     m_pil   = mat('Pilotis', (0.96,0.97,0.98), 0.05, 0.32)
     m_sol   = mat('Solar', (0.07,0.09,0.12), 0.8, 0.28)
-    m_gb    = mat('GlassBlue', (0.10,0.38,0.72), 0.9, 0.05, 0.42)
-    m_ga    = mat('GlassAtrium', (0.14,0.44,0.78), 0.88, 0.06, 0.4)
-    m_gc    = mat('GlassCurtain', (0.70,0.82,0.90), 0.75, 0.1, 0.38)
+    # Single glass hue sampled from ref/04 west prism (~#3a7aa8) — 도훈 v5: unify all glazing
+    m_glass = mat('Glass', (0.227, 0.478, 0.659), 0.88, 0.06, 0.48)
+    m_gb = m_ga = m_gc = m_glass
 
     pts=[rel(x,z) for x,z in FOOT]
     xs=[p[0] for p in pts]; ys=[p[1] for p in pts]
@@ -151,9 +151,23 @@ def build():
     # Council
     cpts=[rel(x,z) for x,z in COUNCIL]
     opaque.append(extrude_poly('Council', cpts, 0, 18, m_frame))
+    opaque.append(box('CouncilSlantFrame', 
+        ((rel(1588.2,-5890.0)[0]+rel(1555.0,-5859.0)[0])/2),
+        ((rel(1588.2,-5890.0)[1]+rel(1555.0,-5859.0)[1])/2),
+        9.0, 0.35, math.hypot(rel(1555.0,-5859.0)[0]-rel(1588.2,-5890.0)[0], rel(1555.0,-5859.0)[1]-rel(1588.2,-5890.0)[1])*0.98, 17.5, m_dark, 0.03))
 
     # --- Glass ---
     glass=[]
+    # Council slant glass (after glass list exists)
+    ca = rel(1588.2, -5890.0); cb = rel(1555.0, -5859.0)
+    cm = ((ca[0]+cb[0])/2, (ca[1]+cb[1])/2)
+    clen = math.hypot(cb[0]-ca[0], cb[1]-ca[1])
+    cang = math.atan2(cb[1]-ca[1], cb[0]-ca[0])
+    bpy.ops.mesh.primitive_plane_add(size=1, location=(cm[0], cm[1], 9.0))
+    cg = bpy.context.active_object; cg.name = 'CouncilSlantGlass'
+    cg.scale = (clen, 1, 16.5); cg.rotation_euler = (math.radians(90), 0, cang)
+    bpy.ops.object.transform_apply(scale=True, rotation=True); cg.data.materials.append(m_glass); glass.append(cg)
+
     y_bot = y_min - 8.0
     x0, x1 = x_min-1.5, mx1+6
     # Big triangular prism facets
@@ -174,18 +188,6 @@ def build():
         xa=x0+(x1-x0)*u0; xb=x0+(x1-x0)*u1
         lean=16+(i%2)*10; fold=3 if i%2==0 else 12
         y_front=y_bot - fold*0.3; y_back=y_bot + lean
-        cx=(xa+xb)/2; cy=(y_front+y_back)/2; cz=WEST_H/2
-        sx=max(2.5,(xb-xa)*0.85); sy=max(3.0,abs(y_back-y_front)*0.55); sz=WEST_H-1
-        glass.append(box(f'WestWedge{i}', cx, cy, cz, sx, sy, sz, m_gb, 0.08))
-
-    # Solid wedge volumes so facets read in aerial (not just thin planes)
-    for i in range(6):
-        u0,u1=i/6,(i+1)/6
-        xa=x0+(x1-x0)*u0; xb=x0+(x1-x0)*u1; xm=(xa+xb)/2
-        lean=16+(i%2)*10; fold=3 if i%2==0 else 12
-        y_front=y_bot - fold*0.3
-        y_back=y_bot + lean
-        # tapered box from south front to north back
         cx=(xa+xb)/2; cy=(y_front+y_back)/2; cz=WEST_H/2
         sx=max(2.5,(xb-xa)*0.85); sy=max(3.0,abs(y_back-y_front)*0.55); sz=WEST_H-1
         glass.append(box(f'WestWedge{i}', cx, cy, cz, sx, sy, sz, m_gb, 0.08))
@@ -217,16 +219,62 @@ def build():
         v.co.x += t*t*8
     bm.to_mesh(ws.data); bm.free(); ws.data.materials.append(m_gb); glass.append(ws)
 
+    # --- Front annex (앞쪽 조그만한 건물): south of west wing, RIGHT side diagonally cut ---
+    # Corridor: X=east, Z=south+. Blender: X=east, Y=north=(-Z).
+    # Looking from SE plaza: annex sits in front of west prism; its east (right) face is a plan chamfer.
+    front_h = 14.0
+    # Polygon in corridor (x,z), then rel() → Blender (x,y)
+    # SW protrusion ~14m south of main south face (~-5943); east face slants from NE attach to SE tip.
+    # Plaza/south face is zMax≈-5906 (+Z south). Annex protrudes further south (larger z).
+    # When viewed from SE plaza, annex is in front of west wing; its RIGHT (east) edge is chamfered.
+    FRONT_CORRIDOR = [
+        (1526.0, -5906.0),  # attach west on main south face
+        (1526.0, -5886.0),  # SW — out into plaza
+        (1542.0, -5886.0),  # short south before long slant
+        (1582.0, -5906.0),  # long diagonal cut to SE attach (비스듬히 깎인 우측)
+    ]
+    front_pts = [rel(x, z) for x, z in FRONT_CORRIDOR]
+    opaque.append(extrude_poly('FrontAnnex', front_pts, 0.0, front_h, m_frame))
+    opaque.append(extrude_poly('FrontAnnexRoof', front_pts, front_h, front_h + 0.35, m_frame))
+    # South glass wall
+    fx0, fy_s = rel(1526.0, -5886.0)
+    fx1, _ = rel(1542.0, -5886.0)
+    # In Blender after rel: south ≈ smaller or larger Y? FOOT south z=-5906 → Y=-(z-CZ)=-( -5906+5930.3)= -24.3
+    # Further south z=-5888 → Y=-( -5888+5930.3)= -42.3  (more negative Y = further south in this mapping)
+    bpy.ops.mesh.primitive_plane_add(size=1, location=((fx0+fx1)/2, fy_s - 0.12, front_h/2))
+    fs = bpy.context.active_object; fs.name = 'FrontSouthGlass'
+    fs.scale = (abs(fx1-fx0)-0.5, 1, front_h-0.7); fs.rotation_euler = (math.radians(90), 0, 0)
+    bpy.ops.object.transform_apply(scale=True, rotation=True); fs.data.materials.append(m_glass); glass.append(fs)
+    # Slanted east face along (1554,-5888)→(1578,-5900)
+    a = rel(1542.0, -5886.0); b = rel(1582.0, -5906.0)
+    mid = ((a[0]+b[0])/2, (a[1]+b[1])/2)
+    edge_len = math.hypot(b[0]-a[0], b[1]-a[1])
+    ang = math.atan2(b[1]-a[1], b[0]-a[0])
+    bpy.ops.mesh.primitive_plane_add(size=1, location=(mid[0], mid[1], front_h/2))
+    fe = bpy.context.active_object; fe.name = 'FrontSlantGlass'
+    fe.scale = (edge_len, 1, front_h-0.5)
+    fe.rotation_euler = (math.radians(90), 0, ang)
+    bpy.ops.object.transform_apply(scale=True, rotation=True); fe.data.materials.append(m_glass); glass.append(fe)
+    # Thick dark frame along the slant edge so the cut reads even at distance
+    opaque.append(box('FrontSlantFrame', mid[0], mid[1], front_h/2, 0.45, edge_len*0.98, front_h-0.2, m_dark, 0.04))
+    # Roof edge strip along slant
+    opaque.append(box('FrontSlantRoofEdge', mid[0], mid[1], front_h + 0.2, 0.6, edge_len*0.98, 0.35, m_frame, 0.02))
+
     # Join
     join_named([o.name for o in opaque], 'CityHallOpaque')
     join_named([o.name for o in glass], 'CityHallGlass')
-    for name in ('CityHallOpaque','CityHallGlass'):
-        o=bpy.data.objects.get(name)
-        if not o: continue
+    # Opaque: keep sharp massing (council slant / annex cut must stay crisp) — flat shaded, no dissolve
+    o=bpy.data.objects.get('CityHallOpaque')
+    if o:
         bpy.context.view_layer.objects.active=o; o.select_set(True)
+        bpy.ops.object.shade_flat()
+    # Glass: light dissolve + smooth ok
+    o=bpy.data.objects.get('CityHallGlass')
+    if o:
+        bpy.context.view_layer.objects.active=o; bpy.ops.object.select_all(action='DESELECT'); o.select_set(True)
         bpy.ops.object.shade_smooth()
         bpy.ops.object.mode_set(mode='EDIT'); bpy.ops.mesh.select_all(action='SELECT')
-        bpy.ops.mesh.dissolve_limited(angle_limit=math.radians(2))
+        bpy.ops.mesh.dissolve_limited(angle_limit=math.radians(1.5))
         bpy.ops.object.mode_set(mode='OBJECT')
 
     # AO bake on opaque
@@ -255,6 +303,17 @@ def build():
         except Exception as e:
             print('AO skip', e)
 
+    fa=bpy.data.objects.get('CityHallOpaque')
+    if fa:
+        bb=[fa.matrix_world @ Vector(c) for c in fa.bound_box]
+        xs=[v.x for v in bb]; ys=[v.y for v in bb]; zs=[v.z for v in bb]
+        print('OPAQUE_BOUNDS', min(xs),max(xs), min(ys),max(ys), min(zs),max(zs))
+    gl=bpy.data.objects.get('CityHallGlass')
+    if gl:
+        bb=[gl.matrix_world @ Vector(c) for c in gl.bound_box]
+        xs=[v.x for v in bb]; ys=[v.y for v in bb]; zs=[v.z for v in bb]
+        print('GLASS_BOUNDS', min(xs),max(xs), min(ys),max(ys), min(zs),max(zs))
+        print('GLASS_MATS', [m.name for m in gl.data.materials])
     glb=os.path.join(OUT,'building.glb')
     bpy.ops.export_scene.gltf(
         filepath=glb, export_format='GLB', export_apply=True,
@@ -265,12 +324,12 @@ def build():
     print('EXPORTED', glb, os.path.getsize(glb))
 
     # Preview SE aerial like ref/04
-    sc=bpy.context.scene; sc.render.engine='CYCLES'; sc.cycles.device='CPU'; sc.cycles.samples=48
+    sc=bpy.context.scene; sc.render.engine='CYCLES'; sc.cycles.device='CPU'; sc.cycles.samples=12
     sc.render.resolution_x=1600; sc.render.resolution_y=1000
     sc.render.filepath=os.path.join(PREV,'blender-preview-04.png')
     cam_d=bpy.data.cameras.new('Cam'); cam=bpy.data.objects.new('Cam',cam_d)
     bpy.context.collection.objects.link(cam); sc.camera=cam
-    cam.location=(75,-95,70); cam_d.lens=32
+    cam.location=(55,-70,38); cam_d.lens=28
     cam.rotation_euler=(Vector((0,0,16))-cam.location).to_track_quat('-Z','Y').to_euler()
     ld=bpy.data.lights.new('Sun','SUN'); ld.energy=4.5
     sun=bpy.data.objects.new('Sun',ld); bpy.context.collection.objects.link(sun)

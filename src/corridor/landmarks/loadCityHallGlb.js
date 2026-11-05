@@ -31,21 +31,21 @@ export async function loadCityHallGlb(url, { env = null, decoderPath } = {}) {
       const m = mats[i];
       if (!m) continue;
       const n = (m.name || '').toLowerCase();
-      const isGlass = /glass|curtain|atrium/.test(n);
+      // v5: all glazing → one blue sampled from ref/04 (#3a7aa8); no curtain/atrium split
+      const isGlass = /glass|curtain|atrium/.test(n) || o.name === 'CityHallGlass';
       if (isGlass) {
         const g = new THREE.MeshStandardMaterial({
-          color: /curtain/.test(n) ? '#c5d8e6' : '#1e6aab',
+          color: '#3a7aa8',
           metalness: 0.88,
-          roughness: 0.06,
+          roughness: 0.07,
           transparent: true,
-          opacity: /curtain/.test(n) ? 0.55 : 0.72,
+          opacity: 0.62,
           side: THREE.DoubleSide,
           envMap: env || null,
-          envMapIntensity: env ? (/curtain/.test(n) ? 1.1 : 1.8) : 0.3,
+          envMapIntensity: env ? 1.5 : 0.35,
           depthWrite: false,
         });
-        // keep name for debugging
-        g.name = m.name || 'Glass';
+        g.name = 'Glass';
         mats[i] = g;
         m.dispose?.();
       } else if (m.isMeshStandardMaterial || m.isMeshPhysicalMaterial) {
