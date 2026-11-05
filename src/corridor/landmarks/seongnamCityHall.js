@@ -12,7 +12,7 @@ const C = {
   glassBlue: '#1e6aab', glassTeal: '#3a8fc4', glassLite: '#a8c8dc',
   frame: '#e6eaee', frameDark: '#c5ced6', spandrel: '#d5dbe2',
   soffit: '#b8bec6', pilotis: '#f2f4f6', solar: '#1a2330', solarFrame: '#4a5560',
-  plaza: '#c8c4ba', plazaDark: '#aea99e', lawn: '#5f9a58', lawnDark: '#4a7f45',
+  plaza: '#ddd8ce', plazaDark: '#c2bdb2', lawn: '#5f9a58', lawnDark: '#4a7f45',
   path: '#b8b3a6', brick: '#a07058', brickDark: '#8a5a42', wood: '#5c4030', woodDark: '#3e2a1e',
   water: '#2a7fa8', waterDeep: '#154a66', pole: '#5a6068', banner: '#2f6db5',
   hedge: '#3d6b3a', trunk: '#4a3428', foliage: '#3f7a38', pine: '#2d5a30',
@@ -85,21 +85,23 @@ function mats() {
     path: S(C.path, { roughness: 0.9, metalness: 0 }),
     brick: S(C.brick, { roughness: 0.85, metalness: 0 }),
     wood: S(C.wood, { roughness: 0.8, metalness: 0 }),
-    water: S(C.water, { transparent: true, opacity: 0.78, roughness: 0.15, metalness: 0.6, envMapIntensity: env ? 1.1 : 0, emissive: C.waterDeep, emissiveIntensity: 0.15 }),
+    water: S(C.water, { transparent: true, opacity: 0.82, roughness: 0.08, metalness: 0.75, envMapIntensity: env ? 1.4 : 0, emissive: C.waterDeep, emissiveIntensity: 0.2 }),
     pole: S(C.pole, { roughness: 0.5, metalness: 0.4 }),
     banner: null,
     hedge: S(C.hedge, { roughness: 0.95, metalness: 0 }),
     trunk: S(C.trunk, { roughness: 0.9, metalness: 0 }),
     foliage: S(C.foliage, { roughness: 0.95, metalness: 0 }),
+    foliageLite: S('#4a8a42', { roughness: 0.95, metalness: 0 }),
     pine: S(C.pine, { roughness: 0.95, metalness: 0 }),
+    pineLite: S('#3a6a38', { roughness: 0.95, metalness: 0 }),
     asphalt: S(C.asphalt, { roughness: 0.95, metalness: 0 }),
     line: B(C.line),
     curb: S(C.curb, { roughness: 0.7, metalness: 0.05 }),
     sculpture: S(C.sculpture, { roughness: 0.35, metalness: 0.4, emissive: C.sculpture, emissiveIntensity: 0.12, envMapIntensity: env ? 0.7 : 0 }),
     kiosk: S(C.kiosk, { roughness: 0.5, metalness: 0.2 }),
     glow: B('#ffffff', { vertexColors: true }),
-    jet: B('#dff2ff', { transparent: true, opacity: 0.85, depthWrite: false }),
-    mist: B('#c8e8ff', { transparent: true, opacity: 0.16, depthWrite: false, side: THREE.DoubleSide }),
+    jet: B('#dff2ff', { transparent: true, opacity: 0.9, depthWrite: false, blending: THREE.AdditiveBlending }),
+    mist: B('#c8e8ff', { transparent: true, opacity: 0.38, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending }),
   };
 
   if (hasDoc) {
@@ -146,13 +148,13 @@ function mats() {
     // Plaza granite grid
     shared.plaza = S(C.plaza, {
       map: canvasTex(256, 256, (x, w, h) => {
-        x.fillStyle = '#c9c5bb'; x.fillRect(0, 0, w, h);
-        x.strokeStyle = '#a8a296'; x.lineWidth = 1.5;
+        x.fillStyle = '#ebe6dc'; x.fillRect(0, 0, w, h);
+        x.strokeStyle = '#c8c0b0'; x.lineWidth = 1.6;
         for (let i = 0; i <= 8; i++) {
           x.beginPath(); x.moveTo(i * 32, 0); x.lineTo(i * 32, h); x.stroke();
           x.beginPath(); x.moveTo(0, i * 32); x.lineTo(w, i * 32); x.stroke();
         }
-        x.fillStyle = '#b9b4a8';
+        x.fillStyle = '#e0dbd0';
         for (let i = 0; i < 8; i++) for (let j = 0; j < 8; j++) if ((i + j) % 2 === 0) x.fillRect(i * 32 + 1, j * 32 + 1, 30, 30);
       }, 24, 16),
       roughness: 0.85, metalness: 0.05, envMapIntensity: env ? 0.15 : 0,
@@ -371,45 +373,49 @@ function buildBuilding(data, M) {
   const night = lit.mesh(M.glow, 'cityhallGlow'); if (night) { night.castShadow = night.receiveShadow = false; g.add(night); }
 
   // --- Glass skins (the recognizable look) ---
-  // West wing: huge sloped/folded blue glass prism (lean ~12 m, deep V-folds)
-  const westGlass = makeSlopedGlass(xMin + 0.2, westX1 + 10, zMax + 2.0, 0.5, westH - 0.1, 14, 16, 8, 6.5);
+  // West wing: DOMINANT sloped/folded blue glass prism (lean ~18 m, deep V-folds) — the photo signature
+  const westGlass = makeSlopedGlass(xMin - 1.0, westX1 + 22, zMax + 5.5, 0.2, westH + 0.5, 24, 20, 11, 11.0);
   const westMesh = new THREE.Mesh(westGlass, M.glassBlue);
   westMesh.name = 'cityhallWestFacet';
   westMesh.castShadow = false;
   g.add(westMesh);
-  // Extra large triangular prism facets (readable silhouette from aerial / plaza)
+  // Extra large triangular prism facets (merged → 1 draw) across west + atrium
   {
-    const span = westX1 - xMin;
-    const facets = 4;
+    const xLo = xMin - 1.0, xHi = midX1 + 6;
+    const span = xHi - xLo;
+    const facets = 8;
+    const geos = [];
     for (let i = 0; i < facets; i++) {
       const u0 = i / facets, u1 = (i + 1) / facets;
-      const xA = xMin + span * u0, xB = xMin + span * u1, xM = (xA + xB) / 2;
-      const leanBot = 0.4, leanTop = 11 + (i % 2) * 3.5;
-      const foldOut = (i % 2 === 0) ? 0.6 : 5.5;
+      const xA = xLo + span * u0, xB = xLo + span * u1, xM = (xA + xB) / 2;
+      const leanTop = 16 + (i % 2) * 7.0;
+      const foldOut = (i % 2 === 0) ? 1.5 : 9.5;
       const geo = new THREE.BufferGeometry();
-      // triangle strip: bottom-left, bottom-right, top-mid (folded), top-left, top-right via two tris + side
-      const y0 = 0.5, y1 = westH - 0.2;
-      const zBot = zMax + 1.5;
-      const zTop = zMax + 1.5 - leanTop;
-      const zFold = zMax + 1.5 - leanTop + foldOut; // alternate push forward for facet catch-light
+      const y0 = 0.2, y1 = (i < 5 ? westH : midH) + 0.2;
+      const zBot = zMax + 5.2;
+      const zTop = zMax + 5.2 - leanTop;
+      const zFold = zMax + 5.2 - leanTop * 0.5 + foldOut;
       const pos = new Float32Array([
-        xA, y0, zBot - leanBot,
-        xB, y0, zBot - leanBot,
+        xA, y0, zBot,
+        xB, y0, zBot,
         xM, y1, zFold,
-        xA, y0, zBot - leanBot,
+        xA, y0, zBot,
         xM, y1, zFold,
         xA, y1, zTop,
-        xB, y0, zBot - leanBot,
+        xB, y0, zBot,
         xB, y1, zTop,
         xM, y1, zFold,
       ]);
       geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
       geo.computeVertexNormals();
-      const m = new THREE.Mesh(geo, M.glassBlue);
-      m.name = 'cityhallWestPrism' + i;
-      m.castShadow = false;
-      g.add(m);
+      geos.push(geo);
     }
+    const merged = mergeGeometries(geos);
+    for (const g0 of geos) g0.dispose();
+    const m = new THREE.Mesh(merged, M.glassBlue);
+    m.name = 'cityhallWestPrisms';
+    m.castShadow = false;
+    g.add(m);
   }
   // West wrap corner (west-facing facet, leans into building)
   const westSideMesh = new THREE.Mesh(
@@ -444,22 +450,35 @@ function buildBuilding(data, M) {
   westSideMesh.name = 'cityhallWestSideGlass'; westSideMesh.castShadow = false; g.add(westSideMesh);
 
   // Center atrium: big diagonal blue glass over entrance (continues the west fold language)
-  const atrium = makeSlopedGlass(westX1 - 4, midX1 + 6, zMax + 2.2, 0.8, midH - 0.1, 12, 14, 8, 4.5);
+  const atrium = makeSlopedGlass(westX1 - 8, midX1 + 12, zMax + 4.5, 0.3, midH + 0.3, 20, 18, 10, 7.5);
   const atriumMesh = new THREE.Mesh(atrium, M.glassBlue);
   atriumMesh.name = 'cityhallBlueFacade'; atriumMesh.castShadow = false; g.add(atriumMesh);
 
-  // East upright curtain wall (south face)
-  const eastCurtain = new THREE.PlaneGeometry(xMax - midX1 - 2, eastH - pilotisH - 1, 1, 1);
-  eastCurtain.translate((midX1 + xMax) / 2, (pilotisH + eastH) / 2, zMax + 0.45);
+  // East upright curtain wall (south face) — tall glass box with deep pilotis recess
+  const eastCurtain = new THREE.PlaneGeometry(xMax - midX1 - 1.5, eastH - pilotisH - 0.5, 1, 1);
+  eastCurtain.translate((midX1 + xMax) / 2, (pilotisH + eastH) / 2, zMax + 0.55);
   const eastCurtainMesh = new THREE.Mesh(eastCurtain, M.glassCurtain || M.glassLite);
   eastCurtainMesh.name = 'cityhallEastCurtain'; eastCurtainMesh.castShadow = false; g.add(eastCurtainMesh);
+  // Thick light-grey frame around east box (top + sides)
+  frameBag.box((midX1 + xMax) / 2, eastH + 0.15, zMax + 0.7, xMax - midX1 - 0.5, 0.55, 0.7, 0, C.frame);
+  frameBag.box(midX1 + 0.4, (pilotisH + eastH) / 2, zMax + 0.7, 0.7, eastH - pilotisH, 0.7, 0, C.frame);
+  frameBag.box(xMax - 0.9, (pilotisH + eastH) / 2, zMax + 0.7, 0.7, eastH - pilotisH, 0.7, 0, C.frame);
 
-  // North curtain (whole length)
-  const northCurtain = new THREE.PlaneGeometry(xMax - xMin - 3, H - 2, 1, 1);
-  northCurtain.translate((xMin + xMax) / 2, H / 2, zMin - 0.35);
+  // North curtain — backdrop for music fountain (seats look south at fountain + this face)
+  const northCurtain = new THREE.PlaneGeometry(xMax - xMin - 2, H - 1.5, 1, 1);
+  northCurtain.translate((xMin + xMax) / 2, H / 2, zMin - 0.5);
   northCurtain.rotateY(Math.PI);
   const northMesh = new THREE.Mesh(northCurtain, M.glassCurtain || M.glassLite);
   northMesh.name = 'cityhallNorthCurtain'; northMesh.castShadow = false; g.add(northMesh);
+  // North horizontal bands + a few pilotis under north mid (fountain view)
+  for (let y = 4; y < H - 2; y += 3.6) {
+    frameBag.box((xMin + xMax) / 2, y, zMin - 0.65, xMax - xMin - 4, 0.3, 0.22, 0, C.spandrel);
+  }
+  for (let i = 0; i < 8; i++) {
+    const x = westX1 + 2 + i * ((midX1 - westX1) / 7);
+    frameBag.cyl(x, 3.6, zMin - 1.2, 0.45, 7.2, 10, C.pilotis);
+  }
+  frameBag.box((westX1 + midX1) / 2, 7.2, zMin - 2.5, midX1 - westX1 + 6, 0.3, 5, 0, C.frame);
 
   // Low glass base along south plaza
   const baseGlass = new THREE.PlaneGeometry(xMax - xMin - 4, 3.2, 1, 1);
@@ -570,9 +589,9 @@ function buildBanners(data, M) {
   const pr = data.promenade;
   const dx = pr.to[0] - pr.from[0], dz = pr.to[1] - pr.from[1], L = Math.hypot(dx, dz);
   const ux = dx / L, uz = dz / L, px = -uz, pz = ux;
-  const n = 12;
-  const poles = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.07, 0.09, 7.8, 6), M.pole, n * 2);
-  const banners = new THREE.InstancedMesh(new THREE.PlaneGeometry(0.95, 2.4), M.banner, n * 2);
+  const n = 14;
+  const poles = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.07, 0.09, 7.8, 6), M.pole, n * 2 + 10);
+  const banners = new THREE.InstancedMesh(new THREE.PlaneGeometry(0.95, 2.4), M.banner, n * 2 + 10);
   const dummy = new THREE.Object3D();
   let i = 0;
   for (const side of [-1, 1]) {
@@ -589,6 +608,20 @@ function buildBanners(data, M) {
       i++;
     }
   }
+  // Extra banner row on SE plaza approach (purple/blue poles like photo)
+  const b = data.building;
+  const bxs = b.o.map((p) => p[0]), bzs = b.o.map((p) => p[1]);
+  const bxMax = Math.max(...bxs), bzMax = Math.max(...bzs);
+  for (let k = 0; k < 10; k++) {
+    const x = bxMax + 8 + k * 4.2;
+    const z = bzMax + 18 + k * 3.5;
+    dummy.position.set(x, 3.9, z); dummy.rotation.set(0, 0, 0); dummy.scale.set(1, 1, 1); dummy.updateMatrix();
+    poles.setMatrixAt(i, dummy.matrix);
+    dummy.position.set(x, 5.4, z); dummy.rotation.set(0, 0.6, 0); dummy.updateMatrix();
+    banners.setMatrixAt(i, dummy.matrix);
+    i++;
+  }
+  poles.count = i; banners.count = i;
   poles.castShadow = true; g.add(poles, banners);
   return g;
 }
@@ -638,6 +671,13 @@ function buildFountainComplex(data, M) {
   bag.push(paintFaces(extrude(pool, [], 0.02, 0.45), C.waterDeep, C.curb, C.waterDeep));
   band(bag, pool, 0.45, 0.6, 0.28, 0.35, C.brick, { minLen: 1 });
   const body = bag.mesh(M.vc, 'cityhallFountainBasin'); if (body) g.add(body);
+  // Raised curb around basin (keeps stray vehicles from reading as in-water)
+  const curbBag = Bag();
+  curbBag.box(f.cx, 0.55, f.cz - f.wid / 2, f.len, 0.7, 0.45, 0, C.curb);
+  curbBag.box(f.cx, 0.55, f.cz + f.wid / 2, f.len, 0.7, 0.45, 0, C.curb);
+  curbBag.box(f.cx - f.len / 2, 0.55, f.cz, 0.45, 0.7, f.wid, 0, C.curb);
+  curbBag.box(f.cx + f.len / 2, 0.55, f.cz, 0.45, 0.7, f.wid, 0, C.curb);
+  const curbM = curbBag.mesh(M.vc, 'cityhallFountainCurb'); if (curbM) g.add(curbM);
 
   const water = new THREE.Mesh(extrude(
     [[f.cx - f.len / 2 + 0.4, f.cz - f.wid / 2 + 0.3], [f.cx + f.len / 2 - 0.4, f.cz - f.wid / 2 + 0.3],
@@ -653,19 +693,23 @@ function buildFountainComplex(data, M) {
   for (let x = d.x0 + 1; x < d.x1; x += 0.85) deckBag.box(x, 0.59, d.deckZ, 0.06, 0.02, 2.7, 0, C.woodDark);
   const deckM = deckBag.mesh(M.vc, 'cityhallDeck'); if (deckM) g.add(deckM);
 
-  // 4-tier stone/brick step-seats south of fountain, facing north toward fountain + city hall; forest further south
+  // 4-tier brick/stone step-seats NORTH of fountain, facing SOUTH toward fountain + city hall (ref/08·09)
+  // Rise further north (away from water); forest + 3–4 m path behind seats
   const seatBag = Bag();
-  const tiers = 4, tierD = 1.25, tierH = 0.55;
+  const tiers = 4, tierD = 1.2, tierH = 0.52;
   for (let t = 0; t < tiers; t++) {
-    const z0 = d.seatsZ + t * tierD; // rise away from water (south = +z)
+    const z0 = d.seatsZ - t * tierD; // rise north (−z)
     const y0 = 0.4 + t * tierH;
-    seatBag.box((d.x0 + d.x1) / 2, y0 + tierH / 2, z0, d.x1 - d.x0 + 4, tierH, tierD - 0.08, 0, t % 2 ? C.frame : '#d8dde4');
+    seatBag.box((d.x0 + d.x1) / 2, y0 + tierH / 2, z0, d.x1 - d.x0 + 4, tierH, tierD - 0.08, 0, t % 2 ? C.brick : C.brickDark);
   }
-  seatBag.box((d.x0 + d.x1) / 2, 0.35, d.seatsZ - 0.6, d.x1 - d.x0 + 4, 0.3, 0.55, 0, C.wood);
+  seatBag.box((d.x0 + d.x1) / 2, 0.35, d.seatsZ + 0.55, d.x1 - d.x0 + 4, 0.3, 0.5, 0, C.wood);
+  // 3–4 m walking path behind seats (further north, outer red of ref/08)
+  const pathZ = d.seatsZ - tiers * tierD - 2.5;
+  seatBag.box((d.x0 + d.x1) / 2, 0.06, pathZ, d.x1 - d.x0 + 18, 0.1, 3.8, 0, C.path);
   const seatM = seatBag.mesh(M.vc, 'cityhallSeats'); if (seatM) g.add(seatM);
 
   // Jets: many vertical columns + left/right arching pairs (multi-segment bends)
-  const JET_N = 48;
+  const JET_N = 56;
   const jetGeo = new THREE.CylinderGeometry(0.08, 0.14, 1, 5);
   jetGeo.translate(0, 0.5, 0);
   const jets = new THREE.InstancedMesh(jetGeo, M.jet, JET_N);
@@ -686,14 +730,14 @@ function buildFountainComplex(data, M) {
   // Underwater lights + shafts
   const lightGeo = new THREE.CircleGeometry(0.65, 10);
   lightGeo.rotateX(-Math.PI / 2);
-  const shaftGeo = new THREE.CylinderGeometry(0.35, 0.55, 1, 6, 1, true);
+  const shaftGeo = new THREE.CylinderGeometry(0.45, 0.7, 1, 6, 1, true);
   shaftGeo.translate(0, 0.5, 0);
   const lightMats = [
     new THREE.MeshBasicMaterial({ color: '#3aa0ff', transparent: true, opacity: 0.9 }),
     new THREE.MeshBasicMaterial({ color: '#ff4db8', transparent: true, opacity: 0.9 }),
     new THREE.MeshBasicMaterial({ color: '#4dff7a', transparent: true, opacity: 0.9 }),
   ];
-  const shaftMat = new THREE.MeshBasicMaterial({ color: '#6ab0ff', transparent: true, opacity: 0.32, side: THREE.DoubleSide, depthWrite: false });
+  const shaftMat = new THREE.MeshBasicMaterial({ color: '#6ab0ff', transparent: true, opacity: 0.72, side: THREE.DoubleSide, depthWrite: false, blending: THREE.AdditiveBlending });
   const lights = [];
   const LIGHT_N = 16;
   for (let i = 0; i < LIGHT_N; i++) {
@@ -707,7 +751,7 @@ function buildFountainComplex(data, M) {
 
   const glow = new THREE.Mesh(
     new THREE.PlaneGeometry(f.len * 1.2, f.wid * 2.4),
-    new THREE.MeshBasicMaterial({ color: '#3a8fff', transparent: true, opacity: 0.4, side: THREE.DoubleSide, depthWrite: false }),
+    new THREE.MeshBasicMaterial({ color: '#3a8fff', transparent: true, opacity: 0.55, side: THREE.DoubleSide, depthWrite: false, blending: THREE.AdditiveBlending }),
   );
   glow.rotation.x = -Math.PI / 2; glow.position.set(f.cx, 0.39, f.cz); glow.visible = false; g.add(glow);
 
@@ -716,7 +760,7 @@ function buildFountainComplex(data, M) {
     x: f.cx - f.len / 2 + 1.5 + ((i + 0.5) / JET_N) * (f.len - 3),
     z: f.cz + ((i % 3) - 1) * 1.8,
     phase: i / JET_N,
-    h: 5 + (i % 7) * 1.35 + (i % 5 === 0 ? 5 : 0),
+    h: 6.5 + (i % 7) * 1.6 + (i % 5 === 0 ? 6 : 0),
     arch: 0,
   }));
   // Arch banks: left (+z lean) and right (−z lean) pairs meeting above center
@@ -747,7 +791,7 @@ function buildFountainComplex(data, M) {
     glow.visible = on;
     shafts.visible = on;
     for (const m of lights) m.visible = on;
-    M.water.emissiveIntensity = on ? 0.9 : 0.15;
+    M.water.emissiveIntensity = on ? 1.35 : 0.15;
   });
 
   function update(t) {
@@ -802,13 +846,13 @@ function buildFountainComplex(data, M) {
     }
     arches.count = Math.min(ARCH_N, archSeeds.length);
     arches.instanceMatrix.needsUpdate = true;
-    // mist billboards
+    // mist as horizontal soft discs above jets (not vertical floating panes)
     for (let i = 0; i < 16; i++) {
       const s = seeds[i * 2 % JET_N];
       const h = s.h * (0.5 + 0.4 * Math.sin(t * 1.3 + s.phase * 6));
-      dummy.position.set(s.x, 0.6 + h * 0.5, s.z);
-      dummy.scale.set(1.6 + (i % 3) * 0.35, 1.3, 1);
-      dummy.rotation.set(0, t * 0.25 + i, 0);
+      dummy.position.set(s.x, 0.5 + h * 0.85, s.z);
+      dummy.scale.set(2.2 + (i % 3) * 0.5, 2.0, 1);
+      dummy.rotation.set(-Math.PI / 2, 0, t * 0.15 + i);
       dummy.updateMatrix();
       mists.setMatrixAt(i, dummy.matrix);
     }
@@ -831,62 +875,75 @@ function buildLandscape(data, M) {
   const xs = b.o.map((p) => p[0]), zs = b.o.map((p) => p[1]);
   const xMin = Math.min(...xs), xMax = Math.max(...xs);
   const zMin = Math.min(...zs), zMax = Math.max(...zs);
-  const seatsZ = data.deck?.seatsZ ?? -5862;
-  const f = data.fountain || { cx: 1610, cz: -5875, len: 56 };
+  const seatsZ = data.deck?.seatsZ ?? -5978;
+  const f = data.fountain || { cx: 1610, cz: -5965, len: 58 };
 
-  // Keep south plaza + fountain view corridor CLEAR (x near fountain, z from facade to seats)
+  // Clear: north fountain view corridor (seats→fountain→hall) + south plaza facade strip
   const inKeepClear = (x, z) => (
-    x > f.cx - f.len / 2 - 8 && x < f.cx + f.len / 2 + 8 && z > zMax - 2 && z < seatsZ + 10
+    x > f.cx - f.len / 2 - 10 && x < f.cx + f.len / 2 + 10 && z < zMin + 2 && z > seatsZ - 8
   ) || (
-    // also clear immediate south facade strip so glass reads from plaza
-    x > xMin - 5 && x < xMax + 5 && z > zMax && z < zMax + 28
+    x > xMin - 5 && x < xMax + 5 && z > zMax && z < zMax + 32
   );
 
   const positions = [];
-  const pushT = (x, z, pine) => { if (!inKeepClear(x, z)) positions.push([x, z, pine]); };
+  const pushT = (x, z, kind) => { if (!inKeepClear(x, z)) positions.push([x, z, kind]); }; // kind: 0 broad, 1 pine, 2 layered-pine
 
-  // Dense edges like photo — north belt and far-south belt (beyond seats)
-  for (let x = xMin - 80; x < xMax + 60; x += 7) {
-    pushT(x, zMin - 48 + (Math.sin(x * 0.2) * 3), 1);
-    pushT(x, seatsZ + 28 + (Math.cos(x * 0.15) * 4), 0);
+  // Dense edges
+  for (let x = xMin - 80; x < xMax + 60; x += 6.5) {
+    pushT(x, zMin - 55 + Math.sin(x * 0.2) * 3, 2); // far north forest belt
+    pushT(x, zMax + 70 + Math.cos(x * 0.15) * 4, 0);
   }
-  for (let z = zMin - 40; z < seatsZ + 45; z += 8) {
-    pushT(xMin - 70 + Math.sin(z * 0.1) * 4, z, 1);
-    pushT(xMax + 52 + Math.cos(z * 0.12) * 3, z, 0);
+  for (let z = seatsZ - 55; z < zMax + 55; z += 7.5) {
+    pushT(xMin - 72 + Math.sin(z * 0.1) * 4, z, 1);
+    pushT(xMax + 50 + Math.cos(z * 0.12) * 3, z, 0);
   }
-  // Forest BEHIND seats only
-  for (let x = 1575; x < 1645; x += 4.5) pushT(x, seatsZ + 16 + Math.sin(x) * 1.5, 1);
-  for (let x = 1578; x < 1642; x += 5) pushT(x, seatsZ + 24 + Math.cos(x) * 2, 0);
-  for (let x = 1568; x < 1650; x += 6) pushT(x, seatsZ + 34 + Math.sin(x * 0.3) * 2, 1);
-  // Lawn SE grove (east of pond), not in front of facade
-  for (let x = xMax + 10; x < xMax + 55; x += 6) {
-    for (let z = zMax + 15; z < zMax + 70; z += 8) pushT(x + Math.sin(z) * 2, z, x % 12 < 6 ? 1 : 0);
+  // Forest BEHIND seats (further north of seats/path)
+  for (let x = 1570; x < 1650; x += 4) pushT(x, seatsZ - 22 + Math.sin(x) * 1.5, 2);
+  for (let x = 1572; x < 1648; x += 4.5) pushT(x, seatsZ - 22 + Math.cos(x) * 2, 1);
+  for (let x = 1565; x < 1655; x += 5.5) pushT(x, seatsZ - 32 + Math.sin(x * 0.3) * 2, 0);
+  // SE lawn grove by round pond
+  for (let x = xMax + 8; x < xMax + 58; x += 5.5) {
+    for (let z = zMax + 12; z < zMax + 72; z += 7) pushT(x + Math.sin(z) * 2, z, x % 11 < 5 ? 2 : 0);
   }
   // Promenade flanks
   const pr = data.promenade;
-  for (let t = 0; t < 1; t += 0.08) {
+  for (let t = 0; t < 1; t += 0.07) {
     const x = pr.from[0] + (pr.to[0] - pr.from[0]) * t;
     const z = pr.from[1] + (pr.to[1] - pr.from[1]) * t;
     pushT(x + 9, z + 7, 0); pushT(x - 8, z - 6, 1);
   }
 
   const N = positions.length;
-  const trunk = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.25, 0.35, 1, 5), M.trunk, N);
-  const broad = new THREE.InstancedMesh(new THREE.SphereGeometry(1, 7, 6), M.foliage, N);
-  const pine = new THREE.InstancedMesh(new THREE.ConeGeometry(1.3, 3.2, 7), M.pine, N);
+  // Better trees: layered conifer (2 cones) + multi-sphere broadleaf — still 3 InstancedMeshes
+  const trunk = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.22, 0.32, 1, 6), M.trunk, N);
+  const broad = new THREE.InstancedMesh(new THREE.SphereGeometry(1, 8, 6), M.foliage, N * 3); // up to 3 spheres each
+  const pine = new THREE.InstancedMesh(new THREE.ConeGeometry(1.2, 2.4, 7), M.pine, N * 3); // up to 3 layers
+  // Second foliage tone via vertex colors on shared mat — use scale/offset only; extra mat would cost a texture/draw
   const dummy = new THREE.Object3D();
   let pi = 0, bi = 0;
   for (let i = 0; i < N; i++) {
-    const [x, z, isPine] = positions[i];
-    const h = 3.5 + (i % 5) * 0.7;
-    dummy.position.set(x, h / 2, z); dummy.scale.set(1, h, 1); dummy.rotation.set(0, 0, 0); dummy.updateMatrix();
+    const [x, z, kind] = positions[i];
+    const h = 4.0 + (i % 5) * 0.85;
+    dummy.position.set(x, h / 2, z); dummy.scale.set(1, h, 1); dummy.rotation.set(0, (i % 7) * 0.3, 0); dummy.updateMatrix();
     trunk.setMatrixAt(i, dummy.matrix);
-    if (isPine) {
-      dummy.position.set(x, h + 1.2, z); dummy.scale.set(1.1 + (i % 3) * 0.15, 1.3 + (i % 4) * 0.1, 1.1); dummy.updateMatrix();
-      pine.setMatrixAt(pi++, dummy.matrix);
+    if (kind === 1 || kind === 2) {
+      // Layered conifer: 2–3 cones stacked
+      const layers = kind === 2 ? 3 : 2;
+      for (let L = 0; L < layers; L++) {
+        const yy = h * 0.55 + L * 1.35 + 0.8;
+        const sc = 1.35 - L * 0.28 + (i % 3) * 0.08;
+        dummy.position.set(x, yy, z); dummy.scale.set(sc, 1.1 + (i % 3) * 0.1, sc); dummy.updateMatrix();
+        pine.setMatrixAt(pi++, dummy.matrix);
+      }
     } else {
-      dummy.position.set(x, h + 1.4, z); dummy.scale.set(2.2 + (i % 3) * 0.3, 2.0, 2.2); dummy.updateMatrix();
-      broad.setMatrixAt(bi++, dummy.matrix);
+      // Broadleaf: 2–3 overlapping spheres, slight color via scale
+      const blobs = 2 + (i % 2);
+      for (let L = 0; L < blobs; L++) {
+        const ox = (L - 0.5) * 0.9, oz = ((L * 2) % 3 - 1) * 0.7;
+        dummy.position.set(x + ox, h + 1.1 + L * 0.45, z + oz);
+        dummy.scale.set(2.0 + (i % 3) * 0.25 - L * 0.15, 1.7 + L * 0.1, 2.0); dummy.updateMatrix();
+        broad.setMatrixAt(bi++, dummy.matrix);
+      }
     }
   }
   pine.count = pi; broad.count = bi;
