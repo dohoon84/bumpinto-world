@@ -129,7 +129,8 @@ function createFountain(x, z) {
   const brass = M('#c9a24b');
 
   // 바닥 원형 광장 타일 패드
-  const pad = new THREE.Mesh(new THREE.CylinderGeometry(8.8, 8.8, 0.06, 32), M('#dcd4c6'));
+  const padMat = M('#dcd4c6'); padMat.userData.snowPile = 'plaza'; // [snowpile]
+  const pad = new THREE.Mesh(new THREE.CylinderGeometry(8.8, 8.8, 0.06, 32), padMat);
   pad.position.y = 0.03;
   pad.receiveShadow = true;
   g.add(pad);

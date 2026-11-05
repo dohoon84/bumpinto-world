@@ -11,6 +11,7 @@ import { isEn, tr, toggleLang, onLangChange } from './i18n.js';
 import { sanitizeLook, readSavedPassport, isPassportActive, setPassportActive } from './look.js';
 import { NPCs, getNpcCapForRegion } from './entities/npcs.js';
 import { createAtmosphere } from './weather.js';
+import { mountSnowPile } from './weather/snowPile.js'; // [snowpile]
 import { Overlay, Bubble } from './overlay.js';
 import { EMOTE_LIST, EMOTE_BY_ID, EMOTE_BY_CODE, EmoteFX } from './emotes.js';
 import { Input } from './input.js';
@@ -497,6 +498,11 @@ const atmosphere = createAtmosphere({
   clock: document.getElementById('hud-clock'),
   region,
 });
+const snowPile = mountSnowPile({ // [snowpile] ?snowpile=0..1|ramp — 기본 꺼짐, 재질 색 lerp만
+  world, scene, region, params,
+  getPrecipKind: () => atmosphere.state.kind || 'clear',
+});
+
 npcs.setCrowdLevel(atmosphere.state.rush || 'normal');
 let rushNow = atmosphere.state.rush || 'normal';
 
@@ -2577,6 +2583,7 @@ function frame() {
     peers: remotes.list(),
   });
   atmosphere.update(dt, camera);
+  snowPile.update(dt); // [snowpile]
   roadster?.update(dt); // [roadster] 시네마틱 카메라가 켜져 있으면 camera/sun.target 덮어씀
   launch?.update(dt); // [launch] 5분 주기 발사·핫스테이징·젓가락 캐치 쇼
   sun.position.copy(sun.target.position).addScaledVector(atmosphere.sunDir, 500);
@@ -2598,7 +2605,7 @@ window.__jj = {
   perfmem: perfMem, // [perf-memory]
   ready: true, region, tower, renderer, corridor, playgrounds, streetlights, pangyoLamps, migeumLamps, // [corridor] [playgrounds] [streetlights]
   bungeo, // [bungeo]
-  launch, roadster, trucks, bike: adminBike, giftRides, inventory, data, world, npcs, transit, camera, cam, ov, setMode, terrain, taxis, jzTraffic, police, weather: atmosphere, umbrellas, dogPark, strayCats, // [terrain] [taxi] [roadster] [tower] [launch] [truck] [bike] [roadbike] [inventory]
+  launch, roadster, trucks, bike: adminBike, giftRides, inventory, data, world, npcs, transit, camera, cam, ov, setMode, terrain, taxis, jzTraffic, police, weather: atmosphere, snowPile, umbrellas, dogPark, strayCats, // [terrain] [taxi] [roadster] [tower] [launch] [truck] [bike] [roadbike] [inventory] [snowpile]
   get player() { return player; },
   teleport(x, z, y) { ride?.forceAlight('teleport'); if (bikes.riding) dismountBike(); if (adminBike?.riding) adminBike.dismount(); dismountGiftRides(); player.position.set(x, y ?? (terrain ? terrain.getGroundHeight(x, z, 0) : 0), z); }, // [terrain] [bike] [roadbike]
   bikes, toggleRide, triggerEmote,

@@ -104,12 +104,20 @@ export function buildWorld(scene, data, region = null, opts = {}) {
   const { x0, x1, z0, z1 } = data.meta.bboxLocal;
   const cx = (x0 + x1) / 2, cz = (z0 + z1) / 2;
   const mat = (color, extra = {}) => new THREE.MeshLambertMaterial({ color, ...extra });
+  // [snowpile] 지면·도로·녹지 재질만 태깅 (물·중앙선 제외). ?snowpile 켜면 색 lerp.
+  const snowPileEntries = [];
+  const pileMat = (color, kind, extra = {}) => {
+    const m = mat(color, extra);
+    m.userData.snowPile = kind;
+    snowPileEntries.push({ mat: m, kind });
+    return m;
+  };
 
   // 바닥 (넓은 지역에서도 경계 밖 바닥이 잘리지 않도록 bbox 크기에 비례해 확장)
   const groundSpan = Math.max(6000, (x1 - x0) + 3200, (z1 - z0) + 3200);
-  const ground = new THREE.Mesh(new THREE.PlaneGeometry(groundSpan, groundSpan), mat('#efe9dc'));
+  const ground = new THREE.Mesh(new THREE.PlaneGeometry(groundSpan, groundSpan), pileMat('#efe9dc', 'ground'));
   ground.rotation.x = -Math.PI / 2; ground.position.set(cx, 0, cz); ground.receiveShadow = true; scene.add(ground);
-  const block = new THREE.Mesh(new THREE.PlaneGeometry(x1 - x0, z1 - z0), mat('#ebe4d4'));
+  const block = new THREE.Mesh(new THREE.PlaneGeometry(x1 - x0, z1 - z0), pileMat('#ebe4d4', 'ground'));
   block.rotation.x = -Math.PI / 2; block.position.set(cx, 0.01, cz); block.receiveShadow = true; scene.add(block);
 
   // 공원/녹지
@@ -117,9 +125,10 @@ export function buildWorld(scene, data, region = null, opts = {}) {
   for (const p of data.parks) (byKind[p.k] ||= []).push(p);
   for (const [k, list] of Object.entries(byKind)) {
     const g = flatGeo(list, k === 'plaza' ? 0.03 : 0.02 + (k === 'park' ? 0 : 0.005));
-    if (g) { const m = new THREE.Mesh(fixNormalsUp(g), mat(PARK_COLOR[k] || '#b5dda3')); m.receiveShadow = true; scene.add(m); }
+    const parkKind = k === 'plaza' ? 'plaza' : 'park';
+    if (g) { const m = new THREE.Mesh(fixNormalsUp(g), pileMat(PARK_COLOR[k] || '#b5dda3', parkKind)); m.receiveShadow = true; scene.add(m); }
   }
-  // 물(탄천) — 강 폴리곤 + 중심선 리본(폴리곤이 없을 때 대비)
+  // 물(탄천) — 강 폴리곤 + 중심선 리본(폴리곤이 없을 때 대비) — [snowpile] 제외
   const waterMat = mat('#7ec3e6');
   const wg = flatGeo(data.water, 0.04);
   if (wg) { const m = new THREE.Mesh(fixNormalsUp(wg), waterMat); m.receiveShadow = true; scene.add(m); }
@@ -134,9 +143,9 @@ export function buildWorld(scene, data, region = null, opts = {}) {
   }
   for (const [key, geos] of Object.entries(roadGroups)) {
     const [color] = key.split('|');
-    const m = new THREE.Mesh(mergeGeometries(geos), mat(color)); m.receiveShadow = true; scene.add(m);
+    const m = new THREE.Mesh(mergeGeometries(geos), pileMat(color, 'road')); m.receiveShadow = true; scene.add(m);
   }
-  // 큰 도로 중앙선
+  // 큰 도로 중앙선 — [snowpile] 노란 차선 제외
   const lines = data.roads.filter((r) => ['primary', 'secondary', 'trunk'].includes(r.k)).map((r) => ribbonGeo(r.p, 0.35, 0.09, false));
   if (lines.length) scene.add(new THREE.Mesh(mergeGeometries(lines), mat('#f2d36b')));
 
@@ -294,7 +303,7 @@ export function buildWorld(scene, data, region = null, opts = {}) {
     }
     return false;
   };
-  return { isBlocked, onRoad, walkPaths, cityWalkPaths, inWater, signPos: sp, bounds: { x0, x1, z0, z1 }, treeCount: treePts.length, ground, block, starbucksRooms, shops: shopsLayer, colours }; // [terrain] ground/block: terrain.build 가 하천 구간을 비운 형상으로 교체
+  return { isBlocked, onRoad, walkPaths, cityWalkPaths, inWater, signPos: sp, bounds: { x0, x1, z0, z1 }, treeCount: treePts.length, ground, block, starbucksRooms, shops: shopsLayer, colours, snowPileEntries }; // [terrain] ground/block: terrain.build 가 하천 구간을 비운 형상으로 교체
 }
 
 // 건물 한 덩이(ExtrudeGeometry)에 버텍스 색(윗면 top / 아랫면 bottom / 옆면 side)을 칠해 윗면은 roofs, 옆면은 walls[key] 에 넣고 geo 는 버린다.
