@@ -114,3 +114,36 @@ body.hud-v3 .h3-seg button.on { color: #122033; background: linear-gradient(180d
   body.hud-v3 .h3-name { max-width: 104px; }
   body.hud-v3 .h3-cell { padding: 0 10px; }
 }
+
+/* ---------- [hud-v3-minimap] 원형 미니맵 (접속자 알약 y82–114 아래, 오른쪽 12) — minimap.js ---------- */
+body.hud-v3 #h3-mm { position: fixed; right: 4px; top: 118px; z-index: 11; width: 200px; height: 222px; pointer-events: none; user-select: none; -webkit-user-select: none; }
+body.hud-v3 #h3-mm[hidden], body.hud-v3.in-gate #h3-mm, body.hud-v3.in-lobby #h3-mm, body.hud-v3.mobile #h3-mm { display: none !important; }
+body.hud-v3 .h3-mm-ring { position: absolute; left: 12px; top: 12px; width: 176px; height: 176px; border-radius: 50%; pointer-events: auto;
+  box-shadow: 0 0 0 2px rgba(255, 225, 105, .78), 0 0 0 6px rgba(15, 25, 42, .94), 0 0 0 7px rgba(255, 255, 255, .16), 0 10px 26px rgba(8, 16, 30, .5); }
+body.hud-v3 .h3-mm-cv { position: absolute; inset: 0; width: 100%; height: 100%; border-radius: 50%; display: block; }
+body.hud-v3 .h3-mm-glass { position: absolute; inset: 0; border-radius: 50%; cursor: pointer;
+  background: radial-gradient(circle at 34% 26%, rgba(255, 255, 255, .13), rgba(255, 255, 255, 0) 42%); box-shadow: inset 0 0 0 1px rgba(8, 16, 30, .6), inset 0 0 18px rgba(4, 10, 22, .65); }
+body.hud-v3 .h3-mm-compass { position: absolute; inset: 0; pointer-events: none; }
+body.hud-v3 .h3-mm-compass > * { position: absolute; display: grid; place-items: center; font-style: normal; line-height: 1; }
+body.hud-v3 .h3-mm-compass .n { left: 79px; top: -9px; width: 18px; height: 18px; border-radius: 50%; font-size: 11px; font-weight: 900; color: #122033; background: linear-gradient(180deg, #ffe98a, #f5a200); box-shadow: 0 0 0 1.5px #0f192a, 0 2px 4px rgba(0, 0, 0, .45); }
+body.hud-v3 .h3-mm-compass i { width: 14px; height: 14px; font-size: 9px; font-weight: 900; color: rgba(232, 242, 248, .72); text-shadow: 0 1px 2px #000; }
+body.hud-v3 .h3-mm-compass .e { left: 165px; top: 81px; } body.hud-v3 .h3-mm-compass .s { left: 81px; top: 165px; } body.hud-v3 .h3-mm-compass .w { left: -3px; top: 81px; }
+body.hud-v3 .h3-mm-b { position: absolute; box-sizing: border-box; width: 24px; height: 24px; margin: 0; padding: 0; display: grid; place-items: center; border-radius: 50%; pointer-events: auto; cursor: pointer;
+  color: var(--h3-gold); background: linear-gradient(180deg, #24385a, #0f192a); border: 1.5px solid rgba(255, 225, 105, .55); box-shadow: 0 2px 6px rgba(0, 0, 0, .45); transition: transform .12s, border-color .12s; }
+body.hud-v3 .h3-mm-b:hover { transform: scale(1.1); border-color: var(--h3-gold); }
+body.hud-v3 .h3-mm-b:focus-visible { outline: 2px solid var(--h3-gold); outline-offset: 1px; }
+body.hud-v3 .h3-mm-b:disabled { opacity: .4; cursor: default; transform: none; }
+body.hud-v3 .h3-mm-b.on { color: #122033; background: linear-gradient(180deg, #ffe169, #f5a200); border-color: #a65f00; }
+body.hud-v3 .h3-mm-rot { left: 21px; top: 21px; } body.hud-v3 .h3-mm-close { left: 155px; top: 21px; width: 20px; height: 20px; color: var(--h3-sub); border-color: rgba(255, 255, 255, .3); }
+body.hud-v3 .h3-mm-zin { left: 171px; top: 132px; } body.hud-v3 .h3-mm-zout { left: 144px; top: 165px; }
+/* 회전 모드: 방위 글자를 테두리 안쪽(반지름 74)으로 — 가장자리 버튼과 겹치지 않게 */
+body.hud-v3 #h3-mm.rot .h3-mm-compass .n { left: 79px; top: 5px; } body.hud-v3 #h3-mm.rot .h3-mm-compass .e { left: 155px; top: 81px; }
+body.hud-v3 #h3-mm.rot .h3-mm-compass .s { left: 81px; top: 155px; } body.hud-v3 #h3-mm.rot .h3-mm-compass .w { left: 7px; top: 81px; }
+body.hud-v3 .h3-mm-plaque { position: absolute; left: 50%; top: 196px; transform: translateX(-50%); max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; box-sizing: border-box; height: 22px; padding: 0 12px; border-radius: 11px;
+  font-size: 11.5px; font-weight: 800; line-height: 19px; color: var(--h3-gold); background: rgba(15, 25, 42, .9); border: 1.5px solid rgba(255, 225, 105, .4); box-shadow: 0 3px 10px rgba(8, 16, 30, .35); }
+body.hud-v3 .h3-mm-plaque:empty { display: none; }
+/* 지도·이동 메뉴의 켬/끔 스위치 */
+body.hud-v3 .h3-sw { position: relative; flex: none; width: 30px; height: 18px; border-radius: 9px; background: rgba(255, 255, 255, .16); transition: background-color .15s; }
+body.hud-v3 .h3-sw i { position: absolute; left: 2px; top: 2px; width: 14px; height: 14px; border-radius: 50%; background: #9eb4c6; transition: left .15s, background-color .15s; }
+body.hud-v3 .h3-sw.on { background: rgba(255, 225, 105, .35); }
+body.hud-v3 .h3-sw.on i { left: 14px; background: var(--h3-gold); }

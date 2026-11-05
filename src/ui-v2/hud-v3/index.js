@@ -9,6 +9,7 @@ import { useAltHud } from '../econ-ui/hud.js';
 import { close as closePanel, openKey } from '../econ-ui/layer.js';
 import { cardAlt, mountCard, questsLeft, refreshName } from './card.js';
 import { icon } from './icons.js';
+import { mountMinimap, minimapOn, toggle as toggleMinimap } from './minimap.js'; // [hud-v3-minimap]
 
 const $ = (id) => document.getElementById(id);
 const strip = (t) => String(t || '').replace(/^[^\p{L}\p{N}]+/u, '').replace(/\s+/g, ' ').trim();
@@ -24,6 +25,8 @@ export async function mountHudV3(econUiPromise) {
   document.body.classList.add('hud-v3');
   mountCard();
   mountBar();
+  mountMinimap({ onToggle: () => { if (dropKind === 'map') openDrop('map', true); } }); // [hud-v3-minimap] 바·알약 아래 원형 미니맵 (N)
+  bindMinimapKey();
   dispatchEvent(new Event('bw:hud-layout')); // BGM 막대가 새 카드·바를 피해 자리를 다시 잡게
   try {
     const m = await econUiPromise;
@@ -129,6 +132,9 @@ function openDrop(kind, keep = false) {
     const vb = $('btn-view');
     html += sec(tr('보기', 'View'));
     if (vb && !vb.hidden) html += item('btn-view', 'top', strip(vb.textContent) || tr('위에서 보기', 'Overview'), { kbd: 'M' });
+    // [hud-v3-minimap] 미니맵 켜기/끄기 (N)
+    const mo = minimapOn();
+    html += `<button type="button" role="menuitemcheckbox" aria-checked="${mo}" class="h3-item" data-act="minimap">${icon('radar', 20)}<span class="h3-it">${esc(tr('미니맵', 'Minimap'))}</span><span class="h3-sw${mo ? ' on' : ''}" aria-hidden="true"><i></i></span><kbd class="h3-kbd">N</kbd></button>`;
     html += sec(tr('이동', 'Travel'));
     const hb = $('btn-home'); if (hb && !hb.hidden) html += item('btn-home', 'train', strip(hb.textContent) || tr('역으로', 'To station'), { kbd: 'H' });
     const gb = $('btn-globe'); if (gb && !gb.hidden) html += item('btn-globe', 'globe', tr('지구본 · 다른 동네로', 'Globe · other towns'));
@@ -151,6 +157,7 @@ function openDrop(kind, keep = false) {
   drop.addEventListener('click', (e) => {
     const lb = e.target.closest('[data-lang]');
     if (lb) { if ((lb.dataset.lang === 'en') !== isEn()) press('lang-launcher'); return; } // 메뉴는 열어 둔다(onLangChange 가 다시 그림)
+    if (e.target.closest('[data-act="minimap"]')) { toggleMinimap(); return; } // 메뉴는 열어 둔 채 스위치만 바뀜(onToggle 이 다시 그림)
     const b = e.target.closest('[data-press], [data-open]'); if (!b) return;
     const id = b.dataset.press, code = b.dataset.open;
     closeDrop();
@@ -188,13 +195,21 @@ function typing(t) {
   return false;
 }
 const KEYS = { KeyQ: 'quest', KeyB: 'shop', KeyJ: 'board' };
+const blockedKey = (e) => e.repeat || e.ctrlKey || e.metaKey || e.altKey || e.shiftKey || e.isComposing || typing(e.target) || ['in-gate', 'in-lobby', 'mobile'].some((c) => document.body.classList.contains(c));
 function onKey(e) {
   if (e.key === 'Escape' && drop) { closeDrop(); return; }
   const k = KEYS[e.code];
-  if (!k || e.repeat || e.ctrlKey || e.metaKey || e.altKey || e.shiftKey || e.isComposing) return;
-  if (typing(e.target)) return;
-  const cl = document.body.classList;
-  if (cl.contains('in-gate') || cl.contains('in-lobby') || cl.contains('mobile')) return;
+  if (!k || blockedKey(e)) return;
   e.preventDefault();
   act(k);
+}
+// [hud-v3-minimap] N = 미니맵. N 은 바이크 엔진음 음소거(bikeAudio.js)에도 쓰여서: 바이크(크루저·슈퍼바이크)를 타는 중이면 그대로 음소거로 넘기고,
+//   걷는 중이면 미니맵만 토글하고 이벤트를 멈춘다(안 보이는 바이크 소리가 몰래 음소거되지 않게). capture 라 bikeAudio 보다 먼저 받는다.
+const onBike = () => { const J = window.__jj; return !!(J?.bike?.riding || J?.giftRides?.some?.((g) => g.ride?.riding)); };
+function bindMinimapKey() {
+  addEventListener('keydown', (e) => {
+    if (e.code !== 'KeyN' || blockedKey(e) || onBike()) return;
+    e.preventDefault(); e.stopImmediatePropagation();
+    toggleMinimap();
+  }, true);
 }
