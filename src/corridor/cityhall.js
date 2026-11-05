@@ -1,11 +1,12 @@
 // [cityhall] 성남시청 일대 — 야탑 코리더 타일(3_-12 등) 위에 덧붙이는 지연 로드 랜드마크.
 //   ?cityhall=1 일 때만 요청·메시·타일 억제. 기본 OFF → 플래그 없으면 기존 월드와 동일.
-//   OSM 외곽(public/corridor/cityhall/index.json) + 절차적 모델(landmarks/seongnamCityHall.js).
+//   OSM 외곽(public/corridor/cityhall/index.json) + Blender GLB 본관 + 절차적 광장/분수.
 import * as THREE from 'three';
 import { buildSeongnamCityHall, disposeCityHallMaterials } from './landmarks/seongnamCityHall.js';
 
 export const CITYHALL_DIR = 'cityhall/';
 export const CITYHALL_FILE = CITYHALL_DIR + 'index.json';
+export const CITYHALL_GLB = CITYHALL_DIR + 'building.glb';
 
 export function cityhallEnabled(search = typeof location !== 'undefined' ? location.search : '') {
   return new URLSearchParams(search).get('cityhall') === '1';
@@ -28,9 +29,10 @@ export function filterCityHallHidden(data, tileJson) {
   return hit ? { ...tileJson, b } : tileJson;
 }
 
-export function createCityHall({ data, scene, overlay = null, env = null } = {}) {
+export function createCityHall({ data, scene, overlay = null, env = null, baseUrl = '' } = {}) {
   if (!data?.building) return null;
-  const built = buildSeongnamCityHall(data, { env });
+  const glbUrl = baseUrl ? (baseUrl + CITYHALL_GLB) : null;
+  const built = buildSeongnamCityHall(data, { env, glbUrl });
   scene.add(built.group);
   let label = null;
   if (overlay && data.building.pos) {
@@ -53,7 +55,6 @@ export function createCityHall({ data, scene, overlay = null, env = null } = {})
     dispose() {
       scene.remove(built.group);
       built.dispose();
-      // overlay items are not individually removed in this codebase for landmarks; leave label
       void label;
     },
   };

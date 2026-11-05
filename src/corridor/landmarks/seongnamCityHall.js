@@ -1,4 +1,4 @@
-// [cityhall] 성남시청 절차적 랜드마크 v2 — 참고사진(ref/04·05) 실루엣 우선.
+// [cityhall] 성남시청 랜드마크 v4 — Blender GLB 본관 + 절차적 광장/분수/수목.
 //   넓은 저층(~10층)·서측 접힌 파란 유리·중앙 사선 아트리움·동측 커튼월+흰 프레임·필로티·태양광
 //   광장 화강암·배너 보행로·원형 연못·음악분수·데크·계단의자. 브랜드 로고 없음.
 //   성능: 공유 재질 · 병합 · InstancedMesh · 소형 캔버스/큐브 env
@@ -59,6 +59,27 @@ function canvasTex(w, h, draw, repeatX = 1, repeatY = 1) {
   return t;
 }
 
+function jetGradTex() {
+  return canvasTex(64, 256, (x, w, h) => {
+    const g = x.createLinearGradient(0, 0, 0, h);
+    g.addColorStop(0, 'rgba(200,240,255,0)');
+    g.addColorStop(0.08, 'rgba(180,230,255,0.55)');
+    g.addColorStop(0.5, 'rgba(160,220,255,0.85)');
+    g.addColorStop(0.92, 'rgba(140,210,255,0.5)');
+    g.addColorStop(1, 'rgba(120,200,255,0)');
+    x.fillStyle = g; x.fillRect(0, 0, w, h);
+    // soft horizontal falloff
+    const g2 = x.createLinearGradient(0, 0, w, 0);
+    g2.addColorStop(0, 'rgba(0,0,0,0.85)');
+    g2.addColorStop(0.5, 'rgba(0,0,0,0)');
+    g2.addColorStop(1, 'rgba(0,0,0,0.85)');
+    x.globalCompositeOperation = 'destination-out';
+    x.fillStyle = g2; x.fillRect(0, 0, w, h);
+    x.globalCompositeOperation = 'source-over';
+  }, 1, 1);
+}
+
+
 function mats() {
   if (shared) return shared;
   const hasDoc = typeof document !== 'undefined';
@@ -100,8 +121,8 @@ function mats() {
     sculpture: S(C.sculpture, { roughness: 0.35, metalness: 0.4, emissive: C.sculpture, emissiveIntensity: 0.12, envMapIntensity: env ? 0.7 : 0 }),
     kiosk: S(C.kiosk, { roughness: 0.5, metalness: 0.2 }),
     glow: B('#ffffff', { vertexColors: true }),
-    jet: B('#dff2ff', { transparent: true, opacity: 0.9, depthWrite: false, blending: THREE.AdditiveBlending }),
-    mist: B('#c8e8ff', { transparent: true, opacity: 0.38, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending }),
+    jet: B('#ffffff', { transparent: true, opacity: 0.7, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide }),
+    mist: B('#b8e0ff', { transparent: true, opacity: 0.22, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending }),
   };
 
   if (hasDoc) {
@@ -173,6 +194,8 @@ function mats() {
       side: THREE.DoubleSide, roughness: 0.7, metalness: 0.05, transparent: true,
     });
     shared._bannerTex = shared.banner.map;
+    shared.jet.map = jetGradTex();
+    shared.jet.needsUpdate = true;
   } else {
     shared.glassCurtain = S(C.glassLite);
     shared.plaza = S(C.plaza);
@@ -708,78 +731,77 @@ function buildFountainComplex(data, M) {
   seatBag.box((d.x0 + d.x1) / 2, 0.06, pathZ, d.x1 - d.x0 + 18, 0.1, 3.8, 0, C.path);
   const seatM = seatBag.mesh(M.vc, 'cityhallSeats'); if (seatM) g.add(seatM);
 
-  // Jets: many vertical columns + left/right arching pairs (multi-segment bends)
-  const JET_N = 56;
-  const jetGeo = new THREE.CylinderGeometry(0.08, 0.14, 1, 5);
+  // Jets: thin translucent tapered columns (2–10 m) + soft additive glow — NOT opaque slabs
+  const JET_N = 40;
+  // Vertical soft gradient planes (cross pair) — reads as thin water column, not opaque slab
+  const jetGeo = new THREE.PlaneGeometry(0.22, 1);
   jetGeo.translate(0, 0.5, 0);
-  const jets = new THREE.InstancedMesh(jetGeo, M.jet, JET_N);
+  const jets = new THREE.InstancedMesh(jetGeo, M.jet, JET_N * 2);
   jets.name = 'cityhallJets'; jets.frustumCulled = false; g.add(jets);
 
-  // Arch segments (torus quarter approx via tilted short cylinders) — 2 banks × 8 arcs × 5 segs
-  const ARCH_N = 60;
-  const archGeo = new THREE.CylinderGeometry(0.07, 0.1, 1, 5);
+  // Soft outer glow sheath (slightly wider, more transparent) — night only
+  const sheathMat = new THREE.MeshBasicMaterial({
+    color: '#5aa8ff', transparent: true, opacity: 0.18, depthWrite: false,
+    blending: THREE.AdditiveBlending, side: THREE.DoubleSide,
+  });
+  const sheathGeo = new THREE.PlaneGeometry(0.9, 1);
+  sheathGeo.translate(0, 0.5, 0);
+  const sheaths = new THREE.InstancedMesh(sheathGeo, sheathMat, JET_N);
+  sheaths.name = 'cityhallJetSheaths'; sheaths.visible = false; sheaths.frustumCulled = false; g.add(sheaths);
+
+  // Arch segments — thin
+  const ARCH_N = 48;
+  const archGeo = new THREE.CylinderGeometry(0.03, 0.055, 1, 5);
   archGeo.translate(0, 0.5, 0);
   const arches = new THREE.InstancedMesh(archGeo, M.jet, ARCH_N);
   arches.name = 'cityhallArches'; arches.frustumCulled = false; g.add(arches);
 
-  // Mist discs
-  const mistGeo = new THREE.PlaneGeometry(2.2, 2.2);
-  const mists = new THREE.InstancedMesh(mistGeo, M.mist, 16);
+  // Mist soft discs
+  const mistGeo = new THREE.CircleGeometry(1.1, 10);
+  const mists = new THREE.InstancedMesh(mistGeo, M.mist, 12);
   mists.name = 'cityhallMist'; mists.frustumCulled = false; g.add(mists);
 
-  // Underwater lights + shafts
-  const lightGeo = new THREE.CircleGeometry(0.65, 10);
+  // Basin point lights (small)
+  const lightGeo = new THREE.CircleGeometry(0.4, 8);
   lightGeo.rotateX(-Math.PI / 2);
-  const shaftGeo = new THREE.CylinderGeometry(0.45, 0.7, 1, 6, 1, true);
-  shaftGeo.translate(0, 0.5, 0);
   const lightMats = [
-    new THREE.MeshBasicMaterial({ color: '#3aa0ff', transparent: true, opacity: 0.9 }),
-    new THREE.MeshBasicMaterial({ color: '#ff4db8', transparent: true, opacity: 0.9 }),
-    new THREE.MeshBasicMaterial({ color: '#4dff7a', transparent: true, opacity: 0.9 }),
+    new THREE.MeshBasicMaterial({ color: '#3aa0ff', transparent: true, opacity: 0.7 }),
+    new THREE.MeshBasicMaterial({ color: '#ff4db8', transparent: true, opacity: 0.7 }),
+    new THREE.MeshBasicMaterial({ color: '#4dff7a', transparent: true, opacity: 0.7 }),
   ];
-  const shaftMat = new THREE.MeshBasicMaterial({ color: '#6ab0ff', transparent: true, opacity: 0.72, side: THREE.DoubleSide, depthWrite: false, blending: THREE.AdditiveBlending });
   const lights = [];
-  const LIGHT_N = 16;
+  const LIGHT_N = 12;
   for (let i = 0; i < LIGHT_N; i++) {
     const t = (i + 0.5) / LIGHT_N;
     const x = f.cx - f.len / 2 + 2 + t * (f.len - 4);
     const m = new THREE.Mesh(lightGeo, lightMats[i % 3]);
     m.position.set(x, 0.4, f.cz); m.visible = false; g.add(m); lights.push(m);
   }
-  const shafts = new THREE.InstancedMesh(shaftGeo, shaftMat, JET_N);
-  shafts.name = 'cityhallShafts'; shafts.visible = false; shafts.frustumCulled = false; g.add(shafts);
 
   const glow = new THREE.Mesh(
-    new THREE.PlaneGeometry(f.len * 1.2, f.wid * 2.4),
-    new THREE.MeshBasicMaterial({ color: '#3a8fff', transparent: true, opacity: 0.55, side: THREE.DoubleSide, depthWrite: false, blending: THREE.AdditiveBlending }),
+    new THREE.PlaneGeometry(f.len * 1.05, f.wid * 1.6),
+    new THREE.MeshBasicMaterial({ color: '#3a8fff', transparent: true, opacity: 0.28, side: THREE.DoubleSide, depthWrite: false, blending: THREE.AdditiveBlending }),
   );
   glow.rotation.x = -Math.PI / 2; glow.position.set(f.cx, 0.39, f.cz); glow.visible = false; g.add(glow);
 
   const dummy = new THREE.Object3D();
   const seeds = Array.from({ length: JET_N }, (_, i) => ({
-    x: f.cx - f.len / 2 + 1.5 + ((i + 0.5) / JET_N) * (f.len - 3),
-    z: f.cz + ((i % 3) - 1) * 1.8,
+    x: f.cx - f.len / 2 + 1.8 + ((i + 0.5) / JET_N) * (f.len - 3.6),
+    z: f.cz + ((i % 3) - 1) * 1.5,
     phase: i / JET_N,
-    h: 6.5 + (i % 7) * 1.6 + (i % 5 === 0 ? 6 : 0),
-    arch: 0,
+    // 2–10 m peaks
+    h: Math.min(10, 2.0 + (i % 5) * 1.0 + (i % 7 === 0 ? 2.8 : 0) + (i % 11 === 0 ? 1.8 : 0)),
   }));
-  // Arch banks: left (+z lean) and right (−z lean) pairs meeting above center
   const archSeeds = [];
   for (let bank = 0; bank < 2; bank++) {
-    for (let a = 0; a < 6; a++) {
-      const x = f.cx - 18 + a * 5.0;
-      for (let seg = 0; seg < 5; seg++) {
-        const u = seg / 4; // 0..1 along arc
-        const ang = u * Math.PI; // half-circle
-        const radius = 5.5 + (a % 3) * 0.6;
+    for (let a = 0; a < 5; a++) {
+      const x = f.cx - 14 + a * 5.5;
+      for (let seg = 0; seg < 4; seg++) {
         archSeeds.push({
-          x,
-          y0: 0.4,
-          z0: f.cz + (bank === 0 ? -2.2 : 2.2),
+          x, y0: 0.4, z0: f.cz + (bank === 0 ? -1.8 : 1.8),
           side: bank === 0 ? 1 : -1,
-          radius,
-          seg,
-          phase: (a + bank * 8) / 16,
+          radius: 3.2 + (a % 3) * 0.45,
+          seg, phase: (a + bank * 6) / 12,
         });
       }
     }
@@ -789,9 +811,10 @@ function buildFountainComplex(data, M) {
   const stopEve = watchEvening((on) => {
     nightOn = on;
     glow.visible = on;
-    shafts.visible = on;
+    sheaths.visible = false; // disabled: wide planes read as slabs
     for (const m of lights) m.visible = on;
-    M.water.emissiveIntensity = on ? 1.35 : 0.15;
+    M.water.emissiveIntensity = on ? 0.85 : 0.15;
+    M.jet.opacity = on ? 0.55 : 0.4;
   });
 
   function update(t) {
@@ -801,8 +824,8 @@ function buildFountainComplex(data, M) {
       const idx = Math.floor(phase), mix = phase - idx;
       const c0 = new THREE.Color(cols[idx]), c1 = new THREE.Color(cols[(idx + 1) % 3]);
       glow.material.color.copy(c0).lerp(c1, mix);
-      M.jet.color.copy(c0).lerp(c1, mix).multiplyScalar(nightOn ? 1.4 : 1);
-      shaftMat.color.copy(M.jet.color);
+      M.jet.color.copy(c0).lerp(c1, mix);
+      sheathMat.color.copy(c0).lerp(c1, mix);
       M.mist.color.copy(c0).lerp(c1, mix);
       for (let i = 0; i < lights.length; i++) {
         lights[i].material.color.copy(c0).lerp(c1, (mix + i * 0.05) % 1);
@@ -813,46 +836,48 @@ function buildFountainComplex(data, M) {
     }
     for (let i = 0; i < JET_N; i++) {
       const s = seeds[i];
-      const h = s.h * (0.5 + 0.5 * Math.sin(t * 2.1 + s.phase * Math.PI * 2));
+      const h = Math.min(10, s.h * (0.45 + 0.55 * (0.5 + 0.5 * Math.sin(t * 2.0 + s.phase * Math.PI * 2))));
+      const w = nightOn ? 0.35 : 0.28;
+      // crossed planes for volumetric column look
       dummy.position.set(s.x, 0.4, s.z);
       dummy.rotation.set(0, 0, 0);
-      dummy.scale.set(1.0, Math.max(0.3, h), 1.0);
+      dummy.scale.set(w, Math.max(0.5, h), 1);
       dummy.updateMatrix();
-      jets.setMatrixAt(i, dummy.matrix);
-      dummy.scale.set(nightOn ? 1.8 : 1.1, Math.max(0.3, h * 1.05), nightOn ? 1.8 : 1.1);
+      jets.setMatrixAt(i * 2, dummy.matrix);
+      dummy.rotation.set(0, Math.PI / 2, 0);
       dummy.updateMatrix();
-      shafts.setMatrixAt(i, dummy.matrix);
+      jets.setMatrixAt(i * 2 + 1, dummy.matrix);
+      dummy.rotation.set(0, 0, 0);
+      dummy.scale.set(nightOn ? 1.4 : 0.9, Math.max(0.5, h * 1.02), 1);
+      dummy.updateMatrix();
+      sheaths.setMatrixAt(i, dummy.matrix);
     }
+    jets.count = JET_N * 2;
     jets.instanceMatrix.needsUpdate = true;
-    shafts.instanceMatrix.needsUpdate = true;
-    // Arching jets
+    sheaths.instanceMatrix.needsUpdate = true;
     for (let i = 0; i < archSeeds.length && i < ARCH_N; i++) {
       const a = archSeeds[i];
-      const pulse = 0.65 + 0.35 * Math.sin(t * 1.9 + a.phase * Math.PI * 2);
-      const u = a.seg / 4;
+      const pulse = 0.7 + 0.3 * Math.sin(t * 1.8 + a.phase * Math.PI * 2);
+      const u = a.seg / 3;
       const ang = u * Math.PI;
       const rr = a.radius * pulse;
       const y = a.y0 + Math.sin(ang) * rr;
-      const z = a.z0 + a.side * (1 - Math.cos(ang)) * rr * 0.55;
-      // segment tangent for orientation
-      const tangY = Math.cos(ang);
-      const tangZ = a.side * Math.sin(ang) * 0.55;
-      const lean = Math.atan2(tangZ, Math.max(0.05, tangY));
+      const z = a.z0 + a.side * (1 - Math.cos(ang)) * rr * 0.5;
+      const lean = Math.atan2(a.side * Math.sin(ang) * 0.5, Math.max(0.05, Math.cos(ang)));
       dummy.position.set(a.x, y, z);
       dummy.rotation.set(lean, 0, 0);
-      dummy.scale.set(1, 1.35 * pulse, 1);
+      dummy.scale.set(1, 1.1 * pulse, 1);
       dummy.updateMatrix();
       arches.setMatrixAt(i, dummy.matrix);
     }
     arches.count = Math.min(ARCH_N, archSeeds.length);
     arches.instanceMatrix.needsUpdate = true;
-    // mist as horizontal soft discs above jets (not vertical floating panes)
-    for (let i = 0; i < 16; i++) {
-      const s = seeds[i * 2 % JET_N];
-      const h = s.h * (0.5 + 0.4 * Math.sin(t * 1.3 + s.phase * 6));
-      dummy.position.set(s.x, 0.5 + h * 0.85, s.z);
-      dummy.scale.set(2.2 + (i % 3) * 0.5, 2.0, 1);
-      dummy.rotation.set(-Math.PI / 2, 0, t * 0.15 + i);
+    for (let i = 0; i < 12; i++) {
+      const s = seeds[i * 3 % JET_N];
+      const h = s.h * (0.5 + 0.35 * Math.sin(t * 1.2 + s.phase * 6));
+      dummy.position.set(s.x, 0.45 + h * 0.75, s.z);
+      dummy.scale.set(1.4 + (i % 3) * 0.35, 1.4, 1);
+      dummy.rotation.set(-Math.PI / 2, 0, t * 0.1 + i);
       dummy.updateMatrix();
       mists.setMatrixAt(i, dummy.matrix);
     }
@@ -862,12 +887,13 @@ function buildFountainComplex(data, M) {
   return {
     group: g, update,
     disposeExtra: () => {
-      stopEve(); lightGeo.dispose(); shaftGeo.dispose(); jetGeo.dispose(); archGeo.dispose(); mistGeo.dispose();
-      for (const m of lightMats) m.dispose(); shaftMat.dispose();
+      stopEve(); lightGeo.dispose(); sheathGeo.dispose(); jetGeo.dispose(); archGeo.dispose(); mistGeo.dispose();
+      for (const m of lightMats) m.dispose(); sheathMat.dispose();
       glow.geometry.dispose(); glow.material.dispose();
     },
   };
 }
+
 
 function buildLandscape(data, M) {
   const g = new THREE.Group(); g.name = 'cityhallLandscape';
@@ -1029,7 +1055,7 @@ function buildVehicleGate(data, M) {
   return g;
 }
 
-export function buildSeongnamCityHall(data, { env = null } = {}) {
+export function buildSeongnamCityHall(data, { env = null, glbUrl = null } = {}) {
   const M = mats();
   if (env) {
     for (const k of ['glassBlue', 'glassCurtain', 'glassLite', 'water', 'frame', 'solar', 'sculpture']) {
@@ -1037,8 +1063,11 @@ export function buildSeongnamCityHall(data, { env = null } = {}) {
     }
   }
   const root = new THREE.Group(); root.name = 'seongnamCityHall';
+  // Procedural building as sync fallback (tests / GLB fail); replaced when GLB loads
   const building = buildBuilding(data, M);
-  root.add(building.group);
+  const buildingHost = new THREE.Group(); buildingHost.name = 'cityhallBuildingHost';
+  buildingHost.add(building.group);
+  root.add(buildingHost);
   root.add(buildGrounds(data, M));
   root.add(buildBanners(data, M));
   root.add(buildPond(data, M));
@@ -1053,16 +1082,36 @@ export function buildSeongnamCityHall(data, { env = null } = {}) {
   });
   if (building.night) building.night.visible = false;
 
+  let glbPending = null;
+  if (glbUrl) {
+    glbPending = import('./loadCityHallGlb.js').then(({ loadCityHallGlb }) =>
+      loadCityHallGlb(glbUrl, { env }).then((glb) => {
+        if (!glb || disposed) return;
+        // Place at building center (GLB origin = center)
+        const p = data.building.pos;
+        glb.position.set(p.x, 0, p.z);
+        // Remove procedural massing
+        building.group.removeFromParent();
+        buildingHost.add(glb);
+        recount();
+      }).catch((e) => { console.warn('[cityhall] GLB load failed, keeping procedural', e); })
+    );
+  }
+
   let meshes = 0, instanced = 0;
-  root.traverse((o) => {
-    if (o.isInstancedMesh) instanced++;
-    else if (o.isMesh) meshes++;
-  });
+  function recount() {
+    meshes = 0; instanced = 0;
+    root.traverse((o) => {
+      if (o.isInstancedMesh) instanced++;
+      else if (o.isMesh) meshes++;
+    });
+  }
+  recount();
 
   let disposed = false;
   return {
     group: root,
-    stats: { name: 'seongnamCityHall', meshes, instanced },
+    get stats() { return { name: 'seongnamCityHall', meshes, instanced }; },
     update(dt, t) { if (!disposed) fountain.update(t ?? performance.now() / 1000); },
     dispose() {
       if (disposed) return; disposed = true;
@@ -1071,6 +1120,7 @@ export function buildSeongnamCityHall(data, { env = null } = {}) {
         if (o.geometry) o.geometry.dispose();
       });
       root.removeFromParent();
+      void glbPending;
     },
   };
 }

@@ -301,7 +301,7 @@ export function createCorridor({ scene, corridorData, terrain, world, renderer, 
   if (corridorData.cityhall) {
     const CH = corridorData.cityhall;
     const boxes = CH.meta?.boxes || (CH.meta?.box ? [CH.meta.box] : null);
-    const mount = () => { if (!cityhall) cityhall = createCityHall({ data: CH, scene: root, overlay }); };
+    const mount = () => { if (!cityhall) cityhall = createCityHall({ data: CH, scene: root, overlay, baseUrl: corridorData.baseUrl }); };
     const unmount = () => { if (cityhall) { cityhall.dispose(); cityhall = null; } };
     if (regions && boxes) {
       regions.register({ id: 'seongnam-cityhall', boxes, near: 700, far: 1200, onEnter: mount, onLeave: unmount });
