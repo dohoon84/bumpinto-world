@@ -91,7 +91,8 @@ function paint() {
   }
   // 접속자 알약: '● 접속 N명 ▾'
   const ps = $('presence-status');
-  const cnt = ps?.querySelector('.live-count')?.textContent?.trim() || '';
+  // .live-count 텍스트는 언어에 따라 '2명' 또는 '2'처럼 단위가 붙어 올 수 있어 숫자만 뽑는다.
+  const cnt = (ps?.querySelector('.live-count')?.textContent || '').match(/\d[\d,]*/)?.[0] || '';
   const txt = cnt ? tr(`접속 ${cnt}명`, `${cnt} online`) : tr('접속자', 'Online');
   const key = `${txt}|${ps?.classList.contains('open') ? 1 : 0}`;
   if (online.dataset.k !== key) {
