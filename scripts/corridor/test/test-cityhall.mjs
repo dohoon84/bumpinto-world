@@ -126,19 +126,38 @@ ok('filter no-op without data');
 }
 
 
-// 5d) G1 front + BACK glass — no side walls; enter via doors
+// 5d) G1 sealed lobby + open east passage (front↔back); divider wall; doors only into lobby
 {
   const built = buildSeongnamCityHall(data);
+  const xs = data.building.o.map((p) => p[0]);
   const zs = data.building.o.map((p) => p[1]);
+  const x0 = Math.min(...xs) + 0.35, x1 = Math.max(...xs) - 0.35;
+  const midX1 = data.building.massing?.midX1 ?? 1632;
+  const passX0 = midX1 + 22;
   const zFace = Math.max(...zs) + 0.22;
   const zBack = Math.min(...zs) - 0.22;
+  const zMid = (zFace + zBack) / 2;
   assert.equal(built.isBlocked(1545, zFace, 0.4), true, 'west G1 front blocks');
-  assert.equal(built.isBlocked(1585, zFace, 0.4), true, 'former gap now glass');
-  assert.equal(built.isBlocked(1650, zFace, 0.4), true, 'main G1 front blocks');
+  assert.equal(built.isBlocked(1585, zFace, 0.4), true, 'mid G1 front blocks');
   assert.equal(built.isBlocked(1607, zFace, 0.4), false, 'door bay open');
-  // Back facade glass (pond side) blocks; side corridor must stay walkable
-  assert.equal(built.isBlocked(1600, zBack, 0.4), true, 'back facade glass blocks');
-  assert.equal(built.isBlocked(1524, (zFace + zBack) / 2, 0.4), false, 'no west side wall — corridor open');
+  assert.equal(built.isBlocked(1600, zBack, 0.4), true, 'back lobby glass blocks');
+  assert.equal(built.isBlocked(x0, zMid, 0.4), true, 'west side glass blocks');
+  assert.equal(built.isBlocked(passX0, zMid, 0.4), true, 'passage divider wall blocks');
+  // Open passage: front, mid undercroft, and back must be walkable
+  const passX = (passX0 + x1) / 2;
+  assert.equal(built.isBlocked(passX, zFace, 0.4), false, 'passage front open');
+  assert.equal(built.isBlocked(passX, zMid, 0.4), false, 'passage mid walkable');
+  assert.equal(built.isBlocked(passX, zBack, 0.4), false, 'passage back open');
+  // Perimeter probe on SEALED lobby only (west of divider)
+  const doorL = 1607 - 5.4 / 2, doorR = 1607 + 5.4 / 2;
+  const gaps = [];
+  const push = (x, z, tag) => {
+    if (tag === 'S' && x > doorL - 0.5 && x < doorR + 0.5) return;
+    if (!built.isBlocked(x, z, 0.45)) gaps.push(tag + '@' + x.toFixed(1) + ',' + z.toFixed(1));
+  };
+  for (let x = x0; x <= passX0; x += 2.0) { push(x, zFace, 'S'); push(x, zBack, 'N'); }
+  for (let z = zBack; z <= zFace; z += 2.0) { push(x0, z, 'W'); push(passX0, z, 'D'); }
+  assert.equal(gaps.length, 0, 'lobby perimeter sealed, gaps: ' + gaps.slice(0, 8).join(' | '));
   const names = [];
   built.group.traverse((o) => { if (o.name) names.push(o.name); });
   assert.ok(names.includes('cityhallGroundFloor'), 'ground floor group');
@@ -146,9 +165,12 @@ ok('filter no-op without data');
   assert.ok(names.includes('cityhallAutoDoor'), 'auto door');
   assert.ok(names.includes('cityhallG1Transom'), 'transom above doors');
   assert.ok(names.includes('cityhallG1BackGlass'), 'back curtain glass');
+  assert.ok(names.includes('cityhallG1WestGlass'), 'west side glass');
+  assert.ok(names.includes('cityhallG1EastGlass'), 'east side glass');
+  assert.ok(names.includes('cityhallG1PassageWall'), 'passage divider wall');
   assert.ok(names.includes('cityhallStayCable') || names.includes('cityhallOverpassRail'), 'cable-stayed overpass');
   built.dispose();
-  ok('G1 front+back glass/doors; no side walls');
+  ok('G1 sealed lobby + open east passage + divider');
 }
 
 // 6) createCityHall wrapper

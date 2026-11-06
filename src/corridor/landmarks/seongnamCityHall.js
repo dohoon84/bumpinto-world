@@ -469,11 +469,11 @@ function buildBuilding(data, M) {
   frameBag.box((westX1 + midX1) / 2, canopyY, zMax + canopyDepth / 2 - 1, canW, 0.35, canopyDepth, 0, C.frame);
   frameBag.box((westX1 + midX1) / 2, canopyY - 0.2, zMax + canopyDepth / 2 - 1, canW - 0.4, 0.12, canopyDepth - 0.4, 0, C.soffit);
 
-  // East end solid light-grey wall (thick vertical frame)
+  // East end wall ABOVE pilotis only — G1 east face is sealed glass (도훈: no pale solid at undercroft)
   const eastWallX = xMax - 0.4;
-  frameBag.box(eastWallX, eastH / 2, (zMin + zMax) / 2, 1.6, eastH, zMax - zMin - 1, 0, C.frame);
-  // Horizontal slit windows on east end
-  for (let y = 4; y < eastH - 2; y += 3.8) {
+  frameBag.box(eastWallX, (pilotisH + eastH) / 2, (zMin + zMax) / 2, 1.6, eastH - pilotisH, zMax - zMin - 1, 0, C.frame);
+  // Horizontal slit windows on east end (upper floors only)
+  for (let y = pilotisH + 2; y < eastH - 2; y += 3.8) {
     frameBag.box(eastWallX + 0.75, y, (zMin + zMax) / 2, 0.15, 0.55, zMax - zMin - 6, 0, C.glassLite);
   }
 
@@ -613,11 +613,17 @@ function buildBuilding(data, M) {
   // (north pilotis come from CITYHALL_PILLARS — central passage clear)
   frameBag.box((westX1 + midX1) / 2, 7.2, zMin - 2.5, midX1 - westX1 + 6, 0.3, 5, 0, C.frame);
 
-  // Low glass base along south plaza
-  const baseGlass = new THREE.PlaneGeometry(xMax - xMin - 4, 3.2, 1, 1);
-  baseGlass.translate((xMin + xMax) / 2, 2.0, zMax + 0.5);
-  const baseMesh = new THREE.Mesh(baseGlass, M.glassLite);
-  baseMesh.name = 'cityhallBaseGlass'; baseMesh.castShadow = false; g.add(baseMesh);
+  // Low glass base along south plaza — only sealed lobby; leave east passage clear (도훈 walk-through)
+  {
+    const passX0 = midX1 + 22;
+    const bw = passX0 - xMin - 2;
+    if (bw > 2) {
+      const baseGlass = new THREE.PlaneGeometry(bw, 3.2, 1, 1);
+      baseGlass.translate((xMin + passX0) / 2, 2.0, zMax + 0.5);
+      const baseMesh = new THREE.Mesh(baseGlass, M.glassLite);
+      baseMesh.name = 'cityhallBaseGlass'; baseMesh.castShadow = false; g.add(baseMesh);
+    }
+  }
 
   // Tall vertical banner panel on east end wall (generic emblem, no city logo)
   const ban = new THREE.PlaneGeometry(3.2, eastH * 0.55, 1, 1);
@@ -1950,8 +1956,9 @@ function buildWalkingSculpture(data, M, { walkerGlbUrl = null } = {}) {
 
 
 
-/** G1 glass: front (south) + doors, and BACK (north) curtain along pond facade.
- *  NO east/west side walls (those made a wrong narrow corridor). Enter via revolving/auto doors.
+/** G1 glass: sealed envelope under the slab — front, back, both ends/sides, corners.
+ *  East undercroft PASSAGE (도훈): open front+back walk-through; divider wall seals lobby to the west.
+ *  Meets slab at top; pillars inside/flush. Lobby enter only via revolving/auto doors.
  *  Doors: clear near-transparent glass (not blue-tinted).
  */
 function buildGroundFloor(data, M) {
@@ -1965,19 +1972,21 @@ function buildGroundFloor(data, M) {
   const midX1 = mass.midX1 ?? 1632;
   const PH = mass.pilotisH ?? 8.0;
 
-  // Front yellow extent: west wing through mid/east — stop before far-east overhang panels
-  const G1_X0 = xMin + 2.0;                 // ~1524
-  const G1_X1 = Math.min(xMax - 14.5, midX1 + 46); // ~1678
-  // Back facade: full undercroft length facing pond (도훈 yellow outline)
-  const BACK_X0 = xMin + 2.0;
-  const BACK_X1 = xMax - 2.0;
+  // Full slab footprint — continuous sealed glass (도훈: close ALL undercroft openings)
+  const G1_X0 = xMin + 0.35;                 // west end under slab
+  const G1_X1 = xMax - 0.35;                 // east end under slab (was truncated → open overhang)
+  const BACK_X0 = G1_X0;
+  const BACK_X1 = G1_X1;
   const zSouth = zMax + 0.22;               // south face (front)
-  const zNorth = zMin - 0.22;               // BACK face toward pond/garden — NOT a mid-depth wall
+  const zNorth = zMin - 0.22;               // BACK face toward pond/garden
   const DOOR_X = (westX1 + midX1) / 2;      // ~1607
   const DOOR_W = 5.4;
   const doorL = DOOR_X - DOOR_W / 2;
   const doorR = DOOR_X + DOOR_W / 2;
   const DOOR_H = 2.95; // revolving / auto leaf height; transom fills DOOR_H → PH
+  // Open front↔back passage under east wing (purple-banner / yellow-box span) — real city hall walk-through
+  const PASS_X0 = midX1 + 22;              // ~1654 — left edge of open span (glass meets here)
+  const PASS_X1 = G1_X1;                   // east end
 
   // Building enclosure glass (blue-ish curtain) — walls of the sealed volume
   const glassMat = (M.glassBlue || M.glassLite).clone();
@@ -2040,9 +2049,10 @@ function buildGroundFloor(data, M) {
     walls.push({ kind: 'ew', z0, z1, x, half: 0.4 });
   }
 
-  // --- South facade: full span with door cutout ---
+  // --- South facade: sealed lobby (west of passage) with door cutout; OPEN east passage ---
   addNSWall(G1_X0, doorL, zSouth, 0.15, PH - 0.2);
-  addNSWall(doorR, G1_X1, zSouth, 0.15, PH - 0.2);
+  addNSWall(doorR, PASS_X0, zSouth, 0.15, PH - 0.2);
+  // no front glass in [PASS_X0, PASS_X1] — walk-through under slab
   // Transom above door bay — SOLID fill to slab (bag solids + glass face) so gap cannot read open
   {
     const tw = doorR - doorL;
@@ -2077,25 +2087,36 @@ function buildGroundFloor(data, M) {
   bag.box(doorL, PH / 2, zSouth + 0.1, 0.2, PH - 0.15, 0.32, 0, C.frame);
   bag.box(doorR, PH / 2, zSouth + 0.1, 0.2, PH - 0.15, 0.32, 0, C.frame);
 
-  // --- North BACK curtain wall (pond/garden facade undercroft) — full yellow length ---
-  // Named distinctly for shots/tests; pillars stay inside/along it
-  addNSWall(BACK_X0, BACK_X1, zNorth, 0.15, PH - 0.2, glassMat, 'cityhallG1BackGlass');
-  // Mullions already added by addNSWall; push a few deeper vertical accents as "pillar line"
-  for (let x = BACK_X0 + 3; x < BACK_X1 - 2; x += 6.5) {
+  // --- North BACK curtain — sealed lobby only; open behind east passage ---
+  addNSWall(BACK_X0, PASS_X0, zNorth, 0.15, PH - 0.2, glassMat, 'cityhallG1BackGlass');
+  for (let x = BACK_X0 + 3; x < PASS_X0 - 2; x += 6.5) {
     bag.box(x, PH / 2, zNorth + 0.35, 0.35, PH - 0.3, 0.35, 0, C.pilotis);
   }
 
-  // NO east/west side glass walls — those created the wrong narrow corridor next to the yellow building
+  // --- West end + passage divider + East end ---
+  addEWWall(zNorth, zSouth, G1_X0, 0.15, PH - 0.2, glassMat, 'cityhallG1WestGlass');
+  // Divider at left end of open span — seals lobby interior from the walk-through
+  addEWWall(zNorth, zSouth, PASS_X0, 0.15, PH - 0.2, glassMat, 'cityhallG1PassageWall');
+  addEWWall(zNorth, zSouth, G1_X1, 0.15, PH - 0.2, glassMat, 'cityhallG1EastGlass');
+  for (const [cx, cz] of [
+    [G1_X0, zSouth], [G1_X0, zNorth],
+    [PASS_X0, zSouth], [PASS_X0, zNorth],
+    [G1_X1, zSouth], [G1_X1, zNorth],
+  ]) {
+    bag.box(cx, PH / 2, cz, 0.32, PH - 0.25, 0.32, 0, C.frame);
+  }
 
   // Interior glow strips (night) along south
-  for (let x = G1_X0 + 2; x < G1_X1 - 1; x += 4.5) {
+  for (let x = G1_X0 + 2; x < PASS_X0 - 1; x += 4.5) {
     if (x > doorL - 1 && x < doorR + 1) continue;
     const col = ((Math.sin(x * 12.9) + 1) * 0.5) > 0.45 ? C.nightWarm : C.nightCool;
     bag.box(x, PH * 0.45, zSouth - 0.9, 3.2, PH * 0.7, 0.08, 0, col);
   }
 
   // Lobby floor under slab between front and back glass
-  bag.box((G1_X0 + G1_X1) / 2, 0.06, (zSouth + zNorth) / 2, G1_X1 - G1_X0 - 0.5, 0.1, Math.abs(zSouth - zNorth) - 0.8, 0, C.plaza);
+  bag.box((G1_X0 + PASS_X0) / 2, 0.06, (zSouth + zNorth) / 2, PASS_X0 - G1_X0 - 0.4, 0.1, Math.abs(zSouth - zNorth) - 0.5, 0, C.plaza);
+  // Passage paving (same level, open)
+  bag.box((PASS_X0 + PASS_X1) / 2, 0.05, (zSouth + zNorth) / 2, PASS_X1 - PASS_X0 - 0.3, 0.08, Math.abs(zSouth - zNorth) - 0.4, 0, C.path);
 
   // --- Revolving door (회전문): clear glass wings ---
   const revG = new THREE.Group(); revG.name = 'cityhallRevolvingDoor';
@@ -2173,12 +2194,17 @@ function buildGroundFloor(data, M) {
   }
 
   function isBlocked(x, z, r = 0.4) {
+    // Open east undercroft passage — walk front↔back under slab (no NS glass here)
+    const inPass = x > PASS_X0 + r && x < PASS_X1 - r
+      && z > zNorth - 1.2 - r && z < zSouth + 1.2 + r;
+    if (inPass) {
+      // Still blocked by divider / east end walls via the loop below
+    }
     // Passage through door bay (revolving centre + open auto door)
     const inDoorBay = x > doorL - r && x < doorR + r && z > zSouth - 1.4 - r && z < zSouth + 1.2 + r;
     if (inDoorBay) {
       if (Math.abs(x - DOOR_X) < 0.9) return false; // revolving path
       if (slideOpen > 0.55 && x > DOOR_X + 0.3 && x < DOOR_X + 3.2) return false;
-      // jambs still block near doorL/doorR edges when trying to squeeze past closed leaves
     }
     for (const w of walls) {
       if (w.kind === 'ns') {
@@ -2192,7 +2218,7 @@ function buildGroundFloor(data, M) {
 
   return {
     group: g, update, isBlocked, setNight, doorX: DOOR_X, zFace: zSouth,
-    extent: { x0: G1_X0, x1: G1_X1, backX0: BACK_X0, backX1: BACK_X1, zSouth, zNorth, PH },
+    extent: { x0: G1_X0, x1: G1_X1, backX0: BACK_X0, backX1: BACK_X1, zSouth, zNorth, PH, passX0: PASS_X0, passX1: PASS_X1 },
     disposeExtra: () => { clearMat.dispose(); glassMat.dispose(); },
   };
 }
@@ -2523,6 +2549,44 @@ function buildPlazaExtras(data, M) {
       if (seen.some(([sx, sz]) => Math.hypot(x - sx, z - sz) < 10)) continue;
       seen.push([x, z]);
       streetPts.push([x, z]);
+    }
+    // Continuous row along WEST plaza curb (big road ↔ plaza) — 도훈 yellow line
+    // NE near floor fountain → SW along sidewalk edge, ~9 m spacing, curb not road
+    {
+      const westPoly = [
+        [1536.0, -5794.0], // NE — by NW fountain pad
+        [1524.0, -5835.0],
+        [1514.0, -5875.0],
+        [1506.0, -5915.0],
+        [1500.0, -5955.0],
+        [1496.0, -5995.0],
+        [1495.0, -6035.0],
+        [1498.0, -6070.0],
+        [1508.0, -6100.0], // SW
+      ];
+      const spacing = 9.0;
+      let carry = 0;
+      for (let i = 0; i < westPoly.length - 1; i++) {
+        const [ax, az] = westPoly[i], [bx, bz] = westPoly[i + 1];
+        const dx = bx - ax, dz = bz - az;
+        const seg = Math.hypot(dx, dz) || 1;
+        const ux = dx / seg, uz = dz / seg;
+        // Perp toward plaza (+X): choose sign so offset increases x
+        let px = -uz, pz = ux;
+        if (px < 0) { px = -px; pz = -pz; }
+        let d = carry;
+        while (d <= seg) {
+          const xx = ax + ux * d + px * 2.4;
+          const zz = az + uz * d + pz * 2.4;
+          if (!clear.some(([cx, cz, r]) => Math.hypot(xx - cx, zz - cz) < r)
+              && !seen.some(([sx, sz]) => Math.hypot(xx - sx, zz - sz) < 7.5)) {
+            seen.push([xx, zz]);
+            streetPts.push([xx, zz]);
+          }
+          d += spacing;
+        }
+        carry = d - seg;
+      }
     }
     let seed = 42011;
     const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
