@@ -1,7 +1,7 @@
 {
   "name": "Bumpinto World",
   "short_name": "Bumpinto",
-  "description": "다 같이 만들어 가는 오픈 월드 · Korea & USA",
+  "description": "다 같이 만들어 가는 오픈 월드",
   "start_url": "/",
   "scope": "/",
   "display": "fullscreen",
