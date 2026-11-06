@@ -139,14 +139,15 @@ const OVERLAY_CSS = `
 #subway-routemap .srm-x:hover{background:rgba(255,225,105,.28)}
 #subway-routemap .srm-strip-wrap{flex:none;overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch;overscroll-behavior-x:contain;
   background:rgba(8,14,26,.45);border-bottom:1px solid rgba(255,255,255,.1);scrollbar-width:thin}
-#subway-routemap .srm-strip{display:flex;align-items:flex-end;gap:0;padding:14px 20px 12px;min-height:88px;width:max-content;position:relative}
-#subway-routemap .srm-strip::before{content:'';position:absolute;left:20px;right:20px;top:52px;height:5px;background:var(--c);border-radius:3px;pointer-events:none}
-#subway-routemap .srm-stop{position:relative;z-index:1;flex:0 0 auto;width:76px;display:flex;flex-direction:column;align-items:center;gap:6px;text-align:center}
-#subway-routemap .srm-stop .dot{width:12px;height:12px;border-radius:50%;background:#fff;border:3px solid var(--c);box-sizing:border-box}
-#subway-routemap .srm-stop .nm{font-size:12px;font-weight:700;line-height:1.2;color:#e8f2f8;max-width:72px;word-break:keep-all}
+/* 이름 위 · 점 아래 · 줄은 점 높이(bottom) — 이름과 겹치지 않음 */
+#subway-routemap .srm-strip{display:flex;align-items:flex-end;gap:0;padding:12px 20px 20px;min-height:100px;width:max-content;position:relative}
+#subway-routemap .srm-strip::before{content:'';position:absolute;left:20px;right:20px;bottom:24px;height:5px;background:var(--c);border-radius:3px;pointer-events:none;z-index:0}
+#subway-routemap .srm-stop{position:relative;z-index:1;flex:0 0 auto;width:76px;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:10px;text-align:center}
+#subway-routemap .srm-stop .nm{font-size:12px;font-weight:700;line-height:1.25;color:#e8f2f8;max-width:72px;min-height:2.5em;display:flex;align-items:flex-end;justify-content:center;text-align:center;word-break:keep-all}
+#subway-routemap .srm-stop .dot{flex:none;width:12px;height:12px;border-radius:50%;background:#fff;border:3px solid var(--c);box-sizing:border-box;margin-bottom:0}
 #subway-routemap .srm-stop.out{opacity:.45}
 #subway-routemap .srm-stop.out .nm{color:#9eb4c6}
-#subway-routemap .srm-stop.me .dot{width:16px;height:16px;background:#ffe169;border-color:#ffe169;box-shadow:0 0 0 3px rgba(255,225,105,.28)}
+#subway-routemap .srm-stop.me .dot{width:16px;height:16px;background:#ffe169;border-color:#ffe169;box-shadow:0 0 0 3px rgba(255,225,105,.28);margin-bottom:-2px}
 #subway-routemap .srm-stop.me .nm{font-size:13.5px;font-weight:900;color:#ffe169}
 #subway-routemap .srm-xfer{padding:8px 14px;display:flex;flex-wrap:wrap;gap:6px;align-items:center;flex:none;border-bottom:1px solid rgba(255,255,255,.08)}
 #subway-routemap .srm-xfer span{font-size:11px;color:#9eb4c6;margin-right:2px}
