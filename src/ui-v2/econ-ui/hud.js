@@ -86,24 +86,35 @@ export function render(delta = null) {
   if (guest) {
     row.innerHTML = `<div class="v2-chip ve-bal ve-bal-guest" data-ve="bal-guest">${EI.coin(24)}<span class="ve-gst"><small>${esc(tr('게스트', 'Guest'))}</small><b>0 bum</b></span>
       <button type="button" class="v2-btn sm primary ve-link" data-ve="link">${esc(tr('구글 계정 연동하고 bum 받기', 'Link Google account to earn bum'))}</button></div>`;
-    trk.innerHTML = `<div class="ve-card ve-guest">
-      <div class="ve-trk-h"><span class="ve-tile" style="--c:#20c997">${EI.walk(16)}</span><b>${esc(tr('게스트로 플레이 중', 'Playing as a guest'))}</b></div>
-      <p>${esc(tr('걷기·구경·사진, 버스·지하철·택시는 그대로 할 수 있어요. 할 일 보상과 bum 지갑은 구글 계정을 연동하면 열려요.', 'Walking, sightseeing, photos, buses, the subway and taxis all work as usual. Quest rewards and the bum wallet open once you link a Google account.'))}</p>
-      <button type="button" class="v2-btn sm primary ve-link" data-ve="link">${esc(tr('구글 계정 연동하고 bum 받기', 'Link Google account to earn bum'))}</button>
-      <p class="ve-gnote">${esc(tr('연동하면 지금까지의 기록이 계정으로 이어져요.', 'Linking carries your progress over to the account.'))}</p></div>`;
+    trk.innerHTML = guestTrackerHtml();
     return;
   }
   const dShow = delta ?? (Date.now() < deltaT ? row.dataset.delta && +row.dataset.delta : null);
   if (delta != null) row.dataset.delta = String(delta);
-  const { slots, done, total } = dailySlots(daily.quests); // 서버가 배정한 일일 슬롯 (계정·날짜마다 다름)
+  const { done, total } = dailySlots(daily.quests); // 서버가 배정한 일일 슬롯 (계정·날짜마다 다름)
   const m = travel.minutes;
   row.innerHTML = `<button type="button" class="v2-chip ve-bal${dShow ? ' v2-glow' : ''}" data-ve="bal" title="${esc(tr('교통카드 · 지갑 열기', 'Open transit card · wallet'))}">${EI.coin(24)}<b data-ve="bal-v">${n(anim ? shown : bal.total)}</b><small>bum</small>${dShow ? `<span class="v2-sub ve-d ${dShow < 0 ? 'neg' : ''}">${sgn(dShow)}</span>` : ''}${mockTag('mini')}</button>
     <button type="button" class="v2-chip ve-move" data-ve="move"><span class="ve-tile" style="--c:#20c997">${EI.walk(16)}</span><small>${esc(tr('이동 인정', 'Counted travel'))}</small><b>${esc(tr(`${m} / ${travel.capMinutes}분`, `${m} / ${travel.capMinutes} min`))}</b>${bar(m, travel.capMinutes, { w: 56, h: 6, cls: 'mint' })}
       <span class="v2-sub ve-pend">${m && travel.settled ? esc(tr('오늘 지급 완료', 'Paid today')) : m ? esc(tr(`정산 예정 ${n(travel.pendingBum)}`, `Pending ${n(travel.pendingBum)}`)) : esc(tr(`걸으면 분당 ${travel.ratePerMin} bum`, `${travel.ratePerMin} bum per walking min`))}</span></button>
     <button type="button" class="v2-chip ve-qchip" data-ve="quest" aria-expanded="${trackerOpen}">${EI.quest(20)}<small>${esc(tr('할 일', 'Quests'))}</small><b>${done}/${total}</b><span class="ve-caret">${trackerOpen ? '▴' : '▾'}</span></button>`;
   if (!trackerOpen) { trk.innerHTML = ''; return; }
+  trk.innerHTML = trackerHtml(daily);
+}
+
+/** 게스트 트래커 카드 (03g). [hud-v3] 플레이어 카드(src/ui-v2/hud-v3/card.js)도 같은 마크업을 쓴다 */
+export function guestTrackerHtml() {
+  return `<div class="ve-card ve-guest">
+      <div class="ve-trk-h"><span class="ve-tile" style="--c:#20c997">${EI.walk(16)}</span><b>${esc(tr('게스트로 플레이 중', 'Playing as a guest'))}</b></div>
+      <p>${esc(tr('걷기·구경·사진, 버스·지하철·택시는 그대로 할 수 있어요. 할 일 보상과 bum 지갑은 구글 계정을 연동하면 열려요.', 'Walking, sightseeing, photos, buses, the subway and taxis all work as usual. Quest rewards and the bum wallet open once you link a Google account.'))}</p>
+      <button type="button" class="v2-btn sm primary ve-link" data-ve="link">${esc(tr('구글 계정 연동하고 bum 받기', 'Link Google account to earn bum'))}</button>
+      <p class="ve-gnote">${esc(tr('연동하면 지금까지의 기록이 계정으로 이어져요.', 'Linking carries your progress over to the account.'))}</p></div>`;
+}
+
+/** 오늘의 할 일 트래커 카드. [hud-v3] 플레이어 카드도 같은 마크업을 쓴다 */
+export function trackerHtml(daily) {
+  const { slots, done, total } = dailySlots(daily.quests);
   const all3 = daily.quests.find((q) => q.id === 'D-ALL3');
-  trk.innerHTML = `<div class="ve-card">
+  return `<div class="ve-card">
     <div class="ve-trk-h">${EI.quest(20)}<b>${esc(tr('오늘의 할 일', "Today's quests"))}</b><b class="ve-blue">${done}/${total}</b>${mockTag('mini')}<span class="v2-grow"></span><button type="button" class="ve-lnk" data-ve="all">${esc(tr('전체 보기 ›', 'View all ›'))}</button></div>
     ${slots.map((q) => {
       const ok = q.state !== 'active';

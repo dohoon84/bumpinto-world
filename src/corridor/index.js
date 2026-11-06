@@ -12,6 +12,7 @@ import { createLandmarks } from './landmarks/index.js';
 import { createLotteEvent } from './landmarks/lotteEvent.js';
 import { stationSign, Grid } from '../world.js';
 import { drawBaseMap } from '../phone.js';
+import { isHudV3 } from '../ui-v2/flag.js'; // [hud-v3-minimap] ?hud=v3 일 때만 타일 도로 데이터를 미니맵용으로 남긴다
 import { addInstancedTrees } from '../world/trees.js';
 import { createCorridorLife } from './life.js';
 import { extractLifeHints, gatherLifeHints } from './lifeHints.js'; // [life] 동네별 보행자·주차 위치 힌트
@@ -51,6 +52,7 @@ export function corridorTerrainData(terrainData, corridorData) {
   return corridorData.streams?.streams?.length ? { ...T, streams: corridorData.streams } : T;
 }
 
+const KEEP_MINI = (() => { try { return isHudV3(); } catch { return false; } })(); // [hud-v3-minimap]
 const QUALITY = { low: { detail: 450, lod: 1500 }, med: { detail: 650, lod: 1800 }, high: { detail: 850, lod: 2400 } };
 const OVERVIEW_LOD = 4200;
 const LINE_COLOR = { 신분당선: '#d4003b', 수인분당선: '#f5a200', 경강선: '#0054a6', '2호선': '#00a84d', '3호선': '#ef7c1c', '8호선': '#e6186c', '9호선': '#bdb092' };
@@ -120,6 +122,7 @@ export function createCorridor({ scene, corridorData, terrain, world, renderer, 
       const pgLm = pangyoLm?.build(t.key); if (pgLm) tile.group.add(pgLm); // [pangyo] 랜드마크는 그 타일과 같이 생기고 해제
       const mgLm = migeumLm?.build(t.key); if (mgLm) tile.group.add(mgLm); // [migeum] 출입구 캐노피
       tile.map = tileMap(t, t.dData);
+      if (KEEP_MINI) tile.mini = miniData(t, t.dData); // [hud-v3-minimap] 타일이 언로드되면 같이 사라진다
       tile.hints = extractLifeHints(t.dData, live); // [life]
       t.dData = null; t.detail = tile; t.dState = 3; root.add(tile.group); loaded.push(t);
       if (t.lod) t.lod.group.visible = false;
@@ -138,6 +141,12 @@ export function createCorridor({ scene, corridorData, terrain, world, renderer, 
     try {
       return drawBaseMap({ meta: { bboxLocal: bx }, parks: j.parks, water: j.water, waterLines: j.wl, roads: j.r.concat(ch.filter(hit)), buildings: j.b.filter((b) => !b.nr) }, { features: {} });
     } catch { return null; }
+  }
+  // [hud-v3-minimap] 미니맵(src/ui-v2/hud-v3/minimap.js)용: 이미 받은 타일 JSON 의 도로·공원·물·건물 외곽 참조만 남긴다(복사 없음)
+  function miniData(t, j) {
+    const bx = { x0: t.x0, z0: t.z0, x1: t.x0 + TS, z1: t.z0 + TS };
+    const hit = (r) => r.p.some(([x, z]) => x >= bx.x0 - 50 && x <= bx.x1 + 50 && z >= bx.z0 - 50 && z <= bx.z1 + 50);
+    return { roads: (j.r || []).concat(ch.filter(hit)), parks: j.parks || [], water: j.water || [], waterLines: j.wl || [], buildings: (j.b || []).filter((b) => !b.nr) };
   }
   function requestDetail(t) {
     if (t.dState) return t.dPromise;
@@ -394,6 +403,7 @@ export function createCorridor({ scene, corridorData, terrain, world, renderer, 
     },
     detailTiles,
     mapTiles: () => loaded.map((t) => t.detail.map).filter(Boolean),
+    miniTiles: () => loaded.filter((t) => t.detail.mini).map((t) => ({ key: t.key, x0: t.x0, z0: t.z0, size: TS, data: t.detail.mini })), // [hud-v3-minimap]
   };
   return api;
 }

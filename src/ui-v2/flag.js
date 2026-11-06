@@ -29,3 +29,21 @@ export function isUiV2(search = typeof location !== 'undefined' ? location.searc
     return false;
   }
 }
+
+// [hud-v3] 데스크톱 상단 HUD v3 (A안: 왼쪽 플레이어 카드 + 오른쪽 액션 바). 기본 꺼짐 — ?hud=v3 로 켠다.
+//   이 탭에서만 기억(월드 이동 새로고침에도 유지). ?hud=off|v2|0 으로 해제. PC(ui-v2) 전용 — 모바일(body.mobile)·?ui=v1 에서는 절대 켜지지 않는다.
+const HUD_KEY = 'bw.hud.v3';
+export function hudV3Wanted(search = typeof location !== 'undefined' ? location.search : '') {
+  try {
+    const q = (new URLSearchParams(search).get('hud') || '').toLowerCase();
+    let ss = null; try { ss = sessionStorage; } catch { /* 막힘 */ }
+    if (q === 'v3') { try { ss?.setItem(HUD_KEY, '1'); } catch { /* noop */ } return true; }
+    if (q) { try { ss?.removeItem(HUD_KEY); } catch { /* noop */ } return false; }
+    try { return ss?.getItem(HUD_KEY) === '1'; } catch { return false; }
+  } catch {
+    return false;
+  }
+}
+export function isHudV3(search = typeof location !== 'undefined' ? location.search : '') {
+  return isUiV2(search) && hudV3Wanted(search);
+}

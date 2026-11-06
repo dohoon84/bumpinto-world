@@ -9,6 +9,7 @@ import { mountEntryWatch, setEntryStation, beforeLobby as entryBeforeLobby, peek
 import { mountHudV2 } from './hud.js';
 import { saveLastStation, readLastStation } from './data.js';
 import { startResumeSaver, readResume, whoOf } from './resume.js';
+import { isHudV3 } from './flag.js';
 
 export { registerGoogleSignIn } from './google.js'; // #21 연결 지점
 export { coinFly } from './kit.js';
@@ -59,7 +60,12 @@ export function initUiV2() {
   import('./econ/index.js').then(({ econ }) => { econ.getSession().then((x) => { ses = x; }).catch(() => {}); econ.on('session', (x) => { ses = x; }); }).catch(() => {});
   startResumeSaver(new URLSearchParams(location.search).get('region') || 'jeongja', () => whoOf(ses));
   // [econ-ui] 경제 UI (bum 잔액·할 일·교통 결제·상점) — PC 전용, 별도 청크
-  if (!document.body.classList.contains('mobile')) import('./econ-ui/index.js').then((m) => m.mountEconUi()).catch(() => {});
+  if (!document.body.classList.contains('mobile')) {
+    const econUi = import('./econ-ui/index.js');
+    // [hud-v3] ?hud=v3 (기본 꺼짐): 상단 HUD 를 A안(플레이어 카드 + 액션 바)으로. 꺼져 있으면 예전 그대로
+    if (isHudV3()) import('./hud-v3/index.js').then((h) => h.mountHudV3(econUi)).catch((e) => { console.warn('[hud-v3]', e); econUi.then((m) => m.mountEconUi()).catch(() => {}); });
+    else econUi.then((m) => m.mountEconUi()).catch(() => {});
+  }
   if (!flow) setGateDecorator(makeGateDecorator({ onBackToStart: () => location.reload() }));
 }
 initUiV2();

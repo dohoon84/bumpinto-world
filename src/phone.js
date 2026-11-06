@@ -268,6 +268,8 @@ export function mountPhone({ data, region = null, extraTiles = null }) { // [cor
 
   return {
     tick({ x, z, moving, moveYaw, lookYaw, dt = 0.016, peers = [] }) {
+      // [hud-v3] 원형 미니맵이 켜져 있으면 코너맵을 그리지 않음(display:none + 여기 early return)
+      if (document.body.classList.contains('h3-mm-on')) return;
       const target = moving ? moveYaw : lookYaw;
       if (!ready) { heading = target; ready = true; }
       else {

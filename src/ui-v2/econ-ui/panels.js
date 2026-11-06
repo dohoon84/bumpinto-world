@@ -8,7 +8,7 @@ import thumbRoadbike from './assets/shop/roadbike.webp';
 import thumbScooter from './assets/shop/scooter.webp';
 import thumbCar from './assets/shop/car.webp';
 const SHOP_THUMB = { bike: thumbBike, roadbike: thumbRoadbike, scooter: thumbScooter, car: thumbCar };
-import { n, sgn, T, tr, esc, EI, AXIS, axisName, axisTile, mockTag, bumPill, karmaPill, bar, stamp, tag, head, closeBtn, unitText } from './kit.js';
+import { n, sgn, T, tr, esc, EI, AXIS, axisName, axisTile, mockTag, bumPill, karmaPill, bar, stamp, tag, head, closeBtn, unitText, v3i, gi } from './kit.js';
 import { show, close, toastLayer } from './layer.js';
 import { balanceChip, countUp, refresh } from './hud.js';
 import { googleButton } from '../google.js';
@@ -71,6 +71,7 @@ export async function openChipTip(delta = null) {
 
 // ---------- 04 할 일 시트 (매일 · 주간 · 월간)
 const PERIOD = [['daily', '매일', 'Daily'], ['weekly', '주간', 'Weekly'], ['monthly', '월간', 'Monthly']];
+const TAB_IC = { daily: 'sun', weekly: 'cal', monthly: 'trophy' }; // [game-icons] v3 탭 아이콘
 // 열기·탭 전환 모두 즉시: 받아 둔 목록(또는 스켈레톤)을 먼저 그리고, 서버 응답이 오면 같은 패널만 갈아 끼운다.
 // PR #34 는 탭만 즉시였고, 첫 오픈은 서버를 기다렸음(아래 questOpenFast). ?questfast=0 이면 예전처럼 첫 오픈도 대기.
 const questCache = new Map();
@@ -84,7 +85,7 @@ try {
   econ.on?.('quest', ({ period } = {}) => { if (period) questCache.delete(period); });
 } catch { /* 목 클라이언트 등 */ }
 function questsHtml(period, list) {
-  const tabs = PERIOD.map(([k, ko, en]) => `<button type="button" class="ve-tab${k === period ? ' on' : ''}" data-tab="${k}">${esc(tr(ko, en))}</button>`).join('');
+  const tabs = PERIOD.map(([k, ko, en]) => `<button type="button" class="ve-tab${k === period ? ' on' : ''}" data-tab="${k}">${v3i() ? gi(TAB_IC[k], 16) : ''}${esc(tr(ko, en))}</button>`).join('');
   let body;
   if (!list) body = `<p class="ve-info">${esc(tr('불러오는 중…', 'Loading…'))}</p>`;
   else if (list.guest) {
@@ -100,7 +101,7 @@ function questsHtml(period, list) {
       }).join('')}</div>
       <div class="ve-qfoot">${EI.coin(20)}<b>${esc(period === 'daily' ? tr(`오늘 할 일 보상 최대 ${n(list.maxBum)} bum`, `Today's quest rewards up to ${n(list.maxBum)} bum`) : period === 'weekly' ? tr(`이번 주 할 일 보상 최대 ${n(list.maxBum)} bum`, `This week's quest rewards up to ${n(list.maxBum)} bum`) : tr(`이번 달 할 일 보상 최대 ${n(list.maxBum)} bum`, `This month's quest rewards up to ${n(list.maxBum)} bum`))}</b><span class="v2-grow"></span><small>${esc(tr(`받은 보상 ${n(list.claimedBum)} · 남은 보상 ${n(list.maxBum - list.claimedBum)}`, `Claimed ${n(list.claimedBum)} · Left ${n(list.maxBum - list.claimedBum)}`))}</small></div>`;
   }
-  return `<div class="v2-hrow ve-qhead">${head(tr('할 일', 'Quests'), { icon: EI.quest(24), size: 24 })}<div class="ve-tabs">${tabs}</div>${mockTag()}<span class="v2-grow"></span>${closeBtn()}</div>${body}`;
+  return `<div class="v2-hrow ve-qhead">${head(tr('할 일', 'Quests'), { icon: v3i() ? gi('quest', 26, 've-gi-head') : EI.quest(24), size: 24 })}<div class="ve-tabs">${tabs}</div>${mockTag()}<span class="v2-grow"></span>${closeBtn()}</div>${body}`;
 }
 function rememberQuests(period, list) {
   if (!list) return;
@@ -214,7 +215,7 @@ export async function openKarma({ link } = {}) {
   };
   p.innerHTML = `${k.asOf ? `<span class="ve-asof">${esc(T(k.asOf))}</span>` : ''}
     <div class="ve-kl">
-      <div class="v2-hrow">${head(tr('카르마', 'Karma'), { icon: EI.karma(20), size: 22 })}<b class="ve-t22 ve-gold">${esc(tr(`총 ${n(k.total)}`, `Total ${n(k.total)}`))}</b>${k.featured ? tag(tr(`대표 칭호 · ${T(k.featured)}`, `Title · ${T(k.featured)}`), '#20c997') : ''}${mockTag()}</div>
+      <div class="v2-hrow">${head(tr('카르마', 'Karma'), { icon: v3i() ? gi('karma', 24, 've-gi-head') : EI.karma(20), size: 22 })}<b class="ve-t22 ve-gold">${esc(tr(`총 ${n(k.total)}`, `Total ${n(k.total)}`))}</b>${k.featured ? tag(tr(`대표 칭호 · ${T(k.featured)}`, `Title · ${T(k.featured)}`), '#20c997') : ''}${mockTag()}</div>
       <p class="ve-note">${esc(tr('행동을 하면 축별로 쌓여요. 칭호는 누적 점수로 열려요.', 'Actions add up per axis. Titles unlock by total points.'))}</p>
       ${k.guest ? `<div class="ve-empty sm"><b>${esc(tr('구글 계정을 연동하면 카르마와 업적이 쌓여요', 'Link a Google account to build karma and achievements'))}</b><button type="button" class="v2-btn sm primary" data-ve="link">${esc(tr('구글 계정 연동하고 bum 받기', 'Link Google account to earn bum'))}</button></div>` : ''}
       ${['health', 'explore', 'transit', 'neighbor', 'streak'].map(axisRow).join('')}
@@ -232,7 +233,7 @@ export async function openKarma({ link } = {}) {
 export async function openShop({ link } = {}) {
   let [items, goal, bal] = await Promise.all([econ.listShopItems(), econ.getShopGoal(), econ.getBalance()]); // 상점은 미리보기 전용 — 무료(베타) 표시 없음
   let sel = items.find((i) => !i.owned && i.available !== false)?.id || items[0]?.id;
-  if (!items.length) { const p0 = panel('ve-shop', `<div class="v2-hrow">${head(tr('탈것 상점', 'Vehicle shop'), { size: 24 })}${mockTag()}<span class="v2-grow"></span>${closeBtn()}</div><p class="ve-note">${esc(tr('지금은 상점을 열 수 없어요. 잠시 뒤 다시 열어 주세요.', 'The shop is unavailable right now. Please try again later.'))}</p>`); show(p0, { key: '11' }); return; }
+  if (!items.length) { const p0 = panel('ve-shop', `<div class="v2-hrow">${head(tr('탈것 상점', 'Vehicle shop'), { icon: v3i() ? gi('shop', 26, 've-gi-head') : '', size: 24 })}${mockTag()}<span class="v2-grow"></span>${closeBtn()}</div><p class="ve-note">${esc(tr('지금은 상점을 열 수 없어요. 잠시 뒤 다시 열어 주세요.', 'The shop is unavailable right now. Please try again later.'))}</p>`); show(p0, { key: '11' }); return; }
   const p = panel('ve-shop', '');
   const draw = () => {
     const it = items.find((i) => i.id === sel);
@@ -247,12 +248,12 @@ export async function openShop({ link } = {}) {
           : `<button type="button" class="v2-btn secondary ve-locked" disabled>${EI.lock(12)}${esc(tr('잔액 부족 · 구매 불가', 'Not enough bum · cannot buy'))}</button>`;
     const gItem = goal ? items.find((i) => i.id === goal.itemId) : null;
     const pct = goal ? Math.floor((goal.balance / goal.price) * 100) : 0;
-    p.innerHTML = `<div class="v2-hrow">${head(tr('탈것 상점', 'Vehicle shop'), { size: 24 })}${tag(tr('미리보기 · 준비중', 'Preview · Coming soon'), '#9eb4c6')}${mockTag()}<span class="v2-grow"></span>${bal.guest ? '' : `<span class="ve-bum lg">${EI.coin(16)}<b>${esc(tr(`내 잔액 ${n(bal.total)} bum`, `Balance ${n(bal.total)} bum`))}</b></span>`}${closeBtn()}</div>
+    p.innerHTML = `<div class="v2-hrow">${head(tr('탈것 상점', 'Vehicle shop'), { icon: v3i() ? gi('shop', 26, 've-gi-head') : '', size: 24 })}${tag(tr('미리보기 · 준비중', 'Preview · Coming soon'), '#9eb4c6')}${mockTag()}<span class="v2-grow"></span>${bal.guest ? '' : `<span class="ve-bum lg">${EI.coin(16)}<b>${esc(tr(`내 잔액 ${n(bal.total)} bum`, `Balance ${n(bal.total)} bum`))}</b></span>`}${closeBtn()}</div>
       ${goal && gItem ? `<div class="ve-goal"><div class="v2-hrow"><b>${esc(tr(`목표: ${T(items.find((i) => i.id === goal.itemId).name)} ${n(goal.price)} bum`, `Goal: ${T(items.find((i) => i.id === goal.itemId).name)} ${n(goal.price)} bum`))}</b><span class="v2-grow"></span><b class="ve-gold ve-t20">${esc(tr(`${goal.daysLeft}일 남음`, `${goal.daysLeft} days left`))}</b></div>
         ${bar(goal.balance, goal.price, { w: 1180, h: 10, cls: 'gold ve-wide' })}<div class="v2-hrow"><small>${esc(tr(`${n(goal.balance)} / ${n(goal.price)} (${pct}%) · 남은 ${n(goal.remaining)} bum`, `${n(goal.balance)} / ${n(goal.price)} (${pct}%) · ${n(goal.remaining)} bum to go`))}</small><span class="v2-grow"></span><small>${esc(tr(`보통 페이스 하루 순 +${n(goal.typicalDailyNet)} 기준`, `At a typical net +${n(goal.typicalDailyNet)} per day`))}</small></div>
         <small class="ve-freenote">${esc(tr('상점은 준비중이에요. 지금은 가격만 볼 수 있고, 열리면 모은 bum으로 살 수 있어요.', 'The shop is coming soon. Prices are a preview; you can buy with saved bum once it opens.'))}</small></div>` : ''}
-      <div class="ve-items">${items.map((i) => `<button type="button" class="ve-item${i.id === sel ? ' on' : ''}${i.available === false ? ' na' : ''}" data-item="${i.id}"><span class="ve-thumb">${SHOP_THUMB[i.id] ? `<img src="${SHOP_THUMB[i.id]}" alt="${esc(T(i.name))}" width="200" height="120" loading="lazy" decoding="async">` : esc(T(i.name))}</span>
-        <span class="v2-hrow"><b>${esc(T(i.name))}</b>${!i.owned && (i.comingSoon !== false || i.available === false || !i.affordable) ? EI.lock(12) : ''}${i.owned ? tag(tr('보유', 'Owned'), '#20c997') : ''}${i.comingSoon !== false || i.available === false ? tag(tr('준비중', 'Coming soon'), '#9eb4c6') : ''}</span>
+      <div class="ve-items">${items.map((i) => `<button type="button" class="ve-item${i.id === sel ? ' on' : ''}${i.available === false ? ' na' : ''}" data-item="${i.id}"><span class="ve-thumb">${SHOP_THUMB[i.id] ? `<img src="${SHOP_THUMB[i.id]}" alt="${esc(T(i.name))}" width="200" height="120" loading="lazy" decoding="async">` : esc(T(i.name))}${v3i() ? `<span class="ve-vbadge">${gi(i.id, 18)}</span>` : ''}</span>
+        <span class="v2-hrow"><b>${esc(T(i.name))}</b>${!i.owned && (i.comingSoon !== false || i.available === false || !i.affordable) ? EI.lock(12) : ''}${i.owned ? tag(tr('보유', 'Owned'), '#20c997') : ''}${i.comingSoon !== false || i.available === false ? (v3i() ? tag(tr('준비중', 'Coming soon'), '#9eb4c6', 've-soon').replace('>', `>${gi('clock', 12)}`) : tag(tr('준비중', 'Coming soon'), '#9eb4c6')) : ''}</span>
         <span class="ve-iprice">${EI.coin(18)}<b>${n(i.price)} bum</b></span>
         <small>${esc(tr(`보통 플레이어 약 ${n(i.daysForTypical)}일`, `About ${n(i.daysForTypical)} days for a typical player`))}</small></button>`).join('')}</div>
       <div class="v2-hrow ve-sfoot"><small>${esc(tr('첫 자전거 기준: 라이트 80일 · 헤비 14일 · 구매한 탈것은 선물 불가', 'First bicycle: light player 80 days · heavy 14 days · bought vehicles cannot be gifted'))}</small><span class="v2-grow"></span>${btn}</div>
