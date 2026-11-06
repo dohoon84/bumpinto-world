@@ -109,6 +109,12 @@ export function createCorridor({ scene, corridorData, terrain, world, renderer, 
       if (!near(t, x, z, 120)) continue;
       for (const [dx, dz] of [[0, 0], [r, 0], [-r, 0], [0, r], [0, -r]]) if (t.detail.blocked(x + dx, z + dz)) return true;
     }
+    // [cityhall] pond railing / water — landmark collision (music-fountain plaza)
+    if (cityhall?.isBlocked) {
+      for (const [dx, dz] of [[0, 0], [r, 0], [-r, 0], [0, r], [0, -r]]) {
+        if (cityhall.isBlocked(x + dx, z + dz, r)) return true;
+      }
+    }
     return false;
   };
   const onRoadAll = (x, z) => liveOnRoad(x, z) || corridorOnRoad(x, z);

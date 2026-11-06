@@ -864,6 +864,287 @@ function buildPond(data, M) {
   return g;
 }
 
+function pondGeom() {
+  // Shared D-pond params (must match buildPond)
+  const bx = 1694, z0 = -5948, z1 = -5896;
+  const zMid = (z0 + z1) / 2;
+  const R = Math.abs(z1 - z0) / 2;
+  const ring = [];
+  for (let i = 0; i <= 8; i++) ring.push([bx, z0 + (z1 - z0) * (i / 8)]);
+  for (let i = 1; i < 32; i++) {
+    const t = i / 32, ang = Math.PI / 2 - t * Math.PI;
+    ring.push([bx + R * Math.cos(ang), zMid + R * Math.sin(ang)]);
+  }
+  return { bx, z0, z1, zMid, R, ring };
+}
+
+/** Music-fountain plaza around the east D-pond (도훈 marked4 mockup). */
+function buildPondMusicPlaza(data, M) {
+  const g = new THREE.Group(); g.name = 'cityhallPondPlaza';
+  const { bx, z0, z1, zMid, R, ring } = pondGeom();
+  const bag = Bag();
+  const dummy = new THREE.Object3D();
+
+  // --- ② Low railing along curved edge (knee ~1.0 m) + collision helpers ---
+  const railH = 1.0, railY = railH / 2;
+  const postR = 0.04;
+  const railPts = [];
+  for (let i = 0; i <= 36; i++) {
+    const t = i / 36;
+    const ang = Math.PI / 2 - t * Math.PI;
+    railPts.push([bx + (R + 0.35) * Math.cos(ang), zMid + (R + 0.35) * Math.sin(ang), ang]);
+  }
+  for (let i = 0; i < railPts.length; i++) {
+    const [x, z] = railPts[i];
+    bag.cyl(x, railY, z, postR, railH, 5, C.pole);
+    if (i < railPts.length - 1) {
+      const [x2, z2] = railPts[i + 1];
+      const dx = x2 - x, dz = z2 - z, L = Math.hypot(dx, dz) || 1;
+      const ang = Math.atan2(dz, dx);
+      bag.box((x + x2) / 2, railH * 0.92, (z + z2) / 2, L, 0.05, 0.05, -ang, C.pole);
+      bag.box((x + x2) / 2, railH * 0.55, (z + z2) / 2, L, 0.04, 0.04, -ang, C.pole);
+    }
+  }
+  // Also short returns at chord ends so players can't slip in at tips
+  bag.box(bx + 0.6, railY, z0, 1.4, railH, 0.08, 0, C.pole);
+  bag.box(bx + 0.6, railY, z1, 1.4, railH, 0.08, 0, C.pole);
+
+  // --- ③ Wooden deck — middle of curve only (ends = lawn per red strike-through) ---
+  // Arc t in [0.20, 0.78] → skip north tip (building) and south tip (chord)
+  const deckBag = Bag();
+  const deckInner = R + 0.7, deckOuter = R + 5.2;
+  const deckT0 = 0.20, deckT1 = 0.78;
+  const deckSegs = 18;
+  for (let i = 0; i < deckSegs; i++) {
+    const t0 = deckT0 + (deckT1 - deckT0) * (i / deckSegs);
+    const t1 = deckT0 + (deckT1 - deckT0) * ((i + 1) / deckSegs);
+    const a0 = Math.PI / 2 - t0 * Math.PI, a1 = Math.PI / 2 - t1 * Math.PI;
+    const ringDeck = [
+      [bx + deckInner * Math.cos(a0), zMid + deckInner * Math.sin(a0)],
+      [bx + deckInner * Math.cos(a1), zMid + deckInner * Math.sin(a1)],
+      [bx + deckOuter * Math.cos(a1), zMid + deckOuter * Math.sin(a1)],
+      [bx + deckOuter * Math.cos(a0), zMid + deckOuter * Math.sin(a0)],
+    ];
+    deckBag.push(paintFaces(extrude(ringDeck, [], 0.28, 0.42), C.wood, C.woodDark, C.woodDark));
+  }
+  // plank lines (cheap)
+  for (let i = 0; i < 14; i++) {
+    const t = deckT0 + (deckT1 - deckT0) * ((i + 0.5) / 14);
+    const ang = Math.PI / 2 - t * Math.PI;
+    const x = bx + ((deckInner + deckOuter) / 2) * Math.cos(ang);
+    const z = zMid + ((deckInner + deckOuter) / 2) * Math.sin(ang);
+    deckBag.box(x, 0.43, z, 0.05, 0.02, deckOuter - deckInner - 0.3, -ang, C.woodDark);
+  }
+  const deckM = deckBag.mesh(M.vc, 'cityhallPondDeck'); if (deckM) g.add(deckM);
+
+  // --- ④ ㄱ자 3-tier stone seating + ⑤ aisle stairs ---
+  // North leg (top): west→east, facing south toward pond
+  // East leg (right): north→south, facing west toward pond
+  const seatBag = Bag();
+  const tierH = 0.38, tierD = 1.35;
+  const stoneA = '#c8c2b6', stoneB = '#a8a296';
+  // North leg
+  const nLegZ0 = z0 - 2.2; // closest to pond (south face of seats)
+  const nLegX0 = bx + 6, nLegX1 = bx + R + 14;
+  // East leg
+  const eLegX0 = bx + R + 5.5; // closest to pond
+  const eLegZ0 = z0 - 1.5, eLegZ1 = zMid + 10;
+
+  function addTierRow(alongAxis, /* 'x' or 'z' */ a0, a1, fixed, outwardSign, facingPond) {
+    // alongAxis grows along the leg; fixed is the pond-side coordinate of tier 0 front
+    for (let t = 0; t < 3; t++) {
+      const y = tierH * (t + 0.5);
+      const depthOff = outwardSign * (t + 0.5) * tierD;
+      const col = t % 2 ? stoneB : stoneA;
+      if (alongAxis === 'x') {
+        seatBag.box((a0 + a1) / 2, y, fixed + depthOff, a1 - a0, tierH, tierD - 0.06, 0, col);
+      } else {
+        seatBag.box(fixed + depthOff, y, (a0 + a1) / 2, tierD - 0.06, tierH, a1 - a0, 0, col);
+      }
+    }
+  }
+  addTierRow('x', nLegX0, nLegX1, nLegZ0, -1); // north of pond → outward is -Z
+  addTierRow('z', eLegZ0, eLegZ1, eLegX0, +1); // east of pond → outward is +X
+
+  // Corner fill where legs meet (NE)
+  for (let t = 0; t < 3; t++) {
+    const y = tierH * (t + 0.5);
+    const ox = eLegX0 + (t + 0.5) * tierD;
+    const oz = nLegZ0 - (t + 0.5) * tierD;
+    seatBag.box(ox, y, oz, tierD - 0.06, tierH, tierD - 0.06, 0, t % 2 ? stoneB : stoneA);
+  }
+
+  // Aisle stairs — 2 per leg (lighter stone)
+  function cutStairsX(cx, zFront, outwardSign) {
+    // stairs rising away from pond through 3 tiers
+    for (let s = 0; s < 3; s++) {
+      const y = tierH * (s + 0.5);
+      seatBag.box(cx, y, zFront + outwardSign * (s + 0.5) * tierD, 1.4, tierH * 0.95, tierD - 0.1, 0, C.path);
+    }
+  }
+  function cutStairsZ(cz, xFront, outwardSign) {
+    for (let s = 0; s < 3; s++) {
+      const y = tierH * (s + 0.5);
+      seatBag.box(xFront + outwardSign * (s + 0.5) * tierD, y, cz, tierD - 0.1, tierH * 0.95, 1.4, 0, C.path);
+    }
+  }
+  const nSpan = nLegX1 - nLegX0;
+  cutStairsX(nLegX0 + nSpan * 0.33, nLegZ0, -1);
+  cutStairsX(nLegX0 + nSpan * 0.72, nLegZ0, -1);
+  const eSpan = eLegZ1 - eLegZ0;
+  cutStairsZ(eLegZ0 + eSpan * 0.30, eLegX0, +1);
+  cutStairsZ(eLegZ0 + eSpan * 0.68, eLegX0, +1);
+
+  const seatM = seatBag.mesh(M.vc, 'cityhallPondSeats'); if (seatM) g.add(seatM);
+
+  const railM = bag.mesh(M.vc, 'cityhallPondRail'); if (railM) g.add(railM);
+
+  // --- ⑥ Lawn strip below deck: bushes + trees (yellow zone) ---
+  // Between deck outer and further east/SE
+  const bushN = 28, treeN = 14;
+  const bushes = new THREE.InstancedMesh(new THREE.SphereGeometry(0.7, 6, 5), M.hedge, bushN);
+  const trunks = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.16, 0.22, 1, 6), M.trunk, treeN);
+  const pines = new THREE.InstancedMesh(new THREE.ConeGeometry(1.0, 2.2, 7), M.pine, treeN * 2);
+  bushes.name = 'cityhallPondBushes'; trunks.name = 'cityhallPondTrunks'; pines.name = 'cityhallPondPines';
+  let bi = 0, ti = 0, pi = 0;
+  const rnd = (a, b, s) => a + (b - a) * (Math.abs(Math.sin(s * 12.9898)) % 1);
+  for (let i = 0; i < bushN; i++) {
+    const t = 0.15 + 0.7 * (i / bushN);
+    const ang = Math.PI / 2 - t * Math.PI;
+    const rad = deckOuter + 2.2 + rnd(0, 4.5, i + 3);
+    const x = bx + rad * Math.cos(ang) + rnd(-1.2, 1.2, i * 7);
+    const z = zMid + rad * Math.sin(ang) + rnd(-1.0, 1.0, i * 9);
+    // keep off north tip / seating footprint
+    if (z < z0 - 1) continue;
+    if (x < bx + 4) continue;
+    dummy.position.set(x, 0.55 + rnd(0, 0.25, i), z);
+    const s = 0.7 + rnd(0, 0.55, i + 1);
+    dummy.scale.set(s, s * 0.85, s); dummy.rotation.set(0, i, 0); dummy.updateMatrix();
+    bushes.setMatrixAt(bi++, dummy.matrix);
+  }
+  for (let i = 0; i < treeN; i++) {
+    const t = 0.22 + 0.55 * (i / treeN);
+    const ang = Math.PI / 2 - t * Math.PI;
+    const rad = deckOuter + 5.5 + rnd(0, 3.5, i + 11);
+    const x = bx + rad * Math.cos(ang);
+    const z = zMid + rad * Math.sin(ang);
+    if (z < z0) continue;
+    dummy.position.set(x, 0.7, z); dummy.scale.set(1, 1.4, 1); dummy.rotation.set(0, 0, 0); dummy.updateMatrix();
+    trunks.setMatrixAt(ti++, dummy.matrix);
+    for (let L = 0; L < 2; L++) {
+      dummy.position.set(x, 1.6 + L * 1.1, z);
+      dummy.scale.set(1.1 - L * 0.25, 1.0 - L * 0.15, 1.1 - L * 0.25);
+      dummy.updateMatrix();
+      pines.setMatrixAt(pi++, dummy.matrix);
+    }
+  }
+  bushes.count = bi; trunks.count = ti; pines.count = pi;
+  bushes.castShadow = trunks.castShadow = pines.castShadow = true;
+  g.add(bushes, trunks, pines);
+
+  // --- ① Colour jets: main line on chord + 2 shorter aux rows toward curve ---
+  const MAIN_N = 26, AUX1_N = 14, AUX2_N = 10;
+  const TOTAL = MAIN_N + AUX1_N + AUX2_N;
+  // Shared additive jet material (recolour via material.color — cheap, one draw for all if same mat)
+  // Use instanceColor for per-jet rainbow
+  const jetMat = new THREE.MeshBasicMaterial({
+    color: '#ffffff', transparent: true, opacity: 0.72, depthWrite: false,
+    blending: THREE.AdditiveBlending, side: THREE.DoubleSide, vertexColors: false,
+  });
+  jetMat.name = 'PondJet';
+  const jetGeo = new THREE.PlaneGeometry(0.18, 1);
+  jetGeo.translate(0, 0.5, 0);
+  // 2 crossed planes per jet
+  const jets = new THREE.InstancedMesh(jetGeo, jetMat, TOTAL * 2);
+  jets.name = 'cityhallPondJets'; jets.frustumCulled = false;
+  // instance colors
+  const colorArr = new Float32Array(TOTAL * 2 * 3);
+  jets.instanceColor = new THREE.InstancedBufferAttribute(colorArr, 3);
+  g.add(jets);
+
+  const seeds = [];
+  const pushSeed = (x, z, hMax, phase) => { seeds.push({ x, z, hMax, phase }); };
+  for (let i = 0; i < MAIN_N; i++) {
+    const t = (i + 0.5) / MAIN_N;
+    pushSeed(bx + 1.6, z0 + 3 + t * (z1 - z0 - 6), 7.5 + (i % 5) * 0.6, i / MAIN_N);
+  }
+  for (let i = 0; i < AUX1_N; i++) {
+    const t = 0.12 + 0.76 * ((i + 0.5) / AUX1_N);
+    pushSeed(bx + 5.2, z0 + 3 + t * (z1 - z0 - 6), 3.2 + (i % 3) * 0.35, 0.3 + i / AUX1_N);
+  }
+  for (let i = 0; i < AUX2_N; i++) {
+    const t = 0.2 + 0.6 * ((i + 0.5) / AUX2_N);
+    pushSeed(bx + 8.8, z0 + 3 + t * (z1 - z0 - 6), 2.0 + (i % 2) * 0.3, 0.55 + i / AUX2_N);
+  }
+
+  const tmpC = new THREE.Color();
+  function rainbow(u) {
+    // u in [0,1) → vivid rainbow
+    tmpC.setHSL((u % 1), 0.95, 0.55);
+    return tmpC;
+  }
+
+  function update(t) {
+    const nightBoost = 1; // colour always on for this plaza (music fountain identity)
+    for (let i = 0; i < seeds.length; i++) {
+      const s = seeds[i];
+      const pulse = 0.4 + 0.6 * (0.5 + 0.5 * Math.sin(t * 2.4 + s.phase * Math.PI * 2));
+      const h = Math.max(0.4, s.hMax * pulse);
+      const hue = (s.phase * 0.85 + t * 0.15) % 1;
+      const col = rainbow(hue);
+      const w = 0.28 + (i < MAIN_N ? 0.12 : 0.04);
+      dummy.position.set(s.x, 0.32, s.z);
+      dummy.rotation.set(0, 0, 0);
+      dummy.scale.set(w, h, 1);
+      dummy.updateMatrix();
+      jets.setMatrixAt(i * 2, dummy.matrix);
+      jets.setColorAt(i * 2, col);
+      dummy.rotation.set(0, Math.PI / 2, 0);
+      dummy.updateMatrix();
+      jets.setMatrixAt(i * 2 + 1, dummy.matrix);
+      jets.setColorAt(i * 2 + 1, col);
+    }
+    jets.count = seeds.length * 2;
+    jets.instanceMatrix.needsUpdate = true;
+    if (jets.instanceColor) jets.instanceColor.needsUpdate = true;
+    jetMat.opacity = 0.7 + 0.28 * (0.5 + 0.5 * Math.sin(t * 1.5));
+    // keep additive colour readable at night (don't wash to white)
+    jetMat.color.setRGB(1, 1, 1);
+  }
+
+  // Collision: block inside pond water + near railing arc
+  function isBlocked(x, z, r = 0.4) {
+    // Inside D water (slightly inset)
+    if (inRing(x, z, ring)) {
+      // allow west lip path (outside water toward building)
+      if (x < bx + 0.4) return false;
+      return true;
+    }
+    // Near railing posts (curved edge band)
+    const dx = x - bx, dz = z - zMid;
+    const dist = Math.hypot(dx, dz);
+    if (dist > R - 0.2 && dist < R + 1.1) {
+      // only on the eastern semicircle (x >= bx)
+      if (x >= bx - 0.5) {
+        const ang = Math.atan2(dz, dx); // -PI..PI, east=0
+        if (ang > -Math.PI / 2 - 0.15 && ang < Math.PI / 2 + 0.15) return true;
+      }
+    }
+    return false;
+  }
+
+  // Kick one frame so jets visible before first update
+  update(0);
+
+  return {
+    group: g,
+    update,
+    isBlocked,
+    disposeExtra: () => { jetGeo.dispose(); jetMat.dispose(); },
+  };
+}
+
+
 function buildFountainComplex(data, M) {
   const g = new THREE.Group(); g.name = 'cityhallFountain';
   const f = data.fountain, d = data.deck;
@@ -1291,6 +1572,7 @@ export function buildSeongnamCityHall(data, { env = null, glbUrl = null } = {}) 
   const banners = buildBanners(data, M);
   const sign = buildSeongnamSign(data, M);
   const pond = buildPond(data, M);
+  const pondPlaza = buildPondMusicPlaza(data, M);
   const fountain = buildFountainComplex(data, M);
   const landscape = buildLandscape(data, M);
   const parking = buildParking(data, M);
@@ -1298,11 +1580,13 @@ export function buildSeongnamCityHall(data, { env = null, glbUrl = null } = {}) 
   mergeStaticGroup(grounds, 'cityhallGroundsMerged');
   mergeStaticGroup(banners, 'cityhallBannersMerged');
   mergeStaticGroup(pond, 'cityhallPondMerged');
+  // merge static bits of plaza (rail/deck/seats); keep instanced jets/trees
+  mergeStaticGroup(pondPlaza.group, 'cityhallPondPlazaMerged');
   mergeStaticGroup(landscape, 'cityhallLandscapeMerged');
   mergeStaticGroup(parking, 'cityhallParkingMerged');
   mergeStaticGroup(gate, 'cityhallGateMerged');
-  // fountain kept unmerged — animated jets + named deck/seats for tests
-  root.add(grounds, banners, sign, pond, fountain.group, landscape, parking, gate);
+  // fountain + pondPlaza jets kept as instanced (animated)
+  root.add(grounds, banners, sign, pond, pondPlaza.group, fountain.group, landscape, parking, gate);
 
   let glbNight = null;
   let eveningOn = false;
@@ -1343,10 +1627,16 @@ export function buildSeongnamCityHall(data, { env = null, glbUrl = null } = {}) 
   return {
     group: root,
     get stats() { return { name: 'seongnamCityHall', meshes, instanced }; },
-    update(dt, t) { if (!disposed) fountain.update(t ?? performance.now() / 1000); },
+    update(dt, t) {
+      if (disposed) return;
+      const tt = t ?? performance.now() / 1000;
+      fountain.update(tt);
+      pondPlaza.update(tt);
+    },
+    isBlocked(x, z, r) { return !disposed && !!pondPlaza.isBlocked?.(x, z, r); },
     dispose() {
       if (disposed) return; disposed = true;
-      stopEve(); fountain.disposeExtra?.();
+      stopEve(); fountain.disposeExtra?.(); pondPlaza.disposeExtra?.();
       root.traverse((o) => {
         if (o.geometry) o.geometry.dispose();
       });

@@ -52,6 +52,7 @@ export function createCityHall({ data, scene, overlay = null, env = null, baseUr
     stats: built.stats,
     data,
     update(dt) { built.update(dt, performance.now() / 1000 - t0); },
+    isBlocked(x, z, r) { return !!built.isBlocked?.(x, z, r); },
     dispose() {
       scene.remove(built.group);
       built.dispose();
