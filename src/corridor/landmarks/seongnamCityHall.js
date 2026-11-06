@@ -1,4 +1,4 @@
-// [cityhall] 성남시청 랜드마크 v4 — Blender GLB 본관 + 절차적 광장/분수/수목.
+// [cityhall] 성남시청 랜드마크 v6 — Blender GLB 본관 + 절차적 광장/분수/수목.
 //   넓은 저층(~10층)·서측 접힌 파란 유리·중앙 사선 아트리움·동측 커튼월+흰 프레임·필로티·태양광
 //   광장 화강암·배너 보행로·원형 연못·음악분수·데크·계단의자. 브랜드 로고 없음.
 //   성능: 공유 재질 · 병합 · InstancedMesh · 소형 캔버스/큐브 env
@@ -631,8 +631,8 @@ function buildGrounds(data, M) {
     [1688, zMax + 48], [xMin - 5, zMax + 65],
   ];
   {
-    const geo = extrude(plaza, [], 0.08, 0.16);
-    const m = new THREE.Mesh(geo, M.plaza); m.name = 'cityhallPlaza'; m.receiveShadow = true; g.add(m);
+    // [p6] merge plaza into vc bag (1 draw with lawns/paths)
+    bag.push(paintFaces(extrude(plaza, [], 0.08, 0.16), C.plaza, C.plazaDark));
   }
 
   // Lawns — open green beside SE approach (ref/12): west of pond, both sides of promenade
@@ -661,13 +661,7 @@ function buildGrounds(data, M) {
   const pr = data.promenade;
   {
     const dx = pr.to[0] - pr.from[0], dz = pr.to[1] - pr.from[1], L = Math.hypot(dx, dz), ang = Math.atan2(dz, dx);
-    const geo = new THREE.BoxGeometry(L, 0.14, pr.width);
-    geo.rotateY(-ang); geo.translate((pr.from[0] + pr.to[0]) / 2, 0.09, (pr.from[1] + pr.to[1]) / 2);
-    const promMat = (M.path || M.plaza).clone();
-    if (promMat.color) promMat.color.set('#d8d2c6');
-    promMat.roughness = 0.92;
-    const m = new THREE.Mesh(geo, promMat); m.name = 'cityhallPromenade'; m.receiveShadow = true; g.add(m);
-    // Soft curb lines both sides
+    bag.box((pr.from[0] + pr.to[0]) / 2, 0.09, (pr.from[1] + pr.to[1]) / 2, L, 0.14, pr.width, -ang, '#d8d2c6');
     const ux = dx / L, uz = dz / L, px = -uz, pz = ux;
     for (const side of [-1, 1]) {
       bag.box(
@@ -1241,6 +1235,43 @@ function buildVehicleGate(data, M) {
   return g;
 }
 
+
+/** Merge child meshes that share MeshStandard/Lambert Basic with vertex colors into fewer draws. */
+function mergeStaticGroup(group, name = 'merged') {
+  const byKey = new Map();
+  const keep = [];
+  const children = [...group.children];
+  for (const ch of children) {
+    if (ch.isInstancedMesh || ch.isPoints || ch.isLine) { keep.push(ch); continue; }
+    if (!ch.isMesh || !ch.geometry) { keep.push(ch); continue; }
+    // skip transparent water / animated-looking names
+    const n = ch.name || '';
+    if (/Jet|Mist|Arch|Sheath|Water|Glow|Light/i.test(n)) { keep.push(ch); continue; }
+    const mat = ch.material;
+    if (!mat || Array.isArray(mat)) { keep.push(ch); continue; }
+    if (mat.transparent && mat.opacity < 0.95 && !mat.vertexColors) { keep.push(ch); continue; }
+    const key = mat.uuid;
+    if (!byKey.has(key)) byKey.set(key, { mat, geos: [] });
+    const g = ch.geometry.clone();
+    ch.updateWorldMatrix(true, false);
+    g.applyMatrix4(ch.matrixWorld);
+    byKey.get(key).geos.push(g);
+    ch.geometry.dispose();
+    group.remove(ch);
+  }
+  for (const { mat, geos } of byKey.values()) {
+    if (!geos.length) continue;
+    const merged = mergeGeometries(geos, false);
+    for (const g of geos) g.dispose();
+    if (!merged) continue;
+    const m = new THREE.Mesh(merged, mat);
+    m.name = name; m.castShadow = true; m.receiveShadow = true;
+    group.add(m);
+  }
+  for (const k of keep) { if (!k.parent) group.add(k); }
+  return group;
+}
+
 export function buildSeongnamCityHall(data, { env = null, glbUrl = null } = {}) {
   const M = mats();
   if (env) {
@@ -1254,18 +1285,31 @@ export function buildSeongnamCityHall(data, { env = null, glbUrl = null } = {}) 
   const buildingHost = new THREE.Group(); buildingHost.name = 'cityhallBuildingHost';
   buildingHost.add(building.group);
   root.add(buildingHost);
-  root.add(buildGrounds(data, M));
-  root.add(buildBanners(data, M));
-  root.add(buildSeongnamSign(data, M));
-  root.add(buildPond(data, M));
-  const fountain = buildFountainComplex(data, M);
-  root.add(fountain.group);
-  root.add(buildLandscape(data, M));
-  root.add(buildParking(data, M));
-  root.add(buildVehicleGate(data, M));
 
+  // [p6] amenity groups — merge static children to cut draw calls
+  const grounds = buildGrounds(data, M);
+  const banners = buildBanners(data, M);
+  const sign = buildSeongnamSign(data, M);
+  const pond = buildPond(data, M);
+  const fountain = buildFountainComplex(data, M);
+  const landscape = buildLandscape(data, M);
+  const parking = buildParking(data, M);
+  const gate = buildVehicleGate(data, M);
+  mergeStaticGroup(grounds, 'cityhallGroundsMerged');
+  mergeStaticGroup(banners, 'cityhallBannersMerged');
+  mergeStaticGroup(pond, 'cityhallPondMerged');
+  mergeStaticGroup(landscape, 'cityhallLandscapeMerged');
+  mergeStaticGroup(parking, 'cityhallParkingMerged');
+  mergeStaticGroup(gate, 'cityhallGateMerged');
+  // fountain kept unmerged — animated jets + named deck/seats for tests
+  root.add(grounds, banners, sign, pond, fountain.group, landscape, parking, gate);
+
+  let glbNight = null;
+  let eveningOn = false;
   const stopEve = watchEvening((on) => {
+    eveningOn = !!on;
     if (building.night) building.night.visible = on;
+    glbNight?.(on);
   });
   if (building.night) building.night.visible = false;
 
@@ -1274,12 +1318,12 @@ export function buildSeongnamCityHall(data, { env = null, glbUrl = null } = {}) 
     glbPending = import('./loadCityHallGlb.js').then(({ loadCityHallGlb }) =>
       loadCityHallGlb(glbUrl, { env: env || (typeof document !== 'undefined' ? makeEnvCube() : null) }).then((glb) => {
         if (!glb || disposed) return;
-        // Place at building center (GLB origin = center)
         const p = data.building.pos;
         glb.position.set(p.x, 0, p.z);
-        // Remove procedural massing
         building.group.removeFromParent();
         buildingHost.add(glb);
+        glbNight = (on) => glb.userData.setNight?.(!!on);
+        glbNight(eveningOn);
         recount();
       }).catch((e) => { console.warn('[cityhall] GLB load failed, keeping procedural', e); })
     );
