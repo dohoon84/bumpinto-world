@@ -131,7 +131,9 @@ export async function handleEcon(request, env, url, deps = {}) {
       if (!featureOn(env, "quests")) {
         return okJ({ ...E.GUEST_QUESTS(period, now), guest: false, info: { ko: "할 일은 곧 열려요", en: "Quests are coming soon" } }, cors);
       }
-      await E.autoSettle(db, env, id, now);
+      // autoSettle 은 /econ/state(클라이언트 fresh) · 결제 · claim 에서 이미 돈다. 목록 GET 마다 세 기간×2패스 D1 을 또 돌리면 할 일 창 오픈이 길어진다.
+      // ?settle=1 이면 예전처럼 이 요청에서도 정산(디버그·구버전 클라).
+      if (url.searchParams.get("settle") === "1") await E.autoSettle(db, env, id, now);
       return okJ(await E.listQuests(db, env, id, period, now), cors);
     }
     if (path === "/econ/quests/claim" && POST) {
