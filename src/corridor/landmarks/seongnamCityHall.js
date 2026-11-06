@@ -240,35 +240,43 @@ function mats() {
     shared.jet.map = jetGradTex();
     shared.jet.needsUpdate = true;
     const hexMap = canvasTex(256, 256, (x, w, h) => {
-      x.fillStyle = '#050608';
-      x.fillRect(0, 0, w, h);
-      const cell = 18;
+      // Transparent holes + bright steel rims (alphaTest punches tube mouths)
+      x.clearRect(0, 0, w, h);
+      const cell = 14;
       const rowH = cell * 0.866;
-      const rOut = 7.2, rIn = 4.4;
+      const rOut = 6.0, rIn = 3.6;
       for (let row = -1; row < h / rowH + 2; row++) {
         for (let col = -1; col < w / cell + 2; col++) {
           const cx = col * cell + (row & 1 ? cell * 0.5 : 0);
           const cy = row * rowH;
+          // steel annulus (opaque)
+          x.beginPath();
+          x.arc(cx, cy, rOut, 0, Math.PI * 2);
+          x.arc(cx, cy, rIn, 0, Math.PI * 2, true);
+          x.fillStyle = '#e8ecf0';
+          x.fill();
+          // rim highlight
           x.beginPath(); x.arc(cx, cy, rOut, 0, Math.PI * 2);
-          x.fillStyle = '#d8dce2'; x.fill();
+          x.strokeStyle = 'rgba(255,255,255,0.7)'; x.lineWidth = 1.4; x.stroke();
           x.beginPath(); x.arc(cx, cy, rIn, 0, Math.PI * 2);
-          x.fillStyle = '#040507'; x.fill();
-          x.beginPath(); x.arc(cx, cy, rOut, 0, Math.PI * 2);
-          x.strokeStyle = 'rgba(255,255,255,0.35)'; x.lineWidth = 1.2; x.stroke();
+          x.strokeStyle = 'rgba(40,48,56,0.55)'; x.lineWidth = 1.1; x.stroke();
         }
       }
-    }, 3.2, 5.5);
+    }, 4.5, 7.5);
+    hexMap.colorSpace = THREE.SRGBColorSpace;
     shared.steelHoneycomb = new THREE.MeshStandardMaterial({
-      color: '#c4c8ce',
+      color: '#d0d4da',
       map: hexMap,
-      alphaTest: 0.28,
+      alphaMap: hexMap,
+      alphaTest: 0.15,
       transparent: false,
-      roughness: 0.35,
-      metalness: 0.9,
+      roughness: 0.32,
+      metalness: 0.92,
       envMap: env,
-      envMapIntensity: env ? 0.9 : 0,
+      envMapIntensity: env ? 1.15 : 0,
       side: THREE.DoubleSide,
       depthWrite: true,
+      flatShading: false,
     });
     shared._honeycombTex = hexMap;
   } else {
@@ -1839,13 +1847,15 @@ function buildWalkingSculpture(data, M) {
     const merged = mergeGeometries(geos, false);
     for (const x of geos) x.dispose();
     if (!merged) return null;
-    if (!merged.attributes.uv) {
+    // Always rebuild UVs so honeycomb tiles read on merged capsules/boxes
+    {
       const n = merged.attributes.position.count;
       const uv = new Float32Array(n * 2);
       const pos = merged.attributes.position;
       for (let i = 0; i < n; i++) {
-        uv[i * 2] = pos.getX(i) * 0.35;
-        uv[i * 2 + 1] = pos.getY(i) * 0.35;
+        const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i);
+        uv[i * 2] = (Math.atan2(z, x) / Math.PI + 1) * 1.6 + x * 0.15;
+        uv[i * 2 + 1] = y * 0.55 + z * 0.08;
       }
       merged.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
     }
