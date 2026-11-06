@@ -23,7 +23,24 @@ const C = {
   nightWarm: '#ffe3ad', nightCool: '#a8c8ff',
 };
 
+// Pilotis + end-core collision (matches tools/cityhall-blender/build_cityhall.py layout).
+// Central N–S passage around x=1610.7 is intentionally pillar-free.
+const CITYHALL_PILLARS = [
+  [1536.8, -5908.7], [1557.0, -5908.7], [1577.2, -5908.7],
+  [1637.9, -5908.7], [1658.1, -5908.7], [1678.3, -5908.7],
+  [1542.7, -5941.0], [1568.6, -5941.0], [1594.6, -5941.0],
+  [1646.5, -5941.0], [1672.4, -5941.0],
+  [1526.7, -5916.6], [1526.7, -5933.3], [1688.4, -5916.6], [1688.4, -5933.3],
+  [1509.7, -5873.0], [1509.7, -5893.0], [1509.7, -5913.0], [1509.7, -5933.0],
+];
+const CITYHALL_PILLAR_R = 0.55;
+const CITYHALL_CORES = [
+  { cx: 1531.7, cz: -5924.9, hx: 4.2, hz: 6.8 },
+  { cx: 1683.4, cz: -5924.9, hx: 4.2, hz: 6.8 },
+];
+
 let shared = null;
+
 
 function makeEnvCube() {
   // Cheap procedural sky/ground cube for glass reflections (64² × 6)
@@ -360,15 +377,10 @@ function buildBuilding(data, M) {
   // Continuous thin overhang along south top edge
   frameBag.box((xMin + xMax) / 2, eastH + 0.15, zMax + 1.0, xMax - xMin + 2, 0.22, 2.4, 0, C.frame);
 
-  // Pilotis — 4 thick round columns on south (~1.2 m dia) (ref/15)
-  const colR = 0.6, colN = 4;
-  for (let i = 0; i < colN; i++) {
-    const x = midX1 + 6 + i * ((xMax - midX1 - 12) / Math.max(1, colN - 1));
-    frameBag.cyl(x, pilotisH / 2, zMax - 2.5, colR, pilotisH, 14, C.pilotis);
-  }
-  for (let i = 0; i < 3; i++) {
-    const x = westX1 + 5 + i * ((midX1 - westX1 - 10) / 2);
-    frameBag.cyl(x, canopyY / 2, zMax - 2, 0.55, canopyY, 14, C.pilotis);
+  // Pilotis — sparse edge columns matching GLB; central passage clear (도훈 fountain3)
+  for (const [px, pz] of CITYHALL_PILLARS) {
+    if (px < xMin - 5 || px > xMax + 5) continue; // wing cols drawn with wing fallback only
+    frameBag.cyl(px, pilotisH / 2, pz, 0.42, pilotisH, 10, C.pilotis);
   }
 
   // Long flat entrance canopy
@@ -517,10 +529,7 @@ function buildBuilding(data, M) {
   for (let y = 4; y < H - 2; y += 3.6) {
     frameBag.box((xMin + xMax) / 2, y, zMin - 0.65, xMax - xMin - 4, 0.3, 0.22, 0, C.spandrel);
   }
-  for (let i = 0; i < 8; i++) {
-    const x = westX1 + 2 + i * ((midX1 - westX1) / 7);
-    frameBag.cyl(x, 3.6, zMin - 1.2, 0.45, 7.2, 10, C.pilotis);
-  }
+  // (north pilotis come from CITYHALL_PILLARS — central passage clear)
   frameBag.box((westX1 + midX1) / 2, 7.2, zMin - 2.5, midX1 - westX1 + 6, 0.3, 5, 0, C.frame);
 
   // Low glass base along south plaza
@@ -640,7 +649,8 @@ function buildGrounds(data, M) {
   const lawnSE = [[xMax + 2, zMax + 4], [xMax + 55, zMax + 6], [xMax + 72, zMax + 78], [xMax + 4, zMax + 70]];
   bag.push(paintFaces(extrude(lawnSE, [], 0.12, 0.18), C.lawn, C.lawnDark));
   // Explicit lawn band between promenade and pond (ref/11·12)
-  const lawnPathPond = [[1635, -5912], [1675, -5850], [1708, -5860], [1708, -5938], [1650, -5940]];
+  // Keep lawn east of entrance promenade only (도훈: 입구쪽 길엔 잔디 없음)
+  const lawnPathPond = [[1678, -5910], [1700, -5868], [1708, -5875], [1708, -5935], [1685, -5935]];
   bag.push(paintFaces(extrude(lawnPathPond, [], 0.12, 0.18), C.lawn, C.lawnDark));
   const lawnN = [[xMin - 25, zMin - 60], [xMax + 15, zMin - 60], [xMax + 15, zMin - 2], [xMin - 25, zMin - 2]];
   bag.push(paintFaces(extrude(lawnN, [], 0.01, 0.05), C.lawn, C.lawnDark));
@@ -674,35 +684,98 @@ function buildGrounds(data, M) {
     }
   }
 
-  // Lawn flanks both sides of promenade
+  // 입구쪽 길 — 잔디 플랭크 제거, 포장으로 (도훈: "입구쪽 길엔 원래 잔디 없음")
   {
     const dx = pr.to[0] - pr.from[0], dz = pr.to[1] - pr.from[1], L = Math.hypot(dx, dz) || 1;
-    const ux = dx / L, uz = dz / L, px = -uz, pz = ux;
-    const midX = (pr.from[0] + pr.to[0]) / 2, midZ = (pr.from[1] + pr.to[1]) / 2;
-    for (const side of [-1, 1]) {
-      const ox = px * side * (pr.width / 2 + 9);
-      const oz = pz * side * (pr.width / 2 + 9);
-      const hx = ux * (L / 2 - 2), hz = uz * (L / 2 - 2);
-      const poly = [
-        [midX + ox - hx - px * side * 7, midZ + oz - hz - pz * side * 7],
-        [midX + ox + hx - px * side * 7, midZ + oz + hz - pz * side * 7],
-        [midX + ox + hx + px * side * 7, midZ + oz + hz + pz * side * 7],
-        [midX + ox - hx + px * side * 7, midZ + oz - hz + pz * side * 7],
-      ];
-      bag.push(paintFaces(extrude(poly, [], 0.12, 0.18), C.lawn, C.lawnDark));
-    }
+    const ang = Math.atan2(dz, dx);
+    // wider paved apron around entrance promenade (replaces lawn flanks in the red oval)
+    bag.box((pr.from[0] + pr.to[0]) / 2, 0.07, (pr.from[1] + pr.to[1]) / 2, L + 4, 0.1, pr.width + 14, -ang, C.plaza);
   }
 
-  // Pink/brick strip crossing the lawn (ref/12)
+  // Pink/brick strip crossing (kept, sits on plaza now)
   {
     const bx0 = 1660, bz0 = -5865, bx1 = 1710, bz1 = -5872;
     const dx = bx1 - bx0, dz = bz1 - bz0, L = Math.hypot(dx, dz), ang = Math.atan2(dz, dx);
     bag.box((bx0 + bx1) / 2, 0.14, (bz0 + bz1) / 2, L, 0.1, 2.6, -ang, C.brick);
   }
 
-  // No lawn furniture blocks (ref/12·15 — open grass)
+  // --- East of fountain: 산책길 + 담벼락 (parallel to primary road ~x=1800) ---
+  // Path runs N–S between pond apron and road; wall on road edge.
+  const eastPath = { x: 1756, z0: -5978, z1: -5855, w: 4.2 };
+  {
+    bag.box(eastPath.x, 0.09, (eastPath.z0 + eastPath.z1) / 2, eastPath.w, 0.12, Math.abs(eastPath.z1 - eastPath.z0), 0, '#d4cfc4');
+    // curb lines
+    bag.box(eastPath.x - eastPath.w / 2 - 0.15, 0.12, (eastPath.z0 + eastPath.z1) / 2, 0.3, 0.08, Math.abs(eastPath.z1 - eastPath.z0), 0, C.curb);
+    bag.box(eastPath.x + eastPath.w / 2 + 0.15, 0.12, (eastPath.z0 + eastPath.z1) / 2, 0.3, 0.08, Math.abs(eastPath.z1 - eastPath.z0), 0, C.curb);
+  }
+  // 담벼락 along road edge (outermost)
+  const wallX = 1788, wallZ0 = -5985, wallZ1 = -5845, wallH = 1.85;
+  {
+    bag.box(wallX, wallH / 2, (wallZ0 + wallZ1) / 2, 0.45, wallH, Math.abs(wallZ1 - wallZ0), 0, '#8b929a');
+    // posts every ~8 m
+    for (let z = wallZ0 + 2; z < wallZ1; z += 8) {
+      bag.box(wallX, wallH / 2 + 0.1, z, 0.5, wallH + 0.2, 0.5, 0, '#7e848c');
+    }
+  }
+
+  // --- 여러갈래길: junction in lower (SE) lawn, paths fanning to plaza / east promenade ---
+  {
+    const jx = 1688, jz = -5868; // junction
+    const spokes = [
+      [jx, jz, 1655, -5905], // toward plaza / building SE
+      [jx, jz, 1705, -5915], // toward pond south apron
+      [jx, jz, 1748, -5888], // toward east promenade
+      [jx, jz, 1720, -5845], // toward NE approach
+      [jx, jz, 1660, -5840], // toward entrance approach
+    ];
+    for (const [ax, az, bx, bz] of spokes) {
+      const dx = bx - ax, dz = bz - az, L = Math.hypot(dx, dz) || 1, ang = Math.atan2(dz, dx);
+      bag.box((ax + bx) / 2, 0.11, (az + bz) / 2, L, 0.12, 3.4, -ang, C.plaza);
+    }
+    // small paved junction pad
+    bag.box(jx, 0.11, jz, 6.5, 0.1, 6.5, 0, C.plaza);
+  }
 
   const body = bag.mesh(M.vc, 'cityhallGroundBody'); if (body) g.add(body);
+
+  // Instanced benches along east promenade (점선처럼 띄엄띄엄) — plaza side of path
+  const benchN = 9;
+  const seatGeo = new THREE.BoxGeometry(2.2, 0.09, 0.56);
+  const backGeo = new THREE.BoxGeometry(2.2, 0.42, 0.08);
+  const legGeo = new THREE.BoxGeometry(0.1, 0.44, 0.52);
+  const woodMat = new THREE.MeshLambertMaterial({ color: '#8d6e63' });
+  const ironMat = new THREE.MeshLambertMaterial({ color: '#343a40' });
+  const seatIM = new THREE.InstancedMesh(seatGeo, woodMat, benchN);
+  const backIM = new THREE.InstancedMesh(backGeo, woodMat, benchN);
+  const legLIM = new THREE.InstancedMesh(legGeo, ironMat, benchN * 2);
+  seatIM.name = 'cityhallPromenadeBenches';
+  const dummy = new THREE.Object3D();
+  let li = 0;
+  for (let i = 0; i < benchN; i++) {
+    const t = (i + 0.5) / benchN;
+    const z = eastPath.z0 + (eastPath.z1 - eastPath.z0) * t;
+    const x = eastPath.x - eastPath.w / 2 - 1.6; // plaza (west) side
+    const yaw = Math.PI / 2; // face the path (+X)
+    dummy.position.set(x, 0.44, z); dummy.rotation.set(0, yaw, 0); dummy.scale.set(1, 1, 1); dummy.updateMatrix();
+    seatIM.setMatrixAt(i, dummy.matrix);
+    dummy.position.set(x, 0.72, z); dummy.rotation.set(-0.12, yaw, 0); // slight back tilt in local X after yaw
+    // apply yaw then offset back locally (-Z local → -X world when yaw=PI/2)
+    dummy.position.set(x - 0.24, 0.72, z); dummy.rotation.set(0, yaw, 0); dummy.updateMatrix();
+    backIM.setMatrixAt(i, dummy.matrix);
+    for (const sz of [-0.9, 0.9]) {
+      dummy.position.set(x, 0.22, z + sz); dummy.rotation.set(0, yaw, 0); dummy.updateMatrix();
+      // legs along bench length (world Z when facing +X)
+      dummy.position.set(x, 0.22, z + sz); dummy.updateMatrix();
+      legLIM.setMatrixAt(li++, dummy.matrix);
+    }
+  }
+  seatIM.castShadow = backIM.castShadow = true;
+  g.add(seatIM, backIM, legLIM);
+  // stash wall extents for isBlocked via userData on group
+  g.userData.eastWall = { x: wallX, z0: wallZ0, z1: wallZ1, halfW: 0.45 };
+  g.userData.benchMats = [woodMat, ironMat];
+  g.userData.benchGeos = [seatGeo, backGeo, legGeo];
+
   return g;
 }
 
@@ -1637,10 +1710,28 @@ export function buildSeongnamCityHall(data, { env = null, glbUrl = null } = {}) 
       fountain.update(tt);
       pondPlaza.update(tt);
     },
-    isBlocked(x, z, r) { return !disposed && !!pondPlaza.isBlocked?.(x, z, r); },
+    isBlocked(x, z, r = 0.4) {
+      if (disposed) return false;
+      if (pondPlaza.isBlocked?.(x, z, r)) return true;
+      // Remaining pilotis
+      const pr = CITYHALL_PILLAR_R + r;
+      for (const [px, pz] of CITYHALL_PILLARS) {
+        if (Math.hypot(x - px, z - pz) < pr) return true;
+      }
+      // Enclosed end cores (central passage open)
+      for (const c of CITYHALL_CORES) {
+        if (Math.abs(x - c.cx) < c.hx + r && Math.abs(z - c.cz) < c.hz + r) return true;
+      }
+      // East boundary wall (담벼락)
+      const w = grounds.userData?.eastWall;
+      if (w && Math.abs(x - w.x) < w.halfW + r && z >= w.z0 - r && z <= w.z1 + r) return true;
+      return false;
+    },
     dispose() {
       if (disposed) return; disposed = true;
       stopEve(); fountain.disposeExtra?.(); pondPlaza.disposeExtra?.();
+      for (const m of grounds.userData?.benchMats || []) m.dispose?.();
+      for (const g0 of grounds.userData?.benchGeos || []) g0.dispose?.();
       root.traverse((o) => {
         if (o.geometry) o.geometry.dispose();
       });

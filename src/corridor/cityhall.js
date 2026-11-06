@@ -24,7 +24,9 @@ export function filterCityHallHidden(data, tileJson) {
     const [x, z] = cen(building.o);
     if (!centers.some(([cx, cz]) => Math.hypot(x - cx, z - cz) <= radius)) return building;
     hit++;
-    return { ...building, nr: 1, lm: 'seongnamCityHall' };
+    // Raised landmark (pilotis undercroft is walkable). mh>=2.5 skips tile colliders
+    // (tileMesh buildDetailTile); cityhall.isBlocked owns pillars/core/wall/pond.
+    return { ...building, nr: 1, mh: Math.max(building.mh || 0, 8), lm: 'seongnamCityHall' };
   });
   return hit ? { ...tileJson, b } : tileJson;
 }

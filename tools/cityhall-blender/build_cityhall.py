@@ -3,8 +3,8 @@
 import bpy, math, os
 from mathutils import Vector
 
-OUT = os.environ.get('CITYHALL_OUT', '/workspace/bw-cityhall-p6/public/corridor/cityhall')
-PREV = os.environ.get('CITYHALL_PREV', '/workspace/bw-cityhall-p6-shots/blender')
+OUT = os.environ.get('CITYHALL_OUT', '/workspace/bw-cityhall-fountain/public/corridor/cityhall')
+PREV = os.environ.get('CITYHALL_PREV', '/workspace/bw-cityhall-shots/blender')
 os.makedirs(OUT, exist_ok=True); os.makedirs(PREV, exist_ok=True)
 CX, CZ = 1610.7, -5930.3
 FOOT = [(1521.7,-5905.9),(1522.1,-5942.6),(1530.4,-5942.7),(1628.7,-5943.9),(1633.1,-5943.9),
@@ -113,21 +113,38 @@ def build():
     length = abs(x_max - x_min)
     opaque, glass = [], []
 
-    # --- Pilotis: dense south row (most visible) + grid ---
-    for i in range(22):
-        px = x_min + 3 + i * ((length - 6) / 21)
-        opaque.append(cyl(f'PS{i}', px, y_s + 2.8, PH / 2, 0.32, PH - 0.2, m_pil, 10))
-    for i in range(12):
-        px = x_min + 6 + i * ((length - 12) / 11)
-        opaque.append(cyl(f'PN{i}', px, y_n - 3.0, PH / 2, 0.32, PH - 0.2, m_pil, 10))
-        opaque.append(cyl(f'PM{i}', px, y_c, PH / 2, 0.30, PH - 0.2, m_pil, 10))
+    # --- Pilotis: sparse edge columns; CENTRAL N–S passage completely clear ---
+    # World x≈1610.7 is blender x=0; keep |bx| < 10 free of columns (clear walkway).
+    CLEAR = 14.0  # blender-x half-width of central passage
+    def _edge_xs(x0, x1, n, gap_c=CLEAR):
+        """n columns along [x0,x1] skipping the central gap around 0."""
+        if n <= 0: return []
+        span = x1 - x0
+        raw = [x0 + (i + 0.5) * span / n for i in range(n)]
+        return [x for x in raw if abs(x) >= gap_c]
 
-    # --- Lobby recessed ---
-    # Lobby under mid/east only — keep west/SW undercroft open (pilotis, no cream wall at wing join)
-    _lob_x0 = x_min + 28.0
-    _lob_x1 = mx1 - 4.0
-    glass.append(box('LobbyBox', (_lob_x0 + _lob_x1) / 2, y_c + 1.0, PH / 2 - 0.1,
-                     max(8.0, abs(_lob_x1 - _lob_x0)), depth - 10, PH - 1.2, m_lobby, 0.04))
+    # South row (plaza face) — fewer, thicker; skip center
+    for i, px in enumerate(_edge_xs(x_min + 5, x_max - 5, 8)):
+        opaque.append(cyl(f'PS{i}', px, y_s + 2.8, PH / 2, 0.42, PH - 0.2, m_pil, 10))
+    # North row — sparse, skip center (no mid-depth row at all → open undercroft)
+    for i, px in enumerate(_edge_xs(x_min + 8, x_max - 8, 6)):
+        opaque.append(cyl(f'PN{i}', px, y_n - 3.0, PH / 2, 0.38, PH - 0.2, m_pil, 10))
+    # Side columns near E/W ends only (not mid-depth grid)
+    for i, (px, py) in enumerate([
+        (x_min + 5, y_c - depth * 0.22), (x_min + 5, y_c + depth * 0.22),
+        (x_max - 5, y_c - depth * 0.22), (x_max - 5, y_c + depth * 0.22),
+    ]):
+        if abs(px) < CLEAR: continue
+        opaque.append(cyl(f'PE{i}', px, py, PH / 2, 0.36, PH - 0.2, m_pil, 10))
+
+    # --- Ground cores: ONLY at far W / far E ends — central passage stays open ---
+    # (Former full-width LobbyBox blocked the undercroft; replace with two end cores.)
+    _core_d = depth - 14
+    # Compact end cores only (keep most undercroft open; central passage free)
+    glass.append(box('CoreLobbyW', x_min + 10, y_c, PH / 2 - 0.1,
+                     8.0, max(5.0, _core_d * 0.55), PH - 1.2, m_lobby, 0.04))
+    glass.append(box('CoreLobbyE', x_max - 10, y_c, PH / 2 - 0.1,
+                     8.0, max(5.0, _core_d * 0.55), PH - 1.2, m_lobby, 0.04))
 
     # --- Soffit + fascia ---
     opaque.append(box('Soffit', (x_min + x_max) / 2, y_c, PH - 0.2, length + 2, depth + 2.5, 0.5, m_sof))
@@ -242,10 +259,11 @@ def build():
     ], [
         (0, 1, 4), (2, 3, 5), (0, 2, 5, 4), (1, 3, 5, 4), (0, 1, 3, 2),
     ], m_prow))
-    for i in range(7):
-        opaque.append(cyl(f'WP{i}', wing_x_west + 5 + (i % 3) * 8,
-                          wing_y_s + 5 + i * ((wing_sy - 10) / 6),
-                          PH / 2, 0.34, PH - 0.2, m_pil, 10))
+    # Wing pilotis — 4 columns along west edge only (keep wing undercroft open)
+    for i in range(4):
+        opaque.append(cyl(f'WP{i}', wing_x_west + 4,
+                          wing_y_s + 8 + i * ((wing_sy - 16) / 3),
+                          PH / 2, 0.36, PH - 0.2, m_pil, 10))
 
             # --- North glass + fold ---
     glass.append(box('NG', (x_min + mx1) / 2, y_n + 0.35, (PH + BODY_H) / 2,
