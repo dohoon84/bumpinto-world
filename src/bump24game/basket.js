@@ -120,10 +120,10 @@ export function createBasket({ maxKg = BASKET_MAX_KG } = {}) {
       if (!held || !owner) return;
       // 오른손에 든 위치(아바타 기준) + 걸음 흔들림 + 담을 때 살짝 튐
       const t = performance.now() / 1000, sy = owner.rotation.y;
-      const ox = -0.42, oz = 0.1; // 오른쪽(아바타 -x)·약간 앞
+      const ox = -0.38, oz = 0.28; // 오른쪽 앞
       const wx = Math.cos(sy) * ox + Math.sin(sy) * oz, wz = -Math.sin(sy) * ox + Math.cos(sy) * oz;
-      group.position.set(owner.position.x + wx, 0.3 + Math.sin(bounce * Math.PI) * 0.06, owner.position.z + wz);
-      group.rotation.set(Math.sin(t * 9) * 0.03 * (owner.userData.moving ? 1 : 0.3) + Math.sin(t * 30) * 0.2 * swing, sy + Math.PI / 2, Math.sin(t * 25) * 0.15 * swing);
+      group.position.set(owner.position.x + wx, 0.28 + Math.sin(bounce * Math.PI) * 0.06, owner.position.z + wz);
+      group.rotation.set(0.18 + Math.sin(t * 9) * 0.03 * (owner.userData.moving ? 1 : 0.3) + Math.sin(t * 30) * 0.18 * swing, sy + Math.PI / 2, Math.sin(t * 25) * 0.12 * swing);
     },
     worldTop(v) { v.set(0, HB + 0.05, 0); group.localToWorld(v); return v; },
     dispose() { tex.dispose(); material.dispose(); geometry.dispose(); contents.geometry.dispose(); contentsMat.dispose(); },

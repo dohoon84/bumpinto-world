@@ -36,7 +36,7 @@ export function createBump24UI({ onGrab, onExit, onMute, onHintTap, onIntroGo } 
     <div class="b24-combo b24-in"></div>
     <div class="b24-count b24-in"></div>
     <div class="b24-banner b24-in"></div>
-    <div class="b24-hint b24-in"></div>
+    <div class="b24-hint"></div>
     <button class="b24-grab b24-in" hidden><span>담기<small>E</small></span></button>
     <div class="b24-intro-wrap b24-in"></div>
     <div class="b24-receipt-wrap b24-in"></div>

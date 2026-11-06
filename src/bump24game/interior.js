@@ -175,7 +175,7 @@ export function buildInterior({ renderer = null, storeId = 'seongnam-cityhall', 
       facings.push(f);
       if (tags) {
         const isSale = sale.has(item.id);
-        sign.quad(V(f.x - nx * 0.012, y - 0.022, f.z - nz * 0.012), V(nx, 0, nz), UP, 0.088, 0.03, toC('#ffffff'), uvr(tagRect(item.idx, isSale)));
+        sign.quad(V(f.x - nx * 0.011, y - 0.026, f.z - nz * 0.011), V(nx, 0, nz), UP, 0.124, 0.043, toC('#ffffff'), uvr(tagRect(item.idx, isSale)));
         if (isSale) decalQ(V(f.x + dx * (n * gw / 2 - 0.03) + nx * 0.004, y + 0.04, f.z + dz * (n * gw / 2 - 0.03) + nz * 0.004), V(nx, 0, nz), UP, 0.085, 0.085, R.STICKER, '#ffffff', 1);
       }
       cur += n * gw + 0.012;
@@ -184,7 +184,7 @@ export function buildInterior({ renderer = null, storeId = 'seongnam-cityhall', 
   const zonePool = (...zs) => zs.flatMap((z) => layout.byZone[z] || []);
   const rail = (ax, az, bx, bz, y, nx, nz, rect = R.RAIL) => {
     const len = Math.hypot(bx - ax, bz - az);
-    sign.quad(V((ax + bx) / 2 + nx * 0.008, y - 0.022, (az + bz) / 2 + nz * 0.008), V(nx, 0, nz), UP, len, 0.04, toC('#ffffff'), uvr(rect, 2));
+    sign.quad(V((ax + bx) / 2 + nx * 0.008, y - 0.026, (az + bz) / 2 + nz * 0.008), V(nx, 0, nz), UP, len, 0.048, toC('#ffffff'), uvr(rect, 2));
   };
 
   // ---------- 곤돌라 3개(양면, 1.65m) ----------
@@ -439,7 +439,9 @@ export function buildInterior({ renderer = null, storeId = 'seongnam-cityhall', 
   const arrow = new THREE.Mesh(arrowGeo, mat.arrow); arrow.renderOrder = 10; arrow.visible = false; scene.add(arrow);
 
   // ---------- 플레이어 ----------
-  const me = createAvatar(look || { color: '#4f7cff', gender: 'm', hair: 'short' });
+  // 매장 안: 등가방(큰 색 블록)은 빼서 손에 든 파란 바구니가 보이게
+  const meLook = { ...(look || { color: '#4f7cff', gender: 'm', hair: 'short' }), bag: null, coffee: null };
+  const me = createAvatar(meLook);
   me.position.set(-0.6, 0, 1.3); me.rotation.y = 0; scene.add(me);
   const shadowGeo = new THREE.PlaneGeometry(0.75, 0.75); shadowGeo.rotateX(-Math.PI / 2); { const u = uvr(R.SOFT, 2), uv = shadowGeo.attributes.uv; for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) ? u[2] : u[0], uv.getY(i) ? u[3] : u[1]); }
   shadowGeo.setAttribute('color', new THREE.Float32BufferAttribute(Array.from({ length: 16 }, (_, i) => (i % 4 === 3 ? 0.5 : 0)), 4));
@@ -459,10 +461,10 @@ export function buildInterior({ renderer = null, storeId = 'seongnam-cityhall', 
     return [THREE.MathUtils.clamp(x, -4.72, 4.05), THREE.MathUtils.clamp(z, 0.32, 7.0)];
   }
   // 머리→카메라 선분이 가구(높이 h)를 지나면: 먼저 위로 올려 넘겨 보고, 그래도 막히면 앞으로 당김
-  function segBlocked(ax, ay, az, bx, by, bz) {
+  function segBlocked(ax, ay, az, bx, by, bz, clear = 0.12) {
     for (let i = 1; i <= 14; i++) {
       const t = i / 14, x = ax + (bx - ax) * t, y = ay + (by - ay) * t, z = az + (bz - az) * t;
-      for (const [x0, z0, x1, z1, h] of obstacles) if (y < h + 0.12 && x > x0 - 0.08 && x < x1 + 0.08 && z > z0 - 0.08 && z < z1 + 0.08) return t;
+      for (const [x0, z0, x1, z1, h] of obstacles) if (y < h + clear && x > x0 - 0.08 && x < x1 + 0.08 && z > z0 - 0.08 && z < z1 + 0.08) return t;
     }
     return 0;
   }
@@ -474,6 +476,7 @@ export function buildInterior({ renderer = null, storeId = 'seongnam-cityhall', 
     return [bx, top, bz];
   }
   function updateCamera(dt, snap = false) {
+    if (cam.mode === 'free') return; // 디버그: 카메라를 직접 둠
     const pr = camPreset();
     if (Math.abs(camera.fov - pr.fov) > 0.01) { camera.fov = pr.fov; camera.updateProjectionMatrix(); }
     if (camera.aspect !== innerWidth / innerHeight) { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); }
@@ -489,7 +492,7 @@ export function buildInterior({ renderer = null, storeId = 'seongnam-cityhall', 
           const y = cam.yaw + off, bx = me.position.x + Math.sin(y) * back, bz = me.position.z + Math.cos(y) * back;
           const [qx, qz] = clampCam(bx, bz);
           if (Math.hypot(bx - qx, bz - qz) > 0.6) continue;
-          if (!segBlocked(me.position.x, 1.35, me.position.z, qx, hy, qz)) { best = off; break; }
+          if (!segBlocked(me.position.x, 1.35, me.position.z, qx, hy, qz, 0.55)) { best = off; break; } // 가구 위를 넉넉히 넘는 3/4 각도
         }
         if (best) cam.yaw += snap ? best : best * Math.min(1, dt * 4);
       }
@@ -627,7 +630,7 @@ export function buildInterior({ renderer = null, storeId = 'seongnam-cityhall', 
   }
 
   // ---------- 매 프레임 ----------
-  let walkPhase = 0;
+  let walkPhase = 0, slow = 0;
   function update(dt, { look = [0, 0, 0], axes = { f: 0, s: 0, run: false }, allowMove = true } = {}) {
     const [dy, dp, dz] = look;
     if (dy || dp) cam.lookIdle = 0; else cam.lookIdle += dt;
@@ -650,7 +653,8 @@ export function buildInterior({ renderer = null, storeId = 'seongnam-cityhall', 
     clerkBody.position.y = Math.sin(walkPhase * 1.6) * 0.006;
     const want = Math.atan2(me.position.x - clerk.position.x, me.position.z - clerk.position.z) - clerk.rotation.y;
     clerkHead.rotation.y += (THREE.MathUtils.clamp(Math.atan2(Math.sin(want), Math.cos(want)), -0.7, 0.7) - clerkHead.rotation.y) * Math.min(1, dt * 3);
-    updateFlights(dt); updateFloor(dt);
+    slow = Math.max(0, slow - dt); const pdt = slow > 0 ? dt * 0.35 : dt; // 와르르 순간 슬로모션
+    updateFlights(pdt); updateFloor(pdt);
     updateCamera(dt);
     const p = me.position;
     const nearBasket = !hasBasket && Math.hypot(p.x - BASKET_SPOT.x, p.z - BASKET_SPOT.z) < BASKET_SPOT.r;
@@ -686,6 +690,7 @@ export function buildInterior({ renderer = null, storeId = 'seongnam-cityhall', 
     update, render, setView, stats, nearestShelf, pickFromShelf, restock,
     flyToBasket, flyToScanner, spillItems, nearestFloorItem, pickupFloor, clearFloor, floorItems, flights,
     shake(v = 1) { cam.shake = Math.max(cam.shake, v); },
+    slowmo(sec = 0.55) { slow = sec; },
     worldToScreen(v, out = { x: 0, y: 0 }) { const q = v.clone().project(camera); out.x = (q.x + 1) / 2 * innerWidth; out.y = (1 - q.y) / 2 * innerHeight; return out; },
     dispose() {
       for (const m of statics) m.geometry.dispose();

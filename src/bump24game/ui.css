@@ -17,7 +17,7 @@ body.b24-inside .b24-outside-hidden { visibility: hidden !important; pointer-eve
 .b24-fade .logo { width: 56px; height: 56px; margin: 0 auto 12px; border-radius: 16px; background: #fff; display: grid; place-items: center; box-shadow: 0 8px 30px rgba(58,166,255,.45); }
 
 /* 위쪽 버튼 */
-.b24-top { position: absolute; top: var(--st); left: var(--sl); right: var(--sr); display: flex; justify-content: space-between; align-items: flex-start; }
+.b24-top { position: absolute; top: var(--st); left: var(--sl); right: var(--sr); display: flex; justify-content: space-between; align-items: flex-start; z-index: 6; }
 .b24-ibtn { height: 40px; min-width: 40px; padding: 0 14px 0 10px; border-radius: 20px; background: rgba(10, 22, 48, .78); color: #fff; font-size: 14px; font-weight: 800; display: inline-flex; align-items: center; gap: 6px; box-shadow: 0 4px 14px rgba(0,0,0,.25), inset 0 0 0 1px rgba(255,255,255,.14); backdrop-filter: blur(6px); }
 .b24-ibtn.round { padding: 0; width: 40px; justify-content: center; }
 .b24-ibtn svg { width: 20px; height: 20px; }
@@ -112,7 +112,8 @@ body.b24-inside .b24-outside-hidden { visibility: hidden !important; pointer-eve
 .b24-intro .go { width: 100%; height: 48px; border-radius: 14px; background: var(--b-blue); color: #fff; font-size: 17px; font-weight: 900; box-shadow: 0 5px 0 #004f99; }
 
 /* 영수증 */
-.b24-receipt { position: absolute; left: 50%; top: 4%; transform: translateX(-50%); width: 300px; display: flex; flex-direction: column; align-items: center; }
+.b24-receipt-wrap { position: absolute; inset: 0; display: grid; place-items: center; pointer-events: none; z-index: 4; }
+.b24-receipt { position: relative; width: min(300px, 70vw); display: flex; flex-direction: column; align-items: center; margin-top: 36px; }
 .b24-receipt .printer { width: 340px; height: 46px; border-radius: 14px 14px 8px 8px; background: linear-gradient(180deg, #3a4250, #1c222b); box-shadow: 0 10px 24px rgba(0,0,0,.4); position: relative; z-index: 2; display: flex; align-items: center; justify-content: space-between; padding: 0 16px; color: #9fd0ff; font-size: 12px; font-weight: 800; }
 .b24-receipt .printer i { width: 8px; height: 8px; border-radius: 50%; background: #3dff8a; box-shadow: 0 0 8px #3dff8a; animation: b24blink .3s infinite alternate; }
 .b24-receipt .printer:after { content: ''; position: absolute; left: 20px; right: 20px; bottom: 8px; height: 5px; border-radius: 3px; background: #0b0e13; }
@@ -199,7 +200,8 @@ body.b24-inside .b24-outside-hidden { visibility: hidden !important; pointer-eve
   .b24-banner b { font-size: 44px; padding: 10px 30px; }
   .b24-intro { padding: 14px 18px 12px; width: min(560px, 76vw); transform: translate(-50%, -50%); }
   .b24-intro h2 { font-size: 21px; } .b24-intro p { margin-bottom: 8px; } .b24-intro ol { grid-template-columns: 1fr 1fr; gap: 6px 12px; margin-bottom: 10px; } .b24-intro li { font-size: 12px; } .b24-intro .go { height: 40px; }
-  .b24-receipt { top: 2%; transform: translateX(-50%) scale(.82); transform-origin: top center; }
+  .b24-receipt { margin-top: 8px; transform: scale(.78); transform-origin: center center; width: min(280px, 46vw); }
+  .b24-receipt .printer { width: min(320px, 52vw); }
   .b24-result { width: min(620px, 88vw); display: grid; grid-template-columns: 1fr 1fr; }
   .b24-result .top { grid-row: span 3; display: flex; flex-direction: column; justify-content: center; }
   .b24-result .top .sc { font-size: 44px; }

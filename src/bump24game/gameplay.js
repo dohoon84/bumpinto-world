@@ -59,7 +59,7 @@ export function createGameplay({ interior, ui, sfx, storeId, storeName, onExitSt
     const n = Math.min(interior.basket.items.length, 3 + Math.floor(Math.random() * 3));
     const before = interior.basket.score;
     const out = interior.basket.spill(n);
-    interior.spillItems(out);
+    interior.spillItems(out); interior.slowmo(0.55);
     for (const it of interior.floorItems) if (!it.onBounce) it.onBounce = (x) => { if (x.bounces < 3) sfx.bounce(1 / x.bounces); };
     const lost = before - interior.basket.score;
     sfx.spill(); vibrate([60, 40, 90, 40, 60]); ui.flash();
