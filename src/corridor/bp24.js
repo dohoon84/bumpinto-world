@@ -302,6 +302,10 @@ function buildStore(st) {
 
   // 1) 1층 바깥 벽: 건물 외곽 중 유리 두 면(남·동)을 뺀 나머지 변을 0~gf 로 막는다
   const ring = st.ring;
+  // 서쪽(x0) 면이 건물 외곽과 겹치면(=바깥에 드러난 옆면) 앞면과 같은 유리 + 검은 멀리언으로. westEnd: 그 외곽 변이 끝나는 z
+  let westEnd = -1;
+  for (let i = 0; i < ring.length; i++) { const a = ring[i], c = ring[(i + 1) % ring.length]; if (Math.abs(a[0] - x0) < 0.4 && Math.abs(c[0] - x0) < 0.4 && Math.abs(a[1] - c[1]) > 1) westEnd = Math.max(westEnd, a[1], c[1]); }
+  const west = westEnd >= zb - 0.5;
   let area = 0; for (let i = 0; i < ring.length; i++) { const a = ring[i], b = ring[(i + 1) % ring.length]; area += a[0] * b[1] - b[0] * a[1]; }
   for (let i = 0; i < ring.length; i++) {
     const a = ring[i], b = ring[(i + 1) % ring.length];
@@ -311,7 +315,8 @@ function buildStore(st) {
     // 유리 면과 겹치는 구간은 빼고 남는 조각만 벽으로(앞면: x 0..W, 옆면: z 0..D)
     const onFront = Math.abs(a[1] - zf) < 0.3 && Math.abs(b[1] - zf) < 0.3;
     const onSide = side && Math.abs(a[0] - x1) < 0.4 && Math.abs(b[0] - x1) < 0.4;
-    const cut = onFront ? [0, x0, x1] : onSide ? [1, zf, zb + 0.3] : null;
+    const onWest = west && Math.abs(a[0] - x0) < 0.4 && Math.abs(b[0] - x0) < 0.4;
+    const cut = onFront ? [0, x0, x1] : onSide ? [1, zf, zb + 0.3] : onWest ? [1, zf, zb] : null;
     const pieces = [];
     if (!cut) pieces.push([0, 1]);
     else {
@@ -345,6 +350,16 @@ function buildStore(st) {
     const nS = Math.round((zb - zf - 0.5) / 1.75);
     for (let k = 1; k < nS; k++) { const z = zf + 0.5 + ((zb - zf - 0.5) * k) / nS; ext.box(x1 - 0.05, 0.32, z - 0.04, x1 + 0.05, GLASS_H, z + 0.04, MULL); }
     ext.box(x1 - 0.05, 2.55, zf + 0.5, x1 + 0.05, 2.62, zb, MULL);
+  }
+  if (west) { // 서쪽 옆 유리(앞 끝 기둥 뒤 ~ 매장 끝) + 유리 밑 턱 + 멀리언 + 위 벽, 매장 뒤로 남는 외곽 구간은 막음
+    const wz0 = zf + 0.3;
+    glass.quad(N(-1, 0, 0), P(x0, (0.32 + GLASS_H) / 2, (wz0 + zb) / 2), zb - wz0, GLASS_H - 0.32, [1, 1, 1]);
+    ext.box(x0 - 0.06, 0, wz0, x0 + 0.06, 0.32, zb, DARK);
+    const nW = Math.max(1, Math.round((zb - wz0) / 1.75));
+    for (let k = 1; k <= nW; k++) { const z = k === nW ? zb - 0.04 : wz0 + ((zb - wz0) * k) / nW; ext.box(x0 - 0.05, 0.32, z - 0.04, x0 + 0.05, GLASS_H, z + 0.04, MULL); }
+    ext.box(x0 - 0.05, 2.55, wz0, x0 + 0.05, 2.62, zb, MULL); // 가로대
+    ext.box(x0 - 0.05, GLASS_H, wz0, x0 + 0.08, gf, zb, STONE); // 유리 위 벽
+    if (westEnd > zb + 0.05) ext.box(x0 - 0.05, 0, zb, x0 + 0.08, gf, westEnd, STONE);
   }
   // 출입문(가운데 두 칸): 손잡이
   const dx = fx0 + ((fx1 - fx0) * Math.floor(nF / 2)) / nF;
@@ -398,7 +413,7 @@ function buildStore(st) {
   }
   int.quad(N(0, -1, 0), P((ix0 + ix1) / 2, ceil, (iz0 + iz1) / 2), ix1 - ix0, iz1 - iz0, CEIL);
   int.quad(N(0, 0, -1), P((ix0 + ix1) / 2, ceil / 2, iz1), ix1 - ix0, ceil, WALL); // 뒷벽(안쪽 면)
-  int.quad(N(1, 0, 0), P(ix0, ceil / 2, (iz0 + iz1) / 2), iz1 - iz0, ceil, WALL.map((v) => v * 0.95)); // 서쪽 벽
+  if (!west) int.quad(N(1, 0, 0), P(ix0, ceil / 2, (iz0 + iz1) / 2), iz1 - iz0, ceil, WALL.map((v) => v * 0.95)); // 서쪽 벽(유리면이면 없음)
   int.quad(N(0, 0, -1), P((ix0 + ix1) / 2, 0.16, iz1 - 0.01), ix1 - ix0, 0.3, hex('#c9cdd0')); // 걸레받이
   // LED 선형 조명(앞뒤 방향 줄 4개)
   const nLed = Math.max(2, Math.round(W / 4));
