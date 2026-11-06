@@ -356,17 +356,18 @@ function buildStore() {
   int.box(hx0 + 0.42, top + 0.55, cz0c + 0.14, hx0 + 0.48, top + 0.6, cz0c + 0.16, hex('#2a2d31'));
   // POS 모니터(직원 쪽) + 손님 쪽 작은 화면 + 카드 단말기 + 라이터 진열대 + 봉투
   const mx = cx0 + 2.1;
-  int.box(mx - 0.05, top, cz1c - 0.3, mx + 0.05, top + 0.25, cz1c - 0.2, hex('#3a3d42'));
-  int.box(mx - 0.27, top + 0.22, cz1c - 0.33, mx + 0.27, top + 0.62, cz1c - 0.27, hex('#2a2d31'), true);
-  int.box(mx - 0.24, top + 0.25, cz1c - 0.27, mx + 0.24, top + 0.59, cz1c - 0.265, hex('#8fc3f2'));
-  int.box(mx - 0.16, top, cz0c + 0.12, mx + 0.16, top + 0.24, cz0c + 0.2, hex('#2a2d31'), true); // 손님 화면
-  int.box(mx - 0.14, top + 0.03, cz0c + 0.115, mx + 0.14, top + 0.22, cz0c + 0.12, hex('#3aa6ff'));
+  const pm = mx - 0.62; // POS 는 직원 왼쪽(밖에서 직원 얼굴이 가리지 않게)
+  int.box(pm - 0.05, top, cz1c - 0.3, pm + 0.05, top + 0.2, cz1c - 0.2, hex('#3a3d42'));
+  int.box(pm - 0.24, top + 0.18, cz1c - 0.33, pm + 0.24, top + 0.5, cz1c - 0.27, hex('#2a2d31'), true);
+  int.box(pm - 0.21, top + 0.21, cz1c - 0.27, pm + 0.21, top + 0.47, cz1c - 0.265, hex('#8fc3f2'));
+  int.box(pm - 0.14, top, cz0c + 0.12, pm + 0.14, top + 0.2, cz0c + 0.2, hex('#2a2d31'), true); // 손님 화면
+  int.box(pm - 0.12, top + 0.03, cz0c + 0.115, pm + 0.12, top + 0.18, cz0c + 0.12, hex('#3aa6ff'));
   int.box(mx + 0.45, top, cz0c + 0.18, mx + 0.6, top + 0.06, cz0c + 0.36, hex('#1c1e21'), true); // 카드 단말기
   int.box(mx + 0.47, top + 0.06, cz0c + 0.2, mx + 0.58, top + 0.14, cz0c + 0.24, hex('#1c1e21'), true);
   int.box(mx + 0.48, top + 0.09, cz0c + 0.195, mx + 0.57, top + 0.13, cz0c + 0.2, hex('#9fd0a8'));
-  int.box(mx - 0.78, top, cz0c + 0.1, mx - 0.38, top + 0.2, cz0c + 0.3, hex('#e9ecef'), true); // 라이터 진열대
-  prodFace(prod, N(0, 0, -1), mx - 0.58, top + 0.12, cz0c + 0.095, 0.38, 0.14, 7, 41);
-  int.box(cx1 - 0.55, top, cz0c + 0.2, cx1 - 0.2, top + 0.08, cz0c + 0.5, hex('#f8f8f6'), true); // 봉투 더미
+  int.box(mx + 0.85, top, cz0c + 0.1, mx + 1.25, top + 0.2, cz0c + 0.3, hex('#e9ecef'), true); // 라이터 진열대
+  prodFace(prod, N(0, 0, -1), mx + 1.05, top + 0.12, cz0c + 0.095, 0.38, 0.14, 7, 41);
+  int.box(cx1 - 0.45, top, cz1c - 0.45, cx1 - 0.1, top + 0.08, cz1c - 0.15, hex('#f8f8f6'), true); // 봉투 더미
   // 계산대 뒤 담배·상품 진열 벽(직원 등 뒤)
   int.box(cx0 + 0.6, 0, iz0 + 4.0, cx1, 2.5, iz0 + 4.3, hex('#d9dcdf'), true);
   int.box(cx0 + 0.6, 2.5, iz0 + 3.95, cx1, 2.75, iz0 + 4.3, hex('#0072DD'), true);
