@@ -1,21 +1,23 @@
-# BP24 체인 매장 — 매장 추가하기
+# BUMP24 체인 매장 — 매장 추가하기
 
-BP24는 코리더 건물 1층에 끼워 넣는 우리 브랜드 편의점이에요. 코드는 `src/corridor/bp24.js`, 매장 목록은 `src/corridor/bp24Locations.js`에 있어요.
+> 브랜드 이름은 BUMP24예요(예전 BP24). 호환을 위해 코드 이름·파일 이름·`?bp24` 플래그는 그대로 두고, `?bump24=1` · `?bump24=demo`도 같은 뜻으로 받아요.
+
+BUMP24는 코리더 건물 1층에 끼워 넣는 우리 브랜드 편의점이에요. 코드는 `src/corridor/bp24.js`, 매장 목록은 `src/corridor/bp24Locations.js`에 있어요.
 
 ## 켜는 법
 
 | URL | 동작 |
 |---|---|
 | (없음) | 꺼짐. 월드는 예전과 같아요 |
-| `?bp24=1` | `BP24_LOCATIONS` 목록의 매장 |
-| `?bp24=demo` | 목록 + `BP24_DEMO`(크기가 다른 검증용 건물 3채) |
+| `?bp24=1` · `?bump24=1` | `BP24_LOCATIONS` 목록의 매장 |
+| `?bp24=demo` · `?bump24=demo` | 목록 + `BP24_DEMO`(크기가 다른 검증용 건물 3채) |
 
 ## 매장 하나 추가
 
 `BP24_LOCATIONS`에 한 줄을 넣어요.
 
 ```js
-{ id: 'yatap-xx', name: 'BP24 야탑XX점', match: { x: 1234.5, z: -5678.9 } },
+{ id: 'yatap-xx', name: 'BUMP24 야탑XX점', match: { x: 1234.5, z: -5678.9 } },
 ```
 
 - `match`: 대상 건물 외곽의 중심(월드 x, z)이에요. 반경 `r`(기본 3m) 안에서 가장 가까운 건물을 써요.

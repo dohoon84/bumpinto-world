@@ -1,5 +1,5 @@
-// [bp24] 성남시청 길 건너 1층 편의점 → 우리 브랜드 'BP24' (실제 GS25 자리, 간판/로고는 bumpinto 아이덴티티).
-//   ?bp24=1 일 때만. 기본 OFF → 플래그 없으면 월드는 그대로.
+// [bp24] 성남시청 길 건너 1층 편의점 → 우리 브랜드 'BUMP24'(예전 BP24, 코드 이름은 bp24 유지) (실제 GS25 자리, 간판/로고는 bumpinto 아이덴티티).
+//   ?bp24=1 · ?bump24=1 일 때만. 기본 OFF → 플래그 없으면 월드는 그대로.
 //   자리: 코리더 타일 3_-12, 공원 띠(x≈1608~1627) 서쪽 · 큰길(z≈-5778) 북쪽 모퉁이 상가 건물(중심 1601.1,-5752.8 · h17.3).
 //   그 건물의 1층(0~GF m)을 비우고(mh=GF 사본 + 충돌용 nr 원본) 유리 상점을 끼운다.
 //   draw call (가까이·밤): 외부 불투명 1 + 간판 1 + 유리 1 + 발광 1 + 바닥 빛 1 + 내부 1 + 상품 1 + 직원 2(몸·머리) = 9 (+그림자 1). 낮엔 발광·바닥 빛 0.
@@ -10,10 +10,10 @@ import { nightFade, onNightTarget } from '../world/nightFade.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { createAvatar } from '../entities/avatar.js';
 
-// ?bp24=1 → 목록(bp24Locations.js BP24_LOCATIONS) · ?bp24=demo → 목록 + 데모 매장(BP24_DEMO) · 그 외 null
+// ?bp24=1 (= ?bump24=1) → 목록(bp24Locations.js BP24_LOCATIONS) · ?bp24=demo → 목록 + 데모 매장(BP24_DEMO) · 그 외 null
 export function bp24Mode(search = typeof location !== 'undefined' ? location.search : '') {
   const p = search instanceof URLSearchParams ? search : new URLSearchParams(search || '');
-  const v = p.get('bp24');
+  const v = p.get('bp24') ?? p.get('bump24'); // [bump24] 새 이름 별칭
   return v === '1' ? 'list' : v === 'demo' ? 'demo' : null;
 }
 export const bp24Enabled = (search) => !!bp24Mode(search);
@@ -180,19 +180,23 @@ function drawLogo(ctx, x, y, size) {
   ctx.fillStyle = '#FF3B3B'; ctx.beginPath(); ctx.arc(723, 472, 52, 0, Math.PI * 2); ctx.fill();
   ctx.restore();
 }
+const BRAND = ['BUMP', '24']; // [bump24] 간판 브랜드(코드 이름·플래그는 bp24 그대로)
 const FONT = '"Pretendard","Apple SD Gothic Neo","Noto Sans KR","Arial Black","Helvetica Neue",Arial,sans-serif';
 function signPanel(ctx, x, y, w, h, { brackets = true, sub = true } = {}) {
   const g = ctx.createLinearGradient(0, y, 0, y + h); g.addColorStop(0, '#13264a'); g.addColorStop(1, '#0a1630');
   ctx.fillStyle = g; ctx.fillRect(x, y, w, h);
-  const fs = Math.round(h * 0.62), ls = Math.round(h * 0.66);
+  // 브랜드: 흰 'BUMP' + 로고 파랑 '24'. 꺾쇠 안쪽 폭(약 72%)에 들어가게 글자·로고 크기를 함께 줄인다
+  let fs = Math.round(h * 0.6), ls = Math.round(h * 0.66);
   ctx.font = `900 ${fs}px ${FONT}`; ctx.textBaseline = 'middle';
-  const wBP = ctx.measureText('BP').width, w24 = ctx.measureText('24').width;
-  const total = ls + h * 0.14 + wBP + w24 + fs * 0.04;
+  let wM = ctx.measureText(BRAND[0]).width, wA = ctx.measureText(BRAND[1]).width;
+  const avail = w * (brackets ? 0.72 : 0.86), total0 = ls + h * 0.14 + wM + wA + fs * 0.04;
+  if (total0 > avail) { const k = avail / total0; fs = Math.floor(fs * k); ls = Math.floor(ls * k); ctx.font = `900 ${fs}px ${FONT}`; wM = ctx.measureText(BRAND[0]).width; wA = ctx.measureText(BRAND[1]).width; }
+  const total = ls + h * 0.14 + wM + wA + fs * 0.04;
   let cx = x + (w - total) / 2;
   drawLogo(ctx, cx, y + (h - ls) / 2, ls); cx += ls + h * 0.14;
   ctx.shadowColor = 'rgba(120,200,255,0.9)'; ctx.shadowBlur = h * 0.12;
-  ctx.fillStyle = '#ffffff'; ctx.fillText('BP', cx, y + h * 0.53); cx += wBP + fs * 0.04;
-  ctx.fillStyle = '#3aa6ff'; ctx.fillText('24', cx, y + h * 0.53);
+  ctx.fillStyle = '#ffffff'; ctx.fillText(BRAND[0], cx, y + h * 0.53); cx += wM + fs * 0.04;
+  ctx.fillStyle = '#3aa6ff'; ctx.fillText(BRAND[1], cx, y + h * 0.53);
   ctx.shadowBlur = 0;
   if (brackets) { // 대각선으로 마주 보는 ⌜ ⌟ 꺾쇠 (실제 매장의 위쪽 꺾쇠와 일부러 다르게)
     ctx.strokeStyle = '#38b6ff'; ctx.lineWidth = Math.max(3, h * 0.07); ctx.shadowColor = 'rgba(56,182,255,0.9)'; ctx.shadowBlur = h * 0.1;
@@ -203,8 +207,8 @@ function signPanel(ctx, x, y, w, h, { brackets = true, sub = true } = {}) {
   }
   if (sub) { ctx.font = `700 ${Math.round(h * 0.13)}px ${FONT}`; ctx.fillStyle = 'rgba(205,230,251,0.75)'; ctx.textAlign = 'right'; ctx.fillText('bumpinto.world', x + w - h * 0.95, y + h * 0.84); ctx.textAlign = 'left'; }
 }
-// 간판 아틀라스 1024×256: 앞 띠(0,0,1024,112) · 옆 띠(0,128,512,112) · 돌출 간판(544,120,64,136)
-const SIGN = { W: 1024, H: 256, front: [0, 0, 1024, 112], side: [0, 128, 512, 112], blade: [544, 120, 64, 136], hot: [640, 136, 256, 72] };
+// 간판 아틀라스 1024×256: 앞 띠(0,0,1024,112) · 옆 띠(0,128,512,112) · 돌출 간판(544,120,84,136) · 온장고(640,136,256,72)
+const SIGN = { W: 1024, H: 256, front: [0, 0, 1024, 112], side: [0, 128, 512, 112], blade: [544, 120, 84, 136], hot: [640, 136, 256, 72] };
 const rectUV = ([x, y, w, h], W, H, pad = 1) => [(x + pad) / W, 1 - (y + h - pad) / H, (x + w - pad) / W, 1 - (y + pad) / H];
 function signTexture() {
   const cv = document.createElement('canvas'); cv.width = SIGN.W; cv.height = SIGN.H;
@@ -212,23 +216,28 @@ function signTexture() {
   ctx.fillStyle = '#0a1630'; ctx.fillRect(0, 0, SIGN.W, SIGN.H);
   signPanel(ctx, ...SIGN.front);
   signPanel(ctx, ...SIGN.side, { sub: false });
-  { // 돌출 간판: 흰 바탕 + 로고 + 세로 BP24
+  { // 돌출 간판: 흰 바탕 + 로고 + 세로로 BUMP / 24
     const [x, y, w, h] = SIGN.blade;
     ctx.fillStyle = '#f4f8fc'; ctx.fillRect(x, y, w, h);
     ctx.fillStyle = '#0072DD'; ctx.fillRect(x, y + h - 6, w, 6);
-    drawLogo(ctx, x + 6, y + 6, w - 12);
-    ctx.font = `900 22px ${FONT}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.fillStyle = '#0b1830'; ctx.fillText('BP', x + w / 2, y + w + 14);
-    ctx.fillStyle = '#0072DD'; ctx.fillText('24', x + w / 2, y + w + 38);
+    const lg = 52; drawLogo(ctx, x + (w - lg) / 2, y + 5, lg);
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.font = `900 24px ${FONT}`; const k = Math.min(1, (w - 10) / ctx.measureText(BRAND[0]).width);
+    ctx.font = `900 ${Math.floor(24 * k)}px ${FONT}`; ctx.fillStyle = '#0b1830'; ctx.fillText(BRAND[0], x + w / 2, y + lg + 22);
+    ctx.font = `900 30px ${FONT}`; ctx.fillStyle = '#0072DD'; ctx.fillText(BRAND[1], x + w / 2, y + lg + 52);
     ctx.textAlign = 'left';
   }
-  { // 온장고 머리판: 'BP 치킨' (주황 바탕, 흰 글씨 + 작은 로고)
+  { // 온장고 머리판: 'BUMP 치킨' (주황 바탕 + 작은 로고, 흰 글씨에 진한 테두리 — 밝은 바탕에서 흐려 보이지 않게)
     const [x, y, w, h] = SIGN.hot;
-    ctx.fillStyle = '#ff8a1f'; ctx.fillRect(x, y, w, h);
+    ctx.fillStyle = '#f07a12'; ctx.fillRect(x, y, w, h);
     ctx.fillStyle = '#fff3e0'; ctx.fillRect(x, y + h - 8, w, 8);
-    drawLogo(ctx, x + 8, y + 8, h - 22);
-    ctx.font = `900 ${Math.round(h * 0.5)}px ${FONT}`; ctx.textBaseline = 'middle'; ctx.fillStyle = '#ffffff';
-    ctx.fillText('BP 치킨', x + h - 4, y + h * 0.45);
+    const lg = h - 22; drawLogo(ctx, x + 6, y + 7, lg);
+    const tx = x + lg + 14, room = x + w - 6 - tx, label = `${BRAND[0]} 치킨`;
+    let fs = Math.round(h * 0.5); ctx.font = `900 ${fs}px ${FONT}`;
+    const tw = ctx.measureText(label).width; if (tw > room) { fs = Math.floor(fs * room / tw); ctx.font = `900 ${fs}px ${FONT}`; }
+    ctx.textBaseline = 'middle'; ctx.textAlign = 'left'; ctx.lineJoin = 'round';
+    ctx.lineWidth = Math.max(3, fs * 0.16); ctx.strokeStyle = '#7a3300'; ctx.strokeText(label, tx, y + h * 0.44);
+    ctx.fillStyle = '#ffffff'; ctx.fillText(label, tx, y + h * 0.44);
   }
   const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4;
   return t;
@@ -348,8 +357,8 @@ function buildStore(st) {
   if (side && D >= 5) { const sw = Math.min(4.6, D * 0.45); sign.quad(N(1, 0, 0), P(x1 + FASCIA_OUT + 0.01, sy, (zf + zb) / 2 + 0.3), sw, sw / 4.6, [1, 1, 1], suv(SIGN.side)); }
   const bx = x1 - 0.17, bz = zf - 0.25 - 0.55, by = 2.45;
   ext.box(bx - 0.07, by - 0.62, bz - 0.5, bx + 0.07, by + 0.62, bz + 0.5, BLACK); // 돌출 간판 틀
-  sign.quad(N(1, 0, 0), P(bx + 0.072, by, bz), 0.46, 1.0, [1, 1, 1], suv(SIGN.blade));
-  sign.quad(N(-1, 0, 0), P(bx - 0.072, by, bz), 0.46, 1.0, [1, 1, 1], suv(SIGN.blade));
+  sign.quad(N(1, 0, 0), P(bx + 0.072, by, bz), 0.6, 0.97, [1, 1, 1], suv(SIGN.blade));
+  sign.quad(N(-1, 0, 0), P(bx - 0.072, by, bz), 0.6, 0.97, [1, 1, 1], suv(SIGN.blade));
   // 간판 띠 아래 LED 줄(밤)
   glow.box(x0 + 0.3, GLASS_H - 0.05, zf - FASCIA_OUT + 0.02, x1 + 0.1, GLASS_H - 0.01, zf - FASCIA_OUT + 0.08, hex('#bfe6ff'));
   if (side) glow.box(x1 + FASCIA_OUT - 0.08, GLASS_H - 0.05, zf - 0.2, x1 + FASCIA_OUT - 0.02, GLASS_H - 0.01, zb - 0.2, hex('#bfe6ff'));
@@ -457,7 +466,7 @@ function buildStore(st) {
   int.box(hx0, top + 0.26, cz0c + 0.12, hx1, top + 0.275, cz1c - 0.1, hex('#d0d4d8'));
   glass.quad(N(0, 0, -1), P((hx0 + hx1) / 2, top + 0.28, cz0c + 0.1), hx1 - hx0, 0.5, [1, 1, 1]);
   int.box(hx0, top + 0.5, cz0c + 0.08, hx1, top + 0.55, cz1c - 0.08, hex('#2a2d31'), true);
-  sign.quad(N(0, 0, -1), P((hx0 + hx1) / 2, top + 0.7, cz0c + 0.12), 0.9, 0.25, [1, 1, 1], suv(SIGN.hot)); // BP 치킨 머리판
+  sign.quad(N(0, 0, -1), P((hx0 + hx1) / 2, top + 0.7, cz0c + 0.12), 0.9, 0.25, [1, 1, 1], suv(SIGN.hot)); // BUMP 치킨 머리판
   int.box(hx0 + 0.42, top + 0.55, cz0c + 0.14, hx0 + 0.48, top + 0.6, cz0c + 0.16, hex('#2a2d31'));
   }
   // POS 모니터(직원 쪽) + 손님 쪽 작은 화면 + 카드 단말기 + 라이터 진열대 + 봉투
