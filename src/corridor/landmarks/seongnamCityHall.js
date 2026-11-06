@@ -289,22 +289,31 @@ function mats() {
     });
     shared._honeycombTex = hexMap;
     shared.stonePlaza = S('#c8c2b6', {
-      map: canvasTex(256, 256, (x, w, h) => {
-        x.fillStyle = '#d2cdc2'; x.fillRect(0, 0, w, h);
-        const n = 6;
+      map: canvasTex(512, 512, (x, w, h) => {
+        x.fillStyle = '#bdb6a8'; x.fillRect(0, 0, w, h);
+        const n = 4; // large tiles so joints read at eye level
+        const s = w / n;
         for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) {
-          const px = i * (w / n), py = j * (h / n), s = w / n;
-          const shade = ((i + j) % 2) ? '#c4beb2' : '#d8d2c6';
-          x.fillStyle = shade;
-          x.fillRect(px + 2, py + 2, s - 4, s - 4);
-          x.strokeStyle = '#a8a094'; x.lineWidth = 2;
-          x.strokeRect(px + 1, py + 1, s - 2, s - 2);
-          // subtle grain
-          x.fillStyle = 'rgba(90,80,70,0.08)';
-          for (let k = 0; k < 6; k++) x.fillRect(px + 4 + (k * 17) % (s - 8), py + 4 + (k * 13) % (s - 8), 3, 2);
+          const px = i * s, py = j * s;
+          const v = ((i * 17 + j * 31) % 7) / 7;
+          const r = 190 + v * 25, g = 184 + v * 18, b = 168 + v * 14;
+          x.fillStyle = `rgb(${r|0},${g|0},${b|0})`;
+          x.fillRect(px + 3, py + 3, s - 6, s - 6);
+          // deep mortar joint (high contrast so eye-level reads)
+          x.fillStyle = '#7a7366';
+          x.fillRect(px, py, s, 7); x.fillRect(px, py, 7, s);
+          x.strokeStyle = '#6a6358'; x.lineWidth = 3;
+          x.strokeRect(px + 2, py + 2, s - 4, s - 4);
+          x.strokeStyle = 'rgba(255,255,255,0.22)'; x.lineWidth = 1.5;
+          x.beginPath(); x.moveTo(px + 6, py + 6); x.lineTo(px + s - 8, py + 6); x.stroke();
+          // grit
+          x.fillStyle = 'rgba(70,60,50,0.12)';
+          for (let k = 0; k < 14; k++) {
+            x.fillRect(px + 8 + (k * 37) % (s - 16), py + 8 + (k * 53) % (s - 16), 2 + (k % 3), 2);
+          }
         }
-      }, 14, 14),
-      roughness: 0.92, metalness: 0.02, envMapIntensity: env ? 0.12 : 0,
+      }, 1, 1), // UVs set in world meters on each plane
+      roughness: 0.94, metalness: 0.02, envMapIntensity: env ? 0.1 : 0,
     });
     shared._stoneTex = shared.stonePlaza.map;
   } else {
@@ -2107,22 +2116,35 @@ function buildPlazaExtras(data, M) {
   const elevators = []; // { x, z, deckY, label }
   const heights = []; // { kind, ... } for groundHeight
 
-  // --- 1) Stone paving (돌바닥): entrance approach + west plaza toward walker/lawn ---
+  // --- 1) Stone paving (돌바닥): wide approach + west/south plaza 도훈 circled ---
   const stoneMat = M.stonePlaza || M.plaza || M.path;
   const stoneGeos = [];
   function stoneBox(cx, cz, sx, sz, rotY = 0) {
     const geo = new THREE.PlaneGeometry(sx, sz, 1, 1);
+    // World-meter UVs so ~1.8 m tiles read at eye level regardless of plane size
+    const uv = geo.attributes.uv;
+    for (let i = 0; i < uv.count; i++) {
+      const u = uv.getX(i), v = uv.getY(i);
+      uv.setXY(i, u * (sx / 1.8), v * (sz / 1.8));
+    }
     geo.rotateX(-Math.PI / 2);
     if (rotY) geo.rotateY(rotY);
-    geo.translate(cx, 0.175, cz);
+    geo.translate(cx, 0.195, cz); // above grey plaza pads (~0.16)
     stoneGeos.push(geo);
   }
-  // Approach strip from promenade end into west plaza
-  stoneBox(1605, -5898, 55, 22, 0.35);
-  stoneBox(1575, -5895, 40, 28, 0.1);
-  stoneBox(1555, -5905, 35, 24, 0);
-  // Path band from walker toward south lawn / entrance
-  stoneBox(1588, -5880, 48, 18, -0.2);
+  // Large contiguous stone field matching 도훈 circle: entrance approach + plaza
+  stoneBox(1610, -5890, 110, 70, 0.12);  // main approach / south plaza (circled)
+  stoneBox(1560, -5880, 80, 55, 0.02);   // west open plaza (walker side)
+  stoneBox(1645, -5865, 75, 50, -0.08);  // SE plaza toward road
+  stoneBox(1595, -5915, 55, 32, 0.22);   // near south face apron
+  stoneBox(1640, -5828, 120, 85, 0.05);  // floor-fountain field + north plaza (도훈 circle)
+  // Promenade approach (match promenade axis ~ SE→NW) — widened stone walk
+  {
+    const pr = data.promenade || { from: [1700, -5835], to: [1645, -5900] };
+    const dx = pr.to[0] - pr.from[0], dz = pr.to[1] - pr.from[1];
+    const L = Math.hypot(dx, dz) || 1, ang = Math.atan2(dz, dx);
+    stoneBox((pr.from[0] + pr.to[0]) / 2, (pr.from[1] + pr.to[1]) / 2, L + 12, (pr.width || 9.5) + 10, -ang);
+  }
   if (stoneGeos.length) {
     const merged = mergeGeometries(stoneGeos, false);
     for (const x of stoneGeos) x.dispose();
@@ -2133,7 +2155,7 @@ function buildPlazaExtras(data, M) {
     }
   }
 
-  // --- 2) Floor fountain (바닥분수) — south paved plaza, summer jets, walkable ---
+  // --- 2) Floor fountain — water-like thin translucent jets ---
   const FF = { x0: 1575, x1: 1705, z0: -5868, z1: -5788 };
   const grateN = [];
   const cols = 10, rows = 8;
@@ -2141,13 +2163,12 @@ function buildPlazaExtras(data, M) {
     for (let j = 0; j < rows; j++) {
       const x = FF.x0 + 4 + (i + 0.5) * ((FF.x1 - FF.x0 - 8) / cols);
       const z = FF.z0 + 4 + (j + 0.5) * ((FF.z1 - FF.z0 - 8) / rows);
-      // skip a soft oval hole so it does not look like a solid rectangle block of jets
       const u = (i + 0.5) / cols - 0.5, v = (j + 0.5) / rows - 0.5;
       if (u * u * 2.2 + v * v * 3.0 > 0.55) continue;
       grateN.push([x, z]);
     }
   }
-  const grateGeo = new THREE.CircleGeometry(0.28, 8);
+  const grateGeo = new THREE.CircleGeometry(0.32, 8);
   grateGeo.rotateX(-Math.PI / 2);
   const grateMat = new THREE.MeshStandardMaterial({ color: '#5a6068', roughness: 0.7, metalness: 0.55 });
   const grates = new THREE.InstancedMesh(grateGeo, grateMat, grateN.length);
@@ -2162,112 +2183,191 @@ function buildPlazaExtras(data, M) {
   g.add(grates);
 
   const summer = isCityHallSummer();
-  let jets = null, jetMat = null, jetGeo = null;
+  let jets = null, jetMat = null, jetGeo = null, mist = null, mistMat = null, mistGeo = null;
+  let ownJet = true;
   if (summer && grateN.length) {
+    // Thin translucent water columns (NormalBlending — not additive glass/neon rods)
     jetMat = new THREE.MeshBasicMaterial({
-      color: '#b8e8ff', transparent: true, opacity: 0.75, depthWrite: false,
-      blending: THREE.NormalBlending, side: THREE.DoubleSide, toneMapped: false,
+      map: jetGradTex(), color: '#c5e6f8', transparent: true, opacity: 0.55,
+      depthWrite: false, blending: THREE.NormalBlending, side: THREE.DoubleSide, toneMapped: false,
     });
-    jetGeo = new THREE.PlaneGeometry(0.22, 1);
+    jetGeo = new THREE.PlaneGeometry(0.11, 1);
     jetGeo.translate(0, 0.5, 0);
     jets = new THREE.InstancedMesh(jetGeo, jetMat, grateN.length * 2);
     jets.name = 'cityhallFloorJets'; jets.frustumCulled = false;
     g.add(jets);
+    // Soft spray puff at tip
+    mistMat = new THREE.MeshBasicMaterial({
+      color: '#eaf6ff', transparent: true, opacity: 0.4, depthWrite: false,
+      blending: THREE.NormalBlending, side: THREE.DoubleSide, toneMapped: false,
+    });
+    mistGeo = new THREE.CircleGeometry(0.2, 10);
+    mist = new THREE.InstancedMesh(mistGeo, mistMat, grateN.length);
+    mist.name = 'cityhallFloorMist'; mist.frustumCulled = false;
+    g.add(mist);
   }
   function updateFloorFountain(t) {
     if (!jets) return;
     for (let i = 0; i < grateN.length; i++) {
       const [x, z] = grateN[i];
-      const pulse = 0.45 + 0.55 * (0.5 + 0.5 * Math.sin(t * 2.8 + i * 0.37));
-      const h = 1.2 + pulse * 2.4;
+      // Animated height pulse (staggered) — reads as water, not glass rods
+      const pulse = 0.2 + 0.8 * (0.5 + 0.5 * Math.sin(t * 3.6 + i * 0.53));
+      const h = 0.4 + pulse * 3.4; // animated height
+      const w = 0.55 + 0.35 * pulse; // stay thin
       dummy.position.set(x, 0.2, z);
       dummy.rotation.set(0, 0, 0);
-      dummy.scale.set(1, h, 1);
+      dummy.scale.set(w, h, 1);
       dummy.updateMatrix();
       jets.setMatrixAt(i * 2, dummy.matrix);
       dummy.rotation.y = Math.PI / 2;
       dummy.updateMatrix();
       jets.setMatrixAt(i * 2 + 1, dummy.matrix);
+      if (mist) {
+        // Spray / ripple disc at tip (billboard-ish flat)
+        dummy.position.set(x, 0.2 + h * 0.95, z);
+        dummy.rotation.set(-Math.PI / 2, 0, t * 1.1 + i * 0.2);
+        const ms = 0.55 + pulse * 1.4;
+        dummy.scale.set(ms, ms, 1);
+        dummy.updateMatrix();
+        mist.setMatrixAt(i, dummy.matrix);
+      }
     }
     jets.count = grateN.length * 2;
     jets.instanceMatrix.needsUpdate = true;
-    jetMat.opacity = 0.55 + 0.25 * (0.5 + 0.5 * Math.sin(t * 1.7));
+    jetMat.opacity = 0.4 + 0.25 * (0.5 + 0.5 * Math.sin(t * 2.1));
+    if (mist) {
+      mist.count = grateN.length;
+      mist.instanceMatrix.needsUpdate = true;
+      mistMat.opacity = 0.25 + 0.3 * (0.5 + 0.5 * Math.sin(t * 2.8));
+    }
   }
 
-  // --- 3) Long bus shelter along east road (성남시청전면 — real stop names only via corridor labels) ---
-  // Align between OSM 성남시청전면 stops ~ (1794.6,-5796) and (1826.7,-5842)
+  // --- 3) Long bus shelter on BUILDING-side curb (성남시청전면 OSM stops) ---
   const busA = { x: 1794.6, z: -5796.1 };
   const busB = { x: 1826.7, z: -5842.6 };
   const bdx = busB.x - busA.x, bdz = busB.z - busA.z;
   const bLen = Math.hypot(bdx, bdz) || 1;
   const bang = Math.atan2(bdz, bdx);
-  // Offset onto sidewalk (toward building / −tr of 전면 stop ≈ west)
-  const side = 3.2;
-  const nx = -bdz / bLen, nz = bdx / bLen; // left normal
+  // Normal pointing west toward city hall (smaller x)
+  let nx = -bdz / bLen, nz = bdx / bLen;
+  if (nx > 0) { nx = -nx; nz = -nz; } // force toward building
+  const side = 14.0; // sidewalk offset from stop coords (building curb, clear of roadway)
   const bcx = (busA.x + busB.x) / 2 + nx * side;
   const bcz = (busA.z + busB.z) / 2 + nz * side;
-  // Long continuous shelter (~ bLen)
-  bag.box(bcx, 2.65, bcz, bLen + 4, 0.14, 2.0, -bang, '#2f6fb3'); // roof
-  bag.box(bcx - nx * 0.85, 1.35, bcz - nz * 0.85, bLen + 3.5, 2.3, 0.06, -bang, '#cfe6f5'); // glass back
-  bag.box(bcx, 0.5, bcz, bLen + 2, 0.12, 0.5, -bang, '#8a6b4e'); // bench
-  // posts every ~6m
-  for (let t = 0; t <= 1.001; t += 6 / bLen) {
-    const x = busA.x + bdx * t + nx * side;
-    const z = busA.z + bdz * t + nz * side;
-    bag.box(x, 1.35, z, 0.12, 2.7, 0.12, -bang, '#4a5560');
+  g.userData.busShelter = { x: bcx, z: bcz, len: bLen, ang: bang };
+  // Raised curb platform under shelter
+  bag.box(bcx, 0.12, bcz, bLen + 8, 0.24, 3.2, -bang, '#9aa0a6');
+  // Roof canopy (thick blue slab with overhang)
+  bag.box(bcx, 2.95, bcz, bLen + 7, 0.28, 3.0, -bang, '#1e6bb8');
+  // Back glass wall (toward plaza / building)
+  bag.box(bcx + nx * 1.15, 1.55, bcz + nz * 1.15, bLen + 6, 2.7, 0.1, -bang, '#b8d8ec');
+  // Bench
+  bag.box(bcx + nx * 0.35, 0.55, bcz + nz * 0.35, bLen + 5, 0.16, 0.6, -bang, '#8a6b4e');
+  bag.box(bcx + nx * 0.35, 0.35, bcz + nz * 0.35, bLen + 5, 0.35, 0.12, -bang, '#6a5040');
+  // Posts every ~4.5 m
+  for (let tt = 0; tt <= 1.001; tt += 4.5 / bLen) {
+    const x = busA.x + bdx * tt + nx * side;
+    const z = busA.z + bdz * tt + nz * side;
+    bag.box(x, 1.5, z, 0.18, 3.0, 0.18, -bang, '#3a4550');
   }
-  // End sign posts (no invented names — corridor overlay keeps 성남시청전면)
-  bag.box(busA.x + nx * side, 3.1, busA.z + nz * side, 0.7, 0.9, 0.08, -bang, '#1f5fbf');
-  bag.box(busB.x + nx * side, 3.1, busB.z + nz * side, 0.7, 0.9, 0.08, -bang, '#1f5fbf');
+  // End route signs
+  bag.box(busA.x + nx * side, 3.45, busA.z + nz * side, 1.1, 1.2, 0.12, -bang, '#1a56b0');
+  bag.box(busB.x + nx * side, 3.45, busB.z + nz * side, 1.1, 1.2, 0.12, -bang, '#1a56b0');
 
-  // --- 4) Pedestrian overpass (육교) crossing main road south of bus stops ---
-  // Road runs roughly N–S near x≈1805; cross E–W at z≈-5750
-  const OX = 1805, OZ = -5750;
-  const DECK_Y = 5.4;
-  const SPAN = 28; // across road
-  const DECK_W = 3.2;
-  // Deck
-  bag.box(OX, DECK_Y, OZ, SPAN, 0.28, DECK_W, 0, '#9aa3ad');
+  // --- 4) Pedestrian overpass — elevated deck, thin stairs, fat piers, elevator towers ---
+  // Place where N–S arterial is: near 성남시청전면 (~x 1805–1815)
+  const OX = 1810, OZ = -5765;
+  const DECK_Y = 5.6;
+  const SPAN = 38;
+  const DECK_W = 3.6;
+  g.userData.overpass = { x: OX, z: OZ, y: DECK_Y, span: SPAN };
+  // Deck slab (cy = top - half thickness)
+  bag.box(OX, DECK_Y - 0.12, OZ, SPAN, 0.28, DECK_W, 0, '#a8b0b8');
+  // Side beams under deck (read thickness)
+  bag.box(OX, DECK_Y - 0.45, OZ - DECK_W / 2 + 0.15, SPAN, 0.45, 0.3, 0, '#7a848e');
+  bag.box(OX, DECK_Y - 0.45, OZ + DECK_W / 2 - 0.15, SPAN, 0.45, 0.3, 0, '#7a848e');
   // Rails
-  bag.box(OX, DECK_Y + 0.55, OZ - DECK_W / 2, SPAN, 0.08, 0.08, 0, '#6a727a');
-  bag.box(OX, DECK_Y + 0.55, OZ + DECK_W / 2, SPAN, 0.08, 0.08, 0, '#6a727a');
-  // Supports
-  for (const dx of [-8, 0, 8]) bag.box(OX + dx, DECK_Y / 2, OZ, 0.35, DECK_Y, 0.35, 0, '#7a828a');
+  bag.box(OX, DECK_Y + 0.55, OZ - DECK_W / 2, SPAN, 0.1, 0.1, 0, '#5a646e');
+  bag.box(OX, DECK_Y + 0.55, OZ + DECK_W / 2, SPAN, 0.1, 0.1, 0, '#5a646e');
+  for (const dx of [-10, -3.5, 3.5, 10]) {
+    bag.box(OX + dx, DECK_Y + 0.3, OZ - DECK_W / 2, 0.08, 0.55, 0.08, 0, '#5a646e');
+    bag.box(OX + dx, DECK_Y + 0.3, OZ + DECK_W / 2, 0.08, 0.55, 0.08, 0, '#5a646e');
+  }
+  // Fat piers (clear clearance under deck for cars)
+  for (const dx of [-9, 0, 9]) {
+    bag.box(OX + dx, (DECK_Y - 0.5) / 2, OZ, 0.85, DECK_Y - 0.5, 0.85, 0, '#8a929a');
+    bag.box(OX + dx, 0.2, OZ, 1.4, 0.4, 1.4, 0, '#6a727a'); // footing
+  }
 
   function addStairs(endX, sideSign) {
-    // Stairs descend away from road along ±X
-    const steps = 12;
-    const run = 9.5;
+    const steps = 14;
+    const run = 11.0;
+    const stepD = run / steps;
     for (let i = 0; i < steps; i++) {
-      const t = (i + 0.5) / steps;
-      const y = DECK_Y * (1 - t);
-      const x = endX + sideSign * (run * t);
-      bag.box(x, y / 2, OZ, run / steps + 0.05, Math.max(0.12, y), DECK_W + 0.15, 0, '#8a929a');
+      const t0 = i / steps;
+      const yTop = DECK_Y * (1 - (i + 1) / steps);
+      const yBot = DECK_Y * (1 - i / steps);
+      const y = (yTop + yBot) / 2;
+      const rise = Math.max(0.18, yBot - yTop);
+      const thick = Math.max(0.22, rise * 0.85);
+      const x = endX + sideSign * (stepD * (i + 0.5));
+      // Discrete tread slab (open underside — not a solid ramp/barrier)
+      bag.box(x, yTop - thick / 2, OZ, stepD + 0.06, thick, DECK_W + 0.35, 0, '#9aa2aa');
       heights.push({
         kind: 'stair',
-        x0: x - run / steps * 0.55, x1: x + run / steps * 0.55,
-        z0: OZ - DECK_W / 2 - 0.2, z1: OZ + DECK_W / 2 + 0.2,
-        y,
+        x0: x - stepD * 0.55, x1: x + stepD * 0.55,
+        z0: OZ - DECK_W / 2 - 0.25, z1: OZ + DECK_W / 2 + 0.25,
+        y: yTop,
       });
     }
-    // Elevator tower at bottom of stairs
-    const ex = endX + sideSign * (run + 1.4);
+    // Open stair rails (posts + handrail) — NOT solid walls (those read as a roadside barrier)
+    const stepsN = 14;
+    for (let i = 0; i <= stepsN; i++) {
+      const t0 = i / stepsN;
+      const x = endX + sideSign * (run * t0);
+      const yTop = DECK_Y * (1 - t0);
+      for (const zs of [-1, 1]) {
+        bag.box(x, yTop / 2 + 0.05, OZ + zs * (DECK_W / 2 + 0.08), 0.08, Math.max(0.2, yTop), 0.08, 0, '#5a646e');
+        bag.box(x, yTop + 0.55, OZ + zs * (DECK_W / 2 + 0.08), 0.1, 0.08, 0.1, 0, '#5a646e');
+      }
+    }
+    // Continuous handrail along stair
+    for (const zs of [-1, 1]) {
+      for (let i = 0; i < stepsN; i++) {
+        const t0 = (i + 0.5) / stepsN;
+        const x = endX + sideSign * (run * t0);
+        const yTop = DECK_Y * (1 - t0);
+        bag.box(x, yTop + 0.55, OZ + zs * (DECK_W / 2 + 0.08), run / stepsN + 0.05, 0.08, 0.08, 0, '#5a646e');
+      }
+    }
+    // Elevator tower at stair foot
+    const ex = endX + sideSign * (run + 1.6);
     const ez = OZ;
-    const EH = DECK_Y + 2.4;
-    bag.box(ex, EH / 2, ez, 2.5, EH, 2.5, 0, '#6a7380'); // shaft
-    bag.box(ex, EH + 0.2, ez, 2.8, 0.4, 2.8, 0, '#5a636e'); // machine room
-    bag.box(ex, 1.2, ez + 1.28, 1.4, 2.2, 0.08, 0, '#9eb8c8'); // door glass
-    elevators.push({ x: ex, z: ez, deckY: DECK_Y, r: 1.5 });
+    const EH = DECK_Y + 2.6;
+    bag.box(ex, EH / 2, ez, 3.2, EH, 3.2, 0, '#5a6570');
+    bag.box(ex, EH + 0.3, ez, 3.6, 0.6, 3.6, 0, '#4a5560');
+    bag.box(ex, 1.4, ez + 1.62, 1.8, 2.6, 0.12, 0, '#9eb8c8');
+    // vertical accent stripe so tower reads at distance
+    bag.box(ex, EH / 2, ez - 1.62, 1.2, EH * 0.9, 0.12, 0, '#3a8fd0');
+    // Deck bridge from stair head to elevator shaft top landing
+    bag.box((endX + ex) / 2, DECK_Y - 0.1, ez, Math.abs(ex - endX), 0.22, DECK_W * 0.9, 0, '#a8b0b8');
+    elevators.push({ x: ex, z: ez, deckY: DECK_Y, r: 1.6 });
   }
   addStairs(OX - SPAN / 2, -1);
   addStairs(OX + SPAN / 2, +1);
-  // Deck surface height
   heights.push({
     kind: 'deck',
-    x0: OX - SPAN / 2 - 0.3, x1: OX + SPAN / 2 + 0.3,
-    z0: OZ - DECK_W / 2 - 0.15, z1: OZ + DECK_W / 2 + 0.15,
+    x0: OX - SPAN / 2 - 0.4, x1: OX + SPAN / 2 + 0.4,
+    z0: OZ - DECK_W / 2 - 0.2, z1: OZ + DECK_W / 2 + 0.2,
     y: DECK_Y,
   });
+  // Static car under span (visual proof of clearance) — N–S arterial under deck
+  bag.box(OX + 1.5, 0.55, OZ + 6.5, 4.4, 1.1, 1.9, 0.15, '#2a5fad'); // body
+  bag.box(OX + 1.5, 1.25, OZ + 6.5, 2.2, 0.7, 1.75, 0.15, '#1a3a6a'); // cabin
+  bag.box(OX + 1.5, 1.3, OZ + 6.5, 1.8, 0.45, 1.7, 0.15, '#7ec8e8'); // windows
+  for (const [wx, wz] of [[-1.4, -0.85], [-1.4, 0.85], [1.4, -0.85], [1.4, 0.85]]) {
+    bag.box(OX + 1.5 + wx * Math.cos(0.15) - wz * Math.sin(0.15), 0.32, OZ + 6.5 + wx * Math.sin(0.15) + wz * Math.cos(0.15), 0.55, 0.55, 0.22, 0.15, '#1a1a1a');
+  }
 
   const body = bag.mesh(M.vc, 'cityhallPlazaExtrasBody');
   if (body) g.add(body);
@@ -2301,6 +2401,7 @@ function buildPlazaExtras(data, M) {
     disposeExtra: () => {
       grateGeo.dispose(); grateMat.dispose();
       jetGeo?.dispose(); jetMat?.dispose();
+      mistGeo?.dispose(); mistMat?.dispose();
     },
   };
 }

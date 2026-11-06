@@ -109,9 +109,9 @@ ok('filter no-op without data');
   assert.ok(names.includes('cityhallFloorGrates'), 'floor fountain grates');
   assert.ok(names.includes('cityhallPlazaExtrasBody'), 'bus/overpass body');
   // Overpass deck height
-  const deckY = built.groundHeight(1805, -5750);
-  assert.ok(deckY != null && deckY > 5 && deckY < 6, 'overpass deck y ' + deckY);
-  const el = built.tryElevator?.(1780.1, -5750, 0);
+  const deckY = built.groundHeight(1810, -5765);
+  assert.ok(deckY != null && deckY > 5 && deckY < 6.5, 'overpass deck y ' + deckY);
+  const el = built.tryElevator?.(1778.4, -5765, 0);
   assert.ok(el && el.y > 5, 'elevator up ' + JSON.stringify(el));
   built.dispose();
   ok('plaza extras stone/fountain/overpass/elevator');
