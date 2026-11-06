@@ -59,27 +59,33 @@ const look = async (px, pz, tx, tz, pitch, dist, file) => {
   await on.screenshot({ path: `${OUT}/${file}` });
   console.log('shot', file);
 };
-// 차도에서 학교 정면·명판·표지·노면 글자·횡단보도를 한 프레임에.
-await look(1538, -5566, 1592, -5544, 0.1, 2.4, 'yatap-school-zone-street.png');
+// 야탑: 적색 구간이 길 전체가 아니고, 그 안의 횡단보도가 노란 줄인지.
+await look(1564, -5568, 1634, -5556, 0.1, 3.2, 'yatap-school-zone-street.png');
+// 백현초등학교 (정자 라이브, 이름 있는 다른 학교)
+await look(250, -700, 210, -640, 0.12, 4, 'school-zone-baekhyeon-street.png');
 
 const streetInfo = await on.evaluate(() => {
   let zone = 0;
-  __jj.corridor.root.traverse((o) => { if (o.name === 'yatapSchoolZone') zone++; });
+  __jj.corridor.root.traverse((o) => { if (o.name === 'schoolZone') zone++; });
   return { zone, signs: __jj.schoolZone?.plan?.signs?.length || 0 };
 });
 
-await on.evaluate(() => {
-  __jj.teleport(1568, -5556);
-  __jj.player.visible = false;
-  __jj.setMode('overview');
-  __jj.ov.pitch = 1.22;
-  __jj.ov.yaw = Math.PI;
-  __jj.ov.dist = 145;
-});
-await frames(on, 8);
-await on.waitForTimeout(400);
-await on.screenshot({ path: `${OUT}/yatap-school-zone-aerial.png` });
-console.log('aerial on');
+const aerial = async (x, z, dist, file) => {
+  await on.evaluate(({ x, z, dist }) => {
+    __jj.teleport(x, z);
+    __jj.player.visible = false;
+    __jj.setMode('overview');
+    __jj.ov.pitch = 1.35;
+    __jj.ov.yaw = 0.15;
+    __jj.ov.dist = dist;
+  }, { x, z, dist });
+  await frames(on, 8);
+  await on.waitForTimeout(400);
+  await on.screenshot({ path: `${OUT}/${file}` });
+  console.log('aerial', file);
+};
+await aerial(1610, -5558, 95, 'yatap-school-zone-aerial.png');
+await aerial(220, -650, 110, 'school-zone-baekhyeon-aerial.png');
 
 const off = await open('&schoolzone=0');
 await off.evaluate(() => {
@@ -89,18 +95,18 @@ await off.evaluate(() => {
 });
 await off.waitForFunction(() => __jj.corridor?.tiles?.get('3_-12')?.dState === 3, null, { timeout: 120000 });
 await off.evaluate(() => {
-  __jj.teleport(1568, -5556);
+  __jj.teleport(1610, -5558);
   __jj.player.visible = false;
   __jj.setMode('overview');
-  __jj.ov.pitch = 1.22;
-  __jj.ov.yaw = Math.PI;
-  __jj.ov.dist = 145;
+  __jj.ov.pitch = 1.35;
+  __jj.ov.yaw = 0.15;
+  __jj.ov.dist = 95;
 });
 await frames(off, 8);
 await off.waitForTimeout(400);
 const offInfo = await off.evaluate(() => {
   let zone = 0;
-  __jj.corridor.root.traverse((o) => { if (o.name === 'yatapSchoolZone' || o.name?.startsWith?.('schoolzone-')) zone++; });
+  __jj.corridor.root.traverse((o) => { if (o.name === 'schoolZone' || o.name?.startsWith?.('schoolzone-')) zone++; });
   return { schoolZone: __jj.schoolZone, named: zone };
 });
 await off.screenshot({ path: `${OUT}/yatap-school-zone-off.png` });

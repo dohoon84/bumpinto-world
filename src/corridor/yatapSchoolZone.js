@@ -1,39 +1,20 @@
-// [schoolzone] 야탑초등학교 어린이 보호구역.
-// 양현로 400 (공공데이터 37.416616, 127.125627 → 정자 원점 약 1528.6, -5539.8) 의 학교 건물.
-// 풋프린트는 코리더 타일 3_-12 의 kind=school (중심 1553.8, -5529.9, 높이 18.2m).
-// 정면(북쪽) 양현로 secondary 폭 12m (z≈-5562) 와 그 위 횡단보도 두 곳(x=1450, x=1616.6).
-// 기본으로 켠다. ?schoolzone=0 이면 아무것도 만들지 않는다.
-// 메시는 적색 포장 1 + 노란선 1 + 노면 글자/30(텍스처 2장 공유) + 표지판(인스턴스) + 명판 1.
+// [schoolzone] 어린이 보호구역. 배치는 schoolZonePlan.js 가 구운 schoolZoneData.json.
+// 학교마다 정면 도로의 짧은 적색 구간 + 노면 글자/30 + 노란 가장자리·정지선 + 표지 1~2.
+// 그 구간에 들어오는 횡단보도만 노란 줄로 덮는다. 나머지 횡단보도는 그대로 흰색.
+// 기본 ON. ?schoolzone=0 이면 메쉬를 만들지 않는다.
+// 그리기: 적색 1 + 노란선 1 + 노란 횡단 1 + 글자 1 + 30 1 + 표지 인스턴스 2 + 이름 있는 학교당 명판 1.
 import * as THREE from 'three';
+import zonesData from './schoolZoneData.json' with { type: 'json' };
 
 const KO = '"Noto Sans KR", "Noto Sans CJK KR", "WenQuanYi Micro Hei", "NanumGothic", "Malgun Gothic", "Apple SD Gothic Neo", sans-serif';
 
 export const SCHOOL_RED = '#d23830';
 export const SCHOOL_YELLOW = '#f2c200';
-const Y_RED = 0.1;      // 차도 리본(0.065)·중앙선(0.09) 위, 횡단 지브라(0.108) 아래
-const Y_MARK = 0.122;   // 노면 글자·30
-const Y_LINE = 0.132;   // 노란 가장자리·정지선 (지브라 바깥)
-const RED_W = 11.5;
-const LINE_W = 0.38;
-const STOP_D = 5.65;    // 횡단보도 중심에서 노란 정지선까지 (지브라 ±2.2, 흰 정지선 ±3.8 보다 밖)
-const ROAD_X0 = 1436;
-const ROAD_X1 = 1702;
-
-// 타일 3_-12 school 링. 북쪽 정면 벽은 마지막 점 → 첫 점.
-export const YATAP_SCHOOL_RING = [
-  [1502.3, -5537.3], [1502.6, -5518.9], [1596.7, -5520.7],
-  [1596.4, -5532.1], [1562.5, -5531.1], [1562.5, -5539.4],
-];
-// 양현로 중심선 (서→동). 타일 2_-12 / 3_-12 secondary w=12.
-export const YATAP_ROAD = [
-  [1433, -5562.8], [1450, -5562.7], [1616.6, -5562], [1662.1, -5561.9],
-  [1689.5, -5561.5], [1700.3, -5561.6], [1752.5, -5562.2],
-];
-// base.json 횡단보도. dir = 도로 방향 (crossings.js 와 같음).
-export const YATAP_CROSSINGS = [
-  { x: 1450, z: -5562.7, dir: [-1, -0.004], w: 12 },
-  { x: 1616.6, z: -5562, dir: [-1, -0.004], w: 12 },
-];
+const Y_RED = 0.1;      // 차도 리본(0.065)·중앙선(0.09) 위, 흰 지브라(0.108) 아래
+const Y_ZEBRA = 0.124;  // 학교 구역 노란 횡단줄 (흰 줄을 덮음)
+const Y_MARK = 0.132;   // 노면 글자·30
+const Y_LINE = 0.14;    // 노란 가장자리·정지선
+const LINE_W = 0.36;
 
 export function schoolZoneEnabled(params) {
   try {
@@ -44,64 +25,6 @@ export function schoolZoneEnabled(params) {
 }
 
 const hypot2 = (x, z) => Math.hypot(x, z) || 1;
-export function sampleYatapRoad(x) {
-  const pts = YATAP_ROAD;
-  if (x <= pts[0][0]) return { x: pts[0][0], z: pts[0][1], tx: 1, tz: 0 };
-  for (let i = 1; i < pts.length; i++) {
-    const [ax, az] = pts[i - 1], [bx, bz] = pts[i];
-    if (x <= bx || i === pts.length - 1) {
-      const t = Math.max(0, Math.min(1, (x - ax) / (bx - ax || 1)));
-      const tx = bx - ax, tz = bz - az, L = hypot2(tx, tz);
-      return { x: ax + tx * t, z: az + tz * t, tx: tx / L, tz: tz / L };
-    }
-  }
-  const n = pts.length;
-  return { x: pts[n - 1][0], z: pts[n - 1][1], tx: 1, tz: 0 };
-}
-
-function unit(x, z) { const L = hypot2(x, z); return [x / L, z / L]; }
-
-/** 배치만. three 없이 테스트한다. */
-export function planYatapSchoolZone() {
-  // 도로를 향한 동쪽 북벽(링 3→4). 노면 글자·표지와 같은 시선에 들어온다.
-  const E = YATAP_SCHOOL_RING[4], D = YATAP_SCHOOL_RING[3];
-  const [tx, tz] = unit(D[0] - E[0], D[1] - E[1]);
-  const [nx, nz] = unit(tz, -tx); // 벽 밖(북쪽, 양현로).
-  const along = 0.42 * Math.hypot(D[0] - E[0], D[1] - E[1]);
-  const px = E[0] + tx * along, pz = E[1] + tz * along;
-  const plate = {
-    x: px + nx * 0.22, y: 4.55, z: pz + nz * 0.22,
-    w: 10.4, h: 2.45, nx, nz, tx, tz, text: '야탑초등학교',
-  };
-  const signAt = (x, face) => {
-    const r = sampleYatapRoad(x);
-    const [sx, sz] = unit(-r.tz, r.tx); // 남쪽(학교) 인도. 가로수(도로 가장자리+1.6m)보다 차도에 붙인다.
-    const off = 6 + 1.35;
-    const n = face < 0 ? unit(-r.tx, -r.tz) : unit(r.tx, r.tz);
-    return { x: r.x + sx * off, z: r.z + sz * off, y: 0, nx: n[0], nz: n[1], w: 1.5, h: 2.1, bottom: 1.42 };
-  };
-  const marks = [
-    { kind: 'text', text: '어린이 보호구역', x: 1570, w: 15.4, h: 3.15, face: 1 },
-    { kind: 'disc', text: '30', x: 1588, w: 6.4, h: 6.4, face: 1 },
-    { kind: 'disc', text: '30', x: 1635, w: 6.6, h: 6.6, face: -1 },
-    { kind: 'text', text: '어린이 보호구역', x: 1658, w: 16.2, h: 3.2, face: -1 },
-  ].map((m) => {
-    const r = sampleYatapRoad(m.x);
-    const fwd = m.face < 0 ? [-r.tx, -r.tz] : [r.tx, r.tz];
-    return { ...m, x: r.x, z: r.z, fx: fwd[0], fz: fwd[1] };
-  });
-  const stops = [];
-  for (const c of YATAP_CROSSINGS) {
-    const [dx, dz] = unit(c.dir[0], c.dir[1]);
-    const [qx, qz] = unit(-dz, dx);
-    for (const sgn of [-1, 1]) {
-      stops.push({ x: c.x + dx * sgn * STOP_D, z: c.z + dz * sgn * STOP_D, dx, dz, qx, qz, w: RED_W - 0.7, t: 0.62 });
-    }
-  }
-  const samples = [];
-  for (let x = ROAD_X0; x <= ROAD_X1 + 0.1; x += 10) samples.push(sampleYatapRoad(Math.min(x, ROAD_X1)));
-  return { plate, signs: [signAt(1561, -1), signAt(1643, 1)], marks, stops, samples, redW: RED_W };
-}
 
 function canvasTex(w, h, draw) {
   const cv = document.createElement('canvas');
@@ -120,18 +43,18 @@ function fitText(g, text, maxW, px, min) {
   return s;
 }
 
-function drawPlate(g, w, h) {
+function drawPlate(g, w, h, text) {
   g.fillStyle = '#16386a';
   g.fillRect(0, 0, w, h);
   g.fillStyle = '#f4e4c4';
-  g.fillRect(18, 18, w - 36, h - 36);
+  g.fillRect(14, 14, w - 28, h - 28);
   g.fillStyle = '#1f6b45';
-  g.fillRect(18, 18, w - 36, 22);
+  g.fillRect(14, 14, w - 28, 18);
   g.fillStyle = '#14284a';
   g.textAlign = 'center';
   g.textBaseline = 'middle';
-  fitText(g, '야탑초등학교', w - 120, 150, 72);
-  g.fillText('야탑초등학교', w / 2, h / 2 + 12);
+  fitText(g, text, w - 80, 118, 48);
+  g.fillText(text, w / 2, h / 2 + 8);
 }
 
 function walker(g, x, y, s) {
@@ -248,18 +171,6 @@ function bufGeo(pos, uv, idx, want) {
   return g;
 }
 
-function groundQuad(x, z, fx, fz, w, h, y) {
-  const L = hypot2(fx, fz); fx /= L; fz /= L;
-  const rx = -fz, rz = fx; // 텍스처 +x = 진행 방향의 오른쪽
-  const hw = w / 2, hh = h / 2;
-  const pos = [], uv = [];
-  for (const [lx, ly, u, v] of [[-hw, -hh, 0, 0], [hw, -hh, 1, 0], [hw, hh, 1, 1], [-hw, hh, 0, 1]]) {
-    pos.push(x + rx * lx + fx * ly, y, z + rz * lx + fz * ly);
-    uv.push(u, v);
-  }
-  return bufGeo(pos, uv, [0, 1, 2, 0, 2, 3], [0, 1, 0]);
-}
-
 function wallQuad(x, y, z, ax, az, nx, nz, w, h) {
   const hw = w / 2, hh = h / 2;
   const pos = [], uv = [];
@@ -276,44 +187,70 @@ function addQuad(pos, idx, cx, cz, ax, az, bx, bz, hl, hw, y) {
   idx.push(base, base + 2, base + 1, base, base + 3, base + 2);
 }
 
-function yellowGeo(plan) {
-  const pos = [], idx = [];
-  const samples = plan.samples;
-  const side = RED_W / 2 - LINE_W / 2 - 0.12;
-  for (let i = 1; i < samples.length; i++) {
-    const a = samples[i - 1], b = samples[i];
-    const mx = (a.x + b.x) / 2, mz = (a.z + b.z) / 2;
-    if (YATAP_CROSSINGS.some((c) => Math.abs(c.x - mx) < 4.4)) continue;
-    const dx = b.x - a.x, dz = b.z - a.z, L = hypot2(dx, dz);
-    const tx = dx / L, tz = dz / L, qx = -tz, qz = tx;
-    for (const sgn of [-1, 1]) addQuad(pos, idx, mx + qx * sgn * side, mz + qz * sgn * side, tx, tz, qx, qz, L / 2, LINE_W / 2, Y_LINE);
-  }
-  for (const s of plan.stops) addQuad(pos, idx, s.x, s.z, s.qx, s.qz, s.dx, s.dz, s.w / 2, s.t / 2, Y_LINE);
+function flatMesh(pos, idx) {
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-  g.setIndex(idx);
+  if (idx.length) g.setIndex(idx);
   g.computeVertexNormals();
   const n = g.attributes.normal;
-  for (let i = 0; i < n.count; i++) n.setXYZ(i, 0, 1, 0);
+  if (n) for (let i = 0; i < n.count; i++) n.setXYZ(i, 0, 1, 0);
   return g;
 }
+const pt = (p) => Array.isArray(p) ? { x: p[0], z: p[1] } : p;
 
-function redGeo(plan) {
+function redGeo(zones) {
   const pos = [], idx = [];
-  const samples = plan.samples, hw = RED_W / 2;
-  for (let i = 0; i < samples.length; i++) {
-    const a = samples[Math.max(0, i - 1)], b = samples[Math.min(samples.length - 1, i + 1)];
-    let dx = b.x - a.x, dz = b.z - a.z; const L = hypot2(dx, dz); dx /= L; dz /= L;
-    const p = samples[i];
-    pos.push(p.x - dz * hw, Y_RED, p.z + dx * hw, p.x + dz * hw, Y_RED, p.z - dx * hw);
-    if (i) { const k = (i - 1) * 2; idx.push(k, k + 1, k + 2, k + 1, k + 3, k + 2); }
+  for (const zone of zones) {
+    const samples = zone.samples.map(pt), hw = zone.redW / 2;
+    const base = pos.length / 3;
+    for (let i = 0; i < samples.length; i++) {
+      const a = samples[Math.max(0, i - 1)], b = samples[Math.min(samples.length - 1, i + 1)];
+      let dx = b.x - a.x, dz = b.z - a.z; const L = hypot2(dx, dz); dx /= L; dz /= L;
+      const p = samples[i];
+      pos.push(p.x - dz * hw, Y_RED, p.z + dx * hw, p.x + dz * hw, Y_RED, p.z - dx * hw);
+      if (i) { const k = base + (i - 1) * 2; idx.push(k, k + 1, k + 2, k + 1, k + 3, k + 2); }
+    }
   }
-  const g = new THREE.BufferGeometry();
-  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-  g.setIndex(idx);
-  g.computeVertexNormals();
-  const n = g.attributes.normal;
-  for (let i = 0; i < n.count; i++) n.setXYZ(i, 0, 1, 0);
+  return flatMesh(pos, idx);
+}
+function yellowGeo(zones) {
+  const pos = [], idx = [];
+  for (const zone of zones) {
+    const samples = zone.samples.map(pt);
+    const side = zone.redW / 2 - LINE_W / 2 - 0.08;
+    for (let i = 1; i < samples.length; i++) {
+      const a = samples[i - 1], b = samples[i];
+      const mx = (a.x + b.x) / 2, mz = (a.z + b.z) / 2;
+      if ((zone.crossings || []).some((c) => Math.hypot(c.x - mx, c.z - mz) < 5)) continue;
+      const dx = b.x - a.x, dz = b.z - a.z, L = hypot2(dx, dz);
+      const tx = dx / L, tz = dz / L, qx = -tz, qz = tx;
+      for (const sgn of [-1, 1]) addQuad(pos, idx, mx + qx * sgn * side, mz + qz * sgn * side, tx, tz, qx, qz, L / 2, LINE_W / 2, Y_LINE);
+    }
+    for (const s of zone.stops || []) addQuad(pos, idx, s.x, s.z, s.qx, s.qz, s.dx, s.dz, s.w / 2, s.t / 2, Y_LINE);
+  }
+  return flatMesh(pos, idx);
+}
+function zebraGeo(zones) {
+  const pos = [], idx = [];
+  for (const zone of zones) for (const c of zone.crossings || []) {
+    const [dx, dz] = c.dir, nx = -dz, nz = dx, half = (c.w || zone.roadW) / 2, depth = c.depth || 2.2;
+    for (let v = -half + 0.35; v <= half - 0.15; v += 0.95) addQuad(pos, idx, c.x + nx * v, c.z + nz * v, dx, dz, nx, nz, depth, 0.36, Y_ZEBRA);
+  }
+  return flatMesh(pos, idx);
+}
+function decalGeo(marks) {
+  const pos = [], uv = [], idx = [];
+  for (const m of marks) {
+    const L = hypot2(m.fx, m.fz), fx = m.fx / L, fz = m.fz / L, rx = -fz, rz = fx;
+    const hw = m.w / 2, hh = m.h / 2, base = pos.length / 3;
+    for (const [lx, ly, u, v] of [[-hw, -hh, 0, 0], [hw, -hh, 1, 0], [hw, hh, 1, 1], [-hw, hh, 0, 1]]) {
+      pos.push(m.x + rx * lx + fx * ly, Y_MARK, m.z + rz * lx + fz * ly);
+      uv.push(u, v);
+    }
+    idx.push(base, base + 1, base + 2, base, base + 2, base + 3);
+  }
+  const g = flatMesh(pos, idx);
+  g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
   return g;
 }
 
@@ -323,83 +260,97 @@ const paintMat = (color, order, factor) => {
   return m;
 };
 
+const plateTexCache = new Map();
+function plateTexture(text) {
+  if (plateTexCache.has(text)) return plateTexCache.get(text);
+  const tex = canvasTex(768, 192, (g, w, h) => drawPlate(g, w, h, text));
+  plateTexCache.set(text, tex);
+  return tex;
+}
+
 /**
- * @param {THREE.Object3D} parent
- * @param {URLSearchParams | { get: (k: string) => string | null } | null} params
- * @returns {{ group: THREE.Group, plan: object, dispose: () => void } | null}
+ * 구운 구역 전부를 공유 재질로 올린다. ?schoolzone=0 이면 null.
+ * @returns {{ group: THREE.Group, zones: object[], dispose: () => void } | null}
  */
-export function mountYatapSchoolZone(parent, params) {
+export function mountSchoolZones(parent, params) {
   if (!schoolZoneEnabled(params)) return null;
-  const plan = planYatapSchoolZone();
+  const zones = zonesData;
   const group = new THREE.Group();
-  group.name = 'yatapSchoolZone';
+  group.name = 'schoolZone';
 
-  const red = new THREE.Mesh(redGeo(plan), paintMat(SCHOOL_RED, 2, -1));
-  red.name = 'schoolzone-red'; red.renderOrder = 2; red.receiveShadow = true;
-  group.add(red);
-  const yellow = new THREE.Mesh(yellowGeo(plan), paintMat(SCHOOL_YELLOW, 3, -3));
-  yellow.name = 'schoolzone-yellow'; yellow.renderOrder = 3;
-  group.add(yellow);
+  const add = (geo, mat, name, order) => {
+    if (!geo.attributes.position?.count) { geo.dispose(); return; }
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.name = name; mesh.renderOrder = order; mesh.receiveShadow = name === 'schoolzone-red';
+    group.add(mesh);
+  };
+  add(redGeo(zones), paintMat(SCHOOL_RED, 2, -1), 'schoolzone-red', 2);
+  add(yellowGeo(zones), paintMat(SCHOOL_YELLOW, 3, -3), 'schoolzone-yellow', 3);
+  add(zebraGeo(zones), paintMat(SCHOOL_YELLOW, 4, -4), 'schoolzone-zebra', 4);
 
-  const textTex = canvasTex(1024, 256, (g, w, h) => drawRoadText(g, w, h));
-  const discTex = canvasTex(512, 512, (g, w) => drawDisc(g, w));
-  const textMat = new THREE.MeshBasicMaterial({ map: textTex, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4, side: THREE.DoubleSide });
-  const discMat = new THREE.MeshBasicMaterial({ map: discTex, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4, side: THREE.DoubleSide });
-  for (const m of plan.marks) {
-    const geo = groundQuad(m.x, m.z, m.fx, m.fz, m.w, m.h, Y_MARK);
-    const mesh = new THREE.Mesh(geo, m.kind === 'disc' ? discMat : textMat);
-    mesh.name = m.kind === 'disc' ? 'schoolzone-30' : 'schoolzone-text';
-    mesh.renderOrder = 4;
+  const texts = [], discs = [];
+  for (const z of zones) for (const m of z.marks || []) (m.kind === 'disc' ? discs : texts).push(m);
+  const textMat = new THREE.MeshBasicMaterial({ map: canvasTex(1024, 256, (g, w, h) => drawRoadText(g, w, h)), polygonOffset: true, polygonOffsetFactor: -5, polygonOffsetUnits: -5, side: THREE.DoubleSide });
+  const discMat = new THREE.MeshBasicMaterial({ map: canvasTex(512, 512, (g, w) => drawDisc(g, w)), polygonOffset: true, polygonOffsetFactor: -5, polygonOffsetUnits: -5, side: THREE.DoubleSide });
+  if (texts.length) { const mesh = new THREE.Mesh(decalGeo(texts), textMat); mesh.name = 'schoolzone-text'; mesh.renderOrder = 5; group.add(mesh); }
+  if (discs.length) { const mesh = new THREE.Mesh(decalGeo(discs), discMat); mesh.name = 'schoolzone-30'; mesh.renderOrder = 5; group.add(mesh); }
+
+  for (const z of zones) if (z.plate) {
+    const p = z.plate;
+    const ax = p.nz, az = -p.nx;
+    const mesh = new THREE.Mesh(
+      wallQuad(p.x, p.y, p.z, ax, az, p.nx, p.nz, p.w, p.h),
+      new THREE.MeshBasicMaterial({ map: plateTexture(p.text), side: THREE.FrontSide }),
+    );
+    mesh.name = 'schoolzone-plate';
+    mesh.userData.school = p.text;
     group.add(mesh);
   }
 
-  const plateTex = canvasTex(1024, 256, (g, w, h) => drawPlate(g, w, h));
-  const p = plan.plate;
-  const ax = p.nz, az = -p.nx; // 밖에서 볼 때 글자 왼쪽→오른쪽
-  const plate = new THREE.Mesh(
-    wallQuad(p.x, p.y, p.z, ax, az, p.nx, p.nz, p.w, p.h),
-    new THREE.MeshBasicMaterial({ map: plateTex, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2, side: THREE.FrontSide }),
-  );
-  plate.name = 'schoolzone-plate';
-  plate.castShadow = true;
-  group.add(plate);
-
-  const signTex = canvasTex(512, 768, (g, w, h) => drawSign(g, w, h));
-  const signMat = new THREE.MeshBasicMaterial({ map: signTex, side: THREE.FrontSide });
-  const poleGeo = new THREE.CylinderGeometry(0.055, 0.07, 3.35, 8);
-  poleGeo.translate(0, 1.675, 0);
-  const boardGeo = new THREE.PlaneGeometry(plan.signs[0].w, plan.signs[0].h);
-  boardGeo.translate(0, plan.signs[0].bottom + plan.signs[0].h / 2, 0.06);
-  const n = plan.signs.length;
-  const poles = new THREE.InstancedMesh(poleGeo, new THREE.MeshLambertMaterial({ color: '#5c636a' }), n);
-  const boards = new THREE.InstancedMesh(boardGeo, signMat, n);
-  poles.name = 'schoolzone-poles';
-  boards.name = 'schoolzone-signs';
-  poles.castShadow = true;
-  const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), v = new THREE.Vector3(), up = new THREE.Vector3(0, 0, 1);
-  plan.signs.forEach((s, i) => {
-    v.set(s.x, 0, s.z);
-    q.setFromUnitVectors(up, new THREE.Vector3(s.nx, 0, s.nz));
-    m4.compose(v, q, new THREE.Vector3(1, 1, 1));
-    poles.setMatrixAt(i, m4);
-    boards.setMatrixAt(i, m4);
-  });
-  poles.instanceMatrix.needsUpdate = boards.instanceMatrix.needsUpdate = true;
-  poles.computeBoundingSphere();
-  boards.computeBoundingSphere();
-  group.add(poles, boards);
+  const signs = zones.flatMap((z) => z.signs || []);
+  if (signs.length) {
+    const signMat = new THREE.MeshBasicMaterial({ map: canvasTex(512, 768, (g, w, h) => drawSign(g, w, h)), side: THREE.FrontSide });
+    const poleGeo = new THREE.CylinderGeometry(0.055, 0.07, 3.35, 8);
+    poleGeo.translate(0, 1.675, 0);
+    const boardGeo = new THREE.PlaneGeometry(1.5, 2.1);
+    boardGeo.translate(0, 1.42 + 1.05, 0.06);
+    const n = signs.length;
+    const poles = new THREE.InstancedMesh(poleGeo, new THREE.MeshLambertMaterial({ color: '#5c636a' }), n);
+    const boards = new THREE.InstancedMesh(boardGeo, signMat, n);
+    poles.name = 'schoolzone-poles';
+    boards.name = 'schoolzone-signs';
+    const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), v = new THREE.Vector3(), up = new THREE.Vector3(0, 0, 1);
+    signs.forEach((s, i) => {
+      v.set(s.x, 0, s.z);
+      q.setFromUnitVectors(up, new THREE.Vector3(s.nx, 0, s.nz).normalize());
+      m4.compose(v, q, new THREE.Vector3(1, 1, 1));
+      poles.setMatrixAt(i, m4);
+      boards.setMatrixAt(i, m4);
+    });
+    poles.instanceMatrix.needsUpdate = boards.instanceMatrix.needsUpdate = true;
+    poles.computeBoundingSphere();
+    boards.computeBoundingSphere();
+    group.add(poles, boards);
+  }
 
   parent.add(group);
   return {
-    group, plan,
+    group, zones,
     dispose() {
       parent.remove(group);
+      const seen = new Set();
       group.traverse((o) => {
         if (!o.isMesh) return;
         o.geometry?.dispose();
-        const mats = [].concat(o.material || []);
-        for (const m of mats) { m.map?.dispose(); m.dispose(); }
+        for (const m of [].concat(o.material || [])) {
+          if (seen.has(m)) continue;
+          seen.add(m);
+          m.map?.dispose();
+          m.dispose();
+        }
       });
+      plateTexCache.clear();
     },
   };
 }
+export const mountYatapSchoolZone = mountSchoolZones;
