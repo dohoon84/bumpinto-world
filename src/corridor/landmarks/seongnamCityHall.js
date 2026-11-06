@@ -7,6 +7,7 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import { toShape } from '../../world.js';
 import { vcMat, paint } from '../tileMesh.js';
 import { watchEvening } from '../../evening.js';
+import { addInstancedTrees } from '../../world/trees.js';
 
 const C = {
   glassBlue: '#6bb8dc', glassTeal: '#6bb8dc', glassLite: '#6bb8dc',
@@ -941,14 +942,15 @@ function buildPondMusicPlaza(data, M) {
   // North leg (top): west→east, facing south toward pond
   // East leg (right): north→south, facing west toward pond
   const seatBag = Bag();
-  const tierH = 0.38, tierD = 1.35;
-  const stoneA = '#c8c2b6', stoneB = '#a8a296';
+  const tierH = 0.55, tierD = 1.85;
+  // Strong aerial contrast (marked4 tan stone vs green lawn)
+  const stoneA = '#d9d0c0', stoneB = '#9a9080';
   // North leg
-  const nLegZ0 = z0 - 2.2; // closest to pond (south face of seats)
-  const nLegX0 = bx + 6, nLegX1 = bx + R + 14;
-  // East leg
-  const eLegX0 = bx + R + 5.5; // closest to pond
-  const eLegZ0 = z0 - 1.5, eLegZ1 = zMid + 10;
+  const nLegZ0 = z0 - 2.8; // closest to pond (south face of seats)
+  const nLegX0 = bx + 4, nLegX1 = bx + R + 18;
+  // East leg — longer so ㄱ reads from aerial
+  const eLegX0 = bx + R + 4.5; // closest to pond
+  const eLegZ0 = z0 - 2.0, eLegZ1 = zMid + 16;
 
   function addTierRow(alongAxis, /* 'x' or 'z' */ a0, a1, fixed, outwardSign, facingPond) {
     // alongAxis grows along the leg; fixed is the pond-side coordinate of tier 0 front
@@ -999,60 +1001,63 @@ function buildPondMusicPlaza(data, M) {
 
   const railM = bag.mesh(M.vc, 'cityhallPondRail'); if (railM) g.add(railM);
 
-  // --- ⑥ Lawn strip below deck: bushes + trees (yellow zone) ---
-  // Between deck outer and further east/SE
-  const bushN = 28, treeN = 14;
-  const bushes = new THREE.InstancedMesh(new THREE.SphereGeometry(0.7, 6, 5), M.hedge, bushN);
-  const trunks = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.16, 0.22, 1, 6), M.trunk, treeN);
-  const pines = new THREE.InstancedMesh(new THREE.ConeGeometry(1.0, 2.2, 7), M.pine, treeN * 2);
-  bushes.name = 'cityhallPondBushes'; trunks.name = 'cityhallPondTrunks'; pines.name = 'cityhallPondPines';
-  let bi = 0, ti = 0, pi = 0;
-  const rnd = (a, b, s) => a + (b - a) * (Math.abs(Math.sin(s * 12.9898)) % 1);
-  for (let i = 0; i < bushN; i++) {
-    const t = 0.15 + 0.7 * (i / bushN);
+  // --- ⑥ Lawn strip: existing world tree assets (addInstancedTrees) — same as street/park trees ---
+  // Keep clear of seating / eye sightline toward fountain (trees only SE/E of mid-deck)
+  const treePts = [], bushPts = [];
+  let seed = 7919;
+  const rnd01 = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+  for (let i = 0; i < 16; i++) {
+    const t = 0.28 + 0.50 * ((i + 0.5) / 16); // mid-south arc — avoid north seating sightline
     const ang = Math.PI / 2 - t * Math.PI;
-    const rad = deckOuter + 2.2 + rnd(0, 4.5, i + 3);
-    const x = bx + rad * Math.cos(ang) + rnd(-1.2, 1.2, i * 7);
-    const z = zMid + rad * Math.sin(ang) + rnd(-1.0, 1.0, i * 9);
-    // keep off north tip / seating footprint
-    if (z < z0 - 1) continue;
-    if (x < bx + 4) continue;
-    dummy.position.set(x, 0.55 + rnd(0, 0.25, i), z);
-    const s = 0.7 + rnd(0, 0.55, i + 1);
-    dummy.scale.set(s, s * 0.85, s); dummy.rotation.set(0, i, 0); dummy.updateMatrix();
-    bushes.setMatrixAt(bi++, dummy.matrix);
+    const rad = deckOuter + 3.5 + rnd01() * 3.2;
+    const x = bx + rad * Math.cos(ang) + (rnd01() - 0.5) * 1.4;
+    const z = zMid + rad * Math.sin(ang) + (rnd01() - 0.5) * 1.2;
+    if (z < z0 + 2) continue; // clear north/ㄱ seating
+    if (x < bx + R * 0.35) continue;
+    treePts.push([x, z]);
   }
-  for (let i = 0; i < treeN; i++) {
-    const t = 0.22 + 0.55 * (i / treeN);
+  for (let i = 0; i < 22; i++) {
+    const t = 0.30 + 0.48 * ((i + 0.5) / 22);
     const ang = Math.PI / 2 - t * Math.PI;
-    const rad = deckOuter + 5.5 + rnd(0, 3.5, i + 11);
-    const x = bx + rad * Math.cos(ang);
-    const z = zMid + rad * Math.sin(ang);
-    if (z < z0) continue;
-    dummy.position.set(x, 0.7, z); dummy.scale.set(1, 1.4, 1); dummy.rotation.set(0, 0, 0); dummy.updateMatrix();
-    trunks.setMatrixAt(ti++, dummy.matrix);
-    for (let L = 0; L < 2; L++) {
-      dummy.position.set(x, 1.6 + L * 1.1, z);
-      dummy.scale.set(1.1 - L * 0.25, 1.0 - L * 0.15, 1.1 - L * 0.25);
-      dummy.updateMatrix();
-      pines.setMatrixAt(pi++, dummy.matrix);
-    }
+    const rad = deckOuter + 1.6 + rnd01() * 2.4;
+    const x = bx + rad * Math.cos(ang) + (rnd01() - 0.5) * 1.0;
+    const z = zMid + rad * Math.sin(ang) + (rnd01() - 0.5) * 0.9;
+    if (z < z0 + 4) continue;
+    if (x < bx + R * 0.4) continue;
+    bushPts.push([x, z]);
   }
-  bushes.count = bi; trunks.count = ti; pines.count = pi;
-  bushes.castShadow = trunks.castShadow = pines.castShadow = true;
-  g.add(bushes, trunks, pines);
+  // Street-tree scale (corridor tileMesh defaults) + smaller shrub scale of same asset
+  const treeInst = addInstancedTrees(g, treePts, {
+    rnd: rnd01,
+    crownRadius: 2.0, crownY: 4.6, trunkTop: 0.18, trunkBottom: 0.26, trunkHeight: 3.2,
+    trunkColor: '#8a6b4e', scaleMin: 0.7, scaleSpan: 0.4,
+  });
+  const bushInst = addInstancedTrees(g, bushPts, {
+    rnd: rnd01,
+    crownRadius: 0.95, crownY: 1.55, trunkTop: 0.1, trunkBottom: 0.14, trunkHeight: 1.1,
+    trunkColor: '#8a6b4e', scaleMin: 0.55, scaleSpan: 0.35,
+  });
+  if (treeInst) {
+    treeInst.crowns.name = 'cityhallPondTreeCrowns';
+    treeInst.trunks.name = 'cityhallPondTreeTrunks';
+  }
+  if (bushInst) {
+    bushInst.crowns.name = 'cityhallPondBushCrowns';
+    bushInst.trunks.name = 'cityhallPondBushTrunks';
+  }
 
   // --- ① Colour jets: main line on chord + 2 shorter aux rows toward curve ---
   const MAIN_N = 26, AUX1_N = 14, AUX2_N = 10;
   const TOTAL = MAIN_N + AUX1_N + AUX2_N;
   // Shared additive jet material (recolour via material.color — cheap, one draw for all if same mat)
   // Use instanceColor for per-jet rainbow
+  // Opaque-ish coloured columns (NormalBlending) so rainbow reads day+night — not washed additive white
   const jetMat = new THREE.MeshBasicMaterial({
-    color: '#ffffff', transparent: true, opacity: 0.72, depthWrite: false,
-    blending: THREE.AdditiveBlending, side: THREE.DoubleSide, vertexColors: false,
+    color: '#ffffff', transparent: true, opacity: 0.92, depthWrite: false,
+    blending: THREE.NormalBlending, side: THREE.DoubleSide, toneMapped: false,
   });
   jetMat.name = 'PondJet';
-  const jetGeo = new THREE.PlaneGeometry(0.18, 1);
+  const jetGeo = new THREE.PlaneGeometry(0.42, 1);
   jetGeo.translate(0, 0.5, 0);
   // 2 crossed planes per jet
   const jets = new THREE.InstancedMesh(jetGeo, jetMat, TOTAL * 2);
@@ -1066,7 +1071,7 @@ function buildPondMusicPlaza(data, M) {
   const pushSeed = (x, z, hMax, phase) => { seeds.push({ x, z, hMax, phase }); };
   for (let i = 0; i < MAIN_N; i++) {
     const t = (i + 0.5) / MAIN_N;
-    pushSeed(bx + 1.6, z0 + 3 + t * (z1 - z0 - 6), 7.5 + (i % 5) * 0.6, i / MAIN_N);
+    pushSeed(bx + 1.6, z0 + 3 + t * (z1 - z0 - 6), 9.0 + (i % 5) * 0.7, i / MAIN_N);
   }
   for (let i = 0; i < AUX1_N; i++) {
     const t = 0.12 + 0.76 * ((i + 0.5) / AUX1_N);
@@ -1079,8 +1084,8 @@ function buildPondMusicPlaza(data, M) {
 
   const tmpC = new THREE.Color();
   function rainbow(u) {
-    // u in [0,1) → vivid rainbow
-    tmpC.setHSL((u % 1), 0.95, 0.55);
+    // vivid saturated rainbow (bright enough at night without additive wash)
+    tmpC.setHSL((u % 1), 1.0, 0.52);
     return tmpC;
   }
 
@@ -1092,7 +1097,7 @@ function buildPondMusicPlaza(data, M) {
       const h = Math.max(0.4, s.hMax * pulse);
       const hue = (s.phase * 0.85 + t * 0.15) % 1;
       const col = rainbow(hue);
-      const w = 0.28 + (i < MAIN_N ? 0.12 : 0.04);
+      const w = 0.55 + (i < MAIN_N ? 0.25 : 0.08);
       dummy.position.set(s.x, 0.32, s.z);
       dummy.rotation.set(0, 0, 0);
       dummy.scale.set(w, h, 1);
@@ -1107,8 +1112,7 @@ function buildPondMusicPlaza(data, M) {
     jets.count = seeds.length * 2;
     jets.instanceMatrix.needsUpdate = true;
     if (jets.instanceColor) jets.instanceColor.needsUpdate = true;
-    jetMat.opacity = 0.7 + 0.28 * (0.5 + 0.5 * Math.sin(t * 1.5));
-    // keep additive colour readable at night (don't wash to white)
+    jetMat.opacity = 0.88 + 0.1 * (0.5 + 0.5 * Math.sin(t * 1.5));
     jetMat.color.setRGB(1, 1, 1);
   }
 
