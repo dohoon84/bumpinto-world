@@ -316,7 +316,8 @@ function buildStore(st) {
     const onFront = Math.abs(a[1] - zf) < 0.3 && Math.abs(b[1] - zf) < 0.3;
     const onSide = side && Math.abs(a[0] - x1) < 0.4 && Math.abs(b[0] - x1) < 0.4;
     const onWest = west && Math.abs(a[0] - x0) < 0.4 && Math.abs(b[0] - x0) < 0.4;
-    const cut = onFront ? [0, x0, x1] : onSide ? [1, zf, zb + 0.3] : onWest ? [1, zf, zb] : null;
+    const onBack = Math.abs(a[1] - zb) < 0.4 && Math.abs(b[1] - zb) < 0.4; // 뒤 유리와 겹치는 외곽 변
+    const cut = onFront ? [0, x0, x1] : onSide ? [1, zf, zb + 0.3] : onWest ? [1, zf, zb] : onBack ? [0, x0, x1 + 0.1] : null;
     const pieces = [];
     if (!cut) pieces.push([0, 1]);
     else {
@@ -360,6 +361,15 @@ function buildStore(st) {
     ext.box(x0 - 0.05, 2.55, wz0, x0 + 0.05, 2.62, zb, MULL); // 가로대
     ext.box(x0 - 0.05, GLASS_H, wz0, x0 + 0.08, gf, zb, STONE); // 유리 위 벽
     if (westEnd > zb + 0.05) ext.box(x0 - 0.05, 0, zb, x0 + 0.08, gf, westEnd, STONE);
+  }
+  { // 뒤 유리(서쪽 끝 ~ 동쪽 모퉁이, 바닥 턱 ~ 간판 높이) + 멀리언 + 위 띠 — 뒤에서 봐도 닫힌 유리면
+    const bx0 = x0 + 0.05, bx1 = side ? x1 + 0.06 : x1;
+    glass.quad(N(0, 0, 1), P((bx0 + bx1) / 2, (0.32 + GLASS_H) / 2, zb), bx1 - bx0, GLASS_H - 0.32, [1, 1, 1]);
+    ext.box(bx0, 0, zb - 0.06, bx1, 0.32, zb + 0.06, DARK);
+    const nB = Math.max(1, Math.round((bx1 - bx0) / 1.75));
+    for (let k = 0; k <= nB; k++) { const x = k === 0 ? bx0 + 0.04 : k === nB ? bx1 - 0.04 : bx0 + ((bx1 - bx0) * k) / nB; ext.box(x - 0.04, 0.32, zb - 0.05, x + 0.04, GLASS_H, zb + 0.05, MULL); }
+    ext.box(bx0, 2.55, zb - 0.05, bx1, 2.62, zb + 0.05, MULL); // 가로대
+    ext.box(x0 - 0.05, GLASS_H, zb - 0.06, bx1, gf, zb + 0.08, NAVY); // 위 띠
   }
   // 출입문(가운데 두 칸): 손잡이
   const dx = fx0 + ((fx1 - fx0) * Math.floor(nF / 2)) / nF;
@@ -423,8 +433,8 @@ function buildStore(st) {
   function storeLayout() {
   // 뒷벽 냉장 쇼케이스(청록 머리띠 + 유리문 + 음료), x 3.2 ~ 15.2
   const cz0 = iz1 - 0.75, cxa = ix0 + Math.min(3.2, W * 0.2), cxb = ix1 - 0.4;
-  int.box(cxa, 0, cz0, cxb, 2.25, iz1, FR, true, 'Z');
-  int.box(cxa, 2.25, cz0 - 0.05, cxb, 2.55, iz1, TEAL, true, 'Z');
+  int.box(cxa, 0, cz0, cxb, 2.25, iz1, FR, true);
+  int.box(cxa, 2.25, cz0 - 0.05, cxb, 2.55, iz1, TEAL, true);
   for (let y = 0.35, r = 6; y < 2.1; y += 0.42, r = r === 6 ? 7 : 6) prodFace(prod, N(0, 0, -1), (cxa + cxb) / 2, y + 0.16, cz0 - 0.02, cxb - cxa - 0.1, 0.34, r, cxa * 3 + y);
   for (let x = cxa; x < cxb - 0.1; x += 0.85) int.box(x - 0.03, 0.1, cz0 - 0.06, x + 0.03, 2.2, cz0 - 0.01, hex('#9aa3aa'));
   glass.quad(N(0, 0, -1), P((cxa + cxb) / 2, 1.2, cz0 - 0.07), cxb - cxa, 2.1, [1, 1, 1]);
@@ -524,7 +534,7 @@ function buildStore(st) {
     glass.quad(N(0, 0, -1), P(kx0 + 0.5, top + 0.25, kz + 0.07), 0.8, 0.5, [1, 1, 1]);
     sign.quad(N(0, 0, -1), P(kx0 + 0.5, top + 0.65, kz + 0.1), 0.8, 0.22, [1, 1, 1], suv(SIGN.hot));
   }
-  int.box(ix0 + 0.2, 0, iz1 - 0.35, ix1 - 0.2, 2.4, iz1, hex('#d9dcdf'), true, 'Z'); // 뒷벽 선반
+  int.box(ix0 + 0.2, 0, iz1 - 0.35, ix1 - 0.2, 2.4, iz1, hex('#d9dcdf'), true); // 뒷벽 선반
   for (let y = 0.5; y < 2.3; y += 0.32) prodFace(prod, N(0, 0, -1), (ix0 + ix1) / 2, y, iz1 - 0.36, ix1 - ix0 - 0.5, 0.26, Math.round(y * 10) % 8, y * 7);
   if (kz - iz0 > 1.4) { int.box(ix0, 0, iz0 + 0.5, ix0 + 0.6, 1.9, kz - 0.2, hex('#1b1d20'), true); for (let y = 0.4; y < 1.8; y += 0.38) prodFace(prod, N(1, 0, 0), ix0 + 0.61, y + 0.14, (iz0 + 0.5 + kz - 0.2) / 2, kz - 0.7 - iz0, 0.3, 6 + (Math.round(y * 3) % 2), y * 9); }
   return { x: km + 0.05, z: Math.min(kz + 1.15, iz1 - 0.55) };
