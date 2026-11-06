@@ -613,13 +613,13 @@ function buildBuilding(data, M) {
   // (north pilotis come from CITYHALL_PILLARS — central passage clear)
   frameBag.box((westX1 + midX1) / 2, 7.2, zMin - 2.5, midX1 - westX1 + 6, 0.3, 5, 0, C.frame);
 
-  // Low glass base along south plaza — only sealed lobby; leave east passage clear (도훈 walk-through)
+  // Low glass base along south plaza — sealed lobby only (west pilotis → passage); not over east passage
   {
-    const passX0 = midX1 + 22;
-    const bw = passX0 - xMin - 2;
+    const lobbyX0 = 1508.2, passX0 = midX1 + 22;
+    const bw = passX0 - lobbyX0;
     if (bw > 2) {
       const baseGlass = new THREE.PlaneGeometry(bw, 3.2, 1, 1);
-      baseGlass.translate((xMin + passX0) / 2, 2.0, zMax + 0.5);
+      baseGlass.translate((lobbyX0 + passX0) / 2, 2.0, zMax + 0.5);
       const baseMesh = new THREE.Mesh(baseGlass, M.glassLite);
       baseMesh.name = 'cityhallBaseGlass'; baseMesh.castShadow = false; g.add(baseMesh);
     }
@@ -1957,7 +1957,7 @@ function buildWalkingSculpture(data, M, { walkerGlbUrl = null } = {}) {
 
 
 /** G1 glass: sealed envelope under the slab — front, back, both ends/sides, corners.
- *  East undercroft PASSAGE (도훈): open front+back walk-through; divider wall seals lobby to the west.
+ *  East undercroft PASSAGE (도훈): open front+back+east (fountain side); divider seals lobby to the west.
  *  Meets slab at top; pillars inside/flush. Lobby enter only via revolving/auto doors.
  *  Doors: clear near-transparent glass (not blue-tinted).
  */
@@ -1972,9 +1972,9 @@ function buildGroundFloor(data, M) {
   const midX1 = mass.midX1 ?? 1632;
   const PH = mass.pilotisH ?? 8.0;
 
-  // Full slab footprint — continuous sealed glass (도훈: close ALL undercroft openings)
-  const G1_X0 = xMin + 0.35;                 // west end under slab
-  const G1_X1 = xMax - 0.35;                 // east end under slab (was truncated → open overhang)
+  // Sealed lobby under slab; west extends past pilotis line (~1509) so SW undercroft is not open to lawn
+  const G1_X0 = 1508.2;                      // west of outer pilotis (CITYHALL_PILLARS x=1509.7)
+  const G1_X1 = xMax - 0.35;                 // east slab edge (passage open here — no east glass)
   const BACK_X0 = G1_X0;
   const BACK_X1 = G1_X1;
   const zSouth = zMax + 0.22;               // south face (front)
@@ -2093,30 +2093,54 @@ function buildGroundFloor(data, M) {
     bag.box(x, PH / 2, zNorth + 0.35, 0.35, PH - 0.3, 0.35, 0, C.pilotis);
   }
 
-  // --- West end + passage divider + East end ---
+  // --- West end + passage divider (NO east end glass — open to music fountain, 도훈) ---
   addEWWall(zNorth, zSouth, G1_X0, 0.15, PH - 0.2, glassMat, 'cityhallG1WestGlass');
-  // Divider at left end of open span — seals lobby interior from the walk-through
-  addEWWall(zNorth, zSouth, PASS_X0, 0.15, PH - 0.2, glassMat, 'cityhallG1PassageWall');
-  addEWWall(zNorth, zSouth, G1_X1, 0.15, PH - 0.2, glassMat, 'cityhallG1EastGlass');
+  // Divider: blue curtain glass (same as front) + solid blue backer so beige lobby mass does not read as a tan slab
+  {
+    const passMat = glassMat.clone();
+    passMat.opacity = 0.92;
+    passMat.emissive = new THREE.Color('#3a7aa8');
+    passMat.emissiveIntensity = 0.55;
+    passMat.name = 'G1PassageGlass';
+    addEWWall(zNorth, zSouth, PASS_X0, 0.15, PH - 0.2, passMat, 'cityhallG1PassageWall');
+    // Opaque blue liner on lobby side (Mesh — Bag vc was washing to tan)
+    {
+      const linerMat = new THREE.MeshStandardMaterial({
+        color: '#3d8ec8', transparent: true, opacity: 0.88,
+        roughness: 0.25, metalness: 0.2,
+        emissive: new THREE.Color('#2a6a98'), emissiveIntensity: 0.4,
+        side: THREE.DoubleSide, depthWrite: true,
+      });
+      const liner = new THREE.Mesh(
+        new THREE.BoxGeometry(0.12, PH - 0.4, Math.abs(zSouth - zNorth) - 0.5),
+        linerMat,
+      );
+      liner.position.set(PASS_X0 - 0.14, PH / 2, (zNorth + zSouth) / 2);
+      liner.name = 'cityhallG1PassageLiner';
+      g.add(liner);
+    }
+    // Passage-facing mullions (match front curtain rhythm)
+    for (let z = zNorth + 1.6; z < zSouth - 0.4; z += 3.2) {
+      bag.box(PASS_X0 + 0.08, PH / 2, z, 0.12, PH - 0.4, 0.12, 0, C.frame);
+    }
+    bag.box(PASS_X0 + 0.08, 0.22, (zNorth + zSouth) / 2, 0.14, 0.18, Math.abs(zSouth - zNorth) - 0.3, 0, C.frame);
+    bag.box(PASS_X0 + 0.08, PH - 0.32, (zNorth + zSouth) / 2, 0.14, 0.18, Math.abs(zSouth - zNorth) - 0.3, 0, C.frame);
+    // Horizontal mid mullions
+    for (let y = 2.0; y < PH - 1; y += 2.2) {
+      bag.box(PASS_X0 + 0.08, y, (zNorth + zSouth) / 2, 0.1, 0.1, Math.abs(zSouth - zNorth) - 0.5, 0, C.frame);
+    }
+  }
   for (const [cx, cz] of [
     [G1_X0, zSouth], [G1_X0, zNorth],
     [PASS_X0, zSouth], [PASS_X0, zNorth],
-    [G1_X1, zSouth], [G1_X1, zNorth],
   ]) {
     bag.box(cx, PH / 2, cz, 0.32, PH - 0.25, 0.32, 0, C.frame);
-  }
-
-  // Interior glow strips (night) along south
-  for (let x = G1_X0 + 2; x < PASS_X0 - 1; x += 4.5) {
-    if (x > doorL - 1 && x < doorR + 1) continue;
-    const col = ((Math.sin(x * 12.9) + 1) * 0.5) > 0.45 ? C.nightWarm : C.nightCool;
-    bag.box(x, PH * 0.45, zSouth - 0.9, 3.2, PH * 0.7, 0.08, 0, col);
   }
 
   // Lobby floor under slab between front and back glass
   bag.box((G1_X0 + PASS_X0) / 2, 0.06, (zSouth + zNorth) / 2, PASS_X0 - G1_X0 - 0.4, 0.1, Math.abs(zSouth - zNorth) - 0.5, 0, C.plaza);
   // Passage paving (same level, open)
-  bag.box((PASS_X0 + PASS_X1) / 2, 0.05, (zSouth + zNorth) / 2, PASS_X1 - PASS_X0 - 0.3, 0.08, Math.abs(zSouth - zNorth) - 0.4, 0, C.path);
+  bag.box((PASS_X0 + PASS_X1) / 2, 0.05, (zSouth + zNorth) / 2, PASS_X1 - PASS_X0 - 0.3, 0.08, Math.abs(zSouth - zNorth) - 0.4, 0, C.plaza);
 
   // --- Revolving door (회전문): clear glass wings ---
   const revG = new THREE.Group(); revG.name = 'cityhallRevolvingDoor';
@@ -2194,11 +2218,11 @@ function buildGroundFloor(data, M) {
   }
 
   function isBlocked(x, z, r = 0.4) {
-    // Open east undercroft passage — walk front↔back under slab (no NS glass here)
-    const inPass = x > PASS_X0 + r && x < PASS_X1 - r
+    // Open east undercroft passage — front, back, AND east end open (no NS/east glass)
+    const inPass = x > PASS_X0 + r && x < PASS_X1 + 2 + r
       && z > zNorth - 1.2 - r && z < zSouth + 1.2 + r;
     if (inPass) {
-      // Still blocked by divider / east end walls via the loop below
+      // Divider at PASS_X0 still blocks via walls loop; east end has no wall
     }
     // Passage through door bay (revolving centre + open auto door)
     const inDoorBay = x > doorL - r && x < doorR + r && z > zSouth - 1.4 - r && z < zSouth + 1.2 + r;
@@ -2551,18 +2575,18 @@ function buildPlazaExtras(data, M) {
       streetPts.push([x, z]);
     }
     // Continuous row along WEST plaza curb (big road ↔ plaza) — 도훈 yellow line
-    // NE near floor fountain → SW along sidewalk edge, ~9 m spacing, curb not road
+    // NE near floor fountain (north road) → SW along west sidewalk of plaza, ~9 m spacing
     {
       const westPoly = [
-        [1536.0, -5794.0], // NE — by NW fountain pad
-        [1524.0, -5835.0],
-        [1514.0, -5875.0],
-        [1506.0, -5915.0],
-        [1500.0, -5955.0],
-        [1496.0, -5995.0],
-        [1495.0, -6035.0],
-        [1498.0, -6070.0],
-        [1508.0, -6100.0], // SW
+        [1538.0, -5792.0], // NE — by NW fountain / north road
+        [1528.0, -5810.0],
+        [1518.0, -5830.0],
+        [1510.0, -5855.0],
+        [1504.0, -5880.0],
+        [1500.0, -5905.0],
+        [1498.0, -5930.0],
+        [1498.0, -5955.0],
+        [1502.0, -5980.0], // SW end of plaza west edge
       ];
       const spacing = 9.0;
       let carry = 0;
