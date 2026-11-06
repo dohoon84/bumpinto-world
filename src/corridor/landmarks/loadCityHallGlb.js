@@ -98,15 +98,19 @@ export async function loadCityHallGlb(url, { env = null, decoderPath } = {}) {
         se.name = 'SlantEdge';
         mats[i] = se; m.dispose?.();
       } else if (/eastwindow/.test(n)) {
-        m.color?.set?.('#1e2630');
-        m.metalness = 0.04; m.roughness = 0.6; m.emissive?.set?.('#000000');
+        // mid-dark blue-tint window rows (ref/14·15) — not charcoal
+        m.color?.set?.('#3d5a72');
+        m.metalness = 0.12; m.roughness = 0.38;
+        m.emissive?.set?.('#1a3040'); m.emissiveIntensity = 0.15;
         m.needsUpdate = true;
       } else if (/eastsilver|spandrel/.test(n)) {
-        m.color?.set?.(/spandrel/.test(n) ? '#a8b0b8' : '#9aa4ae');
-        m.metalness = 0.28; m.roughness = 0.4; m.emissive?.set?.('#000000');
+        // LIGHT silver/pale grey #c9ced3–#d8dce0 band (ref/04·13·15) — brighter than walkway/pond
+        m.color?.set?.(/spandrel/.test(n) ? '#d0d6dc' : '#e0e4e8');
+        m.metalness = 0.08; m.roughness = 0.48;
+        m.emissive?.set?.('#9aa3ac'); m.emissiveIntensity = 0.22;
         m.needsUpdate = true;
       } else if (m.isMeshStandardMaterial || m.isMeshPhysicalMaterial) {
-        if (/^frame$/.test(n)) { m.color?.set?.('#b0b8c0'); m.emissive?.set?.('#000000'); }
+        if (/^frame$/.test(n)) { m.color?.set?.('#d0d5da'); m.emissive?.set?.('#000000'); }
         if (env) { m.envMap = env; m.envMapIntensity = (m.envMapIntensity || 0.4) * 1.15; }
         m.metalness = Math.min(m.metalness ?? 0.1, 0.25);
         m.needsUpdate = true;

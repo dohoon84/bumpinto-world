@@ -116,10 +116,10 @@ def join_named(names, out_name):
 def build():
     clear()
     m_frame = mat('Frame', (0.82,0.84,0.86), 0.12, 0.45)
-    m_east  = mat('EastSilver', (0.62,0.66,0.70), 0.25, 0.40)  # mid silver-grey (ref/04)
-    m_win   = mat('EastWindow', (0.16,0.20,0.26), 0.05, 0.55)  # dark window rows
+    m_east  = mat('EastSilver', (0.88,0.90,0.92), 0.08, 0.48)  # light silver #e0e4e8 (ref/04·13·15)
+    m_win   = mat('EastWindow', (0.28,0.40,0.50), 0.05, 0.45)  # mid-dark blue-tint rows
     m_dark  = mat('FrameDark', (0.58,0.60,0.64), 0.18, 0.4)
-    m_span  = mat('Spandrel', (0.72,0.75,0.78), 0.08, 0.5)
+    m_span  = mat('Spandrel', (0.84,0.87,0.90), 0.06, 0.52)  # ~#d6dde4
     m_sof   = mat('Soffit', (0.74,0.76,0.78), 0.05, 0.65)
     m_pil   = mat('Pilotis', (0.96,0.97,0.98), 0.05, 0.32)
     m_sol   = mat('Solar', (0.07,0.09,0.12), 0.8, 0.28)
@@ -158,11 +158,10 @@ def build():
     opaque.append(box('EFTop', east_cx, y_min-0.5, EAST_H+0.25, east_sx+0.8, 0.8, 0.6, m_east))
     opaque.append(box('EFL', mx1+0.8, y_min-0.5, (PH+EAST_H)/2, 0.8, 0.8, EAST_H-PH, m_east))
     opaque.append(box('EFR', x_max-1.5, y_min-0.5, (PH+EAST_H)/2, 0.8, 0.8, EAST_H-PH, m_east))
-    # South facade: readable floor bands + dark window rows (ref/04 east block)
+    # South facade: light silver dominates; thinner mid-dark window rows (ref/04·13·15)
     for k, zy in enumerate(range(int(PH) + 2, int(EAST_H) - 1, 3)):
-        opaque.append(box(f'EBand{k}', east_cx, y_min - 0.55, zy, east_sx - 0.8, 0.55, 0.55, m_span))
-        # dark window strip between bands
-        opaque.append(box(f'EWin{k}', east_cx, y_min - 0.72, zy + 1.4, east_sx - 1.4, 0.35, 2.2, m_win))
+        opaque.append(box(f'EBand{k}', east_cx, y_min - 0.5, zy, east_sx - 0.6, 0.55, 1.25, m_span))
+        opaque.append(box(f'EWin{k}', east_cx, y_min - 0.7, zy + 1.85, east_sx - 1.4, 0.22, 1.35, m_win))
     # Vertical mullion hints
     for i in range(8):
         px = mx1 + 3 + i * ((x_max - mx1 - 6) / 7)
@@ -220,13 +219,12 @@ def build():
         glass.append(box(f'WestWedge{i}', cx, cy, cz, sx, sy, sz, m_gb, 0.08))
 
     glass.append(grid_glass('WestSkin', x0, x1, y_bot+1.0, 0.4, WEST_H+0.5, 24, 12, 22, 12, m_gb))
+    # Stepped horizontal glass bands folding down SW corner (ref/13)
+    for ti, (z0, z1, y_push) in enumerate([(28, 36, 2), (20, 28, 7), (12, 20, 13), (5, 12, 18)]):
+        glass.append(box(f'WestTier{ti}', (x0+x1)/2, y_bot + y_push, (z0+z1)/2,
+                         abs(x1-x0)*0.92, 2.8 + ti*0.4, max(1.5, z1-z0-0.4), m_gb, 0.06))
     glass.append(grid_glass('Atrium', wx1-8, mx1+14, y_bot+1.5, 0.4, MID_H, 18, 7, 16, 10, m_ga))
-    # East curtain plane
-    bpy.ops.mesh.primitive_plane_add(size=1, location=(east_cx, y_min-0.6, (PH+EAST_H)/2))
-    ec=bpy.context.active_object; ec.name='EastCurtain'
-    ec.scale=(east_sx-1.8,1,EAST_H-PH-0.8); ec.rotation_euler=(math.radians(90),0,0)
-    bpy.ops.object.transform_apply(scale=True, rotation=True); # East south face is silver+window bands (opaque), not blue glass
-    ec.data.materials.append(m_win); opaque.append(ec)
+    # East south face: silver mass + band/window strips only (no full dark curtain plane)
     # North curtain
     bpy.ops.mesh.primitive_plane_add(size=1, location=((x_min+x_max)/2, y_max+0.5, EAST_H/2))
     nc=bpy.context.active_object; nc.name='NorthCurtain'

@@ -14,11 +14,11 @@ const C = {
   soffit: '#b8bec6', pilotis: '#f2f4f6', solar: '#1a2330', solarFrame: '#4a5560',
   plaza: '#ddd8ce', plazaDark: '#c2bdb2', lawn: '#5f9a58', lawnDark: '#4a7f45',
   path: '#b8b3a6', brick: '#a07058', brickDark: '#8a5a42', wood: '#5c4030', woodDark: '#3e2a1e',
-  water: '#2a7fa8', waterDeep: '#154a66', pole: '#5a6068', banner: '#2f6db5',
+  water: '#2a7fa8', waterDeep: '#154a66', pole: '#5a6068', banner: '#a0307f',
   hedge: '#3d6b3a', trunk: '#4a3428', foliage: '#3f7a38', pine: '#2d5a30',
   asphalt: '#5a5e64', line: '#e8e8e8', curb: '#9a9ea4', sculpture: '#2a6db5',
   kiosk: '#6fa86a', slantFace: '#4a9ec8', slantEdge: '#2e3540',
-  eastSilver: '#aeb6be', eastWindow: '#2a323c',
+  eastSilver: '#e0e4e8', eastWindow: '#3d5a72',
   nightWarm: '#ffe3ad', nightCool: '#a8c8ff',
 };
 
@@ -155,18 +155,18 @@ function mats() {
     // East silver frame + dark window rows (ref/04) — not blue glass
     shared.eastFacade = S(C.eastSilver, {
       map: canvasTex(256, 512, (x, w, h) => {
-        x.fillStyle = '#aeb6be'; x.fillRect(0, 0, w, h);
+        x.fillStyle = '#e0e4e8'; x.fillRect(0, 0, w, h);
         const rows = 10;
         for (let i = 0; i < rows; i++) {
-          const y = (i + 0.15) * (h / rows);
-          const bh = h / rows * 0.55;
-          x.fillStyle = '#2a323c'; x.fillRect(6, y, w - 12, bh);
-          x.fillStyle = '#c5ccd3'; x.fillRect(0, y + bh, w, h / rows * 0.22);
+          const y = (i + 0.18) * (h / rows);
+          const bh = h / rows * 0.38;
+          x.fillStyle = '#3d5a72'; x.fillRect(6, y, w - 12, bh);
+          x.fillStyle = '#d0d6dc'; x.fillRect(0, y + bh, w, h / rows * 0.35);
         }
-        x.strokeStyle = '#8a929a'; x.lineWidth = 2;
+        x.strokeStyle = '#c5ccd4'; x.lineWidth = 2;
         for (let i = 1; i < 8; i++) { x.beginPath(); x.moveTo(i * (w / 8), 0); x.lineTo(i * (w / 8), h); x.stroke(); }
       }, 4, 6),
-      roughness: 0.4, metalness: 0.25, envMapIntensity: env ? 0.5 : 0,
+      roughness: 0.48, metalness: 0.08, emissive: '#9aa3ac', emissiveIntensity: 0.18, envMapIntensity: env ? 0.35 : 0,
     });
 
 
@@ -204,14 +204,15 @@ function mats() {
     });
     shared._plazaTex = shared.plaza.map;
 
-    // Generic banner (no city emblem — abstract circle + bars)
+    // Magenta/pink banners along promenade (ref/14·15) — abstract marks, no brand logo
     shared.banner = new THREE.MeshStandardMaterial({
       map: canvasTex(64, 128, (x, w, h) => {
-        x.fillStyle = '#2f6db5'; x.fillRect(0, 0, w, h);
-        x.fillStyle = '#ffffff'; x.fillRect(8, 12, 48, 48);
-        x.beginPath(); x.arc(32, 36, 14, 0, Math.PI * 2); x.fillStyle = '#2f6db5'; x.fill();
-        x.fillStyle = 'rgba(255,255,255,0.92)';
-        x.fillRect(12, 72, 40, 8); x.fillRect(16, 88, 32, 6); x.fillRect(20, 102, 24, 6);
+        x.fillStyle = '#a0307f'; x.fillRect(0, 0, w, h);
+        x.fillStyle = '#f0a0d0'; x.fillRect(0, 0, w, 14);
+        x.fillStyle = '#ffffff'; x.fillRect(10, 28, 44, 44);
+        x.beginPath(); x.arc(32, 50, 14, 0, Math.PI * 2); x.fillStyle = '#a0307f'; x.fill();
+        x.fillStyle = 'rgba(255,255,255,0.95)';
+        x.fillRect(12, 84, 40, 8); x.fillRect(16, 98, 32, 6); x.fillRect(20, 112, 24, 6);
       }, 1, 1),
       side: THREE.DoubleSide, roughness: 0.7, metalness: 0.05, transparent: true,
     });
@@ -716,6 +717,64 @@ function buildGrounds(data, M) {
   return g;
 }
 
+
+function buildSeongnamSign(data, M) {
+  // Photo-spot '성남' magenta outline sign on south lawn (ref/14·15) — city sign, not a brand logo
+  const g = new THREE.Group(); g.name = 'cityhallSeongnamSign';
+  const pr = data.promenade;
+  // Sit on lawn beside paved path, east of promenade mid (camera looks north at east block)
+  const dx = pr.to[0] - pr.from[0], dz = pr.to[1] - pr.from[1], L = Math.hypot(dx, dz) || 1;
+  const ux = dx / L, uz = dz / L, px = -uz, pz = ux;
+  const tMid = 0.42;
+  const sx = pr.from[0] + dx * tMid + px * 1 * (pr.width / 2 + 6.5);
+  const sz = pr.from[1] + dz * tMid + pz * 1 * (pr.width / 2 + 6.5);
+
+  // Dark charcoal plinth — ~2× wider than tall (ref/15)
+  const plinthMat = new THREE.MeshStandardMaterial({ color: '#2a2e34', roughness: 0.88, metalness: 0.05 });
+  const plinth = new THREE.Mesh(new THREE.BoxGeometry(2.5, 0.55, 1.05), plinthMat);
+  plinth.position.set(sx, 0.275, sz);
+  plinth.castShadow = true; plinth.receiveShadow = true;
+  g.add(plinth);
+
+  // Magenta outline face (pre-rendered PNG with 성남 + hanging ㅇ) — BasicMat so SwiftShader/daylight always read
+  // TextureLoader needs document; Node tests skip the PNG plane (solid ring below still draws)
+  if (typeof document !== 'undefined' && document.createElementNS) {
+    const tex = new THREE.TextureLoader().load('/corridor/cityhall/seongnam-sign.png');
+    tex.colorSpace = THREE.SRGBColorSpace;
+    tex.anisotropy = 4;
+    const faceMat = new THREE.MeshBasicMaterial({
+      map: tex, transparent: true, alphaTest: 0.12,
+      side: THREE.DoubleSide, depthWrite: false,
+    });
+    const face = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 2.4), faceMat);
+    face.position.set(sx, 0.55 + 1.15, sz + 0.02);
+    face.rotation.y = 0;
+    face.renderOrder = 3;
+    g.add(face);
+    const back = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 2.4), faceMat);
+    back.position.set(sx, 0.55 + 1.15, sz - 0.05);
+    back.rotation.y = Math.PI;
+    back.renderOrder = 3;
+    g.add(back);
+  }
+  // Solid magenta ring backup (reads even if texture lags): rounded-rect approximation via torus + bars
+  const mag = new THREE.MeshBasicMaterial({ color: '#a0307f' });
+  const ring = new THREE.Group();
+  const thrk = 0.1, fw = 2.05, fh = 1.55;
+  for (const [wx, wy, sx_, sy_] of [
+    [0, fh / 2, fw, thrk], [0, -fh / 2, fw, thrk], [-fw / 2, 0, thrk, fh], [fw / 2, 0, thrk, fh],
+  ]) {
+    const b = new THREE.Mesh(new THREE.BoxGeometry(sx_, sy_, 0.12), mag);
+    b.position.set(wx, wy, 0); ring.add(b);
+  }
+  // hanging ㅇ
+  const tor = new THREE.Mesh(new THREE.TorusGeometry(0.28, 0.08, 8, 16), mag);
+  tor.position.set(-0.45, -fh / 2 - 0.28, 0); ring.add(tor);
+  ring.position.set(sx, 0.55 + 1.15, sz + 0.08);
+  g.add(ring);
+  return g;
+}
+
 function buildBanners(data, M) {
   const g = new THREE.Group(); g.name = 'cityhallBanners';
   const pr = data.promenade;
@@ -749,46 +808,54 @@ function buildBanners(data, M) {
 function buildPond(data, M) {
   const g = new THREE.Group(); g.name = 'cityhallPond';
   const bag = Bag();
-  // Half-moon / D-shape hugging east of building (ref/04·12) — prefer OSM outline
-  const outline = data.pond?.o;
-  let ring = outline;
-  if (!ring || ring.length < 5) {
-    // Fallback D: flat west edge near building, curved east lobe
-    const bx = 1694, z0 = -5952, z1 = -5892, bulge = 28;
-    ring = [];
-    ring.push([bx, z0], [bx, z1]);
-    for (let i = 0; i <= 12; i++) {
-      const t = i / 12;
-      const z = z1 + (z0 - z1) * t;
-      const u = Math.sin(t * Math.PI);
-      ring.push([bx + bulge * u, z]);
-    }
+  // Wide filled D / half-moon basin east of building (ref/04·12) — NOT OSM thin ribbon
+  // East block ~61 m long; basin width ~22–28 m (~1/3), length ~55 m along east face
+  const bx = 1695;           // flat west edge near building east face
+  const zSouth = -5950;
+  const zNorth = -5895;
+  const bulge = 34;          // wide D basin ~1/3 east-block length (ref/04·12)
+  const ring = [[bx, zSouth], [bx, zNorth]];
+  for (let i = 0; i <= 16; i++) {
+    const t = i / 16;
+    const z = zNorth + (zSouth - zNorth) * t;
+    const u = Math.sin(t * Math.PI); // full lobe
+    ring.push([bx + Math.max(0.5, bulge * u), z]);
   }
   const xs = ring.map((p) => p[0]), zs = ring.map((p) => p[1]);
   const cx = xs.reduce((a, b) => a + b, 0) / xs.length;
   const cz = zs.reduce((a, b) => a + b, 0) / zs.length;
 
-  // Stone edge (raised curb along outline)
-  band(bag, ring, 0.15, 0.42, 0.55, 0.7, C.curb, { minLen: 0.8 });
-  // Water fill
-  bag.push(paintFaces(extrude(ring, [], 0.05, 0.32), C.water, C.waterDeep, C.water));
-  const waterMesh = new THREE.Mesh(extrude(ring, [], 0.28, 0.34), M.water);
+  // Stone rim
+  band(bag, ring, 0.12, 0.48, 0.7, 0.85, C.curb, { minLen: 0.6 });
+  // Filled water basin
+  bag.push(paintFaces(extrude(ring, [], 0.04, 0.3), C.waterDeep, C.water, C.waterDeep));
+  const waterMesh = new THREE.Mesh(extrude(ring, [], 0.26, 0.36), M.water);
   waterMesh.name = 'cityhallDPond'; g.add(waterMesh);
   const edgeBody = bag.mesh(M.vc, 'cityhallPondEdge'); if (edgeBody) g.add(edgeBody);
 
-  // Curved stone path along west (plaza) lip of pond
-  const westEdge = ring.filter((p) => p[0] < cx + 2).sort((a, b) => a[1] - b[1]);
-  for (let i = 0; i < westEdge.length - 1; i++) {
-    const [ax, az] = westEdge[i], [bx, bz] = westEdge[i + 1];
-    const dx = bx - ax, dz = bz - az, L = Math.hypot(dx, dz) || 1, ang = Math.atan2(dz, dx);
-    // offset further west (plaza side) ~3.5 m
-    const ox = -dz / L * 3.5, oz = dx / L * 3.5;
-    bag.box((ax + bx) / 2 + ox, 0.08, (az + bz) / 2 + oz, L, 0.1, 2.4, -ang, C.path);
+  // Curved stone path along west (plaza) lip
+  for (let i = 0; i < 16; i++) {
+    const t0 = i / 16, t1 = (i + 1) / 16;
+    const z0 = zNorth + (zSouth - zNorth) * t0;
+    const z1 = zNorth + (zSouth - zNorth) * t1;
+    const x0 = bx - 3.2, x1 = bx - 3.2;
+    const dx = x1 - x0, dz = z1 - z0, L = Math.hypot(dx, dz) || 1, ang = Math.atan2(dz, dx || 0.001);
+    bag.box((x0 + x1) / 2, 0.1, (z0 + z1) / 2, Math.max(L, 0.5), 0.1, 2.6, -ang, C.path);
+  }
+  // Also arc path along curved east rim (outside)
+  for (let i = 0; i < 16; i++) {
+    const t0 = i / 16, t1 = (i + 1) / 16;
+    const z0 = zNorth + (zSouth - zNorth) * t0;
+    const z1 = zNorth + (zSouth - zNorth) * t1;
+    const u0 = Math.sin(t0 * Math.PI), u1 = Math.sin(t1 * Math.PI);
+    const x0 = bx + bulge * u0 + 2.8, x1 = bx + bulge * u1 + 2.8;
+    const dx = x1 - x0, dz = z1 - z0, L = Math.hypot(dx, dz) || 1, ang = Math.atan2(dz, dx);
+    bag.box((x0 + x1) / 2, 0.1, (z0 + z1) / 2, L, 0.1, 2.2, -ang, C.path);
   }
   const pathM = bag.mesh(M.vc, 'cityhallPondPath'); if (pathM) g.add(pathM);
 
-  // Blue abstract sculpture near north of pond
-  const sc = data.pond.sculpture || { x: cx - 8, z: Math.min(...zs) + 8 };
+  // Sculpture near NW of pond (plaza side)
+  const sc = data.pond?.sculpture || { x: bx - 10, z: zNorth + 10 };
   const sbag = Bag();
   sbag.cyl(sc.x, 0.35, sc.z, 0.85, 0.7, 10, C.curb);
   const wing = new THREE.SphereGeometry(1.5, 10, 8, 0, Math.PI);
@@ -1027,10 +1094,7 @@ function buildLandscape(data, M) {
   const f = data.fountain || { cx: 1610, cz: -5965, len: 58 };
 
   // Clear: north fountain corridor + south plaza strip + pond apron (ref/11·12 — open water)
-  const _po = data.pond?.o || [[1710, -5925]];
-  const pondCx = _po.reduce((a, p) => a + p[0], 0) / _po.length;
-  const pondCz = _po.reduce((a, p) => a + p[1], 0) / _po.length;
-  const pondR = 28;
+  const pondCx = 1708, pondCz = -5922, pondR = 32;
   const inKeepClear = (x, z) => (
     x > f.cx - f.len / 2 - 10 && x < f.cx + f.len / 2 + 10 && z < zMin + 2 && z > seatsZ - 8
   ) || (
@@ -1207,6 +1271,7 @@ export function buildSeongnamCityHall(data, { env = null, glbUrl = null } = {}) 
   root.add(buildingHost);
   root.add(buildGrounds(data, M));
   root.add(buildBanners(data, M));
+  root.add(buildSeongnamSign(data, M));
   root.add(buildPond(data, M));
   const fountain = buildFountainComplex(data, M);
   root.add(fountain.group);
