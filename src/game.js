@@ -574,6 +574,9 @@ const bump24Game = mountBump24Game({
   renderer, params, getPlayer: () => player, getCorridor: () => corridor,
   getAudioLevel: () => (bgm ? { muted: bgm.player.muted, volume: bgm.player.volume } : null),
   getSelfName: () => (presence?.me?.name || '나'),
+  getLook: () => me.look,
+  toggleMute: bgm ? () => bgm.player.setMuted(!bgm.player.muted) : null,
+  isMobile: mobileMode,
   canEnter: () => subwayCanEnter() && !subway?.active,
   onInterior: (zone, inside) => {
     selfInterior = inside;

@@ -163,7 +163,7 @@ const hex = (h) => { const c = new THREE.Color(h); return [c.r, c.g, c.b]; };
 // ---------- 캔버스 텍스처 ----------
 const LOGO_B = 'M435 265H720C850 265 940 355 940 470C940 535 905 590 858 620C930 650 975 715 975 800C975 920 880 1010 740 1010H445C365 1010 308 950 308 870V390C308 320 360 265 435 265Z';
 const LOGO_SEA = 'M300 1040L300 940L332 937C350 915 370 893 386 881C398 873 414 876 417 892C421 912 410 930 414 947C418 962 428 972 440 970C456 968 466 952 470 940C478 916 500 894 532 887C560 881 584 862 582 836C580 818 566 808 558 800C556 790 572 784 592 788C620 792 648 786 663 756C700 756 760 770 800 788C780 806 750 800 722 818C706 830 706 862 728 880C746 892 770 884 790 902C806 922 818 926 836 932C848 940 856 954 862 970L880 1040Z';
-function drawLogo(ctx, x, y, size) {
+export function drawLogo(ctx, x, y, size) {
   ctx.save(); ctx.translate(x, y); ctx.scale(size / 800, size / 800); ctx.translate(-241.5, -237.5);
   const B = new Path2D(LOGO_B);
   ctx.fillStyle = '#0072DD'; ctx.fill(B);
@@ -520,7 +520,7 @@ function buildStore(st) {
 
 // ---------- 직원(게임 아바타 createAvatar 를 한 번 만들어 정점색 메시 2개로 굳힘: 몸 1 + 머리 1) ----------
 let CLERK_SRC = null;
-function clerkSource() {
+export function clerkSource() {
   if (CLERK_SRC) return CLERK_SRC;
   const SHIRT = '#262a31';
   const a = createAvatar({ color: SHIRT, pants: '#22252b', skin: '#eac3a0', hair: 'short', gender: 'm', face: 'round', top: 'long' });
