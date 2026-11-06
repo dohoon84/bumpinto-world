@@ -28,6 +28,26 @@ const guestWelcome = () => ({ guest: true, eligible: false, claimed: false, gran
 const AXES = ['health', 'explore', 'transit', 'neighbor', 'streak'];
 const guestKarma = () => ({ guest: true, total: 0, featured: null, axes: Object.fromEntries(AXES.map((a) => [a, { points: 0, title: null, next: null, ...(a === 'streak' ? { days: 0 } : {}) }])), achievements: [], ladders: [], asOf: null });
 const sameJson = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+
+/**
+ * [econ] 보상 토스트 재생 수정 스위치. 기본 켜짐, ?toastfix=0 이면 예전 동작.
+ *   켜짐: 새 페이지·새 기기의 첫 /econ/state(sinceAt 없음)에서 STALE_REWARD_MS 보다 오래된 원장 행은 잔액만 반영하고 토스트를 띄우지 않는다
+ *         (다른 기기·브라우저에서 이미 본 보상이 다시 뜨던 문제). 지난 KST 날짜의 이동 보상 토스트 제목에 날짜(예: '11/5 이동 보상')를 붙인다.
+ */
+export function toastFixOn(search) {
+  try { return new URLSearchParams(search ?? (typeof location !== 'undefined' ? location.search : '')).get('toastfix') !== '0'; } catch { return true; }
+}
+export const STALE_REWARD_MS = 10 * 60_000;
+/** 지난 KST 날짜의 이동 보상이면 제목 앞에 'M/D ' (ledger entry.sub = 'YYYY-MM-DD') */
+export function datedTravelTitle(reward, entry, todayKst) {
+  if (reward?.kind !== 'travel' || !reward.title) return reward;
+  const date = String(entry?.sub?.ko || entry?.sub?.en || '');
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date);
+  if (!m || date === todayKst) return reward;
+  const md = `${Number(m[2])}/${Number(m[3])}`;
+  const t = reward.title;
+  return { ...reward, title: typeof t === 'string' ? `${md} ${t}` : { ...t, ko: `${md} ${t.ko ?? ''}`.trim(), en: `${md} ${t.en ?? ''}`.trim() } };
+}
 const rid = (p) => `${p}-${Date.now().toString(36)}-${Math.floor(Math.random() * 46656).toString(36)}`;
 
 /** 택시 요금 — 서버 economy.js taxiFare 와 같은 계산(설정값은 /econ/config) */
@@ -50,6 +70,7 @@ export function createServerClient(o = {}) {
   const doc = o.doc !== undefined ? o.doc : (typeof document !== 'undefined' ? document : null);
   const st = o.storage !== undefined ? o.storage : (() => { try { return localStorage; } catch { return null; } })();
   const pollMs = o.pollMs ?? 30000;
+  const toastFix = o.toastFix ?? toastFixOn();
   const win = o.win !== undefined ? o.win : (typeof window !== 'undefined' ? window : null);
   const bus = createEmitter();
   // 게임 쪽 신호(window CustomEvent). 'bw:econ-owned' = 탈것을 산 직후(게임이 웹소켓으로 보유를 다시 받음)
@@ -71,7 +92,7 @@ export function createServerClient(o = {}) {
 
   const S = {
     session: guestSession(), mode: { ...FREE_MODE }, balance: guestBalance(now()), travel: guestTravel(now()),
-    config: null, features: [], serverOn: false, lastId: 0, fetchedAt: 0, refreshing: null, quests: {}, timer: null, started: false,
+    config: null, features: [], serverOn: false, lastId: 0, fetchedAt: 0, refreshing: null, quests: {}, timer: null, started: false, primed: false,
   };
 
   async function req(path, { method = 'GET', body } = {}) {
@@ -125,6 +146,7 @@ export function createServerClient(o = {}) {
       const since = acc ? S.lastId : (stored?.id || 0);
       const sinceFor = acc || stored?.acc || null; // since 가 가리키는 계정
       const q = sinceAt ? `?sinceAt=${sinceAt}` : since ? `?since=${since}` : '';
+      const initial = !sinceAt && !S.primed; // 이 페이지의 첫 갱신(새로고침·다른 기기) — 저장된 lastId 이후 행을 따라잡는다
       const r = await req(`/econ/state${q}`);
       S.fetchedAt = now();
       if (!r.ok) {
@@ -132,6 +154,7 @@ export function createServerClient(o = {}) {
         return;
       }
       S.serverOn = true;
+      S.primed = true;
       const d = r.data;
       S.features = d.features || [];
       if (d.mode && !sameJson(d.mode, S.mode)) { S.mode = { ...d.mode }; bus.emit('mode', { ...S.mode }); }
@@ -142,7 +165,13 @@ export function createServerClient(o = {}) {
       // 다른 계정의 since 로 받은 행은 버린다(그 계정 행이 아님 — 서버는 since 이후 "이 계정" 행만 주지만, 기준 id 가 달라 엉뚱한 토스트가 날 수 있음)
       const valid = sess.signedIn && (sinceAt > 0 || (since > 0 && sinceFor === sess.accountId));
       const events = valid && Array.isArray(d.events) ? d.events : [];
-      for (const ev of events) if (ev.reward) bus.emit('reward', ev.reward);
+      // 서버 시각(balance.updatedAt = 서버 now) 기준 — 기기 시계가 틀려도 판정이 흔들리지 않게. 없으면 로컬 시각.
+      const serverNow = Number(d.balance?.updatedAt) || now();
+      const stale = (ev) => toastFix && initial && Number.isFinite(Number(ev.entry?.at)) && Number(ev.entry.at) < serverNow - STALE_REWARD_MS;
+      for (const ev of events) {
+        if (!ev.reward || stale(ev)) continue; // 오래된 행: 잔액(아래)만 반영, 토스트·코인 없음
+        bus.emit('reward', toastFix ? datedTravelTitle(ev.reward, ev.entry, kstDate(serverNow)) : ev.reward);
+      }
       if (sess.signedIn) { S.lastId = Number(d.lastId) || 0; saveLast(sess.accountId, S.lastId); }
       const prev = S.balance;
       S.balance = d.balance || guestBalance(now());
