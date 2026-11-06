@@ -1,6 +1,7 @@
 // [bump24game] HUD · 카운트다운 · 영수증 · 결과 · 리더보드(로컬) · 담기 버튼
 const FONT = '"Pretendard","Apple SD Gothic Neo","Noto Sans KR",sans-serif';
 const CSS = `
+body.b24-inside #topbar, body.b24-inside #hud, body.b24-inside #emote-bar, body.b24-inside #chat, body.b24-inside #minimap, body.b24-inside .phone-shell, body.b24-inside #m-hud, body.b24-inside #inventory-fab { opacity:0 !important; pointer-events:none !important; }
 #b24-root{position:fixed;inset:0;pointer-events:none;z-index:220;font-family:${FONT};color:#fff}
 #b24-root *{box-sizing:border-box}
 #b24-hint{position:fixed;left:50%;bottom:110px;transform:translateX(-50%);background:rgba(10,18,36,.88);padding:10px 16px;border-radius:14px;font:700 15px/1.3 ${FONT};opacity:0;transition:opacity .2s;pointer-events:none;border:1px solid rgba(58,166,255,.35);box-shadow:0 8px 24px rgba(0,0,0,.25)}

@@ -93,6 +93,7 @@ export function mountBump24Game({
       onExitStore: () => leaveStore(),
     });
     active = true;
+    document.body.classList.add('b24-inside');
     onInterior?.('bump24', interior);
   }
 
@@ -113,6 +114,7 @@ export function mountBump24Game({
     onInterior?.('', null);
     interior?.dispose(); interior = null; game = null;
     active = false;
+    document.body.classList.remove('b24-inside');
     const p = getPlayer?.()?.position;
     if (p && returnPos) {
       p.x = returnPos.x; p.z = returnPos.z;
@@ -160,7 +162,7 @@ export function mountBump24Game({
 
   function frame(dt, look, axes) {
     tickFade(dt);
-    if (!active || !interior) return false;
+    if (!active || !interior) return !!busy; // 입장/퇴장 페이드 동안에도 월드 렌더를 건너뜀
     const frozen = busy || game?.phase === PHASE.CHECKOUT || game?.phase === PHASE.RESULT || game?.phase === PHASE.COUNTDOWN;
     const sense = interior.update(dt, { look, axes: frozen ? { f: 0, s: 0, run: false } : axes, allowMove: !frozen });
     game?.update(dt, sense);

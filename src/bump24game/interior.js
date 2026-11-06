@@ -61,17 +61,17 @@ function makePriceTagTex(name, price, sale) {
 export function buildInterior({ storeId = 'seongnam-cityhall', storeName = 'BUMP24 성남시청점', dateKey } = {}) {
   const layout = planLayout(storeId, dateKey);
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color('#eef2f5');
-  scene.fog = new THREE.Fog('#eef2f5', 18, 32);
+  scene.background = new THREE.Color('#f4f6f8');
+  scene.fog = null;
 
-  // 조명 — 편의점처럼 밝고 차갑게
-  scene.add(new THREE.HemisphereLight('#ffffff', '#c5d0da', 0.85));
-  const key = new THREE.DirectionalLight('#fff8f0', 0.55);
-  key.position.set(2, 8, 3); scene.add(key);
-  // LED 스트립 느낌의 포인트 라이트
-  for (const z of [-2.5, 0, 2.2, 3.8]) {
-    const p = new THREE.PointLight('#ffffff', 0.55, 8, 2);
-    p.position.set(0, 2.85, z); scene.add(p);
+  // 조명 — 편의점처럼 밝고 차갑게 (SwiftShader에서도 또렷하게)
+  scene.add(new THREE.AmbientLight('#ffffff', 0.75));
+  scene.add(new THREE.HemisphereLight('#ffffff', '#b0bec5', 1.15));
+  const key = new THREE.DirectionalLight('#ffffff', 0.85);
+  key.position.set(3, 10, 4); scene.add(key);
+  for (const z of [1.0, 2.8, 4.6, 6.2]) {
+    const p = new THREE.PointLight('#ffffff', 0.9, 10, 1.6);
+    p.position.set(0, 2.7, z); scene.add(p);
   }
 
   const disposables = [];
@@ -228,9 +228,8 @@ export function buildInterior({ storeId = 'seongnam-cityhall', storeName = 'BUMP
   const geos = buildShapeGeometries();
   const shapeMats = {};
   for (const sh of Object.keys(geos)) {
-    shapeMats[sh] = new THREE.MeshStandardMaterial({
-      map: prodTex, roughness: 0.55, metalness: 0.05,
-    });
+    // InstancedMesh.setColorAt → instanceColor. vertexColors:true 쓰면 검게 나와서 끔.
+    shapeMats[sh] = new THREE.MeshBasicMaterial();
   }
 
   // 진열 슬롯: { itemId, x, y, z, shelfId }
@@ -349,18 +348,7 @@ export function buildInterior({ storeId = 'seongnam-cityhall', storeName = 'BUMP
     mesh.instanceMatrix.needsUpdate = true;
     if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
     // UV 오프셋 인스턴스 속성 + 셰이더 패치
-    mesh.geometry.setAttribute('instanceUVOff', new THREE.InstancedBufferAttribute(uvOff, 2));
-    mesh.material.onBeforeCompile = (shader) => {
-      shader.vertexShader = shader.vertexShader
-        .replace('#include <common>', '#include <common>\nattribute vec2 instanceUVOff; varying vec2 vUvOff;')
-        .replace('#include <uv_vertex>', '#include <uv_vertex>\nvUvOff = instanceUVOff;');
-      shader.fragmentShader = shader.fragmentShader
-        .replace('#include <common>', '#include <common>\nvarying vec2 vUvOff;')
-        .replace('#include <map_fragment>', `{
-  vec4 sampledDiffuseColor = texture2D(map, vMapUv * vec2(0.125, 0.125) + vUvOff);
-  diffuseColor *= sampledDiffuseColor;
-}`);
-    };
+    // 색은 instanceColor, 맵은 아틀라스 전체(장식). UV 오프셋 셰이더는 BasicMaterial에서 불안정해 생략
     mesh.material.needsUpdate = true;
     scene.add(mesh);
     instances[shape] = { mesh, list };
@@ -388,8 +376,8 @@ export function buildInterior({ storeId = 'seongnam-cityhall', storeName = 'BUMP
 
   // 플레이어 아바타 (안에서만)
   const me = createAvatar({ color: '#4f7cff', gender: 'm', hair: 'short' });
-  me.position.set(0, 0, 0.9);
-  me.rotation.y = 0;
+  me.position.set(0, 0, 1.15);
+  me.rotation.y = 0; // +z 안쪽을 봄
   scene.add(me);
 
   const basket = createBasketController({ scene });
@@ -397,7 +385,7 @@ export function buildInterior({ storeId = 'seongnam-cityhall', storeName = 'BUMP
 
   // 카메라 — 위에서 비스듬히 (모바일 친화)
   const camera = new THREE.PerspectiveCamera(55, 1, 0.1, 40);
-  const cam = { yaw: 0, pitch: 0.62, dist: 7.2 };
+  const cam = { yaw: 0, pitch: 0.48, dist: 6.2 };
 
   // 충돌: 간단한 AABB 목록
   const blockers = [
@@ -499,7 +487,9 @@ export function buildInterior({ storeId = 'seongnam-cityhall', storeName = 'BUMP
     const cp = Math.cos(cam.pitch), spp = Math.sin(cam.pitch);
     let d = cam.dist;
     camera.position.set(p.x + bx * d * cp, eye + d * spp, p.z + bz * d * cp);
-    camera.position.y = Math.min(H - 0.2, Math.max(1.2, camera.position.y));
+    camera.position.y = Math.min(H - 0.15, Math.max(1.35, camera.position.y));
+    // 거리가 너무 멀면 천장에 가려 회색만 보이므로 실내에서는 상한
+    if (cam.dist > 7.5) cam.dist = 7.5;
     camera.lookAt(p.x, eye - 0.2, p.z);
 
     const nearBasket = !hasBasket && Math.hypot(p.x - grabBasketZone.x, p.z - grabBasketZone.z) < grabBasketZone.r;

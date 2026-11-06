@@ -2344,7 +2344,7 @@ function frame() {
     return;
   }
   // [bump24game] 매장 안: 도시 렌더 건너뛰고 내부 장면만
-  if (bump24Game?.active && bump24Game.frame(dt, [dy, dp, dz], input.axes())) {
+  if ((bump24Game?.active || bump24Game?.busy) && bump24Game.frame(dt, [dy, dp, dz], input.axes())) {
     myBubble.tick();
     overlay.update(innerWidth, innerHeight);
     emoteFx.update(dt, innerWidth, innerHeight);
