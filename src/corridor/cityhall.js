@@ -59,6 +59,8 @@ export function createCityHall({ data, scene, overlay = null, env = null, baseUr
     isBlocked(x, z, r) { return !!built.isBlocked?.(x, z, r); },
     groundHeight(x, z) { return built.groundHeight?.(x, z) ?? null; },
     findSeat(px, pz) { return built.findSeat?.(px, pz) || null; },
+    tryElevator(px, pz, py) { return built.tryElevator?.(px, pz, py) || null; },
+    setPlayerPos(x, z) { built.setPlayerPos?.(x, z); },
     dispose() {
       scene.remove(built.group);
       built.dispose();
