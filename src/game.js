@@ -74,6 +74,7 @@ import { mountGyeongbuSoon } from './world/gyeongbuSoon.js'; // [gyeongbu] 경�
 import { createServerClock } from './subway/clock.js'; // [subway-sync] 서버 시계 (같은 열차 = 같은 순간)
 import { isMobileMode } from './mobile/flag.js'; // [mobile]
 import { mountSubway, zoneLabel as subwayZoneLabel } from './subway/index.js'; // [subway] 정자역·코리더 역 출입구(실제 OSM 출구) + 지하 대합실. ?subway=0 이면 끔
+import { mountBump24Game } from './bump24game/index.js'; // [bump24game] BUMP24 30초 장보기 (?bp24=1&bp24game=1)
 import { isUiV2, uiV2Wanted } from './ui-v2/flag.js'; // [ui-v2] 게임 UI v2 (기본 켜짐 · ?ui=v1 끔)
 
 const params = new URLSearchParams(location.search);
@@ -568,6 +569,22 @@ const subway = subwayOn ? mountSubway({
     emitMyStateNow();
   },
 }) : null;
+// [bump24game] BUMP24 장보기 미니게임 — 매장 플래그+?bp24game=1 일 때만. 지하철과 같이 별도 Scene.
+const bump24Game = mountBump24Game({
+  renderer, params, getPlayer: () => player, getCorridor: () => corridor,
+  getAudioLevel: () => (bgm ? { muted: bgm.player.muted, volume: bgm.player.volume } : null),
+  getSelfName: () => (presence?.me?.name || '나'),
+  canEnter: () => subwayCanEnter() && !subway?.active,
+  onInterior: (zone, inside) => {
+    selfInterior = inside;
+    overlay.setView(zone, inside?.camera);
+    emoteFx.setView(inside?.scene, inside?.camera);
+    remotes.setZone(zone, inside?.scene);
+    nameTag.zone = zone;
+    myBubble.item.zone = zone;
+    if (zone) emitMyStateNow();
+  },
+});
 const gyeongbuSoon = corridor ? mountGyeongbuSoon({ getPos: () => player.position, params, isEn }) : null; // [gyeongbu] 코리더가 있을 때만 (경부 북쪽 끝이 코리더 타일)
 if (subway) {
   const withSubway = world.isBlocked;
@@ -2030,7 +2047,7 @@ const cameraApp = mountCamera({ // [camera]
     const sp = subway?.active ? { ko: subway.place(false), en: subway.place(true) } : null; // [camera] 지하: '정자역 · 수인분당선 승강장' 등
     return { region: region.id, regionName: sp?.ko || region.name, regionEnName: sp?.en || region.enName || region.name, x: player.position.x, z: player.position.z, name: me?.name || '' };
   },
-  getView: () => subway?.view() || null, // [camera] 지하에서는 대합실·승강장·열차 장면을 찍는다 (바깥 장면 아님)
+  getView: () => bump24Game?.view() || subway?.view() || null, // [camera] [bump24game] 매장·지하 장면
 });
 if (travel && params.get('at')) travel.go(params.get('at'));
 // [corridor] 지구본 역 선택 → 입장 완료 후 역 출구 앞 인도로 (위치 저장 성공 여부와 무관)
@@ -2159,6 +2176,7 @@ leaveBtn.onclick = () => {
   startLobby?.();
 };
 input.onKey = (e) => {
+  if (bump24Game?.onKey(e)) return; // [bump24game] 매장 들어가기·담기
   if (subway?.onKey(e)) return; // [subway] 입구 앞 E · 대합실 안에서는 출구 고르기 등
   if (e.code === 'KeyM') viewBtn.onclick();
   if (e.code === 'KeyH') document.getElementById('btn-home').onclick();
@@ -2325,6 +2343,16 @@ function frame() {
     requestAnimationFrame(frame);
     return;
   }
+  // [bump24game] 매장 안: 도시 렌더 건너뛰고 내부 장면만
+  if (bump24Game?.active && bump24Game.frame(dt, [dy, dp, dz], input.axes())) {
+    myBubble.tick();
+    overlay.update(innerWidth, innerHeight);
+    emoteFx.update(dt, innerWidth, innerHeight);
+    perfHud.tick();
+    memHud.tick();
+    requestAnimationFrame(frame);
+    return;
+  }
   if (cam.mode === 'follow') {
     // pitch +: 내려다보기, -: 올려다보기. ±90° 직전에서 멈춰 시점이 뒤집히지 않게 한다.
     cam.yaw += dy; cam.pitch = THREE.MathUtils.clamp(cam.pitch + dp, -1.2, 1.45); cam.dist = THREE.MathUtils.clamp(cam.dist * (1 + dz), 4, 120);
@@ -2334,6 +2362,7 @@ function frame() {
   let { f, s, run, jump } = input.axes();
   if (ride?.active) { if (f || s || jump) idleTime = 0; f = 0; s = 0; jump = false; } // [ride] 탑승 중엔 걷기·점프 대신 차량이 움직임
   if (subway?.busy) { f = 0; s = 0; jump = false; } // [subway] 들어가는/나오는 페이드 동안
+  if (bump24Game?.busy) { f = 0; s = 0; jump = false; } // [bump24game] 페이드 동안
   if (dy || dp || dz || f || s || jump) wakeFromAfk();
   if (joined && jump && !board.open && jumpY <= 0.001 && !adminBike?.riding && !giftRiding()) { // [bike] [roadbike]
     if (mySit) {
@@ -2515,6 +2544,7 @@ function frame() {
   riverFolk?.update(dt, player.position);
   stationPlaza.update(dt, player.position);
   subway?.outdoorTick(dt, subwayCanEnter() ? player.position : null); // [subway] 입구 안내 + 걸어 들어가면 진입
+  bump24Game?.outdoorTick(dt, (subwayCanEnter() && !subway?.active) ? player.position : null); // [bump24game] 문 앞 들어가기 안내
   gyeongbuSoon?.tick(dt); // [gyeongbu]
   bungeo?.update(dt, joined ? player.position : null, camera, cam.mode); // [bungeo]
   dogPark.update(dt, player.position);
@@ -2606,6 +2636,7 @@ window.__jj = {
   get ride() { return ride; }, remotes, presence, // [ride]
   cameraApp, // [camera]
   subway, serverClock, // [subway] [subway-sync]
+  bump24Game, // [bump24game]
   get pose() { return { sit: mySit, afk: myAfk, jy: jumpY }; }, // [subway-pose] 테스트용
   bgm, // [bgm]
   nearNpc(i = 0, d = 3) { const n = npcs.list[i]; player.position.set(n.pos.x + d, 0, n.pos.z + d * 0.5); },

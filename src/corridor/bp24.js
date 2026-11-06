@@ -659,7 +659,11 @@ export function createBp24(locations = []) {
       }
     },
     get group() { for (const i of live) return i.group; return null; },
-    get stores() { return [...live].flatMap((i) => i.list.map((st) => ({ id: st.id, W: +st.W.toFixed(1), D: +st.D.toFixed(1), side: st.side, mirror: st.mirror, center: st.center }))); },
+    get stores() { return [...live].flatMap((i) => i.list.map((st) => {
+        const door = [st.o[0] + st.ax[0] * st.W / 2 - st.b[0] * 1.15, st.o[1] + st.ax[1] * st.W / 2 - st.b[1] * 1.15];
+        const face = Math.atan2(-st.b[0], -st.b[1]); // 문 밖을 바라보는 yaw
+        return { id: st.id, name: st.name, W: +st.W.toFixed(1), D: +st.D.toFixed(1), side: st.side, mirror: st.mirror, center: st.center, door, face, ax: st.ax, b: st.b, o: st.o };
+      })); },
   };
   return api;
   function apply(inst, k) {
