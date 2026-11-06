@@ -751,11 +751,13 @@ function buildGrounds(data, M) {
   seatIM.name = 'cityhallPromenadeBenches';
   const dummy = new THREE.Object3D();
   let li = 0;
+  const promenadeBenches = [];
   for (let i = 0; i < benchN; i++) {
     const t = (i + 0.5) / benchN;
     const z = eastPath.z0 + (eastPath.z1 - eastPath.z0) * t;
     const x = eastPath.x - eastPath.w / 2 - 1.6; // plaza (west) side
     const yaw = Math.PI / 2; // face the path (+X)
+    promenadeBenches.push({ x, z, ry: yaw, y: 0.44 });
     dummy.position.set(x, 0.44, z); dummy.rotation.set(0, yaw, 0); dummy.scale.set(1, 1, 1); dummy.updateMatrix();
     seatIM.setMatrixAt(i, dummy.matrix);
     dummy.position.set(x, 0.72, z); dummy.rotation.set(-0.12, yaw, 0); // slight back tilt in local X after yaw
@@ -773,6 +775,7 @@ function buildGrounds(data, M) {
   g.add(seatIM, backIM, legLIM);
   // stash wall extents for isBlocked via userData on group
   g.userData.eastWall = { x: wallX, z0: wallZ0, z1: wallZ1, halfW: 0.45 };
+  g.userData.promenadeBenches = promenadeBenches;
   g.userData.benchMats = [woodMat, ironMat];
   g.userData.benchGeos = [seatGeo, backGeo, legGeo];
 
@@ -999,7 +1002,7 @@ function buildPondMusicPlaza(data, M) {
       [bx + deckOuter * Math.cos(a1), zMid + deckOuter * Math.sin(a1)],
       [bx + deckOuter * Math.cos(a0), zMid + deckOuter * Math.sin(a0)],
     ];
-    deckBag.push(paintFaces(extrude(ringDeck, [], 0.28, 0.42), C.wood, C.woodDark, C.woodDark));
+    deckBag.push(paintFaces(extrude(ringDeck, [], 0.28, 0.44), C.wood, C.woodDark, C.woodDark));
   }
   // plank lines (cheap)
   for (let i = 0; i < 14; i++) {
@@ -1007,7 +1010,7 @@ function buildPondMusicPlaza(data, M) {
     const ang = Math.PI / 2 - t * Math.PI;
     const x = bx + ((deckInner + deckOuter) / 2) * Math.cos(ang);
     const z = zMid + ((deckInner + deckOuter) / 2) * Math.sin(ang);
-    deckBag.box(x, 0.43, z, 0.05, 0.02, deckOuter - deckInner - 0.3, -ang, C.woodDark);
+    deckBag.box(x, 0.45, z, 0.05, 0.02, deckOuter - deckInner - 0.3, -ang, C.woodDark);
   }
   const deckM = deckBag.mesh(M.vc, 'cityhallPondDeck'); if (deckM) g.add(deckM);
 
@@ -1015,7 +1018,7 @@ function buildPondMusicPlaza(data, M) {
   // North leg (top): west→east, facing south toward pond
   // East leg (right): north→south, facing west toward pond
   const seatBag = Bag();
-  const tierH = 0.55, tierD = 1.85;
+  const tierH = 0.44, tierD = 1.85; // sit-friendly step (~0.4–0.45 m)
   // Strong aerial contrast (marked4 tan stone vs green lawn)
   const stoneA = '#d9d0c0', stoneB = '#9a9080';
   // North leg
@@ -1213,10 +1216,107 @@ function buildPondMusicPlaza(data, M) {
   // Kick one frame so jets visible before first update
   update(0);
 
+  // --- Surface height: wooden deck + ㄱ tiers (도훈: legs were sinking) ---
+  const DECK_Y = 0.44; // match plank top (~0.43)
+  const TIER_TOP = (ti) => tierH * (ti + 1);
+
+  function onDeck(x, z) {
+    const dx = x - bx, dz = z - zMid;
+    const dist = Math.hypot(dx, dz);
+    if (dist < deckInner - 0.05 || dist > deckOuter + 0.15) return false;
+    if (x < bx - 0.2) return false;
+    const ang = Math.atan2(dz, dx);
+    const tt = (Math.PI / 2 - ang) / Math.PI;
+    return tt >= deckT0 - 0.02 && tt <= deckT1 + 0.02;
+  }
+
+  function tierHeightAt(x, z) {
+    let best = null;
+    if (x >= nLegX0 - 0.15 && x <= nLegX1 + 0.15) {
+      for (let ti = 0; ti < 3; ti++) {
+        const zc = nLegZ0 - (ti + 0.5) * tierD;
+        if (Math.abs(z - zc) <= tierD * 0.5 + 0.1) {
+          const y = TIER_TOP(ti);
+          if (best == null || y > best) best = y;
+        }
+      }
+    }
+    if (z >= eLegZ0 - 0.15 && z <= eLegZ1 + 0.15) {
+      for (let ti = 0; ti < 3; ti++) {
+        const xc = eLegX0 + (ti + 0.5) * tierD;
+        if (Math.abs(x - xc) <= tierD * 0.5 + 0.1) {
+          const y = TIER_TOP(ti);
+          if (best == null || y > best) best = y;
+        }
+      }
+    }
+    for (let ti = 0; ti < 3; ti++) {
+      const ox = eLegX0 + (ti + 0.5) * tierD;
+      const oz = nLegZ0 - (ti + 0.5) * tierD;
+      if (Math.abs(x - ox) <= tierD * 0.5 + 0.1 && Math.abs(z - oz) <= tierD * 0.5 + 0.1) {
+        const y = TIER_TOP(ti);
+        if (best == null || y > best) best = y;
+      }
+    }
+    return best;
+  }
+
+  function groundHeight(x, z) {
+    let y = null;
+    const th = tierHeightAt(x, z);
+    if (th != null) y = th;
+    if (onDeck(x, z)) y = y == null ? DECK_Y : Math.max(y, DECK_Y);
+    return y;
+  }
+
+  function findSeat(px, pz) {
+    const Rseat = 1.75;
+    let best = null, bestD = Rseat;
+    const nSpan = nLegX1 - nLegX0;
+    for (const frac of [0.2, 0.38, 0.55, 0.72, 0.88]) {
+      for (let ti = 0; ti < 3; ti++) {
+        const sx = nLegX0 + nSpan * frac;
+        const sz = nLegZ0 - (ti + 0.32) * tierD;
+        const d = Math.hypot(px - sx, pz - sz);
+        if (d < bestD) {
+          bestD = d;
+          best = {
+            kind: 'bench',
+            label: '🪑 분수 계단 좌석에 앉기 (C)',
+            x: sx, z: sz, y: TIER_TOP(ti),
+            ry: 0,
+            exitX: sx, exitZ: nLegZ0 + 1.3,
+          };
+        }
+      }
+    }
+    const eSpan = eLegZ1 - eLegZ0;
+    for (const frac of [0.2, 0.38, 0.55, 0.72, 0.88]) {
+      for (let ti = 0; ti < 3; ti++) {
+        const sz = eLegZ0 + eSpan * frac;
+        const sx = eLegX0 + (ti + 0.32) * tierD;
+        const d = Math.hypot(px - sx, pz - sz);
+        if (d < bestD) {
+          bestD = d;
+          best = {
+            kind: 'bench',
+            label: '🪑 분수 계단 좌석에 앉기 (C)',
+            x: sx, z: sz, y: TIER_TOP(ti),
+            ry: -Math.PI / 2,
+            exitX: eLegX0 - 1.3, exitZ: sz,
+          };
+        }
+      }
+    }
+    return best;
+  }
+
   return {
     group: g,
     update,
     isBlocked,
+    groundHeight,
+    findSeat,
     disposeExtra: () => { jetGeo.dispose(); jetMat.dispose(); },
   };
 }
@@ -1713,19 +1813,47 @@ export function buildSeongnamCityHall(data, { env = null, glbUrl = null } = {}) 
     isBlocked(x, z, r = 0.4) {
       if (disposed) return false;
       if (pondPlaza.isBlocked?.(x, z, r)) return true;
-      // Remaining pilotis
       const pr = CITYHALL_PILLAR_R + r;
       for (const [px, pz] of CITYHALL_PILLARS) {
         if (Math.hypot(x - px, z - pz) < pr) return true;
       }
-      // Enclosed end cores (central passage open)
       for (const c of CITYHALL_CORES) {
         if (Math.abs(x - c.cx) < c.hx + r && Math.abs(z - c.cz) < c.hz + r) return true;
       }
-      // East boundary wall (담벼락)
       const w = grounds.userData?.eastWall;
       if (w && Math.abs(x - w.x) < w.halfW + r && z >= w.z0 - r && z <= w.z1 + r) return true;
       return false;
+    },
+    groundHeight(x, z) {
+      if (disposed) return null;
+      let y = pondPlaza.groundHeight?.(x, z) ?? null;
+      // Promenade bench pads (sit/stand on seat top)
+      for (const b of grounds.userData?.promenadeBenches || []) {
+        if (Math.hypot(x - b.x, z - b.z) < 1.15) {
+          const by = b.y ?? 0.44;
+          y = y == null ? by : Math.max(y, by);
+        }
+      }
+      return y;
+    },
+    findSeat(px, pz) {
+      if (disposed) return null;
+      let best = pondPlaza.findSeat?.(px, pz) || null;
+      let bestD = best ? Math.hypot(px - best.x, pz - best.z) : 1.8;
+      for (const b of grounds.userData?.promenadeBenches || []) {
+        const d = Math.hypot(px - b.x, pz - b.z);
+        if (d < bestD && d < 1.8) {
+          bestD = d;
+          best = {
+            kind: 'bench',
+            label: '🪑 산책길 벤치에 앉기 (C)',
+            x: b.x, z: b.z, y: b.y ?? 0.44,
+            ry: b.ry,
+            exitX: b.x - 1.4, exitZ: b.z,
+          };
+        }
+      }
+      return best;
     },
     dispose() {
       if (disposed) return; disposed = true;

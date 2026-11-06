@@ -1472,6 +1472,17 @@ let myEmoteUntil = 0;
 let emoteCombo = 0;
 let lastEmoteAt = 0;
 let mySit = ''; // '' | 'ground' | 'beanbag' | 'bench' | 'ledge'
+// [cityhall] plaza tier/promenade seats + stationPlaza beanbags/benches
+function findNearbySeat(px, pz) {
+  return stationPlaza.findSeat?.(px, pz) || corridor?.cityhall?.findSeat?.(px, pz) || null;
+}
+function seatSurfaceY(seat) {
+  // avatar.js bench sit pose assumes player.y is ~0.44m below the seat top
+  // (rig drops ~0.26 so butt lands on a ~0.44m bench). Raised tiers use the same delta.
+  if (seat?.y != null) return Math.max(0, seat.y - 0.44);
+  return terrain ? terrain.getGroundHeight(seat.x, seat.z, player.position.y) : 0;
+}
+
 let sitExitPos = null; // 좌석에서 일어날 때 복귀할 안전한 좌표
 let myAfk = false;
 let idleTime = 0;
@@ -1585,13 +1596,13 @@ function toggleSit() {
     emitMyStateNow();
     return;
   }
-  const seat = stationPlaza.findSeat?.(player.position.x, player.position.z);
+  const seat = findNearbySeat(player.position.x, player.position.z);
   if (seat) {
     sitExitPos = {
       x: seat.exitX ?? player.position.x,
       z: seat.exitZ ?? player.position.z,
     };
-    const ty = terrain ? terrain.getGroundHeight(seat.x, seat.z, player.position.y) : 0;
+    const ty = seatSurfaceY(seat);
     player.position.set(seat.x, ty, seat.z);
     player.rotation.y = seat.ry;
     mySit = seat.kind;
@@ -1623,13 +1634,13 @@ function toggleAfk() {
   player.userData.emote = '';
   if (!mySit && subway?.active) mySit = subway.canPose ? subway.sitDown() : ''; // [subway-pose]
   else if (!mySit) {
-    const seat = stationPlaza.findSeat?.(player.position.x, player.position.z);
+    const seat = findNearbySeat(player.position.x, player.position.z);
     if (seat) {
       sitExitPos = {
         x: seat.exitX ?? player.position.x,
         z: seat.exitZ ?? player.position.z,
       };
-      const ty = terrain ? terrain.getGroundHeight(seat.x, seat.z, player.position.y) : 0;
+      const ty = seatSurfaceY(seat);
       player.position.set(seat.x, ty, seat.z);
       player.rotation.y = seat.ry;
       mySit = seat.kind;
@@ -2438,7 +2449,7 @@ function frame() {
     if (!terrain && player.position.y !== 0) player.position.y = 0; // [terrain] 지형이 있으면 둔치 높이를 유지
 
     // 빈백·벤치 근처 좌석 감지하여 하단 앉기 버튼 문구 자동 전환
-    const foundSeat = !mySit && joined ? stationPlaza.findSeat?.(player.position.x, player.position.z) : null;
+    const foundSeat = !mySit && joined ? findNearbySeat(player.position.x, player.position.z) : null;
     if ((foundSeat?.label || '') !== (nearSeatHint?.label || '')) {
       nearSeatHint = foundSeat || null;
       if (!emoteFolded) renderEmoteBar();
@@ -2455,8 +2466,8 @@ function frame() {
               x: foundSeat.exitX ?? player.position.x,
               z: foundSeat.exitZ ?? player.position.z,
             };
-            const ty = terrain ? terrain.getGroundHeight(foundSeat.x, foundSeat.z, player.position.y) : 0;
-            player.position.set(foundSeat.x, ty, foundSeat.z);
+            const ty = seatSurfaceY(foundSeat);
+          player.position.set(foundSeat.x, ty, foundSeat.z);
             player.rotation.y = foundSeat.ry;
             mySit = foundSeat.kind;
           } else {

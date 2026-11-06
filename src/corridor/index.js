@@ -307,8 +307,18 @@ export function createCorridor({ scene, corridorData, terrain, world, renderer, 
   if (corridorData.cityhall) {
     const CH = corridorData.cityhall;
     const boxes = CH.meta?.boxes || (CH.meta?.box ? [CH.meta.box] : null);
-    const mount = () => { if (!cityhall) cityhall = createCityHall({ data: CH, scene: root, overlay, baseUrl: corridorData.baseUrl }); };
-    const unmount = () => { if (cityhall) { cityhall.dispose(); cityhall = null; } };
+    let unregGround = null;
+    const mount = () => {
+      if (!cityhall) cityhall = createCityHall({ data: CH, scene: root, overlay, baseUrl: corridorData.baseUrl });
+      // Raised deck/tiers: feed into terrain.getGroundHeight (player + remotes + NPCs)
+      if (!unregGround && terrain?.addGroundExtra && cityhall?.groundHeight) {
+        unregGround = terrain.addGroundExtra((x, z, refY, h) => cityhall.groundHeight(x, z));
+      }
+    };
+    const unmount = () => {
+      if (unregGround) { unregGround(); unregGround = null; }
+      if (cityhall) { cityhall.dispose(); cityhall = null; }
+    };
     if (regions && boxes) {
       regions.register({ id: 'seongnam-cityhall', boxes, near: 700, far: 1200, onEnter: mount, onLeave: unmount });
     } else mount();
