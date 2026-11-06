@@ -25,13 +25,13 @@ function shelterGeos() {
   };
 }
 
-export function createCorridorBuses(root, T, { crossings, terrain, overlay, liveBox, proxy, mode = 'sim', gg = false }) {
+export function createCorridorBuses(root, T, { crossings, terrain, overlay, liveBox, proxy, mode = 'sim', gg = false, fix = true }) {
   const group = new THREE.Group(); group.name = 'corridorBuses'; root.add(group);
   const gy = (x, z, ref = 0) => (terrain ? terrain.getGroundHeight(x, z, ref) : 0);
   const vgy = (x, z, ref = 0) => (terrain ? (terrain.getVehicleHeight || terrain.getGroundHeight)(x, z, ref) : 0); // [vehicle-h] 버스는 다리 상판을 따라감
   const data = { ...T, crossings: crossings.crossings };
   const big = { x0: -1e6, x1: 1e6, z0: -1e6, z1: 1e6 };
-  const sim = new SimulatedBusSource(data, big, { seed: 7, spacing: true }); // [bus-net] 노선 간 간격·정류장 2번째 칸
+  const sim = new SimulatedBusSource(data, big, { seed: 7, spacing: true, fix }); // [traffic-fix] ?trafficfix=0 → 예전 교착 판정 // [bus-net] 노선 간 간격·정류장 2번째 칸
   // 정자 bbox 경계에서 시작/끝나는 경로는 라이브 버스와 이어지는 것처럼 페이드 없이
   const onLiveEdge = ([x, z]) => x >= liveBox.x0 - 6 && x <= liveBox.x1 + 6 && z >= liveBox.z0 - 6 && z <= liveBox.z1 + 6;
   for (const P of sim.paths) { P.fadeIn = !onLiveEdge(P.pts[0]); P.fadeOut = !onLiveEdge(P.pts[P.pts.length - 1]); }

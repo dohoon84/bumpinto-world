@@ -1,5 +1,5 @@
 // [jz-traffic] 정자 일반 차량 NPC 테스트: node scripts/test-jz-traffic.mjs
-//   플래그(?jzcars)·스폰 수·종류 비율·도로 위 스폰·신호 정지·장시간 고밀도 무겹침·교차로 양보·오토바이 vs 승용차·?jzcars=0 동일성
+//   플래그(?jzcars, ?trafficfix)·스폰 수·종류 비율·도로 위 스폰·신호 정지·장시간 고밀도 무겹침·교차로 양보·오토바이 vs 승용차·?jzcars=0 동일성
 import './corridor/test/dom-shim.mjs';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -8,8 +8,9 @@ import path from 'node:path';
 import { execSync } from 'node:child_process';
 import { Group } from 'three';
 import { Taxis } from '../src/entities/taxis.js';
-import { JzCars, parseJzCars, mountJzTraffic, mixFor, densityFor, obbGap, deliveryStops } from '../src/entities/jzTraffic.js';
+import { JzCars, parseJzCars, parseTrafficFix, mountJzTraffic, mixFor, densityFor, obbGap, deliveryStops } from '../src/entities/jzTraffic.js';
 import { KINDS } from '../src/entities/vehicleKinds.js';
+import { CYCLE, hash } from '../src/transit/transit.js';
 
 const P = (f) => JSON.parse(fs.readFileSync(new URL('../public/' + f, import.meta.url)));
 const drive = P('drive.json'), data = P('jeongja.json'), T = P('transit.json'), shops = P('jeongja-shops.json');
@@ -26,7 +27,8 @@ assert.equal(parseJzCars(new URLSearchParams('jzcars=0')).on, false);
 assert.equal(parseJzCars(new URLSearchParams('jzcars=40')).base, 40);
 assert.equal(parseJzCars(new URLSearchParams('jzcars=999')).base, 200);
 assert.equal(mountJzTraffic(new Group(), { params: new URLSearchParams('jzcars=0'), drive, data, transit, world }), null);
-ok('?jzcars 파싱 · 0 이면 아무것도 만들지 않음');
+for (const [q, v] of [['', true], ['trafficfix=1', true], ['trafficfix=0', false], ['trafficfix=off', false]]) assert.equal(parseTrafficFix(new URLSearchParams(q)), v, q);
+ok('?jzcars 파싱 · 0 이면 아무것도 만들지 않음 · ?trafficfix=0 이면 예전 동작');
 
 // 2) 스폰 수(시간대 배수)
 const mk = (o = {}) => new JzCars({ drive, data, transit, world, base: 60, hour: () => 15, stops: deliveryStops(shops, data), ...o });
@@ -171,5 +173,25 @@ ok('오토바이 vs 승용차: 뒤에 서고 통과하지 않음');
   light = () => 'red';
 }
 ok('?jzcars=0: 택시 궤적이 develop 원본과 동일');
+
+// 10) [traffic-fix] 실제 신호 주기·밤 8시·느티로×성남대로 사거리(cl 4)에서 6분: 60초 넘게 서 있는 차량 0대 (예전엔 ~3분부터 줄 전체가 영구 정지)
+{
+  let simTime = 0; const off = new Map();
+  const realLight = (c) => { if (!c.sig) return 'none'; if (!off.has(c.cl)) off.set(c.cl, hash('cl' + c.cl) * CYCLE); const t = ((simTime + off.get(c.cl)) % CYCLE - (c.g ? 30 : 0) + CYCLE) % CYCLE; return t < 20 ? 'green' : t < 26 ? 'blink' : 'red'; };
+  const tr = { crossings, pedLight: realLight, source: { vehicles: () => [] } };
+  const cl = crossings.filter((c) => c.sig && c.cl === 4), J = { x: cl.reduce((a, c) => a + c.x, 0) / cl.length, z: cl.reduce((a, c) => a + c.z, 0) / cl.length };
+  const taxis = new Taxis(new Group(), null, { drive, data, transit: tr, world, count: 24 });
+  const s = new JzCars({ drive, data, transit: tr, world, taxis, base: 120, hour: () => 20, stops: deliveryStops(shops, data) }); s.focus = J;
+  assert.equal(s.fix, true);
+  const still = new Map(); let worst = 0; const dt = 1 / 30;
+  for (let i = 1; i <= 360 * 30; i++) {
+    simTime += dt; s.update(dt);
+    for (const t of s.list) if (t && !t.parked) still.set(t.rec, t.v < 0.1 ? (still.get(t.rec) || 0) + dt : 0);
+    if (i % 300 === 0) { let n = 0; for (const t of s.list) if (t && !t.parked && !t.rec.off && Math.hypot(t.rec.x - J.x, t.rec.z - J.z) < 120 && (still.get(t.rec) || 0) > 60) n++; worst = Math.max(worst, n); }
+  }
+  assert.equal(worst, 0, '60초 넘게 선 차량 ' + worst);
+  console.log(`    6분 동안 60초 넘게 선 차량 최대 ${worst}대 · 교착 해소 ${s.counts().deadlocks}+${s.counts().cycles} · 택시 해제 ${s.counts().taxiUnlocks}`);
+}
+ok('[traffic-fix] 실제 신호·밤 8시 사거리: 영구 정체 없음');
 
 console.log(`jz-traffic: ${pass} 통과 (${((Date.now() - t0) / 1000).toFixed(1)}s)`);

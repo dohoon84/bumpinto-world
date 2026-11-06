@@ -13,8 +13,10 @@ import { createAvatar, animateAvatar } from '../entities/avatar.js';
 import { buildCrowd } from '../entities/avatarCrowd.js'; // [life] 보행 NPC 인스턴싱 (붕어빵 줄 손님도 같이 씀)
 import { createTruck, truckShared, COLORS as TRUCK_PAINT, DIM } from '../entities/truckModel.js'; // [life] 스타베이스 'Steel Truck' (로고 없음)
 import { isEvening, watchEvening } from '../evening.js';
+import { parseTrafficFix } from '../trafficFix.js'; // [traffic-fix]
 
 const BOX = 380, SPAWN_MIN = 140, CELL = 250;
+const STILL_MAX = 75; // [traffic-fix] 이 시간(초) 넘게 서 있는 차는 다른 곳에 다시 나타남(정자 jzTraffic 과 같은 값)
 // [life] Steel Truck 도색: 절반은 무도장 스테인리스(브러시드 금속 재질), 나머지는 도장 재질에 인스턴스 색
 const TRUCK_MIX = [['truck-s', 'stainless', 0.5], ['truck-p', 'black', 0.12], ['truck-p', 'white', 0.12], ['truck-p', 'blue', 0.07], ['truck-p', 'red', 0.06], ['truck-p', 'green', 0.05], ['truck-p', 'tan', 0.05], ['truck-p', 'orange', 0.03]];
 export function pickTruckPaint(r) { for (const [key, c, w] of TRUCK_MIX) { r -= w; if (r <= 0) return { key, color: TRUCK_PAINT[c].color }; } return { key: 'truck-s', color: TRUCK_PAINT.stainless.color }; }
@@ -48,8 +50,10 @@ export function mergeLiveDrive(drive, live, box, M = 40) {
 }
 
 class CorridorCars extends Taxis {
-  constructor({ drive, transit, world, exits, liveBox, count, taxiShare, seed = 11, liveSigs = [], nTaxi = null, trucks = 0 }) {
+  constructor({ drive, transit, world, exits, liveBox, count, taxiShare, seed = 11, liveSigs = [], nTaxi = null, trucks = 0, fix = true }) {
     super(null, null, { drive, data: { meta: { bboxLocal: { x0: 0, x1: 0, z0: 0, z1: 0 } } }, transit, world, count: 0, seed });
+    // [traffic-fix] 교착 해소(?trafficfix=0 이면 끔): 서로를 앞차로 보는 두 차(합류·교차로에서 겹침)는 번호 작은 쪽이 먼저 감 + STILL_MAX 초 넘게 선 차는 재배치
+    this.fix = fix !== false; this.mutualYield = this.fix; if (this.fix) this.stats0 = { stillMax: 0 };
     this.live = liveBox; this.box = { x0: 0, x1: 0, z0: 0, z1: 0 }; this.focus = { x: 0, z: 0 };
     this.exits = exits || []; this.count = count; this.taxiShare = taxiShare;
     // [life] 슬롯 배치: [0, nTaxi) 택시 · … 일반 차량 · [count - trucks, count) 주행 Steel Truck (호출 불가)
@@ -178,6 +182,11 @@ class CorridorCars extends Taxis {
       if (t.age > 0.5 && (Math.abs(p.x - fx) > BOX + 60 || Math.abs(p.z - fz) > BOX + 60)) this._spawn(t.i, false);
     }
     this.update(dt);
+    if (this.fix) for (const t of this.list) { // [traffic-fix] 최후 안전망: 손님 태우는 중이 아닌데 너무 오래 서 있음(호출·탑승 택시는 제외)
+      if (!t || t.parked || t.hired || t.manual || t.keep) continue;
+      t._still = t.v < 0.1 && t.state !== 'pickup' ? (t._still || 0) + dt : 0;
+      if (t._still > STILL_MAX) { t._still = 0; this.stats0.stillMax++; this._spawn(t.i, false); }
+    }
   }
 }
 
@@ -287,7 +296,7 @@ export function createCorridorTraffic(root, { drive, crossings, terrain, terrain
   const inLB = (c) => liveBox && c.x >= liveBox.x0 && c.x <= liveBox.x1 && c.z >= liveBox.z0 && c.z <= liveBox.z1;
   const merged = liveDrive ? mergeLiveDrive(drive, liveDrive, liveBox) : { drive, added: 0 };
   const liveSigs = merged.added ? (liveCrossings || []).filter((c) => c.sig && inLB(c)) : [];
-  const cars = COUNT || WALKERS || TPARK ? new CorridorCars({ drive: merged.drive, transit, world, exits, liveBox, count: COUNT, taxiShare: SHARE, nTaxi: NTAXI, trucks: TDRIVE, liveSigs }) : null;
+  const cars = COUNT || WALKERS || TPARK ? new CorridorCars({ drive: merged.drive, transit, world, exits, liveBox, count: COUNT, taxiShare: SHARE, nTaxi: NTAXI, trucks: TDRIVE, liveSigs, fix: parseTrafficFix(params) }) : null; // [traffic-fix] ?trafficfix=0 → 예전 동작
 
   // 템플릿: 택시 리버리 5종 + 일반 차량(표시등 없는 세단, 차체 색은 인스턴스별) + [life] Steel Truck 2종(스테인리스/도장)
   const inst = buildInstancer(group, Math.max(1, COUNT + TPARK));
