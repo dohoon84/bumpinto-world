@@ -169,19 +169,18 @@ def build():
         if b <= a: continue
         glass.append(prism(f'SF{i}', a, b, y_s - 0.15, PH + 1.5, BODY_H - 1.5, y_s - d, m_fold, 2.2))
 
-    # --- West wing: SAME volume as 4f97aa1 (~76×34m), rotated 90° ---
-    # Long axis N–S along west road; long glass faces west; clearly past x_min
-    # South edge ≈ flush with main south (slightly forward); attach at west end
+    # --- West wing: SAME volume as 4f97aa1 (~76×34m), opposite 90° from p6e ---
+    # Pivot at SW corner → long axis N–S extending SOUTH into plaza (aerial-se viewer),
+    # long glass faces west road. NOT north behind the main block.
     WING_H = 19.0
-    # 4f97aa1 size: long≈76m, depth≈34m → after rotate: N–S=76, west depth=34
-    WING_LONG = 76.0   # along road (N–S)
-    WING_DEPTH = 34.0  # protrude west beyond x_min (same as old south stick-out)
-    wing_x_east = x_min + 2.0          # attach into west end slightly
-    wing_x_west = x_min - WING_DEPTH   # clearly beyond main west face
+    WING_LONG = 76.0   # N–S into plaza
+    WING_DEPTH = 34.0  # west of x_min (road-facing depth)
+    wing_x_east = x_min + 2.0          # attach at west end / SW corner
+    wing_x_west = x_min - WING_DEPTH
     wing_cx = (wing_x_east + wing_x_west) / 2
     wing_sx = abs(wing_x_east - wing_x_west)
-    wing_y_s = y_s - 4.0               # slightly forward of south facade
-    wing_y_n = wing_y_s + WING_LONG    # full 76m — do not clamp (same volume as 4f97aa1)
+    wing_y_n = y_s + 4.0               # north edge hugs SW / south facade
+    wing_y_s = wing_y_n - WING_LONG    # full 76m south toward plaza/viewer
     wing_cy = (wing_y_s + wing_y_n) / 2
     wing_sy = abs(wing_y_n - wing_y_s)
     opaque.append(box('WingCore', wing_cx, wing_cy, (PH + WING_H) / 2,
@@ -202,8 +201,10 @@ def build():
         (0, 1, 5, 4), (1, 2, 6, 5), (2, 3, 7, 6), (3, 0, 4, 7),
         (4, 5, 8), (5, 6, 8), (6, 7, 8), (7, 4, 8), (0, 3, 2, 1),
     ], m_fold))
-    glass.append(box('WingGlassS', wing_cx, wing_y_s - 0.35, (PH + WING_H) / 2,
-                     wing_sx * 0.92, 0.5, WING_H - PH - 1.4, m_glass))
+    glass.append(box('WingGlassS', wing_cx, wing_y_s - 0.35, (PH + WING_H) / 2 + 0.15,
+                     wing_sx * 0.94, 0.55, WING_H - PH - 1.2, m_fold))
+    glass.append(prism('WingPrismS', wing_x_west + 4, wing_x_east - 2, wing_y_s - 0.2,
+                       PH + 1.5, WING_H - 1.0, wing_y_s - 10.0, m_fold, 2.6))
     glass.append(box('WingGlassN', wing_cx, wing_y_n + 0.35, (PH + WING_H) / 2,
                      wing_sx * 0.9, 0.5, WING_H - PH - 1.4, m_glass))
     glass.append(box('WingGlassE', wing_x_east + 0.3, wing_cy, (PH + WING_H) / 2,
@@ -212,16 +213,16 @@ def build():
     opaque.append(box('WingFasciaTop', wing_cx, wing_cy, WING_H + 0.15, wing_sx + 1.2, wing_sy + 1.2, 0.65, m_fascia))
     opaque.append(box('WingRoof', wing_cx, wing_cy, WING_H + 0.45, wing_sx + 0.8, wing_sy + 0.6, 0.35, m_roof))
     print(f'WING sx={wing_sx:.1f} sy={wing_sy:.1f} xw={wing_x_west:.1f} xe={wing_x_east:.1f} ys={wing_y_s:.1f} yn={wing_y_n:.1f}')
-    # Prow keel: wide at east (attach), tapers west (toward road)
+    # Prow keel: wide at north attach, tapers to SW tip (plaza + road)
     opaque.append(mesh_obj('ProwKeel', [
-        (wing_x_east - 0.5, wing_y_s + 4, PH + 8.5),
-        (wing_x_east - 0.5, wing_y_n - 4, PH + 8.5),
-        (wing_x_east - 0.5, wing_y_n - 4, PH + 0.35),
-        (wing_x_east - 0.5, wing_y_s + 4, PH + 0.35),
-        (wing_x_west + 2, wing_cy, PH + 2.4),
-        (wing_x_west + 2, wing_cy, PH + 0.35),
+        (wing_x_east - 0.5, wing_y_n - 2, PH + 8.5),
+        (wing_x_east - 0.5, wing_y_n - 2, PH + 0.35),
+        (wing_x_west + 4, wing_y_n - 6, PH + 6.0),
+        (wing_x_west + 4, wing_y_n - 6, PH + 0.35),
+        (wing_cx, wing_y_s + 3, PH + 2.6),
+        (wing_cx, wing_y_s + 3, PH + 0.35),
     ], [
-        (0, 1, 4), (1, 2, 5, 4), (2, 3, 5), (3, 0, 4, 5), (0, 3, 2, 1),
+        (0, 2, 4), (1, 3, 5), (0, 1, 3, 2), (2, 3, 5, 4), (0, 4, 5, 1),
     ], m_prow))
     for i in range(7):
         opaque.append(cyl(f'WP{i}', wing_x_west + 5 + (i % 3) * 8,
