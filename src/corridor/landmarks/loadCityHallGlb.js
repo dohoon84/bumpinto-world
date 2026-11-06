@@ -48,7 +48,7 @@ function makeGlassMat(env) {
     }
   }, 8, 5);
   const g = new THREE.MeshStandardMaterial({
-    color: '#5f86a8',
+    color: '#6a96b4',
     map: day,
     emissive: '#ffffff',
     emissiveMap: night,
@@ -56,7 +56,7 @@ function makeGlassMat(env) {
     metalness: 0.22,
     roughness: 0.28,
     transparent: true,
-    opacity: 0.82,
+    opacity: 0.88,
     side: THREE.DoubleSide,
     envMap: env || null,
     envMapIntensity: env ? 0.7 : 0,
@@ -88,7 +88,7 @@ function makeFoldMat(env) {
   const g = makeGlassMat(env).clone();
   g.name = 'GlassFold';
   g.color.set('#4a7a9a');
-  g.opacity = 0.86;
+  g.opacity = 0.90;
   g.metalness = 0.2;
   g.roughness = 0.22;
   g.envMapIntensity = env ? 0.9 : 0;

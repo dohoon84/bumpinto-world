@@ -137,57 +137,82 @@ def build():
     opaque.append(box('ParaE', x_max + 0.35, y_c, BODY_H + 0.4, 0.5, depth + 1.5, 0.75, m_fascia))
     opaque.append(box('ParaW', x_min - 0.35, y_c, BODY_H + 0.4, 0.5, depth + 1.5, 0.75, m_fascia))
 
-    # --- East dark block (full depth, tall) ---
-    east_sx = abs(x_max - mx1) - 0.5
-    east_cx = (mx1 + x_max) / 2
-    opaque.append(box('EastMass', east_cx, y_c, (PH + EAST_H) / 2, east_sx, depth - 1.0, EAST_H - PH, m_east, 0.06))
-    # 5 louvers on EAST face
+    # --- East END FACE only (dark + 5 louvers). No dark mass on south/plaza front. ---
+    # Thin slab on +X (east) only — south face stays glass via SG_E to x_max
+    opaque.append(box('EastMass', x_max + 0.15, y_c, (PH + EAST_H) / 2, 0.7, depth - 3.0, EAST_H - PH, m_east))
     for k in range(5):
         zy = PH + 4.0 + k * ((EAST_H - PH - 7) / 4)
-        opaque.append(box(f'Louv{k}', x_max - 0.55, y_c - 1.0, zy, 1.8, 9.0, 3.0, m_louver))
-    glass.append(box('EastBlueBand', x_max - 0.3, y_c, PH + 1.5, 1.3, depth * 0.7, 2.6, m_band))
+        opaque.append(box(f'Louv{k}', x_max + 0.55, y_c - 0.5, zy, 1.2, 8.5, 2.8, m_louver))
+    glass.append(box('EastBlueBand', x_max + 0.4, y_c, PH + 1.5, 0.9, depth * 0.65, 2.4, m_band))
+    opaque.append(box('CoreE', (mx1 + x_max) / 2, y_c, (PH + BODY_H) / 2,
+                      abs(x_max - mx1) - 2.5, depth - 6, BODY_H - PH - 0.8, m_span))
 
-    # --- Cores ---
+    # --- Cores (west/mid) ---
     opaque.append(box('CoreW', (x_min + wx1) / 2, y_c, (PH + BODY_H) / 2,
                       abs(wx1 - x_min) - 3, depth - 6, BODY_H - PH - 0.8, m_span))
     opaque.append(box('CoreM', (wx1 + mx1) / 2, y_c, (PH + BODY_H) / 2,
                       abs(mx1 - wx1) - 3, depth - 6, BODY_H - PH - 0.8, m_span))
 
-    # --- South glass curtain ---
+    # --- South glass curtain (full length including east front) ---
     glass.append(box('SG_W', (x_min + wx1) / 2, y_s - 0.35, (PH + BODY_H) / 2,
                      abs(wx1 - x_min) - 1.5, 0.45, BODY_H - PH - 1.2, m_glass))
     glass.append(box('SG_M', (wx1 + mx1) / 2, y_s - 0.35, (PH + BODY_H) / 2,
                      abs(mx1 - wx1) - 1.5, 0.45, BODY_H - PH - 1.2, m_glass))
-    # Big central fold prism
-    glass.append(prism('SPrism', wx1 - 10, mx1 + 8, y_s - 0.2, PH + 1.2, BODY_H - 1.0, y_s - 11, m_fold, 4.0))
-    # Side folds
+    # East SOUTH face = glass (owner: not dark grey on plaza front)
+    glass.append(box('SG_E', (mx1 + x_max) / 2, y_s - 0.35, (PH + BODY_H) / 2,
+                     abs(x_max - mx1) - 0.5, 0.55, BODY_H - PH - 1.2, m_glass))
+    # Central + side folds (real geometric offsets)
+    glass.append(prism('SPrism', wx1 - 10, mx1 + 8, y_s - 0.2, PH + 1.2, BODY_H - 1.0, y_s - 12, m_fold, 4.0))
     for i, (a, b, d) in enumerate([
-        (x_min + 6, wx1 - 14, 5.5), (mx1 + 6, mx1 - 4, 4.5),
+        (x_min + 8, wx1 - 12, 6.0), (mx1 + 4, mx1 + 18, 5.0),
     ]):
         if b <= a: continue
-        glass.append(prism(f'SF{i}', a, b, y_s - 0.15, PH + 1.5, BODY_H - 1.5, y_s - d, m_fold, 2.0))
+        glass.append(prism(f'SF{i}', a, b, y_s - 0.15, PH + 1.5, BODY_H - 1.5, y_s - d, m_fold, 2.2))
 
-    # --- West prow projecting south with keel ---
-    prow_tip = y_s - 22
-    prow_x0, prow_x1 = x_min + 1, wx1 + 4
-    glass.append(box('ProwGlass', (prow_x0 + prow_x1) / 2, (y_s + prow_tip) / 2 + 1, (PH + BODY_H) / 2 + 0.5,
-                     abs(prow_x1 - prow_x0) * 0.92, abs(y_s - prow_tip) * 0.85, BODY_H - PH - 4, m_fold, 0.05))
-    # keel wedge
+    # --- West projecting WING (separate LOWER volume — owner renders) ---
+    # Lower than main roof; protrudes south from SW corner; prow underside; fascia; silver roof
+    WING_H = 19.0          # clearly lower than main BODY_H 34
+    wing_x0, wing_x1 = x_min - 2.0, wx1 + 14.0
+    wing_cx = (wing_x0 + wing_x1) / 2
+    wing_sx = abs(wing_x1 - wing_x0)
+    wing_south = y_s - 32.0  # clear protrusion toward plaza
+    wing_north = y_s + 2.0   # overlaps main south face slightly
+    wing_cy = (wing_south + wing_north) / 2
+    wing_sy = abs(wing_north - wing_south)
+    # core + glass skins
+    opaque.append(box('WingCore', wing_cx, wing_cy, (PH + WING_H) / 2,
+                      wing_sx - 3, wing_sy - 3, WING_H - PH - 0.6, m_span))
+    # south faceted glass (two offset planes + prism)
+    glass.append(box('WingGlassS', wing_cx, wing_south - 0.3, (PH + WING_H) / 2 + 0.2,
+                     wing_sx * 0.92, 0.5, WING_H - PH - 1.5, m_fold))
+    glass.append(prism('WingPrism', wing_x0 + 3, wing_x1 - 3, wing_south - 0.2,
+                       PH + 1.5, WING_H - 1.0, wing_south - 11.0, m_fold, 2.8))
+    glass.append(box('WingGlassW', wing_x0 - 0.3, wing_cy, (PH + WING_H) / 2,
+                     0.45, wing_sy * 0.85, WING_H - PH - 1.5, m_glass))
+    glass.append(box('WingGlassE', wing_x1 + 0.3, wing_cy, (PH + WING_H) / 2,
+                     0.45, wing_sy * 0.7, WING_H - PH - 1.5, m_glass))
+    # white fascia top & bottom slab edges
+    opaque.append(box('WingFasciaBot', wing_cx, wing_cy, PH + 0.25, wing_sx + 1.2, wing_sy + 1.0, 0.7, m_fascia))
+    opaque.append(box('WingFasciaTop', wing_cx, wing_cy, WING_H + 0.15, wing_sx + 1.2, wing_sy + 1.0, 0.65, m_fascia))
+    # lower silver roof (clearly below main roof)
+    opaque.append(box('WingRoof', wing_cx, wing_cy, WING_H + 0.45, wing_sx + 0.8, wing_sy + 0.6, 0.35, m_roof))
+    # prow / keel underside (wide at top attach, tapers to tip)
     opaque.append(mesh_obj('ProwKeel', [
-        (prow_x0 + 1.5, y_s - 0.5, PH + 9),
-        (prow_x1 - 1.5, y_s - 0.5, PH + 9),
-        (prow_x1 - 1.5, y_s - 0.5, PH + 0.4),
-        (prow_x0 + 1.5, y_s - 0.5, PH + 0.4),
-        ((prow_x0 + prow_x1) / 2, prow_tip + 2, PH + 2.5),
-        ((prow_x0 + prow_x1) / 2, prow_tip + 2, PH + 0.4),
+        (wing_x0 + 2, wing_north - 1, PH + 8.5),
+        (wing_x1 - 2, wing_north - 1, PH + 8.5),
+        (wing_x1 - 2, wing_north - 1, PH + 0.35),
+        (wing_x0 + 2, wing_north - 1, PH + 0.35),
+        (wing_cx, wing_south + 1.5, PH + 2.2),
+        (wing_cx, wing_south + 1.5, PH + 0.35),
     ], [
         (0, 1, 4), (1, 2, 5, 4), (2, 3, 5), (3, 0, 4, 5), (0, 3, 2, 1),
     ], m_prow))
-    # pilotis under prow
-    for i in range(4):
-        opaque.append(cyl(f'PP{i}', prow_x0 + 4 + i * 8, prow_tip + 8, PH / 2, 0.35, PH - 0.2, m_pil, 10))
+    # pilotis under wing
+    for i in range(5):
+        opaque.append(cyl(f'WP{i}', wing_x0 + 4 + i * ((wing_sx - 8) / 4), wing_south + 6 + (i % 2) * 4,
+                          PH / 2, 0.34, PH - 0.2, m_pil, 10))
 
-    # --- North glass + fold ---
+        # --- North glass + fold ---
     glass.append(box('NG', (x_min + mx1) / 2, y_n + 0.35, (PH + BODY_H) / 2,
                      abs(mx1 - x_min) - 2, 0.45, BODY_H - PH - 1.2, m_glass))
     glass.append(prism('NPrism', wx1 - 6, mx1 + 4, y_n + 0.2, PH + 2, BODY_H - 1.5, y_n + 11, m_fold, 3.0))
