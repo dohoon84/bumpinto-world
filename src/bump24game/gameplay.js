@@ -152,9 +152,9 @@ export function createGameplay({ interior, ui, sfx, storeId, storeName, onExitSt
     if (phase === PHASE.BROWSE) {
       ui.showGrab(false);
       if (ui.introOpen) ui.setHint('');
-      else if (!interior.hasBasket && sense.nearBasket) ui.setHint(`${K}바구니 집기 — 5초 뒤 시작!`);
+      else if (!interior.hasBasket && sense.nearBasket) ui.setHint(`${K}바구니 집기 — 5초 뒤 시작!`, true);
       else if (sense.nearExit) ui.setHint(`${K}매장 나가기`);
-      else ui.setHint('입구 옆 <b style="color:#3aa6ff">파란 바구니</b>를 집으세요');
+      else ui.setHint('입구 옆 <b style="color:#3aa6ff">파란 바구니</b>를 집으세요', true);
       return;
     }
     if (phase === PHASE.COUNTDOWN) {

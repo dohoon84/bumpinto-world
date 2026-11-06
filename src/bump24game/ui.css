@@ -90,6 +90,7 @@ body.b24-inside .b24-outside-hidden { visibility: hidden !important; pointer-eve
 /* 힌트 · 담기 버튼 */
 .b24-hint { position: absolute; left: 50%; bottom: calc(var(--sb) + 24px); transform: translateX(-50%); padding: 10px 18px; border-radius: 24px; background: rgba(10,22,48,.82); color: #fff; font-size: 15px; font-weight: 800; white-space: nowrap; box-shadow: 0 6px 20px rgba(0,0,0,.3); pointer-events: auto; cursor: pointer; }
 .b24-hint:empty { display: none; }
+.b24-hint.center { top: 50%; bottom: auto; transform: translate(-50%, -50%); padding: 14px 26px; font-size: 19px; border-radius: 30px; }
 .b24-hint kbd { display: inline-grid; place-items: center; min-width: 24px; height: 24px; margin-right: 8px; padding: 0 6px; border-radius: 6px; background: var(--b-yellow); color: var(--b-navy); font: 900 13px/1 inherit; box-shadow: 0 2px 0 #b38f00; }
 .b24-grab { position: absolute; right: calc(var(--sr) + 8px); bottom: calc(var(--sb) + 8px); width: 112px; height: 112px; border-radius: 50%; background: radial-gradient(circle at 50% 35%, #4db3ff, var(--b-blue) 60%, #0058b0); color: #fff; font-size: 24px; font-weight: 900; box-shadow: 0 8px 0 #003f80, 0 14px 30px rgba(0,60,140,.45), inset 0 3px 0 rgba(255,255,255,.35); display: grid; place-items: center; transition: transform .08s, opacity .2s; }
 .b24-grab small { display: block; font-size: 11px; font-weight: 800; opacity: .85; margin-top: -2px; }
@@ -216,3 +217,5 @@ body.b24-inside .b24-outside-hidden { visibility: hidden !important; pointer-eve
 @keyframes b24burst { 0% { transform: scale(.2) rotate(-20deg); opacity: 0; } 15% { transform: scale(1.15) rotate(4deg); opacity: 1; } 25% { transform: scale(1) rotate(0); } 80% { opacity: 1; } 100% { transform: scale(1.05) translateY(-20px); opacity: 0; } }
 @media (max-height: 520px) { .b24-burst { transform-origin: center; width: 140px; height: 90px; margin: -45px 0 0 -70px; } .b24-burst span { font-size: 22px; } }
 @media (pointer: coarse) { .b24-hint kbd { display: none; } }
+
+@media (max-height: 500px) { .b24-hint.center { top: 50%; bottom: auto; font-size: 15px; padding: 10px 18px; } }

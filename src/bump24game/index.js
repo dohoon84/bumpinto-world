@@ -118,7 +118,7 @@ export function mountBump24Game({
     if (active || busy) return;
     if (!pos) { if (lastNear) ui.setHint(''); lastNear = null; return; }
     const st = nearestDoor(pos); lastNear = st;
-    ui.setHint(st ? `${mobile() ? '' : '<kbd>E</kbd>'}${st.name || 'BUMP24'} 들어가기 · 30초 장보기` : '');
+    ui.setHint(st ? `${mobile() ? '' : '<kbd>E</kbd>'}${st.name || 'BUMP24'} 들어가기 · 30초 장보기` : '', true);
   }
 
   function frame(dt, look, axes) {

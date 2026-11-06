@@ -76,7 +76,7 @@ export function createBump24UI({ onGrab, onExit, onMute, onHintTap, onIntroGo } 
       if (title) { el.fadeT.textContent = title; el.fadeS.textContent = sub || ''; }
       el.fade.querySelector('.t').style.opacity = a > 0.6 ? '1' : '0';
     },
-    setHint(html) { if (el.hint.innerHTML !== (html || '')) el.hint.innerHTML = html || ''; },
+    setHint(html, center = false) { if (el.hint.innerHTML !== (html || '')) el.hint.innerHTML = html || ''; el.hint.classList.toggle('center', !!center); },
     showHud(on) { el.hud.classList.toggle('off', !on); el.sale.style.display = on ? '' : 'none'; },
     setMode(ranked) { el.mode.textContent = ranked ? '랭킹' : '연습'; el.mode.classList.toggle('prac', !ranked); },
     setSale(items) { el.sale.innerHTML = items.map((p) => `<span><b>2배</b>${esc(p.name)}</span>`).join(''); },
