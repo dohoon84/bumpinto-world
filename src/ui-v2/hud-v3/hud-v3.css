@@ -1,4 +1,4 @@
-/* [hud-v3] 데스크톱 상단 HUD v3 (PROPOSAL A안) — body.hud-v3 (= ?hud=v3, PC ui-v2 전용) 일 때만 걸린다.
+/* [hud-v3] 데스크톱 상단 HUD v3 (PROPOSAL A안) — body.hud-v3 (PC ui-v2 기본, ?hud=off 로 끔) 일 때만 걸린다.
    game-ui-spec: 남색 글라스(#1d2e4b→#0f192a 94%) · 흰 18% 테두리 1.5px · 반경 16 · 금색 #ffe169 · 8px 그리드 · 높이 64. */
 body.hud-v3 {
   --h3-txt: #e8f2f8; --h3-sub: #9eb4c6; --h3-gold: #ffe169; --h3-amber: #f5a200; --h3-line: rgba(255, 255, 255, .12);

@@ -12,7 +12,7 @@ import { createLandmarks } from './landmarks/index.js';
 import { createLotteEvent } from './landmarks/lotteEvent.js';
 import { stationSign, Grid } from '../world.js';
 import { drawBaseMap } from '../phone.js';
-import { isHudV3 } from '../ui-v2/flag.js'; // [hud-v3-minimap] ?hud=v3 일 때만 타일 도로 데이터를 미니맵용으로 남긴다
+import { isHudV3 } from '../ui-v2/flag.js'; // [hud-v3-minimap] PC HUD v3 일 때만 타일 도로 데이터를 미니맵용으로 남긴다
 import { addInstancedTrees } from '../world/trees.js';
 import { createCorridorLife } from './life.js';
 import { extractLifeHints, gatherLifeHints } from './lifeHints.js'; // [life] 동네별 보행자·주차 위치 힌트

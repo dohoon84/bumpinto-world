@@ -62,7 +62,7 @@ export function initUiV2() {
   // [econ-ui] 경제 UI (bum 잔액·할 일·교통 결제·상점) — PC 전용, 별도 청크
   if (!document.body.classList.contains('mobile')) {
     const econUi = import('./econ-ui/index.js');
-    // [hud-v3] ?hud=v3 (기본 꺼짐): 상단 HUD 를 A안(플레이어 카드 + 액션 바)으로. 꺼져 있으면 예전 그대로
+    // [hud-v3] 기본 켜짐(PC): 상단 HUD A안. ?hud=off|v2 이면 예전 HUD
     if (isHudV3()) import('./hud-v3/index.js').then((h) => h.mountHudV3(econUi)).catch((e) => { console.warn('[hud-v3]', e); econUi.then((m) => m.mountEconUi()).catch(() => {}); });
     else econUi.then((m) => m.mountEconUi()).catch(() => {});
   }

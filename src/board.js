@@ -4,7 +4,7 @@ import { NOTICE_POSTS, NOTICE_BY_KEY } from './notices.js';
 import { isEn, tr, toggleLang, onLangChange } from './i18n.js';
 import { gicon, giOn } from './ui-v2/gameIcons.js';
 
-// [game-icons] PC HUD v3(?hud=v3) 에서만: 머리·버튼·탭의 이모지를 공용 게임 아이콘으로 바꾼다. 예전 HUD·모바일은 그대로.
+// [game-icons] PC HUD v3(body.hud-v3) 에서만: 머리·버튼·탭의 이모지를 공용 게임 아이콘으로 바꾼다. 예전 HUD·모바일은 그대로.
 const BOARD_EMOJI = { '📋': 'board', '🌍': 'heart', '🌐': 'lang', '📢': 'megaphone', '📌': 'pushpin' };
 function v3BoardIcons(root) {
   if (!document.body.classList.contains('hud-v3') || !giOn()) return;

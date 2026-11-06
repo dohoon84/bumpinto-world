@@ -1,4 +1,4 @@
-// [hud-v3] 데스크톱 상단 HUD v3 (PROPOSAL A안) — ?hud=v3 일 때만 ui-v2/index.js 가 불러온다(기본 꺼짐, 모바일 제외).
+// [hud-v3] 데스크톱 상단 HUD v3 (PROPOSAL A안) — PC ui-v2 기본 켜짐. ?hud=off|v2 로 끔. 모바일·?ui=v1 제외.
 //   왼쪽 위: 플레이어 카드(card.js) + 할 일 트래커. 오른쪽 위: 액션 바 [지도·이동 M][할 일 Q][탈것 상점 B][게시판 J][☰] + 접속자 알약(바 왼쪽 같은 줄).
 //   기존 버튼(#hud · #buttons · #top-right-bar)은 DOM 에 그대로 두고 CSS 로만 숨긴다 → 새 버튼은 기존 버튼을 .click() 으로 부른다
 //   (game.js 핸들러·문구·상태를 복제하지 않는다). 경제 패널은 econ-ui 의 open('04a'|'11'|'06') 을 그대로 쓴다.
