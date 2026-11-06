@@ -99,6 +99,24 @@ ok('filter no-op without data');
   ok(`walker @ ${wx.toFixed(0)},${wz.toFixed(0)} collision+heights`);
 }
 
+
+// 5c) plaza extras: stone, floor fountain, overpass height, elevator
+{
+  const built = buildSeongnamCityHall(data);
+  const names = [];
+  built.group.traverse((o) => { if (o.name) names.push(o.name); });
+  assert.ok(names.includes('cityhallStonePlaza'), 'stone plaza');
+  assert.ok(names.includes('cityhallFloorGrates'), 'floor fountain grates');
+  assert.ok(names.includes('cityhallPlazaExtrasBody'), 'bus/overpass body');
+  // Overpass deck height
+  const deckY = built.groundHeight(1805, -5750);
+  assert.ok(deckY != null && deckY > 5 && deckY < 6, 'overpass deck y ' + deckY);
+  const el = built.tryElevator?.(1780.1, -5750, 0);
+  assert.ok(el && el.y > 5, 'elevator up ' + JSON.stringify(el));
+  built.dispose();
+  ok('plaza extras stone/fountain/overpass/elevator');
+}
+
 // 6) createCityHall wrapper
 {
   const scene = new THREE.Scene();

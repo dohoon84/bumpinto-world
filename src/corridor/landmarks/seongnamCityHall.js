@@ -41,6 +41,18 @@ const CITYHALL_CORES = [
 
 let shared = null;
 
+/** Floor fountain active Jun–Aug (Seoul), or ?floorFountain=1|0 override. */
+function isCityHallSummer() {
+  if (typeof location !== 'undefined') {
+    const v = new URLSearchParams(location.search).get('floorFountain');
+    if (v === '1' || v === 'on') return true;
+    if (v === '0' || v === 'off') return false;
+  }
+  const m = new Date().getMonth(); // 0-based
+  return m >= 5 && m <= 7; // Jun–Aug
+}
+
+
 
 function makeEnvCube() {
   // Cheap procedural sky/ground cube for glass reflections (64² × 6)
@@ -140,6 +152,7 @@ function mats() {
     curb: S(C.curb, { roughness: 0.7, metalness: 0.05 }),
     sculpture: S(C.sculpture, { roughness: 0.35, metalness: 0.4, emissive: C.sculpture, emissiveIntensity: 0.12, envMapIntensity: env ? 0.7 : 0 }),
     steelHoneycomb: null,
+    stonePlaza: null,
     steelPlate: S('#b8bcc2', { roughness: 0.4, metalness: 0.85, envMapIntensity: env ? 0.7 : 0 }),
     kiosk: S(C.kiosk, { roughness: 0.5, metalness: 0.2 }),
     slantFace: S(C.slantFace, { roughness: 0.55, metalness: 0.08 }),
@@ -241,24 +254,24 @@ function mats() {
     shared.jet.needsUpdate = true;
     // ~13 cm cells: bright steel rims, transparent mouths (alphaTest)
     const hexMap = canvasTex(128, 128, (x, w, h) => {
+      // Hex packing: opaque steel walls, fully transparent cell mouths (alphaTest)
       x.clearRect(0, 0, w, h);
-      // one hex cell per tile — rim opaque, hole clear
-      const cx = w / 2, cy = h / 2;
-      const rOut = w * 0.46, rIn = w * 0.30;
-      x.beginPath();
-      x.arc(cx, cy, rOut, 0, Math.PI * 2);
-      x.arc(cx, cy, rIn, 0, Math.PI * 2, true);
-      x.fillStyle = '#eef1f5';
-      x.fill();
-      x.beginPath(); x.arc(cx, cy, rOut, 0, Math.PI * 2);
-      x.strokeStyle = 'rgba(255,255,255,0.95)'; x.lineWidth = 3; x.stroke();
-      x.beginPath(); x.arc(cx, cy, rIn, 0, Math.PI * 2);
-      x.strokeStyle = 'rgba(20,24,30,0.7)'; x.lineWidth = 2.5; x.stroke();
-      // soft steel between cells
-      x.globalCompositeOperation = 'destination-over';
-      x.fillStyle = '#c8ccd2';
-      x.fillRect(0, 0, w, h);
-      x.globalCompositeOperation = 'source-over';
+      const cell = 42;
+      const rowH = cell * 0.866;
+      const rOut = 18, rIn = 11;
+      for (let row = -1; row < h / rowH + 2; row++) {
+        for (let col = -1; col < w / cell + 2; col++) {
+          const cx = col * cell + (row & 1 ? cell * 0.5 : 0);
+          const cy = row * rowH;
+          x.beginPath();
+          x.arc(cx, cy, rOut, 0, Math.PI * 2);
+          x.arc(cx, cy, rIn, 0, Math.PI * 2, true);
+          x.fillStyle = '#e8ecf2';
+          x.fill();
+          x.beginPath(); x.arc(cx, cy, rOut, 0, Math.PI * 2);
+          x.strokeStyle = 'rgba(255,255,255,0.85)'; x.lineWidth = 2; x.stroke();
+        }
+      }
     }, 1, 1);
     hexMap.colorSpace = THREE.SRGBColorSpace;
     shared.steelHoneycomb = new THREE.MeshStandardMaterial({
@@ -275,11 +288,31 @@ function mats() {
       depthWrite: true,
     });
     shared._honeycombTex = hexMap;
+    shared.stonePlaza = S('#c8c2b6', {
+      map: canvasTex(256, 256, (x, w, h) => {
+        x.fillStyle = '#d2cdc2'; x.fillRect(0, 0, w, h);
+        const n = 6;
+        for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) {
+          const px = i * (w / n), py = j * (h / n), s = w / n;
+          const shade = ((i + j) % 2) ? '#c4beb2' : '#d8d2c6';
+          x.fillStyle = shade;
+          x.fillRect(px + 2, py + 2, s - 4, s - 4);
+          x.strokeStyle = '#a8a094'; x.lineWidth = 2;
+          x.strokeRect(px + 1, py + 1, s - 2, s - 2);
+          // subtle grain
+          x.fillStyle = 'rgba(90,80,70,0.08)';
+          for (let k = 0; k < 6; k++) x.fillRect(px + 4 + (k * 17) % (s - 8), py + 4 + (k * 13) % (s - 8), 3, 2);
+        }
+      }, 14, 14),
+      roughness: 0.92, metalness: 0.02, envMapIntensity: env ? 0.12 : 0,
+    });
+    shared._stoneTex = shared.stonePlaza.map;
   } else {
     shared.glassCurtain = S(C.glassLite);
     shared.plaza = S(C.plaza);
     shared.banner = S(C.banner, { side: THREE.DoubleSide });
     shared.steelHoneycomb = S('#c4c8ce', { roughness: 0.35, metalness: 0.9 });
+    shared.stonePlaza = S('#c8c2b6', { roughness: 0.92 });
   }
   return shared;
 }
@@ -1798,7 +1831,7 @@ function buildWalkingSculpture(data, M, { walkerGlbUrl = null } = {}) {
   function paintWalker(root) {
     root.traverse((o) => {
       if (!o.isMesh || !o.geometry) return;
-      applyHoneycombUVs(o.geometry, 0.13);
+      applyHoneycombUVs(o.geometry, 0.14);
       const n = (o.name || '').toLowerCase();
       if (/plate/.test(n)) {
         o.material = plateMat;
@@ -1842,7 +1875,7 @@ function buildWalkingSculpture(data, M, { walkerGlbUrl = null } = {}) {
     // ≤3 draws: plate | pedestals+base | body
     const plate = new THREE.Mesh(new THREE.BoxGeometry(5.0, 0.06, 3.6), plateMat);
     plate.position.y = 0.03; plate.name = 'cityhallWalkerPlate';
-    applyHoneycombUVs(plate.geometry, 0.13);
+    applyHoneycombUVs(plate.geometry, 0.14);
     const baseGeos = [];
     const push = (geo, x, y, z) => { geo.translate(x, y, z); baseGeos.push(geo); };
     push(new THREE.CylinderGeometry(1.8, 1.85, 0.4, 16), 0, 0.2, 0);
@@ -1850,11 +1883,11 @@ function buildWalkingSculpture(data, M, { walkerGlbUrl = null } = {}) {
     push(new THREE.CylinderGeometry(0.55, 0.55, 1.45, 12), -0.55, 1.125, 1.25);
     const baseMerged = mergeGeometries(baseGeos, false);
     for (const g0 of baseGeos) g0.dispose();
-    applyHoneycombUVs(baseMerged, 0.13);
+    applyHoneycombUVs(baseMerged, 0.14);
     const base = new THREE.Mesh(baseMerged, steel); base.name = 'cityhallWalkerBase';
     const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.7, 3.2, 6, 10), steel);
     body.position.set(0.05, 5.2, -0.2); body.rotation.x = 0.45; body.name = 'cityhallWalkerBody';
-    applyHoneycombUVs(body.geometry, 0.13);
+    applyHoneycombUVs(body.geometry, 0.14);
     for (const m of [plate, base, body]) {
       m.castShadow = m.receiveShadow = true;
       g.add(m);
@@ -1905,6 +1938,212 @@ function buildWalkingSculpture(data, M, { walkerGlbUrl = null } = {}) {
   };
 }
 
+
+/** Stone approach, floor fountain, long bus shelter, pedestrian overpass — ?cityhall=1 only. */
+function buildPlazaExtras(data, M) {
+  const g = new THREE.Group(); g.name = 'cityhallPlazaExtras';
+  const bag = Bag();
+  const elevators = []; // { x, z, deckY, label }
+  const heights = []; // { kind, ... } for groundHeight
+
+  // --- 1) Stone paving (돌바닥): entrance approach + west plaza toward walker/lawn ---
+  const stoneMat = M.stonePlaza || M.plaza || M.path;
+  const stoneGeos = [];
+  function stoneBox(cx, cz, sx, sz, rotY = 0) {
+    const geo = new THREE.PlaneGeometry(sx, sz, 1, 1);
+    geo.rotateX(-Math.PI / 2);
+    if (rotY) geo.rotateY(rotY);
+    geo.translate(cx, 0.175, cz);
+    stoneGeos.push(geo);
+  }
+  // Approach strip from promenade end into west plaza
+  stoneBox(1605, -5898, 55, 22, 0.35);
+  stoneBox(1575, -5895, 40, 28, 0.1);
+  stoneBox(1555, -5905, 35, 24, 0);
+  // Path band from walker toward south lawn / entrance
+  stoneBox(1588, -5880, 48, 18, -0.2);
+  if (stoneGeos.length) {
+    const merged = mergeGeometries(stoneGeos, false);
+    for (const x of stoneGeos) x.dispose();
+    if (merged) {
+      const m = new THREE.Mesh(merged, stoneMat);
+      m.name = 'cityhallStonePlaza'; m.receiveShadow = true; m.castShadow = false;
+      g.add(m);
+    }
+  }
+
+  // --- 2) Floor fountain (바닥분수) — south paved plaza, summer jets, walkable ---
+  const FF = { x0: 1575, x1: 1705, z0: -5868, z1: -5788 };
+  const grateN = [];
+  const cols = 10, rows = 8;
+  for (let i = 0; i < cols; i++) {
+    for (let j = 0; j < rows; j++) {
+      const x = FF.x0 + 4 + (i + 0.5) * ((FF.x1 - FF.x0 - 8) / cols);
+      const z = FF.z0 + 4 + (j + 0.5) * ((FF.z1 - FF.z0 - 8) / rows);
+      // skip a soft oval hole so it does not look like a solid rectangle block of jets
+      const u = (i + 0.5) / cols - 0.5, v = (j + 0.5) / rows - 0.5;
+      if (u * u * 2.2 + v * v * 3.0 > 0.55) continue;
+      grateN.push([x, z]);
+    }
+  }
+  const grateGeo = new THREE.CircleGeometry(0.28, 8);
+  grateGeo.rotateX(-Math.PI / 2);
+  const grateMat = new THREE.MeshStandardMaterial({ color: '#5a6068', roughness: 0.7, metalness: 0.55 });
+  const grates = new THREE.InstancedMesh(grateGeo, grateMat, grateN.length);
+  grates.name = 'cityhallFloorGrates';
+  const dummy = new THREE.Object3D();
+  grateN.forEach(([x, z], i) => {
+    dummy.position.set(x, 0.19, z);
+    dummy.updateMatrix();
+    grates.setMatrixAt(i, dummy.matrix);
+  });
+  grates.instanceMatrix.needsUpdate = true;
+  g.add(grates);
+
+  const summer = isCityHallSummer();
+  let jets = null, jetMat = null, jetGeo = null;
+  if (summer && grateN.length) {
+    jetMat = new THREE.MeshBasicMaterial({
+      color: '#b8e8ff', transparent: true, opacity: 0.75, depthWrite: false,
+      blending: THREE.NormalBlending, side: THREE.DoubleSide, toneMapped: false,
+    });
+    jetGeo = new THREE.PlaneGeometry(0.22, 1);
+    jetGeo.translate(0, 0.5, 0);
+    jets = new THREE.InstancedMesh(jetGeo, jetMat, grateN.length * 2);
+    jets.name = 'cityhallFloorJets'; jets.frustumCulled = false;
+    g.add(jets);
+  }
+  function updateFloorFountain(t) {
+    if (!jets) return;
+    for (let i = 0; i < grateN.length; i++) {
+      const [x, z] = grateN[i];
+      const pulse = 0.45 + 0.55 * (0.5 + 0.5 * Math.sin(t * 2.8 + i * 0.37));
+      const h = 1.2 + pulse * 2.4;
+      dummy.position.set(x, 0.2, z);
+      dummy.rotation.set(0, 0, 0);
+      dummy.scale.set(1, h, 1);
+      dummy.updateMatrix();
+      jets.setMatrixAt(i * 2, dummy.matrix);
+      dummy.rotation.y = Math.PI / 2;
+      dummy.updateMatrix();
+      jets.setMatrixAt(i * 2 + 1, dummy.matrix);
+    }
+    jets.count = grateN.length * 2;
+    jets.instanceMatrix.needsUpdate = true;
+    jetMat.opacity = 0.55 + 0.25 * (0.5 + 0.5 * Math.sin(t * 1.7));
+  }
+
+  // --- 3) Long bus shelter along east road (성남시청전면 — real stop names only via corridor labels) ---
+  // Align between OSM 성남시청전면 stops ~ (1794.6,-5796) and (1826.7,-5842)
+  const busA = { x: 1794.6, z: -5796.1 };
+  const busB = { x: 1826.7, z: -5842.6 };
+  const bdx = busB.x - busA.x, bdz = busB.z - busA.z;
+  const bLen = Math.hypot(bdx, bdz) || 1;
+  const bang = Math.atan2(bdz, bdx);
+  // Offset onto sidewalk (toward building / −tr of 전면 stop ≈ west)
+  const side = 3.2;
+  const nx = -bdz / bLen, nz = bdx / bLen; // left normal
+  const bcx = (busA.x + busB.x) / 2 + nx * side;
+  const bcz = (busA.z + busB.z) / 2 + nz * side;
+  // Long continuous shelter (~ bLen)
+  bag.box(bcx, 2.65, bcz, bLen + 4, 0.14, 2.0, -bang, '#2f6fb3'); // roof
+  bag.box(bcx - nx * 0.85, 1.35, bcz - nz * 0.85, bLen + 3.5, 2.3, 0.06, -bang, '#cfe6f5'); // glass back
+  bag.box(bcx, 0.5, bcz, bLen + 2, 0.12, 0.5, -bang, '#8a6b4e'); // bench
+  // posts every ~6m
+  for (let t = 0; t <= 1.001; t += 6 / bLen) {
+    const x = busA.x + bdx * t + nx * side;
+    const z = busA.z + bdz * t + nz * side;
+    bag.box(x, 1.35, z, 0.12, 2.7, 0.12, -bang, '#4a5560');
+  }
+  // End sign posts (no invented names — corridor overlay keeps 성남시청전면)
+  bag.box(busA.x + nx * side, 3.1, busA.z + nz * side, 0.7, 0.9, 0.08, -bang, '#1f5fbf');
+  bag.box(busB.x + nx * side, 3.1, busB.z + nz * side, 0.7, 0.9, 0.08, -bang, '#1f5fbf');
+
+  // --- 4) Pedestrian overpass (육교) crossing main road south of bus stops ---
+  // Road runs roughly N–S near x≈1805; cross E–W at z≈-5750
+  const OX = 1805, OZ = -5750;
+  const DECK_Y = 5.4;
+  const SPAN = 28; // across road
+  const DECK_W = 3.2;
+  // Deck
+  bag.box(OX, DECK_Y, OZ, SPAN, 0.28, DECK_W, 0, '#9aa3ad');
+  // Rails
+  bag.box(OX, DECK_Y + 0.55, OZ - DECK_W / 2, SPAN, 0.08, 0.08, 0, '#6a727a');
+  bag.box(OX, DECK_Y + 0.55, OZ + DECK_W / 2, SPAN, 0.08, 0.08, 0, '#6a727a');
+  // Supports
+  for (const dx of [-8, 0, 8]) bag.box(OX + dx, DECK_Y / 2, OZ, 0.35, DECK_Y, 0.35, 0, '#7a828a');
+
+  function addStairs(endX, sideSign) {
+    // Stairs descend away from road along ±X
+    const steps = 12;
+    const run = 9.5;
+    for (let i = 0; i < steps; i++) {
+      const t = (i + 0.5) / steps;
+      const y = DECK_Y * (1 - t);
+      const x = endX + sideSign * (run * t);
+      bag.box(x, y / 2, OZ, run / steps + 0.05, Math.max(0.12, y), DECK_W + 0.15, 0, '#8a929a');
+      heights.push({
+        kind: 'stair',
+        x0: x - run / steps * 0.55, x1: x + run / steps * 0.55,
+        z0: OZ - DECK_W / 2 - 0.2, z1: OZ + DECK_W / 2 + 0.2,
+        y,
+      });
+    }
+    // Elevator tower at bottom of stairs
+    const ex = endX + sideSign * (run + 1.4);
+    const ez = OZ;
+    const EH = DECK_Y + 2.4;
+    bag.box(ex, EH / 2, ez, 2.5, EH, 2.5, 0, '#6a7380'); // shaft
+    bag.box(ex, EH + 0.2, ez, 2.8, 0.4, 2.8, 0, '#5a636e'); // machine room
+    bag.box(ex, 1.2, ez + 1.28, 1.4, 2.2, 0.08, 0, '#9eb8c8'); // door glass
+    elevators.push({ x: ex, z: ez, deckY: DECK_Y, r: 1.5 });
+  }
+  addStairs(OX - SPAN / 2, -1);
+  addStairs(OX + SPAN / 2, +1);
+  // Deck surface height
+  heights.push({
+    kind: 'deck',
+    x0: OX - SPAN / 2 - 0.3, x1: OX + SPAN / 2 + 0.3,
+    z0: OZ - DECK_W / 2 - 0.15, z1: OZ + DECK_W / 2 + 0.15,
+    y: DECK_Y,
+  });
+
+  const body = bag.mesh(M.vc, 'cityhallPlazaExtrasBody');
+  if (body) g.add(body);
+
+  function groundHeight(x, z) {
+    let best = null;
+    for (const h of heights) {
+      if (x >= h.x0 && x <= h.x1 && z >= h.z0 && z <= h.z1) {
+        if (best == null || h.y > best) best = h.y;
+      }
+    }
+    return best;
+  }
+
+  function tryElevator(px, pz, py) {
+    for (const e of elevators) {
+      if (Math.hypot(px - e.x, pz - e.z) < e.r) {
+        const up = (py || 0) < e.deckY * 0.5;
+        return { x: e.x, z: e.z, y: up ? e.deckY : 0 };
+      }
+    }
+    return null;
+  }
+
+  return {
+    group: g,
+    update: updateFloorFountain,
+    groundHeight,
+    tryElevator,
+    summer,
+    disposeExtra: () => {
+      grateGeo.dispose(); grateMat.dispose();
+      jetGeo?.dispose(); jetMat?.dispose();
+    },
+  };
+}
+
 /** Merge child meshes that share MeshStandard/Lambert Basic with vertex colors into fewer draws. */
 function mergeStaticGroup(group, name = 'merged') {
   const byKey = new Map();
@@ -1944,7 +2183,7 @@ function mergeStaticGroup(group, name = 'merged') {
 export function buildSeongnamCityHall(data, { env = null, glbUrl = null, walkerGlbUrl = null } = {}) {
   const M = mats();
   if (env) {
-    for (const k of ['glassBlue', 'glassCurtain', 'glassLite', 'water', 'frame', 'solar', 'sculpture', 'steelHoneycomb', 'steelPlate']) {
+    for (const k of ['glassBlue', 'glassCurtain', 'glassLite', 'water', 'frame', 'solar', 'sculpture', 'steelHoneycomb', 'steelPlate', 'stonePlaza']) {
       if (M[k]) { M[k].envMap = env; M[k].envMapIntensity = (M[k].envMapIntensity || 0.5) * 1.1; }
     }
   }
@@ -1966,6 +2205,7 @@ export function buildSeongnamCityHall(data, { env = null, glbUrl = null, walkerG
   const parking = buildParking(data, M);
   const gate = buildVehicleGate(data, M);
   const walker = buildWalkingSculpture(data, M, { walkerGlbUrl });
+  const plazaExtras = buildPlazaExtras(data, M);
   mergeStaticGroup(grounds, 'cityhallGroundsMerged');
   mergeStaticGroup(banners, 'cityhallBannersMerged');
   mergeStaticGroup(pond, 'cityhallPondMerged');
@@ -1975,7 +2215,7 @@ export function buildSeongnamCityHall(data, { env = null, glbUrl = null, walkerG
   mergeStaticGroup(parking, 'cityhallParkingMerged');
   mergeStaticGroup(gate, 'cityhallGateMerged');
   // fountain + pondPlaza jets kept as instanced (animated)
-  root.add(grounds, banners, sign, pond, pondPlaza.group, fountain.group, landscape, parking, gate, walker.group);
+  root.add(grounds, banners, sign, pond, pondPlaza.group, fountain.group, landscape, parking, gate, walker.group, plazaExtras.group);
 
   let glbNight = null;
   let eveningOn = false;
@@ -2021,6 +2261,7 @@ export function buildSeongnamCityHall(data, { env = null, glbUrl = null, walkerG
       const tt = t ?? performance.now() / 1000;
       fountain.update(tt);
       pondPlaza.update(tt);
+      plazaExtras.update?.(tt);
     },
     isBlocked(x, z, r = 0.4) {
       if (disposed) return false;
@@ -2040,6 +2281,8 @@ export function buildSeongnamCityHall(data, { env = null, glbUrl = null, walkerG
     groundHeight(x, z) {
       if (disposed) return null;
       let y = pondPlaza.groundHeight?.(x, z) ?? null;
+      const oy = plazaExtras.groundHeight?.(x, z);
+      if (oy != null) y = y == null ? oy : Math.max(y, oy);
       for (const b of grounds.userData?.promenadeBenches || []) {
         if (Math.hypot(x - b.x, z - b.z) < 1.15) {
           const by = (b.y ?? 0.44) - 0.03;
@@ -2047,6 +2290,10 @@ export function buildSeongnamCityHall(data, { env = null, glbUrl = null, walkerG
         }
       }
       return y;
+    },
+    tryElevator(px, pz, py) {
+      if (disposed) return null;
+      return plazaExtras.tryElevator?.(px, pz, py) || null;
     },
     findSeat(px, pz) {
       if (disposed) return null;
@@ -2069,7 +2316,7 @@ export function buildSeongnamCityHall(data, { env = null, glbUrl = null, walkerG
     },
     dispose() {
       if (disposed) return; disposed = true;
-      stopEve(); fountain.disposeExtra?.(); pondPlaza.disposeExtra?.();
+      stopEve(); fountain.disposeExtra?.(); pondPlaza.disposeExtra?.(); plazaExtras.disposeExtra?.();
       for (const m of grounds.userData?.benchMats || []) m.dispose?.();
       for (const g0 of grounds.userData?.benchGeos || []) g0.dispose?.();
       root.traverse((o) => {

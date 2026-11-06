@@ -2173,7 +2173,15 @@ input.onKey = (e) => {
   if (e.code === 'KeyM') viewBtn.onclick();
   if (e.code === 'KeyH') document.getElementById('btn-home').onclick();
   if (e.code === 'Enter') { e.preventDefault(); chatInput.focus(); }
-  if (e.code === 'KeyE' && !e.repeat && !ride?.handleE()) toggleRide(); // [ride] 버스·택시 탑승/하차가 우선, 아니면 카카오바이크
+  if (e.code === 'KeyE' && !e.repeat && !ride?.handleE()) {
+    // [cityhall] 육교 엘리베이터: 근처면 상·하판 토글, 아니면 카카오바이크
+    const el = corridor?.cityhall?.tryElevator?.(player.position.x, player.position.z, player.position.y);
+    if (el) {
+      player.position.set(el.x, el.y, el.z);
+    } else {
+      toggleRide();
+    }
+  }
   if (e.code === 'KeyY' && !e.repeat && ride && joined) ride.hail(); // [ride] 택시 호출
   if (e.code === 'KeyX' && !e.repeat && ride?.ride?.mode === 'taxi') ride.requestStop(); // [ride] 택시 '세워주세요'
   if (e.code === 'KeyV' && !e.repeat && ride?.active) ride.toggleCam(); // [ride] 창가 1인칭 ↔ 뒤쪽 3인칭
