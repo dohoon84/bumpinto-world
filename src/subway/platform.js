@@ -10,7 +10,7 @@ import { buildConsist, buildScreenDoors, screenDoorFrame, CAR } from './trainPar
 import { buildCrowd } from '../entities/avatarCrowd.js';
 import { createAvatar, animateAvatar } from '../entities/avatar.js';
 import { LOOKS } from './looks.js';
-import { routeMapData, drawRouteMapPanel, routeMapSlots, nearRouteMap as nearRouteMapAt } from './routeMap.js';
+import { routeMapData, drawRouteMapPanel, routeMapSlots, nearRouteMap as nearRouteMapAt, PANEL_TEX } from './routeMap.js';
 
 export const PLAT = Object.freeze({ Z0: -5, Z1: 0, CEIL: 3.6, TRACK_Z: 1.8, WALL_Z: 4.4, STAIR: { x0: -2.6, x1: 2.6, depth: 6 } });
 // 계단 단: z0 에서 -z 로 n 단 (단 깊이 d, 높이 h). 올라가기 = 계단 UP_Z 보다 안쪽 → 대합실
@@ -152,14 +152,14 @@ export function buildPlatform({ def, line, dir, renderer, look, feed = null, arr
   const mapSlots = mapData ? routeMapSlots(psd.spans, { avoidHalf: SX1 + 1.2, max: 4 }) : [];
   let mapMesh = null;
   if (mapData && mapSlots.length) {
-    const cv = document.createElement('canvas'); cv.width = 768; cv.height = 256;
+    const cv = document.createElement('canvas'); cv.width = PANEL_TEX.w; cv.height = PANEL_TEX.h;
     drawRouteMapPanel(cv.getContext('2d'), cv.width, cv.height, mapData, lang() === 'en');
-    const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 2;
+    const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 4;
     const mat = new THREE.MeshBasicMaterial({ map: tex, toneMapped: false });
-    const geo = new THREE.PlaneGeometry(1.7, 0.9);
+    const geo = new THREE.PlaneGeometry(2.35, 1.15);
     mapMesh = new THREE.InstancedMesh(geo, mat, mapSlots.length); mapMesh.name = 'platRouteMap'; mapMesh.frustumCulled = false;
     const M4 = new THREE.Matrix4(), Q = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI), P = new THREE.Vector3(), S1 = new THREE.Vector3(1, 1, 1);
-    mapSlots.forEach((s, i) => { M4.compose(P.set(s.x, 1.15, -0.08), Q, S1); mapMesh.setMatrixAt(i, M4); });
+    mapSlots.forEach((s, i) => { M4.compose(P.set(s.x, 1.25, -0.08), Q, S1); mapMesh.setMatrixAt(i, M4); });
     mapMesh.instanceMatrix.needsUpdate = true; scene.add(mapMesh);
     disposables.push(tex, mat, geo);
   }

@@ -4,7 +4,7 @@ import { STATIONS } from '../src/subway/roster.js';
 import { LINE_STOPS } from '../src/subway/stationsData.js';
 import { LINES } from '../src/subway/lines.js';
 import {
-  routeMapEnabled, routeMapData, routeMapSlots, nearRouteMap,
+  routeMapEnabled, routeMapData, routeMapSlots, nearRouteMap, panelWindow, PANEL_RADIUS,
 } from '../src/subway/routeMap.js';
 
 assert.equal(routeMapEnabled(new URLSearchParams('')), true, '기본 켜짐');
@@ -47,6 +47,24 @@ assert.deepEqual(slots.map((s) => s.x), [...slots].map((s) => s.x).sort((a, b) =
 assert.ok(nearRouteMap(10.2, -0.8, [{ x: 10, a: 9, b: 11, w: 2 }]));
 assert.equal(nearRouteMap(10.2, -4.5, [{ x: 10, a: 9, b: 11, w: 2 }]), null, 'too far back');
 assert.equal(nearRouteMap(40, -0.5, [{ x: 10, a: 9, b: 11, w: 2 }]), null);
+
+// 패널 창: 현재 역 ±PANEL_RADIUS (전체 stops 는 그대로 두고 창만)
+{
+  const jeongja = STATIONS.find((s) => s.id === 'jeongja');
+  const d = routeMapData(jeongja, 'suin');
+  const w = panelWindow(d, PANEL_RADIUS);
+  assert.ok(w.stops.length <= PANEL_RADIUS * 2 + 1);
+  assert.ok(w.stops.some((s) => s.me && s.name === '정자'));
+  assert.equal(w.stops[w.meLocal].name, '정자');
+  assert.ok(w.moreLeft && w.moreRight, '정자는 수인분당 중간이라 양쪽에 더 있음');
+  assert.ok(w.stops.every((s) => d.stops.some((q) => q.name === s.name)), '창 역은 전부 LINE_STOPS 안');
+  // 종착 근처: 미금은 신분당에서 끝쪽에 가깝지 않음 — 모란(l8) 은 시종착
+  const moran = STATIONS.find((s) => s.id === 'moran');
+  const ml = routeMapData(moran, 'l8');
+  const mw = panelWindow(ml, PANEL_RADIUS);
+  assert.equal(mw.from, 0, '모란은 8호선 시종착 → 왼쪽 잘림 없음');
+  assert.equal(mw.moreLeft, false);
+}
 
 // 로고/브랜드 문자열 금지 (데이터 필드)
 for (const def of STATIONS) {
