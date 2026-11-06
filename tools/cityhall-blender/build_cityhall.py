@@ -169,27 +169,28 @@ def build():
         if b <= a: continue
         glass.append(prism(f'SF{i}', a, b, y_s - 0.15, PH + 1.5, BODY_H - 1.5, y_s - d, m_fold, 2.2))
 
-    # --- West wing: SAME volume as 4f97aa1 (~76×34m), opposite 90° from p6e ---
-    # Pivot at SW corner → long axis N–S extending SOUTH into plaza (aerial-se viewer),
-    # long glass faces west road. NOT north behind the main block.
+    # --- West wing: SAME volume, N–S south into plaza; PHYSICALLY JOINED at SW ---
+    # North end butts/overlaps main SW corner (no floating gap). Long glass → west road.
     WING_H = 19.0
     WING_LONG = 76.0   # N–S into plaza
-    WING_DEPTH = 34.0  # west of x_min (road-facing depth)
-    wing_x_east = x_min + 2.0          # attach at west end / SW corner
-    wing_x_west = x_min - WING_DEPTH
+    WING_DEPTH = 34.0  # E–W depth (west of attach)
+    # Push east edge deep under west mass so roofs meet; still protrude west of x_min
+    wing_x_east = x_min + 18.0
+    wing_x_west = wing_x_east - WING_DEPTH   # still ~16m west of x_min
     wing_cx = (wing_x_east + wing_x_west) / 2
     wing_sx = abs(wing_x_east - wing_x_west)
-    wing_y_n = y_s + 4.0               # north edge hugs SW / south facade
-    wing_y_s = wing_y_n - WING_LONG    # full 76m south toward plaza/viewer
+    # North end deep into main west mass
+    wing_y_n = y_n - 3.0
+    wing_y_s = wing_y_n - WING_LONG
     wing_cy = (wing_y_s + wing_y_n) / 2
     wing_sy = abs(wing_y_n - wing_y_s)
-    opaque.append(box('WingCore', wing_cx, wing_cy, (PH + WING_H) / 2,
-                      max(2.0, wing_sx - 3), max(2.0, wing_sy - 3), WING_H - PH - 0.6, m_span))
-    # Long WEST glass (faces road)
-    glass.append(box('WingGlassW', wing_x_west - 0.4, wing_cy, (PH + WING_H) / 2 + 0.2,
-                     0.55, wing_sy * 0.94, WING_H - PH - 1.4, m_fold))
-    # Faceted prism on west face (tip further west)
-    _wy0, _wy1 = wing_y_s + 8, wing_y_n - 8
+    # Core: keep full north reach into main (only trim south/west for glass)
+    opaque.append(box('WingCore', wing_cx, wing_cy + 1.0, (PH + WING_H) / 2,
+                      max(2.0, wing_sx - 2.5), max(2.0, wing_sy - 1.0), WING_H - PH - 0.6, m_span))
+    # Long WEST glass (faces road) — stop short of north overlap to avoid z-fight
+    glass.append(box('WingGlassW', wing_x_west - 0.4, wing_cy - 2.0, (PH + WING_H) / 2 + 0.2,
+                     0.55, wing_sy * 0.88, WING_H - PH - 1.4, m_fold))
+    _wy0, _wy1 = wing_y_s + 8, wing_y_n - 16
     _wm = (_wy0 + _wy1) / 2
     _x0 = wing_x_west - 0.2
     glass.append(mesh_obj('WingPrism', [
@@ -205,20 +206,69 @@ def build():
                      wing_sx * 0.94, 0.55, WING_H - PH - 1.2, m_fold))
     glass.append(prism('WingPrismS', wing_x_west + 4, wing_x_east - 2, wing_y_s - 0.2,
                        PH + 1.5, WING_H - 1.0, wing_y_s - 10.0, m_fold, 2.6))
-    glass.append(box('WingGlassN', wing_cx, wing_y_n + 0.35, (PH + WING_H) / 2,
-                     wing_sx * 0.9, 0.5, WING_H - PH - 1.4, m_glass))
-    glass.append(box('WingGlassE', wing_x_east + 0.3, wing_cy, (PH + WING_H) / 2,
-                     0.45, wing_sy * 0.75, WING_H - PH - 1.4, m_glass))
-    opaque.append(box('WingFasciaBot', wing_cx, wing_cy, PH + 0.25, wing_sx + 1.2, wing_sy + 1.2, 0.7, m_fascia))
-    opaque.append(box('WingFasciaTop', wing_cx, wing_cy, WING_H + 0.15, wing_sx + 1.2, wing_sy + 1.2, 0.65, m_fascia))
-    opaque.append(box('WingRoof', wing_cx, wing_cy, WING_H + 0.45, wing_sx + 0.8, wing_sy + 0.6, 0.35, m_roof))
-    print(f'WING sx={wing_sx:.1f} sy={wing_sy:.1f} xw={wing_x_west:.1f} xe={wing_x_east:.1f} ys={wing_y_s:.1f} yn={wing_y_n:.1f}')
-    # Prow keel: wide at north attach, tapers to SW tip (plaza + road)
+    # No sealed north glass wall (would read as a gap); east glass only south of facade
+    glass.append(box('WingGlassE', wing_x_east + 0.25, (wing_y_s + y_s) / 2 - 4.0, (PH + WING_H) / 2,
+                     0.45, max(2.0, (y_s - wing_y_s) * 0.7), WING_H - PH - 1.4, m_glass))
+    opaque.append(box('WingSealToMain', wing_x_east - 1.0, y_s - 1.0, (PH + WING_H) / 2,
+                      8.0, 12.0, WING_H - PH - 0.5, m_fascia))
+    # Fascia/roof: extend north past y_s into main so roofs read continuous
+    opaque.append(box('WingFasciaBot', wing_cx, wing_cy, PH + 0.25, wing_sx + 1.0, wing_sy + 0.8, 0.7, m_fascia))
+    opaque.append(box('WingFasciaTop', wing_cx, wing_cy, WING_H + 0.15, wing_sx + 1.0, wing_sy + 0.8, 0.65, m_fascia))
+    opaque.append(box('WingRoof', wing_cx, wing_cy, WING_H + 0.45, wing_sx + 0.6, wing_sy + 0.4, 0.35, m_roof))
+    # --- L-junction: E–W arm along south facade + SW collar (no floating gap) ---
+    # Arm runs from wing into west mass under south fascia — reads as one building
+    arm_x0 = wing_x_west + 4.0
+    arm_x1 = x_min + 48.0
+    arm_cx = (arm_x0 + arm_x1) / 2
+    arm_sx = abs(arm_x1 - arm_x0)
+    arm_y0 = y_s - 7.0   # slightly south of facade (visible seat)
+    arm_y1 = y_s + 10.0  # into main
+    arm_cy = (arm_y0 + arm_y1) / 2
+    arm_sy = abs(arm_y1 - arm_y0)
+    opaque.append(box('JoinArmCore', arm_cx, arm_cy, (PH + WING_H) / 2,
+                      arm_sx - 1.0, arm_sy - 1.0, WING_H - PH - 0.7, m_span))
+    opaque.append(box('JoinArmFaceS', arm_cx, arm_y0 - 0.35, (PH + WING_H) / 2 + 0.1,
+                      arm_sx * 0.96, 0.7, WING_H - PH - 1.1, m_fascia))
+    opaque.append(box('JoinArmFaceW', wing_x_west - 0.35, arm_cy, (PH + WING_H) / 2 + 0.1,
+                      0.7, arm_sy * 0.9, WING_H - PH - 1.1, m_fascia))
+    opaque.append(box('JoinArmFasciaBot', arm_cx, arm_cy, PH + 0.28, arm_sx + 0.8, arm_sy + 0.8, 0.7, m_fascia))
+    opaque.append(box('JoinArmFasciaTop', arm_cx, arm_cy, WING_H + 0.18, arm_sx + 0.8, arm_sy + 0.8, 0.65, m_fascia))
+    opaque.append(box('JoinArmRoof', arm_cx, arm_cy, WING_H + 0.48, arm_sx + 0.5, arm_sy + 0.5, 0.35, m_roof))
+    # Fill re-entrant corner solid (wing NE ↔ main SW)
+    opaque.append(box('JoinCorner', (wing_x_east + x_min) / 2, y_s + 2.0, (PH + WING_H) / 2,
+                      abs(wing_x_east - x_min) + 10, 14.0, WING_H - PH - 0.5, m_span))
+    opaque.append(box('JoinCornerRoof', (wing_x_east + x_min) / 2, y_s + 2.0, WING_H + 0.52,
+                      abs(wing_x_east - x_min) + 11, 15.0, 0.4, m_roof))
+    # Solid plinth under junction — kills see-through pilotis gap at SW
+    opaque.append(box('JoinPlinth', arm_cx, (y_s - 2.0), PH / 2,
+                      arm_sx * 0.95, 16.0, PH - 0.4, m_sof))
+    opaque.append(box('JoinPlinth2', (wing_x_west + x_min) / 2, y_s + 4.0, PH / 2,
+                      abs(x_min - wing_x_west) + 8, 18.0, PH - 0.4, m_sof))
+    # Extra south hyphen: thick visible seat on plaza side of SW corner
+    # Wide L-seat: from wing across SW onto south facade — same roof height as wing
+    hx0, hx1 = wing_x_west + 2.0, x_min + 55.0
+    hy0, hy1 = y_s - 12.0, y_s + 8.0
+    hcx, hcy = (hx0 + hx1) / 2, (hy0 + hy1) / 2
+    hsx, hsy = abs(hx1 - hx0), abs(hy1 - hy0)
+    opaque.append(box('JoinHyphen', hcx, hcy, (PH + WING_H) / 2,
+                      hsx - 0.5, hsy - 0.5, WING_H - PH - 0.4, m_span))
+    opaque.append(box('JoinHyphenFaceS', hcx, hy0 - 0.35, (PH + WING_H) / 2 + 0.1,
+                      hsx * 0.96, 0.7, WING_H - PH - 1.0, m_fascia))
+    # Seal north joint face (no see-through to pilotis)
+    opaque.append(box('JoinSealN', hcx, y_s + 0.4, (PH + WING_H) / 2,
+                      hsx * 0.9, 1.2, WING_H - PH - 0.6, m_fascia))
+    opaque.append(box('JoinHyphenRoof', hcx, hcy, WING_H + 0.52,
+                      hsx, hsy, 0.45, m_roof))
+    opaque.append(box('JoinHyphenFascia', hcx, hcy, WING_H + 0.2,
+                      hsx + 0.8, hsy + 0.8, 0.7, m_fascia))
+    opaque.append(box('JoinHyphenFasciaBot', hcx, hcy, PH + 0.28,
+                      hsx + 0.8, hsy + 0.8, 0.7, m_fascia))
+    print(f'WING sx={wing_sx:.1f} sy={wing_sy:.1f} xw={wing_x_west:.1f} xe={wing_x_east:.1f} ys={wing_y_s:.1f} yn={wing_y_n:.1f} join')
     opaque.append(mesh_obj('ProwKeel', [
-        (wing_x_east - 0.5, wing_y_n - 2, PH + 8.5),
-        (wing_x_east - 0.5, wing_y_n - 2, PH + 0.35),
-        (wing_x_west + 4, wing_y_n - 6, PH + 6.0),
-        (wing_x_west + 4, wing_y_n - 6, PH + 0.35),
+        (wing_x_east - 0.5, min(wing_y_n, y_s + 2) - 1, PH + 8.5),
+        (wing_x_east - 0.5, min(wing_y_n, y_s + 2) - 1, PH + 0.35),
+        (wing_x_west + 4, y_s - 4, PH + 6.0),
+        (wing_x_west + 4, y_s - 4, PH + 0.35),
         (wing_cx, wing_y_s + 3, PH + 2.6),
         (wing_cx, wing_y_s + 3, PH + 0.35),
     ], [
