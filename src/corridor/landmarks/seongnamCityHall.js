@@ -1802,10 +1802,11 @@ function buildWalkingSculpture(data, M, { walkerGlbUrl = null } = {}) {
   const g = new THREE.Group(); g.name = 'cityhallWalker';
   // White-ellipse mark: west half of south plaza, left of entrance promenade
   // (open paved area in front of west side of building — not centre/east of walkway)
-  const sx = data.walker?.x ?? 1555;
-  const sz = data.walker?.z ?? -5892;
-  // Face roughly SE toward plaza / promenade (stride forward)
-  const yaw = data.walker?.ry ?? -0.55;
+  // White arrow: out from undercroft into open south plaza (facade behind, like photo 2)
+  const sx = data.walker?.x ?? 1635;
+  const sz = data.walker?.z ?? -5872;
+  // Face south into plaza; city hall glass behind when viewed from south
+  const yaw = data.walker?.ry ?? 0.15;
 
   const steel = M.steelHoneycomb || M.steelPlate;
   const plateMat = M.steelPlate || steel;
@@ -1938,6 +1939,166 @@ function buildWalkingSculpture(data, M, { walkerGlbUrl = null } = {}) {
   };
 }
 
+
+
+/** Enclosed G1 glass under west wing + main south band (도훈 yellow outlines).
+ *  Gap between zones stays open. Centre: revolving door + auto sliding door.
+ */
+function buildGroundFloor(data, M) {
+  const g = new THREE.Group(); g.name = 'cityhallGroundFloor';
+  const b = data.building;
+  const xs = b.o.map((p) => p[0]), zs = b.o.map((p) => p[1]);
+  const xMin = Math.min(...xs), xMax = Math.max(...xs);
+  const zMax = Math.max(...zs);
+  const mass = b.massing || {};
+  const westX1 = mass.westX1 ?? 1582;
+  const midX1 = mass.midX1 ?? 1632;
+  const PH = mass.pilotisH ?? 8.0;
+  const zFace = zMax + 0.55; // south facade line just outside footprint
+
+  // Yellow zones: west wing | OPEN GAP | main band (doors cut out)
+  const WEST = { x0: xMin + 1.5, x1: westX1 - 8 };       // ~1523–1574
+  const MAIN = { x0: westX1 + 12, x1: xMax - 2 };        // ~1594–1691
+  const DOOR_X = (westX1 + midX1) / 2;                   // ~1607 canopy centre
+  const DOOR_W = 5.2; // opening for revolving + auto
+  const doorL = DOOR_X - DOOR_W / 2;
+  const doorR = DOOR_X + DOOR_W / 2;
+
+  const glassMat = (M.glassBlue || M.glassLite).clone();
+  glassMat.name = 'G1Glass';
+  glassMat.transparent = true;
+  glassMat.opacity = 0.88;
+  glassMat.roughness = 0.28;
+  glassMat.metalness = 0.2;
+  glassMat.emissive = new THREE.Color('#3a7aa8');
+  glassMat.emissiveIntensity = 0.35;
+  glassMat.side = THREE.DoubleSide;
+  glassMat.depthWrite = true;
+
+  const mullionMat = M.frame || M.frameDark || new THREE.MeshStandardMaterial({ color: '#e6eaee' });
+  const bag = Bag();
+  const colliders = []; // { x0,x1,z, half }
+
+  function addGlassSpan(x0, x1) {
+    if (x1 - x0 < 1.2) return;
+    const cx = (x0 + x1) / 2, w = x1 - x0;
+    // Glass curtain
+    const plane = new THREE.PlaneGeometry(w, PH - 0.35, Math.max(1, Math.round(w / 3.2)), 4);
+    // Mullion UVs already on plane
+    plane.translate(cx, (PH - 0.35) / 2 + 0.15, zFace);
+    const mesh = new THREE.Mesh(plane, glassMat);
+    mesh.name = 'cityhallG1Glass';
+    mesh.castShadow = false;
+    mesh.receiveShadow = true;
+    g.add(mesh);
+    // Vertical mullions every ~3.2m
+    for (let x = x0 + 1.6; x < x1 - 0.5; x += 3.2) {
+      bag.box(x, PH / 2, zFace + 0.04, 0.12, PH - 0.2, 0.14, 0, C.frame);
+    }
+    // Top + bottom rails
+    bag.box(cx, 0.18, zFace + 0.04, w, 0.22, 0.16, 0, C.frame);
+    bag.box(cx, PH - 0.15, zFace + 0.04, w, 0.22, 0.18, 0, C.frame);
+    // Interior glow strip (night) — warm/cool panels behind glass
+    for (let x = x0 + 2; x < x1 - 1; x += 4.5) {
+      const col = ((Math.sin(x * 12.9) + 1) * 0.5) > 0.45 ? C.nightWarm : C.nightCool;
+      bag.box(x, PH * 0.45, zFace - 0.8, 3.2, PH * 0.7, 0.08, 0, col);
+    }
+    colliders.push({ x0, x1, z: zFace, half: 0.45 });
+  }
+
+  addGlassSpan(WEST.x0, WEST.x1);
+  // Main band split around door opening
+  addGlassSpan(MAIN.x0, doorL);
+  addGlassSpan(doorR, MAIN.x1);
+
+  // Simple lobby floor just inside facade (cheap)
+  bag.box(DOOR_X, 0.06, zMax - 4, DOOR_W + 14, 0.1, 10, 0, C.plaza);
+
+  // --- Revolving door (회전문): 4-wing glass in cylinder ---
+  const revG = new THREE.Group(); revG.name = 'cityhallRevolvingDoor';
+  revG.position.set(DOOR_X - 1.15, 0, zFace + 0.15);
+  const cylR = 1.35, cylH = 2.85;
+  // Drum frame (top/bottom rings + posts)
+  const drumMat = mullionMat;
+  const topRing = new THREE.Mesh(new THREE.TorusGeometry(cylR, 0.07, 6, 20), drumMat);
+  topRing.rotation.x = Math.PI / 2; topRing.position.y = cylH;
+  revG.add(topRing);
+  const botRing = topRing.clone(); botRing.position.y = 0.08; revG.add(botRing);
+  // 4 wings
+  const wingG = new THREE.Group(); wingG.name = 'cityhallRevWings';
+  const wingMat = glassMat.clone(); wingMat.opacity = 0.55; wingMat.emissiveIntensity = 0.15;
+  for (let i = 0; i < 4; i++) {
+    const wing = new THREE.Mesh(new THREE.BoxGeometry(cylR * 1.85, cylH - 0.25, 0.06), wingMat);
+    wing.position.set(0, cylH / 2, 0);
+    const pivot = new THREE.Group();
+    pivot.rotation.y = (i * Math.PI) / 2;
+    pivot.add(wing);
+    wing.position.x = cylR * 0.48;
+    wingG.add(pivot);
+  }
+  revG.add(wingG);
+  // Centre shaft
+  const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, cylH, 8), drumMat);
+  shaft.position.y = cylH / 2; revG.add(shaft);
+  g.add(revG);
+
+  // --- Automatic sliding door (자동문) next to revolving ---
+  const slideG = new THREE.Group(); slideG.name = 'cityhallAutoDoor';
+  slideG.position.set(DOOR_X + 1.55, 0, zFace + 0.12);
+  const slideMat = wingMat;
+  const frameH = 2.9, openW = 1.35;
+  // Frame
+  bag.box(DOOR_X + 1.55, frameH / 2, zFace + 0.12, 0.12, frameH, 0.14, 0, C.frame); // will merge separately — use meshes in group
+  const sL = new THREE.Mesh(new THREE.BoxGeometry(openW, frameH - 0.2, 0.07), slideMat);
+  sL.position.set(-openW / 2, frameH / 2, 0); sL.name = 'slideL';
+  const sR = sL.clone(); sR.position.x = openW / 2; sR.name = 'slideR';
+  slideG.add(sL, sR);
+  // Header
+  const hdr = new THREE.Mesh(new THREE.BoxGeometry(openW * 2.2, 0.2, 0.2), drumMat);
+  hdr.position.y = frameH; slideG.add(hdr);
+  g.add(slideG);
+
+  const frameBits = bag.mesh(M.vc, 'cityhallG1Frame');
+  if (frameBits) g.add(frameBits);
+
+  // Night: bump glass emissive
+  let eveningOn = false;
+  function setNight(on) {
+    eveningOn = !!on;
+    glassMat.emissiveIntensity = on ? 0.95 : 0.35;
+    wingMat.emissiveIntensity = on ? 0.4 : 0.15;
+  }
+
+  let slideOpen = 0; // 0 closed .. 1 open
+  function update(dt, t, playerPos) {
+    // Slow revolving
+    wingG.rotation.y = (t || 0) * 0.35;
+    // Auto door proximity
+    let want = 0;
+    if (playerPos) {
+      const d = Math.hypot(playerPos.x - (DOOR_X + 1.55), playerPos.z - zFace);
+      if (d < 4.5) want = 1;
+    }
+    slideOpen += ((want - slideOpen) * Math.min(1, (dt || 0.016) * 4));
+    sL.position.x = -openW / 2 - slideOpen * openW * 0.85;
+    sR.position.x = openW / 2 + slideOpen * openW * 0.85;
+  }
+
+  function isBlocked(x, z, r = 0.4) {
+    // Open in door bay when auto door open enough / revolving cylinder walkable rim
+    if (x > doorL - r && x < doorR + r && Math.abs(z - zFace) < 1.2 + r) {
+      // Block solid frame edges of door bay only lightly — allow passage through centre
+      if (Math.abs(x - DOOR_X) < 0.85) return false; // revolving + path
+      if (slideOpen > 0.55 && x > DOOR_X + 0.3 && x < DOOR_X + 3.2) return false;
+    }
+    for (const c of colliders) {
+      if (x >= c.x0 - r && x <= c.x1 + r && Math.abs(z - c.z) < c.half + r) return true;
+    }
+    return false;
+  }
+
+  return { group: g, update, isBlocked, setNight, doorX: DOOR_X, zFace };
+}
 
 /** Stone approach, floor fountain, long bus shelter, pedestrian overpass — ?cityhall=1 only. */
 function buildPlazaExtras(data, M) {
@@ -2206,6 +2367,7 @@ export function buildSeongnamCityHall(data, { env = null, glbUrl = null, walkerG
   const gate = buildVehicleGate(data, M);
   const walker = buildWalkingSculpture(data, M, { walkerGlbUrl });
   const plazaExtras = buildPlazaExtras(data, M);
+  const groundFloor = buildGroundFloor(data, M);
   mergeStaticGroup(grounds, 'cityhallGroundsMerged');
   mergeStaticGroup(banners, 'cityhallBannersMerged');
   mergeStaticGroup(pond, 'cityhallPondMerged');
@@ -2215,7 +2377,7 @@ export function buildSeongnamCityHall(data, { env = null, glbUrl = null, walkerG
   mergeStaticGroup(parking, 'cityhallParkingMerged');
   mergeStaticGroup(gate, 'cityhallGateMerged');
   // fountain + pondPlaza jets kept as instanced (animated)
-  root.add(grounds, banners, sign, pond, pondPlaza.group, fountain.group, landscape, parking, gate, walker.group, plazaExtras.group);
+  root.add(grounds, banners, sign, pond, pondPlaza.group, fountain.group, landscape, parking, gate, walker.group, plazaExtras.group, groundFloor.group);
 
   let glbNight = null;
   let eveningOn = false;
@@ -2223,6 +2385,7 @@ export function buildSeongnamCityHall(data, { env = null, glbUrl = null, walkerG
     eveningOn = !!on;
     if (building.night) building.night.visible = on;
     glbNight?.(on);
+    groundFloor.setNight?.(on);
   });
   if (building.night) building.night.visible = false;
 
@@ -2253,6 +2416,7 @@ export function buildSeongnamCityHall(data, { env = null, glbUrl = null, walkerG
   recount();
 
   let disposed = false;
+  let _playerPos = null;
   return {
     group: root,
     get stats() { return { name: 'seongnamCityHall', meshes, instanced }; },
@@ -2262,11 +2426,14 @@ export function buildSeongnamCityHall(data, { env = null, glbUrl = null, walkerG
       fountain.update(tt);
       pondPlaza.update(tt);
       plazaExtras.update?.(tt);
+      groundFloor.update?.(dt, tt, _playerPos);
     },
+    setPlayerPos(x, z) { _playerPos = { x, z }; },
     isBlocked(x, z, r = 0.4) {
       if (disposed) return false;
       if (pondPlaza.isBlocked?.(x, z, r)) return true;
       if (walker.isBlocked?.(x, z, r)) return true;
+      if (groundFloor.isBlocked?.(x, z, r)) return true;
       const pr = CITYHALL_PILLAR_R + r;
       for (const [px, pz] of CITYHALL_PILLARS) {
         if (Math.hypot(x - px, z - pz) < pr) return true;

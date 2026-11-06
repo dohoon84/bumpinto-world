@@ -2510,6 +2510,7 @@ function frame() {
     player.userData.jumpY = jumpY;
     player.userData.emote = myEmote;
     player.userData.sit = ride?.active ? 'bench' : mySit; // [ride] 버스·택시 좌석
+  corridor?.cityhall?.setPlayerPos?.(player.position.x, player.position.z);
     player.userData.afk = ride?.active ? false : myAfk;
     player.userData.umbrella = umbrellas.umbrellaTheme || '';
     animateAvatar(player, moveSpeed, dt);

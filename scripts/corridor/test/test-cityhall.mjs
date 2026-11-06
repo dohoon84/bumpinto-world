@@ -80,8 +80,8 @@ ok('filter no-op without data');
   assert.ok(names.includes('cityhallWalkerBody'), 'walker body mesh');
   assert.ok(names.includes('cityhallWalkerBase'), 'walker base mesh');
   const pr = data.promenade;
-  const wx = data.walker?.x ?? 1555;
-  const wz = data.walker?.z ?? -5892;
+  const wx = data.walker?.x ?? 1635;
+  const wz = data.walker?.z ?? -5872;
   assert.equal(built.isBlocked(wx, wz, 0.4), true, 'walker base blocks center');
   assert.equal(built.isBlocked(wx + 8, wz + 8, 0.4), false, 'clear of walker');
   const bx = 1694, zMid = -5922, R = 26;
@@ -115,6 +115,24 @@ ok('filter no-op without data');
   assert.ok(el && el.y > 5, 'elevator up ' + JSON.stringify(el));
   built.dispose();
   ok('plaza extras stone/fountain/overpass/elevator');
+}
+
+
+// 5d) ground floor G1 glass + door gap + walker SE of facade
+{
+  const built = buildSeongnamCityHall(data);
+  const zFace = Math.max(...data.building.o.map((p) => p[1])) + 0.55;
+  assert.equal(built.isBlocked(1545, zFace, 0.4), true, 'west G1 blocks');
+  assert.equal(built.isBlocked(1585, zFace, 0.4), false, 'gap stays open');
+  assert.equal(built.isBlocked(1650, zFace, 0.4), true, 'main G1 blocks');
+  assert.equal(built.isBlocked(1607, zFace, 0.4), false, 'door bay open');
+  const names = [];
+  built.group.traverse((o) => { if (o.name) names.push(o.name); });
+  assert.ok(names.includes('cityhallGroundFloor'), 'ground floor group');
+  assert.ok(names.includes('cityhallRevolvingDoor'), 'revolving door');
+  assert.ok(names.includes('cityhallAutoDoor'), 'auto door');
+  built.dispose();
+  ok('ground floor G1 glass/doors/gap');
 }
 
 // 6) createCityHall wrapper
