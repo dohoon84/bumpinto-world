@@ -1950,8 +1950,8 @@ function buildWalkingSculpture(data, M, { walkerGlbUrl = null } = {}) {
 
 
 
-/** Sealed G1 glass volume under pilotis (도훈 yellow extent).
- *  South/east/west/north walls + transom above doors. Enter ONLY via revolving/auto doors.
+/** G1 glass: front (south) + doors, and BACK (north) curtain along pond facade.
+ *  NO east/west side walls (those made a wrong narrow corridor). Enter via revolving/auto doors.
  *  Doors: clear near-transparent glass (not blue-tinted).
  */
 function buildGroundFloor(data, M) {
@@ -1959,17 +1959,20 @@ function buildGroundFloor(data, M) {
   const b = data.building;
   const xs = b.o.map((p) => p[0]), zs = b.o.map((p) => p[1]);
   const xMin = Math.min(...xs), xMax = Math.max(...xs);
-  const zMax = Math.max(...zs);
+  const zMin = Math.min(...zs), zMax = Math.max(...zs);
   const mass = b.massing || {};
   const westX1 = mass.westX1 ?? 1582;
   const midX1 = mass.midX1 ?? 1632;
   const PH = mass.pilotisH ?? 8.0;
 
-  // Yellow-boxed extent: west wing through mid/east colonnade — stop before far-east overhang panels
+  // Front yellow extent: west wing through mid/east — stop before far-east overhang panels
   const G1_X0 = xMin + 2.0;                 // ~1524
-  const G1_X1 = Math.min(xMax - 14.5, midX1 + 46); // ~1678 — drop eastmost ~4×3.2 m panels
-  const zSouth = zMax + 0.22;               // flush with building south face (not free-standing overhang)
-  const zNorth = zMax - 11.0;               // back wall under slab
+  const G1_X1 = Math.min(xMax - 14.5, midX1 + 46); // ~1678
+  // Back facade: full undercroft length facing pond (도훈 yellow outline)
+  const BACK_X0 = xMin + 2.0;
+  const BACK_X1 = xMax - 2.0;
+  const zSouth = zMax + 0.22;               // south face (front)
+  const zNorth = zMin - 0.22;               // BACK face toward pond/garden — NOT a mid-depth wall
   const DOOR_X = (westX1 + midX1) / 2;      // ~1607
   const DOOR_W = 5.4;
   const doorL = DOOR_X - DOOR_W / 2;
@@ -2074,12 +2077,15 @@ function buildGroundFloor(data, M) {
   bag.box(doorL, PH / 2, zSouth + 0.1, 0.2, PH - 0.15, 0.32, 0, C.frame);
   bag.box(doorR, PH / 2, zSouth + 0.1, 0.2, PH - 0.15, 0.32, 0, C.frame);
 
-  // --- North (back) wall — sealed ---
-  addNSWall(G1_X0, G1_X1, zNorth, 0.15, PH - 0.2);
+  // --- North BACK curtain wall (pond/garden facade undercroft) — full yellow length ---
+  // Named distinctly for shots/tests; pillars stay inside/along it
+  addNSWall(BACK_X0, BACK_X1, zNorth, 0.15, PH - 0.2, glassMat, 'cityhallG1BackGlass');
+  // Mullions already added by addNSWall; push a few deeper vertical accents as "pillar line"
+  for (let x = BACK_X0 + 3; x < BACK_X1 - 2; x += 6.5) {
+    bag.box(x, PH / 2, zNorth + 0.35, 0.35, PH - 0.3, 0.35, 0, C.pilotis);
+  }
 
-  // --- West + East end walls — sealed ---
-  addEWWall(zNorth, zSouth, G1_X0, 0.15, PH - 0.2);
-  addEWWall(zNorth, zSouth, G1_X1, 0.15, PH - 0.2);
+  // NO east/west side glass walls — those created the wrong narrow corridor next to the yellow building
 
   // Interior glow strips (night) along south
   for (let x = G1_X0 + 2; x < G1_X1 - 1; x += 4.5) {
@@ -2088,8 +2094,8 @@ function buildGroundFloor(data, M) {
     bag.box(x, PH * 0.45, zSouth - 0.9, 3.2, PH * 0.7, 0.08, 0, col);
   }
 
-  // Lobby floor inside sealed volume
-  bag.box((G1_X0 + G1_X1) / 2, 0.06, (zSouth + zNorth) / 2, G1_X1 - G1_X0 - 0.5, 0.1, Math.abs(zSouth - zNorth) - 0.5, 0, C.plaza);
+  // Lobby floor under slab between front and back glass
+  bag.box((G1_X0 + G1_X1) / 2, 0.06, (zSouth + zNorth) / 2, G1_X1 - G1_X0 - 0.5, 0.1, Math.abs(zSouth - zNorth) - 0.8, 0, C.plaza);
 
   // --- Revolving door (회전문): clear glass wings ---
   const revG = new THREE.Group(); revG.name = 'cityhallRevolvingDoor';
@@ -2186,12 +2192,12 @@ function buildGroundFloor(data, M) {
 
   return {
     group: g, update, isBlocked, setNight, doorX: DOOR_X, zFace: zSouth,
-    extent: { x0: G1_X0, x1: G1_X1, zSouth, zNorth, PH },
+    extent: { x0: G1_X0, x1: G1_X1, backX0: BACK_X0, backX1: BACK_X1, zSouth, zNorth, PH },
     disposeExtra: () => { clearMat.dispose(); glassMat.dispose(); },
   };
 }
 
-/** Stone approach, floor fountain, long bus shelter, pedestrian overpass — ?cityhall=1 only. */
+/** Stone approach, NW floor fountain, street trees, pedestrian overpass — ?cityhall=1 only. */
 function buildPlazaExtras(data, M) {
   const g = new THREE.Group(); g.name = 'cityhallPlazaExtras';
   const bag = Bag();
@@ -2220,7 +2226,8 @@ function buildPlazaExtras(data, M) {
   stoneBox(1588, -5885, 48, 48, 0.02);
   stoneBox(1645, -5865, 75, 50, -0.08);  // SE plaza toward road
   stoneBox(1595, -5915, 55, 32, 0.22);   // near south face apron
-  stoneBox(1640, -5828, 120, 85, 0.05);  // floor-fountain field + north plaza (도훈 circle)
+  stoneBox(1640, -5828, 120, 85, 0.05);  // north plaza field
+  stoneBox(1540, -5800, 40, 30, 0.02);   // NW floor-fountain pad (도훈 yellow circle)
   // Promenade approach (match promenade axis ~ SE→NW) — widened stone walk
   {
     const pr = data.promenade || { from: [1700, -5835], to: [1645, -5900] };
@@ -2238,15 +2245,15 @@ function buildPlazaExtras(data, M) {
     }
   }
 
-  // --- 2) Floor fountain — visible water columns (summer / ?floorFountain=1) ---
-  // Clear rectangular nozzle grid on stone; players walk through (no collision).
-  const FF = { x0: 1585, x1: 1695, z0: -5860, z1: -5795 };
+  // --- 2) Floor fountain — small NW cluster only (도훈: left of tree row, near road/footpath)
+  // Players walk through (no collision). ~16 nozzles; all other plaza nozzles removed.
+  const FF = { x0: 1528, x1: 1556, z0: -5812, z1: -5790 };
   const grateN = [];
-  const cols = 9, rows = 7;
+  const cols = 4, rows = 4;
   for (let i = 0; i < cols; i++) {
     for (let j = 0; j < rows; j++) {
-      const x = FF.x0 + 3 + (i + 0.5) * ((FF.x1 - FF.x0 - 6) / cols);
-      const z = FF.z0 + 3 + (j + 0.5) * ((FF.z1 - FF.z0 - 6) / rows);
+      const x = FF.x0 + 1.5 + (i + 0.5) * ((FF.x1 - FF.x0 - 3) / cols);
+      const z = FF.z0 + 1.5 + (j + 0.5) * ((FF.z1 - FF.z0 - 3) / rows);
       grateN.push([x, z]);
     }
   }
@@ -2299,14 +2306,14 @@ function buildPlazaExtras(data, M) {
   let drops = null, dropMat = null, dropGeo = null;
   let wet = null, wetMat = null, wetGeo = null;
   let splash = null, splashMat = null, splashGeo = null;
-  const DROP_PER = 8;
+  const DROP_PER = 3;
   if (summer && grateN.length) {
     // Solid water column ~0.14–0.18 m diameter (cylinder keeps volume at every angle)
     jetMat = new THREE.MeshBasicMaterial({
       color: '#8ec6ea', transparent: true, opacity: 0.88, depthWrite: false,
       blending: THREE.NormalBlending, toneMapped: false,
     });
-    jetGeo = new THREE.CylinderGeometry(0.09, 0.105, 1, 12); // ~0.18–0.22 m with pulse fat
+    jetGeo = new THREE.CylinderGeometry(0.09, 0.105, 1, 12, 1, true); // openEnded — no tip disc
     jetGeo.translate(0, 0.5, 0);
     jets = new THREE.InstancedMesh(jetGeo, jetMat, grateN.length);
     jets.name = 'cityhallFloorJets'; jets.frustumCulled = false;
@@ -2314,10 +2321,10 @@ function buildPlazaExtras(data, M) {
 
     // Bright white-blue core
     coreMat = new THREE.MeshBasicMaterial({
-      color: '#f5fcff', transparent: true, opacity: 0.9, depthWrite: false,
-      blending: THREE.AdditiveBlending, toneMapped: false,
+      color: '#d8eefc', transparent: true, opacity: 0.45, depthWrite: false,
+      blending: THREE.NormalBlending, toneMapped: false,
     });
-    coreGeo = new THREE.CylinderGeometry(0.032, 0.045, 1, 8);
+    coreGeo = new THREE.CylinderGeometry(0.032, 0.045, 1, 8, 1, true);
     coreGeo.translate(0, 0.5, 0);
     cores = new THREE.InstancedMesh(coreGeo, coreMat, grateN.length);
     cores.name = 'cityhallFloorJetCores'; cores.frustumCulled = false;
@@ -2325,31 +2332,22 @@ function buildPlazaExtras(data, M) {
 
     // Soft translucent falloff sheath (outer cylinder, wider than solid column)
     sheathMat = new THREE.MeshBasicMaterial({
-      color: '#c8e6f8', transparent: true, opacity: 0.28, depthWrite: false,
-      blending: THREE.AdditiveBlending, toneMapped: false,
+      color: '#b8dcff', transparent: true, opacity: 0.22, depthWrite: false,
+      blending: THREE.NormalBlending, toneMapped: false,
     });
-    sheathGeo = new THREE.CylinderGeometry(0.16, 0.19, 1, 10);
+    sheathGeo = new THREE.CylinderGeometry(0.16, 0.19, 1, 10, 1, true);
     sheathGeo.translate(0, 0.5, 0);
     sheaths = new THREE.InstancedMesh(sheathGeo, sheathMat, grateN.length);
     sheaths.name = 'cityhallFloorJetSheaths'; sheaths.frustumCulled = false;
     g.add(sheaths);
 
-    // Soft spray puff at tip
-    mistMat = new THREE.MeshBasicMaterial({
-      color: '#f8fcff', transparent: true, opacity: 0.7, depthWrite: false,
-      blending: THREE.AdditiveBlending, side: THREE.DoubleSide, toneMapped: false,
-    });
-    mistGeo = new THREE.CircleGeometry(0.28, 16);
-    mist = new THREE.InstancedMesh(mistGeo, mistMat, grateN.length);
-    mist.name = 'cityhallFloorMist'; mist.frustumCulled = false;
-    g.add(mist);
-
-    // Arc-tip droplets / spray beads
+    // No tip disc/ring — only tiny sparse droplets (도훈: huge white blobs were too big)
+    // mist left null
     dropMat = new THREE.MeshBasicMaterial({
-      color: '#ffffff', transparent: true, opacity: 0.9, depthWrite: false,
-      blending: THREE.AdditiveBlending, toneMapped: false,
+      color: '#e8f4fc', transparent: true, opacity: 0.35, depthWrite: false,
+      blending: THREE.NormalBlending, toneMapped: false,
     });
-    dropGeo = new THREE.SphereGeometry(0.045, 8, 6);
+    dropGeo = new THREE.SphereGeometry(0.018, 6, 4);
     drops = new THREE.InstancedMesh(dropGeo, dropMat, grateN.length * DROP_PER);
     drops.name = 'cityhallFloorDrops'; drops.frustumCulled = false;
     g.add(drops);
@@ -2415,26 +2413,18 @@ function buildPlazaExtras(data, M) {
         dummy.updateMatrix();
         sheaths.setMatrixAt(i, dummy.matrix);
       }
-      if (mist) {
-        dummy.position.set(x, 0.2 + h * 0.98, z);
-        dummy.rotation.set(-Math.PI / 2, 0, t * 1.2 + i * 0.15);
-        const ms = 1.0 + pulse * 2.0;
-        dummy.scale.set(ms, ms, 1);
-        dummy.updateMatrix();
-        mist.setMatrixAt(i, dummy.matrix);
-      }
       if (drops) {
         for (let d = 0; d < DROP_PER; d++) {
-          const ang = t * 2.4 + i * 0.7 + d * 1.4;
-          const rad = 0.12 + 0.35 * ((d * 0.37 + pulse) % 1);
-          const dy = h * (0.55 + 0.45 * ((Math.sin(t * 4.2 + d * 1.3 + i) + 1) * 0.5));
+          const ang = t * 2.8 + i * 0.9 + d * 2.1;
+          const rad = 0.04 + 0.08 * ((d * 0.41 + pulse * 0.3) % 1);
+          const dy = h * (0.82 + 0.16 * ((Math.sin(t * 5.0 + d * 1.7 + i) + 1) * 0.5));
           dummy.position.set(
             x + Math.cos(ang) * rad,
             0.2 + dy,
             z + Math.sin(ang) * rad,
           );
           dummy.rotation.set(0, 0, 0);
-          const ds = 0.8 + pulse * (0.5 + 0.7 * ((d % 3) / 2));
+          const ds = 0.35 + 0.25 * pulse; // tiny beads
           dummy.scale.set(ds, ds, ds);
           dummy.updateMatrix();
           drops.setMatrixAt(i * DROP_PER + d, dummy.matrix);
@@ -2455,22 +2445,17 @@ function buildPlazaExtras(data, M) {
     if (cores) {
       cores.count = grateN.length;
       cores.instanceMatrix.needsUpdate = true;
-      coreMat.opacity = 0.7 + 0.25 * (0.5 + 0.5 * Math.sin(t * 2.4));
+      coreMat.opacity = 0.35 + 0.15 * (0.5 + 0.5 * Math.sin(t * 2.4));
     }
     if (sheaths) {
       sheaths.count = grateN.length;
       sheaths.instanceMatrix.needsUpdate = true;
       sheathMat.opacity = 0.22 + 0.18 * (0.5 + 0.5 * Math.sin(t * 2.2));
     }
-    if (mist) {
-      mist.count = grateN.length;
-      mist.instanceMatrix.needsUpdate = true;
-      mistMat.opacity = 0.45 + 0.35 * (0.5 + 0.5 * Math.sin(t * 2.6));
-    }
     if (drops) {
       drops.count = grateN.length * DROP_PER;
       drops.instanceMatrix.needsUpdate = true;
-      dropMat.opacity = 0.6 + 0.35 * (0.5 + 0.5 * Math.sin(t * 3.1));
+      dropMat.opacity = 0.22 + 0.12 * (0.5 + 0.5 * Math.sin(t * 3.1));
     }
     if (splash) {
       splash.count = grateN.length;
@@ -2479,39 +2464,81 @@ function buildPlazaExtras(data, M) {
     }
   }
 
-  // --- 3) Long bus shelter on BUILDING-side curb (성남시청전면 OSM stops) ---
-  const busA = { x: 1794.6, z: -5796.1 };
-  const busB = { x: 1826.7, z: -5842.6 };
-  const bdx = busB.x - busA.x, bdz = busB.z - busA.z;
-  const bLen = Math.hypot(bdx, bdz) || 1;
-  const bang = Math.atan2(bdz, bdx);
-  // Normal pointing west toward city hall (smaller x)
-  let nx = -bdz / bLen, nz = bdx / bLen;
-  if (nx > 0) { nx = -nx; nz = -nz; } // force toward building
-  const side = 40.0; // further onto building-side sidewalk — clear of asphalt
-  const bcx = (busA.x + busB.x) / 2 + nx * side;
-  const bcz = (busA.z + busB.z) / 2 + nz * side;
-  g.userData.busShelter = { x: bcx, z: bcz, len: bLen, ang: bang };
-  // Raised curb platform under shelter
-  bag.box(bcx, 0.14, bcz, bLen + 2, 0.28, 2.8, -bang, '#9aa0a6');
-  // Roof canopy (thick blue slab with overhang)
-  bag.box(bcx, 2.95, bcz, bLen + 1, 0.28, 2.6, -bang, '#1e6bb8');
-  // Back glass wall (toward plaza / building)
-  bag.box(bcx + nx * 1.15, 1.55, bcz + nz * 1.15, bLen + 6, 2.7, 0.1, -bang, '#b8d8ec');
-  // Bench
-  bag.box(bcx + nx * 0.35, 0.55, bcz + nz * 0.35, bLen + 5, 0.16, 0.6, -bang, '#8a6b4e');
-  bag.box(bcx + nx * 0.35, 0.35, bcz + nz * 0.35, bLen + 5, 0.35, 0.12, -bang, '#6a5040');
-  // Posts every ~4.5 m
-  for (let tt = 0; tt <= 1.001; tt += 4.5 / bLen) {
-    const x = busA.x + bdx * tt + nx * side;
-    const z = busA.z + bdz * tt + nz * side;
-    bag.box(x, 1.5, z, 0.18, 3.0, 0.18, -bang, '#3a4550');
+  // --- 3) Street trees along sidewalks near streetlights (도훈) ---
+  // Spaced along curb between/near lamp posts; clear of bus boarding + overpass span.
+  {
+    const streetPts = [];
+    // Derived from public/corridor/streetlights.json lamps around city hall; offset onto sidewalk.
+    const lamps = [
+      // EW road north of plaza (z≈-5787), plant south toward plaza
+      [1490.0, -5786.9, 1.56], [1554.3, -5786.6, 1.57], [1604.3, -5786.6, 1.57],
+      [1651.3, -5786.6, 1.57], [1704.4, -5786.3, 1.56], [1754.4, -5785.8, 1.56],
+      // NS arterial west curb (plaza side) — lamps x≈1792–1795
+      [1794.5, -6145.5, 3.14], [1794.3, -6113.5, 3.14], [1793.5, -5889.8, 3.13],
+      [1793.0, -5857.8, 3.13], [1792.5, -5819.8, 3.13], [1792.0, -5787.8, 3.13],
+      [1791.2, -5752.9, 3.12], [1789.9, -5673.8, 3.13], [1795.4, -6054.5, 0.01],
+      [1795.8, -6025.5, 0.01], [1795.3, -5997.8, 3.13], [1794.8, -5965.8, 3.12],
+      // NS arterial east curb
+      [1831.2, -6143.8, 0], [1831.1, -6105.7, 3.12], [1828.7, -5925.3, 3.13],
+      [1828.2, -5890.3, 3.13], [1827.8, -5855.3, 3.13], [1827.3, -5820.3, 3.13],
+      [1826.2, -5746.6, 3.13], [1825.8, -5714.6, 3.13], [1825.2, -5673.6, 3.12],
+      // South / approach EW
+      [1543.7, -6102.6, 1.59], [1583.9, -6102.3, 1.52], [1623.9, -6100.2, 1.52],
+      [1663.7, -6098.4, 1.55], [1703.5, -6098.2, 1.6], [1516.6, -6092.4, 1.54],
+      [1551.6, -6091.3, 1.54], [1586.8, -6089.3, 1.51], [1621.7, -6087.4, 1.51],
+      [1656.7, -6085.4, 1.51], [1691.6, -6083.4, 1.51], [1726.5, -6081.5, 1.51],
+    ];
+    // Bus boarding clear zones (existing stop curb positions) + overpass deck
+    const clear = [
+      [1794.6, -5796.1, 7], [1826.7, -5842.6, 7], [1794.9, -5827.8, 7], [1827.1, -5798.8, 7],
+      [1782.7, -5711.2, 6], [1810, -5765, 22],
+    ];
+    const seen = [];
+    for (const [lx, lz, yaw] of lamps) {
+      // Offset onto sidewalk: opposite road-arm direction by ~2.8 m, plus slight curb stagger
+      const ax = Math.cos(yaw), az = -Math.sin(yaw); // arm over road
+      // Prefer plaza/building side for arterial: for NS road center ~1810, west lamps push west (−x), east push east (+x)
+      let ox = -ax * 2.9, oz = -az * 2.9;
+      if (Math.abs(lx - 1810) < 40 && Math.abs(ax) < 0.35) {
+        // arm mostly E/W along NS road — push away from road centerline
+        ox = (lx < 1810 ? -1 : 1) * 2.9;
+        oz = 0;
+      } else if (Math.abs(lz + 5786) < 8) {
+        // EW road north of plaza — plant south (toward plaza, −z)
+        ox = 0; oz = -3.0;
+      } else if (Math.abs(lz + 6095) < 25) {
+        // south approach — plant north of curb (+z toward city hall)
+        ox = 0; oz = 2.8;
+      }
+      const x = lx + ox, z = lz + oz;
+      if (clear.some(([cx, cz, r]) => Math.hypot(x - cx, z - cz) < r)) continue;
+      if (seen.some(([sx, sz]) => Math.hypot(x - sx, z - sz) < 9)) continue;
+      seen.push([x, z]);
+      streetPts.push([x, z]);
+    }
+    // Extra regular curb fill between lamps on plaza-side NS west sidewalk
+    for (let z = -6120; z <= -5680; z += 16) {
+      const x = 1784.5;
+      if (clear.some(([cx, cz, r]) => Math.hypot(x - cx, z - cz) < r)) continue;
+      if (seen.some(([sx, sz]) => Math.hypot(x - sx, z - sz) < 10)) continue;
+      seen.push([x, z]);
+      streetPts.push([x, z]);
+    }
+    let seed = 42011;
+    const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+    const inst = addInstancedTrees(g, streetPts, {
+      rnd,
+      crownRadius: 2.1, crownY: 4.8, trunkTop: 0.18, trunkBottom: 0.26, trunkHeight: 3.4,
+      trunkColor: '#8a6b4e', scaleMin: 0.75, scaleSpan: 0.4,
+    });
+    if (inst) {
+      inst.crowns.name = 'cityhallStreetTreeCrowns';
+      inst.trunks.name = 'cityhallStreetTreeTrunks';
+    }
+    g.userData.streetTreeCount = streetPts.length;
   }
-  // End route signs
-  bag.box(busA.x + nx * side, 3.45, busA.z + nz * side, 1.1, 1.2, 0.12, -bang, '#1a56b0');
-  bag.box(busB.x + nx * side, 3.45, busB.z + nz * side, 1.1, 1.2, 0.12, -bang, '#1a56b0');
 
-  // --- 4) White cable-stayed footbridge (도훈 ref) — slim deck, inclined pylon, teal glass rails ---
+  // --- 4) White cable-stayed footbridge — IDENTICAL A-frame pylons at both ends (도훈) ---
   const OX = 1810, OZ = -5765;
   const DECK_Y = 5.6;
   const SPAN = 38;
@@ -2522,15 +2549,15 @@ function buildPlazaExtras(data, M) {
   g.userData.overpass = { x: OX, z: OZ, y: DECK_Y, span: SPAN };
   const xW = OX - SPAN / 2, xE = OX + SPAN / 2;
 
-  // Slim white deck + smooth curved underside (layered taper — no mid-span piers)
+  // Slim white deck + smooth curved underside (no mid-span piers)
   bag.box(OX, DECK_Y - 0.07, OZ, SPAN, 0.16, DECK_W, 0, WHITE);
   bag.box(OX, DECK_Y - 0.24, OZ, SPAN - 0.4, 0.2, DECK_W * 0.88, 0, WHITE);
   bag.box(OX, DECK_Y - 0.42, OZ, SPAN - 1.6, 0.2, DECK_W * 0.7, 0, WHITE2);
   bag.box(OX, DECK_Y - 0.58, OZ, SPAN - 3.5, 0.18, DECK_W * 0.5, 0, WHITE2);
   bag.box(OX, DECK_Y - 0.72, OZ, SPAN - 7.0, 0.14, DECK_W * 0.28, 0, '#e4e8ec');
-  bag.box(OX, DECK_Y - 0.82, OZ, SPAN - 11.0, 0.1, DECK_W * 0.16, 0, '#d8dde2'); // soft keel
+  bag.box(OX, DECK_Y - 0.82, OZ, SPAN - 11.0, 0.1, DECK_W * 0.16, 0, '#d8dde2');
 
-  // Teal-tinted glass railings (both sides) + white posts / handrail
+  // Teal-tint glass rails on main span
   const railMat = new THREE.MeshStandardMaterial({
     color: TEAL, transparent: true, opacity: 0.38, roughness: 0.12, metalness: 0.15,
     side: THREE.DoubleSide, depthWrite: false,
@@ -2538,144 +2565,153 @@ function buildPlazaExtras(data, M) {
   const railH = 1.15;
   for (const zs of [-1, 1]) {
     const zR = OZ + zs * (DECK_W / 2);
-    const pane = new THREE.Mesh(
-      new THREE.PlaneGeometry(SPAN - 0.4, railH, 1, 1),
-      railMat,
-    );
+    const pane = new THREE.Mesh(new THREE.PlaneGeometry(SPAN - 0.4, railH, 1, 1), railMat);
     pane.position.set(OX, DECK_Y + railH / 2, zR);
     pane.name = 'cityhallOverpassRail';
     g.add(pane);
-    // white posts every ~3 m
     for (let x = xW + 1; x <= xE - 1; x += 3.0) {
       bag.box(x, DECK_Y + railH / 2, zR, 0.06, railH, 0.06, 0, WHITE);
     }
-    bag.box(OX, DECK_Y + railH + 0.04, zR, SPAN - 0.2, 0.07, 0.07, 0, WHITE); // handrail
-    bag.box(OX, DECK_Y + 0.04, zR, SPAN - 0.2, 0.06, 0.08, 0, WHITE); // bottom rail
+    bag.box(OX, DECK_Y + railH + 0.04, zR, SPAN - 0.2, 0.07, 0.07, 0, WHITE);
+    bag.box(OX, DECK_Y + 0.04, zR, SPAN - 0.2, 0.06, 0.08, 0, WHITE);
   }
 
-  // Inclined white pylon/mast at west end — leans away from deck (blade / A feel)
-  const pylX = xW - 1.8;
-  const pylH = 20.0;
-  const lean = 5.5; // strong lean away from deck
-  // Tapered blade: stacked boxes leaning west (A/blade silhouette)
-  for (let i = 0; i < 12; i++) {
-    const t0 = i / 12, t1 = (i + 1) / 12;
-    const y0 = t0 * pylH, y1 = t1 * pylH;
-    const x0 = pylX - lean * t0, x1 = pylX - lean * t1;
-    const cx = (x0 + x1) / 2;
-    const cy = (y0 + y1) / 2;
-    const thick = 1.5 - t0 * 1.05;
-    const depth = 2.8 - t0 * 1.5;
-    bag.box(cx, cy, OZ, Math.max(0.35, thick), y1 - y0 + 0.05, Math.max(0.6, depth), 0, WHITE);
-  }
-  // Open A-slot through mid blade (darker inset)
-  for (let i = 2; i < 10; i++) {
-    const t0 = i / 12, t1 = (i + 1) / 12;
-    const y0 = t0 * pylH, y1 = t1 * pylH;
-    const cx = pylX - lean * ((t0 + t1) / 2);
-    const cy = (y0 + y1) / 2;
-    bag.box(cx + 0.15, cy, OZ, 0.25, y1 - y0 + 0.02, 1.1 - t0 * 0.4, 0, '#d0d4d8');
-  }
-  // Sculptural curved base footing
-  bag.box(pylX + 0.6, 0.4, OZ, 3.8, 0.8, 4.0, 0, WHITE2);
-  bag.cyl(pylX + 0.3, 0.18, OZ, 2.5, 0.35, 12, WHITE2);
-
-  // Stay cables: fan from pylon top to deck edge (both sides)
   const cableMat = new THREE.MeshBasicMaterial({ color: '#f8fafc' });
-  const cableTop = { x: pylX - lean * 0.94, y: pylH * 0.94, z: OZ };
-  const N_CABLES = 14;
-  for (let i = 0; i < N_CABLES; i++) {
-    const u = (i + 0.5) / N_CABLES;
-    const ax = xW + 1.5 + u * (SPAN - 3.0);
-    for (const zs of [-1, 1]) {
-      const az = OZ + zs * (DECK_W / 2 - 0.05);
-      const ay = DECK_Y + 0.05;
-      const dx = ax - cableTop.x, dy = ay - cableTop.y, dz = az - cableTop.z;
-      const len = Math.hypot(dx, dy, dz) || 1;
-      const mid = new THREE.Vector3(
-        (ax + cableTop.x) / 2, (ay + cableTop.y) / 2, (az + cableTop.z) / 2,
-      );
-      const cyl = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.025, 0.025, len, 5),
-        cableMat,
-      );
-      cyl.position.copy(mid);
-      cyl.quaternion.setFromUnitVectors(
-        new THREE.Vector3(0, 1, 0),
-        new THREE.Vector3(dx / len, dy / len, dz / len),
-      );
-      cyl.name = 'cityhallStayCable';
-      g.add(cyl);
-    }
-  }
-
-  // Abutment pads only (no mid-span piers — deck hangs on stays)
-  bag.box(xW + 0.8, 0.25, OZ, 2.2, 0.5, DECK_W + 0.6, 0, WHITE2);
-  bag.box(xE - 0.8, 0.25, OZ, 2.2, 0.5, DECK_W + 0.6, 0, WHITE2);
-
-  function addEndAccess(endX, sideSign) {
-    // White enclosed elevator tower
-    const ex = endX + sideSign * 4.2;
-    const ez = OZ - sideSign * 0.2;
-    const EH = DECK_Y + 2.8;
-    bag.box(ex, EH / 2, ez, 3.0, EH, 3.0, 0, WHITE);
-    bag.box(ex, EH + 0.25, ez, 3.3, 0.5, 3.3, 0, WHITE2);
-    // Elevator glass door face
-    const eg = new THREE.Mesh(
-      new THREE.PlaneGeometry(1.6, 2.4),
-      new THREE.MeshStandardMaterial({ color: '#c5dde0', transparent: true, opacity: 0.45, side: THREE.DoubleSide }),
+  function addCable(ax, ay, az, bx, by, bz) {
+    const dx = bx - ax, dy = by - ay, dz = bz - az;
+    const len = Math.hypot(dx, dy, dz) || 1;
+    const cyl = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.022, len, 5), cableMat);
+    cyl.position.set((ax + bx) / 2, (ay + by) / 2, (az + bz) / 2);
+    cyl.quaternion.setFromUnitVectors(
+      new THREE.Vector3(0, 1, 0),
+      new THREE.Vector3(dx / len, dy / len, dz / len),
     );
-    eg.position.set(ex, 1.35, ez + 1.52 * (sideSign > 0 ? -1 : 1));
-    // face toward approach
-    if (sideSign > 0) eg.rotation.y = Math.PI;
-    g.add(eg);
-    elevators.push({ x: ex, z: ez, deckY: DECK_Y, r: 1.55 });
-
-    // Curved / spiral stair tower (white) — stepped quarter-turns rising to deck
-    const steps = 16;
-    const stairR = 2.35;
-    const scx = endX + sideSign * 1.2;
-    const scz = OZ + 5.2; // well off roadway so fins ≠ under-deck piers
-    for (let i = 0; i < steps; i++) {
-      const t0 = i / steps;
-      const ang = sideSign * (t0 * Math.PI * 1.15 - 0.2);
-      const yTop = DECK_Y * (t0 + 1 / steps);
-      const x = scx + Math.cos(ang) * stairR;
-      const z = scz + Math.sin(ang) * stairR * 0.85;
-      bag.box(x, yTop - 0.1, z, 1.15, 0.18, 0.7, -ang, WHITE);
-      heights.push({
-        kind: 'stair',
-        x0: x - 0.7, x1: x + 0.7,
-        z0: z - 0.55, z1: z + 0.55,
-        y: yTop,
-      });
-      // outer rail post
-      bag.box(x + Math.cos(ang) * 0.45, yTop / 2 + 0.2, z + Math.sin(ang) * 0.45, 0.07, Math.max(0.3, yTop), 0.07, 0, WHITE);
-    }
-    // Spiral enclosure hints (vertical white fins)
-    for (let k = 0; k < 8; k++) {
-      const a = (k / 8) * Math.PI * 2;
-      bag.box(scx + Math.cos(a) * (stairR + 0.7), DECK_Y * 0.55, scz + Math.sin(a) * (stairR * 0.85 + 0.5), 0.12, DECK_Y * 1.05, 0.35, -a, WHITE2);
-    }
-    // Deck link from stair head / elevator to main span
-    bag.box((endX + ex) / 2, DECK_Y - 0.08, OZ, Math.abs(ex - endX), 0.18, DECK_W * 0.95, 0, WHITE);
-    // Short stair flight from ground into spiral foot (approach)
-    for (let i = 0; i < 6; i++) {
-      const t0 = i / 6;
-      const yTop = (DECK_Y * 0.22) * (t0 + 1 / 6);
-      const x = scx - sideSign * (2.5 - t0 * 2.0);
-      const z = scz + 1.2;
-      bag.box(x, yTop - 0.09, z, 0.85, 0.16, 1.1, 0, WHITE);
-      heights.push({
-        kind: 'stair',
-        x0: x - 0.5, x1: x + 0.5,
-        z0: z - 0.65, z1: z + 0.65,
-        y: yTop,
-      });
-    }
+    cyl.name = 'cityhallStayCable';
+    g.add(cyl);
   }
-  addEndAccess(xW, -1);
-  addEndAccess(xE, +1);
+
+  /** Mirror-symmetric end: A-frame pylon + stays + stair ramp + elevator (sideSign -1 west / +1 east). */
+  function addSymmetricEnd(endX, sideSign) {
+    // A-frame: two legs in Z, meeting at apex; leans away from span in X
+    const baseX = endX + sideSign * 0.6;
+    const apexX = endX + sideSign * 6.0; // lean away from deck
+    const apexY = 18.5;
+    const legSpread = 7.0; // wide V opening so A-frame reads clearly
+    const SEG = 16;
+    for (const zSign of [-1, 1]) {
+      for (let i = 0; i < SEG; i++) {
+        const t0 = i / SEG, t1 = (i + 1) / SEG;
+        const x0 = baseX + (apexX - baseX) * t0;
+        const x1 = baseX + (apexX - baseX) * t1;
+        const z0 = OZ + zSign * (legSpread / 2) * (1 - t0);
+        const z1 = OZ + zSign * (legSpread / 2) * (1 - t1);
+        const y0 = apexY * t0, y1 = apexY * t1;
+        const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2, cz = (z0 + z1) / 2;
+        // Thin legs so hollow A opening is obvious
+        const thick = 0.42 - t0 * 0.16;
+        const depth = 0.55 - t0 * 0.2;
+        bag.box(cx, cy, cz, Math.max(0.22, thick), Math.max(0.22, y1 - y0 + 0.05), Math.max(0.28, depth), 0, WHITE);
+      }
+    }
+    // Crossbeam near apex (opening below)
+    bag.box(apexX - sideSign * 0.4, apexY * 0.86, OZ, 0.5, 0.32, 1.8, 0, WHITE2);
+    bag.box(apexX - sideSign * 0.15, apexY * 0.96, OZ, 0.4, 0.45, 0.85, 0, WHITE);
+    // Base footing pads under each leg
+    for (const zSign of [-1, 1]) {
+      bag.box(baseX, 0.28, OZ + zSign * (legSpread / 2), 2.0, 0.55, 1.8, 0, WHITE2);
+    }
+
+    // Elevator glass cabin between A-frame legs (tryElevator)
+    const ex = baseX + sideSign * 0.2;
+    const ez = OZ;
+    const EH = DECK_Y + 2.2;
+    bag.box(ex, EH / 2, ez, 2.0, EH, 2.0, 0, WHITE);
+    bag.box(ex, EH + 0.18, ez, 2.2, 0.36, 2.2, 0, WHITE2);
+    const eg = new THREE.Mesh(
+      new THREE.PlaneGeometry(1.5, 2.3),
+      new THREE.MeshStandardMaterial({ color: '#c8e0e4', transparent: true, opacity: 0.5, side: THREE.DoubleSide }),
+    );
+    eg.position.set(ex - sideSign * 1.22, 1.3, ez);
+    eg.rotation.y = sideSign > 0 ? 0 : Math.PI;
+    g.add(eg);
+    elevators.push({ x: ex, z: ez, deckY: DECK_Y, r: 1.45 });
+
+    // Stay cables: fan from apex to this half of the deck (both edges)
+    const N_CABLES = 11;
+    const halfFrom = endX;
+    const halfTo = OX; // toward midspan
+    for (let i = 0; i < N_CABLES; i++) {
+      const u = (i + 0.35) / N_CABLES;
+      const ax = halfFrom + (halfTo - halfFrom) * u;
+      for (const zs of [-1, 1]) {
+        addCable(apexX, apexY * 0.97, OZ, ax, DECK_Y + 0.06, OZ + zs * (DECK_W / 2 - 0.05));
+      }
+    }
+
+    // Stair ramp descending alongside deck (south side), with teal glass railing — walkable
+    const steps = 14;
+    const run = 12.0;
+    const stairZ = OZ + DECK_W / 2 + 1.6; // beside deck
+    for (let i = 0; i < steps; i++) {
+      const yTop = DECK_Y * (1 - (i + 1) / steps);
+      const yBot = DECK_Y * (1 - i / steps);
+      const rise = Math.max(0.16, yBot - yTop);
+      // Stairs continue outward from deck end (away from midspan)
+      const xx = endX + sideSign * (0.8 + run * ((i + 0.5) / steps));
+      bag.box(xx, yTop - rise * 0.4, stairZ, run / steps + 0.08, Math.max(0.16, rise * 0.85), 1.5, 0, WHITE);
+      heights.push({
+        kind: 'stair',
+        x0: xx - run / steps * 0.55, x1: xx + run / steps * 0.55,
+        z0: stairZ - 0.85, z1: stairZ + 0.85,
+        y: yTop,
+      });
+      // glass rail posts along outer edge
+      bag.box(xx, yTop / 2 + 0.15, stairZ + 0.7, 0.06, Math.max(0.25, yTop + 0.9), 0.06, 0, WHITE);
+    }
+    // Teal glass pane along stair outer side
+    {
+      const sx0 = endX + sideSign * 0.8;
+      const sx1 = endX + sideSign * (0.8 + run);
+      const scx = (sx0 + sx1) / 2;
+      // approximate vertical plane (not slanted with stair — good enough visual)
+      const pane = new THREE.Mesh(
+        new THREE.PlaneGeometry(run + 0.4, DECK_Y * 0.55 + 1.0, 1, 1),
+        railMat,
+      );
+      pane.position.set(scx, (DECK_Y * 0.55 + 1.0) / 2, stairZ + 0.72);
+      pane.name = 'cityhallOverpassRail';
+      g.add(pane);
+      bag.box(scx, DECK_Y * 0.55 + 1.0, stairZ + 0.72, run + 0.4, 0.07, 0.07, 0, WHITE);
+    }
+    // Handrail posts on inner stair edge + link to deck
+    for (let i = 0; i <= steps; i++) {
+      const t0 = i / steps;
+      const yTop = DECK_Y * (1 - t0);
+      const xx = endX + sideSign * (0.8 + run * t0);
+      bag.box(xx, yTop + 0.55, stairZ - 0.7, 0.06, 0.08, 0.06, 0, WHITE);
+      bag.box(xx, yTop + 0.55, stairZ + 0.7, 0.06, 0.08, 0.06, 0, WHITE);
+    }
+    // Deck spur from main span to elevator / stair head
+    bag.box(endX + sideSign * 1.4, DECK_Y - 0.08, OZ, 3.2, 0.16, DECK_W + 0.4, 0, WHITE);
+    // Short landing between elevator and stair head
+    bag.box(endX + sideSign * 1.4, DECK_Y - 0.08, (OZ + stairZ) / 2, 2.2, 0.16, Math.abs(stairZ - OZ), 0, WHITE);
+    heights.push({
+      kind: 'deck',
+      x0: Math.min(endX, endX + sideSign * 2.8) - 0.3,
+      x1: Math.max(endX, endX + sideSign * 2.8) + 0.3,
+      z0: OZ - DECK_W / 2 - 0.2,
+      z1: stairZ + 0.9,
+      y: DECK_Y,
+    });
+  }
+
+  addSymmetricEnd(xW, -1);
+  addSymmetricEnd(xE, +1);
+
+  // Abutment pads under deck ends
+  bag.box(xW + 0.6, 0.22, OZ, 1.8, 0.44, DECK_W + 0.4, 0, WHITE2);
+  bag.box(xE - 0.6, 0.22, OZ, 1.8, 0.44, DECK_W + 0.4, 0, WHITE2);
+
   heights.push({
     kind: 'deck',
     x0: xW - 0.4, x1: xE + 0.4,
@@ -2683,7 +2719,7 @@ function buildPlazaExtras(data, M) {
     y: DECK_Y,
   });
 
-  // Static car under span (clearance proof)
+  // Static car under span
   bag.box(OX + 1.5, 0.55, OZ + 6.5, 4.4, 1.1, 1.9, 0.15, '#2a5fad');
   bag.box(OX + 1.5, 1.25, OZ + 6.5, 2.2, 0.7, 1.75, 0.15, '#1a3a6a');
   bag.box(OX + 1.5, 1.3, OZ + 6.5, 1.8, 0.45, 1.7, 0.15, '#7ec8e8');

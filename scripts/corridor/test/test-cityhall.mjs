@@ -107,41 +107,48 @@ ok('filter no-op without data');
   built.group.traverse((o) => { if (o.name) names.push(o.name); });
   assert.ok(names.includes('cityhallStonePlaza'), 'stone plaza');
   assert.ok(names.includes('cityhallFloorGrates'), 'floor fountain grates');
-  assert.ok(names.includes('cityhallPlazaExtrasBody'), 'bus/overpass body');
+  assert.ok(names.includes('cityhallStreetTreeCrowns'), 'street trees near lamps');
+  assert.ok(names.includes('cityhallPlazaExtrasBody'), 'overpass body');
+  let grateN = 0;
+  built.group.traverse((o) => { if (o.name === 'cityhallFloorGrates' && o.isInstancedMesh) grateN = o.count; });
+  assert.ok(grateN >= 12 && grateN <= 20, 'NW fountain cluster size ' + grateN);
+  assert.ok(!built.group.userData?.busShelter, 'custom blue bus shelter removed');
   // Overpass deck height
   const deckY = built.groundHeight(1810, -5765);
   assert.ok(deckY != null && deckY > 5 && deckY < 6.5, 'overpass deck y ' + deckY);
-  // West/east elevator towers at end abutments (cable-stayed)
-  const el = built.tryElevator?.(1786.8, -5765, 0);
+  // West/east elevators inside mirrored A-frame pylons
+  const el = built.tryElevator?.(1790.2, -5765, 0);
   assert.ok(el && el.y > 5, 'elevator up ' + JSON.stringify(el));
-  const elEast = built.tryElevator?.(1833.2, -5765, 0);
+  const elEast = built.tryElevator?.(1829.8, -5765, 0);
   assert.ok(elEast && elEast.y > 5, 'east elevator up ' + JSON.stringify(elEast));
   built.dispose();
   ok('plaza extras stone/fountain/overpass/elevator');
 }
 
 
-// 5d) sealed G1 glass volume — enter only via doors; former gap closed
+// 5d) G1 front + BACK glass — no side walls; enter via doors
 {
   const built = buildSeongnamCityHall(data);
-  const zFace = Math.max(...data.building.o.map((p) => p[1])) + 0.22;
-  assert.equal(built.isBlocked(1545, zFace, 0.4), true, 'west G1 blocks');
+  const zs = data.building.o.map((p) => p[1]);
+  const zFace = Math.max(...zs) + 0.22;
+  const zBack = Math.min(...zs) - 0.22;
+  assert.equal(built.isBlocked(1545, zFace, 0.4), true, 'west G1 front blocks');
   assert.equal(built.isBlocked(1585, zFace, 0.4), true, 'former gap now glass');
-  assert.equal(built.isBlocked(1650, zFace, 0.4), true, 'main G1 blocks');
+  assert.equal(built.isBlocked(1650, zFace, 0.4), true, 'main G1 front blocks');
   assert.equal(built.isBlocked(1607, zFace, 0.4), false, 'door bay open');
-  // Back / side walls of sealed volume
-  const zBack = Math.max(...data.building.o.map((p) => p[1])) - 11;
-  assert.equal(built.isBlocked(1600, zBack, 0.4), true, 'north/back wall blocks');
-  assert.equal(built.isBlocked(1524, (zFace + zBack) / 2, 0.4), true, 'west end wall blocks');
+  // Back facade glass (pond side) blocks; side corridor must stay walkable
+  assert.equal(built.isBlocked(1600, zBack, 0.4), true, 'back facade glass blocks');
+  assert.equal(built.isBlocked(1524, (zFace + zBack) / 2, 0.4), false, 'no west side wall — corridor open');
   const names = [];
   built.group.traverse((o) => { if (o.name) names.push(o.name); });
   assert.ok(names.includes('cityhallGroundFloor'), 'ground floor group');
   assert.ok(names.includes('cityhallRevolvingDoor'), 'revolving door');
   assert.ok(names.includes('cityhallAutoDoor'), 'auto door');
   assert.ok(names.includes('cityhallG1Transom'), 'transom above doors');
+  assert.ok(names.includes('cityhallG1BackGlass'), 'back curtain glass');
   assert.ok(names.includes('cityhallStayCable') || names.includes('cityhallOverpassRail'), 'cable-stayed overpass');
   built.dispose();
-  ok('sealed G1 glass/doors/transom + overpass');
+  ok('G1 front+back glass/doors; no side walls');
 }
 
 // 6) createCityHall wrapper
