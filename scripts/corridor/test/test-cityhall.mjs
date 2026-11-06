@@ -58,7 +58,7 @@ ok('filter no-op without data');
   scene.add(built.group);
   const names = [];
   built.group.traverse((o) => { if (o.name) names.push(o.name); });
-  for (const need of ['cityhallBuilding', 'cityhallBlueFacade', 'cityhallFountain', 'cityhallDeck', 'cityhallSeats', 'cityhallJets', 'cityhallBanners', 'cityhallParking', 'cityhallVehicleGate']) {
+  for (const need of ['cityhallBuilding', 'cityhallBlueFacade', 'cityhallFountain', 'cityhallDeck', 'cityhallSeats', 'cityhallJets', 'cityhallBanners', 'cityhallParking', 'cityhallVehicleGate', 'cityhallWalker', 'cityhallWalkerBody']) {
     assert.ok(names.includes(need), 'missing ' + need);
   }
   assert.ok(built.stats.meshes >= 8, 'meshes ' + built.stats.meshes);
@@ -69,6 +69,34 @@ ok('filter no-op without data');
   built.update(0.016, 2.0);
   built.dispose();
   ok(`builder meshes=${built.stats.meshes} instanced=${built.stats.instanced}`);
+}
+
+
+// 5b) honeycomb walker at west plaza + collision + groundHeight deck/tier
+{
+  const built = buildSeongnamCityHall(data);
+  const names = [];
+  built.group.traverse((o) => { if (o.name) names.push(o.name); });
+  assert.ok(names.includes('cityhallWalkerBody'), 'walker body mesh');
+  assert.ok(names.includes('cityhallWalkerBase'), 'walker base mesh');
+  const pr = data.promenade;
+  const wx = data.walker?.x ?? (pr.to[0] - 48);
+  const wz = data.walker?.z ?? (pr.to[1] + 4);
+  assert.equal(built.isBlocked(wx, wz, 0.4), true, 'walker base blocks center');
+  assert.equal(built.isBlocked(wx + 8, wz + 8, 0.4), false, 'clear of walker');
+  const bx = 1694, zMid = -5922, R = 26;
+  const deckX = bx + ((R + 0.7 + R + 5.2) / 2);
+  const deckY = built.groundHeight(deckX, zMid);
+  assert.ok(deckY != null && deckY > 0.35 && deckY < 0.5, 'deck groundHeight ' + deckY);
+  const nLegZ0 = -5948 - 2.8, tierD = 1.85;
+  const tierTopZ = nLegZ0 - 2.5 * tierD;
+  const seatX = 1698 + 40 * 0.55;
+  const tierY = built.groundHeight(seatX, tierTopZ);
+  assert.ok(tierY != null && tierY > 1.2 && tierY < 1.4, 'top tier groundHeight ' + tierY);
+  const seat = built.findSeat(seatX, nLegZ0 - 2.32 * tierD);
+  assert.ok(seat && Math.abs(seat.y - 1.32) < 0.05, 'top tier seat.y ' + seat?.y);
+  built.dispose();
+  ok(`walker @ ${wx.toFixed(0)},${wz.toFixed(0)} collision+heights`);
 }
 
 // 6) createCityHall wrapper

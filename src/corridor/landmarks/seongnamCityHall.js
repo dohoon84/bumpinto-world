@@ -139,6 +139,8 @@ function mats() {
     line: B(C.line),
     curb: S(C.curb, { roughness: 0.7, metalness: 0.05 }),
     sculpture: S(C.sculpture, { roughness: 0.35, metalness: 0.4, emissive: C.sculpture, emissiveIntensity: 0.12, envMapIntensity: env ? 0.7 : 0 }),
+    steelHoneycomb: null,
+    steelPlate: S('#b8bcc2', { roughness: 0.4, metalness: 0.85, envMapIntensity: env ? 0.7 : 0 }),
     kiosk: S(C.kiosk, { roughness: 0.5, metalness: 0.2 }),
     slantFace: S(C.slantFace, { roughness: 0.55, metalness: 0.08 }),
     slantEdge: S(C.slantEdge, { roughness: 0.45, metalness: 0.05 }),
@@ -237,10 +239,43 @@ function mats() {
     shared._bannerTex = shared.banner.map;
     shared.jet.map = jetGradTex();
     shared.jet.needsUpdate = true;
+    const hexMap = canvasTex(256, 256, (x, w, h) => {
+      x.fillStyle = '#050608';
+      x.fillRect(0, 0, w, h);
+      const cell = 18;
+      const rowH = cell * 0.866;
+      const rOut = 7.2, rIn = 4.4;
+      for (let row = -1; row < h / rowH + 2; row++) {
+        for (let col = -1; col < w / cell + 2; col++) {
+          const cx = col * cell + (row & 1 ? cell * 0.5 : 0);
+          const cy = row * rowH;
+          x.beginPath(); x.arc(cx, cy, rOut, 0, Math.PI * 2);
+          x.fillStyle = '#d8dce2'; x.fill();
+          x.beginPath(); x.arc(cx, cy, rIn, 0, Math.PI * 2);
+          x.fillStyle = '#040507'; x.fill();
+          x.beginPath(); x.arc(cx, cy, rOut, 0, Math.PI * 2);
+          x.strokeStyle = 'rgba(255,255,255,0.35)'; x.lineWidth = 1.2; x.stroke();
+        }
+      }
+    }, 3.2, 5.5);
+    shared.steelHoneycomb = new THREE.MeshStandardMaterial({
+      color: '#c4c8ce',
+      map: hexMap,
+      alphaTest: 0.28,
+      transparent: false,
+      roughness: 0.35,
+      metalness: 0.9,
+      envMap: env,
+      envMapIntensity: env ? 0.9 : 0,
+      side: THREE.DoubleSide,
+      depthWrite: true,
+    });
+    shared._honeycombTex = hexMap;
   } else {
     shared.glassCurtain = S(C.glassLite);
     shared.plaza = S(C.plaza);
     shared.banner = S(C.banner, { side: THREE.DoubleSide });
+    shared.steelHoneycomb = S('#c4c8ce', { roughness: 0.35, metalness: 0.9 });
   }
   return shared;
 }
@@ -1218,6 +1253,8 @@ function buildPondMusicPlaza(data, M) {
 
   // --- Surface height: wooden deck + ㄱ tiers (도훈: legs were sinking) ---
   const DECK_Y = 0.44; // match plank top (~0.43)
+  // Avatar leg capsules end ~0.04 above group origin — stand slightly lower so soles kiss the surface
+  const FOOT_EPS = 0.03;
   const TIER_TOP = (ti) => tierH * (ti + 1);
 
   function onDeck(x, z) {
@@ -1266,7 +1303,7 @@ function buildPondMusicPlaza(data, M) {
     const th = tierHeightAt(x, z);
     if (th != null) y = th;
     if (onDeck(x, z)) y = y == null ? DECK_Y : Math.max(y, DECK_Y);
-    return y;
+    return y == null ? null : y - FOOT_EPS;
   }
 
   function findSeat(px, pz) {
@@ -1694,6 +1731,166 @@ function buildVehicleGate(data, M) {
 }
 
 
+
+/** West-plaza honeycomb-steel walking figure (~8.5 m). Tube-cell look via texture/alphaTest; 1–3 draws. */
+function buildWalkingSculpture(data, M) {
+  const g = new THREE.Group(); g.name = 'cityhallWalker';
+  const pr = data.promenade || { to: [1645, -5900] };
+  const sx = data.walker?.x ?? (pr.to[0] - 48);
+  const sz = data.walker?.z ?? (pr.to[1] + 4);
+  const yaw = data.walker?.ry ?? 0.35;
+
+  const steel = M.steelHoneycomb || M.steelPlate;
+  const plateMat = M.steelPlate || steel;
+
+  const bodyGeos = [];
+  const baseGeos = [];
+  const plateGeos = [];
+  const dummy = new THREE.Object3D();
+
+  function take(geo, bag, lx, ly, lz, rx = 0, ry = 0, rz = 0, scx = 1, scy = 1, scz = 1) {
+    dummy.position.set(lx, ly, lz);
+    dummy.rotation.set(rx, ry, rz);
+    dummy.scale.set(scx, scy, scz);
+    dummy.updateMatrix();
+    const g2 = geo.clone();
+    g2.applyMatrix4(dummy.matrix);
+    bag.push(g2);
+  }
+
+  {
+    const plate = new THREE.BoxGeometry(4.6, 0.06, 3.4);
+    take(plate, plateGeos, 0, 0.03, 0);
+    plate.dispose();
+  }
+  {
+    const base = new THREE.CylinderGeometry(1.7, 1.75, 0.38, 20);
+    take(base, baseGeos, 0, 0.25, 0);
+    base.dispose();
+    const lip = new THREE.CylinderGeometry(1.55, 1.55, 0.12, 20);
+    take(lip, baseGeos, 0, 0.48, 0);
+    lip.dispose();
+  }
+
+  const pedFront = { x: 0.55, z: 0.55, h: 0.55, r: 0.48 };
+  const pedRear = { x: -0.45, z: -0.55, h: 0.95, r: 0.48 };
+  const baseTop = 0.54;
+  for (const ped of [pedFront, pedRear]) {
+    const cyl = new THREE.CylinderGeometry(ped.r, ped.r * 1.05, ped.h, 14);
+    take(cyl, baseGeos, ped.x, baseTop + ped.h / 2, ped.z);
+    cyl.dispose();
+  }
+  const yFront = baseTop + pedFront.h;
+  const yRear = baseTop + pedRear.h;
+
+  {
+    const thigh = new THREE.CapsuleGeometry(0.28, 1.35, 4, 8);
+    take(thigh, bodyGeos, pedFront.x, yFront + 1.45, pedFront.z - 0.05, 0.45, 0, 0.08, 1, 1.25, 1);
+    thigh.dispose();
+    const shin = new THREE.CapsuleGeometry(0.22, 1.15, 4, 8);
+    take(shin, bodyGeos, pedFront.x + 0.05, yFront + 0.55, pedFront.z + 0.15, -0.15, 0, 0);
+    shin.dispose();
+    const foot = new THREE.BoxGeometry(0.45, 0.22, 0.85);
+    take(foot, bodyGeos, pedFront.x, yFront + 0.14, pedFront.z + 0.15);
+    foot.dispose();
+  }
+  {
+    const thigh = new THREE.CapsuleGeometry(0.28, 1.45, 4, 8);
+    take(thigh, bodyGeos, pedRear.x, yRear + 1.55, pedRear.z + 0.1, -0.7, 0, -0.05, 1, 1.3, 1);
+    thigh.dispose();
+    const shin = new THREE.CapsuleGeometry(0.22, 1.2, 4, 8);
+    take(shin, bodyGeos, pedRear.x - 0.05, yRear + 0.55, pedRear.z - 0.2, 0.35, 0, 0);
+    shin.dispose();
+    const foot = new THREE.BoxGeometry(0.45, 0.22, 0.85);
+    take(foot, bodyGeos, pedRear.x, yRear + 0.14, pedRear.z - 0.15);
+    foot.dispose();
+  }
+  {
+    const hips = new THREE.BoxGeometry(1.15, 0.55, 0.7);
+    take(hips, bodyGeos, 0.05, 4.05, 0.05, 0.12, 0.08, 0);
+    hips.dispose();
+  }
+  {
+    const torso = new THREE.CapsuleGeometry(0.55, 1.7, 6, 10);
+    take(torso, bodyGeos, 0.08, 5.85, 0.4, 0.42, 0.12, 0.06, 1.1, 1.15, 0.9);
+    torso.dispose();
+    const chest = new THREE.BoxGeometry(1.05, 1.1, 0.65);
+    take(chest, bodyGeos, 0.1, 6.05, 0.5, 0.4, 0.1, 0);
+    chest.dispose();
+  }
+  {
+    const head = new THREE.CapsuleGeometry(0.38, 0.35, 4, 8);
+    take(head, bodyGeos, 0.25, 7.95, 1.1, 0.35, 0.1, 0);
+    head.dispose();
+  }
+  {
+    const uArm = new THREE.CapsuleGeometry(0.16, 0.85, 4, 6);
+    take(uArm, bodyGeos, -0.75, 6.25, 0.6, 0.9, 0, 0.55);
+    take(uArm, bodyGeos, 0.9, 6.1, 0.95, 0.55, 0, -0.7);
+    uArm.dispose();
+    const lArm = new THREE.CapsuleGeometry(0.14, 0.75, 4, 6);
+    take(lArm, bodyGeos, -0.6, 5.35, 1.05, 0.2, 0, 0.4);
+    take(lArm, bodyGeos, 0.75, 5.25, 1.4, -0.15, 0, -0.35);
+    lArm.dispose();
+  }
+
+  function mergeBag(geos, mat, name) {
+    if (!geos.length) return null;
+    const merged = mergeGeometries(geos, false);
+    for (const x of geos) x.dispose();
+    if (!merged) return null;
+    if (!merged.attributes.uv) {
+      const n = merged.attributes.position.count;
+      const uv = new Float32Array(n * 2);
+      const pos = merged.attributes.position;
+      for (let i = 0; i < n; i++) {
+        uv[i * 2] = pos.getX(i) * 0.35;
+        uv[i * 2 + 1] = pos.getY(i) * 0.35;
+      }
+      merged.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+    }
+    merged.computeVertexNormals();
+    const m = new THREE.Mesh(merged, mat);
+    m.name = name; m.castShadow = m.receiveShadow = true;
+    return m;
+  }
+
+  const plateM = mergeBag(plateGeos, plateMat, 'cityhallWalkerPlate');
+  const baseM = mergeBag(baseGeos, steel, 'cityhallWalkerBase');
+  const bodyM = mergeBag(bodyGeos, steel, 'cityhallWalkerBody');
+  if (plateM) g.add(plateM);
+  if (baseM) g.add(baseM);
+  if (bodyM) g.add(bodyM);
+
+  g.position.set(sx, 0, sz);
+  g.rotation.y = yaw;
+
+  const cos = Math.cos(yaw), sin = Math.sin(yaw);
+  function localToWorld(lx, lz) {
+    return [sx + lx * cos - lz * sin, sz + lx * sin + lz * cos];
+  }
+  const [bx, bz] = localToWorld(0, 0);
+  const [pfx, pfz] = localToWorld(pedFront.x, pedFront.z);
+  const [prx, prz] = localToWorld(pedRear.x, pedRear.z);
+  const colliders = [
+    { x: bx, z: bz, r: 1.85 },
+    { x: pfx, z: pfz, r: 0.65 },
+    { x: prx, z: prz, r: 0.65 },
+  ];
+  g.userData.walkerColliders = colliders;
+  g.userData.walkerPos = { x: sx, z: sz };
+
+  return {
+    group: g,
+    isBlocked(x, z, r = 0.4) {
+      for (const c of colliders) {
+        if (Math.hypot(x - c.x, z - c.z) < c.r + r) return true;
+      }
+      return false;
+    },
+  };
+}
+
 /** Merge child meshes that share MeshStandard/Lambert Basic with vertex colors into fewer draws. */
 function mergeStaticGroup(group, name = 'merged') {
   const byKey = new Map();
@@ -1733,7 +1930,7 @@ function mergeStaticGroup(group, name = 'merged') {
 export function buildSeongnamCityHall(data, { env = null, glbUrl = null } = {}) {
   const M = mats();
   if (env) {
-    for (const k of ['glassBlue', 'glassCurtain', 'glassLite', 'water', 'frame', 'solar', 'sculpture']) {
+    for (const k of ['glassBlue', 'glassCurtain', 'glassLite', 'water', 'frame', 'solar', 'sculpture', 'steelHoneycomb', 'steelPlate']) {
       if (M[k]) { M[k].envMap = env; M[k].envMapIntensity = (M[k].envMapIntensity || 0.5) * 1.1; }
     }
   }
@@ -1754,6 +1951,7 @@ export function buildSeongnamCityHall(data, { env = null, glbUrl = null } = {}) 
   const landscape = buildLandscape(data, M);
   const parking = buildParking(data, M);
   const gate = buildVehicleGate(data, M);
+  const walker = buildWalkingSculpture(data, M);
   mergeStaticGroup(grounds, 'cityhallGroundsMerged');
   mergeStaticGroup(banners, 'cityhallBannersMerged');
   mergeStaticGroup(pond, 'cityhallPondMerged');
@@ -1763,7 +1961,7 @@ export function buildSeongnamCityHall(data, { env = null, glbUrl = null } = {}) 
   mergeStaticGroup(parking, 'cityhallParkingMerged');
   mergeStaticGroup(gate, 'cityhallGateMerged');
   // fountain + pondPlaza jets kept as instanced (animated)
-  root.add(grounds, banners, sign, pond, pondPlaza.group, fountain.group, landscape, parking, gate);
+  root.add(grounds, banners, sign, pond, pondPlaza.group, fountain.group, landscape, parking, gate, walker.group);
 
   let glbNight = null;
   let eveningOn = false;
@@ -1813,6 +2011,7 @@ export function buildSeongnamCityHall(data, { env = null, glbUrl = null } = {}) 
     isBlocked(x, z, r = 0.4) {
       if (disposed) return false;
       if (pondPlaza.isBlocked?.(x, z, r)) return true;
+      if (walker.isBlocked?.(x, z, r)) return true;
       const pr = CITYHALL_PILLAR_R + r;
       for (const [px, pz] of CITYHALL_PILLARS) {
         if (Math.hypot(x - px, z - pz) < pr) return true;
@@ -1827,10 +2026,9 @@ export function buildSeongnamCityHall(data, { env = null, glbUrl = null } = {}) 
     groundHeight(x, z) {
       if (disposed) return null;
       let y = pondPlaza.groundHeight?.(x, z) ?? null;
-      // Promenade bench pads (sit/stand on seat top)
       for (const b of grounds.userData?.promenadeBenches || []) {
         if (Math.hypot(x - b.x, z - b.z) < 1.15) {
-          const by = b.y ?? 0.44;
+          const by = (b.y ?? 0.44) - 0.03;
           y = y == null ? by : Math.max(y, by);
         }
       }
