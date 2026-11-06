@@ -292,7 +292,7 @@ export function createCorridorTraffic(root, { drive, crossings, terrain, terrain
   const COUNT = CARS + TDRIVE;
   const exits = stations.flatMap((s) => s.exits || []);
   if (extraExits?.length) exits.push(...extraExits); // [migeum-taxibike] 미금역 갓길 승차 지점(택시만 씀, 보행 NPC 힌트 exitPts 는 그대로)
-  const transit = { crossings: crossings.crossings, pedLight: crossings.pedLight, source: { vehicles: getBuses } };
+  const transit = { crossings: crossings.crossings, pedLight: crossings.pedLight, vehicleAllowed: crossings.vehicleAllowed, source: { vehicles: getBuses } }; // [tancheon-amenities]
   const inLB = (c) => liveBox && c.x >= liveBox.x0 && c.x <= liveBox.x1 && c.z >= liveBox.z0 && c.z <= liveBox.z1;
   const merged = liveDrive ? mergeLiveDrive(drive, liveDrive, liveBox) : { drive, added: 0 };
   const liveSigs = merged.added ? (liveCrossings || []).filter((c) => c.sig && inLB(c)) : [];

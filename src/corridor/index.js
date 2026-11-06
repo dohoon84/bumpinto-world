@@ -5,6 +5,7 @@
 // 라이브 정자 영역(liveBox + 탄천 띠) 안에는 아무것도 그리지 않으므로 기존 정자 화면/동작은 그대로다.
 import * as THREE from 'three';
 import { mergeTancheon, coveredFn, holeyGround, channelWaterMesh } from './tancheon.js';
+import { withTancheonStairs, mountTancheonAmenities } from './tancheonAmenities.js'; // [tancheon-amenities]
 import { buildDetailTile, buildLodTile, roadMesh, CAR_KINDS } from './tileMesh.js';
 import { applyTileCuts } from '../world/streams.js';
 import { buildCorridorCrossings } from './crossings.js';
@@ -46,7 +47,8 @@ export function corridorTerrainData(terrainData, corridorData) {
   if (!terrainData || !corridorData?.tancheon) return terrainData;
   const T0 = mergeTancheon(terrainData, corridorData.tancheon);
   if (T0 === terrainData) return T0;
-  const T = attachMainDrop(applyMigeumBank(T0, corridorData.migeumWater, terrainData), corridorData.pangyoWater); // [migeum-water] 미금 둑 위치 (없으면 T0 그대로) // [pangyo-water] 정자→판교 탄천 낙차 (없으면 T0 그대로)
+  const T1 = attachMainDrop(applyMigeumBank(T0, corridorData.migeumWater, terrainData), corridorData.pangyoWater); // [migeum-water] 미금 둑 위치 (없으면 T0 그대로) // [pangyo-water] 정자→판교 탄천 낙차 (없으면 T0 그대로)
+  const T = withTancheonStairs(T1); // [tancheon-amenities] 여수동 제방 계단 (?tcstairs=0 끄기)
   corridorData.terrainT = T;
   // [streams] 지류는 코리더 본류 축이 붙었을 때만 (합류 높이가 본류 단면에 기대므로)
   return corridorData.streams?.streams?.length ? { ...T, streams: corridorData.streams } : T;
@@ -105,11 +107,13 @@ export function createCorridor({ scene, corridorData, terrain, world, renderer, 
     for (const t of loaded) if (near(t, x, z, 40) && t.detail.onRoad(x, z)) return true;
     return false;
   };
-  const corridorBlocked = (x, z, r = 0.35) => {
+  let amenities = null; // [tancheon-amenities] crossings 만든 뒤 mount
+  const corridorBlocked = (x, z, r) => {
     for (const t of loaded) {
       if (!near(t, x, z, 120)) continue;
       for (const [dx, dz] of [[0, 0], [r, 0], [-r, 0], [0, r], [0, -r]]) if (t.detail.blocked(x + dx, z + dz)) return true;
     }
+    if (amenities?.blocks?.(x, z)) return true; // [tancheon-amenities] 반려견 울타리
     return false;
   };
   const onRoadAll = (x, z) => liveOnRoad(x, z) || corridorOnRoad(x, z);
@@ -282,6 +286,7 @@ export function createCorridor({ scene, corridorData, terrain, world, renderer, 
 
   // ---------- 횡단보도 · 랜드마크 ----------
   const crossings = buildCorridorCrossings(root, base.crossings, { getSimTime });
+  amenities = mountTancheonAmenities({ scene: root, overlay, terrain, crossings, getSimTime, params }); // [tancheon-amenities]
   const landmarks = createLandmarks(root, index.landmarks, renderer);
   const pangyoLm = corridorData.pangyo ? createPangyoLandmarks(corridorData.pangyo, { overlay }) : null; // [pangyo]
   const migeumLm = corridorData.migeum && !migeumSubwayDrawsEntrances() ? createPangyoLandmarks(corridorData.migeum, { overlay, prefix: 'migeum' }) : null; // [migeum] 같은 빌더(출입구만). [migeum-sub] 지하철이 출입구를 그리면 안 만듦
@@ -320,6 +325,7 @@ export function createCorridor({ scene, corridorData, terrain, world, renderer, 
   let rx = null, rz = null; // [perf-memory] 지난 프레임 위치(진행 방향 추정)
   const api = {
     root, bounds, stations, tiles, stats, crossings, landmarks, inLive,
+    get amenities() { return amenities; }, // [tancheon-amenities]
     pangyo: pangyoLm, // [pangyo] null 이면 꺼짐(?pangyo=0)
     migeum: migeumLm, // [migeum] null 이면 꺼짐(?migeum=0)
     get pangyoExpress() { return pangyoEx; }, // [pangyo-express] null 이면 꺼짐(?pangyoexpress=0 · ?pangyo=0) · [perf-memory] 지연 로드면 멀 때 null
@@ -353,6 +359,7 @@ export function createCorridor({ scene, corridorData, terrain, world, renderer, 
     get pangyoNpc() { return pangyoNpc; }, // [pangyo-npc]
     get migeumPeds() { return migeumPeds; }, get migeumNpc() { return migeumNpc; }, // [migeum-npc]
     update(dt, x, z, mode = 'follow') {
+      amenities?.update?.(dt); // [tancheon-amenities]
       if (!chTreesDone) { chTreesDone = true; stats.chTrees = chTrees(); }
       acc += dt;
       if (acc > 0.25 || mode !== lastMode) { acc = 0; lastMode = mode; stream(x, z, mode); }

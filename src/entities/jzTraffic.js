@@ -285,9 +285,16 @@ export class JzCars extends Taxis {
       if (ang > 0.25) { const R = Math.min(t.cum[i] - t.cum[i - 1], t.cum[i + 1] - t.cum[i]) / ang; limit = Math.min(limit, vAllow(d - 1, Math.max(3, Math.min((t.moto ? 14 : 12) * (1 - ang / 2), Math.sqrt((t.moto ? 3.2 : 2.5) * R))))); }
     }
     const front = t.s + t.hl;
-    if (this.transit) for (const q of t.sigQ) { // 신호: 보행 신호면 정지선 앞
+    if (this.transit) for (const q of t.sigQ) { // 신호: 보행 신호면 정지선 앞 · [tancheon-amenities] vehSig 면 차량 위상(좌회전 포함)
       const stopAt = q.s - ((q.c.depth || 2.2) + 2.3); if (stopAt < front - 1.5) continue; if (stopAt - front > 60) break;
-      if (this.transit.pedLight(q.c) !== 'red') { const l = vAllow(stopAt - front - 0.5); if (l < limit) { limit = l; why = 'sig'; } break; }
+      let stop = false;
+      if (q.c.vehSig && this.transit.vehicleAllowed) {
+        const hx = Math.sin(t.heading || 0), hz = Math.cos(t.heading || 0);
+        stop = !this.transit.vehicleAllowed(q.c, hx, hz);
+      } else {
+        stop = this.transit.pedLight(q.c) !== 'red';
+      }
+      if (stop) { const l = vAllow(stopAt - front - 0.5); if (l < limit) { limit = l; why = 'sig'; } break; }
     }
     if (this.pedPts) for (const p of this.pedPts) { // 차도 위 보행자(횡단 중인 NPC)
       const rx = p.x - x, rz = p.z - z; if (Math.abs(rx) > 20 || Math.abs(rz) > 20) continue;
