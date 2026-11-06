@@ -169,65 +169,63 @@ def build():
         if b <= a: continue
         glass.append(prism(f'SF{i}', a, b, y_s - 0.15, PH + 1.5, BODY_H - 1.5, y_s - d, m_fold, 2.2))
 
-    # --- West wing ROTATED 90°: long axis N–S along west road; long glass faces west ---
-    # Attached to main west end; modest west protrusion (avoid road/trees); prow tips west
+    # --- West wing: SAME volume as 4f97aa1 (~76×34m), rotated 90° ---
+    # Long axis N–S along west road; long glass faces west; clearly past x_min
+    # South edge ≈ flush with main south (slightly forward); attach at west end
     WING_H = 19.0
-    # E–W: attach at x_min, stick ~16m west (not into road)
-    wing_x_east = x_min + 1.5
-    wing_x_west = x_min - 16.0
+    # 4f97aa1 size: long≈76m, depth≈34m → after rotate: N–S=76, west depth=34
+    WING_LONG = 76.0   # along road (N–S)
+    WING_DEPTH = 34.0  # protrude west beyond x_min (same as old south stick-out)
+    wing_x_east = x_min + 2.0          # attach into west end slightly
+    wing_x_west = x_min - WING_DEPTH   # clearly beyond main west face
     wing_cx = (wing_x_east + wing_x_west) / 2
     wing_sx = abs(wing_x_east - wing_x_west)
-    # N–S: long along west facade (slightly past south corner, up the west side)
-    wing_y_s = y_s - 6.0
-    wing_y_n = y_s + 38.0  # ~44m long along road
-    if wing_y_n > y_n - 2:
-        wing_y_n = y_n - 2
+    wing_y_s = y_s - 4.0               # slightly forward of south facade
+    wing_y_n = wing_y_s + WING_LONG    # full 76m — do not clamp (same volume as 4f97aa1)
     wing_cy = (wing_y_s + wing_y_n) / 2
     wing_sy = abs(wing_y_n - wing_y_s)
     opaque.append(box('WingCore', wing_cx, wing_cy, (PH + WING_H) / 2,
-                      wing_sx - 2.5, wing_sy - 3, WING_H - PH - 0.6, m_span))
-    # Long WEST glass face (toward road) + faceted prism offset west
-    glass.append(box('WingGlassW', wing_x_west - 0.35, wing_cy, (PH + WING_H) / 2 + 0.2,
-                     0.5, wing_sy * 0.92, WING_H - PH - 1.5, m_fold))
-    # West-facing trapezoid prism (facade at wing_x_west, tip further west / −X)
-    _wy0, _wy1 = wing_y_s + 5, wing_y_n - 5
+                      max(2.0, wing_sx - 3), max(2.0, wing_sy - 3), WING_H - PH - 0.6, m_span))
+    # Long WEST glass (faces road)
+    glass.append(box('WingGlassW', wing_x_west - 0.4, wing_cy, (PH + WING_H) / 2 + 0.2,
+                     0.55, wing_sy * 0.94, WING_H - PH - 1.4, m_fold))
+    # Faceted prism on west face (tip further west)
+    _wy0, _wy1 = wing_y_s + 8, wing_y_n - 8
     _wm = (_wy0 + _wy1) / 2
-    _x0 = wing_x_west - 0.15
-    _xt = wing_x_west - 9.0
-    _xm = wing_x_west - 5.0
+    _x0 = wing_x_west - 0.2
     glass.append(mesh_obj('WingPrism', [
         (_x0, _wy0, PH + 1.5), (_x0, _wy1, PH + 1.5), (_x0, _wy1, WING_H - 1.0), (_x0, _wy0, WING_H - 1.0),
-        (_xt, _wy0 + 3, PH + 3.0), (_xt, _wy1 - 3, PH + 3.0),
-        (_xm, _wy1 - 4, WING_H - 2.0), (_xm, _wy0 + 4, WING_H - 2.0),
-        (_xt - 2.5, _wm, (PH + WING_H) / 2),
+        (_x0 - 6, _wy0 + 4, PH + 3.0), (_x0 - 6, _wy1 - 4, PH + 3.0),
+        (_x0 - 4, _wy1 - 5, WING_H - 2.0), (_x0 - 4, _wy0 + 5, WING_H - 2.0),
+        (_x0 - 8, _wm, (PH + WING_H) / 2),
     ], [
         (0, 1, 5, 4), (1, 2, 6, 5), (2, 3, 7, 6), (3, 0, 4, 7),
         (4, 5, 8), (5, 6, 8), (6, 7, 8), (7, 4, 8), (0, 3, 2, 1),
     ], m_fold))
-    # South / north short ends + east attach face (glass)
-    glass.append(box('WingGlassS', wing_cx, wing_y_s - 0.3, (PH + WING_H) / 2,
-                     wing_sx * 0.9, 0.45, WING_H - PH - 1.5, m_glass))
-    glass.append(box('WingGlassN', wing_cx, wing_y_n + 0.3, (PH + WING_H) / 2,
-                     wing_sx * 0.85, 0.45, WING_H - PH - 1.5, m_glass))
-    glass.append(box('WingGlassE', wing_x_east + 0.25, wing_cy, (PH + WING_H) / 2,
-                     0.4, wing_sy * 0.7, WING_H - PH - 1.5, m_glass))
-    opaque.append(box('WingFasciaBot', wing_cx, wing_cy, PH + 0.25, wing_sx + 1.0, wing_sy + 1.0, 0.7, m_fascia))
-    opaque.append(box('WingFasciaTop', wing_cx, wing_cy, WING_H + 0.15, wing_sx + 1.0, wing_sy + 1.0, 0.65, m_fascia))
-    opaque.append(box('WingRoof', wing_cx, wing_cy, WING_H + 0.45, wing_sx + 0.6, wing_sy + 0.5, 0.35, m_roof))
-    # Prow keel: wide at east attach, tapers west toward road
+    glass.append(box('WingGlassS', wing_cx, wing_y_s - 0.35, (PH + WING_H) / 2,
+                     wing_sx * 0.92, 0.5, WING_H - PH - 1.4, m_glass))
+    glass.append(box('WingGlassN', wing_cx, wing_y_n + 0.35, (PH + WING_H) / 2,
+                     wing_sx * 0.9, 0.5, WING_H - PH - 1.4, m_glass))
+    glass.append(box('WingGlassE', wing_x_east + 0.3, wing_cy, (PH + WING_H) / 2,
+                     0.45, wing_sy * 0.75, WING_H - PH - 1.4, m_glass))
+    opaque.append(box('WingFasciaBot', wing_cx, wing_cy, PH + 0.25, wing_sx + 1.2, wing_sy + 1.2, 0.7, m_fascia))
+    opaque.append(box('WingFasciaTop', wing_cx, wing_cy, WING_H + 0.15, wing_sx + 1.2, wing_sy + 1.2, 0.65, m_fascia))
+    opaque.append(box('WingRoof', wing_cx, wing_cy, WING_H + 0.45, wing_sx + 0.8, wing_sy + 0.6, 0.35, m_roof))
+    print(f'WING sx={wing_sx:.1f} sy={wing_sy:.1f} xw={wing_x_west:.1f} xe={wing_x_east:.1f} ys={wing_y_s:.1f} yn={wing_y_n:.1f}')
+    # Prow keel: wide at east (attach), tapers west (toward road)
     opaque.append(mesh_obj('ProwKeel', [
-        (wing_x_east - 0.5, wing_y_s + 3, PH + 8.5),
-        (wing_x_east - 0.5, wing_y_n - 3, PH + 8.5),
-        (wing_x_east - 0.5, wing_y_n - 3, PH + 0.35),
-        (wing_x_east - 0.5, wing_y_s + 3, PH + 0.35),
-        (wing_x_west + 1.5, wing_cy, PH + 2.2),
-        (wing_x_west + 1.5, wing_cy, PH + 0.35),
+        (wing_x_east - 0.5, wing_y_s + 4, PH + 8.5),
+        (wing_x_east - 0.5, wing_y_n - 4, PH + 8.5),
+        (wing_x_east - 0.5, wing_y_n - 4, PH + 0.35),
+        (wing_x_east - 0.5, wing_y_s + 4, PH + 0.35),
+        (wing_x_west + 2, wing_cy, PH + 2.4),
+        (wing_x_west + 2, wing_cy, PH + 0.35),
     ], [
         (0, 1, 4), (1, 2, 5, 4), (2, 3, 5), (3, 0, 4, 5), (0, 3, 2, 1),
     ], m_prow))
-    for i in range(6):
-        opaque.append(cyl(f'WP{i}', wing_x_west + 4 + (i % 2) * 5,
-                          wing_y_s + 4 + i * ((wing_sy - 8) / 5),
+    for i in range(7):
+        opaque.append(cyl(f'WP{i}', wing_x_west + 5 + (i % 3) * 8,
+                          wing_y_s + 5 + i * ((wing_sy - 10) / 6),
                           PH / 2, 0.34, PH - 0.2, m_pil, 10))
 
             # --- North glass + fold ---
