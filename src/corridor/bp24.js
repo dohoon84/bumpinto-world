@@ -2,10 +2,13 @@
 //   ?bp24=1 일 때만. 기본 OFF → 플래그 없으면 월드는 그대로.
 //   자리: 코리더 타일 3_-12, 공원 띠(x≈1608~1627) 서쪽 · 큰길(z≈-5778) 북쪽 모퉁이 상가 건물(중심 1601.1,-5752.8 · h17.3).
 //   그 건물의 1층(0~GF m)을 비우고(mh=GF 사본 + 충돌용 nr 원본) 유리 상점을 끼운다.
-//   draw call (가까이·밤): 외부 불투명 1 + 간판 1 + 유리 1 + 발광 1 + 바닥 빛 1 + 내부 1 + 상품 1 = 7 (+그림자 1). 낮엔 발광·바닥 빛 0.
+//   draw call (가까이·밤): 외부 불투명 1 + 간판 1 + 유리 1 + 발광 1 + 바닥 빛 1 + 내부 1 + 상품 1 + 직원 2(몸·머리) = 9 (+그림자 1). 낮엔 발광·바닥 빛 0.
+//   직원: createAvatar 모양을 정점색으로 굳혀 몸/머리 두 메시(숨쉬기 + 고개 돌리기). 실내 LOD 와 같이 숨음.
 //   텍스처: 간판 1024×256 + 상품 512×256 캔버스 2장(≈1.7MB GPU, 밉맵 포함). 내부는 LOD 로 170m 밖에서 숨김.
 import * as THREE from 'three';
 import { nightFade, onNightTarget } from '../world/nightFade.js';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { createAvatar } from '../entities/avatar.js';
 
 export function bp24Enabled(search = typeof location !== 'undefined' ? location.search : '') {
   const p = search instanceof URLSearchParams ? search : new URLSearchParams(search || '');
@@ -123,7 +126,7 @@ function signPanel(ctx, x, y, w, h, { brackets = true, sub = true } = {}) {
   if (sub) { ctx.font = `700 ${Math.round(h * 0.13)}px ${FONT}`; ctx.fillStyle = 'rgba(205,230,251,0.75)'; ctx.textAlign = 'right'; ctx.fillText('bumpinto.world', x + w - h * 0.95, y + h * 0.84); ctx.textAlign = 'left'; }
 }
 // 간판 아틀라스 1024×256: 앞 띠(0,0,1024,112) · 옆 띠(0,128,512,112) · 돌출 간판(544,120,64,136)
-const SIGN = { W: 1024, H: 256, front: [0, 0, 1024, 112], side: [0, 128, 512, 112], blade: [544, 120, 64, 136] };
+const SIGN = { W: 1024, H: 256, front: [0, 0, 1024, 112], side: [0, 128, 512, 112], blade: [544, 120, 64, 136], hot: [640, 136, 256, 72] };
 const rectUV = ([x, y, w, h], W, H, pad = 1) => [(x + pad) / W, 1 - (y + h - pad) / H, (x + w - pad) / W, 1 - (y + pad) / H];
 function signTexture() {
   const cv = document.createElement('canvas'); cv.width = SIGN.W; cv.height = SIGN.H;
@@ -140,6 +143,14 @@ function signTexture() {
     ctx.fillStyle = '#0b1830'; ctx.fillText('BP', x + w / 2, y + w + 14);
     ctx.fillStyle = '#0072DD'; ctx.fillText('24', x + w / 2, y + w + 38);
     ctx.textAlign = 'left';
+  }
+  { // 온장고 머리판: 'BP 치킨' (주황 바탕, 흰 글씨 + 작은 로고)
+    const [x, y, w, h] = SIGN.hot;
+    ctx.fillStyle = '#ff8a1f'; ctx.fillRect(x, y, w, h);
+    ctx.fillStyle = '#fff3e0'; ctx.fillRect(x, y + h - 8, w, 8);
+    drawLogo(ctx, x + 8, y + 8, h - 22);
+    ctx.font = `900 ${Math.round(h * 0.5)}px ${FONT}`; ctx.textBaseline = 'middle'; ctx.fillStyle = '#ffffff';
+    ctx.fillText('BP 치킨', x + h - 4, y + h * 0.45);
   }
   const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4;
   return t;
@@ -296,8 +307,8 @@ function buildStore() {
   // 서쪽 벽 철망 선반(과자)
   int.box(ix0, 0, iz0 + 2.6, ix0 + 0.5, 1.9, iz1 - 0.8, WIRE, true);
   for (let y = 0.3; y < 1.8; y += 0.38) { int.box(ix0 + 0.5, y - 0.03, iz0 + 2.6, ix0 + 0.55, y, iz1 - 0.8, hex('#b9bec2')); prodFace(prod, N(1, 0, 0), ix0 + 0.52, y + 0.15, (iz0 + 2.6 + iz1 - 0.8) / 2, iz1 - 0.8 - iz0 - 2.6, 0.3, Math.floor(y * 7) % 6, y * 5); }
-  // 가운데 곤돌라 3줄(앞뒤 방향, 흰 철망 + 양면 상품)
-  for (const gu of [5.6, 8.0, 10.4]) {
+  // 가운데 곤돌라 3줄(앞뒤 방향, 흰 철망 + 양면 상품) — 계산대 자리를 위해 서쪽으로 1m
+  for (const gu of [4.6, 7.0, 9.4]) {
     const gx = ix0 + gu, ga = iz0 + 2.0, gb = iz1 - 1.35;
     int.box(gx - 0.32, 0, ga, gx + 0.32, 0.12, gb, hex('#cfd3d6'), true);
     int.box(gx - 0.03, 0.12, ga, gx + 0.03, 1.55, gb, WH, true);
@@ -309,30 +320,63 @@ function buildStore() {
     int.box(gx - 0.34, 0.12, ga - 0.02, gx + 0.34, 1.6, ga, hex('#f0f0ee'), true); // 끝판
     for (let y = 0.35; y < 1.5; y += 0.38) prodFace(prod, N(0, 0, -1), gx, y + 0.12, ga - 0.03, 0.6, 0.26, (Math.round(gu) + Math.round(y * 3)) % 6, gu + y);
   }
-  // 앞쪽 오른편(모퉁이 유리 안) 유리 뚜껑 냉동고 2대 + 검은 오픈 음료 냉장고
-  for (const [a, b] of [[ix1 - 3.9, ix1 - 2.2], [ix1 - 2.0, ix1 - 0.3]]) {
-    int.box(a, 0, iz0 + 0.7, b, 0.82, iz0 + 1.5, hex('#e8ecee'), true);
-    prodFace(prod, N(0, 1, 0), (a + b) / 2, 0.84, iz0 + 1.1, b - a - 0.12, 0.66, 4, a, N(0, 0, -1));
-    glass.quad(N(0, 1, 0), P((a + b) / 2, 0.9, iz0 + 1.1), b - a - 0.05, 0.76, [1, 1, 1], null, N(0, 0, -1));
+  // 앞쪽(문 서쪽) 유리 뚜껑 냉동고 2대
+  for (const [a, b] of [[ix0 + 3.9, ix0 + 5.5], [ix0 + 5.65, ix0 + 7.25]]) {
+    int.box(a, 0, iz0 + 0.6, b, 0.82, iz0 + 1.4, hex('#e8ecee'), true);
+    prodFace(prod, N(0, 1, 0), (a + b) / 2, 0.84, iz0 + 1.0, b - a - 0.12, 0.66, 4, a, N(0, 0, -1));
+    glass.quad(N(0, 1, 0), P((a + b) / 2, 0.9, iz0 + 1.0), b - a - 0.05, 0.76, [1, 1, 1], null, N(0, 0, -1));
   }
-  { const a = ix1 - 1.1, z0 = iz0 + 3.0, z1 = iz0 + 4.6;
+  // 검은 오픈 음료 냉장고(동쪽 유리 안, 뒤쪽)
+  { const a = ix1 - 1.1, z0 = iz0 + 5.4, z1 = iz0 + 7.0;
     int.box(a, 0, z0, ix1 - 0.2, 1.95, z1, hex('#1b1d20'), true);
     for (let y = 0.4; y < 1.8; y += 0.38) prodFace(prod, N(-1, 0, 0), a - 0.01, y + 0.14, (z0 + z1) / 2, z1 - z0 - 0.16, 0.3, 6 + (Math.round(y * 3) % 2), y * 9); }
-  // 왼쪽 앞: POS 계산대(밝은 나무 상판) + 커피머신 + 온장 진열장
-  const px0 = ix0 + 0.6, px1 = ix0 + 3.6, pz0 = iz0 + 0.9, pz1 = iz0 + 1.6;
+  // 왼쪽 앞: 커피 코너(나무 상판 + 커피머신)
+  const px0 = ix0 + 0.6, px1 = ix0 + 3.4, pz0 = iz0 + 0.9, pz1 = iz0 + 1.6;
   int.box(px0, 0, pz0, px1, 0.95, pz1, hex('#f2f2f0'), true);
   int.box(px0 - 0.05, 0.95, pz0 - 0.05, px1 + 0.05, 1.0, pz1 + 0.05, WOOD, true);
-  int.box(px0 + 0.4, 1.0, pz0 + 0.15, px0 + 0.75, 1.32, pz0 + 0.45, hex('#2a2d31'), true); // POS 화면
-  int.box(px0 + 0.43, 1.05, pz0 + 0.14, px0 + 0.72, 1.29, pz0 + 0.15, hex('#7fb3e6'));
-  int.box(px1 - 0.75, 1.0, pz0 + 0.1, px1 - 0.2, 1.55, pz0 + 0.6, hex('#1e2124'), true); // 커피머신
-  int.box(px1 - 0.7, 1.35, pz0 + 0.09, px1 - 0.25, 1.48, pz0 + 0.1, hex('#d9a441'));
-  int.box(px0 + 1.1, 1.0, pz0 + 0.1, px0 + 1.9, 1.42, pz0 + 0.6, hex('#e8e2d6'), true); // 온장고
-  prodFace(prod, N(0, 0, -1), px0 + 1.5, 1.2, pz0 + 0.09, 0.7, 0.3, 1, 3);
-  glass.quad(N(0, 0, -1), P(px0 + 1.5, 1.21, pz0 + 0.08), 0.8, 0.42, [1, 1, 1]);
-  int.box(ix0 + 0.2, 0, pz1 + 0.3, ix0 + 0.4, 2.6, pz1 + 2.4, hex('#d9dcdf'), true); // 뒤쪽 담배 진열 벽
-  for (let y = 1.2; y < 2.5; y += 0.3) prodFace(prod, N(1, 0, 0), ix0 + 0.41, y, pz1 + 1.35, 2.0, 0.24, (Math.round(y * 10) % 6), y * 13);
+  int.box(px1 - 0.95, 1.0, pz0 + 0.1, px1 - 0.3, 1.6, pz0 + 0.6, hex('#1e2124'), true); // 커피머신
+  int.box(px1 - 0.9, 1.38, pz0 + 0.09, px1 - 0.35, 1.52, pz0 + 0.1, hex('#d9a441'));
+  int.box(px0 + 0.3, 1.0, pz0 + 0.2, px0 + 0.9, 1.12, pz0 + 0.5, hex('#ffffff'), true); // 컵·뚜껑
+  // 계산대(모퉁이 유리 안, 문을 바라봄): 흰 몸통 + 파란 띠 + 밝은 나무 상판
+  const cx0 = ix0 + 10.9, cx1 = ix1 - 0.7, cz0c = iz0 + 2.0, cz1c = iz0 + 2.7, top = 1.0;
+  int.box(cx0, 0, cz0c, cx1, top - 0.05, cz1c, hex('#f4f4f2'), true);
+  int.box(cx0, 0.55, cz0c - 0.012, cx1, 0.63, cz0c, hex('#0072DD')); // 앞면 브랜드 띠
+  int.box(cx0, 0, cz0c - 0.01, cx1, 0.1, cz0c, hex('#b9bec2')); // 걸레받이
+  int.box(cx0 - 0.06, top - 0.05, cz0c - 0.08, cx1 + 0.06, top, cz1c + 0.06, WOOD, true);
+  int.box(cx1 - 0.05, 0, cz1c, cx1 + 0.02, top, cz1c + 1.2, hex('#f4f4f2'), true); // 안쪽 칸막이
+  // 온장 진열장(왼쪽 끝): 유리 상자 + 노란 불빛 + 튀김
+  const hx0 = cx0 + 0.1, hx1 = cx0 + 1.0;
+  int.box(hx0, top, cz0c + 0.08, hx1, top + 0.05, cz1c - 0.08, hex('#2a2d31'), true);
+  int.box(hx0 + 0.02, top + 0.05, cz0c + 0.12, hx1 - 0.02, top + 0.5, cz1c - 0.1, hex('#ffd27a'), false, 'z');
+  for (let k = 0; k < 4; k++) for (const yy of [top + 0.08, top + 0.29]) int.box(hx0 + 0.07 + k * 0.21, yy, cz0c + 0.16, hx0 + 0.24 + k * 0.21, yy + 0.08, cz0c + 0.4, hex(k % 2 ? '#c9781f' : '#e0a040'), true);
+  int.box(hx0, top + 0.26, cz0c + 0.12, hx1, top + 0.275, cz1c - 0.1, hex('#d0d4d8'));
+  glass.quad(N(0, 0, -1), P((hx0 + hx1) / 2, top + 0.28, cz0c + 0.1), hx1 - hx0, 0.5, [1, 1, 1]);
+  int.box(hx0, top + 0.5, cz0c + 0.08, hx1, top + 0.55, cz1c - 0.08, hex('#2a2d31'), true);
+  sign.quad(N(0, 0, -1), P((hx0 + hx1) / 2, top + 0.7, cz0c + 0.12), 0.9, 0.25, [1, 1, 1], rectUV(SIGN.hot, SIGN.W, SIGN.H)); // BP 치킨 머리판
+  int.box(hx0 + 0.42, top + 0.55, cz0c + 0.14, hx0 + 0.48, top + 0.6, cz0c + 0.16, hex('#2a2d31'));
+  // POS 모니터(직원 쪽) + 손님 쪽 작은 화면 + 카드 단말기 + 라이터 진열대 + 봉투
+  const mx = cx0 + 2.1;
+  int.box(mx - 0.05, top, cz1c - 0.3, mx + 0.05, top + 0.25, cz1c - 0.2, hex('#3a3d42'));
+  int.box(mx - 0.27, top + 0.22, cz1c - 0.33, mx + 0.27, top + 0.62, cz1c - 0.27, hex('#2a2d31'), true);
+  int.box(mx - 0.24, top + 0.25, cz1c - 0.27, mx + 0.24, top + 0.59, cz1c - 0.265, hex('#8fc3f2'));
+  int.box(mx - 0.16, top, cz0c + 0.12, mx + 0.16, top + 0.24, cz0c + 0.2, hex('#2a2d31'), true); // 손님 화면
+  int.box(mx - 0.14, top + 0.03, cz0c + 0.115, mx + 0.14, top + 0.22, cz0c + 0.12, hex('#3aa6ff'));
+  int.box(mx + 0.45, top, cz0c + 0.18, mx + 0.6, top + 0.06, cz0c + 0.36, hex('#1c1e21'), true); // 카드 단말기
+  int.box(mx + 0.47, top + 0.06, cz0c + 0.2, mx + 0.58, top + 0.14, cz0c + 0.24, hex('#1c1e21'), true);
+  int.box(mx + 0.48, top + 0.09, cz0c + 0.195, mx + 0.57, top + 0.13, cz0c + 0.2, hex('#9fd0a8'));
+  int.box(mx - 0.78, top, cz0c + 0.1, mx - 0.38, top + 0.2, cz0c + 0.3, hex('#e9ecef'), true); // 라이터 진열대
+  prodFace(prod, N(0, 0, -1), mx - 0.58, top + 0.12, cz0c + 0.095, 0.38, 0.14, 7, 41);
+  int.box(cx1 - 0.55, top, cz0c + 0.2, cx1 - 0.2, top + 0.08, cz0c + 0.5, hex('#f8f8f6'), true); // 봉투 더미
+  // 계산대 뒤 담배·상품 진열 벽(직원 등 뒤)
+  int.box(cx0 + 0.6, 0, iz0 + 4.0, cx1, 2.5, iz0 + 4.3, hex('#d9dcdf'), true);
+  int.box(cx0 + 0.6, 2.5, iz0 + 3.95, cx1, 2.75, iz0 + 4.3, hex('#0072DD'), true);
+  for (let y = 1.15; y < 2.4; y += 0.3) prodFace(prod, N(0, 0, -1), (cx0 + 0.6 + cx1) / 2, y, iz0 + 3.99, cx1 - cx0 - 0.7, 0.24, Math.round(y * 10) % 6, y * 13);
+  int.box(cx0 + 0.6, 0, iz0 + 3.6, cx1, 0.9, iz0 + 4.0, hex('#eef0f1'), true); // 아래 수납장
   // 파란 장바구니 더미(문 옆)
   for (let k = 0; k < 2; k++) { const x = dx + 0.7 + k * 0.5; int.box(x, 0, iz0 + 0.3, x + 0.42, 0.45, iz0 + 0.62, BLUE, true); int.box(x - 0.01, 0.43, iz0 + 0.29, x + 0.43, 0.46, iz0 + 0.63, hex('#174f99')); }
+  // 직원: 계산대 뒤에 서서 문(남쪽 유리)을 바라봄
+  const clerk = makeClerk(M.int);
+  clerk.group.position.set(mx + 0.05, 0, iz0 + 3.25); clerk.group.rotation.y = Math.PI;
 
   // ---------- 메시 ----------
   const g = new THREE.Group(); g.name = 'bp24Store';
@@ -344,12 +388,70 @@ function buildStore() {
   const inner = new THREE.Group(); inner.name = 'bp24Interior';
   inner.add(int.mesh(M.int, 'bp24InteriorBody'));
   inner.add(prod.mesh(M.prod, 'bp24Products'));
+  inner.add(clerk.group);
   const lod = new THREE.LOD(); lod.name = 'bp24InteriorLod';
   lod.position.set((x0 + x1) / 2, 1.5, (zf + zb) / 2);
   inner.position.set(-lod.position.x, -lod.position.y, -lod.position.z); // 지오메트리는 월드 좌표 그대로
   lod.addLevel(inner, 0); lod.addLevel(new THREE.Object3D(), 170);
   g.add(lod);
-  return { group: g, glow: gwM, spill: spM, stats: { tris: [exM, sgM, glM, gwM, spM, ...inner.children].reduce((s, m) => s + m.geometry.index.count / 3, 0) } };
+  const tris = [exM, sgM, glM, gwM, spM, inner.children[0], inner.children[1], clerk.body, clerk.head].reduce((s, m) => s + (m.geometry.index ? m.geometry.index.count : m.geometry.attributes.position.count) / 3, 0);
+  return { group: g, glow: gwM, spill: spM, clerk, inner, stats: { tris } };
+}
+
+// ---------- 직원(게임 아바타 createAvatar 를 한 번 만들어 정점색 메시 2개로 굳힘: 몸 1 + 머리 1) ----------
+let CLERK_SRC = null;
+function clerkSource() {
+  if (CLERK_SRC) return CLERK_SRC;
+  const SHIRT = '#262a31';
+  const a = createAvatar({ color: SHIRT, pants: '#22252b', skin: '#eac3a0', hair: 'short', gender: 'm', face: 'round', top: 'long' });
+  const rig = a.userData.rig;
+  // 조끼(로고 파랑): 몸통보다 살짝 큰 원통 + 앞 가운데 셔츠 띠 + 이름표 + 로고 점
+  const add = (geo, c, x, y, z) => { const m = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: c })); m.position.set(x, y, z); rig.add(m); return m; };
+  const vest = add(new THREE.CylinderGeometry(0.262, 0.252, 0.6, 12), '#0072DD', 0, 1.06, 0); vest.scale.set(1.08, 1, 1.04);
+  add(new THREE.BoxGeometry(0.1, 0.5, 0.03), SHIRT, 0, 1.1, 0.27);
+  add(new THREE.BoxGeometry(0.11, 0.05, 0.02), '#f8f9fa', -0.14, 1.2, 0.27); // 이름표
+  add(new THREE.BoxGeometry(0.055, 0.055, 0.02), '#ffffff', 0.13, 1.21, 0.268); // 로고 점(흰 바탕 + 빨간 핀)
+  add(new THREE.BoxGeometry(0.03, 0.03, 0.02), '#ff3b3b', 0.13, 1.21, 0.275);
+  // 팔: 계산대 위로 살짝 내민 자세
+  a.userData.armL.rotation.x = -0.55; a.userData.armR.rotation.x = -0.55;
+  a.updateMatrixWorld(true);
+  const L = new THREE.Vector3(0.35, 0.8, 0.5).normalize(), n = new THREE.Vector3(), col = new THREE.Color();
+  const body = [], head = [];
+  const visible = (o) => { for (; o; o = o.parent) if (!o.visible) return false; return true; };
+  a.traverse((o) => {
+    if (!o.isMesh || !visible(o)) return;
+    let g = o.geometry.clone(); g.applyMatrix4(o.matrixWorld);
+    if (g.index) { const ng = g.toNonIndexed(); g.dispose(); g = ng; }
+    for (const k of Object.keys(g.attributes)) if (k !== 'position' && k !== 'normal') g.deleteAttribute(k);
+    col.copy(o.material.color);
+    const nr = g.attributes.normal, cs = new Float32Array(nr.count * 3);
+    for (let i = 0; i < nr.count; i++) { n.fromBufferAttribute(nr, i); const f = 0.62 + 0.42 * Math.max(0, n.dot(L)); cs[i * 3] = col.r * f; cs[i * 3 + 1] = col.g * f; cs[i * 3 + 2] = col.b * f; }
+    g.setAttribute('color', new THREE.BufferAttribute(cs, 3));
+    g.computeBoundingBox();
+    const cy = (g.boundingBox.min.y + g.boundingBox.max.y) / 2;
+    (cy > 1.45 ? head : body).push(g);
+  });
+  a.traverse((o) => { if (o.isMesh && o.material?.isMeshBasicMaterial) { o.geometry.dispose(); o.material.dispose(); } }); // 여기서 만든 것만(아바타 공용 지오메트리·재질은 그대로)
+  const merge = (list, dy) => { const g = mergeGeometries(list); for (const x of list) x.dispose(); if (dy) g.translate(0, dy, 0); g.computeBoundingSphere(); return g; };
+  CLERK_SRC = { body: merge(body, 0), head: merge(head, -1.45) };
+  return CLERK_SRC;
+}
+function makeClerk(mat) {
+  const src = clerkSource();
+  const group = new THREE.Group(); group.name = 'bp24Clerk';
+  const body = new THREE.Mesh(src.body.clone(), mat); body.name = 'bp24ClerkBody';
+  const pivot = new THREE.Group(); pivot.position.y = 1.45; // 목
+  const head = new THREE.Mesh(src.head.clone(), mat); head.name = 'bp24ClerkHead';
+  pivot.add(head); group.add(body, pivot);
+  return { group, body, head, pivot };
+}
+// 숨쉬기(몸 0.6% 위아래) + 9초마다 고개를 좌우로 천천히 돌림. 실내 LOD 가 보일 때만
+function animateClerk(c, t) {
+  const br = Math.sin(t * 1.7) * 0.006;
+  c.body.scale.y = 1 + br; c.pivot.position.y = 1.45 * (1 + br);
+  const cyc = t % 9, k = cyc < 2 ? 0 : cyc < 3.5 ? (cyc - 2) / 1.5 : cyc < 5.5 ? 1 : cyc < 7 ? 1 - (cyc - 5.5) / 1.5 : 0;
+  const side = Math.floor(t / 9) % 2 ? -1 : 1, e = k * k * (3 - 2 * k);
+  c.pivot.rotation.y = side * 0.45 * e; c.pivot.rotation.x = 0.05 * Math.sin(t * 0.6);
 }
 
 // 상품 앞면 한 장: 아틀라스 줄 row 중 임의 구간(가로 길이에 비례)
@@ -380,6 +482,7 @@ export function createBp24() {
       let o = cur.group; while (o.parent) o = o.parent;
       if (!o.isScene) { cur = null; return; } // 타일이 풀림
       apply(nightFade());
+      if (cur.inner.visible) animateClerk(cur.clerk, performance.now() / 1000);
     },
     get group() { return cur?.group || null; },
   };
