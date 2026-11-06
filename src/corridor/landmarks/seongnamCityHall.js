@@ -2155,27 +2155,53 @@ function buildPlazaExtras(data, M) {
     }
   }
 
-  // --- 2) Floor fountain — water-like thin translucent jets ---
-  const FF = { x0: 1575, x1: 1705, z0: -5868, z1: -5788 };
+  // --- 2) Floor fountain — visible water columns (summer / ?floorFountain=1) ---
+  // Clear rectangular nozzle grid on stone; players walk through (no collision).
+  const FF = { x0: 1585, x1: 1695, z0: -5860, z1: -5795 };
   const grateN = [];
-  const cols = 10, rows = 8;
+  const cols = 9, rows = 7;
   for (let i = 0; i < cols; i++) {
     for (let j = 0; j < rows; j++) {
-      const x = FF.x0 + 4 + (i + 0.5) * ((FF.x1 - FF.x0 - 8) / cols);
-      const z = FF.z0 + 4 + (j + 0.5) * ((FF.z1 - FF.z0 - 8) / rows);
-      const u = (i + 0.5) / cols - 0.5, v = (j + 0.5) / rows - 0.5;
-      if (u * u * 2.2 + v * v * 3.0 > 0.55) continue;
+      const x = FF.x0 + 3 + (i + 0.5) * ((FF.x1 - FF.x0 - 6) / cols);
+      const z = FF.z0 + 3 + (j + 0.5) * ((FF.z1 - FF.z0 - 6) / rows);
       grateN.push([x, z]);
     }
   }
-  const grateGeo = new THREE.CircleGeometry(0.32, 8);
+  // Nozzle grate: high-contrast metal disc with radial slots (readable at eye level)
+  const grateMap = (typeof document !== 'undefined') ? canvasTex(96, 96, (x, w, h) => {
+    x.clearRect(0, 0, w, h);
+    x.fillStyle = '#4a5560';
+    x.beginPath(); x.arc(w / 2, h / 2, w / 2 - 1, 0, Math.PI * 2); x.fill();
+    x.fillStyle = '#0a0c10';
+    x.beginPath(); x.arc(w / 2, h / 2, w / 2 - 10, 0, Math.PI * 2); x.fill();
+    x.strokeStyle = '#d0d6dc'; x.lineWidth = 3.5;
+    for (let k = 0; k < 8; k++) {
+      const a = (k / 8) * Math.PI * 2;
+      x.beginPath();
+      x.moveTo(w / 2 + Math.cos(a) * 7, h / 2 + Math.sin(a) * 7);
+      x.lineTo(w / 2 + Math.cos(a) * (w / 2 - 11), h / 2 + Math.sin(a) * (w / 2 - 11));
+      x.stroke();
+    }
+    x.strokeStyle = '#eef2f6'; x.lineWidth = 4;
+    x.beginPath(); x.arc(w / 2, h / 2, w / 2 - 3, 0, Math.PI * 2); x.stroke();
+    x.strokeStyle = '#a8b0b8'; x.lineWidth = 2.5;
+    x.beginPath(); x.arc(w / 2, h / 2, 8, 0, Math.PI * 2); x.stroke();
+    // center hole
+    x.fillStyle = '#050608';
+    x.beginPath(); x.arc(w / 2, h / 2, 5, 0, Math.PI * 2); x.fill();
+  }, 1, 1) : null;
+  const grateGeo = new THREE.CircleGeometry(0.55, 16);
   grateGeo.rotateX(-Math.PI / 2);
-  const grateMat = new THREE.MeshStandardMaterial({ color: '#5a6068', roughness: 0.7, metalness: 0.55 });
+  const grateMat = new THREE.MeshStandardMaterial({
+    color: '#c8ced6', map: grateMap || undefined, roughness: 0.45, metalness: 0.8,
+  });
   const grates = new THREE.InstancedMesh(grateGeo, grateMat, grateN.length);
   grates.name = 'cityhallFloorGrates';
   const dummy = new THREE.Object3D();
   grateN.forEach(([x, z], i) => {
-    dummy.position.set(x, 0.19, z);
+    dummy.position.set(x, 0.205, z);
+    dummy.scale.set(1, 1, 1);
+    dummy.rotation.set(0, (i % 8) * 0.2, 0);
     dummy.updateMatrix();
     grates.setMatrixAt(i, dummy.matrix);
   });
@@ -2183,62 +2209,190 @@ function buildPlazaExtras(data, M) {
   g.add(grates);
 
   const summer = isCityHallSummer();
-  let jets = null, jetMat = null, jetGeo = null, mist = null, mistMat = null, mistGeo = null;
-  let ownJet = true;
+  let jets = null, jetMat = null, jetGeo = null;
+  let cores = null, coreMat = null, coreGeo = null;
+  let sheaths = null, sheathMat = null, sheathGeo = null;
+  let mist = null, mistMat = null, mistGeo = null;
+  let drops = null, dropMat = null, dropGeo = null;
+  let wet = null, wetMat = null, wetGeo = null;
+  let splash = null, splashMat = null, splashGeo = null;
+  const DROP_PER = 8;
   if (summer && grateN.length) {
-    // Thin translucent water columns (NormalBlending — not additive glass/neon rods)
+    // Solid water column ~0.14–0.18 m diameter (cylinder keeps volume at every angle)
     jetMat = new THREE.MeshBasicMaterial({
-      map: jetGradTex(), color: '#c5e6f8', transparent: true, opacity: 0.55,
-      depthWrite: false, blending: THREE.NormalBlending, side: THREE.DoubleSide, toneMapped: false,
+      color: '#8ec6ea', transparent: true, opacity: 0.88, depthWrite: false,
+      blending: THREE.NormalBlending, toneMapped: false,
     });
-    jetGeo = new THREE.PlaneGeometry(0.11, 1);
+    jetGeo = new THREE.CylinderGeometry(0.09, 0.105, 1, 12); // ~0.18–0.22 m with pulse fat
     jetGeo.translate(0, 0.5, 0);
-    jets = new THREE.InstancedMesh(jetGeo, jetMat, grateN.length * 2);
+    jets = new THREE.InstancedMesh(jetGeo, jetMat, grateN.length);
     jets.name = 'cityhallFloorJets'; jets.frustumCulled = false;
     g.add(jets);
+
+    // Bright white-blue core
+    coreMat = new THREE.MeshBasicMaterial({
+      color: '#f5fcff', transparent: true, opacity: 0.9, depthWrite: false,
+      blending: THREE.AdditiveBlending, toneMapped: false,
+    });
+    coreGeo = new THREE.CylinderGeometry(0.032, 0.045, 1, 8);
+    coreGeo.translate(0, 0.5, 0);
+    cores = new THREE.InstancedMesh(coreGeo, coreMat, grateN.length);
+    cores.name = 'cityhallFloorJetCores'; cores.frustumCulled = false;
+    g.add(cores);
+
+    // Soft translucent falloff sheath (outer cylinder, wider than solid column)
+    sheathMat = new THREE.MeshBasicMaterial({
+      color: '#c8e6f8', transparent: true, opacity: 0.28, depthWrite: false,
+      blending: THREE.AdditiveBlending, toneMapped: false,
+    });
+    sheathGeo = new THREE.CylinderGeometry(0.16, 0.19, 1, 10);
+    sheathGeo.translate(0, 0.5, 0);
+    sheaths = new THREE.InstancedMesh(sheathGeo, sheathMat, grateN.length);
+    sheaths.name = 'cityhallFloorJetSheaths'; sheaths.frustumCulled = false;
+    g.add(sheaths);
+
     // Soft spray puff at tip
     mistMat = new THREE.MeshBasicMaterial({
-      color: '#eaf6ff', transparent: true, opacity: 0.4, depthWrite: false,
-      blending: THREE.NormalBlending, side: THREE.DoubleSide, toneMapped: false,
+      color: '#f8fcff', transparent: true, opacity: 0.7, depthWrite: false,
+      blending: THREE.AdditiveBlending, side: THREE.DoubleSide, toneMapped: false,
     });
-    mistGeo = new THREE.CircleGeometry(0.2, 10);
+    mistGeo = new THREE.CircleGeometry(0.28, 16);
     mist = new THREE.InstancedMesh(mistGeo, mistMat, grateN.length);
     mist.name = 'cityhallFloorMist'; mist.frustumCulled = false;
     g.add(mist);
+
+    // Arc-tip droplets / spray beads
+    dropMat = new THREE.MeshBasicMaterial({
+      color: '#ffffff', transparent: true, opacity: 0.9, depthWrite: false,
+      blending: THREE.AdditiveBlending, toneMapped: false,
+    });
+    dropGeo = new THREE.SphereGeometry(0.045, 8, 6);
+    drops = new THREE.InstancedMesh(dropGeo, dropMat, grateN.length * DROP_PER);
+    drops.name = 'cityhallFloorDrops'; drops.frustumCulled = false;
+    g.add(drops);
+
+    // Wet darker stone patch under/around each nozzle
+    wetMat = new THREE.MeshBasicMaterial({
+      color: '#152028', transparent: true, opacity: 0.62, depthWrite: false,
+      side: THREE.DoubleSide, toneMapped: false,
+    });
+    wetGeo = new THREE.RingGeometry(0.55, 1.25, 20);
+    wetGeo.rotateX(-Math.PI / 2);
+    wet = new THREE.InstancedMesh(wetGeo, wetMat, grateN.length);
+    wet.name = 'cityhallFloorWet'; wet.frustumCulled = false;
+    grateN.forEach(([x, z], i) => {
+      dummy.position.set(x, 0.196, z);
+      dummy.rotation.set(0, 0, 0);
+      dummy.scale.set(1, 1, 1);
+      dummy.updateMatrix();
+      wet.setMatrixAt(i, dummy.matrix);
+    });
+    wet.instanceMatrix.needsUpdate = true;
+    // Draw wet BEFORE grates visually: already added after grates in scene graph —
+    // re-insert under grates by renderOrder
+    wet.renderOrder = -1;
+    grates.renderOrder = 1;
+    g.add(wet);
+
+    // Small splash ring on stone at each nozzle
+    splashMat = new THREE.MeshBasicMaterial({
+      color: '#e0f2ff', transparent: true, opacity: 0.75, depthWrite: false,
+      blending: THREE.AdditiveBlending, side: THREE.DoubleSide, toneMapped: false,
+    });
+    splashGeo = new THREE.RingGeometry(0.35, 0.62, 20);
+    splashGeo.rotateX(-Math.PI / 2);
+    splash = new THREE.InstancedMesh(splashGeo, splashMat, grateN.length);
+    splash.name = 'cityhallFloorSplash'; splash.frustumCulled = false;
+    splash.renderOrder = 2;
+    g.add(splash);
   }
   function updateFloorFountain(t) {
     if (!jets) return;
     for (let i = 0; i < grateN.length; i++) {
       const [x, z] = grateN[i];
-      // Animated height pulse (staggered) — reads as water, not glass rods
-      const pulse = 0.2 + 0.8 * (0.5 + 0.5 * Math.sin(t * 3.6 + i * 0.53));
-      const h = 0.4 + pulse * 3.4; // animated height
-      const w = 0.55 + 0.35 * pulse; // stay thin
+      const pulse = 0.3 + 0.7 * (0.5 + 0.5 * Math.sin(t * 3.4 + i * 0.47));
+      const h = 0.7 + pulse * 3.4;
+      // Diameter stays ~0.14–0.18 m (fat scales the 0.14–0.18 base cylinder)
+      const fat = 1.0 + 0.15 * pulse;
       dummy.position.set(x, 0.2, z);
       dummy.rotation.set(0, 0, 0);
-      dummy.scale.set(w, h, 1);
+      dummy.scale.set(fat, h, fat);
       dummy.updateMatrix();
-      jets.setMatrixAt(i * 2, dummy.matrix);
-      dummy.rotation.y = Math.PI / 2;
-      dummy.updateMatrix();
-      jets.setMatrixAt(i * 2 + 1, dummy.matrix);
+      jets.setMatrixAt(i, dummy.matrix);
+      if (cores) {
+        dummy.scale.set(fat * 0.95, h * 0.98, fat * 0.95);
+        dummy.updateMatrix();
+        cores.setMatrixAt(i, dummy.matrix);
+      }
+      if (sheaths) {
+        const sw = 0.95 + 0.25 * pulse;
+        dummy.position.set(x, 0.2, z);
+        dummy.rotation.set(0, 0, 0);
+        dummy.scale.set(sw, h * 0.96, sw);
+        dummy.updateMatrix();
+        sheaths.setMatrixAt(i, dummy.matrix);
+      }
       if (mist) {
-        // Spray / ripple disc at tip (billboard-ish flat)
-        dummy.position.set(x, 0.2 + h * 0.95, z);
-        dummy.rotation.set(-Math.PI / 2, 0, t * 1.1 + i * 0.2);
-        const ms = 0.55 + pulse * 1.4;
+        dummy.position.set(x, 0.2 + h * 0.98, z);
+        dummy.rotation.set(-Math.PI / 2, 0, t * 1.2 + i * 0.15);
+        const ms = 1.0 + pulse * 2.0;
         dummy.scale.set(ms, ms, 1);
         dummy.updateMatrix();
         mist.setMatrixAt(i, dummy.matrix);
       }
+      if (drops) {
+        for (let d = 0; d < DROP_PER; d++) {
+          const ang = t * 2.4 + i * 0.7 + d * 1.4;
+          const rad = 0.12 + 0.35 * ((d * 0.37 + pulse) % 1);
+          const dy = h * (0.55 + 0.45 * ((Math.sin(t * 4.2 + d * 1.3 + i) + 1) * 0.5));
+          dummy.position.set(
+            x + Math.cos(ang) * rad,
+            0.2 + dy,
+            z + Math.sin(ang) * rad,
+          );
+          dummy.rotation.set(0, 0, 0);
+          const ds = 0.8 + pulse * (0.5 + 0.7 * ((d % 3) / 2));
+          dummy.scale.set(ds, ds, ds);
+          dummy.updateMatrix();
+          drops.setMatrixAt(i * DROP_PER + d, dummy.matrix);
+        }
+      }
+      if (splash) {
+        const ss = 0.85 + 0.7 * pulse;
+        dummy.position.set(x, 0.206, z);
+        dummy.rotation.set(0, t * 0.9 + i * 0.3, 0);
+        dummy.scale.set(ss, 1, ss);
+        dummy.updateMatrix();
+        splash.setMatrixAt(i, dummy.matrix);
+      }
     }
-    jets.count = grateN.length * 2;
+    jets.count = grateN.length;
     jets.instanceMatrix.needsUpdate = true;
-    jetMat.opacity = 0.4 + 0.25 * (0.5 + 0.5 * Math.sin(t * 2.1));
+    jetMat.opacity = 0.78 + 0.14 * (0.5 + 0.5 * Math.sin(t * 2.0));
+    if (cores) {
+      cores.count = grateN.length;
+      cores.instanceMatrix.needsUpdate = true;
+      coreMat.opacity = 0.7 + 0.25 * (0.5 + 0.5 * Math.sin(t * 2.4));
+    }
+    if (sheaths) {
+      sheaths.count = grateN.length;
+      sheaths.instanceMatrix.needsUpdate = true;
+      sheathMat.opacity = 0.22 + 0.18 * (0.5 + 0.5 * Math.sin(t * 2.2));
+    }
     if (mist) {
       mist.count = grateN.length;
       mist.instanceMatrix.needsUpdate = true;
-      mistMat.opacity = 0.25 + 0.3 * (0.5 + 0.5 * Math.sin(t * 2.8));
+      mistMat.opacity = 0.45 + 0.35 * (0.5 + 0.5 * Math.sin(t * 2.6));
+    }
+    if (drops) {
+      drops.count = grateN.length * DROP_PER;
+      drops.instanceMatrix.needsUpdate = true;
+      dropMat.opacity = 0.6 + 0.35 * (0.5 + 0.5 * Math.sin(t * 3.1));
+    }
+    if (splash) {
+      splash.count = grateN.length;
+      splash.instanceMatrix.needsUpdate = true;
+      splashMat.opacity = 0.4 + 0.4 * (0.5 + 0.5 * Math.sin(t * 3.5));
     }
   }
 
@@ -2399,9 +2553,14 @@ function buildPlazaExtras(data, M) {
     tryElevator,
     summer,
     disposeExtra: () => {
-      grateGeo.dispose(); grateMat.dispose();
+      grateGeo.dispose(); grateMat.dispose(); grateMap?.dispose?.();
       jetGeo?.dispose(); jetMat?.dispose();
+      coreGeo?.dispose(); coreMat?.dispose();
+      sheathGeo?.dispose(); sheathMat?.dispose();
       mistGeo?.dispose(); mistMat?.dispose();
+      dropGeo?.dispose(); dropMat?.dispose();
+      wetGeo?.dispose(); wetMat?.dispose();
+      splashGeo?.dispose(); splashMat?.dispose();
     },
   };
 }
