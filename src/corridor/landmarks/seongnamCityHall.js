@@ -239,44 +239,40 @@ function mats() {
     shared._bannerTex = shared.banner.map;
     shared.jet.map = jetGradTex();
     shared.jet.needsUpdate = true;
-    const hexMap = canvasTex(256, 256, (x, w, h) => {
-      // Transparent holes + bright steel rims (alphaTest punches tube mouths)
+    // ~13 cm cells: bright steel rims, transparent mouths (alphaTest)
+    const hexMap = canvasTex(128, 128, (x, w, h) => {
       x.clearRect(0, 0, w, h);
-      const cell = 14;
-      const rowH = cell * 0.866;
-      const rOut = 6.0, rIn = 3.6;
-      for (let row = -1; row < h / rowH + 2; row++) {
-        for (let col = -1; col < w / cell + 2; col++) {
-          const cx = col * cell + (row & 1 ? cell * 0.5 : 0);
-          const cy = row * rowH;
-          // steel annulus (opaque)
-          x.beginPath();
-          x.arc(cx, cy, rOut, 0, Math.PI * 2);
-          x.arc(cx, cy, rIn, 0, Math.PI * 2, true);
-          x.fillStyle = '#e8ecf0';
-          x.fill();
-          // rim highlight
-          x.beginPath(); x.arc(cx, cy, rOut, 0, Math.PI * 2);
-          x.strokeStyle = 'rgba(255,255,255,0.7)'; x.lineWidth = 1.4; x.stroke();
-          x.beginPath(); x.arc(cx, cy, rIn, 0, Math.PI * 2);
-          x.strokeStyle = 'rgba(40,48,56,0.55)'; x.lineWidth = 1.1; x.stroke();
-        }
-      }
-    }, 4.5, 7.5);
+      // one hex cell per tile — rim opaque, hole clear
+      const cx = w / 2, cy = h / 2;
+      const rOut = w * 0.46, rIn = w * 0.30;
+      x.beginPath();
+      x.arc(cx, cy, rOut, 0, Math.PI * 2);
+      x.arc(cx, cy, rIn, 0, Math.PI * 2, true);
+      x.fillStyle = '#eef1f5';
+      x.fill();
+      x.beginPath(); x.arc(cx, cy, rOut, 0, Math.PI * 2);
+      x.strokeStyle = 'rgba(255,255,255,0.95)'; x.lineWidth = 3; x.stroke();
+      x.beginPath(); x.arc(cx, cy, rIn, 0, Math.PI * 2);
+      x.strokeStyle = 'rgba(20,24,30,0.7)'; x.lineWidth = 2.5; x.stroke();
+      // soft steel between cells
+      x.globalCompositeOperation = 'destination-over';
+      x.fillStyle = '#c8ccd2';
+      x.fillRect(0, 0, w, h);
+      x.globalCompositeOperation = 'source-over';
+    }, 1, 1);
     hexMap.colorSpace = THREE.SRGBColorSpace;
     shared.steelHoneycomb = new THREE.MeshStandardMaterial({
-      color: '#d0d4da',
+      color: '#d8dce2',
       map: hexMap,
       alphaMap: hexMap,
-      alphaTest: 0.15,
+      alphaTest: 0.22,
       transparent: false,
       roughness: 0.32,
       metalness: 0.92,
       envMap: env,
-      envMapIntensity: env ? 1.15 : 0,
+      envMapIntensity: env ? 1.2 : 0,
       side: THREE.DoubleSide,
       depthWrite: true,
-      flatShading: false,
     });
     shared._honeycombTex = hexMap;
   } else {
@@ -1740,142 +1736,53 @@ function buildVehicleGate(data, M) {
 
 
 
-/** West-plaza honeycomb-steel walking figure (~8.5 m). Tube-cell look via texture/alphaTest; 1–3 draws. */
-function buildWalkingSculpture(data, M) {
+/** West-plaza honeycomb-steel walking figure (~8.5 m).
+ *  Body/pedestals from Blender Draco GLB (tools/cityhall-blender/build_walker.py);
+ *  honeycomb via ~13 cm hex-cell alphaTest map + world-projected UVs. ≤3 draws.
+ */
+function applyHoneycombUVs(geo, cell = 0.13) {
+  const pos = geo.attributes.position;
+  if (!pos) return;
+  const n = pos.count;
+  const uv = new Float32Array(n * 2);
+  const nor = geo.attributes.normal;
+  for (let i = 0; i < n; i++) {
+    const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i);
+    // Triplanar: pick dominant axis from normal (fallback Y/X)
+    let nx = 0, ny = 1, nz = 0;
+    if (nor) { nx = Math.abs(nor.getX(i)); ny = Math.abs(nor.getY(i)); nz = Math.abs(nor.getZ(i)); }
+    if (ny >= nx && ny >= nz) {
+      uv[i * 2] = x / cell;
+      uv[i * 2 + 1] = z / cell;
+    } else if (nx >= nz) {
+      uv[i * 2] = z / cell;
+      uv[i * 2 + 1] = y / cell;
+    } else {
+      uv[i * 2] = x / cell;
+      uv[i * 2 + 1] = y / cell;
+    }
+  }
+  geo.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+}
+
+function buildWalkingSculpture(data, M, { walkerGlbUrl = null } = {}) {
   const g = new THREE.Group(); g.name = 'cityhallWalker';
-  const pr = data.promenade || { to: [1645, -5900] };
-  const sx = data.walker?.x ?? (pr.to[0] - 48);
-  const sz = data.walker?.z ?? (pr.to[1] + 4);
-  const yaw = data.walker?.ry ?? 0.35;
+  // White-ellipse mark: west half of south plaza, left of entrance promenade
+  // (open paved area in front of west side of building — not centre/east of walkway)
+  const sx = data.walker?.x ?? 1555;
+  const sz = data.walker?.z ?? -5892;
+  // Face roughly SE toward plaza / promenade (stride forward)
+  const yaw = data.walker?.ry ?? -0.55;
 
   const steel = M.steelHoneycomb || M.steelPlate;
   const plateMat = M.steelPlate || steel;
 
-  const bodyGeos = [];
-  const baseGeos = [];
-  const plateGeos = [];
-  const dummy = new THREE.Object3D();
-
-  function take(geo, bag, lx, ly, lz, rx = 0, ry = 0, rz = 0, scx = 1, scy = 1, scz = 1) {
-    dummy.position.set(lx, ly, lz);
-    dummy.rotation.set(rx, ry, rz);
-    dummy.scale.set(scx, scy, scz);
-    dummy.updateMatrix();
-    const g2 = geo.clone();
-    g2.applyMatrix4(dummy.matrix);
-    bag.push(g2);
-  }
-
-  {
-    const plate = new THREE.BoxGeometry(4.6, 0.06, 3.4);
-    take(plate, plateGeos, 0, 0.03, 0);
-    plate.dispose();
-  }
-  {
-    const base = new THREE.CylinderGeometry(1.7, 1.75, 0.38, 20);
-    take(base, baseGeos, 0, 0.25, 0);
-    base.dispose();
-    const lip = new THREE.CylinderGeometry(1.55, 1.55, 0.12, 20);
-    take(lip, baseGeos, 0, 0.48, 0);
-    lip.dispose();
-  }
-
-  const pedFront = { x: 0.55, z: 0.55, h: 0.55, r: 0.48 };
-  const pedRear = { x: -0.45, z: -0.55, h: 0.95, r: 0.48 };
-  const baseTop = 0.54;
-  for (const ped of [pedFront, pedRear]) {
-    const cyl = new THREE.CylinderGeometry(ped.r, ped.r * 1.05, ped.h, 14);
-    take(cyl, baseGeos, ped.x, baseTop + ped.h / 2, ped.z);
-    cyl.dispose();
-  }
-  const yFront = baseTop + pedFront.h;
-  const yRear = baseTop + pedRear.h;
-
-  {
-    const thigh = new THREE.CapsuleGeometry(0.28, 1.35, 4, 8);
-    take(thigh, bodyGeos, pedFront.x, yFront + 1.45, pedFront.z - 0.05, 0.45, 0, 0.08, 1, 1.25, 1);
-    thigh.dispose();
-    const shin = new THREE.CapsuleGeometry(0.22, 1.15, 4, 8);
-    take(shin, bodyGeos, pedFront.x + 0.05, yFront + 0.55, pedFront.z + 0.15, -0.15, 0, 0);
-    shin.dispose();
-    const foot = new THREE.BoxGeometry(0.45, 0.22, 0.85);
-    take(foot, bodyGeos, pedFront.x, yFront + 0.14, pedFront.z + 0.15);
-    foot.dispose();
-  }
-  {
-    const thigh = new THREE.CapsuleGeometry(0.28, 1.45, 4, 8);
-    take(thigh, bodyGeos, pedRear.x, yRear + 1.55, pedRear.z + 0.1, -0.7, 0, -0.05, 1, 1.3, 1);
-    thigh.dispose();
-    const shin = new THREE.CapsuleGeometry(0.22, 1.2, 4, 8);
-    take(shin, bodyGeos, pedRear.x - 0.05, yRear + 0.55, pedRear.z - 0.2, 0.35, 0, 0);
-    shin.dispose();
-    const foot = new THREE.BoxGeometry(0.45, 0.22, 0.85);
-    take(foot, bodyGeos, pedRear.x, yRear + 0.14, pedRear.z - 0.15);
-    foot.dispose();
-  }
-  {
-    const hips = new THREE.BoxGeometry(1.15, 0.55, 0.7);
-    take(hips, bodyGeos, 0.05, 4.05, 0.05, 0.12, 0.08, 0);
-    hips.dispose();
-  }
-  {
-    const torso = new THREE.CapsuleGeometry(0.55, 1.7, 6, 10);
-    take(torso, bodyGeos, 0.08, 5.85, 0.4, 0.42, 0.12, 0.06, 1.1, 1.15, 0.9);
-    torso.dispose();
-    const chest = new THREE.BoxGeometry(1.05, 1.1, 0.65);
-    take(chest, bodyGeos, 0.1, 6.05, 0.5, 0.4, 0.1, 0);
-    chest.dispose();
-  }
-  {
-    const head = new THREE.CapsuleGeometry(0.38, 0.35, 4, 8);
-    take(head, bodyGeos, 0.25, 7.95, 1.1, 0.35, 0.1, 0);
-    head.dispose();
-  }
-  {
-    const uArm = new THREE.CapsuleGeometry(0.16, 0.85, 4, 6);
-    take(uArm, bodyGeos, -0.75, 6.25, 0.6, 0.9, 0, 0.55);
-    take(uArm, bodyGeos, 0.9, 6.1, 0.95, 0.55, 0, -0.7);
-    uArm.dispose();
-    const lArm = new THREE.CapsuleGeometry(0.14, 0.75, 4, 6);
-    take(lArm, bodyGeos, -0.6, 5.35, 1.05, 0.2, 0, 0.4);
-    take(lArm, bodyGeos, 0.75, 5.25, 1.4, -0.15, 0, -0.35);
-    lArm.dispose();
-  }
-
-  function mergeBag(geos, mat, name) {
-    if (!geos.length) return null;
-    const merged = mergeGeometries(geos, false);
-    for (const x of geos) x.dispose();
-    if (!merged) return null;
-    // Always rebuild UVs so honeycomb tiles read on merged capsules/boxes
-    {
-      const n = merged.attributes.position.count;
-      const uv = new Float32Array(n * 2);
-      const pos = merged.attributes.position;
-      for (let i = 0; i < n; i++) {
-        const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i);
-        uv[i * 2] = (Math.atan2(z, x) / Math.PI + 1) * 1.6 + x * 0.15;
-        uv[i * 2 + 1] = y * 0.55 + z * 0.08;
-      }
-      merged.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
-    }
-    merged.computeVertexNormals();
-    const m = new THREE.Mesh(merged, mat);
-    m.name = name; m.castShadow = m.receiveShadow = true;
-    return m;
-  }
-
-  const plateM = mergeBag(plateGeos, plateMat, 'cityhallWalkerPlate');
-  const baseM = mergeBag(baseGeos, steel, 'cityhallWalkerBase');
-  const bodyM = mergeBag(bodyGeos, steel, 'cityhallWalkerBody');
-  if (plateM) g.add(plateM);
-  if (baseM) g.add(baseM);
-  if (bodyM) g.add(bodyM);
-
-  g.position.set(sx, 0, sz);
-  g.rotation.y = yaw;
-
-  const cos = Math.cos(yaw), sin = Math.sin(yaw);
+  // Collision (matches Blender pedestals: front +Y local → after yaw)
+  // Blender stride was +Y; glTF Y-up maps Blender +Y → Three −Z. Rotate extra π so stride reads forward.
+  const modelYaw = yaw + Math.PI;
+  const cos = Math.cos(modelYaw), sin = Math.sin(modelYaw);
+  const pedFront = { x: 0.62, z: -0.95 }; // after Y-up: Blender +Y → −Z
+  const pedRear = { x: -0.55, z: 1.25 };
   function localToWorld(lx, lz) {
     return [sx + lx * cos - lz * sin, sz + lx * sin + lz * cos];
   }
@@ -1883,15 +1790,112 @@ function buildWalkingSculpture(data, M) {
   const [pfx, pfz] = localToWorld(pedFront.x, pedFront.z);
   const [prx, prz] = localToWorld(pedRear.x, pedRear.z);
   const colliders = [
-    { x: bx, z: bz, r: 1.85 },
-    { x: pfx, z: pfz, r: 0.65 },
-    { x: prx, z: prz, r: 0.65 },
+    { x: bx, z: bz, r: 1.95 },
+    { x: pfx, z: pfz, r: 0.7 },
+    { x: prx, z: prz, r: 0.7 },
   ];
+
+  function paintWalker(root) {
+    root.traverse((o) => {
+      if (!o.isMesh || !o.geometry) return;
+      applyHoneycombUVs(o.geometry, 0.13);
+      const n = (o.name || '').toLowerCase();
+      if (/plate/.test(n)) {
+        o.material = plateMat;
+        o.name = 'cityhallWalkerPlate';
+      } else if (/pedestal|base|lip/.test(n)) {
+        o.material = steel;
+        o.name = o.name.includes('Pedestal') || /pedestal|base|lip/.test(n)
+          ? 'cityhallWalkerBase' : o.name;
+        if (/pedestal/.test(n) || n === 'walkerpedestals') o.name = 'cityhallWalkerBase';
+      } else {
+        o.material = steel;
+        o.name = 'cityhallWalkerBody';
+      }
+      o.castShadow = o.receiveShadow = true;
+    });
+    // Ensure named hooks exist even if Blender names differ
+    let hasBody = false, hasBase = false, hasPlate = false;
+    root.traverse((o) => {
+      if (!o.isMesh) return;
+      if (o.name === 'cityhallWalkerBody') hasBody = true;
+      if (o.name === 'cityhallWalkerBase') hasBase = true;
+      if (o.name === 'cityhallWalkerPlate') hasPlate = true;
+    });
+    root.traverse((o) => {
+      if (!o.isMesh) return;
+      if (!hasBody && /body|mesh/i.test(o.name)) { o.name = 'cityhallWalkerBody'; hasBody = true; }
+      if (!hasBase && /ped|base|cyl/i.test(o.name)) { o.name = 'cityhallWalkerBase'; hasBase = true; }
+      if (!hasPlate && /plate|cube/i.test(o.name)) { o.name = 'cityhallWalkerPlate'; hasPlate = true; }
+    });
+    // Last resort: assign by size / order
+    const meshes = [];
+    root.traverse((o) => { if (o.isMesh) meshes.push(o); });
+    meshes.sort((a, b) => (b.geometry?.attributes?.position?.count || 0) - (a.geometry?.attributes?.position?.count || 0));
+    if (!hasBody && meshes[0]) { meshes[0].name = 'cityhallWalkerBody'; meshes[0].material = steel; }
+    if (!hasBase && meshes[1]) { meshes[1].name = 'cityhallWalkerBase'; meshes[1].material = steel; }
+    if (!hasPlate && meshes[2]) { meshes[2].name = 'cityhallWalkerPlate'; meshes[2].material = plateMat; }
+  }
+
+  // Sync fallback (tests / GLB fail): pedestals + muscular-ish low-poly stand-in
+  function addFallback() {
+    // ≤3 draws: plate | pedestals+base | body
+    const plate = new THREE.Mesh(new THREE.BoxGeometry(5.0, 0.06, 3.6), plateMat);
+    plate.position.y = 0.03; plate.name = 'cityhallWalkerPlate';
+    applyHoneycombUVs(plate.geometry, 0.13);
+    const baseGeos = [];
+    const push = (geo, x, y, z) => { geo.translate(x, y, z); baseGeos.push(geo); };
+    push(new THREE.CylinderGeometry(1.8, 1.85, 0.4, 16), 0, 0.2, 0);
+    push(new THREE.CylinderGeometry(0.55, 0.55, 0.5, 12), 0.62, 0.65, -0.95);
+    push(new THREE.CylinderGeometry(0.55, 0.55, 1.45, 12), -0.55, 1.125, 1.25);
+    const baseMerged = mergeGeometries(baseGeos, false);
+    for (const g0 of baseGeos) g0.dispose();
+    applyHoneycombUVs(baseMerged, 0.13);
+    const base = new THREE.Mesh(baseMerged, steel); base.name = 'cityhallWalkerBase';
+    const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.7, 3.2, 6, 10), steel);
+    body.position.set(0.05, 5.2, -0.2); body.rotation.x = 0.45; body.name = 'cityhallWalkerBody';
+    applyHoneycombUVs(body.geometry, 0.13);
+    for (const m of [plate, base, body]) {
+      m.castShadow = m.receiveShadow = true;
+      g.add(m);
+    }
+  }
+
+  g.position.set(sx, 0, sz);
+  g.rotation.y = modelYaw;
   g.userData.walkerColliders = colliders;
   g.userData.walkerPos = { x: sx, z: sz };
 
+  let glbPending = null;
+  if (walkerGlbUrl && typeof document !== 'undefined') {
+    glbPending = import('three/examples/jsm/loaders/GLTFLoader.js').then(({ GLTFLoader }) =>
+      import('three/examples/jsm/loaders/DRACOLoader.js').then(({ DRACOLoader }) => {
+        const loader = new GLTFLoader();
+        const draco = new DRACOLoader();
+        const path = walkerGlbUrl.replace(/[^/]+$/, 'draco/');
+        draco.setDecoderPath(path);
+        draco.setDecoderConfig({ type: 'js' });
+        loader.setDRACOLoader(draco);
+        return loader.loadAsync(walkerGlbUrl).then((gltf) => {
+          const root = gltf.scene || gltf.scenes?.[0];
+          if (!root) { addFallback(); return; }
+          while (g.children.length) g.remove(g.children[0]);
+          paintWalker(root);
+          g.add(root);
+          draco.dispose();
+        }).catch((e) => {
+          console.warn('[cityhall] walker GLB failed', e);
+          if (!g.getObjectByName('cityhallWalkerBody')) addFallback();
+        });
+      })
+    );
+  } else {
+    addFallback();
+  }
+
   return {
     group: g,
+    pending: glbPending,
     isBlocked(x, z, r = 0.4) {
       for (const c of colliders) {
         if (Math.hypot(x - c.x, z - c.z) < c.r + r) return true;
@@ -1937,7 +1941,7 @@ function mergeStaticGroup(group, name = 'merged') {
   return group;
 }
 
-export function buildSeongnamCityHall(data, { env = null, glbUrl = null } = {}) {
+export function buildSeongnamCityHall(data, { env = null, glbUrl = null, walkerGlbUrl = null } = {}) {
   const M = mats();
   if (env) {
     for (const k of ['glassBlue', 'glassCurtain', 'glassLite', 'water', 'frame', 'solar', 'sculpture', 'steelHoneycomb', 'steelPlate']) {
@@ -1961,7 +1965,7 @@ export function buildSeongnamCityHall(data, { env = null, glbUrl = null } = {}) 
   const landscape = buildLandscape(data, M);
   const parking = buildParking(data, M);
   const gate = buildVehicleGate(data, M);
-  const walker = buildWalkingSculpture(data, M);
+  const walker = buildWalkingSculpture(data, M, { walkerGlbUrl });
   mergeStaticGroup(grounds, 'cityhallGroundsMerged');
   mergeStaticGroup(banners, 'cityhallBannersMerged');
   mergeStaticGroup(pond, 'cityhallPondMerged');

@@ -7,6 +7,7 @@ import { buildSeongnamCityHall, disposeCityHallMaterials } from './landmarks/seo
 export const CITYHALL_DIR = 'cityhall/';
 export const CITYHALL_FILE = CITYHALL_DIR + 'index.json';
 export const CITYHALL_GLB = CITYHALL_DIR + 'building.glb';
+export const CITYHALL_WALKER_GLB = CITYHALL_DIR + 'walker.glb';
 
 export function cityhallEnabled(search = typeof location !== 'undefined' ? location.search : '') {
   return new URLSearchParams(search).get('cityhall') === '1';
@@ -34,7 +35,8 @@ export function filterCityHallHidden(data, tileJson) {
 export function createCityHall({ data, scene, overlay = null, env = null, baseUrl = '' } = {}) {
   if (!data?.building) return null;
   const glbUrl = baseUrl ? (baseUrl + CITYHALL_GLB) : null;
-  const built = buildSeongnamCityHall(data, { env, glbUrl });
+  const walkerGlbUrl = baseUrl ? (baseUrl + CITYHALL_WALKER_GLB) : null;
+  const built = buildSeongnamCityHall(data, { env, glbUrl, walkerGlbUrl });
   scene.add(built.group);
   let label = null;
   if (overlay && data.building.pos) {
