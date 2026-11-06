@@ -359,19 +359,15 @@ function buildBuilding(data, M) {
   // Continuous thin overhang along south top edge
   frameBag.box((xMin + xMax) / 2, eastH + 0.15, zMax + 1.0, xMax - xMin + 2, 0.22, 2.4, 0, C.frame);
 
-  // Pilotis (slender white columns) under east + mid entrance
-  const colR = 0.55, colN = 10;
+  // Pilotis — 4 thick round columns on south (~1.2 m dia) (ref/15)
+  const colR = 0.6, colN = 4;
   for (let i = 0; i < colN; i++) {
-    for (let j = 0; j < 3; j++) {
-      const x = midX1 + 3.5 + i * ((xMax - midX1 - 6) / Math.max(1, colN - 1));
-      const z = zMin + 4 + j * ((zMax - zMin - 8) / 2);
-      frameBag.cyl(x, pilotisH / 2, z, colR, pilotisH, 10, C.pilotis);
-    }
+    const x = midX1 + 6 + i * ((xMax - midX1 - 12) / Math.max(1, colN - 1));
+    frameBag.cyl(x, pilotisH / 2, zMax - 2.5, colR, pilotisH, 14, C.pilotis);
   }
-  // A few pilotis under center entrance
-  for (let i = 0; i < 5; i++) {
-    const x = westX1 + 4 + i * ((midX1 - westX1 - 8) / 4);
-    frameBag.cyl(x, canopyY / 2, zMax - 2, 0.48, canopyY, 10, C.pilotis);
+  for (let i = 0; i < 3; i++) {
+    const x = westX1 + 5 + i * ((midX1 - westX1 - 10) / 2);
+    frameBag.cyl(x, canopyY / 2, zMax - 2, 0.55, canopyY, 14, C.pilotis);
   }
 
   // Long flat entrance canopy
@@ -629,10 +625,10 @@ function buildGrounds(data, M) {
   const xMin = Math.min(...xs), xMax = Math.max(...xs);
   const zMin = Math.min(...zs), zMax = Math.max(...zs);
 
-  // SE granite plaza near building (ref/04) — stop short of pond so lawn/path read (ref/11·12)
+  // SE granite plaza near building (ref/04) — stop WEST of pond so D-basin reads full (ref/04·12)
   const plaza = [
-    [xMin - 8, zMax + 0.3], [xMax + 28, zMax + 0.3],
-    [xMax + 38, zMax + 55], [xMin - 5, zMax + 70],
+    [xMin - 8, zMax + 0.3], [1688, zMax + 0.3],
+    [1688, zMax + 48], [xMin - 5, zMax + 65],
   ];
   {
     const geo = extrude(plaza, [], 0.08, 0.16);
@@ -709,9 +705,7 @@ function buildGrounds(data, M) {
     bag.box((bx0 + bx1) / 2, 0.14, (bz0 + bz1) / 2, L, 0.1, 2.6, -ang, C.brick);
   }
 
-  // Small green kiosk on lawn (photo 04/05) — keep west of new path
-  bag.box(xMax + 18, 1.4, zMax + 22, 4.5, 2.8, 3.2, 0.3, C.kiosk);
-  bag.box(xMax + 18, 2.9, zMax + 22, 5.0, 0.15, 3.6, 0.3, C.frame);
+  // No lawn furniture blocks (ref/12·15 — open grass)
 
   const body = bag.mesh(M.vc, 'cityhallGroundBody'); if (body) g.add(body);
   return g;
@@ -719,25 +713,28 @@ function buildGrounds(data, M) {
 
 
 function buildSeongnamSign(data, M) {
-  // Photo-spot '성남' magenta outline sign on south lawn (ref/14·15) — city sign, not a brand logo
+  // Photo-spot '성남' magenta outline — ~3 m frame, plinth ~4×0.8 m (ref/14·15); off spawn, face walkway
   const g = new THREE.Group(); g.name = 'cityhallSeongnamSign';
   const pr = data.promenade;
-  // Sit on lawn beside paved path, east of promenade mid (camera looks north at east block)
   const dx = pr.to[0] - pr.from[0], dz = pr.to[1] - pr.from[1], L = Math.hypot(dx, dz) || 1;
   const ux = dx / L, uz = dz / L, px = -uz, pz = ux;
-  const tMid = 0.42;
-  const sx = pr.from[0] + dx * tMid + px * 1 * (pr.width / 2 + 6.5);
-  const sz = pr.from[1] + dz * tMid + pz * 1 * (pr.width / 2 + 6.5);
+  // Further toward building (t~0.72), east lawn — not on typical eye-spawn mid-path
+  const tAlong = 0.58;
+  const sx = pr.from[0] + dx * tAlong + px * (pr.width / 2 + 10.5);
+  const sz = pr.from[1] + dz * tAlong + pz * (pr.width / 2 + 10.5);
+  // Face the walkway (toward path center)
+  const faceYaw = Math.atan2(-px, -pz);
 
-  // Dark charcoal plinth — ~2× wider than tall (ref/15)
+  // Dark charcoal plinth ~4 m wide × 0.8 m high (ref/15)
   const plinthMat = new THREE.MeshStandardMaterial({ color: '#2a2e34', roughness: 0.88, metalness: 0.05 });
-  const plinth = new THREE.Mesh(new THREE.BoxGeometry(2.5, 0.55, 1.05), plinthMat);
-  plinth.position.set(sx, 0.275, sz);
+  const plinth = new THREE.Mesh(new THREE.BoxGeometry(4.0, 0.8, 1.5), plinthMat);
+  plinth.position.set(sx, 0.4, sz);
+  plinth.rotation.y = faceYaw;
   plinth.castShadow = true; plinth.receiveShadow = true;
   g.add(plinth);
 
-  // Magenta outline face (pre-rendered PNG with 성남 + hanging ㅇ) — BasicMat so SwiftShader/daylight always read
-  // TextureLoader needs document; Node tests skip the PNG plane (solid ring below still draws)
+  const faceH = 3.0; // ~3 m frame + hanging ㅇ ≈ 3.4 m total (ref/15)
+  const faceY = 0.8 + faceH / 2;
   if (typeof document !== 'undefined' && document.createElementNS) {
     const tex = new THREE.TextureLoader().load('/corridor/cityhall/seongnam-sign.png');
     tex.colorSpace = THREE.SRGBColorSpace;
@@ -746,60 +743,67 @@ function buildSeongnamSign(data, M) {
       map: tex, transparent: true, alphaTest: 0.12,
       side: THREE.DoubleSide, depthWrite: false,
     });
-    const face = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 2.4), faceMat);
-    face.position.set(sx, 0.55 + 1.15, sz + 0.02);
-    face.rotation.y = 0;
+    const face = new THREE.Mesh(new THREE.PlaneGeometry(3.6, faceH), faceMat);
+    face.position.set(sx, faceY, sz);
+    face.rotation.y = faceYaw;
     face.renderOrder = 3;
     g.add(face);
-    const back = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 2.4), faceMat);
-    back.position.set(sx, 0.55 + 1.15, sz - 0.05);
-    back.rotation.y = Math.PI;
+    const back = new THREE.Mesh(new THREE.PlaneGeometry(3.6, faceH), faceMat);
+    back.position.set(
+      sx - Math.sin(faceYaw) * 0.06,
+      faceY,
+      sz - Math.cos(faceYaw) * 0.06,
+    );
+    back.rotation.y = faceYaw + Math.PI;
     back.renderOrder = 3;
     g.add(back);
   }
-  // Solid magenta ring backup (reads even if texture lags): rounded-rect approximation via torus + bars
+  // Solid magenta ring backup
   const mag = new THREE.MeshBasicMaterial({ color: '#a0307f' });
   const ring = new THREE.Group();
-  const thrk = 0.1, fw = 2.05, fh = 1.55;
+  const thrk = 0.14, fw = 3.2, fh = 2.45;
   for (const [wx, wy, sx_, sy_] of [
     [0, fh / 2, fw, thrk], [0, -fh / 2, fw, thrk], [-fw / 2, 0, thrk, fh], [fw / 2, 0, thrk, fh],
   ]) {
-    const b = new THREE.Mesh(new THREE.BoxGeometry(sx_, sy_, 0.12), mag);
+    const b = new THREE.Mesh(new THREE.BoxGeometry(sx_, sy_, 0.14), mag);
     b.position.set(wx, wy, 0); ring.add(b);
   }
-  // hanging ㅇ
-  const tor = new THREE.Mesh(new THREE.TorusGeometry(0.28, 0.08, 8, 16), mag);
-  tor.position.set(-0.45, -fh / 2 - 0.28, 0); ring.add(tor);
-  ring.position.set(sx, 0.55 + 1.15, sz + 0.08);
+  const tor = new THREE.Mesh(new THREE.TorusGeometry(0.42, 0.11, 8, 20), mag);
+  tor.position.set(-0.7, -fh / 2 - 0.42, 0); ring.add(tor);
+  ring.position.set(sx, faceY, sz);
+  ring.rotation.y = faceYaw;
   g.add(ring);
   return g;
 }
 
 function buildBanners(data, M) {
+  // Slim poles ~0.12 m dia, ~4.5 m tall; small fabric ~0.5×1.5 m near top; ~9 m spacing (ref/12·15)
   const g = new THREE.Group(); g.name = 'cityhallBanners';
   const pr = data.promenade;
   const dx = pr.to[0] - pr.from[0], dz = pr.to[1] - pr.from[1], L = Math.hypot(dx, dz);
   const ux = dx / L, uz = dz / L, px = -uz, pz = ux;
-  const n = 16;
-  const poles = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.07, 0.09, 7.8, 6), M.pole, n * 2 + 10);
-  const banners = new THREE.InstancedMesh(new THREE.PlaneGeometry(0.95, 2.4), M.banner, n * 2 + 10);
+  const spacing = 9;
+  const n = Math.max(4, Math.floor(L / spacing));
+  const poleH = 4.5;
+  const poles = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.055, 0.06, poleH, 8), M.pole, n * 2 + 4);
+  const banners = new THREE.InstancedMesh(new THREE.PlaneGeometry(0.5, 1.5), M.banner, n * 2 + 4);
   const dummy = new THREE.Object3D();
   let i = 0;
   for (const side of [-1, 1]) {
     for (let k = 0; k < n; k++) {
       const t = (k + 0.5) / n;
-      const x = pr.from[0] + dx * t + px * side * (pr.width / 2 + 1.3);
-      const z = pr.from[1] + dz * t + pz * side * (pr.width / 2 + 1.3);
-      dummy.position.set(x, 3.9, z); dummy.rotation.set(0, 0, 0); dummy.scale.set(1, 1, 1); dummy.updateMatrix();
+      const x = pr.from[0] + dx * t + px * side * (pr.width / 2 + 0.9);
+      const z = pr.from[1] + dz * t + pz * side * (pr.width / 2 + 0.9);
+      dummy.position.set(x, poleH / 2, z); dummy.rotation.set(0, 0, 0); dummy.scale.set(1, 1, 1); dummy.updateMatrix();
       poles.setMatrixAt(i, dummy.matrix);
-      dummy.position.set(x + px * side * 0.15, 5.4, z + pz * side * 0.15);
+      // Small vertical banner near top of pole
+      dummy.position.set(x + px * side * 0.12, poleH - 0.95, z + pz * side * 0.12);
       dummy.rotation.set(0, Math.atan2(px * side, pz * side), 0);
       dummy.updateMatrix();
       banners.setMatrixAt(i, dummy.matrix);
       i++;
     }
   }
-  // Banner poles only along the (shifted) promenade — matches ref/12
   poles.count = i; banners.count = i;
   poles.castShadow = true; g.add(poles, banners);
   return g;
@@ -808,54 +812,51 @@ function buildBanners(data, M) {
 function buildPond(data, M) {
   const g = new THREE.Group(); g.name = 'cityhallPond';
   const bag = Bag();
-  // Wide filled D / half-moon basin east of building (ref/04·12) — NOT OSM thin ribbon
-  // East block ~61 m long; basin width ~22–28 m (~1/3), length ~55 m along east face
-  const bx = 1695;           // flat west edge near building east face
-  const zSouth = -5950;
-  const zNorth = -5895;
-  const bulge = 34;          // wide D basin ~1/3 east-block length (ref/04·12)
-  const ring = [[bx, zSouth], [bx, zNorth]];
-  for (let i = 0; i <= 16; i++) {
-    const t = i / 16;
-    const z = zNorth + (zSouth - zNorth) * t;
-    const u = Math.sin(t * Math.PI); // full lobe
-    ring.push([bx + Math.max(0.5, bulge * u), z]);
+  // Wide rounded D / half-moon (ref/04) — smooth semicircle outer edge, NOT triangle / ribbon
+  // Flat west lip along east facade; east bulge = semicircle radius ≈ half chord
+  const bx = 1694;
+  const z0 = -5948; // northish (more −Z)
+  const z1 = -5896; // southish
+  const zMid = (z0 + z1) / 2;
+  const halfLen = Math.abs(z1 - z0) / 2; // ~26 m
+  const R = halfLen; // circular half-moon → bulge ≈ 26 m (~1/3 of ~70 m east face)
+  const ring = [];
+  // Flat west edge (building side), north → south
+  for (let i = 0; i <= 8; i++) {
+    const t = i / 8;
+    ring.push([bx, z0 + (z1 - z0) * t]);
+  }
+  // Smooth semicircle outer arc south → north (CCW close), 32 samples
+  for (let i = 1; i < 32; i++) {
+    const t = i / 32;
+    const ang = Math.PI / 2 - t * Math.PI; // +90° (south) → −90° (north) through east (0°)
+    ring.push([bx + R * Math.cos(ang), zMid + R * Math.sin(ang)]);
   }
   const xs = ring.map((p) => p[0]), zs = ring.map((p) => p[1]);
   const cx = xs.reduce((a, b) => a + b, 0) / xs.length;
   const cz = zs.reduce((a, b) => a + b, 0) / zs.length;
 
   // Stone rim
-  band(bag, ring, 0.12, 0.48, 0.7, 0.85, C.curb, { minLen: 0.6 });
+  band(bag, ring, 0.12, 0.48, 0.7, 0.85, C.curb, { minLen: 0.5 });
   // Filled water basin
   bag.push(paintFaces(extrude(ring, [], 0.04, 0.3), C.waterDeep, C.water, C.waterDeep));
   const waterMesh = new THREE.Mesh(extrude(ring, [], 0.26, 0.36), M.water);
   waterMesh.name = 'cityhallDPond'; g.add(waterMesh);
   const edgeBody = bag.mesh(M.vc, 'cityhallPondEdge'); if (edgeBody) g.add(edgeBody);
 
-  // Curved stone path along west (plaza) lip
-  for (let i = 0; i < 16; i++) {
-    const t0 = i / 16, t1 = (i + 1) / 16;
-    const z0 = zNorth + (zSouth - zNorth) * t0;
-    const z1 = zNorth + (zSouth - zNorth) * t1;
-    const x0 = bx - 3.2, x1 = bx - 3.2;
-    const dx = x1 - x0, dz = z1 - z0, L = Math.hypot(dx, dz) || 1, ang = Math.atan2(dz, dx || 0.001);
-    bag.box((x0 + x1) / 2, 0.1, (z0 + z1) / 2, Math.max(L, 0.5), 0.1, 2.6, -ang, C.path);
+  // Path along flat west lip
+  for (let i = 0; i < 12; i++) {
+    const t0 = i / 12, t1 = (i + 1) / 12;
+    const za = z0 + (z1 - z0) * t0, zb = z0 + (z1 - z0) * t1;
+    const x0 = bx - 3.0, x1 = bx - 3.0;
+    const ddx = x1 - x0, ddz = zb - za, LL = Math.hypot(ddx, ddz) || 1, ang = Math.atan2(ddz, ddx || 0.001);
+    bag.box((x0 + x1) / 2, 0.1, (za + zb) / 2, Math.max(LL, 0.5), 0.1, 2.4, -ang, C.path);
   }
-  // Also arc path along curved east rim (outside)
-  for (let i = 0; i < 16; i++) {
-    const t0 = i / 16, t1 = (i + 1) / 16;
-    const z0 = zNorth + (zSouth - zNorth) * t0;
-    const z1 = zNorth + (zSouth - zNorth) * t1;
-    const u0 = Math.sin(t0 * Math.PI), u1 = Math.sin(t1 * Math.PI);
-    const x0 = bx + bulge * u0 + 2.8, x1 = bx + bulge * u1 + 2.8;
-    const dx = x1 - x0, dz = z1 - z0, L = Math.hypot(dx, dz) || 1, ang = Math.atan2(dz, dx);
-    bag.box((x0 + x1) / 2, 0.1, (z0 + z1) / 2, L, 0.1, 2.2, -ang, C.path);
-  }
+  // No east arc pavers (were reading as grey lawn blocks in eye shots)
   const pathM = bag.mesh(M.vc, 'cityhallPondPath'); if (pathM) g.add(pathM);
 
   // Sculpture near NW of pond (plaza side)
-  const sc = data.pond?.sculpture || { x: bx - 10, z: zNorth + 10 };
+  const sc = data.pond?.sculpture || { x: bx - 10, z: zMid + 8 };
   const sbag = Bag();
   sbag.cyl(sc.x, 0.35, sc.z, 0.85, 0.7, 10, C.curb);
   const wing = new THREE.SphereGeometry(1.5, 10, 8, 0, Math.PI);
@@ -1094,7 +1095,7 @@ function buildLandscape(data, M) {
   const f = data.fountain || { cx: 1610, cz: -5965, len: 58 };
 
   // Clear: north fountain corridor + south plaza strip + pond apron (ref/11·12 — open water)
-  const pondCx = 1708, pondCz = -5922, pondR = 32;
+  const pondCx = 1708, pondCz = -5922, pondR = 36;
   const inKeepClear = (x, z) => (
     x > f.cx - f.len / 2 - 10 && x < f.cx + f.len / 2 + 10 && z < zMin + 2 && z > seatsZ - 8
   ) || (
@@ -1177,23 +1178,7 @@ function buildLandscape(data, M) {
   trunk.castShadow = true; broad.castShadow = pine.castShadow = true;
   g.add(trunk, broad, pine);
 
-  // Hedges along promenade
-  const hedgeN = 20;
-  const hedges = new THREE.InstancedMesh(new THREE.BoxGeometry(2.2, 0.9, 0.7), M.hedge, hedgeN * 2);
-  let hi = 0;
-  for (const side of [-1, 1]) {
-    for (let k = 0; k < hedgeN; k++) {
-      const t = (k + 0.5) / hedgeN;
-      const x = pr.from[0] + (pr.to[0] - pr.from[0]) * t;
-      const z = pr.from[1] + (pr.to[1] - pr.from[1]) * t;
-      const dx = pr.to[0] - pr.from[0], dz = pr.to[1] - pr.from[1], L = Math.hypot(dx, dz);
-      const px = -dz / L, pz = dx / L;
-      dummy.position.set(x + px * side * (pr.width / 2 + 2.5), 0.45, z + pz * side * (pr.width / 2 + 2.5));
-      dummy.scale.set(1, 1, 1); dummy.rotation.set(0, Math.atan2(dz, dx), 0); dummy.updateMatrix();
-      hedges.setMatrixAt(hi++, dummy.matrix);
-    }
-  }
-  g.add(hedges);
+  // No hedge boxes along promenade (ref/12·15 — open lawn; grey rect blocks removed)
   return g;
 }
 

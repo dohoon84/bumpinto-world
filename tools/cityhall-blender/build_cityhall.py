@@ -166,14 +166,13 @@ def build():
     for i in range(8):
         px = mx1 + 3 + i * ((x_max - mx1 - 6) / 7)
         opaque.append(box(f'EMul{i}', px, y_min - 0.6, (PH + EAST_H) / 2, 0.28, 0.4, EAST_H - PH - 1, m_span))
-    # Pilotis
-    for i in range(12):
-        px = mx1 + 2 + i*((x_max-mx1-4)/11)
-        for oy in (-east_sy/2+2.5, 0, east_sy/2-2.5):
-            opaque.append(cyl(f'P{i}_{oy:.0f}', px, y_c+oy, PH/2, 0.45, PH, m_pil))
-    for i in range(7):
-        px = wx1 + 3 + i*((mx1-wx1-4)/6)
-        opaque.append(cyl(f'PM{i}', px, y_min-2, 3.5, 0.42, 7.0, m_pil))
+    # Pilotis — 4 thick round columns on south face only (~1.2 m dia) (ref/15 eye)
+    for i in range(4):
+        px = mx1 + 6 + i*((x_max-mx1-12)/3)
+        opaque.append(cyl(f'P{i}', px, y_min + 2.5, PH/2, 0.60, PH, m_pil, segs=16))
+    for i in range(3):
+        px = wx1 + 5 + i*((mx1-wx1-10)/2)
+        opaque.append(cyl(f'PM{i}', px, y_min-2, 3.5, 0.55, 7.0, m_pil, segs=14))
     # Council
     cpts=[rel(x,z) for x,z in COUNCIL]
     opaque.append(extrude_poly('Council', cpts, 0, 18, m_frame))
