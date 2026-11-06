@@ -111,28 +111,37 @@ ok('filter no-op without data');
   // Overpass deck height
   const deckY = built.groundHeight(1810, -5765);
   assert.ok(deckY != null && deckY > 5 && deckY < 6.5, 'overpass deck y ' + deckY);
-  const el = built.tryElevator?.(1778.4, -5765, 0);
+  // West/east elevator towers at end abutments (cable-stayed)
+  const el = built.tryElevator?.(1786.8, -5765, 0);
   assert.ok(el && el.y > 5, 'elevator up ' + JSON.stringify(el));
+  const elEast = built.tryElevator?.(1833.2, -5765, 0);
+  assert.ok(elEast && elEast.y > 5, 'east elevator up ' + JSON.stringify(elEast));
   built.dispose();
   ok('plaza extras stone/fountain/overpass/elevator');
 }
 
 
-// 5d) ground floor G1 glass + door gap + walker SE of facade
+// 5d) sealed G1 glass volume — enter only via doors; former gap closed
 {
   const built = buildSeongnamCityHall(data);
-  const zFace = Math.max(...data.building.o.map((p) => p[1])) + 0.55;
+  const zFace = Math.max(...data.building.o.map((p) => p[1])) + 0.22;
   assert.equal(built.isBlocked(1545, zFace, 0.4), true, 'west G1 blocks');
-  assert.equal(built.isBlocked(1585, zFace, 0.4), false, 'gap stays open');
+  assert.equal(built.isBlocked(1585, zFace, 0.4), true, 'former gap now glass');
   assert.equal(built.isBlocked(1650, zFace, 0.4), true, 'main G1 blocks');
   assert.equal(built.isBlocked(1607, zFace, 0.4), false, 'door bay open');
+  // Back / side walls of sealed volume
+  const zBack = Math.max(...data.building.o.map((p) => p[1])) - 11;
+  assert.equal(built.isBlocked(1600, zBack, 0.4), true, 'north/back wall blocks');
+  assert.equal(built.isBlocked(1524, (zFace + zBack) / 2, 0.4), true, 'west end wall blocks');
   const names = [];
   built.group.traverse((o) => { if (o.name) names.push(o.name); });
   assert.ok(names.includes('cityhallGroundFloor'), 'ground floor group');
   assert.ok(names.includes('cityhallRevolvingDoor'), 'revolving door');
   assert.ok(names.includes('cityhallAutoDoor'), 'auto door');
+  assert.ok(names.includes('cityhallG1Transom'), 'transom above doors');
+  assert.ok(names.includes('cityhallStayCable') || names.includes('cityhallOverpassRail'), 'cable-stayed overpass');
   built.dispose();
-  ok('ground floor G1 glass/doors/gap');
+  ok('sealed G1 glass/doors/transom + overpass');
 }
 
 // 6) createCityHall wrapper

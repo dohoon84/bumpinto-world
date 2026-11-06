@@ -1950,8 +1950,9 @@ function buildWalkingSculpture(data, M, { walkerGlbUrl = null } = {}) {
 
 
 
-/** Enclosed G1 glass under west wing + main south band (도훈 yellow outlines).
- *  Gap between zones stays open. Centre: revolving door + auto sliding door.
+/** Sealed G1 glass volume under pilotis (도훈 yellow extent).
+ *  South/east/west/north walls + transom above doors. Enter ONLY via revolving/auto doors.
+ *  Doors: clear near-transparent glass (not blue-tinted).
  */
 function buildGroundFloor(data, M) {
   const g = new THREE.Group(); g.name = 'cityhallGroundFloor';
@@ -1963,20 +1964,23 @@ function buildGroundFloor(data, M) {
   const westX1 = mass.westX1 ?? 1582;
   const midX1 = mass.midX1 ?? 1632;
   const PH = mass.pilotisH ?? 8.0;
-  const zFace = zMax + 0.55; // south facade line just outside footprint
 
-  // Yellow zones: west wing | OPEN GAP | main band (doors cut out)
-  const WEST = { x0: xMin + 1.5, x1: westX1 - 8 };       // ~1523–1574
-  const MAIN = { x0: westX1 + 12, x1: xMax - 2 };        // ~1594–1691
-  const DOOR_X = (westX1 + midX1) / 2;                   // ~1607 canopy centre
-  const DOOR_W = 5.2; // opening for revolving + auto
+  // Yellow-boxed extent: west wing through mid/east colonnade — stop before far-east overhang panels
+  const G1_X0 = xMin + 2.0;                 // ~1524
+  const G1_X1 = Math.min(xMax - 14.5, midX1 + 46); // ~1678 — drop eastmost ~4×3.2 m panels
+  const zSouth = zMax + 0.22;               // flush with building south face (not free-standing overhang)
+  const zNorth = zMax - 11.0;               // back wall under slab
+  const DOOR_X = (westX1 + midX1) / 2;      // ~1607
+  const DOOR_W = 5.4;
   const doorL = DOOR_X - DOOR_W / 2;
   const doorR = DOOR_X + DOOR_W / 2;
+  const DOOR_H = 2.95; // revolving / auto leaf height; transom fills DOOR_H → PH
 
+  // Building enclosure glass (blue-ish curtain) — walls of the sealed volume
   const glassMat = (M.glassBlue || M.glassLite).clone();
   glassMat.name = 'G1Glass';
   glassMat.transparent = true;
-  glassMat.opacity = 0.88;
+  glassMat.opacity = 0.86;
   glassMat.roughness = 0.28;
   glassMat.metalness = 0.2;
   glassMat.emissive = new THREE.Color('#3a7aa8');
@@ -1984,108 +1988,177 @@ function buildGroundFloor(data, M) {
   glassMat.side = THREE.DoubleSide;
   glassMat.depthWrite = true;
 
+  // Clear door glass — near-transparent, light neutral (NOT blue tint)
+  const clearMat = new THREE.MeshStandardMaterial({
+    color: '#eef3f6', transparent: true, opacity: 0.18,
+    roughness: 0.06, metalness: 0.12, depthWrite: false,
+    side: THREE.DoubleSide, envMapIntensity: 0.35,
+  });
+  clearMat.name = 'G1ClearDoor';
+
   const mullionMat = M.frame || M.frameDark || new THREE.MeshStandardMaterial({ color: '#e6eaee' });
   const bag = Bag();
-  const colliders = []; // { x0,x1,z, half }
+  // Wall colliders: { kind:'ns'|'ew', x0,x1,z0,z1 } thin slabs
+  const walls = [];
 
-  function addGlassSpan(x0, x1) {
-    if (x1 - x0 < 1.2) return;
-    const cx = (x0 + x1) / 2, w = x1 - x0;
-    // Glass curtain
-    const plane = new THREE.PlaneGeometry(w, PH - 0.35, Math.max(1, Math.round(w / 3.2)), 4);
-    // Mullion UVs already on plane
-    plane.translate(cx, (PH - 0.35) / 2 + 0.15, zFace);
-    const mesh = new THREE.Mesh(plane, glassMat);
-    mesh.name = 'cityhallG1Glass';
-    mesh.castShadow = false;
-    mesh.receiveShadow = true;
+  function addNSWall(x0, x1, z, y0, y1, mat = glassMat, name = 'cityhallG1Glass') {
+    if (x1 - x0 < 0.4 || y1 - y0 < 0.3) return;
+    const cx = (x0 + x1) / 2, w = x1 - x0, h = y1 - y0;
+    const plane = new THREE.PlaneGeometry(w, h, Math.max(1, Math.round(w / 3.2)), Math.max(1, Math.round(h / 2.5)));
+    plane.translate(cx, y0 + h / 2, z);
+    const mesh = new THREE.Mesh(plane, mat);
+    mesh.name = name;
+    mesh.castShadow = false; mesh.receiveShadow = true;
     g.add(mesh);
-    // Vertical mullions every ~3.2m
-    for (let x = x0 + 1.6; x < x1 - 0.5; x += 3.2) {
-      bag.box(x, PH / 2, zFace + 0.04, 0.12, PH - 0.2, 0.14, 0, C.frame);
+    // Mullions
+    for (let x = x0 + 1.6; x < x1 - 0.4; x += 3.2) {
+      bag.box(x, y0 + h / 2, z + 0.04, 0.1, h - 0.1, 0.12, 0, C.frame);
     }
-    // Top + bottom rails
-    bag.box(cx, 0.18, zFace + 0.04, w, 0.22, 0.16, 0, C.frame);
-    bag.box(cx, PH - 0.15, zFace + 0.04, w, 0.22, 0.18, 0, C.frame);
-    // Interior glow strip (night) — warm/cool panels behind glass
-    for (let x = x0 + 2; x < x1 - 1; x += 4.5) {
-      const col = ((Math.sin(x * 12.9) + 1) * 0.5) > 0.45 ? C.nightWarm : C.nightCool;
-      bag.box(x, PH * 0.45, zFace - 0.8, 3.2, PH * 0.7, 0.08, 0, col);
-    }
-    colliders.push({ x0, x1, z: zFace, half: 0.45 });
+    bag.box(cx, y0 + 0.12, z + 0.04, w, 0.18, 0.14, 0, C.frame);
+    bag.box(cx, y1 - 0.12, z + 0.04, w, 0.18, 0.14, 0, C.frame);
+    walls.push({ kind: 'ns', x0, x1, z, half: 0.4 });
   }
 
-  addGlassSpan(WEST.x0, WEST.x1);
-  // Main band split around door opening
-  addGlassSpan(MAIN.x0, doorL);
-  addGlassSpan(doorR, MAIN.x1);
+  function addEWWall(z0, z1, x, y0, y1, mat = glassMat, name = 'cityhallG1Glass') {
+    if (z1 - z0 < 0.4 || y1 - y0 < 0.3) return;
+    const cz = (z0 + z1) / 2, d = z1 - z0, h = y1 - y0;
+    const plane = new THREE.PlaneGeometry(d, h, Math.max(1, Math.round(d / 3.2)), Math.max(1, Math.round(h / 2.5)));
+    plane.rotateY(Math.PI / 2);
+    plane.translate(x, y0 + h / 2, cz);
+    const mesh = new THREE.Mesh(plane, mat);
+    mesh.name = name;
+    mesh.castShadow = false; mesh.receiveShadow = true;
+    g.add(mesh);
+    for (let z = z0 + 1.6; z < z1 - 0.4; z += 3.2) {
+      bag.box(x + 0.04, y0 + h / 2, z, 0.12, h - 0.1, 0.1, 0, C.frame);
+    }
+    bag.box(x + 0.04, y0 + 0.12, cz, 0.14, 0.18, d, 0, C.frame);
+    bag.box(x + 0.04, y1 - 0.12, cz, 0.14, 0.18, d, 0, C.frame);
+    walls.push({ kind: 'ew', z0, z1, x, half: 0.4 });
+  }
 
-  // Simple lobby floor just inside facade (cheap)
-  bag.box(DOOR_X, 0.06, zMax - 4, DOOR_W + 14, 0.1, 10, 0, C.plaza);
+  // --- South facade: full span with door cutout ---
+  addNSWall(G1_X0, doorL, zSouth, 0.15, PH - 0.2);
+  addNSWall(doorR, G1_X1, zSouth, 0.15, PH - 0.2);
+  // Transom above door bay — SOLID fill to slab (bag solids + glass face) so gap cannot read open
+  {
+    const tw = doorR - doorL;
+    const tcx = (doorL + doorR) / 2;
+    const ty0 = DOOR_H + 0.02, ty1 = PH - 0.12;
+    const th = ty1 - ty0;
+    // Opaque-ish interior fill (blocks view of open air / sky through bay)
+    bag.box(tcx, ty0 + th / 2, zSouth - 0.25, tw - 0.1, th, 0.5, 0, '#a8c0d4');
+    // Outer glass face
+    const transMat = glassMat.clone();
+    transMat.opacity = 0.9;
+    transMat.emissive = new THREE.Color('#4a90b8');
+    transMat.emissiveIntensity = 0.3;
+    const tGeo = new THREE.BoxGeometry(tw - 0.05, th, 0.2);
+    tGeo.translate(tcx, ty0 + th / 2, zSouth + 0.06);
+    const tMesh = new THREE.Mesh(tGeo, transMat);
+    tMesh.name = 'cityhallG1Transom';
+    g.add(tMesh);
+    // Mullion grid
+    for (let y = ty0 + 1.0; y < ty1 - 0.2; y += 1.2) {
+      bag.box(tcx, y, zSouth + 0.14, tw, 0.12, 0.18, 0, C.frame);
+    }
+    for (let x = doorL + 1.2; x < doorR - 0.5; x += 1.6) {
+      bag.box(x, ty0 + th / 2, zSouth + 0.14, 0.1, th, 0.16, 0, C.frame);
+    }
+    bag.box(tcx, ty0 + 0.1, zSouth + 0.14, tw, 0.18, 0.2, 0, C.frame);
+    bag.box(tcx, ty1 - 0.1, zSouth + 0.14, tw, 0.18, 0.2, 0, C.frame);
+  }
+  // White lintel / header bar right above door leaves
+  bag.box(DOOR_X, DOOR_H + 0.14, zSouth + 0.1, DOOR_W + 0.4, 0.32, 0.4, 0, C.frame);
+  // Door-bay side jambs (full height to slab)
+  bag.box(doorL, PH / 2, zSouth + 0.1, 0.2, PH - 0.15, 0.32, 0, C.frame);
+  bag.box(doorR, PH / 2, zSouth + 0.1, 0.2, PH - 0.15, 0.32, 0, C.frame);
 
-  // --- Revolving door (회전문): 4-wing glass in cylinder ---
+  // --- North (back) wall — sealed ---
+  addNSWall(G1_X0, G1_X1, zNorth, 0.15, PH - 0.2);
+
+  // --- West + East end walls — sealed ---
+  addEWWall(zNorth, zSouth, G1_X0, 0.15, PH - 0.2);
+  addEWWall(zNorth, zSouth, G1_X1, 0.15, PH - 0.2);
+
+  // Interior glow strips (night) along south
+  for (let x = G1_X0 + 2; x < G1_X1 - 1; x += 4.5) {
+    if (x > doorL - 1 && x < doorR + 1) continue;
+    const col = ((Math.sin(x * 12.9) + 1) * 0.5) > 0.45 ? C.nightWarm : C.nightCool;
+    bag.box(x, PH * 0.45, zSouth - 0.9, 3.2, PH * 0.7, 0.08, 0, col);
+  }
+
+  // Lobby floor inside sealed volume
+  bag.box((G1_X0 + G1_X1) / 2, 0.06, (zSouth + zNorth) / 2, G1_X1 - G1_X0 - 0.5, 0.1, Math.abs(zSouth - zNorth) - 0.5, 0, C.plaza);
+
+  // --- Revolving door (회전문): clear glass wings ---
   const revG = new THREE.Group(); revG.name = 'cityhallRevolvingDoor';
-  revG.position.set(DOOR_X - 1.15, 0, zFace + 0.15);
-  const cylR = 1.35, cylH = 2.85;
-  // Drum frame (top/bottom rings + posts)
+  revG.position.set(DOOR_X - 1.15, 0, zSouth + 0.1);
+  const cylR = 1.35, cylH = DOOR_H - 0.1;
   const drumMat = mullionMat;
-  const topRing = new THREE.Mesh(new THREE.TorusGeometry(cylR, 0.07, 6, 20), drumMat);
+  const topRing = new THREE.Mesh(new THREE.TorusGeometry(cylR, 0.055, 6, 20), drumMat);
   topRing.rotation.x = Math.PI / 2; topRing.position.y = cylH;
   revG.add(topRing);
-  const botRing = topRing.clone(); botRing.position.y = 0.08; revG.add(botRing);
-  // 4 wings
-  const wingG = new THREE.Group(); wingG.name = 'cityhallRevWings';
-  const wingMat = glassMat.clone(); wingMat.opacity = 0.55; wingMat.emissiveIntensity = 0.15;
+  const botRing = topRing.clone(); botRing.position.y = 0.06; revG.add(botRing);
+  // Subtle outer posts (not a solid blue drum)
   for (let i = 0; i < 4; i++) {
-    const wing = new THREE.Mesh(new THREE.BoxGeometry(cylR * 1.85, cylH - 0.25, 0.06), wingMat);
-    wing.position.set(0, cylH / 2, 0);
+    const a = (i / 4) * Math.PI * 2 + Math.PI / 4;
+    const post = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, cylH, 6), drumMat);
+    post.position.set(Math.cos(a) * cylR, cylH / 2, Math.sin(a) * cylR);
+    revG.add(post);
+  }
+  const wingG = new THREE.Group(); wingG.name = 'cityhallRevWings';
+  for (let i = 0; i < 4; i++) {
+    const wing = new THREE.Mesh(new THREE.BoxGeometry(cylR * 1.85, cylH - 0.2, 0.045), clearMat);
+    wing.position.set(cylR * 0.48, cylH / 2, 0);
     const pivot = new THREE.Group();
     pivot.rotation.y = (i * Math.PI) / 2;
     pivot.add(wing);
-    wing.position.x = cylR * 0.48;
     wingG.add(pivot);
   }
   revG.add(wingG);
-  // Centre shaft
-  const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, cylH, 8), drumMat);
+  const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, cylH, 8), drumMat);
   shaft.position.y = cylH / 2; revG.add(shaft);
   g.add(revG);
 
-  // --- Automatic sliding door (자동문) next to revolving ---
+  // --- Automatic sliding door (자동문): clear glass ---
   const slideG = new THREE.Group(); slideG.name = 'cityhallAutoDoor';
-  slideG.position.set(DOOR_X + 1.55, 0, zFace + 0.12);
-  const slideMat = wingMat;
-  const frameH = 2.9, openW = 1.35;
-  // Frame
-  bag.box(DOOR_X + 1.55, frameH / 2, zFace + 0.12, 0.12, frameH, 0.14, 0, C.frame); // will merge separately — use meshes in group
-  const sL = new THREE.Mesh(new THREE.BoxGeometry(openW, frameH - 0.2, 0.07), slideMat);
+  slideG.position.set(DOOR_X + 1.55, 0, zSouth + 0.08);
+  const frameH = DOOR_H, openW = 1.35;
+  const sL = new THREE.Mesh(new THREE.BoxGeometry(openW, frameH - 0.15, 0.05), clearMat);
   sL.position.set(-openW / 2, frameH / 2, 0); sL.name = 'slideL';
   const sR = sL.clone(); sR.position.x = openW / 2; sR.name = 'slideR';
   slideG.add(sL, sR);
-  // Header
-  const hdr = new THREE.Mesh(new THREE.BoxGeometry(openW * 2.2, 0.2, 0.2), drumMat);
+  // Subtle metal frames on leaves
+  for (const leaf of [sL, sR]) {
+    const f = new THREE.Mesh(new THREE.BoxGeometry(openW + 0.04, frameH - 0.1, 0.02), drumMat);
+    f.position.copy(leaf.position); f.position.z = 0.03;
+    // frame as edge strips instead
+  }
+  const hdr = new THREE.Mesh(new THREE.BoxGeometry(openW * 2.2, 0.16, 0.16), drumMat);
   hdr.position.y = frameH; slideG.add(hdr);
+  // Side jambs of auto door
+  const jL = new THREE.Mesh(new THREE.BoxGeometry(0.08, frameH, 0.12), drumMat);
+  jL.position.set(-openW - 0.05, frameH / 2, 0);
+  const jR = jL.clone(); jR.position.x = openW + 0.05;
+  slideG.add(jL, jR);
   g.add(slideG);
 
   const frameBits = bag.mesh(M.vc, 'cityhallG1Frame');
   if (frameBits) g.add(frameBits);
 
-  // Night: bump glass emissive
   let eveningOn = false;
   function setNight(on) {
     eveningOn = !!on;
     glassMat.emissiveIntensity = on ? 0.95 : 0.35;
-    wingMat.emissiveIntensity = on ? 0.4 : 0.15;
   }
 
-  let slideOpen = 0; // 0 closed .. 1 open
+  let slideOpen = 0;
   function update(dt, t, playerPos) {
-    // Slow revolving
     wingG.rotation.y = (t || 0) * 0.35;
-    // Auto door proximity
     let want = 0;
     if (playerPos) {
-      const d = Math.hypot(playerPos.x - (DOOR_X + 1.55), playerPos.z - zFace);
+      const d = Math.hypot(playerPos.x - (DOOR_X + 1.55), playerPos.z - zSouth);
       if (d < 4.5) want = 1;
     }
     slideOpen += ((want - slideOpen) * Math.min(1, (dt || 0.016) * 4));
@@ -2094,19 +2167,28 @@ function buildGroundFloor(data, M) {
   }
 
   function isBlocked(x, z, r = 0.4) {
-    // Open in door bay when auto door open enough / revolving cylinder walkable rim
-    if (x > doorL - r && x < doorR + r && Math.abs(z - zFace) < 1.2 + r) {
-      // Block solid frame edges of door bay only lightly — allow passage through centre
-      if (Math.abs(x - DOOR_X) < 0.85) return false; // revolving + path
+    // Passage through door bay (revolving centre + open auto door)
+    const inDoorBay = x > doorL - r && x < doorR + r && z > zSouth - 1.4 - r && z < zSouth + 1.2 + r;
+    if (inDoorBay) {
+      if (Math.abs(x - DOOR_X) < 0.9) return false; // revolving path
       if (slideOpen > 0.55 && x > DOOR_X + 0.3 && x < DOOR_X + 3.2) return false;
+      // jambs still block near doorL/doorR edges when trying to squeeze past closed leaves
     }
-    for (const c of colliders) {
-      if (x >= c.x0 - r && x <= c.x1 + r && Math.abs(z - c.z) < c.half + r) return true;
+    for (const w of walls) {
+      if (w.kind === 'ns') {
+        if (x >= w.x0 - r && x <= w.x1 + r && Math.abs(z - w.z) < w.half + r) return true;
+      } else {
+        if (z >= w.z0 - r && z <= w.z1 + r && Math.abs(x - w.x) < w.half + r) return true;
+      }
     }
     return false;
   }
 
-  return { group: g, update, isBlocked, setNight, doorX: DOOR_X, zFace };
+  return {
+    group: g, update, isBlocked, setNight, doorX: DOOR_X, zFace: zSouth,
+    extent: { x0: G1_X0, x1: G1_X1, zSouth, zNorth, PH },
+    disposeExtra: () => { clearMat.dispose(); glassMat.dispose(); },
+  };
 }
 
 /** Stone approach, floor fountain, long bus shelter, pedestrian overpass — ?cityhall=1 only. */
@@ -2133,8 +2215,9 @@ function buildPlazaExtras(data, M) {
     stoneGeos.push(geo);
   }
   // Large contiguous stone field matching 도훈 circle: entrance approach + plaza
-  stoneBox(1610, -5890, 110, 70, 0.12);  // main approach / south plaza (circled)
-  stoneBox(1560, -5880, 80, 55, 0.02);   // west open plaza (walker side)
+  stoneBox(1620, -5890, 90, 70, 0.12);   // main approach / south plaza (circled) — trimmed west
+  // west open plaza kept east of roadside strip (도훈 yellow: no stone on road/sidewalk)
+  stoneBox(1588, -5885, 48, 48, 0.02);
   stoneBox(1645, -5865, 75, 50, -0.08);  // SE plaza toward road
   stoneBox(1595, -5915, 55, 32, 0.22);   // near south face apron
   stoneBox(1640, -5828, 120, 85, 0.05);  // floor-fountain field + north plaza (도훈 circle)
@@ -2405,14 +2488,14 @@ function buildPlazaExtras(data, M) {
   // Normal pointing west toward city hall (smaller x)
   let nx = -bdz / bLen, nz = bdx / bLen;
   if (nx > 0) { nx = -nx; nz = -nz; } // force toward building
-  const side = 14.0; // sidewalk offset from stop coords (building curb, clear of roadway)
+  const side = 40.0; // further onto building-side sidewalk — clear of asphalt
   const bcx = (busA.x + busB.x) / 2 + nx * side;
   const bcz = (busA.z + busB.z) / 2 + nz * side;
   g.userData.busShelter = { x: bcx, z: bcz, len: bLen, ang: bang };
   // Raised curb platform under shelter
-  bag.box(bcx, 0.12, bcz, bLen + 8, 0.24, 3.2, -bang, '#9aa0a6');
+  bag.box(bcx, 0.14, bcz, bLen + 2, 0.28, 2.8, -bang, '#9aa0a6');
   // Roof canopy (thick blue slab with overhang)
-  bag.box(bcx, 2.95, bcz, bLen + 7, 0.28, 3.0, -bang, '#1e6bb8');
+  bag.box(bcx, 2.95, bcz, bLen + 1, 0.28, 2.6, -bang, '#1e6bb8');
   // Back glass wall (toward plaza / building)
   bag.box(bcx + nx * 1.15, 1.55, bcz + nz * 1.15, bLen + 6, 2.7, 0.1, -bang, '#b8d8ec');
   // Bench
@@ -2428,97 +2511,182 @@ function buildPlazaExtras(data, M) {
   bag.box(busA.x + nx * side, 3.45, busA.z + nz * side, 1.1, 1.2, 0.12, -bang, '#1a56b0');
   bag.box(busB.x + nx * side, 3.45, busB.z + nz * side, 1.1, 1.2, 0.12, -bang, '#1a56b0');
 
-  // --- 4) Pedestrian overpass — elevated deck, thin stairs, fat piers, elevator towers ---
-  // Place where N–S arterial is: near 성남시청전면 (~x 1805–1815)
+  // --- 4) White cable-stayed footbridge (도훈 ref) — slim deck, inclined pylon, teal glass rails ---
   const OX = 1810, OZ = -5765;
   const DECK_Y = 5.6;
   const SPAN = 38;
-  const DECK_W = 3.6;
+  const DECK_W = 3.8;
+  const WHITE = '#f2f4f6';
+  const WHITE2 = '#e8ecf0';
+  const TEAL = '#7eb8b0';
   g.userData.overpass = { x: OX, z: OZ, y: DECK_Y, span: SPAN };
-  // Deck slab (cy = top - half thickness)
-  bag.box(OX, DECK_Y - 0.12, OZ, SPAN, 0.28, DECK_W, 0, '#a8b0b8');
-  // Side beams under deck (read thickness)
-  bag.box(OX, DECK_Y - 0.45, OZ - DECK_W / 2 + 0.15, SPAN, 0.45, 0.3, 0, '#7a848e');
-  bag.box(OX, DECK_Y - 0.45, OZ + DECK_W / 2 - 0.15, SPAN, 0.45, 0.3, 0, '#7a848e');
-  // Rails
-  bag.box(OX, DECK_Y + 0.55, OZ - DECK_W / 2, SPAN, 0.1, 0.1, 0, '#5a646e');
-  bag.box(OX, DECK_Y + 0.55, OZ + DECK_W / 2, SPAN, 0.1, 0.1, 0, '#5a646e');
-  for (const dx of [-10, -3.5, 3.5, 10]) {
-    bag.box(OX + dx, DECK_Y + 0.3, OZ - DECK_W / 2, 0.08, 0.55, 0.08, 0, '#5a646e');
-    bag.box(OX + dx, DECK_Y + 0.3, OZ + DECK_W / 2, 0.08, 0.55, 0.08, 0, '#5a646e');
-  }
-  // Fat piers (clear clearance under deck for cars)
-  for (const dx of [-9, 0, 9]) {
-    bag.box(OX + dx, (DECK_Y - 0.5) / 2, OZ, 0.85, DECK_Y - 0.5, 0.85, 0, '#8a929a');
-    bag.box(OX + dx, 0.2, OZ, 1.4, 0.4, 1.4, 0, '#6a727a'); // footing
+  const xW = OX - SPAN / 2, xE = OX + SPAN / 2;
+
+  // Slim white deck + smooth curved underside (layered taper — no mid-span piers)
+  bag.box(OX, DECK_Y - 0.07, OZ, SPAN, 0.16, DECK_W, 0, WHITE);
+  bag.box(OX, DECK_Y - 0.24, OZ, SPAN - 0.4, 0.2, DECK_W * 0.88, 0, WHITE);
+  bag.box(OX, DECK_Y - 0.42, OZ, SPAN - 1.6, 0.2, DECK_W * 0.7, 0, WHITE2);
+  bag.box(OX, DECK_Y - 0.58, OZ, SPAN - 3.5, 0.18, DECK_W * 0.5, 0, WHITE2);
+  bag.box(OX, DECK_Y - 0.72, OZ, SPAN - 7.0, 0.14, DECK_W * 0.28, 0, '#e4e8ec');
+  bag.box(OX, DECK_Y - 0.82, OZ, SPAN - 11.0, 0.1, DECK_W * 0.16, 0, '#d8dde2'); // soft keel
+
+  // Teal-tinted glass railings (both sides) + white posts / handrail
+  const railMat = new THREE.MeshStandardMaterial({
+    color: TEAL, transparent: true, opacity: 0.38, roughness: 0.12, metalness: 0.15,
+    side: THREE.DoubleSide, depthWrite: false,
+  });
+  const railH = 1.15;
+  for (const zs of [-1, 1]) {
+    const zR = OZ + zs * (DECK_W / 2);
+    const pane = new THREE.Mesh(
+      new THREE.PlaneGeometry(SPAN - 0.4, railH, 1, 1),
+      railMat,
+    );
+    pane.position.set(OX, DECK_Y + railH / 2, zR);
+    pane.name = 'cityhallOverpassRail';
+    g.add(pane);
+    // white posts every ~3 m
+    for (let x = xW + 1; x <= xE - 1; x += 3.0) {
+      bag.box(x, DECK_Y + railH / 2, zR, 0.06, railH, 0.06, 0, WHITE);
+    }
+    bag.box(OX, DECK_Y + railH + 0.04, zR, SPAN - 0.2, 0.07, 0.07, 0, WHITE); // handrail
+    bag.box(OX, DECK_Y + 0.04, zR, SPAN - 0.2, 0.06, 0.08, 0, WHITE); // bottom rail
   }
 
-  function addStairs(endX, sideSign) {
-    const steps = 14;
-    const run = 11.0;
-    const stepD = run / steps;
+  // Inclined white pylon/mast at west end — leans away from deck (blade / A feel)
+  const pylX = xW - 1.8;
+  const pylH = 20.0;
+  const lean = 5.5; // strong lean away from deck
+  // Tapered blade: stacked boxes leaning west (A/blade silhouette)
+  for (let i = 0; i < 12; i++) {
+    const t0 = i / 12, t1 = (i + 1) / 12;
+    const y0 = t0 * pylH, y1 = t1 * pylH;
+    const x0 = pylX - lean * t0, x1 = pylX - lean * t1;
+    const cx = (x0 + x1) / 2;
+    const cy = (y0 + y1) / 2;
+    const thick = 1.5 - t0 * 1.05;
+    const depth = 2.8 - t0 * 1.5;
+    bag.box(cx, cy, OZ, Math.max(0.35, thick), y1 - y0 + 0.05, Math.max(0.6, depth), 0, WHITE);
+  }
+  // Open A-slot through mid blade (darker inset)
+  for (let i = 2; i < 10; i++) {
+    const t0 = i / 12, t1 = (i + 1) / 12;
+    const y0 = t0 * pylH, y1 = t1 * pylH;
+    const cx = pylX - lean * ((t0 + t1) / 2);
+    const cy = (y0 + y1) / 2;
+    bag.box(cx + 0.15, cy, OZ, 0.25, y1 - y0 + 0.02, 1.1 - t0 * 0.4, 0, '#d0d4d8');
+  }
+  // Sculptural curved base footing
+  bag.box(pylX + 0.6, 0.4, OZ, 3.8, 0.8, 4.0, 0, WHITE2);
+  bag.cyl(pylX + 0.3, 0.18, OZ, 2.5, 0.35, 12, WHITE2);
+
+  // Stay cables: fan from pylon top to deck edge (both sides)
+  const cableMat = new THREE.MeshBasicMaterial({ color: '#f8fafc' });
+  const cableTop = { x: pylX - lean * 0.94, y: pylH * 0.94, z: OZ };
+  const N_CABLES = 14;
+  for (let i = 0; i < N_CABLES; i++) {
+    const u = (i + 0.5) / N_CABLES;
+    const ax = xW + 1.5 + u * (SPAN - 3.0);
+    for (const zs of [-1, 1]) {
+      const az = OZ + zs * (DECK_W / 2 - 0.05);
+      const ay = DECK_Y + 0.05;
+      const dx = ax - cableTop.x, dy = ay - cableTop.y, dz = az - cableTop.z;
+      const len = Math.hypot(dx, dy, dz) || 1;
+      const mid = new THREE.Vector3(
+        (ax + cableTop.x) / 2, (ay + cableTop.y) / 2, (az + cableTop.z) / 2,
+      );
+      const cyl = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.025, 0.025, len, 5),
+        cableMat,
+      );
+      cyl.position.copy(mid);
+      cyl.quaternion.setFromUnitVectors(
+        new THREE.Vector3(0, 1, 0),
+        new THREE.Vector3(dx / len, dy / len, dz / len),
+      );
+      cyl.name = 'cityhallStayCable';
+      g.add(cyl);
+    }
+  }
+
+  // Abutment pads only (no mid-span piers — deck hangs on stays)
+  bag.box(xW + 0.8, 0.25, OZ, 2.2, 0.5, DECK_W + 0.6, 0, WHITE2);
+  bag.box(xE - 0.8, 0.25, OZ, 2.2, 0.5, DECK_W + 0.6, 0, WHITE2);
+
+  function addEndAccess(endX, sideSign) {
+    // White enclosed elevator tower
+    const ex = endX + sideSign * 4.2;
+    const ez = OZ - sideSign * 0.2;
+    const EH = DECK_Y + 2.8;
+    bag.box(ex, EH / 2, ez, 3.0, EH, 3.0, 0, WHITE);
+    bag.box(ex, EH + 0.25, ez, 3.3, 0.5, 3.3, 0, WHITE2);
+    // Elevator glass door face
+    const eg = new THREE.Mesh(
+      new THREE.PlaneGeometry(1.6, 2.4),
+      new THREE.MeshStandardMaterial({ color: '#c5dde0', transparent: true, opacity: 0.45, side: THREE.DoubleSide }),
+    );
+    eg.position.set(ex, 1.35, ez + 1.52 * (sideSign > 0 ? -1 : 1));
+    // face toward approach
+    if (sideSign > 0) eg.rotation.y = Math.PI;
+    g.add(eg);
+    elevators.push({ x: ex, z: ez, deckY: DECK_Y, r: 1.55 });
+
+    // Curved / spiral stair tower (white) — stepped quarter-turns rising to deck
+    const steps = 16;
+    const stairR = 2.35;
+    const scx = endX + sideSign * 1.2;
+    const scz = OZ + 5.2; // well off roadway so fins ≠ under-deck piers
     for (let i = 0; i < steps; i++) {
       const t0 = i / steps;
-      const yTop = DECK_Y * (1 - (i + 1) / steps);
-      const yBot = DECK_Y * (1 - i / steps);
-      const y = (yTop + yBot) / 2;
-      const rise = Math.max(0.18, yBot - yTop);
-      const thick = Math.max(0.22, rise * 0.85);
-      const x = endX + sideSign * (stepD * (i + 0.5));
-      // Discrete tread slab (open underside — not a solid ramp/barrier)
-      bag.box(x, yTop - thick / 2, OZ, stepD + 0.06, thick, DECK_W + 0.35, 0, '#9aa2aa');
+      const ang = sideSign * (t0 * Math.PI * 1.15 - 0.2);
+      const yTop = DECK_Y * (t0 + 1 / steps);
+      const x = scx + Math.cos(ang) * stairR;
+      const z = scz + Math.sin(ang) * stairR * 0.85;
+      bag.box(x, yTop - 0.1, z, 1.15, 0.18, 0.7, -ang, WHITE);
       heights.push({
         kind: 'stair',
-        x0: x - stepD * 0.55, x1: x + stepD * 0.55,
-        z0: OZ - DECK_W / 2 - 0.25, z1: OZ + DECK_W / 2 + 0.25,
+        x0: x - 0.7, x1: x + 0.7,
+        z0: z - 0.55, z1: z + 0.55,
+        y: yTop,
+      });
+      // outer rail post
+      bag.box(x + Math.cos(ang) * 0.45, yTop / 2 + 0.2, z + Math.sin(ang) * 0.45, 0.07, Math.max(0.3, yTop), 0.07, 0, WHITE);
+    }
+    // Spiral enclosure hints (vertical white fins)
+    for (let k = 0; k < 8; k++) {
+      const a = (k / 8) * Math.PI * 2;
+      bag.box(scx + Math.cos(a) * (stairR + 0.7), DECK_Y * 0.55, scz + Math.sin(a) * (stairR * 0.85 + 0.5), 0.12, DECK_Y * 1.05, 0.35, -a, WHITE2);
+    }
+    // Deck link from stair head / elevator to main span
+    bag.box((endX + ex) / 2, DECK_Y - 0.08, OZ, Math.abs(ex - endX), 0.18, DECK_W * 0.95, 0, WHITE);
+    // Short stair flight from ground into spiral foot (approach)
+    for (let i = 0; i < 6; i++) {
+      const t0 = i / 6;
+      const yTop = (DECK_Y * 0.22) * (t0 + 1 / 6);
+      const x = scx - sideSign * (2.5 - t0 * 2.0);
+      const z = scz + 1.2;
+      bag.box(x, yTop - 0.09, z, 0.85, 0.16, 1.1, 0, WHITE);
+      heights.push({
+        kind: 'stair',
+        x0: x - 0.5, x1: x + 0.5,
+        z0: z - 0.65, z1: z + 0.65,
         y: yTop,
       });
     }
-    // Open stair rails (posts + handrail) — NOT solid walls (those read as a roadside barrier)
-    const stepsN = 14;
-    for (let i = 0; i <= stepsN; i++) {
-      const t0 = i / stepsN;
-      const x = endX + sideSign * (run * t0);
-      const yTop = DECK_Y * (1 - t0);
-      for (const zs of [-1, 1]) {
-        bag.box(x, yTop / 2 + 0.05, OZ + zs * (DECK_W / 2 + 0.08), 0.08, Math.max(0.2, yTop), 0.08, 0, '#5a646e');
-        bag.box(x, yTop + 0.55, OZ + zs * (DECK_W / 2 + 0.08), 0.1, 0.08, 0.1, 0, '#5a646e');
-      }
-    }
-    // Continuous handrail along stair
-    for (const zs of [-1, 1]) {
-      for (let i = 0; i < stepsN; i++) {
-        const t0 = (i + 0.5) / stepsN;
-        const x = endX + sideSign * (run * t0);
-        const yTop = DECK_Y * (1 - t0);
-        bag.box(x, yTop + 0.55, OZ + zs * (DECK_W / 2 + 0.08), run / stepsN + 0.05, 0.08, 0.08, 0, '#5a646e');
-      }
-    }
-    // Elevator tower at stair foot
-    const ex = endX + sideSign * (run + 1.6);
-    const ez = OZ;
-    const EH = DECK_Y + 2.6;
-    bag.box(ex, EH / 2, ez, 3.2, EH, 3.2, 0, '#5a6570');
-    bag.box(ex, EH + 0.3, ez, 3.6, 0.6, 3.6, 0, '#4a5560');
-    bag.box(ex, 1.4, ez + 1.62, 1.8, 2.6, 0.12, 0, '#9eb8c8');
-    // vertical accent stripe so tower reads at distance
-    bag.box(ex, EH / 2, ez - 1.62, 1.2, EH * 0.9, 0.12, 0, '#3a8fd0');
-    // Deck bridge from stair head to elevator shaft top landing
-    bag.box((endX + ex) / 2, DECK_Y - 0.1, ez, Math.abs(ex - endX), 0.22, DECK_W * 0.9, 0, '#a8b0b8');
-    elevators.push({ x: ex, z: ez, deckY: DECK_Y, r: 1.6 });
   }
-  addStairs(OX - SPAN / 2, -1);
-  addStairs(OX + SPAN / 2, +1);
+  addEndAccess(xW, -1);
+  addEndAccess(xE, +1);
   heights.push({
     kind: 'deck',
-    x0: OX - SPAN / 2 - 0.4, x1: OX + SPAN / 2 + 0.4,
+    x0: xW - 0.4, x1: xE + 0.4,
     z0: OZ - DECK_W / 2 - 0.2, z1: OZ + DECK_W / 2 + 0.2,
     y: DECK_Y,
   });
-  // Static car under span (visual proof of clearance) — N–S arterial under deck
-  bag.box(OX + 1.5, 0.55, OZ + 6.5, 4.4, 1.1, 1.9, 0.15, '#2a5fad'); // body
-  bag.box(OX + 1.5, 1.25, OZ + 6.5, 2.2, 0.7, 1.75, 0.15, '#1a3a6a'); // cabin
-  bag.box(OX + 1.5, 1.3, OZ + 6.5, 1.8, 0.45, 1.7, 0.15, '#7ec8e8'); // windows
+
+  // Static car under span (clearance proof)
+  bag.box(OX + 1.5, 0.55, OZ + 6.5, 4.4, 1.1, 1.9, 0.15, '#2a5fad');
+  bag.box(OX + 1.5, 1.25, OZ + 6.5, 2.2, 0.7, 1.75, 0.15, '#1a3a6a');
+  bag.box(OX + 1.5, 1.3, OZ + 6.5, 1.8, 0.45, 1.7, 0.15, '#7ec8e8');
   for (const [wx, wz] of [[-1.4, -0.85], [-1.4, 0.85], [1.4, -0.85], [1.4, 0.85]]) {
     bag.box(OX + 1.5 + wx * Math.cos(0.15) - wz * Math.sin(0.15), 0.32, OZ + 6.5 + wx * Math.sin(0.15) + wz * Math.cos(0.15), 0.55, 0.55, 0.22, 0.15, '#1a1a1a');
   }
@@ -2743,7 +2911,7 @@ export function buildSeongnamCityHall(data, { env = null, glbUrl = null, walkerG
     },
     dispose() {
       if (disposed) return; disposed = true;
-      stopEve(); fountain.disposeExtra?.(); pondPlaza.disposeExtra?.(); plazaExtras.disposeExtra?.();
+      stopEve(); fountain.disposeExtra?.(); pondPlaza.disposeExtra?.(); plazaExtras.disposeExtra?.(); groundFloor.disposeExtra?.();
       for (const m of grounds.userData?.benchMats || []) m.dispose?.();
       for (const g0 of grounds.userData?.benchGeos || []) g0.dispose?.();
       root.traverse((o) => {
