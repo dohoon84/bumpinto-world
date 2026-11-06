@@ -7,7 +7,7 @@ import { econ } from '../econ/index.js';
 import { requestGoogleSignIn } from '../google.js';
 import { onLangChange } from '../../i18n.js';
 import { mountEconHud, refresh, render } from './hud.js';
-import { openWelcome, openChipTip, openQuests, prefetchAllQuests, pushReward, openKarma, openShop, openGoogleWait, openMigrate } from './panels.js';
+import { openWelcome, openChipTip, openQuests, prefetchAllQuests, prefetchAllShop, pushReward, openKarma, openShop, openGoogleWait, openMigrate } from './panels.js';
 import { shownInPay, shownReceipts, showPay, payAndShow, openTaxiApp, openSettle, holdToast, openBoard, openGate } from './transit.js';
 import { close, openKey } from './layer.js';
 import { mountWalletApp, openWalletApp } from './walletApp.js';
@@ -163,7 +163,7 @@ export function mountEconUi({ mobile = false } = {}) {
   onLangChange(() => render());
   addEventListener('bw:transit', onTransit);
   trackWalk();
-  refresh().then(() => prefetchAllQuests()).catch(() => prefetchAllQuests());
+  refresh().then(() => { prefetchAllQuests(); prefetchAllShop(); }).catch(() => { prefetchAllQuests(); prefetchAllShop(); });
   if (isDemo() && econ.dev) import('./demo.js').then((m) => m.mountDemo({ open, link, setSuppress: (ms) => { suppressRewards = Date.now() + ms; } }));
   return { open, link };
 }

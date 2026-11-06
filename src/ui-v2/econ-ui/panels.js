@@ -230,58 +230,78 @@ export async function openKarma({ link } = {}) {
 }
 
 // ---------- 11 탈것 상점
-export async function openShop({ link } = {}) {
-  let [items, goal, bal] = await Promise.all([econ.listShopItems(), econ.getShopGoal(), econ.getBalance()]); // 상점은 미리보기 전용 — 무료(베타) 표시 없음
-  let sel = items.find((i) => !i.owned && i.available !== false)?.id || items[0]?.id;
-  if (!items.length) { const p0 = panel('ve-shop', `<div class="v2-hrow">${head(tr('탈것 상점', 'Vehicle shop'), { icon: v3i() ? gi('shop', 26, 've-gi-head') : '', size: 24 })}${mockTag()}<span class="v2-grow"></span>${closeBtn()}</div><p class="ve-note">${esc(tr('지금은 상점을 열 수 없어요. 잠시 뒤 다시 열어 주세요.', 'The shop is unavailable right now. Please try again later.'))}</p>`); show(p0, { key: '11' }); return; }
-  const p = panel('ve-shop', '');
-  const draw = () => {
-    const it = items.find((i) => i.id === sel);
-    const soon = it.comingSoon !== false || it.available === false; // 미리보기: 모든 물건 준비중
-    const na = soon;
-    const can = !bal.guest && !it.owned && !na && it.affordable;
-    const btn = soon ? `<button type="button" class="v2-btn secondary ve-locked" disabled>${EI.lock(12)}${esc(tr(`준비중 · ${T(it.name)} 아직 살 수 없어요`, `Coming soon · ${T(it.name)} not on sale yet`))}</button>`
-      : bal.guest ? `<button type="button" class="v2-btn primary" data-ve="link">${esc(tr('구글 계정 연동하고 bum 받기', 'Link Google account to earn bum'))}</button>`
-      : it.owned ? `<button type="button" class="v2-btn secondary" disabled>${EI.check(14)}${esc(tr('보유 중', 'Owned'))}</button>`
-      : na ? `<button type="button" class="v2-btn secondary ve-locked" disabled>${EI.lock(12)}${esc(tr('준비 중 · 아직 팔지 않아요', 'Coming soon · not on sale yet'))}</button>`
-        : can ? `<button type="button" class="v2-btn primary" data-ve="buy">${esc(tr(`${T(it.name)} 구매 · ${n(it.price)} bum`, `Buy ${T(it.name)} · ${n(it.price)} bum`))}</button>`
-          : `<button type="button" class="v2-btn secondary ve-locked" disabled>${EI.lock(12)}${esc(tr('잔액 부족 · 구매 불가', 'Not enough bum · cannot buy'))}</button>`;
-    const gItem = goal ? items.find((i) => i.id === goal.itemId) : null;
-    const pct = goal ? Math.floor((goal.balance / goal.price) * 100) : 0;
-    p.innerHTML = `<div class="v2-hrow">${head(tr('탈것 상점', 'Vehicle shop'), { icon: v3i() ? gi('shop', 26, 've-gi-head') : '', size: 24 })}${tag(tr('미리보기 · 준비중', 'Preview · Coming soon'), '#9eb4c6')}${mockTag()}<span class="v2-grow"></span>${bal.guest ? '' : `<span class="ve-bum lg">${EI.coin(16)}<b>${esc(tr(`내 잔액 ${n(bal.total)} bum`, `Balance ${n(bal.total)} bum`))}</b></span>`}${closeBtn()}</div>
-      ${goal && gItem ? `<div class="ve-goal"><div class="v2-hrow"><b>${esc(tr(`목표: ${T(items.find((i) => i.id === goal.itemId).name)} ${n(goal.price)} bum`, `Goal: ${T(items.find((i) => i.id === goal.itemId).name)} ${n(goal.price)} bum`))}</b><span class="v2-grow"></span><b class="ve-gold ve-t20">${esc(tr(`${goal.daysLeft}일 남음`, `${goal.daysLeft} days left`))}</b></div>
-        ${bar(goal.balance, goal.price, { w: 1180, h: 10, cls: 'gold ve-wide' })}<div class="v2-hrow"><small>${esc(tr(`${n(goal.balance)} / ${n(goal.price)} (${pct}%) · 남은 ${n(goal.remaining)} bum`, `${n(goal.balance)} / ${n(goal.price)} (${pct}%) · ${n(goal.remaining)} bum to go`))}</small><span class="v2-grow"></span><small>${esc(tr(`보통 페이스 하루 순 +${n(goal.typicalDailyNet)} 기준`, `At a typical net +${n(goal.typicalDailyNet)} per day`))}</small></div>
-        <small class="ve-freenote">${esc(tr('상점은 준비중이에요. 지금은 가격만 볼 수 있고, 열리면 모은 bum으로 살 수 있어요.', 'The shop is coming soon. Prices are a preview; you can buy with saved bum once it opens.'))}</small></div>` : ''}
-      <div class="ve-items">${items.map((i) => `<button type="button" class="ve-item${i.id === sel ? ' on' : ''}${i.available === false ? ' na' : ''}" data-item="${i.id}"><span class="ve-thumb">${SHOP_THUMB[i.id] ? `<img src="${SHOP_THUMB[i.id]}" alt="${esc(T(i.name))}" width="200" height="120" loading="lazy" decoding="async">` : esc(T(i.name))}${v3i() ? `<span class="ve-vbadge">${gi(i.id, 18)}</span>` : ''}</span>
-        <span class="v2-hrow"><b>${esc(T(i.name))}</b>${!i.owned && (i.comingSoon !== false || i.available === false || !i.affordable) ? EI.lock(12) : ''}${i.owned ? tag(tr('보유', 'Owned'), '#20c997') : ''}${i.comingSoon !== false || i.available === false ? (v3i() ? tag(tr('준비중', 'Coming soon'), '#9eb4c6', 've-soon').replace('>', `>${gi('clock', 12)}`) : tag(tr('준비중', 'Coming soon'), '#9eb4c6')) : ''}</span>
-        <span class="ve-iprice">${EI.coin(18)}<b>${n(i.price)} bum</b></span>
-        <small>${esc(tr(`보통 플레이어 약 ${n(i.daysForTypical)}일`, `About ${n(i.daysForTypical)} days for a typical player`))}</small></button>`).join('')}</div>
-      <div class="v2-hrow ve-sfoot"><small>${esc(tr('첫 자전거 기준: 라이트 80일 · 헤비 14일 · 구매한 탈것은 선물 불가', 'First bicycle: light player 80 days · heavy 14 days · bought vehicles cannot be gifted'))}</small><span class="v2-grow"></span>${btn}</div>
-      <p class="ve-msg" hidden></p>`;
-  };
-  draw();
+// 열기 즉시: 받아 둔 목록(또는 스켈레톤)을 먼저 그리고, 서버 응답이 오면 같은 패널만 갈아 끼운다(할 일 PR #34·#37 과 같은 방식).
+// ?shopfast=0 이면 예전처럼 서버를 기다린 뒤 띄움. 구매(purchase)는 항상 서버 검증.
+let shopCache = null; // { items, goal, bal }
+let shopView = null; // { p, link, items, goal, bal, sel }
+function shopOpenFast() {
+  try { return new URLSearchParams(location.search).get('shopfast') !== '0'; } catch { return true; }
+}
+function rememberShop(data) {
+  if (!data || !Array.isArray(data.items)) return;
+  shopCache = { items: data.items, goal: data.goal ?? null, bal: data.bal };
+}
+try {
+  // 로그인·로그아웃 때만 비움. 잔액 변화는 열 때 백그라운드 갱신으로 맞춘다(할 일과 같음).
+  econ.on?.('session', () => { shopCache = null; });
+} catch { /* 목 클라이언트 등 */ }
+function shopHead(bal) {
+  const balHtml = bal && !bal.guest ? `<span class="ve-bum lg">${EI.coin(16)}<b>${esc(tr(`내 잔액 ${n(bal.total)} bum`, `Balance ${n(bal.total)} bum`))}</b></span>` : '';
+  return `<div class="v2-hrow">${head(tr('탈것 상점', 'Vehicle shop'), { icon: v3i() ? gi('shop', 26, 've-gi-head') : '', size: 24 })}${tag(tr('미리보기 · 준비중', 'Preview · Coming soon'), '#9eb4c6')}${mockTag()}<span class="v2-grow"></span>${balHtml}${closeBtn()}</div>`;
+}
+function shopEmptyHtml(bal) {
+  return `${shopHead(bal)}<p class="ve-note">${esc(tr('지금은 상점을 열 수 없어요. 잠시 뒤 다시 열어 주세요.', 'The shop is unavailable right now. Please try again later.'))}</p>`;
+}
+function shopLoadingHtml(bal) {
+  return `${shopHead(bal)}<p class="ve-info">${esc(tr('불러오는 중…', 'Loading…'))}</p>`;
+}
+async function loadShopBundle() {
+  const [items, goal, bal] = await Promise.all([econ.listShopItems(), econ.getShopGoal(), econ.getBalance()]);
+  return { items: Array.isArray(items) ? items : [], goal: goal ?? null, bal };
+}
+/** 월드 입장·HUD 마운트 직후 상점 목록을 미리 받아 둔다(열 때 서버 대기 없음). */
+export function prefetchAllShop() {
+  loadShopBundle().then(rememberShop).catch(() => {});
+}
+function pickSel(items, prefer) {
+  if (prefer && items.some((i) => i.id === prefer)) return prefer;
+  return items.find((i) => !i.owned && i.available !== false)?.id || items[0]?.id;
+}
+function bindShopPanel(p) {
   p.addEventListener('click', async (e) => {
-    const it = e.target.closest('[data-item]'); if (it) { sel = it.dataset.item; draw(); return; }
-    if (e.target.closest('[data-ve="link"]')) { link?.(); return; }
+    const v = shopView; if (!v || v.p !== p) return;
+    const it = e.target.closest('[data-item]'); if (it) { v.sel = it.dataset.item; drawShop(v); return; }
+    if (e.target.closest('[data-ve="link"]')) { v.link?.(); return; }
     if (e.target.closest('[data-ve="buy"]')) {
-      const r = await econ.purchase(sel);
+      const r = await econ.purchase(v.sel);
       const m = p.querySelector('.ve-msg');
       if (r.ok) {
         // 산 탈것은 바로 탈 수 있다(서버 클라이언트가 'bw:econ-owned' 로 게임 보유를 다시 받음) → 보유 목록·목표·잔액을 바로 다시 읽는다
-        const name = T((r.data.item || items.find((x) => x.id === sel) || {}).name);
-        const [it2, g2, b2] = await Promise.all([econ.listShopItems(), econ.getShopGoal(), econ.getBalance()]).catch(() => [null, goal, bal]);
-        if (Array.isArray(it2) && it2.length) items = it2; else { const i = items.findIndex((x) => x.id === sel); if (i >= 0) items[i] = r.data.item || { ...items[i], owned: true, affordable: false }; }
-        goal = g2 ?? null; bal = b2 || { ...bal, ...(r.data.balance || {}) };
+        const name = T((r.data.item || v.items.find((x) => x.id === v.sel) || {}).name);
+        const fresh = await loadShopBundle().catch(() => null);
+        if (fresh?.items?.length) {
+          v.items = fresh.items; v.goal = fresh.goal; v.bal = fresh.bal;
+          rememberShop(fresh);
+        } else {
+          const i = v.items.findIndex((x) => x.id === v.sel);
+          if (i >= 0) v.items[i] = r.data.item || { ...v.items[i], owned: true, affordable: false };
+          if (r.data.balance) v.bal = { ...v.bal, ...r.data.balance };
+          rememberShop({ items: v.items, goal: v.goal, bal: v.bal });
+        }
         refresh();
-        draw();
+        drawShop(v);
         const m2 = p.querySelector('.ve-msg'); m2.hidden = false;
         const ride = econ.isMock ? tr('(예시 데이터: 이 화면에서는 게임 탈것과 아직 연결 전)', '(example data: not linked to in-game vehicles here)') : tr('지금 바로 탈 수 있어요.', 'You can ride it right away.');
         m2.textContent = r.data.free ? tr(`${name}을(를) 받았어요 (무료 베타, 차감 없음). ${ride}`, `You got ${name} (free beta, nothing deducted). ${ride}`) : tr(`${name} 구매 완료 · −${n(r.data.amount)} bum. ${ride}`, `Bought ${name} · −${n(r.data.amount)} bum. ${ride}`);
-      }
-      else {
-        m.hidden = false;
+      } else {
+        if (m) m.hidden = false;
         const c = r.error.code;
-        if (c === 'not_eligible' || c === 'coming_soon') { const i = items.findIndex((x) => x.id === sel); if (i >= 0) items[i] = { ...items[i], available: false, comingSoon: true, affordable: false }; draw(); }
+        if (c === 'not_eligible' || c === 'coming_soon') {
+          const i = v.items.findIndex((x) => x.id === v.sel);
+          if (i >= 0) v.items[i] = { ...v.items[i], available: false, comingSoon: true, affordable: false };
+          rememberShop({ items: v.items, goal: v.goal, bal: v.bal });
+          drawShop(v);
+        }
         const m3 = p.querySelector('.ve-msg'); m3.hidden = false;
         m3.textContent = c === 'insufficient_balance' ? tr(`잔액 ${n(r.error.shortBy)} bum 부족`, `${n(r.error.shortBy)} bum short`)
           : c === 'coming_soon' ? tr('준비중인 탈것이에요. 상점이 열리면 살 수 있어요.', 'Coming soon. You can buy it once the shop opens.')
@@ -293,7 +313,74 @@ export async function openShop({ link } = {}) {
       }
     }
   });
-  show(p, { key: '11' });
+}
+function drawShop(v) {
+  const { p, items, goal, bal, sel } = v;
+  if (!items?.length) { p.innerHTML = shopEmptyHtml(bal); return; }
+  const it = items.find((i) => i.id === sel) || items[0];
+  v.sel = it.id;
+  const soon = it.comingSoon !== false || it.available === false; // 미리보기: 모든 물건 준비중
+  const na = soon;
+  const can = !bal?.guest && !it.owned && !na && it.affordable;
+  const btn = soon ? `<button type="button" class="v2-btn secondary ve-locked" disabled>${EI.lock(12)}${esc(tr(`준비중 · ${T(it.name)} 아직 살 수 없어요`, `Coming soon · ${T(it.name)} not on sale yet`))}</button>`
+    : bal?.guest ? `<button type="button" class="v2-btn primary" data-ve="link">${esc(tr('구글 계정 연동하고 bum 받기', 'Link Google account to earn bum'))}</button>`
+    : it.owned ? `<button type="button" class="v2-btn secondary" disabled>${EI.check(14)}${esc(tr('보유 중', 'Owned'))}</button>`
+    : na ? `<button type="button" class="v2-btn secondary ve-locked" disabled>${EI.lock(12)}${esc(tr('준비 중 · 아직 팔지 않아요', 'Coming soon · not on sale yet'))}</button>`
+      : can ? `<button type="button" class="v2-btn primary" data-ve="buy">${esc(tr(`${T(it.name)} 구매 · ${n(it.price)} bum`, `Buy ${T(it.name)} · ${n(it.price)} bum`))}</button>`
+        : `<button type="button" class="v2-btn secondary ve-locked" disabled>${EI.lock(12)}${esc(tr('잔액 부족 · 구매 불가', 'Not enough bum · cannot buy'))}</button>`;
+  const gItem = goal ? items.find((i) => i.id === goal.itemId) : null;
+  const pct = goal ? Math.floor((goal.balance / goal.price) * 100) : 0;
+  p.innerHTML = `${shopHead(bal)}
+      ${goal && gItem ? `<div class="ve-goal"><div class="v2-hrow"><b>${esc(tr(`목표: ${T(items.find((i) => i.id === goal.itemId).name)} ${n(goal.price)} bum`, `Goal: ${T(items.find((i) => i.id === goal.itemId).name)} ${n(goal.price)} bum`))}</b><span class="v2-grow"></span><b class="ve-gold ve-t20">${esc(tr(`${goal.daysLeft}일 남음`, `${goal.daysLeft} days left`))}</b></div>
+        ${bar(goal.balance, goal.price, { w: 1180, h: 10, cls: 'gold ve-wide' })}<div class="v2-hrow"><small>${esc(tr(`${n(goal.balance)} / ${n(goal.price)} (${pct}%) · 남은 ${n(goal.remaining)} bum`, `${n(goal.balance)} / ${n(goal.price)} (${pct}%) · ${n(goal.remaining)} bum to go`))}</small><span class="v2-grow"></span><small>${esc(tr(`보통 페이스 하루 순 +${n(goal.typicalDailyNet)} 기준`, `At a typical net +${n(goal.typicalDailyNet)} per day`))}</small></div>
+        <small class="ve-freenote">${esc(tr('상점은 준비중이에요. 지금은 가격만 볼 수 있고, 열리면 모은 bum으로 살 수 있어요.', 'The shop is coming soon. Prices are a preview; you can buy with saved bum once it opens.'))}</small></div>` : ''}
+      <div class="ve-items">${items.map((i) => `<button type="button" class="ve-item${i.id === v.sel ? ' on' : ''}${i.available === false ? ' na' : ''}" data-item="${i.id}"><span class="ve-thumb">${SHOP_THUMB[i.id] ? `<img src="${SHOP_THUMB[i.id]}" alt="${esc(T(i.name))}" width="200" height="120" loading="lazy" decoding="async">` : esc(T(i.name))}${v3i() ? `<span class="ve-vbadge">${gi(i.id, 18)}</span>` : ''}</span>
+        <span class="v2-hrow"><b>${esc(T(i.name))}</b>${!i.owned && (i.comingSoon !== false || i.available === false || !i.affordable) ? EI.lock(12) : ''}${i.owned ? tag(tr('보유', 'Owned'), '#20c997') : ''}${i.comingSoon !== false || i.available === false ? (v3i() ? tag(tr('준비중', 'Coming soon'), '#9eb4c6', 've-soon').replace('>', `>${gi('clock', 12)}`) : tag(tr('준비중', 'Coming soon'), '#9eb4c6')) : ''}</span>
+        <span class="ve-iprice">${EI.coin(18)}<b>${n(i.price)} bum</b></span>
+        <small>${esc(tr(`보통 플레이어 약 ${n(i.daysForTypical)}일`, `About ${n(i.daysForTypical)} days for a typical player`))}</small></button>`).join('')}</div>
+      <div class="v2-hrow ve-sfoot"><small>${esc(tr('첫 자전거 기준: 라이트 80일 · 헤비 14일 · 구매한 탈것은 선물 불가', 'First bicycle: light player 80 days · heavy 14 days · bought vehicles cannot be gifted'))}</small><span class="v2-grow"></span>${btn}</div>
+      <p class="ve-msg" hidden></p>`;
+}
+function applyShopData(v, data, { keepSel = true } = {}) {
+  v.items = data.items;
+  v.goal = data.goal;
+  v.bal = data.bal;
+  v.sel = pickSel(data.items, keepSel ? v.sel : null);
+  rememberShop(data);
+  drawShop(v);
+}
+export async function openShop({ link } = {}) {
+  const fast = shopOpenFast();
+  const live = shopView && shopView.p.isConnected ? shopView : null;
+  let p;
+  if (live) { p = live.p; live.link = link; }
+  else {
+    p = panel('ve-shop', '');
+    shopView = { p, link, items: [], goal: null, bal: null, sel: null };
+    bindShopPanel(p);
+  }
+  const v = shopView;
+  v.link = link;
+  const cached = shopCache?.items?.length ? shopCache : null;
+
+  // 느린 경로(?shopfast=0 · 예전): 캐시 없는 첫 오픈만 서버를 기다린 뒤 띄움
+  if (!fast && !live && !cached) {
+    const data = await loadShopBundle();
+    applyShopData(v, data, { keepSel: false });
+    show(p, { key: '11' });
+    return;
+  }
+
+  // 빠른 경로: 캐시·스켈레톤으로 바로 보이게 한 뒤 백그라운드 갱신
+  if (cached) applyShopData(v, cached, { keepSel: !!live });
+  else p.innerHTML = shopLoadingHtml(shopCache?.bal || null);
+  if (!live) show(p, { key: '11' });
+
+  const fresh = await loadShopBundle().catch(() => null);
+  if (!fresh || shopView?.p !== p) return;
+  const changed = JSON.stringify(fresh) !== JSON.stringify(shopCache);
+  if (changed || !cached) applyShopData(v, fresh, { keepSel: true });
+  else rememberShop(fresh);
 }
 
 // ---------- 01a Google 로그인 대기 · 01b 기존 기기 데이터 연결
