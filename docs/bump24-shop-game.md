@@ -11,6 +11,10 @@
 4. 시간 끝 → TIME UP → 계산대 → 스캐너 삑(상품별) + 영수증 출력 → 카칭 → 결과(색종이, 최고 기록, 연습·리더보드·나가기)
 5. 하루 첫 판 = 랭킹(로컬 표시), 이후 연습 무제한. 진열·할인(2배 1~2종)은 매장 id + 날짜 시드.
 
+## 프롬프트(상호작용 안내)
+`ui.setHint(html, center, { act: true, tap })` — E 로 하는 동작이면 PC 는 `<kbd>E</kbd>`, 터치 기기(body.mobile 또는 hover:none+pointer:coarse)는
+'탭하여 …' 파란 버튼(누르는 손 SVG + 물결, 눌림 상태, prefers-reduced-motion 이면 정지). 문 들어가기·랭킹·바구니·담기·나가기 모두 같은 경로.
+
 ## 모바일
 가로 전용. 세로면 '휴대폰을 가로로 돌려주세요' 화면 + 게임 시간 정지. 입장 때 전체화면 + `screen.orientation.lock('landscape')` 을 시도(실패해도 안내 화면으로 동작).
 HUD 는 낮은 화면(`max-height: 520px`)에서 위쪽 한 줄로 납작하게, 조이스틱 왼쪽 아래(#m-joy 재사용), 담기 버튼 오른쪽 아래, safe-area 반영.

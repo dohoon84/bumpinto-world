@@ -170,8 +170,9 @@ export function mountBump24Game({
     const st = nearestDoor(pos); lastNear = st;
     const bd = nearestBoard(pos), dd = st ? Math.hypot(pos.x - st.door[0], pos.z - st.door[1]) : 1e9;
     lastBoard = bd && bd.d < dd ? bd.st : null;
-    const k = mobile() ? '' : '<kbd>E</kbd>';
-    ui.setHint(lastBoard ? `${k}🏆 ${lastBoard.name || 'BUMP24'} 장보기 랭킹 보기` : st ? `${k}${st.name || 'BUMP24'} 들어가기 · 30초 장보기` : '', true);
+    if (lastBoard) ui.setHint(`🏆 ${lastBoard.name || 'BUMP24'} 장보기 랭킹 보기`, true, { act: true, tap: '장보기 랭킹 보기 🏆' });
+    else if (st) ui.setHint(`${st.name || 'BUMP24'} 들어가기 · 30초 장보기`, true, { act: true, tap: `${st.name || 'BUMP24'} 들어가기` });
+    else ui.setHint('');
   }
 
   function frame(dt, look, axes) {

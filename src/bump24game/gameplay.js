@@ -9,7 +9,6 @@ export const PHASE = { BROWSE: 'browse', COUNTDOWN: 'countdown', PLAY: 'play', C
 export const COUNT_SEC = 5, PLAY_SEC = 30;
 const COMBO_WINDOW = 1.6;
 const won = (n) => Math.round(n).toLocaleString('ko-KR');
-const coarse = () => { try { return matchMedia('(pointer:coarse)').matches || document.body.classList.contains('mobile'); } catch { return false; } };
 
 export function createGameplay({ interior, ui, sfx, storeId, storeName, onExitStore, getSelfName }) {
   const layout = interior.layout, saleIds = layout.saleIds, dateKey = layout.dateKey;
@@ -150,12 +149,11 @@ export function createGameplay({ interior, ui, sfx, storeId, storeName, onExitSt
     clock += dt; interior._lastSense = sense;
     for (let i = 0; i < timeline.length; i++) if (timeline[i].at <= clock) { const t = timeline.splice(i--, 1)[0]; t.fn(); }
     if (grabDelay > 0) grabDelay -= dt;
-    const K = coarse() ? '' : '<kbd>E</kbd>';
     if (phase === PHASE.BROWSE) {
       ui.showGrab(false);
       if (ui.introOpen) ui.setHint('');
-      else if (!interior.hasBasket && sense.nearBasket) ui.setHint(`${K}바구니 집기 — 5초 뒤 시작!`, true);
-      else if (sense.nearExit) ui.setHint(`${K}매장 나가기`);
+      else if (!interior.hasBasket && sense.nearBasket) ui.setHint('바구니 집기 — 5초 뒤 시작!', true, { act: true, tap: '바구니 집기 · 5초 뒤 시작!' });
+      else if (sense.nearExit) ui.setHint('매장 나가기', false, { act: true });
       else ui.setHint('입구 옆 <b style="color:#3aa6ff">파란 바구니</b>를 집으세요', true);
       return;
     }
@@ -175,7 +173,7 @@ export function createGameplay({ interior, ui, sfx, storeId, storeName, onExitSt
       const target = sense.floorItem ? { name: sense.floorItem.item.name, price: sense.floorItem.item.price, floor: true } : sense.shelf ? { name: sense.shelf.item.name, price: sense.shelf.item.price } : null;
       ui.showGrab(true, !!target && grabDelay <= 0 && interior.basket.stunned <= 0, target?.floor ? '줍기' : '담기');
       if (interior.basket.stunned > 0) ui.setHint('와르르… 잠깐!');
-      else if (target) { const sale = saleIds.includes(sense.shelf?.item.id || sense.floorItem?.item.id); ui.setHint(`${K}${target.name} <b style="color:${sale ? '#ffd400' : '#9fd0ff'}">${won(target.price)}원${sale ? ' ×2' : ''}</b>`); }
+      else if (target) { const sale = saleIds.includes(sense.shelf?.item.id || sense.floorItem?.item.id); ui.setHint(`${target.name} <b style="color:${sale ? '#ffd400' : '#9fd0ff'}">${won(target.price)}원${sale ? ' ×2' : ''}</b>`, false, { act: true, tap: `담기 · ${target.name} <b style="color:${sale ? '#ffd400' : '#cfe6ff'}">${won(target.price)}원</b>` }); }
       else ui.setHint('');
       if (playLeft <= 0) { ui.setHud({ time: 0, urgent: false }); beginCheckout(); }
       return;

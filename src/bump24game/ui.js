@@ -6,8 +6,10 @@ const ICON = {
   exit: '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 4H4v12h4M12 6l-4 4 4 4M8 10h9"/></svg>',
   vol: '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"><path d="M3 7.5h3L10 4v12l-4-3.5H3z"/><path d="M13 7.5a3.5 3.5 0 0 1 0 5M15.3 5a7 7 0 0 1 0 10"/></svg>',
   mute: '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"><path d="M3 7.5h3L10 4v12l-4-3.5H3z"/><path d="M13.5 8l4 4M17.5 8l-4 4"/></svg>',
+  hand: '<svg class="hand" viewBox="0 0 32 32"><path d="M12.6 5.2a2.1 2.1 0 0 1 4.2 0v9.3l1.2-.3a2.1 2.1 0 0 1 2.5 1.4 2.1 2.1 0 0 1 2.8 1.5 2.1 2.1 0 0 1 2.9 1.9v4.6c0 3.6-2.9 6.4-6.4 6.4h-3.3a6.4 6.4 0 0 1-5-2.4l-4.7-5.8a2 2 0 0 1 3-2.7l2.8 2.6z" fill="#fff" stroke="#0a1630" stroke-width="1.7" stroke-linejoin="round"/><path d="M17 17.6v3M20.6 18.3v2.6M24 19.6v1.8" stroke="#0a1630" stroke-width="1.4" stroke-linecap="round"/></svg>',
   logo: '<svg viewBox="0 0 40 40"><rect x="7" y="5" width="22" height="30" rx="8" fill="#0072DD"/><path d="M11 23h8c3 0 4-2 5-4l2-4" stroke="#fff" stroke-width="3.2" fill="none" stroke-linecap="round"/><circle cx="27" cy="13" r="4.4" fill="#fff"/><circle cx="27" cy="13" r="2.4" fill="#ff3b3b"/></svg>',
 };
+const isTouch = () => { try { return document.body.classList.contains('mobile') || matchMedia('(hover: none) and (pointer: coarse)').matches; } catch { return false; } };
 const won = (n) => Math.round(n).toLocaleString('ko-KR');
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
@@ -60,6 +62,10 @@ export function createBump24UI({ onGrab, onExit, onMute, onHintTap, onIntroGo } 
   el.grab.addEventListener('pointerdown', grabDown);
   for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) el.grab.addEventListener(ev, () => el.grab.classList.remove('press'));
   el.hint.addEventListener('click', () => onHintTap?.());
+  // 눌림 상태(터치 시작~끝)
+  const hintDown = () => el.hint.classList.add('press'), hintUp = () => el.hint.classList.remove('press');
+  el.hint.addEventListener('pointerdown', hintDown); el.hint.addEventListener('touchstart', hintDown, { passive: true });
+  for (const ev of ['pointerup', 'pointercancel', 'pointerleave', 'touchend', 'touchcancel']) el.hint.addEventListener(ev, hintUp, { passive: true });
 
   // 금액 롤업
   let shown = 0, target = 0, raf = 0;
@@ -77,7 +83,15 @@ export function createBump24UI({ onGrab, onExit, onMute, onHintTap, onIntroGo } 
       if (title) { el.fadeT.textContent = title; el.fadeS.textContent = sub || ''; }
       el.fade.querySelector('.t').style.opacity = a > 0.6 ? '1' : '0';
     },
-    setHint(html, center = false) { if (el.hint.innerHTML !== (html || '')) el.hint.innerHTML = html || ''; el.hint.classList.toggle('center', !!center); },
+    // 안내/상호작용 프롬프트. act: E 로 하는 동작이면 PC 는 <kbd>E</kbd>, 터치 기기는 '탭하여 …' 버튼(누르는 손 + 물결)
+    //   tap: 터치용 짧은 문구(없으면 html)
+    setHint(html, center = false, { act = false, tap = null } = {}) {
+      const touch = act && isTouch();
+      const out = !html ? '' : !act ? html : touch ? `<span class="b24-tapbtn"><span class="ico" aria-hidden="true"><i class="rip"></i><i class="rip r2"></i>${ICON.hand}</span><span class="lb"><b class="tw">탭하여</b>${tap || html}</span></span>` : `<kbd>E</kbd>${html}`;
+      if (el.hint.innerHTML !== out) el.hint.innerHTML = out;
+      el.hint.classList.toggle('center', !!center); el.hint.classList.toggle('tap', !!(html && touch));
+      el.hint.setAttribute('role', html && act ? 'button' : 'status');
+    },
     showHud(on) { el.hud.classList.toggle('off', !on); el.sale.style.display = on ? '' : 'none'; },
     setMode(ranked) { el.mode.textContent = ranked ? '랭킹' : '연습'; el.mode.classList.toggle('prac', !ranked); },
     setSale(items) { el.sale.innerHTML = items.map((p) => `<span><b>2배</b>${esc(p.name)}</span>`).join(''); },
@@ -165,7 +179,7 @@ export function createBump24UI({ onGrab, onExit, onMute, onHintTap, onIntroGo } 
     },
     receiptClose() { el.receipt.innerHTML = ''; api._rows = api._paper = api._tot = null; },
     showResult({ score, best, isBest, ranked, items = [], kg = 0, combo = 0, spills = 0, onRetry, onBoard, onExit: ex }) {
-      const chips = items.slice(0, 18).map((it) => `<i class="${it.sale ? 's' : ''}">${esc(it.name)}</i>`).join('') + (items.length > 18 ? `<i>+${items.length - 18}</i>` : '');
+      const chips = items.map((it) => `<i class="${it.sale ? 's' : ''}">${esc(it.name)}</i>`).join('');
       el.modal.innerHTML = `<div class="b24-modal"><canvas class="b24-confetti"></canvas><div class="b24-result">
         <div class="top"><div class="ttl">${ranked ? '오늘의 랭킹 기록' : '연습 기록'}</div><div class="sc"><span>0</span><u>원</u></div>
         <div class="ribbon ${isBest ? '' : 'prac'}">${isBest ? '🎉 내 최고 기록 갱신!' : `내 최고 ${won(best)}원`}</div></div>
@@ -173,6 +187,7 @@ export function createBump24UI({ onGrab, onExit, onMute, onHintTap, onIntroGo } 
         <div class="items">${chips || '<i>빈 바구니…</i>'}</div>
         <div class="btns"><button class="pri" data-r="retry">연습 한 판 더</button><button data-r="board">리더보드</button><button data-r="exit">매장 나가기</button></div>
         <div class="note">${spills ? `와르르 ${spills}번 · ` : ''}기록은 이 기기에만 저장돼요 (로컬)</div></div></div>`;
+      fitChips(el.modal.querySelector('.b24-result .items'), innerHeight <= 520 ? 2 : 3);
       const sc = el.modal.querySelector('.sc span'); const t0 = performance.now();
       const step = () => { const k = Math.min(1, (performance.now() - t0) / 900), e = 1 - Math.pow(1 - k, 3); sc.textContent = won(score * e); if (k < 1) requestAnimationFrame(step); }; step();
       el.modal.querySelector('[data-r="retry"]').onclick = () => onRetry?.();
@@ -218,6 +233,20 @@ export function createBump24UI({ onGrab, onExit, onMute, onHintTap, onIntroGo } 
     dispose() { cancelAnimationFrame(raf); root.remove(); },
   };
   return api;
+}
+
+// 상품 칩: 정해진 줄 수까지만 보이고 나머지는 '+N' 칩 하나로(줄 중간이 잘리지 않게)
+function fitChips(box, rows) {
+  if (!box) return;
+  const all = [...box.children]; if (!all.length) return;
+  const rowTops = () => [...new Set([...box.children].filter((c) => c.style.display !== 'none').map((c) => c.offsetTop))].sort((a, b) => a - b);
+  if (rowTops().length <= rows) return;
+  const more = document.createElement('i'); more.className = 'more'; box.appendChild(more);
+  let hidden = 0;
+  for (let k = all.length - 1; k > 0; k--) {
+    all[k].style.display = 'none'; hidden++; more.textContent = `+${hidden}`;
+    const t = rowTops(); if (t.length <= rows) break;
+  }
 }
 
 function confetti(cv, n) {

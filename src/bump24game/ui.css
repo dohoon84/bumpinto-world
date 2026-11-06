@@ -92,6 +92,26 @@ body.b24-inside .b24-outside-hidden { visibility: hidden !important; pointer-eve
 .b24-hint:empty { display: none; }
 .b24-hint.center { top: 50%; bottom: auto; transform: translate(-50%, -50%); padding: 14px 26px; font-size: 19px; border-radius: 30px; }
 .b24-hint kbd { display: inline-grid; place-items: center; min-width: 24px; height: 24px; margin-right: 8px; padding: 0 6px; border-radius: 6px; background: var(--b-yellow); color: var(--b-navy); font: 900 13px/1 inherit; box-shadow: 0 2px 0 #b38f00; }
+/* 터치 기기 프롬프트 = 탭 버튼(누르는 손 + 물결). PC 는 위 kbd 그대로 */
+.b24-hint.tap { padding: 0; background: none; box-shadow: none; border-radius: 0; -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
+.b24-tapbtn { display: inline-flex; align-items: center; gap: 10px; height: 52px; padding: 0 20px 0 7px; border-radius: 26px; color: #fff; font-size: 16px; font-weight: 900; letter-spacing: -.2px;
+  background: linear-gradient(180deg, #2f95ff 0%, var(--b-blue) 55%, #005fc0 100%); border: 2px solid rgba(255,255,255,.92);
+  box-shadow: 0 5px 0 #003f80, 0 10px 24px rgba(0,40,100,.45), inset 0 2px 0 rgba(255,255,255,.35); transition: transform .07s, box-shadow .07s; }
+.b24-tapbtn .lb .tw { margin-right: .38em; color: var(--b-yellow); font-weight: 900; }
+.b24-tapbtn .lb { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; line-height: 1; padding-top: 1px; }
+.b24-tapbtn .ico { position: relative; flex: none; width: 38px; height: 38px; border-radius: 50%; background: rgba(255,255,255,.2); box-shadow: inset 0 0 0 2px rgba(255,255,255,.55); }
+.b24-tapbtn .hand { position: absolute; left: 6px; top: 7px; width: 28px; height: 28px; filter: drop-shadow(0 2px 1px rgba(0,30,80,.35)); transform-origin: 45% 20%; animation: b24press 1.3s cubic-bezier(.4,0,.2,1) infinite; }
+.b24-tapbtn .rip { position: absolute; left: 13px; top: 2px; width: 14px; height: 14px; margin: 0; border-radius: 50%; border: 2px solid #fff; opacity: 0; animation: b24rip 1.3s ease-out infinite; }
+.b24-tapbtn .rip.r2 { animation-delay: .16s; border-color: var(--b-yellow); }
+.b24-hint.tap.press .b24-tapbtn { transform: translateY(4px) scale(.97); box-shadow: 0 1px 0 #003f80, 0 4px 12px rgba(0,40,100,.4), inset 0 2px 4px rgba(0,0,0,.25); background: linear-gradient(180deg, #0a74e0, #0058b0); }
+.b24-hint.tap.center .b24-tapbtn { height: 58px; font-size: 18px; border-radius: 29px; padding-right: 24px; }
+@keyframes b24press { 0%, 100% { transform: translate(2px, 5px) scale(1); } 30% { transform: translate(0, 0) scale(1); } 42% { transform: translate(0, 1px) scale(.88); } 55% { transform: translate(0, 0) scale(1); } 75% { transform: translate(2px, 5px) scale(1); } }
+@keyframes b24rip { 0%, 38% { transform: scale(.3); opacity: 0; } 42% { opacity: .95; } 100% { transform: scale(2.6); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .b24-tapbtn .hand { animation: none; transform: translate(0, 1px); }
+  .b24-tapbtn .rip { animation: none; opacity: .7; transform: scale(1.4); } .b24-tapbtn .rip.r2 { display: none; }
+  .b24-tapbtn { transition: none; }
+}
 .b24-grab { position: absolute; right: calc(var(--sr) + 8px); bottom: calc(var(--sb) + 8px); width: 112px; height: 112px; border-radius: 50%; background: radial-gradient(circle at 50% 35%, #4db3ff, var(--b-blue) 60%, #0058b0); color: #fff; font-size: 24px; font-weight: 900; box-shadow: 0 8px 0 #003f80, 0 14px 30px rgba(0,60,140,.45), inset 0 3px 0 rgba(255,255,255,.35); display: grid; place-items: center; transition: transform .08s, opacity .2s; }
 .b24-grab small { display: block; font-size: 11px; font-weight: 800; opacity: .85; margin-top: -2px; }
 .b24-grab[hidden] { display: none; }
@@ -150,9 +170,10 @@ body.b24-inside .b24-outside-hidden { visibility: hidden !important; pointer-eve
 .b24-result .stats div { text-align: center; }
 .b24-result .stats b { display: block; font-size: 20px; font-weight: 900; font-variant-numeric: tabular-nums; }
 .b24-result .stats span { font-size: 11px; color: #6b7c90; font-weight: 700; }
-.b24-result .items { display: flex; flex-wrap: wrap; gap: 4px; padding: 6px 16px 4px; justify-content: center; max-height: 64px; overflow: hidden; }
+.b24-result .items { display: flex; flex-wrap: wrap; gap: 5px 4px; padding: 6px 16px 4px; justify-content: center; align-content: flex-start; overflow: hidden; }
 .b24-result .items i { font-style: normal; font-size: 11px; font-weight: 700; padding: 3px 8px; border-radius: 10px; background: #eef3f8; color: #33404f; }
 .b24-result .items i.s { background: #ffe8ee; color: #d4003b; }
+.b24-result .items i { line-height: 16px; white-space: nowrap; } .b24-result .items i.more { background: #dfe8f2; color: #4a5a6d; font-weight: 900; }
 .b24-result .btns { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 12px 16px 16px; }
 .b24-result .btns button { height: 48px; border-radius: 14px; font-size: 15px; font-weight: 900; background: #eef3f8; color: var(--b-navy); }
 .b24-result .btns button.pri { grid-column: 1 / -1; background: var(--b-blue); color: #fff; box-shadow: 0 5px 0 #004f99; }
@@ -221,6 +242,8 @@ body.b24-inside .b24-outside-hidden { visibility: hidden !important; pointer-eve
   .b24-ibtn { height: 36px; } .b24-ibtn.round { width: 36px; }
   .b24-grab { width: 100px; height: 100px; font-size: 22px; }
   .b24-hint { bottom: calc(var(--sb) + 10px); font-size: 13px; padding: 8px 14px; max-width: calc(100vw - 2 * 150px); overflow: hidden; text-overflow: ellipsis; }
+  .b24-hint.tap { overflow: visible; padding: 0 0 6px; }
+  .b24-tapbtn { max-width: calc(100vw - 2 * 150px); height: 46px; font-size: 14px; padding-right: 16px; gap: 8px; } .b24-hint.tap.center .b24-tapbtn { height: 50px; font-size: 15px; }
   .b24-count .n { font-size: 130px; } .b24-count .n.go { font-size: 86px; } .b24-count .ring { width: 180px; height: 180px; } .b24-count .cap { top: calc(50% + 80px); font-size: 14px; }
   .b24-banner b { font-size: 44px; padding: 10px 30px; }
   .b24-intro { padding: 14px 18px 12px; width: min(560px, 76vw); transform: translate(-50%, -50%); }
@@ -228,10 +251,10 @@ body.b24-inside .b24-outside-hidden { visibility: hidden !important; pointer-eve
   .b24-receipt { margin-top: 8px; transform: scale(.78); transform-origin: center center; width: min(280px, 46vw); }
   .b24-receipt .printer { width: min(320px, 52vw); }
   .b24-result { width: min(620px, 88vw); display: grid; grid-template-columns: 1fr 1fr; }
-  .b24-result .top { grid-row: span 3; display: flex; flex-direction: column; justify-content: center; }
-  .b24-result .top .sc { font-size: 44px; }
-  .b24-result .stats { padding-top: 12px; } .b24-result .items { max-height: 44px; } .b24-result .btns { padding: 8px 12px 10px; } .b24-result .btns button { height: 40px; }
-  .b24-result .note { grid-column: 2; padding-bottom: 8px; }
+  .b24-result .top { grid-row: 1 / span 4; display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 16px 14px; }
+  .b24-result .top .sc { font-size: 44px; } .b24-result .ribbon { max-width: 100%; white-space: nowrap; }
+  .b24-result .stats { padding: 12px 10px 4px; } .b24-result .items { padding: 4px 12px 2px; } .b24-result .btns { padding: 8px 12px 6px; gap: 6px; } .b24-result .btns button { height: 40px; } .b24-result .btns button.pri { box-shadow: 0 4px 0 #004f99; }
+  .b24-result .note { grid-column: 2; padding: 2px 8px 10px; }
 }
 @keyframes b24comboR { 0% { opacity: 0; transform: scale(.3) rotate(-8deg); } 25% { opacity: 1; transform: scale(1.15) rotate(3deg); } 45% { transform: scale(1); } 85% { opacity: 1; } 100% { opacity: 0; transform: translateY(-8px); } }
 

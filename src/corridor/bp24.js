@@ -51,6 +51,7 @@ export function footprintOBB(ring) {
   }
   return best;
 }
+function inRing(r, x, z) { let c = false; for (let i = 0, j = r.length - 1; i < r.length; j = i++) { const [xi, zi] = r[i], [xj, zj] = r[j]; if ((zi > z) !== (zj > z) && x < ((xj - xi) * (z - zi)) / (zj - zi) + xi) c = !c; } return c; }
 const segDist = (x, z, a, b) => { const dx = b[0] - a[0], dz = b[1] - a[1], L2 = dx * dx + dz * dz || 1, t = Math.max(0, Math.min(1, ((x - a[0]) * dx + (z - a[1]) * dz) / L2)); return Math.hypot(a[0] + dx * t - x, a[1] + dz * t - z); };
 function roadDist(roads, x, z) {
   let d = Infinity;
@@ -307,7 +308,9 @@ function buildStore(st) {
     const a = ring[i], b = ring[(i + 1) % ring.length];
     const mx = (a[0] + b[0]) / 2, mz = (a[1] + b[1]) / 2, L = Math.hypot(b[0] - a[0], b[1] - a[1]);
     if (L < 0.2) continue;
-    let nx = (b[1] - a[1]) / L, nz = -(b[0] - a[0]) / L; if (area > 0) { nx = -nx; nz = -nz; } // 바깥쪽
+    let nx = (b[1] - a[1]) / L, nz = -(b[0] - a[0]) / L; if (area > 0) { nx = -nx; nz = -nz; }
+    // 로컬 틀(ax, b)은 손잡이가 바뀔 수 있어 넓이 부호만으로는 안쪽을 볼 수 있음 → 변 중점 바로 바깥이 외곽 안이면 뒤집음(오목 외곽도 안전)
+    if (inRing(ring, (a[0] + b[0]) / 2 + nx * 0.05, (a[1] + b[1]) / 2 + nz * 0.05)) { nx = -nx; nz = -nz; } // 바깥쪽
     // 유리 면과 겹치는 구간은 빼고 남는 조각만 벽으로(앞면: x 0..W, 옆면: z 0..D)
     const onFront = Math.abs(a[1] - zf) < 0.3 && Math.abs(b[1] - zf) < 0.3;
     const onSide = side && Math.abs(a[0] - x1) < 0.4 && Math.abs(b[0] - x1) < 0.4;
@@ -326,6 +329,11 @@ function buildStore(st) {
       ext.quad(N(nx, 0, nz), P(px + nx * 0.02, gf / 2, pz + nz * 0.02), l, gf, STONE);
     }
   }
+  // 1b) 매장 틀(0..W × 0..D) 자체를 닫는 벽: 건물이 틀보다 깊거나 넓으면(고정 box·maxW/maxD) 비운 1층의 뒤·옆이 뚫려 보였음.
+  //     두께 있는 상자라 안·밖 어느 쪽에서도 막힘(외벽 재질에 병합 → draw 추가 없음). 안쪽 면은 실내 벽 색으로 덮음.
+  ext.box(x0 - 0.05, 0, zb - 0.12, (side ? x1 + 0.06 : x1 + 0.05), gf, zb, STONE); // 뒤
+  ext.box(x0 - 0.05, 0, zf + 0.3, x0 + 0.08, gf, zb, STONE); // 서쪽(앞 끝 기둥 뒤부터)
+  if (!side) ext.box(x1 - 0.08, 0, zf + 0.5, x1 + 0.05, gf, zb, STONE); // 동쪽(옆 유리 없을 때, 모퉁이 기둥 뒤부터)
   // 2) 간판 띠(앞·옆) + 아래 처마, 모퉁이 기둥, 앞면 기둥
   ext.box(x0 - 0.05, GLASS_H, zf - FASCIA_OUT, x1 + FASCIA_OUT, gf, zf + 0.25, NAVY);
   if (side) ext.box(x1 - 0.25, GLASS_H, zf - FASCIA_OUT, x1 + FASCIA_OUT, gf, zb, NAVY);
@@ -399,6 +407,8 @@ function buildStore(st) {
   int.quad(N(0, -1, 0), P((ix0 + ix1) / 2, ceil, (iz0 + iz1) / 2), ix1 - ix0, iz1 - iz0, CEIL);
   int.quad(N(0, 0, -1), P((ix0 + ix1) / 2, ceil / 2, iz1), ix1 - ix0, ceil, WALL); // 뒷벽(안쪽 면)
   int.quad(N(1, 0, 0), P(ix0, ceil / 2, (iz0 + iz1) / 2), iz1 - iz0, ceil, WALL.map((v) => v * 0.95)); // 서쪽 벽
+  if (!side) int.quad(N(-1, 0, 0), P(ix1, ceil / 2, (iz0 + iz1) / 2), iz1 - iz0, ceil, WALL.map((v) => v * 0.95)); // 동쪽 벽(옆 유리 없을 때)
+  int.quad(N(0, 0, -1), P((ix0 + ix1) / 2, (ceil + gf) / 2, iz1), ix1 - ix0, gf - ceil, WALL.map((v) => v * 0.9)); // 천장 위 뒷벽(틈 가림)
   int.quad(N(0, 0, -1), P((ix0 + ix1) / 2, 0.16, iz1 - 0.01), ix1 - ix0, 0.3, hex('#c9cdd0')); // 걸레받이
   // LED 선형 조명(앞뒤 방향 줄 4개)
   const nLed = Math.max(2, Math.round(W / 4));
