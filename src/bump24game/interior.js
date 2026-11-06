@@ -8,6 +8,7 @@ import { clerkSource } from '../corridor/bp24.js';
 import { SHAPES, productAtlasCached, ProductBatch, planLayout, singleProductGeometry } from './products.js';
 import { buildSignAtlas, buildFloorTexture, R, uvr, tagRect } from './signs.js';
 import { createBasket } from './basket.js';
+import { boardTexture, releaseBoardTexture, createBoardFxMaterial } from './leaderboard.js';
 
 export const STORE = { X0: -5, X1: 5, Z0: 0, Z1: 8, H: 3.0 };
 const PR = 0.23; // 플레이어 반지름
@@ -234,6 +235,13 @@ export function buildInterior({ renderer = null, storeId = 'seongnam-cityhall', 
     });
   }
 
+  // ---------- 랭킹 화면(블랙 냉장고 위 벽걸이 디스플레이, 입구에서 정면) ----------
+  const LB = { x: 0, y: 2.42, z: 2.855, w: 1.5, h: 1.5 * 560 / 1024 };
+  lit.box(LB.x - LB.w / 2 - 0.05, LB.y - LB.h / 2 - 0.05, LB.z + 0.005, LB.x + LB.w / 2 + 0.05, LB.y + LB.h / 2 + 0.05, LB.z + 0.06, '#101318', { ao: 0 });
+  lit.box(LB.x - LB.w / 2 - 0.05, LB.y - LB.h / 2 - 0.07, LB.z - 0.01, LB.x + LB.w / 2 + 0.05, LB.y - LB.h / 2 - 0.05, LB.z + 0.06, '#0072DD', { ao: 0 });
+  metal.box(LB.x - 0.4, LB.y + LB.h / 2 + 0.05, LB.z + 0.02, LB.x - 0.38, H, LB.z + 0.04, '#9aa1a9', { ao: 0 });
+  metal.box(LB.x + 0.38, LB.y + LB.h / 2 + 0.05, LB.z + 0.02, LB.x + 0.4, H, LB.z + 0.04, '#9aa1a9', { ao: 0 });
+
   // ---------- 왼벽 아이스크림 냉동고(유리 뚜껑) + 앞쪽 섬 냉동고 ----------
   function chestFreezer(x0, z0, x1, z1, items) {
     block(x0, z0, x1, z1, 0.92); shadow(x0, z0, x1, z1, 0.5, 0.2);
@@ -432,6 +440,15 @@ export function buildInterior({ renderer = null, storeId = 'seongnam-cityhall', 
   const prodOrig = Float32Array.from(prodGeo.attributes.position.array);
   addMesh(decal.build(), mat.decal, 'b24-decal', 2);
   addMesh(glass.build(), mat.glass, 'b24-glass', 3);
+
+  // 랭킹 화면: 매장 밖 토템과 같은 공급자·같은 내용(가로 배치 텍스처) + 반짝이 = 2 draw
+  const lbTex = boardTexture(storeId, storeName, 'wide');
+  const lbGeo = new THREE.PlaneGeometry(LB.w, LB.h); lbGeo.rotateY(Math.PI); lbGeo.translate(LB.x, LB.y, LB.z);
+  const lbMat = new THREE.MeshBasicMaterial({ map: lbTex, toneMapped: false });
+  const boardScreen = new THREE.Mesh(lbGeo, lbMat); boardScreen.name = 'b24-board'; scene.add(boardScreen);
+  const lbFxGeo = lbGeo.clone(); lbFxGeo.translate(0, 0, -0.004); lbFxGeo.setAttribute('color', new THREE.Float32BufferAttribute(new Array(12).fill(0).map((_, i) => (i % 3 === 0 ? 1 : 0)), 3));
+  const lbFxMat = createBoardFxMaterial(); lbFxMat.uniforms.uNight.value = 0;
+  const boardFx = new THREE.Mesh(lbFxGeo, lbFxMat); boardFx.name = 'b24-board-fx'; boardFx.renderOrder = 4; scene.add(boardFx);
 
   // 집을 상품 화살표(카메라를 보는 사각형)
   const arrowGeo = new THREE.PlaneGeometry(0.16, 0.16); { const u = uvr(R.ARROW, 2), uv = arrowGeo.attributes.uv; for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) ? u[2] : u[0], uv.getY(i) ? u[3] : u[1]); }
@@ -681,7 +698,7 @@ export function buildInterior({ renderer = null, storeId = 'seongnam-cityhall', 
   updateCamera(0, true);
 
   return {
-    scene, camera, cam, player: me, clerk, basket, layout, facings, obstacles, COUNTER, BASKET_SPOT,
+    scene, camera, cam, player: me, clerk, boardScreen, boardFx, basket, layout, facings, obstacles, COUNTER, BASKET_SPOT,
     get hasBasket() { return hasBasket; },
     grabBasket() { hasBasket = true; basket.group.visible = true; stack.children[0].scale.y = 0.85; },
     dropBasket() { hasBasket = false; basket.group.visible = false; stack.children[0].scale.y = 1; },
@@ -699,6 +716,7 @@ export function buildInterior({ renderer = null, storeId = 'seongnam-cityhall', 
       for (const k of Object.keys(mat)) if (mat[k]) mat[k].dispose();
       signAtlas.tex.dispose(); floorTex.dispose(); envRT?.dispose(); pmrem?.dispose();
       basket.dispose();
+      releaseBoardTexture(lbTex); lbMat.dispose(); lbGeo.dispose(); lbFxGeo.dispose(); lbFxMat.dispose();
       scene.clear();
     },
   };

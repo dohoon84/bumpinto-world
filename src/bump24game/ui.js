@@ -1,5 +1,6 @@
 // [bump24game] 매장 안 DOM UI: HUD(타이머 링·금액 롤업·무게 게이지·콤보) · 카운트다운 · 영수증 · 결과(색종이) · 가로 안내
 import './ui.css';
+import { leaderboard, PERIODS } from './leaderboard.js';
 
 const ICON = {
   exit: '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 4H4v12h4M12 6l-4 4 4 4M8 10h9"/></svg>',
@@ -40,7 +41,7 @@ export function createBump24UI({ onGrab, onExit, onMute, onHintTap, onIntroGo } 
     <button class="b24-grab b24-in" hidden><span>담기<small>E</small></span></button>
     <div class="b24-intro-wrap b24-in"></div>
     <div class="b24-receipt-wrap b24-in"></div>
-    <div class="b24-modal-wrap b24-in"></div>
+    <div class="b24-modal-wrap"></div>
     <div class="b24-rotate"><div class="b24r-box"><div class="b24r-phone"><i>↻</i></div><div class="b24r-arc"></div><h3>휴대폰을 가로로 돌려주세요</h3><p>BUMP24 30초 장보기는<br>가로 화면에서 플레이해요</p><div class="b24r-tag">${ICON.logo.replace('<svg', '<svg width="22" height="22"')}<span>돌리면 <b>바로 이어서</b> 시작돼요</span></div><br><button class="b24r-ex" data-k="exit">매장 나가기</button></div></div>
     <div class="b24-fade"><div class="t"><div class="logo">${ICON.logo.replace('<svg', '<svg width="40" height="40"')}</div><b></b><span></span></div></div>`;
   document.body.appendChild(root);
@@ -67,7 +68,7 @@ export function createBump24UI({ onGrab, onExit, onMute, onHintTap, onIntroGo } 
     el.totalN.textContent = won(shown);
     raf = shown !== target ? requestAnimationFrame(roll) : 0;
   }
-  let lastTime = -1, lastKg = -1;
+  let lastTime = -1, lastKg = -1, boardClose = null;
   const api = {
     root,
     setInside(on) { root.dataset.inside = on ? '1' : '0'; },
@@ -179,11 +180,37 @@ export function createBump24UI({ onGrab, onExit, onMute, onHintTap, onIntroGo } 
       el.modal.querySelector('[data-r="exit"]').onclick = () => ex?.();
       confetti(el.modal.querySelector('.b24-confetti'), isBest ? 160 : 90);
     },
-    showBoard(rows, { me } = {}) {
-      const list = rows.length ? rows.map((r, i) => `<li><b>${i + 1}</b><span>${esc(r.name)}${r.at ? ` <small style="color:#8a97a8;font-weight:600">${new Date(r.at).toLocaleDateString('ko-KR')}</small>` : ''}</span><em>${won(r.score)}원</em></li>`).join('') : '<li><span>아직 기록이 없어요</span></li>';
-      el.modal.innerHTML = `<div class="b24-modal"><div class="b24-board"><h3>오늘의 리더보드</h3><span class="loc">로컬 기록 · 이 기기만 (서버 랭킹 준비 중)</span><ol>${list}</ol><button>닫기</button></div></div>`;
-      el.modal.querySelector('button').onclick = () => me?.();
+    // 전체 랭킹(매장 안·밖 공용): 공급자에서 오늘/이번 주 상위 20 — 탭 전환 · 내 닉네임 강조
+    showBoard({ storeId, storeName = 'BUMP24', me = '', period = 'today', onClose } = {}) {
+      const close = () => { api.hideModal(); onClose?.(); };
+      el.modal.innerHTML = `<div class="b24-modal b24-lbm"><div class="b24-board" role="dialog" aria-label="BUMP24 장보기 랭킹">
+        <div class="side"><div class="hd">${ICON.logo.replace('<svg', '<svg width="40" height="40"')}<div><small>BUMP24</small><h3>장보기 랭킹</h3></div></div>
+          <div class="st">${esc(storeName)} · 30초 동안 담은 최고 금액</div>
+          <div class="tabs">${PERIODS.map(([p, l]) => `<button data-p="${p}">${l}</button>`).join('')}</div>
+          <div class="mine"></div>
+          <span class="loc">${esc(leaderboard.label)}${leaderboard.provider.kind === 'local' ? ' · 서버 랭킹 준비 중' : ''}</span>
+          <button class="close">닫기</button></div>
+        <ol></ol></div></div>`;
+      const box = el.modal.querySelector('.b24-board'), ol = box.querySelector('ol'), mine = box.querySelector('.mine');
+      let seq = 0;
+      const show = async (p) => {
+        period = p; const n = ++seq;
+        for (const b of box.querySelectorAll('.tabs button')) b.classList.toggle('on', b.dataset.p === p);
+        let rows = []; try { rows = await leaderboard.top({ storeId, period: p, limit: 20 }) || []; } catch { rows = []; }
+        if (n !== seq || !box.isConnected) return;
+        ol.innerHTML = rows.length ? rows.map((r, i) => `<li class="${i < 3 ? `m${i + 1}` : ''}${me && r.name === me ? ' me' : ''}"><b>${i + 1}</b><span>${esc(r.name)}${me && r.name === me ? '<i>나</i>' : ''}</span><em>${won(r.score)}원</em></li>`).join('')
+          : `<li class="empty"><div class="crown">👑</div><b>첫 번째 장보기왕이 되어보세요!</b><small>${p === 'week' ? '이번 주' : '오늘'} 기록이 아직 없어요 · 문 앞에서 30초 장보기</small></li>`;
+        const i = rows.findIndex((r) => me && r.name === me);
+        mine.innerHTML = i >= 0 ? `내 순위 <b>${i + 1}위</b> · ${won(rows[i].score)}원` : `${esc(me || '나')} · ${p === 'week' ? '이번 주' : '오늘'} 기록 없음 — 한 판 해보세요!`;
+      };
+      for (const b of box.querySelectorAll('.tabs button')) b.onclick = () => show(b.dataset.p);
+      box.querySelector('.close').onclick = close;
+      el.modal.querySelector('.b24-modal').onclick = (e) => { if (e.target === e.currentTarget) close(); };
+      boardClose = close;
+      show(period);
     },
+    get boardOpen() { return !!el.modal.querySelector('.b24-lbm'); },
+    closeBoard() { if (el.modal.querySelector('.b24-lbm')) boardClose?.(); },
     hideModal() { el.modal.innerHTML = ''; },
     setMuted(m) { el.mute.innerHTML = m ? ICON.mute : ICON.vol; el.mute.setAttribute('aria-label', m ? '효과음 켜기' : '효과음 끄기'); },
     rotate(on) { el.rotate.classList.toggle('on', !!on); },
@@ -207,12 +234,10 @@ function confetti(cv, n) {
 }
 
 // ---------- 로컬 기록 ----------
-const KEY_BEST = 'bw.bump24.best', KEY_BOARD = 'bw.bump24.localBoard', KEY_RANKED = 'bw.bump24.ranked';
+const KEY_BEST = 'bw.bump24.best', KEY_RANKED = 'bw.bump24.ranked'; // 랭킹 기록은 leaderboard.js(공급자)
 const read = (k) => { try { return JSON.parse(localStorage.getItem(k) || '{}') || {}; } catch { return {}; } };
 const write = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* */ } };
 export function loadBest(storeId) { return Number(read(KEY_BEST)[storeId] || 0); }
 export function saveBest(storeId, score) { const all = read(KEY_BEST); const b = Math.max(Number(all[storeId] || 0), score); all[storeId] = b; write(KEY_BEST, all); return b; }
-export function pushLocalBoard(storeId, entry) { const all = read(KEY_BOARD); const arr = (all[storeId] || []).concat([entry]).sort((a, b) => b.score - a.score).slice(0, 20); all[storeId] = arr; write(KEY_BOARD, all); return arr; }
-export function loadLocalBoard(storeId, dateKey) { const arr = read(KEY_BOARD)[storeId] || []; return dateKey ? arr.filter((r) => !r.dateKey || r.dateKey === dateKey) : arr; }
 export function rankedUsed(storeId, dateKey) { return !!read(KEY_RANKED)[`${storeId}|${dateKey}`]; }
 export function markRanked(storeId, dateKey) { const all = read(KEY_RANKED); all[`${storeId}|${dateKey}`] = Date.now(); for (const k of Object.keys(all)) if (Date.now() - all[k] > 3 * 864e5) delete all[k]; write(KEY_RANKED, all); }

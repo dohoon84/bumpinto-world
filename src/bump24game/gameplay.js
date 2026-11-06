@@ -1,7 +1,8 @@
 // [bump24game] 게임 상태머신: 구경 → 바구니 → 5초 카운트다운 → 30초 → 계산(영수증) → 결과
 //   하루 1회 랭킹(로컬 표시) + 무제한 연습. 시간 진행은 update(dt) 의 타임라인으로만(디버그 timeScale 로 멈춤 가능)
 import { BY_ID, scoreOf } from './products.js';
-import { loadBest, saveBest, pushLocalBoard, loadLocalBoard, rankedUsed, markRanked } from './ui.js';
+import { loadBest, saveBest, rankedUsed, markRanked } from './ui.js';
+import { leaderboard } from './leaderboard.js';
 import * as THREE from 'three';
 
 export const PHASE = { BROWSE: 'browse', COUNTDOWN: 'countdown', PLAY: 'play', CHECKOUT: 'checkout', RESULT: 'result' };
@@ -126,16 +127,17 @@ export function createGameplay({ interior, ui, sfx, storeId, storeName, onExitSt
     const isBest = score > bestPrev && score > 0;
     const best = saveBest(storeId, score);
     const name = getSelfName?.() || '나';
-    if (ranked) pushLocalBoard(storeId, { name, score, at: Date.now(), dateKey, items: items.length });
+    leaderboard.submit({ storeId, name, score, at: Date.now(), dateKey, ranked, items: items.length }).catch?.(() => {}); // 끝나자마자 전광판 갱신(공급자 알림)
     const payload = { v: 1, storeId, dateKey, seed: layout.seed, ranked, score, durationMs: PLAY_SEC * 1000, saleIds: saleIds.slice(), events: runLog.slice(), items: items.map((it) => ({ id: it.item.id, sale: !!it.sale })), weight: +kg.toFixed(3), spills, maxCombo };
     try { window.__jj = window.__jj || {}; window.__jj.bump24LastRun = payload; } catch { /* */ }
     sfx.fanfare(isBest);
-    ui.showResult({
+    const show = () => ui.showResult({
       score, best, isBest, ranked, kg, combo: maxCombo, spills,
       items: items.map((it) => ({ name: it.item.name, sale: it.sale })),
       onRetry: () => restart(), onExit: () => onExitStore?.(),
-      onBoard: () => ui.showBoard(loadLocalBoard(storeId, dateKey).map((r) => ({ name: r.name, score: r.score, at: r.at })), { me: () => finish(items, score, kg) }),
+      onBoard: () => ui.showBoard({ storeId, storeName, me: name, onClose: show }),
     });
+    show();
   }
   function restart() {
     ui.hideModal(); interior.basket.clear(); interior.clearFloor(); interior.restock(); interior.setArrow(true);

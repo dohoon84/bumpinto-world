@@ -7,15 +7,18 @@ import { createBump24Sfx } from './sfx.js';
 import { createBump24UI, loadBest, rankedUsed } from './ui.js';
 import { createGameplay, PHASE } from './gameplay.js';
 import { BY_ID, todayKey } from './products.js';
+import { boardTexture, releaseBoardTexture, tickBoards, createBoardFxMaterial, setBoardSelf, refreshBoards, leaderboard } from './leaderboard.js';
+import { setBp24BoardHook } from '../corridor/bp24.js';
+import * as THREE from 'three';
 
 export { bump24GameEnabled } from './flag.js';
 
 const FADE_SEC = 0.38;
-const DOOR_R = 2.4;
+const DOOR_R = 2.4, BOARD_R = 2.3;
 const KEEP = new Set(['app', 'b24-root']);
 
 export function mountBump24Game({
-  renderer, getPlayer, getCorridor, canEnter = () => true, onInterior, getAudioLevel, getSelfName, getLook, toggleMute, isMobile = false,
+  renderer, getPlayer, getCorridor, getCamera, canEnter = () => true, onInterior, getAudioLevel, getSelfName, getLook, toggleMute, isMobile = false,
   params = typeof location !== 'undefined' ? new URLSearchParams(location.search) : new URLSearchParams(),
 } = {}) {
   const search = typeof params?.get === 'function' ? `?${params}` : (typeof params === 'string' ? params : (location?.search || ''));
@@ -28,14 +31,55 @@ export function mountBump24Game({
   const mobile = () => isMobile || document.body.classList.contains('mobile');
   const portrait = () => mobile() && innerHeight > innerWidth;
 
+  let lastBoard = null;
   const ui = createBump24UI({
     onGrab: () => act(),
-    onHintTap: () => { if (!active && lastNear) enterStore(lastNear); else act(); },
+    onHintTap: () => { if (!active && lastBoard) openBoard(lastBoard); else if (!active && lastNear) enterStore(lastNear); else act(); },
     onExit: () => leaveStore(),
     onMute: () => { if (toggleMute) toggleMute(); else sfx.setMuted(!sfx.muted); syncMute(); },
     onIntroGo: () => {},
   });
   function syncMute() { const lv = getAudioLevel?.(); ui.setMuted(sfx.muted || !!lv?.muted); }
+
+  // ---------- 랭킹 전광판(매장 밖 토템 · 매장 안 화면) ----------
+  const selfName = () => getSelfName?.() || '나';
+  setBoardSelf(selfName);
+  const fxMat = createBoardFxMaterial();
+  setBp24BoardHook({
+    texture: (st) => boardTexture(st.id, st.name, 'tall'), release: releaseBoardTexture, fxMaterial: fxMat,
+    tick: (t, night) => { tickBoards(t); fxMat.uniforms.uT.value = t; fxMat.uniforms.uNight.value = night; },
+  });
+  // 닉네임이 나중에 정해지면(접속 후) 내 줄 강조를 위해 한 번 다시 그림
+  let lastSelf = selfName(); const selfIv = setInterval(() => { const n = selfName(); if (n !== lastSelf) { lastSelf = n; refreshBoards(); } }, 3000);
+  function openBoard(st) {
+    if (!st || ui.boardOpen) return false;
+    ui.setHint('');
+    ui.showBoard({ storeId: st.id, storeName: st.name || 'BUMP24', me: selfName() });
+    return true;
+  }
+  // 클릭(짧은 탭)으로 전광판 열기 — 드래그(카메라 돌리기)는 무시
+  const ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
+  let down = null;
+  const onDown = (e) => { down = { x: e.clientX, y: e.clientY, t: performance.now() }; };
+  const onUp = (e) => {
+    if (!down) return; const d = down; down = null;
+    if (Math.hypot(e.clientX - d.x, e.clientY - d.y) > 8 || performance.now() - d.t > 600 || busy || ui.boardOpen) return;
+    const r = renderer.domElement.getBoundingClientRect();
+    ndc.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
+    if (active && interior) {
+      if (game?.phase === PHASE.PLAY || game?.phase === PHASE.COUNTDOWN || game?.phase === PHASE.CHECKOUT || ui.introOpen) return;
+      ray.setFromCamera(ndc, interior.camera);
+      if (interior.boardScreen && ray.intersectObject(interior.boardScreen, false).length) openBoard(currentStore || { id: game?.storeId, name: 'BUMP24' });
+      return;
+    }
+    const cam = getCamera?.(); const meshes = getCorridor?.()?.bp24?.boardMeshes || [];
+    if (!cam || !meshes.length) return;
+    ray.setFromCamera(ndc, cam); ray.far = 90;
+    const hit = ray.intersectObjects(meshes, false)[0];
+    if (hit) { const id = hit.object.userData.bp24Store; openBoard(stores().find((s) => s.id === id) || { id, name: 'BUMP24' }); }
+  };
+  renderer?.domElement?.addEventListener('pointerdown', onDown);
+  renderer?.domElement?.addEventListener('pointerup', onUp);
 
   // ---------- 바깥 UI 숨기기/되돌리기 ----------
   const hidden = new Set();
@@ -69,6 +113,11 @@ export function mountBump24Game({
     return best;
   }
 
+  function nearestBoard(pos) {
+    let best = null, bd = BOARD_R;
+    for (const st of stores()) { if (!st.board) continue; const d = Math.hypot(pos.x - st.board[0], pos.z - st.board[1]); if (d < bd) { bd = d; best = st; } }
+    return best ? { st: best, d: bd } : null;
+  }
   function enterStore(st) {
     if (active || busy || !canEnter()) return false;
     currentStore = st;
@@ -117,8 +166,12 @@ export function mountBump24Game({
   function outdoorTick(dt, pos) {
     if (active || busy) return;
     if (!pos) { if (lastNear) ui.setHint(''); lastNear = null; return; }
+    if (ui.boardOpen) return;
     const st = nearestDoor(pos); lastNear = st;
-    ui.setHint(st ? `${mobile() ? '' : '<kbd>E</kbd>'}${st.name || 'BUMP24'} 들어가기 · 30초 장보기` : '', true);
+    const bd = nearestBoard(pos), dd = st ? Math.hypot(pos.x - st.door[0], pos.z - st.door[1]) : 1e9;
+    lastBoard = bd && bd.d < dd ? bd.st : null;
+    const k = mobile() ? '' : '<kbd>E</kbd>';
+    ui.setHint(lastBoard ? `${k}🏆 ${lastBoard.name || 'BUMP24'} 장보기 랭킹 보기` : st ? `${k}${st.name || 'BUMP24'} 들어가기 · 30초 장보기` : '', true);
   }
 
   function frame(dt, look, axes) {
@@ -129,6 +182,7 @@ export function mountBump24Game({
     const ph = game?.phase;
     const frozen = busy || rot || ui.introOpen || ph === PHASE.CHECKOUT || ph === PHASE.RESULT || ph === PHASE.COUNTDOWN;
     if (ui.introOpen && (axes?.f || axes?.s)) ui.hideIntro(); // 움직이면 소개 카드 닫힘
+    tickBoards(performance.now() / 1000); if (interior.boardFx) interior.boardFx.material.uniforms.uT.value = performance.now() / 1000;
     const sense = interior.update(gdt, { look: rot ? [0, 0, 0] : look, axes: frozen ? { f: 0, s: 0, run: false } : axes, allowMove: !frozen });
     game?.update(gdt, sense);
     interior.render(renderer);
@@ -141,7 +195,13 @@ export function mountBump24Game({
   }
   function onKey(e) {
     if (e.repeat) return false;
-    if (!active) { if (e.code === 'KeyE' && lastNear && !busy) return enterStore(lastNear); return false; }
+    if (!active) {
+      if (ui.boardOpen) { if (e.code === 'Escape' || e.code === 'KeyE') { ui.closeBoard(); return true; } return false; }
+      if (e.code === 'KeyE' && lastBoard && !busy) return openBoard(lastBoard);
+      if (e.code === 'KeyE' && lastNear && !busy) return enterStore(lastNear);
+      return false;
+    }
+    if (ui.boardOpen && (e.code === 'Escape' || e.code === 'KeyE' || e.code === 'Space')) { e.preventDefault?.(); ui.closeBoard(); return true; }
     if (e.code === 'KeyE' || e.code === 'Space') { e.preventDefault?.(); act(); return true; }
     if (e.code === 'Escape' && game?.phase !== PHASE.PLAY) { leaveStore(); return true; }
     return true; // 매장 안에서는 다른 단축키(지도·채팅 등)를 막음
@@ -152,12 +212,14 @@ export function mountBump24Game({
     outdoorTick, frame, onKey, enterStore, leaveStore,
     enterById: (id) => { const st = stores().find((s) => s.id === id); return st ? enterStore(st) : false; },
     view: () => (active && interior ? { scene: interior.scene, camera: interior.camera, cam: interior.cam } : null),
-    dispose() { restoreOutside(); interior?.dispose(); ui.dispose(); interior = null; game = null; },
+    openBoard: (id) => openBoard(id ? stores().find((s) => s.id === id) || { id, name: 'BUMP24' } : (currentStore || stores()[0])),
+    blocks: (x, z, r) => { if (active) return false; try { return !!getCorridor?.()?.bp24?.boardBlocks?.(x, z, r); } catch { return false; } },
+    dispose() { clearInterval(selfIv); setBp24BoardHook(null); renderer?.domElement?.removeEventListener('pointerdown', onDown); renderer?.domElement?.removeEventListener('pointerup', onUp); restoreOutside(); interior?.dispose(); ui.dispose(); interior = null; game = null; },
     _dbg: {
       get stores() { return stores(); }, get interior() { return interior; }, get game() { return game; }, ui, sfx,
       set timeScale(v) { timeScale = v; }, get timeScale() { return timeScale; },
       forceEnter: (id) => enterStore(stores().find((s) => s.id === id) || { id: id || 'seongnam-cityhall', name: 'BUMP24', door: null }),
-      today: todayKey,
+      today: todayKey, leaderboard,
     },
   };
 }

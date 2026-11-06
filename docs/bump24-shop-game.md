@@ -21,7 +21,19 @@ HUD 는 낮은 화면(`max-height: 520px`)에서 위쪽 한 줄로 납작하게,
 
 ## 기록
 `window.__jj.bump24LastRun` = `{ v, storeId, dateKey, seed, ranked, score, saleIds, events:[{id,t,w,sale,src}|{spill,t}], items, weight, spills, maxCombo }` — 나중에 서버 제출용.
-localStorage: `bw.bump24.best`, `bw.bump24.localBoard`, `bw.bump24.ranked`.
+localStorage: `bw.bump24.best`, `bw.bump24.localBoard`(랭킹 공급자 로컬 스텁), `bw.bump24.ranked`.
+
+## 랭킹 전광판 (`src/bump24game/leaderboard.js`)
+- **공급자 하나**: `leaderboard.top({ storeId, period: 'today'|'week', limit })` · `leaderboard.submit({ storeId, name, score, at, dateKey, ranked, items })` · `subscribe(fn)`.
+  지금은 로컬 스텁(`createLocalLeaderboard`, `bw.bump24.localBoard`, 15일 보관, 닉네임별 최고 1개, 주 = 월요일 0시부터) — 라벨 `연습용(이 기기)`.
+  서버(4단계)는 같은 모양의 객체를 `setLeaderboardProvider(p)` 로 넣으면 전광판·전체 랭킹이 그대로 따라감.
+- 판이 끝나면(연습 포함) `finish()` → `submit` → 공급자 알림 → 매장 안팎 전광판 텍스처 즉시 다시 그림. 그 외에는 다시 그리지 않음
+  (오늘/이번 주 두 판을 한 캔버스에 나란히 그리고 7초마다 `texture.offset` 만 밀어 넘김, 반짝이는 셰이더 uniform).
+- **매장 밖**: bp24 체인 모듈(`setBp24BoardHook`)이 모든 매장 앞 서쪽 끝 기둥 앞에 세로 토템(1.44×2.16m 화면, 문·볼라드 비켜 섬, 몸통 충돌 있음).
+  타일당 틀 1(외벽 재질) + 반짝이/바닥 후광 1(셰이더), 매장당 화면 1 → 매장 1곳 타일 +3 draw. 미니게임 플래그(`bp24game=1`)일 때만 생김.
+  2.3m 안에 오면 힌트 `E 🏆 … 장보기 랭킹 보기`(모바일은 힌트 탭), 토템 클릭(짧은 탭)으로도 열림.
+- **매장 안**: 블랙 냉장고 위 벽걸이 화면(가로 배치 텍스처, 같은 내용) +2 draw → ≈ 28 draw. 둘러보기 중 클릭하면 전체 랭킹.
+- 전체 랭킹 UI(`ui.showBoard({ storeId, storeName, me })`): 오늘/이번 주 탭, 상위 20, 1~3위 메달, 내 닉네임 강조·내 순위, 빈 상태 '첫 번째 장보기왕이 되어보세요!'. 모바일 가로는 좌(제목·탭)/우(목록) 2단.
 
 ## 디버그
-`__jj.bump24Game.enterStore(__jj.corridor.bp24.stores[0])`, `._dbg.game._skip(sec)`, `._dbg.timeScale = 0` (멈춤), `._dbg.interior.stats()`.
+`__jj.bump24Game.enterStore(__jj.corridor.bp24.stores[0])`, `._dbg.game._skip(sec)`, `._dbg.timeScale = 0` (멈춤), `._dbg.interior.stats()`, `.openBoard(storeId)`, `._dbg.leaderboard.submit({...})`.

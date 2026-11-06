@@ -571,7 +571,7 @@ const subway = subwayOn ? mountSubway({
 }) : null;
 // [bump24game] BUMP24 장보기 미니게임 — 매장 플래그+?bp24game=1 일 때만. 지하철과 같이 별도 Scene.
 const bump24Game = mountBump24Game({
-  renderer, params, getPlayer: () => player, getCorridor: () => corridor,
+  renderer, params, getPlayer: () => player, getCorridor: () => corridor, getCamera: () => camera,
   getAudioLevel: () => (bgm ? { muted: bgm.player.muted, volume: bgm.player.volume } : null),
   getSelfName: () => (presence?.me?.name || '나'),
   getLook: () => me.look,
@@ -588,6 +588,7 @@ const bump24Game = mountBump24Game({
     if (zone) emitMyStateNow();
   },
 });
+if (bump24Game) { const withB24 = world.isBlocked; world.isBlocked = (x, z, r) => withB24(x, z, r) || bump24Game.blocks(x, z, r); } // [bump24game] 랭킹 토템
 const gyeongbuSoon = corridor ? mountGyeongbuSoon({ getPos: () => player.position, params, isEn }) : null; // [gyeongbu] 코리더가 있을 때만 (경부 북쪽 끝이 코리더 타일)
 if (subway) {
   const withSubway = world.isBlocked;

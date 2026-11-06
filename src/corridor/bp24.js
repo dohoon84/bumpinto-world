@@ -624,6 +624,52 @@ function prodFace(bag, n, x, y, z, w, h, row, seed, up = null) {
   bag.quad(n, new THREE.Vector3(x, y, z), w, h, [f, f, f], [u0, v0, u0 + span, v1], up);
 }
 
+// ---------- 랭킹 전광판(미니게임이 setBp24BoardHook 으로 텍스처를 넣을 때만) ----------
+// 매장 앞 서쪽 끝 기둥 앞 세로 토템(문·볼라드 사이 비켜 섬). 타일당 틀 1 + 반짝이 1, 매장당 화면 1 draw.
+// hook = { texture(st) → THREE.Texture(repeat.x 0.5 두 판), release(tex), fxMaterial: THREE.Material, tick(t, night) }
+let BOARD_HOOK = null;
+export function setBp24BoardHook(h) { BOARD_HOOK = h || null; }
+export function bp24BoardLocal(st) {
+  const fx0 = 0.45, fx1 = st.W - 0.55, nF = Math.max(1, Math.round((fx1 - fx0) / 1.75)), bay = (fx1 - fx0) / nF, dx = fx0 + bay * Math.floor(nF / 2);
+  return { c: Math.min(0.3, dx - bay - 0.95), zF: -0.95, w: 1.44, h: 2.16, y: 1.64 };
+}
+function buildTileBoards(inst, hook) {
+  const N = (x, y, z) => new THREE.Vector3(x, y, z);
+  const NAVY = hex('#0d1a33'), BLUE = hex('#0072DD'), DARK = hex('#1b2230');
+  const frames = [], fxs = [], screens = [], g = new THREE.Group(); g.name = 'bp24Boards';
+  for (const st of inst.list) {
+    const { c, zF, w, h, y } = bp24BoardLocal(st), fr = new Bag(), fx = new Bag(), sc = new Bag();
+    const hw = w / 2 + 0.1, top = y + h / 2 + 0.16;
+    fr.box(c - hw - 0.1, 0, zF - 0.08, c + hw + 0.1, 0.12, zF + 0.32, DARK); // 받침
+    fr.box(c - hw, 0.12, zF, c + hw, top, zF + 0.24, NAVY); // 몸통
+    fr.box(c - hw - 0.05, top, zF - 0.04, c + hw + 0.05, top + 0.1, zF + 0.28, BLUE, false); // 머리 캡
+    fr.box(c - hw - 0.05, 0.12, zF - 0.03, c - hw + 0.01, top, zF + 0.27, BLUE); fr.box(c + hw - 0.01, 0.12, zF - 0.03, c + hw + 0.05, top, zF + 0.27, BLUE); // 옆 띠
+    const uv = st.mirror ? [1, 0, 0, 1] : [0, 0, 1, 1];
+    sc.quad(N(0, 0, -1), N(c, y, zF - 0.006), w, h, [1, 1, 1], uv);
+    fx.quad(N(0, 0, -1), N(c, y, zF - 0.012), w, h, [1, 0, 0], [0, 0, 1, 1]); // 화면 반짝이
+    fx.quad(N(0, 1, 0), N(c, 0.07, zF - 0.95), 2.6, 1.9, [0, 1, 0], [0, 0, 1, 1]); // 바닥 후광
+    frames.push(fr.geometry(st.mat, st.mirror)); fxs.push(fx.geometry(st.mat, st.mirror));
+    const tex = hook.texture(st);
+    const mat = new THREE.MeshBasicMaterial({ map: tex, toneMapped: false });
+    const geo = sc.geometry(st.mat, st.mirror); geo.computeBoundingSphere();
+    const m = new THREE.Mesh(geo, mat); m.name = 'bp24BoardScreen'; m.userData.bp24Store = st.id; g.add(m); screens.push(m);
+    const p = new THREE.Vector3(c, 0, zF + 0.12).applyMatrix4(st.mat);
+    st._board = { x: p.x, z: p.z, inv: st.mat.clone().invert(), c, zF };
+  }
+  const fg = mergeGeometries(frames); frames.forEach((x) => x.dispose()); fg.computeBoundingSphere();
+  const frame = new THREE.Mesh(fg, mats().ext); frame.name = 'bp24BoardFrame'; frame.castShadow = true; frame.receiveShadow = true; g.add(frame);
+  const xg = mergeGeometries(fxs); fxs.forEach((x) => x.dispose()); xg.computeBoundingSphere();
+  const fxm = new THREE.Mesh(xg, hook.fxMaterial); fxm.name = 'bp24BoardFx'; fxm.renderOrder = 3; g.add(fxm);
+  inst.group.add(g);
+  return { group: g, screens, frame, fx: fxm, hook };
+}
+function disposeBoards(inst) {
+  const b = inst.boards; if (!b) return;
+  for (const m of b.screens) { b.hook.release?.(m.material.map); m.material.dispose(); m.geometry.dispose(); }
+  b.frame.geometry.dispose(); b.fx.geometry.dispose(); b.group.removeFromParent(); inst.boards = null;
+  for (const st of inst.list) st._board = null;
+}
+
 // 코리더 연결: filter(key, j) 에서 그 타일 매장 건물 1층을 비우고, build(key) 에서 매장 그룹(타일 그룹에 붙어 같이 해제)
 export function createBp24(locations = []) {
   const byTile = new Map();
@@ -653,16 +699,26 @@ export function createBp24(locations = []) {
       const k = nightFade(), t = performance.now() / 1000;
       for (const inst of live) {
         let o = inst.group; while (o.parent) o = o.parent;
-        if (!o.isScene) { live.delete(inst); continue; } // 타일이 풀림
+        if (!o.isScene) { disposeBoards(inst); live.delete(inst); continue; } // 타일이 풀림
+        if (BOARD_HOOK && inst.boards?.hook !== BOARD_HOOK) { disposeBoards(inst); inst.boards = buildTileBoards(inst, BOARD_HOOK); }
+        else if (!BOARD_HOOK && inst.boards) disposeBoards(inst);
+        if (inst.boards) for (const m of inst.boards.screens) m.material.color.setScalar(0.86 + 0.24 * k);
         apply(inst, k);
         if (inst.inner.visible) animateClerks(inst.clerk, t);
       }
+      BOARD_HOOK?.tick?.(t, k);
+    },
+    get boardMeshes() { return [...live].flatMap((i) => i.boards?.screens || []); },
+    // 전광판 몸통 충돌(로컬 사각형 + 반지름)
+    boardBlocks(x, z, r = 0.3) {
+      for (const i of live) for (const st of i.list) { const b = st._board; if (!b || Math.abs(x - b.x) + Math.abs(z - b.z) > 3) continue; _v.set(x, 0, z).applyMatrix4(b.inv); if (Math.abs(_v.x - b.c) < 0.92 + r && _v.z > b.zF - 0.08 - r && _v.z < b.zF + 0.32 + r) return true; }
+      return false;
     },
     get group() { for (const i of live) return i.group; return null; },
     get stores() { return [...live].flatMap((i) => i.list.map((st) => {
         const door = [st.o[0] + st.ax[0] * st.W / 2 - st.b[0] * 1.15, st.o[1] + st.ax[1] * st.W / 2 - st.b[1] * 1.15];
         const face = Math.atan2(-st.b[0], -st.b[1]); // 문 밖을 바라보는 yaw
-        return { id: st.id, name: st.name, W: +st.W.toFixed(1), D: +st.D.toFixed(1), side: st.side, mirror: st.mirror, center: st.center, door, face, ax: st.ax, b: st.b, o: st.o };
+        return { id: st.id, name: st.name, W: +st.W.toFixed(1), D: +st.D.toFixed(1), side: st.side, mirror: st.mirror, center: st.center, door, face, ax: st.ax, b: st.b, o: st.o, board: st._board ? [st._board.x, st._board.z] : null };
       })); },
   };
   return api;
