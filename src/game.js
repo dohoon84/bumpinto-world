@@ -74,6 +74,7 @@ import { mountGyeongbuSoon } from './world/gyeongbuSoon.js'; // [gyeongbu] 경�
 import { createServerClock } from './subway/clock.js'; // [subway-sync] 서버 시계 (같은 열차 = 같은 순간)
 import { isMobileMode } from './mobile/flag.js'; // [mobile]
 import { mountSubway, zoneLabel as subwayZoneLabel } from './subway/index.js'; // [subway] 정자역·코리더 역 출입구(실제 OSM 출구) + 지하 대합실. ?subway=0 이면 끔
+import { arriveFixEnabled, entrySpawn, withArriveCap } from './corridor/arrive.js'; // [arrivefix] #43 역 입장·역 이동 때 정자역을 거쳐 보이지 않게 (?arrivefix=0 끔)
 import { isUiV2, uiV2Wanted } from './ui-v2/flag.js'; // [ui-v2] 게임 UI v2 (기본 켜짐 · ?ui=v1 끔)
 
 const params = new URLSearchParams(location.search);
@@ -88,6 +89,10 @@ const fromRegion = fromRegionId && fromRegionId !== region.id ? getRegion(fromRe
 // [corridor] 지구본에서 코리더 역을 고르면 입장(로비/여권) 직후 그 역으로 이동. 다른 동네에서 오면 ?at= 로 넘어온다
 let corridorAt = !shot && params.get('corridor') !== '0' ? params.get('at') : null;
 let corridorArrive = null;
+const arriveFix = arriveFixEnabled(); // [arrivefix]
+let arriving = false; // [arrivefix] 역 도착 전(숨김): 위치 저장·송신 멈춤
+let arriveSeq = 0; // [arrivefix] 늦게 끝난 이전 도착이 새 도착을 풀지 않게
+let arriveTravel = null; // [arrivefix] travel 은 아래에서 만들어진다(그 전에 부르면 TDZ) → 만들어진 뒤 여기에 넣는다
 if (autoEnter || passportEnter || fromRegionId) {
   const cleanUrl = new URL(location.href);
   cleanUrl.searchParams.delete('enter');
@@ -1114,13 +1119,15 @@ function completeWorldJoin(name, look, session) {
   const picked = explicitPick;
   explicitPick = false;
   const rp = resumePlace ?? (mobileMode ? takeResumePlace() : null); resumePlace = null; // [econ-mobile] 모바일은 시작화면이 넘겨준 자리
-  const rb = corridor?.bounds || world.bounds;
-  const resumed = !!rp && [rp.x, rp.z].every(Number.isFinite) && (!rb || (rp.x >= rb.x0 && rp.x <= rb.x1 && rp.z >= rb.z0 && rp.z <= rb.z1)) && !world.inWater?.(rp.x, rp.z);
-  if (resumed) { corridorAt = null; applySession({ place: rp }); } // [ui-v2] 그만둔 자리 — 역 출구로 옮기지 않음 (범위 밖·물 위면 아래 역 입장 그대로)
-  else if (session?.place && !picked) applySession(session);
+  const spawn = entrySpawn({ resume: rp, bounds: corridor?.bounds || world.bounds, inWater: world.inWater, picked, sessionPlace: session?.place || null, at: corridorAt, placeOf: arriveTravel ? (id) => arriveTravel.placeOf(id) : null, fix: arriveFix });
+  if (spawn.kind === 'resume') { corridorAt = null; applySession({ place: rp }); } // [ui-v2] 그만둔 자리 — 역 출구로 옮기지 않음 (범위 밖·물 위면 아래 역 입장 그대로)
+  else if (spawn.kind === 'session') applySession(session);
+  else if (spawn.kind === 'station') placeHiddenAt(spawn.x, spawn.z); // [arrivefix] ① 정자 기본 위치가 아니라 그 역 출구에 숨긴 채로
   else player.position.copy(pos);
-  player.visible = true;
-  nameTag.hidden = false;
+  arriving = spawn.hidden;
+  const seq = ++arriveSeq;
+  player.visible = !arriving;
+  nameTag.hidden = arriving;
   nameTag.el.textContent = name;
   nameTag.el.classList.remove('is-afk');
   renderEmoteBar();
@@ -1137,9 +1144,26 @@ function completeWorldJoin(name, look, session) {
   syncRainControl();
   trackEvent('world_join', { region: region.id, has_pin: !!session?.hasPin, resumed: !!session?.place });
   const toStation = !!corridorAt;
-  corridorArrive?.(); // [corridor]
+  const arrive = corridorArrive?.(); // [corridor]
   noticePopup?.schedule(); // [notice-popup] 입장 1.5초 후, 안 본 공지가 있을 때만 게시판 공지 탭 1회
   if (picked && !toStation) { try { rememberPlace(true); } catch {} } // 고른 기본 스폰을 새 마지막 위치로 저장 (역 이동은 teleport 가 저장)
+  if (!arriving) return undefined;
+  // [arrivefix] ② 그 역 타일이 지어지고 출구 앞 인도로 옮겨질 때까지(최대 8초) 숨김 유지 → ③ 보이기. 호출한 쪽은 이걸 기다린 뒤 로딩 화면을 닫는다
+  return withArriveCap(arrive).then((why) => {
+    if (seq !== arriveSeq || !arriving) return why;
+    arriving = false;
+    if (!joined) return why;
+    player.visible = true;
+    nameTag.hidden = false;
+    emitMyStateNow();
+    rememberPlace(true);
+    return why;
+  });
+}
+// [arrivefix] 숨긴 채로 (x,z) 에 세우기 — 프레임 스트리머가 출발지 대신 이 근처 타일을 받는다
+function placeHiddenAt(x, z) {
+  player.position.set(x, terrain ? terrain.getGroundHeight(x, z, 0) : 0, z);
+  player.visible = false;
 }
 joinWithPassport = async () => {
   const passport = readSavedPassport();
@@ -1158,13 +1182,18 @@ joinWithPassport = async () => {
   }
   arrivalFlightScreen = null;
   document.body.classList.remove('in-gate', 'in-lobby');
+  // [arrivefix] 로그인 상태 역 입장: 서버 입장 요청과 그 역 타일 받기를 동시에 (먼저 숨긴 채로 역 출구에 세워 스트리머도 그쪽을 본다)
+  if (arriveFix && corridorAt && !resumePlace && arriveTravel) {
+    const d = arriveTravel.placeOf(corridorAt);
+    if (d && !d.home && Number.isFinite(d.x)) { placeHiddenAt(d.x, d.z); arriveTravel.prewarm?.(corridorAt); }
+  }
   let session = null;
   try {
     session = await sms.enter({ name: passport.name, look: passport.look, preview: false });
   } catch {
     session = { off: true, name: passport.name, look: passport.look, place: null };
   }
-  completeWorldJoin(session?.name || passport.name, sanitizeLook(session?.look || passport.look), session);
+  await completeWorldJoin(session?.name || passport.name, sanitizeLook(session?.look || passport.look), session);
   await screen.finish();
 };
 startLobby = async () => {
@@ -1181,7 +1210,7 @@ startLobby = async () => {
     region: entryRegion(), // [corridor] 고른 역 이름으로 로비 제목·로딩 문구
     onBack: reopenGate,
     onJoin(name, look, session) {
-      completeWorldJoin(name, look, session);
+      return completeWorldJoin(name, look, session); // [arrivefix] 역 도착 약속 → 로비가 기다린 뒤 로딩 화면을 닫는다
     },
   });
 };
@@ -1994,6 +2023,7 @@ function teleportTo(x, z) {
   rememberPlace(true);
 }
 const travel = corridor ? mountTravel({ corridor, home: () => homeBtn.onclick(), teleport: teleportTo }) : null;
+arriveTravel = travel; // [arrivefix]
 if (corridor) { corridor.place = (id) => travel?.go(id); corridor.placeOf = (id) => travel?.dests.find((d) => d.id === id) || null; }
 // [ride] 버스(E 탑승/하차 벨) · 택시(Y 호출) · V 시점. ?corridor=0 이면 corridor 가 없어 아무것도 붙지 않는다.
 ride = corridor && params.get('ride') !== '0' ? mountRide({
@@ -2035,10 +2065,10 @@ const cameraApp = mountCamera({ // [camera]
 if (travel && params.get('at')) travel.go(params.get('at'));
 // [corridor] 지구본 역 선택 → 입장 완료 후 역 출구 앞 인도로 (위치 저장 성공 여부와 무관)
 corridorArrive = () => {
-  if (!corridorAt || !travel) return;
+  if (!corridorAt || !travel) return undefined;
   const id = corridorAt;
   corridorAt = null;
-  travel.go(id).then((ok) => {
+  return travel.go(id).then((ok) => {
     if (!ok) return;
     const u = new URL(location.href);
     if (u.searchParams.get('at') === id) { u.searchParams.delete('at'); history.replaceState(null, '', u.toString()); }
@@ -2186,7 +2216,7 @@ const phone = mountPhone({ data, region, extraTiles: corridor ? () => corridor.m
 
 let placeAt = 0, placeMark = '';
 function rememberPlace(force = false) {
-  if (!joined || !sms.session) return;
+  if (!joined || !sms.session || arriving) return; // [arrivefix] 역 도착 전(숨김)에는 저장하지 않음
   const p = player.position;
   const here = `${p.x.toFixed(1)},${p.y.toFixed(1)},${p.z.toFixed(1)},${player.rotation.y.toFixed(2)}`;
   const now = performance.now();
@@ -2227,7 +2257,7 @@ function subwayPresenceState() {
   return zs ? { ...zs, riding: false, jy: Number(jumpY.toFixed(2)), emote: myEmote, sit: mySit, afk: myAfk, umb: '' } : null; // [subway-pose] 점프·앉기·자리비움도 같은 역 사람에게
 }
 function emitMyStateNow() {
-  if (!joined) return;
+  if (!joined || arriving) return; // [arrivefix]
   const zs = subwayPresenceState();
   if (zs) { presence.sendState(zs, true); return; }
   const aboard = !!(adminBike?.riding || giftRiding());
@@ -2497,7 +2527,7 @@ function frame() {
     animateAvatar(player, moveSpeed, dt);
   }
   syncRideUi();
-  if (joined) {
+  if (joined && !arriving) { // [arrivefix] 역 도착 전에는 위치를 보내지 않음
     const aboard = cruising || cycling;
     presence.sendState({ x: player.position.x, z: player.position.z, ry: player.rotation.y, moving: moveSpeed > 0, riding: !!bikes.riding, jy: Number(jumpY.toFixed(2)), emote: bikes.riding || aboard ? '' : myEmote, sit: bikes.riding || aboard ? '' : mySit, afk: bikes.riding || aboard ? false : myAfk, umb: bikes.riding || aboard ? '' : (umbrellas.umbrellaTheme || ''), ...mergeVehicleNets(trucks?.net(), adminBike?.net(), ...giftRides.map((g) => g.ride.net())), ...(ride?.net() || {}) }); // [bike] [roadbike] [ride]
   }
@@ -2601,6 +2631,8 @@ window.__jj = {
   bungeo, // [bungeo]
   launch, roadster, trucks, bike: adminBike, giftRides, inventory, data, world, npcs, transit, camera, cam, ov, setMode, terrain, taxis, jzTraffic, police, weather: atmosphere, umbrellas, dogPark, strayCats, // [terrain] [taxi] [roadster] [tower] [launch] [truck] [bike] [roadbike] [inventory]
   get player() { return player; },
+  get arriving() { return arriving; }, // [arrivefix]
+  gateEnter(at) { if (!joined) return; setPassportActive(true); pauseWorldSession(); handleGateEnter(region.id, at ? { at } : undefined); }, // [arrivefix] 테스트용: 게임 안 🌏 → 역 고르기와 같은 흐름
   teleport(x, z, y) { ride?.forceAlight('teleport'); if (bikes.riding) dismountBike(); if (adminBike?.riding) adminBike.dismount(); dismountGiftRides(); player.position.set(x, y ?? (terrain ? terrain.getGroundHeight(x, z, 0) : 0), z); }, // [terrain] [bike] [roadbike]
   bikes, toggleRide, triggerEmote,
   get ride() { return ride; }, remotes, presence, // [ride]

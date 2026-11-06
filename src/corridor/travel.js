@@ -69,9 +69,16 @@ export function mountTravel({ corridor, home, teleport }) {
     if (Math.hypot(q.x - p.x, q.z - p.z) > 0.01) teleport(q.x, q.z);
     return true;
   }
+  // [arrivefix] 그 역 주변 타일만 미리 받기 (이동은 하지 않음) — 로그인 상태 입장에서 서버 입장 요청과 동시에
+  const placeOf = (id) => dests.find((x) => x.id === id || x.ko === id || x.en.toLowerCase() === String(id).toLowerCase()) || null; // go() 와 같은 규칙
+  function prewarm(id) {
+    const d = placeOf(id);
+    if (!d || d.home || !Number.isFinite(d.x)) return Promise.resolve(false);
+    return Promise.resolve(corridor.preload(d.x, d.z)).then(() => true, () => false);
+  }
   const toggle = () => { panel.hidden = !panel.hidden; if (!panel.hidden) render(); }; // 열 때 다시 그림(공정률 갱신)
   btn.onclick = toggle;
   onLangChange(render);
   render();
-  return { go, dests, toggle, panel };
+  return { go, prewarm, placeOf, dests, toggle, panel };
 }

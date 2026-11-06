@@ -76,7 +76,9 @@
     "buslive:e2e": "node scripts/e2e-bus-realtime-replay.mjs",
     "buslive:record": "node scripts/record-bus-replay.mjs",
     "shots-jz-traffic": "node scripts/shots-jz-traffic.mjs",
-    "econ:test": "node scripts/test-econ-mock.mjs"
+    "econ:test": "node scripts/test-econ-mock.mjs",
+    "arrive:test": "node scripts/test-station-arrive.mjs",
+    "arrive:e2e": "node scripts/e2e-station-arrive.mjs"
   },
   "dependencies": {
     "three": "^0.186.1"
