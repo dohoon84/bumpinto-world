@@ -152,7 +152,7 @@ function tabs(c, x, y, w, h, period) {
   });
 }
 function rowsBlock(c, x, y, w, rowH, list, period) {
-  const me = getMe?.() || '';
+  let me = ''; try { me = getMe?.() || ''; } catch { me = ''; }
   if (!list.length) {
     crown(c, x + w / 2, y + rowH * 1.25, rowH / 70);
     c.fillStyle = '#ffffff'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.font = `900 ${rowH * 0.44}px ${FONT}`;

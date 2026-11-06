@@ -573,7 +573,7 @@ const subway = subwayOn ? mountSubway({
 const bump24Game = mountBump24Game({
   renderer, params, getPlayer: () => player, getCorridor: () => corridor, getCamera: () => camera,
   getAudioLevel: () => (bgm ? { muted: bgm.player.muted, volume: bgm.player.volume } : null),
-  getSelfName: () => (presence?.me?.name || '나'),
+  getSelfName: () => { try { return presence?.me?.name || '나'; } catch { return '나'; } }, // presence 는 아래에서 만들어짐(TDZ) → 초기화 전이면 기본값
   getLook: () => me.look,
   toggleMute: bgm ? () => bgm.player.setMuted(!bgm.player.muted) : null,
   isMobile: mobileMode,

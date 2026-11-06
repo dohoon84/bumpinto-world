@@ -42,15 +42,15 @@ export function mountBump24Game({
   function syncMute() { const lv = getAudioLevel?.(); ui.setMuted(sfx.muted || !!lv?.muted); }
 
   // ---------- 랭킹 전광판(매장 밖 토템 · 매장 안 화면) ----------
-  const selfName = () => getSelfName?.() || '나';
+  const selfName = () => { try { return getSelfName?.() || '나'; } catch { return '나'; } }; // 마운트 중엔 부르지 않음(지연 조회)
   setBoardSelf(selfName);
   const fxMat = createBoardFxMaterial();
   setBp24BoardHook({
     texture: (st) => boardTexture(st.id, st.name, 'tall'), release: releaseBoardTexture, fxMaterial: fxMat,
     tick: (t, night) => { tickBoards(t); fxMat.uniforms.uT.value = t; fxMat.uniforms.uNight.value = night; },
   });
-  // 닉네임이 나중에 정해지면(접속 후) 내 줄 강조를 위해 한 번 다시 그림
-  let lastSelf = selfName(); const selfIv = setInterval(() => { const n = selfName(); if (n !== lastSelf) { lastSelf = n; refreshBoards(); } }, 3000);
+  // 닉네임이 나중에 정해지면(접속 후) 내 줄 강조를 위해 다시 그림 — 첫 조회도 타이머 안에서(초기화 순서와 무관)
+  let lastSelf = null; const selfIv = setInterval(() => { const n = selfName(); if (lastSelf !== null && n !== lastSelf) refreshBoards(); lastSelf = n; }, 3000);
   function openBoard(st) {
     if (!st || ui.boardOpen) return false;
     ui.setHint('');
@@ -130,7 +130,7 @@ export function mountBump24Game({
     interior?.dispose();
     const storeId = currentStore?.id || 'seongnam-cityhall', storeName = currentStore?.name || 'BUMP24';
     interior = buildInterior({ renderer, storeId, storeName, look: getLook?.() || null, isMobile: mobile() });
-    game = createGameplay({ interior, ui, sfx, storeId, storeName, getSelfName, onExitStore: () => leaveStore() });
+    game = createGameplay({ interior, ui, sfx, storeId, storeName, getSelfName: selfName, onExitStore: () => leaveStore() });
     active = true;
     document.body.classList.add('b24-inside'); ui.setInside(true); hideOutside(); syncMute();
     ui.showHud(false);
