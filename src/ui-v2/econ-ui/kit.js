@@ -5,7 +5,7 @@ import { ICON, esc } from '../kit.js';
 import { econ } from '../econ/index.js';
 import { gicon, giOn } from '../gameIcons.js';
 
-/** [game-icons] PC HUD v3(?hud=v3) 에서만 공용 게임 아이콘. 예전 HUD·모바일 패널은 그대로 */
+/** [game-icons] PC HUD v3(body.hud-v3) 에서만 공용 게임 아이콘. 예전 HUD·모바일 패널은 그대로 */
 export const v3i = () => typeof document !== 'undefined' && !!document.body?.classList.contains('hud-v3') && giOn();
 export const gi = (k, s = 16, cls = '') => gicon(k, s, `ve-gi${cls ? ' ' + cls : ''}`);
 
