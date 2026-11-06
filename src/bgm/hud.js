@@ -92,7 +92,7 @@ export function createBgmHud({ player, tr, onLangChange }) {
   }
   // 좁은 화면(≈1280px)에서 볼륨 슬라이더까지 펼친 폭이 오른쪽 위 버튼 줄(#top-right-bar 등)과 겹치지 않게
   // 가운데에서 필요한 만큼만 옆으로 민다. 둘 다 피할 수 없으면 눌러야 하는 오른쪽 버튼을 우선 피한다
-  const NEIGHBORS = ['#hud', '#buttons', '#top-right-bar', '#h3-card', '#h3-bar']; // [hud-v3] ?hud=v3 의 플레이어 카드·액션 바 (꺼져 있으면 없음 → 그대로)
+  const NEIGHBORS = ['#hud', '#buttons', '#top-right-bar', '#h3-card', '#h3-bar', '#h3-online']; // [hud-v3] 카드·액션 바·접속자 알약 (꺼져 있으면 없음 → 그대로)
   const SLIDER_OPEN = 80 + 14, MARGIN = 8;
   function fit() {
     if (!shown) return;
@@ -113,7 +113,7 @@ export function createBgmHud({ player, tr, onLangChange }) {
   const refit = () => requestAnimationFrame(fit);
   addEventListener('resize', refit);
   addEventListener('bw:hud-layout', () => { // [hud-v3] 나중에 붙은 카드·바도 지켜본다
-    if (typeof ResizeObserver === 'function') { const ro = new ResizeObserver(refit); for (const sel of ['#h3-card', '#h3-bar']) { const n = document.querySelector(sel); if (n) ro.observe(n); } }
+    if (typeof ResizeObserver === 'function') { const ro = new ResizeObserver(refit); for (const sel of ['#h3-card', '#h3-bar', '#h3-online', '#h3-tr']) { const n = document.querySelector(sel); if (n) ro.observe(n); } }
     refit();
   });
   if (typeof ResizeObserver === 'function') {

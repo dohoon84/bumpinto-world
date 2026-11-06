@@ -1,5 +1,5 @@
 // [hud-v3] 데스크톱 상단 HUD v3 (PROPOSAL A안) — ?hud=v3 일 때만 ui-v2/index.js 가 불러온다(기본 꺼짐, 모바일 제외).
-//   왼쪽 위: 플레이어 카드(card.js) + 할 일 트래커. 오른쪽 위: 액션 바 [지도·이동 M][할 일 Q][탈것 상점 B][게시판 J][☰] + 접속자 알약.
+//   왼쪽 위: 플레이어 카드(card.js) + 할 일 트래커. 오른쪽 위: 액션 바 [지도·이동 M][할 일 Q][탈것 상점 B][게시판 J][☰] + 접속자 알약(바 왼쪽 같은 줄).
 //   기존 버튼(#hud · #buttons · #top-right-bar)은 DOM 에 그대로 두고 CSS 로만 숨긴다 → 새 버튼은 기존 버튼을 .click() 으로 부른다
 //   (game.js 핸들러·문구·상태를 복제하지 않는다). 경제 패널은 econ-ui 의 open('04a'|'11'|'06') 을 그대로 쓴다.
 import './hud-v3.css';
@@ -35,30 +35,80 @@ export async function mountHudV3(econUiPromise) {
   paint();
 }
 
-/** 오른쪽 위 액션 바 */
+/** 오른쪽 위 액션 바 + 접속자 알약(바 왼쪽 같은 줄). 좁으면 바 아래로. */
+let trWrap = null;
 function mountBar() {
+  trWrap = document.createElement('div');
+  trWrap.id = 'h3-tr';
   bar = document.createElement('nav');
   bar.id = 'h3-bar'; bar.className = 'h3-glass h3-actbar';
   bar.setAttribute('aria-label', 'HUD');
-  document.body.appendChild(bar);
   online = document.createElement('button');
   online.type = 'button'; online.id = 'h3-online'; online.className = 'h3-online';
-  document.body.appendChild(online);
-  online.addEventListener('click', () => { closeDrop(); $('presence-status')?.click(); });
+  // DOM 순서 [bar, online] + CSS row-reverse → 화면에 알약 | 바 (알약이 바 왼쪽)
+  trWrap.appendChild(bar);
+  trWrap.appendChild(online);
+  document.body.appendChild(trWrap);
+  online.addEventListener('click', () => {
+    closeDrop();
+    $('presence-status')?.click();
+    // 패널이 열린 뒤 알약 기준으로 위치(아래로·왼쪽 — 미니맵을 가리지 않음)
+    requestAnimationFrame(() => { placePresence(); layoutOnline(); });
+  });
 
   bar.addEventListener('click', (e) => {
     const b = e.target.closest('[data-h3]'); if (!b) return;
     act(b.dataset.h3);
     b.blur();
   });
-  addEventListener('pointerdown', (e) => { if (drop && !drop.contains(e.target) && !e.target.closest('#h3-bar')) closeDrop(); }, true);
+  addEventListener('pointerdown', (e) => { if (drop && !drop.contains(e.target) && !e.target.closest('#h3-tr')) closeDrop(); }, true);
   addEventListener('keydown', onKey);
-  onLangChange(() => { paint(); if (drop) openDrop(dropKind, true); refreshName(); });
+  addEventListener('resize', () => { layoutOnline(); placePresence(); });
+  onLangChange(() => { paint(); if (drop) openDrop(dropKind, true); refreshName(); layoutOnline(); });
   // 기존 버튼의 상태(게시판 새 글 N · 게시판 열림 · 접속자 수 · 시점 글자)를 따라 그린다
   const mo = new MutationObserver(() => paintSoon());
   for (const id of ['board-Launcher', 'presence-status', 'buttons']) { const n = $(id); if (n) mo.observe(n, { subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: ['hidden', 'class'] }); }
+  const pp = $('presence-panel');
+  if (pp) new MutationObserver(() => placePresence()).observe(pp, { attributes: true, attributeFilter: ['hidden'] });
   setInterval(paint, 1000);
   paint();
+  layoutOnline();
+}
+/** 접속자 알약: 기본은 바 왼쪽 같은 줄. 카드·BGM 과 겹치면 바 아래(바 왼쪽 가장자리 정렬). */
+function layoutOnline() {
+  if (!trWrap || !online || !bar) return;
+  // 같은 줄로 가정하고 가상 위치를 계산(클래스 토글 flicker 방지)
+  const br = bar.getBoundingClientRect();
+  const ow = online.offsetWidth || 120;
+  const oh = online.offsetHeight || 32;
+  // 같은 줄일 때 알약 오른쪽 = 바 왼쪽 - 8
+  const same = { left: br.left - 8 - ow, right: br.left - 8, top: br.top + (br.height - oh) / 2, bottom: br.top + (br.height - oh) / 2 + oh, width: ow, height: oh };
+  const card = $('h3-card')?.getBoundingClientRect();
+  const bgm = $('bgm')?.getBoundingClientRect();
+  const hit = (a, b) => !!(a && b && a.width > 0 && b.width > 0 && a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom);
+  const tight = !!(card && same.width && same.left < card.right + 12);
+  const below = hit(same, card) || hit(same, bgm) || tight || same.left < 12;
+  const changed = trWrap.classList.contains('h3-online-below') !== below;
+  trWrap.classList.toggle('h3-online-below', below);
+  document.body.classList.toggle('h3-online-below', below);
+  placePresence();
+  if (changed) dispatchEvent(new Event('bw:hud-layout'));
+}
+/** 접속자 패널을 알약 바로 아래·왼쪽 방향으로 (미니맵 원과 안 겹치게) */
+function placePresence() {
+  const panel = $('presence-panel');
+  if (!panel || panel.hidden || !online) return;
+  const o = online.getBoundingClientRect();
+  if (!o.width) return;
+  const br = bar?.getBoundingClientRect();
+  const w = Math.min(320, innerWidth - 24);
+  // 패널 오른쪽을 알약 오른쪽에 맞춤 → 왼쪽으로 펼쳐짐. 바·알약 둘 다 아래로 비킴.
+  let left = Math.round(o.right - w);
+  left = Math.max(12, Math.min(left, innerWidth - 12 - w));
+  const top = Math.max(o.bottom, br?.bottom || 0) + 8;
+  panel.style.top = `${Math.round(top)}px`;
+  panel.style.left = `${left}px`;
+  panel.style.right = 'auto';
 }
 let paintT = 0;
 const paintSoon = () => { if (paintT) return; paintT = requestAnimationFrame(() => { paintT = 0; paint(); }); };
@@ -103,6 +153,7 @@ function paint() {
     online.innerHTML = `<i class="h3-dot" aria-hidden="true"></i><span>${esc(txt)}</span>${icon('caret', 14)}`;
     online.classList.toggle('on', !!ps?.classList.contains('open'));
     online.title = tr('접속자 위치 및 목록 보기', 'Show who is online');
+    layoutOnline(); // 알약 폭·열림 상태가 바뀌면 자리 다시
   }
   online.hidden = !ps;
 }

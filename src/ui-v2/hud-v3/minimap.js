@@ -52,15 +52,22 @@ export function toggle(force) {
   onChange(on);
 }
 
+function syncCornerPhone(on) {
+  // [hud-v3] 원형 미니맵이 켜져 있으면 우측 하단 #phone(사각 코너맵) 숨김 + phone.tick 스킵(CPU). 끄면 다시 표시.
+  document.body.classList.toggle('h3-mm-on', !!on);
+  dispatchEvent(new Event('bw:hud-layout'));
+}
 function open() {
   if (!root) build();
   root.hidden = false;
+  syncCornerPhone(true);
   if (!raf) { last = 0; sig = ''; raf = requestAnimationFrame(loop); }
 }
 function close() {
   if (raf) cancelAnimationFrame(raf);
   raf = 0;
   if (root) root.hidden = true;
+  syncCornerPhone(false);
   // 닫으면 캐시 전부 버림(메모리 0). 다시 열면 보이는 청크만 다시 그린다(청크당 수 ms)
   for (const c of chunks.values()) { c.c.width = 0; c.c.height = 0; }
   chunks.clear(); liveIdx = null; stats.bytes = 0;

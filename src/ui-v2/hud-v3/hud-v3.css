@@ -7,12 +7,12 @@ body.hud-v3 {
 body.hud-v3:not(.mobile) #buttons, body.hud-v3:not(.mobile) #top-right-bar { display: none !important; }
 body.hud-v3:not(.mobile) #hud.is-folded { display: none !important; }
 body.hud-v3:not(.mobile) #hud { top: 82px; max-width: 560px; }
-body.hud-v3.in-gate #h3-card, body.hud-v3.in-gate #h3-bar, body.hud-v3.in-gate #h3-online, body.hud-v3.in-gate #h3-drop,
-body.hud-v3.in-lobby #h3-card, body.hud-v3.in-lobby #h3-bar, body.hud-v3.in-lobby #h3-online, body.hud-v3.in-lobby #h3-drop { display: none !important; }
-/* 다른 패널을 새 줄(카드·바 y10–74, 접속자 알약 y82–114) 아래로 */
+body.hud-v3.in-gate #h3-card, body.hud-v3.in-gate #h3-tr, body.hud-v3.in-gate #h3-bar, body.hud-v3.in-gate #h3-online, body.hud-v3.in-gate #h3-drop,
+body.hud-v3.in-lobby #h3-card, body.hud-v3.in-lobby #h3-tr, body.hud-v3.in-lobby #h3-bar, body.hud-v3.in-lobby #h3-online, body.hud-v3.in-lobby #h3-drop { display: none !important; }
+/* 다른 패널을 카드·바 줄(y10–74) 아래로. 접속자 패널 위치는 index.js placePresence() 가 알약 기준으로 잡음 */
 body.hud-v3:not(.mobile) #account-panel { top: 82px; right: 12px; }
-body.hud-v3:not(.mobile) #presence-panel { top: 122px; }
-body.hud-v3:not(.mobile) #ride-taxi-panel { top: 122px; }
+body.hud-v3:not(.mobile) #presence-panel { top: 82px; right: auto; }
+body.hud-v3:not(.mobile) #ride-taxi-panel { top: 82px; }
 /* BGM: 카드·바와 같은 줄(가운데 맞춤). 좌우는 src/bgm/hud.js fit() 이 카드·바를 피한다 */
 body.ui-v2.hud-v3:not(.mobile).v2-econ #bgm, body.ui-v2.hud-v3:not(.mobile) #bgm { top: 15px; }
 
@@ -69,8 +69,11 @@ body.hud-v3 #ve-hud.h3-trk-root .ve-foot { color: var(--h3-sub); border-top-colo
 body.hud-v3 #ve-hud.h3-trk-root .ve-mock { color: var(--h3-gold); background: rgba(255, 225, 105, .12); }
 body.hud-v3 #ve-hud.h3-trk-root .ve-tile { background: rgba(32, 201, 151, .2); }
 
-/* ---------- 오른쪽 위 액션 바 ---------- */
-body.hud-v3 #h3-bar { position: fixed; right: 12px; top: 10px; z-index: 12; height: 64px; display: flex; align-items: center; gap: 4px; padding: 0 6px; }
+/* ---------- 오른쪽 위 액션 바 + 접속자 알약 묶음 ---------- */
+/* row-reverse: DOM [bar, online] → 화면에 알약 | 바. 알약이 바 왼쪽 같은 줄(세로 가운데). */
+body.hud-v3 #h3-tr { position: fixed; right: 12px; top: 10px; z-index: 12; display: flex; flex-direction: row-reverse; align-items: center; gap: 8px; pointer-events: none; }
+body.hud-v3 #h3-tr > * { pointer-events: auto; }
+body.hud-v3 #h3-bar { position: relative; right: auto; top: auto; z-index: 12; height: 64px; display: flex; align-items: center; gap: 4px; padding: 0 6px; }
 body.hud-v3 .h3-btn { position: relative; box-sizing: border-box; width: 64px; height: 52px; margin: 0; padding: 4px 0 0; border: 0; border-radius: 12px; background: none; color: var(--h3-txt); font: inherit; font-size: 11px; font-weight: 800; line-height: 1; cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; transition: background-color .15s; }
 body.hud-v3 .h3-btn:hover { background: rgba(255, 255, 255, .1); }
 body.hud-v3 .h3-btn:focus-visible { outline: 2px solid var(--h3-gold); outline-offset: -2px; }
@@ -84,12 +87,15 @@ body.hud-v3 .h3-btn.on .h3-tag { background: #fff; }
 body.hud-v3 .h3-badge { position: absolute; top: 2px; left: 4px; box-sizing: border-box; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 8px; font-size: 10px; font-weight: 900; line-height: 16px; color: #fff; background: #ff4d5e; box-shadow: 0 0 0 2px #15233a; }
 body.hud-v3 .h3-badge[hidden] { display: none; }
 
-/* 접속자 알약 (바 아래 y82) */
-body.hud-v3 #h3-online { position: fixed; right: 12px; top: 82px; z-index: 12; display: inline-flex; align-items: center; gap: 6px; box-sizing: border-box; height: 32px; padding: 0 10px 0 12px; border-radius: 16px; border: 1.5px solid rgba(255, 255, 255, .18); background: rgba(15, 25, 42, .9); color: var(--h3-txt); font: inherit; font-size: 12px; font-weight: 800; cursor: pointer; box-shadow: 0 4px 14px rgba(8, 16, 30, .3); }
+/* 접속자 알약 (바 왼쪽 같은 줄). 카드·BGM 과 겹치면 #h3-tr.h3-online-below → 바 아래·바 왼쪽 가장자리 */
+body.hud-v3 #h3-online { position: relative; right: auto; top: auto; z-index: 12; display: inline-flex; align-items: center; gap: 6px; box-sizing: border-box; height: 32px; padding: 0 10px 0 12px; border-radius: 16px; border: 1.5px solid rgba(255, 255, 255, .18); background: rgba(15, 25, 42, .9); color: var(--h3-txt); font: inherit; font-size: 12px; font-weight: 800; cursor: pointer; box-shadow: 0 4px 14px rgba(8, 16, 30, .3); flex: none; white-space: nowrap; }
 body.hud-v3 #h3-online[hidden] { display: none; }
 body.hud-v3 #h3-online:hover, body.hud-v3 #h3-online.on { border-color: rgba(255, 225, 105, .65); }
 body.hud-v3 #h3-online.on .h3-ic { transform: rotate(180deg); }
 body.hud-v3 .h3-dot { width: 8px; height: 8px; border-radius: 50%; background: #20c997; box-shadow: 0 0 0 3px rgba(32, 201, 151, .25); }
+/* fallback: 바 아래, 바의 왼쪽 가장자리에 맞춤 (미니맵 원과 떨어지게) */
+body.hud-v3 #h3-tr.h3-online-below { flex-direction: column; align-items: flex-end; gap: 8px; }
+body.hud-v3 #h3-tr.h3-online-below #h3-online { align-self: flex-start; }
 
 /* 드롭다운 (지도·이동 / ☰) */
 body.hud-v3 #h3-drop { position: fixed; z-index: 40; min-width: 248px; max-width: 320px; padding: 8px; display: flex; flex-direction: column; gap: 2px; }
@@ -115,9 +121,13 @@ body.hud-v3 .h3-seg button.on { color: #122033; background: linear-gradient(180d
   body.hud-v3 .h3-cell { padding: 0 10px; }
 }
 
-/* ---------- [hud-v3-minimap] 원형 미니맵 (접속자 알약 y82–114 아래, 오른쪽 12) — minimap.js ---------- */
-body.hud-v3 #h3-mm { position: fixed; right: 4px; top: 118px; z-index: 11; width: 200px; height: 222px; pointer-events: none; user-select: none; -webkit-user-select: none; }
+/* ---------- [hud-v3-minimap] 원형 미니맵 (액션 바 아래 오른쪽) — minimap.js ---------- */
+/* 알약이 바 왼쪽 같은 줄이므로 미니맵은 바 바로 아래(top 82). 알약이 바 아래로 내려가면 top 122. */
+body.hud-v3 #h3-mm { position: fixed; right: 4px; top: 82px; z-index: 11; width: 200px; height: 222px; pointer-events: none; user-select: none; -webkit-user-select: none; }
+body.hud-v3.h3-online-below #h3-mm { top: 122px; }
 body.hud-v3 #h3-mm[hidden], body.hud-v3.in-gate #h3-mm, body.hud-v3.in-lobby #h3-mm, body.hud-v3.mobile #h3-mm { display: none !important; }
+/* 원형 미니맵이 켜져 있으면 우측 하단 사각 코너맵(#phone) 숨김 — ?hud=v3 만 */
+body.hud-v3.h3-mm-on:not(.mobile) #phone { display: none !important; }
 body.hud-v3 .h3-mm-ring { position: absolute; left: 12px; top: 12px; width: 176px; height: 176px; border-radius: 50%; pointer-events: auto;
   box-shadow: 0 0 0 2px rgba(255, 225, 105, .78), 0 0 0 6px rgba(15, 25, 42, .94), 0 0 0 7px rgba(255, 255, 255, .16), 0 10px 26px rgba(8, 16, 30, .5); }
 body.hud-v3 .h3-mm-cv { position: absolute; inset: 0; width: 100%; height: 100%; border-radius: 50%; display: block; }
