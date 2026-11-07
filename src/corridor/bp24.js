@@ -357,7 +357,9 @@ function buildStore(st) {
     }
   }
   // 2) 간판 띠(앞·옆) + 아래 처마, 모퉁이 기둥, 앞면 기둥
-  ext.box(x0 - 0.05, GLASS_H, zf - FASCIA_OUT, x1 + FASCIA_OUT, gf, zf + 0.25, NAVY);
+  // 들인 매장(정자점)은 위층 처마가 유리 위 간판을 가린다. 글자 면만 외벽선 5cm 안까지 당긴다. recess 0(시청점)은 예전 0.38m.
+  const fasciaOut = st.recess > 0.2 ? st.recess - 0.05 : FASCIA_OUT;
+  ext.box(x0 - 0.05, GLASS_H, zf - fasciaOut, x1 + (st.recess > 0.2 ? 0.05 : FASCIA_OUT), gf, zf + 0.25, NAVY);
   if (side) ext.box(x1 - 0.25, GLASS_H, zf - FASCIA_OUT, x1 + FASCIA_OUT, gf, zb, NAVY);
   ext.box(x0 - 0.05, gf, zf - FASCIA_OUT, x1 + FASCIA_OUT, gf + 0.06, side ? zb : zf + 0.25, DARK, false, 'y'); // 띠 위 마감
   ext.box(x1 - 0.55, 0, zf - 0.25, x1 + 0.2, GLASS_H, zf + 0.5, DARK); // 모퉁이 기둥
@@ -402,14 +404,19 @@ function buildStore(st) {
   // 3) 간판 면(캔버스): 앞 9.0×1.0, 옆 4.6×1.0, 돌출 간판(모퉁이 기둥에서 앞으로)
   const sy = (GLASS_H + gf) / 2;
   const fw = Math.min(9.0, W * 0.6), fh = fw / 9.0; // 앞 간판: 폭에 맞춰 줄이되 비율 유지
-  sign.quad(N(0, 0, -1), P((x0 + x1) / 2 - (W > 12 ? 0.6 : 0), GLASS_H + (gf - GLASS_H) / 2, zf - FASCIA_OUT - 0.01), fw, Math.min(1.0, fh * 1.0 + 0.0), [1, 1, 1], suv(SIGN.front));
+  // 정자: 로고·상호를 외벽선(처마 끝)에 붙인다. 위는 처마(gf) 바로 아래라 가리지 않고, 차도 쪽으로는 3cm 남긴다.
+  const signZ = st.recess > 0.2 ? -(st.recess - 0.03) : zf - FASCIA_OUT - 0.01;
+  sign.quad(N(0, 0, -1), P((x0 + x1) / 2 - (W > 12 ? 0.6 : 0), GLASS_H + (gf - GLASS_H) / 2, signZ), fw, Math.min(1.0, fh * 1.0 + 0.0), [1, 1, 1], suv(SIGN.front));
   if (side && D >= 5) { const sw = Math.min(4.6, D * 0.45); sign.quad(N(1, 0, 0), P(x1 + FASCIA_OUT + 0.01, sy, (zf + zb) / 2 + 0.3), sw, sw / 4.6, [1, 1, 1], suv(SIGN.side)); }
-  const bx = x1 - 0.17, bz = zf - 0.25 - 0.55, by = 2.45;
+  const bx = x1 - 0.17, by = 2.45;
+  let bz = zf - 0.25 - 0.55; // 시청점: 유리에서 0.8m
+  if (st.recess > 0.2) bz = -(st.recess - 0.08) + 0.5; // 바깥 끝이 외벽선 8cm 안
   ext.box(bx - 0.07, by - 0.62, bz - 0.5, bx + 0.07, by + 0.62, bz + 0.5, BLACK); // 돌출 간판 틀
   sign.quad(N(1, 0, 0), P(bx + 0.072, by, bz), 0.6, 0.97, [1, 1, 1], suv(SIGN.blade));
   sign.quad(N(-1, 0, 0), P(bx - 0.072, by, bz), 0.6, 0.97, [1, 1, 1], suv(SIGN.blade));
-  // 간판 띠 아래 LED 줄(밤)
-  glow.box(x0 + 0.3, GLASS_H - 0.05, zf - FASCIA_OUT + 0.02, x1 + 0.1, GLASS_H - 0.01, zf - FASCIA_OUT + 0.08, hex('#bfe6ff'));
+  // 간판 띠 아래 LED 줄(밤). 정자점은 앞으로 당긴 띠 끝에 둔다.
+  const glowZ = st.recess > 0.2 ? -(st.recess - 0.07) : zf - FASCIA_OUT + 0.02;
+  glow.box(x0 + 0.3, GLASS_H - 0.05, glowZ, x1 + 0.1, GLASS_H - 0.01, glowZ + 0.06, hex('#bfe6ff'));
   if (side) glow.box(x1 + FASCIA_OUT - 0.08, GLASS_H - 0.05, zf - 0.2, x1 + FASCIA_OUT - 0.02, GLASS_H - 0.01, zb - 0.2, hex('#bfe6ff'));
   // 4) 보도 볼라드(검은 기둥 + 흰 머리) + 낮은 난간 + 앞 테라스. apron:false 면 생략(차도에 붙는 면 — 정자 칼튼호텔)
   if (st.apron !== false) {
