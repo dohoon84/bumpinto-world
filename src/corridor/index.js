@@ -8,6 +8,7 @@ import { mergeTancheon, coveredFn, holeyGround, channelWaterMesh } from './tanch
 import { buildDetailTile, buildLodTile, roadMesh, CAR_KINDS } from './tileMesh.js';
 import { applyTileCuts } from '../world/streams.js';
 import { buildCorridorCrossings } from './crossings.js';
+import { mountYatapSchoolZone } from './yatapSchoolZone.js'; // [schoolzone]
 import { createLandmarks } from './landmarks/index.js';
 import { createLotteEvent } from './landmarks/lotteEvent.js';
 import { stationSign, Grid } from '../world.js';
@@ -282,6 +283,7 @@ export function createCorridor({ scene, corridorData, terrain, world, renderer, 
 
   // ---------- 횡단보도 · 랜드마크 ----------
   const crossings = buildCorridorCrossings(root, base.crossings, { getSimTime });
+  const schoolZone = mountYatapSchoolZone(root, params); // [schoolzone] 야탑초 어린이 보호구역. ?schoolzone=0 이면 null
   const landmarks = createLandmarks(root, index.landmarks, renderer);
   const pangyoLm = corridorData.pangyo ? createPangyoLandmarks(corridorData.pangyo, { overlay }) : null; // [pangyo]
   const migeumLm = corridorData.migeum && !migeumSubwayDrawsEntrances() ? createPangyoLandmarks(corridorData.migeum, { overlay, prefix: 'migeum' }) : null; // [migeum] 같은 빌더(출입구만). [migeum-sub] 지하철이 출입구를 그리면 안 만듦
@@ -319,7 +321,7 @@ export function createCorridor({ scene, corridorData, terrain, world, renderer, 
   let life = null, pangyoNpc = null, migeumPeds = null, migeumNpc = null;
   let rx = null, rz = null; // [perf-memory] 지난 프레임 위치(진행 방향 추정)
   const api = {
-    root, bounds, stations, tiles, stats, crossings, landmarks, inLive,
+    root, bounds, stations, tiles, stats, crossings, landmarks, inLive, schoolZone, // [schoolzone]
     pangyo: pangyoLm, // [pangyo] null 이면 꺼짐(?pangyo=0)
     migeum: migeumLm, // [migeum] null 이면 꺼짐(?migeum=0)
     get pangyoExpress() { return pangyoEx; }, // [pangyo-express] null 이면 꺼짐(?pangyoexpress=0 · ?pangyo=0) · [perf-memory] 지연 로드면 멀 때 null
