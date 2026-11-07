@@ -2,6 +2,7 @@
 import * as THREE from 'three';
 import { eveningFromPart, isEvening, setEvening } from './evening.js';
 import { isEn as isUiEn } from './i18n.js';
+import { createSnowflakes, snowFxEnabled } from './weather/snowflakes.js'; // [snowfx]
 
 const DEFAULT_LAT = 37.3665;
 const DEFAULT_LON = 127.10835;
@@ -234,6 +235,7 @@ export function createAtmosphere({ scene, sun, hemi, skyGeo, getMode, clock, reg
   const forecastUrl = buildForecastUrl(rLat, rLon, rTz);
   const sunDir = new THREE.Vector3(-0.45, 1, 0.35).normalize();
   const precip = makePrecip(scene);
+  const flakes = snowFxEnabled() ? createSnowflakes(scene) : null; // [snowfx] ?snowfx=0 이면 null → 예전 선분 눈
   const topC = new THREE.Color();
   const botC = new THREE.Color();
   const fogC = new THREE.Color();
@@ -360,8 +362,15 @@ export function createAtmosphere({ scene, sun, hemi, skyGeo, getMode, clock, reg
     const wet = kind === 'rain' || kind === 'snow';
     const heavy = state.code >= 63 || state.code >= 95 || state.precip >= 1.5;
     const amount = !wet ? 0 : state.code >= 51 && state.code <= 57 ? 0.4 : heavy ? 1 : 0.72;
-    precip.lines.visible = amount > 0;
-    if (!wet) return;
+    // [snowfx] 눈은 부드러운 Points. 비·?snowfx=0 은 아래 선분 그대로.
+    const softSnow = !!(snow && flakes);
+    state.snowFx = softSnow;
+    precip.lines.visible = amount > 0 && !softSnow;
+    if (flakes) {
+      if (softSnow && camera) flakes.update(dt, camera.position, state.wind || 0, amount);
+      else flakes.hide();
+    }
+    if (!wet || softSnow) return;
     precip.mat.color.set(snow ? '#f4f7fb' : '#c5d7e6');
     precip.mat.opacity = snow ? 0.75 : heavy ? 0.55 : 0.38;
     if (!camera) return;
