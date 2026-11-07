@@ -8,6 +8,11 @@ export class Input {
     addEventListener('keydown', (e) => {
       const tag = document.activeElement?.tagName;
       if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+      // [controls-card] 안내 카드가 열려 있으면 이동·단축키를 받지 않는다
+      if (document.body?.classList.contains('cc-open')) {
+        if (e.code.startsWith('Arrow') || e.code === 'Space') e.preventDefault();
+        return;
+      }
       this.keys.add(e.code); this.onKey?.(e);
       if (e.code.startsWith('Arrow') || e.code === 'Space') e.preventDefault();
     });
@@ -49,6 +54,7 @@ export class Input {
   }
   // 반환: {f, s, run, jump}
   axes() {
+    if (document.body?.classList.contains('cc-open')) return { f: 0, s: 0, run: false, jump: false };
     const k = this.keys; let f = 0, s = 0;
     if (k.has('KeyW') || k.has('ArrowUp')) f += 1; if (k.has('KeyS') || k.has('ArrowDown')) f -= 1;
     if (k.has('KeyD') || k.has('ArrowRight')) s += 1; if (k.has('KeyA') || k.has('ArrowLeft')) s -= 1;

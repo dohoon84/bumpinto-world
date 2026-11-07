@@ -198,7 +198,10 @@ function openDrop(kind, keep = false) {
     if (ac && !ac.hidden) html += item('account-chip', 'user', tr('내 계정', 'My account'), { extra: `<small class="h3-sub">${esc(strip(ac.querySelector('.board-label')?.textContent))}</small>` });
     const en = isEn();
     html += `<div class="h3-item h3-lang" role="group" aria-label="${esc(tr('언어', 'Language'))}">${icon('lang', 20)}<span class="h3-it">${esc(tr('언어', 'Language'))}</span><span class="h3-seg"><button type="button" data-lang="ko" class="${en ? '' : 'on'}" aria-pressed="${!en}">한국어</button><button type="button" data-lang="en" class="${en ? 'on' : ''}" aria-pressed="${en}">EN</button></span></div>`;
-    html += item('help-fold', 'help', $('hud')?.classList.contains('is-folded') === false ? tr('조작 안내 접기', 'Hide controls') : tr('조작 안내', 'Controls'));
+    const cc = document.documentElement.classList.contains('cc-on');
+    html += cc
+      ? item('cc-reopen', 'help', tr('조작 안내', 'Controls'))
+      : item('help-fold', 'help', $('hud')?.classList.contains('is-folded') === false ? tr('조작 안내 접기', 'Hide controls') : tr('조작 안내', 'Controls'));
     if (api) html += `<button type="button" role="menuitem" class="h3-item" data-open="06">${icon('karma', 20)}<span class="h3-it">${esc(tr('카르마 · 업적', 'Karma · achievements'))}</span></button>`;
     if ($('contribute-launcher')) html += item('contribute-launcher', 'heart', tr('함께 만들기', 'Contribute'), { cls: 'gold' });
     if ($('btn-leave')) html += `<div class="h3-hr"></div>${item('btn-leave', 'door', strip($('btn-leave').textContent) || tr('나가기', 'Leave'), { cls: 'red' })}`;
