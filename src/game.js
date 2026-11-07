@@ -75,7 +75,7 @@ import { createServerClock } from './subway/clock.js'; // [subway-sync] 서버 �
 import { isMobileMode } from './mobile/flag.js'; // [mobile]
 import { mountSubway, zoneLabel as subwayZoneLabel } from './subway/index.js'; // [subway] 정자역·코리더 역 출입구(실제 OSM 출구) + 지하 대합실. ?subway=0 이면 끔
 import { arriveFixEnabled, entrySpawn, withArriveCap } from './corridor/arrive.js'; // [arrivefix] #43 역 입장·역 이동 때 정자역을 거쳐 보이지 않게 (?arrivefix=0 끔)
-import { mountBump24Game } from './bump24game/index.js'; // [bump24game] BUMP24 30초 장보기 (?bp24=1&bp24game=1, 정자점은 ?bp24game=1)
+import { mountBump24Game } from './bump24game/index.js'; // [bump24game] BUMP24 30초 장보기 (시청점 ?bp24=1&bp24game=1, 정자점은 기본 주소)
 import { prepareJeongjaBp24, mountBasemapBp24, bp24DoorInfo } from './corridor/bp24.js'; // [bump24-jeongja]
 import { BUMP24_JEONGJA_AT } from './corridor/bp24Locations.js';
 import { isUiV2, uiV2Wanted } from './ui-v2/flag.js'; // [ui-v2] 게임 UI v2 (기본 켜짐 · ?ui=v1 끔)
@@ -580,7 +580,7 @@ const subway = subwayOn ? mountSubway({
     emitMyStateNow();
   },
 }) : null;
-// [bump24game] BUMP24 장보기 미니게임 — 매장 플래그+?bp24game=1 일 때만. 지하철과 같이 별도 Scene.
+// [bump24game] BUMP24 장보기 미니게임. 정자점은 기본 주소에서도 문 앞 안내. 시청점은 ?bp24game=1. 지하철과 같이 별도 Scene.
 const bump24Game = mountBump24Game({
   renderer, params, getPlayer: () => player, getCorridor: () => corridor, getCamera: () => camera,
   getAudioLevel: () => (bgm ? { muted: bgm.player.muted, volume: bgm.player.volume } : null),

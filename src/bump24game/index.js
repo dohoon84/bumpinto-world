@@ -1,7 +1,7 @@
 // [bump24game] BUMP24 30초 장보기 — 문 앞 '들어가기' · 지하철식 페이드 · 별도 내부 Scene · 게임
-//   ?bp24=1&bp24game=1 (또는 ?bump24=1&bp24game=1). 매장 안에서는 바깥 UI 를 숨기고 게임 HUD + 나가기·음소거만.
+//   시청점: ?bp24=1&bp24game=1. 정자점: 기본 주소(쿼리 없음)에서도 문 앞 안내. 매장 안에서는 바깥 UI 를 숨기고 게임 HUD + 나가기·음소거만.
 //   모바일은 가로 전용: 세로면 '가로로 돌려주세요' 화면을 띄우고 게임 시간을 멈춤.
-import { bump24GameEnabled } from './flag.js';
+import { bump24GameEnabled, bump24GameExplicit, bump24StorePrompts } from './flag.js';
 import { buildInterior } from './interior.js';
 import { createBump24Sfx } from './sfx.js';
 import { createBump24UI, loadBest, rankedUsed } from './ui.js';
@@ -23,6 +23,7 @@ export function mountBump24Game({
 } = {}) {
   const search = typeof params?.get === 'function' ? `?${params}` : (typeof params === 'string' ? params : (location?.search || ''));
   if (!bump24GameEnabled(search)) return null;
+  const explicit = bump24GameExplicit(search);
 
   const sfx = createBump24Sfx({ getLevel: () => getAudioLevel?.() || { muted: false, volume: 1 } });
   let interior = null, game = null, active = false, busy = false, timeScale = 1;
@@ -48,6 +49,8 @@ export function mountBump24Game({
   setBp24BoardHook({
     texture: (st) => boardTexture(st.id, st.name, 'tall'), release: releaseBoardTexture, fxMaterial: fxMat,
     tick: (t, night) => { tickBoards(t); fxMat.uniforms.uT.value = t; fxMat.uniforms.uNight.value = night; },
+    // 시청점 전광판은 ?bp24game=1 일 때만. 기본 주소에서는 정자점만.
+    only: explicit ? null : new Set(['bump24-jeongja']),
   });
   // 닉네임이 나중에 정해지면(접속 후) 내 줄 강조를 위해 다시 그림 — 첫 조회도 타이머 안에서(초기화 순서와 무관)
   let lastSelf = null; const selfIv = setInterval(() => { const n = selfName(); if (lastSelf !== null && n !== lastSelf) refreshBoards(); lastSelf = n; }, 3000);
@@ -113,15 +116,19 @@ export function mountBump24Game({
       return getCorridor?.()?.bp24?.stores || [];
     } catch { return []; }
   }
+  // 안내·입장은 이 목록만. 기본 주소에서는 정자점 문. 시청점은 ?bp24game=1 일 때만 들어온다.
+  function promptStores() {
+    return stores().filter((st) => bump24StorePrompts(st.id, search));
+  }
   function nearestDoor(pos) {
     let best = null, bd = DOOR_R;
-    for (const st of stores()) { if (!st.door) continue; const d = Math.hypot(pos.x - st.door[0], pos.z - st.door[1]); if (d < bd) { bd = d; best = st; } }
+    for (const st of promptStores()) { if (!st.door) continue; const d = Math.hypot(pos.x - st.door[0], pos.z - st.door[1]); if (d < bd) { bd = d; best = st; } }
     return best;
   }
 
   function nearestBoard(pos) {
     let best = null, bd = BOARD_R;
-    for (const st of stores()) { if (!st.board) continue; const d = Math.hypot(pos.x - st.board[0], pos.z - st.board[1]); if (d < bd) { bd = d; best = st; } }
+    for (const st of promptStores()) { if (!st.board) continue; const d = Math.hypot(pos.x - st.board[0], pos.z - st.board[1]); if (d < bd) { bd = d; best = st; } }
     return best ? { st: best, d: bd } : null;
   }
   function enterStore(st) {
@@ -217,7 +224,7 @@ export function mountBump24Game({
   return {
     get active() { return active; }, get busy() { return busy; }, get zone() { return active ? 'bump24' : ''; }, get interior() { return interior; },
     outdoorTick, frame, onKey, enterStore, leaveStore,
-    enterById: (id) => { const st = stores().find((s) => s.id === id); return st ? enterStore(st) : false; },
+    enterById: (id) => { const st = promptStores().find((s) => s.id === id); return st ? enterStore(st) : false; },
     view: () => (active && interior ? { scene: interior.scene, camera: interior.camera, cam: interior.cam } : null),
     openBoard: (id) => openBoard(id ? stores().find((s) => s.id === id) || { id, name: 'BUMP24' } : (currentStore || stores()[0])),
     blocks: (x, z, r) => { if (active) return false; try { return anyBp24BoardBlocks(x, z, r) || !!getCorridor?.()?.bp24?.boardBlocks?.(x, z, r); } catch { return false; } },

@@ -200,6 +200,16 @@ export function buildWorld(scene, data, region = null, opts = {}) {
       if (g) addBuildingPart(g, roof, c, wallTint, facadeKey(b.k), p.roof, roofs, walls, nl);
       if (gb) addBuildingPart(gb, roof, c, bandTint(shop.cat, wallTint, bandC), 'commercial', p.roof === true && !g, roofs, walls, nlb); // 이미 있는 commercial 묶음에 들어가 draw call 그대로
     }
+    // [bump24-jeongja] 들인 포치 끝벽. 위층과 같은 파사드 재질·색·창 무늬로 같은 메시 묶음에 넣는다 (draw 추가 없음).
+    if (b._bp24Porch) {
+      for (const ring of b._bp24Porch.rings) {
+        let pg;
+        try { pg = new THREE.ExtrudeGeometry(toShape(ring), { depth: b._bp24Porch.gf, bevelEnabled: false, UVGenerator: FACADE_UV }); }
+        catch { continue; }
+        pg.rotateX(-Math.PI / 2);
+        addBuildingPart(pg, roof, c, wallTint, facadeKey(b.k), false, roofs, walls, NIGHT_V2 ? [ns, kind, 0] : null);
+      }
+    }
   }
   if (roofs.length) {
     const bmesh = new THREE.Mesh(mergeGeometries(roofs), new THREE.MeshLambertMaterial({ vertexColors: true }));

@@ -78,7 +78,8 @@
     "shots-jz-traffic": "node scripts/shots-jz-traffic.mjs",
     "econ:test": "node scripts/test-econ-mock.mjs",
     "arrive:test": "node scripts/test-station-arrive.mjs",
-    "arrive:e2e": "node scripts/e2e-station-arrive.mjs"
+    "arrive:e2e": "node scripts/e2e-station-arrive.mjs",
+    "bp24:entry": "node scripts/e2e-bump24-jeongja-entry.mjs"
   },
   "dependencies": {
     "three": "^0.186.1"

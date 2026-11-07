@@ -2,6 +2,7 @@
 import fs from 'fs';
 import { bp24DoorInfo, bp24TileKey, prepareJeongjaBp24, recessFront, resolveBp24 } from '../src/corridor/bp24.js';
 import { BP24_LOCATIONS, BP24_PLACEMENTS, jeongjaBump24On } from '../src/corridor/bp24Locations.js';
+import { bump24GameEnabled, bump24StorePrompts } from '../src/bump24game/flag.js';
 
 const jeongja = JSON.parse(fs.readFileSync(new URL('../public/jeongja.json', import.meta.url)));
 const hallSpec = BP24_LOCATIONS.find((s) => s.id === 'seongnam-cityhall');
@@ -38,6 +39,21 @@ if ((b135.mh || 0) < 4) throw new Error('위층 mh 가 안 올라감');
 const door = bp24DoorInfo(st);
 if (!(door.x < maxX - 0.05)) throw new Error(`문이 건물 밖으로 나감 door ${door.x} wall ${maxX}`);
 if (!(door.x > recMax - 0.2)) throw new Error(`문이 유리보다 안쪽 door ${door.x} glass ${recMax}`);
+// 들인 문(유리보다 1.15m 길 쪽, 외벽선보다 안쪽). 인도(외벽 밖 0.9m)에서도 안내 반경 2.4m 안.
+const DOOR_R = 2.4;
+const walkX = maxX + 0.9, walkZ = door.z;
+const walkD = Math.hypot(walkX - door.x, walkZ - door.z);
+if (walkD > DOOR_R - 0.2) throw new Error(`인도에서 문 트리거가 닿지 않음 ${walkD.toFixed(2)} (door ${door.x.toFixed(2)} wall ${maxX.toFixed(2)})`);
+if (!bump24GameEnabled('')) throw new Error('기본 URL에서 정자점 들어가기가 꺼짐');
+if (!bump24GameEnabled('?enter=1&from=jeongja')) throw new Error('모바일 입장 주소에서 정자점 들어가기가 꺼짐');
+if (bump24GameEnabled('?bp24game=0')) throw new Error('bp24game=0 인데 켜짐');
+if (bump24GameEnabled('?bump24jeongja=0')) throw new Error('정자점을 껐는데 들어가기가 켜짐');
+if (!bump24StorePrompts('bump24-jeongja', '')) throw new Error('정자점 문 안내가 기본에서 꺼짐');
+if (bump24StorePrompts('bump24-jeongja', '?bp24game=0')) throw new Error('bp24game=0 인데 정자점 안내');
+if (bump24StorePrompts('seongnam-cityhall', '')) throw new Error('기본 URL에서 시청점 안내가 켜짐');
+if (bump24StorePrompts('seongnam-cityhall', '?bp24=1')) throw new Error('시청점은 ?bp24game=1 없이 안내가 켜짐');
+if (!bump24StorePrompts('seongnam-cityhall', '?bp24=1&bp24game=1')) throw new Error('시청점 ?bp24game=1 안내가 꺼짐');
+if (!bump24GameEnabled('?bp24=1&bp24game=1')) throw new Error('시청점 게임이 꺼짐');
 const skipped = jeongja.buildings.filter((b) => b._skip && b.lm === 'bp24');
 if (skipped.length !== 1) throw new Error('1층 충돌 건물이 없음');
 const worldAt = (x, z) => [st.o[0] + st.ax[0] * x + st.b[0] * z, st.o[1] + st.ax[1] * x + st.b[1] * z];

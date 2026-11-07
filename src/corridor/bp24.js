@@ -338,6 +338,8 @@ function buildStore(st) {
     if (L < 0.2) continue;
     let nx = (b[1] - a[1]) / L, nz = -(b[0] - a[0]) / L; if (area > 0) { nx = -nx; nz = -nz; } // 바깥쪽
     if (st.sealEnds) { nx = -nx; nz = -nz; } // 이 링은 감김이 반대라 그대로 두면 밖에서 벽이 안 보임(실내가 샘). 시청점은 sealEnds 가 아니라 그대로.
+    // 끝면(x=0, x=W)은 회색 돌 대신 건물 파사드로 그린다(prepare 의 _bp24Porch).
+    if (st.sealEnds && ((Math.abs(a[0] - x0) < 0.4 && Math.abs(b[0] - x0) < 0.4) || (Math.abs(a[0] - x1) < 0.4 && Math.abs(b[0] - x1) < 0.4))) continue;
     // 유리 면과 겹치는 구간은 빼고 남는 조각만 벽으로(앞면: x 0..W, 옆면: z 0..D)
     const onFront = Math.abs(a[1] - zf) < 0.3 && Math.abs(b[1] - zf) < 0.3;
     const onSide = side && Math.abs(a[0] - x1) < 0.4 && Math.abs(b[0] - x1) < 0.4;
@@ -364,12 +366,6 @@ function buildStore(st) {
   const fasciaOut = st.recess > 0.2 ? st.recess - 0.05 : FASCIA_OUT;
   const xL = st.sealEnds ? x0 : x0 - 0.05, xR = st.sealEnds ? x1 : x1 + (st.recess > 0.2 ? 0.05 : FASCIA_OUT);
   ext.box(xL, GLASS_H, zf - fasciaOut, xR, gf, zf + 0.25, NAVY);
-  // 들인 포치(외벽선~유리)의 양쪽 끝. 여기가 비면 모서리에서 실내(흰 벽·선반)가 건물 밖으로 보인다.
-  if (st.sealEnds && st.recess > 0.2) {
-    const zOut = -(st.recess - 0.02);
-    ext.box(x0, 0, zOut, x0 + 0.16, gf, 0.08, STONE);
-    ext.box(x1 - 0.16, 0, zOut, x1, gf, 0.08, STONE);
-  }
   if (side) ext.box(x1 - 0.25, GLASS_H, zf - FASCIA_OUT, x1 + FASCIA_OUT, gf, zb, NAVY);
   ext.box(x0 - 0.05, gf, zf - FASCIA_OUT, x1 + FASCIA_OUT, gf + 0.06, side ? zb : zf + 0.25, DARK, false, 'y'); // 띠 위 마감
   ext.box(x1 - 0.55, 0, zf - 0.25, st.sealEnds ? x1 : x1 + 0.2, GLASS_H, zf + 0.5, DARK); // 모퉁이 기둥
@@ -418,9 +414,12 @@ function buildStore(st) {
   const signZ = st.recess > 0.2 ? -(st.recess - 0.03) : zf - FASCIA_OUT - 0.01;
   sign.quad(N(0, 0, -1), P((x0 + x1) / 2 - (W > 12 ? 0.6 : 0), GLASS_H + (gf - GLASS_H) / 2, signZ), fw, Math.min(1.0, fh * 1.0 + 0.0), [1, 1, 1], suv(SIGN.front));
   if (side && D >= 5) { const sw = Math.min(4.6, D * 0.45); sign.quad(N(1, 0, 0), P(x1 + FASCIA_OUT + 0.01, sy, (zf + zb) / 2 + 0.3), sw, sw / 4.6, [1, 1, 1], suv(SIGN.side)); }
-  const bx = x1 - 0.17, by = 2.45;
-  let bz = zf - 0.25 - 0.55; // 시청점: 유리에서 0.8m
-  if (st.recess > 0.2) bz = -(st.recess - 0.08) + 0.5; // 바깥 끝이 외벽선 8cm 안
+  const by = 2.45;
+  let bx = x1 - 0.17, bz = zf - 0.25 - 0.55; // 시청점: 모퉁이에서 유리 앞 0.8m
+  if (st.sealEnds && st.recess > 0.2) {
+    bx = x1 - 0.34; // 끝벽(0.14m)보다 안쪽이라 벽에 안 묻힘
+    bz = -(st.recess - 0.05) + 0.5; // 틀 끝은 외벽선 5cm 안. 글자 면 전체가 끝벽보다 길 쪽.
+  } else if (st.recess > 0.2) bz = -(st.recess - 0.08) + 0.5;
   ext.box(bx - 0.07, by - 0.62, bz - 0.5, bx + 0.07, by + 0.62, bz + 0.5, BLACK); // 돌출 간판 틀
   sign.quad(N(1, 0, 0), P(bx + 0.072, by, bz), 0.6, 0.97, [1, 1, 1], suv(SIGN.blade));
   sign.quad(N(-1, 0, 0), P(bx - 0.072, by, bz), 0.6, 0.97, [1, 1, 1], suv(SIGN.blade));
@@ -704,7 +703,9 @@ function buildTileBoards(inst, hook) {
   const N = (x, y, z) => new THREE.Vector3(x, y, z);
   const NAVY = hex('#0d1a33'), BLUE = hex('#0072DD'), DARK = hex('#1b2230');
   const frames = [], fxs = [], screens = [], g = new THREE.Group(); g.name = 'bp24Boards';
-  for (const st of inst.list) {
+  const list = inst.list.filter((st) => !hook.only || hook.only.has(st.id));
+  if (!list.length) return null;
+  for (const st of list) {
     const { c, zF, w, h, y } = bp24BoardLocal(st), fr = new Bag(), fx = new Bag(), sc = new Bag();
     const hw = w / 2 + 0.1, top = y + h / 2 + 0.16;
     fr.box(c - hw - 0.1, 0, zF - 0.08, c + hw + 0.1, 0.12, zF + 0.32, DARK); // 받침
@@ -760,8 +761,8 @@ function tickBoardHook(t, k) {
   BOARD_HOOK?.tick?.(t, k);
 }
 function syncBoards(inst, k, t) {
-  if (BOARD_HOOK && inst.boards?.hook !== BOARD_HOOK) { disposeBoards(inst); inst.boards = buildTileBoards(inst, BOARD_HOOK); }
-  else if (!BOARD_HOOK && inst.boards) disposeBoards(inst);
+  if (BOARD_HOOK && inst._boardHook !== BOARD_HOOK) { disposeBoards(inst); inst._boardHook = BOARD_HOOK; inst.boards = buildTileBoards(inst, BOARD_HOOK); }
+  else if (!BOARD_HOOK && (inst.boards || inst._boardHook)) { disposeBoards(inst); inst._boardHook = null; }
   if (inst.boards) for (const m of inst.boards.screens) m.material.color.setScalar(0.86 + 0.24 * k);
   if (inst.inner.visible) animateClerks(inst.clerk, t);
 }
@@ -790,6 +791,16 @@ function findJeongjaBuilding(buildings, spec) {
   return bi;
 }
 
+// 들인 포치 양쪽 끝벽(월드 x,z). 간판이 걸릴 바깥 0.4m 는 비워 돌출 간판이 길에서 보이게 한다.
+function bp24PorchWalls(st) {
+  const zOut = -(st.recess - 0.95); // 바깥은 돌출 간판. 글자 면보다 안쪽이라 간판을 가리지 않음
+  const span = (x) => { let z = st.D; for (const p of st.ring) if (Math.abs(p[0] - x) < 0.5) z = Math.max(z, p[1]); return z; };
+  const p = (x, z) => [st.o[0] + st.ax[0] * x + st.b[0] * z, st.o[1] + st.ax[1] * x + st.b[1] * z];
+  const ring = (xa, xb, z1) => [p(xa, zOut), p(xb, zOut), p(xb, z1), p(xa, z1)];
+  const t = 0.14;
+  return { gf: st.gf, rings: [ring(0, t, span(0)), ring(st.W - t, st.W, span(st.W))] };
+}
+
 // buildWorld 전에 부른다. 위층은 mh=gf 부터 그리고, 1층 충돌은 들인 외곽(_skip)으로 남긴다. 매장 메시는 mountBasemapBp24.
 export function prepareJeongjaBp24(data, search) {
   const specs = activePlacements('jeongja', search);
@@ -806,6 +817,7 @@ export function prepareJeongjaBp24(data, search) {
     if (!st) continue;
     src.mh = st.gf;
     src.lm = 'bp24';
+    if (st.sealEnds && st.recess > 0.2) src._bp24Porch = bp24PorchWalls(st);
     data.buildings.push({ o: ring, h: Math.min(st.gf, 3.2), mh: 0, k: src.k, _skip: true, lm: 'bp24' });
     prepared.push(st);
   }
