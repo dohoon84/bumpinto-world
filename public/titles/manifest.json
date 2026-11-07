@@ -1,0 +1,20 @@
+{
+  "_readme": "칭호 얼굴 그림 슬롯. 최종 SVG는 이 폴더의 파일을 바꾸거나 slots.*.src 만 고친다. 코드 수정은 필요 없다. viewBox=\"0 0 128 128\", width/height 128, 외부 이미지·스크립트 없음. 3D 메달은 이 SVG를 얼굴 데칼로 쓰고, tier 가 금속 테·반짝임을 고른다. tier: bronze | silver | gold | legendary | event. 최종 그림으로 바꾸면 placeholder 를 false 로.",
+  "viewBox": "0 0 128 128",
+  "px": 128,
+  "slots": {
+    "health.stroll": { "tier": "bronze", "src": "titles/health.stroll.svg", "placeholder": true },
+    "health.walker": { "tier": "gold", "src": "titles/health.walker.svg", "placeholder": true },
+    "health.marathon": { "tier": "legendary", "src": "titles/health.marathon.svg", "placeholder": true },
+    "explore.alley": { "tier": "silver", "src": "titles/explore.alley.svg", "placeholder": true },
+    "explore.map": { "tier": "gold", "src": "titles/explore.map.svg", "placeholder": true },
+    "transit.transfer": { "tier": "silver", "src": "titles/transit.transfer.svg", "placeholder": true },
+    "transit.vip": { "tier": "gold", "src": "titles/transit.vip.svg", "placeholder": true },
+    "neighbor.hello": { "tier": "silver", "src": "titles/neighbor.hello.svg", "placeholder": true },
+    "neighbor.captain": { "tier": "gold", "src": "titles/neighbor.captain.svg", "placeholder": true },
+    "streak.d7": { "tier": "bronze", "src": "titles/streak.d7.svg", "placeholder": true },
+    "streak.d30": { "tier": "gold", "src": "titles/streak.d30.svg", "placeholder": true },
+    "streak.d100": { "tier": "legendary", "src": "titles/streak.d100.svg", "placeholder": true },
+    "store.grocery": { "tier": "event", "src": "titles/store.grocery.svg", "placeholder": true }
+  }
+}

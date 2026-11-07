@@ -200,6 +200,7 @@ function openDrop(kind, keep = false) {
     html += `<div class="h3-item h3-lang" role="group" aria-label="${esc(tr('언어', 'Language'))}">${icon('lang', 20)}<span class="h3-it">${esc(tr('언어', 'Language'))}</span><span class="h3-seg"><button type="button" data-lang="ko" class="${en ? '' : 'on'}" aria-pressed="${!en}">한국어</button><button type="button" data-lang="en" class="${en ? 'on' : ''}" aria-pressed="${en}">EN</button></span></div>`;
     html += item('help-fold', 'help', $('hud')?.classList.contains('is-folded') === false ? tr('조작 안내 접기', 'Hide controls') : tr('조작 안내', 'Controls'));
     if (api) html += `<button type="button" role="menuitem" class="h3-item" data-open="06">${icon('karma', 20)}<span class="h3-it">${esc(tr('카르마 · 업적', 'Karma · achievements'))}</span></button>`;
+    if (window.__jj?.titles?.enabled) html += `<button type="button" role="menuitem" class="h3-item" data-titles="book"><span class="h3-ic" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24"><circle cx="12" cy="13" r="7" fill="none" stroke="currentColor" stroke-width="2"/><path d="M9 4.5 12 8l3-3.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg></span><span class="h3-it">${esc(tr('칭호 도감', 'Title book'))}</span></button>`;
     if ($('contribute-launcher')) html += item('contribute-launcher', 'heart', tr('함께 만들기', 'Contribute'), { cls: 'gold' });
     if ($('btn-leave')) html += `<div class="h3-hr"></div>${item('btn-leave', 'door', strip($('btn-leave').textContent) || tr('나가기', 'Leave'), { cls: 'red' })}`;
   }
@@ -209,9 +210,10 @@ function openDrop(kind, keep = false) {
     const lb = e.target.closest('[data-lang]');
     if (lb) { if ((lb.dataset.lang === 'en') !== isEn()) press('lang-launcher'); return; } // 메뉴는 열어 둔다(onLangChange 가 다시 그림)
     if (e.target.closest('[data-act="minimap"]')) { toggleMinimap(); return; } // 메뉴는 열어 둔 채 스위치만 바뀜(onToggle 이 다시 그림)
-    const b = e.target.closest('[data-press], [data-open]'); if (!b) return;
+    const b = e.target.closest('[data-press], [data-open], [data-titles]'); if (!b) return;
     const id = b.dataset.press, code = b.dataset.open;
     closeDrop();
+    if (b.dataset.titles === 'book') { window.__jj?.titles?.openBook(); return; }
     if (code) api?.open(code);
     else press(id);
     paintSoon();

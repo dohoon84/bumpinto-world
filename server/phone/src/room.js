@@ -22,6 +22,12 @@ function giftVehMode(veh) {
   return null;
 }
 
+// [titles] 상태 중계용 칭호 id. 저장(D1)은 하지 않고, 모양만 맞으면 다른 사람에게 넘긴다.
+function relayTitle(raw) {
+  const s = typeof raw === "string" ? raw.trim() : "";
+  return /^[a-z][a-z0-9.-]{0,40}$/.test(s) ? s : "";
+}
+
 function isBikeVeh(id) {
   return id === BIKE_VEH_BLACK || id === BIKE_VEH_RED;
 }
@@ -275,6 +281,7 @@ export class Room extends DurableObject {
           sit: peer.sit || "",
           afk: !!peer.afk,
           umb: peer.umb || "",
+          ...(peer.title ? { title: peer.title } : {}),
         });
       }
     }
@@ -366,6 +373,7 @@ export class Room extends DurableObject {
         gifts: owned.gifts,
         ...(shopGifts.length ? { shopGifts } : {}), // [economy] 산 탈것(양도 불가) — 선물을 보낸 뒤에도 보유에 남긴다
         phone: owned.phone,
+        title: relayTitle(m.title),
         lastSeen: now,
       };
       const peers = this.#peers(ws);
@@ -378,6 +386,7 @@ export class Room extends DurableObject {
         x: me.x,
         z: me.z,
         ry: me.ry,
+        ...(me.title ? { title: me.title } : {}),
       };
       this.#send(ws, { t: "welcome", id: me.id, peers, gifts: me.gifts || [], weather: await this.#weatherMode() });
       this.#broadcast({ t: "join", peer: publicMe }, ws);
@@ -399,6 +408,7 @@ export class Room extends DurableObject {
       me.sit = typeof m.sit === "string" ? m.sit.slice(0, 16) : "";
       me.afk = !!m.afk;
       me.umb = typeof m.umb === "string" ? m.umb.slice(0, 16) : (m.umb ? "yellow" : "");
+      me.title = relayTitle(m.title);
       const jy = Math.max(0, Math.min(5, Number(m.jy) || 0));
       const emote = typeof m.emote === "string" ? m.emote.slice(0, 16) : "";
       const veh = this.#relayVeh(m.veh, me);
@@ -421,6 +431,7 @@ export class Room extends DurableObject {
           sit: me.sit,
           afk: me.afk,
           umb: me.umb,
+          title: me.title || "",
           ...(veh ? { veh } : {}),
           ...(pv.length ? { pv } : {}),
         },

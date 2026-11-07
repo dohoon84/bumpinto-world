@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128" role="img" aria-label="transit.transfer placeholder">
+  <circle cx="64" cy="64" r="54" fill="#c5d0dc"/>
+  <circle cx="64" cy="64" r="42" fill="none" stroke="#1c2836" stroke-width="3" stroke-dasharray="5 4"/>
+  <text x="64" y="62" text-anchor="middle" dominant-baseline="middle" font-family="sans-serif" font-size="44" font-weight="700" fill="#1c2836">환</text>
+  <text x="64" y="92" text-anchor="middle" font-family="sans-serif" font-size="10" font-weight="700" fill="#1c2836">PLACEHOLDER</text>
+</svg>
