@@ -1,6 +1,6 @@
 // node scripts/test-xmas-flags.mjs
 import assert from 'node:assert/strict';
-import { xmasActive, xmasMode, inXmasWindow, seoulYmd } from '../src/world/xmasSeason.js';
+import { xmasActive, xmasGlowEnabled, xmasMode, inXmasWindow, seoulYmd } from '../src/world/xmasSeason.js';
 import { snowFxEnabled } from '../src/weather/snowflakes.js';
 
 assert.equal(xmasMode(null), 'on');
@@ -28,5 +28,11 @@ assert.equal(snowFxEnabled('?weather=snow'), true);
 assert.equal(snowFxEnabled('?snowfx=0'), false);
 assert.equal(snowFxEnabled('?snowfx=off'), false);
 assert.equal(snowFxEnabled('?snowfx=1'), true);
+
+assert.equal(xmasGlowEnabled(null), true);
+assert.equal(xmasGlowEnabled(''), true);
+assert.equal(xmasGlowEnabled('1'), true);
+assert.equal(xmasGlowEnabled('0'), false);
+assert.equal(xmasGlowEnabled('off'), false);
 
 console.log('xmas flags ok');

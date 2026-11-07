@@ -1,6 +1,7 @@
 // [xmas] 컨셉 B "빛의 원뿔". 짙은 8각 심 + 흰 와이어 20가닥 + 금 리본 3바퀴 + 꼭대기 별.
 //   기본 켬. ?xmas=0 끄기. ?xmas=auto 는 KST 12/1–12/26 (xmasSeason.js).
-//   전구·후광은 인스턴스/포인트 + 시간 유니폼. 진짜 Light·블룸 없음.
+//   전구·후광은 인스턴스/포인트 + 시간 유니폼. 블룸 없음.
+//   주변 광(?xmasglow=0 이면 끔): 반지름 28m 바닥 빛, 원뿔 옆 빌보드 광기둥, 데스크톱만 PointLight 하나(그림자 없음).
 //   전체는 약 340m, 후광은 약 720m, 그 밖 몸체·별은 약 1100m까지. 모바일은 전구를 디자이너 간격(400개)으로 줄인다.
 //   충돌은 심 원뿔(반지름 5.2m)만. 바깥 와이어(바닥 링 반지름 8m) 아래는 지나갈 수 있다.
 //   미금역 출구 공원은 폭이 약 14m라 지름 16m 링이 도로·건물에 겹친다. 200m 안에도 빈 원이 없어 트리를 두지 않는다.
@@ -8,7 +9,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { createNightFade } from './nightLights.js';
 import { isMobileMode } from '../mobile/flag.js';
-import { xmasActive, xmasMode } from './xmasSeason.js';
+import { xmasActive, xmasGlowEnabled, xmasMode } from './xmasSeason.js';
 
 const BUILD_M = 520;
 const FULL_M = 340;
@@ -100,7 +101,7 @@ function makeStarGeometry(R = 2, r = 0.82, depth = 0.45) {
   return g;
 }
 
-function buildModel(mobile) {
+function buildModel(mobile, glow) {
   const S = SPEC;
   const spacing = mobile ? 1.35 : 0.88;
   const apex = new THREE.Vector3(0, S.baseY + S.H, 0);
@@ -402,18 +403,106 @@ function buildModel(mobile) {
   const nightCore = new THREE.Color(S.day.nightCore);
   const dayWire = new THREE.Color(S.day.wire);
   const nightWire = new THREE.Color(S.day.nightWire);
+  const wash = new THREE.Color('#ffc874');
+
+  let poolGeo = null; let poolMat = null; let shaftGeo = null; let shaftMat = null; let shaftMatrices = null;
+  if (glow) {
+    poolGeo = new THREE.PlaneGeometry(56, 56);
+    poolMat = new THREE.ShaderMaterial({
+      uniforms: { uColor: { value: wash }, uNight, uTime, ...THREE.UniformsLib.fog },
+      vertexShader: /* glsl */`
+        varying vec2 vUv;
+        #include <common>
+        #include <fog_pars_vertex>
+        #include <logdepthbuf_pars_vertex>
+        void main() {
+          vUv = uv;
+          vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+          gl_Position = projectionMatrix * mvPosition;
+          #include <logdepthbuf_vertex>
+          #include <fog_vertex>
+        }`,
+      fragmentShader: /* glsl */`
+        varying vec2 vUv;
+        uniform vec3 uColor; uniform float uNight; uniform float uTime;
+        #include <common>
+        #include <fog_pars_fragment>
+        #include <logdepthbuf_pars_fragment>
+        void main() {
+          #include <logdepthbuf_fragment>
+          vec2 p = vUv - 0.5;
+          float r = length(p) * 2.0;
+          float disc = exp(-2.6 * r * r) * (1.0 - smoothstep(0.62, 1.0, r));
+          float pulse = 0.84 + 0.16 * sin(uTime * 1.6);
+          float a = disc * pulse * mix(0.04, 0.55, uNight);
+          float fogF = 1.0;
+          #ifdef USE_FOG
+            fogF = 1.0 - smoothstep(fogNear, fogFar, vFogDepth);
+          #endif
+          gl_FragColor = vec4(uColor * a * fogF, 1.0);
+        }`,
+      transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: true,
+    });
+    shaftGeo = new THREE.PlaneGeometry(1, 1);
+    shaftGeo.translate(0, 0.5, 0);
+    shaftMat = new THREE.ShaderMaterial({
+      uniforms: { uColor: { value: wash }, uNight, uTime, ...THREE.UniformsLib.fog },
+      vertexShader: /* glsl */`
+        varying float vH;
+        #include <common>
+        #include <fog_pars_vertex>
+        #include <logdepthbuf_pars_vertex>
+        void main() {
+          vH = position.y;
+          vec3 center = (instanceMatrix * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
+          vec4 mvPosition = modelViewMatrix * vec4(center, 1.0);
+          mvPosition.x += position.x * 3.2;
+          mvPosition.y += position.y * 24.0;
+          gl_Position = projectionMatrix * mvPosition;
+          #include <logdepthbuf_vertex>
+          #include <fog_vertex>
+        }`,
+      fragmentShader: /* glsl */`
+        varying float vH;
+        uniform vec3 uColor; uniform float uNight; uniform float uTime;
+        #include <common>
+        #include <fog_pars_fragment>
+        #include <logdepthbuf_pars_fragment>
+        void main() {
+          #include <logdepthbuf_fragment>
+          float shaft = smoothstep(0.0, 0.15, vH) * (1.0 - smoothstep(0.45, 1.0, vH));
+          float pulse = 0.75 + 0.25 * sin(uTime * 1.3 + vH * 4.0);
+          float a = shaft * pulse * mix(0.02, 0.28, uNight);
+          float fogF = 1.0;
+          #ifdef USE_FOG
+            fogF = 1.0 - smoothstep(fogNear, fogFar, vFogDepth);
+          #endif
+          gl_FragColor = vec4(uColor * a * fogF, 1.0);
+        }`,
+      transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, fog: true,
+    });
+    shaftMatrices = [];
+    const dummy = new THREE.Object3D();
+    for (let i = 0; i < 6; i++) {
+      const a = (i / 6) * Math.PI * 2;
+      dummy.position.set(Math.cos(a) * 5.6, 0.2, Math.sin(a) * 5.6);
+      dummy.updateMatrix();
+      shaftMatrices.push(dummy.matrix.clone());
+    }
+  }
 
   return {
     wireGeo, wireMat, coreMat, plinthMat, ringMat, ribbonMat, ribbonGeo,
     bulbGeo, bulbMat, matrices, bulbCount: n,
     haloGeo, haloMat, uScale,
     starGeo, starMat, rayGeo, rayMat, starHaloGeo, starHaloMat, starY,
-    glowGeo, glowMat, uTime, uNight, dayCore, nightCore, dayWire, nightWire,
+    glowGeo, glowMat, uTime, uNight, dayCore, nightCore, dayWire, nightWire, wash,
+    poolGeo, poolMat, shaftGeo, shaftMat, shaftMatrices, glow,
     apexY: apex.y,
   };
 }
 
-function spawnTree(kit, spot, y) {
+function spawnTree(kit, spot, y, { glow = false, lamp = false } = {}) {
   const group = new THREE.Group();
   group.name = 'xmas-tree';
   group.userData.perfNoInstance = true;
@@ -470,15 +559,42 @@ function spawnTree(kit, spot, y) {
   starHalo.visible = false;
   group.add(starHalo);
 
-  const glow = new THREE.Mesh(kit.glowGeo, kit.glowMat);
-  glow.rotation.x = -Math.PI / 2;
-  glow.position.y = 0.05;
-  glow.name = 'xmas-glow';
-  glow.visible = false;
-  glow.renderOrder = 1;
-  group.add(glow);
+  const glowMesh = new THREE.Mesh(kit.glowGeo, kit.glowMat);
+  glowMesh.rotation.x = -Math.PI / 2;
+  glowMesh.position.y = 0.05;
+  glowMesh.name = 'xmas-glow';
+  glowMesh.visible = false;
+  glowMesh.renderOrder = 1;
+  group.add(glowMesh);
 
-  return { id: spot.id, x: spot.x, z: spot.z, group, bulbs, halos, rays, starHalo, glow, starPivot };
+  let pool = null; let shafts = null; let point = null;
+  if (glow && kit.poolGeo) {
+    pool = new THREE.Mesh(kit.poolGeo, kit.poolMat);
+    pool.rotation.x = -Math.PI / 2;
+    pool.position.y = 0.03;
+    pool.name = 'xmas-wash';
+    pool.visible = false;
+    pool.renderOrder = 1;
+    pool.frustumCulled = false;
+    group.add(pool);
+    shafts = new THREE.InstancedMesh(kit.shaftGeo, kit.shaftMat, kit.shaftMatrices.length);
+    shafts.name = 'xmas-shafts';
+    shafts.frustumCulled = false;
+    shafts.renderOrder = 2;
+    kit.shaftMatrices.forEach((m, i) => shafts.setMatrixAt(i, m));
+    shafts.instanceMatrix.needsUpdate = true;
+    shafts.visible = false;
+    group.add(shafts);
+    if (lamp) {
+      point = new THREE.PointLight('#ffc874', 0, 42, 2);
+      point.position.set(0, 6.5, 0);
+      point.castShadow = false;
+      point.name = 'xmas-lamp';
+      group.add(point);
+    }
+  }
+
+  return { id: spot.id, x: spot.x, z: spot.z, group, bulbs, halos, rays, starHalo, glow: glowMesh, pool, shafts, point, starPivot };
 }
 
 export function xmasSpots({ regionId, corridor = false } = {}) {
@@ -499,13 +615,15 @@ export function mountXmasTrees({ scene, region = null, terrain = null, params = 
 
   const night = createNightFade({ seconds: 4 });
   const mobile = typeof location !== 'undefined' && isMobileMode();
+  const glowOn = xmasGlowEnabled(params?.get?.('xmasglow'));
+  const lampOn = glowOn && !mobile;
   let kit = null;
   const built = new Map();
   let elapsed = 0;
   const groundY = (x, z) => (terrain ? terrain.getGroundHeight(x, z, 0) : 0) || 0;
 
   function ensureKit() {
-    if (!kit) kit = buildModel(mobile);
+    if (!kit) kit = buildModel(mobile, glowOn);
     return kit;
   }
 
@@ -514,7 +632,7 @@ export function mountXmasTrees({ scene, region = null, terrain = null, params = 
     rec.bulbs.geometry.dispose();
     rec.bulbs.dispose();
     rec.group.traverse((o) => {
-      if (o.geometry && o.geometry !== kit?.wireGeo && o.geometry !== kit?.ribbonGeo && o.geometry !== kit?.haloGeo && o.geometry !== kit?.starGeo && o.geometry !== kit?.rayGeo && o.geometry !== kit?.starHaloGeo && o.geometry !== kit?.glowGeo) {
+      if (o.geometry && o.geometry !== kit?.wireGeo && o.geometry !== kit?.ribbonGeo && o.geometry !== kit?.haloGeo && o.geometry !== kit?.starGeo && o.geometry !== kit?.rayGeo && o.geometry !== kit?.starHaloGeo && o.geometry !== kit?.glowGeo && o.geometry !== kit?.poolGeo && o.geometry !== kit?.shaftGeo) {
         if (o !== rec.bulbs) o.geometry.dispose();
       }
     });
@@ -531,6 +649,20 @@ export function mountXmasTrees({ scene, region = null, terrain = null, params = 
     const pulse = 0.9 + 0.1 * Math.sin(t * 2.1);
     k.starMat.emissiveIntensity = (0.25 + n * 1.55) * pulse;
     k.glowMat.opacity = 0.62 * n;
+    if (k.poolMat) {
+      const f = ((t * 0.085) % 1 + 1) % 1;
+      const open = f <= 0.05 ? f / 0.05 : f >= 0.22 ? 0 : f <= 0.1 ? 1 : (0.22 - f) / 0.12;
+      const sweep = Math.max(0, Math.min(1, open));
+      const tau = Math.PI * 2;
+      k.wash.setRGB(
+        0.55 + 0.45 * Math.cos(tau * f),
+        0.55 + 0.45 * Math.cos(tau * (f + 0.33)),
+        0.55 + 0.45 * Math.cos(tau * (f + 0.67)),
+      );
+      k.wash.lerp(new THREE.Color('#ffc874'), 1 - sweep * n * 0.85);
+      k.poolMat.uniforms.uColor.value.copy(k.wash);
+      k.shaftMat.uniforms.uColor.value.copy(k.wash);
+    }
   }
 
   function update(dt, camera) {
@@ -549,7 +681,7 @@ export function mountXmasTrees({ scene, region = null, terrain = null, params = 
       const d = Math.hypot(cx - spot.x, cz - spot.z);
       let rec = built.get(spot.id);
       if (!rec && d < BUILD_M) {
-        rec = spawnTree(ensureKit(), spot, groundY(spot.x, spot.z));
+        rec = spawnTree(ensureKit(), spot, groundY(spot.x, spot.z), { glow: glowOn, lamp: lampOn });
         scene.add(rec.group);
         built.set(spot.id, rec);
       } else if (rec && d > DROP_M) {
@@ -564,6 +696,10 @@ export function mountXmasTrees({ scene, region = null, terrain = null, params = 
       rec.rays.visible = d < FULL_M;
       rec.halos.visible = d < HALO_M && fade > 0.04;
       rec.glow.visible = d < FULL_M && fade > 0.04;
+      if (rec.pool) rec.pool.visible = d < FULL_M && fade > 0.02;
+      if (rec.shafts) rec.shafts.visible = d < 220 && fade > 0.08;
+      if (rec.point) rec.point.intensity = fade * 700 * (0.85 + 0.15 * Math.sin(elapsed * 1.6));
+      if (rec.point && k) rec.point.color.copy(k.wash);
       rec.starHalo.visible = fade > 0.04;
       rec.starPivot.rotation.y = elapsed * 0.25;
     }
@@ -582,6 +718,7 @@ export function mountXmasTrees({ scene, region = null, terrain = null, params = 
     mode,
     spots,
     mobile,
+    glow: glowOn,
     blocks,
     update,
     get built() { return built.size; },

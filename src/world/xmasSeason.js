@@ -35,3 +35,9 @@ export function xmasActive(value, date = new Date()) {
   if (mode === 'auto') return inXmasWindow(date);
   return true;
 }
+
+/** 트리 주변 빛. 기본 켬. ?xmasglow=0|off|false 이면 트리만 남고 주변 광은 없다. */
+export function xmasGlowEnabled(value) {
+  const v = value == null ? '' : String(value).trim().toLowerCase();
+  return !(v === '0' || v === 'off' || v === 'false' || v === 'no');
+}
