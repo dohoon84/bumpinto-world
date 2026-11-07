@@ -112,6 +112,8 @@ export class WebSocketPresence extends Emitter {
   }
   sendChat(text) { if (this.ws?.readyState === 1) this.ws.send(JSON.stringify({ t: 'chat', text })); }
   sendEmote(kind, combo = 1) { if (this.ws?.readyState === 1) this.ws.send(JSON.stringify({ t: 'emote', kind, combo })); }
+  sendTitle(id) { if (this.ws?.readyState === 1 && id) this.ws.send(JSON.stringify({ t: 'title', title: id })); }
+  sendTitleClap(to) { if (this.ws?.readyState === 1 && to) this.ws.send(JSON.stringify({ t: 'title_clap', to })); }
   // [economy] 상점에서 탈것을 산 직후: 서버(Room)가 계정 보유를 다시 읽어 { t:'holdings' } 로 돌려준다
   syncGifts() { if (this.ws?.readyState === 1) this.ws.send(JSON.stringify({ t: 'gifts_sync' })); }
   sendWeather(mode) {
@@ -258,6 +260,11 @@ export class MockPresence extends Emitter {
         this.emit('chat', { t: 'chat', id: this.peer.id, text: hypeLines[kind] || (this.isEn ? 'Woohoo!! 🎉' : '와아아!! 🎉') });
       }
     }, 320);
+  }
+  sendTitle() {}
+  sendTitleClap(to) {
+    if (!to || !this.peer) return;
+    this.emit('title_clap', { t: 'title_clap', id: this.peer.id, name: this.peer.name, to });
   }
   syncGifts() {}
   sendWeather(mode) {

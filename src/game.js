@@ -1229,12 +1229,16 @@ startLobby = async () => {
 if (passportQueued) joinWithPassport();
 else if (lobbyQueued) startLobby();
 titles = mountTitles({
-  scene, camera, overlay, params,
+  overlay, params, presence,
   getAnchor() {
     const p = selfInterior?.player || player;
     const sit = p.userData.sit || p.userData.afk;
     const jy = p.userData.jumpY || 0;
     return { x: p.position.x, y: p.position.y + jy + (sit ? 1.55 : 2.15), z: p.position.z };
+  },
+  getFeet() {
+    const p = selfInterior?.player || player;
+    return { x: p.position.x, y: p.position.y, z: p.position.z };
   },
   shown: () => joined && !arriving && (player.visible || !!selfInterior),
   listRemotes: () => remotes.list().map((p) => ({ id: p.id, x: p.x, y: p.y, z: p.z, tagY: p.tagY, titleId: p.title || '' })),
@@ -1548,7 +1552,7 @@ function standUpFromSeat() {
 
 function syncMyNameTag() {
   const baseName = me.name || tr('나', 'Me');
-  titles.paintTag(nameTag.el, { name: baseName, afk: myAfk, afkText: tr('자리비움', 'AFK') });
+  titles.paintTag(nameTag.el, { name: baseName, afk: myAfk, afkText: tr('자리비움', 'AFK'), local: true });
 }
 if (titles.enabled && joined) syncMyNameTag();
 
@@ -2667,5 +2671,11 @@ window.__jj = {
   get pose() { return { sit: mySit, afk: myAfk, jy: jumpY }; }, // [subway-pose] 테스트용
   bgm, // [bgm]
   titles, // [titles]
+  onTitleClap(m) {
+    if (!titles.cheerOn) return;
+    const hit = remotes.list({ all: true }).find((p) => p.id === m?.id);
+    if (!hit) return;
+    emoteFx.burst(new THREE.Vector3(hit.x, (hit.y || 0) + 1.2, hit.z), 'clap', 1);
+  },
   nearNpc(i = 0, d = 3) { const n = npcs.list[i]; player.position.set(n.pos.x + d, 0, n.pos.z + d * 0.5); },
 };

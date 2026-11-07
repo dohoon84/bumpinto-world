@@ -99,3 +99,11 @@ export function featuredId(ids) {
 export function titlesInAxis(axis) {
   return TITLES.filter((t) => t.axis === axis);
 }
+
+/** 금·이벤트·전설만 방 안 획득 알림에 실린다. 모르는 id 는 빈 문자열. */
+export function announceTitleId(raw) {
+  const id = sanitizeTitleId(raw);
+  const t = id ? titleById(id) : null;
+  if (!t || gradeRank(t.grade) < gradeRank('gold')) return '';
+  return t.id;
+}

@@ -116,4 +116,47 @@ assert.equal(indexSlots({ slots: { 'health.stroll': { tier: 'nope', src: 'titles
 assert.equal(indexSlots({ slots: { bad: { tier: 'gold', src: '../secret.svg' } } }).length, 0);
 ok('icon slots are placeholder svgs behind one manifest');
 
+import { announceTitleId } from '../src/titles/catalog.js';
+import { titleCheerOn, titleFxOn, titleRarityOn } from '../src/titles/flags.js';
+import { formatRarityPct, rarityView } from '../src/titles/rarity.js';
+
+assert.equal(announceTitleId('health.stroll'), '');
+assert.equal(announceTitleId('explore.alley'), '');
+assert.equal(announceTitleId('health.walker'), 'health.walker');
+assert.equal(announceTitleId('store.grocery'), 'store.grocery');
+assert.equal(announceTitleId('health.marathon'), 'health.marathon');
+assert.equal(announceTitleId('nope'), '');
+assert.equal(announceTitleId('../x'), '');
+ok('only gold and above can be announced');
+
+assert.equal(titleFxOn(''), true);
+assert.equal(titleFxOn('?titlefx=0'), false);
+assert.equal(titleRarityOn('?titlerarity=off'), false);
+assert.equal(titleCheerOn('?titlecheer=no'), false);
+assert.equal(titleCheerOn('?titles=0'), true);
+ok('fx, rarity, cheer flags default on');
+
+assert.deepEqual(rarityView(null), { ready: false, pct: {} });
+assert.deepEqual(rarityView({ ready: false, totalPlayers: 10, counts: { 'health.stroll': 4 } }), { ready: false, pct: {} });
+assert.deepEqual(rarityView({ ready: true, totalPlayers: 0, counts: { 'health.stroll': 1 } }).ready, false);
+const view = rarityView({ ready: true, asOf: 5, totalPlayers: 200, counts: { 'health.stroll': 10, bad: -1, 'health.walker': 50 } });
+assert.equal(view.ready, true);
+assert.equal(view.pct['health.stroll'], 5);
+assert.equal(view.pct['health.walker'], 25);
+assert.equal(view.pct.bad, undefined);
+assert.equal(formatRarityPct(view.pct['health.stroll']), '5');
+assert.equal(formatRarityPct(0.4), '0.4');
+ok('rarity percents come only from a ready payload');
+
+const { handleEcon } = await import('../server/phone/src/account/econRoutes.js');
+{
+  const res = await handleEcon(new Request('http://localhost/econ/titles/rarity'), { ECONOMY_ENABLED: '0' }, new URL('http://localhost/econ/titles/rarity'));
+  const body = await res.json();
+  assert.equal(body.ok, true);
+  assert.equal(body.data.ready, false);
+  assert.equal(body.data.totalPlayers, null);
+  assert.deepEqual(body.data.counts, {});
+}
+ok('rarity route answers without a count');
+
 console.log(n + ' passed');

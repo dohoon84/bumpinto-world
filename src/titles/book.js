@@ -1,6 +1,7 @@
 // [titles] 칭호 도감. 데이터는 store 가 갖고, 이 파일은 그리는 입구 중 하나일 뿐이다.
 import { AXIS_ORDER, TITLES, axisLabel } from './catalog.js';
 import { gradeOf, iconSrc } from './icons.js';
+import { formatRarityPct } from './rarity.js';
 import { isEn, onLangChange, tr } from '../i18n.js';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -8,7 +9,7 @@ const GRADE_NAME = {
   bronze: ['동', 'Bronze'], silver: ['은', 'Silver'], gold: ['금', 'Gold'], legendary: ['전설', 'Legendary'], event: ['특별', 'Event'],
 };
 
-export function createTitleBook({ store, onEquip, onUnequip }) {
+export function createTitleBook({ store, onEquip, onUnequip, rarityOf = () => null }) {
   let root = null;
   let offLang = null;
   function open() {
@@ -47,7 +48,7 @@ export function createTitleBook({ store, onEquip, onUnequip }) {
     const groups = AXIS_ORDER.map((axis) => {
       const items = store.all().filter((t) => t.axis === axis);
       if (!items.length) return '';
-      const cards = items.map((t) => card(t, earned.has(t.id), sel === t.id)).join('');
+      const cards = items.map((t) => card(t, earned.has(t.id), sel === t.id, rarityOf)).join('');
       const ax = axisLabel(axis);
       return `<section class="tb-axis"><h3>${esc(isEn() ? ax.en : ax.ko)}</h3><div class="tb-grid">${cards}</div></section>`;
     }).join('');
@@ -68,21 +69,30 @@ export function createTitleBook({ store, onEquip, onUnequip }) {
   return { open, close, get openNow() { return !!root && !root.hidden; }, refresh: () => { if (root && !root.hidden) paint(); } };
 }
 
-function card(t, have, on) {
+function card(t, have, on, rarityOf) {
   const name = isEn() ? t.name.en : t.name.ko;
   const grade = GRADE_NAME[gradeOf(t)] || GRADE_NAME.gold;
   const gname = isEn() ? grade[1] : grade[0];
   const req = t.axis === 'store'
     ? (isEn() ? 'BUMP24 store' : 'BUMP24 상점')
     : (isEn() ? `${t.at}` : `${t.at}`);
+  const rare = rareHtml(rarityOf?.(t.id));
   const btn = !have
     ? `<span class="tb-lock">${esc(tr('잠김', 'Locked'))}</span>`
     : `<button type="button" class="tb-btn${on ? ' tb-btn-on' : ''}" data-tb-pick="${esc(t.id)}">${esc(on ? tr('다는 중', 'Wearing') : tr('달기', 'Wear'))}</button>`;
   return `<article class="tb-card g-${gradeOf(t)}${have ? ' is-have' : ''}${on ? ' is-on' : ''}">
     <img src="${iconSrc(t)}" alt="" width="72" height="72">
-    <div class="tb-card-t"><b>${esc(name)}</b><small>${esc(gname)} · ${esc(req)}</small></div>
+    <div class="tb-card-t"><b>${esc(name)}</b><small>${esc(gname)} · ${esc(req)}</small>${rare}</div>
     ${btn}
   </article>`;
+}
+
+function rareHtml(info) {
+  if (info == null) return '';
+  if (info.wait || typeof info.pct !== 'number') return `<small class="tb-rare">${esc(tr('집계 중', 'Counting'))}</small>`;
+  const n = formatRarityPct(info.pct);
+  if (!n) return '';
+  return `<small class="tb-rare">${esc(tr(`전체 플레이어 중 ${n}% 보유`, `${n}% of players`))}</small>`;
 }
 
 export function createIconSheet() {

@@ -214,7 +214,13 @@ export class RemotePlayers {
         p.mesh.userData.sit = p.sit || '';
         p.mesh.userData.afk = !!p.afk;
         p.mesh.userData.umbrella = p.umb || '';
-        paintTitleTag(p.tag.el, { name: p.name, afk: !!p.afk, titleId: p.title || '', afkText: '자리비움' });
+        paintTitleTag(p.tag.el, {
+          name: p.name,
+          afk: !!p.afk,
+          titleId: p.title || '',
+          afkText: '자리비움',
+          lite: Math.hypot((this.getMe()?.x || 0) - p.mesh.position.x, (this.getMe()?.z || 0) - p.mesh.position.z) > 16,
+        });
         if (p.afk) {
           p.zzzTimer = (p.zzzTimer || 0) - dt;
           if (p.zzzTimer <= 0) {

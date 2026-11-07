@@ -1,5 +1,6 @@
 import { DurableObject } from "cloudflare:workers";
 import { giftItem, giftItemByVeh, normalizeHoldings, qtyOf, withQty } from "../../../src/gifts/catalog.js";
+import { announceTitleId } from "../../../src/titles/catalog.js";
 import { accountsReady, statsEnabled } from "./account/flags.js"; // [accounts]
 import { sessionFromRequest } from "./account/session.js";
 import { accountById, accountForSession } from "./account/store.js";
@@ -478,6 +479,28 @@ export class Room extends DurableObject {
       target.ws.serializeAttachment(target.peer);
       this.#send(ws, { t: "gift", ok: true, item, mine: false, qty: fromQty, to: target.peer.id, toName: target.peer.name });
       this.#send(target.ws, { t: "gift", ok: true, item, mine: true, qty: toQty, from: me.id, fromName: me.name });
+      return;
+    }
+    if (m.t === "title") {
+      const title = announceTitleId(m.title);
+      if (!title) return;
+      if (!Array.isArray(me.announced)) me.announced = [];
+      if (me.announced.includes(title)) return;
+      if (now - (me.titleAt || 0) < 20000) return;
+      me.titleAt = now;
+      me.announced = [...me.announced, title].slice(-16);
+      ws.serializeAttachment(me);
+      this.#broadcast({ t: "title", id: me.id, name: me.name, title, x: me.x, z: me.z }, ws);
+      return;
+    }
+    if (m.t === "title_clap") {
+      if (now - (me.clapAt || 0) < 2500) return;
+      const target = this.#socketByPeerId(String(m.to || ""), ws);
+      if (!target?.peer) return;
+      if (Math.hypot((target.peer.x || 0) - me.x, (target.peer.z || 0) - me.z) > 40) return;
+      me.clapAt = now;
+      ws.serializeAttachment(me);
+      this.#broadcast({ t: "title_clap", id: me.id, name: me.name, to: target.peer.id }, ws);
       return;
     }
     if (m.t === "emote") {

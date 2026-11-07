@@ -10,7 +10,9 @@
 //   { t: 'weather', mode }
 //   { t: 'join', peer: Peer }                        Peer = { id, name, color, look, x, z, ry, title? }
 //   { t: 'leave', id }
-//   { t: 'state', id, x, z, ry, moving }
+//   { t: 'state', id, x, z, ry, moving, title? }
+//   { t: 'title', id, name, title, x, z }            금 이상 칭호 획득 알림 (보낸 사람 제외, 방 전체)
+//   { t: 'title_clap', id, name, to }                가까운 사람의 박수 (40m, 2.5초에 한 번)
 //   { t: 'chat', id, text }
 export const STATE_HZ = 10;
 export const CHAT_RADIUS = 30; // m — 이 거리 안의 플레이어 채팅만 말풍선으로 보임(근접 채팅)

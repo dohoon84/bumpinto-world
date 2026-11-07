@@ -3,15 +3,23 @@
 
 const OFF = new Set(['0', 'off', 'no', 'false']);
 
-export function titlesEnabled(search = '') {
+function flagOn(search, key) {
   try {
-    const q = new URLSearchParams(search.startsWith('?') || search.includes('=') ? search : '').get('titles');
+    const q = new URLSearchParams(search.startsWith('?') || search.includes('=') ? search : '').get(key);
     if (q == null) return true;
     return !OFF.has(String(q).toLowerCase());
   } catch {
     return true;
   }
 }
+
+export function titlesEnabled(search = '') {
+  return flagOn(search, 'titles');
+}
+
+export const titleFxOn = (search = '') => flagOn(search, 'titlefx');
+export const titleRarityOn = (search = '') => flagOn(search, 'titlerarity');
+export const titleCheerOn = (search = '') => flagOn(search, 'titlecheer');
 
 export function titleDemoId(search = '', known = null) {
   try {
