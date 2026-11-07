@@ -78,7 +78,7 @@ import { arriveFixEnabled, entrySpawn, withArriveCap } from './corridor/arrive.j
 import { mountBump24Game } from './bump24game/index.js'; // [bump24game] BUMP24 30초 장보기 (시청점 ?bp24=1&bp24game=1, 정자점은 기본 주소)
 import { prepareJeongjaBp24, mountBasemapBp24, bp24DoorInfo } from './corridor/bp24.js'; // [bump24-jeongja]
 import { mountBp24Nav } from './corridor/bp24Nav.js'; // [bp24nav]
-import { BUMP24_JEONGJA_AT } from './corridor/bp24Locations.js';
+import { BUMP24_JEONGJA_AT, bump24AtSpot } from './corridor/bp24Locations.js';
 import { isUiV2, uiV2Wanted } from './ui-v2/flag.js'; // [ui-v2] 게임 UI v2 (기본 켜짐 · ?ui=v1 끔)
 
 const params = new URLSearchParams(location.search);
@@ -92,7 +92,8 @@ const fromRegionId = params.get('from');
 const fromRegion = fromRegionId && fromRegionId !== region.id ? getRegion(fromRegionId) : null;
 // [corridor] 지구본에서 코리더 역을 고르면 입장(로비/여권) 직후 그 역으로 이동. 다른 동네에서 오면 ?at= 로 넘어온다
 const atQuery = params.get('at');
-let corridorAt = !shot && params.get('corridor') !== '0' && atQuery !== BUMP24_JEONGJA_AT ? atQuery : null;
+const bump24AtQuery = atQuery === BUMP24_JEONGJA_AT || (atQuery && atQuery.startsWith('bump24-'));
+let corridorAt = !shot && params.get('corridor') !== '0' && !bump24AtQuery ? atQuery : null;
 let corridorArrive = null;
 const arriveFix = arriveFixEnabled(); // [arrivefix]
 let arriving = false; // [arrivefix] 역 도착 전(숨김): 위치 저장·송신 멈춤
@@ -1167,6 +1168,29 @@ function landBump24Jeongja() {
   setViewMode('follow');
   return true;
 }
+function landBump24At() {
+  if (!atQuery || atQuery === BUMP24_JEONGJA_AT) return false;
+  const spot = bump24AtSpot(atQuery);
+  if (!spot) return false;
+  const st = jeongjaBp24Prep.find((s) => s.id === spot.id);
+  let x = spot.x, z = spot.z, yaw = 0, face = Math.PI;
+  if (st) {
+    const info = bp24DoorInfo(st);
+    x = info.x; z = info.z; yaw = info.yawIn; face = info.face;
+    if (world.isBlocked(x, z) || world.onRoad(x, z)) {
+      const ox = -st.b[0], oz = -st.b[1];
+      for (let d = 0.4; d <= 2.4; d += 0.4) {
+        const nx = info.x + ox * d, nz = info.z + oz * d;
+        if (!world.isBlocked(nx, nz) && !world.onRoad(nx, nz)) { x = nx; z = nz; break; }
+      }
+    }
+  }
+  player.position.set(x, terrain ? terrain.getGroundHeight(x, z, 0) : 0, z);
+  player.rotation.y = yaw;
+  cam.yaw = face; cam.pitch = -0.06; cam.dist = 6.5;
+  setViewMode('follow');
+  return true;
+}
 function completeWorldJoin(name, look, session) {
   setPassportActive(true);
   me.name = name; me.color = look.color; me.look = look;
@@ -1176,7 +1200,7 @@ function completeWorldJoin(name, look, session) {
   explicitPick = false;
   const rp = resumePlace ?? (mobileMode ? takeResumePlace() : null); resumePlace = null; // [econ-mobile] 모바일은 시작화면이 넘겨준 자리
   const spawn = entrySpawn({ resume: rp, bounds: corridor?.bounds || world.bounds, inWater: world.inWater, picked, sessionPlace: session?.place || null, at: corridorAt, placeOf: arriveTravel ? (id) => arriveTravel.placeOf(id) : null, fix: arriveFix });
-  if (landBump24Jeongja()) corridorAt = null; // [bump24-jeongja] ?at=bump24-jeongja 는 정자점 문 앞. 이어하기 위치보다 우선
+  if (landBump24Jeongja() || landBump24At()) corridorAt = null; // [bump24-stores] ?at=bump24-<id> 는 그 매장 문 앞
   else if (spawn.kind === 'resume') { corridorAt = null; applySession({ place: rp }); } // [ui-v2] 그만둔 자리 — 역 출구로 옮기지 않음 (범위 밖·물 위면 아래 역 입장 그대로)
   else if (spawn.kind === 'session') applySession(session);
   else if (spawn.kind === 'station') placeHiddenAt(spawn.x, spawn.z); // [arrivefix] ① 정자 기본 위치가 아니라 그 역 출구에 숨긴 채로
@@ -2121,6 +2145,7 @@ const cameraApp = mountCamera({ // [camera]
   getView: () => bump24Game?.view() || subway?.view() || null, // [camera] [bump24game] 매장·지하 장면
 });
 if (atQuery === BUMP24_JEONGJA_AT) landBump24Jeongja(); // [bump24-jeongja] ?shot=1 처럼 입장 함수를 안 타는 시작
+else if (landBump24At()) { /* [bump24-stores] */ }
 else if (travel && atQuery) travel.go(atQuery);
 // [corridor] 지구본 역 선택 → 입장 완료 후 역 출구 앞 인도로 (위치 저장 성공 여부와 무관)
 corridorArrive = () => {
@@ -2666,7 +2691,7 @@ function frame() {
     sun.target.position.copy(c);
   }
   if (corridor) { const c = cam.mode === 'follow' ? P : sun.target.position; corridor.update(dt, c.x, c.z, cam.mode); } // [corridor] 타일 스트리밍(프레임당 최대 1개 빌드)
-  jeongjaBp24?.update(); // [bump24-jeongja] 직원·밤 간판. 실내는 170m LOD
+  jeongjaBp24?.update(player.position.x, player.position.z); // [bump24-jeongja] 가까운 매장만 실내
   bp24Nav?.update(dt); // [bp24nav] 표지 까딱임 · 안내선 시작점
   if (playgrounds) { const c = cam.mode === 'follow' ? P : sun.target.position; playgrounds.update(dt, c.x, c.z, cam.mode); } // [playgrounds] 거리·타일 기준 표시
   if (streetlights) { const c = cam.mode === 'follow' ? P : sun.target.position; streetlights.update(dt, c.x, c.z, cam.mode); } // [streetlights] 거리·타일 기준 표시 + 밤 페이드

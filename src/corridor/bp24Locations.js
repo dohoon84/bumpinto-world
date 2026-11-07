@@ -1,4 +1,5 @@
 // [bp24] BUMP24 매장 위치 목록. 한 줄 = 매장 하나. 자세한 설명: docs/bp24-chain.md
+import { BP24_GENERATED } from './bp24Generated.js';
 //   id, name, world('corridor' 타일 | 'jeongja' 베이스맵), match{x,z} 또는 building(jeongja.json 인덱스).
 //   front/side: '-z' | '+z' | '-x' | '+x' (바깥 방향). side: null 이면 앞면만 유리. 생략하면 차도 거리로 자동.
 //   enabled: false 면 그 줄은 넣지 않는다.
@@ -27,17 +28,19 @@ export const BP24_PLACEMENTS = [
     front: '+x', side: null,
     recess: 1.55, apron: false,
   },
+  ...BP24_GENERATED,
 ];
 
 /** 이 매장을 지금 켤지. flag 가 없으면 enabled 만 본다. */
 export function placementFlagOn(spec, search = typeof location !== 'undefined' ? location.search : '') {
   if (!spec || spec.enabled === false) return false;
-  if (!spec.flag) return true;
+  const flag = spec.flag || (spec.world === 'jeongja' ? BUMP24_JEONGJA_FLAG : '');
+  if (!flag) return true;
   const p = search instanceof URLSearchParams ? search : new URLSearchParams(search || '');
-  const v = p.get(spec.flag);
+  const v = p.get(flag);
   if (v === '0') return false;
   if (v === '1') return true;
-  return spec.flag === BUMP24_JEONGJA_FLAG ? BUMP24_JEONGJA_DEFAULT : true;
+  return flag === BUMP24_JEONGJA_FLAG ? BUMP24_JEONGJA_DEFAULT : true;
 }
 
 export function activePlacements(world, search) {
@@ -71,4 +74,18 @@ export const BP24_DEMO = [
 export function bp24LocationsFor(mode) {
   const base = BP24_LOCATIONS.filter((s) => placementFlagOn(s));
   return mode === 'demo' ? base.concat(BP24_DEMO) : mode ? base : [];
+}
+
+/** ?bp24=1 없이도 켜는 코리더 매장. 시청점(defaultOn 없음)은 빼서 예전과 같다. */
+export function corridorPlacements(search) {
+  // 판교·미금 타일도 같은 코리더 스트림으로 붙는다. 시청점(defaultOn 없음)은 빼 둔다.
+  return BP24_PLACEMENTS.filter((s) => (s.world === 'corridor' || s.world === 'pangyo' || s.world === 'migeum') && s.defaultOn && placementFlagOn(s, search));
+}
+
+export function bump24AtSpot(at) {
+  if (!at || !String(at).startsWith('bump24-')) return null;
+  const spec = BP24_PLACEMENTS.find((s) => s.at === at || s.id === at || (s.id === 'bump24-jeongja' && at === 'bump24-jeongja'));
+  if (!spec) return null;
+  if (spec.atX != null) return { x: spec.atX, z: spec.atZ, id: spec.id };
+  return null;
 }

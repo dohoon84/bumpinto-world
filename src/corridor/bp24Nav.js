@@ -3,6 +3,7 @@
 //   아이콘을 누르면 기존 미니맵 경로(bw:nav-route)로 문 앞(?at=bump24-jeongja 와 같은 문 좌표)까지 선을 긋는다.
 import * as THREE from 'three';
 import { allBp24Stores, drawLogo } from './bp24.js';
+import { BP24_PLACEMENTS, jeongjaBump24On, placementFlagOn } from './bp24Locations.js';
 import { bp24NavOn } from './bp24Locations.js';
 
 const JEONGJA = 'bump24-jeongja';
@@ -109,14 +110,21 @@ export function mountBp24Nav({ scene, overlay, world, getExits, station, getPlay
   let hint = null;
 
   function points() {
-    const out = [];
+    const out = new Map();
     try {
       for (const st of allBp24Stores()) {
         if (!st?.door) continue;
-        out.push({ id: st.id, name: st.name || 'BUMP24', x: st.door[0], z: st.door[1] });
+        out.set(st.id, { id: st.id, name: st.name || 'BUMP24', x: st.door[0], z: st.door[1] });
       }
-    } catch { /* 매장이 아직 없으면 빈 목록 */ }
-    return out;
+    } catch { /* 매장이 아직 없으면 배치 좌표만 */ }
+    for (const s of BP24_PLACEMENTS) {
+      if (out.has(s.id) || s.atX == null) continue;
+      if (s.id === 'seongnam-cityhall') continue;
+      if (s.world === 'jeongja') { if (!jeongjaBump24On(search)) continue; }
+      else if (!s.defaultOn || !placementFlagOn(s, search)) continue;
+      out.set(s.id, { id: s.id, name: s.name || 'BUMP24', x: s.atX, z: s.atZ });
+    }
+    return [...out.values()];
   }
   function jeongja() { return points().find((p) => p.id === JEONGJA) || null; }
 

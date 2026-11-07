@@ -90,41 +90,103 @@ export function resolveBp24(spec, j) {
   let bi = -1, bd = R;
   (j?.b || []).forEach((b, i) => { if (!b.o?.length || b.nr || b.mh) return; const [x, z] = cen(b.o); const d = Math.hypot(x - spec.match.x, z - spec.match.z); if (d < bd) { bd = d; bi = i; } });
   if (bi < 0) return null;
-  const bld = j.b[bi], ring = bld.o;
+  const bld = j.b[bi];
+  let ring = bld.o;
   if ((bld.h || 0) < opt.gf + 2) return null; // 1층을 비우고도 위층이 남아야 함
-  // 사각 틀: box(축 정렬, 직접 지정) 또는 외곽 OBB
-  let F;
-  if (spec.box) { const { x0, x1, z0, z1 } = spec.box; F = { c: [(x0 + x1) / 2, (z0 + z1) / 2], u: [1, 0], v: [0, 1], hu: (x1 - x0) / 2, hv: (z1 - z0) / 2 }; }
-  else F = footprintOBB(ring);
-  const sides = [ // 바깥 법선 n, 그 방향 반폭 h, 옆 방향 반폭 w
-    { n: F.v, h: F.hv, w: F.hu }, { n: [-F.v[0], -F.v[1]], h: F.hv, w: F.hu },
-    { n: F.u, h: F.hu, w: F.hv }, { n: [-F.u[0], -F.u[1]], h: F.hu, w: F.hv },
-  ];
-  for (const sd of sides) { const mx = F.c[0] + sd.n[0] * sd.h, mz = F.c[1] + sd.n[1] * sd.h; sd.road = Math.min(roadDist(j.r, mx + sd.n[0] * 1.5, mz + sd.n[1] * 1.5), roadDist(j.r, mx, mz)); }
-  const pick = (ax) => { const t = AXIS[ax]; return sides.reduce((b, sd) => (sd.n[0] * t[0] + sd.n[1] * t[1] > (b ? b.n[0] * t[0] + b.n[1] * t[1] : -2) ? sd : b), null); };
-  const front = spec.front ? pick(spec.front) : sides.reduce((b, sd) => (!b || sd.road < b.road - 0.5 || (Math.abs(sd.road - b.road) <= 0.5 && sd.w > b.w) ? sd : b), null);
+  const sidesOf = (F) => {
+    const sides = [
+      { n: F.v, h: F.hv, w: F.hu }, { n: [-F.v[0], -F.v[1]], h: F.hv, w: F.hu },
+      { n: F.u, h: F.hu, w: F.hv }, { n: [-F.u[0], -F.u[1]], h: F.hu, w: F.hv },
+    ];
+    for (const sd of sides) { const mx = F.c[0] + sd.n[0] * sd.h, mz = F.c[1] + sd.n[1] * sd.h; sd.road = Math.min(roadDist(j.r, mx + sd.n[0] * 1.5, mz + sd.n[1] * 1.5), roadDist(j.r, mx, mz)); }
+    return sides;
+  };
+  const pickN = (sides, axName) => { const t = AXIS[axName]; return sides.reduce((best, sd) => (sd.n[0] * t[0] + sd.n[1] * t[1] > (best ? best.n[0] * t[0] + best.n[1] * t[1] : -2) ? sd : best), null); };
+  const chooseFront = (sides) => (spec.front ? pickN(sides, spec.front) : sides.reduce((best, sd) => (!best || sd.road < best.road - 0.5 || (Math.abs(sd.road - best.road) <= 0.5 && sd.w > best.w) ? sd : best), null));
+  let F = spec.box
+    ? { c: [(spec.box.x0 + spec.box.x1) / 2, (spec.box.z0 + spec.box.z1) / 2], u: [1, 0], v: [0, 1], hu: (spec.box.x1 - spec.box.x0) / 2, hv: (spec.box.z1 - spec.box.z0) / 2 }
+    : footprintOBB(ring);
+  if (!F) return null;
+  let sides = sidesOf(F);
+  let front = chooseFront(sides);
+  // 차도에 붙는 면은 앞을 건물 안으로 들인다. 간판은 들인 유리에서 외벽선까지 다시 나온다.
+  if ((spec.recess || 0) > 0.2 && !spec.box && front) {
+    const want = front.n;
+    ring = recessAlong(ring, want, spec.recess);
+    F = footprintOBB(ring);
+    if (!F) return null;
+    sides = sidesOf(F);
+    front = sides.reduce((best, sd) => (sd.n[0] * want[0] + sd.n[1] * want[1] > (best ? best.n[0] * want[0] + best.n[1] * want[1] : -2) ? sd : best), null);
+  }
+  if (!front) return null;
   const adj = sides.filter((sd) => Math.abs(sd.n[0] * front.n[0] + sd.n[1] * front.n[1]) < 0.5);
   let side = null;
-  if (spec.side && spec.side !== 'auto') side = pick(spec.side);
-  else if (spec.side !== null) { const c = adj.reduce((b, sd) => (!b || sd.road < b.road ? sd : b), null); if (c && c.road < 16) side = c; }
+  if (spec.side && spec.side !== 'auto') side = pickN(sides, spec.side);
+  else if (spec.side !== null) { const c = adj.reduce((best, sd) => (!best || sd.road < best.road ? sd : best), null); if (c && c.road < 16) side = c; }
   const b = [-front.n[0], -front.n[1]], a = [b[1], -b[0]]; // b: 안쪽, a: 앞면 따라 (a,위,b 오른손)
   const m = side && side.n[0] * a[0] + side.n[1] * a[1] < 0 ? -1 : 1;
   const ax = [a[0] * m, a[1] * m];
   const Wf = front.w * 2, Df = front.h * 2;
-  const W = Math.min(Wf, opt.maxW), D = Math.min(Df, opt.maxD);
+  let W = Math.min(Wf, opt.maxW), D = Math.min(Df, opt.maxD);
   if (W < opt.minW || D < opt.minD) return null;
   const shift = side ? Wf - W : (Wf - W) / 2;
-  const o = [F.c[0] + front.n[0] * front.h - ax[0] * (front.w - shift), F.c[1] + front.n[1] * front.h - ax[1] * (front.w - shift)];
+  let o = [F.c[0] + front.n[0] * front.h - ax[0] * (front.w - shift), F.c[1] + front.n[1] * front.h - ax[1] * (front.w - shift)];
+  let recess = spec.recess || 0;
+  if (!spec.box) {
+    const at = (x, z, extra = 0) => [o[0] + ax[0] * x + b[0] * (z + extra), o[1] + ax[1] * x + b[1] * (z + extra)];
+    const cornersIn = (extra = 0) => [[0.3, 0.3], [W - 0.3, 0.3], [0.3, D - 0.3], [W - 0.3, D - 0.3]].every(([x, z]) => insidePoly(at(x, z, extra)[0], at(x, z, extra)[1], ring));
+    const doorRoad = (extra = 0) => { const p = at(W / 2, -1.15, extra); return roadDist(j.r, p[0], p[1]); };
+    let extra = 0;
+    if (!cornersIn(0)) {
+      let guard = 0;
+      while ((!cornersIn(extra) || doorRoad(extra) < -0.6) && guard++ < 40) {
+        if (!cornersIn(extra) && D - 0.35 >= opt.minD) D -= 0.35;
+        else if (!cornersIn(extra) && W - 0.35 >= opt.minW) W -= 0.35;
+        else if (doorRoad(extra) < -0.6) extra += 0.3;
+        else break;
+      }
+    } else {
+      while (doorRoad(extra) < -0.6 && extra < 4) extra += 0.25;
+    }
+    if (!cornersIn(extra) || doorRoad(extra) < -0.6) return null;
+    if (extra) { o = [o[0] + b[0] * extra, o[1] + b[1] * extra]; recess = 0; }
+  }
   const toL = (p) => [(p[0] - o[0]) * ax[0] + (p[1] - o[1]) * ax[1], (p[0] - o[0]) * b[0] + (p[1] - o[1]) * b[1]];
   const mat = new THREE.Matrix4().makeBasis(new THREE.Vector3(ax[0], 0, ax[1]), new THREE.Vector3(0, 1, 0), new THREE.Vector3(b[0], 0, b[1])).setPosition(o[0], 0, o[1]);
-  return { id: spec.id, name: spec.name, bi, W, D, side: !!side, mirror: m < 0, gf: opt.gf, apron: spec.apron !== false, recess: spec.recess || 0, sealEnds: spec.side === null, ring: ring.map(toL), mat, o, ax, b, center: [o[0] + ax[0] * W / 2 + b[0] * D / 2, o[1] + ax[1] * W / 2 + b[1] * D / 2] };
+  return { id: spec.id, name: spec.name, bi, W, D, side: !!side, mirror: m < 0, gf: opt.gf, apron: recess > 0.2 ? false : spec.apron !== false, recess, sealEnds: spec.side === null, porch: false, ring: ring.map(toL), colRing: ring, mat, o, ax, b, center: [o[0] + ax[0] * W / 2 + b[0] * D / 2, o[1] + ax[1] * W / 2 + b[1] * D / 2] };
+}
+
+function recessAlong(ring, outward, meters) {
+  const copy = ring.map((p) => [p[0], p[1]]);
+  if (!meters || meters <= 0) return copy;
+  let max = -Infinity;
+  for (const p of copy) max = Math.max(max, p[0] * outward[0] + p[1] * outward[1]);
+  const cut = max - 0.4;
+  return copy.map((p) => {
+    const d = p[0] * outward[0] + p[1] * outward[1];
+    if (d < cut) return p;
+    const pull = d - (max - meters);
+    return [p[0] - outward[0] * pull, p[1] - outward[1] * pull];
+  });
+}
+function insidePoly(x, z, poly) {
+  let inside = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const xi = poly[i][0], zi = poly[i][1], xj = poly[j][0], zj = poly[j][1];
+    if ((zi > z) !== (zj > z) && x < ((xj - xi) * (z - zi)) / ((zj - zi) || 1e-9) + xi) inside = !inside;
+  }
+  return inside;
 }
 
 // 타일 JSON: 매장 건물마다 충돌용(nr) + 위층(mh=gf) 두 개로 나눈다. 원본 객체는 건드리지 않는다.
 export function hollowBuildings(j, stores) {
   if (!stores.length) return j;
   const b = j.b.slice();
-  for (const st of stores) { const src = j.b[st.bi]; b[st.bi] = { ...src, nr: 1, lm: 'bp24' }; b.push({ ...src, mh: st.gf, lm: 'bp24Upper' }); }
+  for (const st of stores) {
+    const src = j.b[st.bi];
+    b[st.bi] = { ...src, o: st.colRing || src.o, nr: 1, lm: 'bp24' };
+    b.push({ ...src, mh: st.gf, lm: 'bp24Upper' });
+  }
   return { ...j, b };
 }
 
@@ -339,7 +401,7 @@ function buildStore(st) {
     let nx = (b[1] - a[1]) / L, nz = -(b[0] - a[0]) / L; if (area > 0) { nx = -nx; nz = -nz; } // 바깥쪽
     if (st.sealEnds) { nx = -nx; nz = -nz; } // 이 링은 감김이 반대라 그대로 두면 밖에서 벽이 안 보임(실내가 샘). 시청점은 sealEnds 가 아니라 그대로.
     // 끝면(x=0, x=W)은 회색 돌 대신 건물 파사드로 그린다(prepare 의 _bp24Porch).
-    if (st.sealEnds && ((Math.abs(a[0] - x0) < 0.4 && Math.abs(b[0] - x0) < 0.4) || (Math.abs(a[0] - x1) < 0.4 && Math.abs(b[0] - x1) < 0.4))) continue;
+    if (st.porch && ((Math.abs(a[0] - x0) < 0.4 && Math.abs(b[0] - x0) < 0.4) || (Math.abs(a[0] - x1) < 0.4 && Math.abs(b[0] - x1) < 0.4))) continue;
     // 유리 면과 겹치는 구간은 빼고 남는 조각만 벽으로(앞면: x 0..W, 옆면: z 0..D)
     const onFront = Math.abs(a[1] - zf) < 0.3 && Math.abs(b[1] - zf) < 0.3;
     const onSide = side && Math.abs(a[0] - x1) < 0.4 && Math.abs(b[0] - x1) < 0.4;
@@ -647,16 +709,59 @@ function animateClerks(c, t0) {
   c.body.instanceMatrix.needsUpdate = true; c.head.instanceMatrix.needsUpdate = true;
 }
 
-// 한 타일의 매장들을 재질별로 합친다: 외부 1 + 간판 1 + 유리 1 + 발광 1 + 바닥 빛 1 + 내부 1 + 상품 1 + 직원 2 = 9 (매장 수와 무관)
+const NEAR_IN = 110; // 이 거리 안의 매장만 실내·상품·직원을 만든다. 밖이면 지오메트리를 버린다.
+function disposeInterior(inst) {
+  const lod = inst.lod; if (!lod) return;
+  const inner = inst.inner || lod.children.find((c) => c.name === 'bp24Interior');
+  if (inner) {
+    for (const m of [...inner.children]) { m.geometry?.dispose(); inner.remove(m); }
+    lod.remove(inner);
+    lod.removeLevel?.(0);
+  }
+  inst.clerk = null; inst.inner = null;
+}
+function fillInterior(inst, subset) {
+  disposeInterior(inst);
+  if (!subset.length) { inst._near = ''; return; }
+  const M = mats();
+  const ints = [], prods = [], clerks = [];
+  for (const st of subset) {
+    const r = inst._built.get(st);
+    if (!r) continue;
+    const gi = r.bags.int.geometry(st.mat, st.mirror), gp = r.bags.prod.geometry(st.mat, st.mirror);
+    if (gi) ints.push(gi); if (gp) prods.push(gp);
+    const p = new THREE.Vector3(r.clerk.x, 0, r.clerk.z).applyMatrix4(st.mat);
+    const face = Math.atan2(-st.b[0], -st.b[1]);
+    clerks.push(new THREE.Matrix4().compose(p, new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), face), new THREE.Vector3(1, 1, 1)));
+  }
+  const mk = (list, mat, name) => { if (!list.length) return null; const g = mergeGeometries(list); for (const x of list) x.dispose(); g.computeBoundingSphere(); const m = new THREE.Mesh(g, mat); m.name = name; return m; };
+  const cx = subset.reduce((s, st) => s + st.center[0], 0) / subset.length, cz = subset.reduce((s, st) => s + st.center[1], 0) / subset.length;
+  const inner = new THREE.Group(); inner.name = 'bp24Interior';
+  const body = mk(ints, M.int, 'bp24InteriorBody'), prod = mk(prods, M.prod, 'bp24Products');
+  if (body) inner.add(body); if (prod) inner.add(prod);
+  if (clerks.length) { const clerk = clerkInstances(M.int, clerks); inner.add(clerk.body, clerk.head); inst.clerk = clerk; }
+  inner.position.set(-cx, -1.5, -cz);
+  inst.lod.position.set(cx, 1.5, cz);
+  inst.lod.addLevel(inner, 0);
+  inst.inner = inner;
+  inst._near = subset.map((s) => s.id).sort().join(',');
+}
+function syncNearInterior(inst, x, z) {
+  if (x == null || !inst?.list) return;
+  const subset = inst.list.filter((st) => Math.hypot(st.center[0] - x, st.center[1] - z) < NEAR_IN);
+  const key = subset.map((s) => s.id).sort().join(',');
+  if (key === inst._near) return;
+  fillInterior(inst, subset);
+}
+// 한 타일의 매장들을 재질별로 합친다. 외부·간판·유리는 매장 수와 무관하게 1 draw. 실내는 가까운 매장만.
 function buildTileStores(stores) {
   const M = mats();
-  const geos = { ext: [], sign: [], glass: [], glow: [], spill: [], int: [], prod: [] }, clerks = [];
+  const geos = { ext: [], sign: [], glass: [], glow: [], spill: [] };
+  const built = new Map();
   for (const st of stores) {
     const r = buildStore(st);
+    built.set(st, r);
     for (const k of Object.keys(geos)) { const g = r.bags[k].geometry(st.mat, st.mirror); if (g) geos[k].push(g); }
-    const p = new THREE.Vector3(r.clerk.x, 0, r.clerk.z).applyMatrix4(st.mat);
-    const face = Math.atan2(-st.b[0], -st.b[1]); // 앞(바깥) 쪽을 봄
-    clerks.push(new THREE.Matrix4().compose(p, new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), face), new THREE.Vector3(1, 1, 1)));
   }
   const mk = (k, mat, name) => { if (!geos[k].length) return null; const g = mergeGeometries(geos[k]); for (const x of geos[k]) x.dispose(); g.computeBoundingSphere(); const m = new THREE.Mesh(g, mat); m.name = name; return m; };
   const g = new THREE.Group(); g.name = 'bp24Stores';
@@ -665,20 +770,10 @@ function buildTileStores(stores) {
   const glM = mk('glass', M.glass, 'bp24Glass'); glM.renderOrder = 2; g.add(glM);
   const gwM = mk('glow', M.glow, 'bp24Glow'); g.add(gwM);
   const spM = mk('spill', M.spill, 'bp24Spill'); spM.renderOrder = 1; g.add(spM);
-  // 실내 LOD: 매장들 중심에서 170m(+매장 간 퍼짐) 밖이면 실내·상품·직원을 그리지 않음
-  const cx = stores.reduce((s, st) => s + st.center[0], 0) / stores.length, cz = stores.reduce((s, st) => s + st.center[1], 0) / stores.length;
-  const spread = stores.reduce((s, st) => Math.max(s, Math.hypot(st.center[0] - cx, st.center[1] - cz)), 0);
-  const inner = new THREE.Group(); inner.name = 'bp24Interior';
-  inner.add(mk('int', M.int, 'bp24InteriorBody'), mk('prod', M.prod, 'bp24Products'));
-  const clerk = clerkInstances(M.int, clerks); inner.add(clerk.body, clerk.head);
   const lod = new THREE.LOD(); lod.name = 'bp24InteriorLod';
-  lod.position.set(cx, 1.5, cz);
-  inner.position.set(-cx, -1.5, -cz); // 지오메트리는 월드 좌표 그대로
-  lod.addLevel(inner, 0); lod.addLevel(new THREE.Object3D(), 170 + spread);
   g.add(lod);
-  const tri = (m) => (m.geometry.index ? m.geometry.index.count : m.geometry.attributes.position.count) / 3;
-  const tris = [exM, sgM, glM, gwM, spM, inner.children[0], inner.children[1]].reduce((s, m) => s + tri(m), 0) + (tri(clerk.body) + tri(clerk.head)) * clerks.length;
-  return { group: g, glow: gwM, spill: spM, clerk, inner, stats: { tris, stores: stores.length } };
+  const inst = { group: g, glow: gwM, spill: spM, clerk: null, inner: null, lod, list: stores, _built: built, _near: null, stats: { stores: stores.length } };
+  return inst;
 }
 
 // 상품 앞면 한 장: 아틀라스 줄 row 중 임의 구간(가로 길이에 비례)
@@ -764,7 +859,7 @@ function syncBoards(inst, k, t) {
   if (BOARD_HOOK && inst._boardHook !== BOARD_HOOK) { disposeBoards(inst); inst._boardHook = BOARD_HOOK; inst.boards = buildTileBoards(inst, BOARD_HOOK); }
   else if (!BOARD_HOOK && (inst.boards || inst._boardHook)) { disposeBoards(inst); inst._boardHook = null; }
   if (inst.boards) for (const m of inst.boards.screens) m.material.color.setScalar(0.86 + 0.24 * k);
-  if (inst.inner.visible) animateClerks(inst.clerk, t);
+  if (inst.inner?.visible && inst.clerk) animateClerks(inst.clerk, t);
 }
 
 // 코리더 매장과 정자 베이스맵 매장을 미니게임이 한 목록으로 보게 한다.
@@ -810,15 +905,15 @@ export function prepareJeongjaBp24(data, search) {
     const bi = findJeongjaBuilding(data.buildings, spec);
     if (bi < 0) continue;
     const src = data.buildings[bi];
-    const ring = recessFront(src.o, spec.front, spec.recess || 0);
-    const [cx, cz] = cen(ring);
-    const tile = { b: [{ o: ring, h: src.h, k: src.k }], r: data.roads };
+    const [cx, cz] = cen(src.o);
+    const tile = { b: [{ o: src.o, h: src.h, k: src.k }], r: data.roads };
     const st = resolveBp24({ ...spec, match: { x: cx, z: cz, r: 8 } }, tile);
     if (!st) continue;
     src.mh = st.gf;
     src.lm = 'bp24';
-    if (st.sealEnds && st.recess > 0.2) src._bp24Porch = bp24PorchWalls(st);
-    data.buildings.push({ o: ring, h: Math.min(st.gf, 3.2), mh: 0, k: src.k, _skip: true, lm: 'bp24' });
+    st.porch = !!(st.sealEnds && st.recess > 0.2);
+    if (st.porch) src._bp24Porch = bp24PorchWalls(st);
+    data.buildings.push({ o: st.colRing, h: Math.min(st.gf, 3.2), mh: 0, k: src.k, _skip: true, lm: 'bp24' });
     prepared.push(st);
   }
   return prepared;
@@ -834,9 +929,10 @@ export function mountBasemapBp24(scene, prepared) {
   const api = {
     group: inst.group,
     prepared,
-    update() {
+    update(x, z) {
       if (!stopNight) stopNight = onNightTarget((t) => { target = t; });
       const k = nightFade(), t = performance.now() / 1000;
+      syncNearInterior(inst, x, z);
       syncBoards(inst, k, t);
       paintNight(inst, k, target);
       tickBoardHook(t, k);
@@ -852,8 +948,12 @@ export function mountBasemapBp24(scene, prepared) {
 // 코리더 연결: filter(key, j) 에서 그 타일 매장 건물 1층을 비우고, build(key) 에서 매장 그룹(타일 그룹에 붙어 같이 해제)
 export function createBp24(locations = []) {
   const byTile = new Map();
-  for (const spec of locations) { const k = bp24TileKey(spec); if (!byTile.has(k)) byTile.set(k, []); byTile.get(k).push(spec); }
-  const resolved = new Map(), live = new Set();
+  const addKey = (k, spec) => { if (!byTile.has(k)) byTile.set(k, []); byTile.get(k).push(spec); };
+  for (const spec of locations) {
+    const [tx, tz] = bp24TileKey(spec).split('_').map(Number);
+    for (let dx = -1; dx <= 1; dx++) for (let dz = -1; dz <= 1; dz++) addKey(`${tx + dx}_${tz + dz}`, spec);
+  }
+  const resolved = new Map(), live = new Set(), taken = new Set();
   let stopNight = null, target = 0;
   const stats = { built: 0, stores: 0, skipped: [] };
   const api = {
@@ -861,7 +961,12 @@ export function createBp24(locations = []) {
     filter(key, j) {
       const specs = byTile.get(key); if (!specs || !j?.b?.length) return j;
       const list = [];
-      for (const sp of specs) { const st = resolveBp24(sp, j); if (st) list.push(st); else if (!stats.skipped.includes(sp.id)) stats.skipped.push(sp.id); }
+      for (const sp of specs) {
+        if (taken.has(sp.id)) continue;
+        const st = resolveBp24(sp, j);
+        if (st) { list.push(st); taken.add(sp.id); const si = stats.skipped.indexOf(sp.id); if (si >= 0) stats.skipped.splice(si, 1); }
+        else if (!stats.skipped.includes(sp.id)) stats.skipped.push(sp.id);
+      }
       resolved.set(key, list);
       return hollowBuildings(j, list);
     },
@@ -873,12 +978,13 @@ export function createBp24(locations = []) {
       apply(inst, nightFade());
       return inst.group;
     },
-    update() {
+    update(_dt, x, z) {
       if (!live.size) return;
       const k = nightFade(), t = performance.now() / 1000;
       for (const inst of live) {
         let o = inst.group; while (o.parent) o = o.parent;
-        if (!o.isScene) { disposeBoards(inst); live.delete(inst); continue; } // 타일이 풀림
+        if (!o.isScene) { disposeBoards(inst); disposeInterior(inst); inst._built?.clear(); live.delete(inst); continue; } // 타일이 풀림
+        syncNearInterior(inst, x, z);
         syncBoards(inst, k, t);
         apply(inst, k);
       }
@@ -903,5 +1009,29 @@ export function placeBP24(specs, tileJson) {
   const list = (Array.isArray(specs) ? specs : [specs]).map((sp) => resolveBp24(sp, tileJson)).filter(Boolean);
   if (!list.length) return { tile: tileJson, group: null, stores: [] };
   const inst = buildTileStores(list);
-  return { tile: hollowBuildings(tileJson, list), group: inst.group, stores: list, update: (t = performance.now() / 1000) => animateClerks(inst.clerk, t) };
+  return { tile: hollowBuildings(tileJson, list), group: inst.group, stores: list, update: (x, z, t = performance.now() / 1000) => { syncNearInterior(inst, x, z); if (inst.clerk) animateClerks(inst.clerk, t); } };
+}
+
+function geomBytes(root) {
+  let bytes = 0, draws = 0;
+  root?.traverse?.((o) => {
+    if (!o.isMesh || !o.geometry) return;
+    draws++;
+    for (const a of Object.values(o.geometry.attributes || {})) bytes += a.array?.byteLength || 0;
+    if (o.geometry.index) bytes += o.geometry.index.array?.byteLength || 0;
+  });
+  return { draws, bytes };
+}
+
+// 매장 수와 draw·메모리. 밖에서는 외부 메시만, 가까이 서면 그 매장 실내만 더한다.
+export function measureBp24Host(list, at) {
+  const inst = buildTileStores(list);
+  const far = geomBytes(inst.group);
+  syncNearInterior(inst, at?.x ?? 1e9, at?.z ?? 1e9);
+  const near = geomBytes(inst.group);
+  fillInterior(inst, list);
+  const all = geomBytes(inst.group);
+  disposeInterior(inst);
+  inst._built?.clear();
+  return { n: list.length, far, near, all };
 }

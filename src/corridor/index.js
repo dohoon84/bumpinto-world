@@ -29,7 +29,7 @@ import { perfFlags } from '../perf/flags.js'; // [perf-memory]
 import { createRegionRegistry } from '../perf/regions.js'; // [perf-memory]
 import { lazyExtraCrowd } from '../perf/lazyCrowd.js'; // [perf-memory]
 import { pangyoWaterEnabled, PANGYO_WATER_FILE, attachMainDrop, mergePangyoStreams, dropWaterGeometry } from './pangyoWater.js'; // [pangyo-water]
-import { bp24Mode, createBp24 } from './bp24.js'; import { bp24LocationsFor } from './bp24Locations.js'; // [bp24] 체인 매장
+import { bp24Mode, createBp24 } from './bp24.js'; import { bp24LocationsFor, corridorPlacements } from './bp24Locations.js'; // [bp24] 체인 매장
 import { migeumWaterEnabled, MIGEUM_WATER_FILE, migeumChRoads, mergeMigeumWater, applyMigeumBank } from './migeumWater.js'; // [migeum-water]
 
 // streams: 탄천 지류 하도(streams.json). ?streams=0 이면 false → 예전과 같은 데이터만
@@ -286,8 +286,11 @@ export function createCorridor({ scene, corridorData, terrain, world, renderer, 
   // ---------- 횡단보도 · 랜드마크 ----------
   const crossings = buildCorridorCrossings(root, base.crossings, { getSimTime });
   const landmarks = createLandmarks(root, index.landmarks, renderer);
-  const bp24Kind = bp24Mode(params || (typeof location !== 'undefined' ? location.search : '')); // [bp24] ?bp24=1 목록 · ?bp24=demo 목록+데모
-  const bp24 = bp24Kind ? createBp24(bp24LocationsFor(bp24Kind)) : null;
+  const bp24Search = params || (typeof location !== 'undefined' ? location.search : '');
+  const bp24Kind = bp24Mode(bp24Search); // [bp24] ?bp24=1 목록 · ?bp24=demo 목록+데모
+  const bp24List = [...corridorPlacements(bp24Search), ...(bp24Kind ? bp24LocationsFor(bp24Kind) : [])];
+  const bp24Seen = new Set();
+  const bp24 = bp24List.length ? createBp24(bp24List.filter((s) => (bp24Seen.has(s.id) ? false : bp24Seen.add(s.id)))) : null;
   const pangyoLm = corridorData.pangyo ? createPangyoLandmarks(corridorData.pangyo, { overlay }) : null; // [pangyo]
   const migeumLm = corridorData.migeum && !migeumSubwayDrawsEntrances() ? createPangyoLandmarks(corridorData.migeum, { overlay, prefix: 'migeum' }) : null; // [migeum] 같은 빌더(출입구만). [migeum-sub] 지하철이 출입구를 그리면 안 만듦
   // [perf-memory] 지역 지연 로드/해제 레지스트리. ?lazyregion=0 · ?perfmem=0 이면 null → 아래는 전부 예전 그대로(즉시 생성)
@@ -367,7 +370,7 @@ export function createCorridor({ scene, corridorData, terrain, world, renderer, 
       crossings.update(dt);
       landmarks.update(dt);
       lotte?.update(dt);
-      bp24?.update(dt); // [bp24]
+      bp24?.update(dt, x, z); // [bp24] 가까운 매장만 실내를 만든다
       updateNight(dt); // [corridor] 저녁 건물 불빛 페이드
       life?.update(dt, x, z);
       migeumNpc?.update(dt, x, z); // [migeum-npc]

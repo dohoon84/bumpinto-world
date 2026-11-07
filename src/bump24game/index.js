@@ -49,8 +49,8 @@ export function mountBump24Game({
   setBp24BoardHook({
     texture: (st) => boardTexture(st.id, st.name, 'tall'), release: releaseBoardTexture, fxMaterial: fxMat,
     tick: (t, night) => { tickBoards(t); fxMat.uniforms.uT.value = t; fxMat.uniforms.uNight.value = night; },
-    // 시청점 전광판은 ?bp24game=1 일 때만. 기본 주소에서는 정자점만.
-    only: explicit ? null : new Set(['bump24-jeongja']),
+    // 전광판은 정자점, 그리고 ?bp24game=1 일 때 시청점만. 나머지 매장에는 안 붙여 draw 가 늘지 않게 한다.
+    only: new Set(explicit ? ['bump24-jeongja', 'seongnam-cityhall'] : ['bump24-jeongja']),
   });
   // 닉네임이 나중에 정해지면(접속 후) 내 줄 강조를 위해 다시 그림 — 첫 조회도 타이머 안에서(초기화 순서와 무관)
   let lastSelf = null; const selfIv = setInterval(() => { const n = selfName(); if (lastSelf !== null && n !== lastSelf) refreshBoards(); lastSelf = n; }, 3000);

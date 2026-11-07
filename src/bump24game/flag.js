@@ -15,24 +15,19 @@ export function bump24GameExplicit(search = typeof location !== 'undefined' ? lo
   return v === '1' || v === 'demo';
 }
 
-function corridorStoreOn(p) {
-  const store = p.get('bp24') ?? p.get('bump24');
-  return !!(store && store !== '0');
-}
-
 export function bump24GameEnabled(search = typeof location !== 'undefined' ? location.search : '') {
   const p = paramsOf(search);
   if (p.get('bp24game') === '0') return false;
-  if (bump24GameExplicit(p)) return corridorStoreOn(p) || jeongjaBump24On(p);
-  // 기본 주소(enter·from 만 붙는 모바일 입장 포함): 정자점만. 시청점은 ?bp24game=1 그대로.
-  return jeongjaBump24On(p);
+  // 기본 주소에도 정자·코리더 매장이 있다. 시청점 안내만 아래에서 가른다.
+  return true;
 }
 
-/** 이 매장 문 앞에 들어가기 안내를 띄울지. 정자점만 기본 주소에서 켜진다. */
+/** 문 앞 'E 들어가기'. 시청점만 ?bp24game=1. 정자 베이스맵은 ?bump24jeongja=0 으로 같이 끈다. */
 export function bump24StorePrompts(storeId, search = typeof location !== 'undefined' ? location.search : '') {
   if (!storeId || !bump24GameEnabled(search)) return false;
-  if (bump24GameExplicit(search)) return true;
-  return storeId === JEONGJA_STORE;
+  if (storeId === 'seongnam-cityhall') return bump24GameExplicit(search);
+  if (storeId === JEONGJA_STORE || /^jz\d+$/.test(storeId)) return jeongjaBump24On(search);
+  return true;
 }
 
 export function bump24GameMode(search = typeof location !== 'undefined' ? location.search : '') {
