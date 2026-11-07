@@ -28,7 +28,8 @@ if (Math.abs((maxX - recMax) - 1.55) > 0.05) throw new Error(`들이기 ${maxX -
 const on = prepareJeongjaBp24(jeongja, '');
 if (on.length !== 1 || on[0].id !== 'bump24-jeongja') throw new Error(`정자 매장 ${on.map((s) => s.id)}`);
 const st = on[0];
-if (st.side) throw new Error('정자점은 옆유리를 열면 안 됨');
+if (st.side || !st.sealEnds) throw new Error('정자점 끝면은 막아야 함');
+if (hall.sealEnds) throw new Error('시청점 옆면이 막힘');
 if (st.apron !== false) throw new Error('정자점 앞마당이 차도로 나감');
 if (st.b[0] > -0.9) throw new Error(`정자점 앞면이 동쪽이 아님 ${st.b}`);
 if (st.W < 16 || st.W > 18.2) throw new Error(`정자점 폭 ${st.W}`);
@@ -39,6 +40,20 @@ if (!(door.x < maxX - 0.05)) throw new Error(`문이 건물 밖으로 나감 doo
 if (!(door.x > recMax - 0.2)) throw new Error(`문이 유리보다 안쪽 door ${door.x} glass ${recMax}`);
 const skipped = jeongja.buildings.filter((b) => b._skip && b.lm === 'bp24');
 if (skipped.length !== 1) throw new Error('1층 충돌 건물이 없음');
+const worldAt = (x, z) => [st.o[0] + st.ax[0] * x + st.b[0] * z, st.o[1] + st.ax[1] * x + st.b[1] * z];
+const pip = (x, z, ring) => {
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const [xi, zi] = ring[i], [xj, zj] = ring[j];
+    if ((zi > z) !== (zj > z) && x < ((xj - xi) * (z - zi)) / ((zj - zi) || 1e-9) + xi) inside = !inside;
+  }
+  return inside;
+};
+const foot = jeongja.buildings[135].o;
+for (let x = 0.2; x < st.W; x += 0.8) for (let z = 0.2; z < st.D; z += 0.8) {
+  const [wx, wz] = worldAt(x, z);
+  if (!pip(wx, wz, foot)) throw new Error(`매장 내부가 건물 밖 ${x.toFixed(1)},${z.toFixed(1)} → ${wx.toFixed(2)},${wz.toFixed(2)}`);
+}
 
 const offData = JSON.parse(fs.readFileSync(new URL('../public/jeongja.json', import.meta.url)));
 const off = prepareJeongjaBp24(offData, '?bump24jeongja=0');

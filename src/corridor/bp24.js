@@ -117,7 +117,7 @@ export function resolveBp24(spec, j) {
   const o = [F.c[0] + front.n[0] * front.h - ax[0] * (front.w - shift), F.c[1] + front.n[1] * front.h - ax[1] * (front.w - shift)];
   const toL = (p) => [(p[0] - o[0]) * ax[0] + (p[1] - o[1]) * ax[1], (p[0] - o[0]) * b[0] + (p[1] - o[1]) * b[1]];
   const mat = new THREE.Matrix4().makeBasis(new THREE.Vector3(ax[0], 0, ax[1]), new THREE.Vector3(0, 1, 0), new THREE.Vector3(b[0], 0, b[1])).setPosition(o[0], 0, o[1]);
-  return { id: spec.id, name: spec.name, bi, W, D, side: !!side, mirror: m < 0, gf: opt.gf, apron: spec.apron !== false, recess: spec.recess || 0, ring: ring.map(toL), mat, o, ax, b, center: [o[0] + ax[0] * W / 2 + b[0] * D / 2, o[1] + ax[1] * W / 2 + b[1] * D / 2] };
+  return { id: spec.id, name: spec.name, bi, W, D, side: !!side, mirror: m < 0, gf: opt.gf, apron: spec.apron !== false, recess: spec.recess || 0, sealEnds: spec.side === null, ring: ring.map(toL), mat, o, ax, b, center: [o[0] + ax[0] * W / 2 + b[0] * D / 2, o[1] + ax[1] * W / 2 + b[1] * D / 2] };
 }
 
 // 타일 JSON: 매장 건물마다 충돌용(nr) + 위층(mh=gf) 두 개로 나눈다. 원본 객체는 건드리지 않는다.
@@ -329,13 +329,15 @@ function buildStore(st) {
   // 서쪽(x0) 면이 건물 외곽과 겹치면(=바깥에 드러난 옆면) 앞면과 같은 유리 + 검은 멀리언으로. westEnd: 그 외곽 변이 끝나는 z
   let westEnd = -1;
   for (let i = 0; i < ring.length; i++) { const a = ring[i], c = ring[(i + 1) % ring.length]; if (Math.abs(a[0] - x0) < 0.4 && Math.abs(c[0] - x0) < 0.4 && Math.abs(a[1] - c[1]) > 1) westEnd = Math.max(westEnd, a[1], c[1]); }
-  const west = westEnd >= zb - 0.5;
+  // side:null(정자점)이면 x=0 끝면도 옆 유리를 열지 않는다. 건물 외벽과 같은 돌벽으로 닫아 실내가 골목으로 새지 않게. 시청점(side 지정)은 그대로.
+  const west = !st.sealEnds && westEnd >= zb - 0.5;
   let area = 0; for (let i = 0; i < ring.length; i++) { const a = ring[i], b = ring[(i + 1) % ring.length]; area += a[0] * b[1] - b[0] * a[1]; }
   for (let i = 0; i < ring.length; i++) {
     const a = ring[i], b = ring[(i + 1) % ring.length];
     const mx = (a[0] + b[0]) / 2, mz = (a[1] + b[1]) / 2, L = Math.hypot(b[0] - a[0], b[1] - a[1]);
     if (L < 0.2) continue;
     let nx = (b[1] - a[1]) / L, nz = -(b[0] - a[0]) / L; if (area > 0) { nx = -nx; nz = -nz; } // 바깥쪽
+    if (st.sealEnds) { nx = -nx; nz = -nz; } // 이 링은 감김이 반대라 그대로 두면 밖에서 벽이 안 보임(실내가 샘). 시청점은 sealEnds 가 아니라 그대로.
     // 유리 면과 겹치는 구간은 빼고 남는 조각만 벽으로(앞면: x 0..W, 옆면: z 0..D)
     const onFront = Math.abs(a[1] - zf) < 0.3 && Math.abs(b[1] - zf) < 0.3;
     const onSide = side && Math.abs(a[0] - x1) < 0.4 && Math.abs(b[0] - x1) < 0.4;
@@ -353,17 +355,25 @@ function buildStore(st) {
     for (const [t0, t1] of pieces) {
       const ta = Math.min(t0, t1), tb = Math.max(t0, t1), l = (tb - ta) * L; if (l < 0.1) continue;
       const tm = (ta + tb) / 2, px = a[0] + (b[0] - a[0]) * tm, pz = a[1] + (b[1] - a[1]) * tm;
-      ext.quad(N(nx, 0, nz), P(px + nx * 0.02, gf / 2, pz + nz * 0.02), l, gf, STONE);
+      const off = st.sealEnds ? 0 : 0.02;
+      ext.quad(N(nx, 0, nz), P(px + nx * off, gf / 2, pz + nz * off), l, gf, STONE);
     }
   }
   // 2) 간판 띠(앞·옆) + 아래 처마, 모퉁이 기둥, 앞면 기둥
   // 들인 매장(정자점)은 위층 처마가 유리 위 간판을 가린다. 글자 면만 외벽선 5cm 안까지 당긴다. recess 0(시청점)은 예전 0.38m.
   const fasciaOut = st.recess > 0.2 ? st.recess - 0.05 : FASCIA_OUT;
-  ext.box(x0 - 0.05, GLASS_H, zf - fasciaOut, x1 + (st.recess > 0.2 ? 0.05 : FASCIA_OUT), gf, zf + 0.25, NAVY);
+  const xL = st.sealEnds ? x0 : x0 - 0.05, xR = st.sealEnds ? x1 : x1 + (st.recess > 0.2 ? 0.05 : FASCIA_OUT);
+  ext.box(xL, GLASS_H, zf - fasciaOut, xR, gf, zf + 0.25, NAVY);
+  // 들인 포치(외벽선~유리)의 양쪽 끝. 여기가 비면 모서리에서 실내(흰 벽·선반)가 건물 밖으로 보인다.
+  if (st.sealEnds && st.recess > 0.2) {
+    const zOut = -(st.recess - 0.02);
+    ext.box(x0, 0, zOut, x0 + 0.16, gf, 0.08, STONE);
+    ext.box(x1 - 0.16, 0, zOut, x1, gf, 0.08, STONE);
+  }
   if (side) ext.box(x1 - 0.25, GLASS_H, zf - FASCIA_OUT, x1 + FASCIA_OUT, gf, zb, NAVY);
   ext.box(x0 - 0.05, gf, zf - FASCIA_OUT, x1 + FASCIA_OUT, gf + 0.06, side ? zb : zf + 0.25, DARK, false, 'y'); // 띠 위 마감
-  ext.box(x1 - 0.55, 0, zf - 0.25, x1 + 0.2, GLASS_H, zf + 0.5, DARK); // 모퉁이 기둥
-  ext.box(x0 - 0.05, 0, zf - 0.12, x0 + 0.45, GLASS_H, zf + 0.3, STONE); // 서쪽 끝 기둥
+  ext.box(x1 - 0.55, 0, zf - 0.25, st.sealEnds ? x1 : x1 + 0.2, GLASS_H, zf + 0.5, DARK); // 모퉁이 기둥
+  ext.box(st.sealEnds ? x0 : x0 - 0.05, 0, zf - 0.12, x0 + 0.45, GLASS_H, zf + 0.3, STONE); // 서쪽 끝 기둥
   ext.box(x0 + 0.45, 0, zf - 0.06, x1 - 0.55, 0.32, zf + 0.06, DARK); // 유리 밑 턱
   if (side) ext.box(x1 - 0.06, 0, zf + 0.5, x1 + 0.06, 0.32, zb, DARK);
   // 유리 + 멀리언
@@ -416,7 +426,7 @@ function buildStore(st) {
   sign.quad(N(-1, 0, 0), P(bx - 0.072, by, bz), 0.6, 0.97, [1, 1, 1], suv(SIGN.blade));
   // 간판 띠 아래 LED 줄(밤). 정자점은 앞으로 당긴 띠 끝에 둔다.
   const glowZ = st.recess > 0.2 ? -(st.recess - 0.07) : zf - FASCIA_OUT + 0.02;
-  glow.box(x0 + 0.3, GLASS_H - 0.05, glowZ, x1 + 0.1, GLASS_H - 0.01, glowZ + 0.06, hex('#bfe6ff'));
+  glow.box(x0 + 0.3, GLASS_H - 0.05, glowZ, st.sealEnds ? x1 - 0.05 : x1 + 0.1, GLASS_H - 0.01, glowZ + 0.06, hex('#bfe6ff'));
   if (side) glow.box(x1 + FASCIA_OUT - 0.08, GLASS_H - 0.05, zf - 0.2, x1 + FASCIA_OUT - 0.02, GLASS_H - 0.01, zb - 0.2, hex('#bfe6ff'));
   // 4) 보도 볼라드(검은 기둥 + 흰 머리) + 낮은 난간 + 앞 테라스. apron:false 면 생략(차도에 붙는 면 — 정자 칼튼호텔)
   if (st.apron !== false) {
