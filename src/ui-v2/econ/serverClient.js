@@ -92,7 +92,7 @@ export function createServerClient(o = {}) {
 
   const S = {
     session: guestSession(), mode: { ...FREE_MODE }, balance: guestBalance(now()), travel: guestTravel(now()),
-    config: null, features: [], serverOn: false, lastId: 0, fetchedAt: 0, refreshing: null, quests: {}, timer: null, started: false, primed: false,
+    config: null, features: [], serverOn: false, lastId: 0, fetchedAt: 0, refreshing: null, quests: {}, shop: null, shopFetch: null, shopGen: 0, timer: null, started: false, primed: false,
   };
 
   async function req(path, { method = 'GET', body } = {}) {
@@ -195,6 +195,7 @@ export function createServerClient(o = {}) {
     if (sameJson(sess, S.session)) return;
     S.session = sess;
     if (!sess.signedIn) { S.balance = guestBalance(now()); S.travel = guestTravel(now()); S.quests = {}; }
+    S.shop = null; S.shopFetch = null; S.shopGen++; // 계정 바뀌면 상점 보유·목표가 달라짐
     S.lastId = 0;
     bus.emit('session', { ...sess });
   }
@@ -272,6 +273,20 @@ export function createServerClient(o = {}) {
   const guestReceipts = new Map();
 
   async function afterWrite(reason) { await refresh({ reason }).catch(() => {}); }
+
+  /** GET /econ/shop 한 번으로 items·goal 을 받아 둔다. listShopItems 와 getShopGoal 이 동시에 와도 한 요청만. */
+  async function fetchShop(force = false) {
+    if (!force && S.shop) return S.shop;
+    if (S.shopFetch) return S.shopFetch;
+    const gen = ++S.shopGen;
+    S.shopFetch = (async () => {
+      const r = await req('/econ/shop');
+      // 구매·세션 변경으로 gen 이 올라갔으면 낡은 응답으로 덮지 않음
+      if (r.ok && S.shopGen === gen) S.shop = { items: Array.isArray(r.data?.items) ? r.data.items : [], goal: r.data?.goal ?? null };
+      return S.shop;
+    })().finally(() => { if (S.shopGen === gen) S.shopFetch = null; });
+    return S.shopFetch;
+  }
 
   const client = {
     source: 'server', isMock: false, version: ECON_API_VERSION,
@@ -380,14 +395,23 @@ export function createServerClient(o = {}) {
 
     async listShopItems() {
       await fresh();
-      const r = await req('/econ/shop');
-      return r.ok && Array.isArray(r.data?.items) ? r.data.items : [];
+      // HUD·이전 열기가 받아 둔 목록이 있으면 바로 주고, 백그라운드로만 새로 받는다(열기 대기 제거). listShopItems+getShopGoal 이 동시에 와도 한 번만 친다.
+      if (S.shop) {
+        fetchShop(true).catch(() => {});
+        return S.shop.items;
+      }
+      const s = await fetchShop();
+      return s?.items || [];
     },
     async getShopGoal() {
       await fresh();
       if (isGuest()) return null;
-      const r = await req('/econ/shop');
-      return r.ok ? (r.data?.goal ?? null) : null;
+      if (S.shop) {
+        fetchShop(true).catch(() => {});
+        return S.shop.goal;
+      }
+      const s = await fetchShop();
+      return s?.goal ?? null;
     },
     async purchase(itemId) {
       await fresh();
@@ -395,6 +419,7 @@ export function createServerClient(o = {}) {
       if (!enabled) return errR(ERR.COMING_SOON);
       const r = await req('/econ/shop/buy', { method: 'POST', body: { itemId } });
       if (r.ok) {
+        S.shop = null; S.shopFetch = null; S.shopGen++; // 보유·잔액이 바뀌었으니 다음 목록은 새로
         signal('bw:econ-owned', { itemId: r.data?.item?.id || itemId }); // 재접속 없이 바로 타도록(room.js gifts_sync)
         await afterWrite('purchase');
       }
