@@ -39,6 +39,7 @@ import { Police } from './entities/police.js';
 import { addRiversideFolk } from './entities/riversideFolk.js';
 import { addStationPlaza } from './world/stationPlaza.js';
 import { mountBungeoStall } from './world/bungeoStall.js'; // [bungeo] 우체통 앞 붕어빵 포장마차 (11~3월, ?bungeo=0|1)
+import { mountXmasTrees } from './world/xmasTree.js'; // [xmas] 크리스마스 트리 (기본 켬, ?xmas=0)
 import { mountDonationBillboards } from './world/donationBillboard.js';
 import { mountUmbrellaSystem } from './entities/umbrellaVendor.js';
 import { addDogPark } from './world/dogPark.js';
@@ -484,6 +485,7 @@ const noopModule = {
 };
 const stationPlaza = region.features?.stationPlaza ? addStationPlaza(scene, overlay, world) : noopModule;
 const bungeo = region.features?.stationPlaza ? mountBungeoStall({ scene, overlay, terrain, params }) : null; // [bungeo] 끄면 null (메시·데이터 없음)
+const xmas = mountXmasTrees({ scene, region, terrain, params, corridor }); // [xmas] ?xmas=0 이면 메시 없음. 미금·잠실은 코리더가 있을 때만
 const dogPark = region.features?.dogPark ? addDogPark(scene, overlay, terrain) : noopModule;
 const strayCats = region.features?.strayCats && terrain
   ? addStrayCats(scene, overlay, terrain, world, st, dogPark.bounds || null, data)
@@ -523,6 +525,7 @@ const umbrellas = region.features?.umbrellas
     origBlocked(x, z, r) ||
     stationPlaza.blocks(x, z) ||
     !!bungeo?.blocks(x, z) || // [bungeo]
+    !!xmas?.blocks(x, z) || // [xmas]
     dogPark.blocks(x, z) ||
     donationBoards.blocks(x, z) ||
     umbrellas.blocks(x, z) ||
@@ -2578,6 +2581,7 @@ function frame() {
     peers: remotes.list(),
   });
   atmosphere.update(dt, camera);
+  xmas?.update(dt, camera); // [xmas] 카메라가 놓인 뒤 거리로 만들고 숨긴다
   roadster?.update(dt); // [roadster] 시네마틱 카메라가 켜져 있으면 camera/sun.target 덮어씀
   launch?.update(dt); // [launch] 5분 주기 발사·핫스테이징·젓가락 캐치 쇼
   sun.position.copy(sun.target.position).addScaledVector(atmosphere.sunDir, 500);
@@ -2598,7 +2602,7 @@ requestAnimationFrame(frame);
 window.__jj = {
   perfmem: perfMem, // [perf-memory]
   ready: true, region, tower, renderer, corridor, playgrounds, streetlights, pangyoLamps, migeumLamps, // [corridor] [playgrounds] [streetlights]
-  bungeo, // [bungeo]
+  bungeo, xmas, // [bungeo] [xmas]
   launch, roadster, trucks, bike: adminBike, giftRides, inventory, data, world, npcs, transit, camera, cam, ov, setMode, terrain, taxis, jzTraffic, police, weather: atmosphere, umbrellas, dogPark, strayCats, // [terrain] [taxi] [roadster] [tower] [launch] [truck] [bike] [roadbike] [inventory]
   get player() { return player; },
   teleport(x, z, y) { ride?.forceAlight('teleport'); if (bikes.riding) dismountBike(); if (adminBike?.riding) adminBike.dismount(); dismountGiftRides(); player.position.set(x, y ?? (terrain ? terrain.getGroundHeight(x, z, 0) : 0), z); }, // [terrain] [bike] [roadbike]
