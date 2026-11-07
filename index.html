@@ -19,13 +19,24 @@
       </button>
       <div class="clock" id="hud-clock">--:--</div>
       <button type="button" id="weather-rain" class="weather-rain" hidden aria-pressed="false" title="이 화면을 비로 바꾸기">비</button>
+      <button type="button" id="cc-reopen" aria-expanded="false" aria-controls="cc-overlay" title="조작 안내" aria-label="조작 안내">?</button>
     </div>
   </div>
   <script>
     try {
       var hud = document.getElementById('hud');
       var foldBtn = document.getElementById('help-fold');
-      var expanded = localStorage.getItem('jeongja3d.helpFolded') === '0';
+      var ccQ = (new URLSearchParams(location.search).get('controlscard') || '').toLowerCase();
+      var ccSs = null;
+      try { ccSs = sessionStorage; } catch (e1) {}
+      var ccForceOff = ccQ === '0' || ccQ === 'off' || ccQ === 'old' || ccQ === 'legacy' || ccQ === 'v1' || (ccQ && ccQ !== '1' && ccQ !== 'on' && ccQ !== 'v2');
+      var ccForceOn = ccQ === '1' || ccQ === 'on' || ccQ === 'v2';
+      var ccOff = false;
+      if (ccForceOff) { ccOff = true; try { if (ccSs) ccSs.setItem('bw.controlsCard.off', '1'); } catch (e2) {} }
+      else if (ccForceOn) { try { if (ccSs) ccSs.removeItem('bw.controlsCard.off'); } catch (e3) {} }
+      else { try { ccOff = !!(ccSs && ccSs.getItem('bw.controlsCard.off') === '1'); } catch (e4) {} }
+      if (!ccOff) document.documentElement.classList.add('cc-on');
+      var expanded = !ccOff && localStorage.getItem('jeongja3d.helpFolded') === '0';
       var en = localStorage.getItem('jeongja3d.lang') === 'en';
       if (expanded) {
         if (hud) hud.classList.remove('is-folded');
