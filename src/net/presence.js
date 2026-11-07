@@ -44,7 +44,7 @@ export class WebSocketPresence extends Emitter {
     ws.onopen = () => {
       this.retry = 1000;
       const phone = String(me.phone || '').replace(/\D/g, '').slice(0, 11);
-      ws.send(JSON.stringify({ t: 'hello', deviceId: deviceId(), name: me.name, color: me.color, look: me.look, ...(phone ? { phone } : {}) }));
+      ws.send(JSON.stringify({ t: 'hello', deviceId: deviceId(), name: me.name, color: me.color, look: me.look, ...(phone ? { phone } : {}), ...(me.title ? { title: String(me.title).slice(0, 40) } : {}) }));
       this.pingTimer = setInterval(() => {
         if (this.ws === ws && ws.readyState === 1) {
           try { ws.send(JSON.stringify({ t: 'ping' })); } catch {}
@@ -99,7 +99,8 @@ export class WebSocketPresence extends Emitter {
     const vehId = s.veh ? s.veh.id : -1;
     const vehSig = s.veh ? `${s.veh.id},${s.veh.ry},${s.veh.v},${s.veh.st},${s.veh.wh || 0},${s.veh.pk || 0},${s.veh.p || 0},${s.veh.x ?? ''},${s.veh.z ?? ''}` : '';
     const pvSig = Array.isArray(s.pv) ? s.pv.map((v) => `${v.id},${v.pk || 0},${v.x ?? ''},${v.z ?? ''},${v.ry ?? ''}`).join('|') : '';
-    const discreteSig = `${s.riding ? 1 : 0},${em},${sit},${afk},${umb},${vehId},${s.veh?.pk ? 1 : 0},${pvSig}`;
+    const title = typeof s.title === 'string' ? s.title : '';
+    const discreteSig = `${s.riding ? 1 : 0},${em},${sit},${afk},${umb},${vehId},${s.veh?.pk ? 1 : 0},${pvSig},${title}`;
     const discreteChanged = discreteSig !== this.lastDiscreteSig;
     if (!force && !discreteChanged && now - this.lastSent < 1000 / STATE_HZ) return;
     const sig = `${s.x.toFixed(2)},${s.z.toFixed(2)},${s.ry.toFixed(2)},${s.moving ? 1 : 0},${discreteSig},${jy.toFixed(2)},${vehSig}`;
@@ -111,6 +112,8 @@ export class WebSocketPresence extends Emitter {
   }
   sendChat(text) { if (this.ws?.readyState === 1) this.ws.send(JSON.stringify({ t: 'chat', text })); }
   sendEmote(kind, combo = 1) { if (this.ws?.readyState === 1) this.ws.send(JSON.stringify({ t: 'emote', kind, combo })); }
+  sendTitle(id) { if (this.ws?.readyState === 1 && id) this.ws.send(JSON.stringify({ t: 'title', title: id })); }
+  sendTitleClap(to) { if (this.ws?.readyState === 1 && to) this.ws.send(JSON.stringify({ t: 'title_clap', to })); }
   // [economy] 상점에서 탈것을 산 직후: 서버(Room)가 계정 보유를 다시 읽어 { t:'holdings' } 로 돌려준다
   syncGifts() { if (this.ws?.readyState === 1) this.ws.send(JSON.stringify({ t: 'gifts_sync' })); }
   sendWeather(mode) {
@@ -166,6 +169,7 @@ export class MockPresence extends Emitter {
       name: this.isEn ? 'StarshipSpotter' : '판교러버',
       color: '#00b894',
       look: sanitizeLook({ gender: 'f', face: 'round', hair: 'pony', glasses: true, top: 'hoodie', color: '#00b894' }),
+      title: 'neighbor.captain',
       x: this.station.x + 12,
       z: this.station.z - 6,
       ry: 0,
@@ -208,7 +212,7 @@ export class MockPresence extends Emitter {
     const step = (this.peerEmote || sit || afk) && !riding ? 0 : Math.min(L, spd * dt);
     const wait = L > 0.05 && this.guard && this.guard(this.peer.x, this.peer.z, dx / L, dz / L);
     if (!wait && L > 0.01 && step > 0) { this.peer.x += (dx / L) * step; this.peer.z += (dz / L) * step; this.peer.ry = Math.atan2(dx, dz); }
-    this.emit('state', { t: 'state', id: this.peer.id, x: this.peer.x, z: this.peer.z, ry: this.peer.ry, moving: !wait && step > 0.05, riding, emote: riding ? '' : (this.peerEmote || ''), sit, afk });
+    this.emit('state', { t: 'state', id: this.peer.id, x: this.peer.x, z: this.peer.z, ry: this.peer.ry, moving: !wait && step > 0.05, riding, emote: riding ? '' : (this.peerEmote || ''), sit, afk, title: this.peer.title || '' });
     this.nextTalk -= dt;
     if (this.nextTalk <= 0) { this.emit('chat', { t: 'chat', id: this.peer.id, text: this.lines[this.li++ % this.lines.length] }); this.nextTalk = 12; }
   }
@@ -256,6 +260,11 @@ export class MockPresence extends Emitter {
         this.emit('chat', { t: 'chat', id: this.peer.id, text: hypeLines[kind] || (this.isEn ? 'Woohoo!! 🎉' : '와아아!! 🎉') });
       }
     }, 320);
+  }
+  sendTitle() {}
+  sendTitleClap(to) {
+    if (!to || !this.peer) return;
+    this.emit('title_clap', { t: 'title_clap', id: this.peer.id, name: this.peer.name, to });
   }
   syncGifts() {}
   sendWeather(mode) {

@@ -1,0 +1,20 @@
+{
+  "_readme": "칭호 얼굴 그림. 문양은 currentColor 하나. img 는 부모 색을 물려받지 않으므로 클라이언트가 currentColor 를 등급 금속색으로 바꾼 뒤 그린다. viewBox 0 0 128 128, 외부 이미지·스크립트 없음. tier: bronze | silver | gold | legendary | event.",
+  "viewBox": "0 0 128 128",
+  "px": 128,
+  "slots": {
+    "health.stroll": { "tier": "bronze", "src": "titles/health.stroll.svg", "placeholder": false },
+    "health.walker": { "tier": "gold", "src": "titles/health.walker.svg", "placeholder": false },
+    "health.marathon": { "tier": "legendary", "src": "titles/health.marathon.svg", "placeholder": false },
+    "explore.alley": { "tier": "silver", "src": "titles/explore.alley.svg", "placeholder": false },
+    "explore.map": { "tier": "gold", "src": "titles/explore.map.svg", "placeholder": false },
+    "transit.transfer": { "tier": "silver", "src": "titles/transit.transfer.svg", "placeholder": false },
+    "transit.vip": { "tier": "gold", "src": "titles/transit.vip.svg", "placeholder": false },
+    "neighbor.hello": { "tier": "silver", "src": "titles/neighbor.hello.svg", "placeholder": false },
+    "neighbor.captain": { "tier": "gold", "src": "titles/neighbor.captain.svg", "placeholder": false },
+    "streak.d7": { "tier": "bronze", "src": "titles/streak.d7.svg", "placeholder": false },
+    "streak.d30": { "tier": "gold", "src": "titles/streak.d30.svg", "placeholder": false },
+    "streak.d100": { "tier": "legendary", "src": "titles/streak.d100.svg", "placeholder": false },
+    "store.grocery": { "tier": "event", "src": "titles/store.grocery.svg", "placeholder": false }
+  }
+}

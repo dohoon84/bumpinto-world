@@ -3,6 +3,7 @@
 //   브라우저: http://localhost:5173/?ws=ws://localhost:8787  (탭 2개 열어서 서로 마주쳐 보기)
 import { WebSocketServer } from 'ws';
 import { sanitizeLook } from '../src/look.js';
+import { announceTitleId } from '../src/titles/catalog.js';
 import { giftItem, giftItemByVeh, giftUnit, qtyOf, seedList, withQty } from '../src/gifts/catalog.js';
 const PORT = Number(process.env.PORT || 8787);
 // [subway-sync] 테스트용: 서버 시계를 이만큼 옮김 (time 응답에만). 예) 낮 시간표를 밤에 시험할 때
@@ -14,6 +15,7 @@ let seeded = false;
 let seq = 0;
 let worldWeather = '';
 const send = (ws, m) => ws.readyState === 1 && ws.send(JSON.stringify(m));
+const relayTitle = (raw) => { const s = typeof raw === 'string' ? raw.trim() : ''; return /^[a-z][a-z0-9.-]{0,40}$/.test(s) ? s : ''; };
 const broadcast = (m, except) => { for (const ws of peers.keys()) if (ws !== except) send(ws, m); };
 const broadcastAll = (m) => { for (const ws of peers.keys()) send(ws, m); };
 wss.on('connection', (ws) => {
@@ -26,10 +28,10 @@ wss.on('connection', (ws) => {
       const deviceId = String(m.deviceId || '').slice(0, 64) || id;
       const phone = String(m.phone || '').replace(/\D/g, '');
       if (!seeded) { giftStock.set(deviceId, seedList()); seeded = true; }
-      const peer = { id, deviceId, name: String(m.name || '손님').slice(0, 24), color: look.color, look, x: 0, z: 0, ry: 0, gifts: giftStock.get(deviceId) || [], phone: /^010\d{8}$/.test(phone) ? phone : '' };
-      const pubPeer = (peerRow) => ({ id: peerRow.id, name: peerRow.name, color: peerRow.color, look: peerRow.look, x: peerRow.x, z: peerRow.z, ry: peerRow.ry });
+      const peer = { id, deviceId, name: String(m.name || '손님').slice(0, 24), color: look.color, look, x: 0, z: 0, ry: 0, gifts: giftStock.get(deviceId) || [], phone: /^010\d{8}$/.test(phone) ? phone : '', title: relayTitle(m.title) };
+      const pubPeer = (peerRow) => ({ id: peerRow.id, name: peerRow.name, color: peerRow.color, look: peerRow.look, x: peerRow.x, z: peerRow.z, ry: peerRow.ry, ...(peerRow.title ? { title: peerRow.title } : {}) });
       send(ws, { t: 'welcome', id: peer.id, peers: [...peers.values()].map(pubPeer), gifts: peer.gifts, weather: worldWeather });
-      peers.set(ws, peer); broadcast({ t: 'join', peer: { id: peer.id, name: peer.name, color: peer.color, look: peer.look, x: peer.x, z: peer.z, ry: peer.ry } }, ws);
+      peers.set(ws, peer); broadcast({ t: 'join', peer: pubPeer(peer) }, ws);
     }
     const p = peers.get(ws); if (!p) return;
     if (m.t === 'state') {
@@ -63,8 +65,24 @@ wss.on('connection', (ws) => {
       };
       const veh = packVeh(m.veh);
       const pv = Array.isArray(m.pv) ? m.pv.map((raw) => packVeh({ ...raw, pk: 1 })).filter((v) => v?.pk).slice(0, 4) : [];
-      Object.assign(p, { x: +m.x || 0, z: +m.z || 0, ry: +m.ry || 0, riding: !!m.riding, sit, afk, veh, pv });
-      broadcast({ t: 'state', id: p.id, x: p.x, z: p.z, ry: p.ry, moving: !!m.moving, riding: p.riding, jy, emote, sit, afk, ...(veh ? { veh } : {}), ...(pv.length ? { pv } : {}) }, ws);
+      Object.assign(p, { x: +m.x || 0, z: +m.z || 0, ry: +m.ry || 0, riding: !!m.riding, sit, afk, veh, pv, title: relayTitle(m.title) });
+      broadcast({ t: 'state', id: p.id, x: p.x, z: p.z, ry: p.ry, moving: !!m.moving, riding: p.riding, jy, emote, sit, afk, title: p.title || '', ...(veh ? { veh } : {}), ...(pv.length ? { pv } : {}) }, ws);
+    }
+    if (m.t === 'title') {
+      const title = announceTitleId(m.title);
+      if (!title) return;
+      p.announced ||= new Set();
+      if (p.announced.has(title) || Date.now() - (p.titleAt || 0) < 20000) return;
+      p.titleAt = Date.now();
+      p.announced.add(title);
+      broadcast({ t: 'title', id: p.id, name: p.name, title, x: p.x, z: p.z }, ws);
+    }
+    if (m.t === 'title_clap') {
+      if (Date.now() - (p.clapAt || 0) < 2500) return;
+      const target = [...peers.values()].find((peer) => peer.id === m.to);
+      if (!target || Math.hypot((target.x || 0) - p.x, (target.z || 0) - p.z) > 40) return;
+      p.clapAt = Date.now();
+      broadcast({ t: 'title_clap', id: p.id, name: p.name, to: target.id }, ws);
     }
     if (m.t === 'gift') {
       const item = giftItem(m.item)?.id || '';

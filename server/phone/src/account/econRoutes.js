@@ -17,6 +17,7 @@
 //   GET  /econ/shop                         { items, goal }
 //   POST /econ/shop/buy       { itemId }
 //   GET  /econ/karma
+//   GET  /econ/titles/rarity               보유 비율 집계. 표가 없으면 ready:false (숫자를 지어내지 않음)
 //   GET  /econ/welcome  ·  POST /econ/welcome
 import { authCors } from "./routes.js";
 import { sessionFromRequest } from "./session.js";
@@ -78,6 +79,8 @@ export async function handleEcon(request, env, url, deps = {}) {
   const POST = request.method === "POST";
 
   if (path === "/econ/config" && GET) return okJ({ ...E.publicConfig(env), enabled: economyEnabled(env), features: econFeatures(env) }, cors);
+  // [titles] 보유 비율. 집계 표가 생기기 전에는 숫자를 만들지 않는다(ready:false). D1 을 읽지 않는다.
+  if (path === "/econ/titles/rarity" && GET) return okJ({ ready: false, asOf: null, totalPlayers: null, counts: {} }, cors);
   if (!accountsEnabled(env) || !economyEnabled(env) || !env?.DB) return errJ("econ_disabled", 404, cors);
   if (request.headers.get("Origin") && !cors["Access-Control-Allow-Origin"]) return errJ("bad_origin", 403, cors);
 

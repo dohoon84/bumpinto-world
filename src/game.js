@@ -12,6 +12,7 @@ import { sanitizeLook, readSavedPassport, isPassportActive, setPassportActive } 
 import { NPCs, getNpcCapForRegion } from './entities/npcs.js';
 import { createAtmosphere } from './weather.js';
 import { Overlay, Bubble } from './overlay.js';
+import { mountTitles } from './titles/index.js'; // [titles]
 import { EMOTE_LIST, EMOTE_BY_ID, EMOTE_BY_CODE, EmoteFX } from './emotes.js';
 import { Input } from './input.js';
 import { createPresence } from './net/presence.js';
@@ -540,6 +541,17 @@ const trashBins = region.id === 'jeongja'
   const withBins = world.isBlocked;
   world.isBlocked = (x, z, r) => withBins(x, z, r) || trashBins.blocks(x, z);
 }
+// [titles] 장착한 칭호. 실제 연결은 프레즌스보다 앞에서 채운다.
+let titles = {
+  enabled: false,
+  tick() {},
+  selectedId: () => '',
+  paintTag(el, spec) {
+    const who = spec?.afk ? `${spec.name} 💤 ${spec.afkText || '자리비움'}` : (spec?.name || '');
+    if (el && el.textContent !== who) el.textContent = who;
+  },
+  openBook() {}, closeBook() {}, showSheet() {}, hideSheet() {}, grant() {}, present() {}, setView() {},
+};
 // [subway] 정자역 출입구 (실제 출구 위치·번호, OSM). 들어가면 별도 대합실 Scene, 그동안 바깥 월드는 갱신·렌더 건너뜀
 const subwayCanEnter = () => joined && !bikes.riding && !adminBike?.riding && !giftRiding() && !ride?.active && !trucks?.current;
 const serverClock = createServerClock(); // [subway-sync] presence 'time' 응답으로 맞춤 (아래 presence.on('time'))
@@ -557,6 +569,7 @@ const subway = subwayOn ? mountSubway({
     emoteFx.setView(inside?.scene, inside?.camera);
     remotes.setZone(zone, inside?.scene);
     nameTag.zone = zone;
+    titles.setView(zone, inside?.scene, inside?.camera);
     myBubble.item.zone = zone;
     if (zone) emitMyStateNow();
   },
@@ -1128,8 +1141,7 @@ function completeWorldJoin(name, look, session) {
   const seq = ++arriveSeq;
   player.visible = !arriving;
   nameTag.hidden = arriving;
-  nameTag.el.textContent = name;
-  nameTag.el.classList.remove('is-afk');
+  syncMyNameTag();
   renderEmoteBar();
   document.body.classList.remove('in-gate', 'in-lobby');
   if (globeBtn) globeBtn.hidden = false;
@@ -1216,6 +1228,24 @@ startLobby = async () => {
 };
 if (passportQueued) joinWithPassport();
 else if (lobbyQueued) startLobby();
+titles = mountTitles({
+  overlay, params, presence,
+  getAnchor() {
+    const p = selfInterior?.player || player;
+    const sit = p.userData.sit || p.userData.afk;
+    const jy = p.userData.jumpY || 0;
+    return { x: p.position.x, y: p.position.y + jy + (sit ? 1.55 : 2.15), z: p.position.z };
+  },
+  getFeet() {
+    const p = selfInterior?.player || player;
+    return { x: p.position.x, y: p.position.y, z: p.position.z };
+  },
+  shown: () => joined && !arriving && (player.visible || !!selfInterior),
+  listRemotes: () => remotes.list().map((p) => ({ id: p.id, x: p.x, y: p.y, z: p.z, tagY: p.tagY, titleId: p.title || '' })),
+  onEquip(id) { me.title = id || ''; syncMyNameTag(); emitMyStateNow(); },
+});
+me.title = titles.selectedId();
+addEventListener('bw:titles-icons', () => { if (joined) syncMyNameTag(); });
 if (joined) {
   me.phone = sms.session?.phone || '';
   presence.connect(me);
@@ -1522,12 +1552,9 @@ function standUpFromSeat() {
 
 function syncMyNameTag() {
   const baseName = me.name || tr('나', 'Me');
-  const want = myAfk ? `${baseName} 💤 ${tr('자리비움', 'AFK')}` : baseName;
-  if (nameTag.el.textContent !== want) {
-    nameTag.el.textContent = want;
-    nameTag.el.classList.toggle('is-afk', myAfk);
-  }
+  titles.paintTag(nameTag.el, { name: baseName, afk: myAfk, afkText: tr('자리비움', 'AFK'), local: true });
 }
+if (titles.enabled && joined) syncMyNameTag();
 
 function wakeFromAfk() {
   idleTime = 0;
@@ -2254,7 +2281,7 @@ function mergeVehicleNets(...parts) {
 // [zone] 대합실 안이면 실내 위치(구역 띠 좌표)와 리액션·자리비움만 보낸다. 바깥이면 null
 function subwayPresenceState() {
   const zs = subway?.netState();
-  return zs ? { ...zs, riding: false, jy: Number(jumpY.toFixed(2)), emote: myEmote, sit: mySit, afk: myAfk, umb: '' } : null; // [subway-pose] 점프·앉기·자리비움도 같은 역 사람에게
+  return zs ? { ...zs, riding: false, jy: Number(jumpY.toFixed(2)), emote: myEmote, sit: mySit, afk: myAfk, umb: '', title: titles.selectedId() } : null; // [subway-pose] 점프·앉기·자리비움도 같은 역 사람에게 · [titles]
 }
 function emitMyStateNow() {
   if (!joined || arriving) return; // [arrivefix]
@@ -2273,6 +2300,7 @@ function emitMyStateNow() {
       sit: bikes.riding || aboard ? '' : mySit,
       afk: bikes.riding || aboard ? false : myAfk,
       umb: bikes.riding || aboard ? '' : (umbrellas.umbrellaTheme || ''),
+      title: titles.selectedId(),
       ...mergeVehicleNets(trucks?.net(), adminBike?.net(), ...giftRides.map((g) => g.ride.net())),
       ...(ride?.net() || {}), // [ride] 탑승 중: 차량 중심 x/z·방향 + sit='bus:…'/'taxi:…'
     },
@@ -2345,8 +2373,9 @@ function frame() {
       myEmote = ''; myEmoteUntil = 0;
       if (!emoteFolded) emoteBar?.querySelectorAll('.emote-btn.active').forEach((b) => b.classList.remove('active'));
     }
-    if (joined) presence.sendState(subwayPresenceState() || { x: player.position.x, z: player.position.z, ry: player.rotation.y, moving: false, riding: false, jy: 0, emote: '', sit: '', afk: false, umb: '' });
+    if (joined) presence.sendState(subwayPresenceState() || { x: player.position.x, z: player.position.z, ry: player.rotation.y, moving: false, riding: false, jy: 0, emote: '', sit: '', afk: false, umb: '', title: titles.selectedId() });
     myBubble.tick();
+    titles.tick(dt);
     overlay.update(innerWidth, innerHeight);
     emoteFx.update(dt, innerWidth, innerHeight);
     perfHud.tick();
@@ -2611,6 +2640,7 @@ function frame() {
   roadster?.update(dt); // [roadster] 시네마틱 카메라가 켜져 있으면 camera/sun.target 덮어씀
   launch?.update(dt); // [launch] 5분 주기 발사·핫스테이징·젓가락 캐치 쇼
   sun.position.copy(sun.target.position).addScaledVector(atmosphere.sunDir, 500);
+  titles.tick(dt);
   renderer.render(scene, camera);
   perfHud.tick();
   bgm?.setDuck(!!ride?.active || !!adminBike?.riding || !!giftMount() || !!subway?.voiceActive); // [bgm] 버스·바이크 소리 · [subway-voice] 지하철 안내 방송 중 살짝 줄임 (바뀔 때만 동작)
@@ -2640,5 +2670,12 @@ window.__jj = {
   subway, serverClock, // [subway] [subway-sync]
   get pose() { return { sit: mySit, afk: myAfk, jy: jumpY }; }, // [subway-pose] 테스트용
   bgm, // [bgm]
+  titles, // [titles]
+  onTitleClap(m) {
+    if (!titles.cheerOn) return;
+    const hit = remotes.list({ all: true }).find((p) => p.id === m?.id);
+    if (!hit) return;
+    emoteFx.burst(new THREE.Vector3(hit.x, (hit.y || 0) + 1.2, hit.z), 'clap', 1);
+  },
   nearNpc(i = 0, d = 3) { const n = npcs.list[i]; player.position.set(n.pos.x + d, 0, n.pos.z + d * 0.5); },
 };

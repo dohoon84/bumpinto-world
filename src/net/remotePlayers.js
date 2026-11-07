@@ -4,6 +4,7 @@ import { createAvatar, animateAvatar, animateRide, clearRidePose } from '../enti
 import { createKakaoBike } from '../entities/bike.js';
 import { sanitizeLook } from '../look.js';
 import { Bubble } from '../overlay.js';
+import { paintTitleTag } from '../titles/nametag.js'; // [titles]
 import { CHAT_RADIUS } from './protocol.js';
 import { decodeZone } from './zones.js';
 
@@ -39,6 +40,7 @@ export class RemotePlayers {
       p.sit = typeof m.sit === 'string' ? m.sit : '';
       p.afk = !!m.afk;
       p.umb = typeof m.umb === 'string' ? m.umb : (m.umb ? 'yellow' : '');
+      if (typeof m.title === 'string') p.title = m.title;
       if (typeof m.emote === 'string') {
         p.emote = m.emote;
         if (m.emote) p.emoteUntil = performance.now() + 1500;
@@ -98,6 +100,7 @@ export class RemotePlayers {
       sit: peer.sit || '',
       afk: !!peer.afk,
       umb: typeof peer.umb === 'string' ? peer.umb : (peer.umb ? 'yellow' : ''),
+      title: typeof peer.title === 'string' ? peer.title : '',
       wasRiding: false,
     };
     p.tag = this.overlay.add({ cls: 'tag remote', text: peer.name || '손님', getPos: () => mesh.position.clone().setY(mesh.position.y + (p.sit || p.afk ? 1.55 : 2.05)), maxDist: 80 }); // [terrain]
@@ -155,6 +158,8 @@ export class RemotePlayers {
         riding: p.riding,
         sit: p.sit,
         afk: p.afk,
+        title: p.title || '',
+        tagY: p.mesh.position.y + (p.sit || p.afk ? 1.55 : 2.05),
       });
     }
     return out;
@@ -209,11 +214,13 @@ export class RemotePlayers {
         p.mesh.userData.sit = p.sit || '';
         p.mesh.userData.afk = !!p.afk;
         p.mesh.userData.umbrella = p.umb || '';
-        const wantTag = p.afk ? `${p.name} 💤 자리비움` : p.name;
-        if (p.tag.el.textContent !== wantTag) {
-          p.tag.el.textContent = wantTag;
-          p.tag.el.classList.toggle('is-afk', !!p.afk);
-        }
+        paintTitleTag(p.tag.el, {
+          name: p.name,
+          afk: !!p.afk,
+          titleId: p.title || '',
+          afkText: '자리비움',
+          lite: Math.hypot((this.getMe()?.x || 0) - p.mesh.position.x, (this.getMe()?.z || 0) - p.mesh.position.z) > 16,
+        });
         if (p.afk) {
           p.zzzTimer = (p.zzzTimer || 0) - dt;
           if (p.zzzTimer <= 0) {
