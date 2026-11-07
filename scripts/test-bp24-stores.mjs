@@ -1,8 +1,10 @@
-// 배치된 BUMP24 마다: 건물에 붙는지, 문 앞 2.4m 안에 차도·벽이 아닌 자리가 있는지, 실내가 풋프린트 안에 있는지, 기본 주소에서 안내가 켜지는지.
+// 배치된 BUMP24 마다: 렌더되는 건물 메시 안에 상자가 있는지, 차도·광장과 안 겹치는지, 문이 길을 보는지,
+// 문 앞 2.4m 안에 차도·벽이 아닌 자리가 있는지, 기본 주소에서 안내가 켜지는지, 표시 이름에 체인 상호가 없는지.
 import fs from 'fs';
 import { bp24DoorInfo, bp24TileKey, prepareJeongjaBp24, resolveBp24 } from '../src/corridor/bp24.js';
 import { BP24_PLACEMENTS, bump24AtSpot } from '../src/corridor/bp24Locations.js';
 import { bump24StorePrompts } from '../src/bump24game/flag.js';
+import { assessStore } from './lib/bp24-mesh.mjs';
 
 const root = new URL('../', import.meta.url);
 const DOOR_R = 2.4;
@@ -29,12 +31,20 @@ function tileAt(key) {
 }
 function resolveNear(spec) {
   const [tx, tz] = bp24TileKey(spec).split('_').map(Number);
+  const roads = [], parks = [];
+  let hit = null;
   for (let dx = -1; dx <= 1; dx++) for (let dz = -1; dz <= 1; dz++) {
     const j = tileAt(`${tx + dx}_${tz + dz}`);
-    const st = j ? resolveBp24(spec, j) : null;
-    if (st) return { st, roads: j.r || [] };
+    if (!j) continue;
+    for (const r of j.r || []) roads.push(r);
+    for (const p of j.parks || []) parks.push(p);
+    if (!hit) {
+      const st = resolveBp24(spec, j);
+      if (st) hit = { st, bld: j.b[st.bi] };
+    }
   }
-  return null;
+  if (!hit) return null;
+  return { ...hit, roads, parks };
 }
 function roadClearance(roads, x, z) {
   let d = Infinity;
@@ -60,22 +70,36 @@ function inside(x, z, poly) {
 }
 
 const jeongja = readJson('public/jeongja.json');
-const prepared = prepareJeongjaBp24(jeongja, '');
+const prepared = prepareJeongjaBp24(structuredClone(jeongja), '');
 const jz = new Map(prepared.map((st) => [st.id, st]));
 const fail = [];
 let checked = 0;
+const CHAIN = /gs\s*25|gs25|gs\s*24|지에스|씨유|(^|[^A-Za-z])cu([^A-Za-z]|$)|세븐|7\s*-?\s*eleven|7eleven|이마트|emart|미니스톱|미니스탑|mini\s*stop|씨스페이스|c\s*[·.]?\s*space|스토리웨이|365|문방구|까까/i;
+const names = new Map();
 
 for (const spec of BP24_PLACEMENTS) {
-  let st, roads;
+  if (!spec.name || !spec.name.startsWith('BUMP24 ') || !spec.name.endsWith('점')) fail.push(`${spec.id} 표시 이름 형식 ${spec.name}`);
+  if (CHAIN.test(spec.name || '')) fail.push(`${spec.id} 표시 이름에 체인·상호 ${spec.name}`);
+  if (names.has(spec.name)) fail.push(`${spec.id} 표시 이름 중복 ${spec.name} = ${names.get(spec.name)}`);
+  else names.set(spec.name, spec.id);
+  let st, roads, bld, parks;
   if (spec.world === 'jeongja') {
     st = jz.get(spec.id);
     roads = jeongja.roads;
+    parks = jeongja.parks || [];
+    bld = jeongja.buildings[spec.building];
     if (!st) { fail.push(`${spec.id} 정자 건물에 안 붙음`); continue; }
   } else {
     const hit = resolveNear(spec);
     st = hit?.st;
     roads = hit?.roads || [];
+    parks = hit?.parks || [];
+    bld = hit?.bld;
     if (!st) { fail.push(`${spec.id} 타일 ${bp24TileKey(spec)} 에서 안 붙음`); continue; }
+  }
+  if (!spec.box) {
+    const mesh = assessStore(st, bld, roads, parks);
+    if (!mesh.ok) fail.push(`${spec.id} ${mesh.reasons.join(', ')}`);
   }
   checked++;
   const door = bp24DoorInfo(st);
