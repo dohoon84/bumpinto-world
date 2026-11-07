@@ -29,6 +29,7 @@ import { perfFlags } from '../perf/flags.js'; // [perf-memory]
 import { createRegionRegistry } from '../perf/regions.js'; // [perf-memory]
 import { lazyExtraCrowd } from '../perf/lazyCrowd.js'; // [perf-memory]
 import { pangyoWaterEnabled, PANGYO_WATER_FILE, attachMainDrop, mergePangyoStreams, dropWaterGeometry } from './pangyoWater.js'; // [pangyo-water]
+import { bp24Mode, createBp24 } from './bp24.js'; import { bp24LocationsFor } from './bp24Locations.js'; // [bp24] 체인 매장
 import { migeumWaterEnabled, MIGEUM_WATER_FILE, migeumChRoads, mergeMigeumWater, applyMigeumBank } from './migeumWater.js'; // [migeum-water]
 
 // streams: 탄천 지류 하도(streams.json). ?streams=0 이면 false → 예전과 같은 데이터만
@@ -121,6 +122,7 @@ export function createCorridor({ scene, corridorData, terrain, world, renderer, 
       const tile = buildDetailTile(t.key, t.dData, { terrain, onRoadAll });
       const pgLm = pangyoLm?.build(t.key); if (pgLm) tile.group.add(pgLm); // [pangyo] 랜드마크는 그 타일과 같이 생기고 해제
       const mgLm = migeumLm?.build(t.key); if (mgLm) tile.group.add(mgLm); // [migeum] 출입구 캐노피
+      const bpLm = bp24?.build(t.key); if (bpLm) tile.group.add(bpLm); // [bp24] 1층 유리 편의점
       tile.map = tileMap(t, t.dData);
       if (KEEP_MINI) tile.mini = miniData(t, t.dData); // [hud-v3-minimap] 타일이 언로드되면 같이 사라진다
       tile.hints = extractLifeHints(t.dData, live); // [life]
@@ -155,6 +157,7 @@ export function createCorridor({ scene, corridorData, terrain, world, renderer, 
       if (t.dState !== 1) return; // 그 사이 언로드
       if (!j) { t.dState = 0; return; }
       j = filterExpressHidden(corridorData.pangyoExpress, t.key, 'tiles', j); // [pangyo-express] 평면 고가차도 리본 빼기
+      if (bp24) j = bp24.filter(t.key, j); // [bp24] 시청 앞 편의점 건물 1층 비우기
       if (SD) prepStreamTile(j, SD.tiles[t.key], 'tile');
       t.dData = j; t.dState = 2; buildQueue.push({ kind: 'd', key: t.key });
     }));
@@ -283,6 +286,8 @@ export function createCorridor({ scene, corridorData, terrain, world, renderer, 
   // ---------- 횡단보도 · 랜드마크 ----------
   const crossings = buildCorridorCrossings(root, base.crossings, { getSimTime });
   const landmarks = createLandmarks(root, index.landmarks, renderer);
+  const bp24Kind = bp24Mode(params || (typeof location !== 'undefined' ? location.search : '')); // [bp24] ?bp24=1 목록 · ?bp24=demo 목록+데모
+  const bp24 = bp24Kind ? createBp24(bp24LocationsFor(bp24Kind)) : null;
   const pangyoLm = corridorData.pangyo ? createPangyoLandmarks(corridorData.pangyo, { overlay }) : null; // [pangyo]
   const migeumLm = corridorData.migeum && !migeumSubwayDrawsEntrances() ? createPangyoLandmarks(corridorData.migeum, { overlay, prefix: 'migeum' }) : null; // [migeum] 같은 빌더(출입구만). [migeum-sub] 지하철이 출입구를 그리면 안 만듦
   // [perf-memory] 지역 지연 로드/해제 레지스트리. ?lazyregion=0 · ?perfmem=0 이면 null → 아래는 전부 예전 그대로(즉시 생성)
@@ -320,6 +325,7 @@ export function createCorridor({ scene, corridorData, terrain, world, renderer, 
   let rx = null, rz = null; // [perf-memory] 지난 프레임 위치(진행 방향 추정)
   const api = {
     root, bounds, stations, tiles, stats, crossings, landmarks, inLive,
+    bp24, // [bp24] null 이면 꺼짐
     pangyo: pangyoLm, // [pangyo] null 이면 꺼짐(?pangyo=0)
     migeum: migeumLm, // [migeum] null 이면 꺼짐(?migeum=0)
     get pangyoExpress() { return pangyoEx; }, // [pangyo-express] null 이면 꺼짐(?pangyoexpress=0 · ?pangyo=0) · [perf-memory] 지연 로드면 멀 때 null
@@ -361,6 +367,7 @@ export function createCorridor({ scene, corridorData, terrain, world, renderer, 
       crossings.update(dt);
       landmarks.update(dt);
       lotte?.update(dt);
+      bp24?.update(dt); // [bp24]
       updateNight(dt); // [corridor] 저녁 건물 불빛 페이드
       life?.update(dt, x, z);
       migeumNpc?.update(dt, x, z); // [migeum-npc]
