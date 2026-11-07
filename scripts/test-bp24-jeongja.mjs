@@ -28,8 +28,8 @@ for (const p of recessed) recMax = Math.max(recMax, p[0]);
 if (Math.abs((maxX - recMax) - 1.55) > 0.05) throw new Error(`들이기 ${maxX - recMax}`);
 
 const on = prepareJeongjaBp24(jeongja, '');
-if (on.length !== 1 || on[0].id !== 'bump24-jeongja') throw new Error(`정자 매장 ${on.map((s) => s.id)}`);
-const st = on[0];
+const st = on.find((s) => s.id === 'bump24-jeongja');
+if (!st) throw new Error(`정자점 없음 ${on.map((s) => s.id).slice(0, 6).join(',')}`);
 if (st.side || !st.sealEnds) throw new Error('정자점 끝면은 막아야 함');
 if (hall.sealEnds) throw new Error('시청점 옆면이 막힘');
 if (st.apron !== false) throw new Error('정자점 앞마당이 차도로 나감');
@@ -48,7 +48,9 @@ if (walkD > DOOR_R - 0.2) throw new Error(`인도에서 문 트리거가 닿지 
 if (!bump24GameEnabled('')) throw new Error('기본 URL에서 정자점 들어가기가 꺼짐');
 if (!bump24GameEnabled('?enter=1&from=jeongja')) throw new Error('모바일 입장 주소에서 정자점 들어가기가 꺼짐');
 if (bump24GameEnabled('?bp24game=0')) throw new Error('bp24game=0 인데 켜짐');
-if (bump24GameEnabled('?bump24jeongja=0')) throw new Error('정자점을 껐는데 들어가기가 켜짐');
+if (!bump24GameEnabled('?bump24jeongja=0')) throw new Error('다른 지역 매장이 있는데 모듈이 꺼짐');
+if (bump24StorePrompts('bump24-jeongja', '?bump24jeongja=0')) throw new Error('정자점을 껐는데 안내가 켜짐');
+if (!bump24StorePrompts('cr1', '?bump24jeongja=0')) throw new Error('코리더 매장 안내가 정자 플래그에 같이 꺼짐');
 if (!bump24StorePrompts('bump24-jeongja', '')) throw new Error('정자점 문 안내가 기본에서 꺼짐');
 if (bump24StorePrompts('bump24-jeongja', '?bp24game=0')) throw new Error('bp24game=0 인데 정자점 안내');
 if (bump24StorePrompts('seongnam-cityhall', '')) throw new Error('기본 URL에서 시청점 안내가 켜짐');
@@ -56,7 +58,7 @@ if (bump24StorePrompts('seongnam-cityhall', '?bp24=1')) throw new Error('시청�
 if (!bump24StorePrompts('seongnam-cityhall', '?bp24=1&bp24game=1')) throw new Error('시청점 ?bp24game=1 안내가 꺼짐');
 if (!bump24GameEnabled('?bp24=1&bp24game=1')) throw new Error('시청점 게임이 꺼짐');
 const skipped = jeongja.buildings.filter((b) => b._skip && b.lm === 'bp24');
-if (skipped.length !== 1) throw new Error('1층 충돌 건물이 없음');
+if (skipped.length !== on.length) throw new Error(`1층 충돌 ${skipped.length} != 매장 ${on.length}`);
 const worldAt = (x, z) => [st.o[0] + st.ax[0] * x + st.b[0] * z, st.o[1] + st.ax[1] * x + st.b[1] * z];
 const pip = (x, z, ring) => {
   let inside = false;
@@ -74,7 +76,7 @@ for (let x = 0.2; x < st.W; x += 0.8) for (let z = 0.2; z < st.D; z += 0.8) {
 
 const offData = JSON.parse(fs.readFileSync(new URL('../public/jeongja.json', import.meta.url)));
 const off = prepareJeongjaBp24(offData, '?bump24jeongja=0');
-if (off.length) throw new Error('플래그 0 인데 정자점이 켜짐');
+if (off.length) throw new Error(`플래그 0 인데 정자 매장이 켜짐 ${off.map((s) => s.id).slice(0, 4)}`);
 if (offData.buildings[135].mh) throw new Error('플래그 0 인데 건물을 비움');
 if (!bp24NavOn('')) throw new Error('길찾기 기본은 켜짐');
 if (bp24NavOn('?bp24nav=0')) throw new Error('bp24nav=0 인데 켜짐');
