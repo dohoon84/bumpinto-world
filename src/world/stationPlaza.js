@@ -9,6 +9,7 @@ import { createAvatar } from '../entities/avatar.js';
 import { Bubble } from '../overlay.js';
 import { watchEvening } from '../evening.js';
 import { createPlazaTree } from './trees.js';
+import { fountainSuppressed, pushOutOfTree } from './xmasSeason.js';
 
 const PLAZA_X = -74.0;
 const PLAZA_Z = 25.0;
@@ -965,17 +966,21 @@ export function addStationPlaza(scene, overlay, world) {
   root.name = 'jeongja-station-plaza'; // [perf-memory] 정적 병합 대상 이름(src/perf/index.js)
   scene.add(root);
 
-  // 1) 중앙 분수대
+  // 1) 중앙 분수대. 크리스마스 트리가 이 자리면 메시·물·충돌·이름표를 끈다 (?xmas=0 이면 그대로).
+  const xmasFlag = (() => { try { return new URLSearchParams(location.search).get('xmas'); } catch { return null; } })();
+  const fountainOff = fountainSuppressed(xmasFlag);
   const fountain = createFountain(PLAZA_X, PLAZA_Z);
+  fountain.group.visible = !fountainOff;
   root.add(fountain.group);
   if (overlay) {
-    overlay.add({
+    const fountainLabel = overlay.add({
       cls: 'label plaza',
       text: '⛲ 정자역 광장 분수대',
       getPos: () => new THREE.Vector3(PLAZA_X, 3.6, PLAZA_Z),
       maxDist: 140,
       minDist: 0,
     });
+    if (fountainOff) fountainLabel.hidden = true;
   }
 
   // 2) 간이 무대 & 버스킹 공연
@@ -1085,8 +1090,9 @@ export function addStationPlaza(scene, overlay, world) {
     for (let i = 0; i < cluster.count; i++) {
       const ang = prnd() * Math.PI * 2;
       const rad = 0.6 + prnd() * 3.8;
-      const hx = cluster.x + Math.cos(ang) * rad;
-      const hz = cluster.z + Math.sin(ang) * rad;
+      let hx = cluster.x + Math.cos(ang) * rad;
+      let hz = cluster.z + Math.sin(ang) * rad;
+      if (fountainOff) { const out = pushOutOfTree(hx, hz); hx = out.x; hz = out.z; }
       const mesh = createPigeonMesh();
       mesh.position.set(hx, 0, hz);
       mesh.rotation.y = prnd() * Math.PI * 2;
@@ -1138,7 +1144,7 @@ export function addStationPlaza(scene, overlay, world) {
 
   function update(dt, playerPos) {
     const t = performance.now() * 0.001;
-    fountain.update(t);
+    if (!fountainOff) fountain.update(t);
     stage.update(dt, t);
     gym.update(t);
     court.update(t);
@@ -1262,7 +1268,7 @@ export function addStationPlaza(scene, overlay, world) {
 
   function blocks(x, z) {
     // 분수대 수조, 버스킹 무대, 정자 쉼터, 푸드트럭 등 구조물 충돌 처리
-    if (Math.hypot(x - fountain.x, z - fountain.z) < fountain.radius) return true;
+    if (!fountainOff && Math.hypot(x - fountain.x, z - fountain.z) < fountain.radius) return true;
     if (Math.abs(x - stage.x) < stage.hw && Math.abs(z - stage.z) < stage.hd) return true;
     if (Math.abs(x - pagoda.x) < pagoda.hw && Math.abs(z - pagoda.z) < pagoda.hd) return true;
     if (Math.abs(x - foodTruck.x) < foodTruck.hw && Math.abs(z - foodTruck.z) < foodTruck.hd) return true;
@@ -1306,8 +1312,8 @@ export function addStationPlaza(scene, overlay, world) {
       }
     }
 
-    // 3) 분수대 대리석 둘레 턱 (충돌 반경 5.5m 바깥쪽 가장자리 5.55m에 걸터앉고, 일어날 땐 6.05m로 복귀)
-    {
+    // 3) 분수대 대리석 둘레 턱. 트리가 분수를 대체하면 턱이 없으므로 앉지 않는다.
+    if (!fountainOff) {
       const dx = px - fountain.x, dz = pz - fountain.z;
       const d = Math.hypot(dx, dz);
       if (d >= 4.5 && d <= 6.6) {

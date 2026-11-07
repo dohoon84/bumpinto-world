@@ -9,7 +9,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { createNightFade } from './nightLights.js';
 import { isMobileMode } from '../mobile/flag.js';
-import { xmasActive, xmasGlowEnabled, xmasMode } from './xmasSeason.js';
+import { jeongjaTreeSpot, xmasActive, xmasGlowEnabled, xmasMode } from './xmasSeason.js';
 
 const BUILD_M = 520;
 const FULL_M = 340;
@@ -18,9 +18,8 @@ const HIDE_M = 1100;
 const DROP_M = 1400;
 const CONE_R = 5.2;
 
-// 분수 패드(반지름 8.8, -74, 25)와 느티나무 열(x≈-90) 사이는 약 4m뿐이라 폭 18m가 안 들어간다.
-// 가로수 서쪽 포장, 분수에서 약 30m. 건물·도로·무대와 떨어짐.
-const JEONGJA = { id: 'jeongja', x: -104, z: 22, yaw: 0.35 };
+// 정자역 광장 분수대 중심. 트리가 켜지면 분수는 stationPlaza가 치운다.
+const JEONGJA = jeongjaTreeSpot();
 // 스폰(0,0) 앞 제안 (-20, 25)는 건물 벽까지 6.7m. 빈 모래밭.
 const STARBASE = { id: 'starbase', x: -32, z: 40, yaw: 0.8 };
 // 잔디 폴리곤 중심. 링은 잔디 밖으로 포장까지 나가지만 타워 벽(약 14m)과 가림막 밖.
