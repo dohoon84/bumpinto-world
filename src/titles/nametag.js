@@ -41,7 +41,6 @@ export function paintTitleTag(el, { name, afk = false, titleId = '', afkText = '
   el.dataset.tb = sig;
   el.classList.toggle('is-afk', !!afk);
   el.classList.toggle('has-title', !!title);
-  el.classList.toggle('fx', !!(title && fxOn && !lite));
   el.classList.remove('g-bronze', 'g-silver', 'g-gold', 'g-legendary', 'g-event');
   if (!title) {
     el.textContent = who;

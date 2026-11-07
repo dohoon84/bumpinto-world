@@ -60,13 +60,18 @@ body.in-gate .tb-layer, body.in-lobby .tb-layer, body.in-gate .tb-sheet, body.in
 
 .tag.has-title {
   display: flex; flex-direction: column; align-items: center; gap: 3px;
-  padding: 0; background: transparent;
+  padding: 0; background: transparent; border: 0;
 }
+/* 닉네임은 칭호 도입 전과 같은 이름표. 등급 색은 메달과 칭호 알약에만 둔다. */
 .tag.has-title .tb-name {
+  font-size: inherit; font-weight: inherit; color: inherit;
   background: rgba(30, 40, 60, .55); padding: 1px 6px; border-radius: 8px;
 }
 .tag.remote.has-title .tb-name { background: rgba(20, 130, 110, .7); }
-.tag.has-title.is-afk .tb-name { background: rgba(65, 78, 102, .85); color: #dce8f5; }
+.tag.has-title.is-afk .tb-name {
+  background: rgba(65, 78, 102, .85); color: #dce8f5;
+  border: 1px solid rgba(255, 255, 255, .25);
+}
 .tb-chip {
   display: inline-flex; align-items: center; gap: 4px;
   padding: 1px 8px 1px 2px; border-radius: 999px;
@@ -125,14 +130,6 @@ body.in-gate .tb-layer, body.in-lobby .tb-layer, body.in-gate .tb-sheet, body.in
 @keyframes tb-spark {
   0%, 100% { opacity: 0; transform: translate(-50%, -50%) scale(.3); }
   45% { opacity: 1; transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))) scale(1); }
-}
-.tag.has-title.fx.g-silver .tb-name { box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .45); }
-.tag.has-title.fx.g-gold .tb-name { background: rgba(92, 58, 8, .88); color: #ffe169; }
-.tag.has-title.fx.g-event .tb-name { background: rgba(6, 72, 58, .9); color: #d8fff4; box-shadow: 0 0 8px rgba(32, 201, 151, .65); }
-.tag.has-title.fx.g-legendary .tb-name {
-  background: linear-gradient(90deg, rgba(42, 18, 110, .94), rgba(109, 77, 255, .92));
-  color: #ffe169;
-  box-shadow: 0 0 12px rgba(255, 225, 105, .85);
 }
 .tb-aura {
   position: absolute; left: 0; top: 0;
