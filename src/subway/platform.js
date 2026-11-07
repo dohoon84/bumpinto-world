@@ -10,6 +10,7 @@ import { buildConsist, buildScreenDoors, screenDoorFrame, CAR } from './trainPar
 import { buildCrowd } from '../entities/avatarCrowd.js';
 import { createAvatar, animateAvatar } from '../entities/avatar.js';
 import { LOOKS } from './looks.js';
+import { routeMapData, drawRouteMapPanel, routeMapSlots, nearRouteMap as nearRouteMapAt, PANEL_TEX } from './routeMap.js';
 
 export const PLAT = Object.freeze({ Z0: -5, Z1: 0, CEIL: 3.6, TRACK_Z: 1.8, WALL_Z: 4.4, STAIR: { x0: -2.6, x1: 2.6, depth: 6 } });
 // 계단 단: z0 에서 -z 로 n 단 (단 깊이 d, 높이 h). 올라가기 = 계단 UP_Z 보다 안쪽 → 대합실
@@ -22,7 +23,7 @@ export const inStairArea = (x, z, r = 0.3) => x > PLAT.STAIR.x0 + r && x < PLAT.
 
 // def: stationsData 역, line: 노선 키, dir: 0/1, feed: createArrivalFeed (raw()), arrival: { at, run } 이미 서 있는 열차(하차) 또는 null
 //   onEvent(kind, data): 'board' {door, run, live} · 'up' · 'say' {ko,en}
-export function buildPlatform({ def, line, dir, renderer, look, feed = null, arrival = null, spawnDoor = null, onEvent = () => {}, now = () => Date.now(), rides: ridesIn = null, lang = () => 'ko' }) {
+export function buildPlatform({ def, line, dir, renderer, look, feed = null, arrival = null, spawnDoor = null, onEvent = () => {}, now = () => Date.now(), rides: ridesIn = null, lang = () => 'ko', routeMap = true }) {
   const L = LINES[line], lay = platformLayout(line), sign = signText(def, line, dir), half = lay.half;
   const rides = ridesIn ?? rideStops(line, dir, def.name);
   const zone = platformZone(def.id, line, dir);
@@ -146,6 +147,22 @@ export function buildPlatform({ def, line, dir, renderer, look, feed = null, arr
 
   // ---------- 스크린도어·열차 ----------
   const psd = buildScreenDoors(scene, { lay, z: 0, x0: -half + 0.4, x1: half - 0.4, disposables });
+  // ---------- 스크린도어 노선도 판 (앞면, 고정 유리 칸) ----------
+  const mapData = routeMap ? routeMapData(def, line) : null;
+  const mapSlots = mapData ? routeMapSlots(psd.spans, { avoidHalf: SX1 + 1.2, max: 4 }) : [];
+  let mapMesh = null;
+  if (mapData && mapSlots.length) {
+    const cv = document.createElement('canvas'); cv.width = PANEL_TEX.w; cv.height = PANEL_TEX.h;
+    drawRouteMapPanel(cv.getContext('2d'), cv.width, cv.height, mapData, lang() === 'en');
+    const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 4;
+    const mat = new THREE.MeshBasicMaterial({ map: tex, toneMapped: false });
+    const geo = new THREE.PlaneGeometry(2.35, 1.15);
+    mapMesh = new THREE.InstancedMesh(geo, mat, mapSlots.length); mapMesh.name = 'platRouteMap'; mapMesh.frustumCulled = false;
+    const M4 = new THREE.Matrix4(), Q = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI), P = new THREE.Vector3(), S1 = new THREE.Vector3(1, 1, 1);
+    mapSlots.forEach((s, i) => { M4.compose(P.set(s.x, 1.25, -0.08), Q, S1); mapMesh.setMatrixAt(i, M4); });
+    mapMesh.instanceMatrix.needsUpdate = true; scene.add(mapMesh);
+    disposables.push(tex, mat, geo);
+  }
   const trainGroup = new THREE.Group(); scene.add(trainGroup);
   const consist = buildConsist(trainGroup, { color: L.color, cars: lay.cars, side: -1, disposables });
   const CZ = 0.25 + CAR.W / 2; // 차체 가운데 z (스크린도어와 0.25m 틈)
@@ -343,10 +360,12 @@ export function buildPlatform({ def, line, dir, renderer, look, feed = null, arr
   function setView(x, z, yaw, pitch = 0.3, dist = 6) { me.position.set(x, 0, z); cam.yaw = yaw; cam.pitch = pitch; cam.dist = dist; }
   // 테스트·스크린샷: 다음 열차를 지금으로부터 약 sec 초 뒤 정차로. [subway-sync] 서버 시계의 공유 격자(CALL_GRID_SEC) 칸 → 같은 칸에 부른 사람은 같은 열차·run
   function callTrain(sec = MOTION.APPROACH + 2) { pinned = sched = calledArrival(line, dir, def.id, now(), sec); said = ''; }
+  const nearMap = () => (mapSlots.length ? nearRouteMapAt(me.position.x, me.position.z, mapSlots) : null);
   return {
     kind: 'platform', zone, def, line, dir, lay, sign, rides, scene, camera, player: me, cam, update, render, dispose, setView, callTrain,
     get speed() { return speed; }, get sched() { return sched; }, get doorsNow() { return sched ? trainMotion((now() - sched.at) / 1000).doors : 0; }, // [subway-sync] 테스트: 프레임과 무관한 지금 문 상태
     get lastPass() { return null; }, get sitKind() { return me.userData.sit || ''; }, sitDown, standUp, benchSeats,
-    stats: () => ({ tris: S.count + G.count, parts: crowd.parts.size, npcs: npcs.length, doors: lay.doors.length }),
+    routeMap: mapData, mapSlots, mapMesh, nearMap,
+    stats: () => ({ tris: S.count + G.count, parts: crowd.parts.size, npcs: npcs.length, doors: lay.doors.length, routeMaps: mapSlots.length }),
   };
 }

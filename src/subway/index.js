@@ -27,6 +27,8 @@ import { createArrivalFeed } from './arrivals.js';
 import { isEn, tr } from '../i18n.js';
 import { encodeZone } from '../net/zones.js';
 import { emitTransit } from '../econHook.js'; // [econ-ui] trigger point
+import { routeMapEnabled, mountRouteMapOverlay } from './routeMap.js';
+import * as THREE from 'three';
 
 export const STATION_ZONE = 'jeongja-station'; // [zone] 정자역 대합실. 다른 역은 stationZone(id) (src/net/zones.js)
 const PHONE_BASE = import.meta.env?.VITE_PHONE_URL || 'https://jeongja-phone.xn0texn073.workers.dev';
@@ -101,7 +103,37 @@ export function mountSubway({ scene, overlay, data, world, terrain, renderer, ge
   let cur = stations[0]; // 지금(또는 마지막으로) 들어간 역
   const stationOf = (e) => stations.find((s) => s.ent && s.ent.list.includes(e)) || null;
   const rtOn = params?.get?.('subwayRt') !== '0';
+  const mapOn = routeMapEnabled(params);
+  const routeMapUi = mapOn ? mountRouteMapOverlay() : null;
   let feed = null;
+  // 노선도 클릭/탭 (드래그와 구분: 움직임 8px 미만)
+  const ray = mapOn ? new THREE.Raycaster() : null;
+  const ndc = mapOn ? new THREE.Vector2() : null;
+  let tap0 = null;
+  function tryOpenMapFromPointer(clientX, clientY) {
+    if (!mapOn || !routeMapUi || !inside || inside.kind !== 'platform' || !inside.mapMesh || swap) return false;
+    const rect = renderer.domElement.getBoundingClientRect();
+    ndc.set(((clientX - rect.left) / rect.width) * 2 - 1, -((clientY - rect.top) / rect.height) * 2 + 1);
+    ray.setFromCamera(ndc, inside.camera);
+    const hits = ray.intersectObject(inside.mapMesh, false);
+    if (!hits.length) return false;
+    return routeMapUi.open(inside.routeMap);
+  }
+  function onPointerDown(e) {
+    if (!mapOn || !inside || inside.kind !== 'platform' || routeMapUi?.isOpen) return;
+    if (e.button != null && e.button !== 0) return;
+    tap0 = { x: e.clientX, y: e.clientY, id: e.pointerId };
+  }
+  function onPointerUp(e) {
+    if (!tap0 || tap0.id !== e.pointerId) { tap0 = null; return; }
+    const dx = e.clientX - tap0.x, dy = e.clientY - tap0.y; tap0 = null;
+    if (Math.hypot(dx, dy) > 8) return;
+    tryOpenMapFromPointer(e.clientX, e.clientY);
+  }
+  if (mapOn) {
+    renderer.domElement.addEventListener('pointerdown', onPointerDown);
+    renderer.domElement.addEventListener('pointerup', onPointerUp);
+  }
 
   // ---------- DOM ----------
   const style = document.createElement('style'); style.textContent = CSS; document.head.appendChild(style);
@@ -262,6 +294,7 @@ export function mountSubway({ scene, overlay, data, world, terrain, renderer, ge
     swap.t += dt;
     if (swap.phase === 'out' && swap.t >= FADE_SEC) {
       swap.phase = 'wait';
+      routeMapUi?.close();
       sub.style.opacity = '0'; subT = 0; voice.cancel(); // 앞 방 안내 방송 자막·음성은 지우기 (열차·승강장을 떠남)
       onInterior?.('', null);
       inside?.dispose(); inside = null;
@@ -281,7 +314,7 @@ export function mountSubway({ scene, overlay, data, world, terrain, renderer, ge
   }
   function makePlatform(line, dir, extra = {}) {
     const st = cur;
-    return loadPlat().then((m) => m.buildPlatform({ def: st.def, line, dir, renderer, look: getLook?.(), feed, now, rides: platformRides(line, dir, st.def), lang: () => (isEn() ? 'en' : 'ko'), onEvent: (k, a) => { if (k === 'say') say2(a); }, ...extra }));
+    return loadPlat().then((m) => m.buildPlatform({ def: st.def, line, dir, renderer, look: getLook?.(), feed, now, rides: platformRides(line, dir, st.def), lang: () => (isEn() ? 'en' : 'ko'), routeMap: mapOn, onEvent: (k, a) => { if (k === 'say') say2(a); }, ...extra }));
   }
   function toPlatform(line, dir) {
     const L = LINES[line];
@@ -339,13 +372,15 @@ export function mountSubway({ scene, overlay, data, world, terrain, renderer, ge
     fade.style.opacity = String(sa != null ? sa : state.phase === 'arriving' && !inside ? 1 : state.fadeAlpha());
     if (!state.interior || !inside) return state.interior; // 로드 대기 중이면 검은 화면 유지
     feed?.tick?.(dt); // 승강장·열차에서도 실시간 도착 갱신 (대합실 안내판은 자체 tick)
-    const walk = state.canWalk && !swap && !tpick;
+    const walk = state.canWalk && !swap && !tpick && !routeMapUi?.isOpen;
     const r = inside.update(dt, { look, axes, allowMove: walk, self: getSelf?.() });
     if (walk) {
       if (inside.kind === 'platform') {
         if (r.up) toConcourse(inside.line === cur.theme.primary.key ? { well: inside.dir } : { transfer: true });
         else if (r.board) toTrain(r.board);
-        setHint(tr('열차가 서고 문이 열리면 스크린도어로 걸어 들어가 타기 · 계단 = 대합실', 'Walk through an open screen door to board · stairs = concourse'));
+        const nearMap = mapOn && inside.nearMap?.();
+        if (nearMap) setHint(`<kbd>E</kbd>${tr('노선도 자세히 보기', 'View route map')} · ${tr('계단 = 대합실', 'stairs = concourse')}`);
+        else setHint(tr('열차가 서고 문이 열리면 스크린도어로 걸어 들어가 타기 · 계단 = 대합실', 'Walk through an open screen door to board · stairs = concourse'));
       } else if (inside.kind === 'train') {
         if (r.alight) alightAt(r.alight);
         setHint(`<kbd>E</kbd>${tr(inside.sitting ? '일어나기' : '앉기', inside.sitting ? 'Stand up' : 'Sit')} · ${tr('문이 열리면 왼쪽 문으로 내리기', 'Get off through the left doors')}`);
@@ -405,8 +440,12 @@ export function mountSubway({ scene, overlay, data, world, terrain, renderer, ge
     }
     if (swap) return true;
     if (state.phase === 'inside' && e.code === 'KeyE' && !e.repeat) {
+      if (routeMapUi?.isOpen) { routeMapUi.close(); return true; }
       if (inside?.kind === 'train') { inside.toggleSit(); return true; }
-      if (inside?.kind === 'platform') return true;
+      if (inside?.kind === 'platform') {
+        if (mapOn && inside.nearMap?.() && inside.routeMap) { routeMapUi.open(inside.routeMap); return true; }
+        return true;
+      }
       openChooser(); return true;
     }
     if (state.phase === 'inside' && passKey?.(e)) return false;
@@ -445,6 +484,14 @@ export function mountSubway({ scene, overlay, data, world, terrain, renderer, ge
     openChooser, choose: (id) => { const i = cur.exits.findIndex((x) => x.id === id); if (i >= 0 && cur.state.phase === 'choosing') { cur.state.move(i - cur.state.pick); renderChooser(); } },
     go,
     drawCalls: () => built().filter((s) => s.ent.group.visible).reduce((a, s) => a + s.ent.group.children.length, 0),
-    dispose() { voice.dispose(); inside?.dispose(); feed?.stop(); sub.remove(); for (const st of stations) dropEnt(st); style.remove(); fade.remove(); hint.remove(); toast.remove(); chooser.remove(); },
+    dispose() {
+      voice.dispose(); inside?.dispose(); feed?.stop(); sub.remove(); for (const st of stations) dropEnt(st);
+      routeMapUi?.dispose();
+      if (mapOn) { renderer.domElement.removeEventListener('pointerdown', onPointerDown); renderer.domElement.removeEventListener('pointerup', onPointerUp); }
+      style.remove(); fade.remove(); hint.remove(); toast.remove(); chooser.remove();
+    },
+    get routeMapOpen() { return !!routeMapUi?.isOpen; },
+    openRouteMap() { return mapOn && inside?.kind === 'platform' && inside.routeMap ? routeMapUi.open(inside.routeMap) : false; },
+    closeRouteMap() { routeMapUi?.close(); },
   };
 }
