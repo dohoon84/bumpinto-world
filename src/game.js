@@ -77,6 +77,7 @@ import { mountSubway, zoneLabel as subwayZoneLabel } from './subway/index.js'; /
 import { arriveFixEnabled, entrySpawn, withArriveCap } from './corridor/arrive.js'; // [arrivefix] #43 역 입장·역 이동 때 정자역을 거쳐 보이지 않게 (?arrivefix=0 끔)
 import { mountBump24Game } from './bump24game/index.js'; // [bump24game] BUMP24 30초 장보기 (시청점 ?bp24=1&bp24game=1, 정자점은 기본 주소)
 import { prepareJeongjaBp24, mountBasemapBp24, bp24DoorInfo } from './corridor/bp24.js'; // [bump24-jeongja]
+import { mountBp24Nav } from './corridor/bp24Nav.js'; // [bp24nav]
 import { BUMP24_JEONGJA_AT } from './corridor/bp24Locations.js';
 import { isUiV2, uiV2Wanted } from './ui-v2/flag.js'; // [ui-v2] 게임 UI v2 (기본 켜짐 · ?ui=v1 끔)
 
@@ -605,6 +606,10 @@ if (subway) {
   const withSubway = world.isBlocked;
   world.isBlocked = (x, z, r) => withSubway(x, z, r) || subway.blocks(x, z, r);
 }
+const bp24Nav = mountBp24Nav({ // [bp24nav] ?bp24nav=0 이면 null. 매장 아이콘·정자점 표지·이정표
+  scene, overlay, world, station: data.station, terrain, search: params, getPlayer: () => player,
+  getExits: () => subway?.exits || [],
+});
 const presence = createPresence({ station: st, region });
 if (npcs.guard) presence.setGuard?.(npcs.guard);
 const remotes = new RemotePlayers(scene, overlay, presence, () => selfPos(), (t) => myBubble.say(t, 6000), terrain?.getGroundHeight, emoteFx); // [terrain] 원격 플레이어도 지형 높이
@@ -2662,6 +2667,7 @@ function frame() {
   }
   if (corridor) { const c = cam.mode === 'follow' ? P : sun.target.position; corridor.update(dt, c.x, c.z, cam.mode); } // [corridor] 타일 스트리밍(프레임당 최대 1개 빌드)
   jeongjaBp24?.update(); // [bump24-jeongja] 직원·밤 간판. 실내는 170m LOD
+  bp24Nav?.update(dt); // [bp24nav] 표지 까딱임 · 안내선 시작점
   if (playgrounds) { const c = cam.mode === 'follow' ? P : sun.target.position; playgrounds.update(dt, c.x, c.z, cam.mode); } // [playgrounds] 거리·타일 기준 표시
   if (streetlights) { const c = cam.mode === 'follow' ? P : sun.target.position; streetlights.update(dt, c.x, c.z, cam.mode); } // [streetlights] 거리·타일 기준 표시 + 밤 페이드
   if (pangyoLamps) { const c = cam.mode === 'follow' ? P : sun.target.position; pangyoLamps.update(dt, c.x, c.z, cam.mode); } // [pangyo-streetlights]
@@ -2706,7 +2712,7 @@ window.__jj = {
   get ride() { return ride; }, remotes, presence, // [ride]
   cameraApp, // [camera]
   subway, serverClock, // [subway] [subway-sync]
-  bump24Game, jeongjaBp24, // [bump24game] [bump24-jeongja]
+  bump24Game, jeongjaBp24, bp24Nav, // [bump24game] [bump24-jeongja] [bp24nav]
   get pose() { return { sit: mySit, afk: myAfk, jy: jumpY }; }, // [subway-pose] 테스트용
   bgm, // [bgm]
   nearNpc(i = 0, d = 3) { const n = npcs.list[i]; player.position.set(n.pos.x + d, 0, n.pos.z + d * 0.5); },

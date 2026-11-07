@@ -7,6 +7,8 @@
 export const BUMP24_JEONGJA_FLAG = 'bump24jeongja';
 export const BUMP24_JEONGJA_DEFAULT = true;
 export const BUMP24_JEONGJA_AT = 'bump24-jeongja';
+export const BUMP24_NAV_FLAG = 'bp24nav';
+export const BUMP24_NAV_DEFAULT = true;
 
 export const BP24_PLACEMENTS = [
   { // #1 성남시청 길 건너(실제 GS25 자리). 실측 사진에 맞춘 고정 틀 — 자동 결과와 달리 북쪽 창고 부분을 뺀 10.3m 깊이
@@ -45,6 +47,15 @@ export function activePlacements(world, search) {
 export function jeongjaBump24On(search) {
   const spec = BP24_PLACEMENTS.find((s) => s.id === 'bump24-jeongja');
   return !!spec && placementFlagOn(spec, search);
+}
+
+/** 지도 아이콘·정자점 표지·이정표. ?bp24nav=0 이면 전부 끔. 기본 켜짐. */
+export function bp24NavOn(search = typeof location !== 'undefined' ? location.search : '') {
+  const p = search instanceof URLSearchParams ? search : new URLSearchParams(search || '');
+  const v = p.get(BUMP24_NAV_FLAG);
+  if (v === '0') return false;
+  if (v === '1') return true;
+  return BUMP24_NAV_DEFAULT;
 }
 
 // 코리더 타일에 붙는 매장. ?bp24=1 일 때 createBp24 가 이 목록을 쓴다(시청점 동작은 그대로).

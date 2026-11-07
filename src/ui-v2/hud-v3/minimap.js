@@ -30,6 +30,7 @@ const savePrefs = () => { try { localStorage.setItem(LS_KEY, JSON.stringify(pref
 let root = null, cv = null, ctx = null, compass = null, plaque = null, raf = 0, last = 0, sig = '';
 let route = null; // { pts: [[x,z]], dest: {x,z,label} }
 let hover = null; // { x, y } CSS px (원 안 좌표)
+let navHits = []; // [bp24nav] 이번 프레임 매장 아이콘 (클릭 판정)
 const chunks = new Map(); // key → { c, s, ver, used }
 let liveIdx = null; // { data, map: Map(chunkKey → feats) }
 const bboxOf = new WeakMap();
@@ -42,7 +43,7 @@ export function mountMinimap({ onToggle } = {}) {
   onChange = onToggle || onChange;
   addEventListener('bw:nav-route', (e) => setRoute(e.detail));
   onLangChange(() => { if (root) paintChrome(); });
-  window.__h3mm = { setRoute, stats: () => ({ ...stats, chunks: chunks.size, canvases: [...chunks.values()].map((c) => `${c.c.width}x${c.c.height}`), prefs: { ...prefs }, open: !!root?.isConnected && prefs.on }), toggle, setZoom: (i) => setZoom(i), setRot: (v) => setRot(v) };
+  window.__h3mm = { setRoute, stats: () => ({ ...stats, chunks: chunks.size, canvases: [...chunks.values()].map((c) => `${c.c.width}x${c.c.height}`), prefs: { ...prefs }, open: !!root?.isConnected && prefs.on }), toggle, setZoom: (i) => setZoom(i), setRot: (v) => setRot(v), get navHits() { return navHits; } };
   if (prefs.on) open();
 }
 export function toggle(force) {
@@ -98,7 +99,14 @@ function build() {
       else if (k === 'out') setZoom(prefs.zi + 1);
       b.blur(); return;
     }
-    if (e.target === cv || e.target.closest('.h3-mm-glass')) { const v = $('btn-view'); if (v && !v.hidden) v.click(); } // 지도 누르면 '위에서 보기'
+    if (e.target === cv || e.target.closest('.h3-mm-glass')) {
+      const rect = cv.getBoundingClientRect();
+      const sx = (e.clientX - rect.left) * (cv.width / Math.max(1, rect.width));
+      const sy = (e.clientY - rect.top) * (cv.height / Math.max(1, rect.height));
+      const hit = navHits.find((h) => (h.sx - sx) ** 2 + (h.sy - sy) ** 2 < h.r * h.r);
+      if (hit && window.__jj?.bp24Nav?.guide?.(hit.id)) return; // [bp24nav] 매장 아이콘 → 문 앞 안내. 다른 클릭은 예전대로 위에서 보기
+      const v = $('btn-view'); if (v && !v.hidden) v.click();
+    }
   });
   const glass = root.querySelector('.h3-mm-glass');
   glass.addEventListener('mousemove', (e) => { const r = cv.getBoundingClientRect(); hover = { x: e.clientX - r.left, y: e.clientY - r.top }; sig = ''; });
@@ -311,6 +319,21 @@ function draw(now, J, P) {
     const name = tr(st.name, st.nameEn || st.name);
     if (labelAll) labels.push({ sx, sy: sy - 10, t: name });
     if (hover) { const d = (hover.x - sx) ** 2 + (hover.y - sy) ** 2; if (d < hovD * 1.4) { hovD = d; hov = { sx, sy, t: name }; } }
+  }
+
+  // [bp24nav] 편의점 아이콘. 길찾기가 꺼져 있으면 points 가 비어 기존 점과 같다.
+  navHits = [];
+  const nav = J.bp24Nav;
+  if (nav?.on && nav.logo) {
+    for (const st of nav.points()) {
+      const [sx, sy] = toS(st.x, st.z);
+      if (!inC(sx, sy, 2)) continue;
+      g.beginPath(); g.arc(sx, sy, 8, 0, Math.PI * 2); g.fillStyle = '#fff'; g.fill();
+      g.lineWidth = 1.5; g.strokeStyle = '#0d1a33'; g.stroke();
+      g.drawImage(nav.logo, sx - 6, sy - 6, 12, 12);
+      navHits.push({ sx, sy, r: 12, id: st.id, name: st.name });
+      if (hover) { const d = (hover.x - sx) ** 2 + (hover.y - sy) ** 2; if (d < hovD) { hovD = d; hov = { sx, sy, t: st.name }; } }
+    }
   }
 
   // 목적지 (원 밖이면 테두리에 화살표)
