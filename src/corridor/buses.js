@@ -37,20 +37,97 @@ export function createCorridorBuses(root, T, { crossings, terrain, overlay, live
   for (const P of sim.paths) { P.fadeIn = !onLiveEdge(P.pts[0]); P.fadeOut = !onLiveEdge(P.pts[P.pts.length - 1]); }
   const source = mode === 'realtime' && proxy ? new CorridorRealtimeSource(data, { proxy, fallback: sim, gg }) : sim;
 
-  // ---------- 쉘터 (Instanced) ----------
+  // ---------- 쉘터 (Instanced; ?longstop=0 = short default at 시청/야탑) ----------
   const M = { frame: new THREE.MeshLambertMaterial({ color: '#4a5560' }), roof: new THREE.MeshLambertMaterial({ color: '#2f6fb3' }), glass: new THREE.MeshLambertMaterial({ color: '#cfe6f5', transparent: true, opacity: 0.45 }), bench: new THREE.MeshLambertMaterial({ color: '#8a6b4e' }), sign: new THREE.MeshLambertMaterial({ color: '#1f5fbf' }) };
   const G = shelterGeos();
   const parts = [[G.roof, M.roof, true], [G.glass, M.glass, false], [G.bench, M.bench, false], [G.frame, M.frame, true], [G.sign, M.sign, false]];
   const stops = T.stops;
   const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), up = new THREE.Vector3(0, 1, 0), one = new THREE.Vector3(1, 1, 1), p = new THREE.Vector3();
+  const tiny = new THREE.Vector3(0.001, 0.001, 0.001);
   const ims = parts.map(([geo, mat, cast]) => { const im = new THREE.InstancedMesh(geo, mat, Math.max(1, stops.length)); im.count = stops.length; im.castShadow = cast; im.receiveShadow = true; group.add(im); return im; });
+  // ?longstop=0 opts out — default: extend 성남시청 전면/후면/후문 + 야탑역 shelters into one long canopy per curb cluster
+  const longOk = typeof location === 'undefined' || new URLSearchParams(location.search).get('longstop') !== '0';
+  const wantLong = (s) => {
+    const n = s.name || '';
+    return /성남시청(전면|후면|후문)/.test(n) || /야탑역/.test(n);
+  };
   stops.forEach((s, i) => {
     const tr = s.tr || [0, 1];
     const back1 = s.rdist != null && s.rdist < 7 ? 7 - s.rdist : 0;
     const x = s.x - tr[0] * back1, z = s.z - tr[1] * back1;
     s._pos = new THREE.Vector3(x, gy(x, z, 0), z);
+    s._tr = tr;
+  });
+  // Per-stop shelter scale (X = along curb). Clusters of long stops share ONE extended shelter at the centroid.
+  const scaleX = new Float32Array(stops.length);
+  for (let i = 0; i < stops.length; i++) scaleX[i] = 1;
+  const shelterAt = stops.map((s) => s._pos);
+  if (longOk) {
+    const idxs = [];
+    stops.forEach((s, i) => { if (wantLong(s)) idxs.push(i); });
+    const used = new Set();
+    for (const i of idxs) {
+      if (used.has(i)) continue;
+      const group = [i];
+      used.add(i);
+      const ai = Math.atan2(stops[i]._tr[0], stops[i]._tr[1]);
+      for (const j of idxs) {
+        if (used.has(j)) continue;
+        const d = Math.hypot(stops[i]._pos.x - stops[j]._pos.x, stops[i]._pos.z - stops[j]._pos.z);
+        const aj = Math.atan2(stops[j]._tr[0], stops[j]._tr[1]);
+        let dang = Math.abs(ai - aj); if (dang > Math.PI) dang = 2 * Math.PI - dang;
+        // Same curb cluster: nearby + similar facing (or opposite face of same road strip)
+        if (d < 75 && (dang < 0.55 || Math.abs(dang - Math.PI) < 0.55)) {
+          // Prefer same side of road (similar offset along tr)
+          const sideDot = stops[i]._tr[0] * stops[j]._tr[0] + stops[i]._tr[1] * stops[j]._tr[1];
+          if (sideDot > 0.5) { group.push(j); used.add(j); }
+        }
+      }
+      // Solo: only stretch if heading is curb-aligned (tr into road). Bad OSM headings stay short.
+      if (group.length < 2) {
+        const k0 = group[0];
+        const tr = stops[k0]._tr || [0, 1];
+        // Solo long only when facing the road on an NS arterial (|tr.x| high). Skips bad OSM headings that draw diagonal bars.
+        if (Math.abs(tr[0]) < 0.85) continue;
+        scaleX[k0] = 9; // ~38 m canopy — yellow-line length at 시청 후문
+        continue;
+      }
+      let cx = 0, cz = 0, maxD = 10;
+      for (const k of group) { cx += stops[k]._pos.x; cz += stops[k]._pos.z; }
+      cx /= group.length; cz /= group.length;
+      for (const a of group) for (const b of group) {
+        maxD = Math.max(maxD, Math.hypot(stops[a]._pos.x - stops[b]._pos.x, stops[a]._pos.z - stops[b]._pos.z));
+      }
+      // Roof base length 4.2 m → scale so canopy covers stop span + end overhang
+      const span = maxD + 18;
+      const sx = Math.min(14, Math.max(6, span / 4.2));
+      let best = group[0], bestD = 1e9;
+      for (const k of group) {
+        const d = Math.hypot(stops[k]._pos.x - cx, stops[k]._pos.z - cz);
+        if (d < bestD) { bestD = d; best = k; }
+      }
+      // Prefer a stop whose heading is curb-aligned (tr mostly E/W for NS roads, or N/S for EW)
+      const aligned = group.filter((k) => {
+        const tr = stops[k]._tr || [0, 1];
+        return Math.abs(tr[0]) > 0.75 || Math.abs(tr[1]) > 0.75;
+      });
+      if (aligned.length) {
+        best = aligned[0]; bestD = 1e9;
+        for (const k of aligned) {
+          const d = Math.hypot(stops[k]._pos.x - cx, stops[k]._pos.z - cz);
+          if (d < bestD) { bestD = d; best = k; }
+        }
+      }
+      for (const k of group) scaleX[k] = 0; // hide siblings — one continuous shelter
+      scaleX[best] = sx;
+      shelterAt[best] = new THREE.Vector3(cx, stops[best]._pos.y, cz);
+    }
+  }
+  stops.forEach((s, i) => {
+    const tr = s._tr || [0, 1];
     q.setFromAxisAngle(up, Math.atan2(tr[0], tr[1]));
-    m4.compose(s._pos, q, one);
+    const sc = scaleX[i] <= 0 ? tiny : (scaleX[i] === 1 ? one : new THREE.Vector3(scaleX[i], 1, 1));
+    m4.compose(shelterAt[i], q, sc);
     for (const im of ims) im.setMatrixAt(i, m4);
   });
   for (const im of ims) { im.instanceMatrix.needsUpdate = true; im.computeBoundingSphere(); }

@@ -1502,6 +1502,17 @@ let myEmoteUntil = 0;
 let emoteCombo = 0;
 let lastEmoteAt = 0;
 let mySit = ''; // '' | 'ground' | 'beanbag' | 'bench' | 'ledge'
+// [cityhall] plaza tier/promenade seats + stationPlaza beanbags/benches
+function findNearbySeat(px, pz) {
+  return stationPlaza.findSeat?.(px, pz) || corridor?.cityhall?.findSeat?.(px, pz) || null;
+}
+function seatSurfaceY(seat) {
+  // avatar.js bench sit pose assumes player.y is ~0.44m below the seat top
+  // (rig drops ~0.26 so butt lands on a ~0.44m bench). Raised tiers use the same delta.
+  if (seat?.y != null) return Math.max(0, seat.y - 0.44);
+  return terrain ? terrain.getGroundHeight(seat.x, seat.z, player.position.y) : 0;
+}
+
 let sitExitPos = null; // 좌석에서 일어날 때 복귀할 안전한 좌표
 let myAfk = false;
 let idleTime = 0;
@@ -1615,13 +1626,13 @@ function toggleSit() {
     emitMyStateNow();
     return;
   }
-  const seat = stationPlaza.findSeat?.(player.position.x, player.position.z);
+  const seat = findNearbySeat(player.position.x, player.position.z);
   if (seat) {
     sitExitPos = {
       x: seat.exitX ?? player.position.x,
       z: seat.exitZ ?? player.position.z,
     };
-    const ty = terrain ? terrain.getGroundHeight(seat.x, seat.z, player.position.y) : 0;
+    const ty = seatSurfaceY(seat);
     player.position.set(seat.x, ty, seat.z);
     player.rotation.y = seat.ry;
     mySit = seat.kind;
@@ -1653,13 +1664,13 @@ function toggleAfk() {
   player.userData.emote = '';
   if (!mySit && subway?.active) mySit = subway.canPose ? subway.sitDown() : ''; // [subway-pose]
   else if (!mySit) {
-    const seat = stationPlaza.findSeat?.(player.position.x, player.position.z);
+    const seat = findNearbySeat(player.position.x, player.position.z);
     if (seat) {
       sitExitPos = {
         x: seat.exitX ?? player.position.x,
         z: seat.exitZ ?? player.position.z,
       };
-      const ty = terrain ? terrain.getGroundHeight(seat.x, seat.z, player.position.y) : 0;
+      const ty = seatSurfaceY(seat);
       player.position.set(seat.x, ty, seat.z);
       player.rotation.y = seat.ry;
       mySit = seat.kind;
@@ -2193,7 +2204,15 @@ input.onKey = (e) => {
   if (e.code === 'KeyM') viewBtn.onclick();
   if (e.code === 'KeyH') document.getElementById('btn-home').onclick();
   if (e.code === 'Enter') { e.preventDefault(); chatInput.focus(); }
-  if (e.code === 'KeyE' && !e.repeat && !ride?.handleE()) toggleRide(); // [ride] 버스·택시 탑승/하차가 우선, 아니면 카카오바이크
+  if (e.code === 'KeyE' && !e.repeat && !ride?.handleE()) {
+    // [cityhall] 육교 엘리베이터: 근처면 상·하판 토글, 아니면 카카오바이크
+    const el = corridor?.cityhall?.tryElevator?.(player.position.x, player.position.z, player.position.y);
+    if (el) {
+      player.position.set(el.x, el.y, el.z);
+    } else {
+      toggleRide();
+    }
+  }
   if (e.code === 'KeyY' && !e.repeat && ride && joined) ride.hail(); // [ride] 택시 호출
   if (e.code === 'KeyX' && !e.repeat && ride?.ride?.mode === 'taxi') ride.requestStop(); // [ride] 택시 '세워주세요'
   if (e.code === 'KeyV' && !e.repeat && ride?.active) ride.toggleCam(); // [ride] 창가 1인칭 ↔ 뒤쪽 3인칭
@@ -2469,7 +2488,7 @@ function frame() {
     if (!terrain && player.position.y !== 0) player.position.y = 0; // [terrain] 지형이 있으면 둔치 높이를 유지
 
     // 빈백·벤치 근처 좌석 감지하여 하단 앉기 버튼 문구 자동 전환
-    const foundSeat = !mySit && joined ? stationPlaza.findSeat?.(player.position.x, player.position.z) : null;
+    const foundSeat = !mySit && joined ? findNearbySeat(player.position.x, player.position.z) : null;
     if ((foundSeat?.label || '') !== (nearSeatHint?.label || '')) {
       nearSeatHint = foundSeat || null;
       if (!emoteFolded) renderEmoteBar();
@@ -2486,8 +2505,8 @@ function frame() {
               x: foundSeat.exitX ?? player.position.x,
               z: foundSeat.exitZ ?? player.position.z,
             };
-            const ty = terrain ? terrain.getGroundHeight(foundSeat.x, foundSeat.z, player.position.y) : 0;
-            player.position.set(foundSeat.x, ty, foundSeat.z);
+            const ty = seatSurfaceY(foundSeat);
+          player.position.set(foundSeat.x, ty, foundSeat.z);
             player.rotation.y = foundSeat.ry;
             mySit = foundSeat.kind;
           } else {
@@ -2522,6 +2541,7 @@ function frame() {
     player.userData.jumpY = jumpY;
     player.userData.emote = myEmote;
     player.userData.sit = ride?.active ? 'bench' : mySit; // [ride] 버스·택시 좌석
+  corridor?.cityhall?.setPlayerPos?.(player.position.x, player.position.z);
     player.userData.afk = ride?.active ? false : myAfk;
     player.userData.umbrella = umbrellas.umbrellaTheme || '';
     animateAvatar(player, moveSpeed, dt);
