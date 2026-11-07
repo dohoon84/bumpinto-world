@@ -1,7 +1,1 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128" role="img" aria-label="explore.map placeholder">
-  <circle cx="64" cy="64" r="54" fill="#e6b422"/>
-  <circle cx="64" cy="64" r="42" fill="none" stroke="#3a2500" stroke-width="3" stroke-dasharray="5 4"/>
-  <text x="64" y="62" text-anchor="middle" dominant-baseline="middle" font-family="sans-serif" font-size="44" font-weight="700" fill="#3a2500">지</text>
-  <text x="64" y="92" text-anchor="middle" font-family="sans-serif" font-size="10" font-weight="700" fill="#3a2500">PLACEHOLDER</text>
-</svg>
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128"><g transform="translate(64 64) scale(0.84302) translate(-64 -64)"><path d="m29 40 23-12 24 12 23-12v60l-23 12-24-12-23 12V40ZM52 29v59M76 40v60" fill="none" stroke="currentColor" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/></g></svg>

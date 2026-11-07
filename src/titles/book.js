@@ -106,7 +106,7 @@ export function createIconSheet() {
       root.addEventListener('click', (e) => { if (e.target.closest('[data-tb="close"]')) root.hidden = true; });
     }
     root.hidden = false;
-    root.innerHTML = `<button type="button" class="tb-x" data-tb="close" aria-label="close">×</button><div class="tb-sheet-grid">${TITLES.map((t) => `<figure class="g-${gradeOf(t)}"><img src="${iconSrc(t)}" alt="${esc(isEn() ? t.name.en : t.name.ko)}" width="160" height="160"><figcaption>${esc(isEn() ? t.name.en : t.name.ko)}</figcaption><small>PLACEHOLDER · ${esc(gradeOf(t))}</small></figure>`).join('')}</div>`;
+    root.innerHTML = `<button type="button" class="tb-x" data-tb="close" aria-label="close">×</button><div class="tb-sheet-grid">${TITLES.map((t) => `<figure class="g-${gradeOf(t)}"><img src="${iconSrc(t)}" alt="${esc(isEn() ? t.name.en : t.name.ko)}" width="160" height="160"><figcaption>${esc(isEn() ? t.name.en : t.name.ko)}</figcaption><small>${esc(gradeOf(t))}</small></figure>`).join('')}</div>`;
   }
   function close() { if (root) root.hidden = true; }
   return { open, close };

@@ -91,7 +91,7 @@ body.in-gate .tb-layer, body.in-lobby .tb-layer, body.in-gate .tb-sheet, body.in
   position: absolute; inset: 0; border-radius: 50%;
   backface-visibility: hidden; -webkit-backface-visibility: hidden;
 }
-.tb-front { overflow: hidden; background: var(--back, #c5d0dc); }
+.tb-front { overflow: hidden; background: #142033; }
 .tb-front img { width: 100%; height: 100%; display: block; }
 .tb-back {
   transform: rotateY(180deg);

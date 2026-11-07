@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import { LADDERS } from '../server/phone/src/account/econ.js';
 import { readFileSync } from 'node:fs';
 import { TITLES, featuredId, gradeRank, sanitizeTitleId, titleByAxisKo } from '../src/titles/catalog.js';
-import { ICON_TIERS, indexSlots } from '../src/titles/icons.js';
+import { GRADES } from '../src/titles/catalog.js';
+import { ICON_TIERS, indexSlots, tintSvg, tierColor } from '../src/titles/icons.js';
 import { titleDemoId, titlesEnabled } from '../src/titles/flags.js';
 import { TITLE_STORE_KEY, createTitleStore } from '../src/titles/store.js';
 import { fanfareNotes } from '../src/titles/sound.js';
@@ -103,18 +104,24 @@ for (const t of TITLES) {
   const slot = slots.find((s) => s.id === t.id);
   assert.ok(slot, t.id);
   assert.ok(ICON_TIERS.includes(slot.tier));
-  assert.equal(slot.placeholder, true);
+  assert.equal(slot.tier, t.grade);
+  assert.equal(slot.placeholder, false);
   assert.equal(slot.src, `titles/${t.id}.svg`);
   const svg = readFileSync(new URL(`../public/${slot.src}`, import.meta.url), 'utf8');
   assert.match(svg, /viewBox="0 0 128 128"/);
   assert.match(svg, /width="128"/);
-  assert.match(svg, /PLACEHOLDER/);
+  assert.match(svg, /currentColor/);
+  assert.doesNotMatch(svg, /PLACEHOLDER/);
   assert.doesNotMatch(svg, /<script/i);
   assert.doesNotMatch(svg, /<image/i);
+  assert.doesNotMatch(svg, /<text/i);
+  const tinted = tintSvg(svg, tierColor(slot.tier));
+  assert.equal(tinted.includes('currentColor'), false);
+  assert.equal(tinted.includes(GRADES[slot.tier].metal), true);
 }
 assert.equal(indexSlots({ slots: { 'health.stroll': { tier: 'nope', src: 'titles/x.svg' } } }).length, 0);
 assert.equal(indexSlots({ slots: { bad: { tier: 'gold', src: '../secret.svg' } } }).length, 0);
-ok('icon slots are placeholder svgs behind one manifest');
+ok('icon slots are final svgs tinted to the tier color');
 
 import { announceTitleId } from '../src/titles/catalog.js';
 import { titleCheerOn, titleFxOn, titleRarityOn } from '../src/titles/flags.js';

@@ -44,6 +44,16 @@ function absUrl(src, base) {
   return b + src.replace(/^\//, '');
 }
 
+/** img 는 currentColor 를 물려받지 않는다. 등급 금속색으로 바꾼 SVG 를 쓴다. */
+export function tintSvg(svg, color) {
+  const hex = /^#[0-9a-fA-F]{3,8}$/.test(String(color || '')) ? String(color) : '#ffffff';
+  return String(svg).split('currentColor').join(hex);
+}
+
+export function tierColor(grade) {
+  return (GRADES[grade] || GRADES.gold).metal;
+}
+
 export function iconSrc(title) {
   const slot = title ? slots.get(title.id) : null;
   if (slot?.url) return slot.url;
@@ -118,7 +128,19 @@ export async function loadTitleIcons(base = (typeof import.meta !== 'undefined' 
     if (!res.ok) throw new Error(String(res.status));
     const json = await res.json();
     const next = new Map();
-    for (const slot of indexSlots(json)) next.set(slot.id, { ...slot, url: absUrl(slot.src, base) });
+    const rows = indexSlots(json);
+    await Promise.all(rows.map(async (slot) => {
+      const file = absUrl(slot.src, base);
+      let url = file;
+      try {
+        const svg = await fetch(file);
+        if (svg.ok) {
+          const text = await svg.text();
+          url = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(tintSvg(text, tierColor(slot.tier)))}`;
+        }
+      } catch { /* 원본 경로로 둔다 */ }
+      next.set(slot.id, { ...slot, url });
+    }));
     slots = next;
   } catch (e) {
     console.warn('[titles] icon manifest', e?.message || e);

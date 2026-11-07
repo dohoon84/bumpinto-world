@@ -1,7 +1,1 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128" role="img" aria-label="health.stroll placeholder">
-  <circle cx="64" cy="64" r="54" fill="#8d5a32"/>
-  <circle cx="64" cy="64" r="42" fill="none" stroke="#fff8e7" stroke-width="3" stroke-dasharray="5 4"/>
-  <text x="64" y="62" text-anchor="middle" dominant-baseline="middle" font-family="sans-serif" font-size="44" font-weight="700" fill="#fff8e7">산</text>
-  <text x="64" y="92" text-anchor="middle" font-family="sans-serif" font-size="10" font-weight="700" fill="#fff8e7">PLACEHOLDER</text>
-</svg>
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128"><g transform="translate(64 64) scale(0.87402) translate(-64 -64)"><path fill="currentColor" fill-rule="evenodd" d="M38 33h23l4 29 14 11 17 6q7 3 7 11v9H27V82l13-15-2-34Z M41 42v18h12l-2-18Z"/><path d="M32 101h63" fill="none" stroke="currentColor" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/></g></svg>

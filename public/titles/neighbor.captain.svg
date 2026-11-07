@@ -1,7 +1,1 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128" role="img" aria-label="neighbor.captain placeholder">
-  <circle cx="64" cy="64" r="54" fill="#e6b422"/>
-  <circle cx="64" cy="64" r="42" fill="none" stroke="#3a2500" stroke-width="3" stroke-dasharray="5 4"/>
-  <text x="64" y="62" text-anchor="middle" dominant-baseline="middle" font-family="sans-serif" font-size="44" font-weight="700" fill="#3a2500">동</text>
-  <text x="64" y="92" text-anchor="middle" font-family="sans-serif" font-size="10" font-weight="700" fill="#3a2500">PLACEHOLDER</text>
-</svg>
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128"><g transform="translate(64 64) scale(0.81162) translate(-64 -64)"><path d="M40 100V30" fill="none" stroke="currentColor" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/><path fill="currentColor" fill-rule="evenodd" d="M43 27h51l-10 23 10 22H43Z M54 45v10h23V45Z"/><path d="M28 102h36" fill="none" stroke="currentColor" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/></g></svg>

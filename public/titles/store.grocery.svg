@@ -1,7 +1,1 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128" role="img" aria-label="store.grocery placeholder">
-  <circle cx="64" cy="64" r="54" fill="#1aa37c"/>
-  <circle cx="64" cy="64" r="42" fill="none" stroke="#fff8e7" stroke-width="3" stroke-dasharray="5 4"/>
-  <text x="64" y="62" text-anchor="middle" dominant-baseline="middle" font-family="sans-serif" font-size="44" font-weight="700" fill="#fff8e7">장</text>
-  <text x="64" y="92" text-anchor="middle" font-family="sans-serif" font-size="10" font-weight="700" fill="#fff8e7">PLACEHOLDER</text>
-</svg>
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128"><g transform="translate(64 64) scale(1.00000) translate(-64 -64)"><path fill="currentColor" fill-rule="evenodd" d="M27 55h74l-9 43H36L27 55ZM41 66l4 21h8l-3-21ZM60 66v21h8V66ZM78 66l-3 21h8l4-21Z M44 47l-5-21 17 9 8-16 8 16 17-9-5 21Z"/></g></svg>
