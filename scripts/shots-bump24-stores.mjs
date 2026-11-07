@@ -23,7 +23,7 @@ const shots = [
   ['문정', 'bump24-cr10571'],
   ['가락시장', 'bump24-cr7944'],
   ['송파', 'bump24-cr140'],
-  ['석촌', 'bump24-cr3086'],
+  ['석촌', 'bump24-cr3350'],
 ];
 
 const browser = await chromium.launch({
