@@ -436,4 +436,73 @@ for (const paid of [false, true]) {
   ok(`rideId match (${paid ? 'paid' : 'free'}): bus/taxi ledger rideId = charge().receiptId (rideLog fare.receiptId), subway = UI rideId; ${paid ? 'ledger ids numeric' : 'e{n} 0-delta rows'}`);
 }
 
+// ── 보상 토스트 재생 수정(?toastfix): 다른 기기 첫 갱신에서 오래된 원장 행은 잔액만, 최근 행·이후 폴링은 토스트. 지난 날 이동 보상 제목에 날짜 ──
+{
+  const { toastFixOn, datedTravelTitle, STALE_REWARD_MS } = await import('../src/ui-v2/econ/serverClient.js');
+  assert.equal(toastFixOn(''), true); assert.equal(toastFixOn('?toastfix=1'), true); assert.equal(toastFixOn('?toastfix=0'), false);
+  assert.equal(STALE_REWARD_MS, 600_000);
+  const MID = Date.parse('2026-11-06T00:00:40+09:00'); // 자정 직후 (다른 기기에서 받음)
+  const MORNING = Date.parse('2026-11-06T08:23:00+09:00');
+  // move·quests 기능을 끄면 /econ/state 가 새 원장 행을 만들지 않는다(행을 직접 넣어 시나리오를 고정)
+  const env = makeEnv({ ECON_FEATURES: '' });
+  await account(env, 'z');
+  const add = async (reason, ref, key, amount, at) => { await L.appendLedger(env.DB, { accountId: 'z', amount, kind: 'free', reason, ref, idempotencyKey: key }, { now: at }); return Number((await env.DB.prepare('SELECT MAX(id) AS n FROM ledger').first()).n); };
+  const seen = await add('welcome', null, 'welcome:z', 20000, MID - 3 * 86400_000); // 이 기기가 마지막으로 본 행
+  await add('quest', 'D-LOGIN@2026-11-06', 'quest:z:D-LOGIN:2026-11-06', 500, MID);
+  await add('move', '2026-11-05:23', 'move:z:2026-11-05', 23 * 172, MID + 15 * 60_000);
+  const storeAt = () => { const st = memStore(); st.setItem('bw.econ.last.v1', JSON.stringify({ acc: 'z', id: seen })); return st; };
+  const tok = await S.signSession({ accountId: 'z', sessionVersion: 1, now: MORNING }, SECRET);
+  const total = 20000 + 500 + 23 * 172;
+
+  // 1) 기본(켜짐): 아침 다른 기기 첫 갱신 → 토스트 0, 잔액은 반영
+  const jar = { token: tok, now: MORNING };
+  const c = mk(env, jar, { storage: storeAt(), toastFix: true });
+  const ev = collect(c);
+  await c.getSession();
+  assert.equal(ev.reward.length, 0, 'stale catch-up rows: no toast');
+  assert.equal((await c.getBalance()).total, total, 'balance still updated');
+  // 이후 폴링에서 새로 생긴 행은 그대로 토스트(10분보다 오래된 시각이어도 첫 갱신이 아니면 토스트)
+  await add('quest', 'D-WALK10@2026-11-06', 'quest:z:D-WALK10:2026-11-06', 1000, MORNING - 20 * 60_000);
+  await c.refresh();
+  assert.deepEqual(ev.reward.map((r) => r.amount), [1000], 'incremental fetch unchanged');
+
+  // 2) 첫 갱신이어도 최근(10분 이내) 행은 토스트. 기기 시계가 하루 틀려도 서버 시각(balance.updatedAt) 기준
+  const jar2 = { token: tok, now: MORNING + 5 * 60_000 };
+  await add('quest', 'D-RIDE10@2026-11-06', 'quest:z:D-RIDE10:2026-11-06', 1000, MORNING + 3 * 60_000);
+  const st2 = memStore(); st2.setItem('bw.econ.last.v1', JSON.stringify({ acc: 'z', id: seen }));
+  const c2 = createServerClient({ fetch: fakeFetch(env, jar2), base: BASE, enabled: true, storage: st2, now: () => MORNING - 86400_000, pollMs: 0, doc: null, autoRegister: false, rideBridge: false, toastFix: true });
+  const ev2 = collect(c2);
+  await c2.getSession();
+  assert.deepEqual(ev2.reward.map((r) => r.amount), [1000], 'only the recent row toasts on first fetch (server clock)');
+
+  // 3) ?toastfix=0 → 예전 동작: 저장된 lastId 이후 행 전부 토스트, 제목 날짜 없음
+  const c3 = mk(env, { token: tok, now: MORNING + 5 * 60_000 }, { storage: storeAt(), toastFix: false });
+  const ev3 = collect(c3);
+  await c3.getSession();
+  assert.equal(ev3.reward.length, 4, 'opt-out: replay all rows since stored lastId');
+  const mv3 = ev3.reward.find((r) => r.kind === 'travel');
+  assert.equal(mv3.title.ko, '이동 보상 23분');
+
+  // 4) 지난 KST 날짜 이동 보상: 폴링으로 받으면 제목에 날짜
+  const env4 = makeEnv({ ECON_FEATURES: '' });
+  await account(env4, 'y');
+  await L.appendLedger(env4.DB, { accountId: 'y', amount: 20000, kind: 'free', reason: 'welcome', ref: null, idempotencyKey: 'welcome:y' }, { now: MID - 86400_000 }); // lastId > 0 이어야 폴링이 이벤트를 낸다
+  const jar4 = { token: await S.signSession({ accountId: 'y', sessionVersion: 1, now: MID }, SECRET), now: MID };
+  const c4 = mk(env4, jar4, { toastFix: true });
+  const ev4 = collect(c4);
+  await c4.getSession();
+  await L.appendLedger(env4.DB, { accountId: 'y', amount: 23 * 172, kind: 'free', reason: 'move', ref: '2026-11-05:23', idempotencyKey: 'move:y:2026-11-05' }, { now: MID + 15 * 60_000 });
+  jar4.now = MID + 16 * 60_000; await c4.refresh();
+  await L.appendLedger(env4.DB, { accountId: 'y', amount: 60 * 172, kind: 'free', reason: 'move', ref: '2026-11-06:60', idempotencyKey: 'move:y:2026-11-06' }, { now: MID + 9 * 3600_000 });
+  jar4.now = MID + 9 * 3600_000 + 30_000; await c4.refresh();
+  const titles = ev4.reward.filter((r) => r.kind === 'travel').map((r) => r.title);
+  assert.deepEqual(titles, [{ ko: '11/5 이동 보상 23분', en: '11/5 Travel reward 23 min' }, { ko: '이동 보상 60분', en: 'Travel reward 60 min' }]);
+  // 순수 함수: 오늘·날짜 없음·다른 종류는 그대로
+  const rw = { kind: 'travel', title: { ko: '이동 보상 5분', en: 'Travel reward 5 min' } };
+  assert.equal(datedTravelTitle(rw, { sub: { ko: '2026-11-06' } }, '2026-11-06'), rw);
+  assert.equal(datedTravelTitle(rw, { sub: null }, '2026-11-06'), rw);
+  assert.equal(datedTravelTitle({ kind: 'quest', title: rw.title }, { sub: { ko: '2026-11-05' } }, '2026-11-06').title, rw.title);
+  ok('toastfix: first fetch on another device skips >10 min old reward toasts (balance still updates, server clock), recent rows + later polls toast, ?toastfix=0 restores replay; past-day travel toast titled "11/5 이동 보상"');
+}
+
 console.log(`\necon client: ${n} checks passed`);
