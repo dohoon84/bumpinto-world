@@ -148,21 +148,49 @@ console.log('economy tests');
   const rows = ms.drain();
   const w = rows.find((r) => r.mode === 'walk');
   assert.ok(w.cs >= 119 && w.cs <= 120, `credited ${w.cs}`);
-  ok('move: steady 1.4 m/s walk → credited seconds ≈ elapsed (60 s windows, net ≥ 30 m)');
+  ok('move: steady 1.4 m/s walk → credited seconds ≈ elapsed');
 
   const loop = new STAT.MoveStats();
   t = NOW;
   for (let i = 0; i <= 180; i++) { loop.push({ x: (i % 2) * 3, z: 0, mode: 'walk', now: t }); t += 1000; }
   const lr = loop.drain().find((r) => r.mode === 'walk');
   assert.ok(lr.m > 100, 'stats still count distance'); assert.equal(lr.cs, 0, 'back-and-forth in place not credited');
-  ok('move: pacing in place (net displacement < 30 m per window) → 0 credited, distance stats kept');
+  ok('move: pacing 3 m in place → 0 credited, distance stats kept');
+
+  const run = new STAT.MoveStats();
+  t = NOW;
+  for (let i = 0; i <= 120; i++) { run.push({ x: i * 9, z: 0, mode: 'walk', now: t }); t += 1000; }
+  const rr = run.drain().find((r) => r.mode === 'walk');
+  assert.ok(rr.cs >= 119 && rr.cs <= 120, `run credited ${rr.cs}`);
+  ok('move: shift-run 9 m/s is inside the v2 walk cap → credited');
 
   const sprint = new STAT.MoveStats();
   t = NOW;
-  for (let i = 0; i <= 120; i++) { sprint.push({ x: i * 7, z: 0, mode: 'walk', now: t }); t += 1000; }
+  for (let i = 0; i <= 120; i++) { sprint.push({ x: i * 30, z: 0, mode: 'walk', now: t }); t += 1000; }
   const sr = sprint.drain().find((r) => r.mode === 'walk');
   assert.equal(sr.cs, 0); assert.ok(sprint.dropped.fast > 100);
-  ok('move: over the walk speed cap (Shift sprint) → not credited');
+  ok('move: sustained 30 m/s on walk → 0 credited');
+
+  const legacy = new STAT.MoveStats({ v2: false });
+  t = NOW;
+  for (let i = 0; i <= 120; i++) { legacy.push({ x: i * 7, z: 0, mode: 'walk', now: t }); t += 1000; }
+  const lg = legacy.drain().find((r) => r.mode === 'walk');
+  assert.equal(lg.cs, 0); assert.ok(legacy.dropped.fast > 100);
+  ok('move: MOVE_CREDIT_V2 off keeps the old cap (7 m/s walk not credited)');
+
+  const shuttle = new STAT.MoveStats();
+  t = NOW;
+  let x = 0, dir = 1;
+  shuttle.push({ x: 0, z: 0, mode: 'walk', now: t });
+  for (let i = 0; i < 120; i++) {
+    x += dir * 4.2;
+    if (x >= 40) { x = 40; dir = -1; } else if (x <= 0) { x = 0; dir = 1; }
+    shuttle.push({ x, z: 0, mode: 'walk', now: (t += 1000) });
+  }
+  shuttle.finish();
+  const sh = shuttle.drain().find((r) => r.mode === 'walk');
+  assert.ok(sh.cs >= 110, `40 m shuttle credited ${sh.cs}`);
+  ok('move: 40 m back-and-forth keeps almost all of the moving time');
 
   const tele = new STAT.MoveStats();
   t = NOW;
@@ -577,6 +605,9 @@ console.log('economy tests');
   assert.deepEqual({ ...C.MOVE.multiplier }, { walk: 1, bike: 1, roadbike: 1, superbike: 0.5, truck: 0.5, bus: 0, taxi: 0 });
   assert.equal(C.MOVE.perMinute * C.MOVE.multiplier.superbike, 86);
   assert.equal(C.MOVE.windowMinNetM, 30); assert.equal(STAT.TELEPORT_M, 50);
+  assert.equal(F.moveCreditV2({}), true); assert.equal(F.moveCreditV2({ MOVE_CREDIT_V2: '1' }), true);
+  assert.equal(F.moveCreditV2({ MOVE_CREDIT_V2: '0' }), false);
+  assert.ok(STAT.MODE_CAP_V2_MPS.walk >= 9); assert.ok(STAT.MODE_CAP_V2_MPS.bike >= 13.5);
   assert.equal(C.WELCOME_FREE_BUM, 20000); assert.equal(C.BETA_FREE_BUM, 10000); assert.equal(C.BETA_WINDOW_DAYS, 30);
   const fares = Object.fromEntries(Object.entries(C.FARES).filter(([, f]) => f.amount).map(([k, f]) => [k, f.amount]));
   assert.deepEqual(fares, { 'bus.city': 1650, 'bus.village': 1550, 'bus.seat': 2650, 'bus.wide': 3200, 'bus.circular': 3450, 'bus.long': 3200, 'subway.base': 1550 });

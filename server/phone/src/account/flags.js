@@ -4,6 +4,9 @@
 //   ECONOMY_ENABLED   "1" 이면 웰컴·베타 지급과 잔액 표시. 기본 "0".
 //   ECONOMY_OPEN_AT   경제 오픈 시각(ISO, 예 2026-12-01T00:00:00+09:00). 베타 감사 지급의 기준일·30일 창. 비어 있으면 베타 지급 없음.
 //   STATS_ENABLED     "0" 이면 칭호용 기록(이동·접속일·사진)을 끈다. 기본 켬(ACCOUNTS_ENABLED 가 켜졌을 때만 의미).
+//   MOVE_CREDIT_V2    인정 이동 초를 쌓는 방식. 비우거나 "1" = 검증된 초를 그대로 더함(루프·왕복·짧은 공백 유지).
+//                     "0" = 롤백. 예전 60초 창(순변위 30m 미만이면 그 1분 전체 버림, 속도 상한은 plan 실측값).
+//                     대시보드 변수로만 켠다. wrangler.jsonc vars 에는 넣지 않는다(keep_vars · 운영 값 유지).
 //   ACCOUNT_MAX_DEVICES 계정당 기기 수 상한. 기본 5.
 //   ── [economy] 2~5단계 (전부 ECONOMY_ENABLED=1 위에서만 의미) ──
 //   ECON_FEATURES     켤 기능 목록(쉼표). move | quests | shop | board. 기본 "" = 웰컴 지급만. 순서: move → quests → shop → board
@@ -38,6 +41,15 @@ export function economyEnabled(env) {
 
 export function statsEnabled(env) {
   return accountsReady(env) && !/^(0|false|off|no)$/i.test(String(env?.STATS_ENABLED ?? "1").trim());
+}
+
+/**
+ * 인정 이동 v2. 기본 켜짐.
+ * MOVE_CREDIT_V2="0" (false/off/no) 이면 예전 60초 순변위 창으로 돌아간다.
+ * 값이 없거나 "1" 이면 검증된 초를 누적한다.
+ */
+export function moveCreditV2(env) {
+  return !/^(0|false|off|no)$/i.test(String(env?.MOVE_CREDIT_V2 ?? "1").trim());
 }
 
 export function economyOpenAt(env) {

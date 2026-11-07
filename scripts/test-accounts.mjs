@@ -416,7 +416,11 @@ function makeAuth(env, jwks) {
   const fast = new STAT.MoveStats();
   fast.push({ x: 0, z: 0, mode: 'walk', now: NOW });
   fast.push({ x: 7, z: 0, mode: 'walk', now: NOW + 1000 });
-  assert.equal(Math.floor(fast.drain()[0].m), 4); ok('over speed cap → clamped to 4.62 m/s');
+  assert.equal(Math.floor(fast.drain()[0].m), 7); ok('7 m/s is under the v2 walk cap (shift-run is 9)');
+  const legacyCap = new STAT.MoveStats({ v2: false });
+  legacyCap.push({ x: 0, z: 0, mode: 'walk', now: NOW });
+  legacyCap.push({ x: 7, z: 0, mode: 'walk', now: NOW + 1000 });
+  assert.equal(Math.floor(legacyCap.drain()[0].m), 4); ok('MOVE_CREDIT_V2 off → distance still clamped to 4.62 m/s');
   assert.equal(STAT.classifyMode({ sit: 'bus:12' }), 'bus');
   assert.equal(STAT.classifyMode({ sit: 'taxi:1' }), 'taxi');
   assert.equal(STAT.classifyMode({ veh: 900 }), null);

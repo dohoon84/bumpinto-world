@@ -21,8 +21,10 @@ export const ECON_CONFIG_VERSION = 4; // 이동·퀘스트·업적·요금·상�
  *   원장에는 날짜마다 딱 1행(plan "일 단위 이벤트 move(mode, sec) → 원장 move:{date}", 키 move:{acc}:{date}) — 토스트도 하루 1번.
  *     · 그날 인정분이 하루 몫(min(60분, 이번 주 남은 분))에 닿으면 그 자리에서 지급
  *     · 못 닿은 날은 날짜가 지나고 settleGraceMin 뒤, 다음 접속 때(최근 catchUpDays 일) 그날 인정분 그대로 지급
- *   인정 조건(stats.js MoveStats): 수단별 속도 상한, 순간이동 버림, 5초 넘는 공백 버림, 80ms 보다 촘촘한 표본 버림,
- *   60초 창의 순변위 30m 미만(제자리 맴돌기) 버림.
+ *   인정 조건(stats.js MoveStats, MOVE_CREDIT_V2 기본 켜짐): 게임 속도에 맞춘 수단별 상한(여러 표본으로 판정),
+ *   순간이동 버림, 5초 넘는 공백은 그 공백만 버림, 80ms 보다 촘촘한 표본 버림, 제자리 미세 왕복(약 3m)은 버림.
+ *   이미 검증된 초는 공백·수단 변경·자리비움 너머로 남긴다.
+ *   MOVE_CREDIT_V2="0" 이면 예전 규칙: 60초 창의 순변위 30m 미만이면 그 1분을 통째로 버림.
  */
 /** 분당 금액 표 (plan §6 "1분 = 172 bum (2026 최저시급 10,320 ÷ 60). 2027-01-01에 178로" · Figma 13:2 Note 03). KST 날짜로 고른다. */
 export const MOVE_RATES = Object.freeze([

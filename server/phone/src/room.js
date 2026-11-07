@@ -1,6 +1,6 @@
 import { DurableObject } from "cloudflare:workers";
 import { giftItem, giftItemByVeh, normalizeHoldings, qtyOf, withQty } from "../../../src/gifts/catalog.js";
-import { accountsReady, statsEnabled } from "./account/flags.js"; // [accounts]
+import { accountsReady, moveCreditV2, statsEnabled } from "./account/flags.js"; // [accounts]
 import { sessionFromRequest } from "./account/session.js";
 import { accountById, accountForSession } from "./account/store.js";
 import { MoveStats, classifyMode, flushMoves, logLoginDay } from "./account/stats.js";
@@ -83,11 +83,29 @@ export class Room extends DurableObject {
     }
   }
 
+  // 같은 계정이 소켓을 여러 개 열어도 인정 초는 한 연결만 쌓는다.
+  // 자리비움이 아닌 연결을 우선하고, 둘 다 움직이면 id 가 작은 쪽만 남긴다.
+  #shouldCredit(ws, me, now) {
+    let socks = [];
+    try { socks = this.ctx.getWebSockets(ACCOUNT_TAG + me.accountId) || []; } catch { return true; }
+    const fresh = [];
+    for (const s of socks) {
+      const p = s.deserializeAttachment();
+      if (!p?.id || (p.lastSeen && now - p.lastSeen > STALE_MS)) continue;
+      fresh.push({ s, p });
+    }
+    if (fresh.length <= 1) return true;
+    const moving = fresh.filter((x) => !x.p.afk);
+    const pool = (moving.length ? moving : fresh).slice().sort((a, b) => (String(a.p.id) < String(b.p.id) ? -1 : 1));
+    return pool[0].s === ws;
+  }
+
   #trackMove(ws, me, m, now) {
     if (!me.accountId || !statsEnabled(this.env)) return;
+    if (!this.#shouldCredit(ws, me, now)) return;
     let slot = this.moves.get(ws);
     if (!slot) {
-      slot = { stats: new MoveStats(), flushedAt: now };
+      slot = { stats: new MoveStats({ v2: moveCreditV2(this.env) }), flushedAt: now };
       this.moves.set(ws, slot);
     }
     const mode = classifyMode({ riding: me.riding, sit: me.sit, afk: me.afk, veh: me.veh?.id, zone: m.zone }, giftVehMode);
