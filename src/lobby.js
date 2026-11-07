@@ -604,7 +604,7 @@ export function openLobby({ sms, region = null, onJoin, onBack }) {
       const picked = sanitizeLook(session.look || pickedLook());
       try { localStorage.setItem(PROFILE_KEY, JSON.stringify({ name, look: picked, phone: session.phone, display: session.display })); } catch {}
       cleanupLobby();
-      onJoin(name, picked, session);
+      await onJoin(name, picked, session); // [arrivefix] 역 입장이면 도착(최대 8초)까지 로딩 화면 유지
       await screen.finish();
       return;
     }
@@ -642,7 +642,7 @@ export function openLobby({ sms, region = null, onJoin, onBack }) {
     const picked = session.look || pickedLook();
     try { localStorage.setItem(PROFILE_KEY, JSON.stringify({ name, look: picked, phone: session.phone, display: session.display })); } catch { /* 저장이 막혀 있어도 입장은 된다 */ }
     cleanupLobby();
-    onJoin(name, picked, session);
+    await onJoin(name, picked, session); // [arrivefix]
     await screen.finish();
   });
 }

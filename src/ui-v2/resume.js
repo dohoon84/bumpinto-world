@@ -45,7 +45,7 @@ export function writeResume(who, region, p, now = Date.now()) {
 /** 게임 안(입장 완료 · 걸어 다니는 중)인지 — 저장해도 되는 순간 */
 function onFoot(j) {
   const b = document.body.classList;
-  if (!j?.player?.visible || b.contains('in-gate') || b.contains('in-lobby')) return false;
+  if (!j?.player?.visible || j.arriving || b.contains('in-gate') || b.contains('in-lobby')) return false;
   if (document.getElementById('enter-loading') && !document.getElementById('enter-loading').hidden) return false;
   if (j.subway?.active || j.subway?.zone) return false; // 지하·열차 안
   if (j.ride?.active) return false; // 버스·택시 탑승 중
