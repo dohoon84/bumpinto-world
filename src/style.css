@@ -362,7 +362,7 @@ html.cc-on #cc-reopen {
   background: rgba(255, 255, 255, 0.18);
   color: #ffe169;
 }
-#ride-btn { position: fixed; left: 50%; bottom: 98px; transform: translateX(-50%); z-index: 6; font: inherit; font-size: 14px; font-weight: 800; color: #3a2a00; background: #fee500; border: 0; border-radius: 999px; padding: 8px 14px; box-shadow: 0 2px 8px rgba(0,0,0,.18); cursor: pointer; }
+#ride-btn { position: fixed; left: 50%; bottom: 110px; transform: translateX(-50%); z-index: 6; font: inherit; font-size: 14px; font-weight: 800; color: #3a2a00; background: #fee500; border: 0; border-radius: 999px; padding: 8px 14px; box-shadow: 0 2px 8px rgba(0,0,0,.18); cursor: pointer; }
 #ride-btn[hidden] { display: none !important; }
 body.in-lobby #ride-btn { display: none !important; }
 #chat-log-panel {
@@ -384,7 +384,7 @@ body.in-lobby #ride-btn { display: none !important; }
 @media (max-width: 1180px) {
   #emote-bar .emote-btn[data-emote-id] .em-lbl { display: none; }
 }
-#ride-btn:not([hidden]) ~ #chat-log-panel { bottom: 142px; }
+#ride-btn:not([hidden]) ~ #chat-log-panel { bottom: 154px; }
 #chat-log-panel[hidden] { display: none !important; }
 #chat-log-panel .c-head {
   display: flex;
