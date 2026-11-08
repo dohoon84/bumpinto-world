@@ -54,8 +54,8 @@ if (bump24StorePrompts('bump24-jeongja', '?bump24jeongja=0')) throw new Error('�
 if (!bump24StorePrompts('cr1', '?bump24jeongja=0')) throw new Error('코리더 매장 안내가 정자 플래그에 같이 꺼짐');
 if (!bump24StorePrompts('bump24-jeongja', '')) throw new Error('정자점 문 안내가 기본에서 꺼짐');
 if (bump24StorePrompts('bump24-jeongja', '?bp24game=0')) throw new Error('bp24game=0 인데 정자점 안내');
-if (bump24StorePrompts('seongnam-cityhall', '')) throw new Error('기본 URL에서 시청점 안내가 켜짐');
-if (bump24StorePrompts('seongnam-cityhall', '?bp24=1')) throw new Error('시청점은 ?bp24game=1 없이 안내가 켜짐');
+if (!bump24StorePrompts('seongnam-cityhall', '')) throw new Error('기본 URL에서 시청점 안내가 꺼짐');
+if (!bump24StorePrompts('seongnam-cityhall', '?bp24=1')) throw new Error('?bp24=1 인데 시청점 안내가 꺼짐');
 if (!bump24StorePrompts('seongnam-cityhall', '?bp24game=1')) throw new Error('시청점 ?bp24game=1 안내가 꺼짐');
 if (!bump24StorePrompts('seongnam-cityhall', '?bp24=1&bp24game=1')) throw new Error('시청점 ?bp24=1&bp24game=1 안내가 꺼짐');
 if (bump24StorePrompts('seongnam-cityhall', '?bp24=0&bp24game=1')) throw new Error('?bp24=0 인데 시청점 안내');

@@ -2645,7 +2645,8 @@ function buildPlazaExtras(data, M) {
   bag.box(OX, DECK_Y - 0.72, OZ, SPAN - 7.0, 0.14, DECK_W * 0.28, 0, '#e4e8ec');
   bag.box(OX, DECK_Y - 0.82, OZ, SPAN - 11.0, 0.1, DECK_W * 0.16, 0, '#d8dde2');
 
-  // Teal-tint glass rails on main span
+  // Rails only on the deck's outer edges. The south rail stops short of both
+  // ends so the stair landings are not walled off. Same two panes as before.
   const railMat = new THREE.MeshStandardMaterial({
     color: TEAL, transparent: true, opacity: 0.38, roughness: 0.12, metalness: 0.15,
     side: THREE.DoubleSide, depthWrite: false,
@@ -2653,15 +2654,16 @@ function buildPlazaExtras(data, M) {
   const railH = 1.15;
   for (const zs of [-1, 1]) {
     const zR = OZ + zs * (DECK_W / 2);
-    const pane = new THREE.Mesh(new THREE.PlaneGeometry(SPAN - 0.4, railH, 1, 1), railMat);
+    const span = zs === 1 ? SPAN - 10 : SPAN - 0.4;
+    const pane = new THREE.Mesh(new THREE.PlaneGeometry(span, railH, 1, 1), railMat);
     pane.position.set(OX, DECK_Y + railH / 2, zR);
     pane.name = 'cityhallOverpassRail';
     g.add(pane);
-    for (let x = xW + 1; x <= xE - 1; x += 3.0) {
+    for (let x = OX - span / 2 + 0.8; x <= OX + span / 2 - 0.8; x += 3.0) {
       bag.box(x, DECK_Y + railH / 2, zR, 0.06, railH, 0.06, 0, WHITE);
     }
-    bag.box(OX, DECK_Y + railH + 0.04, zR, SPAN - 0.2, 0.07, 0.07, 0, WHITE);
-    bag.box(OX, DECK_Y + 0.04, zR, SPAN - 0.2, 0.06, 0.08, 0, WHITE);
+    bag.box(OX, DECK_Y + railH + 0.04, zR, span, 0.07, 0.07, 0, WHITE);
+    bag.box(OX, DECK_Y + 0.04, zR, span, 0.06, 0.08, 0, WHITE);
   }
 
   const cableMat = new THREE.MeshBasicMaterial({ color: '#f8fafc' });
@@ -2709,12 +2711,15 @@ function buildPlazaExtras(data, M) {
       bag.box(baseX, 0.28, OZ + zSign * (legSpread / 2), 2.0, 0.55, 1.8, 0, WHITE2);
     }
 
-    // Elevator glass cabin between A-frame legs (tryElevator)
+    // Elevator frame between A-frame legs (tryElevator). Corner posts only —
+    // a solid shaft filled the deck and blocked the walk.
     const ex = baseX + sideSign * 0.2;
     const ez = OZ;
     const EH = DECK_Y + 2.2;
-    bag.box(ex, EH / 2, ez, 2.0, EH, 2.0, 0, WHITE);
-    bag.box(ex, EH + 0.18, ez, 2.2, 0.36, 2.2, 0, WHITE2);
+    for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
+      bag.box(ex + sx * 0.92, (EH + 0.2) / 2, ez + sz * 0.92, 0.14, EH + 0.2, 0.14, 0, WHITE);
+    }
+    bag.box(ex, EH + 0.18, ez, 2.2, 0.28, 2.2, 0, WHITE2);
     const eg = new THREE.Mesh(
       new THREE.PlaneGeometry(1.5, 2.3),
       new THREE.MeshStandardMaterial({ color: '#c8e0e4', transparent: true, opacity: 0.5, side: THREE.DoubleSide }),
@@ -2736,59 +2741,40 @@ function buildPlazaExtras(data, M) {
       }
     }
 
-    // Stair ramp descending alongside deck (south side), with teal glass railing — walkable
-    const steps = 14;
-    const run = 12.0;
-    const stairZ = OZ + DECK_W / 2 + 1.6; // beside deck
+    // Stairs run out from the deck end, south of the A-frame footings.
+    // Tread tops are continuous: the first is flush with the deck, each next
+    // step drops one rise, and each box reaches the tread below (no float gap).
+    const steps = 16;
+    const rise = DECK_Y / steps;
+    const run = 14;
+    const stepRun = run / steps;
+    const treadD = 1.7;
+    const stairZ = OZ + legSpread / 2 + 1.85;
     for (let i = 0; i < steps; i++) {
-      const yTop = DECK_Y * (1 - (i + 1) / steps);
-      const yBot = DECK_Y * (1 - i / steps);
-      const rise = Math.max(0.16, yBot - yTop);
-      // Stairs continue outward from deck end (away from midspan)
-      const xx = endX + sideSign * (0.8 + run * ((i + 0.5) / steps));
-      bag.box(xx, yTop - rise * 0.4, stairZ, run / steps + 0.08, Math.max(0.16, rise * 0.85), 1.5, 0, WHITE);
+      const yTop = DECK_Y - i * rise;
+      const h = rise + 0.05;
+      const xx = endX + sideSign * (0.3 + stepRun * (i + 0.5));
+      bag.box(xx, yTop - h / 2, stairZ, stepRun + 0.08, h, treadD, 0, WHITE);
+      const hx = (stepRun + 0.08) / 2;
       heights.push({
         kind: 'stair',
-        x0: xx - run / steps * 0.55, x1: xx + run / steps * 0.55,
-        z0: stairZ - 0.85, z1: stairZ + 0.85,
+        x0: xx - hx, x1: xx + hx,
+        z0: stairZ - treadD / 2, z1: stairZ + treadD / 2,
         y: yTop,
       });
-      // glass rail posts along outer edge
-      bag.box(xx, yTop / 2 + 0.15, stairZ + 0.7, 0.06, Math.max(0.25, yTop + 0.9), 0.06, 0, WHITE);
     }
-    // Teal glass pane along stair outer side
-    {
-      const sx0 = endX + sideSign * 0.8;
-      const sx1 = endX + sideSign * (0.8 + run);
-      const scx = (sx0 + sx1) / 2;
-      // approximate vertical plane (not slanted with stair — good enough visual)
-      const pane = new THREE.Mesh(
-        new THREE.PlaneGeometry(run + 0.4, DECK_Y * 0.55 + 1.0, 1, 1),
-        railMat,
-      );
-      pane.position.set(scx, (DECK_Y * 0.55 + 1.0) / 2, stairZ + 0.72);
-      pane.name = 'cityhallOverpassRail';
-      g.add(pane);
-      bag.box(scx, DECK_Y * 0.55 + 1.0, stairZ + 0.72, run + 0.4, 0.07, 0.07, 0, WHITE);
-    }
-    // Handrail posts on inner stair edge + link to deck
-    for (let i = 0; i <= steps; i++) {
-      const t0 = i / steps;
-      const yTop = DECK_Y * (1 - t0);
-      const xx = endX + sideSign * (0.8 + run * t0);
-      bag.box(xx, yTop + 0.55, stairZ - 0.7, 0.06, 0.08, 0.06, 0, WHITE);
-      bag.box(xx, yTop + 0.55, stairZ + 0.7, 0.06, 0.08, 0.06, 0, WHITE);
-    }
-    // Deck spur from main span to elevator / stair head
-    bag.box(endX + sideSign * 1.4, DECK_Y - 0.08, OZ, 3.2, 0.16, DECK_W + 0.4, 0, WHITE);
-    // Short landing between elevator and stair head
-    bag.box(endX + sideSign * 1.4, DECK_Y - 0.08, (OZ + stairZ) / 2, 2.2, 0.16, Math.abs(stairZ - OZ), 0, WHITE);
+    // Landing covers only the top tread. A box over the lower steps reported
+    // deck height and canMove treated the jump as a wall.
+    const land = 0.3 + stepRun * 0.45;
+    const xA = endX - sideSign * 0.2;
+    const xB = endX + sideSign * land;
+    const zIn = OZ + DECK_W / 2 - 0.45;
+    const zOut = stairZ - treadD / 2 + 0.3;
+    bag.box((xA + xB) / 2, DECK_Y - 0.08, (zIn + zOut) / 2, Math.abs(xB - xA), 0.16, Math.abs(zOut - zIn), 0, WHITE);
     heights.push({
       kind: 'deck',
-      x0: Math.min(endX, endX + sideSign * 2.8) - 0.3,
-      x1: Math.max(endX, endX + sideSign * 2.8) + 0.3,
-      z0: OZ - DECK_W / 2 - 0.2,
-      z1: stairZ + 0.9,
+      x0: Math.min(xA, xB), x1: Math.max(xA, xB),
+      z0: Math.min(zIn, zOut), z1: Math.max(zIn, zOut),
       y: DECK_Y,
     });
   }

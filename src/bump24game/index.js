@@ -138,7 +138,7 @@ export function mountBump24Game({
       return getCorridor?.()?.bp24?.stores || [];
     } catch { return []; }
   }
-  // 안내·입장은 이 목록만. 기본 주소에서는 정자점 문. 시청점은 ?bp24game=1 일 때만 들어온다.
+  // 안내·입장은 이 목록만. 시청점은 매장이 켜져 있으면 기본 주소에서도 들어온다.
   function promptStores() {
     return stores().filter((st) => bump24StorePrompts(st.id, search));
   }
