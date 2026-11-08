@@ -8,10 +8,12 @@ import {
   NOTICE_IMAGE_MAX,
   closeNoticeLightbox,
   galleryHtml,
+  noticeHasImages,
   noticeImagesDemo,
   noticeImagesEnabled,
   noticeLightboxOpen,
   openNoticeLightbox,
+  photoMarkHtml,
   sanitizeNoticeImages,
 } from './noticeImages.js'; // [notice-images]
 
@@ -372,19 +374,20 @@ export function mountBoard({ sms, getMe, onOpen } = {}) {
       ? listData.items
           .map((rawItem) => {
             const item = localizePost(rawItem);
-            const gallery = noticeImagesEnabled() && item.category === 'notice' ? galleryHtml(item.images, esc) : '';
+            const mark = noticeImagesEnabled() && item.category === 'notice' && noticeHasImages(item.images)
+              ? photoMarkHtml(en ? 'Photos' : '사진')
+              : '';
             return `
-          <tr class="board-row ${item.category === 'notice' ? 'is-notice' : ''}${gallery ? ' has-images' : ''}" data-post-id="${item.id}">
+          <tr class="board-row ${item.category === 'notice' ? 'is-notice' : ''}" data-post-id="${item.id}">
             <td class="col-id">${item.category === 'notice' ? `<span class="pin-icon" title="${en ? 'Pinned Notice' : '상단 고정 공지'}">📌</span>` : item.id}</td>
             <td class="col-cat"><span class="cat-badge cat-${esc(item.category)}">${esc(catLabelOf(item.category, true))}</span></td>
             <td class="col-title">
               <button type="button" class="title-btn" data-post-id="${item.id}">
-                ${esc(item.title)}
+                ${mark}${esc(item.title)}
                 ${isNewPost(item) ? `<span class="post-new-icon" title="${en ? 'Posted within 24h' : '24시간 이내 새 글'}">N</span>` : ''}
                 ${item.commentsCount > 0 ? `<span class="cmt-count">[${item.commentsCount}]</span>` : ''}
                 ${item.mine ? `<em class="mine-tag">${en ? 'Mine' : '내 글'}</em>` : ''}
               </button>
-              ${gallery}
             </td>
             <td class="col-author">${esc(item.authorName)}</td>
             <td class="col-date">${esc(fmtDate(item.createdAt))}</td>

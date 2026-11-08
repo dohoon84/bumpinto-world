@@ -2312,7 +2312,10 @@ body.in-lobby #hud, body.in-lobby #buttons, body.in-lobby #top-right-bar, body.i
 }
 
 /* [notice-images] 공지에 사진이 있을 때만 붙는다. 없는 공지는 이 규칙을 타지 않는다. */
-#board-modal .board-table .board-row.has-images td { vertical-align: top; }
+#board-modal .ni-mark {
+  display: inline-flex; align-items: center; margin-right: 4px; vertical-align: -2px; color: #f5a200;
+}
+#board-modal .ni-mark svg { display: block; }
 #board-modal .ni-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
 #board-modal .ni-thumb {
   width: 160px; height: 112px; padding: 0; border-radius: 8px; overflow: hidden; cursor: zoom-in;

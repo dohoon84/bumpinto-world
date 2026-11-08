@@ -45,6 +45,27 @@ export function noticeImagesColumnPresent(columns) {
   return Array.isArray(columns) && columns.some((c) => c?.name === 'images');
 }
 
+/**
+ * PhoneBook 가 켜질 때마다. posts.images 가 없으면 ALTER 한 번.
+ * CREATE TABLE 에 이미 있으면 아무것도 하지 않는다. ALTER 가 실패해도 던지지 않는다.
+ * @returns {{ added: boolean }}
+ */
+export function ensurePostsImagesColumn(sql) {
+  let cols = [];
+  try {
+    cols = sql.exec("PRAGMA table_info(posts)").toArray();
+  } catch {
+    return { added: false };
+  }
+  if (noticeImagesColumnPresent(cols)) return { added: false };
+  try {
+    sql.exec("ALTER TABLE posts ADD COLUMN images TEXT");
+    return { added: true };
+  } catch {
+    return { added: false };
+  }
+}
+
 function parseStored(raw) {
   if (Array.isArray(raw)) return raw;
   if (typeof raw !== 'string' || !raw.trim()) return [];
@@ -107,6 +128,16 @@ export function sanitizeNoticeImages(input, { allowData = false } = {}) {
 export function readPostImages(row, { allowData = false } = {}) {
   if (!row || row.category !== 'notice' || !('images' in row)) return [];
   return sanitizeNoticeImages(row.images, { allowData });
+}
+
+export function noticeHasImages(images) {
+  return sanitizeNoticeImages(images, { allowData: true }).length > 0;
+}
+
+/** 목록 제목 옆 표시. 사진 자체는 넣지 않는다. */
+export function photoMarkHtml(label = '사진') {
+  const text = String(label || '사진').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  return `<span class="ni-mark" title="${text}" aria-label="${text}"><svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><rect x="1.5" y="3.25" width="13" height="10" rx="2" fill="none" stroke="currentColor" stroke-width="1.4"/><circle cx="6" cy="7" r="1.3" fill="currentColor"/><path d="M2.6 11.6 L5.8 8.7 L8 10.4 L10.3 8.2 L13.4 11.6" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg></span>`;
 }
 
 export function galleryHtml(images, esc, { allowData = true } = {}) {

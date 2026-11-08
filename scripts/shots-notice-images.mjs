@@ -1,60 +1,12 @@
-// [notice-images] 로컬 게시판에 사진 2장짜리 공지를 심고, 첫 화면(게시판 공지 탭)·본문·라이트박스·작성 화면을 찍는다.
+// [notice-images] 로컬 게시판에 사진 4장짜리 공지를 심고, 목록(아이콘만)·본문·라이트박스를 찍는다.
 // 사용: npm run build && npx vite preview --port 4239 --strictPort
 //       node scripts/shots-notice-images.mjs
-import { deflateSync } from 'node:zlib';
-import { writeFileSync, mkdirSync } from 'node:fs';
+import { mkdirSync } from 'node:fs';
 import { chromium } from 'playwright';
 
 const B = process.env.BASE || 'http://127.0.0.1:4239/';
 const OUT = process.env.OUT || '/opt/cursor/artifacts';
 mkdirSync(OUT, { recursive: true });
-
-function crc(buf) {
-  let c = ~0;
-  for (const byte of buf) {
-    c ^= byte;
-    for (let k = 0; k < 8; k++) c = (c >>> 1) ^ (0xedb88320 & -(c & 1));
-  }
-  return ~c >>> 0;
-}
-function chunk(type, data) {
-  const body = Buffer.concat([Buffer.from(type), data]);
-  const len = Buffer.alloc(4);
-  len.writeUInt32BE(data.length);
-  const sum = Buffer.alloc(4);
-  sum.writeUInt32BE(crc(body));
-  return Buffer.concat([len, body, sum]);
-}
-function png(w, h, paint) {
-  const raw = Buffer.alloc((w * 4 + 1) * h);
-  for (let y = 0; y < h; y++) {
-    raw[y * (w * 4 + 1)] = 0;
-    for (let x = 0; x < w; x++) {
-      const [r, g, b] = paint(x, y, w, h);
-      const i = y * (w * 4 + 1) + 1 + x * 4;
-      raw[i] = r; raw[i + 1] = g; raw[i + 2] = b; raw[i + 3] = 255;
-    }
-  }
-  const ihdr = Buffer.alloc(13);
-  ihdr.writeUInt32BE(w, 0); ihdr.writeUInt32BE(h, 4);
-  ihdr[8] = 8; ihdr[9] = 6;
-  return Buffer.concat([
-    Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]),
-    chunk('IHDR', ihdr),
-    chunk('IDAT', deflateSync(raw)),
-    chunk('IEND', Buffer.alloc(0)),
-  ]);
-}
-const fileA = '/tmp/notice-a.png';
-const fileB = '/tmp/notice-b.png';
-writeFileSync(fileA, png(320, 200, (x, y, w, h) => {
-  const t = y / h;
-  return [15 + x * 20 / w, 25 + t * 40, 42 + (1 - t) * 30];
-}));
-writeFileSync(fileB, png(320, 200, (x, y, w, h) => {
-  const band = Math.floor(x / 40) % 2;
-  return band ? [255, 225, 105] : [18, 32, 51];
-}));
 
 const QS = 'passport=1&noticeimgdemo=1&npcs=0&taxis=0&police=0&trucks=0&bike=0&roadbike=0&superbike=0&bus=sim&bgm=0&ws=mock&shadow=0';
 
@@ -90,8 +42,10 @@ async function seed(page) {
           title: '야간 점검 안내 — 공지 이미지',
           body: '오늘 밤 정자역 일대 조명을 점검합니다. 아래 사진을 눌러 크게 볼 수 있습니다.',
           images: [
-            { url: paint('#1d2e4b', '#0f192a', '정자역 야간'), alt: '정자역 야간' },
-            { url: paint('#14324a', '#f5a200', '탄천 산책로'), alt: '탄천 산책로' },
+            { url: paint('#1d2e4b', '#0f192a', '1 정자역'), alt: '정자역 야간' },
+            { url: paint('#14324a', '#f5a200', '2 탄천'), alt: '탄천 산책로' },
+            { url: paint('#0f192a', '#4cc9f0', '3 광장'), alt: '정자역 광장' },
+            { url: paint('#3a2a00', '#ffe169', '4 야간'), alt: '야간 조명' },
           ],
         }),
       ],
@@ -117,18 +71,17 @@ async function shoot(name, { mobile }) {
   await page.waitForFunction(() => {
     const leave = document.getElementById('btn-leave');
     const modal = document.getElementById('board-modal');
-    return leave && !leave.hidden && modal && !modal.hidden && modal.querySelector('.ni-thumb');
+    const list = modal.querySelector('.board-table');
+    return leave && !leave.hidden && modal && !modal.hidden && list && list.querySelector('.ni-mark') && !list.querySelector('img') && !list.querySelector('.ni-more');
   }, null, { timeout: 180000 });
   await page.waitForTimeout(400);
-  const thumb = page.locator('#board-modal .ni-thumb').first();
-  await thumb.scrollIntoViewIfNeeded();
   await page.screenshot({ path: `${OUT}/${mobile ? 'mobile' : 'pc'}-firstscreen.png` });
 
-  await page.locator('#board-modal tr.has-images .title-btn').click();
+  await page.locator('#board-modal .title-btn:has(.ni-mark)').click();
   await page.waitForSelector('#board-modal .ni-detail .ni-thumb');
   await page.locator('#board-modal .board-body').evaluate((el) => { el.scrollTop = 0; });
   await page.waitForTimeout(200);
-  await page.screenshot({ path: `${OUT}/${mobile ? 'mobile' : 'pc'}-board.png` });
+  await page.screenshot({ path: `${OUT}/${mobile ? 'mobile' : 'pc'}-detail.png` });
 
   await page.locator('#board-modal .ni-detail .ni-thumb').first().click();
   await page.waitForSelector('#ni-lightbox img');
@@ -136,18 +89,6 @@ async function shoot(name, { mobile }) {
   await page.screenshot({ path: `${OUT}/${mobile ? 'mobile' : 'pc'}-lightbox.png` });
   await page.locator('#ni-lightbox .ni-x').click();
   await page.waitForSelector('#ni-lightbox', { state: 'detached' });
-
-  if (!mobile) {
-    await page.locator('#board-modal [data-action="back-list"]').click();
-    await page.waitForSelector('#board-modal [data-action="write"]');
-    await page.locator('#board-modal [data-action="write"]').click();
-    await page.waitForSelector('#board-modal .ni-compose');
-    await page.fill('#board-modal input[name="title"]', '야간 점검 안내 — 공지 이미지');
-    await page.fill('#board-modal textarea[name="body"]', '사진을 붙여 공지를 올립니다. 목록과 본문에서 눌러 크게 볼 수 있습니다.');
-    await page.setInputFiles('#board-modal input[name="noticeImages"]', [fileA, fileB]);
-    await page.waitForFunction(() => document.querySelectorAll('#board-modal .ni-compose .ni-thumb').length >= 2);
-    await page.screenshot({ path: `${OUT}/admin-compose.png` });
-  }
   await ctx.close();
   console.log('shot', name);
 }

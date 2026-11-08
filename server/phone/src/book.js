@@ -1,6 +1,6 @@
 import { DurableObject } from "cloudflare:workers";
 import { NOTICE_POSTS } from "../../../src/notices.js";
-import { noticeImagesColumnPresent, readPostImages, sanitizeNoticeImages } from "../../../src/noticeImages.js"; // [notice-images]
+import { ensurePostsImagesColumn, noticeImagesColumnPresent, readPostImages, sanitizeNoticeImages } from "../../../src/noticeImages.js"; // [notice-images]
 import { GIFT_ITEMS, giftItem, giftUnit, normalizeHoldings } from "../../../src/gifts/catalog.js";
 import { photoOp } from "./photos.js";
 import { deviceInfo, mergeUser } from "./accountMerge.js"; // [accounts]
@@ -241,7 +241,8 @@ export class PhoneBook extends DurableObject {
         author_name TEXT NOT NULL,
         views INTEGER NOT NULL DEFAULT 0,
         created_at INTEGER NOT NULL,
-        updated_at INTEGER NOT NULL
+        updated_at INTEGER NOT NULL,
+        images TEXT
       )`);
       sql.exec(`CREATE INDEX posts_cat_id ON posts (category, id DESC)`);
       sql.exec(`CREATE INDEX posts_id ON posts (id DESC)`);
@@ -403,6 +404,8 @@ export class PhoneBook extends DurableObject {
       }
       sql.exec(`INSERT INTO _sql_schema_migrations (id) VALUES (11)`);
     }
+    // [notice-images] 이미 만들어진 posts 에도 images 를 한 번만 붙인다. 새 DB 는 CREATE 에 이미 있다.
+    ensurePostsImagesColumn(sql);
     this.#syncNotices();
   }
 
@@ -1007,7 +1010,7 @@ export class PhoneBook extends DurableObject {
     return item;
   }
 
-  // [notice-images] posts.images 는 제안 마이그레이션(0003)을 DO 에 적용하기 전에는 없다.
+  // [notice-images] 시작 때 ensurePostsImagesColumn 가 컬럼을 넣는다. 실패하면 글만 읽는다.
   #postImagesColumn() {
     try {
       const cols = this.ctx.storage.sql.exec("PRAGMA table_info(posts)").toArray();

@@ -2,7 +2,10 @@
 // node scripts/test-notice-images.mjs
 import assert from 'node:assert/strict';
 import {
+  ensurePostsImagesColumn,
   galleryHtml,
+  noticeHasImages,
+  photoMarkHtml,
   noticeImagesColumnPresent,
   noticeImagesDemo,
   noticeImagesEnabled,
@@ -69,6 +72,58 @@ assert.equal((html.match(/data-ni-open/g) || []).length, 2);
 assert.match(html, /data-ni-i="1"/);
 assert.doesNotMatch(html, /<script/i);
 ok('empty gallery renders nothing; two images render two buttons');
+
+const four = [0, 1, 2, 3].map((i) => ({ url: `https://example.com/${i}.png`, alt: String(i) }));
+assert.equal((galleryHtml(four, esc).match(/class="ni-thumb"/g) || []).length, 4);
+assert.equal(noticeHasImages([]), false);
+assert.equal(noticeHasImages(four), true);
+const mark = photoMarkHtml('사진');
+assert.match(mark, /class="ni-mark"/);
+assert.match(mark, /<svg/);
+assert.doesNotMatch(mark, /<img/i);
+assert.doesNotMatch(mark, /\+N|\+\d/);
+ok('list mark is an icon only; detail gallery keeps every image');
+
+function memSql(names, { failAlter = false } = {}) {
+  const columns = names.map((name) => ({ name }));
+  const alters = [];
+  return {
+    alters,
+    columns,
+    exec(statement) {
+      if (/PRAGMA table_info\(posts\)/i.test(statement)) return { toArray: () => columns.slice() };
+      if (/ALTER TABLE posts ADD COLUMN images TEXT/.test(statement)) {
+        alters.push(statement);
+        if (failAlter) throw new Error('alter failed');
+        columns.push({ name: 'images' });
+        return { toArray: () => [] };
+      }
+      throw new Error(`unexpected sql: ${statement}`);
+    },
+  };
+}
+{
+  const missing = memSql(['id', 'title', 'body']);
+  assert.deepEqual(ensurePostsImagesColumn(missing), { added: true });
+  assert.equal(missing.alters.length, 1);
+  assert.equal(missing.columns.some((c) => c.name === 'images'), true);
+  ok('column missing -> ALTER once');
+  assert.deepEqual(ensurePostsImagesColumn(missing), { added: false });
+  assert.equal(missing.alters.length, 1);
+  ok('second init -> no-op');
+}
+{
+  const present = memSql(['id', 'images', 'title']);
+  assert.deepEqual(ensurePostsImagesColumn(present), { added: false });
+  assert.equal(present.alters.length, 0);
+  ok('column present (fresh CREATE) -> no ALTER');
+}
+{
+  const bad = memSql(['id', 'title'], { failAlter: true });
+  assert.deepEqual(ensurePostsImagesColumn(bad), { added: false });
+  assert.equal(bad.alters.length, 1);
+  ok('ALTER failure stays text-only');
+}
 
 assert.equal(sniffNoticeImage(new Uint8Array([0xff, 0xd8, 0xff, 0x00])), 'image/jpeg');
 assert.equal(sniffNoticeImage(new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])), 'image/png');
