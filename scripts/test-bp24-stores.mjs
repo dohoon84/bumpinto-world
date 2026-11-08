@@ -157,7 +157,9 @@ for (const spec of BP24_PLACEMENTS) {
     };
     if (wallD(-196.3, 251.8) < 0.8) fail.push(`${spec.id} 사선 모서리가 벽으로 남음`);
     if (!st.cornerDoor || Math.hypot(st.cornerDoor[0] + 196.3, st.cornerDoor[1] - 251.8) > 2.2) fail.push(`${spec.id} 모서리 문 트리거가 없음`);
-    if (Math.abs((st.sideZ1 - st.sideZ0) - st.D) > 3.5) fail.push(`${spec.id} 남쪽 유리 너비가 상자 옆면과 다름 ${(st.sideZ1 - st.sideZ0).toFixed(1)}`);
+    const southSpan = st.sideZ1 - st.sideZ0;
+    const minSouth = st.D - 0.5; // 392135a buildStore 옆 유리 (zb - zf - 0.5)
+    if (!(southSpan >= minSouth - 0.05)) fail.push(`${spec.id} 남쪽 유리가 392135a(${minSouth.toFixed(1)}m)보다 좁음 ${southSpan.toFixed(1)}`);
     if (wallD(-198, 229) > 0.5) fail.push(`${spec.id} 매장 북쪽 서쪽 벽에 1층 벽이 없음`);
     if (wallD(-165, 253.4) > 0.5) fail.push(`${spec.id} 매장 동쪽 남쪽 벽에 1층 벽이 없음`);
     const glassBlocked = (x, z, nx, nz) => {

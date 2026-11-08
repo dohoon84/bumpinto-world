@@ -952,12 +952,15 @@ function alignSideGlass(st) {
   }
   if (!best) return;
   st.sideOut = best.dist - 0.04;
-  // 너비는 상자 옆면(392135a) 그대로. 사선 모서리 밖(u<0 쪽)은 모서리 문이 맡는다.
+  // 392135a 남쪽 유리는 D-0.5. 사선 모서리는 유리문이 맡고, 직선 길 벽은 그 너비 이상(최대 16m).
   const proj = (p) => (p[0] - base.a[0]) * ux + (p[1] - base.a[1]) * uz;
   const wallLo = Math.min(proj(best.a), proj(best.b));
   const wallHi = Math.max(proj(best.a), proj(best.b));
-  const lo = Math.max(0, wallLo);
-  const hi = Math.min(wallHi, lo + sL);
+  const minSpan = sL - 0.5;
+  let lo = Math.max(wallLo, -0.2);
+  let hi = Math.min(wallHi, sL + 12);
+  if (hi - lo > 16) hi = lo + 16;
+  if (hi - lo < minSpan) hi = Math.min(wallHi, lo + minSpan);
   if (hi - lo < 3) return;
   const toLocalZ = (u) => {
     const w = [base.a[0] + ux * u, base.a[1] + uz * u];
