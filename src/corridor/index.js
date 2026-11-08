@@ -8,6 +8,7 @@ import { mergeTancheon, coveredFn, holeyGround, channelWaterMesh } from './tanch
 import { buildDetailTile, buildLodTile, roadMesh, CAR_KINDS } from './tileMesh.js';
 import { applyTileCuts } from '../world/streams.js';
 import { buildCorridorCrossings } from './crossings.js';
+import { mountYatapSchoolZone } from './yatapSchoolZone.js'; // [schoolzone]
 import { createLandmarks } from './landmarks/index.js';
 import { createLotteEvent } from './landmarks/lotteEvent.js';
 import { stationSign, Grid } from '../world.js';
@@ -285,6 +286,7 @@ export function createCorridor({ scene, corridorData, terrain, world, renderer, 
 
   // ---------- 횡단보도 · 랜드마크 ----------
   const crossings = buildCorridorCrossings(root, base.crossings, { getSimTime });
+  const schoolZone = mountYatapSchoolZone(root, params); // [schoolzone] 야탑초 어린이 보호구역. ?schoolzone=0 이면 null
   const landmarks = createLandmarks(root, index.landmarks, renderer);
   const bp24Search = params || (typeof location !== 'undefined' ? location.search : '');
   const bp24Kind = bp24Mode(bp24Search); // [bp24] ?bp24=1 목록 · ?bp24=demo 목록+데모
@@ -329,6 +331,7 @@ export function createCorridor({ scene, corridorData, terrain, world, renderer, 
   const api = {
     root, bounds, stations, tiles, stats, crossings, landmarks, inLive,
     bp24, // [bp24] null 이면 꺼짐
+    schoolZone, // [schoolzone] null 이면 꺼짐(?schoolzone=0)
     pangyo: pangyoLm, // [pangyo] null 이면 꺼짐(?pangyo=0)
     migeum: migeumLm, // [migeum] null 이면 꺼짐(?migeum=0)
     get pangyoExpress() { return pangyoEx; }, // [pangyo-express] null 이면 꺼짐(?pangyoexpress=0 · ?pangyo=0) · [perf-memory] 지연 로드면 멀 때 null
