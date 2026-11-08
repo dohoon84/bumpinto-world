@@ -134,6 +134,75 @@ export function noticeHasImages(images) {
   return sanitizeNoticeImages(images, { allowData: true }).length > 0;
 }
 
+// [사진N] 은 1부터 센다. N 은 images[N-1] 이다.
+// 썸네일에서 빼면 그 번호의 토큰을 지우고, 더 큰 번호는 하나씩 당긴다.
+// 본문에 사람이 적은 주소는 사진으로 쓰지 않는다. 이스케이프한 뒤에 토큰만 바꿔 넣는다.
+
+export function noticeToken(index) {
+  return `[사진${index + 1}]`;
+}
+
+/** 커서 위치에 토큰을 한 줄로 넣는다. */
+export function insertNoticeToken(text, cursor, index) {
+  const src = String(text ?? '');
+  const at = Math.max(0, Math.min(src.length, Math.floor(Number(cursor) || 0)));
+  const token = noticeToken(index);
+  let before = src.slice(0, at);
+  let after = src.slice(at);
+  if (before.length && !before.endsWith('\n')) before += '\n';
+  if (after.length && !after.startsWith('\n')) after = `\n${after}`;
+  return { text: `${before}${token}${after}`, cursor: before.length + token.length };
+}
+
+/** removedIndex 는 0부터. 그 사진의 토큰을 지우고 뒤를 다시 번호 매긴다. */
+export function removeNoticeImageToken(text, removedIndex) {
+  const drop = Math.floor(Number(removedIndex)) + 1;
+  if (!Number.isInteger(drop) || drop < 1) return String(text ?? '');
+  const rewrite = (line) => line.replace(/\[사진(\d+)\]/g, (full, n) => {
+    const num = Number(n);
+    if (!Number.isInteger(num) || num < 1) return full;
+    if (num === drop) return '';
+    if (num > drop) return `[사진${num - 1}]`;
+    return full;
+  });
+  return String(text ?? '').split('\n').flatMap((line) => {
+    if (/^\[사진(\d+)\]$/.test(line.trim()) && Number(/^\[사진(\d+)\]$/.exec(line.trim())[1]) === drop) return [];
+    return [rewrite(line)];
+  }).join('\n');
+}
+
+/** 목록·미리보기·끄기 스위치에서 토큰 글자를 뺀다. */
+export function stripNoticeTokens(text) {
+  return String(text ?? '')
+    .split('\n')
+    .filter((line) => !/^\[사진\d+\]$/.test(line.trim()))
+    .map((line) => line.replace(/\[사진\d+\]/g, ''))
+    .join('\n');
+}
+
+/**
+ * 본문을 먼저 esc 한 뒤 [사진N] 만 저장 이미지로 바꾼다.
+ * 토큰이 없는 사진(예전 글)은 rest 로 남아 아래 갤러리에 둔다.
+ * enabled 가 아니면 토큰을 지운 글만 돌려주고 사진은 없다.
+ */
+export function renderNoticeBody(body, images, esc, { enabled = true, allowData = true } = {}) {
+  const list = enabled ? sanitizeNoticeImages(images, { allowData }) : [];
+  const source = enabled ? String(body ?? '') : stripNoticeTokens(body);
+  const escaped = typeof esc === 'function' ? esc(source) : '';
+  if (!enabled || typeof esc !== 'function') return { html: escaped, rest: [] };
+  const used = new Set();
+  const html = escaped.replace(/\[사진(\d+)\]/g, (_, n) => {
+    const i = Number(n) - 1;
+    if (!Number.isInteger(i) || i < 0 || i >= list.length) return '';
+    used.add(i);
+    const img = list[i];
+    const alt = esc(img.alt || '사진');
+    const src = esc(img.url);
+    return `<button type="button" class="ni-inline" data-ni-open data-ni-i="${i}" aria-label="${alt}"><img src="${src}" alt="${alt}" draggable="false" /></button>`;
+  });
+  return { html, rest: list.filter((_, i) => !used.has(i)) };
+}
+
 /** 목록 제목 옆 표시. 사진 자체는 넣지 않는다. */
 export function photoMarkHtml(label = '사진') {
   const text = String(label || '사진').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));

@@ -370,6 +370,8 @@ body.mobile #board-modal .board-detail, body.mobile #board-modal .board-form { m
 body.mobile #board-modal .board-detail-content img { max-width: 100%; height: auto; }
 body.mobile #board-modal .ni-detail .ni-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 body.mobile #board-modal .ni-detail .ni-thumb { width: 100%; height: 112px; }
+body.mobile #board-modal .board-detail-content .ni-inline { width: 100%; }
+body.mobile #board-modal .board-detail-content .ni-inline img { max-height: 180px; }
 body.mobile #board-modal .ni-mark { flex: none; color: #b46900; }
 body.mobile #board-modal .ni-compose-grid { display: grid; grid-template-columns: 1fr 1fr; }
 body.mobile #board-modal .ni-url { flex-wrap: wrap; }

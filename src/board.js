@@ -8,13 +8,17 @@ import {
   NOTICE_IMAGE_MAX,
   closeNoticeLightbox,
   galleryHtml,
+  insertNoticeToken,
   noticeHasImages,
   noticeImagesDemo,
   noticeImagesEnabled,
   noticeLightboxOpen,
   openNoticeLightbox,
   photoMarkHtml,
+  removeNoticeImageToken,
+  renderNoticeBody,
   sanitizeNoticeImages,
+  stripNoticeTokens,
 } from './noticeImages.js'; // [notice-images]
 
 // [game-icons] PC HUD v3(body.hud-v3) 에서만: 머리·버튼·탭의 이모지를 공용 게임 아이콘으로 바꾼다. 예전 HUD·모바일은 그대로.
@@ -222,7 +226,7 @@ export function mountBoard({ sms, getMe, onOpen } = {}) {
     return `
       <fieldset class="ni-compose">
         <legend>${en ? 'Notice images' : '공지 이미지'}</legend>
-        <p>${en ? 'Up to 8 jpg, png, or webp images. They show on the notice list and in the post.' : 'jpg, png, webp 를 8장까지. 공지 목록과 본문에 보입니다.'}</p>
+        <p>${en ? 'Adding a photo puts [사진1] on its own line at the cursor. Move that line to place it in the post.' : '사진을 더하면 커서 자리에 [사진1] 이 한 줄로 들어갑니다. 그 줄을 옮기면 본문 위치도 바뀝니다.'}</p>
         ${thumbs}
         <label class="ni-file">${en ? 'Add images' : '이미지 추가'}
           <input name="noticeImages" type="file" accept="image/jpeg,image/png,image/webp" multiple ${draftImages.length >= NOTICE_IMAGE_MAX ? 'disabled' : ''} />
@@ -383,7 +387,7 @@ export function mountBoard({ sms, getMe, onOpen } = {}) {
             <td class="col-cat"><span class="cat-badge cat-${esc(item.category)}">${esc(catLabelOf(item.category, true))}</span></td>
             <td class="col-title">
               <button type="button" class="title-btn" data-post-id="${item.id}">
-                ${mark}${esc(item.title)}
+                ${mark}${esc(stripNoticeTokens(item.title))}
                 ${isNewPost(item) ? `<span class="post-new-icon" title="${en ? 'Posted within 24h' : '24시간 이내 새 글'}">N</span>` : ''}
                 ${item.commentsCount > 0 ? `<span class="cmt-count">[${item.commentsCount}]</span>` : ''}
                 ${item.mine ? `<em class="mine-tag">${en ? 'Mine' : '내 글'}</em>` : ''}
@@ -443,7 +447,11 @@ export function mountBoard({ sms, getMe, onOpen } = {}) {
         </div>`;
     }
     const p = localizePost(currentPost);
-    const gallery = noticeImagesEnabled() && p.category === 'notice' ? galleryHtml(p.images, esc) : '';
+    const imagesOn = noticeImagesEnabled() && p.category === 'notice';
+    const shown = imagesOn
+      ? renderNoticeBody(p.body, p.images, esc)
+      : { html: esc(noticeImagesEnabled() ? p.body : stripNoticeTokens(p.body)), rest: [] };
+    const gallery = shown.rest.length ? galleryHtml(shown.rest, esc) : '';
     const commentRows = currentComments.length
       ? currentComments
           .map(
@@ -487,7 +495,7 @@ export function mountBoard({ sms, getMe, onOpen } = {}) {
           </div>
         </div>
         ${errorMsg ? `<p class="board-error">${esc(errorMsg)}</p>` : ''}
-        <div class="board-detail-content">${esc(p.body)}</div>
+        <div class="board-detail-content">${shown.html}</div>
         ${gallery ? `<div class="ni-detail">${gallery}</div>` : ''}
         <div class="board-like-bar">
           <button type="button" class="board-like-btn ${p.liked ? 'liked' : ''}" data-action="toggle-like" ${likeLoading ? 'disabled' : ''} aria-pressed="${!!p.liked}">
@@ -684,6 +692,7 @@ export function mountBoard({ sms, getMe, onOpen } = {}) {
       e.stopPropagation();
       const idx = Number(rm.dataset.niRemove);
       captureForm();
+      if (formSticky) formSticky.body = removeNoticeImageToken(formSticky.body, idx);
       draftImages = draftImages.filter((_, i) => i !== idx);
       render();
       return;
@@ -692,12 +701,14 @@ export function mountBoard({ sms, getMe, onOpen } = {}) {
     if (ni) {
       e.preventDefault();
       e.stopPropagation();
-      const gallery = ni.closest('[data-ni-gallery]');
-      const images = [...(gallery?.querySelectorAll('[data-ni-open] img') || [])].map((img) => ({
-        url: img.getAttribute('src') || '',
-        alt: img.getAttribute('alt') || '',
-      }));
-      openNoticeLightbox(images, Number(ni.dataset.niI) || 0);
+      const scope = ni.closest('.board-detail') || ni.closest('[data-ni-gallery]');
+      const buttons = [...(scope?.querySelectorAll('[data-ni-open]') || [])].filter((b) => b.querySelector('img'));
+      const images = buttons.map((b) => {
+        const img = b.querySelector('img');
+        return { url: img.getAttribute('src') || '', alt: img.getAttribute('alt') || '' };
+      });
+      const index = buttons.indexOf(ni);
+      openNoticeLightbox(images, index < 0 ? 0 : index);
       return;
     }
     const actEl = e.target.closest('[data-action]');
@@ -736,10 +747,16 @@ export function mountBoard({ sms, getMe, onOpen } = {}) {
         } else if (next.length > NOTICE_IMAGE_MAX) {
           errorMsg = tr('이미지는 8장까지 붙일 수 있습니다.', 'You can attach up to 8 images.');
         } else {
+          const ta = modal.querySelector('textarea[name="body"]');
+          const cursor = ta?.selectionStart ?? formSticky.body.length;
           draftImages = next;
+          const ins = insertNoticeToken(formSticky.body, cursor, draftImages.length - 1);
+          formSticky.body = ins.text;
+          formSticky.cursor = ins.cursor;
           errorMsg = '';
         }
         render();
+        placeBodyCursor(formSticky?.cursor);
         return;
       }
       if (act === 'back-list') {
@@ -952,6 +969,8 @@ export function mountBoard({ sms, getMe, onOpen } = {}) {
     const fileInput = e.target?.closest?.('input[name="noticeImages"]');
     if (!fileInput || view !== 'form') return;
     const files = [...fileInput.files];
+    const ta = modal.querySelector('textarea[name="body"]');
+    let cursor = ta?.selectionStart ?? 0;
     captureForm();
     errorMsg = '';
     try {
@@ -965,12 +984,25 @@ export function mountBoard({ sms, getMe, onOpen } = {}) {
           throw err;
         }
         draftImages = next;
+        const ins = insertNoticeToken(formSticky.body, cursor, draftImages.length - 1);
+        formSticky.body = ins.text;
+        cursor = ins.cursor;
+        formSticky.cursor = cursor;
       }
     } catch (err) {
       errorMsg = imageErrorText(err);
     }
     render();
+    placeBodyCursor(formSticky?.cursor);
   });
+
+  function placeBodyCursor(pos) {
+    const ta = modal.querySelector('textarea[name="body"]');
+    if (!ta || pos == null || !Number.isFinite(pos)) return;
+    const n = Math.max(0, Math.min(ta.value.length, pos));
+    ta.focus();
+    try { ta.setSelectionRange(n, n); } catch { /* 일부 브라우저는 숨은 칸에서 실패한다 */ }
+  }
 
   addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && noticeLightboxOpen()) return;

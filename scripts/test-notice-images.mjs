@@ -4,8 +4,12 @@ import assert from 'node:assert/strict';
 import {
   ensurePostsImagesColumn,
   galleryHtml,
+  insertNoticeToken,
   noticeHasImages,
   photoMarkHtml,
+  removeNoticeImageToken,
+  renderNoticeBody,
+  stripNoticeTokens,
   noticeImagesColumnPresent,
   noticeImagesDemo,
   noticeImagesEnabled,
@@ -83,6 +87,66 @@ assert.match(mark, /<svg/);
 assert.doesNotMatch(mark, /<img/i);
 assert.doesNotMatch(mark, /\+N|\+\d/);
 ok('list mark is an icon only; detail gallery keeps every image');
+
+assert.equal(insertNoticeToken('안녕 세계', 2, 0).text, '안녕\n[사진1]\n 세계');
+assert.equal(insertNoticeToken('첫째\n\n둘째', 2, 0).text, '첫째\n[사진1]\n\n둘째');
+assert.equal(insertNoticeToken('', 0, 1).text, '[사진2]');
+ok('token inserts on its own line at the cursor');
+
+assert.equal(removeNoticeImageToken('a\n[사진1]\nb\n[사진2]\nc\n[사진3]', 0), 'a\nb\n[사진1]\nc\n[사진2]');
+assert.equal(removeNoticeImageToken('a\n[사진1]\nb\n[사진2]\nc\n[사진3]', 1), 'a\n[사진1]\nb\nc\n[사진2]');
+ok('removing an image drops its token and renumbers the rest');
+
+const shots = [
+  { url: 'https://example.com/1.png', alt: '하나' },
+  { url: 'https://example.com/2.png', alt: '둘' },
+  { url: 'https://example.com/3.png', alt: '셋' },
+];
+const inline = renderNoticeBody('위\n\n[사진1]\n\n가운데\n\n[사진2]\n\n아래', shots, esc);
+assert.equal((inline.html.match(/class="ni-inline"/g) || []).length, 2);
+assert.ok(inline.html.indexOf('위') < inline.html.indexOf('ni-inline'));
+assert.match(inline.html, /가운데/);
+assert.match(inline.html, /아래/);
+assert.equal(inline.rest.length, 1);
+assert.equal(inline.rest[0].url, 'https://example.com/3.png');
+assert.doesNotMatch(inline.html, /\[사진/);
+ok('tokens render inline and untokened images stay for the gallery');
+
+const legacy = renderNoticeBody('예전 글만 있습니다.', shots, esc);
+assert.doesNotMatch(legacy.html, /ni-inline/);
+assert.equal(legacy.rest.length, 3);
+ok('legacy posts with no tokens keep the bottom gallery');
+
+const preview = stripNoticeTokens('제목 [사진1] 계속\n[사진2]\n본문');
+assert.doesNotMatch(preview, /\[사진/);
+assert.match(preview, /제목/);
+assert.match(preview, /본문/);
+ok('previews strip tokens');
+
+const evil = '<img src="https://evil.test/a.png" onerror="alert(1)">\n[사진1]\n[사진1](https://evil.test/b.png)';
+const safe = renderNoticeBody(evil, [{ url: 'https://example.com/ok.png', alt: 'ok' }], esc);
+assert.match(safe.html, /&lt;img/);
+assert.equal((safe.html.match(/<img /g) || []).length, 2);
+assert.deepEqual([...safe.html.matchAll(/src="([^"]*)"/g)].map((m) => m[1]), [
+  'https://example.com/ok.png',
+  'https://example.com/ok.png',
+]);
+assert.doesNotMatch(safe.html, /src="https:\/\/evil\.test/);
+const unknown = renderNoticeBody('x[사진9]y', shots, esc);
+assert.doesNotMatch(unknown.html, /\[사진9\]/);
+assert.doesNotMatch(unknown.html, /ni-inline/);
+assert.match(unknown.html, /xy|x\s*y|^xy$/);
+assert.match(unknown.html, /x/);
+assert.match(unknown.html, /y/);
+ok('body is escaped first and tokens cannot inject a URL');
+
+const off = renderNoticeBody('위\n[사진1]\n아래', shots, esc, { enabled: false });
+assert.doesNotMatch(off.html, /\[사진/);
+assert.doesNotMatch(off.html, /<img/);
+assert.equal(off.rest.length, 0);
+assert.match(off.html, /위/);
+assert.match(off.html, /아래/);
+ok('opt-out strips tokens and shows no images');
 
 function memSql(names, { failAlter = false } = {}) {
   const columns = names.map((name) => ({ name }));
