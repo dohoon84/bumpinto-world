@@ -10,10 +10,13 @@ import * as THREE from 'three';
 import { Taxis } from '../entities/taxis.js';
 import { createTaxi, pickLivery, TAXI_LIVERIES } from '../entities/taxiModel.js';
 import { createAvatar, animateAvatar } from '../entities/avatar.js';
+import { buildCrowd } from '../entities/avatarCrowd.js'; // [life] 보행 NPC 인스턴싱 (붕어빵 줄 손님도 같이 씀)
 import { createTruck, truckShared, COLORS as TRUCK_PAINT, DIM } from '../entities/truckModel.js'; // [life] 스타베이스 'Steel Truck' (로고 없음)
 import { isEvening, watchEvening } from '../evening.js';
+import { parseTrafficFix } from '../trafficFix.js'; // [traffic-fix]
 
 const BOX = 380, SPAWN_MIN = 140, CELL = 250;
+const STILL_MAX = 75; // [traffic-fix] 이 시간(초) 넘게 서 있는 차는 다른 곳에 다시 나타남(정자 jzTraffic 과 같은 값)
 // [life] Steel Truck 도색: 절반은 무도장 스테인리스(브러시드 금속 재질), 나머지는 도장 재질에 인스턴스 색
 const TRUCK_MIX = [['truck-s', 'stainless', 0.5], ['truck-p', 'black', 0.12], ['truck-p', 'white', 0.12], ['truck-p', 'blue', 0.07], ['truck-p', 'red', 0.06], ['truck-p', 'green', 0.05], ['truck-p', 'tan', 0.05], ['truck-p', 'orange', 0.03]];
 export function pickTruckPaint(r) { for (const [key, c, w] of TRUCK_MIX) { r -= w; if (r <= 0) return { key, color: TRUCK_PAINT[c].color }; } return { key: 'truck-s', color: TRUCK_PAINT.stainless.color }; }
@@ -47,8 +50,10 @@ export function mergeLiveDrive(drive, live, box, M = 40) {
 }
 
 class CorridorCars extends Taxis {
-  constructor({ drive, transit, world, exits, liveBox, count, taxiShare, seed = 11, liveSigs = [], nTaxi = null, trucks = 0 }) {
+  constructor({ drive, transit, world, exits, liveBox, count, taxiShare, seed = 11, liveSigs = [], nTaxi = null, trucks = 0, fix = true }) {
     super(null, null, { drive, data: { meta: { bboxLocal: { x0: 0, x1: 0, z0: 0, z1: 0 } } }, transit, world, count: 0, seed });
+    // [traffic-fix] 교착 해소(?trafficfix=0 이면 끔): 서로를 앞차로 보는 두 차(합류·교차로에서 겹침)는 번호 작은 쪽이 먼저 감 + STILL_MAX 초 넘게 선 차는 재배치
+    this.fix = fix !== false; this.mutualYield = this.fix; if (this.fix) this.stats0 = { stillMax: 0 };
     this.live = liveBox; this.box = { x0: 0, x1: 0, z0: 0, z1: 0 }; this.focus = { x: 0, z: 0 };
     this.exits = exits || []; this.count = count; this.taxiShare = taxiShare;
     // [life] 슬롯 배치: [0, nTaxi) 택시 · … 일반 차량 · [count - trucks, count) 주행 Steel Truck (호출 불가)
@@ -177,6 +182,11 @@ class CorridorCars extends Taxis {
       if (t.age > 0.5 && (Math.abs(p.x - fx) > BOX + 60 || Math.abs(p.z - fz) > BOX + 60)) this._spawn(t.i, false);
     }
     this.update(dt);
+    if (this.fix) for (const t of this.list) { // [traffic-fix] 최후 안전망: 손님 태우는 중이 아닌데 너무 오래 서 있음(호출·탑승 택시는 제외)
+      if (!t || t.parked || t.hired || t.manual || t.keep) continue;
+      t._still = t.v < 0.1 && t.state !== 'pickup' ? (t._still || 0) + dt : 0;
+      if (t._still > STILL_MAX) { t._still = 0; this.stats0.stillMax++; this._spawn(t.i, false); }
+    }
   }
 }
 
@@ -264,61 +274,11 @@ function lookFor(i, r) {
   return look;
 }
 
-// [life] 보행 NPC 인스턴싱: 아바타(장면 밖 Object3D)를 그대로 애니메이션한 뒤, 부품(공유 지오메트리)별 InstancedMesh 에 행렬·색을 쓴다.
-//   → 보행자 수와 무관하게 draw call 은 부품 종류 수(≈20)로 고정. 55m 밖에서는 눈·안경 같은 작은 부품은 생략(LOD)
-function buildCrowd(group) {
-  const parts = new Map();
-  const shown = (o, root) => { for (let p = o; p && p !== root; p = p.parent) if (!p.visible) return false; return true; };
-  return {
-    parts,
-    register(root) {
-      root.updateMatrixWorld(true);
-      const list = [];
-      root.traverse((o) => {
-        if (!o.isMesh || Array.isArray(o.material)) return;
-        const m = o.material;
-        const lam = m.isMeshLambertMaterial && !m.map && !m.transparent && m.side === THREE.FrontSide && (!m.emissive || m.emissive.getHex() === 0);
-        const key = (lam ? 'L|' : 'M|' + m.uuid + '|') + o.geometry.uuid;
-        let P = parts.get(key);
-        if (!P) parts.set(key, (P = { geo: o.geometry, mat: lam ? null : m, lam, cast: o.castShadow, cap: 0, n: 0, im: null }));
-        P.cap++;
-        if (!o.geometry.boundingSphere) o.geometry.computeBoundingSphere();
-        list.push({ o, P, small: o.geometry.boundingSphere.radius < 0.09 });
-      });
-      return list;
-    },
-    finalize() {
-      for (const P of parts.values()) {
-        const im = new THREE.InstancedMesh(P.geo, P.lam ? new THREE.MeshLambertMaterial({ color: '#ffffff' }) : P.mat, Math.max(1, P.cap));
-        im.count = 0; im.castShadow = P.cast; im.receiveShadow = true; im.frustumCulled = false; im.name = 'corridorCrowd';
-        if (P.lam) im.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(Math.max(1, P.cap) * 3), 3);
-        P.im = im; group.add(im);
-      }
-    },
-    begin() { for (const P of parts.values()) P.n = 0; },
-    add(root, list, far) {
-      root.updateMatrixWorld(true);
-      for (const it of list) {
-        if ((far && it.small) || !shown(it.o, root)) continue;
-        const P = it.P; if (P.n >= P.im.instanceMatrix.count) continue;
-        P.im.setMatrixAt(P.n, it.o.matrixWorld);
-        if (P.lam) P.im.setColorAt(P.n, it.o.material.color);
-        P.n++;
-      }
-    },
-    end() {
-      for (const P of parts.values()) {
-        P.im.count = P.n; P.im.visible = P.n > 0;
-        if (P.n) { P.im.instanceMatrix.needsUpdate = true; if (P.im.instanceColor) P.im.instanceColor.needsUpdate = true; }
-      }
-    },
-  };
-}
 
 // 선분까지 거리
 const segDist = (x, z, ax, az, bx, bz) => { const dx = bx - ax, dz = bz - az, L2 = dx * dx + dz * dz || 1; const k = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / L2)); return Math.hypot(x - ax - dx * k, z - az - dz * k); };
 
-export function createCorridorTraffic(root, { drive, crossings, terrain, terrainT, world, stations, liveBox, getBuses, params, overlay, liveDrive = null, liveCrossings = null, renderer = null, hints = null }) {
+export function createCorridorTraffic(root, { drive, crossings, terrain, terrainT, world, stations, liveBox, getBuses, params, overlay, liveDrive = null, liveCrossings = null, renderer = null, hints = null, extraCrowd = null, extraExits = null }) {
   const group = new THREE.Group(); group.name = 'corridorTraffic'; root.add(group);
   const num = (k, d, hi) => { const v = params?.get?.(k); return Math.max(0, Math.min(hi, v == null ? d : Math.round(Number(v)) || 0)); };
   // [life] 일반 차량 72대 중 택시 0.3(≈22대 — ride 패치와 같은 택시 수). 인스턴싱이라 draw call 은 대수와 무관. ?ccars= / ?ctaxi=(0~1)
@@ -331,11 +291,12 @@ export function createCorridorTraffic(root, { drive, crossings, terrain, terrain
   const WALKERS = num('cwalkers', 48, 120);
   const COUNT = CARS + TDRIVE;
   const exits = stations.flatMap((s) => s.exits || []);
+  if (extraExits?.length) exits.push(...extraExits); // [migeum-taxibike] 미금역 갓길 승차 지점(택시만 씀, 보행 NPC 힌트 exitPts 는 그대로)
   const transit = { crossings: crossings.crossings, pedLight: crossings.pedLight, source: { vehicles: getBuses } };
   const inLB = (c) => liveBox && c.x >= liveBox.x0 && c.x <= liveBox.x1 && c.z >= liveBox.z0 && c.z <= liveBox.z1;
   const merged = liveDrive ? mergeLiveDrive(drive, liveDrive, liveBox) : { drive, added: 0 };
   const liveSigs = merged.added ? (liveCrossings || []).filter((c) => c.sig && inLB(c)) : [];
-  const cars = COUNT || WALKERS || TPARK ? new CorridorCars({ drive: merged.drive, transit, world, exits, liveBox, count: COUNT, taxiShare: SHARE, nTaxi: NTAXI, trucks: TDRIVE, liveSigs }) : null;
+  const cars = COUNT || WALKERS || TPARK ? new CorridorCars({ drive: merged.drive, transit, world, exits, liveBox, count: COUNT, taxiShare: SHARE, nTaxi: NTAXI, trucks: TDRIVE, liveSigs, fix: parseTrafficFix(params) }) : null; // [traffic-fix] ?trafficfix=0 → 예전 동작
 
   // 템플릿: 택시 리버리 5종 + 일반 차량(표시등 없는 세단, 차체 색은 인스턴스별) + [life] Steel Truck 2종(스테인리스/도장)
   const inst = buildInstancer(group, Math.max(1, COUNT + TPARK));
@@ -369,6 +330,7 @@ export function createCorridorTraffic(root, { drive, crossings, terrain, terrain
     const mesh = createAvatar(lookFor(i, wrnd)); mesh.visible = false;
     walkers.push({ mesh, parts: crowd.register(mesh), path: null, s: 0, dir: 1, speed: 0.9 + ((i * 37) % 10) / 20, idle: 0, kind: null, cross: null });
   }
+  extraCrowd?.register(crowd); // [pangyo-npc] 판교 IT 직장인: 같은 crowd 공유(새 부품 종류만큼만 draw call)
   crowd.finalize();
   const blocked = (x, z) => world.onRoad?.(x, z) || world.isBlocked?.(x, z, 0.4);
   const river = (x, z) => terrain && terrain.renderHeight(x, z) < -0.3;
@@ -528,6 +490,7 @@ export function createCorridorTraffic(root, { drive, crossings, terrain, terrain
       const d = Math.hypot(x - fx, z - fz), near = d < SHOW_R; w.mesh.visible = near;
       if (near) { animateAvatar(w.mesh, v, dt); crowd.add(w.mesh, w.parts, d > LOD_R); }
     }
+    extraCrowd?.render(crowd, dt, fx, fz); // [pangyo-npc]
     crowd.end();
   }
 
@@ -617,7 +580,7 @@ export function createCorridorTraffic(root, { drive, crossings, terrain, terrain
       cars: cars ? cars.list.filter((t) => !t.parked).length : 0, taxis: cars ? cars.list.filter((t) => t.taxi && !t.parked).length : 0,
       trucks: cars ? cars.list.filter((t) => t.truck && !t.parked).length : 0, trucksParked: parked.length, trucksLot: parked.filter((p) => p.mode === 'lot').length,
       walkers: walkers.filter((w) => w.path).length, walkersVisible: walkers.filter((w) => w.mesh.visible).length, walkerKinds: Object.fromEntries(Object.entries(kinds).filter(([, v]) => v > 0)),
-      carParts: inst.parts.size, crowdParts: crowd.parts.size, jzWays: merged.added, jzSigs: liveSigs.length,
+      carParts: inst.parts.size, crowdParts: crowd.parts.size, extra: extraCrowd?.stats || null, jzWays: merged.added, jzSigs: liveSigs.length,
     }),
   };
 }

@@ -58,3 +58,19 @@ The live 정자 map (`public/data/*`, bbox x −606..597, z −608..940) is left
 ## In game
 
 - `📍 Travel` button or <kbd>T</kbd>: teleport to 정자, any corridor station, or Lotte World Tower. `?at=<station id>|lotte` starts there.
+
+## Pangyo Station area (expansion stage 1, off with `?pangyo=0`)
+
+- Data: `data/query_pangyo.overpassql` → `data/osm_pangyo_raw.json` (OSM, ODbL). `npm run corridor:pangyo` (`--fetch` re-queries Overpass)
+  writes `public/corridor/pangyo/{index.json, tiles/K.json, lod/K.json}`.
+- Box x -250..1000, z -3500..-2500 (tiles -1..1 × -7..-6). Cells the corridor already had (0_-6, 1_-6, 1_-7) are `mode:add`: only
+  buildings/roads/parks not already in the corridor tile, appended **after** the original arrays at runtime (original indices and
+  streams cuts unchanged). Other cells are full `mode:new` tiles.
+- Heights: OSM height → building:levels×3.2+1.5 → per-kind default (bake.mjs rules). Defaulted buildings: `meta.defaultHeights`.
+- Landmarks (custom models, `src/corridor/landmarks/pangyo.js`): department store (generic '백화점' label, no brand), the four
+  Alphadom City towers, the station plaza deck, four subway entrances (OSM subway_entrance, 신분당선/경강선 bands). Built and
+  disposed with their detail tile; LOD prisms far away.
+- Pangyo station is used for labels, the station sign and travel (`?at=pangyo`) only; it is not added to `index.stations`
+  (bus/car NPCs unchanged).
+- `build-corridor.mjs` keeps `public/corridor/pangyo/`. After rebuilding the corridor rerun `npm run corridor:pangyo`
+  (dedupe uses corridor tiles; `test-pangyo.mjs` checks committed data equals the script output).

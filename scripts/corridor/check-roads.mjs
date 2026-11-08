@@ -3,12 +3,14 @@
 //   2) 타일 경계: 타일로 나뉜 조각의 이음매 ±2 세그먼트를 0.5m 간격, ±0.9 반폭으로
 //   3) 교차로: 차도 3갈래 이상 노드에서 각 도로 반폭 0.9 원 + 진입 6m 구간
 //   4) 라이브/코리더 경계: 라이브 bbox 에서 잘리거나 라이브 도로와 겹친 조각의 이음매
+//   5) [migeum-water] 미금 탄천 띠: 돌마교 건너기(동쪽 둑 → 서쪽 교대 → 돌마로 접속부)·금곡로 띠 조각이 미금 타일 + migeum/water.json ch 리본으로 덮이고 꺼지지 않는지
 // 사용: node scripts/corridor/check-roads.mjs [--dir=public/corridor] [--out=/tmp/check-roads.json]
 import fs from 'node:fs';
 import path from 'node:path';
 import { ribbonGeo } from '../../src/world.js';
 import { createTerrain } from '../../src/world/terrain.js';
 import { mergeTancheon } from '../../src/corridor/tancheon.js';
+import { applyMigeumBank, migeumChRoads } from '../../src/corridor/migeumWater.js';
 
 const arg = (k, d) => (process.argv.find((a) => a.startsWith(`--${k}=`)) || '').split('=')[1] || d;
 const DIR = arg('dir', 'public/corridor'), OUT = arg('out', '');
@@ -244,8 +246,27 @@ const inLive = (x, z) => x >= LB.x0 - 1 && x <= LB.x1 + 1 && z >= LB.z0 - 1 && z
   }
   res.junctions = { junctions, holes, tees, teeHoles, points: pts, where: where.slice(0, 20), teeWhere: teeWhere.slice(0, 20) };
 }
+// ---------- 5) [migeum-water] 미금 탄천 띠 ----------
+const MGW = path.join(DIR, 'migeum', 'water.json'), MGI = path.join(DIR, 'migeum', 'index.json');
+res.migeumWater = null;
+if (fs.existsSync(MGW) && fs.existsSync(MGI)) {
+  const W = JSON.parse(fs.readFileSync(MGW, 'utf8')), mI = JSON.parse(fs.readFileSync(MGI, 'utf8'));
+  const mgRoads = [];
+  for (const key of Object.keys(mI.tiles)) { const f = path.join(DIR, 'migeum', 'tiles', key + '.json'); if (fs.existsSync(f)) for (const r of JSON.parse(fs.readFileSync(f, 'utf8')).r) if (CAR.has(r.k) && r.p.length >= 2) mgRoads.push({ k: r.k, w: r.w, p: r.p }); }
+  const wCar = W.ch.filter((r) => CAR.has(r.k));
+  const idxOn = triIndex(mgRoads.concat(wCar)), idxOff = triIndex(mgRoads);
+  const tOn = createTerrain(applyMigeumBank(TT, W, T0), live); tOn.annotate({ roads: base.ch.map((r) => ({ ...r, p: r.p.map((q) => q.slice()) })).concat(migeumChRoads(W)), water: [], waterLines: [], parks: [] });
+  const dolma = W.ch.find((r) => r.osm === 186410768), app = W.ch.find((r) => r.osm === 522780985);
+  // 동쪽: OSM 돌마교 마지막 노드(855.3,1353.4, 타일) 너머 15m 부터 → 띠 조각 → 서쪽 교대 → 돌마로 접속부 끝
+  const e = [855.3, 1353.4], d0 = dolma.p[dolma.p.length - 1], ux = (e[0] - d0[0]) / Math.hypot(e[0] - d0[0], e[1] - d0[1]), uz = (e[1] - d0[1]) / Math.hypot(e[0] - d0[0], e[1] - d0[1]);
+  const route = [[e[0] + ux * 15, e[1] + uz * 15], e, ...dolma.p.slice().reverse().map((q) => [q[0], q[1]]), ...app.p.slice().reverse().slice(1).map((q) => [q[0], q[1]])];
+  const sample = (line, hw, offs) => { const out = []; for (let i = 1; i < line.length; i++) { const [ax, az] = line[i - 1], [bx, bz] = line[i], L = Math.hypot(bx - ax, bz - az); if (L < 0.05) continue; const vx = (bx - ax) / L, vz = (bz - az) / L; for (let s = 0; s < L; s += 1) for (const f of offs) out.push([ax + vx * s - vz * hw * f, az + vz * s + vx * hw * f]); } return out; };
+  const run = (name, line, hw) => { const P = sample(line, hw, [0, 0.45, -0.45]); let gapsOn = 0, gapsOff = 0, sunk = 0, minY = 0; for (const [x, z] of P) { if (!idxOn.covered(x, z)) gapsOn++; if (!idxOff.covered(x, z)) gapsOff++; const y = tOn.getGroundHeight(x, z, 0.5); minY = Math.min(minY, y); if (y < -0.05) sunk++; } return { name, samples: P.length, gaps: gapsOn, gapsWithout: gapsOff, sunk, minY: +minY.toFixed(3) }; };
+  const geum = W.ch.find((r) => r.osm === 157657207);
+  res.migeumWater = { dolma: run('돌마교 건너기', route, dolma.w / 2), geumgok: run('금곡로 띠 조각', geum.p.map((q) => [q[0], q[1]]), geum.w / 2), detailTris: idxOn.count };
+}
 res.meta = { roads: roads.length, lodRoads: lodRoads.length, detailTris: detailIdx.count, lodTris: lodIdx.count, virtualEdges: virt };
 console.log(JSON.stringify(res, null, 1));
 if (OUT) fs.writeFileSync(OUT, JSON.stringify(res, null, 1));
-const fail = res.route.sunk + res.route.gaps + res.seams.cracks + res.junctions.holes + res.junctions.teeHoles + res.liveSeam.cracks;
+const fail = res.route.sunk + res.route.gaps + res.seams.cracks + res.junctions.holes + res.junctions.teeHoles + res.liveSeam.cracks + (res.migeumWater ? res.migeumWater.dolma.gaps + res.migeumWater.dolma.sunk + res.migeumWater.geumgok.gaps + res.migeumWater.geumgok.sunk : 0);
 process.exit(fail ? 2 : 0);

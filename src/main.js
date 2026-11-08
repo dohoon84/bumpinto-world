@@ -1,9 +1,27 @@
 import { isHandheld, showPcOnly } from './pcOnly.js';
 import { initAnalytics, trackEvent } from './analytics.js';
+import { isMobileMode } from './mobile/flag.js';
 
 initAnalytics();
+// [notice-launch] 첫 화면 모바일 오픈 안내(자체 완결 모듈, 실패해도 무시)
+import('./notice/launchPopup.js').then((m) => m.showLaunchNotice()).catch(() => {});
 
-if (isHandheld()) {
+if (isMobileMode()) {
+  // [mobile] 핸드폰·태블릿(또는 ?mobile=1): PC 전용 안내 대신 모바일 전용 시작화면 → 게임. ?mobile=0 이면 아래 기존 경로
+  //   역을 고른 뒤 게임을 여는 중 오류가 나도 빈 화면으로 멈추지 않게 guard 가 '다시 시도' 카드를 띄운다.
+  const guard = await import('./mobile/guard.js');
+  try {
+    const { bootMobile } = await import('./mobile/boot.js');
+    await bootMobile();
+  } catch (e) { console.error('[mobile] boot', e); }
+  guard.startEntryWatch();
+  try {
+    await import('./game.js');
+  } catch (e) {
+    console.error('[mobile] game', e);
+    guard.showEntryError(e);
+  }
+} else if (isHandheld()) {
   trackEvent('mobile_globe_view');
   const { openWorldGate } = await import('./worldGate.js');
   const mountMobileGate = () => {

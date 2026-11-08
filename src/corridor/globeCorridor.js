@@ -3,20 +3,33 @@
 // 휠로 한국 쪽을 확대하면 실제 역 좌표(OSM)대로 그린 세로 노선도가 펼쳐지고, 역을 고르면 그 역 출구 앞 인도에서 시작한다.
 // 노선도의 정자는 기존 정자 입장(data-enter-region="jeongja")과 똑같다. ?corridor=0 이면 worldGate 가 이 모듈을 아예 마운트하지 않는다.
 import * as THREE from 'three';
-import { CORRIDOR_ORIGIN, CORRIDOR_STATIONS, CORRIDOR_LANDMARK } from './globeStations.js';
+import { CORRIDOR_ORIGIN, CORRIDOR_STATIONS, CORRIDOR_LANDMARK, PANGYO_GLOBE_STATIONS, MIGEUM_GLOBE_STATIONS } from './globeStations.js';
+import { pangyoEnabled } from './pangyo.js';
 import { lotteSiteLabel, lotteClock } from './lotteOpening.js';
 
 export function corridorGlobeEnabled(params = new URLSearchParams(location.search), region) {
   return !!region?.features?.corridor && params.get('corridor') !== '0';
 }
-export const CORRIDOR_STATION_IDS = new Set(CORRIDOR_STATIONS.map((s) => s.id));
+// [pangyo] 판교역은 정자에서 갈라지는 신분당선 지선 역으로 목록·노선도에 넣는다 (?pangyo=0 이면 기존 목록 그대로)
+// [migeum] 미금역(정자 남쪽, 수인분당선·신분당선)도 같은 방식으로 정자에서 갈라지는 역으로 넣는다 (?migeum=0 이면 뺀다 — src/corridor/migeum.js 의 migeumEnabled 와 같은 규칙)
+export function migeumGlobeEnabled(search = typeof location !== 'undefined' ? location.search : '') {
+  return new URLSearchParams(search).get('migeum') !== '0';
+}
+export const BRANCH_STATIONS = [...(pangyoEnabled() ? PANGYO_GLOBE_STATIONS : []), ...(migeumGlobeEnabled() ? MIGEUM_GLOBE_STATIONS : [])];
+const ALL_STATIONS = CORRIDOR_STATIONS.concat(BRANCH_STATIONS);
+export const CORRIDOR_STATION_IDS = new Set(ALL_STATIONS.map((s) => s.id));
+// [globe-open] 지역 현황 목록에서 '열림'으로 따로 보이는 지선 역 (판교역 → 입장하면 ?at=pangyo 와 같은 자리). ?pangyo=0 이면 빈 목록 → 기존 그대로
+export const OPEN_BRANCH_IDS = new Set(BRANCH_STATIONS.map((s) => s.id));
+// [globe-open] 지구본 '오픈' 수는 지역이 아니라 열린 역 수로 센다 — 노선도에 점으로 그려지는 본선 역(정자~잠실) + 지선 역(판교). 롯데월드타워는 랜드마크라 뺀다
+export const OPEN_MAINLINE_STATIONS = [CORRIDOR_ORIGIN, ...CORRIDOR_STATIONS];
+export const OPEN_BRANCH_STATIONS = BRANCH_STATIONS;
 // 정자 포함 역 수 (롯데월드타워는 역이 아니라 랜드마크)
-export const CORRIDOR_STATION_COUNT = CORRIDOR_STATIONS.length + 1;
+export const CORRIDOR_STATION_COUNT = ALL_STATIONS.length + 1;
 // 입장 화면(로비 제목·로딩 문구)에 쓰는 역 이름 — ?at= 역 id 기준
 export function corridorStationLabel(id) {
   if (id === CORRIDOR_LANDMARK.id) return lotteClock.isOpen() ? { ko: CORRIDOR_LANDMARK.ko, en: CORRIDOR_LANDMARK.en, short: CORRIDOR_LANDMARK.en }
     : { ko: '잠실 랜드마크 공사현장', en: 'Jamsil Landmark site', short: 'Jamsil Landmark' }; // 오픈 전(lotteOpening.js)
-  const s = CORRIDOR_STATIONS.find((x) => x.id === id);
+  const s = ALL_STATIONS.find((x) => x.id === id);
   return s ? { ko: `${s.ko}역`, en: `${s.en} Station`, short: s.en } : null;
 }
 export const corridorName = (en) => (en ? 'Bundang–Jamsil Line' : '분당–잠실 구간');
@@ -57,18 +70,23 @@ const LINE_COLOR = { '수인분당선': '#f5a200', '신분당선': '#d31145', '8
 const lineEn = (l) => ({ '수인분당선': 'Suin-Bundang', '신분당선': 'Shinbundang', '8호선': 'Line 8', '2호선': 'Line 2', '3호선': 'Line 3', '9호선': 'Line 9', '경강선': 'Gyeonggang' }[l] || l);
 
 // 펼친 노선도 레이아웃(px): 실제 x(동)/z(남) 좌표를 같은 축척으로 옮기고, 이름표는 좌우로 번갈아 둔다(겹침 방지).
-export function layoutCorridorMap({ height = 430, width = 320 } = {}) {
+//   extent: 노선도 범위에 넣을 지선 역(기본 = 켜진 지선 역 전체). 미금역은 정자보다 남쪽이라 범위를 넓혀야 보인다.
+//   branches 를 비워도 extent 는 그대로라 본선 배치는 지선 표시 여부와 상관없이 같다(?migeum=0 이면 기존 배치 그대로)
+export function layoutCorridorMap({ height = 430, width = 320, branches = BRANCH_STATIONS, extent = BRANCH_STATIONS } = {}) {
   const pts = [{ ...CORRIDOR_ORIGIN, live: true }, ...CORRIDOR_STATIONS];
-  const zs = pts.map((p) => p.z).concat(CORRIDOR_LANDMARK.z), xs = pts.map((p) => p.x).concat(CORRIDOR_LANDMARK.x);
+  const zs = pts.map((p) => p.z).concat(CORRIDOR_LANDMARK.z, extent.map((b) => b.z)), xs = pts.map((p) => p.x).concat(CORRIDOR_LANDMARK.x, extent.map((b) => b.x));
   const zMin = Math.min(...zs), zMax = Math.max(...zs), xMin = Math.min(...xs), xMax = Math.max(...xs);
   const pad = 12, k = (height - pad * 2) / (zMax - zMin);
   const mapW = (xMax - xMin) * k, x0 = (width - mapW) / 2;
   const px = (x) => x0 + (x - xMin) * k, py = (z) => pad + (z - zMin) * k;
   const colL = x0 - 14, colR = x0 + mapW + 14;
   const items = pts.map((p, i) => ({ ...p, dx: px(p.x), dy: py(p.z), side: i % 2 ? 'right' : 'left' }));
+  // [pangyo] 지선 역: 본선 순서(items)엔 안 넣고 갈라지는 역(branch)에서 따로 선을 긋는다. 이름표는 본선 서쪽(왼쪽) 열
+  const branchItems = branches.filter((b) => b.x >= xMin && b.x <= xMax && b.z >= zMin && b.z <= zMax)
+    .map((b) => ({ ...b, dx: px(b.x), dy: py(b.z), side: 'left', from: items.find((p) => p.id === b.branch) || items[0] }));
   const last = items[items.length - 1];
   const lm = { ...CORRIDOR_LANDMARK, dx: px(CORRIDOR_LANDMARK.x), dy: py(CORRIDOR_LANDMARK.z), side: last.side === 'left' ? 'right' : 'left', landmark: true };
-  return { items, landmark: lm, colL, colR, width, height, k };
+  return { items, branches: branchItems, landmark: lm, colL, colR, width, height, k };
 }
 
 export function mountGlobeCorridor({ root, camera, anchorSpot, globe, isEn, onEnterStation, onFocus }) {
@@ -104,8 +122,12 @@ export function mountGlobeCorridor({ root, camera, anchorSpot, globe, isEn, onEn
     pin.querySelector('.pin-text').textContent = en ? `🚇 ${corridorName(true)} · ${CORRIDOR_STATION_COUNT} stations` : `🚇 ${corridorName(false)} · ${CORRIDOR_STATION_COUNT}개 역`;
     pin.querySelector('.gate-pin-badge').textContent = open ? '▴' : (en ? '▾ Expand' : '▾ 펼치기');
     pin.classList.toggle('is-open', open);
-    const all = [...L.items, L.landmark];
+    const all = [...L.items, ...L.branches, L.landmark];
     let seg = '';
+    for (const b of L.branches) { // 지선(정자→판교 신분당선, 정자→미금)
+      const shared = (b.from.lines || []).find((l) => (b.lines || []).includes(l)) || (b.lines || [])[0];
+      seg += `<line x1="${b.from.dx}" y1="${b.from.dy}" x2="${b.dx}" y2="${b.dy}" stroke="${LINE_COLOR[shared] || '#9eb4c6'}" stroke-width="4" stroke-linecap="round"/>`;
+    }
     for (let i = 1; i < L.items.length; i++) {
       const a = L.items[i - 1], b = L.items[i];
       const shared = (a.lines || ['수인분당선']).find((l) => (b.lines || []).includes(l)) || (b.lines || [])[0];
@@ -135,7 +157,7 @@ export function mountGlobeCorridor({ root, camera, anchorSpot, globe, isEn, onEn
     hot = id;
     panel.querySelectorAll('[data-hot]').forEach((el) => el.classList.toggle('is-hot', el.dataset.hot === id));
     panel.querySelectorAll('[data-dot]').forEach((el) => el.classList.toggle('is-hot', el.dataset.dot === id));
-    const s = [...L.items, L.landmark].find((x) => x.id === id);
+    const s = [...L.items, ...L.branches, L.landmark].find((x) => x.id === id);
     const ft = panel.querySelector('.gcm-ft');
     if (ft) ft.textContent = s ? lineText(s) : (isEn() ? 'Real station positions (OpenStreetMap). Scroll to zoom the globe.' : '실제 역 위치(OpenStreetMap) 기준 · 휠로 지구본 확대/축소');
   }

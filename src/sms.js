@@ -71,15 +71,27 @@ const ERRORS = {
   server: '번호 서버 오류입니다.',
 };
 
+// crypto.randomUUID 는 보안 컨텍스트(https·localhost)에서만 있다. LAN http(폰에서 http://192.168.x.x 로 접속)·구형 iOS 에선
+// 없어서 게임 시작이 통째로 멈췄다 → getRandomValues 로 같은 형식(v4 UUID)을 만든다.
+function uuid() {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') return crypto.randomUUID();
+  const b = new Uint8Array(16);
+  if (typeof crypto !== 'undefined' && crypto.getRandomValues) crypto.getRandomValues(b);
+  else for (let i = 0; i < 16; i++) b[i] = Math.floor(Math.random() * 256);
+  b[6] = (b[6] & 0x0f) | 0x40; b[8] = (b[8] & 0x3f) | 0x80;
+  const h = [...b].map((x) => x.toString(16).padStart(2, '0')).join('');
+  return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
+}
+
 export function deviceId() {
   try {
     const cur = localStorage.getItem(DEVICE_KEY);
     if (cur && ID_RE.test(cur)) return cur;
-    const id = crypto.randomUUID();
+    const id = uuid();
     localStorage.setItem(DEVICE_KEY, id);
     return id;
   } catch {
-    return crypto.randomUUID();
+    return uuid();
   }
 }
 
@@ -104,14 +116,17 @@ export function currentRegion() {
   }
 }
 
-function smsBase() {
+export function smsBase() { // [accounts] 계정 API 기본 주소로도 씀
   const params = new URLSearchParams(location.search);
   const smsParam = params.get('sms');
   if (smsParam === 'off') return '';
   if (smsParam === 'local') return 'http://127.0.0.1:8789';
   if (smsParam === 'prod' || smsParam === 'live') return DEFAULT_SMS_BASE.replace(/\/$/, '');
   if (params.has('sms')) return (smsParam || '').replace(/\/$/, '');
-  if (isLocalHost()) return '';
+  // [accounts] npm run dev:all(로컬 스택)은 /_phone 으로 로컬 워커가 떠 있다 → localhost 에서도 번호부를 켠다.
+  //   예전엔 여기서 '' 를 돌려 PC localhost 만 '로컬 테스트 모드(번호부 꺼짐)' 였고, 계정 API(VITE_ACCOUNT_API_URL)는 서버를 봐서
+  //   로그인돼 있어도 입장 카드가 '실서버 계정 미생성'이라고 했다. 일반 npm run dev(로컬 스택 아님)는 그대로 꺼짐.
+  if (isLocalHost()) return import.meta.env?.VITE_LOCAL_STACK === '1' ? DEFAULT_SMS_BASE.replace(/\/$/, '') : '';
   return DEFAULT_SMS_BASE.replace(/\/$/, '');
 }
 
@@ -471,6 +486,14 @@ export function createSms() {
     get off() { return !base; },
     get base() { return base; }, // [camera] 뉴스 제보(/news-tip) 전송용
     get session() { return session; },
+    /** [accounts] 로그인한 계정의 대표 캐릭터 id 로 바꾼다(새로고침 없이). 이 기기 id 도 같이 바꿔 다음 접속부터 그 캐릭터 */
+    useId(next) {
+      if (!next || !ID_RE.test(next) || next === id) return false;
+      id = next;
+      session = null;
+      try { localStorage.setItem(DEVICE_KEY, id); } catch {}
+      return true;
+    },
     async enter({ name, look, pin, preview = false }) {
       if (!base) {
         session = { off: true, phone: '', display: '', place: readLocalPlace(), unread: 0, hasPin: false, look: sanitizeLook(look), name };

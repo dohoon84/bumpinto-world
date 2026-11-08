@@ -3340,3 +3340,5 @@ body.in-gate #ride-caption, body.in-gate #ride-bus-card, body.in-gate #ride-rout
 /* BGM 플레이어(위 24px, 높이 ≈70px)가 있을 때 탑승 HUD·토스트를 조금 내린다 */
 body.has-bgm #ride-hud { top: 104px; }
 body.has-bgm #ride-toast { top: 154px; }
+/* [pangyo-npc] 판교 IT 직장인 라벨: 회사 이니셜 + 직무 (중립 슬레이트 — 브랜드 색 없음) */
+.tag.npc.pangyo-worker { background: rgba(52, 66, 86, .68); font-weight: 600; }

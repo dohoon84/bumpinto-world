@@ -4,13 +4,14 @@
 import { createBgmPlayer } from './player.js';
 import { createBgmHud } from './hud.js';
 import { tr, onLangChange } from '../i18n.js';
+import { isMobileMode } from '../mobile/flag.js';
 
 export function mountBgm({ params, base = import.meta.env.BASE_URL }) {
   if (params.get('bgm') === '0' || typeof window === 'undefined') return null;
   if (!(window.AudioContext || window.webkitAudioContext)) return null;
   let hud = null;
   const debug = import.meta.env.DEV || params.get('bgmDebug') === '1';
-  const player = createBgmPlayer({ base, debug, onChange: () => hud?.render() });
+  const player = createBgmPlayer({ base, debug, fixedVolume: isMobileMode(), onChange: () => hud?.render() }); // [mobile] 볼륨 슬라이더 없음 · 하드웨어 볼륨
   hud = createBgmHud({ player, tr, onLangChange });
   return {
     player,

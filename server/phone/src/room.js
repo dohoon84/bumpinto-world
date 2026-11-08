@@ -1,10 +1,26 @@
 import { DurableObject } from "cloudflare:workers";
 import { giftItem, giftItemByVeh, normalizeHoldings, qtyOf, withQty } from "../../../src/gifts/catalog.js";
+import { accountsReady, statsEnabled } from "./account/flags.js"; // [accounts]
+import { sessionFromRequest } from "./account/session.js";
+import { accountById, accountForSession } from "./account/store.js";
+import { MoveStats, classifyMode, flushMoves, logLoginDay } from "./account/stats.js";
+import { featureOn } from "./account/flags.js"; // [economy]
+import { accountVehicleGifts, settleMoveForDates } from "./account/economy.js";
 
 const STALE_MS = 35000;
 const BIKE_VEH_BLACK = 900;
 const BIKE_VEH_RED = 901;
 const BOOK_KEY = "jeongja";
+const STATS_FLUSH_MS = 60_000; // [accounts] 칭호용 이동 기록을 D1 에 쓰는 간격
+const ACCOUNT_TAG = "a:";
+
+// [accounts] 선물 탈것 id → 칭호 기록용 수단
+function giftVehMode(veh) {
+  const id = giftItemByVeh(veh)?.id || "";
+  if (id.startsWith("roadbike")) return "roadbike";
+  if (id.startsWith("superbike")) return "superbike";
+  return null;
+}
 
 function isBikeVeh(id) {
   return id === BIKE_VEH_BLACK || id === BIKE_VEH_RED;
@@ -42,6 +58,64 @@ export class Room extends DurableObject {
   constructor(ctx, env) {
     super(ctx, env);
     this.env = env;
+    this.moves = new Map(); // [accounts] ws → { stats: MoveStats, flushedAt } (메모리만, 로그인한 연결만)
+  }
+
+  // [accounts] 웹소켓 연결 시 세션 쿠키 → 계정 id (없거나 꺼져 있으면 "")
+  async #accountFromRequest(request) {
+    if (!accountsReady(this.env)) return "";
+    try {
+      const session = await sessionFromRequest(request, this.env);
+      if (!session) return "";
+      const acc = await accountForSession(this.env.DB, session);
+      return acc?.id || "";
+    } catch {
+      return "";
+    }
+  }
+
+  #accountOf(ws) {
+    try {
+      const tag = this.ctx.getTags(ws).find((t) => t.startsWith(ACCOUNT_TAG));
+      return tag ? tag.slice(ACCOUNT_TAG.length) : "";
+    } catch {
+      return "";
+    }
+  }
+
+  #trackMove(ws, me, m, now) {
+    if (!me.accountId || !statsEnabled(this.env)) return;
+    let slot = this.moves.get(ws);
+    if (!slot) {
+      slot = { stats: new MoveStats(), flushedAt: now };
+      this.moves.set(ws, slot);
+    }
+    const mode = classifyMode({ riding: me.riding, sit: me.sit, afk: me.afk, veh: me.veh?.id, zone: m.zone }, giftVehMode);
+    slot.stats.push({ x: me.x, z: me.z, mode, now });
+    if (now - slot.flushedAt >= STATS_FLUSH_MS) {
+      slot.flushedAt = now;
+      this.#flushMoves(slot, me.accountId);
+    }
+  }
+
+  #flushMoves(slot, accountId) {
+    const rows = slot?.stats.drain() || [];
+    if (!rows.length || !accountId) return;
+    // [economy] 통계를 쓴 다음, 이동 보상(인정분) 정산 — ECON_FEATURES 에 move 가 있을 때만. 멱등.
+    const env = this.env;
+    this.ctx.waitUntil(
+      flushMoves(env.DB, accountId, rows)
+        .then(() => (featureOn(env, "move") ? settleMoveForDates(env.DB, env, accountId, [...new Set(rows.map((r) => r.date))]) : null))
+        .catch(() => {}),
+    );
+  }
+
+  #dropMoves(ws, me) {
+    const slot = this.moves.get(ws);
+    if (!slot) return;
+    this.moves.delete(ws);
+    slot.stats.finish(); // [economy] 마지막 창도 순변위 조건으로 닫는다
+    if (me?.accountId) this.#flushMoves(slot, me.accountId);
   }
 
   async #bikeAuth(deviceId) {
@@ -110,6 +184,12 @@ export class Room extends DurableObject {
     return out;
   }
 
+  // [economy] 상점에서 산 탈것(계정 귀속, D1). 선물함 보유에 합쳐 같은 #relayVeh 검사로 탈 수 있게 한다. 선물로 넘길 수는 없음(PhoneBook 에 없음)
+  async #shopGifts(accountId) {
+    if (!accountId || !this.env?.DB || !featureOn(this.env, "shop")) return [];
+    try { return normalizeHoldings(await accountVehicleGifts(this.env.DB, accountId)); } catch { return []; }
+  }
+
   async #loadGifts(deviceId) {
     try {
       const book = this.env?.PHONE_BOOK?.getByName(BOOK_KEY);
@@ -142,12 +222,15 @@ export class Room extends DurableObject {
     }
     const pair = new WebSocketPair();
     const [client, server] = Object.values(pair);
-    this.ctx.acceptWebSocket(server);
+    // [accounts] 로그인 세션이 있으면 계정 id 를 태그로 붙인다(휴면 후에도 남음). 없으면 예전처럼 deviceId 로만.
+    const accountId = await this.#accountFromRequest(request);
+    this.ctx.acceptWebSocket(server, accountId ? [ACCOUNT_TAG + accountId] : []);
     return new Response(null, { status: 101, webSocket: client });
   }
 
   #evictSocket(ws, code = 1000, reason = "evicted") {
     const peer = ws.deserializeAttachment();
+    this.#dropMoves(ws, peer);
     ws.serializeAttachment(null);
     try {
       ws.close(code, reason);
@@ -235,6 +318,11 @@ export class Room extends DurableObject {
       return;
     }
     const now = Date.now();
+    // [subway-sync] 시계 맞추기: { t:'time', c } → { t:'time', c, s } (클라이언트가 NTP 처럼 오프셋 계산). hello 전에도, 상태는 안 건드림
+    if (m.t === "time") {
+      this.#send(ws, { t: "time", c: Number(m.c) || 0, s: now });
+      return;
+    }
     let me = ws.deserializeAttachment();
     if (m.t === "hello" && !me) {
       const id = "p-" + crypto.randomUUID().slice(0, 8);
@@ -248,11 +336,25 @@ export class Room extends DurableObject {
         ...(m.look || {}),
         color: m.color || m.look?.color,
       });
-      const auth = await this.#bikeAuth(rawDevice);
-      const owned = await this.#loadGifts(rawDevice);
+      // [accounts] 로그인한 연결이면 계정의 대표 캐릭터(primary_user_id)로 선물함을 본다. 관리자는 기기·대표 중 하나면.
+      const accountId = this.#accountOf(ws);
+      let userId = rawDevice;
+      if (accountId) {
+        try {
+          const acc = await accountById(this.env.DB, accountId);
+          if (acc?.primary_user_id) userId = acc.primary_user_id;
+          if (acc && statsEnabled(this.env)) this.ctx.waitUntil(logLoginDay(this.env.DB, accountId).catch(() => {}));
+        } catch {}
+      }
+      let auth = await this.#bikeAuth(rawDevice);
+      if (!auth.isAdmin && userId && userId !== rawDevice) auth = await this.#bikeAuth(userId);
+      const owned = await this.#loadGifts(userId);
+      const shopGifts = await this.#shopGifts(accountId);
+      if (shopGifts.length) owned.gifts = normalizeHoldings([...owned.gifts, ...shopGifts]);
       me = {
         id,
-        deviceId,
+        deviceId: userId || deviceId,
+        ...(accountId ? { accountId } : {}),
         name: String(m.name || "손님").trim().slice(0, 24) || "손님",
         color: look.color,
         look,
@@ -262,6 +364,7 @@ export class Room extends DurableObject {
         bikeAdmin: auth.isAdmin,
         bikeTank: auth.bikeTank,
         gifts: owned.gifts,
+        ...(shopGifts.length ? { shopGifts } : {}), // [economy] 산 탈것(양도 불가) — 선물을 보낸 뒤에도 보유에 남긴다
         phone: owned.phone,
         lastSeen: now,
       };
@@ -303,6 +406,7 @@ export class Room extends DurableObject {
       me.veh = veh;
       me.pv = pv;
       ws.serializeAttachment(me);
+      this.#trackMove(ws, me, m, now); // [accounts] 칭호용 이동 기록 (로그인 + STATS_ENABLED 일 때만)
       this.#broadcast(
         {
           t: "state",
@@ -357,8 +461,8 @@ export class Room extends DurableObject {
       }
       const fromQty = Math.max(0, Math.floor(Number(result.fromQty) || 0));
       const toQty = Math.max(0, Math.floor(Number(result.toQty) || 0));
-      me.gifts = withQty(me.gifts, item, fromQty);
-      target.peer.gifts = withQty(target.peer.gifts, item, toQty);
+      me.gifts = withQty(me.gifts, item, fromQty + qtyOf(me.shopGifts || [], item));
+      target.peer.gifts = withQty(target.peer.gifts, item, toQty + qtyOf(target.peer.shopGifts || [], item));
       ws.serializeAttachment(me);
       target.ws.serializeAttachment(target.peer);
       this.#send(ws, { t: "gift", ok: true, item, mine: false, qty: fromQty, to: target.peer.id, toName: target.peer.name });
@@ -370,6 +474,20 @@ export class Room extends DurableObject {
       const kind = String(m.kind || "").trim().slice(0, 16);
       const combo = Math.max(1, Math.min(99, Math.floor(Number(m.combo) || 1)));
       if (kind) this.#broadcast({ t: "emote", id: me.id, kind, combo }, ws);
+      return;
+    }
+    // [economy] 상점 구매 직후 클라이언트가 보낸다: 재접속 없이 산 탈것을 바로 타도록 서버 쪽 보유(me.gifts)를 다시 읽고 돌려준다.
+    //   보유는 D1(account_vehicles) + PhoneBook 에서만 읽는다 — 클라이언트가 보낸 값은 쓰지 않음. 2초에 1번.
+    if (m.t === "gifts_sync") {
+      if (!me.accountId || now - (me.giftSyncAt || 0) < 2000) return;
+      me.giftSyncAt = now;
+      const owned = await this.#loadGifts(me.deviceId);
+      const shopGifts = await this.#shopGifts(me.accountId);
+      me.gifts = normalizeHoldings([...owned.gifts, ...shopGifts]);
+      if (shopGifts.length) me.shopGifts = shopGifts;
+      else delete me.shopGifts;
+      ws.serializeAttachment(me);
+      this.#send(ws, { t: "holdings", gifts: me.gifts });
       return;
     }
     if (m.t === "chat") {
@@ -391,6 +509,7 @@ export class Room extends DurableObject {
 
   async webSocketClose(ws) {
     const me = ws.deserializeAttachment();
+    this.#dropMoves(ws, me);
     ws.serializeAttachment(null);
     try {
       ws.close(1000, "closed");
@@ -400,6 +519,7 @@ export class Room extends DurableObject {
 
   async webSocketError(ws) {
     const me = ws.deserializeAttachment();
+    this.#dropMoves(ws, me);
     ws.serializeAttachment(null);
     try {
       ws.close(1011, "error");

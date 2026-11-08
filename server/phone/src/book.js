@@ -2,6 +2,7 @@ import { DurableObject } from "cloudflare:workers";
 import { NOTICE_POSTS } from "../../../src/notices.js";
 import { GIFT_ITEMS, giftItem, giftUnit, normalizeHoldings } from "../../../src/gifts/catalog.js";
 import { photoOp } from "./photos.js";
+import { deviceInfo, mergeUser } from "./accountMerge.js"; // [accounts]
 
 // 정자역 번호부 하나. 번호는 여기서만 올라가서 겹치지 않는다.
 const ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -1066,7 +1067,59 @@ export class PhoneBook extends DurableObject {
       const likesRow = sql.exec("SELECT COUNT(*) AS cnt FROM post_likes").toArray()[0];
       const smsRow = sql.exec("SELECT COUNT(*) AS cnt FROM messages WHERE sender != ?", GUIDE_PHONE).toArray()[0];
       const rKey = String(input?.region || DEFAULT_REGION).trim().toLowerCase() || DEFAULT_REGION;
+      // [retention] 재방문 = 마지막 접속일(KST)이 가입일(KST)보다 뒤인 사람. 날짜별 접속 기록이 없어서 근사치.
+      const KST_DAY = "date((%s + 32400000) / 1000, 'unixepoch')";
+      const retRows = sql.exec(
+        `SELECT ${KST_DAY.replace("%s", "created_at")} AS day_kst,
+                COUNT(*) AS joined,
+                SUM(${KST_DAY.replace("%s", "updated_at")} > ${KST_DAY.replace("%s", "created_at")}) AS returned
+         FROM users
+         WHERE phone != ? AND created_at IS NOT NULL
+         GROUP BY day_kst
+         ORDER BY day_kst DESC
+         LIMIT 30`,
+        GUIDE_PHONE,
+      ).toArray();
+      const retention = {
+        rule: "returned = last seen on a later KST day than the join day (approximate)",
+        returnedTotal: retRows.reduce((n, r) => n + Number(r.returned || 0), 0),
+        byJoinDay: retRows.map((r) => ({ date: r.day_kst, joined: Number(r.joined || 0), returned: Number(r.returned || 0) })),
+      };
+      // [retention] since(ms) 이후 신규 가입 + 그중 구글 연결된 캐릭터 수(googleIds 는 워커가 D1 에서 넘겨줌)
+      let sinceStats = null;
+      const since = Number(input?.since);
+      if (Number.isFinite(since) && since > 0) {
+        const joinedRow = sql.exec(
+          "SELECT COUNT(*) AS cnt FROM users WHERE phone != ? AND created_at >= ?", GUIDE_PHONE, since,
+        ).toArray()[0];
+        const activeSinceRow = sql.exec(
+          "SELECT COUNT(*) AS cnt FROM users WHERE phone != ? AND updated_at >= ?", GUIDE_PHONE, since,
+        ).toArray()[0];
+        const gids = Array.isArray(input?.googleIds) ? input.googleIds.map(String).filter((x) => ID_RE.test(x)).slice(0, 5000) : null;
+        let googleNew = null;
+        let googleExisting = null;
+        if (gids) {
+          googleNew = 0;
+          googleExisting = 0;
+          for (const gid of gids) {
+            const r = sql.exec("SELECT created_at FROM users WHERE id = ?", gid).toArray()[0];
+            if (!r) continue;
+            if (Number(r.created_at || 0) >= since) googleNew++;
+            else googleExisting++;
+          }
+        }
+        sinceStats = {
+          since,
+          joined: Number(joinedRow?.cnt || 0),
+          active: Number(activeSinceRow?.cnt || 0),
+          googleLinked: gids ? gids.length : null,
+          googleLinkedNewUsers: googleNew,
+          googleLinkedExistingUsers: googleExisting,
+        };
+      }
       return {
+        retention,
+        ...(sinceStats ? { sinceStats } : {}),
         ok: true,
         region: rKey,
         regionName: regionLabelOf(rKey),
@@ -1428,6 +1481,27 @@ export class PhoneBook extends DurableObject {
     const found = this.#user(input?.id);
     if (found.error) return { ok: false, error: "unauthorized" };
     return photoOp(this.ctx.storage.sql, found.user, input);
+  }
+
+  // [accounts] 로그인 연결 때 Worker 가 기기 상태를 묻는다(번호는 끝 4자리만). ids 최대 10개.
+  accountDevices({ ids } = {}) {
+    this.#migrate();
+    const list = Array.isArray(ids) ? ids.slice(0, 10) : [];
+    const out = {};
+    for (const id of list) out[String(id)] = deviceInfo(this.ctx.storage.sql, String(id));
+    return { ok: true, devices: out };
+  }
+
+  // [accounts] 기기 → 대표 캐릭터 이전. 한 트랜잭션, 기기당 한 번(account_merges). dry 이면 쓰지 않음.
+  accountMerge({ fromId, toId, accountId, dry } = {}) {
+    this.#migrate();
+    const sql = this.ctx.storage.sql;
+    return mergeUser(sql, (fn) => this.ctx.storage.transactionSync(fn), {
+      fromId: String(fromId || ""),
+      toId: String(toId || ""),
+      accountId: accountId ? String(accountId) : null,
+      dry: !!dry,
+    });
   }
 
   stats() {

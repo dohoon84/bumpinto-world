@@ -19,9 +19,9 @@ const BLOCK = '#ebe4d4', WATER = '#7ec3e6', CENTER_LINE = '#f2d36b';
 const DEFAULT_ROAD = ['#b4b7bc', 0.08];
 
 let flatMat = null;
-const vcMat = () => (flatMat ||= new THREE.MeshLambertMaterial({ vertexColors: true }));
+export const vcMat = () => (flatMat ||= new THREE.MeshLambertMaterial({ vertexColors: true }));
 const tmpC = new THREE.Color();
-function paint(g, color) {
+export function paint(g, color) {
   const n = g.attributes.position.count, a = new Float32Array(n * 3);
   const c = color.isColor ? color : tmpC.set(color);
   for (let i = 0; i < n; i++) { a[i * 3] = c.r; a[i * 3 + 1] = c.g; a[i * 3 + 2] = c.b; }
@@ -76,7 +76,7 @@ export function roadMesh(roads, opts) {
 }
 
 // 건물: world.js buildWorld 의 건물 루프와 같은 색 규칙(종류색 + 시드 편차, 지붕 어둡게, 벽은 파사드 텍스처)
-function buildingMeshes(list, seed0) {
+export function buildingMeshes(list, seed0) {
   const roofs = [], walls = {};
   const c = new THREE.Color(), roof = new THREE.Color(), wallTint = new THREE.Color();
   let seed = seed0 % 2147483647 || 1; const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);

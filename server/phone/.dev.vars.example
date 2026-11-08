@@ -1,0 +1,15 @@
+# [accounts · economy] 로컬 wrangler dev 용. 이 파일을 .dev.vars 로 복사해 쓴다(.dev.vars 는 git 에 안 올라감).
+# 세션 쿠키 서명 키 — 32자 이상 아무 값. 예: openssl rand -base64 48
+SESSION_SECRET=
+# 로컬에서 로그인까지 시험할 때만 1
+ACCOUNTS_ENABLED=1
+# 서버 경제(원장·이동·퀘스트·상점·게시판 보상). 0 이면 /econ/config 만 답한다
+ECONOMY_ENABLED=1
+# 켤 기능(쉼표). 운영은 move → quests → shop → board 순서로 하나씩
+ECON_FEATURES=move,quests,shop,board
+# 0(기본) = 무료 오픈: 교통·상점 0원(기록만). 1 = 유료 차감 — 운영에서는 아직 켜지 않는다
+ECON_PAID=0
+# 로컬 전용 개발 로그인(POST /auth/dev). localhost · 사설 LAN(10.x / 172.16–31.x / 192.168.x) 요청에서만 동작. 운영에는 절대 넣지 않는다
+DEV_LOGIN=1
+# 로컬 전용: 세션 쿠키에서 Secure 를 뺀다(아이폰 Safari/Chrome 은 http://172.x 에서 Secure 쿠키를 저장하지 않음). DEV_LOGIN=1 일 때만 효과. 운영에는 절대 넣지 않는다
+SESSION_COOKIE_INSECURE=1

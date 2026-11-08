@@ -100,6 +100,12 @@ function effectiveDate(now = new Date(), tz = DEFAULT_TZ) {
   return new Date(now.getTime() + diffMs);
 }
 
+// [pangyo-npc] 게임 시계(?hour·?rush·?evening·시각 버튼 반영)의 현재 서울 시각(소수 시간). 코리더 NPC 밀도용, 읽기 전용
+export function gameHour(now = new Date()) {
+  const { hour, minute } = seoulClock(effectiveDate(now, DEFAULT_TZ), DEFAULT_TZ);
+  return hour + minute / 60;
+}
+
 // 태양 고도(alt)·방위(az, 북=0, 시계방향). x=동, z=남.
 export function solarPosition(date, latDeg = DEFAULT_LAT, lonDeg = DEFAULT_LON) {
   const latRad = latDeg * Math.PI / 180;

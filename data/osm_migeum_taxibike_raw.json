@@ -1,0 +1,39 @@
+{
+ "note": "[migeum-taxibike] data/query_migeum_taxibike.overpassql 결과(미금 굽기 범위 = query_migeum.overpassql 와 같은 bbox). amenity=taxi 0개 · bicycle_rental 0개 (bicycle_parking 2개는 대여소 아님) → 택시 승차 지점·카카오바이크는 규칙 배치. © OpenStreetMap contributors (ODbL)",
+ "endpoint": "https://maps.mail.ru/osm/tools/overpass/api/interpreter",
+ "osm_base": "2026-11-04T11:39:02Z",
+ "queried": "2026-11-04T11:40:57.807Z",
+ "counts": {
+  "taxi": 0,
+  "bicycle_rental": 0,
+  "bicycle_parking": 2
+ },
+ "elements": [
+  {
+   "type": "way",
+   "id": 905694503,
+   "center": {
+    "lat": 37.3438961,
+    "lon": 127.1164931
+   },
+   "tags": {
+    "amenity": "bicycle_parking",
+    "bicycle_parking": "stands",
+    "capacity": "10"
+   }
+  },
+  {
+   "type": "way",
+   "id": 905694504,
+   "center": {
+    "lat": 37.343685,
+    "lon": 127.1165213
+   },
+   "tags": {
+    "amenity": "bicycle_parking",
+    "bicycle_parking": "stands",
+    "capacity": "10"
+   }
+  }
+ ]
+}

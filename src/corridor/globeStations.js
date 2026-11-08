@@ -18,3 +18,11 @@ export const CORRIDOR_STATIONS = [
   {"id":"jamsil","ko":"잠실","en":"Jamsil","lines":["2호선","8호선"],"x":-726.4,"z":-16218.4,"lat":37.51322,"lon":127.10014},
 ];
 export const CORRIDOR_LANDMARK = {"id":"lotte","ko":"롯데월드타워","en":"Lotte World Tower","x":-503.5,"z":-16143.4,"lat":37.512541,"lon":127.102659};
+// [pangyo] 정자에서 갈라지는 신분당선 지선 역 (?pangyo=0 이면 지구본에서 뺀다)
+export const PANGYO_GLOBE_STATIONS = [
+  {"id":"pangyo","ko":"판교","en":"Pangyo","lines":["신분당선","경강선"],"x":264.7,"z":-3100.4,"lat":37.394548,"lon":127.111342,"branch":"jeongja"},
+];
+// [migeum] 정자에서 남쪽으로 이어지는 미금역 (?migeum=0 이면 지구본에서 뺀다)
+export const MIGEUM_GLOBE_STATIONS = [
+  {"id":"migeum","ko":"미금","en":"Migeum","lines":["수인분당선","신분당선"],"x":58.9,"z":1845,"lat":37.349809,"lon":127.109016,"branch":"jeongja"},
+];

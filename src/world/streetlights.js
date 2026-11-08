@@ -13,15 +13,15 @@ import { createNightFade, lightPoolMaterial } from './nightLights.js';
 const CELL = 250;        // scripts/corridor/build-streetlights.mjs 와 같아야 함
 const VIS_R = 420;       // 이 거리 밖 칸은 숨김 (코리더 상세 타일 반경 안쪽)
 const REFRESH = 0.25;    // 가시 칸 갱신 주기(초)
-const H = 10, ARM = 2.0; // 큰길 가로등 높이 · 기둥에서 팔 끝까지(m). ARM 은 굽는 스크립트와 같아야 함
-const POOL_R = 8, POOL_RZ = 15; // 웅덩이 반경(배율 1): 팔 방향(도로 가로) · 도로 방향. 도로 방향으로 길어 이웃 웅덩이와 이어진다
-const POOL_GAIN = 0.5;  // 웅덩이 가운데 밝기(가산). 낮게 두고 넓게 퍼뜨린다
+export const H = 10, ARM = 2.0; // 큰길 가로등 높이 · 기둥에서 팔 끝까지(m). ARM 은 굽는 스크립트와 같아야 함
+export const POOL_R = 8, POOL_RZ = 15; // 웅덩이 반경(배율 1): 팔 방향(도로 가로) · 도로 방향. 도로 방향으로 길어 이웃 웅덩이와 이어진다
+export const POOL_GAIN = 0.5;  // 웅덩이 가운데 밝기(가산). 낮게 두고 넓게 퍼뜨린다
 // 위에서 보기(overview): 상세 타일·420 m 제한 없이 카메라 주변 가로등을 웅덩이만으로(기둥·램프 없음) 그린다. 그리기 1회
 const OV_CAP = 8192;     // 위에서 보기 웅덩이 최대 개수(가까운 칸부터)
-const OV_SCALE = 1.25, OV_GAIN = 0.5, OV_LIFT = 0.6; // 멀리서도 보이게 조금 크게 · 밝게, 원거리 깊이 겹침 피하려 살짝 띄움
-const SCALE = [1, 0.72, 0.6, 0.45];   // kind 0 큰길 · 1 작은 길 · 2 OSM 가로등(보행 공간이 많아 작게) · 3 탄천 공원등(4.5 m)
-const POOL_SCALE = [1, 0.8, 0.75, 0.7]; // 웅덩이 배율(기둥 배율과 따로). 공원등도 낮지만 넓고 은은하게
-const LENS_DAY = new THREE.Color('#d8d6cf'), LENS_NIGHT = new THREE.Color('#fff1c9').multiplyScalar(1.6);
+export const OV_SCALE = 1.25, OV_GAIN = 0.5, OV_LIFT = 0.6; // 멀리서도 보이게 조금 크게 · 밝게, 원거리 깊이 겹침 피하려 살짝 띄움
+export const SCALE = [1, 0.72, 0.6, 0.45, 0.45];   // kind 0 큰길 · 1 작은 길 · 2 OSM 가로등(보행 공간이 많아 작게) · 3 탄천 공원등(4.5 m) · 4 판교 광장 데크 보행등(4.5 m)
+export const POOL_SCALE = [1, 0.8, 0.75, 0.7, 0.6]; // 웅덩이 배율(기둥 배율과 따로). 공원등도 낮지만 넓고 은은하게
+export const LENS_DAY = new THREE.Color('#d8d6cf'), LENS_NIGHT = new THREE.Color('#fff1c9').multiplyScalar(1.6);
 
 const tmpC = new THREE.Color();
 function paint(g, color) {
@@ -50,7 +50,8 @@ export function buildStreetlightGeometries() {
 }
 const tris = (g) => (g.index ? g.index.count : g.attributes.position.count) / 3;
 
-export function createStreetlights({ scene, terrain = null, corridor = null, liveBox = null, camera = null, url }) {
+// skipBoxes: 이 사각형들 안의 가로등은 건너뜀 — [pangyo] 판교역 일대는 corridor/pangyoStreetlights.js 가 따로 그린다(?pangyo=0 · ?pangyolamps=0 이면 빈 목록)
+export function createStreetlights({ scene, terrain = null, corridor = null, liveBox = null, camera = null, url, skipBoxes = [] }) {
   const root = new THREE.Group(); root.name = 'streetlights';
   scene.add(root);
   const stats = { loaded: false, lamps: 0, visible: 0, overview: 0, cells: 0, trisPerLamp: 0, night: 0 };
@@ -63,7 +64,7 @@ export function createStreetlights({ scene, terrain = null, corridor = null, liv
   const groundAt = (x, z) => (terrain ? terrain.renderHeight(x, z) : 0);
   // 강 둔치(높이 < -0.3)는 차도 가로등을 건너뜀(가로수와 같은 규칙). 탄천 공원등(kind 3)은 둔치 바닥까지 서고 물·하상만 피함
   const FLOOR = terrain?.params?.FLOOR ?? -6;
-  const skipAt = (h, kind) => !!terrain && (kind === 3 ? h < FLOOR - 0.4 : h < -0.3);
+  const skipAt = (h, kind, x, z) => !!terrain && (kind === 3 ? h < (terrain.mainDrop ? terrain.floorAt(x, z) : FLOOR) - 0.4 : h < -0.3); // [pangyo-water] 둔치 = 낙차 반영
 
   const ready = fetch(url).then((r) => (r.ok ? r.json() : null)).catch(() => null).then((j) => {
     if (!j || disposed) return;
@@ -75,6 +76,7 @@ export function createStreetlights({ scene, terrain = null, corridor = null, liv
       for (let i = 0; i < arr.length; i += 4) {
         const x = arr[i], z = arr[i + 1];
         if (!corridor && !inLive(x, z)) continue; // 코리더가 꺼져 있으면 정자 안만
+        if (skipBoxes.length && skipBoxes.some((b) => x >= b.x0 && x <= b.x1 && z >= b.z0 && z <= b.z1)) continue; // [pangyo]
         const tk = TS ? `${Math.floor(x / TS)}_${Math.floor(z / TS)}` : null;
         const gate = !inLive(x, z) && tk && corridor.tiles.has(tk);
         if (gate) tileKey = tk;
@@ -95,7 +97,7 @@ export function createStreetlights({ scene, terrain = null, corridor = null, liv
     for (let i = 0; i < n; i++) {
       const x = g.data[i * 4], z = g.data[i * 4 + 1], yaw = g.data[i * 4 + 2], kind = g.data[i * 4 + 3], s = SCALE[kind] ?? 1, ps = POOL_SCALE[kind] ?? 1;
       const h = groundAt(x, z);
-      if (skipAt(h, kind)) continue;
+      if (skipAt(h, kind, x, z)) continue;
       q.setFromAxisAngle(up, yaw);
       m4.compose(p.set(x, h, z), q, s3.set(s, s, s)).toArray(body, k * 16);
       // 웅덩이: 팔 방향(ux,uz)·직각(vx,vz) 경사를 따라 기울임
@@ -145,7 +147,7 @@ export function createStreetlights({ scene, terrain = null, corridor = null, liv
     for (let i = 0; i < g.data.length && k < room; i += 4) {
       const x = g.data[i], z = g.data[i + 1], kind = g.data[i + 3], s = (POOL_SCALE[kind] ?? 1) * OV_SCALE;
       const h = groundAt(x, z);
-      if (skipAt(h, kind)) continue;
+      if (skipAt(h, kind, x, z)) continue;
       q.setFromAxisAngle(up, g.data[i + 2]);
       m4.compose(p.set(x, h + OV_LIFT, z), q, s3.set(s, s, s)).toArray(arr, (n0 + k) * 16);
       k++;

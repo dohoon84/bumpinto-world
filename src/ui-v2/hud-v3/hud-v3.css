@@ -1,0 +1,191 @@
+/* [hud-v3] 데스크톱 상단 HUD v3 (PROPOSAL A안) — body.hud-v3 (PC ui-v2 기본, ?hud=off 로 끔) 일 때만 걸린다.
+   game-ui-spec: 남색 글라스(#1d2e4b→#0f192a 94%) · 흰 18% 테두리 1.5px · 반경 16 · 금색 #ffe169 · 8px 그리드 · 높이 64. */
+body.hud-v3 {
+  --h3-txt: #e8f2f8; --h3-sub: #9eb4c6; --h3-gold: #ffe169; --h3-amber: #f5a200; --h3-line: rgba(255, 255, 255, .12);
+}
+/* 기존 상단 버튼은 숨기기만(DOM·핸들러는 그대로 → 새 버튼이 .click() 으로 부른다) */
+body.hud-v3:not(.mobile) #buttons, body.hud-v3:not(.mobile) #top-right-bar { display: none !important; }
+body.hud-v3:not(.mobile) #hud.is-folded { display: none !important; }
+body.hud-v3:not(.mobile) #hud { top: 82px; max-width: 560px; }
+body.hud-v3.in-gate #h3-card, body.hud-v3.in-gate #h3-tr, body.hud-v3.in-gate #h3-bar, body.hud-v3.in-gate #h3-online, body.hud-v3.in-gate #h3-drop,
+body.hud-v3.in-lobby #h3-card, body.hud-v3.in-lobby #h3-tr, body.hud-v3.in-lobby #h3-bar, body.hud-v3.in-lobby #h3-online, body.hud-v3.in-lobby #h3-drop { display: none !important; }
+/* 다른 패널을 카드·바 줄(y10–74) 아래로. 접속자 패널 위치는 index.js placePresence() 가 알약 기준으로 잡음 */
+body.hud-v3:not(.mobile) #account-panel { top: 82px; right: 12px; }
+body.hud-v3:not(.mobile) #presence-panel { top: 82px; right: auto; }
+body.hud-v3:not(.mobile) #ride-taxi-panel { top: 82px; }
+/* BGM: 카드·바와 같은 줄(가운데 맞춤). 좌우는 src/bgm/hud.js fit() 이 카드·바를 피한다 */
+body.ui-v2.hud-v3:not(.mobile).v2-econ #bgm, body.ui-v2.hud-v3:not(.mobile) #bgm { top: 15px; }
+
+body.hud-v3 .h3-glass {
+  box-sizing: border-box; color: var(--h3-txt);
+  background: linear-gradient(180deg, rgba(29, 46, 75, .94), rgba(15, 25, 42, .94));
+  border: 1.5px solid rgba(255, 255, 255, .18); border-radius: 16px;
+  box-shadow: 0 8px 24px rgba(8, 16, 30, .35);
+  -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
+  font-family: inherit;
+}
+body.hud-v3 .h3-ic { display: block; flex: none; }
+body.hud-v3 .h3-kbd { box-sizing: border-box; display: inline-grid; place-items: center; min-width: 16px; height: 16px; padding: 0 3px; border-radius: 4px; font: 900 10px/1 inherit; font-family: inherit; color: var(--h3-gold); background: rgba(255, 225, 105, .16); border: 1px solid rgba(255, 225, 105, .5); }
+
+/* ---------- 왼쪽 위 플레이어 카드 ---------- */
+body.hud-v3 #h3-card { position: fixed; left: 12px; top: 10px; z-index: 12; height: 64px; display: flex; align-items: center; gap: 4px; padding: 0 8px; }
+body.hud-v3 .h3-me { display: flex; align-items: center; gap: 10px; padding: 0 8px 0 2px; }
+body.hud-v3 .h3-av { display: grid; place-items: center; width: 44px; height: 44px; border-radius: 50%; flex: none; font-size: 20px; font-weight: 900; color: #122033; background: linear-gradient(180deg, #ffe98a, #f5a200); box-shadow: inset 0 -3px 0 rgba(166, 95, 0, .55), 0 0 0 2px rgba(255, 255, 255, .25); }
+body.hud-v3 .h3-who { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+body.hud-v3 .h3-name { max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 15px; font-weight: 900; line-height: 18px; }
+body.hud-v3 .h3-clock { display: flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 700; color: var(--h3-sub); white-space: nowrap; }
+body.hud-v3 .h3-wx { color: var(--h3-gold); }
+body.hud-v3 .h3-cells { display: flex; align-items: center; height: 48px; }
+body.hud-v3 .h3-cell { position: relative; display: flex; align-items: center; gap: 8px; height: 48px; padding: 0 12px; margin: 0; border: 0; border-left: 1px solid var(--h3-line); border-radius: 0; background: none; color: inherit; font: inherit; cursor: pointer; white-space: nowrap; transition: background-color .15s; }
+body.hud-v3 .h3-cell:hover { background: rgba(255, 255, 255, .08); border-radius: 10px; }
+body.hud-v3 .h3-cell:focus-visible { outline: 2px solid var(--h3-gold); outline-offset: -2px; border-radius: 10px; }
+body.hud-v3 .h3-v { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; line-height: 1; }
+body.hud-v3 .h3-v small { font-size: 11px; font-weight: 700; color: var(--h3-sub); }
+body.hud-v3 .h3-v b { font-size: 15px; font-weight: 900; color: var(--h3-txt); font-variant-numeric: tabular-nums; }
+body.hud-v3 .h3-bal .h3-v { flex-direction: row; align-items: baseline; gap: 4px; }
+body.hud-v3 .h3-bal .h3-v b { font-size: 18px; color: var(--h3-gold); }
+body.hud-v3 .h3-bal .ve-mock { margin-left: 2px; color: var(--h3-gold); background: rgba(255, 225, 105, .12); }
+body.hud-v3 .h3-d { font-style: normal; font-weight: 900; color: #7ff0c8; }
+body.hud-v3 .h3-d.neg { color: #ff8a8a; }
+body.hud-v3 .h3-link .h3-v b { font-size: 13px; color: var(--h3-gold); }
+body.hud-v3 .h3-prog { position: relative; width: 48px; height: 6px; border-radius: 99px; background: rgba(255, 255, 255, .14); overflow: hidden; }
+body.hud-v3 .h3-prog i { position: absolute; inset: 0 auto 0 0; border-radius: inherit; background: linear-gradient(90deg, #ffe169, #f5a200); }
+body.hud-v3 .h3-prog.mint i { background: #20c997; }
+body.hud-v3 .h3-caret { color: var(--h3-sub); transition: transform .15s; }
+body.hud-v3 .h3-caret.up { transform: rotate(180deg); }
+body.hud-v3 #h3-card .v2-glow { border-radius: 10px; }
+
+/* 할 일 트래커: 카드 아래(위치는 card.js). 밝은 카드 → 남색 글라스 */
+body.hud-v3 #ve-hud.h3-trk-root .ve-trk { left: 12px; width: 344px; }
+body.hud-v3 #ve-hud.h3-trk-root .ve-card { color: var(--h3-txt); background: linear-gradient(180deg, rgba(29, 46, 75, .94), rgba(15, 25, 42, .94)); border: 1.5px solid rgba(255, 255, 255, .18); border-radius: 16px; box-shadow: 0 8px 24px rgba(8, 16, 30, .35); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); }
+body.hud-v3 #ve-hud.h3-trk-root .ve-card p { color: var(--h3-sub); }
+body.hud-v3 #ve-hud.h3-trk-root .ve-blue, body.hud-v3 #ve-hud.h3-trk-root .ve-lnk { color: #7fb2ff; }
+body.hud-v3 #ve-hud.h3-trk-root .ve-chk { border-color: rgba(255, 255, 255, .3); }
+body.hud-v3 #ve-hud.h3-trk-root .ve-tt em, body.hud-v3 #ve-hud.h3-trk-root .ve-trow.done .ve-tt b { color: var(--h3-sub); }
+body.hud-v3 #ve-hud.h3-trk-root .ve-ok { color: #7ff0c8 !important; }
+body.hud-v3 #ve-hud.h3-trk-root .ve-amt { color: var(--h3-gold); }
+body.hud-v3 #ve-hud.h3-trk-root .ve-bar { background: rgba(255, 255, 255, .14); }
+body.hud-v3 #ve-hud.h3-trk-root .ve-foot { color: var(--h3-sub); border-top-color: var(--h3-line); }
+body.hud-v3 #ve-hud.h3-trk-root .ve-mock { color: var(--h3-gold); background: rgba(255, 225, 105, .12); }
+body.hud-v3 #ve-hud.h3-trk-root .ve-tile { background: rgba(32, 201, 151, .2); }
+
+/* ---------- 오른쪽 위 액션 바 + 접속자 알약 묶음 ---------- */
+/* row-reverse: DOM [bar, online] → 화면에 알약 | 바. 알약이 바 왼쪽 같은 줄(세로 가운데). */
+body.hud-v3 #h3-tr { position: fixed; right: 12px; top: 10px; z-index: 12; display: flex; flex-direction: row-reverse; align-items: center; gap: 8px; pointer-events: none; }
+body.hud-v3 #h3-tr > * { pointer-events: auto; }
+body.hud-v3 #h3-bar { position: relative; right: auto; top: auto; z-index: 12; height: 64px; display: flex; align-items: center; gap: 4px; padding: 0 6px; }
+body.hud-v3 .h3-btn { position: relative; box-sizing: border-box; width: 64px; height: 52px; margin: 0; padding: 4px 0 0; border: 0; border-radius: 12px; background: none; color: var(--h3-txt); font: inherit; font-size: 11px; font-weight: 800; line-height: 1; cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; transition: background-color .15s; }
+body.hud-v3 .h3-btn:hover { background: rgba(255, 255, 255, .1); }
+body.hud-v3 .h3-btn:focus-visible { outline: 2px solid var(--h3-gold); outline-offset: -2px; }
+body.hud-v3 .h3-btn.gold { color: var(--h3-gold); background: rgba(255, 225, 105, .1); box-shadow: inset 0 0 0 1px rgba(255, 225, 105, .4); }
+body.hud-v3 .h3-btn.on { color: #122033; background: linear-gradient(180deg, #ffe169, #f5a200); box-shadow: inset 0 -3px 0 #a65f00; }
+body.hud-v3 .h3-btn.on .h3-kbd { color: #122033; background: rgba(255, 255, 255, .45); border-color: rgba(166, 95, 0, .5); }
+body.hud-v3 .h3-lbl { white-space: nowrap; }
+body.hud-v3 .h3-btn .h3-kbd { position: absolute; top: 3px; right: 3px; min-width: 14px; height: 14px; font-size: 9px; }
+body.hud-v3 .h3-tag { position: absolute; top: -5px; left: 50%; transform: translateX(-50%); white-space: nowrap; box-shadow: 0 0 0 2px #15233a; padding: 0 3px; height: 13px; border-radius: 4px; font-size: 9px; font-weight: 900; line-height: 13px; color: #122033; background: var(--h3-gold); }
+body.hud-v3 .h3-btn.on .h3-tag { background: #fff; }
+body.hud-v3 .h3-badge { position: absolute; top: 2px; left: 4px; box-sizing: border-box; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 8px; font-size: 10px; font-weight: 900; line-height: 16px; color: #fff; background: #ff4d5e; box-shadow: 0 0 0 2px #15233a; }
+body.hud-v3 .h3-badge[hidden] { display: none; }
+
+/* 접속자 알약 (바 왼쪽 같은 줄). 카드·BGM 과 겹치면 #h3-tr.h3-online-below → 바 아래·바 왼쪽 가장자리 */
+body.hud-v3 #h3-online { position: relative; right: auto; top: auto; z-index: 12; display: inline-flex; align-items: center; gap: 6px; box-sizing: border-box; height: 32px; padding: 0 10px 0 12px; border-radius: 16px; border: 1.5px solid rgba(255, 255, 255, .18); background: rgba(15, 25, 42, .9); color: var(--h3-txt); font: inherit; font-size: 12px; font-weight: 800; cursor: pointer; box-shadow: 0 4px 14px rgba(8, 16, 30, .3); flex: none; white-space: nowrap; }
+body.hud-v3 #h3-online[hidden] { display: none; }
+body.hud-v3 #h3-online:hover, body.hud-v3 #h3-online.on { border-color: rgba(255, 225, 105, .65); }
+body.hud-v3 #h3-online.on .h3-ic { transform: rotate(180deg); }
+body.hud-v3 .h3-dot { width: 8px; height: 8px; border-radius: 50%; background: #20c997; box-shadow: 0 0 0 3px rgba(32, 201, 151, .25); }
+/* fallback: 바 아래, 바의 왼쪽 가장자리에 맞춤 (미니맵 원과 떨어지게) */
+body.hud-v3 #h3-tr.h3-online-below { flex-direction: column; align-items: flex-end; gap: 8px; }
+body.hud-v3 #h3-tr.h3-online-below #h3-online { align-self: flex-start; }
+
+/* 드롭다운 (지도·이동 / ☰) */
+body.hud-v3 #h3-drop { position: fixed; z-index: 40; min-width: 248px; max-width: 320px; padding: 8px; display: flex; flex-direction: column; gap: 2px; }
+body.hud-v3 .h3-sec { padding: 8px 10px 4px; font-size: 11px; font-weight: 800; color: var(--h3-sub); }
+body.hud-v3 .h3-item { box-sizing: border-box; display: flex; align-items: center; gap: 10px; width: 100%; min-height: 40px; margin: 0; padding: 0 10px; border: 0; border-radius: 10px; background: none; color: var(--h3-txt); font: inherit; font-size: 14px; font-weight: 700; text-align: left; cursor: pointer; }
+body.hud-v3 button.h3-item:hover { background: rgba(255, 255, 255, .08); }
+body.hud-v3 .h3-item:focus-visible { outline: 2px solid var(--h3-gold); outline-offset: -2px; }
+body.hud-v3 .h3-it { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+body.hud-v3 .h3-sub { max-width: 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; color: var(--h3-sub); }
+body.hud-v3 .h3-item.gold { color: var(--h3-gold); }
+body.hud-v3 .h3-item.red { color: #ff8a8a; }
+body.hud-v3 .h3-item.h3-lang { cursor: default; }
+body.hud-v3 .h3-hr { height: 1px; margin: 6px 4px; background: var(--h3-line); }
+body.hud-v3 .h3-seg { display: inline-flex; padding: 2px; border-radius: 8px; background: rgba(255, 255, 255, .08); }
+body.hud-v3 .h3-seg button { height: 26px; padding: 0 10px; border: 0; border-radius: 6px; background: none; color: var(--h3-sub); font: inherit; font-size: 12px; font-weight: 800; cursor: pointer; }
+body.hud-v3 .h3-seg button.on { color: #122033; background: linear-gradient(180deg, #ffe169, #f5a200); }
+
+/* 1280–1439: 아이콘만 + 키 배지 (라벨은 title·aria-label 로) */
+@media (max-width: 1439px) {
+  body.hud-v3 .h3-btn { width: 52px; padding: 0; }
+  body.hud-v3 .h3-lbl { display: none; }
+  body.hud-v3 .h3-name { max-width: 104px; }
+  body.hud-v3 .h3-cell { padding: 0 10px; }
+}
+
+/* ---------- [hud-v3-minimap] 원형 미니맵 (액션 바 아래 오른쪽) — minimap.js ---------- */
+/* 알약이 바 왼쪽 같은 줄이므로 미니맵은 바 바로 아래(top 82). 알약이 바 아래로 내려가면 top 122. */
+body.hud-v3 #h3-mm { position: fixed; right: 4px; top: 82px; z-index: 11; width: 200px; height: 222px; pointer-events: none; user-select: none; -webkit-user-select: none; }
+body.hud-v3.h3-online-below #h3-mm { top: 122px; }
+body.hud-v3 #h3-mm[hidden], body.hud-v3.in-gate #h3-mm, body.hud-v3.in-lobby #h3-mm, body.hud-v3.mobile #h3-mm { display: none !important; }
+/* 원형 미니맵이 켜져 있으면 우측 하단 사각 코너맵(#phone) 숨김 — ?hud=v3 만 */
+body.hud-v3.h3-mm-on:not(.mobile) #phone { display: none !important; }
+body.hud-v3 .h3-mm-ring { position: absolute; left: 12px; top: 12px; width: 176px; height: 176px; border-radius: 50%; pointer-events: auto;
+  box-shadow: 0 0 0 2px rgba(255, 225, 105, .78), 0 0 0 6px rgba(15, 25, 42, .94), 0 0 0 7px rgba(255, 255, 255, .16), 0 10px 26px rgba(8, 16, 30, .5); }
+body.hud-v3 .h3-mm-cv { position: absolute; inset: 0; width: 100%; height: 100%; border-radius: 50%; display: block; }
+body.hud-v3 .h3-mm-glass { position: absolute; inset: 0; border-radius: 50%; cursor: pointer;
+  background: radial-gradient(circle at 34% 26%, rgba(255, 255, 255, .13), rgba(255, 255, 255, 0) 42%); box-shadow: inset 0 0 0 1px rgba(8, 16, 30, .6), inset 0 0 18px rgba(4, 10, 22, .65); }
+body.hud-v3 .h3-mm-compass { position: absolute; inset: 0; pointer-events: none; }
+body.hud-v3 .h3-mm-compass > * { position: absolute; display: grid; place-items: center; font-style: normal; line-height: 1; }
+body.hud-v3 .h3-mm-compass .n { left: 79px; top: -9px; width: 18px; height: 18px; border-radius: 50%; font-size: 11px; font-weight: 900; color: #122033; background: linear-gradient(180deg, #ffe98a, #f5a200); box-shadow: 0 0 0 1.5px #0f192a, 0 2px 4px rgba(0, 0, 0, .45); }
+body.hud-v3 .h3-mm-compass i { width: 14px; height: 14px; font-size: 9px; font-weight: 900; color: rgba(232, 242, 248, .72); text-shadow: 0 1px 2px #000; }
+body.hud-v3 .h3-mm-compass .e { left: 165px; top: 81px; } body.hud-v3 .h3-mm-compass .s { left: 81px; top: 165px; } body.hud-v3 .h3-mm-compass .w { left: -3px; top: 81px; }
+body.hud-v3 .h3-mm-b { position: absolute; box-sizing: border-box; width: 24px; height: 24px; margin: 0; padding: 0; display: grid; place-items: center; border-radius: 50%; pointer-events: auto; cursor: pointer;
+  color: var(--h3-gold); background: linear-gradient(180deg, #24385a, #0f192a); border: 1.5px solid rgba(255, 225, 105, .55); box-shadow: 0 2px 6px rgba(0, 0, 0, .45); transition: transform .12s, border-color .12s; }
+body.hud-v3 .h3-mm-b:hover { transform: scale(1.1); border-color: var(--h3-gold); }
+body.hud-v3 .h3-mm-b:focus-visible { outline: 2px solid var(--h3-gold); outline-offset: 1px; }
+body.hud-v3 .h3-mm-b:disabled { opacity: .4; cursor: default; transform: none; }
+body.hud-v3 .h3-mm-b.on { color: #122033; background: linear-gradient(180deg, #ffe169, #f5a200); border-color: #a65f00; }
+body.hud-v3 .h3-mm-rot { left: 21px; top: 21px; } body.hud-v3 .h3-mm-close { left: 155px; top: 21px; width: 20px; height: 20px; color: var(--h3-sub); border-color: rgba(255, 255, 255, .3); }
+body.hud-v3 .h3-mm-zin { left: 171px; top: 132px; } body.hud-v3 .h3-mm-zout { left: 144px; top: 165px; }
+/* 회전 모드: 방위 글자를 테두리 안쪽(N 반지름 64 · E/S/W 70)으로 — 가장자리 버튼과 겹치지 않게 */
+body.hud-v3 #h3-mm.rot .h3-mm-compass .n { left: 79px; top: 15px; } body.hud-v3 #h3-mm.rot .h3-mm-compass .e { left: 151px; top: 81px; }
+body.hud-v3 #h3-mm.rot .h3-mm-compass .s { left: 81px; top: 151px; } body.hud-v3 #h3-mm.rot .h3-mm-compass .w { left: 11px; top: 81px; }
+body.hud-v3 .h3-mm-plaque { position: absolute; left: 50%; top: 196px; transform: translateX(-50%); max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; box-sizing: border-box; height: 22px; padding: 0 12px; border-radius: 11px;
+  font-size: 11.5px; font-weight: 800; line-height: 19px; color: var(--h3-gold); background: rgba(15, 25, 42, .9); border: 1.5px solid rgba(255, 225, 105, .4); box-shadow: 0 3px 10px rgba(8, 16, 30, .35); }
+body.hud-v3 .h3-mm-plaque:empty { display: none; }
+/* 지도·이동 메뉴의 켬/끔 스위치 */
+body.hud-v3 .h3-sw { position: relative; flex: none; width: 30px; height: 18px; border-radius: 9px; background: rgba(255, 255, 255, .16); transition: background-color .15s; }
+body.hud-v3 .h3-sw i { position: absolute; left: 2px; top: 2px; width: 14px; height: 14px; border-radius: 50%; background: #9eb4c6; transition: left .15s, background-color .15s; }
+body.hud-v3 .h3-sw.on { background: rgba(255, 225, 105, .35); }
+body.hud-v3 .h3-sw.on i { left: 14px; background: var(--h3-gold); }
+
+/* [game-icons] 공용 게임 아이콘 — 남색 유리 위 크림 몸통 + 금색 포인트. 눌림(금색 바탕)에서는 포인트를 흰색으로 */
+body.hud-v3 #h3-bar, body.hud-v3 #h3-drop, body.hud-v3 #h3-card, body.hud-v3 #h3-mm { --gi-a: #ffd54a; --gi-k: #13213a; }
+body.hud-v3 .h3-btn .gi { color: #f4ead2; filter: drop-shadow(0 1.5px 0 rgba(0, 0, 0, .35)); transition: transform .14s cubic-bezier(.3, 1.6, .5, 1); }
+body.hud-v3 .h3-btn:hover .gi { transform: translateY(-1.5px) scale(1.06); }
+body.hud-v3 .h3-btn:active .gi { transform: translateY(.5px) scale(.96); }
+body.hud-v3 .h3-btn.on .gi { color: #122033; --gi-a: #fff; --gi-k: #a65f00; filter: none; }
+body.hud-v3 .h3-item .gi { color: #e8eef5; }
+body.hud-v3 button.h3-item:hover .gi { color: #fff; --gi-a: #ffe169; }
+body.hud-v3 .h3-mm-b.on .gi { --gi-a: #fff; --gi-k: #a65f00; }
+/* [game-icons] 게시판(밝은 바탕) — v3 에서만 이모지 대신 아이콘 */
+body.hud-v3 #board-modal.bd-v3 { --gi-a: #f5a200; --gi-k: #fff; }
+body.hud-v3 #board-modal .bd-gi { display: inline-block; vertical-align: -3px; margin-right: 5px; }
+body.hud-v3 #board-modal h1 .bd-gi { vertical-align: -3px; margin-right: 7px; color: #1f5fbf; }
+body.hud-v3 #board-modal .board-btn.primary .bd-gi, body.hud-v3 #board-modal .board-cat.on .bd-gi { --gi-a: #ffd54a; --gi-k: #1f5fbf; }
+body.hud-v3 #board-modal .board-cat.on .bd-gi { --gi-k: #122033; }
+body.hud-v3 #board-modal .pin-icon .bd-gi { margin: 0 auto; vertical-align: -3px; color: #d4003b; --gi-a: #ff5a6e; }
+/* [game-icons] 경제 패널(할 일 · 카르마 · 탈것 상점) — v3 에서만 */
+body.hud-v3 #ve-layer { --gi-a: #ffd54a; --gi-k: #13213a; }
+body.hud-v3 .ve-gi { display: inline-block; vertical-align: middle; flex: none; }
+body.hud-v3 .ve-gi-head { color: #f4ead2; filter: drop-shadow(0 1.5px 0 rgba(0, 0, 0, .35)); }
+body.hud-v3 .ve-gi-lock { color: #9eb4c6; --gi-a: #9eb4c6; }
+body.hud-v3 .ve-tab { display: inline-flex; align-items: center; gap: 6px; }
+body.hud-v3 .ve-tab .ve-gi { color: currentColor; }
+body.hud-v3 .ve-tab.on .ve-gi { --gi-a: #fff; --gi-k: #a65f00; }
+body.hud-v3 .ve-thumb { position: relative; }
+body.hud-v3 .ve-vbadge { position: absolute; left: 8px; top: 8px; display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; color: #f4ead2; background: linear-gradient(180deg, #24385a, #0f192a); box-shadow: 0 0 0 1.5px rgba(255, 225, 105, .55), 0 2px 6px rgba(0, 0, 0, .4); }
+body.hud-v3 .ve-item.on .ve-vbadge { box-shadow: 0 0 0 2px #ffe169, 0 2px 6px rgba(0, 0, 0, .4); }
+body.hud-v3 .ve-soon { display: inline-flex; align-items: center; gap: 3px; }
+body.hud-v3 .ve-soon .ve-gi { --gi-a: #ffd54a; }
+body.hud-v3 .h3-ci { display: inline-block; vertical-align: -2px; margin-right: 3px; color: #cfe0ee; }
+body.hud-v3 #h3-card .h3-wx .gi { color: #ffd54a; }

@@ -39,7 +39,7 @@ const browser = await chromium.launch({ args: ['--use-angle=swiftshader', '--ena
 const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
 const errs = [];
 page.on('pageerror', (e) => errs.push(e.message));
-await page.goto(BASE + '?enter=1&name=e2e&bus=sim&ws=mock&rideSfx=0&rideVoice=0');
+await page.goto(BASE + '?enter=1&name=e2e&bus=sim&ws=mock&rideSfx=0&rideVoice=0&noticePopup=0');
 await page.waitForFunction(() => window.__jj?.ready, null, { timeout: 240000 });
 await page.waitForTimeout(2000);
 await page.evaluate(() => document.getElementById('lobby-go').click());
@@ -93,7 +93,13 @@ async function ride220(pathId, label, legStops) {
     const ok = await page.evaluate(({ busId, k }) => { const R = window.__jj.ride; R.debug.ff(0.3, () => { const b = R.debug.bus(busId, true); return b && b.state === 'dwell' && b.stopIdx === k; }); const b = R.debug.bus(busId, true); if (b?.state === 'dwell') b.dwell = Math.max(b.dwell, 8); return b?.state === 'dwell' && b.stopIdx === k; }, setup);
     if (ok) break;
   }
-  await page.evaluate(({ busId, at }) => { const jj = window.__jj, b = jj.ride.debug.bus(busId, true), q = b._q || { x: at.x, z: at.z }; const sp = jj.corridor.freeSpot((q.x + at.x) / 2, (q.z + at.z) / 2); jj.teleport(sp.x, sp.z); }, setup);
+  await page.evaluate(({ busId, at }) => {
+    const jj = window.__jj, J = jj.transit.rideSim, b = jj.ride.debug.bus(busId, true), q = b._q || { x: at.x, z: at.z };
+    // [pangyo-link] 정자역 정류장엔 G8110·380·다른 220 도 같이 설 수 있고, E 는 가장 가까운 정차 버스를 고른다(의도된 동작, HUD 에 그 노선이 뜬다)
+    //   → 테스트 버스 둘레 40m 안의 다른 버스를 치워 이 220 만 남긴다
+    J.sim.buses = J.sim.buses.filter((o) => o === b || !o._q || Math.hypot(o._q.x - q.x, o._q.z - q.z) > 40);
+    const sp = jj.corridor.freeSpot((q.x + at.x) / 2, (q.z + at.z) / 2); jj.teleport(sp.x, sp.z);
+  }, setup);
   await page.waitForTimeout(1200);
   await page.keyboard.press('e'); await page.waitForTimeout(1200);
   const st0 = await page.evaluate(() => window.__jj.ride.debug.state());

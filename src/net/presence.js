@@ -5,6 +5,7 @@ import { STATE_HZ } from './protocol.js';
 import { sanitizeLook } from '../look.js';
 import { deviceId } from '../sms.js';
 import { seedList } from '../gifts/catalog.js';
+import { accountWsUrl } from '../account/flags.js'; // [accounts]
 
 class Emitter {
   constructor() { this.handlers = {}; }
@@ -49,9 +50,11 @@ export class WebSocketPresence extends Emitter {
           try { ws.send(JSON.stringify({ t: 'ping' })); } catch {}
         }
       }, 15000);
+      this._timeSync(ws); // [subway-sync]
     };
     ws.onmessage = (ev) => {
       let m; try { m = JSON.parse(ev.data); } catch { return; }
+      if (m.t === 'time') { if (Number.isFinite(m.c) && Number.isFinite(m.s)) this.emit('time', { c: m.c, s: m.s, r: Date.now() }); return; } // [subway-sync]
       if (m.t === 'welcome') {
         this.id = m.id;
         this.peerIds = new Set((m.peers || []).map((p) => p.id).filter(Boolean));
@@ -67,6 +70,7 @@ export class WebSocketPresence extends Emitter {
     };
     ws.onclose = (ev) => {
       clearInterval(this.pingTimer);
+      this._timeStop();
       if (this.manualClose || this.ws !== ws) return;
       this.peerIds.clear();
       this.emit('reset');
@@ -107,6 +111,8 @@ export class WebSocketPresence extends Emitter {
   }
   sendChat(text) { if (this.ws?.readyState === 1) this.ws.send(JSON.stringify({ t: 'chat', text })); }
   sendEmote(kind, combo = 1) { if (this.ws?.readyState === 1) this.ws.send(JSON.stringify({ t: 'emote', kind, combo })); }
+  // [economy] 상점에서 탈것을 산 직후: 서버(Room)가 계정 보유를 다시 읽어 { t:'holdings' } 로 돌려준다
+  syncGifts() { if (this.ws?.readyState === 1) this.ws.send(JSON.stringify({ t: 'gifts_sync' })); }
   sendWeather(mode) {
     if (this.ws?.readyState !== 1) return;
     this.ws.send(JSON.stringify({ t: 'weather', mode: mode === 'rain' ? 'rain' : '' }));
@@ -119,7 +125,18 @@ export class WebSocketPresence extends Emitter {
     const digits = String(phone || '').replace(/\D/g, '').slice(0, 11);
     this.ws.send(JSON.stringify({ t: 'gift', item, to, phone: digits }));
   }
+  // [subway-sync] 서버 시계 샘플: 연결 직후 5번(0.3초 간격), 그 뒤 60초마다 1번. 예전 서버는 모르는 메시지라 무시 → 로컬 시계 그대로
+  _timeSync(ws) {
+    this._timeStop();
+    const ask = () => { if (this.ws === ws && ws.readyState === 1) { try { ws.send(JSON.stringify({ t: 'time', c: Date.now() })); } catch {} } };
+    let n = 0;
+    const burst = () => { ask(); if (++n < 5) this.timeBurst = setTimeout(burst, 300); };
+    burst();
+    this.timeTimer = setInterval(ask, 60000);
+  }
+  _timeStop() { clearTimeout(this.timeBurst); clearInterval(this.timeTimer); }
   close() {
+    this._timeStop?.();
     this.manualClose = true;
     clearTimeout(this.retryTimer);
     clearInterval(this.pingTimer);
@@ -240,6 +257,7 @@ export class MockPresence extends Emitter {
       }
     }, 320);
   }
+  syncGifts() {}
   sendWeather(mode) {
     this.emit('weather', { t: 'weather', mode: mode === 'rain' ? 'rain' : '' });
   }
@@ -278,7 +296,7 @@ export function createPresence({ station, region = null }) {
       ? 'ws://127.0.0.1:8787'
       : wsParam === 'prod' || wsParam === 'live'
         ? DEFAULT_WS_URL
-        : (wsParam || DEFAULT_WS_URL);
+        : (wsParam || accountWsUrl() || DEFAULT_WS_URL); // [accounts] 계정 API 를 커스텀 도메인으로 띄웠으면 웹소켓도 그쪽(세션 쿠키가 실림)
   const regionId = region?.id || params.get('region') || 'jeongja';
   const sep = base.includes('?') ? '&' : '?';
   const url = `${base}${sep}region=${encodeURIComponent(regionId)}`;

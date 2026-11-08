@@ -119,6 +119,17 @@ export class EmoteFX {
     this.particles3d = [];
     this.floaters2d = [];
     this.proj = new THREE.Vector3();
+    this.home = { scene, camera };
+  }
+
+  // [zone] 실내 구역(지하철 대합실 등)에서는 그 Scene·카메라에 터뜨린다. 바꿀 때 날던 파티클·이모지는 정리.
+  setView(scene = null, camera = null) {
+    for (const p of this.particles3d) this.scene.remove(p.mesh);
+    for (const f of this.floaters2d) f.el.remove();
+    this.particles3d = [];
+    this.floaters2d = [];
+    this.scene = scene || this.home.scene;
+    this.camera = camera || this.home.camera;
   }
 
   burst(originPos, emoteId = 'cheer', combo = 1) {
