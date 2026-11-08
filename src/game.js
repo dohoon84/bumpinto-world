@@ -21,6 +21,10 @@ import { buildTransit, makeCrossingGuard, mergeSimExtra } from './transit/transi
 import { pangyoLinkEnabled, PANGYO_LINK_FILE } from './corridor/pangyo.js'; // [pangyo-link]
 import { migeumBusEnabled, mergeMigeumBus, MIGEUM_BUS_FILE } from './corridor/migeumBus.js'; // [migeum-bus]
 import { clampWorld } from './corridor/islands.js'; // [gangnam]
+import { setNearScope, collectPlaces, placeCaption, sameIsland } from './corridor/nearScope.js'; // [gangnam-night]
+import { gangnamNightEnabled, createGangnamNight } from './gangnam/night.js'; // [gangnam-night]
+import { createGangnamBillboards } from './gangnam/billboards/create.js'; // [gangnam-ads]
+import { gangnamAdsEnabled } from './gangnam/billboards/manifest.js'; // [gangnam-ads]
 import { mountPhone } from './phone.js';
 import { mountHandset } from './handset.js';
 import { mountCamera } from './camera/index.js'; // [camera] 폰 카메라·사진 앱 (?camera=0 이면 끔, 본체는 처음 열 때 지연 로드)
@@ -326,6 +330,15 @@ const lampSkipBoxes = [...(pangyoLampsOn ? corridorData.pangyo.meta.boxes : []),
 const streetlights = streetlightsFile ? createStreetlights({ scene, terrain, corridor, camera, liveBox: data.meta.bboxLocal, url: import.meta.env.BASE_URL + streetlightsFile, skipBoxes: lampSkipBoxes }) : null;
 const pangyoLamps = pangyoLampsOn ? createPangyoStreetlights({ scene, terrain, corridor, url: import.meta.env.BASE_URL + corridorDir + PANGYO_LAMPS_FILE }) : null;
 const migeumLamps = migeumLampsOn ? createMigeumStreetlights({ scene, terrain, corridor, url: import.meta.env.BASE_URL + corridorDir + MIGEUM_LAMPS_FILE }) : null;
+const gnMobile = params.get('mobile') === '1' || (params.get('mobile') !== '0' && (() => { try { return isMobileMode(); } catch { return false; } })()); // [gangnam-night]
+setNearScope({ islands: corridor?.bounds?.islands || null }); // [gangnam-night] 정류장·지명은 지금 섬 안에서만
+const placeList = collectPlaces(corridor?.stations, corridorData?.gangnam?.landmarks, data.station); // [gangnam-night] 정자 라이브 역은 corridor.stations 에 없음
+const gangnamNight = corridorDir && corridorData?.gangnam && gangnamNightEnabled()
+  ? createGangnamNight({ scene, terrain, url: import.meta.env.BASE_URL + corridorDir + 'gangnam/night.json', mobile: gnMobile })
+  : null;
+const gangnamAds = corridorDir && corridorData?.gangnam && gangnamAdsEnabled()
+  ? createGangnamBillboards({ scene, terrain, baseUrl: import.meta.env.BASE_URL, mobile: gnMobile })
+  : null;
 const st = data.station;
 const homeStationLabel = overlay.add({
   cls: 'label station',
@@ -2213,7 +2226,11 @@ input.onKey = (e) => {
 if (mobileMode) import('./mobile/hud.js').then((m) => m.mountMobileHud({ handset })); // [mobile]
 if (mobileMode && !shot && uiV2Wanted()) import('./mobile/econ/index.js').then((m) => m.mountMobileEcon({ handset })).catch((e) => console.warn('[econ-mobile]', e)); // [econ-mobile] 모바일 경제 UI (?ui=v2)
 const ov = { yaw: 0.35, pitch: 0.95, dist: 1000 };
-const phone = mountPhone({ data, region, extraTiles: corridor ? () => corridor.mapTiles() : null }); // [corridor]
+const phone = mountPhone({
+  data, region, extraTiles: corridor ? () => corridor.mapTiles() : null,
+  placeAt: (x, z) => placeCaption(x, z, placeList, corridor?.bounds?.islands), // [gangnam-night] 미니맵 지명
+  peerHere: (px, pz, x, z) => sameIsland(x, z, px, pz, corridor?.bounds?.islands), // 다른 섬 접속자 이름(판교러버 등)은 가장자리 라벨로 안 그림
+}); // [corridor]
 
 let placeAt = 0, placeMark = '';
 function rememberPlace(force = false) {
@@ -2599,6 +2616,8 @@ function frame() {
   if (streetlights) { const c = cam.mode === 'follow' ? P : sun.target.position; streetlights.update(dt, c.x, c.z, cam.mode); } // [streetlights] 거리·타일 기준 표시 + 밤 페이드
   if (pangyoLamps) { const c = cam.mode === 'follow' ? P : sun.target.position; pangyoLamps.update(dt, c.x, c.z, cam.mode); } // [pangyo-streetlights]
   if (migeumLamps) { const c = cam.mode === 'follow' ? P : sun.target.position; migeumLamps.update(dt, c.x, c.z, cam.mode); } // [migeum-lamps]
+  if (gangnamNight) { const c = cam.mode === 'follow' ? P : sun.target.position; gangnamNight.update(dt, c.x, c.z); } // [gangnam-night]
+  if (gangnamAds) { const c = cam.mode === 'follow' ? P : sun.target.position; gangnamAds.update(dt, c.x, c.z); } // [gangnam-ads]
   world.shops?.update(dt, P.x, P.z); // [shops] 주변 70m 상호 간판 풀
   const viewYaw = cam.mode === 'follow' ? cam.yaw : ov.yaw;
   const moveYaw = player.rotation.y + (bikes.riding && bikes.speed < -0.2 ? Math.PI : 0);
@@ -2628,7 +2647,8 @@ requestAnimationFrame(frame);
 // 스크린샷/디버그용 훅
 window.__jj = {
   perfmem: perfMem, // [perf-memory]
-  ready: true, region, tower, renderer, corridor, playgrounds, streetlights, pangyoLamps, migeumLamps, // [corridor] [playgrounds] [streetlights]
+  ready: true, region, tower, renderer, corridor, playgrounds, streetlights, pangyoLamps, migeumLamps, gangnamNight, gangnamAds, // [corridor] [playgrounds] [streetlights] [gangnam-night]
+  placeCaption: (x, z) => placeCaption(x, z, placeList, corridor?.bounds?.islands), // [gangnam-night]
   bungeo, // [bungeo]
   launch, roadster, trucks, bike: adminBike, giftRides, inventory, data, world, npcs, transit, camera, cam, ov, setMode, terrain, taxis, jzTraffic, police, weather: atmosphere, umbrellas, dogPark, strayCats, // [terrain] [taxi] [roadster] [tower] [launch] [truck] [bike] [roadbike] [inventory]
   get player() { return player; },

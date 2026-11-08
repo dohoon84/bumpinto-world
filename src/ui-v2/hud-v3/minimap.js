@@ -390,10 +390,12 @@ function busStops(J) {
 let plaqueText = '', plaqueAt = 0;
 function updatePlaque(J, x, z) {
   const now = performance.now(); if (now - plaqueAt < 500 && plaqueText) return; plaqueAt = now;
+  const cap = J.placeCaption?.(x, z);
   let best = null, bd = Infinity;
-  for (const s of subwayStations(J)) { const d = Math.hypot(s.x - x, s.z - z); if (d < bd) { bd = d; best = s; } }
+  if (!cap) for (const s of subwayStations(J)) { const d = Math.hypot(s.x - x, s.z - z); if (d < bd) { bd = d; best = s; } }
   let t;
   if (J.region?.id === 'starbase') t = 'Starbase';
+  else if (cap) t = tr(cap.name, cap.nameEn || cap.name); // [gangnam-night] 같은 섬의 역·랜드마크만
   else if (best && bd < 900) t = tr(`${best.name}역${bd > 250 ? ' 근처' : ''}`, `${best.nameEn || best.name}${bd > 250 ? ' area' : ' Stn.'}`);
   else t = tr('분당', 'Bundang');
   if (t !== plaqueText) { plaqueText = t; plaque.textContent = t; }

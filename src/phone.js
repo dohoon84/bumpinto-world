@@ -259,7 +259,7 @@ function drawPeerMarkers(ctx, peers, x, z, w, h, viewW, viewH, now, s) {
   ctx.restore();
 }
 
-export function mountPhone({ data, region = null, extraTiles = null }) { // [corridor] extraTiles(): [{ b, canvas }] (라이브 지도 아래에 깔림)
+export function mountPhone({ data, region = null, extraTiles = null, placeAt = null, peerHere = null } = {}) { // [corridor] extraTiles(): [{ b, canvas }] (라이브 지도 아래에 깔림) [gangnam-night] placeAt·peerHere
   const canvas = document.getElementById('phone-map');
   const ctx = canvas.getContext('2d');
   const map = drawBaseMap(data, region);
@@ -307,7 +307,23 @@ export function mountPhone({ data, region = null, extraTiles = null }) { // [cor
       drawCone(ctx, reach);
       ctx.restore();
 
-      drawPeerMarkers(ctx, peers, x, z, w, h, viewW, viewH, now, s);
+      const peersDraw = peerHere ? peers.filter((p) => peerHere(p.x || 0, p.z || 0, x, z)) : peers;
+      drawPeerMarkers(ctx, peersDraw, x, z, w, h, viewW, viewH, now, s);
+      const cap = placeAt?.(x, z);
+      if (cap?.name) {
+        const label = String(cap.name).slice(0, 14);
+        ctx.save();
+        ctx.font = `800 ${Math.round(12 * s)}px Pretendard, "Apple SD Gothic Neo", sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        const tw = Math.max(24, ctx.measureText(label).width);
+        const bw = tw + 14 * s, bh = 16 * s, bx = w / 2 - bw / 2, by = h - bh - 6 * s;
+        ctx.fillStyle = 'rgba(10, 18, 32, 0.88)';
+        ctx.fillRect(bx, by, bw, bh);
+        ctx.fillStyle = '#ffe169';
+        ctx.fillText(label, w / 2, by + bh / 2 + 0.5);
+        ctx.restore();
+      }
 
       ctx.save();
       ctx.translate(w / 2, h / 2);
