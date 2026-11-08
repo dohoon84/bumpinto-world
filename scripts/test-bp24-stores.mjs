@@ -121,6 +121,14 @@ for (const spec of BP24_PLACEMENTS) {
       if (!inside(wx, wz, ring)) { fail.push(`${spec.id} 실내가 건물 밖`); break; }
     }
   }
+  if (spec.id === 'jz649') {
+    const host = jeongja.buildings[spec.building];
+    if (host?.n !== '백궁프라자2') fail.push(`${spec.id} 호스트가 백궁프라자2가 아님 #${spec.building} ${host?.n || ''}`);
+    if (!(st.b[0] > 0.9)) fail.push(`${spec.id} 입구가 정자일로(서)를 안 봄 ${st.b.map((n) => n.toFixed(2))}`);
+    const doosan = jeongja.buildings.find((b) => b?.n === '분당두산타워');
+    if (doosan && inside(st.center[0], st.center[1], doosan.o)) fail.push(`${spec.id} 중심이 두산타워 풋프린트에 남음`);
+    if (Math.hypot(spec.atX - (-224.4), spec.atZ - 211.9) < 5) fail.push(`${spec.id} 이정·착지 좌표가 옛 공터`);
+  }
   if (spec.id === 'seongnam-cityhall') {
     if (bump24StorePrompts(spec.id, '')) fail.push('시청점 안내가 기본 주소에서 켜짐');
     if (!bump24StorePrompts(spec.id, '?bp24=1&bp24game=1')) fail.push('시청점 안내가 ?bp24game=1 에서 꺼짐');

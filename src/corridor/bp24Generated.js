@@ -148,7 +148,7 @@ export const BP24_GENERATED = [
   {"id":"cr25775","name":"BUMP24 장지송파대로8길점","world":"corridor","match":{"x":2243.3,"z":-12577.1,"r":25},"at":"bump24-cr25775","atX":2237.6,"atZ":-12571.6,"defaultOn":true},
   {"id":"cr28625","name":"BUMP24 장지위례서로점","world":"corridor","match":{"x":2509.1,"z":-12240.5,"r":25},"at":"bump24-cr28625","atX":2520.2,"atZ":-12240.2,"defaultOn":true},
   {"id":"jz122","name":"BUMP24 정자느티로점","world":"jeongja","match":{"x":-291.3,"z":-190.2,"r":25},"at":"bump24-jz122","atX":-291.3,"atZ":-207.7,"building":122},
-  {"id":"jz649","name":"BUMP24 정자일로남점","world":"jeongja","match":{"x":-256,"z":260.1,"r":25},"at":"bump24-jz649","atX":-224.4,"atZ":211.9,"building":649,"recess":1.55,"apron":false,"side":null},
+  {"id":"jz649","name":"BUMP24 정자일로남점","world":"jeongja","match":{"x":-181.1,"z":236.7,"r":8},"at":"bump24-jz649","atX":-199.2,"atZ":239.9,"building":101,"front":"-x","side":null,"apron":false},
   {"id":"jz129","name":"BUMP24 정자일로북점","world":"jeongja","match":{"x":-249.8,"z":-167.7,"r":25},"at":"bump24-jz129","atX":-227.8,"atZ":-198,"building":129},
   {"id":"jz24","name":"BUMP24 정자일로232번길남점","world":"jeongja","match":{"x":-161.3,"z":-368.2,"r":25},"at":"bump24-jz24","atX":-132.9,"atZ":-368.5,"building":24},
   {"id":"jz236","name":"BUMP24 정자일로232번길북점","world":"jeongja","match":{"x":-183.7,"z":-515.4,"r":25},"at":"bump24-jz236","atX":-194.1,"atZ":-495.1,"building":236,"recess":1.55,"apron":false,"side":null},

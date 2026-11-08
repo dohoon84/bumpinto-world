@@ -2,6 +2,7 @@
 // OSM 원본 폴리곤이 아니라, 타일 JSON 의 b.o 를 toShape + ExtrudeGeometry 로 메시가 되는 외곽만 인정한다.
 import * as THREE from 'three';
 import { toShape } from '../../src/world.js';
+import { doosanGate } from '../../src/world/doosanGate.js';
 
 export const CAR = new Set(['primary', 'secondary', 'tertiary', 'trunk', 'residential', 'unclassified', 'service', 'motorway', 'primary_link', 'secondary_link', 'trunk_link', 'motorway_link', 'living_street']);
 
@@ -95,6 +96,11 @@ export function assessStore(st, building, roads, parks) {
   if (!st) return { ok: false, reasons: ['매장 틀 없음'] };
   const fp = renderedFootprint(building);
   if (!fp) return { ok: false, reasons: ['건물 메시 없음'] };
+  // 분당두산타워는 문(門) 틈을 비우고 두 타워만 그린다. OSM 외곽 안의 공터는 메시가 아니다.
+  const gate = doosanGate(building);
+  const inMesh = (x, z) => (gate?.towers?.length
+    ? gate.towers.some((t) => pointInRing(x, z, t))
+    : pointInFootprint(x, z, fp.ring, fp.holes));
   const inset = Math.min(0.45, st.W / 2 - 0.2, st.D / 2 - 0.2);
   const n = 4;
   let outside = 0, onRoad = 0, samples = 0;
@@ -104,13 +110,13 @@ export function assessStore(st, building, roads, parks) {
       const z = inset + (st.D - 2 * inset) * (j / n);
       const [wx, wz] = storePoint(st, x, z);
       samples++;
-      if (!pointInFootprint(wx, wz, fp.ring, fp.holes) && edgeDist(wx, wz, fp.ring) > 0.4) outside++;
+      if (!inMesh(wx, wz) && edgeDist(wx, wz, fp.ring) > 0.4) outside++;
       if (roadClearance(roads, wx, wz) < -0.45) onRoad++;
     }
   }
   for (const [x, z] of [[0.08, 0.08], [st.W - 0.08, 0.08], [0.08, st.D - 0.08], [st.W - 0.08, st.D - 0.08]]) {
     const [wx, wz] = storePoint(st, x, z);
-    if (!pointInFootprint(wx, wz, fp.ring, fp.holes) && edgeDist(wx, wz, fp.ring) > 0.55) {
+    if (!inMesh(wx, wz) && edgeDist(wx, wz, fp.ring) > 0.55) {
       reasons.push('상자 모서리가 건물 메시 밖');
       break;
     }
@@ -118,10 +124,10 @@ export function assessStore(st, building, roads, parks) {
   if (outside > 0) reasons.push(`상자 안쪽이 건물 메시 밖 ${outside}/${samples}`);
   if (onRoad > 0) reasons.push(`상자가 차도와 겹침 ${onRoad}/${samples}`);
   const [cx, cz] = storePoint(st, st.W / 2, st.D / 2);
-  if (!pointInFootprint(cx, cz, fp.ring, fp.holes)) reasons.push('중심이 빈 땅');
+  if (!inMesh(cx, cz)) reasons.push('중심이 빈 땅');
   for (const p of parks || []) {
     const k = p.k;
-    if ((k === 'plaza' || k === 'pedestrian' || k === 'square') && p.o?.length >= 3 && pointInRing(cx, cz, p.o) && !pointInFootprint(cx, cz, fp.ring, fp.holes)) {
+    if ((k === 'plaza' || k === 'pedestrian' || k === 'square') && p.o?.length >= 3 && pointInRing(cx, cz, p.o) && !inMesh(cx, cz)) {
       reasons.push('광장 한가운데');
     }
   }
