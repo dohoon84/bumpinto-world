@@ -28,7 +28,7 @@ export function createGameplay({ interior, ui, sfx, storeId, storeName, onExitSt
 
   function startCountdown() {
     ranked = rankGate ? !!rankGate.ranked : !rankedUsed(storeId, dateKey);
-    if (rankGate?.usedUp) ui.limit?.(true);
+    if (rankGate?.usedUp) ui.limit?.(true, { guest: rankGate.guest === true });
     ui.setMode(ranked); ui.hideIntro();
     phase = PHASE.COUNTDOWN; countLeft = COUNT_SEC; lastSec = COUNT_SEC + 1;
     ui.showHud(true); ui.setHud({ time: PLAY_SEC, total: 0, kg: 0 });

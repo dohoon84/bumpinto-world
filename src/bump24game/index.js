@@ -48,6 +48,15 @@ export function mountBump24Game({
     onExit: () => leaveStore(),
     onMute: () => { if (toggleMute) toggleMute(); else sfx.setMuted(!sfx.muted); syncMute(); },
     onIntroGo: () => {},
+    onRankLogin: () => {
+      rankGateAt = 0;
+      const id = currentStore?.id || lastNear?.id;
+      if (!id) return;
+      refreshGate(id).then((g) => {
+        if (g?.usedUp) ui.limit(true, { guest: g.guest === true });
+        else ui.limit(false);
+      }).catch(() => {});
+    },
   });
   function syncMute() { const lv = getAudioLevel?.(); ui.setMuted(sfx.muted || !!lv?.muted); }
 
@@ -175,7 +184,13 @@ export function mountBump24Game({
     active = true;
     document.body.classList.add('b24-inside'); ui.setInside(true); hideOutside(); syncMute();
     ui.showHud(false);
-    ui.intro({ storeName, ranked: !rankedUsed(storeId, interior.layout.dateKey), sale: interior.layout.saleIds.map((id) => BY_ID[id]).filter(Boolean), best: loadBest(storeId) });
+    const gate = rankGates.get(storeId) || null;
+    ui.intro({
+      storeName,
+      ranked: gate ? !!gate.ranked : !rankedUsed(storeId, interior.layout.dateKey),
+      left: gate?.left, cap: gate?.cap,
+      sale: interior.layout.saleIds.map((id) => BY_ID[id]).filter(Boolean), best: loadBest(storeId),
+    });
     onInterior?.('bump24', interior);
   }
   function leaveStore() {
@@ -216,7 +231,7 @@ export function mountBump24Game({
       ui.setHint(`${st.name || 'BUMP24'} 들어가기 · 30초 장보기`, true, { act: true, tap: `${st.name || 'BUMP24'} 들어가기` });
       refreshGate(st.id);
       const g = rankGates.get(st.id);
-      if (g?.usedUp) ui.limit(true);
+      if (g?.usedUp) ui.limit(true, { guest: g.guest === true });
       else ui.limit(false);
     }
     else ui.setHint('');
