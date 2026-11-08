@@ -15,7 +15,7 @@
 
 ## 지금 그림
 
-기본 `src` 는 공식 CI `bumpinto-logo.png`(파란 둥근 B, 지구, 빨간 핀). 화면보다 작게 689:768 로 넣고 여백은 `#f4f8ff`. 로고는 늘리거나 색을 바꾸지 않는다.  
+기본 `src` 는 공식 CI `bumpinto-logo.png`(파란 둥근 B, 지구, 빨간 핀). 화면보다 작게 689:768 로 넣고 여백은 PNG 바탕과 같은 `#fefefe`(다른 그림으로 바꾸면 `faces.js` 의 `LOGO_PAD_COLOR` 도 그 그림 바탕색으로). 로고는 늘리거나 색을 바꾸지 않는다.
 `schedule` 에 `builtin:world` · `builtin:bump24` · `builtin:gradient` 를 두면 4초마다 글자 슬라이드가 섞인다. `builtin:bump` 임시 글자는 없다.
 
 폴 중심 4m 안에는 가로수를 심지 않는다 (`clearance.js`).

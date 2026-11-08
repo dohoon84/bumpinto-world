@@ -5,7 +5,7 @@
 import * as THREE from 'three';
 import placements from './placements.js';
 import { SCREENS, BUILTIN, FRAME_SEC } from './manifest.js';
-import { faceCorners, logoPlacement, LOGO_ASPECT, LOGO_PAD_COLOR, LOGO_SRC } from './faces.js';
+import { atlasMetrics, faceCorners, logoPlacement, LOGO_ASPECT, LOGO_PAD_COLOR, LOGO_SRC } from './faces.js';
 
 const IH = 256;
 const IW = Math.round(IH * LOGO_ASPECT);
@@ -14,22 +14,22 @@ function sourcesOf(entry) {
   return entry?.schedule?.length ? entry.schedule : [entry?.src].filter(Boolean);
 }
 
-function paintText(ctx, i, label, sub, colors) {
-  const x = i * IW;
-  const g = ctx.createLinearGradient(x, 0, x + IW, IH);
+function paintText(ctx, originX, originY, label, sub, colors) {
+  const x = originX;
+  const g = ctx.createLinearGradient(x, originY, x + IW, originY + IH);
   g.addColorStop(0, colors[0]);
   g.addColorStop(1, colors[1]);
   ctx.fillStyle = g;
-  ctx.fillRect(x, 0, IW, IH);
+  ctx.fillRect(x, originY, IW, IH);
   ctx.fillStyle = '#f4f7fb';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.font = `900 ${Math.round(IH * 0.22)}px Pretendard, sans-serif`;
-  ctx.fillText(label, x + IW / 2, IH * 0.42);
+  ctx.fillText(label, x + IW / 2, originY + IH * 0.42);
   if (sub) {
     ctx.font = `700 ${Math.round(IH * 0.1)}px Pretendard, sans-serif`;
     ctx.fillStyle = '#d5e4f5';
-    ctx.fillText(sub, x + IW / 2, IH * 0.68);
+    ctx.fillText(sub, x + IW / 2, originY + IH * 0.68);
   }
 }
 
@@ -54,32 +54,40 @@ export function createGangnamBillboards({ scene, baseUrl = '/', mobile = false, 
     if (src !== LOGO_SRC && BUILTIN[src] == null && src && !extra.includes(src)) extra.push(src);
   }
   const cols = 4 + extra.length;
+  const atlas = atlasMetrics(cols, IW, IH);
   const canvas = document.createElement('canvas');
-  canvas.width = IW * cols;
-  canvas.height = IH;
+  canvas.width = atlas.atlasW;
+  canvas.height = atlas.atlasH;
   const ctx = canvas.getContext('2d');
+  const cellAt = (i) => ({ x: i * atlas.pitchX + atlas.gutter, y: atlas.gutter });
   ctx.fillStyle = LOGO_PAD_COLOR;
-  ctx.fillRect(0, 0, IW, IH);
-  paintText(ctx, 1, 'bumpinto', '.world', ['#245b86', '#1a3f5c']);
-  paintText(ctx, 2, 'BUMP24', '강남대로', ['#2a4d78', '#1c3554']);
-  const gg = ctx.createLinearGradient(3 * IW, 0, 4 * IW, IH);
+  ctx.fillRect(0, 0, atlas.atlasW, atlas.atlasH);
+  const c1 = cellAt(1);
+  paintText(ctx, c1.x, c1.y, 'bumpinto', '.world', ['#245b86', '#1a3f5c']);
+  const c2 = cellAt(2);
+  paintText(ctx, c2.x, c2.y, 'BUMP24', '강남대로', ['#2a4d78', '#1c3554']);
+  const c3 = cellAt(3);
+  const gg = ctx.createLinearGradient(c3.x, c3.y, c3.x + IW, c3.y + IH);
   gg.addColorStop(0, '#1a6cff');
   gg.addColorStop(0.55, '#7fd0ff');
   gg.addColorStop(1, '#ff5a7a');
   ctx.fillStyle = gg;
-  ctx.fillRect(3 * IW, 0, IW, IH);
+  ctx.fillRect(c3.x, c3.y, IW, IH);
   const tex = new THREE.CanvasTexture(canvas);
   tex.colorSpace = THREE.SRGBColorSpace;
   tex.flipY = true;
   tex.generateMipmaps = false;
   tex.minFilter = THREE.LinearFilter;
   tex.magFilter = THREE.LinearFilter;
+  tex.wrapS = THREE.ClampToEdgeWrapping;
+  tex.wrapT = THREE.ClampToEdgeWrapping;
   const paintLogo = (img) => {
+    const o = cellAt(0);
     ctx.fillStyle = LOGO_PAD_COLOR;
-    ctx.fillRect(0, 0, IW, IH);
+    ctx.fillRect(o.x, o.y, IW, IH);
     const sc = Math.min(IW / img.width, IH / img.height);
     const dw = img.width * sc, dh = img.height * sc;
-    ctx.drawImage(img, (IW - dw) / 2, (IH - dh) / 2, dw, dh);
+    ctx.drawImage(img, o.x + (IW - dw) / 2, o.y + (IH - dh) / 2, dw, dh);
     tex.needsUpdate = true;
   };
   const logo = new Image();
@@ -93,12 +101,12 @@ export function createGangnamBillboards({ scene, baseUrl = '/', mobile = false, 
   extra.forEach((src, i) => {
     const img = new Image();
     img.onload = () => {
-      const dx = (4 + i) * IW;
+      const o = cellAt(4 + i);
       const sc = Math.min(IW / img.width, IH / img.height);
       const w = img.width * sc, h = img.height * sc;
-      ctx.fillStyle = '#0072DD';
-      ctx.fillRect(dx, 0, IW, IH);
-      ctx.drawImage(img, dx + (IW - w) / 2, (IH - h) / 2, w, h);
+      ctx.fillStyle = LOGO_PAD_COLOR;
+      ctx.fillRect(o.x, o.y, IW, IH);
+      ctx.drawImage(img, o.x + (IW - w) / 2, o.y + (IH - h) / 2, w, h);
       tex.needsUpdate = true;
     };
     img.src = src.startsWith('/') ? baseUrl + src.slice(1) : src;
@@ -114,10 +122,11 @@ export function createGangnamBillboards({ scene, baseUrl = '/', mobile = false, 
     const y = s.kind === 'pole' ? ground(s.x, s.z) + (s.poleH || 5.6) - s.h / 2 : ground(s.x, s.z) + s.y;
     const fit = logoPlacement(s.w, s.h);
     // 로고가 밝은 판보다 관찰자 쪽에 있고, 둘 다 기둥(반지름 0.16) 앞에 있다.
-    const front = pushFace(pos, uv, idx, s.x, y, s.z, s.yaw, faceCorners({ w: fit.w, h: fit.h, cell: seq[0], cols, back: false, z: 0.28 }));
-    const back = pushFace(pos, uv, idx, s.x, y, s.z, s.yaw, faceCorners({ w: fit.w, h: fit.h, cell: seq[0], cols, back: true, z: 0.28 }));
-    pushFace(fpos, null, fidx, s.x, y, s.z, s.yaw, faceCorners({ w: s.w, h: s.h, cell: 0, cols, back: false, z: 0.2 }));
-    pushFace(fpos, null, fidx, s.x, y, s.z, s.yaw, faceCorners({ w: s.w, h: s.h, cell: 0, cols, back: true, z: 0.2 }));
+    const uvOpt = { contentW: IW, contentH: IH };
+    const front = pushFace(pos, uv, idx, s.x, y, s.z, s.yaw, faceCorners({ w: fit.w, h: fit.h, cell: seq[0], cols, back: false, z: 0.28, ...uvOpt }));
+    const back = pushFace(pos, uv, idx, s.x, y, s.z, s.yaw, faceCorners({ w: fit.w, h: fit.h, cell: seq[0], cols, back: true, z: 0.28, ...uvOpt }));
+    pushFace(fpos, null, fidx, s.x, y, s.z, s.yaw, faceCorners({ w: s.w, h: s.h, cell: 0, cols, back: false, z: 0.2, ...uvOpt }));
+    pushFace(fpos, null, fidx, s.x, y, s.z, s.yaw, faceCorners({ w: s.w, h: s.h, cell: 0, cols, back: true, z: 0.2, ...uvOpt }));
     anim.push({ front, back, seq, cell: seq[0] });
   }
   const geo = new THREE.BufferGeometry();
@@ -164,8 +173,8 @@ export function createGangnamBillboards({ scene, baseUrl = '/', mobile = false, 
   const uvAttr = geo.getAttribute('uv');
   let acc = 0, shown = false;
   const setPair = (a, cell) => {
-    const frontC = faceCorners({ w: 1, h: 1, cell, cols, back: false });
-    const backC = faceCorners({ w: 1, h: 1, cell, cols, back: true });
+    const frontC = faceCorners({ w: 1, h: 1, cell, cols, back: false, contentW: IW, contentH: IH });
+    const backC = faceCorners({ w: 1, h: 1, cell, cols, back: true, contentW: IW, contentH: IH });
     for (let i = 0; i < 4; i++) {
       uvAttr.setXY(a.front + i, frontC[i].u, frontC[i].v);
       uvAttr.setXY(a.back + i, backC[i].u, backC[i].v);
