@@ -188,7 +188,7 @@ for (const spec of BP24_PLACEMENTS) {
     if (!cityhallBump24On('?bp24=1') || !cityhallBump24On('?bump24cityhall=1')) fail.push('시청점을 다시 켜지 못함');
     if (!corridorPlacements('').some((s) => s.id === spec.id)) fail.push('시청점이 기본 코리더 목록에 없음');
     if (corridorPlacements('?bp24=0').some((s) => s.id === spec.id)) fail.push('?bp24=0 목록에 시청점이 남음');
-    if (bump24StorePrompts(spec.id, '') || bump24StorePrompts(spec.id, '?bp24=1')) fail.push('시청점 안내는 ?bp24game=1 없이 켜짐');
+    if (!bump24StorePrompts(spec.id, '') || !bump24StorePrompts(spec.id, '?bp24=1')) fail.push('켜진 시청점 안내가 기본에서 꺼짐');
     if (!bump24StorePrompts(spec.id, '?bp24game=1') || !bump24StorePrompts(spec.id, '?bp24=1&bp24game=1')) fail.push('시청점 ?bp24game=1 안내가 꺼짐');
     if (bump24StorePrompts(spec.id, '?bp24=0&bp24game=1') || bump24StorePrompts(spec.id, '?bump24cityhall=0&bp24game=1')) fail.push('끈 시청점에 안내가 켜짐');
     const pin = [door.x + 1.6, door.z];
