@@ -4,7 +4,7 @@ import fs from 'fs';
 import { bp24DoorInfo, bp24TileKey, prepareJeongjaBp24, resolveBp24 } from '../src/corridor/bp24.js';
 import { BP24_PLACEMENTS, bump24AtSpot } from '../src/corridor/bp24Locations.js';
 import { bump24StorePrompts } from '../src/bump24game/flag.js';
-import { assessStore } from './lib/bp24-mesh.mjs';
+import { assessStore, nearestNamedRoad } from './lib/bp24-mesh.mjs';
 
 const root = new URL('../', import.meta.url);
 const DOOR_R = 2.4;
@@ -123,11 +123,27 @@ for (const spec of BP24_PLACEMENTS) {
   }
   if (spec.id === 'jz649') {
     const host = jeongja.buildings[spec.building];
-    if (host?.n !== '백궁프라자2') fail.push(`${spec.id} 호스트가 백궁프라자2가 아님 #${spec.building} ${host?.n || ''}`);
-    if (!(st.b[0] > 0.9)) fail.push(`${spec.id} 입구가 정자일로(서)를 안 봄 ${st.b.map((n) => n.toFixed(2))}`);
-    const doosan = jeongja.buildings.find((b) => b?.n === '분당두산타워');
+    if (spec.building !== 101 || host?.n !== '백궁프라자2') fail.push(`${spec.id} 호스트가 백궁프라자2(#101)가 아님 #${spec.building} ${host?.n || ''}`);
+    if (!st.side) fail.push(`${spec.id} 모서리 옆유리가 없음`);
+    const frontOut = [door.x - st.b[0] * 1.6, door.z - st.b[1] * 1.6];
+    const sideOut = [
+      st.o[0] + st.ax[0] * (st.W + 1.4) + st.b[0] * (st.D / 2),
+      st.o[1] + st.ax[1] * (st.W + 1.4) + st.b[1] * (st.D / 2),
+    ];
+    const rf = nearestNamedRoad(jeongja.roads, frontOut[0], frontOut[1]);
+    const rs = nearestNamedRoad(jeongja.roads, sideOut[0], sideOut[1]);
+    if (!rf || rf.name !== '정자일로' || rf.d > 18) fail.push(`${spec.id} 앞면이 정자일로를 안 봄 ${rf?.name} ${rf?.d}`);
+    if (!rs || rs.name !== '정자일로156번길' || rs.d > 18) fail.push(`${spec.id} 옆면이 이름표 쪽 정자일로156번길을 안 봄 ${rs?.name} ${rs?.d}`);
+    let maxZ = -Infinity, minX = Infinity;
+    for (const [x, z] of [[0, 0], [st.W, 0], [0, st.D], [st.W, st.D]]) {
+      const wx = st.o[0] + st.ax[0] * x + st.b[0] * z, wz = st.o[1] + st.ax[1] * x + st.b[1] * z;
+      maxZ = Math.max(maxZ, wz); minX = Math.min(minX, wx);
+    }
+    if (maxZ < 249 || minX > -196) fail.push(`${spec.id} 가 남서 모서리가 아님 ${minX.toFixed(1)},${maxZ.toFixed(1)}`);
+    const doosan = jeongja.buildings.find((bb) => bb?.n === '분당두산타워');
     if (doosan && inside(st.center[0], st.center[1], doosan.o)) fail.push(`${spec.id} 중심이 두산타워 풋프린트에 남음`);
     if (Math.hypot(spec.atX - (-224.4), spec.atZ - 211.9) < 5) fail.push(`${spec.id} 이정·착지 좌표가 옛 공터`);
+    if (Math.hypot(door.x - spec.atX, door.z - spec.atZ) > 1.2) fail.push(`${spec.id} 착지가 문에서 멀다`);
   }
   if (spec.id === 'seongnam-cityhall') {
     if (bump24StorePrompts(spec.id, '')) fail.push('시청점 안내가 기본 주소에서 켜짐');
