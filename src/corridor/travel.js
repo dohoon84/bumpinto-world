@@ -55,16 +55,23 @@ export function mountTravel({ corridor, home, teleport }) {
     }
     return best;
   }
+  // 입장 카드 배경용 go() 가 타일을 기다리는 동안 입장이 끝나면, 늦은 순간이동이 이어하기 자리를 덮지 않게
+  let epoch = 0;
+  function cancel() { epoch++; }
   async function go(id) {
     const d = dests.find((x) => x.id === id || x.ko === id || x.en.toLowerCase() === String(id).toLowerCase());
     if (!d) return false;
+    const mine = ++epoch;
     panel.hidden = true;
-    if (d.home) { home(); return true; }
+    if (d.home) { if (mine === epoch) home(); return mine === epoch; }
     await corridor.preload(d.x, d.z);
+    if (mine !== epoch) return false;
     const p = bestSpot(d);
+    if (mine !== epoch) return false;
     teleport(p.x, p.z);
     // 도착 후 한 번 더: 타일이 늦게 빌드됐으면 인도(차도·건물 밖)로 다시 맞춘다
     await corridor.preload(d.x, d.z);
+    if (mine !== epoch) return false;
     const q = corridor.freeSpot(p.x, p.z);
     if (Math.hypot(q.x - p.x, q.z - p.z) > 0.01) teleport(q.x, q.z);
     return true;
@@ -80,5 +87,5 @@ export function mountTravel({ corridor, home, teleport }) {
   btn.onclick = toggle;
   onLangChange(render);
   render();
-  return { go, prewarm, placeOf, dests, toggle, panel };
+  return { go, prewarm, placeOf, dests, toggle, panel, cancel };
 }

@@ -27,7 +27,7 @@ import { mountBoard } from './board.js';
 import { createNoticePopup } from './noticePopup.js'; // [notice-popup]
 import { createSms } from './sms.js';
 import { accountsOn } from './account/flags.js'; // [accounts]
-import { takeResumePlace } from './ui-v2/resume.js'; // [econ-mobile] 모바일 '계속하기'·'이어서 입장' = 그만둔 자리
+import { takeResumePlace, takeContinue } from './ui-v2/resume.js'; // [econ-mobile] 모바일 '계속하기'·'이어서 입장' = 그만둔 자리 (#42 역을 직접 고르면 넘기지 않음)
 import { trackEvent } from './analytics.js';
 import { createTerrain } from './world/terrain.js'; // [terrain]
 import { Taxis } from './entities/taxis.js'; // [taxi]
@@ -74,7 +74,7 @@ import { mountGyeongbuSoon } from './world/gyeongbuSoon.js'; // [gyeongbu] 경�
 import { createServerClock } from './subway/clock.js'; // [subway-sync] 서버 시계 (같은 열차 = 같은 순간)
 import { isMobileMode } from './mobile/flag.js'; // [mobile]
 import { mountSubway, zoneLabel as subwayZoneLabel } from './subway/index.js'; // [subway] 정자역·코리더 역 출입구(실제 OSM 출구) + 지하 대합실. ?subway=0 이면 끔
-import { arriveFixEnabled, entrySpawn, withArriveCap } from './corridor/arrive.js'; // [arrivefix] #43 역 입장·역 이동 때 정자역을 거쳐 보이지 않게 (?arrivefix=0 끔)
+import { arriveFixEnabled, pickFirstEnabled, entrySpawn, withArriveCap } from './corridor/arrive.js'; // [arrivefix] #43 역 입장·역 이동 때 정자역을 거쳐 보이지 않게 (?arrivefix=0 끔) · [pickfirst] #42 고른 역이 저장 위치보다 우선 (?pickfirst=0 끔)
 import { isUiV2, uiV2Wanted } from './ui-v2/flag.js'; // [ui-v2] 게임 UI v2 (기본 켜짐 · ?ui=v1 끔)
 
 const params = new URLSearchParams(location.search);
@@ -90,6 +90,7 @@ const fromRegion = fromRegionId && fromRegionId !== region.id ? getRegion(fromRe
 let corridorAt = !shot && params.get('corridor') !== '0' ? params.get('at') : null;
 let corridorArrive = null;
 const arriveFix = arriveFixEnabled(); // [arrivefix]
+const pickFirst = pickFirstEnabled(); // [pickfirst] #42 직접 고른 역 출구가 이어하기·서버 위치보다 우선
 let arriving = false; // [arrivefix] 역 도착 전(숨김): 위치 저장·송신 멈춤
 let arriveSeq = 0; // [arrivefix] 늦게 끝난 이전 도착이 새 도착을 풀지 않게
 let arriveTravel = null; // [arrivefix] travel 은 아래에서 만들어진다(그 전에 부르면 TDZ) → 만들어진 뒤 여기에 넣는다
@@ -128,9 +129,11 @@ function getFlightLines(targetRegion) {
   return targetRegion.flightLines || targetRegion.lobbyEnterLines;
 }
 // 지구본(노선도·리스트·게임 안 🌏)에서 직접 고른 입장이면 서버에 저장된 마지막 위치 대신 고른 곳(역 / 기본 스폰)으로.
-// ?from= 은 다른 지역에서 지구본으로 고르고 넘어온 경우. ?passport=1 / ?enter=1 만 있는 진입은 기존처럼 마지막 위치 이어하기.
-let explicitPick = params.has('from');
-let resumePlace = null; // [ui-v2] 그만둔 자리 {x,y,z,ry} — handleGateEnter(gateOpts.place) 가 넣고 completeWorldJoin 이 한 번 쓴다
+// ?from= 은 다른 지역에서 지구본으로 고르고 넘어온 경우. ?at= 도 그 역을 고른 입장 (#42, ?pickfirst=0 이면 예전처럼 서버 위치가 우선).
+// ?passport=1 / ?enter=1 만 있고 역을 고르지 않았으면 마지막 위치 이어하기.
+let explicitPick = params.has('from') || (pickFirst && !!corridorAt);
+let resumePlace = null; // [ui-v2] 그만둔 자리 {x,y,z,ry} — '계속하기'·'이어하기'(gateOpts.continue) 만 넣고 completeWorldJoin 이 한 번 쓴다
+let continueEntry = false; // [pickfirst] 시작화면 '계속하기'·'이어하기'. 역을 직접 고른 입장과 구분
 let arrivalFlightScreen = null;
 if (fromRegion && !shot) {
   arrivalFlightScreen = getEnterScreen();
@@ -154,7 +157,9 @@ const handleGateEnter = (chosenRegionId = region.id, gateOpts = undefined) => {
   corridorAt = gateOpts?.at || null; // [corridor]
   uiV2?.noteEnter(chosenRegionId || region.id, corridorAt); // [ui-v2] 마지막 역(이어하기) · 입장 카드 역 이름
   explicitPick = true;
-  resumePlace = gateOpts?.place && (chosenRegionId || region.id) === region.id ? gateOpts.place : null; // [ui-v2] '계속하기'·'이어하기' = 그만둔 자리 (입장 때 지도 범위 확인)
+  continueEntry = !!gateOpts?.continue; // [pickfirst] 역 선택(continue 없음)은 저장 자리를 쓰지 않음
+  const keepPlace = !pickFirst || continueEntry;
+  resumePlace = keepPlace && gateOpts?.place && (chosenRegionId || region.id) === region.id ? gateOpts.place : null; // [ui-v2] '계속하기'·'이어하기' = 그만둔 자리 (입장 때 지도 범위 확인)
   if (chosenRegionId && chosenRegionId !== region.id) {
     const targetRegion = getRegion(chosenRegionId);
     const screen = getEnterScreen();
@@ -1118,10 +1123,11 @@ function completeWorldJoin(name, look, session) {
   wear(look);
   const picked = explicitPick;
   explicitPick = false;
-  const rp = resumePlace ?? (mobileMode ? takeResumePlace() : null); resumePlace = null; // [econ-mobile] 모바일은 시작화면이 넘겨준 자리
-  const spawn = entrySpawn({ resume: rp, bounds: corridor?.bounds || world.bounds, inWater: world.inWater, picked, sessionPlace: session?.place || null, at: corridorAt, placeOf: arriveTravel ? (id) => arriveTravel.placeOf(id) : null, fix: arriveFix });
-  if (spawn.kind === 'resume') { corridorAt = null; applySession({ place: rp }); } // [ui-v2] 그만둔 자리 — 역 출구로 옮기지 않음 (범위 밖·물 위면 아래 역 입장 그대로)
-  else if (spawn.kind === 'session') applySession(session);
+  const continued = continueEntry || takeContinue(); continueEntry = false; // [pickfirst] PC gateOpts.continue · 모바일 '계속하기'
+  const rp = resumePlace ?? takeResumePlace(); resumePlace = null; // [econ-mobile] 모바일은 시작화면이 넘겨준 자리 (역을 직접 고르면 entrySpawn 이 무시)
+  const spawn = entrySpawn({ resume: rp, bounds: corridor?.bounds || world.bounds, inWater: world.inWater, picked, continued, sessionPlace: session?.place || null, at: corridorAt, placeOf: arriveTravel ? (id) => arriveTravel.placeOf(id) : null, fix: arriveFix, pickFirst });
+  if (spawn.kind === 'resume') { arriveTravel?.cancel?.(); corridorAt = null; applySession({ place: rp }); } // [ui-v2] 그만둔 자리 — 역 출구로 옮기지 않음. 입장 카드가 미리 부른 역 이동이 타일 지연 뒤에 이 자리를 덮지 않게 취소
+  else if (spawn.kind === 'session') { if (spawn.stay) { arriveTravel?.cancel?.(); corridorAt = null; } applySession(session); } // [pickfirst] 이어하기의 서버 위치는 그 자리 그대로. ?pickfirst=0 의 예전 경로는 at 이 있으면 이어서 그 역으로 이동
   else if (spawn.kind === 'station') placeHiddenAt(spawn.x, spawn.z); // [arrivefix] ① 정자 기본 위치가 아니라 그 역 출구에 숨긴 채로
   else player.position.copy(pos);
   arriving = spawn.hidden;
@@ -1183,7 +1189,8 @@ joinWithPassport = async () => {
   arrivalFlightScreen = null;
   document.body.classList.remove('in-gate', 'in-lobby');
   // [arrivefix] 로그인 상태 역 입장: 서버 입장 요청과 그 역 타일 받기를 동시에 (먼저 숨긴 채로 역 출구에 세워 스트리머도 그쪽을 본다)
-  if (arriveFix && corridorAt && !resumePlace && arriveTravel) {
+  // [pickfirst] '계속하기'는 저장 자리라 역 출구에 미리 세우지 않음
+  if (arriveFix && corridorAt && !resumePlace && !(pickFirst && continueEntry) && arriveTravel) {
     const d = arriveTravel.placeOf(corridorAt);
     if (d && !d.home && Number.isFinite(d.x)) { placeHiddenAt(d.x, d.z); arriveTravel.prewarm?.(corridorAt); }
   }
