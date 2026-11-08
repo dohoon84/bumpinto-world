@@ -43,6 +43,15 @@ export class GangnamCars extends JzCars {
     if (this.yaw == null) return Math.hypot(x - f.x, z - f.z) <= (this.keepR || 78);
     return inStreetView(x, z, f.x, f.z, this.yaw, box);
   }
+  noteLook(yaw) {
+    const f = this.focus;
+    if (yaw == null) return;
+    if (this.homeYaw == null || !f || !this.homeAt || Math.hypot(f.x - this.homeAt.x, f.z - this.homeAt.z) > 26) {
+      this.homeYaw = yaw;
+      this.homeAt = f ? { x: f.x, z: f.z } : null;
+      this._fw = null;
+    }
+  }
   _edgeInView(e, f, yaw) {
     const a = this.nodes[e.from], b = this.nodes[e.to];
     if (yaw == null) return Math.hypot((a.x + b.x) / 2 - f.x, (a.z + b.z) / 2 - f.z) <= 58;
@@ -55,7 +64,7 @@ export class GangnamCars extends JzCars {
   _pickSpawn() {
     const f = this.focus;
     if (!f) return super._pickSpawn();
-    const yaw = this.yaw;
+    const yaw = this.homeYaw ?? this.yaw;
     if (!this._fw || Math.hypot(f.x - this._fw.x, f.z - this._fw.z) > 8 || this._fw.yaw !== yaw) {
       const w = this.edges.map((e) => (this._edgeInView(e, f, yaw) ? e.wt : 0));
       this._fw = { x: f.x, z: f.z, yaw, w, tot: w.reduce((a, b) => a + b, 0) };
@@ -75,13 +84,14 @@ export class GangnamCars extends JzCars {
   }
   _slideIntoView(t) {
     const f = this.focus;
-    if (!f || this.yaw == null || !t || t.parked) return;
-    if (t.rec && inStreetView(t.rec.x, t.rec.z, f.x, f.z, this.yaw) && this._room(t.rec, t)) return;
+    const yaw = this.homeYaw ?? this.yaw;
+    if (!f || yaw == null || !t || t.parked) return;
+    if (t.rec && inStreetView(t.rec.x, t.rec.z, f.x, f.z, yaw) && this._room(t.rec, t)) return;
     const L = t.cum[t.cum.length - 1];
     const opts = [];
     for (let s = t.hl + 0.4; s < L; s += 4) {
       const p = this._sample(t, s);
-      if (!inStreetView(p[0], p[1], f.x, f.z, this.yaw)) continue;
+      if (!inStreetView(p[0], p[1], f.x, f.z, yaw)) continue;
       const r = this._pose(t, s, t.lat, null);
       if (this._room(r, t)) opts.push(s);
     }
@@ -98,9 +108,10 @@ export class GangnamCars extends JzCars {
   _stepVeh(t, dt) {
     const f = this.focus;
     if (f && t.rec && !t.parked && t.age > 1.2) {
-      const outside = this.yaw == null
+      const yaw = this.homeYaw == null ? null : this.homeYaw;
+      const outside = yaw == null
         ? Math.hypot(t.rec.x - f.x, t.rec.z - f.z) > (this.keepR || 78)
-        : !inStreetView(t.rec.x, t.rec.z, f.x, f.z, this.yaw, KEEP_PAD);
+        : !inStreetView(t.rec.x, t.rec.z, f.x, f.z, yaw, KEEP_PAD);
       if (outside) {
         this._despawn(t);
         if (!t.retire) this._spawnVeh(t.i, false);
@@ -179,6 +190,7 @@ export function createGangnamTraffic(parent, opts) {
     sim, group, mesh: bm,
     update(dt, focus) {
       if (focus) sim.focus = { x: focus.x, z: focus.z };
+      if (sim.pendingYaw != null) sim.noteLook(sim.pendingYaw);
       sim.update(dt);
       render(focus?.x, focus?.z);
     },

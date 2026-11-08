@@ -3,9 +3,9 @@
 //   관광객 일부만 글 말풍선(ko/en/ja). 횡단은 보행 신호가 초록일 때만.
 import { createMigeumPeds } from '../../corridor/migeumNpc.js';
 import { Bubble } from '../../overlay.js';
-import { MAX_PEDS, MAX_PEDS_MOBILE, GREETINGS, pedDensityAt, inStreetView, STREET_VIEW } from './density.js';
+import { MAX_PEDS, MAX_PEDS_MOBILE, GREETINGS, pedDensityAt } from './density.js';
 import { gangnamNpcForce } from './flags.js';
-import { segDist } from './rules.js';
+import { onDriveRoad, segDist, sidewalkTangent } from './rules.js';
 
 const TOPS = ['#f4f4f2', '#2f3a4a', '#c9ced6', '#e8e0d2', '#5d7fb5', '#3b3f45', '#ffffff', '#d35454'];
 const PANTS = ['#2b2f36', '#3c4350', '#5a6170', '#34495e'];
@@ -43,20 +43,30 @@ export function crossingPath(crossings, at, rnd) {
   return { pts, cross: true };
 }
 
-const CULL = { ahead0: STREET_VIEW.ahead0 - 6, ahead1: STREET_VIEW.ahead1 + 8, lat: STREET_VIEW.lat + 6, nearM: STREET_VIEW.nearM + 8 };
+const KEEP_R = 52;
+const SPAWN_R = 48;
+
+export function strollOnSidewalk(drive, at, rnd, crossings = []) {
+  const tan = sidewalkTangent(drive, at.x, at.z);
+  if (!tan) return null;
+  const blocked = (x, z) => onDriveRoad(drive, x, z, 0.2) && !zebraOf(crossings, x, z);
+  const len = 2.2 + rnd() * 1.6;
+  const dirs = rnd() < 0.5 ? [1, -1] : [-1, 1];
+  for (const dist of [len, 1.6]) for (const s of dirs) {
+    const end = [at.x + tan.ux * s * dist, at.z + tan.uz * s * dist];
+    const mid = [(at.x + end[0]) / 2, (at.z + end[1]) / 2];
+    if (!blocked(at.x, at.z) && !blocked(mid[0], mid[1]) && !blocked(end[0], end[1])) {
+      return { pts: [[at.x, at.z], end], cross: false };
+    }
+  }
+  return { pts: [[at.x, at.z], [at.x + 0.05, at.z]], cross: false };
+}
 
 export function createGangnamPeds({
   npc, loader, terrain = null, isFree = () => true, freeSpot = (x, z) => ({ x, z }), tileReady = () => true,
   getHour, overlay = null, mobile = false, crossings = [], pedLight = () => 'red', seed = 7701,
 } = {}) {
-  const focus = { yaw: null };
-  const stroll = (at, rnd) => {
-    const yaw = focus.yaw ?? 0.38;
-    const len = 7 + rnd() * 5;
-    const ux = Math.sin(yaw), uz = Math.cos(yaw);
-    const s = rnd() < 0.5 ? 1 : -1;
-    return { pts: [[at.x, at.z], [at.x + ux * s * len, at.z + uz * s * len]], cross: false };
-  };
+  const drive = npc?.drive;
   const peds = createMigeumPeds({
     mg: { stations: [{ exits: npc.exits || [] }], meta: { box: npc.meta.box } },
     loader, terrain, isFree, freeSpot, tileReady, getHour, seed,
@@ -64,14 +74,18 @@ export function createGangnamPeds({
     force: gangnamNpcForce(),
     densityAt: (h) => pedDensityAt(h, { mobile }),
     lookFn: slimLook,
-    placeR: 70,
-    placeBurst: mobile ? 8 : 24,
-    spotOk: (s, fx, fz) => focus.yaw == null || inStreetView(s.x, s.z, fx, fz, focus.yaw),
-    cull: (x, z, fx, fz) => focus.yaw != null && !inStreetView(x, z, fx, fz, focus.yaw, CULL),
+    placeR: SPAWN_R + 8,
+    placeBurst: mobile ? 8 : 28,
+    preferNear: true,
+    spotOk: (s, fx, fz) => {
+      const d = Math.hypot(s.x - fx, s.z - fz);
+      return d >= 4 && d <= SPAWN_R && !onDriveRoad(drive, s.x, s.z, 0.15);
+    },
+    cull: (x, z, fx, fz) => Math.hypot(x - fx, z - fz) > KEEP_R,
     pathFor: ({ at, rnd }) => {
       const cross = crossingPath(crossings, at, rnd);
-      if (cross && rnd() < 0.35) return cross;
-      return stroll(at, rnd);
+      if (cross && rnd() < 0.22) return cross;
+      return strollOnSidewalk(drive, at, rnd, crossings);
     },
     hold(a, x, z) {
       const c = zebraOf(crossings, x, z);
@@ -85,7 +99,7 @@ export function createGangnamPeds({
     },
   });
   for (const a of peds.actors) a.tourist = a.i % 7 === 1;
-  peds.setYaw = (yaw) => { focus.yaw = yaw; };
+  peds.setYaw = () => {};
   const bubbles = new Map();
   let sayAcc = 0;
   const say = (a, text, ms = 4200) => {

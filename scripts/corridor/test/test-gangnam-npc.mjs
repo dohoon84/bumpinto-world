@@ -6,7 +6,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import * as THREE from 'three';
-import { buildGangnamNpcData, busSegs, segDist, BUS_CLEAR_M } from '../../../src/gangnam/npc/rules.js';
+import { buildGangnamNpcData, busSegs, segDist, BUS_CLEAR_M, onDriveRoad } from '../../../src/gangnam/npc/rules.js';
 import { gangnamNpcEnabled } from '../../../src/gangnam/npc/flags.js';
 import { pedDensityAt, pedPeriod, pedCount, PED_MIX, GREETINGS, parseGangnamCars, MAX_PEDS, carViewTarget, inStreetView } from '../../../src/gangnam/npc/density.js';
 import { GangnamCars, createGangnamTraffic } from '../../../src/gangnam/npc/cars.js';
@@ -245,6 +245,8 @@ const st = index.stations[0];
   assert.ok(placed0 >= 12, JSON.stringify(s.peds));
   assert.ok(draws0 <= 20, `draws ${draws0}`);
   assert.ok(s.cars.drawn > 0);
+  const crossAt = built.crossings[0];
+  for (let k = 0; k < 40; k++) api.update(0.1, crossAt.x, crossAt.z, 0.4);
   const crossers = api.peds.actors.filter((a) => a.cross && a.path);
   assert.ok(crossers.length >= 1, '횡단 경로 없음');
   const a = crossers.find((p) => {
@@ -299,8 +301,27 @@ const st = index.stations[0];
     fetchJson: async () => npc, isFree: (x, z) => !onCar(x, z), freeSpot: (x, z) => ({ x, z }), tileReady: () => true,
     getHour: () => hour,
   });
+  const camOf = (yaw) => {
+    const dist = 36, pitch = 0.58, aim = 4;
+    const bx = Math.sin(yaw), bz = Math.cos(yaw), cp = Math.cos(pitch), sp = Math.sin(pitch);
+    const cam = new THREE.PerspectiveCamera(55, 1280 / 800, 0.3, 5000);
+    cam.position.set(CAM.x + bx * dist * cp, 1.6 + dist * sp, CAM.z + bz * dist * cp);
+    cam.lookAt(CAM.x - bx * aim * cp, 1.6 - aim * sp, CAM.z - bz * aim * cp);
+    cam.updateMatrixWorld();
+    return cam;
+  };
+  const recognizable = (yaw, pxMin = 46) => {
+    const cam = camOf(yaw);
+    return view.peds.actors.filter((a) => {
+      if (!a.path) return false;
+      const p = a.mesh.position;
+      const q = new THREE.Vector3(p.x, 1.1, p.z).project(cam);
+      const d = Math.hypot(p.x - cam.position.x, 1.1 - cam.position.y, p.z - cam.position.z);
+      return q.z < 1 && Math.abs(q.x) < 0.88 && q.y > -0.85 && q.y < 0.75 && d < 60 && 2166 / d >= pxMin;
+    }).length;
+  };
   const countView = () => {
-    const peds = view.peds.actors.filter((a) => a.path && inStreetView(a.mesh.position.x, a.mesh.position.z, CAM.x, CAM.z, CAM.yaw)).length;
+    const peds = recognizable(CAM.yaw);
     const cars = view.traffic.sim.list.filter((t) => t && !t.parked && t.rec && !t.rec.off && inStreetView(t.rec.x, t.rec.z, CAM.x, CAM.z, CAM.yaw)).length;
     return { peds, cars };
   };
@@ -315,7 +336,7 @@ const st = index.stations[0];
   view.traffic.sim.retarget(false);
   for (let k = 0; k < 40; k++) view.update(0.1, CAM.x, CAM.z, CAM.yaw);
   const eve = countView();
-  assert.ok(eve.peds > day.peds + 6, `21시 보행 ${eve.peds} vs 낮 ${day.peds}`);
+  assert.ok(eve.peds >= day.peds + 4, `21시 보행 ${eve.peds} vs 낮 ${day.peds}`);
   assert.ok(eve.cars > day.cars, `21시 차량 ${eve.cars} vs 낮 ${day.cars}`);
   let gap = Infinity, out = 0, bus = 0;
   const buses = busSegs(tiles);
@@ -334,6 +355,25 @@ const st = index.stations[0];
   assert.equal(bus, 0, `버스 차로 ${bus}`);
   assert.ok(gap > -0.15, `겹침 ${gap}`);
   ok(`화면 밀도 낮 보행 ${day.peds}·차 ${day.cars} / 21시 보행 ${eve.peds}·차 ${eve.cars}`);
+
+  const onRoadPed = (x, z) => onDriveRoad(npc.drive, x, z, 0.25) && !view.peds.onZebra(x, z);
+  for (const yaw of [0.2, 1.1, 2.4, 3.6, CAM.yaw]) {
+    for (let k = 0; k < 25; k++) view.update(0.1, CAM.x, CAM.z, yaw);
+    for (const a of view.peds.actors) if (a.path) {
+      const p = a.mesh.position;
+      assert.ok(!onRoadPed(p.x, p.z), `yaw ${yaw} 차도 위 보행 ${p.x.toFixed(1)},${p.z.toFixed(1)}`);
+    }
+  }
+  const innerIds = () => view.peds.actors.filter((a) => a.path && Math.hypot(a.mesh.position.x - CAM.x, a.mesh.position.z - CAM.z) < 18).map((a) => a.i).sort();
+  const carIds = () => view.traffic.sim.list.filter((t) => t && !t.parked && t.rec && Math.hypot(t.rec.x - CAM.x, t.rec.z - CAM.z) < 22).map((t) => t.i).sort();
+  for (let k = 0; k < 15; k++) view.update(0.1, CAM.x, CAM.z, CAM.yaw);
+  const p0 = innerIds(), c0 = carIds();
+  view.update(0.1, CAM.x, CAM.z, CAM.yaw + Math.PI / 2);
+  const p1 = innerIds(), c1 = carIds();
+  const diff = (a, b) => a.filter((id) => !b.includes(id)).length + b.filter((id) => !a.includes(id)).length;
+  assert.ok(diff(p0, p1) <= 2, `한 프레임 보행 출입 ${diff(p0, p1)}`);
+  assert.ok(diff(c0, c1) <= 2, `한 프레임 차량 출입 ${diff(c0, c1)}`);
+  ok(`인도 유지 · yaw ${p0.length}명 가운데 한 프레임 변화 ${diff(p0, p1)}`);
 }
 
 {

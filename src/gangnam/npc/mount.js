@@ -104,7 +104,7 @@ export function mountGangnamNpc({
     update(dt, x, z, yaw = null) {
       if (yaw != null) {
         peds?.setYaw?.(yaw);
-        if (traffic) traffic.sim.yaw = yaw;
+        if (traffic) traffic.sim.pendingYaw = yaw;
       }
       const here = boxDist(box, x, z) < WAKE_R;
       if (!here) {

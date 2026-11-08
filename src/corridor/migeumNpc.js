@@ -73,7 +73,7 @@ const now = () => (typeof performance !== 'undefined' ? performance.now() : Date
 
 // opts: mg(migeum/index.json) · loader · terrain · isFree(x,z) · freeSpot(x,z) · tileReady(key) · getHour · seed · count
 // densityAt·lookFn·pathFor·hold 는 강남 NPC 가 같은 배치 루프를 쓸 때 넣는 선택 훅. 없으면 미금과 같다.
-export function createMigeumPeds({ mg, loader, terrain = null, isFree = () => true, freeSpot = (x, z) => ({ x, z }), tileReady = () => true, getHour = gameHour, seed = 5151, count = 0, force = migeumNpcForce(), densityAt = null, lookFn = null, pathFor = null, hold = null, placeR = PLACE_R, placeBurst = 4, spotOk = null, cull = null } = {}) {
+export function createMigeumPeds({ mg, loader, terrain = null, isFree = () => true, freeSpot = (x, z) => ({ x, z }), tileReady = () => true, getHour = gameHour, seed = 5151, count = 0, force = migeumNpcForce(), densityAt = null, lookFn = null, pathFor = null, hold = null, placeR = PLACE_R, placeBurst = 4, spotOk = null, cull = null, preferNear = false } = {}) {
   count = force || count || MAX_PEDS;
   const densFn = densityAt || pedDensityAt;
   const dens = (h) => { const d = densFn(h); return force ? { ...d, count: force } : d; };
@@ -111,10 +111,18 @@ export function createMigeumPeds({ mg, loader, terrain = null, isFree = () => tr
     for (let t = 0; t < 4; t++) {
       const kind = t < 3 ? chooseKind(D.mix) : 'walk';
       let sp = null;
-      if (kind === 'walk') { // 보도: 시점 근처 지점 중 무작위(몇 번 뽑아 보고 가까운 것)
+      if (kind === 'walk') { // 보도: 시점 근처 지점 중 무작위(몇 번 뽑아 보고 가까운 것). preferNear 면 빈 자리 중 가장 가까운 곳.
         const L = spots.walk; if (!L.length) continue;
-        for (let k = 0; k < 12 && !sp; k++) { const c = L[Math.floor(rnd() * L.length)]; if (near(c)) sp = c; }
-        if (!sp) { const c = L.filter(near); if (c.length) sp = c[Math.floor(rnd() * c.length)]; }
+        if (preferNear) {
+          let bd = Infinity, bl = Infinity;
+          for (const c of L) if (near(c)) {
+            const d = Math.hypot(c.x - fx, c.z - fz);
+            if (c.load < bl || (c.load === bl && d < bd)) { sp = c; bl = c.load; bd = d; }
+          }
+        } else {
+          for (let k = 0; k < 12 && !sp; k++) { const c = L[Math.floor(rnd() * L.length)]; if (near(c)) sp = c; }
+          if (!sp) { const c = L.filter(near); if (c.length) sp = c[Math.floor(rnd() * c.length)]; }
+        }
       } else {
         let best = Infinity;
         for (const c of spots[kind]) if (near(c)) { const n = c.load + rnd() * 0.9; if (n < best) { best = n; sp = c; } }

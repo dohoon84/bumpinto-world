@@ -12,6 +12,36 @@ export const DAERO_LANES = 8;
 export const LANE_M = 3.3;
 export const BUS_CLEAR_M = 3;
 
+export function driveSegs(drive) {
+  const segs = [];
+  for (const w of drive?.ways || []) {
+    for (let i = 1; i < w.n.length; i++) {
+      const a = drive.nodes[w.n[i - 1]], b = drive.nodes[w.n[i]];
+      if (!a || !b) continue;
+      segs.push({ a, b, w: w.w || 12, name: w.name });
+    }
+  }
+  return segs;
+}
+
+export function onDriveRoad(drive, x, z, pad = 0.35) {
+  for (const s of driveSegs(drive)) if (segDist(x, z, s.a, s.b) < s.w / 2 + pad) return true;
+  return false;
+}
+
+/** 가장 가까운 대로 접선. 산책은 이 방향을 따른다(카메라 yaw 가 아님). */
+export function sidewalkTangent(drive, x, z) {
+  let best = null, bd = Infinity;
+  for (const s of driveSegs(drive)) {
+    const d = segDist(x, z, s.a, s.b);
+    if (d >= bd) continue;
+    bd = d;
+    const dx = s.b[0] - s.a[0], dz = s.b[1] - s.a[1], L = Math.hypot(dx, dz) || 1;
+    best = { ux: dx / L, uz: dz / L };
+  }
+  return best;
+}
+
 export function segDist(px, pz, a, b) {
   const dx = b[0] - a[0], dz = b[1] - a[1], L2 = dx * dx + dz * dz || 1e-9;
   const t = Math.max(0, Math.min(1, ((px - a[0]) * dx + (pz - a[1]) * dz) / L2));
@@ -23,10 +53,10 @@ function inBox(x, z, box, m = 0) {
 }
 
 export function avenueSegs(tiles, { names = AVENUE_NAMES, kinds = null } = {}) {
-  const want = new Set(names);
+  const want = names ? new Set(names) : null;
   const segs = [];
   for (const t of tiles || []) for (const road of t.r || []) {
-    if (!want.has(road.n) || !road.p || road.p.length < 2) continue;
+    if ((want && !want.has(road.n)) || !road.p || road.p.length < 2) continue;
     if (kinds && !kinds.has(road.k)) continue;
     if (road.k === 'busway') continue;
     for (let i = 1; i < road.p.length; i++) {
@@ -149,16 +179,34 @@ function insideBuilding(blocks, x, z) {
   return false;
 }
 
-export function sidewalkPoints(segs, { buildings = [], exits = [], box, buses = [], step = 18 } = {}) {
+const CAR_ROAD_KINDS = new Set(['primary', 'secondary', 'tertiary', 'trunk', 'residential', 'unclassified', 'service', 'motorway', 'primary_link', 'secondary_link', 'trunk_link', 'motorway_link']);
+
+export function sidewalkPoints(segs, { buildings = [], exits = [], box, buses = [], roads = null, crossings = [], step = 1.7 } = {}) {
   const blocks = buildingBlocks(buildings);
+  const roadList = roads || segs;
+  const onRoad = (x, z) => {
+    for (const s of roadList) if (segDist(x, z, s.a, s.b) < (s.w || 12) / 2 + 0.65) return true;
+    return false;
+  };
+  const trees = [];
+  for (const s of segs) {
+    const dx = s.b[0] - s.a[0], dz = s.b[1] - s.a[1], L = Math.hypot(dx, dz);
+    if (L < 8) continue;
+    const ux = dx / L, uz = dz / L, nx = -uz, nz = ux;
+    for (let d = 6; d < L; d += 14) for (const side of [-1, 1]) {
+      const x = s.a[0] + ux * d + nx * side * (s.w / 2 + 1.6);
+      const z = s.a[1] + uz * d + nz * side * (s.w / 2 + 1.6);
+      if (!onRoad(x, z) && !insideBuilding(blocks, x, z)) trees.push([x, z]);
+    }
+  }
+  const nearTree = (x, z) => trees.some((t) => (t[0] - x) ** 2 + (t[1] - z) ** 2 < 2.25 * 2.25);
   const seen = new Set();
   const pts = [];
   const add = (x, z) => {
     if (!inBox(x, z, box, 0)) return;
-    if (insideBuilding(blocks, x, z)) return;
-    for (const s of segs) if (segDist(x, z, s.a, s.b) < s.w / 2 + 0.45) return;
-    for (const b of buses) if (segDist(x, z, b.a, b.b) < b.w / 2 + 0.8) return;
-    const k = Math.round(x / 5) + ',' + Math.round(z / 5);
+    if (insideBuilding(blocks, x, z) || onRoad(x, z) || nearTree(x, z)) return;
+    for (const b of buses) if (segDist(x, z, b.a, b.b) < b.w / 2 + BUS_CLEAR_M) return;
+    const k = Math.round(x / 1.45) + ',' + Math.round(z / 1.45);
     if (seen.has(k)) return;
     seen.add(k);
     pts.push([r1(x), r1(z)]);
@@ -166,12 +214,14 @@ export function sidewalkPoints(segs, { buildings = [], exits = [], box, buses = 
   for (const s of segs) {
     const dx = s.b[0] - s.a[0], dz = s.b[1] - s.a[1], L = Math.hypot(dx, dz);
     if (L < 8) continue;
-    const ux = dx / L, uz = dz / L, lx = -uz, lz = ux, off = s.w / 2 + 2.15;
-    for (let d = 6; d < L - 3; d += step) {
-      const x = s.a[0] + ux * d, z = s.a[1] + uz * d;
-      add(x + lx * off, z + lz * off);
-      add(x - lx * off, z - lz * off);
+    const ux = dx / L, uz = dz / L, nx = -uz, nz = ux;
+    for (let d = 1.4; d < L - 1; d += step) for (const side of [-1, 1]) for (const extra of [1.15, 4.3]) {
+      add(s.a[0] + ux * d + nx * side * (s.w / 2 + extra), s.a[1] + uz * d + nz * side * (s.w / 2 + extra));
     }
+  }
+  for (const c of crossings) {
+    const nx = -c.dir[1], nz = c.dir[0];
+    for (const sgn of [-1, 1]) add(c.x + nx * sgn * (c.w / 2 + 2.6), c.z + nz * sgn * (c.w / 2 + 2.6));
   }
   for (const e of exits) {
     for (const rad of [5.5, 9.5]) for (let k = 0; k < 8; k++) {
@@ -261,10 +311,11 @@ export function buildGangnamNpcData(tiles, index) {
   const buses = busSegs(tiles);
   const cars = carSegments(tiles);
   const sidewalks = avenueSegs(tiles, { kinds: new Set(['primary']) });
+  const roads = avenueSegs(tiles, { names: null, kinds: CAR_ROAD_KINDS });
   const buildings = tiles.flatMap((t) => t.b || []);
   const drive = buildDrive(cars, buses);
-  const walk = sidewalkPoints(sidewalks, { buildings, exits, box, buses });
   const cross = placeCrossings(tiles, { box, station });
+  const walk = sidewalkPoints(sidewalks, { buildings, exits, box, buses, roads, crossings: cross.crossings });
   return {
     meta: {
       note: '강남 보행·차량 NPC 시뮬레이션용. 사람·차 위치는 실제 데이터가 아님. 중앙 busway 는 그래프에 없음.',
