@@ -1,5 +1,6 @@
 import { DurableObject } from "cloudflare:workers";
 import { NOTICE_POSTS } from "../../../src/notices.js";
+import { ensurePostsImagesColumn, noticeImagesColumnPresent, readPostImages, sanitizeNoticeImages } from "../../../src/noticeImages.js"; // [notice-images]
 import { GIFT_ITEMS, giftItem, giftUnit, normalizeHoldings } from "../../../src/gifts/catalog.js";
 import { photoOp } from "./photos.js";
 import { deviceInfo, mergeUser } from "./accountMerge.js"; // [accounts]
@@ -240,7 +241,8 @@ export class PhoneBook extends DurableObject {
         author_name TEXT NOT NULL,
         views INTEGER NOT NULL DEFAULT 0,
         created_at INTEGER NOT NULL,
-        updated_at INTEGER NOT NULL
+        updated_at INTEGER NOT NULL,
+        images TEXT
       )`);
       sql.exec(`CREATE INDEX posts_cat_id ON posts (category, id DESC)`);
       sql.exec(`CREATE INDEX posts_id ON posts (id DESC)`);
@@ -402,6 +404,8 @@ export class PhoneBook extends DurableObject {
       }
       sql.exec(`INSERT INTO _sql_schema_migrations (id) VALUES (11)`);
     }
+    // [notice-images] 이미 만들어진 posts 에도 images 를 한 번만 붙인다. 새 DB 는 CREATE 에 이미 있다.
+    ensurePostsImagesColumn(sql);
     this.#syncNotices();
   }
 
@@ -1000,9 +1004,65 @@ export class PhoneBook extends DurableObject {
       liked,
       createdAt: row.created_at,
       updatedAt: row.updated_at,
+      images: readPostImages(row), // [notice-images] 컬럼이 없거나 공지가 아니면 []
     };
     if (includeBody) item.body = row.body;
     return item;
+  }
+
+  // [notice-images] 시작 때 ensurePostsImagesColumn 가 컬럼을 넣는다. 실패하면 글만 읽는다.
+  #postImagesColumn() {
+    try {
+      const cols = this.ctx.storage.sql.exec("PRAGMA table_info(posts)").toArray();
+      return noticeImagesColumnPresent(cols);
+    } catch {
+      return false;
+    }
+  }
+
+  #rows(sql, text, ...binds) {
+    let widened = text;
+    if (this.#postImagesColumn()) {
+      if (text.includes("p.updated_at,")) widened = text.replace("p.updated_at,", "p.updated_at, p.images,");
+      else if (text.includes("updated_at FROM")) widened = text.replace("updated_at FROM", "updated_at, images FROM");
+    }
+    try {
+      return sql.exec(widened, ...binds).toArray();
+    } catch (error) {
+      if (widened === text || !/no such column/i.test(String(error?.message || error))) throw error;
+      return sql.exec(text, ...binds).toArray();
+    }
+  }
+
+  #attachImages(sql, row, input, category) {
+    if (!row || !this.#postImagesColumn()) return row;
+    const sent = input && Object.prototype.hasOwnProperty.call(input, "images");
+    if (category !== "notice") {
+      try { sql.exec("UPDATE posts SET images = ? WHERE id = ?", "[]", row.id); row.images = "[]"; } catch { /* 컬럼이 없으면 글만 유지 */ }
+      return row;
+    }
+    if (!sent) {
+      try {
+        const cur = sql.exec("SELECT images FROM posts WHERE id = ?", row.id).toArray()[0];
+        if (cur && "images" in cur) row.images = cur.images;
+      } catch { /* 컬럼이 없으면 글만 유지 */ }
+      return row;
+    }
+    const images = sanitizeNoticeImages(input.images);
+    try {
+      sql.exec("UPDATE posts SET images = ? WHERE id = ?", JSON.stringify(images), row.id);
+      row.images = JSON.stringify(images);
+    } catch { /* 컬럼이 없으면 이미지는 버리고 글은 저장 */ }
+    return row;
+  }
+
+  async noticeImageGate(input) {
+    this.#migrate();
+    const id = String(input?.id || "");
+    const found = this.#user(id);
+    if (found.error) return { ok: false, error: found.error };
+    if (!(await isBoardAdmin(found.user.phone, this.env))) return { ok: false, error: "notice_admin" };
+    return { ok: true };
   }
 
   #commentRow(row, id, myPhone) {
@@ -1164,14 +1224,16 @@ export class PhoneBook extends DurableObject {
       const safePage = Math.min(page, totalPages);
       const offset = (safePage - 1) * BOARD_PAGE_SIZE;
       const rows = filterCat
-        ? sql.exec(
+        ? this.#rows(
+            sql,
             `SELECT p.id, p.category, p.title, p.author_id, p.author_phone, p.author_name, p.views, p.created_at, p.updated_at,
                     (SELECT COUNT(*) FROM post_likes pl WHERE pl.post_id = p.id) AS likes_count,
                     (SELECT COUNT(*) FROM post_comments pc WHERE pc.post_id = p.id) AS comments_count
              FROM posts p WHERE p.category = ? ORDER BY p.id DESC LIMIT ? OFFSET ?`,
             filterCat, BOARD_PAGE_SIZE, offset,
-          ).toArray()
-        : sql.exec(
+          )
+        : this.#rows(
+            sql,
             `SELECT p.id, p.category, p.title, p.author_id, p.author_phone, p.author_name, p.views, p.created_at, p.updated_at,
                     (SELECT COUNT(*) FROM post_likes pl WHERE pl.post_id = p.id) AS likes_count,
                     (SELECT COUNT(*) FROM post_comments pc WHERE pc.post_id = p.id) AS comments_count
@@ -1179,7 +1241,7 @@ export class PhoneBook extends DurableObject {
              ORDER BY CASE WHEN p.category = 'notice' THEN 0 ELSE 1 END ASC, p.id DESC
              LIMIT ? OFFSET ?`,
             BOARD_PAGE_SIZE, offset,
-          ).toArray();
+          );
       return {
         ok: true,
         category: filterCat || "all",
@@ -1194,10 +1256,11 @@ export class PhoneBook extends DurableObject {
     if (op === "get") {
       const postId = Math.floor(Number(input?.postId) || 0);
       if (!postId) return { ok: false, error: "post_not_found" };
-      const row = sql.exec(
+      const row = this.#rows(
+        sql,
         "SELECT id, category, title, body, author_id, author_phone, author_name, views, created_at, updated_at FROM posts WHERE id = ?",
         postId,
-      ).toArray()[0];
+      )[0];
       if (!row) return { ok: false, error: "post_not_found" };
       if (!input?.noView) {
         sql.exec("UPDATE posts SET views = views + 1 WHERE id = ?", postId);
@@ -1311,19 +1374,22 @@ export class PhoneBook extends DurableObject {
          VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?)`,
         cat, title, body, id, myPhone, authorName, now, now,
       );
-      const inserted = sql.exec(
+      const inserted = this.#rows(
+        sql,
         "SELECT id, category, title, body, author_id, author_phone, author_name, views, created_at, updated_at FROM posts ORDER BY id DESC LIMIT 1",
-      ).toArray()[0];
+      )[0];
+      this.#attachImages(sql, inserted, input, cat);
       return { ok: true, post: this.#postRow(inserted, id, myPhone, true, admin), comments: [] };
     }
 
     if (op === "update") {
       const postId = Math.floor(Number(input?.postId) || 0);
       if (!postId) return { ok: false, error: "post_not_found" };
-      const existing = sql.exec(
+      const existing = this.#rows(
+        sql,
         "SELECT id, category, title, body, author_id, author_phone, author_name, views, created_at, updated_at FROM posts WHERE id = ?",
         postId,
-      ).toArray()[0];
+      )[0];
       if (!existing) return { ok: false, error: "post_not_found" };
       const isMine = existing.author_id === id || (myPhone && existing.author_phone === myPhone);
       if (!isMine && !(admin && existing.category === "notice")) return { ok: false, error: "forbidden" };
@@ -1346,6 +1412,7 @@ export class PhoneBook extends DurableObject {
       existing.body = body;
       existing.author_name = authorName;
       existing.updated_at = now;
+      this.#attachImages(sql, existing, input, cat);
       const commentRows = sql.exec(
         "SELECT id, post_id, author_id, author_phone, author_name, body, created_at FROM post_comments WHERE post_id = ? ORDER BY id ASC LIMIT 200",
         postId,

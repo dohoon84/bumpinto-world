@@ -9,10 +9,12 @@ import { econ } from '../../ui-v2/econ/index.js';
 import { n, sgn, tr, esc, EI, mockTag } from '../../ui-v2/econ-ui/kit.js';
 import { GOOGLE_G_SVG } from '../../ui-v2/google.js';
 import { dailySlots } from '../../ui-v2/econ-ui/questSlots.js';
+import { moveGoalsHtml, moveMinuteLabel } from '../../ui-v2/econ-ui/moveGoals.js';
 
-let ctx = null, bal = null, row = null;
+let ctx = null, bal = null, row = null, goals = null;
 let shown = 0, anim = 0, deltaT = 0, lastDelta = 0;
 let last = { session: null, bal: null, travel: null, daily: null };
+let lastMinute = null, pulseText = '', pulseUntil = 0;
 
 export const balanceChip = () => (bal && bal.isConnected && bal.getClientRects().length ? bal : null);
 export const balanceCoin = () => bal?.querySelector('.v2-ic') || null;
@@ -25,6 +27,8 @@ function place() {
   }
   const r2 = document.querySelector('#m-hud .m-row2-l');
   if (r2 && row && row.parentNode !== r2) r2.appendChild(row);
+  const hud = document.getElementById('m-hud');
+  if (hud && goals && goals.parentNode !== hud) hud.appendChild(goals);
   return !!(prof && r2);
 }
 
@@ -37,6 +41,9 @@ export function mount(o) {
   row = document.createElement('button');
   row.type = 'button';
   row.className = 'm-chip m-econ-q';
+  goals = document.createElement('div');
+  goals.className = 'm-move-goals';
+  goals.addEventListener('click', () => { if (last.session?.isGuest) ctx.link(); else ctx.open('04a'); });
   bal.addEventListener('click', () => { if (last.session?.isGuest) ctx.link(); else ctx.open('07'); });
   row.addEventListener('click', () => { if (last.session?.isGuest) ctx.link(); else ctx.open('04a'); });
   // #m-hud 는 game.js 가 먼저 붙인다. 늦으면 생길 때까지 본다.
@@ -83,6 +90,7 @@ export function render(delta = null) {
     row.className = 'm-chip m-econ-q is-link';
     row.innerHTML = `<span class="m-econ-g">${GOOGLE_G_SVG(18)}</span><span class="m-econ-lbl">${esc(tr('구글 계정 연동하고 bum 받기', 'Link Google account to earn bum'))}</span>`;
     row.setAttribute('aria-label', tr('구글 계정 연동하고 bum 받기', 'Link Google account to earn bum'));
+    if (goals) goals.innerHTML = '';
     return;
   }
   const d = delta ?? (Date.now() < deltaT ? lastDelta : null);
@@ -90,9 +98,13 @@ export function render(delta = null) {
   bal.setAttribute('aria-label', tr('교통카드 · 지갑 열기', 'Open transit card · wallet'));
   bal.innerHTML = `${EI.coin(20)}<b data-me="v">${n(anim ? shown : b.total)}</b>${d ? `<span class="m-econ-d${d < 0 ? ' neg' : ''}">${sgn(d)}</span>` : ''}${mockTag('mini')}`;
   const { done, total } = dailySlots(daily.quests); // 서버 pickDaily 배정(D-LOGIN + 풀 2개) 그대로, 보너스 D-ALL3 제외
-  const m = travel.minutes, cap = travel.capMinutes;
-  const pct = Math.max(m > 0 ? 4 : 0, Math.min(100, (m / cap) * 100));
-  row.className = 'm-chip m-econ-q';
-  row.setAttribute('aria-label', tr(`할 일 ${done}/${total} · 이동 인정 ${m}/${cap}분 · 할 일 열기`, `Quests ${done}/${total} · counted travel ${m}/${cap} min · open quests`));
-  row.innerHTML = `${EI.quest(18)}<b class="m-econ-n">${done}/${total}</b><i class="m-econ-div"></i><span class="m-econ-walk">${EI.walk(14)}</span><span class="m-econ-mv"><b>${esc(travel.settled && m ? tr('지급 완료', 'Paid') : tr(`${m}/${cap}분`, `${m}/${cap}m`))}</b><span class="m-econ-bar"><i style="width:${pct}%"></i></span></span>`;
+  const lab = moveMinuteLabel(travel);
+  if (lastMinute != null && lab.m > lastMinute) { pulseText = `+${lab.m - lastMinute}분`; pulseUntil = Date.now() + 1600; }
+  lastMinute = lab.m;
+  const pulsing = Date.now() < pulseUntil;
+  row.className = `m-chip m-econ-q${pulsing ? ' ve-tick' : ''}`;
+  row.setAttribute('aria-label', tr(`할 일 ${done}/${total} · ${lab.main}${lab.near ? ` · ${lab.capText}` : ''} · 할 일 열기`, `Quests ${done}/${total} · ${lab.main}${lab.near ? ` · ${lab.capText}` : ''} · open quests`));
+  const sub = travel.settled && lab.m ? tr('지급 완료', 'Paid') : lab.near ? lab.capText : '';
+  row.innerHTML = `${EI.quest(18)}<b class="m-econ-n">${done}/${total}</b><i class="m-econ-div"></i><span class="m-econ-walk">${EI.walk(14)}</span><span class="m-econ-mv"><b class="${pulsing ? 've-min-pop' : ''}">${esc(tr(`${lab.m}분`, `${lab.m}m`))}</b>${sub ? `<small>${esc(sub)}</small>` : ''}${pulsing ? `<em class="ve-plus">${esc(pulseText)}</em>` : ''}</span>`;
+  if (goals) goals.innerHTML = moveGoalsHtml(daily.quests, travel);
 }

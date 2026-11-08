@@ -1,0 +1,616 @@
+{
+  "version": 0.6,
+  "generator": "Overpass API 0.7.62.4 2390de5a",
+  "osm3s": {
+    "timestamp_osm_base": "2026-11-05T14:35:06Z",
+    "copyright": "The data included in this document is from www.openstreetmap.org. The data is made available under ODbL."
+  },
+  "elements": [
+
+{
+  "type": "way",
+  "id": 156924219,
+  "bounds": {
+    "minlat": 37.4199278,
+    "minlon": 127.1255496,
+    "maxlat": 37.4202727,
+    "maxlon": 127.1274907
+  },
+  "geometry": [
+    { "lat": 37.4199278, "lon": 127.1255496 },
+    { "lat": 37.4202601, "lon": 127.1255536 },
+    { "lat": 37.4202610, "lon": 127.1256479 },
+    { "lat": 37.4202716, "lon": 127.1267592 },
+    { "lat": 37.4202715, "lon": 127.1268088 },
+    { "lat": 37.4202727, "lon": 127.1271513 },
+    { "lat": 37.4202642, "lon": 127.1274907 },
+    { "lat": 37.4200945, "lon": 127.1274873 },
+    { "lat": 37.4199326, "lon": 127.1274571 },
+    { "lat": 37.4199280, "lon": 127.1256440 },
+    { "lat": 37.4199278, "lon": 127.1255496 }
+  ],
+  "tags": {
+    "building": "yes",
+    "office": "government"
+  }
+},
+{
+  "type": "way",
+  "id": 429376133,
+  "bounds": {
+    "minlat": 37.4190292,
+    "minlon": 127.1247055,
+    "maxlat": 37.4192502,
+    "maxlon": 127.1251383
+  },
+  "geometry": [
+    { "lat": 37.4192480, "lon": 127.1247055 },
+    { "lat": 37.4191110, "lon": 127.1247067 },
+    { "lat": 37.4191117, "lon": 127.1248457 },
+    { "lat": 37.4190292, "lon": 127.1248464 },
+    { "lat": 37.4190301, "lon": 127.1250267 },
+    { "lat": 37.4191212, "lon": 127.1250260 },
+    { "lat": 37.4191215, "lon": 127.1250885 },
+    { "lat": 37.4191547, "lon": 127.1250882 },
+    { "lat": 37.4191549, "lon": 127.1251383 },
+    { "lat": 37.4192502, "lon": 127.1251375 },
+    { "lat": 37.4192480, "lon": 127.1247055 }
+  ],
+  "tags": {
+    "building": "yes"
+  }
+},
+{
+  "type": "way",
+  "id": 468567042,
+  "bounds": {
+    "minlat": 37.4195037,
+    "minlon": 127.1258199,
+    "maxlat": 37.4198103,
+    "maxlon": 127.1263010
+  },
+  "geometry": [
+    { "lat": 37.4198093, "lon": 127.1258199 },
+    { "lat": 37.4198096, "lon": 127.1259493 },
+    { "lat": 37.4198103, "lon": 127.1263010 },
+    { "lat": 37.4197837, "lon": 127.1263009 },
+    { "lat": 37.4195037, "lon": 127.1262993 },
+    { "lat": 37.4195073, "lon": 127.1260101 },
+    { "lat": 37.4195515, "lon": 127.1258206 },
+    { "lat": 37.4198093, "lon": 127.1258199 }
+  ],
+  "tags": {
+    "addr:city": "성남시",
+    "addr:housenumber": "997",
+    "addr:postcode": "13437",
+    "addr:province": "경기도",
+    "addr:street": "성남대로",
+    "building": "yes",
+    "name": "성남시의회",
+    "name:ja": "城南市議会",
+    "name:ko": "성남시의회",
+    "office": "government"
+  }
+},
+{
+  "type": "way",
+  "id": 503783706,
+  "bounds": {
+    "minlat": 37.4184952,
+    "minlon": 127.1263521,
+    "maxlat": 37.4186219,
+    "maxlon": 127.1265318
+  },
+  "geometry": [
+    { "lat": 37.4185218, "lon": 127.1263521 },
+    { "lat": 37.4185218, "lon": 127.1263964 },
+    { "lat": 37.4184962, "lon": 127.1263964 },
+    { "lat": 37.4184952, "lon": 127.1265063 },
+    { "lat": 37.4185292, "lon": 127.1265063 },
+    { "lat": 37.4185292, "lon": 127.1265291 },
+    { "lat": 37.4186219, "lon": 127.1265318 },
+    { "lat": 37.4186219, "lon": 127.1263534 },
+    { "lat": 37.4185218, "lon": 127.1263521 }
+  ],
+  "tags": {
+    "addr:city": "성남시",
+    "addr:housenumber": "25-7",
+    "addr:postcode": "13439",
+    "addr:province": "경기도",
+    "addr:street": "성남대로997번길",
+    "building": "commercial"
+  }
+},
+{
+  "type": "way",
+  "id": 503783707,
+  "bounds": {
+    "minlat": 37.4183349,
+    "minlon": 127.1263753,
+    "maxlat": 37.4184344,
+    "maxlon": 127.1265346
+  },
+  "geometry": [
+    { "lat": 37.4183976, "lon": 127.1263754 },
+    { "lat": 37.4183977, "lon": 127.1263996 },
+    { "lat": 37.4183349, "lon": 127.1263998 },
+    { "lat": 37.4183350, "lon": 127.1265346 },
+    { "lat": 37.4184344, "lon": 127.1265345 },
+    { "lat": 37.4184341, "lon": 127.1263753 },
+    { "lat": 37.4183976, "lon": 127.1263754 }
+  ],
+  "tags": {
+    "addr:city": "성남시",
+    "addr:housenumber": "25-9",
+    "addr:postcode": "13439",
+    "addr:province": "경기도",
+    "addr:street": "성남대로997번길",
+    "building": "commercial"
+  }
+},
+{
+  "type": "way",
+  "id": 503783708,
+  "bounds": {
+    "minlat": 37.4182629,
+    "minlon": 127.1263993,
+    "maxlat": 37.4183350,
+    "maxlon": 127.1265349
+  },
+  "geometry": [
+    { "lat": 37.4183346, "lon": 127.1263993 },
+    { "lat": 37.4182629, "lon": 127.1263996 },
+    { "lat": 37.4182632, "lon": 127.1265349 },
+    { "lat": 37.4183350, "lon": 127.1265346 },
+    { "lat": 37.4183346, "lon": 127.1263993 }
+  ],
+  "tags": {
+    "building": "commercial"
+  }
+},
+{
+  "type": "way",
+  "id": 503791767,
+  "bounds": {
+    "minlat": 37.4197837,
+    "minlon": 127.1255496,
+    "maxlat": 37.4199326,
+    "maxlon": 127.1274571
+  },
+  "geometry": [
+    { "lat": 37.4199278, "lon": 127.1255496 },
+    { "lat": 37.4198096, "lon": 127.1259493 },
+    { "lat": 37.4198103, "lon": 127.1263010 },
+    { "lat": 37.4197837, "lon": 127.1263009 },
+    { "lat": 37.4198046, "lon": 127.1264629 },
+    { "lat": 37.4198131, "lon": 127.1265293 },
+    { "lat": 37.4199326, "lon": 127.1274571 },
+    { "lat": 37.4199278, "lon": 127.1255496 }
+  ],
+  "tags": {
+    "building": "roof",
+    "layer": "1"
+  }
+},
+{
+  "type": "way",
+  "id": 503791769,
+  "bounds": {
+    "minlat": 37.4195037,
+    "minlon": 127.1262993,
+    "maxlat": 37.4198046,
+    "maxlon": 127.1264652
+  },
+  "geometry": [
+    { "lat": 37.4195037, "lon": 127.1262993 },
+    { "lat": 37.4195037, "lon": 127.1264652 },
+    { "lat": 37.4198046, "lon": 127.1264629 },
+    { "lat": 37.4197837, "lon": 127.1263009 },
+    { "lat": 37.4195037, "lon": 127.1262993 }
+  ],
+  "tags": {
+    "building": "yes"
+  }
+},
+{
+  "type": "way",
+  "id": 503791771,
+  "bounds": {
+    "minlat": 37.4195037,
+    "minlon": 127.1264629,
+    "maxlat": 37.4198131,
+    "maxlon": 127.1265293
+  },
+  "geometry": [
+    { "lat": 37.4195039, "lon": 127.1265289 },
+    { "lat": 37.4198131, "lon": 127.1265293 },
+    { "lat": 37.4198046, "lon": 127.1264629 },
+    { "lat": 37.4195037, "lon": 127.1264652 },
+    { "lat": 37.4195039, "lon": 127.1265289 }
+  ],
+  "tags": {
+    "building": "yes"
+  }
+},
+{
+  "type": "way",
+  "id": 503791773,
+  "bounds": {
+    "minlat": 37.4202715,
+    "minlon": 127.1268088,
+    "maxlat": 37.4205787,
+    "maxlon": 127.1271513
+  },
+  "geometry": [
+    { "lat": 37.4205759, "lon": 127.1268099 },
+    { "lat": 37.4205787, "lon": 127.1270950 },
+    { "lat": 37.4204572, "lon": 127.1271513 },
+    { "lat": 37.4202727, "lon": 127.1271513 },
+    { "lat": 37.4202715, "lon": 127.1268088 },
+    { "lat": 37.4205759, "lon": 127.1268099 }
+  ],
+  "tags": {
+    "building": "yes",
+    "office": "government"
+  }
+},
+{
+  "type": "way",
+  "id": 503791776,
+  "bounds": {
+    "minlat": 37.4202715,
+    "minlon": 127.1267592,
+    "maxlat": 37.4205761,
+    "maxlon": 127.1268099
+  },
+  "geometry": [
+    { "lat": 37.4205759, "lon": 127.1268099 },
+    { "lat": 37.4205761, "lon": 127.1267603 },
+    { "lat": 37.4202716, "lon": 127.1267592 },
+    { "lat": 37.4202715, "lon": 127.1268088 },
+    { "lat": 37.4205759, "lon": 127.1268099 }
+  ],
+  "tags": {
+    "building": "yes"
+  }
+},
+{
+  "type": "way",
+  "id": 562932700,
+  "bounds": {
+    "minlat": 37.4182586,
+    "minlon": 127.1258670,
+    "maxlat": 37.4183786,
+    "maxlon": 127.1260131
+  },
+  "geometry": [
+    { "lat": 37.4183785, "lon": 127.1258670 },
+    { "lat": 37.4183786, "lon": 127.1260130 },
+    { "lat": 37.4182587, "lon": 127.1260131 },
+    { "lat": 37.4182586, "lon": 127.1258671 },
+    { "lat": 37.4183785, "lon": 127.1258670 }
+  ],
+  "tags": {
+    "addr:city": "성남시",
+    "addr:district": "중원구",
+    "addr:housenumber": "25-4",
+    "addr:postcode": "13439",
+    "addr:province": "경기도",
+    "addr:street": "성남대로997번길",
+    "addr:subdistrict": "여수동",
+    "building": "house",
+    "source": "도로명주소"
+  }
+},
+{
+  "type": "way",
+  "id": 562932701,
+  "bounds": {
+    "minlat": 37.4182567,
+    "minlon": 127.1260399,
+    "maxlat": 37.4183767,
+    "maxlon": 127.1261860
+  },
+  "geometry": [
+    { "lat": 37.4183766, "lon": 127.1260399 },
+    { "lat": 37.4183767, "lon": 127.1261859 },
+    { "lat": 37.4182568, "lon": 127.1261860 },
+    { "lat": 37.4182567, "lon": 127.1260400 },
+    { "lat": 37.4183766, "lon": 127.1260399 }
+  ],
+  "tags": {
+    "addr:city": "성남시",
+    "addr:district": "중원구",
+    "addr:housenumber": "25-6",
+    "addr:postcode": "13439",
+    "addr:province": "경기도",
+    "addr:street": "성남대로997번길",
+    "addr:subdistrict": "여수동",
+    "building": "house",
+    "source": "도로명주소"
+  }
+},
+{
+  "type": "way",
+  "id": 562932740,
+  "bounds": {
+    "minlat": 37.4185184,
+    "minlon": 127.1251298,
+    "maxlat": 37.4186406,
+    "maxlon": 127.1252750
+  },
+  "geometry": [
+    { "lat": 37.4186400, "lon": 127.1251298 },
+    { "lat": 37.4186406, "lon": 127.1252742 },
+    { "lat": 37.4185190, "lon": 127.1252750 },
+    { "lat": 37.4185184, "lon": 127.1251306 },
+    { "lat": 37.4186400, "lon": 127.1251298 }
+  ],
+  "tags": {
+    "addr:city": "성남시",
+    "addr:district": "중원구",
+    "addr:housenumber": "27-6",
+    "addr:postcode": "13439",
+    "addr:province": "경기도",
+    "addr:street": "성남대로997번길",
+    "addr:subdistrict": "여수동",
+    "building": "house",
+    "source": "도로명주소"
+  }
+},
+{
+  "type": "way",
+  "id": 562932741,
+  "bounds": {
+    "minlat": 37.4185188,
+    "minlon": 127.1255028,
+    "maxlat": 37.4186417,
+    "maxlon": 127.1256201
+  },
+  "geometry": [
+    { "lat": 37.4186413, "lon": 127.1255028 },
+    { "lat": 37.4186417, "lon": 127.1256193 },
+    { "lat": 37.4185193, "lon": 127.1256201 },
+    { "lat": 37.4185188, "lon": 127.1255035 },
+    { "lat": 37.4186413, "lon": 127.1255028 }
+  ],
+  "tags": {
+    "addr:city": "성남시",
+    "addr:district": "중원구",
+    "addr:housenumber": "27-2",
+    "addr:postcode": "13439",
+    "addr:province": "경기도",
+    "addr:street": "성남대로997번길",
+    "addr:subdistrict": "여수동",
+    "building": "house",
+    "source": "도로명주소"
+  }
+},
+{
+  "type": "way",
+  "id": 562932742,
+  "bounds": {
+    "minlat": 37.4185181,
+    "minlon": 127.1253037,
+    "maxlat": 37.4186385,
+    "maxlon": 127.1254489
+  },
+  "geometry": [
+    { "lat": 37.4186379, "lon": 127.1253037 },
+    { "lat": 37.4186385, "lon": 127.1254481 },
+    { "lat": 37.4185187, "lon": 127.1254489 },
+    { "lat": 37.4185181, "lon": 127.1253045 },
+    { "lat": 37.4186379, "lon": 127.1253037 }
+  ],
+  "tags": {
+    "addr:city": "성남시",
+    "addr:district": "중원구",
+    "addr:housenumber": "27-4",
+    "addr:postcode": "13439",
+    "addr:province": "경기도",
+    "addr:street": "성남대로997번길",
+    "addr:subdistrict": "여수동",
+    "building": "house",
+    "source": "도로명주소"
+  }
+},
+{
+  "type": "way",
+  "id": 562932743,
+  "bounds": {
+    "minlat": 37.4185212,
+    "minlon": 127.1259865,
+    "maxlat": 37.4186354,
+    "maxlon": 127.1261316
+  },
+  "geometry": [
+    { "lat": 37.4186348, "lon": 127.1259865 },
+    { "lat": 37.4186354, "lon": 127.1261309 },
+    { "lat": 37.4185218, "lon": 127.1261316 },
+    { "lat": 37.4185212, "lon": 127.1259872 },
+    { "lat": 37.4186348, "lon": 127.1259865 }
+  ],
+  "tags": {
+    "addr:city": "성남시",
+    "addr:district": "중원구",
+    "addr:housenumber": "25-3",
+    "addr:postcode": "13439",
+    "addr:province": "경기도",
+    "addr:street": "성남대로997번길",
+    "addr:subdistrict": "여수동",
+    "building": "house",
+    "source": "도로명주소"
+  }
+},
+{
+  "type": "way",
+  "id": 562932744,
+  "bounds": {
+    "minlat": 37.4185206,
+    "minlon": 127.1258153,
+    "maxlat": 37.4186375,
+    "maxlon": 127.1259604
+  },
+  "geometry": [
+    { "lat": 37.4186369, "lon": 127.1258153 },
+    { "lat": 37.4186375, "lon": 127.1259597 },
+    { "lat": 37.4185212, "lon": 127.1259604 },
+    { "lat": 37.4185206, "lon": 127.1258160 },
+    { "lat": 37.4186369, "lon": 127.1258153 }
+  ],
+  "tags": {
+    "addr:city": "성남시",
+    "addr:district": "중원구",
+    "addr:housenumber": "25-1",
+    "addr:postcode": "13439",
+    "addr:province": "경기도",
+    "addr:street": "성남대로997번길",
+    "addr:subdistrict": "여수동",
+    "building": "house",
+    "source": "도로명주소"
+  }
+},
+{
+  "type": "way",
+  "id": 562932745,
+  "bounds": {
+    "minlat": 37.4185185,
+    "minlon": 127.1261573,
+    "maxlat": 37.4186407,
+    "maxlon": 127.1263025
+  },
+  "geometry": [
+    { "lat": 37.4186401, "lon": 127.1261573 },
+    { "lat": 37.4186407, "lon": 127.1263017 },
+    { "lat": 37.4185190, "lon": 127.1263025 },
+    { "lat": 37.4185185, "lon": 127.1261581 },
+    { "lat": 37.4186401, "lon": 127.1261573 }
+  ],
+  "tags": {
+    "addr:city": "성남시",
+    "addr:district": "중원구",
+    "addr:housenumber": "25-5",
+    "addr:postcode": "13439",
+    "addr:province": "경기도",
+    "addr:street": "성남대로997번길",
+    "addr:subdistrict": "여수동",
+    "building": "house",
+    "source": "도로명주소"
+  }
+},
+{
+  "type": "way",
+  "id": 562933373,
+  "bounds": {
+    "minlat": 37.4181148,
+    "minlon": 127.1267606,
+    "maxlat": 37.4183880,
+    "maxlon": 127.1270211
+  },
+  "geometry": [
+    { "lat": 37.4183862, "lon": 127.1267606 },
+    { "lat": 37.4183880, "lon": 127.1270183 },
+    { "lat": 37.4181165, "lon": 127.1270211 },
+    { "lat": 37.4181148, "lon": 127.1267635 },
+    { "lat": 37.4183862, "lon": 127.1267606 }
+  ],
+  "tags": {
+    "addr:city": "성남시",
+    "addr:district": "중원구",
+    "addr:housenumber": "13",
+    "addr:postcode": "13439",
+    "addr:province": "경기도",
+    "addr:street": "양현로405번길",
+    "addr:subdistrict": "여수동",
+    "building": "commercial",
+    "building:levels": "10",
+    "height": "40",
+    "name": "라온힐요양병원",
+    "source": "도로명주소",
+    "start_date": "2013"
+  }
+},
+{
+  "type": "way",
+  "id": 562933374,
+  "bounds": {
+    "minlat": 37.4184154,
+    "minlon": 127.1267570,
+    "maxlat": 37.4186321,
+    "maxlon": 127.1270078
+  },
+  "geometry": [
+    { "lat": 37.4186296, "lon": 127.1267570 },
+    { "lat": 37.4186321, "lon": 127.1270043 },
+    { "lat": 37.4184179, "lon": 127.1270078 },
+    { "lat": 37.4184154, "lon": 127.1267605 },
+    { "lat": 37.4186296, "lon": 127.1267570 }
+  ],
+  "tags": {
+    "addr:city": "성남시",
+    "addr:district": "중원구",
+    "addr:housenumber": "17",
+    "addr:postcode": "13439",
+    "addr:province": "경기도",
+    "addr:street": "양현로405번길",
+    "addr:subdistrict": "여수동",
+    "building": "apartments",
+    "building:flats": "88",
+    "building:levels": "10",
+    "height": "42",
+    "name": "시티파크",
+    "source": "도로명주소",
+    "start_date": "2019"
+  }
+},
+{
+  "type": "way",
+  "id": 562934149,
+  "bounds": {
+    "minlat": 37.4184572,
+    "minlon": 127.1275872,
+    "maxlat": 37.4186318,
+    "maxlon": 127.1280123
+  },
+  "geometry": [
+    { "lat": 37.4186272, "lon": 127.1275872 },
+    { "lat": 37.4184572, "lon": 127.1275901 },
+    { "lat": 37.4184618, "lon": 127.1280123 },
+    { "lat": 37.4186318, "lon": 127.1280094 },
+    { "lat": 37.4186272, "lon": 127.1275872 }
+  ],
+  "tags": {
+    "building": "commercial",
+    "building:levels": "10",
+    "height": "42",
+    "name": "금담",
+    "start_date": "2012"
+  }
+},
+{
+  "type": "way",
+  "id": 1500745318,
+  "bounds": {
+    "minlat": 37.4184714,
+    "minlon": 127.1272688,
+    "maxlat": 37.4186197,
+    "maxlon": 127.1275607
+  },
+  "geometry": [
+    { "lat": 37.4186146, "lon": 127.1275607 },
+    { "lat": 37.4184714, "lon": 127.1275567 },
+    { "lat": 37.4184765, "lon": 127.1272688 },
+    { "lat": 37.4186197, "lon": 127.1272728 },
+    { "lat": 37.4186146, "lon": 127.1275607 }
+  ],
+  "tags": {
+    "building": "apartments",
+    "building:flats": "78",
+    "building:levels": "10",
+    "height": "42",
+    "start_date": "2019"
+  }
+}
+
+  ]
+}

@@ -189,6 +189,14 @@ export function createTerrain(T, data) {
     return item;
   }
   // 걸을 수 있는 표면 높이. refY(현재 높이)보다 너무 높은 다리 상판은 무시 -> 다리 밑 둔치를 걸을 수 있음
+  // [cityhall] raised plaza surfaces (deck/tiers) at y≈0 — addGroundExtra(fn)
+  // fn(x,z,refY,baseH) -> surface Y or null. Highest reachable within MAX_STEP wins.
+  const groundExtras = [];
+  function addGroundExtra(fn) {
+    if (typeof fn !== 'function') return () => {};
+    groundExtras.push(fn);
+    return () => { const i = groundExtras.indexOf(fn); if (i >= 0) groundExtras.splice(i, 1); };
+  }
   function getGroundHeight(x, z, refY = Infinity) {
     let h; const st = stairAt(x, z);
     h = st ? stairStep(st.s, st.u) : baseHeight(x, z);
@@ -197,6 +205,11 @@ export function createTerrain(T, data) {
       const s = deckSample(d, x, z);
       if (!s || s.h <= h || s.h > refY + MAX_STEP + 0.1) continue;
       h = s.h;
+    }
+    for (const fn of groundExtras) {
+      const e = fn(x, z, refY, h);
+      if (e == null || !(e > h) || e > refY + MAX_STEP + 0.1) continue;
+      h = e;
     }
     return h;
   }
@@ -689,5 +702,5 @@ export function createTerrain(T, data) {
     }
     return pts.length > 6 ? pts : null;
   }
-  return { params: P, baseHeight, renderHeight, getGroundHeight, groundY: getGroundHeight, getVehicleHeight, vehicleY: getVehicleHeight, deckAt, canMove, annotate, liftRoads, waterLineY, streams, build, stairs, decks, addDeckSegment, project, riversideRoute, bankPath, stairAt, fords, fordAt, grade, waterSurface, mainDrop: MD ? mainDrop : null, mainDropBox: dropBox, floorAt, mainWater };
+  return { params: P, baseHeight, renderHeight, getGroundHeight, groundY: getGroundHeight, getVehicleHeight, vehicleY: getVehicleHeight, deckAt, canMove, annotate, liftRoads, waterLineY, streams, build, stairs, decks, addDeckSegment, addGroundExtra, project, riversideRoute, bankPath, stairAt, fords, fordAt, grade, waterSurface, mainDrop: MD ? mainDrop : null, mainDropBox: dropBox, floorAt, mainWater };
 }

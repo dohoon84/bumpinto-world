@@ -9,6 +9,7 @@ import thumbScooter from './assets/shop/scooter.webp';
 import thumbCar from './assets/shop/car.webp';
 const SHOP_THUMB = { bike: thumbBike, roadbike: thumbRoadbike, scooter: thumbScooter, car: thumbCar };
 import { n, sgn, T, tr, esc, EI, AXIS, axisName, axisTile, mockTag, bumPill, karmaPill, bar, stamp, tag, head, closeBtn, unitText, v3i, gi } from './kit.js';
+import { isMoveGoal, moveGoalsHtml } from './moveGoals.js';
 import { show, close, toastLayer } from './layer.js';
 import { balanceChip, countUp, refresh } from './hud.js';
 import { googleButton } from '../google.js';
@@ -79,22 +80,50 @@ let questView = null; // { p, period, link }
 function questOpenFast() {
   try { return new URLSearchParams(location.search).get('questfast') !== '0'; } catch { return true; }
 }
-// 로그인·로그아웃·할 일 진행이 바뀌면 받아 둔 목록을 버린다(다음에 열 때 새로 받음)
+// 로그인·로그아웃·할 일 진행이 바뀌면 받아 둔 목록을 버리고, 열려 있는 시트는 바로 다시 그린다.
+let questPaint = 0;
+function repaintOpenQuests(period) {
+  const v = questView;
+  if (!v?.p?.isConnected) return;
+  if (period && period !== v.period) return;
+  const token = ++questPaint;
+  const p = v.p;
+  const per = v.period;
+  const y = p.querySelector('.ve-qlist')?.scrollTop || 0;
+  Promise.all([econ.listQuests(per), econ.getTravelToday?.().catch(() => null)]).then(([list, travel]) => {
+    if (!list || token !== questPaint || questView?.p !== p || !p.isConnected || questView.period !== per) return;
+    rememberQuests(per, list);
+    p.innerHTML = questsHtml(per, list, travel);
+    const listEl = p.querySelector('.ve-qlist');
+    if (listEl) listEl.scrollTop = y;
+  }).catch(() => {});
+}
+let questPaintT = 0;
+function scheduleQuestRepaint(period) {
+  clearTimeout(questPaintT);
+  questPaintT = setTimeout(() => repaintOpenQuests(period), 40);
+}
 try {
-  econ.on?.('session', () => questCache.clear());
-  econ.on?.('quest', ({ period } = {}) => { if (period) questCache.delete(period); });
+  econ.on?.('session', () => { questCache.clear(); scheduleQuestRepaint(); });
+  econ.on?.('quest', ({ period } = {}) => { if (period) questCache.delete(period); else questCache.clear(); scheduleQuestRepaint(period); });
+  econ.on?.('travel', () => { for (const k of ['daily', 'weekly', 'monthly']) questCache.delete(k); scheduleQuestRepaint(); });
 } catch { /* 목 클라이언트 등 */ }
-function questsHtml(period, list) {
+function questsHtml(period, list, travel = null) {
   const tabs = PERIOD.map(([k, ko, en]) => `<button type="button" class="ve-tab${k === period ? ' on' : ''}" data-tab="${k}">${v3i() ? gi(TAB_IC[k], 16) : ''}${esc(tr(ko, en))}</button>`).join('');
   let body;
   if (!list) body = `<p class="ve-info">${esc(tr('불러오는 중…', 'Loading…'))}</p>`;
   else if (list.guest) {
     body = `<div class="ve-empty">${EI.lock(28, '#9eb4c6')}<b>${esc(T(list.info))}</b><button type="button" class="v2-btn primary" data-ve="link">${esc(tr('구글 계정 연동하고 bum 받기', 'Link Google account to earn bum'))}</button></div>`;
   } else {
+    const goals = period === 'daily' ? moveGoalsHtml(list.quests, travel) : '';
     body = `<p class="ve-info">${esc(T(list.info))}</p>
+      ${goals}
       <div class="ve-qlist">${list.quests.map((q) => {
         const ok = q.state !== 'active';
-        return `<div class="ve-qcard${ok ? ' done' : ''}" data-quest="${esc(q.id)}">${axisTile(q.reward.karma?.axis || 'streak', 48)}
+        const move = isMoveGoal(q.id);
+        const hue = q.id === 'D-RIDE10' ? '#3b82f6' : '#20c997';
+        const mark = move ? `<span class="ve-tile" style="--c:${hue}">${q.id === 'D-RIDE10' ? EI.bike(18) : EI.walk(18)}</span>` : axisTile(q.reward.karma?.axis || 'streak', 48);
+        return `<div class="ve-qcard${ok ? ' done' : ''}${move ? ' ve-qmove' : ''}" data-quest="${esc(q.id)}">${mark}
           <div class="ve-qmain"><div class="v2-hrow"><b class="ve-t17">${esc(T(q.title))}</b></div>
           <div class="v2-hrow">${bar(q.progress.value, q.progress.target, { w: 340, h: 10, cls: ok ? 'green' : 'gold' })}<span class="ve-prog${ok ? ' ok' : ''}">${ok ? esc(tr('완료', 'Done')) : esc(unitText(q.progress, q.id))}</span></div></div>
           <div class="ve-qrw">${q.paidBum != null && q.paidBum !== q.reward.bum ? `<span class="v2-hrow"><s class="ve-s">${n(q.reward.bum)}</s>${bumPill(q.paidBum)}</span><small class="ve-capnote">${esc(tr('상한 적용', 'Cap applied'))}</small>` : bumPill(q.reward.bum)}${karmaPill(q.reward.karma)}</div>${ok ? stamp() : '<span class="ve-stamp-sp"></span>'}</div>`;
@@ -133,11 +162,12 @@ export async function openQuests(period = 'daily', { link } = {}) {
   }
   const cached = questCache.get(period);
   // 느린 경로(?questfast=0 · 예전): 캐시 없는 첫 오픈만 서버를 기다린 뒤 띄움
+  const travelNow = () => econ.getTravelToday?.().catch(() => null);
   if (!fast && !live && !cached) {
-    const l = await econ.listQuests(period);
+    const [l, travel] = await Promise.all([econ.listQuests(period), travelNow()]);
     rememberQuests(period, l);
     if (questView?.p !== p || questView.period !== period) return;
-    p.innerHTML = questsHtml(period, l);
+    p.innerHTML = questsHtml(period, l, travel);
     show(p, { key: `04${period[0] === 'd' ? 'a' : period[0] === 'w' ? 'b' : 'c'}` });
     prefetchQuests(period);
     return;
@@ -146,11 +176,11 @@ export async function openQuests(period = 'daily', { link } = {}) {
   p.innerHTML = questsHtml(period, cached || null);
   if (!live) show(p, { key: `04${period[0] === 'd' ? 'a' : period[0] === 'w' ? 'b' : 'c'}` });
   prefetchQuests(period);
-  const fresh = await econ.listQuests(period).catch(() => null);
+  const [fresh, travel] = await Promise.all([econ.listQuests(period).catch(() => null), travelNow()]);
   if (!fresh) return;
   const changed = JSON.stringify(fresh) !== JSON.stringify(questCache.get(period));
   rememberQuests(period, fresh);
-  if (questView?.p === p && questView.period === period && (changed || !cached)) p.innerHTML = questsHtml(period, fresh);
+  if (questView?.p === p && questView.period === period && (changed || !cached || travel)) p.innerHTML = questsHtml(period, fresh, travel);
 }
 
 // ---------- 05a 보상 토스트 → 05a2 코인 버스트·흡수 → 05b 잔액 올라가기 + 다음 안내

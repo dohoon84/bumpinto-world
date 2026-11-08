@@ -1,6 +1,7 @@
 // 정자역 번호부(Durable Object) 클라이언트. 기기마다 id 하나를 저장하고, 그 id 로 번호가 유지된다.
 import { sanitizeLook } from './look.js';
 import { NOTICE_POSTS } from './notices.js';
+import { noticeImagesDemo, readNoticeImageFile, sanitizeNoticeImages } from './noticeImages.js'; // [notice-images]
 
 const DEVICE_KEY = 'jeongja3d.device';
 const LOCAL_PLACE_KEY = 'jeongja3d.place';
@@ -11,6 +12,8 @@ const BOARD_CATS = new Set(['notice', 'intro', 'feedback', 'food', 'free']);
 const WRITABLE_BOARD_CATS = new Set(['intro', 'feedback', 'food', 'free']);
 
 function isBoardAdmin(session) {
+  // [notice-images] 로컬 데모(?noticeimgdemo=1, localhost)에서만 공지 작성란을 연다. 실서버 권한은 바꾸지 않는다.
+  if (noticeImagesDemo() && !smsBase()) return true;
   if (!session || session.off) return false;
   return Boolean(session.isAdmin);
 }
@@ -66,6 +69,11 @@ const ERRORS = {
   comment_not_found: '존재하지 않거나 삭제된 댓글입니다.',
   forbidden: '본인이 작성한 글만 수정·삭제할 수 있습니다.',
   notice_admin: '공지는 관리자만 등록할 수 있습니다.',
+  no_storage: '이미지 보관함이 아직 없습니다. https 주소를 붙여 주세요.',
+  bad_type: 'jpg, png, webp 이미지만 올릴 수 있습니다.',
+  too_big: '이미지가 너무 큽니다.',
+  bad_image: '이미지 주소가 올바르지 않습니다.',
+  unauthorized: '이미지를 올릴 권한이 없습니다.',
   not_found: '번호가 아직 없습니다. 다시 입장해 주세요.',
   full: '더 이상 번호를 발급할 수 없습니다.',
   server: '번호 서버 오류입니다.',
@@ -260,6 +268,7 @@ function runLocalBoard(id, session, op, extra = {}) {
       liked,
       createdAt: p.createdAt,
       updatedAt: p.updatedAt,
+      images: p.category === 'notice' ? sanitizeNoticeImages(p.images, { allowData: true }) : [],
     };
     if (includeBody) item.body = p.body;
     return item;
@@ -384,6 +393,9 @@ function runLocalBoard(id, session, op, extra = {}) {
       views: 0,
       createdAt: now,
       updatedAt: now,
+      images: cat === 'notice' && Object.prototype.hasOwnProperty.call(extra, 'images')
+        ? sanitizeNoticeImages(extra.images, { allowData: true })
+        : [],
     };
     store.posts.push(post);
     saveLocalBoardStore(store);
@@ -408,6 +420,8 @@ function runLocalBoard(id, session, op, extra = {}) {
     post.title = title;
     post.body = body;
     post.updatedAt = Date.now();
+    if (cat !== 'notice') post.images = [];
+    else if (Object.prototype.hasOwnProperty.call(extra, 'images')) post.images = sanitizeNoticeImages(extra.images, { allowData: true });
     saveLocalBoardStore(store);
     const comments = store.comments
       .filter((c) => c.postId === postId)
@@ -539,6 +553,36 @@ export function createSms() {
     async board(op, extra = {}) {
       if (!base) return runLocalBoard(id, session, op, extra);
       return post('/board', { op, ...extra });
+    },
+    // [notice-images] 로컬 게시판은 data URL, 번호 서버가 있으면 R2(notices/)에 올리고 주소만 돌려준다.
+    async uploadNoticeImage(file) {
+      if (!base) return readNoticeImageFile(file);
+      let res;
+      try {
+        res = await fetch(`${base}/notice-images`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${id}`, 'Content-Type': file?.type || 'application/octet-stream' },
+          body: file,
+        });
+      } catch {
+        const error = new Error(ERRORS.offline || '번호 서버에 연결되지 않았습니다.');
+        error.code = 'offline';
+        throw error;
+      }
+      let data = null;
+      try { data = await res.json(); } catch { data = null; }
+      if (!res.ok || !data?.ok || !data.image?.url) {
+        const error = new Error(ERRORS[data?.error] || '이미지를 올리지 못했습니다.');
+        error.code = data?.error || 'bad_image';
+        throw error;
+      }
+      const clean = sanitizeNoticeImages([data.image]);
+      if (!clean.length) {
+        const error = new Error(ERRORS.bad_image);
+        error.code = 'bad_image';
+        throw error;
+      }
+      return clean[0];
     },
   };
 }

@@ -27,7 +27,7 @@ import { mountBoard } from './board.js';
 import { createNoticePopup } from './noticePopup.js'; // [notice-popup]
 import { createSms } from './sms.js';
 import { accountsOn } from './account/flags.js'; // [accounts]
-import { takeResumePlace } from './ui-v2/resume.js'; // [econ-mobile] 모바일 '계속하기'·'이어서 입장' = 그만둔 자리
+import { takeResumePlace, takeContinue } from './ui-v2/resume.js'; // [econ-mobile] 모바일 '계속하기'·'이어서 입장' = 그만둔 자리 (#42 역을 직접 고르면 넘기지 않음)
 import { trackEvent } from './analytics.js';
 import { createTerrain } from './world/terrain.js'; // [terrain]
 import { Taxis } from './entities/taxis.js'; // [taxi]
@@ -74,7 +74,11 @@ import { mountGyeongbuSoon } from './world/gyeongbuSoon.js'; // [gyeongbu] 경�
 import { createServerClock } from './subway/clock.js'; // [subway-sync] 서버 시계 (같은 열차 = 같은 순간)
 import { isMobileMode } from './mobile/flag.js'; // [mobile]
 import { mountSubway, zoneLabel as subwayZoneLabel } from './subway/index.js'; // [subway] 정자역·코리더 역 출입구(실제 OSM 출구) + 지하 대합실. ?subway=0 이면 끔
-import { arriveFixEnabled, entrySpawn, withArriveCap } from './corridor/arrive.js'; // [arrivefix] #43 역 입장·역 이동 때 정자역을 거쳐 보이지 않게 (?arrivefix=0 끔)
+import { arriveFixEnabled, pickFirstEnabled, entrySpawn, withArriveCap } from './corridor/arrive.js'; // [arrivefix] #43 (?arrivefix=0) · [pickfirst] #42 (?pickfirst=0)
+import { mountBump24Game } from './bump24game/index.js'; // [bump24game] BUMP24 30초 장보기 (시청점 ?bp24=1&bp24game=1, 정자점은 기본 주소)
+import { prepareJeongjaBp24, mountBasemapBp24, bp24DoorInfo } from './corridor/bp24.js'; // [bump24-jeongja]
+import { mountBp24Nav } from './corridor/bp24Nav.js'; // [bp24nav]
+import { BUMP24_JEONGJA_AT, bump24AtSpot } from './corridor/bp24Locations.js';
 import { isUiV2, uiV2Wanted } from './ui-v2/flag.js'; // [ui-v2] 게임 UI v2 (기본 켜짐 · ?ui=v1 끔)
 
 const params = new URLSearchParams(location.search);
@@ -87,9 +91,12 @@ const passportEnter = params.get('passport') === '1';
 const fromRegionId = params.get('from');
 const fromRegion = fromRegionId && fromRegionId !== region.id ? getRegion(fromRegionId) : null;
 // [corridor] 지구본에서 코리더 역을 고르면 입장(로비/여권) 직후 그 역으로 이동. 다른 동네에서 오면 ?at= 로 넘어온다
-let corridorAt = !shot && params.get('corridor') !== '0' ? params.get('at') : null;
+const atQuery = params.get('at');
+const bump24AtQuery = atQuery === BUMP24_JEONGJA_AT || (atQuery && atQuery.startsWith('bump24-'));
+let corridorAt = !shot && params.get('corridor') !== '0' && !bump24AtQuery ? atQuery : null;
 let corridorArrive = null;
 const arriveFix = arriveFixEnabled(); // [arrivefix]
+const pickFirst = pickFirstEnabled(); // [pickfirst] #42 직접 고른 역 출구가 이어하기·서버 위치보다 우선
 let arriving = false; // [arrivefix] 역 도착 전(숨김): 위치 저장·송신 멈춤
 let arriveSeq = 0; // [arrivefix] 늦게 끝난 이전 도착이 새 도착을 풀지 않게
 let arriveTravel = null; // [arrivefix] travel 은 아래에서 만들어진다(그 전에 부르면 TDZ) → 만들어진 뒤 여기에 넣는다
@@ -128,9 +135,11 @@ function getFlightLines(targetRegion) {
   return targetRegion.flightLines || targetRegion.lobbyEnterLines;
 }
 // 지구본(노선도·리스트·게임 안 🌏)에서 직접 고른 입장이면 서버에 저장된 마지막 위치 대신 고른 곳(역 / 기본 스폰)으로.
-// ?from= 은 다른 지역에서 지구본으로 고르고 넘어온 경우. ?passport=1 / ?enter=1 만 있는 진입은 기존처럼 마지막 위치 이어하기.
-let explicitPick = params.has('from');
-let resumePlace = null; // [ui-v2] 그만둔 자리 {x,y,z,ry} — handleGateEnter(gateOpts.place) 가 넣고 completeWorldJoin 이 한 번 쓴다
+// ?from= 은 다른 지역에서 지구본으로 고르고 넘어온 경우. ?at= 도 그 역을 고른 입장 (#42, ?pickfirst=0 이면 예전처럼 서버 위치가 우선).
+// ?passport=1 / ?enter=1 만 있고 역을 고르지 않았으면 마지막 위치 이어하기.
+let explicitPick = params.has('from') || (pickFirst && !!corridorAt);
+let resumePlace = null; // [ui-v2] 그만둔 자리 {x,y,z,ry} — '계속하기'·'이어하기'(gateOpts.continue) 만 넣고 completeWorldJoin 이 한 번 쓴다
+let continueEntry = false; // [pickfirst] 시작화면 '계속하기'·'이어하기'. 역을 직접 고른 입장과 구분
 let arrivalFlightScreen = null;
 if (fromRegion && !shot) {
   arrivalFlightScreen = getEnterScreen();
@@ -154,7 +163,9 @@ const handleGateEnter = (chosenRegionId = region.id, gateOpts = undefined) => {
   corridorAt = gateOpts?.at || null; // [corridor]
   uiV2?.noteEnter(chosenRegionId || region.id, corridorAt); // [ui-v2] 마지막 역(이어하기) · 입장 카드 역 이름
   explicitPick = true;
-  resumePlace = gateOpts?.place && (chosenRegionId || region.id) === region.id ? gateOpts.place : null; // [ui-v2] '계속하기'·'이어하기' = 그만둔 자리 (입장 때 지도 범위 확인)
+  continueEntry = !!gateOpts?.continue; // [pickfirst] 역 선택(continue 없음)은 저장 자리를 쓰지 않음
+  const keepPlace = !pickFirst || continueEntry;
+  resumePlace = keepPlace && gateOpts?.place && (chosenRegionId || region.id) === region.id ? gateOpts.place : null; // [ui-v2] '계속하기'·'이어하기' = 그만둔 자리 (입장 때 지도 범위 확인)
   if (chosenRegionId && chosenRegionId !== region.id) {
     const targetRegion = getRegion(chosenRegionId);
     const screen = getEnterScreen();
@@ -294,11 +305,13 @@ function setShadowSpan(span) { const c = sun.shadow.camera; c.left = c.bottom = 
 const terrain = terrainData ? createTerrain(corridorTerrainData(terrainData, corridorData), data) : null; // [terrain] [corridor] 코리더 켜짐: 탄천 축 연장
 terrain?.annotate(data); // [terrain] 도로/수면에 높이 부여 (buildWorld 전에)
 const tower = region.features?.launchTower && params.get('tower') !== '0' ? createTowerAddon(data) : null; // [tower] buildWorld 전에 _skip 마킹
+const jeongjaBp24Prep = region.features?.jeongjaBuildings ? prepareJeongjaBp24(data, params) : []; // [bump24-jeongja] 1층을 비우기 전에
 const world = buildWorld(scene, data, region, { // [shops] 1층 상가 띠/차양/간판 · [colours] 건물 외벽·지붕 색
   shops: prepareShops(data, shopsData),
   colours: prepareBuildingColours(data, coloursData),
 });
 tower?.build(scene, renderer); // [tower] 발사탑 1·2기(메카질라), 스타십 풀스택, 부스터 캐치, OLM, 탱크 팜 생성
+const jeongjaBp24 = jeongjaBp24Prep.length ? mountBasemapBp24(scene, jeongjaBp24Prep) : null; // [bump24-jeongja]
 const overlay = new Overlay(document.getElementById('overlay'), camera);
 const corridorClock = { simTime: () => null };
 // [corridor] 정자 → 롯데월드타워 코리더: 탄천 구간 도로는 terrain.build 전에 annotate 해야 다리 구조물이 같이 생긴다
@@ -497,6 +510,7 @@ const donationBoards = region.features?.stationPlaza
   ? mountDonationBillboards({ scene, overlay, world, camera, domElement: renderer.domElement })
   : noopModule;
 const cam = { yaw: Math.PI * 0.85, pitch: 0.32, dist: 14, mode: params.get('view') === 'overview' ? 'overview' : 'follow' };
+let setViewMode = (m) => { cam.mode = m; }; // setMode 가 생기기 전(여권 입장)에도 따라가기 모드만 바꿔 둔다
 const atmosphere = createAtmosphere({
   scene, sun, hemi, skyGeo,
   getMode: () => cam.mode,
@@ -573,11 +587,35 @@ const subway = subwayOn ? mountSubway({
     emitMyStateNow();
   },
 }) : null;
+// [bump24game] BUMP24 장보기 미니게임. 정자점은 기본 주소에서도 문 앞 안내. 시청점은 ?bp24game=1. 지하철과 같이 별도 Scene.
+const bump24Game = mountBump24Game({
+  renderer, params, getPlayer: () => player, getCorridor: () => corridor, getCamera: () => camera,
+  getAudioLevel: () => (bgm ? { muted: bgm.player.muted, volume: bgm.player.volume } : null),
+  getSelfName: () => { try { return presence?.me?.name || '나'; } catch { return '나'; } }, // presence 는 아래에서 만들어짐(TDZ) → 초기화 전이면 기본값
+  getLook: () => me.look,
+  toggleMute: bgm ? () => bgm.player.setMuted(!bgm.player.muted) : null,
+  isMobile: mobileMode,
+  canEnter: () => subwayCanEnter() && !subway?.active,
+  onInterior: (zone, inside) => {
+    selfInterior = inside;
+    overlay.setView(zone, inside?.camera);
+    emoteFx.setView(inside?.scene, inside?.camera);
+    remotes.setZone(zone, inside?.scene);
+    nameTag.zone = zone;
+    myBubble.item.zone = zone;
+    if (zone) emitMyStateNow();
+  },
+});
+if (bump24Game) { const withB24 = world.isBlocked; world.isBlocked = (x, z, r) => withB24(x, z, r) || bump24Game.blocks(x, z, r); } // [bump24game] 랭킹 토템
 const gyeongbuSoon = corridor ? mountGyeongbuSoon({ getPos: () => player.position, params, isEn }) : null; // [gyeongbu] 코리더가 있을 때만 (경부 북쪽 끝이 코리더 타일)
 if (subway) {
   const withSubway = world.isBlocked;
   world.isBlocked = (x, z, r) => withSubway(x, z, r) || subway.blocks(x, z, r);
 }
+const bp24Nav = mountBp24Nav({ // [bp24nav] ?bp24nav=0 이면 null. 매장 아이콘·정자점 표지·이정표
+  scene, overlay, world, station: data.station, terrain, search: params, getPlayer: () => player,
+  getExits: () => subway?.exits || [],
+});
 const presence = createPresence({ station: st, region });
 if (npcs.guard) presence.setGuard?.(npcs.guard);
 const remotes = new RemotePlayers(scene, overlay, presence, () => selfPos(), (t) => myBubble.say(t, 6000), terrain?.getGroundHeight, emoteFx); // [terrain] 원격 플레이어도 지형 높이
@@ -1111,6 +1149,53 @@ const reopenGate = () => {
   document.body.classList.add('in-gate');
   openWorldGate({ onEnter: handleGateEnter });
 };
+function jeongjaBump24Spot() {
+  const st = jeongjaBp24Prep.find((s) => s.id === BUMP24_JEONGJA_AT) || jeongjaBp24Prep[0];
+  if (!st) return null;
+  const info = bp24DoorInfo(st);
+  let x = info.x, z = info.z;
+  if (world.isBlocked(x, z) || world.onRoad(x, z)) {
+    const ox = -st.b[0], oz = -st.b[1];
+    for (let d = 0.4; d <= 2.4; d += 0.4) {
+      const nx = info.x + ox * d, nz = info.z + oz * d;
+      if (!world.isBlocked(nx, nz) && !world.onRoad(nx, nz)) { x = nx; z = nz; break; }
+    }
+  }
+  return { x, z, face: info.face, yawIn: info.yawIn };
+}
+function landBump24Jeongja() {
+  if (atQuery !== BUMP24_JEONGJA_AT) return false;
+  const spot = jeongjaBump24Spot();
+  if (!spot) return false;
+  player.position.set(spot.x, terrain ? terrain.getGroundHeight(spot.x, spot.z, 0) : 0, spot.z);
+  player.rotation.y = spot.yawIn;
+  cam.yaw = spot.face; cam.pitch = -0.06; cam.dist = 6.5; // 맞은편 건물에 들어가지 않고 차도에서 간판을 보게
+  setViewMode('follow');
+  return true;
+}
+function landBump24At() {
+  if (!atQuery || atQuery === BUMP24_JEONGJA_AT) return false;
+  const spot = bump24AtSpot(atQuery);
+  if (!spot) return false;
+  const st = jeongjaBp24Prep.find((s) => s.id === spot.id);
+  let x = spot.x, z = spot.z, yaw = 0, face = Math.PI;
+  if (st) {
+    const info = bp24DoorInfo(st);
+    x = info.x; z = info.z; yaw = info.yawIn; face = info.face;
+    if (world.isBlocked(x, z) || world.onRoad(x, z)) {
+      const ox = -st.b[0], oz = -st.b[1];
+      for (let d = 0.4; d <= 2.4; d += 0.4) {
+        const nx = info.x + ox * d, nz = info.z + oz * d;
+        if (!world.isBlocked(nx, nz) && !world.onRoad(nx, nz)) { x = nx; z = nz; break; }
+      }
+    }
+  }
+  player.position.set(x, terrain ? terrain.getGroundHeight(x, z, 0) : 0, z);
+  player.rotation.y = yaw;
+  cam.yaw = face; cam.pitch = -0.06; cam.dist = 6.5;
+  setViewMode('follow');
+  return true;
+}
 function completeWorldJoin(name, look, session) {
   setPassportActive(true);
   me.name = name; me.color = look.color; me.look = look;
@@ -1118,10 +1203,12 @@ function completeWorldJoin(name, look, session) {
   wear(look);
   const picked = explicitPick;
   explicitPick = false;
-  const rp = resumePlace ?? (mobileMode ? takeResumePlace() : null); resumePlace = null; // [econ-mobile] 모바일은 시작화면이 넘겨준 자리
-  const spawn = entrySpawn({ resume: rp, bounds: corridor?.bounds || world.bounds, inWater: world.inWater, picked, sessionPlace: session?.place || null, at: corridorAt, placeOf: arriveTravel ? (id) => arriveTravel.placeOf(id) : null, fix: arriveFix });
-  if (spawn.kind === 'resume') { corridorAt = null; applySession({ place: rp }); } // [ui-v2] 그만둔 자리 — 역 출구로 옮기지 않음 (범위 밖·물 위면 아래 역 입장 그대로)
-  else if (spawn.kind === 'session') applySession(session);
+  const continued = continueEntry || takeContinue(); continueEntry = false; // [pickfirst] PC gateOpts.continue · 모바일 '계속하기'
+  const rp = resumePlace ?? takeResumePlace(); resumePlace = null; // [econ-mobile] 모바일은 시작화면이 넘겨준 자리 (역을 직접 고르면 entrySpawn 이 무시)
+  const spawn = entrySpawn({ resume: rp, bounds: corridor?.bounds || world.bounds, inWater: world.inWater, picked, continued, sessionPlace: session?.place || null, at: corridorAt, placeOf: arriveTravel ? (id) => arriveTravel.placeOf(id) : null, fix: arriveFix, pickFirst });
+  if (landBump24Jeongja() || landBump24At()) { arriveTravel?.cancel?.(); corridorAt = null; } // [bump24-stores] ?at=bump24-<id> 는 그 매장 문 앞
+  else if (spawn.kind === 'resume') { arriveTravel?.cancel?.(); corridorAt = null; applySession({ place: rp }); }
+  else if (spawn.kind === 'session') { if (spawn.stay) { arriveTravel?.cancel?.(); corridorAt = null; } applySession(session); }
   else if (spawn.kind === 'station') placeHiddenAt(spawn.x, spawn.z); // [arrivefix] ① 정자 기본 위치가 아니라 그 역 출구에 숨긴 채로
   else player.position.copy(pos);
   arriving = spawn.hidden;
@@ -1183,7 +1270,8 @@ joinWithPassport = async () => {
   arrivalFlightScreen = null;
   document.body.classList.remove('in-gate', 'in-lobby');
   // [arrivefix] 로그인 상태 역 입장: 서버 입장 요청과 그 역 타일 받기를 동시에 (먼저 숨긴 채로 역 출구에 세워 스트리머도 그쪽을 본다)
-  if (arriveFix && corridorAt && !resumePlace && arriveTravel) {
+  // [pickfirst] '계속하기'는 저장 자리라 역 출구에 미리 세우지 않음
+  if (arriveFix && corridorAt && !resumePlace && !(pickFirst && continueEntry) && arriveTravel) {
     const d = arriveTravel.placeOf(corridorAt);
     if (d && !d.home && Number.isFinite(d.x)) { placeHiddenAt(d.x, d.z); arriveTravel.prewarm?.(corridorAt); }
   }
@@ -1502,6 +1590,17 @@ let myEmoteUntil = 0;
 let emoteCombo = 0;
 let lastEmoteAt = 0;
 let mySit = ''; // '' | 'ground' | 'beanbag' | 'bench' | 'ledge'
+// [cityhall] plaza tier/promenade seats + stationPlaza beanbags/benches
+function findNearbySeat(px, pz) {
+  return stationPlaza.findSeat?.(px, pz) || corridor?.cityhall?.findSeat?.(px, pz) || null;
+}
+function seatSurfaceY(seat) {
+  // avatar.js bench sit pose assumes player.y is ~0.44m below the seat top
+  // (rig drops ~0.26 so butt lands on a ~0.44m bench). Raised tiers use the same delta.
+  if (seat?.y != null) return Math.max(0, seat.y - 0.44);
+  return terrain ? terrain.getGroundHeight(seat.x, seat.z, player.position.y) : 0;
+}
+
 let sitExitPos = null; // 좌석에서 일어날 때 복귀할 안전한 좌표
 let myAfk = false;
 let idleTime = 0;
@@ -1615,13 +1714,13 @@ function toggleSit() {
     emitMyStateNow();
     return;
   }
-  const seat = stationPlaza.findSeat?.(player.position.x, player.position.z);
+  const seat = findNearbySeat(player.position.x, player.position.z);
   if (seat) {
     sitExitPos = {
       x: seat.exitX ?? player.position.x,
       z: seat.exitZ ?? player.position.z,
     };
-    const ty = terrain ? terrain.getGroundHeight(seat.x, seat.z, player.position.y) : 0;
+    const ty = seatSurfaceY(seat);
     player.position.set(seat.x, ty, seat.z);
     player.rotation.y = seat.ry;
     mySit = seat.kind;
@@ -1653,13 +1752,13 @@ function toggleAfk() {
   player.userData.emote = '';
   if (!mySit && subway?.active) mySit = subway.canPose ? subway.sitDown() : ''; // [subway-pose]
   else if (!mySit) {
-    const seat = stationPlaza.findSeat?.(player.position.x, player.position.z);
+    const seat = findNearbySeat(player.position.x, player.position.z);
     if (seat) {
       sitExitPos = {
         x: seat.exitX ?? player.position.x,
         z: seat.exitZ ?? player.position.z,
       };
-      const ty = terrain ? terrain.getGroundHeight(seat.x, seat.z, player.position.y) : 0;
+      const ty = seatSurfaceY(seat);
       player.position.set(seat.x, ty, seat.z);
       player.rotation.y = seat.ry;
       mySit = seat.kind;
@@ -1835,6 +1934,7 @@ const setMode = (m) => {
   scene.fog.near = m === 'overview' ? 1500 : 350;
   scene.fog.far = m === 'overview' ? 4500 : 1600;
 };
+setViewMode = setMode;
 setMode(cam.mode);
 viewBtn.onclick = () => setMode(cam.mode === 'overview' ? 'follow' : 'overview');
 
@@ -2060,9 +2160,11 @@ const cameraApp = mountCamera({ // [camera]
     const sp = subway?.active ? { ko: subway.place(false), en: subway.place(true) } : null; // [camera] 지하: '정자역 · 수인분당선 승강장' 등
     return { region: region.id, regionName: sp?.ko || region.name, regionEnName: sp?.en || region.enName || region.name, x: player.position.x, z: player.position.z, name: me?.name || '' };
   },
-  getView: () => subway?.view() || null, // [camera] 지하에서는 대합실·승강장·열차 장면을 찍는다 (바깥 장면 아님)
+  getView: () => bump24Game?.view() || subway?.view() || null, // [camera] [bump24game] 매장·지하 장면
 });
-if (travel && params.get('at')) travel.go(params.get('at'));
+if (atQuery === BUMP24_JEONGJA_AT) landBump24Jeongja(); // [bump24-jeongja] ?shot=1 처럼 입장 함수를 안 타는 시작
+else if (landBump24At()) { /* [bump24-stores] */ }
+else if (travel && atQuery) travel.go(atQuery);
 // [corridor] 지구본 역 선택 → 입장 완료 후 역 출구 앞 인도로 (위치 저장 성공 여부와 무관)
 corridorArrive = () => {
   if (!corridorAt || !travel) return undefined;
@@ -2189,11 +2291,20 @@ leaveBtn.onclick = () => {
   startLobby?.();
 };
 input.onKey = (e) => {
+  if (bump24Game?.onKey(e)) return; // [bump24game] 매장 들어가기·담기
   if (subway?.onKey(e)) return; // [subway] 입구 앞 E · 대합실 안에서는 출구 고르기 등
   if (e.code === 'KeyM') viewBtn.onclick();
   if (e.code === 'KeyH') document.getElementById('btn-home').onclick();
   if (e.code === 'Enter') { e.preventDefault(); chatInput.focus(); }
-  if (e.code === 'KeyE' && !e.repeat && !ride?.handleE()) toggleRide(); // [ride] 버스·택시 탑승/하차가 우선, 아니면 카카오바이크
+  if (e.code === 'KeyE' && !e.repeat && !ride?.handleE()) {
+    // [cityhall] 육교 엘리베이터: 근처면 상·하판 토글, 아니면 카카오바이크
+    const el = corridor?.cityhall?.tryElevator?.(player.position.x, player.position.z, player.position.y);
+    if (el) {
+      player.position.set(el.x, el.y, el.z);
+    } else {
+      toggleRide();
+    }
+  }
   if (e.code === 'KeyY' && !e.repeat && ride && joined) ride.hail(); // [ride] 택시 호출
   if (e.code === 'KeyX' && !e.repeat && ride?.ride?.mode === 'taxi') ride.requestStop(); // [ride] 택시 '세워주세요'
   if (e.code === 'KeyV' && !e.repeat && ride?.active) ride.toggleCam(); // [ride] 창가 1인칭 ↔ 뒤쪽 3인칭
@@ -2355,6 +2466,16 @@ function frame() {
     requestAnimationFrame(frame);
     return;
   }
+  // [bump24game] 매장 안: 도시 렌더 건너뛰고 내부 장면만
+  if ((bump24Game?.active || bump24Game?.busy) && bump24Game.frame(dt, [dy, dp, dz], input.axes())) {
+    myBubble.tick();
+    overlay.update(innerWidth, innerHeight);
+    emoteFx.update(dt, innerWidth, innerHeight);
+    perfHud.tick();
+    memHud.tick();
+    requestAnimationFrame(frame);
+    return;
+  }
   if (cam.mode === 'follow') {
     // pitch +: 내려다보기, -: 올려다보기. ±90° 직전에서 멈춰 시점이 뒤집히지 않게 한다.
     cam.yaw += dy; cam.pitch = THREE.MathUtils.clamp(cam.pitch + dp, -1.2, 1.45); cam.dist = THREE.MathUtils.clamp(cam.dist * (1 + dz), 4, 120);
@@ -2364,6 +2485,7 @@ function frame() {
   let { f, s, run, jump } = input.axes();
   if (ride?.active) { if (f || s || jump) idleTime = 0; f = 0; s = 0; jump = false; } // [ride] 탑승 중엔 걷기·점프 대신 차량이 움직임
   if (subway?.busy) { f = 0; s = 0; jump = false; } // [subway] 들어가는/나오는 페이드 동안
+  if (bump24Game?.busy) { f = 0; s = 0; jump = false; } // [bump24game] 페이드 동안
   if (dy || dp || dz || f || s || jump) wakeFromAfk();
   if (joined && jump && !board.open && jumpY <= 0.001 && !adminBike?.riding && !giftRiding()) { // [bike] [roadbike]
     if (mySit) {
@@ -2469,7 +2591,7 @@ function frame() {
     if (!terrain && player.position.y !== 0) player.position.y = 0; // [terrain] 지형이 있으면 둔치 높이를 유지
 
     // 빈백·벤치 근처 좌석 감지하여 하단 앉기 버튼 문구 자동 전환
-    const foundSeat = !mySit && joined ? stationPlaza.findSeat?.(player.position.x, player.position.z) : null;
+    const foundSeat = !mySit && joined ? findNearbySeat(player.position.x, player.position.z) : null;
     if ((foundSeat?.label || '') !== (nearSeatHint?.label || '')) {
       nearSeatHint = foundSeat || null;
       if (!emoteFolded) renderEmoteBar();
@@ -2486,8 +2608,8 @@ function frame() {
               x: foundSeat.exitX ?? player.position.x,
               z: foundSeat.exitZ ?? player.position.z,
             };
-            const ty = terrain ? terrain.getGroundHeight(foundSeat.x, foundSeat.z, player.position.y) : 0;
-            player.position.set(foundSeat.x, ty, foundSeat.z);
+            const ty = seatSurfaceY(foundSeat);
+          player.position.set(foundSeat.x, ty, foundSeat.z);
             player.rotation.y = foundSeat.ry;
             mySit = foundSeat.kind;
           } else {
@@ -2522,6 +2644,7 @@ function frame() {
     player.userData.jumpY = jumpY;
     player.userData.emote = myEmote;
     player.userData.sit = ride?.active ? 'bench' : mySit; // [ride] 버스·택시 좌석
+  corridor?.cityhall?.setPlayerPos?.(player.position.x, player.position.z);
     player.userData.afk = ride?.active ? false : myAfk;
     player.userData.umbrella = umbrellas.umbrellaTheme || '';
     animateAvatar(player, moveSpeed, dt);
@@ -2545,6 +2668,7 @@ function frame() {
   riverFolk?.update(dt, player.position);
   stationPlaza.update(dt, player.position);
   subway?.outdoorTick(dt, subwayCanEnter() ? player.position : null); // [subway] 입구 안내 + 걸어 들어가면 진입
+  bump24Game?.outdoorTick(dt, (subwayCanEnter() && !subway?.active) ? player.position : null); // [bump24game] 문 앞 들어가기 안내
   gyeongbuSoon?.tick(dt); // [gyeongbu]
   bungeo?.update(dt, joined ? player.position : null, camera, cam.mode); // [bungeo]
   dogPark.update(dt, player.position);
@@ -2594,6 +2718,8 @@ function frame() {
     sun.target.position.copy(c);
   }
   if (corridor) { const c = cam.mode === 'follow' ? P : sun.target.position; corridor.update(dt, c.x, c.z, cam.mode); } // [corridor] 타일 스트리밍(프레임당 최대 1개 빌드)
+  jeongjaBp24?.update(player.position.x, player.position.z); // [bump24-jeongja] 가까운 매장만 실내
+  bp24Nav?.update(dt); // [bp24nav] 표지 까딱임 · 안내선 시작점
   if (playgrounds) { const c = cam.mode === 'follow' ? P : sun.target.position; playgrounds.update(dt, c.x, c.z, cam.mode); } // [playgrounds] 거리·타일 기준 표시
   if (streetlights) { const c = cam.mode === 'follow' ? P : sun.target.position; streetlights.update(dt, c.x, c.z, cam.mode); } // [streetlights] 거리·타일 기준 표시 + 밤 페이드
   if (pangyoLamps) { const c = cam.mode === 'follow' ? P : sun.target.position; pangyoLamps.update(dt, c.x, c.z, cam.mode); } // [pangyo-streetlights]
@@ -2627,7 +2753,7 @@ requestAnimationFrame(frame);
 // 스크린샷/디버그용 훅
 window.__jj = {
   perfmem: perfMem, // [perf-memory]
-  ready: true, region, tower, renderer, corridor, playgrounds, streetlights, pangyoLamps, migeumLamps, // [corridor] [playgrounds] [streetlights]
+  ready: true, region, tower, renderer, corridor, schoolZone: corridor?.schoolZone || null, playgrounds, streetlights, pangyoLamps, migeumLamps, // [corridor] [schoolzone] [playgrounds] [streetlights]
   bungeo, // [bungeo]
   launch, roadster, trucks, bike: adminBike, giftRides, inventory, data, world, npcs, transit, camera, cam, ov, setMode, terrain, taxis, jzTraffic, police, weather: atmosphere, umbrellas, dogPark, strayCats, // [terrain] [taxi] [roadster] [tower] [launch] [truck] [bike] [roadbike] [inventory]
   get player() { return player; },
@@ -2638,6 +2764,7 @@ window.__jj = {
   get ride() { return ride; }, remotes, presence, // [ride]
   cameraApp, // [camera]
   subway, serverClock, // [subway] [subway-sync]
+  bump24Game, jeongjaBp24, bp24Nav, // [bump24game] [bump24-jeongja] [bp24nav]
   get pose() { return { sit: mySit, afk: myAfk, jy: jumpY }; }, // [subway-pose] 테스트용
   bgm, // [bgm]
   nearNpc(i = 0, d = 3) { const n = npcs.list[i]; player.position.set(n.pos.x + d, 0, n.pos.z + d * 0.5); },
