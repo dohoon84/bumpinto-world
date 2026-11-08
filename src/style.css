@@ -3440,3 +3440,7 @@ body.has-bgm #ride-toast { top: 154px; }
 #board-modal .ni-url { align-items: flex-end; }
 #board-modal .ni-url label.grow { min-width: 0; }
 #board-modal .ni-url input { box-sizing: border-box; width: 100%; height: 40px; }
+
+/* [notice-image-crop] 공지 본문 이미지(포스터 등 세로 이미지)가 잘리지 않게: 잘라 채우기(cover) 대신 전체 보이기(contain) */
+#board-modal .board-detail-content .ni-inline img { height: auto; max-height: 560px; object-fit: contain; }
+#board-modal .ni-detail .ni-thumb img { object-fit: contain; }
