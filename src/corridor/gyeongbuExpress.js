@@ -55,6 +55,45 @@ function busLaneLine(pts, off) {
   return mesh;
 }
 
+function coloredBox(w, h, d, color, x, y, z) {
+  const geo = new THREE.BoxGeometry(w, h, d);
+  geo.translate(x, y, z);
+  const c = new THREE.Color(color);
+  const col = new Float32Array(geo.attributes.position.count * 3);
+  for (let i = 0; i < geo.attributes.position.count; i++) { col[i * 3] = c.r; col[i * 3 + 1] = c.g; col[i * 3 + 2] = c.b; }
+  geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  return geo;
+}
+
+function mergeGeo(parts) {
+  let n = 0, idxN = 0;
+  for (const g of parts) { n += g.attributes.position.count; idxN += g.index.count; }
+  const pos = new Float32Array(n * 3), nrm = new Float32Array(n * 3), col = new Float32Array(n * 3), idx = new Uint32Array(idxN);
+  let v = 0, k = 0;
+  for (const g of parts) {
+    const p = g.attributes.position.array, nn = g.attributes.normal.array, c = g.attributes.color.array, id = g.index.array;
+    pos.set(p, v * 3); nrm.set(nn, v * 3); col.set(c, v * 3);
+    for (let i = 0; i < id.length; i++) idx[k++] = id[i] + v;
+    v += g.attributes.position.count;
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  geo.setAttribute('normal', new THREE.BufferAttribute(nrm, 3));
+  geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  geo.setIndex(new THREE.BufferAttribute(idx, 1));
+  return geo;
+}
+
+/** 직행좌석 빨강 몸 + 창 + 바퀴. 인스턴스 하나. */
+function expressBusGeo() {
+  const body = coloredBox(2.55, 2.35, 11.2, '#b91c1c', 0, 2.25, 0);
+  const glass = coloredBox(2.85, 1.15, 8.4, '#0e2438', 0, 2.7, 0.35);
+  const skirt = coloredBox(2.4, 0.7, 10.2, '#2b2f33', 0, 0.95, 0);
+  const wheels = [];
+  for (const z of [-3.7, -1.2, 3.3]) for (const x of [-1.45, 1.45]) wheels.push(coloredBox(0.55, 1.05, 1.05, '#111111', x, 0.55, z));
+  return mergeGeo([body, glass, skirt, ...wheels]);
+}
+
 export function mountGyeongbuExpress(group, data, { overlay } = {}) {
   if (!data?.pts?.length || !data.routes?.length) return null;
   const spur = data.pts.filter((p) => p[3] === 'spur');
@@ -70,19 +109,16 @@ export function mountGyeongbuExpress(group, data, { overlay } = {}) {
   if (main.length > 3) group.add(busLaneLine(main, data.lineOff || 3.6));
 
   const cap = 4;
-  const geo = new THREE.BoxGeometry(12, 3.4, 2.9);
-  const mat = new THREE.MeshLambertMaterial({ color: '#ffffff' });
+  const geo = expressBusGeo();
+  const mat = new THREE.MeshLambertMaterial({ vertexColors: true });
   const buses = new THREE.InstancedMesh(geo, mat, cap);
   buses.name = 'gyeongbuExpressBuses';
   buses.count = cap;
   buses.frustumCulled = false;
-  buses.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(cap * 3), 3);
   group.add(buses);
   const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), pos = new THREE.Vector3(), scl = new THREE.Vector3(1, 1, 1);
   const zero = new THREE.Vector3();
   const up = new THREE.Vector3(0, 1, 0);
-  const col = new THREE.Color();
-  const paint = { '9004': '#b91c1c', '1151': '#1d4ed8' };
 
   const byStop = new Map();
   for (const r of data.routes) for (const s of r.stops || []) {
@@ -122,12 +158,10 @@ export function mountGyeongbuExpress(group, data, { overlay } = {}) {
       const px = p.x + p.lx * lat, pz = p.z + p.lz * lat;
       if (Math.hypot(px - x, pz - z) > 1400) { m4.compose(zero, q.identity(), zero); buses.setMatrixAt(i, m4); continue; }
       q.setFromAxisAngle(up, p.ang);
-      m4.compose(pos.set(px, 1.9, pz), q, scl);
+      m4.compose(pos.set(px, 0.15, pz), q, scl);
       buses.setMatrixAt(i, m4);
-      buses.setColorAt(i, col.set(paint[b.no] || '#b91c1c'));
     }
     buses.instanceMatrix.needsUpdate = true;
-    if (buses.instanceColor) buses.instanceColor.needsUpdate = true;
     for (const { s, item } of labels) {
       let best = null;
       const nos = [];

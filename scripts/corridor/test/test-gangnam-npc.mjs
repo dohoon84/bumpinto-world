@@ -11,6 +11,7 @@ import { gangnamNpcEnabled } from '../../../src/gangnam/npc/flags.js';
 import { pedDensityAt, pedPeriod, pedCount, PED_MIX, GREETINGS, parseGangnamCars, MAX_PEDS, carViewTarget, inStreetView } from '../../../src/gangnam/npc/density.js';
 import { GangnamCars, createGangnamTraffic } from '../../../src/gangnam/npc/cars.js';
 import { mountGangnamNpc } from '../../../src/gangnam/npc/mount.js';
+import { daeroSide } from '../../../src/gangnam/npc/peds.js';
 import { pedDensityAt as migeumPedDensityAt } from '../../../src/corridor/migeumNpcData.js';
 import { migeumNpcEnabled, combineCrowds, createMigeumPeds } from '../../../src/corridor/migeumNpc.js';
 import { parseJzCars, JzCars } from '../../../src/entities/jzTraffic.js';
@@ -330,7 +331,19 @@ const st = index.stations[0];
   await new Promise((r) => setTimeout(r, 0));
   for (let k = 0; k < 50; k++) view.update(0.1, CAM.x, CAM.z, CAM.yaw);
   const day = countView();
-  assert.ok(day.peds >= 15 && day.peds <= 25, `낮 보행 ${day.peds}`);
+  const sideN = { 1: 0, '-1': 0 };
+  for (const a of view.peds.actors) {
+    if (!a.spot) continue;
+    if (Math.hypot(a.spot.x - CAM.x, a.spot.z - CAM.z) > 48) continue;
+    const s = daeroSide(npc.drive, a.spot.x, a.spot.z);
+    if (s) sideN[s]++;
+  }
+  // 먼 인도 30%는 46px 게이트 밖이라 화면에 또렷한 수는 한 명 적다.
+  assert.ok(day.peds >= 14 && day.peds <= 25, `낮 보행 ${day.peds}`);
+  const sideTot = sideN[1] + sideN[-1];
+  if (sideTot >= 4) {
+    assert.ok(sideN[1] / sideTot >= 0.3 && sideN[-1] / sideTot >= 0.3, `강남대로 양쪽 ${sideN[1]}/${sideN[-1]}`);
+  }
   assert.ok(day.cars >= 8 && day.cars <= 12, `낮 차량 ${day.cars}`);
   hour = 21;
   view.traffic.sim.retarget(false);

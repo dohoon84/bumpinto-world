@@ -46,6 +46,87 @@ export function crossingPath(crossings, at, rnd) {
 const KEEP_R = 52;
 const SPAWN_R = 48;
 
+function daeroFrames(drive) {
+  const segs = [];
+  for (const w of drive?.ways || []) {
+    if (w.name !== '강남대로' || (w.w || 0) < 20) continue;
+    for (let i = 1; i < w.n.length; i++) {
+      const a = drive.nodes[w.n[i - 1]], b = drive.nodes[w.n[i]];
+      if (!a || !b) continue;
+      const dx = b[0] - a[0], dz = b[1] - a[1], L = Math.hypot(dx, dz);
+      if (L < 0.4) continue;
+      segs.push({ a, b, w: w.w, nx: -dz / L, nz: dx / L });
+    }
+  }
+  return segs;
+}
+
+function footOf(s, x, z) {
+  const dx = s.b[0] - s.a[0], dz = s.b[1] - s.a[1], L2 = dx * dx + dz * dz || 1;
+  const t = Math.max(0, Math.min(1, ((x - s.a[0]) * dx + (z - s.a[1]) * dz) / L2));
+  const px = s.a[0] + dx * t, pz = s.a[1] + dz * t;
+  return { px, pz, d: Math.hypot(px - x, pz - z) };
+}
+
+/** 강남대로 인도. 동쪽 바깥 +1, 서쪽 바깥 -1. 겹친 넓은 차선은 한 폭으로 본다. */
+export function daeroSide(drive, x, z) {
+  const segs = daeroFrames(drive);
+  let best = null;
+  for (const s of segs) {
+    const f = footOf(s, x, z);
+    if (!best || f.d < best.d) best = { ...s, ...f };
+  }
+  if (!best || best.d > 70) return 0;
+  let hi = best.w / 2, lo = -best.w / 2;
+  for (const s of segs) {
+    const f = footOf(s, best.px, best.pz);
+    if (f.d > 48) continue;
+    const signed = (f.px - best.px) * best.nx + (f.pz - best.pz) * best.nz;
+    hi = Math.max(hi, signed + s.w / 2);
+    lo = Math.min(lo, signed - s.w / 2);
+  }
+  let nx = best.nx, nz = best.nz;
+  if (nx < 0) { nx = -nx; nz = -nz; const t = hi; hi = -lo; lo = -t; }
+  const signed = (x - best.px) * nx + (z - best.pz) * nz;
+  if (signed >= hi - 1.5 && signed <= hi + 8) return 1;
+  if (signed <= lo + 1.5 && signed >= lo - 8) return -1;
+  return 0;
+}
+
+/** 시점 거리로 모은 인도 점. 강남대로 양쪽이 범위 안이면 적은 쪽이 30% 밑으로 내려가지 않게, 보는 방향 쪽으로 채운다. */
+export function alternateDaeroPick(drive, aim) {
+  return (list, fx, fz, near) => {
+    const close = [];
+    for (const c of list) if (near(c)) close.push(c);
+    if (!close.length) return null;
+    const pos = [], neg = [];
+    for (const c of close) {
+      const s = daeroSide(drive, c.x, c.z);
+      if (s > 0) pos.push(c);
+      else if (s < 0) neg.push(c);
+    }
+    const load = (arr) => arr.reduce((n, c) => n + (c.load || 0), 0);
+    let pool = close, along = false;
+    if (pos.length && neg.length) {
+      const lp = load(pos), ln = load(neg), tot = lp + ln;
+      if (tot >= 2 && lp / tot < 0.3) { pool = pos; along = true; }
+      else if (tot >= 2 && ln / tot < 0.3) { pool = neg; along = true; }
+    }
+    const yaw = aim?.yaw || 0;
+    const vx = -Math.sin(yaw), vz = -Math.cos(yaw);
+    let best = null, bl = Infinity, bd = Infinity, ba = -Infinity;
+    for (const c of pool) {
+      const d = Math.hypot(c.x - fx, c.z - fz);
+      const l = c.load || 0;
+      const a = (c.x - fx) * vx + (c.z - fz) * vz;
+      if (along) {
+        if (l < bl || (l === bl && a > ba)) { best = c; bl = l; ba = a; }
+      } else if (l < bl || (l === bl && d < bd)) { best = c; bl = l; bd = d; }
+    }
+    return best;
+  };
+}
+
 export function strollOnSidewalk(drive, at, rnd, crossings = []) {
   const tan = sidewalkTangent(drive, at.x, at.z);
   if (!tan) return null;
@@ -67,6 +148,7 @@ export function createGangnamPeds({
   getHour, overlay = null, mobile = false, crossings = [], pedLight = () => 'red', seed = 7701,
 } = {}) {
   const drive = npc?.drive;
+  const aim = { yaw: 0 };
   const peds = createMigeumPeds({
     mg: { stations: [{ exits: npc.exits || [] }], meta: { box: npc.meta.box } },
     loader, terrain, isFree, freeSpot, tileReady, getHour, seed,
@@ -77,6 +159,7 @@ export function createGangnamPeds({
     placeR: SPAWN_R + 8,
     placeBurst: mobile ? 8 : 28,
     preferNear: true,
+    pickWalk: alternateDaeroPick(drive, aim),
     spotOk: (s, fx, fz) => {
       const d = Math.hypot(s.x - fx, s.z - fz);
       return d >= 4 && d <= SPAWN_R && !onDriveRoad(drive, s.x, s.z, 0.15);
@@ -99,7 +182,7 @@ export function createGangnamPeds({
     },
   });
   for (const a of peds.actors) a.tourist = a.i % 7 === 1;
-  peds.setYaw = () => {};
+  peds.setYaw = (y) => { aim.yaw = y; };
   const bubbles = new Map();
   let sayAcc = 0;
   const say = (a, text, ms = 4200) => {
