@@ -34,11 +34,15 @@ export function openEntryFlow(o) {
   showStart();
 }
 
-/** '계속하기'·'이어하기': 그 역 입장 카드로. 이 월드에서 그만둔 자리(7일 이내, 그 뒤에 다른 역을 고르지 않음)가 있으면 입장 때 그 자리로 */
+/** '계속하기'·'이어하기': 그 역 입장 카드로. 이 월드에서 그만둔 자리(7일 이내, 그 뒤에 다른 역을 고르지 않음)가 있으면 입장 때 그 자리로.
+ *  continue: true 가 있을 때만 저장 자리를 쓴다. 역 선택 화면에서 직접 고른 입장은 이 함수를 타지 않는다 (#42). */
 function enterResume(o, d, ses) {
   const last = readLastStation();
   const place = d.region === o.region.id ? readResume(whoOf(ses), o.region.id, { since: last?.t || 0 }) : null;
-  o.enter(d.region, d.at || place ? { ...(d.at ? { at: d.at } : {}), ...(place ? { place } : {}) } : undefined);
+  const opts = { continue: true };
+  if (d.at) opts.at = d.at;
+  if (place) opts.place = place;
+  o.enter(d.region, opts);
 }
 
 /** handleGateEnter 가 부른다: 마지막 역 저장 + 입장 카드/로딩의 역 이름 */

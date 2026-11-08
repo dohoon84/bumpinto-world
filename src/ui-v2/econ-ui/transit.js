@@ -5,6 +5,7 @@ import { econ } from '../econ/index.js';
 import { el } from '../kit.js';
 import { n, sgn, T, tr, esc, EI, mockTag, freeBadge, bumPill, karmaPill, stamp, tag, head, closeBtn, priceHtml, bar } from './kit.js';
 import { show, close, toastLayer } from './layer.js';
+import { beginUiFare, fareCardOn, farePopParts } from './farePop.js';
 
 /** 결제 카드에 이미 '할 일 달성' 줄로 보여 준 보상 (중복 05a 토스트 방지) */
 export const shownInPay = new Map();
@@ -45,24 +46,37 @@ export async function openGate({ where = tr('정자역 개찰구', 'Jeongja Stn.
   show(p, { key: '09a' });
 }
 
-/** 결제 → 08b/09b 또는 08c. 게임 훅(bw:transit)도 여기로 온다. */
+/** 이 방문에서 이미 그려 준 지하철 rideId (카드·팝 공통, 한 번만). */
+const shownSubwayRides = new Set();
+
+/** 결제 → 08b/09b(또는 가운데 팝) 또는 08c. 게임 훅(bw:transit)도 여기로 온다.
+ *  payFare 가 'payment' 를 낸 뒤 afterWrite 를 기다리므로, 그 사이에는 이벤트 쪽이 화면을 그리지 않게 표시해 둔다. */
 export async function payAndShow({ mode, code, rideId, where = '', hold = false }) {
-  const before = (await econ.getBalance()).total;
-  const r = await econ.payFare({ mode, code, rideId, meta: { where } });
-  if (!r.ok) {
-    if (r.error.code === 'insufficient_balance') return openBlock({ mode, code, err: r.error });
-    return null;
-  }
-  showPay(r.data, { where, before, hold });
-  return r.data;
+  const end = beginUiFare(mode);
+  try {
+    const before = (await econ.getBalance()).total;
+    const r = await econ.payFare({ mode, code, rideId, meta: { where } });
+    if (!r.ok) {
+      if (r.error.code === 'insufficient_balance') return openBlock({ mode, code, err: r.error });
+      return null;
+    }
+    showPay(r.data, { where, before, hold, rideId });
+    return r.data;
+  } finally { end(); }
 }
 
 // ---------- 08b 버스 태그 완료 · 09b 개찰구 통과 (+ 할 일 달성 줄 + 합계)
-export function showPay(pay, { where = '', before = null, hold = false } = {}) {
+//   지하철은 기본이 가운데 차감 팝(1s). ?farecard=1 이면 아래 카드.
+export function showPay(pay, { where = '', before = null, hold = false, rideId = '' } = {}) {
   pay = { ...pay, reward: pay.reward || [] };
   if (pay.receiptId) shownReceipts.add(pay.receiptId);
   for (const e of pay.reward || []) shownInPay.set(e.questId, Date.now());
   const sub = pay.mode === 'subway';
+  if (sub && rideId) {
+    if (shownSubwayRides.has(rideId)) return null;
+    shownSubwayRides.add(rideId);
+  }
+  if (sub && !fareCardOn()) return showFarePop(pay);
   const col = sub ? '#f5a200' : '#4cc9f0';
   const title = sub ? tr(`${where || '개찰구'} 통과`, `Passed ${where || 'the gates'}`) : tr(`${T({ ko: '시내버스', en: 'City bus' })} · 카드 태그 완료`, 'City bus · card tapped');
   const amount = pay.free ? `<b class="ve-amt-big free">0 bum</b><s class="ve-s">${n(pay.listAmount)}</s>${freeBadge()}` : `<b class="ve-amt-big">${sgn(-pay.amount)}</b>`;
@@ -76,6 +90,28 @@ export function showPay(pay, { where = '', before = null, hold = false } = {}) {
   const L = toastLayer(); L.querySelectorAll('.ve-paystack').forEach((x) => x.remove());
   L.appendChild(node);
   if (!hold) setTimeout(() => node.remove(), 4200 + pay.reward.length * 800);
+  return node;
+}
+
+/** 화면 가운데 차감 팝. 약 1초, 클릭을 막지 않음. 무료(베타)는 '정가 → 무료(베타)'. */
+const FARE_POP_MS = 1000;
+function showFarePop(pay) {
+  const parts = farePopParts(pay, n);
+  const amt = parts.free
+    ? `<s>${esc(parts.listText)}</s><span class="ve-farepop-arr" aria-hidden="true">→</span>${freeBadge('ve-farepop-badge')}`
+    : `<b class="ve-farepop-minus">${esc(parts.paidText)}</b>`;
+  const rw = parts.rewards.length
+    ? `<small class="ve-farepop-rw">${parts.rewards.map((t) => `<span>${esc(t)}</span>`).join('')}</small>`
+    : '';
+  const node = el('div', 've-farepop', `<span class="ve-farepop-amt">${amt}</span>${rw}`);
+  node.setAttribute('role', 'status');
+  node.setAttribute('aria-label', parts.free
+    ? `${parts.listText} → ${parts.freeLabel}${parts.rewards.length ? ' ' + parts.rewards.join(' ') : ''}`
+    : `${parts.paidText}${parts.rewards.length ? ' ' + parts.rewards.join(' ') : ''}`);
+  const L = toastLayer();
+  L.querySelectorAll('.ve-farepop').forEach((x) => x.remove());
+  L.appendChild(node);
+  setTimeout(() => { if (node.isConnected) node.remove(); }, FARE_POP_MS + 80);
   return node;
 }
 

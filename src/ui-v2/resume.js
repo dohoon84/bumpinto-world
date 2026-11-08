@@ -53,9 +53,13 @@ function onFoot(j) {
 }
 
 // [econ-mobile] 모바일 시작화면(src/mobile/landing.js)은 PC 처럼 gateOpts 로 넘길 수 없어서, 입장 직전 한 번 넘겨준다 (game.js completeWorldJoin 이 꺼냄)
+//   markContinue = '계속하기'·'이어서 입장'. 역을 직접 고른 입장(go)은 부르지 않는다 → 저장 자리를 쓰지 않음 (#42).
 let handoff = null;
+let continueEntry = false;
 export const setResumePlace = (p) => { handoff = p || null; };
 export const takeResumePlace = () => { const p = handoff; handoff = null; return p; };
+export const markContinue = () => { continueEntry = true; };
+export const takeContinue = () => { const c = continueEntry; continueEntry = false; return c; };
 
 let started = false;
 /** initUiV2 가 한 번 부른다. getWho = () => who (econ 세션을 따라감) */

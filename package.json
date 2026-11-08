@@ -36,7 +36,7 @@
     "corridor:pangyo-npc": "node scripts/corridor/build-pangyo-npc.mjs",
     "corridor:pangyoexpress": "node scripts/corridor/build-pangyo-express.mjs",
     "corridor:pangyowater": "node scripts/corridor/build-pangyo-water.mjs",
-    "corridor:test": "node scripts/corridor/test/test-tancheon.mjs && node scripts/corridor/test/test-bus-proxy.mjs && node scripts/corridor/test/test-bus-realtime.mjs && node scripts/corridor/test/test-fare.mjs && node scripts/corridor/test/test-ridelog.mjs && node scripts/corridor/test/test-ride-extras.mjs && node scripts/corridor/test/test-bus-spacing.mjs 600 && node scripts/corridor/test/test-bus-network.mjs && node scripts/corridor/test/test-bus-sfx.mjs && node scripts/corridor/test/test-vehicle-height.mjs && node scripts/corridor/test/test-life.mjs && node scripts/corridor/test/test-superbike.mjs && node scripts/corridor/test/test-streams.mjs && node scripts/corridor/test/test-bridge-lights.mjs && node scripts/corridor/test/test-playgrounds.mjs && node scripts/corridor/test/test-streetlights.mjs && node scripts/corridor/test/test-pangyo.mjs && node scripts/corridor/test/test-pangyo-link.mjs && node scripts/corridor/test/test-pangyo-npc.mjs && node scripts/corridor/test/test-pangyo-deck-lights.mjs && node scripts/corridor/test/test-pangyo-express.mjs && node scripts/corridor/test/test-pangyo-water.mjs && node scripts/corridor/test/test-pangyo-streetlights.mjs && node scripts/corridor/test/test-migeum.mjs && node scripts/corridor/test/test-migeum-streetlights.mjs && node scripts/corridor/test/test-migeum-water.mjs && node scripts/corridor/test/test-migeum-bus.mjs && node scripts/corridor/test/test-migeum-all.mjs && node scripts/corridor/test/test-migeum-globe.mjs",
+    "corridor:test": "node scripts/corridor/test/test-tancheon.mjs && node scripts/corridor/test/test-bus-proxy.mjs && node scripts/corridor/test/test-bus-realtime.mjs && node scripts/corridor/test/test-fare.mjs && node scripts/corridor/test/test-ridelog.mjs && node scripts/corridor/test/test-ride-extras.mjs && node scripts/corridor/test/test-bus-spacing.mjs 600 && node scripts/corridor/test/test-bus-network.mjs && node scripts/corridor/test/test-bus-sfx.mjs && node scripts/corridor/test/test-vehicle-height.mjs && node scripts/corridor/test/test-life.mjs && node scripts/corridor/test/test-superbike.mjs && node scripts/corridor/test/test-streams.mjs && node scripts/corridor/test/test-bridge-lights.mjs && node scripts/corridor/test/test-playgrounds.mjs && node scripts/corridor/test/test-streetlights.mjs && node scripts/corridor/test/test-pangyo.mjs && node scripts/corridor/test/test-pangyo-link.mjs && node scripts/corridor/test/test-pangyo-npc.mjs && node scripts/corridor/test/test-pangyo-deck-lights.mjs && node scripts/corridor/test/test-pangyo-express.mjs && node scripts/corridor/test/test-pangyo-water.mjs && node scripts/corridor/test/test-pangyo-streetlights.mjs && node scripts/corridor/test/test-migeum.mjs && node scripts/corridor/test/test-migeum-streetlights.mjs && node scripts/corridor/test/test-migeum-water.mjs && node scripts/corridor/test/test-migeum-bus.mjs && node scripts/corridor/test/test-migeum-all.mjs && node scripts/corridor/test/test-migeum-globe.mjs && node scripts/corridor/test/test-yatap-school-zone.mjs && node scripts/corridor/test/test-cityhall.mjs",
     "corridor:migeumbus": "node scripts/corridor/build-migeum-bus.mjs",
     "shots": "node scripts/shots.mjs",
     "zip": "npm run build && python3 -c \"import shutil; shutil.make_archive('jeongja3d-dist', 'zip', 'dist')\"",
@@ -58,6 +58,7 @@
     "ride:e2e:8110": "node scripts/corridor/test/e2e-ride-8110.mjs",
     "ride:e2e:migeum": "node scripts/corridor/test/e2e-ride-migeum.mjs",
     "notice-popup:test": "node scripts/test-notice-popup.mjs",
+    "notice-images:test": "node scripts/test-notice-images.mjs",
     "audio:test": "node scripts/test-audio-unlock.mjs",
     "subway:test": "node scripts/test-audio-unlock.mjs && node scripts/test-subway.mjs && node scripts/test-subway-arrivals.mjs && node scripts/test-subway-ride.mjs && node scripts/test-subway-voice.mjs && MIGEUMSUB=0 node scripts/test-subway-ride.mjs && node scripts/test-subway-migeum.mjs && node scripts/test-subway-routemap.mjs",
     "subway:mp": "node scripts/mp-subway.mjs",
@@ -76,9 +77,10 @@
     "buslive:e2e": "node scripts/e2e-bus-realtime-replay.mjs",
     "buslive:record": "node scripts/record-bus-replay.mjs",
     "shots-jz-traffic": "node scripts/shots-jz-traffic.mjs",
-    "econ:test": "node scripts/test-econ-mock.mjs",
+    "econ:test": "node scripts/test-econ-mock.mjs && node scripts/test-fare-pop.mjs",
     "arrive:test": "node scripts/test-station-arrive.mjs",
-    "arrive:e2e": "node scripts/e2e-station-arrive.mjs"
+    "arrive:e2e": "node scripts/e2e-station-arrive.mjs",
+    "bp24:entry": "node scripts/e2e-bump24-jeongja-entry.mjs"
   },
   "dependencies": {
     "three": "^0.186.1"

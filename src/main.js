@@ -3,7 +3,7 @@ import { initAnalytics, trackEvent } from './analytics.js';
 import { isMobileMode } from './mobile/flag.js';
 
 initAnalytics();
-// [notice-launch] 첫 화면 모바일 오픈 안내(자체 완결 모듈, 실패해도 무시)
+// [bp24-poster] 이벤트 포스터는 첫 화면이 아니라 게임 입장 뒤에 띄운다 (game.js completeWorldJoin).
 import('./notice/launchPopup.js').then((m) => m.showLaunchNotice()).catch(() => {});
 
 if (isMobileMode()) {

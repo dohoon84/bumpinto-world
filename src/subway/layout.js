@@ -94,6 +94,8 @@ export function passageAt(x, z, passages) {
   }
   return null;
 }
+// 개찰구 감지 구역에 처음 들어올 때. z<0 대합실 → 승차, z>=0 유료 구역 → 하차(요금은 승차에 포함).
+export function gateTapSide(z, gateZ = GATE.z) { return z < gateZ ? 'in' : 'out'; }
 // 개찰구 통로 번호 (|z| < zr 이면)
 export function laneAt(x, z, zr = 1.4) {
   if (Math.abs(z - GATE.z) > zr) return -1;

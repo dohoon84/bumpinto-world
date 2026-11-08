@@ -29,6 +29,8 @@
   ],
   // [accounts] 기본값은 전부 "꺼짐" — 배포해도 정자는 그대로다. SESSION_SECRET 은 secret 으로만(wrangler secret put).
   //   대시보드에서 넣은 다른 값(ADMIN_PHONES, ALLOWED_ORIGINS 등)이 배포 때 지워지지 않게 keep_vars 를 켠다.
+  //   MOVE_CREDIT_V2 는 vars 에 넣지 않는다(운영 값을 덮지 않음). 비어 있으면 인정 초 누적(v2).
+  //   롤백: 대시보드 변수 MOVE_CREDIT_V2 = "0" → 예전 60초 순변위 창. 코드·D1 마이그레이션 없음.
   "keep_vars": true,
   "vars": {
     "GOOGLE_CLIENT_ID": "1011905802733-qpjjglquapnuacrq5v7tqordlotpdso3.apps.googleusercontent.com",
@@ -38,8 +40,10 @@
     "ECON_FEATURES": "",
     "ECON_PAID": "0",
     "ECONOMY_OPEN_AT": "",
-    "STATS_ENABLED": "1"
+    "STATS_ENABLED": "1",
+    "BP24_RANK_ENABLED": "1"
   },
+  "triggers": { "crons": ["5 15 * * *"] },
   "migrations": [
     { "tag": "v1", "new_sqlite_classes": ["PhoneBook"] },
     { "tag": "v2", "new_sqlite_classes": ["Room"] }

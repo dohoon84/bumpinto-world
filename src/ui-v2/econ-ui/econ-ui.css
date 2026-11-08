@@ -191,6 +191,19 @@ body.ui-v2:not(.mobile) .ve-price { display: inline-flex; align-items: baseline;
 body.ui-v2:not(.mobile) .ve-s, body.ui-v2:not(.mobile) .ve-panel s, body.ui-v2:not(.mobile) .ve-pay s { color: var(--v2-sub); font-weight: 700; text-decoration-thickness: 2px; }
 body.ui-v2:not(.mobile) .ve-paystack { position: fixed; right: 24px; top: 120px; display: flex; flex-direction: column; gap: 8px; width: 480px; pointer-events: auto; animation: ve-in2 .25s ease-out; }
 @keyframes ve-in2 { from { opacity: 0; transform: translateY(-12px); } }
+/* 개찰구 차감 팝: 화면 가운데, 1초 동안 떠오르며 사라짐. 클릭을 받지 않음. ?farecard=1 이면 안 씀. */
+body.ui-v2:not(.mobile) .ve-farepop { position: fixed; left: 50%; top: 42%; z-index: 2; display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 10px 14px; max-width: min(440px, calc(100vw - 32px)); box-sizing: border-box; margin: 0; padding: 14px 22px; border-radius: 16px; pointer-events: none; color: var(--v2-txt); background: var(--v2-panel-fill); border: 1.5px solid rgba(255, 225, 105, .55); box-shadow: var(--v2-panel-fx); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); transform: translate(-50%, -50%); animation: ve-farepop 1s ease-out forwards; }
+body.ui-v2:not(.mobile) .ve-farepop-amt { display: inline-flex; align-items: center; gap: 8px; font-size: 28px; font-weight: 900; line-height: 1; color: var(--v2-gold); font-variant-numeric: tabular-nums; }
+body.ui-v2:not(.mobile) .ve-farepop s { color: var(--v2-sub); font-weight: 800; text-decoration: line-through; text-decoration-thickness: 2px; }
+body.ui-v2:not(.mobile) .ve-farepop-arr { color: var(--v2-gold); font-weight: 900; }
+body.ui-v2:not(.mobile) .ve-farepop-minus { color: #ff8a80; font-weight: 900; }
+body.ui-v2:not(.mobile) .ve-farepop .ve-free { height: 26px; padding: 0 10px; font-size: 14px; }
+body.ui-v2:not(.mobile) .ve-farepop-rw { display: inline-flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 800; color: var(--v2-gold); }
+@keyframes ve-farepop { 0% { opacity: 1; transform: translate(-50%, -50%) translateY(14px); } 40% { opacity: 1; transform: translate(-50%, -50%) translateY(0); } 100% { opacity: 0; transform: translate(-50%, -50%) translateY(-52px); } }
+@media (prefers-reduced-motion: reduce) {
+  body.ui-v2:not(.mobile) .ve-farepop { animation-name: ve-farepop-fade; }
+}
+@keyframes ve-farepop-fade { 0% { opacity: 1; } 65% { opacity: 1; } 100% { opacity: 0; } }
 body.ui-v2:not(.mobile) .ve-pay { display: flex; align-items: center; gap: 16px; padding: 16px 20px; border-color: color-mix(in srgb, var(--c) 60%, transparent); }
 body.ui-v2:not(.mobile) .ve-pay .ve-col { flex: 1; }
 body.ui-v2:not(.mobile) .ve-pay .v2-tag { align-self: flex-start; }

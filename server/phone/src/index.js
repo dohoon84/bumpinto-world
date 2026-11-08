@@ -1,12 +1,14 @@
 import { PhoneBook } from "./book.js";
 import { Room } from "./room.js";
 import { handlePhotos } from "./photos.js";
+import { handleNoticeImages } from "./noticeImageFiles.js"; // [notice-images]
 import { subwayArrival } from "./subway.js";
 import { handleAuth } from "./account/routes.js"; // [accounts] 구글 로그인·세션·계정 (ACCOUNTS_ENABLED 일 때만)
 import { handleEcon } from "./account/econRoutes.js"; // [economy] /econ/* (ECONOMY_ENABLED 일 때만, 단계는 ECON_FEATURES)
 import { featureOn } from "./account/flags.js";
 import { accountForDevice } from "./account/store.js";
 import { clawbackBoardPost, onBoardUpdate, rewardBoardPost } from "./account/economy.js";
+import { handleBump24, settleBump24 } from "./bump24/routes.js"; // [bump24-rank]
 
 export { PhoneBook, Room };
 
@@ -78,6 +80,9 @@ async function newsTip(request, env, cors) {
 }
 
 export default {
+  async scheduled(_event, env, ctx) {
+    ctx?.waitUntil?.(settleBump24(env)); // [bump24-rank] 매일 00:05 KST. 같은 정산은 한 번만 지급
+  },
   async fetch(request, env, ctx) {
     const cors = {
       "Access-Control-Allow-Origin": allowOrigin(request, env),
@@ -91,6 +96,7 @@ export default {
     // [accounts] /auth/* 는 쿠키를 쓰므로 CORS 를 따로(허용 출처만 + credentials) 처리한다 — OPTIONS 포함
     if (url.pathname.startsWith("/auth/")) return handleAuth(request, env, url, { waitUntil: ctx?.waitUntil?.bind(ctx) });
     if (url.pathname.startsWith("/econ/")) return handleEcon(request, env, url);
+    if (url.pathname.startsWith("/bump24/")) return handleBump24(request, env, url, cors); // [bump24-rank]
     if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: cors });
     const queryRegion = (url.searchParams.get("region") || "jeongja").trim().toLowerCase() || "jeongja";
     const GLOBAL_BOOK_KEY = "jeongja"; // 단일 글로벌 번호부/패스포트 DB (모든 동네가 캐릭터·번호·문자 공유)
@@ -148,6 +154,7 @@ export default {
       return json({ ok: true, region: queryRegion, online, residents, ...extra }, 200, cors);
     }
     if (url.pathname === "/photos" || url.pathname.startsWith("/photos/")) return handlePhotos(request, env, cors, url, ctx); // [photo-cloud] 사진 보관함 (R2)
+    if (url.pathname === "/notice-images" || url.pathname.startsWith("/notice-images/")) return handleNoticeImages(request, env, cors, url); // [notice-images] 공지 사진 (같은 R2, notices/ 접두어)
     if (url.pathname === "/subway/arrival") return subwayArrival(request, env, cors, url, ctx); // [subway] 실시간 도착 (secret SEOUL_SUBWAY_KEY, 25초 캐시)
     if (url.pathname === "/news-tip") return newsTip(request, env, cors); // [camera] 사진 뉴스 제보 (본문이 커서 따로 받음)
     const method = ROUTES[url.pathname];

@@ -81,8 +81,14 @@ export function mountLanding() {
     // [econ-mobile] 로그인 계정 '계속하기'(PC 9d48af4 와 같음): 지역·역 고르기를 거치지 않고 마지막 역의 입장 카드로 바로, 마지막 역이 없으면 정자역.
     //   입장 카드의 계정 모드(#30: #lobby-card.is-account · body.bw-signed-in → 계정 캐릭터로 바로 입장, 캐릭터·PIN 고르기 없음)는 lobby 쪽이 판단한다.
     const acctDest = () => lastSt || { region: current.id, at: null, label: v2data?.stationLabel?.(current.id, null) || t('정자역', 'Jeongja Stn.') };
-    // PC enterResume 과 같음: 이 월드에서 그만둔 자리(7일 이내, 그 뒤에 다른 역을 고르지 않음)가 있으면 입장 때 그 자리로
-    const handResume = () => { if (rmod) rmod.setResumePlace(rmod.readResume(rmod.whoOf(ses), new URLSearchParams(location.search).get('region') || 'jeongja', { since: lastSt?.t || 0 })); };
+    // PC enterResume 과 같음: '계속하기'·'이어서 입장'만 그만둔 자리(7일 이내, 그 뒤에 다른 역을 고르지 않음)를 넘긴다.
+    //   '입장할 곳 고르기'로 역을 직접 고르면(go) 부르지 않는다 → 저장 자리·서버 위치보다 그 역 출구 (#42).
+    const handResume = () => {
+      if (!rmod) return;
+      rmod.markContinue();
+      const p = rmod.readResume(rmod.whoOf(ses), new URLSearchParams(location.search).get('region') || 'jeongja', { since: lastSt?.t || 0 });
+      if (p) rmod.setResumePlace(p);
+    };
     const resumeAccount = () => {
       const last = acctDest();
       st.region = last.region; st.station = last.at || 'jeongja';

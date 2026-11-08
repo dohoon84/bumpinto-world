@@ -47,6 +47,11 @@ export function panelWindow(data, radius = PANEL_RADIUS) {
 }
 
 function stopLabel(s, en) { return en && s.nameEn ? s.nameEn : s.name; }
+// 강남역은 노선 이름만 있고 게임 역이 아니다. 타거나 내리지 않고, 노선도에만 개통 예정을 붙인다.
+export function openingSoonLabel(name, en = false) {
+  if (name !== '강남') return '';
+  return en ? 'Gangnam opening soon' : '강남역 개통 예정';
+}
 function termLabel(name, en) {
   if (!name) return '';
   const s = BY_NAME.get(name);
@@ -117,6 +122,13 @@ export function drawRouteMapPanel(c, w, h, data, en = false) {
     // 이름은 위·아래 번갈아 (겹침 줄이기). 현재 역은 항상 위 + 조금 더 띄움
     const up = me || i % 2 === 0;
     c.fillText(label, x, up ? y - (me ? h * 0.16 : h * 0.12) : y + h * 0.12);
+    const soon = openingSoonLabel(s.name, en);
+    if (soon) {
+      c.fillStyle = '#ffe169';
+      fitText(c, soon, Math.max(maxW, 70), Math.round(h * 0.038), 800);
+      c.textAlign = 'center';
+      c.fillText(soon, x, up ? y - h * 0.24 : y + h * 0.2);
+    }
   });
 
   c.fillStyle = '#9eb4c6'; c.font = `600 ${Math.round(h * 0.038)}px ${FONT}`; c.textAlign = 'left'; c.textBaseline = 'alphabetic';
@@ -203,7 +215,8 @@ export function mountRouteMapOverlay() {
     }).join('');
     const items = data.stops.map((s, i) => {
       const cls = [i === 0 ? 'first' : '', i === data.stops.length - 1 ? 'last' : '', s.me ? 'me' : '', s.game ? '' : 'out'].filter(Boolean).join(' ');
-      const tag = s.me ? `<em>${en ? 'You are here' : '여기'}</em>` : '';
+      const soon = openingSoonLabel(s.name, en);
+      const tag = s.me ? `<em>${en ? 'You are here' : '여기'}</em>` : (soon ? `<em>${esc(soon)}</em>` : '');
       const enLine = s.nameEn ? `<span class="en">${esc(s.nameEn)}</span>` : '';
       return `<li class="${cls}" style="--c:${data.color}" data-i="${s.i}"><span class="dot"></span><span><b>${esc(s.name)}</b>${tag}${enLine}</span></li>`;
     }).join('');
