@@ -9,7 +9,7 @@ import { SCREENS, BUILTIN } from '../../../src/gangnam/billboards/manifest.js';
 import { gangnamNightEnabled } from '../../../src/gangnam/night.js';
 import { gangnamAdsEnabled } from '../../../src/gangnam/billboards/manifest.js';
 import { islandIndex, sameIsland, nearestScoped, placeCaption, collectPlaces, setNearScope, stopCardAllowed } from '../../../src/corridor/nearScope.js';
-import { faceCorners, fitInside, logoPlacement, logoUvRect, LOGO_ASPECT, LOGO_PAD, LOGO_SRC } from '../../../src/gangnam/billboards/faces.js';
+import { faceCorners, fitInside, logoPlacement, logoUvRect, LOGO_ASPECT, LOGO_PAD, LOGO_PAD_COLOR, LOGO_SRC } from '../../../src/gangnam/billboards/faces.js';
 import placements from '../../../src/gangnam/billboards/placements.js';
 import { treeBlockedByPole, POLES, POLE_CLEAR_M } from '../../../src/gangnam/billboards/clearance.js';
 import { shortenBoom } from '../../../src/gangnam/camClear.js';
@@ -153,6 +153,37 @@ for (const s of placements.screens) {
   assert.ok(u1 - u0 <= cell.u1 - cell.u0 + 1e-9 && v1 - v0 <= 1, s.id);
 }
 ok('logo aspect + UV front/back');
+{
+  // 여백색 = 로고 PNG 네 모서리 바탕색 (사각 테두리가 보이지 않게)
+  const zlib = await import('node:zlib');
+  const buf = fs.readFileSync(path.join(process.cwd(), 'public', LOGO_SRC));
+  let o = 8, ihdr, idat = [];
+  while (o < buf.length) {
+    const len = buf.readUInt32BE(o), type = buf.toString('latin1', o + 4, o + 8), d = buf.subarray(o + 8, o + 8 + len);
+    if (type === 'IHDR') ihdr = { w: d.readUInt32BE(0), h: d.readUInt32BE(4), depth: d[8], ct: d[9], il: d[12] };
+    if (type === 'IDAT') idat.push(d);
+    o += 12 + len;
+  }
+  assert.equal(ihdr.depth, 8); assert.equal(ihdr.il, 0); assert.ok(ihdr.ct === 6 || ihdr.ct === 2);
+  const bpp = ihdr.ct === 6 ? 4 : 3, stride = ihdr.w * bpp, raw = zlib.inflateSync(Buffer.concat(idat));
+  let prev = Buffer.alloc(stride); const rows = [];
+  for (let y = 0; y < ihdr.h; y++) {
+    const f = raw[y * (stride + 1)], cur = Buffer.from(raw.subarray(y * (stride + 1) + 1, (y + 1) * (stride + 1)));
+    for (let i = 0; i < stride; i++) {
+      const a = i >= bpp ? cur[i - bpp] : 0, b = prev[i], c = i >= bpp ? prev[i - bpp] : 0;
+      const p = a + b - c, pa = Math.abs(p - a), pb = Math.abs(p - b), pc = Math.abs(p - c);
+      const pred = f === 0 ? 0 : f === 1 ? a : f === 2 ? b : f === 3 ? (a + b) >> 1 : (pa <= pb && pa <= pc ? a : pb <= pc ? b : c);
+      cur[i] = (cur[i] + pred) & 255;
+    }
+    rows.push(cur); prev = cur;
+  }
+  const want = [1, 3, 5].map((k) => parseInt(LOGO_PAD_COLOR.slice(k, k + 2), 16));
+  for (const [x, y] of [[2, 2], [ihdr.w - 3, 2], [2, ihdr.h - 3], [ihdr.w - 3, ihdr.h - 3], [2, ihdr.h >> 1], [ihdr.w >> 1, 2]]) {
+    const px = rows[y].subarray(x * bpp, x * bpp + 3);
+    for (let k = 0; k < 3; k++) assert.ok(Math.abs(px[k] - want[k]) <= 2, `로고 바탕 ${x},${y} ${[...px]} ≠ 여백 ${LOGO_PAD_COLOR}`);
+  }
+}
+ok('logo pad color matches PNG background');
 
 const showPeer = (px, pz, x, z) => sameIsland(x, z, px, pz, islands);
 assert.equal(showPeer(8, -6, 0, 4), true, '정자 같은 섬 — 판교러버 이름·화살표 유지');

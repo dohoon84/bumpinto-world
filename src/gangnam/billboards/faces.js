@@ -8,8 +8,8 @@ export const LOGO_PX = { w: 689, h: 768 };
 export const LOGO_ASPECT = LOGO_PX.w / LOGO_PX.h;
 /** 짧은 변의 이 비율만큼을 네 변의 최소 여백으로 둔다. 로고는 화면 가장자리에 닿지 않는다. */
 export const LOGO_PAD = 0.12;
-/** 로고 바깥 여백. B(#0172DD)와 구분되도록 아주 밝은색. */
-export const LOGO_PAD_COLOR = '#f4f8ff';
+/** 로고 바깥 여백. 로고 PNG 의 흰 바탕(#fefefe)과 똑같게 해서 로고 둘레에 사각 테두리가 보이지 않게 한다. */
+export const LOGO_PAD_COLOR = '#fefefe';
 
 /** 화면 사각형 안에 로고 비율을 유지한 채 들어가는 크기. 늘리지 않는다. */
 export function fitInside(boxW, boxH, aspect = LOGO_ASPECT) {
