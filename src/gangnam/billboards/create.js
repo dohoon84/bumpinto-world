@@ -109,10 +109,11 @@ export function createGangnamBillboards({ scene, baseUrl = '/', mobile = false, 
     const seq = (mobile ? [entry.src] : sourcesOf(entry)).map((src) => cellOf(src));
     const y = s.kind === 'pole' ? ground(s.x, s.z) + (s.poleH || 5.6) - s.h / 2 : ground(s.x, s.z) + s.y;
     const fit = fitInside(s.w, s.h, LOGO_ASPECT);
-    const front = pushFace(pos, uv, idx, s.x, y, s.z, s.yaw, faceCorners({ w: fit.w, h: fit.h, cell: seq[0], cols, back: false }));
-    const back = pushFace(pos, uv, idx, s.x, y, s.z, s.yaw, faceCorners({ w: fit.w, h: fit.h, cell: seq[0], cols, back: true }));
-    pushFace(fpos, null, fidx, s.x, y, s.z, s.yaw, faceCorners({ w: s.w, h: s.h, cell: 0, cols, back: false, z: 0.06 }));
-    pushFace(fpos, null, fidx, s.x, y, s.z, s.yaw, faceCorners({ w: s.w, h: s.h, cell: 0, cols, back: true, z: 0.06 }));
+    // 로고가 파란 판보다 관찰자 쪽에 있고, 둘 다 기둥(반지름 0.16) 앞에 있다.
+    const front = pushFace(pos, uv, idx, s.x, y, s.z, s.yaw, faceCorners({ w: fit.w, h: fit.h, cell: seq[0], cols, back: false, z: 0.28 }));
+    const back = pushFace(pos, uv, idx, s.x, y, s.z, s.yaw, faceCorners({ w: fit.w, h: fit.h, cell: seq[0], cols, back: true, z: 0.28 }));
+    pushFace(fpos, null, fidx, s.x, y, s.z, s.yaw, faceCorners({ w: s.w, h: s.h, cell: 0, cols, back: false, z: 0.2 }));
+    pushFace(fpos, null, fidx, s.x, y, s.z, s.yaw, faceCorners({ w: s.w, h: s.h, cell: 0, cols, back: true, z: 0.2 }));
     anim.push({ front, back, seq, cell: seq[0] });
   }
   const geo = new THREE.BufferGeometry();

@@ -163,6 +163,8 @@ ok('poles keep 4m clear of street trees');
 assert.equal(shortenBoom(20, () => false), 20);
 const pulled = shortenBoom(28, (d) => d > 9);
 assert.ok(pulled <= 9 && pulled >= 2.4, pulled);
+const againstWall = shortenBoom(28, (d) => d > 1.2);
+assert.ok(againstWall <= 1.2 && againstWall > 0.45, againstWall);
 assert.equal(gangnamAmbientScale(14, true), 1);
 assert.equal(gangnamAmbientScale(21, false), 1);
 assert.ok(gangnamAmbientScale(21, true) < 0.7);
