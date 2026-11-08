@@ -134,6 +134,15 @@ export function noticeHasImages(images) {
   return sanitizeNoticeImages(images, { allowData: true }).length > 0;
 }
 
+/** 파일 칸의 'No file chosen' 대신. 없으면 빈 문자열. */
+export function noticeFileStatus(count, busy, en) {
+  const n = Math.max(0, Math.floor(Number(count) || 0));
+  if (busy) return en ? 'Uploading…' : '올리는 중…';
+  if (n === 1) return en ? '1 image' : '사진 1장';
+  if (n > 1) return en ? `${n} images` : `사진 ${n}장`;
+  return '';
+}
+
 // [사진N] 은 1부터 센다. N 은 images[N-1] 이다.
 // 썸네일에서 빼면 그 번호의 토큰을 지우고, 더 큰 번호는 하나씩 당긴다.
 // 본문에 사람이 적은 주소는 사진으로 쓰지 않는다. 이스케이프한 뒤에 토큰만 바꿔 넣는다.

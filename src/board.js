@@ -9,6 +9,7 @@ import {
   closeNoticeLightbox,
   galleryHtml,
   insertNoticeToken,
+  noticeFileStatus,
   noticeHasImages,
   noticeImagesDemo,
   noticeImagesEnabled,
@@ -185,6 +186,7 @@ export function mountBoard({ sms, getMe, onOpen } = {}) {
   let errorMsg = '';
   let hasUnreadNew = false;
   let draftImages = []; // [notice-images]
+  let imageBusy = false;
   let formSticky = null;
 
   function captureForm() {
@@ -199,6 +201,7 @@ export function mountBoard({ sms, getMe, onOpen } = {}) {
 
   function resetFormDraft() {
     draftImages = [];
+    imageBusy = false;
     formSticky = null;
   }
 
@@ -228,14 +231,16 @@ export function mountBoard({ sms, getMe, onOpen } = {}) {
         <legend>${en ? 'Notice images' : '공지 이미지'}</legend>
         <p>${en ? 'Adding a photo puts [사진1] on its own line at the cursor. Move that line to place it in the post.' : '사진을 더하면 커서 자리에 [사진1] 이 한 줄로 들어갑니다. 그 줄을 옮기면 본문 위치도 바뀝니다.'}</p>
         ${thumbs}
-        <label class="ni-file">${en ? 'Add images' : '이미지 추가'}
-          <input name="noticeImages" type="file" accept="image/jpeg,image/png,image/webp" multiple ${draftImages.length >= NOTICE_IMAGE_MAX ? 'disabled' : ''} />
-        </label>
+        <div class="ni-file-row">
+          <input id="ni-notice-files" class="ni-file-input" name="noticeImages" type="file" accept="image/jpeg,image/png,image/webp" multiple tabindex="-1" aria-hidden="true" ${draftImages.length >= NOTICE_IMAGE_MAX || imageBusy ? 'disabled' : ''} />
+          <button type="button" class="ni-add" data-action="pick-notice-images" aria-controls="ni-notice-files" aria-describedby="ni-file-status" ${draftImages.length >= NOTICE_IMAGE_MAX || imageBusy ? 'disabled' : ''}>${en ? 'Add images' : '사진 추가'}</button>
+          <p id="ni-file-status" class="ni-status" aria-live="polite">${esc(noticeFileStatus(draftImages.length, imageBusy, en))}</p>
+        </div>
         <div class="ni-url">
           <label class="grow">${en ? 'Or paste an https address' : '또는 https 주소'}
             <input name="noticeUrl" type="url" inputmode="url" placeholder="https://" maxlength="2048" />
           </label>
-          <button type="button" class="board-btn" data-action="add-notice-url">${en ? 'Add' : '추가'}</button>
+          <button type="button" class="ni-add" data-action="add-notice-url">${en ? 'Add' : '추가'}</button>
         </div>
       </fieldset>`;
   }
@@ -729,6 +734,10 @@ export function mountBoard({ sms, getMe, onOpen } = {}) {
         render();
         return;
       }
+      if (act === 'pick-notice-images') {
+        modal.querySelector('input[name="noticeImages"]')?.click();
+        return;
+      }
       if (act === 'write') {
         editingPost = null;
         errorMsg = '';
@@ -973,6 +982,9 @@ export function mountBoard({ sms, getMe, onOpen } = {}) {
     let cursor = ta?.selectionStart ?? 0;
     captureForm();
     errorMsg = '';
+    if (!files.length) return;
+    imageBusy = true;
+    render();
     try {
       for (const file of files) {
         if (draftImages.length >= NOTICE_IMAGE_MAX) break;
@@ -992,6 +1004,7 @@ export function mountBoard({ sms, getMe, onOpen } = {}) {
     } catch (err) {
       errorMsg = imageErrorText(err);
     }
+    imageBusy = false;
     render();
     placeBodyCursor(formSticky?.cursor);
   });

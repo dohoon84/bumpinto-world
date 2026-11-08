@@ -146,7 +146,8 @@ async function shoot(name, { mobile }) {
   await put('/tmp/notice-a.png', '');
   await put('/tmp/notice-b.png', '둘째');
   await page.waitForFunction(() => document.querySelectorAll('#board-modal .ni-compose .ni-thumb').length >= 2);
-  await page.locator('#board-modal .ni-compose').scrollIntoViewIfNeeded();
+  await page.locator('#board-modal .ni-add').first().scrollIntoViewIfNeeded();
+  await page.screenshot({ path: `${OUT}/${mobile ? 'mobile' : 'pc'}-compose-button.png` });
   await page.screenshot({ path: `${OUT}/${mobile ? 'mobile' : 'pc'}-compose-inline.png` });
   await ctx.close();
   console.log('shot', name);

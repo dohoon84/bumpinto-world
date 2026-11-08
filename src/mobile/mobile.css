@@ -375,7 +375,7 @@ body.mobile #board-modal .board-detail-content .ni-inline img { max-height: 180p
 body.mobile #board-modal .ni-mark { flex: none; color: #b46900; }
 body.mobile #board-modal .ni-compose-grid { display: grid; grid-template-columns: 1fr 1fr; }
 body.mobile #board-modal .ni-url { flex-wrap: wrap; }
-body.mobile #board-modal .ni-url .board-btn { min-height: 44px; }
+body.mobile #board-modal .ni-add { min-height: 48px; padding: 0 16px; }
 body.mobile #ni-lightbox .ni-frame { width: min(100%, calc(100% - 96px)); }
 body.mobile #ni-lightbox .ni-x,
 body.mobile #ni-lightbox .ni-nav { width: 48px; height: 48px; }

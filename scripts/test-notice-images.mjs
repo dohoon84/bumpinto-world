@@ -5,6 +5,7 @@ import {
   ensurePostsImagesColumn,
   galleryHtml,
   insertNoticeToken,
+  noticeFileStatus,
   noticeHasImages,
   photoMarkHtml,
   removeNoticeImageToken,
@@ -147,6 +148,14 @@ assert.equal(off.rest.length, 0);
 assert.match(off.html, /위/);
 assert.match(off.html, /아래/);
 ok('opt-out strips tokens and shows no images');
+
+assert.equal(noticeFileStatus(0, false, false), '');
+assert.equal(noticeFileStatus(0, true, true), 'Uploading…');
+assert.equal(noticeFileStatus(0, true, false), '올리는 중…');
+assert.equal(noticeFileStatus(1, false, true), '1 image');
+assert.equal(noticeFileStatus(2, false, false), '사진 2장');
+assert.equal(noticeFileStatus(2, false, true), '2 images');
+ok('file status replaces No file chosen');
 
 function memSql(names, { failAlter = false } = {}) {
   const columns = names.map((name) => ({ name }));

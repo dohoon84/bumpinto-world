@@ -2344,15 +2344,28 @@ body.in-lobby #hud, body.in-lobby #buttons, body.in-lobby #top-right-bar, body.i
 #board-modal .ni-compose legend { padding: 0 8px; font-size: 13px; font-weight: 800; color: #ffe169; }
 #board-modal .ni-compose p { margin: 0 0 8px; font-size: 12px; line-height: 1.5; color: #9eb4c6; }
 #board-modal .ni-compose label { color: #ffe169; }
+#board-modal .ni-compose { position: relative; }
+#board-modal .ni-file-row { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+#board-modal .ni-file-input {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden;
+  clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
+}
+#board-modal .ni-add {
+  min-height: 48px; padding: 0 16px; border: 0; border-radius: 8px;
+  font: inherit; font-size: 14px; font-weight: 900; color: #3a2a00; cursor: pointer;
+  background: linear-gradient(180deg, #ffe169, #f5a200);
+  box-shadow: 0 2px 0 #a65f00, inset 0 1px 0 rgba(255, 255, 255, .55);
+}
+#board-modal .ni-add:disabled { opacity: .45; cursor: default; }
+#board-modal .ni-status { margin: 0; min-height: 16px; font-size: 12px; font-weight: 700; color: #ffe169; }
 #board-modal .ni-compose-grid { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
 #board-modal .ni-compose-item { position: relative; }
 #board-modal .ni-compose .ni-x {
   position: absolute; top: 8px; right: 8px; width: 32px; height: 32px; border: 0; border-radius: 8px;
   background: rgba(15, 25, 42, .8); color: #ffe169; font-size: 18px; font-weight: 800; cursor: pointer;
 }
-#board-modal .ni-url { display: flex; align-items: flex-end; gap: 8px; margin-top: 8px; }
+#board-modal .ni-url { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
 #board-modal .ni-url label.grow { flex: 1; }
-#board-modal .ni-url .board-btn { height: 40px; background: rgba(255, 225, 105, .16); color: #ffe169; }
 #ni-lightbox {
   position: fixed; inset: 0; z-index: 80; display: grid; place-items: center;
   padding: max(16px, env(safe-area-inset-top)) 16px max(16px, env(safe-area-inset-bottom));
