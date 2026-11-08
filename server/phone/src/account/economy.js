@@ -267,9 +267,9 @@ export async function listQuests(db, env, accountId, cadence, now = Date.now()) 
   const quests = list.map(questView);
   const tv = await travelToday(db, accountId, now);
   const info = cadence === "daily"
-    ? T(`매일 00:00 KST에 3개 배정 · 오늘 이동 ${tv.minutes}/60분 (정산 예정 ${fmt(tv.pendingBum)} bum · 하루 상한 ${fmt(tv.ratePerMin * MOVE.dailyMinutes)})`, `3 assigned daily at 00:00 KST · travel today ${tv.minutes}/60 min (pending ${fmt(tv.pendingBum)} bum · daily cap ${fmt(tv.ratePerMin * MOVE.dailyMinutes)})`)
+    ? T(`매일 00:00 KST에 3개 배정 · 오늘 이동 ${tv.minutes}분 인정 · 하루 상한 ${MOVE.dailyMinutes}분 · 정산 예정 ${fmt(tv.pendingBum)} bum`, `3 assigned daily at 00:00 KST · ${tv.minutes} counted min today · daily cap ${MOVE.dailyMinutes} min · pending ${fmt(tv.pendingBum)} bum`)
     : cadence === "weekly"
-      ? T(`월요일 00:00 KST 리셋 · 이번 주 이동 ${tv.weekMinutes}/300분 (주 상한 ${fmt(tv.ratePerMin * MOVE.weeklyMinutes)} bum)`, `Resets Monday 00:00 KST · travel this week ${tv.weekMinutes}/300 min (weekly cap ${fmt(tv.ratePerMin * MOVE.weeklyMinutes)} bum)`)
+      ? T(`월요일 00:00 KST 리셋 · 이번 주 ${tv.weekMinutes}분 인정 · 주 상한 ${MOVE.weeklyMinutes}분`, `Resets Monday 00:00 KST · ${tv.weekMinutes} counted min this week · weekly cap ${MOVE.weeklyMinutes} min`)
       : T("매월 1일 00:00 KST 리셋 (월 단위 KST 집계)", "Resets on the 1st at 00:00 KST");
   return {
     guest: false, period: cadence, resetsAt: r.resetsAt, quests,
