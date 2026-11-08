@@ -122,7 +122,13 @@ export function mountBump24Game({
   }
   function nearestDoor(pos) {
     let best = null, bd = DOOR_R;
-    for (const st of promptStores()) { if (!st.door) continue; const d = Math.hypot(pos.x - st.door[0], pos.z - st.door[1]); if (d < bd) { bd = d; best = st; } }
+    for (const st of promptStores()) {
+      for (const door of [st.door, st.cornerDoor]) {
+        if (!door) continue;
+        const d = Math.hypot(pos.x - door[0], pos.z - door[1]);
+        if (d < bd) { bd = d; best = st; }
+      }
+    }
     return best;
   }
 
