@@ -3432,3 +3432,11 @@ body.has-bgm #ride-hud { top: 104px; }
 body.has-bgm #ride-toast { top: 154px; }
 /* [pangyo-npc] 판교 IT 직장인 라벨: 회사 이니셜 + 직무 (중립 슬레이트 — 브랜드 색 없음) */
 .tag.npc.pangyo-worker { background: rgba(52, 66, 86, .68); font-weight: 600; }
+/* 공지 이미지 칸: 테두리 위 legend 겹침·오른쪽 넘침·추가 버튼 높이 어긋남 정리 */
+#board-modal .ni-compose { box-sizing: border-box; min-width: 0; max-width: 100%; padding-top: 12px; }
+#board-modal .ni-compose legend { float: left; width: 100%; padding: 0; margin: 0 0 6px; }
+#board-modal .ni-compose legend + * { clear: both; }
+#board-modal .ni-add { min-height: 40px; padding: 0 14px; flex: 0 0 auto; }
+#board-modal .ni-url { align-items: flex-end; }
+#board-modal .ni-url label.grow { min-width: 0; }
+#board-modal .ni-url input { box-sizing: border-box; width: 100%; height: 40px; }
