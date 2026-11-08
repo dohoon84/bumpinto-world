@@ -64,7 +64,7 @@ export function mountGangnamNpc({
         drive: j.drive, box, station: j.meta?.station, base: carsOpt.base, hour: getHour,
         transit: { crossings: cross.crossings, pedLight: cross.pedLight, source: { vehicles: () => [] } },
         world: { groundY: (x, z, y) => (terrain?.getGroundHeight ? terrain.getGroundHeight(x, z, y || 0) : 0) },
-        fix: parseTrafficFix(params), peds: pedPts, watchEvening,
+        fix: parseTrafficFix(params), peds: pedPts, watchEvening, mobile,
       });
     }
   }
@@ -101,7 +101,11 @@ export function mountGangnamNpc({
       if (!traffic) return [];
       return traffic.obstacles(x, z, R);
     },
-    update(dt, x, z) {
+    update(dt, x, z, yaw = null) {
+      if (yaw != null) {
+        peds?.setYaw?.(yaw);
+        if (traffic) traffic.sim.yaw = yaw;
+      }
       const here = boxDist(box, x, z) < WAKE_R;
       if (!here) {
         root.visible = false;

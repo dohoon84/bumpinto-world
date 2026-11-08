@@ -3,7 +3,7 @@
 //   관광객 일부만 글 말풍선(ko/en/ja). 횡단은 보행 신호가 초록일 때만.
 import { createMigeumPeds } from '../../corridor/migeumNpc.js';
 import { Bubble } from '../../overlay.js';
-import { MAX_PEDS, MAX_PEDS_MOBILE, GREETINGS, pedDensityAt } from './density.js';
+import { MAX_PEDS, MAX_PEDS_MOBILE, GREETINGS, pedDensityAt, inStreetView, STREET_VIEW } from './density.js';
 import { gangnamNpcForce } from './flags.js';
 import { segDist } from './rules.js';
 
@@ -43,10 +43,20 @@ export function crossingPath(crossings, at, rnd) {
   return { pts, cross: true };
 }
 
+const CULL = { ahead0: STREET_VIEW.ahead0 - 6, ahead1: STREET_VIEW.ahead1 + 8, lat: STREET_VIEW.lat + 6, nearM: STREET_VIEW.nearM + 8 };
+
 export function createGangnamPeds({
   npc, loader, terrain = null, isFree = () => true, freeSpot = (x, z) => ({ x, z }), tileReady = () => true,
   getHour, overlay = null, mobile = false, crossings = [], pedLight = () => 'red', seed = 7701,
 } = {}) {
+  const focus = { yaw: null };
+  const stroll = (at, rnd) => {
+    const yaw = focus.yaw ?? 0.38;
+    const len = 7 + rnd() * 5;
+    const ux = Math.sin(yaw), uz = Math.cos(yaw);
+    const s = rnd() < 0.5 ? 1 : -1;
+    return { pts: [[at.x, at.z], [at.x + ux * s * len, at.z + uz * s * len]], cross: false };
+  };
   const peds = createMigeumPeds({
     mg: { stations: [{ exits: npc.exits || [] }], meta: { box: npc.meta.box } },
     loader, terrain, isFree, freeSpot, tileReady, getHour, seed,
@@ -54,7 +64,15 @@ export function createGangnamPeds({
     force: gangnamNpcForce(),
     densityAt: (h) => pedDensityAt(h, { mobile }),
     lookFn: slimLook,
-    pathFor: ({ at, rnd }) => crossingPath(crossings, at, rnd),
+    placeR: 70,
+    placeBurst: mobile ? 8 : 24,
+    spotOk: (s, fx, fz) => focus.yaw == null || inStreetView(s.x, s.z, fx, fz, focus.yaw),
+    cull: (x, z, fx, fz) => focus.yaw != null && !inStreetView(x, z, fx, fz, focus.yaw, CULL),
+    pathFor: ({ at, rnd }) => {
+      const cross = crossingPath(crossings, at, rnd);
+      if (cross && rnd() < 0.35) return cross;
+      return stroll(at, rnd);
+    },
     hold(a, x, z) {
       const c = zebraOf(crossings, x, z);
       if (!c || pedLight(c) === 'green') return false;
@@ -67,6 +85,7 @@ export function createGangnamPeds({
     },
   });
   for (const a of peds.actors) a.tourist = a.i % 7 === 1;
+  peds.setYaw = (yaw) => { focus.yaw = yaw; };
   const bubbles = new Map();
   let sayAcc = 0;
   const say = (a, text, ms = 4200) => {

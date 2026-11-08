@@ -8,7 +8,7 @@ import { execFileSync } from 'node:child_process';
 import * as THREE from 'three';
 import { buildGangnamNpcData, busSegs, segDist, BUS_CLEAR_M } from '../../../src/gangnam/npc/rules.js';
 import { gangnamNpcEnabled } from '../../../src/gangnam/npc/flags.js';
-import { pedDensityAt, pedPeriod, pedCount, PED_MIX, GREETINGS, parseGangnamCars, MAX_PEDS } from '../../../src/gangnam/npc/density.js';
+import { pedDensityAt, pedPeriod, pedCount, PED_MIX, GREETINGS, parseGangnamCars, MAX_PEDS, carViewTarget, inStreetView } from '../../../src/gangnam/npc/density.js';
 import { GangnamCars, createGangnamTraffic } from '../../../src/gangnam/npc/cars.js';
 import { mountGangnamNpc } from '../../../src/gangnam/npc/mount.js';
 import { pedDensityAt as migeumPedDensityAt } from '../../../src/corridor/migeumNpcData.js';
@@ -105,6 +105,11 @@ const st = index.stations[0];
   assert.equal(pedPeriod(15), 'day');
   assert.equal(pedPeriod(23), 'night');
   assert.ok(pedCount(19) > pedCount(15) && pedCount(15) > pedCount(23) && pedCount(3) <= 6);
+  assert.equal(pedCount(14), 20);
+  assert.ok(pedCount(21) > pedCount(14) && pedCount(19) >= pedCount(21));
+  assert.ok(carViewTarget(19) > carViewTarget(14) && carViewTarget(21) > carViewTarget(14));
+  assert.ok(carViewTarget(14) >= 8 && carViewTarget(14) <= 12);
+  assert.ok(carViewTarget(14, { mobile: true }) <= 12 && carViewTarget(19, { mobile: true }) <= 12);
   const eve = pedDensityAt(19), day = pedDensityAt(15), night = pedDensityAt(23), mob = pedDensityAt(19, { mobile: true });
   assert.ok(eve.count > day.count && day.count > night.count);
   assert.ok(mob.count < eve.count && mob.count <= 18);
@@ -279,6 +284,56 @@ const st = index.stations[0];
   assert.ok(mob.stats().cars.total <= 20);
   void crowd; void line;
   ok(`peds placed ${placed0}, draws ${draws0}, crossers ${crossers.length}, asleep away, mobile cap`);
+}
+
+{
+  const CAM = { x: -7299.3, z: -14894.8, yaw: 0.38 };
+  const npc = built;
+  const onCar = (x, z) => npc.drive.ways.some((w) => {
+    for (let i = 1; i < w.n.length; i++) if (segDist(x, z, npc.drive.nodes[w.n[i - 1]], npc.drive.nodes[w.n[i]]) < w.w / 2 + 0.2) return true;
+    return false;
+  });
+  let hour = 14;
+  const view = mountGangnamNpc({
+    scene: new THREE.Group(), params: new URLSearchParams(''), gangnam: index, mobile: false,
+    fetchJson: async () => npc, isFree: (x, z) => !onCar(x, z), freeSpot: (x, z) => ({ x, z }), tileReady: () => true,
+    getHour: () => hour,
+  });
+  const countView = () => {
+    const peds = view.peds.actors.filter((a) => a.path && inStreetView(a.mesh.position.x, a.mesh.position.z, CAM.x, CAM.z, CAM.yaw)).length;
+    const cars = view.traffic.sim.list.filter((t) => t && !t.parked && t.rec && !t.rec.off && inStreetView(t.rec.x, t.rec.z, CAM.x, CAM.z, CAM.yaw)).length;
+    return { peds, cars };
+  };
+  view.update(0.1, CAM.x, CAM.z, CAM.yaw);
+  await new Promise((r) => setTimeout(r, 0));
+  await new Promise((r) => setTimeout(r, 0));
+  for (let k = 0; k < 50; k++) view.update(0.1, CAM.x, CAM.z, CAM.yaw);
+  const day = countView();
+  assert.ok(day.peds >= 15 && day.peds <= 25, `낮 보행 ${day.peds}`);
+  assert.ok(day.cars >= 8 && day.cars <= 12, `낮 차량 ${day.cars}`);
+  hour = 21;
+  view.traffic.sim.retarget(false);
+  for (let k = 0; k < 40; k++) view.update(0.1, CAM.x, CAM.z, CAM.yaw);
+  const eve = countView();
+  assert.ok(eve.peds > day.peds + 6, `21시 보행 ${eve.peds} vs 낮 ${day.peds}`);
+  assert.ok(eve.cars > day.cars, `21시 차량 ${eve.cars} vs 낮 ${day.cars}`);
+  let gap = Infinity, out = 0, bus = 0;
+  const buses = busSegs(tiles);
+  for (const t of view.traffic.sim.list) if (t && !t.parked && t.rec && !t.rec.off) {
+    const { x, z } = t.rec;
+    out = Math.max(out, B.x0 - x, x - B.x1, B.z0 - z, z - B.z1);
+    let clear = Infinity;
+    for (const s of buses) clear = Math.min(clear, segDist(x, z, s.a, s.b) - s.w / 2);
+    if (clear < 1.2) bus++;
+  }
+  const act = view.traffic.sim.list.filter((t) => t && !t.parked && t.rec && !t.rec.off);
+  for (let i = 0; i < act.length; i++) for (let j = i + 1; j < act.length; j++) {
+    if (Math.abs(act[i].rec.x - act[j].rec.x) < 14 && Math.abs(act[i].rec.z - act[j].rec.z) < 14) gap = Math.min(gap, obbGap(act[i].rec, act[j].rec));
+  }
+  assert.ok(out < 3, `박스 밖 ${out}`);
+  assert.equal(bus, 0, `버스 차로 ${bus}`);
+  assert.ok(gap > -0.15, `겹침 ${gap}`);
+  ok(`화면 밀도 낮 보행 ${day.peds}·차 ${day.cars} / 21시 보행 ${eve.peds}·차 ${eve.cars}`);
 }
 
 {

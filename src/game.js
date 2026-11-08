@@ -2644,7 +2644,7 @@ function frame() {
   if (migeumLamps) { const c = cam.mode === 'follow' ? P : sun.target.position; migeumLamps.update(dt, c.x, c.z, cam.mode); } // [migeum-lamps]
   if (gangnamNight) { const c = cam.mode === 'follow' ? P : sun.target.position; gangnamNight.update(dt, c.x, c.z); } // [gangnam-night]
   if (gangnamAds) { const c = cam.mode === 'follow' ? P : sun.target.position; gangnamAds.update(dt, c.x, c.z); } // [gangnam-ads]
-  if (gangnamNpc) { const c = cam.mode === 'follow' ? P : sun.target.position; gangnamNpc.update(dt, c.x, c.z); } // [gangnam-npc]
+  if (gangnamNpc) { const c = cam.mode === 'follow' ? P : sun.target.position; gangnamNpc.update(dt, c.x, c.z, cam.mode === 'follow' ? cam.yaw : ov.yaw); } // [gangnam-npc]
   world.shops?.update(dt, P.x, P.z); // [shops] 주변 70m 상호 간판 풀
   const viewYaw = cam.mode === 'follow' ? cam.yaw : ov.yaw;
   const moveYaw = player.rotation.y + (bikes.riding && bikes.speed < -0.2 ? Math.PI : 0);

@@ -73,7 +73,7 @@ const now = () => (typeof performance !== 'undefined' ? performance.now() : Date
 
 // opts: mg(migeum/index.json) · loader · terrain · isFree(x,z) · freeSpot(x,z) · tileReady(key) · getHour · seed · count
 // densityAt·lookFn·pathFor·hold 는 강남 NPC 가 같은 배치 루프를 쓸 때 넣는 선택 훅. 없으면 미금과 같다.
-export function createMigeumPeds({ mg, loader, terrain = null, isFree = () => true, freeSpot = (x, z) => ({ x, z }), tileReady = () => true, getHour = gameHour, seed = 5151, count = 0, force = migeumNpcForce(), densityAt = null, lookFn = null, pathFor = null, hold = null } = {}) {
+export function createMigeumPeds({ mg, loader, terrain = null, isFree = () => true, freeSpot = (x, z) => ({ x, z }), tileReady = () => true, getHour = gameHour, seed = 5151, count = 0, force = migeumNpcForce(), densityAt = null, lookFn = null, pathFor = null, hold = null, placeR = PLACE_R, placeBurst = 4, spotOk = null, cull = null } = {}) {
   count = force || count || MAX_PEDS;
   const densFn = densityAt || pedDensityAt;
   const dens = (h) => { const d = densFn(h); return force ? { ...d, count: force } : d; };
@@ -107,7 +107,7 @@ export function createMigeumPeds({ mg, loader, terrain = null, isFree = () => tr
   }
   function chooseKind(mix) { let r = rnd(); for (const [k, w] of Object.entries(mix)) { r -= w; if (r <= 0) return k; } return 'exit'; }
   function place(a, fx, fz, D) {
-    const near = (s) => Math.abs(s.x - fx) < PLACE_R && Math.abs(s.z - fz) < PLACE_R;
+    const near = (s) => Math.abs(s.x - fx) < placeR && Math.abs(s.z - fz) < placeR && (!spotOk || spotOk(s, fx, fz));
     for (let t = 0; t < 4; t++) {
       const kind = t < 3 ? chooseKind(D.mix) : 'walk';
       let sp = null;
@@ -165,7 +165,7 @@ export function createMigeumPeds({ mg, loader, terrain = null, isFree = () => tr
         if (!want && a.path && !a.leaving) a.leaving = true;
         if (a.leaving && (!a.shown || Math.hypot(a.mesh.position.x - fx, a.mesh.position.z - fz) > 60)) hide(a);
         if (!a.path) {
-          if (want && check && placedNow < 4) { placedNow++; place(a, fx, fz, D); }
+          if (want && check && placedNow < placeBurst) { placedNow++; place(a, fx, fz, D); }
           if (!a.path) { if (a.mesh.visible) a.mesh.visible = false; a.shown = false; continue; }
         }
         if (want) act++;
@@ -187,7 +187,7 @@ export function createMigeumPeds({ mg, loader, terrain = null, isFree = () => tr
           }
         }
         const [x, z, dx, dz] = sample(a, a.s);
-        if (check && Math.hypot(x - fx, z - fz) > REPLACE_R) { hide(a); continue; }
+        if (check && (Math.hypot(x - fx, z - fz) > REPLACE_R || (cull && cull(x, z, fx, fz)))) { hide(a); continue; }
         const y = terrain ? terrain.getGroundHeight(x, z, a.y) : 0; a.y = y;
         a.mesh.position.set(x, y, z); a.mesh.rotation.y = Math.atan2(dx * a.dir, dz * a.dir);
         placed++; byKind[a.kind] = (byKind[a.kind] || 0) + 1;

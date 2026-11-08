@@ -1,5 +1,5 @@
 // [gangnam-npc] 강남 보행 밀도. 저녁(18–21시)이 가장 붐비고, 심야는 적다.
-//   차량 대수의 시간 배수는 정자 jz-traffic 의 densityFor 를 그대로 쓴다 (여기 두지 않음).
+//   차량 종류 비율만 정자 mixFor 를 쓴다. 대수는 carViewTarget (화면 안에 모음).
 
 export const MAX_PEDS = 48;
 export const MAX_PEDS_MOBILE = 18;
@@ -7,7 +7,34 @@ export const GN_CARS_DEFAULT = 26;
 export const GN_CARS_MOBILE = 12;
 export const GN_CARS_MAX = 80;
 
-const CURVE = [[0, 4], [5, 4], [7, 22], [8.5, 36], [11, 28], [13, 30], [16, 32], [18, 46], [20, 48], [21.5, 30], [23, 10], [24, 4]];
+// 활성 인원은 화면(플레이어 앞뒤 약 50m) 안에 몰아 둔다. 풀 MAX_PEDS 는 그대로라 힙은 늘지 않는다.
+//   14시 ≈ 20, 18–21시 ≈ 34–36, 21시(샷)도 낮보다 많다. 심야는 적다.
+const CURVE = [[0, 6], [5, 6], [7, 16], [8.5, 22], [11, 20], [14, 20], [16, 20], [18, 34], [20, 36], [21, 34], [21.5, 30], [23, 8], [24, 6]];
+
+// 따라보기 카메라(yaw 방향 30m 앞, 그 뒤를 봄)가 또렷이 담는 구간. ahead 는 yaw 방향.
+// 따라보기 카메라가 길을 내려다보는 쪽(yaw 반대, 화면 가운데~위). 렌즈 밑의 가까운 바닥은 빼 둔다.
+export const STREET_VIEW = { ahead0: -42, ahead1: -4, lat: 18, nearM: 70 };
+
+export function viewOffset(x, z, fx, fz, yaw) {
+  const dx = x - fx, dz = z - fz;
+  const sx = Math.sin(yaw), sz = Math.cos(yaw);
+  return { ahead: dx * sx + dz * sz, lat: Math.abs(-dx * sz + dz * sx), d: Math.hypot(dx, dz) };
+}
+
+export function inStreetView(x, z, fx, fz, yaw, box = STREET_VIEW) {
+  const o = viewOffset(x, z, fx, fz, yaw);
+  return o.d <= box.nearM && o.ahead >= box.ahead0 && o.ahead <= box.ahead1 && o.lat <= box.lat;
+}
+
+// 데스크톱 화면 안 목표 대수. 저녁이 낮보다 많다. 모바일은 상한 12.
+export function carViewTarget(h, { mobile = false } = {}) {
+  if (mobile) return Math.min(GN_CARS_MOBILE, Math.max(6, Math.round(GN_CARS_MOBILE * (h >= 17 && h < 21.5 ? 1 : 0.85))));
+  const p = pedPeriod(h);
+  if (p === 'evening') return 20;
+  if (p === 'morning') return 14;
+  if (p === 'night') return 6;
+  return 11;
+}
 
 export function pedCount(h) {
   h = ((h % 24) + 24) % 24;

@@ -2,19 +2,113 @@
 //   그리는 방식은 미금 차량과 같은 BatchedMesh 하나(종류가 달라도 드로우 1).
 //   섬 1(강남 박스) 밖에서 obstacles() 는 빈 배열 — 정자·미금·잠실 시뮬에 넣지 않는다.
 import * as THREE from 'three';
-import { JzCars } from '../../entities/jzTraffic.js';
+import { JzCars, mixFor, obbGap } from '../../entities/jzTraffic.js';
 import { KINDS, kindGeometry } from '../../entities/vehicleKinds.js';
 import { batchedVehicleMaterial } from '../../corridor/migeumNpc.js';
 import { watchEvening } from '../../evening.js';
 import { gameHour } from '../../weather.js';
+import { carViewTarget, inStreetView, STREET_VIEW } from './density.js';
+
+const KEEP_PAD = { ahead0: STREET_VIEW.ahead0 - 8, ahead1: STREET_VIEW.ahead1 + 10, lat: STREET_VIEW.lat + 8, nearM: STREET_VIEW.nearM + 12 };
 
 export class GangnamCars extends JzCars {
-  constructor({ drive, box, station, transit = null, world = null, base, hour = () => gameHour(), seed = 77, fix = true, peds = null }) {
+  constructor({ drive, box, station, transit = null, world = null, base, hour = () => gameHour(), seed = 77, fix = true, peds = null, mobile = false }) {
     super({
       drive, data: { meta: { bboxLocal: box }, station: station || { x: 0, z: 0 } },
       transit, world, base, hour, stops: [], extra: () => [], seed, fix, peds,
     });
     this.gnBox = box;
+    this.mobile = !!mobile;
+    this.yaw = null;
+    this.keepR = 78;
+  }
+  // 시간대 대수는 화면 안에 모을 수량. 정자 densityFor 곡선은 쓰지 않는다.
+  retarget(initial = false) {
+    const h = this.hour();
+    this.mix = mixFor(h);
+    this.target = Math.min(this.cap, carViewTarget(h, { mobile: this.mobile }));
+    let act = this.list.filter((t) => t && !t.parked && !t.retire).length;
+    for (let i = 0; i < this.cap && act < this.target; i++) {
+      const t = this.list[i];
+      if (!t || t.parked) { this._spawnVeh(i, initial); if (!this.list[i].parked) act++; }
+    }
+    for (let i = this.cap - 1; i >= 0 && act > this.target; i--) {
+      const t = this.list[i];
+      if (t && !t.parked && !t.retire) { t.retire = true; act--; }
+    }
+  }
+  _inView(x, z, box) {
+    const f = this.focus;
+    if (!f) return true;
+    if (this.yaw == null) return Math.hypot(x - f.x, z - f.z) <= (this.keepR || 78);
+    return inStreetView(x, z, f.x, f.z, this.yaw, box);
+  }
+  _edgeInView(e, f, yaw) {
+    const a = this.nodes[e.from], b = this.nodes[e.to];
+    if (yaw == null) return Math.hypot((a.x + b.x) / 2 - f.x, (a.z + b.z) / 2 - f.z) <= 58;
+    for (let i = 0; i <= 8; i++) {
+      const u = i / 8;
+      if (inStreetView(a.x + (b.x - a.x) * u, a.z + (b.z - a.z) * u, f.x, f.z, yaw)) return true;
+    }
+    return false;
+  }
+  _pickSpawn() {
+    const f = this.focus;
+    if (!f) return super._pickSpawn();
+    const yaw = this.yaw;
+    if (!this._fw || Math.hypot(f.x - this._fw.x, f.z - this._fw.z) > 8 || this._fw.yaw !== yaw) {
+      const w = this.edges.map((e) => (this._edgeInView(e, f, yaw) ? e.wt : 0));
+      this._fw = { x: f.x, z: f.z, yaw, w, tot: w.reduce((a, b) => a + b, 0) };
+    }
+    if (this._fw.tot <= 0) return null;
+    let r = this.rnd() * this._fw.tot;
+    for (let k = 0; k < this.edges.length; k++) { r -= this._fw.w[k]; if (r <= 0) return this.edges[k]; }
+    return this.edges[this.edges.length - 1];
+  }
+  _room(r, self) {
+    for (const o of this.list) {
+      if (!o || o === self || o.parked || !o.rec || o.rec.off) continue;
+      if (Math.abs(o.rec.x - r.x) > 18 || Math.abs(o.rec.z - r.z) > 18) continue;
+      if (obbGap(r, o.rec) < 1.3) return false;
+    }
+    return true;
+  }
+  _slideIntoView(t) {
+    const f = this.focus;
+    if (!f || this.yaw == null || !t || t.parked) return;
+    if (t.rec && inStreetView(t.rec.x, t.rec.z, f.x, f.z, this.yaw) && this._room(t.rec, t)) return;
+    const L = t.cum[t.cum.length - 1];
+    const opts = [];
+    for (let s = t.hl + 0.4; s < L; s += 4) {
+      const p = this._sample(t, s);
+      if (!inStreetView(p[0], p[1], f.x, f.z, this.yaw)) continue;
+      const r = this._pose(t, s, t.lat, null);
+      if (this._room(r, t)) opts.push(s);
+    }
+    if (!opts.length) { this._despawn(t); return; }
+    t.s = opts[Math.floor(this.rnd() * opts.length)];
+    const r = this._pose(t, t.s, t.lat, null);
+    t.heading = Math.atan2(r.hx, r.hz);
+    this._commit(t, r);
+  }
+  _spawnVeh(i, initial) {
+    super._spawnVeh(i, initial);
+    this._slideIntoView(this.list[i]);
+  }
+  _stepVeh(t, dt) {
+    const f = this.focus;
+    if (f && t.rec && !t.parked && t.age > 1.2) {
+      const outside = this.yaw == null
+        ? Math.hypot(t.rec.x - f.x, t.rec.z - f.z) > (this.keepR || 78)
+        : !inStreetView(t.rec.x, t.rec.z, f.x, f.z, this.yaw, KEEP_PAD);
+      if (outside) {
+        this._despawn(t);
+        if (!t.retire) this._spawnVeh(t.i, false);
+        else t.retire = false;
+        return;
+      }
+    }
+    return super._stepVeh(t, dt);
   }
   // 강남 박스 밖에서 물어보면 아무것도 안 돌려준다 (다른 섬 교통과 섞지 않음)
   obstacles(x, z, R) {
