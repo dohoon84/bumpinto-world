@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="241.5 237.5 800 800" width="800" height="800" role="img" aria-label="bumpinto.world logo">
+  <title>bumpinto.world</title>
+  <defs>
+    <!-- B 글자 외곽 -->
+    <path id="b-shape" d="M435 265H720C850 265 940 355 940 470C940 535 905 590 858 620C930 650 975 715 975 800C975 920 880 1010 740 1010H445C365 1010 308 950 308 870V390C308 320 360 265 435 265Z"/>
+    <clipPath id="clip-b"><use href="#b-shape"/></clipPath>
+    <!-- 지구: B 안쪽으로 잘림 -->
+    <clipPath id="clip-globe"><circle cx="635" cy="1131" r="413"/></clipPath>
+  </defs>
+
+  <!-- B -->
+  <use href="#b-shape" fill="#0072DD"/>
+
+  <!-- 지구 (B 안쪽에서만 보임) -->
+  <g clip-path="url(#clip-b)">
+    <g clip-path="url(#clip-globe)">
+      <!-- 대륙/테두리 (연한 하늘색) -->
+      <rect x="200" y="700" width="900" height="400" fill="#CDE6FB"/>
+      <!-- 바다 -->
+      <path fill="#1485E6" d="M300 1040L300 940L332 937C350 915 370 893 386 881C398 873 414 876 417 892C421 912 410 930 414 947C418 962 428 972 440 970C456 968 466 952 470 940C478 916 500 894 532 887C560 881 584 862 582 836C580 818 566 808 558 800C556 790 572 784 592 788C620 792 648 786 663 756C700 756 760 770 800 788C780 806 750 800 722 818C706 830 706 862 728 880C746 892 770 884 790 902C806 922 818 926 836 932C848 940 856 954 862 970L880 1040Z"/>
+    </g>
+  </g>
+
+  <!-- 흰색 노선 -->
+  <path d="M300 654H535C590 654 628 628 655 588L723 472" fill="none" stroke="#FFFFFF" stroke-width="68" stroke-linejoin="round" clip-path="url(#clip-b)"/>
+
+  <!-- 현재 위치 핀 -->
+  <circle cx="723" cy="472" r="97" fill="#FFFFFF"/>
+  <circle cx="723" cy="472" r="52" fill="#FF3B3B"/>
+</svg>

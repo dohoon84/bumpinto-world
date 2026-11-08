@@ -23,6 +23,7 @@ import { migeumBusEnabled, mergeMigeumBus, MIGEUM_BUS_FILE } from './corridor/mi
 import { clampWorld } from './corridor/islands.js'; // [gangnam]
 import { setNearScope, collectPlaces, placeCaption, sameIsland } from './corridor/nearScope.js'; // [gangnam-night]
 import { gangnamNightEnabled, createGangnamNight } from './gangnam/night.js'; // [gangnam-night]
+import { shortenBoom, boomPoint } from './gangnam/camClear.js'; // [gangnam-night]
 import { createGangnamBillboards } from './gangnam/billboards/create.js'; // [gangnam-ads]
 import { gangnamAdsEnabled } from './gangnam/billboards/manifest.js'; // [gangnam-ads]
 import { mountPhone } from './phone.js';
@@ -2595,7 +2596,16 @@ function frame() {
   else if (cam.mode === 'follow') {
     // 가슴 높이 피벗을 공전하고, 시선은 피벗을 지나 앞쪽으로 보낸다.
     // 그래서 좌우는 한 바퀴, 위는 하늘, 아래는 바닥까지 화면 가운데로 들어온다.
-    const eye = P.y + 1.6, yaw = cam.yaw, pitch = cam.pitch, dist = cam.dist;
+    const eye = P.y + 1.6, yaw = cam.yaw, pitch = cam.pitch;
+    const gnBox = corridorData?.gangnam?.meta?.box;
+    const inGn = gnBox && P.x >= gnBox.x0 && P.x <= gnBox.x1 && P.z >= gnBox.z0 && P.z <= gnBox.z1;
+    let dist = cam.dist;
+    if (inGn && corridor?.roofAt) {
+      dist = shortenBoom(cam.dist, (d) => {
+        const q = boomPoint(P.x, P.z, eye, yaw, pitch, d);
+        return corridor.roofAt(q.x, q.z) > q.y + 0.6;
+      });
+    }
     const bx = Math.sin(yaw), bz = Math.cos(yaw), cp = Math.cos(pitch), sp = Math.sin(pitch), aim = 4;
     const camX = P.x + bx * dist * cp, camZ = P.z + bz * dist * cp;
     const camFloor = terrain ? 1.2 + terrain.renderHeight(camX, camZ) : 0.45; // [terrain] 카메라가 제방 속으로 안 들어가게

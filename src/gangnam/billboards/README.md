@@ -15,7 +15,9 @@
 
 ## 지금 그림
 
-임시 BUMP 자체 아트(글자 BUMP, bumpinto.world, BUMP24, 단색 그라데이션, `public/favicon.svg` 의 지구+핀).  
-저장소에 파란 둥근 B 로고 파일은 없어서 파비콘 마크를 쓴다. 제3자 로고·상호는 넣지 않는다.
+기본 `src` 는 공식 CI `bumpinto-logo.png`(파란 둥근 B, 지구, 빨간 핀). 화면 비율에 맞춰 여백만 두고, 로고는 늘리거나 색을 바꾸지 않는다.  
+`schedule` 에 `builtin:world` · `builtin:bump24` · `builtin:gradient` 를 두면 4초마다 글자 슬라이드가 섞인다. `builtin:bump` 임시 글자는 없다.
 
-최종 그림은 **특급 디자이너**가 오너 승인 뒤에 위 경로로 교체한다. 그 전까지 이 임시 그림을 유지한다.
+폴 중심 4m 안에는 가로수를 심지 않는다 (`clearance.js`).
+
+최종 그림을 바꾸려면 `src` 경로만 갈아 끼우면 된다.

@@ -1,98 +1,44 @@
-// [gangnam-ads] 미디어폴·전광판. 자리 = placements.json, 그림 = manifest.js.
-//   화면은 아틀라스 1장 + 메시 1개. 폴 기둥은 InstancedMesh 1개. 애니메이션은 UV 를 4초마다 바꾸는 것(셰이더 없음).
-//   모바일은 schedule 없이 첫 장만, UV 스크롤 없음.
+// [gangnam-ads] 미디어폴·전광판. 자리 = placements.js, 그림 = manifest.js.
+//   로고 쿼드는 그림 비율 그대로(fitInside). 앞·뒤 쿼드를 따로 두어 양쪽에서 핀이 원본과 같은 쪽에 있다.
+//   화면 틀(파란 여백)은 로고와 다른 메시. 텍스처는 아틀라스 1장.
 //   ?gangnamads=0 · ?gangnam=0 이면 만들지 않는다.
 import * as THREE from 'three';
 import placements from './placements.js';
 import { SCREENS, BUILTIN, FRAME_SEC } from './manifest.js';
+import { faceCorners, fitInside, LOGO_ASPECT, LOGO_SRC } from './faces.js';
 
-const CELL = 256;
-function roundRect(ctx, x, y, w, h, r) {
-  ctx.beginPath();
-  ctx.moveTo(x + r, y);
-  ctx.arcTo(x + w, y, x + w, y + h, r);
-  ctx.arcTo(x + w, y + h, x, y + h, r);
-  ctx.arcTo(x, y + h, x, y, r);
-  ctx.arcTo(x, y, x + w, y, r);
-  ctx.closePath();
-}
-
-function paintBuiltin(ctx, i, label, sub, colors) {
-  const x = i * CELL;
-  const g = ctx.createLinearGradient(x, 0, x + CELL, CELL);
-  g.addColorStop(0, colors[0]);
-  g.addColorStop(1, colors[1]);
-  ctx.fillStyle = g;
-  ctx.fillRect(x, 0, CELL, CELL);
-  ctx.fillStyle = 'rgba(8,16,32,.35)';
-  roundRect(ctx, x + 14, 14, CELL - 28, CELL - 28, 28);
-  ctx.fill();
-  ctx.fillStyle = '#f4f7fb';
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.font = '900 54px Pretendard, sans-serif';
-  ctx.fillText(label, x + CELL / 2, CELL / 2 - (sub ? 16 : 0));
-  if (sub) {
-    ctx.font = '700 22px Pretendard, sans-serif';
-    ctx.fillStyle = '#d5e4f5';
-    ctx.fillText(sub, x + CELL / 2, CELL / 2 + 36);
-  }
-}
-
-function paintAtlas(logo) {
-  const cols = 4;
-  const canvas = document.createElement('canvas');
-  canvas.width = CELL * cols;
-  canvas.height = CELL;
-  const ctx = canvas.getContext('2d');
-  ctx.fillStyle = '#12151c';
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-  paintBuiltin(ctx, 0, 'BUMP', '강남', ['#1d4e89', '#16365f']);
-  paintBuiltin(ctx, 1, 'bumpinto', '.world', ['#245b86', '#1a3f5c']);
-  paintBuiltin(ctx, 2, 'BUMP24', '강남대로', ['#2a4d78', '#1c3554']);
-  const x = 3 * CELL;
-  const g = ctx.createLinearGradient(x, 0, x + CELL, CELL);
-  g.addColorStop(0, '#1a6cff');
-  g.addColorStop(0.5, '#7fd0ff');
-  g.addColorStop(1, '#ff5a7a');
-  ctx.fillStyle = g;
-  ctx.fillRect(x, 0, CELL, CELL);
-  if (logo) {
-    ctx.save();
-    ctx.beginPath();
-    ctx.arc(CELL * 0.5, 78, 36, 0, Math.PI * 2);
-    ctx.clip();
-    ctx.drawImage(logo, CELL * 0.5 - 36, 42, 72, 72);
-    ctx.restore();
-  } else {
-    ctx.fillStyle = '#7ec8e8';
-    ctx.beginPath();
-    ctx.arc(CELL * 0.5, 78, 28, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = '#e23b4a';
-    ctx.beginPath();
-    ctx.arc(CELL * 0.5, 78, 8, 0, Math.PI * 2);
-    ctx.fill();
-  }
-  return canvas;
-}
+const IH = 512;
+const IW = Math.round(IH * LOGO_ASPECT);
 
 function sourcesOf(entry) {
   return entry?.schedule?.length ? entry.schedule : [entry?.src].filter(Boolean);
 }
 
-function quad(pos, uv, col, idx, cx, cy, cz, yaw, w, h, zLocal, cell, cols, rgb) {
-  const hw = w / 2, hh = h / 2;
+function paintText(ctx, i, label, sub, colors) {
+  const x = i * IW;
+  const g = ctx.createLinearGradient(x, 0, x + IW, IH);
+  g.addColorStop(0, colors[0]);
+  g.addColorStop(1, colors[1]);
+  ctx.fillStyle = g;
+  ctx.fillRect(x, 0, IW, IH);
+  ctx.fillStyle = '#f4f7fb';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.font = `900 ${Math.round(IH * 0.22)}px Pretendard, sans-serif`;
+  ctx.fillText(label, x + IW / 2, IH * 0.42);
+  if (sub) {
+    ctx.font = `700 ${Math.round(IH * 0.1)}px Pretendard, sans-serif`;
+    ctx.fillStyle = '#d5e4f5';
+    ctx.fillText(sub, x + IW / 2, IH * 0.68);
+  }
+}
+
+function pushFace(pos, uv, idx, cx, cy, cz, yaw, corners) {
   const c = Math.cos(yaw), s = Math.sin(yaw);
-  const u0 = cell / cols, u1 = (cell + 1) / cols;
-  const corners = [[-hw, -hh, u0, 1], [hw, -hh, u1, 1], [hw, hh, u1, 0], [-hw, hh, u0, 0]];
   const base = pos.length / 3;
-  for (const [lx, ly, u, v] of corners) {
-    const wx = cx + lx * c + zLocal * s;
-    const wz = cz - lx * s + zLocal * c;
-    pos.push(wx, cy + ly, wz);
-    uv.push(u, v);
-    col.push(rgb[0], rgb[1], rgb[2]);
+  for (const v of corners) {
+    pos.push(cx + v.lx * c + v.lz * s, cy + v.ly, cz - v.lx * s + v.lz * c);
+    if (uv) uv.push(v.u, v.v);
   }
   idx.push(base, base + 1, base + 2, base, base + 2, base + 3);
   return base;
@@ -103,71 +49,90 @@ export function createGangnamBillboards({ scene, baseUrl = '/', mobile = false, 
   const root = new THREE.Group();
   root.name = 'gangnamAds';
   scene.add(root);
-  const custom = [];
+  const extra = [];
   for (const s of list) for (const src of (mobile ? [SCREENS[s.id].src] : sourcesOf(SCREENS[s.id]))) {
-    if (BUILTIN[src] == null && src && !custom.includes(src)) custom.push(src);
+    if (src !== LOGO_SRC && BUILTIN[src] == null && src && !extra.includes(src)) extra.push(src);
   }
-  const cols = 4 + custom.length;
+  const cols = 4 + extra.length;
   const canvas = document.createElement('canvas');
-  canvas.width = CELL * cols;
-  canvas.height = CELL;
-  const baked = paintAtlas(null);
-  canvas.getContext('2d').drawImage(baked, 0, 0);
+  canvas.width = IW * cols;
+  canvas.height = IH;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#0072DD';
+  ctx.fillRect(0, 0, IW, IH);
+  paintText(ctx, 1, 'bumpinto', '.world', ['#245b86', '#1a3f5c']);
+  paintText(ctx, 2, 'BUMP24', '강남대로', ['#2a4d78', '#1c3554']);
+  const gg = ctx.createLinearGradient(3 * IW, 0, 4 * IW, IH);
+  gg.addColorStop(0, '#1a6cff');
+  gg.addColorStop(0.55, '#7fd0ff');
+  gg.addColorStop(1, '#ff5a7a');
+  ctx.fillStyle = gg;
+  ctx.fillRect(3 * IW, 0, IW, IH);
   const tex = new THREE.CanvasTexture(canvas);
   tex.colorSpace = THREE.SRGBColorSpace;
+  tex.flipY = true;
   tex.anisotropy = 4;
-  const drawLogo = () => {
-    const ctx = canvas.getContext('2d');
-    ctx.save();
-    ctx.beginPath();
-    ctx.arc(CELL * 0.5, 70, 34, 0, Math.PI * 2);
-    ctx.clip();
-    ctx.drawImage(logo, CELL * 0.5 - 34, 36, 68, 68);
-    ctx.restore();
+  const paintLogo = (img) => {
+    ctx.fillStyle = '#0072DD';
+    ctx.fillRect(0, 0, IW, IH);
+    ctx.drawImage(img, 0, 0, IW, IH);
     tex.needsUpdate = true;
   };
   const logo = new Image();
-  logo.onload = drawLogo;
-  logo.src = baseUrl + 'favicon.svg';
-  const cellOf = (src) => (BUILTIN[src] != null ? BUILTIN[src] : 4 + custom.indexOf(src));
-  custom.forEach((src, i) => {
+  logo.onload = () => paintLogo(logo);
+  logo.src = baseUrl + LOGO_SRC.slice(1);
+  const cellOf = (src) => {
+    if (src === LOGO_SRC) return 0;
+    if (BUILTIN[src] != null) return BUILTIN[src];
+    return 4 + extra.indexOf(src);
+  };
+  extra.forEach((src, i) => {
     const img = new Image();
     img.onload = () => {
-      const ctx = canvas.getContext('2d');
-      const dx = (4 + i) * CELL;
-      ctx.fillStyle = '#10141c';
-      ctx.fillRect(dx, 0, CELL, CELL);
-      const sc = Math.max(CELL / img.width, CELL / img.height);
+      const dx = (4 + i) * IW;
+      const sc = Math.min(IW / img.width, IH / img.height);
       const w = img.width * sc, h = img.height * sc;
-      ctx.drawImage(img, dx + (CELL - w) / 2, (CELL - h) / 2, w, h);
+      ctx.fillStyle = '#0072DD';
+      ctx.fillRect(dx, 0, IW, IH);
+      ctx.drawImage(img, dx + (IW - w) / 2, (IH - h) / 2, w, h);
       tex.needsUpdate = true;
     };
     img.src = src.startsWith('/') ? baseUrl + src.slice(1) : src;
   });
 
-  const pos = [], uv = [], col = [], idx = [];
+  const pos = [], uv = [], idx = [];
+  const fpos = [], fidx = [];
   const anim = [];
   const ground = (x, z) => (terrain ? terrain.renderHeight(x, z) : 0);
   for (const s of list) {
     const entry = SCREENS[s.id];
     const seq = (mobile ? [entry.src] : sourcesOf(entry)).map((src) => cellOf(src));
     const y = s.kind === 'pole' ? ground(s.x, s.z) + (s.poleH || 5.6) - s.h / 2 : ground(s.x, s.z) + s.y;
-    const frame = quad(pos, uv, col, idx, s.x, y, s.z, s.yaw, s.w + (s.kind === 'pole' ? 0.18 : 0.6), s.h + (s.kind === 'pole' ? 0.18 : 0.45), -0.06, 0, cols, [0.08, 0.09, 0.12]);
-    const face = quad(pos, uv, col, idx, s.x, y, s.z, s.yaw, s.w, s.h, 0.02, seq[0], cols, [1, 1, 1]);
-    anim.push({ face, seq, cell: seq[0], grad: seq.includes(BUILTIN['builtin:gradient']) });
-    void frame;
+    const fit = fitInside(s.w, s.h, LOGO_ASPECT);
+    const front = pushFace(pos, uv, idx, s.x, y, s.z, s.yaw, faceCorners({ w: fit.w, h: fit.h, cell: seq[0], cols, back: false }));
+    const back = pushFace(pos, uv, idx, s.x, y, s.z, s.yaw, faceCorners({ w: fit.w, h: fit.h, cell: seq[0], cols, back: true }));
+    pushFace(fpos, null, fidx, s.x, y, s.z, s.yaw, faceCorners({ w: s.w, h: s.h, cell: 0, cols, back: false, z: 0.06 }));
+    pushFace(fpos, null, fidx, s.x, y, s.z, s.yaw, faceCorners({ w: s.w, h: s.h, cell: 0, cols, back: true, z: 0.06 }));
+    anim.push({ front, back, seq, cell: seq[0] });
   }
   const geo = new THREE.BufferGeometry();
   geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
   geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
-  geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
   geo.setIndex(idx);
   geo.computeBoundingSphere();
-  const mat = new THREE.MeshBasicMaterial({ map: tex, vertexColors: true, toneMapped: false, side: THREE.FrontSide });
+  const mat = new THREE.MeshBasicMaterial({ map: tex, toneMapped: false, side: THREE.FrontSide });
   const mesh = new THREE.Mesh(geo, mat);
   mesh.name = 'gangnamScreens';
   mesh.visible = false;
-  root.add(mesh);
+  const frameGeo = new THREE.BufferGeometry();
+  frameGeo.setAttribute('position', new THREE.Float32BufferAttribute(fpos, 3));
+  frameGeo.setIndex(fidx);
+  frameGeo.computeBoundingSphere();
+  const frameMat = new THREE.MeshBasicMaterial({ color: '#0072DD', toneMapped: false, side: THREE.FrontSide });
+  const frame = new THREE.Mesh(frameGeo, frameMat);
+  frame.name = 'gangnamScreenFrames';
+  frame.visible = false;
+  root.add(frame, mesh);
 
   const poles = list.filter((s) => s.kind === 'pole');
   let poleMesh = null;
@@ -193,12 +158,13 @@ export function createGangnamBillboards({ scene, baseUrl = '/', mobile = false, 
   }), { x0: Infinity, x1: -Infinity, z0: Infinity, z1: -Infinity });
   const uvAttr = geo.getAttribute('uv');
   let acc = 0, shown = false;
-  const setCell = (face, cell) => {
-    const u0 = cell / cols, u1 = (cell + 1) / cols;
-    uvAttr.setXY(face, u0, 1);
-    uvAttr.setXY(face + 1, u1, 1);
-    uvAttr.setXY(face + 2, u1, 0);
-    uvAttr.setXY(face + 3, u0, 0);
+  const setPair = (a, cell) => {
+    const frontC = faceCorners({ w: 1, h: 1, cell, cols, back: false });
+    const backC = faceCorners({ w: 1, h: 1, cell, cols, back: true });
+    for (let i = 0; i < 4; i++) {
+      uvAttr.setXY(a.front + i, frontC[i].u, frontC[i].v);
+      uvAttr.setXY(a.back + i, backC[i].u, backC[i].v);
+    }
   };
   return {
     root,
@@ -206,20 +172,19 @@ export function createGangnamBillboards({ scene, baseUrl = '/', mobile = false, 
     stats: { screens: list.length, poles: poles.length, mobile, atlas: `${canvas.width}x${canvas.height}` },
     update(dt, x, z) {
       const on = x >= box.x0 - 800 && x <= box.x1 + 800 && z >= box.z0 - 800 && z <= box.z1 + 800;
-      if (on !== shown) { shown = on; mesh.visible = on; if (poleMesh) poleMesh.visible = on; }
+      if (on !== shown) {
+        shown = on;
+        mesh.visible = on;
+        frame.visible = on;
+        if (poleMesh) poleMesh.visible = on;
+      }
       if (!on || mobile) return;
       acc += dt;
       const step = Math.floor(acc / FRAME_SEC);
       let dirty = false;
-      const shift = (Math.sin(acc * 0.7) * 0.5 + 0.5) * 0.08;
       for (const a of anim) {
         const cell = a.seq[step % a.seq.length];
-        if (cell !== a.cell) { a.cell = cell; setCell(a.face, cell); dirty = true; }
-        if (a.grad && a.cell === BUILTIN['builtin:gradient']) {
-          const u0 = a.cell / cols + shift * 0.15, u1 = (a.cell + 1) / cols - 0.02 + shift * 0.05;
-          uvAttr.setX(a.face, u0); uvAttr.setX(a.face + 1, u1); uvAttr.setX(a.face + 2, u1); uvAttr.setX(a.face + 3, u0);
-          dirty = true;
-        }
+        if (cell !== a.cell) { a.cell = cell; setPair(a, cell); dirty = true; }
       }
       if (dirty) uvAttr.needsUpdate = true;
     },
@@ -227,6 +192,8 @@ export function createGangnamBillboards({ scene, baseUrl = '/', mobile = false, 
       geo.dispose();
       mat.dispose();
       tex.dispose();
+      frameGeo.dispose();
+      frameMat.dispose();
       poleMesh?.geometry.dispose();
       poleMesh?.material.dispose();
       scene.remove(root);

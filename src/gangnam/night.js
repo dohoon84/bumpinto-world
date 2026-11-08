@@ -5,6 +5,8 @@ import * as THREE from 'three';
 import { buildStreetlightGeometries, LENS_DAY, LENS_NIGHT, POOL_GAIN, POOL_R, POOL_RZ, ARM } from '../world/streetlights.js';
 import { lightPoolMaterial } from '../world/nightLights.js';
 import { nightFade, nightTarget } from '../world/nightFade.js';
+import { setNightDim, gameHour } from '../weather.js';
+import { gangnamAmbientScale } from './nightTone.js';
 
 export function gangnamNightEnabled(search = typeof location !== 'undefined' ? location.search : '') {
   const q = new URLSearchParams(search || '');
@@ -68,7 +70,7 @@ export function createGangnamNight({ scene, terrain = null, url, mobile = false 
     root.add(body, lens);
     let pool = null;
     if (!mobile && n) {
-      const mat = lightPoolMaterial({ color: '#ffd59a', intensity: POOL_GAIN * 1.15, radius: POOL_R, radiusZ: POOL_RZ, focusX: ARM });
+      const mat = lightPoolMaterial({ color: '#fff3df', intensity: POOL_GAIN * 0.42, radius: POOL_R * 0.42, radiusZ: POOL_RZ * 0.38, focusX: ARM * 0.7 });
       pool = new THREE.InstancedMesh(geo.pool, mat, n);
       pool.name = 'gangnamLamp-pool';
       pool.frustumCulled = true;
@@ -111,13 +113,13 @@ export function createGangnamNight({ scene, terrain = null, url, mobile = false 
     const gn = gl.length / 4;
     stats.glow = gn;
     const ggeo = new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2);
-    const gmat = new THREE.MeshBasicMaterial({ color: '#ffb15a', toneMapped: false, transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending });
+    const gmat = new THREE.MeshBasicMaterial({ color: '#fff1dc', toneMapped: false, transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending });
     const glow = new THREE.InstancedMesh(ggeo, gmat, Math.max(1, gn));
     glow.name = 'gangnamGlow';
     glow.renderOrder = 1;
     for (let i = 0; i < gn; i++) {
       const len = gl[i * 4 + 3] || 10;
-      compose(m4, q, p, s, gl[i * 4], ground(gl[i * 4], gl[i * 4 + 1]) + 0.08, gl[i * 4 + 1], gl[i * 4 + 2], len, 1, mobile ? 2.2 : 3.4);
+      compose(m4, q, p, s, gl[i * 4], ground(gl[i * 4], gl[i * 4 + 1]) + 0.05, gl[i * 4 + 1], gl[i * 4 + 2], Math.min(len, 6), 1, mobile ? 1.1 : 1.35);
       glow.setMatrixAt(i, m4);
     }
     glow.count = gn;
@@ -173,7 +175,7 @@ export function createGangnamNight({ scene, terrain = null, url, mobile = false 
     }
     meshes.wmat.opacity = on ? v * (mobile ? 0.55 : 0.9) : 0;
     meshes.wins.visible = on && v > 0.02;
-    meshes.gmat.opacity = on ? v * (mobile ? 0.16 : 0.34) : 0;
+    meshes.gmat.opacity = on ? v * (mobile ? 0.08 : 0.14) : 0;
     meshes.glow.visible = on && v > 0.02;
     if (meshes.streaks) {
       meshes.streaks.material.opacity = on ? v * 0.55 : 0;
@@ -198,6 +200,7 @@ export function createGangnamNight({ scene, terrain = null, url, mobile = false 
       if (!meshes) return;
       acc += dt;
       if (acc > 0.4) { acc = 0; near.here = near(x, z); }
+      setNightDim(() => gangnamAmbientScale(gameHour(), near.here));
       apply(nightFade());
     },
     dispose() {

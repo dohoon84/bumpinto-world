@@ -25,9 +25,7 @@
 
 OSM `advertising` 이 박스 안에 0개라 **실측 좌표가 아니다.** 출구 10·11·사거리·테헤란로 보도/파사드에 규칙으로 놓았다. 목록은 `src/gangnam/billboards/placements.js`.
 
-그림은 `src/gangnam/billboards/manifest.js` 한 파일. 바꾸는 법은 그 폴더의 `README.md`. 지금 그림은 BUMP / bumpinto.world / BUMP24 / 그라데이션과 `public/favicon.svg`(지구+핀). 저장소에 파란 둥근 B 파일은 없다. 제3자 로고는 넣지 않는다. 최종 그림은 특급 디자이너가 오너 승인 후 경로만 갈아 끼운다.
-
-화면은 아틀라스 1장 + 메시 1개, 기둥은 인스턴스 1개. PC 는 4초마다 칸을 바꾸고 그라데이션만 UV 를 조금 민다. 모바일은 첫 장만.
+그림은 `manifest.js`. 기본은 공식 CI `public/corridor/gangnam/screens/bumpinto-logo.png`(비율 유지, 앞·뒤 각각 바른 방향). 폴 중심 4m 안은 가로수를 심지 않는다. 강남 따라보기 카메라는 지붕보다 낮으면 붐을 당긴다. 21시 전역 태양고도는 이미 밤(약 −42°)이고, 환경광을 더 낮추는 것은 강남 박스 안에서만이다.
 
 ## 미니맵 · 정류장 카드
 

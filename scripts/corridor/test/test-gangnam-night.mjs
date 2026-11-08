@@ -9,6 +9,11 @@ import { SCREENS, BUILTIN } from '../../../src/gangnam/billboards/manifest.js';
 import { gangnamNightEnabled } from '../../../src/gangnam/night.js';
 import { gangnamAdsEnabled } from '../../../src/gangnam/billboards/manifest.js';
 import { islandIndex, sameIsland, nearestScoped, placeCaption, collectPlaces, setNearScope, stopCardAllowed } from '../../../src/corridor/nearScope.js';
+import { faceCorners, fitInside, LOGO_ASPECT, LOGO_SRC } from '../../../src/gangnam/billboards/faces.js';
+import { treeBlockedByPole, POLES, POLE_CLEAR_M } from '../../../src/gangnam/billboards/clearance.js';
+import { shortenBoom } from '../../../src/gangnam/camClear.js';
+import { gangnamAmbientScale } from '../../../src/gangnam/nightTone.js';
+import { buildDetailTile } from '../../../src/corridor/tileMesh.js';
 
 const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), '../../..');
 const J = (f) => JSON.parse(fs.readFileSync(path.join(ROOT, f), 'utf8'));
@@ -69,7 +74,7 @@ for (const s of screens) {
   const srcs = entry.schedule?.length ? entry.schedule : [entry.src];
   for (const src of srcs) {
     assert.ok(BUILTIN[src] != null || src.startsWith('/'), `${s.id} src ${src}`);
-    assert.ok(!brands.test(src), src);
+    if (src !== LOGO_SRC) assert.ok(!brands.test(src), src);
   }
 }
 assert.ok(screens.some((s) => s.anchor === 'exit 10' && s.kind === 'pole'));
@@ -115,5 +120,53 @@ assert.ok(jamCap && jamCap.name === '잠실역', jamCap?.name);
 assert.equal(stopCardAllowed(jam.x, jam.z), true);
 assert.equal(nearestScoped(jam.x, jam.z, stops, { maxDist: 22, islands }), null);
 ok('scope: 강남 지명은 강남역, 정자 정류장·판교 이름 없음. 정자·잠실은 그대로');
+
+for (const s of Object.values(SCREENS)) {
+  assert.equal(s.src, LOGO_SRC);
+  assert.ok(!s.schedule?.includes('builtin:bump'));
+}
+const front = faceCorners({ w: 14, h: 7.5, cell: 0, cols: 4, back: false });
+const back = faceCorners({ w: 14, h: 7.5, cell: 0, cols: 4, back: true });
+const topOf = (cs, pred) => cs.filter((c) => c.ly > 0).reduce(pred);
+const fright = topOf(front, (a, b) => (a.lx > b.lx ? a : b));
+const fleft = topOf(front, (a, b) => (a.lx < b.lx ? a : b));
+assert.ok(fright.u > fleft.u && fright.v === 1 && fleft.v === 1, '앞면: 오른쪽이 그림의 오른쪽(핀 쪽), 위가 v=1');
+assert.equal(front.find((c) => c.lx === fleft.lx && c.ly < 0).v, 0);
+const bright = topOf(back, (a, b) => (a.lx < b.lx ? a : b));
+const bleft = topOf(back, (a, b) => (a.lx > b.lx ? a : b));
+assert.ok(bright.u > bleft.u && bleft.v === 1, '뒷면: 관찰자 오른쪽(−X)이 그림의 오른쪽');
+const fit = fitInside(14, 7.5);
+assert.ok(Math.abs(fit.w / fit.h - LOGO_ASPECT) < 1e-9 && fit.w <= 14 && fit.h <= 7.5);
+ok('logo aspect + UV front/back');
+
+const showPeer = (px, pz, x, z) => sameIsland(x, z, px, pz, islands);
+assert.equal(showPeer(8, -6, 0, 4), true, '정자 같은 섬 — 판교러버 이름·화살표 유지');
+assert.equal(showPeer(jam.x + 30, jam.z - 10, jam.x, jam.z), true, '잠실 같은 섬');
+assert.equal(showPeer(40, 1760, 20, 1700), true, '미금은 본선 섬');
+assert.equal(showPeer(gx, gz, 0, 0), false, '강남↔정자는 다른 섬이라 미니맵에서 숨김');
+ok('same-island peers stay, cross-island peers drop');
+
+assert.equal(POLE_CLEAR_M, 4);
+assert.ok(POLES.length >= 6);
+for (const p of POLES) {
+  assert.ok(treeBlockedByPole(p.x + 1, p.z, POLES));
+  assert.equal(treeBlockedByPole(p.x + 6, p.z, POLES), null);
+}
+{
+  const key = '-15_-30';
+  const built = buildDetailTile(key, J(`public/corridor/gangnam/tiles/${key}.json`), { onRoadAll: () => false });
+  for (const [x, z] of built.treePts) assert.equal(treeBlockedByPole(x, z), null, `tree ${x},${z}`);
+  built.dispose();
+}
+ok('poles keep 4m clear of street trees');
+
+assert.equal(shortenBoom(20, () => false), 20);
+const pulled = shortenBoom(28, (d) => d > 9);
+assert.ok(pulled <= 9 && pulled >= 2.4, pulled);
+assert.equal(gangnamAmbientScale(14, true), 1);
+assert.equal(gangnamAmbientScale(21, false), 1);
+assert.ok(gangnamAmbientScale(21, true) < 0.7);
+assert.ok(gangnamAmbientScale(2, true) < 0.7);
+ok('camera boom shortens inside a roof, gangnam ambient only at night');
 
 console.log(`gangnam-night ${n} ok`);

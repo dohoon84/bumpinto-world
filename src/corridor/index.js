@@ -127,6 +127,15 @@ export function createCorridor({ scene, corridorData, terrain, world, renderer, 
     }
     return false;
   };
+  // [gangnam-night] 카메라가 건물 안에 들어가지 않게. 로드된 상세 타일의 지붕 높이.
+  const roofAt = (x, z) => {
+    let h = 0;
+    for (const t of loaded) {
+      if (!near(t, x, z, 4) || !t.detail.roofAt) continue;
+      h = Math.max(h, t.detail.roofAt(x, z));
+    }
+    return h;
+  };
   const onRoadAll = (x, z) => liveOnRoad(x, z) || corridorOnRoad(x, z);
 
   function buildOne() {
@@ -357,7 +366,7 @@ export function createCorridor({ scene, corridorData, terrain, world, renderer, 
     regions, // [perf-memory] 지역 지연 로드 레지스트리(null 이면 꺼짐). 미금 등은 regions.register({...}) 로 붙는다 — docs/perf-memory.md
     liveBox: live, // [ride]
     get lotte() { return lotte; },
-    isBlocked: corridorBlocked, onRoad: corridorOnRoad,
+    isBlocked: corridorBlocked, onRoad: corridorOnRoad, roofAt,
     afterTerrain() { addOuterGround(); },
     // 버스·차량·보행 NPC (수내 → 롯데). game.js 가 버스 프록시가 정해진 뒤 한 번 부른다. ?clife=0 이면 끔
     attachLife({ proxy, mode, liveDrive = null, liveCrossings = null } = {}) { // [ride] liveDrive: 정자 차도(읽기 전용, 정자 택시 호출용)
