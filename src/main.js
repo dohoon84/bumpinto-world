@@ -3,8 +3,13 @@ import { initAnalytics, trackEvent } from './analytics.js';
 import { isMobileMode } from './mobile/flag.js';
 
 initAnalytics();
-// [notice-launch] 첫 화면 모바일 오픈 안내(자체 완결 모듈, 실패해도 무시)
-import('./notice/launchPopup.js').then((m) => m.showLaunchNotice()).catch(() => {});
+// [bp24-poster] 이벤트 포스터를 먼저 띄운다. 닫힌 뒤에만 모바일 오픈 안내. 둘은 겹치지 않는다.
+import('./notice/posterPopup.js').then(async (m) => {
+  const poster = m.showPoster();
+  if (poster?.closed) await poster.closed;
+}).catch(() => {}).finally(() => {
+  import('./notice/launchPopup.js').then((m) => m.showLaunchNotice()).catch(() => {});
+});
 
 if (isMobileMode()) {
   // [mobile] 핸드폰·태블릿(또는 ?mobile=1): PC 전용 안내 대신 모바일 전용 시작화면 → 게임. ?mobile=0 이면 아래 기존 경로
