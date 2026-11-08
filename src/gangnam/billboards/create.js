@@ -1,13 +1,13 @@
 // [gangnam-ads] 미디어폴·전광판. 자리 = placements.js, 그림 = manifest.js.
-//   로고 쿼드는 그림 비율 그대로(fitInside). 앞·뒤 쿼드를 따로 두어 양쪽에서 핀이 원본과 같은 쪽에 있다.
-//   화면 틀(파란 여백)은 로고와 다른 메시. 텍스처는 아틀라스 1장.
+//   로고 쿼드는 그림 비율 그대로, 화면보다 작게(logoPlacement) 두어 네 변에 밝은 여백이 남는다.
+//   앞·뒤 쿼드를 따로 두어 양쪽에서 핀이 원본과 같은 쪽에 있다. 텍스처는 아틀라스 1장.
 //   ?gangnamads=0 · ?gangnam=0 이면 만들지 않는다.
 import * as THREE from 'three';
 import placements from './placements.js';
 import { SCREENS, BUILTIN, FRAME_SEC } from './manifest.js';
-import { faceCorners, fitInside, LOGO_ASPECT, LOGO_SRC } from './faces.js';
+import { faceCorners, logoPlacement, LOGO_ASPECT, LOGO_PAD_COLOR, LOGO_SRC } from './faces.js';
 
-const IH = 512;
+const IH = 256;
 const IW = Math.round(IH * LOGO_ASPECT);
 
 function sourcesOf(entry) {
@@ -58,7 +58,7 @@ export function createGangnamBillboards({ scene, baseUrl = '/', mobile = false, 
   canvas.width = IW * cols;
   canvas.height = IH;
   const ctx = canvas.getContext('2d');
-  ctx.fillStyle = '#0072DD';
+  ctx.fillStyle = LOGO_PAD_COLOR;
   ctx.fillRect(0, 0, IW, IH);
   paintText(ctx, 1, 'bumpinto', '.world', ['#245b86', '#1a3f5c']);
   paintText(ctx, 2, 'BUMP24', '강남대로', ['#2a4d78', '#1c3554']);
@@ -71,11 +71,15 @@ export function createGangnamBillboards({ scene, baseUrl = '/', mobile = false, 
   const tex = new THREE.CanvasTexture(canvas);
   tex.colorSpace = THREE.SRGBColorSpace;
   tex.flipY = true;
-  tex.anisotropy = 4;
+  tex.generateMipmaps = false;
+  tex.minFilter = THREE.LinearFilter;
+  tex.magFilter = THREE.LinearFilter;
   const paintLogo = (img) => {
-    ctx.fillStyle = '#0072DD';
+    ctx.fillStyle = LOGO_PAD_COLOR;
     ctx.fillRect(0, 0, IW, IH);
-    ctx.drawImage(img, 0, 0, IW, IH);
+    const sc = Math.min(IW / img.width, IH / img.height);
+    const dw = img.width * sc, dh = img.height * sc;
+    ctx.drawImage(img, (IW - dw) / 2, (IH - dh) / 2, dw, dh);
     tex.needsUpdate = true;
   };
   const logo = new Image();
@@ -108,8 +112,8 @@ export function createGangnamBillboards({ scene, baseUrl = '/', mobile = false, 
     const entry = SCREENS[s.id];
     const seq = (mobile ? [entry.src] : sourcesOf(entry)).map((src) => cellOf(src));
     const y = s.kind === 'pole' ? ground(s.x, s.z) + (s.poleH || 5.6) - s.h / 2 : ground(s.x, s.z) + s.y;
-    const fit = fitInside(s.w, s.h, LOGO_ASPECT);
-    // 로고가 파란 판보다 관찰자 쪽에 있고, 둘 다 기둥(반지름 0.16) 앞에 있다.
+    const fit = logoPlacement(s.w, s.h);
+    // 로고가 밝은 판보다 관찰자 쪽에 있고, 둘 다 기둥(반지름 0.16) 앞에 있다.
     const front = pushFace(pos, uv, idx, s.x, y, s.z, s.yaw, faceCorners({ w: fit.w, h: fit.h, cell: seq[0], cols, back: false, z: 0.28 }));
     const back = pushFace(pos, uv, idx, s.x, y, s.z, s.yaw, faceCorners({ w: fit.w, h: fit.h, cell: seq[0], cols, back: true, z: 0.28 }));
     pushFace(fpos, null, fidx, s.x, y, s.z, s.yaw, faceCorners({ w: s.w, h: s.h, cell: 0, cols, back: false, z: 0.2 }));
@@ -129,7 +133,7 @@ export function createGangnamBillboards({ scene, baseUrl = '/', mobile = false, 
   frameGeo.setAttribute('position', new THREE.Float32BufferAttribute(fpos, 3));
   frameGeo.setIndex(fidx);
   frameGeo.computeBoundingSphere();
-  const frameMat = new THREE.MeshBasicMaterial({ color: '#0072DD', toneMapped: false, side: THREE.FrontSide });
+  const frameMat = new THREE.MeshBasicMaterial({ color: LOGO_PAD_COLOR, toneMapped: false, side: THREE.FrontSide });
   const frame = new THREE.Mesh(frameGeo, frameMat);
   frame.name = 'gangnamScreenFrames';
   frame.visible = false;

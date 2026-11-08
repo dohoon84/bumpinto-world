@@ -9,7 +9,8 @@ import { SCREENS, BUILTIN } from '../../../src/gangnam/billboards/manifest.js';
 import { gangnamNightEnabled } from '../../../src/gangnam/night.js';
 import { gangnamAdsEnabled } from '../../../src/gangnam/billboards/manifest.js';
 import { islandIndex, sameIsland, nearestScoped, placeCaption, collectPlaces, setNearScope, stopCardAllowed } from '../../../src/corridor/nearScope.js';
-import { faceCorners, fitInside, LOGO_ASPECT, LOGO_SRC } from '../../../src/gangnam/billboards/faces.js';
+import { faceCorners, fitInside, logoPlacement, logoUvRect, LOGO_ASPECT, LOGO_PAD, LOGO_SRC } from '../../../src/gangnam/billboards/faces.js';
+import placements from '../../../src/gangnam/billboards/placements.js';
 import { treeBlockedByPole, POLES, POLE_CLEAR_M } from '../../../src/gangnam/billboards/clearance.js';
 import { shortenBoom } from '../../../src/gangnam/camClear.js';
 import { gangnamAmbientScale } from '../../../src/gangnam/nightTone.js';
@@ -137,6 +138,20 @@ const bleft = topOf(back, (a, b) => (a.lx > b.lx ? a : b));
 assert.ok(bright.u > bleft.u && bleft.v === 1, '뒷면: 관찰자 오른쪽(−X)이 그림의 오른쪽');
 const fit = fitInside(14, 7.5);
 assert.ok(Math.abs(fit.w / fit.h - LOGO_ASPECT) < 1e-9 && fit.w <= 14 && fit.h <= 7.5);
+for (const s of placements.screens) {
+  const p = logoPlacement(s.w, s.h);
+  const cell = logoUvRect(0, 4);
+  const corners = faceCorners({ w: p.w, h: p.h, cell: 0, cols: 4, back: false });
+  const u0 = Math.min(...corners.map((c) => c.u));
+  const u1 = Math.max(...corners.map((c) => c.u));
+  const v0 = Math.min(...corners.map((c) => c.v));
+  const v1 = Math.max(...corners.map((c) => c.v));
+  assert.ok(Math.abs(p.w / p.h - LOGO_ASPECT) < 1e-9, s.id);
+  assert.ok(p.mx >= Math.min(s.w, s.h) * LOGO_PAD - 1e-9 && p.my >= Math.min(s.w, s.h) * LOGO_PAD - 1e-9, s.id);
+  assert.ok(Math.abs(p.mx * 2 + p.w - s.w) < 1e-9 && Math.abs(p.my * 2 + p.h - s.h) < 1e-9, s.id);
+  assert.ok(u0 >= cell.u0 - 1e-9 && u1 <= cell.u1 + 1e-9 && v0 >= cell.v0 - 1e-9 && v1 <= cell.v1 + 1e-9, s.id);
+  assert.ok(u1 - u0 <= cell.u1 - cell.u0 + 1e-9 && v1 - v0 <= 1, s.id);
+}
 ok('logo aspect + UV front/back');
 
 const showPeer = (px, pz, x, z) => sameIsland(x, z, px, pz, islands);

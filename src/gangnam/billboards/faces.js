@@ -6,12 +6,36 @@
 export const LOGO_SRC = '/corridor/gangnam/screens/bumpinto-logo.png';
 export const LOGO_PX = { w: 689, h: 768 };
 export const LOGO_ASPECT = LOGO_PX.w / LOGO_PX.h;
+/** 짧은 변의 이 비율만큼을 네 변의 최소 여백으로 둔다. 로고는 화면 가장자리에 닿지 않는다. */
+export const LOGO_PAD = 0.12;
+/** 로고 바깥 여백. B(#0172DD)와 구분되도록 아주 밝은색. */
+export const LOGO_PAD_COLOR = '#f4f8ff';
 
 /** 화면 사각형 안에 로고 비율을 유지한 채 들어가는 크기. 늘리지 않는다. */
 export function fitInside(boxW, boxH, aspect = LOGO_ASPECT) {
   const boxA = boxW / boxH;
   if (aspect > boxA) return { w: boxW, h: boxW / aspect };
   return { w: boxH * aspect, h: boxH };
+}
+
+/**
+ * 화면 한가운데에 로고를 넣는다. 689:768 을 유지하고, 좌우·상하 여백은 각각 같다.
+ * 네 변 모두 최소 LOGO_PAD × 짧은 변 만큼 비운다.
+ */
+export function logoPlacement(screenW, screenH, aspect = LOGO_ASPECT, pad = LOGO_PAD) {
+  const m = Math.min(screenW, screenH) * pad;
+  const fit = fitInside(screenW - 2 * m, screenH - 2 * m, aspect);
+  return {
+    w: fit.w,
+    h: fit.h,
+    mx: (screenW - fit.w) / 2,
+    my: (screenH - fit.h) / 2,
+  };
+}
+
+/** 로고 아틀라스 칸의 UV. 픽셀 비율은 LOGO_ASPECT 이고, 화면이 쓰는 칸 안에 있다. */
+export function logoUvRect(cell, cols) {
+  return { u0: cell / cols, u1: (cell + 1) / cols, v0: 0, v1: 1 };
 }
 
 /**
