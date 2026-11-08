@@ -30,6 +30,7 @@ import { createGangnamBillboards } from './gangnam/billboards/create.js'; // [ga
 import { gangnamAdsEnabled } from './gangnam/billboards/manifest.js'; // [gangnam-ads]
 import { gangnamEnabled } from './corridor/gangnam.js'; // [gangnam] 브이월드 높이 출처 문구
 import { BUS_CREDIT, gangnamBusEnabled } from './corridor/gangnamBus.js'; // [gangnam-bus]
+import { GYEONGGI_BUS_CREDIT } from './corridor/gyeongbuExpress.js'; // [gyeongbu-bus]
 import { mountPhone } from './phone.js';
 import { mountHandset } from './handset.js';
 import { mountCamera } from './camera/index.js'; // [camera] 폰 카메라·사진 앱 (?camera=0 이면 끔, 본체는 처음 열 때 지연 로드)
@@ -2010,7 +2011,7 @@ function syncGameLocale() {
     if (corridorDir && gangnamEnabled(location.search)) rest += en
       ? ' · Gangnam building heights: MOLIT VWorld GIS building data (KOGL Type 1: attribution), <a href="https://www.data.go.kr/data/15083092/fileData.do" target="_blank" rel="noopener">https://www.data.go.kr/data/15083092/fileData.do</a>'
       : ' · 건물 높이: 국토교통부 브이월드 GIS건물통합정보 (공공누리 제1유형: 출처표시), <a href="https://www.data.go.kr/data/15083092/fileData.do" target="_blank" rel="noopener">https://www.data.go.kr/data/15083092/fileData.do</a>';
-    if (corridorDir && gangnamBusEnabled(location.search)) rest += ` · ${BUS_CREDIT}`;
+    if (corridorDir && gangnamBusEnabled(location.search)) rest += ` · ${BUS_CREDIT} · ${GYEONGGI_BUS_CREDIT}`;
     // [shops] 1층 상가 출처 (소상공인시장진흥공단 상가(상권)정보, 공공데이터포털 15083033)
     if (world.shops) rest += en
       ? ' · Shops: <a href="https://www.data.go.kr/data/15083033/fileData.do" target="_blank" rel="noopener">SEMAS</a> (data.go.kr)'

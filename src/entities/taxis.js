@@ -9,6 +9,7 @@
 //         taxis.update(dt)  /  taxis.fastForward(sec)  /  taxis.list
 import * as THREE from 'three';
 import { createTaxi, pickLivery, TAXI_LIVERIES, taxiLength } from './taxiModel.js';
+import { carLaneIndex } from '../corridor/gyeongbuSpeed.js'; // [gyeongbu-bus] 경부 1차로는 버스만
 
 const SPEED = { motorway: 22, motorway_link: 13, trunk: 17, trunk_link: 12, primary: 13.9, primary_link: 10, secondary: 12, secondary_link: 9, tertiary: 10, tertiary_link: 8, residential: 7, unclassified: 7.5, living_street: 4, service: 4.5 };
 const WEIGHT = { motorway: 0.5, motorway_link: 0.25, trunk: 0.8, trunk_link: 0.4, primary: 3, primary_link: 1, secondary: 2.4, secondary_link: 0.8, tertiary: 1.8, residential: 0.9, unclassified: 0.9, living_street: 0.3, service: 0.12 };
@@ -55,7 +56,12 @@ export class Taxis {
   _inBox(x, z, m = 0) { const b = this.bb; return x > b.x0 - m && x < b.x1 + m && z > b.z0 - m && z < b.z1 + m; }
   _laneOffset(t, w) {
     const lanes = w.lanes || Math.max(1, Math.round(w.w / 3.3));
-    if (w.ow) { const lw = w.w / lanes, li = Math.min(lanes - 1, t.lane); return w.w / 2 - (li + 0.5) * lw; }
+    if (w.ow) {
+      const lw = w.w / lanes;
+      let li = Math.min(lanes - 1, t.lane || 0);
+      if (w.name === '경부고속도로') li = carLaneIndex(lanes, li);
+      return w.w / 2 - (li + 0.5) * lw;
+    }
     const per = Math.max(1, Math.floor(lanes / 2)), lw = w.w / 2 / per, li = Math.min(per - 1, t.lane);
     return Math.max(0.9, w.w / 2 - (li + 0.5) * lw);
   }

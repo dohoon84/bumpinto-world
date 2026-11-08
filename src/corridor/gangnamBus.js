@@ -4,6 +4,7 @@
 import * as THREE from 'three';
 import { ribbonGeo } from '../world.js';
 import { gameHour } from '../weather.js';
+import { mountGyeongbuExpress } from './gyeongbuExpress.js';
 
 export const GANGNAM_BUS_FILE = 'gangnam/transit.json';
 export const BUS_CREDIT = '버스 노선·정류소 정보: 서울특별시 (공공데이터포털)';
@@ -102,7 +103,7 @@ function pointAt(pts, s) {
   return { x: p[0], z: p[1], ang: 0 };
 }
 
-export function mountGangnamTransit(root, data, { overlay } = {}) {
+export function mountGangnamTransit(root, data, { overlay, express = null } = {}) {
   if (!data?.pts?.length) return null;
   const group = new THREE.Group();
   group.name = 'gangnamGyeongbu';
@@ -148,6 +149,7 @@ export function mountGangnamTransit(root, data, { overlay } = {}) {
     }
   }
   root.add(group);
+  const expressRun = mountGyeongbuExpress(group, express, { overlay });
   let lastMin = -1;
 
   function update(_dt, x, z) {
@@ -169,6 +171,7 @@ export function mountGangnamTransit(root, data, { overlay } = {}) {
       buses.setMatrixAt(i, m4);
     });
     if (runners.length) buses.instanceMatrix.needsUpdate = true;
+    expressRun?.update(min, kind, x, z);
     if (min !== lastMin) {
       lastMin = min;
       for (const { s, item } of labels) {
