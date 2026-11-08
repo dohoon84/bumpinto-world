@@ -72,9 +72,11 @@ const SHOW_R = 140, LOD_R = 55, PLACE_R = 170, REPLACE_R = 230;
 const now = () => (typeof performance !== 'undefined' ? performance.now() : Date.now());
 
 // opts: mg(migeum/index.json) · loader · terrain · isFree(x,z) · freeSpot(x,z) · tileReady(key) · getHour · seed · count
-export function createMigeumPeds({ mg, loader, terrain = null, isFree = () => true, freeSpot = (x, z) => ({ x, z }), tileReady = () => true, getHour = gameHour, seed = 5151, count = 0, force = migeumNpcForce() } = {}) {
+// densityAt·lookFn·pathFor·hold 는 강남 NPC 가 같은 배치 루프를 쓸 때 넣는 선택 훅. 없으면 미금과 같다.
+export function createMigeumPeds({ mg, loader, terrain = null, isFree = () => true, freeSpot = (x, z) => ({ x, z }), tileReady = () => true, getHour = gameHour, seed = 5151, count = 0, force = migeumNpcForce(), densityAt = null, lookFn = null, pathFor = null, hold = null } = {}) {
   count = force || count || MAX_PEDS;
-  const dens = (h) => { const d = pedDensityAt(h); return force ? { ...d, count: force } : d; };
+  const densFn = densityAt || pedDensityAt;
+  const dens = (h) => { const d = densFn(h); return force ? { ...d, count: force } : d; };
   let rs = seed; const rnd = () => ((rs = (rs * 16807) % 2147483647) / 2147483647);
   const exits = (mg?.stations || []).flatMap((s) => s.exits || []);
   let spots = null;
@@ -100,7 +102,7 @@ export function createMigeumPeds({ mg, loader, terrain = null, isFree = () => tr
   }
   const actors = [];
   for (let i = 0; i < count; i++) {
-    const mesh = createAvatar(townLook(rnd)); mesh.visible = false;
+    const mesh = createAvatar((lookFn || townLook)(rnd)); mesh.visible = false;
     actors.push({ i, mesh, parts: null, path: null, cum: null, L: 0, s: 0, dir: 1, speed: 1, idle: 0, y: 0, leaving: false, shown: false, kind: null, spot: null });
   }
   function chooseKind(mix) { let r = rnd(); for (const [k, w] of Object.entries(mix)) { r -= w; if (r <= 0) return k; } return 'exit'; }
@@ -119,12 +121,16 @@ export function createMigeumPeds({ mg, loader, terrain = null, isFree = () => tr
       }
       if (!sp) continue;
       const at = ready(sp, kind === 'shop' ? 40 : 12); if (!at) continue;
-      const path = freePath(at.x, at.z, 2.5, kind === 'exit' ? 10 : kind === 'shop' ? 12 : 22); // 출입구·상가 앞은 짧게 오가며 붐비게
+      const built = pathFor ? pathFor({ kind, at, rnd, spot: sp }) : null;
+      const cross = !!(built && !Array.isArray(built) && built.cross);
+      let path = Array.isArray(built) ? built : built?.pts;
+      if (!path || path.length < 2) path = freePath(at.x, at.z, 2.5, kind === 'exit' ? 10 : kind === 'shop' ? 12 : 22); // 출입구·상가 앞은 짧게 오가며 붐비게
       if (!path) continue;
       if (rnd() < 0.5) path.reverse(); // 절반은 그 장소로 '향해' 걷는다
       const cum = [0]; for (let k = 1; k < path.length; k++) cum.push(cum[k - 1] + Math.hypot(path[k][0] - path[k - 1][0], path[k][1] - path[k - 1][1]));
       if (a.spot) a.spot.load--; a.spot = sp; sp.load++;
-      Object.assign(a, { path, cum, L: cum[cum.length - 1], s: rnd() * cum[cum.length - 1], dir: rnd() < 0.5 ? 1 : -1, kind, idle: 0, leaving: false });
+      const L = cum[cum.length - 1];
+      Object.assign(a, { path, cum, L, s: cross ? (rnd() < 0.5 ? 0 : L) : rnd() * L, dir: rnd() < 0.5 ? 1 : -1, kind, idle: 0, leaving: false, cross });
       a.speed = (kind === 'exit' && (D.period === 'morning' || D.period === 'evening') ? 1.2 : 0.95) + rnd() * 0.3;
       return true;
     }
@@ -166,10 +172,18 @@ export function createMigeumPeds({ mg, loader, terrain = null, isFree = () => tr
         let v = 0;
         if (a.idle > 0) a.idle -= dt;
         else {
-          v = a.speed; a.s += a.dir * v * dt;
-          if (a.s <= 0 || a.s >= a.L) {
-            a.s = Math.max(0, Math.min(a.L, a.s)); a.dir *= -1; a.idle = (a.kind === 'shop' ? 3 : 1) + rnd() * 4;
-            if (a.leaving) { hide(a); continue; }
+          v = a.speed;
+          if (hold && a.path) {
+            const aheadS = Math.max(0, Math.min(a.L, a.s + a.dir * Math.max(1.2, v * 0.35)));
+            const ahead = sample(a, aheadS);
+            if (hold(a, ahead[0], ahead[1])) v = 0;
+          }
+          if (v > 0) {
+            a.s += a.dir * v * dt;
+            if (a.s <= 0 || a.s >= a.L) {
+              a.s = Math.max(0, Math.min(a.L, a.s)); a.dir *= -1; a.idle = (a.kind === 'shop' ? 3 : 1) + rnd() * 4;
+              if (a.leaving) { hide(a); continue; }
+            }
           }
         }
         const [x, z, dx, dz] = sample(a, a.s);
@@ -231,7 +245,7 @@ export class MigeumCars extends JzCars {
 }
 
 // 배치 재질: vehicleMaterial 과 같은 셰이더 수정(차체만 인스턴스 색 · 저녁 등 발광)을 BatchedMesh 색(getBatchingColor)으로
-function batchedVehicleMaterial() {
+export function batchedVehicleMaterial() {
   const eve = { value: 0 };
   const m = new THREE.MeshLambertMaterial({ color: '#ffffff', vertexColors: true });
   m.onBeforeCompile = (sh) => {
