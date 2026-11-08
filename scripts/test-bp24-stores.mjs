@@ -1,7 +1,7 @@
 // 배치된 BUMP24 마다: 렌더되는 건물 메시 안에 상자가 있는지, 차도·광장과 안 겹치는지, 문이 길을 보는지,
 // 문 앞 2.4m 안에 차도·벽이 아닌 자리가 있는지, 기본 주소에서 안내가 켜지는지, 표시 이름에 체인 상호가 없는지.
 import fs from 'fs';
-import { bp24DoorInfo, bp24TileKey, prepareJeongjaBp24, resolveBp24 } from '../src/corridor/bp24.js';
+import { bp24DoorInfo, bp24ShellWalls, bp24TileKey, prepareJeongjaBp24, resolveBp24 } from '../src/corridor/bp24.js';
 import { BP24_PLACEMENTS, bump24AtSpot } from '../src/corridor/bp24Locations.js';
 import { bump24StorePrompts } from '../src/bump24game/flag.js';
 import { assessStore, nearestNamedRoad } from './lib/bp24-mesh.mjs';
@@ -144,6 +144,22 @@ for (const spec of BP24_PLACEMENTS) {
     if (doosan && inside(st.center[0], st.center[1], doosan.o)) fail.push(`${spec.id} 중심이 두산타워 풋프린트에 남음`);
     if (Math.hypot(spec.atX - (-224.4), spec.atZ - 211.9) < 5) fail.push(`${spec.id} 이정·착지 좌표가 옛 공터`);
     if (Math.hypot(door.x - spec.atX, door.z - spec.atZ) > 1.2) fail.push(`${spec.id} 착지가 문에서 멀다`);
+    const walls = bp24ShellWalls(st);
+    const segD = (x, z, a, b) => {
+      const dx = b[0] - a[0], dz = b[1] - a[1], L2 = dx * dx + dz * dz || 1;
+      const t = Math.max(0, Math.min(1, ((x - a[0]) * dx + (z - a[1]) * dz) / L2));
+      return Math.hypot(a[0] + dx * t - x, a[1] + dz * t - z);
+    };
+    const wallD = (x, z) => {
+      let d = Infinity;
+      for (const w of walls) for (let i = 0; i < w.length; i++) d = Math.min(d, segD(x, z, w[i], w[(i + 1) % w.length]));
+      return d;
+    };
+    if (wallD(-196.3, 251.8) > 0.5) fail.push(`${spec.id} 사선 모서리에 1층 벽이 없음`);
+    if (wallD(-198, 229) > 0.5) fail.push(`${spec.id} 매장 북쪽 서쪽 벽에 1층 벽이 없음`);
+    if (wallD(-170, 253.4) > 0.5) fail.push(`${spec.id} 이름표 쪽 남쪽 벽에 1층 벽이 없음`);
+    if (wallD(-198, 242) < 1.5) fail.push(`${spec.id} 서쪽 유리 앞이 벽으로 막힘`);
+    if (wallD(door.x, door.z) < 1.5) fail.push(`${spec.id} 출입문이 1층 벽에 막힘`);
   }
   if (spec.id === 'seongnam-cityhall') {
     if (bump24StorePrompts(spec.id, '')) fail.push('시청점 안내가 기본 주소에서 켜짐');

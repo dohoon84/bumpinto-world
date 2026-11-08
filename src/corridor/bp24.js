@@ -896,6 +896,109 @@ function bp24PorchWalls(st) {
   return { gf: st.gf, rings: [ring(0, t, span(0)), ring(st.W - t, st.W, span(st.W))] };
 }
 
+function shellWorld(st, x, z) {
+  return [st.o[0] + st.ax[0] * x + st.b[0] * z, st.o[1] + st.ax[1] * x + st.b[1] * z];
+}
+
+/** 매장 유리가 보는 두 면(앞, 옆). 옆면이 없으면 앞만. */
+function storeGlassFaces(st) {
+  const faces = [{ a: shellWorld(st, 0, 0), b: shellWorld(st, st.W, 0), n: [-st.b[0], -st.b[1]] }];
+  if (st.side) faces.push({ a: shellWorld(st, st.W, 0), b: shellWorld(st, st.W, st.D), n: [st.ax[0], st.ax[1]] });
+  return faces;
+}
+
+function glassCutOnEdge(a, b, face) {
+  const dx = b[0] - a[0], dz = b[1] - a[1], L = Math.hypot(dx, dz) || 1;
+  const dirx = dx / L, dirz = dz / L;
+  const fx = face.b[0] - face.a[0], fz = face.b[1] - face.a[1], fL = Math.hypot(fx, fz) || 1;
+  const fdx = fx / fL, fdz = fz / fL;
+  if (Math.abs(dirx * fdx + dirz * fdz) < 0.82) return null;
+  const mx = (a[0] + b[0]) / 2, mz = (a[1] + b[1]) / 2;
+  const vx = mx - face.a[0], vz = mz - face.a[1];
+  const along = vx * fdx + vz * fdz;
+  const dist = Math.hypot(mx - (face.a[0] + fdx * along), mz - (face.a[1] + fdz * along));
+  if (dist > 3.6) return null;
+  const uOf = (p) => (p[0] - face.a[0]) * fdx + (p[1] - face.a[1]) * fdz;
+  const u0 = uOf(a), u1 = uOf(b);
+  const lo = Math.max(Math.min(u0, u1), -0.35), hi = Math.min(Math.max(u0, u1), fL + 0.35);
+  if (hi - lo < 0.4) return null;
+  const tAt = (u) => (u - u0) / ((u1 - u0) || 1);
+  let t0 = tAt(u0 <= u1 ? lo : hi), t1 = tAt(u0 <= u1 ? hi : lo);
+  if (t0 > t1) { const s = t0; t0 = t1; t1 = s; }
+  t0 = Math.max(0, t0); t1 = Math.min(1, t1);
+  return t1 - t0 > 0.02 ? [t0, t1, fdx, fdz] : null;
+}
+
+/**
+ * 1층을 통째로 비운 건물에서, 매장 유리가 아닌 외곽(사선 모서리 포함)을 막는 얇은 벽.
+ * 유리 앞 외곽은 비워서 모서리 매장이 보이게 하고, 그 틈 옆은 유리까지 이어 막는다.
+ */
+export function bp24ShellWalls(st) {
+  const ring = st?.colRing;
+  if (!ring || ring.length < 3 || !st.o) return [];
+  let area = 0;
+  for (let i = 0; i < ring.length; i++) {
+    const a = ring[i], c = ring[(i + 1) % ring.length];
+    area += a[0] * c[1] - c[0] * a[1];
+  }
+  let cx = 0, cz = 0;
+  for (const p of ring) { cx += p[0]; cz += p[1]; }
+  cx /= ring.length; cz /= ring.length;
+  const faces = storeGlassFaces(st);
+  const thick = 0.36;
+  const walls = [];
+  const quad = (a, b, nx, nz) => {
+    const L = Math.hypot(b[0] - a[0], b[1] - a[1]);
+    if (L < 0.25) return;
+    let ox = nx, oz = nz;
+    if (ox * (a[0] - cx) + oz * (a[1] - cz) < 0) { ox = -ox; oz = -oz; }
+    walls.push([
+      [a[0], a[1]],
+      [b[0], b[1]],
+      [b[0] - ox * thick, b[1] - oz * thick],
+      [a[0] - ox * thick, a[1] - oz * thick],
+    ]);
+  };
+  for (let i = 0; i < ring.length; i++) {
+    const a = ring[i], c = ring[(i + 1) % ring.length];
+    const dx = c[0] - a[0], dz = c[1] - a[1], L = Math.hypot(dx, dz);
+    if (L < 0.2) continue;
+    let nx = dz / L, nz = -dx / L;
+    if (area > 0) { nx = -nx; nz = -nz; }
+    if (nx * (a[0] - cx) + nz * (a[1] - cz) < 0) { nx = -nx; nz = -nz; }
+    const cuts = [];
+    for (const face of faces) {
+      const hit = glassCutOnEdge(a, c, face);
+      if (hit) cuts.push(hit);
+    }
+    cuts.sort((p, q) => p[0] - q[0]);
+    let cursor = 0;
+    const at = (t) => [a[0] + dx * t, a[1] + dz * t];
+    for (const [t0, t1] of cuts) {
+      if (t0 > cursor + 0.01) quad(at(cursor), at(t0), nx, nz);
+      for (const t of [t0, t1]) {
+        const p = at(t);
+        let face = faces[0];
+        let best = Infinity;
+        for (const f of faces) {
+          const fx = f.b[0] - f.a[0], fz = f.b[1] - f.a[1], fl = Math.hypot(fx, fz) || 1;
+          const uu = ((p[0] - f.a[0]) * fx + (p[1] - f.a[1]) * fz) / fl;
+          const qx = f.a[0] + (fx / fl) * uu, qz = f.a[1] + (fz / fl) * uu;
+          const d = Math.hypot(p[0] - qx, p[1] - qz);
+          if (d < best) { best = d; face = f; }
+        }
+        const fx = face.b[0] - face.a[0], fz = face.b[1] - face.a[1], fl = Math.hypot(fx, fz) || 1;
+        const uu = Math.max(0, Math.min(fl, ((p[0] - face.a[0]) * fx + (p[1] - face.a[1]) * fz) / fl));
+        const q = [face.a[0] + (fx / fl) * uu, face.a[1] + (fz / fl) * uu];
+        if (Math.hypot(q[0] - p[0], q[1] - p[1]) > 0.2) quad(p, q, nx, nz);
+      }
+      cursor = Math.max(cursor, t1);
+    }
+    if (cursor < 0.99) quad(at(cursor), at(1), nx, nz);
+  }
+  return walls;
+}
+
 // buildWorld 전에 부른다. 위층은 mh=gf 부터 그리고, 1층 충돌은 들인 외곽(_skip)으로 남긴다. 매장 메시는 mountBasemapBp24.
 export function prepareJeongjaBp24(data, search) {
   const specs = activePlacements('jeongja', search);
@@ -911,6 +1014,8 @@ export function prepareJeongjaBp24(data, search) {
     if (!st) continue;
     src.mh = st.gf;
     src.lm = 'bp24';
+    const shell = bp24ShellWalls(st);
+    if (shell.length) src._bp24Shell = { gf: st.gf, rings: shell };
     st.porch = !!(st.sealEnds && st.recess > 0.2);
     if (st.porch) src._bp24Porch = bp24PorchWalls(st);
     data.buildings.push({ o: st.colRing, h: Math.min(st.gf, 3.2), mh: 0, k: src.k, _skip: true, lm: 'bp24' });
