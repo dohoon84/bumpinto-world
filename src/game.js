@@ -1232,7 +1232,16 @@ function completeWorldJoin(name, look, session) {
   trackEvent('world_join', { region: region.id, has_pin: !!session?.hasPin, resumed: !!session?.place });
   const toStation = !!corridorAt;
   const arrive = corridorArrive?.(); // [corridor]
-  noticePopup?.schedule(); // [notice-popup] 입장 1.5초 후, 안 본 공지가 있을 때만 게시판 공지 탭 1회
+  // [bp24-poster] 게임 입장 뒤 이벤트 포스터를 한 번 띄우고, 닫힌 다음에 공지 팝업 예약 (둘이 겹치지 않게)
+  if (!bp24PosterTried) {
+    bp24PosterTried = true;
+    setTimeout(() => {
+      import('./notice/posterPopup.js').then(async (m) => {
+        const poster = m.showPoster();
+        if (poster?.closed) await poster.closed;
+      }).catch(() => {}).finally(() => noticePopup?.schedule());
+    }, 800);
+  } else noticePopup?.schedule(); // [notice-popup] 입장 1.5초 후, 안 본 공지가 있을 때만 게시판 공지 탭 1회
   if (picked && !toStation) { try { rememberPlace(true); } catch {} } // 고른 기본 스폰을 새 마지막 위치로 저장 (역 이동은 teleport 가 저장)
   if (!arriving) return undefined;
   // [arrivefix] ② 그 역 타일이 지어지고 출구 앞 인도로 옮겨질 때까지(최대 8초) 숨김 유지 → ③ 보이기. 호출한 쪽은 이걸 기다린 뒤 로딩 화면을 닫는다
@@ -1248,6 +1257,7 @@ function completeWorldJoin(name, look, session) {
   });
 }
 // [arrivefix] 숨긴 채로 (x,z) 에 세우기 — 프레임 스트리머가 출발지 대신 이 근처 타일을 받는다
+let bp24PosterTried = false; // [bp24-poster] 페이지당 한 번만
 function placeHiddenAt(x, z) {
   player.position.set(x, terrain ? terrain.getGroundHeight(x, z, 0) : 0, z);
   player.visible = false;
