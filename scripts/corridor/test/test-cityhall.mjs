@@ -13,12 +13,12 @@ const J = (f) => JSON.parse(fs.readFileSync(f, 'utf8'));
 const data = J(path.join(ROOT, 'public/corridor', CITYHALL_FILE));
 let n = 0; const ok = (name) => { n++; console.log('ok', n, name); };
 
-// 1) flag default OFF
-assert.equal(cityhallEnabled(''), false);
-assert.equal(cityhallEnabled('?foo=1'), false);
+// 1) flag default ON
+assert.equal(cityhallEnabled(''), true);
+assert.equal(cityhallEnabled('?foo=1'), true);
 assert.equal(cityhallEnabled('?cityhall=0'), false);
 assert.equal(cityhallEnabled('?cityhall=1'), true);
-ok('cityhall flag default off, ?cityhall=1 enables');
+ok('cityhall flag default on, ?cityhall=0 disables');
 
 // 2) data integrity — OSM-derived footprint, box inside corridor, near yatap
 const cIndex = J(path.join(ROOT, 'public/corridor/index.json'));

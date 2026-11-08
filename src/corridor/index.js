@@ -321,7 +321,7 @@ export function createCorridor({ scene, corridorData, terrain, world, renderer, 
       onLeave() { if (pangyoEx) { pangyoEx.dispose(); pangyoEx = null; } } });
   }
 
-  // [cityhall] 성남시청 — 야탑 북측. ?cityhall=1 일 때만. lazyregion 있으면 지연, 없으면 즉시
+  // [cityhall] 성남시청 — 야탑 북측. 기본 켜짐. ?cityhall=0 이면 없음. lazyregion 있으면 지연, 없으면 즉시
   let cityhall = null;
   if (corridorData.cityhall) {
     const CH = corridorData.cityhall;

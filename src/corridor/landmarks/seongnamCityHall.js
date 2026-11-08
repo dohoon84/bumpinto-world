@@ -2247,7 +2247,7 @@ function buildGroundFloor(data, M) {
   };
 }
 
-/** Stone approach, NW floor fountain, street trees, pedestrian overpass — ?cityhall=1 only. */
+/** Stone approach, NW floor fountain, street trees, pedestrian overpass. Off with ?cityhall=0. */
 function buildPlazaExtras(data, M) {
   const g = new THREE.Group(); g.name = 'cityhallPlazaExtras';
   const bag = Bag();

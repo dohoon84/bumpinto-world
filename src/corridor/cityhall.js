@@ -1,5 +1,5 @@
 // [cityhall] 성남시청 일대 — 야탑 코리더 타일(3_-12 등) 위에 덧붙이는 지연 로드 랜드마크.
-//   ?cityhall=1 일 때만 요청·메시·타일 억제. 기본 OFF → 플래그 없으면 기존 월드와 동일.
+//   기본 ON. ?cityhall=0 이면 요청·메시·타일 억제를 하지 않는다.
 //   OSM 외곽(public/corridor/cityhall/index.json) + Blender GLB 본관 + 절차적 광장/분수.
 import * as THREE from 'three';
 import { buildSeongnamCityHall, disposeCityHallMaterials } from './landmarks/seongnamCityHall.js';
@@ -10,7 +10,7 @@ export const CITYHALL_GLB = CITYHALL_DIR + 'building.glb';
 export const CITYHALL_WALKER_GLB = CITYHALL_DIR + 'walker.glb';
 
 export function cityhallEnabled(search = typeof location !== 'undefined' ? location.search : '') {
-  return new URLSearchParams(search).get('cityhall') === '1';
+  return new URLSearchParams(search).get('cityhall') !== '0';
 }
 
 const cen = (o) => { let x = 0, z = 0; for (const p of o) { x += p[0]; z += p[1]; } return [x / o.length, z / o.length]; };
