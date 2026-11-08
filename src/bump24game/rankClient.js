@@ -58,13 +58,13 @@ export function createRankProvider({ base, device } = {}) {
     async ack() {
       const b = root();
       if (!b) return;
-      await fetch(`${b}/bump24/ack`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ deviceId: dev() }) });
+      await fetch(`${b}/bump24/ack`, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=UTF-8' }, body: JSON.stringify({ deviceId: dev() }) });
     },
     async submit({ storeId, name, score, ranked }) {
       const b = root();
       if (!b) return { record: false };
       const r = await fetch(`${b}/bump24/run`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        method: 'POST', headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
         body: JSON.stringify({ storeId, name, score, deviceId: dev(), practice: !ranked }),
       });
       return r.ok ? r.json() : { record: false };

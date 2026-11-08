@@ -96,8 +96,8 @@ export default {
     // [accounts] /auth/* 는 쿠키를 쓰므로 CORS 를 따로(허용 출처만 + credentials) 처리한다 — OPTIONS 포함
     if (url.pathname.startsWith("/auth/")) return handleAuth(request, env, url, { waitUntil: ctx?.waitUntil?.bind(ctx) });
     if (url.pathname.startsWith("/econ/")) return handleEcon(request, env, url);
-    if (url.pathname.startsWith("/bump24/")) return handleBump24(request, env, url, cors); // [bump24-rank]
     if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: cors });
+    if (url.pathname.startsWith("/bump24/")) return handleBump24(request, env, url, cors); // [bump24-rank] OPTIONS(사전 요청) 처리 뒤에 둔다 — 앞에 있으면 404 로 POST 가 막힌다
     const queryRegion = (url.searchParams.get("region") || "jeongja").trim().toLowerCase() || "jeongja";
     const GLOBAL_BOOK_KEY = "jeongja"; // 단일 글로벌 번호부/패스포트 DB (모든 동네가 캐릭터·번호·문자 공유)
     if (url.pathname === "/ws") {
