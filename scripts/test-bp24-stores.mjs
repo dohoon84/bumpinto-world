@@ -155,9 +155,11 @@ for (const spec of BP24_PLACEMENTS) {
       for (const w of walls) for (let i = 0; i < w.length; i++) d = Math.min(d, segD(x, z, w[i], w[(i + 1) % w.length]));
       return d;
     };
-    if (wallD(-196.3, 251.8) > 0.5) fail.push(`${spec.id} 사선 모서리에 1층 벽이 없음`);
+    if (wallD(-196.3, 251.8) < 0.8) fail.push(`${spec.id} 사선 모서리가 벽으로 남음`);
+    if (!st.cornerDoor || Math.hypot(st.cornerDoor[0] + 196.3, st.cornerDoor[1] - 251.8) > 2.2) fail.push(`${spec.id} 모서리 문 트리거가 없음`);
+    if (Math.abs((st.sideZ1 - st.sideZ0) - st.D) > 3.5) fail.push(`${spec.id} 남쪽 유리 너비가 상자 옆면과 다름 ${(st.sideZ1 - st.sideZ0).toFixed(1)}`);
     if (wallD(-198, 229) > 0.5) fail.push(`${spec.id} 매장 북쪽 서쪽 벽에 1층 벽이 없음`);
-    if (wallD(-168, 253.4) > 0.5) fail.push(`${spec.id} 매장 동쪽 남쪽 벽에 1층 벽이 없음`);
+    if (wallD(-165, 253.4) > 0.5) fail.push(`${spec.id} 매장 동쪽 남쪽 벽에 1층 벽이 없음`);
     const glassBlocked = (x, z, nx, nz) => {
       for (let t = 0.3; t <= 5; t += 0.4) if (wallD(x + nx * t, z + nz * t) < 0.25) return true;
       return false;

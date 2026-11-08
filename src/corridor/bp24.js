@@ -449,6 +449,23 @@ function buildStore(st) {
     for (let k = 1; k < nS; k++) { const z = sideZ0 + ((sideZ1 - sideZ0) * k) / nS; ext.box(sideX - 0.05, 0.32, z - 0.04, sideX + 0.05, GLASS_H, z + 0.04, MULL); }
     ext.box(sideX - 0.05, 2.55, sideZ0, sideX + 0.05, 2.62, sideZ1, MULL);
   }
+  if (st.chamferLocal) {
+    const [pa, pb] = st.chamferLocal;
+    const len = Math.hypot(pb[0] - pa[0], pb[1] - pa[1]);
+    const mx = (pa[0] + pb[0]) / 2, mz = (pa[1] + pb[1]) / 2;
+    const nn = st.chamferN || [0, -1];
+    const nlen = Math.hypot(nn[0], nn[1]) || 1;
+    const cn = N(nn[0] / nlen, 0, nn[1] / nlen);
+    glass.quad(cn, P(mx, (0.32 + GLASS_H) / 2, mz), len - 0.12, GLASS_H - 0.32, [1, 1, 1]);
+    ext.quad(cn, P(mx, (GLASS_H + gf) / 2, mz), len, gf - GLASS_H, NAVY);
+    ext.quad(cn, P(mx, 0.16, mz), len, 0.32, DARK);
+    const along = [(pb[0] - pa[0]) / len, (pb[1] - pa[1]) / len];
+    for (const s of [-1, 1]) {
+      const x = mx + along[0] * (len / 2 - 0.04) * s, z = mz + along[1] * (len / 2 - 0.04) * s;
+      ext.quad(cn, P(x, (0.32 + GLASS_H) / 2, z), 0.08, GLASS_H - 0.32, MULL);
+    }
+    ext.quad(cn, P(mx, 2.58, mz), len, 0.07, MULL);
+  }
   if (west) { // 서쪽 옆 유리(앞 끝 기둥 뒤 ~ 매장 끝) + 유리 밑 턱 + 멀리언 + 위 벽, 매장 뒤로 남는 외곽 구간은 막음
     const wz0 = zf + 0.3;
     glass.quad(N(-1, 0, 0), P(x0, (0.32 + GLASS_H) / 2, (wz0 + zb) / 2), zb - wz0, GLASS_H - 0.32, [1, 1, 1]);
@@ -838,7 +855,7 @@ function disposeBoards(inst) {
 
 function summarizeStore(st) {
   const info = bp24DoorInfo(st);
-  return { id: st.id, name: st.name, W: +st.W.toFixed(1), D: +st.D.toFixed(1), side: st.side, mirror: st.mirror, center: st.center, door: info.door, face: info.face, ax: st.ax, b: st.b, o: st.o, board: st._board ? [st._board.x, st._board.z] : null };
+  return { id: st.id, name: st.name, W: +st.W.toFixed(1), D: +st.D.toFixed(1), side: st.side, mirror: st.mirror, center: st.center, door: info.door, cornerDoor: st.cornerDoor || null, face: info.face, ax: st.ax, b: st.b, o: st.o, board: st._board ? [st._board.x, st._board.z] : null };
 }
 function boardHit(list, x, z, r) {
   for (const st of list) { const b = st._board; if (!b || Math.abs(x - b.x) + Math.abs(z - b.z) > 3) continue; _v.set(x, 0, z).applyMatrix4(b.inv); if (Math.abs(_v.x - b.c) < 0.92 + r && _v.z > b.zF - 0.08 - r && _v.z < b.zF + 0.32 + r) return true; }
@@ -935,19 +952,54 @@ function alignSideGlass(st) {
   }
   if (!best) return;
   st.sideOut = best.dist - 0.04;
+  // 너비는 상자 옆면(392135a) 그대로. 사선 모서리 밖(u<0 쪽)은 모서리 문이 맡는다.
   const proj = (p) => (p[0] - base.a[0]) * ux + (p[1] - base.a[1]) * uz;
-  let lo = Math.min(proj(best.a), proj(best.b)), hi = Math.max(proj(best.a), proj(best.b));
-  lo = Math.max(lo, -0.2);
-  hi = Math.min(hi, sL + 12);
-  if (hi - lo > 16) hi = lo + 16;
-  if (hi - lo < 4) return;
-  const toLocal = (u) => {
+  const wallLo = Math.min(proj(best.a), proj(best.b));
+  const wallHi = Math.max(proj(best.a), proj(best.b));
+  const lo = Math.max(0, wallLo);
+  const hi = Math.min(wallHi, lo + sL);
+  if (hi - lo < 3) return;
+  const toLocalZ = (u) => {
     const w = [base.a[0] + ux * u, base.a[1] + uz * u];
     const vx = w[0] - st.o[0], vz = w[1] - st.o[1];
     return vx * st.b[0] + vz * st.b[1];
   };
-  st.sideZ0 = toLocal(lo);
-  st.sideZ1 = toLocal(hi);
+  st.sideZ0 = toLocalZ(lo);
+  st.sideZ1 = toLocalZ(hi);
+}
+
+/** 서쪽 유리와 남쪽 유리 사이 짧은 사선 외곽. 벽 대신 유리문으로 쓴다. */
+function markChamferDoor(st) {
+  const ring = st?.colRing;
+  if (!ring) return;
+  let best = null;
+  for (let i = 0; i < ring.length; i++) {
+    const a = ring[i], b = ring[(i + 1) % ring.length];
+    const dx = b[0] - a[0], dz = b[1] - a[1], L = Math.hypot(dx, dz);
+    if (L < 3 || L > 7) continue;
+    if (Math.abs(dx) / L < 0.45 || Math.abs(dz) / L < 0.45) continue;
+    const mx = (a[0] + b[0]) / 2, mz = (a[1] + b[1]) / 2;
+    let area = 0;
+    for (let k = 0; k < ring.length; k++) {
+      const p = ring[k], q = ring[(k + 1) % ring.length];
+      area += p[0] * q[1] - q[0] * p[1];
+    }
+    let nx = dz / L, nz = -dx / L;
+    if (area > 0) { nx = -nx; nz = -nz; }
+    let cx = 0, cz = 0;
+    for (const p of ring) { cx += p[0]; cz += p[1]; }
+    cx /= ring.length; cz /= ring.length;
+    if (nx * (mx - cx) + nz * (mz - cz) < 0) { nx = -nx; nz = -nz; }
+    best = { a, b, nx, nz, mx, mz };
+  }
+  if (!best) return;
+  const toL = (p) => {
+    const vx = p[0] - st.o[0], vz = p[1] - st.o[1];
+    return [vx * st.ax[0] + vz * st.ax[1], vx * st.b[0] + vz * st.b[1]];
+  };
+  st.chamferLocal = [toL(best.a), toL(best.b)];
+  st.chamferN = [best.nx * st.ax[0] + best.nz * st.ax[1], best.nx * st.b[0] + best.nz * st.b[1]];
+  st.cornerDoor = [best.mx + best.nx * 1.25, best.mz + best.nz * 1.25];
 }
 
 function glassCutOnEdge(a, b, face) {
@@ -1006,6 +1058,7 @@ export function bp24ShellWalls(st) {
     const a = ring[i], c = ring[(i + 1) % ring.length];
     const dx = c[0] - a[0], dz = c[1] - a[1], L = Math.hypot(dx, dz);
     if (L < 0.2) continue;
+    if (L < 7 && Math.abs(dx) / L > 0.45 && Math.abs(dz) / L > 0.45) continue; // 사선 모서리는 유리문
     let nx = dz / L, nz = -dx / L;
     if (area > 0) { nx = -nx; nz = -nz; }
     if (nx * (a[0] - cx) + nz * (a[1] - cz) < 0) { nx = -nx; nz = -nz; }
@@ -1042,6 +1095,7 @@ export function prepareJeongjaBp24(data, search) {
     src.mh = st.gf;
     src.lm = 'bp24';
     alignSideGlass(st);
+    markChamferDoor(st);
     const shell = bp24ShellWalls(st);
     if (shell.length) src._bp24Shell = { gf: st.gf, rings: shell };
     st.porch = !!(st.sealEnds && st.recess > 0.2);
