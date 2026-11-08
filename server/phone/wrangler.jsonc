@@ -38,8 +38,10 @@
     "ECON_FEATURES": "",
     "ECON_PAID": "0",
     "ECONOMY_OPEN_AT": "",
-    "STATS_ENABLED": "1"
+    "STATS_ENABLED": "1",
+    "BP24_RANK_ENABLED": "1"
   },
+  "triggers": { "crons": ["5 15 * * *"] },
   "migrations": [
     { "tag": "v1", "new_sqlite_classes": ["PhoneBook"] },
     { "tag": "v2", "new_sqlite_classes": ["Room"] }

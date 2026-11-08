@@ -144,6 +144,19 @@ export function createBump24UI({ onGrab, onExit, onMute, onHintTap, onIntroGo } 
     flash() { el.flash.classList.remove('on'); void el.flash.offsetWidth; el.flash.classList.add('on'); },
     edge(on) { el.edge.classList.toggle('on', !!on); },
     banner(text, ms = 1400) { el.banner.innerHTML = `<b>${esc(text)}</b>`; clearTimeout(api._bt); api._bt = setTimeout(() => { el.banner.innerHTML = ''; }, ms); },
+    limit(on) {
+      let n = document.getElementById('bp24-rank-limit');
+      if (!on) { n?.remove(); return; }
+      if (!n) { n = document.createElement('div'); n.id = 'bp24-rank-limit'; n.style.cssText = 'position:fixed;left:50%;top:18%;transform:translateX(-50%);z-index:70;padding:12px 18px;border-radius:16px;background:rgba(10,22,48,.94);color:#fff;font:800 18px/1.3 Pretendard,sans-serif;pointer-events:none'; document.body.appendChild(n); }
+      n.textContent = '오늘 도전 완료, 연습은 계속 가능';
+    },
+    reward(amount) {
+      const n = document.createElement('div'); n.id = 'bp24-rank-reward';
+      n.textContent = `+${amount} bum`;
+      n.style.cssText = 'position:fixed;left:50%;top:46%;transform:translate(-50%,-50%);z-index:80;padding:22px 36px;border-radius:20px;background:#0d1a33;color:#ffd400;font:900 42px Pretendard,sans-serif;box-shadow:0 12px 40px rgba(0,0,0,.35)';
+      document.body.appendChild(n);
+      setTimeout(() => n.remove(), 2600);
+    },
     intro({ storeName, ranked, sale = [], best = 0 } = {}) {
       el.intro.innerHTML = `<div class="b24-intro"><span class="mode ${ranked ? '' : 'prac'}">${ranked ? '오늘의 랭킹 도전 1회' : '연습 모드 · 무제한'}</span>
         <h2><em>30초</em> 장보기</h2><p>${esc(storeName)} · 내 최고 ${won(best)}원</p>

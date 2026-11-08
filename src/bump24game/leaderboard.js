@@ -56,6 +56,10 @@ export const leaderboard = {
   get label() { return provider.label || ''; },
   top: (q) => provider.top(q),
   submit: (run) => provider.submit(run),
+  gate: (id) => provider.gate?.(id) || null,
+  pending: () => provider.pending?.() || Promise.resolve([]),
+  ack: () => provider.ack?.(),
+  boardMeta: (id) => provider.boardMeta?.(id) || null,
   subscribe(fn) { listeners.add(fn); return () => listeners.delete(fn); },
 };
 function relay(storeId) { for (const f of listeners) f(storeId); refreshBoards(storeId); }
@@ -91,6 +95,9 @@ async function load(b) {
   try {
     const [today, week] = await Promise.all(PERIODS.map(([p]) => provider.top({ storeId: b.storeId, period: p, limit: 5 })));
     if (seq !== b.seq || !boards.has(b.key)) return;
+    const meta = provider.boardMeta?.(b.storeId);
+    if (meta?.tabs) b.tabs = meta.tabs;
+    if (meta?.empty2) b.empty2 = meta.empty2;
     b.data = { today: today || [], week: week || [] }; draw(b);
   } catch (e) { console.warn('[bump24 board]', e); }
 }
@@ -137,7 +144,8 @@ function draw(b) {
   if (b.mode === 'notice') return;
   const c = b.cv.getContext('2d'), [pw, ph] = LAYOUT[b.layout];
   c.setTransform(1, 0, 0, 1, 0, 0); c.clearRect(0, 0, pw * 2, ph);
-  PERIODS.forEach(([p], i) => { c.save(); c.translate(pw * i, 0); (b.layout === 'wide' ? panelWide : panelTall)(c, pw, ph, b, p); c.restore(); });
+  const tabs = b.tabs || PERIODS;
+  tabs.forEach(([p], i) => { c.save(); c.translate(pw * i, 0); (b.layout === 'wide' ? panelWide : panelTall)(c, pw, ph, b, p); c.restore(); });
   b.tex.needsUpdate = true;
 }
 function bg(c, w, h) {
@@ -147,21 +155,22 @@ function bg(c, w, h) {
   rr(c, 7, 7, w - 14, h - 14, 26); c.lineWidth = 8; c.strokeStyle = '#0072DD'; c.stroke();
   rr(c, 16, 16, w - 32, h - 32, 20); c.lineWidth = 2; c.strokeStyle = 'rgba(140,205,255,.55)'; c.stroke();
 }
-function tabs(c, x, y, w, h, period) {
+function tabs(c, x, y, w, h, period, labels) {
   const tw = w / 2;
   rr(c, x, y, w, h, h / 2); c.fillStyle = 'rgba(255,255,255,.1)'; c.fill();
-  PERIODS.forEach(([p, label], i) => {
+  (labels || PERIODS).forEach(([p, label], i) => {
     const on = p === period;
     if (on) { rr(c, x + tw * i + 3, y + 3, tw - 6, h - 6, (h - 6) / 2); c.fillStyle = '#ffd400'; c.fill(); }
     c.fillStyle = on ? '#0a1a3a' : '#bcd3ee'; c.font = `900 ${h * 0.5}px ${FONT}`; c.textAlign = 'center'; c.textBaseline = 'middle';
     c.fillText(label, x + tw * i + tw / 2, y + h / 2 + 1);
   });
 }
-function rowsBlock(c, x, y, w, rowH, list, period) {
+function rowsBlock(c, x, y, w, rowH, list, period, emptyExtra) {
   let me = ''; try { me = getMe?.() || ''; } catch { me = ''; }
   if (!list.length) {
     c.fillStyle = '#ffffff'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.font = `900 ${rowH * 0.34}px ${FONT}`;
-    c.fillText(period === 'week' ? '이번 주 첫 도전자를' : '오늘 첫 도전자를', x + w / 2, y + rowH * 1.7);
+    const line = period === 'today' ? '오늘 첫 도전자를' : (emptyExtra || '이번 주 첫 도전자를');
+    c.fillText(line, x + w / 2, y + rowH * 1.7);
     c.fillText('기다리는 중', x + w / 2, y + rowH * 2.35);
     return;
   }
@@ -191,9 +200,9 @@ function panelTall(c, w, h, b, period) {
   c.textAlign = 'left'; c.textBaseline = 'alphabetic';
   c.fillStyle = '#ffd400'; c.font = `900 30px ${FONT}`; c.fillText('BUMP24', 128, 70);
   c.fillStyle = '#ffffff'; c.font = `900 50px ${FONT}`; c.fillText('장보기 랭킹', 126, 122);
-  tabs(c, 36, 150, w - 72, 56, period);
+  tabs(c, 36, 150, w - 72, 56, period, b.tabs);
   c.fillStyle = '#7f9cc4'; c.font = `800 20px ${FONT}`; c.textAlign = 'center'; c.fillText(fit(c, `${b.storeName || 'BUMP24'} · 30초 장보기 최고 금액`, w - 80), w / 2, 236);
-  rowsBlock(c, 30, 254, w - 60, 86, b.data[period] || [], period);
+  rowsBlock(c, 30, 254, w - 60, 86, b.data[period] || [], period, b.empty2);
   footer(c, 34, h - 72, w - 68, 40, false);
 }
 function panelWide(c, w, h, b, period) {

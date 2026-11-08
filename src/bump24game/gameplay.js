@@ -10,7 +10,7 @@ export const COUNT_SEC = 5, PLAY_SEC = 30;
 const COMBO_WINDOW = 1.6;
 const won = (n) => Math.round(n).toLocaleString('ko-KR');
 
-export function createGameplay({ interior, ui, sfx, storeId, storeName, onExitStore, getSelfName }) {
+export function createGameplay({ interior, ui, sfx, storeId, storeName, onExitStore, getSelfName, rankGate = null }) {
   const layout = interior.layout, saleIds = layout.saleIds, dateKey = layout.dateKey;
   let phase = PHASE.BROWSE, ranked = false;
   let countLeft = 0, playLeft = PLAY_SEC, clock = 0;
@@ -27,7 +27,8 @@ export function createGameplay({ interior, ui, sfx, storeId, storeName, onExitSt
   ui.setHud({ time: PLAY_SEC, total: 0, kg: 0, maxKg: interior.basket.maxKg });
 
   function startCountdown() {
-    ranked = !rankedUsed(storeId, dateKey);
+    ranked = rankGate ? !!rankGate.ranked : !rankedUsed(storeId, dateKey);
+    if (rankGate?.usedUp) ui.limit?.(true);
     ui.setMode(ranked); ui.hideIntro();
     phase = PHASE.COUNTDOWN; countLeft = COUNT_SEC; lastSec = COUNT_SEC + 1;
     ui.showHud(true); ui.setHud({ time: PLAY_SEC, total: 0, kg: 0 });

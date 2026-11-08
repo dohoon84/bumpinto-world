@@ -7,7 +7,8 @@ import { createBump24Sfx } from './sfx.js';
 import { createBump24UI, loadBest, rankedUsed } from './ui.js';
 import { createGameplay, PHASE } from './gameplay.js';
 import { BY_ID, todayKey } from './products.js';
-import { boardTexture, releaseBoardTexture, tickBoards, createBoardFxMaterial, setBoardSelf, refreshBoards, leaderboard } from './leaderboard.js';
+import { boardTexture, releaseBoardTexture, tickBoards, createBoardFxMaterial, setBoardSelf, refreshBoards, leaderboard, setLeaderboardProvider } from './leaderboard.js';
+import { bp24RankOn, createRankProvider } from './rankClient.js';
 import { setBp24BoardHook, allBp24Stores, allBp24BoardMeshes, anyBp24BoardBlocks } from '../corridor/bp24.js';
 import { bp24BoardsAll } from '../corridor/bp24Locations.js';
 import * as THREE from 'three';
@@ -34,6 +35,13 @@ export function mountBump24Game({
   const portrait = () => mobile() && innerHeight > innerWidth;
 
   let lastBoard = null;
+  const rankGates = new Map();
+  let rankGateAt = 0;
+  async function refreshGate(id) {
+    if (!id || !leaderboard.gate || performance.now() - rankGateAt < 4000) return rankGates.get(id) || null;
+    rankGateAt = performance.now();
+    try { const g = await leaderboard.gate(id); if (g) rankGates.set(id, g); return g; } catch { return rankGates.get(id) || null; }
+  }
   const ui = createBump24UI({
     onGrab: () => act(),
     onHintTap: () => { if (!active && lastBoard) openBoard(lastBoard); else if (!active && lastNear) enterStore(lastNear); else act(); },
@@ -47,6 +55,16 @@ export function mountBump24Game({
   const selfName = () => { try { return getSelfName?.() || '나'; } catch { return '나'; } }; // 마운트 중엔 부르지 않음(지연 조회)
   setBoardSelf(selfName);
   const fxMat = createBoardFxMaterial();
+  if (bp24RankOn(search)) {
+    setLeaderboardProvider(createRankProvider());
+    setInterval(async () => {
+      try {
+        const notes = await leaderboard.pending();
+        const amount = (notes || []).reduce((s, n) => s + Number(n.amount || 0), 0);
+        if (amount > 0) { ui.reward(amount); await leaderboard.ack(); }
+      } catch { /* 서버가 없으면 로컬 전광판 */ }
+    }, 8000);
+  }
   const boardsAll = bp24BoardsAll(search);
   setBp24BoardHook({
     texture: (st) => boardTexture(st.id, st.name, 'tall'), release: releaseBoardTexture, fxMaterial: fxMat,
@@ -153,7 +171,7 @@ export function mountBump24Game({
     interior?.dispose();
     const storeId = currentStore?.id || 'seongnam-cityhall', storeName = currentStore?.name || 'BUMP24';
     interior = buildInterior({ renderer, storeId, storeName, look: getLook?.() || null, isMobile: mobile() });
-    game = createGameplay({ interior, ui, sfx, storeId, storeName, getSelfName: selfName, onExitStore: () => leaveStore() });
+    game = createGameplay({ interior, ui, sfx, storeId, storeName, getSelfName: selfName, onExitStore: () => leaveStore(), rankGate: rankGates.get(storeId) || null });
     active = true;
     document.body.classList.add('b24-inside'); ui.setInside(true); hideOutside(); syncMute();
     ui.showHud(false);
@@ -194,7 +212,13 @@ export function mountBump24Game({
     const bd = nearestBoard(pos), dd = st ? Math.hypot(pos.x - st.door[0], pos.z - st.door[1]) : 1e9;
     lastBoard = bd && bd.d < dd ? bd.st : null;
     if (lastBoard) ui.setHint(`🏆 ${lastBoard.name || 'BUMP24'} 장보기 랭킹 보기`, true, { act: true, tap: '장보기 랭킹 보기 🏆' });
-    else if (st) ui.setHint(`${st.name || 'BUMP24'} 들어가기 · 30초 장보기`, true, { act: true, tap: `${st.name || 'BUMP24'} 들어가기` });
+    else if (st) {
+      ui.setHint(`${st.name || 'BUMP24'} 들어가기 · 30초 장보기`, true, { act: true, tap: `${st.name || 'BUMP24'} 들어가기` });
+      refreshGate(st.id);
+      const g = rankGates.get(st.id);
+      if (g?.usedUp) ui.limit(true);
+      else ui.limit(false);
+    }
     else ui.setHint('');
   }
 
