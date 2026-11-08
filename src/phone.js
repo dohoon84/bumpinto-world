@@ -259,10 +259,48 @@ function drawPeerMarkers(ctx, peers, x, z, w, h, viewW, viewH, now, s) {
   ctx.restore();
 }
 
+function drawBp24(ctx, x, z, w, h, viewW, viewH) {
+  const nav = window.__jj?.bp24Nav;
+  const canvas = ctx.canvas;
+  canvas._bp24Hits = [];
+  if (!nav?.on || !nav.logo) return;
+  const pts = nav.points();
+  if (!pts.length && !nav.guiding) return;
+  const px = w / viewW, pz = h / viewH;
+  const g = nav.guiding;
+  if (g) {
+    const x0 = w / 2 + (g.from[0] - x) * px, y0 = h / 2 + (g.from[1] - z) * pz;
+    const x1 = w / 2 + (g.x - x) * px, y1 = h / 2 + (g.z - z) * pz;
+    ctx.save();
+    ctx.strokeStyle = '#4cc9f0'; ctx.lineWidth = Math.max(2, w / 80); ctx.setLineDash([6, 6]);
+    ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke();
+    ctx.restore();
+  }
+  for (const st of pts) {
+    const sx = w / 2 + (st.x - x) * px, sy = h / 2 + (st.z - z) * pz;
+    if (sx < -16 || sy < -16 || sx > w + 16 || sy > h + 16) continue;
+    const r = Math.max(7, w / 28);
+    ctx.beginPath(); ctx.arc(sx, sy, r, 0, Math.PI * 2); ctx.fillStyle = '#fff'; ctx.fill();
+    ctx.lineWidth = 1.5; ctx.strokeStyle = '#0d1a33'; ctx.stroke();
+    ctx.drawImage(nav.logo, sx - r + 2, sy - r + 2, (r - 2) * 2, (r - 2) * 2);
+    canvas._bp24Hits.push({ sx, sy, r: r + 4, id: st.id });
+  }
+}
+
 export function mountPhone({ data, region = null, extraTiles = null }) { // [corridor] extraTiles(): [{ b, canvas }] (라이브 지도 아래에 깔림)
   const canvas = document.getElementById('phone-map');
   const ctx = canvas.getContext('2d');
   const map = drawBaseMap(data, region);
+  canvas.addEventListener('click', (e) => { // [bp24nav] 매장 아이콘만. 다른 곳은 예전처럼 클릭이 없다
+    const nav = window.__jj?.bp24Nav;
+    const hits = canvas._bp24Hits;
+    if (!nav?.on || !hits?.length) return;
+    const r = canvas.getBoundingClientRect();
+    const sx = (e.clientX - r.left) * (canvas.width / Math.max(1, r.width));
+    const sy = (e.clientY - r.top) * (canvas.height / Math.max(1, r.height));
+    const hit = hits.find((h) => (h.sx - sx) ** 2 + (h.sy - sy) ** 2 < h.r * h.r);
+    if (hit) nav.guide(hit.id);
+  });
   let heading = 0;
   let ready = false;
 
@@ -308,6 +346,7 @@ export function mountPhone({ data, region = null, extraTiles = null }) { // [cor
       ctx.restore();
 
       drawPeerMarkers(ctx, peers, x, z, w, h, viewW, viewH, now, s);
+      drawBp24(ctx, x, z, w, h, viewW, viewH); // [bp24nav] 꺼져 있으면 그리지 않음
 
       ctx.save();
       ctx.translate(w / 2, h / 2);
