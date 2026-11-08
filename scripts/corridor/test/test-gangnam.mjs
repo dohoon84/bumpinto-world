@@ -33,8 +33,10 @@ let n = 0; const ok = (name) => { n++; console.log('ok', n, name); };
 const B = gn.meta.box;
 assert.deepEqual(B, { x0: -7500, x1: -6000, z0: -15500, z1: -14000 });
 assert.equal(gn.meta.island, true);
-assert.equal(gn.meta.attribution, '© OpenStreetMap contributors (ODbL)');
-assert.ok(!/브이월드|VWorld|GIS건물/.test(gn.meta.attribution), '높이 보정을 안 했으므로 그 출처를 적지 않음');
+const VW_CREDIT = '건물 높이: 국토교통부 브이월드 GIS건물통합정보 (공공누리 제1유형: 출처표시), https://www.data.go.kr/data/15083092/fileData.do';
+assert.equal(gn.meta.attribution, '© OpenStreetMap contributors (ODbL) · ' + VW_CREDIT);
+assert.match(gn.meta.heightRule, /V-World dt_d010 hg/);
+assert.equal(gn.meta.source.vworld, 'data/gangnam_vworld_heights.json');
 assert.deepEqual(Object.keys(gn.tiles).sort(), ['-13_-29', '-13_-30', '-13_-31', '-14_-29', '-14_-30', '-14_-31', '-15_-29', '-15_-30', '-15_-31']);
 assert.ok(Object.keys(gn.tiles).every((k) => !cIndex.tiles[k] && !pg.tiles[k] && !mg.tiles[k]), '기존 칸과 안 겹침');
 const inBox = (x, z, m) => x >= B.x0 - m && x <= B.x1 + m && z >= B.z0 - m && z <= B.z1 + m;
@@ -51,11 +53,37 @@ for (const [k, t] of Object.entries(gn.tiles)) {
   }
 }
 const st0 = gn.meta.stats;
-assert.equal(st0.height + st0.levels + st0.default, st0.osmBuildings);
+const BEFORE_BUILDINGS = 2709; // acfe2f1 강남 건물 수. 높이만 바꾸고 풋프린트는 그대로
+assert.equal(st0.osmBuildings, BEFORE_BUILDINGS, '건물이 줄거나 늘지 않음');
+assert.equal(st0.height + st0.vwHg + st0.vwFloors + st0.levels + st0.default, st0.osmBuildings);
+assert.deepEqual(
+  { height: st0.height, vwHg: st0.vwHg, vwFloors: st0.vwFloors, levels: st0.levels, default: st0.default },
+  { height: 395, vwHg: 1655, vwFloors: 373, levels: 67, default: 219 },
+  '높이 출처: OSM height / 브이월드 hg / 브이월드 층수 / OSM levels / 기본값',
+);
 assert.equal(Object.values(gn.tiles).reduce((s, t) => s + t.nb, 0), st0.osmBuildings);
+assert.deepEqual(Object.fromEntries(Object.entries(gn.tiles).map(([k, t]) => [k, t.nb])), {
+  '-13_-29': 485, '-13_-30': 219, '-13_-31': 499, '-14_-29': 401, '-14_-30': 260, '-14_-31': 186, '-15_-29': 117, '-15_-30': 303, '-15_-31': 239,
+}, '칸마다 건물 수 유지');
 assert.ok(detailBytes <= 900 * 1024, `상세 타일 ${detailBytes} > 900KB`);
 assert.ok(!gn.meta.defaultHeights.some((d) => /지하쇼핑|지하상가/.test(d.n || '')), '지하상가 이름을 지상 기본높이에 넣지 않음');
-ok(`9 new tiles, ${st0.osmBuildings} buildings (height ${st0.height} / levels ${st0.levels} / default ${st0.default}), detail ${(detailBytes / 1024).toFixed(0)}KB`);
+assert.ok(gn.meta.defaultHeights.some((d) => d.id === 'w117790043' && d.h === 16.6), '국기원 캠퍼스 외곽은 한 동과 안 겹쳐 기본값');
+{
+  const table = J(path.join(ROOT, 'data/gangnam_vworld_heights.json'));
+  assert.equal(table.meta.attribution, VW_CREDIT);
+  assert.equal(table.rows.length, st0.vwHg + st0.vwFloors, '표의 행 = 실제로 쓴 브이월드 높이');
+  const osmIds = new Set(J(path.join(ROOT, 'data/osm_gangnam_raw.json')).elements.map((e) => e.type[0] + e.id));
+  let hg = 0, fl = 0;
+  for (const [id, src, val] of table.rows) {
+    assert.ok(osmIds.has(String(id).split('@')[0]), id);
+    if (src === 'hg') { hg++; assert.ok(val >= 2 && val <= 300, id); }
+    else if (src === 'fl') { fl++; assert.ok(val >= 1 && val <= 60, id); }
+    else assert.fail(src);
+  }
+  assert.equal(hg, 1655); assert.equal(fl, 373);
+  assert.ok(table.meta.counts.hgAbsurd >= 1, '비현실 hg 는 기록');
+}
+ok(`9 new tiles, ${st0.osmBuildings} buildings (OSM height ${st0.height} / vw hg ${st0.vwHg} / vw floors ${st0.vwFloors} / levels ${st0.levels} / default ${st0.default}), detail ${(detailBytes / 1024).toFixed(0)}KB`);
 
 const st = gn.stations[0];
 assert.equal(st.id, 'gangnam'); assert.equal(st.name, '강남'); assert.equal(st.nameEn, 'Gangnam');
