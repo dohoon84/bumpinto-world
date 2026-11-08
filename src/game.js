@@ -20,6 +20,7 @@ import { CHAT_RADIUS } from './net/protocol.js';
 import { buildTransit, makeCrossingGuard, mergeSimExtra } from './transit/transit.js';
 import { pangyoLinkEnabled, PANGYO_LINK_FILE } from './corridor/pangyo.js'; // [pangyo-link]
 import { migeumBusEnabled, mergeMigeumBus, MIGEUM_BUS_FILE } from './corridor/migeumBus.js'; // [migeum-bus]
+import { clampWorld } from './corridor/islands.js'; // [gangnam]
 import { mountPhone } from './phone.js';
 import { mountHandset } from './handset.js';
 import { mountCamera } from './camera/index.js'; // [camera] 폰 카메라·사진 앱 (?camera=0 이면 끔, 본체는 처음 열 때 지연 로드)
@@ -2424,8 +2425,8 @@ function frame() {
     const h = dist / steps;
     const bb = world.bounds;
     for (let i = 0; i < steps; i++) {
-      const nx = THREE.MathUtils.clamp(b.x + mx * h, bb.x0, bb.x1);
-      const nz = THREE.MathUtils.clamp(b.z + mz * h, bb.z0, bb.z1);
+      const nx = clampWorld(b.x + mx * h, b.z, bb).x;
+      const nz = clampWorld(b.x, b.z + mz * h, bb).z;
       let yx = null, yz = null;
       const xOk = !world.isBlocked(nx, b.z, 0.4) && !bikes.blocks(nx, b.z, b, b.y) && (!terrain || (yx = terrain.canMove(b.x, b.z, b.y, nx, b.z)) != null);
       const zOk = !world.isBlocked(b.x, nz, 0.4) && !bikes.blocks(b.x, nz, b, b.y) && (!terrain || (yz = terrain.canMove(b.x, b.z, b.y, b.x, nz)) != null);
@@ -2451,7 +2452,7 @@ function frame() {
       let mx = fx * f + rx * s, mz = fz * f + rz * s; const L = Math.hypot(mx, mz); mx /= L; mz /= L;
       const sp = (run ? 9 : 4.2) * Math.min(1, Math.hypot(f, s)), step = sp * dt;
       const p = player.position, bb = world.bounds;
-      const nx = THREE.MathUtils.clamp(p.x + mx * step, bb.x0, bb.x1), nz = THREE.MathUtils.clamp(p.z + mz * step, bb.z0, bb.z1);
+      const nx = clampWorld(p.x + mx * step, p.z, bb).x, nz = clampWorld(p.x, p.z + mz * step, bb).z;
       // 현재 위치가 구조물 충돌 반경 내부에 끼어 있는 경우, 장애물에서 멀어지는 방향으로는 탈출 허용
       const stuckNow = world.isBlocked(p.x, p.z);
       if (terrain) { // [terrain] 계단/경사/다리 판정 + 높이 따라가기 (축별 슬라이딩 유지)

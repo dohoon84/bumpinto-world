@@ -6,6 +6,7 @@ import { LINES, TRAIN, CAR_LEN, DOOR_OFF } from './lines.js';
 import { LINE_STOPS } from './stationsData.js';
 import { STATIONS, STATIONS_BASE, EXT_STATIONS } from './roster.js'; // [migeum-sub] 플래그 반영 역 목록 · 확장 전 역 목록
 import { jaName, jaDir } from './ja.js';
+import { GAP_STOPS } from './stopCoords.js'; // [gangnam] 정자↔강남·잠실↔강남 사이 게임 밖 역의 OSM 좌표
 
 export const BY_NAME = new Map(STATIONS.map((s) => [s.name, s]));
 export const isGameStop = (line, name) => !!BY_NAME.get(name)?.lines.includes(line); // 게임에 대합실이 있고 이 노선이 서는 역
@@ -164,6 +165,12 @@ export const RIDE = Object.freeze({ VMAX: 22, ACC: 1.0, DEC: 1.0, GAP_DEFAULT: 1
 export function segmentDist(a, b, byName = BY_NAME) {
   const A = byName.get(a), B = byName.get(b);
   if (A && B) return Math.max(500, Math.hypot(A.x - B.x, A.z - B.z));
+  // [gangnam] 확장 역 주행(rideTimeline·EXT 오프셋)만 OSM 정차 좌표를 쓴다.
+  //   기존 역 오프셋은 BASE_BY_NAME 으로 재므로 여기 표를 안 보고, 표에 없는 게임 밖 구간은 1.2km 그대로.
+  if (byName === BY_NAME && (GAP_STOPS[a] || GAP_STOPS[b])) {
+    const ca = A || GAP_STOPS[a], cb = B || GAP_STOPS[b];
+    if (ca && cb) return Math.max(500, Math.hypot(ca.x - cb.x, ca.z - cb.z));
+  }
   return RIDE.GAP_DEFAULT; // 게임 밖 역: 대략 1.2km (근사)
 }
 // [migeum-sub] 확장 전 역 목록 기준 거리 (기존 역 시간표 = lineOffsets 는 늘 이것으로 → 확장 역을 켜도 기존 역 오프셋은 그대로)
@@ -214,10 +221,20 @@ export function lineOffsets(line, dir) {
       for (let k = i - 1; k >= 0; k--) if (isBase(order[k])) { j = k; break; }
       if (j < 0) for (let k = i + 1; k < order.length; k++) if (isBase(order[k])) { j = k; break; }
       if (j < 0) continue;
-      const [a0, a1] = j < i ? [j, i] : [i, j];
-      let dt = 0;
-      for (let k = a0 + 1; k <= a1; k++) dt += MOTION.DWELL + segmentProfile(segmentDist(order[k - 1], order[k])).T;
-      m.set(E.name, m.get(order[j]) + (j < i ? dt : -dt));
+      // 그 사이 게임 밖 역도 같은 실거리로 맞춰 둔다 (기존 게임 역 값은 건드리지 않음).
+      //   열차 안 타임라인(rideTimeline)과 그 이름의 승강장 시각이 같은 열차가 되게.
+      let t = m.get(order[j]);
+      if (j < i) {
+        for (let k = j + 1; k <= i; k++) {
+          t += MOTION.DWELL + segmentProfile(segmentDist(order[k - 1], order[k])).T;
+          if (!isBase(order[k])) m.set(order[k], t);
+        }
+      } else {
+        for (let k = j - 1; k >= i; k--) {
+          t -= MOTION.DWELL + segmentProfile(segmentDist(order[k], order[k + 1])).T;
+          if (!isBase(order[k])) m.set(order[k], t);
+        }
+      }
     }
   }
   OFFS.set(key, m);

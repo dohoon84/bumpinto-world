@@ -1,6 +1,7 @@
 // [truck] 주차된 'Steel Truck' 들 + 탑승/운전/하차 + (가능하면) 멀티플레이 동기화
 //   ?trucks=N (기본 20, 0=끔)  ?truckColors=stainless,black,red,...  F 키: 탑승/하차
 import * as THREE from 'three';
+import { inWorldBounds } from '../corridor/islands.js'; // [gangnam]
 import { createTruck, setBrake, DIM, COLORS } from './truckModel.js';
 
 const DRIVE_KINDS = new Set(['secondary', 'tertiary', 'residential', 'service', 'unclassified', 'primary', 'trunk']);
@@ -145,7 +146,7 @@ export function createTrucks({ scene, overlay, world, data, params, camera, cam,
   // ---------- 물리(아케이드 자전거 모델) ----------
   const poseFits = (t, x, z, h) => {
     const s = Math.sin(h), c = Math.cos(h), b = world.bounds;
-    if (x < b.x0 || x > b.x1 || z < b.z0 || z > b.z1) return false;
+    if (!inWorldBounds({ x, z }, b)) return false;
     for (const [lx, lz] of HULL) if (baseBlocked(x + lx * c + lz * s, z - lx * s + lz * c, 0.05)) return false;
     for (const [cx, cz] of circles(t, x, z, h)) if (hitTruck(cx, cz, 1.05, t)) return false;
     return true;

@@ -74,3 +74,10 @@ The live 정자 map (`public/data/*`, bbox x −606..597, z −608..940) is left
   (bus/car NPCs unchanged).
 - `build-corridor.mjs` keeps `public/corridor/pangyo/`. After rebuilding the corridor rerun `npm run corridor:pangyo`
   (dedupe uses corridor tiles; `test-pangyo.mjs` checks committed data equals the script output).
+
+## Gangnam Station area (island, off with `?gangnam=0`)
+
+- Data: `data/query_gangnam.overpassql` → `data/osm_gangnam_raw.json` (OSM, ODbL; this bake used the OSM API `/map` fallback). `npm run corridor:gangnam` writes `public/corridor/gangnam/{index.json, tiles, lod}`.
+- Box x −7500..−6000, z −15500..−14000 (tiles −15..−13 × −31..−29), all `mode:new`. Not joined to the corridor on foot: `meta.islands` is the main rectangle plus this box. `?at=gangnam` jumps there. Ride 신분당선 from 정자/미금 or 2호선 from 잠실 (`?gangnamsub=0` turns the station off only).
+- Heights: OSM `height` → `building:levels`×3.2 → kind default. No GIS건물통합정보 supplement in this build — see `docs/gangnam-heights.md`. Signs are plain OSM names (ko, and `name:en` when the tag exists). No logos.
+- On a phone, detail/LOD drop to `QUALITY.low` only while the camera is inside the Gangnam box.

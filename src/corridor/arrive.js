@@ -15,7 +15,8 @@ export function arriveFixEnabled(search = typeof location !== 'undefined' ? loca
   return !(q != null && OFF.has(q.toLowerCase()));
 }
 
-const inBounds = (p, b) => !b || (p.x >= b.x0 && p.x <= b.x1 && p.z >= b.z0 && p.z <= b.z1);
+import { inWorldBounds } from './islands.js'; // [gangnam] 섬이 있으면 그 사각형들 안
+const inBounds = (p, b) => inWorldBounds(p, b);
 
 /**
  * 입장 위치 고르기 (순수 — game.js completeWorldJoin 이 쓴다).

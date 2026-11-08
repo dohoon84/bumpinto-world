@@ -11,7 +11,8 @@
 export const SUBWAY_CACHE_SEC = 25;
 //   [migeum-sub] '미금' 추가 (2026-11-04, 맨 뒤). 코드만 — 배포(wrangler deploy)는 도훈님이 직접. 배포 전에는 미금 요청이 400 unknown_station
 //   → 게임(src/subway/arrivals.js)은 시간표 근사로 표시 (scripts/test-subway-arrivals.mjs 가 확인)
-export const ALLOWED = Object.freeze(['정자', '수내', '서현', '이매', '야탑', '모란', '태평', '가천대', '복정', '장지', '문정', '가락시장', '송파', '석촌', '잠실', '미금']);
+//   [gangnam] '강남' 추가 (2026-11-08, 맨 뒤). 코드만 — 배포는 하지 않음. 배포 전에는 강남 요청이 400 unknown_station
+export const ALLOWED = Object.freeze(['정자', '수내', '서현', '이매', '야탑', '모란', '태평', '가천대', '복정', '장지', '문정', '가락시장', '송파', '석촌', '잠실', '미금', '강남']);
 const UPSTREAM = 'http://swopenapi.seoul.go.kr/api/subway';
 const ROWS = 20;
 // subwayId → 게임 노선 키 (src/subway/lines.js SUBWAY_ID 와 같아야 함 — scripts/test-subway-arrivals.mjs 가 확인)

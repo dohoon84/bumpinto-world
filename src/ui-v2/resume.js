@@ -5,6 +5,7 @@
 //   읽을 때: 7일 이내 · 숫자 정상 · (지도 범위 검사는 월드가 다 지어진 뒤 game.js completeWorldJoin 이 한다).
 //   그리기·메모리 추가 없음(4초 타이머 1개, 바뀌었을 때만 쓰기).
 import { deviceId } from '../sms.js';
+import { inWorldBounds } from '../corridor/islands.js'; // [gangnam]
 
 const KEY = 'bw.uiv2.resume.v1';
 const MAX_AGE_MS = 7 * 24 * 3600e3;
@@ -19,7 +20,7 @@ function readAll() { try { const v = JSON.parse(localStorage.getItem(KEY) || '{}
 export function validPlace(p, { now = Date.now(), maxAge = MAX_AGE_MS, bounds = null } = {}) {
   if (!p || ![p.x, p.y, p.z, p.ry, p.t].every(Number.isFinite)) return false;
   if (now - p.t > maxAge || p.t > now + 60e3) return false;
-  if (bounds && !(p.x >= bounds.x0 && p.x <= bounds.x1 && p.z >= bounds.z0 && p.z <= bounds.z1)) return false;
+  if (bounds && !inWorldBounds(p, bounds)) return false;
   return true;
 }
 
