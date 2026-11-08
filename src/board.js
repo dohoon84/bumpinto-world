@@ -3,6 +3,17 @@ import { CONTRIBUTORS, CONTRIBUTION_AREAS, REPO_URL } from './contributors.js';
 import { NOTICE_POSTS, NOTICE_BY_KEY } from './notices.js';
 import { isEn, tr, toggleLang, onLangChange } from './i18n.js';
 import { gicon, giOn } from './ui-v2/gameIcons.js';
+import { smsBase } from './sms.js';
+import {
+  NOTICE_IMAGE_MAX,
+  closeNoticeLightbox,
+  galleryHtml,
+  noticeImagesDemo,
+  noticeImagesEnabled,
+  noticeLightboxOpen,
+  openNoticeLightbox,
+  sanitizeNoticeImages,
+} from './noticeImages.js'; // [notice-images]
 
 // [game-icons] PC HUD v3(body.hud-v3) 에서만: 머리·버튼·탭의 이모지를 공용 게임 아이콘으로 바꾼다. 예전 HUD·모바일은 그대로.
 const BOARD_EMOJI = { '📋': 'board', '🌍': 'heart', '🌐': 'lang', '📢': 'megaphone', '📌': 'pushpin' };
@@ -101,6 +112,7 @@ function localizePost(item) {
 }
 
 function isBoardAdmin(session) {
+  if (noticeImagesDemo() && !smsBase()) return true; // [notice-images] localhost 데모에서만 공지 작성란
   return Boolean(session?.isAdmin);
 }
 const BOARD_SEEN_KEY = 'jeongja3d.board.seenId';
@@ -166,6 +178,61 @@ export function mountBoard({ sms, getMe, onOpen } = {}) {
   let likeLoading = false;
   let errorMsg = '';
   let hasUnreadNew = false;
+  let draftImages = []; // [notice-images]
+  let formSticky = null;
+
+  function captureForm() {
+    const form = modal.querySelector('.board-form');
+    if (!form) return;
+    formSticky = {
+      title: form.title?.value ?? '',
+      body: form.body?.value ?? '',
+      category: form.category?.value || category,
+    };
+  }
+
+  function resetFormDraft() {
+    draftImages = [];
+    formSticky = null;
+  }
+
+  function imageErrorText(err) {
+    const code = err?.code;
+    if (code === 'too_big') return tr('이미지가 너무 큽니다. 더 작은 jpg, png, webp 를 올려 주세요.', 'That image is too large. Use a smaller jpg, png, or webp.');
+    if (code === 'bad_type') return tr('jpg, png, webp 이미지만 올릴 수 있습니다.', 'Only jpg, png, or webp images can be added.');
+    if (code === 'no_storage') return tr('이미지 보관함이 아직 없습니다. https 주소를 붙여 주세요.', 'Image storage is not ready yet. Paste an https address instead.');
+    if (code === 'notice_admin' || code === 'unauthorized' || code === 'forbidden') return tr('공지 이미지는 관리자만 올릴 수 있습니다.', 'Only an admin can upload notice images.');
+    return err?.message || tr('이미지를 올리지 못했습니다.', 'Could not add that image.');
+  }
+
+  function renderNoticeImageField(en, cat) {
+    if (!noticeImagesEnabled() || cat !== 'notice') return '';
+    if (!isBoardAdmin(sms?.session) && editingPost?.category !== 'notice') return '';
+    const thumbs = draftImages.length
+      ? `<div class="ni-compose-grid" data-ni-gallery>${draftImages.map((img, i) => (
+        `<div class="ni-compose-item">` +
+        `<button type="button" class="ni-thumb" data-ni-open data-ni-i="${i}" aria-label="${esc(img.alt || (en ? 'Preview image' : '이미지 미리보기'))}">` +
+        `<img src="${esc(img.url)}" alt="${esc(img.alt || '')}" draggable="false" /></button>` +
+        `<button type="button" class="ni-x" data-ni-remove="${i}" aria-label="${en ? 'Remove image' : '이미지 빼기'}">×</button>` +
+        `</div>`
+      )).join('')}</div>`
+      : '';
+    return `
+      <fieldset class="ni-compose">
+        <legend>${en ? 'Notice images' : '공지 이미지'}</legend>
+        <p>${en ? 'Up to 8 jpg, png, or webp images. They show on the notice list and in the post.' : 'jpg, png, webp 를 8장까지. 공지 목록과 본문에 보입니다.'}</p>
+        ${thumbs}
+        <label class="ni-file">${en ? 'Add images' : '이미지 추가'}
+          <input name="noticeImages" type="file" accept="image/jpeg,image/png,image/webp" multiple ${draftImages.length >= NOTICE_IMAGE_MAX ? 'disabled' : ''} />
+        </label>
+        <div class="ni-url">
+          <label class="grow">${en ? 'Or paste an https address' : '또는 https 주소'}
+            <input name="noticeUrl" type="url" inputmode="url" placeholder="https://" maxlength="2048" />
+          </label>
+          <button type="button" class="board-btn" data-action="add-notice-url">${en ? 'Add' : '추가'}</button>
+        </div>
+      </fieldset>`;
+  }
 
   function syncLaunchers() {
     launcher.classList.toggle('active', isOpen && view !== 'contribute');
@@ -205,6 +272,7 @@ export function mountBoard({ sms, getMe, onOpen } = {}) {
       if (!isOpen) return;
       isOpen = false;
       modal.hidden = true;
+      closeNoticeLightbox();
       syncLaunchers();
       return;
     }
@@ -304,8 +372,9 @@ export function mountBoard({ sms, getMe, onOpen } = {}) {
       ? listData.items
           .map((rawItem) => {
             const item = localizePost(rawItem);
+            const gallery = noticeImagesEnabled() && item.category === 'notice' ? galleryHtml(item.images, esc) : '';
             return `
-          <tr class="board-row ${item.category === 'notice' ? 'is-notice' : ''}" data-post-id="${item.id}">
+          <tr class="board-row ${item.category === 'notice' ? 'is-notice' : ''}${gallery ? ' has-images' : ''}" data-post-id="${item.id}">
             <td class="col-id">${item.category === 'notice' ? `<span class="pin-icon" title="${en ? 'Pinned Notice' : '상단 고정 공지'}">📌</span>` : item.id}</td>
             <td class="col-cat"><span class="cat-badge cat-${esc(item.category)}">${esc(catLabelOf(item.category, true))}</span></td>
             <td class="col-title">
@@ -315,6 +384,7 @@ export function mountBoard({ sms, getMe, onOpen } = {}) {
                 ${item.commentsCount > 0 ? `<span class="cmt-count">[${item.commentsCount}]</span>` : ''}
                 ${item.mine ? `<em class="mine-tag">${en ? 'Mine' : '내 글'}</em>` : ''}
               </button>
+              ${gallery}
             </td>
             <td class="col-author">${esc(item.authorName)}</td>
             <td class="col-date">${esc(fmtDate(item.createdAt))}</td>
@@ -370,6 +440,7 @@ export function mountBoard({ sms, getMe, onOpen } = {}) {
         </div>`;
     }
     const p = localizePost(currentPost);
+    const gallery = noticeImagesEnabled() && p.category === 'notice' ? galleryHtml(p.images, esc) : '';
     const commentRows = currentComments.length
       ? currentComments
           .map(
@@ -414,6 +485,7 @@ export function mountBoard({ sms, getMe, onOpen } = {}) {
         </div>
         ${errorMsg ? `<p class="board-error">${esc(errorMsg)}</p>` : ''}
         <div class="board-detail-content">${esc(p.body)}</div>
+        ${gallery ? `<div class="ni-detail">${gallery}</div>` : ''}
         <div class="board-like-bar">
           <button type="button" class="board-like-btn ${p.liked ? 'liked' : ''}" data-action="toggle-like" ${likeLoading ? 'disabled' : ''} aria-pressed="${!!p.liked}">
             <span class="heart">${p.liked ? '♥' : '♡'}</span>
@@ -448,7 +520,9 @@ export function mountBoard({ sms, getMe, onOpen } = {}) {
     const isEdit = !!editingPost;
     const admin = isBoardAdmin(sms?.session);
     const writableCats = CATEGORIES.filter((c) => c.key !== 'all' && (admin || c.key !== 'notice'));
-    const picked = editingPost?.category || category;
+    const picked = formSticky?.category || editingPost?.category || category;
+    const titleVal = formSticky?.title ?? editingPost?.title ?? '';
+    const bodyVal = formSticky?.body ?? editingPost?.body ?? '';
     const defaultCat = writableCats.some((c) => c.key === picked) ? picked : 'intro';
     const catOptions = writableCats
       .map(
@@ -464,12 +538,13 @@ export function mountBoard({ sms, getMe, onOpen } = {}) {
             <select name="category">${catOptions}</select>
           </label>
           <label class="grow">${en ? 'Title' : '제목'}
-            <input name="title" maxlength="80" placeholder="${en ? 'Enter a title (max 80 chars)' : '제목을 입력해 주세요 (최대 80자)'}" value="${esc(editingPost?.title || '')}" required />
+            <input name="title" maxlength="80" placeholder="${en ? 'Enter a title (max 80 chars)' : '제목을 입력해 주세요 (최대 80자)'}" value="${esc(titleVal)}" required />
           </label>
         </div>
         <label class="board-form-body">${en ? 'Content' : '내용'}
-          <textarea name="body" rows="9" maxlength="2000" placeholder="${en ? 'Share intros, feedback, local spots, or anything about the world (max 2,000 chars)' : '인사말, 피드백, 주변 맛집 추천 등을 자유롭게 작성해 주세요 (최대 2,000자)'}" required>${esc(editingPost?.body || '')}</textarea>
+          <textarea name="body" rows="9" maxlength="2000" placeholder="${en ? 'Share intros, feedback, local spots, or anything about the world (max 2,000 chars)' : '인사말, 피드백, 주변 맛집 추천 등을 자유롭게 작성해 주세요 (최대 2,000자)'}" required>${esc(bodyVal)}</textarea>
         </label>
+        ${renderNoticeImageField(en, defaultCat)}
         ${errorMsg ? `<p class="board-error">${esc(errorMsg)}</p>` : ''}
         <div class="board-detail-actions">
           <button type="button" class="board-btn" data-action="cancel-form">${en ? 'Cancel' : '취소'}</button>
@@ -600,6 +675,28 @@ export function mountBoard({ sms, getMe, onOpen } = {}) {
   });
 
   modal.addEventListener('click', async (e) => {
+    const rm = e.target.closest('[data-ni-remove]');
+    if (rm) {
+      e.preventDefault();
+      e.stopPropagation();
+      const idx = Number(rm.dataset.niRemove);
+      captureForm();
+      draftImages = draftImages.filter((_, i) => i !== idx);
+      render();
+      return;
+    }
+    const ni = e.target.closest('[data-ni-open]');
+    if (ni) {
+      e.preventDefault();
+      e.stopPropagation();
+      const gallery = ni.closest('[data-ni-gallery]');
+      const images = [...(gallery?.querySelectorAll('[data-ni-open] img') || [])].map((img) => ({
+        url: img.getAttribute('src') || '',
+        alt: img.getAttribute('alt') || '',
+      }));
+      openNoticeLightbox(images, Number(ni.dataset.niI) || 0);
+      return;
+    }
     const actEl = e.target.closest('[data-action]');
     if (actEl) {
       const act = actEl.dataset.action;
@@ -621,9 +718,25 @@ export function mountBoard({ sms, getMe, onOpen } = {}) {
       if (act === 'write') {
         editingPost = null;
         errorMsg = '';
+        resetFormDraft();
         view = 'form';
         render();
         modal.querySelector('input[name="title"]')?.focus();
+        return;
+      }
+      if (act === 'add-notice-url') {
+        captureForm();
+        const raw = modal.querySelector('input[name="noticeUrl"]')?.value || '';
+        const next = sanitizeNoticeImages([...draftImages, { url: raw }], { allowData: !smsBase() });
+        if (!raw.trim() || next.length === draftImages.length) {
+          errorMsg = tr('https 이미지 주소만 추가할 수 있습니다.', 'Only an https image address can be added.');
+        } else if (next.length > NOTICE_IMAGE_MAX) {
+          errorMsg = tr('이미지는 8장까지 붙일 수 있습니다.', 'You can attach up to 8 images.');
+        } else {
+          draftImages = next;
+          errorMsg = '';
+        }
+        render();
         return;
       }
       if (act === 'back-list') {
@@ -635,6 +748,7 @@ export function mountBoard({ sms, getMe, onOpen } = {}) {
       }
       if (act === 'cancel-form') {
         errorMsg = '';
+        resetFormDraft();
         view = editingPost && currentPost ? 'detail' : 'list';
         editingPost = null;
         render();
@@ -642,6 +756,8 @@ export function mountBoard({ sms, getMe, onOpen } = {}) {
       }
       if (act === 'edit' && currentPost) {
         editingPost = { ...currentPost };
+        draftImages = sanitizeNoticeImages(currentPost.images, { allowData: true });
+        formSticky = null;
         errorMsg = '';
         view = 'form';
         render();
@@ -768,6 +884,7 @@ export function mountBoard({ sms, getMe, onOpen } = {}) {
     const cat = form.category.value;
     const title = form.title.value.trim();
     const body = form.body.value.trim();
+    captureForm();
     if (!title) {
       errorMsg = tr('제목을 입력해 주세요.', 'Please enter a title.');
       render();
@@ -783,12 +900,14 @@ export function mountBoard({ sms, getMe, onOpen } = {}) {
     render();
     try {
       const meName = getMe?.()?.name || sms?.session?.name || tr('손님', 'Guest');
+      const imagePayload = noticeImagesEnabled() && cat === 'notice' ? { images: draftImages } : {};
       if (editingPost) {
         const res = await sms.board('update', {
           postId: editingPost.id,
           category: cat,
           title,
           body,
+          ...imagePayload,
         });
         currentPost = res.post;
         if (Array.isArray(res.comments)) currentComments = res.comments;
@@ -801,6 +920,7 @@ export function mountBoard({ sms, getMe, onOpen } = {}) {
           title,
           body,
           name: meName,
+          ...imagePayload,
         });
         currentPost = res.post;
         currentComments = res.comments || [];
@@ -810,6 +930,7 @@ export function mountBoard({ sms, getMe, onOpen } = {}) {
         page = 1;
         trackEvent('board_post_create', { category: cat });
       }
+      resetFormDraft();
     } catch (err) {
       errorMsg = err.message || tr('저장하지 못했습니다.', 'Failed to save post.');
     } finally {
@@ -818,7 +939,38 @@ export function mountBoard({ sms, getMe, onOpen } = {}) {
     }
   });
 
+  modal.addEventListener('change', async (e) => {
+    const catSelect = e.target?.closest?.('select[name="category"]');
+    if (catSelect && view === 'form') {
+      captureForm();
+      render();
+      return;
+    }
+    const fileInput = e.target?.closest?.('input[name="noticeImages"]');
+    if (!fileInput || view !== 'form') return;
+    const files = [...fileInput.files];
+    captureForm();
+    errorMsg = '';
+    try {
+      for (const file of files) {
+        if (draftImages.length >= NOTICE_IMAGE_MAX) break;
+        const img = await sms.uploadNoticeImage(file);
+        const next = sanitizeNoticeImages([...draftImages, img], { allowData: !smsBase() });
+        if (next.length === draftImages.length) {
+          const err = new Error('bad_type');
+          err.code = 'bad_type';
+          throw err;
+        }
+        draftImages = next;
+      }
+    } catch (err) {
+      errorMsg = imageErrorText(err);
+    }
+    render();
+  });
+
   addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && noticeLightboxOpen()) return;
     if (e.key === 'Escape' && isOpen) {
       setOpen(false);
     }
