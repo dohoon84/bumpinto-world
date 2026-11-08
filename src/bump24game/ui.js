@@ -85,9 +85,9 @@ export function createBump24UI({ onGrab, onExit, onMute, onHintTap, onIntroGo } 
     },
     // 안내/상호작용 프롬프트. act: E 로 하는 동작이면 PC 는 <kbd>E</kbd>, 터치 기기는 '탭하여 …' 버튼(누르는 손 + 물결)
     //   tap: 터치용 짧은 문구(없으면 html)
-    setHint(html, center = false, { act = false, tap = null } = {}) {
+    setHint(html, center = false, { act = false, tap = null, key = 'E' } = {}) {
       const touch = act && isTouch();
-      const out = !html ? '' : !act ? html : touch ? `<span class="b24-tapbtn"><span class="ico" aria-hidden="true"><i class="rip"></i><i class="rip r2"></i>${ICON.hand}</span><span class="lb"><b class="tw">탭하여</b>${tap || html}</span></span>` : `<kbd>E</kbd>${html}`;
+      const out = !html ? '' : !act ? html : touch ? `<span class="b24-tapbtn"><span class="ico" aria-hidden="true"><i class="rip"></i><i class="rip r2"></i>${ICON.hand}</span><span class="lb"><b class="tw">탭하여</b>${tap || html}</span></span>` : `<kbd>${key}</kbd>${html}`;
       if (el.hint.innerHTML !== out) el.hint.innerHTML = out;
       el.hint.classList.toggle('center', !!center); el.hint.classList.toggle('tap', !!(html && touch));
       el.hint.setAttribute('role', html && act ? 'button' : 'status');
