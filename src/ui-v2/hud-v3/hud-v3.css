@@ -190,16 +190,3 @@ body.hud-v3 .ve-soon .ve-gi { --gi-a: #ffd54a; }
 body.hud-v3 .h3-ci { display: inline-block; vertical-align: -2px; margin-right: 3px; color: #cfe0ee; }
 body.hud-v3 #h3-card .h3-wx .gi { color: #ffd54a; }
 
-/* [controls-card] 조작 안내가 가운데로 가면, 접힌 #hud(시계·날씨)를 플레이어 카드 아래 칩으로 남긴다.
-   카드 안의 짧은 시계는 숨겨 같은 시각이 두 번 나오지 않게 한다. */
-html.cc-on body.hud-v3:not(.mobile):not(.in-gate):not(.in-lobby) #hud.is-folded { display: flex !important; }
-html.cc-on body.hud-v3:not(.mobile) #hud {
-  top: 82px;
-  left: 12px;
-  height: auto;
-  max-width: min(560px, calc(100vw - 240px));
-  padding: 0;
-  background: transparent;
-  box-shadow: none;
-}
-html.cc-on body.hud-v3 .h3-clock { display: none; }
