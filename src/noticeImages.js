@@ -189,6 +189,15 @@ export function stripNoticeTokens(text) {
     .join('\n');
 }
 
+// [notice-images] /notice-images/<id> 는 게임 사이트가 아니라 API 서버(api.bumpinto.world)에 있다.
+//   상대 경로 그대로 <img> 에 넣으면 Pages 가 index.html 을 돌려줘 깨지므로, 그릴 때만 API 주소를 붙인다.
+let noticeImageBase = '';
+export function setNoticeImageBase(base) { noticeImageBase = String(base || '').replace(/\/$/, ''); }
+export function noticeImageSrc(url) {
+  const u = String(url || '');
+  return noticeImageBase && u.startsWith('/notice-images/') ? `${noticeImageBase}${u}` : u;
+}
+
 /**
  * 본문을 먼저 esc 한 뒤 [사진N] 만 저장 이미지로 바꾼다.
  * 토큰이 없는 사진(예전 글)은 rest 로 남아 아래 갤러리에 둔다.
@@ -206,7 +215,7 @@ export function renderNoticeBody(body, images, esc, { enabled = true, allowData 
     used.add(i);
     const img = list[i];
     const alt = esc(img.alt || '사진');
-    const src = esc(img.url);
+    const src = esc(noticeImageSrc(img.url));
     return `<button type="button" class="ni-inline" data-ni-open data-ni-i="${i}" aria-label="${alt}"><img src="${src}" alt="${alt}" draggable="false" /></button>`;
   });
   return { html, rest: list.filter((_, i) => !used.has(i)) };
@@ -223,7 +232,7 @@ export function galleryHtml(images, esc, { allowData = true } = {}) {
   if (!list.length || typeof esc !== 'function') return '';
   const buttons = list.map((img, i) => (
     `<button type="button" class="ni-thumb" data-ni-open data-ni-i="${i}" aria-label="${esc(img.alt || '이미지 크게 보기')}">` +
-    `<img src="${esc(img.url)}" alt="${esc(img.alt || '')}" draggable="false" /></button>`
+    `<img src="${esc(noticeImageSrc(img.url))}" alt="${esc(img.alt || '')}" draggable="false" /></button>`
   )).join('');
   return `<div class="ni-row" data-ni-gallery>${buttons}</div>`;
 }
@@ -283,7 +292,7 @@ function paintLightbox() {
   const photo = root.querySelector('img');
   const cap = root.querySelector('figcaption');
   if (photo) {
-    photo.src = img.url;
+    photo.src = noticeImageSrc(img.url);
     photo.alt = img.alt || '';
   }
   if (cap) cap.textContent = lightboxImages.length > 1 ? `${lightboxIndex + 1} / ${lightboxImages.length}` : (img.alt || '');
