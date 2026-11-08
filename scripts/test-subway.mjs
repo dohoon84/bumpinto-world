@@ -4,7 +4,7 @@ import path from 'node:path';
 import assert from 'node:assert/strict';
 import { createSubwayState, FADE_SEC } from '../src/subway/state.js';
 import { JEONGJA_EXITS, projectLatLon, compass, nearbyHints, resolveExits, groupExits, exitLabel, roadAxis, exitSide } from '../src/subway/exits.js';
-import { HALL, GATE, WELLS, passageFor, walkable, passageAt, laneAt, staticBlockers, wellMouth, WELL_MOUTH_Z, nearWellTop, WELL_INTO, WELL_REARM, OFFICE } from '../src/subway/layout.js';
+import { HALL, GATE, WELLS, passageFor, walkable, passageAt, laneAt, gateTapSide, staticBlockers, wellMouth, WELL_MOUTH_Z, nearWellTop, WELL_INTO, WELL_REARM, OFFICE } from '../src/subway/layout.js';
 import { placeEntrance, toWorld, toLocal, structureClear, CLEAR, ENTRANCE_DIM } from '../src/subway/entrance.js';
 import { gameTerrain } from './subway/gameTerrain.mjs';
 import * as THREE from 'three';
@@ -159,6 +159,9 @@ for (const w of WELLS) {
 // 개찰구: 열린 통로로만 지나감, 펜스는 못 지나감
 const lane = 3, lx = GATE.lanes[lane];
 assert.equal(laneAt(lx, -1.0), lane); assert.equal(laneAt(lx, 3), -1); assert.equal(laneAt(GATE.cab[0], 0), -1);
+assert.equal(gateTapSide(-1.2), 'in', '대합실 쪽에서 닿으면 승차');
+assert.equal(gateTapSide(1.2), 'out', '유료 구역에서 닿으면 하차');
+assert.equal(gateTapSide(0), 'out');
 assert.equal(walkable(lx, 0, 0.25, { passages, laneOpen: () => false }), false, '닫힌 개찰구');
 assert.equal(walkable(lx, 0, 0.25, { passages, laneOpen: () => true }), true, '열린 개찰구');
 assert.equal(walkable(-20, 0, 0.25, { passages }), false, '펜스');

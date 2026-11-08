@@ -9,6 +9,7 @@ import { onLangChange } from '../../i18n.js';
 import { mountEconHud, refresh, render } from './hud.js';
 import { openWelcome, openChipTip, openQuests, prefetchAllQuests, prefetchAllShop, pushReward, openKarma, openShop, openGoogleWait, openMigrate } from './panels.js';
 import { shownInPay, shownReceipts, showPay, payAndShow, openTaxiApp, openSettle, holdToast, openBoard, openGate } from './transit.js';
+import { claimIfUiFare, resetSubwayFare, takeSubwayTap } from './farePop.js';
 import { close, openKey } from './layer.js';
 import { mountWalletApp, openWalletApp } from './walletApp.js';
 import { coinSound } from './coinSound.js';
@@ -72,7 +73,6 @@ export const isDemo = () => new URLSearchParams(location.search).get('demo') ===
 
 // ---------- 게임 교통 훅 (bw:transit) → 결제 화면
 const taxiHolds = new Map();
-let lastSubTap = 0;
 let pendingSettle = null; // 서버 모드: 게임 택시는 출발 때 바로 정산(rideProvider) → 도착 때 10b 로 보여 준다
 let taxiRiding = false;
 async function onTransit(e) {
@@ -90,10 +90,14 @@ async function onTransit(e) {
     }
     if (d.mode === 'bus' && d.phase === 'board') {
       await payAndShow({ mode: 'bus', code: d.code || 'bus.city', rideId: d.rideId || `bus-${Date.now()}`, where: d.where || '' });
+    } else if (d.mode === 'subway' && d.phase === 'leave') {
+      resetSubwayFare(); // 역 밖으로 나감 → 다음 승차는 새 탑승
     } else if (d.mode === 'subway' && d.phase === 'tap') {
-      if (Date.now() - lastSubTap < 60000) return; // 개찰구 하나 통과 = 1회 (안쪽 다시 태그 무시)
-      lastSubTap = Date.now();
-      await payAndShow({ mode: 'subway', code: 'subway.base', rideId: `sub-${Math.floor(Date.now() / 60000)}`, where: d.where || '' });
+      // 하차 태그는 승차 요금에 포함. 같은 방문(in-subway)에서 들어온 태그는 rideId 하나로 한 번만.
+      const inside = document.body.classList.contains('in-subway');
+      const next = takeSubwayTap({ gate: d.gate === 'out' ? 'out' : 'in', inside }, Date.now());
+      if (next.action !== 'pay') return;
+      await payAndShow({ mode: 'subway', code: 'subway.base', rideId: next.rideId, where: d.where || '' });
     } else if (d.mode === 'taxi' && d.phase === 'depart') {
       const h = await econ.holdTaxi({ code: d.code || 'taxi.drive', estimateMeters: Math.round(d.meters || 0), rideId: d.rideId || `taxi-${Date.now()}` });
       if (h.ok) { taxiHolds.set(d.rideId, h.data); holdToast(h.data); }
@@ -117,6 +121,10 @@ function onServerPayment(p) {
     if (p.status === 'insufficient') import('./transit.js').then(({ openBlock }) => openBlock({ mode: p.mode, code: p.code, err: p.error, onQuests: OPEN['04a'] }));
     return;
   }
+  // UI 가 payFare 를 직접 부르는 중이면 그 호출이 화면을 그린다.
+  // 영수증은 emit 순간에 찍는다. payFare 가 afterWrite(상태 새로고침)를 끝낸 뒤에야 showPay 가 돌아가서,
+  // 300ms 뒤에 한 번 더 그리면 같은 카드가 연달아 두 번 떴다.
+  if (claimIfUiFare(p, shownReceipts) === 'claimed') return;
   setTimeout(() => {
     if (p.receiptId && shownReceipts.has(p.receiptId)) return; // 지하철 등 이 화면이 직접 결제해서 이미 띄운 것
     if (p.receiptId) shownReceipts.add(p.receiptId);
@@ -162,6 +170,9 @@ export function mountEconUi({ mobile = false } = {}) {
   });
   onLangChange(() => render());
   addEventListener('bw:transit', onTransit);
+  // 역 밖으로 나가면(in-subway 해제) 개찰구 탑승 id 를 비운다. 하차 태그는 같은 id 로 막혀 있다.
+  new MutationObserver(() => { if (!document.body.classList.contains('in-subway')) resetSubwayFare(); })
+    .observe(document.body, { attributes: true, attributeFilter: ['class'] });
   trackWalk();
   refresh().then(() => { prefetchAllQuests(); prefetchAllShop(); }).catch(() => { prefetchAllQuests(); prefetchAllShop(); });
   if (isDemo() && econ.dev) import('./demo.js').then((m) => m.mountDemo({ open, link, setSuppress: (ms) => { suppressRewards = Date.now() + ms; } }));

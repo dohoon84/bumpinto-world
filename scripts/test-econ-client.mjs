@@ -414,7 +414,7 @@ for (const paid of [false, true]) {
   jar.now = NOW + 60e3;
   const taxi = await fare.charge({ code: 'taxi.drive', mode: 'taxi', meta: { meters: 3000 } });
   jar.now = NOW + 120e3;
-  const subId = `sub-${Math.floor(jar.now / 60000)}`; // econ-ui index.js 지하철 개찰구 = UI 가 rideId 를 만들어 payFare
+  const subId = `sub-${Math.floor(jar.now / 60000)}`; // 개찰구 UI 가 payFare 에 넘기는 rideId 예 (한 탑승에 하나). 서버는 그 값을 그대로 저장한다.
   const sub = await c.payFare({ mode: 'subway', code: 'subway.base', rideId: subId });
   fare.setPaymentProvider(null);
   await new Promise((r) => setTimeout(r, 30)); // 무료 모드는 서버 기록이 뒤에서 끝난다

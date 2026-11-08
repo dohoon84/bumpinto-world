@@ -76,7 +76,7 @@
     "buslive:e2e": "node scripts/e2e-bus-realtime-replay.mjs",
     "buslive:record": "node scripts/record-bus-replay.mjs",
     "shots-jz-traffic": "node scripts/shots-jz-traffic.mjs",
-    "econ:test": "node scripts/test-econ-mock.mjs",
+    "econ:test": "node scripts/test-econ-mock.mjs && node scripts/test-fare-pop.mjs",
     "arrive:test": "node scripts/test-station-arrive.mjs",
     "arrive:e2e": "node scripts/e2e-station-arrive.mjs",
     "bp24:entry": "node scripts/e2e-bump24-jeongja-entry.mjs"

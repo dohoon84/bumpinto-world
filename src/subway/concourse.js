@@ -8,7 +8,7 @@
 import * as THREE from 'three';
 import { createBuilder, createAtlas, FONT, fitText, lineBadge, roundRect } from './geom.js';
 import { JEONGJA_THEME } from './stations.js';
-import { HALL, CEIL, GATE, GATE_X, OFFICE, WELLS, DROP, RUN, COLUMNS, PASSAGE_LEN, passageFor, staticBlockers, walkable, passageAt, laneAt, nearWellTop, wellMouth, WELL_INTO, WELL_REARM, northGaps, cutSpans } from './layout.js';
+import { HALL, CEIL, GATE, GATE_X, OFFICE, WELLS, DROP, RUN, COLUMNS, PASSAGE_LEN, passageFor, staticBlockers, walkable, passageAt, laneAt, gateTapSide, nearWellTop, wellMouth, WELL_INTO, WELL_REARM, northGaps, cutSpans } from './layout.js';
 import { buildCrowd } from '../entities/avatarCrowd.js';
 import { createAvatar, animateAvatar } from '../entities/avatar.js';
 import { LOOKS } from './looks.js';
@@ -485,7 +485,8 @@ export function buildConcourse({ exits, groups, entryId, look, renderer, onToast
   // 개찰구: 근처에 사람이 있으면 열림
   const tapLane = (i, who) => {
     const ln = lanes[i];
-    if (ln.open < 0.5 && ln.t <= 0) { ln.ok = 0.9; if (who === 'me') onToast?.('tap', ln); }
+    // 대합실(z<0)에서 처음 닿으면 승차, 유료 구역에서 닿으면 하차. 하차 요금은 승차에 포함.
+    if (ln.open < 0.5 && ln.t <= 0) { ln.ok = 0.9; if (who === 'me') onToast?.('tap', ln, { gate: gateTapSide(me.position.z) }); }
     ln.t = 1.1;
   };
   function updateNpc(n, dt) {

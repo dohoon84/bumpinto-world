@@ -141,6 +141,10 @@ body.mobile.m-econ:has(#ve-layer .ve-wrap) :is(#subway-hint, #umbrella-actions, 
 body.mobile.m-econ .ve-shop .ve-real { display: none !important; }
 /* 06 닫기 버튼: 마지막 자식이라 sticky 가 위에 붙지 않음 → 맨 앞으로 */
 body.mobile.m-econ .ve-karma > .v2-close { order: -1; }
+/* 개찰구 차감 팝: PC 와 같은 1초. 좁은 화면에서는 글자만 조금 줄인다. */
+body.mobile.m-econ .ve-farepop { top: 46%; padding: 12px 16px; gap: 8px 10px; }
+body.mobile.m-econ .ve-farepop-amt { font-size: 22px; }
+body.mobile.m-econ .ve-farepop-rw { font-size: 13px; }
 /* 08b/09b 금액 줄: '0 bum' 이 두 줄로 깨지지 않게 */
 body.mobile.m-econ .ve-pay .ve-amt-big { white-space: nowrap; font-size: 18px; }
 body.mobile.m-econ .ve-pay .ve-amtrow { flex-wrap: wrap; row-gap: 2px; }
