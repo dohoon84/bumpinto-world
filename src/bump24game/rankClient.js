@@ -1,6 +1,6 @@
 // [bump24-rank] 서버 전광판. ?bp24rank=0 이면 이 공급자를 쓰지 않고 기기 기록만 남긴다.
 import { smsBase, deviceId } from '../sms.js';
-import { LIMIT_MSG } from '../../server/phone/src/bump24/rules.js';
+import { attemptCap, LIMIT_MSG } from '../../server/phone/src/bump24/rules.js';
 
 export function bp24RankOn(search = typeof location !== 'undefined' ? location.search : '') {
   try { return new URLSearchParams(search || '').get('bp24rank') !== '0'; } catch { return true; }
@@ -40,7 +40,12 @@ export function createRankProvider({ base, device } = {}) {
       if (!r.ok) return null;
       const j = await r.json();
       if (!j?.ok) return null;
-      return { ranked: !j.usedUp && !j.beforeOpen, usedUp: !!j.usedUp, message: j.message || '' };
+      const left = Number(j.left);
+      const guest = j.guest === true;
+      return {
+        ranked: !j.usedUp && !j.beforeOpen, usedUp: !!j.usedUp, message: j.message || '', guest,
+        ...(Number.isFinite(left) ? { left, cap: attemptCap(guest) } : {}),
+      };
     },
     async pending() {
       const b = root();
@@ -53,13 +58,13 @@ export function createRankProvider({ base, device } = {}) {
     async ack() {
       const b = root();
       if (!b) return;
-      await fetch(`${b}/bump24/ack`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ deviceId: dev() }) });
+      await fetch(`${b}/bump24/ack`, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=UTF-8' }, body: JSON.stringify({ deviceId: dev() }) });
     },
     async submit({ storeId, name, score, ranked }) {
       const b = root();
       if (!b) return { record: false };
       const r = await fetch(`${b}/bump24/run`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        method: 'POST', headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
         body: JSON.stringify({ storeId, name, score, deviceId: dev(), practice: !ranked }),
       });
       return r.ok ? r.json() : { record: false };
