@@ -148,6 +148,18 @@ html, body { margin: 0; height: 100%; overflow: hidden; font-family: 'Pretendard
   background: #1f5fbf;
   border-color: #1f5fbf;
 }
+/* [controls-card] 첫 페인트: 가운데 카드가 켜지면 왼쪽 위는 시계·날씨 칩만 (조작 문장은 숨김). 자세한 모양은 controlsCard.css */
+html.cc-on #hud { width: max-content; max-width: min(560px, calc(100vw - 240px)); padding: 0; background: transparent; box-shadow: none; }
+html.cc-on #hud .help, html.cc-on #hud .help-fold { display: none !important; }
+html.cc-on #hud .hud-meta { margin-top: 0; gap: 8px; }
+html.cc-on #hud .clock, html.cc-on #cc-reopen { pointer-events: auto; }
+#cc-reopen { display: none; }
+html.cc-on #cc-reopen {
+  display: inline-grid; place-items: center; box-sizing: border-box; width: 40px; height: 40px; margin: 0; padding: 0;
+  border: 0; border-radius: 12px; background: linear-gradient(180deg, #ffe169, #f5a200); color: #3a2a00;
+  font: inherit; font-size: 20px; font-weight: 900; line-height: 1; cursor: pointer;
+  box-shadow: 0 3px 0 #a65f00, 0 6px 14px rgba(8, 16, 30, .28), inset 0 1px 0 rgba(255, 255, 255, .55);
+}
 #buttons { position: fixed; right: 12px; top: 10px; display: flex; gap: 6px; }
 #buttons button { font: inherit; font-size: 13px; border: 0; border-radius: 10px; padding: 7px 10px; background: rgba(255,255,255,.85); box-shadow: 0 1px 4px rgba(0,0,0,.15); cursor: pointer; }
 :root {

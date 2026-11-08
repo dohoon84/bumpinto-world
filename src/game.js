@@ -80,6 +80,7 @@ import { prepareJeongjaBp24, mountBasemapBp24, bp24DoorInfo } from './corridor/b
 import { mountBp24Nav } from './corridor/bp24Nav.js'; // [bp24nav]
 import { BUMP24_JEONGJA_AT, bump24AtSpot } from './corridor/bp24Locations.js';
 import { isUiV2, uiV2Wanted } from './ui-v2/flag.js'; // [ui-v2] 게임 UI v2 (기본 켜짐 · ?ui=v1 끔)
+import { controlsCardWanted } from './controlsCard/flag.js'; // [controls-card] 가운데 조작 안내 (기본 켜짐 · ?controlscard=0 이면 예전 접기)
 
 const params = new URLSearchParams(location.search);
 const mobileMode = isMobileMode(); // [mobile] 모바일 모드(핸드폰·?mobile=1): 가벼운 렌더 + 모바일 HUD
@@ -973,7 +974,7 @@ noticePopup = createNoticePopup({
   busy: () => {
     try {
       const b = document.body.classList;
-      return !joined || b.contains('in-gate') || b.contains('in-lobby') || board.open || handset.open ||
+      return !joined || b.contains('in-gate') || b.contains('in-lobby') || b.contains('cc-open') || board.open || handset.open ||
         !!cameraApp?.open || !!donationBoards.open || !!ride?.active || !!adminBike?.riding || !!giftRiding();
     } catch { return true; }
   },
@@ -2331,6 +2332,7 @@ input.onKey = (e) => {
   if (emoteDef) triggerEmote(emoteDef.id, true);
 };
 if (mobileMode) import('./mobile/hud.js').then((m) => m.mountMobileHud({ handset })); // [mobile]
+if (controlsCardWanted()) import('./controlsCard/index.js').then((m) => m.mountControlsCard()).catch((e) => console.warn('[controls-card]', e));
 if (mobileMode && !shot && uiV2Wanted()) import('./mobile/econ/index.js').then((m) => m.mountMobileEcon({ handset })).catch((e) => console.warn('[econ-mobile]', e)); // [econ-mobile] 모바일 경제 UI (?ui=v2)
 const ov = { yaw: 0.35, pitch: 0.95, dist: 1000 };
 const phone = mountPhone({ data, region, extraTiles: corridor ? () => corridor.mapTiles() : null }); // [corridor]
