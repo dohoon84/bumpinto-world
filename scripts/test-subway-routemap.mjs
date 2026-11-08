@@ -66,6 +66,24 @@ assert.equal(nearRouteMap(40, -0.5, [{ x: 10, a: 9, b: 11, w: 2 }]), null);
   assert.equal(mw.moreLeft, false);
 }
 
+{
+  const gn = STATIONS.find((s) => s.id === 'gangnam');
+  if (gn) {
+    const shin = routeMapData(gn, 'shin');
+    for (const name of ['판교', '청계산입구', '양재시민의숲', '양재']) {
+      const s = shin.stops.find((x) => x.name === name);
+      assert.equal(s.pass, true, name);
+      assert.equal(s.game, false, name);
+    }
+    assert.equal(shin.stops.find((x) => x.name === '강남').pass, false);
+    assert.equal(shin.stops.find((x) => x.name === '정자').pass, false);
+    const l2 = routeMapData(gn, 'l2');
+    for (const name of ['잠실새내', '종합운동장', '삼성', '선릉', '역삼']) assert.equal(l2.stops.find((x) => x.name === name).pass, true, name);
+    assert.equal(l2.stops.find((x) => x.name === '교대').pass, false, '개통 구간 밖은 통과 표기 없음');
+    assert.equal(l2.stops.find((x) => x.name === '잠실').pass, false);
+  }
+}
+
 // 로고/브랜드 문자열 금지 (데이터 필드)
 for (const def of STATIONS) {
   const d = routeMapData(def, def.lines[0]);

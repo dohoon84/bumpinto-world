@@ -4,13 +4,19 @@
 //   좌표(승강장 Scene): x = 선로 방향, 열차 진행 방향 = +x (1호차 = +x 끝), 승강장 쪽 z < 0, 스크린도어 z = 0, 선로 z > 0
 import { LINES, TRAIN, CAR_LEN, DOOR_OFF } from './lines.js';
 import { LINE_STOPS } from './stationsData.js';
-import { STATIONS, STATIONS_BASE, EXT_STATIONS } from './roster.js'; // [migeum-sub] 플래그 반영 역 목록 · 확장 전 역 목록
+import { STATIONS, STATIONS_BASE, EXT_STATIONS, gangnamSubEnabled } from './roster.js'; // [migeum-sub] 플래그 반영 역 목록 · 확장 전 역 목록
 import { jaName, jaDir } from './ja.js';
 import { GAP_STOPS } from './stopCoords.js'; // [gangnam] 정자↔강남·잠실↔강남 사이 게임 밖 역의 OSM 좌표
 
 export const BY_NAME = new Map(STATIONS.map((s) => [s.name, s]));
 export const isGameStop = (line, name) => !!BY_NAME.get(name)?.lines.includes(line); // 게임에 대합실이 있고 이 노선이 서는 역
 export const stopsOf = (line) => LINE_STOPS[line]?.stops || [];
+// [gangnam] 개통 구간에서 내리지 않고 지나가는 역. ?gangnam=0 / ?gangnamsub=0 이면 표시하지 않는다.
+const PASS_BY_LINE = { shin: ['판교', '청계산입구', '양재시민의숲', '양재'], l2: ['잠실새내', '종합운동장', '삼성', '선릉', '역삼'] };
+export function isPassStop(line, name) {
+  return gangnamSubEnabled() && (PASS_BY_LINE[line] || []).includes(name) && !isGameStop(line, name);
+}
+export const alightAllowed = (stop) => !!stop?.game;
 
 // from 역에서 dir 방면으로 가는 다음 역들 (순환선은 한 바퀴 전까지, 아니면 종점까지)
 export function nextStops(line, dir, from, max = 60) {
@@ -38,7 +44,12 @@ export function rideStops(line, dir, from, max = 24) {
   const ups = nextStops(line, dir, from, max);
   let last = -1;
   ups.forEach((n, i) => { if (isGameStop(line, n)) last = i; });
-  return last < 0 ? [] : ups.slice(0, last + 1).map((n) => ({ name: n, game: isGameStop(line, n), id: BY_NAME.get(n)?.id || null }));
+  return last < 0 ? [] : ups.slice(0, last + 1).map((n) => {
+    const game = isGameStop(line, n);
+    const o = { name: n, game, id: BY_NAME.get(n)?.id || null };
+    if (!game && isPassStop(line, n)) o.pass = true; // 통과만. game 역 객체 모양은 예전과 같다
+    return o;
+  });
 }
 
 // 승강장 배치: 스크린도어 (량·문 번호), 길이
@@ -84,10 +95,12 @@ function announceText(kind, o = {}) {
     case 'approach': return { ko: `지금 ${dKo} 방면으로 가는 열차가 들어오고 있습니다. 안전선 밖으로 한 걸음 물러서 주시기 바랍니다.`, en: `The train bound for ${dEn} is now approaching. Please step back from the platform screen doors.`, ja: `まもなく、${dirJa}の電車が到着します。安全のため、ホームドアから一歩お下がりください。` };
     case 'arrived': return { ko: `${dKo} 방면 열차입니다. 내리는 분이 먼저 내린 다음 타시기 바랍니다.`, en: `This train is bound for ${dEn}. Please let passengers off first.`, ja: `${dirJa}の電車です。お降りのお客様を先にお通しください。` };
     case 'closing': return { ko: '출입문 닫습니다.', en: 'The doors are closing.', ja: 'ドアが閉まります。ご注意ください。' };
-    case 'next': return { ko: `이번 역은 ${o.name}, ${o.name}역입니다.${o.transfer ? ` ${o.transfer}으로 갈아타실 수 있습니다.` : ''}${doorKo}`, en: `This stop is ${o.nameEn || o.name}.${o.transferEn ? ` You can transfer to the ${o.transferEn}.` : ''}${doorEn}`, ja: `まもなく、${nJa}、${nJa}です。${o.transferJa ? `${o.transferJa}にお乗り換えいただけます。` : ''}${doorJa}` };
-    case 'depart': return { ko: `다음 역은 ${o.name}역입니다.`, en: `The next stop is ${o.nameEn || o.name}.`, ja: `次は、${nJa}、${nJa}です。` };
-    case 'noAlight': return { ko: `${o.name}역은 아직 게임 지상이 없어 내릴 수 없어요. 다음 역까지 타고 가요.`, en: `${o.nameEn || o.name} isn't in the game yet — stay on to the next stop.`, ja: `${nJa}駅はゲームでは準備中のため、お降りいただけません。次の駅までそのままご乗車ください。` };
-    case 'last': return { ko: `이 방면 마지막 게임 역입니다. ${o.name}역에서 내려 주세요.`, en: `Last in-game stop this way — please get off at ${o.nameEn || o.name}.`, ja: `この方面のゲーム内の最後の駅です。${nJa}駅でお降りください。` };
+    case 'next': return { ko: `이번 역은 ${o.name}, ${o.name}역입니다.${o.pass ? ' 통과 — 준비 중인 역.' : ''}${o.opening ? ' 강남 개통.' : ''}${o.transfer ? ` ${o.transfer}으로 갈아타실 수 있습니다.` : ''}${doorKo}`, en: `This stop is ${o.nameEn || o.name}.${o.pass ? ' Pass through.' : ''}${o.opening ? ' Gangnam is open.' : ''}${o.transferEn ? ` You can transfer to the ${o.transferEn}.` : ''}${doorEn}`, ja: `まもなく、${nJa}、${nJa}です。${o.pass ? '通過です。準備中のためお降りいただけません。' : ''}${o.opening ? 'カンナム開通。' : ''}${o.transferJa ? `${o.transferJa}にお乗り換えいただけます。` : ''}${doorJa}` };
+    case 'depart': return { ko: `다음 역은 ${o.name}역입니다.${o.pass ? ' 통과 — 준비 중인 역.' : ''}${o.opening ? ' 강남 개통.' : ''}`, en: `The next stop is ${o.nameEn || o.name}.${o.pass ? ' Pass through.' : ''}${o.opening ? ' Gangnam is open.' : ''}`, ja: `次は、${nJa}、${nJa}です。${o.pass ? '通過です。準備中。' : ''}${o.opening ? 'カンナム開通。' : ''}` };
+    case 'noAlight': return o.pass
+      ? { ko: `${o.name}역은 통과 — 준비 중인 역입니다.`, en: `${o.nameEn || o.name} — pass through.`, ja: `${nJa}駅は通過です。準備中のため、お降りいただけません。` }
+      : { ko: `${o.name}역은 아직 게임 지상이 없어 내릴 수 없어요. 다음 역까지 타고 가요.`, en: `${o.nameEn || o.name} isn't in the game yet — stay on to the next stop.`, ja: `${nJa}駅はゲームでは準備中のため、お降りいただけません。次の駅までそのままご乗車ください。` };
+    case 'last': return { ko: `이 방면 마지막 게임 역입니다. ${o.name}역에서 내려 주세요.${o.opening ? ' 강남 개통.' : ''}`, en: `Last in-game stop this way — please get off at ${o.nameEn || o.name}.${o.opening ? ' Gangnam is open.' : ''}`, ja: `この方面のゲーム内の最後の駅です。${nJa}駅でお降りください。${o.opening ? 'カンナム開通。' : ''}` };
     case 'noRide': return { ko: `${dKo} 방면은 내릴 수 있는 게임 역이 아직 없어요 (다음 업데이트).`, en: `No in-game stop toward ${dEn} yet — coming soon.`, ja: `${dJa}は、お降りいただけるゲーム内の駅がまだありません（準備中）。` };
     default: return { ko: '', en: '', ja: '' };
   }

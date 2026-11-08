@@ -189,13 +189,14 @@ body.ui-v2:not(.mobile) .ve-fare small { font-size: 12px; color: var(--v2-sub); 
 body.ui-v2:not(.mobile) .ve-fare .ve-col.r b { font-size: 15px; }
 body.ui-v2:not(.mobile) .ve-price { display: inline-flex; align-items: baseline; gap: 8px; }
 body.ui-v2:not(.mobile) .ve-s, body.ui-v2:not(.mobile) .ve-panel s, body.ui-v2:not(.mobile) .ve-pay s { color: var(--v2-sub); font-weight: 700; text-decoration-thickness: 2px; }
-body.ui-v2:not(.mobile) .ve-paystack { position: fixed; right: 24px; top: 120px; display: flex; flex-direction: column; gap: 8px; width: 480px; pointer-events: auto; animation: ve-in2 .25s ease-out; }
-@keyframes ve-in2 { from { opacity: 0; transform: translateY(-12px); } }
+body.ui-v2:not(.mobile) .ve-paystack { position: fixed; left: 50%; right: auto; top: 120px; display: flex; flex-direction: column; gap: 8px; width: 480px; pointer-events: auto; transform: translateX(-50%); animation: ve-in2 .25s ease-out; }
+@keyframes ve-in2 { from { opacity: 0; transform: translateX(-50%) translateY(-12px); } to { opacity: 1; transform: translateX(-50%); } }
 body.ui-v2:not(.mobile) .ve-pay { display: flex; align-items: center; gap: 16px; padding: 16px 20px; border-color: color-mix(in srgb, var(--c) 60%, transparent); }
 body.ui-v2:not(.mobile) .ve-pay .ve-col { flex: 1; }
 body.ui-v2:not(.mobile) .ve-pay .v2-tag { align-self: flex-start; }
 body.ui-v2:not(.mobile) .ve-amtrow { align-items: baseline; gap: 10px; }
-body.ui-v2:not(.mobile) .ve-amt-big { font-size: 28px; font-weight: 900; color: #ff8a80; }
+body.ui-v2:not(.mobile) .ve-amt-center { justify-content: center; width: 100%; }
+body.ui-v2:not(.mobile) .ve-amt-big { font-size: 28px; font-weight: 900; color: #ff8a80; text-align: center; }
 body.ui-v2:not(.mobile) .ve-amt-big.free { color: #7ff0c8; }
 body.ui-v2:not(.mobile) .ve-after { font-size: 13px; color: var(--v2-sub); }
 body.ui-v2:not(.mobile) .ve-beep { position: relative; flex: none; display: grid; place-items: center; width: 88px; height: 88px; color: var(--c); }

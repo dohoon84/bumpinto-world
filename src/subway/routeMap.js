@@ -4,7 +4,7 @@
 //   승강장 판 = 현재 역 ±PANEL_RADIUS 창 (큰 글씨). 전체 노선은 오버레이에서만.
 import { LINE_STOPS } from './stationsData.js';
 import { LINES } from './lines.js';
-import { BY_NAME } from './ride.js';
+import { BY_NAME, isPassStop } from './ride.js';
 import { FONT, fitText, lineBadge } from './geom.js';
 import { isEn } from '../i18n.js';
 
@@ -21,7 +21,7 @@ export function routeMapData(def, line) {
   if (meIdx < 0) return null;
   const list = stops.map((name, i) => {
     const s = BY_NAME.get(name);
-    return { name, nameEn: s?.nameEn || null, game: !!s?.lines?.includes(line), i, me: i === meIdx };
+    return { name, nameEn: s?.nameEn || null, game: !!s?.lines?.includes(line), pass: isPassStop(line, name), i, me: i === meIdx };
   });
   const transfer = (def.lines || []).filter((k) => k !== line && LINES[k]).map((k) => ({ key: k, short: LINES[k].short, ko: LINES[k].ko, en: LINES[k].en, color: LINES[k].color }));
   return {
@@ -117,6 +117,11 @@ export function drawRouteMapPanel(c, w, h, data, en = false) {
     // 이름은 위·아래 번갈아 (겹침 줄이기). 현재 역은 항상 위 + 조금 더 띄움
     const up = me || i % 2 === 0;
     c.fillText(label, x, up ? y - (me ? h * 0.16 : h * 0.12) : y + h * 0.12);
+    if (s.pass) {
+      c.fillStyle = '#ffe169';
+      fitText(c, '통과', maxW, Math.round(h * 0.042), 800);
+      c.fillText('통과', x, up ? y + h * 0.08 : y - h * 0.045);
+    }
   });
 
   c.fillStyle = '#9eb4c6'; c.font = `600 ${Math.round(h * 0.038)}px ${FONT}`; c.textAlign = 'left'; c.textBaseline = 'alphabetic';
@@ -147,6 +152,8 @@ const OVERLAY_CSS = `
 #subway-routemap .srm-stop .dot{flex:none;width:12px;height:12px;border-radius:50%;background:#fff;border:3px solid var(--c);box-sizing:border-box;margin-bottom:0}
 #subway-routemap .srm-stop.out{opacity:.45}
 #subway-routemap .srm-stop.out .nm{color:#9eb4c6}
+#subway-routemap .srm-stop.pass .nm{color:#e8f2f8}
+#subway-routemap .srm-stop i{font-style:normal;font-size:10px;font-weight:800;color:#3a2a00;background:#ffe169;border-radius:5px;padding:0 4px;margin-left:2px}
 #subway-routemap .srm-stop.me .dot{width:16px;height:16px;background:#ffe169;border-color:#ffe169;box-shadow:0 0 0 3px rgba(255,225,105,.28);margin-bottom:-2px}
 #subway-routemap .srm-stop.me .nm{font-size:13.5px;font-weight:900;color:#ffe169}
 #subway-routemap .srm-xfer{padding:8px 14px;display:flex;flex-wrap:wrap;gap:6px;align-items:center;flex:none;border-bottom:1px solid rgba(255,255,255,.08)}
@@ -162,6 +169,7 @@ const OVERLAY_CSS = `
 #subway-routemap .srm-list li.me{font-weight:900;color:#ffe169}
 #subway-routemap .srm-list li.me .dot{background:#ffe169;border-color:#ffe169;width:14px;height:14px;margin-left:-1px}
 #subway-routemap .srm-list li.out{opacity:.42}
+#subway-routemap .srm-list li.pass{opacity:1}
 #subway-routemap .srm-list em{font-style:normal;font-size:10.5px;font-weight:800;border-radius:6px;padding:1px 6px;background:#ffe169;color:#122033;margin-left:4px}
 #subway-routemap .srm-list .en{display:block;font-size:11px;font-weight:600;color:#9eb4c6}
 #subway-routemap .srm-ft{padding:8px 14px;font-size:11px;color:#9eb4c6;border-top:1px solid rgba(255,255,255,.12);flex:none}
@@ -197,13 +205,13 @@ export function mountRouteMapOverlay() {
       ? `<div class="srm-xfer"><span>${en ? 'Transfer' : '갈아타는 곳'}</span>${data.transfer.map((t) => `<i style="background:${t.color}">${esc(en ? t.short : t.short)}</i>`).join('')}</div>`
       : '';
     const strip = data.stops.map((s) => {
-      const cls = ['srm-stop', s.me ? 'me' : '', s.game ? '' : 'out'].filter(Boolean).join(' ');
-      const nm = esc(stopLabel(s, en));
+      const cls = ['srm-stop', s.me ? 'me' : '', s.pass ? 'pass' : (s.game ? '' : 'out')].filter(Boolean).join(' ');
+      const nm = `${esc(stopLabel(s, en))}${s.pass ? '<i>통과</i>' : ''}`;
       return `<div class="${cls}" data-i="${s.i}"><span class="nm">${nm}</span><span class="dot"></span></div>`;
     }).join('');
     const items = data.stops.map((s, i) => {
-      const cls = [i === 0 ? 'first' : '', i === data.stops.length - 1 ? 'last' : '', s.me ? 'me' : '', s.game ? '' : 'out'].filter(Boolean).join(' ');
-      const tag = s.me ? `<em>${en ? 'You are here' : '여기'}</em>` : '';
+      const cls = [i === 0 ? 'first' : '', i === data.stops.length - 1 ? 'last' : '', s.me ? 'me' : '', s.pass ? 'pass' : (s.game ? '' : 'out')].filter(Boolean).join(' ');
+      const tag = s.me ? `<em>${en ? 'You are here' : '여기'}</em>` : (s.pass ? `<em>통과</em>` : '');
       const enLine = s.nameEn ? `<span class="en">${esc(s.nameEn)}</span>` : '';
       return `<li class="${cls}" style="--c:${data.color}" data-i="${s.i}"><span class="dot"></span><span><b>${esc(s.name)}</b>${tag}${enLine}</span></li>`;
     }).join('');

@@ -107,7 +107,9 @@ body.mobile.m-econ .ve-goal { padding: 10px 12px; }
 body.mobile.m-econ .ve-board { position: fixed; left: var(--me-l); right: var(--me-r); margin-inline: auto; bottom: var(--m-b); transform: none; width: min(460px, calc(100vw - var(--me-l) - var(--me-r))); max-height: calc(100vh - var(--m-t) - 48px - var(--m-b)); }
 body.mobile.m-econ .ve-wrap:has(.ve-board) { padding: 0; }
 body.mobile.m-econ .ve-fare { padding: 8px 12px; gap: 10px; }
-body.mobile.m-econ .ve-paystack { right: var(--m-r); top: calc(var(--m-t) + 48px); width: min(320px, calc(100vw - var(--m-l) - var(--m-r) - 300px)); max-height: calc(100vh - var(--m-t) - 48px - var(--m-b) - 144px); overflow: hidden; gap: 6px; }
+body.mobile.m-econ .ve-paystack { left: 50%; right: auto; transform: translateX(-50%); top: calc(var(--m-t) + 48px); width: min(320px, calc(100vw - var(--m-l) - var(--m-r) - 300px)); max-height: calc(100vh - var(--m-t) - 48px - var(--m-b) - 144px); overflow: hidden; gap: 6px; }
+body.mobile.m-econ .ve-amt-center { justify-content: center; }
+body.mobile.m-econ .ve-amt-big { text-align: center; }
 body.mobile.m-econ .ve-pay { gap: 10px; padding: 8px 12px; }
 body.mobile.m-econ .ve-beep { width: 48px; height: 48px; }
 body.mobile.m-econ .ve-beep i:nth-child(2) { inset: 7px; } body.mobile.m-econ .ve-beep i:nth-child(3) { inset: 14px; }

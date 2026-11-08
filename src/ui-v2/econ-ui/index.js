@@ -9,6 +9,7 @@ import { onLangChange } from '../../i18n.js';
 import { mountEconHud, refresh, render } from './hud.js';
 import { openWelcome, openChipTip, openQuests, prefetchAllQuests, prefetchAllShop, pushReward, openKarma, openShop, openGoogleWait, openMigrate } from './panels.js';
 import { shownInPay, shownReceipts, showPay, payAndShow, openTaxiApp, openSettle, holdToast, openBoard, openGate } from './transit.js';
+import { createRideOnce } from './rideOnce.js';
 import { close, openKey } from './layer.js';
 import { mountWalletApp, openWalletApp } from './walletApp.js';
 import { coinSound } from './coinSound.js';
@@ -72,7 +73,7 @@ export const isDemo = () => new URLSearchParams(location.search).get('demo') ===
 
 // ---------- 게임 교통 훅 (bw:transit) → 결제 화면
 const taxiHolds = new Map();
-let lastSubTap = 0;
+const rideOnce = createRideOnce();
 let pendingSettle = null; // 서버 모드: 게임 택시는 출발 때 바로 정산(rideProvider) → 도착 때 10b 로 보여 준다
 let taxiRiding = false;
 async function onTransit(e) {
@@ -89,11 +90,20 @@ async function onTransit(e) {
       return;
     }
     if (d.mode === 'bus' && d.phase === 'board') {
-      await payAndShow({ mode: 'bus', code: d.code || 'bus.city', rideId: d.rideId || `bus-${Date.now()}`, where: d.where || '' });
+      const rideId = d.rideId || `bus-${Date.now()}`;
+      if (!rideOnce.begin(rideId)) return;
+      try {
+        const pay = await payAndShow({ mode: 'bus', code: d.code || 'bus.city', rideId, where: d.where || '' });
+        rideOnce.finish(rideId, !!pay);
+      } catch (err) { rideOnce.finish(rideId, false); throw err; }
     } else if (d.mode === 'subway' && d.phase === 'tap') {
-      if (Date.now() - lastSubTap < 60000) return; // 개찰구 하나 통과 = 1회 (안쪽 다시 태그 무시)
-      lastSubTap = Date.now();
-      await payAndShow({ mode: 'subway', code: 'subway.base', rideId: `sub-${Math.floor(Date.now() / 60000)}`, where: d.where || '' });
+      if (d.dir === 'out') return; // 퇴장 태그는 같은 승차. 다시 결제하지 않는다
+      const rideId = d.rideId;
+      if (!rideOnce.begin(rideId)) return;
+      try {
+        const pay = await payAndShow({ mode: 'subway', code: 'subway.base', rideId, where: d.where || '' });
+        rideOnce.finish(rideId, !!pay);
+      } catch (err) { rideOnce.finish(rideId, false); throw err; }
     } else if (d.mode === 'taxi' && d.phase === 'depart') {
       const h = await econ.holdTaxi({ code: d.code || 'taxi.drive', estimateMeters: Math.round(d.meters || 0), rideId: d.rideId || `taxi-${Date.now()}` });
       if (h.ok) { taxiHolds.set(d.rideId, h.data); holdToast(h.data); }

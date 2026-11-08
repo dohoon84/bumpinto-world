@@ -62,11 +62,20 @@ if (ON) {
   const shin = R.rideStops('shin', 1, '정자');
   assert.equal(shin.at(-1).id, 'gangnam');
   assert.ok(shin.filter((q) => !q.game).map((q) => q.name).join() === '판교,청계산입구,양재시민의숲,양재');
+  assert.deepEqual(shin.filter((q) => q.pass).map((q) => q.name), ['판교', '청계산입구', '양재시민의숲', '양재']);
+  for (const q of shin.filter((s) => s.pass)) assert.equal(R.alightAllowed(q), false, q.name);
+  assert.equal(R.alightAllowed(shin.at(-1)), true, '강남에서는 내린다');
+  const passSay = R.announce('noAlight', { name: '양재', pass: true });
+  assert.ok(passSay.ko.includes('통과 — 준비 중인 역') && !/[가-힣]/.test(passSay.ja));
+  assert.ok(R.announce('next', { name: '강남', nameEn: 'Gangnam', opening: true }).ko.includes('강남 개통'));
   const back = R.rideStops('shin', 0, '강남');
   assert.ok(back.some((q) => q.id === 'jeongja') && back.at(-1).id === 'migeum');
   const l2 = R.rideStops('l2', 0, '잠실');
   assert.equal(l2.at(-1).id, 'gangnam');
   assert.deepEqual(l2.filter((q) => !q.game).map((q) => q.name), ['잠실새내', '종합운동장', '삼성', '선릉', '역삼']);
+  assert.ok(l2.filter((q) => q.pass).every((q) => R.alightAllowed(q) === false));
+  assert.deepEqual(l2.filter((q) => q.pass).map((q) => q.name), ['잠실새내', '종합운동장', '삼성', '선릉', '역삼']);
+  assert.equal(R.alightAllowed(l2.at(-1)), true);
   const back2 = R.rideStops('l2', 1, '강남');
   assert.equal(back2.at(-1).id, 'jamsil');
   // 게임 밖 구간은 OSM 좌표. 정자→판교는 1.2km 가 아니다.
@@ -108,6 +117,10 @@ for (const [name, s] of Object.entries(GAP_STOPS)) {
   assert.equal(p.x, s.x, name); assert.equal(p.z, s.z, name);
 }
 
+if (!ON) {
+  assert.equal(R.isPassStop('shin', '양재'), false);
+  assert.equal(R.isPassStop('l2', '역삼'), false);
+}
 if (!process.env.GANGNAM_CHILD) {
   const r = spawnSync(process.execPath, [fileURLToPath(import.meta.url)], { env: { ...process.env, GANGNAM_CHILD: '1', GANGNAMSUB: ON ? '0' : '1' }, encoding: 'utf8' });
   assert.equal(r.status, 0, r.stderr || r.stdout);

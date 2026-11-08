@@ -365,6 +365,7 @@ export function mountSubway({ scene, overlay, data, world, terrain, renderer, ge
         document.body.classList.remove('in-subway');
         setHint(''); sub.style.opacity = '0'; voice.cancel();
         onExit?.(e);
+        fareRide = null;
       }
     }
     if (state._waitLoad && mod) { state._waitLoad = false; buildInside(); }
@@ -396,10 +397,23 @@ export function mountSubway({ scene, overlay, data, world, terrain, renderer, ge
     inside.render();
     return true;
   }
+  let fareRide = null;
+  const fareWhere = () => (cur.theme?.name ? `${cur.theme.name}역` : '');
   function makeConcourse(spawn = null) {
     const c = mod.buildConcourse({
       exits: cur.exits, groups: cur.groups, entryId: cur.state.entry, look: getLook?.(), renderer, theme: cur.theme, board: feed, spawn,
-      onToast: (kind) => { if (kind === 'tap') { beep(); say(tr('삑 — 교통카드 태그', 'Beep — card tapped'), 1.3); emitTransit({ mode: 'subway', phase: 'tap' }); } }, // [econ-ui] trigger point
+      onToast: (kind, info) => {
+        if (kind !== 'tap') return;
+        beep(); say(tr('삑 — 교통카드 태그', 'Beep — card tapped'), 1.3);
+        const dir = info?.dir === 'out' ? 'out' : 'in';
+        if (dir === 'out') {
+          if (fareRide) emitTransit({ mode: 'subway', phase: 'tap', rideId: fareRide, dir: 'out', where: fareWhere() });
+          fareRide = null; // 개찰 퇴장 뒤 다시 들어오면 새 승차
+          return;
+        }
+        if (!fareRide) fareRide = `sub-${cur.theme?.id || 'st'}-${Date.now().toString(36)}-${(Math.random() * 1679616 | 0).toString(36)}`;
+        emitTransit({ mode: 'subway', phase: 'tap', rideId: fareRide, dir: 'in', where: fareWhere() });
+      }, // [econ-ui] 승차 id 하나. 같은 입장 태그는 한 번만
     });
     c.kind = 'concourse'; c.zone = cur.theme.zone;
     return c;
