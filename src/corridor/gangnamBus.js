@@ -3,6 +3,7 @@
 //   경부 본선을 실제로 쓰지 않는 노선은 그 도로에 올리지 않는다. 강남대로에 정류소가 있는 노선만 그 구간을 달린다.
 import * as THREE from 'three';
 import { ribbonGeo } from '../world.js';
+import { gameHour } from '../weather.js';
 
 export const GANGNAM_BUS_FILE = 'gangnam/transit.json';
 export const BUS_CREDIT = '버스 노선·정류소 정보: 서울특별시 (공공데이터포털)';
@@ -60,6 +61,35 @@ export function nextBus(block, nowMin) {
   return best;
 }
 
+/** 정류장 라벨용 노선 번호. 왕복·같은 이름이 겹쳐도 노선당 하나, 처음 나온 순서. */
+export function stopRouteNos(routes) {
+  const out = [];
+  const seen = new Set();
+  for (const r of routes || []) {
+    const no = String(r?.no ?? r ?? '');
+    if (!no || seen.has(no)) continue;
+    seen.add(no);
+    out.push(no);
+  }
+  return out;
+}
+
+/** 14:00 평일처럼 주어진 시각에 강남대로 위에 그려질 버스. 반경 안·운행 중만. */
+export function busesAt(data, { minutes = 14 * 60, kind = 'weekday', x = 0, z = 0, radius = 900 } = {}) {
+  const runners = (data?.routes || []).filter((r) => r.onDaero);
+  const span = Math.max(400, (data?.lengthM || 0) - (data?.daeroAt || 0));
+  const out = [];
+  runners.forEach((r, i) => {
+    const block = r.timetable?.[kind] || r.timetable?.weekday;
+    if (!inService(block, minutes)) return;
+    const phase = block?.term ? (((minutes % block.term) / block.term) + i / Math.max(1, runners.length)) % 1 : i / Math.max(1, runners.length);
+    const p = pointAt(data.pts, (data.daeroAt || 0) + phase * span);
+    if (Math.hypot(p.x - x, p.z - z) > radius) return;
+    out.push({ no: r.no, x: p.x, z: p.z });
+  });
+  return out;
+}
+
 function pointAt(pts, s) {
   for (let i = 1; i < pts.length; i++) {
     const a = pts[i - 1], b = pts[i];
@@ -85,8 +115,8 @@ export function mountGangnamTransit(root, data, { overlay } = {}) {
   group.add(mesh);
 
   const runners = (data.routes || []).filter((r) => r.onDaero);
-  const geo = new THREE.BoxGeometry(10, 3.1, 2.7);
-  const mat = new THREE.MeshLambertMaterial({ color: '#1d4e89' });
+  const geo = new THREE.BoxGeometry(12, 3.4, 2.9);
+  const mat = new THREE.MeshLambertMaterial({ color: '#3b82f6' });
   const buses = new THREE.InstancedMesh(geo, mat, Math.max(1, runners.length));
   buses.name = 'gangnamBuses';
   buses.count = runners.length;
@@ -122,7 +152,8 @@ export function mountGangnamTransit(root, data, { overlay } = {}) {
 
   function update(_dt, x, z) {
     const now = new Date();
-    const min = seoulMinutes(now);
+    const h = gameHour(now);
+    const min = Math.round(((h % 24) + 24) % 24 * 60);
     const kind = dayKind(now);
     const span = Math.max(400, (data.lengthM || 0) - (data.daeroAt || 0));
     runners.forEach((r, i) => {
@@ -134,16 +165,16 @@ export function mountGangnamTransit(root, data, { overlay } = {}) {
       const near = Math.hypot(p.x - x, p.z - z) < 900;
       if (!on || !near) { m4.compose(zero, q.identity(), zero); buses.setMatrixAt(i, m4); return; }
       q.setFromAxisAngle(up, p.ang);
-      m4.compose(pos.set(p.x, 1.6, p.z), q, scl.set(1, 1, 1));
+      m4.compose(pos.set(p.x, 1.9, p.z), q, scl.set(1, 1, 1));
       buses.setMatrixAt(i, m4);
     });
     if (runners.length) buses.instanceMatrix.needsUpdate = true;
     if (min !== lastMin) {
       lastMin = min;
       for (const { s, item } of labels) {
-        let best = null, nos = [];
+        let best = null;
+        const nos = stopRouteNos(s.routes);
         for (const r of s.routes) {
-          nos.push(r.no);
           const block = r.timetable?.[kind] || r.timetable?.weekday;
           const n = nextBus(block, min);
           if (n && (!best || n.waitMin < best.waitMin)) best = n;

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { gangnamBusEnabled, nextBus, inService, BUS_CREDIT } from '../../../src/corridor/gangnamBus.js';
+import { gangnamBusEnabled, nextBus, inService, BUS_CREDIT, stopRouteNos, busesAt } from '../../../src/corridor/gangnamBus.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
 const J = JSON.parse(fs.readFileSync(path.join(root, 'public/corridor/gangnam/transit.json'), 'utf8'));
@@ -39,6 +39,26 @@ assert.ok(n.waitMin > 0 && n.waitMin <= 6, `wait ${n.waitMin}`);
 assert.equal(inService(r402.timetable.weekday, 23 * 60 + 59), true);
 assert.equal(inService(r402.timetable.weekday, 2 * 60), false);
 assert.equal(nextBus(J.routes.find((r) => r.no === '140').timetable.weekday, 4 * 60).label, '04:00');
+
+const dup = [{ no: '140' }, { no: '140' }, { no: '400' }, { no: '400' }, { no: '402' }, { no: '402' }];
+assert.deepEqual(stopRouteNos(dup), ['140', '400', '402']);
+const byName = new Map();
+for (const r of J.routes) for (const s of r.stops || []) {
+  if (!byName.has(s.name)) byName.set(s.name, []);
+  byName.get(s.name).push(r);
+}
+let labeled = 0;
+for (const [name, routes] of byName) {
+  const nos = stopRouteNos(routes);
+  assert.equal(new Set(nos).size, nos.length, `${name} 노선 번호 중복`);
+  assert.deepEqual(nos, [...new Set(routes.map((r) => String(r.no)))]);
+  const label = `🚏 ${nos.join('·')} 다음 14:00`;
+  assert.ok(label.includes('다음 '), name);
+  labeled++;
+}
+assert.ok(labeled > 0);
+const shown = busesAt(J, { minutes: 14 * 60, kind: 'weekday', x: st[0], z: st[1], radius: 900 });
+assert.ok(shown.length > 0, `14:00 평일 강남대로 버스 ${shown.length}`);
 
 assert.equal(gangnamBusEnabled(''), true);
 assert.equal(gangnamBusEnabled('?gangnambus=0'), false);

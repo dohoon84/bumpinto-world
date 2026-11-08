@@ -105,23 +105,19 @@ export function drawRouteMapPanel(c, w, h, data, en = false) {
     const me = !!s.me;
     const r = me ? Math.max(14, h * 0.045) : Math.max(8, h * 0.028);
     c.beginPath(); c.arc(x, y, r, 0, Math.PI * 2);
-    c.fillStyle = me ? '#ffe169' : '#fff'; c.fill();
-    c.strokeStyle = me ? '#ffe169' : data.color; c.lineWidth = me ? 5 : 2.5; c.stroke();
+    const dim = !me && (s.pass || !s.game);
+    c.fillStyle = me ? '#ffe169' : (dim ? '#b7c3ce' : '#fff'); c.fill();
+    c.strokeStyle = me ? '#ffe169' : (s.pass ? '#8b9bab' : data.color); c.lineWidth = me ? 5 : 2.5; c.stroke();
 
     const label = stopLabel(s, en);
     const maxW = Math.max(40, dx - 6);
     const px = me ? Math.round(h * 0.085) : Math.round(h * 0.055);
-    c.fillStyle = me ? '#ffe169' : (s.game ? '#e8f2f8' : '#9eb4c6');
+    c.fillStyle = me ? '#ffe169' : (dim ? '#8b9bab' : '#e8f2f8');
     fitText(c, label, maxW, px, me ? 900 : 700);
     c.textAlign = 'center'; c.textBaseline = 'middle';
-    // 이름은 위·아래 번갈아 (겹침 줄이기). 현재 역은 항상 위 + 조금 더 띄움
+    // 이름은 위·아래 번갈아 (겹침 줄이기). 현재 역은 항상 위 + 조금 더 띄움. 통과 배지는 가로 칸에 넣지 않는다.
     const up = me || i % 2 === 0;
     c.fillText(label, x, up ? y - (me ? h * 0.16 : h * 0.12) : y + h * 0.12);
-    if (s.pass) {
-      c.fillStyle = '#ffe169';
-      fitText(c, '통과', maxW, Math.round(h * 0.042), 800);
-      c.fillText('통과', x, up ? y + h * 0.08 : y - h * 0.045);
-    }
   });
 
   c.fillStyle = '#9eb4c6'; c.font = `600 ${Math.round(h * 0.038)}px ${FONT}`; c.textAlign = 'left'; c.textBaseline = 'alphabetic';
@@ -152,8 +148,8 @@ const OVERLAY_CSS = `
 #subway-routemap .srm-stop .dot{flex:none;width:12px;height:12px;border-radius:50%;background:#fff;border:3px solid var(--c);box-sizing:border-box;margin-bottom:0}
 #subway-routemap .srm-stop.out{opacity:.45}
 #subway-routemap .srm-stop.out .nm{color:#9eb4c6}
-#subway-routemap .srm-stop.pass .nm{color:#e8f2f8}
-#subway-routemap .srm-stop i{font-style:normal;font-size:10px;font-weight:800;color:#3a2a00;background:#ffe169;border-radius:5px;padding:0 4px;margin-left:2px}
+#subway-routemap .srm-stop.pass .nm{color:#8b9bab;font-weight:600}
+#subway-routemap .srm-stop.pass .dot{background:#c5d0da;border-color:#8b9bab}
 #subway-routemap .srm-stop.me .dot{width:16px;height:16px;background:#ffe169;border-color:#ffe169;box-shadow:0 0 0 3px rgba(255,225,105,.28);margin-bottom:-2px}
 #subway-routemap .srm-stop.me .nm{font-size:13.5px;font-weight:900;color:#ffe169}
 #subway-routemap .srm-xfer{padding:8px 14px;display:flex;flex-wrap:wrap;gap:6px;align-items:center;flex:none;border-bottom:1px solid rgba(255,255,255,.08)}
@@ -177,6 +173,20 @@ body.mobile #subway-routemap .srm-box{width:min(100vw - 16px,560px);max-height:c
 `;
 
 function esc(s) { return String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+
+/** 위 가로 줄. 통과 역은 흐린 점·이름만 (배지 없음 — 칸이 좁아 이름이 잘림). */
+export function routeStripMarkup(stops, { en = false } = {}) {
+  return (stops || []).map((s) => {
+    const cls = ['srm-stop', s.me ? 'me' : '', s.pass ? 'pass' : (s.game ? '' : 'out')].filter(Boolean).join(' ');
+    return `<div class="${cls}" data-i="${s.i}"><span class="nm">${esc(stopLabel(s, en))}</span><span class="dot"></span></div>`;
+  }).join('');
+}
+
+/** 아래 세로 목록의 배지. 통과 역만 ‘통과’. */
+export function routeListBadge(s, en = false) {
+  if (s?.me) return en ? 'You are here' : '여기';
+  return s?.pass ? '통과' : '';
+}
 
 // 스크롤 컨테이너에서 대상이 가운데 오도록 (offsetParent 말고 getBoundingClientRect — 중첩 offset 오차 방지)
 function centerIn(scroller, el, axis = 'y') {
@@ -204,14 +214,11 @@ export function mountRouteMapOverlay() {
     const xfer = data.transfer.length
       ? `<div class="srm-xfer"><span>${en ? 'Transfer' : '갈아타는 곳'}</span>${data.transfer.map((t) => `<i style="background:${t.color}">${esc(en ? t.short : t.short)}</i>`).join('')}</div>`
       : '';
-    const strip = data.stops.map((s) => {
-      const cls = ['srm-stop', s.me ? 'me' : '', s.pass ? 'pass' : (s.game ? '' : 'out')].filter(Boolean).join(' ');
-      const nm = `${esc(stopLabel(s, en))}${s.pass ? '<i>통과</i>' : ''}`;
-      return `<div class="${cls}" data-i="${s.i}"><span class="nm">${nm}</span><span class="dot"></span></div>`;
-    }).join('');
+    const strip = routeStripMarkup(data.stops, { en });
     const items = data.stops.map((s, i) => {
       const cls = [i === 0 ? 'first' : '', i === data.stops.length - 1 ? 'last' : '', s.me ? 'me' : '', s.pass ? 'pass' : (s.game ? '' : 'out')].filter(Boolean).join(' ');
-      const tag = s.me ? `<em>${en ? 'You are here' : '여기'}</em>` : (s.pass ? `<em>통과</em>` : '');
+      const badge = routeListBadge(s, en);
+      const tag = badge ? `<em>${badge}</em>` : '';
       const enLine = s.nameEn ? `<span class="en">${esc(s.nameEn)}</span>` : '';
       return `<li class="${cls}" style="--c:${data.color}" data-i="${s.i}"><span class="dot"></span><span><b>${esc(s.name)}</b>${tag}${enLine}</span></li>`;
     }).join('');
