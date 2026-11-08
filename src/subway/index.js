@@ -362,6 +362,7 @@ export function mountSubway({ scene, overlay, data, world, terrain, renderer, ge
         inside?.dispose(); inside = null;
         feed?.stop(); feed = null;
         document.body.classList.remove('in-subway');
+        emitTransit({ mode: 'subway', phase: 'leave' }); // [econ-ui] 방문 끝 — 다음 승차는 새 요금
         setHint(''); sub.style.opacity = '0'; voice.cancel();
         onExit?.(e);
       }
@@ -398,7 +399,7 @@ export function mountSubway({ scene, overlay, data, world, terrain, renderer, ge
   function makeConcourse(spawn = null) {
     const c = mod.buildConcourse({
       exits: cur.exits, groups: cur.groups, entryId: cur.state.entry, look: getLook?.(), renderer, theme: cur.theme, board: feed, spawn,
-      onToast: (kind) => { if (kind === 'tap') { beep(); say(tr('삑 — 교통카드 태그', 'Beep — card tapped'), 1.3); emitTransit({ mode: 'subway', phase: 'tap' }); } }, // [econ-ui] trigger point
+      onToast: (kind, _ln, info) => { if (kind === 'tap') { beep(); say(tr('삑 — 교통카드 태그', 'Beep — card tapped'), 1.3); emitTransit({ mode: 'subway', phase: 'tap', gate: info?.gate === 'out' ? 'out' : 'in' }); } }, // [econ-ui] trigger point
     });
     c.kind = 'concourse'; c.zone = cur.theme.zone;
     return c;
