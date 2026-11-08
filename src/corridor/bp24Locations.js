@@ -52,6 +52,36 @@ export function jeongjaBump24On(search) {
   return !!spec && placementFlagOn(spec, search);
 }
 
+function queryFlag(name, search, fallback) {
+  const p = search instanceof URLSearchParams ? search : new URLSearchParams(search || '');
+  const v = p.get(name);
+  if (v === '0') return false;
+  if (v === '1') return true;
+  return fallback;
+}
+
+/** 매장 위 길찾기 핀. 기본은 points() 의 매장마다. ?bp24pins=0 이면 정자점 하나만. */
+export function bp24PinsAll(search = typeof location !== 'undefined' ? location.search : '') {
+  return queryFlag('bp24pins', search, true);
+}
+
+/** 랭킹 전광판. 기본은 켜진 매장마다. ?bp24boards=0 이면 예전처럼 정자점(명시 게임이면 시청점)만. */
+export function bp24BoardsAll(search = typeof location !== 'undefined' ? location.search : '') {
+  return queryFlag('bp24boards', search, true);
+}
+
+/** 전광판을 달 매장 id. 시청점은 points() 에 없으므로 빼 둔다. */
+export function bp24BoardStoreIds(search = '', explicit = false) {
+  if (!bp24BoardsAll(search)) return explicit ? ['bump24-jeongja', 'seongnam-cityhall'] : ['bump24-jeongja'];
+  const ids = [];
+  for (const s of BP24_PLACEMENTS) {
+    if (s.enabled === false || s.id === 'seongnam-cityhall') continue;
+    if (s.world === 'jeongja') { if (jeongjaBump24On(search)) ids.push(s.id); continue; }
+    if (s.defaultOn && placementFlagOn(s, search) && s.atX != null) ids.push(s.id);
+  }
+  return ids;
+}
+
 /** 지도 아이콘·정자점 표지·이정표. ?bp24nav=0 이면 전부 끔. 기본 켜짐. */
 export function bp24NavOn(search = typeof location !== 'undefined' ? location.search : '') {
   const p = search instanceof URLSearchParams ? search : new URLSearchParams(search || '');

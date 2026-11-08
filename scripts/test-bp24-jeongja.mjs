@@ -2,7 +2,8 @@
 import fs from 'fs';
 import { bp24DoorInfo, bp24TileKey, prepareJeongjaBp24, recessFront, resolveBp24 } from '../src/corridor/bp24.js';
 import { BP24_LOCATIONS, BP24_PLACEMENTS, bp24NavOn, jeongjaBump24On } from '../src/corridor/bp24Locations.js';
-import { findSignSpot } from '../src/corridor/bp24Nav.js';
+import { findSignSpot, stationSignSpots } from '../src/corridor/bp24Nav.js';
+import { bp24PinsAll } from '../src/corridor/bp24Locations.js';
 import { bump24GameEnabled, bump24StorePrompts } from '../src/bump24game/flag.js';
 
 const jeongja = JSON.parse(fs.readFileSync(new URL('../public/jeongja.json', import.meta.url)));
@@ -78,6 +79,10 @@ const offData = JSON.parse(fs.readFileSync(new URL('../public/jeongja.json', imp
 const off = prepareJeongjaBp24(offData, '?bump24jeongja=0');
 if (off.length) throw new Error(`플래그 0 인데 정자 매장이 켜짐 ${off.map((s) => s.id).slice(0, 4)}`);
 if (offData.buildings[135].mh) throw new Error('플래그 0 인데 건물을 비움');
+if (stationSignSpots().length) throw new Error('정자역 이정표를 아직 만든다');
+if (!bp24PinsAll('')) throw new Error('핀 기본은 전부');
+if (bp24PinsAll('?bp24pins=0')) throw new Error('bp24pins=0 인데 전부');
+if (!bp24PinsAll('?bp24pins=1')) throw new Error('bp24pins=1 인데 꺼짐');
 if (!bp24NavOn('')) throw new Error('길찾기 기본은 켜짐');
 if (bp24NavOn('?bp24nav=0')) throw new Error('bp24nav=0 인데 켜짐');
 if (!bp24NavOn('?bp24nav=1')) throw new Error('bp24nav=1 인데 꺼짐');

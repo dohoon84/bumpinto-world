@@ -169,7 +169,18 @@ for (const spec of BP24_PLACEMENTS) {
     if (glassBlocked(-197.9, 242, -1, 0)) fail.push(`${spec.id} 채움 벽이 서쪽 유리와 겹침`);
     if (glassBlocked(-192, 253.35, 0, 1)) fail.push(`${spec.id} 채움 벽이 남쪽 유리와 겹침`);
     if (wallD(door.x, door.z) < 1.2) fail.push(`${spec.id} 출입문이 1층 벽에 막힘`);
-  }
+    const glassW = st.sideZ1 - st.sideZ0;
+    const interior = (st.interiorZ1 || st.D) - 0.08;
+    if (!(st.interiorZ1 >= st.sideZ1 - 0.05) || interior + 0.2 < glassW) fail.push(`${spec.id} 실내가 남쪽 유리(${glassW.toFixed(1)}m)보다 짧음 ${interior.toFixed(1)}`);
+    if (st.W !== 18 || st.D !== 11) fail.push(`${spec.id} 상자 크기가 바뀜 ${st.W}x${st.D}`);
+    const insideNew = (x, z) => {
+      const wx = st.o[0] + st.ax[0] * x + st.b[0] * z, wz = st.o[1] + st.ax[1] * x + st.b[1] * z;
+      return inside(wx, wz, st.colRing);
+    };
+    if (!insideNew(st.W * 0.5, (st.D + st.sideZ1) / 2)) fail.push(`${spec.id} 늘린 실내가 건물 밖`);
+    const outX = st.W + (st.sideOut || 0) + 1.2;
+    if (insideNew(outX, (st.sideZ0 + st.sideZ1) / 2)) fail.push(`${spec.id} 유리 밖 인도까지 실내 충돌`);
+  } else if (st.interiorZ1) fail.push(`${spec.id} 실내 깊이가 바뀜`);
   if (spec.id === 'seongnam-cityhall') {
     if (bump24StorePrompts(spec.id, '')) fail.push('시청점 안내가 기본 주소에서 켜짐');
     if (!bump24StorePrompts(spec.id, '?bp24=1&bp24game=1')) fail.push('시청점 안내가 ?bp24game=1 에서 꺼짐');

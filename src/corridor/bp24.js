@@ -538,7 +538,7 @@ function buildStore(st) {
   // 5) 실내 (자체 발광 정점색, LOD 로 멀면 숨김)
   const WH = hex('#f4f5f3'), WALL = hex('#eceeed'), FLOOR = hex('#e3e5e3'), CEIL = hex('#e9ebec'), LED = hex('#ffffff');
   const WIRE = hex('#dfe2e4'), WOOD = hex('#d2b48a'), TEAL = hex('#2aa6a8'), BLUE = hex('#1f6fd1'), FR = hex('#cfd6db');
-  const ix0 = x0 + 0.1, ix1 = x1 - 0.1, iz0 = zf + 0.08, iz1 = zb - 0.15, ceil = GLASS_H - 0.05;
+  const ix0 = x0 + 0.1, ix1 = x1 - 0.1, iz0 = zf + 0.08, iz1 = (st.interiorZ1 || zb) - 0.15, ceil = GLASS_H - 0.05;
   // 바닥 타일(격자: 밝기 교대)
   for (let i = 0, x = ix0; x < ix1 - 0.01; x += 1.2, i++) for (let j = 0, z = iz0; z < iz1 - 0.01; z += 1.2, j++) {
     const xe = Math.min(ix1, x + 1.18), ze = Math.min(iz1, z + 1.18), f = (i + j) % 2 ? 1 : 0.965;
@@ -551,6 +551,26 @@ function buildStore(st) {
   // LED 선형 조명(앞뒤 방향 줄 4개)
   const nLed = Math.max(2, Math.round(W / 4));
   for (let k = 0; k < nLed; k++) { const u = 0.5 + (k - (nLed - 1) / 2) * (0.88 / nLed), x = ix0 + (ix1 - ix0) * u; int.box(x - 0.07, ceil - 0.05, iz0 + 0.5, x + 0.07, ceil, iz1 - 0.5, LED, false, 'Y'); }
+  // jz649: 남쪽 유리가 상자보다 길다. 유리 바로 안(옆 유리까지) 바닥·천장·끝벽을 채운다.
+  if (st.interiorZ1 > zb + 0.4 && side && (st.sideOut || 0) > 0.3) {
+    const xg = x1 + st.sideOut - 0.08, zg0 = Math.max(iz0, st.sideZ0 || iz0);
+    for (let i = 0, x = ix1; x < xg - 0.01; x += 1.2, i++) for (let j = 0, z = zg0; z < iz1 - 0.01; z += 1.2, j++) {
+      const xe = Math.min(xg, x + 1.18), ze = Math.min(iz1, z + 1.18), f = (i + j) % 2 ? 1 : 0.965;
+      int.quad(N(0, 1, 0), P((x + xe) / 2, 0.02, (z + ze) / 2), xe - x, ze - z, FLOOR.map((v) => v * f));
+    }
+    int.quad(N(0, -1, 0), P((ix1 + xg) / 2, ceil, (zg0 + iz1) / 2), xg - ix1, iz1 - zg0, CEIL);
+    int.quad(N(0, 0, -1), P((ix1 + xg) / 2, ceil / 2, iz1), Math.max(0.2, xg - ix1), ceil, WALL);
+    const gx = (ix1 + xg) / 2, ga = Math.max(zg0 + 0.3, zb), gb = iz1 - 0.45;
+    if (gb - ga > 1.4) {
+      int.box(gx - 0.32, 0, ga, gx + 0.32, 0.12, gb, hex('#cfd3d6'), true);
+      int.box(gx - 0.03, 0.12, ga, gx + 0.03, 1.55, gb, WH, true);
+      int.box(gx - 0.34, 1.55, ga, gx + 0.34, 1.6, gb, WIRE, true);
+      for (const s of [-1, 1]) for (let y = 0.3, r = 0; y < 1.5; y += 0.36, r++) {
+        int.box(Math.min(gx, gx + s * 0.34), y - 0.025, ga, Math.max(gx, gx + s * 0.34), y, gb, hex('#d4d8db'));
+        prodFace(prod, N(s, 0, 0), gx + s * 0.3, y + 0.15, (ga + gb) / 2, gb - ga - 0.05, 0.3, (r + (s > 0 ? 2 : 0)) % 6, 80 + y);
+      }
+    }
+  }
   const kiosk = W < 9 || D < 6;
   const clerk = kiosk ? kioskLayout() : storeLayout();
   function storeLayout() {
@@ -814,12 +834,33 @@ export function bp24BoardLocal(st) {
   const fx0 = 0.45, fx1 = st.W - 0.55, nF = Math.max(1, Math.round((fx1 - fx0) / 1.75)), bay = (fx1 - fx0) / nF, dx = fx0 + bay * Math.floor(nF / 2);
   return { c: Math.min(0.3, dx - bay - 0.95), zF: -0.95, w: 1.44, h: 2.16, y: 1.64 };
 }
+let BOARD_SCREEN_GEO = null, BOARD_SCREEN_GEO_M = null;
+function boardScreenGeos() {
+  if (BOARD_SCREEN_GEO) return { n: BOARD_SCREEN_GEO, m: BOARD_SCREEN_GEO_M };
+  const mk = (flip) => {
+    const g = new THREE.PlaneGeometry(1.44, 2.16);
+    g.rotateY(Math.PI);
+    if (flip) { const uv = g.getAttribute('uv'); for (let i = 0; i < uv.count; i++) uv.setX(i, 1 - uv.getX(i)); }
+    return g;
+  };
+  BOARD_SCREEN_GEO = mk(false); BOARD_SCREEN_GEO_M = mk(true);
+  return { n: BOARD_SCREEN_GEO, m: BOARD_SCREEN_GEO_M };
+}
 function buildTileBoards(inst, hook) {
   const N = (x, y, z) => new THREE.Vector3(x, y, z);
   const NAVY = hex('#0d1a33'), BLUE = hex('#0072DD'), DARK = hex('#1b2230');
   const frames = [], fxs = [], screens = [], g = new THREE.Group(); g.name = 'bp24Boards';
   const list = inst.list.filter((st) => !hook.only || hook.only.has(st.id));
   if (!list.length) return null;
+  if (hook.lazy) {
+    inst.group.add(g);
+    const slots = list.map((st) => {
+      const loc = bp24BoardLocal(st);
+      const p = new THREE.Vector3(loc.c, 0, loc.zF).applyMatrix4(st.mat);
+      return { st, loc, x: p.x, z: p.z };
+    });
+    return { group: g, screens, frame: null, fx: null, hook, lazy: true, slots, nearKey: '', cullAt: 0 };
+  }
   for (const st of list) {
     const { c, zF, w, h, y } = bp24BoardLocal(st), fr = new Bag(), fx = new Bag(), sc = new Bag();
     const hw = w / 2 + 0.1, top = y + h / 2 + 0.16;
@@ -848,9 +889,57 @@ function buildTileBoards(inst, hook) {
 }
 function disposeBoards(inst) {
   const b = inst.boards; if (!b) return;
-  for (const m of b.screens) { b.hook.release?.(m.material.map); m.material.dispose(); m.geometry.dispose(); }
-  b.frame.geometry.dispose(); b.fx.geometry.dispose(); b.group.removeFromParent(); inst.boards = null;
+  for (const m of b.screens) { b.hook.release?.(m.material.map); m.material.dispose(); if (!m.userData.sharedGeo) m.geometry.dispose(); }
+  b.frame?.geometry.dispose(); b.fx?.geometry.dispose(); b.group.removeFromParent(); inst.boards = null;
   for (const st of inst.list) st._board = null;
+}
+function mountNearBoards(b, near) {
+  const frames = [], fxs = [], N = (x, y, z) => new THREE.Vector3(x, y, z);
+  const NAVY = hex('#0d1a33'), BLUE = hex('#0072DD'), DARK = hex('#1b2230');
+  const geos = boardScreenGeos();
+  for (const s of near) {
+    const st = s.st, { c, zF, w, h, y } = s.loc, fr = new Bag(), fx = new Bag();
+    const hw = w / 2 + 0.1, top = y + h / 2 + 0.16;
+    fr.box(c - hw - 0.1, 0, zF - 0.08, c + hw + 0.1, 0.12, zF + 0.32, DARK);
+    fr.box(c - hw, 0.12, zF, c + hw, top, zF + 0.24, NAVY);
+    fr.box(c - hw - 0.05, top, zF - 0.04, c + hw + 0.05, top + 0.1, zF + 0.28, BLUE, false);
+    fr.box(c - hw - 0.05, 0.12, zF - 0.03, c - hw + 0.01, top, zF + 0.27, BLUE);
+    fr.box(c + hw - 0.01, 0.12, zF - 0.03, c + hw + 0.05, top, zF + 0.27, BLUE);
+    fx.quad(N(0, 0, -1), N(c, y, zF - 0.012), w, h, [1, 0, 0], [0, 0, 1, 1]);
+    fx.quad(N(0, 1, 0), N(c, 0.07, zF - 0.95), 2.6, 1.9, [0, 1, 0], [0, 0, 1, 1]);
+    frames.push(fr.geometry(st.mat, st.mirror)); fxs.push(fx.geometry(st.mat, st.mirror));
+    const tex = b.hook.texture(st);
+    const mat = new THREE.MeshBasicMaterial({ map: tex, toneMapped: false });
+    const mesh = new THREE.Mesh(st.mirror ? geos.m : geos.n, mat);
+    mesh.name = 'bp24BoardScreen'; mesh.userData.bp24Store = st.id; mesh.userData.sharedGeo = true;
+    mesh.matrixAutoUpdate = false;
+    mesh.matrix.copy(st.mat).multiply(new THREE.Matrix4().makeTranslation(c, y, zF - 0.006));
+    b.group.add(mesh); b.screens.push(mesh);
+    const p = new THREE.Vector3(c, 0, zF + 0.12).applyMatrix4(st.mat);
+    st._board = { x: p.x, z: p.z, inv: st.mat.clone().invert(), c, zF };
+  }
+  const fg = mergeGeometries(frames.filter(Boolean)); frames.forEach((x) => x?.dispose());
+  if (fg) { fg.computeBoundingSphere(); const frame = new THREE.Mesh(fg, mats().ext); frame.name = 'bp24BoardFrame'; frame.castShadow = true; b.group.add(frame); b.frame = frame; }
+  const xg = mergeGeometries(fxs.filter(Boolean)); fxs.forEach((x) => x?.dispose());
+  if (xg) { xg.computeBoundingSphere(); const fxm = new THREE.Mesh(xg, b.hook.fxMaterial); fxm.name = 'bp24BoardFx'; fxm.renderOrder = 3; b.group.add(fxm); b.fx = fxm; }
+}
+function cullBoards(inst, x, z) {
+  const b = inst.boards;
+  if (!b?.lazy || x == null) return;
+  const now = performance.now();
+  if (now - b.cullAt < 450) return;
+  b.cullAt = now;
+  const r2 = (b.hook.near || 78) ** 2;
+  const near = b.slots.filter((s) => (s.x - x) ** 2 + (s.z - z) ** 2 <= r2);
+  const key = near.map((s) => s.st.id).sort().join(',');
+  if (key === b.nearKey) return;
+  for (const m of b.screens) { b.hook.release?.(m.material.map); m.material.dispose(); m.removeFromParent(); }
+  b.screens = [];
+  if (b.frame) { b.frame.geometry.dispose(); b.frame.removeFromParent(); b.frame = null; }
+  if (b.fx) { b.fx.geometry.dispose(); b.fx.removeFromParent(); b.fx = null; }
+  for (const s of b.slots) s.st._board = null;
+  b.nearKey = key;
+  if (near.length) mountNearBoards(b, near);
 }
 
 function summarizeStore(st) {
@@ -875,9 +964,10 @@ function tickBoardHook(t, k) {
   hookStamp = stamp;
   BOARD_HOOK?.tick?.(t, k);
 }
-function syncBoards(inst, k, t) {
+function syncBoards(inst, k, t, x, z) {
   if (BOARD_HOOK && inst._boardHook !== BOARD_HOOK) { disposeBoards(inst); inst._boardHook = BOARD_HOOK; inst.boards = buildTileBoards(inst, BOARD_HOOK); }
   else if (!BOARD_HOOK && (inst.boards || inst._boardHook)) { disposeBoards(inst); inst._boardHook = null; }
+  if (inst.boards?.lazy) cullBoards(inst, x, z);
   if (inst.boards) for (const m of inst.boards.screens) m.material.color.setScalar(0.86 + 0.24 * k);
   if (inst.inner?.visible && inst.clerk) animateClerks(inst.clerk, t);
 }
@@ -1099,6 +1189,8 @@ export function prepareJeongjaBp24(data, search) {
     src.lm = 'bp24';
     alignSideGlass(st);
     markChamferDoor(st);
+    // jz649 남쪽 유리만 상자보다 길다. 실내(바닥·천장·선반·끝벽)를 그 끝까지 민다. 다른 매장 치수는 그대로.
+    if (spec.id === 'jz649' && st.sideZ1 > st.D + 0.4) st.interiorZ1 = st.sideZ1;
     const shell = bp24ShellWalls(st);
     if (shell.length) src._bp24Shell = { gf: st.gf, rings: shell };
     st.porch = !!(st.sealEnds && st.recess > 0.2);
@@ -1123,7 +1215,7 @@ export function mountBasemapBp24(scene, prepared) {
       if (!stopNight) stopNight = onNightTarget((t) => { target = t; });
       const k = nightFade(), t = performance.now() / 1000;
       syncNearInterior(inst, x, z);
-      syncBoards(inst, k, t);
+      syncBoards(inst, k, t, x, z);
       paintNight(inst, k, target);
       tickBoardHook(t, k);
     },
@@ -1175,7 +1267,7 @@ export function createBp24(locations = []) {
         let o = inst.group; while (o.parent) o = o.parent;
         if (!o.isScene) { disposeBoards(inst); disposeInterior(inst); inst._built?.clear(); live.delete(inst); continue; } // 타일이 풀림
         syncNearInterior(inst, x, z);
-        syncBoards(inst, k, t);
+        syncBoards(inst, k, t, x, z);
         apply(inst, k);
       }
       tickBoardHook(t, k);

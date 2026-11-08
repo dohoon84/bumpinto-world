@@ -4,9 +4,14 @@
 import * as THREE from 'three';
 import { allBp24Stores, drawLogo } from './bp24.js';
 import { BP24_PLACEMENTS, jeongjaBump24On, placementFlagOn } from './bp24Locations.js';
-import { bp24NavOn } from './bp24Locations.js';
+import { bp24NavOn, bp24PinsAll } from './bp24Locations.js';
+
+const PIN_R = 240; // 이 거리 밖의 핀은 그리지 않는다. 0.5초마다만 다시 고른다.
 
 const JEONGJA = 'bump24-jeongja';
+
+/** 정자역 6번 출구 앞 이정표는 만들지 않는다. */
+export function stationSignSpots() { return []; }
 
 export function findSignSpot(isBlocked, onRoad, anchor, goal, side = 3.4) {
   const dx = goal.x - anchor.x, dz = goal.z - anchor.z;
@@ -129,45 +134,71 @@ export function mountBp24Nav({ scene, overlay, world, getExits, station, getPlay
   function jeongja() { return points().find((p) => p.id === JEONGJA) || null; }
 
   const spot = jeongja();
-  if (spot && scene) {
-    const mat = new THREE.SpriteMaterial({ map: pinTex, transparent: true, depthWrite: false, depthTest: false });
-    const spr = new THREE.Sprite(mat);
-    spr.name = 'bp24NavPin';
-    spr.renderOrder = 4;
-    spr.center.set(0.5, 0.06);
-    spr.scale.set(5.2, 6.8, 1);
-    spr.position.set(spot.x + 1.6, 11.2, spot.z);
-    scene.add(spr);
-    pins.push(spr);
-    if (overlay) {
-      label = overlay.add({
-        cls: 'label shop',
-        text: 'BUMP24 정자점',
-        getPos: () => new THREE.Vector3(spot.x, 7.2, spot.z),
-        maxDist: 220,
-        minDist: 0,
-      });
-    }
+  const allPins = bp24PinsAll(search);
+  const pinSpots = (allPins ? points() : (spot ? [spot] : [])).map((p) => ({ id: p.id, x: p.x + 1.6, z: p.z }));
+  let pinMesh = null;
+  if (pinSpots.length && scene) {
+    const geo = new THREE.PlaneGeometry(5.2, 6.8);
+    geo.translate(0, 3.4, 0);
+    const mat = new THREE.ShaderMaterial({
+      uniforms: { map: { value: pinTex }, uTime: { value: 0 } },
+      vertexShader: `
+        uniform float uTime; varying vec2 vUv;
+        void main() {
+          vUv = uv;
+          vec3 center = vec3(instanceMatrix[3][0], instanceMatrix[3][1], instanceMatrix[3][2]);
+          vec3 right = vec3(viewMatrix[0][0], viewMatrix[1][0], viewMatrix[2][0]);
+          vec3 up = vec3(viewMatrix[0][1], viewMatrix[1][1], viewMatrix[2][1]);
+          float bob = sin(uTime * 2.1 + center.x * 0.02) * 0.35;
+          vec3 wpos = center + right * position.x + up * (position.y + bob);
+          gl_Position = projectionMatrix * viewMatrix * vec4(wpos, 1.0);
+        }`,
+      fragmentShader: `
+        uniform sampler2D map; varying vec2 vUv;
+        void main() { vec4 c = texture2D(map, vUv); if (c.a < 0.08) discard; gl_FragColor = c; }`,
+      transparent: true, depthWrite: false, depthTest: false,
+    });
+    pinMesh = new THREE.InstancedMesh(geo, mat, pinSpots.length);
+    pinMesh.name = 'bp24NavPin'; pinMesh.renderOrder = 4; pinMesh.frustumCulled = false; pinMesh.count = 0;
+    scene.add(pinMesh);
+    pins.push(pinMesh);
   }
+  if (spot && overlay) {
+    label = overlay.add({
+      cls: 'label shop',
+      text: 'BUMP24 정자점',
+      getPos: () => new THREE.Vector3(spot.x, 7.2, spot.z),
+      maxDist: 220,
+      minDist: 0,
+    });
+  }
+  // 정자역 6번 출구 앞 이정표는 만들지 않는다.
+  const _signSpots = stationSignSpots();
+  if (_signSpots.length && scene) { signs = buildSigns(_signSpots, terrain); if (signs) scene.add(signs.mesh); }
 
-  if (spot && scene && world) {
-    const blocked = (x, z, r) => { try { return world.isBlocked(x, z, r); } catch { return false; } };
-    const road = (x, z) => { try { return world.onRoad(x, z); } catch { return false; } };
-    const anchors = [];
-    const exits = getExits?.() || [];
-    const ex6 = exits.find((e) => String(e.ref) === '6');
-    if (ex6) anchors.push(ex6);
-    if (station) anchors.push({ x: (station.x || 0) + 18, z: (station.z || 0) + 8 });
-    const spots = [];
-    for (const a of anchors) {
-      const s = findSignSpot(blocked, road, a, spot);
-      if (!s) continue;
-      const n = { ...s, z: s.z + 2.4 };
-      spots.push(!blocked(n.x, n.z, 0.45) && !road(n.x, n.z) ? n : s);
+  let pinShown = '', pinCullAt = 0;
+  const pinM = new THREE.Matrix4(), pinP = new THREE.Vector3();
+  function cullPins(force) {
+    if (!pinMesh) return;
+    const now = performance.now();
+    if (!force && now - pinCullAt < 500) return;
+    pinCullAt = now;
+    const p = getPlayer?.()?.position;
+    const px = p?.x ?? pinSpots[0]?.x ?? 0, pz = p?.z ?? pinSpots[0]?.z ?? 0;
+    const vis = [];
+    const r2 = PIN_R * PIN_R;
+    for (let i = 0; i < pinSpots.length; i++) {
+      const s = pinSpots[i];
+      if (!allPins || (s.x - px) ** 2 + (s.z - pz) ** 2 <= r2) vis.push(i);
     }
-    signs = buildSigns(spots, terrain);
-    if (signs) scene.add(signs.mesh);
+    const key = vis.join(',');
+    if (key === pinShown) return;
+    pinShown = key;
+    pinMesh.count = vis.length;
+    vis.forEach((i, n) => { pinP.set(pinSpots[i].x, 11.2, pinSpots[i].z); pinMesh.setMatrixAt(n, pinM.makeTranslation(pinP.x, pinP.y, pinP.z)); });
+    pinMesh.instanceMatrix.needsUpdate = true;
   }
+  cullPins(true);
 
   function showHint(name) {
     if (!hint) {
@@ -195,7 +226,7 @@ export function mountBp24Nav({ scene, overlay, world, getExits, station, getPlay
   let acc = 0;
   function update(dt = 0.016) {
     const t = performance.now() / 1000;
-    for (const s of pins) s.position.y = 11.2 + Math.sin(t * 2.1) * 0.35;
+    if (pinMesh) { pinMesh.material.uniforms.uTime.value = t; cullPins(false); }
     if (!guide) return;
     const p = getPlayer?.()?.position;
     if (!p) return;
@@ -216,12 +247,15 @@ export function mountBp24Nav({ scene, overlay, world, getExits, station, getPlay
     on: true,
     logo,
     points,
+    pinRadius: PIN_R,
+    pinCount: () => pinMesh?.count || 0,
+    pinSpots: () => pinSpots.length,
     signs: () => signs?.placed || [],
     guide: guideTo,
     get guiding() { return guide; },
     update,
     dispose() {
-      for (const s of pins) { s.material.map?.dispose(); s.material.dispose(); s.removeFromParent(); }
+      if (pinMesh) { pinMesh.geometry.dispose(); pinMesh.material.dispose(); pinTex.dispose(); pinMesh.removeFromParent(); }
       if (label && overlay) overlay.remove(label);
       if (signs) { signs.mesh.geometry.dispose(); signs.mesh.material.map?.dispose(); signs.mesh.material.dispose(); signs.mesh.removeFromParent(); }
       hint?.remove();

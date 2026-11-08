@@ -9,6 +9,7 @@ import { createGameplay, PHASE } from './gameplay.js';
 import { BY_ID, todayKey } from './products.js';
 import { boardTexture, releaseBoardTexture, tickBoards, createBoardFxMaterial, setBoardSelf, refreshBoards, leaderboard } from './leaderboard.js';
 import { setBp24BoardHook, allBp24Stores, allBp24BoardMeshes, anyBp24BoardBlocks } from '../corridor/bp24.js';
+import { bp24BoardsAll } from '../corridor/bp24Locations.js';
 import * as THREE from 'three';
 
 export { bump24GameEnabled } from './flag.js';
@@ -46,11 +47,14 @@ export function mountBump24Game({
   const selfName = () => { try { return getSelfName?.() || '나'; } catch { return '나'; } }; // 마운트 중엔 부르지 않음(지연 조회)
   setBoardSelf(selfName);
   const fxMat = createBoardFxMaterial();
+  const boardsAll = bp24BoardsAll(search);
   setBp24BoardHook({
     texture: (st) => boardTexture(st.id, st.name, 'tall'), release: releaseBoardTexture, fxMaterial: fxMat,
     tick: (t, night) => { tickBoards(t); fxMat.uniforms.uT.value = t; fxMat.uniforms.uNight.value = night; },
-    // 전광판은 정자점, 그리고 ?bp24game=1 일 때 시청점만. 나머지 매장에는 안 붙여 draw 가 늘지 않게 한다.
-    only: new Set(explicit ? ['bump24-jeongja', 'seongnam-cityhall'] : ['bump24-jeongja']),
+    // 기본: 켜진 매장마다(텍스처는 가까이 왔을 때만). ?bp24boards=0 이면 정자점, ?bp24game=1 이면 시청점까지.
+    only: boardsAll ? null : new Set(explicit ? ['bump24-jeongja', 'seongnam-cityhall'] : ['bump24-jeongja']),
+    lazy: boardsAll,
+    near: 78,
   });
   // 닉네임이 나중에 정해지면(접속 후) 내 줄 강조를 위해 다시 그림 — 첫 조회도 타이머 안에서(초기화 순서와 무관)
   let lastSelf = null; const selfIv = setInterval(() => { const n = selfName(); if (lastSelf !== null && n !== lastSelf) refreshBoards(); lastSelf = n; }, 3000);

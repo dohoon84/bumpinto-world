@@ -11,6 +11,11 @@ import { todayKey } from './products.js';
 const KEY_BOARD = 'bw.bump24.localBoard';
 const FONT = '"Pretendard Variable","Pretendard","Apple SD Gothic Neo","Noto Sans KR",sans-serif';
 export const PERIODS = [['today', '오늘'], ['week', '이번 주']];
+// rank: 오늘/이번 주. notice: 나중에 월간 합산 안내를 같은 판에 올릴 자리. 지금은 그리지 않는다.
+export const BOARD_MODES = ['rank', 'notice'];
+export function emptyRankMessage(period) {
+  return period === 'week' ? '이번 주 첫 도전자를 기다리는 중' : '오늘 첫 도전자를 기다리는 중';
+}
 const won = (n) => Math.round(n).toLocaleString('ko-KR');
 
 // ---------- 주(월요일 0시 시작, 기기 시간대) ----------
@@ -73,7 +78,7 @@ export function boardTexture(storeId, storeName = 'BUMP24', layout = 'tall') {
   const cv = document.createElement('canvas'); cv.width = pw * 2; cv.height = ph;
   const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 4;
   tex.repeat.set(0.5, 1); tex.offset.set(0, 0);
-  b = { key, storeId, storeName, layout, cv, tex, refs: 1, data: { today: [], week: [] }, seq: 0 };
+  b = { key, storeId, storeName, layout, cv, tex, refs: 1, mode: 'rank', notice: null, data: { today: [], week: [] }, seq: 0 };
   boards.set(key, b);
   draw(b); load(b);
   return tex;
@@ -129,6 +134,7 @@ function crown(c, x, y, s) {
 }
 
 function draw(b) {
+  if (b.mode === 'notice') return;
   const c = b.cv.getContext('2d'), [pw, ph] = LAYOUT[b.layout];
   c.setTransform(1, 0, 0, 1, 0, 0); c.clearRect(0, 0, pw * 2, ph);
   PERIODS.forEach(([p], i) => { c.save(); c.translate(pw * i, 0); (b.layout === 'wide' ? panelWide : panelTall)(c, pw, ph, b, p); c.restore(); });
@@ -154,12 +160,9 @@ function tabs(c, x, y, w, h, period) {
 function rowsBlock(c, x, y, w, rowH, list, period) {
   let me = ''; try { me = getMe?.() || ''; } catch { me = ''; }
   if (!list.length) {
-    crown(c, x + w / 2, y + rowH * 1.25, rowH / 70);
-    c.fillStyle = '#ffffff'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.font = `900 ${rowH * 0.44}px ${FONT}`;
-    c.fillText('첫 번째 장보기왕이', x + w / 2, y + rowH * 2.55);
-    c.fillStyle = '#ffd400'; c.fillText('되어보세요!', x + w / 2, y + rowH * 3.15);
-    c.fillStyle = '#8fb0d6'; c.font = `800 ${rowH * 0.25}px ${FONT}`;
-    c.fillText(period === 'week' ? '이번 주 기록이 아직 없어요 · 30초 장보기' : '오늘 기록이 아직 없어요 · 30초 장보기', x + w / 2, y + rowH * 3.85);
+    c.fillStyle = '#ffffff'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.font = `900 ${rowH * 0.34}px ${FONT}`;
+    c.fillText(period === 'week' ? '이번 주 첫 도전자를' : '오늘 첫 도전자를', x + w / 2, y + rowH * 1.7);
+    c.fillText('기다리는 중', x + w / 2, y + rowH * 2.35);
     return;
   }
   list.slice(0, 5).forEach((r, i) => {
