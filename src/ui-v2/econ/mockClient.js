@@ -295,8 +295,8 @@ export function createMockClient({ storage, now = () => Date.now(), key = MOCK_K
       if (!s.signedIn) return later({ guest: true, period, resetsAt: nextReset(period, now()), quests: [], maxBum: 0, claimedBum: 0, info: T('구글 계정을 연동하면 할 일과 보상이 열려요', 'Link a Google account to unlock quests and rewards') });
       const quests = ids.map(quest);
       const tv = travel();
-      const info = period === 'daily' ? T(`매일 00:00 KST에 3개 배정 · 오늘 이동 ${tv.minutes}분 인정 · 하루 상한 60분 · ${tv.settled ? '오늘 이동 보상 지급 완료' : `정산 예정 ${fmt(Math.min(tv.minutes, 60) * tv.ratePerMin)} bum`}`, `3 assigned daily at 00:00 KST · ${tv.minutes} counted min today · daily cap 60 min · ${tv.settled ? 'travel reward paid today' : `pending ${fmt(Math.min(tv.minutes, 60) * tv.ratePerMin)} bum`}`)
-        : period === 'weekly' ? T(`월요일 00:00 KST 리셋 · 이번 주 ${tv.weekMinutes}분 인정 · 주 상한 300분`, `Resets Monday 00:00 KST · ${tv.weekMinutes} counted min this week · weekly cap 300 min`)
+      const info = period === 'daily' ? T(`매일 00:00 KST에 3개 배정 · 오늘 이동 ${tv.minutes}/60분 (${tv.settled ? '오늘 이동 보상 지급 완료' : `60분 채우면 바로 ${fmt(60 * tv.ratePerMin)} bum`} · 하루 1번)`, `3 assigned daily at 00:00 KST · travel today ${tv.minutes}/60 min (${tv.settled ? 'travel reward paid today' : `reach 60 min for ${fmt(60 * tv.ratePerMin)} bum`} · once a day)`)
+        : period === 'weekly' ? T(`월요일 00:00 KST 리셋 · 이번 주 이동 ${tv.weekMinutes}/300분 (주 상한 51,600 bum)`, `Resets Monday 00:00 KST · travel this week ${tv.weekMinutes}/300 min (weekly cap 51,600 bum)`)
           : T('매월 1일 00:00 KST 리셋 (월 단위 KST 집계)', 'Resets on the 1st at 00:00 KST');
       return { guest: false, period, resetsAt: nextReset(period, now()), quests, maxBum: quests.reduce((a, q) => a + q.reward.bum, 0), claimedBum: quests.filter((q) => q.state === 'claimed').reduce((a, q) => a + q.reward.bum, 0), info };
     },

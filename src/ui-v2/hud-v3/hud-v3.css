@@ -68,18 +68,6 @@ body.hud-v3 #ve-hud.h3-trk-root .ve-bar { background: rgba(255, 255, 255, .14); 
 body.hud-v3 #ve-hud.h3-trk-root .ve-foot { color: var(--h3-sub); border-top-color: var(--h3-line); }
 body.hud-v3 #ve-hud.h3-trk-root .ve-mock { color: var(--h3-gold); background: rgba(255, 225, 105, .12); }
 body.hud-v3 #ve-hud.h3-trk-root .ve-tile { background: rgba(32, 201, 151, .2); }
-body.hud-v3 #ve-hud.h3-trk-root .ve-goal { display: flex; flex-direction: row; justify-content: flex-start; align-items: center; color: var(--h3-txt); background: rgba(255, 255, 255, .06); border-color: rgba(255, 255, 255, .16); }
-body.hud-v3 #ve-hud.h3-trk-root .ve-goal-t b { color: var(--h3-txt); font-size: 13px; }
-body.hud-v3 #ve-hud.h3-trk-root .ve-goal[data-goal="D-RIDE10"] { border-color: rgba(127, 178, 255, .45); }
-body.hud-v3 #ve-hud.h3-trk-root .ve-goal-t em { color: var(--h3-sub); }
-body.hud-v3 #ve-hud.h3-trk-root .ve-goal.done .ve-goal-t em { color: #7ff0c8; }
-body.hud-v3 #ve-hud.h3-trk-root .ve-goal .ve-tile { width: 28px; height: 28px; flex: 0 0 28px; background: color-mix(in srgb, var(--c) 28%, transparent); }
-body.hud-v3 #ve-hud.h3-trk-root .ve-goal-t { flex: 1 1 auto; min-width: 72px; display: flex; flex-direction: column; align-items: flex-start; }
-body.hud-v3 .h3-walk { position: relative; }
-body.hud-v3 .h3-cap { font-size: 10px; font-weight: 800; color: #7ff0c8; }
-body.hud-v3 .h3-walk .ve-plus { position: static; margin-left: 4px; font-style: normal; font-size: 12px; font-weight: 900; color: #ffe169; text-shadow: 0 1px 0 #122033; pointer-events: none; animation: ve-plus 1.6s ease-out forwards; }
-body.hud-v3 .ve-min-pop { display: inline-block; animation: ve-min .45s ease-out; }
-body.hud-v3 .h3-walk.ve-tick { background: rgba(32, 201, 151, .16); border-radius: 10px; }
 
 /* ---------- 오른쪽 위 액션 바 + 접속자 알약 묶음 ---------- */
 /* row-reverse: DOM [bar, online] → 화면에 알약 | 바. 알약이 바 왼쪽 같은 줄(세로 가운데). */

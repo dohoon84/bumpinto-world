@@ -27,7 +27,6 @@ const sv = (s, vb, body) => `<svg class="v2-ic" width="${s}" height="${s}" viewB
 export const EI = {
   coin: (s = 16) => ICON.coin(s),
   walk: (s = 16, c = '#fff') => sv(s, 16, `<ellipse cx="5.6" cy="5.4" rx="2.3" ry="3.4" fill="${c}"/><ellipse cx="10.6" cy="8.6" rx="2.3" ry="3.4" fill="${c}"/><circle cx="5.4" cy="11.4" r="1.4" fill="${c}"/><circle cx="10.8" cy="14" r="1.3" fill="${c}"/>`),
-  bike: (s = 16, c = '#fff') => sv(s, 16, `<circle cx="4" cy="11.6" r="2.5" fill="none" stroke="${c}" stroke-width="1.5"/><circle cx="12" cy="11.6" r="2.5" fill="none" stroke="${c}" stroke-width="1.5"/><path d="M4 11.6 6.7 6.4h3.2M7.6 11.6 6.7 6.4M8.6 6.4 12 11.6M10.2 6.4h2.4" fill="none" stroke="${c}" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>`),
   quest: (s = 16) => sv(s, 16, `<rect x="2" y="2.5" width="12" height="12.5" rx="2.4" fill="#1f5fbf"/><rect x="5" y="1" width="6" height="3.2" rx="1.2" fill="#ffe169"/><path d="M5 9 L7.2 11.2 L11.2 6.8" fill="none" stroke="#fff" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/>`),
   card: (s = 20) => sv(s, 20, `<rect x="1.5" y="4" width="17" height="12" rx="2.4" fill="#fff"/><rect x="1.5" y="6.6" width="17" height="2.4" fill="#d4003b"/><rect x="1.5" y="9" width="17" height="1.4" fill="#f5a200"/><rect x="4" y="12" width="5" height="1.6" rx=".8" fill="#9eb4c6"/>`),
   karma: (s = 16, c = '#ffe169') => sv(s, 16, `<path d="M8 1 L9.8 6.2 L15 8 L9.8 9.8 L8 15 L6.2 9.8 L1 8 L6.2 6.2 Z" fill="${c}"/>`),

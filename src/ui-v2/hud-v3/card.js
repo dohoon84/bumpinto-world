@@ -1,10 +1,9 @@
-// [hud-v3] 왼쪽 위 플레이어 카드 (A안): 아바타(이름 첫 글자) · 이름 · 시계/날씨 | bum 잔액 | 할 일 n/3 | 오늘 이동 N분 인정
+// [hud-v3] 왼쪽 위 플레이어 카드 (A안): 아바타(이름 첫 글자) · 이름 · 시계/날씨 | bum 잔액 | 할 일 n/3 | 걸음 m/60분
 //   + 카드 아래 '오늘의 할 일' 트래커. econ-ui/hud.js 의 useAltHud 계약(mount·refresh·render·countUp·balanceChip·balanceCoin)을 구현한다
 //   → 잔액/할 일 데이터·보상 연출·패널 흐름은 econ-ui 그대로, 모양만 바꾼다. 게스트는 지금 칩처럼 구글 연동으로 안내(ctx.link).
 import { econ } from '../econ/index.js';
 import { n, sgn, tr, esc, EI, mockTag } from '../econ-ui/kit.js';
 import { trackerHtml, guestTrackerHtml } from '../econ-ui/hud.js';
-import { moveMinuteLabel } from '../econ-ui/moveGoals.js';
 import { dailySlots } from '../econ-ui/questSlots.js';
 import { icon } from './icons.js';
 import { gicon, giOn } from '../gameIcons.js';
@@ -14,7 +13,6 @@ const ci = (k) => (giOn() ? gicon(k, 13, 'h3-ci') : '');
 let card = null, cells = null, trkRoot = null, trk = null, ctx = null;
 let shown = 0, anim = 0, deltaT = 0, trackerOpen = true;
 let last = { session: null, bal: null, travel: null, daily: null };
-let lastMinute = null, pulseText = '', pulseUntil = 0;
 const $ = (id) => document.getElementById(id);
 
 /** 플레이어 카드 DOM 을 만든다 (econ 이 없어도 이름·시계는 보이게 먼저) */
@@ -120,13 +118,10 @@ function render(delta = null) {
   const dShow = delta ?? (Date.now() < deltaT ? cells.dataset.delta && +cells.dataset.delta : null);
   if (delta != null) cells.dataset.delta = String(delta);
   const { done, total } = dailySlots(daily.quests);
-  const lab = moveMinuteLabel(travel);
-  if (lastMinute != null && lab.m > lastMinute) { pulseText = `+${lab.m - lastMinute}분`; pulseUntil = Date.now() + 1600; }
-  lastMinute = lab.m;
-  const pulsing = Date.now() < pulseUntil;
+  const m = travel.minutes, cap = travel.capMinutes || 60;
   const pct = (v, t) => Math.round(Math.max(0, Math.min(1, t ? v / t : 0)) * 100);
   cells.innerHTML = `<button type="button" class="h3-cell h3-bal${dShow ? ' v2-glow' : ''}" data-ve="bal" title="${esc(tr('교통카드 · 지갑 열기', 'Open transit card · wallet'))}">${EI.coin(24)}<span class="h3-v"><b data-ve="bal-v">${n(anim ? shown : bal.total)}</b><small>bum${dShow ? ` <em class="h3-d${dShow < 0 ? ' neg' : ''}">${sgn(dShow)}</em>` : ''}</small></span>${mockTag('mini')}</button>
     <button type="button" class="h3-cell h3-q" data-ve="quest" aria-expanded="${trackerOpen}" title="${esc(trackerOpen ? tr('할 일 접기', 'Hide quests') : tr('할 일 펼치기', 'Show quests'))}"><span class="h3-v"><small>${ci('quest')}${esc(tr('할 일', 'Quests'))}</small><b>${done}/${total}</b></span><span class="h3-prog"><i style="width:${pct(done, total)}%"></i></span><span class="h3-caret${trackerOpen ? ' up' : ''}">${icon('caret', 14)}</span></button>
-    <button type="button" class="h3-cell h3-walk${pulsing ? ' ve-tick' : ''}" data-ve="move" title="${esc(lab.near ? `${lab.main} · ${lab.capText}` : lab.main)}"><span class="h3-v"><small>${ci('walk')}${esc(tr('오늘 이동', 'Today'))}</small><b class="${pulsing ? 've-min-pop' : ''}">${esc(lab.short)}</b></span>${lab.near ? `<span class="h3-cap">${esc(lab.capText)}</span>` : ''}${pulsing ? `<em class="ve-plus">${esc(pulseText)}</em>` : ''}</button>`;
-  trk.innerHTML = trackerOpen ? trackerHtml(daily, travel) : '';
+    <button type="button" class="h3-cell h3-walk" data-ve="move" title="${esc(tr('할 일 · 이동 인정 보기', 'Quests · counted travel'))}"><span class="h3-v"><small>${ci('walk')}${esc(tr('걸음', 'Walk'))}</small><b>${esc(tr(`${m}/${cap}분`, `${m}/${cap} min`))}</b></span><span class="h3-prog mint"><i style="width:${pct(m, cap)}%"></i></span></button>`;
+  trk.innerHTML = trackerOpen ? trackerHtml(daily) : '';
 }
