@@ -56,7 +56,9 @@ if (!bump24StorePrompts('bump24-jeongja', '')) throw new Error('정자점 문 �
 if (bump24StorePrompts('bump24-jeongja', '?bp24game=0')) throw new Error('bp24game=0 인데 정자점 안내');
 if (bump24StorePrompts('seongnam-cityhall', '')) throw new Error('기본 URL에서 시청점 안내가 켜짐');
 if (bump24StorePrompts('seongnam-cityhall', '?bp24=1')) throw new Error('시청점은 ?bp24game=1 없이 안내가 켜짐');
-if (!bump24StorePrompts('seongnam-cityhall', '?bp24=1&bp24game=1')) throw new Error('시청점 ?bp24game=1 안내가 꺼짐');
+if (!bump24StorePrompts('seongnam-cityhall', '?bp24game=1')) throw new Error('시청점 ?bp24game=1 안내가 꺼짐');
+if (!bump24StorePrompts('seongnam-cityhall', '?bp24=1&bp24game=1')) throw new Error('시청점 ?bp24=1&bp24game=1 안내가 꺼짐');
+if (bump24StorePrompts('seongnam-cityhall', '?bp24=0&bp24game=1')) throw new Error('?bp24=0 인데 시청점 안내');
 if (!bump24GameEnabled('?bp24=1&bp24game=1')) throw new Error('시청점 게임이 꺼짐');
 const skipped = jeongja.buildings.filter((b) => b._skip && b.lm === 'bp24');
 if (skipped.length !== on.length) throw new Error(`1층 충돌 ${skipped.length} != 매장 ${on.length}`);

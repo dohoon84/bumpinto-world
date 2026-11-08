@@ -124,7 +124,6 @@ export function mountBp24Nav({ scene, overlay, world, getExits, station, getPlay
     } catch { /* 매장이 아직 없으면 배치 좌표만 */ }
     for (const s of BP24_PLACEMENTS) {
       if (out.has(s.id) || s.atX == null) continue;
-      if (s.id === 'seongnam-cityhall') continue;
       if (s.world === 'jeongja') { if (!jeongjaBump24On(search)) continue; }
       else if (!s.defaultOn || !placementFlagOn(s, search)) continue;
       out.set(s.id, { id: s.id, name: s.name || 'BUMP24', x: s.atX, z: s.atZ });

@@ -2,7 +2,7 @@
 // 문 앞 2.4m 안에 차도·벽이 아닌 자리가 있는지, 기본 주소에서 안내가 켜지는지, 표시 이름에 체인 상호가 없는지.
 import fs from 'fs';
 import { bp24DoorInfo, bp24ShellWalls, bp24TileKey, prepareJeongjaBp24, resolveBp24 } from '../src/corridor/bp24.js';
-import { BP24_PLACEMENTS, bump24AtSpot } from '../src/corridor/bp24Locations.js';
+import { BP24_PLACEMENTS, bump24AtSpot, cityhallBump24On, corridorPlacements } from '../src/corridor/bp24Locations.js';
 import { bump24StorePrompts } from '../src/bump24game/flag.js';
 import { assessStore, nearestNamedRoad } from './lib/bp24-mesh.mjs';
 
@@ -182,8 +182,25 @@ for (const spec of BP24_PLACEMENTS) {
     if (insideNew(outX, (st.sideZ0 + st.sideZ1) / 2)) fail.push(`${spec.id} 유리 밖 인도까지 실내 충돌`);
   } else if (st.interiorZ1) fail.push(`${spec.id} 실내 깊이가 바뀜`);
   if (spec.id === 'seongnam-cityhall') {
-    if (bump24StorePrompts(spec.id, '')) fail.push('시청점 안내가 기본 주소에서 켜짐');
-    if (!bump24StorePrompts(spec.id, '?bp24=1&bp24game=1')) fail.push('시청점 안내가 ?bp24game=1 에서 꺼짐');
+    if (!cityhallBump24On('')) fail.push('시청점이 기본 주소에서 꺼짐');
+    if (cityhallBump24On('?bp24=0') || cityhallBump24On('?bump24=0')) fail.push('?bp24=0 인데 시청점이 켜짐');
+    if (cityhallBump24On('?bump24cityhall=0')) fail.push('매장 플래그 0 인데 시청점이 켜짐');
+    if (!cityhallBump24On('?bp24=1') || !cityhallBump24On('?bump24cityhall=1')) fail.push('시청점을 다시 켜지 못함');
+    if (!corridorPlacements('').some((s) => s.id === spec.id)) fail.push('시청점이 기본 코리더 목록에 없음');
+    if (corridorPlacements('?bp24=0').some((s) => s.id === spec.id)) fail.push('?bp24=0 목록에 시청점이 남음');
+    if (bump24StorePrompts(spec.id, '') || bump24StorePrompts(spec.id, '?bp24=1')) fail.push('시청점 안내는 ?bp24game=1 없이 켜짐');
+    if (!bump24StorePrompts(spec.id, '?bp24game=1') || !bump24StorePrompts(spec.id, '?bp24=1&bp24game=1')) fail.push('시청점 ?bp24game=1 안내가 꺼짐');
+    if (bump24StorePrompts(spec.id, '?bp24=0&bp24game=1') || bump24StorePrompts(spec.id, '?bump24cityhall=0&bp24game=1')) fail.push('끈 시청점에 안내가 켜짐');
+    const pin = [door.x + 1.6, door.z];
+    const board = [
+      st.o[0] + st.ax[0] * 0.3 + st.b[0] * -0.95,
+      st.o[1] + st.ax[1] * 0.3 + st.b[1] * -0.95,
+    ];
+    for (const [name, p] of [['문', [door.x, door.z]], ['핀', pin], ['전광판', board]]) {
+      if (roadClearance(roads, p[0], p[1]) < -0.4) fail.push(`${spec.id} ${name}이 차도 (${p[0].toFixed(1)},${p[1].toFixed(1)})`);
+      if (bld?.o && inside(p[0], p[1], bld.o)) fail.push(`${spec.id} ${name}이 시청 건물 안`);
+      for (const pk of parks || []) if (pk?.o && inside(p[0], p[1], pk.o)) fail.push(`${spec.id} ${name}이 광장·공원 안`);
+    }
   } else if (!bump24StorePrompts(spec.id, '')) fail.push(`${spec.id} 기본 주소에서 안내가 꺼짐`);
   if (spec.at) {
     const spot = bump24AtSpot(spec.at);

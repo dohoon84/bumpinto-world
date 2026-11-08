@@ -9,14 +9,15 @@ if (!bp24BoardsAll('?bp24boards=1')) throw new Error('bp24boards=1 인데 꺼짐
 const ids = bp24BoardStoreIds('');
 const set = new Set(ids);
 if (set.size !== ids.length) throw new Error('전광판 id 가 겹침');
-if (ids.length < 160) throw new Error(`전광판 슬롯이 너무 적음 ${ids.length}`);
-if (!ids.includes('bump24-jeongja') || !ids.includes('jz649')) throw new Error('정자 매장 슬롯이 빠짐');
-if (ids.includes('seongnam-cityhall')) throw new Error('시청점이 기본 슬롯에 들어감');
+if (ids.length !== BP24_PLACEMENTS.length) throw new Error(`전광판 슬롯 ${ids.length} != 배치 ${BP24_PLACEMENTS.length}`);
+if (!ids.includes('bump24-jeongja') || !ids.includes('jz649') || !ids.includes('seongnam-cityhall')) throw new Error('정자·시청 슬롯이 빠짐');
 for (const s of BP24_PLACEMENTS) {
-  if (s.enabled === false || s.id === 'seongnam-cityhall') continue;
+  if (s.enabled === false) continue;
   if (s.world !== 'jeongja' && !s.defaultOn) continue;
   if (!set.has(s.id)) throw new Error(`${s.id} 전광판 슬롯이 없음`);
 }
+if (bp24BoardStoreIds('?bp24=0').includes('seongnam-cityhall')) throw new Error('?bp24=0 인데 시청점 전광판');
+if (bp24BoardStoreIds('?bump24cityhall=0').includes('seongnam-cityhall')) throw new Error('매장 플래그 0 인데 시청점 전광판');
 const legacy = bp24BoardStoreIds('?bp24boards=0');
 if (legacy.length !== 1 || legacy[0] !== 'bump24-jeongja') throw new Error(`예전 전광판이 아님 ${legacy}`);
 const explicit = bp24BoardStoreIds('?bp24boards=0', true);

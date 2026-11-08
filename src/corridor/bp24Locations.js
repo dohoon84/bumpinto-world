@@ -3,18 +3,21 @@ import { BP24_GENERATED } from './bp24Generated.js';
 //   id, name, world('corridor' 타일 | 'jeongja' 베이스맵), match{x,z} 또는 building(jeongja.json 인덱스).
 //   front/side: '-z' | '+z' | '-x' | '+x' (바깥 방향). side: null 이면 앞면만 유리. 생략하면 차도 거리로 자동.
 //   enabled: false 면 그 줄은 넣지 않는다.
-//   flag: URL 이름. ?<flag>=0 이면 그 매장만 끄고, 없거나 1 이면 켠다(기본 켜짐). 시청점은 플래그 없이 ?bp24=1 로만 켜진다.
+//   flag: URL 이름. ?<flag>=0 이면 그 매장만 끄고, 없거나 1 이면 켠다(기본 켜짐). 시청점은 ?bp24=0 으로도 끈다.
 //   recess: 앞면을 건물 안쪽으로 당기는 거리(m). apron: false 면 앞 보도 데크·볼라드를 생략(차도에 붙는 면).
 export const BUMP24_JEONGJA_FLAG = 'bump24jeongja';
 export const BUMP24_JEONGJA_DEFAULT = true;
 export const BUMP24_JEONGJA_AT = 'bump24-jeongja';
+export const BUMP24_CITYHALL_FLAG = 'bump24cityhall';
 export const BUMP24_NAV_FLAG = 'bp24nav';
 export const BUMP24_NAV_DEFAULT = true;
 
 export const BP24_PLACEMENTS = [
   { // #1 성남시청 길 건너(실제 GS25 자리). 실측 사진에 맞춘 고정 틀 — 자동 결과와 달리 북쪽 창고 부분을 뺀 10.3m 깊이
     id: 'seongnam-cityhall', name: 'BUMP24 성남시청점',
-    enabled: true, world: 'corridor',
+    enabled: true, world: 'corridor', defaultOn: true,
+    flag: BUMP24_CITYHALL_FLAG,
+    at: 'bump24-seongnam-cityhall', atX: 1600.65, atZ: -5762.75,
     match: { x: 1601.1, z: -5752.8 },
     box: { x0: 1592.8, x1: 1608.5, z0: -5761.6, z1: -5751.3 }, front: '-z', side: '+x',
   },
@@ -34,6 +37,10 @@ export const BP24_PLACEMENTS = [
 /** 이 매장을 지금 켤지. flag 가 없으면 enabled 만 본다. */
 export function placementFlagOn(spec, search = typeof location !== 'undefined' ? location.search : '') {
   if (!spec || spec.enabled === false) return false;
+  if (spec.id === 'seongnam-cityhall') {
+    const q = search instanceof URLSearchParams ? search : new URLSearchParams(search || '');
+    if (q.get('bp24') === '0' || q.get('bump24') === '0') return false;
+  }
   const flag = spec.flag || (spec.world === 'jeongja' ? BUMP24_JEONGJA_FLAG : '');
   if (!flag) return true;
   const p = search instanceof URLSearchParams ? search : new URLSearchParams(search || '');
@@ -49,6 +56,11 @@ export function activePlacements(world, search) {
 
 export function jeongjaBump24On(search) {
   const spec = BP24_PLACEMENTS.find((s) => s.id === 'bump24-jeongja');
+  return !!spec && placementFlagOn(spec, search);
+}
+
+export function cityhallBump24On(search) {
+  const spec = BP24_PLACEMENTS.find((s) => s.id === 'seongnam-cityhall');
   return !!spec && placementFlagOn(spec, search);
 }
 
@@ -70,12 +82,12 @@ export function bp24BoardsAll(search = typeof location !== 'undefined' ? locatio
   return queryFlag('bp24boards', search, true);
 }
 
-/** 전광판을 달 매장 id. 시청점은 points() 에 없으므로 빼 둔다. */
+/** 전광판을 달 매장 id. 켜진 매장 전부(시청점 포함). */
 export function bp24BoardStoreIds(search = '', explicit = false) {
   if (!bp24BoardsAll(search)) return explicit ? ['bump24-jeongja', 'seongnam-cityhall'] : ['bump24-jeongja'];
   const ids = [];
   for (const s of BP24_PLACEMENTS) {
-    if (s.enabled === false || s.id === 'seongnam-cityhall') continue;
+    if (s.enabled === false) continue;
     if (s.world === 'jeongja') { if (jeongjaBump24On(search)) ids.push(s.id); continue; }
     if (s.defaultOn && placementFlagOn(s, search) && s.atX != null) ids.push(s.id);
   }
@@ -106,9 +118,9 @@ export function bp24LocationsFor(mode) {
   return mode === 'demo' ? base.concat(BP24_DEMO) : mode ? base : [];
 }
 
-/** ?bp24=1 없이도 켜는 코리더 매장. 시청점(defaultOn 없음)은 빼서 예전과 같다. */
+/** ?bp24=1 없이도 켜는 코리더 매장. 시청점도 defaultOn. ?bp24=0 · ?bump24cityhall=0 이면 빠진다. */
 export function corridorPlacements(search) {
-  // 판교·미금 타일도 같은 코리더 스트림으로 붙는다. 시청점(defaultOn 없음)은 빼 둔다.
+  // 판교·미금 타일도 같은 코리더 스트림으로 붙는다.
   return BP24_PLACEMENTS.filter((s) => (s.world === 'corridor' || s.world === 'pangyo' || s.world === 'migeum') && s.defaultOn && placementFlagOn(s, search));
 }
 
