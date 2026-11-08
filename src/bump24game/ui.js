@@ -1,6 +1,8 @@
 // [bump24game] 매장 안 DOM UI: HUD(타이머 링·금액 롤업·무게 게이지·콤보) · 카운트다운 · 영수증 · 결과(색종이) · 가로 안내
 import './ui.css';
 import { leaderboard, PERIODS } from './leaderboard.js';
+import { requestGoogleSignIn, googleNotReadyText } from '../ui-v2/google.js';
+import { tr } from '../i18n.js';
 
 const ICON = {
   exit: '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 4H4v12h4M12 6l-4 4 4 4M8 10h9"/></svg>',
@@ -20,7 +22,7 @@ function ensureFont() {
   document.head.appendChild(l);
 }
 
-export function createBump24UI({ onGrab, onExit, onMute, onHintTap, onIntroGo } = {}) {
+export function createBump24UI({ onGrab, onExit, onMute, onHintTap, onIntroGo, onRankLogin } = {}) {
   ensureFont();
   const root = document.createElement('div');
   root.id = 'b24-root'; root.dataset.inside = '0';
@@ -144,9 +146,42 @@ export function createBump24UI({ onGrab, onExit, onMute, onHintTap, onIntroGo } 
     flash() { el.flash.classList.remove('on'); void el.flash.offsetWidth; el.flash.classList.add('on'); },
     edge(on) { el.edge.classList.toggle('on', !!on); },
     banner(text, ms = 1400) { el.banner.innerHTML = `<b>${esc(text)}</b>`; clearTimeout(api._bt); api._bt = setTimeout(() => { el.banner.innerHTML = ''; }, ms); },
-    limit(on) {
+    limit(on, { guest = false } = {}) {
       let n = document.getElementById('bp24-rank-limit');
-      if (!on) { n?.remove(); return; }
+      const drop = () => { clearTimeout(api._lt); clearTimeout(api._lAway); api._lt = api._lAway = 0; api._lHold = false; n?.remove(); };
+      if (!on) { drop(); return; }
+      if (guest) {
+        clearTimeout(api._lAway);
+        api._lAway = setTimeout(() => { api._lHold = false; }, 800);
+        if (api._lHold) return;
+        api._lHold = true;
+        n?.remove();
+        n = document.createElement('div');
+        n.id = 'bp24-rank-limit';
+        n.style.cssText = 'position:fixed;left:50%;top:18%;transform:translateX(-50%);z-index:70;padding:12px 18px;border-radius:16px;background:rgba(10,22,48,.94);color:#fff;font:800 18px/1.3 Pretendard,sans-serif;pointer-events:auto;text-align:center;max-width:min(440px,92vw)';
+        n.innerHTML = `<div>구글 로그인하면 오늘 이 매장에서 4번 더 도전할 수 있어요</div><div style="display:flex;gap:8px;justify-content:center;margin-top:10px"><button type="button" data-b24-limit="google" style="border:0;border-radius:10px;padding:8px 12px;background:#fff;color:#1f1f1f;font:800 14px/1 Pretendard,sans-serif;cursor:pointer">Google 로그인</button><button type="button" data-b24-limit="close" style="border:1px solid rgba(255,255,255,.45);border-radius:10px;padding:8px 12px;background:transparent;color:#fff;font:800 14px/1 Pretendard,sans-serif;cursor:pointer">닫기</button></div>`;
+        const close = () => { clearTimeout(api._lt); n.remove(); };
+        n.querySelector('[data-b24-limit="close"]').addEventListener('click', close);
+        n.querySelector('[data-b24-limit="google"]').addEventListener('click', async (e) => {
+          const btn = e.currentTarget;
+          btn.disabled = true;
+          clearTimeout(api._lt);
+          let r = { ok: false };
+          try { r = await requestGoogleSignIn(); } catch { r = { ok: false, reason: 'error' }; }
+          if (!n.isConnected) return;
+          btn.disabled = false;
+          if (r?.ok) { close(); onRankLogin?.(); return; }
+          let note = n.querySelector('[data-b24-limit="note"]');
+          if (!note) { note = document.createElement('div'); note.dataset.b24Limit = 'note'; note.style.cssText = 'margin-top:8px;font-size:13px;font-weight:700;color:#cfe0f5'; n.appendChild(note); }
+          note.textContent = r?.reason === 'not_ready' ? googleNotReadyText() : tr('로그인하지 못했어요. 다시 시도하거나 게스트로 계속해 주세요.', 'Sign-in failed. Try again or continue as a guest.');
+          api._lt = setTimeout(close, 6000);
+        });
+        document.body.appendChild(n);
+        api._lt = setTimeout(close, 6000);
+        return;
+      }
+      clearTimeout(api._lt); clearTimeout(api._lAway); api._lt = api._lAway = 0; api._lHold = false;
+      if (n?.querySelector('button')) { n.remove(); n = null; }
       if (!n) { n = document.createElement('div'); n.id = 'bp24-rank-limit'; n.style.cssText = 'position:fixed;left:50%;top:18%;transform:translateX(-50%);z-index:70;padding:12px 18px;border-radius:16px;background:rgba(10,22,48,.94);color:#fff;font:800 18px/1.3 Pretendard,sans-serif;pointer-events:none'; document.body.appendChild(n); }
       n.textContent = '오늘 도전 완료, 연습은 계속 가능';
     },
@@ -157,8 +192,10 @@ export function createBump24UI({ onGrab, onExit, onMute, onHintTap, onIntroGo } 
       document.body.appendChild(n);
       setTimeout(() => n.remove(), 2600);
     },
-    intro({ storeName, ranked, sale = [], best = 0 } = {}) {
-      el.intro.innerHTML = `<div class="b24-intro"><span class="mode ${ranked ? '' : 'prac'}">${ranked ? '오늘의 랭킹 도전 1회' : '연습 모드 · 무제한'}</span>
+    intro({ storeName, ranked, sale = [], best = 0, left, cap } = {}) {
+      const l = Number(left), c = Number(cap);
+      const mode = !ranked ? '연습 모드 · 무제한' : (Number.isInteger(l) && Number.isInteger(c) && c > 0 && l >= 0 && l <= c ? `오늘의 랭킹 도전 · 남은 ${l}/${c}` : '오늘의 랭킹 도전 1회');
+      el.intro.innerHTML = `<div class="b24-intro"><span class="mode ${ranked ? '' : 'prac'}">${mode}</span>
         <h2><em>30초</em> 장보기</h2><p>${esc(storeName)} · 내 최고 ${won(best)}원</p>
         <ol><li><b>1</b>입구 옆 파란 바구니를 집으면 5초 뒤 시작</li><li><b>2</b>진열대 앞에서 담기 — 비싼 걸 많이!</li>
         <li><b>3</b>바구니 ${6}kg 넘으면 와르르 쏟아져요</li><li><b>4</b>오늘의 2배: ${sale.map((p) => esc(p.name)).join(', ') || '-'}</li></ol>
@@ -243,7 +280,7 @@ export function createBump24UI({ onGrab, onExit, onMute, onHintTap, onIntroGo } 
     setMuted(m) { el.mute.innerHTML = m ? ICON.mute : ICON.vol; el.mute.setAttribute('aria-label', m ? '효과음 켜기' : '효과음 끄기'); },
     rotate(on) { el.rotate.classList.toggle('on', !!on); },
     get rotating() { return el.rotate.classList.contains('on'); },
-    dispose() { cancelAnimationFrame(raf); root.remove(); },
+    dispose() { cancelAnimationFrame(raf); clearTimeout(api._lt); clearTimeout(api._lAway); document.getElementById('bp24-rank-limit')?.remove(); root.remove(); },
   };
   return api;
 }
