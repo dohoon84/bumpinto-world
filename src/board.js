@@ -20,6 +20,7 @@ import {
   renderNoticeBody,
   sanitizeNoticeImages,
   stripNoticeTokens,
+  noticeImageSrc, setNoticeImageBase,
 } from './noticeImages.js'; // [notice-images]
 
 // [game-icons] PC HUD v3(body.hud-v3) 에서만: 머리·버튼·탭의 이모지를 공용 게임 아이콘으로 바꾼다. 예전 HUD·모바일은 그대로.
@@ -166,6 +167,7 @@ function fmtDate(ms) {
 }
 
 export function mountBoard({ sms, getMe, onOpen } = {}) {
+  try { setNoticeImageBase(smsBase()); } catch { /* 주소 없음 → 상대 경로 그대로 */ } // [notice-images] 공지 사진은 API 서버에서
   const launcher = document.getElementById('board-Launcher');
   const launcherBadge = document.getElementById('board-new-badge');
   const contribLauncher = document.getElementById('contribute-launcher');
@@ -221,7 +223,7 @@ export function mountBoard({ sms, getMe, onOpen } = {}) {
       ? `<div class="ni-compose-grid" data-ni-gallery>${draftImages.map((img, i) => (
         `<div class="ni-compose-item">` +
         `<button type="button" class="ni-thumb" data-ni-open data-ni-i="${i}" aria-label="${esc(img.alt || (en ? 'Preview image' : '이미지 미리보기'))}">` +
-        `<img src="${esc(img.url)}" alt="${esc(img.alt || '')}" draggable="false" /></button>` +
+        `<img src="${esc(noticeImageSrc(img.url))}" alt="${esc(img.alt || '')}" draggable="false" /></button>` +
         `<button type="button" class="ni-x" data-ni-remove="${i}" aria-label="${en ? 'Remove image' : '이미지 빼기'}">×</button>` +
         `</div>`
       )).join('')}</div>`
