@@ -15,6 +15,8 @@
 // [gangnam] --region=gangnam : 강남역 일대 B안 9칸(GANGNAM_BOX, x −7500..−6000, z −15500..−14000) → public/corridor/gangnam/*
 //   코리더와 떨어진 섬. 탄천 띠 없음. 지하(layer<0·location=underground) 건물은 그리지 않음(지하상가는 후속).
 //   출입구는 가장 가까운 역 이름이 강남인 것만(신논현·역삼 출구는 이 박스 안에 있어도 제외). 표지는 OSM 이름 평문만.
+//   높이: OSM height → data/gangnam_vworld_heights.json (브이월드 dt_d010 hg, 없으면 지상층수×LEVEL_H) → building:levels → 기본값.
+//   원본 타일은 커밋하지 않고, 표는 scripts/corridor/gangnam-vworld-heights.mjs --vworld= 로 만든다.
 import fs from 'node:fs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
@@ -72,6 +74,23 @@ const tileOf = (x, z) => `${Math.floor(x / TS)}_${Math.floor(z / TS)}`;
 const CELLS = [];
 for (const B of BOXES) for (let tx = Math.floor(B.x0 / TS); tx < Math.ceil(B.x1 / TS); tx++) for (let tz = Math.floor(B.z0 / TS); tz < Math.ceil(B.z1 / TS); tz++) if (!CELLS.includes(`${tx}_${tz}`)) CELLS.push(`${tx}_${tz}`);
 const LEVEL_H = 3.2;
+const fromFloors = (lv) => lv * LEVEL_H + (lv > 3 ? 1.5 : 0.6); // 층고 3.2m + 낮은 옥상 덧값. 판교·미금·강남·브이월드 층수 공통
+// [gangnam] 브이월드 GIS건물통합정보 파생 표. 원본 타일 캐시는 저장소에 없다.
+const VW_CREDIT = '건물 높이: 국토교통부 브이월드 GIS건물통합정보 (공공누리 제1유형: 출처표시), https://www.data.go.kr/data/15083092/fileData.do';
+const VW_HEIGHTS = GN ? path.resolve(ROOT, arg('vworldHeights', 'data/gangnam_vworld_heights.json')) : null;
+let vwByKey = null;
+if (GN) {
+  if (!VW_HEIGHTS || !fs.existsSync(VW_HEIGHTS)) throw new Error('강남 브이월드 높이 표 없음: ' + VW_HEIGHTS);
+  vwByKey = new Map();
+  for (const row of readJSON(VW_HEIGHTS).rows || []) {
+    const [id, src, val] = row;
+    const n = typeof val === 'number' ? val : parseFloat(val);
+    if (src === 'hg' && n >= 2 && n <= 300) vwByKey.set(id, { src, val: n });
+    else if (src === 'fl' && n >= 1 && n <= 60) vwByKey.set(id, { src, val: n });
+    else console.warn('높이 표에서 버림', id, src, val);
+  }
+}
+const vwHit = (id, c) => vwByKey?.get(`${id}@${r1(c[0])},${r1(c[1])}`) || vwByKey?.get(id) || null;
 
 // ---------- 기하 유틸 ----------
 const area = (r) => { let a = 0; for (let i = 0, n = r.length; i < n; i++) { const [x1, z1] = r[i], [x2, z2] = r[(i + 1) % n]; a += x1 * z2 - x2 * z1; } return a / 2; };
@@ -221,7 +240,7 @@ function defaultLevels(t, a) {
   if (/residential/.test(b)) return [4, 'default:residential'];
   return [a < 120 ? 2 : a < 500 ? 3 : a < 2000 ? 4 : 5, 'default:area'];
 }
-const stat = { osmBuildings: 0, height: 0, levels: 0, default: 0, outlines: 0, dupExisting: 0, outsideAllowed: 0, landmark: 0 };
+const stat = { osmBuildings: 0, height: 0, ...(GN ? { vwHg: 0, vwFloors: 0 } : {}), levels: 0, default: 0, outlines: 0, dupExisting: 0, outsideAllowed: 0, landmark: 0 };
 const buildings = [];
 for (const e of raw.elements) {
   const t = e.tags || {};
@@ -235,7 +254,13 @@ for (const e of raw.elements) {
     const c = centroid(poly.outer); if (!inBox(c[0], c[1])) continue;
     let h = num(t.height), src = 'osm:height';
     const lv = num(t['building:levels']);
-    if (!h || h < 2) { if (lv) { h = lv * LEVEL_H + (lv > 3 ? 1.5 : 0.6); src = 'osm:levels'; } else { const [L, s] = defaultLevels(t, a); h = L * LEVEL_H + 0.6; src = s; } }
+    if (!h || h < 2) {
+      const hit = GN ? vwHit(id, c) : null; // [gangnam] OSM height 가 없을 때만. hg > 지상층수 > OSM 층수 > 기본값
+      if (hit?.src === 'hg') { h = hit.val; src = 'vw:hg'; }
+      else if (hit?.src === 'fl') { h = fromFloors(hit.val); src = 'vw:floors'; }
+      else if (lv) { h = fromFloors(lv); src = 'osm:levels'; }
+      else { const [L, s] = defaultLevels(t, a); h = L * LEVEL_H + 0.6; src = s; }
+    }
     let mh = num(t.min_height) ?? (num(t['building:min_level']) ? num(t['building:min_level']) * LEVEL_H : 0);
     if (t.building === 'roof' || t['building:part'] === 'roof') { if (!t.min_height && !t['building:min_level']) { mh = Math.max(0, h - 0.6); if (h < 3) h = 4.5, mh = 3.9; } }
     if (id === LM_DECK) { h = DECK.h; mh = DECK.mh; src = 'landmark:deck'; }
@@ -269,7 +294,11 @@ for (const b of buildings) {
   rec.id = b.id;
   (addB[tileOf(b.c[0], b.c[1])] ||= []).push(rec);
   stat.osmBuildings++;
-  if (b.s.startsWith('osm:height')) stat.height++; else if (b.s.startsWith('osm:levels')) stat.levels++; else if (b.s.startsWith('default')) { stat.default++; if (!b.outline) defaultList.push({ id: b.id, k: b.k, h: b.h, rule: b.s, a: Math.round(b.a), x: r1(b.c[0]), z: r1(b.c[1]), ...(b.n ? { n: b.n } : {}) }); }
+  if (b.s.startsWith('osm:height')) stat.height++;
+  else if (b.s === 'vw:hg') stat.vwHg++;
+  else if (b.s === 'vw:floors') stat.vwFloors++;
+  else if (b.s.startsWith('osm:levels')) stat.levels++;
+  else if (b.s.startsWith('default')) { stat.default++; if (!b.outline) defaultList.push({ id: b.id, k: b.k, h: b.h, rule: b.s, a: Math.round(b.a), x: r1(b.c[0]), z: r1(b.c[1]), ...(b.n ? { n: b.n } : {}) }); }
 }
 
 // ---------- 2) 도로 (bake.mjs 규칙) ----------
@@ -600,10 +629,10 @@ for (const k of CELLS) {
 const index = {
   meta: {
     name: GN ? 'Gangnam station area (stage 1, island)' : MG ? 'Migeum station area (stage 1)' : 'Pangyo station area (stage 1)', tileSize: TS, box: GN ? GANGNAM_BOX : MG ? MIGEUM_BOX : BOX, boxes: BOXES, island: GN || undefined, generated: new Date().toISOString(),
-    source: { osm: `Overpass API (osm_base ${raw.osm3s?.timestamp_osm_base || '?'})`, query: `data/query_${REGION}.overpassql`, corridor: cIndex.meta.generated },
-    attribution: '© OpenStreetMap contributors (ODbL)',
+    source: { osm: `Overpass API (osm_base ${raw.osm3s?.timestamp_osm_base || '?'})`, query: `data/query_${REGION}.overpassql`, corridor: cIndex.meta.generated, ...(GN ? { vworld: 'data/gangnam_vworld_heights.json' } : {}) },
+    attribution: GN ? `© OpenStreetMap contributors (ODbL) · ${VW_CREDIT}` : '© OpenStreetMap contributors (ODbL)',
     heightRule: GN
-      ? 'OSM height → building:levels×3.2(+1.5 if >3F, else +0.6) → default levels by type/area (scripts/bake.mjs defaultLevels). GIS건물통합정보 높이 보정 없음 — docs/gangnam-heights.md'
+      ? 'OSM height → V-World dt_d010 hg → V-World ground_floor_co×3.2(+1.5 if >3F, else +0.6) → building:levels×3.2(same) → default levels by type/area (scripts/bake.mjs defaultLevels). docs/gangnam-heights.md'
       : MG ? 'OSM height → building:levels×3.2(+1.5 if >3F, else +0.6) → default levels by type/area (scripts/bake.mjs defaultLevels)' : 'OSM height → building:levels×3.2(+1.5 if >3F, else +0.6) → default levels by type/area (scripts/bake.mjs defaultLevels); deck = 10–12 m from press descriptions "3~4층 높이" (no measured survey value: VWorld dt_d010 hg=0 on all deck/plaza parcels, OSM no height tags)',
     stats: { ...stat, ...rstat, runs: runs.length, parks: P.n, water: W.n, tiles: Object.keys(tiles).length, tileKB: Math.round(bytes / 1024) },
     defaultHeights: defaultList,
