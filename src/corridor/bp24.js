@@ -428,23 +428,26 @@ function buildStore(st) {
   const fasciaOut = st.recess > 0.2 ? st.recess - 0.05 : FASCIA_OUT;
   const xL = st.sealEnds ? x0 : x0 - 0.05, xR = st.sealEnds ? x1 : x1 + (st.recess > 0.2 ? 0.05 : FASCIA_OUT);
   ext.box(xL, GLASS_H, zf - fasciaOut, xR, gf, zf + 0.25, NAVY);
-  if (side) ext.box(x1 - 0.25, GLASS_H, zf - FASCIA_OUT, x1 + FASCIA_OUT, gf, zb, NAVY);
+  const sideX = side ? x1 + (st.sideOut || 0) : x1;
+  const sideZ0 = side ? (st.sideZ0 ?? zf + 0.4) : zf;
+  const sideZ1 = side ? (st.sideZ1 ?? zb) : zb;
+  if (side) ext.box(sideX - 0.22, GLASS_H, sideZ0, sideX + 0.16, gf, sideZ1, NAVY);
   ext.box(x0 - 0.05, gf, zf - FASCIA_OUT, x1 + FASCIA_OUT, gf + 0.06, side ? zb : zf + 0.25, DARK, false, 'y'); // 띠 위 마감
   ext.box(x1 - 0.55, 0, zf - 0.25, st.sealEnds ? x1 : x1 + 0.2, GLASS_H, zf + 0.5, DARK); // 모퉁이 기둥
   ext.box(st.sealEnds ? x0 : x0 - 0.05, 0, zf - 0.12, x0 + 0.45, GLASS_H, zf + 0.3, STONE); // 서쪽 끝 기둥
   ext.box(x0 + 0.45, 0, zf - 0.06, x1 - 0.55, 0.32, zf + 0.06, DARK); // 유리 밑 턱
-  if (side) ext.box(x1 - 0.06, 0, zf + 0.5, x1 + 0.06, 0.32, zb, DARK);
+  if (side) ext.box(sideX - 0.06, 0, sideZ0, sideX + 0.06, 0.32, sideZ1, DARK);
   // 유리 + 멀리언
   const fx0 = x0 + 0.45, fx1 = x1 - 0.55;
   glass.quad(N(0, 0, -1), P((fx0 + fx1) / 2, (0.32 + GLASS_H) / 2, zf), fx1 - fx0, GLASS_H - 0.32, [1, 1, 1]);
-  if (side) glass.quad(N(1, 0, 0), P(x1, (0.32 + GLASS_H) / 2, (zf + 0.5 + zb) / 2), zb - zf - 0.5, GLASS_H - 0.32, [1, 1, 1]);
+  if (side) glass.quad(N(1, 0, 0), P(sideX, (0.32 + GLASS_H) / 2, (sideZ0 + sideZ1) / 2), Math.max(0.4, sideZ1 - sideZ0), GLASS_H - 0.32, [1, 1, 1]);
   const nF = Math.round((fx1 - fx0) / 1.75);
   for (let k = 1; k < nF; k++) { const x = fx0 + ((fx1 - fx0) * k) / nF; ext.box(x - 0.04, 0.32, zf - 0.05, x + 0.04, GLASS_H, zf + 0.05, MULL); }
   ext.box(fx0, 2.55, zf - 0.05, fx1, 2.62, zf + 0.05, MULL); // 가로대
   if (side) {
-    const nS = Math.round((zb - zf - 0.5) / 1.75);
-    for (let k = 1; k < nS; k++) { const z = zf + 0.5 + ((zb - zf - 0.5) * k) / nS; ext.box(x1 - 0.05, 0.32, z - 0.04, x1 + 0.05, GLASS_H, z + 0.04, MULL); }
-    ext.box(x1 - 0.05, 2.55, zf + 0.5, x1 + 0.05, 2.62, zb, MULL);
+    const nS = Math.max(1, Math.round((sideZ1 - sideZ0) / 1.75));
+    for (let k = 1; k < nS; k++) { const z = sideZ0 + ((sideZ1 - sideZ0) * k) / nS; ext.box(sideX - 0.05, 0.32, z - 0.04, sideX + 0.05, GLASS_H, z + 0.04, MULL); }
+    ext.box(sideX - 0.05, 2.55, sideZ0, sideX + 0.05, 2.62, sideZ1, MULL);
   }
   if (west) { // 서쪽 옆 유리(앞 끝 기둥 뒤 ~ 매장 끝) + 유리 밑 턱 + 멀리언 + 위 벽, 매장 뒤로 남는 외곽 구간은 막음
     const wz0 = zf + 0.3;
@@ -475,7 +478,7 @@ function buildStore(st) {
   // 정자: 로고·상호를 외벽선(처마 끝)에 붙인다. 위는 처마(gf) 바로 아래라 가리지 않고, 차도 쪽으로는 3cm 남긴다.
   const signZ = st.recess > 0.2 ? -(st.recess - 0.03) : zf - FASCIA_OUT - 0.01;
   sign.quad(N(0, 0, -1), P((x0 + x1) / 2 - (W > 12 ? 0.6 : 0), GLASS_H + (gf - GLASS_H) / 2, signZ), fw, Math.min(1.0, fh * 1.0 + 0.0), [1, 1, 1], suv(SIGN.front));
-  if (side && D >= 5) { const sw = Math.min(4.6, D * 0.45); sign.quad(N(1, 0, 0), P(x1 + FASCIA_OUT + 0.01, sy, (zf + zb) / 2 + 0.3), sw, sw / 4.6, [1, 1, 1], suv(SIGN.side)); }
+  if (side && (sideZ1 - sideZ0) >= 4) { const sw = Math.min(6.2, (sideZ1 - sideZ0) * 0.55); sign.quad(N(1, 0, 0), P(sideX + 0.08, sy, (sideZ0 + sideZ1) / 2), sw, sw / 6.2, [1, 1, 1], suv(SIGN.side)); }
   const by = 2.45;
   let bx = x1 - 0.17, bz = zf - 0.25 - 0.55; // 시청점: 모퉁이에서 유리 앞 0.8m
   if (st.sealEnds && st.recess > 0.2) {
@@ -488,7 +491,7 @@ function buildStore(st) {
   // 간판 띠 아래 LED 줄(밤). 정자점은 앞으로 당긴 띠 끝에 둔다.
   const glowZ = st.recess > 0.2 ? -(st.recess - 0.07) : zf - FASCIA_OUT + 0.02;
   glow.box(x0 + 0.3, GLASS_H - 0.05, glowZ, st.sealEnds ? x1 - 0.05 : x1 + 0.1, GLASS_H - 0.01, glowZ + 0.06, hex('#bfe6ff'));
-  if (side) glow.box(x1 + FASCIA_OUT - 0.08, GLASS_H - 0.05, zf - 0.2, x1 + FASCIA_OUT - 0.02, GLASS_H - 0.01, zb - 0.2, hex('#bfe6ff'));
+  if (side) glow.box(sideX + 0.02, GLASS_H - 0.05, sideZ0 + 0.2, sideX + 0.08, GLASS_H - 0.01, sideZ1 - 0.2, hex('#bfe6ff'));
   // 4) 보도 볼라드(검은 기둥 + 흰 머리) + 낮은 난간 + 앞 테라스. apron:false 면 생략(차도에 붙는 면 — 정자 칼튼호텔)
   if (st.apron !== false) {
     const bol = [];
@@ -900,11 +903,51 @@ function shellWorld(st, x, z) {
   return [st.o[0] + st.ax[0] * x + st.b[0] * z, st.o[1] + st.ax[1] * x + st.b[1] * z];
 }
 
-/** 매장 유리가 보는 두 면(앞, 옆). 옆면이 없으면 앞만. */
+/** 매장 유리가 보는 두 면(앞, 옆). 옆면을 길 쪽 외벽까지 당겨 두었으면 그 면을 쓴다. */
 function storeGlassFaces(st) {
   const faces = [{ a: shellWorld(st, 0, 0), b: shellWorld(st, st.W, 0), n: [-st.b[0], -st.b[1]] }];
-  if (st.side) faces.push({ a: shellWorld(st, st.W, 0), b: shellWorld(st, st.W, st.D), n: [st.ax[0], st.ax[1]] });
+  if (st.side) {
+    const x = st.W + (st.sideOut || 0);
+    const z0 = st.sideZ0 ?? 0;
+    const z1 = st.sideZ1 ?? st.D;
+    faces.push({ a: shellWorld(st, x, z0), b: shellWorld(st, x, z1), n: [st.ax[0], st.ax[1]] });
+  }
   return faces;
+}
+
+/** 옆 유리를 건물 외벽(길 쪽)에 붙인다. 사선 모서리 밖으로 나가지 않게 그 벽 구간만 쓴다. */
+function alignSideGlass(st) {
+  if (!st?.side || !st.colRing) return;
+  const base = { a: shellWorld(st, st.W, 0), b: shellWorld(st, st.W, st.D), n: [st.ax[0], st.ax[1]] };
+  const mx = (base.a[0] + base.b[0]) / 2, mz = (base.a[1] + base.b[1]) / 2;
+  const sdx = base.b[0] - base.a[0], sdz = base.b[1] - base.a[1], sL = Math.hypot(sdx, sdz) || 1;
+  const ux = sdx / sL, uz = sdz / sL;
+  let best = null;
+  const ring = st.colRing;
+  for (let i = 0; i < ring.length; i++) {
+    const a = ring[i], b = ring[(i + 1) % ring.length];
+    const dx = b[0] - a[0], dz = b[1] - a[1], L = Math.hypot(dx, dz);
+    if (L < 8) continue;
+    if (Math.abs((dx / L) * ux + (dz / L) * uz) < 0.92) continue;
+    const dist = (a[0] - mx) * base.n[0] + (a[1] - mz) * base.n[1];
+    if (dist < 0.4 || dist > 6) continue;
+    if (!best || dist < best.dist) best = { a, b, dist, L };
+  }
+  if (!best) return;
+  st.sideOut = best.dist - 0.04;
+  const proj = (p) => (p[0] - base.a[0]) * ux + (p[1] - base.a[1]) * uz;
+  let lo = Math.min(proj(best.a), proj(best.b)), hi = Math.max(proj(best.a), proj(best.b));
+  lo = Math.max(lo, -0.2);
+  hi = Math.min(hi, sL + 12);
+  if (hi - lo > 16) hi = lo + 16;
+  if (hi - lo < 4) return;
+  const toLocal = (u) => {
+    const w = [base.a[0] + ux * u, base.a[1] + uz * u];
+    const vx = w[0] - st.o[0], vz = w[1] - st.o[1];
+    return vx * st.b[0] + vz * st.b[1];
+  };
+  st.sideZ0 = toLocal(lo);
+  st.sideZ1 = toLocal(hi);
 }
 
 function glassCutOnEdge(a, b, face) {
@@ -975,23 +1018,7 @@ export function bp24ShellWalls(st) {
     let cursor = 0;
     const at = (t) => [a[0] + dx * t, a[1] + dz * t];
     for (const [t0, t1] of cuts) {
-      if (t0 > cursor + 0.01) quad(at(cursor), at(t0), nx, nz);
-      for (const t of [t0, t1]) {
-        const p = at(t);
-        let face = faces[0];
-        let best = Infinity;
-        for (const f of faces) {
-          const fx = f.b[0] - f.a[0], fz = f.b[1] - f.a[1], fl = Math.hypot(fx, fz) || 1;
-          const uu = ((p[0] - f.a[0]) * fx + (p[1] - f.a[1]) * fz) / fl;
-          const qx = f.a[0] + (fx / fl) * uu, qz = f.a[1] + (fz / fl) * uu;
-          const d = Math.hypot(p[0] - qx, p[1] - qz);
-          if (d < best) { best = d; face = f; }
-        }
-        const fx = face.b[0] - face.a[0], fz = face.b[1] - face.a[1], fl = Math.hypot(fx, fz) || 1;
-        const uu = Math.max(0, Math.min(fl, ((p[0] - face.a[0]) * fx + (p[1] - face.a[1]) * fz) / fl));
-        const q = [face.a[0] + (fx / fl) * uu, face.a[1] + (fz / fl) * uu];
-        if (Math.hypot(q[0] - p[0], q[1] - p[1]) > 0.2) quad(p, q, nx, nz);
-      }
+      if (t0 > cursor + 0.01) quad(at(cursor), at(Math.max(cursor, t0)), nx, nz);
       cursor = Math.max(cursor, t1);
     }
     if (cursor < 0.99) quad(at(cursor), at(1), nx, nz);
@@ -1014,6 +1041,7 @@ export function prepareJeongjaBp24(data, search) {
     if (!st) continue;
     src.mh = st.gf;
     src.lm = 'bp24';
+    alignSideGlass(st);
     const shell = bp24ShellWalls(st);
     if (shell.length) src._bp24Shell = { gf: st.gf, rings: shell };
     st.porch = !!(st.sealEnds && st.recess > 0.2);

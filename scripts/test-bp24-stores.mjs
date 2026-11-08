@@ -157,9 +157,14 @@ for (const spec of BP24_PLACEMENTS) {
     };
     if (wallD(-196.3, 251.8) > 0.5) fail.push(`${spec.id} 사선 모서리에 1층 벽이 없음`);
     if (wallD(-198, 229) > 0.5) fail.push(`${spec.id} 매장 북쪽 서쪽 벽에 1층 벽이 없음`);
-    if (wallD(-170, 253.4) > 0.5) fail.push(`${spec.id} 이름표 쪽 남쪽 벽에 1층 벽이 없음`);
-    if (wallD(-198, 242) < 1.5) fail.push(`${spec.id} 서쪽 유리 앞이 벽으로 막힘`);
-    if (wallD(door.x, door.z) < 1.5) fail.push(`${spec.id} 출입문이 1층 벽에 막힘`);
+    if (wallD(-168, 253.4) > 0.5) fail.push(`${spec.id} 매장 동쪽 남쪽 벽에 1층 벽이 없음`);
+    const glassBlocked = (x, z, nx, nz) => {
+      for (let t = 0.3; t <= 5; t += 0.4) if (wallD(x + nx * t, z + nz * t) < 0.25) return true;
+      return false;
+    };
+    if (glassBlocked(-197.9, 242, -1, 0)) fail.push(`${spec.id} 채움 벽이 서쪽 유리와 겹침`);
+    if (glassBlocked(-192, 253.35, 0, 1)) fail.push(`${spec.id} 채움 벽이 남쪽 유리와 겹침`);
+    if (wallD(door.x, door.z) < 1.2) fail.push(`${spec.id} 출입문이 1층 벽에 막힘`);
   }
   if (spec.id === 'seongnam-cityhall') {
     if (bump24StorePrompts(spec.id, '')) fail.push('시청점 안내가 기본 주소에서 켜짐');
