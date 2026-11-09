@@ -60,6 +60,30 @@ export function mountBump24Game({
   });
   function syncMute() { const lv = getAudioLevel?.(); ui.setMuted(sfx.muted || !!lv?.muted); }
 
+  // 보상 알림 키(bp24:part|daily|week|month:...) → 화면 문구
+  function rewardLabel(key = '') {
+    const k = String(key).split(':')[1];
+    return k === 'part' ? '참여보상' : k === 'daily' ? '오늘의 순위 보상' : k === 'week' || k === 'weekly' ? '주간 랭킹 보상' : k === 'month' || k === 'monthly' ? '월간 랭킹 보상' : '랭킹 보상';
+  }
+  // 일일 미션 보상처럼: 상자 → 동전 효과음 + 동전이 잔액 칩으로 날아가 쌓임 → 잔액 갱신
+  async function showReward(amount, label) {
+    const box = ui.reward(amount, label);
+    await new Promise((r) => setTimeout(r, 900));
+    try {
+      const [{ coinFly }, { balanceChip, refresh }, { coinSound }] = await Promise.all([
+        import('../ui-v2/kit.js'), import('../ui-v2/econ-ui/hud.js'), import('../ui-v2/econ-ui/coinSound.js'),
+      ]);
+      const to = balanceChip();
+      if (to && box.isConnected) {
+        clearTimeout(box._t);
+        coinSound.play('quest');
+        await coinFly(box.querySelector('[data-coin]') || box, to, { count: 8 });
+        box.remove();
+      }
+      await refresh();
+    } catch { /* 효과가 없어도 상자는 2.6초 뒤 사라짐 */ }
+  }
+
   // ---------- 랭킹 전광판(매장 밖 토템 · 매장 안 화면) ----------
   const selfName = () => { try { return getSelfName?.() || '나'; } catch { return '나'; } }; // 마운트 중엔 부르지 않음(지연 조회)
   setBoardSelf(selfName);
@@ -69,8 +93,13 @@ export function mountBump24Game({
     setInterval(async () => {
       try {
         const notes = await leaderboard.pending();
-        const amount = (notes || []).reduce((s, n) => s + Number(n.amount || 0), 0);
-        if (amount > 0) { ui.reward(amount); await leaderboard.ack(); }
+        const groups = new Map();
+        for (const n of notes || []) {
+          const a = Number(n.amount || 0); if (!(a > 0)) continue;
+          const label = rewardLabel(n.key);
+          groups.set(label, (groups.get(label) || 0) + a);
+        }
+        if (groups.size) { await leaderboard.ack(); for (const [label, amount] of groups) await showReward(amount, label); }
       } catch { /* 서버가 없으면 로컬 전광판 */ }
     }, 8000);
   }
@@ -219,20 +248,21 @@ export function mountBump24Game({
     } else if (fade.phase === 'in' && fade.t >= FADE_SEC) { fade = { t: 0, phase: '' }; ui.setFade(0); busy = false; }
   }
 
+  let limitShownFor = null;
   function outdoorTick(dt, pos) {
     if (active || busy) return;
-    if (!pos) { if (lastNear) ui.setHint(''); lastNear = null; return; }
+    if (!pos) { if (lastNear) ui.setHint(''); lastNear = null; if (limitShownFor) { ui.limit(false); limitShownFor = null; } return; }
     if (ui.boardOpen) return;
     const st = nearestDoor(pos); lastNear = st;
     const bd = nearestBoard(pos), dd = st ? Math.hypot(pos.x - st.door[0], pos.z - st.door[1]) : 1e9;
     lastBoard = bd && bd.d < dd ? bd.st : null;
+    // '오늘 도전 완료' 안내는 매장 문 앞에 처음 섰을 때 한 번만 띄우고, 문에서 벗어나면 바로 닫는다
+    const g0 = !lastBoard && st ? rankGates.get(st.id) : null, limitId = g0?.usedUp ? st.id : null;
+    if (limitId !== limitShownFor) { if (limitId) ui.limit(true, { guest: g0.guest === true }); else ui.limit(false); limitShownFor = limitId; }
     if (lastBoard) ui.setHint(`🏆 ${lastBoard.name || 'BUMP24'} 장보기 랭킹 보기`, true, { act: true, tap: '장보기 랭킹 보기 🏆', key: 'R' });
     else if (st) {
       ui.setHint(`${st.name || 'BUMP24'} 들어가기 · 30초 장보기`, true, { act: true, tap: `${st.name || 'BUMP24'} 들어가기` });
       refreshGate(st.id);
-      const g = rankGates.get(st.id);
-      if (g?.usedUp) ui.limit(true, { guest: g.guest === true });
-      else ui.limit(false);
     }
     else ui.setHint('');
   }

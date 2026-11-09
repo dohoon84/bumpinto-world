@@ -184,13 +184,16 @@ export function createBump24UI({ onGrab, onExit, onMute, onHintTap, onIntroGo, o
       if (n?.querySelector('button')) { n.remove(); n = null; }
       if (!n) { n = document.createElement('div'); n.id = 'bp24-rank-limit'; n.style.cssText = 'position:fixed;left:50%;top:18%;transform:translateX(-50%);z-index:70;padding:12px 18px;border-radius:16px;background:rgba(10,22,48,.94);color:#fff;font:800 18px/1.3 Pretendard,sans-serif;pointer-events:none'; document.body.appendChild(n); }
       n.textContent = '오늘 도전 완료, 연습은 계속 가능';
+      api._lt = setTimeout(() => { n.remove(); }, 4000); // 계속 떠 있지 않게 4초 뒤 닫힘
     },
-    reward(amount) {
-      const n = document.createElement('div'); n.id = 'bp24-rank-reward';
-      n.textContent = `+${amount} bum`;
-      n.style.cssText = 'position:fixed;left:50%;top:46%;transform:translate(-50%,-50%);z-index:80;padding:22px 36px;border-radius:20px;background:#0d1a33;color:#ffd400;font:900 42px Pretendard,sans-serif;box-shadow:0 12px 40px rgba(0,0,0,.35)';
+    /** 보상 상자('참여보상 +20 bum'). 상자를 돌려주고, 부른 쪽이 동전 날리기 후 지운다(안 지우면 2.6초 뒤 자동). */
+    reward(amount, label = '') {
+      const n = document.createElement('div'); n.className = 'bp24-rank-reward';
+      n.innerHTML = `${label ? `<small style="display:block;font:800 16px Pretendard,sans-serif;color:#cfe0ff;margin-bottom:4px">${esc(label)}</small>` : ''}<span data-coin style="display:inline-block;width:34px;height:34px;margin-right:8px;vertical-align:-4px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#fff3a0,#ffc400 55%,#d98e00);box-shadow:inset 0 -3px 0 rgba(0,0,0,.18)"></span>+${Number(amount) || 0} bum`;
+      n.style.cssText = 'position:fixed;left:50%;top:46%;transform:translate(-50%,-50%);z-index:80;padding:18px 34px;border-radius:20px;background:#0d1a33;color:#ffd400;font:900 40px Pretendard,sans-serif;text-align:center;box-shadow:0 12px 40px rgba(0,0,0,.35);pointer-events:none';
       document.body.appendChild(n);
-      setTimeout(() => n.remove(), 2600);
+      n._t = setTimeout(() => n.remove(), 2600);
+      return n;
     },
     intro({ storeName, ranked, sale = [], best = 0, left, cap } = {}) {
       const l = Number(left), c = Number(cap);
