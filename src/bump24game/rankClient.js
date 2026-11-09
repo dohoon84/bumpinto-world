@@ -1,5 +1,6 @@
 // [bump24-rank] 서버 전광판. ?bp24rank=0 이면 이 공급자를 쓰지 않고 기기 기록만 남긴다.
-import { smsBase, deviceId } from '../sms.js';
+import { deviceId } from '../sms.js';
+import { accountBase } from '../account/api.js'; // 로그인 쿠키가 있는 계정 API 주소(api.bumpinto.world). smsBase(workers.dev)로 보내면 쿠키가 안 실려 게스트로 처리된다
 import { attemptCap, LIMIT_MSG } from '../../server/phone/src/bump24/rules.js';
 
 export function bp24RankOn(search = typeof location !== 'undefined' ? location.search : '') {
@@ -21,7 +22,7 @@ async function cfetch(url, opts = {}) {
 
 export function createRankProvider({ base, device } = {}) {
   const meta = new Map();
-  const root = () => (base || smsBase() || '').replace(/\/$/, '');
+  const root = () => (base || accountBase() || '').replace(/\/$/, '');
   const dev = () => { try { return device?.() || deviceId(); } catch { return 'guest'; } };
   async function board(storeId) {
     const b = root();
