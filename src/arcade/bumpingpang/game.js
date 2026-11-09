@@ -18,42 +18,100 @@ export function starsFor(score) {
 
 export function mountBumpingPang({
   root, sfx, ranked = true, storeId = 'arcade-seohyeon', getName = () => '나',
-  onExit, onResult, practice = false,
+  onExit, onResult, onOpenBoard, practice = false, getBest = () => 0,
 } = {}) {
+  const detectTouch = () => {
+    try {
+      return document.body.classList.contains('mobile')
+        || matchMedia('(hover: none) and (pointer: coarse)').matches
+        || (navigator.maxTouchPoints > 0 && matchMedia('(pointer: coarse)').matches);
+    } catch { return false; }
+  };
+  let isTouch = detectTouch();
   const wrap = document.createElement('div');
-  wrap.className = 'arc-pang';
+  wrap.className = 'arc-pang' + (isTouch ? ' is-touch' : ' is-desk');
   wrap.innerHTML = `
-    <div class="arc-pang-hud">
-      <div class="arc-pang-score jelly" data-score-wrap>
-        <span class="lbl">점수</span><b data-score>0</b>
-      </div>
-      <div class="arc-pang-time jelly" data-time-wrap>
-        <span class="lbl">시간</span>
-        <div class="tube"><i data-bar></i></div>
-        <b data-time>${PLAY_SEC}</b>
-      </div>
-      <div class="arc-pang-combo jelly" data-combo-wrap>
-        <span class="lbl">콤보</span><b data-combo>0</b>
-      </div>
-      <button type="button" class="arc-pang-mute jelly-btn" data-mute title="음소거" aria-label="음소거">🔊</button>
-      <button type="button" class="arc-pang-x jelly-btn" data-exit title="나가기" aria-label="나가기">✕</button>
-    </div>
-    <canvas class="arc-pang-cv jelly-board" width="640" height="640"></canvas>
-    <div class="arc-pang-fx" data-fx></div>
-    <div class="arc-pang-toast" data-toast hidden></div>
-    <div class="arc-pang-float" data-floats></div>
-    <div class="arc-pang-intro" data-intro>
-      <div class="box">
-        <div class="mascot logo-bounce" aria-hidden="true">💜</div>
-        <h2 class="logo-bounce">범핑팡</h2>
-        <p>같은 친구 3명 이상 모아 팡!<br/><b>60초</b> 동안 귀엽게 겨뤄요.</p>
-        <p class="tag">${practice || !ranked ? '연습 모드 · 순위 기록 안 함' : '랭킹 도전 ★'}</p>
-        <button type="button" data-go>시작!</button>
+    <div class="arc-pang-orient" data-orient hidden>
+      <div class="orient-card">
+        <div class="phone-spin" aria-hidden="true">
+          <div class="phone-body"><span></span></div>
+        </div>
+        <div class="orient-mascot" aria-hidden="true"><svg class="bum-face" viewBox="0 0 80 80" aria-hidden="true"><ellipse cx="40" cy="46" rx="28" ry="26" fill="#6ea8ff"/><circle cx="22" cy="18" r="12" fill="#6ea8ff"/><circle cx="58" cy="18" r="12" fill="#6ea8ff"/><circle cx="22" cy="18" r="7" fill="#3d6fd9"/><circle cx="58" cy="18" r="7" fill="#3d6fd9"/><ellipse cx="40" cy="52" rx="22" ry="18" fill="#8fc0ff"/><circle cx="30" cy="44" r="5" fill="#1a1030"/><circle cx="50" cy="44" r="5" fill="#1a1030"/><circle cx="31.5" cy="42.5" r="1.6" fill="#fff"/><circle cx="51.5" cy="42.5" r="1.6" fill="#fff"/><ellipse cx="28" cy="52" rx="5" ry="3" fill="#ff8fb8" opacity=".85"/><ellipse cx="52" cy="52" rx="5" ry="3" fill="#ff8fb8" opacity=".85"/><path d="M34 56 Q40 62 46 56" stroke="#1a1030" stroke-width="2.2" fill="none" stroke-linecap="round"/></svg></div>
+        <p class="orient-title">휴대폰을 세로로 돌려 주세요</p>
+        <p class="orient-sub">범핑팡은 세로 화면에서만 플레이할 수 있어요</p>
       </div>
     </div>
-    <div class="arc-pang-count" data-count hidden></div>
-    <div class="arc-pang-result" data-result hidden></div>
+    <div class="arc-pang-phone" data-phone>
+      <div class="arc-pang-sky" aria-hidden="true">
+        <i class="cloud c1"></i><i class="cloud c2"></i><i class="cloud c3"></i>
+        <i class="flower f1"></i><i class="flower f2"></i><i class="flower f3"></i>
+        <i class="hill"></i>
+      </div>
+      <header class="arc-pang-top">
+        <div class="arc-pang-scoreblock" data-score-wrap>
+          <span class="lbl">점수</span>
+          <b class="score-num" data-score>0</b>
+          <span class="best">최고 <em data-best>0</em></span>
+        </div>
+        <div class="arc-pang-topbtns">
+          <button type="button" class="arc-pang-iconbtn" data-mute title="음소거" aria-label="음소거">🔊</button>
+          <button type="button" class="arc-pang-iconbtn pause" data-exit title="나가기" aria-label="나가기">⏸</button>
+        </div>
+      </header>
+      <div class="arc-pang-stage">
+        <div class="arc-pang-boardwrap">
+          <canvas class="arc-pang-cv" width="640" height="640"></canvas>
+        </div>
+        <aside class="arc-pang-mascot" data-mascot aria-hidden="true">
+          <div class="mascot-bubble" data-mascot-say hidden>화이팅!</div>
+          <div class="mascot-body"><svg class="bum-face" viewBox="0 0 80 80" aria-hidden="true"><ellipse cx="40" cy="46" rx="28" ry="26" fill="#6ea8ff"/><circle cx="22" cy="18" r="12" fill="#6ea8ff"/><circle cx="58" cy="18" r="12" fill="#6ea8ff"/><circle cx="22" cy="18" r="7" fill="#3d6fd9"/><circle cx="58" cy="18" r="7" fill="#3d6fd9"/><ellipse cx="40" cy="52" rx="22" ry="18" fill="#8fc0ff"/><circle cx="30" cy="44" r="5" fill="#1a1030"/><circle cx="50" cy="44" r="5" fill="#1a1030"/><circle cx="31.5" cy="42.5" r="1.6" fill="#fff"/><circle cx="51.5" cy="42.5" r="1.6" fill="#fff"/><ellipse cx="28" cy="52" rx="5" ry="3" fill="#ff8fb8" opacity=".85"/><ellipse cx="52" cy="52" rx="5" ry="3" fill="#ff8fb8" opacity=".85"/><path d="M34 56 Q40 62 46 56" stroke="#1a1030" stroke-width="2.2" fill="none" stroke-linecap="round"/></svg></div>
+        </aside>
+      </div>
+      <footer class="arc-pang-bottom">
+        <div class="arc-pang-timebar" data-time-wrap>
+          <span class="time-ico" aria-hidden="true">⏱</span>
+          <div class="tube"><i data-bar></i></div>
+          <b data-time>${PLAY_SEC}</b>
+        </div>
+        <div class="arc-pang-fever" data-combo-wrap>
+          <span class="lbl">콤보</span>
+          <div class="fever-track"><i data-fever></i></div>
+          <b data-combo>0</b>
+        </div>
+      </footer>
+      <div class="arc-pang-fx" data-fx></div>
+      <div class="arc-pang-toast" data-toast hidden></div>
+      <div class="arc-pang-float" data-floats></div>
+      <div class="arc-pang-intro" data-intro>
+        <div class="intro-inner">
+          <div class="logo-wrap logo-bounce">
+            <div class="logo-bubble">
+              <span class="logo-mark" aria-hidden="true"><svg class="bum-face" viewBox="0 0 80 80" aria-hidden="true"><ellipse cx="40" cy="46" rx="28" ry="26" fill="#6ea8ff"/><circle cx="22" cy="18" r="12" fill="#6ea8ff"/><circle cx="58" cy="18" r="12" fill="#6ea8ff"/><circle cx="22" cy="18" r="7" fill="#3d6fd9"/><circle cx="58" cy="18" r="7" fill="#3d6fd9"/><ellipse cx="40" cy="52" rx="22" ry="18" fill="#8fc0ff"/><circle cx="30" cy="44" r="5" fill="#1a1030"/><circle cx="50" cy="44" r="5" fill="#1a1030"/><circle cx="31.5" cy="42.5" r="1.6" fill="#fff"/><circle cx="51.5" cy="42.5" r="1.6" fill="#fff"/><ellipse cx="28" cy="52" rx="5" ry="3" fill="#ff8fb8" opacity=".85"/><ellipse cx="52" cy="52" rx="5" ry="3" fill="#ff8fb8" opacity=".85"/><path d="M34 56 Q40 62 46 56" stroke="#1a1030" stroke-width="2.2" fill="none" stroke-linecap="round"/></svg></span>
+              <span class="logo-text">범핑팡</span>
+            </div>
+          </div>
+          <div class="howto-card">
+            <div class="howto-head">어떻게 하나요? <span class="pg">1/3</span></div>
+            <div class="howto-body">
+              <div class="howto-illust" aria-hidden="true">
+                <div class="mini-tiles">
+                  <i class="t t1"></i><i class="t t2"></i><i class="t t3"></i>
+                </div>
+                <div class="tap-hand">👆</div>
+              </div>
+              <p>같은 친구 <b>3명 이상</b>을<br/>탭·스와이프로 모아 팡!</p>
+            </div>
+          </div>
+          <p class="tag">${practice || !ranked ? '연습 모드 · 순위 기록 안 함' : '랭킹 도전 ★'}</p>
+          <button type="button" class="candy-go" data-go>시작</button>
+          <button type="button" class="ghost-rank" data-open-rank>순위판</button>
+        </div>
+      </div>
+      <div class="arc-pang-count" data-count hidden></div>
+      <div class="arc-pang-result" data-result hidden></div>
+    </div>
   `;
+
   root.appendChild(wrap);
   try { prewarmSprites(); } catch { /* */ }
 
@@ -62,9 +120,11 @@ export function mountBumpingPang({
   const el = {
     score: wrap.querySelector('[data-score]'),
     scoreWrap: wrap.querySelector('[data-score-wrap]'),
+    best: wrap.querySelector('[data-best]'),
     time: wrap.querySelector('[data-time]'),
     timeWrap: wrap.querySelector('[data-time-wrap]'),
     bar: wrap.querySelector('[data-bar]'),
+    fever: wrap.querySelector('[data-fever]'),
     combo: wrap.querySelector('[data-combo]'),
     comboWrap: wrap.querySelector('[data-combo-wrap]'),
     toast: wrap.querySelector('[data-toast]'),
@@ -73,6 +133,9 @@ export function mountBumpingPang({
     result: wrap.querySelector('[data-result]'),
     count: wrap.querySelector('[data-count]'),
     mute: wrap.querySelector('[data-mute]'),
+    orient: wrap.querySelector('[data-orient]'),
+    mascot: wrap.querySelector('[data-mascot]'),
+    mascotSay: wrap.querySelector('[data-mascot-say]'),
   };
 
   const seed = hashSeed(`${storeId}|${new Date().toISOString().slice(0, 10)}|pang`);
@@ -83,6 +146,11 @@ export function mountBumpingPang({
   let raf = 0, last = 0, acc = 0, blinkT = 0, blinkOn = false;
   let anim = null;
   let cellAnim = freshCellAnim();
+  let hover = null;
+  let orientBlocked = false;
+  let bestScore = 0;
+  try { bestScore = Math.max(0, Number(getBest?.()) || 0); } catch { bestScore = 0; }
+  if (el.best) el.best.textContent = String(bestScore);
 
   function freshCellAnim() {
     return Array.from({ length: ROWS }, () => Array.from({ length: COLS }, () => ({ y: 0, sx: 1, sy: 1, pop: 0, flash: 0 })));
@@ -111,8 +179,11 @@ export function mountBumpingPang({
     const tNow = performance.now() / 1000;
     ctx.clearRect(0, 0, cv.width, cv.height);
     const bg = ctx.createLinearGradient(0, 0, 0, cv.height);
-    bg.addColorStop(0, '#1e2a52'); bg.addColorStop(1, '#0c1220');
+    bg.addColorStop(0, '#fff6d6'); bg.addColorStop(1, '#ffe0a8');
     ctx.fillStyle = bg; ctx.fillRect(0, 0, cv.width, cv.height);
+    // soft board wells
+    ctx.fillStyle = 'rgba(120, 70, 20, 0.08)';
+    roundRect(ctx, pad - 2, pad - 2, cv.width - pad * 2 + 4, cv.height - pad * 2 + 4, 18); ctx.fill();
 
     ctx.save();
     if (shake || punch) {
@@ -122,8 +193,12 @@ export function mountBumpingPang({
 
     for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
       const x = pad + c * s, y = pad + r * s;
-      ctx.fillStyle = 'rgba(255,255,255,0.07)';
-      roundRect(ctx, x + 2, y + 2, s - 4, s - 4, 14); ctx.fill();
+      ctx.fillStyle = 'rgba(255,255,255,0.55)';
+      roundRect(ctx, x + 3, y + 3, s - 6, s - 6, 16); ctx.fill();
+      if (hover && hover.r === r && hover.c === c && !(sel && sel.r === r && sel.c === c)) {
+        ctx.fillStyle = 'rgba(126,182,255,0.35)';
+        roundRect(ctx, x + 2, y + 2, s - 4, s - 4, 16); ctx.fill();
+      }
 
       const cell = board[r][c];
       if (!cell) continue;
@@ -166,10 +241,31 @@ export function mountBumpingPang({
       ctx.restore();
 
       if (sel && sel.r === r && sel.c === c) {
-        ctx.strokeStyle = '#ffe66d'; ctx.lineWidth = 4;
-        ctx.shadowColor = '#ffe66d'; ctx.shadowBlur = 14;
+        ctx.strokeStyle = '#ffe66d'; ctx.lineWidth = 5;
+        ctx.shadowColor = '#ffe66d'; ctx.shadowBlur = 16;
         roundRect(ctx, x + 3 + ox, y + 3 + oy, s - 6, s - 6, 16); ctx.stroke();
         ctx.shadowBlur = 0;
+      }
+    }
+
+    // 선택 후 인접 4칸 힌트(글로우 + 화살표) — PC 마우스 UX
+    if (sel && playing && !busy) {
+      const dirs = [[-1, 0, '▲'], [1, 0, '▼'], [0, -1, '◀'], [0, 1, '▶']];
+      for (const [dr, dc, arrow] of dirs) {
+        const nr = sel.r + dr, nc = sel.c + dc;
+        if (nr < 0 || nc < 0 || nr >= ROWS || nc >= COLS || !board[nr][nc]) continue;
+        const x = pad + nc * s, y = pad + nr * s;
+        ctx.fillStyle = 'rgba(255, 230, 109, 0.28)';
+        roundRect(ctx, x + 2, y + 2, s - 4, s - 4, 16); ctx.fill();
+        ctx.strokeStyle = 'rgba(255, 180, 40, 0.9)'; ctx.lineWidth = 3;
+        roundRect(ctx, x + 4, y + 4, s - 8, s - 8, 14); ctx.stroke();
+        ctx.fillStyle = '#fff';
+        ctx.strokeStyle = '#c47800';
+        ctx.lineWidth = 3;
+        ctx.font = `900 ${Math.floor(s * 0.28)}px system-ui, sans-serif`;
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.strokeText(arrow, x + s / 2, y + s / 2);
+        ctx.fillText(arrow, x + s / 2, y + s / 2);
       }
     }
 
@@ -257,29 +353,70 @@ export function mountBumpingPang({
       void el.scoreWrap.offsetWidth;
       el.scoreWrap.classList.add('bump');
     }
+    if (score > bestScore) {
+      bestScore = score;
+      if (el.best) el.best.textContent = String(bestScore);
+    }
     el.time.textContent = String(Math.max(0, Math.ceil(left)));
     const prevCombo = el.combo.textContent;
     const nextCombo = String(comboShow);
     el.combo.textContent = nextCombo;
     const pct = Math.max(0, left / PLAY_SEC) * 100;
     if (el.bar) el.bar.style.width = `${pct}%`;
+    const fever = Math.min(100, comboShow * 20);
+    if (el.fever) el.fever.style.width = `${fever}%`;
     el.timeWrap?.classList.toggle('urgent', left <= 10);
     wrap.classList.toggle('is-urgent', playing && left <= 10);
-    el.comboWrap.classList.toggle('glow', comboShow >= 2);
+    el.comboWrap?.classList.toggle('glow', comboShow >= 2);
+    el.comboWrap?.classList.toggle('fever-on', comboShow >= 4);
     if (prevCombo !== nextCombo && comboShow >= 2) {
-      el.comboWrap.classList.remove('pop');
-      void el.comboWrap.offsetWidth;
-      el.comboWrap.classList.add('pop');
+      el.comboWrap?.classList.remove('pop');
+      void el.comboWrap?.offsetWidth;
+      el.comboWrap?.classList.add('pop');
+      cheerMascot(comboShow >= 4 ? '피버!' : `콤보 x${comboShow}!`);
     }
+  }
+
+  function cheerMascot(say) {
+    if (!el.mascot) return;
+    el.mascot.classList.remove('cheer');
+    void el.mascot.offsetWidth;
+    el.mascot.classList.add('cheer');
+    if (el.mascotSay && say) {
+      el.mascotSay.hidden = false;
+      el.mascotSay.textContent = say;
+      clearTimeout(el.mascotSay._t);
+      el.mascotSay._t = setTimeout(() => { el.mascotSay.hidden = true; }, 900);
+    }
+  }
+
+  function syncOrient() {
+    isTouch = detectTouch() || wrap.classList.contains('is-touch');
+    wrap.classList.toggle('is-touch', isTouch);
+    wrap.classList.toggle('is-desk', !isTouch);
+    // 모바일(터치)만 세로 강제. PC는 가로·세로 모두 플레이 가능
+    if (!isTouch) {
+      orientBlocked = false;
+      if (el.orient) el.orient.hidden = true;
+      wrap.classList.remove('is-landscape');
+      return;
+    }
+    const land = window.innerWidth > window.innerHeight;
+    orientBlocked = land;
+    wrap.classList.toggle('is-landscape', land);
+    if (el.orient) el.orient.hidden = !land;
   }
 
   function cellFromEvent(e) {
     const rect = cv.getBoundingClientRect();
-    const pt = e.touches ? e.touches[0] || e.changedTouches[0] : e;
+    if (!rect.width || !rect.height) return null;
+    const pt = e.touches ? e.touches[0] || e.changedTouches?.[0] : e;
+    if (!pt) return null;
     const x = (pt.clientX - rect.left) * (cv.width / rect.width);
     const y = (pt.clientY - rect.top) * (cv.height / rect.height);
     const { pad, s } = cellSize();
-    const c = Math.floor((x - pad) / s), r = Math.floor((y - pad) / s);
+    // 여유 히트: 보드 가장자리 2px 안쪽까지 허용
+    const c = Math.floor((x - pad + 2) / s), r = Math.floor((y - pad + 2) / s);
     if (r < 0 || c < 0 || r >= ROWS || c >= COLS) return null;
     return { r, c };
   }
@@ -387,7 +524,7 @@ export function mountBumpingPang({
   }
 
   function onPointer(e) {
-    if (!playing || over || busy) return;
+    if (orientBlocked || !playing || over || busy) return;
     e.preventDefault();
     const cell = cellFromEvent(e);
     if (!cell || !board[cell.r][cell.c]) return;
@@ -399,21 +536,56 @@ export function mountBumpingPang({
   }
 
   let dragFrom = null;
+  let dragStartPt = null;
+  let dragMoved = false;
+  const DRAG_THRESH = 8; // px — 작은 드래그로도 스왑
+
   function onDown(e) {
-    if (!playing || over || busy) return;
+    if (orientBlocked || !playing || over || busy) return;
+    try { cv.setPointerCapture?.(e.pointerId); } catch { /* */ }
     dragFrom = cellFromEvent(e);
+    dragStartPt = { x: e.clientX, y: e.clientY };
+    dragMoved = false;
     onPointer(e);
   }
-  function onUp(e) {
-    if (!playing || over || busy || !dragFrom) { dragFrom = null; return; }
+  function onMove(e) {
+    if (orientBlocked) return;
     const cell = cellFromEvent(e);
-    if (cell && sel && areAdjacent(dragFrom, cell) && (cell.r !== dragFrom.r || cell.c !== dragFrom.c)) {
-      if (sel.r === dragFrom.r && sel.c === dragFrom.c) {
+    if (!isTouch) {
+      const next = cell && board[cell.r]?.[cell.c] ? cell : null;
+      if (!hover || !next || hover.r !== next.r || hover.c !== next.c) {
+        hover = next; draw();
+      } else if (!next && hover) { hover = null; draw(); }
+    }
+    if (!playing || over || busy || !dragFrom || !dragStartPt) return;
+    const dx = e.clientX - dragStartPt.x, dy = e.clientY - dragStartPt.y;
+    if (Math.hypot(dx, dy) < DRAG_THRESH) return;
+    dragMoved = true;
+    // 방향 스냅: 가장 큰 축으로 인접 칸 스왑
+    let tr = dragFrom.r, tc = dragFrom.c;
+    if (Math.abs(dx) > Math.abs(dy)) tc += dx > 0 ? 1 : -1;
+    else tr += dy > 0 ? 1 : -1;
+    if (tr < 0 || tc < 0 || tr >= ROWS || tc >= COLS || !board[tr][tc]) return;
+    if (!areAdjacent(dragFrom, { r: tr, c: tc })) return;
+    const a = dragFrom;
+    dragFrom = null; dragStartPt = null; sel = null;
+    doSwapSafe(a, { r: tr, c: tc });
+  }
+  function onUp(e) {
+    if (!dragFrom) { dragFrom = null; dragStartPt = null; return; }
+    // 클릭-클릭: 이미 onDown 에서 선택됨. 드래그 안 했으면 인접 클릭 스왑은 onPointer 가 처리.
+    // 포인터를 인접 칸에서 떼면 스왑
+    if (!dragMoved && playing && !over && !busy && !orientBlocked) {
+      const cell = cellFromEvent(e);
+      if (cell && sel && areAdjacent(sel, cell) && (cell.r !== sel.r || cell.c !== sel.c)) {
         const a = sel; sel = null;
         doSwapSafe(a, cell);
       }
     }
-    dragFrom = null;
+    dragFrom = null; dragStartPt = null; dragMoved = false;
+  }
+  function onLeave() {
+    if (hover) { hover = null; draw(); }
   }
 
   function tick(ts) {
@@ -424,7 +596,7 @@ export function mountBumpingPang({
     blinkT += dt;
     if (blinkT > 2.4) { blinkOn = true; if (blinkT > 2.55) { blinkOn = false; blinkT = 0; } }
 
-    if (playing && !over) {
+    if (playing && !over && !orientBlocked) {
       left -= dt;
       if (left <= 10) {
         acc += dt;
@@ -477,6 +649,8 @@ export function mountBumpingPang({
     ev?.preventDefault?.();
     ev?.stopPropagation?.();
     if (playing) return;
+    syncOrient();
+    if (orientBlocked) return; // 세로로 돌려야 시작
     if (over) { el.result.hidden = true; over = false; }
     if (!el.count.hidden) return;
     countdownThenPlay();
@@ -492,17 +666,17 @@ export function mountBumpingPang({
     const finalScore = score;
     const stars = starsFor(finalScore);
     el.result.hidden = false;
-    el.result.innerHTML = `<div class="box cute">
+    el.result.innerHTML = `<div class="box cute result-v2">
       <div class="rays" aria-hidden="true"></div>
       <div class="confetti" data-confetti></div>
       <div class="banner">시간 끝!</div>
-      <div class="mascot big">🎉💜</div>
+      <div class="mascot big result-bum" aria-hidden="true"><svg class="bum-face" viewBox="0 0 80 80"><ellipse cx="40" cy="46" rx="28" ry="26" fill="#6ea8ff"/><circle cx="22" cy="18" r="12" fill="#6ea8ff"/><circle cx="58" cy="18" r="12" fill="#6ea8ff"/><circle cx="22" cy="18" r="7" fill="#3d6fd9"/><circle cx="58" cy="18" r="7" fill="#3d6fd9"/><ellipse cx="40" cy="52" rx="22" ry="18" fill="#8fc0ff"/><circle cx="30" cy="44" r="5" fill="#1a1030"/><circle cx="50" cy="44" r="5" fill="#1a1030"/><path d="M34 56 Q40 62 46 56" stroke="#1a1030" stroke-width="2.2" fill="none" stroke-linecap="round"/></svg></div>
       <p class="big" data-roll>0점</p>
       <div class="star-row" data-stars><span class="dim">★</span><span class="dim">★</span><span class="dim">★</span></div>
       <div class="rank-badge" data-badge>${practice || !ranked ? '연습 기록' : '랭킹 도전'}</div>
-      <p>최고 콤보 ${comboShow}</p>
+      <p class="sub">최고 콤보 ${comboShow} · 최고 ${Math.max(bestScore, finalScore)}</p>
       <div class="row">
-        <button type="button" data-again>한 판 더</button>
+        <button type="button" class="candy-go" data-again>한 판 더</button>
         <button type="button" data-board>순위판</button>
         <button type="button" data-leave>오락실로</button>
       </div>
@@ -557,6 +731,8 @@ export function mountBumpingPang({
 
   function dispose(exit = false) {
     cancelAnimationFrame(raf);
+    try { window.removeEventListener('resize', onOrient); } catch { /* */ }
+    try { window.removeEventListener('orientationchange', onOrient); } catch { /* */ }
     try { sfx?.setUrgentBgm?.(false); } catch { /* */ }
     try { sfx?.stopBgm?.(); } catch { /* */ }
     wrap.remove();
@@ -564,15 +740,24 @@ export function mountBumpingPang({
   }
 
   cv.addEventListener('pointerdown', onDown);
+  cv.addEventListener('pointermove', onMove);
   cv.addEventListener('pointerup', onUp);
+  cv.addEventListener('pointercancel', onUp);
+  cv.addEventListener('pointerleave', onLeave);
   wrap.querySelector('[data-go]')?.addEventListener('click', start);
   wrap.querySelector('[data-exit]')?.addEventListener('click', () => dispose(true));
+  wrap.querySelector('[data-open-rank]')?.addEventListener('click', () => onOpenBoard?.());
   el.mute.addEventListener('click', () => {
     const next = !sfx?.muted;
     sfx?.setMuted?.(next);
     el.mute.textContent = next ? '🔇' : '🔊';
     if (next) sfx?.stopBgm?.(); else if (playing && !over) sfx?.startBgm?.();
   });
+
+  function onOrient() { syncOrient(); }
+  window.addEventListener('resize', onOrient);
+  window.addEventListener('orientationchange', onOrient);
+  syncOrient();
 
   syncHud(); draw();
   raf = requestAnimationFrame(tick);

@@ -6,7 +6,7 @@ import { mountArcadeExterior } from './exterior.js';
 import { buildArcadeInterior } from './interior.js';
 import { createArcadeSfx } from './sfx.js';
 import { createArcadeUI } from './ui.js';
-import { createArcadeRankProvider } from './rank.js';
+import { createArcadeRankProvider, localBoard } from './rank.js';
 import { mountBumpingPang } from './bumpingpang/game.js';
 
 export { arcadeEnabled, arcadeAtSpot, ARCADE_AT } from './flag.js';
@@ -149,11 +149,25 @@ export function mountArcade({
 
   async function openBoard(period = 'today') {
     const rows = await rank.top({ period });
+    const name = (() => { try { return selfName?.() || ''; } catch { return ''; } })();
+    // 통합 보드: PC·모바일 같은 rows. 내 행은 실데이터에서만 골라 상단 고정
+    const mine = name
+      ? (rows.find((r) => String(r.name || '') === name) || null)
+      : (rows.find((r) => r.me || r.self) || null);
     ui.showBoard({
-      period, rows,
+      period, rows, me: mine,
       onClose: () => ui.hideBoard(),
       onTab: (p) => openBoard(p),
     });
+  }
+
+  function bestScoreLocal() {
+    try {
+      const rows = localBoard('today');
+      const name = (() => { try { return selfName?.() || ''; } catch { return ''; } })();
+      const mine = name ? rows.find((r) => r.name === name) : rows[0];
+      return Math.max(0, Number(mine?.score) || Number(rows[0]?.score) || 0);
+    } catch { return 0; }
   }
 
   async function startPang() {
@@ -180,6 +194,8 @@ export function mountArcade({
       ranked,
       practice: !ranked,
       getName: selfName,
+      getBest: bestScoreLocal,
+      onOpenBoard: () => openBoard('today'),
       onExit: () => { pang = null; ui.root.classList.remove('is-pang'); resumeWorldOst(); ui.setCabHint('범핑팡 하기', true, { act: true, tap: '범핑팡 하기', key: 'F' }); },
       onResult: async ({ score, ranked: rec, name, openBoard: wantBoard }) => {
         try { await rank.submit({ name, score, ranked: rec }); } catch { /* local ok */ }
@@ -205,6 +221,7 @@ export function mountArcade({
   function onKey(e) {
     if (pang) {
       if (e.code === 'Escape') { pang.dispose(); pang = null; ui.root.classList.remove('is-pang'); resumeWorldOst(); ui.setCabHint('범핑팡 하기', true, { act: true, tap: '범핑팡 하기', key: 'F' }); return true; }
+      if (e.code === 'KeyR' && !e.repeat) { openBoard(); return true; } // 통합 순위판 (PC·모바일 동일)
       return true; // swallow while playing
     }
     if (e.code === 'KeyE' && !e.repeat) {
