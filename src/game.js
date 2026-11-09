@@ -218,6 +218,9 @@ const startDeferredBoot = (hasPassport) => {
   // 로딩 화면이 한 번 그려진 다음에 무거운 빌드 시작
   requestAnimationFrame(() => setTimeout(go, 0));
 };
+const showUiV2Start = !shot && !!uiV2 && !lockedBeforeOpen && !(passportEnter && readSavedPassport()) && !autoEnter;
+// [ui-v2] index.html 조기 로그인 껍데기: 시작화면을 안 타는 경로에서는 바로 치운다(타는 경로는 openStart 가 치움)
+if (!showUiV2Start) import('./ui-v2/earlyStart.js').then((m) => m.dismissEarlyStart()).catch(() => {});
 if (shot) document.body.classList.remove('in-gate');
 else if (lockedBeforeOpen) openWorldGate({ onEnter: handleGateEnter });
 else if (passportEnter && readSavedPassport()) passportQueued = true;

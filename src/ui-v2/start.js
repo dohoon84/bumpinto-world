@@ -3,12 +3,13 @@
 //   배경은 JPG 2장(DOM)이라 WebGL 드로우콜 0. 화면을 떠나면 노드를 지워 이미지 메모리도 놓는다.
 import { el, esc, ICON, headHtml, tagHtml } from './kit.js';
 import { setTop, liveChip, langChip, contributeChip } from './topbar.js';
-import { googleButton, requestGoogleSignIn, googleNotReadyText, GOOGLE_G_SVG } from './google.js';
+import { googleButton, requestGoogleSignIn, googleNotReadyText, googleSignInReady, onGoogleReady, GOOGLE_G_SVG } from './google.js';
 import { regionSummary, readLastStation, stationLabel } from './data.js';
 import { tr, isEn, onLangChange } from '../i18n.js';
 import { REPO_URL } from '../worldGate.js';
 import { trackEvent } from '../analytics.js';
 import { mountBgVideo } from '../landing/bgVideo.js';
+import { dismissEarlyStart, takeEarlyPending } from './earlyStart.js';
 
 const SCENES = [
   { img: 'ui-v2/start-a.jpg', ko: '정자역 광장 · 실제 게임 화면', en: 'Jeongja Station Plaza · in-game' },
@@ -24,6 +25,15 @@ const SCENE_MS = 3000;
  *   입장 카드의 계정 모드(#30 lobby.js is-account: 계정 캐릭터로 바로 입장)는 lobby 쪽이 스스로 판단 — 여기서는 그 훅에 기대지 않는다.
  */
 export function openStart({ region, onGuest, onContinue, onGoogle, onAccount, defaultAt = null }) {
+  const pending = takeEarlyPending();
+  // 껍데기에서 이미 게스트를 눌렀으면 실제 시작화면을 그리지 않고 바로 월드 선택으로
+  if (pending === 'guest') {
+    dismissEarlyStart();
+    trackEvent('uiv2_start_guest', { early: 1 });
+    onGuest();
+    return { close() {} };
+  }
+
   const base = import.meta.env.BASE_URL;
   const root = el('div', 'v2-screen v2-start');
   root.id = 'v2-start';
@@ -36,6 +46,7 @@ export function openStart({ region, onGuest, onContinue, onGoogle, onAccount, de
     <a class="v2-chip v2-studio" href="https://crazylabs.co.kr" target="_blank" rel="noopener"></a>`;
   document.body.appendChild(root);
   document.body.classList.add('v2-in-start');
+  dismissEarlyStart();
 
   const logo = root.querySelector('.v2-logo');
   const panel = root.querySelector('.v2-start-panel');
@@ -141,5 +152,28 @@ export function openStart({ region, onGuest, onContinue, onGoogle, onAccount, de
   });
 
   render();
+
+  // 껍데기에서 Google을 먼저 눌렀으면 핸들러 등록을 잠깐 기다린 뒤 로그인 이어가기
+  if (pending === 'google') {
+    trackEvent('uiv2_start_google', { early: 1 });
+    (async () => {
+      if (!alive) return;
+      if (!googleSignInReady()) {
+        await new Promise((resolve) => {
+          let off = () => {};
+          const t = setTimeout(() => { off(); resolve(); }, 2500);
+          off = onGoogleReady(() => { clearTimeout(t); resolve(); });
+        });
+      }
+      if (!alive) return;
+      const r = await requestGoogleSignIn();
+      if (!alive) return;
+      if (r.ok) { close(); (onGoogle || onGuest)(r.account); return; }
+      msg = r.reason === 'not_ready' ? googleNotReadyText() : tr('로그인하지 못했어요. 다시 시도하거나 게스트로 계속해 주세요.', 'Sign-in failed. Try again or continue as a guest.');
+      const m = panel.querySelector('.v2-msg');
+      if (m) { m.hidden = false; m.textContent = msg; }
+    })();
+  }
+
   return { close };
 }
