@@ -1,5 +1,6 @@
 // [arcade] 오락실 내부 Scene — 네온 바닥 + 오락기 3대(가운데가 범핑팡)
 import * as THREE from 'three';
+import { createAvatar } from '../entities/avatar.js';
 
 export function buildArcadeInterior({ renderer = null, storeName = 'BUMP 오락실' } = {}) {
   const scene = new THREE.Scene();
@@ -53,9 +54,17 @@ export function buildArcadeInterior({ renderer = null, storeName = 'BUMP 오락�
   const board = makeSign('범핑팡 랭킹 · R', '#fff', '#152238');
   board.position.set(3.2, 1.8, -3.05); board.scale.set(0.7, 0.7, 0.7); scene.add(board);
 
+  // 이름표·말풍선이 selfInterior.player 를 보므로 아바타를 둔다 (오락실에선 서 있기만)
+  const me = createAvatar({ color: '#5b8cff' });
+  me.position.set(0, 0, 1.2);
+  me.rotation.y = Math.PI; // 오락기 쪽을 봄
+  me.userData.jumpY = 0;
+  me.userData.sit = '';
+  scene.add(me);
+
   const clock = new THREE.Clock();
   return {
-    scene, camera, cabinets, board,
+    scene, camera, player: me, cabinets, board,
     dispose() {
       scene.traverse((o) => {
         if (o.geometry) o.geometry.dispose?.();
