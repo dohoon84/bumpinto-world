@@ -26,9 +26,9 @@ export function createGameplay({ interior, ui, sfx, storeId, storeName, onExitSt
   ui.resetTotal();
   ui.setHud({ time: PLAY_SEC, total: 0, kg: 0, maxKg: interior.basket.maxKg });
 
-  function startCountdown() {
-    ranked = gate ? !!gate.ranked : !rankedUsed(storeId, dateKey);
-    if (gate?.usedUp) ui.limit?.(true, { guest: gate.guest === true });
+  function startCountdown(practiceOnly = false) {
+    ranked = practiceOnly ? false : (gate ? !!gate.ranked : !rankedUsed(storeId, dateKey));
+    if (gate?.usedUp && !practiceOnly) ui.limit?.(true, { guest: gate.guest === true });
     ui.setMode(ranked); ui.hideIntro();
     phase = PHASE.COUNTDOWN; countLeft = COUNT_SEC; lastSec = COUNT_SEC + 1;
     ui.showHud(true); ui.setHud({ time: PLAY_SEC, total: 0, kg: 0 });
@@ -140,17 +140,17 @@ export function createGameplay({ interior, ui, sfx, storeId, storeName, onExitSt
     try { window.__jj = window.__jj || {}; window.__jj.bump24LastRun = payload; } catch { /* */ }
     sfx.fanfare(isBest);
     const show = () => ui.showResult({
-      score, best, isBest, ranked, kg, combo: maxCombo, spills, left: gate?.ranked ? gate.left : 0, cap: gate?.cap,
+      score, best, isBest, ranked, kg, combo: maxCombo, spills, left: gate?.ranked && Number.isFinite(Number(gate.left)) ? Math.max(0, Number(gate.left) - (ranked ? 1 : 0)) : 0, cap: gate?.cap,
       items: items.map((it) => ({ name: it.item.name, sale: it.sale })),
-      onRetry: () => restart(), onExit: () => onExitStore?.(),
+      onRetry: () => restart(), onPractice: () => restart(true), onExit: () => onExitStore?.(),
       onBoard: () => ui.showBoard({ storeId, storeName, me: name, onClose: show }),
     });
     show();
   }
-  function restart() {
+  function restart(practiceOnly = false) {
     ui.hideModal(); interior.basket.clear(); interior.clearFloor(); interior.restock(); interior.setArrow(true);
     interior.setMode('follow'); interior.setView(-1.0, 1.2, Math.PI, 0.5, 3.0);
-    ui.resetTotal(); startCountdown();
+    ui.resetTotal(); startCountdown(practiceOnly);
   }
 
   // ---------- 매 프레임 ----------
