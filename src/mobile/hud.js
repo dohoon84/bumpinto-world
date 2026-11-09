@@ -501,6 +501,20 @@ export function mountMobileHud({ handset } = {}) {
     if (dp) add(dp.open ? t('문 닫기', 'Close gate') : t('문 열기', 'Open gate'), 'door', key('KeyG'), false);
     const dn = $('donate-near-btn');
     if (shown(dn)) add(t('전단지', 'Flyer'), 'board', clk(dn), false);
+    // [arcade] 오락실 — E/F/R 대신 터치 행동 버튼 (BUMP24 문 앞과 같은 패턴)
+    const arc = J?.arcadeGame;
+    if (arc && !S?.active) {
+      if (arc.active && !arc.playing) {
+        A.riding = true; // 안에서는 걷기 대신 행동 강조
+        add(t('범핑팡', 'Play'), 'board', () => arc.actPlay?.() || pressKey('KeyF'));
+        add(t('나가기', 'Exit'), 'door', () => arc.actLeave?.() || pressKey('KeyE'), false);
+        return A;
+      }
+      if (!arc.active) {
+        if (arc.nearDoor) add(t('오락실 들어가기', 'Enter arcade'), 'door', () => arc.actEnter?.() || pressKey('KeyE'));
+        else if (arc.nearBoard) add(t('범핑팡 랭킹', 'Arcade ranks'), 'board', () => arc.actBoard?.() || pressKey('KeyR'), false);
+      }
+    }
     return A;
   };
   const paintAct = (btn, a) => {

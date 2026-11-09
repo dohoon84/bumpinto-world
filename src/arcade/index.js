@@ -66,9 +66,15 @@ export function mountArcade({
     onHintTap: () => {
       if (!active && nearBoard) openBoard();
       else if (!active && nearDoor) enter();
-      else if (active && nearCab?.playable) startPang();
+      else if (active && !pang) leave(); // 안쪽 힌트가 나가기일 때
     },
-    onExit: () => { if (pang) { pang.dispose(); pang = null; ui.root.classList.remove('is-pang'); } else leave(); },
+    onCabTap: () => {
+      if (active && !pang) {
+        const playable = interior?.cabinets?.find((c) => c.playable);
+        if (playable) { nearCab = playable; startPang(); }
+      }
+    },
+    onExit: () => { if (pang) { pang.dispose(); pang = null; ui.root.classList.remove('is-pang'); ui.setCabHint('범핑팡 하기', true, { act: true, tap: '범핑팡 하기', key: 'F' }); } else leave(); },
     onMute: () => {
       if (toggleMute) toggleMute();
       else sfx.setMuted(!sfx.muted);
@@ -92,7 +98,7 @@ export function mountArcade({
     active = true;
     ui.setInside(true);
     onInterior?.('arcade', interior);
-    ui.setCabHint('가운데 오락기 · F 또는 화면 클릭 → 범핑팡', true);
+    ui.setCabHint('범핑팡 하기', true, { act: true, tap: '범핑팡 하기', key: 'F' });
   }
   function leave() {
     if (!active || (busy && !fade.leaving && fade.phase)) return;
@@ -154,7 +160,7 @@ export function mountArcade({
       ranked,
       practice: !ranked,
       getName: selfName,
-      onExit: () => { pang = null; ui.root.classList.remove('is-pang'); ui.setCabHint('가운데 오락기 · F 또는 화면 클릭 → 범핑팡', true); },
+      onExit: () => { pang = null; ui.root.classList.remove('is-pang'); ui.setCabHint('범핑팡 하기', true, { act: true, tap: '범핑팡 하기', key: 'F' }); },
       onResult: async ({ score, ranked: rec, name, openBoard: wantBoard }) => {
         try { await rank.submit({ name, score, ranked: rec }); } catch { /* local ok */ }
         if (wantBoard) openBoard('today');
@@ -170,19 +176,19 @@ export function mountArcade({
     const dBoard = Math.hypot(pos.x - board[0], pos.z - board[1]);
     nearBoard = dBoard < BOARD_R;
     if (nearBoard && dBoard <= dDoor) {
-      ui.setHint(`<kbd>R</kbd> ${store.name} 범핑팡 랭킹`, true);
+      ui.setHint(`${store.name} 범핑팡 랭킹`, true, { act: true, tap: '범핑팡 랭킹 보기', key: 'R' });
     } else if (nearDoor) {
-      ui.setHint(`<kbd>E</kbd> ${store.name} 들어가기`, true);
+      ui.setHint(`${store.name} 들어가기`, true, { act: true, tap: `${store.name} 들어가기`, key: 'E' });
     } else ui.setHint('');
   }
 
   function onKey(e) {
     if (pang) {
-      if (e.code === 'Escape') { pang.dispose(); pang = null; ui.root.classList.remove('is-pang'); ui.setCabHint('가운데 오락기 · F 또는 화면 클릭 → 범핑팡', true); return true; }
+      if (e.code === 'Escape') { pang.dispose(); pang = null; ui.root.classList.remove('is-pang'); ui.setCabHint('범핑팡 하기', true, { act: true, tap: '범핑팡 하기', key: 'F' }); return true; }
       return true; // swallow while playing
     }
     if (e.code === 'KeyE' && !e.repeat) {
-      if (!active && nearDoor) { enter(); return true; }
+      if (!active && nearDoor) return !!enter();
       if (active && !busy) { leave(); return true; }
     }
     if (e.code === 'KeyR' && !e.repeat) {
@@ -211,12 +217,27 @@ export function mountArcade({
   }
   if (typeof window !== 'undefined') window.addEventListener('pointerdown', onPointerDown, true);
 
+  function actEnter() { if (!active && nearDoor && !busy) return enter(); return false; }
+  function actBoard() { if ((nearBoard || active) && !busy) { openBoard(); return true; } return false; }
+  function actPlay() {
+    if (active && !pang) {
+      const playable = interior?.cabinets?.find((c) => c.playable);
+      if (playable) { nearCab = playable; startPang(); return true; }
+    }
+    return false;
+  }
+  function actLeave() { if (active && !busy) { leave(); return true; } return false; }
+
   return {
     get active() { return active; },
     get busy() { return busy; },
     get zone() { return active ? 'arcade' : ''; },
     get interior() { return interior; },
+    get nearDoor() { return nearDoor; },
+    get nearBoard() { return nearBoard; },
+    get playing() { return !!pang; },
     store,
+    actEnter, actBoard, actPlay, actLeave,
     outdoorTick,
     onKey,
     view() { return active && interior ? { scene: interior.scene, camera: interior.camera } : null; },

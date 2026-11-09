@@ -615,12 +615,14 @@ const bump24Game = mountBump24Game({
 });
 if (bump24Game) { const withB24 = world.isBlocked; world.isBlocked = (x, z, r) => withB24(x, z, r) || bump24Game.blocks(x, z, r); } // [bump24game] 랭킹 토템
 // [arcade] BUMP 오락실 서현점 · 범핑팡 (?arcade=0 끔)
+// [arcade] 모바일은 presence join 전에도 문 앞 탭 입장이 되어야 함 → joined 불필요. 탈것·지하철·BUMP24 충돌만 막음.
+const arcadeCanApproach = () => !bikes.riding && !adminBike?.riding && !giftRiding() && !ride?.active && !trucks?.current && !subway?.active && !bump24Game?.active;
 const arcadeGame = mountArcade({
   renderer, scene, params, getPlayer: () => player, getCamera: () => camera,
   getAudioLevel: () => (bgm ? { muted: bgm.player.muted, volume: bgm.player.volume } : null),
   getSelfName: () => { try { return presence?.me?.name || '나'; } catch { return '나'; } },
   toggleMute: bgm ? () => bgm.player.setMuted(!bgm.player.muted) : null,
-  canEnter: () => subwayCanEnter() && !subway?.active && !bump24Game?.active,
+  canEnter: () => arcadeCanApproach(),
   onInterior: (zone, inside) => {
     selfInterior = inside;
     overlay.setView(zone, inside?.camera);
@@ -2727,7 +2729,7 @@ function frame() {
   stationPlaza.update(dt, player.position);
   subway?.outdoorTick(dt, subwayCanEnter() ? player.position : null); // [subway] 입구 안내 + 걸어 들어가면 진입
   bump24Game?.outdoorTick(dt, (subwayCanEnter() && !subway?.active && !arcadeGame?.active) ? player.position : null); // [bump24game] 문 앞 들어가기 안내
-  arcadeGame?.outdoorTick(dt, (subwayCanEnter() && !subway?.active && !bump24Game?.active) ? player.position : null); // [arcade]
+  arcadeGame?.outdoorTick(dt, arcadeCanApproach() ? player.position : null); // [arcade] joined 대기 없이 문 앞 안내
   gyeongbuSoon?.tick(dt); // [gyeongbu]
   bungeo?.update(dt, joined ? player.position : null, camera, cam.mode); // [bungeo]
   dogPark.update(dt, player.position);

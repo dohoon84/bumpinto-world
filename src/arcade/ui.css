@@ -2,11 +2,13 @@
 #arc-root { position: fixed; inset: 0; z-index: 120; pointer-events: none; font-family: Pretendard, "Noto Sans KR", system-ui, sans-serif; }
 #arc-root * { box-sizing: border-box; }
 #arc-root .arc-hint {
-  pointer-events: none; position: fixed; left: 50%; bottom: 88px; transform: translateX(-50%);
+  pointer-events: none; position: fixed; left: 50%; bottom: 100px; transform: translateX(-50%);
   background: rgba(12,16,28,.88); color: #fff; padding: 10px 16px; border-radius: 999px;
   font-weight: 800; font-size: 14px; display: none; border: 2px solid rgba(255,230,109,.35);
+  z-index: 240; max-width: min(92vw, 420px); text-align: center;
 }
 #arc-root .arc-hint.on { display: block; }
+#arc-root .arc-hint.tap { pointer-events: auto; padding: 0; background: none; border: 0; box-shadow: none; -webkit-tap-highlight-color: transparent; touch-action: manipulation; cursor: pointer; }
 #arc-root .arc-hint kbd { display: inline-block; min-width: 22px; padding: 1px 6px; margin: 0 4px; border-radius: 6px; background: #ffe66d; color: #111; font-weight: 900; text-align: center; }
 #arc-root .arc-fade {
   pointer-events: none; position: fixed; inset: 0; z-index: 1; background: #05070f; opacity: 0; transition: none;
@@ -23,11 +25,13 @@
   background: rgba(255,255,255,.12); color: #fff; backdrop-filter: blur(8px);
 }
 #arc-root .arc-cab-hint {
-  pointer-events: none; position: fixed; left: 50%; top: 18%; transform: translateX(-50%);
+  pointer-events: none; position: fixed; left: 50%; top: 16%; transform: translateX(-50%);
   background: rgba(12,16,28,.9); color: #ffe66d; padding: 10px 18px; border-radius: 999px;
   font-weight: 900; font-size: 15px; display: none; border: 2px solid rgba(255,230,109,.4);
+  z-index: 240; max-width: min(92vw, 420px); text-align: center;
 }
 #arc-root .arc-cab-hint.on { display: block; }
+#arc-root .arc-cab-hint.tap { pointer-events: auto; padding: 0; background: none; border: 0; color: #fff; -webkit-tap-highlight-color: transparent; touch-action: manipulation; cursor: pointer; }
 
 .arc-pang {
   pointer-events: auto; position: fixed; inset: 0; z-index: 90;
@@ -170,3 +174,64 @@
   display: none !important;
   pointer-events: none !important;
 }
+
+
+/* 터치 '탭하여' 버튼 — BUMP24 와 같은 손+물결 */
+.arc-tapbtn {
+  display: inline-flex; align-items: center; gap: 10px; height: 52px; padding: 0 20px 0 7px;
+  border-radius: 26px; color: #fff; font-size: 16px; font-weight: 900; letter-spacing: -.02em;
+  background: linear-gradient(180deg, #5b9fff, #3d6fd9); box-shadow: 0 5px 0 #2a4f9e, 0 10px 24px rgba(40,80,180,.45);
+  max-width: min(92vw, 380px);
+}
+.arc-tapbtn .lb { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; line-height: 1; }
+.arc-tapbtn .lb .tw { margin-right: .35em; color: #ffe66d; }
+.arc-tapbtn .ico { position: relative; flex: none; width: 38px; height: 38px; border-radius: 50%; background: rgba(255,255,255,.22); box-shadow: inset 0 0 0 2px rgba(255,255,255,.5); }
+.arc-tapbtn .hand { position: absolute; left: 5px; top: 5px; width: 28px; height: 28px; }
+.arc-tapbtn .rip { position: absolute; left: 12px; top: 2px; width: 14px; height: 14px; border-radius: 50%; border: 2px solid #fff; opacity: 0; animation: arc-rip 1.3s ease-out infinite; }
+.arc-tapbtn .rip.r2 { animation-delay: .16s; border-color: #ffe66d; }
+@keyframes arc-rip { 0% { opacity: .9; transform: scale(.4); } 100% { opacity: 0; transform: scale(2.2); } }
+.arc-hint.tap:active .arc-tapbtn, .arc-cab-hint.tap:active .arc-tapbtn { transform: translateY(3px); box-shadow: 0 2px 0 #2a4f9e; }
+
+/* 게임 결과/인트로 — 캔디 스타일 */
+.arc-pang-intro .box, .arc-pang-result .box.cute {
+  overflow: hidden;
+}
+.arc-pang-result .rays {
+  position: absolute; inset: -40%; background: conic-gradient(from 0deg, transparent 0 20deg, rgba(255,230,109,.12) 20deg 40deg, transparent 40deg 60deg);
+  animation: arc-spin 12s linear infinite; pointer-events: none;
+}
+@keyframes arc-spin { to { transform: rotate(360deg); } }
+.arc-pang-result .banner {
+  display: inline-block; background: linear-gradient(180deg, #ffe66d, #ffb020); color: #1a1030;
+  font-size: 28px; font-weight: 900; padding: 10px 22px; border-radius: 16px;
+  box-shadow: 0 6px 0 #c47800, 0 12px 28px rgba(0,0,0,.35);
+  animation: arc-drop .55s cubic-bezier(.2,1.4,.3,1);
+  margin-bottom: 8px;
+}
+@keyframes arc-drop { from { transform: translateY(-80px) scale(.6); opacity: 0; } to { transform: none; opacity: 1; } }
+.arc-pang-result .star-row { display: flex; gap: 8px; justify-content: center; margin: 6px 0 10px; min-height: 36px; }
+.arc-pang-result .star-row span {
+  font-size: 32px; opacity: 0; transform: scale(0);
+  filter: drop-shadow(0 4px 0 rgba(0,0,0,.25));
+}
+.arc-pang-result .star-row span.on { animation: arc-star-pop .45s cubic-bezier(.2,1.5,.3,1) forwards; }
+@keyframes arc-star-pop { to { opacity: 1; transform: scale(1); } }
+.arc-pang-result .rank-badge {
+  display: inline-block; margin: 4px 0 10px; padding: 6px 14px; border-radius: 999px;
+  background: rgba(255,230,109,.2); color: #ffe66d; font-weight: 900; font-size: 13px;
+  border: 2px solid rgba(255,230,109,.45);
+}
+.arc-pang-result .confetti { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+.arc-pang-result .confetti i {
+  position: absolute; top: -10px; width: 8px; height: 12px; border-radius: 2px;
+  animation: arc-confetti 2.2s linear forwards;
+}
+@keyframes arc-confetti {
+  0% { transform: translateY(0) rotate(0); opacity: 1; }
+  100% { transform: translateY(110vh) rotate(720deg); opacity: .2; }
+}
+.arc-pang-score.bump b { animation: arc-score-bump .35s ease; }
+@keyframes arc-score-bump { 40% { transform: scale(1.25); color: #ffe66d; } }
+.arc-pang-combo.glow { box-shadow: 0 0 18px rgba(255,230,109,.55), inset 0 0 0 1px rgba(255,230,109,.35); }
+.arc-pang-intro .logo-bounce { animation: arc-logo .9s cubic-bezier(.2,1.4,.3,1); }
+@keyframes arc-logo { 0% { transform: scale(.4) rotate(-8deg); opacity: 0; } 100% { transform: none; opacity: 1; } }
