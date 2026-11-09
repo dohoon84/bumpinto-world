@@ -14,7 +14,7 @@ async function playerOf(request, env, body) {
     if (s?.accountId) accountId = s.accountId;
   } catch { /* 세션 비밀이 없으면 게스트 */ }
   const device = String(body?.deviceId || new URL(request.url).searchParams.get('deviceId') || '').replace(/[^\w.-]/g, '').slice(0, 80);
-  if (accountId) return { playerKey: `a:${accountId}`, accountId, guest: false };
+  if (accountId) return { playerKey: `a:${accountId}`, accountId, guest: false, device };
   if (!device) return null;
   return { playerKey: `g:${device}`, accountId: null, guest: true };
 }

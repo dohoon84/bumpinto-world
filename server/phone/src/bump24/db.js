@@ -21,7 +21,23 @@ export async function storesRecorded(db, playerKey, day) {
   return Number(r?.n || 0);
 }
 
-export async function recordRun(db, { playerKey, accountId, guest, storeId, name, score, now, practice }) {
+// 같은 기기에서 로그인 전에 낸 게스트 최고 기록을 계정 기록 하나로 합친다(한 사람은 순위판에 한 줄, 높은 점수만)
+async function mergeGuestBest(db, { device, playerKey, accountId, storeId, day, name, now }) {
+  if (!device) return;
+  const gk = `g:${device}`;
+  const g = await one(db, 'SELECT score FROM bump24_best WHERE player_key = ? AND store_id = ? AND day_key = ?', gk, storeId, day);
+  if (!g) return;
+  await db.prepare(
+    `INSERT INTO bump24_best (player_key, account_id, store_id, day_key, name, guest, score, at)
+     VALUES (?, ?, ?, ?, ?, 0, ?, ?)
+     ON CONFLICT(player_key, store_id, day_key) DO UPDATE SET
+       score = excluded.score, at = excluded.at, name = excluded.name
+     WHERE excluded.score > bump24_best.score`,
+  ).bind(playerKey, accountId, storeId, day, name, Number(g.score), now).run();
+  await db.prepare('DELETE FROM bump24_best WHERE player_key = ? AND store_id = ? AND day_key = ?').bind(gk, storeId, day).run();
+}
+
+export async function recordRun(db, { playerKey, accountId, guest, storeId, name, score, now, practice, device }) {
   const day = kstDayKey(now);
   const used = await attemptsUsed(db, playerKey, storeId, day);
   const decision = decideAttempt({ now, guest, used, practice });
@@ -43,6 +59,7 @@ export async function recordRun(db, { playerKey, accountId, guest, storeId, name
        WHERE excluded.score > bump24_best.score`,
     ).bind(playerKey, accountId, storeId, day, name, guest ? 1 : 0, score, now).run();
   }
+  if (accountId) await mergeGuestBest(db, { device, playerKey, accountId, storeId, day, name, now });
   let participation = null;
   if (accountId) {
     const already = await storesRecorded(db, playerKey, day);
