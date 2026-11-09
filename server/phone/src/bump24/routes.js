@@ -1,6 +1,6 @@
 // [bump24-rank] /bump24/* . BP24_RANK_ENABLED=0 이면 전부 끔.
 import { sessionFromRequest } from '../account/session.js';
-import { creditParticipation, ackNotices, attemptsUsed, pendingNotices, rankEnabled, recordRun, storeBoard } from './db.js';
+import { mergeGuestBest, creditParticipation, ackNotices, attemptsUsed, pendingNotices, rankEnabled, recordRun, storeBoard } from './db.js';
 import { kstDayKey, LIMIT_MSG } from './rules.js';
 
 function json(data, status, cors) {
@@ -19,6 +19,15 @@ async function playerOf(request, env, body) {
   return { playerKey: `g:${device}`, accountId: null, guest: true };
 }
 
+// 로그인한 사람이 순위판·매장을 열면 같은 기기의 오늘 게스트 기록을 계정 한 줄로 합친다
+async function mergeOnView(request, env, storeId, now, who = null) {
+  try {
+    const w = who || await playerOf(request, env, {});
+    if (!w?.accountId || !w.device) return;
+    await mergeGuestBest(env.DB, { device: w.device, playerKey: w.playerKey, accountId: w.accountId, storeId, day: kstDayKey(now), name: '', now });
+  } catch { /* 합치기 실패해도 조회는 계속 */ }
+}
+
 export async function handleBump24(request, env, url, cors) {
   if (!rankEnabled(env) || !env?.DB) return json({ ok: false, error: 'disabled' }, 404, cors);
   const path = url.pathname;
@@ -27,12 +36,14 @@ export async function handleBump24(request, env, url, cors) {
     if (request.method === 'GET' && path === '/bump24/board') {
       const storeId = String(url.searchParams.get('storeId') || '').slice(0, 80);
       if (!storeId) return json({ ok: false, error: 'bad_store' }, 400, cors);
+      await mergeOnView(request, env, storeId, now);
       return json({ ok: true, ...(await storeBoard(env.DB, storeId, now)) }, 200, cors);
     }
     if (request.method === 'GET' && path === '/bump24/status') {
       const who = await playerOf(request, env, {});
       const storeId = String(url.searchParams.get('storeId') || '').slice(0, 80);
       if (!who || !storeId) return json({ ok: false, error: 'bad_player' }, 400, cors);
+      await mergeOnView(request, env, storeId, now, who);
       const used = await attemptsUsed(env.DB, who.playerKey, storeId, kstDayKey(now));
       const cap = who.guest ? 1 : 5;
       const usedUp = used >= cap;
