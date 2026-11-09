@@ -1,26 +1,85 @@
-// [arcade] BUMP 오락실 위치. 서현역(corridor station seohyeon) 5번 출구 옆 상업건물.
-//   근거: public/corridor/tiles/2_-5.json buildings[146] — commercial, h=13.4,
-//   bbox ≈ 1309.6~1338.7 × -2088.7~-2058.9, 중심 1326.75,-2076.5.
-//   OSM/데이터에 오락실·게임장 태그는 없어서, 실제 건물 footprint에 우리 브랜드로 입점.
-import { ARCADE_STORE_ID, ARCADE_AT } from './flag.js';
-
+// [arcade] BUMP 오락실 위치.
+//   서현점: 서현역 AK플라자 도로면(tile 2_-5 buildings[26], 문 1336.99,-1990.75).
+//     예전 standalone 간판·봉·슬래브(건물 146 북쪽 중정)는 쓰지 않는다.
+//   정자역점: 스타벅스 정자역(x=-152..-136, z=-21.5..-40) 바로 동쪽,
+//     남북 길(x≈-127, w=6.4) 건너 공터. 도로·스타벅스·노비오스호텔과 겹치지 않게.
+//   랭킹 storeId 는 flag.js 의 ARCADE_STORE_ID('arcade-seohyeon') 하나로 통합.
+//     서버 DB 는 store_id 컬럼이 있지만 두 지점 모두 같은 id 를 보낸다.
 export const ARCADE_PLACEMENTS = [
   {
-    id: ARCADE_STORE_ID,
-    at: ARCADE_AT,
+    id: 'arcade-seohyeon',
+    at: 'arcade-seohyeon',
     name: 'BUMP 오락실 서현점',
+    branch: '서현점',
     world: 'corridor',
-    // 건물 중심 — createBp24 resolve 와 같은 match 규칙
-    match: { x: 1326.75, z: -2076.5, r: 18 },
-    // 문: 북쪽(+z) 면 바깥. exit 5 (1342.9,-2067.5) 쪽을 봄.
-    door: [1326.75, -2057.55],
-    board: [1322.5, -2057.2],
-    front: '+z',
-    face: Math.PI, // 문 밖을 보는 yaw
-    yawIn: 0,
+    // 서현역 AK플라자 도로면 (tile 2_-5 buildings[26] part, 성남대로 쪽 긴 외벽)
+    match: { x: 1352.59, z: -2011.83, r: 25 },
+    wall: { x0: 1317.3, z0: -1975.0, x1: 1355.1, z1: -2008.3 },
+    nx: 0.66103,
+    nz: 0.75036,
+    width: 10.4,
+    door: [1336.99, -1990.75],
+    board: [1333.50, -1988.66],
+    face: Math.atan2(0.66103, 0.75036),
+    yawIn: Math.atan2(-0.66103, -0.75036),
+  },
+  {
+    id: 'arcade-jeongja',
+    at: 'arcade-jeongja',
+    name: 'BUMP 오락실 정자역점',
+    branch: '정자역점',
+    world: 'jeongja',
+    // 남쪽 면(z=-21.5, 스타벅스와 같은 전면선)이 성남대로343번길을 본다.
+    ring: [[-120.5, -21.5], [-108.5, -21.5], [-108.5, -33.0], [-120.5, -33.0]],
+    h: 8.4,
+    gf: 3.6,
+    match: { x: -114.5, z: -27.25, r: 8 },
+    nx: 0,
+    nz: 1,
+    width: 11.2,
+    door: [-114.5, -20.3],
+    board: [-118.2, -21.25],
+    face: 0,
+    yawIn: Math.PI,
   },
 ];
 
-export function arcadePlacement(id = ARCADE_STORE_ID) {
-  return ARCADE_PLACEMENTS.find((s) => s.id === id) || ARCADE_PLACEMENTS[0];
+export function arcadePlacements() {
+  return ARCADE_PLACEMENTS;
+}
+
+export function arcadePlacement(id = 'arcade-seohyeon') {
+  return ARCADE_PLACEMENTS.find((s) => s.id === id || s.at === id) || ARCADE_PLACEMENTS[0];
+}
+
+export function arcadeAtSpot(at) {
+  if (!at) return null;
+  const st = ARCADE_PLACEMENTS.find((s) => s.at === at || s.id === at);
+  if (!st) return null;
+  return { id: st.id, x: st.door[0], z: st.door[1], yaw: st.yawIn, face: st.face };
+}
+
+/** 정자 베이스맵에 정자역점 상가 건물을 넣는다. 1층은 비우고(mh=gf) 충돌만 남긴다. */
+export function placeJeongjaArcadeBuilding(data, search = typeof location !== 'undefined' ? location.search : '') {
+  try {
+    const q = search instanceof URLSearchParams ? search : new URLSearchParams(search || '');
+    if (q.get('arcade') === '0') return;
+  } catch { /* keep on */ }
+  const st = ARCADE_PLACEMENTS.find((s) => s.id === 'arcade-jeongja');
+  if (!st?.ring || !data?.buildings) return;
+  if (data.buildings.some((b) => b.n === st.name)) return;
+  // 시각 메시는 exterior.js 가 그린다. 여기선 발자국 충돌만 (플레이어가 건물을 통과하지 않게).
+  data.buildings.push({
+    o: st.ring.map((p) => [p[0], p[1]]),
+    h: st.h,
+    mh: 0,
+    k: 'commercial',
+    n: st.name,
+    _skip: true,
+    lm: 'arcade',
+  });
+}
+
+export function arcadeMapPoints() {
+  return ARCADE_PLACEMENTS.map((s) => ({ id: s.id, name: s.name, x: s.door[0], z: s.door[1] }));
 }

@@ -15,9 +15,11 @@ const assert = (c, m) => { if (!c) throw new Error(m); };
 assert(arcadeEnabled(''), 'default on');
 assert(arcadeEnabled('?arcade=1'), 'explicit on');
 assert(!arcadeEnabled('?arcade=0'), 'opt-out');
-assert(arcadeAtSpot(ARCADE_AT)?.x === 1326.75, 'spawn x');
-assert(arcadePlacement().match.z === -2076.5, 'building match z');
+assert(Math.abs(arcadeAtSpot(ARCADE_AT)?.x - 1336.99) < 0.02, 'seohyeon spawn x');
+assert(Math.abs(arcadeAtSpot('arcade-jeongja')?.x - -114.5) < 0.02, 'jeongja spawn x');
 assert(arcadePlacement().name.includes('오락실'), 'our brand name');
+assert(arcadePlacement('arcade-jeongja').name.includes('정자'), 'jeongja branch name');
+assert(arcadePlacement().id === 'arcade-seohyeon', 'default placement');
 
 assert(COLS === 8 && ROWS === 8, 'board size');
 const rng = makeRng(42);

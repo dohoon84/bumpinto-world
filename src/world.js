@@ -5,6 +5,7 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import { addCafeSidewalks } from './world/cafeWalks.js';
 import { addStarbucksGlass, placeJeongjaStationStarbucks, ringKey, starbucksShells, stationWallColliders } from './world/starbucksGlass.js';
 import { addNobiosShop, placeNobiosHotel } from './world/nobiosHotel.js';
+import { placeJeongjaArcadeBuilding } from './arcade/locations.js';
 import { addWindowLights } from './world/windowLights.js';
 import { NIGHT_V2, nightFacade, nightKind, nightSeed } from './corridor/nightLights.js'; // [night-buildings]
 import { doosanGate } from './world/doosanGate.js'; // [night-buildings]
@@ -100,6 +101,7 @@ export function buildWorld(scene, data, region = null, opts = {}) {
     addCafeSidewalks(data); // 역 보행망이 끊긴 카페 앞까지 인도
     placeJeongjaStationStarbucks(data);
     placeNobiosHotel(data);
+    placeJeongjaArcadeBuilding(data);
   }
   const { x0, x1, z0, z1 } = data.meta.bboxLocal;
   const cx = (x0 + x1) / 2, cz = (z0 + z1) / 2;

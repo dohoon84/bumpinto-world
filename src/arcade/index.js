@@ -1,7 +1,7 @@
 // [arcade] BUMP 오락실 — 문 앞 E 입장 · 오락기 F/클릭으로 범핑팡 · R 순위판
 import * as THREE from 'three';
 import { arcadeEnabled, ARCADE_AT, arcadeAtSpot } from './flag.js';
-import { arcadePlacement } from './locations.js';
+import { arcadePlacement, arcadePlacements } from './locations.js';
 import { mountArcadeExterior } from './exterior.js';
 import { buildArcadeInterior } from './interior.js';
 import { createArcadeSfx } from './sfx.js';
@@ -10,7 +10,7 @@ import { createArcadeRankProvider, localBoard } from './rank.js';
 import { mountBumpingPang } from './bumpingpang/game.js';
 
 export { arcadeEnabled, arcadeAtSpot, ARCADE_AT } from './flag.js';
-export { arcadePlacement } from './locations.js';
+export { arcadePlacement, arcadePlacements } from './locations.js';
 
 function dismissBlockingOverlays() {
   // Controls 첫 안내 · BUMP24 포스터(z=5100) · 기타 모달이 범핑팡 시작 버튼을 가리면 진행 불가
@@ -54,7 +54,8 @@ export function mountArcade({
   const sfx = createArcadeSfx({ getLevel: () => getAudioLevel?.() || { muted: false, volume: 1 } });
   const rank = createArcadeRankProvider();
   const exterior = scene ? mountArcadeExterior({ scene }) : null;
-  const store = arcadePlacement();
+  const stores = arcadePlacements();
+  let store = stores[0] || arcadePlacement();
 
   let interior = null, active = false, busy = false, pang = null;
   let worldOstHeld = false;
@@ -206,6 +207,15 @@ export function mountArcade({
 
   function outdoorTick(_dt, pos) {
     if (active || busy || !pos) { nearDoor = false; nearBoard = false; if (!active) ui.setHint(''); return; }
+    let best = store, bestD = Infinity;
+    for (const s of stores) {
+      const dDoor = Math.hypot(pos.x - s.door[0], pos.z - s.door[1]);
+      const board = s.board || s.door;
+      const dBoard = Math.hypot(pos.x - board[0], pos.z - board[1]);
+      const d = Math.min(dDoor, dBoard);
+      if (d < bestD) { bestD = d; best = s; }
+    }
+    store = best;
     const dDoor = Math.hypot(pos.x - store.door[0], pos.z - store.door[1]);
     nearDoor = dDoor < DOOR_R;
     const board = store.board || store.door;
@@ -273,7 +283,8 @@ export function mountArcade({
     get nearDoor() { return nearDoor; },
     get nearBoard() { return nearBoard; },
     get playing() { return !!pang; },
-    store,
+    get store() { return store; },
+    stores,
     actEnter, actBoard, actPlay, actLeave,
     outdoorTick,
     onKey,
@@ -290,10 +301,12 @@ export function mountArcade({
       return true;
     },
     blocks(x, z, r = 0.4) {
-      // soft block around door frame so players queue up
       if (!exterior) return false;
-      const d = Math.hypot(x - store.door[0], z - store.door[1]);
-      return d < 0.55 + r && d > 0.35;
+      for (const s of stores) {
+        const d = Math.hypot(x - s.door[0], z - s.door[1]);
+        if (d < 0.45 + r && d > 0.32) return true;
+      }
+      return false;
     },
     dispose() {
       window.removeEventListener('pointerdown', onPointerDown, true);

@@ -2209,7 +2209,7 @@ const cameraApp = mountCamera({ // [camera]
   },
   getView: () => arcadeGame?.view() || bump24Game?.view() || subway?.view() || null, // [camera] [arcade] [bump24game] 매장·지하 장면
 });
-if (atQuery === ARCADE_AT || atQuery === 'arcade-seohyeon') landArcade(); // [arcade]
+if (arcadeAtSpot(atQuery)) landArcade(); // [arcade] arcade-seohyeon · arcade-jeongja
 else if (atQuery === BUMP24_JEONGJA_AT) landBump24Jeongja(); // [bump24-jeongja] ?shot=1 처럼 입장 함수를 안 타는 시작
 else if (landBump24At()) { /* [bump24-stores] */ }
 else if (travel && atQuery) travel.go(atQuery);
