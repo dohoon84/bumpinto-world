@@ -27,7 +27,7 @@ export function createRankProvider({ base, device } = {}) {
   async function board(storeId) {
     const b = root();
     if (!b) return null;
-    const r = await fetch(`${b}/bump24/board?storeId=${encodeURIComponent(storeId)}`);
+    const r = await cfetch(`${b}/bump24/board?storeId=${encodeURIComponent(storeId)}&deviceId=${encodeURIComponent(dev())}`);
     if (!r.ok) return null;
     const j = await r.json();
     if (!j?.ok) return null;
