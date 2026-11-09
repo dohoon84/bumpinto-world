@@ -17,6 +17,39 @@ const SCENES = [
 ];
 const SCENE_MS = 3000;
 
+function rememberAccounts() {
+  try { localStorage.setItem('bw.accounts', '1'); } catch { /* 저장소가 막혀 있으면 훅만 시도 */ }
+}
+
+function waitForGoogleHook(ms) {
+  if (googleSignInReady()) return Promise.resolve(true);
+  return new Promise((resolve) => {
+    let off = () => {};
+    const t = setTimeout(() => { off(); resolve(googleSignInReady()); }, ms);
+    off = onGoogleReady(() => { clearTimeout(t); resolve(true); });
+  });
+}
+
+/** 계정 훅이 늦게 붙거나(econ 청크) 이 브라우저에 계정 플래그가 없어도 로그인 창은 연다. */
+async function signInFromStart() {
+  rememberAccounts();
+  const econP = import('./econ/index.js').catch(() => null);
+  const hooked = await Promise.race([
+    waitForGoogleHook(12000),
+    econP.then(() => waitForGoogleHook(1500)),
+  ]);
+  if (hooked && googleSignInReady()) return requestGoogleSignIn();
+  try {
+    const { googleSignIn } = await import('../account/signin.js');
+    const r = await googleSignIn();
+    if (r?.ok) return { ok: true, account: { name: r.account?.name || null, email: r.account?.email || null } };
+    if (!r) return { ok: false, reason: 'cancelled' };
+    return { ok: false, reason: 'error' };
+  } catch {
+    return { ok: false, reason: 'not_ready' };
+  }
+}
+
 /**
  * 로그인된 계정(econ.getSession() 이 게스트가 아님)이면 '게스트로 계속' 대신 계정 이름이 붙은 '계속하기'(primary) — 두 번째 기기에서 로그인한 뒤 시작화면으로
  *   한 번 돌아왔을 때 '게스트'로 들어가 계정 잔액이 보이는 혼란을 없앤다. Google 버튼은 이 상태에서 숨긴다. 게스트 화면은 그대로.
@@ -33,6 +66,8 @@ export function openStart({ region, onGuest, onContinue, onGoogle, onAccount, de
     onGuest();
     return { close() {} };
   }
+  // econ 모듈이 계정 플래그를 읽기 전에 켜 둔다. 꺼져 있으면 mock 이라 Google 훅이 영원히 안 붙는다.
+  if (pending === 'google') rememberAccounts();
 
   const base = import.meta.env.BASE_URL;
   const root = el('div', 'v2-screen v2-start');
@@ -142,35 +177,36 @@ export function openStart({ region, onGuest, onContinue, onGoogle, onAccount, de
     if (k === 'google') {
       trackEvent('uiv2_start_google');
       b.disabled = true;
-      const r = await requestGoogleSignIn();
-      b.disabled = false;
-      if (r.ok) { close(); (onGoogle || onGuest)(r.account); return; }
-      msg = r.reason === 'not_ready' ? googleNotReadyText() : tr('로그인하지 못했어요. 다시 시도하거나 게스트로 계속해 주세요.', 'Sign-in failed. Try again or continue as a guest.');
+      const preparing = tr('Google 로그인을 준비하는 중…', 'Preparing Google sign-in…');
+      msg = preparing;
       const m = panel.querySelector('.v2-msg');
-      m.hidden = false; m.textContent = msg;
+      if (m) { m.hidden = false; m.textContent = preparing; }
+      const r = await signInFromStart();
+      b.disabled = false;
+      if (!alive) return;
+      if (r.ok) { close(); (onGoogle || onGuest)(r.account); return; }
+      if (r.reason === 'cancelled') { if (m) m.hidden = true; return; }
+      msg = r.reason === 'not_ready' ? googleNotReadyText() : tr('로그인하지 못했어요. 다시 시도하거나 게스트로 계속해 주세요.', 'Sign-in failed. Try again or continue as a guest.');
+      if (m) { m.hidden = false; m.textContent = msg; }
     }
   });
 
   render();
 
-  // 껍데기에서 Google을 먼저 눌렀으면 핸들러 등록을 잠깐 기다린 뒤 로그인 이어가기
+  // 껍데기에서 Google을 먼저 눌렀으면 훅(또는 GIS 창)이 준비된 뒤 로그인 이어가기
   if (pending === 'google') {
     trackEvent('uiv2_start_google', { early: 1 });
     (async () => {
       if (!alive) return;
-      if (!googleSignInReady()) {
-        await new Promise((resolve) => {
-          let off = () => {};
-          const t = setTimeout(() => { off(); resolve(); }, 2500);
-          off = onGoogleReady(() => { clearTimeout(t); resolve(); });
-        });
-      }
-      if (!alive) return;
-      const r = await requestGoogleSignIn();
+      const preparing = tr('Google 로그인을 준비하는 중…', 'Preparing Google sign-in…');
+      msg = preparing;
+      const m = panel.querySelector('.v2-msg');
+      if (m) { m.hidden = false; m.textContent = preparing; }
+      const r = await signInFromStart();
       if (!alive) return;
       if (r.ok) { close(); (onGoogle || onGuest)(r.account); return; }
+      if (r.reason === 'cancelled') { if (m) m.hidden = true; return; }
       msg = r.reason === 'not_ready' ? googleNotReadyText() : tr('로그인하지 못했어요. 다시 시도하거나 게스트로 계속해 주세요.', 'Sign-in failed. Try again or continue as a guest.');
-      const m = panel.querySelector('.v2-msg');
       if (m) { m.hidden = false; m.textContent = msg; }
     })();
   }
