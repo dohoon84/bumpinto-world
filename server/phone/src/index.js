@@ -9,6 +9,7 @@ import { featureOn } from "./account/flags.js";
 import { accountForDevice } from "./account/store.js";
 import { clawbackBoardPost, onBoardUpdate, rewardBoardPost } from "./account/economy.js";
 import { handleBump24, settleBump24 } from "./bump24/routes.js"; // [bump24-rank]
+import { handleArcade } from "./arcade/routes.js"; // [arcade-pang]
 
 export { PhoneBook, Room };
 
