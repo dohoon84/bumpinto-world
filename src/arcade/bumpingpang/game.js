@@ -6,6 +6,15 @@ import {
 } from './engine.js';
 
 const COLORS = Object.fromEntries(TILES.map((t) => [t.id, t.color]));
+// 별점: 60초 시뮬(클리어당 ~30–80점, 히트율·콤보 반영) → 캐주얼~500 / 중급~1200 / 숙련~2000+
+export const STAR_THRESHOLDS = [500, 1200, 2000];
+export function starsFor(score) {
+  const s = Number(score) || 0;
+  if (s >= STAR_THRESHOLDS[2]) return 3;
+  if (s >= STAR_THRESHOLDS[1]) return 2;
+  if (s >= STAR_THRESHOLDS[0]) return 1;
+  return 0;
+}
 
 export function mountBumpingPang({
   root, sfx, ranked = true, storeId = 'arcade-seohyeon', getName = () => '나',
@@ -15,13 +24,21 @@ export function mountBumpingPang({
   wrap.className = 'arc-pang';
   wrap.innerHTML = `
     <div class="arc-pang-hud">
-      <div class="arc-pang-score" data-score-wrap><small>점수</small><b data-score>0</b></div>
-      <div class="arc-pang-timer"><svg viewBox="0 0 36 36"><circle cx="18" cy="18" r="15.5" pathLength="100"/><circle data-ring cx="18" cy="18" r="15.5" pathLength="100"/></svg><b data-time>${PLAY_SEC}</b></div>
-      <div class="arc-pang-combo" data-combo-wrap><small>콤보</small><b data-combo>0</b></div>
-      <button type="button" class="arc-pang-mute" data-mute title="음소거">🔊</button>
-      <button type="button" class="arc-pang-x" data-exit title="나가기">✕</button>
+      <div class="arc-pang-score jelly" data-score-wrap>
+        <span class="lbl">점수</span><b data-score>0</b>
+      </div>
+      <div class="arc-pang-time jelly" data-time-wrap>
+        <span class="lbl">시간</span>
+        <div class="tube"><i data-bar></i></div>
+        <b data-time>${PLAY_SEC}</b>
+      </div>
+      <div class="arc-pang-combo jelly" data-combo-wrap>
+        <span class="lbl">콤보</span><b data-combo>0</b>
+      </div>
+      <button type="button" class="arc-pang-mute jelly-btn" data-mute title="음소거" aria-label="음소거">🔊</button>
+      <button type="button" class="arc-pang-x jelly-btn" data-exit title="나가기" aria-label="나가기">✕</button>
     </div>
-    <canvas class="arc-pang-cv" width="640" height="640"></canvas>
+    <canvas class="arc-pang-cv jelly-board" width="640" height="640"></canvas>
     <div class="arc-pang-fx" data-fx></div>
     <div class="arc-pang-toast" data-toast hidden></div>
     <div class="arc-pang-float" data-floats></div>
@@ -46,9 +63,10 @@ export function mountBumpingPang({
     score: wrap.querySelector('[data-score]'),
     scoreWrap: wrap.querySelector('[data-score-wrap]'),
     time: wrap.querySelector('[data-time]'),
+    timeWrap: wrap.querySelector('[data-time-wrap]'),
+    bar: wrap.querySelector('[data-bar]'),
     combo: wrap.querySelector('[data-combo]'),
     comboWrap: wrap.querySelector('[data-combo-wrap]'),
-    ring: wrap.querySelector('[data-ring]'),
     toast: wrap.querySelector('[data-toast]'),
     floats: wrap.querySelector('[data-floats]'),
     intro: wrap.querySelector('[data-intro]'),
@@ -231,14 +249,28 @@ export function mountBumpingPang({
   }
 
   function syncHud() {
-    el.score.textContent = String(score);
+    const prevScore = el.score.textContent;
+    const nextScore = String(score);
+    el.score.textContent = nextScore;
+    if (prevScore !== nextScore) {
+      el.scoreWrap.classList.remove('bump');
+      void el.scoreWrap.offsetWidth;
+      el.scoreWrap.classList.add('bump');
+    }
     el.time.textContent = String(Math.max(0, Math.ceil(left)));
-    el.combo.textContent = String(comboShow);
+    const prevCombo = el.combo.textContent;
+    const nextCombo = String(comboShow);
+    el.combo.textContent = nextCombo;
     const pct = Math.max(0, left / PLAY_SEC) * 100;
-    el.ring.style.strokeDasharray = `${pct} 100`;
-    el.ring.classList.toggle('urgent', left <= 10);
+    if (el.bar) el.bar.style.width = `${pct}%`;
+    el.timeWrap?.classList.toggle('urgent', left <= 10);
     wrap.classList.toggle('is-urgent', playing && left <= 10);
     el.comboWrap.classList.toggle('glow', comboShow >= 2);
+    if (prevCombo !== nextCombo && comboShow >= 2) {
+      el.comboWrap.classList.remove('pop');
+      void el.comboWrap.offsetWidth;
+      el.comboWrap.classList.add('pop');
+    }
   }
 
   function cellFromEvent(e) {
@@ -458,7 +490,7 @@ export function mountBumpingPang({
     try { sfx?.stopBgm?.(); } catch { /* */ }
     const name = (() => { try { return getName() || '나'; } catch { return '나'; } })();
     const finalScore = score;
-    const stars = finalScore >= 8000 ? 3 : finalScore >= 4000 ? 2 : finalScore >= 1200 ? 1 : 0;
+    const stars = starsFor(finalScore);
     el.result.hidden = false;
     el.result.innerHTML = `<div class="box cute">
       <div class="rays" aria-hidden="true"></div>
@@ -466,7 +498,7 @@ export function mountBumpingPang({
       <div class="banner">시간 끝!</div>
       <div class="mascot big">🎉💜</div>
       <p class="big" data-roll>0점</p>
-      <div class="star-row" data-stars><span>★</span><span>★</span><span>★</span></div>
+      <div class="star-row" data-stars><span class="dim">★</span><span class="dim">★</span><span class="dim">★</span></div>
       <div class="rank-badge" data-badge>${practice || !ranked ? '연습 기록' : '랭킹 도전'}</div>
       <p>최고 콤보 ${comboShow}</p>
       <div class="row">
@@ -509,6 +541,7 @@ export function mountBumpingPang({
     for (let i = 0; i < 3; i++) {
       await wait(350 + i * 280);
       if (i < stars) {
+        starEls[i]?.classList.remove('dim');
         starEls[i]?.classList.add('on');
         try { sfx?.starDing?.(); } catch { /* */ }
       }

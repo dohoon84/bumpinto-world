@@ -622,6 +622,7 @@ const arcadeGame = mountArcade({
   getAudioLevel: () => (bgm ? { muted: bgm.player.muted, volume: bgm.player.volume } : null),
   getSelfName: () => { try { return presence?.me?.name || '나'; } catch { return '나'; } },
   toggleMute: bgm ? () => bgm.player.setMuted(!bgm.player.muted) : null,
+  getBgmPlayer: () => bgm?.player || null,
   canEnter: () => arcadeCanApproach(),
   onInterior: (zone, inside) => {
     selfInterior = inside;
