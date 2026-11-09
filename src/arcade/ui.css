@@ -1,3 +1,4 @@
+@import url("https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=Jua&display=swap");
 /* [arcade] BUMP 오락실 · 범핑팡 — 귀여운 파스텔 UI */
 #arc-root { position: fixed; inset: 0; z-index: 120; pointer-events: none; font-family: Pretendard, "Noto Sans KR", system-ui, sans-serif; }
 #arc-root * { box-sizing: border-box; }
@@ -670,4 +671,621 @@
 }
 .arc-pang-timebar.refill .tube i {
   box-shadow: inset 0 1px 0 rgba(255,255,255,.8), 0 0 18px rgba(255,200,40,.9);
+}
+
+/* ========== B안 네온 오락실 에셋 ========== */
+
+.arc-pang {
+  background: #0B0428;
+  font-family: "Jua", "Noto Sans KR", "Apple SD Gothic Neo", system-ui, sans-serif;
+}
+.arc-pang .score-num,
+.arc-pang-lv b,
+.arc-pang-timebar b,
+.arc-pang-fever b,
+.arc-pang-result .big,
+.arc-pang-count,
+.arc-pang-floater,
+#arc-root .arc-modal .sc,
+.arc-pang .lu-lv {
+  font-family: "Black Han Sans", "Jua", "Noto Sans KR", sans-serif;
+}
+
+.arc-pang-sky {
+  background: url(/arcade/pang/bg/bg-arcade.jpg) center / cover no-repeat #0B0428;
+}
+@media (min-resolution: 2.5dppx) {
+  .arc-pang-sky { background-image: url(/arcade/pang/bg/bg-arcade@3x.jpg); }
+}
+.arc-pang-sky .cloud,
+.arc-pang-sky .hill,
+.arc-pang-sky .flower { display: none; }
+
+.arc-pang-phone {
+  width: min(390px, 100vw);
+  height: min(844px, 100dvh);
+  border-radius: 28px;
+  box-shadow: 0 20px 60px rgba(0,0,0,.45), 0 0 0 2px rgba(51,230,255,.25);
+  background: transparent;
+}
+.arc-pang.is-touch .arc-pang-phone {
+  width: 100vw; height: 100dvh; border-radius: 0; box-shadow: none;
+}
+.arc-pang.is-desk .arc-pang-phone {
+  width: min(390px, 96vw); height: min(844px, 96dvh);
+}
+
+.arc-pang-orient {
+  background: url(/arcade/pang/bg/bg-arcade.jpg) center / cover no-repeat #0B0428;
+}
+.orient-card {
+  color: #fff;
+  background: transparent;
+  border: 40px solid transparent;
+  border-image: url(/arcade/pang/ui/panel.webp) 120 fill / 40px stretch;
+  box-shadow: none;
+  max-width: 340px;
+  padding: 12px 8px 20px;
+}
+.orient-icon { width: 120px; height: 120px; display: block; margin: 0 auto 8px; }
+.orient-bum { width: 88px; height: 88px; display: block; margin: 0 auto 8px; filter: drop-shadow(0 0 12px #33e6ff); }
+.orient-title { color: #fff; text-shadow: 0 0 8px #ff4fd8; }
+.orient-sub { color: #cbb8ff; opacity: 1; }
+.phone-spin { display: none; }
+.orient-mascot { display: none; }
+
+.arc-pang-top {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  padding: max(12px, env(safe-area-inset-top)) 8px 0;
+  gap: 6px;
+}
+.arc-pang-lv {
+  width: 84px; height: 92px; min-width: 84px; padding: 0;
+  background: url(/arcade/pang/ui/lv-badge.webp) center / 84px 92px no-repeat;
+  border: 0; box-shadow: none; color: #fff;
+  display: flex; align-items: center; justify-content: center;
+  padding-top: 18px;
+}
+.arc-pang-lv .lv-lab { display: none; }
+.arc-pang-lv b {
+  font-size: 38px; letter-spacing: -.04em;
+  -webkit-text-stroke: 0;
+  text-shadow: 0 0 8px #ff4fd8, 0 0 2px #ff4fd8;
+}
+.arc-pang.is-desk .arc-pang-lv b { font-size: 38px; }
+.arc-pang-lv.lv-pulse,
+.arc-pang.is-levelup .arc-pang-lv {
+  box-shadow: none;
+  filter: drop-shadow(0 0 16px #ff4fd8);
+}
+
+.arc-pang-scoreblock {
+  flex: 1; min-width: 0; height: 98px;
+  position: relative;
+  background: none; border: 0; box-shadow: none;
+  border-radius: 0; padding: 18px 12px 14px;
+  color: #fff;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+}
+.arc-pang-scoreblock::before {
+  content: ""; position: absolute; inset: 0; pointer-events: none;
+  border-style: solid; border-width: 30px;
+  border-image: url(/arcade/pang/ui/score-card.webp) 90 fill / 30px stretch;
+}
+.arc-pang-scoreblock > * { position: relative; z-index: 1; }
+.arc-pang-scoreblock .lbl {
+  font-size: 15px; font-weight: 400; opacity: 1; color: #7ff3ff;
+  text-shadow: 0 0 8px #33e6ff;
+}
+.arc-pang-scoreblock .score-num {
+  font-size: 34px; color: #fff36b; -webkit-text-stroke: 0;
+  text-shadow: 0 0 8px #ffb300, 0 0 2px #ffb300;
+  line-height: 1.05;
+}
+.arc-pang-scoreblock .best { font-size: 13px; color: #b7a6ff; opacity: 1; font-weight: 400; }
+.arc-pang-scoreblock .best em { color: #ff8ae6; }
+
+.arc-pang-topbtns { display: flex; gap: 4px; padding-top: 18px; }
+.arc-pang-iconbtn {
+  width: 54px; height: 57px; border: 0; border-radius: 0; padding: 0;
+  background: transparent center / contain no-repeat;
+  box-shadow: none; font-size: 0; color: transparent;
+}
+.arc-pang-iconbtn.is-sound { background-image: url(/arcade/pang/ui/buttons/btn-sound-on-normal.webp); }
+.arc-pang-iconbtn.is-sound:active { background-image: url(/arcade/pang/ui/buttons/btn-sound-on-pressed.webp); }
+.arc-pang-iconbtn.is-sound.is-off { background-image: url(/arcade/pang/ui/buttons/btn-sound-off-normal.webp); }
+.arc-pang-iconbtn.is-sound.is-off:active { background-image: url(/arcade/pang/ui/buttons/btn-sound-off-pressed.webp); }
+.arc-pang-iconbtn.is-pause,
+.arc-pang-iconbtn.pause {
+  background: url(/arcade/pang/ui/buttons/btn-pause-normal.webp) center / contain no-repeat;
+  box-shadow: none;
+}
+.arc-pang-iconbtn.is-pause:active,
+.arc-pang-iconbtn.pause:active {
+  background-image: url(/arcade/pang/ui/buttons/btn-pause-pressed.webp);
+}
+
+.arc-pang-hero {
+  position: relative; z-index: 5;
+  height: 100px; margin: -8px 0 -28px; padding: 0 4px;
+  display: flex; align-items: flex-end;
+  pointer-events: none; flex: none;
+}
+.arc-pang-mascot {
+  position: relative; right: auto; bottom: auto;
+  width: auto; display: flex; flex-direction: row; align-items: center;
+  gap: 0; pointer-events: none;
+}
+.arc-pang-mascot .mascot-img {
+  width: 124px; height: 124px;
+  filter: drop-shadow(0 0 10px rgba(51,230,255,.35));
+}
+.arc-pang.is-desk .arc-pang-hero { height: 78px; margin: 0 0 -16px; }
+.arc-pang.is-desk .arc-pang-mascot,
+.arc-pang.is-desk .arc-pang-mascot .mascot-img { width: auto; }
+.arc-pang.is-desk .arc-pang-mascot .mascot-img { width: 96px; height: 96px; }
+.mascot-bubble {
+  min-width: 140px; min-height: 56px;
+  padding: 14px 16px 18px 28px;
+  border: 0; border-radius: 0; box-shadow: none;
+  background: none; color: #fff;
+  font-family: "Jua", "Noto Sans KR", sans-serif;
+  font-size: 18px; font-weight: 400;
+  text-shadow: 0 0 8px #33e6ff;
+  display: flex; align-items: center; justify-content: center;
+  position: relative;
+}
+.mascot-bubble::before {
+  content: ""; position: absolute; inset: 0; pointer-events: none;
+  border-style: solid; border-width: 24px 24px 30px 44px;
+  border-image: url(/arcade/pang/ui/bubble.webp) 72 72 90 132 fill / 24px 24px 30px 44px stretch;
+}
+.mascot-bubble { z-index: 1; }
+.mascot-bubble { color: #fff; }
+
+.arc-pang-stage {
+  flex: 1; min-height: 0;
+  padding: 0 8px; align-items: center; justify-content: center;
+}
+.arc-pang-boardwrap {
+  width: min(100%, 384px);
+  max-height: 100%;
+  aspect-ratio: 1;
+  padding: 5.208%;
+  border-radius: 0; border: 0;
+  background: url(/arcade/pang/board/frame.webp) center / 100% 100% no-repeat;
+  box-shadow: none;
+  box-sizing: border-box;
+}
+.arc-pang.is-desk .arc-pang-boardwrap { width: min(100%, 384px); }
+.arc-pang-cv {
+  border-radius: 8px;
+  background: #0B0428;
+}
+
+.arc-pang-bottom {
+  padding: 4px 8px max(10px, env(safe-area-inset-bottom));
+  gap: 6px;
+}
+.arc-pang-timebar,
+.arc-pang-fever {
+  position: relative;
+  height: 68px; padding: 0 14px 0 12px;
+  background: none; border: 0; border-radius: 0;
+  box-shadow: none; color: #cbb8ff;
+  gap: 6px;
+}
+.arc-pang-timebar::before,
+.arc-pang-fever::before {
+  content: ""; position: absolute; inset: 0; pointer-events: none;
+  border-style: solid; border-width: 30px 32px;
+  border-image: url(/arcade/pang/ui/bar-panel.webp) 90 96 fill / 30px 32px stretch;
+}
+.arc-pang-timebar > *,
+.arc-pang-fever > * { position: relative; z-index: 1; }
+.arc-pang-timebar .bar-ico,
+.arc-pang-fever .bar-ico { width: 24px; height: 24px; flex: none; }
+.arc-pang-timebar .lbl,
+.arc-pang-fever .lbl {
+  font-size: 17px; font-weight: 400; color: #cbb8ff; min-width: 32px;
+}
+.arc-pang-timebar .tube,
+.arc-pang-fever .fever-track {
+  flex: 1; height: 26px; border-radius: 0; border: 0;
+  background: none; box-shadow: none; overflow: visible;
+  position: relative;
+}
+.arc-pang-timebar .tube::before,
+.arc-pang-fever .fever-track::before {
+  content: ""; position: absolute; inset: 0;
+  border-style: solid; border-width: 13px;
+  border-image: url(/arcade/pang/ui/bar-track.webp) 39 fill / 13px stretch;
+}
+.arc-pang-timebar .tube i,
+.arc-pang-fever .fever-track i {
+  position: absolute; left: 0; top: 0; bottom: 0;
+  min-width: 26px; height: 26px;
+  background: none !important; box-shadow: none;
+  border-style: solid; border-width: 13px;
+  border-image: url(/arcade/pang/ui/bar-fill-time.webp) 39 fill / 13px stretch;
+}
+.arc-pang-fever .fever-track i {
+  border-image-source: url(/arcade/pang/ui/bar-fill-level.webp);
+}
+.arc-pang-timebar.urgent .tube i,
+.arc-pang.is-danger .arc-pang-timebar .tube i {
+  border-image-source: url(/arcade/pang/ui/bar-fill-time-low.webp);
+  animation: pang-low-blink .5s step-end infinite;
+}
+@keyframes pang-low-blink { 50% { opacity: .45; } }
+.arc-pang-timebar b,
+.arc-pang-fever b {
+  min-width: 52px; text-align: right;
+  font-size: 22px; color: #fff36b;
+  text-shadow: 0 0 8px #ffb300;
+}
+.arc-pang-timebar.urgent,
+.arc-pang.is-danger .arc-pang-timebar {
+  background: none; box-shadow: none; color: #ff3d5a;
+  animation: pang-hud-shake .35s ease-in-out infinite;
+}
+.arc-pang-fever { background: none; box-shadow: none; }
+.arc-pang-fever.glow,
+.arc-pang-fever.fever-on { box-shadow: none; filter: drop-shadow(0 0 10px rgba(107,255,154,.45)); }
+.arc-pang-timebar.refill { box-shadow: none !important; filter: drop-shadow(0 0 14px #fff36b); }
+.arc-pang-timebar.refill .tube i { box-shadow: none; }
+
+.arc-pang-toast {
+  top: 42%;
+  background: linear-gradient(90deg, #ff4fd8, #7a4dff);
+  color: #fff; border: 2px solid #fff;
+  box-shadow: 0 0 16px rgba(255,79,216,.55);
+}
+.arc-pang-toast.combo {
+  background: transparent; border: 0; box-shadow: none;
+  font-family: "Black Han Sans", "Jua", sans-serif;
+  font-size: 22px; color: #fff36b;
+  text-shadow: 0 0 10px #ffb300, 0 2px 0 #8a0f66;
+  padding: 0;
+}
+.arc-pang-floater {
+  color: #fff36b;
+  text-shadow: 0 0 8px #ffb300, 0 2px 0 #8a0f66;
+}
+
+.arc-pang-intro { background: transparent; }
+.arc-pang-result { background: rgba(11, 4, 40, .62); }
+.arc-pang:has([data-intro]:not([hidden])) .arc-pang-top,
+.arc-pang:has([data-intro]:not([hidden])) .arc-pang-hero,
+.arc-pang:has([data-intro]:not([hidden])) .arc-pang-stage,
+.arc-pang:has([data-intro]:not([hidden])) .arc-pang-bottom,
+.arc-pang:has([data-result]:not([hidden])) .arc-pang-top,
+.arc-pang:has([data-result]:not([hidden])) .arc-pang-hero,
+.arc-pang:has([data-result]:not([hidden])) .arc-pang-stage,
+.arc-pang:has([data-result]:not([hidden])) .arc-pang-bottom {
+  visibility: hidden; pointer-events: none;
+}
+.arc-pang-intro .intro-inner {
+  width: min(362px, 94%); color: #fff;
+  display: flex; flex-direction: column; align-items: center;
+}
+.intro-topchip {
+  align-self: flex-start;
+  display: flex; align-items: center; gap: 6px;
+  min-height: 36px; padding: 6px 14px 6px 8px;
+  position: relative; color: #fff; font-size: 16px;
+  margin: 4px 0 0 4px;
+}
+.intro-topchip::before {
+  content: ""; position: absolute; inset: 0;
+  border-style: solid; border-width: 16px 18px;
+  border-image: url(/arcade/pang/ui/chip-best.webp) 48 54 fill / 16px 18px stretch;
+}
+.intro-topchip > * { position: relative; z-index: 1; }
+.intro-topchip img { width: 24px; height: 24px; }
+.intro-topchip em { color: #fff36b; font-style: normal; }
+.logo-wrap { margin: 4px 0 0; }
+.logo-img { width: min(330px, 92%); height: auto; display: block; margin: 0 auto; }
+.logo-bubble { display: none; }
+.intro-store {
+  margin: 2px 0 4px; padding: 6px 18px;
+  position: relative; color: #ffd23f; font-size: 15px;
+}
+.intro-store::before {
+  content: ""; position: absolute; inset: 0;
+  border-style: solid; border-width: 16px 18px;
+  border-image: url(/arcade/pang/ui/chip-best.webp) 48 54 fill / 16px 18px stretch;
+}
+.intro-bum {
+  width: min(180px, 46%); height: auto;
+  margin: -4px 0 6px;
+  filter: drop-shadow(0 0 16px rgba(51,230,255,.4));
+  animation: pang-mascot-cheer 2.4s ease-in-out infinite;
+}
+.howto-card {
+  width: 100%; background: none; border: 0; border-radius: 0;
+  box-shadow: none; margin: 0 0 10px; overflow: visible;
+  position: relative; padding: 22px 12px 14px;
+  color: #e6dcff;
+}
+.howto-card::before {
+  content: ""; position: absolute; inset: 0;
+  border-style: solid; border-width: 40px;
+  border-image: url(/arcade/pang/ui/panel.webp) 120 fill / 40px stretch;
+}
+.howto-card > * { position: relative; z-index: 1; }
+.howto-head {
+  background: none; color: #fff; justify-content: center;
+  font-size: 20px; padding: 0 0 10px;
+  text-shadow: 0 0 8px #ff4fd8;
+}
+.howto-head .pg { display: none; }
+.howto-body {
+  display: flex; gap: 8px; padding: 0; align-items: stretch;
+}
+.howto-col { flex: 1; text-align: center; }
+.howto-col p {
+  margin: 6px 0 0; font-weight: 400; font-size: 13px; line-height: 1.25; color: #e6dcff;
+}
+.howto-illust {
+  width: 100%; height: 72px; background: none; border: 0;
+  position: relative; display: grid; place-items: center;
+}
+.howto-illust::before {
+  content: ""; position: absolute; inset: 0;
+  border-style: solid; border-width: 18px 20px;
+  border-image: url(/arcade/pang/ui/row.webp) 54 60 fill / 18px 20px stretch;
+}
+.howto-illust > * { position: relative; z-index: 1; }
+.mini-tiles { display: flex; gap: 2px; }
+.mini-tiles img { width: 26px; height: 26px; }
+.mini-gauge {
+  width: 70%; height: 14px; position: relative;
+}
+.mini-gauge::before {
+  content: ""; position: absolute; inset: 0;
+  border-style: solid; border-width: 7px;
+  border-image: url(/arcade/pang/ui/bar-track.webp) 39 fill / 7px stretch;
+}
+.mini-gauge i {
+  position: absolute; left: 0; top: 0; bottom: 0; width: 70%;
+  border-style: solid; border-width: 7px;
+  border-image: url(/arcade/pang/ui/bar-fill-level.webp) 39 fill / 7px stretch;
+}
+.mini-clock { width: 22px; height: 22px; margin-top: 4px; }
+.mini-clock.big { width: 32px; height: 32px; margin: 0; }
+.mini-zero { display: block; font-family: "Black Han Sans", sans-serif; color: #ff8a9e; font-size: 14px; }
+.tap-hand { display: none; }
+.arc-pang-intro .tag {
+  background: transparent; color: #ffd23f; margin-bottom: 8px;
+}
+.candy-go, .arc-pang-intro .candy-go, .arc-pang-result .candy-go { display: none; }
+
+.pang-imgbtn {
+  border: 0; padding: 0; cursor: pointer;
+  background: transparent center / contain no-repeat;
+  flex: none;
+}
+.pang-imgbtn:active { transform: translateY(2px); }
+.pang-btn-start { width: min(240px, 86%); height: 76px; background-image: url(/arcade/pang/ui/buttons/btn-start-normal.webp); margin: 0 auto 6px; }
+.pang-btn-start:active { background-image: url(/arcade/pang/ui/buttons/btn-start-pressed.webp); }
+.pang-btn-again { width: min(200px, 80%); height: 70px; background-image: url(/arcade/pang/ui/buttons/btn-again-normal.webp); margin: 8px auto 6px; display: block; }
+.pang-btn-again:active { background-image: url(/arcade/pang/ui/buttons/btn-again-pressed.webp); }
+.pang-btn-rank { width: 168px; height: 66px; background-image: url(/arcade/pang/ui/buttons/btn-rank-normal.webp); }
+.pang-btn-rank:active { background-image: url(/arcade/pang/ui/buttons/btn-rank-pressed.webp); }
+.pang-btn-arcade { width: 168px; height: 66px; background-image: url(/arcade/pang/ui/buttons/btn-arcade-normal.webp); }
+.pang-btn-arcade:active { background-image: url(/arcade/pang/ui/buttons/btn-arcade-pressed.webp); }
+.intro-row { display: flex; gap: 8px; justify-content: center; width: 100%; }
+.ghost-rank { display: none; }
+
+.arc-pang-result .box {
+  background: none; border: 0; border-radius: 0; box-shadow: none;
+  color: #fff; padding: 28px 18px 18px;
+  position: relative;
+}
+.arc-pang-result .box::before {
+  content: ""; position: absolute; inset: 0;
+  border-style: solid; border-width: 40px;
+  border-image: url(/arcade/pang/ui/panel.webp) 120 fill / 40px stretch;
+}
+.arc-pang-result .box > * { position: relative; z-index: 1; }
+.arc-pang-result .result-banner { width: min(300px, 92%); height: auto; display: block; margin: -8px auto 4px; }
+.arc-pang-result .result-bum { width: 110px; height: 110px; display: block; margin: 0 auto; }
+.arc-pang-result .banner { display: none; }
+.arc-pang-result .lbl { margin: 4px 0 0; color: #7ff3ff; text-shadow: 0 0 8px #33e6ff; font-size: 15px; }
+.arc-pang-result .big {
+  font-size: 40px; color: #fff36b; -webkit-text-stroke: 0;
+  text-shadow: 0 0 8px #ffb300, 0 0 2px #ffb300; margin: 0 0 6px;
+}
+.arc-pang-result .sub { color: #cbb8ff; opacity: 1; }
+.arc-pang-result .result-meta { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+.arc-pang-result .result-lv {
+  background: none; box-shadow: none; color: #fff;
+  border: 0; padding: 4px 0;
+}
+.arc-pang-result .rank-badge {
+  background: transparent; color: #ffd23f; border: 0;
+}
+.arc-pang-result .star-row { gap: 10px; min-height: 56px; align-items: center; }
+.arc-pang-result .star-row img { width: 56px; height: 56px; }
+.arc-pang-result .star-row img.dim { opacity: 1; }
+.arc-pang-result .star-row img.on { animation: arc-star-pop .45s cubic-bezier(.2,1.5,.3,1); }
+.arc-pang-result .row { gap: 8px; margin-top: 4px; }
+.arc-pang-result .row button:not(.pang-imgbtn) { display: none; }
+.arc-pang-result .rays { display: none; }
+
+.arc-pang-count {
+  color: #fff36b; -webkit-text-stroke: 0;
+  text-shadow: 0 0 16px #ffb300, 0 4px 0 #8a0f66;
+}
+
+.arc-pang-levelup .lu-card {
+  background: none; border: 0; box-shadow: none;
+  min-width: 0; padding: 0; color: #fff;
+  display: flex; flex-direction: column; align-items: center;
+}
+.arc-pang-levelup .lu-mascot-img { width: 140px; height: 140px; margin-bottom: -24px; z-index: 3; }
+.arc-pang-levelup .lu-card-img { width: min(320px, 86vw); height: auto; display: block; }
+.arc-pang-levelup .lu-banner { display: none; }
+.arc-pang-levelup .lu-mascot { display: none; }
+.arc-pang-levelup .lu-sub { display: none; }
+.arc-pang-levelup .lu-lv {
+  margin-top: -18px;
+  font-size: 36px; color: #fff;
+  text-shadow: 0 0 8px #ff4fd8, 0 3px 0 #8a0f66;
+}
+.arc-pang-levelup.pop .lu-card { animation: pang-lu-pop .3s cubic-bezier(.2,1.4,.3,1); }
+@keyframes pang-lu-pop {
+  0% { transform: scale(.6); }
+  55% { transform: scale(1.1); }
+  100% { transform: scale(1); }
+}
+
+#arc-root .arc-modal.neon { background: rgba(11, 4, 40, .62); }
+#arc-root .arc-modal.neon .board {
+  background: none; border: 0; box-shadow: none; color: #fff;
+  position: relative; padding: 22px 16px 16px;
+}
+#arc-root .arc-modal.neon .board::before {
+  content: ""; position: absolute; inset: 0;
+  border-style: solid; border-width: 40px;
+  border-image: url(/arcade/pang/ui/panel.webp) 120 fill / 40px stretch;
+}
+#arc-root .arc-modal.neon .board > * { position: relative; z-index: 1; }
+#arc-root .arc-modal.neon .board h3 {
+  color: #fff; text-shadow: 0 0 8px #ff4fd8;
+  font-family: "Jua", "Noto Sans KR", sans-serif;
+}
+#arc-root .arc-modal.neon .board .sub { color: #cbb8ff; opacity: 1; }
+#arc-root .arc-modal.neon .tabs {
+  background: none; padding: 0; gap: 8px; border-radius: 0;
+}
+#arc-root .arc-modal.neon .tabs button {
+  position: relative; background: none; color: #cbb8ff;
+  border: 0; border-radius: 0; box-shadow: none;
+  font-family: "Jua", "Noto Sans KR", sans-serif; font-size: 18px;
+  padding: 10px 8px;
+}
+#arc-root .arc-modal.neon .tabs button::before {
+  content: ""; position: absolute; inset: 0;
+  border-style: solid; border-width: 20px 22px;
+  border-image: url(/arcade/pang/ui/tab-off.webp) 60 66 fill / 20px 22px stretch;
+}
+#arc-root .arc-modal.neon .tabs button.on { color: #fff; text-shadow: 0 0 6px #ff4fd8; }
+#arc-root .arc-modal.neon .tabs button.on::before {
+  border-image-source: url(/arcade/pang/ui/tab-on.webp);
+}
+#arc-root .arc-modal.neon .tabs button > * ,
+#arc-root .arc-modal.neon .tabs button { z-index: 1; }
+#arc-root .arc-modal.neon .rank-row {
+  background: none; border: 0; box-shadow: none; color: #fff;
+  position: relative; padding: 10px 12px;
+}
+#arc-root .arc-modal.neon .rank-row::before {
+  content: ""; position: absolute; inset: 0;
+  border-style: solid; border-width: 18px 20px;
+  border-image: url(/arcade/pang/ui/row.webp) 54 60 fill / 18px 20px stretch;
+}
+#arc-root .arc-modal.neon .rank-row > * { position: relative; z-index: 1; }
+#arc-root .arc-modal.neon .rank-row.me::before,
+#arc-root .arc-modal.neon .mine .rank-row::before {
+  border-width: 20px 22px;
+  border-image: url(/arcade/pang/ui/row-me.webp) 60 66 fill / 20px 22px stretch;
+}
+#arc-root .arc-modal.neon .mine {
+  background: none; border: 0; box-shadow: none; padding: 0; margin-top: 8px;
+}
+#arc-root .arc-modal.neon .medal-img { width: 36px; height: 40px; object-fit: contain; flex: none; }
+#arc-root .arc-modal.neon .medal {
+  background: #2B1170; color: #cbb8ff; box-shadow: none;
+}
+#arc-root .arc-modal.neon .av-bum { width: 36px; height: 36px; flex: none; }
+#arc-root .arc-modal.neon .nm { color: #fff; }
+#arc-root .arc-modal.neon .sc {
+  background: none; border: 0; box-shadow: none; color: #fff36b;
+  text-shadow: 0 0 8px #ffb300; padding: 0; font-size: 16px;
+}
+#arc-root .arc-modal.neon .empty {
+  background: rgba(11,4,40,.35); border-color: rgba(51,230,255,.3); color: #cbb8ff;
+}
+#arc-root .arc-modal.neon .empty b { color: #fff; }
+#arc-root .arc-modal.neon .close {
+  background: none; box-shadow: none; color: #cbb8ff;
+  border: 0; text-decoration: underline;
+}
+#arc-root .arc-modal.neon .close-x {
+  position: absolute; top: 10px; right: 10px; z-index: 2;
+  width: 54px; height: 57px; border: 0; background: url(/arcade/pang/ui/buttons/btn-close-normal.webp) center / contain no-repeat;
+  cursor: pointer;
+}
+#arc-root .arc-modal.neon .close-x:active {
+  background-image: url(/arcade/pang/ui/buttons/btn-close-pressed.webp);
+}
+
+@media (max-height: 740px) {
+  .arc-pang-hero { height: 72px; margin-bottom: -22px; }
+  .arc-pang-mascot .mascot-img { width: 92px; height: 92px; }
+  .intro-bum { width: min(130px, 38%); }
+  .howto-card { padding: 18px 10px 10px; }
+  .pang-btn-start { height: 64px; }
+}
+@media (max-width: 360px) {
+  .arc-pang-lv { width: 72px; min-width: 72px; height: 80px; background-size: 72px 80px; }
+  .arc-pang-lv b { font-size: 32px; }
+  .arc-pang-scoreblock { height: 88px; }
+  .arc-pang-scoreblock .score-num { font-size: 28px; }
+  .arc-pang-iconbtn { width: 48px; height: 50px; }
+  .arc-pang-mascot .mascot-img { width: 100px; height: 100px; }
+  .pang-btn-rank, .pang-btn-arcade { width: 150px; height: 58px; }
+}
+
+.mascot-bubble,
+.intro-store,
+.intro-topchip,
+.howto-card,
+.howto-illust,
+.arc-pang-scoreblock,
+.arc-pang-timebar,
+.arc-pang-fever,
+.arc-pang-result .box,
+.orient-card,
+#arc-root .arc-modal.neon .board,
+#arc-root .arc-modal.neon .tabs button,
+#arc-root .arc-modal.neon .rank-row { isolation: isolate; }
+.mascot-bubble::before,
+.intro-store::before,
+.intro-topchip::before,
+.howto-card::before,
+.howto-illust::before,
+.arc-pang-scoreblock::before,
+.arc-pang-timebar::before,
+.arc-pang-fever::before,
+.arc-pang-timebar .tube::before,
+.arc-pang-fever .fever-track::before,
+.arc-pang-result .box::before,
+#arc-root .arc-modal.neon .board::before,
+#arc-root .arc-modal.neon .tabs button::before,
+#arc-root .arc-modal.neon .rank-row::before { z-index: -1; }
+
+.arc-pang-result .row button.pang-imgbtn {
+  padding: 0; border: 0; border-radius: 0; box-shadow: none;
+  background-color: transparent;
+  background-repeat: no-repeat; background-position: center; background-size: contain;
+}
+.arc-pang-result .row button.pang-btn-rank {
+  width: 168px; height: 66px;
+  background-image: url(/arcade/pang/ui/buttons/btn-rank-normal.webp);
+}
+.arc-pang-result .row button.pang-btn-rank:active {
+  background-image: url(/arcade/pang/ui/buttons/btn-rank-pressed.webp);
+}
+.arc-pang-result .row button.pang-btn-arcade {
+  width: 168px; height: 66px;
+  background-image: url(/arcade/pang/ui/buttons/btn-arcade-normal.webp);
+}
+.arc-pang-result .row button.pang-btn-arcade:active {
+  background-image: url(/arcade/pang/ui/buttons/btn-arcade-pressed.webp);
+}
+.arc-pang-vignette {
+  background: radial-gradient(ellipse at center, transparent 38%, rgba(255,20,60,.52) 100%);
 }

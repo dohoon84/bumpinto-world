@@ -88,37 +88,41 @@ export function createArcadeUI({ onHintTap, onCabTap, onExit, onMute } = {}) {
     },
     setMuted(m) { muteBtn.textContent = m ? '🔇' : '🔊'; },
     showBoard({ title = '범핑팡 랭킹', sub = 'PC·모바일 통합 · 월간 1·2·3만 보상', rows = [], period = 'today', me = null, onClose, onTab } = {}) {
+      const pang = '/arcade/pang';
       const medal = (rank) => {
-        if (rank === 1) return '<span class="medal g" aria-label="1등">1</span>';
-        if (rank === 2) return '<span class="medal s" aria-label="2등">2</span>';
-        if (rank === 3) return '<span class="medal b" aria-label="3등">3</span>';
+        if (rank === 1 || rank === 2 || rank === 3) {
+          return `<img class="medal-img" src="${pang}/ui/medals/medal-${rank}.webp" alt="${rank}등" />`;
+        }
         return `<span class="medal">${rank}</span>`;
       };
-      const av = (name) => {
+      const av = (name, isMe = false) => {
+        if (isMe) return `<img class="av-bum" src="${pang}/character/bum-front.webp" alt="" />`;
         const ch = String(name || '?').trim().slice(0, 1) || '?';
         return `<span class="av" aria-hidden="true">${esc(ch)}</span>`;
       };
       const rowHtml = (r, extra = '') => {
         const rank = Number(r.rank) || 0;
         const top = rank === 1 ? ' top1' : rank === 2 ? ' top2' : rank === 3 ? ' top3' : '';
-        return `<li class="rank-row${top}${extra}">${medal(rank)}${av(r.name)}<span class="nm">${esc(r.name || '나')}</span><span class="sc">${Number(r.score || 0).toLocaleString()}</span></li>`;
+        const isMe = extra.includes('me');
+        return `<li class="rank-row${top}${extra}">${medal(rank)}${av(r.name, isMe)}<span class="nm">${esc(r.name || '나')}</span><span class="sc">${Number(r.score || 0).toLocaleString()}</span></li>`;
       };
-      // 실제 데이터만 — 가짜 이름/점수 금지. me 는 rows 안 내 행(있으면 상단 고정)
+      // 실제 데이터만 — 가짜 이름/점수 금지. me 는 rows 안 내 행(있으면 하단 고정)
       const list = Array.isArray(rows) ? rows.filter((r) => r && (r.name != null || r.score != null)) : [];
       const mine = me && (me.name != null || me.score != null) ? me : null;
       const body = list.length
         ? `<ul class="rank-list">${list.map((r) => rowHtml(r)).join('')}</ul>`
         : `<div class="empty"><b>아직 기록이 없어요</b>첫 판을 플레이하면 여기에 순위가 쌓여요.<br/>로컬/서버에 점수가 없을 때 보이는 빈 화면입니다.</div>`;
       const mineBlock = mine ? `<div class="mine"><ul class="rank-list" style="overflow:visible">${rowHtml(mine, ' me')}</ul></div>` : '';
-      modalHost.innerHTML = `<div class="arc-modal"><div class="board" role="dialog" aria-label="${esc(title)}">
+      modalHost.innerHTML = `<div class="arc-modal neon"><div class="board" role="dialog" aria-label="${esc(title)}">
+        <button type="button" class="close-x" data-close aria-label="닫기"></button>
         <h3>${esc(title)}</h3><div class="sub">${esc(sub)}</div>
         <div class="tabs">
           <button type="button" data-p="today" class="${period === 'today' ? 'on' : ''}">오늘</button>
           <button type="button" data-p="week" class="${period === 'week' ? 'on' : ''}">주간</button>
           <button type="button" data-p="month" class="${period === 'month' ? 'on' : ''}">이달</button>
         </div>
-        ${mineBlock}
         ${body}
+        ${mineBlock}
         <button type="button" class="close" data-close>닫기</button>
       </div></div>`;
       modalHost.querySelector('[data-close]')?.addEventListener('click', () => { modalHost.innerHTML = ''; onClose?.(); });

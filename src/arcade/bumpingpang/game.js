@@ -1,6 +1,6 @@
 // [범핑팡] 모바일 퍼즐급 연출 — 큰 타일 · 스쿼시버스트 · 히트스톱 · 게임 결과창
 import { TILES } from './tiles.js';
-import { getTileSprite, prewarmSprites } from './sprites.js';
+import { getTileSprite, getCellSprite, prewarmSprites, pangUrl, mascotUrl } from './sprites.js';
 import {
   COLS, ROWS, PLAY_SEC, createBoard, makeRng, hashSeed, trySwap, hasMoves, shuffleBoard, areAdjacent,
   gaugeNeed, timeDrainPerSec, scoreMult, starsForLevel,
@@ -39,48 +39,46 @@ export function mountBumpingPang({
   wrap.innerHTML = `
     <div class="arc-pang-orient" data-orient hidden>
       <div class="orient-card">
-        <div class="phone-spin" aria-hidden="true">
-          <div class="phone-body"><span></span></div>
-        </div>
-        <div class="orient-mascot" aria-hidden="true"><svg class="bum-face" viewBox="0 0 80 80" aria-hidden="true"><ellipse cx="40" cy="46" rx="28" ry="26" fill="#6ea8ff"/><circle cx="22" cy="18" r="12" fill="#6ea8ff"/><circle cx="58" cy="18" r="12" fill="#6ea8ff"/><circle cx="22" cy="18" r="7" fill="#3d6fd9"/><circle cx="58" cy="18" r="7" fill="#3d6fd9"/><ellipse cx="40" cy="52" rx="22" ry="18" fill="#8fc0ff"/><circle cx="30" cy="44" r="5" fill="#1a1030"/><circle cx="50" cy="44" r="5" fill="#1a1030"/><circle cx="31.5" cy="42.5" r="1.6" fill="#fff"/><circle cx="51.5" cy="42.5" r="1.6" fill="#fff"/><ellipse cx="28" cy="52" rx="5" ry="3" fill="#ff8fb8" opacity=".85"/><ellipse cx="52" cy="52" rx="5" ry="3" fill="#ff8fb8" opacity=".85"/><path d="M34 56 Q40 62 46 56" stroke="#1a1030" stroke-width="2.2" fill="none" stroke-linecap="round"/></svg></div>
+        <img class="orient-icon" src="${pangUrl('ui/icon-rotate.webp')}" alt="" />
+        <img class="orient-bum" src="${mascotUrl('wink')}" alt="" />
         <p class="orient-title">휴대폰을 세로로 돌려 주세요</p>
         <p class="orient-sub">범핑팡은 세로 화면에서만 플레이할 수 있어요</p>
       </div>
     </div>
     <div class="arc-pang-phone" data-phone>
-      <div class="arc-pang-sky" aria-hidden="true">
-        <i class="cloud c1"></i><i class="cloud c2"></i><i class="cloud c3"></i>
-        <i class="flower f1"></i><i class="flower f2"></i><i class="flower f3"></i>
-        <i class="hill"></i>
-      </div>
+      <div class="arc-pang-sky" aria-hidden="true"></div>
       <header class="arc-pang-top">
-        <div class="arc-pang-lv" data-lv-wrap><span class="lv-lab">Lv.</span><b data-lv>1</b></div>
+        <div class="arc-pang-lv" data-lv-wrap><span class="lv-lab">Lv</span><b data-lv>1</b></div>
         <div class="arc-pang-scoreblock" data-score-wrap>
           <span class="lbl">점수</span>
           <b class="score-num" data-score>0</b>
           <span class="best">최고 <em data-best>0</em></span>
         </div>
         <div class="arc-pang-topbtns">
-          <button type="button" class="arc-pang-iconbtn" data-mute title="음소거" aria-label="음소거">🔊</button>
-          <button type="button" class="arc-pang-iconbtn pause" data-exit title="나가기" aria-label="나가기">⏸</button>
+          <button type="button" class="arc-pang-iconbtn is-sound" data-mute title="음소거" aria-label="음소거"></button>
+          <button type="button" class="arc-pang-iconbtn is-pause" data-exit title="나가기" aria-label="나가기"></button>
         </div>
       </header>
+      <div class="arc-pang-hero">
+        <aside class="arc-pang-mascot" data-mascot aria-hidden="true">
+          <img class="mascot-img" data-mascot-img src="${mascotUrl('wink')}" alt="" />
+          <div class="mascot-bubble" data-mascot-say hidden>화이팅!</div>
+        </aside>
+      </div>
       <div class="arc-pang-stage">
         <div class="arc-pang-boardwrap">
           <canvas class="arc-pang-cv" width="640" height="640"></canvas>
         </div>
-        <aside class="arc-pang-mascot" data-mascot aria-hidden="true">
-          <div class="mascot-bubble" data-mascot-say hidden>화이팅!</div>
-          <div class="mascot-body"><svg class="bum-face" viewBox="0 0 80 80" aria-hidden="true"><ellipse cx="40" cy="46" rx="28" ry="26" fill="#6ea8ff"/><circle cx="22" cy="18" r="12" fill="#6ea8ff"/><circle cx="58" cy="18" r="12" fill="#6ea8ff"/><circle cx="22" cy="18" r="7" fill="#3d6fd9"/><circle cx="58" cy="18" r="7" fill="#3d6fd9"/><ellipse cx="40" cy="52" rx="22" ry="18" fill="#8fc0ff"/><circle cx="30" cy="44" r="5" fill="#1a1030"/><circle cx="50" cy="44" r="5" fill="#1a1030"/><circle cx="31.5" cy="42.5" r="1.6" fill="#fff"/><circle cx="51.5" cy="42.5" r="1.6" fill="#fff"/><ellipse cx="28" cy="52" rx="5" ry="3" fill="#ff8fb8" opacity=".85"/><ellipse cx="52" cy="52" rx="5" ry="3" fill="#ff8fb8" opacity=".85"/><path d="M34 56 Q40 62 46 56" stroke="#1a1030" stroke-width="2.2" fill="none" stroke-linecap="round"/></svg></div>
-        </aside>
       </div>
       <footer class="arc-pang-bottom">
         <div class="arc-pang-timebar" data-time-wrap>
-          <span class="time-ico" aria-hidden="true">⏱</span>
+          <img class="bar-ico" src="${pangUrl('ui/icon-clock.webp')}" alt="" />
+          <span class="lbl">시간</span>
           <div class="tube"><i data-bar></i></div>
-          <b data-time>${PLAY_SEC}</b>
+          <b data-time>0:30</b>
         </div>
         <div class="arc-pang-fever" data-gauge-wrap>
+          <img class="bar-ico" src="${pangUrl('ui/icon-star.webp')}" alt="" />
           <span class="lbl">레벨</span>
           <div class="fever-track"><i data-gauge></i></div>
           <b data-combo title="콤보">x0</b>
@@ -91,27 +89,50 @@ export function mountBumpingPang({
       <div class="arc-pang-float" data-floats></div>
       <div class="arc-pang-intro" data-intro>
         <div class="intro-inner">
+          <div class="intro-topchip">
+            <img src="${pangUrl('ui/icon-star.webp')}" alt="" />
+            <span>최고 <em data-intro-best>0</em></span>
+          </div>
           <div class="logo-wrap logo-bounce">
-            <div class="logo-bubble">
-              <span class="logo-mark" aria-hidden="true"><svg class="bum-face" viewBox="0 0 80 80" aria-hidden="true"><ellipse cx="40" cy="46" rx="28" ry="26" fill="#6ea8ff"/><circle cx="22" cy="18" r="12" fill="#6ea8ff"/><circle cx="58" cy="18" r="12" fill="#6ea8ff"/><circle cx="22" cy="18" r="7" fill="#3d6fd9"/><circle cx="58" cy="18" r="7" fill="#3d6fd9"/><ellipse cx="40" cy="52" rx="22" ry="18" fill="#8fc0ff"/><circle cx="30" cy="44" r="5" fill="#1a1030"/><circle cx="50" cy="44" r="5" fill="#1a1030"/><circle cx="31.5" cy="42.5" r="1.6" fill="#fff"/><circle cx="51.5" cy="42.5" r="1.6" fill="#fff"/><ellipse cx="28" cy="52" rx="5" ry="3" fill="#ff8fb8" opacity=".85"/><ellipse cx="52" cy="52" rx="5" ry="3" fill="#ff8fb8" opacity=".85"/><path d="M34 56 Q40 62 46 56" stroke="#1a1030" stroke-width="2.2" fill="none" stroke-linecap="round"/></svg></span>
-              <span class="logo-text">범핑팡</span>
-            </div>
+            <img class="logo-img" src="${pangUrl('logo/logo-bumpingpang.svg')}" alt="범핑팡" />
           </div>
+          <div class="intro-store">BUMP 오락실 서현점</div>
+          <img class="intro-bum" src="${mascotUrl('wink')}" alt="" />
           <div class="howto-card">
-            <div class="howto-head">어떻게 하나요? <span class="pg">1/3</span></div>
+            <div class="howto-head">어떻게 하나요?</div>
             <div class="howto-body">
-              <div class="howto-illust" aria-hidden="true">
-                <div class="mini-tiles">
-                  <i class="t t1"></i><i class="t t2"></i><i class="t t3"></i>
+              <div class="howto-col">
+                <div class="howto-illust" aria-hidden="true">
+                  <div class="mini-tiles">
+                    <img src="${pangUrl('blocks/blk-bear.webp')}" alt="" />
+                    <img src="${pangUrl('blocks/blk-bear.webp')}" alt="" />
+                    <img src="${pangUrl('blocks/blk-bear.webp')}" alt="" />
+                  </div>
                 </div>
-                <div class="tap-hand">👆</div>
+                <p>같은 블록 3개 팡!</p>
               </div>
-              <p>같은 친구 <b>3+</b> 모아 팡!<br/>게이지를 채우면 <b>레벨업</b>·시간 충전.<br/>시간 소진 전 레벨업!</p>
+              <div class="howto-col">
+                <div class="howto-illust" aria-hidden="true">
+                  <div class="mini-gauge"><i></i></div>
+                  <img class="mini-clock" src="${pangUrl('ui/icon-clock.webp')}" alt="" />
+                </div>
+                <p>게이지 채우면<br/>시간 충전</p>
+              </div>
+              <div class="howto-col">
+                <div class="howto-illust" aria-hidden="true">
+                  <img class="mini-clock big" src="${pangUrl('ui/icon-clock.webp')}" alt="" />
+                  <span class="mini-zero">0:00</span>
+                </div>
+                <p>시간 끝나면<br/>게임 끝</p>
+              </div>
             </div>
           </div>
-          <p class="tag">${practice || !ranked ? '연습 모드 · 순위 기록 안 함' : '랭킹 도전 ★'}</p>
-          <button type="button" class="candy-go" data-go>시작</button>
-          <button type="button" class="ghost-rank" data-open-rank>순위판</button>
+          <p class="tag">${practice || !ranked ? '연습 모드 · 순위 기록 안 함' : '랭킹 도전'}</p>
+          <button type="button" class="pang-imgbtn pang-btn-start" data-go aria-label="시작"></button>
+          <div class="intro-row">
+            <button type="button" class="pang-imgbtn pang-btn-rank" data-open-rank aria-label="순위판"></button>
+            <button type="button" class="pang-imgbtn pang-btn-arcade" data-leave-intro aria-label="오락실로"></button>
+          </div>
         </div>
       </div>
       <div class="arc-pang-count" data-count hidden></div>
@@ -120,16 +141,15 @@ export function mountBumpingPang({
         <div class="lu-rays" aria-hidden="true"></div>
         <div class="lu-confetti" data-lu-confetti aria-hidden="true"></div>
         <div class="lu-card">
-          <div class="lu-mascot" aria-hidden="true">🎉</div>
-          <div class="lu-banner">LEVEL UP!</div>
+          <img class="lu-mascot-img" src="${mascotUrl('levelup')}" alt="" />
+          <img class="lu-card-img" src="${pangUrl('ui/levelup-card.webp')}" alt="LEVEL UP" />
           <div class="lu-lv">Lv.<b data-lu-lv>2</b></div>
-          <p class="lu-sub">시간 충전 · 점수 배율 업!</p>
         </div>
       </div>
       <div class="arc-pang-vignette" data-vignette hidden></div>
       <div class="arc-pang-result" data-result hidden></div>
     </div>
-  `;
+    `;
 
   root.appendChild(wrap);
   try { prewarmSprites(); } catch { /* */ }
@@ -161,6 +181,7 @@ export function mountBumpingPang({
     orient: wrap.querySelector('[data-orient]'),
     mascot: wrap.querySelector('[data-mascot]'),
     mascotSay: wrap.querySelector('[data-mascot-say]'),
+    mascotImg: wrap.querySelector('[data-mascot-img]'),
   };
 
   const seed = hashSeed(`${storeId}|${new Date().toISOString().slice(0, 10)}|pang`);
@@ -177,13 +198,15 @@ export function mountBumpingPang({
   let bestScore = 0;
   try { bestScore = Math.max(0, Number(getBest?.()) || 0); } catch { bestScore = 0; }
   if (el.best) el.best.textContent = String(bestScore);
+  const introBest = wrap.querySelector('[data-intro-best]');
+  if (introBest) introBest.textContent = Number(bestScore).toLocaleString();
 
   function freshCellAnim() {
     return Array.from({ length: ROWS }, () => Array.from({ length: COLS }, () => ({ y: 0, sx: 1, sy: 1, pop: 0, flash: 0 })));
   }
   function cellSize() {
-    const pad = 4; // larger tiles fill the board
-    return { pad, s: (cv.width - pad * 2) / COLS };
+    const pad = 0;
+    return { pad, s: cv.width / COLS };
   }
   function wait(ms) { return new Promise((r) => setTimeout(r, ms)); }
   function easeInOut(t) { return t < 0.5 ? 2 * t * t : 1 - ((-2 * t + 2) ** 2) / 2; }
@@ -204,12 +227,8 @@ export function mountBumpingPang({
     const { pad, s } = cellSize();
     const tNow = performance.now() / 1000;
     ctx.clearRect(0, 0, cv.width, cv.height);
-    const bg = ctx.createLinearGradient(0, 0, 0, cv.height);
-    bg.addColorStop(0, '#fff6d6'); bg.addColorStop(1, '#ffe0a8');
-    ctx.fillStyle = bg; ctx.fillRect(0, 0, cv.width, cv.height);
-    // soft board wells
-    ctx.fillStyle = 'rgba(120, 70, 20, 0.08)';
-    roundRect(ctx, pad - 2, pad - 2, cv.width - pad * 2 + 4, cv.height - pad * 2 + 4, 18); ctx.fill();
+    ctx.fillStyle = '#0B0428';
+    ctx.fillRect(0, 0, cv.width, cv.height);
 
     ctx.save();
     if (shake || punch) {
@@ -219,11 +238,11 @@ export function mountBumpingPang({
 
     for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
       const x = pad + c * s, y = pad + r * s;
-      ctx.fillStyle = 'rgba(255,255,255,0.55)';
-      roundRect(ctx, x + 3, y + 3, s - 6, s - 6, 16); ctx.fill();
+      const well = getCellSprite((r + c) % 2 ? 'dark' : 'light');
+      ctx.drawImage(well, x, y, s, s);
       if (hover && hover.r === r && hover.c === c && !(sel && sel.r === r && sel.c === c)) {
-        ctx.fillStyle = 'rgba(126,182,255,0.35)';
-        roundRect(ctx, x + 2, y + 2, s - 4, s - 4, 16); ctx.fill();
+        ctx.fillStyle = 'rgba(51,230,255,0.22)';
+        ctx.fillRect(x, y, s, s);
       }
 
       const cell = board[r][c];
@@ -256,7 +275,7 @@ export function mountBumpingPang({
       ctx.rotate(rot);
       ctx.scale(sx, sy);
       const spr = getTileSprite(cell.id, cell.special, blinkOn && !(sel && sel.r === r && sel.c === c));
-      const sz = s - 4;
+      const sz = s * (44 / 43);
       ctx.drawImage(spr, -sz / 2, -sz / 2, sz, sz);
       if (ca.flash > 0) {
         ctx.globalAlpha = Math.min(1, ca.flash);
@@ -267,10 +286,8 @@ export function mountBumpingPang({
       ctx.restore();
 
       if (sel && sel.r === r && sel.c === c) {
-        ctx.strokeStyle = '#ffe66d'; ctx.lineWidth = 5;
-        ctx.shadowColor = '#ffe66d'; ctx.shadowBlur = 16;
-        roundRect(ctx, x + 3 + ox, y + 3 + oy, s - 6, s - 6, 16); ctx.stroke();
-        ctx.shadowBlur = 0;
+        const mark = getCellSprite('select');
+        ctx.drawImage(mark, x + ox, y + oy, s, s);
       }
     }
 
@@ -372,7 +389,7 @@ export function mountBumpingPang({
 
   function syncHud() {
     const prevScore = el.score.textContent;
-    const nextScore = String(score);
+    const nextScore = score.toLocaleString();
     el.score.textContent = nextScore;
     if (prevScore !== nextScore) {
       el.scoreWrap.classList.remove('bump');
@@ -380,9 +397,12 @@ export function mountBumpingPang({
       el.scoreWrap.classList.add('bump');
     }
     bestScore = Math.max(bestScore, score);
-    if (el.best) el.best.textContent = String(Math.max(bestScore, score));
+    if (el.best) el.best.textContent = Math.max(bestScore, score).toLocaleString();
     if (el.lv) el.lv.textContent = String(level);
-    el.time.textContent = String(Math.max(0, Math.ceil(left)));
+    {
+      const sec = Math.max(0, Math.ceil(left));
+      el.time.textContent = `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`;
+    }
     const prevCombo = el.combo?.textContent;
     const nextCombo = `x${comboShow}`;
     if (el.combo) el.combo.textContent = nextCombo;
@@ -408,8 +428,17 @@ export function mountBumpingPang({
     try { sfx?.setFever?.(feverOn || comboShow >= 5); } catch { /* */ }
   }
 
+  function setMascotPose(pose) {
+    if (!el.mascotImg) return;
+    const next = mascotUrl(pose);
+    if (el.mascotImg.getAttribute('src') !== next) el.mascotImg.src = next;
+  }
   function cheerMascot(say) {
     if (!el.mascot) return;
+    const pose = say === '레벨업!' ? 'levelup'
+      : (say && (String(say).includes('피버') || String(say).includes('특수'))) ? 'wow'
+      : 'cheer';
+    setMascotPose(pose);
     el.mascot.classList.remove('cheer');
     void el.mascot.offsetWidth;
     el.mascot.classList.add('cheer');
@@ -419,6 +448,8 @@ export function mountBumpingPang({
       clearTimeout(el.mascotSay._t);
       el.mascotSay._t = setTimeout(() => { el.mascotSay.hidden = true; }, 900);
     }
+    clearTimeout(el.mascot._poseT);
+    el.mascot._poseT = setTimeout(() => { if (!over) setMascotPose('wink'); }, 1100);
   }
 
   function syncOrient() {
@@ -490,6 +521,7 @@ export function mountBumpingPang({
           try { if (navigator.vibrate) navigator.vibrate(step.combo >= 3 ? [12, 30, 18] : 10); } catch { /* */ }
           if (step.specs?.length) {
             try { sfx?.special?.(); } catch { /* */ }
+            setMascotPose('wow');
             const sp = step.specs[0]?.special;
             if (sp === 'lineH' || sp === 'lineV') try { sfx?.lineBlast?.(); } catch { /* */ }
             else if (sp === 'bomb') try { sfx?.bomb?.(); } catch { /* */ }
@@ -775,20 +807,29 @@ export function mountBumpingPang({
     const stars = starsForLevel(finalLevel);
     const durationMs = runStartedAt ? Math.max(0, performance.now() - runStartedAt) : 0;
     el.result.hidden = false;
+    setMascotPose('sad');
+    const starOff = pangUrl('ui/star-off.webp');
+    const starOn = pangUrl('ui/star-on.webp');
     el.result.innerHTML = `<div class="box cute result-v2">
-      <div class="rays" aria-hidden="true"></div>
       <div class="confetti" data-confetti></div>
-      <div class="banner">시간 끝!</div>
-      <div class="mascot big result-bum" aria-hidden="true"><svg class="bum-face" viewBox="0 0 80 80"><ellipse cx="40" cy="46" rx="28" ry="26" fill="#6ea8ff"/><circle cx="22" cy="18" r="12" fill="#6ea8ff"/><circle cx="58" cy="18" r="12" fill="#6ea8ff"/><circle cx="22" cy="18" r="7" fill="#3d6fd9"/><circle cx="58" cy="18" r="7" fill="#3d6fd9"/><ellipse cx="40" cy="52" rx="22" ry="18" fill="#8fc0ff"/><circle cx="30" cy="44" r="5" fill="#1a1030"/><circle cx="50" cy="44" r="5" fill="#1a1030"/><path d="M34 56 Q40 62 46 56" stroke="#1a1030" stroke-width="2.2" fill="none" stroke-linecap="round"/></svg></div>
-      <div class="result-lv">도달 <b>Lv.${finalLevel}</b></div>
+      <img class="result-banner" src="${pangUrl('ui/banner-timeup.webp')}" alt="시간 끝!" />
+      <img class="result-bum" src="${mascotUrl('sad')}" alt="" />
+      <div class="star-row" data-stars>
+        <img src="${starOff}" alt="" class="dim" data-star="0" />
+        <img src="${starOff}" alt="" class="dim" data-star="1" />
+        <img src="${starOff}" alt="" class="dim" data-star="2" />
+      </div>
+      <p class="lbl">점수</p>
       <p class="big" data-roll>0점</p>
-      <div class="star-row" data-stars><span class="dim">★</span><span class="dim">★</span><span class="dim">★</span></div>
-      <div class="rank-badge" data-badge>${practice || !ranked ? '연습 기록' : '랭킹 도전'}</div>
+      <div class="result-meta">
+        <div class="result-lv">도달 <b>Lv.${finalLevel}</b></div>
+        <div class="rank-badge" data-badge>${practice || !ranked ? '연습 기록' : '랭킹 도전'}</div>
+      </div>
       <p class="sub">최고 콤보 ${comboShow} · 배율 ×${scoreMult(finalLevel).toFixed(2)}</p>
+      <button type="button" class="pang-imgbtn pang-btn-again" data-again aria-label="한판더"></button>
       <div class="row">
-        <button type="button" class="candy-go" data-again>한 판 더</button>
-        <button type="button" data-board>순위판</button>
-        <button type="button" data-leave>오락실로</button>
+        <button type="button" class="pang-imgbtn pang-btn-rank" data-board aria-label="순위판"></button>
+        <button type="button" class="pang-imgbtn pang-btn-arcade" data-leave aria-label="오락실로"></button>
       </div>
     </div>`;
     // confetti
@@ -821,12 +862,15 @@ export function mountBumpingPang({
     requestAnimationFrame(tickRoll);
 
     // stars one by one
-    const starEls = [...el.result.querySelectorAll('[data-stars] span')];
+    const starEls = [...el.result.querySelectorAll('[data-stars] img')];
     for (let i = 0; i < 3; i++) {
       await wait(350 + i * 280);
       if (i < stars) {
-        starEls[i]?.classList.remove('dim');
-        starEls[i]?.classList.add('on');
+        if (starEls[i]) {
+          starEls[i].src = starOn;
+          starEls[i].classList.remove('dim');
+          starEls[i].classList.add('on');
+        }
         try { sfx?.starDing?.(); } catch { /* */ }
       }
     }
@@ -857,10 +901,12 @@ export function mountBumpingPang({
   wrap.querySelector('[data-go]')?.addEventListener('click', start);
   wrap.querySelector('[data-exit]')?.addEventListener('click', () => dispose(true));
   wrap.querySelector('[data-open-rank]')?.addEventListener('click', () => onOpenBoard?.());
+  wrap.querySelector('[data-leave-intro]')?.addEventListener('click', () => dispose(true));
   el.mute.addEventListener('click', () => {
     const next = !sfx?.muted;
     sfx?.setMuted?.(next);
-    el.mute.textContent = next ? '🔇' : '🔊';
+    el.mute.classList.toggle('is-off', next);
+    el.mute.setAttribute('aria-label', next ? '소리 켜기' : '음소거');
     if (next) sfx?.stopBgm?.(); else if (playing && !over) sfx?.startBgm?.();
   });
 
