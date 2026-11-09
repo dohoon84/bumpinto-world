@@ -12,7 +12,7 @@ const won = (n) => Math.round(n).toLocaleString('ko-KR');
 
 export function createGameplay({ interior, ui, sfx, storeId, storeName, onExitStore, getSelfName, rankGate = null }) {
   const layout = interior.layout, saleIds = layout.saleIds, dateKey = layout.dateKey;
-  let phase = PHASE.BROWSE, ranked = false;
+  let phase = PHASE.BROWSE, ranked = false, gate = rankGate;
   let countLeft = 0, playLeft = PLAY_SEC, clock = 0;
   let combo = 0, maxCombo = 0, lastGrabAt = -9, lastFacing = null, samePenalty = 0, grabDelay = 0, pending = 0, spills = 0;
   let runLog = [], startedAtMs = 0, urgentAcc = 0, lastSec = 99;
@@ -26,9 +26,9 @@ export function createGameplay({ interior, ui, sfx, storeId, storeName, onExitSt
   ui.resetTotal();
   ui.setHud({ time: PLAY_SEC, total: 0, kg: 0, maxKg: interior.basket.maxKg });
 
-  function startCountdown() {
-    ranked = rankGate ? !!rankGate.ranked : !rankedUsed(storeId, dateKey);
-    if (rankGate?.usedUp) ui.limit?.(true, { guest: rankGate.guest === true });
+  function startCountdown(practiceOnly = false) {
+    ranked = practiceOnly ? false : (gate ? !!gate.ranked : !rankedUsed(storeId, dateKey));
+    if (gate?.usedUp && !practiceOnly) ui.limit?.(true, { guest: gate.guest === true });
     ui.setMode(ranked); ui.hideIntro();
     phase = PHASE.COUNTDOWN; countLeft = COUNT_SEC; lastSec = COUNT_SEC + 1;
     ui.showHud(true); ui.setHud({ time: PLAY_SEC, total: 0, kg: 0 });
@@ -127,22 +127,30 @@ export function createGameplay({ interior, ui, sfx, storeId, storeName, onExitSt
     const isBest = score > bestPrev && score > 0;
     const best = saveBest(storeId, score);
     const name = getSelfName?.() || '나';
-    leaderboard.submit({ storeId, name, score, at: Date.now(), dateKey, ranked, items: items.length }).catch?.(() => {}); // 끝나자마자 전광판 갱신(공급자 알림)
+    // 서버 응답(남은 도전 수)으로 다음 판의 랭킹/연습 여부와 '다시 도전' 버튼을 맞춘다
+    Promise.resolve(leaderboard.submit({ storeId, name, score, at: Date.now(), dateKey, ranked, items: items.length })).then((r) => {
+      if (!r || !gate) return;
+      const left = Number(r.left);
+      if (r.record && Number.isFinite(left)) gate = { ...gate, ranked: left > 0, usedUp: left <= 0, left };
+      else if (ranked && r.record === false && r.usedUp) gate = { ...gate, ranked: false, usedUp: true, left: 0 };
+      else return;
+      ui.setRetry?.(gate.ranked ? gate.left : 0, gate.cap);
+    }).catch(() => {});
     const payload = { v: 1, storeId, dateKey, seed: layout.seed, ranked, score, durationMs: PLAY_SEC * 1000, saleIds: saleIds.slice(), events: runLog.slice(), items: items.map((it) => ({ id: it.item.id, sale: !!it.sale })), weight: +kg.toFixed(3), spills, maxCombo };
     try { window.__jj = window.__jj || {}; window.__jj.bump24LastRun = payload; } catch { /* */ }
     sfx.fanfare(isBest);
     const show = () => ui.showResult({
-      score, best, isBest, ranked, kg, combo: maxCombo, spills,
+      score, best, isBest, ranked, kg, combo: maxCombo, spills, left: gate?.ranked && Number.isFinite(Number(gate.left)) ? Math.max(0, Number(gate.left) - (ranked ? 1 : 0)) : 0, cap: gate?.cap,
       items: items.map((it) => ({ name: it.item.name, sale: it.sale })),
-      onRetry: () => restart(), onExit: () => onExitStore?.(),
+      onRetry: () => restart(), onPractice: () => restart(true), onExit: () => onExitStore?.(),
       onBoard: () => ui.showBoard({ storeId, storeName, me: name, onClose: show }),
     });
     show();
   }
-  function restart() {
+  function restart(practiceOnly = false) {
     ui.hideModal(); interior.basket.clear(); interior.clearFloor(); interior.restock(); interior.setArrow(true);
     interior.setMode('follow'); interior.setView(-1.0, 1.2, Math.PI, 0.5, 3.0);
-    ui.resetTotal(); startCountdown();
+    ui.resetTotal(); startCountdown(practiceOnly);
   }
 
   // ---------- 매 프레임 ----------

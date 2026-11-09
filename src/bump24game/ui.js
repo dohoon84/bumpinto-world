@@ -228,19 +228,33 @@ export function createBump24UI({ onGrab, onExit, onMute, onHintTap, onIntroGo, o
       step(); api._fit?.();
     },
     receiptClose() { el.receipt.innerHTML = ''; api._rows = api._paper = api._tot = null; },
-    showResult({ score, best, isBest, ranked, items = [], kg = 0, combo = 0, spills = 0, onRetry, onBoard, onExit: ex }) {
+    // 결과 화면 첫 버튼: 랭킹 도전이 남았으면 '다시 도전 · 남은 n/m', 아니면 '연습 한 판 더'
+    setRetry(left, cap) {
+      const b = el.modal.querySelector('[data-r="retry"]');
+      if (!b) return;
+      const l = Number(left), c = Number(cap);
+      const more = Number.isInteger(l) && l > 0;
+      b.textContent = more ? (Number.isInteger(c) && c > 0 ? `다시 도전 · 남은 ${l}/${c}` : '다시 도전') : '연습 한 판 더';
+      // 랭킹 도전이 남아 있어도 연습은 따로 고를 수 있게 '연습하기' 버튼을 함께 둔다
+      const p = el.modal.querySelector('[data-r="practice"]');
+      if (p) p.hidden = !more;
+      el.modal.querySelector('.b24-result .btns')?.classList.toggle('has-prac', more);
+    },
+    showResult({ score, best, isBest, ranked, items = [], kg = 0, combo = 0, spills = 0, left, cap, onRetry, onPractice, onBoard, onExit: ex }) {
       const chips = items.map((it) => `<i class="${it.sale ? 's' : ''}">${esc(it.name)}</i>`).join('');
       el.modal.innerHTML = `<div class="b24-modal"><canvas class="b24-confetti"></canvas><div class="b24-result">
         <div class="top"><div class="ttl">${ranked ? '오늘의 랭킹 기록' : '연습 기록'}</div><div class="sc"><span>0</span><u>원</u></div>
         <div class="ribbon ${isBest ? '' : 'prac'}">${isBest ? '🎉 내 최고 기록 갱신!' : `내 최고 ${won(best)}원`}</div></div>
         <div class="stats"><div><b>${items.length}</b><span>담은 개수</span></div><div><b>${kg.toFixed(1)}kg</b><span>무게</span></div><div><b>${combo}</b><span>최대 콤보</span></div></div>
         <div class="items">${chips || '<i>빈 바구니…</i>'}</div>
-        <div class="btns"><button class="pri" data-r="retry">연습 한 판 더</button><button data-r="board">리더보드</button><button data-r="exit">매장 나가기</button></div>
+        <div class="btns"><button class="pri" data-r="retry">연습 한 판 더</button><button data-r="practice" hidden>연습하기</button><button data-r="board">리더보드</button><button data-r="exit">매장 나가기</button></div>
         <div class="note">${spills ? `와르르 ${spills}번 · ` : ''}기록은 이 기기에만 저장돼요 (로컬)</div></div></div>`;
       fitChips(el.modal.querySelector('.b24-result .items'), innerHeight <= 520 ? 2 : 3);
       const sc = el.modal.querySelector('.sc span'); const t0 = performance.now();
       const step = () => { const k = Math.min(1, (performance.now() - t0) / 900), e = 1 - Math.pow(1 - k, 3); sc.textContent = won(score * e); if (k < 1) requestAnimationFrame(step); }; step();
       el.modal.querySelector('[data-r="retry"]').onclick = () => onRetry?.();
+      el.modal.querySelector('[data-r="practice"]').onclick = () => (onPractice || onRetry)?.();
+      api.setRetry(left, cap);
       el.modal.querySelector('[data-r="board"]').onclick = () => onBoard?.();
       el.modal.querySelector('[data-r="exit"]').onclick = () => ex?.();
       confetti(el.modal.querySelector('.b24-confetti'), isBest ? 160 : 90);
