@@ -5,9 +5,93 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
   <title>Bumpinto World</title>
   <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <link rel="preload" as="image" href="/ui-v2/start-a.jpg" />
   <link rel="stylesheet" href="/src/style.css" />
+  <style id="bw-early-start-css">
+    /* PC ui-v2 시작화면 껍데기: game.js 전에 로그인 UI를 보여 체감 로딩을 줄인다. 모바일·?ui=v1·바로입장 URL은 인라인 스크립트가 숨긴다. */
+    #bw-early-start { position: fixed; inset: 0; z-index: 54; overflow: hidden; background: #070d1c; color: #e2ecf8; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; transition: opacity .2s; }
+    #bw-early-start[hidden], #bw-early-start.is-leaving { opacity: 0; pointer-events: none; }
+    #bw-early-start .bw-es-bg { position: absolute; inset: 0; background: #070d1c center / cover no-repeat; }
+    #bw-early-start .bw-es-shade-l { position: absolute; inset: 0 auto 0 0; width: 57%; background: linear-gradient(90deg, rgba(7,13,28,.82), rgba(7,13,28,.45) 60%, rgba(7,13,28,0)); }
+    #bw-early-start .bw-es-shade-b { position: absolute; inset: auto 0 0 0; height: 18%; background: linear-gradient(180deg, rgba(7,13,28,0), rgba(7,13,28,.6)); }
+    #bw-early-start .bw-es-logo { position: absolute; left: max(24px, 7vw); top: 18%; display: flex; flex-direction: column; gap: 12px; max-width: min(640px, 88vw); }
+    #bw-early-start .bw-es-tag { display: inline-flex; align-self: flex-start; padding: 4px 10px; border-radius: 8px; font-size: 12px; font-weight: 800; letter-spacing: .02em; color: #ffe169; background: rgba(255,225,105,.18); border: 1px solid rgba(255,225,105,.55); }
+    #bw-early-start .bw-es-logo h1 { margin: 0; font-size: clamp(36px, 6vw, 72px); line-height: 1.15; font-weight: 900; color: #fff; text-shadow: 0 4px 12px rgba(0,0,0,.45); }
+    #bw-early-start .bw-es-logo p { margin: 0; font-size: clamp(16px, 2vw, 22px); font-weight: 700; color: #e2ecf8; text-shadow: 0 2px 8px rgba(0,0,0,.5); }
+    #bw-early-start .bw-es-panel { position: absolute; left: max(24px, 7vw); top: 48%; width: min(520px, calc(100vw - 48px)); padding: 24px; display: flex; flex-direction: column; gap: 12px; box-sizing: border-box; border-radius: 16px; background: linear-gradient(180deg, rgba(29,46,75,.94), rgba(15,25,42,.94)); border: 1.5px solid rgba(255,255,255,.18); box-shadow: 0 12px 32px rgba(8,16,30,.42); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); }
+    #bw-early-start .bw-es-panel h2 { margin: 0; font-size: 20px; font-weight: 900; color: #fff; }
+    #bw-early-start .bw-es-note { margin: 0; font-size: 13px; line-height: 1.35; color: #9eb4c6; }
+    #bw-early-start .bw-es-btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; box-sizing: border-box; width: 100%; height: 48px; padding: 0 24px; border-radius: 12px; border: 0; font: inherit; font-size: 16px; font-weight: 900; cursor: pointer; }
+    #bw-early-start .bw-es-btn:disabled { cursor: wait; filter: grayscale(.15) brightness(.92); }
+    #bw-early-start .bw-es-btn.google { color: #1f1f1f; background: #fff; border: 1px solid #747775; }
+    #bw-early-start .bw-es-btn.guest { color: #e2ecf8; background: rgba(255,255,255,.1); border: 1px solid rgba(255,255,255,.22); }
+    #bw-early-start .bw-es-status { margin: 0; font-size: 13px; font-weight: 700; color: #ffe8a3; }
+    #bw-early-start .bw-es-studio { position: absolute; right: 12px; bottom: 12px; font-size: 12px; color: #9eb4c6; }
+    body.bw-early-start #world-gate, body.bw-early-start #lobby, body.bw-early-start #hud, body.bw-early-start #buttons, body.bw-early-start #top-right-bar, body.bw-early-start #attribution { visibility: hidden !important; }
+  </style>
 </head>
 <body class="in-gate">
+  <div id="bw-early-start" hidden>
+    <div class="bw-es-bg" style="background-image:url('/ui-v2/start-a.jpg')"></div>
+    <div class="bw-es-shade-l"></div>
+    <div class="bw-es-shade-b"></div>
+    <div class="bw-es-logo">
+      <span class="bw-es-tag" data-es="tag">OPEN SOURCE · GLOBAL OPEN WORLD</span>
+      <h1>Bumpinto World</h1>
+      <p data-es="sub">Walk real-world neighborhoods together</p>
+    </div>
+    <section class="bw-es-panel" aria-label="Start">
+      <h2 data-es="start">Start</h2>
+      <button type="button" class="bw-es-btn google" data-es-act="google" data-es="google">Sign in with Google</button>
+      <p class="bw-es-note" data-es="googleNote">Balance and records are saved to your account · continue on any device</p>
+      <button type="button" class="bw-es-btn guest" data-es-act="guest" data-es="guest">Continue as Guest</button>
+      <p class="bw-es-note" data-es="guestNote">Guests are saved on this device only · link Google later</p>
+      <p class="bw-es-status" data-es="status" hidden>Loading the world…</p>
+    </section>
+    <div class="bw-es-studio">Studio · CrazyLabs</div>
+  </div>
+  <script>
+    (function () {
+      var root = document.getElementById('bw-early-start');
+      if (!root) return;
+      var q = new URLSearchParams(location.search);
+      var ui = (q.get('ui') || '').toLowerCase();
+      var mobileQ = q.get('mobile');
+      var skip = q.has('shot') || q.get('enter') === '1' || q.get('passport') === '1' || q.has('from') || ui === 'v1' || ui === 'old' || ui === 'legacy' || ui === '0' || ui === 'off' || mobileQ === '1';
+      try { if (!skip && sessionStorage.getItem('bw.ui.v1') === '1' && ui !== 'v2') skip = true; } catch (e) {}
+      try { if (!skip && mobileQ !== '0' && sessionStorage.getItem('bw.mobileMode') === '1') skip = true; } catch (e2) {}
+      if (!skip) {
+        var ua = navigator.userAgent || '';
+        var points = Number(navigator.maxTouchPoints) || 0;
+        if (/iPhone|iPad|iPod|Android|webOS|BlackBerry|IEMobile|Opera Mini|CriOS|FxiOS|EdgiOS|Mobile|Silk|Kindle|PlayBook/i.test(ua)) skip = true;
+        else if (navigator.userAgentData && navigator.userAgentData.mobile === true) skip = true;
+        else if (points > 1 && /Macintosh|Mac OS X/i.test(ua)) skip = true;
+      }
+      if (skip) { root.remove(); return; }
+
+      var en = false;
+      try { en = localStorage.getItem('jeongja3d.lang') === 'en'; } catch (e3) {}
+      var t = en
+        ? { tag: 'OPEN SOURCE · GLOBAL OPEN WORLD', sub: 'Walk real-world neighborhoods together', start: 'Start', google: 'Sign in with Google', googleNote: 'Balance and records are saved to your account · continue on any device', guest: 'Continue as Guest', guestNote: 'Guests are saved on this device only · link Google later', status: 'Loading the world…', wait: 'Almost ready…' }
+        : { tag: '순차 오픈 · 글로벌 오픈월드', sub: '다 같이 만들어 가는 오픈 월드', start: '시작하기', google: 'Google 계정으로 로그인', googleNote: '잔액·기록이 계정에 저장돼요 · 다른 기기에서도 이어하기', guest: '게스트로 계속', guestNote: '게스트는 이 기기에만 저장 · 나중에 Google 연결 가능', status: '월드를 불러오는 중…', wait: '곧 이어집니다…' };
+      root.querySelectorAll('[data-es]').forEach(function (el) {
+        var k = el.getAttribute('data-es');
+        if (t[k]) el.textContent = t[k];
+      });
+      root.hidden = false;
+      document.body.classList.add('bw-early-start');
+      var api = { alive: true, pending: null };
+      window.__bwEarlyStart = api;
+      root.addEventListener('click', function (e) {
+        var b = e.target.closest('[data-es-act]');
+        if (!b || !api.alive) return;
+        api.pending = b.getAttribute('data-es-act');
+        root.querySelectorAll('[data-es-act]').forEach(function (x) { x.disabled = true; });
+        var st = root.querySelector('[data-es="status"]');
+        if (st) { st.hidden = false; st.textContent = t.wait; }
+      });
+    })();
+  </script>
   <div id="app"></div>
   <div id="overlay"></div>
   <div id="hud" class="is-folded">
