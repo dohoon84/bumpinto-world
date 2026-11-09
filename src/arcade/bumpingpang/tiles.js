@@ -1,18 +1,19 @@
-// [범핑팡] 타일 세트 — 우리 캐릭터·매장 아이템 (애니팡 베끼기 금지, 이름·그림 완전 오리지널)
+// [범핑팡] 오리지널 타일 캐릭터 — 애니팡 IP 베끼기 금지. 둥글고 통통한 얼굴 친구들.
 export const TILES = [
-  { id: 'bum', label: '범', color: '#5b8cff', emoji: '🟣' },
-  { id: 'coin', label: '범', color: '#ffd24a', emoji: '🟡' },
-  { id: 'bike', label: '바이크', color: '#3ddc97', emoji: '🟢' },
-  { id: 'bus', label: '버스', color: '#ff6b6b', emoji: '🔴' },
-  { id: 'ramen', label: '라면', color: '#c084fc', emoji: '🟣' },
-  { id: 'bento', label: '도시락', color: '#38bdf8', emoji: '🔵' },
+  { id: 'bum',   name: '범이',   color: '#6ea8ff', accent: '#3d6fd9', blush: '#ff8fb8', feature: 'ears' },
+  { id: 'coin',  name: '코이니', color: '#ffd24a', accent: '#e6a800', blush: '#ffb4a2', feature: 'shine' },
+  { id: 'bike',  name: '바이키', color: '#3ddc97', accent: '#1fa86a', blush: '#ff9ec4', feature: 'helmet' },
+  { id: 'bus',   name: '버시',   color: '#ff6b6b', accent: '#d94343', blush: '#ffb087', feature: 'wheels' },
+  { id: 'ramen', name: '라멘이', color: '#c084fc', accent: '#8b5cf6', blush: '#ff9ec4', feature: 'steam' },
+  { id: 'bento', name: '도시랑', color: '#38bdf8', accent: '#0ea5e9', blush: '#ffb4a2', feature: 'bow' },
 ];
 
 export const SPECIAL = {
-  lineH: { id: 'lineH', label: '가로줄', color: '#fff' },
-  lineV: { id: 'lineV', label: '세로줄', color: '#fff' },
-  bomb: { id: 'bomb', label: '폭탄', color: '#ff9f1c' },
-  color: { id: 'color', label: '컬러', color: '#ffffff' },
+  lineH: { id: 'lineH', mark: '═', color: '#fff' },
+  lineV: { id: 'lineV', mark: '║', color: '#fff' },
+  bomb:  { id: 'bomb',  mark: '✦', color: '#ff9f1c' },
+  color: { id: 'color', mark: '★', color: '#ffe66d' },
 };
 
 export function tileAt(i) { return TILES[((i % TILES.length) + TILES.length) % TILES.length]; }
+export function tileById(id) { return TILES.find((t) => t.id === id) || TILES[0]; }

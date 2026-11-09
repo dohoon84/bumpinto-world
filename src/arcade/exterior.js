@@ -12,10 +12,13 @@ export function mountArcadeExterior({ scene } = {}) {
   const c = document.createElement('canvas'); c.width = 1024; c.height = 256;
   const ctx = c.getContext('2d');
   const grad = ctx.createLinearGradient(0, 0, 1024, 0);
-  grad.addColorStop(0, '#5b8cff'); grad.addColorStop(0.5, '#ff66aa'); grad.addColorStop(1, '#ffe66d');
-  ctx.fillStyle = '#0b1020'; ctx.fillRect(0, 0, 1024, 256);
+  grad.addColorStop(0, '#7eb6ff'); grad.addColorStop(0.45, '#ff9ecd'); grad.addColorStop(1, '#ffe66d');
+  ctx.fillStyle = '#1a1030'; ctx.fillRect(0, 0, 1024, 256);
   ctx.fillStyle = grad; ctx.fillRect(24, 24, 976, 208);
-  ctx.fillStyle = '#0b1020'; ctx.fillRect(40, 40, 944, 176);
+  ctx.fillStyle = '#241840'; ctx.fillRect(40, 40, 944, 176);
+  // cute sparkles
+  ctx.fillStyle = 'rgba(255,230,109,0.85)';
+  for (const [x,y] of [[80,70],[944,70],[80,186],[944,186],[512,55]]) { ctx.beginPath(); ctx.arc(x,y,6,0,Math.PI*2); ctx.fill(); }
   ctx.fillStyle = '#ffe66d';
   ctx.font = '900 72px Pretendard,sans-serif';
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
@@ -35,7 +38,7 @@ export function mountArcadeExterior({ scene } = {}) {
   g.add(sign);
 
   // glowing door frame
-  const frameMat = new THREE.MeshBasicMaterial({ color: '#5b8cff' });
+  const frameMat = new THREE.MeshBasicMaterial({ color: '#ff9ecd' });
   const frame = new THREE.Group();
   const left = new THREE.Mesh(new THREE.BoxGeometry(0.12, 2.6, 0.12), frameMat);
   left.position.set(-1.0, 1.3, 0);

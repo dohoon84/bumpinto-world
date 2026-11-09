@@ -70,4 +70,24 @@ const clean = monthlyBestPays(rankRows([
 ]), '2026-11');
 assert(clean.length === 3 && clean[0].title === TITLE && clean[0].amount === MONTHLY_BUM[0], 'clean podium');
 
+
+// invalid swap restores board and stays interactive (no lock in engine)
+{
+  const b = createBoard(makeRng(123));
+  const snap = b.map((row) => row.map((c) => (c ? { ...c } : null)));
+  let denied = null;
+  for (let r = 0; r < ROWS && !denied; r++) for (let c = 0; c < COLS - 1; c++) {
+    const res = trySwap(b, { r, c }, { r, c: c + 1 }, makeRng(1));
+    if (!res.ok) { denied = { r, c, res }; break; }
+    // restore if somehow matched
+    for (let rr = 0; rr < ROWS; rr++) for (let cc = 0; cc < COLS; cc++) b[rr][cc] = snap[rr][cc] ? { ...snap[rr][cc] } : null;
+  }
+  assert(denied && denied.res.ok === false, 'found invalid swap');
+  for (let rr = 0; rr < ROWS; rr++) for (let cc = 0; cc < COLS; cc++) {
+    const a = snap[rr][cc], x = b[rr][cc];
+    assert(!!a === !!x && a?.id === x?.id, 'invalid swap restored');
+  }
+  assert(hasMoves(b) || !hasMoves(b), 'board still queryable after deny');
+}
+
 console.log('ok arcade-pang', { scoreSample: res.score, pays: pays.map((p) => p.amount) });

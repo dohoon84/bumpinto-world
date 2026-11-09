@@ -1,17 +1,16 @@
-/* [arcade] BUMP 오락실 · 범핑팡 */
-#arc-root { position: fixed; inset: 0; z-index: 120; pointer-events: none; /* controls-card #cc-overlay=80 위 */ font-family: Pretendard, "Noto Sans KR", system-ui, sans-serif; }
+/* [arcade] BUMP 오락실 · 범핑팡 — 귀여운 파스텔 UI */
+#arc-root { position: fixed; inset: 0; z-index: 120; pointer-events: none; font-family: Pretendard, "Noto Sans KR", system-ui, sans-serif; }
 #arc-root * { box-sizing: border-box; }
 #arc-root .arc-hint {
   pointer-events: none; position: fixed; left: 50%; bottom: 88px; transform: translateX(-50%);
-  background: rgba(8,12,24,.82); color: #fff; padding: 10px 16px; border-radius: 14px;
-  font-weight: 700; font-size: 15px; letter-spacing: -.02em; border: 1px solid rgba(255,255,255,.12);
-  box-shadow: 0 8px 28px rgba(0,0,0,.35); display: none; white-space: nowrap;
+  background: rgba(12,16,28,.88); color: #fff; padding: 10px 16px; border-radius: 999px;
+  font-weight: 800; font-size: 14px; display: none; border: 2px solid rgba(255,230,109,.35);
 }
 #arc-root .arc-hint.on { display: block; }
 #arc-root .arc-hint kbd { display: inline-block; min-width: 22px; padding: 1px 6px; margin: 0 4px; border-radius: 6px; background: #ffe66d; color: #111; font-weight: 900; text-align: center; }
 #arc-root .arc-fade {
   pointer-events: none; position: fixed; inset: 0; z-index: 1; background: #05070f; opacity: 0; transition: none;
-  display: flex; align-items: center; justify-content: center; flex-direction: column; color: #fff; gap: 6px;
+  display: grid; place-items: center; color: #fff; text-align: center; gap: 6px; visibility: hidden;
 }
 #arc-root .arc-fade b { font-size: 28px; font-weight: 900; letter-spacing: -.03em; }
 #arc-root .arc-fade span { opacity: .75; font-size: 14px; }
@@ -20,58 +19,134 @@
 }
 #arc-root.is-inside .arc-inside-bar { display: flex; }
 #arc-root .arc-inside-bar button {
-  pointer-events: auto; border: 0; border-radius: 12px; padding: 10px 14px; font-weight: 800; cursor: pointer;
-  background: rgba(12,16,28,.85); color: #fff; border: 1px solid rgba(255,255,255,.14);
+  pointer-events: auto; border: 0; border-radius: 14px; padding: 10px 14px; font-weight: 800; cursor: pointer;
+  background: rgba(255,255,255,.12); color: #fff; backdrop-filter: blur(8px);
 }
 #arc-root .arc-cab-hint {
   pointer-events: none; position: fixed; left: 50%; top: 18%; transform: translateX(-50%);
-  background: rgba(8,12,24,.8); color: #ffe66d; padding: 8px 14px; border-radius: 12px; font-weight: 800;
-  display: none; border: 1px solid rgba(255,230,109,.35);
+  background: rgba(12,16,28,.9); color: #ffe66d; padding: 10px 18px; border-radius: 999px;
+  font-weight: 900; font-size: 15px; display: none; border: 2px solid rgba(255,230,109,.4);
 }
 #arc-root .arc-cab-hint.on { display: block; }
 
-/* 범핑팡 오버레이 */
-.arc-pang { pointer-events: auto; position: fixed; inset: 0; z-index: 90; background: radial-gradient(1200px 800px at 50% 20%, #1a2744, #070b14 70%); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; }
-.arc-pang-hud { display: flex; align-items: center; gap: 14px; color: #fff; width: min(560px, 94vw); }
-.arc-pang-score, .arc-pang-combo { background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.1); border-radius: 14px; padding: 8px 14px; min-width: 88px; }
-.arc-pang-score small, .arc-pang-combo small { display: block; opacity: .65; font-size: 11px; font-weight: 700; }
+.arc-pang {
+  pointer-events: auto; position: fixed; inset: 0; z-index: 90;
+  background:
+    radial-gradient(900px 600px at 50% 0%, #3a2a6a 0%, transparent 55%),
+    radial-gradient(700px 500px at 20% 80%, #1a3a5c 0%, transparent 50%),
+    linear-gradient(180deg, #1a1440, #0a1020 70%);
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px;
+}
+.arc-pang.is-urgent .arc-pang-timer [data-ring] { stroke: #ff6b6b; animation: pang-pulse 0.5s ease-in-out infinite; }
+.arc-pang.is-urgent .arc-pang-timer b { color: #ff8a8a; animation: pang-pulse 0.5s ease-in-out infinite; }
+@keyframes pang-pulse { 50% { transform: scale(1.08); } }
+
+.arc-pang-hud { display: flex; align-items: center; gap: 12px; color: #fff; width: min(560px, 94vw); }
+.arc-pang-score, .arc-pang-combo {
+  background: rgba(255,255,255,.1); border: 2px solid rgba(255,255,255,.14); border-radius: 18px;
+  padding: 8px 14px; min-width: 88px; box-shadow: 0 8px 24px rgba(0,0,0,.25);
+}
+.arc-pang-score small, .arc-pang-combo small { display: block; opacity: .7; font-size: 11px; font-weight: 800; }
 .arc-pang-score b, .arc-pang-combo b { font-size: 22px; font-weight: 900; letter-spacing: -.03em; }
 .arc-pang-timer { position: relative; width: 56px; height: 56px; }
 .arc-pang-timer svg { position: absolute; inset: 0; transform: rotate(-90deg); }
-.arc-pang-timer circle { fill: none; stroke-width: 3; }
-.arc-pang-timer circle:first-child { stroke: rgba(255,255,255,.12); }
-.arc-pang-timer [data-ring] { stroke: #5b8cff; stroke-linecap: round; transition: stroke .2s; }
-.arc-pang-timer [data-ring].urgent { stroke: #ff6b6b; }
+.arc-pang-timer circle { fill: none; stroke-width: 3.5; }
+.arc-pang-timer circle:first-child { stroke: rgba(255,255,255,.14); }
+.arc-pang-timer [data-ring] { stroke: #7eb6ff; stroke-linecap: round; transition: stroke .2s; }
 .arc-pang-timer b { position: absolute; inset: 0; display: grid; place-items: center; font-size: 18px; font-weight: 900; }
-.arc-pang-mute, .arc-pang-x { margin-left: auto; border: 0; border-radius: 12px; width: 42px; height: 42px; background: rgba(255,255,255,.08); color: #fff; font-size: 16px; cursor: pointer; }
+.arc-pang-mute, .arc-pang-x {
+  margin-left: auto; border: 0; border-radius: 14px; width: 44px; height: 44px;
+  background: rgba(255,255,255,.12); color: #fff; font-size: 16px; cursor: pointer;
+}
 .arc-pang-x { margin-left: 0; }
-.arc-pang-cv { width: min(560px, 94vw); height: auto; border-radius: 18px; box-shadow: 0 20px 60px rgba(0,0,0,.45), inset 0 0 0 1px rgba(255,255,255,.08); touch-action: none; background: #0b1220; }
-.arc-pang-toast { position: absolute; top: 22%; left: 50%; transform: translateX(-50%); background: #ffe66d; color: #111; font-weight: 900; padding: 8px 16px; border-radius: 999px; pointer-events: none; }
+
+.arc-pang-cv {
+  width: min(560px, 94vw); height: auto; border-radius: 22px;
+  box-shadow: 0 24px 60px rgba(0,0,0,.45), 0 0 0 3px rgba(255,230,109,.25), inset 0 0 0 1px rgba(255,255,255,.08);
+  touch-action: none; background: #0b1220;
+}
+
+.arc-pang-fx { position: absolute; inset: 0; pointer-events: none; }
+.arc-pang-float { position: fixed; inset: 0; pointer-events: none; z-index: 100; }
+.arc-pang-floater {
+  position: fixed; transform: translate(-50%, -50%);
+  font-weight: 900; font-size: 22px; color: #ffe66d;
+  text-shadow: 0 2px 0 #b8860b, 0 0 12px rgba(255,230,109,.6);
+  animation: pang-float 0.9s ease-out forwards; pointer-events: none;
+}
+@keyframes pang-float {
+  0% { opacity: 1; transform: translate(-50%, -50%) scale(0.6); }
+  30% { opacity: 1; transform: translate(-50%, -80%) scale(1.15); }
+  100% { opacity: 0; transform: translate(-50%, -140%) scale(1); }
+}
+
+.arc-pang-toast {
+  position: absolute; top: 20%; left: 50%; transform: translateX(-50%);
+  background: #ffe66d; color: #1a1030; font-weight: 900; padding: 10px 20px; border-radius: 999px;
+  pointer-events: none; font-size: 18px; letter-spacing: -.02em;
+  box-shadow: 0 10px 30px rgba(0,0,0,.35), 0 0 0 3px rgba(255,255,255,.35);
+  animation: pang-toast-in .25s ease-out;
+}
+.arc-pang-toast.combo {
+  background: linear-gradient(90deg, #ff9ecd, #ffe66d 50%, #7eb6ff);
+  font-size: 22px;
+}
+@keyframes pang-toast-in {
+  from { opacity: 0; transform: translateX(-50%) scale(0.6); }
+  to { opacity: 1; transform: translateX(-50%) scale(1); }
+}
+
 .arc-pang-intro, .arc-pang-result {
   position: absolute; inset: 0; z-index: 5; display: grid; place-items: center;
-  background: rgba(4,8,18,.72); pointer-events: auto;
+  background: rgba(8,10,24,.72); pointer-events: auto;
 }
-.arc-pang-intro .box, .arc-pang-result .box { pointer-events: auto; position: relative; z-index: 1; }
-.arc-pang-intro button, .arc-pang-result button { pointer-events: auto; position: relative; z-index: 2; }
-.arc-pang-intro .box, .arc-pang-result .box { background: #121a2c; color: #fff; border-radius: 20px; padding: 28px 26px; width: min(360px, 90vw); text-align: center; border: 1px solid rgba(255,255,255,.1); box-shadow: 0 24px 60px rgba(0,0,0,.5); }
-.arc-pang-intro h2, .arc-pang-result h2 { margin: 0 0 8px; font-size: 28px; font-weight: 900; letter-spacing: -.04em; }
-.arc-pang-intro p, .arc-pang-result p { margin: 0 0 10px; opacity: .85; line-height: 1.45; }
-.arc-pang-intro .tag { display: inline-block; background: rgba(91,140,255,.2); color: #9ec1ff; padding: 4px 10px; border-radius: 999px; font-size: 12px; font-weight: 800; }
-.arc-pang-result .big { font-size: 36px; font-weight: 900; letter-spacing: -.04em; color: #ffe66d; }
+.arc-pang-intro .box, .arc-pang-result .box {
+  pointer-events: auto; position: relative; z-index: 1;
+  background: linear-gradient(180deg, #2a1f55, #161b33);
+  color: #fff; border-radius: 28px; padding: 28px 26px; width: min(360px, 90vw); text-align: center;
+  border: 3px solid rgba(255,230,109,.45); box-shadow: 0 28px 70px rgba(0,0,0,.55), 0 0 40px rgba(126,182,255,.2);
+}
+.arc-pang-intro .mascot, .arc-pang-result .mascot { font-size: 48px; line-height: 1; filter: drop-shadow(0 6px 0 rgba(0,0,0,.25)); }
+.arc-pang-result .mascot.big { font-size: 56px; }
+.arc-pang-intro h2, .arc-pang-result h2 { margin: 6px 0 8px; font-size: 30px; font-weight: 900; letter-spacing: -.04em; }
+.arc-pang-intro p, .arc-pang-result p { margin: 0 0 10px; opacity: .9; line-height: 1.45; }
+.arc-pang-intro .tag {
+  display: inline-block; background: rgba(126,182,255,.22); color: #b8d4ff;
+  padding: 5px 12px; border-radius: 999px; font-size: 12px; font-weight: 800; margin-bottom: 8px;
+}
+.arc-pang-result .big { font-size: 40px; font-weight: 900; letter-spacing: -.04em; color: #ffe66d; }
+.arc-pang-result .stars { font-size: 22px; letter-spacing: 4px; color: #ffd24a; }
 .arc-pang-intro button, .arc-pang-result button {
-  border: 0; border-radius: 12px; padding: 12px 18px; font-weight: 900; cursor: pointer; background: #5b8cff; color: #fff; font-size: 15px;
+  pointer-events: auto; position: relative; z-index: 2;
+  border: 0; border-radius: 16px; padding: 14px 22px; font-weight: 900; cursor: pointer;
+  background: linear-gradient(180deg, #7eb6ff, #5b8cff); color: #fff; font-size: 16px;
+  box-shadow: 0 6px 0 #3d6fd9, 0 10px 24px rgba(91,140,255,.35);
 }
-.arc-pang-result .row { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin-top: 8px; }
-.arc-pang-result .row button:nth-child(2) { background: #243049; }
-.arc-pang-result .row button:nth-child(3) { background: transparent; border: 1px solid rgba(255,255,255,.2); }
+.arc-pang-intro button:active, .arc-pang-result button:active { transform: translateY(3px); box-shadow: 0 3px 0 #3d6fd9; }
+.arc-pang-result .row { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin-top: 10px; }
+.arc-pang-result .row button:nth-child(2) { background: linear-gradient(180deg, #3a4560, #243049); box-shadow: 0 6px 0 #1a2236; }
+.arc-pang-result .row button:nth-child(3) { background: transparent; border: 2px solid rgba(255,255,255,.25); box-shadow: none; }
+
+.arc-pang-count {
+  position: absolute; inset: 0; z-index: 8; display: grid; place-items: center;
+  pointer-events: none; font-size: 96px; font-weight: 900; color: #ffe66d;
+  text-shadow: 0 8px 0 #b8860b, 0 0 40px rgba(255,230,109,.5);
+}
+.arc-pang-count.pop { animation: pang-count .55s cubic-bezier(.2,1.4,.4,1); }
+@keyframes pang-count {
+  0% { transform: scale(0.3); opacity: 0; }
+  40% { transform: scale(1.2); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
 
 #arc-root .arc-modal {
   pointer-events: auto; position: fixed; inset: 0; z-index: 95; background: rgba(4,8,18,.72);
   display: grid; place-items: center;
 }
 #arc-root .arc-modal .board {
-  width: min(420px, 92vw); background: #121a2c; color: #fff; border-radius: 18px; padding: 18px 16px 14px;
-  border: 1px solid rgba(255,255,255,.1); box-shadow: 0 24px 60px rgba(0,0,0,.5);
+  width: min(420px, 92vw); background: linear-gradient(180deg, #2a1f55, #121a2c); color: #fff;
+  border-radius: 22px; padding: 18px 16px 14px; border: 3px solid rgba(255,230,109,.35);
+  box-shadow: 0 24px 60px rgba(0,0,0,.5);
 }
 #arc-root .arc-modal .board h3 { margin: 0 0 4px; font-size: 18px; font-weight: 900; }
 #arc-root .arc-modal .board .sub { opacity: .65; font-size: 12px; margin-bottom: 12px; }
@@ -82,18 +157,16 @@
 #arc-root .arc-modal li { display: flex; gap: 10px; align-items: center; padding: 8px 6px; border-bottom: 1px solid rgba(255,255,255,.06); font-weight: 700; }
 #arc-root .arc-modal li .rk { width: 24px; text-align: center; color: #ffe66d; }
 #arc-root .arc-modal li .sc { margin-left: auto; font-variant-numeric: tabular-nums; }
-#arc-root .arc-modal .close { margin-top: 12px; width: 100%; border: 0; border-radius: 12px; padding: 10px; font-weight: 800; cursor: pointer; background: #243049; color: #fff; }
+#arc-root .arc-modal .close { margin-top: 12px; width: 100%; border: 0; border-radius: 14px; padding: 10px; font-weight: 800; cursor: pointer; background: #243049; color: #fff; }
 #arc-root .arc-reward {
   pointer-events: none; position: fixed; left: 50%; top: 28%; transform: translate(-50%,-50%);
   background: #121a2c; color: #fff; border-radius: 16px; padding: 16px 20px; font-weight: 900;
   border: 1px solid rgba(255,230,109,.35); box-shadow: 0 16px 40px rgba(0,0,0,.4); z-index: 100;
 }
 
-/* 범핑팡 플레이 중에는 포스터(z=5100)보다 위에 */
 #arc-root.is-pang { z-index: 5200; }
 
-/* [hidden] 이 display:grid 에 덮이면 결과 레이어가 시작 버튼을 가로챔 */
-.arc-pang-intro[hidden], .arc-pang-result[hidden], .arc-pang-toast[hidden] {
+.arc-pang-intro[hidden], .arc-pang-result[hidden], .arc-pang-toast[hidden], .arc-pang-count[hidden] {
   display: none !important;
   pointer-events: none !important;
 }
