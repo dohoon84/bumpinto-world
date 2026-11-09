@@ -577,47 +577,97 @@
 @keyframes pang-vignette-pulse { 50% { opacity: .75; } }
 
 .arc-pang-levelup {
-  position: absolute; inset: 0; z-index: 15; display: grid; place-items: center;
-  pointer-events: none; background: rgba(255,255,255,.18);
+  position: absolute; inset: 0; z-index: 30; display: grid; place-items: center;
+  pointer-events: none;
 }
 .arc-pang-levelup[hidden] { display: none !important; }
+.arc-pang-levelup .lu-dim {
+  position: absolute; inset: 0;
+  background: rgba(20, 10, 40, .45);
+}
 .arc-pang-levelup .lu-rays {
-  position: absolute; inset: -30%;
-  background: conic-gradient(from 0deg, transparent 0 18deg, rgba(255,230,109,.35) 18deg 36deg, transparent 36deg 54deg);
-  animation: arc-spin 2.5s linear infinite;
+  position: absolute; inset: -40%;
+  background: conic-gradient(from 0deg, transparent 0 16deg, rgba(255,230,109,.55) 16deg 32deg, transparent 32deg 48deg);
+  animation: arc-spin 2.2s linear infinite;
+  opacity: .9;
+}
+.arc-pang-levelup .lu-confetti {
+  position: absolute; inset: 0; overflow: hidden; pointer-events: none;
+}
+.arc-pang-levelup .lu-confetti i {
+  position: absolute; top: 42%; width: 10px; height: 14px; border-radius: 3px;
+  animation: pang-lu-burst .95s cubic-bezier(.2,.8,.2,1) forwards;
+}
+.arc-pang-levelup .lu-confetti i.star {
+  width: 0; height: 0; border-radius: 0;
+  border-left: 7px solid transparent; border-right: 7px solid transparent;
+  border-bottom: 12px solid #ffe66d;
+  background: transparent !important;
+}
+@keyframes pang-lu-burst {
+  0% { transform: translate(0,0) scale(.4) rotate(0); opacity: 1; }
+  100% { transform: translate(var(--dx, 0), -160px) scale(1) rotate(240deg); opacity: 0; }
 }
 .arc-pang-levelup .lu-card {
-  position: relative; text-align: center; padding: 22px 28px; border-radius: 28px;
-  background: linear-gradient(180deg, #fff, #ffe8a8);
-  border: 4px solid #fff;
-  box-shadow: 0 10px 0 #ff9ecd, 0 22px 50px rgba(0,0,0,.3);
+  position: relative; z-index: 2; text-align: center;
+  padding: 18px 22px 20px; border-radius: 28px; min-width: min(300px, 86%);
+  background: linear-gradient(180deg, #fffef8, #ffe066 60%, #ffb020);
+  border: 5px solid #fff;
+  box-shadow:
+    0 0 0 4px #ff6b9d,
+    0 12px 0 #c47800,
+    0 24px 50px rgba(0,0,0,.4);
   color: #1a1030;
+  /* 기본 완전 불투명 — 스크린샷·애니 중에도 항상 읽힘 */
+  opacity: 1; transform: scale(1);
 }
-.arc-pang-levelup.pop .lu-card { animation: pang-lu-pop .7s cubic-bezier(.2,1.5,.3,1); }
+.arc-pang-levelup.pop .lu-card {
+  animation: pang-lu-pop .85s cubic-bezier(.2,1.55,.3,1);
+}
 @keyframes pang-lu-pop {
-  0% { transform: scale(.3) rotate(-8deg); opacity: 0; }
-  55% { transform: scale(1.12) rotate(2deg); opacity: 1; }
-  100% { transform: scale(1); opacity: 1; }
+  0% { transform: scale(.2) rotate(-12deg); }
+  45% { transform: scale(1.18) rotate(3deg); }
+  70% { transform: scale(0.96) rotate(-1deg); }
+  100% { transform: scale(1) rotate(0); }
 }
-.arc-pang-levelup .lu-title {
-  font-size: 28px; font-weight: 900; color: #fff;
-  -webkit-text-stroke: 3px #e04080; paint-order: stroke fill;
-  text-shadow: 0 4px 0 rgba(160,20,80,.3); letter-spacing: -.03em;
+.arc-pang-levelup .lu-banner {
+  display: inline-block; margin: 2px 0 4px;
+  font-size: clamp(28px, 8vw, 36px); font-weight: 900; letter-spacing: -.04em; line-height: 1.05;
+  color: #fff;
+  text-shadow:
+    -3px -3px 0 #e04080, 3px -3px 0 #e04080, -3px 3px 0 #e04080, 3px 3px 0 #e04080,
+    0 5px 0 #a02050, 0 8px 16px rgba(0,0,0,.25);
 }
 .arc-pang-levelup .lu-lv {
-  font-size: 42px; font-weight: 900; color: #fff;
-  -webkit-text-stroke: 3px #c47800; paint-order: stroke fill;
-  text-shadow: 0 4px 0 rgba(120,60,0,.25); margin: 4px 0;
+  font-size: clamp(40px, 12vw, 52px); font-weight: 900; letter-spacing: -.05em; line-height: 1;
+  color: #fff; margin: 6px 0 4px;
+  text-shadow:
+    -3px -3px 0 #c47800, 3px -3px 0 #c47800, -3px 3px 0 #c47800, 3px 3px 0 #c47800,
+    0 5px 0 #8a5500, 0 10px 18px rgba(0,0,0,.28);
 }
-.arc-pang-levelup .lu-sub { margin: 0; font-weight: 800; opacity: .75; font-size: 13px; }
-.arc-pang-levelup .lu-mascot { font-size: 40px; filter: drop-shadow(0 4px 0 rgba(0,0,0,.15)); }
+.arc-pang-levelup .lu-lv b { font-size: inherit; }
+.arc-pang-levelup .lu-sub { margin: 0; font-weight: 900; opacity: .8; font-size: 13px; color: #5a3a00; }
+.arc-pang-levelup .lu-mascot { font-size: 44px; filter: drop-shadow(0 5px 0 rgba(0,0,0,.18)); margin-bottom: 2px; }
 
 .arc-pang-result .result-lv {
   display: inline-block; margin: 4px 0 2px; padding: 6px 14px; border-radius: 999px;
   background: linear-gradient(180deg, #7eb6ff, #5b8cff); color: #fff; font-weight: 900; font-size: 15px;
   box-shadow: 0 4px 0 #3d6fd9;
 }
-.arc-pang.is-levelup .arc-pang-lv {
-  animation: pang-combo-pop .5s cubic-bezier(.2,1.5,.3,1);
-  box-shadow: 0 5px 0 #2a5aaa, 0 0 22px rgba(126,182,255,.75);
+.arc-pang.is-levelup .arc-pang-lv,
+.arc-pang-lv.lv-pulse {
+  animation: pang-lv-pulse .9s cubic-bezier(.2,1.5,.3,1);
+  box-shadow: 0 5px 0 #2a5aaa, 0 0 28px rgba(126,182,255,.95), 0 0 0 3px #fff;
+}
+@keyframes pang-lv-pulse {
+  0% { transform: scale(1); }
+  35% { transform: scale(1.28) rotate(-4deg); }
+  60% { transform: scale(0.94); }
+  100% { transform: scale(1); }
+}
+.arc-pang-timebar.refill {
+  box-shadow: 0 4px 0 #7a9ad0, 0 0 22px rgba(255,230,109,.85), 0 0 0 3px #ffe66d !important;
+}
+.arc-pang-timebar.refill .tube i {
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.8), 0 0 18px rgba(255,200,40,.9);
 }

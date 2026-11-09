@@ -116,10 +116,12 @@ export function mountBumpingPang({
       </div>
       <div class="arc-pang-count" data-count hidden></div>
       <div class="arc-pang-levelup" data-levelup hidden>
+        <div class="lu-dim" aria-hidden="true"></div>
         <div class="lu-rays" aria-hidden="true"></div>
+        <div class="lu-confetti" data-lu-confetti aria-hidden="true"></div>
         <div class="lu-card">
           <div class="lu-mascot" aria-hidden="true">🎉</div>
-          <div class="lu-title">LEVEL UP!</div>
+          <div class="lu-banner">LEVEL UP!</div>
           <div class="lu-lv">Lv.<b data-lu-lv>2</b></div>
           <p class="lu-sub">시간 충전 · 점수 배율 업!</p>
         </div>
@@ -148,6 +150,7 @@ export function mountBumpingPang({
     lvWrap: wrap.querySelector('[data-lv-wrap]'),
     levelup: wrap.querySelector('[data-levelup]'),
     luLv: wrap.querySelector('[data-lu-lv]'),
+    luConfetti: wrap.querySelector('[data-lu-confetti]'),
     vignette: wrap.querySelector('[data-vignette]'),
     toast: wrap.querySelector('[data-toast]'),
     floats: wrap.querySelector('[data-floats]'),
@@ -376,10 +379,8 @@ export function mountBumpingPang({
       void el.scoreWrap.offsetWidth;
       el.scoreWrap.classList.add('bump');
     }
-    if (score > bestScore) {
-      bestScore = score;
-      if (el.best) el.best.textContent = String(bestScore);
-    }
+    bestScore = Math.max(bestScore, score);
+    if (el.best) el.best.textContent = String(Math.max(bestScore, score));
     if (el.lv) el.lv.textContent = String(level);
     el.time.textContent = String(Math.max(0, Math.ceil(left)));
     const prevCombo = el.combo?.textContent;
@@ -661,10 +662,14 @@ export function mountBumpingPang({
 
   async function doLevelUp() {
     if (leveling || over) return;
-    leveling = true;
+    leveling = true; // tick 이 시간 소모·입력 스왑과 겹치지 않게 (busy 도 잠금)
+    const wasBusy = busy;
+    busy = true;
     const need = gaugeNeed(level);
     gauge = Math.max(0, gauge - need);
     level += 1;
+    // 리필 연출: 이전 잔여 → 풀 (danger 깜빡 없이)
+    const prevLeft = left;
     left = PLAY_SEC;
     feverOn = false;
     try { sfx?.setFever?.(false); } catch { /* */ }
@@ -672,6 +677,20 @@ export function mountBumpingPang({
     try { if (navigator.vibrate) navigator.vibrate([20, 40, 20, 40, 60]); } catch { /* */ }
     cheerMascot('레벨업!');
     if (el.luLv) el.luLv.textContent = String(level);
+    // confetti / stars
+    if (el.luConfetti) {
+      el.luConfetti.innerHTML = '';
+      const cols = ['#ff6b9d', '#ffe66d', '#7eb6ff', '#3ddc97', '#c084fc', '#ff9f1c', '#fff'];
+      for (let i = 0; i < 42; i++) {
+        const bit = document.createElement('i');
+        bit.className = i % 3 === 0 ? 'star' : 'bit';
+        bit.style.left = `${8 + Math.random() * 84}%`;
+        bit.style.background = cols[i % cols.length];
+        bit.style.animationDelay = `${Math.random() * 0.35}s`;
+        bit.style.setProperty('--dx', `${(Math.random() - 0.5) * 120}px`);
+        el.luConfetti.appendChild(bit);
+      }
+    }
     if (el.levelup) {
       el.levelup.hidden = false;
       el.levelup.classList.remove('pop');
@@ -679,20 +698,29 @@ export function mountBumpingPang({
       el.levelup.classList.add('pop');
     }
     wrap.classList.add('is-levelup');
-    // 시간 바 리필 연출
+    el.lvWrap?.classList.remove('lv-pulse');
+    void el.lvWrap?.offsetWidth;
+    el.lvWrap?.classList.add('lv-pulse');
+    // 시간 바: 0 → 100% 글로우 리필
     if (el.bar) {
-      el.bar.style.transition = 'width .45s cubic-bezier(.2,1.4,.3,1)';
+      el.bar.style.transition = 'none';
+      el.bar.style.width = `${Math.max(0, (prevLeft / PLAY_SEC) * 100)}%`;
+      void el.bar.offsetWidth;
+      el.bar.style.transition = 'width .7s cubic-bezier(.2,1.3,.3,1)';
       el.bar.style.width = '100%';
     }
     el.timeWrap?.classList.add('refill');
-    punch = 1.4; shake = 10; hitStop = 0.08;
+    punch = 1.5; shake = 12; hitStop = 0.1;
     syncHud();
-    await wait(1100);
-    if (el.levelup) el.levelup.hidden = true;
+    await wait(1100); // ~1.1s 입력·시간 정지
+    if (el.levelup) { el.levelup.hidden = true; el.levelup.classList.remove('pop'); }
+    if (el.luConfetti) el.luConfetti.innerHTML = '';
     wrap.classList.remove('is-levelup');
+    el.lvWrap?.classList.remove('lv-pulse');
     el.timeWrap?.classList.remove('refill');
     if (el.bar) el.bar.style.transition = '';
     leveling = false;
+    busy = wasBusy;
     syncHud();
   }
 

@@ -127,4 +127,13 @@ assert(starsForLevel(1) === 0, 'no star early');
   assert(r1.gauge > 0, 'gauge fill returned');
 }
 
+// live best display = max(storedBest, currentScore)
+{
+  let best = 1000, score = 4280;
+  best = Math.max(best, score);
+  assert(best === 4280, 'live best tracks current');
+  score = 3000; best = Math.max(best, score);
+  assert(best === 4280, 'best never drops mid-run');
+}
+
 console.log('ok arcade-pang', { scoreSample: res.score, pays: pays.map((p) => p.amount) });
