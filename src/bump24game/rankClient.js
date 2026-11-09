@@ -7,6 +7,10 @@ export function bp24RankOn(search = typeof location !== 'undefined' ? location.s
   try { return new URLSearchParams(search || '').get('bp24rank') !== '0'; } catch { return true; }
 }
 export { LIMIT_MSG };
+// 테스트 화면 모드(?shot)는 이름이 '나 (김도훈)'로 고정되고 매번 새 기기라 랭킹에 쌓이면 안 된다 → 항상 연습으로 보낸다
+export function bp24ShotMode(search = typeof location !== 'undefined' ? location.search : '') {
+  try { return new URLSearchParams(search || '').has('shot'); } catch { return false; }
+}
 
 const TAB = { yesterday: '어제', weekly: '이번 주', monthly: '이달' };
 const EMPTY = { yesterday: '어제 기록이 아직', weekly: '이번 주 첫 도전자를', monthly: '이달 순위가 아직' };
@@ -75,7 +79,7 @@ export function createRankProvider({ base, device } = {}) {
       if (!b) return { record: false };
       const r = await cfetch(`${b}/bump24/run`, {
         method: 'POST', headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
-        body: JSON.stringify({ storeId, name, score, deviceId: dev(), practice: !ranked }),
+        body: JSON.stringify({ storeId, name, score, deviceId: dev(), practice: !ranked || bp24ShotMode() }),
       });
       return r.ok ? r.json() : { record: false };
     },
