@@ -80,7 +80,7 @@ export function createArcadeSfx({
       bgmNodes = nodes;
       setTimeout(loop, notes.length * beat * 1000 - 30);
     };
-    bgmOn = true; loop();
+    bgmOn = true; try { loop(); } catch (e) { console.warn("[arcade-sfx] bgm", e); bgmOn = false; }
   }
 
   return {

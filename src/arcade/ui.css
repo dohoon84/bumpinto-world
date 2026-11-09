@@ -1,5 +1,5 @@
 /* [arcade] BUMP 오락실 · 범핑팡 */
-#arc-root { position: fixed; inset: 0; z-index: 70; pointer-events: none; font-family: Pretendard, "Noto Sans KR", system-ui, sans-serif; }
+#arc-root { position: fixed; inset: 0; z-index: 120; pointer-events: none; /* controls-card #cc-overlay=80 위 */ font-family: Pretendard, "Noto Sans KR", system-ui, sans-serif; }
 #arc-root * { box-sizing: border-box; }
 #arc-root .arc-hint {
   pointer-events: none; position: fixed; left: 50%; bottom: 88px; transform: translateX(-50%);
@@ -10,7 +10,7 @@
 #arc-root .arc-hint.on { display: block; }
 #arc-root .arc-hint kbd { display: inline-block; min-width: 22px; padding: 1px 6px; margin: 0 4px; border-radius: 6px; background: #ffe66d; color: #111; font-weight: 900; text-align: center; }
 #arc-root .arc-fade {
-  pointer-events: none; position: fixed; inset: 0; background: #05070f; opacity: 0; transition: none;
+  pointer-events: none; position: fixed; inset: 0; z-index: 1; background: #05070f; opacity: 0; transition: none;
   display: flex; align-items: center; justify-content: center; flex-direction: column; color: #fff; gap: 6px;
 }
 #arc-root .arc-fade b { font-size: 28px; font-weight: 900; letter-spacing: -.03em; }
@@ -47,7 +47,12 @@
 .arc-pang-x { margin-left: 0; }
 .arc-pang-cv { width: min(560px, 94vw); height: auto; border-radius: 18px; box-shadow: 0 20px 60px rgba(0,0,0,.45), inset 0 0 0 1px rgba(255,255,255,.08); touch-action: none; background: #0b1220; }
 .arc-pang-toast { position: absolute; top: 22%; left: 50%; transform: translateX(-50%); background: #ffe66d; color: #111; font-weight: 900; padding: 8px 16px; border-radius: 999px; pointer-events: none; }
-.arc-pang-intro, .arc-pang-result { position: absolute; inset: 0; display: grid; place-items: center; background: rgba(4,8,18,.72); }
+.arc-pang-intro, .arc-pang-result {
+  position: absolute; inset: 0; z-index: 5; display: grid; place-items: center;
+  background: rgba(4,8,18,.72); pointer-events: auto;
+}
+.arc-pang-intro .box, .arc-pang-result .box { pointer-events: auto; position: relative; z-index: 1; }
+.arc-pang-intro button, .arc-pang-result button { pointer-events: auto; position: relative; z-index: 2; }
 .arc-pang-intro .box, .arc-pang-result .box { background: #121a2c; color: #fff; border-radius: 20px; padding: 28px 26px; width: min(360px, 90vw); text-align: center; border: 1px solid rgba(255,255,255,.1); box-shadow: 0 24px 60px rgba(0,0,0,.5); }
 .arc-pang-intro h2, .arc-pang-result h2 { margin: 0 0 8px; font-size: 28px; font-weight: 900; letter-spacing: -.04em; }
 .arc-pang-intro p, .arc-pang-result p { margin: 0 0 10px; opacity: .85; line-height: 1.45; }
@@ -82,4 +87,13 @@
   pointer-events: none; position: fixed; left: 50%; top: 28%; transform: translate(-50%,-50%);
   background: #121a2c; color: #fff; border-radius: 16px; padding: 16px 20px; font-weight: 900;
   border: 1px solid rgba(255,230,109,.35); box-shadow: 0 16px 40px rgba(0,0,0,.4); z-index: 100;
+}
+
+/* 범핑팡 플레이 중에는 포스터(z=5100)보다 위에 */
+#arc-root.is-pang { z-index: 5200; }
+
+/* [hidden] 이 display:grid 에 덮이면 결과 레이어가 시작 버튼을 가로챔 */
+.arc-pang-intro[hidden], .arc-pang-result[hidden], .arc-pang-toast[hidden] {
+  display: none !important;
+  pointer-events: none !important;
 }

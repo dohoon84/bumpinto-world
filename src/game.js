@@ -95,7 +95,9 @@ const fromRegion = fromRegionId && fromRegionId !== region.id ? getRegion(fromRe
 // [corridor] 지구본에서 코리더 역을 고르면 입장(로비/여권) 직후 그 역으로 이동. 다른 동네에서 오면 ?at= 로 넘어온다
 const atQuery = params.get('at');
 const bump24AtQuery = atQuery === BUMP24_JEONGJA_AT || (atQuery && atQuery.startsWith('bump24-'));
-let corridorAt = !shot && params.get('corridor') !== '0' && !bump24AtQuery ? atQuery : null;
+const arcadeAtQuery = atQuery === ARCADE_AT || atQuery === 'arcade-seohyeon' || (atQuery && atQuery.startsWith('arcade-'));
+// bump24·arcade 전용 ?at= 은 코리더 역 이동이 아님 (없는 역 id 로 travel.go 가 돌지 않게)
+let corridorAt = !shot && params.get('corridor') !== '0' && !bump24AtQuery && !arcadeAtQuery ? atQuery : null;
 let corridorArrive = null;
 const arriveFix = arriveFixEnabled(); // [arrivefix]
 const pickFirst = pickFirstEnabled(); // [pickfirst] #42 직접 고른 역 출구가 이어하기·서버 위치보다 우선

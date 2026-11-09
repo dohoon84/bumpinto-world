@@ -12,6 +12,34 @@ import { mountBumpingPang } from './bumpingpang/game.js';
 export { arcadeEnabled, arcadeAtSpot, ARCADE_AT } from './flag.js';
 export { arcadePlacement } from './locations.js';
 
+function dismissBlockingOverlays() {
+  // Controls 첫 안내 · BUMP24 포스터(z=5100) · 기타 모달이 범핑팡 시작 버튼을 가리면 진행 불가
+  try {
+    const ov = document.getElementById('cc-overlay');
+    if (ov) ov.hidden = true;
+    localStorage.setItem('bw.controlsCard.dismissed', '1');
+    sessionStorage.setItem('bw.controlsCard.off', '1');
+    document.documentElement.classList.remove('cc-on');
+  } catch { /* */ }
+  try {
+    const poster = document.getElementById('bw-bp24-poster');
+    if (poster) {
+      poster.querySelector('[data-close]')?.click();
+      poster.remove();
+    }
+  } catch { /* */ }
+  try {
+    document.querySelector('#bw-notice-popup [data-close], .np-close, [data-notice-close]')?.click();
+  } catch { /* */ }
+  try {
+    const board = document.getElementById('board-modal');
+    if (board && !board.hidden) {
+      board.querySelector('.board-close, [data-action="close"]')?.click();
+      board.hidden = true; // click 이 안 먹어도 강제 닫기
+    }
+  } catch { /* */ }
+}
+
 const FADE_SEC = 0.38;
 const DOOR_R = 2.6;
 const BOARD_R = 2.4;
@@ -40,7 +68,7 @@ export function mountArcade({
       else if (!active && nearDoor) enter();
       else if (active && nearCab?.playable) startPang();
     },
-    onExit: () => { if (pang) { pang.dispose(); pang = null; } else leave(); },
+    onExit: () => { if (pang) { pang.dispose(); pang = null; ui.root.classList.remove('is-pang'); } else leave(); },
     onMute: () => {
       if (toggleMute) toggleMute();
       else sfx.setMuted(!sfx.muted);
@@ -53,6 +81,7 @@ export function mountArcade({
   function enter() {
     if (active || busy || !canEnter()) return false;
     const p = getPlayer?.()?.position; if (p) returnPos = { x: p.x, z: p.z };
+    dismissBlockingOverlays();
     busy = true; fade = { t: 0, phase: 'out', title: store.name, sub: '네온이 반짝, 어서 와요', leaving: false };
     ui.setHint(''); sfx.door();
     return true;
@@ -67,7 +96,7 @@ export function mountArcade({
   }
   function leave() {
     if (!active || (busy && !fade.leaving && fade.phase)) return;
-    if (pang) { pang.dispose(); pang = null; }
+    if (pang) { pang.dispose(); pang = null; ui.root.classList.remove('is-pang'); }
     busy = true; fade = { t: 0, phase: 'out', title: '밖으로', sub: '또 와요!', leaving: true };
     ui.setCabHint(''); sfx.door(); sfx.stopBgm();
   }
@@ -83,7 +112,8 @@ export function mountArcade({
   function tickFade(dt) {
     if (!fade.phase) return;
     fade.t += dt;
-    const a = fade.phase === 'out' ? Math.min(1, fade.t / FADE_SEC) : Math.max(0, 1 - fade.t / FADE_SEC);
+    const raw = fade.phase === 'out' ? fade.t / FADE_SEC : 1 - fade.t / FADE_SEC;
+    const a = Math.min(1, Math.max(0, raw));
     ui.setFade(a, fade.title, fade.sub);
     if (fade.phase === 'out' && fade.t >= FADE_SEC) {
       if (fade.leaving) finishLeave();
@@ -103,16 +133,28 @@ export function mountArcade({
 
   async function startPang() {
     if (pang || !active) return;
+    dismissBlockingOverlays();
     ui.setCabHint('');
-    const gate = await rank.gate();
-    const ranked = !!gate?.ranked;
+    // 입장 페이드가 아직 'in' 이면 다음 프레임이 다시 어두워지며 클릭을 먹음 → 즉시 종료
+    fade = { t: 0, phase: '', title: '', sub: '', leaving: false };
+    busy = false;
+    ui.setFade(0);
+    let ranked = true;
+    try {
+      const gate = await Promise.race([
+        rank.gate(),
+        new Promise((r) => setTimeout(() => r({ ranked: true, local: true, guest: true }), 800)),
+      ]);
+      ranked = !!gate?.ranked;
+    } catch { ranked = true; }
+    ui.root.classList.add('is-pang');
     pang = mountBumpingPang({
       root: ui.root,
       sfx,
       ranked,
       practice: !ranked,
       getName: selfName,
-      onExit: () => { pang = null; ui.setCabHint('가운데 오락기 · F 또는 화면 클릭 → 범핑팡', true); },
+      onExit: () => { pang = null; ui.root.classList.remove('is-pang'); ui.setCabHint('가운데 오락기 · F 또는 화면 클릭 → 범핑팡', true); },
       onResult: async ({ score, ranked: rec, name, openBoard: wantBoard }) => {
         try { await rank.submit({ name, score, ranked: rec }); } catch { /* local ok */ }
         if (wantBoard) openBoard('today');
@@ -136,7 +178,7 @@ export function mountArcade({
 
   function onKey(e) {
     if (pang) {
-      if (e.code === 'Escape') { pang.dispose(); pang = null; ui.setCabHint('가운데 오락기 · F 또는 화면 클릭 → 범핑팡', true); return true; }
+      if (e.code === 'Escape') { pang.dispose(); pang = null; ui.root.classList.remove('is-pang'); ui.setCabHint('가운데 오락기 · F 또는 화면 클릭 → 범핑팡', true); return true; }
       return true; // swallow while playing
     }
     if (e.code === 'KeyE' && !e.repeat) {
@@ -197,7 +239,7 @@ export function mountArcade({
     },
     dispose() {
       window.removeEventListener('pointerdown', onPointerDown, true);
-      pang?.dispose?.();
+      pang?.dispose?.(); ui.root.classList.remove('is-pang');
       interior?.dispose();
       exterior?.dispose();
       ui.dispose();

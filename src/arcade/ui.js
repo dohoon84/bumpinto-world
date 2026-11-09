@@ -41,8 +41,11 @@ export function createArcadeUI({ onHintTap, onExit, onMute } = {}) {
       cab.textContent = text || '';
     },
     setFade(a, title = '', sub = '') {
-      fade.style.opacity = String(a);
-      fade.style.pointerEvents = a > 0.05 ? 'auto' : 'none';
+      const v = Math.min(1, Math.max(0, Number(a) || 0));
+      fade.style.opacity = String(v);
+      // 페이드가 거의 투명하면 반드시 클릭 통과 (범핑팡 시작 버튼 보호)
+      fade.style.pointerEvents = v > 0.05 ? 'auto' : 'none';
+      if (v <= 0.05) { fade.style.visibility = 'hidden'; } else { fade.style.visibility = 'visible'; }
       fade.querySelector('b').textContent = title;
       fade.querySelector('span').textContent = sub;
     },

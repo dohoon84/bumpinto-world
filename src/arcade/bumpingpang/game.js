@@ -221,12 +221,15 @@ export function mountBumpingPang({
     raf = requestAnimationFrame(tick);
   }
 
-  function start() {
+  function start(ev) {
+    ev?.preventDefault?.();
+    ev?.stopPropagation?.();
+    if (playing || over) return;
     el.intro.hidden = true;
     playing = true; over = false; left = PLAY_SEC; score = 0; comboShow = 0;
     board = createBoard(rng);
-    sfx?.startWhistle?.();
-    sfx?.startBgm?.();
+    try { sfx?.startWhistle?.(); } catch { /* 오디오 실패해도 게임은 진행 */ }
+    try { sfx?.startBgm?.(); } catch { /* */ }
     syncHud(); draw();
   }
 
@@ -257,7 +260,9 @@ export function mountBumpingPang({
   }
 
   cv.addEventListener('pointerdown', onPointer);
-  wrap.querySelector('[data-go]')?.addEventListener('click', start);
+  const goBtn = wrap.querySelector('[data-go]');
+  goBtn?.addEventListener('click', start);
+  goBtn?.addEventListener('pointerup', start);
   wrap.querySelector('[data-exit]')?.addEventListener('click', () => dispose(true));
   el.mute.addEventListener('click', () => {
     const next = !sfx?.muted;
