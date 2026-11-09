@@ -1,7 +1,7 @@
 // [arcade-pang] /arcade/* — 범핑팡 랭킹. 참여보상·일일보상 없음.
 import { sessionFromRequest } from '../account/session.js';
 import { arcadeRankEnabled, attemptsUsed, recordRun, storeBoard } from './db.js';
-import { kstDayKey, LIMIT_MSG, attemptCap, GAME_ID, STORE_ID } from './rules.js';
+import { kstDayKey, LIMIT_MSG, attemptCap, GAME_ID, STORE_ID, plausibleArcadeRun } from './rules.js';
 
 function json(data, status, cors) {
   return new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json; charset=utf-8', ...cors } });
@@ -46,9 +46,13 @@ export async function handleArcade(request, env, url, cors) {
       const gameId = String(body?.gameId || GAME_ID).slice(0, 40);
       const storeId = String(body?.storeId || STORE_ID).slice(0, 80);
       const score = Math.round(Number(body?.score));
+      const level = Math.max(1, Math.min(40, Math.round(Number(body?.level) || 1)));
+      const durationMs = Math.max(0, Math.round(Number(body?.durationMs) || 0));
       const name = String(body?.name || '나').replace(/[\u0000-\u001f]/g, '').trim().slice(0, 16) || '나';
       if (!who || !storeId || !Number.isFinite(score) || score < 0) return json({ ok: false, error: 'bad_run' }, 400, cors);
-      const out = await recordRun(env.DB, { ...who, gameId, storeId, name, score, now, practice: !!body?.practice });
+      const gate = plausibleArcadeRun({ score, level, durationMs });
+      if (!gate.ok) return json({ ok: false, error: 'implausible', reason: gate.reason }, 400, cors);
+      const out = await recordRun(env.DB, { ...who, gameId, storeId, name, score, level, durationMs, now, practice: !!body?.practice });
       // 참여보상 없음 — creditParticipation 호출하지 않음
       return json({ ok: true, ...out }, 200, cors);
     }

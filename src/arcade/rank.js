@@ -22,13 +22,13 @@ export function localBoard(period = 'today') {
   return rows;
 }
 
-export function saveLocal({ name, score }) {
+export function saveLocal({ name, score, level = 1 }) {
   const day = new Date().toISOString().slice(0, 10);
   const all = readLocal();
   const id = `local:${name || '나'}`;
   const prev = all[id];
   if (!prev || score > prev.score || prev.day !== day) {
-    all[id] = { name: name || '나', score, day, at: Date.now(), guest: true };
+    all[id] = { name: name || '나', score, level: Math.max(1, Number(level) || 1), day, at: Date.now(), guest: true };
     writeLocal(all);
   }
   return localBoard('today');
@@ -67,8 +67,8 @@ export function createArcadeRankProvider({ base, device } = {}) {
         return { ranked: !j.usedUp && !j.beforeOpen, usedUp: !!j.usedUp, message: j.message || LIMIT_MSG, guest, left: j.left, cap: attemptCap(guest) };
       } catch { return { ranked: true, usedUp: false, left: 5, cap: 5, guest: true, local: true }; }
     },
-    async submit({ name, score, ranked }) {
-      saveLocal({ name, score });
+    async submit({ name, score, ranked, level = 1, durationMs = 0 }) {
+      saveLocal({ name, score, level });
       const b = root();
       if (!b) return { record: false, local: true };
       try {
@@ -76,6 +76,7 @@ export function createArcadeRankProvider({ base, device } = {}) {
           method: 'POST', headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
           body: JSON.stringify({
             gameId: ARCADE_GAME_ID, storeId: ARCADE_STORE_ID, name, score,
+            level, durationMs,
             deviceId: dev(), practice: !ranked,
           }),
         });

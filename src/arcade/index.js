@@ -197,8 +197,8 @@ export function mountArcade({
       getBest: bestScoreLocal,
       onOpenBoard: () => openBoard('today'),
       onExit: () => { pang = null; ui.root.classList.remove('is-pang'); resumeWorldOst(); ui.setCabHint('범핑팡 하기', true, { act: true, tap: '범핑팡 하기', key: 'F' }); },
-      onResult: async ({ score, ranked: rec, name, openBoard: wantBoard }) => {
-        try { await rank.submit({ name, score, ranked: rec }); } catch { /* local ok */ }
+      onResult: async ({ score, level, durationMs, ranked: rec, name, openBoard: wantBoard }) => {
+        try { await rank.submit({ name, score, level, durationMs, ranked: rec }); } catch { /* local ok */ }
         if (wantBoard) openBoard('today');
       },
     });

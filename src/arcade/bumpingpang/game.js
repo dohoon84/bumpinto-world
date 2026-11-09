@@ -3,18 +3,24 @@ import { TILES } from './tiles.js';
 import { getTileSprite, prewarmSprites } from './sprites.js';
 import {
   COLS, ROWS, PLAY_SEC, createBoard, makeRng, hashSeed, trySwap, hasMoves, shuffleBoard, areAdjacent,
+  gaugeNeed, timeDrainPerSec, scoreMult, starsForLevel,
 } from './engine.js';
 
 const COLORS = Object.fromEntries(TILES.map((t) => [t.id, t.color]));
-// 별점: 60초 시뮬(클리어당 ~30–80점, 히트율·콤보 반영) → 캐주얼~500 / 중급~1200 / 숙련~2000+
-export const STAR_THRESHOLDS = [500, 1200, 2000];
-export function starsFor(score) {
-  const s = Number(score) || 0;
-  if (s >= STAR_THRESHOLDS[2]) return 3;
-  if (s >= STAR_THRESHOLDS[1]) return 2;
-  if (s >= STAR_THRESHOLDS[0]) return 1;
+// 별점: 도달 레벨 기준 (Lv3 / Lv7 / Lv12)
+export const STAR_LEVELS = [3, 7, 12];
+export function starsFor(scoreOrLevel, maybeLevel) {
+  // 하위호환: starsFor(score) 또는 starsFor(score, level) 또는 starsFor({level})
+  if (scoreOrLevel && typeof scoreOrLevel === 'object') return starsForLevel(scoreOrLevel.level || 0);
+  if (maybeLevel != null) return starsForLevel(maybeLevel);
+  // 점수만 오면 대략 환산(레거시) — 레벨 모드에선 finish 가 level 전달
+  const s = Number(scoreOrLevel) || 0;
+  if (s >= 12000) return 3;
+  if (s >= 5000) return 2;
+  if (s >= 1500) return 1;
   return 0;
 }
+export { starsForLevel };
 
 export function mountBumpingPang({
   root, sfx, ranked = true, storeId = 'arcade-seohyeon', getName = () => '나',
@@ -48,6 +54,7 @@ export function mountBumpingPang({
         <i class="hill"></i>
       </div>
       <header class="arc-pang-top">
+        <div class="arc-pang-lv" data-lv-wrap><span class="lv-lab">Lv.</span><b data-lv>1</b></div>
         <div class="arc-pang-scoreblock" data-score-wrap>
           <span class="lbl">점수</span>
           <b class="score-num" data-score>0</b>
@@ -73,10 +80,10 @@ export function mountBumpingPang({
           <div class="tube"><i data-bar></i></div>
           <b data-time>${PLAY_SEC}</b>
         </div>
-        <div class="arc-pang-fever" data-combo-wrap>
-          <span class="lbl">콤보</span>
-          <div class="fever-track"><i data-fever></i></div>
-          <b data-combo>0</b>
+        <div class="arc-pang-fever" data-gauge-wrap>
+          <span class="lbl">레벨</span>
+          <div class="fever-track"><i data-gauge></i></div>
+          <b data-combo title="콤보">x0</b>
         </div>
       </footer>
       <div class="arc-pang-fx" data-fx></div>
@@ -99,7 +106,7 @@ export function mountBumpingPang({
                 </div>
                 <div class="tap-hand">👆</div>
               </div>
-              <p>같은 친구 <b>3명 이상</b>을<br/>탭·스와이프로 모아 팡!</p>
+              <p>같은 친구 <b>3+</b> 모아 팡!<br/>게이지를 채우면 <b>레벨업</b>·시간 충전.<br/>시간 소진 전 레벨업!</p>
             </div>
           </div>
           <p class="tag">${practice || !ranked ? '연습 모드 · 순위 기록 안 함' : '랭킹 도전 ★'}</p>
@@ -108,6 +115,16 @@ export function mountBumpingPang({
         </div>
       </div>
       <div class="arc-pang-count" data-count hidden></div>
+      <div class="arc-pang-levelup" data-levelup hidden>
+        <div class="lu-rays" aria-hidden="true"></div>
+        <div class="lu-card">
+          <div class="lu-mascot" aria-hidden="true">🎉</div>
+          <div class="lu-title">LEVEL UP!</div>
+          <div class="lu-lv">Lv.<b data-lu-lv>2</b></div>
+          <p class="lu-sub">시간 충전 · 점수 배율 업!</p>
+        </div>
+      </div>
+      <div class="arc-pang-vignette" data-vignette hidden></div>
       <div class="arc-pang-result" data-result hidden></div>
     </div>
   `;
@@ -124,9 +141,14 @@ export function mountBumpingPang({
     time: wrap.querySelector('[data-time]'),
     timeWrap: wrap.querySelector('[data-time-wrap]'),
     bar: wrap.querySelector('[data-bar]'),
-    fever: wrap.querySelector('[data-fever]'),
+    gauge: wrap.querySelector('[data-gauge]'),
+    gaugeWrap: wrap.querySelector('[data-gauge-wrap]'),
     combo: wrap.querySelector('[data-combo]'),
-    comboWrap: wrap.querySelector('[data-combo-wrap]'),
+    lv: wrap.querySelector('[data-lv]'),
+    lvWrap: wrap.querySelector('[data-lv-wrap]'),
+    levelup: wrap.querySelector('[data-levelup]'),
+    luLv: wrap.querySelector('[data-lu-lv]'),
+    vignette: wrap.querySelector('[data-vignette]'),
     toast: wrap.querySelector('[data-toast]'),
     floats: wrap.querySelector('[data-floats]'),
     intro: wrap.querySelector('[data-intro]'),
@@ -142,6 +164,7 @@ export function mountBumpingPang({
   const rng = makeRng(seed);
   let board = createBoard(rng);
   let score = 0, comboShow = 0, left = PLAY_SEC, playing = false, over = false, busy = false;
+  let level = 1, gauge = 0, runStartedAt = 0, feverOn = false, leveling = false;
   let sel = null, particles = [], shake = 0, punch = 0, hitStop = 0, flashCells = [];
   let raf = 0, last = 0, acc = 0, blinkT = 0, blinkOn = false;
   let anim = null;
@@ -357,24 +380,31 @@ export function mountBumpingPang({
       bestScore = score;
       if (el.best) el.best.textContent = String(bestScore);
     }
+    if (el.lv) el.lv.textContent = String(level);
     el.time.textContent = String(Math.max(0, Math.ceil(left)));
-    const prevCombo = el.combo.textContent;
-    const nextCombo = String(comboShow);
-    el.combo.textContent = nextCombo;
-    const pct = Math.max(0, left / PLAY_SEC) * 100;
-    if (el.bar) el.bar.style.width = `${pct}%`;
-    const fever = Math.min(100, comboShow * 20);
-    if (el.fever) el.fever.style.width = `${fever}%`;
-    el.timeWrap?.classList.toggle('urgent', left <= 10);
-    wrap.classList.toggle('is-urgent', playing && left <= 10);
-    el.comboWrap?.classList.toggle('glow', comboShow >= 2);
-    el.comboWrap?.classList.toggle('fever-on', comboShow >= 4);
+    const prevCombo = el.combo?.textContent;
+    const nextCombo = `x${comboShow}`;
+    if (el.combo) el.combo.textContent = nextCombo;
+    const timePct = Math.max(0, left / PLAY_SEC) * 100;
+    if (el.bar) el.bar.style.width = `${timePct}%`;
+    const need = gaugeNeed(level);
+    const gPct = Math.max(0, Math.min(100, (gauge / need) * 100));
+    if (el.gauge) el.gauge.style.width = `${gPct}%`;
+    const danger = playing && left <= 5;
+    el.timeWrap?.classList.toggle('urgent', danger);
+    wrap.classList.toggle('is-urgent', danger);
+    wrap.classList.toggle('is-danger', danger);
+    if (el.vignette) el.vignette.hidden = !danger;
+    el.gaugeWrap?.classList.toggle('glow', comboShow >= 2);
+    el.gaugeWrap?.classList.toggle('fever-on', feverOn || comboShow >= 5);
     if (prevCombo !== nextCombo && comboShow >= 2) {
-      el.comboWrap?.classList.remove('pop');
-      void el.comboWrap?.offsetWidth;
-      el.comboWrap?.classList.add('pop');
-      cheerMascot(comboShow >= 4 ? '피버!' : `콤보 x${comboShow}!`);
+      el.gaugeWrap?.classList.remove('pop');
+      void el.gaugeWrap?.offsetWidth;
+      el.gaugeWrap?.classList.add('pop');
+      cheerMascot(comboShow >= 5 ? '피버!' : `콤보 x${comboShow}!`);
     }
+    try { sfx?.setUrgentBgm?.(danger); } catch { /* */ }
+    try { sfx?.setFever?.(feverOn || comboShow >= 5); } catch { /* */ }
   }
 
   function cheerMascot(say) {
@@ -438,7 +468,7 @@ export function mountBumpingPang({
     try {
       try { sfx?.swap?.(); } catch { /* */ }
       const clone = board.map((row) => row.map((cell) => (cell ? { ...cell } : null)));
-      const peek = trySwap(clone, a, b, makeRng(1));
+      const peek = trySwap(clone, a, b, makeRng(1), level);
       if (!peek.ok) {
         await runAnim({ type: 'wobble', a, b, dur: 180 });
         try { sfx?.deny?.(); } catch { /* */ }
@@ -446,14 +476,17 @@ export function mountBumpingPang({
         return;
       }
       await runAnim({ type: 'swap', a, b, dur: 110 });
-      const res = trySwap(board, a, b, rng);
+      const res = trySwap(board, a, b, rng, level);
       if (!res.ok) { sel = null; return; }
       score += res.score;
       comboShow = Math.max(comboShow, res.maxCombo);
+      feverOn = comboShow >= 5;
+      gauge += res.gauge || 0;
 
       for (const step of res.steps) {
         if (step.type === 'clear') {
           try { sfx?.match?.(step.combo); } catch { /* */ }
+          try { if (navigator.vibrate) navigator.vibrate(step.combo >= 3 ? [12, 30, 18] : 10); } catch { /* */ }
           if (step.specs?.length) {
             try { sfx?.special?.(); } catch { /* */ }
             const sp = step.specs[0]?.special;
@@ -474,15 +507,16 @@ export function mountBumpingPang({
           await wait(45);
           for (const p of step.cells) {
             const col = COLORS[board[p.r]?.[p.c]?.id] || '#ffe66d';
-            burst(p.r, p.c, col, 14);
+            burst(p.r, p.c, col, 10 + Math.min(18, step.combo * 4 + step.cleared));
             const ca = cellAnim[p.r]?.[p.c];
             if (ca) { ca.sx = 0.15; ca.sy = 0.15; ca.flash = 0; }
           }
           const mid = step.cells[Math.floor(step.cells.length / 2)] || a;
           floatScore(mid.r, mid.c, `+${step.gained}`);
-          if (step.combo >= 3) { punch = 1.2; hitStop = 0.055; }
-          else if (step.combo >= 2) hitStop = 0.04;
-          shake = 4 + step.combo * 1.5;
+          if (step.combo >= 4) { punch = 1.6; hitStop = 0.09; }
+          else if (step.combo >= 3) { punch = 1.3; hitStop = 0.07; }
+          else if (step.combo >= 2) hitStop = 0.045;
+          shake = 5 + step.combo * 2.2;
           syncHud(); draw();
           await wait(100);
           for (const p of step.cells) {
@@ -508,6 +542,9 @@ export function mountBumpingPang({
             cellAnim[r][c].y = 0; cellAnim[r][c].sx = 1; cellAnim[r][c].sy = 1;
           }
         }
+      }
+      while (gauge >= gaugeNeed(level) && !over) {
+        await doLevelUp();
       }
       if (!hasMoves(board)) {
         toast('섞는 중…');
@@ -596,12 +633,11 @@ export function mountBumpingPang({
     blinkT += dt;
     if (blinkT > 2.4) { blinkOn = true; if (blinkT > 2.55) { blinkOn = false; blinkT = 0; } }
 
-    if (playing && !over && !orientBlocked) {
-      left -= dt;
-      if (left <= 10) {
+    if (playing && !over && !orientBlocked && !leveling) {
+      left -= dt * timeDrainPerSec(level);
+      if (left <= 5) {
         acc += dt;
-        if (acc > 0.38) { acc = 0; try { sfx?.urgent?.(); } catch { /* */ } }
-        try { sfx?.setUrgentBgm?.(true); } catch { /* */ }
+        if (acc > 0.32) { acc = 0; try { sfx?.urgent?.(); sfx?.heartbeat?.(); } catch { /* */ } }
       }
       if (left <= 0) { left = 0; finish(); }
       syncHud();
@@ -623,6 +659,43 @@ export function mountBumpingPang({
     raf = requestAnimationFrame(tick);
   }
 
+  async function doLevelUp() {
+    if (leveling || over) return;
+    leveling = true;
+    const need = gaugeNeed(level);
+    gauge = Math.max(0, gauge - need);
+    level += 1;
+    left = PLAY_SEC;
+    feverOn = false;
+    try { sfx?.setFever?.(false); } catch { /* */ }
+    try { sfx?.levelUp?.(); } catch { /* */ }
+    try { if (navigator.vibrate) navigator.vibrate([20, 40, 20, 40, 60]); } catch { /* */ }
+    cheerMascot('레벨업!');
+    if (el.luLv) el.luLv.textContent = String(level);
+    if (el.levelup) {
+      el.levelup.hidden = false;
+      el.levelup.classList.remove('pop');
+      void el.levelup.offsetWidth;
+      el.levelup.classList.add('pop');
+    }
+    wrap.classList.add('is-levelup');
+    // 시간 바 리필 연출
+    if (el.bar) {
+      el.bar.style.transition = 'width .45s cubic-bezier(.2,1.4,.3,1)';
+      el.bar.style.width = '100%';
+    }
+    el.timeWrap?.classList.add('refill');
+    punch = 1.4; shake = 10; hitStop = 0.08;
+    syncHud();
+    await wait(1100);
+    if (el.levelup) el.levelup.hidden = true;
+    wrap.classList.remove('is-levelup');
+    el.timeWrap?.classList.remove('refill');
+    if (el.bar) el.bar.style.transition = '';
+    leveling = false;
+    syncHud();
+  }
+
   async function countdownThenPlay() {
     el.intro.hidden = true;
     el.count.hidden = false;
@@ -639,9 +712,12 @@ export function mountBumpingPang({
     }
     el.count.hidden = true;
     playing = true; over = false; left = PLAY_SEC; score = 0; comboShow = 0;
+    level = 1; gauge = 0; feverOn = false; leveling = false;
+    runStartedAt = performance.now();
     board = createBoard(rng);
     cellAnim = freshCellAnim();
     try { sfx?.startBgm?.(); } catch { /* */ }
+    try { sfx?.setFever?.(false); } catch { /* */ }
     syncHud(); draw();
   }
 
@@ -658,23 +734,29 @@ export function mountBumpingPang({
 
   async function finish() {
     if (over) return;
-    over = true; playing = false;
+    over = true; playing = false; feverOn = false;
     try { sfx?.setUrgentBgm?.(false); } catch { /* */ }
+    try { sfx?.setFever?.(false); } catch { /* */ }
     try { sfx?.timeUp?.(); } catch { /* */ }
     try { sfx?.stopBgm?.(); } catch { /* */ }
+    if (el.vignette) el.vignette.hidden = true;
+    wrap.classList.remove('is-danger', 'is-urgent');
     const name = (() => { try { return getName() || '나'; } catch { return '나'; } })();
     const finalScore = score;
-    const stars = starsFor(finalScore);
+    const finalLevel = level;
+    const stars = starsForLevel(finalLevel);
+    const durationMs = runStartedAt ? Math.max(0, performance.now() - runStartedAt) : 0;
     el.result.hidden = false;
     el.result.innerHTML = `<div class="box cute result-v2">
       <div class="rays" aria-hidden="true"></div>
       <div class="confetti" data-confetti></div>
       <div class="banner">시간 끝!</div>
       <div class="mascot big result-bum" aria-hidden="true"><svg class="bum-face" viewBox="0 0 80 80"><ellipse cx="40" cy="46" rx="28" ry="26" fill="#6ea8ff"/><circle cx="22" cy="18" r="12" fill="#6ea8ff"/><circle cx="58" cy="18" r="12" fill="#6ea8ff"/><circle cx="22" cy="18" r="7" fill="#3d6fd9"/><circle cx="58" cy="18" r="7" fill="#3d6fd9"/><ellipse cx="40" cy="52" rx="22" ry="18" fill="#8fc0ff"/><circle cx="30" cy="44" r="5" fill="#1a1030"/><circle cx="50" cy="44" r="5" fill="#1a1030"/><path d="M34 56 Q40 62 46 56" stroke="#1a1030" stroke-width="2.2" fill="none" stroke-linecap="round"/></svg></div>
+      <div class="result-lv">도달 <b>Lv.${finalLevel}</b></div>
       <p class="big" data-roll>0점</p>
       <div class="star-row" data-stars><span class="dim">★</span><span class="dim">★</span><span class="dim">★</span></div>
       <div class="rank-badge" data-badge>${practice || !ranked ? '연습 기록' : '랭킹 도전'}</div>
-      <p class="sub">최고 콤보 ${comboShow} · 최고 ${Math.max(bestScore, finalScore)}</p>
+      <p class="sub">최고 콤보 ${comboShow} · 배율 ×${scoreMult(finalLevel).toFixed(2)}</p>
       <div class="row">
         <button type="button" class="candy-go" data-again>한 판 더</button>
         <button type="button" data-board>순위판</button>
@@ -725,8 +807,8 @@ export function mountBumpingPang({
       el.result.hidden = true; over = false; playing = false; start();
     });
     el.result.querySelector('[data-leave]')?.addEventListener('click', () => dispose(true));
-    el.result.querySelector('[data-board]')?.addEventListener('click', () => onResult?.({ score: finalScore, ranked: ranked && !practice, name, openBoard: true }));
-    onResult?.({ score: finalScore, ranked: ranked && !practice, name, openBoard: false });
+    el.result.querySelector('[data-board]')?.addEventListener('click', () => onResult?.({ score: finalScore, level: finalLevel, durationMs, ranked: ranked && !practice, name, openBoard: true }));
+    onResult?.({ score: finalScore, level: finalLevel, durationMs, ranked: ranked && !practice, name, openBoard: false });
   }
 
   function dispose(exit = false) {

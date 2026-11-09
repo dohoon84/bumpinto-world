@@ -58,3 +58,21 @@ export function payOnce(seen, payouts) {
   }
   return applied;
 }
+
+/** 레벨 모드 점수 타당성 (클라 engine.plausibleRun 과 동일 취지). */
+export function plausibleArcadeRun({ score, level, durationMs, maxLevel = 40 } = {}) {
+  const sc = Math.round(Number(score) || 0);
+  const lv = Math.max(1, Math.round(Number(level) || 1));
+  const dur = Math.max(0, Number(durationMs) || 0);
+  if (!Number.isFinite(sc) || sc < 0) return { ok: false, reason: 'bad_score' };
+  if (lv > maxLevel) return { ok: false, reason: 'level_cap' };
+  const minMs = Math.max(0, (lv - 1) * 6000);
+  if (dur > 0 && dur < minMs * 0.7) return { ok: false, reason: 'too_fast' };
+  const sec = Math.max(1, dur / 1000);
+  const maxScore = Math.round(sec * 220 + lv * 2500);
+  if (sc > maxScore) return { ok: false, reason: 'score_cap' };
+  if (sc > 5000 && lv < 2 && dur < 20000) return { ok: false, reason: 'implausible' };
+  // 절대 상한 (버그·치트 가드)
+  if (sc > 500000) return { ok: false, reason: 'score_abs_cap' };
+  return { ok: true };
+}

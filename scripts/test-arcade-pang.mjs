@@ -1,7 +1,9 @@
 // [arcade] 범핑팡 엔진 · 월간 보상 규칙 단위 테스트
 import {
-  COLS, ROWS, createBoard, makeRng, trySwap, findMatches, hasMoves, scoreFor, areAdjacent, specialCells,
+  COLS, ROWS, PLAY_SEC, createBoard, makeRng, trySwap, findMatches, hasMoves, scoreFor, areAdjacent, specialCells,
+  gaugeNeed, timeDrainPerSec, gaugeFill, scoreMult, starsForLevel, plausibleRun,
 } from '../src/arcade/bumpingpang/engine.js';
+import { plausibleArcadeRun } from '../server/phone/src/arcade/rules.js';
 import {
   attemptCap, decideAttempt, monthlyBestPays, rankRows, MONTHLY_BUM, LIMIT_MSG, TITLE, OPENING_MS,
 } from '../server/phone/src/arcade/rules.js';
@@ -88,6 +90,41 @@ assert(clean.length === 3 && clean[0].title === TITLE && clean[0].amount === MON
     assert(!!a === !!x && a?.id === x?.id, 'invalid swap restored');
   }
   assert(hasMoves(b) || !hasMoves(b), 'board still queryable after deny');
+}
+
+
+// —— 레벨 모드 튜닝·타당성 ——
+assert(PLAY_SEC === 30, 'time bar capacity 30s');
+assert(gaugeNeed(1) === 90, `gauge L1 ${gaugeNeed(1)}`);
+assert(gaugeNeed(5) > gaugeNeed(1), 'gauge grows');
+assert(timeDrainPerSec(1) === 1, 'drain L1');
+assert(timeDrainPerSec(10) > timeDrainPerSec(1), 'drain grows');
+assert(gaugeFill(3, 1, 0) >= 20, 'fill basic');
+assert(gaugeFill(6, 3, 1) > gaugeFill(3, 1, 0), 'fill combo/special bonus');
+assert(scoreMult(5) > 1, 'score mult');
+assert(scoreFor(3, 1, 5) > scoreFor(3, 1, 1), 'level score bump');
+assert(starsForLevel(3) === 1 && starsForLevel(7) === 2 && starsForLevel(12) === 3, 'stars by level');
+assert(starsForLevel(1) === 0, 'no star early');
+{
+  const bad = plausibleRun({ score: 80000, level: 10, durationMs: 3000 });
+  assert(!bad.ok, 'reject too-fast high score');
+  const good = plausibleRun({ score: 9000, level: 8, durationMs: 150000 });
+  assert(good.ok, 'accept decent run');
+  const srv = plausibleArcadeRun({ score: 9000, level: 8, durationMs: 150000 });
+  assert(srv.ok, 'server plausibility matches');
+}
+// trySwap with level mult
+{
+  const b = createBoard(makeRng(42));
+  b[3][3] = { id: 'bum', special: null };
+  b[3][4] = { id: 'bum', special: null };
+  b[3][5] = { id: 'coin', special: null };
+  b[2][5] = { id: 'bum', special: null };
+  const r1 = trySwap(b.map((row) => row.map((c) => (c ? { ...c } : null))), { r: 2, c: 5 }, { r: 3, c: 5 }, makeRng(1), 1);
+  const r5 = trySwap(b.map((row) => row.map((c) => (c ? { ...c } : null))), { r: 2, c: 5 }, { r: 3, c: 5 }, makeRng(1), 5);
+  assert(r1.ok && r5.ok, 'level trySwap ok');
+  assert(r5.score >= r1.score, 'higher level ≥ score');
+  assert(r1.gauge > 0, 'gauge fill returned');
 }
 
 console.log('ok arcade-pang', { scoreSample: res.score, pays: pays.map((p) => p.amount) });

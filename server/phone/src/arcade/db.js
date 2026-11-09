@@ -16,16 +16,26 @@ export async function attemptsUsed(db, playerKey, gameId, storeId, day) {
   return Number(r?.n || 0);
 }
 
-export async function recordRun(db, { playerKey, accountId, guest, gameId, storeId, name, score, now, practice }) {
+export async function recordRun(db, { playerKey, accountId, guest, gameId, storeId, name, score, level = 1, durationMs = 0, now, practice }) {
   const day = kstDayKey(now);
   const used = await attemptsUsed(db, playerKey, gameId, storeId, day);
   const decision = decideAttempt({ now, guest, used, practice });
   if (!decision.record) return { ...decision, day };
   const attempt = decision.attempt;
-  await db.prepare(
-    `INSERT INTO arcade_runs (game_id, player_key, account_id, store_id, day_key, score, name, guest, attempt, at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(player_key, game_id, store_id, day_key, attempt) DO NOTHING`,
-  ).bind(gameId, playerKey, accountId, storeId, day, score, name, guest ? 1 : 0, attempt, now).run();
+  const lv = Math.max(1, Math.round(Number(level) || 1));
+  const dur = Math.max(0, Math.round(Number(durationMs) || 0));
+  try {
+    await db.prepare(
+      `INSERT INTO arcade_runs (game_id, player_key, account_id, store_id, day_key, score, name, guest, attempt, at, level, duration_ms)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(player_key, game_id, store_id, day_key, attempt) DO NOTHING`,
+    ).bind(gameId, playerKey, accountId, storeId, day, score, name, guest ? 1 : 0, attempt, now, lv, dur).run();
+  } catch {
+    // 마이그레이션 전 DB: level/duration 없이 기록
+    await db.prepare(
+      `INSERT INTO arcade_runs (game_id, player_key, account_id, store_id, day_key, score, name, guest, attempt, at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(player_key, game_id, store_id, day_key, attempt) DO NOTHING`,
+    ).bind(gameId, playerKey, accountId, storeId, day, score, name, guest ? 1 : 0, attempt, now).run();
+  }
   const prev = await one(db, 'SELECT score FROM arcade_best WHERE player_key = ? AND game_id = ? AND store_id = ? AND day_key = ?', playerKey, gameId, storeId, day);
   const best = bestScore(prev ? Number(prev.score) : null, score);
   if (!prev || best === score) {

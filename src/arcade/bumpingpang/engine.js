@@ -3,7 +3,11 @@ import { TILES } from './tiles.js';
 
 export const COLS = 8;
 export const ROWS = 8;
-export const PLAY_SEC = 60;
+export const PLAY_SEC = 30; // 시간 바 용량(레벨업 시 풀 충전). 고정 60초 라운드 폐지.
+export const BASE_GAUGE = 90;
+export const GAUGE_GROWTH = 1.17; // 레벨당 게이지 요구량 증가
+export const DRAIN_GROWTH = 0.11; // 레벨당 시간 소모 배율 증가
+
 export const MATCH_MIN = 3;
 
 export function makeRng(seed = 1) {
@@ -163,21 +167,78 @@ export function applyGravity(board, rng = Math.random) {
   return moves;
 }
 
-export function scoreFor(cleared, combo) {
-  // 기본 10 × 칸수 × 콤보 배율(1, 1.5, 2, 2.5…)
-  const mult = 1 + Math.max(0, combo - 1) * 0.5;
-  return Math.round(cleared * 10 * mult);
+export function scoreFor(cleared, combo, level = 1) {
+  // 기본 10 × 칸수 × 콤보 배율 × 레벨 배율
+  const comboMult = 1 + Math.max(0, combo - 1) * 0.5;
+  const levelMult = scoreMult(level);
+  return Math.round(cleared * 10 * comboMult * levelMult);
+}
+
+/** 레벨 점수 배율 — Lv1=1.0, 매 레벨 +0.12 */
+export function scoreMult(level) {
+  return 1 + Math.max(0, (Number(level) || 1) - 1) * 0.12;
+}
+
+/** 레벨업에 필요한 게이지 */
+export function gaugeNeed(level) {
+  const lv = Math.max(1, Number(level) || 1);
+  return Math.round(BASE_GAUGE * (GAUGE_GROWTH ** (lv - 1)));
+}
+
+/** 초당 시간 소모(초). Lv1=1.0 → 30초 풀, Lv10≈1.99 → ~15초 */
+export function timeDrainPerSec(level) {
+  const lv = Math.max(1, Number(level) || 1);
+  return 1 + (lv - 1) * DRAIN_GROWTH;
+}
+
+/** 클리어로 채우는 게이지량 */
+export function gaugeFill(cleared, combo = 1, specialCount = 0) {
+  const c = Math.max(0, Number(cleared) || 0);
+  const k = Math.max(1, Number(combo) || 1);
+  const sp = Math.max(0, Number(specialCount) || 0);
+  return Math.round(c * 7 + Math.max(0, k - 1) * 14 + sp * 22);
+}
+
+/** 도달 레벨 기준 별점 */
+export function starsForLevel(level) {
+  const lv = Math.max(0, Number(level) || 0);
+  if (lv >= 12) return 3;
+  if (lv >= 7) return 2;
+  if (lv >= 3) return 1;
+  return 0;
+}
+
+/**
+ * 긴 런 대비 서버/클라 공통 타당성 검사.
+ * - 최소 플레이 시간: 레벨당 ~6초 (애니·조작)
+ * - 점수 상한: 초당 ~220 + 레벨 보너스
+ * - 레벨 상한: 지속시간으로 역산
+ */
+export function plausibleRun({ score, level, durationMs, maxLevel = 40 } = {}) {
+  const sc = Math.round(Number(score) || 0);
+  const lv = Math.max(1, Math.round(Number(level) || 1));
+  const dur = Math.max(0, Number(durationMs) || 0);
+  if (!Number.isFinite(sc) || sc < 0) return { ok: false, reason: 'bad_score' };
+  if (lv > maxLevel) return { ok: false, reason: 'level_cap' };
+  const minMs = Math.max(0, (lv - 1) * 6000); // 레벨업 lv-1회 최소 시간
+  if (dur > 0 && dur < minMs * 0.7) return { ok: false, reason: 'too_fast' };
+  const sec = Math.max(1, dur / 1000);
+  const maxScore = Math.round(sec * 220 + lv * 2500);
+  if (sc > maxScore) return { ok: false, reason: 'score_cap' };
+  // 레벨 없이 점수만 비정상적으로 클 때
+  if (sc > 5000 && lv < 2 && dur < 20000) return { ok: false, reason: 'implausible' };
+  return { ok: true };
 }
 
 /**
  * 한 스왑을 시도하고 연쇄까지 처리(동기).
  * @returns {{ ok:boolean, steps: object[], score:number, maxCombo:number }}
  */
-export function trySwap(board, a, b, rng = Math.random) {
-  if (!areAdjacent(a, b)) return { ok: false, steps: [], score: 0, maxCombo: 0 };
+export function trySwap(board, a, b, rng = Math.random, level = 1) {
+  if (!areAdjacent(a, b)) return { ok: false, steps: [], score: 0, maxCombo: 0, cleared: 0, gauge: 0 };
   swap(board, a, b);
   const steps = [];
-  let score = 0, combo = 0, maxCombo = 0;
+  let score = 0, combo = 0, maxCombo = 0, clearedTotal = 0, gauge = 0;
 
   // special activation if either cell is special
   const forced = [];
@@ -210,18 +271,21 @@ export function trySwap(board, a, b, rng = Math.random) {
     for (const s of specs) {
       if (inBounds(s.r, s.c)) board[s.r][s.c] = { id: s.id || TILES[0].id, special: s.special };
     }
-    const gained = scoreFor(cleared, combo);
+    const gained = scoreFor(cleared, combo, level);
     score += gained;
-    steps.push({ type: 'clear', cells: expand, cleared, combo, gained, specs });
+    clearedTotal += cleared;
+    const gFill = gaugeFill(cleared, combo, specs.length);
+    gauge += gFill;
+    steps.push({ type: 'clear', cells: expand, cleared, combo, gained, specs, gaugeFill: gFill });
     const moves = applyGravity(board, rng);
     steps.push({ type: 'fall', moves });
   }
 
   if (!steps.length) {
     swap(board, a, b); // revert
-    return { ok: false, steps: [], score: 0, maxCombo: 0 };
+    return { ok: false, steps: [], score: 0, maxCombo: 0, cleared: 0, gauge: 0 };
   }
-  return { ok: true, steps, score, maxCombo };
+  return { ok: true, steps, score, maxCombo, cleared: clearedTotal, gauge };
 }
 
 /** 보드에 유효 수(인접 스왑으로 매치)가 있는지 */

@@ -12,7 +12,7 @@ export function createArcadeSfx({
   AudioCtx = typeof window !== 'undefined' ? (window.AudioContext || window.webkitAudioContext || null) : null,
 } = {}) {
   let ctx = null, master = null, sfxBus = null, bgmBus = null, noiseBuf = null;
-  let localMute = false, bgmOn = false, urgent = false, bgmTimer = 0, duckGain = null;
+  let localMute = false, bgmOn = false, urgent = false, fever = false, bgmTimer = 0, duckGain = null;
 
   const ac = () => {
     if (ctx || !AudioCtx || sfxOff) return ctx;
@@ -111,7 +111,7 @@ export function createArcadeSfx({
     const bass = [0, 0, 5, 5, -5, -5, 0, 7];
     const loop = () => {
       if (!bgmOn) return;
-      const beat = urgent ? 0.13 : 0.18;
+      const beat = fever ? 0.11 : urgent ? 0.13 : 0.18;
       const now = c.currentTime + 0.02;
       const g0 = lvl(); if (g0 <= 0) { bgmTimer = setTimeout(loop, 400); return; }
       try { bgmBus.gain.setTargetAtTime(0.5 * g0, c.currentTime, 0.05); } catch { /* */ }
@@ -132,6 +132,9 @@ export function createArcadeSfx({
         tone(120, 0.12, { type: 'sine', gain: 0.22, slide: 0.35, attack: 0.001, delay: t - c.currentTime, dest: bgmBus });
         // hat
         noise(0.04, { gain: 0.06, type: 'highpass', freq: 6000, q: 0.7, delay: t - c.currentTime + beat });
+        if (fever) {
+          tone(semi(12 + (i % 3), 880), 0.05, { type: 'sine', gain: 0.035, delay: t - c.currentTime + beat * 0.5, dest: bgmBus, filter: 6000 });
+        }
       }
       bgmTimer = setTimeout(loop, mel.length * beat * 1000 - 30);
     };
@@ -142,6 +145,7 @@ export function createArcadeSfx({
     setMuted(m) { localMute = !!m; if (localMute) stopBgm(); },
     get muted() { return localMute; },
     setUrgentBgm(on) { urgent = !!on; },
+    setFever(on) { fever = !!on; },
     unlock,
     door() {
       tone(660, 0.12, { type: 'sine', gain: 0.1 });
@@ -259,6 +263,23 @@ export function createArcadeSfx({
       const seq = [[0, 0], [4, 0.08], [7, 0.16], [12, 0.26], [16, 0.36]];
       for (const [s, d] of seq) tone(semi(s, 523), 0.22, { type: 'square', gain: 0.09, delay: d, filter: 2600 });
       if (big) for (let i = 0; i < 8; i++) tone(semi(12 + (i % 4), 784), 0.08, { type: 'sine', gain: 0.05, delay: 0.45 + i * 0.04 });
+    },
+    levelUp() {
+      duck(0.55, 220);
+      const seq = [[0, 0], [4, 0.07], [7, 0.14], [12, 0.22], [16, 0.32], [19, 0.42]];
+      for (const [s, d] of seq) tone(semi(s, 523.25), 0.2, { type: 'square', gain: 0.11, delay: d, filter: 3200 });
+      for (let i = 0; i < 10; i++) tone(semi(12 + i, 660), 0.08, { type: 'sine', gain: 0.05, delay: 0.35 + i * 0.03 });
+      noise(0.25, { gain: 0.12, type: 'bandpass', freq: 1800, sweep: 2.5, q: 0.8 });
+      this.timeRefill();
+    },
+    timeRefill() {
+      tone(400, 0.25, { type: 'sine', gain: 0.1, slide: 2.5, filter: 3000 });
+      tone(600, 0.2, { type: 'triangle', gain: 0.08, delay: 0.08, slide: 1.8 });
+      noise(0.12, { gain: 0.07, type: 'bandpass', freq: 2400, sweep: 1.5 });
+    },
+    heartbeat() {
+      tone(90, 0.08, { type: 'sine', gain: 0.14, slide: 0.55, attack: 0.001 });
+      tone(70, 0.1, { type: 'triangle', gain: 0.08, delay: 0.12, slide: 0.6 });
     },
     startBgm, stopBgm,
   };
