@@ -3,7 +3,7 @@ import { Room } from "./room.js";
 import { handlePhotos } from "./photos.js";
 import { handleNoticeImages } from "./noticeImageFiles.js"; // [notice-images]
 import { subwayArrival } from "./subway.js";
-import { handleAuth } from "./account/routes.js"; // [accounts] 구글 로그인·세션·계정 (ACCOUNTS_ENABLED 일 때만)
+import { handleAuth, authCors } from "./account/routes.js"; // [accounts] 구글 로그인·세션·계정 (ACCOUNTS_ENABLED 일 때만)
 import { handleEcon } from "./account/econRoutes.js"; // [economy] /econ/* (ECONOMY_ENABLED 일 때만, 단계는 ECON_FEATURES)
 import { featureOn } from "./account/flags.js";
 import { accountForDevice } from "./account/store.js";
@@ -97,7 +97,7 @@ export default {
     if (url.pathname.startsWith("/auth/")) return handleAuth(request, env, url, { waitUntil: ctx?.waitUntil?.bind(ctx) });
     if (url.pathname.startsWith("/econ/")) return handleEcon(request, env, url);
     if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: cors });
-    if (url.pathname.startsWith("/bump24/")) return handleBump24(request, env, url, cors); // [bump24-rank] OPTIONS(사전 요청) 처리 뒤에 둔다 — 앞에 있으면 404 로 POST 가 막힌다
+    if (url.pathname.startsWith("/bump24/")) return handleBump24(request, env, url, { ...cors, ...authCors(request, env) }); // [bump24-rank] OPTIONS(사전 요청) 처리 뒤에 둔다 — 앞에 있으면 404 로 POST 가 막힌다
     const queryRegion = (url.searchParams.get("region") || "jeongja").trim().toLowerCase() || "jeongja";
     const GLOBAL_BOOK_KEY = "jeongja"; // 단일 글로벌 번호부/패스포트 DB (모든 동네가 캐릭터·번호·문자 공유)
     if (url.pathname === "/ws") {

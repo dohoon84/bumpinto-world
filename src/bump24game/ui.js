@@ -228,7 +228,14 @@ export function createBump24UI({ onGrab, onExit, onMute, onHintTap, onIntroGo, o
       step(); api._fit?.();
     },
     receiptClose() { el.receipt.innerHTML = ''; api._rows = api._paper = api._tot = null; },
-    showResult({ score, best, isBest, ranked, items = [], kg = 0, combo = 0, spills = 0, onRetry, onBoard, onExit: ex }) {
+    // 결과 화면 첫 버튼: 랭킹 도전이 남았으면 '다시 도전 · 남은 n/m', 아니면 '연습 한 판 더'
+    setRetry(left, cap) {
+      const b = el.modal.querySelector('[data-r="retry"]');
+      if (!b) return;
+      const l = Number(left), c = Number(cap);
+      b.textContent = Number.isInteger(l) && l > 0 ? (Number.isInteger(c) && c > 0 ? `다시 도전 · 남은 ${l}/${c}` : '다시 도전') : '연습 한 판 더';
+    },
+    showResult({ score, best, isBest, ranked, items = [], kg = 0, combo = 0, spills = 0, left, cap, onRetry, onBoard, onExit: ex }) {
       const chips = items.map((it) => `<i class="${it.sale ? 's' : ''}">${esc(it.name)}</i>`).join('');
       el.modal.innerHTML = `<div class="b24-modal"><canvas class="b24-confetti"></canvas><div class="b24-result">
         <div class="top"><div class="ttl">${ranked ? '오늘의 랭킹 기록' : '연습 기록'}</div><div class="sc"><span>0</span><u>원</u></div>
@@ -241,6 +248,7 @@ export function createBump24UI({ onGrab, onExit, onMute, onHintTap, onIntroGo, o
       const sc = el.modal.querySelector('.sc span'); const t0 = performance.now();
       const step = () => { const k = Math.min(1, (performance.now() - t0) / 900), e = 1 - Math.pow(1 - k, 3); sc.textContent = won(score * e); if (k < 1) requestAnimationFrame(step); }; step();
       el.modal.querySelector('[data-r="retry"]').onclick = () => onRetry?.();
+      api.setRetry(left, cap);
       el.modal.querySelector('[data-r="board"]').onclick = () => onBoard?.();
       el.modal.querySelector('[data-r="exit"]').onclick = () => ex?.();
       confetti(el.modal.querySelector('.b24-confetti'), isBest ? 160 : 90);
