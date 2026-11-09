@@ -184,6 +184,7 @@ export function createBump24UI({ onGrab, onExit, onMute, onHintTap, onIntroGo, o
       if (n?.querySelector('button')) { n.remove(); n = null; }
       if (!n) { n = document.createElement('div'); n.id = 'bp24-rank-limit'; n.style.cssText = 'position:fixed;left:50%;top:18%;transform:translateX(-50%);z-index:70;padding:12px 18px;border-radius:16px;background:rgba(10,22,48,.94);color:#fff;font:800 18px/1.3 Pretendard,sans-serif;pointer-events:none'; document.body.appendChild(n); }
       n.textContent = '오늘 도전 완료, 연습은 계속 가능';
+      api._lt = setTimeout(() => { n.remove(); }, 4000); // 계속 떠 있지 않게 4초 뒤 닫힘
     },
     reward(amount) {
       const n = document.createElement('div'); n.id = 'bp24-rank-reward';

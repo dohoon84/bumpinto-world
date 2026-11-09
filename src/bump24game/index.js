@@ -219,20 +219,21 @@ export function mountBump24Game({
     } else if (fade.phase === 'in' && fade.t >= FADE_SEC) { fade = { t: 0, phase: '' }; ui.setFade(0); busy = false; }
   }
 
+  let limitShownFor = null;
   function outdoorTick(dt, pos) {
     if (active || busy) return;
-    if (!pos) { if (lastNear) ui.setHint(''); lastNear = null; return; }
+    if (!pos) { if (lastNear) ui.setHint(''); lastNear = null; if (limitShownFor) { ui.limit(false); limitShownFor = null; } return; }
     if (ui.boardOpen) return;
     const st = nearestDoor(pos); lastNear = st;
     const bd = nearestBoard(pos), dd = st ? Math.hypot(pos.x - st.door[0], pos.z - st.door[1]) : 1e9;
     lastBoard = bd && bd.d < dd ? bd.st : null;
+    // '오늘 도전 완료' 안내는 매장 문 앞에 처음 섰을 때 한 번만 띄우고, 문에서 벗어나면 바로 닫는다
+    const g0 = !lastBoard && st ? rankGates.get(st.id) : null, limitId = g0?.usedUp ? st.id : null;
+    if (limitId !== limitShownFor) { if (limitId) ui.limit(true, { guest: g0.guest === true }); else ui.limit(false); limitShownFor = limitId; }
     if (lastBoard) ui.setHint(`🏆 ${lastBoard.name || 'BUMP24'} 장보기 랭킹 보기`, true, { act: true, tap: '장보기 랭킹 보기 🏆', key: 'R' });
     else if (st) {
       ui.setHint(`${st.name || 'BUMP24'} 들어가기 · 30초 장보기`, true, { act: true, tap: `${st.name || 'BUMP24'} 들어가기` });
       refreshGate(st.id);
-      const g = rankGates.get(st.id);
-      if (g?.usedUp) ui.limit(true, { guest: g.guest === true });
-      else ui.limit(false);
     }
     else ui.setHint('');
   }
