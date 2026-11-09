@@ -156,21 +156,26 @@
 .arc-pang-iconbtn:active { transform: translateY(2px); }
 
 .arc-pang-stage {
-  flex: 1; display: flex; align-items: center; justify-content: center; gap: 4px;
-  min-height: 0; padding: 4px 8px;
+  flex: 1; display: flex; align-items: center; justify-content: center;
+  min-height: 0; padding: 8px 16px; position: relative;
+  /* 좌우 여백: 무지개 링(~11px) + 작은 사이드 마진이 잘리지 않게 */
 }
 .arc-pang-boardwrap {
   position: relative; flex: none;
-  width: min(100%, calc(100dvh - 280px), 360px);
+  /* 스테이지 패딩 안쪽에서만 커짐 — 360~414 폭에서도 좌우 잘림 없음 */
+  width: min(100%, calc(100dvh - 300px), 340px);
+  max-width: 100%;
   aspect-ratio: 1;
-  padding: 10px; border-radius: 28px;
+  margin: 0 auto;
+  padding: 8px; border-radius: 24px;
+  box-sizing: border-box;
   background: linear-gradient(180deg, #fff8e8, #ffd9a0);
-  border: 5px solid #fff;
+  border: 4px solid #fff;
   box-shadow:
-    0 0 0 4px #ff9ecd,
-    0 0 0 8px #ffe66d,
-    0 0 0 11px #7eb6ff,
-    0 12px 28px rgba(0,0,0,.22),
+    0 0 0 3px #ff9ecd,
+    0 0 0 6px #ffe66d,
+    0 0 0 9px #7eb6ff,
+    0 10px 22px rgba(0,0,0,.22),
     inset 0 2px 0 rgba(255,255,255,.7);
 }
 .arc-pang.is-desk .arc-pang-phone {
@@ -182,15 +187,21 @@
 .arc-pang.is-desk .arc-pang-scoreblock .score-num { font-size: 44px; }
 
 .arc-pang-cv {
-  display: block; width: 100%; height: 100%; border-radius: 18px;
+  display: block; width: 100%; height: 100%; border-radius: 16px;
   touch-action: none; cursor: pointer;
   background: #ffe8b8;
 }
+/* 보드 flex 옆에 두지 않고 모서리 겹침 — 좁은 세로에서 잘림 방지 */
 .arc-pang-mascot {
-  flex: none; width: 64px; display: flex; flex-direction: column; align-items: center; gap: 4px;
-  align-self: flex-end; margin-bottom: 8px;
+  position: absolute; right: 6px; bottom: 2px; z-index: 4;
+  width: 52px; display: flex; flex-direction: column; align-items: center; gap: 2px;
+  pointer-events: none;
 }
-.arc-pang-mascot .mascot-body .bum-face { width: 58px; height: 58px; filter: drop-shadow(0 5px 0 rgba(0,0,0,.15)); }
+.arc-pang-mascot .mascot-body .bum-face { width: 48px; height: 48px; filter: drop-shadow(0 4px 0 rgba(0,0,0,.15)); }
+.arc-pang.is-desk .arc-pang-mascot {
+  right: 10px; bottom: 6px; width: 58px;
+}
+.arc-pang.is-desk .arc-pang-mascot .mascot-body .bum-face { width: 54px; height: 54px; }
 .arc-pang-mascot.cheer .mascot-body { animation: pang-mascot-cheer .45s cubic-bezier(.2,1.5,.3,1); }
 @keyframes pang-mascot-cheer {
   0% { transform: translateY(0) scale(1); }
