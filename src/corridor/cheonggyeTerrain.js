@@ -1,5 +1,6 @@
 // [gyeongbu-bus] 판교IC–양재IC 청계산·인릉산 지형. 공개 DEM(AWS Terrain Tiles / SRTM 계열)을
 //   경부 본선 중앙값 기준으로 상대 높이화했다. 도로 주변은 0m 로 펴서 버스가 산에 파묻히지 않게 한다.
+//   DEM 격자는 50m 이라, 도로·청계산로 근처 칸만 10m 로 나눠 펴지 않으면 보간된 잔디가 아스팔트(y=0.30)를 덮는다.
 //   수목은 도로 근처를 촘촘히, 먼 사면은 숲 색 지면에 맡긴다. 방음벽은 청계산입구·원지동 주택가 쪽에만 연속 패널.
 //   청계산입구 건물은 OSM 윤곽·층고(있으면)이고, 신분당선 출입구는 OSM railway=subway_entrance(1·2번)에 정자역과 같은 캐노피·계단을 세운 뒤 광장(포장·자전거 거치대·가로수·가로등·키 높이 폴 사인)을 곁들인다.
 //   출입구 주변 차도·보도·횡단보도·버스 정류장은 OSM(청계산로와 옆 길)에서 구운 cheonggye-streets.json 으로 깔아, 출입구가 잔디 위가 아니라 인도 옆에 앉게 한다.
@@ -13,6 +14,8 @@ import { CHEONGGYE_FLAT_R } from './gyeongbuWorld.js';
 export const CHEONGGYE_DEM_FILE = 'gyeongbu/cheonggye-dem.json';
 export const CHEONGGYE_BUILDINGS_FILE = 'gyeongbu/cheonggye-buildings.json';
 export const CHEONGGYE_STREETS_FILE = 'gyeongbu/cheonggye-streets.json';
+export const CHEONGGYE_GROUND_FINE = 10; // 도로 근처 DEM 칸을 나누는 간격(m)
+export const CHEONGGYE_REFINE_R = 130; // 이 거리 안 칸은 10m 로 나눠 평탄화 골짜기를 살린다
 
 export function cheonggyeTerrainEnabled(search = typeof location !== 'undefined' ? location.search : '') {
   const p = new URLSearchParams(search || '');
@@ -319,24 +322,85 @@ function terrainHeight(raw, dist, distLocal = Infinity) {
   return y;
 }
 
+function heightAtPoint(x, z, dem, segs, localSegs) {
+  return terrainHeight(
+    sampleH(dem, x, z),
+    distToRoad(x, z, segs),
+    localSegs.length ? distToRoad(x, z, localSegs) : Infinity,
+  );
+}
+
 /** 테스트·노면 검사: DEM 상대 높이(본선·청계산로 주변은 0). 격자 밖은 null. */
 export function cheonggyeHeightAt(x, z, dem, streets = null, extraRoad = null) {
   if (!dem?.h?.length) return null;
   const { x0, z0, dx, dz, nx, nz } = dem;
   if (x < x0 || z < z0 || x > x0 + (nx - 1) * dx || z > z0 + (nz - 1) * dz) return null;
+  const { segs, local } = prepareRoadSegs(dem, streets, extraRoad);
+  return heightAtPoint(x, z, dem, segs, local);
+}
+
+/** 화면에 깔리는 지면 메시와 같은 보간. 50m 칸은 두 삼각형, 도로 근처 칸은 10m 로 나눈 뒤 같은 식으로 보간한다. */
+export function cheonggyeMeshHeightAt(x, z, dem, streets = null, extraRoad = null) {
+  if (!dem?.h?.length) return null;
+  const { x0, z0, dx, dz, nx, nz } = dem;
+  if (x < x0 || z < z0 || x > x0 + (nx - 1) * dx || z > z0 + (nz - 1) * dz) return null;
+  const { segs, local } = prepareRoadSegs(dem, streets, extraRoad);
+  const fx = (x - x0) / dx, fz = (z - z0) / dz;
+  const ix = Math.max(0, Math.min(nx - 2, Math.floor(fx)));
+  const iz = Math.max(0, Math.min(nz - 2, Math.floor(fz)));
+  const yAt = (px, pz) => heightAtPoint(px, pz, dem, segs, local);
+  const sub = Math.max(1, Math.round(dx / CHEONGGYE_GROUND_FINE));
+  if (quadNeedsRefine(ix, iz, x0, z0, dx, dz, segs, local)) {
+    const lx = (fx - ix) * sub, lz = (fz - iz) * sub;
+    const jx = Math.max(0, Math.min(sub - 1, Math.floor(lx)));
+    const jz = Math.max(0, Math.min(sub - 1, Math.floor(lz)));
+    const tx = lx - jx, tz = lz - jz;
+    const at = (sx, sz) => yAt(x0 + (ix + sx / sub) * dx, z0 + (iz + sz / sub) * dz);
+    return triHeight(tx, tz, at(jx, jz), at(jx + 1, jz), at(jx, jz + 1), at(jx + 1, jz + 1));
+  }
+  const tx = fx - ix, tz = fz - iz;
+  const at = (sx, sz) => yAt(x0 + (ix + sx) * dx, z0 + (iz + sz) * dz);
+  return triHeight(tx, tz, at(0, 0), at(1, 0), at(0, 1), at(1, 1));
+}
+
+function sampleH(data, x, z) {
+  const { x0, z0, dx, dz, nx, nz, h } = data;
+  const fx = (x - x0) / dx, fz = (z - z0) / dz;
+  const ix = Math.floor(fx), iz = Math.floor(fz);
+  if (ix < 0 || iz < 0 || ix >= nx - 1 || iz >= nz - 1) {
+    const cx = Math.max(0, Math.min(nx - 1, Math.round(fx)));
+    const cz = Math.max(0, Math.min(nz - 1, Math.round(fz)));
+    return h[cz * nx + cx] || 0;
+  }
+  const tx = fx - ix, tz = fz - iz;
+  const h00 = h[iz * nx + ix] || 0;
+  const h10 = h[iz * nx + ix + 1] || 0;
+  const h01 = h[(iz + 1) * nx + ix] || 0;
+  const h11 = h[(iz + 1) * nx + ix + 1] || 0;
+  return h00 * (1 - tx) * (1 - tz) + h10 * tx * (1 - tz) + h01 * (1 - tx) * tz + h11 * tx * tz;
+}
+
+function prepareRoadSegs(dem, streets, extraRoad) {
   const road = [...(dem.road || [])];
   if (extraRoad?.length) for (const p of extraRoad) road.push([p[0], p[1]]);
   const segs = segsFromRoad(road);
   const local = [];
   for (const r of streets?.roads || []) if (r.p && r.p.length >= 2) local.push(...segsFromRoad(r.p));
-  return terrainHeight(sampleH(dem, x, z), distToRoad(x, z, segs), local.length ? distToRoad(x, z, local) : Infinity);
+  return { segs, local };
 }
 
-function sampleH(data, x, z) {
-  const { x0, z0, dx, dz, nx, nz, h } = data;
-  const ix = Math.max(0, Math.min(nx - 1, Math.round((x - x0) / dx)));
-  const iz = Math.max(0, Math.min(nz - 1, Math.round((z - z0) / dz)));
-  return h[iz * nx + ix] || 0;
+function quadNeedsRefine(ix, iz, x0, z0, dx, dz, segs, localSegs, r = CHEONGGYE_REFINE_R) {
+  for (const [sx, sz] of [[0, 0], [1, 0], [0, 1], [1, 1]]) {
+    const x = x0 + (ix + sx) * dx, z = z0 + (iz + sz) * dz;
+    if (distToRoad(x, z, segs) < r) return true;
+    if (localSegs.length && distToRoad(x, z, localSegs) < r) return true;
+  }
+  return false;
+}
+
+function triHeight(tx, tz, h00, h10, h01, h11) {
+  if (tx + tz <= 1) return (1 - tx - tz) * h00 + tx * h10 + tz * h01;
+  return (1 - tz) * h10 + (1 - tx) * h01 + (tx + tz - 1) * h11;
 }
 
 function inFootprint(x, z, ring) {
@@ -369,55 +433,83 @@ function nearHousing(x, z) {
   return Math.hypot(x - STATION.x, z - STATION.z) < 1750;
 }
 
-function buildGround(data, segs, localSegs = []) {
-  const { x0, z0, dx, dz, nx, nz, h } = data;
-  const pos = new Float32Array(nx * nz * 3);
-  const col = new Float32Array(nx * nz * 3);
+function groundColor(y, dist, hx, hz) {
   const grass = new THREE.Color('#5b7a45');
   const woods = new THREE.Color('#3a5a32');
   const forest = new THREE.Color('#2a4528');
   const canopy = new THREE.Color('#1e3820');
   const rock = new THREE.Color('#8b8680');
-  for (let iz = 0; iz < nz; iz++) {
-    for (let ix = 0; ix < nx; ix++) {
-      const i = iz * nx + ix;
-      const x = x0 + ix * dx, z = z0 + iz * dz;
-      const dist = distToRoad(x, z, segs);
-      const distLocal = localSegs.length ? distToRoad(x, z, localSegs) : Infinity;
-      const y = terrainHeight(h[i] || 0, dist, distLocal);
-      pos[i * 3] = x; pos[i * 3 + 1] = y; pos[i * 3 + 2] = z;
-      let c;
-      if (y < 22 && dist < 90) c = grass;
-      else if (y > 320) c = rock;
-      else {
-        // 먼 사면은 인스턴스 대신 숲 색 얼룩으로 밀도감을 낸다.
-        const n = hash01(ix, iz);
-        if (dist > 70 || y > 28) c = n > 0.62 ? forest : n > 0.28 ? woods : canopy;
-        else c = grass;
-      }
-      col[i * 3] = c.r; col[i * 3 + 1] = c.g; col[i * 3 + 2] = c.b;
-    }
-  }
-  const idx = new Uint32Array((nx - 1) * (nz - 1) * 6);
-  let k = 0;
+  if (y < 22 && dist < 90) return grass;
+  if (y > 320) return rock;
+  const n = hash01(hx, hz);
+  if (dist > 70 || y > 28) return n > 0.62 ? forest : n > 0.28 ? woods : canopy;
+  return grass;
+}
+
+function buildGround(data, segs, localSegs = []) {
+  const { x0, z0, dx, dz, nx, nz } = data;
+  const yAt = (x, z) => heightAtPoint(x, z, data, segs, localSegs);
+  const sub = Math.max(1, Math.round(dx / CHEONGGYE_GROUND_FINE));
+  const pos = [], col = [], idx = [];
+  const pushV = (x, y, z, dist) => {
+    const i = pos.length / 3;
+    pos.push(x, y, z);
+    const c = groundColor(y, dist, Math.round(x * 0.2), Math.round(z * 0.2));
+    col.push(c.r, c.g, c.b);
+    return i;
+  };
   for (let iz = 0; iz < nz - 1; iz++) {
     for (let ix = 0; ix < nx - 1; ix++) {
-      const a = iz * nx + ix, b = a + 1, c = a + nx, d = c + 1;
-      idx[k++] = a; idx[k++] = c; idx[k++] = b;
-      idx[k++] = b; idx[k++] = c; idx[k++] = d;
+      if (quadNeedsRefine(ix, iz, x0, z0, dx, dz, segs, localSegs)) {
+        const patch = [];
+        for (let jz = 0; jz <= sub; jz++) {
+          const row = [];
+          for (let jx = 0; jx <= sub; jx++) {
+            const x = x0 + (ix + jx / sub) * dx;
+            const z = z0 + (iz + jz / sub) * dz;
+            const y = yAt(x, z);
+            row.push(pushV(x, y, z, distToRoad(x, z, segs)));
+          }
+          patch.push(row);
+        }
+        for (let jz = 0; jz < sub; jz++) {
+          for (let jx = 0; jx < sub; jx++) {
+            const a = patch[jz][jx], b = patch[jz][jx + 1], c = patch[jz + 1][jx], d = patch[jz + 1][jx + 1];
+            idx.push(a, c, b, b, c, d);
+          }
+        }
+      } else {
+        const corner = (sx, sz) => {
+          const x = x0 + (ix + sx) * dx, z = z0 + (iz + sz) * dz;
+          return pushV(x, yAt(x, z), z, distToRoad(x, z, segs));
+        };
+        const a = corner(0, 0), b = corner(1, 0), c = corner(0, 1), d = corner(1, 1);
+        idx.push(a, c, b, b, c, d);
+      }
     }
   }
   const geo = new THREE.BufferGeometry();
-  geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-  geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
-  geo.setIndex(new THREE.BufferAttribute(idx, 1));
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+  geo.setIndex(idx);
   geo.computeVertexNormals();
   const mesh = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ vertexColors: true }));
   mesh.name = 'cheonggyeGround';
   mesh.receiveShadow = true;
   mesh.matrixAutoUpdate = false;
   mesh.updateMatrix();
-  return { mesh, pos, nx, nz, x0, z0, dx, dz };
+  // 나무는 예전처럼 50m 격자 꼭짓점만 쓴다(도로에서 32m 밖).
+  const treePos = new Float32Array(nx * nz * 3);
+  for (let iz = 0; iz < nz; iz++) {
+    for (let ix = 0; ix < nx; ix++) {
+      const i = iz * nx + ix;
+      const x = x0 + ix * dx, z = z0 + iz * dz;
+      treePos[i * 3] = x;
+      treePos[i * 3 + 1] = yAt(x, z);
+      treePos[i * 3 + 2] = z;
+    }
+  }
+  return { mesh, pos: treePos, nx, nz, x0, z0, dx, dz };
 }
 
 function treePrototype(trunkHex, crownHex, crownR, crownH) {

@@ -12,7 +12,8 @@ import {
   mergeGyeongbuWorld, expressRoadHeight, sampleExpressPts, BEFORE_FIX_STUCK,
   EXPRESS_ROAD_Y, EXPRESS_PAVE_R, CHEONGGYE_ISLAND,
 } from '../../../src/corridor/gyeongbuWorld.js';
-import { cheonggyeHeightAt } from '../../../src/corridor/cheonggyeTerrain.js';
+import { cheonggyeHeightAt, cheonggyeMeshHeightAt } from '../../../src/corridor/cheonggyeTerrain.js';
+import { expresswayMedianLine } from '../../../src/corridor/gyeongbuExpress.js';
 import { pointInBox } from '../../../src/corridor/islands.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
@@ -119,4 +120,64 @@ assert.deepEqual(buried, [], `노면이 지형에 묻힘 ${JSON.stringify(buried
 assert.ok(EXPRESS_PAVE_R > 27, '4+4 바깥 갓길까지 덮는 반경');
 assert.ok(pointInBox(-4782.8, -9114.0, CHEONGGYE_ISLAND) && pointInBox(-4720.9, -8974.6, CHEONGGYE_ISLAND));
 
-console.log(`gyeongbu route: ${samples.length} pts / 20m, 왕복 통과, 노면 y=${EXPRESS_ROAD_Y}. 고치기 전 막힘 ${stuckBefore.length}곳 첫 s=${first.s.toFixed(0)} (${first.x.toFixed(1)}, ${first.z.toFixed(1)})`);
+// 화면에 깔리는 지면 메시(도로 근처 10m 칸)가 차로 폭 전체에서 노면보다 낮아야 한다.
+// 고치기 전엔 50m 칸 보간으로 잔디가 아스팔트를 덮었다.
+const meshBuried = [];
+const dense = sampleExpressPts(ex.pts, 10);
+const offsets = [];
+for (let o = -30; o <= 30; o += 2) offsets.push(o);
+for (const q of dense) {
+  const lx = -q.hz, lz = q.hx;
+  for (const off of offsets) {
+    const wx = q.x + lx * off, wz = q.z + lz * off;
+    const mh = cheonggyeMeshHeightAt(wx, wz, dem, streets, ex.pts);
+    if (mh != null && mh > EXPRESS_ROAD_Y - 0.08) {
+      meshBuried.push({ s: +q.s.toFixed(1), off, x: +wx.toFixed(1), z: +wz.toFixed(1), meshY: +mh.toFixed(3) });
+    }
+  }
+}
+assert.deepEqual(meshBuried, [], `메시 지면이 노면을 덮음 ${JSON.stringify(meshBuried[0] || {})} (${meshBuried.length}곳)`);
+
+const streetBuried = [];
+for (const r of streets.roads || []) {
+  const pts = r.p || [];
+  if (pts.length < 2) continue;
+  const y0 = 0.20; // 청계산로 리본 ≈ ROAD_STYLE y + 0.12
+  for (let i = 1; i < pts.length; i++) {
+    const ax = pts[i - 1][0], az = pts[i - 1][1], bx = pts[i][0], bz = pts[i][1];
+    const seg = Math.hypot(bx - ax, bz - az) || 1e-9;
+    const hx = (bx - ax) / seg, hz = (bz - az) / seg, lx = -hz, lz = hx;
+    const hw = (r.w || 6) * 0.5;
+    for (let t = 0; t <= seg; t += 6) {
+      const x = ax + hx * t, z = az + hz * t;
+      for (const off of [-hw, 0, hw]) {
+        const mh = cheonggyeMeshHeightAt(x + lx * off, z + lz * off, dem, streets, ex.pts);
+        if (mh != null && mh > y0 - 0.06) {
+          streetBuried.push({ name: r.name || r.id, x: +(x + lx * off).toFixed(1), z: +(z + lz * off).toFixed(1), meshY: +mh.toFixed(3), roadY: y0 });
+        }
+      }
+    }
+  }
+}
+assert.deepEqual(streetBuried, [], `청계산로가 지형에 묻힘 ${JSON.stringify(streetBuried[0] || {})} (${streetBuried.length}곳)`);
+
+const trunk = ex.pts.filter((p) => p[3] === 'main' || p[3] === 'spur');
+const median = expresswayMedianLine(trunk);
+assert.ok(median.length > 80, `분리대 샘플 ${median.length}`);
+let maxGap = 0, maxTurn = 0;
+for (let i = 1; i < median.length; i++) {
+  const d = Math.hypot(median[i].x - median[i - 1].x, median[i].z - median[i - 1].z);
+  if (d > maxGap) maxGap = d;
+  assert.ok(d > 0.8 && d < 12, `분리대 간격 ${d.toFixed(2)}m @${i}`);
+  if (i >= 2) {
+    const h0 = Math.atan2(median[i - 1].x - median[i - 2].x, median[i - 1].z - median[i - 2].z);
+    const h1 = Math.atan2(median[i].x - median[i - 1].x, median[i].z - median[i - 1].z);
+    let dh = Math.abs(h1 - h0);
+    if (dh > Math.PI) dh = Math.PI * 2 - dh;
+    if (dh > maxTurn) maxTurn = dh;
+  }
+}
+assert.ok(maxGap < 12, `분리대 최대 간격 ${maxGap.toFixed(2)}m`);
+assert.ok(maxTurn < 0.50, `분리대 최대 꺾임 ${(maxTurn * 180 / Math.PI).toFixed(1)}deg / 5m`);
+
+console.log(`gyeongbu route: ${samples.length} pts / 20m, dense ${dense.length}×${offsets.length} 메시, 분리대 ${median.length} (gap≤${maxGap.toFixed(2)}m turn≤${(maxTurn * 180 / Math.PI).toFixed(1)}°), 노면 y=${EXPRESS_ROAD_Y}. 고치기 전 막힘 ${stuckBefore.length}곳 첫 s=${first.s.toFixed(0)} (${first.x.toFixed(1)}, ${first.z.toFixed(1)})`);
