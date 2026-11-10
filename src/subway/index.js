@@ -186,6 +186,13 @@ export function mountSubway({ scene, overlay, data, world, terrain, renderer, ge
   let inside = null; // 지금 방: buildConcourse · buildPlatform · buildTrain 결과 (kind, zone, scene, camera, player, update, render, dispose)
   let mod = null;    // 지연 로드된 concourse 모듈
   const loadMod = () => (mod ? Promise.resolve(mod) : import('./concourse.js').then((m) => (mod = m)));
+  // [gunder] 강남역은 지하상가 장면을 쓴다. ?gunder=0 이면 다른 역과 같은 대합실 틀.
+  let underMod = null;
+  const gunderOn = params?.get?.('gunder') !== '0';
+  const useUnder = () => gunderOn && cur.def.id === 'gangnam';
+  const loadUnder = () => (underMod ? Promise.resolve(underMod) : import('../world/gangnamUnderground.js').then((m) => (underMod = m)));
+  const loadHall = () => (useUnder() ? loadUnder() : loadMod());
+  const hallReady = () => (useUnder() ? !!underMod : !!mod);
   let platMod = null, trainMod = null; // [subway] 2단계: 승강장·열차 (각각 지연 로드)
   const loadPlat = () => (platMod ? Promise.resolve(platMod) : import('./platform.js').then((m) => (platMod = m)));
   const loadTrain = () => (trainMod ? Promise.resolve(trainMod) : import('./train.js').then((m) => (trainMod = m)));
@@ -238,7 +245,7 @@ export function mountSubway({ scene, overlay, data, world, terrain, renderer, ge
     fade.querySelector('.sf-t').textContent = e.exit.ref ? tr(`${n.name}역 ${e.exit.ref}번 출구`, `${n.nameEn} Stn. · Exit ${e.exit.ref}`) : stName(n);
     setBadges(n);
     setHint('');
-    loadMod(); // 페이드 동안 미리 받기
+    loadHall(); // 페이드 동안 미리 받기
     onEnter?.(e);
     return true;
   }
@@ -323,7 +330,7 @@ export function mountSubway({ scene, overlay, data, world, terrain, renderer, ge
     return swapTo(tr(`${cur.theme.name}역 · ${L.short} ${L.dirs[dir].ko}`, `${cur.theme.nameEn} · ${L.en} ${L.dirs[dir].en}`), () => makePlatform(line, dir), { lines: [L] });
   }
   function toConcourse(spawn) {
-    return swapTo(tr(`${cur.theme.name}역 대합실`, `${cur.theme.nameEn} Stn. concourse`), () => loadMod().then(() => makeConcourse(spawn)));
+    return swapTo(tr(`${cur.theme.name}역 대합실`, `${cur.theme.nameEn} Stn. concourse`), () => loadHall().then(() => makeConcourse(spawn)));
   }
   function toTrain(board) {
     const pl = inside, L = LINES[pl.line];
@@ -355,7 +362,7 @@ export function mountSubway({ scene, overlay, data, world, terrain, renderer, ge
     if (subT > 0 && (subT -= dt) <= 0) { if (voice.active) subT = 0.25; else sub.style.opacity = '0'; } // 말하는 동안은 자막 유지
     for (const ev of state.tick(dt)) {
       if (ev === 'load') {
-        if (!mod) { state._waitLoad = true; }
+        if (!hallReady()) { state._waitLoad = true; }
         else buildInside();
       } else if (ev === 'unload') {
         const e = cur.byId?.get(state.target) || cur.byId?.get(state.entry);
@@ -368,7 +375,7 @@ export function mountSubway({ scene, overlay, data, world, terrain, renderer, ge
         fareRide = null;
       }
     }
-    if (state._waitLoad && mod) { state._waitLoad = false; buildInside(); }
+    if (state._waitLoad && hallReady()) { state._waitLoad = false; buildInside(); }
     if (swap) tickSwap(dt);
     const sa = swapAlpha();
     fade.style.opacity = String(sa != null ? sa : state.phase === 'arriving' && !inside ? 1 : state.fadeAlpha());
@@ -400,7 +407,8 @@ export function mountSubway({ scene, overlay, data, world, terrain, renderer, ge
   let fareRide = null;
   const fareWhere = () => (cur.theme?.name ? `${cur.theme.name}역` : '');
   function makeConcourse(spawn = null) {
-    const c = mod.buildConcourse({
+    const build = (useUnder() && underMod?.buildGangnamUnderground) ? underMod.buildGangnamUnderground : mod.buildConcourse;
+    const c = build({
       exits: cur.exits, groups: cur.groups, entryId: cur.state.entry, look: getLook?.(), renderer, theme: cur.theme, board: feed, spawn,
       onToast: (kind, info) => {
         if (kind !== 'tap') return;
