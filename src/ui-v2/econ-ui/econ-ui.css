@@ -203,7 +203,8 @@ body.ui-v2:not(.mobile) .ve-farepop-rw { display: inline-flex; align-items: cent
 @media (prefers-reduced-motion: reduce) {
   body.ui-v2:not(.mobile) .ve-farepop { animation-name: ve-farepop-fade; }
 }
-@keyframes ve-farepop-fade { 0% { opacity: 1; } 65% { opacity: 1; } 100% { opacity: 0; } }body.ui-v2:not(.mobile) .ve-pay { display: flex; align-items: center; gap: 16px; padding: 16px 20px; border-color: color-mix(in srgb, var(--c) 60%, transparent); }
+@keyframes ve-farepop-fade { 0% { opacity: 1; } 65% { opacity: 1; } 100% { opacity: 0; } }
+body.ui-v2:not(.mobile) .ve-pay { display: flex; align-items: center; gap: 16px; padding: 16px 20px; border-color: color-mix(in srgb, var(--c) 60%, transparent); }
 body.ui-v2:not(.mobile) .ve-pay .ve-col { flex: 1; }
 body.ui-v2:not(.mobile) .ve-pay .v2-tag { align-self: flex-start; }
 body.ui-v2:not(.mobile) .ve-amtrow { align-items: baseline; gap: 10px; }

@@ -82,6 +82,7 @@ import { createPangyoStreetlights, pangyoLampsEnabled, PANGYO_LAMPS_FILE } from 
 import { createMigeumStreetlights, migeumLampsEnabled, MIGEUM_LAMPS_FILE } from './corridor/migeumStreetlights.js'; // [migeum-lamps]
 import { mountRide } from './ride/index.js'; // [ride] 코리더 버스·택시 탑승
 import { mountGyeongbuSoon } from './world/gyeongbuSoon.js'; // [gyeongbu] 경부고속도로 서울 방면 '준비 중' 안내 (?gyeongbu=0 끔)
+import { mountSeoulToll } from './world/seoulToll.js'; // [gyeongbu-bus] 서울요금소
 import { createServerClock } from './subway/clock.js'; // [subway-sync] 서버 시계 (같은 열차 = 같은 순간)
 import { isMobileMode } from './mobile/flag.js'; // [mobile]
 import { mountSubway, zoneLabel as subwayZoneLabel } from './subway/index.js'; // [subway] 정자역·코리더 역 출입구(실제 OSM 출구) + 지하 대합실. ?subway=0 이면 끔
@@ -640,7 +641,9 @@ const bump24Game = mountBump24Game({
   },
 });
 if (bump24Game) { const withB24 = world.isBlocked; world.isBlocked = (x, z, r) => withB24(x, z, r) || bump24Game.blocks(x, z, r); } // [bump24game] 랭킹 토템
-const gyeongbuSoon = corridor ? mountGyeongbuSoon({ getPos: () => player.position, params, isEn }) : null; // [gyeongbu] 코리더가 있을 때만 (경부 북쪽 끝이 코리더 타일)
+const gyeongbuSoon = corridor && !corridorData?.gangnam ? mountGyeongbuSoon({ getPos: () => player.position, params, isEn }) : null; // [gyeongbu] 강남이 열려 있으면 본선이 이어지므로 안내하지 않음
+const seoulToll = mountSeoulToll(scene, location.search); // [gyeongbu-bus] 궁내동 서울요금소 (?seoultg=0 끔)
+void seoulToll;
 if (subway) {
   const withSubway = world.isBlocked;
   world.isBlocked = (x, z, r) => withSubway(x, z, r) || subway.blocks(x, z, r);

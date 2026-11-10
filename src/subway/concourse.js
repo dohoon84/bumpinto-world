@@ -486,7 +486,8 @@ export function buildConcourse({ exits, groups, entryId, look, renderer, onToast
   const tapLane = (i, who, dir = 'in') => {
     const ln = lanes[i];
     // 대합실(z<0)에서 처음 닿으면 승차, 유료 구역에서 닿으면 하차. 하차 요금은 승차에 포함.
-    if (ln.open < 0.5 && ln.t <= 0) { ln.ok = 0.9; if (who === 'me') onToast?.('tap', ln, { gate: gateTapSide(me.position.z) }); }    ln.t = 1.1;
+    if (ln.open < 0.5 && ln.t <= 0) { ln.ok = 0.9; if (who === 'me') onToast?.('tap', ln, { gate: gateTapSide(me.position.z) }); }
+    ln.t = 1.1;
   };
   function updateNpc(n, dt) {
     if (n.fixed) { animateAvatar(n.mesh, 0, dt); return; }

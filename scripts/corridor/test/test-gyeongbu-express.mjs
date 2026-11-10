@@ -4,7 +4,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { gangnamBusEnabled } from '../../../src/corridor/gangnamBus.js';
-import { GYEONGGI_BUS_CREDIT } from '../../../src/corridor/gyeongbuExpress.js';
+import { GYEONGGI_BUS_CREDIT, gyeongbuExpressEnabled } from '../../../src/corridor/gyeongbuExpress.js';
+import { SEOUL_TG, seoulTollEnabled } from '../../../src/world/seoulToll.js';
 import {
   speedMs, rideSpeedMs, travelSeconds, nextExpress, headwayMin, carLaneIndex, busLaneIndex, MS_TO_KMH,
 } from '../../../src/corridor/gyeongbuSpeed.js';
@@ -65,8 +66,25 @@ for (const w of gyeongbu) {
 
 assert.equal(gangnamBusEnabled('?gangnambus=0'), false);
 assert.equal(gangnamBusEnabled('?gangnam=0'), false);
+assert.equal(gyeongbuExpressEnabled(''), true);
+assert.equal(gyeongbuExpressEnabled('?expressbus=0'), false);
+assert.equal(gyeongbuExpressEnabled('?gangnambus=0'), false);
 assert.equal(J.meta.attribution, GYEONGGI_BUS_CREDIT);
 assert.ok(fs.readFileSync(path.join(root, 'README.md'), 'utf8').includes(GYEONGGI_BUS_CREDIT));
 assert.ok(fs.readFileSync(path.join(root, 'src/game.js'), 'utf8').includes('GYEONGGI_BUS_CREDIT'));
-assert.ok(fs.readFileSync(path.join(root, 'src/corridor/index.js'), 'utf8').includes('gangnamBus ? get(GYEONGBU_EXPRESS_FILE)'));
-console.log(`gyeongbu express: ${cruise.toFixed(0)} km/h, 판교→강남 ${Math.round(eta)}s, cars off bus lane OK`);
+assert.ok(fs.readFileSync(path.join(root, 'src/corridor/index.js'), 'utf8').includes('get(GYEONGBU_EXPRESS_FILE)'));
+assert.ok(fs.readFileSync(path.join(root, 'src/corridor/gyeongbuExpress.js'), 'utf8').includes("expressBusGeo(no)"));
+
+assert.equal(seoulTollEnabled(''), true);
+assert.equal(seoulTollEnabled('?seoultg=0'), false);
+const live = JSON.parse(fs.readFileSync(path.join(root, 'public/drive.json'), 'utf8'));
+const gy = live.ways.filter((w) => w.name === '경부고속도로');
+assert.ok(gy.length >= 1);
+let near = Infinity;
+for (const w of gy) for (const ni of w.n || []) {
+  const n = live.nodes[ni];
+  const d = Math.hypot(n[0] - SEOUL_TG.x, n[1] - SEOUL_TG.z);
+  if (d < near) near = d;
+}
+assert.ok(near < 25, `서울TG가 경부에서 ${near.toFixed(1)}m`);
+console.log(`gyeongbu express: ${cruise.toFixed(0)} km/h, 판교→강남 ${Math.round(eta)}s, cars off bus lane OK, 서울TG ${near.toFixed(0)}m`);

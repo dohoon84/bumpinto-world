@@ -4,7 +4,7 @@
 import * as THREE from 'three';
 import { ribbonGeo } from '../world.js';
 import { gameHour } from '../weather.js';
-import { mountGyeongbuExpress } from './gyeongbuExpress.js';
+import { mountGyeongbuExpress, gyeongbuExpressEnabled } from './gyeongbuExpress.js';
 
 export const GANGNAM_BUS_FILE = 'gangnam/transit.json';
 export const BUS_CREDIT = '버스 노선·정류소 정보: 서울특별시 (공공데이터포털)';
@@ -149,7 +149,7 @@ export function mountGangnamTransit(root, data, { overlay, express = null } = {}
     }
   }
   root.add(group);
-  const expressRun = mountGyeongbuExpress(group, express, { overlay });
+  const expressRun = (express && gyeongbuExpressEnabled()) ? mountGyeongbuExpress(group, express, { overlay }) : null;
   let lastMin = -1;
 
   function update(_dt, x, z) {
