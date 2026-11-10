@@ -10,6 +10,10 @@ export function gangnamStreetEnabled(search = typeof location !== 'undefined' ? 
   return q.get('gangnam') !== '0' && q.get('gstreet') !== '0';
 }
 
+// 모든 포장 리본(primary 0.06 · busway 기본 0.08 · cycleway 0.10)보다 높고, 차체보다 낮게.
+// paint < zebra 이어야 빨간 BRT 차로 위에도 횡단보도가 보인다. depthTest 는 켠 채 유지(버스·플레이어 아래).
+export const STREET_DECAL_Y = { paint: 0.15, zebra: 0.20 };
+
 const up = new THREE.Vector3(0, 1, 0);
 
 const StreetXform = {
@@ -664,7 +668,7 @@ export function createGangnamStreet({ scene, terrain = null, url, mobile = false
 
       const zebra = inst(new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2), zebraMat, (j.zebras || []).length, 'gnStreetZebra');
       (j.zebras || []).forEach((z, i) => {
-        StreetXform.compose(m4, quat, pos, scl, z[0], ground(z[0], z[1]) + 0.07, z[1], z[2], z[3], 1, z[4]);
+        StreetXform.compose(m4, quat, pos, scl, z[0], ground(z[0], z[1]) + STREET_DECAL_Y.zebra, z[1], z[2], z[3], 1, z[4]);
         zebra.setMatrixAt(i, m4);
       });
       zebra.count = (j.zebras || []).length;
@@ -672,7 +676,7 @@ export function createGangnamStreet({ scene, terrain = null, url, mobile = false
 
       const paint = inst(new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2), paintMat, (j.paints || []).length, 'gnStreetPaint');
       (j.paints || []).forEach((z, i) => {
-        StreetXform.compose(m4, quat, pos, scl, z[0], ground(z[0], z[1]) + 0.30, z[1], z[2], z[3], 1, z[4]);
+        StreetXform.compose(m4, quat, pos, scl, z[0], ground(z[0], z[1]) + STREET_DECAL_Y.paint, z[1], z[2], z[3], 1, z[4]);
         paint.setMatrixAt(i, m4);
       });
       paint.count = (j.paints || []).length;
