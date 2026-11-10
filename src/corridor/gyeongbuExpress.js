@@ -4,7 +4,7 @@
 import * as THREE from 'three';
 import { ribbonGeo, fixNormalsUp } from '../world.js';
 import { busLateralM, chainageAfter, enRoute, nextExpress } from './gyeongbuSpeed.js';
-import { EXPRESS_ROAD_Y, expressRoadHeight, inPangyoCity, nearPangyoToll, distToPts } from './gyeongbuWorld.js';
+import { EXPRESS_ROAD_Y, EXPRESS_PAVE_R, expressRoadHeight, inPangyoCity, inGangnamCity, GANGNAM_CITY, nearPangyoToll, distToPts } from './gyeongbuWorld.js';
 
 export const GYEONGBU_EXPRESS_FILE = 'gangnam/gyeongbu-express.json';
 export const GYEONGGI_BUS_CREDIT = '버스 노선·정류소 정보: 경기도 (공공데이터포털)';
@@ -474,13 +474,15 @@ function expresswayDeck(rawPts, yAt = null) {
 
 function awayFromCities(p) {
   const pangyo = Math.hypot(p[0] - 312.6, p[1] + 2804);
-  const gangnam = Math.hypot(p[0] + 7097.7, p[1] + 14453.3);
-  return pangyo > 420 && gangnam > 150;
+  if (pangyo <= 420) return false;
+  // 강남 시가 타일(+여유)에서는 코리더 가로수·갓길 잔디를 심지 않는다.
+  if (inGangnamCity(p[0], p[1], 80)) return false;
+  return true;
 }
 
 // 강남 코리더 타일은 x=-7500 에서 시작한다. 갓길 잔디(폭 140m)가 그 앞에 못 미쳐 생기던 흰 틈을 메운다.
 function gangnamSeamFill() {
-  const x0 = -7980, x1 = -7492, z0 = -15540, z1 = -13970;
+  const x0 = -7980, x1 = Math.min(-7492, GANGNAM_CITY.x0 - 1), z0 = -15540, z1 = -13970;
   const geo = new THREE.PlaneGeometry(x1 - x0, z1 - z0);
   geo.rotateX(-Math.PI / 2);
   geo.translate((x0 + x1) / 2, 0.03, (z0 + z1) / 2);
@@ -501,8 +503,48 @@ function grassApron(pts, width = 96, y = 0.04) {
   return mesh;
 }
 
-function vergeTrees(pts, sideOff = 22) {
-  if (!pts || pts.length < 3) return null;
+const VERGE_CAP = 700;
+const VERGE_ROAD_MARGIN = 4;
+
+/** 갓길 가로수 자리. 실제 심는 좌표가 시가·차도 버퍼 안에 있으면 버린다. */
+export function listVergeTreePositions(pts, sideOff = 22, roadPts = null) {
+  const out = [];
+  if (!pts || pts.length < 3) return out;
+  const minSetback = Math.max(34, sideOff + 6);
+  const roads = roadPts && roadPts.length ? roadPts : pts;
+  for (let i = 1; i < pts.length && out.length < VERGE_CAP; i += 1) {
+    const a = pts[i - 1], b = pts[i];
+    const dx = b[0] - a[0], dz = b[1] - a[1], L = Math.hypot(dx, dz);
+    if (L < 8) continue;
+    const hx = dx / L, hz = dz / L, lx = hz, lz = -hx;
+    const step = 11;
+    for (let t = 0; t < L && out.length < VERGE_CAP; t += step) {
+      const x = a[0] + hx * t, z = a[1] + hz * t;
+      if (!awayFromCities([x, z]) || nearPangyoToll(x, z, 70)) continue;
+      const rnd = hash01(x, z);
+      if (rnd < 0.52) continue;
+      const cluster = rnd > 0.92 ? 4 : rnd > 0.8 ? 3 : rnd > 0.66 ? 2 : 1;
+      for (let e = 0; e < cluster && out.length < VERGE_CAP; e++) {
+        const r1 = hash01(x + e * 13.1, z + 4.7);
+        const r2 = hash01(x - 8.2, z + e * 9.4);
+        const side = r1 > 0.5 ? 1 : -1;
+        const along = (r2 - 0.5) * 16;
+        const lat = minSetback + r1 * 28 + e * 3.4;
+        const tx = x + hx * along + lx * lat * side + (r2 - 0.5) * 7;
+        const tz = z + hz * along + lz * lat * side + (r1 - 0.5) * 7;
+        if (nearPangyoToll(tx, tz, 55)) continue;
+        if (!awayFromCities([tx, tz])) continue;
+        if (distToPts(tx, tz, roads) < EXPRESS_PAVE_R + VERGE_ROAD_MARGIN) continue;
+        out.push({ x: tx, z: tz, r1, r2, e });
+      }
+    }
+  }
+  return out;
+}
+
+function vergeTrees(pts, sideOff = 22, roadPts = null) {
+  const spots = listVergeTreePositions(pts, sideOff, roadPts);
+  if (!spots.length) return null;
   const trunk = new THREE.CylinderGeometry(0.18, 0.26, 1.9, 5);
   trunk.translate(0, 0.95, 0);
   const crown = new THREE.ConeGeometry(1.85, 4.6, 6);
@@ -516,44 +558,19 @@ function vergeTrees(pts, sideOff = 22) {
   });
   const geo = mergeGeo(parts);
   trunk.dispose(); crown.dispose();
-  const cap = 700;
-  const mesh = new THREE.InstancedMesh(geo, new THREE.MeshLambertMaterial({ vertexColors: true }), cap);
+  const mesh = new THREE.InstancedMesh(geo, new THREE.MeshLambertMaterial({ vertexColors: true }), spots.length);
   mesh.name = 'gyeongbuVergeTrees';
   mesh.frustumCulled = false;
   const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), pp = new THREE.Vector3(), ss = new THREE.Vector3();
-  let n = 0;
-  const minSetback = Math.max(34, sideOff + 6);
-  for (let i = 1; i < pts.length && n < cap; i += 1) {
-    const a = pts[i - 1], b = pts[i];
-    const dx = b[0] - a[0], dz = b[1] - a[1], L = Math.hypot(dx, dz);
-    if (L < 8) continue;
-    const hx = dx / L, hz = dz / L, lx = hz, lz = -hx;
-    const step = 11;
-    for (let t = 0; t < L && n < cap; t += step) {
-      const x = a[0] + hx * t, z = a[1] + hz * t;
-      if (!awayFromCities([x, z]) || nearPangyoToll(x, z, 70)) continue;
-      const rnd = hash01(x, z);
-      if (rnd < 0.52) continue;
-      const cluster = rnd > 0.92 ? 4 : rnd > 0.8 ? 3 : rnd > 0.66 ? 2 : 1;
-      for (let e = 0; e < cluster && n < cap; e++) {
-        const r1 = hash01(x + e * 13.1, z + 4.7);
-        const r2 = hash01(x - 8.2, z + e * 9.4);
-        const side = r1 > 0.5 ? 1 : -1;
-        const along = (r2 - 0.5) * 16;
-        const lat = minSetback + r1 * 28 + e * 3.4;
-        const tx = x + hx * along + lx * lat * side + (r2 - 0.5) * 7;
-        const tz = z + hz * along + lz * lat * side + (r1 - 0.5) * 7;
-        if (nearPangyoToll(tx, tz, 55)) continue;
-        pp.set(tx, 0, tz);
-        q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), r1 * 6.4 + e);
-        const sc = 0.72 + r2 * 0.7;
-        ss.set(sc, sc * (0.88 + r1 * 0.28), sc);
-        mesh.setMatrixAt(n++, m4.compose(pp, q, ss));
-      }
-    }
-  }
-  mesh.count = n;
-  return n ? mesh : null;
+  spots.forEach((t, i) => {
+    pp.set(t.x, 0, t.z);
+    q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), t.r1 * 6.4 + t.e);
+    const sc = 0.72 + t.r2 * 0.7;
+    ss.set(sc, sc * (0.88 + t.r1 * 0.28), sc);
+    mesh.setMatrixAt(i, m4.compose(pp, q, ss));
+  });
+  mesh.count = spots.length;
+  return mesh;
 }
 
 function makeHwySignTex(lines) {
@@ -613,9 +630,39 @@ function hash01(x, z) {
   return n - Math.floor(n);
 }
 
+export const CORRIDOR_FILL_BOX = Object.freeze({ x0: -8600, x1: 480, z0: -15850, z1: -2360 });
+export const CORRIDOR_FILL_CITY_Y = -0.55; // 시가 타일 바닥(0)보다 낮게 — 시가가 이긴다
+
+function cityClipWeight(x, z) {
+  const b = GANGNAM_CITY;
+  if (x >= b.x0 && x <= b.x1 && z >= b.z0 && z <= b.z1) return 0;
+  const dx = Math.max(b.x0 - x, 0, x - b.x1);
+  const dz = Math.max(b.z0 - z, 0, z - b.z1);
+  const d = Math.hypot(dx, dz);
+  const feather = 90;
+  if (d >= feather) return 1;
+  return d / feather;
+}
+
+/** 코리더 메움 지면 높이. 시가 타일 안은 시가 바닥보다 낮거나 없음. */
+export function corridorFillHeight(x, z, pts) {
+  const B = CORRIDOR_FILL_BOX;
+  if (x < B.x0 || x > B.x1 || z < B.z0 || z > B.z1) return null;
+  const d = pts?.length ? distToPts(x, z, pts) : 1e9;
+  const pangyo = inPangyoCity(x, z);
+  const n = hash01(Math.round(x * 0.2), Math.round(z * 0.2));
+  let y = (pangyo && d > 90) ? -0.08 : 0.025;
+  if (!pangyo && d > 100) y += Math.min(5.5, (d - 100) * 0.0035) * (0.25 + n * 0.75);
+  const w = cityClipWeight(x, z);
+  if (w <= 0) return CORRIDOR_FILL_CITY_Y;
+  if (w < 1) y = CORRIDOR_FILL_CITY_Y + (y - CORRIDOR_FILL_CITY_Y) * w;
+  return y;
+}
+
 function corridorLandMesh(pts) {
   // 판교 시가~양재 사이 회색 클리어 색이 보이지 않도록 코리더 전체를 숲·잔디 지면으로 덮는다.
-  const x0 = -8600, x1 = 480, z0 = -15850, z1 = -2360;
+  // 강남 시가 타일 안은 시가 바닥보다 낮춰, 도로·보도가 풀언덕에 묻히지 않게 한다.
+  const { x0, x1, z0, z1 } = CORRIDOR_FILL_BOX;
   const step = 70;
   const nx = Math.floor((x1 - x0) / step) + 1;
   const nz = Math.floor((z1 - z0) / step) + 1;
@@ -629,11 +676,8 @@ function corridorLandMesh(pts) {
       const i = iz * nx + ix;
       const x = x0 + ix * step, z = z0 + iz * step;
       const d = pts?.length ? distToPts(x, z, pts) : 1e9;
-      const city = inPangyoCity(x, z);
       const n = hash01(Math.round(x * 0.2), Math.round(z * 0.2));
-      // 시가 타일 바닥(#ebe4d4)이 고속도로 옆에서 회색·베이지 공터로 보이지 않게, 본선 가까이만 잔디를 올린다.
-      let y = (city && d > 90) ? -0.08 : 0.025;
-      if (!city && d > 100) y += Math.min(5.5, (d - 100) * 0.0035) * (0.25 + n * 0.75);
+      const y = corridorFillHeight(x, z, pts) ?? 0.025;
       pos[i * 3] = x; pos[i * 3 + 1] = y; pos[i * 3 + 2] = z;
       const c = (d < 110 || y < 0.8) ? grass : (n > 0.58 ? forest : woods);
       col[i * 3] = c.r; col[i * 3 + 1] = c.g; col[i * 3 + 2] = c.b;
@@ -694,9 +738,9 @@ export function mountGyeongbuExpress(group, data, { overlay } = {}) {
   if (apronS) group.add(apronS);
   group.add(corridorLandMesh(data.pts));
   group.add(gangnamSeamFill());
-  const treesA = vergeTrees(approach, 28);
+  const treesA = vergeTrees(approach, 28, data.pts);
   if (treesA) group.add(treesA);
-  const treesS = vergeTrees(spurLand, 24);
+  const treesS = vergeTrees(spurLand, 24, data.pts);
   if (treesS) group.add(treesS);
   group.add(highwayDirectionSigns(data.pts));
   const trunk = data.pts.filter(keepDeckPoint);

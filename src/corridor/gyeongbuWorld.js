@@ -42,6 +42,18 @@ export function inPangyoCity(x, z) {
   return PANGYO_CITY_BOXES.some((b) => x >= b.x0 && x <= b.x1 && z >= b.z0 && z <= b.z1);
 }
 
+// 강남 타일 섬(public/corridor/gangnam/index.json meta.box). 양재는 별도 시가 타일이 없다.
+export const GANGNAM_CITY = Object.freeze({ x0: -7500, x1: -6000, z0: -15500, z1: -14000 });
+
+export function inGangnamCity(x, z, pad = 0) {
+  const b = GANGNAM_CITY;
+  return x >= b.x0 - pad && x <= b.x1 + pad && z >= b.z0 - pad && z <= b.z1 + pad;
+}
+
+export function inCityGround(x, z, pad = 0) {
+  return inPangyoCity(x, z) || inGangnamCity(x, z, pad);
+}
+
 export function nearPangyoToll(x, z, r = PANGYO_TG.r) {
   return Math.hypot(x - PANGYO_TG.x, z - PANGYO_TG.z) < r;
 }
