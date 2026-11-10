@@ -113,7 +113,7 @@ function makeWindowCabinet({ label, color, playable, depth = 0.72 }) {
 /** 통유리 너머로 보이는 오락실 내부. 자체 발광이라 낮·밤 모두 읽힌다. 멀면 LOD 로 끈다. */
 function addWindowInterior(parent, st) {
   const W = st.width || 10;
-  const deep = st.ring ? 4.0 : 1.08;
+  const deep = st.deep || (st.ring ? 4.0 : 1.08);
   const H = 3.2;
   const inner = new THREE.Group();
   inner.name = `arcade-window-${st.id}`;
@@ -178,8 +178,8 @@ function addWindowInterior(parent, st) {
     { label: '준비중', color: '#c084fc', playable: false },
   ];
   const nCab = 4;
-  const cabDepth = st.ring ? 0.78 : 0.5;
-  const zCab = st.ring ? -1.85 : -0.42;
+  const cabDepth = deep > 2 ? 0.78 : 0.5;
+  const zCab = deep > 2 ? -1.85 : -0.42;
   const span = W - 4.2;
   for (let i = 0; i < nCab; i++) {
     const s = specs[i];
@@ -190,7 +190,7 @@ function addWindowInterior(parent, st) {
   }
 
   // 오른쪽 앞쪽 카운터 — 거리에서 노란 상판이 보이게
-  const cz = st.ring ? -1.45 : -0.52;
+  const cz = deep > 2 ? -1.45 : -0.52;
   const desk = new THREE.Mesh(
     new THREE.BoxGeometry(1.2, 0.95, Math.min(1.15, deep * 0.55)),
     new THREE.MeshStandardMaterial({ color: '#2a1848', emissive: '#3a2460', emissiveIntensity: 0.45, roughness: 0.5 }),
@@ -225,11 +225,14 @@ function addStorefront(root, st, shared) {
   const nx = st.nx ?? 0, nz = st.nz ?? 1;
   const [dx, dz] = st.door;
   const wallX = dx - nx * 1.2, wallZ = dz - nz * 1.2;
-  g.position.set(wallX + nx * 0.22, 0, wallZ + nz * 0.22);
+  const out = st.flush ? 0.05 : 0.22;
+  g.position.set(wallX + nx * out, 0, wallZ + nz * out);
   g.rotation.y = Math.atan2(nx, nz);
 
   const W = st.width || 10;
-  const glassH = 3.12, kick = 0.08, fasciaH = 1.05;
+  const kick = 0.08;
+  const fasciaH = st.flush ? 0.88 : 1.05;
+  const glassH = st.flush ? Math.max(2.4, (st.gf || 3.6) - kick - fasciaH - 0.14) : 3.12;
   const fasciaY = kick + glassH + 0.08 + fasciaH / 2;
 
   addWindowInterior(g, st);
@@ -243,8 +246,9 @@ function addStorefront(root, st, shared) {
   });
   const kickMat = new THREE.MeshStandardMaterial({ color: '#140c24', roughness: 0.72 });
 
-  const kickM = new THREE.Mesh(new THREE.BoxGeometry(W, kick, 0.18), kickMat);
-  kickM.position.set(0, kick / 2, 0.12);
+  const zFront = st.flush ? 0.04 : 0.16;
+  const kickM = new THREE.Mesh(new THREE.BoxGeometry(W, kick, st.flush ? 0.08 : 0.18), kickMat);
+  kickM.position.set(0, kick / 2, st.flush ? 0.03 : 0.12);
   g.add(kickM);
 
   const doorW = 1.7;
@@ -252,7 +256,7 @@ function addStorefront(root, st, shared) {
   const paneY = kick + glassH / 2;
   const addGlass = (cx, w) => {
     const pane = new THREE.Mesh(new THREE.BoxGeometry(w, glassH - 0.04, 0.03), glassMat);
-    pane.position.set(cx, paneY, 0.16);
+    pane.position.set(cx, paneY, zFront);
     g.add(pane);
   };
   addGlass(-(doorW / 2 + 0.12 + side / 2), side);
@@ -260,11 +264,11 @@ function addStorefront(root, st, shared) {
   addGlass(0, doorW - 0.12);
 
   const handle = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.5, 8), neonMat);
-  handle.position.set(doorW * 0.28, kick + 1.2, 0.22);
+  handle.position.set(doorW * 0.28, kick + 1.2, zFront + 0.06);
   g.add(handle);
 
-  const rail = (x, w, y, h, z = 0.15) => {
-    const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, 0.12), frameMat);
+  const rail = (x, w, y, h, z = zFront) => {
+    const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, st.flush ? 0.08 : 0.12), frameMat);
     m.position.set(x, y, z);
     g.add(m);
   };
@@ -274,12 +278,12 @@ function addStorefront(root, st, shared) {
   rail(+(doorW / 2 + 0.07), 0.1, paneY, glassH);
   rail(-(doorW / 2 + 0.18 + side / 2), 0.08, paneY, glassH);
   rail(+(doorW / 2 + 0.18 + side / 2), 0.08, paneY, glassH);
-  rail(0, W, kick + glassH + 0.05, 0.1, 0.16);
-  rail(0, W, kick / 2, kick, 0.16);
+  rail(0, W, kick + glassH + 0.05, 0.1, zFront);
+  rail(0, W, kick / 2, kick, zFront);
 
   const glow = (x, w, y, h) => {
     const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, 0.04), neonMat);
-    m.position.set(x, y, 0.22);
+    m.position.set(x, y, zFront + 0.06);
     g.add(m);
   };
   glow(-doorW / 2, 0.05, paneY, glassH);
@@ -287,8 +291,9 @@ function addStorefront(root, st, shared) {
   glow(0, doorW + 0.05, kick + glassH, 0.05);
 
   const fasciaMap = shared.fascia.get(st.id);
+  const fasciaD = st.flush ? 0.10 : 0.28;
   const fascia = new THREE.Mesh(
-    new THREE.BoxGeometry(W + 0.2, fasciaH, 0.28),
+    new THREE.BoxGeometry(st.flush ? W : W + 0.2, fasciaH, fasciaD),
     [
       frameMat, frameMat, frameMat, frameMat,
       new THREE.MeshStandardMaterial({
@@ -298,18 +303,18 @@ function addStorefront(root, st, shared) {
       frameMat,
     ],
   );
-  fascia.position.set(0, fasciaY, 0.2);
+  fascia.position.set(0, fasciaY, st.flush ? 0.04 : 0.2);
   g.add(fascia);
 
   const blade = new THREE.Mesh(
-    new THREE.BoxGeometry(0.14, 1.85, 0.56),
+    new THREE.BoxGeometry(0.14, 1.85, st.flush ? 0.36 : 0.56),
     [
       new THREE.MeshStandardMaterial({ map: shared.bladeTex, emissive: '#ffffff', emissiveMap: shared.bladeTex, emissiveIntensity: 0.45 }),
       new THREE.MeshStandardMaterial({ map: shared.bladeTex, emissive: '#ffffff', emissiveMap: shared.bladeTex, emissiveIntensity: 0.45 }),
       frameMat, frameMat, frameMat, frameMat,
     ],
   );
-  blade.position.set(W / 2 - 0.18, fasciaY - 0.1, 0.48);
+  blade.position.set(W / 2 - 0.18, fasciaY - 0.1, st.flush ? 0.22 : 0.48);
   g.add(blade);
 
   const bx = -W / 2 + 1.2;
@@ -380,6 +385,70 @@ function addJeongjaBuilding(root, st) {
   root.add(floor);
 }
 
+
+/** 서현점: 비운 1층의 나머지 외벽을 막아, 가게 칸만 유리로 열리게 한다.
+ *  BoxGeometry 의 두께(local +Z)를 안쪽 법선에 맞춘다. 길이를 변 방향으로 돌리면
+ *  벽이 건물 안팎으로 솟아 거리에서 1층 파사드가 안 보인다.
+ */
+function addHostFirstFloorSeal(root, st) {
+  const ring = st.hostRing;
+  if (!ring?.length) return;
+  const gf = st.gf || 3.6;
+  const W = st.width || 10;
+  const nx = st.nx, nz = st.nz;
+  const [dx, dz] = st.door;
+  const wx = dx - nx * 1.2, wz = dz - nz * 1.2;
+  // 위층 part:yes 파사드(FACADE_WALL.yes)와 같은 베이지. 통유리 칸만 다르게 읽히게.
+  const mat = new THREE.MeshLambertMaterial({ color: '#d7d2c9', side: THREE.DoubleSide });
+  const thick = 0.42;
+  let cx = 0, cz = 0;
+  for (const p of ring) { cx += p[0]; cz += p[1]; }
+  cx /= ring.length; cz /= ring.length;
+
+  const draw = (x0, z0, x1, z1) => {
+    const sx = x1 - x0, sz = z1 - z0, L = Math.hypot(sx, sz);
+    if (L < 0.2) return;
+    let onx = -sz / L, onz = sx / L;
+    const mx = (x0 + x1) / 2, mz = (z0 + z1) / 2;
+    if (onx * (cx - mx) + onz * (cz - mz) < 0) { onx = -onx; onz = -onz; } // inward
+    const m = new THREE.Mesh(new THREE.BoxGeometry(L, gf, thick), mat);
+    // 바깥면을 외벽선에 두고 안쪽으로 두껍게. local +Z = 안쪽 법선 → 길이가 변을 따라감.
+    m.position.set(mx + onx * (thick / 2 - 0.02), gf / 2, mz + onz * (thick / 2 - 0.02));
+    m.rotation.y = Math.atan2(onx, onz);
+    m.name = 'arcade-seo-seal';
+    root.add(m);
+  };
+
+  for (let i = 0; i < ring.length; i++) {
+    const [x0, z0] = ring[i], [x1, z1] = ring[(i + 1) % ring.length];
+    const sx = x1 - x0, sz = z1 - z0, L = Math.hypot(sx, sz) || 1;
+    const t = Math.max(0, Math.min(1, ((wx - x0) * sx + (wz - z0) * sz) / (L * L)));
+    const px = x0 + sx * t, pz = z0 + sz * t;
+    const onStreet = Math.hypot(px - wx, pz - wz) < 0.6 && L > W + 1;
+    if (!onStreet) { draw(x0, z0, x1, z1); continue; }
+    const along = t * L;
+    const u = sx / L, v = sz / L;
+    const left = along - W / 2, right = along + W / 2;
+    if (left > 0.2) draw(x0, z0, x0 + u * left, z0 + v * left);
+    if (L - right > 0.2) draw(x0 + u * right, z0 + v * right, x1, z1);
+
+    // 유리 칸 양쪽 기둥 — 매장이 건물 1층 베이에 끼워진 것처럼 읽히게
+    let onx = -sz / L, onz = sx / L;
+    const mx = (x0 + x1) / 2, mz = (z0 + z1) / 2;
+    if (onx * (cx - mx) + onz * (cz - mz) < 0) { onx = -onx; onz = -onz; }
+    const post = (alongPos) => {
+      const qx = x0 + u * alongPos, qz = z0 + v * alongPos;
+      const m = new THREE.Mesh(new THREE.BoxGeometry(0.48, gf, 0.46), mat);
+      m.position.set(qx + onx * 0.18, gf / 2, qz + onz * 0.18);
+      m.rotation.y = Math.atan2(onx, onz);
+      m.name = 'arcade-seo-seal';
+      root.add(m);
+    };
+    post(left);
+    post(right);
+  }
+}
+
 export function mountArcadeExterior({ scene } = {}) {
   const stores = arcadePlacements();
   const g = new THREE.Group();
@@ -394,6 +463,8 @@ export function mountArcadeExterior({ scene } = {}) {
 
   const jz = stores.find((s) => s.id === 'arcade-jeongja');
   if (jz?.ring) addJeongjaBuilding(g, jz);
+  const seo = stores.find((s) => s.id === 'arcade-seohyeon');
+  if (seo?.hostRing) addHostFirstFloorSeal(g, seo);
 
   scene.add(g);
   return {
