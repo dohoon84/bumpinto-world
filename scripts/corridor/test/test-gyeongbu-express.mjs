@@ -152,5 +152,7 @@ const shinToSinsa = rideStops('shin', 1, '정자');
 assert.ok(shinToSinsa.find((r) => r.name === '판교' && r.game && !r.pass));
 assert.ok(shinToSinsa.find((r) => r.name === '청계산입구' && r.game && !r.pass));
 assert.ok(shinToSinsa.find((r) => r.name === '강남' && r.game));
+assert.deepEqual(rideStops('shin', 0, '판교').filter((r) => r.game).map((r) => r.id), ['jeongja', 'migeum']);
+assert.equal(rideStops('shin', 1, '판교').at(-1).id, 'gangnam');
 
 console.log(`gyeongbu express: ${cruise.toFixed(0)} km/h, 판교→강남 ${Math.round(eta)}s, cars off bus lane OK, 서울TG ${near.toFixed(0)}m`);

@@ -537,11 +537,11 @@ export function buildConcourse({ exits, groups, entryId, look, renderer, onToast
     cam.yaw += dy; cam.pitch = THREE.MathUtils.clamp(cam.pitch + dp, -0.6, 1.3); cam.dist = THREE.MathUtils.clamp(cam.dist * (1 + dz), 2.2, 11);
     const p = me.position;
     let { f, s, run } = allowMove ? axes : { f: 0, s: 0, run: false };
-    speed = 0; let towardWell = false;
+    speed = 0; let towardWell = false, mz = 0; // mz 는 개찰구 태그(아래 tapLane)에서도 씀 — if (f||s) 안에 let 하면 개찰구 앞에서 ReferenceError 로 게임이 멈춤
     if ((f || s) && me.userData.sit) me.userData.sit = ''; // [subway-pose] 걸으면 일어남 (바깥과 같게)
     if (f || s) {
       const fx = -Math.sin(cam.yaw), fz = -Math.cos(cam.yaw), rx = -fz, rz = fx;
-      let mx = fx * f + rx * s, mz = fz * f + rz * s; const L = Math.hypot(mx, mz); mx /= L; mz /= L;
+      let mx = fx * f + rx * s; mz = fz * f + rz * s; const L = Math.hypot(mx, mz); mx /= L; mz /= L;
       const sp = (run ? 7.5 : 4.0) * Math.min(1, Math.hypot(f, s)), step = sp * dt;
       // 0.1m 씩 나눠 움직여 벽·차단선에 딱 붙는다 (느린 프레임에서 한 번에 0.4m 씩 뛰면 계단 입구 띠(0.25m)를 건너뛰고 멈춤)
       const nSub = Math.max(1, Math.ceil(step / 0.1)), sx = (mx * step) / nSub, sz = (mz * step) / nSub;
