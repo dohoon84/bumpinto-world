@@ -417,7 +417,13 @@ export function createNamsanTerrain({ parent, dem, osm }) {
     geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
     geo.setIndex(idx);
     geo.computeVertexNormals();
-    demMat = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.FrontSide });
+    // Push the coarse ~8 m DEM behind draped asphalt so a steep aerial at
+    // 남산 library coords (~23 km from origin) cannot z-fight the 10 cm
+    // road gap into rectangular bands with saw-tooth rims.
+    demMat = new THREE.MeshLambertMaterial({
+      vertexColors: true, side: THREE.FrontSide,
+      polygonOffset: true, polygonOffsetFactor: 6, polygonOffsetUnits: 12,
+    });
     const mesh = new THREE.Mesh(geo, demMat);
     mesh.receiveShadow = true;
     mesh.name = 'namsan-dem';
