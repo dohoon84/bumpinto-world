@@ -1349,32 +1349,48 @@
   flex: 0 0 auto;
 }
 .arc-merge-score {
-  /* % padding is relative to the parent width, so it blew these cards up on mobile.
-     Lock the painted PNG ratio and place the number in the well under "점수". */
-  flex: 0 0 auto; width: 164px; aspect-ratio: 360 / 176; height: auto;
-  padding: 0; box-sizing: border-box; position: relative; overflow: hidden;
-  background: url(/arcade/merge/ui/score-card.png) center / 100% 100% no-repeat;
+  /* Do not use the painted PNG labels — "다음" sat on the blue stroke.
+     CSS boxes keep the cream fill + pastel border, HTML labels sit inside. */
+  flex: 0 0 auto; width: 164px; aspect-ratio: 360 / 220; height: auto;
+  box-sizing: border-box; position: relative; overflow: hidden;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 4px; padding: 8px 12px 8px;
+  background: linear-gradient(180deg, #FFFEFC 0%, #FFFBF7 50%, #FFF8F0 100%);
+  border: 4px solid #F5B5AA; border-radius: 28px;
 }
-.arc-merge-score .lbl, .arc-merge-next .lbl { display: none; }
+.arc-merge-score .lbl {
+  display: block; position: static; flex: 0 0 auto;
+  margin: 0; padding: 0; line-height: 1.15; text-align: center;
+  font-family: "Jua", "Noto Sans KR", sans-serif; font-size: 14px; color: #3A2430;
+}
+.arc-merge-next .lbl {
+  display: block; position: static; flex: 0 0 auto;
+  margin: 0; padding: 0; line-height: 1.15; text-align: center;
+  font-family: "Jua", "Noto Sans KR", sans-serif; font-size: 13px; color: #3A2430;
+}
 .arc-merge-score b {
-  position: absolute; left: 0; right: 0; top: 52%; transform: translateY(-50%);
+  position: static; transform: none; flex: 0 0 auto;
   text-align: center;
-  font-family: "Black Han Sans", "Jua", sans-serif; font-size: 26px; color: #B8322B;
+  font-family: "Black Han Sans", "Jua", sans-serif; font-size: 36px; color: #B8322B;
   line-height: 1; letter-spacing: -.03em;
 }
 .arc-merge-score .best {
-  position: absolute; left: 0; right: 0; top: 76%;
+  position: static; flex: 0 0 auto;
   font-style: normal; font-size: 11px; margin: 0; color: #7a5a52; text-align: center;
 }
 .arc-merge-score .best i { font-style: normal; color: #B8322B; }
 .arc-merge-next {
   width: 74px; aspect-ratio: 144 / 156; height: auto; flex: 0 0 auto;
-  box-sizing: border-box; position: relative; overflow: hidden; padding: 0;
-  background: url(/arcade/merge/ui/next-holder.png) center / 100% 100% no-repeat;
+  box-sizing: border-box; position: relative; overflow: hidden;
+  display: flex; flex-direction: column; align-items: center;
+  padding: 8px 6px 8px;
+  background: linear-gradient(180deg, #FFFEFC 0%, #FFFBF7 50%, #FFF8F0 100%);
+  border: 4px solid #3A8FD9; border-radius: 20px;
 }
 .arc-merge-next img {
-  position: absolute; left: 50%; top: 58%; transform: translate(-50%, -50%);
-  width: 48%; max-width: 52px; aspect-ratio: 1; height: auto; object-fit: contain; margin: 0;
+  position: static; left: auto; top: auto; transform: none;
+  width: 48%; max-width: 52px; aspect-ratio: 1; height: auto;
+  object-fit: contain; margin: auto; flex: 0 0 auto;
 }
 .arc-merge-iconrow { display: flex; flex-direction: column; gap: 6px; }
 .arc-merge-icon {
@@ -1412,7 +1428,7 @@
 }
 .arc-merge-cv { position: absolute; z-index: 1; touch-action: none; }
 .arc-merge-floatbum {
-  position: absolute; left: max(4px, calc(50% - 190px)); top: 96px; width: 44px; height: auto;
+  position: absolute; left: max(4px, calc(50% - 190px)); top: 118px; width: 44px; height: auto;
   z-index: 4; filter: drop-shadow(0 4px 0 rgba(0,0,0,.08));
 }
 .arc-merge-bubble {
@@ -1420,7 +1436,7 @@
   box-shadow: 0 3px 0 rgba(196,90,82,.25);
 }
 .arc-merge-bubble.float {
-  position: absolute; left: max(52px, calc(50% - 140px)); top: 104px; z-index: 4;
+  position: absolute; left: max(52px, calc(50% - 140px)); top: 126px; z-index: 4;
 }
 .arc-merge-hint {
   margin: 8px 0 4px; background: #fff; color: #C45A52; border-radius: 999px;
@@ -1445,10 +1461,18 @@
   border: 3px solid rgba(255,255,255,.9);
 }
 .arc-merge.is-wide .arc-merge-logo { width: min(220px, 100%); height: auto; margin-bottom: 16px; }
-.arc-merge.is-wide .arc-merge-score { width: 200px; max-width: 200px; height: auto; padding: 0; }
-.arc-merge.is-wide .arc-merge-score b { font-size: 34px; }
+.arc-merge.is-wide .arc-merge-score {
+  width: 200px; max-width: 200px; height: auto; padding: 10px 16px 10px;
+  border-width: 5px; border-radius: 34px; gap: 4px;
+}
+.arc-merge.is-wide .arc-merge-score .lbl { font-size: 16px; }
+.arc-merge.is-wide .arc-merge-score b { font-size: 44px; }
 .arc-merge.is-wide .arc-merge-score .best { font-size: 13px; }
-.arc-merge.is-wide .arc-merge-next { width: 112px; max-width: 112px; height: auto; flex: 0 0 auto; margin-top: 14px; padding: 0; }
+.arc-merge.is-wide .arc-merge-next {
+  width: 112px; max-width: 112px; height: auto; flex: 0 0 auto; margin-top: 14px;
+  padding: 12px 10px 12px; border-width: 5px; border-radius: 28px;
+}
+.arc-merge.is-wide .arc-merge-next .lbl { font-size: 16px; }
 .arc-merge.is-wide .arc-merge-next img { width: 46%; max-width: 56px; height: auto; }
 .arc-merge.is-wide .arc-merge-ctrl { display: block; margin: 14px 0 10px; font-size: 13px; color: #7a5a52; }
 .arc-merge.is-wide .arc-merge-iconrow { flex-direction: row; gap: 10px; }
