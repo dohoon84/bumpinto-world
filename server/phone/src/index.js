@@ -2,6 +2,7 @@ import { PhoneBook } from "./book.js";
 import { Room } from "./room.js";
 import { handlePhotos } from "./photos.js";
 import { subwayArrival } from "./subway.js";
+import { busArrivals } from "./bus.js"; // [livebus] 강남 버스 도착 (secret SEOUL_BUS_KEY, 25초 캐시)
 import { handleAuth } from "./account/routes.js"; // [accounts] 구글 로그인·세션·계정 (ACCOUNTS_ENABLED 일 때만)
 import { handleEcon } from "./account/econRoutes.js"; // [economy] /econ/* (ECONOMY_ENABLED 일 때만, 단계는 ECON_FEATURES)
 import { featureOn } from "./account/flags.js";
@@ -149,6 +150,7 @@ export default {
     }
     if (url.pathname === "/photos" || url.pathname.startsWith("/photos/")) return handlePhotos(request, env, cors, url, ctx); // [photo-cloud] 사진 보관함 (R2)
     if (url.pathname === "/subway/arrival") return subwayArrival(request, env, cors, url, ctx); // [subway] 실시간 도착 (secret SEOUL_SUBWAY_KEY, 25초 캐시)
+    if (url.pathname === "/bus/arrivals") return busArrivals(request, env, cors, url, ctx); // [livebus] 버스 도착 (secret SEOUL_BUS_KEY, 25초 캐시)
     if (url.pathname === "/news-tip") return newsTip(request, env, cors); // [camera] 사진 뉴스 제보 (본문이 커서 따로 받음)
     const method = ROUTES[url.pathname];
     if (!method || request.method !== "POST") return json({ ok: false, error: "not_found" }, 404, cors);

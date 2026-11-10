@@ -12,17 +12,19 @@ import { gangnamBrtEnabled, buildBrtTransit, BRT_ROUTE_PHASE, BRT_ROUTE_N } from
 
 export { gangnamBrtEnabled, buildBrtTransit, offsetRight } from './brtData.js';
 
-const RADIUS = 380, MAX_BUSES = 8, POOL_PER_KEY = 2, POOL_MAX = 8;
+const RADIUS = 380, MAX_BUSES = 12, POOL_PER_KEY = 2, POOL_MAX = 8;
 const DWELL = 15; // 0.8~1.3× → 약 12–20초
 
 export function createGangnamBrt({
-  scene, terrain = null, overlay = null, url, mobile = false, getNpc = () => null,
+  scene, terrain = null, overlay = null, url, mobile = false, getNpc = () => null, liveBus = null,
 } = {}) {
   const root = new THREE.Group();
   root.name = 'gangnamBrt';
   scene?.add(root);
   const stats = { loaded: false, buses: 0, drawn: 0, dwell: 0, mobile };
   let dead = false, source = null, transit = null, data = null;
+  const stopLabels = [];
+  let lastBoard = 0;
   const gy = (x, z, ref = 0) => (terrain?.getVehicleHeight || terrain?.getGroundHeight)?.(x, z, ref) ?? 0;
 
   const ctx = {
@@ -96,6 +98,18 @@ export function createGangnamBrt({
     const bounds = j.meta?.box || { x0: -1e6, x1: 1e6, z0: -1e6, z1: 1e6 };
     source = new SimulatedBusSource(transit, bounds, { seed: 9, spacing: true, dwell: DWELL });
     applyHeadway(source);
+    liveBus?.register(data.stops || []);
+    if (overlay) {
+      for (const s of data.stops || []) {
+        const item = overlay.add({
+          cls: 'label busstop',
+          text: `🚏 ${s.name}`,
+          getPos: () => new THREE.Vector3(s.x, 4.4, s.z),
+          maxDist: 200,
+        });
+        stopLabels.push({ s, item });
+      }
+    }
     stats.loaded = true;
     stats.paths = source.paths.length;
     stats.dirs = data.dirs?.length || 0;
@@ -174,6 +188,20 @@ export function createGangnamBrt({
     vehicles: () => source?.vehicles() || [],
     update(dt, x, z) {
       if (!source) return;
+      if (liveBus) {
+        const synced = liveBus.syncBrt(source, data);
+        stats.live = !!synced.live;
+        stats.liveN = synced.n || 0;
+        const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
+        if (now - lastBoard > 1000) {
+          lastBoard = now;
+          for (const { s, item } of stopLabels) {
+            const text = liveBus.board(s.ref) || `🚏 ${s.name}`;
+            if (item?.el) item.el.textContent = text;
+            else if (item) item.text = text;
+          }
+        }
+      }
       source.update(Math.min(dt, 0.1), ctx, { x, z });
       syncMeshes(x, z);
     },

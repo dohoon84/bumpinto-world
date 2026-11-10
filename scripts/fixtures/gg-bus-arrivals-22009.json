@@ -1,0 +1,14 @@
+{
+  "response": {
+    "msgHeader": { "queryTime": "2026-11-10 19:21:04.000", "resultCode": 0, "resultMessage": "정상적으로 처리되었습니다." },
+    "msgBody": {
+      "busArrivalList": [
+        { "routeName": "1151", "routeId": "204000081", "routeTypeCd": 11, "predictTimeSec1": 235, "locationNo1": 3, "vehId1": "204000181", "plateNo1": "경기70아7467" },
+        { "routeName": "9404", "routeId": "100100391", "routeTypeCd": 11, "predictTimeSec1": 617, "locationNo1": 3, "vehId1": "113008248", "plateNo1": "서울75사1703" },
+        { "routeName": "9408", "routeId": "100100392", "routeTypeCd": 11, "predictTimeSec1": 973, "locationNo1": 5, "vehId1": "113008223", "plateNo1": "서울74사6294" },
+        { "routeName": "441", "routeId": "100100068", "routeTypeCd": 13, "predictTimeSec1": 466, "locationNo1": 2, "vehId1": "121047069", "plateNo1": "서울74사2323" },
+        { "routeName": "5100예약", "routeTypeCd": 11, "predictTimeSec1": "", "locationNo1": "", "vehId1": "" }
+      ]
+    }
+  }
+}
