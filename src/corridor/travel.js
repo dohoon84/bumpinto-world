@@ -27,6 +27,10 @@ export function mountTravel({ corridor, home, teleport }) {
     ...corridor.stations.map((s) => ({ id: s.id, en: s.nameEn, ko: s.name, x: (s.exits?.[0] || s).x, z: (s.exits?.[0] || s).z, exits: s.exits || [] })),
   ];
   if (tower) { const at = tower.fit || tower.pos; dests.push({ id: 'lotte', en: 'Lotte World Tower', ko: '롯데월드타워', x: at.x + 70, z: at.z + 70 }); }
+  if (corridor.namsan) {
+    const n = corridor.namsan;
+    dests.push({ id: 'ntower', en: 'N Seoul Tower', ko: '남산서울타워', x: n.spawn.x, z: n.spawn.z, getY: () => n.spawnY() });
+  }
 
   const render = () => {
     const en = isEn();
@@ -36,7 +40,7 @@ export function mountTravel({ corridor, home, teleport }) {
       const b = document.createElement('button'); b.type = 'button';
       const site = d.id === 'lotte' ? lotteSiteLabel(en) : null; // 오픈 전: 건설중 공정률
       b.innerHTML = site ? `<span>🚧 ${site.main}</span><span class="ko">${site.sub}</span>`
-        : `<span>${d.id === 'lotte' ? '🏙️' : '🚇'} ${en ? d.en : d.ko}</span><span class="ko">${en ? d.ko : d.en}</span>`;
+        : `<span>${d.id === 'lotte' || d.id === 'ntower' ? '🏙️' : '🚇'} ${en ? d.en : d.ko}</span><span class="ko">${en ? d.ko : d.en}</span>`;
       b.onclick = () => go(d.id);
       panel.appendChild(b);
     }
@@ -68,12 +72,12 @@ export function mountTravel({ corridor, home, teleport }) {
     if (mine !== epoch) return false;
     const p = bestSpot(d);
     if (mine !== epoch) return false;
-    teleport(p.x, p.z);
+    teleport(p.x, p.z, d.getY?.());
     // 도착 후 한 번 더: 타일이 늦게 빌드됐으면 인도(차도·건물 밖)로 다시 맞춘다
     await corridor.preload(d.x, d.z);
     if (mine !== epoch) return false;
     const q = corridor.freeSpot(p.x, p.z);
-    if (Math.hypot(q.x - p.x, q.z - p.z) > 0.01) teleport(q.x, q.z);
+    if (Math.hypot(q.x - p.x, q.z - p.z) > 0.01) teleport(q.x, q.z, d.getY?.());
     return true;
   }
   // [arrivefix] 그 역 주변 타일만 미리 받기 (이동은 하지 않음) — 로그인 상태 입장에서 서버 입장 요청과 동시에

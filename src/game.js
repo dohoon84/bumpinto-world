@@ -321,6 +321,8 @@ const corridorClock = { simTime: () => null };
 // [corridor] 정자 → 롯데월드타워 코리더: 탄천 구간 도로는 terrain.build 전에 annotate 해야 다리 구조물이 같이 생긴다
 let ride = null; // [ride] mountRide (코리더가 있을 때만)
 const corridor = corridorData ? createCorridor({ scene, corridorData, terrain, world, renderer, overlay, params, getSimTime: () => corridorClock.simTime() }) : null;
+if (corridor?.namsan) { camera.far = Math.max(camera.far, 14000); camera.updateProjectionMatrix(); } // [namsan] 잠실·강남에서도 실루엣이 보이게
+
 if (terrain) { terrain.build(scene, world, overlay); world.groundY = terrain.getGroundHeight; world.vehicleY = terrain.getVehicleHeight; }
 if (corridor) {
   corridor.afterTerrain();
@@ -2124,7 +2126,7 @@ homeBtn.onclick = () => {
   rememberPlace(true);
 };
 // [corridor] 순간이동(지구본 역 선택 · ?at=<역>|lotte) · 성능 HUD(`)
-function teleportTo(x, z) {
+function teleportTo(x, z, y) {
   ride?.forceAlight('teleport'); // [ride] 순간이동·지구본 이동이면 자동 하차
   if (bikes.riding) dismountBike();
   if (adminBike?.riding) adminBike.dismount();
@@ -2132,7 +2134,8 @@ function teleportTo(x, z) {
   standUpFromSeat();
   wakeFromAfk();
   renderEmoteBar(); // 앉아 있다 순간이동하면 C 칩 표시도 '앉기'로 되돌림
-  player.position.set(x, terrain ? terrain.getGroundHeight(x, z, 0) : 0, z);
+  const gy = (y != null && Number.isFinite(y)) ? y : (terrain ? terrain.getGroundHeight(x, z, 0) : 0);
+  player.position.set(x, gy, z);
   setMode('follow');
   rememberPlace(true);
 }
@@ -2732,7 +2735,7 @@ function frame() {
     camera.position.copy(c).add(tmp); camera.lookAt(c);
     sun.target.position.copy(c);
   }
-  if (corridor) { const c = cam.mode === 'follow' ? P : sun.target.position; corridor.update(dt, c.x, c.z, cam.mode); } // [corridor] 타일 스트리밍(프레임당 최대 1개 빌드)
+  if (corridor) { const c = cam.mode === 'follow' ? P : sun.target.position; corridor.update(dt, c.x, c.z, cam.mode); corridor.namsan?.tickPlayer?.(dt, player, cam); } // [corridor] 타일 스트리밍(프레임당 최대 1개 빌드) // [namsan]
   jeongjaBp24?.update(player.position.x, player.position.z); // [bump24-jeongja] 가까운 매장만 실내
   bp24Nav?.update(dt); // [bp24nav] 표지 까딱임 · 안내선 시작점
   if (playgrounds) { const c = cam.mode === 'follow' ? P : sun.target.position; playgrounds.update(dt, c.x, c.z, cam.mode); } // [playgrounds] 거리·타일 기준 표시
@@ -2768,7 +2771,7 @@ requestAnimationFrame(frame);
 // 스크린샷/디버그용 훅
 window.__jj = {
   perfmem: perfMem, // [perf-memory]
-  ready: true, region, tower, renderer, corridor, schoolZone: corridor?.schoolZone || null, playgrounds, streetlights, pangyoLamps, migeumLamps, // [corridor] [schoolzone] [playgrounds] [streetlights]
+  ready: true, region, tower, renderer, corridor, namsan: corridor?.namsan || null, schoolZone: corridor?.schoolZone || null, playgrounds, streetlights, pangyoLamps, migeumLamps, // [corridor] [schoolzone] [playgrounds] [streetlights] [namsan]
   bungeo, // [bungeo]
   launch, roadster, trucks, bike: adminBike, giftRides, inventory, data, world, npcs, transit, camera, cam, ov, setMode, terrain, taxis, jzTraffic, police, weather: atmosphere, umbrellas, dogPark, strayCats, // [terrain] [taxi] [roadster] [tower] [launch] [truck] [bike] [roadbike] [inventory]
   get player() { return player; },
