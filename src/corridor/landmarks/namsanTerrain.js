@@ -50,9 +50,18 @@ export function createNamsanTerrain({ parent, dem, osm }) {
   const peak = osm?.peak || { x: -10651.28, z: -20527.94 };
   const plaza = osm?.tower?.outer || [];
 
+  function basinEle(d) {
+    if (d < 180) return NT.eleBase;
+    if (d < 700) return NT.eleBase - ((d - 180) / 520) * 155;
+    if (d < 1500) return 88 - ((d - 700) / 800) * 50;
+    return 36;
+  }
+
   function rawEle(x, z) {
     const e = sampleDem(dem, x, z);
-    return e == null ? datum : e;
+    if (e != null) return e;
+    const d = Math.hypot(x - NT.tx, z - NT.tz);
+    return basinEle(d);
   }
 
   function heightAt(x, z) {
@@ -71,7 +80,7 @@ export function createNamsanTerrain({ parent, dem, osm }) {
       const t = 1 - du / 28;
       ele = ele * (1 - t) + (NT.eleBase - 6) * t;
     }
-    return Math.max(0, ele - datum);
+    return ele - datum;
   }
 
   const bounds = dem
@@ -176,6 +185,10 @@ export function createNamsanTerrain({ parent, dem, osm }) {
   }
   for (const wall of osm?.walls || []) {
     const pts = wall.pts || [];
+    // drop distant/disconnected segments that read as floating blocks from the hillside
+    let nearest = Infinity;
+    for (const p of pts) nearest = Math.min(nearest, Math.hypot(p[0] - NT.tx, p[1] - NT.tz));
+    if (nearest > 220) continue;
     const wallH = Number(wall.tags?.height) || 5.5;
     for (let i = 1; i < pts.length; i++) {
       const ax = pts[i - 1][0], az = pts[i - 1][1], bx = pts[i][0], bz = pts[i][1];
@@ -185,13 +198,8 @@ export function createNamsanTerrain({ parent, dem, osm }) {
       const y = heightAt(mx, mz);
       const ang = Math.atan2(bx - ax, bz - az);
       wallGeos.push(coloredBox(L, wallH, 1.15, stone, mx, y + wallH * 0.5, mz, ang));
-      // merlons every ~3.2 m (ref photos of the battlements)
-      const n = Math.max(1, Math.floor(L / 3.2));
-      for (let k = 0; k < n; k++) {
-        const t = (k + 0.5) / n;
-        const x = ax + (bx - ax) * t, z = az + (bz - az) * t;
-        merlonGeos.push(coloredBox(1.15, 1.35, 1.35, stoneD, x, heightAt(x, z) + wallH + 0.65, z, ang));
-      }
+      // continuous coping instead of detached merlon cubes
+      merlonGeos.push(coloredBox(L, 0.42, 1.28, stoneD, mx, y + wallH + 0.22, mz, ang));
     }
   }
   if (wallGeos.length) {

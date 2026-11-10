@@ -81,6 +81,45 @@ function drumWindowTex() {
   return { day: tex(c), night: tex(nc) };
 }
 
+function shaftGlowTex() {
+  const W = 64, H = 512;
+  const c = document.createElement('canvas'); c.width = W; c.height = H;
+  const d = c.getContext('2d');
+  const g = d.createLinearGradient(0, H, 0, 0);
+  g.addColorStop(0.00, '#f2fdff');
+  g.addColorStop(0.10, '#b8f3ff');
+  g.addColorStop(0.38, '#5ad4f5');
+  g.addColorStop(0.72, '#3a9ccc');
+  g.addColorStop(1.00, '#2a6a96');
+  d.fillStyle = g; d.fillRect(0, 0, W, H);
+  for (let i = 0; i < 18; i++) {
+    const x = (i / 18) * W;
+    d.fillStyle = 'rgba(255,255,255,0.16)';
+    d.fillRect(x, 0, 1.4, H);
+  }
+  const tex = new THREE.CanvasTexture(c);
+  tex.wrapS = THREE.RepeatWrapping;
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+
+function insetRing(pts, inset) {
+  const c = centroid(pts);
+  return pts.map(([x, z]) => {
+    const dx = x - c.x, dz = z - c.z, L = Math.hypot(dx, dz) || 1;
+    const nL = Math.max(5.5, L - inset);
+    return [c.x + (dx / L) * nL, c.z + (dz / L) * nL];
+  });
+}
+
+function lockGeometry() {
+  const body = new THREE.BoxGeometry(0.048, 0.062, 0.032);
+  const shackle = new THREE.TorusGeometry(0.016, 0.0045, 5, 10, Math.PI);
+  shackle.rotateZ(Math.PI);
+  shackle.translate(0, 0.038, 0);
+  return mergeGeometries([body, shackle]);
+}
+
 export function createNamsanTower({ parent, osm, baseY }) {
   const g = new THREE.Group();
   g.name = 'namsan-tower';
@@ -101,100 +140,123 @@ export function createNamsanTower({ parent, osm, baseY }) {
   const nightMats = [];
   const track = (mat, dayE = 0, nightE = 1) => { nightMats.push({ mat, dayE, nightE }); return mat; };
 
-  // ---------- plaza building from OSM footprint ----------
-  const wallGeos = [];
-  const wallH = PH;
-  if (plazaPts.length >= 3) {
-    for (let i = 0; i < plazaPts.length; i++) {
-      const a = plazaPts[i], b = plazaPts[(i + 1) % plazaPts.length];
+  // ---------- plaza building: tiered terraces from OSM footprint ----------
+  function wallSegs(pts, y0, h, allowDoor) {
+    const geos = [];
+    for (let i = 0; i < pts.length; i++) {
+      const a = pts[i], b = pts[(i + 1) % pts.length];
       const dx = b[0] - a[0], dz = b[1] - a[1], L = Math.hypot(dx, dz);
       if (L < 0.4) continue;
       const mx = (a[0] + b[0]) / 2, mz = (a[1] + b[1]) / 2;
       const ang = Math.atan2(dx, dz);
-      // door gap on the eastern face (toward 남산순환로 / bus stops)
-      const midX = mx - ox, facingEast = Math.cos(ang) > 0.35 && mx > ox + 8;
-      const door = facingEast && Math.abs(mz - oz) < 8 && L > 6;
+      const facingEast = Math.cos(ang) > 0.35 && mx > ox + 8;
+      const door = allowDoor && facingEast && Math.abs(mz - oz) < 8 && L > 6;
       if (door) {
         const left = L * 0.5 - 2.4, right = L * 0.5 - 2.4;
-        // two wall segments beside a 4.8 m door
         const alongX = dx / L, alongZ = dz / L;
         const cx1 = a[0] + alongX * (left * 0.5), cz1 = a[1] + alongZ * (left * 0.5);
         const cx2 = b[0] - alongX * (right * 0.5), cz2 = b[1] - alongZ * (right * 0.5);
-        if (left > 1) { const bg = new THREE.BoxGeometry(0.55, wallH, left); bg.rotateY(ang); bg.translate(cx1, baseY + wallH / 2, cz1); wallGeos.push(bg); }
-        if (right > 1) { const bg = new THREE.BoxGeometry(0.55, wallH, right); bg.rotateY(ang); bg.translate(cx2, baseY + wallH / 2, cz2); wallGeos.push(bg); }
-        // lintel
-        const lg = new THREE.BoxGeometry(0.6, 3.2, 4.8); lg.rotateY(ang); lg.translate(mx, baseY + wallH - 1.6, mz); wallGeos.push(lg);
+        if (left > 1) { const bg = new THREE.BoxGeometry(0.55, h, left); bg.rotateY(ang); bg.translate(cx1, y0 + h / 2, cz1); geos.push(bg); }
+        if (right > 1) { const bg = new THREE.BoxGeometry(0.55, h, right); bg.rotateY(ang); bg.translate(cx2, y0 + h / 2, cz2); geos.push(bg); }
+        const lg = new THREE.BoxGeometry(0.6, Math.min(2.4, h * 0.28), 4.8); lg.rotateY(ang); lg.translate(mx, y0 + h - 1.2, mz); geos.push(lg);
       } else {
-        const bg = new THREE.BoxGeometry(0.55, wallH, L); bg.rotateY(ang); bg.translate(mx, baseY + wallH / 2, mz); wallGeos.push(bg);
+        const bg = new THREE.BoxGeometry(0.55, h, L); bg.rotateY(ang); bg.translate(mx, y0 + h / 2, mz); geos.push(bg);
       }
     }
-    const plazaMat = track(new THREE.MeshStandardMaterial({
-      color: '#e8eef3', map: win.day, emissiveMap: win.night, emissive: new THREE.Color('#ffffff'),
-      emissiveIntensity: 0, roughness: 0.45, metalness: 0.15,
-    }), 0, 0.85);
-    if (wallGeos.length) {
-      const wm = new THREE.Mesh(mergeGeometries(wallGeos, true), plazaMat);
+    return geos;
+  }
+  function addGlassRail(pts, y) {
+    const postG = [], railG = [], glassG = [];
+    for (let i = 0; i < pts.length; i++) {
+      const a = pts[i], b = pts[(i + 1) % pts.length];
+      const L = Math.hypot(b[0] - a[0], b[1] - a[1]); if (L < 0.4) continue;
+      const mx = (a[0] + b[0]) / 2, mz = (a[1] + b[1]) / 2;
+      const ang = Math.atan2(b[0] - a[0], b[1] - a[1]);
+      const n = Math.max(2, Math.floor(L / 1.7));
+      for (let k = 0; k <= n; k++) {
+        const tt = k / n;
+        const x = a[0] + (b[0] - a[0]) * tt, z = a[1] + (b[1] - a[1]) * tt;
+        const pg = new THREE.BoxGeometry(0.05, 1.05, 0.05);
+        pg.rotateY(ang); pg.translate(x, y + 0.55, z); postG.push(pg);
+      }
+      const rg = new THREE.BoxGeometry(0.05, 0.045, L);
+      rg.rotateY(ang); rg.translate(mx, y + 1.04, mz); railG.push(rg);
+      const gg = new THREE.BoxGeometry(0.03, 0.92, Math.max(0.2, L - 0.08));
+      gg.rotateY(ang); gg.translate(mx, y + 0.52, mz); glassG.push(gg);
+    }
+    if (postG.length) g.add(new THREE.Mesh(mergeGeometries(postG), new THREE.MeshLambertMaterial({ color: '#8b949c' })));
+    if (railG.length) g.add(new THREE.Mesh(mergeGeometries(railG), new THREE.MeshLambertMaterial({ color: '#c5ccd2' })));
+    if (glassG.length) {
+      g.add(new THREE.Mesh(mergeGeometries(glassG), new THREE.MeshStandardMaterial({
+        color: '#cfe4f2', transparent: true, opacity: 0.28, roughness: 0.08, metalness: 0.2, depthWrite: false,
+      })));
+    }
+  }
+  const plazaMat = track(new THREE.MeshStandardMaterial({
+    color: '#e8eef3', map: win.day, emissiveMap: win.night, emissive: new THREE.Color('#ffffff'),
+    emissiveIntensity: 0, roughness: 0.45, metalness: 0.15,
+  }), 0, 0.9);
+  const eaveLight = track(new THREE.MeshBasicMaterial({ color: '#5ec8ff', transparent: true, opacity: 0, fog: false }), 0, 0);
+  eaveLight.userData.nightOp = 0.88;
+  const eaveGeos = [];
+  if (plazaPts.length >= 3) {
+    const tiers = [
+      { pts: plazaPts, y0: baseY, h: PH * 0.38, door: true, inset: 0 },
+      { pts: insetRing(plazaPts, 2.1), y0: baseY + PH * 0.38, h: PH * 0.32, door: false },
+      { pts: insetRing(plazaPts, 3.8), y0: baseY + PH * 0.70, h: PH * 0.30, door: false },
+    ];
+    const allWalls = [];
+    for (const tier of tiers) {
+      allWalls.push(...wallSegs(tier.pts, tier.y0, tier.h, tier.door));
+      const topY = tier.y0 + tier.h;
+      const shape = new THREE.Shape(tier.pts.map((p) => new THREE.Vector2(p[0] - ox, -(p[1] - oz))));
+      const slab = new THREE.ExtrudeGeometry(shape, { depth: 0.45, bevelEnabled: false });
+      slab.rotateX(-Math.PI / 2);
+      slab.translate(ox, topY, oz);
+      const slabM = new THREE.Mesh(slab, new THREE.MeshLambertMaterial({ color: '#cfd6dc' }));
+      slabM.receiveShadow = true;
+      g.add(slabM);
+      addGlassRail(tier.pts, topY);
+      for (let i = 0; i < tier.pts.length; i++) {
+        const a = tier.pts[i], b = tier.pts[(i + 1) % tier.pts.length];
+        const L = Math.hypot(b[0] - a[0], b[1] - a[1]); if (L < 0.4) continue;
+        const mx = (a[0] + b[0]) / 2, mz = (a[1] + b[1]) / 2;
+        const ang = Math.atan2(b[0] - a[0], b[1] - a[1]);
+        const eg = new THREE.BoxGeometry(0.16, 0.16, L);
+        eg.rotateY(ang); eg.translate(mx, topY - 0.22, mz);
+        eaveGeos.push(eg);
+      }
+    }
+    if (allWalls.length) {
+      const wm = new THREE.Mesh(mergeGeometries(allWalls, true), plazaMat);
       wm.castShadow = wm.receiveShadow = true;
       g.add(wm);
     }
-    // roof slab
-    const shape = new THREE.Shape(plazaPts.map((p) => new THREE.Vector2(p[0] - ox, -(p[1] - oz))));
-    const roof = new THREE.ExtrudeGeometry(shape, { depth: 0.7, bevelEnabled: false });
-    roof.rotateX(-Math.PI / 2);
-    roof.translate(ox, shaftBottom, oz);
-    const roofM = new THREE.MeshLambertMaterial({ color: '#cfd6dc' });
-    const roofMesh = new THREE.Mesh(roof, roofM);
-    roofMesh.receiveShadow = true;
-    g.add(roofMesh);
-    // terrace parapet
-    const parapet = [];
-    for (let i = 0; i < plazaPts.length; i++) {
-      const a = plazaPts[i], b = plazaPts[(i + 1) % plazaPts.length];
-      const L = Math.hypot(b[0] - a[0], b[1] - a[1]); if (L < 0.4) continue;
-      const mx = (a[0] + b[0]) / 2, mz = (a[1] + b[1]) / 2;
-      const ang = Math.atan2(b[0] - a[0], b[1] - a[1]);
-      const pg = new THREE.BoxGeometry(0.28, 1.15, L);
-      pg.rotateY(ang); pg.translate(mx, shaftBottom + 0.9, mz);
-      parapet.push(pg);
-    }
-    if (parapet.length) g.add(new THREE.Mesh(mergeGeometries(parapet), new THREE.MeshLambertMaterial({ color: '#d8dde2' })));
-  }
-
-  // night blue wash strips around plaza eaves (ref-night-blue)
-  const eaveLight = track(new THREE.MeshBasicMaterial({ color: '#5ec8ff', transparent: true, opacity: 0, fog: false }), 0, 0);
-  eaveLight.userData.nightOp = 0.85;
-  const eaveGeos = [];
-  if (plazaPts.length >= 3) {
-    for (let i = 0; i < plazaPts.length; i++) {
-      const a = plazaPts[i], b = plazaPts[(i + 1) % plazaPts.length];
-      const L = Math.hypot(b[0] - a[0], b[1] - a[1]); if (L < 0.4) continue;
-      const mx = (a[0] + b[0]) / 2, mz = (a[1] + b[1]) / 2;
-      const ang = Math.atan2(b[0] - a[0], b[1] - a[1]);
-      const eg = new THREE.BoxGeometry(0.2, 0.18, L);
-      eg.rotateY(ang); eg.translate(mx, shaftBottom - 0.3, mz);
-      eaveGeos.push(eg);
-    }
     if (eaveGeos.length) g.add(new THREE.Mesh(mergeGeometries(eaveGeos), eaveLight));
+    // entrance plaza paving east of the building (spawn lives here, not on the roof)
+    const pave = new THREE.Mesh(new THREE.CylinderGeometry(11, 11, 0.12, 24), new THREE.MeshLambertMaterial({ color: '#b8bcc2' }));
+    pave.position.set(ox + 42, baseY + 0.05, oz + 4);
+    pave.receiveShadow = true;
+    g.add(pave);
   }
 
-  // ---------- white shaft ----------
+  // ---------- white shaft with vertical ribbing + night gradient wash (no fake cone) ----------
+  const shaftGlow = shaftGlowTex();
   const shaftMat = track(new THREE.MeshStandardMaterial({
     color: '#f4f6f8', roughness: 0.28, metalness: 0.12,
-    emissive: new THREE.Color('#7ad7ff'), emissiveIntensity: 0,
-  }), 0, 0.55);
+    emissive: new THREE.Color('#ffffff'), emissiveMap: shaftGlow, emissiveIntensity: 0,
+  }), 0, 1.12);
   const shaft = new THREE.Mesh(new THREE.CylinderGeometry(NT.shaftR, NT.shaftR + 0.35, NT.shaftH, 32, 1, false), shaftMat);
   shaft.position.set(ox, shaftBottom + NT.shaftH / 2, oz);
   shaft.castShadow = true;
   g.add(shaft);
-  // faint vertical seams
-  const seamMat = new THREE.MeshLambertMaterial({ color: '#dde3e8' });
-  for (let i = 0; i < 8; i++) {
-    const a = (i / 8) * Math.PI * 2;
-    const s = new THREE.Mesh(new THREE.BoxGeometry(0.12, NT.shaftH, 0.08), seamMat);
-    s.position.set(ox + Math.cos(a) * (NT.shaftR + 0.04), shaftBottom + NT.shaftH / 2, oz + Math.sin(a) * (NT.shaftR + 0.04));
+  const seamMat = new THREE.MeshLambertMaterial({ color: '#d5dce2' });
+  for (let i = 0; i < 16; i++) {
+    const a = (i / 16) * Math.PI * 2;
+    const s = new THREE.Mesh(new THREE.BoxGeometry(0.09, NT.shaftH, 0.07), seamMat);
+    s.position.set(ox + Math.cos(a) * (NT.shaftR + 0.05), shaftBottom + NT.shaftH / 2, oz + Math.sin(a) * (NT.shaftR + 0.05));
     g.add(s);
   }
-  // mid ring / collar (visible in day ref just above the trees / low on the shaft)
   const ringY = shaftBottom + 18;
   const ring = new THREE.Mesh(new THREE.CylinderGeometry(NT.shaftR + 2.4, NT.shaftR + 2.4, 1.6, 24), new THREE.MeshLambertMaterial({ color: '#2a3036' }));
   ring.position.set(ox, ringY, oz);
@@ -202,13 +264,20 @@ export function createNamsanTower({ parent, osm, baseY }) {
   const ringDeck = new THREE.Mesh(new THREE.CylinderGeometry(NT.shaftR + 2.6, NT.shaftR + 2.6, 0.25, 24), new THREE.MeshLambertMaterial({ color: '#c5ccd2' }));
   ringDeck.position.set(ox, ringY + 0.9, oz);
   g.add(ringDeck);
-
-  // upward wash lights at shaft base (night cyan)
-  const wash = track(new THREE.MeshBasicMaterial({ color: '#8ce7ff', transparent: true, opacity: 0, depthWrite: false, fog: false }), 0, 0);
-  wash.userData.nightOp = 0.35;
-  const washM = new THREE.Mesh(new THREE.CylinderGeometry(NT.shaftR + 0.8, NT.shaftR + 3.5, 14, 20, 1, true), wash);
-  washM.position.set(ox, shaftBottom + 7, oz);
-  g.add(washM);
+  const ringGlow = track(new THREE.MeshBasicMaterial({ color: '#e8f7ff', transparent: true, opacity: 0, fog: false }), 0, 0);
+  ringGlow.userData.nightOp = 0.9;
+  const ringHalo = new THREE.Mesh(new THREE.TorusGeometry(NT.shaftR + 2.55, 0.09, 8, 36), ringGlow);
+  ringHalo.rotation.x = Math.PI / 2;
+  ringHalo.position.set(ox, ringY + 0.85, oz);
+  g.add(ringHalo);
+  const ring2Y = shaftBottom + 52;
+  const ring2 = new THREE.Mesh(new THREE.CylinderGeometry(NT.shaftR + 1.5, NT.shaftR + 1.5, 0.7, 20), new THREE.MeshLambertMaterial({ color: '#2a3036' }));
+  ring2.position.set(ox, ring2Y, oz);
+  g.add(ring2);
+  const ring2Halo = new THREE.Mesh(new THREE.TorusGeometry(NT.shaftR + 1.55, 0.07, 8, 28), ringGlow);
+  ring2Halo.rotation.x = Math.PI / 2;
+  ring2Halo.position.set(ox, ring2Y + 0.4, oz);
+  g.add(ring2Halo);
 
   // ---------- observation drum ----------
   const drumGroups = [
@@ -224,7 +293,7 @@ export function createNamsanTower({ parent, osm, baseY }) {
   const glassMat = track(new THREE.MeshStandardMaterial({
     color: '#c5d8e6', map: dwin.day, emissiveMap: dwin.night, emissive: new THREE.Color('#ffffff'),
     emissiveIntensity: 0, roughness: 0.12, metalness: 0.35, transparent: true, opacity: 0.92,
-  }), 0, 1.15);
+  }), 0, 1.55);
   const darkMat = new THREE.MeshLambertMaterial({ color: '#1a1f24' });
   const capMat = new THREE.MeshLambertMaterial({ color: '#e6eaee' });
   for (const b of drumGroups) {
@@ -235,12 +304,20 @@ export function createNamsanTower({ parent, osm, baseY }) {
     g.add(cyl);
   }
   // teal underside ring (night-stars ref)
-  const teal = track(new THREE.MeshBasicMaterial({ color: '#2ee0d0', transparent: true, opacity: 0, fog: false }), 0, 0);
-  teal.userData.nightOp = 0.9;
-  const tealR = new THREE.Mesh(new THREE.TorusGeometry(14.2, 0.28, 8, 48), teal);
+  const teal = track(new THREE.MeshBasicMaterial({ color: '#7ef5ea', transparent: true, opacity: 0, fog: false }), 0, 0);
+  teal.userData.nightOp = 0.95;
+  const tealR = new THREE.Mesh(new THREE.TorusGeometry(14.2, 0.32, 8, 48), teal);
   tealR.rotation.x = Math.PI / 2;
-  tealR.position.set(ox, drumBottom + 0.4, oz);
+  tealR.position.set(ox, drumBottom + 0.35, oz);
   g.add(tealR);
+  const under = track(new THREE.MeshBasicMaterial({
+    color: '#9cf7ee', transparent: true, opacity: 0, depthWrite: false, fog: false, side: THREE.DoubleSide,
+  }), 0, 0);
+  under.userData.nightOp = 0.5;
+  const underDisc = new THREE.Mesh(new THREE.CircleGeometry(13.8, 36), under);
+  underDisc.rotation.x = Math.PI / 2;
+  underDisc.position.set(ox, drumBottom + 0.12, oz);
+  g.add(underDisc);
   // window mullions
   const mull = [];
   for (let i = 0; i < 28; i++) {
@@ -269,7 +346,7 @@ export function createNamsanTower({ parent, osm, baseY }) {
     const mat = track(new THREE.MeshStandardMaterial({
       color: b.color, roughness: 0.4, metalness: 0.45,
       emissive: new THREE.Color(b.night), emissiveIntensity: 0,
-    }), 0, 0.7);
+    }), 0, 0.95);
     antNight.push(mat);
     const cyl = new THREE.Mesh(new THREE.CylinderGeometry(Math.max(0.18, r1), Math.max(0.22, r0), y1 - y0, 12), mat);
     cyl.position.set(ox, (y0 + y1) / 2, oz);
@@ -341,85 +418,149 @@ export function createNamsanTower({ parent, osm, baseY }) {
     lx = lc.x; lz = lc.z;
   }
   const LH = 113;
-  const steel = new THREE.MeshStandardMaterial({ color: '#c44a28', roughness: 0.45, metalness: 0.55, emissive: new THREE.Color('#ff5a2a'), emissiveIntensity: 0 });
-  track(steel, 0, 0.35);
-  const legs = [];
+  const redSteel = track(new THREE.MeshStandardMaterial({
+    color: '#b42822', roughness: 0.42, metalness: 0.52,
+    emissive: new THREE.Color('#ff3a22'), emissiveIntensity: 0,
+  }), 0, 0.45);
+  const whiteSteel = track(new THREE.MeshStandardMaterial({
+    color: '#eef1f4', roughness: 0.38, metalness: 0.48,
+    emissive: new THREE.Color('#fff6e4'), emissiveIntensity: 0,
+  }), 0, 0.4);
+  const redGeos = [], whiteGeos = [];
   const baseHalf = 7.5;
-  for (let i = 0; i < 4; i++) {
+  const LEVELS = 16;
+  const corner = (i, t) => {
     const a = (i / 4) * Math.PI * 2 + Math.PI / 4;
-    const x0 = lx + Math.cos(a) * baseHalf, z0 = lz + Math.sin(a) * baseHalf;
-    const x1 = lx + Math.cos(a) * 0.6, z1 = lz + Math.sin(a) * 0.6;
-    const len = Math.hypot(x1 - x0, LH, z1 - z0);
-    const geo = new THREE.CylinderGeometry(0.28, 0.42, len, 6);
+    const half = baseHalf * (1 - t * 0.92) + 0.45;
+    return [lx + Math.cos(a) * half, lz + Math.sin(a) * half];
+  };
+  const bar = (ax, ay, az, bx, by, bz, r = 0.13) => {
+    const len = Math.hypot(bx - ax, by - ay, bz - az) || 0.01;
+    const geo = new THREE.CylinderGeometry(r, r, len, 5);
     geo.translate(0, len / 2, 0);
-    const dir = new THREE.Vector3(x1 - x0, LH, z1 - z0).normalize();
+    const dir = new THREE.Vector3(bx - ax, by - ay, bz - az).normalize();
     geo.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir));
-    geo.translate(x0, baseY, z0);
-    legs.push(geo);
+    geo.translate(ax, ay, az);
+    return geo;
+  };
+  for (let i = 0; i < 4; i++) {
+    const [x0, z0] = corner(i, 0);
+    const [x1, z1] = corner(i, 1);
+    redGeos.push(bar(x0, baseY, z0, x1, baseY + LH, z1, 0.22));
   }
-  // horizontal frames
-  for (let lv = 1; lv <= 10; lv++) {
-    const t = lv / 10;
-    const y = baseY + LH * t;
-    const half = baseHalf * (1 - t * 0.9) + 0.5;
+  for (let lv = 1; lv <= LEVELS; lv++) {
+    const tt = lv / LEVELS;
+    const y = baseY + LH * tt;
+    const bucket = lv % 2 === 0 ? whiteGeos : redGeos;
     for (let i = 0; i < 4; i++) {
-      const a0 = (i / 4) * Math.PI * 2 + Math.PI / 4, a1 = ((i + 1) / 4) * Math.PI * 2 + Math.PI / 4;
-      const ax = lx + Math.cos(a0) * half, az = lz + Math.sin(a0) * half;
-      const bx = lx + Math.cos(a1) * half, bz = lz + Math.sin(a1) * half;
-      const L = Math.hypot(bx - ax, bz - az);
-      const geo = new THREE.BoxGeometry(0.2, 0.2, L);
-      const ang = Math.atan2(bx - ax, bz - az);
-      geo.rotateY(ang);
-      geo.translate((ax + bx) / 2, y, (az + bz) / 2);
-      legs.push(geo);
+      const [ax, az] = corner(i, tt);
+      const [bx, bz] = corner(i + 1, tt);
+      bucket.push(bar(ax, y, az, bx, y, bz, 0.09));
+    }
+    if (lv < LEVELS) {
+      const t1 = (lv + 1) / LEVELS;
+      const y1 = baseY + LH * t1;
+      for (let i = 0; i < 4; i++) {
+        const [ax, az] = corner(i, tt);
+        const [bx, bz] = corner(i + 1, tt);
+        const [cx, cz] = corner(i, t1);
+        const [dx, dz] = corner(i + 1, t1);
+        whiteGeos.push(bar(ax, y, az, dx, y1, dz, 0.07));
+        whiteGeos.push(bar(bx, y, bz, cx, y1, cz, 0.07));
+      }
     }
   }
-  const lattice = new THREE.Mesh(mergeGeometries(legs), steel);
-  lattice.castShadow = true;
-  lattice.name = 'namsan-kbs-lattice';
-  g.add(lattice);
+  if (redGeos.length) {
+    const lattice = new THREE.Mesh(mergeGeometries(redGeos), redSteel);
+    lattice.castShadow = true;
+    lattice.name = 'namsan-kbs-lattice';
+    g.add(lattice);
+  }
+  if (whiteGeos.length) g.add(new THREE.Mesh(mergeGeometries(whiteGeos), whiteSteel));
   const latTip = new THREE.Mesh(new THREE.SphereGeometry(0.45, 8, 6), redMat);
   latTip.position.set(lx, baseY + LH + 0.4, lz);
   g.add(latTip);
 
-  // ---------- love-lock railings on plaza terrace ----------
-  const lockGeos = { body: [], shackle: [] };
+  // ---------- 사랑의 자물쇠: dense small instanced padlocks on glass rails ----------
   const r = rng(1915);
-  const lockColors = ['#c62828', '#1565c0', '#2e7d32', '#f9a825', '#6a1b9a', '#00838f', '#ef6c00', '#ad1457'];
-  const lockGroups = lockColors.map((col) => ({ color: col, geos: [] }));
-  if (plazaPts.length >= 3) {
-    for (let i = 0; i < plazaPts.length; i++) {
-      const a = plazaPts[i], b = plazaPts[(i + 1) % plazaPts.length];
-      const L = Math.hypot(b[0] - a[0], b[1] - a[1]); if (L < 1) continue;
-      const nLocks = Math.floor(L * 4.5);
-      for (let k = 0; k < nLocks; k++) {
-        const t = (k + 0.15 + r() * 0.7) / nLocks;
-        const x = a[0] + (b[0] - a[0]) * t + (r() - 0.5) * 0.15;
-        const z = a[1] + (b[1] - a[1]) * t + (r() - 0.5) * 0.15;
-        const y = shaftBottom + 0.75 + r() * 0.35;
-        const gi = Math.floor(r() * lockGroups.length);
-        const bg = new THREE.BoxGeometry(0.18, 0.22, 0.12);
-        bg.translate(x, y, z);
-        lockGroups[gi].geos.push(bg);
+  const lockColors = ['#c62828', '#1565c0', '#2e7d32', '#f9a825', '#6a1b9a', '#00838f', '#ef6c00', '#ad1457', '#283593', '#00695c'];
+  const lockGeo = lockGeometry();
+  const placements = lockColors.map(() => []);
+  function placeLocksOnRing(pts, y0, rows = 3, along = 0.13) {
+    if (!pts || pts.length < 2) return;
+    for (let i = 0; i < pts.length; i++) {
+      const a = pts[i], b = pts[(i + 1) % pts.length];
+      const L = Math.hypot(b[0] - a[0], b[1] - a[1]); if (L < 0.6) continue;
+      const n = Math.max(1, Math.floor(L / along));
+      for (let k = 0; k < n; k++) {
+        const tt = (k + 0.12 + r() * 0.7) / n;
+        const x = a[0] + (b[0] - a[0]) * tt + (r() - 0.5) * 0.04;
+        const z = a[1] + (b[1] - a[1]) * tt + (r() - 0.5) * 0.04;
+        const yaw = Math.atan2(b[0] - a[0], b[1] - a[1]) + (r() - 0.5) * 0.6;
+        for (let row = 0; row < rows; row++) {
+          placements[Math.floor(r() * placements.length)].push({
+            x, y: y0 + 0.18 + row * 0.11 + r() * 0.03, z, yaw,
+          });
+        }
       }
     }
   }
-  // extra cluster near 사랑의 자물쇠 판매점 (OSM way/1554015589) if present
+  if (plazaPts.length >= 3) {
+    placeLocksOnRing(insetRing(plazaPts, 3.8), shaftBottom + 0.12, 3, 0.12);
+    placeLocksOnRing(insetRing(plazaPts, 2.1), baseY + PH * 0.70 + 0.12, 2, 0.16);
+    // ground-level lock fence on the east entrance plaza
+    const fence = [
+      [ox + 34, oz - 7], [ox + 46, oz - 6], [ox + 47, oz + 12], [ox + 35, oz + 13],
+    ];
+    const fencePosts = [], fenceRails = [];
+    for (let i = 0; i < fence.length - 1; i++) {
+      const a = fence[i], b = fence[i + 1];
+      const L = Math.hypot(b[0] - a[0], b[1] - a[1]);
+      const mx = (a[0] + b[0]) / 2, mz = (a[1] + b[1]) / 2;
+      const ang = Math.atan2(b[0] - a[0], b[1] - a[1]);
+      const rg = new THREE.BoxGeometry(0.05, 0.05, L);
+      rg.rotateY(ang); rg.translate(mx, baseY + 1.05, mz); fenceRails.push(rg);
+      const n = Math.max(2, Math.floor(L / 1.6));
+      for (let k = 0; k <= n; k++) {
+        const tt = k / n;
+        const pg = new THREE.BoxGeometry(0.06, 1.1, 0.06);
+        pg.translate(a[0] + (b[0] - a[0]) * tt, baseY + 0.55, a[1] + (b[1] - a[1]) * tt);
+        fencePosts.push(pg);
+      }
+    }
+    if (fencePosts.length) g.add(new THREE.Mesh(mergeGeometries(fencePosts), new THREE.MeshLambertMaterial({ color: '#8b949c' })));
+    if (fenceRails.length) g.add(new THREE.Mesh(mergeGeometries(fenceRails), new THREE.MeshLambertMaterial({ color: '#c5ccd2' })));
+    placeLocksOnRing(fence, baseY + 0.55, 4, 0.11);
+  }
   const shop = osm?.loveLockShop?.pts;
   if (shop && shop.length) {
     const sc = centroid(shop);
-    for (let k = 0; k < 180; k++) {
-      const ang = r() * Math.PI * 2, rad = 1.5 + r() * 4;
-      const x = sc.x + Math.cos(ang) * rad, z = sc.z + Math.sin(ang) * rad;
-      const bg = new THREE.BoxGeometry(0.18, 0.22, 0.12);
-      bg.translate(x, baseY + 1.1 + r() * 0.8, z);
-      lockGroups[Math.floor(r() * lockGroups.length)].geos.push(bg);
+    for (let k = 0; k < 420; k++) {
+      const ang = r() * Math.PI * 2, rad = 1.2 + r() * 3.4;
+      placements[Math.floor(r() * placements.length)].push({
+        x: sc.x + Math.cos(ang) * rad,
+        y: baseY + 0.85 + r() * 0.7,
+        z: sc.z + Math.sin(ang) * rad,
+        yaw: r() * Math.PI * 2,
+      });
     }
   }
-  for (const lg of lockGroups) {
-    if (!lg.geos.length) continue;
-    const m = new THREE.Mesh(mergeGeometries(lg.geos), new THREE.MeshLambertMaterial({ color: lg.color }));
-    g.add(m);
+  const dummy = new THREE.Object3D();
+  for (let ci = 0; ci < lockColors.length; ci++) {
+    const list = placements[ci];
+    if (!list.length) continue;
+    const mesh = new THREE.InstancedMesh(lockGeo, new THREE.MeshLambertMaterial({ color: lockColors[ci] }), list.length);
+    for (let i = 0; i < list.length; i++) {
+      const p = list[i];
+      dummy.position.set(p.x, p.y, p.z);
+      dummy.rotation.set(0, p.yaw, (r() - 0.5) * 0.15);
+      dummy.scale.setScalar(0.85 + r() * 0.35);
+      dummy.updateMatrix();
+      mesh.setMatrixAt(i, dummy.matrix);
+    }
+    mesh.instanceMatrix.needsUpdate = true;
+    mesh.castShadow = false;
+    g.add(mesh);
   }
 
   // pylon sign "남산서울타워" on the east approach

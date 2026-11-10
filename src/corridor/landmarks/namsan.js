@@ -8,10 +8,12 @@ import { createNamsanTerrain } from './namsanTerrain.js';
 import { createNamsanTower } from './namsanTower.js';
 import { createNamsanInterior } from './namsanInterior.js';
 import { createNamsanCable } from './namsanCable.js';
+import { createNamsanCity } from './namsanCity.js';
 export { NT, namsanBaseY } from './namsanCoords.js';
 
 export const NAMSAN_DEM_FILE = 'namsan/namsan-dem.json';
 export const NAMSAN_OSM_FILE = 'namsan/namsan-osm.json';
+export const NAMSAN_CITY_FILE = 'namsan/namsan-city.json';
 
 export function namsanEnabled(search = typeof location !== 'undefined' ? location.search : '') {
   return new URLSearchParams(search || '').get('ntower') !== '0';
@@ -21,7 +23,7 @@ export function namsanCableEnabled(search = typeof location !== 'undefined' ? lo
 }
 
 // 상수 NT 는 namsanCoords.js (순환 import 방지).
-export function createNamsan({ scene, overlay, terrain, dem, osm, cable = true, renderer = null } = {}) {
+export function createNamsan({ scene, overlay, terrain, dem, osm, city = null, cable = true, renderer = null } = {}) {
   const root = new THREE.Group();
   root.name = 'namsan';
   scene.add(root);
@@ -30,6 +32,7 @@ export function createNamsan({ scene, overlay, terrain, dem, osm, cable = true, 
   const tower = createNamsanTower({ parent: root, osm, baseY: land.baseY, env: null, renderer });
   const interior = createNamsanInterior({ parent: root, osm, baseY: land.baseY, tower });
   const car = cable ? createNamsanCable({ parent: root, osm, heightAt: land.heightAt, overlay, baseY: land.baseY }) : null;
+  const downtown = createNamsanCity({ parent: root, data: city, heightAt: land.heightAt });
 
   if (overlay) {
     overlay.add({
@@ -42,9 +45,9 @@ export function createNamsan({ scene, overlay, terrain, dem, osm, cable = true, 
   }
 
   const spawn = (() => {
-    // 광장 동쪽(버스 정류장·순환로 쪽) 인도
-    const x = NT.tx + 48;
-    const z = NT.tz + 8;
+    // 광장 동쪽 입구 광장 바닥 (건물 외곽 ~35 m, 지붕이 아님)
+    const x = NT.tx + 44;
+    const z = NT.tz + 6;
     return { x, z, y: land.heightAt(x, z) + 0.15 };
   })();
 
@@ -53,6 +56,7 @@ export function createNamsan({ scene, overlay, terrain, dem, osm, cable = true, 
     interior.setNight(on ? 1 : 0);
     car?.setNight(on ? 1 : 0);
     land.setNight(on ? 1 : 0);
+    downtown.setNight(on ? 1 : 0);
   });
 
   if (terrain?.addGroundExtra) {
@@ -100,15 +104,21 @@ export function createNamsan({ scene, overlay, terrain, dem, osm, cable = true, 
     get cable() { return car; },
     get tower() { return tower; },
     get interior() { return interior; },
+    get city() { return downtown; },
     stage(u) { car?.stage?.(u); },
     tickPlayer(dt, player, cam) {
       interior.tickPlayer?.(dt, player, cam);
       car?.tickPlayer?.(dt, player, cam);
+      if (player && Math.hypot(player.position.x - NT.tx, player.position.z - NT.tz) < 2800) {
+        document.getElementById('stop-panel')?.classList.remove('open');
+        document.getElementById('corridor-stop-panel')?.classList.remove('open');
+      }
     },
     update(dt) {
       tower.update?.(dt);
       interior.update?.(dt);
       car?.update?.(dt);
+      downtown.update?.(dt);
     },
     setNight(v) {
       night = v;
@@ -116,6 +126,7 @@ export function createNamsan({ scene, overlay, terrain, dem, osm, cable = true, 
       interior.setNight(v);
       car?.setNight(v);
       land.setNight(v);
+      downtown.setNight(v);
     },
     dispose() {
       unwatch?.();

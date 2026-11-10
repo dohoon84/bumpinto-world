@@ -12,7 +12,7 @@ const browser = await chromium.launch({
   args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'],
 });
 const errs = [];
-const Q = 'enter=1&name=Tester&ws=mock&bus=sim&weather=clear&noticePopup=0&bgm=0&subwayVoice=0&subwayRt=0&npcs=0&taxis=0&police=0&trucks=0&clife=0&bike=0&roadbike=0&superbike=0&pangyonpc=0&cityhall=0&pangyo=0&migeum=0&controlscard=0';
+const Q = 'enter=1&name=Tester&ws=mock&bus=sim&weather=clear&noticePopup=0&bgm=0&subwayVoice=0&subwayRt=0&npcs=0&taxis=0&police=0&trucks=0&clife=0&bike=0&roadbike=0&superbike=0&pangyonpc=0&cityhall=0&pangyo=0&migeum=0&controlscard=0&at=ntower';
 
 async function open(tag, { hour = 14, extra = '' } = {}) {
   const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
@@ -21,7 +21,11 @@ async function open(tag, { hour = 14, extra = '' } = {}) {
   const q = `?${Q}&hour=${hour}&shot=1${extra}`;
   await page.goto(B + q, { timeout: 180000 });
   await page.waitForFunction(() => window.__jj?.ready && window.__jj?.namsan, null, { timeout: 240000 });
-  await page.waitForTimeout(1200);
+  await page.waitForTimeout(1600);
+  await page.evaluate(() => {
+    document.getElementById('stop-panel')?.classList.remove('open');
+    document.getElementById('corridor-stop-panel')?.classList.remove('open');
+  });
   return page;
 }
 
@@ -36,9 +40,11 @@ async function info(page) {
       tx: n.tower.ox,
       tz: n.tower.oz,
       shaftBottom: n.tower.shaftBottom,
+      tipY: n.tower.tipY,
       floors: n.interior.floors,
       upper: cab?.pts?.[0] || null,
       lower: cab?.pts?.[cab.pts.length - 1] || null,
+      nCity: n.city ? true : false,
     };
   });
 }
@@ -53,12 +59,14 @@ async function go(page, { x, z, y, yaw = 0, dist = 22, pitch = 0.28, stage = nul
     J.cam.yaw = o.yaw;
     J.cam.pitch = o.pitch;
     J.cam.dist = o.dist;
+    document.getElementById('stop-panel')?.classList.remove('open');
+    document.getElementById('corridor-stop-panel')?.classList.remove('open');
   }, { x, z, y, yaw, dist, pitch, stage });
-  await page.waitForTimeout(1600);
+  await page.waitForTimeout(1800);
 }
 
-const look = (fromX, fromZ, toX, toZ) => Math.atan2(fromX - toX, fromZ - toZ); // cam.yaw = atan2(-dx,-dz)
-const shot = (page, name) => page.screenshot({ path: `${OUT}/${name}.png` });
+const look = (fromX, fromZ, toX, toZ) => Math.atan2(fromX - toX, fromZ - toZ);
+const shot = (page, name) => page.screenshot({ path: `${OUT}/${name}.png`, timeout: 120000 });
 
 const day = await open('day', { hour: 14, extra: '&evening=0' });
 const night = await open('night', { hour: 21, extra: '&evening=1' });
@@ -72,121 +80,125 @@ if (!I?.tx) {
 
 const hAt = (page, x, z) => page.evaluate(({ x, z }) => window.__jj.namsan.heightAt(x, z), { x, z });
 
-// day far — SE hillside, camera high enough to clear the canopy
+// whole tower day from ~600 m — camera high at mid-shaft height so drum+antenna fit
 {
-  const x = I.tx + 52, z = I.tz + 42;
-  const y = await hAt(day, x, z);
-  await go(day, { x, z, y: y + 0.4, yaw: look(x, z, I.tx, I.tz), dist: 290, pitch: 0.2 });
+  const midY = (I.baseY + I.tipY) * 0.5;
+  const cx = I.tx - 390, cz = I.tz + 470;
+  await go(day, {
+    x: I.tx + 16, z: I.tz + 16, y: midY,
+    yaw: look(cx, cz, I.tx, I.tz), dist: 610, pitch: 0.04,
+  });
   await shot(day, 'ntower-day-far');
 }
-// day near — east plaza approach
+
+// day near — entrance plaza ground, looking up the tiered building + shaft + drum
 {
-  const x = I.tx + 36, z = I.tz + 12;
-  await go(day, { x, z, y: I.shaftBottom + 0.35, yaw: look(x, z, I.tx, I.tz), dist: 28, pitch: 0.16 });
+  const x = I.tx + 50, z = I.tz + 12;
+  await go(day, { x, z, y: I.baseY + 0.28, yaw: look(x, z, I.tx, I.tz), dist: 28, pitch: -0.2 });
   await shot(day, 'ntower-day-near');
 }
-// aerial + terrain — stand near the tower so it stays in frame
+
+// plaza love locks on the east entrance fence (ground)
 {
-  const x = I.tx + 30, z = I.tz + 50;
-  const y = await hAt(day, x, z);
-  await go(day, { x, z, y: y + 6, yaw: look(x, z, I.tx, I.tz), dist: 360, pitch: 0.98 });
-  await shot(day, 'ntower-aerial-terrain');
-}
-// plaza love locks on the east parapet
-{
-  const x = I.tx + 32, z = I.tz + 10;
-  await go(day, { x, z, y: I.shaftBottom + 0.25, yaw: look(x, z, I.tx + 36, I.tz - 8), dist: 5.2, pitch: -0.22 });
+  const x = I.tx + 44.8, z = I.tz + 1.2;
+  await go(day, { x, z, y: I.baseY + 0.3, yaw: look(x, z, I.tx + 47.2, I.tz - 8), dist: 5.4, pitch: 0.05 });
   await shot(day, 'ntower-plaza-locks');
 }
-// observation 4F — look outward through the glass
+
+// observation deck day — north glass, looking toward 명동 / downtown
 {
-  const x = I.tx + 7.2, z = I.tz + 2.0;
-  await go(day, { x, z, y: I.floors.t4 + 0.2, yaw: look(x, z, I.tx + 20, I.tz + 4), dist: 6.4, pitch: 0.02 });
+  const x = I.tx + 2.0, z = I.tz - 11.4;
+  await go(day, { x, z, y: I.floors.t4 + 0.15, yaw: look(x, z, I.tx + 8, I.tz - 90), dist: 2.15, pitch: 0.0 });
   await shot(day, 'ntower-obs-interior');
 }
-// 7F restaurant — among the window tables
+
+// 7F restaurant — north window tables looking out at the city
 {
-  const x = I.tx + 8.2, z = I.tz + 2.6;
-  await go(day, { x, z, y: I.floors.t7 + 0.2, yaw: look(x, z, I.tx + 14, I.tz + 6), dist: 6.8, pitch: 0.04 });
+  const x = I.tx + 1.6, z = I.tz - 10.2;
+  await go(day, { x, z, y: I.floors.t7 + 0.15, yaw: look(x, z, I.tx + 6, I.tz - 80), dist: 2.35, pitch: 0.02 });
   await shot(day, 'ntower-7f-interior');
 }
 
 if (I.lower && I.upper) {
   {
-    const ux = Math.sin(Math.atan2(I.upper.x - I.lower.x, I.upper.z - I.lower.z));
-    const uz = Math.cos(Math.atan2(I.upper.x - I.lower.x, I.upper.z - I.lower.z));
-    const x = I.lower.x - ux * 20 + uz * 10;
-    const z = I.lower.z - uz * 20 - ux * 10;
-    await go(day, { x, z, y: I.lower.ground + 2.2, yaw: look(x, z, I.lower.x, I.lower.z), dist: 16, pitch: 0.2, stage: 1 });
-    await shot(day, 'ntower-cable-lower');
-  }
-  {
-    const ux = Math.sin(Math.atan2(I.lower.x - I.upper.x, I.lower.z - I.upper.z));
-    const uz = Math.cos(Math.atan2(I.lower.x - I.upper.x, I.lower.z - I.upper.z));
-    const x = I.upper.x + ux * 18 + uz * 8;
-    const z = I.upper.z + uz * 18 - ux * 8;
-    await go(day, { x, z, y: I.upper.ground + 2.2, yaw: look(x, z, I.upper.x, I.upper.z), dist: 17, pitch: 0.18, stage: 0 });
-    await shot(day, 'ntower-cable-upper');
-  }
-  {
     const p = await day.evaluate(() => {
       const c = window.__jj.namsan.cable;
-      c.stage(0.52);
-      return c.at(0.52);
+      c.stage(0.42);
+      return c.at(0.42);
     });
-    const yaw = look(p.x, p.z, I.tx, I.tz);
-    const lx = Math.sin(Math.atan2(I.tx - p.x, I.tz - p.z));
-    const lz = Math.cos(Math.atan2(I.tx - p.x, I.tz - p.z));
+    const sideL = Math.hypot(-p.tz, p.tx) || 1;
+    const sx = (-p.tz / sideL) * 0.5, sz = (p.tx / sideL) * 0.5;
     await go(day, {
-      x: p.x + lx * 0.7, z: p.z + lz * 0.7, y: p.y - 3.48,
-      yaw, dist: 1.9, pitch: 0.04, stage: 0.52,
+      x: p.x + sx, z: p.z + sz, y: p.y - 3.88,
+      yaw: look(p.x, p.z, I.tx, I.tz), dist: 1.42, pitch: 0.03, stage: 0.42,
     });
     await shot(day, 'ntower-cable-day-ride');
   }
 }
 
+// night whole tower from ~600 m
 {
-  const x = I.tx + 52, z = I.tz + 42;
-  const y = await hAt(night, x, z);
-  await go(night, { x, z, y: y + 0.4, yaw: look(x, z, I.tx, I.tz), dist: 290, pitch: 0.2 });
+  const midY = (I.baseY + I.tipY) * 0.5;
+  const cx = I.tx - 390, cz = I.tz + 470;
+  await go(night, {
+    x: I.tx + 16, z: I.tz + 16, y: midY,
+    yaw: look(cx, cz, I.tx, I.tz), dist: 610, pitch: 0.04,
+  });
   await shot(night, 'ntower-night-far');
 }
+
+// night near from the entrance plaza, looking up
 {
-  const x = I.tx + 36, z = I.tz + 12;
-  await go(night, { x, z, y: I.shaftBottom + 0.35, yaw: look(x, z, I.tx, I.tz), dist: 28, pitch: 0.16 });
+  const x = I.tx + 50, z = I.tz + 12;
+  await go(night, { x, z, y: I.baseY + 0.28, yaw: look(x, z, I.tx, I.tz), dist: 28, pitch: -0.2 });
   await shot(night, 'ntower-night-near');
 }
+
+// city streets below (명동-ish primary ~1.1 km NNW), looking up at the lit tower
+{
+  const x = -11053.48, z = -21465.73;
+  const y = await hAt(night, x, z);
+  await go(night, { x, z, y: y + 0.35, yaw: look(x, z, I.tx, I.tz), dist: 11, pitch: -0.3 });
+  await shot(night, 'ntower-night-street');
+}
+
+// observation deck night looking north over the lit city
+{
+  const x = I.tx + 2.0, z = I.tz - 11.4;
+  await go(night, { x, z, y: I.floors.t4 + 0.15, yaw: look(x, z, I.tx + 8, I.tz - 90), dist: 2.15, pitch: 0.0 });
+  await shot(night, 'ntower-obs-interior-night');
+}
+
 if (I.lower && I.upper) {
   {
     const p = await night.evaluate(() => {
       const c = window.__jj.namsan.cable;
-      c.stage(0.36);
-      return c.at(0.36);
+      c.stage(0.34);
+      return c.at(0.34);
     });
-    const yaw = look(p.x, p.z, I.tx, I.tz);
-    const lx = Math.sin(Math.atan2(I.tx - p.x, I.tz - p.z));
-    const lz = Math.cos(Math.atan2(I.tx - p.x, I.tz - p.z));
+    const sideL = Math.hypot(-p.tz, p.tx) || 1;
+    const sx = (-p.tz / sideL) * 0.5, sz = (p.tx / sideL) * 0.5;
     await go(night, {
-      x: p.x + lx * 0.7, z: p.z + lz * 0.7, y: p.y - 3.48,
-      yaw, dist: 1.9, pitch: 0.06, stage: 0.36,
+      x: p.x + sx, z: p.z + sz, y: p.y - 3.88,
+      yaw: look(p.x, p.z, I.tx, I.tz), dist: 1.42, pitch: 0.04, stage: 0.34,
     });
     await shot(night, 'ntower-cable-night-ride');
   }
   {
     const p = await night.evaluate(() => {
       const c = window.__jj.namsan.cable;
-      c.stage(0.18);
-      return c.at(0.18);
+      c.stage(0.2);
+      return c.at(0.2);
     });
     const toA = Math.atan2(I.tx - p.x, I.tz - p.z);
     const lx = Math.sin(toA), lz = Math.cos(toA);
     const px = -lz, pz = lx;
-    const x = p.x - lx * 12 + px * 9;
-    const z = p.z - lz * 12 + pz * 9;
+    const x = p.x - lx * 11 + px * 7;
+    const z = p.z - lz * 11 + pz * 7;
     await go(night, {
-      x, z, y: p.y - 1.4,
+      x, z, y: p.y - 0.4,
       yaw: look(x, z, I.tx, I.tz),
-      dist: 16, pitch: 0.14, stage: 0.18,
+      dist: 13, pitch: 0.06, stage: 0.2,
     });
     await shot(night, 'ntower-cabin-night');
   }

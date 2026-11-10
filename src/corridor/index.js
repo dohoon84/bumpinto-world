@@ -33,7 +33,7 @@ import { pangyoWaterEnabled, PANGYO_WATER_FILE, attachMainDrop, mergePangyoStrea
 import { bp24Mode, createBp24 } from './bp24.js'; import { bp24LocationsFor, corridorPlacements } from './bp24Locations.js'; // [bp24] 체인 매장
 import { migeumWaterEnabled, MIGEUM_WATER_FILE, migeumChRoads, mergeMigeumWater, applyMigeumBank } from './migeumWater.js'; // [migeum-water]
 import { cityhallEnabled, CITYHALL_FILE, filterCityHallHidden, createCityHall } from './cityhall.js'; // [cityhall]
-import { namsanEnabled, namsanCableEnabled, NAMSAN_DEM_FILE, NAMSAN_OSM_FILE, createNamsan } from './landmarks/namsan.js'; // [namsan]
+import { namsanEnabled, namsanCableEnabled, NAMSAN_DEM_FILE, NAMSAN_OSM_FILE, NAMSAN_CITY_FILE, createNamsan } from './landmarks/namsan.js'; // [namsan]
 
 // streams: 탄천 지류 하도(streams.json). ?streams=0 이면 false → 예전과 같은 데이터만
 // [pangyo] pangyo: 판교역 일대(pangyo/index.json). ?pangyo=0 이면 false → 요청 없음
@@ -41,9 +41,9 @@ import { namsanEnabled, namsanCableEnabled, NAMSAN_DEM_FILE, NAMSAN_OSM_FILE, cr
 export async function loadCorridorData(baseUrl, { streams = true, pangyo = pangyoEnabled(), pangyoExpress = pangyo && pangyoExpressEnabled(), migeum = migeumEnabled(), migeumWater = migeum && migeumWaterEnabled(), migeumTaxi = migeum && migeumTaxiEnabled(), migeumBike = migeum && migeumBikeEnabled(), cityhall = cityhallEnabled(), namsan = namsanEnabled(), fetchFn = fetch } = {}) {
   const get = (f) => fetchFn(baseUrl + f).then((r) => (r.ok ? r.json() : null)).catch(() => null);
   const pw = pangyo && pangyoWaterEnabled(); // [pangyo-water] ?pangyowater=0 이면 요청 없음
-  const [index, base, tancheon, streamsData, pg, pgx, water, mg, mgw, mgtb, ch, nDem, nOsm] = await Promise.all([get('index.json'), get('base.json'), get('tancheon.json'), streams ? get('streams.json') : null, pangyo ? get(PANGYO_DIR + 'index.json') : null, pangyo && pangyoExpress ? get(PANGYO_EXPRESS_FILE) : null, pw ? get(PANGYO_WATER_FILE) : null, migeum ? get(MIGEUM_DIR + 'index.json') : null, migeum && migeumWater ? get(MIGEUM_WATER_FILE) : null, migeum && (migeumTaxi || migeumBike) ? get(MIGEUM_TAXIBIKE_FILE) : null, cityhall ? get(CITYHALL_FILE) : null, namsan ? get(NAMSAN_DEM_FILE) : null, namsan ? get(NAMSAN_OSM_FILE) : null]); // [migeum-water] [migeum-taxibike] [cityhall] [namsan]
+  const [index, base, tancheon, streamsData, pg, pgx, water, mg, mgw, mgtb, ch, nDem, nOsm, nCity] = await Promise.all([get('index.json'), get('base.json'), get('tancheon.json'), streams ? get('streams.json') : null, pangyo ? get(PANGYO_DIR + 'index.json') : null, pangyo && pangyoExpress ? get(PANGYO_EXPRESS_FILE) : null, pw ? get(PANGYO_WATER_FILE) : null, migeum ? get(MIGEUM_DIR + 'index.json') : null, migeum && migeumWater ? get(MIGEUM_WATER_FILE) : null, migeum && (migeumTaxi || migeumBike) ? get(MIGEUM_TAXIBIKE_FILE) : null, cityhall ? get(CITYHALL_FILE) : null, namsan ? get(NAMSAN_DEM_FILE) : null, namsan ? get(NAMSAN_OSM_FILE) : null, namsan ? get(NAMSAN_CITY_FILE) : null]); // [migeum-water] [migeum-taxibike] [cityhall] [namsan]
   const pgWater = pg ? water : null; // 판교 타일 없이 판교 지류 컷만 쓰지 않음
-  return index && base ? { index: mergeMigeumIndex(mergePangyoIndex(index, pg), mg), migeum: mg, migeumTaxiBike: mg ? pickMigeumTaxiBike(mgtb, { taxi: migeumTaxi, bike: migeumBike }) : null, base, baseUrl, tancheon, streams: mergePangyoStreams(streamsData, pgWater), pangyo: pg, pangyoExpress: pg ? pgx : null, pangyoWater: pgWater, migeumWater: mg ? mgw : null, cityhall: ch || null, namsan: namsan ? { dem: nDem, osm: nOsm } : null } : null; // [pangyo-express] [pangyo-water] [migeum-water] [migeum-taxibike] [cityhall] [namsan]
+  return index && base ? { index: mergeMigeumIndex(mergePangyoIndex(index, pg), mg), migeum: mg, migeumTaxiBike: mg ? pickMigeumTaxiBike(mgtb, { taxi: migeumTaxi, bike: migeumBike }) : null, base, baseUrl, tancheon, streams: mergePangyoStreams(streamsData, pgWater), pangyo: pg, pangyoExpress: pg ? pgx : null, pangyoWater: pgWater, migeumWater: mg ? mgw : null, cityhall: ch || null, namsan: namsan ? { dem: nDem, osm: nOsm, city: nCity } : null } : null; // [pangyo-express] [pangyo-water] [migeum-water] [migeum-taxibike] [cityhall] [namsan]
 }
 // [corridor] 탄천 지형: 코리더가 켜졌을 때만 라이브 terrain.json 뒤에 수내→잠실 축/단면을 이어 붙인다(라이브 구간 값은 그대로)
 export function corridorTerrainData(terrainData, corridorData) {
@@ -358,6 +358,7 @@ export function createCorridor({ scene, corridorData, terrain, world, renderer, 
       terrain,
       dem: corridorData.namsan.dem,
       osm: corridorData.namsan.osm,
+      city: corridorData.namsan.city,
       cable: namsanCableEnabled(),
       renderer,
     });

@@ -104,22 +104,58 @@ function stationBuilding(pts, y, name, face) {
 
 function makeCabin() {
   const g = new THREE.Group();
-  const body = new THREE.Mesh(new THREE.BoxGeometry(3.4, 2.3, 2.4), new THREE.MeshStandardMaterial({ color: '#d32f2f', metalness: 0.25, roughness: 0.4 }));
-  body.position.y = 0; g.add(body);
-  const roof = new THREE.Mesh(new THREE.BoxGeometry(3.6, 0.22, 2.6), new THREE.MeshLambertMaterial({ color: '#f2f4f6' }));
-  roof.position.y = 1.26; g.add(roof);
-  const glass = new THREE.Mesh(new THREE.BoxGeometry(3.1, 1.15, 2.15), new THREE.MeshStandardMaterial({
-    color: '#b9d4e6', transparent: true, opacity: 0.45, roughness: 0.08, metalness: 0.3,
-    emissive: new THREE.Color('#ffe7b0'), emissiveIntensity: 0,
+  const red = new THREE.MeshStandardMaterial({ color: '#c62828', metalness: 0.28, roughness: 0.38 });
+  const redDark = new THREE.MeshLambertMaterial({ color: '#8e1c1c' });
+  const frame = new THREE.MeshLambertMaterial({ color: '#4a4e54' });
+  const glass = new THREE.MeshStandardMaterial({
+    color: '#b9d4e6', transparent: true, opacity: 0.22, roughness: 0.06, metalness: 0.25,
+    emissive: new THREE.Color('#ffe7b0'), emissiveIntensity: 0, depthWrite: false, side: THREE.DoubleSide,
+  });
+  // hollow cabin: floor, roof, lower apron, four window panes, corner posts
+  const floor = new THREE.Mesh(new THREE.BoxGeometry(2.55, 0.12, 3.25), new THREE.MeshLambertMaterial({ color: '#5a4034' }));
+  floor.position.y = -1.05; g.add(floor);
+  const apron = new THREE.Mesh(new THREE.BoxGeometry(2.6, 0.72, 3.3), red);
+  apron.position.y = -0.64; g.add(apron);
+  const roof = new THREE.Mesh(new THREE.BoxGeometry(2.75, 0.2, 3.45), new THREE.MeshLambertMaterial({ color: '#f2f4f6' }));
+  roof.position.y = 1.18; g.add(roof);
+  const ceil = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.06, 3.1), new THREE.MeshStandardMaterial({
+    color: '#fff4d8', emissive: new THREE.Color('#ffe2a8'), emissiveIntensity: 0.35,
   }));
-  glass.position.y = 0.35; glass.name = 'cabin-glass'; g.add(glass);
-  const hang = new THREE.Mesh(new THREE.BoxGeometry(0.18, 1.3, 0.18), new THREE.MeshLambertMaterial({ color: '#4a4e54' }));
-  hang.position.y = 2.0; g.add(hang);
-  const yoke = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.16, 0.16), new THREE.MeshLambertMaterial({ color: '#4a4e54' }));
-  yoke.position.y = 2.65; g.add(yoke);
-  const seats = new THREE.Mesh(new THREE.BoxGeometry(3.0, 0.35, 1.8), new THREE.MeshLambertMaterial({ color: '#5a4034' }));
-  seats.position.y = -0.55; g.add(seats);
-  g.userData.glass = glass;
+  ceil.position.y = 1.04; g.add(ceil);
+  // window panes: sides (X) and front/back (Z)
+  const panes = [
+    { s: [0.06, 1.15, 2.85], p: [1.28, 0.28, 0] },
+    { s: [0.06, 1.15, 2.85], p: [-1.28, 0.28, 0] },
+    { s: [2.15, 1.15, 0.06], p: [0, 0.28, 1.58] },
+    { s: [2.15, 1.15, 0.06], p: [0, 0.28, -1.58] },
+  ];
+  let glassMesh = null;
+  for (const pn of panes) {
+    const m = new THREE.Mesh(new THREE.BoxGeometry(...pn.s), glass);
+    m.position.set(...pn.p); g.add(m);
+    if (!glassMesh) glassMesh = m;
+  }
+  // red window frames / corner posts
+  for (const [x, z] of [[1.28, 1.55], [1.28, -1.55], [-1.28, 1.55], [-1.28, -1.55]]) {
+    const post = new THREE.Mesh(new THREE.BoxGeometry(0.1, 2.2, 0.1), redDark);
+    post.position.set(x, 0.05, z); g.add(post);
+  }
+  const belt = new THREE.Mesh(new THREE.BoxGeometry(2.62, 0.1, 3.32), red);
+  belt.position.y = 0.92; g.add(belt);
+  // hang rod + yoke + cable grip
+  const hang = new THREE.Mesh(new THREE.BoxGeometry(0.16, 1.15, 0.16), frame);
+  hang.position.y = 1.85; g.add(hang);
+  const yoke = new THREE.Mesh(new THREE.BoxGeometry(1.55, 0.14, 0.16), frame);
+  yoke.position.y = 2.5; g.add(yoke);
+  const grip = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.28, 0.32), new THREE.MeshLambertMaterial({ color: '#2a2e32' }));
+  grip.position.y = 2.78; g.add(grip);
+  const jaw = new THREE.Mesh(new THREE.TorusGeometry(0.14, 0.045, 6, 12), frame);
+  jaw.rotation.z = Math.PI / 2;
+  jaw.position.y = 2.92; g.add(jaw);
+  const seats = new THREE.Mesh(new THREE.BoxGeometry(2.15, 0.32, 1.5), new THREE.MeshLambertMaterial({ color: '#4a3228' }));
+  seats.position.set(0, -0.62, 0.15); g.add(seats);
+  g.userData.glass = glassMesh;
+  g.userData.ceil = ceil;
   return g;
 }
 
@@ -230,7 +266,7 @@ export function createNamsanCable({ parent, osm, heightAt, overlay }) {
   let dir = 1;
   let dwell = 2.5;
   let ride = null; // { cabin: 'A'|'B', dest: 'upper'|'lower' }
-  const nightMats = [cabinA.userData.glass.material, cabinB.userData.glass.material];
+  const nightMats = [cabinA.userData.glass.material, cabinB.userData.glass.material, cabinA.userData.ceil.material, cabinB.userData.ceil.material];
 
   function placeCabin(mesh, t, swayT) {
     const p = at(t);
@@ -280,15 +316,14 @@ export function createNamsanCable({ parent, osm, heightAt, overlay }) {
       const tCabin = ride.cabin === 'A' ? u : 1 - u;
       const p = at(tCabin);
       const sway = Math.sin((performance.now() / 1000) * 1.3) * 0.04;
-      player.position.set(p.x + sway * 0.4, p.y - 3.15, p.z);
-      // look out: toward the tower when going up, toward the city (north-west, downhill) when going down
+      // feet on the cabin floor (cabin origin is at cable Y - 2.85; floor is origin - 1.05)
+      player.position.set(p.x + sway * 0.15, p.y - 3.88, p.z);
       if (cam) {
-        const goingUp = (ride.cabin === 'A' && dir < 0) || (ride.cabin === 'B' && dir < 0) ? false : (ride.dest === 'upper');
-        // dest upper = climbing
         const lookYaw = ride.dest === 'upper' ? Math.atan2(NT.tx - p.x, NT.tz - p.z) : Math.atan2(-p.tx, -p.tz);
-        cam.yaw += (lookYaw - cam.yaw) * Math.min(1, dt * 1.4);
-        cam.pitch += ((ride.dest === 'upper' ? 0.12 : -0.06) - cam.pitch) * Math.min(1, dt * 1.2);
-        cam.dist += (7.5 - cam.dist) * Math.min(1, dt * 1.5);
+        cam.yaw += (lookYaw - cam.yaw) * Math.min(1, dt * 1.8);
+        cam.pitch += ((ride.dest === 'upper' ? 0.08 : -0.04) - cam.pitch) * Math.min(1, dt * 1.4);
+        // just behind the player, still inside the cabin, so the red window frame stays in view
+        cam.dist += (1.55 - cam.dist) * Math.min(1, dt * 2.2);
       }
       // arrival
       const arrived = ride.dest === 'upper' ? tCabin < 0.012 : tCabin > 0.988;
@@ -332,7 +367,10 @@ export function createNamsanCable({ parent, osm, heightAt, overlay }) {
     },
     tickPlayer,
     setNight(v) {
-      for (const m of nightMats) m.emissiveIntensity = v * 0.7;
+      cabinA.userData.glass.material.emissiveIntensity = v * 0.55;
+      cabinB.userData.glass.material.emissiveIntensity = v * 0.55;
+      cabinA.userData.ceil.material.emissiveIntensity = 0.35 + v * 0.7;
+      cabinB.userData.ceil.material.emissiveIntensity = 0.35 + v * 0.7;
     },
     isBlocked,
     floorY(x, z, refY) {

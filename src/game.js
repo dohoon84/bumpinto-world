@@ -693,6 +693,14 @@ function nearestSpotLabel(x, z) {
       bestText = l.text;
     }
   }
+  const nt = corridor?.namsan?.tower;
+  if (nt) {
+    const d = Math.hypot(x - nt.ox, z - nt.oz);
+    if (d < 450 && d < bestDist) {
+      bestDist = d;
+      bestText = isEn() ? 'N Seoul Tower' : '남산서울타워';
+    }
+  }
   return { name: bestText, dist: Math.round(bestDist) };
 }
 
@@ -2717,6 +2725,10 @@ function frame() {
   const P = player.position;
   if (ride?.camera(camera, dt)) sun.target.position.copy(P); // [ride] 창가 1인칭 / 뒤쪽 3인칭
   else if (cam.mode === 'follow') {
+    // 남산 일대는 도심 야경이 수 km 까지 보여야 해서 안개를 멀리 민다.
+    if (corridor?.namsan?.tower && Math.hypot(P.x - corridor.namsan.tower.ox, P.z - corridor.namsan.tower.oz) < 8000) {
+      scene.fog.near = 650; scene.fog.far = 10500;
+    }
     // 가슴 높이 피벗을 공전하고, 시선은 피벗을 지나 앞쪽으로 보낸다.
     // 그래서 좌우는 한 바퀴, 위는 하늘, 아래는 바닥까지 화면 가운데로 들어온다.
     const eye = P.y + 1.6, yaw = cam.yaw, pitch = cam.pitch, dist = cam.dist;
