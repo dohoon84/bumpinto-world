@@ -6,6 +6,7 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import { buildingMeshes, roadGeometries, paint } from '../tileMesh.js';
 import { ribbonGeo, fixNormalsUp } from '../../world.js';
 import { NT, namsanBasinY, inNamsanPark } from './namsanCoords.js';
+import { namsanRenderedWay } from './namsanTerrain.js';
 
 function groundY(x, z, heightAt) {
   if (heightAt) {
@@ -85,7 +86,95 @@ function streakTex() {
   return t;
 }
 
-export function createNamsanCity({ parent, data, heightAt, parks = [] }) {
+
+function distToSeg2(px, pz, ax, az, bx, bz) {
+  const dx = bx - ax, dz = bz - az;
+  const L2 = dx * dx + dz * dz;
+  if (L2 < 1e-12) return Math.hypot(px - ax, pz - az);
+  const t = Math.max(0, Math.min(1, ((px - ax) * dx + (pz - az) * dz) / L2));
+  return Math.hypot(px - (ax + dx * t), pz - (az + dz * t));
+}
+
+/** Centerline keepouts matching the asphalt namsanRoads actually draws. */
+function namsanRoadKeepouts(osm) {
+  const out = [];
+  for (const w of osm?.ways || []) {
+    if (!w.pts || w.pts.length < 2) continue;
+    if (w.k === 'elevator') continue;
+    const info = namsanRenderedWay(w);
+    if (!info.isCar && !info.namedLoop) continue;
+    let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+    const hw = info.width * 0.5 + 1.15;
+    for (const pt of w.pts) {
+      if (pt[0] < minX) minX = pt[0];
+      if (pt[0] > maxX) maxX = pt[0];
+      if (pt[1] < minZ) minZ = pt[1];
+      if (pt[1] > maxZ) maxZ = pt[1];
+    }
+    out.push({
+      pts: w.pts, hw,
+      minX: minX - hw, maxX: maxX + hw, minZ: minZ - hw, maxZ: maxZ + hw,
+    });
+  }
+  return out;
+}
+
+function coveredByNamsanRoad(x, z, keepouts) {
+  for (const k of keepouts) {
+    if (x < k.minX || x > k.maxX || z < k.minZ || z > k.maxZ) continue;
+    for (let i = 1; i < k.pts.length; i++) {
+      if (distToSeg2(x, z, k.pts[i - 1][0], k.pts[i - 1][1], k.pts[i][0], k.pts[i][1]) <= k.hw) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+function clipCityRoadOutsideNamsan(pts, keepouts) {
+  if (!keepouts.length || !pts || pts.length < 2) return pts ? [pts] : [];
+  const cov = (p) => coveredByNamsanRoad(p[0], p[1], keepouts);
+  const crossing = (uncovered, covered) => {
+    let a = uncovered, b = covered;
+    for (let i = 0; i < 14; i++) {
+      const m = [(a[0] + b[0]) * 0.5, (a[1] + b[1]) * 0.5];
+      if (cov(m)) b = m;
+      else a = m;
+    }
+    return a;
+  };
+  const pieces = [];
+  let cur = [];
+  for (let i = 0; i < pts.length; i++) {
+    const pt = pts[i];
+    const inside = cov(pt);
+    if (i === 0) {
+      if (!inside) cur.push(pt);
+      continue;
+    }
+    const prev = pts[i - 1];
+    const prevIn = cov(prev);
+    if (!prevIn && !inside) {
+      cur.push(pt);
+    } else if (!prevIn && inside) {
+      const x = crossing(prev, pt);
+      if (Math.hypot(x[0] - prev[0], x[1] - prev[1]) > 0.15) cur.push(x);
+      if (cur.length >= 2) pieces.push(cur);
+      cur = [];
+    } else if (prevIn && !inside) {
+      const x = crossing(pt, prev);
+      cur = Math.hypot(x[0] - pt[0], x[1] - pt[1]) > 0.15 ? [x, pt] : [pt];
+    }
+  }
+  if (cur.length >= 2) pieces.push(cur);
+  return pieces.filter((pp) => {
+    let L = 0;
+    for (let i = 1; i < pp.length; i++) L += Math.hypot(pp[i][0] - pp[i - 1][0], pp[i][1] - pp[i - 1][1]);
+    return L >= 3;
+  });
+}
+
+export function createNamsanCity({ parent, data, heightAt, parks = [], osm = null }) {
   const g = new THREE.Group();
   g.name = 'namsan-city';
   parent.add(g);
@@ -145,20 +234,30 @@ export function createNamsanCity({ parent, data, heightAt, parks = [] }) {
   }
 
   // ----- roads (follow sampled ground) -----
+  // namsanRoads already draws the park / 소월로 / 공원길 asphalt. The city
+  // pass uses a lighter #949aa3 plate plus a yellow #f2d36b center line, so
+  // any overlap reads as a second road layer (lighter shards + yellow paint
+  // that namsanRoads never emits on 소월로). Keep only remnants outside that
+  // coverage so downtown streets beyond the OSM extract still appear.
+  const keepouts = namsanRoadKeepouts(osm);
   const roadForMesh = [];
   const glowGeos = [];
   const streakGeos = [];
   const ARTERIES = new Set(['motorway', 'trunk', 'primary', 'secondary']);
   for (const r of roads) {
     if (!r.p || r.p.length < 2) continue;
-    const pts = r.p.map(([x, z]) => {
-      const y = groundY(x, z, heightAt) + 0.06;
-      return [x, z, y];
-    });
-    roadForMesh.push({ p: pts, w: r.w || 10, k: r.k || 'secondary' });
-    if (ARTERIES.has(r.k)) {
-      glowGeos.push(paint(fixNormalsUp(ribbonGeo(pts, Math.max(2.2, (r.w || 10) * 0.18), 0.16, false)), '#ffd089'));
-      streakGeos.push(ribbonGeo(pts, 1.15, 0.22, false));
+    const leftovers = clipCityRoadOutsideNamsan(r.p, keepouts);
+    for (const piece of leftovers) {
+      const pts = piece.map(([x, z]) => {
+        const y = groundY(x, z, heightAt) + 0.06;
+        return [x, z, y];
+      });
+      if (pts.length < 2) continue;
+      roadForMesh.push({ p: pts, w: r.w || 10, k: r.k || 'secondary' });
+      if (ARTERIES.has(r.k)) {
+        glowGeos.push(paint(fixNormalsUp(ribbonGeo(pts, Math.max(2.2, (r.w || 10) * 0.18), 0.16, false)), '#ffd089'));
+        streakGeos.push(ribbonGeo(pts, 1.15, 0.22, false));
+      }
     }
   }
   const roadGeos = roadGeometries(roadForMesh, { lines: true, caps: false });

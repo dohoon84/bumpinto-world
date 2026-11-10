@@ -71,7 +71,7 @@ export function createNamsan({ scene, overlay, terrain, dem, osm, city = null, c
   const roads = createNamsanRoads({ parent: root, osm, heightAt: land.heightAt, overlay });
   roads.setDoor?.(tower.door);
   const library = createNamsanLibrary({ parent: root, osm, heightAt: land.heightAt, overlay });
-  const downtown = createNamsanCity({ parent: root, data: city, heightAt: land.heightAt, parks: osm?.parks || [] });
+  const downtown = createNamsanCity({ parent: root, data: city, heightAt: land.heightAt, parks: osm?.parks || [], osm });
 
   // 원점 하늘 돔(r=3000)은 남산(약 23 km)에 닿지 않는다. 플레이어를 따라가는
   // 남산 전용 하늘을 두고, 톤매핑에 짓눌리지 않는 남색으로 칠한다.

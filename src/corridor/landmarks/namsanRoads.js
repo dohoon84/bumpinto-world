@@ -71,10 +71,9 @@ function drapedRibbonGeo(pts, width, heightAt, dy) {
   return fixNormalsUp(g);
 }
 
-// East 소월로 / 남산공원길 junction: cut every ribbon out of this
-// radius and replace the hole with one union mesh (no overlapping fills).
-const JUNCTION_R = 28;
-const JUNCTION_FILLET = 7;
+// East 소월로 / 남산공원길 junction: keep the through-ribbons continuous
+// and fill only inside-corner curb fillets (5–7 m). No circular hole, no disc.
+const JUNCTION_FILLET = 6;
 
 function findSowolParkTip(ways) {
   const sowols = (ways || []).filter((w) => (w.name || '') === '소월로' && w.pts?.length >= 2);
@@ -96,67 +95,6 @@ function findSowolParkTip(ways) {
   return best < 8 ? tip : null;
 }
 
-function clipOutsideCircle(pts, cx, cz, R) {
-  if (!pts || pts.length < 2) return pts;
-  const r2 = R * R;
-  const outside = (p) => {
-    const dx = p[0] - cx, dz = p[1] - cz;
-    return dx * dx + dz * dz >= r2 - 1e-6;
-  };
-  const crossing = (a, b) => {
-    const Ax = a[0] - cx, Az = a[1] - cz;
-    const Dx = b[0] - a[0], Dz = b[1] - a[1];
-    const qa = Dx * Dx + Dz * Dz;
-    if (qa < 1e-16) return null;
-    const qb = 2 * (Ax * Dx + Az * Dz);
-    const qc = Ax * Ax + Az * Az - r2;
-    const disc = qb * qb - 4 * qa * qc;
-    if (disc < 0) return null;
-    const s = Math.sqrt(disc);
-    let pick = null;
-    for (const t of [(-qb - s) / (2 * qa), (-qb + s) / (2 * qa)]) {
-      if (t >= -1e-6 && t <= 1 + 1e-6) {
-        const tt = Math.max(0, Math.min(1, t));
-        if (pick == null || Math.abs(tt - 0.5) < Math.abs(pick - 0.5)) pick = tt;
-      }
-    }
-    if (pick == null) return null;
-    return [a[0] + Dx * pick, a[1] + Dz * pick];
-  };
-  const pieces = [];
-  let cur = [];
-  for (let i = 0; i < pts.length; i++) {
-    const p = pts[i];
-    const out = outside(p);
-    if (i === 0) {
-      if (out) cur.push(p);
-      continue;
-    }
-    const prev = pts[i - 1];
-    const prevOut = outside(prev);
-    if (prevOut && out) {
-      cur.push(p);
-    } else if (prevOut && !out) {
-      const x = crossing(prev, p);
-      if (x) cur.push(x);
-      if (cur.length >= 2) pieces.push(cur);
-      cur = [];
-    } else if (!prevOut && out) {
-      const x = crossing(prev, p);
-      cur = x ? [x, p] : [p];
-    }
-  }
-  if (cur.length >= 2) pieces.push(cur);
-  if (!pieces.length) return null;
-  const plen = (pp) => {
-    let L = 0;
-    for (let i = 1; i < pp.length; i++) L += Math.hypot(pp[i][0] - pp[i - 1][0], pp[i][1] - pp[i - 1][1]);
-    return L;
-  };
-  pieces.sort((a, b) => plen(b) - plen(a));
-  return pieces[0];
-}
-
 function nearestOnCenterline(x, z, pts) {
   let best = Infinity, bx = pts[0][0], bz = pts[0][1];
   for (let i = 1; i < pts.length; i++) {
@@ -171,15 +109,78 @@ function nearestOnCenterline(x, z, pts) {
   return { d: best, x: bx, z: bz };
 }
 
-// One draped mesh: 2D union of the junction arms with circular fillets
-// in the outside-outside corners, sampled on a ~0.85 m grid so triangles
-// hug the same benched heightAt the ribbons use (dy = 0.10).
+function angNorm(a) {
+  while (a <= -Math.PI) a += Math.PI * 2;
+  while (a > Math.PI) a -= Math.PI * 2;
+  return a;
+}
+
+function localHeadings(pts, ox, oz) {
+  if (!pts || pts.length < 2) return [];
+  const n = nearestOnCenterline(ox, oz, pts);
+  let hx = 1, hz = 0;
+  let best = Infinity;
+  let nearAcc = 0;
+  let acc = 0;
+  let total = 0;
+  for (let i = 1; i < pts.length; i++) {
+    const ax = pts[i - 1][0], az = pts[i - 1][1], bx = pts[i][0], bz = pts[i][1];
+    const dx = bx - ax, dz = bz - az;
+    const L = Math.hypot(dx, dz) || 1;
+    const t = Math.max(0, Math.min(1, ((n.x - ax) * dx + (n.z - az) * dz) / (L * L)));
+    const px = ax + dx * t, pz = az + dz * t;
+    const d = Math.hypot(n.x - px, n.z - pz);
+    if (d < best) {
+      best = d;
+      hx = dx / L;
+      hz = dz / L;
+      nearAcc = acc + t * L;
+    }
+    acc += L;
+    total += L;
+  }
+  const endSlop = 2.2;
+  const headings = [];
+  if (nearAcc > endSlop) headings.push({ hx: -hx, hz: -hz });
+  if (total - nearAcc > endSlop) headings.push({ hx, hz });
+  if (!headings.length) headings.push({ hx, hz });
+  return headings;
+}
+
+function pairMeet(ptsA, ptsB) {
+  let best = Infinity, mx = 0, mz = 0;
+  const consider = (x, z, d) => {
+    if (d < best) { best = d; mx = x; mz = z; }
+  };
+  const ends = (pts) => [pts[0], pts[pts.length - 1]];
+  for (const a of ends(ptsA)) {
+    const n = nearestOnCenterline(a[0], a[1], ptsB);
+    consider((a[0] + n.x) * 0.5, (a[1] + n.z) * 0.5, n.d);
+  }
+  for (const b of ends(ptsB)) {
+    const n = nearestOnCenterline(b[0], b[1], ptsA);
+    consider((b[0] + n.x) * 0.5, (b[1] + n.z) * 0.5, n.d);
+  }
+  return { x: mx, z: mz, d: best };
+}
+
+function inCCWSector(px, pz, ax, az, bx, bz) {
+  const pa = Math.atan2(px, pz);
+  const a0 = Math.atan2(ax, az);
+  const span = angNorm(Math.atan2(bx, bz) - a0);
+  if (span <= 1e-4) return false;
+  const delta = angNorm(pa - a0);
+  return delta >= -0.04 && delta <= span + 0.04;
+}
+
+// Draped mesh of inside-corner curb arcs only (radius JUNCTION_FILLET).
+// Road bodies stay on the continuous ribbons; the large outside sector is
+// left alone so the junction cannot grow into a disc.
 function drapedJunctionUnionGeo(arms, tip, heightAt, dy) {
   if (!arms?.length || !tip) return null;
-  const R = JUNCTION_R;
   const FR = JUNCTION_FILLET;
   const queries = [];
-  const cropR = R + 26;
+  const cropR = 48;
   for (const arm of arms) {
     if (!arm.pts || arm.pts.length < 2) continue;
     const cropped = [];
@@ -192,70 +193,82 @@ function drapedJunctionUnionGeo(arms, tip, heightAt, dy) {
       }
     }
     if (cropped.length < 2) continue;
-    const role = arm.name === '소월로' ? 'sowol'
-      : arm.name === '남산공원길' ? 'park'
-      : 'other';
-    queries.push({ pts: cropped, hw: Math.max(1.2, (arm.width || 8) * 0.5), role });
-  }
-  if (!queries.length) return null;
-
-  function sdList(x, z) {
-    return queries.map((q) => {
-      const n = nearestOnCenterline(x, z, q.pts);
-      return { sd: n.d - q.hw, tipD: Math.hypot(n.x - tip[0], n.z - tip[1]) };
+    queries.push({
+      pts: cropped,
+      hw: Math.max(1.2, (arm.width || 8) * 0.5),
+      name: arm.name || '',
     });
   }
-  function inside(x, z) {
-    const tipDist = Math.hypot(x - tip[0], z - tip[1]);
-    if (tipDist > R + FR + 1.2) return false;
-    const sds = sdList(x, z);
-    for (const s of sds) {
-      if (s.sd <= 0 && s.tipD <= R) return true;
-    }
-    if (tipDist > R + 0.8) return false;
-    // Round only the 소월로 / 공원길 corner — filleting every arm pair
-    // (driveways, extra service roads) grew a dark amoeba between them.
-    const sowolSds = [], parkSds = [];
-    for (let i = 0; i < sds.length; i++) {
-      if (queries[i].role === 'sowol') sowolSds.push(sds[i]);
-      if (queries[i].role === 'park') parkSds.push(sds[i]);
-    }
-    for (const a of sowolSds) {
-      for (const b of parkSds) {
-        if (a.sd > 0 && b.sd > 0 && a.sd < FR && b.sd < FR
-          && (a.sd * a.sd + b.sd * b.sd) < FR * FR
-          && a.tipD <= R + FR && b.tipD <= R + FR) return true;
+  if (queries.length < 2) return null;
+
+  const fillets = [];
+  for (let i = 0; i < queries.length; i++) {
+    for (let j = i + 1; j < queries.length; j++) {
+      const meet = pairMeet(queries[i].pts, queries[j].pts);
+      if (meet.d > 10) continue;
+      const rays = [];
+      for (const h of localHeadings(queries[i].pts, meet.x, meet.z)) rays.push({ i, ...h });
+      for (const h of localHeadings(queries[j].pts, meet.x, meet.z)) rays.push({ i: j, ...h });
+      rays.sort((a, b) => Math.atan2(a.hx, a.hz) - Math.atan2(b.hx, b.hz));
+      if (rays.length < 2) continue;
+      for (let k = 0; k < rays.length; k++) {
+        const a = rays[k];
+        const b = rays[(k + 1) % rays.length];
+        if (a.i === b.i) continue;
+        const span = angNorm(Math.atan2(b.hx, b.hz) - Math.atan2(a.hx, a.hz));
+        const sector = span > 0 ? span : span + Math.PI * 2;
+        if (sector >= Math.PI - 0.02) continue;
+        fillets.push({
+          armI: a.i,
+          armJ: b.i,
+          vx: meet.x,
+          vz: meet.z,
+          ax: a.hx,
+          az: a.hz,
+          bx: b.hx,
+          bz: b.hz,
+        });
       }
+    }
+  }
+  if (!fillets.length) return null;
+
+  function sdOf(q, x, z) {
+    return nearestOnCenterline(x, z, q.pts).d - q.hw;
+  }
+  function inside(x, z) {
+    for (const f of fillets) {
+      const sa = sdOf(queries[f.armI], x, z);
+      const sb = sdOf(queries[f.armJ], x, z);
+      if (sa <= 0 || sb <= 0) continue;
+      if (sa >= FR || sb >= FR) continue;
+      if (sa * sa + sb * sb >= FR * FR) continue;
+      const reach = FR + queries[f.armI].hw + queries[f.armJ].hw + 2;
+      if (Math.hypot(x - f.vx, z - f.vz) > reach) continue;
+      if (!inCCWSector(x - f.vx, z - f.vz, f.ax, f.az, f.bx, f.bz)) continue;
+      return true;
     }
     return false;
   }
 
   const maxHw = Math.max(...queries.map((q) => q.hw));
-  const pad = R + maxHw + FR + 1.6;
-  const step = 0.65;
-  const x0 = tip[0] - pad, z0 = tip[1] - pad;
-  const nx = Math.ceil((2 * pad) / step) + 1;
-  const nzc = Math.ceil((2 * pad) / step) + 1;
-  let occ = new Uint8Array(nx * nzc);
+  const pad = FR + maxHw + 2.4;
+  let x0 = Infinity, z0 = Infinity, x1 = -Infinity, z1 = -Infinity;
+  for (const f of fillets) {
+    if (f.vx - pad < x0) x0 = f.vx - pad;
+    if (f.vx + pad > x1) x1 = f.vx + pad;
+    if (f.vz - pad < z0) z0 = f.vz - pad;
+    if (f.vz + pad > z1) z1 = f.vz + pad;
+  }
+  const step = 0.55;
+  const nx = Math.ceil((x1 - x0) / step) + 1;
+  const nzc = Math.ceil((z1 - z0) / step) + 1;
+  const occ = new Uint8Array(nx * nzc);
   for (let j = 0; j < nzc; j++) {
     for (let i = 0; i < nx; i++) {
       if (inside(x0 + i * step, z0 + j * step)) occ[j * nx + i] = 1;
     }
   }
-  const closed = new Uint8Array(occ);
-  for (let j = 1; j < nzc - 1; j++) {
-    for (let i = 1; i < nx - 1; i++) {
-      if (occ[j * nx + i]) continue;
-      let n = 0;
-      for (let dj = -1; dj <= 1; dj++) {
-        for (let di = -1; di <= 1; di++) {
-          if (occ[(j + dj) * nx + (i + di)]) n++;
-        }
-      }
-      if (n >= 5) closed[j * nx + i] = 1;
-    }
-  }
-  occ = closed;
 
   const pos = [], index = [];
   const vertKey = new Map();
@@ -319,8 +332,6 @@ function drapedJunctionUnionGeo(arms, tip, heightAt, dy) {
     }
   }
   if (index.length < 3) return null;
-  // Grid walk is clockwise in +X / +Z; reverse so faces point +Y and
-  // Lambert lighting matches the draped road ribbons.
   for (let i = 0; i < index.length; i += 3) {
     const t = index[i + 1];
     index[i + 1] = index[i + 2];
@@ -329,40 +340,10 @@ function drapedJunctionUnionGeo(arms, tip, heightAt, dy) {
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
   g.setIndex(index);
-  // Same lighting as the long benched ribbons: a faceted 0.65 m grid
-  // was reading a full shade darker and looked like a separate plate.
   const nrm = new Float32Array((pos.length / 3) * 3);
   for (let i = 0; i < nrm.length; i += 3) nrm[i + 1] = 1;
   g.setAttribute('normal', new THREE.Float32BufferAttribute(nrm, 3));
   return g;
-}
-
-function stripPaintInsideJunction(geos, tip, R, dropWestOfTip = false) {
-  if (!tip || !geos?.length) return geos;
-  const r2 = (R - 0.4) * (R - 0.4);
-  const keep = [];
-  for (const g of geos) {
-    const pos = g.attributes?.position?.array;
-    const idx = g.getIndex()?.array;
-    if (!pos || !idx || !idx.length) { keep.push(g); continue; }
-    const next = [];
-    for (let i = 0; i < idx.length; i += 3) {
-      const a = idx[i] * 3, b = idx[i + 1] * 3, c = idx[i + 2] * 3;
-      const bad = (o) => {
-        const dx = pos[o] - tip[0], dz = pos[o + 2] - tip[1];
-        if (dx * dx + dz * dz < r2) return true;
-        // Yellow that leaked west onto 소월로 (the tip is 소월로's east end).
-        if (dropWestOfTip && pos[o] < tip[0] - 8 && Math.hypot(dx, dz) < 90) return true;
-        return false;
-      };
-      if (bad(a) || bad(b) || bad(c)) continue;
-      next.push(idx[i], idx[i + 1], idx[i + 2]);
-    }
-    if (!next.length) continue;
-    g.setIndex(next);
-    keep.push(g);
-  }
-  return keep;
 }
 
 function geoXzBounds(geo) {
@@ -1039,21 +1020,16 @@ export function createNamsanRoads({ parent, osm, heightAt, overlay = null } = {}
     let hasInside = false;
     if (junctionTip) {
       for (const q of pts) {
-        if (tipD(q) < JUNCTION_R + width * 0.5 + 1) { hasInside = true; break; }
+        if (tipD(q) < 36 + width * 0.5) { hasInside = true; break; }
       }
     }
-    const nearTipEnd = Math.min(tipD(pts[0]), tipD(pts[pts.length - 1])) < JUNCTION_R + 6;
+    const nearTipEnd = Math.min(tipD(pts[0]), tipD(pts[pts.length - 1])) < 36;
     const entersJunc = junctionTip && isCar && (
       isSowol || (isPark && meetsTip) || (nearTipEnd && hasInside)
     );
     if (entersJunc) junctionArms.push({ pts: rawPts, width, name: w.name || w.k || 'way' });
-    // Cut every ribbon, sidewalk and paint out of the junction disk so
-    // they share an edge with the union mesh instead of overlapping it.
-    if (junctionTip) {
-      const clipped = clipOutsideCircle(pts, junctionTip[0], junctionTip[1], JUNCTION_R);
-      if (!clipped) continue;
-      pts = clipped;
-    }
+    // Ribbons stay continuous through the junction (cycling-course spine).
+    // Only the inside-corner fillets are added as a separate mesh below.
     const geo = drape
       ? drapedRibbonGeo(pts, width, heightAt, dy)
       : fixNormalsUp(ribbonGeo(elevated(pts, heightAt, dy), width, 0, false));
@@ -1320,58 +1296,19 @@ export function createNamsanRoads({ parent, osm, heightAt, overlay = null } = {}
       const union = drapedJunctionUnionGeo(junctionArms, junctionTip, heightAt, 0.10);
       if (union) {
         union.name = 'namsan-east-junction';
-        carGeos.push(noteGeo(paint(union, '#6e747c'), 'east-junction-union', '#6e747c', 0.10));
+        carGeos.push(noteGeo(paint(union, '#6e747c'), 'east-junction-fillet', '#6e747c', 0.10));
         walkHits.push({
           segs: [{ a: [junctionTip[0], junctionTip[1]], b: [junctionTip[0], junctionTip[1]], L: 0 }],
-          pad: JUNCTION_R + 6,
+          pad: JUNCTION_FILLET + 12,
           dy: 0.10,
         });
-      }
-      // Stop line on 공원길 at the junction edge (service road yields to 소월로).
-      const parkArm = junctionArms.find((a) => a.name === '남산공원길');
-      if (parkArm?.pts?.length >= 2) {
-        const clipped = clipOutsideCircle(parkArm.pts, junctionTip[0], junctionTip[1], JUNCTION_R);
-        if (clipped && clipped.length >= 2) {
-          const d0 = Math.hypot(clipped[0][0] - junctionTip[0], clipped[0][1] - junctionTip[1]);
-          const d1 = Math.hypot(clipped[clipped.length - 1][0] - junctionTip[0], clipped[clipped.length - 1][1] - junctionTip[1]);
-          const fromStart = d0 <= d1;
-          const p = fromStart ? clipped[0] : clipped[clipped.length - 1];
-          const q = fromStart ? clipped[1] : clipped[clipped.length - 2];
-          const hx = p[0] - q[0], hz = p[1] - q[1];
-          const L = Math.hypot(hx, hz) || 1;
-          const ux = hx / L, uz = hz / L;
-          const cxp = p[0] - ux * 0.3, czp = p[1] - uz * 0.3;
-          const hw = (parkArm.width || 8.6) * 0.46;
-          const left = [cxp - uz * hw, czp + ux * hw];
-          const right = [cxp + uz * hw, czp - ux * hw];
-          const stop = drapedRibbonGeo([left, right], 0.38, heightAt, 0.15);
-          if (stop) whiteGeos.push(stop);
-        }
       }
     }
     console.info('[namsan-junction] ' + JSON.stringify({
       tip: junctionTip,
+      fillet: JUNCTION_FILLET,
       arms: junctionArms.map((a) => ({ name: a.name, width: a.width, n: a.pts.length })),
     }));
-    const yellowNear = [];
-    for (const g of yellowGeos) {
-      const bb = geoXzBounds(g);
-      if (!bb) continue;
-      const cx = (bb.minX + bb.maxX) * 0.5, cz = (bb.minZ + bb.maxZ) * 0.5;
-      const dTip = Math.hypot(cx - junctionTip[0], cz - junctionTip[1]);
-      const cornerD = Math.min(
-        Math.hypot(bb.minX - junctionTip[0], bb.minZ - junctionTip[1]),
-        Math.hypot(bb.maxX - junctionTip[0], bb.maxZ - junctionTip[1]),
-        Math.hypot(bb.minX - junctionTip[0], bb.maxZ - junctionTip[1]),
-        Math.hypot(bb.maxX - junctionTip[0], bb.minZ - junctionTip[1]),
-      );
-      if (cornerD < JUNCTION_R + 8) {
-        yellowNear.push({ ...bb, dTip: +dTip.toFixed(1), cornerD: +cornerD.toFixed(1),
-          minX: +bb.minX.toFixed(1), maxX: +bb.maxX.toFixed(1),
-          minZ: +bb.minZ.toFixed(1), maxZ: +bb.maxZ.toFixed(1) });
-      }
-    }
-    console.info('[namsan-yellow-near] ' + JSON.stringify(yellowNear));
     if (plateLogs.length) {
       console.info('[namsan-plate] ' + JSON.stringify(plateLogs));
     }
@@ -1439,8 +1376,8 @@ export function createNamsanRoads({ parent, osm, heightAt, overlay = null } = {}
   const whiteMat = new THREE.MeshLambertMaterial({
     color: '#eceff4', emissive: new THREE.Color('#dfe4ec'), emissiveIntensity: 0.14,
   });
-  const yellowKept = junctionTip ? stripPaintInsideJunction(yellowGeos, junctionTip, JUNCTION_R, true) : yellowGeos;
-  const whiteKept = junctionTip ? stripPaintInsideJunction(whiteGeos, junctionTip, JUNCTION_R) : whiteGeos;
+  const yellowKept = yellowGeos;
+  const whiteKept = whiteGeos;
   if (yellowKept.length) {
     const yg = mergeGeometries(yellowKept, true);
     if (yg) { const m = new THREE.Mesh(yg, yellowMat); m.name = 'namsan-yellow-lines'; group.add(m); }
