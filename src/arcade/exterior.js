@@ -5,30 +5,31 @@ import { arcadePlacements } from './locations.js';
 
 const FONT = '"Pretendard","Apple SD Gothic Neo","Noto Sans KR",sans-serif';
 
-function fasciaTexture(title, sub) {
+function fasciaTexture(title, sub, shopW = 10.4) {
   const c = document.createElement('canvas');
-  c.width = 1024; c.height = 256;
+  const cw = Math.max(1024, Math.round(1024 * (shopW / 10.4)));
+  c.width = cw; c.height = 256;
   const ctx = c.getContext('2d');
   const bg = ctx.createLinearGradient(0, 0, 0, 256);
   bg.addColorStop(0, '#241840'); bg.addColorStop(1, '#120c22');
-  ctx.fillStyle = bg; ctx.fillRect(0, 0, 1024, 256);
-  const neon = ctx.createLinearGradient(40, 0, 984, 0);
+  ctx.fillStyle = bg; ctx.fillRect(0, 0, cw, 256);
+  const neon = ctx.createLinearGradient(40, 0, cw - 40, 0);
   neon.addColorStop(0, '#7eb6ff'); neon.addColorStop(0.45, '#ff9ecd'); neon.addColorStop(1, '#ffe66d');
-  ctx.fillStyle = neon; ctx.fillRect(14, 14, 996, 228);
-  ctx.fillStyle = '#1a1030'; ctx.fillRect(26, 26, 972, 204);
+  ctx.fillStyle = neon; ctx.fillRect(14, 14, cw - 28, 228);
+  ctx.fillStyle = '#1a1030'; ctx.fillRect(26, 26, cw - 52, 204);
   ctx.fillStyle = 'rgba(255,230,109,0.9)';
-  for (const [x, y] of [[54, 50], [970, 50], [54, 206], [970, 206]]) {
+  for (const [x, y] of [[54, 50], [cw - 54, 50], [54, 206], [cw - 54, 206]]) {
     ctx.beginPath(); ctx.arc(x, y, 5, 0, Math.PI * 2); ctx.fill();
   }
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   ctx.fillStyle = '#ffe66d';
   ctx.shadowColor = 'rgba(255,158,205,0.8)'; ctx.shadowBlur = 16;
   ctx.font = `900 82px ${FONT}`;
-  ctx.fillText(title, 512, 108);
+  ctx.fillText(title, cw / 2, 108);
   ctx.shadowBlur = 0;
   ctx.font = `800 40px ${FONT}`;
   ctx.fillStyle = '#9ec1ff';
-  ctx.fillText(sub, 512, 178);
+  ctx.fillText(sub, cw / 2, 178);
   const tex = new THREE.CanvasTexture(c);
   tex.colorSpace = THREE.SRGBColorSpace;
   tex.anisotropy = 8;
@@ -177,12 +178,13 @@ function addWindowInterior(parent, st) {
     { label: '인형뽑기', color: '#ffe66d', playable: false },
     { label: '준비중', color: '#c084fc', playable: false },
   ];
-  const nCab = 4;
+  // 서현점은 넓어진 전면에 맞춰 간격을 유지하고, 정자역점은 기존 4대 그대로.
+  const nCab = st.id === 'arcade-seohyeon' ? Math.max(4, Math.round((W - 2.3) / 2.15)) : 4;
   const cabDepth = deep > 2 ? 0.78 : 0.5;
   const zCab = deep > 2 ? -1.85 : -0.42;
   const span = W - 4.2;
   for (let i = 0; i < nCab; i++) {
-    const s = specs[i];
+    const s = specs[i % specs.length];
     const cab = makeWindowCabinet({ ...s, depth: cabDepth });
     const x = -W / 2 + 1.15 + (span * i) / (nCab - 1);
     cab.position.set(x, 0, zCab);
@@ -456,7 +458,7 @@ export function mountArcadeExterior({ scene } = {}) {
 
   const fascia = new Map();
   for (const st of stores) {
-    fascia.set(st.id, fasciaTexture('BUMP 오락실', `범핑팡 · ${st.branch || st.name}`));
+    fascia.set(st.id, fasciaTexture('BUMP 오락실', `범핑팡 · ${st.branch || st.name}`, st.id === 'arcade-seohyeon' ? st.width : 10.4));
   }
   const shared = { fascia, bladeTex: bladeTexture() };
   for (const st of stores) addStorefront(g, st, shared);
