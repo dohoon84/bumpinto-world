@@ -7,10 +7,10 @@ export class Overlay {
   constructor(root, camera) { this.root = root; this.camera = camera; this.items = new Set(); this.zone = ''; this.homeCamera = camera; }
   // [zone] 실내 구역(지하철 대합실 등)에 들어가면 그 구역 항목만 그 구역 카메라로 투영. '' = 바깥(원래 카메라)
   setView(zone = '', camera = null) { this.zone = zone || ''; this.camera = camera || this.homeCamera; }
-  add({ cls, text = '', getPos, maxDist = 90, minDist = 0, zone = '' }) {
+  add({ cls, text = '', getPos, maxDist = 90, minDist = 0, zone = '', visibleIf = null }) {
     const el = document.createElement('div'); el.className = cls; el.textContent = text;
     this.root.appendChild(el);
-    const item = { el, getPos, maxDist, minDist, visible: true, hidden: false, zone };
+    const item = { el, getPos, maxDist, minDist, visible: true, hidden: false, zone, visibleIf };
     this.items.add(item); return item;
   }
   remove(item) { item.el.remove(); this.items.delete(item); }
@@ -29,6 +29,7 @@ export class Overlay {
       const kind = it.kind ??= (/^bubble/.test(it.el.className) ? 0 : /^tag/.test(it.el.className) ? 1 : 2); // 0 말풍선 · 1 이름표 · 2 지명 라벨
       const maxD = mob && kind === 2 ? it.maxDist * (/landmark|station/.test(it.el.className) ? 0.8 : 0.55) : it.maxDist;
       let show = p && d < maxD && d >= it.minDist;
+      if (show && it.visibleIf && !it.visibleIf(cam, p, d)) show = false;
       if (show) { v.copy(p).project(cam); show = v.z < 1 && v.z > -1 && Math.abs(v.x) < 1.2 && Math.abs(v.y) < 1.2; }
       let x = 0, y = 0;
       if (show) { x = ((v.x + 1) / 2) * w; y = ((1 - v.y) / 2) * h; }

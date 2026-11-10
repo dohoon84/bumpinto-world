@@ -43,6 +43,33 @@ function elevated(pts, heightAt, dy) {
   return pts.map(([x, z]) => [x, z, heightAt(x, z) + dy]);
 }
 
+// Driveways and footways on a cross-slope: sample each edge against the
+// terrain so the ribbon does not float as a dark wedge (소월로 옆 진입로).
+function drapedRibbonGeo(pts, width, heightAt, dy) {
+  const n = pts.length;
+  if (n < 2) return null;
+  const pos = [], idx = [];
+  const hw = width / 2;
+  for (let i = 0; i < n; i++) {
+    const a = pts[Math.max(0, i - 1)], b = pts[Math.min(n - 1, i + 1)], p = pts[i];
+    let dx = b[0] - a[0], dz = b[1] - a[1];
+    const L = Math.hypot(dx, dz) || 1;
+    dx /= L; dz /= L;
+    const lx = p[0] - dz * hw, lz = p[1] + dx * hw;
+    const rx = p[0] + dz * hw, rz = p[1] - dx * hw;
+    pos.push(lx, heightAt(lx, lz) + dy, lz, rx, heightAt(rx, rz) + dy, rz);
+    if (i > 0) {
+      const k = (i - 1) * 2;
+      idx.push(k, k + 2, k + 1, k + 1, k + 2, k + 3);
+    }
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setIndex(idx);
+  g.computeVertexNormals();
+  return fixNormalsUp(g);
+}
+
 function guideY(x, z, heightAt) {
   const d = Math.hypot(x - NT.tx, z - NT.tz);
   const plazaY = NT.eleBase - NT.datum;
@@ -544,8 +571,11 @@ export function createNamsanRoads({ parent, osm, heightAt, overlay = null } = {}
       continue;
     }
 
-    const epts = elevated(pts, heightAt, dy);
-    const geo = fixNormalsUp(ribbonGeo(epts, width, 0, false));
+    const drape = isDrive || !isCar;
+    const geo = drape
+      ? drapedRibbonGeo(pts, width, heightAt, dy)
+      : fixNormalsUp(ribbonGeo(elevated(pts, heightAt, dy), width, 0, false));
+    if (!geo) continue;
     if (isCar) {
       carGeos.push(paint(geo, isDrive ? '#7a7f86' : '#6e747c'));
       // Driveways and unnamed service spines sit on gentle library slopes.
@@ -1142,6 +1172,16 @@ export function createNamsanRoads({ parent, osm, heightAt, overlay = null } = {}
       if (fills?.material) {
         fills.material.emissive = new THREE.Color('#2a3320');
         fills.material.emissiveIntensity = k * 0.5;
+      }
+      const paths = group.getObjectByName('namsan-paths');
+      if (paths?.material) {
+        paths.material.emissive = new THREE.Color('#4a4034');
+        paths.material.emissiveIntensity = k * 0.28;
+      }
+      const steps = group.getObjectByName('namsan-steps');
+      if (steps?.material) {
+        steps.material.emissive = new THREE.Color('#5a5448');
+        steps.material.emissiveIntensity = k * 0.22;
       }
       roofLit.opacity = k * 0.92;
       roofLit.visible = k > 0.05;

@@ -100,33 +100,65 @@ function extrudeXY(pts, depth) {
   return geo;
 }
 
-function terrainPatchGeo(poly, heightAt, dy, step = 1.15) {
-  if (!poly || poly.length < 3) return null;
-  let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
-  for (const p of poly) {
-    if (p[0] < x0) x0 = p[0]; if (p[0] > x1) x1 = p[0];
-    if (p[1] < z0) z0 = p[1]; if (p[1] > z1) z1 = p[1];
-  }
-  x0 -= step; x1 += step; z0 -= step; z1 += step;
-  const pos = [];
-  const push = (x, z) => { pos.push(x, heightAt(x, z) + dy, z); };
-  const hit = (x, z) => pointInRing(x, z, poly);
-  for (let z = z0; z < z1; z += step) {
-    for (let x = x0; x < x1; x += step) {
-      const x2 = x + step, z2 = z + step;
-      const cx = x + step * 0.5, cz = z + step * 0.5;
-      // More probes than just corners, so thin or diagonal landings do not leave holes.
-      if (!hit(cx, cz) && !hit(x, z) && !hit(x2, z) && !hit(x2, z2) && !hit(x, z2)
-        && !hit(cx, z) && !hit(cx, z2) && !hit(x, cz) && !hit(x2, cz)) continue;
-      push(x, z); push(x2, z); push(x2, z2);
-      push(x, z); push(x2, z2); push(x, z2);
+function drapeRibbon(pts, width, heightAt, dy) {
+  const n = pts.length;
+  if (n < 2) return null;
+  const pos = [], idx = [];
+  const hw = width / 2;
+  for (let i = 0; i < n; i++) {
+    const a = pts[Math.max(0, i - 1)], b = pts[Math.min(n - 1, i + 1)], p = pts[i];
+    let dx = b[0] - a[0], dz = b[1] - a[1];
+    const L = Math.hypot(dx, dz) || 1;
+    dx /= L; dz /= L;
+    const lx = p[0] - dz * hw, lz = p[1] + dx * hw;
+    const rx = p[0] + dz * hw, rz = p[1] - dx * hw;
+    pos.push(lx, heightAt(lx, lz) + dy, lz, rx, heightAt(rx, rz) + dy, rz);
+    if (i > 0) {
+      const k = (i - 1) * 2;
+      idx.push(k, k + 2, k + 1, k + 1, k + 2, k + 3);
     }
   }
-  if (pos.length < 9) return null;
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  geo.setIndex(idx);
+  geo.computeVertexNormals();
+  return geo;
+}
+
+// Smooth draped fan (clean oval/circle edge, no stair-step grid).
+function drapedFan(cx, cz, ring, heightAt, dy) {
+  if (!ring || ring.length < 3) return null;
+  const pos = [];
+  const yc = heightAt(cx, cz) + dy;
+  for (let i = 0; i < ring.length; i++) {
+    const a = ring[i], b = ring[(i + 1) % ring.length];
+    pos.push(cx, yc, cz);
+    pos.push(a[0], heightAt(a[0], a[1]) + dy, a[1]);
+    pos.push(b[0], heightAt(b[0], b[1]) + dy, b[1]);
+  }
   const geo = new THREE.BufferGeometry();
   geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
   geo.computeVertexNormals();
   return geo;
+}
+
+function segsCross(ax, az, bx, bz, cx, cz, dx, dz) {
+  const den = (bx - ax) * (dz - cz) - (bz - az) * (dx - cx);
+  if (Math.abs(den) < 1e-9) return false;
+  const t = ((cx - ax) * (dz - cz) - (cz - az) * (dx - cx)) / den;
+  const u = ((cx - ax) * (bz - az) - (cz - az) * (bx - ax)) / den;
+  return t > 0.03 && t < 0.97 && u >= 0 && u <= 1;
+}
+
+function segmentHitsRing(ax, az, bx, bz, ring) {
+  if (!ring || ring.length < 3) return false;
+  const aIn = pointInRing(ax, az, ring), bIn = pointInRing(bx, bz, ring);
+  if (aIn !== bIn) return true;
+  for (let i = 0; i < ring.length; i++) {
+    const p = ring[i], q = ring[(i + 1) % ring.length];
+    if (segsCross(ax, az, bx, bz, p[0], p[1], q[0], q[1])) return true;
+  }
+  return false;
 }
 
 function plate(w, h, d, color, x, y, z, rotY = 0) {
@@ -462,29 +494,25 @@ export function createNamsanLibrary({ parent, osm, heightAt, overlay = null } = 
       fascia.rotation.y = eyaw;
       fascia.name = 'namsan-library-nameplate';
       group.add(fascia);
-      const wallMap = signTexture('남산도서관', null, '#4a453c', '#f4eee0');
-      const wallSign = new THREE.Mesh(
-        new THREE.PlaneGeometry(3.2, 0.62),
-        new THREE.MeshBasicMaterial({ map: wallMap, toneMapped: false, fog: false, side: THREE.DoubleSide }),
-      );
-      wallSign.position.set(doorX + ehx * 0.32, doorY + 3.06, doorZ + ehz * 0.32);
-      wallSign.rotation.y = eyaw;
-      group.add(wallSign);
     } catch { /* node tests without canvas */ }
   }
 
-  // Forecourt: smaller terrain-hugging pad at the south door (not a 24 m slab).
+  // Forecourt: a draped ribbon (clean parallel edges) instead of a stair-step grid.
   const plaza = [];
-  const depthIn = 2.2, depthOut = 9.5, halfW = 6.4;
+  const depthIn = 2.0, depthOut = 9.2, halfW = 5.6;
   for (const [along, side] of [
     [-depthIn, -halfW], [-depthIn, halfW], [depthOut, halfW], [depthOut, -halfW],
   ]) {
     plaza.push([doorX + ehx * along + px * side, doorZ + ehz * along + pz * side]);
   }
-  const plazaGeo = terrainPatchGeo(plaza, heightAt, 0.05, 1.05);
+  const plazaLine = [];
+  for (let t = -depthIn; t <= depthOut + 0.01; t += 0.9) {
+    plazaLine.push([doorX + ehx * t, doorZ + ehz * t]);
+  }
+  const plazaGeo = drapeRibbon(plazaLine, halfW * 2, heightAt, 0.05);
   if (plazaGeo) {
     const plazaMesh = new THREE.Mesh(plazaGeo, new THREE.MeshLambertMaterial({
-      color: '#c4c0b6', side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1,
+      color: '#c4c0b6', side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2,
     }));
     plazaMesh.receiveShadow = true;
     plazaMesh.name = 'namsan-library-plaza';
@@ -503,14 +531,14 @@ export function createNamsanLibrary({ parent, osm, heightAt, overlay = null } = 
   if (spring && Number.isFinite(spring.x)) {
     const sx = spring.x, sz = spring.z, sy = heightAt(sx, sz);
     const padPoly = [];
-    for (let i = 0; i < 14; i++) {
-      const a = (i / 14) * Math.PI * 2;
+    for (let i = 0; i < 20; i++) {
+      const a = (i / 20) * Math.PI * 2;
       padPoly.push([sx + Math.cos(a) * 6.2, sz + Math.sin(a) * 6.2]);
     }
-    const padGeo = terrainPatchGeo(padPoly, heightAt, 0.05, 0.95);
+    const padGeo = drapedFan(sx, sz, padPoly, heightAt, 0.05);
     if (padGeo) {
       const pad = new THREE.Mesh(padGeo, new THREE.MeshLambertMaterial({
-        color: '#b7b1a4', side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1,
+        color: '#b7b1a4', side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2,
       }));
       pad.receiveShadow = true;
       pad.name = 'namsan-yaksu-pad';
@@ -549,6 +577,18 @@ export function createNamsanLibrary({ parent, osm, heightAt, overlay = null } = 
       group.add(plate(0.14, 2.4, 0.14, '#5a4634', sx + dx, sy + 1.3, sz + dz));
     }
     addBench(group, sx + 3.4, sz + 0.4, heightAt, 1.2);
+    addURacks(group, sx - 4.0, sz + 2.4, heightAt, 4, 0.35);
+    for (const i of [-1.3, 0, 1.3]) {
+      const px_ = sx - 1.4 + i;
+      const pz_ = sz + 4.15;
+      const by = heightAt(px_, pz_);
+      const bollard = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.09, 0.11, 0.72, 8),
+        new THREE.MeshLambertMaterial({ color: '#5c656e' }),
+      );
+      bollard.position.set(px_, by + 0.36, pz_);
+      group.add(bollard);
+    }
 
     if (typeof document !== 'undefined') {
       try {
@@ -584,7 +624,7 @@ export function createNamsanLibrary({ parent, osm, heightAt, overlay = null } = 
       const along = 5.2 * Math.sin(a), across = 6.4 * Math.cos(a);
       mouthPoly.push([mx + uhx * along + vx * across, mz + uhz * along + vz * across]);
     }
-    const mgeo = terrainPatchGeo(mouthPoly, heightAt, 0.05, 0.95);
+    const mgeo = drapedFan(mx, mz, mouthPoly, heightAt, 0.05);
     if (mgeo) {
       const mm = new THREE.Mesh(mgeo, new THREE.MeshLambertMaterial({
         color: '#b9b3a6', side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1,
@@ -671,8 +711,14 @@ export function createNamsanLibrary({ parent, osm, heightAt, overlay = null } = 
         cls: 'label landmark',
         text: '약수터',
         getPos: () => new THREE.Vector3(mouth.x, heightAt(mouth.x, mouth.z) + 4.4, mouth.z),
-        maxDist: 280,
+        maxDist: 200,
         minDist: 12,
+        // Hide when the library mass sits between the camera and the label
+        // (otherwise the HTML overlay draws through the south facade).
+        visibleIf: (cam, p) => {
+          if ((cam.position.y - p.y) > 50) return true;
+          return !segmentHitsRing(cam.position.x, cam.position.z, p.x, p.z, pts);
+        },
       });
     }
   }
