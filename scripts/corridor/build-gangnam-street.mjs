@@ -86,6 +86,8 @@ for (const t of tiles) {
   for (const b of t.b || []) if (b.o?.length >= 3) buildings.push(b.o);
 }
 const avenues = roads.filter((r) => r.n === '강남대로' || r.n === '테헤란로');
+const WALK_ONLY = new Set(['footway', 'steps', 'pedestrian', 'path']);
+const carRoads = roads.filter((r) => r.p && r.p.length >= 2 && !WALK_ONLY.has(r.k));
 
 function nearestRoad(x, z, list = avenues) {
   let best = null;
@@ -471,6 +473,86 @@ const ALLEY = new Set(['강남대로92길', '강남대로94길', '강남대로96
 const candProps = [];
 const candPoles = [];
 const shops = [];
+
+const PROP_R = [0.72, 0.55, 0.48, 0.22, 0.28, 0.5, 0.58];
+
+function allCarriageHits(x, z, radius) {
+  const hits = [];
+  for (const r of carRoads) {
+    const hit = projectOn(r.p, [x, z]);
+    const need = (r.w || 6) * 0.5 + radius;
+    if (hit.d < need) hits.push({ ...hit, road: r, need, pen: need - hit.d });
+  }
+  return hits;
+}
+
+function onZebra(x, z, radius) {
+  for (const zd of zebras) {
+    const [cx, cz, yaw, sx, sz] = zd;
+    const dx = x - cx, dz = z - cz;
+    const c = Math.cos(yaw), s = Math.sin(yaw);
+    const lx = dx * c - dz * s;
+    const lz = dx * s + dz * c;
+    const ox = Math.max(0, Math.abs(lx) - sx / 2);
+    const oz = Math.max(0, Math.abs(lz) - sz / 2);
+    if (hypot(ox, oz) < radius) return true;
+  }
+  return false;
+}
+
+function onMedianIsland(x, z) {
+  const pair = twoBusways(x, z);
+  if (!pair || pair.length < 2) return false;
+  const mx = (pair[0].pt[0] + pair[1].pt[0]) / 2;
+  const mz = (pair[0].pt[1] + pair[1].pt[1]) / 2;
+  return hypot(x - mx, z - mz) <= 2.2;
+}
+
+/** 차도·횡단보도·BRT 섬을 피해서 인도로 밀거나, 안 되면 버린다. */
+function keepFurniture(x, z, radius = 0.55) {
+  let px = x, pz = z;
+  for (let k = 0; k < 8; k++) {
+    if (onMedianIsland(px, pz)) return null;
+    const hits = allCarriageHits(px, pz, radius);
+    if (!hits.length) {
+      if (onZebra(px, pz, radius)) return null;
+      if (inBuilding(px, pz, 0.35)) return null;
+      return [r1(px), r1(pz)];
+    }
+    let vx = 0, vz = 0;
+    for (const bad of hits) {
+      const left = [-Math.cos(bad.yaw), Math.sin(bad.yaw)];
+      const signed = (px - bad.pt[0]) * left[0] + (pz - bad.pt[1]) * left[1];
+      const side = Math.sign(signed) || 1;
+      vx += bad.pt[0] + left[0] * side * (bad.need + 0.15) - px;
+      vz += bad.pt[1] + left[1] * side * (bad.need + 0.15) - pz;
+    }
+    const L = hypot(vx, vz);
+    if (L < 1e-4) {
+      const bad = hits[0];
+      const left = [-Math.cos(bad.yaw), Math.sin(bad.yaw)];
+      vx = left[0] * (bad.need + 0.15);
+      vz = left[1] * (bad.need + 0.15);
+    }
+    px += vx;
+    pz += vz;
+  }
+  return null;
+}
+
+function pushProp(kind, x, z, yaw, scale = 1) {
+  const at = keepFurniture(x, z, (PROP_R[kind] || 0.55) * (scale || 1));
+  if (!at) return false;
+  candProps.push([kind, at[0], at[1], r3(yaw), scale]);
+  return true;
+}
+
+function pushXZ(list, x, z, yaw, radius, extras = []) {
+  const at = keepFurniture(x, z, radius);
+  if (!at) return false;
+  list.push([at[0], at[1], r3(yaw), ...extras]);
+  return true;
+}
 function nearShop(x, z, minD = 2.8) {
   for (const s of shops) if (hypot(s[0] - x, s[1] - z) < minD) return true;
   return false;
@@ -589,24 +671,20 @@ for (const r of [...avenues].sort((a, b) => (a.n === '테헤란로' ? 0 : 1) - (
         }
         if (fx < box.x0 + 8 || fx > box.x1 - 8 || fz < box.z0 + 8 || fz > box.z1 - 8) continue;
         if (inBuilding(fx, fz)) continue;
-        const onAve = nearestRoad(fx, fz, [r]);
-        if (onAve && onAve.d < (r.w || 16) * 0.5 + 0.55) continue;
-        const bw2 = nearestRoad(fx, fz, busways);
-        if (bw2 && bw2.d < (bw2.road.w || 4) / 2 + 2.4) continue;
-        const fyaw = r3(faceYaw);
+        const fyaw = faceYaw;
         const cycle = (hash01(((fx * 29 + fz * 13 + key * 3 + side) | 0)) * 7) | 0;
-        if (cycle === 0 && benches.length < 220) benches.push([r1(fx), r1(fz), fyaw]);
+        if (cycle === 0 && benches.length < 220) pushXZ(benches, fx, fz, fyaw, 0.85);
         else if (cycle === 1 && tables.length < 200) {
-          tables.push([r1(fx), r1(fz), fyaw]);
-          if (stools.length < 360) {
-            stools.push([r1(fx + hx * 0.4), r1(fz + hz * 0.4), fyaw]);
-            stools.push([r1(fx - hx * 0.4), r1(fz - hz * 0.4), fyaw]);
+          if (pushXZ(tables, fx, fz, fyaw, 0.5)) {
+            const t = tables[tables.length - 1];
+            if (stools.length < 360) pushXZ(stools, t[0] + hx * 0.4, t[1] + hz * 0.4, fyaw, 0.25);
+            if (stools.length < 360) pushXZ(stools, t[0] - hx * 0.4, t[1] - hz * 0.4, fyaw, 0.25);
           }
-        } else if (cycle === 2) candProps.push([2, r1(fx), r1(fz), fyaw, 1]);
-        else if (cycle === 3) candProps.push([3, r1(fx + hx * 0.7), r1(fz + hz * 0.7), fyaw, 1]);
-        else if (cycle === 4) candProps.push([1, r1(fx), r1(fz), fyaw, 1]);
-        else if (cycle === 5) candProps.push([0, r1(fx), r1(fz), fyaw, 1]);
-        else candProps.push([6, r1(fx + hx * 0.9), r1(fz + hz * 0.9), fyaw, 1]);
+        } else if (cycle === 2) pushProp(2, fx, fz, fyaw, 1);
+        else if (cycle === 3) pushProp(3, fx + hx * 0.7, fz + hz * 0.7, fyaw, 1);
+        else if (cycle === 4) pushProp(1, fx, fz, fyaw, 1);
+        else if (cycle === 5) pushProp(0, fx, fz, fyaw, 1);
+        else pushProp(6, fx + hx * 0.9, fz + hz * 0.9, fyaw, 1);
       }
     }
   }
@@ -632,7 +710,7 @@ for (const r of [...roads].sort((a, b) => (ALLEY.has(a.n || '') ? 0 : 1) - (ALLE
       const x = a[0] + hx * s, z = a[1] + hz * s;
       if (focus) {
         for (const side of [-1, 1]) {
-          const off = (r.w || 5) * 0.46 + 0.32;
+          const off = (r.w || 5) * 0.5 + 0.7;
           const px = x + nx * side * off, pz = z + nz * side * off;
           if (px < box.x0 + 6 || px > box.x1 - 6 || pz < box.z0 + 6 || pz > box.z1 - 6) continue;
           const front = storefrontAt(x, z, nx, nz, side, (r.w || 5) * 0.22, 8);
@@ -646,27 +724,26 @@ for (const r of [...roads].sort((a, b) => (ALLEY.has(a.n || '') ? 0 : 1) - (ALLE
           if (behind) {
             const type = h < 0.24 ? 0 : h < 0.5 ? 1 : h < 0.72 ? 2 : 3;
             if (type === 2 && tents.length < 36 && !nearShop(qx, qz, 2.2)) {
-              tents.push([r1(qx - nx * side * 0.15), r1(qz - nz * side * 0.15), r3(faceYaw)]);
+              pushXZ(tents, qx - nx * side * 0.15, qz - nz * side * 0.15, faceYaw, 1.35);
             }
             if ((type === 1 || type === 2) && tables.length < 70) {
-              const tx = px - nx * side * 1.45, tz = pz - nz * side * 1.45;
-              if (!inBuilding(tx, tz, 0.4)) {
-                tables.push([r1(tx), r1(tz), r3(faceYaw)]);
-                stools.push([r1(tx + hx * 0.42), r1(tz + hz * 0.42), r3(faceYaw)]);
-                stools.push([r1(tx - hx * 0.42), r1(tz - hz * 0.42), r3(faceYaw)]);
+              const tx = px - nx * side * 0.35, tz = pz - nz * side * 0.35;
+              if (!inBuilding(tx, tz, 0.4) && pushXZ(tables, tx, tz, faceYaw, 0.5)) {
+                const t = tables[tables.length - 1];
+                pushXZ(stools, t[0] + hx * 0.42, t[1] + hz * 0.42, faceYaw, 0.25);
+                pushXZ(stools, t[0] - hx * 0.42, t[1] - hz * 0.42, faceYaw, 0.25);
               }
             }
             if (aframes.length < 55) {
-              aframes.push([r1(px - nx * side * 1.05 + hx * 1.15), r1(pz - nz * side * 1.05 + hz * 1.15), r3(faceYaw)]);
+              pushXZ(aframes, px + hx * 1.15, pz + hz * 1.15, faceYaw, 0.42);
             }
           }
           const h2 = hash01(((px * 19 + pz * 11 + key) | 0));
-          if (!inBuilding(px - nx * side * 0.6, pz - nz * side * 0.6, 0.4)) {
-            const qx = px - nx * side * 0.55, qz = pz - nz * side * 0.55;
-            if (h2 < 0.16 && candProps.length < 400) candProps.push([5, r1(qx), r1(qz), r3(faceYaw), 1]);
-            else if (h2 < 0.28 && candProps.length < 400) candProps.push([6, r1(qx + hx * 0.8), r1(qz + hz * 0.8), r3(faceYaw), 1]);
-            else if (h2 < 0.4 && trash.length < 40) trash.push([r1(qx + hx * 1.2), r1(qz + hz * 1.2), r3(faceYaw)]);
-            else if (h2 < 0.5 && bins.length < 36) bins.push([r1(qx - hx * 0.9), r1(qz - hz * 0.9), r3(faceYaw)]);
+          if (!inBuilding(px, pz, 0.4)) {
+            if (h2 < 0.16 && candProps.length < 400) pushProp(5, px + hx * 0.4, pz + hz * 0.4, faceYaw, 1);
+            else if (h2 < 0.28 && candProps.length < 400) pushProp(6, px + hx * 0.8, pz + hz * 0.8, faceYaw, 1);
+            else if (h2 < 0.4 && trash.length < 40) pushXZ(trash, px + hx * 1.2, pz + hz * 1.2, faceYaw, 0.28);
+            else if (h2 < 0.5 && bins.length < 36) pushXZ(bins, px - hx * 0.9, pz - hz * 0.9, faceYaw, 0.38);
           }
         }
         if (key % 2 === 0 && strings.length < 70) {
@@ -675,10 +752,11 @@ for (const r of [...roads].sort((a, b) => (ALLEY.has(a.n || '') ? 0 : 1) - (ALLE
         }
         if (key % 3 === 0) {
           const side = key % 6 === 0 ? 1 : -1;
-          const off = (r.w || 5) * 0.46 + 0.25;
+          const off = (r.w || 5) * 0.5 + 0.55;
           const px = x + nx * side * off, pz = z + nz * side * off;
-          if (!inBuilding(px, pz, 0.8)) {
-            const pole = [r1(px), r1(pz), r3(Math.atan2(hx, hz))];
+          const poleAt = keepFurniture(px, pz, 0.28);
+          if (poleAt && !inBuilding(poleAt[0], poleAt[1], 0.8)) {
+            const pole = [poleAt[0], poleAt[1], r3(Math.atan2(hx, hz))];
             alleyPoles.push(pole);
             if (lastAlleyPole) {
               const d = hypot(pole[0] - lastAlleyPole[0], pole[1] - lastAlleyPole[1]);
@@ -692,15 +770,17 @@ for (const r of [...roads].sort((a, b) => (ALLEY.has(a.n || '') ? 0 : 1) - (ALLE
         }
       } else {
         const side = (hash01((x * 17 + z * 31) | 0) > 0.5 ? 1 : -1);
-        const off = (r.w || 5) * 0.38 + 0.7;
+        const off = (r.w || 5) * 0.5 + 0.9;
         const px = x + nx * side * off, pz = z + nz * side * off;
         if (inBuilding(px, pz, 1.6)) continue;
         if (px < box.x0 + 8 || px > box.x1 - 8 || pz < box.z0 + 8 || pz > box.z1 - 8) continue;
         const yaw = Math.atan2(hx, hz) + (side > 0 ? 0 : Math.PI);
         const h = hash01(((px * 13 + pz * 29 + key) | 0));
         const kind = h < 0.10 ? 0 : h < 0.22 ? 1 : h < 0.40 ? 2 : h < 0.58 ? 3 : h < 0.70 ? 5 : h < 0.82 ? 6 : 4;
-        if (kind === 4) candPoles.push([r1(px), r1(pz), r3(yaw)]);
-        else candProps.push([kind, r1(px), r1(pz), r3(yaw), r1(0.85 + hash01((key * 19) | 0) * 0.3)]);
+        if (kind === 4) {
+          const at = keepFurniture(px, pz, 0.28);
+          if (at) candPoles.push([at[0], at[1], r3(yaw)]);
+        } else pushProp(kind, px, pz, yaw, r1(0.85 + hash01((key * 19) | 0) * 0.3));
       }
     }
   }
@@ -710,12 +790,43 @@ for (const r of [...roads].sort((a, b) => (ALLEY.has(a.n || '') ? 0 : 1) - (ALLE
 const nearIx = (x, z) => hypot(x - IX.x, z - IX.z);
 const TEH_PLAZA = { x: -6880, z: -14540 };
 const furPri = (x, z) => Math.min(nearIx(x, z), hypot(x - TEH_PLAZA.x, z - TEH_PLAZA.z));
+function sanitizeProps(list) {
+  const out = [];
+  for (const it of list) {
+    const at = keepFurniture(it[1], it[2], (PROP_R[it[0]] || 0.55) * (it[4] || 1));
+    if (at) out.push([it[0], at[0], at[1], it[3], it[4]]);
+  }
+  return out;
+}
+function sanitizeXZ(list, radius) {
+  const out = [];
+  for (const it of list) {
+    const at = keepFurniture(it[0], it[1], radius);
+    if (at) out.push([at[0], at[1], ...it.slice(2)]);
+  }
+  return out;
+}
+
 candProps.sort((a, b) => furPri(a[1], a[2]) - furPri(b[1], b[2]));
 candPoles.sort((a, b) => nearIx(a[0], a[1]) - nearIx(b[0], b[1]));
-benches.sort((a, b) => furPri(a[0], a[1]) - furPri(b[0], b[1]));
-if (benches.length > 220) benches.length = 220;
-const props = candProps.slice(0, 480);
-const poles = [...alleyPoles, ...candPoles].slice(0, 110);
+const keptBenches = sanitizeXZ(benches, 0.85);
+keptBenches.sort((a, b) => furPri(a[0], a[1]) - furPri(b[0], b[1]));
+benches.length = 0;
+benches.push(...keptBenches.slice(0, 220));
+const props = sanitizeProps(candProps).slice(0, 480);
+const poles = sanitizeXZ([...alleyPoles, ...candPoles], 0.28).slice(0, 110);
+const keptTents = sanitizeXZ(tents, 1.35);
+tents.length = 0; tents.push(...keptTents);
+const keptTables = sanitizeXZ(tables, 0.5);
+tables.length = 0; tables.push(...keptTables);
+const keptStools = sanitizeXZ(stools, 0.25);
+stools.length = 0; stools.push(...keptStools);
+const keptAframes = sanitizeXZ(aframes, 0.42);
+aframes.length = 0; aframes.push(...keptAframes);
+const keptTrash = sanitizeXZ(trash, 0.28);
+trash.length = 0; trash.push(...keptTrash);
+const keptBins = sanitizeXZ(bins, 0.38);
+bins.length = 0; bins.push(...keptBins);
 const wires = extraWires.slice(0, 80);
 for (let i = 0; i < poles.length && wires.length < 120; i++) {
   let best = -1, bd = 34;
@@ -978,7 +1089,7 @@ const out = {
   meta: {
     generated: new Date().toISOString(),
     source: 'data/osm_gangnam_raw.json (© OpenStreetMap contributors, ODbL)',
-    note: '강남대로·테헤란로 OSM 정류장. 중앙 BRT 는 두 busway 사이 3–4m 섬 위에만 쉘터를 두고, 적색 페인트는 섬 옆 버스차로. 길가 정류장은 인도. BIS는 노선번호만. 먹자골목은 강남대로92·94·96길·테헤란로1길.',
+    note: '강남대로·테헤란로 OSM 정류장. 중앙 BRT 는 두 busway 사이 3–4m 섬 위에만 쉘터를 두고, 적색 페인트는 섬 옆 버스차로. 길가 정류장은 인도. 가로시설은 차도·횡단보도·BRT 섬을 피하고 인도에만 둔다. BIS는 노선번호만. 먹자골목은 강남대로92·94·96길·테헤란로1길.',
     box,
     alley: alleyCam,
     alleyRoads: [...ALLEY],

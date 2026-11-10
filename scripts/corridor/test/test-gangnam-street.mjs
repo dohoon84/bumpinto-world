@@ -167,6 +167,83 @@ const ok = (m) => console.log(`ok ${++n} ${m}`);
 }
 
 {
+  const j = J('public/corridor/gangnam/street.json');
+  const index = J('public/corridor/gangnam/index.json');
+  const tiles = Object.keys(index.tiles).sort().map((k) => J(`public/corridor/gangnam/tiles/${k}.json`));
+  const roads = tiles.flatMap((t) => t.r || []);
+  const WALK = new Set(['footway', 'steps', 'pedestrian', 'path']);
+  const carRoads = roads.filter((r) => r.p?.length >= 2 && !WALK.has(r.k));
+  const hypot = Math.hypot;
+  function projectOn(seq, p) {
+    let best = Infinity, pt = seq[0], yaw = 0;
+    for (let i = 1; i < seq.length; i++) {
+      const a = seq[i - 1], b = seq[i];
+      const dx = b[0] - a[0], dz = b[1] - a[1], L2 = dx * dx + dz * dz || 1;
+      const t = Math.max(0, Math.min(1, ((p[0] - a[0]) * dx + (p[1] - a[1]) * dz) / L2));
+      const q = [a[0] + dx * t, a[1] + dz * t];
+      const d = hypot(q[0] - p[0], q[1] - p[1]);
+      if (d < best) { best = d; pt = q; yaw = Math.atan2(dx, dz); }
+    }
+    return { d: best, pt, yaw };
+  }
+  function onCarriage(x, z, radius) {
+    for (const r of carRoads) {
+      const hit = projectOn(r.p, [x, z]);
+      if (hit.d < (r.w || 6) * 0.5 + radius) return { ...hit, road: r };
+    }
+    for (const zd of j.zebras || []) {
+      const [cx, cz, yaw, sx, sz] = zd;
+      const dx = x - cx, dz = z - cz;
+      const c = Math.cos(yaw), s = Math.sin(yaw);
+      const lx = dx * c - dz * s, lz = dx * s + dz * c;
+      const ox = Math.max(0, Math.abs(lx) - sx / 2);
+      const oz = Math.max(0, Math.abs(lz) - sz / 2);
+      if (hypot(ox, oz) < radius) return { kind: 'zebra' };
+    }
+    return null;
+  }
+  const PROP_R = [0.72, 0.55, 0.48, 0.22, 0.28, 0.5, 0.58];
+  const KIND = ['kiosk', 'bike', 'planter', 'bollard', 'pole', 'scooter', 'vending'];
+  const lists = [
+    ['props', (j.props || []).map((p) => ({ x: p[1], z: p[2], r: (PROP_R[p[0]] || 0.55) * (p[4] || 1), label: KIND[p[0]] || `k${p[0]}` }))],
+    ['poles', (j.poles || []).map((p) => ({ x: p[0], z: p[1], r: 0.28, label: 'pole' }))],
+    ['benches', (j.benches || []).map((p) => ({ x: p[0], z: p[1], r: 0.85, label: 'bench' }))],
+    ['tables', (j.tables || []).map((p) => ({ x: p[0], z: p[1], r: 0.5, label: 'table' }))],
+    ['stools', (j.stools || []).map((p) => ({ x: p[0], z: p[1], r: 0.25, label: 'stool' }))],
+    ['tents', (j.tents || []).map((p) => ({ x: p[0], z: p[1], r: 1.35, label: 'tent' }))],
+    ['aframes', (j.aframes || []).map((p) => ({ x: p[0], z: p[1], r: 0.42, label: 'aframe' }))],
+    ['trash', (j.trash || []).map((p) => ({ x: p[0], z: p[1], r: 0.28, label: 'trash' }))],
+    ['bins', (j.bins || []).map((p) => ({ x: p[0], z: p[1], r: 0.38, label: 'bin' }))],
+  ];
+  const byList = {};
+  let overlap = 0, total = 0;
+  const samples = [];
+  for (const [name, items] of lists) {
+    let n = 0;
+    for (const it of items) {
+      total++;
+      const hit = onCarriage(it.x, it.z, it.r);
+      if (hit) {
+        n++; overlap++;
+        if (samples.length < 8) samples.push(`${name}:${it.label} @${it.x},${it.z} ${hit.road ? `${hit.road.n||hit.road.k} d=${hit.d.toFixed(2)}` : 'zebra'}`);
+      }
+    }
+    byList[name] = `${n}/${items.length}`;
+  }
+  assert.equal(overlap, 0, `furniture on carriageway ${overlap}/${total} ${JSON.stringify(byList)} ${samples.join(' | ')}`);
+  const islandHits = [];
+  for (const st of (j.stops || []).filter((s) => s.kind === 'median')) {
+    for (const [name, items] of lists) {
+      for (const it of items) {
+        if (hypot(it.x - st.x, it.z - st.z) <= 2.2) islandHits.push(`${name} near ${st.ref || st.name}`);
+      }
+    }
+  }
+  assert.equal(islandHits.length, 0, `non-shelter furniture on BRT island: ${islandHits.join(', ')}`);
+  ok(`furniture off carriageway 0/${total} ${JSON.stringify(byList)}`);
+}
+
+{
   const prev = J('public/corridor/gangnam/street.json');
   execFileSync('node', [path.join(ROOT, 'scripts/corridor/build-gangnam-street.mjs')], { cwd: ROOT, stdio: 'pipe' });
   const next = J('public/corridor/gangnam/street.json');
