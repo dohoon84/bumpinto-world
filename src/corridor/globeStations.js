@@ -26,3 +26,7 @@ export const PANGYO_GLOBE_STATIONS = [
 export const MIGEUM_GLOBE_STATIONS = [
   {"id":"migeum","ko":"미금","en":"Migeum","lines":["수인분당선","신분당선"],"x":58.9,"z":1845,"lat":37.349809,"lon":127.109016,"branch":"jeongja"},
 ];
+// [gangnam] 강남역. 좌표는 public/corridor/gangnam/index.json 역(x,z) · regions 핀(lat,lon). 2호선으로 잠실에서 갈라진다.
+export const GANGNAM_GLOBE_STATIONS = [
+  {"id":"gangnam","ko":"강남","en":"Gangnam","lines":["2호선","신분당선"],"x":-7097.7,"z":-14453.3,"lat":37.4979,"lon":127.0276,"branch":"jamsil"},
+];

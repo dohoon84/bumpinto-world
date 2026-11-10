@@ -30,10 +30,11 @@ const R = await import('../../../src/regions/index.js');
 // 2) 목록·역 수·이름 (판교와 같은 규칙)
 {
   assert.ok(G.CORRIDOR_STATION_IDS.has('migeum') && G.OPEN_BRANCH_IDS.has('migeum'));
-  assert.equal(G.CORRIDOR_STATION_COUNT, S.CORRIDOR_STATIONS.length + 1 + S.PANGYO_GLOBE_STATIONS.length + 1);
-  assert.equal(G.OPEN_BRANCH_STATIONS.length, S.PANGYO_GLOBE_STATIONS.length + 1);
+  assert.equal(G.CORRIDOR_STATION_COUNT, S.CORRIDOR_STATIONS.length + 1 + G.BRANCH_STATIONS.length);
+  assert.equal(G.OPEN_BRANCH_STATIONS.length, G.BRANCH_STATIONS.length);
+  assert.ok(G.OPEN_BRANCH_IDS.has('gangnam'), '강남 개통 시 지선에 포함');
   assert.deepEqual(G.corridorStationLabel('migeum'), { ko: '미금역', en: 'Migeum Station', short: 'Migeum' });
-  ok(`globe list: ${G.CORRIDOR_STATION_COUNT} stations (pangyo + migeum branches)`);
+  ok(`globe list: ${G.CORRIDOR_STATION_COUNT} stations (branches ${G.BRANCH_STATIONS.map((s) => s.id).join('+')})`);
 }
 
 // 3) 노선도: 미금 점이 정자 남쪽에 보이고, 이름표가 겹치지 않으며, 지선 표시 여부와 상관없이 본선 배치는 같다

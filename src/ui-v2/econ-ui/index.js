@@ -9,8 +9,7 @@ import { onLangChange } from '../../i18n.js';
 import { mountEconHud, refresh, render } from './hud.js';
 import { openWelcome, openChipTip, openQuests, prefetchAllQuests, prefetchAllShop, pushReward, openKarma, openShop, openGoogleWait, openMigrate } from './panels.js';
 import { shownInPay, shownReceipts, showPay, payAndShow, openTaxiApp, openSettle, holdToast, openBoard, openGate } from './transit.js';
-import { claimIfUiFare, resetSubwayFare, takeSubwayTap } from './farePop.js';
-import { close, openKey } from './layer.js';
+import { claimIfUiFare, resetSubwayFare, takeSubwayTap } from './farePop.js';import { close, openKey } from './layer.js';
 import { mountWalletApp, openWalletApp } from './walletApp.js';
 import { coinSound } from './coinSound.js';
 
@@ -97,8 +96,7 @@ async function onTransit(e) {
       const inside = document.body.classList.contains('in-subway');
       const next = takeSubwayTap({ gate: d.gate === 'out' ? 'out' : 'in', inside }, Date.now());
       if (next.action !== 'pay') return;
-      await payAndShow({ mode: 'subway', code: 'subway.base', rideId: next.rideId, where: d.where || '' });
-    } else if (d.mode === 'taxi' && d.phase === 'depart') {
+      await payAndShow({ mode: 'subway', code: 'subway.base', rideId: next.rideId, where: d.where || '' });    } else if (d.mode === 'taxi' && d.phase === 'depart') {
       const h = await econ.holdTaxi({ code: d.code || 'taxi.drive', estimateMeters: Math.round(d.meters || 0), rideId: d.rideId || `taxi-${Date.now()}` });
       if (h.ok) { taxiHolds.set(d.rideId, h.data); holdToast(h.data); }
       else if (h.error.code === 'insufficient_balance') { const { openBlock } = await import('./transit.js'); openBlock({ mode: 'taxi', err: h.error, onQuests: OPEN['04a'] }); }

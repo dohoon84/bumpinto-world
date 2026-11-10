@@ -4,7 +4,7 @@
 //   승강장 판 = 현재 역 ±PANEL_RADIUS 창 (큰 글씨). 전체 노선은 오버레이에서만.
 import { LINE_STOPS } from './stationsData.js';
 import { LINES } from './lines.js';
-import { BY_NAME } from './ride.js';
+import { BY_NAME, isPassStop } from './ride.js';
 import { FONT, fitText, lineBadge } from './geom.js';
 import { isEn } from '../i18n.js';
 
@@ -21,7 +21,7 @@ export function routeMapData(def, line) {
   if (meIdx < 0) return null;
   const list = stops.map((name, i) => {
     const s = BY_NAME.get(name);
-    return { name, nameEn: s?.nameEn || null, game: !!s?.lines?.includes(line), i, me: i === meIdx };
+    return { name, nameEn: s?.nameEn || null, game: !!s?.lines?.includes(line), pass: isPassStop(line, name), i, me: i === meIdx };
   });
   const transfer = (def.lines || []).filter((k) => k !== line && LINES[k]).map((k) => ({ key: k, short: LINES[k].short, ko: LINES[k].ko, en: LINES[k].en, color: LINES[k].color }));
   return {
@@ -110,16 +110,17 @@ export function drawRouteMapPanel(c, w, h, data, en = false) {
     const me = !!s.me;
     const r = me ? Math.max(14, h * 0.045) : Math.max(8, h * 0.028);
     c.beginPath(); c.arc(x, y, r, 0, Math.PI * 2);
-    c.fillStyle = me ? '#ffe169' : '#fff'; c.fill();
-    c.strokeStyle = me ? '#ffe169' : data.color; c.lineWidth = me ? 5 : 2.5; c.stroke();
+    const dim = !me && (s.pass || !s.game);
+    c.fillStyle = me ? '#ffe169' : (dim ? '#b7c3ce' : '#fff'); c.fill();
+    c.strokeStyle = me ? '#ffe169' : (s.pass ? '#8b9bab' : data.color); c.lineWidth = me ? 5 : 2.5; c.stroke();
 
     const label = stopLabel(s, en);
     const maxW = Math.max(40, dx - 6);
     const px = me ? Math.round(h * 0.085) : Math.round(h * 0.055);
-    c.fillStyle = me ? '#ffe169' : (s.game ? '#e8f2f8' : '#9eb4c6');
+    c.fillStyle = me ? '#ffe169' : (dim ? '#8b9bab' : '#e8f2f8');
     fitText(c, label, maxW, px, me ? 900 : 700);
     c.textAlign = 'center'; c.textBaseline = 'middle';
-    // 이름은 위·아래 번갈아 (겹침 줄이기). 현재 역은 항상 위 + 조금 더 띄움
+    // 이름은 위·아래 번갈아 (겹침 줄이기). 현재 역은 항상 위 + 조금 더 띄움. 통과 배지는 가로 칸에 넣지 않는다.
     const up = me || i % 2 === 0;
     c.fillText(label, x, up ? y - (me ? h * 0.16 : h * 0.12) : y + h * 0.12);
     const soon = openingSoonLabel(s.name, en);
@@ -159,6 +160,8 @@ const OVERLAY_CSS = `
 #subway-routemap .srm-stop .dot{flex:none;width:12px;height:12px;border-radius:50%;background:#fff;border:3px solid var(--c);box-sizing:border-box;margin-bottom:0}
 #subway-routemap .srm-stop.out{opacity:.45}
 #subway-routemap .srm-stop.out .nm{color:#9eb4c6}
+#subway-routemap .srm-stop.pass .nm{color:#8b9bab;font-weight:600}
+#subway-routemap .srm-stop.pass .dot{background:#c5d0da;border-color:#8b9bab}
 #subway-routemap .srm-stop.me .dot{width:16px;height:16px;background:#ffe169;border-color:#ffe169;box-shadow:0 0 0 3px rgba(255,225,105,.28);margin-bottom:-2px}
 #subway-routemap .srm-stop.me .nm{font-size:13.5px;font-weight:900;color:#ffe169}
 #subway-routemap .srm-xfer{padding:8px 14px;display:flex;flex-wrap:wrap;gap:6px;align-items:center;flex:none;border-bottom:1px solid rgba(255,255,255,.08)}
@@ -174,6 +177,7 @@ const OVERLAY_CSS = `
 #subway-routemap .srm-list li.me{font-weight:900;color:#ffe169}
 #subway-routemap .srm-list li.me .dot{background:#ffe169;border-color:#ffe169;width:14px;height:14px;margin-left:-1px}
 #subway-routemap .srm-list li.out{opacity:.42}
+#subway-routemap .srm-list li.pass{opacity:1}
 #subway-routemap .srm-list em{font-style:normal;font-size:10.5px;font-weight:800;border-radius:6px;padding:1px 6px;background:#ffe169;color:#122033;margin-left:4px}
 #subway-routemap .srm-list .en{display:block;font-size:11px;font-weight:600;color:#9eb4c6}
 #subway-routemap .srm-ft{padding:8px 14px;font-size:11px;color:#9eb4c6;border-top:1px solid rgba(255,255,255,.12);flex:none}
@@ -181,6 +185,20 @@ body.mobile #subway-routemap .srm-box{width:min(100vw - 16px,560px);max-height:c
 `;
 
 function esc(s) { return String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+
+/** 위 가로 줄. 통과 역은 흐린 점·이름만 (배지 없음 — 칸이 좁아 이름이 잘림). */
+export function routeStripMarkup(stops, { en = false } = {}) {
+  return (stops || []).map((s) => {
+    const cls = ['srm-stop', s.me ? 'me' : '', s.pass ? 'pass' : (s.game ? '' : 'out')].filter(Boolean).join(' ');
+    return `<div class="${cls}" data-i="${s.i}"><span class="nm">${esc(stopLabel(s, en))}</span><span class="dot"></span></div>`;
+  }).join('');
+}
+
+/** 아래 세로 목록의 배지. 통과 역만 ‘통과’. */
+export function routeListBadge(s, en = false) {
+  if (s?.me) return en ? 'You are here' : '여기';
+  return s?.pass ? '통과' : '';
+}
 
 // 스크롤 컨테이너에서 대상이 가운데 오도록 (offsetParent 말고 getBoundingClientRect — 중첩 offset 오차 방지)
 function centerIn(scroller, el, axis = 'y') {
@@ -208,15 +226,12 @@ export function mountRouteMapOverlay() {
     const xfer = data.transfer.length
       ? `<div class="srm-xfer"><span>${en ? 'Transfer' : '갈아타는 곳'}</span>${data.transfer.map((t) => `<i style="background:${t.color}">${esc(en ? t.short : t.short)}</i>`).join('')}</div>`
       : '';
-    const strip = data.stops.map((s) => {
-      const cls = ['srm-stop', s.me ? 'me' : '', s.game ? '' : 'out'].filter(Boolean).join(' ');
-      const nm = esc(stopLabel(s, en));
-      return `<div class="${cls}" data-i="${s.i}"><span class="nm">${nm}</span><span class="dot"></span></div>`;
-    }).join('');
+    const strip = routeStripMarkup(data.stops, { en });
     const items = data.stops.map((s, i) => {
-      const cls = [i === 0 ? 'first' : '', i === data.stops.length - 1 ? 'last' : '', s.me ? 'me' : '', s.game ? '' : 'out'].filter(Boolean).join(' ');
+      const cls = [i === 0 ? 'first' : '', i === data.stops.length - 1 ? 'last' : '', s.me ? 'me' : '', s.pass ? 'pass' : (s.game ? '' : 'out')].filter(Boolean).join(' ');
+      const badge = routeListBadge(s, en);
       const soon = openingSoonLabel(s.name, en);
-      const tag = s.me ? `<em>${en ? 'You are here' : '여기'}</em>` : (soon ? `<em>${esc(soon)}</em>` : '');
+      const tag = badge ? `<em>${esc(badge)}</em>` : (soon ? `<em>${esc(soon)}</em>` : '');
       const enLine = s.nameEn ? `<span class="en">${esc(s.nameEn)}</span>` : '';
       return `<li class="${cls}" style="--c:${data.color}" data-i="${s.i}"><span class="dot"></span><span><b>${esc(s.name)}</b>${tag}${enLine}</span></li>`;
     }).join('');

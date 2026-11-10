@@ -4,7 +4,7 @@ import * as THREE from 'three';
 import { releaseRenderer } from './releaseRenderer.js';
 import { MAP_W, MAP_H, LAND, KOREA } from './worldLand.js';
 import { trackEvent } from './analytics.js';
-import { OPEN_REGIONS, UPCOMING_REGIONS, getCurrentRegion, getRegion, countryOf } from './regions/index.js';
+import { OPEN_REGIONS, UPCOMING_REGIONS, getCurrentRegion, getRegion, countryOf, regionBlurb } from './regions/index.js';
 import { isEn, tr, toggleLang, onLangChange } from './i18n.js';
 import { corridorGlobeEnabled, mountGlobeCorridor, CORRIDOR_STATION_IDS, CORRIDOR_STATION_COUNT, corridorName, OPEN_BRANCH_IDS, OPEN_MAINLINE_STATIONS, OPEN_BRANCH_STATIONS } from './corridor/globeCorridor.js'; // [corridor]
 
@@ -535,7 +535,7 @@ export function openWorldGate({ onEnter }) {
           <button type="button" class="gate-upcoming-item is-open" data-enter-at="${r.id}">
             <span class="dot open"></span>
             <span class="name">${en ? (r.enName || r.name) : r.name}</span>
-            <small>${en ? (r.enDesc || r.desc) : r.desc}</small>
+            <small>${regionBlurb(r, en, true)}</small>
             <em>${en ? 'OPEN · Enter' : '열림 · 입장'}</em>
           </button>
         </li>`;

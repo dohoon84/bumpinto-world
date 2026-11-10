@@ -13,7 +13,17 @@ export function migeumSubEnabled(search = typeof location !== 'undefined' ? loca
   const p = new URLSearchParams(search);
   return p.get('migeum') !== '0' && p.get('migeumsub') !== '0';
 }
-const EXT_ON = { migeum: migeumSubEnabled() };
+// [gangnam] ?gangnamsub=0 강남 지하철만 끔. ?gangnam=0 이면 지상과 함께 지하철도 끔.
+//   Node: GANGNAMSUB=0 / GANGNAM=0
+export function gangnamSubEnabled(search = typeof location !== 'undefined' ? location.search : null) {
+  if (search == null) {
+    const env = typeof process !== 'undefined' ? process.env || {} : {};
+    return env.GANGNAM !== '0' && env.GANGNAMSUB !== '0';
+  }
+  const p = new URLSearchParams(search);
+  return p.get('gangnam') !== '0' && p.get('gangnamsub') !== '0';
+}
+const EXT_ON = { migeum: migeumSubEnabled(), gangnam: gangnamSubEnabled() };
 // 확장 전 역 목록 (ext 없는 역) — 기존 역 시간표 기준(ride.js lineOffsets)은 늘 이것으로 잰다
 export const STATIONS_BASE = Object.freeze(ALL.filter((s) => !s.ext));
 export const STATIONS = Object.freeze(ALL.filter((s) => !s.ext || EXT_ON[s.ext]));

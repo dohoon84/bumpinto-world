@@ -7,7 +7,7 @@
 import { el, esc, ICON, headHtml, tagHtml, guestChip } from './kit.js';
 import { setTop, backChip, liveChip, langChip } from './topbar.js';
 import { regionSummary, stationLabel, readLastStation } from './data.js';
-import { OPEN_REGIONS, UPCOMING_REGIONS, getRegion, countryOf } from '../regions/index.js';
+import { OPEN_REGIONS, UPCOMING_REGIONS, getRegion, countryOf, regionBlurb } from '../regions/index.js';
 import { CORRIDOR_STATION_IDS, CORRIDOR_STATION_COUNT, corridorName, layoutCorridorMap, OPEN_BRANCH_IDS } from '../corridor/globeCorridor.js';
 import { lotteSiteLabel } from '../corridor/lotteOpening.js';
 import { isEn, tr, onLangChange } from '../i18n.js';
@@ -72,7 +72,7 @@ function mountGate({ root, corridorGlobe, enter, focus, teardown }, onBackToStar
       out.push({ c, open: !isSoon, html: card({ name: en ? (r.enName || r.name) : r.name, desc, open: !isSoon, colors: c === 'US' ? STRIP.us : STRIP.kr, attr: `data-enter-region="${r.id}"`, soonText: isSoon ? '11:00 KST' : '' }) });
     }
     if (cor) for (const r of UPCOMING_REGIONS.filter((x) => OPEN_BRANCH_IDS.has(x.id))) {
-      out.push({ c: countryOf(r), open: true, html: card({ name: en ? (r.enName || r.name) : r.name, desc: en ? (r.enDesc || r.desc) : r.desc, open: true, colors: STRIP.branch, attr: `data-enter-at="${r.id}"` }) });
+      out.push({ c: countryOf(r), open: true, html: card({ name: en ? (r.enName || r.name) : r.name, desc: regionBlurb(r, en, true), open: true, colors: STRIP.branch, attr: `data-enter-at="${r.id}"` }) });
     }
     for (const r of UPCOMING_REGIONS.filter((x) => !(cor && (CORRIDOR_STATION_IDS.has(x.id) || OPEN_BRANCH_IDS.has(x.id))))) {
       out.push({ c: countryOf(r), open: false, html: card({ name: en ? (r.enName || r.name) : r.name, desc: en ? (r.enDesc || r.desc) : r.desc, open: false, attr: `data-region="${r.id}" role="button" tabindex="0"` }) });
@@ -131,7 +131,8 @@ function mountGate({ root, corridorGlobe, enter, focus, teardown }, onBackToStar
     }
     const stations = [...BASE.items, ...BASE.branches];
     const colX = (side) => ox + (side === 'left' ? BASE.colL : BASE.colR) * k;
-    const leaders = stations.map((s) => { const [x, y] = P(s); return `<path d="M${x.toFixed(1)} ${y.toFixed(1)} L${colX(s.side).toFixed(1)} ${y.toFixed(1)}" stroke="#ffffff" stroke-opacity=".28" stroke-width="1.5"/>`; }).join('');
+    const Ly = (s) => oy + ((s.labelDy ?? s.dy) * k);
+    const leaders = stations.map((s) => { const [x, y] = P(s); return `<path d="M${x.toFixed(1)} ${y.toFixed(1)} L${colX(s.side).toFixed(1)} ${Ly(s).toFixed(1)}" stroke="#ffffff" stroke-opacity=".28" stroke-width="1.5"/>`; }).join('');
     const dots = stations.map((s) => {
       const [x, y] = P(s), id = s.live ? 'jeongja' : s.id, on = id === sel;
       return `<circle data-dot="${id}" cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${on ? 9 : 6}" fill="${on ? '#ffe169' : '#ffffff'}" stroke="${on ? '#f5a200' : '#122033'}" stroke-width="${on ? 4 : 3}"/>`;
@@ -139,7 +140,7 @@ function mountGate({ root, corridorGlobe, enter, focus, teardown }, onBackToStar
     const [lx, ly] = P(BASE.landmark);
     const lm = `<rect x="${(lx - 6).toFixed(1)}" y="${(ly - 6).toFixed(1)}" width="12" height="12" transform="rotate(45 ${lx.toFixed(1)} ${ly.toFixed(1)})" fill="#4cc9f0" stroke="#ffffff" stroke-width="2"/>`;
     const chips = stations.map((s) => {
-      const [, y] = P(s), id = s.live ? 'jeongja' : s.id, on = id === sel, left = s.side === 'left';
+      const y = Ly(s), id = s.live ? 'jeongja' : s.id, on = id === sel, left = s.side === 'left';
       const pos = left ? `right:${(W - colX('left') + 4).toFixed(1)}px` : `left:${(colX('right') + 4).toFixed(1)}px`;
       return `<button type="button" class="v2-stn${on ? ' on' : ''}" data-v2-at="${id}" data-hot="${id}" style="${pos};top:${(y - 13).toFixed(1)}px"><b>${esc(en ? s.en : s.ko)}</b><small>${esc(en ? s.ko : s.en)}</small></button>`;
     }).join('');

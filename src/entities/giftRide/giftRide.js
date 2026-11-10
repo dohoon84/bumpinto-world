@@ -2,6 +2,7 @@
 //   탈것마다 다른 것(모델·가감속·라이더 자세·HUD·소리·연출)은 spec 으로 받는다. 예: roadBike/roadBike.js, superbike/superbike.js
 //   보유 수량은 src/gifts/catalog.js · holdings.js 가 기준이고, 여기는 setStock 으로 받기만 한다.
 import * as THREE from 'three';
+import { inWorldBounds } from '../../corridor/islands.js'; // [gangnam]
 import { stepWheelie, wheelieSteerScaleSmooth } from './wheelie.js';
 
 const G = 9.81;
@@ -356,7 +357,7 @@ export function createGiftRide(env, spec) {
     const s = Math.sin(h);
     const c = Math.cos(h);
     const bd = world.bounds;
-    if (bd && (x < bd.x0 || x > bd.x1 || z < bd.z0 || z > bd.z1)) return false;
+    if (bd && !inWorldBounds({ x, z }, bd)) return false;
     for (const [lx, lz] of HULL) {
       if (world.isBlocked(x + lx * c + lz * s, z - lx * s + lz * c, 0.05)) return false;
     }

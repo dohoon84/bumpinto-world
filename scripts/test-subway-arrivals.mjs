@@ -14,7 +14,7 @@ const KEY = 'TESTKEY-not-real-0123456789abc';
 // 노선 id 표는 클라이언트·worker 가 같다, 허용 역 = 게임 역
 assert.deepEqual({ ...WORKER_IDS }, { ...SUBWAY_ID });
 assert.deepEqual([...ALLOWED], STATIONS_DATA.map((d) => d.name)); // [migeum-sub] worker 허용 역 = 생성된 역 전체 (미금 포함, 플래그와 무관)
-assert.equal(ALLOWED.at(-1), '미금');
+assert.equal(ALLOWED.at(-2), '미금'); assert.equal(ALLOWED.at(-1), '강남'); // [gangnam] 미금 다음, 맨 뒤
 for (const k of Object.values(SUBWAY_ID)) assert.ok(LINES[k]);
 assert.ok(SUBWAY_CACHE_SEC >= 20 && SUBWAY_CACHE_SEC <= 30 && POLL_SEC >= SUBWAY_CACHE_SEC);
 
