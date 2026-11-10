@@ -453,7 +453,10 @@
   display: flex; flex-direction: column; overflow: hidden;
 }
 #arc-root .arc-modal .board h3 { margin: 0 0 2px; font-size: 20px; font-weight: 900; text-align: center; padding: 0 60px; box-sizing: border-box; }
-#arc-root .arc-modal .board .sub { opacity: .65; font-size: 12px; margin-bottom: 10px; text-align: center; font-weight: 700; word-break: keep-all; overflow-wrap: break-word; line-height: 1.45; padding: 0 60px; box-sizing: border-box; max-width: 100%; white-space: normal; }
+#arc-root .arc-modal .board .sub { opacity: .65; font-size: 12px; margin-bottom: 10px; text-align: center; font-weight: 700; word-break: keep-all; overflow-wrap: break-word; line-height: 1.45; padding: 0 48px; box-sizing: border-box; max-width: 100%; white-space: normal; }
+#arc-root .arc-modal .board .sub .sub-lead { display: block; white-space: nowrap; }
+#arc-root .arc-modal .board .sub .sub-pays { display: block; }
+#arc-root .arc-modal .board .sub .sub-pay { white-space: nowrap; }
 .arc-login-nudge { margin: 0 0 10px; text-align: center; font-weight: 800; line-height: 1.35; word-break: keep-all; }
 .arc-login-nudge p { margin: 0 0 8px; }
 .arc-login-nudge [data-login] {

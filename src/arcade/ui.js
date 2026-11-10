@@ -1,6 +1,6 @@
 // [arcade] DOM UI: 힌트 · 페이드 · 순위판 · 음소거 — 터치는 BUMP24 식 '탭하여' 버튼
 import './ui.css';
-import { monthlyRewardSub } from '../../server/phone/src/arcade/rules.js';
+import { monthlyRewardSubHtml } from '../../server/phone/src/arcade/rules.js';
 import { splitBoardMine } from './boardView.js';
 import { loginNudgeHtml, bindLoginNudge } from './loginNudge.js';
 
@@ -91,7 +91,7 @@ export function createArcadeUI({ onHintTap, onCabTap, onExit, onMute } = {}) {
       fade.querySelector('span').textContent = sub;
     },
     setMuted(m) { muteBtn.textContent = m ? '🔇' : '🔊'; },
-    showBoard({ title = '범핑팡 랭킹', sub = monthlyRewardSub(), rows = [], period = 'today', game = 'pang', games = ['pang'], me = null, guest = false, onClose, onTab, onGame, onLogin } = {}) {
+    showBoard({ title = '범핑팡 랭킹', sub, rows = [], period = 'today', game = 'pang', games = ['pang'], me = null, guest = false, onClose, onTab, onGame, onLogin } = {}) {
       const pang = '/arcade/pang';
       const medal = (rank) => {
         if (rank === 1 || rank === 2 || rank === 3) {
@@ -125,7 +125,7 @@ export function createArcadeUI({ onHintTap, onCabTap, onExit, onMute } = {}) {
         : '';
       modalHost.innerHTML = `<div class="arc-modal neon"><div class="board" role="dialog" aria-label="${esc(title)}">
         <button type="button" class="close-x" data-close aria-label="닫기"></button>
-        <h3>${esc(title)}</h3><div class="sub">${esc(sub)}</div>
+        <h3>${esc(title)}</h3><div class="sub">${sub == null ? monthlyRewardSubHtml() : esc(sub)}</div>
         ${loginBlock}
         ${gameTabs}
         <div class="tabs" role="tablist" aria-label="기간">

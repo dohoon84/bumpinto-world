@@ -2,7 +2,6 @@
 import * as THREE from 'three';
 import { arcadeEnabled, mergeEnabled, arcadeShotMode, ARCADE_AT, arcadeAtSpot } from './flag.js';
 import { arcadePlacement, arcadePlacements, doorOutsidePos, arcadeBranchLabel } from './locations.js';
-import { monthlyRewardSub } from '../../server/phone/src/arcade/rules.js';
 import { mountArcadeExterior } from './exterior.js';
 import { buildArcadeInterior } from './interior.js';
 import { createArcadeSfx } from './sfx.js';
@@ -178,7 +177,6 @@ export function mountArcade({
   async function openBoard(period = 'today', kind = 'pang') {
     const provider = kind === 'merge' ? mergeRank : rank;
     const title = kind === 'merge' ? '범편의점 랭킹' : '범핑팡 랭킹';
-    const sub = monthlyRewardSub();
     await gateFor(provider);
     const rows = await provider.top({ period });
     const name = (() => { try { return selfName?.() || ''; } catch { return ''; } })();
@@ -187,7 +185,7 @@ export function mountArcade({
       ? (rows.find((r) => String(r.name || '') === name) || null)
       : (rows.find((r) => r.me || r.self) || null);
     ui.showBoard({
-      title, sub, period, rows, me: mine,
+      title, period, rows, me: mine,
       game: kind,
       games: mergeOn ? ['pang', 'merge'] : ['pang'],
       guest: knownGuest,

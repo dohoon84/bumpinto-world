@@ -10,8 +10,16 @@ export function resolveGameId(raw) {
 export const STORE_ID = 'arcade-seohyeon'; // 오락실 전광판 1개(매장 통합)
 export const LIMIT_MSG = '오늘 도전 완료, 연습은 계속 가능';
 export const MONTHLY_BUM = [3000, 2000, 1000]; // 월간 1·2·3등. 참여·일일 지급 없음. 게스트는 지급하지 않음.
+export function monthlyRewardPairs() {
+  return MONTHLY_BUM.map((n, i) => `${i + 1}위 ${n.toLocaleString('ko-KR')}`);
+}
 export function monthlyRewardSub() {
-  return `PC·모바일 통합 · 월간 1위 ${MONTHLY_BUM[0].toLocaleString('ko-KR')} · 2위 ${MONTHLY_BUM[1].toLocaleString('ko-KR')} · 3위 ${MONTHLY_BUM[2].toLocaleString('ko-KR')} bum`;
+  const [a, b, c] = monthlyRewardPairs();
+  return `PC·모바일 통합 · 월간 보상 · ${a} · ${b} · ${c} bum`;
+}
+export function monthlyRewardSubHtml() {
+  const [a, b, c] = monthlyRewardPairs();
+  return `<span class="sub-lead">PC·모바일 통합 · 월간 보상</span> <span class="sub-pays"><span class="sub-pay">${a}</span> · <span class="sub-pay">${b}</span> · <span class="sub-pay">${c} bum</span></span>`;
 }
 export const MIN_PARTICIPANTS = 5;
 export const TITLE = '범핑팡왕';

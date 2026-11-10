@@ -9,7 +9,7 @@ import {
 } from '../server/phone/src/arcade/rules.js';
 import { arcadeEnabled, arcadeAtSpot, ARCADE_AT } from '../src/arcade/flag.js';
 import { arcadePlacement, hollowSeohyeonArcade, arcadeBranchLabel } from '../src/arcade/locations.js';
-import { monthlyRewardSub } from '../server/phone/src/arcade/rules.js';
+import { monthlyRewardSub, monthlyRewardSubHtml } from '../server/phone/src/arcade/rules.js';
 import { readFileSync } from 'node:fs';
 
 const assert = (c, m) => { if (!c) throw new Error(m); };
@@ -77,7 +77,8 @@ const clean = monthlyBestPays(rankRows([
 ]), '2026-11');
 assert(clean.length === 3 && clean[0].title === TITLE && clean[0].amount === MONTHLY_BUM[0], 'clean podium');
 assert(MONTHLY_BUM[0] === 3000 && MONTHLY_BUM[1] === 2000 && MONTHLY_BUM[2] === 1000, 'monthly 3000/2000/1000');
-assert(monthlyRewardSub().includes('월간 1위 3,000') && monthlyRewardSub().includes('2위 2,000') && monthlyRewardSub().includes('3위 1,000 bum'), 'subtitle both games');
+assert(monthlyRewardSub().includes('월간 보상') && monthlyRewardSub().includes('1위 3,000') && monthlyRewardSub().includes('2위 2,000') && monthlyRewardSub().includes('3위 1,000 bum'), 'subtitle both games');
+assert(monthlyRewardSubHtml().includes('sub-lead') && (monthlyRewardSubHtml().match(/class="sub-pay"/g) || []).length === 3, 'subtitle pairs are nowrap spans');
 assert(arcadeBranchLabel(arcadePlacement('arcade-seohyeon')) === 'BUMP 오락실 서현점', 'seohyeon badge');
 assert(arcadeBranchLabel(arcadePlacement('arcade-jeongja')) === 'BUMP 오락실 정자역점', 'jeongja badge');
 assert(arcadeBranchLabel({ branch: '분당점' }) === 'BUMP 오락실 분당점', 'other branch fallback');
@@ -92,7 +93,8 @@ assert(arcadeBranchLabel({ branch: '분당점' }) === 'BUMP 오락실 분당점'
   assert(/max-width:\s*100%/.test(store), 'long branch names can wrap in badge');
   assert(/z-index:\s*0/.test(bum) && !/margin:\s*-/.test(bum), 'bear stays below badge and is not pulled over it');
   const sub = css.match(/#arc-root \.arc-modal \.board \.sub \{[^}]+\}/)[0];
-  assert(/word-break:\s*keep-all/.test(sub) && /padding:\s*0 60px/.test(sub), 'subtitle wraps and clears close button');
+  assert(/word-break:\s*keep-all/.test(sub), 'subtitle keep-all');
+  assert(/white-space:\s*nowrap/.test(css.match(/\.sub-pay \{[^}]+\}/)[0]), 'rank-amount pairs do not wrap inside');
 }
 
 

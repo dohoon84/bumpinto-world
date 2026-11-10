@@ -224,7 +224,7 @@ assert(rankSrc.includes('arcadeShotMode()'), 'submit forces practice in ?shot');
 
 
 assert(MONTHLY_BUM[0] === 3000 && MONTHLY_BUM[1] === 2000 && MONTHLY_BUM[2] === 1000, 'monthly rewards 3000/2000/1000');
-assert(monthlyRewardSub().includes('1위 3,000') && monthlyRewardSub().includes('2위 2,000') && monthlyRewardSub().includes('3위 1,000 bum'), 'reward subtitle');
+assert(monthlyRewardSub().includes('월간 보상') && monthlyRewardSub().includes('1위 3,000') && monthlyRewardSub().includes('2위 2,000') && monthlyRewardSub().includes('3위 1,000 bum'), 'reward subtitle');
 assert(LOGIN_NUDGE_TEXT.includes('로그인하면'), 'guest nudge copy');
 {
   const guestOnly = monthlyBestPays(rankRows([
