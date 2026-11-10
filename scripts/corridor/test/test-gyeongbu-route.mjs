@@ -11,6 +11,7 @@ import { mergeGangnamIndex } from '../../../src/corridor/gangnam.js';
 import {
   mergeGyeongbuWorld, expressRoadHeight, sampleExpressPts, BEFORE_FIX_STUCK,
   EXPRESS_ROAD_Y, EXPRESS_PAVE_R, CHEONGGYE_ISLAND,
+  inPangyoCity, nearPangyoToll, PANGYO_TG, setExpressHeightExtra, buildExpressHeightProfile,
 } from '../../../src/corridor/gyeongbuWorld.js';
 import { cheonggyeHeightAt, cheonggyeMeshHeightAt } from '../../../src/corridor/cheonggyeTerrain.js';
 import { expresswayMedianLine } from '../../../src/corridor/gyeongbuExpress.js';
@@ -180,4 +181,72 @@ for (let i = 1; i < median.length; i++) {
 assert.ok(maxGap < 12, `분리대 최대 간격 ${maxGap.toFixed(2)}m`);
 assert.ok(maxTurn < 0.50, `분리대 최대 꺾임 ${(maxTurn * 180 / Math.PI).toFixed(1)}deg / 5m`);
 
-console.log(`gyeongbu route: ${samples.length} pts / 20m, dense ${dense.length}×${offsets.length} 메시, 분리대 ${median.length} (gap≤${maxGap.toFixed(2)}m turn≤${(maxTurn * 180 / Math.PI).toFixed(1)}°), 노면 y=${EXPRESS_ROAD_Y}. 고치기 전 막힘 ${stuckBefore.length}곳 첫 s=${first.s.toFixed(0)} (${first.x.toFixed(1)}, ${first.z.toFixed(1)})`);
+const decked = ex.pts.filter((p) => p[3] === 'main' || p[3] === 'spur' || (p[3] === 'approach' && (p[0] < -200 || !inPangyoCity(p[0], p[1]))));
+const approachDeck = decked.filter((p) => p[3] === 'approach');
+assert.ok(approachDeck.length > 40, `접근로 차도 점 ${approachDeck.length}`);
+assert.ok(approachDeck.every((p) => p[0] < -180), '접근로 차도는 판교 시가 서쪽에서 시작');
+assert.ok(approachDeck.some((p) => nearPangyoToll(p[0], p[1], 80)), '접근로 차도가 판교요금소를 지남');
+assert.ok(nearPangyoToll(PANGYO_TG.x, PANGYO_TG.z));
+const gySrc = fs.readFileSync(path.join(root, 'src/corridor/gyeongbuExpress.js'), 'utf8');
+assert.ok(gySrc.includes('gyeongbuApproachFill'));
+assert.ok(gySrc.includes('nearPangyoToll'));
+assert.ok(gySrc.includes('keepDeckPoint'));
+assert.ok(/notToll\(s\)/.test(gySrc) && gySrc.includes('wallBoxGeo(run, medOff'));
+const idxSrc = fs.readFileSync(path.join(root, 'src/corridor/index.js'), 'utf8');
+assert.ok(idxSrc.includes('setExpressHeightExtra') && idxSrc.includes('buildExpressHeightProfile'));
+
+const pangyo = JSON.parse(fs.readFileSync(path.join(root, 'public/corridor/pangyo/express.json'), 'utf8'));
+function pangyoY(x, z) {
+  let best = null;
+  for (const l of pangyo.lines || []) {
+    const pts = l.pts || [];
+    for (let i = 1; i < pts.length; i++) {
+      const a = pts[i - 1], b = pts[i];
+      const hw = Math.max(a[3] || 8, b[3] || 8) / 2 + 1.5;
+      const dx = b[0] - a[0], dz = b[1] - a[1], L2 = dx * dx + dz * dz || 1e-9;
+      const t = Math.max(0, Math.min(1, ((x - a[0]) * dx + (z - a[1]) * dz) / L2));
+      if (Math.hypot(a[0] + dx * t - x, a[1] + dz * t - z) > hw) continue;
+      const y = a[2] + (b[2] - a[2]) * t;
+      if (best == null || y > best) best = y;
+    }
+  }
+  return best;
+}
+setExpressHeightExtra(buildExpressHeightProfile(ex.pts, pangyoY));
+
+const MAX_STEP = 0.5;
+const ride = sampleExpressPts(ex.pts, 5);
+assert.ok(ride.length > 200, `전 구간 샘플 ${ride.length}`);
+let playerY = expressRoadHeight(ride[0].x, ride[0].z, ex.pts);
+assert.ok(playerY != null);
+const heightMiss = [];
+let maxRise = 0;
+for (const q of ride) {
+  const road = expressRoadHeight(q.x, q.z, ex.pts);
+  if (road == null) {
+    heightMiss.push({ s: +q.s.toFixed(1), x: +q.x.toFixed(1), z: +q.z.toFixed(1), why: 'no-road' });
+    continue;
+  }
+  let h = 0;
+  if (road > h && road <= playerY + MAX_STEP + 0.1) h = road;
+  if (Math.abs(h - road) > 0.02 || Math.abs(playerY - road) > 0.61) {
+    heightMiss.push({ s: +q.s.toFixed(1), player: +playerY.toFixed(3), next: +road.toFixed(3), got: +h.toFixed(3) });
+  }
+  const rise = Math.abs(road - playerY);
+  if (rise > maxRise) maxRise = rise;
+  playerY = h;
+}
+assert.deepEqual(heightMiss, [], `전 구간 높이가 노면과 다름 ${JSON.stringify(heightMiss[0] || {})} (${heightMiss.length}곳)`);
+
+const tgRide = ride.filter((q) => nearPangyoToll(q.x, q.z, 80));
+assert.ok(tgRide.length > 4, `요금소 부근 샘플 ${tgRide.length}`);
+for (const q of tgRide) {
+  const road = expressRoadHeight(q.x, q.z, ex.pts);
+  assert.ok(road != null && road >= EXPRESS_ROAD_Y - 0.001, `요금소 노면 ${q.s.toFixed(0)} y=${road}`);
+}
+
+const cityEdge = ride.find((q) => q.x < -200 && q.kind === 'approach');
+assert.ok(cityEdge, '판교 시가 서쪽 접근로 샘플');
+assert.equal(expressRoadHeight(cityEdge.x, cityEdge.z, ex.pts) != null, true);
+
+console.log(`gyeongbu route: ${samples.length} pts / 20m, dense ${dense.length}×${offsets.length} 메시, 분리대 ${median.length} (gap≤${maxGap.toFixed(2)}m turn≤${(maxTurn * 180 / Math.PI).toFixed(1)}°), 노면 y=${EXPRESS_ROAD_Y}, 전구간 ${ride.length} (Δy≤${maxRise.toFixed(3)}m/5m), 접근로 ${approachDeck.length}. 고치기 전 막힘 ${stuckBefore.length}곳 첫 s=${first.s.toFixed(0)} (${first.x.toFixed(1)}, ${first.z.toFixed(1)})`);

@@ -42,6 +42,45 @@ function distToRoad(x, z, segs) {
   return best;
 }
 
+function makeDistFn(segs, cell = 80) {
+  if (!segs.length) return () => Infinity;
+  const map = new Map();
+  const key = (ix, iz) => ix * 100003 + iz;
+  for (const s of segs) {
+    const minx = Math.min(s.ax, s.ax + s.dx), maxx = Math.max(s.ax, s.ax + s.dx);
+    const minz = Math.min(s.az, s.az + s.dz), maxz = Math.max(s.az, s.az + s.dz);
+    for (let iz = Math.floor(minz / cell); iz <= Math.floor(maxz / cell); iz++) {
+      for (let ix = Math.floor(minx / cell); ix <= Math.floor(maxx / cell); ix++) {
+        const k = key(ix, iz);
+        let b = map.get(k);
+        if (!b) map.set(k, (b = []));
+        b.push(s);
+      }
+    }
+  }
+  return (x, z) => {
+    const ix = Math.floor(x / cell), iz = Math.floor(z / cell);
+    let best = Infinity;
+    const maxR = 4;
+    for (let ring = 0; ring <= maxR; ring++) {
+      for (let jz = iz - ring; jz <= iz + ring; jz++) {
+        for (let jx = ix - ring; jx <= ix + ring; jx++) {
+          if (ring && jz !== iz - ring && jz !== iz + ring && jx !== ix - ring && jx !== ix + ring) continue;
+          const b = map.get(key(jx, jz));
+          if (!b) continue;
+          for (const s of b) {
+            const t = Math.max(0, Math.min(1, ((x - s.ax) * s.dx + (z - s.az) * s.dz) / s.L2));
+            const d = Math.hypot(s.ax + s.dx * t - x, s.az + s.dz * t - z);
+            if (d < best) best = d;
+          }
+        }
+      }
+      if (best <= (ring + 0.51) * cell) break;
+    }
+    return best;
+  };
+}
+
 function hash01(ix, iz) {
   let n = (ix * 374761393 + iz * 668265263) | 0;
   n = (n ^ (n >>> 13)) * 1274126177;
@@ -339,27 +378,20 @@ export function cheonggyeHeightAt(x, z, dem, streets = null, extraRoad = null) {
   return heightAtPoint(x, z, dem, segs, local);
 }
 
-/** 화면에 깔리는 지면 메시와 같은 보간. 50m 칸은 두 삼각형, 도로 근처 칸은 10m 로 나눈 뒤 같은 식으로 보간한다. */
+/** 화면에 깔리는 지면 메시와 같은 보간(10m 격자, 두 삼각형). */
 export function cheonggyeMeshHeightAt(x, z, dem, streets = null, extraRoad = null) {
   if (!dem?.h?.length) return null;
   const { x0, z0, dx, dz, nx, nz } = dem;
   if (x < x0 || z < z0 || x > x0 + (nx - 1) * dx || z > z0 + (nz - 1) * dz) return null;
   const { segs, local } = prepareRoadSegs(dem, streets, extraRoad);
-  const fx = (x - x0) / dx, fz = (z - z0) / dz;
-  const ix = Math.max(0, Math.min(nx - 2, Math.floor(fx)));
-  const iz = Math.max(0, Math.min(nz - 2, Math.floor(fz)));
+  const step = CHEONGGYE_GROUND_FINE;
+  const fx = (x - x0) / step, fz = (z - z0) / step;
+  const maxX = (nx - 1) * dx, maxZ = (nz - 1) * dz;
+  const jx = Math.max(0, Math.min(Math.floor(maxX / step) - 1, Math.floor(fx)));
+  const jz = Math.max(0, Math.min(Math.floor(maxZ / step) - 1, Math.floor(fz)));
+  const tx = fx - jx, tz = fz - jz;
   const yAt = (px, pz) => heightAtPoint(px, pz, dem, segs, local);
-  const sub = Math.max(1, Math.round(dx / CHEONGGYE_GROUND_FINE));
-  if (quadNeedsRefine(ix, iz, x0, z0, dx, dz, segs, local)) {
-    const lx = (fx - ix) * sub, lz = (fz - iz) * sub;
-    const jx = Math.max(0, Math.min(sub - 1, Math.floor(lx)));
-    const jz = Math.max(0, Math.min(sub - 1, Math.floor(lz)));
-    const tx = lx - jx, tz = lz - jz;
-    const at = (sx, sz) => yAt(x0 + (ix + sx / sub) * dx, z0 + (iz + sz / sub) * dz);
-    return triHeight(tx, tz, at(jx, jz), at(jx + 1, jz), at(jx, jz + 1), at(jx + 1, jz + 1));
-  }
-  const tx = fx - ix, tz = fz - iz;
-  const at = (sx, sz) => yAt(x0 + (ix + sx) * dx, z0 + (iz + sz) * dz);
+  const at = (sx, sz) => yAt(x0 + (jx + sx) * step, z0 + (jz + sz) * step);
   return triHeight(tx, tz, at(0, 0), at(1, 0), at(0, 1), at(1, 1));
 }
 
@@ -387,15 +419,6 @@ function prepareRoadSegs(dem, streets, extraRoad) {
   const local = [];
   for (const r of streets?.roads || []) if (r.p && r.p.length >= 2) local.push(...segsFromRoad(r.p));
   return { segs, local };
-}
-
-function quadNeedsRefine(ix, iz, x0, z0, dx, dz, segs, localSegs, r = CHEONGGYE_REFINE_R) {
-  for (const [sx, sz] of [[0, 0], [1, 0], [0, 1], [1, 1]]) {
-    const x = x0 + (ix + sx) * dx, z = z0 + (iz + sz) * dz;
-    if (distToRoad(x, z, segs) < r) return true;
-    if (localSegs.length && distToRoad(x, z, localSegs) < r) return true;
-  }
-  return false;
 }
 
 function triHeight(tx, tz, h00, h10, h01, h11) {
@@ -448,50 +471,54 @@ function groundColor(y, dist, hx, hz) {
 
 function buildGround(data, segs, localSegs = []) {
   const { x0, z0, dx, dz, nx, nz } = data;
-  const yAt = (x, z) => heightAtPoint(x, z, data, segs, localSegs);
-  const sub = Math.max(1, Math.round(dx / CHEONGGYE_GROUND_FINE));
-  const pos = [], col = [], idx = [];
-  const pushV = (x, y, z, dist) => {
-    const i = pos.length / 3;
-    pos.push(x, y, z);
-    const c = groundColor(y, dist, Math.round(x * 0.2), Math.round(z * 0.2));
-    col.push(c.r, c.g, c.b);
-    return i;
-  };
-  for (let iz = 0; iz < nz - 1; iz++) {
-    for (let ix = 0; ix < nx - 1; ix++) {
-      if (quadNeedsRefine(ix, iz, x0, z0, dx, dz, segs, localSegs)) {
-        const patch = [];
-        for (let jz = 0; jz <= sub; jz++) {
-          const row = [];
-          for (let jx = 0; jx <= sub; jx++) {
-            const x = x0 + (ix + jx / sub) * dx;
-            const z = z0 + (iz + jz / sub) * dz;
-            const y = yAt(x, z);
-            row.push(pushV(x, y, z, distToRoad(x, z, segs)));
-          }
-          patch.push(row);
-        }
-        for (let jz = 0; jz < sub; jz++) {
-          for (let jx = 0; jx < sub; jx++) {
-            const a = patch[jz][jx], b = patch[jz][jx + 1], c = patch[jz + 1][jx], d = patch[jz + 1][jx + 1];
-            idx.push(a, c, b, b, c, d);
-          }
-        }
+  const step = CHEONGGYE_GROUND_FINE;
+  const skirt = 220;
+  const sk = Math.round(skirt / step);
+  const fineNx = Math.floor(((nx - 1) * dx) / step) + 1;
+  const fineNz = Math.floor(((nz - 1) * dz) / step) + 1;
+  const Nx = fineNx + sk * 2, Nz = fineNz + sk * 2;
+  const ox = x0 - sk * step, oz = z0 - sk * step;
+  const xMax = x0 + (nx - 1) * dx, zMax = z0 + (nz - 1) * dz;
+  const distRoad = makeDistFn(segs);
+  const distLocal = localSegs.length ? makeDistFn(localSegs) : () => Infinity;
+  const yAt = (x, z) => terrainHeight(sampleH(data, x, z), distRoad(x, z), distLocal(x, z));
+  const pos = new Float32Array(Nx * Nz * 3);
+  const col = new Float32Array(Nx * Nz * 3);
+  for (let iz = 0; iz < Nz; iz++) {
+    for (let ix = 0; ix < Nx; ix++) {
+      const i = iz * Nx + ix;
+      const x = ox + ix * step, z = oz + iz * step;
+      const inside = x >= x0 && z >= z0 && x <= xMax && z <= zMax;
+      let y, dist;
+      if (inside) {
+        dist = distRoad(x, z);
+        y = yAt(x, z);
       } else {
-        const corner = (sx, sz) => {
-          const x = x0 + (ix + sx) * dx, z = z0 + (iz + sz) * dz;
-          return pushV(x, yAt(x, z), z, distToRoad(x, z, segs));
-        };
-        const a = corner(0, 0), b = corner(1, 0), c = corner(0, 1), d = corner(1, 1);
-        idx.push(a, c, b, b, c, d);
+        const cx = Math.max(x0, Math.min(xMax, x));
+        const cz = Math.max(z0, Math.min(zMax, z));
+        dist = distRoad(cx, cz);
+        const edgeY = yAt(cx, cz);
+        const fade = Math.max(0, 1 - Math.hypot(x - cx, z - cz) / skirt);
+        y = edgeY * fade;
       }
+      pos[i * 3] = x; pos[i * 3 + 1] = y; pos[i * 3 + 2] = z;
+      const c = groundColor(y, dist, Math.round(x * 0.2), Math.round(z * 0.2));
+      col[i * 3] = c.r; col[i * 3 + 1] = c.g; col[i * 3 + 2] = c.b;
+    }
+  }
+  const idx = new Uint32Array((Nx - 1) * (Nz - 1) * 6);
+  let k = 0;
+  for (let iz = 0; iz < Nz - 1; iz++) {
+    for (let ix = 0; ix < Nx - 1; ix++) {
+      const a = iz * Nx + ix, b = a + 1, c = a + Nx, d = c + 1;
+      idx[k++] = a; idx[k++] = c; idx[k++] = b;
+      idx[k++] = b; idx[k++] = c; idx[k++] = d;
     }
   }
   const geo = new THREE.BufferGeometry();
   geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
   geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
-  geo.setIndex(idx);
+  geo.setIndex(new THREE.BufferAttribute(idx, 1));
   geo.computeVertexNormals();
   const mesh = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ vertexColors: true }));
   mesh.name = 'cheonggyeGround';

@@ -135,7 +135,7 @@ function makePangyoTollSigns(T) {
         addFacedSign(g, busMat, 1.4, 0.4, x - S.dir[0] * 7.2, under - 1.05, z - S.dir[1] * 7.2, face);
       }
     }
-    addFacedSign(g, fasciaMat, 16, 1.55, S.at[0] - S.dir[0] * 12.2, under + thick + 0.85, S.at[1] - S.dir[1] * 12.2, face);
+    addFacedSign(g, fasciaMat, 16, 1.15, S.at[0] - S.dir[0] * 12.15, under + thick - 0.55, S.at[1] - S.dir[1] * 12.15, face);
   }
   return g;
 }
@@ -178,15 +178,107 @@ function dashes(pts, off, y) {
 }
 const runs = (l) => { const out = []; let cur = null; l.pts.forEach((p, i) => { if (l.draw?.[i] ?? 1) { if (!cur) out.push((cur = [])); cur.push(p); } else cur = null; }); return out.filter((r) => r.length > 1); };
 
-export function buildPangyoExpress(E) {
+function runLen(pts) {
+  let L = 0;
+  for (let i = 1; i < pts.length; i++) L += Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]);
+  return L;
+}
+
+function piecesAway(pts, coverFn) {
+  if (!coverFn) return [pts];
+  const out = [];
+  let cur = [];
+  for (const p of pts) {
+    if (!coverFn(p[0], p[1])) cur.push(p);
+    else if (cur.length) { out.push(cur); cur = []; }
+  }
+  if (cur.length) out.push(cur);
+  return out.filter((r) => r.length > 1 && runLen(r) > 36);
+}
+
+function taperEnds(pts, length = 40) {
+  if (pts.length < 3 || length <= 0) return pts;
+  const out = pts.map((p) => p.slice());
+  const apply = (fromStart) => {
+    let acc = 0;
+    if (fromStart) {
+      for (let i = 1; i < out.length && acc < length; i++) {
+        acc += Math.hypot(out[i][0] - out[i - 1][0], out[i][1] - out[i - 1][1]);
+        const t = Math.max(0.18, acc / length);
+        out[i - 1][3] = (out[i - 1][3] || 7) * t;
+      }
+    } else {
+      for (let i = out.length - 1; i > 0 && acc < length; i--) {
+        acc += Math.hypot(out[i][0] - out[i - 1][0], out[i][1] - out[i - 1][1]);
+        const t = Math.max(0.18, acc / length);
+        out[i][3] = (out[i][3] || 7) * t;
+      }
+    }
+  };
+  apply(true); apply(false);
+  return out;
+}
+
+function addTollCanopy(add, night, T, layout) {
+  const sets = layout?.sets;
+  if (!sets?.length) return;
+  const a = sets[0], b = sets[sets.length - 1];
+  const mx = (a.at[0] + b.at[0]) / 2, mz = (a.at[1] + b.at[1]) / 2;
+  const span = Math.hypot(b.at[0] - a.at[0], b.at[1] - a.at[1]);
+  const extra = (Math.max(a.lanes, b.lanes) * layout.pitch) / 2 + 5;
+  const across = span + extra * 2;
+  const along = 24;
+  const under = T.roof?.underside ?? 5.5;
+  const thick = 1.4;
+  const tAng = Math.atan2(a.dir[0], a.dir[1]);
+  const cy = under + thick / 2;
+  add(boxAt(across, thick, along, mx, cy, mz, tAng), COL.canopy);
+  add(boxAt(across - 1.2, 0.08, along - 1.2, mx, under + thick + 0.04, mz, tAng), '#d5dae0');
+  const fasciaH = 1.2, fy = under + thick - fasciaH / 2;
+  add(boxAt(across + 0.25, fasciaH, 0.38, mx + a.dir[0] * (along / 2), fy, mz + a.dir[1] * (along / 2), tAng), COL.canopyEdge);
+  add(boxAt(across + 0.25, fasciaH, 0.38, mx - a.dir[0] * (along / 2), fy, mz - a.dir[1] * (along / 2), tAng), COL.canopyEdge);
+  const px = a.dir[1], pz = -a.dir[0];
+  add(boxAt(0.38, fasciaH, along + 0.25, mx + px * (across / 2), fy, mz + pz * (across / 2), tAng), COL.canopyEdge);
+  add(boxAt(0.38, fasciaH, along + 0.25, mx - px * (across / 2), fy, mz - pz * (across / 2), tAng), COL.canopyEdge);
+  add(boxAt(across - 0.6, 0.07, along - 0.6, mx, under + 0.03, mz, tAng), COL.canopyUnder);
+  for (const S of sets) {
+    const sx = S.dir[1], sz = -S.dir[0];
+    for (let i = 0; i < S.lanes; i++) {
+      const o = (i + 0.5 - S.lanes / 2) * layout.pitch;
+      const x = S.at[0] + sx * o, z = S.at[1] + sz * o;
+      night.push(painted(boxAt(layout.laneClear - 0.55, 0.09, 7.2, x, under - 0.07, z, tAng), COL.lamp));
+      add(boxAt(0.85, 0.32, 0.5, x, under - 0.3, z, tAng), '#2c333c');
+    }
+  }
+}
+
+export function buildPangyoExpress(E, opts = {}) {
   const g = new THREE.Group(); g.name = 'pangyoExpress';
   const day = [], night = [];
   const add = (geo, color) => { if (geo) day.push(painted(geo, color)); };
   const DECK = E.meta?.rule?.deck ?? 1.5;
-  for (const l of E.lines) for (const P of runs(l)) {
-    const main = l.k === 'motorway', w = P[0][3];
+  const coverFn = typeof opts.coverFn === 'function' ? opts.coverFn : null;
+  for (const l of E.lines) for (const raw of runs(l)) {
+    const main = l.k === 'motorway';
+    // 본선 4+4 가 이미 깔린 구간은 모터웨이 리본을 다시 그리지 않는다(겹침·지그재그 방지).
+    if (main && coverFn && raw.filter((p) => coverFn(p[0], p[1])).length > raw.length * 0.4) continue;
+    const chunks = main ? [raw] : piecesAway(raw, coverFn);
+    for (const P0 of chunks) {
+    const P = taperEnds(P0);
+    const w = P[0][3];
     const pts = P.map((p) => [p[0], p[1], p[2], p[3]]);
     add(ribbonGeo(pts, w, 0.1, false), main ? COL.mainRoad : COL.road);
+    const shoulder = Math.max(5.5, (w || 8) + 6);
+    const grade = P.reduce((s, p) => s + p[2], 0) / P.length < 1.15;
+    if (grade) {
+      add(ribbonGeo(pts.map((p) => [p[0], p[1], 0.03, shoulder]), shoulder, 0, false), '#5e7548');
+      for (const sgn of [1, -1]) {
+        const embTop = (i) => pts[i][2] + 0.08;
+        const embBot = () => 0.02;
+        add(sideStrip(pts, sgn * (w / 2 + 0.2), embTop, embBot), '#6a7a4e');
+        add(sideStrip(pts, sgn * (w / 2 + 7.5), embTop, embBot), '#567044');
+      }
+    }
     // 차선: 양 끝 실선 + 차로 경계 점선(OSM lanes, 폭 규칙 3.3m — 데이터의 폭에서 역산)
     add(ribbonGeo(offsetPts(pts, w / 2 - 0.6).map((p) => [p[0], p[1], p[2], 0.18]), 0.18, 0.13, false), COL.edge);
     add(ribbonGeo(offsetPts(pts, -(w / 2 - 0.6)).map((p) => [p[0], p[1], p[2], 0.18]), 0.18, 0.13, false), COL.edge);
@@ -203,29 +295,19 @@ export function buildPangyoExpress(E) {
     }
     // 교량 밑면
     if (P.some((p) => p[4] && p[2] > 1.6)) add(ribbonGeo(pts.map((p, i) => [p[0], p[1], P[i][4] ? Math.max(0.02, p[2] - DECK) : 0.02, p[3] + 0.8]), w + 0.8, 0, false), COL.under); // 양면 재질이라 아래에서도 보임
+    }
   }
   // 교각: 기둥 2개 + 코핑(두부)
   for (const l of E.lines) for (const [x, z, top, ang, w] of l.piers || []) {
+    if (coverFn && coverFn(x, z)) continue;
     const ux = Math.cos(ang), uz = -Math.sin(ang), off = Math.max(2, w / 2 - 2.5);
     for (const s of [1, -1]) add(boxAt(1.4, top, 1.4, x + ux * off * s, top / 2, z + uz * off * s, ang), COL.pier);
     add(boxAt(w - 1, 1.0, 2.0, x, top - 0.5, z, ang), COL.pier);
   }
   // 요금소: 지붕(OSM 윤곽 돌출) + 섬/부스 + 기둥 — 일반형, 표지·로고 없음
   const T = E.toll;
-  if (T?.roof?.ring?.length > 3) {
-    const r = T.roof.ring.slice(0, -1), sh = new THREE.Shape(r.map(([x, z]) => new THREE.Vector2(x, -z)));
-    const ex = new THREE.ExtrudeGeometry(sh, { depth: T.roof.thick, bevelEnabled: false }); ex.rotateX(-Math.PI / 2); ex.translate(0, T.roof.underside, 0);
-    // 윗면 · 옆면(테두리) · 밑면 색을 면 법선으로 나눠 칠함
-    const geo = ex.index ? ex.toNonIndexed() : ex; if (geo !== ex) ex.dispose(); geo.computeVertexNormals();
-    const P2 = geo.attributes.position, N2 = geo.attributes.normal, c2 = new Float32Array(P2.count * 3), ct = new THREE.Color(COL.canopy), cs = new THREE.Color(COL.canopyEdge), cu = new THREE.Color(COL.canopyUnder);
-    for (let i = 0; i < P2.count; i++) { const ny = N2.getY(i), c = ny > 0.5 ? ct : ny < -0.5 ? cu : cs; c2.set([c.r, c.g, c.b], i * 3); }
-    geo.setAttribute('color', new THREE.BufferAttribute(c2, 3)); if (geo.attributes.uv) geo.deleteAttribute('uv');
-    day.push(geo);
-    // 밤: 지붕 밑 조명 띠(긴 축 따라)
-    const [A0, A1] = T.booths.axis, L = Math.hypot(A1[0] - A0[0], A1[1] - A0[1]), ang = Math.atan2(A1[0] - A0[0], A1[1] - A0[1]);
-    night.push(painted(boxAt(1.2, 0.08, L * 0.9, (A0[0] + A1[0]) / 2, T.roof.underside - 0.06, (A0[1] + A1[1]) / 2, ang), COL.lamp));
-  }
   const layout = pangyoTollLayout(T);
+  addTollCanopy(add, night, T, layout);
   for (const S of layout?.sets || []) {
     const ix = layout.islandW, iw = layout.islandLen, ih = (T.booths.island && T.booths.island[2]) || 2.4;
     const ang = Math.atan2(S.dir[0], S.dir[1]), px = S.dir[1], pz = -S.dir[0];

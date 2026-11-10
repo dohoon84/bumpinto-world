@@ -8,6 +8,11 @@ export const EXPRESS_ROAD_Y = 0.30; // gyeongbuExpress.js 본선 아스팔트 �
 export const EXPRESS_PAVE_R = 32; // 중심선에서 4+4 차로·갓길 바깥까지 + 여유
 export const EXPRESS_CORRIDOR_HALF = 140; // 본선을 따라 달릴 수 있는 띠 반폭(청계산 출입구 포함, 빈 산은 열지 않음)
 export const CHEONGGYE_FLAT_R = 42; // DEM 을 0m 로 펴는 본선 반경. 예전 34m 는 반대편 갓길 여유가 적었다.
+export const PANGYO_TG = Object.freeze({ x: -482.05, z: -3232.35, r: 55 });
+export const PANGYO_CITY_BOXES = Object.freeze([
+  { x0: -250, x1: 1000, z0: -3500, z1: -2500 },
+  { x0: -180, x1: 125, z0: -3700, z1: -3500 },
+]);
 
 // 고치기 전, 본선·강남 섬만 있을 때 막히던 지점 (판교→강남).
 export const BEFORE_FIX_STUCK = Object.freeze([
@@ -33,9 +38,65 @@ export function distToPts(x, z, pts) {
   return best;
 }
 
+export function inPangyoCity(x, z) {
+  return PANGYO_CITY_BOXES.some((b) => x >= b.x0 && x <= b.x1 && z >= b.z0 && z <= b.z1);
+}
+
+export function nearPangyoToll(x, z, r = PANGYO_TG.r) {
+  return Math.hypot(x - PANGYO_TG.x, z - PANGYO_TG.z) < r;
+}
+
+// 판교 고가·요금소 선 높이(pangyoExpress). 바이크·보행은 getVehicleHeight 가 아니라 getGroundHeight 를 쓰므로
+// 여기 더하지 않으면 상판(최대 6m) 아래로 빠진다.
+let heightExtra = null;
+export function setExpressHeightExtra(fn) {
+  heightExtra = typeof fn === 'function' ? fn : null;
+}
+
+/** 판교 고가 높이를 본선 체인에 붙이고, 데이터가 비는 구간은 이웃 높이로 잇는다. */
+export function buildExpressHeightProfile(pts, extraFn) {
+  const n = pts?.length || 0;
+  if (!n) return () => EXPRESS_ROAD_Y;
+  const acc = new Float64Array(n);
+  for (let i = 1; i < n; i++) {
+    acc[i] = acc[i - 1] + Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]);
+  }
+  const ys = new Array(n).fill(null);
+  for (let i = 0; i < n; i++) {
+    const e = extraFn ? extraFn(pts[i][0], pts[i][1]) : null;
+    if (e != null) ys[i] = Math.max(EXPRESS_ROAD_Y, e + 0.1);
+    else if (pts[i][3] === 'main' || pts[i][3] === 'spur') ys[i] = EXPRESS_ROAD_Y;
+  }
+  if (ys[0] == null) ys[0] = EXPRESS_ROAD_Y;
+  if (ys[n - 1] == null) ys[n - 1] = EXPRESS_ROAD_Y;
+  let prev = 0;
+  for (let i = 1; i < n; i++) {
+    if (ys[i] == null) continue;
+    const sa = acc[prev], sb = acc[i], ya = ys[prev], yb = ys[i], span = (sb - sa) || 1;
+    for (let k = prev + 1; k < i; k++) ys[k] = ya + (yb - ya) * ((acc[k] - sa) / span);
+    prev = i;
+  }
+  return function profileAt(x, z) {
+    let best = Infinity, y = EXPRESS_ROAD_Y;
+    for (let i = 1; i < n; i++) {
+      const ax = pts[i - 1][0], az = pts[i - 1][1];
+      const dx = pts[i][0] - ax, dz = pts[i][1] - az, L2 = dx * dx + dz * dz || 1e-9;
+      const t = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / L2));
+      const d = Math.hypot(ax + dx * t - x, az + dz * t - z);
+      if (d < best) {
+        best = d;
+        y = ys[i - 1] + (ys[i] - ys[i - 1]) * t;
+      }
+    }
+    return y;
+  };
+}
+
 export function expressRoadHeight(x, z, pts, r = EXPRESS_PAVE_R) {
   if (!pts?.length) return null;
-  return distToPts(x, z, pts) <= r ? EXPRESS_ROAD_Y : null;
+  if (distToPts(x, z, pts) > r) return null;
+  const e = heightExtra ? heightExtra(x, z) : null;
+  return e == null ? EXPRESS_ROAD_Y : Math.max(EXPRESS_ROAD_Y, e);
 }
 
 export function sampleExpressPts(pts, step = 20) {

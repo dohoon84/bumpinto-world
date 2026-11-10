@@ -19,13 +19,13 @@ import { createCorridorLife } from './life.js';
 import { extractLifeHints, gatherLifeHints } from './lifeHints.js'; // [life] 동네별 보행자·주차 위치 힌트
 import { setNightCut, updateNight } from './nightLights.js';
 import { pangyoEnabled, pangyoLinkEnabled, mergePangyoIndex, fetchCorridorTile, PANGYO_DIR } from './pangyo.js'; // [pangyo]
-import { pangyoExpressEnabled, PANGYO_EXPRESS_FILE, filterExpressHidden, buildPangyoExpress } from './pangyoExpress.js'; // [pangyo-express]
+import { pangyoExpressEnabled, PANGYO_EXPRESS_FILE, filterExpressHidden, buildPangyoExpress, expressHeightFn } from './pangyoExpress.js'; // [pangyo-express]
 import { createPangyoLandmarks } from './landmarks/pangyo.js'; // [pangyo]
 import { migeumEnabled, mergeMigeumIndex, MIGEUM_DIR, migeumSubwayDrawsEntrances, migeumTaxiEnabled, migeumBikeEnabled, MIGEUM_TAXIBIKE_FILE, pickMigeumTaxiBike } from './migeum.js'; // [migeum] [migeum-sub] [migeum-taxibike]
 import { gangnamEnabled, mergeGangnamIndex, GANGNAM_DIR, gangnamSubwayDrawsEntrances } from './gangnam.js'; // [gangnam]
 import { gangnamBusEnabled, GANGNAM_BUS_FILE, mountGangnamTransit } from './gangnamBus.js'; // [gangnam-bus]
 import { GYEONGBU_EXPRESS_FILE, gyeongbuExpressEnabled } from './gyeongbuExpress.js'; // [gyeongbu-bus]
-import { mergeGyeongbuWorld, expressRoadHeight } from './gyeongbuWorld.js'; // [gyeongbu-bus]
+import { mergeGyeongbuWorld, expressRoadHeight, setExpressHeightExtra, buildExpressHeightProfile, distToPts } from './gyeongbuWorld.js'; // [gyeongbu-bus]
 import { binGyeongbuMiniTiles, CHEONGGYE_STREETS_FILE, CHEONGGYE_BUILDINGS_FILE } from './gyeongbuMinimap.js'; // [gyeongbu-bus] 미니맵
 import { isMobileMode } from '../mobile/flag.js'; // [gangnam] 강남 박스 안에서만 모바일 품질 하향
 import { migeumBusEnabled } from './migeumBus.js'; // [migeum-bus]
@@ -348,14 +348,16 @@ export function createCorridor({ scene, corridorData, terrain, world, renderer, 
   const PF = perfFlags(params || (typeof location !== 'undefined' ? location.search : ''));
   const regions = PF.lazyregion ? createRegionRegistry() : null;
   let pangyoEx = null;
-  if (corridorData.pangyoExpress && !regions) { pangyoEx = buildPangyoExpress(corridorData.pangyoExpress); root.add(pangyoEx.group); } // [pangyo-express] 판교IC~경부 합류(메시 2개)
+  const coverPts = corridorData.gangnamExpress?.pts;
+  const pangyoCoverFn = coverPts?.length ? (x, z) => distToPts(x, z, coverPts) < 24 : null;
+  if (corridorData.pangyoExpress && !regions) { pangyoEx = buildPangyoExpress(corridorData.pangyoExpress, { coverFn: pangyoCoverFn }); root.add(pangyoEx.group); } // [pangyo-express] 판교IC~경부 합류(메시 2개)
   else if (corridorData.pangyoExpress) {
     // [perf-memory] 고속도로 메시는 LOD 타일 거리 안(+여유)일 때만 만들고, 멀어지면 dispose
     const E = corridorData.pangyoExpress; let b = { x0: Infinity, x1: -Infinity, z0: Infinity, z1: -Infinity };
     for (const l of E.lines || []) for (const p of l.pts || []) { b.x0 = Math.min(b.x0, p[0]); b.x1 = Math.max(b.x1, p[0]); b.z0 = Math.min(b.z0, p[1]); b.z1 = Math.max(b.z1, p[1]); }
     if (!Number.isFinite(b.x0)) b = { x0: -1e9, x1: 1e9, z0: -1e9, z1: 1e9 };
     regions.register({ id: 'pangyo-express', boxes: [b], near: Q.lod + 300, far: Q.lod + 900,
-      onEnter() { if (!pangyoEx) { pangyoEx = buildPangyoExpress(E); root.add(pangyoEx.group); } },
+      onEnter() { if (!pangyoEx) { pangyoEx = buildPangyoExpress(E, { coverFn: pangyoCoverFn }); root.add(pangyoEx.group); } },
       onLeave() { if (pangyoEx) { pangyoEx.dispose(); pangyoEx = null; } } });
   }
 
@@ -402,6 +404,14 @@ export function createCorridor({ scene, corridorData, terrain, world, renderer, 
   }
   // [gyeongbu-bus] 경부 본선 띠 — 본선·강남 섬 사이로 판교IC에서 강남대로까지 달린다.
   if (index.meta.corridors?.length) bounds.corridors = index.meta.corridors;
+  if (corridorData.pangyoExpress) {
+    const raw = expressHeightFn(corridorData.pangyoExpress);
+    const expPts = corridorData.gangnamExpress?.pts;
+    setExpressHeightExtra(expPts?.length ? buildExpressHeightProfile(expPts, raw) : (x, z) => {
+      const e = raw(x, z);
+      return e == null ? null : e + 0.1;
+    });
+  }
   if (terrain?.addGroundExtra && corridorData.gangnamExpress?.pts) {
     const expPts = corridorData.gangnamExpress.pts;
     terrain.addGroundExtra((x, z) => expressRoadHeight(x, z, expPts));
