@@ -6,7 +6,7 @@ import { mountArcadeExterior } from './exterior.js';
 import { buildArcadeInterior } from './interior.js';
 import { createArcadeSfx } from './sfx.js';
 import { createArcadeUI } from './ui.js';
-import { createArcadeRankProvider, createMergeRankProvider, localBoard } from './rank.js';
+import { createArcadeRankProvider, createMergeRankProvider, localBest } from './rank.js';
 import { clientSignedIn, resolveGuest } from './guest.js';
 import { mountBumpingPang } from './bumpingpang/game.js';
 import { mountBumStore } from './bumstore/game.js';
@@ -175,16 +175,17 @@ export function mountArcade({
     } else if (fade.phase === 'in' && fade.t >= FADE_SEC) { fade = { t: 0, phase: '' }; ui.setFade(0); busy = false; }
   }
 
-  async function openBoard(period = 'today', kind = 'pang') {
+  async function openBoard(period = 'today', kind = 'pang', primed = null) {
     const provider = kind === 'merge' ? mergeRank : rank;
     const title = kind === 'merge' ? '범편의점 랭킹' : '범핑팡 랭킹';
     await gateFor(provider);
-    const rows = await provider.top({ period });
+    const fresh = primed?.rows ? primed : provider.lastSubmit?.();
+    const useFresh = period === 'today' && Array.isArray(fresh?.rows) && (!fresh.at || Date.now() - fresh.at < 15000);
+    const rows = useFresh ? fresh.rows : await provider.top({ period });
     const name = (() => { try { return selfName?.() || ''; } catch { return ''; } })();
-    // 통합 보드: PC·모바일 같은 rows. 내 행은 실데이터에서만 골라 상단 고정
-    const mine = name
-      ? (rows.find((r) => String(r.name || '') === name) || null)
-      : (rows.find((r) => r.me || r.self) || null);
+    const mine = (useFresh && fresh.me) || rows.find((r) => r.me || r.self)
+      || (name ? rows.find((r) => String(r.name || '') === name) : null)
+      || null;
     ui.showBoard({
       title, period, rows, me: mine,
       game: kind,
@@ -200,11 +201,9 @@ export function mountArcade({
 
   function bestScoreLocal(kind = 'pang') {
     try {
+      const provider = kind === 'merge' ? mergeRank : rank;
       const key = kind === 'merge' ? 'bw.arcade.merge.best' : 'bw.arcade.pang.best';
-      const rows = localBoard('today', key);
-      const name = (() => { try { return selfName?.() || ''; } catch { return ''; } })();
-      const mine = name ? rows.find((r) => r.name === name) : rows[0];
-      return Math.max(0, Number(mine?.score) || Number(rows[0]?.score) || 0);
+      return Math.max(0, Number(provider.rememberedBest?.()) || 0, localBest(key));
     } catch { return 0; }
   }
 
@@ -262,8 +261,12 @@ export function mountArcade({
       onOpenBoard: () => openBoard('today', 'pang'),
       onExit: () => { session = null; sessionKind = ''; ui.root.classList.remove('is-pang', 'is-merge'); resumeWorldOst(); setLobbyHints(); },
       onResult: async ({ score, level, durationMs, ranked: rec, name, openBoard: wantBoard }) => {
-        try { await rank.submit({ name, score, level, durationMs, ranked: rec }); } catch { /* local ok */ }
-        if (wantBoard) openBoard('today', 'pang');
+        let out = null;
+        try { out = await rank.submit({ name, score, level, durationMs, ranked: rec }); } catch { /* local ok */ }
+        const best = Math.max(Number(score) || 0, Number(out?.best) || 0);
+        try { session?.setBest?.(best); } catch { /* */ }
+        if (wantBoard) await openBoard('today', 'pang', out);
+        return out;
       },
     });
   }
@@ -290,7 +293,11 @@ export function mountArcade({
       },
       onExit: () => { session = null; sessionKind = ''; ui.root.classList.remove('is-pang', 'is-merge'); resumeWorldOst(); setLobbyHints(); },
       onResult: async ({ score, level, durationMs, ranked: rec, name }) => {
-        try { await mergeRank.submit({ name, score, level, durationMs, ranked: rec }); } catch { /* local ok */ }
+        let out = null;
+        try { out = await mergeRank.submit({ name, score, level, durationMs, ranked: rec }); } catch { /* local ok */ }
+        const best = Math.max(Number(score) || 0, Number(out?.best) || 0);
+        try { session?.setBest?.(best); } catch { /* */ }
+        return out;
       },
     });
   }
@@ -352,6 +359,7 @@ export function mountArcade({
     pointer.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
     pointer.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
     ray.setFromCamera(pointer, cam);
+    if (interior.pickBoard?.(ray)) { openBoard(); return; }
     const hit = interior.pickCabinet(ray);
     nearCab = hit;
     if (hit?.playable) startPlay();

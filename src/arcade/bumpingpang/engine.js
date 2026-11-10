@@ -211,7 +211,7 @@ export function starsForLevel(level) {
 /**
  * 긴 런 대비 서버/클라 공통 타당성 검사.
  * - 최소 플레이 시간: 레벨당 ~6초 (애니·조작)
- * - 점수 상한: 초당 ~220 + 레벨 보너스
+ * - 점수 상한: 초당 ~280 + 레벨 보너스(여유)
  * - 레벨 상한: 지속시간으로 역산
  */
 export function plausibleRun({ score, level, durationMs, maxLevel = 40 } = {}) {
@@ -223,7 +223,7 @@ export function plausibleRun({ score, level, durationMs, maxLevel = 40 } = {}) {
   const minMs = Math.max(0, (lv - 1) * 6000); // 레벨업 lv-1회 최소 시간
   if (dur > 0 && dur < minMs * 0.7) return { ok: false, reason: 'too_fast' };
   const sec = Math.max(1, dur / 1000);
-  const maxScore = Math.round(sec * 220 + lv * 2500);
+  const maxScore = Math.round(sec * 280 + lv * 2800);
   if (sc > maxScore) return { ok: false, reason: 'score_cap' };
   // 레벨 없이 점수만 비정상적으로 클 때
   if (sc > 5000 && lv < 2 && dur < 20000) return { ok: false, reason: 'implausible' };

@@ -5,7 +5,7 @@ import {
 } from '../src/arcade/bumpingpang/engine.js';
 import { plausibleArcadeRun } from '../server/phone/src/arcade/rules.js';
 import {
-  attemptCap, decideAttempt, monthlyBestPays, rankRows, MONTHLY_BUM, LIMIT_MSG, TITLE, OPENING_MS,
+  decideAttempt, monthlyBestPays, rankRows, MONTHLY_BUM, TITLE, OPENING_MS,
 } from '../server/phone/src/arcade/rules.js';
 import { arcadeEnabled, arcadeAtSpot, ARCADE_AT } from '../src/arcade/flag.js';
 import { arcadePlacement, hollowSeohyeonArcade, arcadeBranchLabel } from '../src/arcade/locations.js';
@@ -51,11 +51,13 @@ assert(typeof hasMoves(b2) === 'boolean', 'hasMoves runs');
 b2[1][1] = { id: 'bum', special: 'bomb' };
 assert(specialCells(b2, 1, 1).length >= 9, 'bomb radius');
 
-assert(attemptCap(true) === 1 && attemptCap(false) === 5, 'attempt caps');
 const open = OPENING_MS + 1000;
-assert(decideAttempt({ now: open, guest: true, used: 0 }).record, 'guest first');
-assert(decideAttempt({ now: open, guest: true, used: 1 }).message === LIMIT_MSG, 'guest capped');
+assert(decideAttempt({ now: open, guest: true, used: 0 }).record, 'guest first records');
+assert(decideAttempt({ now: open, guest: true, used: 20 }).record, 'guest has no daily cap');
+assert(decideAttempt({ now: open, guest: false, used: 99 }).record, 'signed-in has no daily cap');
 assert(decideAttempt({ now: open, guest: false, used: 0, practice: true }).practice, 'practice');
+assert(!decideAttempt({ now: open, guest: false, used: 0, practice: true }).record, 'practice not recorded');
+assert(decideAttempt({ now: OPENING_MS - 1, guest: false, used: 0 }).beforeOpen, 'before open is practice');
 
 const rows = rankRows([
   { playerKey: 'a:1', accountId: '1', name: '일등', score: 9000, at: 1, guest: false },
@@ -137,6 +139,8 @@ assert(starsForLevel(1) === 0, 'no star early');
   assert(good.ok, 'accept decent run');
   const srv = plausibleArcadeRun({ score: 9000, level: 8, durationMs: 150000 });
   assert(srv.ok, 'server plausibility matches');
+  assert(plausibleRun({ score: 9109, level: 1, durationMs: 30000 }).ok, '9109 at lv1/30s accepted');
+  assert(plausibleArcadeRun({ score: 9109, level: 1, durationMs: 30000 }).ok, 'server accepts 9109 at lv1/30s');
 }
 // trySwap with level mult
 {

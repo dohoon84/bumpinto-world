@@ -4,8 +4,9 @@ import {
   kstDayKey, monthKey, resolveGameId, GAME_ID, MERGE_GAME_ID, decideAttempt, OPENING_MS,
   monthlyRewardSub, MONTHLY_BUM, monthlyBestPays, rankRows,
 } from '../server/phone/src/arcade/rules.js';
-import { storeBoard, mergeGuestBest, recordRun } from '../server/phone/src/arcade/db.js';
+import { storeBoard, mergeGuestBest, recordRun, attachMine } from '../server/phone/src/arcade/db.js';
 import { arcadeShotMode, mergeEnabled, MERGE_GAME_ID as CLIENT_MERGE_ID } from '../src/arcade/flag.js';
+import { plausibleArcadeRun } from '../server/phone/src/arcade/rules.js';
 import { splitBoardMine, sameRankPlayer } from '../src/arcade/boardView.js';
 import { LOGIN_NUDGE_TEXT } from '../src/arcade/loginNudge.js';
 import { resolveGuest, isGuestFlag, clientSignedIn } from '../src/arcade/guest.js';
@@ -294,6 +295,86 @@ assert(authSrc.includes('mergeGuestBest'), 'login/link migrates arcade guest rec
   assert(idxSrc.includes('resolveGuest'), 'arcade uses resolveGuest');
   assert(idxSrc.includes('2500'), 'gate timeout is not 800ms');
   assert(!idxSrc.includes('guest: knownGuest'), 'games receive guestNow, not a stale boolean');
+}
+
+// 새 최고점은 같은 기록 흐름에서 바로 보드에 반영된다
+{
+  const adb = memoryD1();
+  const r1 = await recordRun(adb, {
+    playerKey: 'a:1', accountId: '1', guest: false, gameId: 'bumpingpang', storeId: SID,
+    name: '도훈', score: 5495, level: 3, durationMs: 40000, now, practice: false,
+  });
+  assert(r1.record && r1.best === 5495, 'first run best');
+  const first = attachMine(await storeBoard(adb, 'bumpingpang', SID, 'today', now), { playerKey: 'a:1', accountId: '1' });
+  assert(first.rows[0].score === 5495 && first.me?.score === 5495 && first.rows[0].me, 'first snapshot marks me');
+  const r2 = await recordRun(adb, {
+    playerKey: 'a:1', accountId: '1', guest: false, gameId: 'bumpingpang', storeId: SID,
+    name: '도훈', score: 9109, level: 2, durationMs: 35000, now, practice: false,
+  });
+  assert(r2.record && r2.best === 9109, `second run keeps higher score, got ${r2.best}`);
+  const second = attachMine(await storeBoard(adb, 'bumpingpang', SID, 'today', now), { playerKey: 'a:1', accountId: '1' });
+  assert(second.rows.length === 1 && second.rows[0].score === 9109, 'board shows new best immediately');
+  assert(second.me?.score === 9109, 'POST-like snapshot me is the new best');
+}
+
+// 오락실 게임은 일일 횟수 제한이 없다. 매 기록 중 최고만 남긴다. ?shot/practice 는 기록하지 않는다.
+{
+  const udb = memoryD1();
+  for (let i = 0; i < 6; i++) {
+    const r = await recordRun(udb, {
+      playerKey: 'a:1', accountId: '1', guest: false, gameId: 'bumpingpang', storeId: SID,
+      name: '도훈', score: 1000 + i, level: 2, durationMs: 30000, now, practice: false,
+    });
+    assert(r.record, `signed-in run ${i + 1} records`);
+  }
+  assert(udb._best.find((r) => r.player_key === 'a:1')?.score === 1005, 'best of unlimited signed-in runs');
+  const g1 = await recordRun(udb, {
+    playerKey: 'g:dev', accountId: null, guest: true, gameId: 'bumpingpang', storeId: SID,
+    name: '손님', score: 2000, level: 2, durationMs: 30000, now, practice: false,
+  });
+  const g2 = await recordRun(udb, {
+    playerKey: 'g:dev', accountId: null, guest: true, gameId: 'bumpingpang', storeId: SID,
+    name: '손님', score: 2500, level: 2, durationMs: 30000, now, practice: false,
+  });
+  assert(g1.record && g2.record && g2.best === 2500, 'guest runs also unlimited; best kept');
+  const shot = await recordRun(udb, {
+    playerKey: 'a:1', accountId: '1', guest: false, gameId: 'bumpingpang', storeId: SID,
+    name: '도훈', score: 99999, level: 2, durationMs: 30000, now, practice: true,
+  });
+  assert(!shot.record && udb._best.find((r) => r.player_key === 'a:1')?.score === 1005, 'practice not recorded');
+}
+
+assert(plausibleArcadeRun({ score: 9109, level: 1, durationMs: 30000 }).ok, '9109 at lv1/30s is a valid run');
+assert(plausibleArcadeRun({ score: 80000, level: 10, durationMs: 3000 }).ok === false, 'still reject too-fast high score');
+
+{
+  const rankSrc = readFileSync(new URL('../src/arcade/rank.js', import.meta.url), 'utf8');
+  assert(rankSrc.includes('kstDayKey'), 'local day key is KST not UTC');
+  assert(rankSrc.includes('rememberedBest'), 'provider remembers the last best');
+  assert(rankSrc.includes('lastSubmit'), 'provider keeps the POST snapshot');
+  assert(rankSrc.includes('ranked: !j.beforeOpen'), 'gate does not treat usedUp as practice');
+  assert(!rankSrc.includes('ranked: !j.usedUp'), 'gate no longer blocks ranking after N attempts');
+  const pangSrc = readFileSync(new URL('../src/arcade/bumpingpang/game.js', import.meta.url), 'utf8');
+  assert(pangSrc.includes('resultPosted'), 'pang submits the run once');
+  assert(pangSrc.includes('onOpenBoard?.()'), '순위판 opens the board without posting again');
+  assert(!/data-board[\s\S]*onResult\?\.\(\{[^}]*openBoard: true/.test(pangSrc), 'board click does not resubmit');
+  assert(pangSrc.includes('--pang-vvh'), 'pang play shell follows visualViewport');
+  const mergeSrc = readFileSync(new URL('../src/arcade/bumstore/game.js', import.meta.url), 'utf8');
+  assert(mergeSrc.includes('storeName'), 'merge accepts branch name');
+  assert(mergeSrc.includes('data-open-rank'), 'merge title has 순위판');
+  assert(mergeSrc.includes('data-board'), 'merge result has 순위판');
+  assert(mergeSrc.includes('intro-store'), 'merge title shows branch badge');
+  const interiorSrc = readFileSync(new URL('../src/arcade/interior.js', import.meta.url), 'utf8');
+  assert(interiorSrc.includes('pickBoard'), 'indoor kiosk is pickable');
+  assert(interiorSrc.includes('랭킹 보기'), 'kiosk label is ranking not pang-only');
+  const css = readFileSync(new URL('../src/arcade/ui.css', import.meta.url), 'utf8');
+  const playShell = css.match(/\.arc-pang \{[^}]+height:[^}]+\}/);
+  assert(playShell && !playShell[0].includes('100lvh'), 'play HUD is not sized with lvh');
+  assert(css.includes('--pang-vvh'), 'css uses pang viewport vars');
+  assert(css.includes('.arc-merge-intro'), 'merge title overlay styles');
+  const idxSrc = readFileSync(new URL('../src/arcade/index.js', import.meta.url), 'utf8');
+  assert(idxSrc.includes('pickBoard'), 'tapping the kiosk opens the board');
+  assert(idxSrc.includes('lastSubmit'), 'arcade prefers the POST snapshot when opening the board');
 }
 
 console.log('ok arcade-rank', { today: today.rows.length, week: week.rows.length, month: month.rows.length });
