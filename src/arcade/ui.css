@@ -452,8 +452,8 @@
   box-shadow: 0 10px 0 #ff9ecd, 0 22px 50px rgba(0,0,0,.3);
   display: flex; flex-direction: column; overflow: hidden;
 }
-#arc-root .arc-modal .board h3 { margin: 0 0 2px; font-size: 20px; font-weight: 900; text-align: center; }
-#arc-root .arc-modal .board .sub { opacity: .65; font-size: 12px; margin-bottom: 10px; text-align: center; font-weight: 700; word-break: keep-all; }
+#arc-root .arc-modal .board h3 { margin: 0 0 2px; font-size: 20px; font-weight: 900; text-align: center; padding: 0 60px; box-sizing: border-box; }
+#arc-root .arc-modal .board .sub { opacity: .65; font-size: 12px; margin-bottom: 10px; text-align: center; font-weight: 700; word-break: keep-all; overflow-wrap: break-word; line-height: 1.45; padding: 0 60px; box-sizing: border-box; max-width: 100%; white-space: normal; }
 .arc-login-nudge { margin: 0 0 10px; text-align: center; font-weight: 800; line-height: 1.35; word-break: keep-all; }
 .arc-login-nudge p { margin: 0 0 8px; }
 .arc-login-nudge [data-login] {
@@ -1000,8 +1000,10 @@
 .logo-img { width: min(330px, 92%); height: auto; display: block; margin: 0 auto; }
 .logo-bubble { display: none; }
 .intro-store {
-  margin: 2px 0 4px; padding: 6px 18px;
-  position: relative; color: #ffd23f; font-size: 15px;
+  margin: 2px 0 0; padding: 6px 16px;
+  position: relative; z-index: 2; color: #ffd23f; font-size: 15px;
+  width: max-content; max-width: 100%; box-sizing: border-box;
+  text-align: center; line-height: 1.25; word-break: keep-all;
 }
 .intro-store::before {
   content: ""; position: absolute; inset: 0;
@@ -1010,7 +1012,8 @@
 }
 .intro-bum {
   width: min(180px, 46%); height: auto;
-  margin: -4px 0 6px;
+  margin: 20px 0 6px;
+  position: relative; z-index: 0;
   filter: drop-shadow(0 0 16px rgba(51,230,255,.4));
   animation: pang-mascot-cheer 2.4s ease-in-out infinite;
 }
@@ -1245,6 +1248,7 @@
   .pang-btn-start { height: 64px; }
 }
 @media (max-width: 360px) {
+  .intro-store { font-size: 13px; padding: 5px 12px; }
   .arc-pang-lv { width: 72px; min-width: 72px; height: 80px; background-size: 72px 80px; }
   .arc-pang-lv b { font-size: 32px; }
   .arc-pang-scoreblock { height: 88px; }

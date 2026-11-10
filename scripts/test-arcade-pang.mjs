@@ -85,6 +85,14 @@ assert(arcadeBranchLabel({ branch: '분당점' }) === 'BUMP 오락실 분당점'
   const pangSrc = readFileSync(new URL('../src/arcade/bumpingpang/game.js', import.meta.url), 'utf8');
   assert(!pangSrc.includes('BUMP 오락실 서현점'), 'pang intro not hardcoded seohyeon');
   assert(pangSrc.includes('${storeLabel}'), 'pang intro uses storeLabel');
+  const css = readFileSync(new URL('../src/arcade/ui.css', import.meta.url), 'utf8');
+  const store = css.match(/\.intro-store \{[^}]+\}/)[0];
+  const bum = css.match(/\.intro-bum \{[^}]+\}/)[0];
+  assert(/z-index:\s*2/.test(store), 'store badge stacks above bear');
+  assert(/max-width:\s*100%/.test(store), 'long branch names can wrap in badge');
+  assert(/z-index:\s*0/.test(bum) && !/margin:\s*-/.test(bum), 'bear stays below badge and is not pulled over it');
+  const sub = css.match(/#arc-root \.arc-modal \.board \.sub \{[^}]+\}/)[0];
+  assert(/word-break:\s*keep-all/.test(sub) && /padding:\s*0 60px/.test(sub), 'subtitle wraps and clears close button');
 }
 
 
