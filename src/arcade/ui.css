@@ -87,7 +87,7 @@
   background: transparent;
 }
 .arc-pang.is-touch .arc-pang-phone {
-  width: 100vw; height: 100dvh; border-radius: 0; box-shadow: none;
+  width: 100%; height: 100%; min-height: 100%; border-radius: 0; box-shadow: none;
 }
 .arc-pang.is-touch.is-landscape .arc-pang-phone { visibility: hidden; pointer-events: none; }
 
@@ -691,8 +691,14 @@
 /* ========== B안 네온 오락실 에셋 ========== */
 
 .arc-pang {
-  background: #0B0428;
+  background: url(/arcade/pang/bg/bg-arcade.jpg) center / cover no-repeat #0B0428;
   font-family: "Jua", "Noto Sans KR", "Apple SD Gothic Neo", system-ui, sans-serif;
+  width: 100%;
+  height: 100%;
+  height: 100dvh;
+  height: 100lvh;
+  min-height: 100%;
+  min-height: -webkit-fill-available;
 }
 .arc-pang .score-num,
 .arc-pang-lv b,
@@ -710,7 +716,7 @@
   background: url(/arcade/pang/bg/bg-arcade.jpg) center / cover no-repeat #0B0428;
 }
 @media (min-resolution: 2.5dppx) {
-  .arc-pang-sky { background-image: url(/arcade/pang/bg/bg-arcade@3x.jpg); }
+  .arc-pang, .arc-pang-sky { background-image: url(/arcade/pang/bg/bg-arcade@3x.jpg); }
 }
 .arc-pang-sky .cloud,
 .arc-pang-sky .hill,
@@ -969,7 +975,7 @@
 }
 
 .arc-pang-intro { background: transparent; }
-.arc-pang-result { background: rgba(11, 4, 40, .62); }
+.arc-pang-result { background: rgba(11, 4, 40, .88); }
 .arc-pang:has([data-intro]:not([hidden])) .arc-pang-top,
 .arc-pang:has([data-intro]:not([hidden])) .arc-pang-hero,
 .arc-pang:has([data-intro]:not([hidden])) .arc-pang-stage,
@@ -977,7 +983,8 @@
 .arc-pang:has([data-result]:not([hidden])) .arc-pang-top,
 .arc-pang:has([data-result]:not([hidden])) .arc-pang-hero,
 .arc-pang:has([data-result]:not([hidden])) .arc-pang-stage,
-.arc-pang:has([data-result]:not([hidden])) .arc-pang-bottom {
+.arc-pang:has([data-result]:not([hidden])) .arc-pang-bottom,
+.arc-pang:has([data-result]:not([hidden])) .arc-pang-intro {
   visibility: hidden; pointer-events: none;
 }
 .arc-pang-intro .intro-inner {
@@ -1351,6 +1358,10 @@
 .arc-merge {
   pointer-events: auto; position: fixed; left: 0; top: var(--merge-vv-top, 0px); z-index: 90;
   width: var(--merge-vvw, 100vw); height: var(--merge-vvh, 100dvh);
+  min-height: 100%;
+  min-height: 100dvh;
+  min-height: 100lvh;
+  min-height: -webkit-fill-available;
   font-family: "Jua", Pretendard, "Noto Sans KR", sans-serif; color: #3A2430;
   background: #FFF8F0 url(/arcade/merge/bg/bg-store.jpg) center / cover no-repeat;
   overflow: hidden;
@@ -1513,7 +1524,13 @@
 /* 결과 · 순위 · 일시정지 */
 .arc-merge-result, .arc-merge-rank, .arc-merge-pause {
   position: absolute; inset: 0; z-index: 8; display: grid; place-items: center;
-  background: rgba(58, 36, 48, .28); padding: 20px;
+  background: rgba(58, 36, 48, .72); padding: 20px;
+}
+.arc-merge:has(.arc-merge-result:not([hidden])) .arc-merge-top,
+.arc-merge:has(.arc-merge-result:not([hidden])) .arc-merge-hint,
+.arc-merge:has(.arc-merge-result:not([hidden])) .arc-merge-floatbum,
+.arc-merge:has(.arc-merge-result:not([hidden])) .arc-merge-bubble {
+  visibility: hidden; pointer-events: none;
 }
 .arc-merge-result[hidden], .arc-merge-rank[hidden], .arc-merge-pause[hidden] { display: none !important; }
 .arc-merge-modal {
@@ -1593,4 +1610,24 @@
 .arc-merge-orient .phone-body span {
   position: absolute; left: 50%; top: 8px; width: 16px; height: 5px; border-radius: 3px;
   background: #B8322B; transform: translateX(-50%);
+}
+
+/* iPhone: fixed 오버레이가 레이아웃 뷰포트만 채울 때 html/body(#bfe3f5)가 하단으로 비치지 않게 */
+html:has(.arc-pang), body:has(.arc-pang) {
+  background: #0B0428;
+}
+html:has(.arc-merge), body:has(.arc-merge) {
+  background: #FFF8F0 url(/arcade/merge/bg/bg-store.jpg) center / cover no-repeat;
+}
+#arc-root:has(.arc-pang) {
+  background: #0B0428;
+  min-height: 100%;
+  min-height: 100dvh;
+  min-height: 100lvh;
+}
+#arc-root:has(.arc-merge) {
+  background: #FFF8F0;
+  min-height: 100%;
+  min-height: 100dvh;
+  min-height: 100lvh;
 }

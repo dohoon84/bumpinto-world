@@ -39,10 +39,8 @@ export function createMergeRankProvider(opts = {}) {
 }
 
 async function cfetch(url, opts = {}) {
-  try { return await fetch(url, { ...opts, credentials: 'include' }); } catch (e) {
-    if ((opts.method || 'GET') !== 'GET') throw e;
-    return fetch(url, opts);
-  }
+  // 쿠키가 빠진 재시도는 로그인된 사람을 손님으로 만든다 — 항상 credentials 를 보낸다.
+  return fetch(url, { ...opts, credentials: 'include' });
 }
 
 export function createArcadeRankProvider({ base, device, gameId = ARCADE_GAME_ID, storageKey = KEY } = {}) {
@@ -65,15 +63,15 @@ export function createArcadeRankProvider({ base, device, gameId = ARCADE_GAME_ID
     },
     async gate() {
       const b = root();
-      if (!b) return { ranked: true, usedUp: false, left: 5, cap: 5, guest: true, local: true };
+      if (!b) return { ranked: true, usedUp: false, left: 5, cap: 5, local: true };
       try {
         const r = await cfetch(`${b}/arcade/status?gameId=${gid}&storeId=${ARCADE_STORE_ID}&deviceId=${encodeURIComponent(dev())}`);
-        if (!r.ok) return { ranked: true, usedUp: false, left: 5, cap: 5, guest: true, local: true };
+        if (!r.ok) return { ranked: true, usedUp: false, left: 5, cap: 5, local: true };
         const j = await r.json();
-        if (!j?.ok) return { ranked: true, usedUp: false, left: 5, cap: 5, guest: true, local: true };
+        if (!j?.ok) return { ranked: true, usedUp: false, left: 5, cap: 5, local: true };
         const guest = j.guest === true;
         return { ranked: !j.usedUp && !j.beforeOpen, usedUp: !!j.usedUp, message: j.message || LIMIT_MSG, guest, left: j.left, cap: attemptCap(guest) };
-      } catch { return { ranked: true, usedUp: false, left: 5, cap: 5, guest: true, local: true }; }
+      } catch { return { ranked: true, usedUp: false, left: 5, cap: 5, local: true }; }
     },
     async submit({ name, score, ranked, level = 1, durationMs = 0 }) {
       localSave({ name, score, level });
