@@ -9,6 +9,7 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import { watchEvening } from '../evening.js';
 import { ribbonGeo, fixNormalsUp, ROAD_STYLE } from '../world.js';
 import { buildingMeshes } from './tileMesh.js';
+import { CHEONGGYE_FLAT_R } from './gyeongbuWorld.js';
 export const CHEONGGYE_DEM_FILE = 'gyeongbu/cheonggye-dem.json';
 export const CHEONGGYE_BUILDINGS_FILE = 'gyeongbu/cheonggye-buildings.json';
 export const CHEONGGYE_STREETS_FILE = 'gyeongbu/cheonggye-streets.json';
@@ -306,15 +307,29 @@ function buildLocalStreets(streets, buildings) {
 
 // 4+4 본선(반대편까지 ~28m)이 산에 파묻히지 않게 더 넓게 편다.
 function terrainHeight(raw, dist, distLocal = Infinity) {
-  if (dist < 34) return 0;
+  const flat = CHEONGGYE_FLAT_R;
+  if (dist < flat) return 0;
   let y = raw;
-  if (dist < 115) y = raw * ((dist - 34) / 81);
+  if (dist < 115) y = raw * ((dist - flat) / (115 - flat));
   y = Math.max(0, y);
-  if (dist < 260) y = Math.max(y, Math.min(16, (dist - 34) * 0.038));
+  if (dist < 260) y = Math.max(y, Math.min(16, (dist - flat) * 0.038));
   // DEM 격자 50m — 보간된 지면이 청계산로를 덮지 않게 길을 넓게 편다.
   if (distLocal < 42) return 0;
   if (distLocal < 85) y *= (distLocal - 42) / 43;
   return y;
+}
+
+/** 테스트·노면 검사: DEM 상대 높이(본선·청계산로 주변은 0). 격자 밖은 null. */
+export function cheonggyeHeightAt(x, z, dem, streets = null, extraRoad = null) {
+  if (!dem?.h?.length) return null;
+  const { x0, z0, dx, dz, nx, nz } = dem;
+  if (x < x0 || z < z0 || x > x0 + (nx - 1) * dx || z > z0 + (nz - 1) * dz) return null;
+  const road = [...(dem.road || [])];
+  if (extraRoad?.length) for (const p of extraRoad) road.push([p[0], p[1]]);
+  const segs = segsFromRoad(road);
+  const local = [];
+  for (const r of streets?.roads || []) if (r.p && r.p.length >= 2) local.push(...segsFromRoad(r.p));
+  return terrainHeight(sampleH(dem, x, z), distToRoad(x, z, segs), local.length ? distToRoad(x, z, local) : Infinity);
 }
 
 function sampleH(data, x, z) {
@@ -782,7 +797,7 @@ function assemble(data, buildingsData, streetsData) {
   };
 }
 
-export function mountCheonggyeTerrain(scene, { search = typeof location !== 'undefined' ? location.search : '', baseUrl = '' } = {}) {
+export function mountCheonggyeTerrain(scene, { search = typeof location !== 'undefined' ? location.search : '', baseUrl = '', expressPts = null } = {}) {
   if (!cheonggyeTerrainEnabled(search)) return null;
   const g = new THREE.Group();
   g.name = 'cheonggyeTerrain';
@@ -798,6 +813,7 @@ export function mountCheonggyeTerrain(scene, { search = typeof location !== 'und
     fetch(strUrl).then((r) => (r.ok ? r.json() : null)).catch(() => null),
   ]).then(([dem, buildings, streets]) => {
     if (!dem?.h?.length) return;
+    if (expressPts?.length) dem = { ...dem, road: [...(dem.road || []), ...expressPts.map((p) => [p[0], p[1]])] };
     const built = assemble(dem, buildings, streets);
     g.add(built.group);
     ctl._inner = built;

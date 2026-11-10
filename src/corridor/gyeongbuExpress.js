@@ -4,6 +4,7 @@
 import * as THREE from 'three';
 import { ribbonGeo, fixNormalsUp } from '../world.js';
 import { busLateralM, chainageAfter, enRoute, nextExpress } from './gyeongbuSpeed.js';
+import { EXPRESS_ROAD_Y } from './gyeongbuWorld.js';
 
 export const GYEONGBU_EXPRESS_FILE = 'gangnam/gyeongbu-express.json';
 export const GYEONGGI_BUS_CREDIT = '버스 노선·정류소 정보: 경기도 (공공데이터포털)';
@@ -355,7 +356,7 @@ function expresswayDeck(rawPts) {
   const sbLaneOuter = sbLaneInner + carriage;
   const sbOuterEdge = sbLaneOuter + outerSh;
   const sbLaneCenter = (sbLaneInner + sbLaneOuter) / 2;
-  const yRoad = 0.30, ySh = 0.294, yLine = 0.322;
+  const yRoad = EXPRESS_ROAD_Y, ySh = EXPRESS_ROAD_Y - 0.006, yLine = EXPRESS_ROAD_Y + 0.022;
   const ASP = '#4a4f56', SH = '#5c626a', LINE = '#f2f3ef', EDGE = '#eceee9';
   const MED = '#c8c5bc', RAIL = '#b4b8be', POST = '#8b9098';
   const parts = [];

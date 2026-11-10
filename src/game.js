@@ -645,7 +645,7 @@ if (bump24Game) { const withB24 = world.isBlocked; world.isBlocked = (x, z, r) =
 const gyeongbuSoon = corridor && !corridorData?.gangnam ? mountGyeongbuSoon({ getPos: () => player.position, params, isEn }) : null; // [gyeongbu] 강남이 열려 있으면 본선이 이어지므로 안내하지 않음
 const seoulToll = mountSeoulToll(scene, location.search); // [gyeongbu-bus] 궁내동 서울요금소 (?seoultg=0 끔)
 void seoulToll;
-const cheonggyeTerrain = mountCheonggyeTerrain(scene, { search: location.search }); // [gyeongbu-bus] 판교–양재 청계산 지형 (?cgterrain=0 끔)
+const cheonggyeTerrain = mountCheonggyeTerrain(scene, { search: location.search, expressPts: corridorData?.gangnamExpress?.pts }); // [gyeongbu-bus] 판교–양재 청계산 지형 (?cgterrain=0 끔)
 void cheonggyeTerrain;
 if (subway) {
   const withSubway = world.isBlocked;
