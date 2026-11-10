@@ -112,7 +112,7 @@ export function createArcadeUI({ onHintTap, onCabTap, onExit, onMute } = {}) {
       const mine = me && (me.name != null || me.score != null) ? me : null;
       const body = list.length
         ? `<ul class="rank-list">${list.map((r) => rowHtml(r)).join('')}</ul>`
-        : `<div class="empty"><b>아직 기록이 없어요</b>첫 판을 플레이하면 여기에 순위가 쌓여요.<br/>로컬/서버에 점수가 없을 때 보이는 빈 화면입니다.</div>`;
+        : `<div class="empty"><b>아직 기록이 없어요</b>첫 판을 플레이하면 여기에 순위가 쌓여요.</div>`;
       const mineBlock = mine ? `<div class="mine"><ul class="rank-list" style="overflow:visible">${rowHtml(mine, ' me')}</ul></div>` : '';
       const gameTabs = Array.isArray(games) && games.length > 1
         ? `<div class="tabs games" role="tablist" aria-label="게임">

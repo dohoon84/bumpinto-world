@@ -509,6 +509,7 @@
 #arc-root .arc-modal .empty {
   text-align: center; padding: 36px 12px; color: #5a6a88; font-weight: 800;
   background: rgba(255,255,255,.55); border-radius: 16px; border: 2px dashed rgba(90,110,150,.35);
+  word-break: keep-all; overflow-wrap: normal;
 }
 #arc-root .arc-modal .empty b { display: block; font-size: 16px; color: #1a1030; margin-bottom: 6px; }
 #arc-root .arc-modal .close {
@@ -1547,7 +1548,7 @@
   border-radius: 999px; font-style: normal; font-size: 11px; padding: 1px 6px;
 }
 .arc-merge-rank .rank-row .sc { font-family: "Black Han Sans", "Jua", sans-serif; color: #B8322B; }
-.arc-merge-rank .empty { padding: 28px 10px; color: #7a5a52; line-height: 1.5; }
+.arc-merge-rank .empty { padding: 28px 10px; color: #7a5a52; line-height: 1.5; word-break: keep-all; overflow-wrap: normal; }
 
 /* 모바일 가로 — 세로 전환 안내 (PC에는 안 띄움). 아이콘은 CSS로 그린 원본 휴대폰. */
 .arc-merge-orient {
