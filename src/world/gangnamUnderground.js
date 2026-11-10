@@ -89,6 +89,8 @@ export function buildGangnamUnderground({ exits, entryId, look, renderer, onToas
   floorBase(-HALF, HALF, NORTH_Z, -HALF, '#c4beb2');
   floorBase(-HALF, HALF, HALF, SOUTH_Z, '#c4beb2');
   floorBase(L2HALL.x0, L2HALL.x1, L2HALL.z0, L2HALL.z1, '#c2bbb0');
+  floorBase(L2HALL.x0, L2HALL.x1, L2HALL.z1, -HALF, '#c2bbb0');
+  floorBase(HALF, L2HALL.x0, L2HALL.z1, -HALF, '#c4beb2');
   floorBase(-FOOD.hw, FOOD.hw, FOOD.z0, FOOD.z1, '#c9c0b3');
 
   const ceilRects = [

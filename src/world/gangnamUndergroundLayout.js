@@ -83,7 +83,11 @@ export const NAMES = {
 };
 
 const inR = (r, x, z, m = 0) => r && x > r.x0 - m && x < r.x1 + m && z > r.z0 - m && z < r.z1 + m;
-export const rect = (x0, x1, z0, z1) => ({ x0, x1, z0, z1 });
+export const rect = (x0, x1, z0, z1) => ({
+  x0: Math.min(x0, x1), x1: Math.max(x0, x1),
+  z0: Math.min(z0, z1), z1: Math.max(z0, z1),
+});
+const DOOR_PAD = 1.15;
 
 function pickName(type, i) {
   const list = NAMES[type] || NAMES.fashion;
@@ -201,6 +205,43 @@ export function buildLayout(exits = []) {
   n = shopAlongZ(shops, FOOD.z1 + 0.4, 55.2, -HALF, -1, ['cafe', 'accessories'], n);
   n = shopAlongZ(shops, FOOD.z1 + 0.4, 55.2, HALF, 1, ['cafe', 'phone'], n);
 
+  function sealGap(axis, side, a0, a1, front, namePair) {
+    if (a1 - a0 < 0.45) return;
+    if (axis === 'x') {
+      const zA = side < 0 ? front - SHOP_D : front;
+      const zB = side < 0 ? front : front + SHOP_D;
+      pushShop(shops, 'fashion', n, namePair, 'x', side, a0, a1, zA, zB, {
+        zFront: front, closed: true, rich: false,
+      });
+    } else {
+      const xA = side < 0 ? front - SHOP_D : front;
+      const xB = side < 0 ? front : front + SHOP_D;
+      pushShop(shops, 'fashion', n, namePair, 'z', side, xA, xB, a0, a1, {
+        xFront: front, closed: true, rich: false,
+      });
+    }
+    n++;
+  }
+  const rowEnd = (axis, side, front, pred) => {
+    const row = shops.filter((q) => q.axis === axis && q.side === side
+      && (axis === 'x' ? Math.abs(q.zFront - front) < 0.05 : Math.abs(q.xFront - front) < 0.05)
+      && pred(q));
+    if (!row.length) return null;
+    return {
+      start: Math.min(...row.map((q) => (axis === 'x' ? q.x0 : q.z0))),
+      end: Math.max(...row.map((q) => (axis === 'x' ? q.x1 : q.z1))),
+    };
+  };
+  // 상점 줄이 채우지 못한 앞면은 셔터로 닫아, 열린 길처럼 보이지 않게 한다.
+  const ewnWest = rowEnd('x', -1, -HALF, (q) => q.x1 < 0);
+  if (ewnWest) sealGap('x', -1, ewnWest.end, PLAZA.x0, -HALF, ['준비중', 'Coming Soon']);
+  const ewnEast = rowEnd('x', -1, -HALF, (q) => q.x0 > 20);
+  if (ewnEast) sealGap('x', -1, ewnEast.end, EW.x1 - 1.2, -HALF, ['직원만', 'Staff Only']);
+  const ewsWest = rowEnd('x', 1, HALF, (q) => q.x1 < 0);
+  if (ewsWest) sealGap('x', 1, ewsWest.end, PLAZA.x0, HALF, ['준비중', 'Coming Soon']);
+  const ewsEast = rowEnd('x', 1, HALF, (q) => q.x0 > 0);
+  if (ewsEast) sealGap('x', 1, ewsEast.end, EW.x1 - 1.2, HALF, ['창고칸', 'Storage']);
+
   const cafes = [
     { name: '깊은잔', nameEn: 'Deep Cup', x: -6.4, z: 0.2, w: 4.2, d: 3.2 },
     { name: '따뜻한컵', nameEn: 'Warm Cup', x: 6.4, z: 0.2, w: 4.2, d: 3.2 },
@@ -307,14 +348,37 @@ export function buildLayout(exits = []) {
     { x: -1.5, z: 43.5 }, { x: 1.5, z: 50.6 },
   ];
 
+  const alongFront = (s, t, depth) => {
+    if (s.axis === 'x') return { x: s.cx + t, z: s.side < 0 ? s.z1 - depth : s.z0 + depth };
+    return { x: s.side < 0 ? s.x1 - depth : s.x0 + depth, z: s.cz + t };
+  };
+  const around = (s, p, hw, hd) => (s.axis === 'x'
+    ? rect(p.x - hw, p.x + hw, p.z - hd, p.z + hd)
+    : rect(p.x - hd, p.x + hd, p.z - hw, p.z + hw));
+
   const walks = [
     rect(EW.x0, EW.x1, -HALF, HALF),
     rect(-HALF, HALF, NORTH_Z, -HALF),
     rect(-HALF, HALF, HALF, SOUTH_Z),
+    // 십자로 교차점: 복도 사각형이 맞닿기만 해서 반경 0.3 으로는 건너지 못했다.
+    rect(-HALF, HALF, -HALF - DOOR_PAD, -HALF + DOOR_PAD),
+    rect(-HALF, HALF, HALF - DOOR_PAD, HALF + DOOR_PAD),
     rect(L2HALL.x0, L2HALL.x1, L2HALL.z0, L2HALL.z1),
-    rect(HALF, L2HALL.x0 + 0.2, -HALF, -8.15),
+    // 2호선 홀과 동서 복도를 잇는 앞마당 (예전 사각형은 z0>z1 이라 한 칸도 걷지 못했음)
+    rect(L2HALL.x0, L2HALL.x1, L2HALL.z1 - DOOR_PAD, -HALF + DOOR_PAD),
+    // 남북 북측에서 2호선 앞마당으로 이어지는 모서리 통로
+    rect(HALF - DOOR_PAD, L2HALL.x0 + DOOR_PAD, L2HALL.z1 - DOOR_PAD, -HALF),
     rect(-FOOD.hw, FOOD.hw, FOOD.z0, FOOD.z1),
-    ...shops.filter((s) => !s.closed).map((s) => s.interior),
+    ...shops.filter((q) => !q.closed).map((q) => q.interior),
+    ...shops.filter((q) => !q.closed).map((q) => {
+      const gap = (q.openW || OPEN_W) / 2;
+      if (q.axis === 'x') {
+        const zf = q.side < 0 ? q.z1 : q.z0;
+        return rect(q.cx - gap, q.cx + gap, zf - DOOR_PAD, zf + DOOR_PAD);
+      }
+      const xf = q.side < 0 ? q.x1 : q.x0;
+      return rect(xf - DOOR_PAD, xf + DOOR_PAD, q.cz - gap, q.cz + gap);
+    }),
   ];
   for (const p of passages) {
     const R = p.rect;
@@ -389,6 +453,34 @@ export function buildLayout(exits = []) {
   }
   for (const w of wells) {
     blockers.push(rect(w.x0 - 0.08, w.x1 + 0.08, w.z0 - 0.05, w.z1 - 0.4));
+  }
+  // 열린 가게 안의 카운터·진열대는 걸어 들어갈 수 있지만 통과하지는 못하게 막는다.
+  for (const q of shops) {
+    if (q.closed) continue;
+    const span = q.axis === 'x' ? q.x1 - q.x0 : q.z1 - q.z0;
+    const back = alongFront(q, 0, SHOP_D - 0.38);
+    blockers.push(around(q, back, Math.max(0.4, span / 2 - 0.32), 0.22));
+    if (q.type === 'fashion' || q.type === 'shoes') {
+      blockers.push(around(q, alongFront(q, q.type === 'shoes' ? 0 : 0.1, 1.62), 0.78, 0.25));
+      const side0 = alongFront(q, -(span / 2 - 0.28), 0.65);
+      const side1 = alongFront(q, -(span / 2 - 0.28), 0.65 + 7 * 0.48);
+      if (q.axis === 'x') blockers.push(rect(side0.x - 0.12, side0.x + 0.12, side0.z, side1.z));
+      else blockers.push(rect(side0.x, side1.x, side0.z - 0.12, side0.z + 0.12));
+      const rackTs = span > 4.3 ? [-1.15, 1.15] : [0];
+      for (const depth of [1.1, 2.45, 3.55]) {
+        for (const t of rackTs) blockers.push(around(q, alongFront(q, t, depth), 0.48, 0.14));
+      }
+    } else if (q.type === 'accessories' || q.type === 'cosmetics' || q.type === 'phone') {
+      blockers.push(around(q, alongFront(q, 0, 1.45), Math.min(1.05, span / 2 - 0.3), 0.26));
+    } else if (q.type === 'cafe') {
+      blockers.push(around(q, alongFront(q, 0, 2.1), 1.23, 0.36));
+    } else if (q.type === 'snack') {
+      blockers.push(around(q, alongFront(q, 0, 2.05), 1.28, 0.37));
+    } else if (q.type === 'flower') {
+      for (const t of [-1.1, -0.35, 0.35, 1.1]) {
+        blockers.push(around(q, alongFront(q, t, 2.0), 0.22, 0.22));
+      }
+    }
   }
 
   return {
