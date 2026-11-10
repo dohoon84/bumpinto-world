@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { gangnamBusEnabled } from '../../../src/corridor/gangnamBus.js';
 import { GYEONGGI_BUS_CREDIT, gyeongbuExpressEnabled } from '../../../src/corridor/gyeongbuExpress.js';
 import { SEOUL_TG, seoulTollEnabled } from '../../../src/world/seoulToll.js';
+import { cheonggyeTerrainEnabled } from '../../../src/corridor/cheonggyeTerrain.js';
 import {
   speedMs, rideSpeedMs, travelSeconds, nextExpress, headwayMin, carLaneIndex, busLaneIndex, MS_TO_KMH,
 } from '../../../src/corridor/gyeongbuSpeed.js';
@@ -87,4 +88,19 @@ for (const w of gy) for (const ni of w.n || []) {
   if (d < near) near = d;
 }
 assert.ok(near < 25, `서울TG가 경부에서 ${near.toFixed(1)}m`);
+assert.equal(cheonggyeTerrainEnabled(''), true);
+assert.equal(cheonggyeTerrainEnabled('?cgterrain=0'), false);
+const dem = JSON.parse(fs.readFileSync(path.join(root, 'public/corridor/gyeongbu/cheonggye-dem.json'), 'utf8'));
+assert.equal(dem.h.length, dem.nx * dem.nz);
+assert.ok(Math.max(...dem.h) > 400, '청계산 DEM peak');
+assert.ok(dem.road.length > 40);
+const PANGYO_TG = { x: -482.05, z: -3232.35 };
+let tgNear = Infinity;
+for (const p of J.pts) {
+  if (p[3] !== 'approach') continue;
+  const d = Math.hypot(p[0] - PANGYO_TG.x, p[1] - PANGYO_TG.z);
+  if (d < tgNear) tgNear = d;
+}
+assert.ok(tgNear < 25, `판교TG가 접근로에서 ${tgNear.toFixed(1)}m`);
+assert.ok(fs.readFileSync(path.join(root, 'src/corridor/pangyoExpress.js'), 'utf8').includes('makePangyoTollSigns'));
 console.log(`gyeongbu express: ${cruise.toFixed(0)} km/h, 판교→강남 ${Math.round(eta)}s, cars off bus lane OK, 서울TG ${near.toFixed(0)}m`);

@@ -155,7 +155,11 @@ export function mountGangnamTransit(root, data, { overlay, express = null } = {}
   function update(_dt, x, z) {
     const now = new Date();
     const h = gameHour(now);
-    const min = Math.round(((h % 24) + 24) % 24 * 60);
+    // ?hour=8.018 처럼 소수 시간이 오면 분으로 그대로 써서 광역버스가 분 사이에도 움직인다.
+    const rawHour = typeof location !== 'undefined' ? new URLSearchParams(location.search).get('hour') : null;
+    const min = (rawHour != null && rawHour !== '' && Number.isFinite(Number(rawHour)))
+      ? ((Number(rawHour) % 24) + 24) % 24 * 60
+      : Math.round(((h % 24) + 24) % 24 * 60);
     const kind = dayKind(now);
     const span = Math.max(400, (data.lengthM || 0) - (data.daeroAt || 0));
     runners.forEach((r, i) => {

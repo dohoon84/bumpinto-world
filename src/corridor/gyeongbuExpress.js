@@ -293,7 +293,7 @@ export function mountGyeongbuExpress(group, data, { overlay } = {}) {
   const main = data.pts.filter((p) => p[3] === 'main');
   if (main.length > 3) group.add(busLaneMarkings(main, data));
 
-  const cap = 3;
+  const cap = 8;
   const mat = new THREE.MeshLambertMaterial({ vertexColors: true });
   const meshes = {};
   for (const no of ['9004', '1151']) {
@@ -353,12 +353,12 @@ export function mountGyeongbuExpress(group, data, { overlay } = {}) {
     for (const b of live) {
       const mesh = meshes[b.no];
       if (!mesh) continue;
-      const i = slot[b.no]++;
-      if (i >= cap) continue;
+      if (slot[b.no] >= cap) continue;
       const p = poseAt(data.pts, b.s);
       const lat = busLateralM(b.s, data);
       const px = p.x + p.lx * lat, pz = p.z + p.lz * lat;
       if (Math.hypot(px - x, pz - z) > 1400) continue;
+      const i = slot[b.no]++;
       q.setFromAxisAngle(up, p.ang);
       m4.compose(pos.set(px, 0.15, pz), q, scl);
       mesh.setMatrixAt(i, m4);

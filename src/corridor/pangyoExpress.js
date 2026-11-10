@@ -1,6 +1,6 @@
 // [pangyo-express] 판교 확장 3단계 — 판교IC고가차도 → 판교TG → 경부고속도로 서울 방향 합류 (pangyo/express.json, scripts/corridor/build-pangyo-express.mjs)
 //   ?pangyoexpress=0 (또는 ?pangyo=0) 이면 요청·메시·버스 연장 전부 없음 → 2단계 그대로
-//   - 구조물: 도로 상판·차선·방호벽·옹벽/상판 옆면·교각·요금소(일반형, 표지·로고 없음)·하이패스 게이트 → 메시 2개(낮 1 + 밤 조명 1)
+//   - 구조물: 도로 상판·차선·방호벽·옹벽/상판 옆면·교각·요금소(캐노피·부스·하이패스/일반/버스 글자 표지, 로고 없음)·하이패스 게이트 → 메시 2개(낮 1 + 밤 조명 1)
 //   - 판교 타일의 평면(0m) 고가차도 리본은 express.hide 서명과 같은 것만 빼고, 높이 있는 리본으로 대신 그림
 //   - 버스: G8110 코리더 경로 끝에 램프 → 합류 → 본선 350m 를 이어 붙이고 끝에서 서서 사라짐(endStop)
 //   - 높이: terrain 프록시(getVehicleHeight)에 고속도로 선 높이를 더함(보행자 getGroundHeight 는 그대로)
@@ -71,6 +71,52 @@ export function extendLinkWithExpress(L, E) {
 }
 
 // ---------- 메시 ----------
+
+function loadGyeongbuTex(file) {
+  const base = (import.meta.env && import.meta.env.BASE_URL) || '/';
+  const tex = new THREE.TextureLoader().load(`${base}corridor/gyeongbu/${file}`);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+
+/** 판교TG 표지. 한국도로공사·하이패스 로고는 쓰지 않고 글자만 쓴다. */
+function makePangyoTollSigns(T) {
+  if (!T?.booths?.sets) return null;
+  const hipassMat = new THREE.MeshBasicMaterial({ map: loadGyeongbuTex('sign-hipass.png') });
+  const generalMat = new THREE.MeshBasicMaterial({ map: loadGyeongbuTex('sign-general.png') });
+  const busMat = new THREE.MeshBasicMaterial({ map: loadGyeongbuTex('sign-bus.png') });
+  const fasciaMat = new THREE.MeshBasicMaterial({ map: loadGyeongbuTex('sign-toll.png'), side: THREE.DoubleSide });
+  const g = new THREE.Group();
+  g.name = 'pangyoTollSigns';
+  const laneW = T.booths.laneW || 3.3;
+  const under = T.roof?.underside ?? 5.5;
+  const thick = T.roof?.thick ?? 1.2;
+  for (const S of T.booths.sets) {
+    const px = S.dir[1], pz = -S.dir[0];
+    const face = Math.atan2(-S.dir[0], -S.dir[1]);
+    for (let i = 0; i < S.lanes; i++) {
+      const o = (i + 0.5 - S.lanes / 2) * laneW;
+      const x = S.at[0] + px * o, z = S.at[1] + pz * o;
+      const hipass = i >= S.lanes - 2;
+      const board = new THREE.Mesh(new THREE.PlaneGeometry(2.2, 0.6), hipass ? hipassMat : generalMat);
+      board.position.set(x - S.dir[0] * 6.2, under - 0.55, z - S.dir[1] * 6.2);
+      board.rotation.y = face;
+      g.add(board);
+      if (i === S.lanes - 1) {
+        const bus = new THREE.Mesh(new THREE.PlaneGeometry(1.4, 0.4), busMat);
+        bus.position.set(x - S.dir[0] * 6.2, under - 1.05, z - S.dir[1] * 6.2);
+        bus.rotation.y = face;
+        g.add(bus);
+      }
+    }
+    const fascia = new THREE.Mesh(new THREE.PlaneGeometry(14, 1.5), fasciaMat);
+    fascia.position.set(S.at[0] - S.dir[0] * 10.5, under + thick + 0.85, S.at[1] - S.dir[1] * 10.5);
+    fascia.rotation.y = face;
+    g.add(fascia);
+  }
+  return g;
+}
+
 const COL = { road: '#6b7077', mainRoad: '#61666d', line: '#f4f4f0', edge: '#e9e9e4', barrier: '#c9c7c0', side: '#b8b5ad', under: '#8e8b85', pier: '#aeaba3', wall: '#bdb6a8', canopy: '#e3e5e8', canopyEdge: '#9aa3ad', canopyUnder: '#c9ced4', island: '#d7d3c8', booth: '#eef1f4', boothGlass: '#7ea2bf', gantry: '#8a929b', lamp: '#fff2c8' };
 const C3 = new THREE.Color();
 function painted(g, color) {
@@ -171,9 +217,41 @@ export function buildPangyoExpress(E) {
     for (const s of [1, -1]) add(boxAt(0.45, G.h, 0.45, G.at[0] + px * hs * s, G.h / 2, G.at[1] + pz * hs * s, ang), COL.gantry);
     add(boxAt(0.6, 0.9, G.span + 0.6, G.at[0], G.h - 0.45, G.at[1], ang + Math.PI / 2), COL.gantry);
   }
+  // [gyeongbu-bus] 판교TG 세부. 왼쪽(1차로 쪽) 2개 차로를 하이패스·버스로 두고, 로고는 쓰지 않는다.
+  if (T?.booths?.sets) {
+    const laneW = T.booths.laneW || 3.3;
+    for (const S of T.booths.sets) {
+      const ang = Math.atan2(S.dir[0], S.dir[1]);
+      const px = S.dir[1], pz = -S.dir[0];
+      for (let i = 0; i < S.lanes; i++) {
+        const o = (i + 0.5 - S.lanes / 2) * laneW;
+        const x = S.at[0] + px * o, z = S.at[1] + pz * o;
+        if (i >= S.lanes - 2) add(boxAt(laneW - 0.35, 0.045, 24, x, 0.11, z, ang), '#2a4a7a');
+      }
+      const [ix, iw] = [T.booths.island[0], T.booths.island[1]];
+      for (let k = 0; k <= S.lanes; k++) {
+        const o = (k - S.lanes / 2) * laneW;
+        const x = S.at[0] + px * o, z = S.at[1] + pz * o;
+        add(boxAt(ix, 0.32, 0.38, x + S.dir[0] * (iw / 2), 0.28, z + S.dir[1] * (iw / 2), ang), '#f5c518');
+        add(boxAt(ix, 0.32, 0.38, x - S.dir[0] * (iw / 2), 0.28, z - S.dir[1] * (iw / 2), ang), '#f5c518');
+      }
+    }
+    if (T.booths.axis && T.roof) {
+      const [A0, A1] = T.booths.axis;
+      const ang = Math.atan2(A1[0] - A0[0], A1[1] - A0[1]);
+      const mx = (A0[0] + A1[0]) / 2, mz = (A0[1] + A1[1]) / 2;
+      const L = Math.hypot(A1[0] - A0[0], A1[1] - A0[1]) || 1;
+      const nx = (A1[1] - A0[1]) / L, nz = -(A1[0] - A0[0]) / L;
+      const y = T.roof.underside - 0.08;
+      night.push(painted(boxAt(1.05, 0.07, L * 0.82, mx + nx * 3.8, y, mz + nz * 3.8, ang), COL.lamp));
+      night.push(painted(boxAt(1.05, 0.07, L * 0.82, mx - nx * 3.8, y, mz - nz * 3.8, ang), COL.lamp));
+    }
+  }
   const mat = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide });
   const body = new THREE.Mesh(mergeGeometries(day.map((x) => (x.index ? x.toNonIndexed() : x)).map((x) => { for (const k of Object.keys(x.attributes)) if (!['position', 'normal', 'color'].includes(k)) x.deleteAttribute(k); return x; })), mat);
   body.name = 'pangyoExpressBody'; body.receiveShadow = true; body.castShadow = true; g.add(body);
+  const tollSigns = makePangyoTollSigns(T);
+  if (tollSigns) g.add(tollSigns);
   let glow = null;
   if (night.length) {
     glow = new THREE.Mesh(mergeGeometries(night.map((x) => { const y = x.index ? x.toNonIndexed() : x; for (const k of Object.keys(y.attributes)) if (!['position', 'normal', 'color'].includes(k)) y.deleteAttribute(k); return y; })), new THREE.MeshBasicMaterial({ vertexColors: true }));
