@@ -172,7 +172,7 @@ body.ui-v2:not(.mobile) #world-gate.v2-gate .gate-toast-btn { height: 32px; box-
 body.ui-v2:not(.mobile) #world-gate.v2-gate .gate-toast-btn.primary { color: #3a2a00; background: linear-gradient(180deg, #ffe169, #f5a200); border: 0; box-shadow: 0 2px 0 #a65f00, inset 0 1px 0 rgba(255, 255, 255, .55); }
 
 /* 03 역 선택 패널 */
-body.ui-v2:not(.mobile) .v2-picker { position: absolute; left: 12px; top: 58px; z-index: 6; width: 608px; max-height: calc(100% - 70px); overflow: hidden auto; padding: 24px; display: flex; flex-direction: column; gap: 12px; }
+body.ui-v2:not(.mobile) .v2-picker { position: absolute; left: 12px; top: 58px; z-index: 6; box-sizing: border-box; width: min(608px, calc(100% - 24px)); max-height: calc(100% - 70px); overflow: hidden auto; padding: 24px; display: flex; flex-direction: column; gap: 12px; }
 body.ui-v2:not(.mobile) .v2-tags { display: flex; gap: 8px; }
 body.ui-v2:not(.mobile) .v2-map { position: relative; flex: none; }
 body.ui-v2:not(.mobile) .v2-map svg { position: absolute; inset: 0; overflow: visible; }
@@ -182,6 +182,8 @@ body.ui-v2:not(.mobile) .v2-stn small { font-size: 11px; font-weight: 500; color
 body.ui-v2:not(.mobile) .v2-stn:hover, body.ui-v2:not(.mobile) .v2-stn:focus-visible { border-color: rgba(255, 225, 105, .7); outline: none; }
 body.ui-v2:not(.mobile) .v2-stn.on { border-color: transparent; background: linear-gradient(180deg, #ffe169, #f5a200); box-shadow: 0 2px 0 #a65f00, 0 0 12px rgba(255, 225, 105, .5); color: #3a2a00; }
 body.ui-v2:not(.mobile) .v2-stn.on small { color: #6b4a00; }
+body.ui-v2:not(.mobile) .v2-stn.is-pass { cursor: default; opacity: .72; border-style: dashed; background: rgba(15, 25, 42, .55); }
+body.ui-v2:not(.mobile) .v2-stn.is-pass:hover, body.ui-v2:not(.mobile) .v2-stn.is-pass:focus-visible { border-color: rgba(255, 255, 255, .2); }
 body.ui-v2:not(.mobile) .v2-lm { position: absolute; display: inline-flex; align-items: center; box-sizing: border-box; height: 22px; padding: 0 8px; border-radius: 6px; background: rgba(76, 201, 240, .18); border: 1px solid rgba(76, 201, 240, .6); color: #bfefff; font: inherit; font-size: 11px; font-weight: 700; cursor: pointer; white-space: nowrap; }
 body.ui-v2:not(.mobile) .v2-lm.on, body.ui-v2:not(.mobile) .v2-lm:hover { background: rgba(76, 201, 240, .32); }
 body.ui-v2:not(.mobile) .v2-sel { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 12px; background: rgba(255, 225, 105, .1); border: 1px solid rgba(255, 225, 105, .5); }

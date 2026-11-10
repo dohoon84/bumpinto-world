@@ -47,10 +47,9 @@ export function panelWindow(data, radius = PANEL_RADIUS) {
 }
 
 function stopLabel(s, en) { return en && s.nameEn ? s.nameEn : s.name; }
-// 강남역은 노선 이름만 있고 게임 역이 아니다. 타거나 내리지 않고, 노선도에만 개통 예정을 붙인다.
+// 게임에서 탈 수 있는 역·통과 역·아직 구간 밖인 역을 구분한다. 강남은 이미 개통한 게임 역이라 예정 배지를 붙이지 않는다.
 export function openingSoonLabel(name, en = false) {
-  if (name !== '강남') return '';
-  return en ? 'Gangnam opening soon' : '강남역 개통 예정';
+  return '';
 }
 function termLabel(name, en) {
   if (!name) return '';
