@@ -403,7 +403,7 @@ function expresswayDeck(rawPts) {
   if (pts.length < 4) return null;
   const S = leftSamples(pts);
   const {
-    laneW, carriage, nbLaneInner, nbLaneOuter, nbInnerEdge, nbOuterEdge,
+    laneW, carriage, innerSh, outerSh, nbLaneInner, nbLaneOuter, nbInnerEdge, nbOuterEdge,
     medHi, sbLaneInner, sbLaneOuter, sbOuterEdge, sbLaneCenter, medOff,
   } = expressLayout();
   const yRoad = EXPRESS_ROAD_Y, ySh = EXPRESS_ROAD_Y - 0.006, yLine = EXPRESS_ROAD_Y + 0.022;
