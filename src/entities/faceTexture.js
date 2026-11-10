@@ -322,6 +322,19 @@ export function getFaceMaterial(look, expr = 'idle') {
     matCache.set(key, hit);
     return hit;
   }
+  // node 테스트(jsdom 없음)에서는 캔버스 대신 피부색만 쓴다.
+  if (typeof document === 'undefined') {
+    const mat = new THREE.MeshLambertMaterial({ color: look?.skin || '#f2d0b0' });
+    matCache.set(key, mat);
+    if (matCache.size > MAX_CACHE) {
+      const oldest = matCache.keys().next().value;
+      const old = matCache.get(oldest);
+      matCache.delete(oldest);
+      old?.map?.dispose?.();
+      old?.dispose?.();
+    }
+    return mat;
+  }
   const tex = new THREE.CanvasTexture(paintFace(look, expr));
   tex.colorSpace = THREE.SRGBColorSpace;
   tex.magFilter = THREE.LinearFilter;
