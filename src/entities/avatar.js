@@ -1,5 +1,7 @@
 // 로우폴리 아바타 (플레이어 / NPC / 원격 플레이어 공용)
 import * as THREE from 'three';
+import { sanitizeLook } from '../look.js';
+import { getHeadGeometry, getFaceMaterial, applyFaceExpression } from './faceTexture.js';
 
 const geo = {
   body: new THREE.CapsuleGeometry(0.22, 0.62, 4, 8),
@@ -45,11 +47,81 @@ const geo = {
   catStripe: new THREE.BoxGeometry(0.2, 0.03, 0.055),
   catEye: new THREE.SphereGeometry(0.026, 6, 5),
   catNose: new THREE.SphereGeometry(0.018, 5, 4),
+  shoe: new THREE.BoxGeometry(0.2, 0.08, 0.28),
+  capCrown: new THREE.CylinderGeometry(0.22, 0.24, 0.16, 10),
+  capBrim: new THREE.BoxGeometry(0.3, 0.035, 0.22),
+  beanie: new THREE.SphereGeometry(0.28, 10, 8),
+  beaniePom: new THREE.SphereGeometry(0.07, 6, 5),
+  bucketCrown: new THREE.CylinderGeometry(0.24, 0.2, 0.16, 10),
+  bucketBrim: new THREE.CylinderGeometry(0.36, 0.32, 0.035, 12),
+  band: new THREE.TorusGeometry(0.27, 0.032, 6, 14),
+  beret: new THREE.SphereGeometry(0.3, 10, 8),
+  helmet: new THREE.SphereGeometry(0.32, 10, 8),
+  helmetVisor: new THREE.BoxGeometry(0.34, 0.07, 0.14),
+  earCone: new THREE.ConeGeometry(0.07, 0.15, 5),
+  glassSq: new THREE.BoxGeometry(0.12, 0.1, 0.018),
+  glassLens: new THREE.BoxGeometry(0.1, 0.082, 0.01),
+  mask: new THREE.BoxGeometry(0.34, 0.16, 0.08),
+  stud: new THREE.SphereGeometry(0.028, 6, 5),
+  hoop: new THREE.TorusGeometry(0.04, 0.01, 5, 10),
+  scarfRing: new THREE.TorusGeometry(0.2, 0.055, 6, 12),
+  scarfEnd: new THREE.BoxGeometry(0.1, 0.28, 0.06),
+  neckThin: new THREE.TorusGeometry(0.18, 0.016, 5, 12),
+  pendant: new THREE.SphereGeometry(0.035, 6, 5),
+  backpack: new THREE.BoxGeometry(0.38, 0.42, 0.16),
+  strap: new THREE.BoxGeometry(0.055, 0.52, 0.035),
+  crossBag: new THREE.BoxGeometry(0.2, 0.26, 0.1),
+  crossStrap: new THREE.BoxGeometry(0.045, 0.88, 0.03),
+  tote: new THREE.BoxGeometry(0.24, 0.28, 0.12),
+  toteHandle: new THREE.TorusGeometry(0.07, 0.015, 5, 10, Math.PI),
+  watchFace: new THREE.BoxGeometry(0.065, 0.08, 0.04),
+  watchBand: new THREE.TorusGeometry(0.068, 0.014, 5, 10),
 };
 const matCache = new Map();
 const M = (c) => { if (!matCache.has(c)) matCache.set(c, new THREE.MeshLambertMaterial({ color: c })); return matCache.get(c); };
+
+function shadeHex(hex, amt) {
+  const n = parseInt(String(hex).slice(1), 16);
+  const k = amt < 0 ? 1 + amt : 1;
+  const mix = amt > 0 ? amt : 0;
+  const ch = (v) => {
+    const x = amt < 0 ? v * k : v + (255 - v) * mix;
+    return Math.max(0, Math.min(255, Math.round(x))).toString(16).padStart(2, '0');
+  };
+  return `#${ch((n >> 16) & 255)}${ch((n >> 8) & 255)}${ch(n & 255)}`;
+}
+
+function topMaterial(color, pattern) {
+  if (!pattern || pattern === 'none') return M(color);
+  const key = `top:${pattern}:${color}`;
+  if (matCache.has(key)) return matCache.get(key);
+  const cnv = document.createElement('canvas');
+  cnv.width = 64; cnv.height = 64;
+  const ctx = cnv.getContext('2d');
+  if (pattern === 'stripe') {
+    const alt = shadeHex(color, 0.28);
+    for (let i = 0; i < 8; i++) {
+      ctx.fillStyle = i % 2 ? color : alt;
+      ctx.fillRect(0, i * 8, 64, 8);
+    }
+  } else {
+    ctx.fillStyle = color;
+    ctx.fillRect(0, 0, 64, 38);
+    ctx.fillStyle = shadeHex(color, -0.22);
+    ctx.fillRect(0, 38, 64, 26);
+  }
+  const tex = new THREE.CanvasTexture(cnv);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.magFilter = THREE.NearestFilter;
+  tex.minFilter = THREE.LinearMipmapLinearFilter;
+  tex.needsUpdate = true;
+  const mat = new THREE.MeshLambertMaterial({ map: tex });
+  matCache.set(key, mat);
+  return mat;
+}
+
 const HAIR = '#2a211c';
-const BEARD = '#4a3428';
 const UMB_SEGMENTS = 8;
 const umbWedgeGeos = Array.from({ length: UMB_SEGMENTS }, (_, i) => {
   const g = new THREE.SphereGeometry(
@@ -175,47 +247,195 @@ export function createCoffeeCupProp(kind = 'iced') {
   return g;
 }
 
-function addHair(rig, hair) {
+function addHair(parent, hair, hairColor) {
   if (!hair || hair === 'bald') return;
-  const cap = new THREE.Mesh(geo.hairCap, M(HAIR));
-  if (hair === 'short' || hair === 'pony') { cap.position.y = 1.78; cap.scale.set(1.02, 0.52, 1.02); }
-  else { cap.position.y = 1.73; cap.scale.set(1.12, 0.7, 1.08); }
-  rig.add(cap);
+  const mat = M(hairColor || HAIR);
+  const cap = new THREE.Mesh(geo.hairCap, mat);
+  if (hair === 'short' || hair === 'pony') { cap.position.y = 0.18; cap.scale.set(1.02, 0.52, 1.02); }
+  else { cap.position.y = 0.13; cap.scale.set(1.12, 0.7, 1.08); }
+  parent.add(cap);
   if (hair === 'long') {
-    const L = new THREE.Mesh(geo.hairLock, M(HAIR)), R = L.clone();
-    put(rig, L, -0.18, 1.4, 0.02); put(rig, R, 0.18, 1.4, 0.02);
+    const L = new THREE.Mesh(geo.hairLock, mat), R = L.clone();
+    put(parent, L, -0.18, -0.2, 0.02); put(parent, R, 0.18, -0.2, 0.02);
   }
   if (hair === 'pony') {
-    const tail = new THREE.Mesh(geo.hairLock, M(HAIR));
-    tail.position.set(0, 1.46, -0.24); tail.rotation.x = 0.6; rig.add(tail);
+    const tail = new THREE.Mesh(geo.hairLock, mat);
+    tail.position.set(0, -0.14, -0.24); tail.rotation.x = 0.6; parent.add(tail);
   }
 }
 
-// 짧은 수염은 콧수염만. 풀수염은 구렛나루-볼-턱-콧수염이 한 덩어리로 이어진다.
-function addBeard(head, beard, face) {
-  if (beard !== 'goatee' && beard !== 'full') return;
-  const square = face === 'square';
-  const lipY = square ? -0.09 : -0.07;
-  const front = square ? 0.2 : 0.22;
-  const stash = new THREE.Mesh(geo.mustache, M(BEARD));
-  stash.position.set(0, lipY, front);
-  head.add(stash);
-  if (beard !== 'full') return;
-  const side = square ? 0.16 : 0.17;
-  const jawY = square ? -0.16 : -0.135;
-  const chin = new THREE.Mesh(geo.chinBeard, M(BEARD));
-  chin.position.set(0, jawY, square ? 0.16 : 0.175);
-  head.add(chin);
-  for (const s of [-1, 1]) {
-    const burn = new THREE.Mesh(geo.sideburn, M(BEARD));
-    // 귀 앞에서 시작해 콧수염까지 내려오게 앞으로 빼 둔다.
-    burn.position.set(s * side, 0.0, square ? 0.14 : 0.16);
-    head.add(burn);
-    const cheek = new THREE.Mesh(geo.cheekBeard, M(BEARD));
-    cheek.position.set(s * side * 0.7, lipY - 0.02, square ? 0.17 : 0.19);
-    head.add(cheek);
+function addHat(parent, type, color, hairy) {
+  if (!type || type === 'none') return;
+  const mat = M(color || '#243044');
+  const y = hairy ? 0.34 : 0.26;
+  if (type === 'cap') {
+    const crown = new THREE.Mesh(geo.capCrown, mat);
+    crown.position.y = y;
+    const brim = new THREE.Mesh(geo.capBrim, mat);
+    brim.position.set(0, y - 0.06, 0.16);
+    parent.add(crown, brim);
+  } else if (type === 'beanie') {
+    const cap = new THREE.Mesh(geo.beanie, mat);
+    cap.position.y = y - 0.02;
+    cap.scale.set(1.05, 0.72, 1.05);
+    const pom = new THREE.Mesh(geo.beaniePom, mat);
+    pom.position.y = y + 0.16;
+    parent.add(cap, pom);
+  } else if (type === 'bucket') {
+    const crown = new THREE.Mesh(geo.bucketCrown, mat);
+    crown.position.y = y - 0.04;
+    const brim = new THREE.Mesh(geo.bucketBrim, mat);
+    brim.position.y = y - 0.12;
+    parent.add(crown, brim);
+  } else if (type === 'band') {
+    const band = new THREE.Mesh(geo.band, mat);
+    band.rotation.x = Math.PI / 2;
+    band.position.y = 0.1;
+    parent.add(band);
+  } else if (type === 'beret') {
+    const beret = new THREE.Mesh(geo.beret, mat);
+    beret.position.set(0.04, y + 0.02, 0);
+    beret.scale.set(1.15, 0.38, 1.15);
+    beret.rotation.z = -0.18;
+    parent.add(beret);
+  } else if (type === 'helmet') {
+    const helm = new THREE.Mesh(geo.helmet, mat);
+    helm.position.y = y - 0.06;
+    helm.scale.set(1.08, 0.82, 1.12);
+    const visor = new THREE.Mesh(geo.helmetVisor, M('#1a1a1a'));
+    visor.position.set(0, y - 0.14, 0.2);
+    parent.add(helm, visor);
+  } else if (type === 'catear') {
+    const band = new THREE.Mesh(geo.band, mat);
+    band.rotation.x = Math.PI / 2;
+    band.position.y = 0.1;
+    parent.add(band);
+    for (const s of [-1, 1]) {
+      const ear = new THREE.Mesh(geo.earCone, mat);
+      ear.position.set(s * 0.14, y + 0.08, 0);
+      ear.rotation.z = s * -0.18;
+      parent.add(ear);
+    }
+  } else {
+    const h = new THREE.Mesh(geo.hat, mat);
+    h.position.y = y;
+    parent.add(h);
   }
 }
+
+function addGlasses(parent, type) {
+  if (!type || type === 'none') return;
+  const y = 0.06, z = 0.24;
+  if (type === 'square' || type === 'sun') {
+    const frame = M('#243044');
+    const lens = M(type === 'sun' ? '#1a1a1a' : '#d7e7f4');
+    for (const s of [-1, 1]) {
+      put(parent, new THREE.Mesh(geo.glassSq, frame), s * 0.09, y, z);
+      put(parent, new THREE.Mesh(geo.glassLens, lens), s * 0.09, y, z + 0.006);
+    }
+    put(parent, new THREE.Mesh(geo.bridge, frame), 0, y, z);
+    return;
+  }
+  const rL = put(parent, new THREE.Mesh(geo.glass, M('#243044')), -0.09, y, z);
+  put(parent, rL.clone(), 0.09, y, z);
+  put(parent, new THREE.Mesh(geo.bridge, M('#243044')), 0, y, z);
+}
+
+function addMask(parent, type) {
+  if (type !== 'cloth') return;
+  const m = new THREE.Mesh(geo.mask, M('#e9ecef'));
+  m.position.set(0, -0.08, 0.2);
+  parent.add(m);
+}
+
+function addEarrings(parent, type) {
+  if (!type || type === 'none') return;
+  for (const s of [-1, 1]) {
+    const mesh = new THREE.Mesh(type === 'hoop' ? geo.hoop : geo.stud, M('#f1c40f'));
+    mesh.position.set(s * 0.26, -0.02, 0.04);
+    if (type === 'hoop') mesh.rotation.y = Math.PI / 2;
+    parent.add(mesh);
+  }
+}
+
+function addNeck(rig, type, color) {
+  if (!type || type === 'none') return;
+  if (type === 'scarf') {
+    const ring = new THREE.Mesh(geo.scarfRing, M(color || '#ff6b6b'));
+    ring.position.y = 1.38;
+    ring.rotation.x = Math.PI / 2;
+    const end = new THREE.Mesh(geo.scarfEnd, M(color || '#ff6b6b'));
+    end.position.set(0.12, 1.2, 0.12);
+    end.rotation.z = -0.25;
+    rig.add(ring, end);
+    return;
+  }
+  const ring = new THREE.Mesh(geo.neckThin, M('#f1c40f'));
+  ring.position.y = 1.36;
+  ring.rotation.x = Math.PI / 2;
+  const pendant = new THREE.Mesh(geo.pendant, M('#e64980'));
+  pendant.position.set(0, 1.24, 0.18);
+  rig.add(ring, pendant);
+}
+
+function addBag(rig, type, color) {
+  if (!type || type === 'none') return;
+  const mat = M(color || '#6b4f3a');
+  if (type === 'crossbody') {
+    const bag = new THREE.Mesh(geo.crossBag, mat);
+    bag.position.set(0.26, 0.88, 0.06);
+    const strap = new THREE.Mesh(geo.crossStrap, mat);
+    strap.position.set(0.02, 1.15, 0);
+    strap.rotation.z = 0.72;
+    rig.add(bag, strap);
+    return;
+  }
+  if (type === 'tote') {
+    const bag = new THREE.Mesh(geo.tote, mat);
+    bag.position.set(0.3, 0.82, 0.04);
+    const h1 = new THREE.Mesh(geo.toteHandle, M('#2d3436'));
+    h1.position.set(0.24, 1.0, 0.04);
+    h1.rotation.z = Math.PI / 2;
+    const h2 = h1.clone();
+    h2.position.x = 0.36;
+    rig.add(bag, h1, h2);
+    return;
+  }
+  const pack = new THREE.Mesh(type === 'backpack' ? geo.backpack : geo.bag, mat);
+  pack.position.set(0, 1.05, -0.32);
+  const sL = new THREE.Mesh(geo.strap, mat);
+  sL.position.set(-0.12, 1.18, -0.14);
+  sL.rotation.x = 0.35;
+  const sR = sL.clone();
+  sR.position.x = 0.12;
+  rig.add(pack, sL, sR);
+}
+
+function addWatch(arm) {
+  if (!arm) return;
+  const band = new THREE.Mesh(geo.watchBand, M('#2d3436'));
+  band.position.y = -0.62;
+  band.rotation.x = Math.PI / 2;
+  const face = new THREE.Mesh(geo.watchFace, M('#dfe6ee'));
+  face.position.set(0.01, -0.62, 0.07);
+  arm.add(band, face);
+}
+
+function tickFace(u, dt) {
+  if (!u.head || !u.look || u.cat) return;
+  const em = u.emote || '';
+  let expr = 'idle';
+  if (u.afk) expr = 'sleepy';
+  else if (em === 'cry' || em === 'wail') expr = 'cry';
+  else if (em === 'pout') expr = 'pout';
+  else if (em === 'lol' || em === 'cheer' || em === 'love' || em === 'dance') expr = 'smile';
+  u.blinkT = (u.blinkT || 0) + dt;
+  if (expr === 'idle' && (u.blinkT % 4.2) > 4.02) expr = 'blink';
+  if (u.faceExpr === expr) return;
+  u.faceExpr = expr;
+  applyFaceExpression(u.head, u.look, expr);
+}
+
 
 function addArm(rig, side, halfW, look) {
   const pivot = new THREE.Group();
@@ -233,17 +453,20 @@ function addArm(rig, side, halfW, look) {
   return pivot;
 }
 
-export function createAvatar({
-  color = '#4f7cff', skin = '#f2d0b0', hat = null, pants = '#3b4252', bag = null, scale = 1,
-  gender = 'm', face = 'round', hair = null, glasses = false, beard = 'none', top = 'long',
-  coffee = null, badge = null,
-} = {}) {
-  const look = { color, skin, top };
+export function createAvatar(raw = {}) {
+  const look = sanitizeLook(raw);
+  const {
+    color, skin, hat, pants, bag, gender, face, hair, glasses, beard, top,
+    pattern, shoes, hairColor, hatColor, bagColor, mask, earrings, neck, watch,
+  } = look;
+  const scale = raw.scale ?? 1;
+  const coffee = raw.coffee ?? null;
+  const badge = raw.badge ?? null;
   const female = gender === 'f';
   const g = new THREE.Group();
   const rig = new THREE.Group(); g.add(rig);
 
-  const body = new THREE.Mesh(geo.body, M(color));
+  const body = new THREE.Mesh(geo.body, topMaterial(color, pattern));
   body.position.y = 1.02;
   body.scale.set(female ? 0.9 : 1.08, 1, female ? 0.92 : 1.02);
   if (top === 'hoodie') { body.scale.x *= 1.06; body.scale.z *= 1.1; }
@@ -251,7 +474,7 @@ export function createAvatar({
 
   if (badge) {
     const bz = (female ? 0.205 : 0.225) * (top === 'hoodie' ? 1.08 : 1);
-    const strapMat = M( typeof badge === 'string' ? badge : '#03c75a');
+    const strapMat = M(typeof badge === 'string' ? badge : '#03c75a');
     const sL = put(rig, new THREE.Mesh(geo.lanyardStrap, strapMat), -0.055, 1.18, bz);
     sL.rotation.z = -0.34;
     const sR = put(rig, new THREE.Mesh(geo.lanyardStrap, strapMat), 0.055, 1.18, bz);
@@ -259,39 +482,44 @@ export function createAvatar({
     put(rig, new THREE.Mesh(geo.lanyardCard, M('#f8f9fa')), 0, 1.0, bz + 0.008);
   }
 
-  const head = new THREE.Mesh(face === 'square' ? geo.headBox : geo.head, M(skin));
+  const head = new THREE.Mesh(getHeadGeometry(face), getFaceMaterial(look, 'idle'));
   head.position.y = 1.6;
   if (face === 'long') head.scale.set(0.86, 1.2, 0.96);
   if (female) head.scale.multiplyScalar(0.94);
   rig.add(head);
 
-  const eyeY = face === 'square' ? 1.64 : 1.66, eyeZ = face === 'square' ? 0.24 : 0.22;
-  const eyeL = put(rig, new THREE.Mesh(geo.eye, M('#222')), -0.09, eyeY, eyeZ);
-  const eyeR = put(rig, eyeL.clone(), 0.09, eyeY, eyeZ);
+  const headAttach = new THREE.Group();
+  headAttach.scale.set(1 / head.scale.x, 1 / head.scale.y, 1 / head.scale.z);
+  head.add(headAttach);
 
-  if (glasses) {
-    const rL = put(rig, new THREE.Mesh(geo.glass, M('#243044')), -0.09, eyeY, eyeZ + 0.04);
-    put(rig, rL.clone(), 0.09, eyeY, eyeZ + 0.04);
-    put(rig, new THREE.Mesh(geo.bridge, M('#243044')), 0, eyeY, eyeZ + 0.04);
-  }
-  addBeard(head, beard, face);
+  addHair(headAttach, hair, hairColor);
+  addHat(headAttach, hat, hatColor, !!(hair && hair !== 'bald'));
+  addGlasses(headAttach, glasses);
+  addMask(headAttach, mask);
+  addEarrings(headAttach, earrings);
+  addNeck(rig, neck, color);
+  addBag(rig, bag, bagColor);
 
-  addHair(rig, hair);
   if (top === 'hoodie') {
     const hood = new THREE.Mesh(geo.hood, M(color));
     hood.position.set(0, 1.66, -0.1); hood.scale.set(1.02, 0.92, 0.58);
     rig.add(hood);
     put(rig, new THREE.Mesh(geo.pocket, M(color)), 0, 0.92, 0.22);
   }
-  if (hat) { const h = new THREE.Mesh(geo.hat, M(hat)); h.position.y = hair && hair !== 'bald' ? 1.96 : 1.86; rig.add(h); }
-  if (bag) put(rig, new THREE.Mesh(geo.bag, M(bag)), 0, 1.02, -0.34);
 
   const hip = female ? 0.11 : 0.14;
   const legL = put(rig, new THREE.Mesh(geo.leg, M(pants)), -hip, 0.36, 0);
-  const legR = put(rig, legL.clone(), hip, 0.36, 0);
+  const legR = put(rig, new THREE.Mesh(geo.leg, M(pants)), hip, 0.36, 0);
+  const shoeL = new THREE.Mesh(geo.shoe, M(shoes));
+  shoeL.position.set(0, -0.28, 0.03);
+  const shoeR = shoeL.clone();
+  legL.add(shoeL);
+  legR.add(shoeR);
   const halfW = 0.22 * body.scale.x;
   const armL = addArm(rig, -1, halfW, look);
   const armR = addArm(rig, 1, halfW, look);
+  if (watch === '1') addWatch(armL);
+
   const handPhone = new THREE.Group();
   const slab = new THREE.Mesh(geo.phone, M('#1c1c1e'));
   const screen = new THREE.Mesh(geo.phoneScreen, M('#d5ecff'));
@@ -319,12 +547,12 @@ export function createAvatar({
   rig.traverse((o) => { if (o.isMesh) o.castShadow = true; });
   g.scale.setScalar(scale);
   g.userData = {
-    rig, legL, legR, armL, armR, phase: 0, head, eyeL, eyeR, handPhone, phoneOpen: false,
+    rig, legL, legR, armL, armR, phase: 0, head, handPhone, phoneOpen: false,
     handUmbrella, umbrella: false,
     handCoffee, coffee: coffee || false, coffeePhase: Math.random() * 20, chatting: false,
-    eyeY: eyeL.position.y, eyeZ: eyeL.position.z, armLz: armL.rotation.z, armRz: armR.rotation.z,
+    armLz: armL.rotation.z, armRz: armR.rotation.z,
     legLy: legL.position.y, legLz: legL.position.z,
-    look: { gender, face, hair, glasses: !!glasses, top, color, skin },
+    look, faceExpr: 'idle',
   };
   return g;
 }
@@ -419,6 +647,7 @@ export function createCat({ color = '#f0a050', coat = null } = {}) {
 // 걷기/점프/호들갑(이모트) 애니메이션
 export function animateAvatar(a, speed, dt) {
   const u = a.userData;
+  tickFace(u, dt);
   const jumpY = u.jumpY || 0;
   const jumping = jumpY > 0.02;
   const emote = u.emote || '';
@@ -715,6 +944,7 @@ export function animateAvatar(a, speed, dt) {
 // 안장에 앉은 자세. 팔은 핸들 쪽(+Z), 다리는 페달 방향으로 구부리고 굴린다.
 export function animateRide(a, speed, dt) {
   const u = a.userData;
+  tickFace(u, dt);
   if (!u.legL || !u.armL) return;
   if (!u.rideBase) {
     u.rideBase = {

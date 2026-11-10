@@ -6,6 +6,7 @@ import { accountById, accountForSession } from "./account/store.js";
 import { MoveStats, classifyMode, flushMoves, logLoginDay } from "./account/stats.js";
 import { featureOn } from "./account/flags.js"; // [economy]
 import { accountVehicleGifts, settleMoveForDates } from "./account/economy.js";
+import { sanitizeLook } from "../../../src/look.js";
 
 const STALE_MS = 35000;
 const BIKE_VEH_BLACK = 900;
@@ -24,34 +25,6 @@ function giftVehMode(veh) {
 
 function isBikeVeh(id) {
   return id === BIKE_VEH_BLACK || id === BIKE_VEH_RED;
-}
-
-const SETS = {
-  gender: ["f", "m"],
-  face: ["round", "square", "long"],
-  hair: ["bald", "short", "medium", "long", "pony"],
-  beard: ["none", "goatee", "full"],
-  top: ["hoodie", "short", "long"],
-};
-
-const hex = (v, fb) => (typeof v === "string" && /^#[0-9a-fA-F]{6}$/.test(v) ? v : fb);
-
-function sanitizeLook(raw = {}) {
-  const l = raw && typeof raw === "object" ? raw : {};
-  const one = (k, fb) => (SETS[k].includes(l[k]) ? l[k] : fb);
-  return {
-    gender: one("gender", "m"),
-    face: one("face", "round"),
-    hair: l.hair == null ? null : one("hair", "short"),
-    glasses: l.glasses === true || l.glasses === 1 || l.glasses === "1",
-    beard: one("beard", "none"),
-    top: one("top", "long"),
-    color: hex(l.color, "#4f7cff"),
-    skin: hex(l.skin, "#f2d0b0"),
-    pants: hex(l.pants, "#3b4252"),
-    hat: typeof l.hat === "string" ? l.hat : null,
-    bag: typeof l.bag === "string" ? l.bag : null,
-  };
 }
 
 export class Room extends DurableObject {

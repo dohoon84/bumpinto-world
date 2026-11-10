@@ -197,7 +197,12 @@ body.ui-v2:not(.mobile) .v2-mini .v2-btn { cursor: default; }
 body.ui-v2:not(.mobile).in-lobby #lobby { background: linear-gradient(180deg, rgba(7, 13, 28, .35), rgba(7, 13, 28, .15) 50%, rgba(7, 13, 28, .55)); padding-top: 58px; }
 body.ui-v2:not(.mobile) #lobby-card { box-sizing: border-box; grid-template-columns: 240px 1fr; gap: 18px; width: min(760px, 100%); padding: 16px; border-radius: 16px; background: var(--v2-panel-fill); border: 1.5px solid rgba(255, 255, 255, .18); box-shadow: var(--v2-panel-fx); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); color: var(--v2-txt); }
 body.ui-v2:not(.mobile) #lobby-preview { border-radius: 12px; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .14); }
-body.ui-v2:not(.mobile) #lobby-fields { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+body.ui-v2:not(.mobile) #lobby-card { max-height: min(92vh, 900px); }
+body.ui-v2:not(.mobile) #lobby-fields { display: flex; flex-direction: column; gap: 10px; min-width: 0; overflow: auto; overscroll-behavior: contain; }
+body.ui-v2:not(.mobile) #lobby-fields .pick-group { margin: 4px 0 0; font-size: 11px; font-weight: 800; letter-spacing: 0.08em; color: var(--v2-gold); }
+body.ui-v2:not(.mobile) .look-tabs { margin: 0; gap: 6px; padding: 4px; border-radius: 10px; background: rgba(0, 0, 0, .3); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .08); overflow-x: auto; }
+body.ui-v2:not(.mobile) .look-tabs .look-tab { height: 32px; padding: 0 10px; border-radius: 8px; font-size: 13px; font-weight: 700; color: #c9d8e6; background: transparent; }
+body.ui-v2:not(.mobile) .look-tabs .look-tab.on { font-weight: 900; color: #3a2a00; background: linear-gradient(180deg, #ffe169, #f5a200); box-shadow: 0 2px 0 #a65f00; }
 body.ui-v2:not(.mobile) #lobby-fields .lobby-top-bar { gap: 10px; }
 body.ui-v2:not(.mobile) #lobby-fields h1 { margin: 0; display: flex; align-items: center; font-size: 22px; font-weight: 900; color: var(--v2-gold); }
 body.ui-v2:not(.mobile) #lobby-fields h1::before { flex: none; width: 18px; height: 12px; margin-right: 10px; border-radius: 2px; vertical-align: 0; }
@@ -218,7 +223,7 @@ body.ui-v2:not(.mobile) .v2-phone-row #lobby-phone { flex: 1 1 auto; min-width: 
 body.ui-v2:not(.mobile) .v2-phone-row .v2-gsi { flex: none; }
 body.ui-v2:not(.mobile) #lobby-pane-join { display: flex; flex-direction: column; gap: 10px; }
 body.ui-v2:not(.mobile) #lobby-pane-join[hidden] { display: none; }
-body.ui-v2:not(.mobile) #lobby-picks { display: flex; flex-direction: column; gap: 10px; }
+body.ui-v2:not(.mobile) #lobby-picks { display: flex; flex-direction: column; gap: 8px; }
 body.ui-v2:not(.mobile) #lobby-fields .pick-label { margin: 0; font-size: 12px; font-weight: 700; color: var(--v2-sub); }
 body.ui-v2:not(.mobile) #lobby-fields .pick { margin-top: 6px; gap: 6px; }
 body.ui-v2:not(.mobile) #lobby-color-lbl { margin-top: 0; }

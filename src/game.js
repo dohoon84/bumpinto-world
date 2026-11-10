@@ -2899,6 +2899,8 @@ requestAnimationFrame(frame);
 
 // 스크린샷/디버그용 훅
 window.__jj = {
+  createAvatar,
+  sanitizeLook,
   perfmem: perfMem, // [perf-memory]
   ready: true, region, tower, renderer, corridor, schoolZone: corridor?.schoolZone || null, playgrounds, streetlights, pangyoLamps, migeumLamps, gangnamNight, gangnamAds, gangnamNightlife, gangnamNpc, gangnamStreet, gangnamBrt, liveBus, // [corridor] [schoolzone] [playgrounds] [streetlights] [gangnam-night] [gangnam-nightlife] [gangnam-npc] [gangnam-street] [gangnam-brt] [livebus]
   placeCaption: (x, z) => placeCaption(x, z, placeList, corridor?.bounds?.islands), // [gangnam-night]
