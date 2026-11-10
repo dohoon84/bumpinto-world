@@ -37,6 +37,36 @@ export function fetchedOnRoad(x, z) {
 const LINE_KINDS = new Set(['primary', 'secondary', 'trunk']);
 const BLOCK = '#ebe4d4', WATER = '#7ec3e6', CENTER_LINE = '#f2d36b';
 const DEFAULT_ROAD = ['#b4b7bc', 0.08];
+const LINE_Y = 0.17; // above cycleway 0.10 / paint 0.15, below zebra 0.20
+const WALK_ONLY = new Set(['footway', 'steps', 'pedestrian', 'path']);
+const SURFACE_SUPPRESS = new Set(['primary', 'secondary', 'tertiary', 'trunk', 'residential', 'unclassified', 'primary_link', 'secondary_link']);
+
+function distPointSeg(x, z, a, b) {
+  const dx = b[0] - a[0], dz = b[1] - a[1], L2 = dx * dx + dz * dz || 1;
+  const t = Math.max(0, Math.min(1, ((x - a[0]) * dx + (z - a[1]) * dz) / L2));
+  return Math.hypot(a[0] + dx * t - x, a[1] + dz * t - z);
+}
+
+/** 더 넓은 차도 리본이 이 구간을 덮으면 true. 같은 높이의 16m/26.4m 겹침 z-fighting 을 줄인다. */
+export function segmentCoveredByWiderRoad(ax, az, bx, bz, w, roads, self = null) {
+  const samples = [[ax, az], [(ax + bx) / 2, (az + bz) / 2], [bx, bz]];
+  for (const other of roads || []) {
+    if (other === self || !other.p || other.p.length < 2) continue;
+    if (WALK_ONLY.has(other.k)) continue;
+    if ((other.w || 0) < w + 0.4) continue;
+    let inside = true;
+    for (const [x, z] of samples) {
+      let best = Infinity;
+      for (let i = 1; i < other.p.length; i++) {
+        const d = distPointSeg(x, z, other.p[i - 1], other.p[i]);
+        if (d < best) best = d;
+      }
+      if (best + w / 2 > other.w / 2 + 0.35) { inside = false; break; }
+    }
+    if (inside) return true;
+  }
+  return false;
+}
 
 let flatMat = null;
 export const vcMat = () => (flatMat ||= new THREE.MeshLambertMaterial({ vertexColors: true }));
@@ -83,9 +113,29 @@ export function roadGeometries(roads, { lines = true, caps = true } = {}) {
   for (const r of roads) {
     if (!r.p || r.p.length < 2) continue;
     const [color, y] = ROAD_STYLE[r.k] || DEFAULT_ROAD;
-    geos.push(paint(ribbonGeo(r.p, r.w, y + (r.br ? 0.02 : 0), caps), color));
+    // Wider (and a stable first-point hash) sit a few mm higher so coincident ribbons do not shimmer.
+    const seed = Math.abs(((r.p[0][0] * 10) + (r.p[0][1] || 0)) | 0);
+    const yy = y + (r.br ? 0.02 : 0) + (r.w || 6) * 0.00025 + (seed % 5) * 0.0008;
+    const suppress = SURFACE_SUPPRESS.has(r.k);
+    let run = [];
+    const flush = () => {
+      if (run.length >= 2) geos.push(paint(ribbonGeo(run, r.w, yy, caps), color));
+      run = [];
+    };
+    for (let i = 0; i < r.p.length; i++) {
+      if (i === 0) { run = [r.p[0]]; continue; }
+      const a = r.p[i - 1], b = r.p[i];
+      if (suppress && segmentCoveredByWiderRoad(a[0], a[1], b[0], b[1], r.w || 6, roads, r)) {
+        flush();
+        run = [b];
+      } else {
+        if (!run.length) run = [a];
+        run.push(b);
+      }
+    }
+    flush();
   }
-  if (lines) for (const r of roads) if (LINE_KINDS.has(r.k) && r.p.length >= 2) geos.push(paint(ribbonGeo(r.p, 0.35, 0.09, false), CENTER_LINE));
+  if (lines) for (const r of roads) if (LINE_KINDS.has(r.k) && r.p.length >= 2) geos.push(paint(ribbonGeo(r.p, 0.35, LINE_Y, false), CENTER_LINE));
   return geos;
 }
 export function roadMesh(roads, opts) {

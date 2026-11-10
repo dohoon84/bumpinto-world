@@ -11,8 +11,9 @@ export function buildCorridorCrossings(scene, crossings, { getSimTime }) {
   for (const c of list) {
     const [dx, dz] = c.dir, nx = -dz, nz = dx, half = c.w / 2, depth = c.sig ? 2.2 : 1.8;
     c.depth = depth;
-    for (let v = -half + 0.4; v <= half - 0.2; v += 1.0) idx.push(...quad(pos, c.x + nx * v, c.z + nz * v, dx, dz, nx, nz, depth, 0.28, 0.108));
-    if (c.sig) for (const sgn of [-1, 1]) idx.push(...quad(pos, c.x + dx * sgn * (depth + 1.6) - nx * (sgn * half / 2), c.z + dz * sgn * (depth + 1.6) - nz * (sgn * half / 2), nx, nz, dx, dz, half / 2, 0.22, 0.108));
+    const markY = 0.20; // STREET_DECAL_Y.zebra: above cycleway/busway/overlapping primary, below vehicle hulls
+    for (let v = -half + 0.4; v <= half - 0.2; v += 1.0) idx.push(...quad(pos, c.x + nx * v, c.z + nz * v, dx, dz, nx, nz, depth, 0.28, markY));
+    if (c.sig) for (const sgn of [-1, 1]) idx.push(...quad(pos, c.x + dx * sgn * (depth + 1.6) - nx * (sgn * half / 2), c.z + dz * sgn * (depth + 1.6) - nz * (sgn * half / 2), nx, nz, dx, dz, half / 2, 0.22, markY));
   }
   const group = new THREE.Group(); group.name = 'corridorCrossings';
   if (idx.length) group.add(flatMesh(pos, idx, '#f7f7f2'));

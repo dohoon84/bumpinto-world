@@ -2,7 +2,8 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
-import { gangnamStreetEnabled } from '../../../src/gangnam/streetDetail.js';
+import { gangnamStreetEnabled, STREET_DECAL_Y } from '../../../src/gangnam/streetDetail.js';
+import { segmentCoveredByWiderRoad } from '../../../src/corridor/tileMesh.js';
 import { carSegs, onCarriageway } from '../../../src/gangnam/avenues.js';
 import { POLES } from '../../../src/gangnam/billboards/clearance.js';
 
@@ -16,6 +17,20 @@ const ok = (m) => console.log(`ok ${++n} ${m}`);
   assert.equal(gangnamStreetEnabled('?gstreet=0'), false);
   assert.equal(gangnamStreetEnabled('?gangnam=0'), false);
   ok('flags gstreet / gangnam');
+}
+
+{
+  assert.ok(STREET_DECAL_Y.zebra > STREET_DECAL_Y.paint, `zebra ${STREET_DECAL_Y.zebra} must sit above paint ${STREET_DECAL_Y.paint}`);
+  assert.ok(STREET_DECAL_Y.paint > 0.10, `paint ${STREET_DECAL_Y.paint} must sit above cycleway/footway 0.10`);
+  const src = fs.readFileSync(path.join(ROOT, 'src/gangnam/streetDetail.js'), 'utf8');
+  assert.match(src, /zebraMat[\s\S]*?depthTest:\s*true/);
+  assert.match(src, /paintMat[\s\S]*?depthTest:\s*true/);
+  const wide = { n: '강남대로', k: 'primary', w: 26.4, p: [[0, 0], [0, 40]] };
+  const narrow = { n: '강남대로', k: 'primary', w: 16, p: [[1, 5], [1, 35]] };
+  assert.equal(segmentCoveredByWiderRoad(1, 5, 1, 35, 16, [wide, narrow], narrow), true);
+  const beside = { n: '옆길', k: 'residential', w: 6, p: [[30, 0], [30, 40]] };
+  assert.equal(segmentCoveredByWiderRoad(30, 0, 30, 40, 6, [wide, beside], beside), false);
+  ok(`decal stack paint ${STREET_DECAL_Y.paint} < zebra ${STREET_DECAL_Y.zebra}; cover-filter synthetic ok`);
 }
 
 {
