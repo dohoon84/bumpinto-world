@@ -50,7 +50,7 @@ export async function handleArcade(request, env, url, cors) {
       const durationMs = Math.max(0, Math.round(Number(body?.durationMs) || 0));
       const name = String(body?.name || '나').replace(/[\u0000-\u001f]/g, '').trim().slice(0, 16) || '나';
       if (!who || !storeId || !Number.isFinite(score) || score < 0) return json({ ok: false, error: 'bad_run' }, 400, cors);
-      const gate = plausibleArcadeRun({ score, level, durationMs });
+      const gate = plausibleArcadeRun({ score, level, durationMs, gameId });
       if (!gate.ok) return json({ ok: false, error: 'implausible', reason: gate.reason }, 400, cors);
       const out = await recordRun(env.DB, { ...who, gameId, storeId, name, score, level, durationMs, now, practice: !!body?.practice });
       // 참여보상 없음 — creditParticipation 호출하지 않음

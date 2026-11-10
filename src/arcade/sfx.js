@@ -12,7 +12,7 @@ export function createArcadeSfx({
   AudioCtx = typeof window !== 'undefined' ? (window.AudioContext || window.webkitAudioContext || null) : null,
 } = {}) {
   let ctx = null, master = null, sfxBus = null, bgmBus = null, noiseBuf = null;
-  let localMute = false, bgmOn = false, urgent = false, fever = false, bgmTimer = 0, duckGain = null;
+  let localMute = false, bgmOn = false, urgent = false, fever = false, bgmTimer = 0, duckGain = null, bgmMode = 'pang';
 
   const ac = () => {
     if (ctx || !AudioCtx || sfxOff) return ctx;
@@ -102,13 +102,16 @@ export function createArcadeSfx({
     bgmOn = false;
   }
 
-  function startBgm() {
+  function startBgm(mode = 'pang') {
     const c = ac(); if (!c || bgmOn) return; if (lvl() <= 0) return;
     stopBgm();
     bgmOn = true;
+    bgmMode = mode === 'store' ? 'store' : 'pang';
     // bouncy marimba/chiptune: melody + bass + kick/hat
-    const mel = [0, 4, 7, 4, 9, 7, 4, 2, 0, 2, 4, 7, 4, 0, -5, 0];
-    const bass = [0, 0, 5, 5, -5, -5, 0, 7];
+    const mel = bgmMode === 'store'
+      ? [0, 2, 4, 7, 4, 2, 0, -3, 0, 4, 7, 9, 7, 4, 2, 0]
+      : [0, 4, 7, 4, 9, 7, 4, 2, 0, 2, 4, 7, 4, 0, -5, 0];
+    const bass = bgmMode === 'store' ? [0, 0, 4, 4, -5, -5, 0, 2] : [0, 0, 5, 5, -5, -5, 0, 7];
     const loop = () => {
       if (!bgmOn) return;
       const beat = fever ? 0.11 : urgent ? 0.13 : 0.18;
@@ -281,6 +284,21 @@ export function createArcadeSfx({
       tone(90, 0.08, { type: 'sine', gain: 0.14, slide: 0.55, attack: 0.001 });
       tone(70, 0.1, { type: 'triangle', gain: 0.08, delay: 0.12, slide: 0.6 });
     },
+    mergePop(stage = 2) {
+      const step = Math.min(10, Math.max(1, stage | 0));
+      const base = semi(step - 1, 392);
+      duck(0.26 + step * 0.015, 80);
+      tone(base, 0.12, { type: 'sine', gain: 0.16, attack: 0.001, slide: 1.45 });
+      tone(base * 1.5, 0.1, { type: 'triangle', gain: 0.09, delay: 0.02 });
+      tone(base * 2, 0.08, { type: 'sine', gain: 0.06, delay: 0.04, filter: 6000 });
+      noise(0.08, { gain: 0.09, type: 'bandpass', freq: 1800 + step * 140, q: 1.6, sweep: 1.7 });
+    },
+    mergeBonus() {
+      duck(0.45, 180);
+      for (let i = 0; i < 6; i++) tone(semi(i * 2, 523.25), 0.14, { type: 'sine', gain: 0.09, delay: i * 0.045 });
+      noise(0.2, { gain: 0.12, type: 'bandpass', freq: 1600, sweep: 2.4, q: 0.8 });
+    },
+    startStoreBgm() { this.startBgm('store'); },
     startBgm, stopBgm,
   };
 }

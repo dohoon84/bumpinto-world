@@ -60,10 +60,19 @@ export function payOnce(seen, payouts) {
 }
 
 /** 레벨 모드 점수 타당성 (클라 engine.plausibleRun 과 동일 취지). */
-export function plausibleArcadeRun({ score, level, durationMs, maxLevel = 40 } = {}) {
+export function plausibleArcadeRun({ score, level, durationMs, maxLevel = 40, gameId } = {}) {
   const sc = Math.round(Number(score) || 0);
   const lv = Math.max(1, Math.round(Number(level) || 1));
   const dur = Math.max(0, Number(durationMs) || 0);
+  if (gameId === 'bumstore') {
+    if (!Number.isFinite(sc) || sc < 0) return { ok: false, reason: 'bad_score' };
+    if (sc > 500000) return { ok: false, reason: 'score_abs_cap' };
+    if (dur > 0 && sc > 3000 && dur < 5000) return { ok: false, reason: 'too_fast' };
+    const sec = Math.max(1, dur / 1000);
+    if (sc > sec * 900 + 4000) return { ok: false, reason: 'score_cap' };
+    if (sc >= 20000 && lv < 8) return { ok: false, reason: 'stage_mismatch' };
+    return { ok: true };
+  }
   if (!Number.isFinite(sc) || sc < 0) return { ok: false, reason: 'bad_score' };
   if (lv > maxLevel) return { ok: false, reason: 'level_cap' };
   const minMs = Math.max(0, (lv - 1) * 6000);

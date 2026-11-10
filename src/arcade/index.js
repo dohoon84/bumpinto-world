@@ -1,13 +1,15 @@
-// [arcade] BUMP 오락실 — 문 앞 E 입장 · 오락기 F/클릭으로 범핑팡 · R 순위판
+// [arcade] BUMP 오락실 — 문 앞 E 입장 · 오락기 F/클릭으로 게임 선택(범핑팡·범편의점) · R 순위판
 import * as THREE from 'three';
-import { arcadeEnabled, ARCADE_AT, arcadeAtSpot } from './flag.js';
+import { arcadeEnabled, mergeEnabled, ARCADE_AT, arcadeAtSpot } from './flag.js';
 import { arcadePlacement, arcadePlacements } from './locations.js';
 import { mountArcadeExterior } from './exterior.js';
 import { buildArcadeInterior } from './interior.js';
 import { createArcadeSfx } from './sfx.js';
 import { createArcadeUI } from './ui.js';
-import { createArcadeRankProvider, localBoard } from './rank.js';
+import { createArcadeRankProvider, createMergeRankProvider, localBoard } from './rank.js';
 import { mountBumpingPang } from './bumpingpang/game.js';
+import { mountBumStore } from './bumstore/game.js';
+import { mountGameSelect } from './select.js';
 
 export { arcadeEnabled, arcadeAtSpot, ARCADE_AT } from './flag.js';
 export { arcadePlacement, arcadePlacements } from './locations.js';
@@ -53,11 +55,13 @@ export function mountArcade({
 
   const sfx = createArcadeSfx({ getLevel: () => getAudioLevel?.() || { muted: false, volume: 1 } });
   const rank = createArcadeRankProvider();
+  const mergeRank = createMergeRankProvider();
+  const mergeOn = mergeEnabled(search);
   const exterior = scene ? mountArcadeExterior({ scene }) : null;
   const stores = arcadePlacements();
   let store = stores[0] || arcadePlacement();
 
-  let interior = null, active = false, busy = false, pang = null;
+  let interior = null, active = false, busy = false, session = null, sessionKind = '', picker = null;
   let worldOstHeld = false;
   function pauseWorldOst() {
     if (worldOstHeld) return;
@@ -77,6 +81,18 @@ export function mountArcade({
     worldOstHeld = false;
   }
 
+  const playLabel = () => (mergeOn ? '게임 하기' : '범핑팡 하기');
+  const playing = () => !!(session || picker);
+  function endSession() {
+    try { picker?.dispose?.(); } catch { /* */ }
+    picker = null;
+    try { session?.dispose?.(); } catch { /* */ }
+    session = null; sessionKind = '';
+    ui.root.classList.remove('is-pang', 'is-merge');
+    resumeWorldOst();
+    ui.setCabHint(playLabel(), true, { act: true, tap: playLabel(), key: 'F' });
+  }
+
   let fade = { t: 0, phase: '', title: '', sub: '', leaving: false };
   let returnPos = null, nearDoor = false, nearBoard = false, nearCab = null;
   const ray = new THREE.Raycaster();
@@ -86,15 +102,15 @@ export function mountArcade({
     onHintTap: () => {
       if (!active && nearBoard) openBoard();
       else if (!active && nearDoor) enter();
-      else if (active && !pang) leave(); // 안쪽 힌트가 나가기일 때
+      else if (active && !playing()) leave(); // 안쪽 힌트가 나가기일 때
     },
     onCabTap: () => {
-      if (active && !pang) {
+      if (active && !playing()) {
         const playable = interior?.cabinets?.find((c) => c.playable);
-        if (playable) { nearCab = playable; startPang(); }
+        if (playable) { nearCab = playable; startPlay(); }
       }
     },
-    onExit: () => { if (pang) { pang.dispose(); pang = null; ui.root.classList.remove('is-pang'); resumeWorldOst(); ui.setCabHint('범핑팡 하기', true, { act: true, tap: '범핑팡 하기', key: 'F' }); } else leave(); },
+    onExit: () => { if (playing()) endSession(); else leave(); },
     onMute: () => {
       if (toggleMute) toggleMute();
       else sfx.setMuted(!sfx.muted);
@@ -118,11 +134,11 @@ export function mountArcade({
     active = true;
     ui.setInside(true);
     onInterior?.('arcade', interior);
-    ui.setCabHint('범핑팡 하기', true, { act: true, tap: '범핑팡 하기', key: 'F' });
+    ui.setCabHint(playLabel(), true, { act: true, tap: playLabel(), key: 'F' });
   }
   function leave() {
     if (!active || (busy && !fade.leaving && fade.phase)) return;
-    if (pang) { pang.dispose(); pang = null; ui.root.classList.remove('is-pang'); resumeWorldOst(); }
+    if (playing()) endSession();
     busy = true; fade = { t: 0, phase: 'out', title: '밖으로', sub: '또 와요!', leaving: true };
     ui.setCabHint(''); sfx.door(); sfx.stopBgm();
   }
@@ -148,59 +164,109 @@ export function mountArcade({
     } else if (fade.phase === 'in' && fade.t >= FADE_SEC) { fade = { t: 0, phase: '' }; ui.setFade(0); busy = false; }
   }
 
-  async function openBoard(period = 'today') {
-    const rows = await rank.top({ period });
+  async function openBoard(period = 'today', kind = 'pang') {
+    const provider = kind === 'merge' ? mergeRank : rank;
+    const title = kind === 'merge' ? '범편의점 랭킹' : '범핑팡 랭킹';
+    const rows = await provider.top({ period });
     const name = (() => { try { return selfName?.() || ''; } catch { return ''; } })();
     // 통합 보드: PC·모바일 같은 rows. 내 행은 실데이터에서만 골라 상단 고정
     const mine = name
       ? (rows.find((r) => String(r.name || '') === name) || null)
       : (rows.find((r) => r.me || r.self) || null);
     ui.showBoard({
-      period, rows, me: mine,
+      title, period, rows, me: mine,
       onClose: () => ui.hideBoard(),
-      onTab: (p) => openBoard(p),
+      onTab: (p) => openBoard(p, kind),
     });
+    return rows;
   }
 
-  function bestScoreLocal() {
+  function bestScoreLocal(kind = 'pang') {
     try {
-      const rows = localBoard('today');
+      const key = kind === 'merge' ? 'bw.arcade.merge.best' : 'bw.arcade.pang.best';
+      const rows = localBoard('today', key);
       const name = (() => { try { return selfName?.() || ''; } catch { return ''; } })();
       const mine = name ? rows.find((r) => r.name === name) : rows[0];
       return Math.max(0, Number(mine?.score) || Number(rows[0]?.score) || 0);
     } catch { return 0; }
   }
 
-  async function startPang() {
-    if (pang || !active) return;
+  function readyPlaySurface() {
     dismissBlockingOverlays();
     ui.setCabHint('');
-    // 입장 페이드가 아직 'in' 이면 다음 프레임이 다시 어두워지며 클릭을 먹음 → 즉시 종료
     fade = { t: 0, phase: '', title: '', sub: '', leaving: false };
     busy = false;
     ui.setFade(0);
-    let ranked = true;
+  }
+
+  function startPlay() {
+    if (playing() || !active) return;
+    readyPlaySurface();
+    if (!mergeOn) { startPang(); return; }
+    ui.root.classList.add('is-pang');
+    picker = mountGameSelect({
+      root: ui.root,
+      onPick: (id) => { picker = null; if (id === 'merge') startMerge(); else startPang(); },
+      onClose: () => { picker = null; ui.root.classList.remove('is-pang', 'is-merge'); ui.setCabHint(playLabel(), true, { act: true, tap: playLabel(), key: 'F' }); },
+    });
+  }
+
+  async function gateFor(provider) {
     try {
       const gate = await Promise.race([
-        rank.gate(),
+        provider.gate(),
         new Promise((r) => setTimeout(() => r({ ranked: true, local: true, guest: true }), 800)),
       ]);
-      ranked = !!gate?.ranked;
-    } catch { ranked = true; }
+      return !!gate?.ranked;
+    } catch { return true; }
+  }
+
+  async function startPang() {
+    if (session || !active) return;
+    readyPlaySurface();
+    const ranked = await gateFor(rank);
     ui.root.classList.add('is-pang');
     pauseWorldOst();
-    pang = mountBumpingPang({
+    sessionKind = 'pang';
+    session = mountBumpingPang({
       root: ui.root,
       sfx,
       ranked,
       practice: !ranked,
       getName: selfName,
-      getBest: bestScoreLocal,
-      onOpenBoard: () => openBoard('today'),
-      onExit: () => { pang = null; ui.root.classList.remove('is-pang'); resumeWorldOst(); ui.setCabHint('범핑팡 하기', true, { act: true, tap: '범핑팡 하기', key: 'F' }); },
+      getBest: () => bestScoreLocal('pang'),
+      onOpenBoard: () => openBoard('today', 'pang'),
+      onExit: () => { session = null; sessionKind = ''; ui.root.classList.remove('is-pang', 'is-merge'); resumeWorldOst(); ui.setCabHint(playLabel(), true, { act: true, tap: playLabel(), key: 'F' }); },
       onResult: async ({ score, level, durationMs, ranked: rec, name, openBoard: wantBoard }) => {
         try { await rank.submit({ name, score, level, durationMs, ranked: rec }); } catch { /* local ok */ }
-        if (wantBoard) openBoard('today');
+        if (wantBoard) openBoard('today', 'pang');
+      },
+    });
+  }
+
+  async function startMerge() {
+    if (session || !active) return;
+    readyPlaySurface();
+    const ranked = await gateFor(mergeRank);
+    ui.root.classList.add('is-merge');
+    pauseWorldOst();
+    sessionKind = 'merge';
+    session = mountBumStore({
+      root: ui.root,
+      sfx,
+      ranked,
+      practice: !ranked,
+      getName: selfName,
+      getBest: () => bestScoreLocal('merge'),
+      onOpenBoard: async (opts) => {
+        const rows = await mergeRank.top({ period: 'today' });
+        if (opts?.embed) return rows;
+        // 게임 안 순위판이 직접 그리므로 rows 만 돌려준다
+        return rows;
+      },
+      onExit: () => { session = null; sessionKind = ''; ui.root.classList.remove('is-pang', 'is-merge'); resumeWorldOst(); ui.setCabHint(playLabel(), true, { act: true, tap: playLabel(), key: 'F' }); },
+      onResult: async ({ score, level, durationMs, ranked: rec, name }) => {
+        try { await mergeRank.submit({ name, score, level, durationMs, ranked: rec }); } catch { /* local ok */ }
       },
     });
   }
@@ -229,9 +295,13 @@ export function mountArcade({
   }
 
   function onKey(e) {
-    if (pang) {
-      if (e.code === 'Escape') { pang.dispose(); pang = null; ui.root.classList.remove('is-pang'); resumeWorldOst(); ui.setCabHint('범핑팡 하기', true, { act: true, tap: '범핑팡 하기', key: 'F' }); return true; }
-      if (e.code === 'KeyR' && !e.repeat) { openBoard(); return true; } // 통합 순위판 (PC·모바일 동일)
+    if (playing()) {
+      if (e.code === 'Escape') { endSession(); return true; }
+      if (e.code === 'KeyR' && !e.repeat) {
+        if (sessionKind === 'merge') session?.openRank?.();
+        else openBoard('today', sessionKind || 'pang');
+        return true;
+      }
       return true; // swallow while playing
     }
     if (e.code === 'KeyE' && !e.repeat) {
@@ -242,15 +312,15 @@ export function mountArcade({
       if (!active && nearBoard) { openBoard(); return true; }
       if (active) { openBoard(); return true; }
     }
-    if (e.code === 'KeyF' && !e.repeat && active && !pang) {
+    if (e.code === 'KeyF' && !e.repeat && active && !playing()) {
       const playable = interior?.cabinets?.find((c) => c.playable);
-      if (playable) { nearCab = playable; startPang(); return true; }
+      if (playable) { nearCab = playable; startPlay(); return true; }
     }
     return false;
   }
 
   function onPointerDown(e) {
-    if (!active || pang || !interior) return;
+    if (!active || playing() || !interior) return;
     const cam = interior.camera;
     const rect = renderer?.domElement?.getBoundingClientRect?.();
     if (!rect) return;
@@ -259,7 +329,7 @@ export function mountArcade({
     ray.setFromCamera(pointer, cam);
     const hit = interior.pickCabinet(ray);
     nearCab = hit;
-    if (hit?.playable) startPang();
+    if (hit?.playable) startPlay();
     else if (hit) sfx.deny();
   }
   if (typeof window !== 'undefined') window.addEventListener('pointerdown', onPointerDown, true);
@@ -267,9 +337,9 @@ export function mountArcade({
   function actEnter() { if (!active && nearDoor && !busy) return enter(); return false; }
   function actBoard() { if ((nearBoard || active) && !busy) { openBoard(); return true; } return false; }
   function actPlay() {
-    if (active && !pang) {
+    if (active && !playing()) {
       const playable = interior?.cabinets?.find((c) => c.playable);
-      if (playable) { nearCab = playable; startPang(); return true; }
+      if (playable) { nearCab = playable; startPlay(); return true; }
     }
     return false;
   }
@@ -282,7 +352,10 @@ export function mountArcade({
     get interior() { return interior; },
     get nearDoor() { return nearDoor; },
     get nearBoard() { return nearBoard; },
-    get playing() { return !!pang; },
+    get playing() { return playing(); },
+    get sessionKind() { return sessionKind; },
+    get merge() { return sessionKind === 'merge' ? session : null; },
+    get picker() { return picker; },
     get store() { return store; },
     stores,
     actEnter, actBoard, actPlay, actLeave,
@@ -310,7 +383,7 @@ export function mountArcade({
     },
     dispose() {
       window.removeEventListener('pointerdown', onPointerDown, true);
-      pang?.dispose?.(); ui.root.classList.remove('is-pang'); resumeWorldOst();
+      endSession();
       interior?.dispose();
       exterior?.dispose();
       ui.dispose();
