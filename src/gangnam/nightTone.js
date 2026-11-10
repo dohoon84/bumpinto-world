@@ -5,6 +5,6 @@
 export function gangnamAmbientScale(hour, inside) {
   if (!inside) return 1;
   const h = ((hour % 24) + 24) % 24;
-  if (h >= 21 || h < 4) return 0.52;
+  if (h >= 21 || h < 4) return 0.44;
   return 1;
 }

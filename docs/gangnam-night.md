@@ -9,6 +9,9 @@
 | `?gangnamnight=0` | 강남대로·테헤란로 가로등, 고층 추가 창, 인도 온기, 차선 빛줄기 |
 | `?gangnamads=0` | 미디어폴·전광판 |
 | `?cnight=0` | 코리더 공통 창 셰이더(강남 타일도 이 셰이더를 씀). 강남 전용 야경과 따로 |
+| `?gnight=0` | 강남 밤거리 네온·미디어파사드·쇼윈도·골목등·출구 빛·횡단보도·차선 빛줄기(기본 켜짐) |
+
+데이터 `public/corridor/gangnam/nightlife.json`. 다시 구우려면 `node scripts/corridor/build-gangnam-nightlife.mjs`. 상호는 만든 이름만 쓰며 실제 브랜드·로고는 없다. 실제 조명 대신 인스턴스·아틀라스·발광 재질을 쓰고, 모바일은 간판 절반·줄전구/젖은 도로/차선 빛줄기를 뺀다.
 
 저녁 판정은 `evening.js` → `world/nightFade.js` (미금·판교 가로등과 같은 값). 기둥 메시는 `buildStreetlightGeometries()` 를 그대로 쓴다.
 
