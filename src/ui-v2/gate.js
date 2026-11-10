@@ -104,6 +104,31 @@ function mountGate({ root, corridorGlobe, enter, focus, teardown }, onBackToStar
     const avail = (root.clientHeight || innerHeight) - 58 - 12;
     return Math.max(0.9, Math.min(1.5, (avail - 300 - 38) / 430));
   }
+  function pickerMapWidth() {
+    const w = picker.clientWidth;
+    if (!w) return 560;
+    const cs = getComputedStyle(picker);
+    const pad = (parseFloat(cs.paddingLeft) || 0) + (parseFloat(cs.paddingRight) || 0);
+    return Math.max(260, Math.round(w - pad));
+  }
+  // 긴 이름표(청계산입구 등)가 패널 밖으로 잘리지 않게 맵 안쪽으로 민다.
+  function fitMapLabels(map, W) {
+    if (!map || !W) return;
+    const PAD = 8;
+    map.querySelectorAll('.v2-stn, .v2-lm').forEach((el) => {
+      const width = el.getBoundingClientRect().width;
+      let left = el.offsetLeft;
+      if (left < PAD) {
+        el.style.right = 'auto';
+        el.style.left = `${PAD}px`;
+        left = PAD;
+      }
+      if (left + width > W - PAD) {
+        el.style.right = 'auto';
+        el.style.left = `${Math.max(PAD, W - PAD - width)}px`;
+      }
+    });
+  }
   function stationById(id) { return allStations().find((x) => (x.live ? 'jeongja' : x.id) === id); }
   function selectedRow(id) {
     const s = stationById(id) || BASE.items[0];
@@ -114,7 +139,7 @@ function mountGate({ root, corridorGlobe, enter, focus, teardown }, onBackToStar
       <button type="button" class="v2-btn primary" data-v2-at="${sid}">${esc(tr(`${label}에 입장`, `Enter ${label}`))}</button></div>`;
   }
   function renderPicker() {
-    const en = isEn(), k = pickK(), W = 560, ox = (W - 320 * k) / 2, oy = 14, H = Math.round(430 * k + oy * 2 + 10);
+    const en = isEn(), k = pickK(), W = pickerMapWidth(), ox = (W - 320 * k) / 2, oy = 14, H = Math.round(430 * k + oy * 2 + 10);
     const P = (s) => [ox + s.dx * k, oy + s.dy * k];
     const sel = hot || defaultAt;
     let seg = '';
@@ -175,6 +200,7 @@ function mountGate({ root, corridorGlobe, enter, focus, teardown }, onBackToStar
       <div class="v2-map" style="width:${W}px;height:${H}px"><svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" aria-hidden="true">${leaders}${seg}${dots}${lm}</svg>${chips}${lmChip}</div>
       <div class="v2-sel-slot">${selectedRow(sel)}</div>
       <p class="v2-foot">${esc(tr('실제 역 위치(OpenStreetMap) 기준 · 역 이름을 누르면 그 역에서 시작', 'Real station positions (OpenStreetMap) · click a station to start there'))}</p>`;
+    fitMapLabels(picker.querySelector('.v2-map'), W);
   }
   function renderMini() {
     const s = sum();
@@ -218,8 +244,8 @@ function mountGate({ root, corridorGlobe, enter, focus, teardown }, onBackToStar
     view = 'station';
     hot = null;
     openedAt = performance.now();
-    renderPicker(); renderMini();
     world.hidden = true; picker.hidden = false; mini.hidden = false;
+    renderPicker(); renderMini();
     root.classList.add('v2-view-station');
     if (!corridorGlobe.isOpen()) corridorGlobe.toggle(true);
     focus?.('jeongja');

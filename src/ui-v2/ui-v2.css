@@ -172,7 +172,7 @@ body.ui-v2:not(.mobile) #world-gate.v2-gate .gate-toast-btn { height: 32px; box-
 body.ui-v2:not(.mobile) #world-gate.v2-gate .gate-toast-btn.primary { color: #3a2a00; background: linear-gradient(180deg, #ffe169, #f5a200); border: 0; box-shadow: 0 2px 0 #a65f00, inset 0 1px 0 rgba(255, 255, 255, .55); }
 
 /* 03 역 선택 패널 */
-body.ui-v2:not(.mobile) .v2-picker { position: absolute; left: 12px; top: 58px; z-index: 6; width: 608px; max-height: calc(100% - 70px); overflow: hidden auto; padding: 24px; display: flex; flex-direction: column; gap: 12px; }
+body.ui-v2:not(.mobile) .v2-picker { position: absolute; left: 12px; top: 58px; z-index: 6; box-sizing: border-box; width: min(608px, calc(100% - 24px)); max-height: calc(100% - 70px); overflow: hidden auto; padding: 24px; display: flex; flex-direction: column; gap: 12px; }
 body.ui-v2:not(.mobile) .v2-tags { display: flex; gap: 8px; }
 body.ui-v2:not(.mobile) .v2-map { position: relative; flex: none; }
 body.ui-v2:not(.mobile) .v2-map svg { position: absolute; inset: 0; overflow: visible; }
