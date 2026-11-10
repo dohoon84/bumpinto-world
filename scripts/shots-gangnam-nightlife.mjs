@@ -39,25 +39,31 @@ function streetInfo() {
   })();
 }
 
-// 22012 중앙차로 강남역(중) — 섬 옆에서 쉘터·BIS·난간·대기인을 본다
-const STOP = { x: -7256.5, z: -14841.0, yaw: -2.40, dist: 7, pitch: 0.20 };
-// 강남역 서쪽 이면 — 자전거·배달 스쿠터·키오스크가 모인 인도
-const ALLEY = { x: -7176, z: -14540, yaw: 0.05, dist: 8, pitch: 0.12 };
+// 22012 장대 중앙차로 — 3/4 로 쉘터·횡단·버스전용 차로가 함께 보이게
+const STOP34 = { x: -7264.39, z: -14841.41, yaw: -1.958, dist: 10, pitch: 0.32 };
+// 쉘터 안을 길게 본다 — 벤치·대기인·백패널·BIS·노란점자블록
+const STOPIN = { x: -7255.28, z: -14836.03, yaw: -1.229, dist: 4.2, pitch: 0.12 };
+// 강남대로92길 도로 위 (11번출구 동쪽 먹자골목)
+const ALLEY = { x: -7087.3, z: -14625.2, yaw: -1.222, dist: 7, pitch: 0.13 };
 
 const night = await open({ hour: 21 });
-await surface(night, STOP.x, STOP.z, STOP.yaw, STOP.dist, STOP.pitch, 8000);
-await night.screenshot({ path: `${OUT}/gnight6-busstop-night.png` });
+await surface(night, STOP34.x, STOP34.z, STOP34.yaw, STOP34.dist, STOP34.pitch, 7000);
+await night.screenshot({ path: `${OUT}/gnight7-busstop-night.png` });
 const nightStop = await night.evaluate(streetInfo);
 
+await surface(night, STOPIN.x, STOPIN.z, STOPIN.yaw, STOPIN.dist, STOPIN.pitch, 4500);
+await night.screenshot({ path: `${OUT}/gnight7-busstop-close.png` });
+const closeStop = await night.evaluate(streetInfo);
+
 await surface(night, ALLEY.x, ALLEY.z, ALLEY.yaw, ALLEY.dist, ALLEY.pitch, 6000);
-await night.screenshot({ path: `${OUT}/gnight6-alley.png` });
-const alley = await night.evaluate(streetInfo);
+await night.screenshot({ path: `${OUT}/gnight7-alley-night.png` });
+const alleyNight = await night.evaluate(streetInfo);
 await night.close();
 
 const day = await open({ hour: 14 });
-await surface(day, STOP.x, STOP.z, STOP.yaw, STOP.dist, STOP.pitch, 8000);
-await day.screenshot({ path: `${OUT}/gnight6-busstop-day.png` });
-const dayStop = await day.evaluate(streetInfo);
+await surface(day, ALLEY.x, ALLEY.z, ALLEY.yaw, ALLEY.dist, ALLEY.pitch, 6000);
+await day.screenshot({ path: `${OUT}/gnight7-alley-day.png` });
+const alleyDay = await day.evaluate(streetInfo);
 await day.close();
 await browser.close();
-console.log(JSON.stringify({ out: OUT, nightStop, alley, dayStop }, null, 2));
+console.log(JSON.stringify({ out: OUT, nightStop, closeStop, alleyNight, alleyDay }, null, 2));

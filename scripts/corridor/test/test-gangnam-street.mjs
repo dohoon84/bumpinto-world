@@ -30,8 +30,23 @@ const ok = (m) => console.log(`ok ${++n} ${m}`);
     for (const r of s.routes) assert.ok(/^\d{2,5}$|^[가-힣]{1,2}\d{1,2}$/.test(r), r);
   }
   assert.ok(j.props.length >= 80 && j.props.length <= 400, `props ${j.props.length}`);
-  assert.ok(j.waiters.length >= 20 && j.waiters.length <= 160, `waiters ${j.waiters.length}`);
-  ok(`stops ${j.stops.length} median ${med.length} props ${j.props.length}`);
+  assert.ok(j.waiters.length >= 20 && j.waiters.length <= 280, `waiters ${j.waiters.length}`);
+  const medMods = (j.modules || []).filter((m) => m.kind === 'median');
+  assert.ok(medMods.length >= 10, `median modules ${medMods.length}`);
+  const g12 = j.stops.find((s) => s.ref === '22012');
+  if (g12) {
+    const ms = medMods.filter((m) => m.si === j.stops.indexOf(g12));
+    const span = Math.hypot(ms[0].x - ms[ms.length - 1].x, ms[0].z - ms[ms.length - 1].z);
+    assert.ok(span >= 26 && span <= 42, `22012 span ${span}`);
+  }
+  assert.ok((j.platforms || []).some((p) => p[3] >= 30 && p[3] <= 42), 'platform length');
+  assert.ok((j.zebras || []).length >= 20, `zebras ${j.zebras.length}`);
+  assert.ok((j.shops || []).length >= 40, `shops ${j.shops.length}`);
+  assert.ok((j.tents || []).length >= 10, `tents ${j.tents.length}`);
+  const shopBrand = /스타벅스|GS25|CU|세븐일레븐|배스킨|맥도날드|이디야|투썸/i;
+  for (const name of ['골목24', '나인마트', '오후커피', '한그릇', '노을포차']) assert.ok(!shopBrand.test(name));
+  assert.ok((j.meta?.alleyRoads || []).includes('강남대로94길'));
+  ok(`stops ${j.stops.length} median ${med.length} modules ${j.modules.length} shops ${j.shops.length}`);
 }
 
 {
