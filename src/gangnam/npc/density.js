@@ -27,13 +27,13 @@ export function inStreetView(x, z, fx, fz, yaw, box = STREET_VIEW) {
   return o.d <= box.nearM && o.ahead >= box.ahead0 && o.ahead <= box.ahead1 && o.lat <= box.lat;
 }
 
-// 데스크톱 화면 안 목표 대수. 저녁이 낮보다 많다. 모바일은 상한 12.
+// 데스크톱 화면 안 목표 대수. 저녁·밤이 낮보다 많다(강남 밤거리). 모바일은 상한 12.
 export function carViewTarget(h, { mobile = false } = {}) {
   if (mobile) return Math.min(GN_CARS_MOBILE, Math.max(6, Math.round(GN_CARS_MOBILE * (h >= 17 && h < 21.5 ? 1 : 0.85))));
   const p = pedPeriod(h);
-  if (p === 'evening') return 20;
+  if (p === 'evening') return 28;
   if (p === 'morning') return 14;
-  if (p === 'night') return 6;
+  if (p === 'night') return 14;
   return 11;
 }
 

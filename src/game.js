@@ -346,10 +346,15 @@ const gangnamNight = corridorDir && corridorData?.gangnam && gangnamNightEnabled
 const gangnamAds = corridorDir && corridorData?.gangnam && gangnamAdsEnabled()
   ? createGangnamBillboards({ scene, terrain, baseUrl: import.meta.env.BASE_URL, mobile: gnMobile })
   : null;
+let gangnamNpc = null;
 const gangnamNightlife = corridorDir && corridorData?.gangnam && gangnamNightlifeEnabled()
-  ? createGangnamNightlife({ scene, terrain, url: import.meta.env.BASE_URL + corridorDir + 'gangnam/nightlife.json', mobile: gnMobile })
+  ? createGangnamNightlife({
+    scene, terrain, url: import.meta.env.BASE_URL + corridorDir + 'gangnam/nightlife.json', mobile: gnMobile,
+    followNpc: !!(corridor && corridorDir && corridorData?.gangnam && gangnamNpcEnabled()),
+    getNpcTraffic: () => gangnamNpc?.traffic || null,
+  })
   : null; // [gangnam-nightlife]
-const gangnamNpc = corridor && corridorDir && corridorData?.gangnam && gangnamNpcEnabled()
+gangnamNpc = corridor && corridorDir && corridorData?.gangnam && gangnamNpcEnabled()
   ? mountGangnamNpc({
     scene, terrain, overlay, params, mobile: gnMobile, gangnam: corridorData.gangnam,
     baseUrl: import.meta.env.BASE_URL + corridorDir,
@@ -2651,8 +2656,8 @@ function frame() {
   if (migeumLamps) { const c = cam.mode === 'follow' ? P : sun.target.position; migeumLamps.update(dt, c.x, c.z, cam.mode); } // [migeum-lamps]
   if (gangnamNight) { const c = cam.mode === 'follow' ? P : sun.target.position; gangnamNight.update(dt, c.x, c.z); } // [gangnam-night]
   if (gangnamAds) { const c = cam.mode === 'follow' ? P : sun.target.position; gangnamAds.update(dt, c.x, c.z); } // [gangnam-ads]
-  if (gangnamNightlife) { const c = cam.mode === 'follow' ? P : sun.target.position; gangnamNightlife.update(dt, c.x, c.z); } // [gangnam-nightlife]
   if (gangnamNpc) { const c = cam.mode === 'follow' ? P : sun.target.position; gangnamNpc.update(dt, c.x, c.z, cam.mode === 'follow' ? cam.yaw : ov.yaw); } // [gangnam-npc]
+  if (gangnamNightlife) { const c = cam.mode === 'follow' ? P : sun.target.position; gangnamNightlife.update(dt, c.x, c.z); } // [gangnam-nightlife]
   world.shops?.update(dt, P.x, P.z); // [shops] 주변 70m 상호 간판 풀
   const viewYaw = cam.mode === 'follow' ? cam.yaw : ov.yaw;
   const moveYaw = player.rotation.y + (bikes.riding && bikes.speed < -0.2 ? Math.PI : 0);

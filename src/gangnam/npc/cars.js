@@ -7,9 +7,11 @@ import { KINDS, kindGeometry } from '../../entities/vehicleKinds.js';
 import { batchedVehicleMaterial } from '../../corridor/migeumNpc.js';
 import { watchEvening } from '../../evening.js';
 import { gameHour } from '../../weather.js';
-import { carViewTarget, inStreetView, STREET_VIEW } from './density.js';
+import { carViewTarget, inStreetView, STREET_VIEW, pedPeriod } from './density.js';
 
 const KEEP_PAD = { ahead0: STREET_VIEW.ahead0 - 8, ahead1: STREET_VIEW.ahead1 + 10, lat: STREET_VIEW.lat + 8, nearM: STREET_VIEW.nearM + 12 };
+const NIGHT_VIEW = { ahead0: -80, ahead1: 12, lat: 26, nearM: 110 };
+const NIGHT_KEEP = { ahead0: NIGHT_VIEW.ahead0 - 10, ahead1: NIGHT_VIEW.ahead1 + 12, lat: NIGHT_VIEW.lat + 10, nearM: NIGHT_VIEW.nearM + 16 };
 
 export class GangnamCars extends JzCars {
   constructor({ drive, box, station, transit = null, world = null, base, hour = () => gameHour(), seed = 77, fix = true, peds = null, mobile = false }) {
@@ -37,11 +39,19 @@ export class GangnamCars extends JzCars {
       if (t && !t.parked && !t.retire) { t.retire = true; act--; }
     }
   }
+  viewBox() {
+    const p = pedPeriod(this.hour());
+    return (p === 'evening' || p === 'night') ? NIGHT_VIEW : STREET_VIEW;
+  }
+  keepBox() {
+    const p = pedPeriod(this.hour());
+    return (p === 'evening' || p === 'night') ? NIGHT_KEEP : KEEP_PAD;
+  }
   _inView(x, z, box) {
     const f = this.focus;
     if (!f) return true;
-    if (this.yaw == null) return Math.hypot(x - f.x, z - f.z) <= (this.keepR || 78);
-    return inStreetView(x, z, f.x, f.z, this.yaw, box);
+    if (this.yaw == null) return Math.hypot(x - f.x, z - f.z) <= ((this.viewBox() === NIGHT_VIEW) ? 110 : (this.keepR || 78));
+    return inStreetView(x, z, f.x, f.z, this.yaw, box || this.viewBox());
   }
   noteLook(yaw) {
     const f = this.focus;
@@ -57,7 +67,7 @@ export class GangnamCars extends JzCars {
     if (yaw == null) return Math.hypot((a.x + b.x) / 2 - f.x, (a.z + b.z) / 2 - f.z) <= 58;
     for (let i = 0; i <= 8; i++) {
       const u = i / 8;
-      if (inStreetView(a.x + (b.x - a.x) * u, a.z + (b.z - a.z) * u, f.x, f.z, yaw)) return true;
+      if (inStreetView(a.x + (b.x - a.x) * u, a.z + (b.z - a.z) * u, f.x, f.z, yaw, this.viewBox())) return true;
     }
     return false;
   }
@@ -86,12 +96,12 @@ export class GangnamCars extends JzCars {
     const f = this.focus;
     const yaw = this.homeYaw ?? this.yaw;
     if (!f || yaw == null || !t || t.parked) return;
-    if (t.rec && inStreetView(t.rec.x, t.rec.z, f.x, f.z, yaw) && this._room(t.rec, t)) return;
+    if (t.rec && inStreetView(t.rec.x, t.rec.z, f.x, f.z, yaw, this.viewBox()) && this._room(t.rec, t)) return;
     const L = t.cum[t.cum.length - 1];
     const opts = [];
     for (let s = t.hl + 0.4; s < L; s += 4) {
       const p = this._sample(t, s);
-      if (!inStreetView(p[0], p[1], f.x, f.z, yaw)) continue;
+      if (!inStreetView(p[0], p[1], f.x, f.z, yaw, this.viewBox())) continue;
       const r = this._pose(t, s, t.lat, null);
       if (this._room(r, t)) opts.push(s);
     }
@@ -111,7 +121,7 @@ export class GangnamCars extends JzCars {
       const yaw = this.homeYaw == null ? null : this.homeYaw;
       const outside = yaw == null
         ? Math.hypot(t.rec.x - f.x, t.rec.z - f.z) > (this.keepR || 78)
-        : !inStreetView(t.rec.x, t.rec.z, f.x, f.z, yaw, KEEP_PAD);
+        : !inStreetView(t.rec.x, t.rec.z, f.x, f.z, yaw, this.keepBox());
       if (outside) {
         this._despawn(t);
         if (!t.retire) this._spawnVeh(t.i, false);

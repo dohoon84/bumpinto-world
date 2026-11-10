@@ -8,6 +8,8 @@ import { KINDS, kindGeometry, pickWeighted } from '../entities/vehicleKinds.js';
 import { mixFor } from '../entities/jzTraffic.js';
 import { batchedVehicleMaterial } from '../corridor/migeumNpc.js';
 import { NEON_COLORS, WINDOW_COLORS, SHOP_NAMES, hash01 } from './nightlifePlace.js';
+import { gangnamNpcEnabled } from './npc/flags.js';
+import { GN_CARS_MAX } from './npc/density.js';
 
 export function gangnamNightlifeEnabled(search = typeof location !== 'undefined' ? location.search : '') {
   const q = new URLSearchParams(search || '');
@@ -366,15 +368,17 @@ function makeHaloMaterial() {
   });
 }
 
-export function createGangnamNightlife({ scene, terrain = null, url, mobile = false }) {
+export function createGangnamNightlife({ scene, terrain = null, url, mobile = false, followNpc = null, getNpcTraffic = null }) {
   nightTarget();
   const root = new THREE.Group();
   root.name = 'gangnamNightlife';
   scene.add(root);
-  const stats = { loaded: false, mobile, draws: 0 };
+  const stats = { loaded: false, mobile, draws: 0, carMode: 'none' };
   let dead = false;
   let box = null;
   let meshes = null;
+  let focusXZ = null;
+  const attachNpc = followNpc === true || (followNpc == null && gangnamNpcEnabled());
   const ground = (x, z) => (terrain ? terrain.renderHeight(x, z) : 0);
   const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), p = new THREE.Vector3(), s = new THREE.Vector3();
   const tmpC = new THREE.Color();
@@ -700,7 +704,27 @@ export function createGangnamNightlife({ scene, terrain = null, url, mobile = fa
     }
 
     let cars = null;
-    if (!mobile && j.lanes?.length) {
+    if (!mobile && attachNpc) {
+      // 기본: 강남 NPC 차량에 헤드/테일 블룸·전방 콘만 붙인다. 루프 차열은 만들지 않는다.
+      const cap = GN_CARS_MAX;
+      const bloomMat = makeUnlitColor({ map: poolTex(), additive: true });
+      const coneMat = makeUnlitColor({ map: coneTex(), color: '#ffd8a0', additive: true });
+      const blooms = new THREE.InstancedMesh(new THREE.PlaneGeometry(1, 1), bloomMat, cap * 4);
+      const cones = new THREE.InstancedMesh(new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2), coneMat, cap);
+      blooms.name = 'gnightCarBlooms';
+      cones.name = 'gnightCarCones';
+      blooms.count = 0;
+      cones.count = 0;
+      for (const m of [blooms, cones]) {
+        m.frustumCulled = false;
+        m.renderOrder = 3;
+      }
+      cones.renderOrder = 1;
+      root.add(blooms); root.add(cones);
+      cars = { mode: 'npc', cap, blooms, bloomMat, cones, coneMat };
+      stats.cars = 0;
+      stats.carMode = 'npc';
+    } else if (!mobile && j.lanes?.length) {
       const CARS = 8;
       const usable = [];
       let total = 0;
@@ -708,7 +732,7 @@ export function createGangnamNightlife({ scene, terrain = null, url, mobile = fa
         if ((lane.length / 3) >= 8) { usable.push(lane); total += CARS; }
       }
       if (total) {
-        // 정자·분당·강남 NPC 와 같은 KINDS 지오메트리 + BatchedMesh 재질. 상자 차체는 쓰지 않는다.
+        // ?gangnamnpc=0 폴백: 공유 KINDS + BatchedMesh 루프 차열.
         const kindIds = Object.keys(KINDS);
         const geos = kindIds.map((k) => kindGeometry(k));
         const nV = geos.reduce((a, g) => a + g.attributes.position.count, 0);
@@ -753,10 +777,11 @@ export function createGangnamNightlife({ scene, terrain = null, url, mobile = fa
         cones.renderOrder = 1;
         root.add(mesh); root.add(carHeads); root.add(carTails); root.add(blooms); root.add(cones);
         cars = {
-          mesh, bodyMat, fleet, slots, carHeads, chMat, carTails, ctMat,
+          mode: 'loop', mesh, bodyMat, fleet, slots, carHeads, chMat, carTails, ctMat,
           blooms, bloomMat, cones, coneMat, usable, CARS, total,
         };
         stats.cars = total;
+        stats.carMode = 'loop';
       }
     }
 
@@ -830,17 +855,22 @@ export function createGangnamNightlife({ scene, terrain = null, url, mobile = fa
     if (meshes.cars) {
       const c = meshes.cars;
       const show = on && n > 0.04;
-      c.mesh.visible = show;
+      if (c.mesh) c.mesh.visible = show;
       if (c.bodyMat?.userData?.eve) c.bodyMat.userData.eve.value = n;
-      c.carHeads.visible = show;
-      c.carTails.visible = show;
+      if (c.carHeads) c.carHeads.visible = show;
+      if (c.carTails) c.carTails.visible = show;
       if (c.blooms) c.blooms.visible = show;
       if (c.cones) c.cones.visible = show;
-      c.chMat.opacity = n * 0.98;
-      c.ctMat.opacity = n * 0.95;
-      if (c.bloomMat) c.bloomMat.opacity = n * 0.55;
-      if (c.coneMat) c.coneMat.opacity = n * 0.42;
-      if (show) tickCars(c);
+      if (c.chMat) c.chMat.opacity = n * 0.98;
+      if (c.ctMat) c.ctMat.opacity = n * 0.95;
+      if (c.bloomMat) c.bloomMat.opacity = n * (c.mode === 'npc' ? 0.48 : 0.55);
+      if (c.coneMat) c.coneMat.opacity = n * (c.mode === 'npc' ? 0.28 : 0.42);
+      if (show) {
+        if (c.mode === 'npc') tickNpcLights(c);
+        else tickCars(c);
+      } else {
+        stats.overlays = 0;
+      }
     }
     let draws = 0;
     const listed = [meshes.signs, meshes.backs, meshes.halos, meshes.wins, meshes.strips, meshes.lanterns, meshes.strings, meshes.exits, meshes.crossings, meshes.signals, meshes.heads, meshes.tails, meshes.wet];
@@ -852,7 +882,81 @@ export function createGangnamNightlife({ scene, terrain = null, url, mobile = fa
     stats.draws = draws;
   }
 
+  function writeLights(c, ci, x, gy, z, yaw, spec) {
+    const fx = Math.sin(yaw), fz = Math.cos(yaw);
+    const rx = Math.cos(yaw), rz = -Math.sin(yaw);
+    const halfL = (spec.L || 4.6) * 0.5;
+    const halfW = spec.moto ? 0.08 : Math.max(0.22, (spec.W || 1.8) * 0.5 - 0.28);
+    const liteY = gy + (spec.moto ? 0.98 : spec.truck ? 0.78 : 0.74);
+    if (c.carHeads && c.carTails) {
+      const hs = spec.moto ? 0.07 : 0.11;
+      const ts = spec.moto ? 0.06 : 0.09;
+      compose(m4, q, p, s, x + fx * halfL + rx * halfW, liteY, z + fz * halfL + rz * halfW, 0, hs, hs * 0.9, hs * 0.9);
+      c.carHeads.setMatrixAt(ci * 2, m4);
+      compose(m4, q, p, s, x + fx * halfL - rx * halfW, liteY, z + fz * halfL - rz * halfW, 0, hs, hs * 0.9, hs * 0.9);
+      c.carHeads.setMatrixAt(ci * 2 + 1, m4);
+      compose(m4, q, p, s, x - fx * halfL + rx * halfW, liteY, z - fz * halfL + rz * halfW, 0, ts, ts * 0.9, ts * 0.9);
+      c.carTails.setMatrixAt(ci * 2, m4);
+      compose(m4, q, p, s, x - fx * halfL - rx * halfW, liteY, z - fz * halfL - rz * halfW, 0, ts, ts * 0.9, ts * 0.9);
+      c.carTails.setMatrixAt(ci * 2 + 1, m4);
+    }
+    if (c.blooms) {
+      const bw = spec.moto ? 0.45 : 0.85;
+      const tw = spec.moto ? 0.35 : 0.7;
+      compose(m4, q, p, s, x + fx * (halfL + 0.04) + rx * halfW, liteY, z + fz * (halfL + 0.04) + rz * halfW, yaw, bw, bw * 0.65, 1);
+      c.blooms.setMatrixAt(ci * 4, m4);
+      compose(m4, q, p, s, x + fx * (halfL + 0.04) - rx * halfW, liteY, z + fz * (halfL + 0.04) - rz * halfW, yaw, bw, bw * 0.65, 1);
+      c.blooms.setMatrixAt(ci * 4 + 1, m4);
+      compose(m4, q, p, s, x - fx * (halfL + 0.04) + rx * halfW, liteY, z - fz * (halfL + 0.04) + rz * halfW, yaw, tw, tw * 0.64, 1);
+      c.blooms.setMatrixAt(ci * 4 + 2, m4);
+      compose(m4, q, p, s, x - fx * (halfL + 0.04) - rx * halfW, liteY, z - fz * (halfL + 0.04) - rz * halfW, yaw, tw, tw * 0.64, 1);
+      c.blooms.setMatrixAt(ci * 4 + 3, m4);
+      c.blooms.setColorAt(ci * 4, tmpC.set('#fff4cc'));
+      c.blooms.setColorAt(ci * 4 + 1, tmpC.set('#fff4cc'));
+      c.blooms.setColorAt(ci * 4 + 2, tmpC.set('#ff3a40'));
+      c.blooms.setColorAt(ci * 4 + 3, tmpC.set('#ff3a40'));
+    }
+    if (c.cones) {
+      const cl = spec.moto ? 1.6 : 3.4;
+      const cw = spec.moto ? 0.9 : 1.85;
+      compose(m4, q, p, s, x + fx * (halfL + 0.62), gy + 0.05, z + fz * (halfL + 0.62), yaw, cw, 1, cl);
+      c.cones.setMatrixAt(ci, m4);
+    }
+  }
+
+  function flushLights(c, n) {
+    if (c.carHeads) { c.carHeads.count = n * 2; c.carHeads.instanceMatrix.needsUpdate = true; }
+    if (c.carTails) { c.carTails.count = n * 2; c.carTails.instanceMatrix.needsUpdate = true; }
+    if (c.blooms) {
+      c.blooms.count = n * 4;
+      c.blooms.instanceMatrix.needsUpdate = true;
+      if (c.blooms.instanceColor) c.blooms.instanceColor.needsUpdate = true;
+    }
+    if (c.cones) { c.cones.count = n; c.cones.instanceMatrix.needsUpdate = true; }
+    stats.overlays = n;
+  }
+
+  function tickNpcLights(c) {
+    const list = getNpcTraffic?.()?.sim?.list;
+    let ci = 0;
+    if (list) {
+      for (let i = 0; i < list.length && ci < c.cap; i++) {
+        const t = list[i];
+        if (!t || t.parked) continue;
+        const pos = t.mesh.position;
+        if (focusXZ && (Math.abs(pos.x - focusXZ.x) > 280 || Math.abs(pos.z - focusXZ.z) > 280)) continue;
+        const K = t.K || KINDS[t.kind] || {};
+        writeLights(c, ci, pos.x, pos.y, pos.z, t.mesh.rotation.y, {
+          L: K.L, W: K.W, moto: !!(K.moto || t.moto), truck: !!K.truck,
+        });
+        ci++;
+      }
+    }
+    flushLights(c, ci);
+  }
+
   function tickCars(c) {
+
     const t = performance.now() / 1000;
     const speed = 15;
     const spacing = 4;
@@ -876,53 +980,11 @@ export function createGangnamNightlife({ scene, terrain = null, url, mobile = fa
         const spec = c.fleet[ci];
         compose(m4, q, p, s, x, gy, z, yaw, 1, 1, 1);
         c.mesh.setMatrixAt(c.slots[ci], m4);
-        const fx = Math.sin(yaw), fz = Math.cos(yaw);
-        const rx = Math.cos(yaw), rz = -Math.sin(yaw);
-        const halfL = (spec.L || 4.6) * 0.5;
-        const halfW = spec.moto ? 0.08 : Math.max(0.22, (spec.W || 1.8) * 0.5 - 0.28);
-        const liteY = gy + (spec.moto ? 0.98 : spec.truck ? 0.78 : 0.74);
-        const hs = spec.moto ? 0.07 : 0.11;
-        const ts = spec.moto ? 0.06 : 0.09;
-        compose(m4, q, p, s, x + fx * halfL + rx * halfW, liteY, z + fz * halfL + rz * halfW, 0, hs, hs * 0.9, hs * 0.9);
-        c.carHeads.setMatrixAt(ci * 2, m4);
-        compose(m4, q, p, s, x + fx * halfL - rx * halfW, liteY, z + fz * halfL - rz * halfW, 0, hs, hs * 0.9, hs * 0.9);
-        c.carHeads.setMatrixAt(ci * 2 + 1, m4);
-        compose(m4, q, p, s, x - fx * halfL + rx * halfW, liteY, z - fz * halfL + rz * halfW, 0, ts, ts * 0.9, ts * 0.9);
-        c.carTails.setMatrixAt(ci * 2, m4);
-        compose(m4, q, p, s, x - fx * halfL - rx * halfW, liteY, z - fz * halfL - rz * halfW, 0, ts, ts * 0.9, ts * 0.9);
-        c.carTails.setMatrixAt(ci * 2 + 1, m4);
-        if (c.blooms) {
-          const bw = spec.moto ? 0.45 : 0.85;
-          const tw = spec.moto ? 0.35 : 0.7;
-          compose(m4, q, p, s, x + fx * (halfL + 0.04) + rx * halfW, liteY, z + fz * (halfL + 0.04) + rz * halfW, yaw, bw, bw * 0.65, 1);
-          c.blooms.setMatrixAt(ci * 4, m4);
-          compose(m4, q, p, s, x + fx * (halfL + 0.04) - rx * halfW, liteY, z + fz * (halfL + 0.04) - rz * halfW, yaw, bw, bw * 0.65, 1);
-          c.blooms.setMatrixAt(ci * 4 + 1, m4);
-          compose(m4, q, p, s, x - fx * (halfL + 0.04) + rx * halfW, liteY, z - fz * (halfL + 0.04) + rz * halfW, yaw, tw, tw * 0.64, 1);
-          c.blooms.setMatrixAt(ci * 4 + 2, m4);
-          compose(m4, q, p, s, x - fx * (halfL + 0.04) - rx * halfW, liteY, z - fz * (halfL + 0.04) - rz * halfW, yaw, tw, tw * 0.64, 1);
-          c.blooms.setMatrixAt(ci * 4 + 3, m4);
-          c.blooms.setColorAt(ci * 4, tmpC.set('#fff4cc'));
-          c.blooms.setColorAt(ci * 4 + 1, tmpC.set('#fff4cc'));
-          c.blooms.setColorAt(ci * 4 + 2, tmpC.set('#ff3a40'));
-          c.blooms.setColorAt(ci * 4 + 3, tmpC.set('#ff3a40'));
-        }
-        if (c.cones) {
-          const cl = spec.moto ? 1.6 : 3.4;
-          const cw = spec.moto ? 0.9 : 1.85;
-          compose(m4, q, p, s, x + fx * (halfL + 0.62), gy + 0.05, z + fz * (halfL + 0.62), yaw, cw, 1, cl);
-          c.cones.setMatrixAt(ci, m4);
-        }
+        writeLights(c, ci, x, gy, z, yaw, spec);
         ci++;
       }
     }
-    c.carHeads.instanceMatrix.needsUpdate = true;
-    c.carTails.instanceMatrix.needsUpdate = true;
-    if (c.blooms) {
-      c.blooms.instanceMatrix.needsUpdate = true;
-      if (c.blooms.instanceColor) c.blooms.instanceColor.needsUpdate = true;
-    }
-    if (c.cones) c.cones.instanceMatrix.needsUpdate = true;
+    flushLights(c, ci);
   }
 
   let acc = 0;
@@ -930,6 +992,7 @@ export function createGangnamNightlife({ scene, terrain = null, url, mobile = fa
     root, stats, ready,
     update(dt, x, z) {
       if (!meshes) return;
+      focusXZ = { x, z };
       acc += dt;
       if (acc > 0.4) { acc = 0; near.here = near(x, z); }
       apply(nightFade());
