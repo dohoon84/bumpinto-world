@@ -86,6 +86,33 @@ function findSowolParkTip(osm) {
   return best < 8 ? tip : null;
 }
 
+// Match namsanRoads sowolWidthAt so the DEM carve does not keep using the
+// 14 m full width after the road has tapered to 8.6 m at the east tip.
+const SOWOL_FULL_W = 14;
+const SOWOL_JOIN_W = 8.6;
+const SOWOL_TAPER_M = 18;
+function sowolSegWidth(pts, i, tip) {
+  if (!tip || !pts || pts.length < 2) return SOWOL_FULL_W;
+  const d0 = Math.hypot(pts[0][0] - tip[0], pts[0][1] - tip[1]);
+  const d1 = Math.hypot(pts[pts.length - 1][0] - tip[0], pts[pts.length - 1][1] - tip[1]);
+  const fromStart = d0 <= d1;
+  let acc = 0;
+  const along = [0];
+  for (let k = 1; k < pts.length; k++) {
+    acc += Math.hypot(pts[k][0] - pts[k - 1][0], pts[k][1] - pts[k - 1][1]);
+    along.push(acc);
+  }
+  const total = along[along.length - 1] || 1;
+  const dist = (idx) => (fromStart ? along[idx] : total - along[idx]);
+  const wAt = (d) => {
+    if (d >= SOWOL_TAPER_M) return SOWOL_FULL_W;
+    const t = d / SOWOL_TAPER_M;
+    const s = t * t * (3 - 2 * t);
+    return SOWOL_JOIN_W + (SOWOL_FULL_W - SOWOL_JOIN_W) * s;
+  };
+  return Math.max(wAt(dist(i - 1)), wAt(dist(i)));
+}
+
 export function makeNamsanHeightAt(dem, osm = null) {
   const datum = dem?.datum ?? NT.datum;
   function extrapolateEle(x, z) {
@@ -152,20 +179,16 @@ export function makeNamsanHeightAt(dem, osm = null) {
     if (!info.namedLoop && !info.isCar) continue;
     if (w.k === 'elevator') continue;
     const width = info.width;
-    const hw = width * 0.5;
-    // Bench the DEM under the carriageway (and a short shoulder) so coarse
-    // ~8 m triangles cannot straddle the ribbon and pierce it. Fall off
-    // farther out so downhill ground still rises toward the road.
-    const bench = hw + 1.2;
-    const reach = bench + 10;
     const pts = w.pts || [];
     for (let i = 1; i < pts.length; i++) {
       const ax = pts[i - 1][0], az = pts[i - 1][1], bx = pts[i][0], bz = pts[i][1];
-      const nearJunc = !!(juncTip && (
-        Math.hypot(ax - juncTip[0], az - juncTip[1]) < 34
-        || Math.hypot(bx - juncTip[0], bz - juncTip[1]) < 34
-      ));
-      const seg = { ax, az, bx, bz, reach, bench, hw, isDrive: info.isDrive, isSowol: info.isSowol, nearJunc };
+      const hw = (info.isSowol ? sowolSegWidth(pts, i, juncTip) : width) * 0.5;
+      // Bench the DEM under the carriageway (and a short shoulder) so coarse
+      // ~8 m triangles cannot straddle the ribbon and pierce it. Fall off
+      // farther out so downhill ground still rises toward the road.
+      const bench = hw + 1.2;
+      const reach = bench + 10;
+      const seg = { ax, az, bx, bz, reach, bench, hw, isDrive: info.isDrive, isSowol: info.isSowol };
       const x0 = Math.min(ax, bx) - reach, x1 = Math.max(ax, bx) + reach;
       const z0 = Math.min(az, bz) - reach, z1 = Math.max(az, bz) + reach;
       const i0 = Math.floor(x0 / GRID), i1 = Math.floor(x1 / GRID);
@@ -241,13 +264,6 @@ export function makeNamsanHeightAt(dem, osm = null) {
       const t = Math.max(0, Math.min(1, ((x - s.ax) * dx + (z - s.az) * dz) / L2));
       const dist = Math.hypot(s.ax + dx * t - x, s.az + dz * t - z);
       let p = s.hw + (s.isSowol ? 1.6 : 1.1);
-      // Extra carve only under the 5–7 m inside-corner fillets. A 20 m
-      // disk at hw+7.5 dropped the grass north of the curb into a
-      // dark puddle where the driveway meets 소월로.
-      if (s.nearJunc && juncTip) {
-        const tipDist = Math.hypot(x - juncTip[0], z - juncTip[1]);
-        if (tipDist < 14) p = Math.max(p, s.hw + 6.5);
-      }
       if (dist < best) { best = dist; pad = p; }
     }
     if (best === Infinity) return y;

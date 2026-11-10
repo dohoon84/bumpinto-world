@@ -365,4 +365,47 @@ function walkWay(w) {
   ok(`남산도서관 + 소월로: ${sowol.length} ways stitch to 공원길, ${libStops.length} stops, spring y=${heightAt(spring.x, spring.z).toFixed(1)}, max 5m step ${maxStep.toFixed(2)} over ${samples} samples`);
 }
 
+{
+  const parkEnd = osm.ways.find((w) => w.id === 357958295);
+  assert.ok(parkEnd, '공원길 stub for junction grass carve test');
+  const tip = parkEnd.pts[parkEnd.pts.length - 1];
+  const renderH = heightAt.renderHeightAt;
+  assert.equal(typeof renderH, 'function', 'renderHeightAt missing');
+  const carWays = osm.ways.filter((w) => (
+    w.pts?.length >= 2 && (w.name === '소월로' || w.name === '남산공원길')
+  ));
+  const distToRoad = (x, z) => {
+    let best = Infinity, hw = 5;
+    for (const w of carWays) {
+      const ww = (w.name === '소월로') ? 14 : Math.max(w.w || 8.6, 8.6);
+      for (let i = 1; i < w.pts.length; i++) {
+        const ax = w.pts[i - 1][0], az = w.pts[i - 1][1], bx = w.pts[i][0], bz = w.pts[i][1];
+        const L2 = (bx - ax) ** 2 + (bz - az) ** 2 || 1;
+        const t = Math.max(0, Math.min(1, ((x - ax) * (bx - ax) + (z - az) * (bz - az)) / L2));
+        const d = Math.hypot(ax + (bx - ax) * t - x, az + (bz - az) * t - z);
+        if (d < best) { best = d; hw = ww * 0.5; }
+      }
+    }
+    return { d: best, hw };
+  };
+  let grass = 0, carved = 0;
+  const worst = [];
+  for (let a = 0; a < 24; a++) {
+    const ang = a * Math.PI / 12;
+    const x = tip[0] + Math.cos(ang) * 12;
+    const z = tip[1] + Math.sin(ang) * 12;
+    const near = distToRoad(x, z);
+    if (near.d < near.hw + 3.2) continue;
+    grass++;
+    const drop = heightAt(x, z) - renderH(x, z);
+    if (drop > 0.8) {
+      carved++;
+      worst.push({ x: +x.toFixed(1), z: +z.toFixed(1), drop: +drop.toFixed(2), road: +near.d.toFixed(1) });
+    }
+  }
+  assert.ok(grass >= 4, `not enough off-road samples around tip (${grass})`);
+  assert.equal(carved, 0, `junction grass still carved: ${JSON.stringify(worst)}`);
+  ok(`junction grass uncarved: ${grass} off-road samples at 12 m from tip, 0 dark-carve hits`);
+}
+
 console.log(`namsan-roads ${n} checks passed`);
