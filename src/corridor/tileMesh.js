@@ -37,7 +37,7 @@ export function fetchedOnRoad(x, z) {
 const LINE_KINDS = new Set(['primary', 'secondary', 'trunk']);
 const BLOCK = '#ebe4d4', WATER = '#7ec3e6', CENTER_LINE = '#f2d36b';
 const DEFAULT_ROAD = ['#b4b7bc', 0.08];
-const LINE_Y = 0.17; // above cycleway 0.10 / paint 0.15, below zebra 0.20
+const LINE_Y = 0.27; // above gyeongbuSpur 0.25, below paint 0.28 / zebra 0.32
 const WALK_ONLY = new Set(['footway', 'steps', 'pedestrian', 'path']);
 const SURFACE_SUPPRESS = new Set(['primary', 'secondary', 'tertiary', 'trunk', 'residential', 'unclassified', 'primary_link', 'secondary_link']);
 

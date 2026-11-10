@@ -21,7 +21,7 @@ const ok = (m) => console.log(`ok ${++n} ${m}`);
 
 {
   assert.ok(STREET_DECAL_Y.zebra > STREET_DECAL_Y.paint, `zebra ${STREET_DECAL_Y.zebra} must sit above paint ${STREET_DECAL_Y.paint}`);
-  assert.ok(STREET_DECAL_Y.paint > 0.10, `paint ${STREET_DECAL_Y.paint} must sit above cycleway/footway 0.10`);
+  assert.ok(STREET_DECAL_Y.paint > 0.25, `paint ${STREET_DECAL_Y.paint} must sit above gyeongbuSpur 0.25`);
   const src = fs.readFileSync(path.join(ROOT, 'src/gangnam/streetDetail.js'), 'utf8');
   assert.match(src, /zebraMat[\s\S]*?depthTest:\s*true/);
   assert.match(src, /paintMat[\s\S]*?depthTest:\s*true/);
@@ -78,8 +78,12 @@ const ok = (m) => console.log(`ok ${++n} ${m}`);
   const index = J('public/corridor/gangnam/index.json');
   const tiles = Object.keys(index.tiles).sort().map((k) => J(`public/corridor/gangnam/tiles/${k}.json`));
   const roads = tiles.flatMap((t) => t.r || []);
-  const daeroRoads = roads.filter((r) => r.n === '강남대로' && r.k !== 'service');
-  const busways = roads.filter((r) => r.k === 'busway');
+  const WALK = new Set(['footway', 'steps', 'pedestrian', 'path', 'cycleway']);
+  const asphaltRoads = roads.filter((r) => r.p && r.p.length >= 2 && !WALK.has(r.k));
+  const gb = J('public/corridor/gangnam/gyeongbu-express.json');
+  const spurPts = (gb.pts || []).filter((p) => p[3] === 'spur').map((p) => [p[0], p[1]]);
+  const SPUR_W = 16;
+  const SPUR_Y = 0.25;
   const hypot = Math.hypot;
   const projectOn = (seq, p) => {
     let best = Infinity, pt = seq[0], yaw = 0;
@@ -93,16 +97,16 @@ const ok = (m) => console.log(`ok ${++n} ${m}`);
     }
     return { d: best, pt, yaw };
   };
-  const onLane = (x, z, pad = 0.35) => {
-    for (const r of daeroRoads) {
-      if (!r.p || r.p.length < 2) continue;
-      if (projectOn(r.p, [x, z]).d < (r.w || 16) / 2 + pad) return true;
+  const roadY = (k) => (k === 'busway' || k === 'service' || k === 'living_street' ? 0.08 : 0.06);
+  // Highest rendered carriageway surface at (x,z): OSM ribbons AND the 16 m
+  // gyeongbuSpur overlay (y=0.25) that sits on 강남대로 next to the BRT island.
+  const surfaceAt = (x, z, pad = 0.35) => {
+    let y = -Infinity;
+    for (const r of asphaltRoads) {
+      if (projectOn(r.p, [x, z]).d < (r.w || 16) / 2 + pad) y = Math.max(y, roadY(r.k));
     }
-    for (const r of busways) {
-      if (!r.p || r.p.length < 2) continue;
-      if (projectOn(r.p, [x, z]).d < (r.w || 4) / 2 + pad) return true;
-    }
-    return false;
+    if (spurPts.length >= 2 && projectOn(spurPts, [x, z]).d < SPUR_W / 2 + pad) y = Math.max(y, SPUR_Y);
+    return y;
   };
   const inZebra = (x, z, pad = 0.25) => {
     for (const zd of j.zebras || []) {
@@ -114,28 +118,6 @@ const ok = (m) => console.log(`ok ${++n} ${m}`);
     }
     return false;
   };
-  const twoBus = (x, z) => {
-    const hits = [];
-    for (const r of busways) {
-      if (!r.p || r.p.length < 2) continue;
-      const hit = projectOn(r.p, [x, z]);
-      if (hit.d <= 45 && !hits.some((o) => hypot(o.pt[0] - hit.pt[0], o.pt[1] - hit.pt[1]) < 5.5)) hits.push({ ...hit, road: r });
-    }
-    for (let i = 0; i < hits.length; i++) {
-      for (let k = i + 1; k < hits.length; k++) {
-        const c2c = hypot(hits[i].pt[0] - hits[k].pt[0], hits[i].pt[1] - hits[k].pt[1]);
-        if (c2c >= 6.2 && c2c <= 15.5) return [hits[i], hits[k]];
-      }
-    }
-    return hits.slice(0, 1);
-  };
-  const islandW = (x, z) => {
-    const pair = twoBus(x, z);
-    if (pair.length < 2) return 3.6;
-    const c2c = hypot(pair[0].pt[0] - pair[1].pt[0], pair[0].pt[1] - pair[1].pt[1]);
-    const gap = c2c - (pair[0].road.w || 4) / 2 - (pair[1].road.w || 4) / 2;
-    return Math.max(3.2, Math.min(4.0, gap - 0.35));
-  };
   const MED_N = 5, MED_GAP = 7.2, span = (MED_N - 1) * MED_GAP;
   const targets = (j.stops || []).filter((st) => st.kind === 'median' && st.road === '강남대로' && /강남역/.test(st.name));
   assert.ok(targets.length >= 2, `강남역 median stops ${targets.length}`);
@@ -144,23 +126,24 @@ const ok = (m) => console.log(`ok ${++n} ${m}`);
   for (const st of targets) {
     const fx = Math.sin(st.yaw), fz = Math.cos(st.yaw);
     const rx = Math.cos(st.yaw), rz = -Math.sin(st.yaw);
+    const plat = (j.platforms || []).find((p) => hypot(p[0] - st.x, p[1] - st.z) < 1);
+    const edge = (plat ? plat[4] : 4) * 0.5;
     for (const along of [-span / 2, 0, span / 2]) {
       const ix = st.x + rx * along, iz = st.z + rz * along;
-      const inner = islandW(ix, iz) * 0.5 + 0.2;
       for (const side of [-1, 1]) {
-        let lane = 0, hit = 0;
-        for (let d = inner; d <= 34; d += 0.6) {
+        let lane = 0;
+        for (let d = edge + 0.05; d <= 34; d += 0.5) {
           const x = ix + fx * side * d, z = iz + fz * side * d;
-          if (!onLane(x, z)) continue;
+          const surf = surfaceAt(x, z);
+          if (surf === -Infinity) continue;
           lane++;
           checked++;
-          if (inZebra(x, z)) hit++;
-          else {
-            missed++;
-            if (samples.length < 8) samples.push(`${st.ref} along=${along} side=${side} d=${d.toFixed(1)} @${x.toFixed(1)},${z.toFixed(1)}`);
-          }
+          const covered = inZebra(x, z) && STREET_DECAL_Y.zebra > surf;
+          if (covered) continue;
+          missed++;
+          if (samples.length < 10) samples.push(`${st.ref} along=${along} side=${side} d=${d.toFixed(2)} surf=${surf.toFixed(2)} zebraY=${STREET_DECAL_Y.zebra} @${x.toFixed(1)},${z.toFixed(1)}`);
         }
-        assert.ok(lane >= 8, `${st.ref} side ${side} along ${along} only ${lane} carriageway samples`);
+        assert.ok(lane >= 8, `${st.ref} side ${side} along ${along} only ${lane} asphalt samples from island edge`);
       }
     }
   }

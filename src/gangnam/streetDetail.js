@@ -10,9 +10,9 @@ export function gangnamStreetEnabled(search = typeof location !== 'undefined' ? 
   return q.get('gangnam') !== '0' && q.get('gstreet') !== '0';
 }
 
-// 모든 포장 리본(primary 0.06 · busway 기본 0.08 · cycleway 0.10)보다 높고, 차체보다 낮게.
+// 모든 포장 리본(primary 0.06 · busway 0.08 · cycleway 0.10 · 경부 지선 gyeongbuSpur 0.25)보다 높고, 차체보다 낮게.
 // paint < zebra 이어야 빨간 BRT 차로 위에도 횡단보도가 보인다. depthTest 는 켠 채 유지(버스·플레이어 아래).
-export const STREET_DECAL_Y = { paint: 0.15, zebra: 0.20 };
+export const STREET_DECAL_Y = { paint: 0.28, zebra: 0.32 };
 
 const up = new THREE.Vector3(0, 1, 0);
 
