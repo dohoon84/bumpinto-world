@@ -121,6 +121,15 @@ for (const spec of BP24_PLACEMENTS) {
       if (!inside(wx, wz, ring)) { fail.push(`${spec.id} 실내가 건물 밖`); break; }
     }
   }
+  if (spec.id === 'jz24') {
+    if (door.z > -374 || Math.abs(door.x + 169.8) > 3) fail.push(`${spec.id} 문이 OSM 북쪽 1층 면이 아님 (${door.x.toFixed(1)}, ${door.z.toFixed(1)})`);
+    if (st.W < 16) fail.push(`${spec.id} 긴 면에 안 붙음 폭 ${st.W}`);
+    if (!(st.b[1] > 0.9)) fail.push(`${spec.id} 앞면이 북쪽이 아님 ${st.b}`);
+  }
+  if (spec.id === 'cr12446') {
+    if ((st.recess || 0) < 1.5) fail.push(`${spec.id} 들인 간판이 사라짐 recess=${st.recess}`);
+    if (Math.hypot(door.x - 1630.7, door.z + 7393.7) > 6) fail.push(`${spec.id} 문이 OSM에서 멀다 (${door.x.toFixed(1)}, ${door.z.toFixed(1)})`);
+  }
   if (spec.id === 'jz649') {
     const host = jeongja.buildings[spec.building];
     if (spec.building !== 101 || host?.n !== '백궁프라자2') fail.push(`${spec.id} 호스트가 백궁프라자2(#101)가 아님 #${spec.building} ${host?.n || ''}`);

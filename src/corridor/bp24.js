@@ -23,6 +23,7 @@ export const BP24_DEFAULTS = { gf: 4.4, maxW: 18, maxD: 11, minW: 3.5, minD: 3, 
 const GLASS_H = 3.3, FASCIA_OUT = 0.38;
 const TS = 500;
 const ROAD_KINDS = new Set(['primary', 'secondary', 'tertiary', 'trunk', 'residential', 'unclassified', 'service', 'primary_link', 'secondary_link', 'trunk_link', 'living_street']);
+const WALK_KINDS = new Set([...ROAD_KINDS, 'footway', 'pedestrian', 'path', 'steps', 'cycleway']);
 const AXIS = { '-z': [0, -1], '+z': [0, 1], '-x': [-1, 0], '+x': [1, 0] };
 
 const cen = (o) => { let x = 0, z = 0; for (const p of o) { x += p[0]; z += p[1]; } return [x / o.length, z / o.length]; };
@@ -81,9 +82,19 @@ function roadDist(roads, x, z) {
   for (const r of roads || []) { if (!ROAD_KINDS.has(r.k)) continue; for (let i = 1; i < r.p.length; i++) d = Math.min(d, segDist(x, z, r.p[i - 1], r.p[i]) - (r.w || 6) / 2); }
   return d;
 }
+function walkDist(roads, x, z) {
+  let d = Infinity;
+  for (const r of roads || []) {
+    if (!WALK_KINDS.has(r.k)) continue;
+    const hw = (r.w || (ROAD_KINDS.has(r.k) ? 6 : 2)) / 2;
+    for (let i = 1; i < r.p.length; i++) d = Math.min(d, segDist(x, z, r.p[i - 1], r.p[i]) - hw);
+  }
+  return d;
+}
 
 // 설정 한 줄 + 타일 JSON → 매장 틀(로컬 좌표: x 0..W 앞면 방향, z 0..D 안쪽, 옆 유리는 x=W)
-//   spec: { id, name, match:{x,z,r?}, box?:{x0,x1,z0,z1}, front?:'-z'|'+z'|'-x'|'+x', side?: 축 | null(옆 유리 없음) | 'auto'(기본), gf?, maxW?, maxD? }
+//   spec: { id, name, match:{x,z,r?}, shop?:{x,z}, box?:{x0,x1,z0,z1}, front?:'-z'|'+z'|'-x'|'+x', side?: 축 | null(옆 유리 없음) | 'auto'(기본), gf?, maxW?, maxD? }
+//   shop 은 실제 1층 편의점(OSM) 좌표. 있으면 그 점에 가장 가까운 면을 앞면으로 고르고 그 앞에 상자를 둔다.
 export function resolveBp24(spec, j) {
   const opt = { ...BP24_DEFAULTS, ...spec };
   const R = spec.match.r || opt.matchR;
@@ -93,67 +104,113 @@ export function resolveBp24(spec, j) {
   const bld = j.b[bi];
   let ring = bld.o;
   if ((bld.h || 0) < opt.gf + 2) return null; // 1층을 비우고도 위층이 남아야 함
+  const anchor = (spec.shop && Number.isFinite(spec.shop.x) && Number.isFinite(spec.shop.z)) ? spec.shop : spec.match;
   const sidesOf = (F) => {
     const sides = [
       { n: F.v, h: F.hv, w: F.hu }, { n: [-F.v[0], -F.v[1]], h: F.hv, w: F.hu },
       { n: F.u, h: F.hu, w: F.hv }, { n: [-F.u[0], -F.u[1]], h: F.hu, w: F.hv },
     ];
-    for (const sd of sides) { const mx = F.c[0] + sd.n[0] * sd.h, mz = F.c[1] + sd.n[1] * sd.h; sd.road = Math.min(roadDist(j.r, mx + sd.n[0] * 1.5, mz + sd.n[1] * 1.5), roadDist(j.r, mx, mz)); }
+    for (const sd of sides) {
+      const mx = F.c[0] + sd.n[0] * sd.h, mz = F.c[1] + sd.n[1] * sd.h;
+      sd.road = Math.min(roadDist(j.r, mx + sd.n[0] * 1.5, mz + sd.n[1] * 1.5), roadDist(j.r, mx, mz));
+      sd.access = Math.min(sd.road, walkDist(j.r, mx + sd.n[0] * 1.5, mz + sd.n[1] * 1.5), walkDist(j.r, mx, mz));
+      const tx = -sd.n[1], tz = sd.n[0];
+      const along = (anchor.x - mx) * tx + (anchor.z - mz) * tz;
+      const ca = Math.max(-sd.w, Math.min(sd.w, along));
+      sd.anchor = Math.hypot(anchor.x - (mx + tx * ca), anchor.z - (mz + tz * ca));
+    }
     return sides;
   };
   const pickN = (sides, axName) => { const t = AXIS[axName]; return sides.reduce((best, sd) => (sd.n[0] * t[0] + sd.n[1] * t[1] > (best ? best.n[0] * t[0] + best.n[1] * t[1] : -2) ? sd : best), null); };
-  const chooseFront = (sides) => (spec.front ? pickN(sides, spec.front) : sides.reduce((best, sd) => (!best || sd.road < best.road - 0.5 || (Math.abs(sd.road - best.road) <= 0.5 && sd.w > best.w) ? sd : best), null));
+  const placeOn = (frontPick, baseRing, baseF) => {
+    let ring = baseRing.map((p) => [p[0], p[1]]);
+    let F = baseF;
+    let sides = sidesOf(F);
+    let front = sides.reduce((best, sd) => (sd.n[0] * frontPick.n[0] + sd.n[1] * frontPick.n[1] > (best ? best.n[0] * frontPick.n[0] + best.n[1] * frontPick.n[1] : -2) ? sd : best), null);
+    if ((spec.recess || 0) > 0.2 && !spec.box && front) {
+      const want = front.n;
+      ring = recessAlong(ring, want, spec.recess);
+      F = footprintOBB(ring);
+      if (!F) return null;
+      sides = sidesOf(F);
+      front = sides.reduce((best, sd) => (sd.n[0] * want[0] + sd.n[1] * want[1] > (best ? best.n[0] * want[0] + best.n[1] * want[1] : -2) ? sd : best), null);
+    }
+    if (!front) return null;
+    const adj = sides.filter((sd) => Math.abs(sd.n[0] * front.n[0] + sd.n[1] * front.n[1]) < 0.5);
+    let side = null;
+    if (spec.side && spec.side !== 'auto') side = pickN(sides, spec.side);
+    else if (spec.side !== null) { const c = adj.reduce((best, sd) => (!best || sd.road < best.road ? sd : best), null); if (c && c.road < 16) side = c; }
+    const b = [-front.n[0], -front.n[1]], a = [b[1], -b[0]]; // b: 안쪽, a: 앞면 따라 (a,위,b 오른손)
+    const m = side && side.n[0] * a[0] + side.n[1] * a[1] < 0 ? -1 : 1;
+    const ax = [a[0] * m, a[1] * m];
+    const Wf = front.w * 2, Df = front.h * 2;
+    let W = Math.min(Wf, opt.maxW), D = Math.min(Df, opt.maxD);
+    if (W < opt.minW || D < opt.minD) return null;
+    let shift = side ? Wf - W : (Wf - W) / 2;
+    const explicitSide = spec.side && spec.side !== 'auto';
+    const onShopFace = !!(spec.shop && Number.isFinite(frontPick.anchor) && frontPick.anchor < 8);
+    if (!spec.box && !explicitSide && onShopFace && Number.isFinite(anchor.x) && Number.isFinite(anchor.z)) {
+      const fx = F.c[0] + front.n[0] * front.h, fz = F.c[1] + front.n[1] * front.h;
+      const along = (anchor.x - fx) * ax[0] + (anchor.z - fz) * ax[1];
+      const target = Math.max(-front.w + W / 2, Math.min(front.w - W / 2, along));
+      shift = front.w - W / 2 + target;
+      if (shift >= 0.6 && shift <= Wf - W - 0.6) side = null;
+    }
+    let o = [F.c[0] + front.n[0] * front.h - ax[0] * (front.w - shift), F.c[1] + front.n[1] * front.h - ax[1] * (front.w - shift)];
+    let recess = spec.recess || 0;
+    if (!spec.box) {
+      const at = (x, z, extra = 0) => [o[0] + ax[0] * x + b[0] * (z + extra), o[1] + ax[1] * x + b[1] * (z + extra)];
+      const cornersIn = (extra = 0) => [[0.3, 0.3], [W - 0.3, 0.3], [0.3, D - 0.3], [W - 0.3, D - 0.3]].every(([x, z]) => insidePoly(at(x, z, extra)[0], at(x, z, extra)[1], ring));
+      const doorRoad = (extra = 0) => { const p = at(W / 2, -1.15, extra); return roadDist(j.r, p[0], p[1]); };
+      let extra = 0;
+      if (!cornersIn(0)) {
+        let guard = 0;
+        while ((!cornersIn(extra) || doorRoad(extra) < -0.6) && guard++ < 40) {
+          if (!cornersIn(extra) && D - 0.35 >= opt.minD) D -= 0.35;
+          else if (!cornersIn(extra) && W - 0.35 >= opt.minW) W -= 0.35;
+          else if (doorRoad(extra) < -0.6) extra += 0.3;
+          else break;
+        }
+      } else {
+        while (doorRoad(extra) < -0.6 && extra < 4) extra += 0.25;
+      }
+      if (!cornersIn(extra) || doorRoad(extra) < -0.6) return null;
+      if (extra) {
+        o = [o[0] + b[0] * extra, o[1] + b[1] * extra];
+        recess = (spec.recess || 0) + extra;
+        ring = recessAlong(ring, front.n, extra);
+      }
+    }
+    const toL = (p) => [(p[0] - o[0]) * ax[0] + (p[1] - o[1]) * ax[1], (p[0] - o[0]) * b[0] + (p[1] - o[1]) * b[1]];
+    const mat = new THREE.Matrix4().makeBasis(new THREE.Vector3(ax[0], 0, ax[1]), new THREE.Vector3(0, 1, 0), new THREE.Vector3(b[0], 0, b[1])).setPosition(o[0], 0, o[1]);
+    return { id: spec.id, name: spec.name, bi, W, D, side: !!side, mirror: m < 0, gf: opt.gf, apron: recess > 0.2 ? false : spec.apron !== false, recess, sealEnds: spec.side === null, porch: false, ring: ring.map(toL), colRing: ring, mat, o, ax, b, center: [o[0] + ax[0] * W / 2 + b[0] * D / 2, o[1] + ax[1] * W / 2 + b[1] * D / 2] };
+  };
   let F = spec.box
     ? { c: [(spec.box.x0 + spec.box.x1) / 2, (spec.box.z0 + spec.box.z1) / 2], u: [1, 0], v: [0, 1], hu: (spec.box.x1 - spec.box.x0) / 2, hv: (spec.box.z1 - spec.box.z0) / 2 }
     : footprintOBB(ring);
   if (!F) return null;
-  let sides = sidesOf(F);
-  let front = chooseFront(sides);
-  // 차도에 붙는 면은 앞을 건물 안으로 들인다. 간판은 들인 유리에서 외벽선까지 다시 나온다.
-  if ((spec.recess || 0) > 0.2 && !spec.box && front) {
-    const want = front.n;
-    ring = recessAlong(ring, want, spec.recess);
-    F = footprintOBB(ring);
-    if (!F) return null;
-    sides = sidesOf(F);
-    front = sides.reduce((best, sd) => (sd.n[0] * want[0] + sd.n[1] * want[1] > (best ? best.n[0] * want[0] + best.n[1] * want[1] : -2) ? sd : best), null);
+  const sides = sidesOf(F);
+  const ranked = spec.front
+    ? [pickN(sides, spec.front)].filter(Boolean)
+    : spec.shop
+      ? (() => {
+        const acc = sides.filter((sd) => sd.access < 22);
+        const pool = acc.length ? acc : sides;
+        return [...pool].sort((a, b) => {
+          const ad = a.anchor - b.anchor;
+          if (ad < -1) return -1;
+          if (ad > 1) return 1;
+          if (a.access < b.access - 0.5) return -1;
+          if (b.access < a.access - 0.5) return 1;
+          return b.w - a.w;
+        });
+      })()
+      : [sides.reduce((best, sd) => (!best || sd.road < best.road - 0.5 || (Math.abs(sd.road - best.road) <= 0.5 && sd.w > best.w) ? sd : best), null)].filter(Boolean);
+  for (const pick of ranked) {
+    const st = placeOn(pick, ring, F);
+    if (st) return st;
   }
-  if (!front) return null;
-  const adj = sides.filter((sd) => Math.abs(sd.n[0] * front.n[0] + sd.n[1] * front.n[1]) < 0.5);
-  let side = null;
-  if (spec.side && spec.side !== 'auto') side = pickN(sides, spec.side);
-  else if (spec.side !== null) { const c = adj.reduce((best, sd) => (!best || sd.road < best.road ? sd : best), null); if (c && c.road < 16) side = c; }
-  const b = [-front.n[0], -front.n[1]], a = [b[1], -b[0]]; // b: 안쪽, a: 앞면 따라 (a,위,b 오른손)
-  const m = side && side.n[0] * a[0] + side.n[1] * a[1] < 0 ? -1 : 1;
-  const ax = [a[0] * m, a[1] * m];
-  const Wf = front.w * 2, Df = front.h * 2;
-  let W = Math.min(Wf, opt.maxW), D = Math.min(Df, opt.maxD);
-  if (W < opt.minW || D < opt.minD) return null;
-  const shift = side ? Wf - W : (Wf - W) / 2;
-  let o = [F.c[0] + front.n[0] * front.h - ax[0] * (front.w - shift), F.c[1] + front.n[1] * front.h - ax[1] * (front.w - shift)];
-  let recess = spec.recess || 0;
-  if (!spec.box) {
-    const at = (x, z, extra = 0) => [o[0] + ax[0] * x + b[0] * (z + extra), o[1] + ax[1] * x + b[1] * (z + extra)];
-    const cornersIn = (extra = 0) => [[0.3, 0.3], [W - 0.3, 0.3], [0.3, D - 0.3], [W - 0.3, D - 0.3]].every(([x, z]) => insidePoly(at(x, z, extra)[0], at(x, z, extra)[1], ring));
-    const doorRoad = (extra = 0) => { const p = at(W / 2, -1.15, extra); return roadDist(j.r, p[0], p[1]); };
-    let extra = 0;
-    if (!cornersIn(0)) {
-      let guard = 0;
-      while ((!cornersIn(extra) || doorRoad(extra) < -0.6) && guard++ < 40) {
-        if (!cornersIn(extra) && D - 0.35 >= opt.minD) D -= 0.35;
-        else if (!cornersIn(extra) && W - 0.35 >= opt.minW) W -= 0.35;
-        else if (doorRoad(extra) < -0.6) extra += 0.3;
-        else break;
-      }
-    } else {
-      while (doorRoad(extra) < -0.6 && extra < 4) extra += 0.25;
-    }
-    if (!cornersIn(extra) || doorRoad(extra) < -0.6) return null;
-    if (extra) { o = [o[0] + b[0] * extra, o[1] + b[1] * extra]; recess = 0; }
-  }
-  const toL = (p) => [(p[0] - o[0]) * ax[0] + (p[1] - o[1]) * ax[1], (p[0] - o[0]) * b[0] + (p[1] - o[1]) * b[1]];
-  const mat = new THREE.Matrix4().makeBasis(new THREE.Vector3(ax[0], 0, ax[1]), new THREE.Vector3(0, 1, 0), new THREE.Vector3(b[0], 0, b[1])).setPosition(o[0], 0, o[1]);
-  return { id: spec.id, name: spec.name, bi, W, D, side: !!side, mirror: m < 0, gf: opt.gf, apron: recess > 0.2 ? false : spec.apron !== false, recess, sealEnds: spec.side === null, porch: false, ring: ring.map(toL), colRing: ring, mat, o, ax, b, center: [o[0] + ax[0] * W / 2 + b[0] * D / 2, o[1] + ax[1] * W / 2 + b[1] * D / 2] };
+  return null;
 }
 
 function recessAlong(ring, outward, meters) {
@@ -1182,8 +1239,9 @@ export function prepareJeongjaBp24(data, search) {
     if (bi < 0) continue;
     const src = data.buildings[bi];
     const [cx, cz] = cen(src.o);
+    const shop = spec.shop || (spec.match ? { x: spec.match.x, z: spec.match.z } : null);
     const tile = { b: [{ o: src.o, h: src.h, k: src.k }], r: data.roads };
-    const st = resolveBp24({ ...spec, match: { x: cx, z: cz, r: 8 } }, tile);
+    const st = resolveBp24({ ...spec, match: { x: cx, z: cz, r: 8 }, shop }, tile);
     if (!st) continue;
     src.mh = st.gf;
     src.lm = 'bp24';
