@@ -2,7 +2,7 @@
 import {
   TUB_INNER_W, TUB_INNER_H, STAGES, SPRITE_PAD,
   createSession, tryDrop, setAimX, canDrop, step, spawnAt, resetSession,
-  stageInfo, radiusFor, peekPending,
+  stageInfo, radiusFor, peekPending, FIXED_DT,
 } from './engine.js';
 import { mergeUrl, itemImage, itemUrl, bumUrl, prewarmMerge, loadImage } from './sprites.js';
 
@@ -127,6 +127,7 @@ export function mountBumStore({
   let session = createSession({ seed: (Date.now() ^ (Math.random() * 1e9)) >>> 0 });
   let best = Math.max(0, Number(getBest?.()) || 0);
   let runStartedAt = performance.now();
+  let pendingPopAt = performance.now();
   let playing = true;
   let overShown = false;
   let raf = 0;
@@ -248,6 +249,7 @@ export function mountBumStore({
     for (const ev of events) {
       if (ev.type === 'drop') {
         try { sfx?.drop?.(); } catch { /* */ }
+        pendingPopAt = performance.now();
       } else if (ev.type === 'merge') {
         try { sfx?.mergePop?.(ev.stage); } catch { /* */ }
         addParticles(ev.x, ev.y + DROP_PAD, ev.stage, 14);
@@ -267,14 +269,19 @@ export function mountBumStore({
   function dropNow() {
     if (!playing || session.paused || session.over || orientPaused) return;
     if (!canDrop(session)) return;
-    tryDrop(session);
+    const item = tryDrop(session);
+    if (item) {
+      pendingPopAt = performance.now();
+      handleEvents(session.events);
+      session.events = [];
+    }
     syncHud();
   }
 
   function onKeyDown(e) {
     if (e.code === 'ArrowLeft' || e.code === 'KeyA') { keyDir = -1; e.preventDefault(); }
     else if (e.code === 'ArrowRight' || e.code === 'KeyD') { keyDir = 1; e.preventDefault(); }
-    else if (e.code === 'Space' || e.code === 'Enter') { e.preventDefault(); dropNow(); }
+    else if (e.code === 'Space' || e.code === 'Enter') { e.preventDefault(); if (!e.repeat) dropNow(); }
     else if (e.code === 'KeyP') { togglePause(); }
   }
   function onKeyUp(e) {
@@ -344,18 +351,21 @@ export function mountBumStore({
 
     const pending = peekPending(session);
     if (pending && !session.over) {
+      const pop = Math.min(1, (performance.now() - pendingPopAt) / 200);
+      const ease = 1 - (1 - pop) ** 3;
       const px = pending.x;
-      const py = DROP_PAD + pending.y;
+      const py = DROP_PAD + pending.y + (1 - ease) * -18;
+      const pr = pending.r * (0.52 + 0.48 * ease);
       ctx.save();
       ctx.strokeStyle = 'rgba(224, 90, 82, 0.55)';
       ctx.setLineDash([5, 6]);
       ctx.lineWidth = 1.6;
       ctx.beginPath();
-      ctx.moveTo(px, py + pending.r * 0.2);
+      ctx.moveTo(px, py + pr * 0.2);
       ctx.lineTo(px, DROP_PAD + dangerWorldY + 70);
       ctx.stroke();
       ctx.restore();
-      drawItem(pending.stage, px, py, pending.r, 0);
+      drawItem(pending.stage, px, py, pr, 0);
       const arrow = loadImage(mergeUrl('tub/drop-indicator.png'));
       if (arrow.complete && arrow.naturalWidth) {
         const aw = 22, ah = 15;
@@ -363,12 +373,15 @@ export function mountBumStore({
       }
     }
 
+    const alpha = Math.max(0, Math.min(1, (session.acc || 0) / FIXED_DT));
     for (const it of session.items) {
       if (it.dead) continue;
       let ang = spin.get(it.id) || 0;
       ang += it.vx * 0.0018;
       spin.set(it.id, ang);
-      drawItem(it.stage, it.x, DROP_PAD + it.y, it.r, ang);
+      const rx = it.prevX == null ? it.x : it.prevX + (it.x - it.prevX) * alpha;
+      const ry = it.prevY == null ? it.y : it.prevY + (it.y - it.prevY) * alpha;
+      drawItem(it.stage, rx, DROP_PAD + ry, it.r, ang);
     }
 
     for (const p of particles) {
@@ -479,6 +492,7 @@ export function mountBumStore({
     particles = [];
     floats = [];
     spin.clear();
+    pendingPopAt = performance.now();
     playing = true;
     overShown = false;
     submitted = false;
@@ -610,6 +624,7 @@ export function mountBumStore({
       seedDemo,
       canDrop: () => canDrop(session),
       tryDrop: () => tryDrop(session),
+      dropNow,
       syncLayout,
       showResult: () => { session.score = session.score || 8640; session.bestStage = session.bestStage || 6; finish(); },
       showRanking: (rows, me) => showRanking(rows, me),

@@ -7,10 +7,13 @@ import {
 export {
   TUB_INNER_W, TUB_INNER_H, MAX_STAGE, SPAWN_MAX, GAMEOVER_HOLD, BUM_BONUS,
   radiusFor, scoreForStage, stageInfo, STAGES, SPRITE_PAD, DANGER_Y_FRAC,
+  STAGE1_DIAM_DIV,
 } from './stages.js';
 
 export const FIXED_DT = 1 / 120;
-const GRAVITY = 1650;
+export const DROP_COOLDOWN = 0.30;
+const GRAVITY = 2200;
+const DROP_VY = 360;
 const RESTITUTION = 0.08;
 const FRICTION = 0.28;
 const DAMPING = 0.996;
@@ -20,10 +23,8 @@ const ITERATIONS = 10;
 const SLEEP_SPEED = 7;
 const WAKE_IMPULSE = 14;
 const MERGE_SLOP = 0.85;
-const DROP_UNLOCK = 0.55;
-const MAX_STEPS = 5;
-// 스폰 가중치: 앞 단계가 더 자주 나옴 (1~5만)
-const SPAWN_WEIGHTS = [34, 26, 20, 13, 7];
+const FALLING_CLEAR = 0.55;
+const MAX_STEPS = 8;
 
 export function makeRng(seed = 1) {
   let s = (seed >>> 0) || 1;
@@ -33,11 +34,21 @@ export function makeRng(seed = 1) {
   };
 }
 
-export function pickSpawnStage(rng = Math.random) {
-  const total = SPAWN_WEIGHTS.reduce((a, b) => a + b, 0);
+/** 점수에 따라 1~5단계 가중치를 위로 민다. */
+export function spawnWeightsForScore(score = 0) {
+  const s = Number(score) || 0;
+  if (s < 200) return [36, 30, 20, 10, 4];
+  if (s < 500) return [24, 26, 24, 16, 10];
+  if (s < 1200) return [16, 22, 26, 20, 16];
+  return [10, 18, 24, 26, 22];
+}
+
+export function pickSpawnStage(rng = Math.random, score = 0) {
+  const weights = spawnWeightsForScore(score);
+  const total = weights.reduce((a, b) => a + b, 0);
   let r = (typeof rng === 'function' ? rng() : Math.random()) * total;
-  for (let i = 0; i < SPAWN_WEIGHTS.length; i++) {
-    r -= SPAWN_WEIGHTS[i];
+  for (let i = 0; i < weights.length; i++) {
+    r -= weights[i];
     if (r <= 0) return i + 1;
   }
   return SPAWN_MAX;
@@ -57,6 +68,8 @@ export function makeItem(stage, x, y, extras = {}) {
     id: extras.id ?? nextId(),
     stage: st,
     x, y,
+    prevX: extras.prevX ?? x,
+    prevY: extras.prevY ?? y,
     vx: extras.vx || 0,
     vy: extras.vy || 0,
     r,
@@ -72,8 +85,8 @@ export function makeItem(stage, x, y, extras = {}) {
 
 export function createSession({ seed = 1, width = TUB_INNER_W, height = TUB_INNER_H } = {}) {
   const rng = makeRng(seed);
-  const pendingStage = pickSpawnStage(rng);
-  const nextStage = pickSpawnStage(rng);
+  const pendingStage = pickSpawnStage(rng, 0);
+  const nextStage = pickSpawnStage(rng, 0);
   const pendingR = radiusFor(pendingStage);
   return {
     width, height,
@@ -113,7 +126,7 @@ export function setAimX(session, x) {
 }
 
 export function canDrop(session) {
-  return !session.over && !session.paused && session.pendingStage != null && session.dropLock <= 0 && session.fallingId == null;
+  return !session.over && !session.paused && session.pendingStage != null && session.dropLock <= 0;
 }
 
 /** 대기 아이템을 통 윗부분에서 떨어뜨린다. 성공하면 아이템, 아니면 null. */
@@ -122,13 +135,13 @@ export function tryDrop(session) {
   const stage = session.pendingStage;
   const r = radiusFor(stage);
   const x = clampAimX(session.aimX, r, session.width);
-  const item = makeItem(stage, x, r + 0.5, { falling: true });
+  const item = makeItem(stage, x, r + 0.5, { falling: true, vy: DROP_VY });
   session.items.push(item);
   session.fallingId = item.id;
   session.pendingStage = session.nextStage;
-  session.nextStage = pickSpawnStage(session.rng);
+  session.nextStage = pickSpawnStage(session.rng, session.score);
   session.pendingR = radiusFor(session.pendingStage);
-  session.dropLock = DROP_UNLOCK;
+  session.dropLock = DROP_COOLDOWN;
   session.aimX = clampAimX(session.aimX, session.pendingR, session.width);
   session.events.push({ type: 'drop', x, y: item.y, stage, id: item.id });
   return item;
@@ -139,6 +152,8 @@ function wake(item, impulse = WAKE_IMPULSE + 1) {
 }
 
 function integrate(item, dt) {
+  item.prevX = item.x;
+  item.prevY = item.y;
   if (item.sleeping) { item.vx = 0; item.vy = 0; return; }
   item.vy += GRAVITY * dt;
   item.vx *= DAMPING;
@@ -293,7 +308,7 @@ function updateSleepAndOver(session, dt) {
     }
     if (session.fallingId === it.id) {
       fallingAlive = true;
-      if (it.contacted || it.age >= DROP_UNLOCK) session.fallingId = null;
+      if (it.contacted || it.age >= FALLING_CLEAR) session.fallingId = null;
     }
     // 막 떨어뜨린 아이템은 위험선 판정에서 잠시 제외
     const counts = it.age > 0.45 && it.id !== session.fallingId;
@@ -306,7 +321,7 @@ function updateSleepAndOver(session, dt) {
   }
   // 낙하 중 합쳐져 목록에서 빠지면 fallingId 가 영원히 남아 다음 드롭이 막힌다
   if (session.fallingId != null && !fallingAlive) session.fallingId = null;
-  if (session.dropLock > 0 && session.fallingId == null) {
+  if (session.dropLock > 0) {
     session.dropLock = Math.max(0, session.dropLock - dt);
   }
   if (danger && !session.over) {

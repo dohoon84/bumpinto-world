@@ -3,6 +3,7 @@ import {
   TUB_INNER_W, TUB_INNER_H, MAX_STAGE, SPAWN_MAX, GAMEOVER_HOLD, BUM_BONUS, FIXED_DT,
   radiusFor, scoreForStage, makeRng, pickSpawnStage, clampAimX, createSession,
   tryDrop, setAimX, canDrop, step, stepPhysics, spawnAt, plausibleMergeRun, STAGES,
+  STAGE1_DIAM_DIV, DROP_COOLDOWN, spawnWeightsForScore,
 } from '../src/arcade/bumstore/engine.js';
 import { arcadeEnabled, mergeEnabled, MERGE_GAME_ID } from '../src/arcade/flag.js';
 import { plausibleArcadeRun } from '../server/phone/src/arcade/rules.js';
@@ -24,8 +25,8 @@ assert(scoreForStage(9) === 1280 && scoreForStage(5) === 80, 'mid scores');
 
 const r1 = radiusFor(1);
 const r10 = radiusFor(10);
-assert(Math.abs(r1 * 2 - TUB_INNER_W / 9) < 0.05, `stage1 diameter ${r1 * 2} vs ${TUB_INNER_W / 9}`);
-assert(Math.abs(r10 * 2 - TUB_INNER_W / 3) < 0.05, `stage10 diameter ${r10 * 2}`);
+assert(Math.abs(r1 * 2 - TUB_INNER_W / STAGE1_DIAM_DIV) < 0.05, `stage1 diameter ${r1 * 2} vs ${TUB_INNER_W / STAGE1_DIAM_DIV}`);
+assert(Math.abs(r10 * 2 - (TUB_INNER_W / STAGE1_DIAM_DIV) * 3) < 0.05, `stage10 diameter ${r10 * 2}`);
 assert(Math.abs(radiusFor(2) / r1 - 3 ** (1 / 9)) < 1e-6, 'radius curve k');
 
 const rng = makeRng(99);
@@ -46,7 +47,7 @@ assert(clampAimX(999, 20) === TUB_INNER_W - 20, 'clamp right');
   setAimX(s, TUB_INNER_W / 2);
   const dropped = tryDrop(s);
   assert(dropped && dropped.stage >= 1 && dropped.stage <= 5, 'drop returns item');
-  assert(!canDrop(s), 'locked while falling');
+  assert(!canDrop(s), 'locked by cooldown');
   for (let i = 0; i < 240; i++) step(s, FIXED_DT); // 2s
   assert(s.items.length >= 1, 'item still there');
   const it = s.items[0];
@@ -106,7 +107,7 @@ assert(clampAimX(999, 20) === TUB_INNER_W - 20, 'clamp right');
   assert(s.score >= 20, `chain score ${s.score}`);
 }
 
-// game over: item parked above the line for ~2s
+// game over: item parked above the line for GAMEOVER_HOLD
 {
   const s = createSession({ seed: 1 });
   const it = spawnAt(s, 6, TUB_INNER_W / 2, 20, { age: 1, contacted: true, sleeping: true, vx: 0, vy: 0 });
@@ -125,7 +126,7 @@ assert(clampAimX(999, 20) === TUB_INNER_W - 20, 'clamp right');
   const s = createSession({ seed: 1 });
   spawnAt(s, 4, TUB_INNER_W / 2, 18, { age: 1, contacted: true, sleeping: true });
   for (let i = 0; i < 60; i++) step(s, FIXED_DT); // 0.5s
-  assert(!s.over, 'under 2s is safe');
+  assert(!s.over, 'under grace period is safe');
 }
 
 // jitter: a pile of mixed items settles
@@ -236,6 +237,42 @@ assert(clampAimX(999, 20) === TUB_INNER_W - 20, 'clamp right');
   assert(s.fallingId == null || s.over, `input-mix fallingId=${s.fallingId}`);
   if (!s.over) assert(canDrop(s), 'input-mix still droppable');
   assert(drops >= 8 && cancels >= 2 && hides >= 2, `drops=${drops} cancels=${cancels} hides=${hides}`);
+}
+
+// 10 rapid drops in ~3s all spawn (cooldown, not wait-to-settle)
+{
+  assert(DROP_COOLDOWN >= 0.25 && DROP_COOLDOWN <= 0.35, `cooldown ${DROP_COOLDOWN}`);
+  const s = createSession({ seed: 99 });
+  let drops = 0;
+  const steps = Math.round(3 / FIXED_DT);
+  for (let i = 0; i < steps; i++) {
+    if (drops < 10 && canDrop(s)) {
+      setAimX(s, 48 + (drops * 27) % (TUB_INNER_W - 96));
+      if (tryDrop(s)) drops += 1;
+    }
+    step(s, FIXED_DT);
+  }
+  assert(drops === 10, `expected 10 rapid drops in 3s, got ${drops} cooldown=${DROP_COOLDOWN}`);
+  assert(s.fallingId == null || s.items.some((it) => it.id === s.fallingId) || s.over,
+    `fallingId leaked after rapid drops: ${s.fallingId}`);
+}
+
+// 점수 오르면 스폰이 더 큰 단계로 기운다
+{
+  const low = [];
+  const high = [];
+  const rngL = makeRng(3);
+  const rngH = makeRng(3);
+  for (let i = 0; i < 5000; i++) {
+    low.push(pickSpawnStage(rngL, 0));
+    high.push(pickSpawnStage(rngH, 2000));
+  }
+  const avg = (arr) => arr.reduce((a, b) => a + b, 0) / arr.length;
+  const aL = avg(low);
+  const aH = avg(high);
+  assert(low.every((n) => n >= 1 && n <= SPAWN_MAX) && high.every((n) => n >= 1 && n <= SPAWN_MAX), 'spawn in 1-5');
+  assert(aH > aL + 0.35, `spawn ramp ${aL.toFixed(3)} -> ${aH.toFixed(3)}`);
+  assert(spawnWeightsForScore(0).length === 5 && spawnWeightsForScore(9999).length === 5, 'five weights');
 }
 
 console.log('ok arcade-merge', {

@@ -4,7 +4,7 @@ export const TUB_INNER_H = 454;
 export const RADIUS_K = 3 ** (1 / 9); // ≈ 1.12983
 export const MAX_STAGE = 10;
 export const SPAWN_MAX = 5;
-export const GAMEOVER_HOLD = 2;
+export const GAMEOVER_HOLD = 1.2;
 export const BUM_BONUS = 5120;
 export const DANGER_Y_FRAC = 0.08;
 export const SPRITE_PAD = 1.1; // 에셋 캔버스 = 논리 지름 × 1.10
@@ -29,10 +29,11 @@ export function stageInfo(stage) { return BY_STAGE[stage] || BY_STAGE[1]; }
 export function stageById(id) { return BY_ID[id] || BY_STAGE[1]; }
 export function scoreForStage(stage) { return stageInfo(stage).score || 0; }
 
-/** 1단계 지름 = 통 안쪽 너비/9, 10단계 지름 = 1/3 */
+/** 1단계 지름 = 통 안쪽 너비 / STAGE1_DIAM_DIV (예전 9보다 조금 커서 통이 빨리 찬다) */
+export const STAGE1_DIAM_DIV = 8.35;
 export function radiusFor(stage, tubW = TUB_INNER_W) {
   const n = Math.max(1, Math.min(MAX_STAGE, stage | 0));
-  return (tubW / 18) * (RADIUS_K ** (n - 1));
+  return (tubW / (STAGE1_DIAM_DIV * 2)) * (RADIUS_K ** (n - 1));
 }
 
 export function dangerY(tubH = TUB_INNER_H) { return tubH * DANGER_Y_FRAC; }
