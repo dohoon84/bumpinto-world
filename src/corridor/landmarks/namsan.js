@@ -10,6 +10,7 @@ import { createNamsanInterior } from './namsanInterior.js';
 import { createNamsanCable } from './namsanCable.js';
 import { createNamsanCity } from './namsanCity.js';
 import { createNamsanRoads } from './namsanRoads.js';
+import { createNamsanLibrary } from './namsanLibrary.js';
 export { NT, namsanBaseY } from './namsanCoords.js';
 
 export const NAMSAN_DEM_FILE = 'namsan/namsan-dem.json';
@@ -44,7 +45,7 @@ export function namsanMini(city, osm, heightAt) {
   const plazas = [];
   if (osm?.tower?.outer?.length >= 3) plazas.push({ o: osm.tower.outer });
   const extraB = [];
-  for (const key of ['upperStation', 'lowerStation', 'loveLockShop', 'palgakjeong', 'bongsu']) {
+  for (const key of ['upperStation', 'lowerStation', 'loveLockShop', 'palgakjeong', 'bongsu', 'library']) {
     const pts = osm?.[key]?.pts;
     if (pts?.length >= 3) extraB.push({ o: pts });
   }
@@ -69,6 +70,7 @@ export function createNamsan({ scene, overlay, terrain, dem, osm, city = null, c
   const car = cable ? createNamsanCable({ parent: root, osm, heightAt: land.heightAt, overlay, baseY: land.baseY }) : null;
   const roads = createNamsanRoads({ parent: root, osm, heightAt: land.heightAt, overlay });
   roads.setDoor?.(tower.door);
+  const library = createNamsanLibrary({ parent: root, osm, heightAt: land.heightAt, overlay });
   const downtown = createNamsanCity({ parent: root, data: city, heightAt: land.heightAt, parks: osm?.parks || [] });
 
   // 원점 하늘 돔(r=3000)은 남산(약 23 km)에 닿지 않는다. 플레이어를 따라가는
@@ -151,6 +153,10 @@ export function createNamsan({ scene, overlay, terrain, dem, osm, city = null, c
     }
     for (const lm of osm?.landmarks || []) {
       if (!lm?.name || !Number.isFinite(lm.x)) continue;
+      // Guidepost 14279259878 reads '한양도성 유적전시관 / 남산도서관' and would
+      // sit on top of the new 남산도서관 label ~90 m west. Keep the node in
+      // OSM data; skip the overlapping world label.
+      if (lm.id === 14279259878 || (lm.k === 'guidepost' && (lm.name || '').includes('남산도서관'))) continue;
       overlay.add({
         cls: 'label landmark',
         text: lm.name,
@@ -174,6 +180,7 @@ export function createNamsan({ scene, overlay, terrain, dem, osm, city = null, c
     car?.setNight(on ? 1 : 0);
     land.setNight(on ? 1 : 0);
     roads.setNight?.(on ? 1 : 0);
+    library.setNight?.(on ? 1 : 0);
     downtown.setNight(on ? 1 : 0);
     starMat.opacity = on ? 0.88 : 0;
     stars.visible = !!on;
@@ -197,6 +204,8 @@ export function createNamsan({ scene, overlay, terrain, dem, osm, city = null, c
     if (ty != null) ys.push(ty);
     const cy = car?.floorY?.(x, z, refY);
     if (cy != null) ys.push(cy);
+    const ly = library.floorY?.(x, z, refY);
+    if (ly != null) ys.push(ly);
     const ry = roads.floorY?.(x, z, refY);
     if (ry != null) ys.push(ry);
     let best = null;
@@ -209,7 +218,7 @@ export function createNamsan({ scene, overlay, terrain, dem, osm, city = null, c
   }
 
   function isBlocked(x, z, r = 0.4) {
-    return !!(tower.isBlocked?.(x, z, r) || interior.isBlocked?.(x, z, r) || car?.isBlocked?.(x, z, r) || land.isBlocked?.(x, z, r));
+    return !!(tower.isBlocked?.(x, z, r) || interior.isBlocked?.(x, z, r) || car?.isBlocked?.(x, z, r) || land.isBlocked?.(x, z, r) || library.isBlocked?.(x, z, r));
   }
 
   let night = 0;
@@ -229,6 +238,7 @@ export function createNamsan({ scene, overlay, terrain, dem, osm, city = null, c
     get interior() { return interior; },
     get city() { return downtown; },
     get roads() { return roads; },
+    get library() { return library; },
     mini: namsanMini(city, osm, land.heightAt), // [hud-v3-minimap] 광장·도로·케이블카·공원
     stage(u) { car?.stage?.(u); },
     tickPlayer(dt, player, cam) {
@@ -258,6 +268,7 @@ export function createNamsan({ scene, overlay, terrain, dem, osm, city = null, c
       car?.setNight(v);
       land.setNight(v);
       roads.setNight?.(v);
+      library.setNight?.(v);
       downtown.setNight(v);
       starMat.opacity = Math.max(0, Math.min(1, v)) * 0.88;
       stars.visible = v > 0.08;

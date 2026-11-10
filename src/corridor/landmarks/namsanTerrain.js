@@ -207,11 +207,13 @@ const NAMSAN_CAR = new Set([
 export function namsanRenderedWay(w) {
   const isCar = NAMSAN_CAR.has(w.k);
   const namedLoop = /남산공원길|순환로/.test(w.name || '');
+  const isSowol = (w.name || '') === '소월로';
   const isDrive = w.service === 'driveway'
-    || !!(isCar && !namedLoop && (w.motor_vehicle === 'private' || !w.name));
+    || !!(isCar && !namedLoop && !isSowol && (w.motor_vehicle === 'private' || !w.name));
   let width = w.w || (isCar ? 7 : w.k === 'steps' ? 2.6 : 2.3);
   if (w.k === 'elevator') width = 2.5;
   else if (isDrive) width = Math.min(width, w.service === 'driveway' ? 3.2 : 4.4);
+  else if (isSowol) width = Math.max(width, 14);
   else if (namedLoop) width = Math.max(width, 8.6);
   return { width, isCar, namedLoop, isDrive };
 }
@@ -521,6 +523,15 @@ export function createNamsanTerrain({ parent, dem, osm }) {
 
   // ---- forest (skip plaza, stations, roads/trails, very steep / peak pad) ----
   const onWay = makeWayMask(osm?.ways);
+  const libPts = osm?.library?.pts;
+  const libC = libPts?.length ? centroid(libPts) : null;
+  const spring = osm?.spring;
+  const onLibrary = (x, z) => {
+    if (libC && Math.hypot(x - libC.x, z - libC.z) < 44) return true;
+    if (spring && Number.isFinite(spring.x) && Math.hypot(x - spring.x, z - spring.z) < 9) return true;
+    if (spring?.entrance && Math.hypot(x - spring.entrance.x, z - spring.entrance.z) < 8) return true;
+    return false;
+  };
   const trees = [];
   const x0 = forestBounds.x0 + 30, x1 = forestBounds.x1 - 30, z0 = forestBounds.z0 + 30, z1 = forestBounds.z1 - 30;
   for (let z = z0; z < z1; z += 14) {
@@ -529,7 +540,7 @@ export function createNamsanTerrain({ parent, dem, osm }) {
       const jz = z + (hash01(Math.round(z), Math.round(x)) - 0.5) * 10;
       const dT = Math.hypot(jx - NT.tx, jz - NT.tz);
       if (dT < 70) continue;
-      if (onWay(jx, jz)) continue;
+      if (onWay(jx, jz) || onLibrary(jx, jz)) continue;
       if (Math.hypot(jx + 10705, jz + 20554) < 28) continue;
       if (Math.hypot(jx + 10998, jz + 21021) < 36) continue;
       const y = heightAt(jx, jz);
@@ -548,7 +559,7 @@ export function createNamsanTerrain({ parent, dem, osm }) {
       const jz = z + (hash01(Math.round(z * 2), Math.round(x * 2)) - 0.5) * 5.5;
       const dT = Math.hypot(jx - NT.tx, jz - NT.tz);
       if (dT < 72 || dT > 280) continue;
-      if (onWay(jx, jz)) continue;
+      if (onWay(jx, jz) || onLibrary(jx, jz)) continue;
       if (Math.hypot(jx + 10705, jz + 20554) < 28) continue;
       const y = heightAt(jx, jz);
       if (y < 8) continue;
@@ -564,7 +575,7 @@ export function createNamsanTerrain({ parent, dem, osm }) {
       if (x >= forestBounds.x0 && x <= forestBounds.x1 && z >= forestBounds.z0 && z <= forestBounds.z1) continue;
       const jx = x + (hash01(Math.round(x), Math.round(z) + 3) - 0.5) * 11;
       const jz = z + (hash01(Math.round(z), Math.round(x) + 5) - 0.5) * 11;
-      if (onWay(jx, jz)) continue;
+      if (onWay(jx, jz) || onLibrary(jx, jz)) continue;
       const y = heightAt(jx, jz);
       if (y < 2) continue;
       const s = Math.hypot(heightAt(jx + 6, jz) - heightAt(jx - 6, jz), heightAt(jx, jz + 6) - heightAt(jx, jz - 6)) / 12;

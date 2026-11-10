@@ -322,4 +322,47 @@ function walkWay(w) {
   ok(`한양도성 openings: ${mustOpen.length} crossings cleared, parallel trail kept, ridge standing ${stood}/${ridge.pts.length}`);
 }
 
+{
+  const sowol = osm.ways.filter((w) => w.name === '소월로');
+  assert.ok(sowol.length >= 1, '소월로 missing');
+  assert.ok(sowol.every((w) => (w.w || 0) >= 14), '소월로 should be 4-lane wide');
+  const parkEnd = osm.ways.find((w) => w.id === 357958295);
+  assert.ok(parkEnd, '공원길 stub 357958295');
+  const join = parkEnd.pts[parkEnd.pts.length - 1];
+  const stitched = sowol.some((w) => w.pts.some((p) => Math.hypot(p[0] - join[0], p[1] - join[1]) < 0.35));
+  assert.ok(stitched, '소월로 does not meet 남산공원길 at the OSM join');
+  const lib = osm.library;
+  assert.ok(lib?.pts?.length >= 8, 'library footprint');
+  assert.equal(lib.floors, 5, 'library floors from official source');
+  assert.ok(Number.isFinite(heightAt(lib.x, lib.z)), 'library terrain');
+  const spring = osm.spring;
+  assert.ok(spring?.id === 14055752827, 'drinking_water node');
+  assert.equal(spring.name, '약수터');
+  assert.ok(Number.isFinite(heightAt(spring.x, spring.z)), 'spring terrain');
+  const libStops = (osm.busStops || []).filter((s) => (s.name || '').includes('남산도서관'));
+  assert.ok(libStops.length >= 2, `library bus stops ${libStops.length}`);
+  assert.ok((osm.crossings || []).some((c) => c.id === 436856278), '소월로 crossing');
+  // 소월로 / library driveway hug terrain (same 5 m / 3.2 m budget as other car roads)
+  let maxStep = 0, samples = 0;
+  for (const w of [...sowol, ...osm.ways.filter((w) => w.id === 244399269 || w.id === 244398390)]) {
+    const pts = resample2(w.pts, 5);
+    let prev = null;
+    for (const [x, z] of pts) {
+      const y = heightAt(x, z);
+      assert.ok(Number.isFinite(y), `void on ${w.name || w.id}`);
+      if (prev != null) {
+        const step = Math.abs(y - prev);
+        if (step > maxStep) maxStep = step;
+        assert.ok(step < 3.2, `소월/library road 5m step ${step.toFixed(2)} on ${w.name || w.id}`);
+      }
+      prev = y; samples++;
+    }
+  }
+  const ends = NAMSAN_CONNECT_ENDS;
+  for (const [k, pt] of Object.entries(ends)) {
+    assert.ok(Number.isFinite(heightAt(pt.x, pt.z)), `connect end ${k}`);
+  }
+  ok(`남산도서관 + 소월로: ${sowol.length} ways stitch to 공원길, ${libStops.length} stops, spring y=${heightAt(spring.x, spring.z).toFixed(1)}, max 5m step ${maxStep.toFixed(2)} over ${samples} samples`);
+}
+
 console.log(`namsan-roads ${n} checks passed`);

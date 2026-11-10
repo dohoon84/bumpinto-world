@@ -1,5 +1,6 @@
-// [namsan] OSM 남산공원길·순환로·산책로·계단을 지형 위에 깔고, 상단 버스 정류장과 입구 안내를 둔다.
-//   브랜드 로고 없음. 정류장 이름은 OSM 표기(남산서울타워)만 쓴다.
+// [namsan] OSM 남산공원길·순환로·소월로·산책로·계단을 지형 위에 깔고, 버스 정류장과 입구 안내를 둔다.
+//   브랜드 로고 없음. 타워 정류장은 OSM 표기(남산서울타워).
+//   남산도서관 정류장 노선은 공식 오시는길(01A·01B·402·405)만 적는다.
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { ribbonGeo, fixNormalsUp } from '../../world.js';
@@ -327,7 +328,7 @@ function routeSignTex(route, title) {
   return t;
 }
 
-function adPanelTex(route) {
+function adPanelTex(route, caption = '남산순환') {
   const c = document.createElement('canvas'); c.width = 512; c.height = 256;
   const x = c.getContext('2d');
   const g = x.createLinearGradient(0, 0, 512, 256);
@@ -341,7 +342,7 @@ function adPanelTex(route) {
   x.font = '700 92px sans-serif';
   x.fillText(route, 256, 108);
   x.font = '600 34px sans-serif';
-  x.fillText('남산순환', 256, 178);
+  x.fillText(caption, 256, 178);
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace;
   t.minFilter = THREE.LinearFilter; t.generateMipmaps = false;
   return t;
@@ -503,11 +504,13 @@ export function createNamsanRoads({ parent, osm, heightAt, overlay = null } = {}
     const isStep = STEPS.has(w.k);
     const isElev = w.k === 'elevator';
     const namedLoop = /남산공원길|순환로/.test(w.name || '');
+    const isSowol = (w.name || '') === '소월로';
     const isDrive = w.service === 'driveway'
-      || (isCar && !namedLoop && (w.motor_vehicle === 'private' || !w.name));
+      || (isCar && !namedLoop && !isSowol && (w.motor_vehicle === 'private' || !w.name));
     let width = w.w || (isCar ? 7 : isStep ? 2.6 : 2.3);
     if (isElev) width = 2.5;
     else if (isDrive) width = Math.min(width, w.service === 'driveway' ? 3.2 : 4.4);
+    else if (isSowol) width = Math.max(width, 14);
     else if (namedLoop) width = Math.max(width, 8.6);
     const dy = isCar ? 0.10 : isStep ? 0.08 : isElev ? 0.12 : 0.07;
     const pts = resample(w.pts, isStep || isElev ? 1.6 : 2.4);
@@ -543,7 +546,7 @@ export function createNamsanRoads({ parent, osm, heightAt, overlay = null } = {}
     if (isCar) {
       carGeos.push(paint(geo, isDrive ? '#7a7f86' : '#6e747c'));
       const support = roadSupportGeos(pts, width, heightAt, dy);
-      if (support?.bed) bankGeos.push(paint(support.bed, isDrive ? '#6a6660' : '#6e6a62'));
+      if (support?.bed) bankGeos.push(paint(support.bed, isDrive ? '#7a746c' : '#8a8478'));
       if (support?.fill) fillGeos.push(paint(support.fill, '#3f4a38'));
     } else if (isStep) stepGeos.push(paint(geo, '#9a9080'));
     else pathGeos.push(paint(geo, '#7a6b52'));
@@ -561,6 +564,62 @@ export function createNamsanRoads({ parent, osm, heightAt, overlay = null } = {}
         whiteGeos.push(fixNormalsUp(ribbonGeo(attachToRoad(pts, offsetLine(pts, -(width * 0.5 - 0.20)), heightAt, dy + 0.04), 0.14, 0, false)));
         carGeos.push(paint(fixNormalsUp(ribbonGeo(attachToRoad(pts, offsetLine(pts, width * 0.5 - 0.48), heightAt, dy + 0.012), 0.55, 0, false)), '#7a7f86'));
         carGeos.push(paint(fixNormalsUp(ribbonGeo(attachToRoad(pts, offsetLine(pts, -(width * 0.5 - 0.48)), heightAt, dy + 0.012), 0.55, 0, false)), '#7a7f86'));
+      }
+      // 소월로: OSM lanes=4 on this centerline. White edges + dashed lane
+      // dividers (oneway, so no yellow double center). Wide enough for
+      // 간선 전기버스 and the double-decker 서울시티투어버스.
+      if (isSowol && width >= 10) {
+        whiteGeos.push(fixNormalsUp(ribbonGeo(attachToRoad(pts, offsetLine(pts, width * 0.5 - 0.18), heightAt, dy + 0.04), 0.15, 0, false)));
+        whiteGeos.push(fixNormalsUp(ribbonGeo(attachToRoad(pts, offsetLine(pts, -(width * 0.5 - 0.18)), heightAt, dy + 0.04), 0.15, 0, false)));
+        carGeos.push(paint(fixNormalsUp(ribbonGeo(attachToRoad(pts, offsetLine(pts, width * 0.5 - 0.48), heightAt, dy + 0.012), 0.5, 0, false)), '#7a7f86'));
+        carGeos.push(paint(fixNormalsUp(ribbonGeo(attachToRoad(pts, offsetLine(pts, -(width * 0.5 - 0.48)), heightAt, dy + 0.012), 0.5, 0, false)), '#7a7f86'));
+        const laneOff = [-width / 4, 0, width / 4];
+        for (const off of laneOff) {
+          let accD = 0;
+          for (let i = 1; i < pts.length; i++) {
+            const ax = pts[i - 1][0], az = pts[i - 1][1], bx = pts[i][0], bz = pts[i][1];
+            const L = Math.hypot(bx - ax, bz - az) || 1;
+            const hx = (bx - ax) / L, hz = (bz - az) / L;
+            let s = 0;
+            while (s < L) {
+              const period = 6.2;
+              const into = accD % period;
+              const dashLeft = Math.max(0, 3.1 - into);
+              if (dashLeft > 0.25) {
+                const take = Math.min(dashLeft, L - s);
+                if (take < 1e-4) { s = L; break; }
+                const x0 = ax + hx * s, z0 = az + hz * s;
+                const x1 = ax + hx * (s + take), z1 = az + hz * (s + take);
+                const seg = [[x0 - hz * off, z0 + hx * off], [x1 - hz * off, z1 + hx * off]];
+                whiteGeos.push(fixNormalsUp(ribbonGeo(attachToRoad(seg, seg, heightAt, dy + 0.045), 0.11, 0, false)));
+                s += take; accD += take;
+              } else {
+                let gapLeft = period - into;
+                if (!Number.isFinite(gapLeft) || gapLeft < 0.05) gapLeft = 0.05;
+                const take = Math.min(gapLeft, L - s);
+                if (take < 1e-4) { s = L; break; }
+                s += take; accD += take;
+              }
+            }
+          }
+        }
+        let accL = 0;
+        for (let i = 1; i < pts.length; i++) {
+          const L = Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]);
+          accL += L;
+          if (accL < 18) continue;
+          accL = 0;
+          const hx = (pts[i][0] - pts[i - 1][0]) / (L || 1);
+          const hz = (pts[i][1] - pts[i - 1][1]) / (L || 1);
+          for (const side of [-1, 1]) {
+            lampPts.push({
+              x: pts[i][0] - hz * (width * 0.5 + 0.5) * side,
+              z: pts[i][1] + hx * (width * 0.5 + 0.5) * side,
+              y: heightAt(pts[i][0], pts[i][1]) + dy,
+              yaw: Math.atan2(-hx, -hz) + (side < 0 ? Math.PI : 0),
+            });
+          }
+        }
       }
       const swPref = w.sidewalk || (namedLoop ? 'uphill' : null);
       if (swPref === 'both') {
@@ -691,6 +750,40 @@ export function createNamsanRoads({ parent, osm, heightAt, overlay = null } = {}
     }
   }
 
+  // OSM crossings: zebra across the nearest carriageway (소월로 + library drive).
+  for (const cr of osm?.crossings || []) {
+    if (!Number.isFinite(cr.x) || !Number.isFinite(cr.z)) continue;
+    let best = Infinity, hx = 1, hz = 0, width = 8, px = cr.x, pz = cr.z;
+    for (const w of ways) {
+      if (!CAR.has(w.k)) continue;
+      const wpts = w.pts || [];
+      let ww = w.w || 7;
+      if ((w.name || '') === '소월로') ww = Math.max(ww, 14);
+      for (let i = 1; i < wpts.length; i++) {
+        const ax = wpts[i - 1][0], az = wpts[i - 1][1], bx = wpts[i][0], bz = wpts[i][1];
+        const L = Math.hypot(bx - ax, bz - az) || 1;
+        const tt = Math.max(0, Math.min(1, ((cr.x - ax) * (bx - ax) + (cr.z - az) * (bz - az)) / (L * L)));
+        const qx = ax + (bx - ax) * tt, qz = az + (bz - az) * tt;
+        const d = Math.hypot(cr.x - qx, cr.z - qz);
+        if (d < best) {
+          best = d;
+          hx = (bx - ax) / L; hz = (bz - az) / L;
+          px = qx; pz = qz; width = ww;
+        }
+      }
+    }
+    if (best > 16) continue;
+    const nrmx = -hz, nrmz = hx;
+    const half = width * 0.46;
+    const stripes = width >= 12 ? 8 : 5;
+    for (let i = -stripes; i <= stripes; i++) {
+      const ox = hx * i * 0.52, oz = hz * i * 0.52;
+      const a = [px + ox - nrmx * half, pz + oz - nrmz * half];
+      const b = [px + ox + nrmx * half, pz + oz + nrmz * half];
+      whiteGeos.push(fixNormalsUp(ribbonGeo(attachToRoad([a, b], [a, b], heightAt, 0.145), 0.36, 0, false)));
+    }
+  }
+
   const addMerged = (geos, name, extra = {}) => {
     if (!geos.length) return;
     const g = mergeGeometries(geos, true);
@@ -818,8 +911,13 @@ export function createNamsanRoads({ parent, osm, heightAt, overlay = null } = {}
     const sz = pz + nrmz * (roadW * 0.5 + 1.05);
     const y = heightAt(sx, sz);
     const ang = Math.atan2(hx, hz);
-    const route = si === 0 ? '01A' : '01B';
-    placedStops.push({ ...s, x: sx, z: sz, y, hx, hz, nrmx, nrmz, route });
+    const isLibStop = (s.name || '').includes('남산도서관');
+    const libRoute = s.ref === '03168' ? '402' : s.ref === '03167' ? '405' : '01A';
+    const route = isLibStop ? libRoute : (si === 0 ? '01A' : '01B');
+    const stopTitle = isLibStop ? '남산도서관' : '남산서울타워';
+    const stopSub = isLibStop ? '01A · 01B · 402 · 405' : route;
+    const adCaption = isLibStop ? '간선·순환' : '남산순환';
+    placedStops.push({ ...s, x: sx, z: sz, y, hx, hz, nrmx, nrmz, route, stopTitle });
 
     const pad = new THREE.Mesh(new THREE.BoxGeometry(5.6, 0.08, 2.3), new THREE.MeshLambertMaterial({ color: '#b7b4ac' }));
     pad.position.set(sx, y + 0.05, sz); pad.rotation.y = ang; group.add(pad);
@@ -839,7 +937,7 @@ export function createNamsanRoads({ parent, osm, heightAt, overlay = null } = {}
     const backFrame = new THREE.Mesh(new THREE.BoxGeometry(0.08, 2.05, 4.85), steel);
     backFrame.position.set(sx + nrmx * 0.86, y + 1.28, sz + nrmz * 0.86); backFrame.rotation.y = ang; group.add(backFrame);
     const ad = new THREE.Mesh(new THREE.PlaneGeometry(4.2, 1.55), new THREE.MeshBasicMaterial({
-      map: adPanelTex(route), toneMapped: false, fog: false, side: THREE.DoubleSide,
+      map: adPanelTex(route, adCaption), toneMapped: false, fog: false, side: THREE.DoubleSide,
     }));
     ad.position.set(sx + nrmx * 0.79, y + 1.38, sz + nrmz * 0.79);
     ad.rotation.y = Math.atan2(-nrmx, -nrmz);
@@ -853,7 +951,7 @@ export function createNamsanRoads({ parent, osm, heightAt, overlay = null } = {}
       leg.position.set(sx + hx * u + nrmx * 0.32, y + 0.24, sz + hz * u + nrmz * 0.32);
       group.add(leg);
     }
-    const routeMap = routeSignTex(route, '남산서울타워');
+    const routeMap = routeSignTex(route, stopTitle);
     const routeFace = Math.atan2(-nrmx, -nrmz);
     const rim = new THREE.Mesh(new THREE.BoxGeometry(1.38, 1.68, 0.06), new THREE.MeshBasicMaterial({ color: '#f0d070', toneMapped: false, fog: false }));
     rim.position.set(sx + hx * 2.15 - nrmx * 0.02, y + 1.78, sz + hz * 2.15 - nrmz * 0.02);
@@ -866,20 +964,23 @@ export function createNamsanRoads({ parent, osm, heightAt, overlay = null } = {}
     pole.position.set(sx + hx * 3.15 + nrmx * 0.15, y + 1.73, sz + hz * 3.15 + nrmz * 0.15);
     group.add(pole);
     const flag = new THREE.Mesh(new THREE.PlaneGeometry(1.4, 0.88), new THREE.MeshBasicMaterial({
-      map: signTex('남산서울타워', route), toneMapped: false, side: THREE.DoubleSide, fog: false,
+      map: signTex(stopTitle, stopSub), toneMapped: false, side: THREE.DoubleSide, fog: false,
     }));
     flag.position.set(sx + hx * 3.15 + nrmx * 0.15, y + 3.22, sz + hz * 3.15 + nrmz * 0.15);
     flag.rotation.y = routeFace;
     group.add(flag);
   });
-  if (overlay && busStops.length) {
-    const s = busStops[0];
-    overlay.add({
-      cls: 'label',
-      text: '🚌 남산서울타워 정류장',
-      getPos: () => new THREE.Vector3(s.x, heightAt(s.x, s.z) + 6.5, s.z),
-      maxDist: 280,
-    });
+  if (overlay) {
+    const s = busStops.find((b) => (b.name || '').includes('남산서울타워')) || null;
+    if (s) {
+      overlay.add({
+        cls: 'label',
+        text: '🚌 남산서울타워 정류장',
+        getPos: () => new THREE.Vector3(s.x, heightAt(s.x, s.z) + 6.5, s.z),
+        maxDist: 280,
+        minDist: 16,
+      });
+    }
   }
 
   // optional shuttle on the stitched 순환로 / 공원길
@@ -995,8 +1096,9 @@ export function createNamsanRoads({ parent, osm, heightAt, overlay = null } = {}
       whiteMat.emissiveIntensity = k * 0.32;
       const banks = group.getObjectByName('namsan-road-banks');
       if (banks?.material) {
-        banks.material.emissive = new THREE.Color('#2c2a26');
-        banks.material.emissiveIntensity = k * 0.38;
+        // Slight night lift so downhill facets read as earth, not a void.
+        banks.material.emissive = new THREE.Color('#5a564c');
+        banks.material.emissiveIntensity = k * 0.7;
       }
       const fills = group.getObjectByName('namsan-road-fills');
       if (fills?.material) {
