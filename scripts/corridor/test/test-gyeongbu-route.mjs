@@ -11,10 +11,11 @@ import { mergeGangnamIndex } from '../../../src/corridor/gangnam.js';
 import {
   mergeGyeongbuWorld, expressRoadHeight, sampleExpressPts, BEFORE_FIX_STUCK,
   EXPRESS_ROAD_Y, EXPRESS_PAVE_R, CHEONGGYE_ISLAND,
-  inPangyoCity, nearPangyoToll, PANGYO_TG, setExpressHeightExtra, buildExpressHeightProfile,
+  inPangyoCity, nearPangyoToll, PANGYO_TG, setExpressHeightExtra, buildExpressHeightProfile, distToPts,
 } from '../../../src/corridor/gyeongbuWorld.js';
 import { cheonggyeHeightAt, cheonggyeMeshHeightAt } from '../../../src/corridor/cheonggyeTerrain.js';
-import { expresswayMedianLine } from '../../../src/corridor/gyeongbuExpress.js';
+import { expresswayMedianLine, keepDeckPoint, expressLayout, expressDeckLaneCenters } from '../../../src/corridor/gyeongbuExpress.js';
+import { pangyoTollLayout, pangyoTollSupports, pangyoTollLaneRects, pointInRotatedRect, pangyoVisibleChunks } from '../../../src/corridor/pangyoExpress.js';
 import { pointInBox } from '../../../src/corridor/islands.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
@@ -181,7 +182,7 @@ for (let i = 1; i < median.length; i++) {
 assert.ok(maxGap < 12, `분리대 최대 간격 ${maxGap.toFixed(2)}m`);
 assert.ok(maxTurn < 0.50, `분리대 최대 꺾임 ${(maxTurn * 180 / Math.PI).toFixed(1)}deg / 5m`);
 
-const decked = ex.pts.filter((p) => p[3] === 'main' || p[3] === 'spur' || (p[3] === 'approach' && (p[0] < -200 || !inPangyoCity(p[0], p[1]))));
+const decked = ex.pts.filter(keepDeckPoint);
 const approachDeck = decked.filter((p) => p[3] === 'approach');
 assert.ok(approachDeck.length > 40, `접근로 차도 점 ${approachDeck.length}`);
 assert.ok(approachDeck.every((p) => p[0] < -180), '접근로 차도는 판교 시가 서쪽에서 시작');
@@ -249,4 +250,94 @@ const cityEdge = ride.find((q) => q.x < -200 && q.kind === 'approach');
 assert.ok(cityEdge, '판교 시가 서쪽 접근로 샘플');
 assert.equal(expressRoadHeight(cityEdge.x, cityEdge.z, ex.pts) != null, true);
 
-console.log(`gyeongbu route: ${samples.length} pts / 20m, dense ${dense.length}×${offsets.length} 메시, 분리대 ${median.length} (gap≤${maxGap.toFixed(2)}m turn≤${(maxTurn * 180 / Math.PI).toFixed(1)}°), 노면 y=${EXPRESS_ROAD_Y}, 전구간 ${ride.length} (Δy≤${maxRise.toFixed(3)}m/5m), 접근로 ${approachDeck.length}. 고치기 전 막힘 ${stuckBefore.length}곳 첫 s=${first.s.toFixed(0)} (${first.x.toFixed(1)}, ${first.z.toFixed(1)})`);
+// 판교 분기(본선 시작)~양재: 5m 마다 양 차로에 노면이 있고, 램프 리본과 0.2m 이내로 겹치지 않는다.
+const YANGJAE_S = 12072;
+const layout = expressLayout();
+const deckHalf = Math.max(Math.abs(layout.nbOuterEdge), Math.abs(layout.sbOuterEdge));
+const coverPts = ex.pts.filter(keepDeckPoint);
+const coverFn = (x, z, hw = 8) => distToPts(x, z, coverPts) < deckHalf + Math.max(0, hw) - 0.6;
+const visible = pangyoVisibleChunks(pangyo, coverFn);
+const firstKept = ex.pts.find(keepDeckPoint);
+assert.ok(firstKept, '본선 시작점');
+const laneCenters = expressDeckLaneCenters(ex.pts);
+assert.ok(laneCenters.length > 400, `양 차로 샘플 ${laneCenters.length}`);
+function sNear(x, z) {
+  let best = Infinity, s = 0;
+  for (const p of ex.pts) {
+    const d = Math.hypot(p[0] - x, p[1] - z);
+    if (d < best) { best = d; s = p[2]; }
+  }
+  return s;
+}
+const bySide = { nb: [], sb: [] };
+for (const p of laneCenters) {
+  const sAt = sNear(p.x, p.z);
+  if (sAt >= firstKept[2] - 20 && sAt <= YANGJAE_S + 40) bySide[p.side].push(p);
+}
+const surfaceMiss = [];
+for (const side of ['nb', 'sb']) {
+  const row = bySide[side];
+  assert.ok(row.length > 150, `${side} 판교~양재 샘플 ${row.length}`);
+  for (let i = 1; i < row.length; i++) {
+    const d = Math.hypot(row[i].x - row[i - 1].x, row[i].z - row[i - 1].z);
+    if (d > (side === 'sb' ? 16 : 8.5)) surfaceMiss.push({ side, i, d: +d.toFixed(2), x: +row[i].x.toFixed(1), z: +row[i].z.toFixed(1) });
+  }
+}
+assert.deepEqual(surfaceMiss.slice(0, 8), [], `본선 차도 끊김 ${JSON.stringify(surfaceMiss[0] || {})} (${surfaceMiss.length}곳)`);
+
+const junctionRide = sampleExpressPts(ex.pts, 5).filter((q) => q.s >= firstKept[2] - 1 && q.s <= YANGJAE_S + 15);
+assert.ok(junctionRide.length > 200, `판교~양재 샘플 ${junctionRide.length}`);
+function pangyoHitY(x, z) {
+  let best = null;
+  for (const chunk of visible) {
+    const pts = chunk.pts;
+    for (let i = 1; i < pts.length; i++) {
+      const a = pts[i - 1], b = pts[i];
+      const hw = Math.max(a[3] || 8, b[3] || 8) / 2;
+      const dx = b[0] - a[0], dz = b[1] - a[1], L2 = dx * dx + dz * dz || 1e-9;
+      const t = Math.max(0, Math.min(1, ((x - a[0]) * dx + (z - a[1]) * dz) / L2));
+      if (Math.hypot(a[0] + dx * t - x, a[1] + dz * t - z) > hw) continue;
+      const y = a[2] + (b[2] - a[2]) * t + 0.1;
+      if (best == null || y > best) best = y;
+    }
+  }
+  return best;
+}
+const overlapHits = [];
+const noSurface = [];
+for (const q of junctionRide) {
+  const lx = q.hz, lz = -q.hx;
+  for (const [side, off] of [['nb', 0], ['sb', layout.sbLaneCenter]]) {
+    const x = q.x + lx * off, z = q.z + lz * off;
+    const deckY = expressRoadHeight(x, z, ex.pts);
+    if (deckY == null || distToPts(x, z, coverPts) > deckHalf + 1) {
+      noSurface.push({ s: +q.s.toFixed(1), side, x: +x.toFixed(1), z: +z.toFixed(1) });
+      continue;
+    }
+    const py = pangyoHitY(x, z);
+    if (py != null && Math.abs(py - deckY) < 0.2) {
+      overlapHits.push({ s: +q.s.toFixed(1), side, x: +x.toFixed(1), z: +z.toFixed(1), deckY: +deckY.toFixed(2), py: +py.toFixed(2) });
+    }
+  }
+}
+assert.deepEqual(noSurface.slice(0, 8), [], `차로 아래 노면 없음 ${JSON.stringify(noSurface[0] || {})} (${noSurface.length}곳)`);
+assert.deepEqual(overlapHits.slice(0, 8), [], `차로 위 리본 겹침 ${JSON.stringify(overlapHits[0] || {})} (${overlapHits.length}곳)`);
+
+const layoutT = pangyoTollLayout(pangyo.toll);
+const supports = pangyoTollSupports(layoutT, pangyo.toll?.roof?.underside ?? 5.5);
+const islands = supports.map((s) => s.island);
+const lanes = pangyoTollLaneRects(layoutT);
+assert.ok(supports.length >= 10, `요금소 기둥 ${supports.length}`);
+for (const s of supports) {
+  const corners = [[-s.w / 2, -s.d / 2], [s.w / 2, -s.d / 2], [-s.w / 2, s.d / 2], [s.w / 2, s.d / 2]];
+  for (const [ox, oz] of [[0, 0], ...corners]) {
+    const c = Math.cos(s.ang), sn = Math.sin(s.ang);
+    const px = s.x + ox * c + oz * sn, pz = s.z - ox * sn + oz * c;
+    const inIsland = islands.some((is) => pointInRotatedRect(px, pz, is.x, is.z, is.w, is.d, is.ang));
+    assert.equal(inIsland, true, `기둥이 섬 밖 (${px.toFixed(1)},${pz.toFixed(1)})`);
+    const inLane = lanes.some((ln) => pointInRotatedRect(px, pz, ln.x, ln.z, ln.w, ln.d, ln.ang));
+    assert.equal(inLane, false, `기둥이 차로 안 (${px.toFixed(1)},${pz.toFixed(1)})`);
+  }
+}
+
+console.log(`gyeongbu route: ${samples.length} pts / 20m, dense ${dense.length}×${offsets.length} 메시, 분리대 ${median.length} (gap≤${maxGap.toFixed(2)}m turn≤${(maxTurn * 180 / Math.PI).toFixed(1)}°), 노면 y=${EXPRESS_ROAD_Y}, 전구간 ${ride.length} (Δy≤${maxRise.toFixed(3)}m/5m), 접근로 ${approachDeck.length}, 판교~양재 양차로 ${junctionRide.length}×2 겹침0 끊김0, 기둥 ${supports.length}. 고치기 전 막힘 ${stuckBefore.length}곳 첫 s=${first.s.toFixed(0)} (${first.x.toFixed(1)}, ${first.z.toFixed(1)})`);

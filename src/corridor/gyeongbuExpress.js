@@ -342,7 +342,7 @@ function coloredBoxY(w, h, d, color, x, y, z, angY = 0) {
   return paintGeo(geo, color);
 }
 
-function expressLayout() {
+export function expressLayout() {
   const laneW = 3.6, carriage = laneW * 4;
   const innerSh = 1.05, outerSh = 2.55, medianW = 1.4;
   const nbLaneInner = carriage / 2;
@@ -417,7 +417,7 @@ function expresswayDeck(rawPts, yAt = null) {
   const MED = '#c8c5bc', RAIL = '#b4b8be', POST = '#8b9098';
   const parts = [];
   const addR = (off, w, y, color) => {
-    parts.push(paintGeo(fixNormalsUp(ribbonGeo(shiftLine(S, off, lift), w, y, false)), color));
+    parts.push(paintGeo(fixNormalsUp(ribbonGeo(shiftLine(S, off, lift), w, y, true)), color));
   };
   addR(0, carriage, yRoad, ASP);
   addR((nbLaneInner + nbInnerEdge) / 2, innerSh, ySh, SH);
@@ -458,7 +458,7 @@ function expresswayDeck(rawPts, yAt = null) {
   }
   const g = new THREE.Group();
   g.name = 'gyeongbuExpressway';
-  const mesh = new THREE.Mesh(mergeGeo(parts), new THREE.MeshLambertMaterial({ vertexColors: true }));
+  const mesh = new THREE.Mesh(mergeGeo(parts), new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide }));
   mesh.name = 'gyeongbuExpresswayBody';
   mesh.receiveShadow = true;
   mesh.frustumCulled = false;
@@ -631,7 +631,8 @@ function corridorLandMesh(pts) {
       const d = pts?.length ? distToPts(x, z, pts) : 1e9;
       const city = inPangyoCity(x, z);
       const n = hash01(Math.round(x * 0.2), Math.round(z * 0.2));
-      let y = city ? -0.08 : 0.02;
+      // 시가 타일 바닥(#ebe4d4)이 고속도로 옆에서 회색·베이지 공터로 보이지 않게, 본선 가까이만 잔디를 올린다.
+      let y = (city && d > 90) ? -0.08 : 0.025;
       if (!city && d > 100) y += Math.min(5.5, (d - 100) * 0.0035) * (0.25 + n * 0.75);
       pos[i * 3] = x; pos[i * 3 + 1] = y; pos[i * 3 + 2] = z;
       const c = (d < 110 || y < 0.8) ? grass : (n > 0.58 ? forest : woods);
@@ -659,17 +660,32 @@ function corridorLandMesh(pts) {
   return mesh;
 }
 
-function keepDeckPoint(p) {
+export function keepDeckPoint(p) {
   if (p[3] === 'main' || p[3] === 'spur') return true;
   if (p[3] !== 'approach') return false;
   // 판교 시가 안쪽은 기존 타일 도로를 남기고, 서쪽 가장자리(x<-200)부터는 본선과 잇는다.
   return p[0] < -200 || !inPangyoCity(p[0], p[1]);
 }
 
+/** 본선 4+4 양 차로 중심. 5m 간격. 노면 연속·겹침 테스트에 쓴다. */
+export function expressDeckLaneCenters(rawPts) {
+  const trunk = (rawPts || []).filter(keepDeckPoint);
+  const pts = resampleXZ(chaikin(trunk, 2), 5);
+  if (pts.length < 2) return [];
+  const S = leftSamples(pts);
+  const { sbLaneCenter } = expressLayout();
+  const out = [];
+  for (const s of S) {
+    out.push({ x: s.x, z: s.z, side: 'nb', hx: -s.lz, hz: s.lx });
+    out.push({ x: s.x + s.lx * sbLaneCenter, z: s.z + s.lz * sbLaneCenter, side: 'sb', hx: -s.lz, hz: s.lx });
+  }
+  return out;
+}
+
 export function mountGyeongbuExpress(group, data, { overlay } = {}) {
   if (!data?.pts?.length || !data.routes?.length) return null;
   const yAt = (x, z) => expressRoadHeight(x, z, data.pts) ?? EXPRESS_ROAD_Y;
-  const approach = data.pts.filter((p) => p[3] === 'approach' && (p[0] < -200 || !inPangyoCity(p[0], p[1])));
+  const approach = data.pts.filter((p) => p[3] === 'approach' && keepDeckPoint(p));
   const spur = data.pts.filter((p) => p[3] === 'spur');
   const spurLand = spur.filter(awayFromCities);
   const apronA = grassApron(approach, 320);

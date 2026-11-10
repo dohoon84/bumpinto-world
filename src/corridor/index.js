@@ -24,7 +24,7 @@ import { createPangyoLandmarks } from './landmarks/pangyo.js'; // [pangyo]
 import { migeumEnabled, mergeMigeumIndex, MIGEUM_DIR, migeumSubwayDrawsEntrances, migeumTaxiEnabled, migeumBikeEnabled, MIGEUM_TAXIBIKE_FILE, pickMigeumTaxiBike } from './migeum.js'; // [migeum] [migeum-sub] [migeum-taxibike]
 import { gangnamEnabled, mergeGangnamIndex, GANGNAM_DIR, gangnamSubwayDrawsEntrances } from './gangnam.js'; // [gangnam]
 import { gangnamBusEnabled, GANGNAM_BUS_FILE, mountGangnamTransit } from './gangnamBus.js'; // [gangnam-bus]
-import { GYEONGBU_EXPRESS_FILE, gyeongbuExpressEnabled } from './gyeongbuExpress.js'; // [gyeongbu-bus]
+import { GYEONGBU_EXPRESS_FILE, gyeongbuExpressEnabled, keepDeckPoint, expressLayout } from './gyeongbuExpress.js'; // [gyeongbu-bus]
 import { mergeGyeongbuWorld, expressRoadHeight, setExpressHeightExtra, buildExpressHeightProfile, distToPts } from './gyeongbuWorld.js'; // [gyeongbu-bus]
 import { binGyeongbuMiniTiles, CHEONGGYE_STREETS_FILE, CHEONGGYE_BUILDINGS_FILE } from './gyeongbuMinimap.js'; // [gyeongbu-bus] 미니맵
 import { isMobileMode } from '../mobile/flag.js'; // [gangnam] 강남 박스 안에서만 모바일 품질 하향
@@ -348,8 +348,9 @@ export function createCorridor({ scene, corridorData, terrain, world, renderer, 
   const PF = perfFlags(params || (typeof location !== 'undefined' ? location.search : ''));
   const regions = PF.lazyregion ? createRegionRegistry() : null;
   let pangyoEx = null;
-  const coverPts = corridorData.gangnamExpress?.pts;
-  const pangyoCoverFn = coverPts?.length ? (x, z) => distToPts(x, z, coverPts) < 24 : null;
+  const coverPts = (corridorData.gangnamExpress?.pts || []).filter(keepDeckPoint);
+  const deckHalf = Math.max(Math.abs(expressLayout().nbOuterEdge), Math.abs(expressLayout().sbOuterEdge));
+  const pangyoCoverFn = coverPts.length ? (x, z, hw = 8) => distToPts(x, z, coverPts) < deckHalf + Math.max(0, hw) - 0.6 : null;
   if (corridorData.pangyoExpress && !regions) { pangyoEx = buildPangyoExpress(corridorData.pangyoExpress, { coverFn: pangyoCoverFn }); root.add(pangyoEx.group); } // [pangyo-express] 판교IC~경부 합류(메시 2개)
   else if (corridorData.pangyoExpress) {
     // [perf-memory] 고속도로 메시는 LOD 타일 거리 안(+여유)일 때만 만들고, 멀어지면 dispose

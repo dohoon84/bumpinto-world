@@ -100,6 +100,51 @@ export function pangyoTollLayout(T) {
   return { pitch, islandW, islandLen, laneClear, sets };
 }
 
+/** 요금소 기둥 발자국. 섬 중심과 같은 자리에만 세운다(차로 위 OSM 갠트리 기둥은 쓰지 않는다). */
+export function pangyoTollSupports(layout, underside = 5.5) {
+  if (!layout?.sets?.length) return [];
+  const out = [];
+  for (const S of layout.sets) {
+    const ang = Math.atan2(S.dir[0], S.dir[1]);
+    const px = S.dir[1], pz = -S.dir[0];
+    for (let k = 0; k <= S.lanes; k++) {
+      const o = (k - S.lanes / 2) * layout.pitch;
+      const x = S.at[0] + px * o, z = S.at[1] + pz * o;
+      out.push({
+        x, z, w: 0.42, d: 0.42, ang, h: underside - 0.35,
+        island: { x, z, w: layout.islandW, d: layout.islandLen, ang },
+      });
+    }
+  }
+  return out;
+}
+
+/** boxAt 과 같은 rotateY(ang) 기준의 회전 사각형 안인지. */
+export function pointInRotatedRect(px, pz, cx, cz, w, d, ang) {
+  const dx = px - cx, dz = pz - cz;
+  const c = Math.cos(ang), s = Math.sin(ang);
+  const lx = dx * c - dz * s;
+  const lz = dx * s + dz * c;
+  return Math.abs(lx) <= w / 2 + 0.04 && Math.abs(lz) <= d / 2 + 0.04;
+}
+
+export function pangyoTollLaneRects(layout) {
+  if (!layout?.sets?.length) return [];
+  const out = [];
+  for (const S of layout.sets) {
+    const ang = Math.atan2(S.dir[0], S.dir[1]);
+    const px = S.dir[1], pz = -S.dir[0];
+    for (let i = 0; i < S.lanes; i++) {
+      const o = (i + 0.5 - S.lanes / 2) * layout.pitch;
+      out.push({
+        x: S.at[0] + px * o, z: S.at[1] + pz * o,
+        w: layout.laneClear, d: layout.islandLen + 16, ang,
+      });
+    }
+  }
+  return out;
+}
+
 function addFacedSign(g, mat, w, h, x, y, z, face) {
   const nx = Math.sin(face), nz = Math.cos(face);
   for (const s of [1, -1]) {
@@ -189,34 +234,98 @@ function piecesAway(pts, coverFn) {
   const out = [];
   let cur = [];
   for (const p of pts) {
-    if (!coverFn(p[0], p[1])) cur.push(p);
+    const hw = Math.max(3.2, (p[3] || 8) / 2);
+    if (!coverFn(p[0], p[1], hw)) cur.push(p);
     else if (cur.length) { out.push(cur); cur = []; }
   }
   if (cur.length) out.push(cur);
-  return out.filter((r) => r.length > 1 && runLen(r) > 36);
+  return out.filter((r) => r.length > 1 && runLen(r) > 28);
 }
 
-function taperEnds(pts, length = 40) {
+function distToRun(x, z, pts) {
+  let best = Infinity;
+  for (let i = 1; i < pts.length; i++) {
+    const ax = pts[i - 1][0], az = pts[i - 1][1], bx = pts[i][0], bz = pts[i][1];
+    const dx = bx - ax, dz = bz - az, L2 = dx * dx + dz * dz || 1;
+    const t = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / L2));
+    const d = Math.hypot(ax + dx * t - x, az + dz * t - z);
+    if (d < best) best = d;
+  }
+  return best;
+}
+
+function dedupeChunks(chunks) {
+  if (chunks.length < 2) return chunks;
+  const scored = chunks.map((c, i) => ({ c, i, L: runLen(c) })).sort((a, b) => b.L - a.L);
+  const drop = new Set();
+  for (let i = 0; i < scored.length; i++) {
+    if (drop.has(scored[i].i)) continue;
+    for (let j = i + 1; j < scored.length; j++) {
+      if (drop.has(scored[j].i)) continue;
+      const b = scored[j].c;
+      const step = Math.max(1, Math.floor(b.length / 14));
+      let n = 0, near = 0;
+      for (let k = 0; k < b.length; k += step) {
+        n++;
+        if (distToRun(b[k][0], b[k][1], scored[i].c) < 12) near++;
+      }
+      if (n && near / n >= 0.62) drop.add(scored[j].i);
+    }
+  }
+  return chunks.filter((_, i) => !drop.has(i));
+}
+
+function towardCover(pts, fromStart, coverFn) {
+  if (!coverFn || pts.length < 2) return false;
+  const a = fromStart ? pts[0] : pts[pts.length - 1];
+  const b = fromStart ? pts[1] : pts[pts.length - 2];
+  const dx = a[0] - b[0], dz = a[1] - b[1], L = Math.hypot(dx, dz) || 1;
+  const hw = Math.max(3.2, (a[3] || 8) / 2);
+  return !!coverFn(a[0] + (dx / L) * 14, a[1] + (dz / L) * 14, hw);
+}
+
+function taperEnds(pts, coverFn, length = 28) {
   if (pts.length < 3 || length <= 0) return pts;
   const out = pts.map((p) => p.slice());
   const apply = (fromStart) => {
+    // 본선에 붙는 잘린 끝은 폭을 바늘처럼 줄이지 않는다(갓길에 맞닿는 고어).
+    if (towardCover(pts, fromStart, coverFn)) return;
     let acc = 0;
     if (fromStart) {
       for (let i = 1; i < out.length && acc < length; i++) {
         acc += Math.hypot(out[i][0] - out[i - 1][0], out[i][1] - out[i - 1][1]);
-        const t = Math.max(0.18, acc / length);
+        const t = Math.max(0.55, acc / length);
         out[i - 1][3] = (out[i - 1][3] || 7) * t;
       }
     } else {
       for (let i = out.length - 1; i > 0 && acc < length; i--) {
         acc += Math.hypot(out[i][0] - out[i - 1][0], out[i][1] - out[i - 1][1]);
-        const t = Math.max(0.18, acc / length);
+        const t = Math.max(0.55, acc / length);
         out[i][3] = (out[i][3] || 7) * t;
       }
     }
   };
   apply(true); apply(false);
   return out;
+}
+
+/** 본선 커버를 적용한 뒤에 실제로 그릴 램프·모터웨이 조각. 테스트에서 겹침을 검사한다. */
+export function pangyoVisibleChunks(E, coverFn) {
+  const rawChunks = [];
+  for (const l of E.lines || []) {
+    for (const raw of runs(l)) {
+      for (const c of piecesAway(raw, coverFn)) rawChunks.push({ k: l.k, pts: c });
+    }
+  }
+  const kept = new Set(dedupeChunks(rawChunks.map((c) => c.pts)));
+  return rawChunks.filter((c) => kept.has(c.pts));
+}
+
+function addVerticalPlane(add, width, height, cx, cy, cz, yaw, color) {
+  const g = new THREE.PlaneGeometry(width, height);
+  g.rotateY(yaw);
+  g.translate(cx, cy, cz);
+  add(g, color);
 }
 
 function addTollCanopy(add, night, T, layout) {
@@ -230,22 +339,48 @@ function addTollCanopy(add, night, T, layout) {
   const along = 24;
   const under = T.roof?.underside ?? 5.5;
   const thick = 1.4;
-  const tAng = Math.atan2(a.dir[0], a.dir[1]);
+  const dx = a.dir[0], dz = a.dir[1];
+  const px = dz, pz = -dx;
+  const tAng = Math.atan2(dx, dz);
+  const pAng = Math.atan2(px, pz);
   const cy = under + thick / 2;
   add(boxAt(across, thick, along, mx, cy, mz, tAng), COL.canopy);
-  add(boxAt(across - 1.2, 0.08, along - 1.2, mx, under + thick + 0.04, mz, tAng), '#d5dae0');
-  const fasciaH = 1.2, fy = under + thick - fasciaH / 2;
-  add(boxAt(across + 0.25, fasciaH, 0.38, mx + a.dir[0] * (along / 2), fy, mz + a.dir[1] * (along / 2), tAng), COL.canopyEdge);
-  add(boxAt(across + 0.25, fasciaH, 0.38, mx - a.dir[0] * (along / 2), fy, mz - a.dir[1] * (along / 2), tAng), COL.canopyEdge);
-  const px = a.dir[1], pz = -a.dir[0];
-  add(boxAt(0.38, fasciaH, along + 0.25, mx + px * (across / 2), fy, mz + pz * (across / 2), tAng), COL.canopyEdge);
-  add(boxAt(0.38, fasciaH, along + 0.25, mx - px * (across / 2), fy, mz - pz * (across / 2), tAng), COL.canopyEdge);
-  add(boxAt(across - 0.6, 0.07, along - 0.6, mx, under + 0.03, mz, tAng), COL.canopyUnder);
+  // 처마: 슬래브 위·아래를 덮어 아래에서 하늘이 새지 않게. 안쪽·바깥쪽 면을 따로 둔다.
+  const fasciaH = thick + 0.32;
+  const fy = under + thick / 2 - 0.08;
+  const faces = [
+    [mx + dx * (along / 2), mz + dz * (along / 2), across + 0.35, tAng],
+    [mx - dx * (along / 2), mz - dz * (along / 2), across + 0.35, tAng + Math.PI],
+    [mx + px * (across / 2), mz + pz * (across / 2), along + 0.35, pAng],
+    [mx - px * (across / 2), mz - pz * (across / 2), along + 0.35, pAng + Math.PI],
+  ];
+  for (const [fx, fz, w, yaw] of faces) {
+    addVerticalPlane(add, w, fasciaH, fx, fy, fz, yaw, COL.canopyEdge);
+    addVerticalPlane(add, w, fasciaH, fx, fy, fz, yaw + Math.PI, COL.canopyUnder);
+  }
+  const soffit = new THREE.PlaneGeometry(across - 0.12, along - 0.12);
+  soffit.rotateX(Math.PI / 2);
+  soffit.rotateY(tAng);
+  soffit.translate(mx, under - 0.02, mz);
+  add(soffit, COL.canopyUnder);
+  // 지붕 윗면: 테두리, 리브, 설비, 표지 띠
+  add(boxAt(across + 0.4, 0.16, 0.42, mx + dx * (along / 2), under + thick + 0.08, mz + dz * (along / 2), tAng), '#b7bec6');
+  add(boxAt(across + 0.4, 0.16, 0.42, mx - dx * (along / 2), under + thick + 0.08, mz - dz * (along / 2), tAng), '#b7bec6');
+  add(boxAt(0.42, 0.16, along + 0.4, mx + px * (across / 2), under + thick + 0.08, mz + pz * (across / 2), tAng), '#b7bec6');
+  add(boxAt(0.42, 0.16, along + 0.4, mx - px * (across / 2), under + thick + 0.08, mz - pz * (across / 2), tAng), '#b7bec6');
+  for (let i = -4; i <= 4; i++) {
+    add(boxAt(across - 1.4, 0.13, 0.28, mx + dx * (i * along / 10), under + thick + 0.08, mz + dz * (i * along / 10), tAng), '#c5ccd3');
+  }
+  add(boxAt(3.6, 1.05, 2.6, mx + px * 10 + dx * 3.2, under + thick + 0.62, mz + pz * 10 + dz * 3.2, tAng), '#8f98a2');
+  add(boxAt(2.8, 0.72, 2.1, mx - px * 8.5 - dx * 4.4, under + thick + 0.46, mz - pz * 8.5 - dz * 4.4, tAng), '#7e8791');
+  add(boxAt(1.5, 0.48, 1.3, mx + px * 3.5 - dx * 5.5, under + thick + 0.34, mz + pz * 3.5 - dz * 5.5, tAng), '#9aa3ad');
+  add(boxAt(across * 0.58, 1.02, 0.16, mx - dx * (along / 2 + 0.24), under + thick - 0.52, mz - dz * (along / 2 + 0.24), tAng), '#1b5d38');
   for (const S of sets) {
     const sx = S.dir[1], sz = -S.dir[0];
     for (let i = 0; i < S.lanes; i++) {
       const o = (i + 0.5 - S.lanes / 2) * layout.pitch;
       const x = S.at[0] + sx * o, z = S.at[1] + sz * o;
+      add(boxAt(layout.laneClear - 0.55, 0.06, 7.2, x, under - 0.05, z, tAng), '#e8d9a0');
       night.push(painted(boxAt(layout.laneClear - 0.55, 0.09, 7.2, x, under - 0.07, z, tAng), COL.lamp));
       add(boxAt(0.85, 0.32, 0.5, x, under - 0.3, z, tAng), '#2c333c');
     }
@@ -258,13 +393,9 @@ export function buildPangyoExpress(E, opts = {}) {
   const add = (geo, color) => { if (geo) day.push(painted(geo, color)); };
   const DECK = E.meta?.rule?.deck ?? 1.5;
   const coverFn = typeof opts.coverFn === 'function' ? opts.coverFn : null;
-  for (const l of E.lines) for (const raw of runs(l)) {
-    const main = l.k === 'motorway';
-    // 본선 4+4 가 이미 깔린 구간은 모터웨이 리본을 다시 그리지 않는다(겹침·지그재그 방지).
-    if (main && coverFn && raw.filter((p) => coverFn(p[0], p[1])).length > raw.length * 0.4) continue;
-    const chunks = main ? [raw] : piecesAway(raw, coverFn);
-    for (const P0 of chunks) {
-    const P = taperEnds(P0);
+  for (const { k, pts: P0 } of pangyoVisibleChunks(E, coverFn)) {
+    const main = k === 'motorway';
+    const P = taperEnds(P0, coverFn);
     const w = P[0][3];
     const pts = P.map((p) => [p[0], p[1], p[2], p[3]]);
     add(ribbonGeo(pts, w, 0.1, false), main ? COL.mainRoad : COL.road);
@@ -295,11 +426,11 @@ export function buildPangyoExpress(E, opts = {}) {
     }
     // 교량 밑면
     if (P.some((p) => p[4] && p[2] > 1.6)) add(ribbonGeo(pts.map((p, i) => [p[0], p[1], P[i][4] ? Math.max(0.02, p[2] - DECK) : 0.02, p[3] + 0.8]), w + 0.8, 0, false), COL.under); // 양면 재질이라 아래에서도 보임
-    }
   }
   // 교각: 기둥 2개 + 코핑(두부)
   for (const l of E.lines) for (const [x, z, top, ang, w] of l.piers || []) {
-    if (coverFn && coverFn(x, z)) continue;
+    if (coverFn && coverFn(x, z, Math.max(3.2, (w || 8) / 2))) continue;
+    if (Math.hypot(x + 482.05, z + 3232.35) < 90) continue;
     const ux = Math.cos(ang), uz = -Math.sin(ang), off = Math.max(2, w / 2 - 2.5);
     for (const s of [1, -1]) add(boxAt(1.4, top, 1.4, x + ux * off * s, top / 2, z + uz * off * s, ang), COL.pier);
     add(boxAt(w - 1, 1.0, 2.0, x, top - 0.5, z, ang), COL.pier);
@@ -328,11 +459,6 @@ export function buildPangyoExpress(E, opts = {}) {
         add(boxAt(ix * 0.7, 0.3, 0.36, x + S.dir[0] * (iw / 2) * sgn, 0.26, z + S.dir[1] * (iw / 2) * sgn, ang), '#f5c518');
       }
     }
-  }
-  for (const G of T?.gantries || []) {
-    const ang = Math.atan2(G.dir[0], G.dir[1]), px = G.dir[1], pz = -G.dir[0], hs = G.span / 2;
-    for (const s of [1, -1]) add(boxAt(0.45, G.h, 0.45, G.at[0] + px * hs * s, G.h / 2, G.at[1] + pz * hs * s, ang), COL.gantry);
-    add(boxAt(0.6, 0.9, G.span + 0.6, G.at[0], G.h - 0.45, G.at[1], ang + Math.PI / 2), COL.gantry);
   }
   // [gyeongbu-bus] 판교TG 세부. 왼쪽(1차로 쪽) 2개 차로를 하이패스·버스로 두고, 로고는 쓰지 않는다.
   if (layout?.sets) {
