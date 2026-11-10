@@ -139,6 +139,8 @@ assert.ok(pangyoSrc.includes('function addTollCanopy'));
 assert.ok(pangyoSrc.includes('function piecesAway'));
 assert.ok(pangyoSrc.includes('export function pangyoTollSupports'));
 assert.ok(pangyoSrc.includes('pangyoVisibleChunks'));
+assert.ok(pangyoSrc.includes('isExpressMainline'));
+assert.ok(pangyoSrc.includes('extendChunkToDeck'));
 assert.ok(pangyoSrc.includes('#1b5d38'));
 assert.ok(!pangyoSrc.includes('for (const G of T?.gantries'));
 assert.ok(!pangyoSrc.includes('ExtrudeGeometry(sh'));

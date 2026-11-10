@@ -257,6 +257,8 @@ const deckHalf = Math.max(Math.abs(layout.nbOuterEdge), Math.abs(layout.sbOuterE
 const coverPts = ex.pts.filter(keepDeckPoint);
 const coverFn = (x, z, hw = 8) => distToPts(x, z, coverPts) < deckHalf + Math.max(0, hw) - 0.6;
 const visible = pangyoVisibleChunks(pangyo, coverFn);
+const mainlineDup = visible.filter((c) => c.k === 'motorway' && Math.max(...c.pts.map((p) => p[3] || 0)) >= 16);
+assert.deepEqual(mainlineDup, [], `OSM 경부 본선 리본이 4+4 옆에 남음 ${mainlineDup.length}개`);
 const firstKept = ex.pts.find(keepDeckPoint);
 assert.ok(firstKept, '본선 시작점');
 const laneCenters = expressDeckLaneCenters(ex.pts);

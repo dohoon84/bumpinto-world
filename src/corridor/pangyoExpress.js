@@ -309,12 +309,62 @@ function taperEnds(pts, coverFn, length = 28) {
   return out;
 }
 
+function isExpressMainline(l) {
+  return l?.role === 'mainline' || l?.id === 'mainNB' || l?.id === 'mainSB';
+}
+
+/** OSM 경부 본선에 붙어 있던 램프 끝을 4+4 갓길로 당기고, 약 80m에 걸쳐 원래 선형으로 되돌린다. */
+function extendChunkToDeck(pts, coverFn) {
+  if (!coverFn || pts.length < 2) return pts;
+  const out = pts.map((p) => p.slice());
+  const fade = 80;
+  for (const fromStart of [true, false]) {
+    const p = fromStart ? out[0] : out[out.length - 1];
+    const hw = Math.max(3.2, (p[3] || 8) / 2);
+    if (coverFn(p[0], p[1], hw)) continue;
+    if (!coverFn(p[0], p[1], hw + 50)) continue;
+    let best = null, bestD = Infinity;
+    for (let a = 0; a < 16; a++) {
+      const ux = Math.cos((a * Math.PI) / 8), uz = Math.sin((a * Math.PI) / 8);
+      for (let d = 3; d <= 80; d += 3) {
+        if (!coverFn(p[0] + ux * d, p[1] + uz * d, hw)) continue;
+        if (d < bestD) { bestD = d; best = { ux, uz, d }; }
+        break;
+      }
+    }
+    if (!best) continue;
+    const ox = best.ux * best.d, oz = best.uz * best.d;
+    let acc = 0;
+    if (fromStart) {
+      out[0][0] += ox; out[0][1] += oz;
+      for (let i = 1; i < out.length && acc < fade; i++) {
+        acc += Math.hypot(out[i][0] - out[i - 1][0], out[i][1] - out[i - 1][1]);
+        const t = Math.max(0, 1 - acc / fade);
+        if (t <= 0) break;
+        out[i][0] += ox * t; out[i][1] += oz * t;
+      }
+    } else {
+      const last = out.length - 1;
+      out[last][0] += ox; out[last][1] += oz;
+      for (let i = last - 1; i >= 0 && acc < fade; i--) {
+        acc += Math.hypot(out[i + 1][0] - out[i][0], out[i + 1][1] - out[i][1]);
+        const t = Math.max(0, 1 - acc / fade);
+        if (t <= 0) break;
+        out[i][0] += ox * t; out[i][1] += oz * t;
+      }
+    }
+  }
+  return out;
+}
+
 /** 본선 커버를 적용한 뒤에 실제로 그릴 램프·모터웨이 조각. 테스트에서 겹침을 검사한다. */
 export function pangyoVisibleChunks(E, coverFn) {
   const rawChunks = [];
   for (const l of E.lines || []) {
+    // 4+4 가 있으면 OSM 경부 본선(mainNB/mainSB)은 그리지 않는다. 옆의 넓은 4차로 복제 차도가 되던 원인.
+    if (coverFn && isExpressMainline(l)) continue;
     for (const raw of runs(l)) {
-      for (const c of piecesAway(raw, coverFn)) rawChunks.push({ k: l.k, pts: c });
+      for (const c of piecesAway(raw, coverFn)) rawChunks.push({ k: l.k, pts: extendChunkToDeck(c, coverFn) });
     }
   }
   const kept = new Set(dedupeChunks(rawChunks.map((c) => c.pts)));
@@ -429,6 +479,7 @@ export function buildPangyoExpress(E, opts = {}) {
   }
   // 교각: 기둥 2개 + 코핑(두부)
   for (const l of E.lines) for (const [x, z, top, ang, w] of l.piers || []) {
+    if (coverFn && isExpressMainline(l)) continue;
     if (coverFn && coverFn(x, z, Math.max(3.2, (w || 8) / 2))) continue;
     if (Math.hypot(x + 482.05, z + 3232.35) < 90) continue;
     const ux = Math.cos(ang), uz = -Math.sin(ang), off = Math.max(2, w / 2 - 2.5);
