@@ -23,6 +23,31 @@ export function namsanCableEnabled(search = typeof location !== 'undefined' ? lo
 }
 
 // 상수 NT 는 namsanCoords.js (순환 import 방지).
+
+/** 미니맵용: 시가지 도로·건물 + 광장 윤곽 + 케이블카 선 (좌표만, 복사 최소화) */
+export function namsanMini(city, osm) {
+  const roads = city?.roads || [];
+  const buildings = city?.buildings || [];
+  const extraRoads = [];
+  const nodes = osm?.cable?.nodes;
+  if (nodes?.length >= 2) extraRoads.push({ k: 'aerialway', p: nodes.map((n) => [n.x, n.z]), w: 3 });
+  const plazas = [];
+  if (osm?.tower?.outer?.length >= 3) plazas.push({ o: osm.tower.outer });
+  const extraB = [];
+  for (const key of ['upperStation', 'lowerStation', 'loveLockShop', 'palgakjeong', 'bongsu']) {
+    const pts = osm?.[key]?.pts;
+    if (pts?.length >= 3) extraB.push({ o: pts });
+  }
+  return {
+    roads: extraRoads.length ? roads.concat(extraRoads) : roads,
+    buildings: extraB.length ? buildings.concat(extraB) : buildings,
+    plazas,
+    parks: [],
+    water: [],
+    waterLines: [],
+  };
+}
+
 export function createNamsan({ scene, overlay, terrain, dem, osm, city = null, cable = true, renderer = null } = {}) {
   const root = new THREE.Group();
   root.name = 'namsan';
@@ -131,6 +156,7 @@ export function createNamsan({ scene, overlay, terrain, dem, osm, city = null, c
     get tower() { return tower; },
     get interior() { return interior; },
     get city() { return downtown; },
+    mini: namsanMini(city, osm), // [hud-v3-minimap] 광장·도로·케이블카 선
     stage(u) { car?.stage?.(u); },
     tickPlayer(dt, player, cam) {
       interior.tickPlayer?.(dt, player, cam);
