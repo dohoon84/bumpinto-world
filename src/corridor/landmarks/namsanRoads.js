@@ -512,8 +512,11 @@ export function createNamsanRoads({ parent, osm, heightAt, overlay = null } = {}
     else if (isDrive) width = Math.min(width, w.service === 'driveway' ? 3.2 : 4.4);
     else if (isSowol) width = Math.max(width, 14);
     else if (namedLoop) width = Math.max(width, 8.6);
+    else if (!isCar) width = Math.max(width, 2.05);
     const dy = isCar ? 0.10 : isStep ? 0.08 : isElev ? 0.12 : 0.07;
-    const pts = resample(w.pts, isStep || isElev ? 1.6 : 2.4);
+    // Finer sampling on paths and driveways so ribbons hug the hillside
+    // instead of spanning as flat chords with dark underside edges.
+    const pts = resample(w.pts, isStep || isElev ? 1.4 : (isDrive || !isCar) ? 1.35 : 2.4);
     if (pts.length < 2) continue;
 
     if (isElev) {
@@ -545,9 +548,14 @@ export function createNamsanRoads({ parent, osm, heightAt, overlay = null } = {}
     const geo = fixNormalsUp(ribbonGeo(epts, width, 0, false));
     if (isCar) {
       carGeos.push(paint(geo, isDrive ? '#7a7f86' : '#6e747c'));
-      const support = roadSupportGeos(pts, width, heightAt, dy);
-      if (support?.bed) bankGeos.push(paint(support.bed, isDrive ? '#7a746c' : '#8a8478'));
-      if (support?.fill) fillGeos.push(paint(support.fill, '#3f4a38'));
+      // Driveways and unnamed service spines sit on gentle library slopes.
+      // Deep retaining skirts photographed as dark cliff edges / floating roads,
+      // so only the mountain loop and 소월로 keep a downhill bed.
+      if (!isDrive) {
+        const support = roadSupportGeos(pts, width, heightAt, dy);
+        if (support?.bed) bankGeos.push(paint(support.bed, '#8a8478'));
+        if (support?.fill) fillGeos.push(paint(support.fill, '#3f4a38'));
+      }
     } else if (isStep) stepGeos.push(paint(geo, '#9a9080'));
     else pathGeos.push(paint(geo, '#7a6b52'));
     walkHits.push({ segs: segsOf(pts), pad: width * 0.5 + 0.35, dy });
@@ -798,8 +806,8 @@ export function createNamsanRoads({ parent, osm, heightAt, overlay = null } = {}
   addMerged(carGeos, 'namsan-car-roads', { side: THREE.DoubleSide });
   addMerged(bankGeos, 'namsan-road-banks', { side: THREE.DoubleSide });
   addMerged(fillGeos, 'namsan-road-fills', { side: THREE.DoubleSide });
-  addMerged(pathGeos, 'namsan-paths');
-  addMerged(stepGeos, 'namsan-steps');
+  addMerged(pathGeos, 'namsan-paths', { side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 });
+  addMerged(stepGeos, 'namsan-steps', { side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 });
   addMerged(treadGeos, 'namsan-treads');
   addMerged(railGeos, 'namsan-rails');
   const yellowMat = new THREE.MeshLambertMaterial({
@@ -996,6 +1004,36 @@ export function createNamsanRoads({ parent, osm, heightAt, overlay = null } = {}
     }
   } catch { /* node tests / missing canvas — skip the bus */ }
 
+  // 소월로 bus serving 남산도서관 (official 오시는길: 01A·01B·402·405).
+  // Uses the same createBus + OSM-centerline follower as the loop shuttle.
+  // No double-decker or electric mesh exists in createBus, so this is a
+  // regular city bus numbered 402 (the route painted on stop 03168).
+  let sowolBus = null, sowolPath = null, sowolDist = 0, sowolLen = 0, sowolStopAt = 0;
+  try {
+    const rawS = stitchNamed(ways, /^소월로$/, 20);
+    if (rawS && pathLen(rawS) > 80) {
+      sowolPath = resample(rawS, 2.8);
+      sowolLen = pathLen(sowolPath);
+      const libStop = busStops.find((b) => b.ref === '03168') || busStops.find((b) => (b.name || '').includes('남산도서관'));
+      if (libStop) {
+        let acc = 0, bestD = 0, best = Infinity;
+        for (let i = 1; i < sowolPath.length; i++) {
+          acc += Math.hypot(sowolPath[i][0] - sowolPath[i - 1][0], sowolPath[i][1] - sowolPath[i - 1][1]);
+          const d = Math.hypot(sowolPath[i][0] - libStop.x, sowolPath[i][1] - libStop.z);
+          if (d < best) { best = d; bestD = acc; }
+        }
+        sowolStopAt = bestD;
+        sowolDist = bestD;
+      }
+      sowolBus = createBus('402', 'city', '402');
+      sowolBus.name = 'namsan-sowol-bus';
+      group.add(sowolBus);
+      const p0 = pointAt(sowolPath, sowolDist);
+      sowolBus.position.set(p0.x, heightAt(p0.x, p0.z) + 0.03, p0.z);
+      sowolBus.rotation.y = Math.atan2(p0.hx, p0.hz);
+    }
+  } catch { /* node tests / missing canvas — skip the bus */ }
+
   // guide arrows to a door (filled later via api.setDoor)
   const arrowGeo = chevronGeo();
   const arrowMat = new THREE.MeshBasicMaterial({
@@ -1113,21 +1151,26 @@ export function createNamsanRoads({ parent, osm, heightAt, overlay = null } = {}
       pathBulb.visible = k > 0.05;
     },
     update(dt) {
-      if (!shuttle || !shuttlePath || shuttleLen < 10) return;
-      shuttleDist += dt * 6.5;
-      const loop = Math.hypot(shuttlePath[0][0] - shuttlePath[shuttlePath.length - 1][0], shuttlePath[0][1] - shuttlePath[shuttlePath.length - 1][1]) < 28;
-      let d, rev = false;
-      if (loop) d = shuttleDist % shuttleLen;
-      else {
-        const span = shuttleLen * 2;
-        let u = shuttleDist % span;
-        if (u > shuttleLen) { u = span - u; rev = true; }
-        d = u;
-      }
-      const p = pointAt(shuttlePath, d);
-      shuttle.position.set(p.x, heightAt(p.x, p.z) + 0.03, p.z);
-      const yaw = Math.atan2(p.hx, p.hz) + (rev ? Math.PI : 0);
-      shuttle.rotation.y = yaw;
+      const follow = (mesh, path, dist, len, loopClose) => {
+        if (!mesh || !path || len < 10) return dist;
+        let next = dist + dt * 6.5;
+        const loop = loopClose && Math.hypot(path[0][0] - path[path.length - 1][0], path[0][1] - path[path.length - 1][1]) < 28;
+        let d, rev = false;
+        if (loop) d = next % len;
+        else {
+          const span = len * 2;
+          let u = next % span;
+          if (u < 0) u += span;
+          if (u > len) { u = span - u; rev = true; }
+          d = u;
+        }
+        const p = pointAt(path, d);
+        mesh.position.set(p.x, heightAt(p.x, p.z) + 0.03, p.z);
+        mesh.rotation.y = Math.atan2(p.hx, p.hz) + (rev ? Math.PI : 0);
+        return next;
+      };
+      shuttleDist = follow(shuttle, shuttlePath, shuttleDist, shuttleLen, true);
+      sowolDist = follow(sowolBus, sowolPath, sowolDist, sowolLen, false);
     },
   };
 }
