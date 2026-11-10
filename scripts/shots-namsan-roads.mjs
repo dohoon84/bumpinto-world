@@ -98,6 +98,7 @@ const info = await night.evaluate(() => {
     tx: n.tower.ox, tz: n.tower.oz, baseY: n.baseY,
     door, stops,
     roadPt, trailPt, roadLook,
+    placedStops: n.roads?.placedStops || [],
     nWays: ways.length,
     edgeY: n.heightAt(n.bounds.x0 + 20, n.bounds.z0 + 20),
   };
@@ -123,8 +124,8 @@ const hAt = (x, z) => night.evaluate(({ x, z }) => window.__jj.namsan.heightAt(x
     yaw: look(x, z, info.tx, info.tz),
     dist: 14, pitch: -0.1, fov: 48, hidePlayer: true,
   });
-  await shot(night, 'after-mountain-grounded-v2');
-  console.log('wrote after-mountain-grounded-v2 gy', gy);
+  await shot(night, 'after-mountain-grounded-v3');
+  console.log('wrote after-mountain-grounded-v3 gy', gy);
 }
 {
   const ang = 38 * Math.PI / 180;
@@ -137,8 +138,8 @@ const hAt = (x, z) => night.evaluate(({ x, z }) => window.__jj.namsan.heightAt(x
     yaw: look(x, z, info.tx, info.tz),
     dist: 18, pitch: -0.14, fov: 46, hidePlayer: true,
   });
-  await shot(night, 'after-mountain-grounded-wide-v2');
-  console.log('wrote after-mountain-grounded-wide-v2 gy', gy);
+  await shot(night, 'after-mountain-grounded-wide-v3');
+  console.log('wrote after-mountain-grounded-wide-v3 gy', gy);
 }
 
 // (b) bus road + nearby trail on the mountain (not past the DEM edge)
@@ -147,17 +148,21 @@ if (info.roadPt) {
   const y = await hAt(rx, rz);
   const lx = info.roadLook ? info.roadLook[0] : info.tx;
   const lz = info.roadLook ? info.roadLook[1] : info.tz;
-  const hx = lx - rx, hz = lz - rz, L = Math.hypot(hx, hz) || 1;
-  const cx = rx - (hz / L) * 9;
-  const cz = rz + (hx / L) * 9;
+  const L = Math.hypot(lx - rx, lz - rz) || 1;
+  const hx = (lx - rx) / L, hz = (lz - rz) / L;
+  // 도로 위에 서서 가까운 전방을 본다. 타워 전경이 아니라 아스팔트·차선·연석이 주인공.
+  const cx = rx - hx * 1.2;
+  const cz = rz - hz * 1.2;
+  const lx2 = rx + hx * 14;
+  const lz2 = rz + hz * 14;
   const cy = await hAt(cx, cz);
   await go(night, {
-    x: cx, z: cz, y: Math.max(y, cy) + 3.4,
-    yaw: look(cx, cz, lx, lz),
-    dist: 11, pitch: -0.2, fov: 52, hidePlayer: true,
+    x: cx, z: cz, y: Math.max(y, cy) + 1.55,
+    yaw: look(cx, cz, lx2, lz2),
+    dist: 3.4, pitch: -0.14, fov: 52, hidePlayer: true,
   });
-  await shot(night, 'after-bus-road-close-v2');
-  console.log('wrote after-bus-road-close-v2 at', rx, rz, y, 'cam', cx, cz);
+  await shot(night, 'after-bus-road-close-v3');
+  console.log('wrote after-bus-road-close-v3 at', rx, rz, y, 'cam', cx, cz);
 }
 if (info.trailPt) {
   const [rx, rz] = info.trailPt;
@@ -167,8 +172,8 @@ if (info.trailPt) {
     yaw: look(rx, rz, info.tx, info.tz),
     dist: 10, pitch: -0.2, fov: 58, hidePlayer: false,
   });
-  await shot(night, 'after-trail-night-v2');
-  console.log('wrote after-trail-night-v2 at', rx, rz, y);
+  await shot(night, 'after-trail-night-v3');
+  console.log('wrote after-trail-night-v3 at', rx, rz, y);
 }
 if (info.roadPt && info.trailPt) {
   const [rx, rz] = info.roadPt;
@@ -178,36 +183,40 @@ if (info.roadPt && info.trailPt) {
     yaw: look(rx, rz, info.trailPt[0], info.trailPt[1]),
     dist: 16, pitch: -0.22, fov: 55, hidePlayer: true,
   });
-  await shot(night, 'after-road-trail-night-v2');
-  console.log('wrote after-road-trail-night-v2');
+  await shot(night, 'after-road-trail-night-v3');
+  console.log('wrote after-road-trail-night-v3');
 }
 
 // (c) top bus stop
 if (info.stops?.[0]) {
-  const s = info.stops[0];
-  const y = await hAt(s.x, s.z);
-  const cx = s.x + 16, cz = s.z - 12;
+  const s = info.placedStops?.[0] || info.stops[0];
+  const y = s.y ?? await hAt(s.x, s.z);
+  const nrmx = s.nrmx ?? 0, nrmz = s.nrmz ?? -1;
+  const hx = s.hx ?? 1, hz = s.hz ?? 0;
+  // 도로 쪽에서 살짝 옆으로 봐 지붕·벤치·01A 판과 성벽이 함께 보이게
+  const cx = s.x - nrmx * 8.5 + hx * 5.5;
+  const cz = s.z - nrmz * 8.5 + hz * 5.5;
   await go(night, {
-    x: cx, z: cz, y: y + 2.8,
+    x: cx, z: cz, y: y + 1.7,
     yaw: look(cx, cz, s.x, s.z),
-    dist: 9, pitch: -0.16, fov: 52, hidePlayer: true,
+    dist: 6.2, pitch: -0.08, fov: 52, hidePlayer: true,
   });
-  await shot(night, 'after-bus-stop-v2');
-  console.log('wrote after-bus-stop-v2', s.x, s.z, y);
+  await shot(night, 'after-bus-stop-v3');
+  console.log('wrote after-bus-stop-v3', s.x, s.z, y);
 }
 
 // (d) entrance with sign and guide arrows
 if (info.door) {
   const d = info.door;
-  const sx = d.x + (d.nx || 1) * 11;
-  const sz = d.z + (d.nz || 0) * 11;
+  const sx = d.x + (d.nx || 1) * 13;
+  const sz = d.z + (d.nz || 0) * 13;
   await go(night, {
     x: sx, z: sz, y: info.baseY + 1.55,
     yaw: look(sx, sz, d.x, d.z),
-    dist: 6.2, pitch: 0.18, fov: 50, hidePlayer: true,
+    dist: 7.0, pitch: 0.22, fov: 52, hidePlayer: true,
   });
-  await shot(night, 'after-entrance-v2');
-  console.log('wrote after-entrance-v2');
+  await shot(night, 'after-entrance-v3');
+  console.log('wrote after-entrance-v3');
 }
 
 await browser.close();

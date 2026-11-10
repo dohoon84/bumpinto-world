@@ -42,12 +42,11 @@ function elevated(pts, heightAt, dy) {
 }
 
 function guideY(x, z, heightAt) {
-  const h = heightAt(x, z);
   const d = Math.hypot(x - NT.tx, z - NT.tz);
   const plazaY = NT.eleBase - NT.datum;
-  // DEM 이 광장 건물을 집어 높이 뛰어도, 입구 바닥(기단 y) 위에 붙인다.
-  if (d < 90) return Math.min(h, plazaY) + 0.32;
-  return h + 0.32;
+  // 광장 포장 위에 바짝 붙인다. DEM 이 동쪽 광장을 높이 집어도 기단을 따른다.
+  if (d < 90) return plazaY + 0.06;
+  return heightAt(x, z) + 0.05;
 }
 
 
@@ -231,16 +230,17 @@ function dijkstra(ways, sx, sz, tx, tz) {
   return path;
 }
 
-function arrowTex() {
-  const c = document.createElement('canvas'); c.width = 128; c.height = 64;
-  const x = c.getContext('2d');
-  x.clearRect(0, 0, 128, 64);
-  x.fillStyle = '#f0d36a';
-  x.beginPath();
-  x.moveTo(118, 32); x.lineTo(18, 8); x.lineTo(18, 22); x.lineTo(72, 32); x.lineTo(18, 42); x.lineTo(18, 56);
-  x.closePath(); x.fill();
-  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace;
-  return t;
+function chevronGeo() {
+  const s = new THREE.Shape();
+  // 팁이 -Y 를 향하게 그려, rotation.x = -PI/2 후 +Z(진행 방향)를 가리킨다.
+  s.moveTo(0, -1.05);
+  s.lineTo(-0.78, 0.88);
+  s.lineTo(-0.36, 0.50);
+  s.lineTo(0, 0.18);
+  s.lineTo(0.36, 0.50);
+  s.lineTo(0.78, 0.88);
+  s.closePath();
+  return new THREE.ShapeGeometry(s);
 }
 
 function signTex(title, sub) {
@@ -273,6 +273,26 @@ function routeSignTex(route, title) {
   x.font = '600 36px sans-serif';
   x.fillStyle = '#d7c07a';
   x.fillText('정류장', 256, 540);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace;
+  t.minFilter = THREE.LinearFilter; t.generateMipmaps = false;
+  return t;
+}
+
+function adPanelTex(route) {
+  const c = document.createElement('canvas'); c.width = 512; c.height = 256;
+  const x = c.getContext('2d');
+  const g = x.createLinearGradient(0, 0, 512, 256);
+  g.addColorStop(0, '#15405c');
+  g.addColorStop(1, '#0c6a62');
+  x.fillStyle = g; x.fillRect(0, 0, 512, 256);
+  x.fillStyle = 'rgba(255, 214, 130, 0.18)';
+  x.beginPath(); x.arc(70, 210, 100, 0, Math.PI * 2); x.fill();
+  x.fillStyle = '#f3ecd4';
+  x.textAlign = 'center'; x.textBaseline = 'middle';
+  x.font = '700 92px sans-serif';
+  x.fillText(route, 256, 108);
+  x.font = '600 34px sans-serif';
+  x.fillText('남산순환', 256, 178);
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace;
   t.minFilter = THREE.LinearFilter; t.generateMipmaps = false;
   return t;
@@ -515,13 +535,14 @@ export function createNamsanRoads({ parent, osm, heightAt, overlay = null } = {}
 
   // bus stop shelters at OSM 남산서울타워 platforms
   const busStops = osm?.busStops || [];
-  const roofLit = new THREE.MeshBasicMaterial({ color: '#ffd89a', transparent: true, opacity: 0, fog: false });
+  const roofLit = new THREE.MeshBasicMaterial({ color: '#ffe2a8', transparent: true, opacity: 0, fog: false, toneMapped: false });
+  const tubeMat = new THREE.MeshBasicMaterial({ color: '#fff4d2', transparent: true, opacity: 0, fog: false, toneMapped: false });
   const glassBack = new THREE.MeshStandardMaterial({
-    color: '#9ec4d8', transparent: true, opacity: 0.38, roughness: 0.08, metalness: 0.15,
-    emissive: new THREE.Color('#cfe6f2'), emissiveIntensity: 0.15, depthWrite: false,
+    color: '#b7d4e4', transparent: true, opacity: 0.42, roughness: 0.08, metalness: 0.15,
+    emissive: new THREE.Color('#d7eef8'), emissiveIntensity: 0.22, depthWrite: false,
   });
-  const steel = new THREE.MeshLambertMaterial({ color: '#3a424c' });
-  const wood = new THREE.MeshLambertMaterial({ color: '#6b5340' });
+  const steel = new THREE.MeshLambertMaterial({ color: '#5c6772' });
+  const wood = new THREE.MeshLambertMaterial({ color: '#8a6a4e' });
   const placedStops = [];
   busStops.forEach((s, si) => {
     let hx = 0, hz = 1, nearest = Infinity, nrmx = 0, nrmz = 1, px = s.x, pz = s.z, roadW = 7.8;
@@ -558,36 +579,48 @@ export function createNamsanRoads({ parent, osm, heightAt, overlay = null } = {}
       post.position.set(sx + hx * u + nrmx * 0.78, y + 1.28, sz + hz * u + nrmz * 0.78);
       group.add(post);
     }
-    const roof = new THREE.Mesh(new THREE.BoxGeometry(5.2, 0.1, 1.95), new THREE.MeshLambertMaterial({ color: '#2a3340' }));
+    const roof = new THREE.Mesh(new THREE.BoxGeometry(5.2, 0.12, 1.95), new THREE.MeshLambertMaterial({ color: '#4a5562' }));
     roof.position.set(sx + nrmx * 0.08, y + 2.62, sz + nrmz * 0.08); roof.rotation.y = ang; group.add(roof);
-    const lit = new THREE.Mesh(new THREE.BoxGeometry(4.8, 0.04, 1.65), roofLit);
-    lit.position.set(sx + nrmx * 0.08, y + 2.55, sz + nrmz * 0.08); lit.rotation.y = ang; group.add(lit);
+    const lit = new THREE.Mesh(new THREE.BoxGeometry(4.8, 0.05, 1.65), roofLit);
+    lit.position.set(sx + nrmx * 0.08, y + 2.54, sz + nrmz * 0.08); lit.rotation.y = ang; group.add(lit);
+    const tube = new THREE.Mesh(new THREE.BoxGeometry(4.4, 0.07, 0.07), tubeMat);
+    tube.position.set(sx + nrmx * 0.08, y + 2.48, sz + nrmz * 0.08); tube.rotation.y = ang; group.add(tube);
     const back = new THREE.Mesh(new THREE.BoxGeometry(0.05, 1.95, 4.7), glassBack);
     back.position.set(sx + nrmx * 0.82, y + 1.28, sz + nrmz * 0.82); back.rotation.y = ang; group.add(back);
     const backFrame = new THREE.Mesh(new THREE.BoxGeometry(0.08, 2.05, 4.85), steel);
     backFrame.position.set(sx + nrmx * 0.86, y + 1.28, sz + nrmz * 0.86); backFrame.rotation.y = ang; group.add(backFrame);
-    const seat = new THREE.Mesh(new THREE.BoxGeometry(2.7, 0.08, 0.46), wood);
-    seat.position.set(sx + nrmx * 0.32, y + 0.48, sz + nrmz * 0.32); seat.rotation.y = ang; group.add(seat);
-    const rest = new THREE.Mesh(new THREE.BoxGeometry(2.7, 0.38, 0.06), wood);
-    rest.position.set(sx + nrmx * 0.52, y + 0.78, sz + nrmz * 0.52); rest.rotation.y = ang; group.add(rest);
-    for (const u of [-1.15, 1.15]) {
-      const leg = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.46, 0.07), steel);
+    const ad = new THREE.Mesh(new THREE.PlaneGeometry(4.2, 1.55), new THREE.MeshBasicMaterial({
+      map: adPanelTex(route), toneMapped: false, fog: false, side: THREE.DoubleSide,
+    }));
+    ad.position.set(sx + nrmx * 0.79, y + 1.38, sz + nrmz * 0.79);
+    ad.rotation.y = Math.atan2(-nrmx, -nrmz);
+    group.add(ad);
+    const seat = new THREE.Mesh(new THREE.BoxGeometry(2.9, 0.1, 0.5), wood);
+    seat.position.set(sx + nrmx * 0.32, y + 0.50, sz + nrmz * 0.32); seat.rotation.y = ang; group.add(seat);
+    const rest = new THREE.Mesh(new THREE.BoxGeometry(2.9, 0.42, 0.07), wood);
+    rest.position.set(sx + nrmx * 0.52, y + 0.80, sz + nrmz * 0.52); rest.rotation.y = ang; group.add(rest);
+    for (const u of [-1.2, 0, 1.2]) {
+      const leg = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.48, 0.08), steel);
       leg.position.set(sx + hx * u + nrmx * 0.32, y + 0.24, sz + hz * u + nrmz * 0.32);
       group.add(leg);
     }
     const routeMap = routeSignTex(route, '남산서울타워');
-    const routePlate = new THREE.Mesh(new THREE.PlaneGeometry(0.85, 1.05), new THREE.MeshBasicMaterial({ map: routeMap, toneMapped: false }));
-    routePlate.position.set(sx + hx * 2.15 - nrmx * 0.05, y + 1.85, sz + hz * 2.15 - nrmz * 0.05);
-    routePlate.rotation.y = Math.atan2(-nrmx, -nrmz);
+    const routeFace = Math.atan2(-nrmx, -nrmz);
+    const rim = new THREE.Mesh(new THREE.BoxGeometry(1.38, 1.68, 0.06), new THREE.MeshBasicMaterial({ color: '#f0d070', toneMapped: false, fog: false }));
+    rim.position.set(sx + hx * 2.15 - nrmx * 0.02, y + 1.78, sz + hz * 2.15 - nrmz * 0.02);
+    rim.rotation.y = routeFace; group.add(rim);
+    const routePlate = new THREE.Mesh(new THREE.PlaneGeometry(1.28, 1.56), new THREE.MeshBasicMaterial({ map: routeMap, toneMapped: false, fog: false }));
+    routePlate.position.set(sx + hx * 2.15 - nrmx * 0.06, y + 1.78, sz + hz * 2.15 - nrmz * 0.06);
+    routePlate.rotation.y = routeFace;
     group.add(routePlate);
-    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.06, 3.35, 8), steel);
-    pole.position.set(sx + hx * 3.05 + nrmx * 0.15, y + 1.68, sz + hz * 3.05 + nrmz * 0.15);
+    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.065, 3.45, 8), steel);
+    pole.position.set(sx + hx * 3.15 + nrmx * 0.15, y + 1.73, sz + hz * 3.15 + nrmz * 0.15);
     group.add(pole);
-    const flag = new THREE.Mesh(new THREE.PlaneGeometry(1.15, 0.72), new THREE.MeshBasicMaterial({
-      map: signTex('남산서울타워', route), toneMapped: false, side: THREE.DoubleSide,
+    const flag = new THREE.Mesh(new THREE.PlaneGeometry(1.4, 0.88), new THREE.MeshBasicMaterial({
+      map: signTex('남산서울타워', route), toneMapped: false, side: THREE.DoubleSide, fog: false,
     }));
-    flag.position.set(sx + hx * 3.05 + nrmx * 0.15, y + 3.15, sz + hz * 3.05 + nrmz * 0.15);
-    flag.rotation.y = Math.atan2(-nrmx, -nrmz);
+    flag.position.set(sx + hx * 3.15 + nrmx * 0.15, y + 3.22, sz + hz * 3.15 + nrmz * 0.15);
+    flag.rotation.y = routeFace;
     group.add(flag);
   });
   if (overlay && busStops.length) {
@@ -614,32 +647,34 @@ export function createNamsanRoads({ parent, osm, heightAt, overlay = null } = {}
   } catch { /* node tests / missing canvas — skip the bus */ }
 
   // guide arrows to a door (filled later via api.setDoor)
-  const arrowMap = arrowTex();
+  const arrowGeo = chevronGeo();
   const arrowMat = new THREE.MeshBasicMaterial({
-    map: arrowMap, transparent: true, depthWrite: false, side: THREE.DoubleSide,
-    color: '#ffe08a', toneMapped: false,
+    color: '#e4b43a', transparent: true, opacity: 0.92, depthWrite: false,
+    side: THREE.DoubleSide, toneMapped: false,
+    polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2,
   });
   const guideGroup = new THREE.Group();
   guideGroup.name = 'namsan-guides';
   group.add(guideGroup);
 
-  function addGuide(pts) {
+  function addGuide(pts, opts = {}) {
     if (!pts || pts.length < 2) return 0;
-    const rs = resample(pts, 3.3);
+    const skipPlaza = !!opts.skipPlaza;
+    const rs = resample(pts, 4.4);
     let n = 0;
     for (let i = 0; i < rs.length - 1; i++) {
       const a = rs[i], b = rs[i + 1];
-      const L = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1;
-      const heading = Math.atan2(b[0] - a[0], b[1] - a[1]);
+      const hx = b[0] - a[0], hz = b[1] - a[1];
+      const L = Math.hypot(hx, hz) || 1;
       const x = a[0], z = a[1];
+      if (skipPlaza && Math.hypot(x - NT.tx, z - NT.tz) < 82) continue;
       const y = guideY(x, z, heightAt);
-      const m = new THREE.Mesh(new THREE.PlaneGeometry(2.7, 1.15), arrowMat);
-      m.rotation.order = 'YXZ';
-      m.rotation.set(-Math.PI / 2, heading, 0);
+      const m = new THREE.Mesh(arrowGeo, arrowMat);
+      m.rotation.order = 'XYZ';
+      m.rotation.set(-Math.PI / 2, Math.atan2(hx / L, hz / L), 0);
       m.position.set(x, y, z);
       guideGroup.add(m);
       n++;
-      void L;
     }
     return n;
   }
@@ -648,32 +683,14 @@ export function createNamsanRoads({ parent, osm, heightAt, overlay = null } = {}
   function setDoor(door) {
     if (!door) return;
     const dest = [door.x, door.z];
-    // spawn (east plaza) — short straight + 바닥에서 확실히 읽히는 큰 화살표
+    // spawn (east plaza) — evenly spaced floor chevrons pointing at the door
     const spawn = [door.spawnX ?? NT.tx + 44, door.spawnZ ?? NT.tz + 6];
     doorGuides += addGuide([spawn, dest]);
-    {
-      const dx = dest[0] - spawn[0], dz = dest[1] - spawn[1];
-      const L = Math.hypot(dx, dz) || 1;
-      const heading = Math.atan2(dx, dz);
-      const chevron = new THREE.Shape();
-      chevron.moveTo(1.8, 0); chevron.lineTo(-1.5, 0.7); chevron.lineTo(-0.5, 0); chevron.lineTo(-1.5, -0.7); chevron.closePath();
-      const cg = new THREE.ShapeGeometry(chevron);
-      const cmat = new THREE.MeshBasicMaterial({ color: '#ffcc33', toneMapped: false, side: THREE.DoubleSide, depthWrite: false });
-      for (const t of [0.22, 0.48, 0.74]) {
-        const x = spawn[0] + dx * t, z = spawn[1] + dz * t;
-        const m = new THREE.Mesh(cg, cmat);
-        m.rotation.order = 'YXZ';
-        m.rotation.set(-Math.PI / 2, heading, 0);
-        m.position.set(x, guideY(x, z, heightAt) + 0.08, z);
-        guideGroup.add(m);
-        doorGuides += 1;
-      }
-    }
     // cable upper station
     const ux = -10705.06, uz = -20554.09;
     const viaCable = dijkstra(ways, ux, uz, dest[0], dest[1])
       || [[ux, uz], [-10640, -20510], [-10580, -20470], [NT.tx + 44, NT.tz + 6], dest];
-    doorGuides += addGuide(viaCable);
+    doorGuides += addGuide(viaCable, { skipPlaza: true });
     // bus stop (first OSM platform)
     if (busStops[0]) {
       const bx = placedStops[0]?.x ?? busStops[0].x;
@@ -695,7 +712,7 @@ export function createNamsanRoads({ parent, osm, heightAt, overlay = null } = {}
           viaBus = [[bx, bz], dest];
         }
       }
-      doorGuides += addGuide(viaBus);
+      doorGuides += addGuide(viaBus, { skipPlaza: true });
     }
   }
 
@@ -714,6 +731,7 @@ export function createNamsanRoads({ parent, osm, heightAt, overlay = null } = {}
     group,
     ways,
     busStops,
+    placedStops,
     mini: ways.map((w) => ({ k: w.k, p: w.pts, w: w.w })),
     floorY,
     setDoor,
@@ -726,8 +744,10 @@ export function createNamsanRoads({ parent, osm, heightAt, overlay = null } = {}
       if (pool) pool.visible = k > 0.01;
       yellowMat.emissiveIntensity = k * 0.48;
       whiteMat.emissiveIntensity = k * 0.32;
-      roofLit.opacity = k * 0.75;
+      roofLit.opacity = k * 0.92;
       roofLit.visible = k > 0.05;
+      tubeMat.opacity = k * 0.95;
+      tubeMat.visible = k > 0.05;
     },
     update(dt) {
       if (!shuttle || !shuttlePath || shuttleLen < 10) return;

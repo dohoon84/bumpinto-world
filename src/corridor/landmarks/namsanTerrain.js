@@ -229,46 +229,202 @@ export function createNamsanTerrain({ parent, dem, osm }) {
     getY: (x, z) => heightAt(x, z),
   }) : null;
 
-  // ---- 한양도성 (OSM wall ways) ----
-  const wallGeos = [];
-  const merlonGeos = [];
-  const stone = new THREE.Color('#c4b7a2');
-  const stoneD = new THREE.Color('#9a8d78');
-  function coloredBox(w, h, d, color, x, y, z, ang) {
-    const g = new THREE.BoxGeometry(w, h, d);
-    if (ang) g.rotateY(ang);
-    g.translate(x, y, z);
-    const c = color;
-    const col = new Float32Array(g.attributes.position.count * 3);
-    for (let i = 0; i < g.attributes.position.count; i++) { col[i * 3] = c.r; col[i * 3 + 1] = c.g; col[i * 3 + 2] = c.b; }
-    g.setAttribute('color', new THREE.BufferAttribute(col, 3));
-    return g;
+  // ---- 한양도성 (OSM wall ways only) ----
+  // OSM height=11 은 남산 구간 실측(3–5 m + 여장)보다 커서 쓰지 않는다.
+  const WALL_H = 4.2;
+  const WALL_HALF = 0.78;
+  const MERLON_H = 0.92;
+  const MERLON_LEN = 1.15;
+  const CREN_GAP = 0.85;
+  let wallMat = null;
+  let uplightMat = null;
+  function stoneBlockTex() {
+    try {
+      const c = document.createElement('canvas');
+      c.width = 512; c.height = 256;
+      const x = c.getContext('2d');
+      x.fillStyle = '#6e6558'; x.fillRect(0, 0, 512, 256);
+      const courseH = 32;
+      for (let row = 0; row < 9; row++) {
+        const yy = row * courseH;
+        const off = (row % 2) * 46;
+        for (let col = -1; col < 13; col++) {
+          const bx = off + col * 92;
+          const n = (row * 17 + col * 13) % 40;
+          const r = 158 + n - 12, g = 146 + (n % 17) - 10, b = 124 + (n % 11) - 8;
+          x.fillStyle = `rgb(${r},${g},${b})`;
+          x.fillRect(bx + 2, yy + 2, 88, courseH - 4);
+          x.fillStyle = 'rgba(255,255,255,0.07)';
+          x.fillRect(bx + 4, yy + 3, 84, 3);
+        }
+      }
+      const t = new THREE.CanvasTexture(c);
+      t.wrapS = t.wrapT = THREE.RepeatWrapping;
+      t.colorSpace = THREE.SRGBColorSpace;
+      t.anisotropy = 4;
+      return t;
+    } catch { return null; }
   }
+  function uplightTex() {
+    try {
+      const c = document.createElement('canvas');
+      c.width = 64; c.height = 256;
+      const x = c.getContext('2d');
+      const g = x.createLinearGradient(0, 256, 0, 0);
+      g.addColorStop(0, 'rgba(232,198,130,0.85)');
+      g.addColorStop(0.35, 'rgba(210,170,100,0.35)');
+      g.addColorStop(1, 'rgba(210,170,100,0)');
+      x.fillStyle = g; x.fillRect(0, 0, 64, 256);
+      const t = new THREE.CanvasTexture(c);
+      t.colorSpace = THREE.SRGBColorSpace;
+      return t;
+    } catch { return null; }
+  }
+  function pushQuad(pos, nrm, uv, a, b, c, d, nx, ny, nz, u0, v0, u1, v1) {
+    const vs = [a, b, c, a, c, d];
+    const ts = [[u0, v0], [u1, v0], [u1, v1], [u0, v0], [u1, v1], [u0, v1]];
+    for (let i = 0; i < 6; i++) {
+      pos.push(vs[i][0], vs[i][1], vs[i][2]);
+      nrm.push(nx, ny, nz);
+      uv.push(ts[i][0], ts[i][1]);
+    }
+  }
+  const wallPos = [], wallNrm = [], wallUv = [];
+  const merlonGeos = [];
+  const uplightGeos = [];
+  const stoneMap = stoneBlockTex();
+  const washMap = uplightTex();
   for (const wall of osm?.walls || []) {
     const pts = wall.pts || [];
-    // drop distant/disconnected segments that read as floating blocks from the hillside
-    let nearest = Infinity;
-    for (const p of pts) nearest = Math.min(nearest, Math.hypot(p[0] - NT.tx, p[1] - NT.tz));
-    if (nearest > 220) continue;
-    const wallH = Number(wall.tags?.height) || 5.5;
+    if (pts.length < 2) continue;
+    const samples = [];
     for (let i = 1; i < pts.length; i++) {
       const ax = pts[i - 1][0], az = pts[i - 1][1], bx = pts[i][0], bz = pts[i][1];
       const L = Math.hypot(bx - ax, bz - az);
-      if (L < 0.8) continue;
-      const mx = (ax + bx) / 2, mz = (az + bz) / 2;
-      const y = heightAt(mx, mz);
-      const ang = Math.atan2(bx - ax, bz - az);
-      wallGeos.push(coloredBox(L, wallH, 1.15, stone, mx, y + wallH * 0.5, mz, ang));
-      // continuous coping instead of detached merlon cubes
-      merlonGeos.push(coloredBox(L, 0.42, 1.28, stoneD, mx, y + wallH + 0.22, mz, ang));
+      if (L < 0.4) continue;
+      const steps = Math.max(1, Math.ceil(L / 2.2));
+      for (let s = 0; s < steps; s++) {
+        const t = s / steps;
+        const x = ax + (bx - ax) * t, z = az + (bz - az) * t;
+        if (!samples.length || Math.hypot(x - samples[samples.length - 1].x, z - samples[samples.length - 1].z) > 0.35) {
+          samples.push({ x, z, y: heightAt(x, z) });
+        }
+      }
+    }
+    const last = pts[pts.length - 1];
+    if (!samples.length || Math.hypot(last[0] - samples[samples.length - 1].x, last[1] - samples[samples.length - 1].z) > 0.35) {
+      samples.push({ x: last[0], z: last[1], y: heightAt(last[0], last[1]) });
+    }
+    if (samples.length < 2) continue;
+    for (let pass = 0; pass < 2; pass++) {
+      const ny = samples.map((s) => s.y);
+      for (let i = 1; i < samples.length - 1; i++) ny[i] = samples[i - 1].y * 0.25 + samples[i].y * 0.5 + samples[i + 1].y * 0.25;
+      samples.forEach((s, i) => { s.y = ny[i]; });
+    }
+    for (let i = 1; i < samples.length; i++) {
+      const L = Math.hypot(samples[i].x - samples[i - 1].x, samples[i].z - samples[i - 1].z) || 1;
+      const maxDy = 0.55 * L;
+      const dy = samples[i].y - samples[i - 1].y;
+      if (Math.abs(dy) > maxDy) samples[i].y = samples[i - 1].y + Math.sign(dy) * maxDy;
+    }
+    let uAcc = 0;
+    let merAcc = 0;
+    let lightAcc = 0;
+    const hw = WALL_HALF, H = WALL_H;
+    for (let i = 1; i < samples.length; i++) {
+      const ax = samples[i - 1].x, az = samples[i - 1].z, ay = samples[i - 1].y;
+      const bx = samples[i].x, bz = samples[i].z, by = samples[i].y;
+      const dx = bx - ax, dz = bz - az, L = Math.hypot(dx, dz);
+      if (L < 0.35) continue;
+      const px = -dz / L, pz = dx / L;
+      const yb0 = ay - 0.4, yb1 = by - 0.4, yt0 = ay + H, yt1 = by + H;
+      const fba = [ax + px * hw, yb0, az + pz * hw];
+      const fbb = [bx + px * hw, yb1, bz + pz * hw];
+      const ftb = [bx + px * hw, yt1, bz + pz * hw];
+      const fta = [ax + px * hw, yt0, az + pz * hw];
+      const bba = [ax - px * hw, yb0, az - pz * hw];
+      const bbb = [bx - px * hw, yb1, bz - pz * hw];
+      const btb = [bx - px * hw, yt1, bz - pz * hw];
+      const bta = [ax - px * hw, yt0, az - pz * hw];
+      const u0 = uAcc / 4.4, u1 = (uAcc + L) / 4.4;
+      pushQuad(wallPos, wallNrm, wallUv, fba, fbb, ftb, fta, px, 0, pz, u0, 0, u1, 1);
+      pushQuad(wallPos, wallNrm, wallUv, bbb, bba, bta, btb, -px, 0, -pz, u0, 0, u1, 1);
+      pushQuad(wallPos, wallNrm, wallUv, fta, ftb, btb, bta, 0, 1, 0, u0, 0, u1, 0.18);
+      if (i === 1) pushQuad(wallPos, wallNrm, wallUv, bba, fba, fta, bta, -dx / L, 0, -dz / L, 0, 0, 0.35, 1);
+      if (i === samples.length - 1) pushQuad(wallPos, wallNrm, wallUv, fbb, bbb, btb, ftb, dx / L, 0, dz / L, 0, 0, 0.35, 1);
+      // 여장: 일정 간격의 치(merlon)와 타구(gap)
+      let used = 0;
+      while (used < L) {
+        const inMerlon = (merAcc % (MERLON_LEN + CREN_GAP)) < MERLON_LEN;
+        const remain = inMerlon
+          ? MERLON_LEN - (merAcc % (MERLON_LEN + CREN_GAP))
+          : (MERLON_LEN + CREN_GAP) - (merAcc % (MERLON_LEN + CREN_GAP));
+        const take = Math.min(remain, L - used);
+        if (!(take > 0.02)) { used += 0.03; merAcc += 0.03; continue; }
+        if (inMerlon && take > 0.32) {
+          const t = (used + take * 0.5) / L;
+          const x = ax + dx * t, z = az + dz * t, y = ay + (by - ay) * t;
+          const g = new THREE.BoxGeometry(take, MERLON_H, 1.62);
+          g.rotateY(Math.atan2(dx, dz));
+          g.translate(x, y + H + MERLON_H * 0.5, z);
+          merlonGeos.push(g);
+        }
+        used += take; merAcc += take;
+      }
+      // 야간 업라이트: 내리막(도로에서 보이는) 면에 부드러운 워시
+      lightAcc += L;
+      while (lightAcc >= 12) {
+        lightAcc -= 12;
+        const t = Math.max(0.05, Math.min(0.95, 1 - lightAcc / L));
+        const x = ax + dx * t, z = az + dz * t, y = ay + (by - ay) * t;
+        const leftY = heightAt(x + px * 3, z + pz * 3);
+        const rightY = heightAt(x - px * 3, z - pz * 3);
+        const s = leftY <= rightY ? 1 : -1;
+        const ug = new THREE.PlaneGeometry(2.4, 4.1);
+        ug.rotateY(Math.atan2(s * px, s * pz));
+        ug.translate(x + s * px * (hw + 0.12), y + 2.05, z + s * pz * (hw + 0.12));
+        uplightGeos.push(ug);
+      }
+      uAcc += L;
     }
   }
-  if (wallGeos.length) {
-    const wg = mergeGeometries(wallGeos);
-    group.add(new THREE.Mesh(wg, new THREE.MeshLambertMaterial({ vertexColors: true })));
+  wallMat = new THREE.MeshLambertMaterial({
+    color: '#cfc4b0',
+    map: stoneMap || null,
+    emissive: new THREE.Color('#3a3228'),
+    emissiveIntensity: 0,
+  });
+  if (wallPos.length) {
+    const wg = new THREE.BufferGeometry();
+    wg.setAttribute('position', new THREE.Float32BufferAttribute(wallPos, 3));
+    wg.setAttribute('normal', new THREE.Float32BufferAttribute(wallNrm, 3));
+    wg.setAttribute('uv', new THREE.Float32BufferAttribute(wallUv, 2));
+    const wm = new THREE.Mesh(wg, wallMat);
+    wm.name = 'namsan-hanyang-wall';
+    group.add(wm);
   }
   if (merlonGeos.length) {
-    group.add(new THREE.Mesh(mergeGeometries(merlonGeos), new THREE.MeshLambertMaterial({ vertexColors: true })));
+    const mg = mergeGeometries(merlonGeos);
+    const mm = new THREE.Mesh(mg, wallMat);
+    mm.name = 'namsan-hanyang-merlon';
+    group.add(mm);
+  }
+  uplightMat = new THREE.MeshBasicMaterial({
+    map: washMap || null,
+    color: '#e6c68a',
+    transparent: true,
+    opacity: 0,
+    depthWrite: false,
+    fog: false,
+    toneMapped: false,
+    side: THREE.DoubleSide,
+  });
+  if (uplightGeos.length) {
+    const ug = mergeGeometries(uplightGeos);
+    const um = new THREE.Mesh(ug, uplightMat);
+    um.name = 'namsan-hanyang-uplight';
+    um.visible = false;
+    group.add(um);
   }
 
   // ---- 팔각정 (OSM way/1555991263, building=shelter) ----
@@ -371,6 +527,13 @@ export function createNamsanTerrain({ parent, dem, osm }) {
       lampGlow.opacity = k * 0.45;
       lampBulb.visible = k > 0.05;
       lampGlow.visible = k > 0.05;
+      if (wallMat) wallMat.emissiveIntensity = k * 0.22;
+      if (uplightMat) {
+        uplightMat.opacity = k * 0.62;
+        uplightMat.visible = k > 0.05;
+        const up = group.getObjectByName('namsan-hanyang-uplight');
+        if (up) up.visible = k > 0.05;
+      }
     },
     isBlocked() { return false; },
   };

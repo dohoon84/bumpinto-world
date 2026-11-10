@@ -71,38 +71,50 @@ export function createNamsan({ scene, overlay, terrain, dem, osm, city = null, c
   roads.setDoor?.(tower.door);
   const downtown = createNamsanCity({ parent: root, data: city, heightAt: land.heightAt, parks: osm?.parks || [] });
 
-  // 광장 높이는 스카이라인 링(꼭대기 ~ y 200)과 같아서, 가까이서는 링 위로
-  // 빈 화면(검정 클리어 컬러)이 보인다. 남산 전용 하늘 반구를 깐다.
+  // 원점 하늘 돔(r=3000)은 남산(약 23 km)에 닿지 않는다. 플레이어를 따라가는
+  // 남산 전용 하늘을 두고, 톤매핑에 짓눌리지 않는 남색으로 칠한다.
   const skyDay = new THREE.Color('#87a0c0');
-  const skyNight = new THREE.Color('#243656');
+  const skyNight = new THREE.Color('#3d5a86');
   const skyMat = new THREE.MeshBasicMaterial({
-    color: skyNight.clone(), side: THREE.BackSide, depthWrite: false, fog: false,
+    color: skyNight.clone(), side: THREE.BackSide, depthWrite: false, depthTest: false, fog: false, toneMapped: false,
   });
-  const sky = new THREE.Mesh(new THREE.SphereGeometry(3200, 32, 20), skyMat);
-  sky.position.set(NT.tx, 180, NT.tz);
+  const sky = new THREE.Mesh(new THREE.SphereGeometry(140, 48, 32), skyMat);
+  sky.position.set(NT.tx, 220, NT.tz);
   sky.name = 'namsan-sky';
   sky.renderOrder = -20;
   sky.frustumCulled = false;
   root.add(sky);
 
+  // 카메라 앞의 큰 평면. 구를 카메라에 붙이면 로그 깊이에서 삼각형이 잘린다.
+  const fillMat = new THREE.MeshBasicMaterial({
+    color: skyNight.clone(), depthTest: false, depthWrite: false,
+    toneMapped: false, fog: false, side: THREE.DoubleSide,
+  });
+  const skyFill = new THREE.Mesh(new THREE.PlaneGeometry(500, 500), fillMat);
+  skyFill.name = 'namsan-sky-fill';
+  skyFill.frustumCulled = false;
+  skyFill.renderOrder = -30;
+  root.add(skyFill);
+  const _fillDir = new THREE.Vector3();
+
   // faint stars around Namsan (the origin sky dome does not reach this far)
-  const STAR_N = 2200;
+  const STAR_N = 2800;
   const starPos = new Float32Array(STAR_N * 3);
   let ss = 4797;
   const sr = () => ((ss = (ss * 16807) % 2147483647) / 2147483647);
   for (let i = 0; i < STAR_N; i++) {
     const az = sr() * Math.PI * 2;
-    const el = 0.16 + sr() * 1.25;
-    const r = 1100 + sr() * 900;
+    const el = 0.12 + sr() * 1.38;
+    const r = 700 + sr() * 1100;
     starPos[i * 3] = NT.tx + Math.cos(el) * Math.sin(az) * r;
-    starPos[i * 3 + 1] = Math.sin(el) * r + 160;
+    starPos[i * 3 + 1] = Math.sin(el) * r + 200;
     starPos[i * 3 + 2] = NT.tz - Math.cos(el) * Math.cos(az) * r;
   }
   const starGeo = new THREE.BufferGeometry();
   starGeo.setAttribute('position', new THREE.BufferAttribute(starPos, 3));
   const starMat = new THREE.PointsMaterial({
-    color: '#e8eef6', size: 1.45, sizeAttenuation: false,
-    transparent: true, opacity: 0, depthWrite: false, fog: false,
+    color: '#eef3fb', size: 1.85, sizeAttenuation: false,
+    transparent: true, opacity: 0, depthWrite: false, fog: false, toneMapped: false,
   });
   const stars = new THREE.Points(starGeo, starMat);
   stars.name = 'namsan-stars';
@@ -149,6 +161,8 @@ export function createNamsan({ scene, overlay, terrain, dem, osm, city = null, c
     starMat.opacity = on ? 0.88 : 0;
     stars.visible = !!on;
     skyMat.color.copy(skyDay).lerp(skyNight, on ? 1 : 0);
+    skyFill.visible = !!on;
+    fillMat.color.copy(on ? skyNight : skyDay);
   });
 
   if (terrain?.addGroundExtra) {
@@ -205,6 +219,15 @@ export function createNamsan({ scene, overlay, terrain, dem, osm, city = null, c
     tickPlayer(dt, player, cam) {
       interior.tickPlayer?.(dt, player, cam);
       car?.tickPlayer?.(dt, player, cam);
+      // 로그 깊이 버퍼에서 큰 하늘 구는 삼각형이 잘려 광장에서 하늘이 검게 나온다.
+      // 작은 구를 렌더 카메라에 붙여 항상 시야를 채운다.
+      const cam3 = (typeof window !== 'undefined' && window.__jj?.camera) || null;
+      if (cam3?.position) {
+        sky.position.copy(cam3.position);
+        cam3.getWorldDirection(_fillDir);
+        skyFill.position.copy(cam3.position).addScaledVector(_fillDir, 90);
+        skyFill.lookAt(cam3.position);
+      } else if (player?.position) sky.position.copy(player.position);
       if (player && Math.hypot(player.position.x - NT.tx, player.position.z - NT.tz) < 2800) {
         document.getElementById('stop-panel')?.classList.remove('open');
         document.getElementById('corridor-stop-panel')?.classList.remove('open');
@@ -217,6 +240,7 @@ export function createNamsan({ scene, overlay, terrain, dem, osm, city = null, c
       roads.update?.(dt);
       downtown.update?.(dt);
     },
+
     setNight(v) {
       night = v;
       tower.setNight(v);
@@ -228,6 +252,8 @@ export function createNamsan({ scene, overlay, terrain, dem, osm, city = null, c
       starMat.opacity = Math.max(0, Math.min(1, v)) * 0.88;
       stars.visible = v > 0.08;
       skyMat.color.copy(skyDay).lerp(skyNight, Math.max(0, Math.min(1, v)));
+      skyFill.visible = v > 0.08;
+      fillMat.color.copy(skyDay).lerp(skyNight, Math.max(0, Math.min(1, v)));
     },
     dispose() {
       unwatch?.();
