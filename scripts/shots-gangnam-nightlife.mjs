@@ -26,61 +26,88 @@ async function surface(page, x, z, yaw = 0, dist = 22, pitch = 0.38, wait = 9000
     J.teleport(x, z); J.player.rotation.y = yaw; J.cam.yaw = yaw; J.cam.pitch = pitch; J.cam.dist = dist;
   }, { x, z, yaw, dist, pitch });
   await page.waitForFunction(() => window.__jj?.gangnamStreet?.stats?.loaded, null, { timeout: 30000 }).catch(() => {});
+  await page.waitForFunction(() => window.__jj?.gangnamBrt?.stats?.loaded, null, { timeout: 30000 }).catch(() => {});
   await page.waitForTimeout(wait);
 }
 
-function streetInfo() {
-  return window.__jj && (() => {
-    const J = window.__jj;
-    const st = J.gangnamStreet;
-    const names = [];
-    J.scene?.traverse?.((o) => { if (o.isInstancedMesh && o.name?.startsWith?.('gnStreet')) names.push({ name: o.name, count: o.count }); });
-    return { stats: st?.stats || null, meshes: names, visible: !!st?.root?.visible };
-  })();
-}
-
-// 22012 중앙 BRT 섬 (두 busway 사이)
 const ISLAND = { x: -7261.0, z: -14834.9, yaw: 1.945 };
 const fx = Math.sin(ISLAND.yaw), fz = Math.cos(ISLAND.yaw);
 const rx = Math.cos(ISLAND.yaw), rz = -Math.sin(ISLAND.yaw);
 const TOP = { x: ISLAND.x, z: ISLAND.z, yaw: 0.374, dist: 52, pitch: 1.38 };
-const NIGHT = {
-  x: ISLAND.x + fx * 10 + rx * -5,
-  z: ISLAND.z + fz * 10 + rz * -5,
-  yaw: ISLAND.yaw - 0.42,
-  dist: 13,
-  pitch: 0.30,
-};
 
+async function stage(page) {
+  return page.evaluate(() => {
+    const brt = window.__jj?.gangnamBrt;
+    if (!brt?.stageAt) return { ok: false };
+    return { ok: true, ...brt.stageAt('22012'), stats: { ...brt.stats } };
+  });
+}
+
+function reviewInfo() {
+  return window.__jj && (() => {
+    const J = window.__jj;
+    const vs = J.gangnamBrt?.vehicles?.() || [];
+    const island = { x: -7261.0, z: -14834.9 };
+    const near = vs.map((v) => ({
+      ref: v.ref, type: v.type, state: v.state,
+      d: Math.hypot(v.x - island.x, v.z - island.z),
+      x: +v.x.toFixed(1), z: +v.z.toFixed(1), heading: +v.heading.toFixed(3),
+    })).filter((v) => v.d < 80).sort((a, b) => a.d - b.d);
+    const names = [];
+    J.scene?.traverse?.((o) => { if (o.name?.startsWith?.('gnStreet') || o.name === 'gangnamBrt') names.push({ name: o.name, type: o.type, count: o.count, children: o.children?.length }); });
+    return {
+      brt: J.gangnamBrt?.stats || null,
+      street: J.gangnamStreet?.stats || null,
+      npc: J.gangnamNpc?.stats?.() || null,
+      near,
+    };
+  })();
+}
+
+// --- day 3/4 ---
 const day = await open({ hour: 14 });
-await surface(day, TOP.x, TOP.z, TOP.yaw, TOP.dist, TOP.pitch, 7500);
-await day.evaluate(() => {
-  const el = document.createElement('div');
-  el.id = 'gn8-legend';
-  el.style.cssText = 'position:fixed;left:16px;top:16px;z-index:9999;background:rgba(8,10,16,.72);color:#f3f5f8;padding:10px 12px;font:13px/1.45 sans-serif;border-radius:8px;pointer-events:none';
-  el.innerHTML = '탑다운 · 강남역(중) 22012<br><span style="color:#ff6b55">■</span> 빨강 = 중앙버스전용차로<br><span style="color:#c5ccd6">■</span> 섬 위 = 쉘터·벤치·파일런';
-  document.body.appendChild(el);
-});
-await day.screenshot({ path: `${OUT}/gnight8-busstop-top.png` });
-const topInfo = await day.evaluate(streetInfo);
+await surface(day, ISLAND.x + fx * 12 + rx * -6, ISLAND.z + fz * 12 + rz * -6, ISLAND.yaw - 0.5, 16, 0.32, 7000);
+const dayStage = await stage(day);
+await day.waitForTimeout(400);
+await day.screenshot({ path: `${OUT}/gnight9-brt-day.png` });
+const dayInfo = await day.evaluate(reviewInfo);
 await day.close();
 
+// --- aerial top ---
+const top = await open({ hour: 14 });
+await surface(top, TOP.x, TOP.z, TOP.yaw, TOP.dist, TOP.pitch, 7500);
+const topStage = await stage(top);
+await top.waitForTimeout(400);
+await top.evaluate(() => {
+  const el = document.createElement('div');
+  el.id = 'gn9-legend';
+  el.style.cssText = 'position:fixed;left:16px;top:16px;z-index:9999;background:rgba(8,10,16,.72);color:#f3f5f8;padding:10px 12px;font:13px/1.45 sans-serif;border-radius:8px;pointer-events:none';
+  el.innerHTML = '탑다운 · 중앙버스전용차로 양방향<br><span style="color:#ff6b55">■</span> 빨강 = 버스전용차로 · 버스는 중앙 · 차는 바깥';
+  document.body.appendChild(el);
+});
+await top.screenshot({ path: `${OUT}/gnight9-brt-top.png` });
+const topInfo = await top.evaluate(reviewInfo);
+await top.close();
+
+// --- night dwell ---
+const NIGHT = {
+  x: ISLAND.x + fx * 12 + rx * -6,
+  z: ISLAND.z + fz * 12 + rz * -6,
+  yaw: ISLAND.yaw - 0.5,
+  dist: 16,
+  pitch: 0.32,
+};
 const night = await open({ hour: 21 });
 await surface(night, NIGHT.x, NIGHT.z, NIGHT.yaw, NIGHT.dist, NIGHT.pitch, 8000);
-const veh = await night.evaluate(() => {
-  const J = window.__jj;
-  const keys = Object.keys(J || {}).filter((k) => /npc|car|bus|traffic|gangnam|veh/i.test(k));
-  const names = [];
-  let near = 0;
-  J.scene?.traverse?.((o) => {
-    const n = o.name || '';
-    if (/car|bus|veh|npc|traffic|fleet/i.test(n)) names.push({ name: n, type: o.type, count: o.count });
-    if (o.isInstancedMesh && /car|bus|veh|npc/i.test(n) && o.count) near += o.count;
-  });
-  return { keys, names: names.slice(0, 24), near };
+const nightStage = await stage(night);
+const framed = await night.evaluate(() => {
+  const r = window.__jj.gangnamBrt?.stageAt('22012');
+  const bus = r?.dwell?.[0] || null;
+  return { bus: bus && { ref: bus.ref, type: bus.type, state: bus.state, x: bus.x, z: bus.z } };
 });
-await night.screenshot({ path: `${OUT}/gnight8-busstop-night.png` });
-const nightInfo = await night.evaluate(streetInfo);
+await night.waitForTimeout(500);
+await night.screenshot({ path: `${OUT}/gnight9-brt-dwell-night.png` });
+const nightInfo = await night.evaluate(reviewInfo);
 await night.close();
 await browser.close();
-console.log(JSON.stringify({ out: OUT, top: TOP, night: NIGHT, topInfo, nightInfo, veh }, null, 2));
+console.log(JSON.stringify({ out: OUT, dayStage, topStage, nightStage, framed, dayInfo, topInfo, nightInfo }, null, 2));

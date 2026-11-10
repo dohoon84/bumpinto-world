@@ -619,6 +619,228 @@ let alleyCam = { x: -7085, z: -14695, yaw: 1.2 };
   }
 }
 
+
+const BRT_REFS = ['22009', '22010', '22011', '22012', '22014'];
+const BRT_ROUTES = [
+  { ref: '140', type: 'seat' },
+  { ref: '402', type: 'seat' },
+  { ref: '9404', type: 'express' },
+];
+
+function walkPoly(seq, step, fn) {
+  let acc = 0, next = 0;
+  for (let i = 1; i < seq.length; i++) {
+    const a = seq[i - 1], b = seq[i];
+    const dx = b[0] - a[0], dz = b[1] - a[1], L = hypot(dx, dz) || 1;
+    while (next <= acc + L + 1e-6) {
+      const t = (next - acc) / L;
+      fn(a[0] + dx * t, a[1] + dz * t, Math.atan2(dx, dz));
+      next += step;
+    }
+    acc += L;
+  }
+}
+
+function signedLeft(px, pz, ox, oz, yaw) {
+  return (px - ox) * (-Math.cos(yaw)) + (pz - oz) * Math.sin(yaw);
+}
+
+function dedupTrack(pts, minSep = 5) {
+  const out = [];
+  for (const p of pts) {
+    if (out.length && hypot(out[out.length - 1][0] - p[0], out[out.length - 1][1] - p[1]) < minSep) continue;
+    out.push(p);
+  }
+  return out;
+}
+
+function fillGaps(pts, maxGap = 16) {
+  if (pts.length < 2) return pts;
+  const out = [pts[0]];
+  for (let i = 1; i < pts.length; i++) {
+    const a = out[out.length - 1], b = pts[i];
+    const d = hypot(b[0] - a[0], b[1] - a[1]);
+    if (d > 90) { out.push(b); continue; }
+    if (d > maxGap) {
+      const n = Math.ceil(d / maxGap);
+      for (let k = 1; k < n; k++) out.push([r1(a[0] + (b[0] - a[0]) * k / n), r1(a[1] + (b[1] - a[1]) * k / n)]);
+    }
+    out.push(b);
+  }
+  return out;
+}
+
+function pathLen(pts) {
+  let L = 0;
+  for (let i = 1; i < pts.length; i++) L += hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]);
+  return L;
+}
+
+function projectOnCum(pts, x, z) {
+  let best = { d: Infinity, s: 0, pt: pts[0], yaw: 0, dx: 0, dz: 1 };
+  let acc = 0;
+  for (let i = 1; i < pts.length; i++) {
+    const a = pts[i - 1], b = pts[i];
+    const dx = b[0] - a[0], dz = b[1] - a[1], L2 = dx * dx + dz * dz || 1;
+    const L = Math.sqrt(L2);
+    const t = Math.max(0, Math.min(1, ((x - a[0]) * dx + (z - a[1]) * dz) / L2));
+    const qx = a[0] + dx * t, qz = a[1] + dz * t;
+    const d = hypot(qx - x, qz - z);
+    if (d < best.d) best = { d, s: acc + t * L, pt: [qx, qz], yaw: Math.atan2(dx, dz), dx: dx / L, dz: dz / L };
+    acc += L;
+  }
+  return best;
+}
+
+function orientDoorsTowardIsland(pts, islands) {
+  if (pts.length < 2 || !islands.length) return pts;
+  let votes = 0;
+  for (const isl of islands) {
+    const hit = projectOnCum(pts, isl.x, isl.z);
+    if (hit.d > 10) continue;
+    const door = [-hit.dz, hit.dx];
+    const toI = [isl.x - hit.pt[0], isl.z - hit.pt[1]];
+    votes += Math.sign(door[0] * toI[0] + door[1] * toI[1]) || 0;
+  }
+  if (votes < 0) return pts.slice().reverse();
+  return pts;
+}
+
+function buildBrt() {
+  const medStops = stops.filter((s) => s.kind === 'median' && BRT_REFS.includes(String(s.ref)));
+  const wide = daeroRoads.filter((r) => (r.w || 0) >= 20);
+  const CANON_YAW = 0.36;
+  const alongOf = (x, z) => x * Math.sin(CANON_YAW) + z * Math.cos(CANON_YAW);
+  const bucketA = [], bucketB = [];
+
+  const medianAt = (x, z) => {
+    const pair = twoBusways(x, z);
+    if (pair.length >= 2) {
+      return { x: (pair[0].pt[0] + pair[1].pt[0]) / 2, z: (pair[0].pt[1] + pair[1].pt[1]) / 2, pair };
+    }
+    const daes = twoDaeros(x, z);
+    const island = snapMedianIsland(x, z);
+    if (daes.length >= 2) {
+      return { x: (daes[0].pt[0] + daes[1].pt[0]) / 2, z: (daes[0].pt[1] + daes[1].pt[1]) / 2, pair, island };
+    }
+    return { ...island, pair, island };
+  };
+
+  const consider = (x, z) => {
+    const mid = medianAt(x, z);
+    const mirror = mid.island || mid;
+    const pair = mid.pair || twoBusways(x, z);
+    const sideOf = (pt) => signedLeft(pt[0], pt[1], mid.x, mid.z, CANON_YAW);
+    const push = (pt, wantSign) => {
+      let qx = pt[0], qz = pt[1];
+      const sl = sideOf(pt);
+      if (wantSign && sl !== 0 && Math.sign(sl) !== wantSign) return;
+      const vx = qx - mirror.x, vz = qz - mirror.z, d = hypot(vx, vz);
+      if (d < 3.6 && d > 0.25) {
+        qx = mirror.x + (vx / d) * 4.4;
+        qz = mirror.z + (vz / d) * 4.4;
+      } else if (d <= 0.25) {
+        const lx = -Math.cos(CANON_YAW) * wantSign, lz = Math.sin(CANON_YAW) * wantSign;
+        qx = mirror.x + lx * 4.4; qz = mirror.z + lz * 4.4;
+      }
+      const bucket = wantSign >= 0 ? bucketA : bucketB;
+      bucket.push({ s: alongOf(qx, qz), x: r1(qx), z: r1(qz) });
+    };
+    if (pair.length >= 2) {
+      for (const hit of pair) push(hit.pt, Math.sign(sideOf(hit.pt)) || 1);
+    } else if (pair.length === 1) {
+      const hit = pair[0];
+      const sign = Math.sign(sideOf(hit.pt)) || 1;
+      let opp = [2 * mirror.x - hit.pt[0], 2 * mirror.z - hit.pt[1]];
+      if (hypot(opp[0] - hit.pt[0], opp[1] - hit.pt[1]) < 5.5) {
+        const leftx = -Math.cos(CANON_YAW), leftz = Math.sin(CANON_YAW);
+        opp = [hit.pt[0] - leftx * 2 * sign * 4.4, hit.pt[1] - leftz * 2 * sign * 4.4];
+      }
+      push(hit.pt, sign);
+      push(opp, -sign);
+    }
+  };
+
+  for (const r of (wide.length ? wide : daeroRoads)) {
+    if (!r.p || r.p.length < 2) continue;
+    walkPoly(r.p, 8, consider);
+  }
+  for (const r of busways) {
+    if (!r.p || r.p.length < 2) continue;
+    walkPoly(r.p, 8, (x, z) => {
+      const dae = nearestRoad(x, z, daeroRoads);
+      if (dae && dae.d < 24) consider(x, z);
+    });
+  }
+
+  function chain(bucket) {
+    bucket.sort((a, b) => a.s - b.s || a.x - b.x);
+    return fillGaps(dedupTrack(bucket.map((p) => [p.x, p.z]), 5), 16);
+  }
+
+  function pushOffIslands(pts) {
+    const out = pts.map((p) => [p[0], p[1]]);
+    for (const isl of medStops) {
+      const hit = projectOnCum(out, isl.x, isl.z);
+      if (hit.d > 12 || (hit.d >= 3.9 && hit.d <= 7.5)) continue;
+      const vx = hit.pt[0] - isl.x, vz = hit.pt[1] - isl.z;
+      const d = hypot(vx, vz) || 1;
+      const tx = vx / d * 4.4 - vx, tz = vz / d * 4.4 - vz;
+      for (let i = 0; i < out.length; i++) {
+        if (hypot(out[i][0] - isl.x, out[i][1] - isl.z) < 36) {
+          out[i][0] = r1(out[i][0] + tx);
+          out[i][1] = r1(out[i][1] + tz);
+        }
+      }
+    }
+    return out;
+  }
+
+  const ptsA = orientDoorsTowardIsland(pushOffIslands(chain(bucketA)), medStops);
+  const ptsB = orientDoorsTowardIsland(pushOffIslands(chain(bucketB)), medStops);
+
+  function stopsOn(pts) {
+    const out = [];
+    for (const st of medStops) {
+      const hit = projectOnCum(pts, st.x, st.z);
+      if (hit.d > 8.5) continue;
+      const door = [-hit.dz, hit.dx];
+      const toI = [st.x - hit.pt[0], st.z - hit.pt[1]];
+      if (door[0] * toI[0] + door[1] * toI[1] <= 0) continue;
+      out.push({ stop: `m${st.ref}`, s: r1(hit.s), ref: st.ref });
+    }
+    out.sort((a, b) => a.s - b.s);
+    return out;
+  }
+
+  const dirs = [
+    { id: 'a', pts: ptsA, stops: stopsOn(ptsA) },
+    { id: 'b', pts: ptsB, stops: stopsOn(ptsB) },
+  ].filter((d) => d.pts.length >= 4);
+
+  let crossings = [];
+  try {
+    const npc = JSON.parse(fs.readFileSync(path.join(root, 'public/corridor/gangnam/npc.json'), 'utf8'));
+    crossings = (npc.crossings || []).filter((c) => (c.w || 0) >= 10).map((c) => ({
+      name: c.name, road: c.road, x: c.x, z: c.z, dir: c.dir, w: c.w, id: c.id, sig: true, depth: 2.2,
+    }));
+  } catch { /* npc.json optional at bake time */ }
+
+  return {
+    routes: BRT_ROUTES.map((r) => ({ id: `brt-${r.ref}`, ref: r.ref, type: r.type, name: '강남대로' })),
+    dirs: dirs.map((d) => ({
+      id: d.id,
+      pts: d.pts.map((p) => [r1(p[0]), r1(p[1])]),
+      len: r1(pathLen(d.pts)),
+      stops: d.stops,
+    })),
+    stops: medStops.map((st) => ({ id: `m${st.ref}`, name: st.name, ref: st.ref, x: st.x, z: st.z, toward: st.toward })),
+    crossings,
+  };
+}
+
+const brt = buildBrt();
+
 const out = {
   meta: {
     generated: new Date().toISOString(),
@@ -627,7 +849,9 @@ const out = {
     box,
     alley: alleyCam,
     alleyRoads: [...ALLEY],
+    brtNote: '중앙버스전용차로 양방향. 노선번호는 BIS 자막(간선 파랑 seat / 광역 빨강 express). 배차·ETA 없음.',
   },
+  brt,
   stops,
   modules,
   pylons,
@@ -670,6 +894,9 @@ const out = {
     acs: acs.length,
     trash: trash.length,
     bins: bins.length,
+    brtDirs: brt.dirs.length,
+    brtStops: brt.stops.length,
+    brtLen: brt.dirs.map((d) => d.len),
   },
 };
 fs.writeFileSync(OUT, JSON.stringify(out));
