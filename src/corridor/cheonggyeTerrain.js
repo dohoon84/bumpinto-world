@@ -1,17 +1,17 @@
 // [gyeongbu-bus] 판교IC–양재IC 청계산·인릉산 지형. 공개 DEM(AWS Terrain Tiles / SRTM 계열)을
 //   경부 본선 중앙값 기준으로 상대 높이화했다. 도로 주변은 0m 로 펴서 버스가 산에 파묻히지 않게 한다.
 //   수목은 도로 근처를 촘촘히, 먼 사면은 숲 색 지면에 맡긴다. 방음벽은 청계산입구·원지동 주택가 쪽에만 연속 패널.
-//   청계산입구 건물은 OSM 윤곽·층고(있으면)이고, 신분당선 출입구는 OSM railway=subway_entrance(1·2번)에 정자역과 같은 캐노피·계단을 세운 뒤 광장(포장·자전거 거치대·가로수·가로등·역명 표지)을 곁들인다.
+//   청계산입구 건물은 OSM 윤곽·층고(있으면)이고, 신분당선 출입구는 OSM railway=subway_entrance(1·2번)에 정자역과 같은 캐노피·계단을 세운 뒤 광장(포장·자전거 거치대·가로수·가로등·키 높이 폴 사인)을 곁들인다.
+//   출입구 주변 차도·보도·횡단보도·버스 정류장은 OSM(청계산로와 옆 길)에서 구운 cheonggye-streets.json 으로 깔아, 출입구가 잔디 위가 아니라 인도 옆에 앉게 한다.
 //   ?cgterrain=0 또는 ?gangnam=0 이면 만들지 않는다.
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { watchEvening } from '../evening.js';
+import { ribbonGeo, fixNormalsUp, ROAD_STYLE } from '../world.js';
 import { buildingMeshes } from './tileMesh.js';
-import { buildEntrances } from '../subway/entrance.js';
-import { LINES } from '../subway/lines.js';
-
 export const CHEONGGYE_DEM_FILE = 'gyeongbu/cheonggye-dem.json';
 export const CHEONGGYE_BUILDINGS_FILE = 'gyeongbu/cheonggye-buildings.json';
+export const CHEONGGYE_STREETS_FILE = 'gyeongbu/cheonggye-streets.json';
 
 export function cheonggyeTerrainEnabled(search = typeof location !== 'undefined' ? location.search : '') {
   const p = new URLSearchParams(search || '');
@@ -55,13 +55,265 @@ function coloredBox(w, h, d, color, x, y, z, ang = 0) {
   return g;
 }
 
+const WALK_COL = '#e2d3b5', CURB_COL = '#9a958a', ZEBRA = '#f3f1ea';
+const BUS_POLE = '#5c6370';
+
+function offsetLine(pts, off) {
+  const out = [];
+  for (let i = 0; i < pts.length; i++) {
+    const a = pts[Math.max(0, i - 1)], b = pts[Math.min(pts.length - 1, i + 1)];
+    let dx = b[0] - a[0], dz = b[1] - a[1];
+    const L = Math.hypot(dx, dz) || 1;
+    dx /= L; dz /= L;
+    out.push([pts[i][0] + dz * off, pts[i][1] - dx * off]);
+  }
+  return out;
+}
+
+function streetSegs(streets) {
+  const segs = [];
+  for (const r of streets?.roads || []) {
+    const pts = r.p || [];
+    for (let i = 1; i < pts.length; i++) {
+      const a = pts[i - 1], b = pts[i];
+      const dx = b[0] - a[0], dz = b[1] - a[1], L2 = dx * dx + dz * dz || 1;
+      segs.push({ ax: a[0], az: a[1], dx, dz, L2, hw: (r.w || 6) * 0.5 + 0.4 });
+    }
+  }
+  return segs;
+}
+
+function onStreet(x, z, segs) {
+  for (const s of segs) {
+    const t = Math.max(0, Math.min(1, ((x - s.ax) * s.dx + (z - s.az) * s.dz) / s.L2));
+    if (Math.hypot(s.ax + s.dx * t - x, s.az + s.dz * t - z) < s.hw) return true;
+  }
+  return false;
+}
+
+function paintRibbon(pts, w, y, color, caps = true) {
+  if (!pts || pts.length < 2) return null;
+  return coloredFrom(fixNormalsUp(ribbonGeo(pts, w, y, caps)), color);
+}
+
+function coloredFrom(g, color) {
+  const c = new THREE.Color(color);
+  const col = new Float32Array(g.attributes.position.count * 3);
+  for (let i = 0; i < g.attributes.position.count; i++) { col[i * 3] = c.r; col[i * 3 + 1] = c.g; col[i * 3 + 2] = c.b; }
+  g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  return g;
+}
+
+function dressBuildingList(list) {
+  return (list || []).map((b) => {
+    const nm = b.name || b.n || '';
+    if (/호텔/.test(nm) || b.k === 'hotel') return { ...b, k: 'commercial' };
+    if (b.k === 'yes' && (b.h || 0) <= 16) return { ...b, k: 'commercial' };
+    return b;
+  });
+}
+
+function ringCentroid(ring) {
+  let x = 0, z = 0, n = 0;
+  for (let i = 0; i < ring.length - 1; i++) { x += ring[i][0]; z += ring[i][1]; n++; }
+  return n ? { x: x / n, z: z / n } : { x: 0, z: 0 };
+}
+
+function makeHotelSignTex(text) {
+  const cv = document.createElement('canvas');
+  cv.width = 1024; cv.height = 192;
+  const x = cv.getContext('2d');
+  x.fillStyle = '#2a333c';
+  x.fillRect(0, 0, 1024, 192);
+  x.fillStyle = '#f2efe8';
+  x.textAlign = 'center';
+  x.textBaseline = 'middle';
+  x.font = 'bold 78px sans-serif';
+  x.fillText(text, 512, 96);
+  const tex = new THREE.CanvasTexture(cv);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = 4;
+  return tex;
+}
+
+function buildStreetFrontExtras(buildings) {
+  const g = new THREE.Group();
+  g.name = 'cheonggyeBuildingExtras';
+  const solid = [];
+  for (const b of buildings || []) {
+    const ring = b.o;
+    if (!ring || ring.length < 4) continue;
+    const h = b.h || 9;
+    const c = ringCentroid(ring);
+    const seed = Math.abs(Math.sin((c.x + 17) * 12.9898 + (c.z + 3) * 78.233)) % 1;
+    if (b.k === 'commercial' || b.k === 'residential') {
+      const nBox = b.k === 'commercial' ? 2 + (seed > 0.55 ? 1 : 0) : (seed > 0.65 ? 2 : 1);
+      for (let i = 0; i < nBox; i++) {
+        const ang = seed * 6.2 + i * 1.7;
+        const rad = 2.2 + i * 1.1;
+        const bx = c.x + Math.cos(ang) * rad, bz = c.z + Math.sin(ang) * rad;
+        if (!inFootprint(bx, bz, ring)) continue;
+        const bw = 1.4 + (seed * 0.6), bd = 1.1 + ((seed + i * 0.2) % 1) * 0.5;
+        solid.push(coloredBox(bw, 0.85, bd, i ? '#8a9098' : '#7a818a', bx, h + 0.5, bz, ang));
+      }
+      if (b.k === 'commercial') {
+        solid.push(coloredBox(2.4, 0.18, 2.4, '#6d7380', c.x, h + 0.12, c.z, seed));
+      }
+    }
+    const nm = b.name || b.n || '';
+    if (/호텔/.test(nm)) {
+      let best = null;
+      for (let i = 0; i < ring.length - 1; i++) {
+        const ax = ring[i][0], az = ring[i][1], bx = ring[i + 1][0], bz = ring[i + 1][1];
+        const dx = bx - ax, dz = bz - az, L = Math.hypot(dx, dz) || 1;
+        const mx = (ax + bx) * 0.5, mz = (az + bz) * 0.5;
+        const n1x = -dz / L, n1z = dx / L;
+        const d1 = Math.hypot(mx + n1x * 2 - STATION.x, mz + n1z * 2 - STATION.z);
+        const d2 = Math.hypot(mx - n1x * 2 - STATION.x, mz - n1z * 2 - STATION.z);
+        const sign = d1 < d2 ? 1 : -1;
+        const d = Math.min(d1, d2);
+        if (!best || L > best.L * 0.92 && d < best.d + 8 || d + 4 < best.d) {
+          best = { mx, mz, L, nx: n1x * sign, nz: n1z * sign, ang: Math.atan2(dx, dz), d };
+        }
+      }
+      if (best && best.L > 12) {
+        const y = Math.min(h - 1.6, 6.4);
+        const w = Math.min(14, best.L * 0.42);
+        const px = best.mx + best.nx * 0.18, pz = best.mz + best.nz * 0.18;
+        solid.push(coloredBox(w + 0.3, 1.15, 0.12, '#2a333c', px, y, pz, best.ang));
+        const tex = makeHotelSignTex(nm);
+        const geo = new THREE.PlaneGeometry(w, 0.95);
+        const mat = new THREE.MeshBasicMaterial({ map: tex, toneMapped: false });
+        const face = new THREE.Mesh(geo, mat);
+        face.position.set(px + best.nx * 0.08, y, pz + best.nz * 0.08);
+        face.lookAt(px + best.nx * 2, y, pz + best.nz * 2);
+        face.name = 'cheonggyeHotelSign';
+        g.add(face);
+      }
+    }
+  }
+  if (solid.length) {
+    const mesh = new THREE.Mesh(mergeGeometries(solid), new THREE.MeshLambertMaterial({ vertexColors: true }));
+    mesh.name = 'cheonggyeRoofDetails';
+    mesh.castShadow = true;
+    g.add(mesh);
+    for (const x of solid) x.dispose();
+  }
+  return g.children.length ? g : null;
+}
+
+function makeBusStopTex(stop) {
+  const cv = document.createElement('canvas');
+  cv.width = 384; cv.height = 512;
+  const x = cv.getContext('2d');
+  x.fillStyle = '#1f4f9a';
+  x.fillRect(0, 0, 384, 512);
+  x.fillStyle = '#fff';
+  x.textAlign = 'center';
+  x.textBaseline = 'middle';
+  x.font = 'bold 48px sans-serif';
+  x.fillText('버스', 192, 58);
+  x.fillStyle = '#e8eef8';
+  x.font = 'bold 36px sans-serif';
+  const name = String(stop.name || '버스정류장');
+  x.fillText(name.length > 10 ? name.slice(0, 10) : name, 192, 160);
+  if (name.length > 10) x.fillText(name.slice(10, 20), 192, 206);
+  if (stop.ref) {
+    x.fillStyle = '#fff';
+    x.font = 'bold 72px sans-serif';
+    x.fillText(String(stop.ref), 192, 320);
+  }
+  if (stop.routes) {
+    x.fillStyle = '#d5deee';
+    x.font = '600 28px sans-serif';
+    x.fillText(String(stop.routes).replace(/;/g, '  '), 192, 420);
+  }
+  const tex = new THREE.CanvasTexture(cv);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = 4;
+  return tex;
+}
+
+function addZebra(parts, pts) {
+  if (!pts || pts.length < 2) return;
+  for (let i = 1; i < pts.length; i++) {
+    const a = pts[i - 1], b = pts[i];
+    const dx = b[0] - a[0], dz = b[1] - a[1], L = Math.hypot(dx, dz) || 1;
+    const fx = dx / L, fz = dz / L, lx = fz, lz = -fx;
+    const ang = Math.atan2(dx, dz);
+    for (let t = 0.2; t < L; t += 0.55) {
+      parts.push(coloredBox(3.5, 0.04, 0.32, ZEBRA, a[0] + fx * t, 0.28, a[1] + fz * t, ang));
+    }
+  }
+}
+
+function buildLocalStreets(streets, buildings) {
+  const g = new THREE.Group();
+  g.name = 'cheonggyeLocalStreets';
+  if (!streets?.roads?.length && !streets?.stops?.length) return { group: g, night: [] };
+  const geos = [];
+  const extras = [];
+  const night = [];
+  for (const r of streets.roads || []) {
+    if (!r.p || r.p.length < 2) continue;
+    const [color, y0] = ROAD_STYLE[r.k] || ['#b4b7bc', 0.08];
+    const y = y0 + 0.12;
+    const strip = paintRibbon(r.p, r.w, y, color, true);
+    if (strip) geos.push(strip);
+    const sw = 2.55, curb = 0.2;
+    const swOff = r.w * 0.5 + 0.18 + sw * 0.5;
+    const curbOff = r.w * 0.5 + 0.12;
+    for (const side of [-1, 1]) {
+      const walk = paintRibbon(offsetLine(r.p, swOff * side), sw, 0.22, WALK_COL, false);
+      if (walk) geos.push(walk);
+      const cb = paintRibbon(offsetLine(r.p, curbOff * side), curb, 0.26, CURB_COL, false);
+      if (cb) geos.push(cb);
+    }
+    if (r.k === 'tertiary' || r.k === 'secondary' || r.lanes === 2) {
+      const line = paintRibbon(r.p, 0.18, y + 0.015, '#f2d36b', false);
+      if (line) geos.push(line);
+    }
+  }
+  for (const c of streets.crossings || []) addZebra(extras, c.p);
+  for (const s of streets.stops || []) {
+    if (nearBuilding(s.x, s.z, buildings, 1.2)) continue;
+    extras.push(coloredBox(0.09, 2.7, 0.09, BUS_POLE, s.x, 1.35, s.z));
+    extras.push(coloredBox(0.62, 0.84, 0.05, '#1f4f9a', s.x, 2.28, s.z));
+    const tex = makeBusStopTex(s);
+    const geo = new THREE.PlaneGeometry(0.58, 0.78);
+    const mat = new THREE.MeshBasicMaterial({ map: tex, toneMapped: false, side: THREE.DoubleSide });
+    const face = new THREE.Mesh(geo, mat);
+    face.position.set(s.x, 2.28, s.z + 0.04);
+    face.name = 'cheonggyeBusStop';
+    g.add(face);
+  }
+  if (geos.length) {
+    const mesh = new THREE.Mesh(mergeGeometries(geos), new THREE.MeshLambertMaterial({ vertexColors: true }));
+    mesh.name = 'cheonggyeStreetMesh';
+    mesh.receiveShadow = true;
+    g.add(mesh);
+    for (const x of geos) x.dispose();
+  }
+  if (extras.length) {
+    const mesh = new THREE.Mesh(mergeGeometries(extras), new THREE.MeshLambertMaterial({ vertexColors: true }));
+    mesh.name = 'cheonggyeStreetExtras';
+    mesh.receiveShadow = true;
+    g.add(mesh);
+    for (const x of extras) x.dispose();
+  }
+  return { group: g, night };
+}
+
 // 4+4 본선(반대편까지 ~28m)이 산에 파묻히지 않게 더 넓게 편다.
-function terrainHeight(raw, dist) {
+function terrainHeight(raw, dist, distLocal = Infinity) {
   if (dist < 34) return 0;
   let y = raw;
   if (dist < 115) y = raw * ((dist - 34) / 81);
   y = Math.max(0, y);
   if (dist < 260) y = Math.max(y, Math.min(16, (dist - 34) * 0.038));
+  // DEM 격자 50m — 보간된 지면이 청계산로를 덮지 않게 길을 넓게 편다.
+  if (distLocal < 42) return 0;
+  if (distLocal < 85) y *= (distLocal - 42) / 43;
   return y;
 }
 
@@ -102,7 +354,7 @@ function nearHousing(x, z) {
   return Math.hypot(x - STATION.x, z - STATION.z) < 1750;
 }
 
-function buildGround(data, segs) {
+function buildGround(data, segs, localSegs = []) {
   const { x0, z0, dx, dz, nx, nz, h } = data;
   const pos = new Float32Array(nx * nz * 3);
   const col = new Float32Array(nx * nz * 3);
@@ -116,7 +368,8 @@ function buildGround(data, segs) {
       const i = iz * nx + ix;
       const x = x0 + ix * dx, z = z0 + iz * dz;
       const dist = distToRoad(x, z, segs);
-      const y = terrainHeight(h[i] || 0, dist);
+      const distLocal = localSegs.length ? distToRoad(x, z, localSegs) : Infinity;
+      const y = terrainHeight(h[i] || 0, dist, distLocal);
       pos[i * 3] = x; pos[i * 3 + 1] = y; pos[i * 3 + 2] = z;
       let c;
       if (y < 22 && dist < 90) c = grass;
@@ -327,7 +580,7 @@ function makeRoadSignTex(ref) {
   return tex;
 }
 
-function buildStationPlazas(exits, buildings, gy) {
+function buildStationPlazas(exits, buildings, gy, streets) {
   const g = new THREE.Group();
   g.name = 'cheonggyeStationPlazas';
   const solid = [];
@@ -335,6 +588,7 @@ function buildStationPlazas(exits, buildings, gy) {
   const treeMats = [];
   const treeGeo = treePrototype('#5a4030', '#356338', 1.85, 4.4);
   const TILE_A = '#c9c4b8', TILE_B = '#b7b2a6', CURB = '#9a958a', STEEL = '#8b929a', POLE = '#6b7280';
+  const roadSegs = streetSegs(streets);
   for (const e of exits) {
     const y0 = gy(e.x, e.z);
     const s = Math.sin(e.ry), c = Math.cos(e.ry);
@@ -343,15 +597,16 @@ function buildStationPlazas(exits, buildings, gy) {
       const p = at(u, w0);
       solid.push(coloredBox(w, h, d, color, p.x, y, p.z, e.ry + ang));
     };
-    // 타일 포장 — 계단 구멍·건물 발자국은 비운다
-    for (let iu = -5; iu <= 5; iu++) {
-      for (let iw = -4; iw <= 6; iw++) {
+    // 타일 포장 — 계단 구멍·건물·차도는 비우고, 가까운 청계산로 인도까지 이어 준다
+    for (let iu = -12; iu <= 12; iu++) {
+      for (let iw = -18; iw <= 10; iw++) {
         const u = iu * 1.55, w = iw * 1.55;
         if (Math.abs(u) < 1.85 && w > -0.5 && w < 6.3) continue;
         const p = at(u, w);
         if (nearBuilding(p.x, p.z, buildings, 1.6)) continue;
+        if (onStreet(p.x, p.z, roadSegs)) continue;
         const col = ((iu + iw) & 1) ? TILE_A : TILE_B;
-        solid.push(coloredBox(1.48, 0.07, 1.48, col, p.x, y0 + 0.035, p.z, e.ry));
+        solid.push(coloredBox(1.48, 0.07, 1.48, col, p.x, gy(p.x, p.z) + 0.05, p.z, e.ry));
       }
     }
     // 연석
@@ -397,24 +652,23 @@ function buildStationPlazas(exits, buildings, gy) {
       glow.name = 'cheonggyePlazaLamp';
       night.push(glow);
     }
-    // 큰 역명 표지 (도로·보행에서 읽히게). 출입구 왼쪽 앞.
+    // 키 높이(~2.5m) 폴 사인. 캐노피 이마·기둥 표지는 buildEntrances 가 그대로 둔다.
     {
-      const u = -4.35, w = -3.15;
+      const u = -3.55, w = -2.55;
       const p = at(u, w);
-      if (!nearBuilding(p.x, p.z, buildings, 1.0)) {
-        put(0.12, 3.15, 0.12, POLE, u - 2.15, y0 + 1.58, w);
-        put(0.12, 3.15, 0.12, POLE, u + 2.15, y0 + 1.58, w);
-        put(4.7, 1.52, 0.10, '#1d2228', u, y0 + 3.55, w);
+      if (!nearBuilding(p.x, p.z, buildings, 1.0) && !onStreet(p.x, p.z, roadSegs)) {
+        put(0.09, 2.42, 0.09, POLE, u, y0 + 1.21, w);
+        put(0.90, 0.58, 0.06, '#1d2228', u, y0 + 2.18, w);
         const tex = makeRoadSignTex(e.ref);
-        const geo = new THREE.PlaneGeometry(4.55, 1.42);
+        const geo = new THREE.PlaneGeometry(0.86, 0.54);
         const mat = new THREE.MeshBasicMaterial({ map: tex, toneMapped: false });
         const face = new THREE.Mesh(geo, mat);
-        face.position.set(p.x - Math.sin(e.ry) * 0.06, y0 + 3.55, p.z - Math.cos(e.ry) * 0.06);
+        face.position.set(p.x - Math.sin(e.ry) * 0.04, y0 + 2.18, p.z - Math.cos(e.ry) * 0.04);
         face.rotation.y = e.ry + Math.PI;
         face.name = 'cheonggyeStationSign';
         g.add(face);
         const back = new THREE.Mesh(geo, mat);
-        back.position.set(p.x + Math.sin(e.ry) * 0.06, y0 + 3.55, p.z + Math.cos(e.ry) * 0.06);
+        back.position.set(p.x + Math.sin(e.ry) * 0.04, y0 + 2.18, p.z + Math.cos(e.ry) * 0.04);
         back.rotation.y = e.ry;
         back.name = 'cheonggyeStationSignBack';
         g.add(back);
@@ -450,12 +704,13 @@ function buildStationPlazas(exits, buildings, gy) {
   return { group: g, night };
 }
 
-function buildStationEntrances(list, data, segs, buildings) {
+function buildStationEntrances(list, data, segs, buildings, streets) {
   const g = new THREE.Group();
   g.name = 'cheonggyeEntrances';
   const night = [];
   if (!list?.length) return { group: g, night };
-  const gy = (x, z) => terrainHeight(sampleH(data, x, z), distToRoad(x, z, segs));
+  const local = streetSegs(streets);
+  const gy = (x, z) => terrainHeight(sampleH(data, x, z), distToRoad(x, z, segs), local.length ? distToRoad(x, z, local) : Infinity);
   const exits = list.map((e, i) => {
     const ry = Number.isFinite(e.dir) ? e.dir : Math.atan2(STATION.x - e.x, STATION.z - e.z);
     return {
@@ -469,42 +724,45 @@ function buildStationEntrances(list, data, segs, buildings) {
       place: { x: e.x, z: e.z, ry },
     };
   });
-  // 정자역과 같은 화강석 캐노피·내려가는 계단·노선색 간판. 대합실 탑승은 연결하지 않는다.
-  buildEntrances({
-    scene: g,
-    overlay: null,
-    exits,
-    data: {},
-    world: { isBlocked: () => false, onRoad: () => false },
-    terrain: { getGroundHeight: gy },
-    theme: { id: 'cheonggyesan', name: '청계산입구', nameEn: 'Cheonggyesan', lines: [LINES.shin] },
-  });
-  const plaza = buildStationPlazas(exits.map((e) => ({ ...e, ry: e.place.ry })), buildings, gy);
+  // 화강석 캐노피·탑승은 지하철 시스템(STATIONS 청계산입구)이 맡는다. 여기선 광장·가로 시설만.
+  const plaza = buildStationPlazas(exits.map((e) => ({ ...e, ry: e.place.ry })), buildings, gy, streets);
   g.add(plaza.group);
   night.push(...plaza.night);
   return { group: g, night };
 }
 
-function assemble(data, buildingsData) {
+function assemble(data, buildingsData, streetsData) {
   const road = data.road || [];
   const segs = segsFromRoad(road);
+  const localSegs = [];
+  for (const r of streetsData?.roads || []) {
+    if (r.p && r.p.length >= 2) localSegs.push(...segsFromRoad(r.p));
+  }
   const g = new THREE.Group();
   g.name = 'cheonggyeTerrainInner';
-  const ground = buildGround(data, segs);
+  const ground = buildGround(data, segs, localSegs);
   g.add(ground.mesh);
   g.add(buildTrees(ground, segs));
   const barriers = buildBarriers(road);
   if (barriers) g.add(barriers);
   g.add(buildRoadsideTrees(road));
   const nightMeshes = [];
-  if (buildingsData?.buildings?.length) {
-    const meshes = buildingMeshes(buildingsData.buildings, 9044);
+  const buildings = dressBuildingList(buildingsData?.buildings || []);
+  if (buildings.length) {
+    const meshes = buildingMeshes(buildings, 9044);
     for (const m of meshes) {
       m.name = (m.name || 'cheonggyeBldg') + (m.material?.map ? 'Facade' : 'Roof');
       g.add(m);
     }
+    const extras = buildStreetFrontExtras(buildings);
+    if (extras) g.add(extras);
   }
-  const ents = buildStationEntrances(buildingsData?.entrances || [], data, segs, buildingsData?.buildings || []);
+  const local = buildLocalStreets(streetsData, buildings);
+  if (local) {
+    g.add(local.group);
+    nightMeshes.push(...local.night);
+  }
+  const ents = buildStationEntrances(buildingsData?.entrances || [], data, segs, buildings, streetsData);
   g.add(ents.group);
   nightMeshes.push(...ents.night);
   const unwatch = watchEvening((v) => { for (const m of nightMeshes) m.visible = v; });
@@ -533,12 +791,14 @@ export function mountCheonggyeTerrain(scene, { search = typeof location !== 'und
   const base = baseUrl || ((import.meta.env && import.meta.env.BASE_URL) || '/');
   const demUrl = `${base}corridor/gyeongbu/${CHEONGGYE_DEM_FILE.split('/').pop()}`;
   const bldUrl = `${base}corridor/gyeongbu/${CHEONGGYE_BUILDINGS_FILE.split('/').pop()}`;
+  const strUrl = `${base}corridor/gyeongbu/${CHEONGGYE_STREETS_FILE.split('/').pop()}`;
   Promise.all([
     fetch(demUrl).then((r) => (r.ok ? r.json() : null)),
     fetch(bldUrl).then((r) => (r.ok ? r.json() : null)).catch(() => null),
-  ]).then(([dem, buildings]) => {
+    fetch(strUrl).then((r) => (r.ok ? r.json() : null)).catch(() => null),
+  ]).then(([dem, buildings, streets]) => {
     if (!dem?.h?.length) return;
-    const built = assemble(dem, buildings);
+    const built = assemble(dem, buildings, streets);
     g.add(built.group);
     ctl._inner = built;
   }).catch(() => {});

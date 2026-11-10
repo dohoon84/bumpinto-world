@@ -53,16 +53,22 @@ for (const e of G.exits) {
 }
 for (const id of G.osmStations) assert.ok(raw.some((e) => e.id === id && e.tags?.name === '강남' && e.tags['name:en'] === 'Gangnam'));
 
-assert.deepEqual(ZONES.slice(121), ['gangnam-station', 'gangnam-station/p-l2-0', 'gangnam-station/p-l2-1', 'gangnam-station/p-shin-0', 'gangnam-station/p-shin-1']);
+assert.deepEqual(ZONES.slice(121, 126), ['gangnam-station', 'gangnam-station/p-l2-0', 'gangnam-station/p-l2-1', 'gangnam-station/p-shin-0', 'gangnam-station/p-shin-1']);
 assert.equal(zoneSlot(R.platformZone('gangnam', 'l2', 0)), 122);
 assert.equal(zoneSlot(R.platformZone('gangnam', 'shin', 1)), 125);
-assert.equal(ZONES.length, 126);
+assert.equal(ZONES.length, 134);
+assert.equal(zoneSlot('pangyo-station'), 126);
+assert.equal(zoneSlot('cheonggyesan-station'), 131);
 
 if (ON) {
   const shin = R.rideStops('shin', 1, '정자');
   assert.equal(shin.at(-1).id, 'gangnam');
-  assert.ok(shin.filter((q) => !q.game).map((q) => q.name).join() === '판교,청계산입구,양재시민의숲,양재');
-  assert.deepEqual(shin.filter((q) => q.pass).map((q) => q.name), ['판교', '청계산입구', '양재시민의숲', '양재']);
+  assert.deepEqual(shin.filter((q) => !q.game).map((q) => q.name), ['양재시민의숲', '양재']);
+  assert.deepEqual(shin.filter((q) => q.pass).map((q) => q.name), ['양재시민의숲', '양재']);
+  assert.ok(shin.some((q) => q.name === '판교' && q.game && q.id === 'pangyo'));
+  assert.ok(shin.some((q) => q.name === '청계산입구' && q.game && q.id === 'cheonggyesan'));
+  assert.equal(R.alightAllowed(shin.find((q) => q.name === '판교')), true, '판교에서 내린다');
+  assert.equal(R.alightAllowed(shin.find((q) => q.name === '청계산입구')), true, '청계산입구에서 내린다');
   for (const q of shin.filter((s) => s.pass)) assert.equal(R.alightAllowed(q), false, q.name);
   assert.equal(R.alightAllowed(shin.at(-1)), true, '강남에서는 내린다');
   const passSay = R.announce('noAlight', { name: '양재', pass: true });

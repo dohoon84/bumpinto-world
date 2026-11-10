@@ -7,6 +7,8 @@ import { gangnamBusEnabled } from '../../../src/corridor/gangnamBus.js';
 import { GYEONGGI_BUS_CREDIT, gyeongbuExpressEnabled } from '../../../src/corridor/gyeongbuExpress.js';
 import { SEOUL_TG, seoulTollEnabled } from '../../../src/world/seoulToll.js';
 import { cheonggyeTerrainEnabled } from '../../../src/corridor/cheonggyeTerrain.js';
+import { rideStops, isGameStop, isPassStop } from '../../../src/subway/ride.js';
+import { STATIONS } from '../../../src/subway/roster.js';
 import {
   speedMs, rideSpeedMs, travelSeconds, nextExpress, headwayMin, carLaneIndex, busLaneIndex, MS_TO_KMH,
 } from '../../../src/corridor/gyeongbuSpeed.js';
@@ -117,9 +119,19 @@ assert.ok(bld.buildings.every((b) => b.o?.length >= 4 && b.h > 0));
 const srcT = fs.readFileSync(path.join(root, 'src/corridor/cheonggyeTerrain.js'), 'utf8');
 assert.ok(srcT.includes('buildingMeshes'));
 assert.ok(srcT.includes('cheonggyeBarrierPanels'));
-assert.ok(srcT.includes('buildEntrances'));
 assert.ok(srcT.includes('cheonggyeStationSign'));
 assert.ok(srcT.includes('청계산입구'));
+assert.ok(srcT.includes('지하철 시스템'));
+assert.ok(srcT.includes('cheonggyeLocalStreets'));
+assert.ok(srcT.includes('cheonggyeBusStop'));
+assert.ok(!srcT.includes('4.55, 1.42') && !srcT.includes('PlaneGeometry(4.55'), '큰 두 기둥 간판을 키 높이 폴 사인으로 줄였다');
+const streets = JSON.parse(fs.readFileSync(path.join(root, 'public/corridor/gyeongbu/cheonggye-streets.json'), 'utf8'));
+assert.ok(streets.roads.some((r) => r.name === '청계산로' && r.k === 'tertiary'));
+assert.ok(streets.roads.some((r) => r.name === '원터길'));
+assert.ok(streets.crossings.some((c) => c.k === 'zebra'));
+assert.ok(streets.stops.some((s) => s.ref === '22401' && s.name === '청계산입구역'));
+assert.ok(srcT.includes('dressBuildingList') && srcT.includes('호텔'));
+assert.ok(gySrc.includes('gyeongbuGangnamSeam'));
 const pangyoSrc = fs.readFileSync(path.join(root, 'src/corridor/pangyoExpress.js'), 'utf8');
 assert.ok(pangyoSrc.includes('export function pangyoTollLayout'));
 assert.ok(pangyoSrc.includes('laneClear = 3.9'));
@@ -128,5 +140,17 @@ const seoulSrc = fs.readFileSync(path.join(root, 'src/world/seoulToll.js'), 'utf
 assert.ok(!seoulSrc.includes('i * 9.5'));
 assert.ok(!/sign-toll\.png.*DoubleSide/.test(seoulSrc));
 assert.ok(fs.readFileSync(path.join(root, 'src/transit/busModel.js'), 'utf8').includes('coach3'));
+
+assert.ok(STATIONS.some((s) => s.id === 'pangyo' && s.lines.includes('shin') && s.lines.includes('gg') && s.exits.length === 4));
+assert.ok(STATIONS.some((s) => s.id === 'cheonggyesan' && s.name === '청계산입구' && s.exits.length === 2));
+assert.equal(isGameStop('shin', '판교'), true);
+assert.equal(isGameStop('shin', '청계산입구'), true);
+assert.equal(isGameStop('gg', '판교'), true);
+assert.equal(isPassStop('shin', '판교'), false);
+assert.equal(isPassStop('shin', '청계산입구'), false);
+const shinToSinsa = rideStops('shin', 1, '정자');
+assert.ok(shinToSinsa.find((r) => r.name === '판교' && r.game && !r.pass));
+assert.ok(shinToSinsa.find((r) => r.name === '청계산입구' && r.game && !r.pass));
+assert.ok(shinToSinsa.find((r) => r.name === '강남' && r.game));
 
 console.log(`gyeongbu express: ${cruise.toFixed(0)} km/h, 판교→강남 ${Math.round(eta)}s, cars off bus lane OK, 서울TG ${near.toFixed(0)}m`);

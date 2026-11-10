@@ -312,6 +312,7 @@ export function createPangyoLandmarks(pg, { overlay = null, prefix = 'pangyo' } 
   const station = pg?.stations?.[0];
   const towards = station ? { x: station.x, z: station.z } : { x: 0, z: 0 };
   for (const l of pg?.landmarks || []) {
+    if (l.model === 'pangyoEntrances') continue; // 지하철 시스템이 화강석 캐노피·계단을 세움
     if (!BUILDERS[l.model]) continue;
     const k = tileKeyOf(l); if (!byTile.has(k)) byTile.set(k, []); byTile.get(k).push(l);
     if (overlay && l.label && l.pos) {

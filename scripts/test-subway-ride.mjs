@@ -45,8 +45,9 @@ if (MG) { // [migeum-sub] 미금이 켜지면 정자 남쪽 방면(수인분당 
   assert.deepEqual(rideStops('shin', 0, '정자'), [{ name: '미금', game: true, id: 'migeum' }], '정자 광교 방면: 미금에서 내림');
   if (GN) {
     const up = rideStops('shin', 1, '정자');
-    assert.equal(up.at(-1).id, 'gangnam', '정자 신사 방면: 강남에서 내림 (판교는 게임 역 아님)');
-    assert.ok(up.some((q) => q.name === '판교' && !q.game));
+    assert.equal(up.at(-1).id, 'gangnam', '정자 신사 방면: 강남에서 내림');
+    assert.ok(up.some((q) => q.name === '판교' && q.game && q.id === 'pangyo'));
+    assert.ok(up.some((q) => q.name === '청계산입구' && q.game && q.id === 'cheonggyesan'));
     const fromMg = rideStops('shin', 1, '미금');
     assert.equal(fromMg[0].id, 'jeongja'); assert.equal(fromMg.at(-1).id, 'gangnam');
   } else {
@@ -119,7 +120,7 @@ assert.equal(simNextArrival('suin', 1, 'jeongja', Date.UTC(2026, 10, 3, 18, 0, 0
   assert.equal(liveNextArrival(null, 'suin', 1, 0, 0), null);
 }
 // 구역: 1단계(0..14) 그대로, 승강장 42 + 열차 56 덧붙임 (113) + 장지 대합실·승강장 2 (116)
-assert.equal(ZONES.length, 126); assert.deepEqual(ZONES.slice(116, 121), ['migeum-station', 'migeum-station/p-suin-0', 'migeum-station/p-suin-1', 'migeum-station/p-shin-0', 'migeum-station/p-shin-1'], '[migeum-sub] 미금 116..120 덧붙임'); assert.deepEqual(ZONES.slice(121), ['gangnam-station', 'gangnam-station/p-l2-0', 'gangnam-station/p-l2-1', 'gangnam-station/p-shin-0', 'gangnam-station/p-shin-1'], '[gangnam] 121..125'); assert.equal(ZONES[113], 'jangji-station'); assert.equal(ZONES[114], 'jangji-station/p-l8-0'); assert.equal(ZONES[115], 'jangji-station/p-l8-1'); assert.equal(ZONES[1], 'jeongja-station'); assert.equal(ZONES[14], 'jamsil-station');
+assert.equal(ZONES.length, 134); assert.deepEqual(ZONES.slice(116, 121), ['migeum-station', 'migeum-station/p-suin-0', 'migeum-station/p-suin-1', 'migeum-station/p-shin-0', 'migeum-station/p-shin-1'], '[migeum-sub] 미금 116..120 덧붙임'); assert.deepEqual(ZONES.slice(121, 126), ['gangnam-station', 'gangnam-station/p-l2-0', 'gangnam-station/p-l2-1', 'gangnam-station/p-shin-0', 'gangnam-station/p-shin-1'], '[gangnam] 121..125'); assert.deepEqual(ZONES.slice(126), ['pangyo-station', 'pangyo-station/p-shin-0', 'pangyo-station/p-shin-1', 'pangyo-station/p-gg-0', 'pangyo-station/p-gg-1', 'cheonggyesan-station', 'cheonggyesan-station/p-shin-0', 'cheonggyesan-station/p-shin-1'], '[gyeongbu-bus] 126..133'); assert.equal(ZONES[113], 'jangji-station'); assert.equal(ZONES[114], 'jangji-station/p-l8-0'); assert.equal(ZONES[115], 'jangji-station/p-l8-1'); assert.equal(ZONES[1], 'jeongja-station'); assert.equal(ZONES[14], 'jamsil-station');
 assert.equal(ZONES[15], 'jeongja-station/p-suin-0'); assert.equal(ZONES[57], 'train:suin-0-0'); assert.equal(ZONES[112], 'train:l2-1-3');
 assert.equal(new Set(ZONES).size, ZONES.length);
 for (const d of STATIONS) for (const l of d.lines) for (const di of [0, 1]) { const z = platformZone(d.id, l, di); assert.ok(isZoneId(z) && zoneSlot(z) > 14, z); }

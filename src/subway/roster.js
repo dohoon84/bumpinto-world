@@ -4,6 +4,7 @@
 //     ?migeum=0     미금 전체(지상 지역 포함) 끔 → 지하철도 끔
 //   Node(테스트·e2e 스크립트): 환경변수 MIGEUMSUB=0 / MIGEUM=0 으로 끔 (기본 켬)
 import { STATIONS as ALL } from './stationsData.js';
+import { EXTRA_STATIONS } from './extraStations.js';
 
 export function migeumSubEnabled(search = typeof location !== 'undefined' ? location.search : null) {
   if (search == null) {
@@ -25,6 +26,7 @@ export function gangnamSubEnabled(search = typeof location !== 'undefined' ? loc
 }
 const EXT_ON = { migeum: migeumSubEnabled(), gangnam: gangnamSubEnabled() };
 // 확장 전 역 목록 (ext 없는 역) — 기존 역 시간표 기준(ride.js lineOffsets)은 늘 이것으로 잰다
-export const STATIONS_BASE = Object.freeze(ALL.filter((s) => !s.ext));
-export const STATIONS = Object.freeze(ALL.filter((s) => !s.ext || EXT_ON[s.ext]));
+const MERGED = ALL.concat(EXTRA_STATIONS);
+export const STATIONS_BASE = Object.freeze(MERGED.filter((s) => !s.ext));
+export const STATIONS = Object.freeze(MERGED.filter((s) => !s.ext || EXT_ON[s.ext]));
 export const EXT_STATIONS = Object.freeze(STATIONS.filter((s) => s.ext));

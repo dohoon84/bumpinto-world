@@ -407,7 +407,20 @@ function expresswayDeck(rawPts) {
 function awayFromCities(p) {
   const pangyo = Math.hypot(p[0] - 312.6, p[1] + 2804);
   const gangnam = Math.hypot(p[0] + 7097.7, p[1] + 14453.3);
-  return pangyo > 420 && gangnam > 360;
+  return pangyo > 420 && gangnam > 150;
+}
+
+// 강남 코리더 타일은 x=-7500 에서 시작한다. 갓길 잔디(폭 140m)가 그 앞에 못 미쳐 생기던 흰 틈을 메운다.
+function gangnamSeamFill() {
+  const x0 = -7980, x1 = -7492, z0 = -15540, z1 = -13970;
+  const geo = new THREE.PlaneGeometry(x1 - x0, z1 - z0);
+  geo.rotateX(-Math.PI / 2);
+  geo.translate((x0 + x1) / 2, 0.03, (z0 + z1) / 2);
+  const mesh = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ color: '#5b7a45' }));
+  mesh.name = 'gyeongbuGangnamSeam';
+  mesh.receiveShadow = true;
+  mesh.frustumCulled = false;
+  return mesh;
 }
 
 function grassApron(pts, width = 96, y = 0.04) {
@@ -528,6 +541,7 @@ export function mountGyeongbuExpress(group, data, { overlay } = {}) {
   if (apronA) group.add(apronA);
   const apronS = grassApron(spurLand, 140);
   if (apronS) group.add(apronS);
+  group.add(gangnamSeamFill());
   const treesA = vergeTrees(approach, 28);
   if (treesA) group.add(treesA);
   const treesS = vergeTrees(spurLand, 24);
