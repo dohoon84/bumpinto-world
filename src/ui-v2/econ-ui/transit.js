@@ -4,6 +4,7 @@
 import { econ } from '../econ/index.js';
 import { el } from '../kit.js';
 import { n, sgn, T, tr, esc, EI, mockTag, freeBadge, bumPill, karmaPill, stamp, tag, head, closeBtn, priceHtml, bar } from './kit.js';
+import { fareChargeText } from './rideOnce.js';
 import { show, close, toastLayer } from './layer.js';
 import { beginUiFare, fareCardOn, farePopParts } from './farePop.js';
 
@@ -79,11 +80,12 @@ export function showPay(pay, { where = '', before = null, hold = false, rideId =
   if (sub && !fareCardOn()) return showFarePop(pay);
   const col = sub ? '#f5a200' : '#4cc9f0';
   const title = sub ? tr(`${where || '개찰구'} 통과`, `Passed ${where || 'the gates'}`) : tr(`${T({ ko: '시내버스', en: 'City bus' })} · 카드 태그 완료`, 'City bus · card tapped');
-  const amount = pay.free ? `<b class="ve-amt-big free">0 bum</b><s class="ve-s">${n(pay.listAmount)}</s>${freeBadge()}` : `<b class="ve-amt-big">${sgn(-pay.amount)}</b>`;
+  const amount = pay.free ? `<b class="ve-amt-big free">${fareChargeText(0, true)}</b><s class="ve-s">${n(pay.listAmount)}</s>${freeBadge()}` : `<b class="ve-amt-big">${fareChargeText(pay.amount)}</b>`;
   const sumParts = before != null && pay.reward.length ? `${n(before)}${pay.free ? '' : ` − ${n(pay.amount)}`}${pay.reward.map((e) => ` + ${n(e.amount)}`).join('')}` : '';
   const node = el('div', `ve-paystack${sub ? ' sub' : ''}`, `<div class="v2-panel ve-pay" style="--c:${col}">${tapBeep(col)}
       <div class="ve-col">${tag(sub ? tr('지하철', 'Subway') : tr('시내버스', 'City bus'), sub ? '#f5a200' : '#20c997')}<b class="ve-t20">${esc(title)}</b><small class="ve-sub">${esc(where ? (sub ? tr('지하철 기본요금', 'Subway base fare') : tr(`${where} 승차`, `Boarded at ${where}`)) : '')}</small>
-      <div class="v2-hrow ve-amtrow">${amount}<span class="ve-after">${esc(tr(`잔액 ${n(pay.balance.total)} bum`, `Balance ${n(pay.balance.total)} bum`))}</span></div>
+      <div class="v2-hrow ve-amtrow ve-amt-center">${amount}</div>
+      <div class="ve-after">${esc(tr(`잔액 ${n(pay.balance.total)} bum`, `Balance ${n(pay.balance.total)} bum`))}</div>
       <div class="v2-hrow">${pay.balance?.guest ? '' : karmaPill({ axis: 'transit', points: 5 })}${mockTag()}</div></div></div>
     ${pay.reward.map((e) => `<div class="v2-panel ve-qtoast">${EI.check(16, '#fff')}<div class="ve-col"><b>${esc(e.period === 'weekly' ? tr(`주간 달성 · ${T(e.title)}`, `Weekly · ${T(e.title)}`) : tr(`할 일 달성 · ${T(e.title)}`, `Quest · ${T(e.title)}`))}</b><div class="v2-hrow">${bumPill(e.amount)}${karmaPill(e.karma)}</div></div>${stamp(true)}</div>`).join('')}
     ${sumParts ? `<div class="v2-panel ve-sumline"><span>${esc(sumParts)}</span><b class="ve-gold">= ${n(pay.balance.total)} bum</b></div>` : ''}`);

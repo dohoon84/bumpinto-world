@@ -1,3 +1,5 @@
+import { inWorldBounds } from './islands.js'; // [gangnam] 섬이 있으면 그 사각형들 안
+
 // [arrivefix] #43 역 이동·역 입장 때 정자역(기본 스폰)을 거쳐 보이는 문제.
 //   켜짐(기본): 역을 골라 들어오면 ① 숨긴 채로 그 역 출구 좌표에 먼저 세우고 ② 그 역 타일이 다 지어져 도착할 때까지
 //   (최대 ARRIVE_MAX_MS) 로딩 화면을 유지한 뒤 ③ 보여 준다. 도착 전에는 위치 저장(서버·이어하기)과 위치 송신을 멈춘다.
@@ -27,7 +29,7 @@ export function pickFirstEnabled(search = typeof location !== 'undefined' ? loca
   return flagEnabled('pickfirst', PICK_KEY, search, store);
 }
 
-const inBounds = (p, b) => !b || (p.x >= b.x0 && p.x <= b.x1 && p.z >= b.z0 && p.z <= b.z1);
+const inBounds = (p, b) => inWorldBounds(p, b);
 
 /**
  * 입장 위치 고르기 (순수 — game.js completeWorldJoin 이 쓴다).

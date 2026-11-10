@@ -11,6 +11,7 @@ import { SimulatedBusSource } from '../transit/busSource.js';
 import { createBus, disposeBus, busTextureStats } from '../transit/busModel.js';
 import { liveryOf } from '../transit/livery.js';
 import { CorridorRealtimeSource } from './busRealtime.js';
+import { stopCardAllowed, sameIsland, nearIslands } from './nearScope.js'; // [gangnam-night]
 
 const RADIUS = 450, MAX_BUSES = 16, LABEL_R = 160, PANEL_R = 22;
 
@@ -135,7 +136,12 @@ export function createCorridorBuses(root, T, { crossings, terrain, overlay, live
   // 정류장 이름표: 가까운 것만
   const labels = new Map();
   const syncLabels = (fx, fz) => {
+    const islands = nearIslands();
     for (const s of stops) {
+      if (!sameIsland(fx, fz, s._pos.x, s._pos.z, islands)) {
+        if (labels.has(s.id)) { overlay.remove(labels.get(s.id)); labels.delete(s.id); }
+        continue;
+      }
       const near = Math.hypot(s._pos.x - fx, s._pos.z - fz) < LABEL_R;
       if (near && !labels.has(s.id)) labels.set(s.id, overlay.add({ cls: 'label busstop', text: `🚏 ${s.name}${s.ref ? ' ' + s.ref.split(';')[0] : ''}`, getPos: () => new THREE.Vector3(s._pos.x, s._pos.y + 3.8, s._pos.z), maxDist: 140 }));
       else if (!near && labels.has(s.id)) { overlay.remove(labels.get(s.id)); labels.delete(s.id); }
@@ -196,8 +202,14 @@ export function createCorridorBuses(root, T, { crossings, terrain, overlay, live
   };
   const rideHint = { fn: null };
   const renderPanel = (fx, fz) => {
+    if (!stopCardAllowed(fx, fz)) { panel.classList.remove('open'); panelStop = null; return; } // [gangnam-night]
+    const islands = nearIslands();
     let best = null, bd = PANEL_R;
-    for (const s of stops) { const d = Math.hypot(s._pos.x - fx, s._pos.z - fz); if (d < bd) { bd = d; best = s; } }
+    for (const s of stops) {
+      if (!sameIsland(fx, fz, s._pos.x, s._pos.z, islands)) continue;
+      const d = Math.hypot(s._pos.x - fx, s._pos.z - fz);
+      if (d < bd) { bd = d; best = s; }
+    }
     panelStop = best;
     if (!best) { panel.classList.remove('open'); return; }
     let infoN = 0; // [ride] 방면·다음 정류장 줄은 먼저 오는 3개 노선만(큰 환승센터에서 패널이 넘치지 않게)
@@ -237,7 +249,9 @@ export function createCorridorBuses(root, T, { crossings, terrain, overlay, live
     for (const [id, a] of active) if (!seen.has(id)) { give(a); active.delete(id); }
     rendered = active.size;
     acc += dt;
-    if (acc >= 0.5) {
+    const shownFar = panelStop && Math.hypot(panelStop._pos.x - fx, panelStop._pos.z - fz) > 30;
+    const hideNow = panel.classList.contains('open') && !stopCardAllowed(fx, fz);
+    if (acc >= 0.5 || shownFar || hideNow) {
       acc = 0;
       syncLabels(fx, fz);
       if (inLive) { panel.classList.remove('open'); panelStop = null; } else renderPanel(fx, fz);

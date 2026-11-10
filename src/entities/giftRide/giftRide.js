@@ -2,6 +2,8 @@
 //   탈것마다 다른 것(모델·가감속·라이더 자세·HUD·소리·연출)은 spec 으로 받는다. 예: roadBike/roadBike.js, superbike/superbike.js
 //   보유 수량은 src/gifts/catalog.js · holdings.js 가 기준이고, 여기는 setStock 으로 받기만 한다.
 import * as THREE from 'three';
+import { inWorldBounds } from '../../corridor/islands.js'; // [gangnam]
+import { expressSurfaceHeight } from '../../corridor/expressSurface.js'; // [gyeongbu-bus]
 import { stepWheelie, wheelieSteerScaleSmooth } from './wheelie.js';
 
 const G = 9.81;
@@ -356,7 +358,7 @@ export function createGiftRide(env, spec) {
     const s = Math.sin(h);
     const c = Math.cos(h);
     const bd = world.bounds;
-    if (bd && (x < bd.x0 || x > bd.x1 || z < bd.z0 || z > bd.z1)) return false;
+    if (bd && !inWorldBounds({ x, z }, bd)) return false;
     for (const [lx, lz] of HULL) {
       if (world.isBlocked(x + lx * c + lz * s, z - lx * s + lz * c, 0.05)) return false;
     }
@@ -405,7 +407,11 @@ export function createGiftRide(env, spec) {
     const A = D.WB / 2;
     const yf = ground(b.x + s * A, b.z + c * A, b.y);
     const yr = ground(b.x - s * A, b.z - c * A, b.y);
-    liftS += (Math.max(roadLift(b.x + s * A, b.z + c * A), roadLift(b.x - s * A, b.z - c * A)) - liftS) * Math.min(1, dt * 12);
+    const xf = b.x + s * A, zf = b.z + c * A, xr = b.x - s * A, zr = b.z - c * A;
+    // 경부 본선·램프는 getGroundHeight 가 이미 깔린 노면 높이. OSM 리본용 6~10cm 를 더하면 떠 버린다.
+    const onExpress = expressSurfaceHeight(xf, zf, b.y) != null || expressSurfaceHeight(xr, zr, b.y) != null;
+    const liftT = onExpress ? 0 : Math.max(roadLift(xf, zf), roadLift(xr, zr));
+    liftS += (liftT - liftS) * Math.min(1, dt * 12);
     b.y = (yf + yr) / 2 + liftS;
     b.pitch += (-Math.atan2(yf - yr, D.WB) - b.pitch) * Math.min(1, dt * 10);
     mesh.position.set(b.x, b.y, b.z);

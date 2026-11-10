@@ -10,6 +10,7 @@ import {
 } from '../world.js';
 import { addInstancedTrees } from '../world/trees.js';
 import { addWindowLights } from '../world/windowLights.js';
+import { treeBlockedByPole } from '../gangnam/billboards/clearance.js'; // [gangnam-ads] 폴 4m 안 가로수 제외
 import { NIGHT_ON, NIGHT_V2, nightKind, nightSeed, nightCut, nightFacade, nightLodMaterial } from './nightLights.js';
 
 export const CAR_KINDS = new Set(['primary', 'secondary', 'tertiary', 'trunk', 'residential', 'unclassified', 'service', 'motorway', 'primary_link', 'secondary_link', 'trunk_link', 'motorway_link']);
@@ -132,10 +133,13 @@ export function buildDetailTile(key, t, { terrain, onRoadAll }) {
 
   // 충돌(라이브와 같은 규칙: 아래가 뜬 건물(mh>=2.5)은 제외)
   const colliders = new Grid(40);
+  const solids = [];
   for (const b of t.b) {
-    if ((b.mh || 0) >= 2.5) continue;
+    if (!b.o || b.o.length < 3) continue;
     let mnx = Infinity, mnz = Infinity, mxx = -Infinity, mxz = -Infinity;
     for (const [x, z] of b.o) { mnx = Math.min(mnx, x); mxx = Math.max(mxx, x); mnz = Math.min(mnz, z); mxz = Math.max(mxz, z); }
+    solids.push({ ring: b.o, h: b.h || 0, mnx, mnz, mxx, mxz });
+    if ((b.mh || 0) >= 2.5) continue;
     colliders.add(b.o, mnx, mnz, mxx, mxz);
   }
   const roadGrid = new Grid(30);
@@ -148,6 +152,14 @@ export function buildDetailTile(key, t, { terrain, onRoadAll }) {
   }
   const onRoad = (x, z) => roadGrid.query(x, z).some((s) => segNear(x, z, s));
   const blocked = (x, z) => colliders.query(x, z).some((ring) => pointInRing(x, z, ring));
+  const roofAt = (x, z) => {
+    let h = 0;
+    for (const s of solids) {
+      if (x < s.mnx || x > s.mxx || z < s.mnz || z > s.mxz || s.h <= h) continue;
+      if (pointInRing(x, z, s.ring)) h = s.h;
+    }
+    return h;
+  };
 
   // 가로수: buildWorld 와 같은 간격/오프셋/파라미터. 겹침(o) 구간은 이웃 조각이 심으므로 건너뜀.
   const treePts = [];
@@ -162,7 +174,7 @@ export function buildDetailTile(key, t, { terrain, onRoadAll }) {
       for (let s = 6; s < L; s += 14) for (const side of [-1, 1]) {
         const x = ax + ((bx - ax) * s) / L + nx * side * (r.w / 2 + 1.6), z = az + ((bz - az) * s) / L + nz * side * (r.w / 2 + 1.6);
         if (terrain && terrain.renderHeight(x, z) < -0.3) continue;
-        if (!onRoad(x, z) && !onRoadAll(x, z) && !blocked(x, z)) treePts.push([x, z]);
+        if (!onRoad(x, z) && !onRoadAll(x, z) && !blocked(x, z) && !treeBlockedByPole(x, z)) treePts.push([x, z]);
       }
     }
   }
@@ -172,7 +184,7 @@ export function buildDetailTile(key, t, { terrain, onRoadAll }) {
   // [night-buildings] v2 는 벽 셰이더(nightFacade)가 창 불빛을 그리므로 사각 창 메시(+1 draw/타일)를 만들지 않는다
   const lights = NIGHT_V2 && NIGHT_ON ? null : addWindowLights(group, t.b.filter((b) => !b.nr));
   return {
-    group, colliders, onRoad, blocked, treeCount: treePts.length,
+    group, colliders, onRoad, blocked, roofAt, treePts, treeCount: treePts.length,
     dispose() {
       lights?.stop?.();
       group.traverse((o) => {

@@ -197,6 +197,14 @@ export function createTerrain(T, data) {
     groundExtras.push(fn);
     return () => { const i = groundExtras.indexOf(fn); if (i >= 0) groundExtras.splice(i, 1); };
   }
+  // [gyeongbu-bus] 깔린 노면처럼 "그 높이로 맞춘다"(낮출 수도 있음). extras 는 올리기만 해서
+  // 평탄화된 차도보다 높은 옛 지형에 남으면 떠 버린다.
+  const groundSurfaces = [];
+  function addGroundSurface(fn) {
+    if (typeof fn !== 'function') return () => {};
+    groundSurfaces.push(fn);
+    return () => { const i = groundSurfaces.indexOf(fn); if (i >= 0) groundSurfaces.splice(i, 1); };
+  }
   function getGroundHeight(x, z, refY = Infinity) {
     let h; const st = stairAt(x, z);
     h = st ? stairStep(st.s, st.u) : baseHeight(x, z);
@@ -209,6 +217,11 @@ export function createTerrain(T, data) {
     for (const fn of groundExtras) {
       const e = fn(x, z, refY, h);
       if (e == null || !(e > h) || e > refY + MAX_STEP + 0.1) continue;
+      h = e;
+    }
+    for (const fn of groundSurfaces) {
+      const e = fn(x, z, refY, h);
+      if (e == null || e > refY + MAX_STEP + 0.1) continue;
       h = e;
     }
     return h;
@@ -702,5 +715,5 @@ export function createTerrain(T, data) {
     }
     return pts.length > 6 ? pts : null;
   }
-  return { params: P, baseHeight, renderHeight, getGroundHeight, groundY: getGroundHeight, getVehicleHeight, vehicleY: getVehicleHeight, deckAt, canMove, annotate, liftRoads, waterLineY, streams, build, stairs, decks, addDeckSegment, addGroundExtra, project, riversideRoute, bankPath, stairAt, fords, fordAt, grade, waterSurface, mainDrop: MD ? mainDrop : null, mainDropBox: dropBox, floorAt, mainWater };
+  return { params: P, baseHeight, renderHeight, getGroundHeight, groundY: getGroundHeight, getVehicleHeight, vehicleY: getVehicleHeight, deckAt, canMove, annotate, liftRoads, waterLineY, streams, build, stairs, decks, addDeckSegment, addGroundExtra, addGroundSurface, project, riversideRoute, bankPath, stairAt, fords, fordAt, grade, waterSurface, mainDrop: MD ? mainDrop : null, mainDropBox: dropBox, floorAt, mainWater };
 }

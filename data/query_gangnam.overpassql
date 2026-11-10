@@ -1,0 +1,24 @@
+[out:json][timeout:180][bbox:37.492427,127.022675,37.507444,127.041437];
+(
+  way["building"];
+  relation["building"];
+  way["building:part"];
+  relation["building:part"];
+  way["highway"];
+  way["railway"];
+  way["natural"];
+  relation["natural"="water"];
+  way["waterway"];
+  way["leisure"];
+  relation["leisure"];
+  way["landuse"];
+  relation["landuse"];
+  way["place"="square"];
+  way["amenity"];
+  relation["amenity"];
+  node["railway"~"^(station|subway_entrance|train_station_entrance)$"];
+  node["entrance"]["railway"];
+  node["public_transport"="station"];
+  node["natural"="tree"];
+);
+out body geom;

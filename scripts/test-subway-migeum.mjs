@@ -5,6 +5,8 @@ import fs from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
+// [gangnam] 이 파일은 미금만 본다. 강남 지하철이 켜지면 강남 오프셋이 달라지므로 여기서는 끈다.
+if (process.env.GANGNAMSUB == null) process.env.GANGNAMSUB = '0';
 const ON = process.env.MIGEUM !== '0' && process.env.MIGEUMSUB !== '0';
 const { migeumSubEnabled, STATIONS, STATIONS_BASE, EXT_STATIONS } = await import('../src/subway/roster.js');
 const { STATIONS: ALL, LINE_STOPS } = await import('../src/subway/stationsData.js');

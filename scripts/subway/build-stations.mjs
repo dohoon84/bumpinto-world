@@ -38,13 +38,18 @@ export const TARGETS = [
   // [migeum-sub] 2026-11-04 도훈 요청: 미금(수인분당 K231 · 신분당 D13). 맨 뒤에 덧붙이기만 (앞 역 데이터·순서 그대로).
   //   런타임에서 ?migeumsub=0 또는 ?migeum=0 이면 빠진다 (src/subway/roster.js, ext 필드)
   ['migeum', '미금'],
+  // [gangnam] 2026-11-08: 강남(2호선 · 신분당). 맨 뒤에 덧붙이기만. ?gangnamsub=0 / ?gangnam=0 이면 빠진다.
+  ['gangnam', '강남'],
 ];
 // [migeum-sub] 코리더 밖(정자~잠실 bbox 남쪽) 확장 역: 출구·역 노드·계단·타일은 확장 지역 데이터에서 읽는다
 //   osm    data/osm_migeum_raw.json (data/query_migeum.overpassql, PR #17) — subway_entrance · station 노드, highway=steps
 //   lines  data/osm_subway_routes.json 의 노선 relation (신분당 6060963 · 수인분당 11634611) 이 미금 stop_position 을 멤버로 가짐
 //          (osm_subway_corridor.json 에는 미금이 없음 → 그 relation 만 osmRoutes 에 들어간다)
 //   tiles  public/corridor/migeum/ (mode new = 그 파일만, add = 코리더 타일 + 미금 파일 = 런타임 mergeTileJson 과 같은 합)
-const EXT = { migeum: { index: 'public/corridor/migeum/index.json', tiles: 'public/corridor/migeum/tiles', osm: 'data/osm_migeum_raw.json' } };
+const EXT = {
+  migeum: { index: 'public/corridor/migeum/index.json', tiles: 'public/corridor/migeum/tiles', osm: 'data/osm_migeum_raw.json' },
+  gangnam: { index: 'public/corridor/gangnam/index.json', tiles: 'public/corridor/gangnam/tiles', osm: 'data/osm_gangnam_raw.json' }, // [gangnam]
+};
 // 간이 노선도에 쓸 relation (방향 하나, 정차 순서). data/osm_subway_routes.json 에 있는 것
 const ROUTE_REL = { suin: 11634611, l8: 17953734, l2: 4729409, l3: 4729445, l9: 2718888, gg: 6462562, shin: 6060963 };
 

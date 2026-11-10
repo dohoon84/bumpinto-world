@@ -20,6 +20,17 @@ import { CHAT_RADIUS } from './net/protocol.js';
 import { buildTransit, makeCrossingGuard, mergeSimExtra } from './transit/transit.js';
 import { pangyoLinkEnabled, PANGYO_LINK_FILE } from './corridor/pangyo.js'; // [pangyo-link]
 import { migeumBusEnabled, mergeMigeumBus, MIGEUM_BUS_FILE } from './corridor/migeumBus.js'; // [migeum-bus]
+import { clampWorld } from './corridor/islands.js'; // [gangnam]
+import { setNearScope, collectPlaces, placeCaption, sameIsland } from './corridor/nearScope.js'; // [gangnam-night]
+import { gangnamNightEnabled, createGangnamNight } from './gangnam/night.js'; // [gangnam-night]
+import { gangnamNpcEnabled } from './gangnam/npc/flags.js'; // [gangnam-npc]
+import { mountGangnamNpc } from './gangnam/npc/mount.js'; // [gangnam-npc]
+import { shortenBoom, boomPoint } from './gangnam/camClear.js'; // [gangnam-night]
+import { createGangnamBillboards } from './gangnam/billboards/create.js'; // [gangnam-ads]
+import { gangnamAdsEnabled } from './gangnam/billboards/manifest.js'; // [gangnam-ads]
+import { gangnamEnabled } from './corridor/gangnam.js'; // [gangnam] 브이월드 높이 출처 문구
+import { BUS_CREDIT, gangnamBusEnabled } from './corridor/gangnamBus.js'; // [gangnam-bus]
+import { GYEONGGI_BUS_CREDIT } from './corridor/gyeongbuExpress.js'; // [gyeongbu-bus]
 import { mountPhone } from './phone.js';
 import { mountHandset } from './handset.js';
 import { mountCamera } from './camera/index.js'; // [camera] 폰 카메라·사진 앱 (?camera=0 이면 끔, 본체는 처음 열 때 지연 로드)
@@ -71,6 +82,8 @@ import { createPangyoStreetlights, pangyoLampsEnabled, PANGYO_LAMPS_FILE } from 
 import { createMigeumStreetlights, migeumLampsEnabled, MIGEUM_LAMPS_FILE } from './corridor/migeumStreetlights.js'; // [migeum-lamps]
 import { mountRide } from './ride/index.js'; // [ride] 코리더 버스·택시 탑승
 import { mountGyeongbuSoon } from './world/gyeongbuSoon.js'; // [gyeongbu] 경부고속도로 서울 방면 '준비 중' 안내 (?gyeongbu=0 끔)
+import { mountSeoulToll } from './world/seoulToll.js'; // [gyeongbu-bus] 서울요금소
+import { mountCheonggyeTerrain } from './corridor/cheonggyeTerrain.js'; // [gyeongbu-bus] 청계산 지형
 import { createServerClock } from './subway/clock.js'; // [subway-sync] 서버 시계 (같은 열차 = 같은 순간)
 import { isMobileMode } from './mobile/flag.js'; // [mobile]
 import { mountSubway, zoneLabel as subwayZoneLabel } from './subway/index.js'; // [subway] 정자역·코리더 역 출입구(실제 OSM 출구) + 지하 대합실. ?subway=0 이면 끔
@@ -345,6 +358,24 @@ const lampSkipBoxes = [...(pangyoLampsOn ? corridorData.pangyo.meta.boxes : []),
 const streetlights = streetlightsFile ? createStreetlights({ scene, terrain, corridor, camera, liveBox: data.meta.bboxLocal, url: import.meta.env.BASE_URL + streetlightsFile, skipBoxes: lampSkipBoxes }) : null;
 const pangyoLamps = pangyoLampsOn ? createPangyoStreetlights({ scene, terrain, corridor, url: import.meta.env.BASE_URL + corridorDir + PANGYO_LAMPS_FILE }) : null;
 const migeumLamps = migeumLampsOn ? createMigeumStreetlights({ scene, terrain, corridor, url: import.meta.env.BASE_URL + corridorDir + MIGEUM_LAMPS_FILE }) : null;
+const gnMobile = params.get('mobile') === '1' || (params.get('mobile') !== '0' && (() => { try { return isMobileMode(); } catch { return false; } })()); // [gangnam-night]
+setNearScope({ islands: corridor?.bounds?.islands || null }); // [gangnam-night] 정류장·지명은 지금 섬 안에서만
+const placeList = collectPlaces(corridor?.stations, corridorData?.gangnam?.landmarks, data.station); // [gangnam-night] 정자 라이브 역은 corridor.stations 에 없음
+const gangnamNight = corridorDir && corridorData?.gangnam && gangnamNightEnabled()
+  ? createGangnamNight({ scene, terrain, url: import.meta.env.BASE_URL + corridorDir + 'gangnam/night.json', mobile: gnMobile })
+  : null;
+const gangnamAds = corridorDir && corridorData?.gangnam && gangnamAdsEnabled()
+  ? createGangnamBillboards({ scene, terrain, baseUrl: import.meta.env.BASE_URL, mobile: gnMobile })
+  : null;
+const gangnamNpc = corridor && corridorDir && corridorData?.gangnam && gangnamNpcEnabled()
+  ? mountGangnamNpc({
+    scene, terrain, overlay, params, mobile: gnMobile, gangnam: corridorData.gangnam,
+    baseUrl: import.meta.env.BASE_URL + corridorDir,
+    isFree: (x, z) => corridor.isFree(x, z),
+    freeSpot: (x, z) => corridor.freeSpot(x, z),
+    tileReady: (k) => corridor.tiles?.get?.(k)?.dState === 3,
+  })
+  : null; // [gangnam-npc]
 const st = data.station;
 const homeStationLabel = overlay.add({
   cls: 'label station',
@@ -635,7 +666,11 @@ const arcadeGame = mountArcade({
   },
 });
 if (arcadeGame) { const withArc = world.isBlocked; world.isBlocked = (x, z, r) => withArc(x, z, r) || arcadeGame.blocks(x, z, r); }
-const gyeongbuSoon = corridor ? mountGyeongbuSoon({ getPos: () => player.position, params, isEn }) : null; // [gyeongbu] 코리더가 있을 때만 (경부 북쪽 끝이 코리더 타일)
+const gyeongbuSoon = corridor && !corridorData?.gangnam ? mountGyeongbuSoon({ getPos: () => player.position, params, isEn }) : null; // [gyeongbu] 강남이 열려 있으면 본선이 이어지므로 안내하지 않음
+const seoulToll = mountSeoulToll(scene, location.search); // [gyeongbu-bus] 궁내동 서울요금소 (?seoultg=0 끔)
+void seoulToll;
+const cheonggyeTerrain = mountCheonggyeTerrain(scene, { search: location.search, expressPts: corridorData?.gangnamExpress?.pts }); // [gyeongbu-bus] 판교–양재 청계산 지형 (?cgterrain=0 끔)
+void cheonggyeTerrain;
 if (subway) {
   const withSubway = world.isBlocked;
   world.isBlocked = (x, z, r) => withSubway(x, z, r) || subway.blocks(x, z, r);
@@ -2125,6 +2160,11 @@ function syncGameLocale() {
     if (vworldUse.length) rest += en
       ? ` · Building ${vworldUse.join(' & ')}: <a href="https://www.vworld.kr" target="_blank" rel="noopener">VWorld</a> (MOLIT, KOGL Type 1)`
       : ` · 건물 ${vworldUse.join('·')}: <a href="https://www.vworld.kr" target="_blank" rel="noopener">브이월드</a> (국토교통부, 공공누리 제1유형)`;
+    // [gangnam] 강남 9칸만 브이월드 GIS건물통합정보 hg·층수로 높이를 보탰다. 공공누리 제1유형 출처.
+    if (corridorDir && gangnamEnabled(location.search)) rest += en
+      ? ' · Gangnam building heights: MOLIT VWorld GIS building data (KOGL Type 1: attribution), <a href="https://www.data.go.kr/data/15083092/fileData.do" target="_blank" rel="noopener">https://www.data.go.kr/data/15083092/fileData.do</a>'
+      : ' · 건물 높이: 국토교통부 브이월드 GIS건물통합정보 (공공누리 제1유형: 출처표시), <a href="https://www.data.go.kr/data/15083092/fileData.do" target="_blank" rel="noopener">https://www.data.go.kr/data/15083092/fileData.do</a>';
+    if (corridorDir && gangnamBusEnabled(location.search)) rest += ` · ${BUS_CREDIT} · ${GYEONGGI_BUS_CREDIT}`;
     // [shops] 1층 상가 출처 (소상공인시장진흥공단 상가(상권)정보, 공공데이터포털 15083033)
     if (world.shops) rest += en
       ? ' · Shops: <a href="https://www.data.go.kr/data/15083033/fileData.do" target="_blank" rel="noopener">SEMAS</a> (data.go.kr)'
@@ -2373,7 +2413,11 @@ if (mobileMode) import('./mobile/hud.js').then((m) => m.mountMobileHud({ handset
 if (controlsCardWanted()) import('./controlsCard/index.js').then((m) => m.mountControlsCard()).catch((e) => console.warn('[controls-card]', e));
 if (mobileMode && !shot && uiV2Wanted()) import('./mobile/econ/index.js').then((m) => m.mountMobileEcon({ handset })).catch((e) => console.warn('[econ-mobile]', e)); // [econ-mobile] 모바일 경제 UI (?ui=v2)
 const ov = { yaw: 0.35, pitch: 0.95, dist: 1000 };
-const phone = mountPhone({ data, region, extraTiles: corridor ? () => corridor.mapTiles() : null }); // [corridor]
+const phone = mountPhone({
+  data, region, extraTiles: corridor ? () => corridor.mapTiles() : null,
+  placeAt: (x, z) => placeCaption(x, z, placeList, corridor?.bounds?.islands), // [gangnam-night] 미니맵 지명
+  peerHere: (px, pz, x, z) => sameIsland(x, z, px, pz, corridor?.bounds?.islands), // 다른 섬 접속자 이름(판교러버 등)은 가장자리 라벨로 안 그림
+}); // [corridor]
 
 let placeAt = 0, placeMark = '';
 function rememberPlace(force = false) {
@@ -2607,8 +2651,8 @@ function frame() {
     const h = dist / steps;
     const bb = world.bounds;
     for (let i = 0; i < steps; i++) {
-      const nx = THREE.MathUtils.clamp(b.x + mx * h, bb.x0, bb.x1);
-      const nz = THREE.MathUtils.clamp(b.z + mz * h, bb.z0, bb.z1);
+      const nx = clampWorld(b.x + mx * h, b.z, bb).x;
+      const nz = clampWorld(b.x, b.z + mz * h, bb).z;
       let yx = null, yz = null;
       const xOk = !world.isBlocked(nx, b.z, 0.4) && !bikes.blocks(nx, b.z, b, b.y) && (!terrain || (yx = terrain.canMove(b.x, b.z, b.y, nx, b.z)) != null);
       const zOk = !world.isBlocked(b.x, nz, 0.4) && !bikes.blocks(b.x, nz, b, b.y) && (!terrain || (yz = terrain.canMove(b.x, b.z, b.y, b.x, nz)) != null);
@@ -2634,7 +2678,7 @@ function frame() {
       let mx = fx * f + rx * s, mz = fz * f + rz * s; const L = Math.hypot(mx, mz); mx /= L; mz /= L;
       const sp = (run ? 9 : 4.2) * Math.min(1, Math.hypot(f, s)), step = sp * dt;
       const p = player.position, bb = world.bounds;
-      const nx = THREE.MathUtils.clamp(p.x + mx * step, bb.x0, bb.x1), nz = THREE.MathUtils.clamp(p.z + mz * step, bb.z0, bb.z1);
+      const nx = clampWorld(p.x + mx * step, p.z, bb).x, nz = clampWorld(p.x, p.z + mz * step, bb).z;
       // 현재 위치가 구조물 충돌 반경 내부에 끼어 있는 경우, 장애물에서 멀어지는 방향으로는 탈출 허용
       const stuckNow = world.isBlocked(p.x, p.z);
       if (terrain) { // [terrain] 계단/경사/다리 판정 + 높이 따라가기 (축별 슬라이딩 유지)
@@ -2763,7 +2807,16 @@ function frame() {
   else if (cam.mode === 'follow') {
     // 가슴 높이 피벗을 공전하고, 시선은 피벗을 지나 앞쪽으로 보낸다.
     // 그래서 좌우는 한 바퀴, 위는 하늘, 아래는 바닥까지 화면 가운데로 들어온다.
-    const eye = P.y + 1.6, yaw = cam.yaw, pitch = cam.pitch, dist = cam.dist;
+    const eye = P.y + 1.6, yaw = cam.yaw, pitch = cam.pitch;
+    const gnBox = corridorData?.gangnam?.meta?.box;
+    const inGn = gnBox && P.x >= gnBox.x0 && P.x <= gnBox.x1 && P.z >= gnBox.z0 && P.z <= gnBox.z1;
+    let dist = cam.dist;
+    if (inGn && corridor?.roofAt) {
+      dist = shortenBoom(cam.dist, (d) => {
+        const q = boomPoint(P.x, P.z, eye, yaw, pitch, d);
+        return corridor.roofAt(q.x, q.z) > q.y + 0.6;
+      });
+    }
     const bx = Math.sin(yaw), bz = Math.cos(yaw), cp = Math.cos(pitch), sp = Math.sin(pitch), aim = 4;
     const camX = P.x + bx * dist * cp, camZ = P.z + bz * dist * cp;
     const camFloor = terrain ? 1.2 + terrain.renderHeight(camX, camZ) : 0.45; // [terrain] 카메라가 제방 속으로 안 들어가게
@@ -2786,6 +2839,9 @@ function frame() {
   if (streetlights) { const c = cam.mode === 'follow' ? P : sun.target.position; streetlights.update(dt, c.x, c.z, cam.mode); } // [streetlights] 거리·타일 기준 표시 + 밤 페이드
   if (pangyoLamps) { const c = cam.mode === 'follow' ? P : sun.target.position; pangyoLamps.update(dt, c.x, c.z, cam.mode); } // [pangyo-streetlights]
   if (migeumLamps) { const c = cam.mode === 'follow' ? P : sun.target.position; migeumLamps.update(dt, c.x, c.z, cam.mode); } // [migeum-lamps]
+  if (gangnamNight) { const c = cam.mode === 'follow' ? P : sun.target.position; gangnamNight.update(dt, c.x, c.z); } // [gangnam-night]
+  if (gangnamAds) { const c = cam.mode === 'follow' ? P : sun.target.position; gangnamAds.update(dt, c.x, c.z); } // [gangnam-ads]
+  if (gangnamNpc) { const c = cam.mode === 'follow' ? P : sun.target.position; gangnamNpc.update(dt, c.x, c.z, cam.mode === 'follow' ? cam.yaw : ov.yaw); } // [gangnam-npc]
   world.shops?.update(dt, P.x, P.z); // [shops] 주변 70m 상호 간판 풀
   const viewYaw = cam.mode === 'follow' ? cam.yaw : ov.yaw;
   const moveYaw = player.rotation.y + (bikes.riding && bikes.speed < -0.2 ? Math.PI : 0);
@@ -2815,7 +2871,8 @@ requestAnimationFrame(frame);
 // 스크린샷/디버그용 훅
 window.__jj = {
   perfmem: perfMem, // [perf-memory]
-  ready: true, region, tower, renderer, corridor, schoolZone: corridor?.schoolZone || null, playgrounds, streetlights, pangyoLamps, migeumLamps, // [corridor] [schoolzone] [playgrounds] [streetlights]
+  ready: true, region, tower, renderer, corridor, schoolZone: corridor?.schoolZone || null, playgrounds, streetlights, pangyoLamps, migeumLamps, gangnamNight, gangnamAds, gangnamNpc, // [corridor] [schoolzone] [playgrounds] [streetlights] [gangnam-night] [gangnam-npc]
+  placeCaption: (x, z) => placeCaption(x, z, placeList, corridor?.bounds?.islands), // [gangnam-night]
   bungeo, // [bungeo]
   launch, roadster, trucks, bike: adminBike, giftRides, inventory, data, world, npcs, transit, camera, cam, ov, setMode, terrain, taxis, jzTraffic, police, weather: atmosphere, umbrellas, dogPark, strayCats, // [terrain] [taxi] [roadster] [tower] [launch] [truck] [bike] [roadbike] [inventory]
   get player() { return player; },

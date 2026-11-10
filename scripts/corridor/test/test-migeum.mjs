@@ -142,12 +142,12 @@ assert.equal(migeumEnabled(''), true); assert.equal(migeumEnabled('?migeum=0'), 
   const { loadCorridorData } = await import('../../../src/corridor/index.js');
   const reqs = [];
   const fetchFn = async (u) => { reqs.push(u); const f = path.join(C, u.replace(/^\/corridor\//, '')); return fs.existsSync(f) ? { ok: true, json: async () => J(f) } : { ok: false }; };
-  const off = await loadCorridorData('/corridor/', { fetchFn, migeum: false, streams: false });
+  const off = await loadCorridorData('/corridor/', { fetchFn, migeum: false, gangnam: false, streams: false });
   assert.ok(!reqs.some((u) => u.includes(MIGEUM_DIR)), 'no migeum requests when off');
   assert.ok(!off.migeum && !Object.values(off.index.tiles).some((t) => t.ext), 'no migeum tiles when off');
   assert.deepEqual(off.index.meta.bounds, cIndex.meta.bounds, 'bounds unchanged when off');
   reqs.length = 0;
-  const on = await loadCorridorData('/corridor/', { fetchFn, migeum: true, streams: false });
+  const on = await loadCorridorData('/corridor/', { fetchFn, migeum: true, gangnam: false, streams: false });
   assert.ok(reqs.includes('/corridor/' + MIGEUM_DIR + 'index.json') && on.migeum && on.index.meta.bounds.z1 === 2500, 'loads when on');
 }
 ok('runtime merge, ?migeum=0 = no requests / tiles / bounds change');

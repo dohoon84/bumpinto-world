@@ -58,6 +58,23 @@ export const ZONES = Object.freeze([
   'migeum-station/p-suin-1', // 118
   'migeum-station/p-shin-0', // 119
   'migeum-station/p-shin-1', // 120
+  // [gangnam] 강남 (2호선 · 신분당선, 2026-11-08). 덧붙이기만: 121 대합실, 122·123 2호선, 124·125 신분당.
+  //   ?gangnamsub=0 이어도 슬롯은 그대로. 열차 구역은 기존 l2·shin 슬롯.
+  'gangnam-station',          // 121
+  'gangnam-station/p-l2-0',   // 122
+  'gangnam-station/p-l2-1',   // 123
+  'gangnam-station/p-shin-0', // 124
+  'gangnam-station/p-shin-1', // 125
+  // [gyeongbu-bus] 판교(신분당·경강) · 청계산입구(신분당), 2026-11-10. 덧붙이기만.
+  //   ?gangnamsub=0 이어도 슬롯은 그대로. 열차 구역은 기존 shin·gg 슬롯.
+  'pangyo-station',                // 126
+  'pangyo-station/p-shin-0',       // 127
+  'pangyo-station/p-shin-1',       // 128
+  'pangyo-station/p-gg-0',         // 129
+  'pangyo-station/p-gg-1',         // 130
+  'cheonggyesan-station',          // 131
+  'cheonggyesan-station/p-shin-0', // 132
+  'cheonggyesan-station/p-shin-1', // 133
 ]);
 const SLOT = new Map(ZONES.map((z, i) => [z, i]));
 

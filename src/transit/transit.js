@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { createBus, disposeBus } from './busModel.js';
 import { createBusSource, TIME_COMPRESS } from './busSource.js';
 import { liveryOf } from './livery.js';
+import { stopCardAllowed, sameIsland, nearIslands } from '../corridor/nearScope.js'; // [gangnam-night]
 
 export const CYCLE = 60; // 신호 주기(초): 그룹0 보행 초록 0~20, 깜빡 20~26 / 그룹1 초록 30~50, 깜빡 50~56
 export const hash = (s) => { let h = 2166136261; for (const ch of String(s)) h = Math.imul(h ^ ch.charCodeAt(0), 16777619); return (h >>> 0) / 4294967296; };
@@ -153,8 +154,14 @@ export function buildTransit(scene, T, world, overlay, { mode = 'sim', proxy, fi
     return (m ? `${m}분 ` : '') + `${s}초`;
   };
   const renderPanel = (playerPos) => {
+    if (!stopCardAllowed(playerPos.x, playerPos.z)) { panel.classList.remove('open'); panelStop = null; return; } // [gangnam-night] 강남 섬은 버스 단계 전엔 카드 없음
+    const islands = nearIslands();
     let best = null, bd = 22;
-    for (const s of T.stops) { const d = Math.hypot(s._pos.x - playerPos.x, s._pos.z - playerPos.z); if (d < bd) { bd = d; best = s; } }
+    for (const s of T.stops) {
+      if (!sameIsland(playerPos.x, playerPos.z, s._pos.x, s._pos.z, islands)) continue; // 다른 섬(정자·코리더) 정류장은 후보가 아님
+      const d = Math.hypot(s._pos.x - playerPos.x, s._pos.z - playerPos.z);
+      if (d < bd) { bd = d; best = s; }
+    }
     panelStop = best;
     if (!best) { panel.classList.remove('open'); return; }
     const arrivalList = source.arrivals(best);
@@ -175,7 +182,11 @@ export function buildTransit(scene, T, world, overlay, { mode = 'sim', proxy, fi
     simTime += dt;
     source.update(dt, ctx);
     syncBuses(); updateLamps();
-    panelT -= dt; if (panelT <= 0) { panelT = 0.5; renderPanel(playerPos); }
+    // 텔레포트 직후엔 sim 시간이 0.5초 쌓이기 전에 찍히면 이전 정류장(정자역 07786)이 남는다. 멀어지면 그 프레임에 닫는다.
+    const shown = panelStop && Math.hypot(panelStop._pos.x - playerPos.x, panelStop._pos.z - playerPos.z) > 30;
+    const hideNow = panel.classList.contains('open') && !stopCardAllowed(playerPos.x, playerPos.z);
+    panelT -= dt;
+    if (panelT <= 0 || shown || hideNow) { panelT = 0.5; renderPanel(playerPos); }
   }
   function fastForward(sec, step = 0.1) { for (let t = 0; t < sec; t += step) { simTime += step; source.update(step, ctx); } syncBuses(); updateLamps(); }
   // [ride] 정자 버스 탑승용 읽기 전용 훅 — 시뮬레이션 모드(?bus=sim)에서만. 실시간 버스는 정류장에 서지 않아 탈 수 없다.

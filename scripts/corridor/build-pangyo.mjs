@@ -12,6 +12,11 @@
 // [migeum] --region=migeum : 같은 규칙으로 미금역 일대(MIGEUM_BOX, 9칸) → public/corridor/migeum/* (원본 data/osm_migeum_raw.json ← data/query_migeum.overpassql)
 //   판교 전용 부분(백화점·알파돔·데크·엔씨소프트 덧박스)은 region=pangyo 일 때만. 미금은 지하철 출입구(1–8번)만 랜드마크.
 //   미금 박스 동쪽 끝이 탄천(라이브 terrain.json 축) 제방 띠에 걸려 → 띠(build-corridor.mjs LIVE_MASK 와 같은 계산) 안에는 아무것도 굽지 않는다
+// [gangnam] --region=gangnam : 강남역 일대 B안 9칸(GANGNAM_BOX, x −7500..−6000, z −15500..−14000) → public/corridor/gangnam/*
+//   코리더와 떨어진 섬. 탄천 띠 없음. 지하(layer<0·location=underground) 건물은 그리지 않음(지하상가는 후속).
+//   출입구는 가장 가까운 역 이름이 강남인 것만(신논현·역삼 출구는 이 박스 안에 있어도 제외). 표지는 OSM 이름 평문만.
+//   높이: OSM height → data/gangnam_vworld_heights.json (브이월드 dt_d010 hg, 없으면 지상층수×LEVEL_H) → building:levels → 기본값.
+//   원본 타일은 커밋하지 않고, 표는 scripts/corridor/gangnam-vworld-heights.mjs --vworld= 로 만든다.
 import fs from 'node:fs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
@@ -21,14 +26,15 @@ import pc from 'polygon-clipping';
 const arg = (k, d) => { const a = process.argv.find((s) => s.startsWith(`--${k}=`)); return a ? a.slice(k.length + 3) : d; };
 const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), '../..');
 const CORR = path.resolve(ROOT, arg('corridor', 'public/corridor'));
-const REGION = arg('region', 'pangyo'); // [migeum]
-if (!['pangyo', 'migeum'].includes(REGION)) throw new Error('--region=pangyo|migeum');
+const REGION = arg('region', 'pangyo'); // [migeum] [gangnam]
+if (!['pangyo', 'migeum', 'gangnam'].includes(REGION)) throw new Error('--region=pangyo|migeum|gangnam');
 const MG = REGION === 'migeum';
+const GN = REGION === 'gangnam'; // [gangnam]
 const OUT = path.resolve(ROOT, arg('out', `public/corridor/${REGION}`));
 const RAW = path.resolve(ROOT, arg('raw', `data/osm_${REGION}_raw.json`));
 // [ncsoft] 엔씨소프트 R&D센터 덧박스용 원본(작은 bbox, data/query_pangyo_ncsoft.overpassql). 1단계 원본에 없는 요소만 덧붙인다(같은 id 는 1단계 판 유지)
 const RAW_NC = MG ? null : path.resolve(ROOT, arg('rawNc', 'data/osm_pangyo_ncsoft_raw.json'));
-if (process.argv.includes('--fetch') && MG) execFileSync('bash', [path.join(ROOT, 'data/fetch.sh'), 'query_migeum.overpassql', path.basename(RAW)], { stdio: 'inherit' });
+if (process.argv.includes('--fetch') && (MG || GN)) execFileSync('bash', [path.join(ROOT, 'data/fetch.sh'), `query_${REGION}.overpassql`, path.basename(RAW)], { stdio: 'inherit' }); // [gangnam]
 else if (process.argv.includes('--fetch')) {
   execFileSync('bash', [path.join(ROOT, 'data/fetch.sh'), 'query_pangyo.overpassql', path.basename(RAW)], { stdio: 'inherit' });
   execFileSync('bash', [path.join(ROOT, 'data/fetch.sh'), 'query_pangyo_ncsoft.overpassql', path.basename(RAW_NC)], { stdio: 'inherit' });
@@ -59,13 +65,32 @@ export const NC_BOX = { x0: -180, x1: 125, z0: -3700, z1: -3500 };
 // [migeum] 미금역 일대: 역(x≈50, z≈1826) 둘레 x −500..1000(동쪽 1_x 열 = 청솔마을·탄천 쪽, 2026-11-04 도훈님 결정 9칸), z 1000..2500
 //   북쪽 끝 z 1000 = 정자 라이브 박스(z ≤ 939.6) 남쪽 — 그 사이 60m 는 기존 코리더 칸(-1_1·0_1·1_1) 그대로
 export const MIGEUM_BOX = { x0: -500, x1: 1000, z0: 1000, z1: 2500 };
-const BOXES = MG ? [MIGEUM_BOX] : [BOX, NC_BOX];
+// [gangnam] 강남역 일대 B안 (2026-11-08 결정): 강남·신논현·역삼, 강남대로×테헤란로. 타일 −15..−13 × −31..−29
+export const GANGNAM_BOX = { x0: -7500, x1: -6000, z0: -15500, z1: -14000 };
+const BOXES = GN ? [GANGNAM_BOX] : MG ? [MIGEUM_BOX] : [BOX, NC_BOX];
 const inB = (B, x, z, m = 0) => x >= B.x0 - m && x <= B.x1 + m && z >= B.z0 - m && z <= B.z1 + m;
 const inBox = (x, z, m = 0) => BOXES.some((B) => inB(B, x, z, m));
 const tileOf = (x, z) => `${Math.floor(x / TS)}_${Math.floor(z / TS)}`;
 const CELLS = [];
 for (const B of BOXES) for (let tx = Math.floor(B.x0 / TS); tx < Math.ceil(B.x1 / TS); tx++) for (let tz = Math.floor(B.z0 / TS); tz < Math.ceil(B.z1 / TS); tz++) if (!CELLS.includes(`${tx}_${tz}`)) CELLS.push(`${tx}_${tz}`);
 const LEVEL_H = 3.2;
+const fromFloors = (lv) => lv * LEVEL_H + (lv > 3 ? 1.5 : 0.6); // 층고 3.2m + 낮은 옥상 덧값. 판교·미금·강남·브이월드 층수 공통
+// [gangnam] 브이월드 GIS건물통합정보 파생 표. 원본 타일 캐시는 저장소에 없다.
+const VW_CREDIT = '건물 높이: 국토교통부 브이월드 GIS건물통합정보 (공공누리 제1유형: 출처표시), https://www.data.go.kr/data/15083092/fileData.do';
+const VW_HEIGHTS = GN ? path.resolve(ROOT, arg('vworldHeights', 'data/gangnam_vworld_heights.json')) : null;
+let vwByKey = null;
+if (GN) {
+  if (!VW_HEIGHTS || !fs.existsSync(VW_HEIGHTS)) throw new Error('강남 브이월드 높이 표 없음: ' + VW_HEIGHTS);
+  vwByKey = new Map();
+  for (const row of readJSON(VW_HEIGHTS).rows || []) {
+    const [id, src, val] = row;
+    const n = typeof val === 'number' ? val : parseFloat(val);
+    if (src === 'hg' && n >= 2 && n <= 300) vwByKey.set(id, { src, val: n });
+    else if (src === 'fl' && n >= 1 && n <= 60) vwByKey.set(id, { src, val: n });
+    else console.warn('높이 표에서 버림', id, src, val);
+  }
+}
+const vwHit = (id, c) => vwByKey?.get(`${id}@${r1(c[0])},${r1(c[1])}`) || vwByKey?.get(id) || null;
 
 // ---------- 기하 유틸 ----------
 const area = (r) => { let a = 0; for (let i = 0, n = r.length; i < n; i++) { const [x1, z1] = r[i], [x2, z2] = r[(i + 1) % n]; a += x1 * z2 - x2 * z1; } return a / 2; };
@@ -215,20 +240,27 @@ function defaultLevels(t, a) {
   if (/residential/.test(b)) return [4, 'default:residential'];
   return [a < 120 ? 2 : a < 500 ? 3 : a < 2000 ? 4 : 5, 'default:area'];
 }
-const stat = { osmBuildings: 0, height: 0, levels: 0, default: 0, outlines: 0, dupExisting: 0, outsideAllowed: 0, landmark: 0 };
+const stat = { osmBuildings: 0, height: 0, ...(GN ? { vwHg: 0, vwFloors: 0 } : {}), levels: 0, default: 0, outlines: 0, dupExisting: 0, outsideAllowed: 0, landmark: 0 };
 const buildings = [];
 for (const e of raw.elements) {
   const t = e.tags || {};
   if (!(t.building || t['building:part']) || e.type === 'node') continue;
   if (t.building === 'no' && !t['building:part']) continue;
   if (/construction|proposed|demolished/.test(t.building || '') && !t.height && !t['building:levels']) continue;
+  if (GN && ((num(t.layer) != null && num(t.layer) < 0) || t.location === 'underground')) continue; // [gangnam] 지하상가·지하층은 지상에 그리지 않음
   const id = `${e.type[0]}${e.id}`;
   for (const poly of polygonsOf(e)) {
     const a = Math.abs(area(poly.outer)); if (a < 6) continue;
     const c = centroid(poly.outer); if (!inBox(c[0], c[1])) continue;
     let h = num(t.height), src = 'osm:height';
     const lv = num(t['building:levels']);
-    if (!h || h < 2) { if (lv) { h = lv * LEVEL_H + (lv > 3 ? 1.5 : 0.6); src = 'osm:levels'; } else { const [L, s] = defaultLevels(t, a); h = L * LEVEL_H + 0.6; src = s; } }
+    if (!h || h < 2) {
+      const hit = GN ? vwHit(id, c) : null; // [gangnam] OSM height 가 없을 때만. hg > 지상층수 > OSM 층수 > 기본값
+      if (hit?.src === 'hg') { h = hit.val; src = 'vw:hg'; }
+      else if (hit?.src === 'fl') { h = fromFloors(hit.val); src = 'vw:floors'; }
+      else if (lv) { h = fromFloors(lv); src = 'osm:levels'; }
+      else { const [L, s] = defaultLevels(t, a); h = L * LEVEL_H + 0.6; src = s; }
+    }
     let mh = num(t.min_height) ?? (num(t['building:min_level']) ? num(t['building:min_level']) * LEVEL_H : 0);
     if (t.building === 'roof' || t['building:part'] === 'roof') { if (!t.min_height && !t['building:min_level']) { mh = Math.max(0, h - 0.6); if (h < 3) h = 4.5, mh = 3.9; } }
     if (id === LM_DECK) { h = DECK.h; mh = DECK.mh; src = 'landmark:deck'; }
@@ -236,7 +268,7 @@ for (const e of raw.elements) {
     if (id === NC_PHOTO.under) { NC_OSM.set(id, { mh, h }); h = NC_PHOTO.bridgeMh; src = NC_PHOTO.src; }
     if (mh >= h) mh = Math.max(0, h - 1);
     const part = !!t['building:part'] && t['building:part'] !== 'no' && (!t.building || LM_DEPT.has(id) && e.type === 'way');
-    buildings.push({ id, o: poly.outer, holes: poly.holes, h: r1(h), mh: r1(mh), k: t.building && t.building !== 'yes' || !t['building:part'] ? (t.building || 'yes') : 'part:' + t['building:part'], s: src, a, c, n: t.name, part });
+    buildings.push({ id, o: poly.outer, holes: poly.holes, h: r1(h), mh: r1(mh), k: t.building && t.building !== 'yes' || !t['building:part'] ? (t.building || 'yes') : 'part:' + t['building:part'], s: src, a, c, n: t.name, en: t['name:en'] || '', part });
   }
 }
 // building:part 가 있는 외곽선은 렌더 생략(Simple 3D Buildings), 충돌만 유지 — bake.mjs 와 같음
@@ -262,7 +294,11 @@ for (const b of buildings) {
   rec.id = b.id;
   (addB[tileOf(b.c[0], b.c[1])] ||= []).push(rec);
   stat.osmBuildings++;
-  if (b.s.startsWith('osm:height')) stat.height++; else if (b.s.startsWith('osm:levels')) stat.levels++; else if (b.s.startsWith('default')) { stat.default++; if (!b.outline) defaultList.push({ id: b.id, k: b.k, h: b.h, rule: b.s, a: Math.round(b.a), x: r1(b.c[0]), z: r1(b.c[1]), ...(b.n ? { n: b.n } : {}) }); }
+  if (b.s.startsWith('osm:height')) stat.height++;
+  else if (b.s === 'vw:hg') stat.vwHg++;
+  else if (b.s === 'vw:floors') stat.vwFloors++;
+  else if (b.s.startsWith('osm:levels')) stat.levels++;
+  else if (b.s.startsWith('default')) { stat.default++; if (!b.outline) defaultList.push({ id: b.id, k: b.k, h: b.h, rule: b.s, a: Math.round(b.a), x: r1(b.c[0]), z: r1(b.c[1]), ...(b.n ? { n: b.n } : {}) }); }
 }
 
 // ---------- 2) 도로 (bake.mjs 규칙) ----------
@@ -426,14 +462,18 @@ for (const l of waterLines) {
 
 // ---------- 4) 역 · 출입구 · 랜드마크 ----------
 const nodes = raw.elements.filter((e) => e.type === 'node');
-const ST_RE = MG ? /^미금$/ : /판교/; // [migeum]
-const stNodes = nodes.filter((e) => e.tags?.railway === 'station' || e.tags?.public_transport === 'station').filter((e) => ST_RE.test(e.tags?.name || '') && inBox(...proj(e)));
+const baseName = (s) => String(s || '').replace(/\s*[(（].*$/, '').replace(/역$/, '').trim();
+const ST_RE = GN ? /^강남$/ : MG ? /^미금$/ : /판교/; // [migeum] [gangnam]
+const stNodes = nodes.filter((e) => e.tags?.railway === 'station' || e.tags?.public_transport === 'station').filter((e) => (GN ? ST_RE.test(baseName(e.tags?.name || '')) : ST_RE.test(e.tags?.name || '')) && inBox(...proj(e)));
 if (!stNodes.length) throw new Error(`${REGION} 역 노드 없음`);
 // 노선: 역 노드 태그로 판별 (경강선 = description/노선 태그, 신분당선 = 운영사 네오트랜스 — 이 구간 신분당선 운영사)
 // [migeum] 미금: 운영사 태그로 판별 — 네오트랜스 = 신분당선, 한국철도공사(KORAIL) = 수인분당선 (OSM 역 노드 5881397260 / 7908597462 · 5927446185)
+// [gangnam] 강남: 서울교통공사 = 2호선 (node 5927529147), 네오트랜스 = 신분당선 (node 8793714495)
 const LINE_OF_MG = (t) => (/네오트랜스|NEO TRANS/i.test(`${t.operator || ''} ${t['operator:en'] || ''}`) ? '신분당선' : /한국철도공사|KORAIL|Korea Railroad/i.test(`${t.operator || ''} ${t['operator:en'] || ''}`) ? '수인분당선' : null);
-const LINE_OF = MG ? LINE_OF_MG : (t) => (/경강/.test(`${t.description || ''} ${t.line || ''} ${t.name || ''}`) || /^K\d+/.test(t.ref || '') ? '경강선' : /신분당|네오트랜스|NEO TRANS/i.test(`${t.line || ''} ${t.operator || ''} ${t['operator:en'] || ''}`) ? '신분당선' : null);
-const stLines = [...new Set(stNodes.map((e) => LINE_OF(e.tags)).filter(Boolean))].sort((a, b) => (MG ? (a === '수인분당선' ? -1 : b === '수인분당선' ? 1 : 0) : a === '신분당선' ? -1 : b === '신분당선' ? 1 : 0));
+const LINE_OF_GN = (t) => (/네오트랜스|NEO TRANS|신분당/i.test(`${t.operator || ''} ${t['operator:en'] || ''} ${t.line || ''}`) ? '신분당선' : /서울교통공사|서울메트로|Seoul Metro|^2$/.test(`${t.operator || ''} ${t['operator:en'] || ''}`) || t.ref === '2' ? '2호선' : null);
+const LINE_OF = GN ? LINE_OF_GN : MG ? LINE_OF_MG : (t) => (/경강/.test(`${t.description || ''} ${t.line || ''} ${t.name || ''}`) || /^K\d+/.test(t.ref || '') ? '경강선' : /신분당|네오트랜스|NEO TRANS/i.test(`${t.line || ''} ${t.operator || ''} ${t['operator:en'] || ''}`) ? '신분당선' : null);
+const lineOrder = GN ? ['2호선', '신분당선'] : null;
+const stLines = [...new Set(stNodes.map((e) => LINE_OF(e.tags)).filter(Boolean))].sort((a, b) => (lineOrder ? lineOrder.indexOf(a) - lineOrder.indexOf(b) : MG ? (a === '수인분당선' ? -1 : b === '수인분당선' ? 1 : 0) : a === '신분당선' ? -1 : b === '신분당선' ? 1 : 0));
 const sp = stNodes.map(proj);
 const allRendered = buildings.filter((b) => b.id !== LM_DECK && !b.outline);
 const footways = chains.filter((c) => ['footway', 'pedestrian', 'path', 'steps'].includes(c.k));
@@ -457,14 +497,25 @@ function offCarway(x0, z0) {
 }
 const exits = nodes.filter((e) => e.tags?.railway === 'subway_entrance' || e.tags?.railway === 'train_station_entrance').map((e) => {
   let [x, z] = proj(e), moved = 0;
-  if (MG) [x, z, moved] = offCarway(x, z);
+  if (MG || GN) [x, z, moved] = offCarway(x, z); // [gangnam] 강남대로 폭 추정에 출입구가 묻히면 보도 쪽으로 1m
   // 입구 방향: 가장 가까운 보행로 선분 방향 (데이터 기반). 건물 안(지하 연결 통로) 입구는 캐노피 없이 표지만
   let best = null, bd = Infinity;
   for (const c of footways) for (let i = 1; i < c.p.length; i++) { const d = segDist(x, z, ...c.p[i - 1], ...c.p[i]); if (d < bd) { bd = d; best = [c.p[i - 1], c.p[i]]; } }
   const dir = best ? Math.atan2(best[1][1] - best[0][1], best[1][0] - best[0][0]) : 0;
   const inside = allRendered.find((b) => inPoly(x, z, b.o, b.holes));
-  return { x: MG ? r1(x) : x, z: MG ? r1(z) : z, ref: e.tags.ref || '', osm: e.id, dir: +dir.toFixed(3), ...(inside ? { indoor: inside.id } : {}), ...(moved > 0.05 ? { moved: r1(moved) } : {}) };
-}).filter((e) => inBox(e.x, e.z)).sort((a, b) => String(a.ref).localeCompare(String(b.ref), 'en', { numeric: true }));
+  return { x: MG || GN ? r1(x) : x, z: MG || GN ? r1(z) : z, ref: e.tags.ref || '', osm: e.id, dir: +dir.toFixed(3), ...(inside ? { indoor: inside.id } : {}), ...(moved > 0.05 ? { moved: r1(moved) } : {}) };
+}).filter((e) => inBox(e.x, e.z));
+// [gangnam] 박스 안에 신논현·역삼 출구도 있다. 가장 가까운 역 노드 이름이 강남이고 450m 안인 것만 강남 출구.
+if (GN) {
+  // 버스 정류장(public_transport=stop_position, 이름 '강남역○○')은 역이 아님. railway=station 만.
+  const anchors = nodes.filter((e) => e.tags?.name && (e.tags.railway === 'station' || (e.tags.public_transport === 'station' && e.tags.railway !== 'stop'))).map((e) => ({ name: baseName(e.tags.name), p: proj(e) }));
+  for (let i = exits.length - 1; i >= 0; i--) {
+    const e = exits[i]; let best = null;
+    for (const a of anchors) { const d = Math.hypot(a.p[0] - e.x, a.p[1] - e.z); if (!best || d < best.d) best = { a, d }; }
+    if (!best || best.a.name !== '강남' || best.d > 450) exits.splice(i, 1);
+  }
+}
+exits.sort((a, b) => String(a.ref).localeCompare(String(b.ref), 'en', { numeric: true }));
 // 역 표지판(stationSign: 기둥+판 x-0.3..+0.3, 자체 캐노피 x+2.5..+7.5 · z±3.5) 자리: 출구 둘레에서 건물·데크·차도·다른 출입구와 안 겹치는 첫 점
 //   (런타임 placeSign 은 기존처럼 그 점부터 나선 탐색 — 여기선 판교 출입구 캐노피/데크와 겹치지 않게만 고름. 배치 규칙일 뿐 데이터 아님)
 const signAt = (() => {
@@ -478,7 +529,17 @@ const signAt = (() => {
   for (const e of exits) for (const r of [10, 14, 18, 24]) for (let a = 0; a < 16; a++) { const x = r1(e.x + Math.cos((a * Math.PI) / 8) * r), z = r1(e.z + Math.sin((a * Math.PI) / 8) * r); if (clear(x, z)) return { x, z }; }
   return null;
 })();
-const station = { id: REGION, name: MG ? '미금' : '판교', nameEn: MG ? 'Migeum' : 'Pangyo', lines: stLines.length ? stLines : ['신분당선'], x: r1(sp.reduce((s, p) => s + p[0], 0) / sp.length), z: r1(sp.reduce((s, p) => s + p[1], 0) / sp.length), exits: exits.map(({ x, z, ref }) => ({ x, z, ...(ref ? { ref } : {}) })), ...(signAt ? { signAt } : {}), osm: stNodes.map((e) => e.id) };
+const nameEnOsm = stNodes.map((e) => e.tags?.['name:en']).find(Boolean) || '';
+const station = {
+  id: REGION,
+  name: GN ? '강남' : MG ? '미금' : '판교',
+  nameEn: GN ? nameEnOsm : MG ? 'Migeum' : 'Pangyo',
+  lines: stLines.length ? stLines : ['신분당선'],
+  x: r1(sp.reduce((s, p) => s + p[0], 0) / sp.length), z: r1(sp.reduce((s, p) => s + p[1], 0) / sp.length),
+  exits: exits.map(({ x, z, ref }) => ({ x, z, ...(ref ? { ref } : {}) })),
+  ...(signAt ? { signAt } : {}), osm: stNodes.map((e) => e.id),
+};
+if (GN && !nameEnOsm) throw new Error('강남역 OSM name:en 없음 — 영문 이름을 지어내지 않음');
 
 const lmParts = (lm) => buildings.filter((b) => lmOf(b) === lm && !b.outline).map((b) => ({ id: b.id, o: b.o, ...(b.holes?.length ? { holes: b.holes } : {}), h: b.h, mh: b.mh || 0, ...(b.n ? { n: b.n } : {}), s: b.s }));
 const centerOf = (parts) => { const all = parts.flatMap((p) => p.o); const bb = bboxOf(all); return { x: r1((bb[0] + bb[2]) / 2), z: r1((bb[1] + bb[3]) / 2), y: Math.max(...parts.map((p) => p.h)) }; };
@@ -490,7 +551,7 @@ const nc = nc0.map((p) => { // [ncsoft-44m] 사진 기준값으로 바꾼 두 �
   const o = NC_OSM.get(p.id); if (!o) return p;
   return { ...p, ...(p.id === NC_PHOTO.under ? { fl: Math.round((p.h - p.mh) / ((o.h - o.mh) / (p.fl || 1))) } : {}), osm: { ...o, ...(p.id === NC_PHOTO.under ? { fl: p.fl } : {}) } };
 });
-if (!MG && (dept.length !== 4 || towers.length !== 4 || deck.length !== 1 || nc.length !== 5)) throw new Error(`랜드마크 매칭 실패 dept=${dept.length} towers=${towers.length} deck=${deck.length} ncsoft=${nc.length}`);
+if (!MG && !GN && (dept.length !== 4 || towers.length !== 4 || deck.length !== 1 || nc.length !== 5)) throw new Error(`랜드마크 매칭 실패 dept=${dept.length} towers=${towers.length} deck=${deck.length} ncsoft=${nc.length}`);
 // 데크 안쪽 빈 곳(선큰 광장) — OSM 링의 구멍이 없으면 외곽 자체의 오목한 X 모양이라 중심 원형 마당을 가정하지 않는다
 const plazaPed = plazas.filter((p) => inBox(...centroid(p.o)));
 // [deck-v2] OSM 엘리베이터 노드: 데크 외곽 안 또는 가장자리 6m 안인 것만 (지상 → 데크 상판)
@@ -500,7 +561,28 @@ function deckElevators() {
   const edge = (x, z) => Math.min(...ring.map((a, i) => { const b = ring[(i + 1) % ring.length], dx = b[0] - a[0], dz = b[1] - a[1], L2 = dx * dx + dz * dz || 1e-9, t = Math.max(0, Math.min(1, ((x - a[0]) * dx + (z - a[1]) * dz) / L2)); return Math.hypot(a[0] + dx * t - x, a[1] + dz * t - z); }));
   return readJSON(ELEV).elements.map((n) => { const [x, z] = proj(n); return { osm: n.id, x: r1(x), z: r1(z), inside: inR(x, z) }; }).filter((e) => e.inside || edge(e.x, e.z) < 6).map(({ osm, x, z, inside }) => ({ osm, x, z, inside }));
 }
-const landmarks = MG ? [
+// [gangnam] 확인된 OSM 이름만 평문 표지 (로고·브랜드 색 없음). id 가 데이터에 있을 때만.
+const GN_SIGN_IDS = new Set(['r8311185', 'r8311184', 'r8311183', 'w117790043', 'w117823787']);
+function gangnamSigns() {
+  const by = new Map();
+  for (const b of buildings) {
+    if (!GN_SIGN_IDS.has(b.id) || !b.n || b.outline) continue;
+    const prev = by.get(b.id);
+    if (!prev || b.h > prev.h) by.set(b.id, b);
+  }
+  const signs = [...by.values()].map((b) => ({ id: 'sign-' + b.id, model: 'textSign', label: { ko: b.n, ...(b.en ? { en: b.en } : {}) }, pos: { x: r1(b.c[0]), z: r1(b.c[1]), y: b.h }, osm: b.id }));
+  const gyobo = nodes.find((e) => e.tags?.name === '교보타워사거리');
+  if (gyobo) {
+    const [x, z] = proj(gyobo);
+    if (inBox(x, z)) signs.push({ id: 'sign-gyobo', model: 'textSign', label: { ko: gyobo.tags.name, ...(gyobo.tags['name:en'] ? { en: gyobo.tags['name:en'] } : {}) }, pos: { x: r1(x), z: r1(z), y: 8 }, osm: 'n' + gyobo.id });
+  }
+  return signs;
+}
+const landmarks = GN ? [
+  // [gangnam] 출구 1–12: OSM 위치·ref. 캐노피 띠 = 2호선·신분당선. pos = 역 중심(타일 하나에서 같이 그림)
+  { id: 'gangnam-entrances', model: 'gangnamEntrances', entrances: exits, lines: station.lines, pos: { x: station.x, z: station.z, y: 0 } },
+  ...gangnamSigns(),
+] : MG ? [
   // [migeum] 출입구 1–8번: OSM railway=subway_entrance 노드 위치·ref 그대로, 방향 = 가까운 보행로(판교와 같은 규칙). 로고·브랜드 표지 없음
   { id: 'migeum-entrances', model: 'migeumEntrances', entrances: exits, lines: station.lines },
 ] : [
@@ -546,10 +628,12 @@ for (const k of CELLS) {
 }
 const index = {
   meta: {
-    name: MG ? 'Migeum station area (stage 1)' : 'Pangyo station area (stage 1)', tileSize: TS, box: MG ? MIGEUM_BOX : BOX, boxes: BOXES, generated: new Date().toISOString(),
-    source: { osm: `Overpass API (osm_base ${raw.osm3s?.timestamp_osm_base || '?'})`, query: `data/query_${REGION}.overpassql`, corridor: cIndex.meta.generated },
-    attribution: '© OpenStreetMap contributors (ODbL)',
-    heightRule: MG ? 'OSM height → building:levels×3.2(+1.5 if >3F, else +0.6) → default levels by type/area (scripts/bake.mjs defaultLevels)' : 'OSM height → building:levels×3.2(+1.5 if >3F, else +0.6) → default levels by type/area (scripts/bake.mjs defaultLevels); deck = 10–12 m from press descriptions "3~4층 높이" (no measured survey value: VWorld dt_d010 hg=0 on all deck/plaza parcels, OSM no height tags)',
+    name: GN ? 'Gangnam station area (stage 1, island)' : MG ? 'Migeum station area (stage 1)' : 'Pangyo station area (stage 1)', tileSize: TS, box: GN ? GANGNAM_BOX : MG ? MIGEUM_BOX : BOX, boxes: BOXES, island: GN || undefined, generated: new Date().toISOString(),
+    source: { osm: `Overpass API (osm_base ${raw.osm3s?.timestamp_osm_base || '?'})`, query: `data/query_${REGION}.overpassql`, corridor: cIndex.meta.generated, ...(GN ? { vworld: 'data/gangnam_vworld_heights.json' } : {}) },
+    attribution: GN ? `© OpenStreetMap contributors (ODbL) · ${VW_CREDIT}` : '© OpenStreetMap contributors (ODbL)',
+    heightRule: GN
+      ? 'OSM height → V-World dt_d010 hg → V-World ground_floor_co×3.2(+1.5 if >3F, else +0.6) → building:levels×3.2(same) → default levels by type/area (scripts/bake.mjs defaultLevels). docs/gangnam-heights.md'
+      : MG ? 'OSM height → building:levels×3.2(+1.5 if >3F, else +0.6) → default levels by type/area (scripts/bake.mjs defaultLevels)' : 'OSM height → building:levels×3.2(+1.5 if >3F, else +0.6) → default levels by type/area (scripts/bake.mjs defaultLevels); deck = 10–12 m from press descriptions "3~4층 높이" (no measured survey value: VWorld dt_d010 hg=0 on all deck/plaza parcels, OSM no height tags)',
     stats: { ...stat, ...rstat, runs: runs.length, parks: P.n, water: W.n, tiles: Object.keys(tiles).length, tileKB: Math.round(bytes / 1024) },
     defaultHeights: defaultList,
   },

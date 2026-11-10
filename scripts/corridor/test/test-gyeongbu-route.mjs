@@ -1,0 +1,510 @@
+// [gyeongbu-bus] 판교IC→청계산→양재→강남대로 본선을 양방향으로 끝까지 달릴 수 있는지,
+//   노면이 지형에 묻히지 않는지, 차·사람 높이가 노면에 맞는지 20m 마다 검사한다.
+//   고치기 전: 본선 bounds(x0=-2500)와 강남 섬 사이에서 inWorldBounds 가 막히고,
+//   걸으면 clampWorld 가 서쪽 끝으로 끌어 가 회색 평원만 보였다. 노면은 y=0.30 인데 지면 높이는 0 이라 차가 묻혔다.
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { inWorldBounds, clampWorld } from '../../../src/corridor/islands.js';
+import { mergeGangnamIndex } from '../../../src/corridor/gangnam.js';
+import {
+  mergeGyeongbuWorld, expressRoadHeight, sampleExpressPts, BEFORE_FIX_STUCK,
+  EXPRESS_ROAD_Y, EXPRESS_PAVE_R, CHEONGGYE_ISLAND,
+  inPangyoCity, inGangnamCity, GANGNAM_CITY, nearPangyoToll, PANGYO_TG, setExpressHeightExtra, buildExpressHeightProfile, distToPts,
+} from '../../../src/corridor/gyeongbuWorld.js';
+import { cheonggyeHeightAt, cheonggyeMeshHeightAt } from '../../../src/corridor/cheonggyeTerrain.js';
+import { expresswayMedianLine, keepDeckPoint, expressLayout, expressDeckLaneCenters, listVergeTreePositions, corridorFillHeight, CORRIDOR_FILL_CITY_Y } from '../../../src/corridor/gyeongbuExpress.js';
+import { pangyoTollLayout, pangyoTollSupports, pangyoTollLaneRects, pointInRotatedRect, pangyoVisibleChunks } from '../../../src/corridor/pangyoExpress.js';
+import { setExpressSurface, expressSurfaceHeight, expressDeckOffsets, EXPRESS_RIBBON_Y } from '../../../src/corridor/expressSurface.js';
+import { pointInBox } from '../../../src/corridor/islands.js';
+
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
+const index0 = JSON.parse(fs.readFileSync(path.join(root, 'public/corridor/index.json'), 'utf8'));
+const gn = JSON.parse(fs.readFileSync(path.join(root, 'public/corridor/gangnam/index.json'), 'utf8'));
+const ex = JSON.parse(fs.readFileSync(path.join(root, 'public/corridor/gangnam/gyeongbu-express.json'), 'utf8'));
+const dem = JSON.parse(fs.readFileSync(path.join(root, 'public/corridor/gyeongbu/cheonggye-dem.json'), 'utf8'));
+const streets = JSON.parse(fs.readFileSync(path.join(root, 'public/corridor/gyeongbu/cheonggye-streets.json'), 'utf8'));
+
+const mergedGn = mergeGangnamIndex(index0, gn);
+const main = mergedGn.meta.islands[0];
+const isle = mergedGn.meta.islands[1];
+const oldWorld = { ...main, islands: [main, isle] };
+
+const stuckBefore = [];
+const samples = sampleExpressPts(ex.pts, 20);
+for (const q of samples) {
+  if (!inWorldBounds({ x: q.x, z: q.z }, oldWorld)) {
+    if (!stuckBefore.length || q.s - stuckBefore.at(-1).s > 400) stuckBefore.push({ s: +q.s.toFixed(1), x: +q.x.toFixed(1), z: +q.z.toFixed(1) });
+  }
+}
+assert.ok(stuckBefore.length > 0, '고치기 전 막힌 지점이 있어야 한다 (회귀 기준)');
+const first = samples.find((q) => !inWorldBounds({ x: q.x, z: q.z }, oldWorld));
+assert.ok(first && first.s > 4000 && first.s < 4800 && first.x < -2500, `첫 막힘 ${first && `${first.s.toFixed(0)} (${first.x.toFixed(1)}, ${first.z.toFixed(1)})`}`);
+const c0 = clampWorld(first.x, first.z, oldWorld);
+assert.ok(Math.abs(c0.x - (-2500)) < 1 || !inWorldBounds({ x: first.x, z: first.z }, oldWorld), '고치기 전 clamp 는 본선 끝으로 끌어 감');
+for (const sp of BEFORE_FIX_STUCK) {
+  assert.equal(inWorldBounds({ x: sp.x, z: sp.z }, oldWorld), false, `고치기 전 ${sp.name}`);
+}
+const exits = [{ name: '청계산 1번', x: -4782.8, z: -9114.0 }, { name: '청계산 2번', x: -4720.9, z: -8974.6 }];
+for (const e of exits) {
+  assert.equal(inWorldBounds({ x: e.x, z: e.z }, oldWorld), false, e.name);
+  const c = clampWorld(e.x + 5, e.z, oldWorld);
+  assert.ok(Math.hypot(c.x - e.x, c.z - e.z) > 100, `${e.name} 에서 걸으면 멀리 끌려감 (${c.x.toFixed(0)}, ${c.z.toFixed(0)})`);
+}
+
+const fixed = mergeGyeongbuWorld(mergedGn, ex.pts, '');
+const world = {
+  ...fixed.meta.bounds,
+  islands: [main, isle, CHEONGGYE_ISLAND],
+  corridors: fixed.meta.corridors,
+};
+assert.ok(fixed.meta.corridors?.length === 1);
+assert.ok(fixed.meta.islands.some((b) => b.x0 === CHEONGGYE_ISLAND.x0));
+
+function drive(dir) {
+  const pts = dir > 0 ? samples : samples.slice().reverse();
+  const stuck = [];
+  let x = pts[0].x, z = pts[0].z;
+  for (const q of pts) {
+    const steps = Math.max(1, Math.ceil(Math.hypot(q.x - x, q.z - z) / 8));
+    for (let i = 1; i <= steps; i++) {
+      const tx = x + ((q.x - x) * i) / steps, tz = z + ((q.z - z) * i) / steps;
+      if (!inWorldBounds({ x: tx, z: tz }, world)) {
+        stuck.push({ s: q.s, x: +tx.toFixed(2), z: +tz.toFixed(2), why: 'inWorldBounds' });
+        return stuck;
+      }
+      const c = clampWorld(tx, tz, world);
+      if (Math.hypot(c.x - tx, c.z - tz) > 0.25) {
+        stuck.push({ s: q.s, x: +tx.toFixed(2), z: +tz.toFixed(2), clamp: { x: +c.x.toFixed(2), z: +c.z.toFixed(2) }, why: 'clampWorld' });
+        return stuck;
+      }
+    }
+    x = q.x; z = q.z;
+  }
+  return stuck;
+}
+
+const go = drive(1), back = drive(-1);
+assert.deepEqual(go, [], `판교→강남 막힘 ${JSON.stringify(go[0] || {})}`);
+assert.deepEqual(back, [], `강남→판교 막힘 ${JSON.stringify(back[0] || {})}`);
+for (const e of exits) {
+  assert.equal(inWorldBounds({ x: e.x, z: e.z }, world), true, `${e.name} 출구는 범위 안`);
+  for (const [dx, dz] of [[50, 0], [-50, 0], [0, 50], [0, -50], [35, 35]]) {
+    const x = e.x + dx, z = e.z + dz;
+    assert.equal(inWorldBounds({ x, z }, world), true, `${e.name} ${dx},${dz}`);
+    const c = clampWorld(x, z, world);
+    assert.ok(Math.hypot(c.x - x, c.z - z) < 0.01, `${e.name} 50m 보행 clamp`);
+  }
+}
+assert.equal(inWorldBounds({ x: 251, z: -3080 }, world), true, '판교역');
+assert.equal(inWorldBounds({ x: -7100, z: -14500 }, world), true, '강남 섬');
+assert.equal(inWorldBounds({ x: -4000, z: -14500 }, world), false, '본선과 강남 사이 빈 땅은 그대로 막힘');
+
+const buried = [], sink = [];
+for (const q of samples) {
+  const roadY = expressRoadHeight(q.x, q.z, ex.pts);
+  assert.equal(roadY, EXPRESS_ROAD_Y, `노면 ${q.s.toFixed(0)} (${q.x.toFixed(1)}, ${q.z.toFixed(1)})`);
+  // 차·사람 높이 = 노면 (addGroundExtra 가 이 값을 씀). 고치기 전엔 0 이라 0.30m 아래에 묻힘.
+  const vehY = Math.max(0, roadY);
+  if (Math.abs(vehY - EXPRESS_ROAD_Y) > 0.02) sink.push({ s: q.s, vehY, roadY });
+  const demY = cheonggyeHeightAt(q.x, q.z, dem, streets, ex.pts);
+  if (demY != null && demY > EXPRESS_ROAD_Y + 0.02) buried.push({ s: +q.s.toFixed(1), x: +q.x.toFixed(1), z: +q.z.toFixed(1), demY: +demY.toFixed(2) });
+  for (const side of [-1, 1]) {
+    const wx = q.x + q.hx * 0 /* along */ + (-q.hz) * side * 8, wz = q.z + q.hz * 0 + q.hx * side * 8;
+    const h = expressRoadHeight(wx, wz, ex.pts);
+    assert.equal(h, EXPRESS_ROAD_Y, `차로 ${side} ${q.s.toFixed(0)}`);
+    const dy = cheonggyeHeightAt(wx, wz, dem, streets, ex.pts);
+    if (dy != null && dy > EXPRESS_ROAD_Y + 0.02) buried.push({ s: +q.s.toFixed(1), x: +wx.toFixed(1), z: +wz.toFixed(1), demY: +dy.toFixed(2), lane: side });
+  }
+}
+assert.deepEqual(sink, [], `차가 노면보다 낮음 ${JSON.stringify(sink[0] || {})}`);
+assert.deepEqual(buried, [], `노면이 지형에 묻힘 ${JSON.stringify(buried[0] || {})}`);
+assert.ok(EXPRESS_PAVE_R > 27, '4+4 바깥 갓길까지 덮는 반경');
+assert.ok(pointInBox(-4782.8, -9114.0, CHEONGGYE_ISLAND) && pointInBox(-4720.9, -8974.6, CHEONGGYE_ISLAND));
+
+// 화면에 깔리는 지면 메시(도로 근처 10m 칸)가 차로 폭 전체에서 노면보다 낮아야 한다.
+// 고치기 전엔 50m 칸 보간으로 잔디가 아스팔트를 덮었다.
+const meshBuried = [];
+const dense = sampleExpressPts(ex.pts, 10);
+const offsets = [];
+for (let o = -30; o <= 30; o += 2) offsets.push(o);
+for (const q of dense) {
+  const lx = -q.hz, lz = q.hx;
+  for (const off of offsets) {
+    const wx = q.x + lx * off, wz = q.z + lz * off;
+    const mh = cheonggyeMeshHeightAt(wx, wz, dem, streets, ex.pts);
+    if (mh != null && mh > EXPRESS_ROAD_Y - 0.08) {
+      meshBuried.push({ s: +q.s.toFixed(1), off, x: +wx.toFixed(1), z: +wz.toFixed(1), meshY: +mh.toFixed(3) });
+    }
+  }
+}
+assert.deepEqual(meshBuried, [], `메시 지면이 노면을 덮음 ${JSON.stringify(meshBuried[0] || {})} (${meshBuried.length}곳)`);
+
+const streetBuried = [];
+for (const r of streets.roads || []) {
+  const pts = r.p || [];
+  if (pts.length < 2) continue;
+  const y0 = 0.20; // 청계산로 리본 ≈ ROAD_STYLE y + 0.12
+  for (let i = 1; i < pts.length; i++) {
+    const ax = pts[i - 1][0], az = pts[i - 1][1], bx = pts[i][0], bz = pts[i][1];
+    const seg = Math.hypot(bx - ax, bz - az) || 1e-9;
+    const hx = (bx - ax) / seg, hz = (bz - az) / seg, lx = -hz, lz = hx;
+    const hw = (r.w || 6) * 0.5;
+    for (let t = 0; t <= seg; t += 6) {
+      const x = ax + hx * t, z = az + hz * t;
+      for (const off of [-hw, 0, hw]) {
+        const mh = cheonggyeMeshHeightAt(x + lx * off, z + lz * off, dem, streets, ex.pts);
+        if (mh != null && mh > y0 - 0.06) {
+          streetBuried.push({ name: r.name || r.id, x: +(x + lx * off).toFixed(1), z: +(z + lz * off).toFixed(1), meshY: +mh.toFixed(3), roadY: y0 });
+        }
+      }
+    }
+  }
+}
+assert.deepEqual(streetBuried, [], `청계산로가 지형에 묻힘 ${JSON.stringify(streetBuried[0] || {})} (${streetBuried.length}곳)`);
+
+const trunk = ex.pts.filter((p) => p[3] === 'main' || p[3] === 'spur');
+const median = expresswayMedianLine(trunk);
+assert.ok(median.length > 80, `분리대 샘플 ${median.length}`);
+let maxGap = 0, maxTurn = 0;
+for (let i = 1; i < median.length; i++) {
+  const d = Math.hypot(median[i].x - median[i - 1].x, median[i].z - median[i - 1].z);
+  if (d > maxGap) maxGap = d;
+  assert.ok(d > 0.8 && d < 12, `분리대 간격 ${d.toFixed(2)}m @${i}`);
+  if (i >= 2) {
+    const h0 = Math.atan2(median[i - 1].x - median[i - 2].x, median[i - 1].z - median[i - 2].z);
+    const h1 = Math.atan2(median[i].x - median[i - 1].x, median[i].z - median[i - 1].z);
+    let dh = Math.abs(h1 - h0);
+    if (dh > Math.PI) dh = Math.PI * 2 - dh;
+    if (dh > maxTurn) maxTurn = dh;
+  }
+}
+assert.ok(maxGap < 12, `분리대 최대 간격 ${maxGap.toFixed(2)}m`);
+assert.ok(maxTurn < 0.50, `분리대 최대 꺾임 ${(maxTurn * 180 / Math.PI).toFixed(1)}deg / 5m`);
+
+const decked = ex.pts.filter(keepDeckPoint);
+const approachDeck = decked.filter((p) => p[3] === 'approach');
+assert.ok(approachDeck.length > 40, `접근로 차도 점 ${approachDeck.length}`);
+assert.ok(approachDeck.every((p) => p[0] < -180), '접근로 차도는 판교 시가 서쪽에서 시작');
+assert.ok(approachDeck.some((p) => nearPangyoToll(p[0], p[1], 80)), '접근로 차도가 판교요금소를 지남');
+assert.ok(nearPangyoToll(PANGYO_TG.x, PANGYO_TG.z));
+const gySrc = fs.readFileSync(path.join(root, 'src/corridor/gyeongbuExpress.js'), 'utf8');
+assert.ok(gySrc.includes('gyeongbuApproachFill'));
+assert.ok(gySrc.includes('nearPangyoToll'));
+assert.ok(gySrc.includes('keepDeckPoint'));
+assert.ok(/notToll\(s\)/.test(gySrc) && gySrc.includes('wallBoxGeo(run, medOff'));
+const idxSrc = fs.readFileSync(path.join(root, 'src/corridor/index.js'), 'utf8');
+assert.ok(idxSrc.includes('setExpressHeightExtra') && idxSrc.includes('buildExpressHeightProfile'));
+
+const pangyo = JSON.parse(fs.readFileSync(path.join(root, 'public/corridor/pangyo/express.json'), 'utf8'));
+function pangyoY(x, z) {
+  let best = null;
+  for (const l of pangyo.lines || []) {
+    const pts = l.pts || [];
+    for (let i = 1; i < pts.length; i++) {
+      const a = pts[i - 1], b = pts[i];
+      const hw = Math.max(a[3] || 8, b[3] || 8) / 2 + 1.5;
+      const dx = b[0] - a[0], dz = b[1] - a[1], L2 = dx * dx + dz * dz || 1e-9;
+      const t = Math.max(0, Math.min(1, ((x - a[0]) * dx + (z - a[1]) * dz) / L2));
+      if (Math.hypot(a[0] + dx * t - x, a[1] + dz * t - z) > hw) continue;
+      const y = a[2] + (b[2] - a[2]) * t;
+      if (best == null || y > best) best = y;
+    }
+  }
+  return best;
+}
+setExpressHeightExtra(buildExpressHeightProfile(ex.pts, pangyoY));
+
+const MAX_STEP = 0.5;
+const ride = sampleExpressPts(ex.pts, 5);
+assert.ok(ride.length > 200, `전 구간 샘플 ${ride.length}`);
+let playerY = expressRoadHeight(ride[0].x, ride[0].z, ex.pts);
+assert.ok(playerY != null);
+const heightMiss = [];
+let maxRise = 0;
+for (const q of ride) {
+  const road = expressRoadHeight(q.x, q.z, ex.pts);
+  if (road == null) {
+    heightMiss.push({ s: +q.s.toFixed(1), x: +q.x.toFixed(1), z: +q.z.toFixed(1), why: 'no-road' });
+    continue;
+  }
+  let h = 0;
+  if (road > h && road <= playerY + MAX_STEP + 0.1) h = road;
+  if (Math.abs(h - road) > 0.02 || Math.abs(playerY - road) > 0.61) {
+    heightMiss.push({ s: +q.s.toFixed(1), player: +playerY.toFixed(3), next: +road.toFixed(3), got: +h.toFixed(3) });
+  }
+  const rise = Math.abs(road - playerY);
+  if (rise > maxRise) maxRise = rise;
+  playerY = h;
+}
+assert.deepEqual(heightMiss, [], `전 구간 높이가 노면과 다름 ${JSON.stringify(heightMiss[0] || {})} (${heightMiss.length}곳)`);
+
+const tgRide = ride.filter((q) => nearPangyoToll(q.x, q.z, 80));
+assert.ok(tgRide.length > 4, `요금소 부근 샘플 ${tgRide.length}`);
+for (const q of tgRide) {
+  const road = expressRoadHeight(q.x, q.z, ex.pts);
+  assert.ok(road != null && road >= EXPRESS_ROAD_Y - 0.001, `요금소 노면 ${q.s.toFixed(0)} y=${road}`);
+}
+
+const cityEdge = ride.find((q) => q.x < -200 && q.kind === 'approach');
+assert.ok(cityEdge, '판교 시가 서쪽 접근로 샘플');
+assert.equal(expressRoadHeight(cityEdge.x, cityEdge.z, ex.pts) != null, true);
+
+// 판교 분기(본선 시작)~양재: 5m 마다 양 차로에 노면이 있고, 램프 리본과 0.2m 이내로 겹치지 않는다.
+const YANGJAE_S = 12072;
+const layout = expressLayout();
+const deckHalf = Math.max(Math.abs(layout.nbOuterEdge), Math.abs(layout.sbOuterEdge));
+const coverPts = ex.pts.filter(keepDeckPoint);
+const coverFn = (x, z, hw = 8) => distToPts(x, z, coverPts) < deckHalf + Math.max(0, hw) - 0.6;
+const visible = pangyoVisibleChunks(pangyo, coverFn, coverPts);
+const taperTips = [];
+for (const c of visible) {
+  for (const p of [c.pts[0], c.pts[c.pts.length - 1]]) {
+    if (distToPts(p[0], p[1], coverPts) < 40 && (p[3] || 7) < 1.6) taperTips.push(p);
+  }
+}
+assert.ok(taperTips.length >= 1, `연결로가 4+4 갓길에 테이퍼로 붙어야 한다 (${taperTips.length})`);
+
+const mainlineDup = visible.filter((c) => c.k === 'motorway' && Math.max(...c.pts.map((p) => p[3] || 0)) >= 16);
+assert.deepEqual(mainlineDup, [], `OSM 경부 본선 리본이 4+4 옆에 남음 ${mainlineDup.length}개`);
+const firstKept = ex.pts.find(keepDeckPoint);
+assert.ok(firstKept, '본선 시작점');
+const laneCenters = expressDeckLaneCenters(ex.pts);
+assert.ok(laneCenters.length > 400, `양 차로 샘플 ${laneCenters.length}`);
+function sNear(x, z) {
+  let best = Infinity, s = 0;
+  for (const p of ex.pts) {
+    const d = Math.hypot(p[0] - x, p[1] - z);
+    if (d < best) { best = d; s = p[2]; }
+  }
+  return s;
+}
+const bySide = { nb: [], sb: [] };
+for (const p of laneCenters) {
+  const sAt = sNear(p.x, p.z);
+  if (sAt >= firstKept[2] - 20 && sAt <= YANGJAE_S + 40) bySide[p.side].push(p);
+}
+const surfaceMiss = [];
+for (const side of ['nb', 'sb']) {
+  const row = bySide[side];
+  assert.ok(row.length > 150, `${side} 판교~양재 샘플 ${row.length}`);
+  for (let i = 1; i < row.length; i++) {
+    const d = Math.hypot(row[i].x - row[i - 1].x, row[i].z - row[i - 1].z);
+    if (d > (side === 'sb' ? 16 : 8.5)) surfaceMiss.push({ side, i, d: +d.toFixed(2), x: +row[i].x.toFixed(1), z: +row[i].z.toFixed(1) });
+  }
+}
+assert.deepEqual(surfaceMiss.slice(0, 8), [], `본선 차도 끊김 ${JSON.stringify(surfaceMiss[0] || {})} (${surfaceMiss.length}곳)`);
+
+const junctionRide = sampleExpressPts(ex.pts, 5).filter((q) => q.s >= firstKept[2] - 1 && q.s <= YANGJAE_S + 15);
+assert.ok(junctionRide.length > 200, `판교~양재 샘플 ${junctionRide.length}`);
+function pangyoHitY(x, z) {
+  let best = null;
+  for (const chunk of visible) {
+    const pts = chunk.pts;
+    for (let i = 1; i < pts.length; i++) {
+      const a = pts[i - 1], b = pts[i];
+      const hw = Math.max(a[3] || 8, b[3] || 8) / 2;
+      const dx = b[0] - a[0], dz = b[1] - a[1], L2 = dx * dx + dz * dz || 1e-9;
+      const t = Math.max(0, Math.min(1, ((x - a[0]) * dx + (z - a[1]) * dz) / L2));
+      if (Math.hypot(a[0] + dx * t - x, a[1] + dz * t - z) > hw) continue;
+      const y = a[2] + (b[2] - a[2]) * t + 0.1;
+      if (best == null || y > best) best = y;
+    }
+  }
+  return best;
+}
+const overlapHits = [];
+const noSurface = [];
+for (const q of junctionRide) {
+  const lx = q.hz, lz = -q.hx;
+  for (const [side, off] of [['nb', 0], ['sb', layout.sbLaneCenter]]) {
+    const x = q.x + lx * off, z = q.z + lz * off;
+    const deckY = expressRoadHeight(x, z, ex.pts);
+    if (deckY == null || distToPts(x, z, coverPts) > deckHalf + 1) {
+      noSurface.push({ s: +q.s.toFixed(1), side, x: +x.toFixed(1), z: +z.toFixed(1) });
+      continue;
+    }
+    const py = pangyoHitY(x, z);
+    if (py != null && Math.abs(py - deckY) < 0.2) {
+      overlapHits.push({ s: +q.s.toFixed(1), side, x: +x.toFixed(1), z: +z.toFixed(1), deckY: +deckY.toFixed(2), py: +py.toFixed(2) });
+    }
+  }
+}
+assert.deepEqual(noSurface.slice(0, 8), [], `차로 아래 노면 없음 ${JSON.stringify(noSurface[0] || {})} (${noSurface.length}곳)`);
+assert.deepEqual(overlapHits.slice(0, 8), [], `차로 위 리본 겹침 ${JSON.stringify(overlapHits[0] || {})} (${overlapHits.length}곳)`);
+
+// 깔린 메시 높이와 걷기·라이딩 지면 질의가 5m 마다 5cm 안으로 같아야 한다.
+// meshSurface: expresswayDeck yAt / ribbonGeo(p[2]+0.1). groundQuery: extras(올리기) + surface(맞추기).
+setExpressSurface({ deckPts: coverPts, rampChunks: visible });
+const SURF_TOL = 0.05;
+function groundQuery(x, z, refY = Infinity) {
+  let h = 0;
+  const extra = expressRoadHeight(x, z, ex.pts);
+  if (extra != null && extra > h && extra <= refY + 0.6) h = extra;
+  const surf = expressSurfaceHeight(x, z, refY);
+  if (surf != null && surf <= refY + 0.6) h = surf;
+  return h;
+}
+function meshDeckY(x, z) {
+  return expressRoadHeight(x, z, ex.pts) ?? EXPRESS_ROAD_Y;
+}
+const surfMiss = [];
+const deckOffs = expressDeckOffsets();
+let deckSamples = 0, rampSamples = 0;
+for (const q of junctionRide) {
+  if (distToPts(q.x, q.z, coverPts) > 5) continue;
+  const lx = q.hz, lz = -q.hx;
+  for (const spec of deckOffs) {
+    const x = q.x + lx * spec.off, z = q.z + lz * spec.off;
+    const meshSurface = meshDeckY(x, z);
+    const gq = groundQuery(x, z);
+    deckSamples++;
+    if (gq == null || !Number.isFinite(gq) || Math.abs(gq - meshSurface) > SURF_TOL) {
+      surfMiss.push({ kind: spec.name, s: +q.s.toFixed(1), x: +x.toFixed(1), z: +z.toFixed(1), meshSurface: +meshSurface.toFixed(3), groundQuery: gq == null ? null : +gq.toFixed(3) });
+    }
+  }
+}
+function sampleRun(pts, step, fn) {
+  let acc = 0, next = 0;
+  for (let i = 1; i < pts.length; i++) {
+    const a = pts[i - 1], b = pts[i];
+    const seg = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1e-9;
+    const hx = (b[0] - a[0]) / seg, hz = (b[1] - a[1]) / seg;
+    while (next <= acc + seg + 1e-9) {
+      const u = Math.max(0, Math.min(1, (next - acc) / seg));
+      fn(a, b, u, hx, hz, next);
+      next += step;
+    }
+    acc += seg;
+  }
+}
+for (const chunk of visible) {
+  const pts = chunk.pts;
+  if (!pts || pts.length < 2) continue;
+  sampleRun(pts, 5, (a, b, u, hx, hz) => {
+    const x = a[0] + (b[0] - a[0]) * u, z = a[1] + (b[1] - a[1]) * u;
+    const w = (a[3] || 7) * (1 - u) + (b[3] || 7) * u;
+    const meshSurface = (a[2] || 0) + ((b[2] || 0) - (a[2] || 0)) * u + EXPRESS_RIBBON_Y;
+    const lx = hz, lz = -hx;
+    const spots = [[x, z, 'cen']];
+    if (w > 2.4) {
+      const lat = w * 0.28;
+      spots.push([x + lx * lat, z + lz * lat, 'L'], [x - lx * lat, z - lz * lat, 'R']);
+    }
+    for (const [sx, sz, where] of spots) {
+      const gq = groundQuery(sx, sz);
+      rampSamples++;
+      if (gq == null || !Number.isFinite(gq) || Math.abs(gq - meshSurface) > SURF_TOL) {
+        surfMiss.push({ kind: `ramp:${chunk.k || 'link'}:${where}`, x: +sx.toFixed(1), z: +sz.toFixed(1), meshSurface: +meshSurface.toFixed(3), groundQuery: gq == null ? null : +gq.toFixed(3) });
+      }
+    }
+  });
+}
+assert.ok(deckSamples > 2000, `본선 차로·갓길 샘플 ${deckSamples}`);
+assert.ok(rampSamples > 80, `램프·테이퍼 샘플 ${rampSamples}`);
+assert.deepEqual(surfMiss.slice(0, 8), [], `지면 질의 ≠ 깔린 노면 ${JSON.stringify(surfMiss[0] || {})} (${surfMiss.length}곳)`);
+
+const layoutT = pangyoTollLayout(pangyo.toll);
+const supports = pangyoTollSupports(layoutT, pangyo.toll?.roof?.underside ?? 5.5);
+const islands = supports.map((s) => s.island);
+const lanes = pangyoTollLaneRects(layoutT);
+assert.ok(supports.length >= 10, `요금소 기둥 ${supports.length}`);
+for (const s of supports) {
+  const corners = [[-s.w / 2, -s.d / 2], [s.w / 2, -s.d / 2], [-s.w / 2, s.d / 2], [s.w / 2, s.d / 2]];
+  for (const [ox, oz] of [[0, 0], ...corners]) {
+    const c = Math.cos(s.ang), sn = Math.sin(s.ang);
+    const px = s.x + ox * c + oz * sn, pz = s.z - ox * sn + oz * c;
+    const inIsland = islands.some((is) => pointInRotatedRect(px, pz, is.x, is.z, is.w, is.d, is.ang));
+    assert.equal(inIsland, true, `기둥이 섬 밖 (${px.toFixed(1)},${pz.toFixed(1)})`);
+    const inLane = lanes.some((ln) => pointInRotatedRect(px, pz, ln.x, ln.z, ln.w, ln.d, ln.ang));
+    assert.equal(inLane, false, `기둥이 차로 안 (${px.toFixed(1)},${pz.toFixed(1)})`);
+  }
+}
+
+const TREE_KINDS = new Set(['primary', 'secondary', 'tertiary']);
+const CAR_KINDS = new Set(['primary', 'secondary', 'tertiary', 'trunk', 'residential', 'unclassified', 'service', 'motorway', 'primary_link', 'secondary_link', 'trunk_link', 'motorway_link']);
+const gnTiles = fs.readdirSync(path.join(root, 'public/corridor/gangnam/tiles')).filter((f) => f.endsWith('.json')).map((f) => JSON.parse(fs.readFileSync(path.join(root, 'public/corridor/gangnam/tiles', f), 'utf8')));
+const cityRoads = [];
+for (const tile of gnTiles) {
+  for (const r of tile.r || []) {
+    if (!r.p || r.p.length < 2) continue;
+    cityRoads.push({ p: r.p, w: r.w || 6, k: r.k, n: r.n || '' });
+  }
+}
+function segDist(x, z, ax, az, bx, bz) {
+  const dx = bx - ax, dz = bz - az, L2 = dx * dx + dz * dz || 1e-9;
+  const t = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / L2));
+  return Math.hypot(ax + dx * t - x, az + dz * t - z);
+}
+function inCityRoad(x, z, margin = 2.5) {
+  for (const r of cityRoads) {
+    if (!CAR_KINDS.has(r.k)) continue;
+    const hw = r.w / 2 + margin;
+    for (let i = 1; i < r.p.length; i++) {
+      if (segDist(x, z, r.p[i - 1][0], r.p[i - 1][1], r.p[i][0], r.p[i][1]) < hw) return true;
+    }
+  }
+  return false;
+}
+function inAnyRoad(x, z, margin = 2.5) {
+  if (distToPts(x, z, ex.pts) < EXPRESS_PAVE_R + margin) return true;
+  return inCityRoad(x, z, margin);
+}
+
+const approachPts = ex.pts.filter((p) => p[3] === 'approach' && keepDeckPoint(p));
+const spurPts = ex.pts.filter((p) => p[3] === 'spur');
+const verge = [
+  ...listVergeTreePositions(approachPts, 28, ex.pts),
+  ...listVergeTreePositions(spurPts, 24, ex.pts),
+];
+const vergeOnRoad = verge.filter((t) => inAnyRoad(t.x, t.z, 2.5) || inGangnamCity(t.x, t.z, 0));
+assert.deepEqual(vergeOnRoad.slice(0, 8), [], `코리더 가로수가 차도·강남 시가에 있음 ${JSON.stringify(vergeOnRoad[0] || {})} (${vergeOnRoad.length}곳 / ${verge.length})`);
+
+function listTileTrees(tile) {
+  const pts = [];
+  for (const r of tile.r || []) {
+    if (!TREE_KINDS.has(r.k) || !r.p || r.p.length < 2) continue;
+    const [oh, ot] = r.o || [0, 0];
+    for (let i = 1 + oh; i < r.p.length - ot; i++) {
+      const [ax, az] = r.p[i - 1], [bx, bz] = r.p[i], L = Math.hypot(bx - ax, bz - az);
+      if (L < 1e-3) continue;
+      const nx = -(bz - az) / L, nz = (bx - ax) / L;
+      for (let s = 6; s < L; s += 14) for (const side of [-1, 1]) {
+        const x = ax + ((bx - ax) * s) / L + nx * side * (r.w / 2 + 1.6);
+        const z = az + ((bz - az) * s) / L + nz * side * (r.w / 2 + 1.6);
+        if (inCityRoad(x, z, 0.6) || distToPts(x, z, ex.pts) < EXPRESS_PAVE_R + 2) continue;
+        pts.push({ x, z });
+      }
+    }
+  }
+  return pts;
+}
+const tileTrees = gnTiles.flatMap(listTileTrees);
+const nearKyobo = tileTrees.filter((t) => Math.hypot(t.x + 7097.7, t.z + 14453.3) < 180);
+const tileOnExpress = nearKyobo.filter((t) => distToPts(t.x, t.z, ex.pts) < EXPRESS_PAVE_R + 2);
+assert.deepEqual(tileOnExpress.slice(0, 8), [], `강남 가로수가 본선 차도에 있음 ${JSON.stringify(tileOnExpress[0] || {})} (${tileOnExpress.length}곳)`);
+const tileOnRoad = nearKyobo.filter((t) => inCityRoad(t.x, t.z, 0.6));
+assert.deepEqual(tileOnRoad.slice(0, 8), [], `강남역·교보 가로수가 차도에 있음 ${JSON.stringify(tileOnRoad[0] || {})} (${tileOnRoad.length}곳)`);
+
+const cityHits = [];
+const avatarHits = [];
+const CITY_GROUND = 0;
+for (let x = GANGNAM_CITY.x0 + 25; x <= GANGNAM_CITY.x1 - 25; x += 40) {
+  for (let z = GANGNAM_CITY.z0 + 25; z <= GANGNAM_CITY.z1 - 25; z += 40) {
+    const fill = corridorFillHeight(x, z, ex.pts);
+    if (fill != null && fill > CITY_GROUND - 0.05) {
+      cityHits.push({ x: +x.toFixed(1), z: +z.toFixed(1), fill: +fill.toFixed(3) });
+    }
+    const onDeck = distToPts(x, z, ex.pts) < EXPRESS_PAVE_R;
+    const avatarY = onDeck ? (expressRoadHeight(x, z, ex.pts) ?? EXPRESS_ROAD_Y) : CITY_GROUND;
+    if (!onDeck && Math.abs(avatarY - CITY_GROUND) > 0.02) {
+      avatarHits.push({ x: +x.toFixed(1), z: +z.toFixed(1), avatarY });
+    }
+  }
+}
+assert.deepEqual(cityHits.slice(0, 8), [], `강남 시가 위 코리더 지면이 높음 ${JSON.stringify(cityHits[0] || {})} (${cityHits.length}곳)`);
+assert.deepEqual(avatarHits, [], `강남 시가에서 아바타 높이가 다름 ${JSON.stringify(avatarHits[0] || {})}`);
+assert.ok(CORRIDOR_FILL_CITY_Y <= CITY_GROUND - 0.05, '시가 메움은 시가 바닥보다 낮아야 한다');
+
+console.log(`gyeongbu route: ${samples.length} pts / 20m, dense ${dense.length}×${offsets.length} 메시, 분리대 ${median.length} (gap≤${maxGap.toFixed(2)}m turn≤${(maxTurn * 180 / Math.PI).toFixed(1)}°), 노면 y=${EXPRESS_ROAD_Y}, 전구간 ${ride.length} (Δy≤${maxRise.toFixed(3)}m/5m), 접근로 ${approachDeck.length}, 판교~양재 양차로 ${junctionRide.length}×2 겹침0 끊김0, 지면 ${deckSamples}+${rampSamples} Δy<${SURF_TOL}m, 가로수 ${verge.length} 차도0, 강남메움 ${cityHits.length} 위배0, 기둥 ${supports.length}. 고치기 전 막힘 ${stuckBefore.length}곳 첫 s=${first.s.toFixed(0)} (${first.x.toFixed(1)}, ${first.z.toFixed(1)})`);

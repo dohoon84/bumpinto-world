@@ -7,6 +7,7 @@ import { addVehicleLamp } from '../vehicleLights.js';
 const BODY = {
   city:  { L: 11.0, W: 2.5, H: 3.15, floor: 0.32, winB: 0.36, winT: 0.86, pillar: 1.25, doors: [[0.05, 0.16], [0.55, 0.66]], wheels: [0.2, 0.74] },
   coach: { L: 12.0, W: 2.5, H: 3.5, floor: 0.45, winB: 0.46, winT: 0.86, pillar: 1.6, doors: [[0.03, 0.12]], wheels: [0.2, 0.76], bays: true },
+  coach3:{ L: 12.6, W: 2.5, H: 3.55, floor: 0.48, winB: 0.46, winT: 0.86, pillar: 1.55, doors: [[0.03, 0.12]], wheels: [0.16, 0.58, 0.80], bays: true },
   mini:  { L: 8.6, W: 2.3, H: 2.95, floor: 0.32, winB: 0.38, winT: 0.86, pillar: 1.1, doors: [[0.04, 0.15], [0.5, 0.6]], wheels: [0.2, 0.78] },
 };
 const texCache = new Map();
@@ -96,11 +97,11 @@ function drawRear(ref, lv, b) {
 //   해제된 노선이 다시 나오면 같은 그리기 함수로 다시 만든다(결과 동일).
 const IDLE_MAX = 12;
 let useSeq = 0;
-function textures(ref, type, name) {
-  const k = ref + '|' + type;
+function textures(ref, type, name, bodyKey) {
+  const k = ref + '|' + type + (bodyKey ? '|' + bodyKey : '');
   let e = texCache.get(k);
   if (!e) {
-    const lv = liveryOf(type), b = BODY[lv.body];
+    const lv = liveryOf(type), b = BODY[bodyKey] || BODY[lv.body];
     e = { left: drawSide(ref, lv, b, false, false), right: drawSide(ref, lv, b, true, true), front: drawFront(ref, lv, b, name), rear: drawRear(ref, lv, b), lv, b, refs: 0, used: 0, key: k };
     texCache.set(k, e);
   }
@@ -179,8 +180,8 @@ function addEveningLights(g, b, own) {
 }
 
 // 앞 = +z. 우측(승강문) = -x
-export function createBus(ref, type, name = '') {
-  const T = textures(ref, type, name), b = T.b, lv = T.lv;
+export function createBus(ref, type, name = '', opts = {}) {
+  const T = textures(ref, type, name, opts.body), b = T.b, lv = T.lv;
   const g = new THREE.Group();
   const bodyH = b.H - b.floor;
   const roofCol = lv.plain ? '#e9e9e9' : new THREE.Color(lv.color).offsetHSL(0, -0.05, 0.05);
@@ -198,7 +199,8 @@ export function createBus(ref, type, name = '') {
   const skirt = new THREE.Mesh(new THREE.BoxGeometry(b.W * 0.92, b.floor, b.L * 0.96), new THREE.MeshLambertMaterial({ color: '#2b2f33' }));
   skirt.position.y = b.floor / 2 + 0.05; g.add(skirt);
   // 바퀴 (뒤 바퀴 코치는 복륜 느낌으로 2축)
-  for (const u of b.wheels.concat(b.bays ? [b.wheels[0] + 0.1] : [])) for (const sx of [-1, 1]) {
+  const axles = b.wheels.length >= 3 ? b.wheels : b.wheels.concat(b.bays ? [b.wheels[0] + 0.1] : []);
+  for (const u of axles) for (const sx of [-1, 1]) {
     const z = (0.5 - u) * b.L * -1; // u: 앞에서부터 비율
     const w = new THREE.Mesh(wheelGeo, wheelMat); w.position.set(sx * (b.W / 2 - 0.12), 0.5, (0.5 - u) * b.L); g.add(w);
     const h = new THREE.Mesh(hubGeo, hubMat); h.position.copy(w.position); h.position.x += sx * 0.01; g.add(h);
@@ -211,7 +213,7 @@ export function createBus(ref, type, name = '') {
   g.traverse((o) => { if (o.isMesh && o.geometry !== wheelGeo && o.geometry !== hubGeo) { own.geos.push(o.geometry); for (const m of [].concat(o.material)) if (m !== wheelMat && m !== hubMat && !own.mats.includes(m)) own.mats.push(m); } });
   const releaseLights = addEveningLights(g, b, own);
   T.refs++;
-  g.userData = { L: b.L, type, ref, releaseLights, own, texKey: ref + '|' + type, texEntry: T };
+  g.userData = { L: b.L, type, ref, releaseLights, own, texKey: T.key, texEntry: T };
   return g;
 }
 export const busLength = (type) => BODY[liveryOf(type).body].L;
