@@ -1632,6 +1632,8 @@ body.in-lobby #hud, body.in-lobby #buttons, body.in-lobby #top-right-bar, body.i
 #lobby-fields .sub-btn { margin-top: 12px; width: 100%; font: inherit; font-size: 13px; font-weight: 700; color: #1f5fbf; background: rgba(31,95,191,.1); border: 1px solid rgba(31,95,191,.28); border-radius: 8px; padding: 9px 12px; cursor: pointer; }
 #lobby-fields .sub-btn:hover { background: rgba(31,95,191,.16); }
 #lobby-error { min-height: 18px; margin: 6px 0 0; font-size: 12px; color: #d4003b; }
+.pick-group { margin: 12px 0 2px; font-size: 11px; font-weight: 800; letter-spacing: 0.08em; color: #5c6b82; }
+.pick-group:first-child { margin-top: 2px; }
 .pick-label { margin-top: 8px; font-size: 12px; font-weight: 700; color: #122033; }
 .pick { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
 .pick button { font: inherit; font-size: 13px; font-weight: 600; border: 1px solid rgba(18,32,51,.12); background: rgba(255,255,255,.95); color: #122033; border-radius: 10px; padding: 5px 10px; cursor: pointer; }
@@ -1639,6 +1641,10 @@ body.in-lobby #hud, body.in-lobby #buttons, body.in-lobby #top-right-bar, body.i
 .pick button.swatch { width: 26px; height: 26px; padding: 0; border-radius: 50%; border: 2px solid #fff; box-shadow: 0 0 0 1px rgba(18,32,51,.2); }
 .pick button.swatch.on { box-shadow: 0 0 0 2px #d4003b; }
 #lobby-go { margin-top: 14px; width: 100%; font: inherit; font-size: 15px; font-weight: 700; color: #fff; background: linear-gradient(90deg, #d4003b 50%, #f5a200 50%); border: 0; border-radius: 6px; padding: 11px 14px; cursor: pointer; text-shadow: 0 1px 2px rgba(0,0,0,.4); }
+@media (min-width: 721px) {
+  #lobby-card { align-items: stretch; max-height: min(92vh, 900px); }
+  #lobby-fields { overflow: auto; overscroll-behavior: contain; padding-right: 2px; }
+}
 @media (max-width: 720px) {
   #lobby-card { grid-template-columns: 1fr; }
   #lobby-preview { height: 240px; }

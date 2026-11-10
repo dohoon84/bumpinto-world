@@ -2,7 +2,7 @@
 import * as THREE from 'three';
 import { releaseRenderer } from './releaseRenderer.js';
 import { createAvatar } from './entities/avatar.js';
-import { LOOK_CHOICES, OUTFIT_COLORS, PROFILE_KEY, sanitizeLook } from './look.js';
+import { LOOK_CHOICES, COLOR_FIELDS, PROFILE_KEY, sanitizeLook } from './look.js';
 import { isEn, tr, toggleLang, onLangChange } from './i18n.js';
 import { accountsOn } from './account/flags.js'; // [accounts] 가벼운 스위치만 — 계정 입장 UI 는 켜졌을 때만 동적으로
 
@@ -217,8 +217,7 @@ export function openLobby({ sms, region = null, onJoin, onBack }) {
           </div>
           <p id="lobby-phone" class="phone-no"></p>
           <div id="lobby-picks"></div>
-          <div id="lobby-color-lbl" class="pick-label"></div>
-          <div id="color-picks" class="pick"></div>
+          <div id="lobby-colors"></div>
         </div>
         <div id="lobby-pane-login" hidden>
           <p id="lobby-login-guide" class="login-guide"></p>
@@ -258,13 +257,21 @@ export function openLobby({ sms, region = null, onJoin, onBack }) {
   function renderPicks() {
     const en = isEn();
     picks.innerHTML = '';
+    let lastGroup = '';
     for (const choice of LOOK_CHOICES) {
+      if (choice.group && choice.group !== lastGroup) {
+        lastGroup = choice.group;
+        const hd = document.createElement('div');
+        hd.className = 'pick-group';
+        hd.textContent = en ? (choice.enGroup || choice.group) : choice.group;
+        picks.appendChild(hd);
+      }
       const row = document.createElement('div');
       row.className = 'pick-row';
       row.innerHTML = `<div class="pick-label">${en ? (choice.enLabel || choice.label) : choice.label}</div>`;
       const wrap = document.createElement('div');
       wrap.className = 'pick';
-      const current = choice.key === 'glasses' ? (look.glasses ? '1' : '0') : look[choice.key];
+      const current = String(look[choice.key] ?? '');
       for (const [value, koLbl, enLbl] of choice.options) {
         const b = document.createElement('button');
         b.type = 'button';
@@ -274,8 +281,7 @@ export function openLobby({ sms, region = null, onJoin, onBack }) {
         if (value === current) b.classList.add('on');
         b.addEventListener('click', () => {
           wrap.querySelectorAll('button').forEach((el) => el.classList.toggle('on', el === b));
-          if (choice.key === 'glasses') look.glasses = value === '1';
-          else look[choice.key] = value;
+          look[choice.key] = value;
           show();
         });
         wrap.appendChild(b);
@@ -285,19 +291,38 @@ export function openLobby({ sms, region = null, onJoin, onBack }) {
     }
   }
 
-  const colors = root.querySelector('#color-picks');
-  for (const color of OUTFIT_COLORS) {
-    const b = document.createElement('button');
-    b.type = 'button';
-    b.className = 'swatch' + (color === look.color ? ' on' : '');
-    b.style.background = color;
-    b.title = color;
-    b.addEventListener('click', () => {
-      colors.querySelectorAll('button').forEach((el) => el.classList.toggle('on', el === b));
-      look.color = color;
-      show();
-    });
-    colors.appendChild(b);
+  const colorBox = root.querySelector('#lobby-colors');
+  function renderColors() {
+    const en = isEn();
+    colorBox.innerHTML = '';
+    const hd = document.createElement('div');
+    hd.className = 'pick-group';
+    hd.textContent = en ? 'Colors' : '색';
+    colorBox.appendChild(hd);
+    for (const field of COLOR_FIELDS) {
+      const row = document.createElement('div');
+      row.className = 'pick-row';
+      row.innerHTML = `<div class="pick-label">${en ? field.enLabel : field.label}</div>`;
+      const wrap = document.createElement('div');
+      wrap.className = 'pick';
+      wrap.dataset.colorKey = field.key;
+      const cur = String(look[field.key] || '').toLowerCase();
+      for (const color of field.colors) {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'swatch' + (color.toLowerCase() === cur ? ' on' : '');
+        b.style.background = color;
+        b.title = color;
+        b.addEventListener('click', () => {
+          wrap.querySelectorAll('button').forEach((el) => el.classList.toggle('on', el === b));
+          look[field.key] = color;
+          show();
+        });
+        wrap.appendChild(b);
+      }
+      row.appendChild(wrap);
+      colorBox.appendChild(row);
+    }
   }
 
   const view = root.querySelector('#lobby-preview');
@@ -423,7 +448,7 @@ export function openLobby({ sms, region = null, onJoin, onBack }) {
     root.querySelector('#lobby-pin-lbl').innerHTML = en
       ? 'Recovery PIN <small>(4–6 digits)</small>'
       : '재입장 PIN <small>(숫자 4~6자리)</small>';
-    root.querySelector('#lobby-color-lbl').textContent = tr('옷 색', 'Outfit Color');
+    renderColors();
     root.querySelector('#lobby-login-guide').textContent = tr(
       '이전에 발급받은 휴대폰 번호와 설정해 둔 PIN(4~6자리)을 입력하면 닉네임·외형·위치·메시지를 그대로 이어받습니다.',
       'Enter your previously issued virtual phone number and PIN (4–6 digits) to restore your nickname, avatar, position, and messages.',
@@ -464,12 +489,13 @@ export function openLobby({ sms, region = null, onJoin, onBack }) {
 
   const syncLookButtons = () => {
     picks.querySelectorAll('button[data-k]').forEach((b) => {
-      const k = b.dataset.k;
-      const cur = k === 'glasses' ? (look.glasses ? '1' : '0') : look[k];
-      b.classList.toggle('on', b.dataset.v === cur);
+      b.classList.toggle('on', b.dataset.v === String(look[b.dataset.k] ?? ''));
     });
-    colors.querySelectorAll('button.swatch').forEach((b) => {
-      b.classList.toggle('on', b.title === look.color);
+    colorBox.querySelectorAll('.pick').forEach((wrap) => {
+      const cur = String(look[wrap.dataset.colorKey] || '').toLowerCase();
+      wrap.querySelectorAll('button.swatch').forEach((b) => {
+        b.classList.toggle('on', b.title.toLowerCase() === cur);
+      });
     });
   };
 
