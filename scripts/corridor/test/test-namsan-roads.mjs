@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { NT, inNamsanPark, NAMSAN_CONNECT_ENDS } from '../../../src/corridor/landmarks/namsanCoords.js';
-import { makeNamsanHeightAt } from '../../../src/corridor/landmarks/namsanTerrain.js';
+import { makeNamsanHeightAt, namsanWallKeepouts, namsanWallPointOpen } from '../../../src/corridor/landmarks/namsanTerrain.js';
 import { namsanMini } from '../../../src/corridor/landmarks/namsan.js';
 
 const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), '../../..');
@@ -291,6 +291,35 @@ function walkWay(w) {
   const gapJoin = Math.hypot(ends.yaksuSouth.x - ends.yaksuNorth.x, ends.yaksuSouth.z - ends.yaksuNorth.z);
   assert.ok(gapJoin < 60, `약수 남북 순환로 끝이 ${gapJoin.toFixed(1)} m 떨어짐`);
   ok(`connectable ends: 약수 남 ${ends.yaksuSouth.x.toFixed(1)},${ends.yaksuSouth.z.toFixed(1)} / 한남 ${ends.hannam.x.toFixed(1)},${ends.hannam.z.toFixed(1)} / 장충 ${ends.jangchung.x.toFixed(1)},${ends.jangchung.z.toFixed(1)}`);
+}
+
+
+{
+  const keep = namsanWallKeepouts(osm);
+  const mustOpen = [
+    { x: -10411.5, z: -20404.5, label: '남산공원길 × 한양도성 (정류장 서쪽)' },
+    { x: -10189.9, z: -20152.0, label: '남산남측순환로 at wall 1279010528 start' },
+    { x: -10199.0, z: -20157.5, label: '남산남측순환로 at wall 1279010531 end' },
+    { x: -10574.1, z: -20443.1, label: 'plaza driveway × 한양도성' },
+    { x: -9892.7, z: -20123.1, label: '한양도성 3코스 steps × wall 1279010528' },
+    { x: -10649.8, z: -20445.9, label: 'steps near tower × 한양도성' },
+    { x: -10387.2, z: -20363.5, label: 'path north of bus stop × 한양도성' },
+    { x: -10409.0, z: -20393.4, label: 'footway beside 남산공원길 × 한양도성' },
+  ];
+  for (const p of mustOpen) {
+    assert.ok(namsanWallPointOpen(p.x, p.z, keep), `wall still blocks ${p.label}`);
+  }
+  // 한양도성 3코스 that only walks alongside must not punch a long hole
+  assert.equal(!!namsanWallPointOpen(-10965.0, -20638.4, keep), false, 'parallel 한양도성 trail cut the wall');
+  const ridge = osm.walls.find((w) => w.id === 1279010531);
+  assert.ok(ridge, 'ridge wall');
+  let stood = 0, opened = 0;
+  for (const pt of ridge.pts) {
+    if (namsanWallPointOpen(pt[0], pt[1], keep)) opened++;
+    else stood++;
+  }
+  assert.ok(stood >= 20, `ridge over-cut stood=${stood} opened=${opened} of ${ridge.pts.length}`);
+  ok(`한양도성 openings: ${mustOpen.length} crossings cleared, parallel trail kept, ridge standing ${stood}/${ridge.pts.length}`);
 }
 
 console.log(`namsan-roads ${n} checks passed`);

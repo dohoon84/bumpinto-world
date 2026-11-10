@@ -120,6 +120,154 @@ export function makeNamsanHeightAt(dem, _osm = null) {
   };
 }
 
+
+const NAMSAN_CAR = new Set([
+  'motorway', 'trunk', 'primary', 'secondary', 'tertiary', 'residential',
+  'unclassified', 'service', 'living_street', 'primary_link', 'secondary_link', 'tertiary_link',
+]);
+
+/** Same width rules as createNamsanRoads so openings match the painted asphalt. */
+export function namsanRenderedWay(w) {
+  const isCar = NAMSAN_CAR.has(w.k);
+  const namedLoop = /남산공원길|순환로/.test(w.name || '');
+  const isDrive = w.service === 'driveway'
+    || !!(isCar && !namedLoop && (w.motor_vehicle === 'private' || !w.name));
+  let width = w.w || (isCar ? 7 : w.k === 'steps' ? 2.6 : 2.3);
+  if (w.k === 'elevator') width = 2.5;
+  else if (isDrive) width = Math.min(width, w.service === 'driveway' ? 3.2 : 4.4);
+  else if (namedLoop) width = Math.max(width, 8.6);
+  return { width, isCar, namedLoop, isDrive };
+}
+
+export function namsanWayKeepout(w, wallHalf = 0.78) {
+  const info = namsanRenderedWay(w);
+  let extra = 0.85;
+  if (info.namedLoop) extra = 2.35; // sidewalk + curb + guardrail slack
+  else if (info.isDrive) extra = 0.85;
+  else if (info.isCar) extra = 0.65;
+  return info.width * 0.5 + extra + wallHalf;
+}
+
+function distToSeg(px, pz, ax, az, bx, bz) {
+  const dx = bx - ax, dz = bz - az;
+  const L2 = dx * dx + dz * dz;
+  if (L2 < 1e-12) return { d: Math.hypot(px - ax, pz - az), x: ax, z: az };
+  const t = Math.max(0, Math.min(1, ((px - ax) * dx + (pz - az) * dz) / L2));
+  const x = ax + dx * t, z = az + dz * t;
+  return { d: Math.hypot(px - x, pz - z), x, z };
+}
+
+function segIntersect(ax, az, bx, bz, cx, cz, dx, dz) {
+  const den = (ax - bx) * (cz - dz) - (az - bz) * (cx - dx);
+  if (Math.abs(den) < 1e-12) return null;
+  const t = ((ax - cx) * (cz - dz) - (az - cz) * (cx - dx)) / den;
+  const u = ((ax - cx) * (az - bz) - (az - cz) * (ax - bx)) / den;
+  if (t < -1e-4 || t > 1 + 1e-4 || u < -1e-4 || u > 1 + 1e-4) return null;
+  return { x: ax + t * (bx - ax), z: az + t * (bz - az) };
+}
+
+/**
+ * Openings where 한양도성 crosses a road or trail, or sits on a car-road
+ * envelope (surface, shoulder, sidewalk, guardrail). Trails that only walk
+ * alongside the wall are left alone — no fabricated gates.
+ */
+export function namsanWallKeepouts(osm, wallHalf = 0.78) {
+  const ways = osm?.ways || [];
+  const walls = osm?.walls || [];
+  const carWays = [];
+  const crossings = [];
+  for (const w of ways) {
+    if (!w.pts || w.pts.length < 2) continue;
+    if (w.k === 'elevator') continue;
+    const info = namsanRenderedWay(w);
+    const keep = namsanWayKeepout(w, wallHalf);
+    if (info.isCar || info.namedLoop || info.isDrive) {
+      carWays.push({
+        pts: w.pts, keep, id: w.id, name: w.name || '', k: w.k,
+        kind: info.namedLoop ? 'loop' : (info.isDrive ? 'drive' : 'car'),
+      });
+    }
+  }
+  for (const wall of walls) {
+    const wpts = wall.pts || [];
+    for (let i = 1; i < wpts.length; i++) {
+      const ax = wpts[i - 1][0], az = wpts[i - 1][1], bx = wpts[i][0], bz = wpts[i][1];
+      for (const w of ways) {
+        if (!w.pts || w.pts.length < 2 || w.k === 'elevator') continue;
+        const info = namsanRenderedWay(w);
+        if (info.isCar || info.namedLoop || info.isDrive) continue;
+        const keep = namsanWayKeepout(w, wallHalf);
+        for (let j = 1; j < w.pts.length; j++) {
+          const hit = segIntersect(
+            ax, az, bx, bz,
+            w.pts[j - 1][0], w.pts[j - 1][1], w.pts[j][0], w.pts[j][1],
+          );
+          if (hit) {
+            crossings.push({
+              x: hit.x, z: hit.z, r: keep, id: w.id, name: w.name || '',
+              k: w.k, wallId: wall.id, kind: 'trail',
+            });
+          }
+        }
+      }
+    }
+  }
+  return { carWays, crossings };
+}
+
+export function namsanWallPointOpen(x, z, keepouts) {
+  if (!keepouts) return null;
+  for (const c of keepouts.crossings) {
+    if (Math.hypot(x - c.x, z - c.z) <= c.r) return c;
+  }
+  for (const w of keepouts.carWays) {
+    const pts = w.pts;
+    for (let i = 1; i < pts.length; i++) {
+      const hit = distToSeg(x, z, pts[i - 1][0], pts[i - 1][1], pts[i][0], pts[i][1]);
+      if (hit.d <= w.keep) return { ...w, x: hit.x, z: hit.z, d: hit.d, r: w.keep };
+    }
+  }
+  return null;
+}
+
+function splitWallRuns(samples, keepouts) {
+  const runs = [];
+  let cur = [];
+  for (const s of samples) {
+    if (namsanWallPointOpen(s.x, s.z, keepouts)) {
+      if (cur.length >= 2) runs.push(cur);
+      cur = [];
+    } else {
+      cur.push(s);
+    }
+  }
+  if (cur.length >= 2) runs.push(cur);
+  return runs.filter((run) => {
+    let L = 0;
+    for (let i = 1; i < run.length; i++) {
+      L += Math.hypot(run[i].x - run[i - 1].x, run[i].z - run[i - 1].z);
+    }
+    return L >= 2.4;
+  });
+}
+
+function smoothWallRun(samples) {
+  for (let pass = 0; pass < 2; pass++) {
+    const ny = samples.map((s) => s.y);
+    for (let i = 1; i < samples.length - 1; i++) {
+      ny[i] = samples[i - 1].y * 0.25 + samples[i].y * 0.5 + samples[i + 1].y * 0.25;
+    }
+    samples.forEach((s, i) => { s.y = ny[i]; });
+  }
+  for (let i = 1; i < samples.length; i++) {
+    const L = Math.hypot(samples[i].x - samples[i - 1].x, samples[i].z - samples[i - 1].z) || 1;
+    const maxDy = 0.55 * L;
+    const dy = samples[i].y - samples[i - 1].y;
+    if (Math.abs(dy) > maxDy) samples[i].y = samples[i - 1].y + Math.sign(dy) * maxDy;
+  }
+  return samples;
+}
+
 export function createNamsanTerrain({ parent, dem, osm }) {
   const group = new THREE.Group();
   group.name = 'namsan-terrain';
@@ -424,6 +572,8 @@ export function createNamsanTerrain({ parent, dem, osm }) {
   const uplightGeos = [];
   const stoneMap = stoneBlockTex();
   const washMap = uplightTex();
+  const wallKeepouts = namsanWallKeepouts(osm, WALL_HALF);
+  const wallHits = [];
   for (const wall of osm?.walls || []) {
     const pts = wall.pts || [];
     if (pts.length < 2) continue;
@@ -446,17 +596,9 @@ export function createNamsanTerrain({ parent, dem, osm }) {
       samples.push({ x: last[0], z: last[1], y: heightAt(last[0], last[1]) });
     }
     if (samples.length < 2) continue;
-    for (let pass = 0; pass < 2; pass++) {
-      const ny = samples.map((s) => s.y);
-      for (let i = 1; i < samples.length - 1; i++) ny[i] = samples[i - 1].y * 0.25 + samples[i].y * 0.5 + samples[i + 1].y * 0.25;
-      samples.forEach((s, i) => { s.y = ny[i]; });
-    }
-    for (let i = 1; i < samples.length; i++) {
-      const L = Math.hypot(samples[i].x - samples[i - 1].x, samples[i].z - samples[i - 1].z) || 1;
-      const maxDy = 0.55 * L;
-      const dy = samples[i].y - samples[i - 1].y;
-      if (Math.abs(dy) > maxDy) samples[i].y = samples[i - 1].y + Math.sign(dy) * maxDy;
-    }
+    const runs = splitWallRuns(samples, wallKeepouts);
+    for (const run of runs) {
+    const samples = smoothWallRun(run);
     let uAcc = 0;
     let merAcc = 0;
     let lightAcc = 0;
@@ -466,6 +608,7 @@ export function createNamsanTerrain({ parent, dem, osm }) {
       const bx = samples[i].x, bz = samples[i].z, by = samples[i].y;
       const dx = bx - ax, dz = bz - az, L = Math.hypot(dx, dz);
       if (L < 0.35) continue;
+      wallHits.push({ ax, az, bx, bz, L });
       const px = -dz / L, pz = dx / L;
       const yb0 = ay - 0.4, yb1 = by - 0.4, yt0 = ay + H, yt1 = by + H;
       const fba = [ax + px * hw, yb0, az + pz * hw];
@@ -516,6 +659,7 @@ export function createNamsanTerrain({ parent, dem, osm }) {
         uplightGeos.push(ug);
       }
       uAcc += L;
+    }
     }
   }
   wallMat = new THREE.MeshLambertMaterial({
@@ -703,6 +847,16 @@ export function createNamsanTerrain({ parent, dem, osm }) {
         if (up) up.visible = k > 0.05;
       }
     },
-    isBlocked() { return false; },
+    isBlocked(x, z, r = 0.4) {
+      const need = WALL_HALF + (Number.isFinite(r) ? r : 0.4);
+      const need2 = need * need;
+      for (const s of wallHits) {
+        const dx = s.bx - s.ax, dz = s.bz - s.az;
+        const t = Math.max(0, Math.min(1, ((x - s.ax) * dx + (z - s.az) * dz) / (s.L * s.L || 1)));
+        const px = s.ax + dx * t - x, pz = s.az + dz * t - z;
+        if (px * px + pz * pz < need2) return true;
+      }
+      return false;
+    },
   };
 }
