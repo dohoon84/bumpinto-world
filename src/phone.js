@@ -2,7 +2,7 @@
 // 플레이어를 가운데 두고 주변만 보여 준다. 북쪽은 위(z가 남쪽이므로 캔버스 +y = +z).
 
 const ROAD_COLOR = {
-  primary: '#8d939c', secondary: '#949aa3', tertiary: '#9ca1a9', trunk: '#8d939c',
+  motorway: '#8d939c', motorway_link: '#8d939c', primary: '#8d939c', secondary: '#949aa3', tertiary: '#9ca1a9', trunk: '#8d939c',
   residential: '#a9adb4', unclassified: '#a9adb4', service: '#b4b7bc', living_street: '#b4b7bc',
   footway: '#e2d3b5', pedestrian: '#e6d8bb', path: '#d9c8a4', cycleway: '#d68c7a', steps: '#cbbd9f', track: '#c9b48d',
 };

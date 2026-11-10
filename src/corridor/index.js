@@ -26,6 +26,7 @@ import { gangnamEnabled, mergeGangnamIndex, GANGNAM_DIR, gangnamSubwayDrawsEntra
 import { gangnamBusEnabled, GANGNAM_BUS_FILE, mountGangnamTransit } from './gangnamBus.js'; // [gangnam-bus]
 import { GYEONGBU_EXPRESS_FILE, gyeongbuExpressEnabled } from './gyeongbuExpress.js'; // [gyeongbu-bus]
 import { mergeGyeongbuWorld, expressRoadHeight } from './gyeongbuWorld.js'; // [gyeongbu-bus]
+import { binGyeongbuMiniTiles, CHEONGGYE_STREETS_FILE, CHEONGGYE_BUILDINGS_FILE } from './gyeongbuMinimap.js'; // [gyeongbu-bus] 미니맵
 import { isMobileMode } from '../mobile/flag.js'; // [gangnam] 강남 박스 안에서만 모바일 품질 하향
 import { migeumBusEnabled } from './migeumBus.js'; // [migeum-bus]
 import { isEn, onLangChange } from '../i18n.js'; // [pangyo-link] 판교역 라벨 KO/EN
@@ -45,9 +46,9 @@ import { cityhallEnabled, CITYHALL_FILE, filterCityHallHidden, createCityHall } 
 export async function loadCorridorData(baseUrl, { streams = true, pangyo = pangyoEnabled(), pangyoExpress = pangyo && pangyoExpressEnabled(), migeum = migeumEnabled(), migeumWater = migeum && migeumWaterEnabled(), migeumTaxi = migeum && migeumTaxiEnabled(), migeumBike = migeum && migeumBikeEnabled(), cityhall = cityhallEnabled(), gangnam = gangnamEnabled(), gangnamBus = gangnam && gangnamBusEnabled(), fetchFn = fetch } = {}) {
   const get = (f) => fetchFn(baseUrl + f).then((r) => (r.ok ? r.json() : null)).catch(() => null);
   const pw = pangyo && pangyoWaterEnabled(); // [pangyo-water] ?pangyowater=0 이면 요청 없음
-  const [index, base, tancheon, streamsData, pg, pgx, water, mg, mgw, mgtb, ch, gn, gnBus, gnEx] = await Promise.all([get('index.json'), get('base.json'), get('tancheon.json'), streams ? get('streams.json') : null, pangyo ? get(PANGYO_DIR + 'index.json') : null, pangyo && pangyoExpress ? get(PANGYO_EXPRESS_FILE) : null, pw ? get(PANGYO_WATER_FILE) : null, migeum ? get(MIGEUM_DIR + 'index.json') : null, migeum && migeumWater ? get(MIGEUM_WATER_FILE) : null, migeum && (migeumTaxi || migeumBike) ? get(MIGEUM_TAXIBIKE_FILE) : null, cityhall ? get(CITYHALL_FILE) : null, gangnam ? get(GANGNAM_DIR + 'index.json') : null, gangnamBus ? get(GANGNAM_BUS_FILE) : null, gangnam && gyeongbuExpressEnabled() ? get(GYEONGBU_EXPRESS_FILE) : null]); // [migeum-water] [migeum-taxibike] [cityhall] [gangnam] [gangnam-bus] [gyeongbu-bus]
+  const [index, base, tancheon, streamsData, pg, pgx, water, mg, mgw, mgtb, ch, gn, gnBus, gnEx, gnCgSt, gnCgBd] = await Promise.all([get('index.json'), get('base.json'), get('tancheon.json'), streams ? get('streams.json') : null, pangyo ? get(PANGYO_DIR + 'index.json') : null, pangyo && pangyoExpress ? get(PANGYO_EXPRESS_FILE) : null, pw ? get(PANGYO_WATER_FILE) : null, migeum ? get(MIGEUM_DIR + 'index.json') : null, migeum && migeumWater ? get(MIGEUM_WATER_FILE) : null, migeum && (migeumTaxi || migeumBike) ? get(MIGEUM_TAXIBIKE_FILE) : null, cityhall ? get(CITYHALL_FILE) : null, gangnam ? get(GANGNAM_DIR + 'index.json') : null, gangnamBus ? get(GANGNAM_BUS_FILE) : null, gangnam && gyeongbuExpressEnabled() ? get(GYEONGBU_EXPRESS_FILE) : null, gangnam ? get(CHEONGGYE_STREETS_FILE) : null, gangnam ? get(CHEONGGYE_BUILDINGS_FILE) : null]); // [migeum-water] [migeum-taxibike] [cityhall] [gangnam] [gangnam-bus] [gyeongbu-bus]
   const pgWater = pg ? water : null; // 판교 타일 없이 판교 지류 컷만 쓰지 않음
-  return index && base ? { index: gangnam ? mergeGyeongbuWorld(mergeGangnamIndex(mergeMigeumIndex(mergePangyoIndex(index, pg), mg), gn), gnEx?.pts) : mergeGangnamIndex(mergeMigeumIndex(mergePangyoIndex(index, pg), mg), gn), migeum: mg, gangnam: gn, gangnamTransit: gangnamBus ? gnBus : null, gangnamExpress: gnEx || null, migeumTaxiBike: mg ? pickMigeumTaxiBike(mgtb, { taxi: migeumTaxi, bike: migeumBike }) : null, base, baseUrl, tancheon, streams: mergePangyoStreams(streamsData, pgWater), pangyo: pg, pangyoExpress: pg ? pgx : null, pangyoWater: pgWater, migeumWater: mg ? mgw : null, cityhall: ch || null } : null; // [pangyo-express] [pangyo-water] [migeum-water] [migeum-taxibike] [cityhall] [gangnam] [gangnam-bus] [gyeongbu-bus]
+  return index && base ? { index: gangnam ? mergeGyeongbuWorld(mergeGangnamIndex(mergeMigeumIndex(mergePangyoIndex(index, pg), mg), gn), gnEx?.pts) : mergeGangnamIndex(mergeMigeumIndex(mergePangyoIndex(index, pg), mg), gn), migeum: mg, gangnam: gn, gangnamTransit: gangnamBus ? gnBus : null, gangnamExpress: gnEx || null, migeumTaxiBike: mg ? pickMigeumTaxiBike(mgtb, { taxi: migeumTaxi, bike: migeumBike }) : null, base, baseUrl, tancheon, streams: mergePangyoStreams(streamsData, pgWater), pangyo: pg, pangyoExpress: pg ? pgx : null, pangyoWater: pgWater, migeumWater: mg ? mgw : null, cityhall: ch || null, cheonggyeStreets: gnCgSt || null, cheonggyeBuildings: gnCgBd || null } : null; // [pangyo-express] [pangyo-water] [migeum-water] [migeum-taxibike] [cityhall] [gangnam] [gangnam-bus] [gyeongbu-bus]
 }
 // [corridor] 탄천 지형: 코리더가 켜졌을 때만 라이브 terrain.json 뒤에 수내→잠실 축/단면을 이어 붙인다(라이브 구간 값은 그대로)
 export function corridorTerrainData(terrainData, corridorData) {
@@ -405,6 +406,26 @@ export function createCorridor({ scene, corridorData, terrain, world, renderer, 
     const expPts = corridorData.gangnamExpress.pts;
     terrain.addGroundExtra((x, z) => expressRoadHeight(x, z, expPts));
   }
+  // [gyeongbu-bus] 본선 공백에는 상세 타일이 없다. 경부 본선·청계산로를 가상 타일로 미니맵에 올린다.
+  const gbMini = (corridorData.gangnamExpress?.pts || corridorData.cheonggyeStreets)
+    ? binGyeongbuMiniTiles({
+      pts: corridorData.gangnamExpress?.pts,
+      streets: corridorData.cheonggyeStreets,
+      buildings: corridorData.cheonggyeBuildings,
+      tileSize: TS,
+    })
+    : [];
+  const gbKey = (t) => `${t.x0},${t.z0}`;
+  const gbMaps = new Map();
+  const gbMapOf = (t) => {
+    let m = gbMaps.get(t.key);
+    if (!m) {
+      const bx = { x0: t.x0, z0: t.z0, x1: t.x0 + TS, z1: t.z0 + TS };
+      m = drawBaseMap({ meta: { bboxLocal: bx }, parks: t.data.parks, water: t.data.water, waterLines: t.data.waterLines, roads: t.data.roads, buildings: t.data.buildings }, { features: {} });
+      gbMaps.set(t.key, m);
+    }
+    return m;
+  };
   const inLive = (x, z) => x >= live.x0 && x <= live.x1 && z >= live.z0 && z <= live.z1;
 
   const stats = { builtDetail: 0, builtLod: 0, chRoads: ch.length, signals: crossings.signals, chTrees: 0 };
@@ -502,8 +523,23 @@ export function createCorridor({ scene, corridorData, terrain, world, renderer, 
       return { detail: d, lod: l, queue: buildQueue.length };
     },
     detailTiles,
-    mapTiles: () => loaded.map((t) => t.detail.map).filter(Boolean),
-    miniTiles: () => loaded.filter((t) => t.detail.mini).map((t) => ({ key: t.key, x0: t.x0, z0: t.z0, size: TS, data: t.detail.mini })), // [hud-v3-minimap]
+    mapTiles: () => {
+      const maps = loaded.map((t) => t.detail.map).filter(Boolean);
+      const have = new Set(loaded.map((t) => gbKey(t)));
+      for (const t of gbMini) if (!have.has(gbKey(t))) maps.push(gbMapOf(t));
+      return maps;
+    },
+    miniTiles: () => {
+      const out = [];
+      const have = new Set();
+      for (const t of loaded) {
+        if (!t.detail?.mini) continue;
+        out.push({ key: t.key, x0: t.x0, z0: t.z0, size: TS, data: t.detail.mini });
+        have.add(gbKey(t));
+      }
+      for (const t of gbMini) if (!have.has(gbKey(t))) out.push({ key: t.key, x0: t.x0, z0: t.z0, size: TS, data: t.data });
+      return out;
+    }, // [hud-v3-minimap] [gyeongbu-bus]
   };
   return api;
 }
