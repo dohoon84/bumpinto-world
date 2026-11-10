@@ -59,6 +59,58 @@ async function go(page, { x, z, y, yaw = 0, dist = 22, pitch = 0.28, fov = 55, h
 const look = (fromX, fromZ, toX, toZ) => Math.atan2(fromX - toX, fromZ - toZ);
 const shot = (page, name) => page.screenshot({ path: `${OUT}/${name}.png`, timeout: 120000 });
 
+async function setCam(page, { yaw = 0, dist = 8, pitch = 0.12, fov = 54 } = {}) {
+  await page.evaluate((o) => {
+    const J = window.__jj;
+    J.setMode('follow');
+    J.cam.distMin = 0.5;
+    J.cam.distMax = 2500;
+    J.cam.yaw = o.yaw;
+    J.cam.pitch = o.pitch;
+    J.cam.dist = o.dist;
+    if (J.camera) {
+      J.camera.fov = o.fov;
+      J.camera.updateProjectionMatrix?.();
+    }
+  }, { yaw, dist, pitch, fov });
+}
+
+async function mountRide(page, { x, z, y, heading }) {
+  return page.evaluate((o) => {
+    const J = window.__jj;
+    const bikes = J.bikes;
+    if (!bikes?._proto || !J.player) return { ok: false, reason: 'no-bike-proto' };
+    if (bikes.riding) J.toggleRide();
+    const scene = J.player.parent;
+    if (!scene) return { ok: false, reason: 'no-scene' };
+    const mesh = bikes._proto.clone(true);
+    mesh.position.set(o.x, o.y, o.z);
+    mesh.rotation.y = o.heading;
+    scene.add(mesh);
+    const b = {
+      mesh, x: o.x, z: o.z, y: o.y, ry: o.heading,
+      wheelF: mesh.getObjectByName('wheelF'),
+      wheelR: mesh.getObjectByName('wheelR'),
+      crank: mesh.getObjectByName('crank'),
+      stand: mesh.getObjectByName('stand'),
+      lampF: mesh.getObjectByName('lampF'),
+      lampR: mesh.getObjectByName('lampR'),
+    };
+    bikes.list.push(b);
+    J.player.position.set(o.x, o.y + 0.05, o.z);
+    J.player.rotation.y = o.heading;
+    J.toggleRide();
+    if (!bikes.riding) bikes.mount(b);
+    bikes.speed = 3.4;
+    const r = bikes.riding;
+    return {
+      ok: !!r,
+      x: r?.x, z: r?.z, y: r?.y, ry: r?.ry,
+      standHidden: r?.stand ? r.stand.visible === false : null,
+    };
+  }, { x, z, y, heading });
+}
+
 const night = await open('night', { hour: 21, extra: '' });
 const info = await night.evaluate(() => {
   const n = window.__jj.namsan;
@@ -424,6 +476,52 @@ if (info.drivePt) {
   });
   await shot(night, 'yaksu-mid');
   console.log('wrote yaksu / user9 floating-road-fixed shots');
+}
+
+// 약수터길 v2: roadside detail + actually riding a bicycle
+{
+  const mid = { x: -10153.58, z: -20030.69 };
+  const climb = { x: -10011.2, z: -19779.46 };
+  const ym = await hAt(mid.x, mid.z);
+  const yc = await hAt(climb.x, climb.z);
+  const midLook = look(mid.x, mid.z, info.tx, info.tz);
+  const climbLook = look(climb.x, climb.z, -10084.64, -19811.55);
+  await go(night, {
+    x: mid.x, z: mid.z, y: ym + 0.12,
+    yaw: midLook, dist: 7, pitch: 0.08, fov: 54, hidePlayer: false,
+  });
+  const mMid = await mountRide(night, { x: mid.x, z: mid.z, y: ym + 0.02, heading: midLook });
+  await setCam(night, { yaw: midLook, dist: 7, pitch: 0.08, fov: 54 });
+  await night.waitForTimeout(700);
+  await shot(night, 'yaksu-mid-v2');
+  await go(night, {
+    x: climb.x, z: climb.z, y: yc + 0.12,
+    yaw: climbLook, dist: 6.6, pitch: 0.10, fov: 50, hidePlayer: false,
+  });
+  const mClimb = await mountRide(night, { x: climb.x, z: climb.z, y: yc + 0.02, heading: climbLook });
+  await night.evaluate((o) => {
+    const J = window.__jj;
+    const shuttle = J.namsan?.roads?.group?.getObjectByName?.('namsan-shuttle');
+    if (!shuttle) return;
+    J.namsan.roads.update = function () {};
+    const hx = -Math.sin(o.yaw), hz = -Math.cos(o.yaw);
+    const x = o.x + hx * 14, z = o.z + hz * 14;
+    shuttle.position.set(x, J.namsan.heightAt(x, z) + 0.03, z);
+    shuttle.rotation.y = o.yaw;
+    shuttle.visible = true;
+  }, { x: climb.x, z: climb.z, yaw: climbLook });
+  await setCam(night, { yaw: climbLook + Math.PI * 0.48, dist: 6.4, pitch: 0.10, fov: 50 });
+  await night.waitForTimeout(700);
+  await shot(night, 'yaksu-climb-bike-v2');
+  await setCam(night, { yaw: climbLook, dist: 6.8, pitch: 0.16, fov: 50 });
+  await night.waitForTimeout(450);
+  await shot(night, 'yaksu-bike-rear-v2');
+  await go(night, {
+    x: mid.x, z: mid.z, y: ym + 80,
+    yaw: midLook, dist: 220, pitch: 0.72, fov: 50, hidePlayer: true,
+  });
+  await shot(night, 'yaksu-aerial-v2');
+  console.log('wrote yaksu-*-v2 shots', JSON.stringify({ mMid, mClimb }));
 }
 
 // downward black-pixel survey every 20 m along access routes

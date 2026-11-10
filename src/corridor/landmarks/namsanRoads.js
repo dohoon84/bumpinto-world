@@ -97,15 +97,63 @@ function pointAt(pts, dist) {
 }
 
 
+function headingAt(pts, i) {
+  const prev = pts[Math.max(0, i - 1)];
+  const next = pts[Math.min(pts.length - 1, i + 1)];
+  let hx = next[0] - prev[0], hz = next[1] - prev[1];
+  const L = Math.hypot(hx, hz) || 1;
+  return { hx: hx / L, hz: hz / L };
+}
+
 function offsetLine(pts, dist) {
   const out = [];
   for (let i = 0; i < pts.length; i++) {
-    const prev = pts[Math.max(0, i - 1)];
-    const next = pts[Math.min(pts.length - 1, i + 1)];
-    let hx = next[0] - prev[0], hz = next[1] - prev[1];
-    const L = Math.hypot(hx, hz) || 1;
-    hx /= L; hz /= L;
+    const { hx, hz } = headingAt(pts, i);
     out.push([pts[i][0] - hz * dist, pts[i][1] + hx * dist]);
+  }
+  return out;
+}
+
+function offsetBySigned(pts, distAt) {
+  const out = [];
+  for (let i = 0; i < pts.length; i++) {
+    const { hx, hz } = headingAt(pts, i);
+    const d = typeof distAt === 'function' ? distAt(i) : distAt;
+    out.push([pts[i][0] - hz * d, pts[i][1] + hx * d]);
+  }
+  return out;
+}
+
+// Decorations must share the road centerline height. Sampling heightAt at an
+// offset XZ on a cross-slope lifted sidewalks, paint lines and rails onto the
+// hillside (the tan "detached slab" next to 약수터길).
+function attachToRoad(centerPts, offsetPts, heightAt, dy) {
+  return offsetPts.map((p, i) => {
+    const c = centerPts[Math.min(i, centerPts.length - 1)];
+    return [p[0], p[1], heightAt(c[0], c[1]) + dy];
+  });
+}
+
+function localUpSign(pts, i, heightAt) {
+  const { hx, hz } = headingAt(pts, i);
+  const x = pts[i][0], z = pts[i][1];
+  const leftY = heightAt(x - hz * 6, z + hx * 6);
+  const rightY = heightAt(x + hz * 6, z - hx * 6);
+  return leftY >= rightY ? 1 : -1;
+}
+
+function smoothSideSigns(pts, heightAt) {
+  const raw = pts.map((_, i) => localUpSign(pts, i, heightAt));
+  const out = new Array(raw.length);
+  let cur = raw[0];
+  let run = 0;
+  for (let i = 0; i < raw.length; i++) {
+    if (raw[i] === cur) run = Math.min(run + 1, 12);
+    else {
+      run -= 1;
+      if (run < -5) { cur = raw[i]; run = 6; }
+    }
+    out[i] = cur;
   }
   return out;
 }
@@ -301,47 +349,53 @@ function adPanelTex(route) {
 
 
 
-function roadSupportGeo(pts, width, heightAt, dy) {
+// Vertical stone/concrete retaining wall on the valley edge.
+// A previous 3.8 m sloped apron (road-edge at roadY → 3.8 m out at terrainY)
+// read as a bright tan slab with a double white line peeling diagonally up
+// the grass — not a second OSM trail. The cap is gone; the face is a wall.
+function roadSupportGeo(pts, width, heightAt, dy, downSigns) {
   const hw = width * 0.5;
+  const wallT = 0.32;
   const n = pts.length;
   if (n < 2) return null;
+  const downs = downSigns || smoothSideSigns(pts, heightAt).map((s) => -s);
   const pos = [];
   const frames = [];
   for (let i = 0; i < n; i++) {
-    const prev = pts[Math.max(0, i - 1)];
-    const next = pts[Math.min(n - 1, i + 1)];
-    let hx = next[0] - prev[0], hz = next[1] - prev[1];
-    const L = Math.hypot(hx, hz) || 1;
-    hx /= L; hz /= L;
+    const { hx, hz } = headingAt(pts, i);
     const x = pts[i][0], z = pts[i][1];
     const y = heightAt(x, z) + dy;
-    const leftY = heightAt(x - hz * 4, z + hx * 4);
-    const rightY = heightAt(x + hz * 4, z - hx * 4);
-    const downSign = leftY >= rightY ? -1 : 1;
-    frames.push({ x, z, y, hx, hz, downSign });
+    frames.push({ x, z, y, hx, hz, downSign: downs[i] || -1 });
   }
   for (const f of frames) {
     const lx = f.x - f.hz * hw, lz = f.z + f.hx * hw;
     const rx = f.x + f.hz * hw, rz = f.z - f.hx * hw;
     const ybL = Math.min(f.y - 0.34, heightAt(lx, lz) - 0.12);
     const ybR = Math.min(f.y - 0.34, heightAt(rx, rz) - 0.12);
-    const ax = f.x - f.hz * (hw + 3.8) * f.downSign;
-    const az = f.z + f.hx * (hw + 3.8) * f.downSign;
-    const ay = heightAt(ax, az);
-    const dx = f.x - f.hz * hw * f.downSign;
-    const dz = f.z + f.hx * hw * f.downSign;
-    pos.push(lx, f.y, lz, rx, f.y, rz, lx, ybL, lz, rx, ybR, rz, ax, ay, az, dx, f.y, dz);
+    const innerX = f.x - f.hz * hw * f.downSign;
+    const innerZ = f.z + f.hx * hw * f.downSign;
+    const outerX = f.x - f.hz * (hw + wallT) * f.downSign;
+    const outerZ = f.z + f.hx * (hw + wallT) * f.downSign;
+    const yBot = Math.min(f.y - 0.34, heightAt(outerX, outerZ) - 0.08);
+    // 0 topL, 1 topR, 2 botL, 3 botR,
+    // 4 wall-outer-top (road Y), 5 wall-inner-top (road Y),
+    // 6 wall-outer-bot (terrain)
+    pos.push(
+      lx, f.y, lz, rx, f.y, rz, lx, ybL, lz, rx, ybR, rz,
+      outerX, f.y, outerZ, innerX, f.y, innerZ, outerX, yBot, outerZ,
+    );
   }
   const idx = [];
-  const S = 6;
+  const S = 7;
   for (let i = 0; i < n - 1; i++) {
     const k = i * S, m = k + S;
     idx.push(k + 2, m + 2, k + 3, k + 3, m + 2, m + 3);
     idx.push(k + 0, m + 0, k + 2, k + 2, m + 0, m + 2);
     idx.push(k + 1, k + 3, m + 1, k + 3, m + 3, m + 1);
+    if (frames[i].downSign !== frames[i + 1].downSign) continue;
+    // Thin coping (wall thickness only) + vertical outer face.
     idx.push(k + 5, m + 5, k + 4, k + 4, m + 5, m + 4);
-    if (frames[i].downSign > 0) idx.push(k + 2, k + 4, m + 2, m + 2, k + 4, m + 4);
-    else idx.push(k + 3, m + 3, k + 4, k + 4, m + 3, m + 4);
+    idx.push(k + 4, m + 4, k + 6, k + 6, m + 4, m + 6);
   }
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
@@ -421,7 +475,7 @@ export function createNamsanRoads({ parent, osm, heightAt, overlay = null } = {}
     if (isCar) {
       carGeos.push(paint(geo, isDrive ? '#7a7f86' : '#6e747c'));
       const support = roadSupportGeo(pts, width, heightAt, dy);
-      if (support) bankGeos.push(paint(support, isDrive ? '#6a6660' : '#5c584e'));
+      if (support) bankGeos.push(paint(support, isDrive ? '#6a6660' : '#6a655c'));
     } else if (isStep) stepGeos.push(paint(geo, '#9a9080'));
     else pathGeos.push(paint(geo, '#7a6b52'));
     walkHits.push({ segs: segsOf(pts), pad: width * 0.5 + 0.35, dy });
@@ -429,37 +483,48 @@ export function createNamsanRoads({ parent, osm, heightAt, overlay = null } = {}
     if (isCar) {
       const walkPad = width * 0.5 + (namedLoop ? 2.2 : 0.45);
       walkHits[walkHits.length - 1].pad = walkPad;
+      const upSigns = namedLoop ? smoothSideSigns(pts, heightAt) : null;
       if (namedLoop && width >= 6) {
-        yellowGeos.push(fixNormalsUp(ribbonGeo(elevated(offsetLine(pts, 0.14), heightAt, dy + 0.045), 0.11, 0, false)));
-        yellowGeos.push(fixNormalsUp(ribbonGeo(elevated(offsetLine(pts, -0.14), heightAt, dy + 0.045), 0.11, 0, false)));
-        whiteGeos.push(fixNormalsUp(ribbonGeo(elevated(offsetLine(pts, width * 0.5 - 0.18), heightAt, dy + 0.04), 0.12, 0, false)));
-        whiteGeos.push(fixNormalsUp(ribbonGeo(elevated(offsetLine(pts, -(width * 0.5 - 0.18)), heightAt, dy + 0.04), 0.12, 0, false)));
+        yellowGeos.push(fixNormalsUp(ribbonGeo(attachToRoad(pts, offsetLine(pts, 0.14), heightAt, dy + 0.045), 0.11, 0, false)));
+        yellowGeos.push(fixNormalsUp(ribbonGeo(attachToRoad(pts, offsetLine(pts, -0.14), heightAt, dy + 0.045), 0.11, 0, false)));
+        // Bike-friendly painted edge lines, glued to the asphalt (8.6 m kept).
+        whiteGeos.push(fixNormalsUp(ribbonGeo(attachToRoad(pts, offsetLine(pts, width * 0.5 - 0.20), heightAt, dy + 0.04), 0.14, 0, false)));
+        whiteGeos.push(fixNormalsUp(ribbonGeo(attachToRoad(pts, offsetLine(pts, -(width * 0.5 - 0.20)), heightAt, dy + 0.04), 0.14, 0, false)));
+        carGeos.push(paint(fixNormalsUp(ribbonGeo(attachToRoad(pts, offsetLine(pts, width * 0.5 - 0.48), heightAt, dy + 0.012), 0.55, 0, false)), '#7a7f86'));
+        carGeos.push(paint(fixNormalsUp(ribbonGeo(attachToRoad(pts, offsetLine(pts, -(width * 0.5 - 0.48)), heightAt, dy + 0.012), 0.55, 0, false)), '#7a7f86'));
       }
       const swPref = w.sidewalk || (namedLoop ? 'uphill' : null);
-      const upSign = namedLoop || swPref ? sideSign(pts, heightAt, swPref === 'left' || swPref === 'right' ? swPref : 'uphill') : 0;
-      const downSign = namedLoop ? -upSign : 0;
       if (swPref === 'both') {
         for (const sgn of [1, -1]) {
-          sidewalkGeos.push(paint(fixNormalsUp(ribbonGeo(elevated(offsetLine(pts, sgn * (width * 0.5 + 0.95)), heightAt, dy + 0.02), 1.7, 0, false)), '#b7b4ac'));
-          curbGeos.push(paint(fixNormalsUp(ribbonGeo(elevated(offsetLine(pts, sgn * (width * 0.5 + 0.12)), heightAt, dy + 0.12), 0.24, 0, false)), '#c9c5bb'));
+          sidewalkGeos.push(paint(fixNormalsUp(ribbonGeo(attachToRoad(pts, offsetLine(pts, sgn * (width * 0.5 + 0.90)), heightAt, dy + 0.07), 1.55, 0, false)), '#b7b4ac'));
+          curbGeos.push(paint(fixNormalsUp(ribbonGeo(attachToRoad(pts, offsetLine(pts, sgn * (width * 0.5 + 0.12)), heightAt, dy + 0.13), 0.22, 0, false)), '#c9c5bb'));
         }
-      } else if (upSign) {
-        sidewalkGeos.push(paint(fixNormalsUp(ribbonGeo(elevated(offsetLine(pts, upSign * (width * 0.5 + 0.95)), heightAt, dy + 0.02), 1.7, 0, false)), '#b7b4ac'));
-        curbGeos.push(paint(fixNormalsUp(ribbonGeo(elevated(offsetLine(pts, upSign * (width * 0.5 + 0.12)), heightAt, dy + 0.12), 0.24, 0, false)), '#c9c5bb'));
+      } else if (swPref === 'left' || swPref === 'right') {
+        const sgn = swPref === 'left' ? 1 : -1;
+        sidewalkGeos.push(paint(fixNormalsUp(ribbonGeo(attachToRoad(pts, offsetLine(pts, sgn * (width * 0.5 + 0.90)), heightAt, dy + 0.07), 1.55, 0, false)), '#b7b4ac'));
+        curbGeos.push(paint(fixNormalsUp(ribbonGeo(attachToRoad(pts, offsetLine(pts, sgn * (width * 0.5 + 0.12)), heightAt, dy + 0.13), 0.22, 0, false)), '#c9c5bb'));
+      } else if (upSigns) {
+        const swPts = offsetBySigned(pts, (i) => upSigns[i] * (width * 0.5 + 0.90));
+        const curbPts = offsetBySigned(pts, (i) => upSigns[i] * (width * 0.5 + 0.12));
+        sidewalkGeos.push(paint(fixNormalsUp(ribbonGeo(attachToRoad(pts, swPts, heightAt, dy + 0.07), 1.55, 0, false)), '#b7b4ac'));
+        curbGeos.push(paint(fixNormalsUp(ribbonGeo(attachToRoad(pts, curbPts, heightAt, dy + 0.13), 0.22, 0, false)), '#c9c5bb'));
       } else {
         curbGeos.push(paint(fixNormalsUp(ribbonGeo(elevated(pts, heightAt, dy + 0.06), width + 0.5, 0, false)), '#8a8680'));
       }
-      if (namedLoop && downSign) {
-        // 계곡 쪽 가드레일
+      if (namedLoop && upSigns) {
+        // Valley-side guardrail sitting on the road edge at road height.
         let accR = 0;
         for (let i = 1; i < pts.length; i++) {
           const ax = pts[i - 1][0], az = pts[i - 1][1], bx = pts[i][0], bz = pts[i][1];
           const L = Math.hypot(bx - ax, bz - az) || 1;
           const hx = (bx - ax) / L, hz = (bz - az) / L;
-          const ox = -hz * (width * 0.5 + 0.22) * downSign;
-          const oz = hx * (width * 0.5 + 0.22) * downSign;
-          const y0 = heightAt(ax + ox, az + oz), y1 = heightAt(bx + ox, bz + oz);
-          for (const hy of [0.48, 0.88]) {
+          if (upSigns[i] !== upSigns[i - 1]) { accR += L; continue; }
+          const ds = -upSigns[i];
+          const ox = -hz * (width * 0.5 + 0.14) * ds;
+          const oz = hx * (width * 0.5 + 0.14) * ds;
+          const y0 = heightAt(ax, az) + dy;
+          const y1 = heightAt(bx, bz) + dy;
+          for (const hy of [0.52, 0.92]) {
             const rg = new THREE.BoxGeometry(0.05, 0.06, L);
             rg.rotateY(Math.atan2(hx, hz));
             rg.translate((ax + bx) / 2 + ox, (y0 + y1) * 0.5 + hy, (az + bz) / 2 + oz);
@@ -481,10 +546,11 @@ export function createNamsanRoads({ parent, osm, heightAt, overlay = null } = {}
           accL = 0;
           const hx = (pts[i][0] - pts[i - 1][0]) / (L || 1);
           const hz = (pts[i][1] - pts[i - 1][1]) / (L || 1);
-          const side = upSign || 1;
+          const side = upSigns[i];
           lampPts.push({
-            x: pts[i][0] - hz * (width * 0.5 + 1.25) * side,
-            z: pts[i][1] + hx * (width * 0.5 + 1.25) * side,
+            x: pts[i][0] - hz * (width * 0.5 + 0.42) * side,
+            z: pts[i][1] + hx * (width * 0.5 + 0.42) * side,
+            y: heightAt(pts[i][0], pts[i][1]) + dy,
             yaw: Math.atan2(-hx, -hz),
           });
         }
@@ -568,7 +634,7 @@ export function createNamsanRoads({ parent, osm, heightAt, overlay = null } = {}
   addMerged(sidewalkGeos, 'namsan-sidewalks');
   addMerged(curbGeos, 'namsan-curbs');
   addMerged(carGeos, 'namsan-car-roads', { side: THREE.DoubleSide });
-  addMerged(bankGeos, 'namsan-road-banks');
+  addMerged(bankGeos, 'namsan-road-banks', { side: THREE.DoubleSide });
   addMerged(pathGeos, 'namsan-paths');
   addMerged(stepGeos, 'namsan-steps');
   addMerged(treadGeos, 'namsan-treads');
@@ -577,7 +643,7 @@ export function createNamsanRoads({ parent, osm, heightAt, overlay = null } = {}
     color: '#f0d24a', emissive: new THREE.Color('#f0d24a'), emissiveIntensity: 0,
   });
   const whiteMat = new THREE.MeshLambertMaterial({
-    color: '#eceff4', emissive: new THREE.Color('#dfe4ec'), emissiveIntensity: 0,
+    color: '#eceff4', emissive: new THREE.Color('#dfe4ec'), emissiveIntensity: 0.14,
   });
   if (yellowGeos.length) {
     const yg = mergeGeometries(yellowGeos, true);
@@ -610,7 +676,7 @@ export function createNamsanRoads({ parent, osm, heightAt, overlay = null } = {}
     const ax = new THREE.Vector3(), ay = new THREE.Vector3(), az = new THREE.Vector3();
     for (let i = 0; i < n; i++) {
       const p = lampPts[i];
-      const y = heightAt(p.x, p.z);
+      const y = Number.isFinite(p.y) ? p.y : heightAt(p.x, p.z);
       const yaw = p.yaw || 0;
       q.setFromAxisAngle(up, yaw);
       m4.compose(pos.set(p.x, y, p.z), q, scl.set(sc, sc, sc));
