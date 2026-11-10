@@ -281,6 +281,7 @@ function applyMerges(session, pairs) {
 function updateSleepAndOver(session, dt) {
   const line = dangerYOf(session.height);
   let danger = false;
+  let fallingAlive = false;
   for (const it of session.items) {
     if (it.dead) continue;
     it.age += dt;
@@ -290,8 +291,9 @@ function updateSleepAndOver(session, dt) {
       it.vx = 0;
       it.vy = 0;
     }
-    if (session.fallingId === it.id && (it.contacted || it.age >= DROP_UNLOCK)) {
-      session.fallingId = null;
+    if (session.fallingId === it.id) {
+      fallingAlive = true;
+      if (it.contacted || it.age >= DROP_UNLOCK) session.fallingId = null;
     }
     // 막 떨어뜨린 아이템은 위험선 판정에서 잠시 제외
     const counts = it.age > 0.45 && it.id !== session.fallingId;
@@ -302,6 +304,8 @@ function updateSleepAndOver(session, dt) {
       it.aboveMs = 0;
     }
   }
+  // 낙하 중 합쳐져 목록에서 빠지면 fallingId 가 영원히 남아 다음 드롭이 막힌다
+  if (session.fallingId != null && !fallingAlive) session.fallingId = null;
   if (session.dropLock > 0 && session.fallingId == null) {
     session.dropLock = Math.max(0, session.dropLock - dt);
   }

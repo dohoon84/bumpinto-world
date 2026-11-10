@@ -72,6 +72,7 @@ export function createArcadeUI({ onHintTap, onCabTap, onExit, onMute } = {}) {
     root,
     isTouch,
     setInside(on) { root.classList.toggle('is-inside', !!on); },
+    setPlaying(on) { root.classList.toggle('is-playing', !!on); },
     setHint(text, on = !!text, opts = {}) {
       paintAct(hint, text, { ...opts, act: opts.act ?? !!text, on });
     },

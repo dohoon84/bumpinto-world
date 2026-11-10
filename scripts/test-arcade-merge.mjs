@@ -155,6 +155,89 @@ assert(clampAimX(999, 20) === TUB_INNER_W - 20, 'clamp right');
   assert(!srvBad.ok, 'server rejects too-fast merge run');
 }
 
+// falling item that merges away must not lock future drops
+{
+  const s = createSession({ seed: 1 });
+  s.pendingStage = 2;
+  s.nextStage = 1;
+  s.pendingR = radiusFor(2);
+  const r = radiusFor(2);
+  spawnAt(s, 2, TUB_INNER_W / 2, r * 3.2, { age: 1, contacted: true });
+  setAimX(s, TUB_INNER_W / 2);
+  const dropped = tryDrop(s);
+  assert(dropped, 'merge-while-falling: drop');
+  assert(!canDrop(s), 'locked right after drop');
+  for (let i = 0; i < 240; i++) step(s, FIXED_DT);
+  assert(s.fallingId == null, `fallingId leaked after merge: ${s.fallingId}`);
+  assert(s.dropLock <= 0, `dropLock leaked after merge: ${s.dropLock}`);
+  assert(canDrop(s) || s.over, 'should allow another drop after the falling item merged');
+}
+
+// long play: many drops must keep unlocking (or end in a real game over)
+{
+  const s = createSession({ seed: 20261110 });
+  let drops = 0;
+  for (let i = 0; i < 16000 && !s.over; i++) {
+    step(s, FIXED_DT);
+    if (canDrop(s) && i % 4 === 0) {
+      setAimX(s, 36 + ((i * 47) % (TUB_INNER_W - 72)));
+      if (tryDrop(s)) drops += 1;
+    }
+  }
+  if (!s.over) {
+    for (let i = 0; i < 360; i++) step(s, FIXED_DT);
+    assert(s.fallingId == null, `long-play fallingId=${s.fallingId}`);
+    assert(s.dropLock <= 0, `long-play dropLock=${s.dropLock}`);
+    assert(canDrop(s), `stuck after ${drops} drops, items=${s.items.length} falling=${s.fallingId} lock=${s.dropLock}`);
+  }
+  assert(drops >= 40, `expected a long run of drops, got ${drops}`);
+}
+
+// pointer / touchcancel / visibility must not leave a stuck "touching" flag
+{
+  let touching = false;
+  const end = (type, drop) => {
+    if (!touching) return 'ignore';
+    touching = false;
+    if (!drop) return 'reset';
+    return (type === 'touch' || type === 'pen') ? 'drop' : 'ignore';
+  };
+  const s = createSession({ seed: 11 });
+  let drops = 0, cancels = 0, hides = 0;
+  const kinds = ['mouse', 'touch', 'touch', 'pen', 'touch'];
+  for (let i = 0; i < 80; i++) {
+    for (let k = 0; k < 30 && !s.over; k++) step(s, FIXED_DT);
+    const type = kinds[i % kinds.length];
+    touching = true;
+    if (i % 7 === 0) {
+      assert(end(type, false) === 'reset', 'touchcancel resets without drop');
+      assert(!touching, 'touchcancel cleared flag');
+      cancels += 1;
+      continue;
+    }
+    if (i % 11 === 0) {
+      touching = false; // visibilitychange
+      hides += 1;
+      assert(!touching, 'visibility cleared flag');
+      continue;
+    }
+    const act = end(type, true);
+    if (act === 'drop' && canDrop(s) && !s.over) {
+      setAimX(s, 40 + (i * 19) % (TUB_INNER_W - 80));
+      if (tryDrop(s)) drops += 1;
+    } else if (act === 'ignore' && type === 'mouse' && canDrop(s) && !s.over) {
+      // mouse drops on pointerdown in the real UI
+      setAimX(s, 40 + (i * 19) % (TUB_INNER_W - 80));
+      if (tryDrop(s)) drops += 1;
+    }
+  }
+  for (let i = 0; i < 240; i++) step(s, FIXED_DT);
+  assert(!touching, 'pointer flag clear at end');
+  assert(s.fallingId == null || s.over, `input-mix fallingId=${s.fallingId}`);
+  if (!s.over) assert(canDrop(s), 'input-mix still droppable');
+  assert(drops >= 8 && cancels >= 2 && hides >= 2, `drops=${drops} cancels=${cancels} hides=${hides}`);
+}
+
 console.log('ok arcade-merge', {
   r1: +r1.toFixed(2), r10: +r10.toFixed(2),
   k: +(radiusFor(2) / r1).toFixed(4),

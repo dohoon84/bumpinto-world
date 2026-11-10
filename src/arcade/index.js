@@ -1,7 +1,7 @@
 // [arcade] BUMP 오락실 — 문 앞 E 입장 · 오락기 F/클릭으로 게임 선택(범핑팡·범편의점) · R 순위판
 import * as THREE from 'three';
 import { arcadeEnabled, mergeEnabled, ARCADE_AT, arcadeAtSpot } from './flag.js';
-import { arcadePlacement, arcadePlacements } from './locations.js';
+import { arcadePlacement, arcadePlacements, doorOutsidePos } from './locations.js';
 import { mountArcadeExterior } from './exterior.js';
 import { buildArcadeInterior } from './interior.js';
 import { createArcadeSfx } from './sfx.js';
@@ -83,6 +83,11 @@ export function mountArcade({
 
   const playLabel = () => (mergeOn ? '게임 하기' : '범핑팡 하기');
   const playing = () => !!(session || picker);
+  function setLobbyHints() {
+    ui.setPlaying?.(false);
+    ui.setCabHint(playLabel(), true, { act: true, tap: playLabel(), key: 'F' });
+    ui.setHint('오락실 나가기', true, { act: true, tap: '오락실 나가기', key: 'E' });
+  }
   function endSession() {
     try { picker?.dispose?.(); } catch { /* */ }
     picker = null;
@@ -90,7 +95,7 @@ export function mountArcade({
     session = null; sessionKind = '';
     ui.root.classList.remove('is-pang', 'is-merge');
     resumeWorldOst();
-    ui.setCabHint(playLabel(), true, { act: true, tap: playLabel(), key: 'F' });
+    if (active) setLobbyHints();
   }
 
   let fade = { t: 0, phase: '', title: '', sub: '', leaving: false };
@@ -134,20 +139,22 @@ export function mountArcade({
     active = true;
     ui.setInside(true);
     onInterior?.('arcade', interior);
-    ui.setCabHint(playLabel(), true, { act: true, tap: playLabel(), key: 'F' });
+    setLobbyHints();
   }
   function leave() {
     if (!active || (busy && !fade.leaving && fade.phase)) return;
     if (playing()) endSession();
     busy = true; fade = { t: 0, phase: 'out', title: '밖으로', sub: '또 와요!', leaving: true };
-    ui.setCabHint(''); sfx.door(); sfx.stopBgm();
+    ui.setCabHint(''); ui.setHint(''); sfx.door(); sfx.stopBgm();
   }
   function finishLeave() {
     onInterior?.('', null);
     interior?.dispose(); interior = null; active = false;
-    ui.setInside(false); ui.setCabHint('');
+    ui.setInside(false); ui.setPlaying?.(false); ui.setCabHint(''); ui.setHint('');
     const p = getPlayer?.()?.position;
-    if (p && store.door) { p.x = store.door[0]; p.z = store.door[1]; }
+    const out = store ? doorOutsidePos(store) : null;
+    if (p && out) { p.x = out.x; p.z = out.z; }
+    else if (p && store?.door) { p.x = store.door[0]; p.z = store.door[1]; }
     else if (p && returnPos) { p.x = returnPos.x; p.z = returnPos.z; }
     returnPos = null;
   }
@@ -194,6 +201,8 @@ export function mountArcade({
   function readyPlaySurface() {
     dismissBlockingOverlays();
     ui.setCabHint('');
+    ui.setHint('');
+    ui.setPlaying?.(true);
     fade = { t: 0, phase: '', title: '', sub: '', leaving: false };
     busy = false;
     ui.setFade(0);
@@ -207,7 +216,7 @@ export function mountArcade({
     picker = mountGameSelect({
       root: ui.root,
       onPick: (id) => { picker = null; if (id === 'merge') startMerge(); else startPang(); },
-      onClose: () => { picker = null; ui.root.classList.remove('is-pang', 'is-merge'); ui.setCabHint(playLabel(), true, { act: true, tap: playLabel(), key: 'F' }); },
+      onClose: () => { picker = null; ui.root.classList.remove('is-pang', 'is-merge'); setLobbyHints(); },
     });
   }
 
@@ -236,7 +245,7 @@ export function mountArcade({
       getName: selfName,
       getBest: () => bestScoreLocal('pang'),
       onOpenBoard: () => openBoard('today', 'pang'),
-      onExit: () => { session = null; sessionKind = ''; ui.root.classList.remove('is-pang', 'is-merge'); resumeWorldOst(); ui.setCabHint(playLabel(), true, { act: true, tap: playLabel(), key: 'F' }); },
+      onExit: () => { session = null; sessionKind = ''; ui.root.classList.remove('is-pang', 'is-merge'); resumeWorldOst(); setLobbyHints(); },
       onResult: async ({ score, level, durationMs, ranked: rec, name, openBoard: wantBoard }) => {
         try { await rank.submit({ name, score, level, durationMs, ranked: rec }); } catch { /* local ok */ }
         if (wantBoard) openBoard('today', 'pang');
@@ -264,7 +273,7 @@ export function mountArcade({
         // 게임 안 순위판이 직접 그리므로 rows 만 돌려준다
         return rows;
       },
-      onExit: () => { session = null; sessionKind = ''; ui.root.classList.remove('is-pang', 'is-merge'); resumeWorldOst(); ui.setCabHint(playLabel(), true, { act: true, tap: playLabel(), key: 'F' }); },
+      onExit: () => { session = null; sessionKind = ''; ui.root.classList.remove('is-pang', 'is-merge'); resumeWorldOst(); setLobbyHints(); },
       onResult: async ({ score, level, durationMs, ranked: rec, name }) => {
         try { await mergeRank.submit({ name, score, level, durationMs, ranked: rec }); } catch { /* local ok */ }
       },
@@ -373,12 +382,9 @@ export function mountArcade({
       }
       return true;
     },
-    blocks(x, z, r = 0.4) {
-      if (!exterior) return false;
-      for (const s of stores) {
-        const d = Math.hypot(x - s.door[0], z - s.door[1]);
-        if (d < 0.45 + r && d > 0.32) return true;
-      }
+    blocks(_x, _z, _r = 0.4) {
+      // 문 주변 도넛(0.32 < d < 0.45+r)은 퇴장 좌표(문 중심)에 플레이어를 가둔다.
+      // 매장 안은 건물 footprint 충돌이 막으므로 문 고리는 두지 않는다.
       return false;
     },
     dispose() {

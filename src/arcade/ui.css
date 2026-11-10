@@ -20,7 +20,9 @@
 #arc-root .arc-inside-bar {
   pointer-events: auto; position: fixed; top: 14px; right: 14px; display: none; gap: 8px; z-index: 80;
 }
-#arc-root.is-inside .arc-inside-bar { display: flex; }
+/* 월드 HUD(게시판/메뉴)와 겹치지 않게. 소리는 각 게임 UI 안에서만 다룬다. */
+#arc-root.is-inside .arc-inside-bar,
+#arc-root.is-playing .arc-inside-bar { display: none; }
 #arc-root .arc-inside-bar button {
   pointer-events: auto; border: 0; border-radius: 14px; padding: 10px 14px; font-weight: 800; cursor: pointer;
   background: rgba(255,255,255,.12); color: #fff; backdrop-filter: blur(8px);
@@ -1327,38 +1329,45 @@
 
 /* ========== 범편의점 ========== */
 .arc-merge {
-  pointer-events: auto; position: fixed; inset: 0; z-index: 90;
+  pointer-events: auto; position: fixed; left: 0; top: var(--merge-vv-top, 0px); z-index: 90;
+  width: var(--merge-vvw, 100vw); height: var(--merge-vvh, 100dvh);
   font-family: "Jua", Pretendard, "Noto Sans KR", sans-serif; color: #3A2430;
   background: #FFF8F0 url(/arcade/merge/bg/bg-store.jpg) center / cover no-repeat;
   overflow: hidden;
+  box-sizing: border-box;
 }
 .arc-merge.is-wide { background-image: url(/arcade/merge/bg/bg-store-pc.jpg); }
-.arc-merge-shell { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; }
+.arc-merge-shell {
+  position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center;
+  padding-bottom: max(8px, env(safe-area-inset-bottom, 0px));
+  box-sizing: border-box;
+}
 .arc-merge-left, .arc-merge-right { display: none; }
 .arc-merge-top {
   width: min(390px, 100%); display: flex; align-items: flex-start; gap: 8px;
-  padding: 36px 12px 0; box-sizing: border-box; z-index: 4;
+  padding: max(10px, env(safe-area-inset-top, 0px)) 12px 4px; box-sizing: border-box; z-index: 4;
+  flex: 0 0 auto;
 }
 .arc-merge-score {
-  flex: 0 0 auto; width: 180px; height: 88px; padding: 30px 14px 8px;
+  flex: 0 0 auto; width: 148px; height: 70px; padding: 22px 12px 6px;
   background: url(/arcade/merge/ui/score-card.png) center / 100% 100% no-repeat;
   display: flex; flex-direction: column; align-items: center; justify-content: center;
   position: relative;
 }
 .arc-merge-score .lbl, .arc-merge-next .lbl { display: none; }
 .arc-merge-score b {
-  font-family: "Black Han Sans", "Jua", sans-serif; font-size: 32px; color: #B8322B;
+  font-family: "Black Han Sans", "Jua", sans-serif; font-size: 28px; color: #B8322B;
   line-height: 1; letter-spacing: -.03em;
 }
 .arc-merge-score .best { font-style: normal; font-size: 12px; margin-top: 4px; color: #7a5a52; }
 .arc-merge-score .best i { font-style: normal; color: #B8322B; }
 .arc-merge-next {
-  width: 72px; height: 78px; flex: 0 0 72px;
+  width: 64px; height: 70px; flex: 0 0 64px;
   background: url(/arcade/merge/ui/next-holder.png) center / 100% 100% no-repeat;
   display: flex; flex-direction: column; align-items: center; justify-content: flex-end;
-  padding: 26px 8px 10px;
+  padding: 22px 8px 8px;
 }
-.arc-merge-next img { width: 36px; height: 36px; object-fit: contain; margin-top: 2px; }
+.arc-merge-next img { width: 32px; height: 32px; object-fit: contain; margin-top: 2px; }
 .arc-merge-iconrow { display: flex; flex-direction: column; gap: 6px; }
 .arc-merge-icon {
   width: 44px; height: 46px; border: 0; padding: 0; cursor: pointer; background-color: transparent;
@@ -1371,12 +1380,17 @@
 .arc-merge-icon.is-pause { background-image: url(/arcade/merge/ui/buttons/btn-pause-normal.png); }
 .arc-merge-icon.is-pause:active { background-image: url(/arcade/merge/ui/buttons/btn-pause-pressed.png); }
 .arc-merge-play {
-  position: relative; width: min(350px, calc(100vw - 24px)); margin-top: 4px;
-  flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
-  padding-top: 88px; box-sizing: border-box;
+  position: relative; width: min(350px, calc(100% - 24px)); margin-top: 0;
+  flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; align-items: center; justify-content: flex-end;
+  padding-top: 0; box-sizing: border-box;
+  container-type: size;
 }
 .arc-merge-tub {
-  position: relative; width: 100%; aspect-ratio: 350 / 500;
+  position: relative;
+  width: min(100%, 350px, calc(100cqh * 0.56));
+  max-height: 82%;
+  aspect-ratio: 350 / 500;
+  height: auto;
   background: #FFF3EA; border-radius: 28px;
 }
 .arc-merge-frame { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 3; }
@@ -1390,7 +1404,7 @@
 }
 .arc-merge-cv { position: absolute; z-index: 1; touch-action: none; }
 .arc-merge-floatbum {
-  position: absolute; left: max(4px, calc(50% - 190px)); top: 132px; width: 52px; height: auto;
+  position: absolute; left: max(4px, calc(50% - 190px)); top: 96px; width: 44px; height: auto;
   z-index: 4; filter: drop-shadow(0 4px 0 rgba(0,0,0,.08));
 }
 .arc-merge-bubble {
@@ -1398,18 +1412,19 @@
   box-shadow: 0 3px 0 rgba(196,90,82,.25);
 }
 .arc-merge-bubble.float {
-  position: absolute; left: max(52px, calc(50% - 140px)); top: 142px; z-index: 4;
+  position: absolute; left: max(52px, calc(50% - 140px)); top: 104px; z-index: 4;
 }
 .arc-merge-hint {
-  margin: 10px 0 18px; background: #fff; color: #C45A52; border-radius: 999px;
-  padding: 8px 16px; font-size: 14px; box-shadow: 0 3px 0 rgba(0,0,0,.06);
+  margin: 8px 0 4px; background: #fff; color: #C45A52; border-radius: 999px;
+  padding: 7px 14px; font-size: 13px; box-shadow: 0 3px 0 rgba(0,0,0,.06);
+  flex: 0 0 auto;
 }
 .arc-merge-ctrl { display: none; }
 
 /* PC / 가로 레이아웃 */
 .arc-merge.is-wide .arc-merge-shell {
-  display: grid; grid-template-columns: minmax(240px, 300px) minmax(360px, 1fr) minmax(240px, 300px);
-  align-items: stretch; padding: 28px 32px; gap: 12px;
+  display: grid; grid-template-columns: minmax(220px, 280px) minmax(320px, 1fr) minmax(220px, 280px);
+  align-items: stretch; padding: 28px 32px; gap: 16px;
 }
 .arc-merge.is-wide .arc-merge-top,
 .arc-merge.is-wide .arc-merge-hint,
@@ -1422,14 +1437,16 @@
   border: 3px solid rgba(255,255,255,.9);
 }
 .arc-merge.is-wide .arc-merge-logo { width: min(220px, 100%); height: auto; margin-bottom: 16px; }
-.arc-merge.is-wide .arc-merge-score { width: 180px; height: 88px; max-width: 180px; }
+.arc-merge.is-wide .arc-merge-score { width: 180px; height: 88px; max-width: 180px; padding: 30px 14px 8px; }
 .arc-merge.is-wide .arc-merge-score b { font-size: 32px; }
-.arc-merge.is-wide .arc-merge-next { width: 88px; height: 94px; flex-basis: 94px; margin-top: 12px; }
+.arc-merge.is-wide .arc-merge-next { width: 88px; height: 94px; flex: 0 0 94px; margin-top: 12px; padding: 26px 8px 10px; }
 .arc-merge.is-wide .arc-merge-next img { width: 44px; height: 44px; }
 .arc-merge.is-wide .arc-merge-ctrl { display: block; margin: 14px 0 10px; font-size: 13px; color: #7a5a52; }
 .arc-merge.is-wide .arc-merge-iconrow { flex-direction: row; gap: 10px; }
-.arc-merge.is-wide .arc-merge-play { width: 100%; margin: 0; }
-.arc-merge.is-wide .arc-merge-tub { width: min(420px, 100%); }
+.arc-merge.is-wide .arc-merge-play {
+  width: 100%; margin: 0; padding-top: 0; justify-content: center; align-items: center; min-height: 0;
+}
+.arc-merge.is-wide .arc-merge-tub { width: min(420px, 100%, calc(100cqh * 0.56)); max-height: 90%; }
 .arc-merge.is-wide .arc-merge-bum { width: 120px; height: auto; margin-top: 8px; }
 .arc-merge.is-wide .arc-merge-bubble { margin: 10px 0 16px; font-size: 15px; padding: 8px 14px; }
 .arc-merge.is-wide .arc-merge-guide-title { margin: 0 0 8px; font-size: 15px; }
@@ -1497,3 +1514,30 @@
 }
 .arc-merge-rank .rank-row .sc { font-family: "Black Han Sans", "Jua", sans-serif; color: #B8322B; }
 .arc-merge-rank .empty { padding: 28px 10px; color: #7a5a52; line-height: 1.5; }
+
+/* 모바일 가로 — 세로 전환 안내 (PC에는 안 띄움). 아이콘은 CSS로 그린 원본 휴대폰. */
+.arc-merge-orient {
+  position: absolute; inset: 0; z-index: 20;
+  display: grid; place-items: center;
+  background: rgba(58, 36, 48, .55);
+  padding: 24px;
+}
+.arc-merge-orient[hidden] { display: none !important; }
+.arc-merge-orient .orient-card {
+  text-align: center; color: #3A2430; max-width: 320px;
+  background: rgba(255, 248, 240, .96); border-radius: 28px; padding: 28px 22px;
+  border: 4px solid #fff; box-shadow: 0 12px 0 rgba(184, 50, 43, .12), 0 24px 50px rgba(0, 0, 0, .22);
+}
+.arc-merge-orient .orient-title { font-size: 22px; font-weight: 900; margin: 12px 0 6px; letter-spacing: -.03em; }
+.arc-merge-orient .orient-sub { margin: 0; opacity: .75; font-weight: 700; font-size: 14px; line-height: 1.4; }
+.arc-merge-orient .phone-spin { display: grid; place-items: center; height: 108px; margin: 0 auto; }
+.arc-merge-orient .phone-body {
+  width: 48px; height: 78px; border-radius: 12px; border: 5px solid #B8322B;
+  background: linear-gradient(180deg, #fff, #ffe4d2); position: relative;
+  animation: pang-phone-spin 1.6s ease-in-out infinite;
+  box-shadow: 0 7px 0 rgba(184, 50, 43, .22);
+}
+.arc-merge-orient .phone-body span {
+  position: absolute; left: 50%; top: 8px; width: 16px; height: 5px; border-radius: 3px;
+  background: #B8322B; transform: translateX(-50%);
+}

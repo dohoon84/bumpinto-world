@@ -47,6 +47,27 @@ export const ARCADE_PLACEMENTS = [
   },
 ];
 
+
+/** 퇴장 시 문에서 거리 쪽으로 조금 나와 선다. 문 좌표 자체에 세우면 예전 도넛 콜라이더에 갇혔다. */
+export const DOOR_EXIT_OUT = 1.8;
+export function doorOutsidePos(store, dist = DOOR_EXIT_OUT) {
+  if (!store?.door) return null;
+  const nx = Number.isFinite(store.nx) ? store.nx : 0;
+  const nz = Number.isFinite(store.nz) ? store.nz : 1;
+  const len = Math.hypot(nx, nz) || 1;
+  return {
+    x: store.door[0] + (nx / len) * dist,
+    z: store.door[1] + (nz / len) * dist,
+  };
+}
+
+/** 예전 문 주변 도넛(0.32 < d < 0.45+r). 문 중심에 선 플레이어가 빠져나오지 못한다. */
+export function doorRingWouldBlock(x, z, store, r = 0.4) {
+  if (!store?.door) return false;
+  const d = Math.hypot(x - store.door[0], z - store.door[1]);
+  return d < 0.45 + r && d > 0.32;
+}
+
 export function arcadePlacements() {
   return ARCADE_PLACEMENTS;
 }

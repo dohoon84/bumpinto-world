@@ -1,4 +1,4 @@
-// [범편의점] 합치기 퍼즐 — PC 마우스/키보드 · 모바일 터치 공용 (세로 강제 없음)
+// [범편의점] 합치기 퍼즐 — PC 가로 레이아웃 · 모바일 세로는 뷰포트에 맞추고, 가로는 전환 안내
 import {
   TUB_INNER_W, TUB_INNER_H, STAGES, SPRITE_PAD,
   createSession, tryDrop, setAimX, canDrop, step, spawnAt, resetSession,
@@ -38,6 +38,13 @@ export function mountBumStore({
     `<li><img src="${itemUrl(s.id, 2)}" alt=""><span>${s.name}</span></li>`
   )).join('');
   wrap.innerHTML = `
+    <div class="arc-merge-orient" data-orient hidden>
+      <div class="orient-card">
+        <div class="phone-spin" aria-hidden="true"><div class="phone-body"><span></span></div></div>
+        <p class="orient-title">세로로 돌려 주세요</p>
+        <p class="orient-sub">범편의점은 세로 화면에서 플레이할 수 있어요</p>
+      </div>
+    </div>
     <div class="arc-merge-shell">
       <aside class="arc-merge-left">
         <img class="arc-merge-logo" src="${mergeUrl('logo/logo-bumstore.png')}" alt="범편의점" />
@@ -112,6 +119,7 @@ export function mountBumStore({
   const pauseBtns = [...wrap.querySelectorAll('[data-pause]')];
   const hint = wrap.querySelector('[data-hint]');
   const ctrl = wrap.querySelector('[data-ctrl]');
+  const orientEl = wrap.querySelector('[data-orient]');
 
   prewarmMerge();
   loadImage(mergeUrl('tub/drop-indicator.png'));
@@ -129,14 +137,51 @@ export function mountBumStore({
   const spin = new Map();
   let pointerTouching = false;
   let submitted = false;
+  let orientPaused = false;
 
+  function viewportBox() {
+    try {
+      const vv = window.visualViewport;
+      if (vv && vv.height) {
+        return { w: Math.round(vv.width), h: Math.round(vv.height), top: Math.round(vv.offsetTop || 0) };
+      }
+    } catch { /* */ }
+    try { return { w: innerWidth, h: innerHeight, top: 0 }; }
+    catch { return { w: 390, h: 844, top: 0 }; }
+  }
+  function applyViewport() {
+    const { w, h, top } = viewportBox();
+    wrap.style.setProperty('--merge-vvw', `${w}px`);
+    wrap.style.setProperty('--merge-vvh', `${h}px`);
+    wrap.style.setProperty('--merge-vv-top', `${top}px`);
+  }
+  function syncOrient() {
+    const coarse = isCoarse();
+    const land = (() => { try { return innerWidth > innerHeight; } catch { return false; } })();
+    const need = coarse && land;
+    if (orientEl) orientEl.hidden = !need;
+    wrap.classList.toggle('is-landscape', need);
+    if (need) {
+      if (!session.paused) {
+        session.paused = true;
+        orientPaused = true;
+      }
+    } else if (orientPaused) {
+      session.paused = false;
+      orientPaused = false;
+    }
+    return need;
+  }
   function syncLayout() {
-    const wide = isWideScreen();
+    applyViewport();
+    const coarse = isCoarse();
+    const wide = !coarse && isWideScreen();
     wrap.classList.toggle('is-wide', wide);
-    wrap.classList.toggle('is-touch', isCoarse());
-    wrap.classList.toggle('is-desk', !isCoarse());
-    if (ctrl) ctrl.textContent = isCoarse() ? '좌우로 밀고 손을 떼면 떨어져요' : '마우스 좌우 + 클릭';
-    if (hint) hint.textContent = isCoarse() ? '좌우로 밀어 떨어뜨리기' : '좌우로 움직여 떨어뜨리기';
+    wrap.classList.toggle('is-touch', coarse);
+    wrap.classList.toggle('is-desk', !coarse);
+    syncOrient();
+    if (ctrl) ctrl.textContent = coarse ? '좌우로 밀고 손을 떼면 떨어져요' : '마우스 좌우 + 클릭';
+    if (hint) hint.textContent = coarse ? '좌우로 밀어 떨어뜨리기' : '좌우로 움직여 떨어뜨리기';
   }
 
   function syncHud() {
@@ -220,7 +265,7 @@ export function mountBumStore({
   }
 
   function dropNow() {
-    if (!playing || session.paused || session.over) return;
+    if (!playing || session.paused || session.over || orientPaused) return;
     if (!canDrop(session)) return;
     tryDrop(session);
     syncHud();
@@ -237,7 +282,7 @@ export function mountBumStore({
   }
 
   function onPointerMove(e) {
-    if (session.paused || session.over) return;
+    if (session.paused || session.over || orientPaused) return;
     if (e.pointerType === 'touch' || e.pointerType === 'pen') {
       if (!pointerTouching) return;
       setAimX(session, worldFromClientX(e.clientX));
@@ -246,8 +291,8 @@ export function mountBumStore({
     }
   }
   function onPointerDown(e) {
-    if (e.target.closest('button, .arc-merge-result, .arc-merge-rank, .arc-merge-pause')) return;
-    if (session.paused || session.over || !playing) return;
+    if (e.target.closest('button, .arc-merge-result, .arc-merge-rank, .arc-merge-pause, .arc-merge-orient')) return;
+    if (session.paused || session.over || !playing || orientPaused) return;
     const onPlay = e.target === cv || e.target.closest('.arc-merge-play');
     if (!onPlay) return;
     if (e.pointerType === 'touch' || e.pointerType === 'pen') {
@@ -258,17 +303,20 @@ export function mountBumStore({
       dropNow();
     }
   }
-  function onPointerUp(e) {
+  function endTouch(e, { drop } = { drop: true }) {
     if (!pointerTouching) return;
     pointerTouching = false;
+    if (!drop || orientPaused) return;
     if (e.pointerType === 'touch' || e.pointerType === 'pen') {
       setAimX(session, worldFromClientX(e.clientX));
       dropNow();
     }
   }
+  function onPointerUp(e) { endTouch(e, { drop: true }); }
+  function onPointerCancel() { endTouch({ pointerType: 'touch' }, { drop: false }); }
 
   function togglePause() {
-    if (session.over || !playing) return;
+    if (session.over || !playing || orientPaused) return;
     session.paused = !session.paused;
     pauseUi.hidden = !session.paused;
     if (session.paused) { try { sfx?.stopBgm?.(); } catch { /* */ } }
@@ -479,12 +527,20 @@ export function mountBumStore({
     try { window.removeEventListener('keydown', onKeyDown, true); } catch { /* */ }
     try { window.removeEventListener('keyup', onKeyUp, true); } catch { /* */ }
     try { window.removeEventListener('resize', onResize); } catch { /* */ }
+    try { window.removeEventListener('orientationchange', onResize); } catch { /* */ }
+    try { window.visualViewport?.removeEventListener('resize', onResize); } catch { /* */ }
+    try { window.visualViewport?.removeEventListener('scroll', onResize); } catch { /* */ }
+    try { document.removeEventListener('visibilitychange', onVisibility); } catch { /* */ }
     try { sfx?.stopBgm?.(); } catch { /* */ }
     wrap.remove();
     if (exit) onExit?.();
   }
 
   function onResize() { syncLayout(); resizeCanvas(); }
+  function onVisibility() {
+    pointerTouching = false;
+    lastT = 0;
+  }
 
   muteBtns.forEach((btn) => btn.addEventListener('click', (e) => {
     e.stopPropagation();
@@ -502,10 +558,14 @@ export function mountBumStore({
   wrap.querySelector('.arc-merge-play')?.addEventListener('pointerdown', onPointerDown);
   window.addEventListener('pointermove', onPointerMove, { passive: true });
   window.addEventListener('pointerup', onPointerUp, { passive: true });
-  window.addEventListener('pointercancel', onPointerUp, { passive: true });
+  window.addEventListener('pointercancel', onPointerCancel, { passive: true });
   window.addEventListener('keydown', onKeyDown, true);
   window.addEventListener('keyup', onKeyUp, true);
   window.addEventListener('resize', onResize);
+  window.addEventListener('orientationchange', onResize);
+  try { window.visualViewport?.addEventListener('resize', onResize); } catch { /* */ }
+  try { window.visualViewport?.addEventListener('scroll', onResize); } catch { /* */ }
+  document.addEventListener('visibilitychange', onVisibility);
 
   function seedDemo() {
     resetSession(session, { seed: 42 });
@@ -548,6 +608,9 @@ export function mountBumStore({
     debug: {
       session,
       seedDemo,
+      canDrop: () => canDrop(session),
+      tryDrop: () => tryDrop(session),
+      syncLayout,
       showResult: () => { session.score = session.score || 8640; session.bestStage = session.bestStage || 6; finish(); },
       showRanking: (rows, me) => showRanking(rows, me),
       hideOverlays: () => { resultEl.hidden = true; rankEl.hidden = true; pauseUi.hidden = true; },
