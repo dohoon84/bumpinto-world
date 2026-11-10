@@ -65,7 +65,7 @@ function makeWayMask(ways, cell = 5) {
   return (x, z) => set.has(Math.round(x / cell) + ',' + Math.round(z / cell));
 }
 
-export function makeNamsanHeightAt(dem, _osm = null) {
+export function makeNamsanHeightAt(dem, osm = null) {
   const datum = dem?.datum ?? NT.datum;
   function extrapolateEle(x, z) {
     // DEM 사각형 밖에서 가장자리 고도를 분지로 부드럽게 내린다.
@@ -94,7 +94,7 @@ export function makeNamsanHeightAt(dem, _osm = null) {
     if (dem) return extrapolateEle(x, z);
     return namsanBasinEle(Math.hypot(x - NT.tx, z - NT.tz));
   }
-  return function heightAt(x, z) {
+  function baseHeight(x, z) {
     let ele = rawEle(x, z);
     const d = Math.hypot(x - NT.tx, z - NT.tz);
     // 정상 광장을 문서 기단 243 m 로 단단히 평평히 한다. 예전 95 m smoothstep 은
@@ -117,6 +117,83 @@ export function makeNamsanHeightAt(dem, _osm = null) {
       ele = ele * (1 - t) + (NT.eleBase - 6) * t;
     }
     return ele - datum;
+  }
+
+  // Raise ground that falls away beside a carriageway so aerial views cannot
+  // see the night void under the ribbon. Never lowers terrain; centerline
+  // height is unchanged.
+  const GRID = 28;
+  const cells = new Map();
+  const cellKey = (i, j) => `${i},${j}`;
+  for (const w of osm?.ways || []) {
+    const named = /남산공원길|순환로/.test(w.name || '');
+    const isCar = NAMSAN_CAR.has(w.k);
+    if (!named && !isCar) continue;
+    if (w.k === 'elevator') continue;
+    let width = w.w || (isCar ? 7 : 2.3);
+    if (w.service === 'driveway' || (isCar && !named && (w.motor_vehicle === 'private' || !w.name))) {
+      width = Math.min(width, w.service === 'driveway' ? 3.2 : 4.4);
+    } else if (named) width = Math.max(width, 8.6);
+    const hw = width * 0.5;
+    // Bench the DEM under the carriageway (and a short shoulder) so coarse
+    // ~8 m triangles cannot straddle the ribbon and pierce it. Fall off
+    // farther out so downhill ground still rises toward the road.
+    const bench = hw + 1.2;
+    const reach = bench + 10;
+    const pts = w.pts || [];
+    for (let i = 1; i < pts.length; i++) {
+      const ax = pts[i - 1][0], az = pts[i - 1][1], bx = pts[i][0], bz = pts[i][1];
+      const seg = { ax, az, bx, bz, reach, bench };
+      const x0 = Math.min(ax, bx) - reach, x1 = Math.max(ax, bx) + reach;
+      const z0 = Math.min(az, bz) - reach, z1 = Math.max(az, bz) + reach;
+      const i0 = Math.floor(x0 / GRID), i1 = Math.floor(x1 / GRID);
+      const j0 = Math.floor(z0 / GRID), j1 = Math.floor(z1 / GRID);
+      for (let gi = i0; gi <= i1; gi++) {
+        for (let gj = j0; gj <= j1; gj++) {
+          const k = cellKey(gi, gj);
+          if (!cells.has(k)) cells.set(k, []);
+          cells.get(k).push(seg);
+        }
+      }
+    }
+  }
+
+  return function heightAt(x, z) {
+    let y = baseHeight(x, z);
+    const nearby = cells.get(cellKey(Math.floor(x / GRID), Math.floor(z / GRID)));
+    if (!nearby) return y;
+    let bestDist = Infinity, bestY = y, bestBench = 0;
+    let liftY = y, liftDist = Infinity, liftReach = 0, liftBench = 0;
+    for (const s of nearby) {
+      const dx = s.bx - s.ax, dz = s.bz - s.az;
+      const L2 = dx * dx + dz * dz || 1;
+      const t = Math.max(0, Math.min(1, ((x - s.ax) * dx + (z - s.az) * dz) / L2));
+      const px = s.ax + dx * t, pz = s.az + dz * t;
+      const dist = Math.hypot(x - px, z - pz);
+      if (dist >= s.reach) continue;
+      const roadY = baseHeight(px, pz);
+      if (dist < bestDist) {
+        bestDist = dist;
+        bestY = roadY;
+        bestBench = s.bench;
+      }
+      if (roadY > liftY || (roadY === liftY && dist < liftDist)) {
+        liftY = roadY;
+        liftDist = dist;
+        liftReach = s.reach;
+        liftBench = s.bench;
+      }
+    }
+    if (bestDist === Infinity) return y;
+    // Under the nearest ribbon: match it so coarse triangles cannot pierce it.
+    if (bestDist <= bestBench && Math.abs(bestY - y) < 2.2) return bestY;
+    // Outside: raise ground toward the highest nearby carriageway, never carve
+    // a trench toward a lower driveway that happens to sit closer.
+    if (liftY <= y) return y;
+    const span = Math.max(0.01, liftReach - liftBench);
+    const u = liftDist <= liftBench ? 1 : 1 - (liftDist - liftBench) / span;
+    const w = u * u * (3 - 2 * u);
+    return y + (liftY - y) * w;
   };
 }
 

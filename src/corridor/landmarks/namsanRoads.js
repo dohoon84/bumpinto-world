@@ -349,59 +349,127 @@ function adPanelTex(route) {
 
 
 
-// Vertical stone/concrete retaining wall on the valley edge.
-// A previous 3.8 m sloped apron (road-edge at roadY → 3.8 m out at terrainY)
-// read as a bright tan slab with a double white line peeling diagonally up
-// the grass — not a second OSM trail. The cap is gone; the face is a wall.
-function roadSupportGeo(pts, width, heightAt, dy, downSigns) {
+// Closed bed under the asphalt so a downhill camera cannot see the night
+// void through the ribbon. Retaining faces go on every side that actually
+// drops away (no single-side sign that lags and leaves a hole at a flip).
+// A previous 3.8 m sloped apron at road height read as extra tan pavement
+// with painted lines; the short grass berm here starts below the asphalt.
+function roadSupportGeos(pts, width, heightAt, dy) {
   const hw = width * 0.5;
-  const wallT = 0.32;
+  const wallT = 0.42;
   const n = pts.length;
   if (n < 2) return null;
-  const downs = downSigns || smoothSideSigns(pts, heightAt).map((s) => -s);
-  const pos = [];
+
+  const sampleY = (x, z, hx, hz, sign, dist) => heightAt(x - hz * dist * sign, z + hx * dist * sign);
+  const deepY = (x, z, hx, hz, sign, roadY) => {
+    let y = Math.min(roadY - 0.62, heightAt(x, z) - 0.18);
+    for (const o of [1.6, 3.2, 5.5, 8]) y = Math.min(y, sampleY(x, z, hx, hz, sign, o) - 0.1);
+    return y;
+  };
+  const dropAt = (x, z, hx, hz, sign) => heightAt(x, z) - sampleY(x, z, hx, hz, sign, 12);
+
   const frames = [];
+  const pos = [];
   for (let i = 0; i < n; i++) {
     const { hx, hz } = headingAt(pts, i);
     const x = pts[i][0], z = pts[i][1];
     const y = heightAt(x, z) + dy;
-    frames.push({ x, z, y, hx, hz, downSign: downs[i] || -1 });
-  }
-  for (const f of frames) {
-    const lx = f.x - f.hz * hw, lz = f.z + f.hx * hw;
-    const rx = f.x + f.hz * hw, rz = f.z - f.hx * hw;
-    const ybL = Math.min(f.y - 0.34, heightAt(lx, lz) - 0.12);
-    const ybR = Math.min(f.y - 0.34, heightAt(rx, rz) - 0.12);
-    const innerX = f.x - f.hz * hw * f.downSign;
-    const innerZ = f.z + f.hx * hw * f.downSign;
-    const outerX = f.x - f.hz * (hw + wallT) * f.downSign;
-    const outerZ = f.z + f.hx * (hw + wallT) * f.downSign;
-    const yBot = Math.min(f.y - 0.34, heightAt(outerX, outerZ) - 0.08);
+    const lx = x - hz * hw, lz = z + hx * hw;
+    const rx = x + hz * hw, rz = z - hx * hw;
+    const dropL = dropAt(x, z, hx, hz, 1);
+    const dropR = dropAt(x, z, hx, hz, -1);
+    const wallL = dropL > 0.2;
+    const wallR = dropR > 0.2;
+    // Keep the under-road slab thin so a deep cave roof does not photograph
+    // as a black triangle from the air. Walls still reach farther downhill.
+    const ybL = Math.min(y - 0.42, heightAt(lx, lz) - 0.14);
+    const ybR = Math.min(y - 0.42, heightAt(rx, rz) - 0.14);
+    const lox = x - hz * (hw + wallT), loz = z + hx * (hw + wallT);
+    const rox = x + hz * (hw + wallT), roz = z - hx * (hw + wallT);
+    const yBotL = deepY(lox, loz, hx, hz, 1, y);
+    const yBotR = deepY(rox, roz, hx, hz, -1, y);
+    frames.push({ hx, hz, x, z, y, wallL, wallR, dropL, dropR, lx, lz, rx, rz });
     // 0 topL, 1 topR, 2 botL, 3 botR,
-    // 4 wall-outer-top (road Y), 5 wall-inner-top (road Y),
-    // 6 wall-outer-bot (terrain)
+    // 4 L-outer-top, 5 L-inner-top, 6 L-outer-bot,
+    // 7 R-outer-top, 8 R-inner-top, 9 R-outer-bot
     pos.push(
-      lx, f.y, lz, rx, f.y, rz, lx, ybL, lz, rx, ybR, rz,
-      outerX, f.y, outerZ, innerX, f.y, innerZ, outerX, yBot, outerZ,
+      lx, y, lz, rx, y, rz, lx, ybL, lz, rx, ybR, rz,
+      lox, y, loz, lx, y, lz, lox, yBotL, loz,
+      rox, y, roz, rx, y, rz, rox, yBotR, roz,
     );
   }
+
   const idx = [];
-  const S = 7;
+  const S = 10;
+  const wallRun = (i, topO, topI, botO) => {
+    const k = i * S, m = k + S;
+    idx.push(k + topI, m + topI, k + topO, k + topO, m + topI, m + topO);
+    idx.push(k + topO, m + topO, k + botO, k + botO, m + topO, m + botO);
+  };
+  const wallCap = (base, topO, topI, botO) => {
+    idx.push(base + topI, base + topO, base + botO);
+  };
   for (let i = 0; i < n - 1; i++) {
     const k = i * S, m = k + S;
     idx.push(k + 2, m + 2, k + 3, k + 3, m + 2, m + 3);
     idx.push(k + 0, m + 0, k + 2, k + 2, m + 0, m + 2);
     idx.push(k + 1, k + 3, m + 1, k + 3, m + 3, m + 1);
-    if (frames[i].downSign !== frames[i + 1].downSign) continue;
-    // Thin coping (wall thickness only) + vertical outer face.
-    idx.push(k + 5, m + 5, k + 4, k + 4, m + 5, m + 4);
-    idx.push(k + 4, m + 4, k + 6, k + 6, m + 4, m + 6);
+    if (frames[i].wallL && frames[i + 1].wallL) wallRun(i, 4, 5, 6);
+    else {
+      if (frames[i].wallL) wallCap(k, 4, 5, 6);
+      if (frames[i + 1].wallL) wallCap(m, 4, 5, 6);
+    }
+    if (frames[i].wallR && frames[i + 1].wallR) wallRun(i, 7, 8, 9);
+    else {
+      if (frames[i].wallR) wallCap(k, 7, 8, 9);
+      if (frames[i + 1].wallR) wallCap(m, 7, 8, 9);
+    }
   }
-  const g = new THREE.BufferGeometry();
-  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-  g.setIndex(idx);
-  g.computeVertexNormals();
-  return g;
+  const last = (n - 1) * S;
+  idx.push(0, 1, 3, 0, 3, 2);
+  idx.push(last + 1, last + 0, last + 2, last + 1, last + 2, last + 3);
+  if (frames[0].wallL) wallCap(0, 4, 5, 6);
+  if (frames[0].wallR) wallCap(0, 7, 8, 9);
+  if (frames[n - 1].wallL) wallCap(last, 4, 5, 6);
+  if (frames[n - 1].wallR) wallCap(last, 7, 8, 9);
+
+  const bed = new THREE.BufferGeometry();
+  bed.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  bed.setIndex(idx);
+  bed.computeVertexNormals();
+
+  const FILL = 2.3;
+  const fillPos = [];
+  const fillIdx = [];
+  for (let i = 0; i < n; i++) {
+    const f = frames[i];
+    for (const sign of [1, -1]) {
+      const ix = f.x - f.hz * hw * sign;
+      const iz = f.z + f.hx * hw * sign;
+      const ox = f.x - f.hz * (hw + FILL) * sign;
+      const oz = f.z + f.hx * (hw + FILL) * sign;
+      fillPos.push(ix, f.y - 0.1, iz, ox, heightAt(ox, oz) + 0.03, oz);
+    }
+  }
+  // per frame: 4 verts (L-inner, L-outer, R-inner, R-outer) = 2 pairs
+  for (let i = 0; i < n - 1; i++) {
+    for (const side of [0, 1]) {
+      const drop = side === 0 ? Math.min(frames[i].dropL, frames[i + 1].dropL)
+        : Math.min(frames[i].dropR, frames[i + 1].dropR);
+      if (drop < 0.28) continue;
+      const a = i * 4 + side * 2;
+      const b = a + 4;
+      fillIdx.push(a, b, a + 1, a + 1, b, b + 1);
+    }
+  }
+  let fill = null;
+  if (fillIdx.length) {
+    fill = new THREE.BufferGeometry();
+    fill.setAttribute('position', new THREE.Float32BufferAttribute(fillPos, 3));
+    fill.setIndex(fillIdx);
+    fill.computeVertexNormals();
+  }
+  return { bed, fill };
 }
 
 export function createNamsanRoads({ parent, osm, heightAt, overlay = null } = {}) {
@@ -422,7 +490,7 @@ export function createNamsanRoads({ parent, osm, heightAt, overlay = null } = {}
   };
   if (!ways.length) return empty;
 
-  const carGeos = [], pathGeos = [], stepGeos = [], treadGeos = [], bankGeos = [];
+  const carGeos = [], pathGeos = [], stepGeos = [], treadGeos = [], bankGeos = [], fillGeos = [];
   const curbGeos = [], sidewalkGeos = [], railGeos = [];
   const yellowGeos = [], whiteGeos = [];
   const walkHits = [];
@@ -474,8 +542,9 @@ export function createNamsanRoads({ parent, osm, heightAt, overlay = null } = {}
     const geo = fixNormalsUp(ribbonGeo(epts, width, 0, false));
     if (isCar) {
       carGeos.push(paint(geo, isDrive ? '#7a7f86' : '#6e747c'));
-      const support = roadSupportGeo(pts, width, heightAt, dy);
-      if (support) bankGeos.push(paint(support, isDrive ? '#6a6660' : '#6a655c'));
+      const support = roadSupportGeos(pts, width, heightAt, dy);
+      if (support?.bed) bankGeos.push(paint(support.bed, isDrive ? '#6a6660' : '#6e6a62'));
+      if (support?.fill) fillGeos.push(paint(support.fill, '#3f4a38'));
     } else if (isStep) stepGeos.push(paint(geo, '#9a9080'));
     else pathGeos.push(paint(geo, '#7a6b52'));
     walkHits.push({ segs: segsOf(pts), pad: width * 0.5 + 0.35, dy });
@@ -635,6 +704,7 @@ export function createNamsanRoads({ parent, osm, heightAt, overlay = null } = {}
   addMerged(curbGeos, 'namsan-curbs');
   addMerged(carGeos, 'namsan-car-roads', { side: THREE.DoubleSide });
   addMerged(bankGeos, 'namsan-road-banks', { side: THREE.DoubleSide });
+  addMerged(fillGeos, 'namsan-road-fills', { side: THREE.DoubleSide });
   addMerged(pathGeos, 'namsan-paths');
   addMerged(stepGeos, 'namsan-steps');
   addMerged(treadGeos, 'namsan-treads');
@@ -923,6 +993,16 @@ export function createNamsanRoads({ parent, osm, heightAt, overlay = null } = {}
       if (pool) pool.visible = k > 0.01;
       yellowMat.emissiveIntensity = k * 0.48;
       whiteMat.emissiveIntensity = k * 0.32;
+      const banks = group.getObjectByName('namsan-road-banks');
+      if (banks?.material) {
+        banks.material.emissive = new THREE.Color('#2c2a26');
+        banks.material.emissiveIntensity = k * 0.38;
+      }
+      const fills = group.getObjectByName('namsan-road-fills');
+      if (fills?.material) {
+        fills.material.emissive = new THREE.Color('#2a3320');
+        fills.material.emissiveIntensity = k * 0.5;
+      }
       roofLit.opacity = k * 0.92;
       roofLit.visible = k > 0.05;
       tubeMat.opacity = k * 0.95;
