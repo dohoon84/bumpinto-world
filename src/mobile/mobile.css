@@ -105,7 +105,7 @@ body.mobile.bw-signed-in #lobby-card .v2-save-google { display: none !important;
 body.mobile.in-lobby #lobby { padding: var(--m-t) var(--m-r) var(--m-b) var(--m-l); place-items: stretch; overflow: hidden; grid-template-rows: minmax(0, 1fr); grid-template-columns: minmax(0, 1fr); }
 body.mobile #lobby-card { width: 100%; height: 100%; min-height: 0; box-sizing: border-box; max-height: 100%; grid-template-columns: minmax(150px, 26vw) 1fr; grid-template-rows: minmax(0, 1fr); gap: 12px; padding: 10px; background: rgba(255, 255, 255, .9); }
 body.mobile #lobby-preview { height: 100%; min-height: 0; }
-body.mobile #lobby-fields { min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; padding-right: 2px; }
+body.mobile #lobby-fields { min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; touch-action: pan-y; padding-right: 2px; }
 body.mobile #lobby-fields h1 { font-size: 18px; }
 body.mobile #lobby-fields .sub { margin: 2px 0 6px; font-size: 12px; }
 body.mobile #lobby-fields input { font-size: 16px !important; min-height: 44px; }

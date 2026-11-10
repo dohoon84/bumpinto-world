@@ -6,6 +6,7 @@ import {
 } from './engine.js';
 import { mergeUrl, itemImage, itemUrl, bumUrl, prewarmMerge, loadImage } from './sprites.js';
 import { loginNudgeHtml, bindLoginNudge } from '../loginNudge.js';
+import { isGuestFlag } from '../guest.js';
 
 const DROP_PAD = 112;
 const AIM_SPEED = 220;
@@ -33,6 +34,7 @@ export function mountBumStore({
   root, sfx, ranked = true, getName = () => '나',
   onExit, onResult, onOpenBoard, practice = false, getBest = () => 0, guest = false,
 } = {}) {
+  const guestNow = () => isGuestFlag(guest);
   const wrap = document.createElement('div');
   wrap.className = 'arc-merge' + (isCoarse() ? ' is-touch' : ' is-desk');
   const guideHtml = STAGES.map((s) => (
@@ -475,7 +477,7 @@ export function mountBumStore({
           <div><span>최고</span><b>${fmt(high)}</b></div>
         </div>
         <div class="res-merge">최고 합치기 <em>${info.name}</em></div>
-        ${guest ? loginNudgeHtml() : ''}
+        ${guestNow() ? loginNudgeHtml() : ''}
         <div class="res-actions">
           <button type="button" class="arc-merge-btn again" data-again aria-label="다시하기"></button>
           <button type="button" class="arc-merge-btn arcade" data-leave aria-label="오락실로"></button>
@@ -483,7 +485,7 @@ export function mountBumStore({
       </div>`;
     resultEl.querySelector('[data-again]')?.addEventListener('click', () => restart());
     resultEl.querySelector('[data-leave]')?.addEventListener('click', () => dispose(true));
-    if (guest) bindLoginNudge(resultEl);
+    if (guestNow()) bindLoginNudge(resultEl);
     if (!submitted) {
       submitted = true;
       onResult?.({ score: finalScore, level: finalLevel, durationMs, ranked: ranked && !practice, name, openBoard: false });

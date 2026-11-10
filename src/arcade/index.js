@@ -7,6 +7,7 @@ import { buildArcadeInterior } from './interior.js';
 import { createArcadeSfx } from './sfx.js';
 import { createArcadeUI } from './ui.js';
 import { createArcadeRankProvider, createMergeRankProvider, localBoard } from './rank.js';
+import { clientSignedIn, resolveGuest } from './guest.js';
 import { mountBumpingPang } from './bumpingpang/game.js';
 import { mountBumStore } from './bumstore/game.js';
 import { mountGameSelect } from './select.js';
@@ -188,7 +189,7 @@ export function mountArcade({
       title, period, rows, me: mine,
       game: kind,
       games: mergeOn ? ['pang', 'merge'] : ['pang'],
-      guest: knownGuest,
+      guest: guestNow(),
       onClose: () => ui.hideBoard(),
       onTab: (p) => openBoard(p, kind),
       onGame: (g) => openBoard(period, g === 'merge' ? 'merge' : 'pang'),
@@ -229,15 +230,16 @@ export function mountArcade({
     });
   }
 
-  let knownGuest = true;
+  let knownGuest = !clientSignedIn();
+  const guestNow = () => resolveGuest(null, { prev: knownGuest, signedIn: clientSignedIn() });
   async function gateFor(provider) {
     try {
       const gate = await Promise.race([
-        provider.gate(),
-        new Promise((r) => setTimeout(() => r({ ranked: true, local: true, guest: knownGuest }), 800)),
+        provider.gate().then((g) => ({ ...g, timedOut: false })),
+        new Promise((r) => setTimeout(() => r({ ranked: true, local: true, timedOut: true }), 2500)),
       ]);
-      if (typeof gate?.guest === 'boolean') knownGuest = gate.guest;
-      return !!gate?.ranked;
+      knownGuest = resolveGuest(gate, { prev: knownGuest, signedIn: clientSignedIn() });
+      return gate?.timedOut ? true : !!gate?.ranked;
     } catch { return true; }
   }
 
@@ -254,7 +256,7 @@ export function mountArcade({
       ranked,
       practice: !ranked || shot,
       storeName: arcadeBranchLabel(store),
-      guest: knownGuest,
+      guest: guestNow,
       getName: selfName,
       getBest: () => bestScoreLocal('pang'),
       onOpenBoard: () => openBoard('today', 'pang'),
@@ -279,7 +281,7 @@ export function mountArcade({
       ranked,
       practice: !ranked || shot,
       storeName: arcadeBranchLabel(store),
-      guest: knownGuest,
+      guest: guestNow,
       getName: selfName,
       getBest: () => bestScoreLocal('merge'),
       onOpenBoard: async (opts) => {
