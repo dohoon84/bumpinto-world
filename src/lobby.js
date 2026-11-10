@@ -2,7 +2,7 @@
 import * as THREE from 'three';
 import { releaseRenderer } from './releaseRenderer.js';
 import { createAvatar } from './entities/avatar.js';
-import { LOOK_CHOICES, COLOR_FIELDS, PROFILE_KEY, sanitizeLook } from './look.js';
+import { LOOK_CHOICES, LOOK_TABS, COLOR_FIELDS, PROFILE_KEY, sanitizeLook } from './look.js';
 import { isEn, tr, toggleLang, onLangChange } from './i18n.js';
 import { accountsOn } from './account/flags.js'; // [accounts] 가벼운 스위치만 — 계정 입장 UI 는 켜졌을 때만 동적으로
 
@@ -216,8 +216,8 @@ export function openLobby({ sms, region = null, onJoin, onBack }) {
             </label>
           </div>
           <p id="lobby-phone" class="phone-no"></p>
+          <div id="lobby-look-tabs" class="look-tabs" role="tablist"></div>
           <div id="lobby-picks"></div>
-          <div id="lobby-colors"></div>
         </div>
         <div id="lobby-pane-login" hidden>
           <p id="lobby-login-guide" class="login-guide"></p>
@@ -254,18 +254,62 @@ export function openLobby({ sms, region = null, onJoin, onBack }) {
   nick.value = saved?.name || (sms?.off ? defaultLocalNick() : '');
   if (saved?.display || saved?.phone) loginPhone.value = saved.display || saved.phone;
 
-  function renderPicks() {
+  let lookTab = 'basic';
+  const lookTabBar = root.querySelector('#lobby-look-tabs');
+
+  function renderLookTabs() {
+    lookTabBar.innerHTML = '';
+    for (const tab of LOOK_TABS) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'look-tab' + (tab.id === lookTab ? ' on' : '');
+      b.dataset.lookTab = tab.id;
+      b.setAttribute('role', 'tab');
+      b.setAttribute('aria-selected', tab.id === lookTab ? 'true' : 'false');
+      b.textContent = tr(tab.label, tab.enLabel);
+      b.addEventListener('click', () => {
+        if (lookTab === tab.id) return;
+        lookTab = tab.id;
+        renderLookTabs();
+        renderLookPane();
+        updateFrameGoal();
+      });
+      lookTabBar.appendChild(b);
+    }
+  }
+
+  function renderLookPane() {
     const en = isEn();
     picks.innerHTML = '';
-    let lastGroup = '';
-    for (const choice of LOOK_CHOICES) {
-      if (choice.group && choice.group !== lastGroup) {
-        lastGroup = choice.group;
-        const hd = document.createElement('div');
-        hd.className = 'pick-group';
-        hd.textContent = en ? (choice.enGroup || choice.group) : choice.group;
-        picks.appendChild(hd);
+    if (lookTab === 'color') {
+      for (const field of COLOR_FIELDS) {
+        const row = document.createElement('div');
+        row.className = 'pick-row';
+        row.innerHTML = `<div class="pick-label">${en ? field.enLabel : field.label}</div>`;
+        const wrap = document.createElement('div');
+        wrap.className = 'pick';
+        wrap.dataset.colorKey = field.key;
+        const cur = String(look[field.key] || '').toLowerCase();
+        for (const color of field.colors) {
+          const b = document.createElement('button');
+          b.type = 'button';
+          b.className = 'swatch' + (color.toLowerCase() === cur ? ' on' : '');
+          b.style.background = color;
+          b.title = color;
+          b.addEventListener('click', () => {
+            wrap.querySelectorAll('button').forEach((el) => el.classList.toggle('on', el === b));
+            look[field.key] = color;
+            show();
+          });
+          wrap.appendChild(b);
+        }
+        row.appendChild(wrap);
+        picks.appendChild(row);
       }
+      return;
+    }
+    for (const choice of LOOK_CHOICES) {
+      if ((choice.tab || 'basic') !== lookTab) continue;
       const row = document.createElement('div');
       row.className = 'pick-row';
       row.innerHTML = `<div class="pick-label">${en ? (choice.enLabel || choice.label) : choice.label}</div>`;
@@ -291,40 +335,6 @@ export function openLobby({ sms, region = null, onJoin, onBack }) {
     }
   }
 
-  const colorBox = root.querySelector('#lobby-colors');
-  function renderColors() {
-    const en = isEn();
-    colorBox.innerHTML = '';
-    const hd = document.createElement('div');
-    hd.className = 'pick-group';
-    hd.textContent = en ? 'Colors' : '색';
-    colorBox.appendChild(hd);
-    for (const field of COLOR_FIELDS) {
-      const row = document.createElement('div');
-      row.className = 'pick-row';
-      row.innerHTML = `<div class="pick-label">${en ? field.enLabel : field.label}</div>`;
-      const wrap = document.createElement('div');
-      wrap.className = 'pick';
-      wrap.dataset.colorKey = field.key;
-      const cur = String(look[field.key] || '').toLowerCase();
-      for (const color of field.colors) {
-        const b = document.createElement('button');
-        b.type = 'button';
-        b.className = 'swatch' + (color.toLowerCase() === cur ? ' on' : '');
-        b.style.background = color;
-        b.title = color;
-        b.addEventListener('click', () => {
-          wrap.querySelectorAll('button').forEach((el) => el.classList.toggle('on', el === b));
-          look[field.key] = color;
-          show();
-        });
-        wrap.appendChild(b);
-      }
-      row.appendChild(wrap);
-      colorBox.appendChild(row);
-    }
-  }
-
   const view = root.querySelector('#lobby-preview');
   const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
   renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
@@ -333,7 +343,14 @@ export function openLobby({ sms, region = null, onJoin, onBack }) {
   scene.background = new THREE.Color('#1a2744');
   const camera = new THREE.PerspectiveCamera(32, 1, 0.1, 20);
   camera.position.set(0.35, 1.2, 2.85);
-  camera.lookAt(0, 1.12, 0);
+  const camFrom = new THREE.Vector3(0.35, 1.2, 2.85);
+  const camLook = new THREE.Vector3(0, 1.12, 0);
+  const camTo = camFrom.clone();
+  const lookTo = camLook.clone();
+  const _size = new THREE.Vector3();
+  const _center = new THREE.Vector3();
+  const _box = new THREE.Box3();
+  camera.lookAt(camLook);
   scene.add(new THREE.HemisphereLight('#d4e2ff', '#1a1612', 1.15));
   const sun = new THREE.DirectionalLight('#fff6e4', 1.45);
   sun.position.set(-2, 4, 3);
@@ -342,22 +359,70 @@ export function openLobby({ sms, region = null, onJoin, onBack }) {
   floor.rotation.x = -Math.PI / 2; floor.position.y = 0.01;
   scene.add(floor);
 
-  let avatar = null, spin = 0, raf = 0;
+  let avatar = null, spin = 0, raf = 0, snapFrame = true;
+  function updateFrameGoal() {
+    if (!avatar) return;
+    const prevY = avatar.rotation.y;
+    avatar.rotation.y = 0;
+    avatar.updateMatrixWorld(true);
+    _box.setFromObject(avatar);
+    avatar.rotation.y = prevY;
+    avatar.updateMatrixWorld(true);
+    if (!Number.isFinite(_box.min.y) || !Number.isFinite(_box.max.y)) return;
+    _box.min.y = Math.min(_box.min.y, 0) - 0.06;
+    _box.max.y += 0.08;
+    _box.getSize(_size);
+    _box.getCenter(_center);
+    const face = lookTab === 'face';
+    let targetY = _center.y;
+    let height = Math.max(_size.y, 0.9);
+    let width = Math.max(_size.x, _size.z * 0.5, 0.45);
+    if (face) {
+      const top = _box.max.y;
+      const chin = 1.16;
+      targetY = (top + chin) * 0.5;
+      height = Math.max(0.7, top - chin);
+      width = 0.4;
+    }
+    const vFov = (camera.fov * Math.PI) / 180;
+    const aspect = Math.max(0.45, camera.aspect || 1);
+    const pad = face ? 1.18 : 1.24;
+    const distH = (height * 0.5) / Math.tan(vFov / 2);
+    const distW = (width * 0.5) / (Math.tan(vFov / 2) * aspect);
+    const dist = Math.max(distH, distW) * pad + 0.2;
+    lookTo.set(0, targetY, 0);
+    camTo.set(dist * 0.1, targetY, dist);
+  }
   const show = () => {
     if (avatar) scene.remove(avatar);
     avatar = createAvatar(sanitizeLook(look));
     scene.add(avatar);
+    updateFrameGoal();
   };
   const fit = () => {
-    const w = view.clientWidth || 240, h = view.clientHeight || 320;
+    const w = Math.max(1, view.clientWidth || 240);
+    const h = Math.max(1, view.clientHeight || 320);
+    const prevAspect = camera.aspect;
     renderer.setSize(w, h, false);
-    camera.aspect = w / Math.max(1, h);
+    camera.aspect = w / h;
     camera.updateProjectionMatrix();
+    updateFrameGoal();
+    if (Math.abs(prevAspect - camera.aspect) > 0.05) snapFrame = true;
   };
+  let lastTick = performance.now();
   const loop = () => {
     raf = requestAnimationFrame(loop);
-    spin += 0.012;
+    const now = performance.now();
+    const dt = Math.min(0.2, Math.max(0, (now - lastTick) / 1000));
+    lastTick = now;
+    spin += dt * 0.72;
     if (avatar) avatar.rotation.y = Math.sin(spin) * 0.65;
+    const k = snapFrame ? 1 : 1 - Math.exp(-dt / 0.16);
+    snapFrame = false;
+    camFrom.lerp(camTo, k);
+    camLook.lerp(lookTo, k);
+    camera.position.copy(camFrom);
+    camera.lookAt(camLook);
     renderer.render(scene, camera);
   };
   show();
@@ -365,6 +430,8 @@ export function openLobby({ sms, region = null, onJoin, onBack }) {
   loop();
   const onResize = () => fit();
   addEventListener('resize', onResize);
+  const ro = typeof ResizeObserver === 'function' ? new ResizeObserver(() => fit()) : null;
+  ro?.observe(view);
 
   const pickedLook = () => sanitizeLook({ ...look, hair: look.hair || 'short' });
 
@@ -448,7 +515,7 @@ export function openLobby({ sms, region = null, onJoin, onBack }) {
     root.querySelector('#lobby-pin-lbl').innerHTML = en
       ? 'Recovery PIN <small>(4–6 digits)</small>'
       : '재입장 PIN <small>(숫자 4~6자리)</small>';
-    renderColors();
+    renderLookTabs();
     root.querySelector('#lobby-login-guide').textContent = tr(
       '이전에 발급받은 휴대폰 번호와 설정해 둔 PIN(4~6자리)을 입력하면 닉네임·외형·위치·메시지를 그대로 이어받습니다.',
       'Enter your previously issued virtual phone number and PIN (4–6 digits) to restore your nickname, avatar, position, and messages.',
@@ -460,7 +527,7 @@ export function openLobby({ sms, region = null, onJoin, onBack }) {
     go.textContent = mode === 'login'
       ? tr('인증하고 입장하기', 'Verify & Enter')
       : tr('입장하기', 'Enter World');
-    renderPicks();
+    renderLookPane();
     showNumber();
     renderAccount();
   }
@@ -474,6 +541,7 @@ export function openLobby({ sms, region = null, onJoin, onBack }) {
     unsubLang();
     cancelAnimationFrame(raf);
     removeEventListener('resize', onResize);
+    ro?.disconnect();
     releaseRenderer(renderer);
   };
 
@@ -491,7 +559,7 @@ export function openLobby({ sms, region = null, onJoin, onBack }) {
     picks.querySelectorAll('button[data-k]').forEach((b) => {
       b.classList.toggle('on', b.dataset.v === String(look[b.dataset.k] ?? ''));
     });
-    colorBox.querySelectorAll('.pick').forEach((wrap) => {
+    picks.querySelectorAll('.pick[data-color-key]').forEach((wrap) => {
       const cur = String(look[wrap.dataset.colorKey] || '').toLowerCase();
       wrap.querySelectorAll('button.swatch').forEach((b) => {
         b.classList.toggle('on', b.title.toLowerCase() === cur);
