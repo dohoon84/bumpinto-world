@@ -154,7 +154,7 @@ export function makeNamsanHeightAt(dem, osm = null) {
     }
   }
 
-  return function heightAt(x, z) {
+  function heightAt(x, z) {
     let y = baseHeight(x, z);
     const nearby = cells.get(cellKey(Math.floor(x / GRID), Math.floor(z / GRID)));
     if (!nearby) return y;
@@ -198,6 +198,37 @@ export function makeNamsanHeightAt(dem, osm = null) {
     const w = u * u * (3 - 2 * u);
     return y + (liftY - y) * w;
   };
+
+  // Rendered DEM only: drop vertices under the paved shelf so the mesh is
+  // metres below the ribbon. heightAt itself stays benched (gameplay + road
+  // placement). logarithmicDepthBuffer is already on; a 10 cm gap at ~23 km
+  // still z-fought as 8 m rectangular panels, so the geometry has to separate.
+  const CARVE = 2.2;
+  function renderHeightAt(x, z) {
+    const y = heightAt(x, z);
+    const nearby = cells.get(cellKey(Math.floor(x / GRID), Math.floor(z / GRID)));
+    if (!nearby) return y;
+    let best = Infinity, pad = 0;
+    for (const s of nearby) {
+      const dx = s.bx - s.ax, dz = s.bz - s.az;
+      const L2 = dx * dx + dz * dz || 1;
+      const t = Math.max(0, Math.min(1, ((x - s.ax) * dx + (z - s.az) * dz) / L2));
+      const dist = Math.hypot(s.ax + dx * t - x, s.az + dz * t - z);
+      const p = s.hw + (s.isSowol ? 1.6 : 1.1);
+      if (dist < best) { best = dist; pad = p; }
+    }
+    if (best === Infinity) return y;
+    if (best <= pad) return y - CARVE;
+    const blend = 3.2;
+    if (best <= pad + blend) {
+      const t = (best - pad) / blend;
+      const w = t * t * (3 - 2 * t);
+      return y - CARVE * (1 - w);
+    }
+    return y;
+  }
+  heightAt.renderHeightAt = renderHeightAt;
+  return heightAt;
 }
 
 
@@ -370,7 +401,9 @@ export function createNamsanTerrain({ parent, dem, osm }) {
 
   // ---- heightfield mesh (upsample DEM) ----
   if (dem) {
-    const sub = 3;
+    // 25 m DEM ×6 ≈ 4.2 m vertices, fine enough that a carve under the
+    // 14 m 소월로 shelf does not leave an 8 m triangle straddling the rim.
+    const sub = 6;
     const nx = (dem.nx - 1) * sub + 1, nz = (dem.nz - 1) * sub + 1;
     const pos = new Float32Array(nx * nz * 3);
     const col = new Float32Array(nx * nz * 3);
@@ -379,16 +412,17 @@ export function createNamsanTerrain({ parent, dem, osm }) {
       for (let i = 0; i < nx; i++) {
         const x = dem.x0 + (i / sub) * dem.dx;
         const z = dem.z0 + (j / sub) * dem.dz;
-        const y = heightAt(x, z);
+        const yLogic = heightAt(x, z);
+        const y = heightAt.renderHeightAt ? heightAt.renderHeightAt(x, z) : yLogic;
         const k = (j * nx + i) * 3;
         pos[k] = x; pos[k + 1] = y; pos[k + 2] = z;
         // slope color: deep forest on mid-slopes, grass near top, darker in valleys
-        const e = heightAt(x, z) + datum;
+        const e = yLogic + datum;
         const yp = heightAt(x + 8, z), ym = heightAt(x - 8, z), zp = heightAt(x, z + 8), zm = heightAt(x, z - 8);
         const slope = Math.hypot(yp - ym, zp - zm) / 16;
         const nrm = hash01(i, j);
         let r, g, b;
-        if (y < 10) { // city-foot dirt — avoid a pale night-blue apron
+        if (yLogic < 10) { // city-foot dirt — avoid a pale night-blue apron
           r = 0.17 + nrm * 0.03; g = 0.18 + nrm * 0.03; b = 0.16 + nrm * 0.02;
         } else if (e > 230 && slope < 0.25) { // summit lawn / packed earth
           r = 0.45 + nrm * 0.06; g = 0.52 + nrm * 0.05; b = 0.32 + nrm * 0.04;
@@ -397,8 +431,8 @@ export function createNamsanTerrain({ parent, dem, osm }) {
         } else { // forest floor
           r = 0.18 + nrm * 0.05; g = 0.32 + nrm * 0.08; b = 0.16 + nrm * 0.04;
         }
-        if (y < 24 && y >= 10) {
-          const u = (y - 10) / 14;
+        if (yLogic < 24 && yLogic >= 10) {
+          const u = (yLogic - 10) / 14;
           r = r * u + (0.17 + nrm * 0.03) * (1 - u);
           g = g * u + (0.18 + nrm * 0.03) * (1 - u);
           b = b * u + (0.16 + nrm * 0.02) * (1 - u);
@@ -417,13 +451,7 @@ export function createNamsanTerrain({ parent, dem, osm }) {
     geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
     geo.setIndex(idx);
     geo.computeVertexNormals();
-    // Push the coarse ~8 m DEM behind draped asphalt so a steep aerial at
-    // 남산 library coords (~23 km from origin) cannot z-fight the 10 cm
-    // road gap into rectangular bands with saw-tooth rims.
-    demMat = new THREE.MeshLambertMaterial({
-      vertexColors: true, side: THREE.FrontSide,
-      polygonOffset: true, polygonOffsetFactor: 6, polygonOffsetUnits: 12,
-    });
+    demMat = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.FrontSide });
     const mesh = new THREE.Mesh(geo, demMat);
     mesh.receiveShadow = true;
     mesh.name = 'namsan-dem';
