@@ -805,6 +805,7 @@ export function mountBumpingPang({
     try { sfx?.timeUp?.(); } catch { /* */ }
     try { sfx?.stopBgm?.(); } catch { /* */ }
     if (el.vignette) el.vignette.hidden = true;
+    if (el.intro) el.intro.hidden = true;
     wrap.classList.remove('is-danger', 'is-urgent');
     const name = (() => { try { return getName() || '나'; } catch { return '나'; } })();
     const finalScore = score;

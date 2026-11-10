@@ -975,7 +975,7 @@
 }
 
 .arc-pang-intro { background: transparent; }
-.arc-pang-result { background: rgba(11, 4, 40, .62); }
+.arc-pang-result { background: rgba(11, 4, 40, .88); }
 .arc-pang:has([data-intro]:not([hidden])) .arc-pang-top,
 .arc-pang:has([data-intro]:not([hidden])) .arc-pang-hero,
 .arc-pang:has([data-intro]:not([hidden])) .arc-pang-stage,
@@ -983,7 +983,8 @@
 .arc-pang:has([data-result]:not([hidden])) .arc-pang-top,
 .arc-pang:has([data-result]:not([hidden])) .arc-pang-hero,
 .arc-pang:has([data-result]:not([hidden])) .arc-pang-stage,
-.arc-pang:has([data-result]:not([hidden])) .arc-pang-bottom {
+.arc-pang:has([data-result]:not([hidden])) .arc-pang-bottom,
+.arc-pang:has([data-result]:not([hidden])) .arc-pang-intro {
   visibility: hidden; pointer-events: none;
 }
 .arc-pang-intro .intro-inner {
@@ -1523,7 +1524,13 @@
 /* 결과 · 순위 · 일시정지 */
 .arc-merge-result, .arc-merge-rank, .arc-merge-pause {
   position: absolute; inset: 0; z-index: 8; display: grid; place-items: center;
-  background: rgba(58, 36, 48, .28); padding: 20px;
+  background: rgba(58, 36, 48, .72); padding: 20px;
+}
+.arc-merge:has(.arc-merge-result:not([hidden])) .arc-merge-top,
+.arc-merge:has(.arc-merge-result:not([hidden])) .arc-merge-hint,
+.arc-merge:has(.arc-merge-result:not([hidden])) .arc-merge-floatbum,
+.arc-merge:has(.arc-merge-result:not([hidden])) .arc-merge-bubble {
+  visibility: hidden; pointer-events: none;
 }
 .arc-merge-result[hidden], .arc-merge-rank[hidden], .arc-merge-pause[hidden] { display: none !important; }
 .arc-merge-modal {
