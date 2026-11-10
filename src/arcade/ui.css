@@ -455,6 +455,7 @@
 #arc-root .arc-modal .board h3 { margin: 0 0 2px; font-size: 20px; font-weight: 900; text-align: center; }
 #arc-root .arc-modal .board .sub { opacity: .65; font-size: 12px; margin-bottom: 10px; text-align: center; font-weight: 700; }
 #arc-root .arc-modal .tabs { display: flex; gap: 6px; margin-bottom: 10px; background: rgba(255,255,255,.6); padding: 4px; border-radius: 999px; }
+#arc-root .arc-modal .tabs.games { margin-bottom: 6px; }
 #arc-root .arc-modal .tabs button {
   flex: 1; border: 0; border-radius: 999px; padding: 8px 10px; font-weight: 900; cursor: pointer;
   background: transparent; color: #5a6a88;

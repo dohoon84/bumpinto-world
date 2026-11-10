@@ -88,7 +88,7 @@ export function createArcadeUI({ onHintTap, onCabTap, onExit, onMute } = {}) {
       fade.querySelector('span').textContent = sub;
     },
     setMuted(m) { muteBtn.textContent = m ? '🔇' : '🔊'; },
-    showBoard({ title = '범핑팡 랭킹', sub = 'PC·모바일 통합 · 월간 1·2·3만 보상', rows = [], period = 'today', me = null, onClose, onTab } = {}) {
+    showBoard({ title = '범핑팡 랭킹', sub = 'PC·모바일 통합 · 월간 1·2·3만 보상', rows = [], period = 'today', game = 'pang', games = ['pang'], me = null, onClose, onTab, onGame } = {}) {
       const pang = '/arcade/pang';
       const medal = (rank) => {
         if (rank === 1 || rank === 2 || rank === 3) {
@@ -114,10 +114,17 @@ export function createArcadeUI({ onHintTap, onCabTap, onExit, onMute } = {}) {
         ? `<ul class="rank-list">${list.map((r) => rowHtml(r)).join('')}</ul>`
         : `<div class="empty"><b>아직 기록이 없어요</b>첫 판을 플레이하면 여기에 순위가 쌓여요.<br/>로컬/서버에 점수가 없을 때 보이는 빈 화면입니다.</div>`;
       const mineBlock = mine ? `<div class="mine"><ul class="rank-list" style="overflow:visible">${rowHtml(mine, ' me')}</ul></div>` : '';
+      const gameTabs = Array.isArray(games) && games.length > 1
+        ? `<div class="tabs games" role="tablist" aria-label="게임">
+          <button type="button" data-g="pang" class="${game === 'pang' ? 'on' : ''}">범핑팡</button>
+          <button type="button" data-g="merge" class="${game === 'merge' ? 'on' : ''}">범편의점</button>
+        </div>`
+        : '';
       modalHost.innerHTML = `<div class="arc-modal neon"><div class="board" role="dialog" aria-label="${esc(title)}">
         <button type="button" class="close-x" data-close aria-label="닫기"></button>
         <h3>${esc(title)}</h3><div class="sub">${esc(sub)}</div>
-        <div class="tabs">
+        ${gameTabs}
+        <div class="tabs" role="tablist" aria-label="기간">
           <button type="button" data-p="today" class="${period === 'today' ? 'on' : ''}">오늘</button>
           <button type="button" data-p="week" class="${period === 'week' ? 'on' : ''}">주간</button>
           <button type="button" data-p="month" class="${period === 'month' ? 'on' : ''}">이달</button>
@@ -126,8 +133,9 @@ export function createArcadeUI({ onHintTap, onCabTap, onExit, onMute } = {}) {
         ${mineBlock}
         <button type="button" class="close" data-close>닫기</button>
       </div></div>`;
-      modalHost.querySelector('[data-close]')?.addEventListener('click', () => { modalHost.innerHTML = ''; onClose?.(); });
+      modalHost.querySelectorAll('[data-close]').forEach((b) => b.addEventListener('click', () => { modalHost.innerHTML = ''; onClose?.(); }));
       modalHost.querySelectorAll('[data-p]').forEach((b) => b.addEventListener('click', () => onTab?.(b.getAttribute('data-p'))));
+      modalHost.querySelectorAll('[data-g]').forEach((b) => b.addEventListener('click', () => onGame?.(b.getAttribute('data-g'))));
     },
     hideBoard() { modalHost.innerHTML = ''; },
     dispose() { root.remove(); },

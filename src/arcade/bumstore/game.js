@@ -283,6 +283,11 @@ export function mountBumStore({
     else if (e.code === 'ArrowRight' || e.code === 'KeyD') { keyDir = 1; e.preventDefault(); }
     else if (e.code === 'Space' || e.code === 'Enter') { e.preventDefault(); if (!e.repeat) dropNow(); }
     else if (e.code === 'KeyP') { togglePause(); }
+    else if (e.code === 'Escape') {
+      playing = false;
+      if (session) session.paused = true;
+      try { sfx?.stopBgm?.(); } catch { /* */ }
+    }
   }
   function onKeyUp(e) {
     if (e.code === 'ArrowLeft' || e.code === 'KeyA' || e.code === 'ArrowRight' || e.code === 'KeyD') keyDir = 0;
@@ -530,14 +535,16 @@ export function mountBumStore({
 
   async function openRank() {
     if (typeof onOpenBoard === 'function') {
-      const rows = await onOpenBoard({ embed: true });
-      if (Array.isArray(rows)) showRanking(rows);
-      else onOpenBoard();
+      const out = await onOpenBoard();
+      if (Array.isArray(out)) showRanking(out);
     }
   }
 
   function dispose(exit = false) {
+    playing = false;
+    if (session) session.paused = true;
     cancelAnimationFrame(raf);
+    raf = 0;
     try { window.removeEventListener('keydown', onKeyDown, true); } catch { /* */ }
     try { window.removeEventListener('keyup', onKeyUp, true); } catch { /* */ }
     try { window.removeEventListener('resize', onResize); } catch { /* */ }

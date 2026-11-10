@@ -1,6 +1,12 @@
 // [arcade-pang] 범핑팡 랭킹 규칙. 보상은 월간 1·2·3등만. 참여보상·일일보상 없음.
 export const OPENING_MS = Date.parse('2026-11-09T15:00:00.000Z'); // 2026-11-10 00:00 KST (도훈 확정 전 초안)
 export const GAME_ID = 'bumpingpang';
+export const MERGE_GAME_ID = 'bumstore';
+export const GAME_IDS = [GAME_ID, MERGE_GAME_ID];
+export function resolveGameId(raw) {
+  const id = String(raw || GAME_ID).slice(0, 40);
+  return GAME_IDS.includes(id) ? id : GAME_ID;
+}
 export const STORE_ID = 'arcade-seohyeon'; // 오락실 전광판 1개(매장 통합)
 export const LIMIT_MSG = '오늘 도전 완료, 연습은 계속 가능';
 export const MONTHLY_BUM = [5000, 3000, 2000]; // 월간 1·2·3만. 4~10 없음.

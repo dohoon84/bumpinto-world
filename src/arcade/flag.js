@@ -23,3 +23,12 @@ export function mergeEnabled(search = typeof location !== 'undefined' ? location
     return p.get(MERGE_FLAG) !== '0';
   } catch { return true; }
 }
+
+export function arcadeShotMode(search = typeof location !== 'undefined' ? location.search : '') {
+  // 캡처/테스트(?shot)는 순위판에 쌓이면 안 된다 → 항상 연습
+  try {
+    const p = search instanceof URLSearchParams ? search : new URLSearchParams(search || '');
+    return p.has('shot');
+  } catch { return false; }
+}
+

@@ -12,7 +12,7 @@ export function createArcadeSfx({
   AudioCtx = typeof window !== 'undefined' ? (window.AudioContext || window.webkitAudioContext || null) : null,
 } = {}) {
   let ctx = null, master = null, sfxBus = null, bgmBus = null, noiseBuf = null;
-  let localMute = false, bgmOn = false, urgent = false, fever = false, bgmTimer = 0, duckGain = null, bgmMode = 'pang';
+  let localMute = false, bgmOn = false, urgent = false, fever = false, bgmTimer = 0, duckGain = null, bgmMode = 'pang', bgmGen = 0;
 
   const ac = () => {
     if (ctx || !AudioCtx || sfxOff) return ctx;
@@ -81,7 +81,7 @@ export function createArcadeSfx({
     } catch { /* */ }
   }
 
-  function noise(dur, { gain = 0.15, type = 'bandpass', freq = 2000, q = 1, delay = 0, sweep = 0, attack = 0.002 } = {}) {
+  function noise(dur, { gain = 0.15, type = 'bandpass', freq = 2000, q = 1, delay = 0, sweep = 0, attack = 0.002, dest = null } = {}) {
     const c = ac(); if (!c || !noiseBuf) return; const g0 = lvl(); if (g0 <= 0) return;
     try {
       const t0 = c.currentTime + delay + 0.003;
@@ -92,28 +92,38 @@ export function createArcadeSfx({
       g.gain.setValueAtTime(0.0001, t0);
       g.gain.exponentialRampToValueAtTime(Math.max(0.0001, gain * g0), t0 + attack);
       g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
-      s.connect(f); f.connect(g); g.connect(sfxBus);
+      s.connect(f); f.connect(g); g.connect(dest || sfxBus);
       s.start(t0, Math.random() * 0.4); s.stop(t0 + dur + 0.02);
     } catch { /* */ }
   }
 
   function stopBgm() {
+    bgmGen += 1;
     if (bgmTimer) { clearTimeout(bgmTimer); bgmTimer = 0; }
     bgmOn = false;
+    if (bgmBus && ctx) {
+      try {
+        const t = ctx.currentTime;
+        bgmBus.gain.cancelScheduledValues(t);
+        bgmBus.gain.setValueAtTime(0, t);
+      } catch { /* */ }
+    }
   }
 
   function startBgm(mode = 'pang') {
-    const c = ac(); if (!c || bgmOn) return; if (lvl() <= 0) return;
+    const c = ac(); if (!c) return; if (lvl() <= 0) return;
     stopBgm();
     bgmOn = true;
     bgmMode = mode === 'store' ? 'store' : 'pang';
+    const gen = bgmGen;
+    try { bgmBus.gain.setValueAtTime(0.55, c.currentTime); } catch { /* */ }
     // bouncy marimba/chiptune: melody + bass + kick/hat
     const mel = bgmMode === 'store'
       ? [0, 2, 4, 7, 4, 2, 0, -3, 0, 4, 7, 9, 7, 4, 2, 0]
       : [0, 4, 7, 4, 9, 7, 4, 2, 0, 2, 4, 7, 4, 0, -5, 0];
     const bass = bgmMode === 'store' ? [0, 0, 4, 4, -5, -5, 0, 2] : [0, 0, 5, 5, -5, -5, 0, 7];
     const loop = () => {
-      if (!bgmOn) return;
+      if (!bgmOn || gen !== bgmGen) return;
       const beat = fever ? 0.11 : urgent ? 0.13 : 0.18;
       const now = c.currentTime + 0.02;
       const g0 = lvl(); if (g0 <= 0) { bgmTimer = setTimeout(loop, 400); return; }
@@ -134,11 +144,12 @@ export function createArcadeSfx({
         // kick
         tone(120, 0.12, { type: 'sine', gain: 0.22, slide: 0.35, attack: 0.001, delay: t - c.currentTime, dest: bgmBus });
         // hat
-        noise(0.04, { gain: 0.06, type: 'highpass', freq: 6000, q: 0.7, delay: t - c.currentTime + beat });
+        noise(0.04, { gain: 0.06, type: 'highpass', freq: 6000, q: 0.7, delay: t - c.currentTime + beat, dest: bgmBus });
         if (fever) {
           tone(semi(12 + (i % 3), 880), 0.05, { type: 'sine', gain: 0.035, delay: t - c.currentTime + beat * 0.5, dest: bgmBus, filter: 6000 });
         }
       }
+      if (!bgmOn || gen !== bgmGen) return;
       bgmTimer = setTimeout(loop, mel.length * beat * 1000 - 30);
     };
     try { loop(); } catch (e) { console.warn('[arcade-sfx] bgm', e); bgmOn = false; }
@@ -300,5 +311,6 @@ export function createArcadeSfx({
     },
     startStoreBgm() { this.startBgm('store'); },
     startBgm, stopBgm,
+    get bgmPlaying() { return bgmOn; },
   };
 }

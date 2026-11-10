@@ -1,6 +1,6 @@
 // [arcade] BUMP 오락실 — 문 앞 E 입장 · 오락기 F/클릭으로 게임 선택(범핑팡·범편의점) · R 순위판
 import * as THREE from 'three';
-import { arcadeEnabled, mergeEnabled, ARCADE_AT, arcadeAtSpot } from './flag.js';
+import { arcadeEnabled, mergeEnabled, arcadeShotMode, ARCADE_AT, arcadeAtSpot } from './flag.js';
 import { arcadePlacement, arcadePlacements, doorOutsidePos } from './locations.js';
 import { mountArcadeExterior } from './exterior.js';
 import { buildArcadeInterior } from './interior.js';
@@ -57,6 +57,7 @@ export function mountArcade({
   const rank = createArcadeRankProvider();
   const mergeRank = createMergeRankProvider();
   const mergeOn = mergeEnabled(search);
+  const shot = arcadeShotMode(search);
   const exterior = scene ? mountArcadeExterior({ scene }) : null;
   const stores = arcadePlacements();
   let store = stores[0] || arcadePlacement();
@@ -93,6 +94,8 @@ export function mountArcade({
     picker = null;
     try { session?.dispose?.(); } catch { /* */ }
     session = null; sessionKind = '';
+    try { sfx.stopBgm(); } catch { /* */ }
+    try { sfx.setUrgentBgm?.(false); sfx.setFever?.(false); } catch { /* */ }
     ui.root.classList.remove('is-pang', 'is-merge');
     resumeWorldOst();
     if (active) setLobbyHints();
@@ -174,6 +177,9 @@ export function mountArcade({
   async function openBoard(period = 'today', kind = 'pang') {
     const provider = kind === 'merge' ? mergeRank : rank;
     const title = kind === 'merge' ? '범편의점 랭킹' : '범핑팡 랭킹';
+    const sub = kind === 'merge'
+      ? 'PC·모바일 통합 · 일간·주간·월간'
+      : 'PC·모바일 통합 · 월간 1·2·3만 보상';
     const rows = await provider.top({ period });
     const name = (() => { try { return selfName?.() || ''; } catch { return ''; } })();
     // 통합 보드: PC·모바일 같은 rows. 내 행은 실데이터에서만 골라 상단 고정
@@ -181,9 +187,12 @@ export function mountArcade({
       ? (rows.find((r) => String(r.name || '') === name) || null)
       : (rows.find((r) => r.me || r.self) || null);
     ui.showBoard({
-      title, period, rows, me: mine,
+      title, sub, period, rows, me: mine,
+      game: kind,
+      games: mergeOn ? ['pang', 'merge'] : ['pang'],
       onClose: () => ui.hideBoard(),
       onTab: (p) => openBoard(p, kind),
+      onGame: (g) => openBoard(period, g === 'merge' ? 'merge' : 'pang'),
     });
     return rows;
   }
@@ -233,7 +242,7 @@ export function mountArcade({
   async function startPang() {
     if (session || !active) return;
     readyPlaySurface();
-    const ranked = await gateFor(rank);
+    const ranked = !shot && await gateFor(rank);
     ui.root.classList.add('is-pang');
     pauseWorldOst();
     sessionKind = 'pang';
@@ -241,7 +250,7 @@ export function mountArcade({
       root: ui.root,
       sfx,
       ranked,
-      practice: !ranked,
+      practice: !ranked || shot,
       getName: selfName,
       getBest: () => bestScoreLocal('pang'),
       onOpenBoard: () => openBoard('today', 'pang'),
@@ -256,7 +265,7 @@ export function mountArcade({
   async function startMerge() {
     if (session || !active) return;
     readyPlaySurface();
-    const ranked = await gateFor(mergeRank);
+    const ranked = !shot && await gateFor(mergeRank);
     ui.root.classList.add('is-merge');
     pauseWorldOst();
     sessionKind = 'merge';
@@ -264,14 +273,12 @@ export function mountArcade({
       root: ui.root,
       sfx,
       ranked,
-      practice: !ranked,
+      practice: !ranked || shot,
       getName: selfName,
       getBest: () => bestScoreLocal('merge'),
       onOpenBoard: async (opts) => {
-        const rows = await mergeRank.top({ period: 'today' });
-        if (opts?.embed) return rows;
-        // 게임 안 순위판이 직접 그리므로 rows 만 돌려준다
-        return rows;
+        if (opts?.embed) return mergeRank.top({ period: 'today' });
+        await openBoard('today', 'merge');
       },
       onExit: () => { session = null; sessionKind = ''; ui.root.classList.remove('is-pang', 'is-merge'); resumeWorldOst(); setLobbyHints(); },
       onResult: async ({ score, level, durationMs, ranked: rec, name }) => {
@@ -297,7 +304,9 @@ export function mountArcade({
     const dBoard = Math.hypot(pos.x - board[0], pos.z - board[1]);
     nearBoard = dBoard < BOARD_R;
     if (nearBoard && dBoard <= dDoor) {
-      ui.setHint(`${store.name} 범핑팡 랭킹`, true, { act: true, tap: '범핑팡 랭킹 보기', key: 'R' });
+      const label = mergeOn ? `${store.name} 랭킹` : `${store.name} 범핑팡 랭킹`;
+      const tap = mergeOn ? '랭킹 보기' : '범핑팡 랭킹 보기';
+      ui.setHint(label, true, { act: true, tap, key: 'R' });
     } else if (nearDoor) {
       ui.setHint(`${store.name} 들어가기`, true, { act: true, tap: `${store.name} 들어가기`, key: 'E' });
     } else ui.setHint('');
@@ -307,8 +316,7 @@ export function mountArcade({
     if (playing()) {
       if (e.code === 'Escape') { endSession(); return true; }
       if (e.code === 'KeyR' && !e.repeat) {
-        if (sessionKind === 'merge') session?.openRank?.();
-        else openBoard('today', sessionKind || 'pang');
+        openBoard('today', sessionKind === 'merge' ? 'merge' : 'pang');
         return true;
       }
       return true; // swallow while playing

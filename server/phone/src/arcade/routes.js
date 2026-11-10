@@ -1,7 +1,7 @@
 // [arcade-pang] /arcade/* — 범핑팡 랭킹. 참여보상·일일보상 없음.
 import { sessionFromRequest } from '../account/session.js';
-import { arcadeRankEnabled, attemptsUsed, recordRun, storeBoard } from './db.js';
-import { kstDayKey, LIMIT_MSG, attemptCap, GAME_ID, STORE_ID, plausibleArcadeRun } from './rules.js';
+import { arcadeRankEnabled, attemptsUsed, recordRun, storeBoard, mergeGuestBest } from './db.js';
+import { kstDayKey, LIMIT_MSG, attemptCap, GAME_ID, STORE_ID, plausibleArcadeRun, resolveGameId } from './rules.js';
 
 function json(data, status, cors) {
   return new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json; charset=utf-8', ...cors } });
@@ -25,16 +25,23 @@ export async function handleArcade(request, env, url, cors) {
   const now = Date.now();
   try {
     if (request.method === 'GET' && path === '/arcade/board') {
-      const gameId = String(url.searchParams.get('gameId') || GAME_ID).slice(0, 40);
+      const gameId = resolveGameId(url.searchParams.get('gameId') || GAME_ID);
       const storeId = String(url.searchParams.get('storeId') || STORE_ID).slice(0, 80);
       const period = String(url.searchParams.get('period') || 'today');
+      const who = await playerOf(request, env, {});
+      if (who?.accountId && who.device) {
+        await mergeGuestBest(env.DB, { device: who.device, playerKey: who.playerKey, accountId: who.accountId, gameId, storeId, day: kstDayKey(now), name: '', now });
+      }
       return json({ ok: true, ...(await storeBoard(env.DB, gameId, storeId, period, now)) }, 200, cors);
     }
     if (request.method === 'GET' && path === '/arcade/status') {
       const who = await playerOf(request, env, {});
-      const gameId = String(url.searchParams.get('gameId') || GAME_ID).slice(0, 40);
+      const gameId = resolveGameId(url.searchParams.get('gameId') || GAME_ID);
       const storeId = String(url.searchParams.get('storeId') || STORE_ID).slice(0, 80);
       if (!who) return json({ ok: false, error: 'bad_player' }, 400, cors);
+      if (who.accountId && who.device) {
+        await mergeGuestBest(env.DB, { device: who.device, playerKey: who.playerKey, accountId: who.accountId, gameId, storeId, day: kstDayKey(now), name: '', now });
+      }
       const used = await attemptsUsed(env.DB, who.playerKey, gameId, storeId, kstDayKey(now));
       const cap = attemptCap(who.guest);
       const usedUp = used >= cap;
@@ -43,7 +50,7 @@ export async function handleArcade(request, env, url, cors) {
     if (request.method === 'POST' && path === '/arcade/run') {
       const body = await request.json().catch(() => ({}));
       const who = await playerOf(request, env, body);
-      const gameId = String(body?.gameId || GAME_ID).slice(0, 40);
+      const gameId = resolveGameId(body?.gameId || GAME_ID);
       const storeId = String(body?.storeId || STORE_ID).slice(0, 80);
       const score = Math.round(Number(body?.score));
       const level = Math.max(1, Math.min(40, Math.round(Number(body?.level) || 1)));

@@ -1,7 +1,7 @@
 // [arcade] 랭킹 — 서버(/arcade/*) 우선, 없으면 localStorage 폴백 (로컬 연습용)
 import { deviceId } from '../sms.js';
 import { accountBase } from '../account/api.js';
-import { ARCADE_GAME_ID, ARCADE_STORE_ID, MERGE_GAME_ID } from './flag.js';
+import { ARCADE_GAME_ID, ARCADE_STORE_ID, MERGE_GAME_ID, arcadeShotMode } from './flag.js';
 import { attemptCap, LIMIT_MSG } from '../../server/phone/src/arcade/rules.js';
 
 const KEY = 'bw.arcade.pang.best';
@@ -85,7 +85,7 @@ export function createArcadeRankProvider({ base, device, gameId = ARCADE_GAME_ID
           body: JSON.stringify({
             gameId: gid, storeId: ARCADE_STORE_ID, name, score,
             level, durationMs,
-            deviceId: dev(), practice: !ranked,
+            deviceId: dev(), practice: !ranked || arcadeShotMode(),
           }),
         });
         return r.ok ? r.json() : { record: false };

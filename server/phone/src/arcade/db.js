@@ -16,8 +16,41 @@ export async function attemptsUsed(db, playerKey, gameId, storeId, day) {
   return Number(r?.n || 0);
 }
 
-export async function recordRun(db, { playerKey, accountId, guest, gameId, storeId, name, score, level = 1, durationMs = 0, now, practice }) {
+export async function mergeGuestBest(db, { device, playerKey, accountId, gameId, storeId, day, name, now }) {
+  if (!device || !accountId || !playerKey) return { merged: false };
+  const gk = `g:${device}`;
+  if (gk === playerKey) return { merged: false };
+  const g = await one(db, 'SELECT score, name FROM arcade_best WHERE player_key = ? AND game_id = ? AND store_id = ? AND day_key = ?', gk, gameId, storeId, day);
+  if (g) {
+    await db.prepare(
+      `INSERT INTO arcade_best (game_id, player_key, account_id, store_id, day_key, name, guest, score, at)
+       VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?)
+       ON CONFLICT(player_key, game_id, store_id, day_key) DO UPDATE SET
+         score = excluded.score, at = excluded.at, name = excluded.name, account_id = excluded.account_id, guest = 0
+       WHERE excluded.score > arcade_best.score`,
+    ).bind(gameId, playerKey, accountId, storeId, day, name || g.name || '', Number(g.score), now).run();
+    await db.prepare('DELETE FROM arcade_best WHERE player_key = ? AND game_id = ? AND store_id = ? AND day_key = ?').bind(gk, gameId, storeId, day).run();
+  }
+  const mk = monthKey(now);
+  const gm = await one(db, 'SELECT score, name FROM arcade_month_best WHERE player_key = ? AND game_id = ? AND store_id = ? AND month_key = ?', gk, gameId, storeId, mk);
+  if (gm) {
+    await db.prepare(
+      `INSERT INTO arcade_month_best (game_id, player_key, account_id, store_id, month_key, name, guest, score, at)
+       VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?)
+       ON CONFLICT(player_key, game_id, store_id, month_key) DO UPDATE SET
+         score = excluded.score, at = excluded.at, name = excluded.name, account_id = excluded.account_id, guest = 0
+       WHERE excluded.score > arcade_month_best.score`,
+    ).bind(gameId, playerKey, accountId, storeId, mk, name || gm.name || '', Number(gm.score), now).run();
+    await db.prepare('DELETE FROM arcade_month_best WHERE player_key = ? AND game_id = ? AND store_id = ? AND month_key = ?').bind(gk, gameId, storeId, mk).run();
+  }
+  return { merged: !!(g || gm) };
+}
+
+export async function recordRun(db, { playerKey, accountId, guest, gameId, storeId, name, score, level = 1, durationMs = 0, now, practice, device }) {
   const day = kstDayKey(now);
+  if (accountId && device) {
+    await mergeGuestBest(db, { device, playerKey, accountId, gameId, storeId, day, name, now });
+  }
   const used = await attemptsUsed(db, playerKey, gameId, storeId, day);
   const decision = decideAttempt({ now, guest, used, practice });
   if (!decision.record) return { ...decision, day };
