@@ -49,19 +49,30 @@ async function info(page) {
   });
 }
 
-async function go(page, { x, z, y, yaw = 0, dist = 22, pitch = 0.28, stage = null }) {
+async function go(page, { x, z, y, yaw = 0, dist = 22, pitch = 0.28, stage = null, fov = null, hidePlayer = false, view = null }) {
   await page.evaluate((o) => {
     const J = window.__jj;
     J.setMode('follow');
     if (o.stage != null && J.namsan?.stage) J.namsan.stage(o.stage);
+    if (o.view && J.namsan?.cable?.setView) J.namsan.cable.setView(o.view);
     J.teleport(o.x, o.z, o.y);
-    if (J.player) { J.player.rotation.y = o.yaw; if (o.y != null) J.player.position.y = o.y; }
+    if (J.player) {
+      J.player.rotation.y = o.yaw;
+      if (o.y != null) J.player.position.y = o.y;
+      J.player.visible = !o.hidePlayer;
+    }
+    J.cam.distMin = 0.5;
+    J.cam.distMax = 2500;
     J.cam.yaw = o.yaw;
     J.cam.pitch = o.pitch;
     J.cam.dist = o.dist;
+    if (J.camera) {
+      J.camera.fov = o.fov != null ? o.fov : 55;
+      J.camera.updateProjectionMatrix?.();
+    }
     document.getElementById('stop-panel')?.classList.remove('open');
     document.getElementById('corridor-stop-panel')?.classList.remove('open');
-  }, { x, z, y, yaw, dist, pitch, stage });
+  }, { x, z, y, yaw, dist, pitch, stage, fov, hidePlayer, view });
   await page.waitForTimeout(1800);
 }
 
@@ -80,13 +91,17 @@ if (!I?.tx) {
 
 const hAt = (page, x, z) => page.evaluate(({ x, z }) => window.__jj.namsan.heightAt(x, z), { x, z });
 
-// whole tower day from ~600 m — camera high at mid-shaft height so drum+antenna fit
+// whole tower day from ~900 m NNW, above the downtown rooftops, looking at the tower
 {
-  const midY = (I.baseY + I.tipY) * 0.5;
-  const cx = I.tx - 390, cz = I.tz + 470;
+  const ang = 25 * Math.PI / 180;
+  const d = 900;
+  const x = I.tx - Math.sin(ang) * d;
+  const z = I.tz - Math.cos(ang) * d;
+  const gy = await hAt(day, x, z);
   await go(day, {
-    x: I.tx + 16, z: I.tz + 16, y: midY,
-    yaw: look(cx, cz, I.tx, I.tz), dist: 610, pitch: 0.04,
+    x, z, y: gy + 85,
+    yaw: look(x, z, I.tx, I.tz),
+    dist: 14, pitch: -0.1, fov: 48, hidePlayer: true,
   });
   await shot(day, 'ntower-day-far');
 }
@@ -123,42 +138,57 @@ if (I.lower && I.upper) {
   {
     const p = await day.evaluate(() => {
       const c = window.__jj.namsan.cable;
-      c.stage(0.42);
-      return c.at(0.42);
+      c.stage(0.68);
+      c.setView?.('city');
+      return c.at(0.68);
     });
-    const sideL = Math.hypot(-p.tz, p.tx) || 1;
-    const sx = (-p.tz / sideL) * 0.5, sz = (p.tx / sideL) * 0.5;
+    const cityX = I.tx - 420, cityZ = I.tz - 1680;
+    const yaw = look(p.x, p.z, cityX, cityZ);
+    const lx = Math.sin(yaw), lz = Math.cos(yaw);
+    const sx = -lz, sz = lx;
     await go(day, {
-      x: p.x + sx, z: p.z + sz, y: p.y - 3.88,
-      yaw: look(p.x, p.z, I.tx, I.tz), dist: 1.42, pitch: 0.03, stage: 0.42,
+      x: p.x - lx * 0.12 + sx * 0.55, z: p.z - lz * 0.12 + sz * 0.55, y: p.y - 3.88,
+      yaw, dist: 0.88, pitch: 0.26, stage: 0.68, view: 'city', hidePlayer: true, fov: 64,
     });
     await shot(day, 'ntower-cable-day-ride');
   }
 }
 
-// night whole tower from ~600 m
+// night whole tower from ~900 m NNW above downtown, city lights in the foreground
 {
-  const midY = (I.baseY + I.tipY) * 0.5;
-  const cx = I.tx - 390, cz = I.tz + 470;
+  const ang = 25 * Math.PI / 180;
+  const d = 900;
+  const x = I.tx - Math.sin(ang) * d;
+  const z = I.tz - Math.cos(ang) * d;
+  const gy = await hAt(night, x, z);
   await go(night, {
-    x: I.tx + 16, z: I.tz + 16, y: midY,
-    yaw: look(cx, cz, I.tx, I.tz), dist: 610, pitch: 0.04,
+    x, z, y: gy + 85,
+    yaw: look(x, z, I.tx, I.tz),
+    dist: 14, pitch: -0.1, fov: 48, hidePlayer: true,
   });
   await shot(night, 'ntower-night-far');
 }
 
-// night near from the entrance plaza, looking up
+// night near: whole tower from just east of the plaza (wide FOV, hover so look-up isn't floor-clamped)
 {
   const x = I.tx + 50, z = I.tz + 12;
-  await go(night, { x, z, y: I.baseY + 0.28, yaw: look(x, z, I.tx, I.tz), dist: 28, pitch: -0.2 });
+  await go(night, {
+    x, z, y: I.baseY + 42,
+    yaw: look(x, z, I.tx, I.tz),
+    dist: 58, pitch: -0.5, fov: 74, hidePlayer: true,
+  });
   await shot(night, 'ntower-night-near');
 }
 
-// city streets below (명동-ish primary ~1.1 km NNW), looking up at the lit tower
+// city streets below (~1.1 km NNW toward 명동), hover above rooftops so the tower reads
 {
-  const x = -11053.48, z = -21465.73;
+  const x = -11820, z = -21360; // 회현·남대문 건물 밀집 — 타워가 스카이라인 위로 읽힘
   const y = await hAt(night, x, z);
-  await go(night, { x, z, y: y + 0.35, yaw: look(x, z, I.tx, I.tz), dist: 11, pitch: -0.3 });
+  await go(night, {
+    x, z, y: y + 48,
+    yaw: look(x, z, I.tx, I.tz),
+    dist: 16, pitch: -0.08, fov: 46, hidePlayer: true,
+  });
   await shot(night, 'ntower-night-street');
 }
 
@@ -173,14 +203,17 @@ if (I.lower && I.upper) {
   {
     const p = await night.evaluate(() => {
       const c = window.__jj.namsan.cable;
-      c.stage(0.34);
-      return c.at(0.34);
+      c.stage(0.68);
+      c.setView?.('city');
+      return c.at(0.68);
     });
-    const sideL = Math.hypot(-p.tz, p.tx) || 1;
-    const sx = (-p.tz / sideL) * 0.5, sz = (p.tx / sideL) * 0.5;
+    const cityX = I.tx - 420, cityZ = I.tz - 1680;
+    const yaw = look(p.x, p.z, cityX, cityZ);
+    const lx = Math.sin(yaw), lz = Math.cos(yaw);
+    const sx = -lz, sz = lx;
     await go(night, {
-      x: p.x + sx, z: p.z + sz, y: p.y - 3.88,
-      yaw: look(p.x, p.z, I.tx, I.tz), dist: 1.42, pitch: 0.04, stage: 0.34,
+      x: p.x - lx * 0.12 + sx * 0.55, z: p.z - lz * 0.12 + sz * 0.55, y: p.y - 3.88,
+      yaw, dist: 0.88, pitch: 0.26, stage: 0.68, view: 'city', hidePlayer: true, fov: 64,
     });
     await shot(night, 'ntower-cable-night-ride');
   }
@@ -193,12 +226,12 @@ if (I.lower && I.upper) {
     const toA = Math.atan2(I.tx - p.x, I.tz - p.z);
     const lx = Math.sin(toA), lz = Math.cos(toA);
     const px = -lz, pz = lx;
-    const x = p.x - lx * 11 + px * 7;
-    const z = p.z - lz * 11 + pz * 7;
+    const x = p.x - lx * 18 + px * 10;
+    const z = p.z - lz * 18 + pz * 10;
     await go(night, {
-      x, z, y: p.y - 0.4,
+      x, z, y: p.y + 6,
       yaw: look(x, z, I.tx, I.tz),
-      dist: 13, pitch: 0.06, stage: 0.2,
+      dist: 16, pitch: -0.28, fov: 62, stage: 0.2, hidePlayer: true,
     });
     await shot(night, 'ntower-cabin-night');
   }

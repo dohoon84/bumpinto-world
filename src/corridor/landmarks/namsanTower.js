@@ -64,43 +64,56 @@ function drumWindowTex() {
   const d = c.getContext('2d');
   const nc = document.createElement('canvas'); nc.width = W; nc.height = H;
   const n = nc.getContext('2d');
-  d.fillStyle = '#2c3338'; d.fillRect(0, 0, W, H);
+  d.fillStyle = '#1c242c'; d.fillRect(0, 0, W, H);
   n.fillStyle = '#000'; n.fillRect(0, 0, W, H);
-  const cols = 28, pw = W / cols;
-  for (let i = 0; i < cols; i++) {
-    const x = i * pw + 3;
-    const g = d.createLinearGradient(x, 20, x + pw, 230);
+  const cols = 32, rows = 2, pw = W / cols, ph = H / rows;
+  for (let j = 0; j < rows; j++) for (let i = 0; i < cols; i++) {
+    const x = i * pw + 3, y = j * ph + 10, w = pw - 6, h = ph - 20;
+    const g = d.createLinearGradient(x, y, x + w, y + h);
     g.addColorStop(0, '#d5e4ee'); g.addColorStop(0.5, '#8aa3b4'); g.addColorStop(1, '#c5d5e0');
-    d.fillStyle = g; d.fillRect(x, 28, pw - 6, 200);
-    d.fillStyle = 'rgba(255,255,255,0.18)'; d.fillRect(x + 2, 32, (pw - 6) * 0.28, 190);
-    n.fillStyle = `rgba(255,${224 + r() * 20},${170 + r() * 30},${0.65 + r() * 0.3})`;
-    n.fillRect(x + 1, 30, pw - 5, 196);
+    d.fillStyle = g; d.fillRect(x, y, w, h);
+    d.fillStyle = 'rgba(255,255,255,0.2)'; d.fillRect(x + 1, y + 2, w * 0.28, h - 4);
+    n.fillStyle = `rgba(255,${228 + r() * 18},${190 + r() * 30},${0.82 + r() * 0.18})`;
+    n.fillRect(x + 1, y + 1, w - 2, h - 2);
   }
-  d.fillStyle = '#1a1e22'; d.fillRect(0, 0, W, 22); d.fillRect(0, H - 22, W, 22);
   const tex = (cv) => { const t = new THREE.CanvasTexture(cv); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8; return t; };
   return { day: tex(c), night: tex(nc) };
 }
 
 function shaftGlowTex() {
-  const W = 64, H = 512;
+  const W = 128, H = 512;
   const c = document.createElement('canvas'); c.width = W; c.height = H;
   const d = c.getContext('2d');
+  // Cylinder UV: v=1 at bottom → canvas y=H must be the bright base
   const g = d.createLinearGradient(0, H, 0, 0);
-  g.addColorStop(0.00, '#f2fdff');
-  g.addColorStop(0.10, '#b8f3ff');
-  g.addColorStop(0.38, '#5ad4f5');
-  g.addColorStop(0.72, '#3a9ccc');
-  g.addColorStop(1.00, '#2a6a96');
+  g.addColorStop(0.00, '#f7feff');
+  g.addColorStop(0.10, '#eefbff');
+  g.addColorStop(0.22, '#d8f4ff');
+  g.addColorStop(0.28, '#8edfff');
+  g.addColorStop(0.42, '#3aa8d8');
+  g.addColorStop(0.62, '#1c6aa6');
+  g.addColorStop(0.82, '#154a7a');
+  g.addColorStop(1.00, '#0d2e52');
   d.fillStyle = g; d.fillRect(0, 0, W, H);
-  for (let i = 0; i < 18; i++) {
-    const x = (i / 18) * W;
-    d.fillStyle = 'rgba(255,255,255,0.16)';
-    d.fillRect(x, 0, 1.4, H);
+  for (let i = 0; i < 24; i++) {
+    const x = (i / 24) * W;
+    d.fillStyle = i % 2 ? 'rgba(255,255,255,0.22)' : 'rgba(10,40,70,0.18)';
+    d.fillRect(x, 0, 2.4, H);
   }
   const tex = new THREE.CanvasTexture(c);
   tex.wrapS = THREE.RepeatWrapping;
   tex.colorSpace = THREE.SRGBColorSpace;
   return tex;
+}
+
+function strut(ax, ay, az, bx, by, bz, r = 0.09) {
+  const len = Math.hypot(bx - ax, by - ay, bz - az) || 0.01;
+  const geo = new THREE.CylinderGeometry(r, r, len, 4);
+  geo.translate(0, len / 2, 0);
+  const dir = new THREE.Vector3(bx - ax, by - ay, bz - az).normalize();
+  geo.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir));
+  geo.translate(ax, ay, az);
+  return geo;
 }
 
 function insetRing(pts, inset) {
@@ -240,152 +253,233 @@ export function createNamsanTower({ parent, osm, baseY }) {
     g.add(pave);
   }
 
-  // ---------- white shaft with vertical ribbing + night gradient wash (no fake cone) ----------
+  // ---------- white shaft: night gradient (bright base + mid ring → deeper blue up) ----------
   const shaftGlow = shaftGlowTex();
   const shaftMat = track(new THREE.MeshStandardMaterial({
-    color: '#f4f6f8', roughness: 0.28, metalness: 0.12,
+    color: '#f4f6f8', roughness: 0.26, metalness: 0.1,
     emissive: new THREE.Color('#ffffff'), emissiveMap: shaftGlow, emissiveIntensity: 0,
-  }), 0, 1.12);
-  const shaft = new THREE.Mesh(new THREE.CylinderGeometry(NT.shaftR, NT.shaftR + 0.35, NT.shaftH, 32, 1, false), shaftMat);
+  }), 0, 1.15);
+  const shaft = new THREE.Mesh(new THREE.CylinderGeometry(NT.shaftR, NT.shaftR + 0.35, NT.shaftH, 40, 1, false), shaftMat);
   shaft.position.set(ox, shaftBottom + NT.shaftH / 2, oz);
   shaft.castShadow = true;
   g.add(shaft);
-  const seamMat = new THREE.MeshLambertMaterial({ color: '#d5dce2' });
-  for (let i = 0; i < 16; i++) {
-    const a = (i / 16) * Math.PI * 2;
-    const s = new THREE.Mesh(new THREE.BoxGeometry(0.09, NT.shaftH, 0.07), seamMat);
-    s.position.set(ox + Math.cos(a) * (NT.shaftR + 0.05), shaftBottom + NT.shaftH / 2, oz + Math.sin(a) * (NT.shaftR + 0.05));
+  const seamMat = new THREE.MeshLambertMaterial({ color: '#cfd6dc' });
+  for (let i = 0; i < 20; i++) {
+    const a = (i / 20) * Math.PI * 2;
+    const s = new THREE.Mesh(new THREE.BoxGeometry(0.1, NT.shaftH, 0.08), seamMat);
+    s.position.set(ox + Math.cos(a) * (NT.shaftR + 0.06), shaftBottom + NT.shaftH / 2, oz + Math.sin(a) * (NT.shaftR + 0.06));
     g.add(s);
   }
-  const ringY = shaftBottom + 18;
-  const ring = new THREE.Mesh(new THREE.CylinderGeometry(NT.shaftR + 2.4, NT.shaftR + 2.4, 1.6, 24), new THREE.MeshLambertMaterial({ color: '#2a3036' }));
-  ring.position.set(ox, ringY, oz);
-  g.add(ring);
-  const ringDeck = new THREE.Mesh(new THREE.CylinderGeometry(NT.shaftR + 2.6, NT.shaftR + 2.6, 0.25, 24), new THREE.MeshLambertMaterial({ color: '#c5ccd2' }));
-  ringDeck.position.set(ox, ringY + 0.9, oz);
-  g.add(ringDeck);
-  const ringGlow = track(new THREE.MeshBasicMaterial({ color: '#e8f7ff', transparent: true, opacity: 0, fog: false }), 0, 0);
-  ringGlow.userData.nightOp = 0.9;
-  const ringHalo = new THREE.Mesh(new THREE.TorusGeometry(NT.shaftR + 2.55, 0.09, 8, 36), ringGlow);
-  ringHalo.rotation.x = Math.PI / 2;
-  ringHalo.position.set(ox, ringY + 0.85, oz);
-  g.add(ringHalo);
-  const ring2Y = shaftBottom + 52;
-  const ring2 = new THREE.Mesh(new THREE.CylinderGeometry(NT.shaftR + 1.5, NT.shaftR + 1.5, 0.7, 20), new THREE.MeshLambertMaterial({ color: '#2a3036' }));
-  ring2.position.set(ox, ring2Y, oz);
-  g.add(ring2);
-  const ring2Halo = new THREE.Mesh(new THREE.TorusGeometry(NT.shaftR + 1.55, 0.07, 8, 28), ringGlow);
-  ring2Halo.rotation.x = Math.PI / 2;
-  ring2Halo.position.set(ox, ring2Y + 0.4, oz);
-  g.add(ring2Halo);
+  // soft bloom halo (additive) — brightest near the base
+  const bloomMat = track(new THREE.MeshBasicMaterial({
+    color: '#c8f4ff', transparent: true, opacity: 0, depthWrite: false, fog: false,
+    blending: THREE.AdditiveBlending, side: THREE.DoubleSide,
+  }), 0, 0);
+  bloomMat.userData.nightOp = 0.16;
+  const bloom = new THREE.Mesh(new THREE.CylinderGeometry(NT.shaftR + 1.05, NT.shaftR + 1.9, NT.shaftH, 28, 1, true), bloomMat);
+  bloom.position.set(ox, shaftBottom + NT.shaftH / 2, oz);
+  g.add(bloom);
 
-  // ---------- observation drum ----------
+  const whitePt = track(new THREE.MeshBasicMaterial({ color: '#f4fbff', transparent: true, opacity: 0, fog: false }), 0, 0);
+  whitePt.userData.nightOp = 1;
+  function addLitRing(y, extraR, points = 18) {
+    const body = new THREE.Mesh(new THREE.CylinderGeometry(NT.shaftR + extraR, NT.shaftR + extraR, 1.35, 24), new THREE.MeshLambertMaterial({ color: '#2a3036' }));
+    body.position.set(ox, y, oz);
+    g.add(body);
+    const deck = new THREE.Mesh(new THREE.CylinderGeometry(NT.shaftR + extraR + 0.25, NT.shaftR + extraR + 0.25, 0.22, 24), new THREE.MeshLambertMaterial({ color: '#c5ccd2' }));
+    deck.position.set(ox, y + 0.75, oz);
+    g.add(deck);
+    const halo = new THREE.Mesh(new THREE.TorusGeometry(NT.shaftR + extraR + 0.15, 0.08, 8, 32), whitePt);
+    halo.rotation.x = Math.PI / 2;
+    halo.position.set(ox, y + 0.72, oz);
+    g.add(halo);
+    for (let i = 0; i < points; i++) {
+      const a = (i / points) * Math.PI * 2;
+      const pt = new THREE.Mesh(new THREE.SphereGeometry(0.11, 8, 6), whitePt);
+      pt.position.set(ox + Math.cos(a) * (NT.shaftR + extraR + 0.15), y + 0.78, oz + Math.sin(a) * (NT.shaftR + extraR + 0.15));
+      g.add(pt);
+    }
+  }
+  addLitRing(shaftBottom + 1.1, 2.15, 16); // base collar
+  addLitRing(shaftBottom + 18, 2.45, 18);  // mid platform (visible in day ref)
+
+  // ---------- observation drum: dark body + warm-white window rows, teal underside ----------
   const drumGroups = [
-    { y0: 0, h: 4.2, r0: 13.2, r1: 15.0, kind: 'lip', color: '#1c2228' },
-    { y0: 4.2, h: 6.2, r0: 14.8, r1: 14.8, kind: 'win', color: '#d5e0e8' },
-    { y0: 10.4, h: 2.6, r0: 15.1, r1: 15.2, kind: 'band', color: '#1a1f24' },
-    { y0: 13.0, h: 8.4, r0: 14.9, r1: 14.9, kind: 'obs', color: '#d5e0e8' },
-    { y0: 21.4, h: 2.4, r0: 14.4, r1: 13.6, kind: 'band', color: '#22282e' },
-    { y0: 23.8, h: 5.4, r0: 13.4, r1: 12.2, kind: 'rest', color: '#d5e0e8' },
-    { y0: 29.2, h: 2.2, r0: 11.4, r1: 8.6, kind: 'cap', color: '#eceff2' },
-    { y0: 31.4, h: 1.6, r0: 7.4, r1: 5.2, kind: 'cap', color: '#dfe4e8' },
+    { y0: 0,    h: 3.4, r0: 12.8, r1: 14.9, kind: 'lip' },
+    { y0: 3.4,  h: 6.2, r0: 14.75, r1: 14.75, kind: 'win' },
+    { y0: 9.6,  h: 2.0, r0: 15.05, r1: 15.05, kind: 'band' },
+    { y0: 11.6, h: 8.2, r0: 14.85, r1: 14.85, kind: 'obs' },
+    { y0: 19.8, h: 2.0, r0: 14.6, r1: 14.1, kind: 'band' },
   ];
   const glassMat = track(new THREE.MeshStandardMaterial({
-    color: '#c5d8e6', map: dwin.day, emissiveMap: dwin.night, emissive: new THREE.Color('#ffffff'),
-    emissiveIntensity: 0, roughness: 0.12, metalness: 0.35, transparent: true, opacity: 0.92,
-  }), 0, 1.55);
-  const darkMat = new THREE.MeshLambertMaterial({ color: '#1a1f24' });
-  const capMat = new THREE.MeshLambertMaterial({ color: '#e6eaee' });
+    color: '#5a6b78', map: dwin.day, emissiveMap: dwin.night, emissive: new THREE.Color('#ffffff'),
+    emissiveIntensity: 0, roughness: 0.14, metalness: 0.22,
+  }), 0, 1.85);
+  const darkMat = track(new THREE.MeshStandardMaterial({
+    color: '#151b22', roughness: 0.5, metalness: 0.15,
+    emissive: new THREE.Color('#163a48'), emissiveIntensity: 0,
+  }), 0, 0.45);
   for (const b of drumGroups) {
-    const mat = (b.kind === 'win' || b.kind === 'obs' || b.kind === 'rest') ? glassMat : (b.kind === 'cap' ? capMat : darkMat);
-    const cyl = new THREE.Mesh(new THREE.CylinderGeometry(b.r1, b.r0, b.h, 48, 1, false), mat);
+    const mat = (b.kind === 'win' || b.kind === 'obs') ? glassMat : darkMat;
+    const open = b.kind === 'win' || b.kind === 'obs' || b.kind === 'lip';
+    const cyl = new THREE.Mesh(new THREE.CylinderGeometry(b.r1, b.r0, b.h, 48, 1, open), mat);
     cyl.position.set(ox, drumBottom + b.y0 + b.h / 2, oz);
     cyl.castShadow = true;
     g.add(cyl);
   }
-  // teal underside ring (night-stars ref)
-  const teal = track(new THREE.MeshBasicMaterial({ color: '#7ef5ea', transparent: true, opacity: 0, fog: false }), 0, 0);
-  teal.userData.nightOp = 0.95;
-  const tealR = new THREE.Mesh(new THREE.TorusGeometry(14.2, 0.32, 8, 48), teal);
-  tealR.rotation.x = Math.PI / 2;
-  tealR.position.set(ox, drumBottom + 0.35, oz);
-  g.add(tealR);
-  const under = track(new THREE.MeshBasicMaterial({
-    color: '#9cf7ee', transparent: true, opacity: 0, depthWrite: false, fog: false, side: THREE.DoubleSide,
-  }), 0, 0);
-  under.userData.nightOp = 0.5;
-  const underDisc = new THREE.Mesh(new THREE.CircleGeometry(13.8, 36), under);
-  underDisc.rotation.x = Math.PI / 2;
-  underDisc.position.set(ox, drumBottom + 0.12, oz);
-  g.add(underDisc);
-  // window mullions
+  // mullions only on the main observation row
   const mull = [];
-  for (let i = 0; i < 28; i++) {
-    const a = (i / 28) * Math.PI * 2;
-    const mg = new THREE.BoxGeometry(0.16, 8.2, 0.16);
-    mg.translate(ox + Math.cos(a) * 15.0, drumBottom + 17.2, oz + Math.sin(a) * 15.0);
+  for (let i = 0; i < 32; i++) {
+    const a = (i / 32) * Math.PI * 2;
+    const mg = new THREE.BoxGeometry(0.12, 8.0, 0.12);
+    mg.translate(ox + Math.cos(a) * 14.95, drumBottom + 15.7, oz + Math.sin(a) * 14.95);
     mull.push(mg);
   }
-  g.add(new THREE.Mesh(mergeGeometries(mull), new THREE.MeshLambertMaterial({ color: '#2b333a' })));
+  g.add(new THREE.Mesh(mergeGeometries(mull), new THREE.MeshLambertMaterial({ color: '#1a2228' })));
 
-  // ---------- antenna (red / white bands, lattice feel) ----------
-  const antH = tipY - drumTop;
-  const bands = [
-    { t0: 0.00, t1: 0.10, color: '#e8eaed', night: '#e8eaed' },
-    { t0: 0.10, t1: 0.22, color: '#c62828', night: '#ff3b2e' },
-    { t0: 0.22, t1: 0.38, color: '#f2f4f6', night: '#fff6e0' },
-    { t0: 0.38, t1: 0.52, color: '#c62828', night: '#ff6a2a' },
-    { t0: 0.52, t1: 0.68, color: '#f2f4f6', night: '#ffe7b0' },
-    { t0: 0.68, t1: 0.82, color: '#c62828', night: '#ff4028' },
-    { t0: 0.82, t1: 1.00, color: '#f2f4f6', night: '#fff4d6' },
+  // teal / cyan underside + bright cyan ring at the lip
+  const cyan = track(new THREE.MeshBasicMaterial({ color: '#7af7ff', transparent: true, opacity: 0, fog: false }), 0, 0);
+  cyan.userData.nightOp = 1;
+  const cyanR = new THREE.Mesh(new THREE.TorusGeometry(14.75, 0.34, 8, 48), cyan);
+  cyanR.rotation.x = Math.PI / 2;
+  cyanR.position.set(ox, drumBottom + 0.06, oz);
+  g.add(cyanR);
+  const teal = track(new THREE.MeshBasicMaterial({ color: '#3ee8dc', transparent: true, opacity: 0, fog: false }), 0, 0);
+  teal.userData.nightOp = 0.9;
+  const tealR = new THREE.Mesh(new THREE.TorusGeometry(13.9, 0.7, 8, 48), teal);
+  tealR.rotation.x = Math.PI / 2;
+  tealR.position.set(ox, drumBottom + 0.45, oz);
+  g.add(tealR);
+  const under = track(new THREE.MeshBasicMaterial({
+    color: '#5af4ea', transparent: true, opacity: 0, depthWrite: false, fog: false, side: THREE.DoubleSide,
+  }), 0, 0);
+  under.userData.nightOp = 0.7;
+  const underDisc = new THREE.Mesh(new THREE.CircleGeometry(14.6, 40), under);
+  underDisc.rotation.x = Math.PI / 2;
+  underDisc.position.set(ox, drumBottom - 0.06, oz);
+  g.add(underDisc);
+
+  // ---------- white equipment tiers (3–4 stepped decks with railings) ----------
+  const tierMat = track(new THREE.MeshStandardMaterial({
+    color: '#f1f4f8', roughness: 0.32, metalness: 0.12,
+    emissive: new THREE.Color('#d8eeff'), emissiveIntensity: 0,
+  }), 0, 0.95);
+  const tiers = [
+    { y0: 21.8, h: 3.5, r0: 11.6, r1: 10.0 },
+    { y0: 25.3, h: 2.6, r0: 8.2, r1: 6.8 },
+    { y0: 27.9, h: 2.3, r0: 5.6, r1: 4.6 },
+    { y0: 30.2, h: 2.0, r0: 3.8, r1: 3.15 },
   ];
-  const antNight = [];
-  for (const b of bands) {
-    const y0 = drumTop + b.t0 * antH, y1 = drumTop + b.t1 * antH;
-    const r0 = 4.6 * (1 - b.t0 * 0.88), r1 = 4.6 * (1 - b.t1 * 0.88);
-    const mat = track(new THREE.MeshStandardMaterial({
-      color: b.color, roughness: 0.4, metalness: 0.45,
-      emissive: new THREE.Color(b.night), emissiveIntensity: 0,
-    }), 0, 0.95);
-    antNight.push(mat);
-    const cyl = new THREE.Mesh(new THREE.CylinderGeometry(Math.max(0.18, r1), Math.max(0.22, r0), y1 - y0, 12), mat);
-    cyl.position.set(ox, (y0 + y1) / 2, oz);
+  const railGeos = [];
+  for (const tr of tiers) {
+    const cyl = new THREE.Mesh(new THREE.CylinderGeometry(tr.r1, tr.r0, tr.h, 32), tierMat);
+    cyl.position.set(ox, drumBottom + tr.y0 + tr.h / 2, oz);
     cyl.castShadow = true;
     g.add(cyl);
+    const topY = drumBottom + tr.y0 + tr.h;
+    const topR = tr.r1;
+    const deck = new THREE.Mesh(new THREE.CylinderGeometry(topR + 0.25, topR + 0.25, 0.16, 28), new THREE.MeshLambertMaterial({ color: '#dde3e8' }));
+    deck.position.set(ox, topY + 0.06, oz);
+    g.add(deck);
+    const nPost = Math.max(10, Math.round(topR * 2.4));
+    for (let i = 0; i < nPost; i++) {
+      const a = (i / nPost) * Math.PI * 2;
+      const pg = new THREE.BoxGeometry(0.05, 0.7, 0.05);
+      pg.translate(ox + Math.cos(a) * (topR + 0.12), topY + 0.42, oz + Math.sin(a) * (topR + 0.12));
+      railGeos.push(pg);
+    }
+    const rg = new THREE.TorusGeometry(topR + 0.12, 0.035, 6, 28);
+    rg.rotateX(Math.PI / 2);
+    rg.translate(ox, topY + 0.72, oz);
+    railGeos.push(rg);
   }
-  // lattice legs around lower antenna
-  const latMat = new THREE.MeshLambertMaterial({ color: '#d0d4d8' });
-  const latGeos = [];
-  for (let i = 0; i < 6; i++) {
-    const a = (i / 6) * Math.PI * 2;
-    const y0 = drumTop, y1 = drumTop + antH * 0.42;
-    const r0 = 4.2, r1 = 2.0;
-    const geo = new THREE.CylinderGeometry(0.12, 0.12, Math.hypot(r0 - r1, y1 - y0), 5);
-    geo.translate(0, Math.hypot(r0 - r1, y1 - y0) / 2, 0);
-    const dir = new THREE.Vector3(Math.cos(a) * (r1 - r0), y1 - y0, Math.sin(a) * (r1 - r0)).normalize();
-    geo.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir));
-    geo.translate(ox + Math.cos(a) * r0, y0, oz + Math.sin(a) * r0);
-    latGeos.push(geo);
+  if (railGeos.length) g.add(new THREE.Mesh(mergeGeometries(railGeos), new THREE.MeshLambertMaterial({ color: '#b8c0c8' })));
+
+  // ---------- open steel lattice antenna (red / white / orange bands) ----------
+  const antH = tipY - drumTop;
+  const rBase = 2.95, rTip = 0.2;
+  const redLat = track(new THREE.MeshStandardMaterial({
+    color: '#c62828', roughness: 0.4, metalness: 0.5,
+    emissive: new THREE.Color('#ff3a28'), emissiveIntensity: 0,
+  }), 0, 1.15);
+  const whiteLat = track(new THREE.MeshStandardMaterial({
+    color: '#eef2f5', roughness: 0.38, metalness: 0.48,
+    emissive: new THREE.Color('#fff6e6'), emissiveIntensity: 0,
+  }), 0, 0.95);
+  const orangeLat = track(new THREE.MeshStandardMaterial({
+    color: '#e65100', roughness: 0.4, metalness: 0.48,
+    emissive: new THREE.Color('#ff8a2a'), emissiveIntensity: 0,
+  }), 0, 1.25);
+  const buckets = { red: [], white: [], orange: [] };
+  const BANDS = [
+    { t0: 0.00, t1: 0.10, c: 'white' },
+    { t0: 0.10, t1: 0.26, c: 'red' },
+    { t0: 0.26, t1: 0.40, c: 'white' },
+    { t0: 0.40, t1: 0.56, c: 'orange' },
+    { t0: 0.56, t1: 0.70, c: 'red' },
+    { t0: 0.70, t1: 0.84, c: 'white' },
+    { t0: 0.84, t1: 1.00, c: 'red' },
+  ];
+  const bandOf = (t) => {
+    for (const b of BANDS) if (t >= b.t0 && t <= b.t1) return b.c;
+    return 'red';
+  };
+  const radAt = (t) => rBase * (1 - t) + rTip * t + rBase * 0.08 * (1 - t) * (1 - t);
+  const LEGS = 6, ANT_LV = 24;
+  for (let lv = 0; lv < ANT_LV; lv++) {
+    const t0 = lv / ANT_LV, t1 = (lv + 1) / ANT_LV;
+    const y0 = drumTop + t0 * antH, y1 = drumTop + t1 * antH;
+    const rr0 = radAt(t0), rr1 = radAt(t1);
+    const key = bandOf((t0 + t1) * 0.5);
+    for (let i = 0; i < LEGS; i++) {
+      const a = (i / LEGS) * Math.PI * 2;
+      buckets[key].push(strut(
+        ox + Math.cos(a) * rr0, y0, oz + Math.sin(a) * rr0,
+        ox + Math.cos(a) * rr1, y1, oz + Math.sin(a) * rr1,
+        0.075,
+      ));
+      const a1 = ((i + 1) / LEGS) * Math.PI * 2;
+      buckets[key].push(strut(
+        ox + Math.cos(a) * rr1, y1, oz + Math.sin(a) * rr1,
+        ox + Math.cos(a1) * rr1, y1, oz + Math.sin(a1) * rr1,
+        0.055,
+      ));
+      buckets[key].push(strut(
+        ox + Math.cos(a) * rr0, y0, oz + Math.sin(a) * rr0,
+        ox + Math.cos(a1) * rr1, y1, oz + Math.sin(a1) * rr1,
+        0.05,
+      ));
+      buckets[key].push(strut(
+        ox + Math.cos(a1) * rr0, y0, oz + Math.sin(a1) * rr0,
+        ox + Math.cos(a) * rr1, y1, oz + Math.sin(a) * rr1,
+        0.05,
+      ));
+    }
   }
-  if (latGeos.length) g.add(new THREE.Mesh(mergeGeometries(latGeos), latMat));
-  // dish platforms
-  for (const t of [0.18, 0.34, 0.55]) {
-    const y = drumTop + t * antH;
-    const r = 4.4 * (1 - t * 0.8) + 1.6;
-    const disk = new THREE.Mesh(new THREE.CylinderGeometry(r, r, 0.18, 16), new THREE.MeshLambertMaterial({ color: '#cfd4d8' }));
+  if (buckets.red.length) g.add(new THREE.Mesh(mergeGeometries(buckets.red), redLat));
+  if (buckets.white.length) g.add(new THREE.Mesh(mergeGeometries(buckets.white), whiteLat));
+  if (buckets.orange.length) g.add(new THREE.Mesh(mergeGeometries(buckets.orange), orangeLat));
+
+  const platTs = [0.14, 0.34, 0.55];
+  for (const tt of platTs) {
+    const y = drumTop + tt * antH;
+    const r = radAt(tt) + 1.15;
+    const disk = new THREE.Mesh(new THREE.CylinderGeometry(r, r, 0.16, 16), new THREE.MeshLambertMaterial({ color: '#c5ccd2' }));
     disk.position.set(ox, y, oz);
     g.add(disk);
   }
 
-  // aviation lights
+  // aviation lights (tip + platforms)
   const redMat = new THREE.MeshBasicMaterial({ color: '#ff2a1a', fog: false });
-  const tip = new THREE.Mesh(new THREE.SphereGeometry(0.55, 10, 8), redMat);
-  tip.position.set(ox, tipY + 0.4, oz);
+  const tip = new THREE.Mesh(new THREE.SphereGeometry(0.5, 10, 8), redMat);
+  tip.position.set(ox, tipY + 0.35, oz);
   tip.name = 'namsan-aviation';
   g.add(tip);
-  const midLight = new THREE.Mesh(new THREE.SphereGeometry(0.35, 8, 6), redMat);
-  midLight.position.set(ox, drumTop + antH * 0.5, oz);
-  g.add(midLight);
+  for (const tt of [0.14, 0.34, 0.55, 0.78]) {
+    const lite = new THREE.Mesh(new THREE.SphereGeometry(0.28, 8, 6), redMat);
+    lite.position.set(ox, drumTop + tt * antH + 0.25, oz);
+    g.add(lite);
+  }
 
   // ---------- far beacon (fog:false) so the tower reads on the skyline ----------
   const farG = new THREE.Group();
@@ -398,13 +492,13 @@ export function createNamsanTower({ parent, osm, baseY }) {
   farG.add(farShaft);
   const farDrum = new THREE.Mesh(
     new THREE.CylinderGeometry(15.2, 15.2, NT.drumH, 16),
-    new THREE.MeshBasicMaterial({ color: '#ffe7b8', fog: false, transparent: true, opacity: 0 }),
+    new THREE.MeshBasicMaterial({ color: '#b8fff4', fog: false, transparent: true, opacity: 0 }),
   );
   farDrum.position.set(ox, drumBottom + NT.drumH / 2, oz);
   farG.add(farDrum);
   const farAnt = new THREE.Mesh(
     new THREE.CylinderGeometry(0.6, 3.4, antH, 8),
-    new THREE.MeshBasicMaterial({ color: '#ff5a3a', fog: false, transparent: true, opacity: 0 }),
+    new THREE.MeshBasicMaterial({ color: '#ff6a30', fog: false, transparent: true, opacity: 0 }),
   );
   farAnt.position.set(ox, drumTop + antH / 2, oz);
   farG.add(farAnt);
@@ -598,9 +692,9 @@ export function createNamsanTower({ parent, osm, baseY }) {
         mat.emissiveIntensity = dayE + (nightE - dayE) * v;
       }
     }
-    farShaft.material.opacity = v * 0.55;
-    farDrum.material.opacity = v * 0.7;
-    farAnt.material.opacity = v * 0.6;
+    farShaft.material.opacity = v * 0.18;
+    farDrum.material.opacity = 0;
+    farAnt.material.opacity = v * 0.22;
     farG.visible = v > 0.02;
   }
 

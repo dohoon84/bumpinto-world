@@ -266,6 +266,33 @@ export function createNamsanCable({ parent, osm, heightAt, overlay }) {
   let dir = 1;
   let dwell = 2.5;
   let ride = null; // { cabin: 'A'|'B', dest: 'upper'|'lower' }
+  // 회현→타워는 산을 바라보므로, 기본은 어깨 너머 명동(도시) 쪽. T 로 타워/도시/자동 전환.
+  const CITY = { x: NT.tx - 420, z: NT.tz - 1680 };
+  let viewMode = 'auto'; // auto | city | tower
+  let hintEl = null;
+  function hintText() {
+    const mode = viewMode === 'auto' ? '자동' : viewMode === 'city' ? '도시 야경' : '타워';
+    return `케이블카 · T 전망 전환 (${mode})`;
+  }
+  function showHint(on) {
+    if (typeof document === 'undefined') return;
+    if (!hintEl) {
+      hintEl = document.createElement('div');
+      hintEl.id = 'namsan-cable-hint';
+      hintEl.style.cssText = 'position:fixed;left:50%;bottom:88px;transform:translateX(-50%);z-index:40;padding:8px 14px;border-radius:999px;background:rgba(12,16,22,0.72);color:#f3f6f8;font:600 14px/1.3 sans-serif;letter-spacing:.02em;pointer-events:none;';
+      document.body.appendChild(hintEl);
+    }
+    hintEl.textContent = hintText();
+    hintEl.style.display = on ? 'block' : 'none';
+  }
+  if (typeof window !== 'undefined') {
+    window.addEventListener('keydown', (e) => {
+      if (!ride || e.repeat || e.code !== 'KeyT') return;
+      viewMode = viewMode === 'auto' ? 'city' : viewMode === 'city' ? 'tower' : 'auto';
+      showHint(true);
+    });
+  }
+
   const nightMats = [cabinA.userData.glass.material, cabinB.userData.glass.material, cabinA.userData.ceil.material, cabinB.userData.ceil.material];
 
   function placeCabin(mesh, t, swayT) {
@@ -316,15 +343,25 @@ export function createNamsanCable({ parent, osm, heightAt, overlay }) {
       const tCabin = ride.cabin === 'A' ? u : 1 - u;
       const p = at(tCabin);
       const sway = Math.sin((performance.now() / 1000) * 1.3) * 0.04;
-      // feet on the cabin floor (cabin origin is at cable Y - 2.85; floor is origin - 1.05)
-      player.position.set(p.x + sway * 0.15, p.y - 3.88, p.z);
+      // feet on the cabin floor; nudge toward the look so the camera behind stays inside
+      const goingUp = ride.dest === 'upper';
+      let want = viewMode === 'auto'
+        ? (goingUp && tCabin < 0.2 ? 'tower' : 'city')
+        : viewMode;
+      const lookX = want === 'tower' ? NT.tx : CITY.x;
+      const lookZ = want === 'tower' ? NT.tz : CITY.z;
+      const lookYaw = Math.atan2(p.x - lookX, p.z - lookZ);
+      // place player slightly toward the view so camera (opposite look) remains inside the 3.3 m cabin
+      const lx = Math.sin(lookYaw), lz = Math.cos(lookYaw);
+      player.position.set(p.x - lx * 0.35 + sway * 0.1, p.y - 3.88, p.z - lz * 0.35);
       if (cam) {
-        const lookYaw = ride.dest === 'upper' ? Math.atan2(NT.tx - p.x, NT.tz - p.z) : Math.atan2(-p.tx, -p.tz);
-        cam.yaw += (lookYaw - cam.yaw) * Math.min(1, dt * 1.8);
-        cam.pitch += ((ride.dest === 'upper' ? 0.08 : -0.04) - cam.pitch) * Math.min(1, dt * 1.4);
-        // just behind the player, still inside the cabin, so the red window frame stays in view
-        cam.dist += (1.55 - cam.dist) * Math.min(1, dt * 2.2);
+        cam.distMin = 0.7;
+        cam.yaw += (lookYaw - cam.yaw) * Math.min(1, dt * 2.0);
+        const wantPitch = want === 'city' ? 0.2 : -0.08;
+        cam.pitch += (wantPitch - cam.pitch) * Math.min(1, dt * 1.6);
+        cam.dist = 0.92;
       }
+      showHint(true);
       // arrival
       const arrived = ride.dest === 'upper' ? tCabin < 0.012 : tCabin > 0.988;
       if (arrived && dwell > 1.6) {
@@ -333,6 +370,9 @@ export function createNamsanCable({ parent, osm, heightAt, overlay }) {
         player.position.set(st.x + 3.2, sy + 0.3, st.z + 1.4);
         ride = null;
         hold = 0;
+        showHint(false);
+        if (cam && 'distMin' in cam) delete cam.distMin;
+        if (cam && cam.dist < 5) cam.dist = 8;
       }
       return;
     }
@@ -367,8 +407,8 @@ export function createNamsanCable({ parent, osm, heightAt, overlay }) {
     },
     tickPlayer,
     setNight(v) {
-      cabinA.userData.glass.material.emissiveIntensity = v * 0.55;
-      cabinB.userData.glass.material.emissiveIntensity = v * 0.55;
+      cabinA.userData.glass.material.emissiveIntensity = v * 0.16;
+      cabinB.userData.glass.material.emissiveIntensity = v * 0.16;
       cabinA.userData.ceil.material.emissiveIntensity = 0.35 + v * 0.7;
       cabinB.userData.ceil.material.emissiveIntensity = 0.35 + v * 0.7;
     },
@@ -381,5 +421,7 @@ export function createNamsanCable({ parent, osm, heightAt, overlay }) {
     at,
     pts,
     stage(t) { u = Math.max(0, Math.min(1, t)); dwell = 10; placeCabin(cabinA, u, 0); placeCabin(cabinB, 1 - u, 1.7); },
+    setView(mode) { viewMode = mode || 'auto'; },
+    get viewMode() { return viewMode; },
   };
 }
