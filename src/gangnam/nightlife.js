@@ -3,7 +3,11 @@
 //   모바일은 간판 절반·줄전구/젖은 도로/차선 빛줄기 없음.
 import * as THREE from 'three';
 import { nightFade, nightTarget } from '../world/nightFade.js';
-import { NEON_COLORS, WINDOW_COLORS, SHOP_NAMES } from './nightlifePlace.js';
+import { gameHour } from '../weather.js';
+import { KINDS, kindGeometry, pickWeighted } from '../entities/vehicleKinds.js';
+import { mixFor } from '../entities/jzTraffic.js';
+import { batchedVehicleMaterial } from '../corridor/migeumNpc.js';
+import { NEON_COLORS, WINDOW_COLORS, SHOP_NAMES, hash01 } from './nightlifePlace.js';
 
 export function gangnamNightlifeEnabled(search = typeof location !== 'undefined' ? location.search : '') {
   const q = new URLSearchParams(search || '');
@@ -325,56 +329,6 @@ function coneTex() {
   tex.generateMipmaps = false;
   tex.minFilter = THREE.LinearFilter;
   return tex;
-}
-
-function coloredBox(w, h, d, x, y, z, hex) {
-  const g = new THREE.BoxGeometry(w, h, d);
-  g.translate(x, y, z);
-  const color = new THREE.Color(hex);
-  const n = g.getAttribute('position').count;
-  const cols = new Float32Array(n * 3);
-  for (let i = 0; i < n; i++) {
-    cols[i * 3] = color.r; cols[i * 3 + 1] = color.g; cols[i * 3 + 2] = color.b;
-  }
-  g.setAttribute('color', new THREE.Float32BufferAttribute(cols, 3));
-  return g;
-}
-
-function mergeGeos(parts) {
-  const pos = [], nrm = [], col = [], idx = [];
-  for (const g of parts) {
-    const p = g.getAttribute('position');
-    const n = g.getAttribute('normal');
-    const c = g.getAttribute('color');
-    const base = pos.length / 3;
-    for (let i = 0; i < p.count; i++) {
-      pos.push(p.getX(i), p.getY(i), p.getZ(i));
-      nrm.push(n.getX(i), n.getY(i), n.getZ(i));
-      if (c) col.push(c.getX(i), c.getY(i), c.getZ(i));
-      else col.push(1, 1, 1);
-    }
-    const id = g.getIndex();
-    if (id) for (let i = 0; i < id.count; i++) idx.push(id.getX(i) + base);
-    g.dispose();
-  }
-  const geo = new THREE.BufferGeometry();
-  geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-  geo.setAttribute('normal', new THREE.Float32BufferAttribute(nrm, 3));
-  geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
-  geo.setIndex(idx);
-  return geo;
-}
-
-function makeCarGeometry() {
-  return mergeGeos([
-    coloredBox(1.74, 0.70, 4.10, 0, 0.00, 0.00, '#727888'),
-    coloredBox(1.58, 0.16, 3.60, 0, 0.40, -0.04, '#a8aeb8'),
-    coloredBox(1.50, 0.40, 2.05, 0, 0.52, -0.20, '#8c929e'),
-    coloredBox(1.46, 0.30, 0.06, 0, 0.46, 1.08, '#eaf4ff'),
-    coloredBox(1.46, 0.26, 0.06, 0, 0.44, -1.18, '#d4e6fa'),
-    coloredBox(0.05, 0.26, 1.46, 0.86, 0.42, -0.16, '#dff0ff'),
-    coloredBox(0.05, 0.26, 1.46, -0.86, 0.42, -0.16, '#dff0ff'),
-  ]);
 }
 
 function zebraTex() {
@@ -754,15 +708,32 @@ export function createGangnamNightlife({ scene, terrain = null, url, mobile = fa
         if ((lane.length / 3) >= 8) { usable.push(lane); total += CARS; }
       }
       if (total) {
-        const bodyMat = new THREE.MeshBasicMaterial({
-          vertexColors: true, transparent: true, opacity: 0, toneMapped: false, depthWrite: true,
-        });
-        const bodies = new THREE.InstancedMesh(makeCarGeometry(), bodyMat, total);
-        bodies.name = 'gnightCars';
-        bodies.frustumCulled = false;
-        const carTints = ['#d5dbe4', '#e0d4cc', '#c5d0de', '#ddd8ce', '#d0c8d6', '#c8d4c8'];
-        for (let i = 0; i < total; i++) bodies.setColorAt(i, tmpC.set(carTints[i % carTints.length]));
-        if (bodies.instanceColor) bodies.instanceColor.needsUpdate = true;
+        // 정자·분당·강남 NPC 와 같은 KINDS 지오메트리 + BatchedMesh 재질. 상자 차체는 쓰지 않는다.
+        const kindIds = Object.keys(KINDS);
+        const geos = kindIds.map((k) => kindGeometry(k));
+        const nV = geos.reduce((a, g) => a + g.attributes.position.count, 0);
+        const bodyMat = batchedVehicleMaterial();
+        const mesh = new THREE.BatchedMesh(total, nV, 0, bodyMat);
+        mesh.name = 'gnightCars';
+        mesh.frustumCulled = false;
+        mesh.castShadow = false;
+        mesh.receiveShadow = false;
+        mesh.perObjectFrustumCulled = false;
+        mesh.sortObjects = false;
+        const gid = {};
+        kindIds.forEach((k, i) => { gid[k] = mesh.addGeometry(geos[i]); });
+        const mix = mixFor(gameHour());
+        const fleet = [];
+        const slots = [];
+        for (let i = 0; i < total; i++) {
+          const kind = pickWeighted(mix, hash01(9000 + i * 17));
+          const paint = pickWeighted(KINDS[kind].paint, hash01(14000 + i * 31));
+          const id = mesh.addInstance(gid[kind]);
+          mesh.setColorAt(id, tmpC.set(paint));
+          slots.push(id);
+          const K = KINDS[kind];
+          fleet.push({ kind, L: K.L, W: K.W, moto: !!K.moto, truck: !!K.truck });
+        }
         const chMat = makeUnlitColor({ color: '#fff6d8', additive: true });
         const ctMat = makeUnlitColor({ color: '#ff2a38', additive: true });
         const bloomMat = makeUnlitColor({ map: poolTex(), additive: true });
@@ -780,9 +751,9 @@ export function createGangnamNightlife({ scene, terrain = null, url, mobile = fa
           m.renderOrder = 3;
         }
         cones.renderOrder = 1;
-        root.add(bodies); root.add(carHeads); root.add(carTails); root.add(blooms); root.add(cones);
+        root.add(mesh); root.add(carHeads); root.add(carTails); root.add(blooms); root.add(cones);
         cars = {
-          bodies, bodyMat, carHeads, chMat, carTails, ctMat,
+          mesh, bodyMat, fleet, slots, carHeads, chMat, carTails, ctMat,
           blooms, bloomMat, cones, coneMat, usable, CARS, total,
         };
         stats.cars = total;
@@ -859,12 +830,12 @@ export function createGangnamNightlife({ scene, terrain = null, url, mobile = fa
     if (meshes.cars) {
       const c = meshes.cars;
       const show = on && n > 0.04;
-      c.bodies.visible = show;
+      c.mesh.visible = show;
+      if (c.bodyMat?.userData?.eve) c.bodyMat.userData.eve.value = n;
       c.carHeads.visible = show;
       c.carTails.visible = show;
       if (c.blooms) c.blooms.visible = show;
       if (c.cones) c.cones.visible = show;
-      c.bodyMat.opacity = show ? 1 : 0;
       c.chMat.opacity = n * 0.98;
       c.ctMat.opacity = n * 0.95;
       if (c.bloomMat) c.bloomMat.opacity = n * 0.55;
@@ -874,7 +845,7 @@ export function createGangnamNightlife({ scene, terrain = null, url, mobile = fa
     let draws = 0;
     const listed = [meshes.signs, meshes.backs, meshes.halos, meshes.wins, meshes.strips, meshes.lanterns, meshes.strings, meshes.exits, meshes.crossings, meshes.signals, meshes.heads, meshes.tails, meshes.wet];
     if (meshes.facadeMeshes) listed.push(...meshes.facadeMeshes);
-    if (meshes.cars) listed.push(meshes.cars.bodies, meshes.cars.carHeads, meshes.cars.carTails, meshes.cars.blooms, meshes.cars.cones);
+    if (meshes.cars) listed.push(meshes.cars.mesh, meshes.cars.carHeads, meshes.cars.carTails, meshes.cars.blooms, meshes.cars.cones);
     for (const m of listed) {
       if (m && m.visible) draws++;
     }
@@ -901,28 +872,35 @@ export function createGangnamNightlife({ scene, terrain = null, url, mobile = fa
         if (dy > Math.PI) dy -= Math.PI * 2;
         if (dy < -Math.PI) dy += Math.PI * 2;
         const yaw = lane[i0 * 3 + 2] + dy * f;
-        const gy = ground(x, z) + 0.48;
+        const gy = ground(x, z);
+        const spec = c.fleet[ci];
         compose(m4, q, p, s, x, gy, z, yaw, 1, 1, 1);
-        c.bodies.setMatrixAt(ci, m4);
+        c.mesh.setMatrixAt(c.slots[ci], m4);
         const fx = Math.sin(yaw), fz = Math.cos(yaw);
         const rx = Math.cos(yaw), rz = -Math.sin(yaw);
-        const hl = gy + 0.08;
-        compose(m4, q, p, s, x + fx * 2.08 + rx * 0.52, hl, z + fz * 2.08 + rz * 0.52, 0, 0.11, 0.10, 0.10);
+        const halfL = (spec.L || 4.6) * 0.5;
+        const halfW = spec.moto ? 0.08 : Math.max(0.22, (spec.W || 1.8) * 0.5 - 0.28);
+        const liteY = gy + (spec.moto ? 0.98 : spec.truck ? 0.78 : 0.74);
+        const hs = spec.moto ? 0.07 : 0.11;
+        const ts = spec.moto ? 0.06 : 0.09;
+        compose(m4, q, p, s, x + fx * halfL + rx * halfW, liteY, z + fz * halfL + rz * halfW, 0, hs, hs * 0.9, hs * 0.9);
         c.carHeads.setMatrixAt(ci * 2, m4);
-        compose(m4, q, p, s, x + fx * 2.08 - rx * 0.52, hl, z + fz * 2.08 - rz * 0.52, 0, 0.11, 0.10, 0.10);
+        compose(m4, q, p, s, x + fx * halfL - rx * halfW, liteY, z + fz * halfL - rz * halfW, 0, hs, hs * 0.9, hs * 0.9);
         c.carHeads.setMatrixAt(ci * 2 + 1, m4);
-        compose(m4, q, p, s, x - fx * 2.08 + rx * 0.52, hl, z - fz * 2.08 + rz * 0.52, 0, 0.09, 0.08, 0.08);
+        compose(m4, q, p, s, x - fx * halfL + rx * halfW, liteY, z - fz * halfL + rz * halfW, 0, ts, ts * 0.9, ts * 0.9);
         c.carTails.setMatrixAt(ci * 2, m4);
-        compose(m4, q, p, s, x - fx * 2.08 - rx * 0.52, hl, z - fz * 2.08 - rz * 0.52, 0, 0.09, 0.08, 0.08);
+        compose(m4, q, p, s, x - fx * halfL - rx * halfW, liteY, z - fz * halfL - rz * halfW, 0, ts, ts * 0.9, ts * 0.9);
         c.carTails.setMatrixAt(ci * 2 + 1, m4);
         if (c.blooms) {
-          compose(m4, q, p, s, x + fx * 2.12 + rx * 0.52, hl, z + fz * 2.12 + rz * 0.52, yaw, 0.85, 0.55, 1);
+          const bw = spec.moto ? 0.45 : 0.85;
+          const tw = spec.moto ? 0.35 : 0.7;
+          compose(m4, q, p, s, x + fx * (halfL + 0.04) + rx * halfW, liteY, z + fz * (halfL + 0.04) + rz * halfW, yaw, bw, bw * 0.65, 1);
           c.blooms.setMatrixAt(ci * 4, m4);
-          compose(m4, q, p, s, x + fx * 2.12 - rx * 0.52, hl, z + fz * 2.12 - rz * 0.52, yaw, 0.85, 0.55, 1);
+          compose(m4, q, p, s, x + fx * (halfL + 0.04) - rx * halfW, liteY, z + fz * (halfL + 0.04) - rz * halfW, yaw, bw, bw * 0.65, 1);
           c.blooms.setMatrixAt(ci * 4 + 1, m4);
-          compose(m4, q, p, s, x - fx * 2.12 + rx * 0.52, hl, z - fz * 2.12 + rz * 0.52, yaw, 0.7, 0.45, 1);
+          compose(m4, q, p, s, x - fx * (halfL + 0.04) + rx * halfW, liteY, z - fz * (halfL + 0.04) + rz * halfW, yaw, tw, tw * 0.64, 1);
           c.blooms.setMatrixAt(ci * 4 + 2, m4);
-          compose(m4, q, p, s, x - fx * 2.12 - rx * 0.52, hl, z - fz * 2.12 - rz * 0.52, yaw, 0.7, 0.45, 1);
+          compose(m4, q, p, s, x - fx * (halfL + 0.04) - rx * halfW, liteY, z - fz * (halfL + 0.04) - rz * halfW, yaw, tw, tw * 0.64, 1);
           c.blooms.setMatrixAt(ci * 4 + 3, m4);
           c.blooms.setColorAt(ci * 4, tmpC.set('#fff4cc'));
           c.blooms.setColorAt(ci * 4 + 1, tmpC.set('#fff4cc'));
@@ -930,13 +908,14 @@ export function createGangnamNightlife({ scene, terrain = null, url, mobile = fa
           c.blooms.setColorAt(ci * 4 + 3, tmpC.set('#ff3a40'));
         }
         if (c.cones) {
-          compose(m4, q, p, s, x + fx * 2.7, ground(x, z) + 0.05, z + fz * 2.7, yaw, 1.85, 1, 3.4);
+          const cl = spec.moto ? 1.6 : 3.4;
+          const cw = spec.moto ? 0.9 : 1.85;
+          compose(m4, q, p, s, x + fx * (halfL + 0.62), gy + 0.05, z + fz * (halfL + 0.62), yaw, cw, 1, cl);
           c.cones.setMatrixAt(ci, m4);
         }
         ci++;
       }
     }
-    c.bodies.instanceMatrix.needsUpdate = true;
     c.carHeads.instanceMatrix.needsUpdate = true;
     c.carTails.instanceMatrix.needsUpdate = true;
     if (c.blooms) {
