@@ -81,10 +81,12 @@ export function buildArcadeInterior({ renderer = null, storeName = 'BUMP 오락�
   const claw = makeClawMachine();
   claw.position.set(-3.6, 0, 0.9); claw.rotation.y = 0.45; scene.add(claw);
 
-  // ranking board
-  const board = makeSign('범핑팡 랭킹 · R', '#ffe66d', '#2a1840');
-  board.position.set(4.0, 1.9, -3.3); board.scale.set(0.75, 0.75, 0.75); scene.add(board);
-  const boardGlow = new THREE.PointLight(0xffe66d, 0.55, 4, 2); boardGlow.position.set(4.0, 1.9, -2.8); scene.add(boardGlow);
+  // ranking kiosk — 게임 안 들어가지 않고 두 게임 일·주·월 랭킹을 본다
+  const board = makeRankKiosk();
+  board.position.set(2.55, 0, 2.05);
+  board.rotation.y = -0.35;
+  scene.add(board);
+  const boardGlow = new THREE.PointLight(0xffe66d, 0.7, 4.5, 2); boardGlow.position.set(2.55, 1.6, 2.2); scene.add(boardGlow);
 
   // plush pile near claw
   for (let i = 0; i < 5; i++) {
@@ -137,7 +139,33 @@ export function buildArcadeInterior({ renderer = null, storeName = 'BUMP 오락�
       if (!hits.length) return null;
       return cabinets.find((c) => c.screen === hits[0].object) || null;
     },
+    pickBoard(raycaster) {
+      const targets = [];
+      board.traverse((o) => { if (o.isMesh) targets.push(o); });
+      const hits = raycaster.intersectObjects(targets, false);
+      return hits.length > 0;
+    },
   };
+}
+
+function makeRankKiosk() {
+  const g = new THREE.Group();
+  const body = new THREE.Mesh(
+    new THREE.BoxGeometry(1.2, 1.9, 0.42),
+    new THREE.MeshStandardMaterial({ color: '#4a2a78', roughness: 0.38, metalness: 0.32 }),
+  );
+  body.position.y = 0.95; g.add(body);
+  const screen = new THREE.Mesh(
+    new THREE.PlaneGeometry(1.0, 1.2),
+    new THREE.MeshStandardMaterial({ color: '#ffe66d', emissive: '#ffe66d', emissiveIntensity: 0.5, roughness: 0.35 }),
+  );
+  screen.position.set(0, 1.18, 0.22); g.add(screen);
+  const sign = makeSign('랭킹 보기', '#1a1030', '#ffe66d');
+  sign.position.set(0, 2.02, 0.14); sign.scale.set(0.58, 0.48, 0.58); g.add(sign);
+  const sub = makeSign('범핑팡 · 범편의점', '#ffe66d', '#2a1840');
+  sub.position.set(0, 0.38, 0.22); sub.scale.set(0.48, 0.34, 0.48); g.add(sub);
+  g.userData.screen = screen;
+  return g;
 }
 
 function makeCabinet({ label, color, playable }) {

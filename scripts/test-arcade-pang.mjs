@@ -137,6 +137,8 @@ assert(starsForLevel(1) === 0, 'no star early');
   assert(good.ok, 'accept decent run');
   const srv = plausibleArcadeRun({ score: 9000, level: 8, durationMs: 150000 });
   assert(srv.ok, 'server plausibility matches');
+  assert(plausibleRun({ score: 9109, level: 1, durationMs: 30000 }).ok, '9109 at lv1/30s accepted');
+  assert(plausibleArcadeRun({ score: 9109, level: 1, durationMs: 30000 }).ok, 'server accepts 9109 at lv1/30s');
 }
 // trySwap with level mult
 {

@@ -31,10 +31,11 @@ function resultLine(bestStage) {
 }
 
 export function mountBumStore({
-  root, sfx, ranked = true, getName = () => '나',
+  root, sfx, ranked = true, storeName = 'BUMP 오락실', getName = () => '나',
   onExit, onResult, onOpenBoard, practice = false, getBest = () => 0, guest = false,
 } = {}) {
   const guestNow = () => isGuestFlag(guest);
+  const storeLabel = String(storeName || 'BUMP 오락실').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const wrap = document.createElement('div');
   wrap.className = 'arc-merge' + (isCoarse() ? ' is-touch' : ' is-desk');
   const guideHtml = STAGES.map((s) => (
@@ -105,6 +106,19 @@ export function mountBumStore({
         <button type="button" class="arc-merge-btn arcade" data-leave-pause>오락실로</button>
       </div>
     </div>
+    <div class="arc-merge-intro" data-intro>
+      <div class="arc-merge-modal intro">
+        <img class="res-bum" src="${bumUrl('front')}" alt="" />
+        <img class="arc-merge-logo intro-logo" src="${mergeUrl('logo/logo-bumstore.png')}" alt="범편의점" />
+        <div class="intro-store">${storeLabel}</div>
+        <p class="tag">${practice || !ranked ? '연습 모드 · 순위 기록 안 함' : '랭킹 도전'}</p>
+        <button type="button" class="arc-merge-btn start" data-go>시작</button>
+        <div class="res-actions">
+          <button type="button" class="arc-merge-btn rank" data-open-rank>순위판</button>
+          <button type="button" class="arc-merge-btn arcade" data-leave-intro aria-label="오락실로"></button>
+        </div>
+      </div>
+    </div>
     <div class="arc-merge-result" data-result hidden></div>
     <div class="arc-merge-rank" data-rank hidden></div>
   `;
@@ -131,7 +145,7 @@ export function mountBumStore({
   let best = Math.max(0, Number(getBest?.()) || 0);
   let runStartedAt = performance.now();
   let pendingPopAt = performance.now();
-  let playing = true;
+  let playing = false;
   let overShown = false;
   let raf = 0;
   let lastT = 0;
@@ -141,6 +155,7 @@ export function mountBumStore({
   const spin = new Map();
   let pointerTouching = false;
   let submitted = false;
+  let submitPromise = null;
   let orientPaused = false;
 
   function viewportBox() {
@@ -306,7 +321,7 @@ export function mountBumStore({
     }
   }
   function onPointerDown(e) {
-    if (e.target.closest('button, .arc-merge-result, .arc-merge-rank, .arc-merge-pause, .arc-merge-orient')) return;
+    if (e.target.closest('button, .arc-merge-result, .arc-merge-rank, .arc-merge-pause, .arc-merge-orient, .arc-merge-intro')) return;
     if (session.paused || session.over || !playing || orientPaused) return;
     const onPlay = e.target === cv || e.target.closest('.arc-merge-play');
     if (!onPlay) return;
@@ -478,17 +493,22 @@ export function mountBumStore({
         </div>
         <div class="res-merge">최고 합치기 <em>${info.name}</em></div>
         ${guestNow() ? loginNudgeHtml() : ''}
+        <button type="button" class="arc-merge-btn again" data-again aria-label="다시하기"></button>
         <div class="res-actions">
-          <button type="button" class="arc-merge-btn again" data-again aria-label="다시하기"></button>
+          <button type="button" class="arc-merge-btn rank" data-board>순위판</button>
           <button type="button" class="arc-merge-btn arcade" data-leave aria-label="오락실로"></button>
         </div>
       </div>`;
     resultEl.querySelector('[data-again]')?.addEventListener('click', () => restart());
     resultEl.querySelector('[data-leave]')?.addEventListener('click', () => dispose(true));
+    resultEl.querySelector('[data-board]')?.addEventListener('click', async () => {
+      try { await submitPromise; } catch { /* */ }
+      openRank();
+    });
     if (guestNow()) bindLoginNudge(resultEl);
     if (!submitted) {
       submitted = true;
-      onResult?.({ score: finalScore, level: finalLevel, durationMs, ranked: ranked && !practice, name, openBoard: false });
+      submitPromise = Promise.resolve(onResult?.({ score: finalScore, level: finalLevel, durationMs, ranked: ranked && !practice, name, openBoard: false }));
     }
   }
 
@@ -506,6 +526,7 @@ export function mountBumStore({
     playing = true;
     overShown = false;
     submitted = false;
+    submitPromise = null;
     runStartedAt = performance.now();
     try { sfx?.startStoreBgm?.(); } catch { /* */ }
     syncHud();
@@ -621,15 +642,34 @@ export function mountBumStore({
     syncHud();
   }
 
+  function startFromIntro() {
+    const intro = wrap.querySelector('[data-intro]');
+    if (intro) intro.hidden = true;
+    session.paused = false;
+    playing = true;
+    runStartedAt = performance.now();
+    try { sfx?.startStoreBgm?.(); } catch { /* */ }
+    syncHud();
+  }
+  function setBest(n) {
+    const v = Math.max(0, Number(n) || 0);
+    if (v > best) best = v;
+    for (const el of bestEls) el.textContent = fmt(best);
+    return best;
+  }
+  wrap.querySelector('[data-go]')?.addEventListener('click', (e) => { e.stopPropagation(); startFromIntro(); });
+  wrap.querySelector('[data-open-rank]')?.addEventListener('click', (e) => { e.stopPropagation(); openRank(); });
+  wrap.querySelector('[data-leave-intro]')?.addEventListener('click', (e) => { e.stopPropagation(); dispose(true); });
+  session.paused = true;
   syncLayout();
   resizeCanvas();
   syncHud();
-  try { sfx?.startStoreBgm?.(); } catch { /* */ }
   raf = requestAnimationFrame(tick);
 
   return {
     dispose: () => dispose(false),
     get score() { return session.score; },
+    setBest,
     openRank,
     debug: {
       session,

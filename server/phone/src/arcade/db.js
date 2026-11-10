@@ -90,7 +90,10 @@ export async function recordRun(db, { playerKey, accountId, guest, gameId, store
   }
   const used = await attemptsUsed(db, playerKey, gameId, storeId, day);
   const decision = decideAttempt({ now, guest, used, practice });
-  if (!decision.record) return { ...decision, day };
+  if (!decision.record) {
+    const prev = await one(db, 'SELECT score FROM arcade_best WHERE player_key = ? AND game_id = ? AND store_id = ? AND day_key = ?', playerKey, gameId, storeId, day);
+    return { ...decision, day, best: prev ? Number(prev.score) : null, score };
+  }
   const attempt = decision.attempt;
   const lv = Math.max(1, Math.round(Number(level) || 1));
   const dur = Math.max(0, Math.round(Number(durationMs) || 0));
@@ -155,6 +158,19 @@ export async function storeBoard(db, gameId, storeId, period, now) {
 
 function asRow(r) {
   return { playerKey: r.player_key, accountId: r.account_id || null, name: r.name, guest: !!r.guest, score: Number(r.score), at: Number(r.at) };
+}
+
+/** 보드 줄에 지금 요청한 사람(me)을 표시한다. GET·POST 가 같은 스냅샷을 쓰게 한다. */
+export function attachMine(board, who) {
+  const rows = Array.isArray(board?.rows) ? board.rows.map((r) => ({
+    ...r,
+    me: !!(who && (
+      (who.playerKey && r.playerKey === who.playerKey)
+      || (who.accountId && r.accountId && String(r.accountId) === String(who.accountId))
+    )),
+  })) : [];
+  const me = rows.find((r) => r.me) || null;
+  return { ...board, rows, me };
 }
 
 /** 월간 정산 — 도훈님이 cron/수동으로. 계정 1·2·3등만 지급(게스트 제외). */

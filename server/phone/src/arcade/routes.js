@@ -1,10 +1,10 @@
 // [arcade-pang] /arcade/* — 범핑팡 랭킹. 참여보상·일일보상 없음.
 import { sessionFromRequest } from '../account/session.js';
-import { arcadeRankEnabled, attemptsUsed, recordRun, storeBoard, mergeGuestBest } from './db.js';
+import { arcadeRankEnabled, attemptsUsed, recordRun, storeBoard, mergeGuestBest, attachMine } from './db.js';
 import { kstDayKey, LIMIT_MSG, attemptCap, GAME_ID, STORE_ID, plausibleArcadeRun, resolveGameId } from './rules.js';
 
 function json(data, status, cors) {
-  return new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json; charset=utf-8', ...cors } });
+  return new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', ...cors } });
 }
 
 async function playerOf(request, env, body) {
@@ -32,7 +32,8 @@ export async function handleArcade(request, env, url, cors) {
       if (who?.accountId && who.device) {
         await mergeGuestBest(env.DB, { device: who.device, playerKey: who.playerKey, accountId: who.accountId, gameId, storeId, day: kstDayKey(now), name: '', now });
       }
-      return json({ ok: true, ...(await storeBoard(env.DB, gameId, storeId, period, now)) }, 200, cors);
+      const board = attachMine(await storeBoard(env.DB, gameId, storeId, period, now), who);
+      return json({ ok: true, ...board }, 200, cors);
     }
     if (request.method === 'GET' && path === '/arcade/status') {
       const who = await playerOf(request, env, {});
@@ -60,8 +61,9 @@ export async function handleArcade(request, env, url, cors) {
       const gate = plausibleArcadeRun({ score, level, durationMs, gameId });
       if (!gate.ok) return json({ ok: false, error: 'implausible', reason: gate.reason }, 400, cors);
       const out = await recordRun(env.DB, { ...who, gameId, storeId, name, score, level, durationMs, now, practice: !!body?.practice });
-      // 참여보상 없음 — creditParticipation 호출하지 않음
-      return json({ ok: true, ...out }, 200, cors);
+      // 같은 요청 안에서 오늘 보드를 돌려 주어, 다음 GET 이 복제본을 읽더라도 새 최고가 바로 보이게 한다.
+      const board = attachMine(await storeBoard(env.DB, gameId, storeId, 'today', now), who);
+      return json({ ok: true, ...out, ...board, score }, 200, cors);
     }
   } catch (error) {
     return json({ ok: false, error: 'server', detail: String(error?.message || error) }, 500, cors);

@@ -39,7 +39,11 @@
 
 /* ========== 범핑팡 — 밝고 귀여운 모바일 퍼즐 셸 ========== */
 .arc-pang {
-  pointer-events: auto; position: fixed; inset: 0; z-index: 90;
+  pointer-events: auto; position: fixed;
+  top: var(--pang-vv-top, 0px); left: 0;
+  width: var(--pang-vvw, 100vw); height: var(--pang-vvh, 100dvh);
+  max-height: 100svh;
+  z-index: 90;
   display: grid; place-items: center;
   background: linear-gradient(180deg, #7ec8ff 0%, #b8e4ff 40%, #dff7c8 78%, #c8ef9a 100%);
   font-family: Pretendard, "Noto Sans KR", system-ui, sans-serif;
@@ -87,7 +91,7 @@
   background: transparent;
 }
 .arc-pang.is-touch .arc-pang-phone {
-  width: 100%; height: 100%; min-height: 100%; border-radius: 0; box-shadow: none;
+  width: 100%; height: 100%; max-height: 100%; min-height: 0; border-radius: 0; box-shadow: none;
 }
 .arc-pang.is-touch.is-landscape .arc-pang-phone { visibility: hidden; pointer-events: none; }
 
@@ -219,8 +223,10 @@
 .mascot-bubble[hidden] { display: none !important; }
 
 .arc-pang-bottom {
-  padding: 6px 12px max(14px, env(safe-area-inset-bottom));
+  flex: 0 0 auto;
+  padding: 6px 12px max(14px, env(safe-area-inset-bottom, 0px));
   display: flex; flex-direction: column; gap: 8px;
+  box-sizing: border-box;
 }
 .arc-pang-timebar, .arc-pang-fever {
   display: flex; align-items: center; gap: 8px;
@@ -693,12 +699,10 @@
 .arc-pang {
   background: url(/arcade/pang/bg/bg-arcade.jpg) center / cover no-repeat #0B0428;
   font-family: "Jua", "Noto Sans KR", "Apple SD Gothic Neo", system-ui, sans-serif;
-  width: 100%;
-  height: 100%;
-  height: 100dvh;
-  height: 100lvh;
-  min-height: 100%;
-  min-height: -webkit-fill-available;
+  width: var(--pang-vvw, 100vw);
+  height: var(--pang-vvh, 100dvh);
+  max-height: 100svh;
+  min-height: 0;
 }
 .arc-pang .score-num,
 .arc-pang-lv b,
@@ -730,7 +734,7 @@
   background: transparent;
 }
 .arc-pang.is-touch .arc-pang-phone {
-  width: 100vw; height: 100dvh; border-radius: 0; box-shadow: none;
+  width: 100%; height: 100%; max-height: 100%; border-radius: 0; box-shadow: none;
 }
 .arc-pang.is-desk .arc-pang-phone {
   width: min(390px, 96vw); height: min(844px, 96dvh);
@@ -869,7 +873,7 @@
   padding: 0 8px; align-items: center; justify-content: center;
 }
 .arc-pang-boardwrap {
-  width: min(100%, 384px);
+  width: min(100%, 384px, calc(var(--pang-vvh, 100dvh) - 290px));
   max-height: 100%;
   aspect-ratio: 1;
   padding: 5.208%;
@@ -885,8 +889,10 @@
 }
 
 .arc-pang-bottom {
-  padding: 4px 8px max(10px, env(safe-area-inset-bottom));
+  flex: 0 0 auto;
+  padding: 4px 8px max(12px, env(safe-area-inset-bottom, 0px));
   gap: 6px;
+  box-sizing: border-box;
 }
 .arc-pang-timebar,
 .arc-pang-fever {
@@ -1358,10 +1364,8 @@
 .arc-merge {
   pointer-events: auto; position: fixed; left: 0; top: var(--merge-vv-top, 0px); z-index: 90;
   width: var(--merge-vvw, 100vw); height: var(--merge-vvh, 100dvh);
-  min-height: 100%;
-  min-height: 100dvh;
-  min-height: 100lvh;
-  min-height: -webkit-fill-available;
+  max-height: 100svh;
+  min-height: 0;
   font-family: "Jua", Pretendard, "Noto Sans KR", sans-serif; color: #3A2430;
   background: #FFF8F0 url(/arcade/merge/bg/bg-store.jpg) center / cover no-repeat;
   overflow: hidden;
@@ -1529,7 +1533,11 @@
 .arc-merge:has(.arc-merge-result:not([hidden])) .arc-merge-top,
 .arc-merge:has(.arc-merge-result:not([hidden])) .arc-merge-hint,
 .arc-merge:has(.arc-merge-result:not([hidden])) .arc-merge-floatbum,
-.arc-merge:has(.arc-merge-result:not([hidden])) .arc-merge-bubble {
+.arc-merge:has(.arc-merge-result:not([hidden])) .arc-merge-bubble,
+.arc-merge:has(.arc-merge-intro:not([hidden])) .arc-merge-top,
+.arc-merge:has(.arc-merge-intro:not([hidden])) .arc-merge-hint,
+.arc-merge:has(.arc-merge-intro:not([hidden])) .arc-merge-floatbum,
+.arc-merge:has(.arc-merge-intro:not([hidden])) .arc-merge-bubble {
   visibility: hidden; pointer-events: none;
 }
 .arc-merge-result[hidden], .arc-merge-rank[hidden], .arc-merge-pause[hidden] { display: none !important; }
@@ -1539,6 +1547,9 @@
   box-shadow: 0 16px 0 rgba(196,90,82,.15), 0 24px 50px rgba(0,0,0,.18);
 }
 .arc-merge-modal.rank { background-image: url(/arcade/merge/ui/rank-panel.png); padding-top: 52px; }
+.arc-merge-modal.intro {
+  background-image: none; background-color: #FFF8F0; padding-top: 22px;
+}
 .arc-merge-modal .eyebrow { margin: 0 0 8px; font-size: 18px; color: #3A2430; }
 .arc-merge-modal .ttl { margin: 8px 0 18px; font-size: 24px; }
 .arc-merge-modal .res-bum { width: 120px; height: auto; margin: 4px 0 8px; }
@@ -1562,6 +1573,29 @@
 .arc-merge-btn.again:active { background-image: url(/arcade/merge/ui/buttons/btn-again-pressed.png); }
 .arc-merge-btn.arcade { background-image: url(/arcade/merge/ui/buttons/btn-arcade-normal.png); }
 .arc-merge-btn.arcade:active { background-image: url(/arcade/merge/ui/buttons/btn-arcade-pressed.png); }
+.arc-merge-btn.start {
+  background-image: none; background-color: #F0B429; color: #2A1E08;
+  font-size: 20px; border-radius: 999px; width: 200px; height: 52px;
+  display: block; margin: 12px auto 14px;
+}
+.arc-merge-btn.rank {
+  background-image: none; background-color: #3A2460; color: #ffe66d;
+  font-size: 18px; border-radius: 999px; width: 148px; height: 52px;
+}
+.arc-merge-intro {
+  position: absolute; inset: 0; z-index: 12;
+  display: grid; place-items: center;
+  background: rgba(58, 36, 48, .48);
+  padding: 20px 12px;
+  box-sizing: border-box;
+}
+.arc-merge-intro[hidden] { display: none !important; }
+.arc-merge-intro .intro-logo { width: min(220px, 72%); height: auto; margin: 4px 0 8px; }
+.arc-merge-intro .intro-store {
+  display: inline-block; margin: 4px 0 8px; padding: 6px 14px;
+  background: #FFF3EA; border-radius: 999px; color: #3A2430; font-size: 15px;
+}
+.arc-merge-intro .tag { margin: 0 0 4px; color: #7a5a52; font-size: 14px; }
 .arc-merge-pause .arc-merge-btn.again {
   background-image: none; background-color: #F0B429; color: #2A1E08; font-size: 18px;
   border-radius: 999px; width: 180px; height: 48px; display: block; margin: 0 auto 10px;

@@ -95,7 +95,8 @@ export function plausibleArcadeRun({ score, level, durationMs, maxLevel = 40, ga
   const minMs = Math.max(0, (lv - 1) * 6000);
   if (dur > 0 && dur < minMs * 0.7) return { ok: false, reason: 'too_fast' };
   const sec = Math.max(1, dur / 1000);
-  const maxScore = Math.round(sec * 220 + lv * 2500);
+  // 여유를 둔다. 초당 220이면 Lv1·30초에 9,100이 상한이라 9,109 같은 정상 기록이 거절됐다.
+  const maxScore = Math.round(sec * 280 + lv * 2800);
   if (sc > maxScore) return { ok: false, reason: 'score_cap' };
   if (sc > 5000 && lv < 2 && dur < 20000) return { ok: false, reason: 'implausible' };
   // 절대 상한 (버그·치트 가드)
