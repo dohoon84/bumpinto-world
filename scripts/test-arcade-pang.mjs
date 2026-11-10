@@ -8,7 +8,8 @@ import {
   attemptCap, decideAttempt, monthlyBestPays, rankRows, MONTHLY_BUM, LIMIT_MSG, TITLE, OPENING_MS,
 } from '../server/phone/src/arcade/rules.js';
 import { arcadeEnabled, arcadeAtSpot, ARCADE_AT } from '../src/arcade/flag.js';
-import { arcadePlacement, hollowSeohyeonArcade } from '../src/arcade/locations.js';
+import { arcadePlacement, hollowSeohyeonArcade, arcadeBranchLabel } from '../src/arcade/locations.js';
+import { monthlyRewardSub } from '../server/phone/src/arcade/rules.js';
 import { readFileSync } from 'node:fs';
 
 const assert = (c, m) => { if (!c) throw new Error(m); };
@@ -75,6 +76,16 @@ const clean = monthlyBestPays(rankRows([
   { playerKey: 'a:3', accountId: '3', name: '삼등', score: 7000, at: 3, guest: false },
 ]), '2026-11');
 assert(clean.length === 3 && clean[0].title === TITLE && clean[0].amount === MONTHLY_BUM[0], 'clean podium');
+assert(MONTHLY_BUM[0] === 3000 && MONTHLY_BUM[1] === 2000 && MONTHLY_BUM[2] === 1000, 'monthly 3000/2000/1000');
+assert(monthlyRewardSub().includes('월간 1위 3,000') && monthlyRewardSub().includes('2위 2,000') && monthlyRewardSub().includes('3위 1,000 bum'), 'subtitle both games');
+assert(arcadeBranchLabel(arcadePlacement('arcade-seohyeon')) === 'BUMP 오락실 서현점', 'seohyeon badge');
+assert(arcadeBranchLabel(arcadePlacement('arcade-jeongja')) === 'BUMP 오락실 정자역점', 'jeongja badge');
+assert(arcadeBranchLabel({ branch: '분당점' }) === 'BUMP 오락실 분당점', 'other branch fallback');
+{
+  const pangSrc = readFileSync(new URL('../src/arcade/bumpingpang/game.js', import.meta.url), 'utf8');
+  assert(!pangSrc.includes('BUMP 오락실 서현점'), 'pang intro not hardcoded seohyeon');
+  assert(pangSrc.includes('${storeLabel}'), 'pang intro uses storeLabel');
+}
 
 
 // invalid swap restores board and stays interactive (no lock in engine)

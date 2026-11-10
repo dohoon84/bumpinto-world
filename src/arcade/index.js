@@ -1,7 +1,8 @@
 // [arcade] BUMP 오락실 — 문 앞 E 입장 · 오락기 F/클릭으로 게임 선택(범핑팡·범편의점) · R 순위판
 import * as THREE from 'three';
 import { arcadeEnabled, mergeEnabled, arcadeShotMode, ARCADE_AT, arcadeAtSpot } from './flag.js';
-import { arcadePlacement, arcadePlacements, doorOutsidePos } from './locations.js';
+import { arcadePlacement, arcadePlacements, doorOutsidePos, arcadeBranchLabel } from './locations.js';
+import { monthlyRewardSub } from '../../server/phone/src/arcade/rules.js';
 import { mountArcadeExterior } from './exterior.js';
 import { buildArcadeInterior } from './interior.js';
 import { createArcadeSfx } from './sfx.js';
@@ -177,9 +178,8 @@ export function mountArcade({
   async function openBoard(period = 'today', kind = 'pang') {
     const provider = kind === 'merge' ? mergeRank : rank;
     const title = kind === 'merge' ? '범편의점 랭킹' : '범핑팡 랭킹';
-    const sub = kind === 'merge'
-      ? 'PC·모바일 통합 · 일간·주간·월간'
-      : 'PC·모바일 통합 · 월간 1·2·3만 보상';
+    const sub = monthlyRewardSub();
+    await gateFor(provider);
     const rows = await provider.top({ period });
     const name = (() => { try { return selfName?.() || ''; } catch { return ''; } })();
     // 통합 보드: PC·모바일 같은 rows. 내 행은 실데이터에서만 골라 상단 고정
@@ -190,9 +190,11 @@ export function mountArcade({
       title, sub, period, rows, me: mine,
       game: kind,
       games: mergeOn ? ['pang', 'merge'] : ['pang'],
+      guest: knownGuest,
       onClose: () => ui.hideBoard(),
       onTab: (p) => openBoard(p, kind),
       onGame: (g) => openBoard(period, g === 'merge' ? 'merge' : 'pang'),
+      onLogin: () => { knownGuest = false; openBoard(period, kind); },
     });
     return rows;
   }
@@ -229,12 +231,14 @@ export function mountArcade({
     });
   }
 
+  let knownGuest = true;
   async function gateFor(provider) {
     try {
       const gate = await Promise.race([
         provider.gate(),
-        new Promise((r) => setTimeout(() => r({ ranked: true, local: true, guest: true }), 800)),
+        new Promise((r) => setTimeout(() => r({ ranked: true, local: true, guest: knownGuest }), 800)),
       ]);
+      if (typeof gate?.guest === 'boolean') knownGuest = gate.guest;
       return !!gate?.ranked;
     } catch { return true; }
   }
@@ -251,6 +255,8 @@ export function mountArcade({
       sfx,
       ranked,
       practice: !ranked || shot,
+      storeName: arcadeBranchLabel(store),
+      guest: knownGuest,
       getName: selfName,
       getBest: () => bestScoreLocal('pang'),
       onOpenBoard: () => openBoard('today', 'pang'),
@@ -274,6 +280,8 @@ export function mountArcade({
       sfx,
       ranked,
       practice: !ranked || shot,
+      storeName: arcadeBranchLabel(store),
+      guest: knownGuest,
       getName: selfName,
       getBest: () => bestScoreLocal('merge'),
       onOpenBoard: async (opts) => {

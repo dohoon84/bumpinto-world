@@ -1,5 +1,8 @@
 // [arcade] DOM UI: 힌트 · 페이드 · 순위판 · 음소거 — 터치는 BUMP24 식 '탭하여' 버튼
 import './ui.css';
+import { monthlyRewardSub } from '../../server/phone/src/arcade/rules.js';
+import { splitBoardMine } from './boardView.js';
+import { loginNudgeHtml, bindLoginNudge } from './loginNudge.js';
 
 const isTouch = () => {
   try { return document.body.classList.contains('mobile') || matchMedia('(hover: none) and (pointer: coarse)').matches; }
@@ -88,7 +91,7 @@ export function createArcadeUI({ onHintTap, onCabTap, onExit, onMute } = {}) {
       fade.querySelector('span').textContent = sub;
     },
     setMuted(m) { muteBtn.textContent = m ? '🔇' : '🔊'; },
-    showBoard({ title = '범핑팡 랭킹', sub = 'PC·모바일 통합 · 월간 1·2·3만 보상', rows = [], period = 'today', game = 'pang', games = ['pang'], me = null, onClose, onTab, onGame } = {}) {
+    showBoard({ title = '범핑팡 랭킹', sub = monthlyRewardSub(), rows = [], period = 'today', game = 'pang', games = ['pang'], me = null, guest = false, onClose, onTab, onGame, onLogin } = {}) {
       const pang = '/arcade/pang';
       const medal = (rank) => {
         if (rank === 1 || rank === 2 || rank === 3) {
@@ -107,13 +110,13 @@ export function createArcadeUI({ onHintTap, onCabTap, onExit, onMute } = {}) {
         const isMe = extra.includes('me');
         return `<li class="rank-row${top}${extra}">${medal(rank)}${av(r.name, isMe)}<span class="nm">${esc(r.name || '나')}</span><span class="sc">${Number(r.score || 0).toLocaleString()}</span></li>`;
       };
-      // 실제 데이터만 — 가짜 이름/점수 금지. me 는 rows 안 내 행(있으면 하단 고정)
-      const list = Array.isArray(rows) ? rows.filter((r) => r && (r.name != null || r.score != null)) : [];
-      const mine = me && (me.name != null || me.score != null) ? me : null;
+      // 실제 데이터만 — 가짜 이름/점수 금지. 목록에 내 기록이 있으면 그 줄을 강조하고, 없을 때만 아래에 고정한다.
+      const { list, mine, pinMine, isMine } = splitBoardMine(rows, me);
       const body = list.length
-        ? `<ul class="rank-list">${list.map((r) => rowHtml(r)).join('')}</ul>`
+        ? `<ul class="rank-list">${list.map((r) => rowHtml(r, isMine(r) ? ' me' : '')).join('')}</ul>`
         : `<div class="empty"><b>아직 기록이 없어요</b>첫 판을 플레이하면 여기에 순위가 쌓여요.</div>`;
-      const mineBlock = mine ? `<div class="mine"><ul class="rank-list" style="overflow:visible">${rowHtml(mine, ' me')}</ul></div>` : '';
+      const mineBlock = pinMine ? `<div class="mine"><ul class="rank-list" style="overflow:visible">${rowHtml(mine, ' me')}</ul></div>` : '';
+      const loginBlock = guest ? loginNudgeHtml() : '';
       const gameTabs = Array.isArray(games) && games.length > 1
         ? `<div class="tabs games" role="tablist" aria-label="게임">
           <button type="button" data-g="pang" class="${game === 'pang' ? 'on' : ''}">범핑팡</button>
@@ -123,6 +126,7 @@ export function createArcadeUI({ onHintTap, onCabTap, onExit, onMute } = {}) {
       modalHost.innerHTML = `<div class="arc-modal neon"><div class="board" role="dialog" aria-label="${esc(title)}">
         <button type="button" class="close-x" data-close aria-label="닫기"></button>
         <h3>${esc(title)}</h3><div class="sub">${esc(sub)}</div>
+        ${loginBlock}
         ${gameTabs}
         <div class="tabs" role="tablist" aria-label="기간">
           <button type="button" data-p="today" class="${period === 'today' ? 'on' : ''}">오늘</button>
@@ -136,6 +140,7 @@ export function createArcadeUI({ onHintTap, onCabTap, onExit, onMute } = {}) {
       modalHost.querySelectorAll('[data-close]').forEach((b) => b.addEventListener('click', () => { modalHost.innerHTML = ''; onClose?.(); }));
       modalHost.querySelectorAll('[data-p]').forEach((b) => b.addEventListener('click', () => onTab?.(b.getAttribute('data-p'))));
       modalHost.querySelectorAll('[data-g]').forEach((b) => b.addEventListener('click', () => onGame?.(b.getAttribute('data-g'))));
+      if (guest) bindLoginNudge(modalHost, { onDone: () => onLogin?.() });
     },
     hideBoard() { modalHost.innerHTML = ''; },
     dispose() { root.remove(); },

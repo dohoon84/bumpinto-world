@@ -16,34 +16,71 @@ export async function attemptsUsed(db, playerKey, gameId, storeId, day) {
   return Number(r?.n || 0);
 }
 
-export async function mergeGuestBest(db, { device, playerKey, accountId, gameId, storeId, day, name, now }) {
+export async function mergeGuestBest(db, { device, playerKey, accountId, name, now } = {}) {
+  // 같은 기기 게스트 일간·주간(일일 best 합산)·월간 best 와 판수(runs)를 계정으로 옮긴다. 높은 점수를 남기고 게스트 줄을 지운다.
   if (!device || !accountId || !playerKey) return { merged: false };
   const gk = `g:${device}`;
   if (gk === playerKey) return { merged: false };
-  const g = await one(db, 'SELECT score, name FROM arcade_best WHERE player_key = ? AND game_id = ? AND store_id = ? AND day_key = ?', gk, gameId, storeId, day);
-  if (g) {
+  const ts = Number(now) || Date.now();
+  let merged = false;
+
+  const bests = await all(db, 'SELECT game_id, store_id, day_key, score, name FROM arcade_best WHERE player_key = ?', gk);
+  for (const g of bests) {
     await db.prepare(
       `INSERT INTO arcade_best (game_id, player_key, account_id, store_id, day_key, name, guest, score, at)
        VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?)
        ON CONFLICT(player_key, game_id, store_id, day_key) DO UPDATE SET
          score = excluded.score, at = excluded.at, name = excluded.name, account_id = excluded.account_id, guest = 0
        WHERE excluded.score > arcade_best.score`,
-    ).bind(gameId, playerKey, accountId, storeId, day, name || g.name || '', Number(g.score), now).run();
-    await db.prepare('DELETE FROM arcade_best WHERE player_key = ? AND game_id = ? AND store_id = ? AND day_key = ?').bind(gk, gameId, storeId, day).run();
+    ).bind(g.game_id, playerKey, accountId, g.store_id, g.day_key, name || g.name || '', Number(g.score), ts).run();
+    await db.prepare('DELETE FROM arcade_best WHERE player_key = ? AND game_id = ? AND store_id = ? AND day_key = ?').bind(gk, g.game_id, g.store_id, g.day_key).run();
+    merged = true;
   }
-  const mk = monthKey(now);
-  const gm = await one(db, 'SELECT score, name FROM arcade_month_best WHERE player_key = ? AND game_id = ? AND store_id = ? AND month_key = ?', gk, gameId, storeId, mk);
-  if (gm) {
+
+  const months = await all(db, 'SELECT game_id, store_id, month_key, score, name FROM arcade_month_best WHERE player_key = ?', gk);
+  for (const g of months) {
     await db.prepare(
       `INSERT INTO arcade_month_best (game_id, player_key, account_id, store_id, month_key, name, guest, score, at)
        VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?)
        ON CONFLICT(player_key, game_id, store_id, month_key) DO UPDATE SET
          score = excluded.score, at = excluded.at, name = excluded.name, account_id = excluded.account_id, guest = 0
        WHERE excluded.score > arcade_month_best.score`,
-    ).bind(gameId, playerKey, accountId, storeId, mk, name || gm.name || '', Number(gm.score), now).run();
-    await db.prepare('DELETE FROM arcade_month_best WHERE player_key = ? AND game_id = ? AND store_id = ? AND month_key = ?').bind(gk, gameId, storeId, mk).run();
+    ).bind(g.game_id, playerKey, accountId, g.store_id, g.month_key, name || g.name || '', Number(g.score), ts).run();
+    await db.prepare('DELETE FROM arcade_month_best WHERE player_key = ? AND game_id = ? AND store_id = ? AND month_key = ?').bind(gk, g.game_id, g.store_id, g.month_key).run();
+    merged = true;
   }
-  return { merged: !!(g || gm) };
+
+  let runs = [];
+  try {
+    runs = await all(db, 'SELECT game_id, store_id, day_key, score, name, attempt, at, level, duration_ms FROM arcade_runs WHERE player_key = ?', gk);
+  } catch {
+    runs = await all(db, 'SELECT game_id, store_id, day_key, score, name, attempt, at FROM arcade_runs WHERE player_key = ?', gk);
+  }
+  for (const r of runs) {
+    const score = Number(r.score) || 0;
+    const nm = name || r.name || '';
+    const at = Number(r.at) || ts;
+    try {
+      await db.prepare(
+        `INSERT INTO arcade_runs (game_id, player_key, account_id, store_id, day_key, score, name, guest, attempt, at, level, duration_ms)
+         VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?)
+         ON CONFLICT(player_key, game_id, store_id, day_key, attempt) DO UPDATE SET
+           score = excluded.score, name = excluded.name, account_id = excluded.account_id, guest = 0
+         WHERE excluded.score > arcade_runs.score`,
+      ).bind(r.game_id, playerKey, accountId, r.store_id, r.day_key, score, nm, r.attempt, at, Math.max(1, Number(r.level) || 1), Math.max(0, Number(r.duration_ms) || 0)).run();
+    } catch {
+      await db.prepare(
+        `INSERT INTO arcade_runs (game_id, player_key, account_id, store_id, day_key, score, name, guest, attempt, at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?)
+         ON CONFLICT(player_key, game_id, store_id, day_key, attempt) DO UPDATE SET
+           score = excluded.score, name = excluded.name, account_id = excluded.account_id, guest = 0
+         WHERE excluded.score > arcade_runs.score`,
+      ).bind(r.game_id, playerKey, accountId, r.store_id, r.day_key, score, nm, r.attempt, at).run();
+    }
+    await db.prepare('DELETE FROM arcade_runs WHERE player_key = ? AND game_id = ? AND store_id = ? AND day_key = ? AND attempt = ?').bind(gk, r.game_id, r.store_id, r.day_key, r.attempt).run();
+    merged = true;
+  }
+  return { merged };
 }
 
 export async function recordRun(db, { playerKey, accountId, guest, gameId, storeId, name, score, level = 1, durationMs = 0, now, practice, device }) {
@@ -120,7 +157,7 @@ function asRow(r) {
   return { playerKey: r.player_key, accountId: r.account_id || null, name: r.name, guest: !!r.guest, score: Number(r.score), at: Number(r.at) };
 }
 
-/** 월간 정산 — 도훈님이 cron/수동으로. 1·2·3만 지급. */
+/** 월간 정산 — 도훈님이 cron/수동으로. 계정 1·2·3등만 지급(게스트 제외). */
 export async function settleArcadeMonth(db, env, month, gameId = GAME_ID, storeId = 'arcade-seohyeon', now = Date.now()) {
   const raw = (await all(db, 'SELECT player_key, account_id, name, guest, score, at FROM arcade_month_best WHERE game_id = ? AND store_id = ? AND month_key = ?', gameId, storeId, month)).map(asRow);
   const rows = rankRows(raw);

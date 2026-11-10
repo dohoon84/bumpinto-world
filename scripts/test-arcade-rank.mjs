@@ -2,9 +2,12 @@
 import { readFileSync } from 'node:fs';
 import {
   kstDayKey, monthKey, resolveGameId, GAME_ID, MERGE_GAME_ID, decideAttempt, OPENING_MS,
+  monthlyRewardSub, MONTHLY_BUM, monthlyBestPays, rankRows,
 } from '../server/phone/src/arcade/rules.js';
 import { storeBoard, mergeGuestBest, recordRun } from '../server/phone/src/arcade/db.js';
 import { arcadeShotMode, mergeEnabled, MERGE_GAME_ID as CLIENT_MERGE_ID } from '../src/arcade/flag.js';
+import { splitBoardMine, sameRankPlayer } from '../src/arcade/boardView.js';
+import { LOGIN_NUDGE_TEXT } from '../src/arcade/loginNudge.js';
 
 const assert = (c, m) => { if (!c) throw new Error(m); };
 
@@ -21,11 +24,14 @@ function memoryD1() {
       async run() {
         const s = sql;
         if (/INSERT INTO arcade_runs/.test(s)) {
-          const gameId = binds[0], playerKey = binds[1], accountId = binds[2], storeId = binds[3];
-          const day = binds[4], score = binds[5], name = binds[6], guest = binds[7], attempt = binds[8], at = binds[9];
-          const exists = runs.some((r) => r.player_key === playerKey && r.game_id === gameId && r.store_id === storeId && r.day_key === day && r.attempt === attempt);
-          if (!exists) runs.push({ game_id: gameId, player_key: playerKey, account_id: accountId, store_id: storeId, day_key: day, score, name, guest, attempt, at });
-          return { meta: { changes: exists ? 0 : 1 } };
+          let gameId, playerKey, accountId, storeId, day, score, name, guest, attempt, at;
+          if (/, 0, \?/.test(s)) [gameId, playerKey, accountId, storeId, day, score, name, attempt, at] = binds, guest = 0;
+          else [gameId, playerKey, accountId, storeId, day, score, name, guest, attempt, at] = binds;
+          const i = runs.findIndex((r) => r.player_key === playerKey && r.game_id === gameId && r.store_id === storeId && r.day_key === day && r.attempt === attempt);
+          const row = { game_id: gameId, player_key: playerKey, account_id: accountId, store_id: storeId, day_key: day, score, name, guest, attempt, at };
+          if (i < 0) runs.push(row);
+          else if (Number(score) > Number(runs[i].score)) runs[i] = { ...runs[i], ...row };
+          return { meta: { changes: 1 } };
         }
         if (/INSERT INTO arcade_best/.test(s)) {
           let gameId, playerKey, accountId, storeId, day, name, guest, score, at;
@@ -61,6 +67,13 @@ function memoryD1() {
           }
           return { meta: { changes: 1 } };
         }
+        if (/DELETE FROM arcade_runs/.test(s)) {
+          const [gk, gameId, storeId, day, attempt] = binds;
+          for (let i = runs.length - 1; i >= 0; i--) {
+            if (runs[i].player_key === gk && runs[i].game_id === gameId && runs[i].store_id === storeId && runs[i].day_key === day && runs[i].attempt === attempt) runs.splice(i, 1);
+          }
+          return { meta: { changes: 1 } };
+        }
         if (/SELECT COUNT\(\*\)/.test(s)) {
           const [playerKey, gameId, storeId, day] = binds;
           const n = runs.filter((r) => r.player_key === playerKey && r.game_id === gameId && r.store_id === storeId && r.day_key === day).length;
@@ -78,6 +91,15 @@ function memoryD1() {
         if (/FROM arcade_best WHERE player_key = \? AND game_id = \? AND store_id = \? AND day_key = \?/.test(s)) {
           const [pk, gid, sid, day] = binds;
           return best.filter((r) => r.player_key === pk && r.game_id === gid && r.store_id === sid && r.day_key === day);
+        }
+        if (/FROM arcade_best WHERE player_key = \?/.test(s) && binds.length === 1) {
+          return best.filter((r) => r.player_key === binds[0]);
+        }
+        if (/FROM arcade_month_best WHERE player_key = \?/.test(s) && binds.length === 1) {
+          return month.filter((r) => r.player_key === binds[0]);
+        }
+        if (/FROM arcade_runs WHERE player_key = \?/.test(s) && binds.length === 1) {
+          return runs.filter((r) => r.player_key === binds[0]);
         }
         if (/FROM arcade_best WHERE game_id = \? AND store_id = \? AND day_key >= \?/.test(s)) {
           const [gid, sid, since] = binds;
@@ -199,5 +221,53 @@ assert(src.includes("Content-Type: 'text/plain") || readFileSync(new URL('../src
 const rankSrc = readFileSync(new URL('../src/arcade/rank.js', import.meta.url), 'utf8');
 assert(rankSrc.includes("credentials: 'include'"), 'client sends credentials');
 assert(rankSrc.includes('arcadeShotMode()'), 'submit forces practice in ?shot');
+
+
+assert(MONTHLY_BUM[0] === 3000 && MONTHLY_BUM[1] === 2000 && MONTHLY_BUM[2] === 1000, 'monthly rewards 3000/2000/1000');
+assert(monthlyRewardSub().includes('1위 3,000') && monthlyRewardSub().includes('2위 2,000') && monthlyRewardSub().includes('3위 1,000 bum'), 'reward subtitle');
+assert(LOGIN_NUDGE_TEXT.includes('로그인하면'), 'guest nudge copy');
+{
+  const guestOnly = monthlyBestPays(rankRows([
+    { playerKey: 'g:x', name: '손님', score: 99999, at: 0, guest: true },
+  ]), '2026-11');
+  assert(guestOnly.length === 0, 'guest never paid even as rank 1');
+}
+
+// 목록에 있으면 아래를 또 붙이지 않는다
+{
+  const me = { playerKey: 'a:1', name: 'dd', score: 5445, rank: 1 };
+  const rows = [{ playerKey: 'a:1', name: 'dd', score: 5445, rank: 1 }];
+  const split = splitBoardMine(rows, me);
+  assert(split.inList && !split.pinMine, 'in-list mine is not pinned again');
+  assert(split.isMine(rows[0]), 'highlight in place');
+  assert(sameRankPlayer(rows[0], me), 'same player');
+  const outside = splitBoardMine(rows, { playerKey: 'a:99', name: '나', score: 10, rank: 21 });
+  assert(outside.pinMine, 'pin only when outside the shown list');
+}
+
+// 로그인 시 같은 기기 게스트의 여러 날·두 게임·runs 를 계정으로 합친다
+{
+  const mdb = memoryD1();
+  mdb._best.push({ game_id: 'bumstore', player_key: 'g:devX', account_id: null, store_id: SID, day_key: '2026-11-10', name: 'dd', guest: 1, score: 100, at: 1 });
+  mdb._best.push({ game_id: 'bumstore', player_key: 'g:devX', account_id: null, store_id: SID, day_key: '2026-11-08', name: 'dd', guest: 1, score: 80, at: 2 });
+  mdb._best.push({ game_id: 'bumpingpang', player_key: 'g:devX', account_id: null, store_id: SID, day_key: '2026-11-10', name: 'dd', guest: 1, score: 5445, at: 3 });
+  mdb._best.push({ game_id: 'bumpingpang', player_key: 'a:88', account_id: '88', store_id: SID, day_key: '2026-11-10', name: 'dd', guest: 0, score: 4000, at: 4 });
+  mdb._month.push({ game_id: 'bumpingpang', player_key: 'g:devX', account_id: null, store_id: SID, month_key: '2026-10', name: 'dd', guest: 1, score: 3000, at: 5 });
+  mdb._runs.push({ game_id: 'bumpingpang', player_key: 'g:devX', account_id: null, store_id: SID, day_key: '2026-11-10', score: 5445, name: 'dd', guest: 1, attempt: 1, at: 3 });
+  await mergeGuestBest(mdb, { device: 'devX', playerKey: 'a:88', accountId: '88', name: 'dd', now });
+  assert(!mdb._best.some((r) => r.player_key === 'g:devX'), 'all guest daily rows removed');
+  assert(!mdb._month.some((r) => r.player_key === 'g:devX'), 'guest month rows removed');
+  assert(!mdb._runs.some((r) => r.player_key === 'g:devX'), 'guest runs removed');
+  const pangToday = mdb._best.find((r) => r.player_key === 'a:88' && r.game_id === 'bumpingpang' && r.day_key === '2026-11-10');
+  assert(pangToday && pangToday.score === 5445, 'kept higher guest pang score on account');
+  assert(mdb._best.some((r) => r.player_key === 'a:88' && r.game_id === 'bumstore' && r.day_key === '2026-11-08' && r.score === 80), 'older guest day migrated');
+  assert(mdb._month.find((r) => r.player_key === 'a:88' && r.month_key === '2026-10')?.score === 3000, 'past month migrated');
+  assert(mdb._runs.some((r) => r.player_key === 'a:88' && r.score === 5445 && r.guest === 0), 'run migrated to account');
+  const pangBoard = await storeBoard(mdb, 'bumpingpang', SID, 'today', now);
+  assert(pangBoard.rows.filter((r) => r.name === 'dd').length === 1, 'one account row on board');
+}
+
+const authSrc = readFileSync(new URL('../server/phone/src/account/routes.js', import.meta.url), 'utf8');
+assert(authSrc.includes('mergeGuestBest'), 'login/link migrates arcade guest records');
 
 console.log('ok arcade-rank', { today: today.rows.length, week: week.rows.length, month: month.rows.length });

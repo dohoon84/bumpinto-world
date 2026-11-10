@@ -9,7 +9,10 @@ export function resolveGameId(raw) {
 }
 export const STORE_ID = 'arcade-seohyeon'; // 오락실 전광판 1개(매장 통합)
 export const LIMIT_MSG = '오늘 도전 완료, 연습은 계속 가능';
-export const MONTHLY_BUM = [5000, 3000, 2000]; // 월간 1·2·3만. 4~10 없음.
+export const MONTHLY_BUM = [3000, 2000, 1000]; // 월간 1·2·3등. 참여·일일 지급 없음. 게스트는 지급하지 않음.
+export function monthlyRewardSub() {
+  return `PC·모바일 통합 · 월간 1위 ${MONTHLY_BUM[0].toLocaleString('ko-KR')} · 2위 ${MONTHLY_BUM[1].toLocaleString('ko-KR')} · 3위 ${MONTHLY_BUM[2].toLocaleString('ko-KR')} bum`;
+}
 export const MIN_PARTICIPANTS = 5;
 export const TITLE = '범핑팡왕';
 
@@ -41,7 +44,7 @@ export function rankRows(rows) {
   return [...rows].sort((a, b) => b.score - a.score || a.at - b.at).map((r, i) => ({ ...r, rank: i + 1 }));
 }
 
-/** 월 최고점(플레이어별 best)으로 순위 → 1·2·3만 지급. 게스트·계정 없는 줄 제외. */
+/** 월 최고점(플레이어별 best)으로 순위 → 1·2·3등만 지급. 게스트·계정 없는 줄은 절대 지급하지 않음. */
 export function monthlyBestPays(rows, month, gameId = GAME_ID) {
   return rows
     .filter((r) => r.rank <= 3 && r.accountId && !r.guest)

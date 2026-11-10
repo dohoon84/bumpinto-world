@@ -99,6 +99,20 @@ async function linkAndMigrate(env, accountId, deviceId, now, waitUntil) {
     const p = Promise.all(rec.orphanKeys.map((k) => env.PHOTOS.delete(k).catch(() => {})));
     waitUntil ? waitUntil(p) : await p;
   }
+  // [arcade] 같은 기기 게스트 오락실 기록을 계정으로 합친다(로그인·기기연결 직후)
+  const arcadeDevice = String(deviceId || "").replace(/[^\w.-]/g, "").slice(0, 80);
+  if (arcadeDevice) {
+    try {
+      const { mergeGuestBest } = await import("../arcade/db.js");
+      await mergeGuestBest(db, {
+        device: arcadeDevice,
+        playerKey: `a:${accountId}`,
+        accountId,
+        name: "",
+        now,
+      });
+    } catch { /* 오락실 테이블이 없어도 로그인은 성공 */ }
+  }
   return {
     link,
     primaryUserId: rec.primaryUserId,

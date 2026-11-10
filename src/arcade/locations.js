@@ -78,6 +78,14 @@ export function doorRingWouldBlock(x, z, store, r = 0.4) {
   return d < 0.45 + r && d > 0.32;
 }
 
+export function arcadeBranchLabel(store) {
+  const name = String(store?.name || '').trim();
+  if (name) return name;
+  const branch = String(store?.branch || '').trim();
+  if (branch) return `BUMP 오락실 ${branch}`;
+  return 'BUMP 오락실';
+}
+
 export function arcadePlacements() {
   return ARCADE_PLACEMENTS;
 }
