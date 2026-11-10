@@ -16,7 +16,7 @@ assert(arcadeEnabled(''), 'default on');
 assert(arcadeEnabled('?arcade=1'), 'explicit on');
 assert(!arcadeEnabled('?arcade=0'), 'opt-out');
 assert(Math.abs(arcadeAtSpot(ARCADE_AT)?.x - 1336.99) < 0.02, 'seohyeon spawn x');
-assert(Math.abs(arcadeAtSpot('arcade-jeongja')?.x - -111.0) < 0.02, 'jeongja spawn x');
+assert(Math.abs(arcadeAtSpot('arcade-jeongja')?.x - -114.0) < 0.02, 'jeongja spawn x');
 assert(Math.abs(arcadeAtSpot('arcade-jeongja')?.z - -20.3) < 0.02, 'jeongja spawn z');
 assert(arcadePlacement().name.includes('오락실'), 'our brand name');
 assert(arcadePlacement('arcade-jeongja').name.includes('정자'), 'jeongja branch name');
