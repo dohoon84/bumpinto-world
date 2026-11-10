@@ -446,17 +446,19 @@
 
 /* 통합 랭킹 모달 — PC·모바일 동일 */
 #arc-root .arc-modal {
-  pointer-events: auto; position: fixed; inset: 0; z-index: 95;
+  pointer-events: auto; position: fixed; inset: 0; z-index: 400;
   background: rgba(40, 90, 140, .45);
   display: grid; place-items: center; padding: 12px;
+  box-sizing: border-box;
 }
 #arc-root .arc-modal .board {
-  width: min(420px, 94vw); max-height: min(90dvh, 720px);
+  width: min(420px, 94vw); max-height: min(90dvh, calc(100svh - 16px), 720px);
   background: linear-gradient(180deg, #fff9e8, #ffe8c8);
   color: #1a1030; border-radius: 24px; padding: 16px 14px 14px;
   border: 4px solid #fff;
   box-shadow: 0 10px 0 #ff9ecd, 0 22px 50px rgba(0,0,0,.3);
   display: flex; flex-direction: column; overflow: hidden;
+  min-height: 0; box-sizing: border-box;
 }
 #arc-root .arc-modal .board h3 { margin: 0 0 2px; font-size: 20px; font-weight: 900; text-align: center; padding: 0 60px; box-sizing: border-box; }
 #arc-root .arc-modal .board .sub { opacity: .65; font-size: 12px; margin-bottom: 10px; text-align: center; font-weight: 700; word-break: keep-all; overflow-wrap: break-word; line-height: 1.45; padding: 0 48px; box-sizing: border-box; max-width: 100%; white-space: normal; }
@@ -487,7 +489,7 @@
   box-shadow: 0 4px 0 #d4a010;
 }
 #arc-root .arc-modal .rank-list {
-  list-style: none; margin: 0; padding: 0; overflow: auto; flex: 1; min-height: 120px;
+  list-style: none; margin: 0; padding: 0; overflow: auto; flex: 1 1 auto; min-height: 0;
   display: flex; flex-direction: column; gap: 8px;
 }
 #arc-root .arc-modal .rank-row {
@@ -529,6 +531,10 @@
   word-break: keep-all; overflow-wrap: normal;
 }
 #arc-root .arc-modal .empty b { display: block; font-size: 16px; color: #1a1030; margin-bottom: 6px; }
+#arc-root .arc-modal .board h3,
+#arc-root .arc-modal .board .sub,
+#arc-root .arc-modal .tabs,
+#arc-root .arc-modal .close { flex-shrink: 0; }
 #arc-root .arc-modal .close {
   margin-top: 12px; width: 100%; border: 0; border-radius: 14px; padding: 12px;
   font-weight: 900; cursor: pointer;
@@ -541,6 +547,27 @@
   border: 3px solid #ffe66d; box-shadow: 0 16px 40px rgba(0,0,0,.3); z-index: 100;
 }
 #arc-root.is-pang { z-index: 5200; }
+#arc-root.is-board { z-index: 5300; }
+#arc-root.is-board .arc-hint,
+#arc-root.is-board .arc-cab-hint { display: none !important; }
+@media (max-height: 520px) {
+  #arc-root .arc-modal { padding: 6px 8px; }
+  #arc-root .arc-modal .board {
+    max-height: calc(100dvh - 12px);
+    max-height: calc(100svh - 12px);
+    width: min(520px, 96vw);
+    padding: 12px 12px 10px;
+  }
+  #arc-root .arc-modal.neon .board { padding: 14px 12px 10px; }
+  #arc-root .arc-modal.neon .board::before { border-width: 24px; }
+  #arc-root .arc-modal .board h3 { font-size: 17px; }
+  #arc-root .arc-modal .board .sub { font-size: 11px; margin-bottom: 6px; padding: 0 40px; }
+  #arc-root .arc-modal .tabs { margin-bottom: 6px; }
+  #arc-root .arc-modal .tabs button { padding: 6px 8px; }
+  #arc-root .arc-modal.neon .tabs button { font-size: 16px; padding: 7px 6px; }
+  #arc-root .arc-modal .close { margin-top: 8px; padding: 10px; }
+  #arc-root .arc-modal.neon .close-x { width: 44px; height: 46px; top: 6px; right: 6px; }
+}
 
 
 /* 터치 '탭하여' 버튼 — BUMP24 와 같은 손+물결 */
@@ -1364,8 +1391,9 @@
 .arc-merge {
   pointer-events: auto; position: fixed; left: 0; top: var(--merge-vv-top, 0px); z-index: 90;
   width: var(--merge-vvw, 100vw); height: var(--merge-vvh, 100dvh);
-  max-height: 100svh;
-  min-height: 0;
+  min-height: 100%;
+  min-height: 100dvh;
+  min-height: 100svh;
   font-family: "Jua", Pretendard, "Noto Sans KR", sans-serif; color: #3A2430;
   background: #FFF8F0 url(/arcade/merge/bg/bg-store.jpg) center / cover no-repeat;
   overflow: hidden;
@@ -1380,18 +1408,20 @@
 .arc-merge-left, .arc-merge-right { display: none; }
 .arc-merge-top {
   width: min(390px, 100%); display: flex; align-items: flex-start; gap: 8px;
-  padding: max(10px, env(safe-area-inset-top, 0px)) 12px 4px; box-sizing: border-box; z-index: 4;
+  padding: max(10px, env(safe-area-inset-top, 0px)) 12px 4px; box-sizing: border-box; z-index: 5;
+  position: relative;
   flex: 0 0 auto;
 }
 .arc-merge-score {
   /* Do not use the painted PNG labels — "다음" sat on the blue stroke.
      CSS boxes keep the cream fill + pastel border, HTML labels sit inside. */
-  flex: 0 0 auto; width: 164px; aspect-ratio: 360 / 220; height: auto;
-  box-sizing: border-box; position: relative; overflow: hidden;
+  flex: 0 0 auto; width: 164px; min-height: 96px; aspect-ratio: 360 / 220; height: auto;
+  box-sizing: border-box; position: relative; overflow: visible;
   display: flex; flex-direction: column; align-items: center; justify-content: center;
-  gap: 4px; padding: 8px 12px 8px;
+  gap: 2px; padding: 10px 14px 10px;
   background: linear-gradient(180deg, #FFFEFC 0%, #FFFBF7 50%, #FFF8F0 100%);
   border: 4px solid #F5B5AA; border-radius: 28px;
+  z-index: 2;
 }
 .arc-merge-score .lbl {
   display: block; position: static; flex: 0 0 auto;
@@ -1405,8 +1435,8 @@
 }
 .arc-merge-score b {
   position: static; transform: none; flex: 0 0 auto;
-  text-align: center;
-  font-family: "Black Han Sans", "Jua", sans-serif; font-size: 36px; color: #B8322B;
+  text-align: center; max-width: 100%;
+  font-family: "Black Han Sans", "Jua", sans-serif; font-size: clamp(26px, 8vw, 36px); color: #B8322B;
   line-height: 1; letter-spacing: -.03em;
 }
 .arc-merge-score .best {
@@ -1463,15 +1493,21 @@
 }
 .arc-merge-cv { position: absolute; z-index: 1; touch-action: none; }
 .arc-merge-floatbum {
-  position: absolute; left: max(4px, calc(50% - 190px)); top: 118px; width: 44px; height: auto;
-  z-index: 4; filter: drop-shadow(0 4px 0 rgba(0,0,0,.08));
+  position: absolute; left: max(8px, calc(50% - 186px));
+  top: calc(max(10px, env(safe-area-inset-top, 0px)) + 118px);
+  width: 40px; height: auto;
+  z-index: 3; filter: drop-shadow(0 4px 0 rgba(0,0,0,.08));
+  pointer-events: none;
 }
 .arc-merge-bubble {
   margin: 0; background: #fff; border-radius: 16px; padding: 6px 10px; font-size: 12px;
   box-shadow: 0 3px 0 rgba(196,90,82,.25);
 }
 .arc-merge-bubble.float {
-  position: absolute; left: max(52px, calc(50% - 140px)); top: 126px; z-index: 4;
+  position: absolute; left: max(50px, calc(50% - 142px));
+  top: calc(max(10px, env(safe-area-inset-top, 0px)) + 124px);
+  z-index: 3;
+  pointer-events: none;
 }
 .arc-merge-hint {
   margin: 8px 0 4px; background: #fff; color: #C45A52; border-radius: 999px;
@@ -1673,7 +1709,7 @@ html:has(.arc-merge), body:has(.arc-merge) {
   min-height: 100lvh;
 }
 #arc-root:has(.arc-merge) {
-  background: #FFF8F0;
+  background: #FFF8F0 url(/arcade/merge/bg/bg-store.jpg) center / cover no-repeat;
   min-height: 100%;
   min-height: 100dvh;
   min-height: 100lvh;

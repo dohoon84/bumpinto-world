@@ -84,6 +84,7 @@ export function mountMobileHud({ handset } = {}) {
     <div class="m-actions">
       <button type="button" class="m-act m-act-ride" data-act="ride" hidden>${svg('bike', 26)}<span></span></button>
       <button type="button" class="m-act m-act-ride2" data-act="ride2" hidden></button>
+      <button type="button" class="m-act m-act-ride3" data-act="ride3" hidden></button>
       <button type="button" class="m-act m-act-run" data-act="run">${svg('run', 20)}<span>${t('달리기', 'Run')}</span></button>
       <button type="button" class="m-act m-act-sit" data-act="sit">${svg('sit', 20)}<span>${t('앉기', 'Sit')}</span></button>
       <button type="button" class="m-act m-act-emote" data-tg="emote">${svg('emote', 20)}<span>${t('이모트', 'Emote')}</span></button>
@@ -450,6 +451,7 @@ export function mountMobileHud({ handset } = {}) {
   //   지하철(대합실·열차) → 버스(하차 벨/내리기) → 택시(타기·목적지·세워주세요) → 정차 버스 타기 → 탈것 안내(트럭·관리자 바이크·선물 탈것)
   //   → 카카오바이크 → 지하철 출입구 → 반려견 놀이터 문 → 후원 전단지
   const rideAct2 = q('[data-act="ride2"]');
+  const rideAct3 = q('[data-act="ride3"]');
   let curActs = [];
   const key = (code) => () => pressKey(code);
   const clk = (el) => () => el?.click();
@@ -504,10 +506,12 @@ export function mountMobileHud({ handset } = {}) {
     // [arcade] 오락실 — E/F/R 대신 터치 행동 버튼 (BUMP24 문 앞과 같은 패턴)
     const arc = J?.arcadeGame;
     if (arc && !S?.active) {
+      if (arc.boardOpen) return A;
       if (arc.active && !arc.playing) {
         A.riding = true; // 안에서는 걷기 대신 행동 강조
         add(t('범핑팡', 'Play'), 'board', () => arc.actPlay?.() || pressKey('KeyF'));
         add(t('나가기', 'Exit'), 'door', () => arc.actLeave?.() || pressKey('KeyE'), false);
+        add(t('랭킹', 'Ranks'), 'board', () => arc.actBoard?.() || pressKey('KeyR'), false);
         return A;
       }
       if (!arc.active) {
@@ -553,7 +557,9 @@ export function mountMobileHud({ handset } = {}) {
     const riding = acts.riding;
     paintAct(rideAct, acts[0]);
     paintAct(rideAct2, acts[1]);
+    if (rideAct3) paintAct(rideAct3, acts[2]);
     document.body.classList.toggle('m-act2', !!acts[1]);
+    document.body.classList.toggle('m-act3', !!acts[2]);
     document.body.classList.toggle('m-ctx-sit', acts[0]?.icon === 'sit');
     document.body.classList.toggle('m-riding', riding);
     paintRide(riding);

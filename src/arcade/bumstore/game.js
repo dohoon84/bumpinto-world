@@ -385,7 +385,7 @@ export function mountBumStore({
       ctx.lineWidth = 1.6;
       ctx.beginPath();
       ctx.moveTo(px, py + pr * 0.2);
-      ctx.lineTo(px, DROP_PAD + dangerWorldY + 70);
+      ctx.lineTo(px, DROP_PAD + dangerWorldY);
       ctx.stroke();
       ctx.restore();
       drawItem(pending.stage, px, py, pr, 0);

@@ -104,6 +104,7 @@ export function mountArcade({
 
   let fade = { t: 0, phase: '', title: '', sub: '', leaving: false };
   let returnPos = null, nearDoor = false, nearBoard = false, nearCab = null;
+  let boardOpen = false;
   const ray = new THREE.Raycaster();
   const pointer = new THREE.Vector2(0, 0);
 
@@ -151,9 +152,18 @@ export function mountArcade({
     busy = true; fade = { t: 0, phase: 'out', title: '밖으로', sub: '또 와요!', leaving: true };
     ui.setCabHint(''); ui.setHint(''); sfx.door(); sfx.stopBgm();
   }
+  function closeBoard() {
+    boardOpen = false;
+    ui.root?.classList.remove('is-board');
+    ui.hideBoard();
+    if (active && !playing()) setLobbyHints();
+  }
   function finishLeave() {
     onInterior?.('', null);
     interior?.dispose(); interior = null; active = false;
+    boardOpen = false;
+    ui.root?.classList.remove('is-board');
+    ui.hideBoard();
     ui.setInside(false); ui.setPlaying?.(false); ui.setCabHint(''); ui.setHint('');
     const p = getPlayer?.()?.position;
     const out = store ? doorOutsidePos(store) : null;
@@ -186,12 +196,16 @@ export function mountArcade({
     const mine = (useFresh && fresh.me) || rows.find((r) => r.me || r.self)
       || (name ? rows.find((r) => String(r.name || '') === name) : null)
       || null;
+    ui.setHint('');
+    ui.setCabHint('');
+    boardOpen = true;
+    ui.root?.classList.add('is-board');
     ui.showBoard({
       title, period, rows, me: mine,
       game: kind,
       games: mergeOn ? ['pang', 'merge'] : ['pang'],
       guest: guestNow(),
-      onClose: () => ui.hideBoard(),
+      onClose: () => closeBoard(),
       onTab: (p) => openBoard(p, kind),
       onGame: (g) => openBoard(period, g === 'merge' ? 'merge' : 'pang'),
       onLogin: () => { knownGuest = false; openBoard(period, kind); },
@@ -352,7 +366,8 @@ export function mountArcade({
   }
 
   function onPointerDown(e) {
-    if (!active || playing() || !interior) return;
+    if (!active || playing() || !interior || boardOpen) return;
+    if (e.target?.closest?.('#arc-root .arc-modal, .arc-hint, .arc-cab-hint')) return;
     const cam = interior.camera;
     const rect = renderer?.domElement?.getBoundingClientRect?.();
     if (!rect) return;
@@ -385,6 +400,7 @@ export function mountArcade({
     get interior() { return interior; },
     get nearDoor() { return nearDoor; },
     get nearBoard() { return nearBoard; },
+    get boardOpen() { return boardOpen; },
     get playing() { return playing(); },
     get sessionKind() { return sessionKind; },
     get merge() { return sessionKind === 'merge' ? session : null; },
