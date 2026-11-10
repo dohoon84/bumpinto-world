@@ -124,11 +124,18 @@ function busLaneMarkings(pts, data) {
   };
   const textTex = loadTex('text-buslane.png');
   const textMat = new THREE.MeshBasicMaterial({ map: textTex, transparent: true, depthWrite: false, side: THREE.DoubleSide });
+  // 노면 글자: 세로 PNG(아래 버 → 위 용). 로컬 +Y = 진행, 로컬 +X = 진행 오른쪽, 법선 +Z = 위.
+  // 운전자가 보면 글자가 바로 서 있고, 가까운 쪽(아래)이 「버」, 먼 쪽(위)이 「용」. 앞면이 위라 좌우 반전 없음.
+  const travel = new THREE.Vector3();
+  const right = new THREE.Vector3();
+  const up = new THREE.Vector3(0, 1, 0);
+  const basis = new THREE.Matrix4();
   g.add(placeDecals(pts, busOff, 90, (x, z, ang) => {
-    const m = new THREE.Mesh(new THREE.PlaneGeometry(9.2, 2.15), textMat);
-    m.rotation.order = 'YXZ';
-    m.rotation.y = ang;
-    m.rotation.x = -Math.PI / 2;
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(2.15, 9.2), textMat);
+    travel.set(Math.sin(ang), 0, Math.cos(ang));
+    right.set(-Math.cos(ang), 0, Math.sin(ang));
+    basis.makeBasis(right, travel, up);
+    m.quaternion.setFromRotationMatrix(basis);
     m.position.set(x, 0.38, z);
     m.frustumCulled = false;
     return m;
