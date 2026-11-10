@@ -159,6 +159,24 @@ export function mountBumpingPang({
   root.appendChild(wrap);
   try { prewarmSprites(); } catch { /* */ }
 
+  function viewportBox() {
+    try {
+      const vv = window.visualViewport;
+      if (vv && vv.height) {
+        return { w: Math.round(vv.width), h: Math.round(vv.height), top: Math.round(vv.offsetTop || 0) };
+      }
+    } catch { /* */ }
+    try { return { w: innerWidth, h: innerHeight, top: 0 }; }
+    catch { return { w: 390, h: 844, top: 0 }; }
+  }
+  function applyViewport() {
+    const { w, h, top } = viewportBox();
+    wrap.style.setProperty('--pang-vvw', `${w}px`);
+    wrap.style.setProperty('--pang-vvh', `${h}px`);
+    wrap.style.setProperty('--pang-vv-top', `${top}px`);
+  }
+  applyViewport();
+
   const cv = wrap.querySelector('canvas');
   const ctx = cv.getContext('2d');
   const el = {
@@ -201,10 +219,21 @@ export function mountBumpingPang({
   let hover = null;
   let orientBlocked = false;
   let bestScore = 0;
+  let resultPosted = null;
   try { bestScore = Math.max(0, Number(getBest?.()) || 0); } catch { bestScore = 0; }
-  if (el.best) el.best.textContent = String(bestScore);
   const introBest = wrap.querySelector('[data-intro-best]');
-  if (introBest) introBest.textContent = Number(bestScore).toLocaleString();
+  function paintBest() {
+    const txt = Number(bestScore).toLocaleString();
+    if (el.best) el.best.textContent = txt;
+    if (introBest) introBest.textContent = txt;
+  }
+  function setBest(n) {
+    const v = Math.max(0, Number(n) || 0);
+    if (v > bestScore) bestScore = v;
+    paintBest();
+    return bestScore;
+  }
+  paintBest();
 
   function freshCellAnim() {
     return Array.from({ length: ROWS }, () => Array.from({ length: COLS }, () => ({ y: 0, sx: 1, sy: 1, pop: 0, flash: 0 })));
@@ -402,7 +431,7 @@ export function mountBumpingPang({
       el.scoreWrap.classList.add('bump');
     }
     bestScore = Math.max(bestScore, score);
-    if (el.best) el.best.textContent = Math.max(bestScore, score).toLocaleString();
+    paintBest();
     if (el.lv) el.lv.textContent = String(level);
     {
       const sec = Math.max(0, Math.ceil(left));
@@ -794,6 +823,7 @@ export function mountBumpingPang({
     if (orientBlocked) return; // 세로로 돌려야 시작
     if (over) { el.result.hidden = true; over = false; }
     if (!el.count.hidden) return;
+    resultPosted = null;
     countdownThenPlay();
   }
 
@@ -886,15 +916,22 @@ export function mountBumpingPang({
       el.result.hidden = true; over = false; playing = false; start();
     });
     el.result.querySelector('[data-leave]')?.addEventListener('click', () => dispose(true));
-    el.result.querySelector('[data-board]')?.addEventListener('click', () => onResult?.({ score: finalScore, level: finalLevel, durationMs, ranked: ranked && !practice, name, openBoard: true }));
+    el.result.querySelector('[data-board]')?.addEventListener('click', async () => {
+      try { await resultPosted; } catch { /* */ }
+      onOpenBoard?.();
+    });
     if (guestNow()) bindLoginNudge(el.result);
-    onResult?.({ score: finalScore, level: finalLevel, durationMs, ranked: ranked && !practice, name, openBoard: false });
+    if (!resultPosted) {
+      resultPosted = Promise.resolve(onResult?.({ score: finalScore, level: finalLevel, durationMs, ranked: ranked && !practice, name, openBoard: false }));
+    }
   }
 
   function dispose(exit = false) {
     cancelAnimationFrame(raf);
     try { window.removeEventListener('resize', onOrient); } catch { /* */ }
     try { window.removeEventListener('orientationchange', onOrient); } catch { /* */ }
+    try { window.visualViewport?.removeEventListener('resize', onOrient); } catch { /* */ }
+    try { window.visualViewport?.removeEventListener('scroll', onOrient); } catch { /* */ }
     try { sfx?.setUrgentBgm?.(false); } catch { /* */ }
     try { sfx?.stopBgm?.(); } catch { /* */ }
     wrap.remove();
@@ -918,9 +955,11 @@ export function mountBumpingPang({
     if (next) sfx?.stopBgm?.(); else if (playing && !over) sfx?.startBgm?.();
   });
 
-  function onOrient() { syncOrient(); }
+  function onOrient() { applyViewport(); syncOrient(); }
   window.addEventListener('resize', onOrient);
   window.addEventListener('orientationchange', onOrient);
+  try { window.visualViewport?.addEventListener('resize', onOrient); } catch { /* */ }
+  try { window.visualViewport?.addEventListener('scroll', onOrient); } catch { /* */ }
   syncOrient();
 
   syncHud(); draw();
@@ -928,6 +967,7 @@ export function mountBumpingPang({
   return {
     dispose: () => dispose(false),
     get score() { return score; },
+    setBest,
     debug: {
       async showResult(opts = {}) {
         if (opts.score != null) score = Number(opts.score) || 0;

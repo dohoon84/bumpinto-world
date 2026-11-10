@@ -1,4 +1,5 @@
 // [arcade-pang] 범핑팡 랭킹 규칙. 보상은 월간 1·2·3등만. 참여보상·일일보상 없음.
+// 오락실 게임(범핑팡·범편의점)은 일일 도전 횟수 제한이 없다. BUMP24 편의점 털기와 다름.
 export const OPENING_MS = Date.parse('2026-11-09T15:00:00.000Z'); // 2026-11-10 00:00 KST (도훈 확정 전 초안)
 export const GAME_ID = 'bumpingpang';
 export const MERGE_GAME_ID = 'bumstore';
@@ -37,14 +38,15 @@ export function weekKey(ms) {
   return new Date(monday).toISOString().slice(0, 10);
 }
 export function monthKey(ms) { const p = kstParts(ms); return `${p.y}-${String(p.m).padStart(2, '0')}`; }
-export function attemptCap(guest) { return guest ? 1 : 5; }
+/** 오락실 게임은 일일 횟수 제한이 없다. 호환용으로 남겨 두며 항상 무제한. */
+export function attemptCap(_guest) { return null; }
 
 export function decideAttempt({ now, guest, used = 0, practice = false }) {
   if (practice) return { record: false, practice: true };
   if (now < OPENING_MS) return { record: false, practice: true, beforeOpen: true };
-  const cap = attemptCap(!!guest);
-  if (used >= cap) return { record: false, practice: true, usedUp: true, message: LIMIT_MSG, left: 0 };
-  return { record: true, practice: false, attempt: used + 1, left: cap - used - 1 };
+  // guest 는 횟수와 무관하게 기록한다. 월간 보상만 monthlyBestPays 에서 계정에만 지급.
+  void guest;
+  return { record: true, practice: false, attempt: used + 1, usedUp: false };
 }
 
 export function bestScore(prev, score) { return prev == null || score > prev ? score : prev; }
@@ -95,7 +97,8 @@ export function plausibleArcadeRun({ score, level, durationMs, maxLevel = 40, ga
   const minMs = Math.max(0, (lv - 1) * 6000);
   if (dur > 0 && dur < minMs * 0.7) return { ok: false, reason: 'too_fast' };
   const sec = Math.max(1, dur / 1000);
-  const maxScore = Math.round(sec * 220 + lv * 2500);
+  // 여유를 둔다. 초당 220이면 Lv1·30초에 9,100이 상한이라 9,109 같은 정상 기록이 거절됐다.
+  const maxScore = Math.round(sec * 280 + lv * 2800);
   if (sc > maxScore) return { ok: false, reason: 'score_cap' };
   if (sc > 5000 && lv < 2 && dur < 20000) return { ok: false, reason: 'implausible' };
   // 절대 상한 (버그·치트 가드)

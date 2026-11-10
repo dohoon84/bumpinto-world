@@ -81,10 +81,12 @@ export function buildArcadeInterior({ renderer = null, storeName = 'BUMP 오락�
   const claw = makeClawMachine();
   claw.position.set(-3.6, 0, 0.9); claw.rotation.y = 0.45; scene.add(claw);
 
-  // ranking board
-  const board = makeSign('범핑팡 랭킹 · R', '#ffe66d', '#2a1840');
-  board.position.set(4.0, 1.9, -3.3); board.scale.set(0.75, 0.75, 0.75); scene.add(board);
-  const boardGlow = new THREE.PointLight(0xffe66d, 0.55, 4, 2); boardGlow.position.set(4.0, 1.9, -2.8); scene.add(boardGlow);
+  // ranking kiosk — 오른쪽 벽 쪽, 오락기(z=-1.7)와 가운데 통로를 가리지 않게
+  const board = makeRankKiosk();
+  board.position.set(4.05, 0, 0.95);
+  board.rotation.y = -0.95;
+  scene.add(board);
+  const boardGlow = new THREE.PointLight(0xffe66d, 1.4, 5.8, 2); boardGlow.position.set(3.65, 1.55, 1.4); scene.add(boardGlow);
 
   // plush pile near claw
   for (let i = 0; i < 5; i++) {
@@ -130,6 +132,9 @@ export function buildArcadeInterior({ renderer = null, storeName = 'BUMP 오락�
         const h = (t * 0.05 + i * 0.2) % 1;
         s.material.color.setHSL(h, 0.7, 0.65);
       });
+      if (board.userData.screen?.material) {
+        board.userData.screen.material.emissiveIntensity = 0.2 + Math.sin(t * 2.4) * 0.06;
+      }
     },
     pickCabinet(raycaster) {
       const screens = cabinets.map((c) => c.screen).filter(Boolean);
@@ -137,7 +142,91 @@ export function buildArcadeInterior({ renderer = null, storeName = 'BUMP 오락�
       if (!hits.length) return null;
       return cabinets.find((c) => c.screen === hits[0].object) || null;
     },
+    pickBoard(raycaster) {
+      const targets = [];
+      board.traverse((o) => { if (o.isMesh) targets.push(o); });
+      const hits = raycaster.intersectObjects(targets, false);
+      return hits.length > 0;
+    },
   };
+}
+
+function makeRankScreenTex() {
+  const c = document.createElement('canvas');
+  c.width = 256; c.height = 288;
+  const ctx = c.getContext('2d');
+  const bg = ctx.createLinearGradient(0, 0, 0, 288);
+  bg.addColorStop(0, '#2a1848');
+  bg.addColorStop(1, '#1a1030');
+  ctx.fillStyle = bg;
+  ctx.fillRect(0, 0, 256, 288);
+  ctx.fillStyle = '#ffe66d';
+  ctx.font = '900 38px Pretendard,sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('랭킹', 128, 42);
+  ctx.fillStyle = '#ffd6ee';
+  ctx.font = '700 16px Pretendard,sans-serif';
+  ctx.fillText('범핑팡 · 범편의점', 128, 76);
+  const medals = ['#ffe66d', '#e8e8f0', '#e0a878'];
+  for (let i = 0; i < 3; i++) {
+    const y = 104 + i * 44;
+    ctx.fillStyle = 'rgba(255,255,255,0.08)';
+    roundRectPath(ctx, 22, y, 212, 36, 12); ctx.fill();
+    ctx.fillStyle = medals[i];
+    ctx.beginPath(); ctx.arc(48, y + 18, 12, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#1a1030';
+    ctx.font = '900 16px Pretendard,sans-serif';
+    ctx.fillText(String(i + 1), 48, y + 19);
+    ctx.fillStyle = 'rgba(255,230,109,0.38)';
+    roundRectPath(ctx, 70, y + 12, 148 - i * 22, 12, 6); ctx.fill();
+  }
+  ctx.fillStyle = '#ffe66d';
+  ctx.font = '800 18px Pretendard,sans-serif';
+  ctx.fillText('일 · 주 · 월', 128, 258);
+  return new THREE.CanvasTexture(c);
+}
+
+function makeRankKiosk() {
+  const g = new THREE.Group();
+  const plate = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.74, 0.8, 0.08, 24),
+    new THREE.MeshStandardMaterial({ color: '#2a1840', roughness: 0.55, metalness: 0.22 }),
+  );
+  plate.position.y = 0.04; g.add(plate);
+  const body = new THREE.Mesh(
+    new THREE.BoxGeometry(1.18, 1.72, 0.48),
+    new THREE.MeshStandardMaterial({ color: '#4a2a78', roughness: 0.38, metalness: 0.32 }),
+  );
+  body.position.y = 0.94; g.add(body);
+  const trim = new THREE.Mesh(
+    new THREE.BoxGeometry(1.22, 0.08, 0.52),
+    new THREE.MeshBasicMaterial({ color: '#ffe66d' }),
+  );
+  trim.position.y = 1.8; g.add(trim);
+  const bezel = new THREE.Mesh(
+    new THREE.BoxGeometry(1.02, 1.14, 0.06),
+    new THREE.MeshStandardMaterial({ color: '#1a1030', roughness: 0.42 }),
+  );
+  bezel.position.set(0, 1.16, 0.24); g.add(bezel);
+  const screenTex = makeRankScreenTex();
+  const screen = new THREE.Mesh(
+    new THREE.PlaneGeometry(0.92, 1.02),
+    new THREE.MeshStandardMaterial({
+      map: screenTex,
+      emissive: '#ffffff',
+      emissiveMap: screenTex,
+      emissiveIntensity: 0.22,
+      roughness: 0.32,
+    }),
+  );
+  screen.position.set(0, 1.16, 0.276); g.add(screen);
+  const sign = makeSign('랭킹 보기', '#1a1030', '#ffe66d');
+  sign.position.set(0, 2.06, 0.16); sign.scale.set(0.6, 0.5, 0.6); g.add(sign);
+  const prompt = makeSign('탭하여 보기', '#1a1030', '#ff9ecd');
+  prompt.position.set(0, 0.4, 0.28); prompt.scale.set(0.44, 0.32, 0.44); g.add(prompt);
+  g.userData.screen = screen;
+  return g;
 }
 
 function makeCabinet({ label, color, playable }) {
