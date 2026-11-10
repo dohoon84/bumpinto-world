@@ -111,7 +111,26 @@ const out = {
   station: { x: 0, z: 0, name: '정자역' },
   buildings: [], roads: [], water: [], waterLines: [], parks: [], labels: [],
 };
-const stats = { height: 0, levels: 0, default: 0 };
+const stats = { height: 0, levels: 0, default: 0, override: 0 };
+// 정자동 킨스타워·SK-U타워는 분당벤처타운 쌍둥이 오피스다.
+// OSM way 466904539 는 building:levels=6 (19.2m), way 466904538 는 levels=23 (73.6m) 으로
+// 서로 다른 높이로 뽑힌다. 실제 높이는 둘 다 118.8m 로 맞춘다.
+// 근거: 매일경제 2005-12-29 「최우수상/분당벤처타운」 지하 6~지상 28층(높이 118.8m);
+// 집품 건축물대장(정자동 킨스타워) 높이 118.8m·지상 28층;
+// 오피스파인드 킨스타워 지하 6층·지상 28층;
+// 딜사이트·매일경제(2005) SK U-타워(u-타워) 지하 6층·지상 28층.
+// 2005년 일부 기사는 킨스타워를 27층으로 적지만, 문서화된 미터 높이는 118.8m 하나뿐이라
+// 두 타워 모두 그 값을 쓴다. 킨스타워 바로 동쪽에 붙은 이름 없는 office(way 466904540)도 같은 단지로, OSM height=119·28층이라 118.8m로 맞춘다.
+// OSM id 또는 이름에 걸리면 재변환 때도 유지된다.
+const HEIGHT_OVERRIDE = {
+  466904538: 118.8, // SK-U타워
+  466904539: 118.8, // 킨스타워 (이름 있는 서쪽·남쪽 동체)
+  466904540: 118.8, // 킨스타워 동쪽 동체(OSM에 이름 없음, height=119·levels=28 로 붙어 있음)
+  'SK-U타워': 118.8,
+  'SK-U Tower': 118.8,
+  '킨스타워': 118.8,
+  'KINS TOWER': 118.8,
+};
 
 const ROAD_W = { motorway: 16, trunk: 16, primary: 16, secondary: 12, tertiary: 9, motorway_link: 7, trunk_link: 7, primary_link: 7, secondary_link: 7, tertiary_link: 6, residential: 6, unclassified: 6, living_street: 5, service: 4, pedestrian: 5, footway: 2.2, cycleway: 2.2, path: 2, steps: 2, track: 3, corridor: 2 };
 const WALKABLE = new Set(['footway', 'pedestrian', 'path', 'living_street', 'residential', 'service', 'unclassified', 'tertiary', 'secondary', 'primary', 'cycleway']);
@@ -180,6 +199,8 @@ for (const e of raw.elements) {
     let h = num(t.height), src = 'height';
     const lv = num(t['building:levels']);
     if (!h || h < 2) { if (lv) { h = lv * LEVEL_H; src = 'levels'; } else { h = (['house', 'garage', 'shed', 'kiosk', 'hut'].includes(t.building) ? 1 : DEFAULT_LEVELS) * LEVEL_H; src = 'default'; } }
+    const ov = HEIGHT_OVERRIDE[e.id] ?? HEIGHT_OVERRIDE[t.name] ?? HEIGHT_OVERRIDE[t['name:ko']] ?? HEIGHT_OVERRIDE[t['name:en']];
+    if (ov) { h = ov; src = 'height'; stats.override++; }
     let minH = num(t.min_height) || (num(t['building:min_level']) || 0) * LEVEL_H;
     for (const poly of polygonsOf(e)) {
       if (Math.abs(area(poly.outer)) < 4) continue;
