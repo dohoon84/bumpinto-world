@@ -78,9 +78,22 @@ const info = await night.evaluate(() => {
     return best;
   };
   const roadWay = loop.sort((a, b) => (b.pts?.length || 0) - (a.pts?.length || 0))[0];
-  const roadPt = roadWay ? nearTower(roadWay.pts) : null;
+  const stop = stops[0];
+  let roadPt = null, roadLook = null;
+  if (roadWay?.pts && stop) {
+    let bi = 0, bd = Infinity;
+    for (let i = 0; i < roadWay.pts.length; i++) {
+      const d = Math.hypot(roadWay.pts[i][0] - stop.x, roadWay.pts[i][1] - stop.z);
+      if (d < bd) { bd = d; bi = i; }
+    }
+    const side = Math.min(roadWay.pts.length - 1, bi + 6);
+    roadPt = roadWay.pts[side];
+    roadLook = roadWay.pts[Math.min(roadWay.pts.length - 1, side + 12)] || roadPt;
+  } else if (roadWay) {
+    roadPt = nearTower(roadWay.pts);
+    roadLook = roadPt;
+  }
   const trailPt = trail?.pts ? nearTower(trail.pts) : null;
-  const roadLook = roadWay && roadPt ? roadWay.pts[Math.min(roadWay.pts.length - 1, roadWay.pts.findIndex((p) => p[0] === roadPt[0] && p[1] === roadPt[1]) + 8)] || roadPt : null;
   return {
     tx: n.tower.ox, tz: n.tower.oz, baseY: n.baseY,
     door, stops,
@@ -110,8 +123,8 @@ const hAt = (x, z) => night.evaluate(({ x, z }) => window.__jj.namsan.heightAt(x
     yaw: look(x, z, info.tx, info.tz),
     dist: 14, pitch: -0.1, fov: 48, hidePlayer: true,
   });
-  await shot(night, 'after-mountain-grounded');
-  console.log('wrote after-mountain-grounded gy', gy);
+  await shot(night, 'after-mountain-grounded-v2');
+  console.log('wrote after-mountain-grounded-v2 gy', gy);
 }
 {
   const ang = 38 * Math.PI / 180;
@@ -124,8 +137,8 @@ const hAt = (x, z) => night.evaluate(({ x, z }) => window.__jj.namsan.heightAt(x
     yaw: look(x, z, info.tx, info.tz),
     dist: 18, pitch: -0.14, fov: 46, hidePlayer: true,
   });
-  await shot(night, 'after-mountain-grounded-wide');
-  console.log('wrote after-mountain-grounded-wide gy', gy);
+  await shot(night, 'after-mountain-grounded-wide-v2');
+  console.log('wrote after-mountain-grounded-wide-v2 gy', gy);
 }
 
 // (b) bus road + nearby trail on the mountain (not past the DEM edge)
@@ -134,13 +147,17 @@ if (info.roadPt) {
   const y = await hAt(rx, rz);
   const lx = info.roadLook ? info.roadLook[0] : info.tx;
   const lz = info.roadLook ? info.roadLook[1] : info.tz;
+  const hx = lx - rx, hz = lz - rz, L = Math.hypot(hx, hz) || 1;
+  const cx = rx - (hz / L) * 9;
+  const cz = rz + (hx / L) * 9;
+  const cy = await hAt(cx, cz);
   await go(night, {
-    x: rx, z: rz, y: y + 1.5,
-    yaw: look(rx, rz, lx, lz),
-    dist: 11, pitch: -0.18, fov: 58, hidePlayer: false,
+    x: cx, z: cz, y: Math.max(y, cy) + 3.4,
+    yaw: look(cx, cz, lx, lz),
+    dist: 11, pitch: -0.2, fov: 52, hidePlayer: true,
   });
-  await shot(night, 'after-bus-road-close');
-  console.log('wrote after-bus-road-close at', rx, rz, y);
+  await shot(night, 'after-bus-road-close-v2');
+  console.log('wrote after-bus-road-close-v2 at', rx, rz, y, 'cam', cx, cz);
 }
 if (info.trailPt) {
   const [rx, rz] = info.trailPt;
@@ -150,8 +167,8 @@ if (info.trailPt) {
     yaw: look(rx, rz, info.tx, info.tz),
     dist: 10, pitch: -0.2, fov: 58, hidePlayer: false,
   });
-  await shot(night, 'after-trail-night');
-  console.log('wrote after-trail-night at', rx, rz, y);
+  await shot(night, 'after-trail-night-v2');
+  console.log('wrote after-trail-night-v2 at', rx, rz, y);
 }
 if (info.roadPt && info.trailPt) {
   const [rx, rz] = info.roadPt;
@@ -161,36 +178,36 @@ if (info.roadPt && info.trailPt) {
     yaw: look(rx, rz, info.trailPt[0], info.trailPt[1]),
     dist: 16, pitch: -0.22, fov: 55, hidePlayer: true,
   });
-  await shot(night, 'after-road-trail-night');
-  console.log('wrote after-road-trail-night');
+  await shot(night, 'after-road-trail-night-v2');
+  console.log('wrote after-road-trail-night-v2');
 }
 
 // (c) top bus stop
 if (info.stops?.[0]) {
   const s = info.stops[0];
   const y = await hAt(s.x, s.z);
-  const cx = s.x + 14, cz = s.z - 10;
+  const cx = s.x + 16, cz = s.z - 12;
   await go(night, {
-    x: cx, z: cz, y: y + 3.2,
+    x: cx, z: cz, y: y + 2.8,
     yaw: look(cx, cz, s.x, s.z),
-    dist: 7, pitch: -0.12, fov: 55, hidePlayer: true,
+    dist: 9, pitch: -0.16, fov: 52, hidePlayer: true,
   });
-  await shot(night, 'after-bus-stop');
-  console.log('wrote after-bus-stop', s.x, s.z, y);
+  await shot(night, 'after-bus-stop-v2');
+  console.log('wrote after-bus-stop-v2', s.x, s.z, y);
 }
 
 // (d) entrance with sign and guide arrows
 if (info.door) {
   const d = info.door;
-  const sx = d.x + (d.nx || 1) * 9.5;
-  const sz = d.z + (d.nz || 0) * 9.5;
+  const sx = d.x + (d.nx || 1) * 11;
+  const sz = d.z + (d.nz || 0) * 11;
   await go(night, {
     x: sx, z: sz, y: info.baseY + 1.55,
     yaw: look(sx, sz, d.x, d.z),
-    dist: 5.6, pitch: 0.08, fov: 52, hidePlayer: true,
+    dist: 6.2, pitch: 0.18, fov: 50, hidePlayer: true,
   });
-  await shot(night, 'after-entrance');
-  console.log('wrote after-entrance');
+  await shot(night, 'after-entrance-v2');
+  console.log('wrote after-entrance-v2');
 }
 
 await browser.close();

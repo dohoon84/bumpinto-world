@@ -289,46 +289,71 @@ export function createNamsanTower({ parent, osm, baseY }) {
     if (eastDoor) {
       const { cx, cz, ux, uz, nx, nz, ang } = eastDoor;
       const glassMat = track(new THREE.MeshStandardMaterial({
-        color: '#c5e4f6', transparent: true, opacity: 0.38, roughness: 0.08, metalness: 0.25,
-        emissive: new THREE.Color('#e7f6ff'), emissiveIntensity: 0,
-      }), 0, 0.95);
-      const frameMat = new THREE.MeshLambertMaterial({ color: '#2c3644' });
+        color: '#d8eef8', transparent: true, opacity: 0.32, roughness: 0.06, metalness: 0.2,
+        emissive: new THREE.Color('#ffd4a0'), emissiveIntensity: 0, depthWrite: false,
+      }), 0, 0.58);
+      const frameMat = new THREE.MeshLambertMaterial({ color: '#1a222c' });
+      const innerGlow = track(new THREE.MeshBasicMaterial({
+        color: '#ffb060', transparent: true, opacity: 0, depthWrite: false, fog: false, side: THREE.DoubleSide,
+      }), 0, 0);
+      innerGlow.userData.nightOp = 0.88;
+      const glowP = new THREE.Mesh(new THREE.PlaneGeometry(4.8, 2.55), innerGlow);
+      glowP.position.set(cx - nx * 0.62, baseY + 1.32, cz - nz * 0.62);
+      glowP.rotation.y = Math.atan2(nx, nz);
+      g.add(glowP);
       for (const side of [-1, 1]) {
-        const px = cx + ux * side * 1.15 + nx * 0.04;
-        const pz = cz + uz * side * 1.15 + nz * 0.04;
-        const pane = new THREE.Mesh(new THREE.BoxGeometry(0.06, 2.42, 2.15), glassMat);
-        pane.rotation.y = ang; pane.position.set(px, baseY + 1.25, pz); g.add(pane);
-        const frame = new THREE.Mesh(new THREE.BoxGeometry(0.1, 2.5, 2.28), frameMat);
-        frame.rotation.y = ang; frame.position.set(px - nx * 0.03, baseY + 1.26, pz - nz * 0.03); g.add(frame);
+        const px = cx + ux * side * 1.15 + nx * 0.06;
+        const pz = cz + uz * side * 1.15 + nz * 0.06;
+        const pane = new THREE.Mesh(new THREE.BoxGeometry(0.04, 2.36, 2.08), glassMat);
+        pane.rotation.y = ang; pane.position.set(px, baseY + 1.26, pz); g.add(pane);
       }
-      const mid = new THREE.Mesh(new THREE.BoxGeometry(0.12, 2.5, 0.12), frameMat);
-      mid.position.set(cx + nx * 0.04, baseY + 1.26, cz + nz * 0.04); g.add(mid);
-      const canopy = new THREE.Mesh(new THREE.BoxGeometry(1.95, 0.14, 5.7), new THREE.MeshLambertMaterial({ color: '#1e2a38' }));
+      const frame = (w, h, d, x, y, z) => {
+        const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), frameMat);
+        m.rotation.y = ang; m.position.set(x, y, z); g.add(m);
+      };
+      // 바깥 테두리·중간 멀리언 (유리 앞에 두어 문틀이 읽히게)
+      const fx = cx + nx * 0.12, fz = cz + nz * 0.12;
+      frame(0.12, 2.58, 4.55, fx, baseY + 2.52, fz); // top
+      frame(0.12, 0.12, 4.55, fx, baseY + 0.12, fz); // sill
+      frame(0.12, 2.5, 0.14, cx + ux * -2.2 + nx * 0.12, baseY + 1.28, cz + uz * -2.2 + nz * 0.12);
+      frame(0.12, 2.5, 0.14, cx + ux * 2.2 + nx * 0.12, baseY + 1.28, cz + uz * 2.2 + nz * 0.12);
+      frame(0.12, 2.5, 0.14, cx + nx * 0.12, baseY + 1.28, cz + nz * 0.12);
+      const canopy = new THREE.Mesh(new THREE.BoxGeometry(1.9, 0.16, 5.8), new THREE.MeshLambertMaterial({ color: '#1e2a38' }));
       canopy.rotation.y = ang;
-      canopy.position.set(cx + nx * 1.05, baseY + 3.22, cz + nz * 1.05);
+      canopy.position.set(cx + nx * 1.15, baseY + 3.62, cz + nz * 1.15);
       g.add(canopy);
       const under = track(new THREE.MeshBasicMaterial({ color: '#ffd89a', transparent: true, opacity: 0, fog: false }), 0, 0);
-      under.userData.nightOp = 0.72;
-      const underM = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.04, 5.3), under);
+      under.userData.nightOp = 0.78;
+      const underM = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.04, 5.4), under);
       underM.rotation.y = ang;
-      underM.position.set(cx + nx * 1.05, baseY + 3.12, cz + nz * 1.05);
+      underM.position.set(cx + nx * 1.15, baseY + 3.52, cz + nz * 1.15);
       g.add(underM);
-      const sc = document.createElement('canvas'); sc.width = 1024; sc.height = 192;
+      const sc = document.createElement('canvas'); sc.width = 2048; sc.height = 320;
       const sx = sc.getContext('2d');
-      sx.fillStyle = '#152033'; sx.fillRect(0, 0, 1024, 192);
-      sx.fillStyle = '#f3f6fa'; sx.textAlign = 'center'; sx.textBaseline = 'middle';
-      sx.font = 'bold 78px sans-serif';
-      sx.fillText('남산서울타워 입구', 512, 96);
-      const sTex = new THREE.CanvasTexture(sc); sTex.colorSpace = THREE.SRGBColorSpace;
-      const fascia = new THREE.Mesh(new THREE.PlaneGeometry(5.2, 0.72), new THREE.MeshBasicMaterial({ map: sTex, transparent: true }));
-      fascia.position.set(cx + nx * 2.02, baseY + 3.18, cz + nz * 2.02);
+      sx.fillStyle = '#10192a'; sx.fillRect(0, 0, 2048, 320);
+      sx.strokeStyle = '#d7c48a'; sx.lineWidth = 10; sx.strokeRect(18, 16, 2012, 288);
+      sx.fillStyle = '#f4f7fb'; sx.textAlign = 'center'; sx.textBaseline = 'middle';
+      sx.font = '700 148px sans-serif';
+      sx.strokeStyle = '#10192a'; sx.lineWidth = 12;
+      sx.strokeText('남산서울타워 입구', 1024, 164);
+      sx.fillText('남산서울타워 입구', 1024, 164);
+      const sTex = new THREE.CanvasTexture(sc);
+      sTex.colorSpace = THREE.SRGBColorSpace;
+      sTex.anisotropy = 8;
+      sTex.minFilter = THREE.LinearFilter;
+      sTex.generateMipmaps = false;
+      // 캐노피 아래 별도 패널 (슬래브와 겹치지 않게 낮추고 앞으로)
+      const fasciaBack = new THREE.Mesh(new THREE.BoxGeometry(5.5, 0.92, 0.1), new THREE.MeshLambertMaterial({ color: '#10192a' }));
+      fasciaBack.position.set(cx + nx * 2.08, baseY + 3.02, cz + nz * 2.08);
+      fasciaBack.rotation.y = Math.atan2(nx, nz);
+      g.add(fasciaBack);
+      const fascia = new THREE.Mesh(
+        new THREE.PlaneGeometry(5.35, 0.84),
+        new THREE.MeshBasicMaterial({ map: sTex, toneMapped: false }),
+      );
+      fascia.position.set(cx + nx * 2.18, baseY + 3.02, cz + nz * 2.18);
       fascia.rotation.y = Math.atan2(nx, nz);
       g.add(fascia);
-      const fasciaBack = new THREE.Mesh(new THREE.BoxGeometry(5.3, 0.78, 0.08), new THREE.MeshLambertMaterial({ color: '#152033' }));
-      fasciaBack.position.copy(fascia.position);
-      fasciaBack.position.x -= nx * 0.05; fasciaBack.position.z -= nz * 0.05;
-      fasciaBack.rotation.y = fascia.rotation.y;
-      g.add(fasciaBack);
     }
   }
 

@@ -3,7 +3,7 @@
 //   브랜드 로고/실제 매장명/마스코트 없음. 층별 안내는 일반 이름만 쓴다.
 import * as THREE from 'three';
 import { watchEvening } from '../../evening.js';
-import { NT, namsanBaseY } from './namsanCoords.js';
+import { NT, namsanBaseY, inNamsanPark } from './namsanCoords.js';
 import { createNamsanTerrain } from './namsanTerrain.js';
 import { createNamsanTower } from './namsanTower.js';
 import { createNamsanInterior } from './namsanInterior.js';
@@ -26,9 +26,15 @@ export function namsanCableEnabled(search = typeof location !== 'undefined' ? lo
 // 상수 NT 는 namsanCoords.js (순환 import 방지).
 
 /** 미니맵용: 시가지 도로·건물 + 광장 윤곽 + 케이블카 선 (좌표만, 복사 최소화) */
-export function namsanMini(city, osm) {
+export function namsanMini(city, osm, heightAt) {
   const roads = city?.roads || [];
-  const buildings = city?.buildings || [];
+  const buildings = (city?.buildings || []).filter((b) => {
+    const o = b.o;
+    if (!o || o.length < 3) return false;
+    let x = 0, z = 0;
+    for (const p of o) { x += p[0]; z += p[1]; }
+    return !inNamsanPark(x / o.length, z / o.length, osm?.parks, heightAt);
+  });
   const extraRoads = [];
   for (const w of osm?.ways || []) {
     if (w.pts?.length >= 2) extraRoads.push({ k: w.k, p: w.pts, w: w.w });
@@ -46,7 +52,7 @@ export function namsanMini(city, osm) {
     roads: extraRoads.length ? roads.concat(extraRoads) : roads,
     buildings: extraB.length ? buildings.concat(extraB) : buildings,
     plazas,
-    parks: [],
+    parks: (osm?.parks || []).filter((p) => p.o?.length >= 3).map((p) => ({ o: p.o })),
     water: [],
     waterLines: [],
   };
@@ -63,7 +69,21 @@ export function createNamsan({ scene, overlay, terrain, dem, osm, city = null, c
   const car = cable ? createNamsanCable({ parent: root, osm, heightAt: land.heightAt, overlay, baseY: land.baseY }) : null;
   const roads = createNamsanRoads({ parent: root, osm, heightAt: land.heightAt, overlay });
   roads.setDoor?.(tower.door);
-  const downtown = createNamsanCity({ parent: root, data: city, heightAt: land.heightAt });
+  const downtown = createNamsanCity({ parent: root, data: city, heightAt: land.heightAt, parks: osm?.parks || [] });
+
+  // 광장 높이는 스카이라인 링(꼭대기 ~ y 200)과 같아서, 가까이서는 링 위로
+  // 빈 화면(검정 클리어 컬러)이 보인다. 남산 전용 하늘 반구를 깐다.
+  const skyDay = new THREE.Color('#87a0c0');
+  const skyNight = new THREE.Color('#243656');
+  const skyMat = new THREE.MeshBasicMaterial({
+    color: skyNight.clone(), side: THREE.BackSide, depthWrite: false, fog: false,
+  });
+  const sky = new THREE.Mesh(new THREE.SphereGeometry(3200, 32, 20), skyMat);
+  sky.position.set(NT.tx, 180, NT.tz);
+  sky.name = 'namsan-sky';
+  sky.renderOrder = -20;
+  sky.frustumCulled = false;
+  root.add(sky);
 
   // faint stars around Namsan (the origin sky dome does not reach this far)
   const STAR_N = 2200;
@@ -72,10 +92,10 @@ export function createNamsan({ scene, overlay, terrain, dem, osm, city = null, c
   const sr = () => ((ss = (ss * 16807) % 2147483647) / 2147483647);
   for (let i = 0; i < STAR_N; i++) {
     const az = sr() * Math.PI * 2;
-    const el = 0.18 + sr() * 1.22;
-    const r = 2200 + sr() * 500;
+    const el = 0.16 + sr() * 1.25;
+    const r = 1100 + sr() * 900;
     starPos[i * 3] = NT.tx + Math.cos(el) * Math.sin(az) * r;
-    starPos[i * 3 + 1] = Math.sin(el) * r + 80;
+    starPos[i * 3 + 1] = Math.sin(el) * r + 160;
     starPos[i * 3 + 2] = NT.tz - Math.cos(el) * Math.cos(az) * r;
   }
   const starGeo = new THREE.BufferGeometry();
@@ -128,6 +148,7 @@ export function createNamsan({ scene, overlay, terrain, dem, osm, city = null, c
     downtown.setNight(on ? 1 : 0);
     starMat.opacity = on ? 0.88 : 0;
     stars.visible = !!on;
+    skyMat.color.copy(skyDay).lerp(skyNight, on ? 1 : 0);
   });
 
   if (terrain?.addGroundExtra) {
@@ -179,7 +200,7 @@ export function createNamsan({ scene, overlay, terrain, dem, osm, city = null, c
     get interior() { return interior; },
     get city() { return downtown; },
     get roads() { return roads; },
-    mini: namsanMini(city, osm), // [hud-v3-minimap] 광장·도로·케이블카 선
+    mini: namsanMini(city, osm, land.heightAt), // [hud-v3-minimap] 광장·도로·케이블카·공원
     stage(u) { car?.stage?.(u); },
     tickPlayer(dt, player, cam) {
       interior.tickPlayer?.(dt, player, cam);
@@ -206,6 +227,7 @@ export function createNamsan({ scene, overlay, terrain, dem, osm, city = null, c
       downtown.setNight(v);
       starMat.opacity = Math.max(0, Math.min(1, v)) * 0.88;
       stars.visible = v > 0.08;
+      skyMat.color.copy(skyDay).lerp(skyNight, Math.max(0, Math.min(1, v)));
     },
     dispose() {
       unwatch?.();

@@ -5,7 +5,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { buildingMeshes, roadGeometries, paint } from '../tileMesh.js';
 import { ribbonGeo, fixNormalsUp } from '../../world.js';
-import { NT, namsanBasinY } from './namsanCoords.js';
+import { NT, namsanBasinY, inNamsanPark } from './namsanCoords.js';
 
 function groundY(x, z, heightAt) {
   const d = Math.hypot(x - NT.tx, z - NT.tz);
@@ -69,7 +69,7 @@ function streakTex() {
   return t;
 }
 
-export function createNamsanCity({ parent, data, heightAt }) {
+export function createNamsanCity({ parent, data, heightAt, parks = [] }) {
   const g = new THREE.Group();
   g.name = 'namsan-city';
   parent.add(g);
@@ -96,11 +96,14 @@ export function createNamsanCity({ parent, data, heightAt }) {
   g.add(disk);
 
   // ----- extruded OSM buildings, batched by quadrant -----
+  // 남산공원(OSM park/wood/forest)과 정상 부근 높은 지형 위의 시가지 압출은 빼 둔다.
   const buckets = [[], [], [], []];
   for (const b of buildings) {
     const o = b.o;
     if (!o || o.length < 3) continue;
     const c = centroid(o);
+    if (inNamsanPark(c.x, c.z, parks, heightAt)) continue;
+    if (o.some((pt) => inNamsanPark(pt[0], pt[1], parks, heightAt))) continue;
     const gy = groundY(c.x, c.z, heightAt);
     const ht = Math.max(4, Number(b.h) || 12);
     const mh0 = Number(b.mh) || 0;
@@ -169,8 +172,8 @@ export function createNamsanCity({ parent, data, heightAt }) {
   const ringMat = new THREE.MeshBasicMaterial({
     map: skyTex, side: THREE.BackSide, transparent: true, opacity: 0.92, fog: true, depthWrite: false,
   });
-  const ring = new THREE.Mesh(new THREE.CylinderGeometry(4300, 4300, 220, 72, 1, true), ringMat);
-  ring.position.set(NT.tx, namsanBasinY(2500) + 100, NT.tz);
+  const ring = new THREE.Mesh(new THREE.CylinderGeometry(4300, 4300, 900, 72, 1, true), ringMat);
+  ring.position.set(NT.tx, namsanBasinY(2500) + 420, NT.tz);
   ring.name = 'namsan-skyline-ring';
   g.add(ring);
 

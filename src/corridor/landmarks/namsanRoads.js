@@ -6,6 +6,8 @@ import { ribbonGeo, fixNormalsUp } from '../../world.js';
 import { paint } from '../tileMesh.js';
 import { createBus } from '../../transit/busModel.js';
 import { NT } from './namsanCoords.js';
+import { buildStreetlightGeometries, SCALE, POOL_SCALE, POOL_R, POOL_RZ, POOL_GAIN, ARM, LENS_DAY, LENS_NIGHT } from '../../world/streetlights.js';
+import { lightPoolMaterial } from '../../world/nightLights.js';
 
 const CAR = new Set(['motorway', 'trunk', 'primary', 'secondary', 'tertiary', 'residential', 'unclassified', 'service', 'living_street', 'primary_link', 'secondary_link', 'tertiary_link']);
 const STEPS = new Set(['steps']);
@@ -38,6 +40,16 @@ function resample(pts, step = 2.4) {
 function elevated(pts, heightAt, dy) {
   return pts.map(([x, z]) => [x, z, heightAt(x, z) + dy]);
 }
+
+function guideY(x, z, heightAt) {
+  const h = heightAt(x, z);
+  const d = Math.hypot(x - NT.tx, z - NT.tz);
+  const plazaY = NT.eleBase - NT.datum;
+  // DEM 이 광장 건물을 집어 높이 뛰어도, 입구 바닥(기단 y) 위에 붙인다.
+  if (d < 90) return Math.min(h, plazaY) + 0.32;
+  return h + 0.32;
+}
+
 
 function segsOf(pts) {
   const s = [];
@@ -82,6 +94,34 @@ function pointAt(pts, dist) {
   const n = pts.length;
   const L = Math.hypot(pts[n - 1][0] - pts[n - 2][0], pts[n - 1][1] - pts[n - 2][1]) || 1;
   return { x: pts[n - 1][0], z: pts[n - 1][1], hx: (pts[n - 1][0] - pts[n - 2][0]) / L, hz: (pts[n - 1][1] - pts[n - 2][1]) / L };
+}
+
+
+function offsetLine(pts, dist) {
+  const out = [];
+  for (let i = 0; i < pts.length; i++) {
+    const prev = pts[Math.max(0, i - 1)];
+    const next = pts[Math.min(pts.length - 1, i + 1)];
+    let hx = next[0] - prev[0], hz = next[1] - prev[1];
+    const L = Math.hypot(hx, hz) || 1;
+    hx /= L; hz /= L;
+    out.push([pts[i][0] - hz * dist, pts[i][1] + hx * dist]);
+  }
+  return out;
+}
+
+function sideSign(pts, heightAt, pref) {
+  if (pref === 'left') return 1;
+  if (pref === 'right') return -1;
+  const mid = Math.max(1, Math.min(pts.length - 1, Math.floor(pts.length / 2)));
+  const a = pts[mid - 1], b = pts[mid];
+  const L = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1;
+  const hx = (b[0] - a[0]) / L, hz = (b[1] - a[1]) / L;
+  const mx = (a[0] + b[0]) / 2, mz = (a[1] + b[1]) / 2;
+  const leftY = heightAt(mx - hz * 4, mz + hx * 4);
+  const rightY = heightAt(mx + hz * 4, mz - hx * 4);
+  const uphill = leftY >= rightY ? 1 : -1;
+  return pref === 'downhill' ? -uphill : uphill;
 }
 
 function stitchNamed(ways, re) {
@@ -152,13 +192,19 @@ function dijkstra(ways, sx, sz, tx, tz) {
       if (d > 0.4 && d < 5) link(node(ends[i][0], ends[i][1]), node(ends[j][0], ends[j][1]), d);
     }
   }
+  for (let i = 0; i < nodes.length; i++) {
+    for (let j = i + 1; j < nodes.length; j++) {
+      const d = Math.hypot(nodes[i].x - nodes[j].x, nodes[i].z - nodes[j].z);
+      if (d > 0.6 && d < 8) link(i, j, d);
+    }
+  }
   const snap = (x, z) => {
     let best = 0, bd = Infinity;
     for (let i = 0; i < nodes.length; i++) {
       const d = Math.hypot(nodes[i].x - x, nodes[i].z - z);
       if (d < bd) { bd = d; best = i; }
     }
-    return bd < 36 ? best : -1;
+    return bd < 48 ? best : -1;
   };
   const a = snap(sx, sz), b = snap(tx, tz);
   if (a < 0 || b < 0) return null;
@@ -214,6 +260,25 @@ function signTex(title, sub) {
   return t;
 }
 
+function routeSignTex(route, title) {
+  const c = document.createElement('canvas'); c.width = 512; c.height = 640;
+  const x = c.getContext('2d');
+  x.fillStyle = '#1c3f78'; x.fillRect(0, 0, 512, 640);
+  x.fillStyle = '#f4f7fb';
+  x.textAlign = 'center'; x.textBaseline = 'middle';
+  x.font = '700 210px sans-serif';
+  x.fillText(route, 256, 250);
+  x.font = '700 48px sans-serif';
+  x.fillText(title, 256, 470);
+  x.font = '600 36px sans-serif';
+  x.fillStyle = '#d7c07a';
+  x.fillText('정류장', 256, 540);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace;
+  t.minFilter = THREE.LinearFilter; t.generateMipmaps = false;
+  return t;
+}
+
+
 export function createNamsanRoads({ parent, osm, heightAt, overlay = null } = {}) {
   const group = new THREE.Group();
   group.name = 'namsan-roads';
@@ -233,7 +298,8 @@ export function createNamsanRoads({ parent, osm, heightAt, overlay = null } = {}
   if (!ways.length) return empty;
 
   const carGeos = [], pathGeos = [], stepGeos = [], treadGeos = [];
-  const curbGeos = [], lineGeos = [], railGeos = [];
+  const curbGeos = [], sidewalkGeos = [], railGeos = [];
+  const yellowGeos = [], whiteGeos = [];
   const walkHits = [];
   const lampPts = [];
 
@@ -246,26 +312,73 @@ export function createNamsanRoads({ parent, osm, heightAt, overlay = null } = {}
     if (pts.length < 2) continue;
     const epts = elevated(pts, heightAt, dy);
     const geo = fixNormalsUp(ribbonGeo(epts, width, 0, false));
-    if (isCar) carGeos.push(paint(geo, '#3a3d42'));
+    if (isCar) carGeos.push(paint(geo, '#6e747c'));
     else if (isStep) stepGeos.push(paint(geo, '#9a9080'));
     else pathGeos.push(paint(geo, '#7a6b52'));
     walkHits.push({ segs: segsOf(pts), pad: width * 0.5 + 0.35, dy });
 
     if (isCar) {
-      curbGeos.push(paint(fixNormalsUp(ribbonGeo(elevated(pts, heightAt, dy + 0.05), width + 0.42, 0, false)), '#5a5854'));
-      if (width >= 6) lineGeos.push(paint(fixNormalsUp(ribbonGeo(elevated(pts, heightAt, dy + 0.03), 0.16, 0, false)), '#e6c15a'));
       const namedLoop = /남산공원길|순환로/.test(w.name || '');
-      if (namedLoop) {
-        let acc = 0;
+      const walkPad = width * 0.5 + (namedLoop ? 2.2 : 0.45);
+      walkHits[walkHits.length - 1].pad = walkPad;
+      if (width >= 6) {
+        yellowGeos.push(fixNormalsUp(ribbonGeo(elevated(offsetLine(pts, 0.14), heightAt, dy + 0.045), 0.11, 0, false)));
+        yellowGeos.push(fixNormalsUp(ribbonGeo(elevated(offsetLine(pts, -0.14), heightAt, dy + 0.045), 0.11, 0, false)));
+        whiteGeos.push(fixNormalsUp(ribbonGeo(elevated(offsetLine(pts, width * 0.5 - 0.18), heightAt, dy + 0.04), 0.12, 0, false)));
+        whiteGeos.push(fixNormalsUp(ribbonGeo(elevated(offsetLine(pts, -(width * 0.5 - 0.18)), heightAt, dy + 0.04), 0.12, 0, false)));
+      }
+      const swPref = w.sidewalk || (namedLoop ? 'uphill' : null);
+      const upSign = namedLoop || swPref ? sideSign(pts, heightAt, swPref === 'left' || swPref === 'right' ? swPref : 'uphill') : 0;
+      const downSign = namedLoop ? -upSign : 0;
+      if (swPref === 'both') {
+        for (const sgn of [1, -1]) {
+          sidewalkGeos.push(paint(fixNormalsUp(ribbonGeo(elevated(offsetLine(pts, sgn * (width * 0.5 + 0.95)), heightAt, dy + 0.02), 1.7, 0, false)), '#b7b4ac'));
+          curbGeos.push(paint(fixNormalsUp(ribbonGeo(elevated(offsetLine(pts, sgn * (width * 0.5 + 0.12)), heightAt, dy + 0.12), 0.24, 0, false)), '#c9c5bb'));
+        }
+      } else if (upSign) {
+        sidewalkGeos.push(paint(fixNormalsUp(ribbonGeo(elevated(offsetLine(pts, upSign * (width * 0.5 + 0.95)), heightAt, dy + 0.02), 1.7, 0, false)), '#b7b4ac'));
+        curbGeos.push(paint(fixNormalsUp(ribbonGeo(elevated(offsetLine(pts, upSign * (width * 0.5 + 0.12)), heightAt, dy + 0.12), 0.24, 0, false)), '#c9c5bb'));
+      } else {
+        curbGeos.push(paint(fixNormalsUp(ribbonGeo(elevated(pts, heightAt, dy + 0.06), width + 0.5, 0, false)), '#8a8680'));
+      }
+      if (namedLoop && downSign) {
+        // 계곡 쪽 가드레일
+        let accR = 0;
+        for (let i = 1; i < pts.length; i++) {
+          const ax = pts[i - 1][0], az = pts[i - 1][1], bx = pts[i][0], bz = pts[i][1];
+          const L = Math.hypot(bx - ax, bz - az) || 1;
+          const hx = (bx - ax) / L, hz = (bz - az) / L;
+          const ox = -hz * (width * 0.5 + 0.22) * downSign;
+          const oz = hx * (width * 0.5 + 0.22) * downSign;
+          const y0 = heightAt(ax + ox, az + oz), y1 = heightAt(bx + ox, bz + oz);
+          for (const hy of [0.48, 0.88]) {
+            const rg = new THREE.BoxGeometry(0.05, 0.06, L);
+            rg.rotateY(Math.atan2(hx, hz));
+            rg.translate((ax + bx) / 2 + ox, (y0 + y1) * 0.5 + hy, (az + bz) / 2 + oz);
+            railGeos.push(paint(rg, '#9aa0a6'));
+          }
+          accR += L;
+          if (accR >= 2.1) {
+            const pg = new THREE.BoxGeometry(0.06, 1.02, 0.06);
+            pg.translate(bx + ox, y1 + 0.52, bz + oz);
+            railGeos.push(paint(pg, '#7e848c'));
+            accR = 0;
+          }
+        }
+        let accL = 0;
         for (let i = 1; i < pts.length; i++) {
           const L = Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]);
-          acc += L;
-          if (acc >= 20) {
-            const hx = (pts[i][0] - pts[i - 1][0]) / (L || 1);
-            const hz = (pts[i][1] - pts[i - 1][1]) / (L || 1);
-            lampPts.push({ x: pts[i][0] - hz * (width * 0.5 + 0.45), z: pts[i][1] + hx * (width * 0.5 + 0.45), h: 4.1 });
-            acc = 0;
-          }
+          accL += L;
+          if (accL < 22) continue;
+          accL = 0;
+          const hx = (pts[i][0] - pts[i - 1][0]) / (L || 1);
+          const hz = (pts[i][1] - pts[i - 1][1]) / (L || 1);
+          const side = upSign || 1;
+          lampPts.push({
+            x: pts[i][0] - hz * (width * 0.5 + 1.25) * side,
+            z: pts[i][1] + hx * (width * 0.5 + 1.25) * side,
+            yaw: Math.atan2(-hx, -hz),
+          });
         }
       }
     }
@@ -334,39 +447,84 @@ export function createNamsanRoads({ parent, osm, heightAt, overlay = null } = {}
     m.name = name;
     group.add(m);
   };
+  addMerged(sidewalkGeos, 'namsan-sidewalks');
   addMerged(curbGeos, 'namsan-curbs');
   addMerged(carGeos, 'namsan-car-roads');
   addMerged(pathGeos, 'namsan-paths');
   addMerged(stepGeos, 'namsan-steps');
   addMerged(treadGeos, 'namsan-treads');
-  addMerged(lineGeos, 'namsan-centerline');
   addMerged(railGeos, 'namsan-rails');
-
-  const lampPole = new THREE.MeshLambertMaterial({ color: '#2a2e34' });
-  const lampBulb = new THREE.MeshBasicMaterial({ color: '#ffd89a', transparent: true, opacity: 0, fog: false });
-  const lampGlow = new THREE.MeshBasicMaterial({
-    color: '#ffc878', transparent: true, opacity: 0, depthWrite: false, fog: false,
-    blending: THREE.AdditiveBlending,
+  const yellowMat = new THREE.MeshLambertMaterial({
+    color: '#f0d24a', emissive: new THREE.Color('#f0d24a'), emissiveIntensity: 0,
   });
-  for (const p of lampPts) {
-    const y = heightAt(p.x, p.z);
-    const h = p.h || 4;
-    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.08, h, 6), lampPole);
-    pole.position.set(p.x, y + h / 2, p.z); group.add(pole);
-    const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.2, 8, 6), lampBulb);
-    bulb.position.set(p.x, y + h + 0.12, p.z); group.add(bulb);
-    const glow = new THREE.Mesh(new THREE.SphereGeometry(0.7, 8, 6), lampGlow);
-    glow.position.set(p.x, y + h + 0.12, p.z); group.add(glow);
+  const whiteMat = new THREE.MeshLambertMaterial({
+    color: '#eceff4', emissive: new THREE.Color('#dfe4ec'), emissiveIntensity: 0,
+  });
+  if (yellowGeos.length) {
+    const yg = mergeGeometries(yellowGeos, true);
+    if (yg) { const m = new THREE.Mesh(yg, yellowMat); m.name = 'namsan-yellow-lines'; group.add(m); }
+  }
+  if (whiteGeos.length) {
+    const wg = mergeGeometries(whiteGeos, true);
+    if (wg) { const m = new THREE.Mesh(wg, whiteMat); m.name = 'namsan-white-lines'; group.add(m); }
+  }
+
+  let lampLensMat = null, lampPoolMat = null;
+  if (lampPts.length) {
+    const geo = buildStreetlightGeometries();
+    const kind = 1;
+    const sc = SCALE[kind] ?? 0.72;
+    const ps = POOL_SCALE[kind] ?? 0.8;
+    const bodyMat = new THREE.MeshLambertMaterial({ vertexColors: true });
+    lampLensMat = new THREE.MeshBasicMaterial({ color: LENS_DAY.clone() });
+    lampPoolMat = lightPoolMaterial({ color: '#ffd59a', intensity: POOL_GAIN, radius: POOL_R, radiusZ: POOL_RZ, focusX: ARM });
+    const n = lampPts.length;
+    const bodyIM = new THREE.InstancedMesh(geo.body, bodyMat, n);
+    const lensIM = new THREE.InstancedMesh(geo.lens, lampLensMat, n);
+    const poolIM = new THREE.InstancedMesh(geo.pool, lampPoolMat, n);
+    bodyIM.name = 'namsan-streetlight-body';
+    lensIM.name = 'namsan-streetlight-lens';
+    poolIM.name = 'namsan-streetlight-pool';
+    poolIM.renderOrder = 2;
+    const m4 = new THREE.Matrix4(), q = new THREE.Quaternion();
+    const up = new THREE.Vector3(0, 1, 0), pos = new THREE.Vector3(), scl = new THREE.Vector3();
+    const ax = new THREE.Vector3(), ay = new THREE.Vector3(), az = new THREE.Vector3();
+    for (let i = 0; i < n; i++) {
+      const p = lampPts[i];
+      const y = heightAt(p.x, p.z);
+      const yaw = p.yaw || 0;
+      q.setFromAxisAngle(up, yaw);
+      m4.compose(pos.set(p.x, y, p.z), q, scl.set(sc, sc, sc));
+      bodyIM.setMatrixAt(i, m4);
+      lensIM.setMatrixAt(i, m4);
+      const ux = Math.cos(yaw), uz = -Math.sin(yaw), vx = -uz, vz = ux;
+      const d = (ARM + POOL_R) * 0.5 * ps;
+      const hx = (heightAt(p.x + ux * d, p.z + uz * d) - heightAt(p.x - ux * d, p.z - uz * d)) / (2 * d || 1);
+      const hz = (heightAt(p.x + vx * d, p.z + vz * d) - heightAt(p.x - vx * d, p.z - vz * d)) / (2 * d || 1);
+      ax.set(ux, hx, uz).normalize(); az.set(vx, hz, vz).normalize(); ay.crossVectors(az, ax).normalize();
+      m4.makeBasis(ax.multiplyScalar(ps), ay.multiplyScalar(ps), az.multiplyScalar(ps)).setPosition(p.x, y + 0.14, p.z);
+      poolIM.setMatrixAt(i, m4);
+    }
+    bodyIM.instanceMatrix.needsUpdate = true;
+    lensIM.instanceMatrix.needsUpdate = true;
+    poolIM.instanceMatrix.needsUpdate = true;
+    bodyIM.count = lensIM.count = poolIM.count = n;
+    poolIM.visible = false;
+    group.add(bodyIM, lensIM, poolIM);
   }
 
   // bus stop shelters at OSM 남산서울타워 platforms
   const busStops = osm?.busStops || [];
   const roofLit = new THREE.MeshBasicMaterial({ color: '#ffd89a', transparent: true, opacity: 0, fog: false });
-  for (const s of busStops) {
-    const y = heightAt(s.x, s.z);
-    // face the nearest car road
-    let hx = 0, hz = 1;
-    let nearest = Infinity, nrmx = 0, nrmz = 1;
+  const glassBack = new THREE.MeshStandardMaterial({
+    color: '#9ec4d8', transparent: true, opacity: 0.38, roughness: 0.08, metalness: 0.15,
+    emissive: new THREE.Color('#cfe6f2'), emissiveIntensity: 0.15, depthWrite: false,
+  });
+  const steel = new THREE.MeshLambertMaterial({ color: '#3a424c' });
+  const wood = new THREE.MeshLambertMaterial({ color: '#6b5340' });
+  const placedStops = [];
+  busStops.forEach((s, si) => {
+    let hx = 0, hz = 1, nearest = Infinity, nrmx = 0, nrmz = 1, px = s.x, pz = s.z, roadW = 7.8;
     for (const w of ways) {
       if (!CAR.has(w.k)) continue;
       const pts = w.pts;
@@ -374,36 +532,64 @@ export function createNamsanRoads({ parent, osm, heightAt, overlay = null } = {}
         const ax = pts[i - 1][0], az = pts[i - 1][1], bx = pts[i][0], bz = pts[i][1];
         const L = Math.hypot(bx - ax, bz - az) || 1;
         const t = Math.max(0, Math.min(1, ((s.x - ax) * (bx - ax) + (s.z - az) * (bz - az)) / (L * L)));
-        const px = ax + (bx - ax) * t, pz = az + (bz - az) * t;
-        const d = Math.hypot(px - s.x, pz - s.z);
+        const qx = ax + (bx - ax) * t, qz = az + (bz - az) * t;
+        const d = Math.hypot(qx - s.x, qz - s.z);
         if (d < nearest) {
           nearest = d;
           hx = (bx - ax) / L; hz = (bz - az) / L;
           nrmx = -hz; nrmz = hx;
-          if ((s.x - px) * nrmx + (s.z - pz) * nrmz < 0) { nrmx = -nrmx; nrmz = -nrmz; }
+          if ((s.x - qx) * nrmx + (s.z - qz) * nrmz < 0) { nrmx = -nrmx; nrmz = -nrmz; }
+          px = qx; pz = qz;
+          roadW = w.w || 7.8;
         }
       }
     }
-    const sx = s.x, sz = s.z;
+    const sx = px + nrmx * (roadW * 0.5 + 1.05);
+    const sz = pz + nrmz * (roadW * 0.5 + 1.05);
+    const y = heightAt(sx, sz);
     const ang = Math.atan2(hx, hz);
-    const pad = new THREE.Mesh(new THREE.BoxGeometry(4.4, 0.08, 2.2), new THREE.MeshLambertMaterial({ color: '#8a8680' }));
-    pad.position.set(sx, y + 0.06, sz); pad.rotation.y = ang; group.add(pad);
-    const roof = new THREE.Mesh(new THREE.BoxGeometry(4.2, 0.1, 2.0), new THREE.MeshLambertMaterial({ color: '#2c3340' }));
-    roof.position.set(sx, y + 2.55, sz); roof.rotation.y = ang; group.add(roof);
-    const lit = new THREE.Mesh(new THREE.BoxGeometry(3.8, 0.04, 1.6), roofLit);
-    lit.position.set(sx, y + 2.48, sz); lit.rotation.y = ang; group.add(lit);
-    for (const u of [-1.7, 1.7]) {
-      const post = new THREE.Mesh(new THREE.BoxGeometry(0.1, 2.5, 0.1), new THREE.MeshLambertMaterial({ color: '#3a4048' }));
-      post.position.set(sx + hx * u - nrmx * 0.85, y + 1.25, sz + hz * u - nrmz * 0.85);
+    const route = si === 0 ? '01A' : '01B';
+    placedStops.push({ ...s, x: sx, z: sz, y, hx, hz, nrmx, nrmz, route });
+
+    const pad = new THREE.Mesh(new THREE.BoxGeometry(5.6, 0.08, 2.3), new THREE.MeshLambertMaterial({ color: '#b7b4ac' }));
+    pad.position.set(sx, y + 0.05, sz); pad.rotation.y = ang; group.add(pad);
+    for (const u of [-2.05, 0, 2.05]) {
+      const post = new THREE.Mesh(new THREE.BoxGeometry(0.1, 2.55, 0.1), steel);
+      post.position.set(sx + hx * u + nrmx * 0.78, y + 1.28, sz + hz * u + nrmz * 0.78);
       group.add(post);
     }
-    const bench = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.1, 0.45), new THREE.MeshLambertMaterial({ color: '#6a5644' }));
-    bench.position.set(sx - nrmx * 0.35, y + 0.48, sz - nrmz * 0.35); bench.rotation.y = ang; group.add(bench);
-    const plate = new THREE.Mesh(new THREE.PlaneGeometry(1.8, 0.6), new THREE.MeshBasicMaterial({ map: signTex('남산서울타워', '정류장'), transparent: true }));
-    plate.position.set(sx + nrmx * 0.15, y + 2.15, sz + nrmz * 0.15);
-    plate.rotation.y = Math.atan2(nrmx, nrmz);
-    group.add(plate);
-  }
+    const roof = new THREE.Mesh(new THREE.BoxGeometry(5.2, 0.1, 1.95), new THREE.MeshLambertMaterial({ color: '#2a3340' }));
+    roof.position.set(sx + nrmx * 0.08, y + 2.62, sz + nrmz * 0.08); roof.rotation.y = ang; group.add(roof);
+    const lit = new THREE.Mesh(new THREE.BoxGeometry(4.8, 0.04, 1.65), roofLit);
+    lit.position.set(sx + nrmx * 0.08, y + 2.55, sz + nrmz * 0.08); lit.rotation.y = ang; group.add(lit);
+    const back = new THREE.Mesh(new THREE.BoxGeometry(0.05, 1.95, 4.7), glassBack);
+    back.position.set(sx + nrmx * 0.82, y + 1.28, sz + nrmz * 0.82); back.rotation.y = ang; group.add(back);
+    const backFrame = new THREE.Mesh(new THREE.BoxGeometry(0.08, 2.05, 4.85), steel);
+    backFrame.position.set(sx + nrmx * 0.86, y + 1.28, sz + nrmz * 0.86); backFrame.rotation.y = ang; group.add(backFrame);
+    const seat = new THREE.Mesh(new THREE.BoxGeometry(2.7, 0.08, 0.46), wood);
+    seat.position.set(sx + nrmx * 0.32, y + 0.48, sz + nrmz * 0.32); seat.rotation.y = ang; group.add(seat);
+    const rest = new THREE.Mesh(new THREE.BoxGeometry(2.7, 0.38, 0.06), wood);
+    rest.position.set(sx + nrmx * 0.52, y + 0.78, sz + nrmz * 0.52); rest.rotation.y = ang; group.add(rest);
+    for (const u of [-1.15, 1.15]) {
+      const leg = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.46, 0.07), steel);
+      leg.position.set(sx + hx * u + nrmx * 0.32, y + 0.24, sz + hz * u + nrmz * 0.32);
+      group.add(leg);
+    }
+    const routeMap = routeSignTex(route, '남산서울타워');
+    const routePlate = new THREE.Mesh(new THREE.PlaneGeometry(0.85, 1.05), new THREE.MeshBasicMaterial({ map: routeMap, toneMapped: false }));
+    routePlate.position.set(sx + hx * 2.15 - nrmx * 0.05, y + 1.85, sz + hz * 2.15 - nrmz * 0.05);
+    routePlate.rotation.y = Math.atan2(-nrmx, -nrmz);
+    group.add(routePlate);
+    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.06, 3.35, 8), steel);
+    pole.position.set(sx + hx * 3.05 + nrmx * 0.15, y + 1.68, sz + hz * 3.05 + nrmz * 0.15);
+    group.add(pole);
+    const flag = new THREE.Mesh(new THREE.PlaneGeometry(1.15, 0.72), new THREE.MeshBasicMaterial({
+      map: signTex('남산서울타워', route), toneMapped: false, side: THREE.DoubleSide,
+    }));
+    flag.position.set(sx + hx * 3.05 + nrmx * 0.15, y + 3.15, sz + hz * 3.05 + nrmz * 0.15);
+    flag.rotation.y = Math.atan2(-nrmx, -nrmz);
+    group.add(flag);
+  });
   if (overlay && busStops.length) {
     const s = busStops[0];
     overlay.add({
@@ -431,7 +617,7 @@ export function createNamsanRoads({ parent, osm, heightAt, overlay = null } = {}
   const arrowMap = arrowTex();
   const arrowMat = new THREE.MeshBasicMaterial({
     map: arrowMap, transparent: true, depthWrite: false, side: THREE.DoubleSide,
-    color: '#ffffff',
+    color: '#ffe08a', toneMapped: false,
   });
   const guideGroup = new THREE.Group();
   guideGroup.name = 'namsan-guides';
@@ -439,17 +625,17 @@ export function createNamsanRoads({ parent, osm, heightAt, overlay = null } = {}
 
   function addGuide(pts) {
     if (!pts || pts.length < 2) return 0;
-    const rs = resample(pts, 4.2);
+    const rs = resample(pts, 3.3);
     let n = 0;
     for (let i = 0; i < rs.length - 1; i++) {
       const a = rs[i], b = rs[i + 1];
       const L = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1;
       const heading = Math.atan2(b[0] - a[0], b[1] - a[1]);
       const x = a[0], z = a[1];
-      const y = heightAt(x, z) + 0.12;
-      const m = new THREE.Mesh(new THREE.PlaneGeometry(1.55, 0.62), arrowMat);
-      m.rotation.x = -Math.PI / 2;
-      m.rotation.z = -heading;
+      const y = guideY(x, z, heightAt);
+      const m = new THREE.Mesh(new THREE.PlaneGeometry(2.7, 1.15), arrowMat);
+      m.rotation.order = 'YXZ';
+      m.rotation.set(-Math.PI / 2, heading, 0);
       m.position.set(x, y, z);
       guideGroup.add(m);
       n++;
@@ -462,8 +648,27 @@ export function createNamsanRoads({ parent, osm, heightAt, overlay = null } = {}
   function setDoor(door) {
     if (!door) return;
     const dest = [door.x, door.z];
-    // spawn (east plaza) — short straight
-    doorGuides += addGuide([[door.spawnX ?? NT.tx + 44, door.spawnZ ?? NT.tz + 6], dest]);
+    // spawn (east plaza) — short straight + 바닥에서 확실히 읽히는 큰 화살표
+    const spawn = [door.spawnX ?? NT.tx + 44, door.spawnZ ?? NT.tz + 6];
+    doorGuides += addGuide([spawn, dest]);
+    {
+      const dx = dest[0] - spawn[0], dz = dest[1] - spawn[1];
+      const L = Math.hypot(dx, dz) || 1;
+      const heading = Math.atan2(dx, dz);
+      const chevron = new THREE.Shape();
+      chevron.moveTo(1.8, 0); chevron.lineTo(-1.5, 0.7); chevron.lineTo(-0.5, 0); chevron.lineTo(-1.5, -0.7); chevron.closePath();
+      const cg = new THREE.ShapeGeometry(chevron);
+      const cmat = new THREE.MeshBasicMaterial({ color: '#ffcc33', toneMapped: false, side: THREE.DoubleSide, depthWrite: false });
+      for (const t of [0.22, 0.48, 0.74]) {
+        const x = spawn[0] + dx * t, z = spawn[1] + dz * t;
+        const m = new THREE.Mesh(cg, cmat);
+        m.rotation.order = 'YXZ';
+        m.rotation.set(-Math.PI / 2, heading, 0);
+        m.position.set(x, guideY(x, z, heightAt) + 0.08, z);
+        guideGroup.add(m);
+        doorGuides += 1;
+      }
+    }
     // cable upper station
     const ux = -10705.06, uz = -20554.09;
     const viaCable = dijkstra(ways, ux, uz, dest[0], dest[1])
@@ -471,8 +676,25 @@ export function createNamsanRoads({ parent, osm, heightAt, overlay = null } = {}
     doorGuides += addGuide(viaCable);
     // bus stop (first OSM platform)
     if (busStops[0]) {
-      const viaBus = dijkstra(ways, busStops[0].x, busStops[0].z, dest[0], dest[1])
-        || [[busStops[0].x, busStops[0].z], dest];
+      const bx = placedStops[0]?.x ?? busStops[0].x;
+      const bz = placedStops[0]?.z ?? busStops[0].z;
+      let viaBus = dijkstra(ways, bx, bz, dest[0], dest[1]);
+      if (!viaBus) {
+        const raw = stitchNamed(ways, /남산공원길|남산남측순환로/);
+        if (raw && raw.length >= 2) {
+          let i0 = 0, i1 = 0, d0 = Infinity, d1 = Infinity;
+          for (let i = 0; i < raw.length; i++) {
+            const a = Math.hypot(raw[i][0] - bx, raw[i][1] - bz);
+            const b = Math.hypot(raw[i][0] - dest[0], raw[i][1] - dest[1]);
+            if (a < d0) { d0 = a; i0 = i; }
+            if (b < d1) { d1 = b; i1 = i; }
+          }
+          const slice = i0 <= i1 ? raw.slice(i0, i1 + 1) : raw.slice(i1, i0 + 1).reverse();
+          viaBus = [[bx, bz], ...slice, dest];
+        } else {
+          viaBus = [[bx, bz], dest];
+        }
+      }
       doorGuides += addGuide(viaBus);
     }
   }
@@ -498,11 +720,13 @@ export function createNamsanRoads({ parent, osm, heightAt, overlay = null } = {}
     get doorGuides() { return doorGuides; },
     setNight(v = 0) {
       const k = Math.max(0, Math.min(1, v));
-      lampBulb.opacity = k;
-      lampGlow.opacity = k * 0.45;
-      lampBulb.visible = k > 0.05;
-      lampGlow.visible = k > 0.05;
-      roofLit.opacity = k * 0.7;
+      if (lampLensMat) lampLensMat.color.copy(LENS_DAY).lerp(LENS_NIGHT, k);
+      if (lampPoolMat) lampPoolMat.uniforms.uNight.value = k;
+      const pool = group.getObjectByName('namsan-streetlight-pool');
+      if (pool) pool.visible = k > 0.01;
+      yellowMat.emissiveIntensity = k * 0.48;
+      whiteMat.emissiveIntensity = k * 0.32;
+      roofLit.opacity = k * 0.75;
       roofLit.visible = k > 0.05;
     },
     update(dt) {

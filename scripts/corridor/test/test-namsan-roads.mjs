@@ -4,7 +4,7 @@ import './dom-shim.mjs';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-import { NT } from '../../../src/corridor/landmarks/namsanCoords.js';
+import { NT, inNamsanPark } from '../../../src/corridor/landmarks/namsanCoords.js';
 import { makeNamsanHeightAt } from '../../../src/corridor/landmarks/namsanTerrain.js';
 import { namsanMini } from '../../../src/corridor/landmarks/namsan.js';
 
@@ -110,7 +110,19 @@ const CITY_Y = 40 - (dem.datum ?? NT.datum); // ≈ -8
   assert.ok(loop.length >= 2, `mini loop ${loop.length}`);
   assert.ok(walks.length >= 20, `mini walks ${walks.length}`);
   assert.ok(mini.roads.some((r) => r.k === 'aerialway'), 'mini still has cable');
-  ok(`namsanMini roads: ${mini.roads.length} (loop ${loop.length}, walks ${walks.length})`);
+  assert.ok((mini.parks || []).length >= 1, `mini parks ${mini.parks?.length}`);
+  assert.ok(mini.parks.some((p) => (p.o?.length || 0) > 50), 'mini has a large park ring');
+  ok(`namsanMini roads: ${mini.roads.length} (loop ${loop.length}, walks ${walks.length}), parks ${mini.parks.length}`);
+}
+
+{
+  assert.ok(Array.isArray(osm.parks) && osm.parks.length >= 5, `parks ${osm.parks?.length}`);
+  assert.ok(osm.parks.some((p) => p.name === '남산공원' && (p.o?.length || 0) > 100), '남산공원 ring');
+  const stop = osm.busStops[0];
+  assert.ok(inNamsanPark(NT.tx, NT.tz, osm.parks, heightAt), 'tower in park');
+  assert.ok(inNamsanPark(stop.x, stop.z, osm.parks, heightAt), 'bus stop in park');
+  assert.equal(inNamsanPark(NT.tx + 2500, NT.tz + 2500, osm.parks, heightAt), false, 'far downtown not park');
+  ok(`park rings ${osm.parks.length}; tower and 남산서울타워 stop culled from city`);
 }
 
 console.log(`namsan-roads ${n} checks passed`);
