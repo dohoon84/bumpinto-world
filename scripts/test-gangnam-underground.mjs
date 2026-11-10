@@ -17,9 +17,22 @@ assert.ok(walkable(0, 47, 0.3, L), 'food');
 assert.ok(walkable(21, -12, 0.3, L), 'line2 hall');
 assert.ok(!walkable(0, -80, 0.3, L), 'outside north');
 assert.ok(!walkable(80, 0, 0.3, L), 'outside east');
-// 가게 안
-const shop = L.shops.find((s) => s.rich) || L.shops[0];
-assert.ok(walkable(shop.cx, shop.cz, 0.25, L), `shop interior ${shop.name}`);
+const open = L.shops.find((s) => !s.closed && s.rich) || L.shops.find((s) => !s.closed);
+assert.ok(open, 'open shop');
+assert.ok(walkable(open.cx, open.cz, 0.25, L), `shop interior ${open.name}`);
+const closed = L.shops.find((s) => s.closed);
+assert.ok(closed, 'some shuttered shops');
+assert.ok(!walkable(closed.cx, closed.cz, 0.25, L), 'closed shop blocked');
+assert.ok(L.shops.some((s) => (s.x1 - s.x0) > 5 || (s.z1 - s.z0) > 5), 'wide shops');
+assert.ok(L.shops.some((s) => (s.x1 - s.x0) < 3.3 || (s.z1 - s.z0) < 3.3), 'narrow shops');
+assert.ok(new Set(L.shops.map((s) => s.signColor)).size >= 6, 'varied sign colors');
+assert.ok(L.carts.length >= 2, 'corridor carts');
+assert.ok(L.saleRacks.length >= 4, 'sale racks');
+assert.ok(L.mapBoards.length >= 2, 'floor maps');
+assert.ok(!walkable(0, 45.2, 0.3, L), 'food table blocked');
+assert.ok(!walkable(-9.5, 44.5, 0.3, L), 'food counter blocked');
+for (const p of L.npcWays) assert.ok(walkable(p.x, p.z, 0.28, L), `npc way ${p.x},${p.z}`);
+const shop = open;
 // 가게 뒷벽 밖
 if (shop.axis === 'x' && shop.side < 0) assert.ok(!walkable(shop.cx, shop.z0 - 0.5, 0.25, L));
 // 이름에 실제 브랜드가 없는지 대략 검사

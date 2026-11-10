@@ -82,12 +82,12 @@ await page.screenshot({ path: `${OUT}/gunder-corridor.png` });
 
 await page.evaluate(() => {
   const i = __jj.subway.inside;
-  const s = i.layout.shops.find((q) => q.type === 'fashion' && q.axis === 'x' && q.side > 0 && q.cx > 14) || i.layout.shops[0];
+  const s = i.layout.shops.find((q) => !q.closed && q.type === 'fashion' && q.axis === 'x' && q.side > 0 && q.cx > 14) || i.layout.shops.find((q) => !q.closed && q.type === 'fashion') || i.layout.shops[0];
   const yaw = s.axis === 'x' ? (s.side > 0 ? Math.PI : 0) : (s.side > 0 ? -Math.PI / 2 : Math.PI / 2);
-  const px = s.axis === 'x' ? s.cx : (s.side > 0 ? s.x0 - 2.5 : s.x1 + 2.5);
-  const pz = s.axis === 'x' ? (s.side > 0 ? s.z0 - 2.5 : s.z1 + 2.5) : s.cz;
-  i.setView(px, pz, yaw, 0.06, 4.4);
-  window.__shop = { name: s.name, type: s.type, cx: s.cx, cz: s.cz, axis: s.axis, side: s.side };
+  const px = s.axis === 'x' ? s.cx - 0.85 : (s.side > 0 ? s.x0 - 2.2 : s.x1 + 2.2);
+  const pz = s.axis === 'x' ? (s.side > 0 ? s.z0 - 2.2 : s.z1 + 2.2) : s.cz - 0.85;
+  i.setView(px, pz, yaw, 0.04, 3.7);
+  window.__shop = { name: s.name, type: s.type, cx: s.cx, cz: s.cz, axis: s.axis, side: s.side, x0: s.x0, x1: s.x1, z0: s.z0, z1: s.z1 };
 });
 await page.waitForTimeout(900);
 await page.screenshot({ path: `${OUT}/gunder-shopfront.png` });
@@ -95,12 +95,15 @@ console.log('shop', await page.evaluate(() => window.__shop));
 
 await page.evaluate(() => {
   const i = __jj.subway.inside, s = window.__shop;
-  i.setView(s.cx, s.cz, s.axis === 'x' ? (s.side > 0 ? Math.PI : 0) : (s.side > 0 ? -Math.PI / 2 : Math.PI / 2), 0.08, 3.5);
+  const yaw = s.axis === 'x' ? (s.side > 0 ? Math.PI : 0) : (s.side > 0 ? -Math.PI / 2 : Math.PI / 2);
+  const px = s.axis === 'x' ? s.cx : (s.side > 0 ? s.x0 + 0.85 : s.x1 - 0.85);
+  const pz = s.axis === 'x' ? (s.side > 0 ? s.z0 + 0.85 : s.z1 - 0.85) : s.cz;
+  i.setView(px, pz, yaw, 0.05, 3.1);
 });
 await page.waitForTimeout(900);
 await page.screenshot({ path: `${OUT}/gunder-shopin.png` });
 
-await page.evaluate(() => { const i = __jj.subway.inside; i.setView(1.2, 46.8, 0.55, 0.16, 7.2); });
+await page.evaluate(() => { const i = __jj.subway.inside; i.setView(0.4, 46.6, 0.35, 0.12, 8.0); });
 await page.waitForTimeout(900);
 await page.screenshot({ path: `${OUT}/gunder-food.png` });
 
@@ -110,8 +113,7 @@ await page.screenshot({ path: `${OUT}/gunder-gates.png` });
 
 await page.evaluate(() => {
   const i = __jj.subway.inside;
-  const p = i.passages.find((q) => q.id === 'east');
-  i.setView(p.mouth.x - 3.2, p.mouth.z, -Math.PI / 2, 0.18, 5.2);
+  i.setView(24, 0.35, Math.PI / 2 + 0.52, 0.0, 3.15);
 });
 await page.waitForTimeout(900);
 await page.screenshot({ path: `${OUT}/gunder-exitsign.png` });

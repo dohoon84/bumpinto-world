@@ -2,7 +2,7 @@
 // +x 동(테헤란로), +z 남(양재), y 위. 바닥 y=0.
 // 출구 묶음은 역 중심 나침반이 아니라 실제 도로 방향을 따른다 (가정은 PLAN 7장).
 
-export const CEIL = 3.25;
+export const CEIL = 3.55;
 export const HALF = 3.8;
 export const SHOP_D = 5.15;
 export const SHOP_W = 3.9;
@@ -21,11 +21,22 @@ export const TYPES = {
   fashion: { wall: '#f3ece1', accent: '#e8590c', floor: '#e7d8c4', ko: '의류', en: 'Fashion' },
   accessories: { wall: '#fff0f6', accent: '#e64980', floor: '#f7e0eb', ko: '액세서리', en: 'Accessories' },
   cosmetics: { wall: '#fff5f5', accent: '#f06595', floor: '#f8e4e8', ko: '화장품', en: 'Beauty' },
-  phone: { wall: '#2b3035', accent: '#22b8cf', floor: '#3b4148', ko: '폰케이스', en: 'Phone cases' },
+  phone: { wall: '#eef3f6', accent: '#22b8cf', floor: '#e3ebf0', ko: '폰케이스', en: 'Phone cases' },
   cafe: { wall: '#fff4e6', accent: '#d9480f', floor: '#ead3b5', ko: '카페', en: 'Cafe' },
   snack: { wall: '#fff0e4', accent: '#e8590c', floor: '#efd0ae', ko: '분식', en: 'Snacks' },
   shoes: { wall: '#f2ebe2', accent: '#8d6e63', floor: '#e2d2c0', ko: '신발', en: 'Shoes' },
   flower: { wall: '#ebfbee', accent: '#2f9e44', floor: '#d3f9d8', ko: '꽃집', en: 'Flowers' },
+};
+
+export const SIGN_COLORS = {
+  fashion: ['#e8590c', '#c2255c', '#1c7ed6', '#2b8a3e', '#e67700', '#495057'],
+  accessories: ['#e64980', '#be4bdb', '#f06595', '#ae3ec9', '#d6336c'],
+  cosmetics: ['#f06595', '#e64980', '#fa5252', '#ff6b6b', '#d6336c'],
+  phone: ['#1098ad', '#1c7ed6', '#15aabf', '#0b7285', '#3bc9db'],
+  cafe: ['#d9480f', '#c05621', '#e8590c', '#862e2e'],
+  snack: ['#e8590c', '#f08c00', '#d9480f', '#c2255c'],
+  shoes: ['#8d6e63', '#5f3dc4', '#495057', '#795548'],
+  flower: ['#2f9e44', '#37b24d', '#e64980', '#f08c00'],
 };
 
 // 전부 지어낸 이름. 실제 지하상가 상호·브랜드는 쓰지 않는다.
@@ -79,14 +90,29 @@ function pickName(type, i) {
   return list[i % list.length];
 }
 
+function nextWidth(i, remain) {
+  const r = i % 8;
+  let w = SHOP_W;
+  if (r === 0) w = 5.55;
+  else if (r === 3) w = 3.05;
+  else if (r === 6) w = 4.55;
+  if (w > remain) w = remain;
+  return w;
+}
+
 function pushShop(list, type, i, namePair, axis, side, xA, xB, zA, zB, extra = {}) {
   const [name, nameEn] = namePair;
+  const span = axis === 'x' ? xB - xA : zB - zA;
+  const pal = SIGN_COLORS[type] || SIGN_COLORS.fashion;
   list.push({
     id: list.length, type, name, nameEn, axis, side,
     x0: xA, x1: xB, z0: zA, z1: zB,
     cx: (xA + xB) / 2, cz: (zA + zB) / 2,
     interior: rect(xA + 0.16, xB - 0.16, zA + 0.16, zB - 0.16),
     rich: i % 3 === 0,
+    closed: i % 12 === 4,
+    openW: Math.min(2.2, Math.max(1.35, span - 1.15)),
+    signColor: pal[i % pal.length],
     ...extra,
   });
 }
@@ -100,11 +126,12 @@ function shopAlongX(list, x0, x1, zFront, side, zoneTypes, start) {
     const zB = side < 0 ? zFront : zFront + SHOP_D;
     pushShop(list, type, i, pickName(type, i), 'x', side, xA, xB, zA, zB, { zFront });
   };
-  while (x + SHOP_W <= x1 + 0.05) {
-    mk(x, x + SHOP_W, i);
-    x += SHOP_W; i++;
+  while (x + 2.15 <= x1 + 0.05) {
+    const w = nextWidth(i, x1 - x);
+    if (w < 2.15) break;
+    mk(x, x + w, i);
+    x += w; i++;
   }
-  if (x1 - x >= 2.15) { mk(x, x1, i); i++; }
   return i;
 }
 
@@ -117,8 +144,12 @@ function shopAlongZ(list, z0, z1, xFront, side, zoneTypes, start) {
     const xB = side < 0 ? xFront : xFront + SHOP_D;
     pushShop(list, type, i, pickName(type, i + 17), 'z', side, xA, xB, zA, zB, { xFront, rich: i % 3 === 1 });
   };
-  while (z + SHOP_W <= z1 + 0.05) { mk(z, z + SHOP_W, i); z += SHOP_W; i++; }
-  if (z1 - z >= 2.15) { mk(z, z1, i); i++; }
+  while (z + 2.15 <= z1 + 0.05) {
+    const w = nextWidth(i, z1 - z);
+    if (w < 2.15) break;
+    mk(z, z + w, i);
+    z += w; i++;
+  }
   return i;
 }
 
@@ -140,7 +171,6 @@ function makePassage(id, wall, c, half, exits) {
     mouth = { x: c, z: NORTH_Z + 1.5 };
     rec = rect(c - half, c + half, NORTH_Z - PASSAGE_LEN, NORTH_Z);
   } else if (wall === 's-e') {
-    // 남동 옆문 (south wing east wall)
     mouth = { x: HALF + SHOP_D - 0.2, z: c };
     rec = rect(HALF + SHOP_D, HALF + SHOP_D + PASSAGE_LEN, c - half, c + half);
     return { id, wall: 'e', c, half, exits, mouth: { x: HALF - 0.4, z: c }, out: { x: 1, z: 0 }, rect: rec, sidePass: true };
@@ -152,25 +182,25 @@ function makePassage(id, wall, c, half, exits) {
   return { id, wall, c, half, exits, mouth, out, rect: rec };
 }
 
+function faceRy(shop) {
+  if (shop.axis === 'x') return shop.side < 0 ? 0 : Math.PI;
+  return shop.side < 0 ? Math.PI / 2 : -Math.PI / 2;
+}
+
 export function buildLayout(exits = []) {
   const shops = [];
   let n = 0;
-  // 동서 본선: 북쪽 점포 (서쪽만 — 북동쪽은 2호선 개찰 홀)
   n = shopAlongX(shops, EW.x0 + 1.2 + SHOP_W, PLAZA.x0 - 0.4, -HALF, -1, ['cosmetics', 'fashion', 'accessories', 'cosmetics', 'shoes'], n);
   n = shopAlongX(shops, 30.4, EW.x1 - 1.2, -HALF, -1, ['phone', 'accessories', 'fashion'], n);
-  // 동서 본선: 남쪽 점포 (교차 광장은 비움)
   n = shopAlongX(shops, EW.x0 + 1.2, PLAZA.x0 - 0.4, HALF, 1, ['fashion', 'accessories', 'fashion', 'cosmetics'], n);
   n = shopAlongX(shops, PLAZA.x1 + 0.4, EW.x1 - 1.2, HALF, 1, ['fashion', 'accessories', 'shoes', 'fashion'], n);
-  // 북쪽 날개
   n = shopAlongZ(shops, NORTH_Z + 2.2, -HALF - 0.4, -HALF, -1, ['phone', 'accessories', 'phone'], n);
   n = shopAlongZ(shops, NORTH_Z + 2.2, L2HALL.z1 - 0.8, HALF, 1, ['accessories', 'phone', 'flower'], n);
-  // 남쪽 날개 (푸드존 앞뒤). 출구 옆문은 z≈56 부근을 비운다.
   n = shopAlongZ(shops, HALF + 0.4, FOOD.z0 - 0.5, -HALF, -1, ['fashion', 'cosmetics', 'cafe', 'accessories'], n);
   n = shopAlongZ(shops, HALF + 0.4, FOOD.z0 - 0.5, HALF, 1, ['fashion', 'snack', 'shoes', 'fashion'], n);
   n = shopAlongZ(shops, FOOD.z1 + 0.4, 55.2, -HALF, -1, ['cafe', 'accessories'], n);
   n = shopAlongZ(shops, FOOD.z1 + 0.4, 55.2, HALF, 1, ['cafe', 'phone'], n);
 
-  // 교차 광장 카페 키오스크 (걸어 들어가는 매장은 아님, 카운터)
   const cafes = [
     { name: '깊은잔', nameEn: 'Deep Cup', x: -6.4, z: 0.2, w: 4.2, d: 3.2 },
     { name: '따뜻한컵', nameEn: 'Warm Cup', x: 6.4, z: 0.2, w: 4.2, d: 3.2 },
@@ -182,6 +212,11 @@ export function buildLayout(exits = []) {
     { name: '어묵한그릇', nameEn: 'One Fishcake', x: 9.5, z: 44.5, w: 4.4, d: 3.0, type: 'snack' },
     { name: '분식코너', nameEn: 'Snack Corner', x: 9.5, z: 49.5, w: 4.4, d: 3.0, type: 'snack' },
     { name: '밤사이커피', nameEn: 'Night Coffee', x: 0, z: 52.4, w: 5.2, d: 2.6, type: 'cafe' },
+  ];
+
+  const tables = [
+    { x: -4.2, z: 46.5 }, { x: 0, z: 45.2 }, { x: 4.2, z: 46.5 },
+    { x: -3.4, z: 49.4 }, { x: 3.4, z: 49.4 },
   ];
 
   const passages = [
@@ -219,7 +254,34 @@ export function buildLayout(exits = []) {
     { x: -3.1, z: -2.4, w: 1.1, d: 0.9, kind: 'dir' },
   ];
 
-  // 2호선 개찰 (홀 남쪽, 본선으로 남향). 신분당 개찰 (푸드존 남쪽, 북에서 남으로).
+  const carts = [
+    { x: -19.5, z: 0, w: 1.35, d: 0.88, kind: 'snack' },
+    { x: 19.5, z: 0, w: 1.35, d: 0.88, kind: 'acc' },
+    { x: 0, z: 17.6, w: 1.28, d: 0.92, kind: 'flower' },
+  ];
+
+  const saleRacks = [];
+  const saleStands = [];
+  for (const s of shops) {
+    if (s.closed) continue;
+    const ry = faceRy(s);
+    let fx, fz;
+    if (s.axis === 'x') { fx = s.cx; fz = s.side < 0 ? s.z1 + 0.72 : s.z0 - 0.72; }
+    else { fx = s.side < 0 ? s.x1 + 0.72 : s.x0 - 0.72; fz = s.cz; }
+    const ax = s.axis === 'x' ? 1 : 0, az = s.axis === 'z' ? 1 : 0;
+    if ((s.type === 'fashion' || s.type === 'accessories' || s.type === 'shoes') && s.id % 2 === 0) {
+      saleRacks.push({ x: fx - ax * 1.38, z: fz - az * 1.38, ry, type: s.type });
+    }
+    if (s.id % 5 === 2) {
+      saleStands.push({ x: fx + ax * 1.15, z: fz + az * 1.15, ry, kind: s.id % 2 ? 'sale' : 'price' });
+    }
+  }
+
+  const mapBoards = [
+    { x: 0.05, z: -2.62, w: 3.35, d: 0.22, ry: 0 },
+    { x: 2.72, z: 39.15, w: 0.2, d: 2.15, ry: -Math.PI / 2 },
+  ];
+
   const l2xs = [];
   for (let k = 0; k < 7; k++) l2xs.push(15.15 + k * 1.35);
   const shinxs = [];
@@ -239,16 +301,21 @@ export function buildLayout(exits = []) {
   ];
   const transfer = { x: 0, z: 62.6, hw: 4.2 };
 
-  const walks = [
-    rect(EW.x0, EW.x1, -HALF, HALF), // 동서 본선
-    rect(-HALF, HALF, NORTH_Z, -HALF), // 북쪽 날개
-    rect(-HALF, HALF, HALF, SOUTH_Z), // 남쪽 날개 중앙
-    rect(L2HALL.x0, L2HALL.x1, L2HALL.z0, L2HALL.z1), // 2호선 홀
-    rect(HALF, L2HALL.x0 + 0.2, -HALF, -8.15), // 본선 → 2호선 홀 이음
-    rect(-FOOD.hw, FOOD.hw, FOOD.z0, FOOD.z1), // 푸드존 확장
-    ...shops.map((s) => s.interior),
+  const npcWays = [
+    { x: 0, z: 0 }, { x: -40, z: 0 }, { x: 40, z: 0 }, { x: 0, z: -22 },
+    { x: 0, z: 22 }, { x: 0, z: 36 }, { x: 0, z: 47.7 }, { x: 21, z: -12 },
+    { x: -1.5, z: 43.5 }, { x: 1.5, z: 50.6 },
   ];
-  // 출구 통로 (바깥 끝 2m 는 계단이라 못 감)
+
+  const walks = [
+    rect(EW.x0, EW.x1, -HALF, HALF),
+    rect(-HALF, HALF, NORTH_Z, -HALF),
+    rect(-HALF, HALF, HALF, SOUTH_Z),
+    rect(L2HALL.x0, L2HALL.x1, L2HALL.z0, L2HALL.z1),
+    rect(HALF, L2HALL.x0 + 0.2, -HALF, -8.15),
+    rect(-FOOD.hw, FOOD.hw, FOOD.z0, FOOD.z1),
+    ...shops.filter((s) => !s.closed).map((s) => s.interior),
+  ];
   for (const p of passages) {
     const R = p.rect;
     if (p.wall === 'w' && !p.sidePass) walks.push(rect(R.x0 + 2.1, EW.x0 + 1.1, R.z0 + 0.15, R.z1 - 0.15));
@@ -264,49 +331,69 @@ export function buildLayout(exits = []) {
   for (const r of restrooms) blockers.push(rect(r.x - r.w / 2, r.x + r.w / 2, r.z - r.d / 2, r.z + r.d / 2));
   for (const k of kiosks) blockers.push(rect(k.x - k.w / 2, k.x + k.w / 2, k.z - k.d / 2, k.z + k.d / 2));
   for (const f of foodStands) blockers.push(rect(f.x - f.w / 2, f.x + f.w / 2, f.z - f.d / 2, f.z + f.d / 2));
-  for (const f of cafes) blockers.push(rect(f.x - f.w / 2, f.x + f.w / 2, f.z - f.d / 2, f.z + f.d / 2));
+  for (const f of cafes) {
+    blockers.push(rect(f.x - f.w / 2, f.x + f.w / 2, f.z - f.d / 2, f.z + f.d / 2));
+    for (const dx of [-1.1, 1.1]) {
+      blockers.push(rect(f.x + dx - 0.3, f.x + dx + 0.3, f.z - 1.55 - 0.3, f.z - 1.55 + 0.3));
+    }
+  }
+  for (const t of tables) blockers.push(rect(t.x - 0.98, t.x + 0.98, t.z - 0.98, t.z + 0.98));
+  for (const k of carts) blockers.push(rect(k.x - k.w / 2, k.x + k.w / 2, k.z - k.d / 2, k.z + k.d / 2));
+  for (const r of saleRacks) blockers.push(rect(r.x - 0.48, r.x + 0.48, r.z - 0.28, r.z + 0.28));
+  for (const r of saleStands) blockers.push(rect(r.x - 0.28, r.x + 0.28, r.z - 0.22, r.z + 0.22));
+  for (const m of mapBoards) blockers.push(rect(m.x - m.w / 2, m.x + m.w / 2, m.z - m.d / 2, m.z + m.d / 2));
   for (const cab of cabs) blockers.push(rect(cab.x - 0.16, cab.x + 0.16, cab.z - 0.85, cab.z + 0.85));
-  // 개찰 펜스 (레인 밖)
   blockers.push(rect(L2HALL.x0, 14.4, -8.32, -7.98));
   blockers.push(rect(l2xs[l2xs.length - 1] + 0.7, L2HALL.x1, -8.32, -7.98));
   blockers.push(rect(-HALF, shinxs[0] - 0.7, 59.98, 60.32));
   blockers.push(rect(shinxs[shinxs.length - 1] + 0.7, HALF, 59.98, 60.32));
-  // 가게 벽 (앞면 출입구만 비움)
   for (const s of shops) {
+    const gap = (s.openW || OPEN_W) / 2;
     if (s.axis === 'x') {
       blockers.push(rect(s.x0, s.x0 + 0.14, s.z0, s.z1));
       blockers.push(rect(s.x1 - 0.14, s.x1, s.z0, s.z1));
       if (s.side < 0) blockers.push(rect(s.x0, s.x1, s.z0, s.z0 + 0.14));
       else blockers.push(rect(s.x0, s.x1, s.z1 - 0.14, s.z1));
-      const mid = s.cx, gap = OPEN_W / 2;
-      if (s.side < 0) { // 남쪽 앞면(본선 쪽) = z1
-        blockers.push(rect(s.x0, mid - gap, s.z1 - 0.14, s.z1 + 0.08));
-        blockers.push(rect(mid + gap, s.x1, s.z1 - 0.14, s.z1 + 0.08));
+      if (s.closed) {
+        if (s.side < 0) blockers.push(rect(s.x0, s.x1, s.z1 - 0.14, s.z1 + 0.08));
+        else blockers.push(rect(s.x0, s.x1, s.z0 - 0.08, s.z0 + 0.14));
       } else {
-        blockers.push(rect(s.x0, mid - gap, s.z0 - 0.08, s.z0 + 0.14));
-        blockers.push(rect(mid + gap, s.x1, s.z0 - 0.08, s.z0 + 0.14));
+        const mid = s.cx;
+        if (s.side < 0) {
+          blockers.push(rect(s.x0, mid - gap, s.z1 - 0.14, s.z1 + 0.08));
+          blockers.push(rect(mid + gap, s.x1, s.z1 - 0.14, s.z1 + 0.08));
+        } else {
+          blockers.push(rect(s.x0, mid - gap, s.z0 - 0.08, s.z0 + 0.14));
+          blockers.push(rect(mid + gap, s.x1, s.z0 - 0.08, s.z0 + 0.14));
+        }
       }
     } else {
       blockers.push(rect(s.x0, s.x1, s.z0, s.z0 + 0.14));
       blockers.push(rect(s.x0, s.x1, s.z1 - 0.14, s.z1));
       if (s.side < 0) blockers.push(rect(s.x0, s.x0 + 0.14, s.z0, s.z1));
       else blockers.push(rect(s.x1 - 0.14, s.x1, s.z0, s.z1));
-      const mid = s.cz, gap = OPEN_W / 2;
-      if (s.side < 0) {
-        blockers.push(rect(s.x1 - 0.14, s.x1 + 0.08, s.z0, mid - gap));
-        blockers.push(rect(s.x1 - 0.14, s.x1 + 0.08, mid + gap, s.z1));
+      if (s.closed) {
+        if (s.side < 0) blockers.push(rect(s.x1 - 0.14, s.x1 + 0.08, s.z0, s.z1));
+        else blockers.push(rect(s.x0 - 0.08, s.x0 + 0.14, s.z0, s.z1));
       } else {
-        blockers.push(rect(s.x0 - 0.08, s.x0 + 0.14, s.z0, mid - gap));
-        blockers.push(rect(s.x0 - 0.08, s.x0 + 0.14, mid + gap, s.z1));
+        const mid = s.cz;
+        if (s.side < 0) {
+          blockers.push(rect(s.x1 - 0.14, s.x1 + 0.08, s.z0, mid - gap));
+          blockers.push(rect(s.x1 - 0.14, s.x1 + 0.08, mid + gap, s.z1));
+        } else {
+          blockers.push(rect(s.x0 - 0.08, s.x0 + 0.14, s.z0, mid - gap));
+          blockers.push(rect(s.x0 - 0.08, s.x0 + 0.14, mid + gap, s.z1));
+        }
       }
     }
   }
   for (const w of wells) {
-    blockers.push(rect(w.x0 - 0.08, w.x1 + 0.08, w.z0 - 0.05, w.z1 - 0.4)); // 구덩이. 남쪽 입구 띠는 남겨 두어 걸어 들어가게 한다
+    blockers.push(rect(w.x0 - 0.08, w.x1 + 0.08, w.z0 - 0.05, w.z1 - 0.4));
   }
 
   return {
     shops, passages, columns, benches, restrooms, kiosks, cafes, foodStands,
+    tables, carts, saleRacks, saleStands, mapBoards, npcWays,
     lanes, cabs, wells, transfer, walks, blockers, l2xs, shinxs,
   };
 }
