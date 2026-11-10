@@ -1,12 +1,14 @@
 // [gyeongbu-bus] 판교IC–양재IC 청계산·인릉산 지형. 공개 DEM(AWS Terrain Tiles / SRTM 계열)을
 //   경부 본선 중앙값 기준으로 상대 높이화했다. 도로 주변은 0m 로 펴서 버스가 산에 파묻히지 않게 한다.
 //   수목은 도로 근처를 촘촘히, 먼 사면은 숲 색 지면에 맡긴다. 방음벽은 청계산입구·원지동 주택가 쪽에만 연속 패널.
-//   청계산입구 건물은 OSM 윤곽·층고(있으면)이고, 신분당선 출입구 캐노피를 곁들인다.
+//   청계산입구 건물은 OSM 윤곽·층고(있으면)이고, 신분당선 출입구는 OSM railway=subway_entrance(1·2번)에 정자역과 같은 캐노피·계단을 세운 뒤 광장(포장·자전거 거치대·가로수·가로등·역명 표지)을 곁들인다.
 //   ?cgterrain=0 또는 ?gangnam=0 이면 만들지 않는다.
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { watchEvening } from '../evening.js';
 import { buildingMeshes } from './tileMesh.js';
+import { buildEntrances } from '../subway/entrance.js';
+import { LINES } from '../subway/lines.js';
 
 export const CHEONGGYE_DEM_FILE = 'gyeongbu/cheonggye-dem.json';
 export const CHEONGGYE_BUILDINGS_FILE = 'gyeongbu/cheonggye-buildings.json';
@@ -61,6 +63,37 @@ function terrainHeight(raw, dist) {
   y = Math.max(0, y);
   if (dist < 260) y = Math.max(y, Math.min(16, (dist - 34) * 0.038));
   return y;
+}
+
+function sampleH(data, x, z) {
+  const { x0, z0, dx, dz, nx, nz, h } = data;
+  const ix = Math.max(0, Math.min(nx - 1, Math.round((x - x0) / dx)));
+  const iz = Math.max(0, Math.min(nz - 1, Math.round((z - z0) / dz)));
+  return h[iz * nx + ix] || 0;
+}
+
+function inFootprint(x, z, ring) {
+  let inside = false;
+  for (let i = 0; i < ring.length - 1; i++) {
+    const [x1, z1] = ring[i], [x2, z2] = ring[i + 1];
+    if ((z1 > z) !== (z2 > z) && x < ((x2 - x1) * (z - z1)) / ((z2 - z1) || 1e-12) + x1) inside = !inside;
+  }
+  return inside;
+}
+
+function nearBuilding(x, z, buildings, pad = 1.4) {
+  for (const b of buildings || []) {
+    const o = b.o;
+    if (!o || o.length < 4) continue;
+    if (inFootprint(x, z, o)) return true;
+    for (let i = 0; i < o.length - 1; i++) {
+      const [ax, az] = o[i], [bx, bz] = o[i + 1];
+      const dx = bx - ax, dz = bz - az, L2 = dx * dx + dz * dz || 1;
+      const t = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / L2));
+      if (Math.hypot(ax + dx * t - x, az + dz * t - z) < pad) return true;
+    }
+  }
+  return false;
 }
 
 const STATION = { x: -4758.4, z: -9052.4 };
@@ -257,65 +290,199 @@ function buildBarriers(road) {
   return g;
 }
 
-function buildStationEntrances(list) {
+function makeRoadSignTex(ref) {
+  const cv = document.createElement('canvas');
+  cv.width = 1024; cv.height = 320;
+  const x = cv.getContext('2d');
+  x.fillStyle = '#d4003b';
+  x.fillRect(0, 0, 248, 320);
+  x.fillStyle = '#fff';
+  x.textAlign = 'center';
+  x.textBaseline = 'middle';
+  x.font = 'bold 170px sans-serif';
+  x.fillText(String(ref || ''), 124, 128);
+  x.font = 'bold 40px sans-serif';
+  x.fillText('번 출구', 124, 248);
+  x.fillStyle = '#1d2228';
+  x.fillRect(248, 0, 776, 320);
+  x.fillStyle = '#fff';
+  x.textAlign = 'left';
+  x.font = 'bold 96px sans-serif';
+  x.fillText('청계산입구', 278, 118);
+  x.fillStyle = '#c9d1d9';
+  x.font = '600 42px sans-serif';
+  x.fillText('Cheonggyesan', 282, 196);
+  x.fillStyle = '#d4003b';
+  x.beginPath();
+  if (x.roundRect) x.roundRect(278, 230, 214, 58, 10);
+  else x.rect(278, 230, 214, 58);
+  x.fill();
+  x.fillStyle = '#fff';
+  x.textAlign = 'center';
+  x.font = 'bold 30px sans-serif';
+  x.fillText('신분당선', 385, 261);
+  const tex = new THREE.CanvasTexture(cv);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = 4;
+  return tex;
+}
+
+function buildStationPlazas(exits, buildings, gy) {
   const g = new THREE.Group();
-  g.name = 'cheonggyeEntrances';
+  g.name = 'cheonggyeStationPlazas';
+  const solid = [];
   const night = [];
-  for (const e of list || []) {
-    const dir = Math.atan2(STATION.x - e.x, STATION.z - e.z);
-    const wrap = new THREE.Group();
-    wrap.position.set(e.x, 0, e.z);
-    wrap.rotation.y = dir;
-    const W = 3.4, Lh = 7.4, H = 3.15;
-    const frame = '#6b7280', glass = '#d7eef8';
-    const parts = [];
-    for (const [u, v] of [[-Lh / 2, -W / 2], [-Lh / 2, W / 2], [Lh / 2, -W / 2], [Lh / 2, W / 2]]) {
-      parts.push(coloredBox(0.16, H, 0.16, frame, v, H / 2, u));
+  const treeMats = [];
+  const treeGeo = treePrototype('#5a4030', '#356338', 1.85, 4.4);
+  const TILE_A = '#c9c4b8', TILE_B = '#b7b2a6', CURB = '#9a958a', STEEL = '#8b929a', POLE = '#6b7280';
+  for (const e of exits) {
+    const y0 = gy(e.x, e.z);
+    const s = Math.sin(e.ry), c = Math.cos(e.ry);
+    const at = (u, w) => ({ x: e.x + u * c + w * s, z: e.z - u * s + w * c });
+    const put = (w, h, d, color, u, y, w0, ang = 0) => {
+      const p = at(u, w0);
+      solid.push(coloredBox(w, h, d, color, p.x, y, p.z, e.ry + ang));
+    };
+    // 타일 포장 — 계단 구멍·건물 발자국은 비운다
+    for (let iu = -5; iu <= 5; iu++) {
+      for (let iw = -4; iw <= 6; iw++) {
+        const u = iu * 1.55, w = iw * 1.55;
+        if (Math.abs(u) < 1.85 && w > -0.5 && w < 6.3) continue;
+        const p = at(u, w);
+        if (nearBuilding(p.x, p.z, buildings, 1.6)) continue;
+        const col = ((iu + iw) & 1) ? TILE_A : TILE_B;
+        solid.push(coloredBox(1.48, 0.07, 1.48, col, p.x, y0 + 0.035, p.z, e.ry));
+      }
     }
-    parts.push(coloredBox(W + 0.45, 0.22, Lh + 0.45, frame, 0, H + 0.12, 0));
-    parts.push(coloredBox(W, 0.06, Lh, '#f4fbff', 0, H + 0.28, 0));
-    parts.push(coloredBox(W, H, 0.18, frame, 0, H / 2, -Lh / 2));
-    parts.push(coloredBox(W - 0.5, 0.08, Lh - 1.1, '#3a3f46', 0, 0.05, 0.2));
-    parts.push(coloredBox(W + 0.35, 0.28, 0.12, '#d4003b', 0, H + 0.52, Lh / 2 + 0.1));
-    parts.push(coloredBox(W + 0.35, 0.22, 0.12, '#e85d04', 0, H + 0.80, Lh / 2 + 0.1));
-    const body = new THREE.Mesh(mergeGeometries(parts), new THREE.MeshLambertMaterial({ vertexColors: true }));
-    for (const x of parts) x.dispose();
-    const glassL = coloredBox(0.05, H - 0.45, Lh - 0.2, glass, -W / 2, H / 2 + 0.15, 0);
-    const glassR = coloredBox(0.05, H - 0.45, Lh - 0.2, glass, W / 2, H / 2 + 0.15, 0);
-    const gm = new THREE.Mesh(mergeGeometries([glassL, glassR]), new THREE.MeshLambertMaterial({
-      vertexColors: true, transparent: true, opacity: 0.42, depthWrite: false,
-    }));
-    glassL.dispose(); glassR.dispose();
-    wrap.add(body, gm);
-    // 번호판
-    const plate = makeExitPlate(e.ref || '');
-    plate.position.set(0, H + 1.28, Lh / 2 + 0.14);
-    wrap.add(plate);
-    const lamp = coloredBox(W - 0.8, 0.05, Lh - 0.7, '#fff6d8', 0, H - 0.04, 0);
-    const glow = new THREE.Mesh(lamp, new THREE.MeshBasicMaterial({ vertexColors: true }));
-    glow.visible = false;
-    wrap.add(glow);
-    night.push(glow);
-    g.add(wrap);
+    // 연석
+    for (const [u, w, ww, dd] of [
+      [0, -6.4, 16.4, 0.28], [0, 10.2, 16.4, 0.28], [-8.2, 1.9, 0.28, 16.8], [8.2, 1.9, 0.28, 16.8],
+    ]) {
+      const p = at(u, w);
+      if (!nearBuilding(p.x, p.z, buildings, 0.8)) {
+        solid.push(coloredBox(ww, 0.16, dd, CURB, p.x, y0 + 0.08, p.z, e.ry));
+      }
+    }
+    // 자전거 거치대 (거꾸로 U자, 출입구 옆)
+    for (const side of [-1, 1]) {
+      for (let i = 0; i < 4; i++) {
+        const u = side * (2.9 + i * 0.72), w = -2.35;
+        const p = at(u, w);
+        if (nearBuilding(p.x, p.z, buildings, 1.0)) continue;
+        put(0.06, 0.95, 0.06, STEEL, u - 0.32, y0 + 0.48, w);
+        put(0.06, 0.95, 0.06, STEEL, u + 0.32, y0 + 0.48, w);
+        put(0.70, 0.06, 0.06, STEEL, u, y0 + 0.98, w);
+      }
+    }
+    // 벤치 하나
+    {
+      const p = at(3.6, -3.4);
+      if (!nearBuilding(p.x, p.z, buildings, 1.2)) {
+        put(1.7, 0.08, 0.42, '#6a5340', 3.6, y0 + 0.46, -3.4);
+        put(1.7, 0.42, 0.08, '#5a4636', 3.6, y0 + 0.72, -3.18);
+        put(0.08, 0.42, 0.42, '#4a3a2c', 2.85, y0 + 0.22, -3.4);
+        put(0.08, 0.42, 0.42, '#4a3a2c', 4.35, y0 + 0.22, -3.4);
+      }
+    }
+    // 가로등 2개
+    for (const [u, w] of [[-6.4, -3.6], [6.4, 3.8]]) {
+      const p = at(u, w);
+      if (nearBuilding(p.x, p.z, buildings, 1.2)) continue;
+      put(0.14, 5.6, 0.14, POLE, u, y0 + 2.8, w);
+      put(1.35, 0.08, 0.10, POLE, u + 0.55, y0 + 5.55, w);
+      put(0.28, 0.14, 0.36, '#d8dde3', u + 1.15, y0 + 5.42, w);
+      const lamp = coloredBox(0.42, 0.18, 0.42, '#fff4d0', p.x + Math.cos(e.ry) * 1.15, y0 + 5.38, p.z - Math.sin(e.ry) * 1.15, e.ry);
+      const glow = new THREE.Mesh(lamp, new THREE.MeshBasicMaterial({ vertexColors: true }));
+      glow.visible = false;
+      glow.name = 'cheonggyePlazaLamp';
+      night.push(glow);
+    }
+    // 큰 역명 표지 (도로·보행에서 읽히게). 출입구 왼쪽 앞.
+    {
+      const u = -4.35, w = -3.15;
+      const p = at(u, w);
+      if (!nearBuilding(p.x, p.z, buildings, 1.0)) {
+        put(0.12, 3.15, 0.12, POLE, u - 2.15, y0 + 1.58, w);
+        put(0.12, 3.15, 0.12, POLE, u + 2.15, y0 + 1.58, w);
+        put(4.7, 1.52, 0.10, '#1d2228', u, y0 + 3.55, w);
+        const tex = makeRoadSignTex(e.ref);
+        const geo = new THREE.PlaneGeometry(4.55, 1.42);
+        const mat = new THREE.MeshBasicMaterial({ map: tex, toneMapped: false });
+        const face = new THREE.Mesh(geo, mat);
+        face.position.set(p.x - Math.sin(e.ry) * 0.06, y0 + 3.55, p.z - Math.cos(e.ry) * 0.06);
+        face.rotation.y = e.ry + Math.PI;
+        face.name = 'cheonggyeStationSign';
+        g.add(face);
+        const back = new THREE.Mesh(geo, mat);
+        back.position.set(p.x + Math.sin(e.ry) * 0.06, y0 + 3.55, p.z + Math.cos(e.ry) * 0.06);
+        back.rotation.y = e.ry;
+        back.name = 'cheonggyeStationSignBack';
+        g.add(back);
+      }
+    }
+    // 광장 나무
+    for (const [u, w, sc] of [[-6.8, 5.6, 1.05], [6.6, 6.0, 0.95], [-6.6, 0.6, 0.88], [6.8, -2.8, 1.0]]) {
+      const p = at(u, w);
+      if (nearBuilding(p.x, p.z, buildings, 2.2)) continue;
+      treeMats.push({ x: p.x, y: y0, z: p.z, sc });
+    }
   }
+  if (solid.length) {
+    const mesh = new THREE.Mesh(mergeGeometries(solid), new THREE.MeshLambertMaterial({ vertexColors: true }));
+    mesh.name = 'cheonggyePlazaSolid';
+    mesh.receiveShadow = true;
+    g.add(mesh);
+    for (const x of solid) x.dispose();
+  }
+  if (treeMats.length) {
+    const im = new THREE.InstancedMesh(treeGeo, new THREE.MeshLambertMaterial({ vertexColors: true }), treeMats.length);
+    im.name = 'cheonggyePlazaTrees';
+    const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), pp = new THREE.Vector3(), ss = new THREE.Vector3();
+    treeMats.forEach((t, i) => {
+      pp.set(t.x, t.y, t.z);
+      q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), i * 1.7);
+      ss.set(t.sc, t.sc, t.sc);
+      im.setMatrixAt(i, m4.compose(pp, q, ss));
+    });
+    g.add(im);
+  } else treeGeo.dispose();
+  for (const m of night) g.add(m);
   return { group: g, night };
 }
 
-function makeExitPlate(ref) {
-  const cv = document.createElement('canvas');
-  cv.width = 128; cv.height = 128;
-  const x = cv.getContext('2d');
-  x.fillStyle = '#d4003b'; x.fillRect(0, 0, 128, 128);
-  x.fillStyle = '#fff';
-  x.font = 'bold 72px sans-serif';
-  x.textAlign = 'center'; x.textBaseline = 'middle';
-  x.fillText(String(ref || '출'), 64, 58);
-  x.font = 'bold 18px sans-serif';
-  x.fillText('청계산입구', 64, 108);
-  const tex = new THREE.CanvasTexture(cv);
-  tex.colorSpace = THREE.SRGBColorSpace;
-  const m = new THREE.Mesh(new THREE.PlaneGeometry(1.05, 1.05), new THREE.MeshBasicMaterial({ map: tex }));
-  return m;
+function buildStationEntrances(list, data, segs, buildings) {
+  const g = new THREE.Group();
+  g.name = 'cheonggyeEntrances';
+  const night = [];
+  if (!list?.length) return { group: g, night };
+  const gy = (x, z) => terrainHeight(sampleH(data, x, z), distToRoad(x, z, segs));
+  const exits = list.map((e, i) => {
+    const ry = Number.isFinite(e.dir) ? e.dir : Math.atan2(STATION.x - e.x, STATION.z - e.z);
+    return {
+      id: e.ref ? `cheonggyesan-x${e.ref}` : `cheonggyesan-n${i}`,
+      ref: e.ref || null,
+      osm: e.osm,
+      lat: e.lat,
+      lon: e.lon,
+      x: e.x,
+      z: e.z,
+      place: { x: e.x, z: e.z, ry },
+    };
+  });
+  // 정자역과 같은 화강석 캐노피·내려가는 계단·노선색 간판. 대합실 탑승은 연결하지 않는다.
+  buildEntrances({
+    scene: g,
+    overlay: null,
+    exits,
+    data: {},
+    world: { isBlocked: () => false, onRoad: () => false },
+    terrain: { getGroundHeight: gy },
+    theme: { id: 'cheonggyesan', name: '청계산입구', nameEn: 'Cheonggyesan', lines: [LINES.shin] },
+  });
+  const plaza = buildStationPlazas(exits.map((e) => ({ ...e, ry: e.place.ry })), buildings, gy);
+  g.add(plaza.group);
+  night.push(...plaza.night);
+  return { group: g, night };
 }
 
 function assemble(data, buildingsData) {
@@ -337,7 +504,7 @@ function assemble(data, buildingsData) {
       g.add(m);
     }
   }
-  const ents = buildStationEntrances(buildingsData?.entrances || []);
+  const ents = buildStationEntrances(buildingsData?.entrances || [], data, segs, buildingsData?.buildings || []);
   g.add(ents.group);
   nightMeshes.push(...ents.night);
   const unwatch = watchEvening((v) => { for (const m of nightMeshes) m.visible = v; });

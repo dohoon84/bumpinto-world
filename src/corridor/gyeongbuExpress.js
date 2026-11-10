@@ -404,17 +404,146 @@ function expresswayDeck(rawPts) {
   return g;
 }
 
+function awayFromCities(p) {
+  const pangyo = Math.hypot(p[0] - 312.6, p[1] + 2804);
+  const gangnam = Math.hypot(p[0] + 7097.7, p[1] + 14453.3);
+  return pangyo > 420 && gangnam > 360;
+}
+
+function grassApron(pts, width = 96, y = 0.04) {
+  if (!pts || pts.length < 3) return null;
+  const geo = fixNormalsUp(ribbonGeo(pts.map((p) => [p[0], p[1], 0]), width, y, false));
+  const mesh = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ color: '#5b7a45' }));
+  mesh.name = 'gyeongbuGrassApron';
+  mesh.receiveShadow = true;
+  mesh.frustumCulled = false;
+  return mesh;
+}
+
+function vergeTrees(pts, sideOff = 22) {
+  if (!pts || pts.length < 3) return null;
+  const trunk = new THREE.CylinderGeometry(0.18, 0.26, 1.9, 5);
+  trunk.translate(0, 0.95, 0);
+  const crown = new THREE.ConeGeometry(1.85, 4.6, 6);
+  crown.translate(0, 3.35, 0);
+  const parts = [trunk, crown].map((g, i) => {
+    const c = new THREE.Color(i === 0 ? '#5a4030' : '#356338');
+    const col = new Float32Array(g.attributes.position.count * 3);
+    for (let k = 0; k < g.attributes.position.count; k++) { col[k * 3] = c.r; col[k * 3 + 1] = c.g; col[k * 3 + 2] = c.b; }
+    g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+    return g;
+  });
+  const geo = mergeGeo(parts);
+  trunk.dispose(); crown.dispose();
+  const cap = 700;
+  const mesh = new THREE.InstancedMesh(geo, new THREE.MeshLambertMaterial({ vertexColors: true }), cap);
+  mesh.name = 'gyeongbuVergeTrees';
+  mesh.frustumCulled = false;
+  const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), pp = new THREE.Vector3(), ss = new THREE.Vector3();
+  let n = 0;
+  for (let i = 1; i < pts.length && n < cap; i += 1) {
+    const a = pts[i - 1], b = pts[i];
+    const dx = b[0] - a[0], dz = b[1] - a[1], L = Math.hypot(dx, dz);
+    if (L < 8) continue;
+    const lx = dz / L, lz = -dx / L;
+    const step = 20;
+    for (let t = 0; t < L && n < cap; t += step) {
+      const x = a[0] + (dx / L) * t, z = a[1] + (dz / L) * t;
+      if (!awayFromCities([x, z])) continue;
+      const rnd = ((Math.sin(x * 12.9898 + z * 78.233) * 43758.5453) % 1 + 1) % 1;
+      if (rnd < 0.18) continue;
+      for (const side of [-1, 1]) {
+        if (n >= cap) break;
+        const off = sideOff + rnd * 6;
+        pp.set(x + lx * off * side, 0, z + lz * off * side);
+        q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), rnd * 6.2 + side);
+        const sc = 0.82 + rnd * 0.45;
+        ss.set(sc, sc, sc);
+        mesh.setMatrixAt(n++, m4.compose(pp, q, ss));
+      }
+    }
+  }
+  mesh.count = n;
+  return n ? mesh : null;
+}
+
+function makeHwySignTex(lines) {
+  const cv = document.createElement('canvas');
+  const rowH = 90;
+  cv.width = 560; cv.height = 40 + lines.length * rowH;
+  const x = cv.getContext('2d');
+  x.fillStyle = '#0b6b3a';
+  x.fillRect(0, 0, cv.width, cv.height);
+  x.strokeStyle = '#fff';
+  x.lineWidth = 12;
+  x.strokeRect(10, 10, cv.width - 20, cv.height - 20);
+  x.fillStyle = '#fff';
+  x.textAlign = 'center';
+  x.textBaseline = 'middle';
+  x.font = 'bold 62px sans-serif';
+  lines.forEach((t, i) => x.fillText(t, cv.width / 2, 28 + i * rowH + rowH / 2));
+  const tex = new THREE.CanvasTexture(cv);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = 4;
+  return tex;
+}
+
+function highwayDirectionSigns(pts) {
+  // 실제 지명만. 한국 고속도로 초록 안내판 (로고 없음).
+  const marks = [
+    { s: 720, lines: ['서울', '양재'] },
+    { s: 3850, lines: ['서울', '양재'] },
+    { s: 8180, lines: ['서울', '양재'] },
+    { s: 9920, lines: ['양재', '서초', '강남'] },
+    { s: 11840, lines: ['강남', '서초'] },
+  ];
+  const g = new THREE.Group();
+  g.name = 'gyeongbuDirectionSigns';
+  const poleMat = new THREE.MeshLambertMaterial({ color: '#6b7280' });
+  const poleGeo = new THREE.BoxGeometry(0.16, 4.2, 0.16);
+  for (const m of marks) {
+    const p = poseAt(pts, m.s);
+    const tex = makeHwySignTex(m.lines);
+    const h = 1.05 + m.lines.length * 0.72;
+    const board = new THREE.Mesh(new THREE.PlaneGeometry(3.6, h), new THREE.MeshBasicMaterial({ map: tex, toneMapped: false }));
+    const wrap = new THREE.Group();
+    const pole = new THREE.Mesh(poleGeo, poleMat);
+    pole.position.set(0, 2.1, 0);
+    board.position.set(0, 3.35 + h * 0.15, 0.1);
+    wrap.add(pole, board);
+    const right = 10.4;
+    wrap.position.set(p.x - p.lx * right, 0, p.z - p.lz * right);
+    wrap.rotation.y = p.ang + Math.PI;
+    g.add(wrap);
+  }
+  return g;
+}
+
 export function mountGyeongbuExpress(group, data, { overlay } = {}) {
   if (!data?.pts?.length || !data.routes?.length) return null;
+  const approach = data.pts.filter((p) => p[3] === 'approach' && awayFromCities(p));
   const spur = data.pts.filter((p) => p[3] === 'spur');
+  const spurLand = spur.filter(awayFromCities);
+  const apronA = grassApron(approach, 140);
+  if (apronA) group.add(apronA);
+  const apronS = grassApron(spurLand, 140);
+  if (apronS) group.add(apronS);
+  const treesA = vergeTrees(approach, 28);
+  if (treesA) group.add(treesA);
+  const treesS = vergeTrees(spurLand, 24);
+  if (treesS) group.add(treesS);
   if (spur.length > 3) {
-    const geo = fixNormalsUp(ribbonGeo(spur.map((p) => [p[0], p[1], 0.25, 16]), 16, 0, false));
-    const mesh = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ color: '#5e646c' }));
+    const geo = fixNormalsUp(ribbonGeo(spur.map((p) => [p[0], p[1], 0.22, 20]), 20, 0, false));
+    const mesh = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ color: '#4a4f56' }));
     mesh.name = 'gyeongbuSpur';
     mesh.castShadow = false;
     mesh.receiveShadow = true;
     group.add(mesh);
+    const dash = busLaneDashes(spur.map((p) => [p[0], p[1]]), 0, 0.28, 0.11, '#f2f3ef');
+    dash.name = 'gyeongbuSpurDash';
+    group.add(dash);
   }
+  group.add(highwayDirectionSigns(data.pts));
   const main = data.pts.filter((p) => p[3] === 'main');
   if (main.length > 3) {
     const deck = expresswayDeck(main);

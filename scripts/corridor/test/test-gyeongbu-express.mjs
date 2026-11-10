@@ -103,14 +103,23 @@ for (const p of J.pts) {
 }
 assert.ok(tgNear < 25, `판교TG가 접근로에서 ${tgNear.toFixed(1)}m`);
 assert.ok(fs.readFileSync(path.join(root, 'src/corridor/pangyoExpress.js'), 'utf8').includes('makePangyoTollSigns'));
-assert.ok(fs.readFileSync(path.join(root, 'src/corridor/gyeongbuExpress.js'), 'utf8').includes('function expresswayDeck'));
+const gySrc = fs.readFileSync(path.join(root, 'src/corridor/gyeongbuExpress.js'), 'utf8');
+assert.ok(gySrc.includes('function expresswayDeck'));
+assert.ok(gySrc.includes('gyeongbuGrassApron'));
+assert.ok(gySrc.includes('gyeongbuDirectionSigns'));
+assert.ok(gySrc.includes('서울') && gySrc.includes('양재') && gySrc.includes('강남'));
 const bld = JSON.parse(fs.readFileSync(path.join(root, 'public/corridor/gyeongbu/cheonggye-buildings.json'), 'utf8'));
 assert.ok(bld.buildings.length > 40, 'OSM 청계산입구 건물');
 assert.ok(bld.entrances.length >= 2, '신분당선 출입구');
+assert.ok(bld.entrances.every((e) => e.osm && e.lat && e.lon && e.ref), '출입구는 OSM 노드 좌표·ref');
+assert.deepEqual(bld.entrances.map((e) => e.ref).sort(), ['1', '2']);
 assert.ok(bld.buildings.every((b) => b.o?.length >= 4 && b.h > 0));
 const srcT = fs.readFileSync(path.join(root, 'src/corridor/cheonggyeTerrain.js'), 'utf8');
 assert.ok(srcT.includes('buildingMeshes'));
 assert.ok(srcT.includes('cheonggyeBarrierPanels'));
+assert.ok(srcT.includes('buildEntrances'));
+assert.ok(srcT.includes('cheonggyeStationSign'));
+assert.ok(srcT.includes('청계산입구'));
 const pangyoSrc = fs.readFileSync(path.join(root, 'src/corridor/pangyoExpress.js'), 'utf8');
 assert.ok(pangyoSrc.includes('export function pangyoTollLayout'));
 assert.ok(pangyoSrc.includes('laneClear = 3.9'));
