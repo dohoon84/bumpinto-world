@@ -404,26 +404,28 @@ function roadSupportGeos(pts, width, heightAt, dy) {
     const y = heightAt(x, z) + dy;
     const lx = x - hz * hw, lz = z + hx * hw;
     const rx = x + hz * hw, rz = z - hx * hw;
+    const yL = heightAt(lx, lz) + dy;
+    const yR = heightAt(rx, rz) + dy;
     const dropL = dropAt(x, z, hx, hz, 1);
     const dropR = dropAt(x, z, hx, hz, -1);
     const wallL = dropL > 0.2;
     const wallR = dropR > 0.2;
     // Keep the under-road slab thin so a deep cave roof does not photograph
     // as a black triangle from the air. Walls still reach farther downhill.
-    const ybL = Math.min(y - 0.42, heightAt(lx, lz) - 0.14);
-    const ybR = Math.min(y - 0.42, heightAt(rx, rz) - 0.14);
+    const ybL = Math.min(yL - 0.42, heightAt(lx, lz) - 0.14);
+    const ybR = Math.min(yR - 0.42, heightAt(rx, rz) - 0.14);
     const lox = x - hz * (hw + wallT), loz = z + hx * (hw + wallT);
     const rox = x + hz * (hw + wallT), roz = z - hx * (hw + wallT);
-    const yBotL = deepY(lox, loz, hx, hz, 1, y);
-    const yBotR = deepY(rox, roz, hx, hz, -1, y);
-    frames.push({ hx, hz, x, z, y, wallL, wallR, dropL, dropR, lx, lz, rx, rz });
+    const yBotL = deepY(lox, loz, hx, hz, 1, yL);
+    const yBotR = deepY(rox, roz, hx, hz, -1, yR);
+    frames.push({ hx, hz, x, z, y, yL, yR, wallL, wallR, dropL, dropR, lx, lz, rx, rz });
     // 0 topL, 1 topR, 2 botL, 3 botR,
     // 4 L-outer-top, 5 L-inner-top, 6 L-outer-bot,
     // 7 R-outer-top, 8 R-inner-top, 9 R-outer-bot
     pos.push(
-      lx, y, lz, rx, y, rz, lx, ybL, lz, rx, ybR, rz,
-      lox, y, loz, lx, y, lz, lox, yBotL, loz,
-      rox, y, roz, rx, y, rz, rox, yBotR, roz,
+      lx, yL, lz, rx, yR, rz, lx, ybL, lz, rx, ybR, rz,
+      lox, yL, loz, lx, yL, lz, lox, yBotL, loz,
+      rox, yR, roz, rx, yR, rz, rox, yBotR, roz,
     );
   }
 
@@ -476,7 +478,7 @@ function roadSupportGeos(pts, width, heightAt, dy) {
       const iz = f.z + f.hx * hw * sign;
       const ox = f.x - f.hz * (hw + FILL) * sign;
       const oz = f.z + f.hx * (hw + FILL) * sign;
-      fillPos.push(ix, f.y - 0.1, iz, ox, heightAt(ox, oz) + 0.03, oz);
+      fillPos.push(ix, (sign === 1 ? f.yL : f.yR) - 0.1, iz, ox, heightAt(ox, oz) + 0.03, oz);
     }
   }
   // per frame: 4 verts (L-inner, L-outer, R-inner, R-outer) = 2 pairs
@@ -505,7 +507,15 @@ export function createNamsanRoads({ parent, osm, heightAt, overlay = null } = {}
   group.name = 'namsan-roads';
   parent.add(group);
 
-  const ways = (osm?.ways || []).filter((w) => w.pts?.length >= 2);
+  let ways = (osm?.ways || []).filter((w) => w.pts?.length >= 2);
+  const sowolSrc = ways.filter((w) => (w.name || '') === '소월로');
+  if (sowolSrc.length >= 2) {
+    const chain = stitchNamed(sowolSrc, /^소월로$/);
+    if (chain) {
+      ways = ways.filter((w) => (w.name || '') !== '소월로');
+      ways.push({ ...sowolSrc[0], pts: chain });
+    }
+  }
   const empty = {
     group,
     ways,
@@ -543,7 +553,7 @@ export function createNamsanRoads({ parent, osm, heightAt, overlay = null } = {}
     const dy = isCar ? 0.10 : isStep ? 0.08 : isElev ? 0.12 : 0.07;
     // Finer sampling on paths and driveways so ribbons hug the hillside
     // instead of spanning as flat chords with dark underside edges.
-    const pts = resample(w.pts, isStep || isElev ? 1.4 : (isDrive || !isCar) ? 1.35 : 2.4);
+    const pts = resample(w.pts, isStep || isElev ? 1.4 : (isDrive || !isCar || isSowol) ? 1.35 : 2.4);
     if (pts.length < 2) continue;
 
     if (isElev) {
@@ -571,7 +581,9 @@ export function createNamsanRoads({ parent, osm, heightAt, overlay = null } = {}
       continue;
     }
 
-    const drape = isDrive || !isCar;
+    // 소월로 is a future cycling-course spine: one draped strip, not
+    // per-segment level plates whose downhill edge steps like stairs.
+    const drape = isDrive || !isCar || isSowol;
     const geo = drape
       ? drapedRibbonGeo(pts, width, heightAt, dy)
       : fixNormalsUp(ribbonGeo(elevated(pts, heightAt, dy), width, 0, false));
@@ -607,10 +619,16 @@ export function createNamsanRoads({ parent, osm, heightAt, overlay = null } = {}
       // dividers (oneway, so no yellow double center). Wide enough for
       // 간선 전기버스 and the double-decker 서울시티투어버스.
       if (isSowol && width >= 10) {
-        whiteGeos.push(fixNormalsUp(ribbonGeo(attachToRoad(pts, offsetLine(pts, width * 0.5 - 0.18), heightAt, dy + 0.04), 0.15, 0, false)));
-        whiteGeos.push(fixNormalsUp(ribbonGeo(attachToRoad(pts, offsetLine(pts, -(width * 0.5 - 0.18)), heightAt, dy + 0.04), 0.15, 0, false)));
-        carGeos.push(paint(fixNormalsUp(ribbonGeo(attachToRoad(pts, offsetLine(pts, width * 0.5 - 0.48), heightAt, dy + 0.012), 0.5, 0, false)), '#7a7f86'));
-        carGeos.push(paint(fixNormalsUp(ribbonGeo(attachToRoad(pts, offsetLine(pts, -(width * 0.5 - 0.48)), heightAt, dy + 0.012), 0.5, 0, false)), '#7a7f86'));
+        const sowolStrip = (off, ww, yOff, color) => {
+          const g = drapedRibbonGeo(offsetLine(pts, off), ww, heightAt, dy + yOff);
+          if (!g) return;
+          if (color) carGeos.push(paint(g, color));
+          else whiteGeos.push(g);
+        };
+        sowolStrip(width * 0.5 - 0.18, 0.15, 0.04);
+        sowolStrip(-(width * 0.5 - 0.18), 0.15, 0.04);
+        sowolStrip(width * 0.5 - 0.48, 0.5, 0.012, '#7a7f86');
+        sowolStrip(-(width * 0.5 - 0.48), 0.5, 0.012, '#7a7f86');
         const laneOff = [-width / 4, 0, width / 4];
         for (const off of laneOff) {
           let accD = 0;
@@ -629,7 +647,8 @@ export function createNamsanRoads({ parent, osm, heightAt, overlay = null } = {}
                 const x0 = ax + hx * s, z0 = az + hz * s;
                 const x1 = ax + hx * (s + take), z1 = az + hz * (s + take);
                 const seg = [[x0 - hz * off, z0 + hx * off], [x1 - hz * off, z1 + hx * off]];
-                whiteGeos.push(fixNormalsUp(ribbonGeo(attachToRoad(seg, seg, heightAt, dy + 0.045), 0.11, 0, false)));
+                const dash = drapedRibbonGeo(seg, 0.11, heightAt, dy + 0.045);
+                if (dash) whiteGeos.push(dash);
                 s += take; accD += take;
               } else {
                 let gapLeft = period - into;
@@ -660,7 +679,20 @@ export function createNamsanRoads({ parent, osm, heightAt, overlay = null } = {}
         }
       }
       const swPref = w.sidewalk || (namedLoop ? 'uphill' : null);
-      if (swPref === 'both') {
+      if (swPref === 'both' && isSowol) {
+        // Stay on the benched carriageway shelf (hw + 1.2). The old 1.55 m
+        // walk at +0.90 m hung 1–2 m out over the downhill grade and read as
+        // extra floating plates next to the asphalt.
+        const swOff = width * 0.5 + 0.42;
+        const swW = 1.0;
+        const curbOff = width * 0.5 + 0.08;
+        for (const sgn of [1, -1]) {
+          const sw = drapedRibbonGeo(offsetLine(pts, sgn * swOff), swW, heightAt, dy + 0.05);
+          const curb = drapedRibbonGeo(offsetLine(pts, sgn * curbOff), 0.2, heightAt, dy + 0.11);
+          if (sw) sidewalkGeos.push(paint(sw, '#b7b4ac'));
+          if (curb) curbGeos.push(paint(curb, '#c9c5bb'));
+        }
+      } else if (swPref === 'both') {
         for (const sgn of [1, -1]) {
           sidewalkGeos.push(paint(fixNormalsUp(ribbonGeo(attachToRoad(pts, offsetLine(pts, sgn * (width * 0.5 + 0.90)), heightAt, dy + 0.07), 1.55, 0, false)), '#b7b4ac'));
           curbGeos.push(paint(fixNormalsUp(ribbonGeo(attachToRoad(pts, offsetLine(pts, sgn * (width * 0.5 + 0.12)), heightAt, dy + 0.13), 0.22, 0, false)), '#c9c5bb'));

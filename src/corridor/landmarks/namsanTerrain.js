@@ -126,14 +126,10 @@ export function makeNamsanHeightAt(dem, osm = null) {
   const cells = new Map();
   const cellKey = (i, j) => `${i},${j}`;
   for (const w of osm?.ways || []) {
-    const named = /남산공원길|순환로/.test(w.name || '');
-    const isCar = NAMSAN_CAR.has(w.k);
-    if (!named && !isCar) continue;
+    const info = namsanRenderedWay(w);
+    if (!info.namedLoop && !info.isCar) continue;
     if (w.k === 'elevator') continue;
-    let width = w.w || (isCar ? 7 : 2.3);
-    if (w.service === 'driveway' || (isCar && !named && (w.motor_vehicle === 'private' || !w.name))) {
-      width = Math.min(width, w.service === 'driveway' ? 3.2 : 4.4);
-    } else if (named) width = Math.max(width, 8.6);
+    const width = info.width;
     const hw = width * 0.5;
     // Bench the DEM under the carriageway (and a short shoulder) so coarse
     // ~8 m triangles cannot straddle the ribbon and pierce it. Fall off
@@ -143,7 +139,7 @@ export function makeNamsanHeightAt(dem, osm = null) {
     const pts = w.pts || [];
     for (let i = 1; i < pts.length; i++) {
       const ax = pts[i - 1][0], az = pts[i - 1][1], bx = pts[i][0], bz = pts[i][1];
-      const seg = { ax, az, bx, bz, reach, bench };
+      const seg = { ax, az, bx, bz, reach, bench, hw, isDrive: info.isDrive, isSowol: info.isSowol };
       const x0 = Math.min(ax, bx) - reach, x1 = Math.max(ax, bx) + reach;
       const z0 = Math.min(az, bz) - reach, z1 = Math.max(az, bz) + reach;
       const i0 = Math.floor(x0 / GRID), i1 = Math.floor(x1 / GRID);
@@ -162,7 +158,7 @@ export function makeNamsanHeightAt(dem, osm = null) {
     let y = baseHeight(x, z);
     const nearby = cells.get(cellKey(Math.floor(x / GRID), Math.floor(z / GRID)));
     if (!nearby) return y;
-    let bestDist = Infinity, bestY = y, bestBench = 0;
+    let bestDist = Infinity, bestY = y, bestBench = 0, bestSowol = false;
     let liftY = y, liftDist = Infinity, liftReach = 0, liftBench = 0;
     for (const s of nearby) {
       const dx = s.bx - s.ax, dz = s.bz - s.az;
@@ -172,10 +168,15 @@ export function makeNamsanHeightAt(dem, osm = null) {
       const dist = Math.hypot(x - px, z - pz);
       if (dist >= s.reach) continue;
       const roadY = baseHeight(px, pz);
-      if (dist < bestDist) {
+      // A climbing library driveway sitting on 소월로 must not own the
+      // 4-lane shelf — otherwise the hillside jumps 3 m and pierces it.
+      const shelf = s.isSowol && dist <= s.bench;
+      const bestShelf = bestSowol && bestDist <= bestBench;
+      if (bestDist === Infinity || (shelf !== bestShelf ? shelf : dist < bestDist)) {
         bestDist = dist;
         bestY = roadY;
         bestBench = s.bench;
+        bestSowol = !!s.isSowol;
       }
       if (roadY > liftY || (roadY === liftY && dist < liftDist)) {
         liftY = roadY;
@@ -186,7 +187,9 @@ export function makeNamsanHeightAt(dem, osm = null) {
     }
     if (bestDist === Infinity) return y;
     // Under the nearest ribbon: match it so coarse triangles cannot pierce it.
-    if (bestDist <= bestBench && Math.abs(bestY - y) < 2.2) return bestY;
+    // 소월로 keeps its full bench even on a steep cross-slope; elsewhere the
+    // 2.2 m cap avoids carving a cliff beside a mountain trail.
+    if (bestDist <= bestBench && (bestSowol || Math.abs(bestY - y) < 2.2)) return bestY;
     // Outside: raise ground toward the highest nearby carriageway, never carve
     // a trench toward a lower driveway that happens to sit closer.
     if (liftY <= y) return y;
@@ -215,7 +218,7 @@ export function namsanRenderedWay(w) {
   else if (isDrive) width = Math.min(width, w.service === 'driveway' ? 3.2 : 4.4);
   else if (isSowol) width = Math.max(width, 14);
   else if (namedLoop) width = Math.max(width, 8.6);
-  return { width, isCar, namedLoop, isDrive };
+  return { width, isCar, namedLoop, isDrive, isSowol };
 }
 
 export function namsanWayKeepout(w, wallHalf = 0.78) {

@@ -173,6 +173,19 @@ function plate(w, h, d, color, x, y, z, rotY = 0) {
   return m;
 }
 
+// Two FrontSide planes back-to-back so each face reads correctly.
+// DoubleSide on one plane shows a mirrored backface from the other side.
+function readableSign(map, w, h) {
+  const g = new THREE.Group();
+  const geo = new THREE.PlaneGeometry(w, h);
+  const mat = new THREE.MeshBasicMaterial({ map, toneMapped: false, fog: false });
+  const front = new THREE.Mesh(geo, mat);
+  const back = new THREE.Mesh(geo, mat.clone());
+  back.rotation.y = Math.PI;
+  g.add(front, back);
+  return g;
+}
+
 function signTexture(title, sub, bg = '#3d3428', fg = '#f3ead4') {
   const c = document.createElement('canvas');
   c.width = 768; c.height = 384;
@@ -593,10 +606,7 @@ export function createNamsanLibrary({ parent, osm, heightAt, overlay = null } = 
     if (typeof document !== 'undefined') {
       try {
         const smap = signTexture('약수터', null, '#3d3428', '#f3ead4');
-        const sboard = new THREE.Mesh(
-          new THREE.PlaneGeometry(1.7, 0.85),
-          new THREE.MeshBasicMaterial({ map: smap, toneMapped: false, fog: false, side: THREE.DoubleSide }),
-        );
+        const sboard = readableSign(smap, 1.7, 0.85);
         sboard.position.set(sx + 2.4, sy + 1.9, sz + 1.2);
         group.add(sboard);
         group.add(plate(0.1, 1.75, 0.1, '#5a4634', sx + 2.4, sy + 0.92, sz + 1.2));
@@ -639,10 +649,7 @@ export function createNamsanLibrary({ parent, osm, heightAt, overlay = null } = 
     if (typeof document !== 'undefined') {
       try {
         const tmap = signTexture('약수터', '산책·자전거 들머리', '#3d3428', '#f3ead4');
-        const board = new THREE.Mesh(
-          new THREE.PlaneGeometry(2.35, 1.15),
-          new THREE.MeshBasicMaterial({ map: tmap, toneMapped: false, fog: false }),
-        );
+        const board = readableSign(tmap, 2.35, 1.15);
         board.position.set(mx - uhx * 0.2, my + 2.25, mz - uhz * 0.2);
         board.rotation.y = uyaw + Math.PI; // face walkers arriving from the library
         group.add(board);
