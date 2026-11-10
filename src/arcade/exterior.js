@@ -204,10 +204,14 @@ function addStorefront(root, st, shared) {
 }
 
 function addJeongjaBuilding(root, st) {
-  const [x0, zS] = st.ring[0], [x1] = st.ring[1], [, zN] = st.ring[2];
-  const cx = (x0 + x1) / 2, cz = (zS + zN) / 2;
-  const bw = Math.abs(x1 - x0), bd = Math.abs(zN - zS);
+  const xs = st.ring.map((p) => p[0]);
+  const zs = st.ring.map((p) => p[1]);
+  const x0 = Math.min(...xs), x1 = Math.max(...xs);
+  const zLo = Math.min(...zs), zHi = Math.max(...zs); // zLo = 북쪽(-z), zHi = 남쪽(+z)
+  const cx = (x0 + x1) / 2, cz = (zLo + zHi) / 2;
+  const bw = x1 - x0, bd = zHi - zLo;
   const gf = st.gf || 3.6, h = st.h || 8.4;
+  const nx = st.nx ?? 0, nz = st.nz ?? 1;
   const wall = new THREE.MeshLambertMaterial({ color: '#b7a896' });
   const trim = new THREE.MeshLambertMaterial({ color: '#3a2a55' });
   const upperH = h - gf;
@@ -222,8 +226,8 @@ function addJeongjaBuilding(root, st) {
   const win = new THREE.MeshLambertMaterial({ color: '#6d88a3' });
   const winH = 1.3;
   for (const [w, d, x, z] of [
-    [bw - 0.6, 0.06, cx, zS + 0.04],
-    [bw - 0.6, 0.06, cx, zN - 0.04],
+    [bw - 0.6, 0.06, cx, zHi - 0.04],
+    [bw - 0.6, 0.06, cx, zLo + 0.04],
     [0.06, bd - 0.6, x0 + 0.04, cz],
     [0.06, bd - 0.6, x1 - 0.04, cz],
   ]) {
@@ -231,12 +235,12 @@ function addJeongjaBuilding(root, st) {
     m.position.set(x, gf + 1.7, z);
     root.add(m);
   }
-  // 1층 옆·뒷벽 (전면은 유리 매장)
-  const sides = [
-    { w: bw, d: 0.24, x: cx, z: zN + 0.1 },
-    { w: 0.24, d: bd, x: x0 + 0.1, z: cz },
-    { w: 0.24, d: bd, x: x1 - 0.1, z: cz },
-  ];
+  // 1층 옆·뒷벽 (n 방향 전면은 유리 매장이므로 벽을 생략)
+  const sides = [];
+  if (nz <= 0.5) sides.push({ w: bw, d: 0.24, x: cx, z: zHi - 0.1 }); // 남
+  if (nz >= -0.5) sides.push({ w: bw, d: 0.24, x: cx, z: zLo + 0.1 }); // 북
+  if (nx <= 0.5) sides.push({ w: 0.24, d: bd, x: x1 - 0.1, z: cz }); // 동
+  if (nx >= -0.5) sides.push({ w: 0.24, d: bd, x: x0 + 0.1, z: cz }); // 서
   for (const s of sides) {
     const m = new THREE.Mesh(new THREE.BoxGeometry(s.w, gf, s.d), trim);
     m.position.set(s.x, gf / 2, s.z);
