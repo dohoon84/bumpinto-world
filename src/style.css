@@ -1665,18 +1665,24 @@ body.mobile #lobby-picks { gap: 6px; }
 @media (max-height: 520px) {
   #lobby-card { max-height: calc(100dvh - 8px); padding: 10px 12px; gap: 12px; }
   #lobby-preview { min-height: 0; height: auto; align-self: stretch; }
-  #lobby-fields { display: flex; flex-direction: column; min-height: 0; min-width: 0; overflow: auto; }
-  #lobby-fields > *:not(#lobby-pane-join) { flex-shrink: 0; }
+  #lobby-fields {
+    display: flex; flex-direction: column; min-height: 0; min-width: 0;
+    overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain;
+    touch-action: pan-y; scroll-padding-bottom: 56px;
+  }
+  /* 자식은 모두 내용 높이대로 — pane-join 을 flex:1 로 줄이면 선택지가 밖으로 넘쳐
+     입장하기 버튼이 목록 한가운데로 떠 버린다. */
+  #lobby-fields > * { flex-shrink: 0; }
   #lobby-fields h1 { font-size: 18px; margin: 0; }
   #lobby-fields .sub { display: none; }
   .lobby-tabs { margin-bottom: 6px; }
   .lobby-tabs .tab { padding: 5px 8px; }
   #lobby-fields .nick input { margin-top: 2px; padding: 6px 10px; }
-  .look-tabs { margin: 6px 0 4px; }
-  #lobby-pane-join { display: flex; flex-direction: column; min-height: 0; min-width: 0; overflow: hidden; flex: 1 1 auto; }
-  #lobby-pane-join > *:not(#lobby-picks) { flex-shrink: 0; }
-  #lobby-picks { overflow: auto; flex: 1 1 auto; min-height: 96px; min-width: 0; }
-  #lobby-go { flex: none; margin-top: 8px; padding: 9px 12px; }
+  .look-tabs { margin: 6px 0 4px; flex-shrink: 0; }
+  #lobby-pane-join { display: flex; flex-direction: column; min-width: 0; overflow: visible; flex: 0 0 auto; }
+  #lobby-pane-join > * { flex-shrink: 0; }
+  #lobby-picks { overflow: visible; flex: 0 0 auto; min-width: 0; }
+  #lobby-go { flex: none; position: sticky; bottom: 0; z-index: 2; margin-top: 8px; padding: 9px 12px; }
 }
 #enter-loading { position: fixed; inset: 0; z-index: 45; display: grid; place-items: center; padding: 28px 16px; background: linear-gradient(180deg, #070d1c, #1a2744); }
 #enter-loading[hidden] { display: none !important; }

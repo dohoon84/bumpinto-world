@@ -8,6 +8,7 @@ import { storeBoard, mergeGuestBest, recordRun } from '../server/phone/src/arcad
 import { arcadeShotMode, mergeEnabled, MERGE_GAME_ID as CLIENT_MERGE_ID } from '../src/arcade/flag.js';
 import { splitBoardMine, sameRankPlayer } from '../src/arcade/boardView.js';
 import { LOGIN_NUDGE_TEXT } from '../src/arcade/loginNudge.js';
+import { resolveGuest, isGuestFlag, clientSignedIn } from '../src/arcade/guest.js';
 
 const assert = (c, m) => { if (!c) throw new Error(m); };
 
@@ -269,5 +270,30 @@ assert(LOGIN_NUDGE_TEXT.includes('로그인하면'), 'guest nudge copy');
 
 const authSrc = readFileSync(new URL('../server/phone/src/account/routes.js', import.meta.url), 'utf8');
 assert(authSrc.includes('mergeGuestBest'), 'login/link migrates arcade guest records');
+
+
+{
+  assert(resolveGuest({ guest: true }, { prev: true, signedIn: true }) === false, 'signed-in body wins over server guest');
+  assert(resolveGuest({ guest: false }, { prev: true, signedIn: false }) === false, 'server signed-in');
+  assert(resolveGuest({ guest: true }, { prev: false, signedIn: false }) === true, 'server guest');
+  assert(resolveGuest({ guest: true, local: true }, { prev: false, signedIn: false }) === false, 'local fallback does not flip to guest');
+  assert(resolveGuest({ guest: true, timedOut: true }, { prev: false, signedIn: false }) === false, 'timeout does not flip to guest');
+  assert(resolveGuest({ ranked: true, local: true }, { prev: true, signedIn: false }) === true, 'local keeps prev guest');
+  assert(resolveGuest(null, { prev: true, signedIn: false }) === true, 'missing gate keeps prev');
+  assert(isGuestFlag(true) === true, 'bool guest');
+  assert(isGuestFlag(() => false) === false, 'fn signed-in');
+  assert(isGuestFlag(() => true) === true, 'fn guest');
+  assert(clientSignedIn() === false, 'no document body in node');
+
+  const rankSrc = readFileSync(new URL('../src/arcade/rank.js', import.meta.url), 'utf8');
+  assert(rankSrc.includes("credentials: 'include'"), 'arcade fetches send cookies');
+  assert(!/return fetch\(url, opts\)/.test(rankSrc), 'no cookie-less fetch retry');
+  assert(rankSrc.includes('local: true };'), 'gate errors omit guest:true');
+
+  const idxSrc = readFileSync(new URL('../src/arcade/index.js', import.meta.url), 'utf8');
+  assert(idxSrc.includes('resolveGuest'), 'arcade uses resolveGuest');
+  assert(idxSrc.includes('2500'), 'gate timeout is not 800ms');
+  assert(!idxSrc.includes('guest: knownGuest'), 'games receive guestNow, not a stale boolean');
+}
 
 console.log('ok arcade-rank', { today: today.rows.length, week: week.rows.length, month: month.rows.length });

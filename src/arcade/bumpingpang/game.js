@@ -6,6 +6,7 @@ import {
   gaugeNeed, timeDrainPerSec, scoreMult, starsForLevel,
 } from './engine.js';
 import { loginNudgeHtml, bindLoginNudge } from '../loginNudge.js';
+import { isGuestFlag } from '../guest.js';
 
 const COLORS = Object.fromEntries(TILES.map((t) => [t.id, t.color]));
 // 별점: 도달 레벨 기준 (Lv3 / Lv7 / Lv12)
@@ -29,6 +30,7 @@ export function mountBumpingPang({
   onExit, onResult, onOpenBoard, practice = false, getBest = () => 0, guest = false,
 } = {}) {
   const storeLabel = String(storeName || 'BUMP 오락실').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const guestNow = () => isGuestFlag(guest);
   const detectTouch = () => {
     try {
       return document.body.classList.contains('mobile')
@@ -829,7 +831,7 @@ export function mountBumpingPang({
         <div class="rank-badge" data-badge>${practice || !ranked ? '연습 기록' : '랭킹 도전'}</div>
       </div>
       <p class="sub">최고 콤보 ${comboShow} · 배율 ×${scoreMult(finalLevel).toFixed(2)}</p>
-      ${guest ? loginNudgeHtml() : ''}
+      ${guestNow() ? loginNudgeHtml() : ''}
       <button type="button" class="pang-imgbtn pang-btn-again" data-again aria-label="한판더"></button>
       <div class="row">
         <button type="button" class="pang-imgbtn pang-btn-rank" data-board aria-label="순위판"></button>
@@ -884,7 +886,7 @@ export function mountBumpingPang({
     });
     el.result.querySelector('[data-leave]')?.addEventListener('click', () => dispose(true));
     el.result.querySelector('[data-board]')?.addEventListener('click', () => onResult?.({ score: finalScore, level: finalLevel, durationMs, ranked: ranked && !practice, name, openBoard: true }));
-    if (guest) bindLoginNudge(el.result);
+    if (guestNow()) bindLoginNudge(el.result);
     onResult?.({ score: finalScore, level: finalLevel, durationMs, ranked: ranked && !practice, name, openBoard: false });
   }
 
