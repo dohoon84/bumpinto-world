@@ -18,3 +18,11 @@ export const NT = {
   osmRel: 'relation/16474080',
 };
 export function namsanBaseY() { return NT.eleBase - NT.datum; }
+
+// 타워에서 멀어질수록 서울 분지(~40 m ASL)로 내려가게. DEM 밖 폴백·도시 바닥 높이에 쓴다.
+export function namsanBasinEle(d) {
+  if (d < 180) return NT.eleBase;
+  if (d < 800) return NT.eleBase - ((d - 180) / 620) * 203; // 243 → 40
+  return 38;
+}
+export function namsanBasinY(d) { return namsanBasinEle(d) - NT.datum; }

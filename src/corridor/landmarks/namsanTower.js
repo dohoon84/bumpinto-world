@@ -154,6 +154,33 @@ export function createNamsanTower({ parent, osm, baseY }) {
   const track = (mat, dayE = 0, nightE = 1) => { nightMats.push({ mat, dayE, nightE }); return mat; };
 
   // ---------- plaza building: tiered terraces from OSM footprint ----------
+  function pickEastDoor(pts) {
+    let best = null, bestScore = -Infinity;
+    for (let i = 0; i < pts.length; i++) {
+      const a = pts[i], b = pts[(i + 1) % pts.length];
+      const dx = b[0] - a[0], dz = b[1] - a[1], L = Math.hypot(dx, dz);
+      if (L < 6) continue;
+      const mx = (a[0] + b[0]) / 2, mz = (a[1] + b[1]) / 2;
+      if (mx < ox + 16) continue;
+      const alongZ = Math.abs(dz) / L;
+      if (alongZ < 0.55) continue;
+      const tx = ox + 44, tz = oz + 6;
+      const tt = Math.max(0, Math.min(1, ((tx - a[0]) * dx + (tz - a[1]) * dz) / (L * L)));
+      const px = a[0] + dx * tt, pz = a[1] + dz * tt;
+      const score = -Math.hypot(px - tx, pz - tz) + alongZ * 4 + Math.min(L, 22) * 0.12;
+      if (score <= bestScore) continue;
+      bestScore = score;
+      const tDoor = Math.max(2.45 / L, Math.min(1 - 2.45 / L, tt));
+      const cx = a[0] + dx * tDoor, cz = a[1] + dz * tDoor;
+      const ux = dx / L, uz = dz / L;
+      let nx = uz, nz = -ux;
+      if ((cx - ox) * nx + (cz - oz) * nz < 0) { nx = -nx; nz = -nz; }
+      best = { i, a, b, L, cx, cz, ux, uz, nx, nz, ang: Math.atan2(dx, dz), t: tDoor };
+    }
+    return best;
+  }
+  const eastDoor = plazaPts.length >= 4 ? pickEastDoor(plazaPts) : null;
+
   function wallSegs(pts, y0, h, allowDoor) {
     const geos = [];
     for (let i = 0; i < pts.length; i++) {
@@ -162,16 +189,24 @@ export function createNamsanTower({ parent, osm, baseY }) {
       if (L < 0.4) continue;
       const mx = (a[0] + b[0]) / 2, mz = (a[1] + b[1]) / 2;
       const ang = Math.atan2(dx, dz);
-      const facingEast = Math.cos(ang) > 0.35 && mx > ox + 8;
-      const door = allowDoor && facingEast && Math.abs(mz - oz) < 8 && L > 6;
+      const door = allowDoor && eastDoor && i === eastDoor.i;
       if (door) {
-        const left = L * 0.5 - 2.4, right = L * 0.5 - 2.4;
+        const gap = 4.8;
+        const mid = eastDoor.t * L;
+        const left = Math.max(0, mid - gap / 2);
+        const right = Math.max(0, L - mid - gap / 2);
         const alongX = dx / L, alongZ = dz / L;
-        const cx1 = a[0] + alongX * (left * 0.5), cz1 = a[1] + alongZ * (left * 0.5);
-        const cx2 = b[0] - alongX * (right * 0.5), cz2 = b[1] - alongZ * (right * 0.5);
-        if (left > 1) { const bg = new THREE.BoxGeometry(0.55, h, left); bg.rotateY(ang); bg.translate(cx1, y0 + h / 2, cz1); geos.push(bg); }
-        if (right > 1) { const bg = new THREE.BoxGeometry(0.55, h, right); bg.rotateY(ang); bg.translate(cx2, y0 + h / 2, cz2); geos.push(bg); }
-        const lg = new THREE.BoxGeometry(0.6, Math.min(2.4, h * 0.28), 4.8); lg.rotateY(ang); lg.translate(mx, y0 + h - 1.2, mz); geos.push(lg);
+        if (left > 0.6) {
+          const cx1 = a[0] + alongX * (left * 0.5), cz1 = a[1] + alongZ * (left * 0.5);
+          const bg = new THREE.BoxGeometry(0.55, h, left); bg.rotateY(ang); bg.translate(cx1, y0 + h / 2, cz1); geos.push(bg);
+        }
+        if (right > 0.6) {
+          const cx2 = b[0] - alongX * (right * 0.5), cz2 = b[1] - alongZ * (right * 0.5);
+          const bg = new THREE.BoxGeometry(0.55, h, right); bg.rotateY(ang); bg.translate(cx2, y0 + h / 2, cz2); geos.push(bg);
+        }
+        const lintelH = Math.min(2.2, h * 0.24);
+        const lg = new THREE.BoxGeometry(0.62, lintelH, gap);
+        lg.rotateY(ang); lg.translate(eastDoor.cx, y0 + h - lintelH / 2, eastDoor.cz); geos.push(lg);
       } else {
         const bg = new THREE.BoxGeometry(0.55, h, L); bg.rotateY(ang); bg.translate(mx, y0 + h / 2, mz); geos.push(bg);
       }
@@ -251,6 +286,50 @@ export function createNamsanTower({ parent, osm, baseY }) {
     pave.position.set(ox + 42, baseY + 0.05, oz + 4);
     pave.receiveShadow = true;
     g.add(pave);
+    if (eastDoor) {
+      const { cx, cz, ux, uz, nx, nz, ang } = eastDoor;
+      const glassMat = track(new THREE.MeshStandardMaterial({
+        color: '#c5e4f6', transparent: true, opacity: 0.38, roughness: 0.08, metalness: 0.25,
+        emissive: new THREE.Color('#e7f6ff'), emissiveIntensity: 0,
+      }), 0, 0.95);
+      const frameMat = new THREE.MeshLambertMaterial({ color: '#2c3644' });
+      for (const side of [-1, 1]) {
+        const px = cx + ux * side * 1.15 + nx * 0.04;
+        const pz = cz + uz * side * 1.15 + nz * 0.04;
+        const pane = new THREE.Mesh(new THREE.BoxGeometry(0.06, 2.42, 2.15), glassMat);
+        pane.rotation.y = ang; pane.position.set(px, baseY + 1.25, pz); g.add(pane);
+        const frame = new THREE.Mesh(new THREE.BoxGeometry(0.1, 2.5, 2.28), frameMat);
+        frame.rotation.y = ang; frame.position.set(px - nx * 0.03, baseY + 1.26, pz - nz * 0.03); g.add(frame);
+      }
+      const mid = new THREE.Mesh(new THREE.BoxGeometry(0.12, 2.5, 0.12), frameMat);
+      mid.position.set(cx + nx * 0.04, baseY + 1.26, cz + nz * 0.04); g.add(mid);
+      const canopy = new THREE.Mesh(new THREE.BoxGeometry(1.95, 0.14, 5.7), new THREE.MeshLambertMaterial({ color: '#1e2a38' }));
+      canopy.rotation.y = ang;
+      canopy.position.set(cx + nx * 1.05, baseY + 3.22, cz + nz * 1.05);
+      g.add(canopy);
+      const under = track(new THREE.MeshBasicMaterial({ color: '#ffd89a', transparent: true, opacity: 0, fog: false }), 0, 0);
+      under.userData.nightOp = 0.72;
+      const underM = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.04, 5.3), under);
+      underM.rotation.y = ang;
+      underM.position.set(cx + nx * 1.05, baseY + 3.12, cz + nz * 1.05);
+      g.add(underM);
+      const sc = document.createElement('canvas'); sc.width = 1024; sc.height = 192;
+      const sx = sc.getContext('2d');
+      sx.fillStyle = '#152033'; sx.fillRect(0, 0, 1024, 192);
+      sx.fillStyle = '#f3f6fa'; sx.textAlign = 'center'; sx.textBaseline = 'middle';
+      sx.font = 'bold 78px sans-serif';
+      sx.fillText('남산서울타워 입구', 512, 96);
+      const sTex = new THREE.CanvasTexture(sc); sTex.colorSpace = THREE.SRGBColorSpace;
+      const fascia = new THREE.Mesh(new THREE.PlaneGeometry(5.2, 0.72), new THREE.MeshBasicMaterial({ map: sTex, transparent: true }));
+      fascia.position.set(cx + nx * 2.02, baseY + 3.18, cz + nz * 2.02);
+      fascia.rotation.y = Math.atan2(nx, nz);
+      g.add(fascia);
+      const fasciaBack = new THREE.Mesh(new THREE.BoxGeometry(5.3, 0.78, 0.08), new THREE.MeshLambertMaterial({ color: '#152033' }));
+      fasciaBack.position.copy(fascia.position);
+      fasciaBack.position.x -= nx * 0.05; fasciaBack.position.z -= nz * 0.05;
+      fasciaBack.rotation.y = fascia.rotation.y;
+      g.add(fasciaBack);
+    }
   }
 
   // ---------- white shaft: night gradient (bright base + mid ring → deeper blue up) ----------
@@ -580,9 +659,10 @@ export function createNamsanTower({ parent, osm, baseY }) {
   const lockColors = ['#c62828', '#1565c0', '#2e7d32', '#f9a825', '#6a1b9a', '#00838f', '#ef6c00', '#ad1457', '#283593', '#00695c'];
   const lockGeo = lockGeometry();
   const placements = lockColors.map(() => []);
-  function placeLocksOnRing(pts, y0, rows = 3, along = 0.13) {
+  function placeLocksOnRing(pts, y0, rows = 3, along = 0.13, closed = true) {
     if (!pts || pts.length < 2) return;
-    for (let i = 0; i < pts.length; i++) {
+    const segs = closed ? pts.length : pts.length - 1;
+    for (let i = 0; i < segs; i++) {
       const a = pts[i], b = pts[(i + 1) % pts.length];
       const L = Math.hypot(b[0] - a[0], b[1] - a[1]); if (L < 0.6) continue;
       const n = Math.max(1, Math.floor(L / along));
@@ -624,7 +704,7 @@ export function createNamsanTower({ parent, osm, baseY }) {
     }
     if (fencePosts.length) g.add(new THREE.Mesh(mergeGeometries(fencePosts), new THREE.MeshLambertMaterial({ color: '#8b949c' })));
     if (fenceRails.length) g.add(new THREE.Mesh(mergeGeometries(fenceRails), new THREE.MeshLambertMaterial({ color: '#c5ccd2' })));
-    placeLocksOnRing(fence, baseY + 0.55, 4, 0.11);
+    placeLocksOnRing(fence, baseY + 0.55, 4, 0.11, false);
   }
   const shop = osm?.loveLockShop?.pts;
   if (shop && shop.length) {
@@ -707,17 +787,30 @@ export function createNamsanTower({ parent, osm, baseY }) {
       // interior of plaza building (not the open terrace — walls only)
       // treat a 0.8 m skin inside the footprint as wall, except east door
       if (e.d < 0.55 + rad) {
-        const door = x > ox + 8 && Math.abs(z - oz) < 3.2;
+        let door = false;
+        if (eastDoor) {
+          const dx = x - eastDoor.cx, dz = z - eastDoor.cz;
+          const along = dx * eastDoor.ux + dz * eastDoor.uz;
+          const across = dx * eastDoor.nx + dz * eastDoor.nz;
+          door = Math.abs(along) < 2.45 && across > -1.3 && across < 2.6;
+        }
         if (!door) return true;
       }
     }
     return false;
   }
 
+  const door = eastDoor ? {
+    x: eastDoor.cx, z: eastDoor.cz, y: baseY,
+    nx: eastDoor.nx, nz: eastDoor.nz,
+    spawnX: ox + 44, spawnZ: oz + 6,
+  } : { x: ox + 32, z: oz + 6, y: baseY, nx: 1, nz: 0, spawnX: ox + 44, spawnZ: oz + 6 };
+
   return {
     group: g,
     ox, oz, baseY, shaftBottom, drumBottom, drumTop, tipY,
     plazaPts,
+    door,
     lattice: { x: lx, z: lz, h: LH },
     setNight,
     update(dt) {

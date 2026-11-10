@@ -9,6 +9,7 @@ import { createNamsanTower } from './namsanTower.js';
 import { createNamsanInterior } from './namsanInterior.js';
 import { createNamsanCable } from './namsanCable.js';
 import { createNamsanCity } from './namsanCity.js';
+import { createNamsanRoads } from './namsanRoads.js';
 export { NT, namsanBaseY } from './namsanCoords.js';
 
 export const NAMSAN_DEM_FILE = 'namsan/namsan-dem.json';
@@ -29,6 +30,9 @@ export function namsanMini(city, osm) {
   const roads = city?.roads || [];
   const buildings = city?.buildings || [];
   const extraRoads = [];
+  for (const w of osm?.ways || []) {
+    if (w.pts?.length >= 2) extraRoads.push({ k: w.k, p: w.pts, w: w.w });
+  }
   const nodes = osm?.cable?.nodes;
   if (nodes?.length >= 2) extraRoads.push({ k: 'aerialway', p: nodes.map((n) => [n.x, n.z]), w: 3 });
   const plazas = [];
@@ -57,6 +61,8 @@ export function createNamsan({ scene, overlay, terrain, dem, osm, city = null, c
   const tower = createNamsanTower({ parent: root, osm, baseY: land.baseY, env: null, renderer });
   const interior = createNamsanInterior({ parent: root, osm, baseY: land.baseY, tower });
   const car = cable ? createNamsanCable({ parent: root, osm, heightAt: land.heightAt, overlay, baseY: land.baseY }) : null;
+  const roads = createNamsanRoads({ parent: root, osm, heightAt: land.heightAt, overlay });
+  roads.setDoor?.(tower.door);
   const downtown = createNamsanCity({ parent: root, data: city, heightAt: land.heightAt });
 
   // faint stars around Namsan (the origin sky dome does not reach this far)
@@ -91,6 +97,19 @@ export function createNamsan({ scene, overlay, terrain, dem, osm, city = null, c
       maxDist: 12000,
       minDist: 80,
     });
+    if (tower.door) {
+      overlay.add({
+        cls: 'label',
+        text: '🚪 타워 입구',
+        getPos: () => new THREE.Vector3(
+          tower.door.x + (tower.door.nx || 0) * 1.4,
+          land.baseY + 4.4,
+          tower.door.z + (tower.door.nz || 0) * 1.4,
+        ),
+        maxDist: 260,
+        minDist: 6,
+      });
+    }
   }
 
   const spawn = (() => {
@@ -105,6 +124,7 @@ export function createNamsan({ scene, overlay, terrain, dem, osm, city = null, c
     interior.setNight(on ? 1 : 0);
     car?.setNight(on ? 1 : 0);
     land.setNight(on ? 1 : 0);
+    roads.setNight?.(on ? 1 : 0);
     downtown.setNight(on ? 1 : 0);
     starMat.opacity = on ? 0.88 : 0;
     stars.visible = !!on;
@@ -127,6 +147,8 @@ export function createNamsan({ scene, overlay, terrain, dem, osm, city = null, c
     if (ty != null) ys.push(ty);
     const cy = car?.floorY?.(x, z, refY);
     if (cy != null) ys.push(cy);
+    const ry = roads.floorY?.(x, z, refY);
+    if (ry != null) ys.push(ry);
     let best = null;
     const cap = Number.isFinite(refY) ? refY + 0.55 : Infinity;
     for (const y of ys) {
@@ -156,6 +178,7 @@ export function createNamsan({ scene, overlay, terrain, dem, osm, city = null, c
     get tower() { return tower; },
     get interior() { return interior; },
     get city() { return downtown; },
+    get roads() { return roads; },
     mini: namsanMini(city, osm), // [hud-v3-minimap] 광장·도로·케이블카 선
     stage(u) { car?.stage?.(u); },
     tickPlayer(dt, player, cam) {
@@ -170,6 +193,7 @@ export function createNamsan({ scene, overlay, terrain, dem, osm, city = null, c
       tower.update?.(dt);
       interior.update?.(dt);
       car?.update?.(dt);
+      roads.update?.(dt);
       downtown.update?.(dt);
     },
     setNight(v) {
@@ -178,6 +202,7 @@ export function createNamsan({ scene, overlay, terrain, dem, osm, city = null, c
       interior.setNight(v);
       car?.setNight(v);
       land.setNight(v);
+      roads.setNight?.(v);
       downtown.setNight(v);
       starMat.opacity = Math.max(0, Math.min(1, v)) * 0.88;
       stars.visible = v > 0.08;

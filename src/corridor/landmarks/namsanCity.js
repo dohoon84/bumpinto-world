@@ -5,24 +5,15 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { buildingMeshes, roadGeometries, paint } from '../tileMesh.js';
 import { ribbonGeo, fixNormalsUp } from '../../world.js';
-import { NT } from './namsanCoords.js';
-
-function basinY(d) {
-  // 광장 243 m → 회현 부근 ~90 m(550 m) → 명동·서울역 분지 ~36 m
-  let ele;
-  if (d < 180) ele = NT.eleBase;
-  else if (d < 700) ele = NT.eleBase - ((d - 180) / 520) * 155;
-  else if (d < 1500) ele = 88 - ((d - 700) / 800) * 50;
-  else ele = 36;
-  return ele - NT.datum;
-}
+import { NT, namsanBasinY } from './namsanCoords.js';
 
 function groundY(x, z, heightAt) {
   const d = Math.hypot(x - NT.tx, z - NT.tz);
-  const dem = heightAt ? heightAt(x, z) : 0;
-  const est = basinY(d);
-  if (Number.isFinite(dem) && dem > 1.5 && d < 950) return dem;
-  return Math.max(Number.isFinite(dem) ? dem : est, est);
+  const dem = heightAt ? heightAt(x, z) : null;
+  const est = namsanBasinY(d);
+  // 페더된 DEM 이 낮아도(산자락) 그대로 쓴다. 콘 폴백으로 건물을 띄우지 않는다.
+  if (Number.isFinite(dem) && d < 1100) return dem;
+  return est;
 }
 
 function centroid(pts) {
@@ -96,11 +87,11 @@ export function createNamsanCity({ parent, data, heightAt }) {
 
   // ----- ground disk so downtown is not floating in void -----
   const disk = new THREE.Mesh(
-    new THREE.RingGeometry(700, 3900, 72, 1),
+    new THREE.CircleGeometry(3900, 72),
     new THREE.MeshLambertMaterial({ color: '#3c403a' }),
   );
   disk.rotation.x = -Math.PI / 2;
-  disk.position.set(NT.tx, basinY(2000) - 0.4, NT.tz);
+  disk.position.set(NT.tx, namsanBasinY(2000) - 0.8, NT.tz);
   disk.receiveShadow = true;
   g.add(disk);
 
@@ -179,7 +170,7 @@ export function createNamsanCity({ parent, data, heightAt }) {
     map: skyTex, side: THREE.BackSide, transparent: true, opacity: 0.92, fog: true, depthWrite: false,
   });
   const ring = new THREE.Mesh(new THREE.CylinderGeometry(4300, 4300, 220, 72, 1, true), ringMat);
-  ring.position.set(NT.tx, basinY(2500) + 100, NT.tz);
+  ring.position.set(NT.tx, namsanBasinY(2500) + 100, NT.tz);
   ring.name = 'namsan-skyline-ring';
   g.add(ring);
 

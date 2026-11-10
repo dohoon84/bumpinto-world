@@ -4,7 +4,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { addInstancedTrees } from '../../world/trees.js';
-import { NT } from './namsanCoords.js';
+import { NT, namsanBasinEle } from './namsanCoords.js';
 
 function sampleDem(dem, x, z) {
   if (!dem) return null;
@@ -40,35 +40,41 @@ function hash01(ix, iz) {
   return ((n ^ (n >>> 16)) >>> 0) / 4294967296;
 }
 
-export function createNamsanTerrain({ parent, dem, osm }) {
-  const group = new THREE.Group();
-  group.name = 'namsan-terrain';
-  parent.add(group);
-  let demMat = null;
-  let plazaMat = null;
 
-  const datum = dem?.datum ?? NT.datum;
-  const baseY = NT.eleBase - datum;
-  const peak = osm?.peak || { x: -10651.28, z: -20527.94 };
-  const plaza = osm?.tower?.outer || [];
 
-  function basinEle(d) {
-    if (d < 180) return NT.eleBase;
-    if (d < 700) return NT.eleBase - ((d - 180) / 520) * 155;
-    if (d < 1500) return 88 - ((d - 700) / 800) * 50;
-    return 36;
+function makeWayMask(ways, cell = 5) {
+  const set = new Set();
+  for (const w of ways || []) {
+    const pts = w.pts || [];
+    const rad = Math.max(2.6, (w.w || 3) * 0.5 + 1.8);
+    const n = Math.ceil(rad / cell);
+    for (let i = 1; i < pts.length; i++) {
+      const ax = pts[i - 1][0], az = pts[i - 1][1], bx = pts[i][0], bz = pts[i][1];
+      const L = Math.hypot(bx - ax, bz - az);
+      const steps = Math.max(1, Math.ceil(L / cell));
+      for (let s = 0; s <= steps; s++) {
+        const t = s / steps;
+        const x = ax + (bx - ax) * t, z = az + (bz - az) * t;
+        const i0 = Math.round(x / cell), j0 = Math.round(z / cell);
+        for (let di = -n; di <= n; di++) for (let dj = -n; dj <= n; dj++) {
+          if (di * di + dj * dj <= n * n + 1) set.add((i0 + di) + ',' + (j0 + dj));
+        }
+      }
+    }
   }
+  return (x, z) => set.has(Math.round(x / cell) + ',' + Math.round(z / cell));
+}
 
+export function makeNamsanHeightAt(dem, _osm = null) {
+  const datum = dem?.datum ?? NT.datum;
   function rawEle(x, z) {
     const e = sampleDem(dem, x, z);
     if (e != null) return e;
-    const d = Math.hypot(x - NT.tx, z - NT.tz);
-    return basinEle(d);
+    return namsanBasinEle(Math.hypot(x - NT.tx, z - NT.tz));
   }
-
-  function heightAt(x, z) {
+  return function heightAt(x, z) {
     let ele = rawEle(x, z);
-    const dx = x - NT.tx, dz = z - NT.tz, d = Math.hypot(dx, dz);
+    const d = Math.hypot(x - NT.tx, z - NT.tz);
     // 광장·타워 발밑: 문서 기단 243 m 로 평평히. DEM 이 구조물/수목을 집어 260 m 대로 뛰는 것을 보정.
     if (d < 95) {
       const t = 1 - d / 95;
@@ -82,8 +88,36 @@ export function createNamsanTerrain({ parent, dem, osm }) {
       const t = 1 - du / 28;
       ele = ele * (1 - t) + (NT.eleBase - 6) * t;
     }
+    // DEM 사각형 가장자리를 서울 분지 높이(~40 m ASL)로 페더해 산이 떠 보이지 않게 한다.
+    if (dem) {
+      const x1 = dem.x0 + (dem.nx - 1) * dem.dx;
+      const z1 = dem.z0 + (dem.nz - 1) * dem.dz;
+      const edgeDist = Math.min(x - dem.x0, x1 - x, z - dem.z0, z1 - z);
+      const FEATHER = 420;
+      if (edgeDist < FEATHER) {
+        const t = Math.max(0, edgeDist / FEATHER);
+        const w = t * t * (3 - 2 * t);
+        const cityEle = 40;
+        if (ele > cityEle) ele = cityEle * (1 - w) + ele * w;
+      }
+    }
     return ele - datum;
-  }
+  };
+}
+
+export function createNamsanTerrain({ parent, dem, osm }) {
+  const group = new THREE.Group();
+  group.name = 'namsan-terrain';
+  parent.add(group);
+  let demMat = null;
+  let plazaMat = null;
+
+  const datum = dem?.datum ?? NT.datum;
+  const baseY = NT.eleBase - datum;
+  const peak = osm?.peak || { x: -10651.28, z: -20527.94 };
+  const plaza = osm?.tower?.outer || [];
+
+  const heightAt = makeNamsanHeightAt(dem, osm);
 
   const bounds = dem
     ? { x0: dem.x0, z0: dem.z0, x1: dem.x0 + (dem.nx - 1) * dem.dx, z1: dem.z0 + (dem.nz - 1) * dem.dz }
@@ -104,17 +138,25 @@ export function createNamsanTerrain({ parent, dem, osm }) {
         const k = (j * nx + i) * 3;
         pos[k] = x; pos[k + 1] = y; pos[k + 2] = z;
         // slope color: deep forest on mid-slopes, grass near top, darker in valleys
-        const e = rawEle(x, z);
+        const e = heightAt(x, z) + datum;
         const yp = heightAt(x + 8, z), ym = heightAt(x - 8, z), zp = heightAt(x, z + 8), zm = heightAt(x, z - 8);
         const slope = Math.hypot(yp - ym, zp - zm) / 16;
         const nrm = hash01(i, j);
         let r, g, b;
-        if (e > 230 && slope < 0.25) { // summit lawn / packed earth
+        if (y < 10) { // city-foot dirt — avoid a pale night-blue apron
+          r = 0.17 + nrm * 0.03; g = 0.18 + nrm * 0.03; b = 0.16 + nrm * 0.02;
+        } else if (e > 230 && slope < 0.25) { // summit lawn / packed earth
           r = 0.45 + nrm * 0.06; g = 0.52 + nrm * 0.05; b = 0.32 + nrm * 0.04;
         } else if (slope > 0.55) { // rocky
           r = 0.38 + nrm * 0.06; g = 0.40 + nrm * 0.05; b = 0.34 + nrm * 0.04;
         } else { // forest floor
           r = 0.18 + nrm * 0.05; g = 0.32 + nrm * 0.08; b = 0.16 + nrm * 0.04;
+        }
+        if (y < 24 && y >= 10) {
+          const u = (y - 10) / 14;
+          r = r * u + (0.17 + nrm * 0.03) * (1 - u);
+          g = g * u + (0.18 + nrm * 0.03) * (1 - u);
+          b = b * u + (0.16 + nrm * 0.02) * (1 - u);
         }
         col[k] = r; col[k + 1] = g; col[k + 2] = b;
       }
@@ -137,7 +179,8 @@ export function createNamsanTerrain({ parent, dem, osm }) {
     group.add(mesh);
   }
 
-  // ---- forest (skip plaza, stations, very steep / peak pad) ----
+  // ---- forest (skip plaza, stations, roads/trails, very steep / peak pad) ----
+  const onWay = makeWayMask(osm?.ways);
   const trees = [];
   const x0 = bounds.x0 + 30, x1 = bounds.x1 - 30, z0 = bounds.z0 + 30, z1 = bounds.z1 - 30;
   for (let z = z0; z < z1; z += 14) {
@@ -146,6 +189,7 @@ export function createNamsanTerrain({ parent, dem, osm }) {
       const jz = z + (hash01(Math.round(z), Math.round(x)) - 0.5) * 10;
       const dT = Math.hypot(jx - NT.tx, jz - NT.tz);
       if (dT < 70) continue;
+      if (onWay(jx, jz)) continue;
       if (Math.hypot(jx + 10705, jz + 20554) < 28) continue;
       if (Math.hypot(jx + 10998, jz + 21021) < 36) continue;
       const y = heightAt(jx, jz);
@@ -164,6 +208,7 @@ export function createNamsanTerrain({ parent, dem, osm }) {
       const jz = z + (hash01(Math.round(z * 2), Math.round(x * 2)) - 0.5) * 5.5;
       const dT = Math.hypot(jx - NT.tx, jz - NT.tz);
       if (dT < 72 || dT > 280) continue;
+      if (onWay(jx, jz)) continue;
       if (Math.hypot(jx + 10705, jz + 20554) < 28) continue;
       const y = heightAt(jx, jz);
       if (y < 8) continue;
@@ -295,13 +340,6 @@ export function createNamsanTerrain({ parent, dem, osm }) {
       addLamp(c.x + Math.cos(a) * 22, c.z + Math.sin(a) * 22, 3.2);
     }
   }
-  // rings that read as 순환로 lighting from a distance
-  for (const [rad, n] of [[155, 28], [210, 34], [275, 36]]) {
-    for (let i = 0; i < n; i++) {
-      const a = (i / n) * Math.PI * 2 + rad * 0.01;
-      addLamp(NT.tx + Math.cos(a) * rad, NT.tz + Math.sin(a) * rad, 4.0);
-    }
-  }
 
   // packed plaza disk so the footprint isn't raw forest color
   if (plaza.length >= 3) {
@@ -325,7 +363,7 @@ export function createNamsanTerrain({ parent, dem, osm }) {
     peak,
     setNight(v = 0) {
       const k = Math.max(0, Math.min(1, v));
-      if (demMat) demMat.color.setRGB(1 - k * 0.82, 1 - k * 0.78, 1 - k * 0.72);
+      if (demMat) demMat.color.setRGB(1 - k * 0.76, 1 - k * 0.73, 1 - k * 0.70);
       if (forest?.crowns?.material) forest.crowns.material.color.setRGB(1 - k * 0.78, 1 - k * 0.72, 1 - k * 0.8);
       if (forest?.trunks?.material) forest.trunks.material.color.setRGB(1 - k * 0.55, 1 - k * 0.55, 1 - k * 0.5);
       if (plazaMat) plazaMat.color.set(k > 0.4 ? '#3a3530' : '#d5cbbb');
