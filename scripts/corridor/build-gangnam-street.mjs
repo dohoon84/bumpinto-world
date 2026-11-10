@@ -449,7 +449,7 @@ for (const st of stops) {
   const fx = Math.sin(st.yaw), fz = Math.cos(st.yaw);
   for (const along of [-span / 2, 0, span / 2]) {
     const [ix, iz] = alongRight(st, along);
-    const inner = islandWidthAt(ix, iz) * 0.5 + 0.15;
+    const inner = islandWidthAt(ix, iz) * 0.5 + 0.02;
     for (const side of [-1, 1]) {
       let outer = inner;
       for (let d = inner; d <= 36; d += 0.35) {
