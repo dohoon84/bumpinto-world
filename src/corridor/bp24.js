@@ -446,8 +446,12 @@ function buildStore(st) {
   // 1) 1층 바깥 벽: 건물 외곽 중 유리 두 면(남·동)을 뺀 나머지 변을 0~gf 로 막는다
   const ring = st.ring;
   // 서쪽(x0) 면이 건물 외곽과 겹치면(=바깥에 드러난 옆면) 앞면과 같은 유리 + 검은 멀리언으로. westEnd: 그 외곽 변이 끝나는 z
-  let westEnd = -1;
-  for (let i = 0; i < ring.length; i++) { const a = ring[i], c = ring[(i + 1) % ring.length]; if (Math.abs(a[0] - x0) < 0.4 && Math.abs(c[0] - x0) < 0.4 && Math.abs(a[1] - c[1]) > 1) westEnd = Math.max(westEnd, a[1], c[1]); }
+  let westEnd = -1, backOnOutline = false;
+  for (let i = 0; i < ring.length; i++) {
+    const a = ring[i], c = ring[(i + 1) % ring.length];
+    if (Math.abs(a[0] - x0) < 0.4 && Math.abs(c[0] - x0) < 0.4 && Math.abs(a[1] - c[1]) > 1) westEnd = Math.max(westEnd, a[1], c[1]);
+    if (Math.abs(a[1] - zb) < 0.4 && Math.abs(c[1] - zb) < 0.4 && Math.abs(a[0] - c[0]) > 1) backOnOutline = true;
+  }
   // side:null(정자점)이면 x=0 끝면도 옆 유리를 열지 않는다. 건물 외벽과 같은 돌벽으로 닫아 실내가 골목으로 새지 않게. 시청점(side 지정)은 그대로.
   const west = !st.sealEnds && westEnd >= zb - 0.5;
   let area = 0; for (let i = 0; i < ring.length; i++) { const a = ring[i], b = ring[(i + 1) % ring.length]; area += a[0] * b[1] - b[0] * a[1]; }
@@ -533,7 +537,9 @@ function buildStore(st) {
     ext.box(x0 - 0.05, GLASS_H, wz0, x0 + 0.08, gf, zb, STONE); // 유리 위 벽
     if (westEnd > zb + 0.05) ext.box(x0 - 0.05, 0, zb, x0 + 0.08, gf, westEnd, STONE);
   }
-  { // 뒤 유리(서쪽 끝 ~ 동쪽 모퉁이, 바닥 턱 ~ 간판 높이) + 멀리언 + 위 띠 — 뒤에서 봐도 닫힌 유리면
+  // 뒤가 건물 외곽에 닿을 때만 뒷유리를 연다. 건물 한가운데를 뚫는 매장(깊은 상자)은
+  // 뒷유리를 달면 길에서 맞은편 외벽 창이 비쳐 빈 벽처럼 보인다.
+  if (backOnOutline) {
     const bx0 = x0 + 0.05, bx1 = side ? x1 + 0.06 : x1;
     glass.quad(N(0, 0, 1), P((bx0 + bx1) / 2, (0.32 + GLASS_H) / 2, zb), bx1 - bx0, GLASS_H - 0.32, [1, 1, 1]);
     ext.box(bx0, 0, zb - 0.06, bx1, 0.32, zb + 0.06, DARK);
@@ -631,6 +637,23 @@ function buildStore(st) {
   const kiosk = W < 9 || D < 6;
   const clerk = kiosk ? kioskLayout() : storeLayout();
   function storeLayout() {
+  // 창가 진열: 출입문 칸만 비우고 유리 바로 안에 길을 보는 선반을 둔다.
+  // 폭이 넓은 매장은 가운데가 빈 통로라 길에서 상품이 안 보이므로, 창가에서 상품이 차게 한다.
+  const bay = (fx1 - fx0) / Math.max(1, nF);
+  const doorLo = dx - 0.2, doorHi = dx + bay + 0.2;
+  const windowRun = (xA, xB, seed) => {
+    if (xB - xA < 1.05) return;
+    const z0 = iz0 + 0.2, z1 = z0 + 0.4;
+    int.box(xA, 0, z0, xB, 0.12, z1, hex('#cfd3d6'), true);
+    int.box(xA + 0.03, 0.12, z0 + 0.15, xB - 0.03, 2.05, z0 + 0.2, WH, true);
+    int.box(xA, 2.05, z0 - 0.02, xB, 2.22, z1, TEAL, true);
+    for (let y = 0.28, r = 0; y < 1.95; y += 0.34, r++) {
+      int.box(xA, y - 0.02, z0, xB, y, z1, hex('#d4d8db'));
+      prodFace(prod, N(0, 0, -1), (xA + xB) / 2, y + 0.13, z0 - 0.015, xB - xA - 0.08, 0.28, (r + seed) % 8, seed * 17 + y);
+    }
+  };
+  windowRun(fx0 + 0.12, doorLo - 0.22, 3);
+  windowRun(doorHi + 0.22, fx1 - 0.12, 6);
   // 뒷벽 냉장 쇼케이스(청록 머리띠 + 유리문 + 음료), x 3.2 ~ 15.2
   const cz0 = iz1 - 0.75, cxa = ix0 + Math.min(3.2, W * 0.2), cxb = ix1 - 0.4;
   int.box(cxa, 0, cz0, cxb, 2.25, iz1, FR, true);
@@ -1035,6 +1058,15 @@ export function allBp24Stores() { const out = []; for (const h of hosts) { try {
 export function allBp24BoardMeshes() { const out = []; for (const h of hosts) { try { out.push(...(h.boardMeshes || [])); } catch { /* 같음 */ } } return out; }
 export function anyBp24BoardBlocks(x, z, r) { for (const h of hosts) { try { if (h.boardBlocks?.(x, z, r)) return true; } catch { /* 같음 */ } } return false; }
 
+function sameFootprint(a, b) {
+  if (!a?.length || !b?.length) return false;
+  let ax0 = Infinity, az0 = Infinity, ax1 = -Infinity, az1 = -Infinity;
+  let bx0 = Infinity, bz0 = Infinity, bx1 = -Infinity, bz1 = -Infinity;
+  for (const p of a) { ax0 = Math.min(ax0, p[0]); ax1 = Math.max(ax1, p[0]); az0 = Math.min(az0, p[1]); az1 = Math.max(az1, p[1]); }
+  for (const p of b) { bx0 = Math.min(bx0, p[0]); bx1 = Math.max(bx1, p[0]); bz0 = Math.min(bz0, p[1]); bz1 = Math.max(bz1, p[1]); }
+  return Math.abs(ax0 - bx0) < 0.8 && Math.abs(az0 - bz0) < 0.8 && Math.abs(ax1 - bx1) < 0.8 && Math.abs(az1 - bz1) < 0.8;
+}
+
 function findJeongjaBuilding(buildings, spec) {
   const hint = spec.building;
   const [mx, mz] = [spec.match.x, spec.match.z];
@@ -1245,6 +1277,14 @@ export function prepareJeongjaBp24(data, search) {
     if (!st) continue;
     src.mh = st.gf;
     src.lm = 'bp24';
+    // 같은 자리에 겹친 건물(정자일로232번길 24번과 853번)도 1층을 비운다. 안 비우면 남은 외벽이 유리·실내를 가린다.
+    // 키가 다른 쌍이 위층까지 겹치면 창 텍스처가 줄무늬로 깨지므로, 호스트가 아닌 쪽은 그리지 않는다.
+    for (const other of data.buildings) {
+      if (other === src || other._skip || !other.o?.length) continue;
+      if (!sameFootprint(other.o, src.o)) continue;
+      other.mh = Math.max(other.mh || 0, st.gf);
+      other._skip = true;
+    }
     alignSideGlass(st);
     markChamferDoor(st);
     // jz649 남쪽 유리만 상자보다 길다. 실내(바닥·천장·선반·끝벽)를 그 끝까지 민다. 다른 매장 치수는 그대로.
