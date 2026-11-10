@@ -3,6 +3,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { gangnamStreetEnabled } from '../../../src/gangnam/streetDetail.js';
+import { carSegs, onCarriageway } from '../../../src/gangnam/avenues.js';
+import { POLES } from '../../../src/gangnam/billboards/clearance.js';
 
 const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), '../../..');
 const J = (f) => JSON.parse(fs.readFileSync(path.join(ROOT, f), 'utf8'));
@@ -241,6 +243,48 @@ const ok = (m) => console.log(`ok ${++n} ${m}`);
   }
   assert.equal(islandHits.length, 0, `non-shelter furniture on BRT island: ${islandHits.join(', ')}`);
   ok(`furniture off carriageway 0/${total} ${JSON.stringify(byList)}`);
+}
+
+{
+  const index = J('public/corridor/gangnam/index.json');
+  const tiles = Object.keys(index.tiles).sort().map((k) => J(`public/corridor/gangnam/tiles/${k}.json`));
+  const cars = carSegs(tiles);
+  const night = J('public/corridor/gangnam/night.json');
+  const lamps = night.lamps || [];
+  let lampHit = 0;
+  for (let i = 0; i < lamps.length; i += 5) {
+    if (onCarriageway(cars, lamps[i], lamps[i + 1], 0.4)) lampHit++;
+  }
+  assert.equal(lampHit, 0, `night.json lamps on carriageway ${lampHit}/${lamps.length / 5}`);
+
+  let poleHit = 0;
+  for (const p of POLES) {
+    if (onCarriageway(cars, p.x, p.z, 0.45)) poleHit++;
+  }
+  assert.equal(poleHit, 0, `billboard poles on carriageway ${poleHit}/${POLES.length}`);
+
+  const TREE_KINDS = new Set(['primary', 'secondary', 'tertiary']);
+  const treePts = [];
+  for (const t of tiles) {
+    for (const r of t.r || []) {
+      if (!TREE_KINDS.has(r.k) || !r.p || r.p.length < 2) continue;
+      for (let i = 1; i < r.p.length; i++) {
+        const a = r.p[i - 1], b = r.p[i];
+        const L = Math.hypot(b[0] - a[0], b[1] - a[1]);
+        if (L < 1e-3) continue;
+        const nx = -(b[1] - a[1]) / L, nz = (b[0] - a[0]) / L;
+        for (let s = 6; s < L; s += 14) for (const side of [-1, 1]) {
+          const x = a[0] + ((b[0] - a[0]) * s) / L + nx * side * (r.w / 2 + 1.6);
+          const z = a[1] + ((b[1] - a[1]) * s) / L + nz * side * (r.w / 2 + 1.6);
+          if (!onCarriageway(cars, x, z, 0.8)) treePts.push([x, z]);
+        }
+      }
+    }
+  }
+  let treeHit = 0;
+  for (const [x, z] of treePts) if (onCarriageway(cars, x, z, 0.8)) treeHit++;
+  assert.equal(treeHit, 0, `trees on carriageway ${treeHit}/${treePts.length}`);
+  ok(`lamps 0/${lamps.length / 5} poles 0/${POLES.length} trees 0/${treePts.length} on carriageway`);
 }
 
 {

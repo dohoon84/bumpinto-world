@@ -3,7 +3,7 @@ import './dom-shim.mjs';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-import { avenueSegs, placeLamps, placeWindows, projectOnto } from '../../../src/gangnam/avenues.js';
+import { avenueSegs, carSegs, placeLamps, placeWindows, projectOnto, onCarriageway } from '../../../src/gangnam/avenues.js';
 import { designScreens } from '../../../src/gangnam/billboards/rules.js';
 import { SCREENS, BUILTIN } from '../../../src/gangnam/billboards/manifest.js';
 import { gangnamNightEnabled } from '../../../src/gangnam/night.js';
@@ -40,21 +40,25 @@ assert.equal(gangnamAdsEnabled('?gangnamads=0'), false);
 assert.equal(gangnamAdsEnabled('?gangnam=0'), false);
 ok('flags gangnamnight / gangnamads');
 
-const lamps = placeLamps(segs, { exits, buildings, step: 40, sides: 2, box: B });
+const cars = carSegs(tiles);
+const lamps = placeLamps(segs, { exits, buildings, step: 40, sides: 2, box: B, carSegs: cars });
 assert.deepEqual(lamps, night.lamps, 'night.json 가로등이 placeLamps 와 다름 — node scripts/corridor/build-gangnam-night.mjs');
 assert.ok(lamps.length / 5 >= 40 && lamps.length / 5 < 400, `가로등 ${lamps.length / 5}`);
 const wins = placeWindows(segs, buildings, { minH: 48, max: 240 });
 assert.deepEqual(wins, night.windows);
 assert.equal(night.meta.osmStreetLamps, 0);
 assert.deepEqual(night.meta.avenues, ['강남대로', '테헤란로']);
+let lampOnRoad = 0;
 for (let i = 0; i < lamps.length; i += 5) {
   const x = lamps[i], z = lamps[i + 1];
   assert.ok(x >= B.x0 && x <= B.x1 && z >= B.z0 && z <= B.z1, `등 박스 밖 ${x},${z}`);
   const pr = projectOnto(segs, x, z);
-  assert.ok(pr && pr.d > 2 && pr.d < pr.w / 2 + 4, `등이 차도 한가운데거나 너무 멈 ${x},${z} d=${pr?.d}`);
-  assert.ok(['강남대로', '테헤란로'].includes(pr.n));
+  assert.ok(pr && ['강남대로', '테헤란로'].includes(pr.n), `등 대로 밖 ${x},${z}`);
+  assert.ok(pr.d <= 18, `등이 대로에서 너무 멈 ${x},${z} d=${pr.d}`);
+  if (onCarriageway(cars, x, z, 0.4)) lampOnRoad++;
 }
-const oneSide = placeLamps(segs, { exits, buildings, step: 40, sides: 1, box: B });
+assert.equal(lampOnRoad, 0, `가로등이 차도 위 ${lampOnRoad}/${lamps.length / 5}`);
+const oneSide = placeLamps(segs, { exits, buildings, step: 40, sides: 1, box: B, carSegs: cars });
 assert.ok(oneSide.length < lamps.length, '모바일(한쪽)이 더 적어야 함');
 assert.ok(wins.length / 4 <= 240);
 ok(`lamps ${lamps.length / 5}, windows ${wins.length / 4}, one-side ${oneSide.length / 5}`);

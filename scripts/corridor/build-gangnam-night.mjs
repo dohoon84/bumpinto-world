@@ -4,7 +4,7 @@
 //   사용: node scripts/corridor/build-gangnam-night.mjs
 import fs from 'node:fs';
 import path from 'node:path';
-import { avenueSegs, placeLamps, placeWindows, placeGlow, placeStreaks } from '../../src/gangnam/avenues.js';
+import { avenueSegs, carSegs, placeLamps, placeWindows, placeGlow, placeStreaks } from '../../src/gangnam/avenues.js';
 import { designScreens } from '../../src/gangnam/billboards/rules.js';
 
 const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), '../..');
@@ -14,7 +14,8 @@ const tiles = Object.keys(idx.tiles).map((k) => JSON.parse(fs.readFileSync(path.
 const segs = avenueSegs(tiles);
 const buildings = tiles.flatMap((t) => t.b || []);
 const exits = (idx.stations?.[0]?.exits || []).map((e) => ({ ref: e.ref, x: e.x, z: e.z }));
-const lamps = placeLamps(segs, { exits, buildings, step: 40, sides: 2, box: idx.meta.box });
+const cars = carSegs(tiles);
+const lamps = placeLamps(segs, { exits, buildings, step: 40, sides: 2, box: idx.meta.box, carSegs: cars });
 const windows = placeWindows(segs, buildings, { minH: 48, max: 240 });
 const glow = placeGlow(segs, { step: 28 });
 const streaks = placeStreaks(segs, { step: 90 });
@@ -23,7 +24,7 @@ const night = {
   attribution: '© OpenStreetMap contributors (ODbL) — road centerlines only. Lamp and screen positions are a design rule, not surveyed street furniture.',
   meta: {
     generated: 'scripts/corridor/build-gangnam-night.mjs',
-    rule: '강남대로·테헤란로(이름 완전 일치) 인도에 40m 간격 양쪽 가로등. OSM highway=street_lamp 는 강남 박스에 없어 규칙 배치(미금 가로등과 같은 이유). 출구 7m·건물 안은 제외. 고층(48m+) 창은 대로 45m 안만, 상한 240개.',
+    rule: '강남대로·테헤란로(이름 완전 일치) 인도에 40m 간격 양쪽 가로등. 겹친 대로 폭·교차로 차도·버스차로·BRT 섬은 피한다. OSM highway=street_lamp 는 강남 박스에 없어 규칙 배치(미금 가로등과 같은 이유). 출구 7m·건물 안은 제외. 고층(48m+) 창은 대로 45m 안만, 상한 240개.',
     avenues: ['강남대로', '테헤란로'],
     osmStreetLamps: 0,
     counts: { lamps: lamps.length / 5, windows: windows.length / 4, glow: glow.length / 4, streaks: streaks.length / 4 },

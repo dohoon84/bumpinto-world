@@ -5,7 +5,7 @@
 // 라이브 정자 영역(liveBox + 탄천 띠) 안에는 아무것도 그리지 않으므로 기존 정자 화면/동작은 그대로다.
 import * as THREE from 'three';
 import { mergeTancheon, coveredFn, holeyGround, channelWaterMesh } from './tancheon.js';
-import { buildDetailTile, buildLodTile, roadMesh, CAR_KINDS } from './tileMesh.js';
+import { buildDetailTile, buildLodTile, roadMesh, CAR_KINDS, ingestTileRoads } from './tileMesh.js';
 import { applyTileCuts } from '../world/streams.js';
 import { buildCorridorCrossings } from './crossings.js';
 import { createLandmarks } from './landmarks/index.js';
@@ -182,7 +182,7 @@ export function createCorridor({ scene, corridorData, terrain, world, renderer, 
       if (!j) { t.dState = 0; return; }
       j = filterExpressHidden(corridorData.pangyoExpress, t.key, 'tiles', j); // [pangyo-express] 평면 고가차도 리본 빼기
       if (SD) prepStreamTile(j, SD.tiles[t.key], 'tile');
-      t.dData = j; t.dState = 2; buildQueue.push({ kind: 'd', key: t.key });
+      t.dData = j; ingestTileRoads(j.r); t.dState = 2; buildQueue.push({ kind: 'd', key: t.key });
     }));
   }
   function requestLod(t) {
