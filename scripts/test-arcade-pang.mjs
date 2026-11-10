@@ -8,7 +8,8 @@ import {
   attemptCap, decideAttempt, monthlyBestPays, rankRows, MONTHLY_BUM, LIMIT_MSG, TITLE, OPENING_MS,
 } from '../server/phone/src/arcade/rules.js';
 import { arcadeEnabled, arcadeAtSpot, ARCADE_AT } from '../src/arcade/flag.js';
-import { arcadePlacement } from '../src/arcade/locations.js';
+import { arcadePlacement, hollowSeohyeonArcade } from '../src/arcade/locations.js';
+import { readFileSync } from 'node:fs';
 
 const assert = (c, m) => { if (!c) throw new Error(m); };
 
@@ -16,7 +17,7 @@ assert(arcadeEnabled(''), 'default on');
 assert(arcadeEnabled('?arcade=1'), 'explicit on');
 assert(!arcadeEnabled('?arcade=0'), 'opt-out');
 assert(Math.abs(arcadeAtSpot(ARCADE_AT)?.x - 1336.99) < 0.02, 'seohyeon spawn x');
-assert(Math.abs(arcadeAtSpot('arcade-jeongja')?.x - -114.0) < 0.02, 'jeongja spawn x');
+assert(Math.abs(arcadeAtSpot('arcade-jeongja')?.x - -167.0) < 0.02, 'jeongja spawn x');
 assert(Math.abs(arcadeAtSpot('arcade-jeongja')?.z - -20.3) < 0.02, 'jeongja spawn z');
 assert(arcadePlacement().name.includes('오락실'), 'our brand name');
 assert(arcadePlacement('arcade-jeongja').name.includes('정자'), 'jeongja branch name');
@@ -140,3 +141,13 @@ assert(starsForLevel(1) === 0, 'no star early');
 }
 
 console.log('ok arcade-pang', { scoreSample: res.score, pays: pays.map((p) => p.amount) });
+
+{
+  const tile = JSON.parse(readFileSync(new URL('../public/corridor/tiles/2_-5.json', import.meta.url), 'utf8'));
+  const out = hollowSeohyeonArcade('2_-5', tile);
+  const upper = out.b.filter((b) => b.lm === 'arcadeUpper');
+  const raw = out.b.filter((b) => b.lm === 'arcade' && b.nr);
+  assert(upper.length === 1 && Math.abs(upper[0].mh - 3.6) < 0.01, 'seohyeon upper mh');
+  assert(raw.length === 1, 'seohyeon collision nr');
+  assert(hollowSeohyeonArcade('2_-5', tile, '?arcade=0') === tile, 'arcade=0 skips hollow');
+}

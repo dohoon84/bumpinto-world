@@ -31,6 +31,7 @@ import { createRegionRegistry } from '../perf/regions.js'; // [perf-memory]
 import { lazyExtraCrowd } from '../perf/lazyCrowd.js'; // [perf-memory]
 import { pangyoWaterEnabled, PANGYO_WATER_FILE, attachMainDrop, mergePangyoStreams, dropWaterGeometry } from './pangyoWater.js'; // [pangyo-water]
 import { bp24Mode, createBp24 } from './bp24.js'; import { bp24LocationsFor, corridorPlacements } from './bp24Locations.js'; // [bp24] 체인 매장
+import { hollowSeohyeonArcade } from '../arcade/locations.js'; // [arcade] 서현점 1층 비우기
 import { migeumWaterEnabled, MIGEUM_WATER_FILE, migeumChRoads, mergeMigeumWater, applyMigeumBank } from './migeumWater.js'; // [migeum-water]
 import { cityhallEnabled, CITYHALL_FILE, filterCityHallHidden, createCityHall } from './cityhall.js'; // [cityhall]
 
@@ -166,6 +167,7 @@ export function createCorridor({ scene, corridorData, terrain, world, renderer, 
       if (!j) { t.dState = 0; return; }
       j = filterExpressHidden(corridorData.pangyoExpress, t.key, 'tiles', j); // [pangyo-express] 평면 고가차도 리본 빼기
       if (bp24) j = bp24.filter(t.key, j); // [bp24] 시청 앞 편의점 건물 1층 비우기
+      j = hollowSeohyeonArcade(t.key, j); // [arcade] 서현점 AK플라자 1층 비우기
       j = filterCityHallHidden(corridorData.cityhall, j); // [cityhall] OSM 본관·부속 억제
       if (SD) prepStreamTile(j, SD.tiles[t.key], 'tile');
       t.dData = j; t.dState = 2; buildQueue.push({ kind: 'd', key: t.key });

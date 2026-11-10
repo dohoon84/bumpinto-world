@@ -1,10 +1,9 @@
 // [arcade] BUMP 오락실 위치.
 //   서현점: 서현역 AK플라자 도로면(tile 2_-5 buildings[26], 문 1336.99,-1990.75).
-//     예전 standalone 간판·봉·슬래브(건물 146 북쪽 중정)는 쓰지 않는다.
-//   정자역점: 스타벅스 정자역(x=-152..-136, z=-21.5..-40) 바로 동쪽,
-//     남북 길(x≈-127, w=6.4) 건너 공터. 도로·스타벅스·노비오스호텔과 겹치지 않게.
+//     해당 다층 건물 1층을 비우고(hollowSeohyeonArcade) 통유리 매장을 외벽선에 끼운다.
+//   정자역점: 스타벅스 정자역(x=-152..-136, z=-21.5..-40) 바로 서쪽,
+//     남북 보도(x≈-157.5, w=2.2) 건너 공터. 출입문은 스타벅스와 같이 성남대로343번길(남쪽)을 본다.
 //   랭킹 storeId 는 flag.js 의 ARCADE_STORE_ID('arcade-seohyeon') 하나로 통합.
-//     서버 DB 는 store_id 컬럼이 있지만 두 지점 모두 같은 id 를 보낸다.
 export const ARCADE_PLACEMENTS = [
   {
     id: 'arcade-seohyeon',
@@ -15,11 +14,23 @@ export const ARCADE_PLACEMENTS = [
     // 서현역 AK플라자 도로면 (tile 2_-5 buildings[26] part, 성남대로 쪽 긴 외벽)
     match: { x: 1352.59, z: -2011.83, r: 25 },
     wall: { x0: 1317.3, z0: -1975.0, x1: 1355.1, z1: -2008.3 },
+    // tile 2_-5 buildings[26] 외곽. 1층 나머지 벽을 막을 때 쓴다.
+    hostRing: [
+      [1312.3, -1975.9], [1315.2, -1972.9], [1317.3, -1975], [1355.1, -2008.3],
+      [1394.7, -2043.6], [1391.7, -2046.8], [1391.6, -2046.9], [1377, -2034.4],
+      [1372.7, -2034.4], [1372.7, -2030.1], [1360.3, -2019.5], [1355.8, -2019.8],
+      [1344, -2008.7], [1344.9, -2005.4], [1332.8, -1994.8], [1327.8, -1994.3],
+      [1328.1, -1990.3],
+    ],
+    hollowTile: '2_-5',
+    gf: 3.6,
+    deep: 4.2,
+    flush: true,
     nx: 0.66103,
     nz: 0.75036,
-    width: 10.4,
+    width: 26,
     door: [1336.99, -1990.75],
-    board: [1333.50, -1988.66],
+    board: [1327.53, -1983.63],
     face: Math.atan2(0.66103, 0.75036),
     yawIn: Math.atan2(-0.66103, -0.75036),
   },
@@ -29,19 +40,18 @@ export const ARCADE_PLACEMENTS = [
     name: 'BUMP 오락실 정자역점',
     branch: '정자역점',
     world: 'jeongja',
-    // 스타벅스 정자역(x=-152..-136, z=-21.5..-40)과 같은 도로 북쪽.
-    // 남북 길(x≈-127, 동측 경계 ≈-123.8) 바로 동쪽 공터를 채운다.
-    // 남쪽 면(z=-21.5, 스타벅스와 같은 전면선)이 성남대로343번길(z≈-14)을 본다.
-    // 문은 공터 도로변의 오른쪽(동쪽) 가운데. 길·도로·노비오스와 겹치지 않게.
-    ring: [[-123.0, -21.5], [-107.0, -21.5], [-107.0, -33.0], [-123.0, -33.0]],
+    // 스타벅스 정자역 서쪽. 남북 보도(성남대로343번길 보행로 x≈-157.5) 바로 서쪽 공터.
+    // 남쪽 면(z=-21.5, 스타벅스와 같은 전면선·출입 방향)이 성남대로343번길(z≈-14)을 본다.
+    // 보도(서측 ≈-158.5)·도로·스타벅스와 겹치지 않게.
+    ring: [[-175.5, -21.5], [-159.5, -21.5], [-159.5, -33.0], [-175.5, -33.0]],
     h: 8.4,
     gf: 3.6,
-    match: { x: -115.0, z: -27.25, r: 10 },
+    match: { x: -167.5, z: -27.25, r: 10 },
     nx: 0,
     nz: 1,
     width: 14.0,
-    door: [-114.0, -20.3],
-    board: [-119.8, -21.25],
+    door: [-167.0, -20.3],
+    board: [-172.8, -21.25],
     face: 0,
     yawIn: Math.PI,
   },
@@ -83,16 +93,21 @@ export function arcadeAtSpot(at) {
   return { id: st.id, x: st.door[0], z: st.door[1], yaw: st.yawIn, face: st.face };
 }
 
-/** 정자 베이스맵에 정자역점 상가 건물을 넣는다. 1층은 비우고(mh=gf) 충돌만 남긴다. */
-export function placeJeongjaArcadeBuilding(data, search = typeof location !== 'undefined' ? location.search : '') {
+function arcadeOff(search) {
   try {
     const q = search instanceof URLSearchParams ? search : new URLSearchParams(search || '');
-    if (q.get('arcade') === '0') return;
-  } catch { /* keep on */ }
+    return q.get('arcade') === '0';
+  } catch {
+    return false;
+  }
+}
+
+/** 정자 베이스맵에 정자역점 상가 건물을 넣는다. 1층은 비우고(mh=gf) 충돌만 남긴다. */
+export function placeJeongjaArcadeBuilding(data, search = typeof location !== 'undefined' ? location.search : '') {
+  if (arcadeOff(search)) return;
   const st = ARCADE_PLACEMENTS.find((s) => s.id === 'arcade-jeongja');
   if (!st?.ring || !data?.buildings) return;
   if (data.buildings.some((b) => b.n === st.name)) return;
-  // 시각 메시는 exterior.js 가 그린다. 여기선 발자국 충돌만 (플레이어가 건물을 통과하지 않게).
   data.buildings.push({
     o: st.ring.map((p) => [p[0], p[1]]),
     h: st.h,
@@ -102,6 +117,32 @@ export function placeJeongjaArcadeBuilding(data, search = typeof location !== 'u
     _skip: true,
     lm: 'arcade',
   });
+}
+
+/**
+ * 코리더 타일 JSON에서 서현점 건물 1층을 비운다(위층 mh=gf + 원본은 충돌만).
+ * tile 2_-5 의 AK플라자 도로면 part 에만 적용. ?arcade=0 이면 그대로 둔다.
+ */
+export function hollowSeohyeonArcade(key, j, search = typeof location !== 'undefined' ? location.search : '') {
+  if (arcadeOff(search)) return j;
+  const st = ARCADE_PLACEMENTS.find((s) => s.id === 'arcade-seohyeon');
+  if (!st?.hollowTile || key !== st.hollowTile || !j?.b?.length) return j;
+  const { x, z, r } = st.match;
+  let best = -1, bestD = r;
+  j.b.forEach((b, i) => {
+    if (!b.o?.length || b.nr || b.mh) return;
+    let sx = 0, sz = 0;
+    for (const p of b.o) { sx += p[0]; sz += p[1]; }
+    const d = Math.hypot(sx / b.o.length - x, sz / b.o.length - z);
+    if (d < bestD) { bestD = d; best = i; }
+  });
+  if (best < 0) return j;
+  const src = j.b[best];
+  const gf = st.gf || 3.6;
+  const b = j.b.slice();
+  b[best] = { ...src, nr: 1, lm: 'arcade' };
+  b.push({ ...src, mh: gf, lm: 'arcadeUpper' });
+  return { ...j, b };
 }
 
 export function arcadeMapPoints() {
