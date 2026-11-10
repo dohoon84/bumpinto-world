@@ -97,6 +97,203 @@ function nearestRoad(x, z, list = avenues) {
   return best;
 }
 
+const busways = roads.filter((r) => r.k === 'busway');
+const daeroRoads = roads.filter((r) => r.n === '강남대로');
+
+function nearestHits(x, z, list, maxD = 80) {
+  const hits = [];
+  for (const r of list) {
+    if (!r.p || r.p.length < 2) continue;
+    const hit = projectOn(r.p, [x, z]);
+    if (hit.d <= maxD) hits.push({ ...hit, road: r });
+  }
+  hits.sort((a, b) => a.d - b.d);
+  return hits;
+}
+
+function distinctHits(hits, minSep = 5.5) {
+  const out = [];
+  for (const h of hits) {
+    if (out.some((o) => hypot(o.pt[0] - h.pt[0], o.pt[1] - h.pt[1]) < minSep)) continue;
+    out.push(h);
+  }
+  return out;
+}
+
+function twoBusways(x, z) {
+  const hits = distinctHits(nearestHits(x, z, busways, 45), 5.5);
+  let best = null, score = Infinity;
+  for (let i = 0; i < hits.length; i++) {
+    for (let j = i + 1; j < hits.length; j++) {
+      const c2c = hypot(hits[i].pt[0] - hits[j].pt[0], hits[i].pt[1] - hits[j].pt[1]);
+      if (c2c < 6.2 || c2c > 15.5) continue;
+      const mx = (hits[i].pt[0] + hits[j].pt[0]) / 2, mz = (hits[i].pt[1] + hits[j].pt[1]) / 2;
+      const sc = hypot(mx - x, mz - z) + Math.abs(hits[i].d - hits[j].d) * 0.15;
+      if (sc < score) { score = sc; best = [hits[i], hits[j]]; }
+    }
+  }
+  return best || hits.slice(0, 1);
+}
+
+function twoDaeros(x, z) {
+  const wide = daeroRoads.filter((r) => (r.w || 0) >= 20);
+  const list = wide.length ? wide : daeroRoads;
+  return distinctHits(nearestHits(x, z, list, 50), 10).slice(0, 2);
+}
+
+function nudgeOffBusway(ix, iz) {
+  const islandHalf = 2.0;
+  for (let k = 0; k < 4; k++) {
+    const bw = nearestRoad(ix, iz, busways);
+    if (!bw || bw.d >= (bw.road.w || 4) / 2 + islandHalf - 0.04) break;
+    const pair = twoBusways(ix, iz);
+    const daes = twoDaeros(ix, iz);
+    let vx = 0, vz = 0;
+    if (pair.length >= 2) {
+      const mx = (pair[0].pt[0] + pair[1].pt[0]) / 2, mz = (pair[0].pt[1] + pair[1].pt[1]) / 2;
+      vx = mx - bw.pt[0]; vz = mz - bw.pt[1];
+    }
+    if (hypot(vx, vz) < 0.45) {
+      vx = Math.cos(bw.yaw); vz = -Math.sin(bw.yaw);
+    }
+    const need = (bw.road.w || 4) / 2 + islandHalf - bw.d + 0.1;
+    const L = hypot(vx, vz) || 1;
+    const c1 = [ix + (vx / L) * need, iz + (vz / L) * need];
+    const c2 = [ix - (vx / L) * need, iz - (vz / L) * need];
+    const score = (p) => {
+      if (daes.length < 2) return hypot(p[0] - ix, p[1] - iz);
+      const d0 = hypot(p[0] - daes[0].pt[0], p[1] - daes[0].pt[1]);
+      const d1 = hypot(p[0] - daes[1].pt[0], p[1] - daes[1].pt[1]);
+      return Math.abs(d0 - d1) + (d0 > 18 ? 12 : 0) + (d1 > 18 ? 12 : 0);
+    };
+    const pick = score(c2) < score(c1) ? c2 : c1;
+    ix = pick[0]; iz = pick[1];
+  }
+  return { x: ix, z: iz };
+}
+
+/** 두 중앙버스전용차로 사이(없으면 양방향 강남대로 사이)가 실제 서울 BRT 섬. */
+function snapMedianIsland(x, z) {
+  const pair = twoBusways(x, z);
+  const daes = twoDaeros(x, z);
+  let ix = x, iz = z, yaw = 0;
+  if (pair.length >= 2) {
+    ix = (pair[0].pt[0] + pair[1].pt[0]) / 2;
+    iz = (pair[0].pt[1] + pair[1].pt[1]) / 2;
+    yaw = pair[0].yaw;
+  } else if (daes.length >= 2) {
+    ix = (daes[0].pt[0] + daes[1].pt[0]) / 2;
+    iz = (daes[0].pt[1] + daes[1].pt[1]) / 2;
+    yaw = daes[0].yaw;
+  } else if (pair.length === 1) {
+    ix = pair[0].pt[0]; iz = pair[0].pt[1]; yaw = pair[0].yaw;
+  } else {
+    const hit = nearestRoad(x, z);
+    if (hit) { ix = hit.pt[0]; iz = hit.pt[1]; yaw = hit.yaw; }
+  }
+  const nudged = nudgeOffBusway(ix, iz);
+  ix = nudged.x; iz = nudged.z;
+  const ave = nearestRoad(ix, iz, daeroRoads);
+  if (ave) yaw = ave.yaw;
+  return { x: ix, z: iz, yaw };
+}
+
+function islandWidthAt(x, z) {
+  const pair = twoBusways(x, z);
+  if (pair.length < 2) return 3.6;
+  const c2c = hypot(pair[0].pt[0] - pair[1].pt[0], pair[0].pt[1] - pair[1].pt[1]);
+  const gap = c2c - (pair[0].road.w || 4) / 2 - (pair[1].road.w || 4) / 2;
+  return r1(Math.max(3.2, Math.min(4.0, gap - 0.35)));
+}
+
+function pickSideRoad(x, z) {
+  const hits = nearestHits(x, z, avenues, 42);
+  if (!hits.length) return null;
+  const on = hits.filter((h) => h.d < (h.road.w || 16) / 2 + 0.4);
+  if (on.length) {
+    on.sort((a, b) => (b.road.w || 0) - (a.road.w || 0) || a.d - b.d);
+    return on[0];
+  }
+  hits.sort((a, b) => (b.road.w || 0) - (a.road.w || 0) || a.d - b.d);
+  const near = hits.filter((h) => h.d < (h.road.w || 16) / 2 + 10);
+  return (near[0] || hits[0]);
+}
+
+function outerSide(hit, x, z) {
+  const left = [-Math.cos(hit.yaw), Math.sin(hit.yaw)];
+  const peers = distinctHits(nearestHits(hit.pt[0], hit.pt[1], avenues.filter((r) => r.n === hit.road.n), 50), 10)
+    .filter((h) => hypot(h.pt[0] - hit.pt[0], h.pt[1] - hit.pt[1]) > 8);
+  const lateral = peers.filter((h) => {
+    const oLeft = (h.pt[0] - hit.pt[0]) * left[0] + (h.pt[1] - hit.pt[1]) * left[1];
+    return Math.abs(oLeft) > 6;
+  });
+  if (lateral[0]) {
+    const oLeft = (lateral[0].pt[0] - hit.pt[0]) * left[0] + (lateral[0].pt[1] - hit.pt[1]) * left[1];
+    return -Math.sign(oLeft);
+  }
+  const bh = nearestRoad(hit.pt[0], hit.pt[1], busways);
+  if (bh && bh.d < 42) {
+    const busLeft = (bh.pt[0] - hit.pt[0]) * left[0] + (bh.pt[1] - hit.pt[1]) * left[1];
+    if (busLeft !== 0) return -Math.sign(busLeft);
+  }
+  const signedLeft = (x - hit.pt[0]) * left[0] + (z - hit.pt[1]) * left[1];
+  return Math.sign(signedLeft) || 1;
+}
+
+function laneOverlap(x, z) {
+  let worst = null;
+  for (const r of avenues) {
+    if (!r.p || r.p.length < 2) continue;
+    const hit = projectOn(r.p, [x, z]);
+    const need = (r.w || 16) / 2 + 0.55;
+    if (hit.d < need && (!worst || need - hit.d > worst.pen)) worst = { ...hit, road: r, need, pen: need - hit.d, kind: 'ave' };
+  }
+  for (const r of busways) {
+    if (!r.p || r.p.length < 2) continue;
+    const hit = projectOn(r.p, [x, z]);
+    const need = (r.w || 4) / 2 + 1.3;
+    if (hit.d < need && (!worst || need - hit.d > worst.pen)) worst = { ...hit, road: r, need, pen: need - hit.d, kind: 'bus' };
+  }
+  return worst;
+}
+
+/** 길가 정류장은 해당 차로 바깥 인도. 건물에 조금 겹치더라도 차로·버스차로 위는 피한다. */
+function snapSidewalk(x, z) {
+  const hit = pickSideRoad(x, z);
+  if (!hit) return { x, z, yaw: 0 };
+  const w = hit.road.w || 16;
+  const left = [-Math.cos(hit.yaw), Math.sin(hit.yaw)];
+  const side = outerSide(hit, x, z);
+  let px = x, pz = z;
+  let placed = false;
+  for (const extra of [1.6, 1.25, 0.95, 0.7]) {
+    const qx = hit.pt[0] + left[0] * side * (w / 2 + extra);
+    const qz = hit.pt[1] + left[1] * side * (w / 2 + extra);
+    px = qx; pz = qz; placed = true;
+    if (!inBuilding(qx, qz, 0.5) && !laneOverlap(qx, qz)) break;
+    if (!laneOverlap(qx, qz)) break;
+  }
+  if (!placed) {
+    px = hit.pt[0] + left[0] * side * (w / 2 + 1.2);
+    pz = hit.pt[1] + left[1] * side * (w / 2 + 1.2);
+  }
+  for (let k = 0; k < 5; k++) {
+    const bad = laneOverlap(px, pz);
+    if (!bad) break;
+    if (bad.kind === 'ave') {
+      const ol = [-Math.cos(bad.yaw), Math.sin(bad.yaw)];
+      const os = outerSide(bad, px, pz);
+      px = bad.pt[0] + ol[0] * os * bad.need;
+      pz = bad.pt[1] + ol[1] * os * bad.need;
+    } else {
+      const ol = [-Math.cos(hit.yaw), Math.sin(hit.yaw)];
+      px = hit.pt[0] + ol[0] * side * ((hit.road.w || 16) / 2 + 1.6);
+      pz = hit.pt[1] + ol[1] * side * ((hit.road.w || 16) / 2 + 1.6);
+    }
+  }
+  return { x: px, z: pz, yaw: Math.atan2(hit.pt[0] - px, hit.pt[1] - pz) };
+}
+
 function inBuilding(x, z, pad = 1.2) {
   for (const o of buildings) {
     let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
@@ -161,15 +358,16 @@ for (const s of picked) {
   const rn = hit.road.n;
   if (rn !== '강남대로' && rn !== '테헤란로') continue;
   const median = /\(중\)|중앙/.test(s.name) || BRT.has(s.ref);
-  let yaw = hit.yaw;
-  const nx = Math.sin(yaw + Math.PI / 2), nz = Math.cos(yaw + Math.PI / 2);
-  // 길 쪽을 +Z 로: 정류장이 중심선 오른쪽에 있으면 yaw 를 뒤집어 도로를 보게
-  const side = (s.x - hit.pt[0]) * nx + (s.z - hit.pt[1]) * nz;
-  if (!median && side < 0) yaw += Math.PI;
+  let x = s.x, z = s.z, yaw = hit.yaw;
   if (median) {
-    // 중앙섬: 버스 차로를 보도록, 교차로에서 바깥을 보게
-    if (s.z < IX.z) yaw = hit.yaw; // 북쪽(신논현) — 도로 접선 유지
-    else yaw = hit.yaw + Math.PI;
+    const snap = snapMedianIsland(s.x, s.z);
+    x = snap.x; z = snap.z;
+    // 도로 접선 + 90° : local X(쉘터 장축·모듈 간격) = 도로 방향, local Z = 횡단(버스차로)
+    yaw = snap.yaw + Math.PI / 2;
+    if (z >= IX.z) yaw += Math.PI;
+  } else {
+    const snap = snapSidewalk(s.x, s.z);
+    x = snap.x; z = snap.z; yaw = snap.yaw;
   }
   const extra = byRef.get(String(s.ref)) || [];
   const routes = [...new Set([...s.routes, ...extra])].filter((n) => /^\d{2,5}$|^[가-힣]{1,2}\d{1,2}$/.test(n)).slice(0, 10);
@@ -181,7 +379,7 @@ for (const s of picked) {
   }
   const display = tidyName(s.name);
   stops.push({
-    x: r1(s.x), z: r1(s.z), yaw: r3(yaw),
+    x: r1(x), z: r1(z), yaw: r3(yaw),
     kind: median ? 'median' : 'side',
     name: display, raw: s.name, ref: s.ref, road: rn, toward,
     routes, osm: s.osm,
@@ -211,9 +409,13 @@ stops.forEach((st, si) => {
   }
   if (st.kind === 'median') {
     const platLen = span + 8.6;
-    platforms.push([st.x, st.z, st.yaw, r1(platLen), 3.1]);
+    const islandW = islandWidthAt(st.x, st.z);
+    platforms.push([st.x, st.z, st.yaw, r1(platLen), islandW]);
     const fx = Math.sin(st.yaw), fz = Math.cos(st.yaw);
-    tactiles.push([r1(st.x + fx * 1.22), r1(st.z + fz * 1.22), st.yaw, r1(platLen - 0.8), 0.44]);
+    const edge = islandW * 0.5 - 0.28;
+    for (const s of [-1, 1]) {
+      tactiles.push([r1(st.x + fx * s * edge), r1(st.z + fz * s * edge), st.yaw, r1(platLen - 0.8), 0.4]);
+    }
     for (const end of [-1, 1]) {
       const [x, z] = alongRight(st, end * (span / 2 + 4.7));
       pylons.push({ x: r1(x), z: r1(z), yaw: st.yaw, si });
@@ -221,33 +423,47 @@ stops.forEach((st, si) => {
   }
 });
 
-// 중앙차로에서 인도로 잇는 횡단 얼룩말 — 플랫폼 중앙·양 끝, 길을 가로지른다
+// 중앙섬에서 양쪽 인도로 잇는 횡단 얼룩말 — 플랫폼 중앙·양 끝
 const zebras = [];
 for (const st of stops) {
   if (st.kind !== 'median' || st.road !== '강남대로') continue;
-  const hit = nearestRoad(st.x, st.z);
-  if (!hit) continue;
-  const nx = Math.sin(hit.yaw + Math.PI / 2), nz = Math.cos(hit.yaw + Math.PI / 2);
-  const half = Math.max(15, (hit.road.w || 28) * 0.52);
+  const daes = distinctHits(nearestHits(st.x, st.z, daeroRoads, 42), 8).slice(0, 2);
+  if (!daes.length) continue;
   const span = (MED_N - 1) * MED_GAP;
   for (const along of [-span / 2, 0, span / 2]) {
     const [bx, bz] = alongRight(st, along);
-    for (const dir of [-1, 1]) {
-      const cx = bx + nx * dir * half * 0.5;
-      const cz = bz + nz * dir * half * 0.5;
-      // yaw=도로+90° 이면 local X=도로 방향, local Z=횡단 방향
-      zebras.push([r1(cx), r1(cz), r3(hit.yaw + Math.PI / 2), 5.2, r1(half - 0.8)]);
+    for (const h of daes) {
+      const rr = [Math.cos(h.yaw), -Math.sin(h.yaw)];
+      const signed = (st.x - h.pt[0]) * rr[0] + (st.z - h.pt[1]) * rr[1];
+      const outer = -(Math.sign(signed) || 1);
+      const half = (h.road.w || 16) / 2;
+      const ox = h.pt[0] + rr[0] * outer * half;
+      const oz = h.pt[1] + rr[1] * outer * half;
+      const cx = (bx + ox) / 2, cz = (bz + oz) / 2;
+      const len = hypot(ox - bx, oz - bz);
+      if (len < 6) continue;
+      zebras.push([r1(cx), r1(cz), r3(h.yaw + Math.PI / 2), 5.2, r1(len - 0.6)]);
     }
   }
 }
 
-// 버스전용 적색 차로 — 플랫폼 옆 차로에 길게
+// 버스전용 적색 차로 — 섬 옆 각 방향 차로 위에. 쉘터 아래가 아님.
 const paints = [];
 for (const st of stops) {
   if (st.kind !== 'median') continue;
-  const fx = Math.sin(st.yaw), fz = Math.cos(st.yaw);
   const platLen = (MED_N - 1) * MED_GAP + 12;
-  paints.push([r1(st.x + fx * 3.55), r1(st.z + fz * 3.55), st.yaw, r1(platLen), 3.35]);
+  const islandW = islandWidthAt(st.x, st.z);
+  const fx = Math.sin(st.yaw), fz = Math.cos(st.yaw);
+  const off = islandW * 0.5 + 1.95;
+  for (const s of [-1, 1]) {
+    let px = st.x + fx * s * off, pz = st.z + fz * s * off, pyaw = st.yaw, pw = 3.5;
+    const bw = nearestRoad(px, pz, busways);
+    if (bw && bw.d < 3.2) {
+      px = bw.pt[0]; pz = bw.pt[1];
+      pw = Math.min(3.8, (bw.road.w || 4) * 0.92);
+    }
+    paints.push([r1(px), r1(pz), r3(pyaw), r1(platLen), r1(pw)]);
+  }
 }
 
 // 일반 골목 소품 + 강남역 11번출구 동쪽 먹자골목(92·94·96길, 테헤란로1길)
@@ -407,7 +623,7 @@ const out = {
   meta: {
     generated: new Date().toISOString(),
     source: 'data/osm_gangnam_raw.json (© OpenStreetMap contributors, ODbL)',
-    note: '강남대로·테헤란로 OSM 정류장 + 중앙차로 장대 쉘터. BIS는 노선번호만. 먹자골목은 강남대로92·94·96길·테헤란로1길.',
+    note: '강남대로·테헤란로 OSM 정류장. 중앙 BRT 는 두 busway 사이 3–4m 섬 위에만 쉘터를 두고, 적색 페인트는 섬 옆 버스차로. 길가 정류장은 인도. BIS는 노선번호만. 먹자골목은 강남대로92·94·96길·테헤란로1길.',
     box,
     alley: alleyCam,
     alleyRoads: [...ALLEY],

@@ -337,8 +337,8 @@ export function createGangnamStreet({ scene, terrain = null, url, mobile = false
         map: zebraTex(), color: '#ffffff', transparent: true, opacity: 1, depthWrite: false, depthTest: true,
         toneMapped: false, polygonOffset: true, polygonOffsetFactor: -8, polygonOffsetUnits: -8,
       });
-      const paintMat = new THREE.MeshBasicMaterial({ color: '#ff4e38', transparent: true, opacity: 0.95, depthWrite: false, depthTest: true, toneMapped: false, polygonOffset: true, polygonOffsetFactor: -8, polygonOffsetUnits: -8 });
-      const platMat = new THREE.MeshLambertMaterial({ color: '#a8b0ba' });
+      const paintMat = new THREE.MeshBasicMaterial({ color: '#ff3a22', transparent: true, opacity: 1, depthWrite: false, depthTest: true, toneMapped: false, polygonOffset: true, polygonOffsetFactor: -16, polygonOffsetUnits: -16 });
+      const platMat = new THREE.MeshLambertMaterial({ color: '#9aa3ae' });
       const tactMat = new THREE.MeshBasicMaterial({ color: '#f0c400', toneMapped: false });
       const pylonMat = new THREE.MeshLambertMaterial({ color: '#2d3a55' });
       const shopMat = new THREE.MeshLambertMaterial({ color: '#ffffff' });
@@ -441,7 +441,7 @@ export function createGangnamStreet({ scene, terrain = null, url, mobile = false
       signs.geometry.setAttribute('slot', new THREE.InstancedBufferAttribute(new Float32Array(allSlots.length ? allSlots : [0]), 1));
 
       const plats = j.platforms || [];
-      const platIm = inst(boxGeo(1, 0.22, 1, 0, 0.11, 0), platMat, plats.length, 'gnStreetPlat');
+      const platIm = inst(boxGeo(1, 0.30, 1, 0, 0.15, 0), platMat, plats.length, 'gnStreetPlat');
       plats.forEach((p, i) => {
         StreetXform.compose(m4, quat, pos, scl, p[0], ground(p[0], p[1]), p[1], p[2], p[3], 1, p[4]);
         platIm.setMatrixAt(i, m4);
@@ -451,7 +451,7 @@ export function createGangnamStreet({ scene, terrain = null, url, mobile = false
       const tacts = j.tactiles || [];
       const tactIm = inst(boxGeo(1, 0.05, 1, 0, 0.025, 0), tactMat, tacts.length, 'gnStreetTact');
       tacts.forEach((p, i) => {
-        StreetXform.compose(m4, quat, pos, scl, p[0], ground(p[0], p[1]) + 0.22, p[1], p[2], p[3], 1, p[4]);
+        StreetXform.compose(m4, quat, pos, scl, p[0], ground(p[0], p[1]) + 0.30, p[1], p[2], p[3], 1, p[4]);
         tactIm.setMatrixAt(i, m4);
       });
       tactIm.count = tacts.length;
@@ -465,7 +465,7 @@ export function createGangnamStreet({ scene, terrain = null, url, mobile = false
 
       const paint = inst(new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2), paintMat, (j.paints || []).length, 'gnStreetPaint');
       (j.paints || []).forEach((z, i) => {
-        StreetXform.compose(m4, quat, pos, scl, z[0], ground(z[0], z[1]) + 0.065, z[1], z[2], z[3], 1, z[4]);
+        StreetXform.compose(m4, quat, pos, scl, z[0], ground(z[0], z[1]) + 0.08, z[1], z[2], z[3], 1, z[4]);
         paint.setMatrixAt(i, m4);
       });
       paint.count = (j.paints || []).length;

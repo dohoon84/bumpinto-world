@@ -50,6 +50,107 @@ const ok = (m) => console.log(`ok ${++n} ${m}`);
 }
 
 {
+  const j = J('public/corridor/gangnam/street.json');
+  const index = J('public/corridor/gangnam/index.json');
+  const tiles = Object.keys(index.tiles).sort().map((k) => J(`public/corridor/gangnam/tiles/${k}.json`));
+  const roads = tiles.flatMap((t) => t.r || []);
+  const busways = roads.filter((r) => r.k === 'busway');
+  const avenues = roads.filter((r) => r.n === '강남대로' || r.n === '테헤란로');
+  const hypot = Math.hypot;
+  function projectOn(seq, p) {
+    let best = Infinity, pt = seq[0];
+    for (let i = 1; i < seq.length; i++) {
+      const a = seq[i - 1], b = seq[i];
+      const dx = b[0] - a[0], dz = b[1] - a[1], L2 = dx * dx + dz * dz || 1;
+      const t = Math.max(0, Math.min(1, ((p[0] - a[0]) * dx + (p[1] - a[1]) * dz) / L2));
+      const q = [a[0] + dx * t, a[1] + dz * t];
+      const d = hypot(q[0] - p[0], q[1] - p[1]);
+      if (d < best) { best = d; pt = q; }
+    }
+    return { d: best, pt };
+  }
+  function nearest(x, z, list) {
+    let best = null;
+    for (const r of list) {
+      if (!r.p || r.p.length < 2) continue;
+      const hit = projectOn(r.p, [x, z]);
+      if (!best || hit.d < best.d) best = { ...hit, road: r };
+    }
+    return best;
+  }
+  function twoBus(x, z) {
+    const hits = [];
+    for (const r of busways) {
+      if (!r.p || r.p.length < 2) continue;
+      const hit = projectOn(r.p, [x, z]);
+      if (hit.d <= 40 && !hits.some((o) => hypot(o.pt[0] - hit.pt[0], o.pt[1] - hit.pt[1]) < 5.5)) hits.push({ ...hit, road: r });
+    }
+    hits.sort((a, b) => a.d - b.d);
+    let best = null, score = Infinity;
+    for (let i = 0; i < hits.length; i++) {
+      for (let j = i + 1; j < hits.length; j++) {
+        const c2c = hypot(hits[i].pt[0] - hits[j].pt[0], hits[i].pt[1] - hits[j].pt[1]);
+        if (c2c < 6.2 || c2c > 15.5) continue;
+        const mx = (hits[i].pt[0] + hits[j].pt[0]) / 2, mz = (hits[i].pt[1] + hits[j].pt[1]) / 2;
+        const sc = hypot(mx - x, mz - z);
+        if (sc < score) { score = sc; best = [hits[i], hits[j]]; }
+      }
+    }
+    return best || hits.slice(0, 1);
+  }
+  const med = j.stops.filter((s) => s.kind === 'median');
+  for (const st of med) {
+    const pair = twoBus(st.x, st.z);
+    assert.ok(pair.length >= 1, `median ${st.ref} missing busway`);
+    const plat = (j.platforms || []).find((p) => hypot(p[0] - st.x, p[1] - st.z) < 1);
+    const islandW = plat ? plat[4] : 3.6;
+    assert.ok(islandW >= 3 && islandW <= 4.05, `islandW ${st.ref} ${islandW}`);
+    if (pair.length >= 2) {
+      const mx = (pair[0].pt[0] + pair[1].pt[0]) / 2;
+      const mz = (pair[0].pt[1] + pair[1].pt[1]) / 2;
+      const dMid = hypot(st.x - mx, st.z - mz);
+      assert.ok(dMid < 1.8, `median ${st.ref} not on island mid ${dMid.toFixed(2)}`);
+    }
+    for (const bw of pair) {
+      const clear = bw.d - (bw.road.w || 4) / 2 - islandW / 2;
+      assert.ok(clear >= -0.25, `median ${st.ref} overlaps busway clear=${clear.toFixed(2)} d=${bw.d.toFixed(2)}`);
+    }
+    const fx = Math.sin(st.yaw), fz = Math.cos(st.yaw);
+    const mods = (j.modules || []).filter((m) => m.kind === 'median' && hypot(m.x - st.x, m.z - st.z) < 30);
+    assert.ok(mods.length >= 3, `median ${st.ref} modules ${mods.length}`);
+    for (const m of mods) {
+      const cross = Math.abs((m.x - st.x) * fx + (m.z - st.z) * fz);
+      assert.ok(cross < 1.3, `median module off island centerline cross=${cross.toFixed(2)} ${st.ref}`);
+    }
+  }
+  for (const p of j.paints || []) {
+    let md = Infinity, sd = Infinity;
+    for (const m of (j.modules || []).filter((m) => m.kind === 'median')) md = Math.min(md, hypot(m.x - p[0], m.z - p[1]));
+    for (const st of med) sd = Math.min(sd, hypot(st.x - p[0], st.z - p[1]));
+    assert.ok(md > 1.6, `paint under shelter d=${md.toFixed(2)}`);
+    assert.ok(sd > 2.3 && sd < 7, `paint not beside island d=${sd.toFixed(2)}`);
+  }
+  const side = j.stops.filter((s) => s.kind === 'side');
+  assert.equal(side.length + med.length, j.stops.length);
+  const offLanes = (x, z, label) => {
+    for (const r of avenues) {
+      if (!r.p || r.p.length < 2) continue;
+      const hit = projectOn(r.p, [x, z]);
+      const half = (r.w || 16) / 2;
+      if (hit.d < half - 0.45) assert.fail(`${label} in ${r.n} w=${r.w} d=${hit.d.toFixed(2)} half=${half.toFixed(2)}`);
+    }
+    for (const r of busways) {
+      if (!r.p || r.p.length < 2) continue;
+      const hit = projectOn(r.p, [x, z]);
+      if (hit.d < (r.w || 4) / 2 + 0.6) assert.fail(`${label} on busway d=${hit.d.toFixed(2)}`);
+    }
+  };
+  for (const st of side) offLanes(st.x, st.z, `side ${st.ref || st.name}`);
+  for (const m of (j.modules || []).filter((m) => m.kind !== 'median')) offLanes(m.x, m.z, 'side module');
+  ok(`island clear ${med.length} median, sidewalk ${side.length} side, paints ${j.paints.length}`);
+}
+
+{
   const prev = J('public/corridor/gangnam/street.json');
   execFileSync('node', [path.join(ROOT, 'scripts/corridor/build-gangnam-street.mjs')], { cwd: ROOT, stdio: 'pipe' });
   const next = J('public/corridor/gangnam/street.json');

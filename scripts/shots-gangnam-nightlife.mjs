@@ -1,10 +1,10 @@
 // [gangnam-nightlife] 강남 밤거리 스크린샷. vite preview 가 떠 있어야 한다.
-//   BASE=http://127.0.0.1:5221/ OUT=/opt/cursor/artifacts node scripts/shots-gangnam-nightlife.mjs
+//   BASE=http://127.0.0.1:5221/ OUT=/workspace/bw-gangnam-nightlife/artifacts node scripts/shots-gangnam-nightlife.mjs
 import fs from 'node:fs';
 import { chromium } from 'playwright';
 
 const B = process.env.BASE || 'http://127.0.0.1:5221/';
-const OUT = process.env.OUT || '/opt/cursor/artifacts';
+const OUT = process.env.OUT || '/workspace/bw-gangnam-nightlife/artifacts';
 fs.mkdirSync(OUT, { recursive: true });
 const browser = await chromium.launch({
   executablePath: process.env.CHROME || '/opt/google/chrome/chrome',
@@ -39,31 +39,48 @@ function streetInfo() {
   })();
 }
 
-// 22012 장대 중앙차로 — 3/4 로 쉘터·횡단·버스전용 차로가 함께 보이게
-const STOP34 = { x: -7264.39, z: -14841.41, yaw: -1.958, dist: 10, pitch: 0.32 };
-// 쉘터 안을 길게 본다 — 벤치·대기인·백패널·BIS·노란점자블록
-const STOPIN = { x: -7255.28, z: -14836.03, yaw: -1.229, dist: 4.2, pitch: 0.12 };
-// 강남대로92길 도로 위 (11번출구 동쪽 먹자골목)
-const ALLEY = { x: -7087.3, z: -14625.2, yaw: -1.222, dist: 7, pitch: 0.13 };
-
-const night = await open({ hour: 21 });
-await surface(night, STOP34.x, STOP34.z, STOP34.yaw, STOP34.dist, STOP34.pitch, 7000);
-await night.screenshot({ path: `${OUT}/gnight7-busstop-night.png` });
-const nightStop = await night.evaluate(streetInfo);
-
-await surface(night, STOPIN.x, STOPIN.z, STOPIN.yaw, STOPIN.dist, STOPIN.pitch, 4500);
-await night.screenshot({ path: `${OUT}/gnight7-busstop-close.png` });
-const closeStop = await night.evaluate(streetInfo);
-
-await surface(night, ALLEY.x, ALLEY.z, ALLEY.yaw, ALLEY.dist, ALLEY.pitch, 6000);
-await night.screenshot({ path: `${OUT}/gnight7-alley-night.png` });
-const alleyNight = await night.evaluate(streetInfo);
-await night.close();
+// 22012 중앙 BRT 섬 (두 busway 사이)
+const ISLAND = { x: -7261.0, z: -14834.9, yaw: 1.945 };
+const fx = Math.sin(ISLAND.yaw), fz = Math.cos(ISLAND.yaw);
+const rx = Math.cos(ISLAND.yaw), rz = -Math.sin(ISLAND.yaw);
+const TOP = { x: ISLAND.x, z: ISLAND.z, yaw: 0.374, dist: 52, pitch: 1.38 };
+const NIGHT = {
+  x: ISLAND.x + fx * 10 + rx * -5,
+  z: ISLAND.z + fz * 10 + rz * -5,
+  yaw: ISLAND.yaw - 0.42,
+  dist: 13,
+  pitch: 0.30,
+};
 
 const day = await open({ hour: 14 });
-await surface(day, ALLEY.x, ALLEY.z, ALLEY.yaw, ALLEY.dist, ALLEY.pitch, 6000);
-await day.screenshot({ path: `${OUT}/gnight7-alley-day.png` });
-const alleyDay = await day.evaluate(streetInfo);
+await surface(day, TOP.x, TOP.z, TOP.yaw, TOP.dist, TOP.pitch, 7500);
+await day.evaluate(() => {
+  const el = document.createElement('div');
+  el.id = 'gn8-legend';
+  el.style.cssText = 'position:fixed;left:16px;top:16px;z-index:9999;background:rgba(8,10,16,.72);color:#f3f5f8;padding:10px 12px;font:13px/1.45 sans-serif;border-radius:8px;pointer-events:none';
+  el.innerHTML = '탑다운 · 강남역(중) 22012<br><span style="color:#ff6b55">■</span> 빨강 = 중앙버스전용차로<br><span style="color:#c5ccd6">■</span> 섬 위 = 쉘터·벤치·파일런';
+  document.body.appendChild(el);
+});
+await day.screenshot({ path: `${OUT}/gnight8-busstop-top.png` });
+const topInfo = await day.evaluate(streetInfo);
 await day.close();
+
+const night = await open({ hour: 21 });
+await surface(night, NIGHT.x, NIGHT.z, NIGHT.yaw, NIGHT.dist, NIGHT.pitch, 8000);
+const veh = await night.evaluate(() => {
+  const J = window.__jj;
+  const keys = Object.keys(J || {}).filter((k) => /npc|car|bus|traffic|gangnam|veh/i.test(k));
+  const names = [];
+  let near = 0;
+  J.scene?.traverse?.((o) => {
+    const n = o.name || '';
+    if (/car|bus|veh|npc|traffic|fleet/i.test(n)) names.push({ name: n, type: o.type, count: o.count });
+    if (o.isInstancedMesh && /car|bus|veh|npc/i.test(n) && o.count) near += o.count;
+  });
+  return { keys, names: names.slice(0, 24), near };
+});
+await night.screenshot({ path: `${OUT}/gnight8-busstop-night.png` });
+const nightInfo = await night.evaluate(streetInfo);
+await night.close();
 await browser.close();
-console.log(JSON.stringify({ out: OUT, nightStop, closeStop, alleyNight, alleyDay }, null, 2));
+console.log(JSON.stringify({ out: OUT, top: TOP, night: NIGHT, topInfo, nightInfo, veh }, null, 2));

@@ -114,22 +114,38 @@ function busClearance(x, z, buses) {
   return best;
 }
 
-/** 일방 구간에서 버스 전용(진행 방향 오른쪽·중앙)을 비운 칸 번호. 테헤란로·좁은 강남대로는 바깥 두 칸. */
+/** 일방 구간에서 버스 전용(중앙)과 그 사이 섬을 비운 칸 번호. 테헤란로·버스웨이 먼 구간은 바깥 두 칸. */
 export function laneSlot(s, buses) {
   const lanes = s.n === '강남대로' && s.w >= 24 ? DAERO_LANES : Math.max(2, Math.round(s.w / LANE_M));
   const mx = (s.a[0] + s.b[0]) / 2, mz = (s.a[1] + s.b[1]) / 2;
-  const near = s.n === '강남대로' && s.w >= 24 && buses.some((b) => segDist(mx, mz, b.a, b.b) < 30);
-  if (!near) return { lanes, slot: [0, 1] };
-  const ok = [];
-  for (let li = 0; li < lanes; li++) {
+  const hitBus = (x, z) => buses.some((b) => segDist(x, z, b.a, b.b) < 30);
+  const near = s.n === '강남대로' && s.w >= 24 && (hitBus(mx, mz) || hitBus(s.a[0], s.a[1]) || hitBus(s.b[0], s.b[1]));
+  const cleared = (li) => {
     const [x, z] = lanePoint(s, lanes, li);
-    if (busClearance(x, z, buses) >= BUS_CLEAR_M) ok.push(li);
+    return busClearance(x, z, buses) >= BUS_CLEAR_M;
+  };
+  const farthest = () => {
+    const ranked = [...Array(lanes).keys()].sort((a, b) => {
+      const pa = lanePoint(s, lanes, a), pb = lanePoint(s, lanes, b);
+      return busClearance(pb[0], pb[1], buses) - busClearance(pa[0], pa[1], buses);
+    });
+    return { lanes, slot: ranked.slice(0, 2) };
+  };
+  if (near) {
+    const ok = [];
+    for (let li = 0; li < lanes; li++) if (cleared(li)) ok.push(li);
+    if (!ok.length) return farthest();
+    if (ok.length <= 4) return { lanes, slot: ok };
+    const step = (ok.length - 1) / 3;
+    const slot = [0, 1, 2, 3].map((i) => ok[Math.round(i * step)]);
+    return { lanes, slot: [...new Set(slot)] };
   }
-  if (!ok.length) return { lanes, slot: [0, 1] };
-  if (ok.length <= 4) return { lanes, slot: ok };
-  const step = (ok.length - 1) / 3;
-  const slot = [0, 1, 2, 3].map((i) => ok[Math.round(i * step)]);
-  return { lanes, slot: [...new Set(slot)] };
+  if (s.n === '강남대로' && buses.length && ![0, 1].every(cleared)) {
+    const other = [lanes - 1, lanes - 2].filter((li) => li >= 0 && cleared(li));
+    if (other.length) return { lanes, slot: other };
+    return farthest();
+  }
+  return { lanes, slot: [0, 1] };
 }
 
 export function buildDrive(segs, buses) {
