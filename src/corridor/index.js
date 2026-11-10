@@ -69,7 +69,7 @@ const segNear = (x, z, { ax, az, bx, bz, hw }) => {
   return Math.hypot(ax + dx * t - x, az + dz * t - z) < hw;
 };
 
-export function createCorridor({ scene, corridorData, terrain, world, renderer, overlay, params, getSimTime = () => null }) {
+export function createCorridor({ scene, corridorData, terrain, world, renderer, overlay, params, getSimTime = () => null, liveBus = null }) {
   const { index, base, baseUrl } = corridorData;
   const TS = index.meta.tileSize;
   const live = index.meta.liveBox;
@@ -335,7 +335,7 @@ export function createCorridor({ scene, corridorData, terrain, world, renderer, 
       onEnter() { if (!pangyoEx) { pangyoEx = buildPangyoExpress(E); root.add(pangyoEx.group); } },
       onLeave() { if (pangyoEx) { pangyoEx.dispose(); pangyoEx = null; } } });
   }
-  const gnTransit = corridorData.gangnamTransit ? mountGangnamTransit(root, corridorData.gangnamTransit, { overlay, express: corridorData.gangnamExpress }) : null; // [gangnam-bus] [gyeongbu-bus]
+  const gnTransit = corridorData.gangnamTransit ? mountGangnamTransit(root, corridorData.gangnamTransit, { overlay, express: corridorData.gangnamExpress, liveBus }) : null; // [gangnam-bus] [gyeongbu-bus] [livebus]
   const tower = index.landmarks.find((l) => l.id === 'lotte-world-tower');
   let lotte = null;
   if (tower) {

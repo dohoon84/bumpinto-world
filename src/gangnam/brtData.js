@@ -5,8 +5,15 @@ export function gangnamBrtEnabled(search = typeof location !== 'undefined' ? loc
 }
 
 export const BRT_LANE_OFF = 1.7; // src/transit/busSource.js LANE_OFF 과 같아야 함
-export const BRT_ROUTE_PHASE = { 140: 0, 402: 1, 9404: 2 };
+export const BRT_ROUTE_PHASE = { 140: 0, 402: 1, 9404: 2, 400: 1, 470: 0, 341: 2, 9408: 0, 1151: 1 };
 export const BRT_ROUTE_N = 3;
+export const BRT_EXTRA_ROUTES = [
+  { id: 'brt-400', ref: '400', type: 'seat', name: '강남대로' },
+  { id: 'brt-470', ref: '470', type: 'seat', name: '강남대로' },
+  { id: 'brt-341', ref: '341', type: 'seat', name: '강남대로' },
+  { id: 'brt-9408', ref: '9408', type: 'express', name: '강남대로' },
+  { id: 'brt-1151', ref: '1151', type: 'express', name: '강남대로' },
+];
 
 export function offsetRight(pts, off = BRT_LANE_OFF) {
   const out = [];
@@ -19,7 +26,8 @@ export function offsetRight(pts, off = BRT_LANE_OFF) {
 }
 
 export function buildBrtTransit(brt) {
-  const routes = brt.routes || [];
+  const seen = new Set((brt.routes || []).map((r) => String(r.ref || r.id)));
+  const routes = [...(brt.routes || []), ...BRT_EXTRA_ROUTES.filter((r) => !seen.has(r.ref))];
   const paths = [];
   for (const dir of brt.dirs || []) {
     const center = dir.pts;

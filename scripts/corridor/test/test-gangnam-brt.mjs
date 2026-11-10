@@ -96,7 +96,9 @@ ok(`paths follow busways, doors face island, clearance ok, covered ${[...allCove
 
 {
   const T = buildBrtTransit(brt);
-  assert.equal(T.paths.length, brt.dirs.length * brt.routes.length);
+  assert.ok(T.paths.length >= brt.dirs.length * brt.routes.length);
+  assert.equal(T.paths.length % brt.dirs.length, 0);
+  assert.ok(T.routes.some((r) => r.ref === '1151') && T.routes.some((r) => r.ref === '400'));
   const dir = brt.dirs[0];
   const mid = dir.pts[dir.pts.length >> 1];
   const off = offsetRight(dir.pts, 1.7);
