@@ -71,8 +71,8 @@ assert.deepEqual(built.lanes, data.lanes);
 ok('nightlife.json matches place*');
 
 const c = countsOf(data);
-assert.ok(c.signs >= 1000 && c.signs <= 2800, `signs ${c.signs}`);
-assert.ok(c.windows >= 250 && c.windows <= 900, `windows ${c.windows}`);
+assert.ok(c.signs >= 1200 && c.signs <= 3600, `signs ${c.signs}`);
+assert.ok(c.windows >= 250 && c.windows <= 1000, `windows ${c.windows}`);
 assert.ok(c.facades >= 20 && c.facades <= 90, `facades ${c.facades}`);
 assert.ok(c.lanterns >= 60 && c.lanterns <= 200, `lanterns ${c.lanterns}`);
 assert.ok(c.strings >= 80 && c.strings <= 260, `strings ${c.strings}`);

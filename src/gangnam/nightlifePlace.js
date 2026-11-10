@@ -121,7 +121,9 @@ function facesRoad(segs, mx, mz, nx, nz, maxD) {
   const out = projectOnto(segs, mx + nx * 1.6, mz + nz * 1.6);
   if (!out || out.d > maxD) return null;
   const inn = projectOnto(segs, mx - nx * 2.2, mz - nz * 2.2);
-  if (inn && inn.d + 0.8 < out.d) return null;
+  if (inn && inn.d + 0.8 < out.d) {
+    if (!(AVENUE_NAMES.includes(out.n) && out.d < 45)) return null;
+  }
   return out;
 }
 
@@ -148,7 +150,7 @@ function facadeWalk(buildings, segs, blocks, box, minL, maxD, fn) {
 }
 
 /** 세로 네온·가로 LED·돌출 간판. [x,y,z,yaw,w,h,nameIdx,colorIdx,kind,seed] kind 0세로 1가로 2돌출 */
-export function placeSigns(tiles, { box = null, max = 2600, around = null } = {}) {
+export function placeSigns(tiles, { box = null, max = 3400, around = null } = {}) {
   const segs = nightSegs(tiles);
   const buildings = (tiles || []).flatMap((t) => t.b || []);
   const blocks = buildingIndex(buildings, around);
@@ -159,14 +161,17 @@ export function placeSigns(tiles, { box = null, max = 2600, around = null } = {}
     out.push(r1(x), r1(y), r1(z), r3(yaw), r2(w), r2(h), nameIdx, colorIdx, kind, r2(hsh));
     taken.push([x, z, y]);
   };
-  const pass = (wantAvenue, budget) => facadeWalk(buildings, segs, blocks, box, 4.0, 34, ({ it, e, hit, x0, z0, id }) => {
+  const avenueSegs = segs.filter((sg) => AVENUE_NAMES.includes(sg.n));
+  const pass = (wantAvenue, budget) => facadeWalk(buildings, segs, blocks, box, 3.4, 52, ({ it, e, hit, x0, z0, id }) => {
     if (out.length >= budget * 10) return;
-    const isAv = !!(hit.n && AVENUE_NAMES.includes(hit.n));
+    const avNear = projectOnto(avenueSegs, e.mx, e.mz);
+    const isAv = !!(hit.n && AVENUE_NAMES.includes(hit.n)) || !!(avNear && avNear.d < 42);
     if (wantAvenue !== isAv) return;
     const isSide = !!(hit.n && String(hit.n).endsWith('길'));
-    const step = isAv ? 3.5 : (isSide ? 4.6 : 5.2);
-    const maxD = isAv ? 32 : 18;
-    if (hit.d > maxD) return;
+    const step = isAv ? 3.4 : (isSide ? 4.6 : 5.2);
+    const maxD = isAv ? 48 : 18;
+    if (!avNear && hit.d > maxD) return;
+    if (avNear && avNear.d > 48 && hit.d > maxD) return;
     const bh = it.b.h || 10;
     const floors = [];
     if (bh >= 6) floors.push(3.55);
@@ -226,17 +231,19 @@ export function placeSigns(tiles, { box = null, max = 2600, around = null } = {}
 }
 
 /** 1층 쇼윈도. [x,y,z,yaw,w,h,colorIdx] */
-export function placeShopWindows(tiles, { box = null, max = 720, around = null } = {}) {
+export function placeShopWindows(tiles, { box = null, max = 880, around = null } = {}) {
   const segs = nightSegs(tiles);
   const buildings = (tiles || []).flatMap((t) => t.b || []);
   const blocks = buildingIndex(buildings, around);
   const out = [];
-  const pass = (wantAvenue) => facadeWalk(buildings, segs, blocks, box, 4.6, 20, ({ it, e, hit, x0, z0, id }) => {
+  const avenueSegs = segs.filter((sg) => AVENUE_NAMES.includes(sg.n));
+  const pass = (wantAvenue) => facadeWalk(buildings, segs, blocks, box, 3.6, 48, ({ it, e, hit, x0, z0, id }) => {
     if (out.length >= max * 7) return;
     if ((it.b.h || 0) < 7) return;
-    const isAv = !!(hit.n && AVENUE_NAMES.includes(hit.n));
+    const avNear = projectOnto(avenueSegs, e.mx, e.mz);
+    const isAv = !!(hit.n && AVENUE_NAMES.includes(hit.n)) || !!(avNear && avNear.d < 42);
     if (wantAvenue !== isAv) return;
-    const bays = Math.max(1, Math.min(5, Math.floor(e.L / 5.2)));
+    const bays = Math.max(1, Math.min(6, Math.floor(e.L / (isAv ? 4.4 : 5.2))));
     for (let s = 0; s < bays; s++) {
       if (out.length >= max * 7) break;
       if (hash01(id * 29 + s * 5 + 8) > 0.88) continue;
@@ -516,35 +523,50 @@ export function placeWet(tiles, { box = null } = {}) {
   return out;
 }
 
-/** 대로 양쪽 차로 샘플. 각 차선은 [x,z,yaw, ...] */
-export function sampleLanes(tiles, { box = null, around = null, max = 24 } = {}) {
+/** 대로 양쪽 차로 샘플. 도로 polyline 전체를 따라 [x,z,yaw, ...] */
+export function sampleLanes(tiles, { box = null, around = null, max = 32 } = {}) {
+  const roads = [];
+  for (const t of tiles || []) for (const road of t.r || []) {
+    if ((road.n === '강남대로' || road.n === '테헤란로') && road.p && road.p.length >= 2) roads.push(road);
+  }
+  if (around) {
+    roads.sort((a, b) => {
+      const pa = a.n === '강남대로' ? 0 : 1, pb = b.n === '강남대로' ? 0 : 1;
+      if (pa !== pb) return pa - pb;
+      const ma = a.p[Math.floor(a.p.length / 2)], mb = b.p[Math.floor(b.p.length / 2)];
+      return Math.hypot(ma[0] - around.x, ma[1] - around.z) - Math.hypot(mb[0] - around.x, mb[1] - around.z);
+    });
+  }
   const out = [];
-  const segs = sortAround(nightSegs(tiles).filter((s) => s.n === '강남대로' || s.n === '테헤란로'), around);
-  for (const s of segs) {
+  for (const road of roads) {
     if (out.length >= max) break;
-    const dx = s.b[0] - s.a[0], dz = s.b[1] - s.a[1], L = Math.hypot(dx, dz);
-    if (L < 56) continue;
-    const tx = dx / L, tz = dz / L, nx = -tz, nz = tx;
-    const w = s.w || 16;
+    const w = road.w || 16;
+    let total = 0;
+    for (let i = 1; i < road.p.length; i++) total += Math.hypot(road.p[i][0] - road.p[i - 1][0], road.p[i][1] - road.p[i - 1][1]);
+    if (total < 24) continue;
     for (const dir of [1, -1]) {
-      const a = dir === 1 ? s.a : s.b;
-      const sx = dir * tx, sz = dir * tz;
-      const side = dir * -0.22 * w;
-      const yaw = Math.atan2(sx, sz);
+      const seq = dir === 1 ? road.p : road.p.slice().reverse();
       const pts = [];
-      for (let d = 6; d < L - 6; d += 4) {
-        const x = a[0] + sx * d + nx * side;
-        const z = a[1] + sz * d + nz * side;
-        if (!inBox(box, x, z)) continue;
-        pts.push(r1(x), r1(z), r3(yaw));
+      for (let i = 1; i < seq.length; i++) {
+        const a = seq[i - 1], b = seq[i];
+        const dx = b[0] - a[0], dz = b[1] - a[1], L = Math.hypot(dx, dz);
+        if (L < 2) continue;
+        const tx = dx / L, tz = dz / L, nx = -tz, nz = tx;
+        const yaw = Math.atan2(tx, tz);
+        const side = -0.22 * w;
+        for (let d = 3; d < L - 3; d += 4) {
+          const x = a[0] + tx * d + nx * side;
+          const z = a[1] + tz * d + nz * side;
+          if (!inBox(box, x, z)) continue;
+          pts.push(r1(x), r1(z), r3(yaw));
+        }
       }
-      if (pts.length >= 18 && out.length < max) out.push(pts);
+      if (pts.length >= 6 && out.length < max) out.push(pts);
     }
   }
   return out;
 }
 
-/** 옥상·모서리 LED 띠. [x,y,z,yaw,w,h,colorIdx,kind] kind 0옥상가로 1모서리세로 */
 export function placeStrips(tiles, { box = null, max = 110, around = null } = {}) {
   const segs = nightSegs(tiles).filter((s) => s.k === 'avenue' || s.k === 'major');
   const buildings = (tiles || []).flatMap((t) => t.b || []);

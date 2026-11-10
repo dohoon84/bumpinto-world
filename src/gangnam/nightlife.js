@@ -293,24 +293,88 @@ function windowTex() {
   const canvas = document.createElement('canvas');
   canvas.width = 128; canvas.height = 128;
   const c = canvas.getContext('2d');
+  c.clearRect(0, 0, 128, 128);
   c.fillStyle = '#000';
   c.fillRect(0, 0, 128, 128);
-  const panes = [[8, 8, 50, 50], [70, 8, 50, 50], [8, 70, 50, 50], [70, 70, 50, 50]];
+  const panes = [[14, 14, 42, 42], [72, 14, 42, 42], [14, 72, 42, 42], [72, 72, 42, 42]];
   for (const [x, y, w, h] of panes) {
-    const g = c.createLinearGradient(x, y, x, y + h);
+    const g = c.createRadialGradient(x + w * 0.45, y + h * 0.3, 2, x + w * 0.5, y + h * 0.5, w * 0.72);
     g.addColorStop(0, 'rgba(255,236,190,0.95)');
-    g.addColorStop(0.65, 'rgba(255,200,120,0.62)');
-    g.addColorStop(1, 'rgba(255,150,70,0.28)');
+    g.addColorStop(0.55, 'rgba(255,190,110,0.45)');
+    g.addColorStop(1, 'rgba(0,0,0,0)');
     c.fillStyle = g;
     c.fillRect(x, y, w, h);
   }
-  c.fillStyle = '#000';
-  c.fillRect(58, 6, 12, 116);
-  c.fillRect(6, 58, 116, 12);
   const tex = new THREE.CanvasTexture(canvas);
   tex.colorSpace = THREE.SRGBColorSpace;
   tex.generateMipmaps = false;
   return tex;
+}
+
+function coneTex() {
+  const canvas = document.createElement('canvas');
+  canvas.width = 64; canvas.height = 128;
+  const c = canvas.getContext('2d');
+  const g = c.createRadialGradient(32, 18, 2, 32, 40, 58);
+  g.addColorStop(0, 'rgba(255,230,170,0.9)');
+  g.addColorStop(0.35, 'rgba(255,190,110,0.35)');
+  g.addColorStop(1, 'rgba(255,200,120,0)');
+  c.fillStyle = g;
+  c.fillRect(0, 0, 64, 128);
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.generateMipmaps = false;
+  tex.minFilter = THREE.LinearFilter;
+  return tex;
+}
+
+function coloredBox(w, h, d, x, y, z, hex) {
+  const g = new THREE.BoxGeometry(w, h, d);
+  g.translate(x, y, z);
+  const color = new THREE.Color(hex);
+  const n = g.getAttribute('position').count;
+  const cols = new Float32Array(n * 3);
+  for (let i = 0; i < n; i++) {
+    cols[i * 3] = color.r; cols[i * 3 + 1] = color.g; cols[i * 3 + 2] = color.b;
+  }
+  g.setAttribute('color', new THREE.Float32BufferAttribute(cols, 3));
+  return g;
+}
+
+function mergeGeos(parts) {
+  const pos = [], nrm = [], col = [], idx = [];
+  for (const g of parts) {
+    const p = g.getAttribute('position');
+    const n = g.getAttribute('normal');
+    const c = g.getAttribute('color');
+    const base = pos.length / 3;
+    for (let i = 0; i < p.count; i++) {
+      pos.push(p.getX(i), p.getY(i), p.getZ(i));
+      nrm.push(n.getX(i), n.getY(i), n.getZ(i));
+      if (c) col.push(c.getX(i), c.getY(i), c.getZ(i));
+      else col.push(1, 1, 1);
+    }
+    const id = g.getIndex();
+    if (id) for (let i = 0; i < id.count; i++) idx.push(id.getX(i) + base);
+    g.dispose();
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  geo.setAttribute('normal', new THREE.Float32BufferAttribute(nrm, 3));
+  geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+  geo.setIndex(idx);
+  return geo;
+}
+
+function makeCarGeometry() {
+  return mergeGeos([
+    coloredBox(1.74, 0.70, 4.10, 0, 0.00, 0.00, '#727888'),
+    coloredBox(1.58, 0.16, 3.60, 0, 0.40, -0.04, '#a8aeb8'),
+    coloredBox(1.50, 0.40, 2.05, 0, 0.52, -0.20, '#8c929e'),
+    coloredBox(1.46, 0.30, 0.06, 0, 0.46, 1.08, '#eaf4ff'),
+    coloredBox(1.46, 0.26, 0.06, 0, 0.44, -1.18, '#d4e6fa'),
+    coloredBox(0.05, 0.26, 1.46, 0.86, 0.42, -0.16, '#dff0ff'),
+    coloredBox(0.05, 0.26, 1.46, -0.86, 0.42, -0.16, '#dff0ff'),
+  ]);
 }
 
 function zebraTex() {
@@ -344,7 +408,7 @@ function makeHaloMaterial() {
   const tex = new THREE.CanvasTexture(canvas);
   return new THREE.MeshBasicMaterial({
     map: tex, transparent: true, opacity: 0, depthWrite: false,
-    blending: THREE.AdditiveBlending, toneMapped: false, side: THREE.DoubleSide,
+    blending: THREE.AdditiveBlending, toneMapped: false, side: THREE.FrontSide,
   });
 }
 
@@ -384,7 +448,7 @@ export function createGangnamNightlife({ scene, terrain = null, url, mobile = fa
       if (kind === 2) {
         pushQuad(pos, nrm, uv, col, seed, idx, wallCorners(x, gy, z, yaw + Math.PI, w, h), color, seedVal, uvQuad);
       }
-      haloItems.push(x, gy, z, yaw, Math.max(w, 1.2) * 1.08, Math.max(h, 1.2) * 1.08, ci);
+      haloItems.push(x, gy, z, yaw, Math.max(w, 1.05) * 1.02, Math.max(h, 1.05) * 1.02, ci);
       cabItems.push(x, gy, z, yaw, w * 1.12, h * 1.2, ci);
     }
     const signGeo = new THREE.BufferGeometry();
@@ -614,7 +678,7 @@ export function createGangnamNightlife({ scene, terrain = null, url, mobile = fa
       heads.name = 'gnightHeads';
       heads.renderOrder = 2;
       for (let i = 0; i < n; i++) {
-        compose(m4, q, p, s, src[i * 4], ground(src[i * 4], src[i * 4 + 1]) + 0.28, src[i * 4 + 1], src[i * 4 + 2] + Math.PI / 2, src[i * 4 + 3], 1, 1.2);
+        compose(m4, q, p, s, src[i * 4], ground(src[i * 4], src[i * 4 + 1]) + 0.18, src[i * 4 + 1], src[i * 4 + 2] + Math.PI / 2, Math.min(src[i * 4 + 3], 14), 1, 0.38);
         heads.setMatrixAt(i, m4);
       }
       heads.instanceMatrix.needsUpdate = true;
@@ -629,7 +693,7 @@ export function createGangnamNightlife({ scene, terrain = null, url, mobile = fa
       tails.name = 'gnightTails';
       tails.renderOrder = 2;
       for (let i = 0; i < n; i++) {
-        compose(m4, q, p, s, src[i * 4], ground(src[i * 4], src[i * 4 + 1]) + 0.26, src[i * 4 + 1], src[i * 4 + 2] + Math.PI + Math.PI / 2, src[i * 4 + 3], 1, 1.2);
+        compose(m4, q, p, s, src[i * 4], ground(src[i * 4], src[i * 4 + 1]) + 0.16, src[i * 4 + 1], src[i * 4 + 2] + Math.PI + Math.PI / 2, Math.min(src[i * 4 + 3], 12), 1, 0.34);
         tails.setMatrixAt(i, m4);
       }
       tails.instanceMatrix.needsUpdate = true;
@@ -637,28 +701,41 @@ export function createGangnamNightlife({ scene, terrain = null, url, mobile = fa
       root.add(tails);
       stats.tails = n;
     }
-    if (!mobile && (j.wet?.length || wn)) {
+    if (!mobile && (j.wet?.length || wn || signSrc.length)) {
       const src = j.wet || [];
       const wetN = src.length / 5;
-      const poolN = wetN + wn;
+      const glowItems = [];
+      for (let i = 0; i < wn; i++) {
+        const x = winSrc[i * 7], z = winSrc[i * 7 + 2], yaw = winSrc[i * 7 + 3];
+        const nx = Math.sin(yaw), nz = Math.cos(yaw);
+        glowItems.push(x + nx * 1.15, z + nz * 1.15, yaw, 2.15, winSrc[i * 7 + 6], 1);
+      }
+      for (let i = 0; i < signSrc.length; i += 10) {
+        if (signSrc[i + 1] > 7.2 || ((i / 10) % 2)) continue;
+        const x = signSrc[i], z = signSrc[i + 2], yaw = signSrc[i + 3];
+        const nx = Math.sin(yaw), nz = Math.cos(yaw);
+        glowItems.push(x + nx * 2.35, z + nz * 2.35, yaw, 2.35, signSrc[i + 7], 0);
+      }
+      const extraN = glowItems.length / 6;
+      const poolN = wetN + extraN;
       wetmat = makeUnlitColor({ map: poolTex(), additive: true });
       wet = new THREE.InstancedMesh(new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2), wetmat, Math.max(1, poolN));
       wet.name = 'gnightWet';
       wet.renderOrder = 1;
       for (let i = 0; i < wetN; i++) {
-        const dia = Math.min(src[i * 5 + 3], src[i * 5 + 4]);
-        compose(m4, q, p, s, src[i * 5], ground(src[i * 5], src[i * 5 + 1]) + 0.045, src[i * 5 + 1], src[i * 5 + 2], dia, 1, dia);
+        const dia = Math.min(src[i * 5 + 3], src[i * 5 + 4], 7.2);
+        compose(m4, q, p, s, src[i * 5], ground(src[i * 5], src[i * 5 + 1]) + 0.04, src[i * 5 + 1], src[i * 5 + 2], dia, 1, dia);
         wet.setMatrixAt(i, m4);
-        wet.setColorAt(i, tmpC.set('#9ad8ff'));
+        wet.setColorAt(i, tmpC.set('#8ec8ff'));
       }
-      for (let i = 0; i < wn; i++) {
-        const x = winSrc[i * 7], z = winSrc[i * 7 + 2], yaw = winSrc[i * 7 + 3];
-        const nx = Math.sin(yaw), nz = Math.cos(yaw);
-        const px = x + nx * 1.35, pz = z + nz * 1.35;
-        const dia = Math.max(2.8, winSrc[i * 7 + 4] * 1.15);
-        compose(m4, q, p, s, px, ground(px, pz) + 0.04, pz, yaw, dia, 1, dia);
+      for (let i = 0; i < extraN; i++) {
+        const x = glowItems[i * 6], z = glowItems[i * 6 + 1], yaw = glowItems[i * 6 + 2];
+        const dia = glowItems[i * 6 + 3];
+        const isWin = glowItems[i * 6 + 5] === 1;
+        compose(m4, q, p, s, x, ground(x, z) + 0.035, z, yaw, dia, 1, dia);
         wet.setMatrixAt(wetN + i, m4);
-        wet.setColorAt(wetN + i, tmpC.set(WINDOW_COLORS[winSrc[i * 7 + 6] % WINDOW_COLORS.length]));
+        if (isWin) wet.setColorAt(wetN + i, tmpC.set(WINDOW_COLORS[glowItems[i * 6 + 4] % WINDOW_COLORS.length]));
+        else wet.setColorAt(wetN + i, tmpC.set(NEON_COLORS[glowItems[i * 6 + 4] % NEON_COLORS.length]));
       }
       wet.count = poolN;
       wet.instanceMatrix.needsUpdate = true;
@@ -677,22 +754,37 @@ export function createGangnamNightlife({ scene, terrain = null, url, mobile = fa
         if ((lane.length / 3) >= 8) { usable.push(lane); total += CARS; }
       }
       if (total) {
-        const bodyMat = new THREE.MeshBasicMaterial({ color: '#16161f', transparent: true, opacity: 0, toneMapped: false, depthWrite: true });
-        const bodies = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), bodyMat, total);
+        const bodyMat = new THREE.MeshBasicMaterial({
+          vertexColors: true, transparent: true, opacity: 0, toneMapped: false, depthWrite: true,
+        });
+        const bodies = new THREE.InstancedMesh(makeCarGeometry(), bodyMat, total);
         bodies.name = 'gnightCars';
         bodies.frustumCulled = false;
-        const chMat = makeUnlitColor({ color: '#fff4d0', additive: true });
-        const ctMat = makeUnlitColor({ color: '#ff3040', additive: true });
-        const carHeads = new THREE.InstancedMesh(new THREE.SphereGeometry(1, 6, 4), chMat, total * 2);
-        const carTails = new THREE.InstancedMesh(new THREE.SphereGeometry(1, 6, 4), ctMat, total * 2);
+        const carTints = ['#d5dbe4', '#e0d4cc', '#c5d0de', '#ddd8ce', '#d0c8d6', '#c8d4c8'];
+        for (let i = 0; i < total; i++) bodies.setColorAt(i, tmpC.set(carTints[i % carTints.length]));
+        if (bodies.instanceColor) bodies.instanceColor.needsUpdate = true;
+        const chMat = makeUnlitColor({ color: '#fff6d8', additive: true });
+        const ctMat = makeUnlitColor({ color: '#ff2a38', additive: true });
+        const bloomMat = makeUnlitColor({ map: poolTex(), additive: true });
+        const coneMat = makeUnlitColor({ map: coneTex(), color: '#ffd8a0', additive: true });
+        const carHeads = new THREE.InstancedMesh(new THREE.SphereGeometry(1, 8, 6), chMat, total * 2);
+        const carTails = new THREE.InstancedMesh(new THREE.SphereGeometry(1, 8, 6), ctMat, total * 2);
+        const blooms = new THREE.InstancedMesh(new THREE.PlaneGeometry(1, 1), bloomMat, total * 4);
+        const cones = new THREE.InstancedMesh(new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2), coneMat, total);
         carHeads.name = 'gnightCarHeads';
         carTails.name = 'gnightCarTails';
-        carHeads.frustumCulled = false;
-        carTails.frustumCulled = false;
-        carHeads.renderOrder = 3;
-        carTails.renderOrder = 3;
-        root.add(bodies); root.add(carHeads); root.add(carTails);
-        cars = { bodies, bodyMat, carHeads, chMat, carTails, ctMat, usable, CARS, total };
+        blooms.name = 'gnightCarBlooms';
+        cones.name = 'gnightCarCones';
+        for (const m of [carHeads, carTails, blooms, cones]) {
+          m.frustumCulled = false;
+          m.renderOrder = 3;
+        }
+        cones.renderOrder = 1;
+        root.add(bodies); root.add(carHeads); root.add(carTails); root.add(blooms); root.add(cones);
+        cars = {
+          bodies, bodyMat, carHeads, chMat, carTails, ctMat,
+          blooms, bloomMat, cones, coneMat, usable, CARS, total,
+        };
         stats.cars = total;
       }
     }
@@ -720,12 +812,12 @@ export function createGangnamNightlife({ scene, terrain = null, url, mobile = fa
     meshes.signMat.opacity = on ? (0.62 + n * 0.38) : 0;
     meshes.signs.visible = on;
     if (meshes.backMat) {
-      meshes.backMat.opacity = n * 0.42;
+      meshes.backMat.opacity = n * 0.26;
       meshes.backs.visible = on && n > 0.04;
     }
-    meshes.haloMat.opacity = n * (mobile ? 0.18 : 0.28);
+    meshes.haloMat.opacity = n * (mobile ? 0.12 : 0.18);
     meshes.halos.visible = on && n > 0.04;
-    meshes.wmat.opacity = n * (mobile ? 0.5 : 0.78);
+    meshes.wmat.opacity = n * (mobile ? 0.38 : 0.52);
     meshes.wins.visible = on && n > 0.04;
     if (meshes.facadeMats) {
       for (let v = 0; v < meshes.facadeMats.length; v++) {
@@ -748,18 +840,20 @@ export function createGangnamNightlife({ scene, terrain = null, url, mobile = fa
     meshes.crossings.visible = on && n > 0.04;
     meshes.sgMat.opacity = on ? 0.55 + n * 0.4 : 0;
     meshes.signals.visible = on;
+    const camDist = (typeof window !== 'undefined' && window.__jj?.cam?.dist) || 0;
+    const aerial = camDist > 90;
     if (meshes.heads) {
-      meshes.hmat.opacity = n * 0.92;
-      meshes.heads.visible = on && n > 0.04;
-      if (meshes.hmat.map) meshes.hmat.map.offset.x = (performance.now() / 700) % 1;
+      meshes.hmat.opacity = aerial ? n * 0.16 : 0;
+      meshes.heads.visible = on && aerial && n > 0.04;
+      if (meshes.hmat.map) meshes.hmat.map.offset.x = (performance.now() / 900) % 1;
     }
     if (meshes.tails) {
-      meshes.tmat.opacity = n * 0.88;
-      meshes.tails.visible = on && n > 0.04;
-      if (meshes.tmat.map) meshes.tmat.map.offset.x = (performance.now() / 760) % 1;
+      meshes.tmat.opacity = aerial ? n * 0.14 : 0;
+      meshes.tails.visible = on && aerial && n > 0.04;
+      if (meshes.tmat.map) meshes.tmat.map.offset.x = (performance.now() / 980) % 1;
     }
     if (meshes.wet) {
-      meshes.wetmat.opacity = n * 0.16;
+      meshes.wetmat.opacity = n * 0.20;
       meshes.wet.visible = on && n > 0.04;
     }
     if (meshes.cars) {
@@ -768,15 +862,19 @@ export function createGangnamNightlife({ scene, terrain = null, url, mobile = fa
       c.bodies.visible = show;
       c.carHeads.visible = show;
       c.carTails.visible = show;
-      c.bodyMat.opacity = show ? 0.92 : 0;
-      c.chMat.opacity = n * 0.95;
-      c.ctMat.opacity = n * 0.9;
+      if (c.blooms) c.blooms.visible = show;
+      if (c.cones) c.cones.visible = show;
+      c.bodyMat.opacity = show ? 1 : 0;
+      c.chMat.opacity = n * 0.98;
+      c.ctMat.opacity = n * 0.95;
+      if (c.bloomMat) c.bloomMat.opacity = n * 0.55;
+      if (c.coneMat) c.coneMat.opacity = n * 0.42;
       if (show) tickCars(c);
     }
     let draws = 0;
     const listed = [meshes.signs, meshes.backs, meshes.halos, meshes.wins, meshes.strips, meshes.lanterns, meshes.strings, meshes.exits, meshes.crossings, meshes.signals, meshes.heads, meshes.tails, meshes.wet];
     if (meshes.facadeMeshes) listed.push(...meshes.facadeMeshes);
-    if (meshes.cars) listed.push(meshes.cars.bodies, meshes.cars.carHeads, meshes.cars.carTails);
+    if (meshes.cars) listed.push(meshes.cars.bodies, meshes.cars.carHeads, meshes.cars.carTails, meshes.cars.blooms, meshes.cars.cones);
     for (const m of listed) {
       if (m && m.visible) draws++;
     }
@@ -785,7 +883,7 @@ export function createGangnamNightlife({ scene, terrain = null, url, mobile = fa
 
   function tickCars(c) {
     const t = performance.now() / 1000;
-    const speed = 12;
+    const speed = 15;
     const spacing = 4;
     let ci = 0;
     for (const lane of c.usable) {
@@ -803,25 +901,49 @@ export function createGangnamNightlife({ scene, terrain = null, url, mobile = fa
         if (dy > Math.PI) dy -= Math.PI * 2;
         if (dy < -Math.PI) dy += Math.PI * 2;
         const yaw = lane[i0 * 3 + 2] + dy * f;
-        const gy = ground(x, z) + 0.62;
-        compose(m4, q, p, s, x, gy, z, yaw, 1.7, 1.12, 4.2);
+        const gy = ground(x, z) + 0.48;
+        compose(m4, q, p, s, x, gy, z, yaw, 1, 1, 1);
         c.bodies.setMatrixAt(ci, m4);
         const fx = Math.sin(yaw), fz = Math.cos(yaw);
         const rx = Math.cos(yaw), rz = -Math.sin(yaw);
-        compose(m4, q, p, s, x + fx * 2.05 + rx * 0.5, gy + 0.12, z + fz * 2.05 + rz * 0.5, 0, 0.32, 0.28, 0.28);
+        const hl = gy + 0.08;
+        compose(m4, q, p, s, x + fx * 2.08 + rx * 0.52, hl, z + fz * 2.08 + rz * 0.52, 0, 0.11, 0.10, 0.10);
         c.carHeads.setMatrixAt(ci * 2, m4);
-        compose(m4, q, p, s, x + fx * 2.05 - rx * 0.5, gy + 0.12, z + fz * 2.05 - rz * 0.5, 0, 0.32, 0.28, 0.28);
+        compose(m4, q, p, s, x + fx * 2.08 - rx * 0.52, hl, z + fz * 2.08 - rz * 0.52, 0, 0.11, 0.10, 0.10);
         c.carHeads.setMatrixAt(ci * 2 + 1, m4);
-        compose(m4, q, p, s, x - fx * 2.05 + rx * 0.5, gy + 0.12, z - fz * 2.05 + rz * 0.5, 0, 0.26, 0.2, 0.2);
+        compose(m4, q, p, s, x - fx * 2.08 + rx * 0.52, hl, z - fz * 2.08 + rz * 0.52, 0, 0.09, 0.08, 0.08);
         c.carTails.setMatrixAt(ci * 2, m4);
-        compose(m4, q, p, s, x - fx * 2.05 - rx * 0.5, gy + 0.12, z - fz * 2.05 - rz * 0.5, 0, 0.26, 0.2, 0.2);
+        compose(m4, q, p, s, x - fx * 2.08 - rx * 0.52, hl, z - fz * 2.08 - rz * 0.52, 0, 0.09, 0.08, 0.08);
         c.carTails.setMatrixAt(ci * 2 + 1, m4);
+        if (c.blooms) {
+          compose(m4, q, p, s, x + fx * 2.12 + rx * 0.52, hl, z + fz * 2.12 + rz * 0.52, yaw, 0.85, 0.55, 1);
+          c.blooms.setMatrixAt(ci * 4, m4);
+          compose(m4, q, p, s, x + fx * 2.12 - rx * 0.52, hl, z + fz * 2.12 - rz * 0.52, yaw, 0.85, 0.55, 1);
+          c.blooms.setMatrixAt(ci * 4 + 1, m4);
+          compose(m4, q, p, s, x - fx * 2.12 + rx * 0.52, hl, z - fz * 2.12 + rz * 0.52, yaw, 0.7, 0.45, 1);
+          c.blooms.setMatrixAt(ci * 4 + 2, m4);
+          compose(m4, q, p, s, x - fx * 2.12 - rx * 0.52, hl, z - fz * 2.12 - rz * 0.52, yaw, 0.7, 0.45, 1);
+          c.blooms.setMatrixAt(ci * 4 + 3, m4);
+          c.blooms.setColorAt(ci * 4, tmpC.set('#fff4cc'));
+          c.blooms.setColorAt(ci * 4 + 1, tmpC.set('#fff4cc'));
+          c.blooms.setColorAt(ci * 4 + 2, tmpC.set('#ff3a40'));
+          c.blooms.setColorAt(ci * 4 + 3, tmpC.set('#ff3a40'));
+        }
+        if (c.cones) {
+          compose(m4, q, p, s, x + fx * 2.7, ground(x, z) + 0.05, z + fz * 2.7, yaw, 1.85, 1, 3.4);
+          c.cones.setMatrixAt(ci, m4);
+        }
         ci++;
       }
     }
     c.bodies.instanceMatrix.needsUpdate = true;
     c.carHeads.instanceMatrix.needsUpdate = true;
     c.carTails.instanceMatrix.needsUpdate = true;
+    if (c.blooms) {
+      c.blooms.instanceMatrix.needsUpdate = true;
+      if (c.blooms.instanceColor) c.blooms.instanceColor.needsUpdate = true;
+    }
+    if (c.cones) c.cones.instanceMatrix.needsUpdate = true;
   }
 
   let acc = 0;

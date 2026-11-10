@@ -30,16 +30,16 @@ async function surface(page, x, z, yaw = 0, dist = 22, pitch = 0.38) {
 
 const night = await open({ hour: 21 });
 await surface(night, -7150, -14590, 0.22, 34, 0.16);
-await night.screenshot({ path: `${OUT}/gnight2-daero.png` });
+await night.screenshot({ path: `${OUT}/gnight3-daero.png` });
 
-await surface(night, -7140, -14595, -2.55, 14, 0.12);
-await night.screenshot({ path: `${OUT}/gnight2-exit.png` });
+await surface(night, -7148, -14588, -0.55, 28, 0.13);
+await night.screenshot({ path: `${OUT}/gnight3-daero-east.png` });
 
 await surface(night, -7030, -14490, 2.0, 16, 0.18);
-await night.screenshot({ path: `${OUT}/gnight2-alley.png` });
+await night.screenshot({ path: `${OUT}/gnight3-alley.png` });
 
 await surface(night, -7140, -14530, 0.35, 200, 1.05);
-await night.screenshot({ path: `${OUT}/gnight2-aerial.png` });
+await night.screenshot({ path: `${OUT}/gnight3-aerial.png` });
 
 const stats = await night.evaluate(() => ({
   nl: window.__jj.gangnamNightlife?.stats || null,
@@ -47,14 +47,9 @@ const stats = await night.evaluate(() => ({
 }));
 await night.close();
 
-const day = await open({ hour: 14 });
-await surface(day, -7150, -14590, 0.22, 34, 0.16);
-await day.screenshot({ path: `${OUT}/gnight2-day.png` });
-await day.close();
-
 const mobile = await open({ w: 844, h: 390, hour: 21, extra: '&mobile=1' });
 await surface(mobile, -7150, -14590, 0.22, 34, 0.16);
-await mobile.screenshot({ path: `${OUT}/gnight2-mobile.png` });
+await mobile.screenshot({ path: `${OUT}/gnight3-mobile.png` });
 const mobileStats = await mobile.evaluate(() => window.__jj.gangnamNightlife?.stats || null);
 await mobile.close();
 await browser.close();
