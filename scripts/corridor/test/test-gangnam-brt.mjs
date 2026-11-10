@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-import { gangnamBrtEnabled, buildBrtTransit, offsetRight } from '../../../src/gangnam/brtData.js';
+import { gangnamBrtEnabled, buildBrtTransit, offsetRight, BRT_ROUTE_PHASE, BRT_ROUTE_N } from '../../../src/gangnam/brtData.js';
 
 const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), '../../..');
 const J = (f) => JSON.parse(fs.readFileSync(path.join(ROOT, f), 'utf8'));
@@ -115,4 +115,14 @@ ok(`paths follow busways, doors face island, clearance ok, covered ${[...allCove
   ok(`LANE_OFF compensated, ${T.paths.length} paths, no fabricated ETAs`);
 }
 
+{
+  const phases = brt.routes.map((r) => BRT_ROUTE_PHASE[r.ref]);
+  assert.equal(new Set(phases).size, phases.length, `phases ${phases}`);
+  assert.equal(BRT_ROUTE_N, brt.routes.length);
+  const spaced = phases.map((p) => p / BRT_ROUTE_N);
+  assert.ok(Math.min(...spaced.map((a, i) => Math.min(...spaced.filter((_, j) => j !== i).map((b) => Math.abs(a - b))))) > 0.25);
+  ok(`route phases staggered ${brt.routes.map((r) => r.ref + ':' + BRT_ROUTE_PHASE[r.ref]).join(' ')}`);
+}
+
 console.log(`test-gangnam-brt: ${n} ok`);
+

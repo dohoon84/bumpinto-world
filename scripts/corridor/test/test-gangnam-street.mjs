@@ -29,7 +29,7 @@ const ok = (m) => console.log(`ok ${++n} ${m}`);
     assert.ok(!/\d+\s*분/.test(s.routes.join(' ')));
     for (const r of s.routes) assert.ok(/^\d{2,5}$|^[가-힣]{1,2}\d{1,2}$/.test(r), r);
   }
-  assert.ok(j.props.length >= 80 && j.props.length <= 400, `props ${j.props.length}`);
+  assert.ok(j.props.length >= 80 && j.props.length <= 520, `props ${j.props.length}`);
   assert.ok(j.waiters.length >= 20 && j.waiters.length <= 280, `waiters ${j.waiters.length}`);
   const medMods = (j.modules || []).filter((m) => m.kind === 'median');
   assert.ok(medMods.length >= 10, `median modules ${medMods.length}`);
@@ -42,6 +42,13 @@ const ok = (m) => console.log(`ok ${++n} ${m}`);
   assert.ok((j.platforms || []).some((p) => p[3] >= 30 && p[3] <= 42), 'platform length');
   assert.ok((j.zebras || []).length >= 20, `zebras ${j.zebras.length}`);
   assert.ok((j.shops || []).length >= 40, `shops ${j.shops.length}`);
+  for (let i = 0; i < j.shops.length; i++) {
+    for (let k = i + 1; k < j.shops.length; k++) {
+      const d = Math.hypot(j.shops[i][0] - j.shops[k][0], j.shops[i][1] - j.shops[k][1]);
+      assert.ok(d >= 2.15, `overlapping shops d=${d.toFixed(2)}`);
+    }
+  }
+  assert.ok((j.benches || []).length >= 8, `benches ${(j.benches || []).length}`);
   assert.ok((j.tents || []).length >= 10, `tents ${j.tents.length}`);
   const shopBrand = /스타벅스|GS25|CU|세븐일레븐|배스킨|맥도날드|이디야|투썸/i;
   for (const name of ['골목24', '나인마트', '오후커피', '한그릇', '노을포차']) assert.ok(!shopBrand.test(name));
@@ -147,7 +154,93 @@ const ok = (m) => console.log(`ok ${++n} ${m}`);
   };
   for (const st of side) offLanes(st.x, st.z, `side ${st.ref || st.name}`);
   for (const m of (j.modules || []).filter((m) => m.kind !== 'median')) offLanes(m.x, m.z, 'side module');
-  ok(`island clear ${med.length} median, sidewalk ${side.length} side, paints ${j.paints.length}`);
+  let gn = 0, th = 0;
+  for (const sh of j.shops || []) {
+    const g = nearest(sh[0], sh[1], roads.filter((r) => r.n === '강남대로'));
+    const te = nearest(sh[0], sh[1], roads.filter((r) => r.n === '테헤란로'));
+    if (g && g.d < (g.road.w || 16) / 2 + 16) gn++;
+    if (te && te.d < (te.road.w || 16) / 2 + 16) th++;
+  }
+  assert.ok(gn >= 20, `강남대로 shops ${gn}`);
+  assert.ok(th >= 12, `테헤란로 shops ${th}`);
+  ok(`island clear ${med.length} median, sidewalk ${side.length} side, paints ${j.paints.length} aveShops ${gn}/${th}`);
+}
+
+{
+  const j = J('public/corridor/gangnam/street.json');
+  const index = J('public/corridor/gangnam/index.json');
+  const tiles = Object.keys(index.tiles).sort().map((k) => J(`public/corridor/gangnam/tiles/${k}.json`));
+  const roads = tiles.flatMap((t) => t.r || []);
+  const WALK = new Set(['footway', 'steps', 'pedestrian', 'path']);
+  const carRoads = roads.filter((r) => r.p?.length >= 2 && !WALK.has(r.k));
+  const hypot = Math.hypot;
+  function projectOn(seq, p) {
+    let best = Infinity, pt = seq[0], yaw = 0;
+    for (let i = 1; i < seq.length; i++) {
+      const a = seq[i - 1], b = seq[i];
+      const dx = b[0] - a[0], dz = b[1] - a[1], L2 = dx * dx + dz * dz || 1;
+      const t = Math.max(0, Math.min(1, ((p[0] - a[0]) * dx + (p[1] - a[1]) * dz) / L2));
+      const q = [a[0] + dx * t, a[1] + dz * t];
+      const d = hypot(q[0] - p[0], q[1] - p[1]);
+      if (d < best) { best = d; pt = q; yaw = Math.atan2(dx, dz); }
+    }
+    return { d: best, pt, yaw };
+  }
+  function onCarriage(x, z, radius) {
+    for (const r of carRoads) {
+      const hit = projectOn(r.p, [x, z]);
+      if (hit.d < (r.w || 6) * 0.5 + radius) return { ...hit, road: r };
+    }
+    for (const zd of j.zebras || []) {
+      const [cx, cz, yaw, sx, sz] = zd;
+      const dx = x - cx, dz = z - cz;
+      const c = Math.cos(yaw), s = Math.sin(yaw);
+      const lx = dx * c - dz * s, lz = dx * s + dz * c;
+      const ox = Math.max(0, Math.abs(lx) - sx / 2);
+      const oz = Math.max(0, Math.abs(lz) - sz / 2);
+      if (hypot(ox, oz) < radius) return { kind: 'zebra' };
+    }
+    return null;
+  }
+  const PROP_R = [0.72, 0.55, 0.48, 0.22, 0.28, 0.5, 0.58];
+  const KIND = ['kiosk', 'bike', 'planter', 'bollard', 'pole', 'scooter', 'vending'];
+  const lists = [
+    ['props', (j.props || []).map((p) => ({ x: p[1], z: p[2], r: (PROP_R[p[0]] || 0.55) * (p[4] || 1), label: KIND[p[0]] || `k${p[0]}` }))],
+    ['poles', (j.poles || []).map((p) => ({ x: p[0], z: p[1], r: 0.28, label: 'pole' }))],
+    ['benches', (j.benches || []).map((p) => ({ x: p[0], z: p[1], r: 0.85, label: 'bench' }))],
+    ['tables', (j.tables || []).map((p) => ({ x: p[0], z: p[1], r: 0.5, label: 'table' }))],
+    ['stools', (j.stools || []).map((p) => ({ x: p[0], z: p[1], r: 0.25, label: 'stool' }))],
+    ['tents', (j.tents || []).map((p) => ({ x: p[0], z: p[1], r: 1.35, label: 'tent' }))],
+    ['aframes', (j.aframes || []).map((p) => ({ x: p[0], z: p[1], r: 0.42, label: 'aframe' }))],
+    ['trash', (j.trash || []).map((p) => ({ x: p[0], z: p[1], r: 0.28, label: 'trash' }))],
+    ['bins', (j.bins || []).map((p) => ({ x: p[0], z: p[1], r: 0.38, label: 'bin' }))],
+  ];
+  const byList = {};
+  let overlap = 0, total = 0;
+  const samples = [];
+  for (const [name, items] of lists) {
+    let n = 0;
+    for (const it of items) {
+      total++;
+      const hit = onCarriage(it.x, it.z, it.r);
+      if (hit) {
+        n++; overlap++;
+        if (samples.length < 8) samples.push(`${name}:${it.label} @${it.x},${it.z} ${hit.road ? `${hit.road.n||hit.road.k} d=${hit.d.toFixed(2)}` : 'zebra'}`);
+      }
+    }
+    byList[name] = `${n}/${items.length}`;
+  }
+  assert.equal(overlap, 0, `furniture on carriageway ${overlap}/${total} ${JSON.stringify(byList)} ${samples.join(' | ')}`);
+  const islandHits = [];
+  for (const st of (j.stops || []).filter((s) => s.kind === 'median')) {
+    for (const [name, items] of lists) {
+      for (const it of items) {
+        if (hypot(it.x - st.x, it.z - st.z) <= 2.2) islandHits.push(`${name} near ${st.ref || st.name}`);
+      }
+    }
+  }
+  assert.equal(islandHits.length, 0, `non-shelter furniture on BRT island: ${islandHits.join(', ')}`);
+  ok(`furniture off carriageway 0/${total} ${JSON.stringify(byList)}`);
 }
 
 {

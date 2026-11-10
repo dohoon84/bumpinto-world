@@ -111,6 +111,122 @@ function makeShopAtlas() {
   });
 }
 
+function silhouette(c, x, y, sc, color) {
+  c.fillStyle = color;
+  c.beginPath(); c.ellipse(x, y - 22 * sc, 7 * sc, 8 * sc, 0, 0, Math.PI * 2); c.fill();
+  c.fillRect(x - 8 * sc, y - 14 * sc, 16 * sc, 22 * sc);
+  c.fillRect(x - 11 * sc, y + 6 * sc, 8 * sc, 16 * sc);
+  c.fillRect(x + 3 * sc, y + 6 * sc, 8 * sc, 16 * sc);
+}
+
+function makeInteriorAtlas() {
+  const kinds = ['cvs', 'cafe', 'restaurant', 'bar'];
+  return paintAtlas(kinds, 384, 256, 2, (c, kind, cx, cy, w, h) => {
+    const pal = {
+      cvs: { wall: '#4a5666', ceil: '#3a4450', floor: '#6a7380', warm: '#e8f0d0', acc: '#4db87a' },
+      cafe: { wall: '#6e4a3a', ceil: '#5a3c30', floor: '#8a6854', warm: '#f6e0b4', acc: '#d4b488' },
+      restaurant: { wall: '#5c3c34', ceil: '#4a2e28', floor: '#7a5644', warm: '#f4cc9c', acc: '#e08848' },
+      bar: { wall: '#3e2a38', ceil: '#2c1e2c', floor: '#3a2834', warm: '#f0b888', acc: '#a04058' },
+    }[kind];
+    c.save();
+    c.beginPath(); c.rect(cx, cy, w, h); c.clip();
+    c.fillStyle = pal.ceil; c.fillRect(cx, cy, w, h * 0.2);
+    c.fillStyle = pal.wall; c.fillRect(cx, cy + h * 0.2, w, h * 0.38);
+    c.fillStyle = pal.floor;
+    c.beginPath();
+    c.moveTo(cx, cy + h); c.lineTo(cx + w, cy + h);
+    c.lineTo(cx + w * 0.84, cy + h * 0.56); c.lineTo(cx + w * 0.16, cy + h * 0.56);
+    c.closePath(); c.fill();
+    // side walls
+    c.fillStyle = pal.ceil;
+    c.beginPath(); c.moveTo(cx, cy); c.lineTo(cx + w * 0.16, cy + h * 0.2); c.lineTo(cx + w * 0.16, cy + h * 0.56); c.lineTo(cx, cy + h); c.fill();
+    c.beginPath(); c.moveTo(cx + w, cy); c.lineTo(cx + w * 0.84, cy + h * 0.2); c.lineTo(cx + w * 0.84, cy + h * 0.56); c.lineTo(cx + w, cy + h); c.fill();
+    if (kind === 'cvs') {
+      for (let i = 0; i < 3; i++) {
+        const sx = cx + w * 0.22 + i * w * 0.2;
+        c.fillStyle = '#2a3038'; c.fillRect(sx, cy + h * 0.22, w * 0.16, h * 0.3);
+        for (let r = 0; r < 4; r++) {
+          c.fillStyle = ['#c45a4a', '#e8d080', '#6ab0d4', '#7bc47a'][(i + r) % 4];
+          c.fillRect(sx + 4, cy + h * 0.24 + r * (h * 0.07), w * 0.16 - 8, 10);
+        }
+      }
+      c.fillStyle = '#cfd6de'; c.fillRect(cx + w * 0.2, cy + h * 0.68, w * 0.6, 16);
+      c.fillStyle = '#8ad0e8'; c.fillRect(cx + w * 0.62, cy + h * 0.22, w * 0.16, h * 0.3);
+      silhouette(c, cx + w * 0.38, cy + h * 0.78, 1.05, '#1a1c20');
+    } else if (kind === 'cafe') {
+      c.fillStyle = pal.acc; c.fillRect(cx + w * 0.22, cy + h * 0.24, w * 0.56, 14);
+      c.fillStyle = pal.warm; c.fillRect(cx + w * 0.28, cy + h * 0.26, w * 0.44, 8);
+      for (const tx of [0.3, 0.5, 0.7]) {
+        c.fillStyle = '#3a281c'; c.beginPath(); c.ellipse(cx + w * tx, cy + h * 0.72, 18, 8, 0, 0, Math.PI * 2); c.fill();
+        c.fillStyle = '#5a3c28'; c.fillRect(cx + w * tx - 3, cy + h * 0.72, 6, 22);
+      }
+      c.fillStyle = '#2c1e18'; c.fillRect(cx + w * 0.68, cy + h * 0.3, 28, 36);
+      c.fillStyle = pal.warm;
+      c.beginPath(); c.arc(cx + w * 0.34, cy + h * 0.34, 6, 0, Math.PI * 2); c.fill();
+      c.beginPath(); c.arc(cx + w * 0.5, cy + h * 0.32, 5, 0, Math.PI * 2); c.fill();
+      silhouette(c, cx + w * 0.42, cy + h * 0.8, 0.95, '#1c1410');
+      silhouette(c, cx + w * 0.58, cy + h * 0.78, 0.9, '#221810');
+    } else if (kind === 'restaurant') {
+      c.fillStyle = '#1c1410'; c.fillRect(cx + w * 0.22, cy + h * 0.24, w * 0.56, h * 0.16);
+      c.fillStyle = pal.warm; c.fillRect(cx + w * 0.24, cy + h * 0.26, w * 0.52, h * 0.1);
+      for (const tx of [0.28, 0.5, 0.72]) {
+        c.fillStyle = '#6a4830'; c.fillRect(cx + w * tx - 22, cy + h * 0.68, 44, 14);
+        c.fillStyle = '#3a281c'; c.fillRect(cx + w * tx - 4, cy + h * 0.8, 8, 16);
+      }
+      c.fillStyle = pal.acc; c.fillRect(cx + w * 0.26, cy + h * 0.22, 40, 8);
+      c.fillRect(cx + w * 0.5, cy + h * 0.22, 40, 8);
+      silhouette(c, cx + w * 0.36, cy + h * 0.62, 0.85, '#1a1210');
+      silhouette(c, cx + w * 0.64, cy + h * 0.84, 1.0, '#201410');
+    } else {
+      c.fillStyle = '#140e14'; c.fillRect(cx + w * 0.2, cy + h * 0.26, w * 0.6, h * 0.18);
+      for (let i = 0; i < 8; i++) {
+        c.fillStyle = ['#c45a4a', '#e8d080', '#7bc4a0', '#d0d8e8'][i % 4];
+        c.fillRect(cx + w * 0.24 + i * 18, cy + h * 0.3, 8, 22);
+      }
+      c.fillStyle = '#3a2428'; c.fillRect(cx + w * 0.18, cy + h * 0.66, w * 0.64, 18);
+      c.fillStyle = pal.acc; c.fillRect(cx + w * 0.18, cy + h * 0.64, w * 0.64, 4);
+      for (const tx of [0.3, 0.46, 0.62]) {
+        c.fillStyle = '#2a1c18'; c.beginPath(); c.ellipse(cx + w * tx, cy + h * 0.84, 10, 6, 0, 0, Math.PI * 2); c.fill();
+      }
+      c.fillStyle = pal.warm; c.globalAlpha = 0.35;
+      c.beginPath(); c.ellipse(cx + w * 0.5, cy + h * 0.4, 40, 16, 0, 0, Math.PI * 2); c.fill();
+      c.globalAlpha = 1;
+      silhouette(c, cx + w * 0.52, cy + h * 0.62, 0.95, '#120c10');
+    }
+    c.restore();
+  });
+}
+
+function makePylonAtlas(stops) {
+  const items = stops.length ? stops : [{ name: '강남역' }];
+  return paintAtlas(items, 512, 192, 2, (c, st, cx, cy, colW, rowH) => {
+    c.fillStyle = '#07090d';
+    c.fillRect(cx, cy, colW, rowH);
+    c.fillStyle = '#f2e6b0';
+    c.fillRect(cx + 10, cy + 10, colW - 20, rowH - 20);
+    c.fillStyle = '#10151f';
+    c.fillRect(cx + 18, cy + 18, colW - 36, rowH - 36);
+    const raw = String(st.name || '정류장');
+    const title = /강남역/.test(raw) ? '강남역' : raw.slice(0, 8);
+    const showToward = Boolean(st.toward) && st.toward !== title;
+    c.fillStyle = '#ffffff';
+    c.textAlign = 'center';
+    c.textBaseline = 'middle';
+    const fs = title.length <= 4 ? 74 : 44;
+    c.font = `bold ${fs}px "Noto Sans KR", "Apple SD Gothic Neo", sans-serif`;
+    const gap = title.length <= 4 ? 78 : 52;
+    const chars = [...title];
+    const start = cx + colW / 2 - ((chars.length - 1) * gap) / 2;
+    const titleY = showToward ? cy + rowH / 2 - 22 : cy + rowH / 2;
+    chars.forEach((ch, i) => c.fillText(ch, start + i * gap, titleY));
+    if (showToward) {
+      c.fillStyle = '#f0d070';
+      c.font = 'bold 30px "Noto Sans KR", "Apple SD Gothic Neo", sans-serif';
+      c.fillText(`${st.toward} 방면`, cx + colW / 2, cy + rowH / 2 + 40);
+    }
+  });
+}
+
 function makeLedTex() {
   const canvas = document.createElement('canvas');
   canvas.width = 512; canvas.height = 80;
@@ -216,8 +332,8 @@ function poolGeo(median) {
 }
 function pylonGeo() {
   return merge([
-    boxGeo(0.32, 4.15, 0.32, 0, 2.08, 0),
-    boxGeo(1.55, 0.95, 0.16, 0, 3.85, 0),
+    boxGeo(0.32, 4.0, 0.32, 0, 2.0, 0),
+    boxGeo(0.42, 0.14, 0.42, 0, 4.07, 0),
   ]);
 }
 function waiterGeo() {
@@ -259,13 +375,25 @@ function poleGeo() {
   ]);
 }
 function shopBodyGeo() {
+  // 건물 1층 띠(약 0–4.35m)에 붙는 연속 점포 베이. +Z = 도로, 벽면은 z≈0.
+  const W = 3.6, H = 4.35, pil = 0.18, kickH = 0.78, sign0 = 3.18, sign1 = 4.12;
+  const d = 0.16, z = 0.07, winW = W - pil * 2;
   return merge([
-    boxGeo(3.35, 2.85, 0.28, 0, 1.45, -0.08),
-    boxGeo(3.5, 0.14, 0.95, 0, 2.82, 0.35),
-    boxGeo(3.4, 0.22, 0.28, 0, 2.55, 0.06),
+    boxGeo(pil, H, d, -(W / 2 - pil / 2), H / 2, z),
+    boxGeo(pil, H, d, +(W / 2 - pil / 2), H / 2, z),
+    boxGeo(winW, kickH, d, 0, kickH / 2, z),
+    boxGeo(winW, sign1 - sign0, d, 0, (sign0 + sign1) / 2, z),
+    boxGeo(W + 0.08, 0.22, d + 0.1, 0, sign1 + 0.11, z + 0.04),
+    boxGeo(0.07, sign0 - kickH, d * 0.7, 0, (kickH + sign0) / 2, z),
   ]);
 }
-function shopWinGeo() { return boxGeo(2.7, 1.55, 0.04, 0, 1.35, 0.12); }
+function shopWinGeo() { return boxGeo(3.18, 2.36, 0.035, 0, 1.98, 0.15); }
+function shopAwningGeo() {
+  return merge([
+    boxGeo(3.28, 0.06, 0.9, 0, 3.14, 0.52),
+    boxGeo(3.32, 0.035, 0.94, 0, 3.2, 0.52),
+  ]);
+}
 function tentGeo() {
   return merge([
     boxGeo(3.3, 2.15, 2.35, 0, 1.15, 0.2),
@@ -284,6 +412,51 @@ function aframeGeo() {
 function acGeo() { return merge([boxGeo(0.95, 0.55, 0.42, 0, 0, 0), boxGeo(0.7, 0.12, 0.08, 0, -0.22, 0.22)]); }
 function trashGeo() { return merge([boxGeo(0.38, 0.28, 0.28, 0, 0.16, 0), boxGeo(0.32, 0.22, 0.24, 0.05, 0.38, 0.02)]); }
 function binGeo() { return merge([boxGeo(0.55, 0.85, 0.42, 0, 0.42, 0), boxGeo(0.5, 0.08, 0.38, 0, 0.88, 0)]); }
+function streetBenchGeo() {
+  return merge([
+    boxGeo(1.5, 0.08, 0.44, 0, 0.43, 0),
+    boxGeo(0.08, 0.43, 0.44, -0.66, 0.22, 0),
+    boxGeo(0.08, 0.43, 0.44, 0.66, 0.22, 0),
+    boxGeo(1.5, 0.34, 0.07, 0, 0.64, -0.19),
+  ]);
+}
+function dedupeShops(list) {
+  const out = [];
+  for (const sh of list) {
+    if (out.some((o) => Math.hypot(o[0] - sh[0], o[1] - sh[1]) < 2.6)) continue;
+    out.push(sh);
+  }
+  return out;
+}
+
+const IX_TREE = { x: -7144, z: -14531 };
+function slimIxTrees(scene) {
+  const m4 = new THREE.Matrix4();
+  const p = new THREE.Vector3(), q = new THREE.Quaternion(), s = new THREE.Vector3();
+  const world = new THREE.Vector3();
+  scene.traverse((o) => {
+    if (!o.isInstancedMesh || o.userData.gnIxSlim || !o.geometry) return;
+    const kind = o.geometry.type;
+    const rad = o.geometry.parameters?.radius;
+    const isCrown = kind === 'IcosahedronGeometry' || (rad >= 1.8 && rad <= 2.6);
+    const isTrunk = kind === 'CylinderGeometry' && (o.geometry.parameters?.height || 0) > 3;
+    if (!isCrown && !isTrunk) return;
+    let hit = 0;
+    for (let i = 0; i < o.count; i++) {
+      o.getMatrixAt(i, m4);
+      m4.decompose(p, q, s);
+      world.copy(p);
+      o.localToWorld(world);
+      if (Math.hypot(world.x - IX_TREE.x, world.z - IX_TREE.z) > 140) continue;
+      if (isCrown) { s.x *= 0.36; s.z *= 0.36; s.y *= 0.76; p.y += 2.25; }
+      else s.y *= 1.62;
+      m4.compose(p, q, s);
+      o.setMatrixAt(i, m4);
+      hit++;
+    }
+    if (hit) { o.instanceMatrix.needsUpdate = true; o.userData.gnIxSlim = true; }
+  });
+}
 
 export function createGangnamStreet({ scene, terrain = null, url, mobile = false }) {
   const root = new THREE.Group();
@@ -303,6 +476,8 @@ export function createGangnamStreet({ scene, terrain = null, url, mobile = false
       const modules = j.modules || stops.map((st, si) => ({ x: st.x, z: st.z, yaw: st.yaw, kind: st.kind, si }));
       const nameAt = makeNameAtlas(stops);
       const shopAt = makeShopAtlas();
+      const interiorAt = makeInteriorAtlas();
+      const pylonAt = makePylonAtlas(stops);
       ledTex = makeLedTex();
       const adTex = makeAdTex();
 
@@ -316,6 +491,17 @@ export function createGangnamStreet({ scene, terrain = null, url, mobile = false
       });
       const nameMat = atlasMaterial(nameAt.tex);
       const shopSignMat = atlasMaterial(shopAt.tex);
+      const interiorMat = atlasMaterial(interiorAt.tex);
+      interiorMat.transparent = false;
+      interiorMat.depthWrite = true;
+      const pylonSignMat = atlasMaterial(pylonAt.tex);
+      pylonSignMat.transparent = false;
+      pylonSignMat.depthWrite = true;
+      const pylonGlowMat = new THREE.MeshBasicMaterial({
+        color: '#f0d080', transparent: true, opacity: 0, blending: THREE.AdditiveBlending,
+        depthWrite: false, toneMapped: false,
+      });
+      const shopRoomMat = new THREE.MeshLambertMaterial({ color: '#1a1614' });
       const adMat = new THREE.MeshBasicMaterial({ map: adTex, toneMapped: false });
       const adGlowMat = new THREE.MeshBasicMaterial({
         color: '#ffe6a0', transparent: true, opacity: 0, blending: THREE.AdditiveBlending,
@@ -335,15 +521,23 @@ export function createGangnamStreet({ scene, terrain = null, url, mobile = false
       });
       const zebraMat = new THREE.MeshBasicMaterial({
         map: zebraTex(), color: '#ffffff', transparent: true, opacity: 1, depthWrite: false, depthTest: true,
-        toneMapped: false, polygonOffset: true, polygonOffsetFactor: -8, polygonOffsetUnits: -8,
+        toneMapped: false, polygonOffset: true, polygonOffsetFactor: -20, polygonOffsetUnits: -20,
       });
-      const paintMat = new THREE.MeshBasicMaterial({ color: '#ff3a22', transparent: false, opacity: 1, depthWrite: false, depthTest: false, toneMapped: false });
+      const paintMat = new THREE.MeshBasicMaterial({
+        color: '#8a4840',
+        transparent: true,
+        opacity: 1,
+        toneMapped: false,
+        depthTest: true,
+        depthWrite: false,
+        polygonOffset: true, polygonOffsetFactor: -20, polygonOffsetUnits: -20,
+      });
       const platMat = new THREE.MeshLambertMaterial({ color: '#9aa3ae' });
       const tactMat = new THREE.MeshBasicMaterial({ color: '#f0c400', toneMapped: false });
       const pylonMat = new THREE.MeshLambertMaterial({ color: '#2d3a55' });
       const shopMat = new THREE.MeshLambertMaterial({ color: '#ffffff' });
       const shopWinMat = new THREE.MeshBasicMaterial({
-        color: '#ffc878', transparent: true, opacity: 0, blending: THREE.AdditiveBlending,
+        color: '#d8e6f2', transparent: true, opacity: 0,
         depthWrite: false, toneMapped: false,
       });
       const tentMat = new THREE.MeshLambertMaterial({ color: '#d4652a' });
@@ -382,7 +576,7 @@ export function createGangnamStreet({ scene, terrain = null, url, mobile = false
       const bis = inst(new THREE.PlaneGeometry(2.15, 0.62), ledMat, modules.length, 'gnStreetBis');
       const ads = inst(new THREE.PlaneGeometry(1.05, 1.7), adMat, modules.length, 'gnStreetAds');
       const adGlows = inst(boxGeo(1.08, 1.74, 0.08, 0, 0, 0), adGlowMat, modules.length, 'gnStreetAdGlow');
-      const signs = inst(new THREE.PlaneGeometry(1.55, 0.72), nameMat, sideMods.length * 2 + (j.pylons || []).length * 4, 'gnStreetNames');
+      const signs = inst(new THREE.PlaneGeometry(1.55, 0.72), nameMat, sideMods.length * 2, 'gnStreetNames');
 
       let si = 0, mi = 0, signI = 0, poolI = 0, bisI = 0;
       const placeModule = (m, metal, glass, back, bench, strip, edge) => {
@@ -419,26 +613,38 @@ export function createGangnamStreet({ scene, terrain = null, url, mobile = false
 
       const pylons = j.pylons || [];
       const pylonIm = inst(pylonGeo(), pylonMat, pylons.length, 'gnStreetPylon', true);
+      const pylonSigns = inst(new THREE.PlaneGeometry(2.85, 1.32), pylonSignMat, Math.max(1, pylons.length * 2), 'gnStreetPylonSign');
+      const pylonGlows = inst(boxGeo(2.98, 1.42, 0.1, 0, 0, -0.04), pylonGlowMat, Math.max(1, pylons.length * 2), 'gnStreetPylonGlow');
       const pylonSlots = [];
+      let pylonSignI = 0;
       pylons.forEach((p, i) => {
         const gy = ground(p.x, p.z);
         StreetXform.compose(m4, quat, pos, scl, p.x, gy, p.z, p.yaw, 1, 1, 1);
         pylonIm.setMatrixAt(i, m4);
-        for (const dy of [0, Math.PI / 2, Math.PI, Math.PI * 1.5]) {
+        // Two opposite FrontSide faces only — a 4-way plus hid the middle 글자
+        for (const dy of [0, Math.PI]) {
           const fy = p.yaw + dy;
-          StreetXform.compose(m4, quat, pos, scl, p.x + Math.sin(fy) * 0.14, gy + 3.85, p.z + Math.cos(fy) * 0.14, fy + Math.PI, 1.15, 1.15, 1);
-          signs.setMatrixAt(signI, m4); pylonSlots.push(p.si ?? 0); signI++;
+          const fx = Math.sin(fy), fz = Math.cos(fy);
+          StreetXform.compose(m4, quat, pos, scl, p.x + fx * 0.16, gy + 4.85, p.z + fz * 0.16, fy, 1, 1, 1);
+          pylonSigns.setMatrixAt(pylonSignI, m4);
+          StreetXform.compose(m4, quat, pos, scl, p.x + fx * 0.10, gy + 4.85, p.z + fz * 0.10, fy, 1, 1, 1);
+          pylonGlows.setMatrixAt(pylonSignI, m4);
+          pylonSlots.push(p.si ?? 0);
+          pylonSignI++;
         }
       });
       pylonIm.count = pylons.length;
+      pylonSigns.count = pylonGlows.count = pylonSignI;
       signs.count = signI;
 
       const sideSlots = [];
       sideMods.forEach((m) => { sideSlots.push(m.si ?? 0); sideSlots.push(m.si ?? 0); });
-      const allSlots = [...sideSlots, ...pylonSlots];
       bindSlotAtlas(nameMat, nameAt, 'gn-stop-name-atlas');
       signs.geometry = signs.geometry.clone();
-      signs.geometry.setAttribute('slot', new THREE.InstancedBufferAttribute(new Float32Array(allSlots.length ? allSlots : [0]), 1));
+      signs.geometry.setAttribute('slot', new THREE.InstancedBufferAttribute(new Float32Array(sideSlots.length ? sideSlots : [0]), 1));
+      bindSlotAtlas(pylonSignMat, pylonAt, 'gn-pylon-name-atlas');
+      pylonSigns.geometry = pylonSigns.geometry.clone();
+      pylonSigns.geometry.setAttribute('slot', new THREE.InstancedBufferAttribute(new Float32Array(pylonSlots.length ? pylonSlots : [0]), 1));
 
       const plats = j.platforms || [];
       const platIm = inst(boxGeo(1, 0.30, 1, 0, 0.15, 0), platMat, plats.length, 'gnStreetPlat');
@@ -462,14 +668,15 @@ export function createGangnamStreet({ scene, terrain = null, url, mobile = false
         zebra.setMatrixAt(i, m4);
       });
       zebra.count = (j.zebras || []).length;
+      zebra.renderOrder = 2;
 
-      const paint = inst(boxGeo(1, 0.06, 1, 0, 0.03, 0), paintMat, (j.paints || []).length, 'gnStreetPaint');
+      const paint = inst(new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2), paintMat, (j.paints || []).length, 'gnStreetPaint');
       (j.paints || []).forEach((z, i) => {
-        StreetXform.compose(m4, quat, pos, scl, z[0], ground(z[0], z[1]) + 0.11, z[1], z[2], z[3], 1, z[4]);
+        StreetXform.compose(m4, quat, pos, scl, z[0], ground(z[0], z[1]) + 0.30, z[1], z[2], z[3], 1, z[4]);
         paint.setMatrixAt(i, m4);
       });
       paint.count = (j.paints || []).length;
-      paint.renderOrder = 0;
+      paint.renderOrder = 1;
 
       const propGeos = [kioskGeo(), bikeGeo(), planterGeo(), bollardGeo(), poleGeo(), scooterGeo(), vendingGeo()];
       const propMats = [
@@ -512,26 +719,52 @@ export function createGangnamStreet({ scene, terrain = null, url, mobile = false
         return im;
       }
 
-      const shopSrc = mobile ? (j.shops || []).filter((_, i) => i % 2 === 0) : (j.shops || []);
+      const shopSrc = dedupeShops(mobile ? (j.shops || []).filter((_, i) => i % 2 === 0) : (j.shops || []));
       const shopIm = inst(shopBodyGeo(), shopMat, shopSrc.length, 'gnStreetShop', true);
       const shopWin = inst(shopWinGeo(), shopWinMat, shopSrc.length, 'gnStreetShopWin');
-      const shopSign = inst(new THREE.PlaneGeometry(1.7, 0.38), shopSignMat, shopSrc.length, 'gnStreetShopSign');
-      const shopPal = ['#2e6b4a', '#6b4a32', '#d4652a', '#6a3038'];
+      const shopSign = inst(new THREE.PlaneGeometry(2.2, 0.42), shopSignMat, shopSrc.length, 'gnStreetShopSign');
+      const shopInterior = inst(new THREE.PlaneGeometry(3.12, 2.28), interiorMat, shopSrc.length, 'gnStreetShopInterior');
+      const awningSrc = shopSrc.filter((sh, i) => sh[3] === 1 || sh[3] === 2 || (i % 3 === 0));
+      const shopAwning = inst(shopAwningGeo(), new THREE.MeshLambertMaterial({ color: '#c45a38' }), awningSrc.length, 'gnStreetShopAwning');
+      shopInterior.renderOrder = 2;
+      interiorMat.side = THREE.DoubleSide;
+      interiorMat.depthWrite = true;
+      interiorMat.depthTest = true;
+      interiorMat.polygonOffset = true;
+      interiorMat.polygonOffsetFactor = -20;
+      interiorMat.polygonOffsetUnits = -20;
+      const shopPal = ['#2e6b4a', '#6b4a32', '#d4652a', '#6a3038', '#3a4a72', '#8a5a28', '#4a6a58', '#703848'];
+      const interiorSlots = [];
+      let awningI = 0;
       shopSrc.forEach((sh, i) => {
         const gy = ground(sh[0], sh[1]);
-        StreetXform.compose(m4, quat, pos, scl, sh[0], gy, sh[1], sh[2], 1, 1, 1);
+        const sx = (sh[4] || 3.6) / 3.6;
+        StreetXform.compose(m4, quat, pos, scl, sh[0], gy, sh[1], sh[2], sx, 1, 1);
         shopIm.setMatrixAt(i, m4);
         shopWin.setMatrixAt(i, m4);
         shopIm.setColorAt(i, tmpC.set(shopPal[sh[3] % shopPal.length] || '#555'));
         const fx = Math.sin(sh[2]), fz = Math.cos(sh[2]);
-        StreetXform.compose(m4, quat, pos, scl, sh[0] + fx * 0.18, gy + 2.52, sh[1] + fz * 0.18, sh[2], 1, 1, 1);
+        StreetXform.compose(m4, quat, pos, scl, sh[0] + fx * 0.18, gy + 3.65, sh[1] + fz * 0.18, sh[2], sx, 1, 1);
         shopSign.setMatrixAt(i, m4);
+        // 유리 바로 안쪽, 건물 벽면보다 살짝 앞(벽의 사무실 창을 가림). 아틀라스가 깊이감을 냄.
+        StreetXform.compose(m4, quat, pos, scl, sh[0] - fx * 0.02, gy + 1.98, sh[1] - fz * 0.02, sh[2], sx, 1, 1);
+        shopInterior.setMatrixAt(i, m4);
+        if (sh[3] === 1 || sh[3] === 2 || (i % 3 === 0)) {
+          StreetXform.compose(m4, quat, pos, scl, sh[0], gy, sh[1], sh[2], sx, 1, 1);
+          shopAwning.setMatrixAt(awningI++, m4);
+        }
+        const nameSlot = (sh[3] * 3 + i) % 12;
+        interiorSlots.push(nameSlot <= 2 ? 0 : nameSlot <= 5 ? 1 : nameSlot <= 9 ? 2 : 3);
       });
-      shopIm.count = shopWin.count = shopSign.count = shopSrc.length;
+      shopIm.count = shopWin.count = shopSign.count = shopInterior.count = shopSrc.length;
+      shopAwning.count = awningI;
       if (shopIm.instanceColor) shopIm.instanceColor.needsUpdate = true;
       bindSlotAtlas(shopSignMat, shopAt, 'gn-shop-name-atlas');
       shopSign.geometry = shopSign.geometry.clone();
       shopSign.geometry.setAttribute('slot', new THREE.InstancedBufferAttribute(new Float32Array(shopSrc.map((sh, i) => (sh[3] * 3 + i) % 12)), 1));
+      bindSlotAtlas(interiorMat, interiorAt, 'gn-shop-interior-atlas');
+      shopInterior.geometry = shopInterior.geometry.clone();
+      shopInterior.geometry.setAttribute('slot', new THREE.InstancedBufferAttribute(new Float32Array(interiorSlots.length ? interiorSlots : [0]), 1));
 
       const tentIm = placeList(j.tents || [], tentGeo(), tentMat, 'gnStreetTent', 0);
       const tentGlow = placeList(mobile ? [] : (j.tents || []), tentGlowGeo(), tentGlowMat, 'gnStreetTentGlow', 0);
@@ -541,6 +774,7 @@ export function createGangnamStreet({ scene, terrain = null, url, mobile = false
       const acIm = placeList(mobile ? [] : (j.acs || []), acGeo(), new THREE.MeshLambertMaterial({ color: '#c5ccd3' }), 'gnStreetAc', 3.15);
       const trashIm = placeList(mobile ? [] : (j.trash || []), trashGeo(), new THREE.MeshLambertMaterial({ color: '#3a3a38' }), 'gnStreetTrash');
       const binIm = placeList(j.bins || [], binGeo(), new THREE.MeshLambertMaterial({ color: '#3d7a45' }), 'gnStreetBin');
+      const benchIm = placeList(j.benches || [], streetBenchGeo(), new THREE.MeshLambertMaterial({ color: '#6b5a44' }), 'gnStreetBench');
 
       let wires = null;
       const wsrc = mobile ? [] : (j.wires || []);
@@ -596,8 +830,8 @@ export function createGangnamStreet({ scene, terrain = null, url, mobile = false
 
       meshes = {
         ledMat, stripMat, edgeMat, poolMat, backMat, glassMat, adGlowMat,
-        shopWinMat, tentGlowMat, stringMat, vendMat, nameMat,
-        bis, pools, adGlows,
+        shopWinMat, tentGlowMat, stringMat, vendMat, nameMat, pylonGlowMat,
+        bis, pools, adGlows, pylonGlows,
       };
       stats.loaded = true;
       stats.stops = stops.length;
@@ -631,7 +865,9 @@ export function createGangnamStreet({ scene, terrain = null, url, mobile = false
     if (meshes.backMat) meshes.backMat.opacity = on ? (0.28 + n * 0.55) : 0;
     if (meshes.glassMat) meshes.glassMat.opacity = on ? (0.22 + n * 0.2) : 0;
     if (meshes.adGlowMat) meshes.adGlowMat.opacity = n * 0.55;
-    if (meshes.shopWinMat) meshes.shopWinMat.opacity = on ? (0.12 + n * 0.5) : 0;
+    if (meshes.shopWinMat) meshes.shopWinMat.opacity = on ? (0.05 + n * 0.07) : 0;
+    if (meshes.pylonGlowMat) meshes.pylonGlowMat.opacity = n * 0.45;
+    if (meshes.pylonGlows) meshes.pylonGlows.visible = on && n > 0.05;
     if (meshes.tentGlowMat) meshes.tentGlowMat.opacity = n * 0.62;
     if (meshes.stringMat) meshes.stringMat.opacity = n * 0.72;
     if (meshes.vendMat) meshes.vendMat.emissiveIntensity = n * 1.1;
@@ -649,7 +885,7 @@ export function createGangnamStreet({ scene, terrain = null, url, mobile = false
     update(dt, x, z) {
       if (!meshes) return;
       acc += dt;
-      if (acc > 0.4) { acc = 0; near.here = near(x, z); }
+      if (acc > 0.25) { acc = 0; near.here = near(x, z); slimIxTrees(scene); }
       apply(nightFade());
     },
     dispose() {
