@@ -44,13 +44,8 @@ async function findBus(page) {
     const root = window.__jj.corridor?.root;
     if (!root) return hits;
     root.traverse((o) => {
-      if (!o.isInstancedMesh || !String(o.name || '').startsWith('gyeongbuExpressBuses')) return;
-      const arr = o.instanceMatrix.array;
-      for (let i = 0; i < o.count; i++) {
-        const b = i * 16;
-        if (Math.hypot(arr[b], arr[b + 1], arr[b + 2]) < 0.5) continue;
-        hits.push({ name: o.name, x: arr[b + 12], z: arr[b + 14], fx: arr[b + 8], fz: arr[b + 10] });
-      }
+      if (!o.visible || !String(o.name || '').startsWith('gyeongbuExpressBuses')) return;
+      hits.push({ name: o.name, x: o.position.x, z: o.position.z, fx: Math.sin(o.rotation.y), fz: Math.cos(o.rotation.y) });
     });
     return hits;
   });

@@ -79,40 +79,63 @@ function loadGyeongbuTex(file) {
   return tex;
 }
 
-/** 판교TG 표지. 한국도로공사·하이패스 로고는 쓰지 않고 글자만 쓴다. */
+/** 판교TG 차로. laneClear=주행 폭(섬과 섬 사이), pitch=섬 중심 간격. 버스(2.5m)보다 넓게 여유를 둔다. */
+export function pangyoTollLayout(T) {
+  const src = T?.booths;
+  if (!src?.sets?.length) return null;
+  const islandW = 1.9;
+  const laneClear = 3.9;
+  const pitch = islandW + laneClear; // 5.8
+  const islandLen = 14;
+  const sets = src.sets.map((S) => ({ ...S, at: S.at.slice(), dir: S.dir.slice() }));
+  if (sets.length >= 2) {
+    const a = sets[0], b = sets[1];
+    const mx = (a.at[0] + b.at[0]) / 2, mz = (a.at[1] + b.at[1]) / 2;
+    const dx = b.at[0] - a.at[0], dz = b.at[1] - a.at[1], L = Math.hypot(dx, dz) || 1;
+    const want = Math.max(a.lanes, b.lanes) * pitch + 5;
+    const ux = dx / L, uz = dz / L;
+    a.at = [mx - ux * want / 2, mz - uz * want / 2];
+    b.at = [mx + ux * want / 2, mz + uz * want / 2];
+  }
+  return { pitch, islandW, islandLen, laneClear, sets };
+}
+
+function addFacedSign(g, mat, w, h, x, y, z, face) {
+  const nx = Math.sin(face), nz = Math.cos(face);
+  for (const s of [1, -1]) {
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), mat);
+    m.position.set(x + nx * 0.03 * s, y, z + nz * 0.03 * s);
+    m.rotation.y = s > 0 ? face : face + Math.PI;
+    g.add(m);
+  }
+}
+
+/** 판교TG 표지. 한국도로공사·하이패스 로고는 쓰지 않고 글자만 쓴다. 양면 모두 올바른 방향으로. */
 function makePangyoTollSigns(T) {
-  if (!T?.booths?.sets) return null;
+  const layout = pangyoTollLayout(T);
+  if (!layout) return null;
   const hipassMat = new THREE.MeshBasicMaterial({ map: loadGyeongbuTex('sign-hipass.png') });
   const generalMat = new THREE.MeshBasicMaterial({ map: loadGyeongbuTex('sign-general.png') });
   const busMat = new THREE.MeshBasicMaterial({ map: loadGyeongbuTex('sign-bus.png') });
-  const fasciaMat = new THREE.MeshBasicMaterial({ map: loadGyeongbuTex('sign-toll.png'), side: THREE.DoubleSide });
+  const fasciaMat = new THREE.MeshBasicMaterial({ map: loadGyeongbuTex('sign-toll.png') });
   const g = new THREE.Group();
   g.name = 'pangyoTollSigns';
-  const laneW = T.booths.laneW || 3.3;
+  const { pitch, sets } = layout;
   const under = T.roof?.underside ?? 5.5;
   const thick = T.roof?.thick ?? 1.2;
-  for (const S of T.booths.sets) {
+  for (const S of sets) {
     const px = S.dir[1], pz = -S.dir[0];
     const face = Math.atan2(-S.dir[0], -S.dir[1]);
     for (let i = 0; i < S.lanes; i++) {
-      const o = (i + 0.5 - S.lanes / 2) * laneW;
+      const o = (i + 0.5 - S.lanes / 2) * pitch;
       const x = S.at[0] + px * o, z = S.at[1] + pz * o;
       const hipass = i >= S.lanes - 2;
-      const board = new THREE.Mesh(new THREE.PlaneGeometry(2.2, 0.6), hipass ? hipassMat : generalMat);
-      board.position.set(x - S.dir[0] * 6.2, under - 0.55, z - S.dir[1] * 6.2);
-      board.rotation.y = face;
-      g.add(board);
+      addFacedSign(g, hipass ? hipassMat : generalMat, 2.2, 0.6, x - S.dir[0] * 7.2, under - 0.55, z - S.dir[1] * 7.2, face);
       if (i === S.lanes - 1) {
-        const bus = new THREE.Mesh(new THREE.PlaneGeometry(1.4, 0.4), busMat);
-        bus.position.set(x - S.dir[0] * 6.2, under - 1.05, z - S.dir[1] * 6.2);
-        bus.rotation.y = face;
-        g.add(bus);
+        addFacedSign(g, busMat, 1.4, 0.4, x - S.dir[0] * 7.2, under - 1.05, z - S.dir[1] * 7.2, face);
       }
     }
-    const fascia = new THREE.Mesh(new THREE.PlaneGeometry(14, 1.5), fasciaMat);
-    fascia.position.set(S.at[0] - S.dir[0] * 10.5, under + thick + 0.85, S.at[1] - S.dir[1] * 10.5);
-    fascia.rotation.y = face;
-    g.add(fascia);
+    addFacedSign(g, fasciaMat, 16, 1.55, S.at[0] - S.dir[0] * 12.2, under + thick + 0.85, S.at[1] - S.dir[1] * 12.2, face);
   }
   return g;
 }
@@ -202,14 +225,26 @@ export function buildPangyoExpress(E) {
     const [A0, A1] = T.booths.axis, L = Math.hypot(A1[0] - A0[0], A1[1] - A0[1]), ang = Math.atan2(A1[0] - A0[0], A1[1] - A0[1]);
     night.push(painted(boxAt(1.2, 0.08, L * 0.9, (A0[0] + A1[0]) / 2, T.roof.underside - 0.06, (A0[1] + A1[1]) / 2, ang), COL.lamp));
   }
-  for (const S of T?.booths?.sets || []) {
-    const [ix, iw, ih] = [T.booths.island[0], T.booths.island[1], T.booths.island[2]], ang = Math.atan2(S.dir[0], S.dir[1]), px = S.dir[1], pz = -S.dir[0];
+  const layout = pangyoTollLayout(T);
+  for (const S of layout?.sets || []) {
+    const ix = layout.islandW, iw = layout.islandLen, ih = (T.booths.island && T.booths.island[2]) || 2.4;
+    const ang = Math.atan2(S.dir[0], S.dir[1]), px = S.dir[1], pz = -S.dir[0];
+    const plazaW = S.lanes * layout.pitch + 4;
+    add(boxAt(plazaW, 0.06, 36, S.at[0], 0.07, S.at[1], ang), '#555a60');
     for (let k = 0; k <= S.lanes; k++) {
-      const o = (k - S.lanes / 2) * T.booths.laneW, x = S.at[0] + px * o, z = S.at[1] + pz * o;
-      add(boxAt(ix, 0.25, iw, x, 0.22, z, ang), COL.island);
-      { add(boxAt(ix - 0.3, ih, 2.2, x, 0.35 + ih / 2, z, ang), COL.booth); add(boxAt(ix - 0.2, 0.9, 2.3, x, 0.35 + ih * 0.62, z, ang), COL.boothGlass); }
-      add(boxAt(0.5, T.roof.underside - 0.35, 0.5, x - S.dir[0] * (iw / 2 - 0.6), 0.35 + (T.roof.underside - 0.35) / 2, z - S.dir[1] * (iw / 2 - 0.6), ang), COL.gantry);
-      night.push(painted(boxAt(ix - 0.1, 0.5, 2.32, x, 0.35 + ih * 0.62, z, ang), COL.lamp));
+      const o = (k - S.lanes / 2) * layout.pitch, x = S.at[0] + px * o, z = S.at[1] + pz * o;
+      // 섬·부스·기둥은 같은 중심 — 기둥은 차로가 아니라 섬 위에만
+      add(boxAt(ix, 0.28, iw, x, 0.24, z, ang), COL.island);
+      add(boxAt(ix - 0.35, ih, 2.2, x, 0.35 + ih / 2, z, ang), COL.booth);
+      add(boxAt(ix - 0.28, 0.9, 2.3, x, 0.35 + ih * 0.62, z, ang), COL.boothGlass);
+      add(boxAt(0.42, T.roof.underside - 0.35, 0.42, x, 0.35 + (T.roof.underside - 0.35) / 2, z, ang), COL.gantry);
+      night.push(painted(boxAt(ix - 0.2, 0.5, 2.32, x, 0.35 + ih * 0.62, z, ang), COL.lamp));
+      // 광장 나팔: 섬 끝을 바깥으로 길게 빼 차로가 갈라져 보이게
+      for (const sgn of [1, -1]) {
+        add(boxAt(ix * 0.7, 0.22, 5.2, x + S.dir[0] * (iw / 2 + 3.8) * sgn, 0.2, z + S.dir[1] * (iw / 2 + 3.8) * sgn, ang), COL.island);
+        add(boxAt(ix * 0.38, 0.16, 6.4, x + S.dir[0] * (iw / 2 + 9.4) * sgn, 0.16, z + S.dir[1] * (iw / 2 + 9.4) * sgn, ang), COL.island);
+        add(boxAt(ix * 0.7, 0.3, 0.36, x + S.dir[0] * (iw / 2) * sgn, 0.26, z + S.dir[1] * (iw / 2) * sgn, ang), '#f5c518');
+      }
     }
   }
   for (const G of T?.gantries || []) {
@@ -218,22 +253,14 @@ export function buildPangyoExpress(E) {
     add(boxAt(0.6, 0.9, G.span + 0.6, G.at[0], G.h - 0.45, G.at[1], ang + Math.PI / 2), COL.gantry);
   }
   // [gyeongbu-bus] 판교TG 세부. 왼쪽(1차로 쪽) 2개 차로를 하이패스·버스로 두고, 로고는 쓰지 않는다.
-  if (T?.booths?.sets) {
-    const laneW = T.booths.laneW || 3.3;
-    for (const S of T.booths.sets) {
+  if (layout?.sets) {
+    for (const S of layout.sets) {
       const ang = Math.atan2(S.dir[0], S.dir[1]);
       const px = S.dir[1], pz = -S.dir[0];
       for (let i = 0; i < S.lanes; i++) {
-        const o = (i + 0.5 - S.lanes / 2) * laneW;
+        const o = (i + 0.5 - S.lanes / 2) * layout.pitch;
         const x = S.at[0] + px * o, z = S.at[1] + pz * o;
-        if (i >= S.lanes - 2) add(boxAt(laneW - 0.35, 0.045, 24, x, 0.11, z, ang), '#2a4a7a');
-      }
-      const [ix, iw] = [T.booths.island[0], T.booths.island[1]];
-      for (let k = 0; k <= S.lanes; k++) {
-        const o = (k - S.lanes / 2) * laneW;
-        const x = S.at[0] + px * o, z = S.at[1] + pz * o;
-        add(boxAt(ix, 0.32, 0.38, x + S.dir[0] * (iw / 2), 0.28, z + S.dir[1] * (iw / 2), ang), '#f5c518');
-        add(boxAt(ix, 0.32, 0.38, x - S.dir[0] * (iw / 2), 0.28, z - S.dir[1] * (iw / 2), ang), '#f5c518');
+        if (i >= S.lanes - 2) add(boxAt(layout.laneClear - 0.2, 0.045, 28, x, 0.12, z, ang), '#2a4a7a');
       }
     }
     if (T.booths.axis && T.roof) {

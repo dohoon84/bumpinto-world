@@ -58,13 +58,7 @@ export function mountSeoulToll(scene, search = typeof location !== 'undefined' ?
   night.push(painted(boxAt(canopyW - 4, 0.07, 1.1, CX, under - 0.08, CZ - 7), COL.lamp));
   night.push(painted(boxAt(canopyW - 4, 0.07, 1.1, CX, under - 0.08, CZ + 7), COL.lamp));
 
-  // 기둥: 캐노피 남북 가장자리
-  for (let i = -5; i <= 5; i++) {
-    const px = CX + i * 9.5;
-    for (const sz of [CZ - 11.2, CZ + 11.2]) {
-      add(boxAt(0.55, under - 0.2, 0.55, px, (under - 0.2) / 2, sz), COL.pole);
-    }
-  }
+  // 기둥: 부스 섬과 같은 x — 차로 한가운데에 세우지 않는다.
 
   // 부스·섬. 중앙(본선, x≈-438·-460)은 하이패스, 바깥은 일반. 차단기는 올려 두어 차가 막히지 않게.
   const xs = [];
@@ -83,18 +77,21 @@ export function mountSeoulToll(scene, search = typeof location !== 'undefined' ?
 
   xs.forEach((bx, i) => {
     const inner = Math.abs(bx - CX) < 22; // 본선·중앙 쪽 = 하이패스
-    add(boxAt(1.15, 0.28, 5.2, bx, 0.22, CZ), COL.island);
-    add(boxAt(1.35, 2.35, 2.15, bx, 0.35 + 1.175, CZ), COL.booth);
-    add(boxAt(1.42, 0.85, 0.12, bx, 1.85, CZ + (bx < CX ? 1.15 : -1.15)), COL.glass);
-    night.push(painted(boxAt(1.38, 0.8, 2.2, bx, 1.85, CZ), COL.lamp));
+    add(boxAt(1.85, 0.28, 6.2, bx, 0.22, CZ), COL.island);
+    add(boxAt(1.45, 2.35, 2.15, bx, 0.35 + 1.175, CZ), COL.booth);
+    add(boxAt(1.5, 0.85, 0.12, bx, 1.85, CZ + (bx < CX ? 1.15 : -1.15)), COL.glass);
+    night.push(painted(boxAt(1.48, 0.8, 2.2, bx, 1.85, CZ), COL.lamp));
     add(boxAt(0.45, under - 0.4, 0.45, bx, 0.3 + (under - 0.4) / 2, CZ), COL.pole);
+    for (const sz of [CZ - 11.2, CZ + 11.2]) {
+      add(boxAt(0.48, under - 0.2, 0.48, bx, (under - 0.2) / 2, sz), COL.pole);
+    }
     if (!inner) {
       // 일반 차단기 팔은 1.55m 높이에 올려 두어 NPC가 밑으로 지나간다(시각만, 충돌 없음).
       add(boxAt(3.2, 0.11, 0.11, bx + 1.7, 1.55, CZ), COL.barrier);
     }
     // 노란 섬 끝 — 접근 방향에서 차로가 갈라져 보이게
-    add(boxAt(1.15, 0.32, 0.38, bx, 0.24, CZ - 2.55), '#f5c518');
-    add(boxAt(1.15, 0.32, 0.38, bx, 0.24, CZ + 2.55), '#f5c518');
+    add(boxAt(1.85, 0.32, 0.38, bx, 0.24, CZ - 3.15), '#f5c518');
+    add(boxAt(1.85, 0.32, 0.38, bx, 0.24, CZ + 3.15), '#f5c518');
     // 남북 양쪽에 차로 표지(하이패스/일반). 교통은 남북이므로 표지도 그 방향을 본다.
     for (const [sz, rot] of [[CZ + canopyD / 2 + 0.12, 0], [CZ - canopyD / 2 - 0.12, Math.PI]]) {
       const board = new THREE.Mesh(new THREE.PlaneGeometry(2.35, 0.62), inner ? hipassMat : generalMat);
@@ -117,7 +114,7 @@ export function mountSeoulToll(scene, search = typeof location !== 'undefined' ?
 
   // 캐노피 남북 파사드에 원작 표지. 운영사·브랜드 로고는 쓰지 않는다.
   const fasciaTex = loadTex('sign-toll.png');
-  const fasciaMat = new THREE.MeshBasicMaterial({ map: fasciaTex, side: THREE.DoubleSide });
+  const fasciaMat = new THREE.MeshBasicMaterial({ map: fasciaTex });
   for (const [sz, rot] of [[CZ + canopyD / 2 + 0.14, 0], [CZ - canopyD / 2 - 0.14, Math.PI]]) {
     const fascia = new THREE.Mesh(new THREE.PlaneGeometry(16, 1.55), fasciaMat);
     fascia.position.set(CX, under + thick + 0.95, sz);

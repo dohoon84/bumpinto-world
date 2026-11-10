@@ -1,5 +1,5 @@
 // [gyeongbu-bus] 9004·1151. 본선은 버스전용차로(1차로) + 파란 차선. 속도는 gyeongbuSpeed.
-//   차체는 수소 직행좌석(둥근 상자, 검정 지붕·윗부분, 긴 옆창, 빨간 하단+회색 사선, 주황 LED 행선판).
+//   차체는 정자역 시내버스와 같은 createBus 파이프라인(직행좌석 도색, 12.6m 3축 코치, LED 행선판).
 //   운수사·제작사 로고와 브랜드 글자는 넣지 않는다.
 import * as THREE from 'three';
 import { ribbonGeo, fixNormalsUp } from '../world.js';
@@ -124,8 +124,8 @@ function busLaneMarkings(pts, data) {
   };
   const textTex = loadTex('text-buslane.png');
   const textMat = new THREE.MeshBasicMaterial({ map: textTex, transparent: true, depthWrite: false, side: THREE.DoubleSide });
-  // 노면 글자: 세로 PNG(아래 버 → 위 용). 로컬 +Y = 진행, 로컬 +X = 진행 오른쪽, 법선 +Z = 위.
-  // 운전자가 보면 글자가 바로 서 있고, 가까운 쪽(아래)이 「버」, 먼 쪽(위)이 「용」. 앞면이 위라 좌우 반전 없음.
+  // 노면 글자: 세로 PNG(위 버 → 아래 용). 로컬 +Y = 진행(먼 쪽), 로컬 +X = 진행 오른쪽, 법선 +Z = 위.
+  // 운전자 시점에서 위→아래가 「버스전용」(먼 쪽 버 · 가까운 쪽 용). 앞면이 위라 좌우 반전 없음.
   const travel = new THREE.Vector3();
   const right = new THREE.Vector3();
   const up = new THREE.Vector3(0, 1, 0);
@@ -279,6 +279,131 @@ export function expressBusGeo(routeNo = '9004') {
   return mergeGeo(parts);
 }
 
+function chaikin(pts, iters = 2) {
+  let cur = pts.map((p) => [p[0], p[1]]);
+  for (let n = 0; n < iters; n++) {
+    const next = [cur[0]];
+    for (let i = 0; i < cur.length - 1; i++) {
+      const a = cur[i], b = cur[i + 1];
+      next.push([a[0] * 0.75 + b[0] * 0.25, a[1] * 0.75 + b[1] * 0.25]);
+      next.push([a[0] * 0.25 + b[0] * 0.75, a[1] * 0.25 + b[1] * 0.75]);
+    }
+    next.push(cur[cur.length - 1]);
+    cur = next;
+  }
+  return cur;
+}
+
+function resampleXZ(pts, step = 5) {
+  const out = [[pts[0][0], pts[0][1]]];
+  for (let i = 1; i < pts.length; i++) {
+    let x0 = out[out.length - 1][0], z0 = out[out.length - 1][1];
+    const x1 = pts[i][0], z1 = pts[i][1];
+    let L = Math.hypot(x1 - x0, z1 - z0);
+    while (L >= step) {
+      const t = step / L;
+      x0 += (x1 - x0) * t; z0 += (z1 - z0) * t;
+      out.push([x0, z0]);
+      L = Math.hypot(x1 - x0, z1 - z0);
+    }
+  }
+  const last = pts[pts.length - 1];
+  if (Math.hypot(out[out.length - 1][0] - last[0], out[out.length - 1][1] - last[1]) > 0.8) out.push([last[0], last[1]]);
+  return out;
+}
+
+function leftSamples(pts) {
+  return pts.map((p, i) => {
+    const a = pts[Math.max(0, i - 1)], b = pts[Math.min(pts.length - 1, i + 1)];
+    const dx = b[0] - a[0], dz = b[1] - a[1], L = Math.hypot(dx, dz) || 1;
+    return { x: p[0], z: p[1], lx: dz / L, lz: -dx / L, ang: Math.atan2(dx, dz) };
+  });
+}
+
+function shiftLine(samples, off) {
+  return samples.map((s) => [s.x + s.lx * off, s.z + s.lz * off, 0]);
+}
+
+function paintGeo(g, color) {
+  const n = g.attributes.position.count, a = new Float32Array(n * 3);
+  const c = new THREE.Color(color);
+  for (let i = 0; i < n; i++) { a[i * 3] = c.r; a[i * 3 + 1] = c.g; a[i * 3 + 2] = c.b; }
+  g.setAttribute('color', new THREE.BufferAttribute(a, 3));
+  return g;
+}
+
+function coloredBoxY(w, h, d, color, x, y, z, angY = 0) {
+  const geo = new THREE.BoxGeometry(w, h, d);
+  if (angY) geo.rotateY(angY);
+  geo.translate(x, y, z);
+  return paintGeo(geo, color);
+}
+
+/** 본선 4+4 고속도로. 경로 중심 = 서울 방면 차로 중앙. +lx(왼쪽) = 중앙분리대·반대편. */
+function expresswayDeck(rawPts) {
+  const pts = resampleXZ(chaikin(rawPts, 2), 5);
+  if (pts.length < 4) return null;
+  const S = leftSamples(pts);
+  const laneW = 3.6, carriage = laneW * 4;
+  const innerSh = 1.05, outerSh = 2.55, medianW = 1.4;
+  const nbLaneInner = carriage / 2;
+  const nbLaneOuter = -carriage / 2;
+  const nbInnerEdge = nbLaneInner + innerSh;
+  const nbOuterEdge = nbLaneOuter - outerSh;
+  const medLo = nbInnerEdge, medHi = nbInnerEdge + medianW;
+  const sbLaneInner = medHi + innerSh;
+  const sbLaneOuter = sbLaneInner + carriage;
+  const sbOuterEdge = sbLaneOuter + outerSh;
+  const sbLaneCenter = (sbLaneInner + sbLaneOuter) / 2;
+  const yRoad = 0.30, ySh = 0.294, yLine = 0.322;
+  const ASP = '#4a4f56', SH = '#5c626a', LINE = '#f2f3ef', EDGE = '#eceee9';
+  const MED = '#c8c5bc', RAIL = '#b4b8be', POST = '#8b9098';
+  const parts = [];
+  const addR = (off, w, y, color) => {
+    parts.push(paintGeo(fixNormalsUp(ribbonGeo(shiftLine(S, off), w, y, false)), color));
+  };
+  addR(0, carriage, yRoad, ASP);
+  addR((nbLaneInner + nbInnerEdge) / 2, innerSh, ySh, SH);
+  addR((nbLaneOuter + nbOuterEdge) / 2, outerSh, ySh, SH);
+  addR(sbLaneCenter, carriage, yRoad, ASP);
+  addR((medHi + sbLaneInner) / 2, innerSh, ySh, SH);
+  addR((sbLaneOuter + sbOuterEdge) / 2, outerSh, ySh, SH);
+  addR(nbLaneInner, 0.18, yLine, EDGE);
+  addR(nbLaneOuter, 0.18, yLine, EDGE);
+  addR(sbLaneInner, 0.18, yLine, EDGE);
+  addR(sbLaneOuter, 0.18, yLine, EDGE);
+
+  const medOff = (medLo + medHi) / 2;
+  for (let i = 0; i < S.length; i++) {
+    const s = S[i];
+    const x = s.x + s.lx * medOff, z = s.z + s.lz * medOff;
+    parts.push(coloredBoxY(0.58, 1.15, 4.9, MED, x, yRoad + 0.58, z, s.ang));
+    parts.push(coloredBoxY(0.36, 0.26, 4.9, '#bbb8b0', x, yRoad + 1.22, z, s.ang));
+  }
+  for (const off of [nbOuterEdge - 0.2, sbOuterEdge + 0.2]) {
+    addR(off, 0.11, yRoad + 0.64, RAIL);
+    addR(off, 0.11, yRoad + 0.40, RAIL);
+    for (let i = 0; i < S.length; i += 2) {
+      const s = S[i];
+      parts.push(coloredBoxY(0.09, 0.78, 0.09, POST, s.x + s.lx * off, yRoad + 0.39, s.z + s.lz * off, s.ang));
+    }
+  }
+  const g = new THREE.Group();
+  g.name = 'gyeongbuExpressway';
+  const mesh = new THREE.Mesh(mergeGeo(parts), new THREE.MeshLambertMaterial({ vertexColors: true }));
+  mesh.name = 'gyeongbuExpresswayBody';
+  mesh.receiveShadow = true;
+  mesh.frustumCulled = false;
+  g.add(mesh);
+  const dashPts = pts;
+  g.add(busLaneDashes(dashPts, 0, yLine, 0.11, LINE));
+  g.add(busLaneDashes(dashPts, -laneW, yLine, 0.11, LINE));
+  g.add(busLaneDashes(dashPts, sbLaneInner + laneW, yLine, 0.11, LINE));
+  g.add(busLaneDashes(dashPts, sbLaneInner + laneW * 2, yLine, 0.11, LINE));
+  g.add(busLaneDashes(dashPts, sbLaneInner + laneW * 3, yLine, 0.11, LINE));
+  return g;
+}
+
 export function mountGyeongbuExpress(group, data, { overlay } = {}) {
   if (!data?.pts?.length || !data.routes?.length) return null;
   const spur = data.pts.filter((p) => p[3] === 'spur');
@@ -291,23 +416,29 @@ export function mountGyeongbuExpress(group, data, { overlay } = {}) {
     group.add(mesh);
   }
   const main = data.pts.filter((p) => p[3] === 'main');
-  if (main.length > 3) group.add(busLaneMarkings(main, data));
+  if (main.length > 3) {
+    const deck = expresswayDeck(main);
+    if (deck) group.add(deck);
+    const smooth = resampleXZ(chaikin(main, 2), 5);
+    group.add(busLaneMarkings(smooth.length > 3 ? smooth : main, data));
+  }
 
   const cap = 8;
-  const mat = new THREE.MeshLambertMaterial({ vertexColors: true });
-  const meshes = {};
-  for (const no of ['9004', '1151']) {
-    const mesh = new THREE.InstancedMesh(expressBusGeo(no), mat, cap);
-    mesh.name = `gyeongbuExpressBuses-${no}`;
-    mesh.count = cap;
-    mesh.frustumCulled = false;
-    mesh.castShadow = true;
-    group.add(mesh);
-    meshes[no] = mesh;
-  }
-  const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), pos = new THREE.Vector3(), scl = new THREE.Vector3(1, 1, 1);
-  const zero = new THREE.Vector3();
-  const up = new THREE.Vector3(0, 1, 0);
+  const dest = { 9004: '강남역', 1151: '강남역' };
+  const pools = { 9004: [], 1151: [] };
+  // createBus 는 document/캔버스를 쓰므로 브라우저에서만 불러 정자역 시내버스와 같은 모델을 쓴다.
+  import('../transit/busModel.js').then(({ createBus }) => {
+    for (const no of ['9004', '1151']) {
+      for (let i = 0; i < cap; i++) {
+        const mesh = createBus(no, 'express', dest[no], { body: 'coach3' });
+        mesh.name = `gyeongbuExpressBuses-${no}`;
+        mesh.visible = false;
+        mesh.frustumCulled = false;
+        group.add(mesh);
+        pools[no].push(mesh);
+      }
+    }
+  }).catch((err) => { console.warn('[gyeongbu] createBus load failed', err); });
 
   const byStop = new Map();
   for (const r of data.routes) for (const s of r.stops || []) {
@@ -329,11 +460,8 @@ export function mountGyeongbuExpress(group, data, { overlay } = {}) {
   }
 
   function hideAll() {
-    for (const no of Object.keys(meshes)) {
-      for (let i = 0; i < cap; i++) {
-        m4.compose(zero, q.identity(), zero);
-        meshes[no].setMatrixAt(i, m4);
-      }
+    for (const no of Object.keys(pools)) {
+      for (const mesh of pools[no]) mesh.visible = false;
     }
   }
 
@@ -351,19 +479,20 @@ export function mountGyeongbuExpress(group, data, { overlay } = {}) {
     hideAll();
     const slot = { 9004: 0, 1151: 0 };
     for (const b of live) {
-      const mesh = meshes[b.no];
-      if (!mesh) continue;
+      const list = pools[b.no];
+      if (!list) continue;
       if (slot[b.no] >= cap) continue;
       const p = poseAt(data.pts, b.s);
       const lat = busLateralM(b.s, data);
       const px = p.x + p.lx * lat, pz = p.z + p.lz * lat;
       if (Math.hypot(px - x, pz - z) > 1400) continue;
-      const i = slot[b.no]++;
-      q.setFromAxisAngle(up, p.ang);
-      m4.compose(pos.set(px, 0.15, pz), q, scl);
-      mesh.setMatrixAt(i, m4);
+      const mesh = list[slot[b.no]];
+      if (!mesh) continue;
+      slot[b.no]++;
+      mesh.visible = true;
+      mesh.position.set(px, 0, pz);
+      mesh.rotation.y = p.ang;
     }
-    for (const no of Object.keys(meshes)) meshes[no].instanceMatrix.needsUpdate = true;
     for (const { s, item } of labels) {
       let best = null;
       const nos = [];
@@ -378,5 +507,5 @@ export function mountGyeongbuExpress(group, data, { overlay } = {}) {
       else if (item) item.text = text;
     }
   }
-  return { update, meshes };
+  return { update, pools };
 }

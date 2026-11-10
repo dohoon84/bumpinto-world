@@ -74,7 +74,7 @@ assert.equal(J.meta.attribution, GYEONGGI_BUS_CREDIT);
 assert.ok(fs.readFileSync(path.join(root, 'README.md'), 'utf8').includes(GYEONGGI_BUS_CREDIT));
 assert.ok(fs.readFileSync(path.join(root, 'src/game.js'), 'utf8').includes('GYEONGGI_BUS_CREDIT'));
 assert.ok(fs.readFileSync(path.join(root, 'src/corridor/index.js'), 'utf8').includes('get(GYEONGBU_EXPRESS_FILE)'));
-assert.ok(fs.readFileSync(path.join(root, 'src/corridor/gyeongbuExpress.js'), 'utf8').includes("expressBusGeo(no)"));
+assert.ok(fs.readFileSync(path.join(root, 'src/corridor/gyeongbuExpress.js'), 'utf8').includes("createBus(no, 'express'"));
 
 assert.equal(seoulTollEnabled(''), true);
 assert.equal(seoulTollEnabled('?seoultg=0'), false);
@@ -103,4 +103,21 @@ for (const p of J.pts) {
 }
 assert.ok(tgNear < 25, `판교TG가 접근로에서 ${tgNear.toFixed(1)}m`);
 assert.ok(fs.readFileSync(path.join(root, 'src/corridor/pangyoExpress.js'), 'utf8').includes('makePangyoTollSigns'));
+assert.ok(fs.readFileSync(path.join(root, 'src/corridor/gyeongbuExpress.js'), 'utf8').includes('function expresswayDeck'));
+const bld = JSON.parse(fs.readFileSync(path.join(root, 'public/corridor/gyeongbu/cheonggye-buildings.json'), 'utf8'));
+assert.ok(bld.buildings.length > 40, 'OSM 청계산입구 건물');
+assert.ok(bld.entrances.length >= 2, '신분당선 출입구');
+assert.ok(bld.buildings.every((b) => b.o?.length >= 4 && b.h > 0));
+const srcT = fs.readFileSync(path.join(root, 'src/corridor/cheonggyeTerrain.js'), 'utf8');
+assert.ok(srcT.includes('buildingMeshes'));
+assert.ok(srcT.includes('cheonggyeBarrierPanels'));
+const pangyoSrc = fs.readFileSync(path.join(root, 'src/corridor/pangyoExpress.js'), 'utf8');
+assert.ok(pangyoSrc.includes('export function pangyoTollLayout'));
+assert.ok(pangyoSrc.includes('laneClear = 3.9'));
+assert.ok(!/sign-toll\.png.*DoubleSide/.test(pangyoSrc));
+const seoulSrc = fs.readFileSync(path.join(root, 'src/world/seoulToll.js'), 'utf8');
+assert.ok(!seoulSrc.includes('i * 9.5'));
+assert.ok(!/sign-toll\.png.*DoubleSide/.test(seoulSrc));
+assert.ok(fs.readFileSync(path.join(root, 'src/transit/busModel.js'), 'utf8').includes('coach3'));
+
 console.log(`gyeongbu express: ${cruise.toFixed(0)} km/h, 판교→강남 ${Math.round(eta)}s, cars off bus lane OK, 서울TG ${near.toFixed(0)}m`);
