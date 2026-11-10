@@ -375,6 +375,22 @@ assert(plausibleArcadeRun({ score: 80000, level: 10, durationMs: 3000 }).ok === 
   const idxSrc = readFileSync(new URL('../src/arcade/index.js', import.meta.url), 'utf8');
   assert(idxSrc.includes('pickBoard'), 'tapping the kiosk opens the board');
   assert(idxSrc.includes('lastSubmit'), 'arcade prefers the POST snapshot when opening the board');
+  assert(idxSrc.includes('is-board'), 'open board marks #arc-root so lobby pills hide');
+  assert(idxSrc.includes('boardOpen'), 'world taps are ignored while the board is open');
+  assert(!interiorSrc.includes('4.05, 0, 0.95'), 'kiosk is not parked on the far right wall');
+  assert(/board\.position\.set\(\s*-1\./.test(interiorSrc), 'kiosk sits front-center-left of the cabinets');
+  assert(css.includes('#arc-root.is-board'), 'css hides hints while the ranking panel is open');
+  assert(/#arc-root \.arc-modal \{[^}]*z-index:\s*400/.test(css.replace(/\n/g, ' ')), 'modal stacks above hint pills');
+  assert(!/rank-list \{[^}]*min-height:\s*120px/.test(css), 'rank list can shrink on short landscape');
+  const mergeScore = css.match(/\.arc-merge-score \{[^}]+\}/)[0];
+  assert(/overflow:\s*visible/.test(mergeScore), 'score number is not clipped by the card');
+  assert(css.includes('env(safe-area-inset-top, 0px)) + 118px'), 'float bear sits below the score card + notch');
+  assert(css.includes('#arc-root:has(.arc-merge)') && css.includes('bg-store.jpg'), 'merge root fills with the store image not a cream band');
+  assert(!mergeSrc.includes('dangerWorldY + 70'), 'aim guide stops at the danger line');
+  const hudSrc = readFileSync(new URL('../src/mobile/hud.js', import.meta.url), 'utf8');
+  assert(hudSrc.includes("t('랭킹'"), 'mobile HUD has a ranking action next to play/exit');
+  assert(hudSrc.includes('ride3'), 'ranking uses a third action button');
+  assert(hudSrc.includes('arc.boardOpen'), 'HUD hides arcade actions while the panel is open');
 }
 
 console.log('ok arcade-rank', { today: today.rows.length, week: week.rows.length, month: month.rows.length });

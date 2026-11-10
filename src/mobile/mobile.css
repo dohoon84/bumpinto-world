@@ -166,7 +166,7 @@ body.mobile.in-gate #m-hud, body.mobile.in-lobby #m-hud, body.mobile.in-mobile-l
 #m-hud .m-act-sit svg, #m-hud .m-act-emote svg { width: 18px; height: 18px; }
 #m-hud .m-act.on, #m-hud .m-act-emote.on { background: var(--m-gold); color: #3a2a00; border-color: transparent; }
 /* 04 탈것 탄 동안에는 '내리기'만 */
-body.mobile.m-riding #m-hud .m-act:not(.m-act-ride):not(.m-act-ride2) { display: none; }
+body.mobile.m-riding #m-hud .m-act:not(.m-act-ride):not(.m-act-ride2):not(.m-act-ride3) { display: none; }
 /* 01 채팅 칩 96×40 (가운데 아래) + 안 읽은 수 */
 #m-hud .m-talk { position: absolute; left: 50%; bottom: var(--m-b); transform: translateX(-50%); width: 96px; justify-content: center; gap: 6px; font-size: 13px; font-weight: 700; }
 body.mobile.m-riding #m-hud .m-talk { display: none; }
@@ -407,6 +407,10 @@ body.m-safe-sim.m-safe-r::before { left: auto; right: calc(var(--sa-r) / 2 - 18p
 #m-hud .m-act.is-plain { background: rgba(15, 25, 42, .72); color: #fff; border: 1.5px solid rgba(255, 255, 255, .4); box-shadow: 0 4px 10px rgba(8, 16, 30, .3); }
 body.mobile.m-act2 #m-hud .m-act-run { display: none; }
 body.mobile.m-riding #m-hud .m-act-ride2:not([hidden]) { display: grid; }
+#m-hud .m-act-ride3 { right: 88px; bottom: 72px; width: 56px; height: 56px; font-size: 11px; }
+#m-hud .m-act-ride3 span { max-width: 50px; white-space: normal; text-align: center; line-height: 1.05; }
+#m-hud .m-act-ride3 svg { width: 20px; height: 20px; }
+body.mobile.m-riding #m-hud .m-act-ride3:not([hidden]) { display: grid; }
 #m-hud .m-act[hidden] { display: none !important; }
 /* 키 안내 글자(kbd)는 모바일에서 안 보임 — 버튼이 대신함 */
 body.mobile kbd { display: none !important; }

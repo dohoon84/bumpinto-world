@@ -81,12 +81,12 @@ export function buildArcadeInterior({ renderer = null, storeName = 'BUMP 오락�
   const claw = makeClawMachine();
   claw.position.set(-3.6, 0, 0.9); claw.rotation.y = 0.45; scene.add(claw);
 
-  // ranking kiosk — 오른쪽 벽 쪽, 오락기(z=-1.7)와 가운데 통로를 가리지 않게
+  // ranking kiosk — 기본 카메라·스폰에서 보이게, 캐비닛 앞 중앙-왼쪽 (범핑팡을 가리지 않음)
   const board = makeRankKiosk();
-  board.position.set(4.05, 0, 0.95);
-  board.rotation.y = -0.95;
+  board.position.set(-1.15, 0, 0.48);
+  board.rotation.y = 0.18;
   scene.add(board);
-  const boardGlow = new THREE.PointLight(0xffe66d, 1.4, 5.8, 2); boardGlow.position.set(3.65, 1.55, 1.4); scene.add(boardGlow);
+  const boardGlow = new THREE.PointLight(0xffe66d, 1.35, 5.5, 2); boardGlow.position.set(-0.85, 1.5, 0.91); scene.add(boardGlow);
 
   // plush pile near claw
   for (let i = 0; i < 5; i++) {
