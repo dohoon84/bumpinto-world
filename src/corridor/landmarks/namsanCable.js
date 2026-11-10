@@ -107,22 +107,41 @@ function makeCabin() {
   const red = new THREE.MeshStandardMaterial({ color: '#c62828', metalness: 0.28, roughness: 0.38 });
   const redDark = new THREE.MeshLambertMaterial({ color: '#8e1c1c' });
   const frame = new THREE.MeshLambertMaterial({ color: '#4a4e54' });
+  const railM = new THREE.MeshStandardMaterial({ color: '#c5ccd2', metalness: 0.55, roughness: 0.35 });
+  const seatM = new THREE.MeshLambertMaterial({ color: '#6a4534' });
+  const backM = new THREE.MeshLambertMaterial({ color: '#4e3228' });
   const glass = new THREE.MeshStandardMaterial({
-    color: '#b9d4e6', transparent: true, opacity: 0.22, roughness: 0.06, metalness: 0.25,
+    color: '#b9d4e6', transparent: true, opacity: 0.16, roughness: 0.06, metalness: 0.25,
     emissive: new THREE.Color('#ffe7b0'), emissiveIntensity: 0, depthWrite: false, side: THREE.DoubleSide,
   });
-  // hollow cabin: floor, roof, lower apron, four window panes, corner posts
-  const floor = new THREE.Mesh(new THREE.BoxGeometry(2.55, 0.12, 3.25), new THREE.MeshLambertMaterial({ color: '#5a4034' }));
+  const floor = new THREE.Mesh(new THREE.BoxGeometry(2.55, 0.12, 3.25), new THREE.MeshLambertMaterial({ color: '#3a2a24' }));
   floor.position.y = -1.05; g.add(floor);
-  const apron = new THREE.Mesh(new THREE.BoxGeometry(2.6, 0.72, 3.3), red);
-  apron.position.y = -0.64; g.add(apron);
-  const roof = new THREE.Mesh(new THREE.BoxGeometry(2.75, 0.2, 3.45), new THREE.MeshLambertMaterial({ color: '#f2f4f6' }));
-  roof.position.y = 1.18; g.add(roof);
-  const ceil = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.06, 3.1), new THREE.MeshStandardMaterial({
-    color: '#fff4d8', emissive: new THREE.Color('#ffe2a8'), emissiveIntensity: 0.35,
+  // hollow apron (skirt walls only — a solid box used to paint the whole floor red)
+  for (const [sx, sy, sz, px, py, pz] of [
+    [2.62, 0.72, 0.08, 0, -0.64, 1.61],
+    [2.62, 0.72, 0.08, 0, -0.64, -1.61],
+    [0.08, 0.72, 3.22, 1.27, -0.64, 0],
+    [0.08, 0.72, 3.22, -1.27, -0.64, 0],
+  ]) {
+    const w = new THREE.Mesh(new THREE.BoxGeometry(sx, sy, sz), red);
+    w.position.set(px, py, pz); g.add(w);
+  }
+  const roof = new THREE.Mesh(new THREE.BoxGeometry(2.78, 0.16, 3.48), new THREE.MeshStandardMaterial({
+    color: '#c8ccd0', roughness: 0.45, metalness: 0.15,
+    emissive: new THREE.Color('#3a2220'), emissiveIntensity: 0.2,
   }));
-  ceil.position.y = 1.04; g.add(ceil);
-  // window panes: sides (X) and front/back (Z)
+  roof.position.y = 1.2; g.add(roof);
+  // full-size interior ceiling so the roof underside never reads as a black slab
+  const ceil = new THREE.Mesh(new THREE.BoxGeometry(2.7, 0.07, 3.38), new THREE.MeshStandardMaterial({
+    color: '#f3e6c8', emissive: new THREE.Color('#ffe2a0'), emissiveIntensity: 0.55,
+  }));
+  ceil.position.y = 1.08; g.add(ceil);
+  const ceilLight = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.04, 2.2), new THREE.MeshStandardMaterial({
+    color: '#fff6d8', emissive: new THREE.Color('#fff0c4'), emissiveIntensity: 0.85,
+  }));
+  ceilLight.position.y = 1.04; g.add(ceilLight);
+  const rim = new THREE.Mesh(new THREE.BoxGeometry(2.72, 0.08, 3.4), red);
+  rim.position.y = 1.14; g.add(rim);
   const panes = [
     { s: [0.06, 1.15, 2.85], p: [1.28, 0.28, 0] },
     { s: [0.06, 1.15, 2.85], p: [-1.28, 0.28, 0] },
@@ -135,14 +154,20 @@ function makeCabin() {
     m.position.set(...pn.p); g.add(m);
     if (!glassMesh) glassMesh = m;
   }
-  // red window frames / corner posts
   for (const [x, z] of [[1.28, 1.55], [1.28, -1.55], [-1.28, 1.55], [-1.28, -1.55]]) {
     const post = new THREE.Mesh(new THREE.BoxGeometry(0.1, 2.2, 0.1), redDark);
     post.position.set(x, 0.05, z); g.add(post);
   }
-  const belt = new THREE.Mesh(new THREE.BoxGeometry(2.62, 0.1, 3.32), red);
-  belt.position.y = 0.92; g.add(belt);
-  // hang rod + yoke + cable grip
+  // window-top frame only (a solid slab here used to paint the whole ceiling black)
+  for (const [sx, sy, sz, px, py, pz] of [
+    [2.62, 0.1, 0.08, 0, 0.92, 1.62],
+    [2.62, 0.1, 0.08, 0, 0.92, -1.62],
+    [0.08, 0.1, 3.22, 1.27, 0.92, 0],
+    [0.08, 0.1, 3.22, -1.27, 0.92, 0],
+  ]) {
+    const b = new THREE.Mesh(new THREE.BoxGeometry(sx, sy, sz), red);
+    b.position.set(px, py, pz); g.add(b);
+  }
   const hang = new THREE.Mesh(new THREE.BoxGeometry(0.16, 1.15, 0.16), frame);
   hang.position.y = 1.85; g.add(hang);
   const yoke = new THREE.Mesh(new THREE.BoxGeometry(1.55, 0.14, 0.16), frame);
@@ -152,10 +177,39 @@ function makeCabin() {
   const jaw = new THREE.Mesh(new THREE.TorusGeometry(0.14, 0.045, 6, 12), frame);
   jaw.rotation.z = Math.PI / 2;
   jaw.position.y = 2.92; g.add(jaw);
-  const seats = new THREE.Mesh(new THREE.BoxGeometry(2.15, 0.32, 1.5), new THREE.MeshLambertMaterial({ color: '#4a3228' }));
-  seats.position.set(0, -0.62, 0.15); g.add(seats);
+  // benches under every window so the seat edge sits in the lower frame
+  function bench(w, d, x, z, alongZ) {
+    const seat = new THREE.Mesh(new THREE.BoxGeometry(alongZ ? d : w, 0.11, alongZ ? w : d), seatM);
+    seat.position.set(x, -0.74, z); g.add(seat);
+    const back = new THREE.Mesh(new THREE.BoxGeometry(alongZ ? 0.07 : w, 0.4, alongZ ? w : 0.07), backM);
+    const bx = alongZ ? x + Math.sign(x || 1) * 0.2 : x;
+    const bz = alongZ ? z : z + Math.sign(z || 1) * 0.2;
+    back.position.set(alongZ ? x + Math.sign(x) * 0.18 : x, -0.52, alongZ ? z : z + Math.sign(z) * 0.18);
+    g.add(back);
+  }
+  bench(2.05, 0.4, 0.92, 0, true);
+  bench(2.05, 0.4, -0.92, 0, true);
+  bench(1.7, 0.4, 0, 1.12, false);
+  bench(1.7, 0.4, 0, -1.12, false);
+  // interior handrail at sill height
+  for (const [sx, sz, px, pz] of [
+    [2.28, 0.035, 0, 1.38],
+    [2.28, 0.035, 0, -1.38],
+    [0.035, 2.72, 1.14, 0],
+    [0.035, 2.72, -1.14, 0],
+  ]) {
+    const rail = new THREE.Mesh(new THREE.BoxGeometry(sx, 0.035, sz), railM);
+    rail.position.set(px, -0.06, pz); g.add(rail);
+  }
+  for (let i = 0; i < 8; i++) {
+    const a = (i / 8) * Math.PI * 2;
+    const post = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.018, 0.55, 6), railM);
+    post.position.set(Math.cos(a) * 1.12, -0.34, Math.sin(a) * 1.36);
+    g.add(post);
+  }
   g.userData.glass = glassMesh;
   g.userData.ceil = ceil;
+  g.userData.ceilLight = ceilLight;
   return g;
 }
 
@@ -267,7 +321,7 @@ export function createNamsanCable({ parent, osm, heightAt, overlay }) {
   let dwell = 2.5;
   let ride = null; // { cabin: 'A'|'B', dest: 'upper'|'lower' }
   // 회현→타워는 산을 바라보므로, 기본은 어깨 너머 명동(도시) 쪽. T 로 타워/도시/자동 전환.
-  const CITY = { x: NT.tx - 420, z: NT.tz - 1680 };
+  const CITY = { x: NT.tx - 980, z: NT.tz - 790 }; // 회현·남대문 야경 (케이블 북서쪽 도심)
   let viewMode = 'auto'; // auto | city | tower
   let hintEl = null;
   function hintText() {
@@ -351,15 +405,15 @@ export function createNamsanCable({ parent, osm, heightAt, overlay }) {
       const lookX = want === 'tower' ? NT.tx : CITY.x;
       const lookZ = want === 'tower' ? NT.tz : CITY.z;
       const lookYaw = Math.atan2(p.x - lookX, p.z - lookZ);
-      // place player slightly toward the view so camera (opposite look) remains inside the 3.3 m cabin
       const lx = Math.sin(lookYaw), lz = Math.cos(lookYaw);
-      player.position.set(p.x - lx * 0.35 + sway * 0.1, p.y - 3.88, p.z - lz * 0.35);
+      // sit slightly toward the city window so the opposite bench stays behind the camera
+      player.position.set(p.x - lx * 0.22 + sway * 0.08, p.y - 3.88, p.z - lz * 0.22);
       if (cam) {
         cam.distMin = 0.7;
         cam.yaw += (lookYaw - cam.yaw) * Math.min(1, dt * 2.0);
-        const wantPitch = want === 'city' ? 0.2 : -0.08;
+        const wantPitch = want === 'city' ? 0.1 : -0.08;
         cam.pitch += (wantPitch - cam.pitch) * Math.min(1, dt * 1.6);
-        cam.dist = 0.92;
+        cam.dist = 0.8;
       }
       showHint(true);
       // arrival
@@ -409,8 +463,10 @@ export function createNamsanCable({ parent, osm, heightAt, overlay }) {
     setNight(v) {
       cabinA.userData.glass.material.emissiveIntensity = v * 0.16;
       cabinB.userData.glass.material.emissiveIntensity = v * 0.16;
-      cabinA.userData.ceil.material.emissiveIntensity = 0.35 + v * 0.7;
-      cabinB.userData.ceil.material.emissiveIntensity = 0.35 + v * 0.7;
+      cabinA.userData.ceil.material.emissiveIntensity = 0.45 + v * 0.7;
+      cabinB.userData.ceil.material.emissiveIntensity = 0.45 + v * 0.7;
+      if (cabinA.userData.ceilLight) cabinA.userData.ceilLight.material.emissiveIntensity = 0.7 + v * 0.5;
+      if (cabinB.userData.ceilLight) cabinB.userData.ceilLight.material.emissiveIntensity = 0.7 + v * 0.5;
     },
     isBlocked,
     floorY(x, z, refY) {

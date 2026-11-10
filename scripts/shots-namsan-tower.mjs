@@ -72,8 +72,16 @@ async function go(page, { x, z, y, yaw = 0, dist = 22, pitch = 0.28, stage = nul
     }
     document.getElementById('stop-panel')?.classList.remove('open');
     document.getElementById('corridor-stop-panel')?.classList.remove('open');
+    document.querySelectorAll('.tag, .emote-floater').forEach((el) => { el.style.display = 'none'; el.hidden = true; });
+    const hint = document.getElementById('namsan-cable-hint');
+    if (hint) hint.style.display = 'none';
   }, { x, z, y, yaw, dist, pitch, stage, fov, hidePlayer, view });
   await page.waitForTimeout(1800);
+  await page.evaluate(() => {
+    document.querySelectorAll('.tag, .emote-floater').forEach((el) => { el.style.display = 'none'; el.hidden = true; });
+    const hint = document.getElementById('namsan-cable-hint');
+    if (hint) hint.style.display = 'none';
+  });
 }
 
 const look = (fromX, fromZ, toX, toZ) => Math.atan2(fromX - toX, fromZ - toZ);
@@ -142,13 +150,12 @@ if (I.lower && I.upper) {
       c.setView?.('city');
       return c.at(0.68);
     });
-    const cityX = I.tx - 420, cityZ = I.tz - 1680;
+    const cityX = I.tx - 980, cityZ = I.tz - 790;
     const yaw = look(p.x, p.z, cityX, cityZ);
     const lx = Math.sin(yaw), lz = Math.cos(yaw);
-    const sx = -lz, sz = lx;
     await go(day, {
-      x: p.x - lx * 0.12 + sx * 0.55, z: p.z - lz * 0.12 + sz * 0.55, y: p.y - 3.88,
-      yaw, dist: 0.88, pitch: 0.26, stage: 0.68, view: 'city', hidePlayer: true, fov: 64,
+      x: p.x - lx * 0.2, z: p.z - lz * 0.2, y: p.y - 3.88,
+      yaw, dist: 0.8, pitch: 0.1, stage: 0.68, view: 'city', hidePlayer: true, fov: 56,
     });
     await shot(day, 'ntower-cable-day-ride');
   }
@@ -192,6 +199,18 @@ if (I.lower && I.upper) {
   await shot(night, 'ntower-night-street');
 }
 
+// hero: rooftop on the 회현·남대문 side (~1.2 km NW), lit buildings in front, whole tower on the summit
+{
+  const x = -11680, z = -21340;
+  const y = await hAt(night, x, z);
+  await go(night, {
+    x, z, y: y + 118,
+    yaw: look(x, z, I.tx, I.tz),
+    dist: 14, pitch: -0.06, fov: 40, hidePlayer: true,
+  });
+  await shot(night, 'ntower-night-hero');
+}
+
 // observation deck night looking north over the lit city
 {
   const x = I.tx + 2.0, z = I.tz - 11.4;
@@ -207,13 +226,12 @@ if (I.lower && I.upper) {
       c.setView?.('city');
       return c.at(0.68);
     });
-    const cityX = I.tx - 420, cityZ = I.tz - 1680;
+    const cityX = I.tx - 980, cityZ = I.tz - 790;
     const yaw = look(p.x, p.z, cityX, cityZ);
     const lx = Math.sin(yaw), lz = Math.cos(yaw);
-    const sx = -lz, sz = lx;
     await go(night, {
-      x: p.x - lx * 0.12 + sx * 0.55, z: p.z - lz * 0.12 + sz * 0.55, y: p.y - 3.88,
-      yaw, dist: 0.88, pitch: 0.26, stage: 0.68, view: 'city', hidePlayer: true, fov: 64,
+      x: p.x - lx * 0.2, z: p.z - lz * 0.2, y: p.y - 3.88,
+      yaw, dist: 0.8, pitch: 0.1, stage: 0.68, view: 'city', hidePlayer: true, fov: 56,
     });
     await shot(night, 'ntower-cable-night-ride');
   }

@@ -44,6 +44,8 @@ export function createNamsanTerrain({ parent, dem, osm }) {
   const group = new THREE.Group();
   group.name = 'namsan-terrain';
   parent.add(group);
+  let demMat = null;
+  let plazaMat = null;
 
   const datum = dem?.datum ?? NT.datum;
   const baseY = NT.eleBase - datum;
@@ -128,8 +130,8 @@ export function createNamsanTerrain({ parent, dem, osm }) {
     geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
     geo.setIndex(idx);
     geo.computeVertexNormals();
-    const mat = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide });
-    const mesh = new THREE.Mesh(geo, mat);
+    demMat = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide });
+    const mesh = new THREE.Mesh(geo, demMat);
     mesh.receiveShadow = true;
     mesh.name = 'namsan-dem';
     group.add(mesh);
@@ -155,18 +157,32 @@ export function createNamsanTerrain({ parent, dem, osm }) {
       trees.push([jx, jz]);
     }
   }
-  if (trees.length) {
-    addInstancedTrees(group, trees, {
-      rnd: () => hash01(Math.round(Math.random() * 1e6), 17),
-      crownRadius: 2.6,
-      crownY: 6.2,
-      trunkHeight: 4.4,
-      trunkColor: '#5c4634',
-      scaleMin: 0.85,
-      scaleSpan: 0.7,
-      getY: (x, z) => heightAt(x, z),
-    });
+  // fill in a tighter canopy on the mid-slopes around the tower (70–280 m)
+  for (let z = NT.tz - 280; z < NT.tz + 280; z += 7.2) {
+    for (let x = NT.tx - 280; x < NT.tx + 280; x += 7.2) {
+      const jx = x + (hash01(Math.round(x * 2), Math.round(z * 2)) - 0.5) * 5.5;
+      const jz = z + (hash01(Math.round(z * 2), Math.round(x * 2)) - 0.5) * 5.5;
+      const dT = Math.hypot(jx - NT.tx, jz - NT.tz);
+      if (dT < 72 || dT > 280) continue;
+      if (Math.hypot(jx + 10705, jz + 20554) < 28) continue;
+      const y = heightAt(jx, jz);
+      if (y < 8) continue;
+      const s = Math.hypot(heightAt(jx + 6, jz) - heightAt(jx - 6, jz), heightAt(jx, jz + 6) - heightAt(jx, jz - 6)) / 12;
+      if (s > 0.85) continue;
+      if (hash01(Math.round(jx * 5), Math.round(jz * 5)) > 0.62) continue;
+      trees.push([jx, jz]);
+    }
   }
+  const forest = trees.length ? addInstancedTrees(group, trees, {
+    rnd: () => hash01(Math.round(Math.random() * 1e6), 17),
+    crownRadius: 2.6,
+    crownY: 6.2,
+    trunkHeight: 4.4,
+    trunkColor: '#5c4634',
+    scaleMin: 0.85,
+    scaleSpan: 0.7,
+    getY: (x, z) => heightAt(x, z),
+  }) : null;
 
   // ---- 한양도성 (OSM wall ways) ----
   const wallGeos = [];
@@ -256,6 +272,37 @@ export function createNamsanTerrain({ parent, dem, osm }) {
     group.add(pit);
   }
 
+  // cheap 남산 순환로 / plaza streetlights (glowing bulbs, no real point lights)
+  const lampPole = new THREE.MeshLambertMaterial({ color: '#2a2e34' });
+  const lampBulb = new THREE.MeshBasicMaterial({ color: '#ffd89a', transparent: true, opacity: 0, fog: false });
+  const lampGlow = new THREE.MeshBasicMaterial({
+    color: '#ffc878', transparent: true, opacity: 0, depthWrite: false, fog: false,
+    blending: THREE.AdditiveBlending,
+  });
+  function addLamp(x, z, h = 3.5) {
+    const y = heightAt(x, z);
+    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.08, h, 6), lampPole);
+    pole.position.set(x, y + h / 2, z); group.add(pole);
+    const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.2, 8, 6), lampBulb);
+    bulb.position.set(x, y + h + 0.12, z); group.add(bulb);
+    const glow = new THREE.Mesh(new THREE.SphereGeometry(0.7, 8, 6), lampGlow);
+    glow.position.set(x, y + h + 0.12, z); group.add(glow);
+  }
+  if (plaza.length >= 3) {
+    const c = centroid(plaza);
+    for (let i = 0; i < 14; i++) {
+      const a = (i / 14) * Math.PI * 2;
+      addLamp(c.x + Math.cos(a) * 22, c.z + Math.sin(a) * 22, 3.2);
+    }
+  }
+  // rings that read as 순환로 lighting from a distance
+  for (const [rad, n] of [[155, 28], [210, 34], [275, 36]]) {
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * Math.PI * 2 + rad * 0.01;
+      addLamp(NT.tx + Math.cos(a) * rad, NT.tz + Math.sin(a) * rad, 4.0);
+    }
+  }
+
   // packed plaza disk so the footprint isn't raw forest color
   if (plaza.length >= 3) {
     const shape = new THREE.Shape(plaza.map((p) => new THREE.Vector2(p[0] - NT.tx, -(p[1] - NT.tz))));
@@ -263,8 +310,8 @@ export function createNamsanTerrain({ parent, dem, osm }) {
     sg.rotateX(-Math.PI / 2);
     const y = baseY + 0.04;
     sg.translate(NT.tx, y, NT.tz);
-    const plazaM = new THREE.MeshLambertMaterial({ color: '#d5cbbb' });
-    const pm = new THREE.Mesh(sg, plazaM);
+    plazaMat = new THREE.MeshLambertMaterial({ color: '#d5cbbb' });
+    const pm = new THREE.Mesh(sg, plazaMat);
     pm.receiveShadow = true;
     group.add(pm);
   }
@@ -276,7 +323,17 @@ export function createNamsanTerrain({ parent, dem, osm }) {
     heightAt,
     datum,
     peak,
-    setNight() {},
+    setNight(v = 0) {
+      const k = Math.max(0, Math.min(1, v));
+      if (demMat) demMat.color.setRGB(1 - k * 0.82, 1 - k * 0.78, 1 - k * 0.72);
+      if (forest?.crowns?.material) forest.crowns.material.color.setRGB(1 - k * 0.78, 1 - k * 0.72, 1 - k * 0.8);
+      if (forest?.trunks?.material) forest.trunks.material.color.setRGB(1 - k * 0.55, 1 - k * 0.55, 1 - k * 0.5);
+      if (plazaMat) plazaMat.color.set(k > 0.4 ? '#3a3530' : '#d5cbbb');
+      lampBulb.opacity = k;
+      lampGlow.opacity = k * 0.45;
+      lampBulb.visible = k > 0.05;
+      lampGlow.visible = k > 0.05;
+    },
     isBlocked() { return false; },
   };
 }

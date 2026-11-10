@@ -34,6 +34,30 @@ export function createNamsan({ scene, overlay, terrain, dem, osm, city = null, c
   const car = cable ? createNamsanCable({ parent: root, osm, heightAt: land.heightAt, overlay, baseY: land.baseY }) : null;
   const downtown = createNamsanCity({ parent: root, data: city, heightAt: land.heightAt });
 
+  // faint stars around Namsan (the origin sky dome does not reach this far)
+  const STAR_N = 2200;
+  const starPos = new Float32Array(STAR_N * 3);
+  let ss = 4797;
+  const sr = () => ((ss = (ss * 16807) % 2147483647) / 2147483647);
+  for (let i = 0; i < STAR_N; i++) {
+    const az = sr() * Math.PI * 2;
+    const el = 0.18 + sr() * 1.22;
+    const r = 2200 + sr() * 500;
+    starPos[i * 3] = NT.tx + Math.cos(el) * Math.sin(az) * r;
+    starPos[i * 3 + 1] = Math.sin(el) * r + 80;
+    starPos[i * 3 + 2] = NT.tz - Math.cos(el) * Math.cos(az) * r;
+  }
+  const starGeo = new THREE.BufferGeometry();
+  starGeo.setAttribute('position', new THREE.BufferAttribute(starPos, 3));
+  const starMat = new THREE.PointsMaterial({
+    color: '#e8eef6', size: 1.45, sizeAttenuation: false,
+    transparent: true, opacity: 0, depthWrite: false, fog: false,
+  });
+  const stars = new THREE.Points(starGeo, starMat);
+  stars.name = 'namsan-stars';
+  stars.frustumCulled = false;
+  root.add(stars);
+
   if (overlay) {
     overlay.add({
       cls: 'label landmark',
@@ -57,6 +81,8 @@ export function createNamsan({ scene, overlay, terrain, dem, osm, city = null, c
     car?.setNight(on ? 1 : 0);
     land.setNight(on ? 1 : 0);
     downtown.setNight(on ? 1 : 0);
+    starMat.opacity = on ? 0.88 : 0;
+    stars.visible = !!on;
   });
 
   if (terrain?.addGroundExtra) {
@@ -127,6 +153,8 @@ export function createNamsan({ scene, overlay, terrain, dem, osm, city = null, c
       car?.setNight(v);
       land.setNight(v);
       downtown.setNight(v);
+      starMat.opacity = Math.max(0, Math.min(1, v)) * 0.88;
+      stars.visible = v > 0.08;
     },
     dispose() {
       unwatch?.();
