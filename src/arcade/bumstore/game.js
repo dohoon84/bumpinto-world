@@ -112,9 +112,9 @@ export function mountBumStore({
         <img class="arc-merge-logo intro-logo" src="${mergeUrl('logo/logo-bumstore.png')}" alt="범편의점" />
         <div class="intro-store">${storeLabel}</div>
         <p class="tag">${practice || !ranked ? '연습 모드 · 순위 기록 안 함' : '랭킹 도전'}</p>
-        <button type="button" class="arc-merge-btn start" data-go>시작</button>
+        <button type="button" class="arc-merge-btn start" data-go aria-label="시작"></button>
         <div class="res-actions">
-          <button type="button" class="arc-merge-btn rank" data-open-rank>순위판</button>
+          <button type="button" class="arc-merge-btn rank" data-open-rank aria-label="순위판"></button>
           <button type="button" class="arc-merge-btn arcade" data-leave-intro aria-label="오락실로"></button>
         </div>
       </div>
@@ -482,6 +482,8 @@ export function mountBumStore({
     const high = Math.max(best, finalScore);
     best = high;
     const info = stageInfo(finalLevel);
+    const intro = wrap.querySelector('[data-intro]');
+    if (intro) intro.hidden = true;
     resultEl.hidden = false;
     resultEl.innerHTML = `
       <div class="arc-merge-modal result">
@@ -495,7 +497,7 @@ export function mountBumStore({
         ${guestNow() ? loginNudgeHtml() : ''}
         <button type="button" class="arc-merge-btn again" data-again aria-label="다시하기"></button>
         <div class="res-actions">
-          <button type="button" class="arc-merge-btn rank" data-board>순위판</button>
+          <button type="button" class="arc-merge-btn rank" data-board aria-label="순위판"></button>
           <button type="button" class="arc-merge-btn arcade" data-leave aria-label="오락실로"></button>
         </div>
       </div>`;

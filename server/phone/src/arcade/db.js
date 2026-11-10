@@ -133,7 +133,7 @@ export async function recordRun(db, { playerKey, accountId, guest, gameId, store
        WHERE excluded.score > arcade_month_best.score`,
     ).bind(gameId, playerKey, accountId, storeId, mk, name, guest ? 1 : 0, score, now).run();
   }
-  return { record: true, day, attempt, left: decision.left, best, participation: null };
+  return { record: true, day, attempt, best, participation: null };
 }
 
 export async function storeBoard(db, gameId, storeId, period, now) {

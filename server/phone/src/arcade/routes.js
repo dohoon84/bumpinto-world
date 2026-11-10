@@ -1,7 +1,7 @@
 // [arcade-pang] /arcade/* — 범핑팡 랭킹. 참여보상·일일보상 없음.
 import { sessionFromRequest } from '../account/session.js';
 import { arcadeRankEnabled, attemptsUsed, recordRun, storeBoard, mergeGuestBest, attachMine } from './db.js';
-import { kstDayKey, LIMIT_MSG, attemptCap, GAME_ID, STORE_ID, plausibleArcadeRun, resolveGameId } from './rules.js';
+import { kstDayKey, GAME_ID, STORE_ID, plausibleArcadeRun, resolveGameId } from './rules.js';
 
 function json(data, status, cors) {
   return new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', ...cors } });
@@ -44,9 +44,8 @@ export async function handleArcade(request, env, url, cors) {
         await mergeGuestBest(env.DB, { device: who.device, playerKey: who.playerKey, accountId: who.accountId, gameId, storeId, day: kstDayKey(now), name: '', now });
       }
       const used = await attemptsUsed(env.DB, who.playerKey, gameId, storeId, kstDayKey(now));
-      const cap = attemptCap(who.guest);
-      const usedUp = used >= cap;
-      return json({ ok: true, guest: who.guest, used, left: Math.max(0, cap - used), usedUp, message: usedUp ? LIMIT_MSG : '' }, 200, cors);
+      // 오락실 게임은 일일 도전 횟수 제한이 없다. used 는 오늘 기록 횟수(참고)일 뿐 cap/left 는 보내지 않는다.
+      return json({ ok: true, guest: who.guest, used, usedUp: false, unlimited: true, message: '' }, 200, cors);
     }
     if (request.method === 'POST' && path === '/arcade/run') {
       const body = await request.json().catch(() => ({}));

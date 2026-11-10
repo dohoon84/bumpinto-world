@@ -2,7 +2,7 @@
 import { deviceId } from '../sms.js';
 import { accountBase } from '../account/api.js';
 import { ARCADE_GAME_ID, ARCADE_STORE_ID, MERGE_GAME_ID, arcadeShotMode } from './flag.js';
-import { attemptCap, LIMIT_MSG, kstDayKey } from '../../server/phone/src/arcade/rules.js';
+import { kstDayKey } from '../../server/phone/src/arcade/rules.js';
 
 const KEY = 'bw.arcade.pang.best';
 
@@ -88,15 +88,16 @@ export function createArcadeRankProvider({ base, device, gameId = ARCADE_GAME_ID
     },
     async gate() {
       const b = root();
-      if (!b) return { ranked: true, usedUp: false, left: 5, cap: 5, local: true };
+      if (!b) return { ranked: true, usedUp: false, unlimited: true, local: true };
       try {
         const r = await cfetch(`${b}/arcade/status?gameId=${gid}&storeId=${ARCADE_STORE_ID}&deviceId=${encodeURIComponent(dev())}&_=${Date.now()}`);
-        if (!r.ok) return { ranked: true, usedUp: false, left: 5, cap: 5, local: true };
+        if (!r.ok) return { ranked: true, usedUp: false, unlimited: true, local: true };
         const j = await r.json();
-        if (!j?.ok) return { ranked: true, usedUp: false, left: 5, cap: 5, local: true };
+        if (!j?.ok) return { ranked: true, usedUp: false, unlimited: true, local: true };
         const guest = j.guest === true;
-        return { ranked: !j.usedUp && !j.beforeOpen, usedUp: !!j.usedUp, message: j.message || LIMIT_MSG, guest, left: j.left, cap: attemptCap(guest) };
-      } catch { return { ranked: true, usedUp: false, left: 5, cap: 5, local: true }; }
+        // 오락실 게임은 일일 횟수 제한이 없다. usedUp/left 로 연습 처리를 하지 않는다.
+        return { ranked: !j.beforeOpen, usedUp: false, unlimited: true, guest, message: j.message || '' };
+      } catch { return { ranked: true, usedUp: false, unlimited: true, local: true }; }
     },
     async submit({ name, score, ranked, level = 1, durationMs = 0 }) {
       localSave({ name, score, level });

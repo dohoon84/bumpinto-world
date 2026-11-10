@@ -317,6 +317,33 @@ assert(authSrc.includes('mergeGuestBest'), 'login/link migrates arcade guest rec
   assert(second.me?.score === 9109, 'POST-like snapshot me is the new best');
 }
 
+// 오락실 게임은 일일 횟수 제한이 없다. 매 기록 중 최고만 남긴다. ?shot/practice 는 기록하지 않는다.
+{
+  const udb = memoryD1();
+  for (let i = 0; i < 6; i++) {
+    const r = await recordRun(udb, {
+      playerKey: 'a:1', accountId: '1', guest: false, gameId: 'bumpingpang', storeId: SID,
+      name: '도훈', score: 1000 + i, level: 2, durationMs: 30000, now, practice: false,
+    });
+    assert(r.record, `signed-in run ${i + 1} records`);
+  }
+  assert(udb._best.find((r) => r.player_key === 'a:1')?.score === 1005, 'best of unlimited signed-in runs');
+  const g1 = await recordRun(udb, {
+    playerKey: 'g:dev', accountId: null, guest: true, gameId: 'bumpingpang', storeId: SID,
+    name: '손님', score: 2000, level: 2, durationMs: 30000, now, practice: false,
+  });
+  const g2 = await recordRun(udb, {
+    playerKey: 'g:dev', accountId: null, guest: true, gameId: 'bumpingpang', storeId: SID,
+    name: '손님', score: 2500, level: 2, durationMs: 30000, now, practice: false,
+  });
+  assert(g1.record && g2.record && g2.best === 2500, 'guest runs also unlimited; best kept');
+  const shot = await recordRun(udb, {
+    playerKey: 'a:1', accountId: '1', guest: false, gameId: 'bumpingpang', storeId: SID,
+    name: '도훈', score: 99999, level: 2, durationMs: 30000, now, practice: true,
+  });
+  assert(!shot.record && udb._best.find((r) => r.player_key === 'a:1')?.score === 1005, 'practice not recorded');
+}
+
 assert(plausibleArcadeRun({ score: 9109, level: 1, durationMs: 30000 }).ok, '9109 at lv1/30s is a valid run');
 assert(plausibleArcadeRun({ score: 80000, level: 10, durationMs: 3000 }).ok === false, 'still reject too-fast high score');
 
@@ -325,6 +352,8 @@ assert(plausibleArcadeRun({ score: 80000, level: 10, durationMs: 3000 }).ok === 
   assert(rankSrc.includes('kstDayKey'), 'local day key is KST not UTC');
   assert(rankSrc.includes('rememberedBest'), 'provider remembers the last best');
   assert(rankSrc.includes('lastSubmit'), 'provider keeps the POST snapshot');
+  assert(rankSrc.includes('ranked: !j.beforeOpen'), 'gate does not treat usedUp as practice');
+  assert(!rankSrc.includes('ranked: !j.usedUp'), 'gate no longer blocks ranking after N attempts');
   const pangSrc = readFileSync(new URL('../src/arcade/bumpingpang/game.js', import.meta.url), 'utf8');
   assert(pangSrc.includes('resultPosted'), 'pang submits the run once');
   assert(pangSrc.includes('onOpenBoard?.()'), '순위판 opens the board without posting again');

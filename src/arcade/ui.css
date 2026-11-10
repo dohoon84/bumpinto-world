@@ -1534,10 +1534,13 @@
 .arc-merge:has(.arc-merge-result:not([hidden])) .arc-merge-hint,
 .arc-merge:has(.arc-merge-result:not([hidden])) .arc-merge-floatbum,
 .arc-merge:has(.arc-merge-result:not([hidden])) .arc-merge-bubble,
+.arc-merge:has(.arc-merge-result:not([hidden])) .arc-merge-shell,
 .arc-merge:has(.arc-merge-intro:not([hidden])) .arc-merge-top,
 .arc-merge:has(.arc-merge-intro:not([hidden])) .arc-merge-hint,
 .arc-merge:has(.arc-merge-intro:not([hidden])) .arc-merge-floatbum,
-.arc-merge:has(.arc-merge-intro:not([hidden])) .arc-merge-bubble {
+.arc-merge:has(.arc-merge-intro:not([hidden])) .arc-merge-bubble,
+.arc-merge:has(.arc-merge-intro:not([hidden])) .arc-merge-shell,
+.arc-merge:has(.arc-merge-rank:not([hidden])) .arc-merge-shell {
   visibility: hidden; pointer-events: none;
 }
 .arc-merge-result[hidden], .arc-merge-rank[hidden], .arc-merge-pause[hidden] { display: none !important; }
@@ -1574,26 +1577,36 @@
 .arc-merge-btn.arcade { background-image: url(/arcade/merge/ui/buttons/btn-arcade-normal.png); }
 .arc-merge-btn.arcade:active { background-image: url(/arcade/merge/ui/buttons/btn-arcade-pressed.png); }
 .arc-merge-btn.start {
-  background-image: none; background-color: #F0B429; color: #2A1E08;
-  font-size: 20px; border-radius: 999px; width: 200px; height: 52px;
+  background-image: url(/arcade/merge/ui/buttons/btn-start-normal.png);
+  background-color: transparent; color: transparent; font-size: 0;
+  border-radius: 0; width: 200px; height: 70px;
   display: block; margin: 12px auto 14px;
 }
+.arc-merge-btn.start:active { background-image: url(/arcade/merge/ui/buttons/btn-start-pressed.png); }
 .arc-merge-btn.rank {
-  background-image: none; background-color: #3A2460; color: #ffe66d;
-  font-size: 18px; border-radius: 999px; width: 148px; height: 52px;
+  background-image: url(/arcade/merge/ui/buttons/btn-rank-normal.png);
+  background-color: transparent; color: transparent; font-size: 0;
+  border-radius: 0; width: 148px; height: 52px;
 }
+.arc-merge-btn.rank:active { background-image: url(/arcade/merge/ui/buttons/btn-rank-pressed.png); }
 .arc-merge-intro {
   position: absolute; inset: 0; z-index: 12;
   display: grid; place-items: center;
-  background: rgba(58, 36, 48, .48);
+  background: rgba(58, 36, 48, .78);
   padding: 20px 12px;
   box-sizing: border-box;
 }
 .arc-merge-intro[hidden] { display: none !important; }
 .arc-merge-intro .intro-logo { width: min(220px, 72%); height: auto; margin: 4px 0 8px; }
 .arc-merge-intro .intro-store {
-  display: inline-block; margin: 4px 0 8px; padding: 6px 14px;
-  background: #FFF3EA; border-radius: 999px; color: #3A2430; font-size: 15px;
+  display: inline-block; margin: 8px 0; padding: 8px 18px;
+  background: #FFF8F0; border: 3px solid #F5B5AA; border-radius: 999px;
+  color: #3A2430; font-size: 15px; font-weight: 700;
+  position: relative; z-index: 2;
+  box-shadow: 0 3px 0 rgba(184, 50, 43, .12);
+}
+.arc-merge-intro .intro-store::before {
+  content: none; display: none; border: 0; background: none;
 }
 .arc-merge-intro .tag { margin: 0 0 4px; color: #7a5a52; font-size: 14px; }
 .arc-merge-pause .arc-merge-btn.again {
