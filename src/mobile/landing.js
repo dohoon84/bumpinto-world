@@ -5,7 +5,7 @@
 import { uiV2Wanted } from '../ui-v2/flag.js'; // [ui-v2-default]
 import { enterFullscreen, shouldShowHomeScreenHint, dismissHomeScreenHint } from './fullscreen.js';
 import { OPEN_REGIONS, getCurrentRegion, getRegion, navigateToRegion } from '../regions/index.js';
-import { OPEN_MAINLINE_STATIONS, OPEN_BRANCH_STATIONS, corridorName } from '../corridor/globeCorridor.js';
+import { OPEN_MAINLINE_STATIONS, OPEN_BRANCH_STATIONS, corridorName, namsanGlobeEnabled, NAMSAN_LANDMARK } from '../corridor/globeCorridor.js';
 import { readSavedPassport, isPassportActive } from '../look.js';
 import { isStarbaseLive } from '../worldGate.js';
 import { isEn, toggleLang } from '../i18n.js';
@@ -25,7 +25,7 @@ function regionList() {
       id: r.id,
       title: corridor ? corridorName(isEn()) : t('스타베이스', 'Starbase'),
       sub: corridor ? t(`한국 · ${OPEN_MAINLINE_STATIONS.length + OPEN_BRANCH_STATIONS.length}개 역`, `Korea · ${OPEN_MAINLINE_STATIONS.length + OPEN_BRANCH_STATIONS.length} stations`) : t('미국 · 텍사스', 'USA · Texas'),
-      stations: corridor ? [...OPEN_MAINLINE_STATIONS, ...OPEN_BRANCH_STATIONS] : null,
+      stations: corridor ? [...OPEN_MAINLINE_STATIONS, ...OPEN_BRANCH_STATIONS, ...(namsanGlobeEnabled() ? [NAMSAN_LANDMARK] : [])] : null,
       locked,
     };
   });
@@ -159,9 +159,9 @@ export function mountLanding() {
           ${reg.stations ? `
             <div class="m-sec-row"><span class="m-sec">${t('역 고르기 · 옆으로 밀어서 더 보기', 'Pick a station · swipe for more')}</span></div>
             <div class="m-line"></div>
-            <div class="m-stn-scroll">${reg.stations.map((s) => `<button type="button" class="m-stn${s.id === stn.id ? ' on' : ''}" data-stn="${s.id}">${esc(isEn() ? s.en : s.ko)}</button>`).join('')}</div>
-            <div class="m-picked"><div><b>${esc(isEn() ? `${stn.en} Stn.` : `${stn.ko}역`)}</b><span>${esc((stn.lines || []).join(' · '))}</span></div>
-              <button type="button" class="m-btn m-primary" data-act="go">${esc(isEn() ? `Enter ${stn.en}` : `${stn.ko}역으로 입장`)}</button></div>`
+            <div class="m-stn-scroll">${reg.stations.map((s) => `<button type="button" class="m-stn${s.namsan || s.landmark ? ' m-stn-lm' : ''}${s.id === stn.id ? ' on' : ''}" data-stn="${s.id}">${esc(isEn() ? s.en : s.ko)}</button>`).join('')}</div>
+            <div class="m-picked"><div><b>${esc(stn.namsan || stn.landmark ? (isEn() ? stn.en : stn.ko) : (isEn() ? `${stn.en} Stn.` : `${stn.ko}역`))}</b><span>${esc((stn.lines || []).join(' · ') || (stn.namsan || stn.landmark ? t('타워 앞 광장에서 시작', 'Start at the tower plaza') : ''))}</span></div>
+              <button type="button" class="m-btn m-primary" data-act="go">${esc(stn.namsan || stn.landmark ? t(`${stn.ko}에 입장`, `Enter ${stn.en}`) : (isEn() ? `Enter ${stn.en}` : `${stn.ko}역으로 입장`))}</button></div>`
             : `<div class="m-region-card" style="background-image:url('${import.meta.env.BASE_URL}promo/starbase-launch.jpg')"></div>
             <div class="m-picked"><div><b>${t('스타베이스 (TX)', 'Starbase, TX')}</b><span>${t('로드스터 쇼 · 발사 쇼', 'Roadster show · Launch show')}</span></div>
               <button type="button" class="m-btn m-primary" data-act="go">${t('스타베이스로 입장', 'Enter Starbase')}</button></div>`}

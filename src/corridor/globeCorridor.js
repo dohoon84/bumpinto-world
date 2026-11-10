@@ -15,6 +15,11 @@ export function corridorGlobeEnabled(params = new URLSearchParams(location.searc
 export function migeumGlobeEnabled(search = typeof location !== 'undefined' ? location.search : '') {
   return new URLSearchParams(search).get('migeum') !== '0';
 }
+// [namsan] ?ntower=0 이면 지구본·ui-v2 역 선택에서 남산서울타워 항목을 숨긴다 (createNamsan 의 namsanEnabled 와 같은 규칙)
+export function namsanGlobeEnabled(search = typeof location !== 'undefined' ? location.search : '') {
+  return new URLSearchParams(search || '').get('ntower') !== '0';
+}
+export const NAMSAN_LANDMARK = { id: 'ntower', ko: '남산서울타워', en: 'N Seoul Tower', landmark: true, namsan: true };
 export const BRANCH_STATIONS = [...(pangyoEnabled() ? PANGYO_GLOBE_STATIONS : []), ...(migeumGlobeEnabled() ? MIGEUM_GLOBE_STATIONS : [])];
 const ALL_STATIONS = CORRIDOR_STATIONS.concat(BRANCH_STATIONS);
 export const CORRIDOR_STATION_IDS = new Set(ALL_STATIONS.map((s) => s.id));
@@ -110,6 +115,9 @@ export function mountGlobeCorridor({ root, camera, anchorSpot, globe, isEn, onEn
 
   function lineText(s) {
     if (s.live) return isEn() ? '🚇 Jeongja Stn. · Suin-Bundang · Shinbundang — the original Jeongja-dong (same entry as before)' : '🚇 정자역 · 수인분당선 · 신분당선 — 기존 정자동 그대로 입장';
+    if (s.id === 'ntower' || s.namsan) {
+      return isEn() ? '🏙️ N Seoul Tower — start at the tower plaza (Namsan)' : '🏙️ 남산서울타워 — 타워 앞 광장에서 시작 (남산)';
+    }
     if (s.landmark) {
       const site = lotteSiteLabel(isEn());
       if (site) return isEn() ? `🚧 ${site.main} — grand opening countdown at the site (Jamsil)` : `🚧 ${site.main} — 현장에서 오픈 카운트다운 (잠실)`;
@@ -151,7 +159,7 @@ export function mountGlobeCorridor({ root, camera, anchorSpot, globe, isEn, onEn
         <button type="button" class="gcm-close" aria-label="${en ? 'Close' : '닫기'}">✕</button></div>
       <div class="gcm-body" style="height:${L.height}px;width:${L.width}px"><svg width="${L.width}" height="${L.height}">${seg}${leaders}${dots}</svg>${labels}</div>
       <div class="gcm-ft">${en ? 'Real station positions (OpenStreetMap). Scroll to zoom the globe.' : '실제 역 위치(OpenStreetMap) 기준 · 휠로 지구본 확대/축소'}</div>
-      <button type="button" class="gcm-stn" data-corridor-at="ntower" data-hot="ntower" style="position:relative;margin-top:8px;left:0;top:0">${en ? '🏙️ N Seoul Tower · start at the plaza' : '🏙️ 남산서울타워 · 광장에서 시작'}</button>`;
+      ${namsanGlobeEnabled() ? `<button type="button" class="gcm-stn" data-corridor-at="ntower" data-hot="ntower" style="position:relative;margin-top:8px;left:0;top:0">${en ? '🏙️ N Seoul Tower · start at the plaza' : '🏙️ 남산서울타워 · 광장에서 시작'}</button>` : ''}`;
     hot = null;
   }
   function setHot(id) {
@@ -159,7 +167,7 @@ export function mountGlobeCorridor({ root, camera, anchorSpot, globe, isEn, onEn
     hot = id;
     panel.querySelectorAll('[data-hot]').forEach((el) => el.classList.toggle('is-hot', el.dataset.hot === id));
     panel.querySelectorAll('[data-dot]').forEach((el) => el.classList.toggle('is-hot', el.dataset.dot === id));
-    const s = [...L.items, ...L.branches, L.landmark].find((x) => x.id === id);
+    const s = [...L.items, ...L.branches, L.landmark, ...(namsanGlobeEnabled() ? [NAMSAN_LANDMARK] : [])].find((x) => x.id === id);
     const ft = panel.querySelector('.gcm-ft');
     if (ft) ft.textContent = s ? lineText(s) : (isEn() ? 'Real station positions (OpenStreetMap). Scroll to zoom the globe.' : '실제 역 위치(OpenStreetMap) 기준 · 휠로 지구본 확대/축소');
   }
