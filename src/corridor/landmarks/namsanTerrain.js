@@ -67,9 +67,31 @@ function makeWayMask(ways, cell = 5) {
 
 export function makeNamsanHeightAt(dem, _osm = null) {
   const datum = dem?.datum ?? NT.datum;
+  function extrapolateEle(x, z) {
+    // DEM 사각형 밖에서 가장자리 고도를 분지로 부드럽게 내린다.
+    // 안쪽 한 점의 기울기를 쓰면 능선에서 부호가 뒤집어져 5 m 마다
+    // 수 미터씩 뛰어 오르내렸다. 가장자리 샘플(E0)과 거리만 쓴다.
+    const x1 = dem.x0 + (dem.nx - 1) * dem.dx;
+    const z1 = dem.z0 + (dem.nz - 1) * dem.dz;
+    const cx = Math.min(x1, Math.max(dem.x0, x));
+    const cz = Math.min(z1, Math.max(dem.z0, z));
+    const E0 = sampleDem(dem, cx, cz);
+    if (E0 == null) return namsanBasinEle(Math.hypot(x - NT.tx, z - NT.tz));
+    const distOut = Math.hypot(x - cx, z - cz);
+    if (distOut < 1e-6) return E0;
+    const basin = 40;
+    const drop = Math.max(0, E0 - basin) / 620;
+    let ext = E0 - drop * distOut;
+    if (ext < basin) ext = basin;
+    if (ext > 280) ext = 280;
+    const t = Math.min(1, distOut / 780);
+    const w = t * t * (3 - 2 * t);
+    return ext * (1 - w) + basin * w;
+  }
   function rawEle(x, z) {
     const e = sampleDem(dem, x, z);
     if (e != null) return e;
+    if (dem) return extrapolateEle(x, z);
     return namsanBasinEle(Math.hypot(x - NT.tx, z - NT.tz));
   }
   return function heightAt(x, z) {
@@ -93,19 +115,6 @@ export function makeNamsanHeightAt(dem, _osm = null) {
     if (du < 28) {
       const t = 1 - du / 28;
       ele = ele * (1 - t) + (NT.eleBase - 6) * t;
-    }
-    // DEM 사각형 가장자리를 서울 분지 높이(~40 m ASL)로 페더해 산이 떠 보이지 않게 한다.
-    if (dem) {
-      const x1 = dem.x0 + (dem.nx - 1) * dem.dx;
-      const z1 = dem.z0 + (dem.nz - 1) * dem.dz;
-      const edgeDist = Math.min(x - dem.x0, x1 - x, z - dem.z0, z1 - z);
-      const FEATHER = 420;
-      if (edgeDist < FEATHER) {
-        const t = Math.max(0, edgeDist / FEATHER);
-        const w = t * t * (3 - 2 * t);
-        const cityEle = 40;
-        if (ele > cityEle) ele = cityEle * (1 - w) + ele * w;
-      }
     }
     return ele - datum;
   };
@@ -197,7 +206,7 @@ export function createNamsanTerrain({ parent, dem, osm }) {
         if (pt[1] > wz1) wz1 = pt[1];
       }
     }
-    const MARGIN = 90;
+    const MARGIN = 420;
     const gx0 = Math.min(bounds.x0, (Number.isFinite(wx0) ? wx0 : bounds.x0) - MARGIN);
     const gz0 = Math.min(bounds.z0, (Number.isFinite(wz0) ? wz0 : bounds.z0) - MARGIN);
     const gx1 = Math.max(bounds.x1, (Number.isFinite(wx1) ? wx1 : bounds.x1) + MARGIN);

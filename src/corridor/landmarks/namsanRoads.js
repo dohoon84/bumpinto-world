@@ -5,7 +5,8 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import { ribbonGeo, fixNormalsUp } from '../../world.js';
 import { paint } from '../tileMesh.js';
 import { createBus } from '../../transit/busModel.js';
-import { NT } from './namsanCoords.js';
+import { NT, NAMSAN_CONNECT_ENDS } from './namsanCoords.js';
+export { NAMSAN_CONNECT_ENDS };
 import { buildStreetlightGeometries, SCALE, POOL_SCALE, POOL_R, POOL_RZ, POOL_GAIN, ARM, LENS_DAY, LENS_NIGHT } from '../../world/streetlights.js';
 import { lightPoolMaterial } from '../../world/nightLights.js';
 
@@ -123,7 +124,7 @@ function sideSign(pts, heightAt, pref) {
   return pref === 'downhill' ? -uphill : uphill;
 }
 
-function stitchNamed(ways, re) {
+function stitchNamed(ways, re, joinDist = 6) {
   const list = ways.filter((w) => re.test(w.name || '') && w.pts?.length >= 2).map((w) => w.pts.map((p) => [p[0], p[1]]));
   if (!list.length) return null;
   const used = new Set();
@@ -148,7 +149,7 @@ function stitchNamed(ways, re) {
         [Math.hypot(head[0] - a[0], head[1] - a[1]), () => { chain = pts.slice().reverse().slice(0, -1).concat(chain); }],
       ];
       pairs.sort((x, y) => x[0] - y[0]);
-      if (pairs[0][0] < 6) {
+      if (pairs[0][0] < joinDist) {
         pairs[0][1]();
         used.add(i);
         grew = true;
@@ -299,6 +300,56 @@ function adPanelTex(route) {
 }
 
 
+
+function roadSupportGeo(pts, width, heightAt, dy) {
+  const hw = width * 0.5;
+  const n = pts.length;
+  if (n < 2) return null;
+  const pos = [];
+  const frames = [];
+  for (let i = 0; i < n; i++) {
+    const prev = pts[Math.max(0, i - 1)];
+    const next = pts[Math.min(n - 1, i + 1)];
+    let hx = next[0] - prev[0], hz = next[1] - prev[1];
+    const L = Math.hypot(hx, hz) || 1;
+    hx /= L; hz /= L;
+    const x = pts[i][0], z = pts[i][1];
+    const y = heightAt(x, z) + dy;
+    const leftY = heightAt(x - hz * 4, z + hx * 4);
+    const rightY = heightAt(x + hz * 4, z - hx * 4);
+    const downSign = leftY >= rightY ? -1 : 1;
+    frames.push({ x, z, y, hx, hz, downSign });
+  }
+  for (const f of frames) {
+    const lx = f.x - f.hz * hw, lz = f.z + f.hx * hw;
+    const rx = f.x + f.hz * hw, rz = f.z - f.hx * hw;
+    const ybL = Math.min(f.y - 0.34, heightAt(lx, lz) - 0.12);
+    const ybR = Math.min(f.y - 0.34, heightAt(rx, rz) - 0.12);
+    const ax = f.x - f.hz * (hw + 3.8) * f.downSign;
+    const az = f.z + f.hx * (hw + 3.8) * f.downSign;
+    const ay = heightAt(ax, az);
+    const dx = f.x - f.hz * hw * f.downSign;
+    const dz = f.z + f.hx * hw * f.downSign;
+    pos.push(lx, f.y, lz, rx, f.y, rz, lx, ybL, lz, rx, ybR, rz, ax, ay, az, dx, f.y, dz);
+  }
+  const idx = [];
+  const S = 6;
+  for (let i = 0; i < n - 1; i++) {
+    const k = i * S, m = k + S;
+    idx.push(k + 2, m + 2, k + 3, k + 3, m + 2, m + 3);
+    idx.push(k + 0, m + 0, k + 2, k + 2, m + 0, m + 2);
+    idx.push(k + 1, k + 3, m + 1, k + 3, m + 3, m + 1);
+    idx.push(k + 5, m + 5, k + 4, k + 4, m + 5, m + 4);
+    if (frames[i].downSign > 0) idx.push(k + 2, k + 4, m + 2, m + 2, k + 4, m + 4);
+    else idx.push(k + 3, m + 3, k + 4, k + 4, m + 3, m + 4);
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setIndex(idx);
+  g.computeVertexNormals();
+  return g;
+}
+
 export function createNamsanRoads({ parent, osm, heightAt, overlay = null } = {}) {
   const group = new THREE.Group();
   group.name = 'namsan-roads';
@@ -317,7 +368,7 @@ export function createNamsanRoads({ parent, osm, heightAt, overlay = null } = {}
   };
   if (!ways.length) return empty;
 
-  const carGeos = [], pathGeos = [], stepGeos = [], treadGeos = [];
+  const carGeos = [], pathGeos = [], stepGeos = [], treadGeos = [], bankGeos = [];
   const curbGeos = [], sidewalkGeos = [], railGeos = [];
   const yellowGeos = [], whiteGeos = [];
   const walkHits = [];
@@ -335,7 +386,7 @@ export function createNamsanRoads({ parent, osm, heightAt, overlay = null } = {}
     let width = w.w || (isCar ? 7 : isStep ? 2.6 : 2.3);
     if (isElev) width = 2.5;
     else if (isDrive) width = Math.min(width, w.service === 'driveway' ? 3.2 : 4.4);
-    else if (namedLoop) width = Math.max(width, 7.2);
+    else if (namedLoop) width = Math.max(width, 8.6);
     const dy = isCar ? 0.10 : isStep ? 0.08 : isElev ? 0.12 : 0.07;
     const pts = resample(w.pts, isStep || isElev ? 1.6 : 2.4);
     if (pts.length < 2) continue;
@@ -367,8 +418,11 @@ export function createNamsanRoads({ parent, osm, heightAt, overlay = null } = {}
 
     const epts = elevated(pts, heightAt, dy);
     const geo = fixNormalsUp(ribbonGeo(epts, width, 0, false));
-    if (isCar) carGeos.push(paint(geo, isDrive ? '#7a7f86' : '#6e747c'));
-    else if (isStep) stepGeos.push(paint(geo, '#9a9080'));
+    if (isCar) {
+      carGeos.push(paint(geo, isDrive ? '#7a7f86' : '#6e747c'));
+      const support = roadSupportGeo(pts, width, heightAt, dy);
+      if (support) bankGeos.push(paint(support, isDrive ? '#6a6660' : '#5c584e'));
+    } else if (isStep) stepGeos.push(paint(geo, '#9a9080'));
     else pathGeos.push(paint(geo, '#7a6b52'));
     walkHits.push({ segs: segsOf(pts), pad: width * 0.5 + 0.35, dy });
 
@@ -423,7 +477,7 @@ export function createNamsanRoads({ parent, osm, heightAt, overlay = null } = {}
         for (let i = 1; i < pts.length; i++) {
           const L = Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]);
           accL += L;
-          if (accL < 22) continue;
+          if (accL < 16) continue;
           accL = 0;
           const hx = (pts[i][0] - pts[i - 1][0]) / (L || 1);
           const hz = (pts[i][1] - pts[i - 1][1]) / (L || 1);
@@ -502,18 +556,19 @@ export function createNamsanRoads({ parent, osm, heightAt, overlay = null } = {}
     }
   }
 
-  const addMerged = (geos, name) => {
+  const addMerged = (geos, name, extra = {}) => {
     if (!geos.length) return;
     const g = mergeGeometries(geos, true);
     if (!g) return;
-    const m = new THREE.Mesh(g, new THREE.MeshLambertMaterial({ vertexColors: true }));
+    const m = new THREE.Mesh(g, new THREE.MeshLambertMaterial({ vertexColors: true, ...extra }));
     m.receiveShadow = true;
     m.name = name;
     group.add(m);
   };
   addMerged(sidewalkGeos, 'namsan-sidewalks');
   addMerged(curbGeos, 'namsan-curbs');
-  addMerged(carGeos, 'namsan-car-roads');
+  addMerged(carGeos, 'namsan-car-roads', { side: THREE.DoubleSide });
+  addMerged(bankGeos, 'namsan-road-banks');
   addMerged(pathGeos, 'namsan-paths');
   addMerged(stepGeos, 'namsan-steps');
   addMerged(treadGeos, 'namsan-treads');
@@ -694,7 +749,7 @@ export function createNamsanRoads({ parent, osm, heightAt, overlay = null } = {}
   // optional shuttle on the stitched 순환로 / 공원길
   let shuttle = null, shuttlePath = null, shuttleDist = 0, shuttleLen = 0;
   try {
-    const raw = stitchNamed(ways, /남산공원길|남산남측순환로/);
+    const raw = stitchNamed(ways, /남산공원길|남산남측순환로|남산북측순환로/, 50);
     if (raw && pathLen(raw) > 180) {
       shuttlePath = resample(raw, 3.2);
       shuttleLen = pathLen(shuttlePath);
@@ -755,7 +810,7 @@ export function createNamsanRoads({ parent, osm, heightAt, overlay = null } = {}
       const bz = placedStops[0]?.z ?? busStops[0].z;
       let viaBus = dijkstra(ways, bx, bz, dest[0], dest[1]);
       if (!viaBus) {
-        const raw = stitchNamed(ways, /남산공원길|남산남측순환로/);
+        const raw = stitchNamed(ways, /남산공원길|남산남측순환로|남산북측순환로/, 50);
         if (raw && raw.length >= 2) {
           let i0 = 0, i1 = 0, d0 = Infinity, d1 = Infinity;
           for (let i = 0; i < raw.length; i++) {

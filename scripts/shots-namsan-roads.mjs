@@ -397,6 +397,35 @@ if (info.drivePt) {
   await day.close();
 }
 
+// 약수터길·공중부양 재촬영 (user9)
+{
+  const yaksuStart = { x: -9685.2, z: -20372.44 };
+  const y0 = await hAt(yaksuStart.x, yaksuStart.z);
+  await go(night, {
+    x: yaksuStart.x, z: yaksuStart.z, y: y0 + 0.15,
+    yaw: look(yaksuStart.x, yaksuStart.z, info.tx, info.tz),
+    dist: 9, pitch: 0.12, fov: 52, hidePlayer: false,
+  });
+  await shot(night, 'yaksu-start');
+  const apt = { x: -9971, z: -20942 };
+  const ya = await hAt(apt.x, apt.z);
+  await go(night, {
+    x: apt.x, z: apt.z, y: ya + 0.12,
+    yaw: look(apt.x, apt.z, info.tx, info.tz),
+    dist: 7, pitch: 0.09, fov: 55, hidePlayer: false,
+  });
+  await shot(night, 'user9-floating-road-fixed');
+  const mid = { x: -10153.58, z: -20030.69 };
+  const ym = await hAt(mid.x, mid.z);
+  await go(night, {
+    x: mid.x, z: mid.z, y: ym + 0.15,
+    yaw: look(mid.x, mid.z, info.tx, info.tz),
+    dist: 7, pitch: 0.08, fov: 54, hidePlayer: false,
+  });
+  await shot(night, 'yaksu-mid');
+  console.log('wrote yaksu / user9 floating-road-fixed shots');
+}
+
 // downward black-pixel survey every 20 m along access routes
 {
   const samples = await night.evaluate(() => {

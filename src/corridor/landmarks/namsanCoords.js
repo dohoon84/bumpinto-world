@@ -54,3 +54,12 @@ export function inNamsanPark(x, z, parks, heightAt) {
   if (!Number.isFinite(y)) return false;
   return d < 850 && y > 70;
 }
+
+/** 약수터길·순환로가 시가지와 맞닿는 끝. 한강·잠수교 코스가 이어질 자리. */
+export const NAMSAN_CONNECT_ENDS = {
+  yaksuSouth: { name: '남산남측순환로 약수·국립극장', x: -9685.2, z: -20372.44 },
+  yaksuNorth: { name: '남산북측순환로 약수·국립극장', x: -9729.16, z: -20369.79 },
+  towerStop: { name: '남산서울타워 정류장(남측순환로)', x: -10387.15, z: -20400.78 },
+  hannam: { name: '남산북측순환로 최북단 → 한남·잠수교', x: -9681.97, z: -20922.61 },
+  jangchung: { name: '남산북측순환로 최동단 → 장충·한남', x: -9555.96, z: -20888.06 },
+};

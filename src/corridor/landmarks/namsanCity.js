@@ -8,12 +8,28 @@ import { ribbonGeo, fixNormalsUp } from '../../world.js';
 import { NT, namsanBasinY, inNamsanPark } from './namsanCoords.js';
 
 function groundY(x, z, heightAt) {
-  const d = Math.hypot(x - NT.tx, z - NT.tz);
-  const dem = heightAt ? heightAt(x, z) : null;
-  const est = namsanBasinY(d);
-  // 페더된 DEM 이 낮아도(산자락) 그대로 쓴다. 콘 폴백으로 건물을 띄우지 않는다.
-  if (Number.isFinite(dem) && d < 1100) return dem;
-  return est;
+  if (heightAt) {
+    const y = heightAt(x, z);
+    if (Number.isFinite(y)) return y;
+  }
+  return namsanBasinY(Math.hypot(x - NT.tx, z - NT.tz));
+}
+
+function footprintRange(o, heightAt) {
+  let mn = Infinity, mx = -Infinity;
+  const add = (x, z) => {
+    const y = groundY(x, z, heightAt);
+    if (y < mn) mn = y;
+    if (y > mx) mx = y;
+  };
+  for (const p of o) add(p[0], p[1]);
+  for (let i = 0; i < o.length; i++) {
+    const a = o[i], b = o[(i + 1) % o.length];
+    add((a[0] + b[0]) * 0.5, (a[1] + b[1]) * 0.5);
+  }
+  const c = centroid(o);
+  add(c.x, c.z);
+  return { mn, mx };
 }
 
 function centroid(pts) {
@@ -107,10 +123,13 @@ export function createNamsanCity({ parent, data, heightAt, parks = [] }) {
     const gy = groundY(c.x, c.z, heightAt);
     const ht = Math.max(4, Number(b.h) || 12);
     const mh0 = Number(b.mh) || 0;
+    const { mn, mx } = footprintRange(o, heightAt);
+    const base = (Number.isFinite(mn) ? mn : gy) - 0.15;
+    const street = Math.max(Number.isFinite(mx) ? mx : gy, gy);
     const item = {
       o,
-      h: gy + ht,
-      mh: gy + mh0,
+      h: street + ht,
+      mh: (mh0 > 0.5 ? gy + mh0 : base),
       k: b.k || 'yes',
     };
     const qi = (c.x >= NT.tx ? 1 : 0) + (c.z >= NT.tz ? 2 : 0);

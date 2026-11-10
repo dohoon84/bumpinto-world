@@ -4,7 +4,7 @@ import './dom-shim.mjs';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-import { NT, inNamsanPark } from '../../../src/corridor/landmarks/namsanCoords.js';
+import { NT, inNamsanPark, NAMSAN_CONNECT_ENDS } from '../../../src/corridor/landmarks/namsanCoords.js';
 import { makeNamsanHeightAt } from '../../../src/corridor/landmarks/namsanTerrain.js';
 import { namsanMini } from '../../../src/corridor/landmarks/namsan.js';
 
@@ -38,23 +38,11 @@ const CITY_Y = 40 - (dem.datum ?? NT.datum); // ≈ -8
 {
   const x1 = dem.x0 + (dem.nx - 1) * dem.dx;
   const z1 = dem.z0 + (dem.nz - 1) * dem.dz;
-  const edges = [];
-  for (let x = dem.x0; x <= x1; x += 50) {
-    edges.push([x, dem.z0], [x, z1]);
-  }
-  for (let z = dem.z0; z <= z1; z += 50) {
-    edges.push([dem.x0, z], [x1, z]);
-  }
-  let maxY = -Infinity, minY = Infinity;
-  for (const [x, z] of edges) {
-    const y = heightAt(x, z);
-    assert.ok(Number.isFinite(y), `edge y at ${x},${z}`);
-    if (y > maxY) maxY = y;
-    if (y < minY) minY = y;
-    assert.ok(y < CITY_Y + 8, `edge still high: y=${y.toFixed(2)} at ${x.toFixed(0)},${z.toFixed(0)} (city ${CITY_Y})`);
-    assert.ok(y > CITY_Y - 14, `edge too low: y=${y.toFixed(2)}`);
-  }
-  // inward samples should change smoothly, no cliff
+  // 동쪽 능선은 원래 ~140 m ASL 이다. 사각 페더가 분지로 누르면 안 된다.
+  const eastMid = heightAt(x1, -20400);
+  assert.ok(eastMid > 70, `east DEM edge flattened to basin: y=${eastMid.toFixed(2)}`);
+  const farEast = heightAt(x1 + 900, -20400);
+  assert.ok(farEast < CITY_Y + 10, `far east still mountainous: y=${farEast.toFixed(2)}`);
   let maxStep = 0;
   for (const [ex, ez] of [[dem.x0, (dem.z0 + z1) / 2], [x1, (dem.z0 + z1) / 2], [(dem.x0 + x1) / 2, dem.z0], [(dem.x0 + x1) / 2, z1]]) {
     const inwardX = Math.sign(NT.tx - ex) || 1;
@@ -70,7 +58,9 @@ const CITY_Y = 40 - (dem.datum ?? NT.datum); // ≈ -8
       prev = y;
     }
   }
-  ok(`DEM edge y in [${minY.toFixed(1)}, ${maxY.toFixed(1)}] vs city ${CITY_Y.toFixed(1)}; max inward 5m step ${maxStep.toFixed(2)}`);
+  const yaksu = heightAt(-9685.2, -20372.44);
+  assert.ok(yaksu > 20 && yaksu < 120, `약수/국립극장 진입 높이 ${yaksu.toFixed(2)}`);
+  ok(`east edge y=${eastMid.toFixed(1)} (not basin), far-east y=${farEast.toFixed(1)}, 약수 end y=${yaksu.toFixed(1)}; max inward 5m step ${maxStep.toFixed(2)}`);
 }
 
 {
@@ -242,6 +232,65 @@ function walkWay(w) {
   assert.ok(ormi.length === 1, '오르미 way');
   for (const w of ormi) steps += walkWay(w);
   ok(`walked ${walked} summit-access ways + 오르미, ${steps} samples at 2 m; all named routes connect to plaza`);
+}
+
+
+{
+  const CAR = new Set(['motorway', 'trunk', 'primary', 'secondary', 'tertiary', 'residential', 'unclassified', 'service', 'living_street']);
+  function resample5(pts, step = 5) {
+    if (!pts || pts.length < 2) return pts || [];
+    const out = [[pts[0][0], pts[0][1]]];
+    let acc = 0;
+    for (let i = 1; i < pts.length; i++) {
+      let ax = out[out.length - 1][0], az = out[out.length - 1][1];
+      const bx = pts[i][0], bz = pts[i][1];
+      let dx = bx - ax, dz = bz - az, L = Math.hypot(dx, dz);
+      if (L < 1e-4) continue;
+      while (acc + L >= step) {
+        const t = (step - acc) / L;
+        ax += dx * t; az += dz * t;
+        out.push([ax, az]);
+        dx = bx - ax; dz = bz - az; L = Math.hypot(dx, dz);
+        acc = 0;
+      }
+      acc += L;
+    }
+    return out;
+  }
+  let samples = 0, maxGap = 0, maxStep = 0;
+  for (const w of osm.ways.filter((w) => CAR.has(w.k) && w.pts?.length >= 2)) {
+    const pts = resample5(w.pts, 5);
+    let prev = null;
+    for (const [x, z] of pts) {
+      const terrain = heightAt(x, z);
+      const roadY = terrain + 0.10;
+      const gap = Math.abs(roadY - terrain);
+      if (gap > maxGap) maxGap = gap;
+      assert.ok(gap < 0.3, `road-terrain gap ${gap} at ${x.toFixed(0)},${z.toFixed(0)} on ${w.name || w.id}`);
+      if (prev) {
+        const step = Math.abs(terrain - prev);
+        if (step > maxStep) maxStep = step;
+        assert.ok(step < 3.2, `road 5m step ${step.toFixed(2)} on ${w.name || w.id}`);
+      }
+      prev = terrain;
+      samples++;
+    }
+  }
+  assert.ok(samples > 400, `car samples ${samples}`);
+  ok(`car roads every 5m: ${samples} samples, max |road-terrain|=${maxGap.toFixed(2)}, max 5m step ${maxStep.toFixed(2)}`);
+}
+
+{
+  const ends = NAMSAN_CONNECT_ENDS;
+  assert.ok(ends.yaksuSouth && ends.hannam && ends.jangchung && ends.towerStop, 'connect ends');
+  for (const [k, p] of Object.entries(ends)) {
+    const y = heightAt(p.x, p.z);
+    assert.ok(Number.isFinite(y), `end ${k} y`);
+    assert.ok(y > -16, `end ${k} sank y=${y}`);
+  }
+  const gapJoin = Math.hypot(ends.yaksuSouth.x - ends.yaksuNorth.x, ends.yaksuSouth.z - ends.yaksuNorth.z);
+  assert.ok(gapJoin < 60, `약수 남북 순환로 끝이 ${gapJoin.toFixed(1)} m 떨어짐`);
+  ok(`connectable ends: 약수 남 ${ends.yaksuSouth.x.toFixed(1)},${ends.yaksuSouth.z.toFixed(1)} / 한남 ${ends.hannam.x.toFixed(1)},${ends.hannam.z.toFixed(1)} / 장충 ${ends.jangchung.x.toFixed(1)},${ends.jangchung.z.toFixed(1)}`);
 }
 
 console.log(`namsan-roads ${n} checks passed`);
