@@ -10,7 +10,6 @@ const browser = await chromium.launch({
   executablePath: process.env.CHROME || '/opt/google/chrome/chrome',
   args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'],
 });
-// 기본 강남 NPC 켜짐(?gangnamnpc 생략). 정자 전용 NPC/택시만 꺼서 샷을 가볍게.
 const Q = 'enter=1&name=Tester&ws=mock&bus=sim&weather=clear&noticePopup=0&bgm=0&subwayVoice=0&subwayRt=0&npcs=0&taxis=0&police=0&trucks=0&clife=0&bike=0&roadbike=0&superbike=0&pangyonpc=0';
 
 async function open({ w = 1280, h = 800, hour = 21, extra = '' } = {}) {
@@ -26,53 +25,39 @@ async function surface(page, x, z, yaw = 0, dist = 22, pitch = 0.38, wait = 9000
     if (J.corridor) await J.corridor.preload(x, z);
     J.teleport(x, z); J.player.rotation.y = yaw; J.cam.yaw = yaw; J.cam.pitch = pitch; J.cam.dist = dist;
   }, { x, z, yaw, dist, pitch });
-  await page.waitForFunction(() => {
-    const n = window.__jj?.gangnamNpc?.stats?.();
-    return n?.ready && (n.cars?.drawn > 0 || n.cars?.total > 0);
-  }, null, { timeout: 30000 }).catch(() => {});
+  await page.waitForFunction(() => window.__jj?.gangnamStreet?.stats?.loaded, null, { timeout: 30000 }).catch(() => {});
   await page.waitForTimeout(wait);
 }
 
-function fleetInfo() {
+function streetInfo() {
   return window.__jj && (() => {
     const J = window.__jj;
-    const nl = J.gangnamNightlife;
-    const npc = J.gangnamNpc;
-    const loop = nl?.root?.getObjectByName?.('gnightCars') || J.scene?.getObjectByName?.('gnightCars');
-    const list = npc?.traffic?.sim?.list || [];
-    const pts = [];
-    for (const t of list) {
-      if (!t || t.parked) continue;
-      pts.push({ x: t.mesh.position.x, z: t.mesh.position.z, kind: t.kind, L: t.K?.L || 4.6 });
-    }
-    let minD = Infinity, close = 0;
-    for (let i = 0; i < pts.length; i++) {
-      for (let j = i + 1; j < pts.length; j++) {
-        const d = Math.hypot(pts[i].x - pts[j].x, pts[i].z - pts[j].z);
-        if (d < minD) minD = d;
-        const need = (pts[i].L + pts[j].L) * 0.45;
-        if (d < need) close++;
-      }
-    }
-    return {
-      nl: nl?.stats || null,
-      npc: npc?.stats?.() || null,
-      loopFleet: !!loop,
-      npcCars: pts.length,
-      minPairM: Number.isFinite(minD) ? +minD.toFixed(2) : null,
-      tightPairs: close,
-    };
+    const st = J.gangnamStreet;
+    const names = [];
+    J.scene?.traverse?.((o) => { if (o.isInstancedMesh && o.name?.startsWith?.('gnStreet')) names.push({ name: o.name, count: o.count }); });
+    return { stats: st?.stats || null, meshes: names, visible: !!st?.root?.visible };
   })();
 }
 
-const night = await open({ hour: 21 });
-await surface(night, -7150, -14590, 0.22, 34, 0.16, 8000);
-await night.screenshot({ path: `${OUT}/gnight5-daero.png` });
-const daero = await night.evaluate(fleetInfo);
+// 22012 중앙차로 강남역(중) — 섬 옆에서 쉘터·BIS·난간·대기인을 본다
+const STOP = { x: -7256.5, z: -14841.0, yaw: -2.40, dist: 7, pitch: 0.20 };
+// 강남역 서쪽 이면 — 자전거·배달 스쿠터·키오스크가 모인 인도
+const ALLEY = { x: -7176, z: -14540, yaw: 0.05, dist: 8, pitch: 0.12 };
 
-await surface(night, -7140, -14530, 0.35, 200, 1.05, 7000);
-await night.screenshot({ path: `${OUT}/gnight5-aerial.png` });
-const aerial = await night.evaluate(fleetInfo);
+const night = await open({ hour: 21 });
+await surface(night, STOP.x, STOP.z, STOP.yaw, STOP.dist, STOP.pitch, 8000);
+await night.screenshot({ path: `${OUT}/gnight6-busstop-night.png` });
+const nightStop = await night.evaluate(streetInfo);
+
+await surface(night, ALLEY.x, ALLEY.z, ALLEY.yaw, ALLEY.dist, ALLEY.pitch, 6000);
+await night.screenshot({ path: `${OUT}/gnight6-alley.png` });
+const alley = await night.evaluate(streetInfo);
 await night.close();
+
+const day = await open({ hour: 14 });
+await surface(day, STOP.x, STOP.z, STOP.yaw, STOP.dist, STOP.pitch, 8000);
+await day.screenshot({ path: `${OUT}/gnight6-busstop-day.png` });
+const dayStop = await day.evaluate(streetInfo);
+await day.close();
 await browser.close();
-console.log(JSON.stringify({ out: OUT, daero, aerial }, null, 2));
+console.log(JSON.stringify({ out: OUT, nightStop, alley, dayStop }, null, 2));
