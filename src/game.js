@@ -290,13 +290,17 @@ const camera = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, 0.3, 50
 
 // 하늘(그라데이션 돔). 색은 한국 표준시와 날씨에 맞춰 다시 칠한다.
 let skyGeo;
+let skyDome;
 {
   const g = new THREE.SphereGeometry(3000, 24, 12), col = [], top = new THREE.Color('#7ec4ef'), bot = new THREE.Color('#e9f6fb');
   const p = g.attributes.position;
   for (let i = 0; i < p.count; i++) { const t = Math.max(0, p.getY(i) / 3000); const c = bot.clone().lerp(top, Math.pow(t, 0.6)); col.push(c.r, c.g, c.b); }
   g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
   skyGeo = g;
-  scene.add(new THREE.Mesh(g, new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.BackSide, fog: false, depthWrite: false })));
+  skyDome = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.BackSide, fog: false, depthWrite: false }));
+  skyDome.name = 'sky-dome';
+  skyDome.frustumCulled = false;
+  scene.add(skyDome);
 }
 const hemi = new THREE.HemisphereLight('#ffffff', '#c9b99a', 1.6);
 scene.add(hemi);
@@ -2767,6 +2771,8 @@ function frame() {
   roadster?.update(dt); // [roadster] 시네마틱 카메라가 켜져 있으면 camera/sun.target 덮어씀
   launch?.update(dt); // [launch] 5분 주기 발사·핫스테이징·젓가락 캐치 쇼
   sun.position.copy(sun.target.position).addScaledVector(atmosphere.sunDir, 500);
+  // 원점에 고정된 r=3000 하늘은 남산(약 23 km) 밖에서 보이지 않는다. 카메라를 따라가게 한다.
+  if (skyDome) skyDome.position.copy(camera.position);
   renderer.render(scene, camera);
   perfHud.tick();
   bgm?.setDuck(!!ride?.active || !!adminBike?.riding || !!giftMount() || !!subway?.voiceActive); // [bgm] 버스·바이크 소리 · [subway-voice] 지하철 안내 방송 중 살짝 줄임 (바뀔 때만 동작)

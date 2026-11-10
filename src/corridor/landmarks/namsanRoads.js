@@ -323,25 +323,59 @@ export function createNamsanRoads({ parent, osm, heightAt, overlay = null } = {}
   const walkHits = [];
   const lampPts = [];
 
+  const trailLampPts = [];
+
   for (const w of ways) {
     const isCar = CAR.has(w.k);
     const isStep = STEPS.has(w.k);
-    const width = w.w || (isCar ? 7 : isStep ? 2.6 : 2.3);
-    const dy = isCar ? 0.10 : isStep ? 0.08 : 0.07;
-    const pts = resample(w.pts, isStep ? 1.6 : 2.4);
+    const isElev = w.k === 'elevator';
+    const namedLoop = /남산공원길|순환로/.test(w.name || '');
+    const isDrive = w.service === 'driveway'
+      || (isCar && !namedLoop && (w.motor_vehicle === 'private' || !w.name));
+    let width = w.w || (isCar ? 7 : isStep ? 2.6 : 2.3);
+    if (isElev) width = 2.5;
+    else if (isDrive) width = Math.min(width, w.service === 'driveway' ? 3.2 : 4.4);
+    else if (namedLoop) width = Math.max(width, 7.2);
+    const dy = isCar ? 0.10 : isStep ? 0.08 : isElev ? 0.12 : 0.07;
+    const pts = resample(w.pts, isStep || isElev ? 1.6 : 2.4);
     if (pts.length < 2) continue;
+
+    if (isElev) {
+      const a = pts[0], b = pts[pts.length - 1];
+      const y0 = heightAt(a[0], a[1]), y1 = heightAt(b[0], b[1]);
+      const dx = b[0] - a[0], dz = b[1] - a[1];
+      const Lh = Math.hypot(dx, dz) || 1;
+      const L = Math.hypot(Lh, y1 - y0) || 1;
+      const glass = new THREE.MeshLambertMaterial({
+        color: '#9ec4d6', transparent: true, opacity: 0.38, depthWrite: false,
+      });
+      const frame = new THREE.MeshLambertMaterial({ color: '#5c6670' });
+      const shaft = new THREE.Mesh(new THREE.BoxGeometry(width, 2.5, L), glass);
+      shaft.position.set((a[0] + b[0]) / 2, (y0 + y1) / 2 + 1.35, (a[1] + b[1]) / 2);
+      shaft.rotation.order = 'YXZ';
+      shaft.rotation.y = Math.atan2(dx, dz);
+      shaft.rotation.x = -Math.atan2(y1 - y0, Lh);
+      group.add(shaft);
+      const roof = new THREE.Mesh(new THREE.BoxGeometry(width + 0.25, 0.12, L), frame);
+      roof.position.copy(shaft.position);
+      roof.position.y += 1.3;
+      roof.rotation.copy(shaft.rotation);
+      group.add(roof);
+      walkHits.push({ segs: segsOf(pts), pad: width * 0.5 + 0.4, dy });
+      continue;
+    }
+
     const epts = elevated(pts, heightAt, dy);
     const geo = fixNormalsUp(ribbonGeo(epts, width, 0, false));
-    if (isCar) carGeos.push(paint(geo, '#6e747c'));
+    if (isCar) carGeos.push(paint(geo, isDrive ? '#7a7f86' : '#6e747c'));
     else if (isStep) stepGeos.push(paint(geo, '#9a9080'));
     else pathGeos.push(paint(geo, '#7a6b52'));
     walkHits.push({ segs: segsOf(pts), pad: width * 0.5 + 0.35, dy });
 
     if (isCar) {
-      const namedLoop = /남산공원길|순환로/.test(w.name || '');
       const walkPad = width * 0.5 + (namedLoop ? 2.2 : 0.45);
       walkHits[walkHits.length - 1].pad = walkPad;
-      if (width >= 6) {
+      if (namedLoop && width >= 6) {
         yellowGeos.push(fixNormalsUp(ribbonGeo(elevated(offsetLine(pts, 0.14), heightAt, dy + 0.045), 0.11, 0, false)));
         yellowGeos.push(fixNormalsUp(ribbonGeo(elevated(offsetLine(pts, -0.14), heightAt, dy + 0.045), 0.11, 0, false)));
         whiteGeos.push(fixNormalsUp(ribbonGeo(elevated(offsetLine(pts, width * 0.5 - 0.18), heightAt, dy + 0.04), 0.12, 0, false)));
@@ -456,6 +490,16 @@ export function createNamsanRoads({ parent, osm, heightAt, overlay = null } = {}
         railGeos.push(paint(rg, '#7a8070'));
       }
     }
+
+    if (!isCar && /한양도성|955|하늘숲|북측숲/.test(w.name || '')) {
+      let accL = 0;
+      for (let i = 1; i < pts.length; i++) {
+        accL += Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]);
+        if (accL < 28) continue;
+        accL = 0;
+        trailLampPts.push({ x: pts[i][0], z: pts[i][1] });
+      }
+    }
   }
 
   const addMerged = (geos, name) => {
@@ -531,6 +575,20 @@ export function createNamsanRoads({ parent, osm, heightAt, overlay = null } = {}
     bodyIM.count = lensIM.count = poolIM.count = n;
     poolIM.visible = false;
     group.add(bodyIM, lensIM, poolIM);
+  }
+
+  const pathBulb = new THREE.MeshBasicMaterial({ color: '#ffd089', transparent: true, opacity: 0, fog: false, toneMapped: false });
+  if (trailLampPts.length) {
+    const poleMat = new THREE.MeshLambertMaterial({ color: '#2c3036' });
+    for (const p of trailLampPts) {
+      const y = heightAt(p.x, p.z);
+      const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.06, 2.7, 6), poleMat);
+      pole.position.set(p.x, y + 1.35, p.z);
+      group.add(pole);
+      const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.13, 8, 6), pathBulb);
+      bulb.position.set(p.x, y + 2.78, p.z);
+      group.add(bulb);
+    }
   }
 
   // bus stop shelters at OSM 남산서울타워 platforms
@@ -748,6 +806,8 @@ export function createNamsanRoads({ parent, osm, heightAt, overlay = null } = {}
       roofLit.visible = k > 0.05;
       tubeMat.opacity = k * 0.95;
       tubeMat.visible = k > 0.05;
+      pathBulb.opacity = k * 0.9;
+      pathBulb.visible = k > 0.05;
     },
     update(dt) {
       if (!shuttle || !shuttlePath || shuttleLen < 10) return;

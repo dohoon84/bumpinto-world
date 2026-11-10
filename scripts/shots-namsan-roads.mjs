@@ -94,6 +94,25 @@ const info = await night.evaluate(() => {
     roadLook = roadPt;
   }
   const trailPt = trail?.pts ? nearTower(trail.pts) : null;
+  const farEnd = (nameRe) => {
+    const group = ways.filter((w) => nameRe.test(w.name || '') && w.pts?.length);
+    let best = null, bd = -1;
+    for (const w of group) {
+      for (const p of w.pts) {
+        const d = Math.hypot(p[0] - n.tower.ox, p[1] - n.tower.oz);
+        if (d > bd) { bd = d; best = { x: p[0], z: p[1], d, name: w.name, k: w.k }; }
+      }
+    }
+    return best;
+  };
+  const midOf = (nameRe) => {
+    const w = ways.find((w) => nameRe.test(w.name || '') && (w.pts?.length || 0) > 4);
+    if (!w) return null;
+    const p = w.pts[Math.floor(w.pts.length / 2)];
+    return { x: p[0], z: p[1], name: w.name, k: w.k };
+  };
+  const drive = ways.find((w) => w.service === 'driveway' && w.pts?.length);
+  const drivePt = drive ? { x: drive.pts[0][0], z: drive.pts[0][1], x2: drive.pts[drive.pts.length - 1][0], z2: drive.pts[drive.pts.length - 1][1] } : null;
   return {
     tx: n.tower.ox, tz: n.tower.oz, baseY: n.baseY,
     door, stops,
@@ -101,6 +120,12 @@ const info = await night.evaluate(() => {
     placedStops: n.roads?.placedStops || [],
     nWays: ways.length,
     edgeY: n.heightAt(n.bounds.x0 + 20, n.bounds.z0 + 20),
+    route955: farEnd(/955계단/),
+    routeSky: farEnd(/남산하늘숲길/),
+    routeEast: farEnd(/남산남측순환로|남산북측순환로/),
+    routeOrmi: midOf(/남산오르미/),
+    midTrail: midOf(/955계단/),
+    drivePt,
   };
 });
 console.log('info', JSON.stringify(info, null, 2));
@@ -217,6 +242,133 @@ if (info.door) {
   });
   await shot(night, 'after-entrance-v3');
   console.log('wrote after-entrance-v3');
+}
+
+// ----- v4 self-check: plaza 4 ways, entrance, bike, route starts, mid-trail, 도훈 4 angles -----
+const plazaY = info.baseY;
+const dirs = [
+  ['plaza-north-v4', 0, -48],
+  ['plaza-east-v4', 52, 6],
+  ['plaza-south-v4', 0, 48],
+  ['plaza-west-v4', -48, 0],
+];
+for (const [name, dx, dz] of dirs) {
+  const x = info.tx + dx, z = info.tz + dz;
+  const y = await hAt(x, z);
+  await go(night, {
+    x, z, y: y + 1.6,
+    yaw: look(x, z, info.tx, info.tz),
+    dist: 9, pitch: 0.18, fov: 55, hidePlayer: true,
+  });
+  await shot(night, name);
+  console.log('wrote', name, 'y', y);
+}
+
+if (info.door) {
+  const d = info.door;
+  const sx = d.x + (d.nx || 1) * 13;
+  const sz = d.z + (d.nz || 0) * 13;
+  await go(night, {
+    x: sx, z: sz, y: plazaY + 1.55,
+    yaw: look(sx, sz, d.x, d.z),
+    dist: 7.0, pitch: 0.18, fov: 52, hidePlayer: true,
+  });
+  await shot(night, 'after-entrance-v4');
+  console.log('wrote after-entrance-v4');
+}
+
+// bike-style third person on summit loop road
+if (info.roadPt) {
+  const [rx, rz] = info.roadPt;
+  const y = await hAt(rx, rz);
+  const lx = info.roadLook ? info.roadLook[0] : info.tx;
+  const lz = info.roadLook ? info.roadLook[1] : info.tz;
+  await go(night, {
+    x: rx, z: rz, y: y + 0.2,
+    yaw: look(rx, rz, lx, lz),
+    dist: 4.2, pitch: 0.08, fov: 55, hidePlayer: false,
+  });
+  await shot(night, 'bike-summit-road-v4');
+  console.log('wrote bike-summit-road-v4', rx, rz, y);
+}
+
+async function routeShot(tag, pt, lookX, lookZ) {
+  if (!pt) { console.log('skip', tag); return; }
+  const y = await hAt(pt.x, pt.z);
+  await go(night, {
+    x: pt.x, z: pt.z, y: y + 1.5,
+    yaw: look(pt.x, pt.z, lookX, lookZ),
+    dist: 8, pitch: 0.12, fov: 55, hidePlayer: false,
+  });
+  await shot(night, tag);
+  console.log('wrote', tag, pt, 'y', y);
+}
+await routeShot('route-955-start-v4', info.route955, info.tx, info.tz);
+await routeShot('route-library-start-v4', info.routeSky, info.tx, info.tz);
+await routeShot('route-east-start-v4', info.routeEast, info.tx, info.tz);
+await routeShot('route-ormi-v4', info.routeOrmi, info.tx, info.tz);
+await routeShot('mid-trail-night-v4', info.midTrail, info.tx, info.tz);
+
+// 도훈's four angles
+if (info.door) {
+  const d = info.door;
+  const sx = d.x + (d.nx || 1) * 16;
+  const sz = d.z + (d.nz || 0) * 2 + 8;
+  await go(night, {
+    x: sx, z: sz, y: plazaY + 1.6,
+    yaw: look(sx, sz, d.x, d.z),
+    dist: 8.5, pitch: 0.28, fov: 58, hidePlayer: true,
+  });
+  await shot(night, 'user4-plaza-v4');
+  const sx2 = d.x + (d.nx || 1) * 22;
+  const sz2 = d.z - 18;
+  const y2 = await hAt(sx2, sz2);
+  await go(night, {
+    x: sx2, z: sz2, y: Math.max(y2, plazaY) + 1.7,
+    yaw: look(sx2, sz2, info.tx, info.tz),
+    dist: 14, pitch: 0.16, fov: 52, hidePlayer: true,
+  });
+  await shot(night, 'user4-plaza-wide-v4');
+  console.log('wrote user4 plaza angles');
+}
+if (info.roadPt) {
+  const [rx, rz] = info.roadPt;
+  const y = await hAt(rx, rz);
+  const lx = info.roadLook ? info.roadLook[0] : info.tx;
+  const lz = info.roadLook ? info.roadLook[1] : info.tz;
+  await go(night, {
+    x: rx, z: rz, y: y + 0.15,
+    yaw: look(rx, rz, lx, lz),
+    dist: 3.6, pitch: 0.12, fov: 58, hidePlayer: false,
+  });
+  await shot(night, 'user4-bike-v4');
+  console.log('wrote user4-bike-v4');
+}
+if (info.drivePt) {
+  const p = info.drivePt;
+  const y = await hAt(p.x, p.z);
+  await go(night, {
+    x: p.x, z: p.z, y: y + 1.5,
+    yaw: look(p.x, p.z, p.x2, p.z2),
+    dist: 6, pitch: 0.08, fov: 55, hidePlayer: false,
+  });
+  await shot(night, 'user4-ribbon-v4');
+  console.log('wrote user4-ribbon-v4');
+}
+
+// default entry: no ntower deep-link, console must stay clean
+{
+  const home = await browser.newPage({ viewport: { width: 1280, height: 720 } });
+  const homeErrs = [];
+  home.on('pageerror', (e) => { homeErrs.push(e.message); errs.push(`default: ${e.message}`); console.error('pageerror default', e.message); });
+  home.on('console', (m) => { if (m.type() === 'error') console.error('console default', m.text()); });
+  const homeQ = 'enter=1&name=Tester&ws=mock&bus=sim&weather=clear&noticePopup=0&bgm=0&subwayVoice=0&subwayRt=0&npcs=0&taxis=0&police=0&trucks=0&clife=0&controlscard=0';
+  await home.goto(`${B}?${homeQ}&hour=21&shot=1`, { timeout: 180000 });
+  await home.waitForFunction(() => window.__jj?.ready, null, { timeout: 240000 });
+  await home.waitForTimeout(1500);
+  if (homeErrs.length) console.error('default entry errors', homeErrs);
+  else console.log('default entry loaded with no pageerrors');
+  await home.close();
 }
 
 await browser.close();

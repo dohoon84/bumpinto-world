@@ -125,4 +125,123 @@ const CITY_Y = 40 - (dem.datum ?? NT.datum); // ≈ -8
   ok(`park rings ${osm.parks.length}; tower and 남산서울타워 stop culled from city`);
 }
 
+{
+  const plazaY = NT.eleBase - NT.datum;
+  for (const d of [0, 25, 42, 55, 70]) {
+    const y = heightAt(NT.tx + d, NT.tz + 4);
+    assert.ok(Math.abs(y - plazaY) < 0.9, `summit pad at d=${d} y=${y.toFixed(2)} plaza=${plazaY}`);
+  }
+  ok(`summit pad flat to ${plazaY} out to 70 m (east entrance included)`);
+}
+
+{
+  const names = new Set(osm.ways.map((w) => w.name).filter(Boolean));
+  assert.ok(names.has('남산북측순환로'), '남산북측순환로');
+  assert.ok(osm.ways.some((w) => w.name === '남산오르미' && w.k === 'elevator'), '남산오르미 elevator');
+  assert.ok(osm.ways.some((w) => w.service === 'driveway'), 'plaza driveway tagged');
+  assert.ok((osm.landmarks || []).some((l) => l.k === 'viewpoint' && l.name.includes('전망대')), '전망대 landmark');
+  ok('북측순환로 · 오르미 · driveway · 전망대 present');
+}
+
+function resample2(pts, step = 2) {
+  if (!pts || pts.length < 2) return pts || [];
+  const out = [[pts[0][0], pts[0][1]]];
+  let acc = 0;
+  for (let i = 1; i < pts.length; i++) {
+    let ax = out[out.length - 1][0], az = out[out.length - 1][1];
+    const bx = pts[i][0], bz = pts[i][1];
+    let dx = bx - ax, dz = bz - az, L = Math.hypot(dx, dz);
+    if (L < 1e-4) continue;
+    while (acc + L >= step) {
+      const t = (step - acc) / L;
+      ax += dx * t; az += dz * t;
+      out.push([ax, az]);
+      dx = bx - ax; dz = bz - az; L = Math.hypot(dx, dz);
+      acc = 0;
+    }
+    acc += L;
+  }
+  const last = pts[pts.length - 1];
+  const p = out[out.length - 1];
+  if (Math.hypot(last[0] - p[0], last[1] - p[1]) > 0.3) out.push([last[0], last[1]]);
+  return out;
+}
+
+function walkWay(w) {
+  const pts = resample2(w.pts, 2);
+  assert.ok(pts.length >= 2, `walk pts ${w.id}`);
+  let prev = null;
+  for (const [x, z] of pts) {
+    const y = heightAt(x, z);
+    assert.ok(Number.isFinite(y), `void/NaN on ${w.name || w.id} at ${x.toFixed(1)},${z.toFixed(1)}`);
+    // player stands on the surface — no hole under the mountain pad
+    assert.ok(y > -20, `sank below world on ${w.name || w.id}: y=${y}`);
+    if (prev) {
+      const L = Math.hypot(x - prev.x, z - prev.z) || 1;
+      const dy = Math.abs(y - prev.y);
+      const maxDy = (w.k === 'steps' || w.k === 'elevator') ? 3.4 : 3.0;
+      assert.ok(dy <= maxDy, `gap ${dy.toFixed(2)} over ${L.toFixed(1)}m on ${w.name || w.id} (${w.k})`);
+    }
+    prev = { x, z, y };
+  }
+  return pts.length;
+}
+
+{
+  const cell = (x, z) => `${Math.round(x / 8)},${Math.round(z / 8)}`;
+  const cellWays = new Map();
+  for (const w of osm.ways) {
+    for (const p of w.pts || []) {
+      const k = cell(p[0], p[1]);
+      if (!cellWays.has(k)) cellWays.set(k, new Set());
+      cellWays.get(k).add(w.id);
+    }
+  }
+  const adj = new Map(osm.ways.map((w) => [w.id, new Set()]));
+  for (const ids of cellWays.values()) {
+    const arr = [...ids];
+    for (let i = 0; i < arr.length; i++) {
+      for (let j = i + 1; j < arr.length; j++) {
+        adj.get(arr[i]).add(arr[j]);
+        adj.get(arr[j]).add(arr[i]);
+      }
+    }
+  }
+  const plazaIds = [];
+  for (const w of osm.ways) {
+    if ((w.pts || []).some((p) => Math.hypot(p[0] - NT.tx, p[1] - NT.tz) < 80)) plazaIds.push(w.id);
+  }
+  assert.ok(plazaIds.length >= 3, `plaza-touching ways ${plazaIds.length}`);
+  const reach = new Set(plazaIds);
+  const q = [...plazaIds];
+  while (q.length) {
+    const id = q.pop();
+    for (const n of adj.get(id) || []) {
+      if (!reach.has(n)) { reach.add(n); q.push(n); }
+    }
+  }
+
+  const ACCESS = [
+    { re: /^남산공원길$/, label: '남산공원길' },
+    { re: /^남산남측순환로$/, label: '남산남측순환로' },
+    { re: /^남산북측순환로$/, label: '남산북측순환로' },
+    { re: /955계단/, label: '남산북측숲길(955계단)' },
+    { re: /남산하늘숲길/, label: '남산하늘숲길' },
+    { re: /한양도성/, label: '서울한양도성 3코스 남산구간' },
+    { re: /와룡묘길/, label: '와룡묘길' },
+  ];
+  let walked = 0, steps = 0;
+  for (const { re, label } of ACCESS) {
+    const group = osm.ways.filter((w) => re.test(w.name || ''));
+    assert.ok(group.length >= 1, `missing access route ${label}`);
+    assert.ok(group.some((w) => reach.has(w.id)), `${label} does not connect to the plaza`);
+    for (const w of group) steps += walkWay(w);
+    walked += group.length;
+  }
+  const ormi = osm.ways.filter((w) => w.name === '남산오르미');
+  assert.ok(ormi.length === 1, '오르미 way');
+  for (const w of ormi) steps += walkWay(w);
+  ok(`walked ${walked} summit-access ways + 오르미, ${steps} samples at 2 m; all named routes connect to plaza`);
+}
+
 console.log(`namsan-roads ${n} checks passed`);

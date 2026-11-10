@@ -75,11 +75,17 @@ export function makeNamsanHeightAt(dem, _osm = null) {
   return function heightAt(x, z) {
     let ele = rawEle(x, z);
     const d = Math.hypot(x - NT.tx, z - NT.tz);
-    // 광장·타워 발밑: 문서 기단 243 m 로 평평히. DEM 이 구조물/수목을 집어 260 m 대로 뛰는 것을 보정.
-    if (d < 95) {
-      const t = 1 - d / 95;
+    // 정상 광장을 문서 기단 243 m 로 단단히 평평히 한다. 예전 95 m smoothstep 은
+    // 입구(약 40 m)에서 DEM 타워 스파이크(~262 m)가 아직 7–12 m 남아 지형이
+    // 광장 위에 지붕처럼 덮였다. 가장자리(76 m)에서 지형과 광장이 같은 높이가 되게 한다.
+    const FLAT_R = 76;
+    const BLEND_R = 155;
+    if (d < FLAT_R) {
+      ele = NT.eleBase;
+    } else if (d < BLEND_R) {
+      const t = (d - FLAT_R) / (BLEND_R - FLAT_R);
       const w = t * t * (3 - 2 * t);
-      ele = ele * (1 - w) + NT.eleBase * w;
+      ele = NT.eleBase * (1 - w) + ele * w;
     }
     // 상행 케이블카 역사는 광장보다 약간 아래(나무위키: 종점은 타워 바로 옆이 아니라 조금 아래).
     const ux = -10705.06, uz = -20554.09;
@@ -172,7 +178,7 @@ export function createNamsanTerrain({ parent, dem, osm }) {
     geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
     geo.setIndex(idx);
     geo.computeVertexNormals();
-    demMat = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide });
+    demMat = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.FrontSide });
     const mesh = new THREE.Mesh(geo, demMat);
     mesh.receiveShadow = true;
     mesh.name = 'namsan-dem';
@@ -494,6 +500,39 @@ export function createNamsanTerrain({ parent, dem, osm }) {
     for (let i = 0; i < 14; i++) {
       const a = (i / 14) * Math.PI * 2;
       addLamp(c.x + Math.cos(a) * 22, c.z + Math.sin(a) * 22, 3.2);
+    }
+  }
+
+  // OSM-tagged landmarks only (전망대 / 안내판). 팔각정·봉수대는 위에 이미 있다.
+  for (const lm of osm?.landmarks || []) {
+    if (!Number.isFinite(lm.x) || !Number.isFinite(lm.z)) continue;
+    const y = heightAt(lm.x, lm.z);
+    if (lm.k === 'viewpoint') {
+      const deck = new THREE.Group();
+      deck.position.set(lm.x, y, lm.z);
+      const wood = new THREE.MeshLambertMaterial({ color: '#8a7355' });
+      const rail = new THREE.MeshLambertMaterial({ color: '#d8d2c6' });
+      const floor = new THREE.Mesh(new THREE.CylinderGeometry(3.2, 3.2, 0.22, 10), wood);
+      floor.position.y = 0.18;
+      deck.add(floor);
+      for (let i = 0; i < 10; i++) {
+        const a = (i / 10) * Math.PI * 2;
+        const post = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.07, 1.05, 6), rail);
+        post.position.set(Math.cos(a) * 3.05, 0.7, Math.sin(a) * 3.05);
+        deck.add(post);
+      }
+      const ring = new THREE.Mesh(new THREE.TorusGeometry(3.05, 0.045, 6, 16), rail);
+      ring.rotation.x = Math.PI / 2;
+      ring.position.y = 1.15;
+      deck.add(ring);
+      group.add(deck);
+    } else if (lm.k === 'guidepost') {
+      const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.06, 2.4, 6), new THREE.MeshLambertMaterial({ color: '#3d434a' }));
+      pole.position.set(lm.x, y + 1.2, lm.z);
+      group.add(pole);
+      const board = new THREE.Mesh(new THREE.BoxGeometry(0.85, 0.55, 0.06), new THREE.MeshLambertMaterial({ color: '#ece6d6' }));
+      board.position.set(lm.x, y + 2.05, lm.z);
+      group.add(board);
     }
   }
 

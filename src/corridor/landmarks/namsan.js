@@ -78,24 +78,12 @@ export function createNamsan({ scene, overlay, terrain, dem, osm, city = null, c
   const skyMat = new THREE.MeshBasicMaterial({
     color: skyNight.clone(), side: THREE.BackSide, depthWrite: false, depthTest: false, fog: false, toneMapped: false,
   });
-  const sky = new THREE.Mesh(new THREE.SphereGeometry(140, 48, 32), skyMat);
+  const sky = new THREE.Mesh(new THREE.SphereGeometry(800, 40, 24), skyMat);
   sky.position.set(NT.tx, 220, NT.tz);
   sky.name = 'namsan-sky';
   sky.renderOrder = -20;
   sky.frustumCulled = false;
   root.add(sky);
-
-  // 카메라 앞의 큰 평면. 구를 카메라에 붙이면 로그 깊이에서 삼각형이 잘린다.
-  const fillMat = new THREE.MeshBasicMaterial({
-    color: skyNight.clone(), depthTest: false, depthWrite: false,
-    toneMapped: false, fog: false, side: THREE.DoubleSide,
-  });
-  const skyFill = new THREE.Mesh(new THREE.PlaneGeometry(500, 500), fillMat);
-  skyFill.name = 'namsan-sky-fill';
-  skyFill.frustumCulled = false;
-  skyFill.renderOrder = -30;
-  root.add(skyFill);
-  const _fillDir = new THREE.Vector3();
 
   // faint stars around Namsan (the origin sky dome does not reach this far)
   const STAR_N = 2800;
@@ -142,6 +130,33 @@ export function createNamsan({ scene, overlay, terrain, dem, osm, city = null, c
         minDist: 6,
       });
     }
+    const namedBuildings = [
+      osm?.palgakjeong && { name: osm.palgakjeong.tags?.name || '남산팔각정', pts: osm.palgakjeong.pts },
+      osm?.bongsu && { name: osm.bongsu.tags?.name || '남산봉수대', pts: osm.bongsu.pts },
+    ];
+    for (const b of namedBuildings) {
+      if (!b?.pts || b.pts.length < 3) continue;
+      let x = 0, z = 0;
+      for (const p of b.pts) { x += p[0]; z += p[1]; }
+      x /= b.pts.length; z /= b.pts.length;
+      overlay.add({
+        cls: 'label landmark',
+        text: b.name,
+        getPos: () => new THREE.Vector3(x, land.heightAt(x, z) + 4.2, z),
+        maxDist: 220,
+        minDist: 8,
+      });
+    }
+    for (const lm of osm?.landmarks || []) {
+      if (!lm?.name || !Number.isFinite(lm.x)) continue;
+      overlay.add({
+        cls: 'label landmark',
+        text: lm.name,
+        getPos: () => new THREE.Vector3(lm.x, land.heightAt(lm.x, lm.z) + 3.4, lm.z),
+        maxDist: 200,
+        minDist: 6,
+      });
+    }
   }
 
   const spawn = (() => {
@@ -161,8 +176,6 @@ export function createNamsan({ scene, overlay, terrain, dem, osm, city = null, c
     starMat.opacity = on ? 0.88 : 0;
     stars.visible = !!on;
     skyMat.color.copy(skyDay).lerp(skyNight, on ? 1 : 0);
-    skyFill.visible = !!on;
-    fillMat.color.copy(on ? skyNight : skyDay);
   });
 
   if (terrain?.addGroundExtra) {
@@ -219,15 +232,10 @@ export function createNamsan({ scene, overlay, terrain, dem, osm, city = null, c
     tickPlayer(dt, player, cam) {
       interior.tickPlayer?.(dt, player, cam);
       car?.tickPlayer?.(dt, player, cam);
-      // 로그 깊이 버퍼에서 큰 하늘 구는 삼각형이 잘려 광장에서 하늘이 검게 나온다.
-      // 작은 구를 렌더 카메라에 붙여 항상 시야를 채운다.
+      // 원점 하늘 돔은 남산(23 km)에 닿지 않는다. 남산 전용 구를 카메라에 붙인다.
       const cam3 = (typeof window !== 'undefined' && window.__jj?.camera) || null;
-      if (cam3?.position) {
-        sky.position.copy(cam3.position);
-        cam3.getWorldDirection(_fillDir);
-        skyFill.position.copy(cam3.position).addScaledVector(_fillDir, 90);
-        skyFill.lookAt(cam3.position);
-      } else if (player?.position) sky.position.copy(player.position);
+      if (cam3?.position) sky.position.copy(cam3.position);
+      else if (player?.position) sky.position.copy(player.position);
       if (player && Math.hypot(player.position.x - NT.tx, player.position.z - NT.tz) < 2800) {
         document.getElementById('stop-panel')?.classList.remove('open');
         document.getElementById('corridor-stop-panel')?.classList.remove('open');
@@ -252,8 +260,6 @@ export function createNamsan({ scene, overlay, terrain, dem, osm, city = null, c
       starMat.opacity = Math.max(0, Math.min(1, v)) * 0.88;
       stars.visible = v > 0.08;
       skyMat.color.copy(skyDay).lerp(skyNight, Math.max(0, Math.min(1, v)));
-      skyFill.visible = v > 0.08;
-      fillMat.color.copy(skyDay).lerp(skyNight, Math.max(0, Math.min(1, v)));
     },
     dispose() {
       unwatch?.();
