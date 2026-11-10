@@ -118,10 +118,18 @@ function mountGate({ root, corridorGlobe, enter, focus, teardown }, onBackToStar
     const P = (s) => [ox + s.dx * k, oy + s.dy * k];
     const sel = hot || defaultAt;
     let seg = '';
+    const byId = new Map([...BASE.items, ...BASE.branches].map((st) => [st.id, st]));
     for (const b of BASE.branches) {
       const shared = (b.from.lines || []).find((l) => (b.lines || []).includes(l)) || (b.lines || [])[0];
       const [x1, y1] = P(b.from), [x2, y2] = P(b);
       seg += `<path d="M${x1.toFixed(1)} ${y1.toFixed(1)} L${x2.toFixed(1)} ${y2.toFixed(1)}" stroke="${LINE_COLOR[shared] || '#9eb4c6'}" stroke-width="7" fill="none" stroke-linecap="round"/>`;
+      for (const id of b.links || []) {
+        const t = byId.get(id);
+        if (!t) continue;
+        const link = (b.lines || []).find((l) => (t.lines || []).includes(l)) || (b.lines || [])[0];
+        const [lx1, ly1] = P(b), [lx2, ly2] = P(t);
+        seg += `<path d="M${lx1.toFixed(1)} ${ly1.toFixed(1)} L${lx2.toFixed(1)} ${ly2.toFixed(1)}" stroke="${LINE_COLOR[link] || '#9eb4c6'}" stroke-width="7" fill="none" stroke-linecap="round"/>`;
+      }
     }
     for (let i = 1; i < BASE.items.length; i++) {
       const a = BASE.items[i - 1], b = BASE.items[i];
@@ -132,16 +140,29 @@ function mountGate({ root, corridorGlobe, enter, focus, teardown }, onBackToStar
     const stations = [...BASE.items, ...BASE.branches];
     const colX = (side) => ox + (side === 'left' ? BASE.colL : BASE.colR) * k;
     const Ly = (s) => oy + ((s.labelDy ?? s.dy) * k);
-    const leaders = stations.map((s) => { const [x, y] = P(s); return `<path d="M${x.toFixed(1)} ${y.toFixed(1)} L${colX(s.side).toFixed(1)} ${Ly(s).toFixed(1)}" stroke="#ffffff" stroke-opacity=".28" stroke-width="1.5"/>`; }).join('');
+    const leaders = stations.map((s) => {
+      if (s.labelAt === 'dot' || s.pin === 'dot') return '';
+      const [x, y] = P(s);
+      return `<path d="M${x.toFixed(1)} ${y.toFixed(1)} L${colX(s.side).toFixed(1)} ${Ly(s).toFixed(1)}" stroke="#ffffff" stroke-opacity=".28" stroke-width="1.5"/>`;
+    }).join('');
     const dots = stations.map((s) => {
-      const [x, y] = P(s), id = s.live ? 'jeongja' : s.id, on = id === sel;
-      return `<circle data-dot="${id}" cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${on ? 9 : 6}" fill="${on ? '#ffe169' : '#ffffff'}" stroke="${on ? '#f5a200' : '#122033'}" stroke-width="${on ? 4 : 3}"/>`;
+      const [x, y] = P(s), id = s.live ? 'jeongja' : s.id, on = !s.pass && id === sel;
+      const fill = on ? '#ffe169' : (s.pass ? '#9eb4c6' : '#ffffff');
+      const stroke = on ? '#f5a200' : (s.pass ? '#6b7a88' : '#122033');
+      return `<circle ${s.pass ? '' : `data-dot="${id}" `}cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${on ? 9 : (s.pass ? 4.5 : 6)}" fill="${fill}" stroke="${stroke}" stroke-width="${on ? 4 : 3}"/>`;
     }).join('');
     const [lx, ly] = P(BASE.landmark);
     const lm = `<rect x="${(lx - 6).toFixed(1)}" y="${(ly - 6).toFixed(1)}" width="12" height="12" transform="rotate(45 ${lx.toFixed(1)} ${ly.toFixed(1)})" fill="#4cc9f0" stroke="#ffffff" stroke-width="2"/>`;
     const chips = stations.map((s) => {
-      const y = Ly(s), id = s.live ? 'jeongja' : s.id, on = id === sel, left = s.side === 'left';
-      const pos = left ? `right:${(W - colX('left') + 4).toFixed(1)}px` : `left:${(colX('right') + 4).toFixed(1)}px`;
+      const id = s.live ? 'jeongja' : s.id, on = !s.pass && id === sel, left = s.side === 'left';
+      const [px, py] = P(s);
+      const y = (s.labelAt === 'dot' || s.pin === 'dot') ? py : Ly(s);
+      const pos = (s.labelAt === 'dot' || s.pin === 'dot')
+        ? `left:${(px + 10).toFixed(1)}px`
+        : (left ? `right:${(W - colX('left') + 4).toFixed(1)}px` : `left:${(colX('right') + 4).toFixed(1)}px`);
+      if (s.pass) {
+        return `<span class="v2-stn is-pass" style="${pos};top:${(y - 13).toFixed(1)}px"><b>${esc(en ? s.en : s.ko)}</b><small>${esc(tr('통과', 'pass'))}</small></span>`;
+      }
       return `<button type="button" class="v2-stn${on ? ' on' : ''}" data-v2-at="${id}" data-hot="${id}" style="${pos};top:${(y - 13).toFixed(1)}px"><b>${esc(en ? s.en : s.ko)}</b><small>${esc(en ? s.ko : s.en)}</small></button>`;
     }).join('');
     const site = lotteSiteLabel(en);
@@ -165,6 +186,7 @@ function mountGate({ root, corridorGlobe, enter, focus, teardown }, onBackToStar
 
   function setHot(id) {
     if (!id || hot === id || performance.now() - openedAt < 400) return;
+    if (stationById(id)?.pass) return;
     hot = id;
     picker.querySelectorAll('[data-hot]').forEach((b) => b.classList.toggle('on', b.dataset.hot === id));
     picker.querySelectorAll('[data-dot]').forEach((c) => {
