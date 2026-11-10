@@ -52,7 +52,7 @@ export function createBgmPlayer({ base = './', storage = null, onChange = () => 
   const ext = pickFormat();
   const s = {
     ctx: null, bus: null, an: null, vol: null, decks: [], cur: null, xf: null, timer: 0, token: 0, fails: 0,
-    entered: false, userPaused: false, hidden: typeof document !== 'undefined' && document.hidden,
+    entered: false, userPaused: false, held: false, heldWasPlaying: false, hidden: typeof document !== 'undefined' && document.hidden,
     started: false, playing: false, waitGesture: false, gestured: false, duck: false, fadeInTok: -1,
     ...readPrefs(store),
   };
@@ -196,7 +196,7 @@ export function createBgmPlayer({ base = './', storage = null, onChange = () => 
   const canStart = () => s.gestured || !!navigator.userActivation?.hasBeenActive;
   // 원하는 상태(입장 · 사용자가 멈추지 않음 · 탭 보임)로 맞춘다
   function apply() {
-    const want = s.entered && !s.userPaused && !s.hidden;
+    const want = s.entered && !s.userPaused && !s.hidden && !s.held;
     if (want) {
       if (!canStart()) { s.waitGesture = true; emit('state'); return; }
       s.waitGesture = false;
@@ -277,6 +277,22 @@ export function createBgmPlayer({ base = './', storage = null, onChange = () => 
       applyVol(); emit('state');
     },
     setDuck(on) { on = !!on; if (on === s.duck) return; s.duck = on; applyVol(0.25); },
+    /** 외부(오락실 게임 등)가 월드 OST 를 완전히 멈춤. userPaused·muted 는 건드리지 않음. */
+    hold(on) {
+      on = !!on;
+      if (on === s.held) return;
+      if (on) {
+        s.heldWasPlaying = !!(s.started && s.playing && !s.userPaused);
+        s.held = true;
+        apply();
+      } else {
+        s.held = false;
+        const resumeWanted = s.heldWasPlaying;
+        s.heldWasPlaying = false;
+        if (resumeWanted && !s.userPaused) apply();
+        else emit('state');
+      }
+    },
   };
   if (!debug) return api;
   // 디버그(개발 서버 / ?bgmDebug=1): 상태·게인 읽기, 크로스페이드 직전으로 이동
