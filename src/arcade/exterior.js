@@ -134,13 +134,13 @@ function addWindowInterior(parent, st) {
   })();
   const floor = new THREE.Mesh(
     new THREE.PlaneGeometry(W - 0.2, deep - 0.1),
-    new THREE.MeshStandardMaterial({ map: floorTex, emissive: '#3a2468', emissiveIntensity: 0.65, roughness: 0.7 }),
+    new THREE.MeshStandardMaterial({ map: floorTex, emissive: '#3a2468', emissiveIntensity: 0.65, roughness: 0.7, side: THREE.DoubleSide }),
   );
   floor.rotation.x = -Math.PI / 2;
   floor.position.set(0, 0.03, -deep / 2);
   inner.add(floor);
 
-  const wallMat = new THREE.MeshStandardMaterial({ color: '#4a3080', emissive: '#3a2468', emissiveIntensity: 0.75, roughness: 0.7 });
+  const wallMat = new THREE.MeshStandardMaterial({ color: '#4a3080', emissive: '#3a2468', emissiveIntensity: 0.75, roughness: 0.7, side: THREE.DoubleSide });
   const back = new THREE.Mesh(new THREE.PlaneGeometry(W - 0.15, H - 0.1), wallMat);
   back.position.set(0, H / 2, -deep + 0.04);
   inner.add(back);
@@ -155,7 +155,7 @@ function addWindowInterior(parent, st) {
   inner.add(right);
   const ceil = new THREE.Mesh(
     new THREE.PlaneGeometry(W - 0.2, deep - 0.1),
-    new THREE.MeshStandardMaterial({ color: '#3a2470', emissive: '#4a2890', emissiveIntensity: 0.7, roughness: 0.75 }),
+    new THREE.MeshStandardMaterial({ color: '#3a2470', emissive: '#4a2890', emissiveIntensity: 0.7, roughness: 0.75, side: THREE.DoubleSide }),
   );
   ceil.rotation.x = Math.PI / 2;
   ceil.position.set(0, H - 0.06, -deep / 2);
@@ -407,18 +407,46 @@ function addHostFirstFloorSeal(root, st) {
   for (const p of ring) { cx += p[0]; cz += p[1]; }
   cx /= ring.length; cz /= ring.length;
 
-  const draw = (x0, z0, x1, z1) => {
+  const deep = st.deep || 4.2;
+  const half = W / 2;
+  // 전면 로컬 축: +X 는 벽 방향, 깊이는 거리에서 건물 안쪽.
+  const lx = nz, lz = -nx;
+  const alongOf = (x, z) => (x - wx) * lx + (z - wz) * lz;
+  const depthOf = (x, z) => -((x - wx) * nx + (z - wz) * nz);
+
+  const draw = (x0, z0, x1, z1, { outward = false } = {}) => {
     const sx = x1 - x0, sz = z1 - z0, L = Math.hypot(sx, sz);
     if (L < 0.2) return;
     let onx = -sz / L, onz = sx / L;
     const mx = (x0 + x1) / 2, mz = (z0 + z1) / 2;
     if (onx * (cx - mx) + onz * (cz - mz) < 0) { onx = -onx; onz = -onz; } // inward
+    if (outward) { onx = -onx; onz = -onz; } // 두께를 건물 밖으로 — 매장 안으로 침범하지 않게
     const m = new THREE.Mesh(new THREE.BoxGeometry(L, gf, thick), mat);
-    // 바깥면을 외벽선에 두고 안쪽으로 두껍게. local +Z = 안쪽 법선 → 길이가 변을 따라감.
+    // 바깥면을 외벽선에 두고 안쪽(또는 outward 면)으로 두껍게. local +Z = 법선 → 길이가 변을 따라감.
     m.position.set(mx + onx * (thick / 2 - 0.02), gf / 2, mz + onz * (thick / 2 - 0.02));
     m.rotation.y = Math.atan2(onx, onz);
     m.name = 'arcade-seo-seal';
     root.add(m);
+  };
+
+  // 변을 전면 along 값에서 잘라 매장 폭 안/밖을 나눈다.
+  const splitAtAlong = (x0, z0, x1, z1, cuts) => {
+    const a0 = alongOf(x0, z0), a1 = alongOf(x1, z1);
+    const pts = [[0, x0, z0]];
+    for (const c of cuts) {
+      if ((c - a0) * (c - a1) < 0) {
+        const t = (c - a0) / (a1 - a0);
+        pts.push([t, x0 + (x1 - x0) * t, z0 + (z1 - z0) * t]);
+      }
+    }
+    pts.push([1, x1, z1]);
+    pts.sort((p, q) => p[0] - q[0]);
+    const segs = [];
+    for (let i = 0; i < pts.length - 1; i++) {
+      if (pts[i + 1][0] - pts[i][0] < 1e-4) continue;
+      segs.push([pts[i][1], pts[i][2], pts[i + 1][1], pts[i + 1][2]]);
+    }
+    return segs;
   };
 
   for (let i = 0; i < ring.length; i++) {
@@ -427,27 +455,37 @@ function addHostFirstFloorSeal(root, st) {
     const t = Math.max(0, Math.min(1, ((wx - x0) * sx + (wz - z0) * sz) / (L * L)));
     const px = x0 + sx * t, pz = z0 + sz * t;
     const onStreet = Math.hypot(px - wx, pz - wz) < 0.6 && L > W + 1;
-    if (!onStreet) { draw(x0, z0, x1, z1); continue; }
-    const along = t * L;
-    const u = sx / L, v = sz / L;
-    const left = along - W / 2, right = along + W / 2;
-    if (left > 0.2) draw(x0, z0, x0 + u * left, z0 + v * left);
-    if (L - right > 0.2) draw(x0 + u * right, z0 + v * right, x1, z1);
+    if (onStreet) {
+      const along = t * L;
+      const u = sx / L, v = sz / L;
+      const left = along - W / 2, right = along + W / 2;
+      if (left > 0.2) draw(x0, z0, x0 + u * left, z0 + v * left);
+      if (L - right > 0.2) draw(x0 + u * right, z0 + v * right, x1, z1);
 
-    // 유리 칸 양쪽 기둥 — 매장이 건물 1층 베이에 끼워진 것처럼 읽히게
-    let onx = -sz / L, onz = sx / L;
-    const mx = (x0 + x1) / 2, mz = (z0 + z1) / 2;
-    if (onx * (cx - mx) + onz * (cz - mz) < 0) { onx = -onx; onz = -onz; }
-    const post = (alongPos) => {
-      const qx = x0 + u * alongPos, qz = z0 + v * alongPos;
-      const m = new THREE.Mesh(new THREE.BoxGeometry(0.48, gf, 0.46), mat);
-      m.position.set(qx + onx * 0.18, gf / 2, qz + onz * 0.18);
-      m.rotation.y = Math.atan2(onx, onz);
-      m.name = 'arcade-seo-seal';
-      root.add(m);
-    };
-    post(left);
-    post(right);
+      // 유리 칸 양쪽 기둥 — 매장이 건물 1층 베이에 끼워진 것처럼 읽히게
+      let onx = -sz / L, onz = sx / L;
+      const mx = (x0 + x1) / 2, mz = (z0 + z1) / 2;
+      if (onx * (cx - mx) + onz * (cz - mz) < 0) { onx = -onx; onz = -onz; }
+      const post = (alongPos) => {
+        const qx = x0 + u * alongPos, qz = z0 + v * alongPos;
+        const m = new THREE.Mesh(new THREE.BoxGeometry(0.48, gf, 0.46), mat);
+        m.position.set(qx + onx * 0.18, gf / 2, qz + onz * 0.18);
+        m.rotation.y = Math.atan2(onx, onz);
+        m.name = 'arcade-seo-seal';
+        root.add(m);
+      };
+      post(left);
+      post(right);
+      continue;
+    }
+
+    // 매장 폭을 넓히면 왼쪽 뒷벽(깊이 ≈4m)이 보라색 뒷벽보다 앞으로 나와
+    // 유리 너머로 베이지 건물 벽이 보인다. 매장 칸 뒤의 실링은 바깥으로만 두껍게 한다.
+    for (const [ax, az, bx, bz] of splitAtAlong(x0, z0, x1, z1, [-half, half])) {
+      const mx = (ax + bx) / 2, mz = (az + bz) / 2;
+      const behindShop = Math.abs(alongOf(mx, mz)) <= half + 0.05 && depthOf(mx, mz) > 0.2;
+      draw(ax, az, bx, bz, { outward: behindShop });
+    }
   }
 }
 
