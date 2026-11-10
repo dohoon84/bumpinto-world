@@ -337,7 +337,7 @@ export function createGangnamStreet({ scene, terrain = null, url, mobile = false
         map: zebraTex(), color: '#ffffff', transparent: true, opacity: 1, depthWrite: false, depthTest: true,
         toneMapped: false, polygonOffset: true, polygonOffsetFactor: -8, polygonOffsetUnits: -8,
       });
-      const paintMat = new THREE.MeshBasicMaterial({ color: '#ff3a22', transparent: true, opacity: 1, depthWrite: false, depthTest: true, toneMapped: false, polygonOffset: true, polygonOffsetFactor: -16, polygonOffsetUnits: -16 });
+      const paintMat = new THREE.MeshBasicMaterial({ color: '#ff3a22', transparent: false, opacity: 1, depthWrite: false, depthTest: false, toneMapped: false });
       const platMat = new THREE.MeshLambertMaterial({ color: '#9aa3ae' });
       const tactMat = new THREE.MeshBasicMaterial({ color: '#f0c400', toneMapped: false });
       const pylonMat = new THREE.MeshLambertMaterial({ color: '#2d3a55' });
@@ -463,12 +463,13 @@ export function createGangnamStreet({ scene, terrain = null, url, mobile = false
       });
       zebra.count = (j.zebras || []).length;
 
-      const paint = inst(new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2), paintMat, (j.paints || []).length, 'gnStreetPaint');
+      const paint = inst(boxGeo(1, 0.06, 1, 0, 0.03, 0), paintMat, (j.paints || []).length, 'gnStreetPaint');
       (j.paints || []).forEach((z, i) => {
-        StreetXform.compose(m4, quat, pos, scl, z[0], ground(z[0], z[1]) + 0.08, z[1], z[2], z[3], 1, z[4]);
+        StreetXform.compose(m4, quat, pos, scl, z[0], ground(z[0], z[1]) + 0.11, z[1], z[2], z[3], 1, z[4]);
         paint.setMatrixAt(i, m4);
       });
       paint.count = (j.paints || []).length;
+      paint.renderOrder = 0;
 
       const propGeos = [kioskGeo(), bikeGeo(), planterGeo(), bollardGeo(), poleGeo(), scooterGeo(), vendingGeo()];
       const propMats = [

@@ -30,6 +30,7 @@ import { createGangnamBillboards } from './gangnam/billboards/create.js'; // [ga
 import { gangnamAdsEnabled } from './gangnam/billboards/manifest.js'; // [gangnam-ads]
 import { gangnamNightlifeEnabled, createGangnamNightlife } from './gangnam/nightlife.js'; // [gangnam-nightlife]
 import { gangnamStreetEnabled, createGangnamStreet } from './gangnam/streetDetail.js'; // [gangnam-street]
+import { gangnamBrtEnabled, createGangnamBrt } from './gangnam/brtBuses.js'; // [gangnam-brt]
 import { gangnamEnabled } from './corridor/gangnam.js'; // [gangnam] 브이월드 높이 출처 문구
 import { BUS_CREDIT, gangnamBusEnabled } from './corridor/gangnamBus.js'; // [gangnam-bus]
 import { GYEONGGI_BUS_CREDIT } from './corridor/gyeongbuExpress.js'; // [gyeongbu-bus]
@@ -367,6 +368,14 @@ gangnamNpc = corridor && corridorDir && corridorData?.gangnam && gangnamNpcEnabl
 const gangnamStreet = corridorDir && corridorData?.gangnam && gangnamStreetEnabled()
   ? createGangnamStreet({ scene, terrain, url: import.meta.env.BASE_URL + corridorDir + 'gangnam/street.json', mobile: gnMobile })
   : null; // [gangnam-street]
+const gangnamBrt = corridorDir && corridorData?.gangnam && gangnamBrtEnabled()
+  ? createGangnamBrt({
+    scene, terrain, overlay,
+    url: import.meta.env.BASE_URL + corridorDir + 'gangnam/street.json',
+    mobile: gnMobile,
+    getNpc: () => gangnamNpc,
+  })
+  : null; // [gangnam-brt]
 const st = data.station;
 const homeStationLabel = overlay.add({
   cls: 'label station',
@@ -2663,6 +2672,7 @@ function frame() {
   if (gangnamNpc) { const c = cam.mode === 'follow' ? P : sun.target.position; gangnamNpc.update(dt, c.x, c.z, cam.mode === 'follow' ? cam.yaw : ov.yaw); } // [gangnam-npc]
   if (gangnamNightlife) { const c = cam.mode === 'follow' ? P : sun.target.position; gangnamNightlife.update(dt, c.x, c.z); } // [gangnam-nightlife]
   if (gangnamStreet) { const c = cam.mode === 'follow' ? P : sun.target.position; gangnamStreet.update(dt, c.x, c.z); } // [gangnam-street]
+  if (gangnamBrt) { const c = cam.mode === 'follow' ? P : sun.target.position; gangnamBrt.update(dt, c.x, c.z); } // [gangnam-brt]
   world.shops?.update(dt, P.x, P.z); // [shops] 주변 70m 상호 간판 풀
   const viewYaw = cam.mode === 'follow' ? cam.yaw : ov.yaw;
   const moveYaw = player.rotation.y + (bikes.riding && bikes.speed < -0.2 ? Math.PI : 0);
@@ -2692,7 +2702,7 @@ requestAnimationFrame(frame);
 // 스크린샷/디버그용 훅
 window.__jj = {
   perfmem: perfMem, // [perf-memory]
-  ready: true, region, tower, renderer, corridor, playgrounds, streetlights, pangyoLamps, migeumLamps, gangnamNight, gangnamAds, gangnamNightlife, gangnamNpc, gangnamStreet, // [corridor] [playgrounds] [streetlights] [gangnam-night] [gangnam-nightlife] [gangnam-npc] [gangnam-street]
+  ready: true, region, tower, renderer, corridor, playgrounds, streetlights, pangyoLamps, migeumLamps, gangnamNight, gangnamAds, gangnamNightlife, gangnamNpc, gangnamStreet, gangnamBrt, // [corridor] [playgrounds] [streetlights] [gangnam-night] [gangnam-nightlife] [gangnam-npc] [gangnam-street] [gangnam-brt]
   placeCaption: (x, z) => placeCaption(x, z, placeList, corridor?.bounds?.islands), // [gangnam-night]
   bungeo, // [bungeo]
   launch, roadster, trucks, bike: adminBike, giftRides, inventory, data, world, npcs, transit, camera, cam, ov, setMode, terrain, taxis, jzTraffic, police, weather: atmosphere, umbrellas, dogPark, strayCats, // [terrain] [taxi] [roadster] [tower] [launch] [truck] [bike] [roadbike] [inventory]
