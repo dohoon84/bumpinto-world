@@ -12,9 +12,95 @@ export function avenueSegs(tiles) {
   const segs = [];
   for (const t of tiles || []) for (const road of t.r || []) {
     if (!AVENUE_NAMES.includes(road.n) || !road.p || road.p.length < 2) continue;
-    for (let i = 1; i < road.p.length; i++) segs.push({ n: road.n, w: road.w || 12, a: road.p[i - 1], b: road.p[i] });
+    for (let i = 1; i < road.p.length; i++) segs.push({ n: road.n, w: road.w || 12, k: road.k, a: road.p[i - 1], b: road.p[i] });
   }
   return segs;
+}
+
+const WALK_ONLY = new Set(['footway', 'steps', 'pedestrian', 'path']);
+
+/** 보행 전용을 뺀 모든 차도·버스차로·자전거도로 구간. 가로등·가로수가 차로에 서지 않게 검사할 때 쓴다. */
+export function carSegs(tiles) {
+  const segs = [];
+  for (const t of tiles || []) for (const road of t.r || []) {
+    if (!road.p || road.p.length < 2 || WALK_ONLY.has(road.k)) continue;
+    for (let i = 1; i < road.p.length; i++) {
+      segs.push({ n: road.n, w: road.w || 6, k: road.k, a: road.p[i - 1], b: road.p[i] });
+    }
+  }
+  return segs;
+}
+
+export function segHits(segs, x, z, radius) {
+  const hits = [];
+  for (const s of segs || []) {
+    const dx = s.b[0] - s.a[0], dz = s.b[1] - s.a[1], L2 = dx * dx + dz * dz || 1;
+    const t = Math.max(0, Math.min(1, ((x - s.a[0]) * dx + (z - s.a[1]) * dz) / L2));
+    const px = s.a[0] + dx * t, pz = s.a[1] + dz * t;
+    const d = Math.hypot(px - x, pz - z);
+    const need = (s.w || 6) * 0.5 + radius;
+    if (d < need) {
+      const L = Math.hypot(dx, dz) || 1;
+      hits.push({ d, px, pz, yaw: Math.atan2(dx, dz), need, pen: need - d, w: s.w, n: s.n, k: s.k });
+    }
+  }
+  return hits;
+}
+
+export function onCarriageway(segs, x, z, radius = 0.4) {
+  return segHits(segs, x, z, radius).length > 0;
+}
+
+function onBusIsland(segs, x, z) {
+  const bus = [];
+  for (const s of segs || []) {
+    if (s.k !== 'busway') continue;
+    const dx = s.b[0] - s.a[0], dz = s.b[1] - s.a[1], L2 = dx * dx + dz * dz || 1;
+    const t = Math.max(0, Math.min(1, ((x - s.a[0]) * dx + (z - s.a[1]) * dz) / L2));
+    const px = s.a[0] + dx * t, pz = s.a[1] + dz * t;
+    const d = Math.hypot(px - x, pz - z);
+    if (d <= 20 && !bus.some((o) => Math.hypot(o.px - px, o.pz - pz) < 5.5)) bus.push({ d, px, pz });
+  }
+  for (let i = 0; i < bus.length; i++) {
+    for (let j = i + 1; j < bus.length; j++) {
+      const c2c = Math.hypot(bus[i].px - bus[j].px, bus[i].pz - bus[j].pz);
+      if (c2c < 6.2 || c2c > 15.5) continue;
+      const mx = (bus[i].px + bus[j].px) / 2, mz = (bus[i].pz + bus[j].pz) / 2;
+      if (Math.hypot(x - mx, z - mz) <= 2.2) return true;
+    }
+  }
+  return false;
+}
+
+/** 차도·버스차로·횡단 차로 밖으로 밀거나 버린다. 중앙 BRT 섬은 쉘터 조명만 남긴다. */
+export function keepOffCarriage(segs, x, z, radius = 0.4, { blocks = null, allowIsland = false } = {}) {
+  let px = x, pz = z;
+  for (let k = 0; k < 8; k++) {
+    if (!allowIsland && onBusIsland(segs, px, pz)) return null;
+    const hits = segHits(segs, px, pz, radius);
+    if (!hits.length) {
+      if (blocks && insideBuilding(blocks, px, pz)) return null;
+      return [r1(px), r1(pz)];
+    }
+    let vx = 0, vz = 0;
+    for (const h of hits) {
+      const left = [-Math.cos(h.yaw), Math.sin(h.yaw)];
+      const signed = (px - h.px) * left[0] + (pz - h.pz) * left[1];
+      const side = Math.sign(signed) || 1;
+      vx += h.px + left[0] * side * (h.need + 0.2) - px;
+      vz += h.pz + left[1] * side * (h.need + 0.2) - pz;
+    }
+    const L = Math.hypot(vx, vz);
+    if (L < 1e-4) {
+      const h = hits[0];
+      const left = [-Math.cos(h.yaw), Math.sin(h.yaw)];
+      vx = left[0] * (h.need + 0.2);
+      vz = left[1] * (h.need + 0.2);
+    }
+    px += vx;
+    pz += vz;
+  }
+  return null;
 }
 
 export function projectOnto(segs, x, z) {
@@ -60,9 +146,10 @@ function insideBuilding(list, x, z) {
   return false;
 }
 
-/** 인도 쪽 가로등. 건물 안·출구 캐노피 옆은 버린다. sides 1 이면 한쪽만(모바일). */
-export function placeLamps(segs, { exits = [], buildings = [], step = 40, sides = 2, exitClear = 7, box = null } = {}) {
+/** 인도 쪽 가로등. 건물 안·출구 캐노피 옆·차도·BRT 차로·중앙섬은 버린다. sides 1 이면 한쪽만(모바일). */
+export function placeLamps(segs, { exits = [], buildings = [], step = 40, sides = 2, exitClear = 7, box = null, carSegs: cars = null } = {}) {
   const blocks = buildingIndex(buildings);
+  const roadList = cars && cars.length ? cars : segs;
   const taken = [];
   const near = (x, z, rad) => taken.some((p) => (p[0] - x) ** 2 + (p[1] - z) ** 2 < rad * rad);
   const out = [];
@@ -72,17 +159,20 @@ export function placeLamps(segs, { exits = [], buildings = [], step = 40, sides 
     const tx = dx / L, tz = dz / L, nx = -tz, nz = tx, off = (s.w || 12) / 2 + 1.25;
     const sideList = sides === 1 ? [1] : [-1, 1];
     for (let d = step * 0.5; d < L - 2; d += step) {
-      const px = s.a[0] + tx * d, pz = s.a[1] + tz * d;
+      const cx = s.a[0] + tx * d, cz = s.a[1] + tz * d;
       for (const side of sideList) {
-        const x = px + nx * side * off, z = pz + nz * side * off;
+        let x = cx + nx * side * off, z = cz + nz * side * off;
         if (box && (x < box.x0 || x > box.x1 || z < box.z0 || z > box.z1)) continue;
-        const onRoad = projectOnto(segs, x, z);
-        if (onRoad && onRoad.d < Math.max(2.4, (onRoad.w || 12) * 0.2)) continue; // 다른 차도 한가운데에 선 등
+        const at = keepOffCarriage(roadList, x, z, 0.4, { blocks });
+        if (!at) continue;
+        x = at[0]; z = at[1];
+        if (box && (x < box.x0 || x > box.x1 || z < box.z0 || z > box.z1)) continue;
         if (near(x, z, 16)) continue;
         if (exits.some((e) => Math.hypot(e.x - x, e.z - z) < exitClear)) continue;
-        if (insideBuilding(blocks, x, z)) continue;
+        const pr = projectOnto(segs, x, z);
+        if (!pr || pr.d > 18) continue;
         // 팔(로컬 +X)이 차도 쪽을 보게. rotY 후 로컬 +X → (cos yaw, -sin yaw)
-        const yaw = Math.atan2(side * nz, -side * nx);
+        const yaw = Math.atan2(-(pr.pz - z), pr.px - x);
         out.push(r1(x), r1(z), r3(yaw), 0, -1);
         taken.push([x, z]);
       }

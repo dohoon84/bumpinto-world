@@ -15,6 +15,25 @@ import { NIGHT_ON, NIGHT_V2, nightKind, nightSeed, nightCut, nightFacade, nightL
 
 export const CAR_KINDS = new Set(['primary', 'secondary', 'tertiary', 'trunk', 'residential', 'unclassified', 'service', 'motorway', 'primary_link', 'secondary_link', 'trunk_link', 'motorway_link']);
 const TREE_KINDS = new Set(['primary', 'secondary', 'tertiary']);
+const fetchedCar = new Grid(30);
+const segNearFetched = (x, z, { ax, az, bx, bz, hw }) => {
+  const dx = bx - ax, dz = bz - az, L2 = dx * dx + dz * dz || 1, t = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / L2));
+  return Math.hypot(ax + dx * t - x, az + dz * t - z) < hw;
+};
+/** 타일 JSON 이 도착하면 차도 구간을 모아, 아직 안 만든 이웃 타일의 넓은 차로 위에도 가로수를 심지 않게 한다. */
+export function ingestTileRoads(roads) {
+  for (const r of roads || []) {
+    if (!r.p || r.p.length < 2) continue;
+    if (!CAR_KINDS.has(r.k) && r.k !== 'busway') continue;
+    for (let i = 1; i < r.p.length; i++) {
+      const [ax, az] = r.p[i - 1], [bx, bz] = r.p[i], hw = (r.w || 6) / 2 + 0.6;
+      fetchedCar.add({ ax, az, bx, bz, hw }, Math.min(ax, bx) - hw, Math.min(az, bz) - hw, Math.max(ax, bx) + hw, Math.max(az, bz) + hw);
+    }
+  }
+}
+export function fetchedOnRoad(x, z) {
+  return fetchedCar.query(x, z).some((s) => segNearFetched(x, z, s));
+}
 const LINE_KINDS = new Set(['primary', 'secondary', 'trunk']);
 const BLOCK = '#ebe4d4', WATER = '#7ec3e6', CENTER_LINE = '#f2d36b';
 const DEFAULT_ROAD = ['#b4b7bc', 0.08];
@@ -144,7 +163,7 @@ export function buildDetailTile(key, t, { terrain, onRoadAll }) {
   }
   const roadGrid = new Grid(30);
   for (const r of t.r) {
-    if (!CAR_KINDS.has(r.k)) continue;
+    if (!CAR_KINDS.has(r.k) && r.k !== 'busway') continue;
     for (let i = 1; i < r.p.length; i++) {
       const [ax, az] = r.p[i - 1], [bx, bz] = r.p[i], hw = r.w / 2 + 0.6;
       roadGrid.add({ ax, az, bx, bz, hw }, Math.min(ax, bx) - hw, Math.min(az, bz) - hw, Math.max(ax, bx) + hw, Math.max(az, bz) + hw);
@@ -174,7 +193,7 @@ export function buildDetailTile(key, t, { terrain, onRoadAll }) {
       for (let s = 6; s < L; s += 14) for (const side of [-1, 1]) {
         const x = ax + ((bx - ax) * s) / L + nx * side * (r.w / 2 + 1.6), z = az + ((bz - az) * s) / L + nz * side * (r.w / 2 + 1.6);
         if (terrain && terrain.renderHeight(x, z) < -0.3) continue;
-        if (!onRoad(x, z) && !onRoadAll(x, z) && !blocked(x, z) && !treeBlockedByPole(x, z)) treePts.push([x, z]);
+        if (!onRoad(x, z) && !onRoadAll(x, z) && !fetchedOnRoad(x, z) && !blocked(x, z) && !treeBlockedByPole(x, z)) treePts.push([x, z]);
       }
     }
   }
