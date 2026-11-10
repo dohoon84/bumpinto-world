@@ -65,6 +65,27 @@ function makeWayMask(ways, cell = 5) {
   return (x, z) => set.has(Math.round(x / cell) + ',' + Math.round(z / cell));
 }
 
+function findSowolParkTip(osm) {
+  const ways = osm?.ways || [];
+  const sowols = ways.filter((w) => (w.name || '') === '소월로' && w.pts?.length >= 2);
+  const parks = ways.filter((w) => (w.name || '') === '남산공원길' && w.pts?.length >= 2);
+  let best = Infinity, tip = null;
+  for (const sw of sowols) {
+    for (const pw of parks) {
+      for (const a of [sw.pts[0], sw.pts[sw.pts.length - 1]]) {
+        for (const b of [pw.pts[0], pw.pts[pw.pts.length - 1]]) {
+          const d = Math.hypot(a[0] - b[0], a[1] - b[1]);
+          if (d < best) {
+            best = d;
+            tip = [(a[0] + b[0]) * 0.5, (a[1] + b[1]) * 0.5];
+          }
+        }
+      }
+    }
+  }
+  return best < 8 ? tip : null;
+}
+
 export function makeNamsanHeightAt(dem, osm = null) {
   const datum = dem?.datum ?? NT.datum;
   function extrapolateEle(x, z) {
@@ -125,6 +146,7 @@ export function makeNamsanHeightAt(dem, osm = null) {
   const GRID = 28;
   const cells = new Map();
   const cellKey = (i, j) => `${i},${j}`;
+  const juncTip = findSowolParkTip(osm);
   for (const w of osm?.ways || []) {
     const info = namsanRenderedWay(w);
     if (!info.namedLoop && !info.isCar) continue;
@@ -139,7 +161,11 @@ export function makeNamsanHeightAt(dem, osm = null) {
     const pts = w.pts || [];
     for (let i = 1; i < pts.length; i++) {
       const ax = pts[i - 1][0], az = pts[i - 1][1], bx = pts[i][0], bz = pts[i][1];
-      const seg = { ax, az, bx, bz, reach, bench, hw, isDrive: info.isDrive, isSowol: info.isSowol };
+      const nearJunc = !!(juncTip && (
+        Math.hypot(ax - juncTip[0], az - juncTip[1]) < 34
+        || Math.hypot(bx - juncTip[0], bz - juncTip[1]) < 34
+      ));
+      const seg = { ax, az, bx, bz, reach, bench, hw, isDrive: info.isDrive, isSowol: info.isSowol, nearJunc };
       const x0 = Math.min(ax, bx) - reach, x1 = Math.max(ax, bx) + reach;
       const z0 = Math.min(az, bz) - reach, z1 = Math.max(az, bz) + reach;
       const i0 = Math.floor(x0 / GRID), i1 = Math.floor(x1 / GRID);
@@ -214,7 +240,13 @@ export function makeNamsanHeightAt(dem, osm = null) {
       const L2 = dx * dx + dz * dz || 1;
       const t = Math.max(0, Math.min(1, ((x - s.ax) * dx + (z - s.az) * dz) / L2));
       const dist = Math.hypot(s.ax + dx * t - x, s.az + dz * t - z);
-      const p = s.hw + (s.isSowol ? 1.6 : 1.1);
+      let p = s.hw + (s.isSowol ? 1.6 : 1.1);
+      // Extra carve only next to the tip, where 6–8 m fillets sit outside
+      // either ribbon. A wide pad along the whole approach carved a pit.
+      if (s.nearJunc && juncTip) {
+        const tipDist = Math.hypot(x - juncTip[0], z - juncTip[1]);
+        if (tipDist < 20) p = Math.max(p, s.hw + 7.5);
+      }
       if (dist < best) { best = dist; pad = p; }
     }
     if (best === Infinity) return y;

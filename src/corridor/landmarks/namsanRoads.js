@@ -71,96 +71,311 @@ function drapedRibbonGeo(pts, width, heightAt, dy) {
   return fixNormalsUp(g);
 }
 
-function walkInFromEnd(pts, fromStart, dist) {
-  if (!pts || pts.length < 2) return null;
-  const dir = fromStart ? 1 : -1;
-  let i = fromStart ? 0 : pts.length - 1;
-  let x = pts[i][0], z = pts[i][1];
-  let left = dist;
-  while (left > 0) {
-    const ni = i + dir;
-    if (ni < 0 || ni >= pts.length) break;
-    const dx = pts[ni][0] - x, dz = pts[ni][1] - z;
-    const L = Math.hypot(dx, dz);
-    if (L < 1e-5) { i = ni; continue; }
-    if (L >= left) return [x + (dx / L) * left, z + (dz / L) * left];
-    left -= L;
-    x = pts[ni][0]; z = pts[ni][1];
-    i = ni;
-  }
-  return [x, z];
-}
+// East 소월로 / 남산공원길 junction: cut every ribbon out of this
+// radius and replace the hole with one union mesh (no overlapping fills).
+const JUNCTION_R = 28;
+const JUNCTION_FILLET = 7;
 
-function splitEnd(pts, fromStart, dist) {
-  if (!pts || pts.length < 2 || dist <= 0) return { kept: pts, removed: null };
-  const cut = walkInFromEnd(pts, fromStart, dist);
-  if (!cut) return { kept: pts, removed: null };
-  const dir = fromStart ? 1 : -1;
-  let i = fromStart ? 0 : pts.length - 1;
-  let acc = 0;
-  while (true) {
-    const ni = i + dir;
-    if (ni < 0 || ni >= pts.length) return { kept: pts, removed: null };
-    const L = Math.hypot(pts[ni][0] - pts[i][0], pts[ni][1] - pts[i][1]);
-    if (acc + L >= dist) {
-      const kept = fromStart ? [cut, ...pts.slice(ni)] : [...pts.slice(0, ni + 1), cut];
-      const removed = fromStart
-        ? [cut, ...pts.slice(0, i + 1).reverse()]
-        : [cut, ...pts.slice(i)];
-      return { kept, removed };
-    }
-    acc += L;
-    i = ni;
-  }
-}
-
-function clipFromEnd(pts, fromStart, cutDist) {
-  return splitEnd(pts, fromStart, cutDist).kept;
-}
-
-// Junction patch spanning the clipped ends of 소월로 and 남산공원길.
-// Same asphalt, barely raised, no flare — a long raised+flared overlay
-// photographed as a pale sharp rectangle sitting on 소월로 (library6).
-function sowolParkJunctionGeo(sowolPts, sowolW, parkPts, parkW, heightAt, dy) {
-  if (!sowolPts || sowolPts.length < 2 || !parkPts || parkPts.length < 2) return null;
-  const pairs = [
-    [true, true], [true, false], [false, true], [false, false],
-  ];
-  let best = Infinity, sStart = true, pStart = true, jx = 0, jz = 0;
-  for (const [ss, ps] of pairs) {
-    const a = ss ? sowolPts[0] : sowolPts[sowolPts.length - 1];
-    const b = ps ? parkPts[0] : parkPts[parkPts.length - 1];
-    const d = Math.hypot(a[0] - b[0], a[1] - b[1]);
-    if (d < best) {
-      best = d;
-      sStart = ss; pStart = ps;
-      jx = (a[0] + b[0]) * 0.5; jz = (a[1] + b[1]) * 0.5;
+function findSowolParkTip(ways) {
+  const sowols = (ways || []).filter((w) => (w.name || '') === '소월로' && w.pts?.length >= 2);
+  const parks = (ways || []).filter((w) => (w.name || '') === '남산공원길' && w.pts?.length >= 2);
+  let best = Infinity, tip = null;
+  for (const s of sowols) {
+    for (const p of parks) {
+      for (const a of [s.pts[0], s.pts[s.pts.length - 1]]) {
+        for (const b of [p.pts[0], p.pts[p.pts.length - 1]]) {
+          const d = Math.hypot(a[0] - b[0], a[1] - b[1]);
+          if (d < best) {
+            best = d;
+            tip = [(a[0] + b[0]) * 0.5, (a[1] + b[1]) * 0.5];
+          }
+        }
+      }
     }
   }
-  if (best > 8) return null;
-  // 소월로 (14 m) and 공원길 (8.6 m) meet at ~54°, so their ribbons
-  // overlap for ~14 m from the tip. Clip that far and fill the gap
-  // along the original centerline (a bezier overlay sat on top of
-  // 소월로 and photographed as a pale sharp rectangle).
-  const ALONG = 13;
-  const sSplit = splitEnd(sowolPts, sStart, ALONG);
-  const pSplit = splitEnd(parkPts, pStart, ALONG);
-  if (!sSplit.removed || !pSplit.removed) return null;
-  const toTip = sSplit.removed;
-  const fromTip = pSplit.removed.slice().reverse();
-  const curve = [...toTip, ...fromTip.slice(1)];
-  if (curve.length < 2) return null;
-  const nS = toTip.length;
-  const widths = curve.map((_, i) => {
-    const t = (i - (nS - 4)) / 8;
-    // Sit slightly inside each carriageway so a heading mismatch
-    // cannot z-fight the clipped ends (library7 shards).
-    const a = sowolW - 0.8, b = parkW - 0.5;
-    if (t <= 0) return a;
-    if (t >= 1) return b;
-    return a + (b - a) * t;
-  });
-  return drapedRibbonGeo(curve, widths, heightAt, dy + 0.02);
+  return best < 8 ? tip : null;
+}
+
+function clipOutsideCircle(pts, cx, cz, R) {
+  if (!pts || pts.length < 2) return pts;
+  const r2 = R * R;
+  const outside = (p) => {
+    const dx = p[0] - cx, dz = p[1] - cz;
+    return dx * dx + dz * dz >= r2 - 1e-6;
+  };
+  const crossing = (a, b) => {
+    const Ax = a[0] - cx, Az = a[1] - cz;
+    const Dx = b[0] - a[0], Dz = b[1] - a[1];
+    const qa = Dx * Dx + Dz * Dz;
+    if (qa < 1e-16) return null;
+    const qb = 2 * (Ax * Dx + Az * Dz);
+    const qc = Ax * Ax + Az * Az - r2;
+    const disc = qb * qb - 4 * qa * qc;
+    if (disc < 0) return null;
+    const s = Math.sqrt(disc);
+    let pick = null;
+    for (const t of [(-qb - s) / (2 * qa), (-qb + s) / (2 * qa)]) {
+      if (t >= -1e-6 && t <= 1 + 1e-6) {
+        const tt = Math.max(0, Math.min(1, t));
+        if (pick == null || Math.abs(tt - 0.5) < Math.abs(pick - 0.5)) pick = tt;
+      }
+    }
+    if (pick == null) return null;
+    return [a[0] + Dx * pick, a[1] + Dz * pick];
+  };
+  const pieces = [];
+  let cur = [];
+  for (let i = 0; i < pts.length; i++) {
+    const p = pts[i];
+    const out = outside(p);
+    if (i === 0) {
+      if (out) cur.push(p);
+      continue;
+    }
+    const prev = pts[i - 1];
+    const prevOut = outside(prev);
+    if (prevOut && out) {
+      cur.push(p);
+    } else if (prevOut && !out) {
+      const x = crossing(prev, p);
+      if (x) cur.push(x);
+      if (cur.length >= 2) pieces.push(cur);
+      cur = [];
+    } else if (!prevOut && out) {
+      const x = crossing(prev, p);
+      cur = x ? [x, p] : [p];
+    }
+  }
+  if (cur.length >= 2) pieces.push(cur);
+  if (!pieces.length) return null;
+  const plen = (pp) => {
+    let L = 0;
+    for (let i = 1; i < pp.length; i++) L += Math.hypot(pp[i][0] - pp[i - 1][0], pp[i][1] - pp[i - 1][1]);
+    return L;
+  };
+  pieces.sort((a, b) => plen(b) - plen(a));
+  return pieces[0];
+}
+
+function nearestOnCenterline(x, z, pts) {
+  let best = Infinity, bx = pts[0][0], bz = pts[0][1];
+  for (let i = 1; i < pts.length; i++) {
+    const ax = pts[i - 1][0], az = pts[i - 1][1], cx = pts[i][0], cz = pts[i][1];
+    const dx = cx - ax, dz = cz - az;
+    const L2 = dx * dx + dz * dz || 1;
+    const t = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / L2));
+    const px = ax + dx * t, pz = az + dz * t;
+    const d = Math.hypot(x - px, z - pz);
+    if (d < best) { best = d; bx = px; bz = pz; }
+  }
+  return { d: best, x: bx, z: bz };
+}
+
+// One draped mesh: 2D union of the junction arms with circular fillets
+// in the outside-outside corners, sampled on a ~0.85 m grid so triangles
+// hug the same benched heightAt the ribbons use (dy = 0.10).
+function drapedJunctionUnionGeo(arms, tip, heightAt, dy) {
+  if (!arms?.length || !tip) return null;
+  const R = JUNCTION_R;
+  const FR = JUNCTION_FILLET;
+  const queries = [];
+  const cropR = R + 26;
+  for (const arm of arms) {
+    if (!arm.pts || arm.pts.length < 2) continue;
+    const cropped = [];
+    for (let i = 0; i < arm.pts.length; i++) {
+      const p = arm.pts[i];
+      const d = Math.hypot(p[0] - tip[0], p[1] - tip[1]);
+      if (d <= cropR) cropped.push(p);
+      else if (cropped.length && Math.hypot(arm.pts[i - 1][0] - tip[0], arm.pts[i - 1][1] - tip[1]) <= cropR) {
+        cropped.push(p);
+      }
+    }
+    if (cropped.length < 2) continue;
+    const role = arm.name === '소월로' ? 'sowol'
+      : arm.name === '남산공원길' ? 'park'
+      : 'other';
+    queries.push({ pts: cropped, hw: Math.max(1.2, (arm.width || 8) * 0.5), role });
+  }
+  if (!queries.length) return null;
+
+  function sdList(x, z) {
+    return queries.map((q) => {
+      const n = nearestOnCenterline(x, z, q.pts);
+      return { sd: n.d - q.hw, tipD: Math.hypot(n.x - tip[0], n.z - tip[1]) };
+    });
+  }
+  function inside(x, z) {
+    const tipDist = Math.hypot(x - tip[0], z - tip[1]);
+    if (tipDist > R + FR + 1.2) return false;
+    const sds = sdList(x, z);
+    for (const s of sds) {
+      if (s.sd <= 0 && s.tipD <= R) return true;
+    }
+    if (tipDist > R + 0.8) return false;
+    // Round only the 소월로 / 공원길 corner — filleting every arm pair
+    // (driveways, extra service roads) grew a dark amoeba between them.
+    const sowolSds = [], parkSds = [];
+    for (let i = 0; i < sds.length; i++) {
+      if (queries[i].role === 'sowol') sowolSds.push(sds[i]);
+      if (queries[i].role === 'park') parkSds.push(sds[i]);
+    }
+    for (const a of sowolSds) {
+      for (const b of parkSds) {
+        if (a.sd > 0 && b.sd > 0 && a.sd < FR && b.sd < FR
+          && (a.sd * a.sd + b.sd * b.sd) < FR * FR
+          && a.tipD <= R + FR && b.tipD <= R + FR) return true;
+      }
+    }
+    return false;
+  }
+
+  const maxHw = Math.max(...queries.map((q) => q.hw));
+  const pad = R + maxHw + FR + 1.6;
+  const step = 0.65;
+  const x0 = tip[0] - pad, z0 = tip[1] - pad;
+  const nx = Math.ceil((2 * pad) / step) + 1;
+  const nzc = Math.ceil((2 * pad) / step) + 1;
+  let occ = new Uint8Array(nx * nzc);
+  for (let j = 0; j < nzc; j++) {
+    for (let i = 0; i < nx; i++) {
+      if (inside(x0 + i * step, z0 + j * step)) occ[j * nx + i] = 1;
+    }
+  }
+  const closed = new Uint8Array(occ);
+  for (let j = 1; j < nzc - 1; j++) {
+    for (let i = 1; i < nx - 1; i++) {
+      if (occ[j * nx + i]) continue;
+      let n = 0;
+      for (let dj = -1; dj <= 1; dj++) {
+        for (let di = -1; di <= 1; di++) {
+          if (occ[(j + dj) * nx + (i + di)]) n++;
+        }
+      }
+      if (n >= 5) closed[j * nx + i] = 1;
+    }
+  }
+  occ = closed;
+
+  const pos = [], index = [];
+  const vertKey = new Map();
+  const vert = (x, z) => {
+    const k = `${x.toFixed(3)},${z.toFixed(3)}`;
+    let id = vertKey.get(k);
+    if (id != null) return id;
+    id = pos.length / 3;
+    pos.push(x, heightAt(x, z) + dy, z);
+    vertKey.set(k, id);
+    return id;
+  };
+  const cross = (ax, az, onA, bx, bz, onB) => {
+    let lo = 0, hi = 1;
+    for (let k = 0; k < 6; k++) {
+      const t = (lo + hi) * 0.5;
+      const x = ax + (bx - ax) * t, z = az + (bz - az) * t;
+      if (inside(x, z) === onA) lo = t;
+      else hi = t;
+    }
+    const t = (lo + hi) * 0.5;
+    return [ax + (bx - ax) * t, az + (bz - az) * t];
+  };
+
+  for (let j = 0; j < nzc - 1; j++) {
+    for (let i = 0; i < nx - 1; i++) {
+      const ons = [
+        occ[j * nx + i],
+        occ[j * nx + i + 1],
+        occ[(j + 1) * nx + i + 1],
+        occ[(j + 1) * nx + i],
+      ];
+      const bits = ons[0] | (ons[1] << 1) | (ons[2] << 2) | (ons[3] << 3);
+      if (!bits) continue;
+      const xA = x0 + i * step, zA = z0 + j * step;
+      const corners = [
+        [xA, zA], [xA + step, zA], [xA + step, zA + step], [xA, zA + step],
+      ];
+      if (bits === 15) {
+        const a = vert(corners[0][0], corners[0][1]);
+        const b = vert(corners[1][0], corners[1][1]);
+        const c = vert(corners[2][0], corners[2][1]);
+        const d = vert(corners[3][0], corners[3][1]);
+        index.push(a, b, c, a, c, d);
+        continue;
+      }
+      const poly = [];
+      for (let e = 0; e < 4; e++) {
+        const n = (e + 1) & 3;
+        if (ons[e]) poly.push(corners[e]);
+        if (!ons[e] !== !ons[n]) {
+          poly.push(cross(
+            corners[e][0], corners[e][1], !!ons[e],
+            corners[n][0], corners[n][1], !!ons[n],
+          ));
+        }
+      }
+      if (poly.length < 3) continue;
+      const ids = poly.map((q) => vert(q[0], q[1]));
+      for (let k = 1; k < ids.length - 1; k++) index.push(ids[0], ids[k], ids[k + 1]);
+    }
+  }
+  if (index.length < 3) return null;
+  // Grid walk is clockwise in +X / +Z; reverse so faces point +Y and
+  // Lambert lighting matches the draped road ribbons.
+  for (let i = 0; i < index.length; i += 3) {
+    const t = index[i + 1];
+    index[i + 1] = index[i + 2];
+    index[i + 2] = t;
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setIndex(index);
+  // Same lighting as the long benched ribbons: a faceted 0.65 m grid
+  // was reading a full shade darker and looked like a separate plate.
+  const nrm = new Float32Array((pos.length / 3) * 3);
+  for (let i = 0; i < nrm.length; i += 3) nrm[i + 1] = 1;
+  g.setAttribute('normal', new THREE.Float32BufferAttribute(nrm, 3));
+  return g;
+}
+
+function stripPaintInsideJunction(geos, tip, R, dropWestOfTip = false) {
+  if (!tip || !geos?.length) return geos;
+  const r2 = (R - 0.4) * (R - 0.4);
+  const keep = [];
+  for (const g of geos) {
+    const pos = g.attributes?.position?.array;
+    const idx = g.getIndex()?.array;
+    if (!pos || !idx || !idx.length) { keep.push(g); continue; }
+    const next = [];
+    for (let i = 0; i < idx.length; i += 3) {
+      const a = idx[i] * 3, b = idx[i + 1] * 3, c = idx[i + 2] * 3;
+      const bad = (o) => {
+        const dx = pos[o] - tip[0], dz = pos[o + 2] - tip[1];
+        if (dx * dx + dz * dz < r2) return true;
+        // Yellow that leaked west onto 소월로 (the tip is 소월로's east end).
+        if (dropWestOfTip && pos[o] < tip[0] - 8 && Math.hypot(dx, dz) < 90) return true;
+        return false;
+      };
+      if (bad(a) || bad(b) || bad(c)) continue;
+      next.push(idx[i], idx[i + 1], idx[i + 2]);
+    }
+    if (!next.length) continue;
+    g.setIndex(next);
+    keep.push(g);
+  }
+  return keep;
+}
+
+function geoXzBounds(geo) {
+  const a = geo?.attributes?.position?.array;
+  if (!a?.length) return null;
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+  let minZ = Infinity, maxZ = -Infinity;
+  for (let i = 0; i < a.length; i += 3) {
+    if (a[i] < minX) minX = a[i]; if (a[i] > maxX) maxX = a[i];
+    if (a[i + 1] < minY) minY = a[i + 1]; if (a[i + 1] > maxY) maxY = a[i + 1];
+    if (a[i + 2] < minZ) minZ = a[i + 2]; if (a[i + 2] > maxZ) maxZ = a[i + 2];
+  }
+  return { minX, maxX, minY, maxY, minZ, maxZ };
 }
 
 function guideY(x, z, heightAt) {
@@ -738,7 +953,26 @@ export function createNamsanRoads({ parent, osm, heightAt, overlay = null } = {}
   const lampPts = [];
 
   const trailLampPts = [];
-  const junctionArms = { sowol: null, parks: [] };
+  const junctionTip = findSowolParkTip(ways);
+  const junctionArms = [];
+  const plateLogs = [];
+  const noteGeo = (geo, name, color, yOff) => {
+    if (!geo) return geo;
+    const bb = geoXzBounds(geo);
+    if (!bb) return geo;
+    // library7 lighter rectangle on 소월로 west of the tip (screen x 70–330).
+    const hit = bb.maxX >= -11220 && bb.minX <= -11165 && bb.maxZ >= -20560 && bb.minZ <= -20508;
+    if (hit) {
+      plateLogs.push({
+        name, color, yOff,
+        minX: +bb.minX.toFixed(2), maxX: +bb.maxX.toFixed(2),
+        minY: +bb.minY.toFixed(2), maxY: +bb.maxY.toFixed(2),
+        minZ: +bb.minZ.toFixed(2), maxZ: +bb.maxZ.toFixed(2),
+        verts: geo.attributes.position.count,
+      });
+    }
+    return geo;
+  };
 
   for (const w of ways) {
     const isCar = CAR.has(w.k);
@@ -768,7 +1002,7 @@ export function createNamsanRoads({ parent, osm, heightAt, overlay = null } = {}
     }
     // Finer sampling on paths and driveways so ribbons hug the hillside
     // instead of spanning as flat chords with dark underside edges.
-    const pts = resample(srcPts, isStep || isElev ? 1.4 : (isDrive || !isCar || isSowol || isPark) ? 1.1 : 2.4);
+    let pts = resample(srcPts, isStep || isElev ? 1.4 : (isDrive || !isCar || isSowol || isPark) ? 1.1 : 2.4);
     if (pts.length < 2) continue;
 
     if (isElev) {
@@ -799,37 +1033,35 @@ export function createNamsanRoads({ parent, osm, heightAt, overlay = null } = {}
     // 소월로 and 남산공원길 are the cycling-course spine: one draped
     // strip each, not per-segment level plates with tan undersides.
     const drape = isDrive || !isCar || isSowol || isPark;
-    // Clip paint and the carriageway 15 m back from the shared tip
-    // (the two 14 m / 8.6 m ribbons overlap for ~14 m at 54°). A
-    // same-path patch with per-arm widths fills the gap; a single
-    // merged ribbon folded at the stub and left the SE approach bare.
-    const JUNCTION_CLIP = 15;
-    let paintPts = pts;
-    if (isSowol) {
-      paintPts = clipFromEnd(pts, true, JUNCTION_CLIP) || pts;
-      junctionArms.sowol = pts;
-    } else if (isPark) {
-      junctionArms.parks.push(pts);
-      const sowol = ways.find((cand) => (cand.name || '') === '소월로');
-      if (sowol?.pts?.length >= 2) {
-        const sA = sowol.pts[0], sB = sowol.pts[sowol.pts.length - 1];
-        const near = (q) => Math.min(
-          Math.hypot(q[0] - sA[0], q[1] - sA[1]),
-          Math.hypot(q[0] - sB[0], q[1] - sB[1]),
-        );
-        const d0 = near(pts[0]), d1 = near(pts[pts.length - 1]);
-        if (Math.min(d0, d1) < 10) paintPts = clipFromEnd(pts, d0 < d1, JUNCTION_CLIP) || pts;
+    const rawPts = pts;
+    const tipD = (q) => (junctionTip ? Math.hypot(q[0] - junctionTip[0], q[1] - junctionTip[1]) : Infinity);
+    const meetsTip = Math.min(tipD(pts[0]), tipD(pts[pts.length - 1])) < 10;
+    let hasInside = false;
+    if (junctionTip) {
+      for (const q of pts) {
+        if (tipD(q) < JUNCTION_R + width * 0.5 + 1) { hasInside = true; break; }
       }
     }
-    const roadPts = (isSowol || isPark) && !isDrive ? paintPts : pts;
+    const nearTipEnd = Math.min(tipD(pts[0]), tipD(pts[pts.length - 1])) < JUNCTION_R + 6;
+    const entersJunc = junctionTip && isCar && (
+      isSowol || (isPark && meetsTip) || (nearTipEnd && hasInside)
+    );
+    if (entersJunc) junctionArms.push({ pts: rawPts, width, name: w.name || w.k || 'way' });
+    // Cut every ribbon, sidewalk and paint out of the junction disk so
+    // they share an edge with the union mesh instead of overlapping it.
+    if (junctionTip) {
+      const clipped = clipOutsideCircle(pts, junctionTip[0], junctionTip[1], JUNCTION_R);
+      if (!clipped) continue;
+      pts = clipped;
+    }
     const geo = drape
-      ? drapedRibbonGeo(roadPts, width, heightAt, dy)
+      ? drapedRibbonGeo(pts, width, heightAt, dy)
       : fixNormalsUp(ribbonGeo(elevated(pts, heightAt, dy), width, 0, false));
     if (!geo) continue;
     if (isCar) {
       // A driveway that meets 소월로 / 공원길 must read as asphalt, not a
       // second brown-gray plate laid across the lanes.
-      carGeos.push(paint(geo, isDrive && !driveOnRoad ? '#7a7f86' : '#6e747c'));
+      carGeos.push(noteGeo(paint(geo, isDrive && !driveOnRoad ? '#7a7f86' : '#6e747c'), (w.name || w.k || 'car') + (isDrive ? '/drive' : ''), isDrive && !driveOnRoad ? '#7a7f86' : '#6e747c', dy));
       // No underside ribbon: a 16 cm gap still z-fights at ~23 km (the
       // same class of bug as the aerial DEM panels). Not a cheap fix.
       // Driveways sit on gentle library slopes — a deep skirt read as a
@@ -851,10 +1083,10 @@ export function createNamsanRoads({ parent, osm, heightAt, overlay = null } = {}
       if (namedLoop && width >= 6) {
         if (isPark) {
           const strip = (off, ww, yOff, dest, color) => {
-            const g = drapedRibbonGeo(offsetLine(paintPts, off), ww, heightAt, dy + yOff);
+            const g = drapedRibbonGeo(offsetLine(pts, off), ww, heightAt, dy + yOff);
             if (!g) return;
-            if (color) dest.push(paint(g, color));
-            else dest.push(g);
+            if (color) dest.push(noteGeo(paint(g, color), (w.name || 'park') + '/shoulder', color, dy + yOff));
+            else dest.push(noteGeo(g, (w.name || 'park') + '/paint', color || '#f0d24a', dy + yOff));
           };
           strip(0.14, 0.11, 0.045, yellowGeos);
           strip(-0.14, 0.11, 0.045, yellowGeos);
@@ -876,7 +1108,7 @@ export function createNamsanRoads({ parent, osm, heightAt, overlay = null } = {}
       // 간선 전기버스 and the double-decker 서울시티투어버스.
       if (isSowol && width >= 10) {
         const sowolStrip = (off, ww, yOff, color) => {
-          const g = drapedRibbonGeo(offsetLine(paintPts, off), ww, heightAt, dy + yOff);
+          const g = drapedRibbonGeo(offsetLine(pts, off), ww, heightAt, dy + yOff);
           if (!g) return;
           if (color) carGeos.push(paint(g, color));
           else whiteGeos.push(g);
@@ -888,8 +1120,8 @@ export function createNamsanRoads({ parent, osm, heightAt, overlay = null } = {}
         const laneOff = [-width / 4, 0, width / 4];
         for (const off of laneOff) {
           let accD = 0;
-          for (let i = 1; i < paintPts.length; i++) {
-            const ax = paintPts[i - 1][0], az = paintPts[i - 1][1], bx = paintPts[i][0], bz = paintPts[i][1];
+          for (let i = 1; i < pts.length; i++) {
+            const ax = pts[i - 1][0], az = pts[i - 1][1], bx = pts[i][0], bz = pts[i][1];
             const L = Math.hypot(bx - ax, bz - az) || 1;
             const hx = (bx - ax) / L, hz = (bz - az) / L;
             let s = 0;
@@ -943,10 +1175,10 @@ export function createNamsanRoads({ parent, osm, heightAt, overlay = null } = {}
         const swW = 1.0;
         const curbOff = width * 0.5 + 0.08;
         for (const sgn of [1, -1]) {
-          const sw = drapedRibbonGeo(offsetLine(paintPts, sgn * swOff), swW, heightAt, dy + 0.05);
-          const curb = drapedRibbonGeo(offsetLine(paintPts, sgn * curbOff), 0.2, heightAt, dy + 0.11);
-          if (sw) sidewalkGeos.push(paint(sw, '#b7b4ac'));
-          if (curb) curbGeos.push(paint(curb, '#c9c5bb'));
+          const sw = drapedRibbonGeo(offsetLine(pts, sgn * swOff), swW, heightAt, dy + 0.05);
+          const curb = drapedRibbonGeo(offsetLine(pts, sgn * curbOff), 0.2, heightAt, dy + 0.11);
+          if (sw) sidewalkGeos.push(noteGeo(paint(sw, '#b7b4ac'), (w.name || 'sw') + '/sidewalk', '#b7b4ac', dy + 0.05));
+          if (curb) curbGeos.push(noteGeo(paint(curb, '#c9c5bb'), (w.name || 'sw') + '/curb', '#c9c5bb', dy + 0.11));
         }
       } else if (swPref === 'both') {
         for (const sgn of [1, -1]) {
@@ -958,12 +1190,12 @@ export function createNamsanRoads({ parent, osm, heightAt, overlay = null } = {}
         sidewalkGeos.push(paint(fixNormalsUp(ribbonGeo(attachToRoad(pts, offsetLine(pts, sgn * (width * 0.5 + 0.90)), heightAt, dy + 0.07), 1.55, 0, false)), '#b7b4ac'));
         curbGeos.push(paint(fixNormalsUp(ribbonGeo(attachToRoad(pts, offsetLine(pts, sgn * (width * 0.5 + 0.12)), heightAt, dy + 0.13), 0.22, 0, false)), '#c9c5bb'));
       } else if (upSigns && isPark) {
-        const swPts = offsetBySigned(paintPts, (i) => upSigns[i] * (width * 0.5 + 0.52));
-        const curbPts = offsetBySigned(paintPts, (i) => upSigns[i] * (width * 0.5 + 0.12));
+        const swPts = offsetBySigned(pts, (i) => upSigns[i] * (width * 0.5 + 0.52));
+        const curbPts = offsetBySigned(pts, (i) => upSigns[i] * (width * 0.5 + 0.12));
         const sw = drapedRibbonGeo(swPts, 1.05, heightAt, dy + 0.05);
         const curb = drapedRibbonGeo(curbPts, 0.2, heightAt, dy + 0.11);
-        if (sw) sidewalkGeos.push(paint(sw, '#b7b4ac'));
-        if (curb) curbGeos.push(paint(curb, '#c9c5bb'));
+        if (sw) sidewalkGeos.push(noteGeo(paint(sw, '#b7b4ac'), (w.name || 'park') + '/sidewalk', '#b7b4ac', dy + 0.05));
+        if (curb) curbGeos.push(noteGeo(paint(curb, '#c9c5bb'), (w.name || 'park') + '/curb', '#c9c5bb', dy + 0.11));
       } else if (upSigns) {
         const swPts = offsetBySigned(pts, (i) => upSigns[i] * (width * 0.5 + 0.90));
         const curbPts = offsetBySigned(pts, (i) => upSigns[i] * (width * 0.5 + 0.12));
@@ -1084,16 +1316,64 @@ export function createNamsanRoads({ parent, osm, heightAt, overlay = null } = {}
   }
 
   {
-    // Fill the clipped gap along the original centerline. Width stays 14 m
-    // on the (straight) 소월로 half and 8.6 m on the 공원길 / stub half so
-    // the 54° turn does not fold a 14 m ribbon.
-    if (junctionArms.sowol && junctionArms.parks.length) {
-      let patch = null;
-      for (const pp of junctionArms.parks) {
-        patch = sowolParkJunctionGeo(junctionArms.sowol, 14, pp, 8.6, heightAt, 0.10);
-        if (patch) break;
+    if (junctionTip && junctionArms.length) {
+      const union = drapedJunctionUnionGeo(junctionArms, junctionTip, heightAt, 0.10);
+      if (union) {
+        union.name = 'namsan-east-junction';
+        carGeos.push(noteGeo(paint(union, '#6e747c'), 'east-junction-union', '#6e747c', 0.10));
+        walkHits.push({
+          segs: [{ a: [junctionTip[0], junctionTip[1]], b: [junctionTip[0], junctionTip[1]], L: 0 }],
+          pad: JUNCTION_R + 6,
+          dy: 0.10,
+        });
       }
-      if (patch) carGeos.push(paint(patch, '#6e747c'));
+      // Stop line on 공원길 at the junction edge (service road yields to 소월로).
+      const parkArm = junctionArms.find((a) => a.name === '남산공원길');
+      if (parkArm?.pts?.length >= 2) {
+        const clipped = clipOutsideCircle(parkArm.pts, junctionTip[0], junctionTip[1], JUNCTION_R);
+        if (clipped && clipped.length >= 2) {
+          const d0 = Math.hypot(clipped[0][0] - junctionTip[0], clipped[0][1] - junctionTip[1]);
+          const d1 = Math.hypot(clipped[clipped.length - 1][0] - junctionTip[0], clipped[clipped.length - 1][1] - junctionTip[1]);
+          const fromStart = d0 <= d1;
+          const p = fromStart ? clipped[0] : clipped[clipped.length - 1];
+          const q = fromStart ? clipped[1] : clipped[clipped.length - 2];
+          const hx = p[0] - q[0], hz = p[1] - q[1];
+          const L = Math.hypot(hx, hz) || 1;
+          const ux = hx / L, uz = hz / L;
+          const cxp = p[0] - ux * 0.3, czp = p[1] - uz * 0.3;
+          const hw = (parkArm.width || 8.6) * 0.46;
+          const left = [cxp - uz * hw, czp + ux * hw];
+          const right = [cxp + uz * hw, czp - ux * hw];
+          const stop = drapedRibbonGeo([left, right], 0.38, heightAt, 0.15);
+          if (stop) whiteGeos.push(stop);
+        }
+      }
+    }
+    console.info('[namsan-junction] ' + JSON.stringify({
+      tip: junctionTip,
+      arms: junctionArms.map((a) => ({ name: a.name, width: a.width, n: a.pts.length })),
+    }));
+    const yellowNear = [];
+    for (const g of yellowGeos) {
+      const bb = geoXzBounds(g);
+      if (!bb) continue;
+      const cx = (bb.minX + bb.maxX) * 0.5, cz = (bb.minZ + bb.maxZ) * 0.5;
+      const dTip = Math.hypot(cx - junctionTip[0], cz - junctionTip[1]);
+      const cornerD = Math.min(
+        Math.hypot(bb.minX - junctionTip[0], bb.minZ - junctionTip[1]),
+        Math.hypot(bb.maxX - junctionTip[0], bb.maxZ - junctionTip[1]),
+        Math.hypot(bb.minX - junctionTip[0], bb.maxZ - junctionTip[1]),
+        Math.hypot(bb.maxX - junctionTip[0], bb.minZ - junctionTip[1]),
+      );
+      if (cornerD < JUNCTION_R + 8) {
+        yellowNear.push({ ...bb, dTip: +dTip.toFixed(1), cornerD: +cornerD.toFixed(1),
+          minX: +bb.minX.toFixed(1), maxX: +bb.maxX.toFixed(1),
+          minZ: +bb.minZ.toFixed(1), maxZ: +bb.maxZ.toFixed(1) });
+      }
+    }
+    console.info('[namsan-yellow-near] ' + JSON.stringify(yellowNear));
+    if (plateLogs.length) {
+      console.info('[namsan-plate] ' + JSON.stringify(plateLogs));
     }
   }
 
@@ -1159,12 +1439,14 @@ export function createNamsanRoads({ parent, osm, heightAt, overlay = null } = {}
   const whiteMat = new THREE.MeshLambertMaterial({
     color: '#eceff4', emissive: new THREE.Color('#dfe4ec'), emissiveIntensity: 0.14,
   });
-  if (yellowGeos.length) {
-    const yg = mergeGeometries(yellowGeos, true);
+  const yellowKept = junctionTip ? stripPaintInsideJunction(yellowGeos, junctionTip, JUNCTION_R, true) : yellowGeos;
+  const whiteKept = junctionTip ? stripPaintInsideJunction(whiteGeos, junctionTip, JUNCTION_R) : whiteGeos;
+  if (yellowKept.length) {
+    const yg = mergeGeometries(yellowKept, true);
     if (yg) { const m = new THREE.Mesh(yg, yellowMat); m.name = 'namsan-yellow-lines'; group.add(m); }
   }
-  if (whiteGeos.length) {
-    const wg = mergeGeometries(whiteGeos, true);
+  if (whiteKept.length) {
+    const wg = mergeGeometries(whiteKept, true);
     if (wg) { const m = new THREE.Mesh(wg, whiteMat); m.name = 'namsan-white-lines'; group.add(m); }
   }
 
@@ -1272,6 +1554,16 @@ export function createNamsanRoads({ parent, osm, heightAt, overlay = null } = {}
 
     const pad = new THREE.Mesh(new THREE.BoxGeometry(5.6, 0.08, 2.3), new THREE.MeshLambertMaterial({ color: '#b7b4ac' }));
     pad.position.set(sx, y + 0.05, sz); pad.rotation.y = ang; group.add(pad);
+    if (sx <= -11165 && sx >= -11220 && sz <= -20508 && sz >= -20560) {
+      plateLogs.push({
+        name: `bus-pad:${s.name || s.ref || si}`,
+        color: '#b7b4ac', yOff: 0.05,
+        minX: +(sx - 3).toFixed(2), maxX: +(sx + 3).toFixed(2),
+        minY: +(y + 0.01).toFixed(2), maxY: +(y + 0.09).toFixed(2),
+        minZ: +(sz - 2).toFixed(2), maxZ: +(sz + 2).toFixed(2),
+        verts: 8,
+      });
+    }
     for (const u of [-2.05, 0, 2.05]) {
       const post = new THREE.Mesh(new THREE.BoxGeometry(0.1, 2.55, 0.1), steel);
       post.position.set(sx + hx * u + nrmx * 0.78, y + 1.28, sz + hz * u + nrmz * 0.78);
@@ -1445,6 +1737,34 @@ export function createNamsanRoads({ parent, osm, heightAt, overlay = null } = {}
       }
       doorGuides += addGuide(viaBus, { skipPlaza: true });
     }
+  }
+
+  {
+    const hits = [];
+    group.traverse((o) => {
+      if (!o.isMesh) return;
+      const bb = o.geometry?.attributes?.position ? geoXzBounds(o.geometry) : null;
+      // world-space: most road meshes sit at origin with baked verts
+      const minX = bb ? bb.minX + o.position.x : o.position.x - 4;
+      const maxX = bb ? bb.maxX + o.position.x : o.position.x + 4;
+      const minZ = bb ? bb.minZ + o.position.z : o.position.z - 4;
+      const maxZ = bb ? bb.maxZ + o.position.z : o.position.z + 4;
+      const minY = bb ? bb.minY + o.position.y : o.position.y;
+      const maxY = bb ? bb.maxY + o.position.y : o.position.y;
+      if (maxX < -11220 || minX > -11165 || maxZ < -20560 || minZ > -20508) return;
+      const mat = o.material;
+      const color = mat?.color ? `#${mat.color.getHexString()}` : (mat?.vertexColors ? 'vertexColors' : '?');
+      hits.push({
+        name: o.name || o.parent?.name || '(unnamed)',
+        color,
+        vertexColors: !!mat?.vertexColors,
+        yOff: +o.position.y.toFixed(3),
+        minX: +minX.toFixed(2), maxX: +maxX.toFixed(2),
+        minY: +minY.toFixed(2), maxY: +maxY.toFixed(2),
+        minZ: +minZ.toFixed(2), maxZ: +maxZ.toFixed(2),
+      });
+    });
+    console.info('[namsan-plate-live] ' + JSON.stringify(hits));
   }
 
   function floorY(x, z, refY) {
