@@ -68,7 +68,7 @@ export function createNamsan({ scene, overlay, terrain, dem, osm, city = null, c
   const tower = createNamsanTower({ parent: root, osm, baseY: land.baseY, env: null, renderer });
   const interior = createNamsanInterior({ parent: root, osm, baseY: land.baseY, tower });
   const car = cable ? createNamsanCable({ parent: root, osm, heightAt: land.heightAt, overlay, baseY: land.baseY }) : null;
-  const roads = createNamsanRoads({ parent: root, osm, heightAt: land.heightAt, overlay });
+  const roads = createNamsanRoads({ parent: root, osm, heightAt: land.heightAt, overlay, city });
   roads.setDoor?.(tower.door);
   const library = createNamsanLibrary({ parent: root, osm, heightAt: land.heightAt, overlay });
   const downtown = createNamsanCity({ parent: root, data: city, heightAt: land.heightAt, parks: osm?.parks || [], osm });

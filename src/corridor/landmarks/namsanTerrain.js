@@ -241,11 +241,12 @@ export function makeNamsanHeightAt(dem, osm = null) {
       const t = Math.max(0, Math.min(1, ((x - s.ax) * dx + (z - s.az) * dz) / L2));
       const dist = Math.hypot(s.ax + dx * t - x, s.az + dz * t - z);
       let p = s.hw + (s.isSowol ? 1.6 : 1.1);
-      // Extra carve only next to the tip, where 6–8 m fillets sit outside
-      // either ribbon. A wide pad along the whole approach carved a pit.
+      // Extra carve only under the 5–7 m inside-corner fillets. A 20 m
+      // disk at hw+7.5 dropped the grass north of the curb into a
+      // dark puddle where the driveway meets 소월로.
       if (s.nearJunc && juncTip) {
         const tipDist = Math.hypot(x - juncTip[0], z - juncTip[1]);
-        if (tipDist < 20) p = Math.max(p, s.hw + 7.5);
+        if (tipDist < 14) p = Math.max(p, s.hw + 6.5);
       }
       if (dist < best) { best = dist; pad = p; }
     }

@@ -7,6 +7,7 @@ import { ribbonGeo, fixNormalsUp } from '../../world.js';
 import { paint } from '../tileMesh.js';
 import { createBus } from '../../transit/busModel.js';
 import { NT, NAMSAN_CONNECT_ENDS } from './namsanCoords.js';
+import { cityJunctionApproaches } from './namsanCity.js';
 export { NAMSAN_CONNECT_ENDS };
 import { buildStreetlightGeometries, SCALE, POOL_SCALE, POOL_R, POOL_RZ, POOL_GAIN, ARM, LENS_DAY, LENS_NIGHT } from '../../world/streetlights.js';
 import { lightPoolMaterial } from '../../world/nightLights.js';
@@ -69,6 +70,39 @@ function drapedRibbonGeo(pts, width, heightAt, dy) {
   g.setIndex(idx);
   g.computeVertexNormals();
   return fixNormalsUp(g);
+}
+
+
+const SOWOL_FULL_W = 14;
+const SOWOL_JOIN_W = 8.6;
+const SOWOL_TAPER_M = 18;
+
+function distAlongFromTip(pts, tip) {
+  const n = pts.length;
+  const out = new Array(n).fill(0);
+  if (!tip || n < 2) return out;
+  const d0 = Math.hypot(pts[0][0] - tip[0], pts[0][1] - tip[1]);
+  const d1 = Math.hypot(pts[n - 1][0] - tip[0], pts[n - 1][1] - tip[1]);
+  if (d0 <= d1) {
+    for (let i = 1; i < n; i++) {
+      out[i] = out[i - 1] + Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]);
+    }
+  } else {
+    for (let i = n - 2; i >= 0; i--) {
+      out[i] = out[i + 1] + Math.hypot(pts[i][0] - pts[i + 1][0], pts[i][1] - pts[i + 1][1]);
+    }
+  }
+  return out;
+}
+
+function sowolWidthAt(pts, tip) {
+  const along = distAlongFromTip(pts, tip);
+  return along.map((d) => {
+    if (d >= SOWOL_TAPER_M) return SOWOL_FULL_W;
+    const t = d / SOWOL_TAPER_M;
+    const s = t * t * (3 - 2 * t);
+    return SOWOL_JOIN_W + (SOWOL_FULL_W - SOWOL_JOIN_W) * s;
+  });
 }
 
 // East 소월로 / 남산공원길 junction: keep the through-ribbons continuous
@@ -906,7 +940,7 @@ function roadSupportGeos(pts, width, heightAt, dy) {
   return { bed, fill };
 }
 
-export function createNamsanRoads({ parent, osm, heightAt, overlay = null } = {}) {
+export function createNamsanRoads({ parent, osm, heightAt, overlay = null, city = null } = {}) {
   const group = new THREE.Group();
   group.name = 'namsan-roads';
   parent.add(group);
@@ -914,6 +948,15 @@ export function createNamsanRoads({ parent, osm, heightAt, overlay = null } = {}
   let ways = (osm?.ways || []).filter((w) => w.pts?.length >= 2);
   ways = replaceNamedWays(ways, '소월로');
   ways = replaceNamedWays(ways, '남산공원길');
+  for (const a of cityJunctionApproaches(osm, city?.roads || [])) {
+    ways.push({
+      name: '남산접근',
+      k: 'secondary',
+      w: a.width,
+      pts: a.pts,
+      _sowolJoin: true,
+    });
+  }
   const carriageSegs = majorCarSegs(ways);
   const empty = {
     group,
@@ -962,8 +1005,9 @@ export function createNamsanRoads({ parent, osm, heightAt, overlay = null } = {}
     const namedLoop = /남산공원길|순환로/.test(w.name || '');
     const isSowol = (w.name || '') === '소월로';
     const isPark = (w.name || '') === '남산공원길';
-    const isDrive = w.service === 'driveway'
-      || (isCar && !namedLoop && !isSowol && (w.motor_vehicle === 'private' || !w.name));
+    const isJoin = !!w._sowolJoin;
+    const isDrive = !isJoin && (w.service === 'driveway'
+      || (isCar && !namedLoop && !isSowol && (w.motor_vehicle === 'private' || !w.name)));
     let width = w.w || (isCar ? 7 : isStep ? 2.6 : 2.3);
     if (isElev) width = 2.5;
     else if (isDrive) width = Math.min(width, w.service === 'driveway' ? 3.2 : 4.4);
@@ -1013,7 +1057,7 @@ export function createNamsanRoads({ parent, osm, heightAt, overlay = null } = {}
 
     // 소월로 and 남산공원길 are the cycling-course spine: one draped
     // strip each, not per-segment level plates with tan undersides.
-    const drape = isDrive || !isCar || isSowol || isPark;
+    const drape = isDrive || !isCar || isSowol || isPark || isJoin;
     const rawPts = pts;
     const tipD = (q) => (junctionTip ? Math.hypot(q[0] - junctionTip[0], q[1] - junctionTip[1]) : Infinity);
     const meetsTip = Math.min(tipD(pts[0]), tipD(pts[pts.length - 1])) < 10;
@@ -1025,13 +1069,16 @@ export function createNamsanRoads({ parent, osm, heightAt, overlay = null } = {}
     }
     const nearTipEnd = Math.min(tipD(pts[0]), tipD(pts[pts.length - 1])) < 36;
     const entersJunc = junctionTip && isCar && (
-      isSowol || (isPark && meetsTip) || (nearTipEnd && hasInside)
+      isSowol || isJoin || (isPark && meetsTip) || (nearTipEnd && hasInside)
     );
-    if (entersJunc) junctionArms.push({ pts: rawPts, width, name: w.name || w.k || 'way' });
+    // Fillet against the width at the tip (소월로 has tapered down by then).
+    const armWidth = isSowol ? SOWOL_JOIN_W : width;
+    if (entersJunc) junctionArms.push({ pts: rawPts, width: armWidth, name: w.name || w.k || 'way' });
     // Ribbons stay continuous through the junction (cycling-course spine).
     // Only the inside-corner fillets are added as a separate mesh below.
+    const sowolWs = isSowol ? sowolWidthAt(pts, junctionTip) : null;
     const geo = drape
-      ? drapedRibbonGeo(pts, width, heightAt, dy)
+      ? drapedRibbonGeo(pts, sowolWs || width, heightAt, dy)
       : fixNormalsUp(ribbonGeo(elevated(pts, heightAt, dy), width, 0, false));
     if (!geo) continue;
     if (isCar) {
@@ -1043,7 +1090,7 @@ export function createNamsanRoads({ parent, osm, heightAt, overlay = null } = {}
       // Driveways sit on gentle library slopes — a deep skirt read as a
       // cliff edge. 소월로 and 남산공원길 skip the bed and the drop-gated
       // grass apron so a steep aerial cannot read them as extra plates.
-      if (!isDrive && !isSowol && !isPark) {
+      if (!isDrive && !isSowol && !isPark && !isJoin) {
         const support = roadSupportGeos(pts, width, heightAt, dy);
         if (support?.bed) bankGeos.push(paint(support.bed, '#8a8478'));
         if (support?.fill) fillGeos.push(paint(support.fill, '#3f4a38'));
@@ -1055,9 +1102,9 @@ export function createNamsanRoads({ parent, osm, heightAt, overlay = null } = {}
     if (isCar) {
       const walkPad = width * 0.5 + (namedLoop ? 2.2 : 0.45);
       walkHits[walkHits.length - 1].pad = walkPad;
-      const upSigns = namedLoop ? smoothSideSigns(pts, heightAt) : null;
-      if (namedLoop && width >= 6) {
-        if (isPark) {
+      const upSigns = (namedLoop || isJoin) ? smoothSideSigns(pts, heightAt) : null;
+      if ((namedLoop || isJoin) && width >= 6) {
+        if (isPark || isJoin) {
           const strip = (off, ww, yOff, dest, color) => {
             const g = drapedRibbonGeo(offsetLine(pts, off), ww, heightAt, dy + yOff);
             if (!g) return;
@@ -1083,18 +1130,19 @@ export function createNamsanRoads({ parent, osm, heightAt, overlay = null } = {}
       // dividers (oneway, so no yellow double center). Wide enough for
       // 간선 전기버스 and the double-decker 서울시티투어버스.
       if (isSowol && width >= 10) {
-        const sowolStrip = (off, ww, yOff, color) => {
-          const g = drapedRibbonGeo(offsetLine(pts, off), ww, heightAt, dy + yOff);
+        const wAt = (i) => (sowolWs ? sowolWs[Math.min(i, sowolWs.length - 1)] : width);
+        const sowolStrip = (offAt, ww, yOff, color) => {
+          const g = drapedRibbonGeo(offsetBySigned(pts, offAt), ww, heightAt, dy + yOff);
           if (!g) return;
           if (color) carGeos.push(paint(g, color));
           else whiteGeos.push(g);
         };
-        sowolStrip(width * 0.5 - 0.18, 0.15, 0.04);
-        sowolStrip(-(width * 0.5 - 0.18), 0.15, 0.04);
-        sowolStrip(width * 0.5 - 0.48, 0.5, 0.012, '#7a7f86');
-        sowolStrip(-(width * 0.5 - 0.48), 0.5, 0.012, '#7a7f86');
-        const laneOff = [-width / 4, 0, width / 4];
-        for (const off of laneOff) {
+        sowolStrip((i) => wAt(i) * 0.5 - 0.18, 0.15, 0.04);
+        sowolStrip((i) => -(wAt(i) * 0.5 - 0.18), 0.15, 0.04);
+        sowolStrip((i) => wAt(i) * 0.5 - 0.48, 0.5, 0.012, '#7a7f86');
+        sowolStrip((i) => -(wAt(i) * 0.5 - 0.48), 0.5, 0.012, '#7a7f86');
+        const laneOff = [-0.25, 0, 0.25];
+        for (const offFrac of laneOff) {
           let accD = 0;
           for (let i = 1; i < pts.length; i++) {
             const ax = pts[i - 1][0], az = pts[i - 1][1], bx = pts[i][0], bz = pts[i][1];
@@ -1110,6 +1158,7 @@ export function createNamsanRoads({ parent, osm, heightAt, overlay = null } = {}
                 if (take < 1e-4) { s = L; break; }
                 const x0 = ax + hx * s, z0 = az + hz * s;
                 const x1 = ax + hx * (s + take), z1 = az + hz * (s + take);
+                const off = offFrac * 0.5 * (wAt(i - 1) + wAt(i));
                 const seg = [[x0 - hz * off, z0 + hx * off], [x1 - hz * off, z1 + hx * off]];
                 const dash = drapedRibbonGeo(seg, 0.11, heightAt, dy + 0.045);
                 if (dash) whiteGeos.push(dash);
@@ -1147,12 +1196,11 @@ export function createNamsanRoads({ parent, osm, heightAt, overlay = null } = {}
         // Stay on the benched carriageway shelf (hw + 1.2). The old 1.55 m
         // walk at +0.90 m hung 1–2 m out over the downhill grade and read as
         // extra floating plates next to the asphalt.
-        const swOff = width * 0.5 + 0.42;
+        const wAt = (i) => (sowolWs ? sowolWs[Math.min(i, sowolWs.length - 1)] : width);
         const swW = 1.0;
-        const curbOff = width * 0.5 + 0.08;
         for (const sgn of [1, -1]) {
-          const sw = drapedRibbonGeo(offsetLine(pts, sgn * swOff), swW, heightAt, dy + 0.05);
-          const curb = drapedRibbonGeo(offsetLine(pts, sgn * curbOff), 0.2, heightAt, dy + 0.11);
+          const sw = drapedRibbonGeo(offsetBySigned(pts, (i) => sgn * (wAt(i) * 0.5 + 0.42)), swW, heightAt, dy + 0.05);
+          const curb = drapedRibbonGeo(offsetBySigned(pts, (i) => sgn * (wAt(i) * 0.5 + 0.08)), 0.2, heightAt, dy + 0.11);
           if (sw) sidewalkGeos.push(noteGeo(paint(sw, '#b7b4ac'), (w.name || 'sw') + '/sidewalk', '#b7b4ac', dy + 0.05));
           if (curb) curbGeos.push(noteGeo(paint(curb, '#c9c5bb'), (w.name || 'sw') + '/curb', '#c9c5bb', dy + 0.11));
         }
@@ -1165,7 +1213,7 @@ export function createNamsanRoads({ parent, osm, heightAt, overlay = null } = {}
         const sgn = swPref === 'left' ? 1 : -1;
         sidewalkGeos.push(paint(fixNormalsUp(ribbonGeo(attachToRoad(pts, offsetLine(pts, sgn * (width * 0.5 + 0.90)), heightAt, dy + 0.07), 1.55, 0, false)), '#b7b4ac'));
         curbGeos.push(paint(fixNormalsUp(ribbonGeo(attachToRoad(pts, offsetLine(pts, sgn * (width * 0.5 + 0.12)), heightAt, dy + 0.13), 0.22, 0, false)), '#c9c5bb'));
-      } else if (upSigns && isPark) {
+      } else if (upSigns && (isPark || isJoin)) {
         const swPts = offsetBySigned(pts, (i) => upSigns[i] * (width * 0.5 + 0.52));
         const curbPts = offsetBySigned(pts, (i) => upSigns[i] * (width * 0.5 + 0.12));
         const sw = drapedRibbonGeo(swPts, 1.05, heightAt, dy + 0.05);

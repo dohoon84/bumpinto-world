@@ -174,6 +174,102 @@ function clipCityRoadOutsideNamsan(pts, keepouts) {
   });
 }
 
+
+function findJunctionTip(ways) {
+  const sowols = (ways || []).filter((w) => (w.name || '') === '소월로' && w.pts?.length >= 2);
+  const parks = (ways || []).filter((w) => (w.name || '') === '남산공원길' && w.pts?.length >= 2);
+  let best = Infinity, tip = null;
+  for (const sw of sowols) {
+    for (const pk of parks) {
+      for (const a of [sw.pts[0], sw.pts[sw.pts.length - 1]]) {
+        for (const b of [pk.pts[0], pk.pts[pk.pts.length - 1]]) {
+          const d = Math.hypot(a[0] - b[0], a[1] - b[1]);
+          if (d < best) {
+            best = d;
+            tip = [(a[0] + b[0]) * 0.5, (a[1] + b[1]) * 0.5];
+          }
+        }
+      }
+    }
+  }
+  return best < 8 ? tip : null;
+}
+
+/**
+ * City secondaries that meet the 소월로 / 공원길 tip but are not already
+ * drawn by namsanRoads (the OSM extract misses this SE approach). Claim
+ * the first ~140 m so namsanRoads can pave them and the city mesh can
+ * drop its lighter leftover stub.
+ */
+export function cityJunctionApproaches(osm, cityRoads) {
+  const tip = findJunctionTip(osm?.ways || []);
+  if (!tip || !cityRoads?.length) return [];
+  const namPts = [];
+  for (const w of osm?.ways || []) {
+    if (!w.pts || w.pts.length < 2) continue;
+    const info = namsanRenderedWay(w);
+    if (!info.isCar && !info.namedLoop) continue;
+    namPts.push(w.pts);
+  }
+  const distToNam = (x, z) => {
+    let best = Infinity;
+    for (const pts of namPts) {
+      for (let i = 1; i < pts.length; i++) {
+        const d = distToSeg2(x, z, pts[i - 1][0], pts[i - 1][1], pts[i][0], pts[i][1]);
+        if (d < best) best = d;
+      }
+    }
+    return best;
+  };
+
+  const approaches = [];
+  for (const r of cityRoads) {
+    const raw = r.p || r.pts;
+    if (!raw || raw.length < 2) continue;
+    const d0 = Math.hypot(raw[0][0] - tip[0], raw[0][1] - tip[1]);
+    const d1 = Math.hypot(raw[raw.length - 1][0] - tip[0], raw[raw.length - 1][1] - tip[1]);
+    if (Math.min(d0, d1) > 2.5) continue;
+    let seq = raw.map((pt) => [pt[0], pt[1]]);
+    if (d1 < d0) seq.reverse();
+    let acc = 0;
+    let probe = seq[seq.length - 1];
+    for (let i = 1; i < seq.length; i++) {
+      acc += Math.hypot(seq[i][0] - seq[i - 1][0], seq[i][1] - seq[i - 1][1]);
+      if (acc >= 40) { probe = seq[i]; break; }
+    }
+    // 소월로 west and 공원길 east already sit on namsan centerlines.
+    if (distToNam(probe[0], probe[1]) < 18) continue;
+    const out = [[tip[0], tip[1]]];
+    acc = 0;
+    for (let i = 1; i < seq.length; i++) {
+      const lx = seq[i][0] - seq[i - 1][0], lz = seq[i][1] - seq[i - 1][1];
+      const L = Math.hypot(lx, lz) || 1;
+      if (acc + L >= 140) {
+        const t = (140 - acc) / L;
+        out.push([seq[i - 1][0] + lx * t, seq[i - 1][1] + lz * t]);
+        break;
+      }
+      acc += L;
+      out.push(seq[i]);
+    }
+    if (out.length < 2) continue;
+    approaches.push({ pts: out, width: Math.max(8.6, r.w || 10) });
+  }
+  const kept = [];
+  for (const a of approaches) {
+    const hx = a.pts[1][0] - a.pts[0][0], hz = a.pts[1][1] - a.pts[0][1];
+    const L = Math.hypot(hx, hz) || 1;
+    const ux = hx / L, uz = hz / L;
+    if (kept.some((b) => {
+      const bx = b.pts[1][0] - b.pts[0][0], bz = b.pts[1][1] - b.pts[0][1];
+      const bL = Math.hypot(bx, bz) || 1;
+      return ux * (bx / bL) + uz * (bz / bL) > 0.92;
+    })) continue;
+    kept.push(a);
+  }
+  return kept;
+}
+
 export function createNamsanCity({ parent, data, heightAt, parks = [], osm = null }) {
   const g = new THREE.Group();
   g.name = 'namsan-city';
@@ -240,6 +336,20 @@ export function createNamsanCity({ parent, data, heightAt, parks = [], osm = nul
   // that namsanRoads never emits on 소월로). Keep only remnants outside that
   // coverage so downtown streets beyond the OSM extract still appear.
   const keepouts = namsanRoadKeepouts(osm);
+  for (const a of cityJunctionApproaches(osm, roads)) {
+    let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+    const hw = a.width * 0.5 + 1.15;
+    for (const pt of a.pts) {
+      if (pt[0] < minX) minX = pt[0];
+      if (pt[0] > maxX) maxX = pt[0];
+      if (pt[1] < minZ) minZ = pt[1];
+      if (pt[1] > maxZ) maxZ = pt[1];
+    }
+    keepouts.push({
+      pts: a.pts, hw,
+      minX: minX - hw, maxX: maxX + hw, minZ: minZ - hw, maxZ: maxZ + hw,
+    });
+  }
   const roadForMesh = [];
   const glowGeos = [];
   const streakGeos = [];
