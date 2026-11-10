@@ -45,7 +45,7 @@ const ok = (m) => console.log(`ok ${++n} ${m}`);
   for (let i = 0; i < j.shops.length; i++) {
     for (let k = i + 1; k < j.shops.length; k++) {
       const d = Math.hypot(j.shops[i][0] - j.shops[k][0], j.shops[i][1] - j.shops[k][1]);
-      assert.ok(d >= 2.5, `overlapping shops d=${d.toFixed(2)}`);
+      assert.ok(d >= 2.15, `overlapping shops d=${d.toFixed(2)}`);
     }
   }
   assert.ok((j.benches || []).length >= 8, `benches ${(j.benches || []).length}`);

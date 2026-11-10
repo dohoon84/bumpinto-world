@@ -375,23 +375,25 @@ function poleGeo() {
   ]);
 }
 function shopBodyGeo() {
-  const winW = 2.62, winH = 1.52, winY = 1.35;
-  const facadeW = 3.35, facadeH = 2.85, facadeY = 1.45, facadeZ = -0.08, facadeD = 0.28;
-  const sideW = (facadeW - winW) / 2;
-  const facadeBottom = facadeY - facadeH / 2;
-  const facadeTop = facadeY + facadeH / 2;
-  const winBottom = winY - winH / 2;
-  const winTop = winY + winH / 2;
+  // 건물 1층 띠(약 0–4.35m)에 붙는 연속 점포 베이. +Z = 도로, 벽면은 z≈0.
+  const W = 3.6, H = 4.35, pil = 0.18, kickH = 0.78, sign0 = 3.18, sign1 = 4.12;
+  const d = 0.16, z = 0.07, winW = W - pil * 2;
   return merge([
-    boxGeo(sideW, facadeH, facadeD, -(winW / 2 + sideW / 2), facadeY, facadeZ),
-    boxGeo(sideW, facadeH, facadeD, +(winW / 2 + sideW / 2), facadeY, facadeZ),
-    boxGeo(winW, winBottom - facadeBottom, facadeD, 0, (facadeBottom + winBottom) / 2, facadeZ),
-    boxGeo(winW, facadeTop - winTop, facadeD, 0, (winTop + facadeTop) / 2, facadeZ),
-    boxGeo(3.5, 0.14, 0.95, 0, 2.82, 0.35),
-    boxGeo(3.4, 0.22, 0.28, 0, 2.55, 0.06),
+    boxGeo(pil, H, d, -(W / 2 - pil / 2), H / 2, z),
+    boxGeo(pil, H, d, +(W / 2 - pil / 2), H / 2, z),
+    boxGeo(winW, kickH, d, 0, kickH / 2, z),
+    boxGeo(winW, sign1 - sign0, d, 0, (sign0 + sign1) / 2, z),
+    boxGeo(W + 0.08, 0.22, d + 0.1, 0, sign1 + 0.11, z + 0.04),
+    boxGeo(0.07, sign0 - kickH, d * 0.7, 0, (kickH + sign0) / 2, z),
   ]);
 }
-function shopWinGeo() { return boxGeo(2.7, 1.55, 0.04, 0, 1.35, 0.12); }
+function shopWinGeo() { return boxGeo(3.18, 2.36, 0.035, 0, 1.98, 0.15); }
+function shopAwningGeo() {
+  return merge([
+    boxGeo(3.28, 0.06, 0.9, 0, 3.14, 0.52),
+    boxGeo(3.32, 0.035, 0.94, 0, 3.2, 0.52),
+  ]);
+}
 function tentGeo() {
   return merge([
     boxGeo(3.3, 2.15, 2.35, 0, 1.15, 0.2),
@@ -720,10 +722,10 @@ export function createGangnamStreet({ scene, terrain = null, url, mobile = false
       const shopSrc = dedupeShops(mobile ? (j.shops || []).filter((_, i) => i % 2 === 0) : (j.shops || []));
       const shopIm = inst(shopBodyGeo(), shopMat, shopSrc.length, 'gnStreetShop', true);
       const shopWin = inst(shopWinGeo(), shopWinMat, shopSrc.length, 'gnStreetShopWin');
-      const shopSign = inst(new THREE.PlaneGeometry(1.7, 0.38), shopSignMat, shopSrc.length, 'gnStreetShopSign');
-      const shopRoom = inst(boxGeo(2.7, 1.55, 0.12, 0, 1.35, -1.25), shopRoomMat, shopSrc.length, 'gnStreetShopRoom');
-      shopRoom.visible = false; // 정면에서 어두운 룸 박스가 인테리어를 가려 창이 검게 보였다
-      const shopInterior = inst(new THREE.PlaneGeometry(2.58, 1.5), interiorMat, shopSrc.length, 'gnStreetShopInterior');
+      const shopSign = inst(new THREE.PlaneGeometry(2.2, 0.42), shopSignMat, shopSrc.length, 'gnStreetShopSign');
+      const shopInterior = inst(new THREE.PlaneGeometry(3.12, 2.28), interiorMat, shopSrc.length, 'gnStreetShopInterior');
+      const awningSrc = shopSrc.filter((sh, i) => sh[3] === 1 || sh[3] === 2 || (i % 3 === 0));
+      const shopAwning = inst(shopAwningGeo(), new THREE.MeshLambertMaterial({ color: '#c45a38' }), awningSrc.length, 'gnStreetShopAwning');
       shopInterior.renderOrder = 2;
       interiorMat.side = THREE.DoubleSide;
       interiorMat.depthWrite = true;
@@ -733,24 +735,29 @@ export function createGangnamStreet({ scene, terrain = null, url, mobile = false
       interiorMat.polygonOffsetUnits = -20;
       const shopPal = ['#2e6b4a', '#6b4a32', '#d4652a', '#6a3038', '#3a4a72', '#8a5a28', '#4a6a58', '#703848'];
       const interiorSlots = [];
+      let awningI = 0;
       shopSrc.forEach((sh, i) => {
         const gy = ground(sh[0], sh[1]);
-        const sx = 0.88 + (sh[3] % 4) * 0.09;
-        const sy = 0.92 + ((sh[3] + i) % 3) * 0.08;
-        StreetXform.compose(m4, quat, pos, scl, sh[0], gy, sh[1], sh[2], sx, sy, 1);
+        const sx = (sh[4] || 3.6) / 3.6;
+        StreetXform.compose(m4, quat, pos, scl, sh[0], gy, sh[1], sh[2], sx, 1, 1);
         shopIm.setMatrixAt(i, m4);
         shopWin.setMatrixAt(i, m4);
-        shopRoom.setMatrixAt(i, m4);
         shopIm.setColorAt(i, tmpC.set(shopPal[sh[3] % shopPal.length] || '#555'));
         const fx = Math.sin(sh[2]), fz = Math.cos(sh[2]);
-        StreetXform.compose(m4, quat, pos, scl, sh[0] + fx * 0.18, gy + 2.52 * sy, sh[1] + fz * 0.18, sh[2], sx, sy, 1);
+        StreetXform.compose(m4, quat, pos, scl, sh[0] + fx * 0.18, gy + 3.65, sh[1] + fz * 0.18, sh[2], sx, 1, 1);
         shopSign.setMatrixAt(i, m4);
-        StreetXform.compose(m4, quat, pos, scl, sh[0] - fx * 0.40, gy + 1.35 * sy, sh[1] - fz * 0.40, sh[2], sx, sy, 1);
+        // 유리 바로 안쪽, 건물 벽면보다 살짝 앞(벽의 사무실 창을 가림). 아틀라스가 깊이감을 냄.
+        StreetXform.compose(m4, quat, pos, scl, sh[0] - fx * 0.02, gy + 1.98, sh[1] - fz * 0.02, sh[2], sx, 1, 1);
         shopInterior.setMatrixAt(i, m4);
+        if (sh[3] === 1 || sh[3] === 2 || (i % 3 === 0)) {
+          StreetXform.compose(m4, quat, pos, scl, sh[0], gy, sh[1], sh[2], sx, 1, 1);
+          shopAwning.setMatrixAt(awningI++, m4);
+        }
         const nameSlot = (sh[3] * 3 + i) % 12;
         interiorSlots.push(nameSlot <= 2 ? 0 : nameSlot <= 5 ? 1 : nameSlot <= 9 ? 2 : 3);
       });
-      shopIm.count = shopWin.count = shopSign.count = shopRoom.count = shopInterior.count = shopSrc.length;
+      shopIm.count = shopWin.count = shopSign.count = shopInterior.count = shopSrc.length;
+      shopAwning.count = awningI;
       if (shopIm.instanceColor) shopIm.instanceColor.needsUpdate = true;
       bindSlotAtlas(shopSignMat, shopAt, 'gn-shop-name-atlas');
       shopSign.geometry = shopSign.geometry.clone();
