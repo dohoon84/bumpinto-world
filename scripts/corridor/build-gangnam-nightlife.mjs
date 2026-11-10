@@ -5,7 +5,7 @@ import path from 'node:path';
 import {
   placeSigns, placeShopWindows, placeFacades, placeLanterns, placeStrings,
   placeCrossings, placeSignals, placeExitGlows, placeHeadlights, placeTaillights,
-  placeWet, placeStrips, countsOf, SHOP_NAMES, NEON_COLORS, WINDOW_COLORS,
+  placeWet, placeStrips, sampleLanes, countsOf, SHOP_NAMES, NEON_COLORS, WINDOW_COLORS,
 } from '../../src/gangnam/nightlifePlace.js';
 
 const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), '../..');
@@ -26,10 +26,11 @@ const strings = placeStrings(tiles, { box, around });
 const crossings = placeCrossings(tiles, { box });
 const signals = placeSignals(crossings);
 const exitGlows = placeExitGlows(exits);
-const heads = placeHeadlights(tiles, { box });
-const tails = placeTaillights(tiles, { box });
+const heads = placeHeadlights(tiles, { box, around });
+const tails = placeTaillights(tiles, { box, around });
 const wet = placeWet(tiles, { box });
 const strips = placeStrips(tiles, { box, around });
+const lanes = sampleLanes(tiles, { box, around });
 
 const night = {
   v: 1,
@@ -44,7 +45,7 @@ const night = {
   },
   boxes: idx.meta.boxes || [idx.meta.box],
   signs, windows, facades, lanterns, strings, crossings, signals,
-  exits: exitGlows, heads, tails, wet, strips,
+  exits: exitGlows, heads, tails, wet, strips, lanes,
 };
 night.meta.counts = countsOf(night);
 fs.writeFileSync(path.join(G, 'nightlife.json'), JSON.stringify(night));

@@ -148,89 +148,106 @@ function facadeWalk(buildings, segs, blocks, box, minL, maxD, fn) {
 }
 
 /** 세로 네온·가로 LED·돌출 간판. [x,y,z,yaw,w,h,nameIdx,colorIdx,kind,seed] kind 0세로 1가로 2돌출 */
-export function placeSigns(tiles, { box = null, max = 880, around = null } = {}) {
+export function placeSigns(tiles, { box = null, max = 2600, around = null } = {}) {
   const segs = nightSegs(tiles);
   const buildings = (tiles || []).flatMap((t) => t.b || []);
   const blocks = buildingIndex(buildings, around);
   const out = [];
   const taken = [];
-  const near = (x, z, rad) => taken.some((p) => (p[0] - x) ** 2 + (p[1] - z) ** 2 < rad * rad);
-  const pass = (wantAvenue) => facadeWalk(buildings, segs, blocks, box, 4.2, 24, ({ it, e, hit, x0, z0, id }) => {
-    if (out.length >= max * 10) return;
+  const nearXZ = (x, z, y, rad) => taken.some((p) => Math.abs(p[2] - y) < 1.35 && (p[0] - x) ** 2 + (p[1] - z) ** 2 < rad * rad);
+  const add = (x, y, z, yaw, w, h, nameIdx, colorIdx, kind, hsh) => {
+    out.push(r1(x), r1(y), r1(z), r3(yaw), r2(w), r2(h), nameIdx, colorIdx, kind, r2(hsh));
+    taken.push([x, z, y]);
+  };
+  const pass = (wantAvenue, budget) => facadeWalk(buildings, segs, blocks, box, 4.0, 34, ({ it, e, hit, x0, z0, id }) => {
+    if (out.length >= budget * 10) return;
     const isAv = !!(hit.n && AVENUE_NAMES.includes(hit.n));
     if (wantAvenue !== isAv) return;
-    const step = isAv ? 5.2 : (hit.n && String(hit.n).endsWith('길') ? 7.4 : 6.2);
-    const maxD = isAv ? 22 : 16;
+    const isSide = !!(hit.n && String(hit.n).endsWith('길'));
+    const step = isAv ? 3.5 : (isSide ? 4.6 : 5.2);
+    const maxD = isAv ? 32 : 18;
     if (hit.d > maxD) return;
+    const bh = it.b.h || 10;
+    const floors = [];
+    if (bh >= 6) floors.push(3.55);
+    if (bh >= 9) floors.push(6.15);
+    if (bh >= 13) floors.push(8.75);
+    if (isAv && bh >= 17) floors.push(11.25);
+    if (isAv && bh >= 21) floors.push(13.6);
+    if (!floors.length) return;
     const slots = Math.max(1, Math.floor(e.L / step));
     for (let s = 0; s < slots; s++) {
-      if (out.length >= max * 10) break;
+      if (out.length >= budget * 10) break;
       const hsh = hash01(id * 97 + s * 13 + Math.round(e.mx * 3) + Math.round(e.mz * 5));
-      if (hsh > 0.86) continue;
+      if (hsh > 0.93) continue;
       const dist = ((s + 0.5) / slots) * e.L;
-      const x = x0 + e.tx * dist + e.nx * 0.75;
-      const z = z0 + e.tz * dist + e.nz * 0.75;
+      const x = x0 + e.tx * dist + e.nx * 1.05;
+      const z = z0 + e.tz * dist + e.nz * 1.05;
       if (!inBox(box, x, z) || insideBuilding(blocks, x + e.nx * 0.4, z + e.nz * 0.4)) continue;
-      if (near(x, z, 3.6)) continue;
       const yaw = Math.atan2(e.nx, e.nz);
-      const nameIdx = Math.floor(hash01(id * 17 + s * 31 + 3) * SHOP_NAMES.length) % SHOP_NAMES.length;
-      const colorIdx = Math.floor(hash01(id * 41 + s * 7 + 9) * NEON_COLORS.length) % NEON_COLORS.length;
-      const kindRoll = hash01(id * 23 + s * 19 + 11);
-      const bh = it.b.h || 10;
-      let kind = 0, w = 0.9, h = 4.4 + hash01(id + s + 2) * 2.4, y = 5.4 + hash01(id + s) * 1.8;
-      if (kindRoll > 0.62) {
-        kind = 1;
-        w = 2.6 + hash01(id + s + 4) * 2.2;
-        h = 0.82;
-        y = 3.35 + hash01(id + s + 5) * 0.35;
-      } else if (kindRoll > 0.28) {
-        kind = 2;
-        w = 0.85;
-        h = 2.2 + hash01(id + s + 6) * 1.6;
-        y = 4.6 + hash01(id + s + 7) * 1.6;
+      const slotW = Math.min(e.L / slots - 0.28, isAv ? 6.4 : 4.6);
+      const w = Math.max(isAv ? 3.6 : 2.8, slotW * (0.82 + hash01(id + s + 4) * 0.16));
+      for (let f = 0; f < floors.length; f++) {
+        if (out.length >= budget * 10) break;
+        const y = floors[f];
+        const fh = isAv ? (f === 0 ? 1.42 : 1.24) : (f === 0 ? 1.22 : 1.08);
+        if (y + fh * 0.5 > bh - 0.35) continue;
+        if (nearXZ(x, z, y, 2.0)) continue;
+        if (!isAv && f > 1 && hash01(id + s + f * 17) < 0.28) continue;
+        const nameIdx = Math.floor(hash01(id * 17 + s * 31 + f * 5 + 3) * SHOP_NAMES.length) % SHOP_NAMES.length;
+        const colorIdx = Math.floor(hash01(id * 41 + s * 7 + f * 11 + 9) * NEON_COLORS.length) % NEON_COLORS.length;
+        add(x, y, z, yaw, w, fh, nameIdx, colorIdx, 1, hash01(id + s + f + 24));
       }
-      if (y + h * 0.5 > bh - 0.4) y = Math.max(2.4, bh - h * 0.5 - 0.5);
-      if (kind === 2) {
-        out.push(r1(x + e.nx * 1.25), r1(y), r1(z + e.nz * 1.25), r3(yaw + Math.PI / 2), r2(w), r2(h), nameIdx, colorIdx, kind, r2(hsh));
-      } else {
-        out.push(r1(x), r1(y), r1(z), r3(yaw), r2(w), r2(h), nameIdx, colorIdx, kind, r2(hsh));
+      if (bh >= 8 && (isAv || hash01(id + s + 40) > 0.32) && out.length < budget * 10) {
+        const vh = Math.min(isAv ? 5.8 : 4.4, bh - 3.2);
+        const vy = 3.2 + vh * 0.5;
+        if (vy + vh * 0.5 < bh - 0.3) {
+          const nameIdx = Math.floor(hash01(id * 19 + s * 11 + 5) * SHOP_NAMES.length) % SHOP_NAMES.length;
+          const colorIdx = Math.floor(hash01(id * 29 + s + 15) * NEON_COLORS.length) % NEON_COLORS.length;
+          const vx = x + e.tx * (isAv ? 1.7 : 1.1);
+          const vz = z + e.tz * (isAv ? 1.7 : 1.1);
+          if (!nearXZ(vx, vz, vy, 0.85)) add(vx, vy, vz, yaw, isAv ? 1.05 : 0.95, vh, nameIdx, colorIdx, 0, hash01(id + s + 41));
+        }
       }
-      taken.push([x, z]);
-      if (kind !== 1 && bh >= 16 && e.L >= 9 && hash01(id + s + 21) > 0.55 && out.length < max * 10) {
-        const y2 = Math.min(bh - 1.2, 6.6 + hash01(id + s + 22) * 1.4);
-        const w2 = 2.4 + hash01(id + s + 23) * 1.8;
-        out.push(r1(x), r1(y2), r1(z), r3(yaw), r2(w2), 0.78, nameIdx, (colorIdx + 3) % NEON_COLORS.length, 1, r2(hash01(id + s + 24)));
+      if (bh >= 8 && (isAv || hash01(id + s + 50) > 0.38) && out.length < budget * 10) {
+        const bhgt = Math.min(isAv ? 4.2 : 2.8, bh - 3);
+        const by = 4.6 + hash01(id + s + 7) * 1.1;
+        const nameIdx = Math.floor(hash01(id * 13 + s * 21 + 8) * SHOP_NAMES.length) % SHOP_NAMES.length;
+        const colorIdx = Math.floor(hash01(id * 37 + s + 18) * NEON_COLORS.length) % NEON_COLORS.length;
+        const outN = isAv ? 1.75 : 1.35;
+        add(x + e.nx * outN, by, z + e.nz * outN, yaw + Math.PI / 2, isAv ? 1.15 : 0.95, bhgt, nameIdx, colorIdx, 2, hash01(id + s + 51));
       }
     }
   });
-  pass(true);
-  pass(false);
+  const sideBudget = Math.floor(max * 0.32);
+  pass(true, max - sideBudget);
+  pass(false, max);
   return out.slice(0, max * 10);
 }
 
 /** 1층 쇼윈도. [x,y,z,yaw,w,h,colorIdx] */
-export function placeShopWindows(tiles, { box = null, max = 640, around = null } = {}) {
+export function placeShopWindows(tiles, { box = null, max = 720, around = null } = {}) {
   const segs = nightSegs(tiles);
   const buildings = (tiles || []).flatMap((t) => t.b || []);
   const blocks = buildingIndex(buildings, around);
   const out = [];
-  const pass = (wantAvenue) => facadeWalk(buildings, segs, blocks, box, 5, 20, ({ it, e, hit, x0, z0, id }) => {
+  const pass = (wantAvenue) => facadeWalk(buildings, segs, blocks, box, 4.6, 20, ({ it, e, hit, x0, z0, id }) => {
     if (out.length >= max * 7) return;
     if ((it.b.h || 0) < 7) return;
     const isAv = !!(hit.n && AVENUE_NAMES.includes(hit.n));
     if (wantAvenue !== isAv) return;
-    const bays = Math.max(1, Math.min(4, Math.floor(e.L / 6.5)));
+    const bays = Math.max(1, Math.min(5, Math.floor(e.L / 5.2)));
     for (let s = 0; s < bays; s++) {
       if (out.length >= max * 7) break;
-      if (hash01(id * 29 + s * 5 + 8) > 0.82) continue;
+      if (hash01(id * 29 + s * 5 + 8) > 0.88) continue;
       const dist = ((s + 0.5) / bays) * e.L;
       const x = x0 + e.tx * dist + e.nx * 0.22;
       const z = z0 + e.tz * dist + e.nz * 0.22;
       if (!inBox(box, x, z) || insideBuilding(blocks, x + e.nx * 0.3, z + e.nz * 0.3)) continue;
       const yaw = Math.atan2(e.nx, e.nz);
-      const w = Math.min(3.4, Math.max(1.8, e.L / bays - 1.1));
+      const w = Math.min(4.8, Math.max(2.6, e.L / bays - 0.7));
       const ci = Math.floor(hash01(id + s + 40) * WINDOW_COLORS.length) % WINDOW_COLORS.length;
-      out.push(r1(x), r1(1.55), r1(z), r3(yaw), r2(w), r2(2.05), ci);
+      out.push(r1(x), r1(1.7), r1(z), r3(yaw), r2(w), r2(2.4), ci);
     }
   });
   pass(true);
@@ -247,13 +264,39 @@ function sortSegs(segs, around) {
   });
 }
 
-/** 고층 미디어 파사드. [x,y,z,yaw,w,h,colorIdx] */
-export function placeFacades(tiles, { box = null, max = 48, around = null } = {}) {
+/** 고층 미디어 파사드·사거리 코너 전광판. [x,y,z,yaw,w,h,colorIdx] */
+export function placeFacades(tiles, { box = null, max = 72, around = null } = {}) {
   const segs = nightSegs(tiles).filter((s) => s.k === 'avenue' || s.k === 'major');
   const buildings = (tiles || []).flatMap((t) => t.b || []);
   const blocks = buildingIndex(buildings, around);
   const out = [];
   const used = [];
+  const ix = -7144, iz = -14531;
+  facadeWalk(buildings, segs, blocks, box, 6, 55, ({ it, e, hit, id }) => {
+    if (out.length >= max * 7) return;
+    const d = Math.hypot(it.cx - ix, it.cz - iz);
+    if (d < 20 || d > 82) return;
+    if ((it.b.h || 0) < 14) return;
+    const key = `c${Math.round(it.cx / 10)}_${Math.round(it.cz / 10)}_${Math.round(e.mx / 6)}_${Math.round(e.mz / 6)}`;
+    if (used.includes(key)) return;
+    const w = Math.min(Math.max(8, e.L * 0.72), 16);
+    const h = Math.min(Math.max(7, (it.b.h - 5) * 0.32), 13);
+    if (w < 7 || h < 6) return;
+    const y = Math.min(it.b.h - h * 0.5 - 1, 12);
+    const x = e.mx + e.nx * 0.95;
+    const z = e.mz + e.nz * 0.95;
+    const yaw = Math.atan2(e.nx, e.nz);
+    const ci = Math.floor(hash01(id + 190) * NEON_COLORS.length) % NEON_COLORS.length;
+    out.push(r1(x), r1(y), r1(z), r3(yaw), r2(w), r2(h), ci);
+    used.push(key);
+    if ((it.b.h || 0) >= 22 && e.L >= 12 && out.length < max * 7) {
+      const h2 = Math.min(8, h * 0.75);
+      const y2 = Math.min(it.b.h - h2 * 0.5 - 1, y + h * 0.55 + 2);
+      if (y2 - y > 5) {
+        out.push(r1(x + e.tx * 2), r1(y2), r1(z + e.tz * 2), r3(yaw), r2(Math.min(w * 0.85, 12)), r2(h2), (ci + 2) % NEON_COLORS.length);
+      }
+    }
+  });
   const pass = (wantAvenue) => facadeWalk(buildings, segs, blocks, box, 8, 40, ({ it, e, hit, id }) => {
     if (out.length >= max * 7) return;
     const isAv = !!(hit.n && AVENUE_NAMES.includes(hit.n));
@@ -405,16 +448,28 @@ export function placeExitGlows(exits) {
   return out;
 }
 
-function placeLaneLights(segs, { step, sideSign, box, minW = 12, len = 16, max = 160 } = {}) {
+function sortAround(segs, around) {
+  if (!around) return segs;
+  return segs.slice().sort((a, b) => {
+    const pa = a.n === '강남대로' ? 0 : 1;
+    const pb = b.n === '강남대로' ? 0 : 1;
+    if (pa !== pb) return pa - pb;
+    const da = Math.hypot((a.a[0] + a.b[0]) / 2 - around.x, (a.a[1] + a.b[1]) / 2 - around.z);
+    const db = Math.hypot((b.a[0] + b.b[0]) / 2 - around.x, (b.a[1] + b.b[1]) / 2 - around.z);
+    return da - db;
+  });
+}
+
+function placeLaneLights(segs, { step, sideSign, box, minW = 12, len = 16, max = 160, yawAdd = 0, around = null } = {}) {
   const out = [];
-  for (const s of segs) {
+  for (const s of sortAround(segs, around)) {
     if ((s.w || 0) < minW) continue;
     const dx = s.b[0] - s.a[0], dz = s.b[1] - s.a[1], L = Math.hypot(dx, dz);
     if (L < 24) continue;
     const tx = dx / L, tz = dz / L, nx = -tz, nz = tx;
-    const yaw = Math.atan2(tx, tz);
+    const yaw = Math.atan2(tx, tz) + yawAdd;
     const side = sideSign * 0.24 * s.w;
-    for (let d = 14; d < L - 10; d += step) {
+    for (let d = 12; d < L - 8; d += step) {
       if (out.length >= max * 4) return out;
       const x = s.a[0] + tx * d + nx * side;
       const z = s.a[1] + tz * d + nz * side;
@@ -425,21 +480,23 @@ function placeLaneLights(segs, { step, sideSign, box, minW = 12, len = 16, max =
   return out;
 }
 
-/** 헤드라이트 줄기. [x,z,yaw,len] */
-export function placeHeadlights(tiles, { box = null } = {}) {
-  return placeLaneLights(nightSegs(tiles).filter((s) => s.k === 'avenue' || s.k === 'major'), {
-    step: 38, sideSign: -1, box, minW: 12, len: 18, max: 150,
-  });
+/** 헤드라이트 줄기. 양방향. [x,z,yaw,len] */
+export function placeHeadlights(tiles, { box = null, around = null } = {}) {
+  const segs = nightSegs(tiles).filter((s) => s.k === 'avenue' || s.k === 'major');
+  const a = placeLaneLights(segs, { step: 20, sideSign: -1, box, minW: 12, len: 36, max: 200, around });
+  const b = placeLaneLights(segs, { step: 22, sideSign: 1, box, minW: 12, len: 34, max: 200, yawAdd: Math.PI, around });
+  return a.concat(b);
 }
 
-/** 테일라이트 줄기. [x,z,yaw,len] */
-export function placeTaillights(tiles, { box = null } = {}) {
-  return placeLaneLights(nightSegs(tiles).filter((s) => s.k === 'avenue' || s.k === 'major'), {
-    step: 42, sideSign: 1, box, minW: 12, len: 13, max: 140,
-  });
+/** 테일라이트 줄기. 양방향. [x,z,yaw,len] */
+export function placeTaillights(tiles, { box = null, around = null } = {}) {
+  const segs = nightSegs(tiles).filter((s) => s.k === 'avenue' || s.k === 'major');
+  const a = placeLaneLights(segs, { step: 22, sideSign: -1, box, minW: 12, len: 28, max: 180, around });
+  const b = placeLaneLights(segs, { step: 24, sideSign: 1, box, minW: 12, len: 26, max: 180, yawAdd: Math.PI, around });
+  return a.concat(b);
 }
 
-/** 젖은 도로 반사. [x,z,yaw,w,len] */
+/** 노면 빛웅덩이(원형 그라디언트용). [x,z,yaw,w,len] */
 export function placeWet(tiles, { box = null } = {}) {
   const segs = nightSegs(tiles).filter((s) => s.k === 'avenue' || s.k === 'major');
   const out = [];
@@ -448,11 +505,40 @@ export function placeWet(tiles, { box = null } = {}) {
     if (L < 20) continue;
     const tx = dx / L, tz = dz / L;
     const yaw = Math.atan2(tx, tz);
-    for (let d = 16; d < L - 12; d += 48) {
+    for (let d = 12; d < L - 10; d += 32) {
       if (out.length >= 80 * 5) return out;
       const x = s.a[0] + tx * d, z = s.a[1] + tz * d;
       if (!inBox(box, x, z)) continue;
-      out.push(r1(x), r1(z), r3(yaw), r2((s.w || 14) * 0.92), 24);
+      const dia = 6.4 + hash01(Math.round(x * 3) + Math.round(z * 5)) * 2.6;
+      out.push(r1(x), r1(z), r3(yaw), r2(dia), r2(dia));
+    }
+  }
+  return out;
+}
+
+/** 대로 양쪽 차로 샘플. 각 차선은 [x,z,yaw, ...] */
+export function sampleLanes(tiles, { box = null, around = null, max = 24 } = {}) {
+  const out = [];
+  const segs = sortAround(nightSegs(tiles).filter((s) => s.n === '강남대로' || s.n === '테헤란로'), around);
+  for (const s of segs) {
+    if (out.length >= max) break;
+    const dx = s.b[0] - s.a[0], dz = s.b[1] - s.a[1], L = Math.hypot(dx, dz);
+    if (L < 56) continue;
+    const tx = dx / L, tz = dz / L, nx = -tz, nz = tx;
+    const w = s.w || 16;
+    for (const dir of [1, -1]) {
+      const a = dir === 1 ? s.a : s.b;
+      const sx = dir * tx, sz = dir * tz;
+      const side = dir * -0.22 * w;
+      const yaw = Math.atan2(sx, sz);
+      const pts = [];
+      for (let d = 6; d < L - 6; d += 4) {
+        const x = a[0] + sx * d + nx * side;
+        const z = a[1] + sz * d + nz * side;
+        if (!inBox(box, x, z)) continue;
+        pts.push(r1(x), r1(z), r3(yaw));
+      }
+      if (pts.length >= 18 && out.length < max) out.push(pts);
     }
   }
   return out;

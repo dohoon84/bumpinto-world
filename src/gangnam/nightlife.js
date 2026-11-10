@@ -144,7 +144,7 @@ function makeSignMaterial(map) {
     transparent: true,
     depthWrite: false,
     toneMapped: false,
-    side: THREE.DoubleSide,
+    side: THREE.FrontSide,
     polygonOffset: true,
     polygonOffsetFactor: -4,
     polygonOffsetUnits: -4,
@@ -167,22 +167,73 @@ function makeUnlitColor(opts = {}) {
   });
 }
 
-function facadeTex() {
+const FACADE_VARIANTS = [
+  { title: '강남대로', sub: 'NIGHT', cols: ['#00e8ff', '#4a86ff', '#7af0ff', '#c45cff'], mode: 'scan' },
+  { title: '테헤란로', sub: 'TEHERAN', cols: ['#ffd84a', '#ff7a18', '#ffb347', '#fff1c2'], mode: 'blocks' },
+  { title: 'BUMPINTO', sub: 'WORLD', cols: ['#4a86ff', '#c45cff', '#ff2d8a', '#7af0ff'], mode: 'news' },
+  { title: '별밤거리', sub: 'NEON', cols: ['#ff2d8a', '#ff3df0', '#c45cff', '#ff9ad5'], mode: 'dots' },
+  { title: '사거리', sub: 'LIVE', cols: ['#19e6c2', '#8aff3a', '#00e8ff', '#ffd84a'], mode: 'diag' },
+  { title: '범프인투', sub: 'SEOUL', cols: ['#ff3355', '#ff7a18', '#ffd84a', '#f4f7ff'], mode: 'type' },
+];
+
+function facadeTex(variant) {
+  const { title, sub, cols, mode } = variant;
   const canvas = document.createElement('canvas');
   canvas.width = 256; canvas.height = 512;
   const c = canvas.getContext('2d');
-  const cols = ['#ff2d8a', '#00e8ff', '#ffd84a', '#4a86ff', '#ff7a18', '#c45cff', '#19e6c2', '#ff3355'];
-  for (let y = 0; y < 16; y++) {
-    c.fillStyle = cols[y % cols.length];
-    c.fillRect(0, y * 32, 256, 30);
-    c.fillStyle = 'rgba(0,0,0,0.25)';
-    for (let x = 0; x < 8; x++) c.fillRect(x * 32 + 2, y * 32 + 4, 28, 22);
+  c.fillStyle = '#050308';
+  c.fillRect(0, 0, 256, 512);
+  if (mode === 'scan') {
+    for (let y = 0; y < 16; y++) {
+      c.fillStyle = cols[y % cols.length];
+      c.fillRect(0, y * 32, 256, 28);
+      c.fillStyle = 'rgba(0,0,0,0.28)';
+      for (let x = 0; x < 8; x++) c.fillRect(x * 32 + 3, y * 32 + 5, 26, 18);
+    }
+  } else if (mode === 'blocks') {
+    for (let y = 0; y < 8; y++) for (let x = 0; x < 4; x++) {
+      c.fillStyle = cols[(x + y) % cols.length];
+      c.fillRect(x * 64 + 3, y * 64 + 3, 58, 58);
+    }
+  } else if (mode === 'news') {
+    for (let y = 0; y < 10; y++) {
+      c.fillStyle = cols[y % cols.length];
+      c.fillRect(0, y * 51, 256, 46);
+      c.fillStyle = 'rgba(0,0,0,0.35)';
+      c.fillRect(8, y * 51 + 10, 240, 26);
+    }
+  } else if (mode === 'dots') {
+    for (let y = 0; y < 24; y++) for (let x = 0; x < 12; x++) {
+      c.fillStyle = cols[(x + y) % cols.length];
+      c.beginPath();
+      c.arc(x * 21 + 12, y * 21 + 12, 7, 0, Math.PI * 2);
+      c.fill();
+    }
+  } else if (mode === 'diag') {
+    c.save();
+    c.translate(128, 256);
+    c.rotate(-0.4);
+    for (let i = -12; i < 12; i++) {
+      c.fillStyle = cols[((i % cols.length) + cols.length) % cols.length];
+      c.fillRect(-220, i * 36, 440, 28);
+    }
+    c.restore();
+  } else {
+    c.fillStyle = cols[0];
+    c.fillRect(0, 0, 256, 512);
+    for (let y = 0; y < 6; y++) {
+      c.fillStyle = cols[(y + 1) % cols.length];
+      c.fillRect(0, 70 + y * 70, 256, 18);
+    }
   }
   c.fillStyle = '#f4f7ff';
-  c.font = '800 36px "Noto Sans KR", sans-serif';
+  c.font = '800 36px "Noto Sans KR", "Noto Sans CJK KR", sans-serif';
   c.textAlign = 'center';
-  c.fillText('강남대로', 128, 80);
-  c.fillText('NIGHT', 128, 280);
+  c.shadowColor = cols[0];
+  c.shadowBlur = 14;
+  c.fillText(title, 128, 90, 230);
+  c.font = '800 42px "Noto Sans KR", "Noto Sans CJK KR", sans-serif';
+  c.fillText(sub, 128, 280, 230);
   const tex = new THREE.CanvasTexture(canvas);
   tex.wrapS = THREE.RepeatWrapping;
   tex.wrapT = THREE.RepeatWrapping;
@@ -192,14 +243,14 @@ function facadeTex() {
   return tex;
 }
 
-function makeFacadeMaterial() {
+function makeFacadeMaterial(variant) {
   return new THREE.MeshBasicMaterial({
-    map: facadeTex(),
+    map: facadeTex(variant),
     transparent: true,
     opacity: 0,
     depthWrite: false,
     toneMapped: false,
-    side: THREE.DoubleSide,
+    side: THREE.FrontSide,
     polygonOffset: true,
     polygonOffsetFactor: -3,
     polygonOffsetUnits: -3,
@@ -222,24 +273,60 @@ function streakTex(from, via, to) {
   return tex;
 }
 
-function wetTex() {
+function poolTex() {
   const canvas = document.createElement('canvas');
-  canvas.width = 256; canvas.height = 128;
+  canvas.width = 128; canvas.height = 128;
+  const c = canvas.getContext('2d');
+  const g = c.createRadialGradient(64, 64, 4, 64, 64, 62);
+  g.addColorStop(0, 'rgba(255,255,255,0.85)');
+  g.addColorStop(0.4, 'rgba(255,230,255,0.28)');
+  g.addColorStop(1, 'rgba(255,255,255,0)');
+  c.fillStyle = g;
+  c.fillRect(0, 0, 128, 128);
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.generateMipmaps = false;
+  tex.minFilter = THREE.LinearFilter;
+  return tex;
+}
+
+function windowTex() {
+  const canvas = document.createElement('canvas');
+  canvas.width = 128; canvas.height = 128;
   const c = canvas.getContext('2d');
   c.fillStyle = '#000';
-  c.fillRect(0, 0, 256, 128);
-  const cols = ['#ff2d8a', '#00e8ff', '#ffd84a', '#ff7a18', '#c45cff', '#19e6c2'];
-  for (let i = 0; i < 18; i++) {
-    const g = c.createLinearGradient(0, 20 + i * 5, 256, 40 + i * 6);
-    g.addColorStop(0, 'rgba(0,0,0,0)');
-    g.addColorStop(0.35, cols[i % cols.length] + 'cc');
-    g.addColorStop(1, 'rgba(0,0,0,0)');
+  c.fillRect(0, 0, 128, 128);
+  const panes = [[8, 8, 50, 50], [70, 8, 50, 50], [8, 70, 50, 50], [70, 70, 50, 50]];
+  for (const [x, y, w, h] of panes) {
+    const g = c.createLinearGradient(x, y, x, y + h);
+    g.addColorStop(0, 'rgba(255,236,190,0.95)');
+    g.addColorStop(0.65, 'rgba(255,200,120,0.62)');
+    g.addColorStop(1, 'rgba(255,150,70,0.28)');
     c.fillStyle = g;
-    c.fillRect(0, 8 + i * 6, 256, 5);
+    c.fillRect(x, y, w, h);
+  }
+  c.fillStyle = '#000';
+  c.fillRect(58, 6, 12, 116);
+  c.fillRect(6, 58, 116, 12);
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.generateMipmaps = false;
+  return tex;
+}
+
+function zebraTex() {
+  const canvas = document.createElement('canvas');
+  canvas.width = 256; canvas.height = 64;
+  const c = canvas.getContext('2d');
+  for (let i = 0; i < 8; i++) {
+    const g = c.createLinearGradient(0, 0, 0, 64);
+    g.addColorStop(0, 'rgba(230,244,255,0)');
+    g.addColorStop(0.25, 'rgba(230,244,255,0.85)');
+    g.addColorStop(0.75, 'rgba(230,244,255,0.85)');
+    g.addColorStop(1, 'rgba(230,244,255,0)');
+    c.fillStyle = g;
+    c.fillRect(i * 32 + 6, 0, 16, 64);
   }
   const tex = new THREE.CanvasTexture(canvas);
-  tex.wrapS = THREE.RepeatWrapping;
-  tex.wrapT = THREE.RepeatWrapping;
   tex.generateMipmaps = false;
   return tex;
 }
@@ -283,19 +370,22 @@ export function createGangnamNightlife({ scene, terrain = null, url, mobile = fa
     if (mobile) signSrc = everyNth(signSrc, 10, 2);
     const pos = [], nrm = [], uv = [], col = [], seed = [], idx = [];
     const haloItems = [];
+    const cabItems = [];
     for (let i = 0; i < signSrc.length; i += 10) {
       const x = signSrc[i], y = signSrc[i + 1], z = signSrc[i + 2], yaw = signSrc[i + 3];
       const w = signSrc[i + 4], h = signSrc[i + 5], ni = signSrc[i + 6] | 0, ci = signSrc[i + 7] | 0, kind = signSrc[i + 8] | 0;
       const sd = signSrc[i + 9] || 0.2;
       const gy = ground(x, z) + y;
       const uvs = signUv(kind, ni % SHOP_NAMES.length, atlas);
-      const corners = wallCorners(x, gy, z, yaw, w, h);
+      const uvQuad = [[uvs.u0, uvs.v1], [uvs.u1, uvs.v1], [uvs.u1, uvs.v0], [uvs.u0, uvs.v0]];
       const color = tmpC.set(NEON_COLORS[ci % NEON_COLORS.length]).clone();
       const seedVal = kind === 1 ? -1 - sd : 0.15 + sd;
-      pushQuad(pos, nrm, uv, col, seed, idx, corners, color, seedVal, [
-        [uvs.u0, uvs.v1], [uvs.u1, uvs.v1], [uvs.u1, uvs.v0], [uvs.u0, uvs.v0],
-      ]);
-      haloItems.push(x, gy, z, yaw, Math.max(w, 1.2) * 1.35, Math.max(h, 1.2) * 1.25, ci);
+      pushQuad(pos, nrm, uv, col, seed, idx, wallCorners(x, gy, z, yaw, w, h), color, seedVal, uvQuad);
+      if (kind === 2) {
+        pushQuad(pos, nrm, uv, col, seed, idx, wallCorners(x, gy, z, yaw + Math.PI, w, h), color, seedVal, uvQuad);
+      }
+      haloItems.push(x, gy, z, yaw, Math.max(w, 1.2) * 1.08, Math.max(h, 1.2) * 1.08, ci);
+      cabItems.push(x, gy, z, yaw, w * 1.12, h * 1.2, ci);
     }
     const signGeo = new THREE.BufferGeometry();
     signGeo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
@@ -311,16 +401,23 @@ export function createGangnamNightlife({ scene, terrain = null, url, mobile = fa
     signs.frustumCulled = false;
     signs.renderOrder = 4;
     root.add(signs);
-    const backGeo = signGeo.clone();
-    const backMat = new THREE.MeshBasicMaterial({
-      vertexColors: true, transparent: true, opacity: 0, depthWrite: false,
-      toneMapped: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending,
-      polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2,
-    });
-    const backs = new THREE.Mesh(backGeo, backMat);
-    backs.name = 'gnightSignBacks';
+    const cabN = cabItems.length / 7;
+    const backMat = makeUnlitColor({ color: '#ffffff', additive: true, poly: true, side: THREE.FrontSide });
+    const backs = new THREE.InstancedMesh(new THREE.PlaneGeometry(1, 1), backMat, Math.max(1, cabN));
+    backs.name = 'gnightSignCabinets';
     backs.frustumCulled = false;
     backs.renderOrder = 3;
+    for (let i = 0; i < cabN; i++) {
+      const x = cabItems[i * 7], y = cabItems[i * 7 + 1], z = cabItems[i * 7 + 2], yaw = cabItems[i * 7 + 3];
+      const nx = Math.sin(yaw), nz = Math.cos(yaw);
+      compose(m4, q, p, s, x - nx * 0.05, y, z - nz * 0.05, yaw, cabItems[i * 7 + 4], cabItems[i * 7 + 5], 1);
+      backs.setMatrixAt(i, m4);
+      backs.setColorAt(i, tmpC.set(NEON_COLORS[cabItems[i * 7 + 6] % NEON_COLORS.length]));
+    }
+    backs.count = cabN;
+    backs.instanceMatrix.needsUpdate = true;
+    if (backs.instanceColor) backs.instanceColor.needsUpdate = true;
+    backs.computeBoundingSphere();
     root.add(backs);
     stats.signs = signSrc.length / 10;
 
@@ -342,7 +439,7 @@ export function createGangnamNightlife({ scene, terrain = null, url, mobile = fa
     let winSrc = j.windows || [];
     if (mobile) winSrc = everyNth(winSrc, 7, 2);
     const wn = winSrc.length / 7;
-    const wmat = makeUnlitColor({ color: '#ffe4b5', poly: true });
+    const wmat = makeUnlitColor({ map: windowTex(), additive: true, poly: true, side: THREE.FrontSide });
     const wins = new THREE.InstancedMesh(new THREE.PlaneGeometry(1, 1), wmat, Math.max(1, wn));
     wins.name = 'gnightWindows';
     for (let i = 0; i < wn; i++) {
@@ -360,21 +457,32 @@ export function createGangnamNightlife({ scene, terrain = null, url, mobile = fa
 
     const facSrc = j.facades || [];
     const fn = facSrc.length / 7;
-    const fmat = makeFacadeMaterial();
-    const facades = new THREE.InstancedMesh(new THREE.PlaneGeometry(1, 1), fmat, Math.max(1, fn));
-    facades.name = 'gnightFacades';
-    facades.renderOrder = 3;
-    for (let i = 0; i < fn; i++) {
-      const x = facSrc[i * 7], y = facSrc[i * 7 + 1], z = facSrc[i * 7 + 2], yaw = facSrc[i * 7 + 3];
-      compose(m4, q, p, s, x, ground(x, z) + y, z, yaw, facSrc[i * 7 + 4], facSrc[i * 7 + 5], 1);
-      facades.setMatrixAt(i, m4);
-      facades.setColorAt(i, tmpC.set(NEON_COLORS[facSrc[i * 7 + 6] % NEON_COLORS.length]));
+    const VARIANT_N = FACADE_VARIANTS.length;
+    const groups = Array.from({ length: VARIANT_N }, () => []);
+    for (let i = 0; i < fn; i++) groups[(facSrc[i * 7 + 6] | 0) % VARIANT_N].push(i);
+    const facadeMeshes = [];
+    const facadeMats = [];
+    for (let v = 0; v < VARIANT_N; v++) {
+      const ids = groups[v];
+      const fmat = makeFacadeMaterial(FACADE_VARIANTS[v]);
+      const facades = new THREE.InstancedMesh(new THREE.PlaneGeometry(1, 1), fmat, Math.max(1, ids.length));
+      facades.name = 'gnightFacades' + v;
+      facades.renderOrder = 3;
+      for (let k = 0; k < ids.length; k++) {
+        const i = ids[k];
+        const x = facSrc[i * 7], y = facSrc[i * 7 + 1], z = facSrc[i * 7 + 2], yaw = facSrc[i * 7 + 3];
+        compose(m4, q, p, s, x, ground(x, z) + y, z, yaw, facSrc[i * 7 + 4], facSrc[i * 7 + 5], 1);
+        facades.setMatrixAt(k, m4);
+        facades.setColorAt(k, tmpC.set(NEON_COLORS[facSrc[i * 7 + 6] % NEON_COLORS.length]));
+      }
+      facades.count = ids.length;
+      facades.instanceMatrix.needsUpdate = true;
+      if (facades.instanceColor) facades.instanceColor.needsUpdate = true;
+      facades.computeBoundingSphere();
+      root.add(facades);
+      facadeMeshes.push(facades);
+      facadeMats.push(fmat);
     }
-    facades.count = fn;
-    facades.instanceMatrix.needsUpdate = true;
-    if (facades.instanceColor) facades.instanceColor.needsUpdate = true;
-    facades.computeBoundingSphere();
-    root.add(facades);
     stats.facades = fn;
 
     let stripSrc = j.strips || [];
@@ -438,7 +546,7 @@ export function createGangnamNightlife({ scene, terrain = null, url, mobile = fa
 
     const exSrc = j.exits || [];
     const en = exSrc.length / 7;
-    const exMat = makeUnlitColor({ color: '#7dffb0', additive: true });
+    const exMat = makeUnlitColor({ map: poolTex(), color: '#7dffb0', additive: true });
     const exits = new THREE.InstancedMesh(new THREE.PlaneGeometry(1, 1), exMat, Math.max(1, en));
     exits.name = 'gnightExits';
     exits.renderOrder = 2;
@@ -446,12 +554,12 @@ export function createGangnamNightlife({ scene, terrain = null, url, mobile = fa
       const x = exSrc[i * 7], y = exSrc[i * 7 + 1], z = exSrc[i * 7 + 2], yaw = exSrc[i * 7 + 3];
       const w = exSrc[i * 7 + 4], h = exSrc[i * 7 + 5], kind = exSrc[i * 7 + 6] | 0;
       if (kind === 0) {
+        const r = Math.max(w, h) * 0.55;
         q.setFromAxisAngle(up, yaw);
         p.set(x, ground(x, z) + 0.07, z);
-        s.set(w, h, 1);
+        s.set(r, 1, r);
         m4.compose(p, q, s);
-        const rx = new THREE.Matrix4().makeRotationX(-Math.PI / 2);
-        m4.multiply(rx);
+        m4.multiply(new THREE.Matrix4().makeRotationX(-Math.PI / 2));
       } else {
         compose(m4, q, p, s, x, ground(x, z) + y, z, yaw, w, h, 1);
       }
@@ -467,7 +575,7 @@ export function createGangnamNightlife({ scene, terrain = null, url, mobile = fa
 
     const crSrc = j.crossings || [];
     const cn = crSrc.length / 6;
-    const crMat = makeUnlitColor({ color: '#e8f4ff', additive: true });
+    const crMat = makeUnlitColor({ map: zebraTex(), color: '#e8f4ff', additive: true });
     const crossings = new THREE.InstancedMesh(new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2), crMat, Math.max(1, cn));
     crossings.name = 'gnightCrossings';
     crossings.renderOrder = 1;
@@ -506,7 +614,7 @@ export function createGangnamNightlife({ scene, terrain = null, url, mobile = fa
       heads.name = 'gnightHeads';
       heads.renderOrder = 2;
       for (let i = 0; i < n; i++) {
-        compose(m4, q, p, s, src[i * 4], ground(src[i * 4], src[i * 4 + 1]) + 0.22, src[i * 4 + 1], src[i * 4 + 2], src[i * 4 + 3], 1, 0.55);
+        compose(m4, q, p, s, src[i * 4], ground(src[i * 4], src[i * 4 + 1]) + 0.28, src[i * 4 + 1], src[i * 4 + 2] + Math.PI / 2, src[i * 4 + 3], 1, 1.2);
         heads.setMatrixAt(i, m4);
       }
       heads.instanceMatrix.needsUpdate = true;
@@ -521,7 +629,7 @@ export function createGangnamNightlife({ scene, terrain = null, url, mobile = fa
       tails.name = 'gnightTails';
       tails.renderOrder = 2;
       for (let i = 0; i < n; i++) {
-        compose(m4, q, p, s, src[i * 4], ground(src[i * 4], src[i * 4 + 1]) + 0.2, src[i * 4 + 1], src[i * 4 + 2] + Math.PI, src[i * 4 + 3], 1, 0.48);
+        compose(m4, q, p, s, src[i * 4], ground(src[i * 4], src[i * 4 + 1]) + 0.26, src[i * 4 + 1], src[i * 4 + 2] + Math.PI + Math.PI / 2, src[i * 4 + 3], 1, 1.2);
         tails.setMatrixAt(i, m4);
       }
       tails.instanceMatrix.needsUpdate = true;
@@ -529,26 +637,70 @@ export function createGangnamNightlife({ scene, terrain = null, url, mobile = fa
       root.add(tails);
       stats.tails = n;
     }
-    if (!mobile && j.wet?.length) {
-      const src = j.wet; const n = src.length / 5;
-      wetmat = makeUnlitColor({ map: wetTex(), additive: true });
-      wet = new THREE.InstancedMesh(new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2), wetmat, n);
+    if (!mobile && (j.wet?.length || wn)) {
+      const src = j.wet || [];
+      const wetN = src.length / 5;
+      const poolN = wetN + wn;
+      wetmat = makeUnlitColor({ map: poolTex(), additive: true });
+      wet = new THREE.InstancedMesh(new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2), wetmat, Math.max(1, poolN));
       wet.name = 'gnightWet';
       wet.renderOrder = 1;
-      for (let i = 0; i < n; i++) {
-        compose(m4, q, p, s, src[i * 5], ground(src[i * 5], src[i * 5 + 1]) + 0.045, src[i * 5 + 1], src[i * 5 + 2], src[i * 5 + 4], 1, src[i * 5 + 3]);
+      for (let i = 0; i < wetN; i++) {
+        const dia = Math.min(src[i * 5 + 3], src[i * 5 + 4]);
+        compose(m4, q, p, s, src[i * 5], ground(src[i * 5], src[i * 5 + 1]) + 0.045, src[i * 5 + 1], src[i * 5 + 2], dia, 1, dia);
         wet.setMatrixAt(i, m4);
+        wet.setColorAt(i, tmpC.set('#9ad8ff'));
       }
+      for (let i = 0; i < wn; i++) {
+        const x = winSrc[i * 7], z = winSrc[i * 7 + 2], yaw = winSrc[i * 7 + 3];
+        const nx = Math.sin(yaw), nz = Math.cos(yaw);
+        const px = x + nx * 1.35, pz = z + nz * 1.35;
+        const dia = Math.max(2.8, winSrc[i * 7 + 4] * 1.15);
+        compose(m4, q, p, s, px, ground(px, pz) + 0.04, pz, yaw, dia, 1, dia);
+        wet.setMatrixAt(wetN + i, m4);
+        wet.setColorAt(wetN + i, tmpC.set(WINDOW_COLORS[winSrc[i * 7 + 6] % WINDOW_COLORS.length]));
+      }
+      wet.count = poolN;
       wet.instanceMatrix.needsUpdate = true;
+      if (wet.instanceColor) wet.instanceColor.needsUpdate = true;
       wet.computeBoundingSphere();
       root.add(wet);
-      stats.wet = n;
+      stats.wet = poolN;
+    }
+
+    let cars = null;
+    if (!mobile && j.lanes?.length) {
+      const CARS = 8;
+      const usable = [];
+      let total = 0;
+      for (const lane of j.lanes) {
+        if ((lane.length / 3) >= 8) { usable.push(lane); total += CARS; }
+      }
+      if (total) {
+        const bodyMat = new THREE.MeshBasicMaterial({ color: '#16161f', transparent: true, opacity: 0, toneMapped: false, depthWrite: true });
+        const bodies = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), bodyMat, total);
+        bodies.name = 'gnightCars';
+        bodies.frustumCulled = false;
+        const chMat = makeUnlitColor({ color: '#fff4d0', additive: true });
+        const ctMat = makeUnlitColor({ color: '#ff3040', additive: true });
+        const carHeads = new THREE.InstancedMesh(new THREE.SphereGeometry(1, 6, 4), chMat, total * 2);
+        const carTails = new THREE.InstancedMesh(new THREE.SphereGeometry(1, 6, 4), ctMat, total * 2);
+        carHeads.name = 'gnightCarHeads';
+        carTails.name = 'gnightCarTails';
+        carHeads.frustumCulled = false;
+        carTails.frustumCulled = false;
+        carHeads.renderOrder = 3;
+        carTails.renderOrder = 3;
+        root.add(bodies); root.add(carHeads); root.add(carTails);
+        cars = { bodies, bodyMat, carHeads, chMat, carTails, ctMat, usable, CARS, total };
+        stats.cars = total;
+      }
     }
 
     meshes = {
-      signs, signMat, backs, backMat, halos, haloMat, wins, wmat, facades, fmat, strips, smat,
+      signs, signMat, backs, backMat, halos, haloMat, wins, wmat, facadeMeshes, facadeMats, strips, smat,
       lanterns, lmat, strings, strMat, exits, exMat, crossings, crMat, signals, sgMat,
-      heads, hmat, tails, tmat, wet, wetmat,
+      heads, hmat, tails, tmat, wet, wetmat, cars,
     };
     stats.loaded = true;
     apply(1);
@@ -568,50 +720,108 @@ export function createGangnamNightlife({ scene, terrain = null, url, mobile = fa
     meshes.signMat.opacity = on ? (0.62 + n * 0.38) : 0;
     meshes.signs.visible = on;
     if (meshes.backMat) {
-      meshes.backMat.opacity = n * 0.62;
+      meshes.backMat.opacity = n * 0.42;
       meshes.backs.visible = on && n > 0.04;
     }
-    meshes.haloMat.opacity = n * (mobile ? 0.22 : 0.38);
+    meshes.haloMat.opacity = n * (mobile ? 0.18 : 0.28);
     meshes.halos.visible = on && n > 0.04;
-    meshes.wmat.opacity = n * (mobile ? 0.45 : 0.72);
+    meshes.wmat.opacity = n * (mobile ? 0.5 : 0.78);
     meshes.wins.visible = on && n > 0.04;
-    meshes.fmat.opacity = n * 0.95;
-    meshes.facades.visible = on && n > 0.04;
-    if (meshes.fmat.map) meshes.fmat.map.offset.y = (performance.now() / 2800) % 1;
-    meshes.smat.opacity = on ? (0.25 + n * 0.85) : 0;
-    meshes.strips.visible = on;
+    if (meshes.facadeMats) {
+      for (let v = 0; v < meshes.facadeMats.length; v++) {
+        meshes.facadeMats[v].opacity = n * 0.95;
+        meshes.facadeMeshes[v].visible = on && n > 0.04;
+        if (meshes.facadeMats[v].map) meshes.facadeMats[v].map.offset.y = (performance.now() / (2400 + v * 280) + v * 0.17) % 1;
+      }
+    }
+    meshes.smat.opacity = n * 0.95;
+    meshes.strips.visible = on && n > 0.04;
     meshes.lmat.opacity = n * 0.85;
     meshes.lanterns.visible = on && n > 0.04;
     if (meshes.strings) {
       meshes.strMat.opacity = n * (0.55 + 0.25 * Math.sin(performance.now() * 0.004));
       meshes.strings.visible = on && n > 0.04;
     }
-    meshes.exMat.opacity = n * 0.55;
+    meshes.exMat.opacity = n * 0.42;
     meshes.exits.visible = on && n > 0.04;
-    meshes.crMat.opacity = n * 0.28;
+    meshes.crMat.opacity = n * 0.22;
     meshes.crossings.visible = on && n > 0.04;
     meshes.sgMat.opacity = on ? 0.55 + n * 0.4 : 0;
     meshes.signals.visible = on;
     if (meshes.heads) {
-      meshes.hmat.opacity = n * 0.7;
+      meshes.hmat.opacity = n * 0.92;
       meshes.heads.visible = on && n > 0.04;
-      if (meshes.hmat.map) meshes.hmat.map.offset.x = (performance.now() / 850) % 1;
+      if (meshes.hmat.map) meshes.hmat.map.offset.x = (performance.now() / 700) % 1;
     }
     if (meshes.tails) {
-      meshes.tmat.opacity = n * 0.62;
+      meshes.tmat.opacity = n * 0.88;
       meshes.tails.visible = on && n > 0.04;
-      if (meshes.tmat.map) meshes.tmat.map.offset.x = (performance.now() / 920) % 1;
+      if (meshes.tmat.map) meshes.tmat.map.offset.x = (performance.now() / 760) % 1;
     }
     if (meshes.wet) {
-      meshes.wetmat.opacity = n * 0.22;
+      meshes.wetmat.opacity = n * 0.16;
       meshes.wet.visible = on && n > 0.04;
-      if (meshes.wetmat.map) meshes.wetmat.map.offset.x = (performance.now() / 4000) % 1;
+    }
+    if (meshes.cars) {
+      const c = meshes.cars;
+      const show = on && n > 0.04;
+      c.bodies.visible = show;
+      c.carHeads.visible = show;
+      c.carTails.visible = show;
+      c.bodyMat.opacity = show ? 0.92 : 0;
+      c.chMat.opacity = n * 0.95;
+      c.ctMat.opacity = n * 0.9;
+      if (show) tickCars(c);
     }
     let draws = 0;
-    for (const m of [meshes.signs, meshes.backs, meshes.halos, meshes.wins, meshes.facades, meshes.strips, meshes.lanterns, meshes.strings, meshes.exits, meshes.crossings, meshes.signals, meshes.heads, meshes.tails, meshes.wet]) {
+    const listed = [meshes.signs, meshes.backs, meshes.halos, meshes.wins, meshes.strips, meshes.lanterns, meshes.strings, meshes.exits, meshes.crossings, meshes.signals, meshes.heads, meshes.tails, meshes.wet];
+    if (meshes.facadeMeshes) listed.push(...meshes.facadeMeshes);
+    if (meshes.cars) listed.push(meshes.cars.bodies, meshes.cars.carHeads, meshes.cars.carTails);
+    for (const m of listed) {
       if (m && m.visible) draws++;
     }
     stats.draws = draws;
+  }
+
+  function tickCars(c) {
+    const t = performance.now() / 1000;
+    const speed = 12;
+    const spacing = 4;
+    let ci = 0;
+    for (const lane of c.usable) {
+      const nPts = lane.length / 3;
+      const pathLen = Math.max(1, (nPts - 1) * spacing);
+      for (let k = 0; k < c.CARS; k++) {
+        const dist = ((t * speed + k * pathLen / c.CARS) % pathLen + pathLen) % pathLen;
+        const u = dist / spacing;
+        const i0 = Math.min(nPts - 2, Math.floor(u));
+        const f = u - i0;
+        const i1 = i0 + 1;
+        const x = lane[i0 * 3] + (lane[i1 * 3] - lane[i0 * 3]) * f;
+        const z = lane[i0 * 3 + 1] + (lane[i1 * 3 + 1] - lane[i0 * 3 + 1]) * f;
+        let dy = lane[i1 * 3 + 2] - lane[i0 * 3 + 2];
+        if (dy > Math.PI) dy -= Math.PI * 2;
+        if (dy < -Math.PI) dy += Math.PI * 2;
+        const yaw = lane[i0 * 3 + 2] + dy * f;
+        const gy = ground(x, z) + 0.62;
+        compose(m4, q, p, s, x, gy, z, yaw, 1.7, 1.12, 4.2);
+        c.bodies.setMatrixAt(ci, m4);
+        const fx = Math.sin(yaw), fz = Math.cos(yaw);
+        const rx = Math.cos(yaw), rz = -Math.sin(yaw);
+        compose(m4, q, p, s, x + fx * 2.05 + rx * 0.5, gy + 0.12, z + fz * 2.05 + rz * 0.5, 0, 0.32, 0.28, 0.28);
+        c.carHeads.setMatrixAt(ci * 2, m4);
+        compose(m4, q, p, s, x + fx * 2.05 - rx * 0.5, gy + 0.12, z + fz * 2.05 - rz * 0.5, 0, 0.32, 0.28, 0.28);
+        c.carHeads.setMatrixAt(ci * 2 + 1, m4);
+        compose(m4, q, p, s, x - fx * 2.05 + rx * 0.5, gy + 0.12, z - fz * 2.05 + rz * 0.5, 0, 0.26, 0.2, 0.2);
+        c.carTails.setMatrixAt(ci * 2, m4);
+        compose(m4, q, p, s, x - fx * 2.05 - rx * 0.5, gy + 0.12, z - fz * 2.05 - rz * 0.5, 0, 0.26, 0.2, 0.2);
+        c.carTails.setMatrixAt(ci * 2 + 1, m4);
+        ci++;
+      }
+    }
+    c.bodies.instanceMatrix.needsUpdate = true;
+    c.carHeads.instanceMatrix.needsUpdate = true;
+    c.carTails.instanceMatrix.needsUpdate = true;
   }
 
   let acc = 0;

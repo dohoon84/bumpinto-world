@@ -12,9 +12,9 @@ const browser = await chromium.launch({
 });
 const Q = 'enter=1&name=Tester&ws=mock&bus=sim&weather=clear&noticePopup=0&bgm=0&subwayVoice=0&subwayRt=0&npcs=0&taxis=0&police=0&trucks=0&clife=0&bike=0&roadbike=0&superbike=0&pangyonpc=0&gangnamnpc=0';
 
-async function open({ w = 1280, h = 800, hour = 21 } = {}) {
+async function open({ w = 1280, h = 800, hour = 21, extra = '' } = {}) {
   const page = await browser.newPage({ viewport: { width: w, height: h } });
-  await page.goto(`${B}?${Q}&hour=${hour}&shot=1`, { timeout: 180000 });
+  await page.goto(`${B}?${Q}&hour=${hour}&shot=1${extra}`, { timeout: 180000 });
   await page.waitForFunction(() => window.__jj?.ready, null, { timeout: 240000 });
   await page.waitForTimeout(1200);
   return page;
@@ -30,16 +30,16 @@ async function surface(page, x, z, yaw = 0, dist = 22, pitch = 0.38) {
 
 const night = await open({ hour: 21 });
 await surface(night, -7150, -14590, 0.22, 34, 0.16);
-await night.screenshot({ path: `${OUT}/gnight-daero.png` });
+await night.screenshot({ path: `${OUT}/gnight2-daero.png` });
 
 await surface(night, -7140, -14595, -2.55, 14, 0.12);
-await night.screenshot({ path: `${OUT}/gnight-exit.png` });
+await night.screenshot({ path: `${OUT}/gnight2-exit.png` });
 
 await surface(night, -7030, -14490, 2.0, 16, 0.18);
-await night.screenshot({ path: `${OUT}/gnight-alley.png` });
+await night.screenshot({ path: `${OUT}/gnight2-alley.png` });
 
 await surface(night, -7140, -14530, 0.35, 200, 1.05);
-await night.screenshot({ path: `${OUT}/gnight-aerial.png` });
+await night.screenshot({ path: `${OUT}/gnight2-aerial.png` });
 
 const stats = await night.evaluate(() => ({
   nl: window.__jj.gangnamNightlife?.stats || null,
@@ -49,7 +49,13 @@ await night.close();
 
 const day = await open({ hour: 14 });
 await surface(day, -7150, -14590, 0.22, 34, 0.16);
-await day.screenshot({ path: `${OUT}/gnight-day.png` });
+await day.screenshot({ path: `${OUT}/gnight2-day.png` });
 await day.close();
+
+const mobile = await open({ w: 844, h: 390, hour: 21, extra: '&mobile=1' });
+await surface(mobile, -7150, -14590, 0.22, 34, 0.16);
+await mobile.screenshot({ path: `${OUT}/gnight2-mobile.png` });
+const mobileStats = await mobile.evaluate(() => window.__jj.gangnamNightlife?.stats || null);
+await mobile.close();
 await browser.close();
-console.log(JSON.stringify({ out: OUT, stats }, null, 2));
+console.log(JSON.stringify({ out: OUT, stats, mobileStats }, null, 2));

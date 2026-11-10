@@ -6,7 +6,7 @@ import path from 'node:path';
 import {
   placeSigns, placeShopWindows, placeFacades, placeLanterns, placeStrings,
   placeCrossings, placeSignals, placeExitGlows, placeHeadlights, placeTaillights,
-  placeWet, placeStrips, countsOf, SHOP_NAMES, BRAND_DENY, NEON_COLORS,
+  placeWet, placeStrips, sampleLanes, countsOf, SHOP_NAMES, BRAND_DENY, NEON_COLORS,
 } from '../../../src/gangnam/nightlifePlace.js';
 import { gangnamNightlifeEnabled } from '../../../src/gangnam/nightlife.js';
 
@@ -50,10 +50,11 @@ const built = {
   crossings: placeCrossings(tiles, { box }),
   signals: placeSignals(placeCrossings(tiles, { box })),
   exits: placeExitGlows(exits),
-  heads: placeHeadlights(tiles, { box }),
-  tails: placeTaillights(tiles, { box }),
+  heads: placeHeadlights(tiles, { box, around }),
+  tails: placeTaillights(tiles, { box, around }),
   wet: placeWet(tiles, { box }),
   strips: placeStrips(tiles, { box, around }),
+  lanes: sampleLanes(tiles, { box, around }),
 };
 assert.deepEqual(built.signs, data.signs, 'nightlife.json signs — node scripts/corridor/build-gangnam-nightlife.mjs');
 assert.deepEqual(built.windows, data.windows);
@@ -66,18 +67,19 @@ assert.deepEqual(built.heads, data.heads);
 assert.deepEqual(built.tails, data.tails);
 assert.deepEqual(built.wet, data.wet);
 assert.deepEqual(built.strips, data.strips);
+assert.deepEqual(built.lanes, data.lanes);
 ok('nightlife.json matches place*');
 
 const c = countsOf(data);
-assert.ok(c.signs >= 400 && c.signs <= 900, `signs ${c.signs}`);
-assert.ok(c.windows >= 250 && c.windows <= 700, `windows ${c.windows}`);
-assert.ok(c.facades >= 12 && c.facades <= 50, `facades ${c.facades}`);
+assert.ok(c.signs >= 1000 && c.signs <= 2800, `signs ${c.signs}`);
+assert.ok(c.windows >= 250 && c.windows <= 900, `windows ${c.windows}`);
+assert.ok(c.facades >= 20 && c.facades <= 90, `facades ${c.facades}`);
 assert.ok(c.lanterns >= 60 && c.lanterns <= 200, `lanterns ${c.lanterns}`);
 assert.ok(c.strings >= 80 && c.strings <= 260, `strings ${c.strings}`);
 assert.ok(c.crossings >= 3 && c.crossings <= 20, `crossings ${c.crossings}`);
 assert.ok(c.exits === exits.length * 3, `exits ${c.exits}`);
-assert.ok(c.heads >= 40 && c.heads <= 180, `heads ${c.heads}`);
-assert.ok(c.tails >= 40 && c.tails <= 180, `tails ${c.tails}`);
+assert.ok(c.heads >= 80 && c.heads <= 450, `heads ${c.heads}`);
+assert.ok(c.tails >= 80 && c.tails <= 450, `tails ${c.tails}`);
 assert.ok(c.wet >= 20 && c.wet <= 90, `wet ${c.wet}`);
 assert.ok(c.strips >= 30 && c.strips <= 130, `strips ${c.strips}`);
 ok(`counts ${JSON.stringify(c)}`);
@@ -93,7 +95,7 @@ const nearStation = [];
 for (let i = 0; i < data.signs.length; i += 10) {
   if (Math.hypot(data.signs[i] + 7120, data.signs[i + 2] + 14540) < 180) nearStation.push(1);
 }
-assert.ok(nearStation.length >= 40, `강남역 사거리 주변 간판 ${nearStation.length}`);
+assert.ok(nearStation.length >= 80, `강남역 사거리 주변 간판 ${nearStation.length}`);
 ok('signs inside box, kinds valid, dense near station');
 
 const a = placeSigns(tiles, { box });
