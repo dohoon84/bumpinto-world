@@ -35,27 +35,48 @@ function closestEdge(x, z, pts) {
   return { d: best, nx, nz };
 }
 
-function windowTex() {
+function podiumTex() {
+  // One storey of horizontal glazing — tiled along each wall, one repeat per tier.
   const W = 512, H = 256, r = rng(4797);
   const c = document.createElement('canvas'); c.width = W; c.height = H;
   const d = c.getContext('2d');
   const nc = document.createElement('canvas'); nc.width = W; nc.height = H;
   const n = nc.getContext('2d');
-  d.fillStyle = '#d8dee4'; d.fillRect(0, 0, W, H);
-  n.fillStyle = '#000'; n.fillRect(0, 0, W, H);
-  const cols = 10, rows = 5, pw = W / cols, ph = H / rows;
-  for (let j = 0; j < rows; j++) for (let i = 0; i < cols; i++) {
-    const x = i * pw + 3, y = j * ph + 4, w = pw - 6, h = ph - 8;
-    const g = d.createLinearGradient(x, y, x + w, y + h);
-    g.addColorStop(0, '#e8eef3'); g.addColorStop(1, '#9bb0c0');
+  d.fillStyle = '#d5cfc4'; d.fillRect(0, 0, W, H);
+  n.fillStyle = '#1c2026'; n.fillRect(0, 0, W, H);
+  d.fillStyle = 'rgba(255,255,255,0.10)'; d.fillRect(0, 0, W, 8);
+  d.fillStyle = 'rgba(70,62,54,0.14)'; d.fillRect(0, H - 6, W, 6);
+  const y0 = Math.round(H * 0.28), yh = Math.round(H * 0.52);
+  const cols = 5, pw = W / cols;
+  for (let i = 0; i < cols; i++) {
+    const x = i * pw + 8, y = y0 + 5, w = pw - 16, h = yh - 10;
+    const g = d.createLinearGradient(x, y, x, y + h);
+    g.addColorStop(0, '#eaf4fa');
+    g.addColorStop(0.4, '#9db8c6');
+    g.addColorStop(1, '#d2e3ee');
     d.fillStyle = g; d.fillRect(x, y, w, h);
-    if (r() < 0.7) {
-      n.fillStyle = `rgba(255,${210 + r() * 30},${150 + r() * 40},${0.45 + r() * 0.45})`;
-      n.fillRect(x + 1, y + 1, w - 2, h - 2);
-    }
+    d.fillStyle = 'rgba(255,255,255,0.30)'; d.fillRect(x + 2, y + 2, w * 0.22, h - 4);
+    d.fillStyle = '#8a9098'; d.fillRect(x + w * 0.5 - 1.2, y, 2.4, h);
+    const warm = 0.78 + r() * 0.22;
+    n.fillStyle = `rgba(255,${186 + r() * 36},${118 + r() * 36},${warm})`;
+    n.fillRect(x + 1, y + 1, w - 2, h - 2);
+    n.fillStyle = 'rgba(255,228,176,0.38)';
+    n.fillRect(x + 2, y + 3, w * 0.32, h * 0.38);
   }
+  n.fillStyle = 'rgba(90, 214, 255, 0.95)'; n.fillRect(0, y0 - 4, W, 4);
+  n.fillStyle = 'rgba(90, 214, 255, 0.50)'; n.fillRect(0, y0 + yh + 1, W, 2);
+  d.fillStyle = '#e6e1d6'; d.fillRect(0, 0, W, 9);
   const tex = (cv) => { const t = new THREE.CanvasTexture(cv); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8; return t; };
   return { day: tex(c), night: tex(nc) };
+}
+
+function applyFacadeUV(geo, len, bay = 7) {
+  const uv = geo.attributes.uv;
+  if (!uv) return geo;
+  const uRepeat = Math.max(0.6, len / bay);
+  for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * uRepeat, uv.getY(i));
+  uv.needsUpdate = true;
+  return geo;
 }
 
 function drumWindowTex() {
@@ -148,7 +169,7 @@ export function createNamsanTower({ parent, osm, baseY }) {
   const drumTop = drumBottom + NT.drumH; // baseY + 147
   const tipY = baseY + NT.height;
 
-  const win = windowTex();
+  const win = podiumTex();
   const dwin = drumWindowTex();
   const nightMats = [];
   const track = (mat, dayE = 0, nightE = 1) => { nightMats.push({ mat, dayE, nightE }); return mat; };
@@ -198,17 +219,20 @@ export function createNamsanTower({ parent, osm, baseY }) {
         const alongX = dx / L, alongZ = dz / L;
         if (left > 0.6) {
           const cx1 = a[0] + alongX * (left * 0.5), cz1 = a[1] + alongZ * (left * 0.5);
-          const bg = new THREE.BoxGeometry(0.55, h, left); bg.rotateY(ang); bg.translate(cx1, y0 + h / 2, cz1); geos.push(bg);
+          const bg = applyFacadeUV(new THREE.BoxGeometry(0.55, h, left), left);
+          bg.rotateY(ang); bg.translate(cx1, y0 + h / 2, cz1); geos.push(bg);
         }
         if (right > 0.6) {
           const cx2 = b[0] - alongX * (right * 0.5), cz2 = b[1] - alongZ * (right * 0.5);
-          const bg = new THREE.BoxGeometry(0.55, h, right); bg.rotateY(ang); bg.translate(cx2, y0 + h / 2, cz2); geos.push(bg);
+          const bg = applyFacadeUV(new THREE.BoxGeometry(0.55, h, right), right);
+          bg.rotateY(ang); bg.translate(cx2, y0 + h / 2, cz2); geos.push(bg);
         }
-        const lintelH = Math.min(2.2, h * 0.24);
-        const lg = new THREE.BoxGeometry(0.62, lintelH, gap);
+        const lintelH = Math.min(1.15, h * 0.24);
+        const lg = applyFacadeUV(new THREE.BoxGeometry(0.62, lintelH, gap), gap);
         lg.rotateY(ang); lg.translate(eastDoor.cx, y0 + h - lintelH / 2, eastDoor.cz); geos.push(lg);
       } else {
-        const bg = new THREE.BoxGeometry(0.55, h, L); bg.rotateY(ang); bg.translate(mx, y0 + h / 2, mz); geos.push(bg);
+        const bg = applyFacadeUV(new THREE.BoxGeometry(0.55, h, L), L);
+        bg.rotateY(ang); bg.translate(mx, y0 + h / 2, mz); geos.push(bg);
       }
     }
     return geos;
@@ -261,7 +285,16 @@ export function createNamsanTower({ parent, osm, baseY }) {
       const slab = new THREE.ExtrudeGeometry(shape, { depth: 0.45, bevelEnabled: false });
       slab.rotateX(-Math.PI / 2);
       slab.translate(ox, topY, oz);
-      const slabM = new THREE.Mesh(slab, new THREE.MeshLambertMaterial({ color: '#cfd6dc' }));
+      const slabMat = track(new THREE.MeshStandardMaterial({
+        color: '#d5cbc0',
+        emissive: new THREE.Color('#cbb89a'),
+        emissiveIntensity: 0,
+        roughness: 0.72,
+        metalness: 0.04,
+        side: THREE.DoubleSide,
+      }), 0.1, 0.28);
+      const slabM = new THREE.Mesh(slab, slabMat);
+      slabM.name = 'namsan-plaza-slab';
       slabM.receiveShadow = true;
       g.add(slabM);
       addGlassRail(tier.pts, topY);
@@ -297,15 +330,23 @@ export function createNamsanTower({ parent, osm, baseY }) {
         color: '#ffb060', transparent: true, opacity: 0, depthWrite: false, fog: false, side: THREE.DoubleSide,
       }), 0, 0);
       innerGlow.userData.nightOp = 0.88;
-      const glowP = new THREE.Mesh(new THREE.PlaneGeometry(4.8, 2.55), innerGlow);
-      glowP.position.set(cx - nx * 0.62, baseY + 1.32, cz - nz * 0.62);
+      const glowP = new THREE.Mesh(new THREE.PlaneGeometry(4.8, 3.15), innerGlow);
+      glowP.position.set(cx - nx * 0.62, baseY + 1.68, cz - nz * 0.62);
       glowP.rotation.y = Math.atan2(nx, nz);
       g.add(glowP);
+      const doorFill = new THREE.Mesh(
+        new THREE.PlaneGeometry(4.7, 3.2),
+        new THREE.MeshBasicMaterial({ color: '#e8b56a', toneMapped: false, fog: false }),
+      );
+      doorFill.position.set(cx - nx * 1.05, baseY + 1.7, cz - nz * 1.05);
+      doorFill.rotation.y = Math.atan2(nx, nz);
+      doorFill.name = 'namsan-door-fill';
+      g.add(doorFill);
       for (const side of [-1, 1]) {
         const px = cx + ux * side * 1.15 + nx * 0.06;
         const pz = cz + uz * side * 1.15 + nz * 0.06;
-        const pane = new THREE.Mesh(new THREE.BoxGeometry(0.04, 2.36, 2.08), glassMat);
-        pane.rotation.y = ang; pane.position.set(px, baseY + 1.26, pz); g.add(pane);
+        const pane = new THREE.Mesh(new THREE.BoxGeometry(0.04, 3.15, 2.08), glassMat);
+        pane.rotation.y = ang; pane.position.set(px, baseY + 1.68, pz); g.add(pane);
       }
       const frame = (w, h, d, x, y, z) => {
         const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), frameMat);
@@ -318,23 +359,28 @@ export function createNamsanTower({ parent, osm, baseY }) {
       frame(0.12, 2.5, 0.14, cx + ux * -2.2 + nx * 0.12, baseY + 1.28, cz + uz * -2.2 + nz * 0.12);
       frame(0.12, 2.5, 0.14, cx + ux * 2.2 + nx * 0.12, baseY + 1.28, cz + uz * 2.2 + nz * 0.12);
       frame(0.12, 2.5, 0.14, cx + nx * 0.12, baseY + 1.28, cz + nz * 0.12);
-      const canopy = new THREE.Mesh(new THREE.BoxGeometry(1.9, 0.16, 5.8), new THREE.MeshLambertMaterial({ color: '#1e2a38' }));
+      const canopy = new THREE.Mesh(
+        new THREE.BoxGeometry(1.9, 0.16, 5.8),
+        new THREE.MeshStandardMaterial({ color: '#c5ccd4', roughness: 0.42, metalness: 0.28 }),
+      );
       canopy.rotation.y = ang;
       canopy.position.set(cx + nx * 1.15, baseY + 3.62, cz + nz * 1.15);
+      canopy.name = 'namsan-entrance-canopy';
       g.add(canopy);
-      const under = track(new THREE.MeshBasicMaterial({ color: '#ffd89a', transparent: true, opacity: 0, fog: false }), 0, 0);
-      under.userData.nightOp = 0.78;
+      const under = track(new THREE.MeshStandardMaterial({
+        color: '#f0d8a8', emissive: new THREE.Color('#ffcc88'), emissiveIntensity: 0.28, roughness: 0.55,
+      }), 0.28, 0.95);
       const underM = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.04, 5.4), under);
       underM.rotation.y = ang;
       underM.position.set(cx + nx * 1.15, baseY + 3.52, cz + nz * 1.15);
       g.add(underM);
       const sc = document.createElement('canvas'); sc.width = 2048; sc.height = 320;
       const sx = sc.getContext('2d');
-      sx.fillStyle = '#10192a'; sx.fillRect(0, 0, 2048, 320);
+      sx.fillStyle = '#102033'; sx.fillRect(0, 0, 2048, 320);
       sx.strokeStyle = '#d7c48a'; sx.lineWidth = 10; sx.strokeRect(18, 16, 2012, 288);
       sx.fillStyle = '#f4f7fb'; sx.textAlign = 'center'; sx.textBaseline = 'middle';
       sx.font = '700 148px sans-serif';
-      sx.strokeStyle = '#10192a'; sx.lineWidth = 12;
+      sx.strokeStyle = '#102033'; sx.lineWidth = 12;
       sx.strokeText('남산서울타워 입구', 1024, 164);
       sx.fillText('남산서울타워 입구', 1024, 164);
       const sTex = new THREE.CanvasTexture(sc);
@@ -342,8 +388,8 @@ export function createNamsanTower({ parent, osm, baseY }) {
       sTex.anisotropy = 8;
       sTex.minFilter = THREE.LinearFilter;
       sTex.generateMipmaps = false;
-      // 캐노피 아래 별도 패널 (슬래브와 겹치지 않게 낮추고 앞으로)
-      const fasciaBack = new THREE.Mesh(new THREE.BoxGeometry(5.5, 0.92, 0.1), new THREE.MeshLambertMaterial({ color: '#10192a' }));
+      // MeshBasic so the entrance board never goes unlit-black
+      const fasciaBack = new THREE.Mesh(new THREE.BoxGeometry(5.5, 0.92, 0.1), new THREE.MeshBasicMaterial({ color: '#102033', toneMapped: false }));
       fasciaBack.position.set(cx + nx * 2.08, baseY + 3.02, cz + nz * 2.08);
       fasciaBack.rotation.y = Math.atan2(nx, nz);
       g.add(fasciaBack);
@@ -353,7 +399,57 @@ export function createNamsanTower({ parent, osm, baseY }) {
       );
       fascia.position.set(cx + nx * 2.18, baseY + 3.02, cz + nz * 2.18);
       fascia.rotation.y = Math.atan2(nx, nz);
+      fascia.name = 'namsan-entrance-sign';
       g.add(fascia);
+
+      // warm vestibule just inside the door — looking in should not show a black cave
+      const vestMat = track(new THREE.MeshStandardMaterial({
+        color: '#e8dcc8', emissive: new THREE.Color('#ffc878'), emissiveIntensity: 0.18, roughness: 0.62,
+      }), 0.18, 0.62);
+      const vestDepth = 3.8, vestW = 4.9, vestH = 3.35;
+      const vx = cx - nx * (vestDepth * 0.5 + 0.25);
+      const vz = cz - nz * (vestDepth * 0.5 + 0.25);
+      const vestCeil = new THREE.Mesh(new THREE.BoxGeometry(vestDepth, 0.08, vestW), vestMat);
+      vestCeil.rotation.y = ang;
+      vestCeil.position.set(vx, baseY + vestH, vz);
+      vestCeil.name = 'namsan-vestibule-ceil';
+      g.add(vestCeil);
+      const vestBack = new THREE.Mesh(new THREE.BoxGeometry(0.1, vestH - 0.1, vestW), vestMat);
+      vestBack.rotation.y = ang;
+      vestBack.position.set(cx - nx * (vestDepth + 0.2), baseY + vestH * 0.5, cz - nz * (vestDepth + 0.2));
+      g.add(vestBack);
+      const glowFloor = track(new THREE.MeshBasicMaterial({
+        color: '#ffd9a0', transparent: true, opacity: 0.22, depthWrite: false, fog: false, toneMapped: false,
+      }), 0.22, 0.22);
+      // keep a little warmth in daytime too (no nightOp hide)
+      const glowM = new THREE.Mesh(new THREE.PlaneGeometry(vestW - 0.3, vestDepth - 0.3), glowFloor);
+      glowM.rotation.x = -Math.PI / 2;
+      glowM.rotation.z = ang;
+      glowM.position.set(vx, baseY + 0.14, vz);
+      g.add(glowM);
+
+      // lit facade banner on the second tier, facing the east plaza
+      const bc = document.createElement('canvas'); bc.width = 1536; bc.height = 320;
+      const bx = bc.getContext('2d');
+      bx.fillStyle = '#102033'; bx.fillRect(0, 0, 1536, 320);
+      bx.fillStyle = '#3ec8f0'; bx.fillRect(0, 0, 1536, 12); bx.fillRect(0, 308, 1536, 12);
+      bx.fillStyle = '#f4f7fb'; bx.textAlign = 'center'; bx.textBaseline = 'middle';
+      bx.font = '700 118px sans-serif'; bx.fillText('남산서울타워', 768, 128);
+      bx.font = '600 48px sans-serif'; bx.fillStyle = '#b8d4e4';
+      bx.fillText('NAMSAN SEOUL TOWER', 768, 228);
+      const bTex = new THREE.CanvasTexture(bc);
+      bTex.colorSpace = THREE.SRGBColorSpace;
+      bTex.anisotropy = 8;
+      const bannerY = baseY + PH * 0.38 + PH * 0.32 * 0.52;
+      const bOff = 1.12;
+      const banner = new THREE.Mesh(
+        new THREE.PlaneGeometry(8.4, 1.55),
+        new THREE.MeshBasicMaterial({ map: bTex, toneMapped: false, fog: false }),
+      );
+      banner.position.set(cx - nx * bOff, bannerY, cz - nz * bOff);
+      banner.rotation.y = Math.atan2(nx, nz);
+      banner.name = 'namsan-plaza-banner';
+      g.add(banner);
     }
   }
 
@@ -684,29 +780,33 @@ export function createNamsanTower({ parent, osm, baseY }) {
   const lockColors = ['#c62828', '#1565c0', '#2e7d32', '#f9a825', '#6a1b9a', '#00838f', '#ef6c00', '#ad1457', '#283593', '#00695c'];
   const lockGeo = lockGeometry();
   const placements = lockColors.map(() => []);
-  function placeLocksOnRing(pts, y0, rows = 3, along = 0.13, closed = true) {
+  function placeLockClusters(pts, y0, { closed = true, spacing = 1.85, perCluster = 7, rows = 2 } = {}) {
     if (!pts || pts.length < 2) return;
     const segs = closed ? pts.length : pts.length - 1;
     for (let i = 0; i < segs; i++) {
       const a = pts[i], b = pts[(i + 1) % pts.length];
-      const L = Math.hypot(b[0] - a[0], b[1] - a[1]); if (L < 0.6) continue;
-      const n = Math.max(1, Math.floor(L / along));
+      const L = Math.hypot(b[0] - a[0], b[1] - a[1]); if (L < 0.8) continue;
+      const n = Math.max(1, Math.floor(L / spacing));
+      const yaw0 = Math.atan2(b[0] - a[0], b[1] - a[1]);
       for (let k = 0; k < n; k++) {
-        const tt = (k + 0.12 + r() * 0.7) / n;
-        const x = a[0] + (b[0] - a[0]) * tt + (r() - 0.5) * 0.04;
-        const z = a[1] + (b[1] - a[1]) * tt + (r() - 0.5) * 0.04;
-        const yaw = Math.atan2(b[0] - a[0], b[1] - a[1]) + (r() - 0.5) * 0.6;
-        for (let row = 0; row < rows; row++) {
+        const baseT = (k + 0.35 + r() * 0.3) / n;
+        const bx = a[0] + (b[0] - a[0]) * baseT;
+        const bz = a[1] + (b[1] - a[1]) * baseT;
+        const count = perCluster - 1 + Math.floor(r() * 3);
+        for (let c = 0; c < count; c++) {
           placements[Math.floor(r() * placements.length)].push({
-            x, y: y0 + 0.18 + row * 0.11 + r() * 0.03, z, yaw,
+            x: bx + (r() - 0.5) * 0.2,
+            y: y0 + 0.15 + (c % rows) * 0.14 + r() * 0.04,
+            z: bz + (r() - 0.5) * 0.2,
+            yaw: yaw0 + (r() - 0.5) * 0.75,
           });
         }
       }
     }
   }
   if (plazaPts.length >= 3) {
-    placeLocksOnRing(insetRing(plazaPts, 3.8), shaftBottom + 0.12, 3, 0.12);
-    placeLocksOnRing(insetRing(plazaPts, 2.1), baseY + PH * 0.70 + 0.12, 2, 0.16);
+    placeLockClusters(insetRing(plazaPts, 3.8), shaftBottom + 0.12, { spacing: 2.4, perCluster: 5, rows: 2 });
+    placeLockClusters(insetRing(plazaPts, 2.1), baseY + PH * 0.70 + 0.12, { spacing: 2.6, perCluster: 4, rows: 2 });
     // ground-level lock fence on the east entrance plaza
     const fence = [
       [ox + 34, oz - 7], [ox + 46, oz - 6], [ox + 47, oz + 12], [ox + 35, oz + 13],
@@ -729,12 +829,12 @@ export function createNamsanTower({ parent, osm, baseY }) {
     }
     if (fencePosts.length) g.add(new THREE.Mesh(mergeGeometries(fencePosts), new THREE.MeshLambertMaterial({ color: '#8b949c' })));
     if (fenceRails.length) g.add(new THREE.Mesh(mergeGeometries(fenceRails), new THREE.MeshLambertMaterial({ color: '#c5ccd2' })));
-    placeLocksOnRing(fence, baseY + 0.55, 4, 0.11, false);
+    placeLockClusters(fence, baseY + 0.55, { closed: false, spacing: 1.85, perCluster: 7, rows: 2 });
   }
   const shop = osm?.loveLockShop?.pts;
   if (shop && shop.length) {
     const sc = centroid(shop);
-    for (let k = 0; k < 420; k++) {
+    for (let k = 0; k < 90; k++) {
       const ang = r() * Math.PI * 2, rad = 1.2 + r() * 3.4;
       placements[Math.floor(r() * placements.length)].push({
         x: sc.x + Math.cos(ang) * rad,
@@ -761,30 +861,6 @@ export function createNamsanTower({ parent, osm, baseY }) {
     mesh.castShadow = false;
     g.add(mesh);
   }
-
-  // pylon sign "남산서울타워" on the east approach
-  const signC = document.createElement('canvas');
-  signC.width = 768; signC.height = 256;
-  const sctx = signC.getContext('2d');
-  sctx.fillStyle = '#1a2330'; sctx.fillRect(0, 0, 768, 256);
-  sctx.fillStyle = '#f2f5f8';
-  sctx.textAlign = 'center'; sctx.textBaseline = 'middle';
-  sctx.font = 'bold 72px sans-serif';
-  sctx.fillText('남산서울타워', 384, 100);
-  sctx.font = '600 36px sans-serif';
-  sctx.fillStyle = '#b8c4d0';
-  sctx.fillText('NAMSAN SEOUL TOWER', 384, 180);
-  const signTex = new THREE.CanvasTexture(signC);
-  signTex.colorSpace = THREE.SRGBColorSpace;
-  const sign = new THREE.Mesh(new THREE.PlaneGeometry(14, 4.6), new THREE.MeshBasicMaterial({ map: signTex, transparent: true }));
-  sign.position.set(ox + 42, baseY + 8.5, oz + 6);
-  sign.rotation.y = -Math.PI / 2 + 0.15;
-  g.add(sign);
-  const signBack = new THREE.Mesh(new THREE.BoxGeometry(14.2, 4.8, 0.25), new THREE.MeshLambertMaterial({ color: '#1a2330' }));
-  signBack.position.copy(sign.position);
-  signBack.position.x -= 0.15;
-  signBack.rotation.y = sign.rotation.y;
-  g.add(signBack);
 
   let night = 0, t = 0;
   function setNight(v) {

@@ -106,7 +106,7 @@ const info = await night.evaluate(() => {
     return best;
   };
   const midOf = (nameRe) => {
-    const w = ways.find((w) => nameRe.test(w.name || '') && (w.pts?.length || 0) > 4);
+    const w = ways.find((w) => nameRe.test(w.name || '') && (w.pts?.length || 0) >= 2);
     if (!w) return null;
     const p = w.pts[Math.floor(w.pts.length / 2)];
     return { x: p[0], z: p[1], name: w.name, k: w.k };
@@ -244,21 +244,21 @@ if (info.door) {
   console.log('wrote after-entrance-v3');
 }
 
-// ----- v4 self-check: plaza 4 ways, entrance, bike, route starts, mid-trail, 도훈 4 angles -----
+// ----- v5 self-check: plaza 4 ways, entrance, bike, route starts, mid-trail, 도훈 angles -----
 const plazaY = info.baseY;
 const dirs = [
-  ['plaza-north-v4', 0, -48],
-  ['plaza-east-v4', 52, 6],
-  ['plaza-south-v4', 0, 48],
-  ['plaza-west-v4', -48, 0],
+  ['plaza-north-v5', 0, -95],
+  ['plaza-east-v5', 78, 8],
+  ['plaza-south-v5', 0, 95],
+  ['plaza-west-v5', -85, 0],
 ];
 for (const [name, dx, dz] of dirs) {
   const x = info.tx + dx, z = info.tz + dz;
   const y = await hAt(x, z);
   await go(night, {
-    x, z, y: y + 1.6,
+    x, z, y: y + 2.4,
     yaw: look(x, z, info.tx, info.tz),
-    dist: 9, pitch: 0.18, fov: 55, hidePlayer: true,
+    dist: 16, pitch: 0.06, fov: 50, hidePlayer: true,
   });
   await shot(night, name);
   console.log('wrote', name, 'y', y);
@@ -266,15 +266,15 @@ for (const [name, dx, dz] of dirs) {
 
 if (info.door) {
   const d = info.door;
-  const sx = d.x + (d.nx || 1) * 13;
-  const sz = d.z + (d.nz || 0) * 13;
+  const sx = d.x + (d.nx || 1) * 14;
+  const sz = d.z + (d.nz || 0) * 14;
   await go(night, {
     x: sx, z: sz, y: plazaY + 1.55,
     yaw: look(sx, sz, d.x, d.z),
-    dist: 7.0, pitch: 0.18, fov: 52, hidePlayer: true,
+    dist: 8.0, pitch: 0.08, fov: 52, hidePlayer: true,
   });
-  await shot(night, 'after-entrance-v4');
-  console.log('wrote after-entrance-v4');
+  await shot(night, 'after-entrance-v5');
+  console.log('wrote after-entrance-v5');
 }
 
 // bike-style third person on summit loop road
@@ -288,8 +288,8 @@ if (info.roadPt) {
     yaw: look(rx, rz, lx, lz),
     dist: 4.2, pitch: 0.08, fov: 55, hidePlayer: false,
   });
-  await shot(night, 'bike-summit-road-v4');
-  console.log('wrote bike-summit-road-v4', rx, rz, y);
+  await shot(night, 'bike-summit-road-v5');
+  console.log('wrote bike-summit-road-v5', rx, rz, y);
 }
 
 async function routeShot(tag, pt, lookX, lookZ) {
@@ -298,37 +298,37 @@ async function routeShot(tag, pt, lookX, lookZ) {
   await go(night, {
     x: pt.x, z: pt.z, y: y + 1.5,
     yaw: look(pt.x, pt.z, lookX, lookZ),
-    dist: 8, pitch: 0.12, fov: 55, hidePlayer: false,
+    dist: 8, pitch: 0.08, fov: 55, hidePlayer: false,
   });
   await shot(night, tag);
   console.log('wrote', tag, pt, 'y', y);
 }
-await routeShot('route-955-start-v4', info.route955, info.tx, info.tz);
-await routeShot('route-library-start-v4', info.routeSky, info.tx, info.tz);
-await routeShot('route-east-start-v4', info.routeEast, info.tx, info.tz);
-await routeShot('route-ormi-v4', info.routeOrmi, info.tx, info.tz);
-await routeShot('mid-trail-night-v4', info.midTrail, info.tx, info.tz);
+await routeShot('route-955-start-v5', info.route955, info.tx, info.tz);
+await routeShot('route-library-start-v5', info.routeSky, info.tx, info.tz);
+await routeShot('route-east-start-v5', info.routeEast, info.tx, info.tz);
+await routeShot('route-ormi-v5', info.routeOrmi, info.tx, info.tz);
+await routeShot('mid-trail-night-v5', info.midTrail, info.tx, info.tz);
 
-// 도훈's four angles
+// 도훈's plaza angles
 if (info.door) {
   const d = info.door;
-  const sx = d.x + (d.nx || 1) * 16;
+  const sx = d.x + (d.nx || 1) * 18;
   const sz = d.z + (d.nz || 0) * 2 + 8;
   await go(night, {
     x: sx, z: sz, y: plazaY + 1.6,
     yaw: look(sx, sz, d.x, d.z),
-    dist: 8.5, pitch: 0.28, fov: 58, hidePlayer: true,
+    dist: 10, pitch: 0.10, fov: 55, hidePlayer: true,
   });
-  await shot(night, 'user4-plaza-v4');
+  await shot(night, 'user4-plaza-v5');
   const sx2 = d.x + (d.nx || 1) * 22;
   const sz2 = d.z - 18;
   const y2 = await hAt(sx2, sz2);
   await go(night, {
     x: sx2, z: sz2, y: Math.max(y2, plazaY) + 1.7,
     yaw: look(sx2, sz2, info.tx, info.tz),
-    dist: 14, pitch: 0.16, fov: 52, hidePlayer: true,
+    dist: 16, pitch: 0.10, fov: 52, hidePlayer: true,
   });
-  await shot(night, 'user4-plaza-wide-v4');
+  await shot(night, 'user4-plaza-wide-v5');
   console.log('wrote user4 plaza angles');
 }
 if (info.roadPt) {
@@ -341,8 +341,8 @@ if (info.roadPt) {
     yaw: look(rx, rz, lx, lz),
     dist: 3.6, pitch: 0.12, fov: 58, hidePlayer: false,
   });
-  await shot(night, 'user4-bike-v4');
-  console.log('wrote user4-bike-v4');
+  await shot(night, 'user4-bike-v5');
+  console.log('wrote user4-bike-v5');
 }
 if (info.drivePt) {
   const p = info.drivePt;
@@ -352,8 +352,105 @@ if (info.drivePt) {
     yaw: look(p.x, p.z, p.x2, p.z2),
     dist: 6, pitch: 0.08, fov: 55, hidePlayer: false,
   });
-  await shot(night, 'user4-ribbon-v4');
-  console.log('wrote user4-ribbon-v4');
+  await shot(night, 'user4-ribbon-v5');
+  console.log('wrote user4-ribbon-v5');
+}
+
+// day plaza check: no flat black leftover in sunlight either
+{
+  const day = await open('day', { hour: 14, extra: '' });
+  if (info.door) {
+    const d = info.door;
+    const sx = d.x + (d.nx || 1) * 18;
+    const sz = d.z + (d.nz || 0) * 2 + 8;
+    await go(day, {
+      x: sx, z: sz, y: plazaY + 1.6,
+      yaw: look(sx, sz, d.x, d.z),
+      dist: 10, pitch: 0.10, fov: 55, hidePlayer: true,
+    });
+    await shot(day, 'user4-plaza-day-v5');
+    const sx2 = d.x + (d.nx || 1) * 14;
+    const sz2 = d.z + (d.nz || 0) * 14;
+    await go(day, {
+      x: sx2, z: sz2, y: plazaY + 1.55,
+      yaw: look(sx2, sz2, d.x, d.z),
+      dist: 8, pitch: 0.08, fov: 52, hidePlayer: true,
+    });
+    await shot(day, 'after-entrance-day-v5');
+    console.log('wrote day plaza shots');
+  }
+  await day.close();
+}
+
+// downward black-pixel survey every 20 m along access routes
+{
+  const samples = await night.evaluate(() => {
+    const ways = window.__jj.namsan.roads?.ways || [];
+    const re = /남산공원길|남산남측순환로|남산북측순환로|955계단|남산하늘숲길|한양도성|와룡묘길|남산오르미/;
+    const out = [];
+    for (const w of ways) {
+      if (!re.test(w.name || '') || !w.pts?.length) continue;
+      const pts = w.pts;
+      out.push({ x: pts[0][0], z: pts[0][1], name: w.name });
+      let acc = 0;
+      for (let i = 1; i < pts.length; i++) {
+        const L = Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]);
+        acc += L;
+        if (acc >= 20) {
+          out.push({ x: pts[i][0], z: pts[i][1], name: w.name });
+          acc = 0;
+        }
+      }
+    }
+    return out;
+  });
+  const tmp = '/tmp/namsan-down';
+  fs.mkdirSync(tmp, { recursive: true });
+  const py = `import sys
+from PIL import Image
+im = Image.open(sys.argv[1]).convert('RGB')
+w, h = im.size
+crop = im.crop((int(w*0.22), int(h*0.16), int(w*0.78), int(h*0.72)))
+pix = list(crop.getdata())
+black = sum(1 for r,g,b in pix if r < 12 and g < 12 and b < 12)
+print(f"{black} {len(pix)} {black/len(pix):.6f}")
+`;
+  fs.writeFileSync(`${tmp}/count.py`, py);
+  const { execFileSync } = await import('node:child_process');
+  const byName = new Map();
+  let worst = { ratio: 0 };
+  for (let i = 0; i < samples.length; i++) {
+    const s = samples[i];
+    const y = await hAt(s.x, s.z);
+    await night.evaluate((o) => {
+      const J = window.__jj;
+      J.setMode('follow');
+      J.teleport(o.x, o.z, o.y);
+      if (J.player) { J.player.rotation.y = 0; J.player.position.y = o.y; J.player.visible = false; }
+      J.cam.distMin = 0.5; J.cam.distMax = 2500;
+      J.cam.yaw = 0; J.cam.pitch = 1.45; J.cam.dist = 6.5;
+      if (J.camera) { J.camera.fov = 70; J.camera.updateProjectionMatrix?.(); }
+    }, { x: s.x, z: s.z, y: y + 1.4 });
+    await night.waitForTimeout(280);
+    const fp = `${tmp}/s${i}.png`;
+    await night.screenshot({ path: fp, timeout: 60000 });
+    const out = execFileSync('python3', [`${tmp}/count.py`, fp], { encoding: 'utf8' }).trim();
+    const [black, total, ratioS] = out.split(' ');
+    const ratio = Number(ratioS);
+    if (!byName.has(s.name)) byName.set(s.name, { n: 0, sum: 0, max: 0 });
+    const rec = byName.get(s.name);
+    rec.n += 1; rec.sum += ratio; if (ratio > rec.max) rec.max = ratio;
+    if (ratio > worst.ratio) worst = { ...s, y, ratio, i };
+    if ((i + 1) % 25 === 0) console.log(`black-scan ${i + 1}/${samples.length} worst=${worst.ratio.toFixed(4)}`);
+  }
+  console.log('BLACK PIXEL SURVEY (downward, 20 m)');
+  for (const [name, rec] of byName) {
+    console.log(`  ${name}: n=${rec.n} mean=${(rec.sum / rec.n).toFixed(4)} max=${rec.max.toFixed(4)}`);
+  }
+  console.log('  worst', JSON.stringify(worst));
+  fs.writeFileSync(`${OUT}/black-scan-v5.json`, JSON.stringify({
+    samples: samples.length, byName: Object.fromEntries(byName), worst,
+  }, null, 2));
 }
 
 // default entry: no ntower deep-link, console must stay clean

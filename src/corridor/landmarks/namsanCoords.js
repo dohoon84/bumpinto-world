@@ -5,8 +5,8 @@ export const NT = {
   eleBase: 243,
   elePeakOsm: 267,
   datum: 48,
-  plazaH: 24,
-  shaftH: 90,
+  plazaH: 12,  // 2–3 storey podium (shaft still starts so tip = baseY + 236.7)
+  shaftH: 102, // 12 + 102 = 114, same drum height as before
   drumH: 33,
   shaftR: 5.6,
   drumR: 14.8,

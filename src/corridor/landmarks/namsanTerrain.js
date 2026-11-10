@@ -125,7 +125,7 @@ export function createNamsanTerrain({ parent, dem, osm }) {
 
   const heightAt = makeNamsanHeightAt(dem, osm);
 
-  const bounds = dem
+  let bounds = dem
     ? { x0: dem.x0, z0: dem.z0, x1: dem.x0 + (dem.nx - 1) * dem.dx, z1: dem.z0 + (dem.nz - 1) * dem.dz }
     : { x0: NT.tx - 800, z0: NT.tz - 900, x1: NT.tx + 800, z1: NT.tz + 700 };
 
@@ -185,10 +185,110 @@ export function createNamsanTerrain({ parent, dem, osm }) {
     group.add(mesh);
   }
 
+  // ---- fallback ground beyond the DEM so access roads (국립극장 동쪽 등) have no void ----
+  let fallMat = null;
+  {
+    let wx0 = Infinity, wz0 = Infinity, wx1 = -Infinity, wz1 = -Infinity;
+    for (const w of osm?.ways || []) {
+      for (const pt of w.pts || []) {
+        if (pt[0] < wx0) wx0 = pt[0];
+        if (pt[0] > wx1) wx1 = pt[0];
+        if (pt[1] < wz0) wz0 = pt[1];
+        if (pt[1] > wz1) wz1 = pt[1];
+      }
+    }
+    const MARGIN = 90;
+    const gx0 = Math.min(bounds.x0, (Number.isFinite(wx0) ? wx0 : bounds.x0) - MARGIN);
+    const gz0 = Math.min(bounds.z0, (Number.isFinite(wz0) ? wz0 : bounds.z0) - MARGIN);
+    const gx1 = Math.max(bounds.x1, (Number.isFinite(wx1) ? wx1 : bounds.x1) + MARGIN);
+    const gz1 = Math.max(bounds.z1, (Number.isFinite(wz1) ? wz1 : bounds.z1) + MARGIN);
+    const need = gx0 < bounds.x0 - 1 || gz0 < bounds.z0 - 1 || gx1 > bounds.x1 + 1 || gz1 > bounds.z1 + 1;
+    if (need) {
+      const STEP = 20;
+      const OVER = STEP;
+      const nx = Math.floor((gx1 - gx0) / STEP) + 1;
+      const nz = Math.floor((gz1 - gz0) / STEP) + 1;
+      const pos = [];
+      const col = [];
+      const idx = [];
+      const vert = new Int32Array(nx * nz);
+      vert.fill(-1);
+      const insideCore = (x, z) => (
+        x > bounds.x0 + OVER && x < bounds.x1 - OVER
+        && z > bounds.z0 + OVER && z < bounds.z1 - OVER
+      );
+      const ensure = (i, j) => {
+        const k = j * nx + i;
+        if (vert[k] >= 0) return vert[k];
+        const x = gx0 + i * STEP, z = gz0 + j * STEP;
+        const y = heightAt(x, z);
+        const e = y + datum;
+        const yp = heightAt(x + 8, z), ym = heightAt(x - 8, z);
+        const zp = heightAt(x, z + 8), zm = heightAt(x, z - 8);
+        const slope = Math.hypot(yp - ym, zp - zm) / 16;
+        const nrm = hash01(i + 91, j + 17);
+        let r, gch, b;
+        if (y < 10) {
+          r = 0.17 + nrm * 0.03; gch = 0.18 + nrm * 0.03; b = 0.16 + nrm * 0.02;
+        } else if (e > 230 && slope < 0.25) {
+          r = 0.45 + nrm * 0.06; gch = 0.52 + nrm * 0.05; b = 0.32 + nrm * 0.04;
+        } else if (slope > 0.55) {
+          r = 0.38 + nrm * 0.06; gch = 0.40 + nrm * 0.05; b = 0.34 + nrm * 0.04;
+        } else {
+          r = 0.18 + nrm * 0.05; gch = 0.32 + nrm * 0.08; b = 0.16 + nrm * 0.04;
+        }
+        if (y < 24 && y >= 10) {
+          const u = (y - 10) / 14;
+          r = r * u + (0.17 + nrm * 0.03) * (1 - u);
+          gch = gch * u + (0.18 + nrm * 0.03) * (1 - u);
+          b = b * u + (0.16 + nrm * 0.02) * (1 - u);
+        }
+        const vi = pos.length / 3;
+        pos.push(x, y, z);
+        col.push(r, gch, b);
+        vert[k] = vi;
+        return vi;
+      };
+      for (let j = 0; j < nz - 1; j++) {
+        for (let i = 0; i < nx - 1; i++) {
+          const x00 = gx0 + i * STEP, z00 = gz0 + j * STEP;
+          const x11 = x00 + STEP, z11 = z00 + STEP;
+          if (insideCore(x00, z00) && insideCore(x11, z00) && insideCore(x00, z11) && insideCore(x11, z11)) continue;
+          const a = ensure(i, j), b = ensure(i + 1, j), c = ensure(i, j + 1), d = ensure(i + 1, j + 1);
+          idx.push(a, c, b, b, c, d);
+        }
+      }
+      if (idx.length) {
+        const geo = new THREE.BufferGeometry();
+        geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+        geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+        geo.setIndex(idx);
+        geo.computeVertexNormals();
+        fallMat = new THREE.MeshLambertMaterial({
+          vertexColors: true,
+          side: THREE.FrontSide,
+          emissive: new THREE.Color('#2c3a1c'),
+          emissiveIntensity: 0,
+        });
+        const fm = new THREE.Mesh(geo, fallMat);
+        fm.receiveShadow = true;
+        fm.name = 'namsan-dem-fallback';
+        group.add(fm);
+      }
+      bounds = { x0: gx0, z0: gz0, x1: gx1, z1: gz1 };
+    }
+  }
+  const forestBounds = {
+    x0: dem ? dem.x0 : bounds.x0,
+    z0: dem ? dem.z0 : bounds.z0,
+    x1: dem ? dem.x0 + (dem.nx - 1) * dem.dx : bounds.x1,
+    z1: dem ? dem.z0 + (dem.nz - 1) * dem.dz : bounds.z1,
+  };
+
   // ---- forest (skip plaza, stations, roads/trails, very steep / peak pad) ----
   const onWay = makeWayMask(osm?.ways);
   const trees = [];
-  const x0 = bounds.x0 + 30, x1 = bounds.x1 - 30, z0 = bounds.z0 + 30, z1 = bounds.z1 - 30;
+  const x0 = forestBounds.x0 + 30, x1 = forestBounds.x1 - 30, z0 = forestBounds.z0 + 30, z1 = forestBounds.z1 - 30;
   for (let z = z0; z < z1; z += 14) {
     for (let x = x0; x < x1; x += 14) {
       const jx = x + (hash01(Math.round(x), Math.round(z)) - 0.5) * 10;
@@ -221,6 +321,21 @@ export function createNamsanTerrain({ parent, dem, osm }) {
       const s = Math.hypot(heightAt(jx + 6, jz) - heightAt(jx - 6, jz), heightAt(jx, jz + 6) - heightAt(jx, jz - 6)) / 12;
       if (s > 0.85) continue;
       if (hash01(Math.round(jx * 5), Math.round(jz * 5)) > 0.62) continue;
+      trees.push([jx, jz]);
+    }
+  }
+  // light forest on the fallback apron (outside the original DEM)
+  for (let z = bounds.z0 + 30; z < bounds.z1 - 30; z += 16) {
+    for (let x = bounds.x0 + 30; x < bounds.x1 - 30; x += 16) {
+      if (x >= forestBounds.x0 && x <= forestBounds.x1 && z >= forestBounds.z0 && z <= forestBounds.z1) continue;
+      const jx = x + (hash01(Math.round(x), Math.round(z) + 3) - 0.5) * 11;
+      const jz = z + (hash01(Math.round(z), Math.round(x) + 5) - 0.5) * 11;
+      if (onWay(jx, jz)) continue;
+      const y = heightAt(jx, jz);
+      if (y < 2) continue;
+      const s = Math.hypot(heightAt(jx + 6, jz) - heightAt(jx - 6, jz), heightAt(jx, jz + 6) - heightAt(jx, jz - 6)) / 12;
+      if (s > 0.85) continue;
+      if (hash01(Math.round(jx * 3), Math.round(jz * 3)) > 0.42) continue;
       trees.push([jx, jz]);
     }
   }
@@ -559,6 +674,11 @@ export function createNamsanTerrain({ parent, dem, osm }) {
     setNight(v = 0) {
       const k = Math.max(0, Math.min(1, v));
       if (demMat) demMat.color.setRGB(1 - k * 0.76, 1 - k * 0.73, 1 - k * 0.70);
+      if (fallMat) {
+        // keep the skirt readable at night so it never photographs as a void
+        fallMat.color.setRGB(1 - k * 0.40, 1 - k * 0.36, 1 - k * 0.42);
+        fallMat.emissiveIntensity = k * 0.55;
+      }
       if (forest?.crowns?.material) forest.crowns.material.color.setRGB(1 - k * 0.78, 1 - k * 0.72, 1 - k * 0.8);
       if (forest?.trunks?.material) forest.trunks.material.color.setRGB(1 - k * 0.55, 1 - k * 0.55, 1 - k * 0.5);
       if (plazaMat) plazaMat.color.set(k > 0.4 ? '#3a3530' : '#d5cbbb');
