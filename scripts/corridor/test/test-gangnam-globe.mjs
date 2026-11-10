@@ -28,8 +28,21 @@ assert.ok(!shown.some((x) => x.id === 'gangnam'), '열린 강남은 준비중 �
 const L = G.layoutCorridorMap();
 const dot = L.branches.find((b) => b.id === 'gangnam');
 assert.ok(dot && dot.from.id === 'jamsil');
-const left = [...L.items, ...L.branches].filter((x) => x.side === 'left' && x.id !== 'gangnam');
-for (const it of left) assert.ok(Math.abs((it.labelDy ?? it.dy) - dot.labelDy) >= 14, `gangnam label vs ${it.id}`);
+assert.deepEqual(dot.links, ['yangjae']);
+const cg = L.branches.find((b) => b.id === 'cheonggyesan');
+assert.ok(cg && cg.from.id === 'pangyo' && !cg.pass);
+const yf = L.branches.find((b) => b.id === 'yangjaeforest');
+const yj = L.branches.find((b) => b.id === 'yangjae');
+assert.ok(yf && yf.pass && yf.from.id === 'cheonggyesan');
+assert.ok(yj && yj.pass && yj.from.id === 'yangjaeforest');
+assert.ok(G.OPEN_BRANCH_IDS.has('cheonggyesan') && G.CORRIDOR_STATION_IDS.has('cheonggyesan'));
+assert.ok(!G.CORRIDOR_STATION_IDS.has('yangjae') && !G.CORRIDOR_STATION_IDS.has('yangjaeforest'), 'pass stops are not enterable');
+assert.equal(G.CORRIDOR_STATION_COUNT, 19);
+assert.equal(dot.labelAt, 'dot', '강남 이름표는 점 옆 — 송파와 위도가 같아 왼쪽 열에 두면 겹친다');
+assert.equal(yf.labelAt, 'dot');
+assert.equal(yj.labelAt, 'dot');
+const songpa = L.items.find((x) => x.id === 'songpa');
+assert.ok(songpa && Math.abs(songpa.dy - dot.dy) < 20, '강남·송파 위도가 가까움');
 
 if (!process.env.GANGNAM_GLOBE_CHILD) {
   const off = spawnSync(process.execPath, ['--input-type=module', '-e', `

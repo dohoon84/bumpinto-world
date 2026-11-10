@@ -23,6 +23,7 @@ import { pangyoExpressEnabled, PANGYO_EXPRESS_FILE, filterExpressHidden, buildPa
 import { createPangyoLandmarks } from './landmarks/pangyo.js'; // [pangyo]
 import { migeumEnabled, mergeMigeumIndex, MIGEUM_DIR, migeumSubwayDrawsEntrances, migeumTaxiEnabled, migeumBikeEnabled, MIGEUM_TAXIBIKE_FILE, pickMigeumTaxiBike } from './migeum.js'; // [migeum] [migeum-sub] [migeum-taxibike]
 import { gangnamEnabled, mergeGangnamIndex, GANGNAM_DIR, gangnamSubwayDrawsEntrances } from './gangnam.js'; // [gangnam]
+import { EXTRA_STATIONS } from '../subway/extraStations.js'; // [gyeongbu] 청계산입구 — 지하철 게임 역을 ?at= / travel.go 목적지에 넣는다
 import { gangnamBusEnabled, GANGNAM_BUS_FILE, mountGangnamTransit } from './gangnamBus.js'; // [gangnam-bus]
 import { GYEONGBU_EXPRESS_FILE, gyeongbuExpressEnabled, keepDeckPoint, expressLayout } from './gyeongbuExpress.js'; // [gyeongbu-bus]
 import { mergeGyeongbuWorld, expressRoadHeight, setExpressHeightExtra, buildExpressHeightProfile, distToPts } from './gyeongbuWorld.js'; // [gyeongbu-bus]
@@ -264,7 +265,13 @@ export function createCorridor({ scene, corridorData, terrain, world, renderer, 
 
   // ---------- 역 표지판 + 라벨 ----------
   // [pangyo] 판교역은 라벨·표지판·이동(?at=pangyo)에 넣는다. 버스/차량 NPC(attachLife)에는 [pangyo-link] 가 켜졌을 때만 더한다
-  const stations = index.stations.concat(corridorData.pangyo?.stations || [], corridorData.migeum?.stations || [], corridorData.gangnam?.stations || []).map((s) => ({ ...s, sign: null })); // [gangnam] ?at=gangnam
+  const extraStops = gangnamEnabled()
+    ? EXTRA_STATIONS.filter((spec) => spec.id === 'cheonggyesan').map((spec) => ({
+      id: spec.id, name: spec.name, nameEn: spec.nameEn, lines: ['신분당선'], x: spec.x, z: spec.z,
+      exits: (spec.exits || []).map((e) => ({ x: e.place?.x ?? e.x, z: e.place?.z ?? e.z, ref: e.ref })),
+    }))
+    : [];
+  const stations = index.stations.concat(corridorData.pangyo?.stations || [], corridorData.migeum?.stations || [], corridorData.gangnam?.stations || [], extraStops).map((s) => ({ ...s, sign: null })); // [gangnam] ?at=gangnam · [gyeongbu] ?at=cheonggyesan
   const pgLabels = []; // [pangyo-link] 판교역 라벨: '판교역  신분당선 · 경강선' / 'Pangyo Stn.  Shinbundang · Gyeonggang', 노선색 배경
   for (const s of stations) {
     const lines = s.lines || [];

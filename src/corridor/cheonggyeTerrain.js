@@ -32,6 +32,15 @@ function segsFromRoad(road) {
   return segs;
 }
 
+// 여러 중심선을 각각 자른다. 한 배열에 이어 붙이면 끝점끼리 가짜 대각선이 생긴다.
+function segsFromRoads(...roads) {
+  const segs = [];
+  for (const road of roads) {
+    if (road && road.length >= 2) segs.push(...segsFromRoad(road));
+  }
+  return segs;
+}
+
 function distToRoad(x, z, segs) {
   let best = Infinity;
   for (const s of segs) {
@@ -413,9 +422,8 @@ function sampleH(data, x, z) {
 }
 
 function prepareRoadSegs(dem, streets, extraRoad) {
-  const road = [...(dem.road || [])];
-  if (extraRoad?.length) for (const p of extraRoad) road.push([p[0], p[1]]);
-  const segs = segsFromRoad(road);
+  const extra = extraRoad?.length ? extraRoad.map((p) => [p[0], p[1]]) : [];
+  const segs = segsFromRoads(dem.road || [], extra);
   const local = [];
   for (const r of streets?.roads || []) if (r.p && r.p.length >= 2) local.push(...segsFromRoad(r.p));
   return { segs, local };
@@ -618,6 +626,7 @@ function buildRoadsideTrees(road) {
   for (let i = 1; i < road.length; i++) {
     const a = road[i - 1], b = road[i];
     const dx = b[0] - a[0], dz = b[1] - a[1], L = Math.hypot(dx, dz) || 1;
+    if (L > 250) continue; // 이어 붙인 점프 구간은 가로수가 아님
     const fx = dx / L, fz = dz / L, lx = fz, lz = -fx;
     const step = 14;
     for (let t = 0; t < L && n < cap; t += step) {
@@ -649,6 +658,7 @@ function buildBarriers(road) {
   for (let i = 1; i < road.length; i++) {
     const a = road[i - 1], b = road[i];
     const dx = b[0] - a[0], dz = b[1] - a[1], L = Math.hypot(dx, dz) || 1;
+    if (L > 250) continue; // 본선+고속 끝을 한 줄로 이으면 출구 광장을 가로지르는 가짜 방음벽이 생긴다
     const fx = dx / L, fz = dz / L, lx = fz, lz = -fx;
     const ang = Math.atan2(dx, dz);
     for (let t = 0; t < L; t += step) {
@@ -867,7 +877,8 @@ function buildStationEntrances(list, data, segs, buildings, streets) {
 
 function assemble(data, buildingsData, streetsData) {
   const road = data.road || [];
-  const segs = segsFromRoad(road);
+  const extra = data.extraRoad || [];
+  const segs = segsFromRoads(road, extra);
   const localSegs = [];
   for (const r of streetsData?.roads || []) {
     if (r.p && r.p.length >= 2) localSegs.push(...segsFromRoad(r.p));
@@ -932,7 +943,8 @@ export function mountCheonggyeTerrain(scene, { search = typeof location !== 'und
     fetch(strUrl).then((r) => (r.ok ? r.json() : null)).catch(() => null),
   ]).then(([dem, buildings, streets]) => {
     if (!dem?.h?.length) return;
-    if (expressPts?.length) dem = { ...dem, road: [...(dem.road || []), ...expressPts.map((p) => [p[0], p[1]])] };
+    // extraRoad 는 높이·평탄용. road 에 이어 붙이면 끝점 사이 가짜 선이 광장·산허리를 가로지른다.
+    if (expressPts?.length) dem = { ...dem, extraRoad: expressPts.map((p) => [p[0], p[1]]) };
     const built = assemble(dem, buildings, streets);
     g.add(built.group);
     ctl._inner = built;
