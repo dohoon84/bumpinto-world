@@ -139,11 +139,13 @@ export function createNamsan({ scene, overlay, terrain, dem, osm, city = null, c
       let x = 0, z = 0;
       for (const p of b.pts) { x += p[0]; z += p[1]; }
       x /= b.pts.length; z /= b.pts.length;
+      // OSM 실제 위치(팔각정 ~64 m WNW, 봉수대 ~104 m WNW). 광장 동쪽에서
+      // 보면 입구와 한 줄로 겹치므로 가까이 가야 보이게 거리를 줄인다.
       overlay.add({
         cls: 'label landmark',
         text: b.name,
-        getPos: () => new THREE.Vector3(x, land.heightAt(x, z) + 4.2, z),
-        maxDist: 220,
+        getPos: () => new THREE.Vector3(x, land.heightAt(x, z) + 5.4, z),
+        maxDist: 100,
         minDist: 8,
       });
     }

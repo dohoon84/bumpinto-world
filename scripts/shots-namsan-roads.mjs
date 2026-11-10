@@ -330,6 +330,21 @@ if (info.door) {
   });
   await shot(night, 'user4-plaza-wide-v5');
   console.log('wrote user4 plaza angles');
+  await go(night, {
+    x: sx, z: sz, y: plazaY + 1.6,
+    yaw: look(sx, sz, d.x, d.z),
+    dist: 10, pitch: 0.10, fov: 55, hidePlayer: true,
+  });
+  await shot(night, 'user4-plaza-v6');
+  const xE = info.tx + 78, zE = info.tz + 8;
+  const yE = await hAt(xE, zE);
+  await go(night, {
+    x: xE, z: zE, y: yE + 2.4,
+    yaw: look(xE, zE, info.tx, info.tz),
+    dist: 16, pitch: 0.06, fov: 50, hidePlayer: true,
+  });
+  await shot(night, 'plaza-east-v6');
+  console.log('wrote plaza v6 label-check shots');
 }
 if (info.roadPt) {
   const [rx, rz] = info.roadPt;
