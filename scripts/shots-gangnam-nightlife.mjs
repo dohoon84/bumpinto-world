@@ -12,28 +12,29 @@ const browser = await chromium.launch({
 });
 const Q = 'enter=1&name=Tester&ws=mock&bus=sim&weather=clear&noticePopup=0&bgm=0&subwayVoice=0&subwayRt=0&npcs=0&taxis=0&police=0&trucks=0&clife=0&bike=0&roadbike=0&superbike=0&pangyonpc=0';
 
-async function open({ w = 1280, h = 800, hour = 21, extra = '' } = {}) {
+async function open({ w = 1280, h = 800, hour = 21 } = {}) {
   const page = await browser.newPage({ viewport: { width: w, height: h } });
-  await page.goto(`${B}?${Q}&hour=${hour}&shot=1${extra}`, { timeout: 180000 });
+  await page.goto(`${B}?${Q}&hour=${hour}&shot=1`, { timeout: 180000 });
   await page.waitForFunction(() => window.__jj?.ready, null, { timeout: 240000 });
-  await page.waitForTimeout(1200);
+  await page.waitForTimeout(1000);
   return page;
 }
-async function surface(page, x, z, yaw = 0, dist = 22, pitch = 0.38, wait = 9000) {
+async function surface(page, x, z, yaw = 0, dist = 22, pitch = 0.38, wait = 3500) {
   await page.evaluate(async ({ x, z, yaw, dist, pitch }) => {
     const J = window.__jj; J.setMode('follow');
     if (J.corridor) await J.corridor.preload(x, z);
     J.teleport(x, z); J.player.rotation.y = yaw; J.cam.yaw = yaw; J.cam.pitch = pitch; J.cam.dist = dist;
   }, { x, z, yaw, dist, pitch });
-  await page.waitForFunction(() => window.__jj?.gangnamStreet?.stats?.loaded, null, { timeout: 30000 }).catch(() => {});
-  await page.waitForFunction(() => window.__jj?.gangnamBrt?.stats?.loaded, null, { timeout: 30000 }).catch(() => {});
+  await page.waitForFunction(() => window.__jj?.gangnamStreet?.stats?.loaded, null, { timeout: 20000 }).catch(() => {});
   await page.waitForTimeout(wait);
 }
 
 const ISLAND = { x: -7261.0, z: -14834.9, yaw: 1.945 };
 const fx = Math.sin(ISLAND.yaw), fz = Math.cos(ISLAND.yaw);
 const rx = Math.cos(ISLAND.yaw), rz = -Math.sin(ISLAND.yaw);
-const TOP = { x: ISLAND.x, z: ISLAND.z, yaw: 0.374, dist: 52, pitch: 1.38 };
+const ALLEY = { x: -7084, z: -14620, yaw: 1.15 };
+const IX = { x: -7144, z: -14531 };
+const STATION = { x: -7097.7, z: -14453.3 };
 
 async function stage(page) {
   return page.evaluate(() => {
@@ -43,71 +44,65 @@ async function stage(page) {
   });
 }
 
-function reviewInfo() {
-  return window.__jj && (() => {
-    const J = window.__jj;
-    const vs = J.gangnamBrt?.vehicles?.() || [];
-    const island = { x: -7261.0, z: -14834.9 };
-    const near = vs.map((v) => ({
-      ref: v.ref, type: v.type, state: v.state,
-      d: Math.hypot(v.x - island.x, v.z - island.z),
-      x: +v.x.toFixed(1), z: +v.z.toFixed(1), heading: +v.heading.toFixed(3),
-    })).filter((v) => v.d < 80).sort((a, b) => a.d - b.d);
-    const names = [];
-    J.scene?.traverse?.((o) => { if (o.name?.startsWith?.('gnStreet') || o.name === 'gangnamBrt') names.push({ name: o.name, type: o.type, count: o.count, children: o.children?.length }); });
-    return {
-      brt: J.gangnamBrt?.stats || null,
-      street: J.gangnamStreet?.stats || null,
-      npc: J.gangnamNpc?.stats?.() || null,
-      near,
-    };
-  })();
-}
+const notes = {};
 
-// --- day 3/4 ---
-const day = await open({ hour: 14 });
-await surface(day, ISLAND.x + fx * 12 + rx * -6, ISLAND.z + fz * 12 + rz * -6, ISLAND.yaw - 0.5, 16, 0.32, 7000);
-const dayStage = await stage(day);
-await day.waitForTimeout(400);
-await day.screenshot({ path: `${OUT}/gnight9-brt-day.png` });
-const dayInfo = await day.evaluate(reviewInfo);
-await day.close();
-
-// --- aerial top ---
-const top = await open({ hour: 14 });
-await surface(top, TOP.x, TOP.z, TOP.yaw, TOP.dist, TOP.pitch, 7500);
-const topStage = await stage(top);
-await top.waitForTimeout(400);
-await top.evaluate(() => {
-  const el = document.createElement('div');
-  el.id = 'gn9-legend';
-  el.style.cssText = 'position:fixed;left:16px;top:16px;z-index:9999;background:rgba(8,10,16,.72);color:#f3f5f8;padding:10px 12px;font:13px/1.45 sans-serif;border-radius:8px;pointer-events:none';
-  el.innerHTML = '탑다운 · 중앙버스전용차로 양방향<br><span style="color:#ff6b55">■</span> 빨강 = 버스전용차로 · 버스는 중앙 · 차는 바깥';
-  document.body.appendChild(el);
-});
-await top.screenshot({ path: `${OUT}/gnight9-brt-top.png` });
-const topInfo = await top.evaluate(reviewInfo);
-await top.close();
-
-// --- night dwell ---
-const NIGHT = {
-  x: ISLAND.x + fx * 12 + rx * -6,
-  z: ISLAND.z + fz * 12 + rz * -6,
-  yaw: ISLAND.yaw - 0.5,
-  dist: 16,
-  pitch: 0.32,
-};
+// --- paint regression: dwell night ---
 const night = await open({ hour: 21 });
-await surface(night, NIGHT.x, NIGHT.z, NIGHT.yaw, NIGHT.dist, NIGHT.pitch, 8000);
-const nightStage = await stage(night);
-const framed = await night.evaluate(() => {
-  const r = window.__jj.gangnamBrt?.stageAt('22012');
-  const bus = r?.dwell?.[0] || null;
-  return { bus: bus && { ref: bus.ref, type: bus.type, state: bus.state, x: bus.x, z: bus.z } };
-});
+await surface(night, ISLAND.x + fx * 12 + rx * -6, ISLAND.z + fz * 12 + rz * -6, ISLAND.yaw - 0.5, 16, 0.32, 7000);
+notes.dwellStage = await stage(night);
 await night.waitForTimeout(500);
 await night.screenshot({ path: `${OUT}/gnight9-brt-dwell-night.png` });
-const nightInfo = await night.evaluate(reviewInfo);
+
+// pylon readable at 3/4 — stand along the outward face normal, look back at the board
+const pylon = { x: -7254, z: -14817.1, yaw: 1.945 };
+await surface(night, pylon.x + Math.sin(pylon.yaw) * 10, pylon.z + Math.cos(pylon.yaw) * 10, pylon.yaw, 9, 0.34, 3500);
+await night.screenshot({ path: `${OUT}/gnight10-pylon-night.png` });
+
+// shop interiors — stand in the street looking into the window
+const shop = { x: -7078.9, z: -14624.9, yaw: -2.792 };
+await surface(night, shop.x + Math.sin(shop.yaw) * 8.5, shop.z + Math.cos(shop.yaw) * 8.5, shop.yaw, 9, 0.05, 4000);
+await night.screenshot({ path: `${OUT}/gnight10-shop-interior-night.png` });
+
+const auditNight = [
+  ['audit-ix-night', IX.x + 10, IX.z + 22, 0.15, 24, 0.26],
+  ['audit-exit-station-night', STATION.x + 12, STATION.z + 8, -0.4, 18, 0.22],
+  ['audit-teheran-night', -6880, -14540, -1.15, 22, 0.24],
+  ['audit-seocho-night', -7340, -14590, 2.05, 22, 0.24],
+  ['audit-rooftops-night', IX.x - 8, IX.z + 30, 0.05, 16, 0.62],
+  ['audit-edge-north-night', -7488, -15420, 0.4, 26, 0.28],
+  ['audit-edge-east-night', -6550, -14740, -1.4, 28, 0.3],
+];
+for (const [name, x, z, yaw, dist, pitch] of auditNight) {
+  await surface(night, x, z, yaw, dist, pitch, 2800);
+  await night.screenshot({ path: `${OUT}/gnight10-${name}.png` });
+}
 await night.close();
+
+const day = await open({ hour: 14 });
+await surface(day, ISLAND.x + fx * 12 + rx * -6, ISLAND.z + fz * 12 + rz * -6, ISLAND.yaw - 0.5, 16, 0.32, 6000);
+await stage(day);
+await day.waitForTimeout(400);
+await day.screenshot({ path: `${OUT}/gnight9-brt-day.png` });
+await surface(day, ISLAND.x, ISLAND.z, 0.374, 52, 1.38, 4000);
+await stage(day);
+await day.screenshot({ path: `${OUT}/gnight10-brt-top.png` });
+await surface(day, pylon.x + Math.sin(pylon.yaw) * 10, pylon.z + Math.cos(pylon.yaw) * 10, pylon.yaw, 9, 0.34, 3000);
+await day.screenshot({ path: `${OUT}/gnight10-pylon-day.png` });
+await surface(day, shop.x + Math.sin(shop.yaw) * 8.5, shop.z + Math.cos(shop.yaw) * 8.5, shop.yaw, 9, 0.05, 3500);
+await day.screenshot({ path: `${OUT}/gnight10-shop-interior-day.png` });
+
+const auditDay = [
+  ['audit-ix-day', IX.x + 10, IX.z + 22, 0.15, 24, 0.26],
+  ['audit-teheran-day', -6880, -14540, -1.15, 22, 0.24],
+  ['audit-seocho-day', -7340, -14590, 2.05, 22, 0.24],
+  ['audit-rooftops-day', IX.x - 8, IX.z + 30, 0.05, 16, 0.62],
+  ['audit-edge-south-day', -7020, -14190, 0.35, 26, 0.28],
+  ['audit-alley-day', -7085.7, -14627.8, -2.792, 12, 0.12],
+];
+for (const [name, x, z, yaw, dist, pitch] of auditDay) {
+  await surface(day, x, z, yaw, dist, pitch, 2800);
+  await day.screenshot({ path: `${OUT}/gnight10-${name}.png` });
+}
+await day.close();
 await browser.close();
-console.log(JSON.stringify({ out: OUT, dayStage, topStage, nightStage, framed, dayInfo, topInfo, nightInfo }, null, 2));
+console.log(JSON.stringify({ out: OUT, dwellStage: notes.dwellStage, files: fs.readdirSync(OUT).filter((f) => f.startsWith('gnight9') || f.startsWith('gnight10')) }, null, 2));

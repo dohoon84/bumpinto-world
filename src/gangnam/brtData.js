@@ -5,6 +5,8 @@ export function gangnamBrtEnabled(search = typeof location !== 'undefined' ? loc
 }
 
 export const BRT_LANE_OFF = 1.7; // src/transit/busSource.js LANE_OFF 과 같아야 함
+export const BRT_ROUTE_PHASE = { 140: 0, 402: 1, 9404: 2 };
+export const BRT_ROUTE_N = 3;
 
 export function offsetRight(pts, off = BRT_LANE_OFF) {
   const out = [];

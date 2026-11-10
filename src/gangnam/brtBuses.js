@@ -8,7 +8,7 @@ import * as THREE from 'three';
 import { SimulatedBusSource } from '../transit/busSource.js';
 import { createBus, disposeBus } from '../transit/busModel.js';
 import { liveryOf } from '../transit/livery.js';
-import { gangnamBrtEnabled, buildBrtTransit } from './brtData.js';
+import { gangnamBrtEnabled, buildBrtTransit, BRT_ROUTE_PHASE, BRT_ROUTE_N } from './brtData.js';
 
 export { gangnamBrtEnabled, buildBrtTransit, offsetRight } from './brtData.js';
 
@@ -77,13 +77,14 @@ export function createGangnamBrt({
     };
     sim.buses = [];
     for (const P of sim.paths) {
-      P.headway = 30 + hash(P.ref + P.id) * 10;
+      P.headway = 66 + hash(P.ref + P.id) * 8;
       P.fadeIn = true;
       P.fadeOut = true;
       const gap = P.headway * P.vmax * 0.75;
+      const phase = ((BRT_ROUTE_PHASE[P.ref] ?? 0) + hash(P.id) * 0.08) / BRT_ROUTE_N;
       let k = 0;
-      for (let s = P.L - 25 - hash(P.ref + 'o' + P.id) * gap; s > 12 && k < 5; s -= gap, k++) sim._spawn(P, s);
-      P.nextSpawn = hash(P.ref + 'n' + P.id) * P.headway;
+      for (let s = P.L - 25 - phase * gap; s > 12 && k < 3; s -= gap, k++) sim._spawn(P, s);
+      P.nextSpawn = phase * P.headway;
     }
   }
 
