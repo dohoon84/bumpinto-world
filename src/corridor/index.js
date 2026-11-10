@@ -5,7 +5,7 @@
 // 라이브 정자 영역(liveBox + 탄천 띠) 안에는 아무것도 그리지 않으므로 기존 정자 화면/동작은 그대로다.
 import * as THREE from 'three';
 import { mergeTancheon, coveredFn, holeyGround, channelWaterMesh } from './tancheon.js';
-import { buildDetailTile, buildLodTile, roadMesh, CAR_KINDS } from './tileMesh.js';
+import { buildDetailTile, buildLodTile, roadMesh, CAR_KINDS, ingestTileRoads } from './tileMesh.js';
 import { applyTileCuts } from '../world/streams.js';
 import { buildCorridorCrossings } from './crossings.js';
 import { mountYatapSchoolZone } from './yatapSchoolZone.js'; // [schoolzone]
@@ -76,7 +76,7 @@ const segNear = (x, z, { ax, az, bx, bz, hw }) => {
   return Math.hypot(ax + dx * t - x, az + dz * t - z) < hw;
 };
 
-export function createCorridor({ scene, corridorData, terrain, world, renderer, overlay, params, getSimTime = () => null }) {
+export function createCorridor({ scene, corridorData, terrain, world, renderer, overlay, params, getSimTime = () => null, liveBus = null }) {
   const { index, base, baseUrl } = corridorData;
   const TS = index.meta.tileSize;
   const live = index.meta.liveBox;
@@ -200,7 +200,7 @@ export function createCorridor({ scene, corridorData, terrain, world, renderer, 
       j = hollowSeohyeonArcade(t.key, j); // [arcade] 서현점 AK플라자 1층 비우기
       j = filterCityHallHidden(corridorData.cityhall, j); // [cityhall] OSM 본관·부속 억제
       if (SD) prepStreamTile(j, SD.tiles[t.key], 'tile');
-      t.dData = j; t.dState = 2; buildQueue.push({ kind: 'd', key: t.key });
+      t.dData = j; ingestTileRoads(j.r); t.dState = 2; buildQueue.push({ kind: 'd', key: t.key });
     }));
   }
   function requestLod(t) {
@@ -388,7 +388,7 @@ export function createCorridor({ scene, corridorData, terrain, world, renderer, 
     } else mount();
   }
 
-  const gnTransit = corridorData.gangnamTransit ? mountGangnamTransit(root, corridorData.gangnamTransit, { overlay, express: corridorData.gangnamExpress }) : null; // [gangnam-bus] [gyeongbu-bus]
+  const gnTransit = corridorData.gangnamTransit ? mountGangnamTransit(root, corridorData.gangnamTransit, { overlay, express: corridorData.gangnamExpress, liveBus }) : null; // [gangnam-bus] [gyeongbu-bus] [livebus]
   const tower = index.landmarks.find((l) => l.id === 'lotte-world-tower');
   let lotte = null;
   if (tower) {

@@ -5,9 +5,10 @@ import * as THREE from 'three';
 import { ribbonGeo } from '../world.js';
 import { gameHour } from '../weather.js';
 import { mountGyeongbuExpress, gyeongbuExpressEnabled } from './gyeongbuExpress.js';
+import { BRT_ARS, boardText } from '../gangnam/liveBus.js'; // [livebus]
 
 export const GANGNAM_BUS_FILE = 'gangnam/transit.json';
-export const BUS_CREDIT = '버스 노선·정류소 정보: 서울특별시 (공공데이터포털)';
+export const BUS_CREDIT = '버스 노선·정류소: 서울특별시(공공데이터포털)';
 
 export function gangnamBusEnabled(search = typeof location !== 'undefined' ? location.search : '') {
   const p = new URLSearchParams(search || '');
@@ -75,6 +76,29 @@ export function stopRouteNos(routes) {
   return out;
 }
 
+/** 같은 이름의 맞은편 정류장(22009 vs 22010)이 하나로 합쳐지지 않게 ARS 기준으로 묶는다. */
+export function groupStopsByArs(routes) {
+  const stops = new Map();
+  for (const r of routes || []) for (const s of r.stops || []) {
+    const key = String(s.arsId || `${s.name}@${Math.round(s.x)}@${Math.round(s.z)}`);
+    if (!stops.has(key)) stops.set(key, { ...s, arsId: s.arsId ? String(s.arsId) : '', routes: [] });
+    stops.get(key).routes.push(r);
+  }
+  return [...stops.values()];
+}
+
+export function timetableBoard(stop, min, kind) {
+  let best = null;
+  const nos = stopRouteNos(stop.routes);
+  for (const r of stop.routes || []) {
+    const block = r.timetable?.[kind] || r.timetable?.weekday;
+    const n = nextBus(block, min);
+    if (n && (!best || n.waitMin < best.waitMin)) best = n;
+  }
+  const when = best ? `다음 ${best.label}` : '';
+  return `🚏 ${nos.join('·')} ${when}`.trim();
+}
+
 /** 14:00 평일처럼 주어진 시각에 강남대로 위에 그려질 버스. 반경 안·운행 중만. */
 export function busesAt(data, { minutes = 14 * 60, kind = 'weekday', x = 0, z = 0, radius = 900 } = {}) {
   const runners = (data?.routes || []).filter((r) => r.onDaero);
@@ -103,7 +127,7 @@ function pointAt(pts, s) {
   return { x: p[0], z: p[1], ang: 0 };
 }
 
-export function mountGangnamTransit(root, data, { overlay, express = null } = {}) {
+export function mountGangnamTransit(root, data, { overlay, express = null, liveBus = null } = {}) {
   if (!data?.pts?.length) return null;
   const group = new THREE.Group();
   group.name = 'gangnamGyeongbu';
@@ -130,15 +154,11 @@ export function mountGangnamTransit(root, data, { overlay, express = null } = {}
   const up = new THREE.Vector3(0, 1, 0);
   const zero = new THREE.Vector3(0, 0, 0);
 
-  const stops = new Map();
-  for (const r of data.routes || []) for (const s of r.stops || []) {
-    const key = s.name;
-    if (!stops.has(key)) stops.set(key, { ...s, routes: [] });
-    stops.get(key).routes.push(r);
-  }
+  const stops = groupStopsByArs(data.routes);
   const labels = [];
   if (overlay) {
-    for (const s of stops.values()) {
+    for (const s of stops) {
+      if (s.arsId && BRT_ARS.includes(s.arsId)) continue; // 중앙차로 정류장은 BRT 안내판이 맡는다
       const item = overlay.add({
         cls: 'label busstop',
         text: s.name,
@@ -148,9 +168,10 @@ export function mountGangnamTransit(root, data, { overlay, express = null } = {}
       labels.push({ s, item });
     }
   }
+  liveBus?.register(stops.filter((s) => s.arsId).map((s) => ({ ref: s.arsId, x: s.x, z: s.z })));
   root.add(group);
-  const expressRun = (express && gyeongbuExpressEnabled()) ? mountGyeongbuExpress(group, express, { overlay }) : null;
-  let lastMin = -1;
+  const expressRun = (express && gyeongbuExpressEnabled()) ? mountGyeongbuExpress(group, express, { overlay, liveBus }) : null;
+  let lastMin = -1, lastBoard = 0;
 
   function update(_dt, x, z) {
     const now = new Date();
@@ -176,19 +197,14 @@ export function mountGangnamTransit(root, data, { overlay, express = null } = {}
     });
     if (runners.length) buses.instanceMatrix.needsUpdate = true;
     expressRun?.update(min, kind, x, z);
-    if (min !== lastMin) {
-      lastMin = min;
+    const nowMs = Date.now();
+    if (min !== lastMin || (liveBus && nowMs - lastBoard >= 1000)) {
+      lastMin = min; lastBoard = nowMs;
       for (const { s, item } of labels) {
-        let best = null;
-        const nos = stopRouteNos(s.routes);
-        for (const r of s.routes) {
-          const block = r.timetable?.[kind] || r.timetable?.weekday;
-          const n = nextBus(block, min);
-          if (n && (!best || n.waitMin < best.waitMin)) best = n;
-        }
-        const when = best ? `다음 ${best.label}` : '';
-        if (item?.el) item.el.textContent = `🚏 ${nos.join('·')} ${when}`.trim();
-        else if (item) item.text = `🚏 ${nos.join('·')} ${when}`.trim();
+        const live = s.arsId ? liveBus?.arrivals(s.arsId) : null;
+        const text = boardText(live) || timetableBoard(s, min, kind);
+        if (item?.el) item.el.textContent = text;
+        else if (item) item.text = text;
       }
     }
   }

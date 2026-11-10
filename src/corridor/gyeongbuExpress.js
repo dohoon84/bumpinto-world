@@ -5,6 +5,7 @@ import * as THREE from 'three';
 import { ribbonGeo, fixNormalsUp } from '../world.js';
 import { busLateralM, chainageAfter, enRoute, nextExpress } from './gyeongbuSpeed.js';
 import { EXPRESS_ROAD_Y, EXPRESS_PAVE_R, expressRoadHeight, inPangyoCity, inGangnamCity, GANGNAM_CITY, nearPangyoToll, distToPts } from './gyeongbuWorld.js';
+import { EXPRESS_ARS, boardText } from '../gangnam/liveBus.js'; // [livebus]
 
 export const GYEONGBU_EXPRESS_FILE = 'gangnam/gyeongbu-express.json';
 export const GYEONGGI_BUS_CREDIT = '버스 노선·정류소 정보: 경기도 (공공데이터포털)';
@@ -726,7 +727,7 @@ export function expressDeckLaneCenters(rawPts) {
   return out;
 }
 
-export function mountGyeongbuExpress(group, data, { overlay } = {}) {
+export function mountGyeongbuExpress(group, data, { overlay, liveBus = null } = {}) {
   if (!data?.pts?.length || !data.routes?.length) return null;
   const yAt = (x, z) => expressRoadHeight(x, z, data.pts) ?? EXPRESS_ROAD_Y;
   const approach = data.pts.filter((p) => p[3] === 'approach' && keepDeckPoint(p));
@@ -777,6 +778,7 @@ export function mountGyeongbuExpress(group, data, { overlay } = {}) {
   const labels = [];
   if (overlay) {
     for (const s of byStop.values()) {
+      if (/\(중\)/.test(s.name) || /신분당선강남역|지하철2호선강남역/.test(s.name)) continue; // 중앙차로 안내는 BRT 쪽
       const item = overlay.add({
         cls: 'label busstop',
         text: s.name,
@@ -786,6 +788,7 @@ export function mountGyeongbuExpress(group, data, { overlay } = {}) {
       labels.push({ s, item });
     }
   }
+  liveBus?.register(labels.map(({ s }) => ({ ref: EXPRESS_ARS[s.name], x: s.x, z: s.z })).filter((s) => s.ref));
 
   function hideAll() {
     for (const no of Object.keys(pools)) {
@@ -822,15 +825,20 @@ export function mountGyeongbuExpress(group, data, { overlay } = {}) {
       mesh.rotation.y = p.ang;
     }
     for (const { s, item } of labels) {
-      let best = null;
-      const nos = [];
-      for (const r of s.routes) {
-        if (!nos.includes(r.no)) nos.push(r.no);
-        const block = r.timetable?.[kind] || r.timetable?.weekday;
-        const n = nextExpress(block, min, { fromGangnam: !!s.fromGangnam });
-        if (n && (!best || n.waitMin < best.waitMin)) best = n;
+      const ars = EXPRESS_ARS[s.name];
+      const live = ars ? liveBus?.arrivals(ars) : null;
+      let text = boardText(live);
+      if (!text) {
+        let best = null;
+        const nos = [];
+        for (const r of s.routes) {
+          if (!nos.includes(r.no)) nos.push(r.no);
+          const block = r.timetable?.[kind] || r.timetable?.weekday;
+          const n = nextExpress(block, min, { fromGangnam: !!s.fromGangnam });
+          if (n && (!best || n.waitMin < best.waitMin)) best = n;
+        }
+        text = `🚏 ${nos.join('·')} ${best ? `다음 ${best.label}` : ''}`.trim();
       }
-      const text = `🚏 ${nos.join('·')} ${best ? `다음 ${best.label}` : ''}`.trim();
       if (item?.el) item.el.textContent = text;
       else if (item) item.text = text;
     }

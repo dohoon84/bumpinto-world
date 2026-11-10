@@ -1,0 +1,908 @@
+// [gangnam-street] 강남대로·테헤란로 OSM 정류장 쉘터와 먹자골목 소품.
+//   중앙버스전용차로 장대 쉘터(모듈 여러 개). BIS 는 노선 번호 자막만.
+//   ?gstreet=0 · ?gangnam=0 이면 만들지 않는다.
+import * as THREE from 'three';
+import * as BufferGeometryUtils from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { nightFade } from '../world/nightFade.js';
+
+export function gangnamStreetEnabled(search = typeof location !== 'undefined' ? location.search : '') {
+  const q = new URLSearchParams(search || '');
+  return q.get('gangnam') !== '0' && q.get('gstreet') !== '0';
+}
+
+// 모든 포장 리본(primary 0.06 · busway 0.08 · cycleway 0.10 · 경부 지선 gyeongbuSpur 0.25)보다 높고, 차체보다 낮게.
+// paint < zebra 이어야 빨간 BRT 차로 위에도 횡단보도가 보인다. depthTest 는 켠 채 유지(버스·플레이어 아래).
+export const STREET_DECAL_Y = { paint: 0.28, zebra: 0.32 };
+
+const up = new THREE.Vector3(0, 1, 0);
+
+const StreetXform = {
+  compose(m4, quat, pos, scl, x, y, z, yaw, sx, sy, sz) {
+    quat.setFromAxisAngle(up, yaw);
+    pos.set(x, y, z);
+    scl.set(sx, sy, sz);
+    m4.compose(pos, quat, scl);
+  },
+};
+
+function boxGeo(w, h, d, x, y, z) {
+  const g = new THREE.BoxGeometry(w, h, d);
+  g.translate(x, y, z);
+  return g;
+}
+function cylGeo(r, h, x, y, z) {
+  const g = new THREE.CylinderGeometry(r, r, h, 6);
+  g.translate(x, y, z);
+  return g;
+}
+function merge(parts) {
+  const g = BufferGeometryUtils.mergeGeometries(parts, false);
+  for (const p of parts) p.dispose();
+  g.computeBoundingSphere();
+  return g;
+}
+
+function atlasMaterial(tex) {
+  return new THREE.MeshBasicMaterial({
+    map: tex, transparent: true, opacity: 1, side: THREE.FrontSide,
+    depthWrite: false, toneMapped: false,
+  });
+}
+
+function bindSlotAtlas(mat, texInfo, key) {
+  mat.onBeforeCompile = (sh) => {
+    sh.vertexShader = sh.vertexShader
+      .replace('#include <common>', '#include <common>\nattribute float slot;\nvarying float vSlot;')
+      .replace('#include <uv_vertex>', '#include <uv_vertex>\nvSlot = slot;');
+    sh.fragmentShader = sh.fragmentShader
+      .replace('#include <common>', '#include <common>\nvarying float vSlot;\nuniform float uCols;\nuniform float uRows;')
+      .replace('#include <map_fragment>', [
+        '#ifdef USE_MAP',
+        'vec2 cell = vec2(mod(vSlot, uCols), floor(vSlot / uCols));',
+        'vec2 uv2;',
+        'uv2.x = (vMapUv.x + cell.x) / uCols;',
+        'uv2.y = 1.0 - (cell.y + 1.0 - vMapUv.y) / uRows;',
+        'vec4 sampledDiffuseColor = texture2D(map, uv2);',
+        'diffuseColor *= sampledDiffuseColor;',
+        '#endif',
+      ].join('\n'));
+    sh.uniforms.uCols = { value: texInfo.cols };
+    sh.uniforms.uRows = { value: texInfo.rows };
+  };
+  mat.customProgramCacheKey = () => key;
+}
+
+function paintAtlas(items, colW, rowH, cols, draw) {
+  const rows = Math.max(1, Math.ceil(items.length / cols));
+  const canvas = document.createElement('canvas');
+  canvas.width = colW * cols; canvas.height = rowH * rows;
+  const c = canvas.getContext('2d');
+  c.clearRect(0, 0, canvas.width, canvas.height);
+  items.forEach((it, i) => draw(c, it, (i % cols) * colW, Math.floor(i / cols) * rowH, colW, rowH));
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.generateMipmaps = false;
+  return { tex, cols, rows };
+}
+
+function makeNameAtlas(stops) {
+  return paintAtlas(stops.length ? stops : [{ name: '강남역' }], 256, 80, 4, (c, st, cx, cy, colW, rowH) => {
+    c.fillStyle = '#0b2a6e';
+    c.fillRect(cx + 4, cy + 6, colW - 8, rowH - 12);
+    c.fillStyle = '#f4f7ff';
+    c.textAlign = 'center';
+    c.textBaseline = 'middle';
+    c.font = 'bold 22px "Noto Sans KR", "Apple SD Gothic Neo", sans-serif';
+    c.fillText(String(st.name || '정류장').slice(0, 14), cx + colW / 2, st.toward ? cy + rowH / 2 - 12 : cy + rowH / 2);
+    if (st.toward) {
+      c.fillStyle = '#d5e6ff';
+      c.font = 'bold 14px "Noto Sans KR", "Apple SD Gothic Neo", sans-serif';
+      c.fillText(`${st.toward} 방면`, cx + colW / 2, cy + rowH / 2 + 16);
+    }
+  });
+}
+
+function makeShopAtlas() {
+  const names = ['골목24', '나인마트', '팝코너', '오후커피', '나무사이', '작은컵', '한그릇', '국밥집', '분식집', '골목밥상', '노란집', '저녁상'];
+  return paintAtlas(names, 192, 48, 4, (c, name, cx, cy, colW, rowH) => {
+    c.fillStyle = '#1a1020';
+    c.fillRect(cx + 2, cy + 4, colW - 4, rowH - 8);
+    c.fillStyle = '#ffe9a8';
+    c.textAlign = 'center';
+    c.textBaseline = 'middle';
+    c.font = 'bold 20px "Noto Sans KR", "Apple SD Gothic Neo", sans-serif';
+    c.fillText(name, cx + colW / 2, cy + rowH / 2);
+  });
+}
+
+function silhouette(c, x, y, sc, color) {
+  c.fillStyle = color;
+  c.beginPath(); c.ellipse(x, y - 22 * sc, 7 * sc, 8 * sc, 0, 0, Math.PI * 2); c.fill();
+  c.fillRect(x - 8 * sc, y - 14 * sc, 16 * sc, 22 * sc);
+  c.fillRect(x - 11 * sc, y + 6 * sc, 8 * sc, 16 * sc);
+  c.fillRect(x + 3 * sc, y + 6 * sc, 8 * sc, 16 * sc);
+}
+
+function makeInteriorAtlas() {
+  const kinds = ['cvs', 'cafe', 'restaurant', 'bar'];
+  return paintAtlas(kinds, 384, 256, 2, (c, kind, cx, cy, w, h) => {
+    const pal = {
+      cvs: { wall: '#4a5666', ceil: '#3a4450', floor: '#6a7380', warm: '#e8f0d0', acc: '#4db87a' },
+      cafe: { wall: '#6e4a3a', ceil: '#5a3c30', floor: '#8a6854', warm: '#f6e0b4', acc: '#d4b488' },
+      restaurant: { wall: '#5c3c34', ceil: '#4a2e28', floor: '#7a5644', warm: '#f4cc9c', acc: '#e08848' },
+      bar: { wall: '#3e2a38', ceil: '#2c1e2c', floor: '#3a2834', warm: '#f0b888', acc: '#a04058' },
+    }[kind];
+    c.save();
+    c.beginPath(); c.rect(cx, cy, w, h); c.clip();
+    c.fillStyle = pal.ceil; c.fillRect(cx, cy, w, h * 0.2);
+    c.fillStyle = pal.wall; c.fillRect(cx, cy + h * 0.2, w, h * 0.38);
+    c.fillStyle = pal.floor;
+    c.beginPath();
+    c.moveTo(cx, cy + h); c.lineTo(cx + w, cy + h);
+    c.lineTo(cx + w * 0.84, cy + h * 0.56); c.lineTo(cx + w * 0.16, cy + h * 0.56);
+    c.closePath(); c.fill();
+    // side walls
+    c.fillStyle = pal.ceil;
+    c.beginPath(); c.moveTo(cx, cy); c.lineTo(cx + w * 0.16, cy + h * 0.2); c.lineTo(cx + w * 0.16, cy + h * 0.56); c.lineTo(cx, cy + h); c.fill();
+    c.beginPath(); c.moveTo(cx + w, cy); c.lineTo(cx + w * 0.84, cy + h * 0.2); c.lineTo(cx + w * 0.84, cy + h * 0.56); c.lineTo(cx + w, cy + h); c.fill();
+    if (kind === 'cvs') {
+      for (let i = 0; i < 3; i++) {
+        const sx = cx + w * 0.22 + i * w * 0.2;
+        c.fillStyle = '#2a3038'; c.fillRect(sx, cy + h * 0.22, w * 0.16, h * 0.3);
+        for (let r = 0; r < 4; r++) {
+          c.fillStyle = ['#c45a4a', '#e8d080', '#6ab0d4', '#7bc47a'][(i + r) % 4];
+          c.fillRect(sx + 4, cy + h * 0.24 + r * (h * 0.07), w * 0.16 - 8, 10);
+        }
+      }
+      c.fillStyle = '#cfd6de'; c.fillRect(cx + w * 0.2, cy + h * 0.68, w * 0.6, 16);
+      c.fillStyle = '#8ad0e8'; c.fillRect(cx + w * 0.62, cy + h * 0.22, w * 0.16, h * 0.3);
+      silhouette(c, cx + w * 0.38, cy + h * 0.78, 1.05, '#1a1c20');
+    } else if (kind === 'cafe') {
+      c.fillStyle = pal.acc; c.fillRect(cx + w * 0.22, cy + h * 0.24, w * 0.56, 14);
+      c.fillStyle = pal.warm; c.fillRect(cx + w * 0.28, cy + h * 0.26, w * 0.44, 8);
+      for (const tx of [0.3, 0.5, 0.7]) {
+        c.fillStyle = '#3a281c'; c.beginPath(); c.ellipse(cx + w * tx, cy + h * 0.72, 18, 8, 0, 0, Math.PI * 2); c.fill();
+        c.fillStyle = '#5a3c28'; c.fillRect(cx + w * tx - 3, cy + h * 0.72, 6, 22);
+      }
+      c.fillStyle = '#2c1e18'; c.fillRect(cx + w * 0.68, cy + h * 0.3, 28, 36);
+      c.fillStyle = pal.warm;
+      c.beginPath(); c.arc(cx + w * 0.34, cy + h * 0.34, 6, 0, Math.PI * 2); c.fill();
+      c.beginPath(); c.arc(cx + w * 0.5, cy + h * 0.32, 5, 0, Math.PI * 2); c.fill();
+      silhouette(c, cx + w * 0.42, cy + h * 0.8, 0.95, '#1c1410');
+      silhouette(c, cx + w * 0.58, cy + h * 0.78, 0.9, '#221810');
+    } else if (kind === 'restaurant') {
+      c.fillStyle = '#1c1410'; c.fillRect(cx + w * 0.22, cy + h * 0.24, w * 0.56, h * 0.16);
+      c.fillStyle = pal.warm; c.fillRect(cx + w * 0.24, cy + h * 0.26, w * 0.52, h * 0.1);
+      for (const tx of [0.28, 0.5, 0.72]) {
+        c.fillStyle = '#6a4830'; c.fillRect(cx + w * tx - 22, cy + h * 0.68, 44, 14);
+        c.fillStyle = '#3a281c'; c.fillRect(cx + w * tx - 4, cy + h * 0.8, 8, 16);
+      }
+      c.fillStyle = pal.acc; c.fillRect(cx + w * 0.26, cy + h * 0.22, 40, 8);
+      c.fillRect(cx + w * 0.5, cy + h * 0.22, 40, 8);
+      silhouette(c, cx + w * 0.36, cy + h * 0.62, 0.85, '#1a1210');
+      silhouette(c, cx + w * 0.64, cy + h * 0.84, 1.0, '#201410');
+    } else {
+      c.fillStyle = '#140e14'; c.fillRect(cx + w * 0.2, cy + h * 0.26, w * 0.6, h * 0.18);
+      for (let i = 0; i < 8; i++) {
+        c.fillStyle = ['#c45a4a', '#e8d080', '#7bc4a0', '#d0d8e8'][i % 4];
+        c.fillRect(cx + w * 0.24 + i * 18, cy + h * 0.3, 8, 22);
+      }
+      c.fillStyle = '#3a2428'; c.fillRect(cx + w * 0.18, cy + h * 0.66, w * 0.64, 18);
+      c.fillStyle = pal.acc; c.fillRect(cx + w * 0.18, cy + h * 0.64, w * 0.64, 4);
+      for (const tx of [0.3, 0.46, 0.62]) {
+        c.fillStyle = '#2a1c18'; c.beginPath(); c.ellipse(cx + w * tx, cy + h * 0.84, 10, 6, 0, 0, Math.PI * 2); c.fill();
+      }
+      c.fillStyle = pal.warm; c.globalAlpha = 0.35;
+      c.beginPath(); c.ellipse(cx + w * 0.5, cy + h * 0.4, 40, 16, 0, 0, Math.PI * 2); c.fill();
+      c.globalAlpha = 1;
+      silhouette(c, cx + w * 0.52, cy + h * 0.62, 0.95, '#120c10');
+    }
+    c.restore();
+  });
+}
+
+function makePylonAtlas(stops) {
+  const items = stops.length ? stops : [{ name: '강남역' }];
+  return paintAtlas(items, 512, 192, 2, (c, st, cx, cy, colW, rowH) => {
+    c.fillStyle = '#07090d';
+    c.fillRect(cx, cy, colW, rowH);
+    c.fillStyle = '#f2e6b0';
+    c.fillRect(cx + 10, cy + 10, colW - 20, rowH - 20);
+    c.fillStyle = '#10151f';
+    c.fillRect(cx + 18, cy + 18, colW - 36, rowH - 36);
+    const raw = String(st.name || '정류장');
+    const title = /강남역/.test(raw) ? '강남역' : raw.slice(0, 8);
+    const showToward = Boolean(st.toward) && st.toward !== title;
+    c.fillStyle = '#ffffff';
+    c.textAlign = 'center';
+    c.textBaseline = 'middle';
+    const fs = title.length <= 4 ? 74 : 44;
+    c.font = `bold ${fs}px "Noto Sans KR", "Apple SD Gothic Neo", sans-serif`;
+    const gap = title.length <= 4 ? 78 : 52;
+    const chars = [...title];
+    const start = cx + colW / 2 - ((chars.length - 1) * gap) / 2;
+    const titleY = showToward ? cy + rowH / 2 - 22 : cy + rowH / 2;
+    chars.forEach((ch, i) => c.fillText(ch, start + i * gap, titleY));
+    if (showToward) {
+      c.fillStyle = '#f0d070';
+      c.font = 'bold 30px "Noto Sans KR", "Apple SD Gothic Neo", sans-serif';
+      c.fillText(`${st.toward} 방면`, cx + colW / 2, cy + rowH / 2 + 40);
+    }
+  });
+}
+
+function makeLedTex() {
+  const canvas = document.createElement('canvas');
+  canvas.width = 512; canvas.height = 80;
+  const c = canvas.getContext('2d');
+  c.fillStyle = '#021208';
+  c.fillRect(0, 0, 512, 80);
+  c.fillStyle = '#46ff8e';
+  c.font = 'bold 36px "Noto Sans KR", monospace';
+  c.textBaseline = 'middle';
+  c.shadowColor = '#14ff74'; c.shadowBlur = 12;
+  c.fillText('140   400   402   470   9404   146   341   360   740   145   340', 16, 42);
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.wrapS = THREE.RepeatWrapping;
+  tex.generateMipmaps = false;
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+
+function zebraTex() {
+  const canvas = document.createElement('canvas');
+  canvas.width = 64; canvas.height = 256;
+  const c = canvas.getContext('2d');
+  c.clearRect(0, 0, 64, 256);
+  for (let i = 0; i < 8; i++) {
+    c.fillStyle = '#ffffff';
+    c.fillRect(0, i * 32 + 4, 64, 18);
+  }
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.generateMipmaps = false;
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+
+function makeAdTex() {
+  const canvas = document.createElement('canvas');
+  canvas.width = 128; canvas.height = 192;
+  const c = canvas.getContext('2d');
+  const g = c.createLinearGradient(0, 0, 0, 192);
+  g.addColorStop(0, '#3a4e78');
+  g.addColorStop(0.45, '#f0d08a');
+  g.addColorStop(1, '#243656');
+  c.fillStyle = g;
+  c.fillRect(0, 0, 128, 192);
+  c.fillStyle = 'rgba(255,240,200,0.55)';
+  c.fillRect(14, 22, 100, 52);
+  c.fillStyle = 'rgba(160,210,255,0.4)';
+  c.fillRect(14, 88, 100, 82);
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.generateMipmaps = false;
+  return tex;
+}
+
+function shelterMetal(median) {
+  const L = median ? 8.2 : 6.6, W = median ? 2.5 : 1.95;
+  return merge([
+    cylGeo(0.07, 2.85, -L * 0.42, 1.42, -W * 0.42),
+    cylGeo(0.07, 2.85, L * 0.42, 1.42, -W * 0.42),
+    cylGeo(0.07, 2.85, -L * 0.42, 1.42, W * 0.32),
+    cylGeo(0.07, 2.85, L * 0.42, 1.42, W * 0.32),
+    boxGeo(L + 0.25, 0.07, 0.09, 0, 2.86, -W * 0.42),
+    boxGeo(L + 0.25, 0.07, 0.09, 0, 2.86, W * 0.32),
+    boxGeo(0.09, 0.07, W * 0.85, -L * 0.42, 2.86, -0.04),
+    boxGeo(0.09, 0.07, W * 0.85, L * 0.42, 2.86, -0.04),
+  ]);
+}
+function shelterGlass(median) {
+  const L = median ? 8.0 : 6.2, W = median ? 2.35 : 1.85;
+  return boxGeo(L, 0.05, W * 0.92, 0, 2.9, -0.04);
+}
+function shelterBack(median) {
+  const L = median ? 7.8 : 6.0, W = median ? 2.35 : 1.85;
+  return boxGeo(L * 0.96, 2.15, 0.045, 0, 1.42, -W * 0.46);
+}
+function shelterBench(median) {
+  const L = median ? 6.4 : 3.2;
+  return merge([
+    boxGeo(L, 0.12, 0.48, 0, 0.72, -0.55),
+    boxGeo(L, 0.42, 0.08, 0, 0.98, -0.78),
+    boxGeo(0.08, 0.62, 0.08, -L * 0.42, 0.35, -0.55),
+    boxGeo(0.08, 0.62, 0.08, L * 0.42, 0.35, -0.55),
+  ]);
+}
+function roofStripGeo(median) {
+  const L = median ? 7.4 : 5.6;
+  return merge([
+    boxGeo(L, 0.035, 0.07, 0, 2.78, -0.55),
+    boxGeo(L, 0.035, 0.07, 0, 2.78, 0.05),
+    boxGeo(L, 0.035, 0.07, 0, 2.78, 0.55),
+  ]);
+}
+function roofEdgeGeo(median) {
+  const L = median ? 8.15 : 6.35, W = median ? 2.4 : 1.9;
+  return merge([
+    boxGeo(L, 0.05, 0.06, 0, 2.93, -W * 0.46),
+    boxGeo(L, 0.05, 0.06, 0, 2.93, W * 0.38),
+    boxGeo(0.06, 0.05, W * 0.88, -L * 0.48, 2.93, -0.04),
+    boxGeo(0.06, 0.05, W * 0.88, L * 0.48, 2.93, -0.04),
+  ]);
+}
+function poolGeo(median) {
+  return boxGeo(median ? 7.6 : 5.8, 0.03, median ? 2.5 : 1.9, 0, 0.03, 0);
+}
+function pylonGeo() {
+  return merge([
+    boxGeo(0.32, 4.0, 0.32, 0, 2.0, 0),
+    boxGeo(0.42, 0.14, 0.42, 0, 4.07, 0),
+  ]);
+}
+function waiterGeo() {
+  return merge([
+    boxGeo(0.36, 0.44, 0.26, 0, 0.94, 0),
+    boxGeo(0.32, 0.28, 0.38, 0, 0.52, 0.04),
+    new THREE.SphereGeometry(0.13, 8, 6).translate(0, 1.28, 0.02),
+  ]);
+}
+function kioskGeo() {
+  return merge([boxGeo(1.15, 2.15, 0.85, 0, 1.08, 0), boxGeo(1.22, 0.12, 0.92, 0, 2.18, 0), boxGeo(0.7, 0.5, 0.04, 0, 1.45, 0.44)]);
+}
+function bikeGeo() {
+  return merge([
+    new THREE.TorusGeometry(0.28, 0.035, 6, 10).rotateY(Math.PI / 2).translate(0, 0.28, 0.38),
+    new THREE.TorusGeometry(0.28, 0.035, 6, 10).rotateY(Math.PI / 2).translate(0, 0.28, -0.38),
+    boxGeo(0.05, 0.05, 0.7, 0, 0.52, 0),
+    boxGeo(0.35, 0.04, 0.12, 0, 0.78, 0.15),
+  ]);
+}
+function planterGeo() { return merge([boxGeo(0.7, 0.38, 0.7, 0, 0.2, 0), cylGeo(0.22, 0.45, 0, 0.55, 0)]); }
+function bollardGeo() { return cylGeo(0.09, 0.72, 0, 0.36, 0); }
+function vendingGeo() { return merge([boxGeo(0.85, 1.85, 0.7, 0, 0.93, 0), boxGeo(0.72, 0.9, 0.04, 0, 1.15, 0.37)]); }
+function scooterGeo() {
+  return merge([
+    new THREE.TorusGeometry(0.18, 0.03, 6, 8).rotateY(Math.PI / 2).translate(0, 0.18, 0.38),
+    new THREE.TorusGeometry(0.18, 0.03, 6, 8).rotateY(Math.PI / 2).translate(0, 0.18, -0.32),
+    boxGeo(0.22, 0.1, 0.62, 0, 0.32, 0),
+    boxGeo(0.38, 0.38, 0.38, 0, 0.72, -0.28),
+    boxGeo(0.08, 0.55, 0.08, 0, 0.6, 0.32),
+  ]);
+}
+function poleGeo() {
+  return merge([
+    cylGeo(0.1, 6.4, 0, 3.2, 0),
+    boxGeo(0.7, 0.14, 0.14, 0.28, 5.85, 0),
+    boxGeo(0.7, 0.14, 0.14, 0.28, 5.45, 0),
+    boxGeo(0.7, 0.14, 0.14, 0.28, 5.05, 0),
+  ]);
+}
+function shopBodyGeo() {
+  // 건물 1층 띠(약 0–4.35m)에 붙는 연속 점포 베이. +Z = 도로, 벽면은 z≈0.
+  const W = 3.6, H = 4.35, pil = 0.18, kickH = 0.78, sign0 = 3.18, sign1 = 4.12;
+  const d = 0.16, z = 0.07, winW = W - pil * 2;
+  return merge([
+    boxGeo(pil, H, d, -(W / 2 - pil / 2), H / 2, z),
+    boxGeo(pil, H, d, +(W / 2 - pil / 2), H / 2, z),
+    boxGeo(winW, kickH, d, 0, kickH / 2, z),
+    boxGeo(winW, sign1 - sign0, d, 0, (sign0 + sign1) / 2, z),
+    boxGeo(W + 0.08, 0.22, d + 0.1, 0, sign1 + 0.11, z + 0.04),
+    boxGeo(0.07, sign0 - kickH, d * 0.7, 0, (kickH + sign0) / 2, z),
+  ]);
+}
+function shopWinGeo() { return boxGeo(3.18, 2.36, 0.035, 0, 1.98, 0.15); }
+function shopAwningGeo() {
+  return merge([
+    boxGeo(3.28, 0.06, 0.9, 0, 3.14, 0.52),
+    boxGeo(3.32, 0.035, 0.94, 0, 3.2, 0.52),
+  ]);
+}
+function tentGeo() {
+  return merge([
+    boxGeo(3.3, 2.15, 2.35, 0, 1.15, 0.2),
+    boxGeo(3.5, 0.1, 2.55, 0, 2.28, 0.2),
+  ]);
+}
+function tentGlowGeo() { return boxGeo(2.6, 1.3, 1.8, 0, 1.1, 0.2); }
+function tableGeo() { return merge([cylGeo(0.38, 0.06, 0, 0.78, 0), cylGeo(0.06, 0.76, 0, 0.38, 0)]); }
+function stoolGeo() { return merge([cylGeo(0.16, 0.05, 0, 0.48, 0), cylGeo(0.04, 0.46, 0, 0.23, 0)]); }
+function aframeGeo() {
+  return merge([
+    boxGeo(0.72, 1.05, 0.06, 0, 0.62, 0.16),
+    boxGeo(0.72, 1.05, 0.06, 0, 0.62, -0.16),
+  ]);
+}
+function acGeo() { return merge([boxGeo(0.95, 0.55, 0.42, 0, 0, 0), boxGeo(0.7, 0.12, 0.08, 0, -0.22, 0.22)]); }
+function trashGeo() { return merge([boxGeo(0.38, 0.28, 0.28, 0, 0.16, 0), boxGeo(0.32, 0.22, 0.24, 0.05, 0.38, 0.02)]); }
+function binGeo() { return merge([boxGeo(0.55, 0.85, 0.42, 0, 0.42, 0), boxGeo(0.5, 0.08, 0.38, 0, 0.88, 0)]); }
+function streetBenchGeo() {
+  return merge([
+    boxGeo(1.5, 0.08, 0.44, 0, 0.43, 0),
+    boxGeo(0.08, 0.43, 0.44, -0.66, 0.22, 0),
+    boxGeo(0.08, 0.43, 0.44, 0.66, 0.22, 0),
+    boxGeo(1.5, 0.34, 0.07, 0, 0.64, -0.19),
+  ]);
+}
+function dedupeShops(list) {
+  const out = [];
+  for (const sh of list) {
+    if (out.some((o) => Math.hypot(o[0] - sh[0], o[1] - sh[1]) < 2.6)) continue;
+    out.push(sh);
+  }
+  return out;
+}
+
+const IX_TREE = { x: -7144, z: -14531 };
+function slimIxTrees(scene) {
+  const m4 = new THREE.Matrix4();
+  const p = new THREE.Vector3(), q = new THREE.Quaternion(), s = new THREE.Vector3();
+  const world = new THREE.Vector3();
+  scene.traverse((o) => {
+    if (!o.isInstancedMesh || o.userData.gnIxSlim || !o.geometry) return;
+    const kind = o.geometry.type;
+    const rad = o.geometry.parameters?.radius;
+    const isCrown = kind === 'IcosahedronGeometry' || (rad >= 1.8 && rad <= 2.6);
+    const isTrunk = kind === 'CylinderGeometry' && (o.geometry.parameters?.height || 0) > 3;
+    if (!isCrown && !isTrunk) return;
+    let hit = 0;
+    for (let i = 0; i < o.count; i++) {
+      o.getMatrixAt(i, m4);
+      m4.decompose(p, q, s);
+      world.copy(p);
+      o.localToWorld(world);
+      if (Math.hypot(world.x - IX_TREE.x, world.z - IX_TREE.z) > 140) continue;
+      if (isCrown) { s.x *= 0.36; s.z *= 0.36; s.y *= 0.76; p.y += 2.25; }
+      else s.y *= 1.62;
+      m4.compose(p, q, s);
+      o.setMatrixAt(i, m4);
+      hit++;
+    }
+    if (hit) { o.instanceMatrix.needsUpdate = true; o.userData.gnIxSlim = true; }
+  });
+}
+
+export function createGangnamStreet({ scene, terrain = null, url, mobile = false }) {
+  const root = new THREE.Group();
+  root.name = 'gangnamStreet';
+  scene.add(root);
+  const stats = { loaded: false, mobile, draws: 0 };
+  let dead = false, worldBox = null, meshes = null, ledTex = null;
+  const ground = (x, z) => (terrain ? terrain.renderHeight(x, z) : 0);
+  const m4 = new THREE.Matrix4(), quat = new THREE.Quaternion(), pos = new THREE.Vector3(), scl = new THREE.Vector3();
+  const tmpC = new THREE.Color();
+
+  const ready = fetch(url).then((r) => (r.ok ? r.json() : null)).catch(() => null).then((j) => {
+    if (!j || dead) return;
+    try {
+      worldBox = j.meta?.box || { x0: -7500, x1: -6000, z0: -15500, z1: -14000 };
+      const stops = j.stops || [];
+      const modules = j.modules || stops.map((st, si) => ({ x: st.x, z: st.z, yaw: st.yaw, kind: st.kind, si }));
+      const nameAt = makeNameAtlas(stops);
+      const shopAt = makeShopAtlas();
+      const interiorAt = makeInteriorAtlas();
+      const pylonAt = makePylonAtlas(stops);
+      ledTex = makeLedTex();
+      const adTex = makeAdTex();
+
+      const metalMat = new THREE.MeshLambertMaterial({ color: '#4a5563' });
+      const glassMat = new THREE.MeshBasicMaterial({ color: '#8fd4ff', transparent: true, opacity: 0.32, toneMapped: false, depthWrite: false });
+      const backMat = new THREE.MeshBasicMaterial({ color: '#fff1c8', transparent: true, opacity: 0.45, toneMapped: false });
+      const benchMat = new THREE.MeshLambertMaterial({ color: '#c9a36c' });
+      const ledMat = new THREE.MeshBasicMaterial({
+        map: ledTex, transparent: true, opacity: 0, blending: THREE.AdditiveBlending,
+        depthWrite: false, toneMapped: false, side: THREE.DoubleSide,
+      });
+      const nameMat = atlasMaterial(nameAt.tex);
+      const shopSignMat = atlasMaterial(shopAt.tex);
+      const interiorMat = atlasMaterial(interiorAt.tex);
+      interiorMat.transparent = false;
+      interiorMat.depthWrite = true;
+      const pylonSignMat = atlasMaterial(pylonAt.tex);
+      pylonSignMat.transparent = false;
+      pylonSignMat.depthWrite = true;
+      const pylonGlowMat = new THREE.MeshBasicMaterial({
+        color: '#f0d080', transparent: true, opacity: 0, blending: THREE.AdditiveBlending,
+        depthWrite: false, toneMapped: false,
+      });
+      const shopRoomMat = new THREE.MeshLambertMaterial({ color: '#1a1614' });
+      const adMat = new THREE.MeshBasicMaterial({ map: adTex, toneMapped: false });
+      const adGlowMat = new THREE.MeshBasicMaterial({
+        color: '#ffe6a0', transparent: true, opacity: 0, blending: THREE.AdditiveBlending,
+        depthWrite: false, toneMapped: false,
+      });
+      const stripMat = new THREE.MeshBasicMaterial({
+        color: '#ffe7b0', transparent: true, opacity: 0, blending: THREE.AdditiveBlending,
+        depthWrite: false, toneMapped: false,
+      });
+      const edgeMat = new THREE.MeshBasicMaterial({
+        color: '#b8f0ff', transparent: true, opacity: 0, blending: THREE.AdditiveBlending,
+        depthWrite: false, toneMapped: false,
+      });
+      const poolMat = new THREE.MeshBasicMaterial({
+        color: '#ffb060', transparent: true, opacity: 0, blending: THREE.AdditiveBlending,
+        depthWrite: false, toneMapped: false,
+      });
+      const zebraMat = new THREE.MeshBasicMaterial({
+        map: zebraTex(), color: '#ffffff', transparent: true, opacity: 1, depthWrite: false, depthTest: true,
+        toneMapped: false, polygonOffset: true, polygonOffsetFactor: -20, polygonOffsetUnits: -20,
+      });
+      const paintMat = new THREE.MeshBasicMaterial({
+        color: '#8a4840',
+        transparent: true,
+        opacity: 1,
+        toneMapped: false,
+        depthTest: true,
+        depthWrite: false,
+        polygonOffset: true, polygonOffsetFactor: -20, polygonOffsetUnits: -20,
+      });
+      const platMat = new THREE.MeshLambertMaterial({ color: '#9aa3ae' });
+      const tactMat = new THREE.MeshBasicMaterial({ color: '#f0c400', toneMapped: false });
+      const pylonMat = new THREE.MeshLambertMaterial({ color: '#2d3a55' });
+      const shopMat = new THREE.MeshLambertMaterial({ color: '#ffffff' });
+      const shopWinMat = new THREE.MeshBasicMaterial({
+        color: '#d8e6f2', transparent: true, opacity: 0,
+        depthWrite: false, toneMapped: false,
+      });
+      const tentMat = new THREE.MeshLambertMaterial({ color: '#d4652a' });
+      const tentGlowMat = new THREE.MeshBasicMaterial({
+        color: '#ffb15a', transparent: true, opacity: 0, blending: THREE.AdditiveBlending,
+        depthWrite: false, toneMapped: false,
+      });
+      const stringMat = new THREE.MeshBasicMaterial({
+        color: '#ffd27a', transparent: true, opacity: 0, blending: THREE.AdditiveBlending,
+        depthWrite: false, toneMapped: false,
+      });
+      const vendMat = new THREE.MeshLambertMaterial({ color: '#3a6ea5', emissive: '#123058', emissiveIntensity: 0 });
+
+      const sideMods = modules.filter((m) => m.kind !== 'median');
+      const medMods = modules.filter((m) => m.kind === 'median');
+
+      function inst(geo, mat, n, name, cast = false) {
+        const im = new THREE.InstancedMesh(geo, mat, Math.max(1, n));
+        im.name = name; im.count = 0; im.frustumCulled = false; im.castShadow = cast; im.receiveShadow = true;
+        root.add(im); return im;
+      }
+
+      const sideMetal = inst(shelterMetal(false), metalMat, sideMods.length, 'gnStreetSideMetal', true);
+      const medMetal = inst(shelterMetal(true), metalMat, medMods.length, 'gnStreetMedMetal', true);
+      const sideGlass = inst(shelterGlass(false), glassMat, sideMods.length, 'gnStreetSideGlass');
+      const medGlass = inst(shelterGlass(true), glassMat, medMods.length, 'gnStreetMedGlass');
+      const sideBack = inst(shelterBack(false), backMat, sideMods.length, 'gnStreetSideBack');
+      const medBack = inst(shelterBack(true), backMat, medMods.length, 'gnStreetMedBack');
+      const sideBench = inst(shelterBench(false), benchMat, sideMods.length, 'gnStreetSideBench');
+      const medBench = inst(shelterBench(true), benchMat, medMods.length, 'gnStreetMedBench');
+      const sideStrip = inst(roofStripGeo(false), stripMat, sideMods.length, 'gnStreetSideStrip');
+      const medStrip = inst(roofStripGeo(true), stripMat, medMods.length, 'gnStreetMedStrip');
+      const sideEdge = inst(roofEdgeGeo(false), edgeMat, sideMods.length, 'gnStreetSideEdge');
+      const medEdge = inst(roofEdgeGeo(true), edgeMat, medMods.length, 'gnStreetMedEdge');
+      const pools = inst(poolGeo(true), poolMat, modules.length, 'gnStreetPool');
+      const bis = inst(new THREE.PlaneGeometry(2.15, 0.62), ledMat, modules.length, 'gnStreetBis');
+      const ads = inst(new THREE.PlaneGeometry(1.05, 1.7), adMat, modules.length, 'gnStreetAds');
+      const adGlows = inst(boxGeo(1.08, 1.74, 0.08, 0, 0, 0), adGlowMat, modules.length, 'gnStreetAdGlow');
+      const signs = inst(new THREE.PlaneGeometry(1.55, 0.72), nameMat, sideMods.length * 2, 'gnStreetNames');
+
+      let si = 0, mi = 0, signI = 0, poolI = 0, bisI = 0;
+      const placeModule = (m, metal, glass, back, bench, strip, edge) => {
+        const gy = ground(m.x, m.z);
+        StreetXform.compose(m4, quat, pos, scl, m.x, gy, m.z, m.yaw, 1, 1, 1);
+        metal.setMatrixAt(metal.count, m4); metal.count++;
+        glass.setMatrixAt(glass.count, m4); glass.count++;
+        back.setMatrixAt(back.count, m4); back.count++;
+        bench.setMatrixAt(bench.count, m4); bench.count++;
+        strip.setMatrixAt(strip.count, m4); strip.count++;
+        edge.setMatrixAt(edge.count, m4); edge.count++;
+        StreetXform.compose(m4, quat, pos, scl, m.x, gy + 0.04, m.z, m.yaw, m.kind === 'median' ? 1 : 0.82, 1, m.kind === 'median' ? 1 : 0.78);
+        pools.setMatrixAt(poolI++, m4);
+        const fx = Math.sin(m.yaw), fz = Math.cos(m.yaw);
+        const rx = Math.cos(m.yaw), rz = -Math.sin(m.yaw);
+        // BIS at the curb, facing the waiting area
+        StreetXform.compose(m4, quat, pos, scl, m.x + fx * 0.98, gy + 2.22, m.z + fz * 0.98, m.yaw + Math.PI, 1, 1, 1);
+        bis.setMatrixAt(bisI, m4);
+        // ad on back panel, glowing into the shelter
+        StreetXform.compose(m4, quat, pos, scl, m.x - fx * 1.08 - rx * 2.35, gy + 1.4, m.z - fz * 1.08 - rz * 2.35, m.yaw, 1, 1, 1);
+        ads.setMatrixAt(bisI, m4);
+        adGlows.setMatrixAt(bisI, m4);
+        bisI++;
+        if (m.kind !== 'median') {
+          StreetXform.compose(m4, quat, pos, scl, m.x + rx * 0.05, gy + 3.22, m.z + rz * 0.05, m.yaw + Math.PI, 1, 1, 1);
+          signs.setMatrixAt(signI, m4); signI++;
+          StreetXform.compose(m4, quat, pos, scl, m.x + rx * 0.05, gy + 3.22, m.z + rz * 0.05, m.yaw, 1, 1, 1);
+          signs.setMatrixAt(signI, m4); signI++;
+        }
+      };
+      sideMods.forEach((m) => placeModule(m, sideMetal, sideGlass, sideBack, sideBench, sideStrip, sideEdge));
+      medMods.forEach((m) => placeModule(m, medMetal, medGlass, medBack, medBench, medStrip, medEdge));
+      pools.count = poolI; bis.count = ads.count = adGlows.count = bisI;
+
+      const pylons = j.pylons || [];
+      const pylonIm = inst(pylonGeo(), pylonMat, pylons.length, 'gnStreetPylon', true);
+      const pylonSigns = inst(new THREE.PlaneGeometry(2.85, 1.32), pylonSignMat, Math.max(1, pylons.length * 2), 'gnStreetPylonSign');
+      const pylonGlows = inst(boxGeo(2.98, 1.42, 0.1, 0, 0, -0.04), pylonGlowMat, Math.max(1, pylons.length * 2), 'gnStreetPylonGlow');
+      const pylonSlots = [];
+      let pylonSignI = 0;
+      pylons.forEach((p, i) => {
+        const gy = ground(p.x, p.z);
+        StreetXform.compose(m4, quat, pos, scl, p.x, gy, p.z, p.yaw, 1, 1, 1);
+        pylonIm.setMatrixAt(i, m4);
+        // Two opposite FrontSide faces only — a 4-way plus hid the middle 글자
+        for (const dy of [0, Math.PI]) {
+          const fy = p.yaw + dy;
+          const fx = Math.sin(fy), fz = Math.cos(fy);
+          StreetXform.compose(m4, quat, pos, scl, p.x + fx * 0.16, gy + 4.85, p.z + fz * 0.16, fy, 1, 1, 1);
+          pylonSigns.setMatrixAt(pylonSignI, m4);
+          StreetXform.compose(m4, quat, pos, scl, p.x + fx * 0.10, gy + 4.85, p.z + fz * 0.10, fy, 1, 1, 1);
+          pylonGlows.setMatrixAt(pylonSignI, m4);
+          pylonSlots.push(p.si ?? 0);
+          pylonSignI++;
+        }
+      });
+      pylonIm.count = pylons.length;
+      pylonSigns.count = pylonGlows.count = pylonSignI;
+      signs.count = signI;
+
+      const sideSlots = [];
+      sideMods.forEach((m) => { sideSlots.push(m.si ?? 0); sideSlots.push(m.si ?? 0); });
+      bindSlotAtlas(nameMat, nameAt, 'gn-stop-name-atlas');
+      signs.geometry = signs.geometry.clone();
+      signs.geometry.setAttribute('slot', new THREE.InstancedBufferAttribute(new Float32Array(sideSlots.length ? sideSlots : [0]), 1));
+      bindSlotAtlas(pylonSignMat, pylonAt, 'gn-pylon-name-atlas');
+      pylonSigns.geometry = pylonSigns.geometry.clone();
+      pylonSigns.geometry.setAttribute('slot', new THREE.InstancedBufferAttribute(new Float32Array(pylonSlots.length ? pylonSlots : [0]), 1));
+
+      const plats = j.platforms || [];
+      const platIm = inst(boxGeo(1, 0.30, 1, 0, 0.15, 0), platMat, plats.length, 'gnStreetPlat');
+      plats.forEach((p, i) => {
+        StreetXform.compose(m4, quat, pos, scl, p[0], ground(p[0], p[1]), p[1], p[2], p[3], 1, p[4]);
+        platIm.setMatrixAt(i, m4);
+      });
+      platIm.count = plats.length;
+
+      const tacts = j.tactiles || [];
+      const tactIm = inst(boxGeo(1, 0.05, 1, 0, 0.025, 0), tactMat, tacts.length, 'gnStreetTact');
+      tacts.forEach((p, i) => {
+        StreetXform.compose(m4, quat, pos, scl, p[0], ground(p[0], p[1]) + 0.30, p[1], p[2], p[3], 1, p[4]);
+        tactIm.setMatrixAt(i, m4);
+      });
+      tactIm.count = tacts.length;
+
+      const zebra = inst(new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2), zebraMat, (j.zebras || []).length, 'gnStreetZebra');
+      (j.zebras || []).forEach((z, i) => {
+        StreetXform.compose(m4, quat, pos, scl, z[0], ground(z[0], z[1]) + STREET_DECAL_Y.zebra, z[1], z[2], z[3], 1, z[4]);
+        zebra.setMatrixAt(i, m4);
+      });
+      zebra.count = (j.zebras || []).length;
+      zebra.renderOrder = 2;
+
+      const paint = inst(new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2), paintMat, (j.paints || []).length, 'gnStreetPaint');
+      (j.paints || []).forEach((z, i) => {
+        StreetXform.compose(m4, quat, pos, scl, z[0], ground(z[0], z[1]) + STREET_DECAL_Y.paint, z[1], z[2], z[3], 1, z[4]);
+        paint.setMatrixAt(i, m4);
+      });
+      paint.count = (j.paints || []).length;
+      paint.renderOrder = 1;
+
+      const propGeos = [kioskGeo(), bikeGeo(), planterGeo(), bollardGeo(), poleGeo(), scooterGeo(), vendingGeo()];
+      const propMats = [
+        new THREE.MeshLambertMaterial({ color: '#d7c8a4' }),
+        new THREE.MeshLambertMaterial({ color: '#2b2e33' }),
+        new THREE.MeshLambertMaterial({ color: '#4a7a46' }),
+        new THREE.MeshLambertMaterial({ color: '#c9ccd1' }),
+        new THREE.MeshLambertMaterial({ color: '#4a4e55' }),
+        new THREE.MeshLambertMaterial({ color: '#e24b3c' }),
+        vendMat,
+      ];
+      const propSrc = mobile ? (j.props || []).filter((_, i) => i % 2 === 0) : (j.props || []);
+      const byKind = Array.from({ length: 7 }, () => []);
+      for (const pr of propSrc) byKind[pr[0]]?.push(pr);
+      const poleSrc = mobile ? (j.poles || []).filter((_, i) => i % 2 === 0) : (j.poles || []);
+      byKind[4].push(...poleSrc.map((pp) => [4, pp[0], pp[1], pp[2], 1]));
+      const propIms = byKind.map((list, k) => {
+        const im = inst(propGeos[k], propMats[k], list.length, `gnStreetProp${k}`, k === 0 || k === 6);
+        list.forEach((pr, i) => {
+          const sc = pr[4] || 1;
+          StreetXform.compose(m4, quat, pos, scl, pr[1], ground(pr[1], pr[2]), pr[2], pr[3], sc, sc, sc);
+          im.setMatrixAt(i, m4);
+        });
+        im.count = list.length;
+        im.instanceMatrix.needsUpdate = true;
+        return im;
+      });
+
+      function placeList(list, geo, mat, name, yAdd = 0, pick = null) {
+        const src = mobile && list.length > 8 ? list.filter((_, i) => i % 2 === 0) : list;
+        const im = inst(geo, mat, src.length, name);
+        src.forEach((it, i) => {
+          const x = it[0], z = it[1], yaw = it[2];
+          StreetXform.compose(m4, quat, pos, scl, x, ground(x, z) + yAdd, z, yaw, 1, 1, 1);
+          im.setMatrixAt(i, m4);
+          if (pick) pick(im, it, i);
+        });
+        im.count = src.length;
+        im.instanceMatrix.needsUpdate = true;
+        return im;
+      }
+
+      const shopSrc = dedupeShops(mobile ? (j.shops || []).filter((_, i) => i % 2 === 0) : (j.shops || []));
+      const shopIm = inst(shopBodyGeo(), shopMat, shopSrc.length, 'gnStreetShop', true);
+      const shopWin = inst(shopWinGeo(), shopWinMat, shopSrc.length, 'gnStreetShopWin');
+      const shopSign = inst(new THREE.PlaneGeometry(2.2, 0.42), shopSignMat, shopSrc.length, 'gnStreetShopSign');
+      const shopInterior = inst(new THREE.PlaneGeometry(3.12, 2.28), interiorMat, shopSrc.length, 'gnStreetShopInterior');
+      const awningSrc = shopSrc.filter((sh, i) => sh[3] === 1 || sh[3] === 2 || (i % 3 === 0));
+      const shopAwning = inst(shopAwningGeo(), new THREE.MeshLambertMaterial({ color: '#c45a38' }), awningSrc.length, 'gnStreetShopAwning');
+      shopInterior.renderOrder = 2;
+      interiorMat.side = THREE.DoubleSide;
+      interiorMat.depthWrite = true;
+      interiorMat.depthTest = true;
+      interiorMat.polygonOffset = true;
+      interiorMat.polygonOffsetFactor = -20;
+      interiorMat.polygonOffsetUnits = -20;
+      const shopPal = ['#2e6b4a', '#6b4a32', '#d4652a', '#6a3038', '#3a4a72', '#8a5a28', '#4a6a58', '#703848'];
+      const interiorSlots = [];
+      let awningI = 0;
+      shopSrc.forEach((sh, i) => {
+        const gy = ground(sh[0], sh[1]);
+        const sx = (sh[4] || 3.6) / 3.6;
+        StreetXform.compose(m4, quat, pos, scl, sh[0], gy, sh[1], sh[2], sx, 1, 1);
+        shopIm.setMatrixAt(i, m4);
+        shopWin.setMatrixAt(i, m4);
+        shopIm.setColorAt(i, tmpC.set(shopPal[sh[3] % shopPal.length] || '#555'));
+        const fx = Math.sin(sh[2]), fz = Math.cos(sh[2]);
+        StreetXform.compose(m4, quat, pos, scl, sh[0] + fx * 0.18, gy + 3.65, sh[1] + fz * 0.18, sh[2], sx, 1, 1);
+        shopSign.setMatrixAt(i, m4);
+        // 유리 바로 안쪽, 건물 벽면보다 살짝 앞(벽의 사무실 창을 가림). 아틀라스가 깊이감을 냄.
+        StreetXform.compose(m4, quat, pos, scl, sh[0] - fx * 0.02, gy + 1.98, sh[1] - fz * 0.02, sh[2], sx, 1, 1);
+        shopInterior.setMatrixAt(i, m4);
+        if (sh[3] === 1 || sh[3] === 2 || (i % 3 === 0)) {
+          StreetXform.compose(m4, quat, pos, scl, sh[0], gy, sh[1], sh[2], sx, 1, 1);
+          shopAwning.setMatrixAt(awningI++, m4);
+        }
+        const nameSlot = (sh[3] * 3 + i) % 12;
+        interiorSlots.push(nameSlot <= 2 ? 0 : nameSlot <= 5 ? 1 : nameSlot <= 9 ? 2 : 3);
+      });
+      shopIm.count = shopWin.count = shopSign.count = shopInterior.count = shopSrc.length;
+      shopAwning.count = awningI;
+      if (shopIm.instanceColor) shopIm.instanceColor.needsUpdate = true;
+      bindSlotAtlas(shopSignMat, shopAt, 'gn-shop-name-atlas');
+      shopSign.geometry = shopSign.geometry.clone();
+      shopSign.geometry.setAttribute('slot', new THREE.InstancedBufferAttribute(new Float32Array(shopSrc.map((sh, i) => (sh[3] * 3 + i) % 12)), 1));
+      bindSlotAtlas(interiorMat, interiorAt, 'gn-shop-interior-atlas');
+      shopInterior.geometry = shopInterior.geometry.clone();
+      shopInterior.geometry.setAttribute('slot', new THREE.InstancedBufferAttribute(new Float32Array(interiorSlots.length ? interiorSlots : [0]), 1));
+
+      const tentIm = placeList(j.tents || [], tentGeo(), tentMat, 'gnStreetTent', 0);
+      const tentGlow = placeList(mobile ? [] : (j.tents || []), tentGlowGeo(), tentGlowMat, 'gnStreetTentGlow', 0);
+      const tableIm = placeList(j.tables || [], tableGeo(), new THREE.MeshLambertMaterial({ color: '#6a5340' }), 'gnStreetTable');
+      const stoolIm = placeList(mobile ? [] : (j.stools || []), stoolGeo(), new THREE.MeshLambertMaterial({ color: '#4a3b30' }), 'gnStreetStool');
+      const aframeIm = placeList(j.aframes || [], aframeGeo(), new THREE.MeshLambertMaterial({ color: '#e8d9a0' }), 'gnStreetAframe');
+      const acIm = placeList(mobile ? [] : (j.acs || []), acGeo(), new THREE.MeshLambertMaterial({ color: '#c5ccd3' }), 'gnStreetAc', 3.15);
+      const trashIm = placeList(mobile ? [] : (j.trash || []), trashGeo(), new THREE.MeshLambertMaterial({ color: '#3a3a38' }), 'gnStreetTrash');
+      const binIm = placeList(j.bins || [], binGeo(), new THREE.MeshLambertMaterial({ color: '#3d7a45' }), 'gnStreetBin');
+      const benchIm = placeList(j.benches || [], streetBenchGeo(), new THREE.MeshLambertMaterial({ color: '#6b5a44' }), 'gnStreetBench');
+
+      let wires = null;
+      const wsrc = mobile ? [] : (j.wires || []);
+      if (wsrc.length) {
+        const wmat = new THREE.MeshBasicMaterial({ color: '#2a2c30' });
+        wires = inst(boxGeo(1, 1, 1, 0, 0, 0), wmat, wsrc.length * 3, 'gnStreetWires');
+        let wi = 0;
+        wsrc.forEach((w) => {
+          const x = (w[0] + w[2]) / 2, z = (w[1] + w[3]) / 2;
+          const dx = w[2] - w[0], dz = w[3] - w[1], L = Math.hypot(dx, dz);
+          const yaw = Math.atan2(dx, dz);
+          const gy = ground(x, z);
+          for (const yh of [5.15, 5.52, 5.88]) {
+            StreetXform.compose(m4, quat, pos, scl, x, gy + yh, z, yaw, 0.035, 0.035, L);
+            wires.setMatrixAt(wi++, m4);
+          }
+        });
+        wires.count = wi;
+        wires.instanceMatrix.needsUpdate = true;
+      }
+
+      let strings = null;
+      const ssrc = mobile ? [] : (j.strings || []);
+      if (ssrc.length) {
+        strings = inst(boxGeo(1, 1, 1, 0, 0, 0), stringMat, ssrc.length, 'gnStreetStrings');
+        ssrc.forEach((w, i) => {
+          const x = (w[0] + w[2]) / 2, z = (w[1] + w[3]) / 2;
+          const dx = w[2] - w[0], dz = w[3] - w[1], L = Math.hypot(dx, dz);
+          StreetXform.compose(m4, quat, pos, scl, x, ground(x, z) + 4.85, z, Math.atan2(dx, dz), 0.06, 0.06, L);
+          strings.setMatrixAt(i, m4);
+        });
+        strings.count = ssrc.length;
+        strings.instanceMatrix.needsUpdate = true;
+      }
+
+      let waiters = null;
+      if (!mobile && j.waiters?.length) {
+        waiters = inst(waiterGeo(), new THREE.MeshLambertMaterial({ color: '#ffffff' }), j.waiters.length, 'gnStreetWait');
+        const pal = ['#3d4652', '#6a3a32', '#2f4a3c', '#3a3f6a', '#5a5248', '#704838'];
+        j.waiters.forEach((w, i) => {
+          StreetXform.compose(m4, quat, pos, scl, w[0], ground(w[0], w[1]) + 0.22, w[1], w[2], 1, 1, 1);
+          waiters.setMatrixAt(i, m4);
+          waiters.setColorAt(i, tmpC.set(pal[i % pal.length]));
+        });
+        waiters.count = j.waiters.length;
+        waiters.instanceMatrix.needsUpdate = true;
+        if (waiters.instanceColor) waiters.instanceColor.needsUpdate = true;
+      }
+
+      for (const o of root.children) {
+        if (o.isInstancedMesh) o.instanceMatrix.needsUpdate = true;
+      }
+
+      meshes = {
+        ledMat, stripMat, edgeMat, poolMat, backMat, glassMat, adGlowMat,
+        shopWinMat, tentGlowMat, stringMat, vendMat, nameMat, pylonGlowMat,
+        bis, pools, adGlows, pylonGlows,
+      };
+      stats.loaded = true;
+      stats.stops = stops.length;
+      stats.median = medMods.length ? stops.filter((s) => s.kind === 'median').length : 0;
+      stats.modules = modules.length;
+      stats.shops = shopSrc.length;
+      stats.tents = (j.tents || []).length;
+      stats.alley = j.meta?.alley || null;
+      apply(1);
+    } catch (err) {
+      stats.error = String(err && err.message || err);
+      console.error('[gangnam-street]', err);
+    }
+  });
+
+  function near(x, z) {
+    if (!worldBox) return true;
+    return x >= worldBox.x0 - 400 && x <= worldBox.x1 + 400 && z >= worldBox.z0 - 400 && z <= worldBox.z1 + 400;
+  }
+  near.here = false;
+
+  function apply(v) {
+    if (!meshes) return;
+    const on = near.here;
+    const n = on ? v : 0;
+    root.visible = on;
+    if (meshes.ledMat) meshes.ledMat.opacity = on ? (0.45 + n * 0.55) : 0;
+    if (meshes.stripMat) meshes.stripMat.opacity = n * 0.9;
+    if (meshes.edgeMat) meshes.edgeMat.opacity = n * 0.8;
+    if (meshes.poolMat) meshes.poolMat.opacity = n * 0.55;
+    if (meshes.backMat) meshes.backMat.opacity = on ? (0.28 + n * 0.55) : 0;
+    if (meshes.glassMat) meshes.glassMat.opacity = on ? (0.22 + n * 0.2) : 0;
+    if (meshes.adGlowMat) meshes.adGlowMat.opacity = n * 0.55;
+    if (meshes.shopWinMat) meshes.shopWinMat.opacity = on ? (0.05 + n * 0.07) : 0;
+    if (meshes.pylonGlowMat) meshes.pylonGlowMat.opacity = n * 0.45;
+    if (meshes.pylonGlows) meshes.pylonGlows.visible = on && n > 0.05;
+    if (meshes.tentGlowMat) meshes.tentGlowMat.opacity = n * 0.62;
+    if (meshes.stringMat) meshes.stringMat.opacity = n * 0.72;
+    if (meshes.vendMat) meshes.vendMat.emissiveIntensity = n * 1.1;
+    if (meshes.ledMat?.map) meshes.ledMat.map.offset.x = (performance.now() / 3800) % 1;
+    if (meshes.pools) meshes.pools.visible = on && n > 0.05;
+    if (meshes.adGlows) meshes.adGlows.visible = on && n > 0.05;
+    let draws = 0;
+    root.traverse((o) => { if (o.isInstancedMesh && o.visible && o.count > 0) draws++; });
+    stats.draws = on ? draws : 0;
+  }
+
+  let acc = 0;
+  return {
+    root, stats, ready,
+    update(dt, x, z) {
+      if (!meshes) return;
+      acc += dt;
+      if (acc > 0.25) { acc = 0; near.here = near(x, z); slimIxTrees(scene); }
+      apply(nightFade());
+    },
+    dispose() {
+      dead = true;
+      root.traverse((o) => {
+        if (o.isMesh) {
+          o.geometry?.dispose();
+          o.material?.map?.dispose?.();
+          o.material?.dispose?.();
+        }
+      });
+      scene.remove(root);
+      meshes = null;
+    },
+  };
+}

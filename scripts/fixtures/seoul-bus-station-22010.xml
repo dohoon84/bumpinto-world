@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ServiceResult>
+  <comMsgHeader/>
+  <msgHeader>
+    <headerCd>0</headerCd>
+    <headerMsg>정상적으로 처리되었습니다.</headerMsg>
+    <itemCount>0</itemCount>
+  </msgHeader>
+  <msgBody>
+    <itemList>
+      <arsId>22010</arsId>
+      <stNm>신분당선강남역</stNm>
+      <busRouteId>100100019</busRouteId>
+      <rtNm>140</rtNm>
+      <arrmsg1>3분후</arrmsg1>
+      <arrmsg2>12분후</arrmsg2>
+      <traTime1>180</traTime1>
+      <traTime2>720</traTime2>
+      <vehId1>111076001</vehId1>
+      <vehId2>111076002</vehId2>
+      <nxtStn>신논현역</nxtStn>
+      <routeType>3</routeType>
+    </itemList>
+    <itemList>
+      <arsId>22010</arsId>
+      <stNm>신분당선강남역</stNm>
+      <busRouteId>100100063</busRouteId>
+      <rtNm>402</rtNm>
+      <arrmsg1>곧 도착</arrmsg1>
+      <arrmsg2>8분후</arrmsg2>
+      <traTime1>20</traTime1>
+      <traTime2>480</traTime2>
+      <vehId1>111076010</vehId1>
+      <routeType>3</routeType>
+    </itemList>
+    <itemList>
+      <arsId>22010</arsId>
+      <stNm>신분당선강남역</stNm>
+      <busRouteId>100100391</busRouteId>
+      <rtNm>9404</rtNm>
+      <arrmsg1>운행종료</arrmsg1>
+      <routeType>6</routeType>
+    </itemList>
+  </msgBody>
+</ServiceResult>

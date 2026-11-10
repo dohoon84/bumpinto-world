@@ -28,8 +28,12 @@ import { mountGangnamNpc } from './gangnam/npc/mount.js'; // [gangnam-npc]
 import { shortenBoom, boomPoint } from './gangnam/camClear.js'; // [gangnam-night]
 import { createGangnamBillboards } from './gangnam/billboards/create.js'; // [gangnam-ads]
 import { gangnamAdsEnabled } from './gangnam/billboards/manifest.js'; // [gangnam-ads]
+import { gangnamNightlifeEnabled, createGangnamNightlife } from './gangnam/nightlife.js'; // [gangnam-nightlife]
+import { gangnamStreetEnabled, createGangnamStreet } from './gangnam/streetDetail.js'; // [gangnam-street]
+import { gangnamBrtEnabled, createGangnamBrt } from './gangnam/brtBuses.js'; // [gangnam-brt]
 import { gangnamEnabled } from './corridor/gangnam.js'; // [gangnam] 브이월드 높이 출처 문구
 import { BUS_CREDIT, gangnamBusEnabled } from './corridor/gangnamBus.js'; // [gangnam-bus]
+import { liveBusEnabled, createLiveBusFeed } from './gangnam/liveBus.js'; // [livebus]
 import { GYEONGGI_BUS_CREDIT } from './corridor/gyeongbuExpress.js'; // [gyeongbu-bus]
 import { mountPhone } from './phone.js';
 import { mountHandset } from './handset.js';
@@ -336,7 +340,8 @@ const overlay = new Overlay(document.getElementById('overlay'), camera);
 const corridorClock = { simTime: () => null };
 // [corridor] 정자 → 롯데월드타워 코리더: 탄천 구간 도로는 terrain.build 전에 annotate 해야 다리 구조물이 같이 생긴다
 let ride = null; // [ride] mountRide (코리더가 있을 때만)
-const corridor = corridorData ? createCorridor({ scene, corridorData, terrain, world, renderer, overlay, params, getSimTime: () => corridorClock.simTime() }) : null;
+const liveBus = corridorDir && corridorData?.gangnam && liveBusEnabled() ? createLiveBusFeed() : null; // [livebus]
+const corridor = corridorData ? createCorridor({ scene, corridorData, terrain, world, renderer, overlay, params, getSimTime: () => corridorClock.simTime(), liveBus }) : null;
 if (terrain) { terrain.build(scene, world, overlay); world.groundY = terrain.getGroundHeight; world.vehicleY = terrain.getVehicleHeight; }
 if (corridor) {
   corridor.afterTerrain();
@@ -367,7 +372,15 @@ const gangnamNight = corridorDir && corridorData?.gangnam && gangnamNightEnabled
 const gangnamAds = corridorDir && corridorData?.gangnam && gangnamAdsEnabled()
   ? createGangnamBillboards({ scene, terrain, baseUrl: import.meta.env.BASE_URL, mobile: gnMobile })
   : null;
-const gangnamNpc = corridor && corridorDir && corridorData?.gangnam && gangnamNpcEnabled()
+let gangnamNpc = null;
+const gangnamNightlife = corridorDir && corridorData?.gangnam && gangnamNightlifeEnabled()
+  ? createGangnamNightlife({
+    scene, terrain, url: import.meta.env.BASE_URL + corridorDir + 'gangnam/nightlife.json', mobile: gnMobile,
+    followNpc: !!(corridor && corridorDir && corridorData?.gangnam && gangnamNpcEnabled()),
+    getNpcTraffic: () => gangnamNpc?.traffic || null,
+  })
+  : null; // [gangnam-nightlife]
+gangnamNpc = corridor && corridorDir && corridorData?.gangnam && gangnamNpcEnabled()
   ? mountGangnamNpc({
     scene, terrain, overlay, params, mobile: gnMobile, gangnam: corridorData.gangnam,
     baseUrl: import.meta.env.BASE_URL + corridorDir,
@@ -376,6 +389,18 @@ const gangnamNpc = corridor && corridorDir && corridorData?.gangnam && gangnamNp
     tileReady: (k) => corridor.tiles?.get?.(k)?.dState === 3,
   })
   : null; // [gangnam-npc]
+const gangnamStreet = corridorDir && corridorData?.gangnam && gangnamStreetEnabled()
+  ? createGangnamStreet({ scene, terrain, url: import.meta.env.BASE_URL + corridorDir + 'gangnam/street.json', mobile: gnMobile })
+  : null; // [gangnam-street]
+const gangnamBrt = corridorDir && corridorData?.gangnam && gangnamBrtEnabled()
+  ? createGangnamBrt({
+    scene, terrain, overlay,
+    url: import.meta.env.BASE_URL + corridorDir + 'gangnam/street.json',
+    mobile: gnMobile,
+    getNpc: () => gangnamNpc,
+    liveBus,
+  })
+  : null; // [gangnam-brt]
 const st = data.station;
 const homeStationLabel = overlay.add({
   cls: 'label station',
@@ -2842,6 +2867,10 @@ function frame() {
   if (gangnamNight) { const c = cam.mode === 'follow' ? P : sun.target.position; gangnamNight.update(dt, c.x, c.z); } // [gangnam-night]
   if (gangnamAds) { const c = cam.mode === 'follow' ? P : sun.target.position; gangnamAds.update(dt, c.x, c.z); } // [gangnam-ads]
   if (gangnamNpc) { const c = cam.mode === 'follow' ? P : sun.target.position; gangnamNpc.update(dt, c.x, c.z, cam.mode === 'follow' ? cam.yaw : ov.yaw); } // [gangnam-npc]
+  if (gangnamNightlife) { const c = cam.mode === 'follow' ? P : sun.target.position; gangnamNightlife.update(dt, c.x, c.z); } // [gangnam-nightlife]
+  if (gangnamStreet) { const c = cam.mode === 'follow' ? P : sun.target.position; gangnamStreet.update(dt, c.x, c.z); } // [gangnam-street]
+  if (liveBus) { const c = cam.mode === 'follow' ? P : sun.target.position; liveBus.tick(dt, { x: c.x, z: c.z }); } // [livebus]
+  if (gangnamBrt) { const c = cam.mode === 'follow' ? P : sun.target.position; gangnamBrt.update(dt, c.x, c.z); } // [gangnam-brt]
   world.shops?.update(dt, P.x, P.z); // [shops] 주변 70m 상호 간판 풀
   const viewYaw = cam.mode === 'follow' ? cam.yaw : ov.yaw;
   const moveYaw = player.rotation.y + (bikes.riding && bikes.speed < -0.2 ? Math.PI : 0);
@@ -2871,7 +2900,7 @@ requestAnimationFrame(frame);
 // 스크린샷/디버그용 훅
 window.__jj = {
   perfmem: perfMem, // [perf-memory]
-  ready: true, region, tower, renderer, corridor, schoolZone: corridor?.schoolZone || null, playgrounds, streetlights, pangyoLamps, migeumLamps, gangnamNight, gangnamAds, gangnamNpc, // [corridor] [schoolzone] [playgrounds] [streetlights] [gangnam-night] [gangnam-npc]
+  ready: true, region, tower, renderer, corridor, schoolZone: corridor?.schoolZone || null, playgrounds, streetlights, pangyoLamps, migeumLamps, gangnamNight, gangnamAds, gangnamNightlife, gangnamNpc, gangnamStreet, gangnamBrt, liveBus, // [corridor] [schoolzone] [playgrounds] [streetlights] [gangnam-night] [gangnam-nightlife] [gangnam-npc] [gangnam-street] [gangnam-brt] [livebus]
   placeCaption: (x, z) => placeCaption(x, z, placeList, corridor?.bounds?.islands), // [gangnam-night]
   bungeo, // [bungeo]
   launch, roadster, trucks, bike: adminBike, giftRides, inventory, data, world, npcs, transit, camera, cam, ov, setMode, terrain, taxis, jzTraffic, police, weather: atmosphere, umbrellas, dogPark, strayCats, // [terrain] [taxi] [roadster] [tower] [launch] [truck] [bike] [roadbike] [inventory]
