@@ -483,7 +483,7 @@ export function buildConcourse({ exits, groups, entryId, look, renderer, onToast
   npcs.filter((n) => !n.fixed).forEach((n, i) => (i < 11 ? startNpc(n, true) : (n.route = null, n.wait = 1 + i)));
 
   // 개찰구: 근처에 사람이 있으면 열림
-  const tapLane = (i, who) => {
+  const tapLane = (i, who, dir = 'in') => {
     const ln = lanes[i];
     // 대합실(z<0)에서 처음 닿으면 승차, 유료 구역에서 닿으면 하차. 하차 요금은 승차에 포함.
     if (ln.open < 0.5 && ln.t <= 0) { ln.ok = 0.9; if (who === 'me') onToast?.('tap', ln, { gate: gateTapSide(me.position.z) }); }
@@ -537,11 +537,11 @@ export function buildConcourse({ exits, groups, entryId, look, renderer, onToast
     cam.yaw += dy; cam.pitch = THREE.MathUtils.clamp(cam.pitch + dp, -0.6, 1.3); cam.dist = THREE.MathUtils.clamp(cam.dist * (1 + dz), 2.2, 11);
     const p = me.position;
     let { f, s, run } = allowMove ? axes : { f: 0, s: 0, run: false };
-    speed = 0; let towardWell = false;
+    speed = 0; let towardWell = false, mz = 0; // mz 는 개찰구 태그(아래 tapLane)에서도 씀 — if (f||s) 안에 let 하면 개찰구 앞에서 ReferenceError 로 게임이 멈춤
     if ((f || s) && me.userData.sit) me.userData.sit = ''; // [subway-pose] 걸으면 일어남 (바깥과 같게)
     if (f || s) {
       const fx = -Math.sin(cam.yaw), fz = -Math.cos(cam.yaw), rx = -fz, rz = fx;
-      let mx = fx * f + rx * s, mz = fz * f + rz * s; const L = Math.hypot(mx, mz); mx /= L; mz /= L;
+      let mx = fx * f + rx * s; mz = fz * f + rz * s; const L = Math.hypot(mx, mz); mx /= L; mz /= L;
       const sp = (run ? 7.5 : 4.0) * Math.min(1, Math.hypot(f, s)), step = sp * dt;
       // 0.1m 씩 나눠 움직여 벽·차단선에 딱 붙는다 (느린 프레임에서 한 번에 0.4m 씩 뛰면 계단 입구 띠(0.25m)를 건너뛰고 멈춤)
       const nSub = Math.max(1, Math.ceil(step / 0.1)), sx = (mx * step) / nSub, sz = (mz * step) / nSub;
@@ -555,7 +555,7 @@ export function buildConcourse({ exits, groups, entryId, look, renderer, onToast
       const want = Math.atan2(mx, mz); me.rotation.y += Math.atan2(Math.sin(want - me.rotation.y), Math.cos(want - me.rotation.y)) * Math.min(1, dt * 12);
       speed = sp;
     }
-    const li = laneAt(p.x, p.z, 1.3); if (li >= 0) tapLane(li, 'me');
+    const li = laneAt(p.x, p.z, 1.3); if (li >= 0) tapLane(li, 'me', mz < -0.2 ? 'out' : 'in');
     if (self) { me.userData.emote = speed > 0 ? '' : (self.emote || ''); me.userData.afk = !!self.afk; me.userData.jumpY = me.userData.sit ? 0 : (self.jy || 0); } // [zone] 리액션·자리비움·점프도 안에서 보이게
     animateAvatar(me, speed, dt);
     for (const ln of lanes) { ln.t -= dt; ln.ok -= dt; const want = ln.t > 0 ? 1 : 0; ln.open += Math.sign(want - ln.open) * Math.min(Math.abs(want - ln.open), dt * 4); }

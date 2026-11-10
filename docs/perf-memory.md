@@ -56,6 +56,8 @@ if (corridor.regions && corridorData.migeum?.meta?.boxes) {
 
 NPC 처럼 `extraCrowd` 훅을 쓰는 것은 `lazyExtraCrowd(() => createMigeumNpc(...))` 로 감싸 `pangyo-npc` 와 같은 방식으로 등록한다. 새 정적 소품 그룹은 이름을 붙여 `MERGE_TARGETS` 에 추가하면 병합된다(움직이는 부분엔 `userData.perfDynamic = true`).
 
+강남(9칸 섬) 타일은 코리더와 같이 거리로만 받는다(`?gangnam=0` 이면 index 도 안 받는다). 모바일은 강남 박스 안에서만 상세 450m / LOD 1500m (`corridor/index.js` `qualityAt`). 본선 이동 범위 숫자는 그대로이고, 강남 박스는 `bounds.islands` 로만 붙는다.
+
 ## 테스트
 
 `npm run perf:test` — 플래그, hide, 지역 레지스트리, lazy crowd, 병합, 인스턴서, propCull 단위 테스트.

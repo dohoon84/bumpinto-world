@@ -226,6 +226,10 @@ function reseed(drop, cam, snow) {
   drop.on = true;
 }
 
+// [gangnam-night] 강남 박스·밤만 1보다 작게. 그 밖은 1(정자 등 그대로).
+let nightDim = () => 1;
+export function setNightDim(fn) { nightDim = typeof fn === 'function' ? fn : () => 1; }
+
 export function createAtmosphere({ scene, sun, hemi, skyGeo, getMode, clock, region = null }) {
   const rLat = region?.lat ?? DEFAULT_LAT;
   const rLon = region?.lon ?? DEFAULT_LON;
@@ -299,6 +303,12 @@ export function createAtmosphere({ scene, sun, hemi, skyGeo, getMode, clock, reg
     topC.lerp(grey, greyAmt);
     botC.lerp(grey, greyAmt * 0.75);
     if (kind === 'fog') { topC.lerp(grey, 0.35); botC.lerp(grey, 0.45); }
+    const dim = nightDim();
+    if (dim < 1) {
+      const deep = new THREE.Color('#040814');
+      topC.lerp(deep, 1 - dim);
+      botC.lerp(deep, (1 - dim) * 0.72);
+    }
     paintSky(topC, botC);
     fogC.copy(botC).lerp(new THREE.Color('#d6eef8'), dayK * (1 - cloud) * 0.35);
     scene.fog.color.copy(fogC);
@@ -315,7 +325,7 @@ export function createAtmosphere({ scene, sun, hemi, skyGeo, getMode, clock, reg
     sun.color.copy(tmpB.set('#b7c6dc')).lerp(tmpA.set(duskK > 0.35 ? '#ffb36b' : '#fff4e0'), dayK);
     if (cloud > 0.45 && dayK > 0.2) sun.color.lerp(grey, cloud * 0.55);
     sun.castShadow = alt > 0.06;
-    hemi.intensity = (0.46 + 1.14 * dayK) * (1 - cloud * 0.22);
+    hemi.intensity = (0.46 + 1.14 * dayK) * (1 - cloud * 0.22) * dim;
     hemi.color.copy(topC).lerp(tmpB.set('#d5deea'), 0.72).lerp(tmpA.set('#ffffff'), dayK * 0.55);
     hemi.groundColor.set('#1a1612').lerp(tmpA.set('#c9b99a'), dayK);
 

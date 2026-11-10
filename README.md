@@ -255,6 +255,27 @@ curl "https://jeongja-bus-proxy.<계정>.workers.dev/seoul/route-list?keyword=34
 # 로컬: server/bus-proxy/.dev.vars 에 DATA_GO_KR_KEY=... (커밋 금지) 후 npm run bus-proxy → ?proxy=local
 ```
 - 오프라인 테스트(네트워크·키 불필요): `npm run corridor:test` (탄천 합치기 · Worker 목업 · 실시간 어댑터 목업).
+
+### 강남 실시간 버스 도착 (jeongja-phone `/bus/arrivals`)
+
+강남대로 중앙차로(ARS 22009·22010·22011·22012·22014)와 주변 정류소, 그리고 9004가 서는 강남역5번출구(22654)·신논현역.유화빌딩(22408)은
+`server/phone` Worker 가 서울시·경기도 도착정보를 합쳐 JSON 으로 돌려 줍니다. 키는 브라우저에 없고 Worker secret `SEOUL_BUS_KEY` 만 씁니다
+(공공데이터포털 일반 인증키 Decoding 값. 서울시 버스 API 활용신청이 되어 있어야 HTTP `ws.bus.go.kr` 가 응답합니다. 같은 키로 경기도 HTTPS API 도 호출합니다).
+
+```bash
+cd server/phone
+npx wrangler secret put SEOUL_BUS_KEY    # Decoding 키를 붙여 넣음
+# 배포는 도훈님이 직접 (이 저장소에서 배포하지 않음):
+#   npm run deploy:phone
+curl -sS "https://api.bumpinto.world/bus/arrivals?stop=22010"
+```
+
+- 캐시 25초, CORS 는 기존 phone worker 와 같음. 게임에 있는 정류소 번호만 받습니다.
+- 서울시 API(`http://ws.bus.go.kr/api/rest/stationinfo/getStationByUid`)는 HTTP 전용이라 브라우저/개발 박스가 아니라 Worker 에서만 호출합니다.
+- 경기도 API(`https://apis.data.go.kr/6410000/busarrivalservice/v2/getBusArrivalListv2`)로 광역(1151·9004·9404 등)을 합칩니다.
+- 실패(키 없음·한도·점검)면 게임은 시간표 근사(`다음 19:15`)와 시뮬 버스를 그대로 씁니다. `?livebus=0` 이면 실시간 요청 자체를 하지 않습니다.
+- 오프라인 테스트: `node scripts/test-bus-arrivals.mjs`
+
 - 기본 프록시 주소에 새 경로가 배포되기 전까지 코리더 실시간 요청은 404 → 조용히 시뮬레이션입니다.
 
 ### 야간 연출 (코리더 전용)
@@ -343,5 +364,7 @@ export default {
 - 지도 데이터 © OpenStreetMap contributors, [ODbL](https://www.openstreetmap.org/copyright). 화면 오른쪽 아래에 표시됩니다. `public/jeongja.json`은 ODbL 파생 데이터베이스입니다.
 - 1층 상가(`public/jeongja-shops.json`): 소상공인시장진흥공단 상가(상권)정보 ([공공데이터포털 15083033](https://www.data.go.kr/data/15083033/fileData.do), 이용허락범위 제한 없음)의 층정보=1 점포를 `public/jeongja.json` 건물에 10 m 이내로 붙인 값이고, 상가정보가 없는 건물만 OSM POI로 채웁니다. OSM과 합쳐진 파생 데이터라 ODbL도 같이 따릅니다. 화면 오른쪽 아래 출처에 표시되며 `?shops=0`으로 끌 수 있습니다. 다시 만드는 법은 `scripts/ground-floor-shops.mjs` 머리말 참고 (원본 CSV는 저장소에 넣지 않습니다).
 - 건물 외벽·지붕 색(`public/jeongja-colours.json`, `scripts/building-colours.mjs`): 브이월드 GIS건물통합정보(국토교통부, 공공누리 제1유형 · 출처표시)의 구조·주용도·사용승인일로 **추정**한 색입니다(외벽 마감재 필드는 공공데이터에 없음). 화면 오른쪽 아래에 "건물 속성: 브이월드"(코리더가 켜져 있으면 "건물 높이·속성: 브이월드")로 표시됩니다. 네이버 그린팩토리 3동만 사진(Wikimedia Commons "Naver HQ.jpg" revi CC BY 2.0 KR, "서울 톨게이트 입갤 전에 NHN 본사 ^2 - panoramio.jpg" 이명민 CC BY 3.0)에서 읽은 색을 수동 지정했습니다(색 값만 사용, 이미지는 쓰지 않음). `?colours=0`이면 꺼집니다.
+- 강남 9칸 건물 높이(`public/corridor/gangnam/`, `data/gangnam_vworld_heights.json`): OSM `height` 가 없는 동만 국토교통부 브이월드 GIS건물통합정보(`hg`, 없으면 지상층수×3.2m)로 채웁니다. 건물 높이: 국토교통부 브이월드 GIS건물통합정보 (공공누리 제1유형: 출처표시), https://www.data.go.kr/data/15083092/fileData.do. 원본 타일 캐시는 저장소에 넣지 않습니다. 화면 오른쪽 아래(강남을 켠 경우)와 `docs/gangnam-heights.md` 에 같은 출처를 적습니다. `?gangnam=0` 이면 강남 타일을 읽지 않습니다.
+- 버스 노선·정류소: 서울특별시(공공데이터포털). 강남역 일대 10개 노선 시간표는 서울시 T Data 정적 수집(2026-11-08, 출처표시 BY)이고, 정류장 안내판과 BRT 버스는 기본으로 서울시 버스도착정보(`getStationByUid`)와 경기도 버스도착정보를 phone worker `GET /bus/arrivals?stop=` 경유로 보여 줍니다(`?livebus=0` 이면 시간표 근사). 경부고속도로는 OpenStreetMap 선형(© OpenStreetMap contributors, ODbL)으로 판교IC 끝에서 양재IC·강남대로를 거쳐 강남역까지 잇습니다. `?gangnambus=0` 또는 `?gangnam=0` 이면 요청하지 않습니다. `?expressbus=0` 이면 9004·1151과 본선 버스전용차로만 끕니다. 버스 노선·정류소 정보: 경기도 (공공데이터포털). 9004·1151은 경기도 버스정보 API 정적 수집(2026-11-08, 공공누리 제1유형)이고 경부 본선 1차로(파란 차선·버스전용 노면 글자)를 달립니다. 강남 중앙차로·강남역5번출구·신논현역.유화빌딩 안내는 같은 `/bus/arrivals` 로 실시간 도착을 붙입니다. 서울요금소는 궁내동 공개 좌표에 규칙으로 배치했고(`?seoultg=0` 이면 끔), 판교→강남 광역버스는 판교IC 북쪽으로 합류해 이 요금소를 지나지 않습니다. 이 노선이 실제로 지나는 곳은 판교IC의 판교TG(OSM 지붕 윤곽, 하이패스/일반/버스 글자 표지, 로고 없음)입니다. 판교IC–양재IC 사이 청계산·인릉산 기슭은 AWS Terrain Tiles(SRTM 계열 공개 DEM)로 본선 중앙값 기준 상대 높이를 올렸고, 본선은 4+4 차로·중앙분리대·갓길로 깔며, 청계산입구·원지동 주택가 쪽에 연속 방음벽을 둡니다. 청계산입구 일대 건물은 OSM 윤곽·층고(ODbL)와 게임과 같은 창 텍스처로 올리고 신분당선 출입구 캐노피를 곁들입니다(`?cgterrain=0` 이면 끔).
 - three.js (MIT).
 - 노선 유형: 경기버스정보(gbis.go.kr). 버스 도색 색상 출처는 위 "버스 도색 매핑과 출처" 참고. 실시간 데이터(사용 시): 공공데이터포털(data.go.kr) 경기도 버스 API, 공공누리 조건 확인 필요.

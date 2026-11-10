@@ -28,6 +28,7 @@ import { isEn, tr } from '../i18n.js';
 import { encodeZone } from '../net/zones.js';
 import { emitTransit } from '../econHook.js'; // [econ-ui] trigger point
 import { routeMapEnabled, mountRouteMapOverlay } from './routeMap.js';
+import { chooserBadgeCss, chooserBadgeSpan } from './chooserBadge.js';
 import * as THREE from 'three';
 
 export const STATION_ZONE = 'jeongja-station'; // [zone] 정자역 대합실. 다른 역은 stationZone(id) (src/net/zones.js)
@@ -67,10 +68,10 @@ const CSS = `
 #subway-chooser .sc-h{background:#FFC20E;color:#111;padding:12px 16px;font-weight:800;font-size:17px;display:flex;justify-content:space-between;align-items:baseline}
 #subway-chooser .sc-h small{font-weight:600;font-size:12px}
 #subway-chooser ul{list-style:none;margin:0;padding:8px;max-height:min(62vh,560px);overflow-y:auto}
-#subway-chooser li{display:flex;gap:12px;align-items:center;padding:8px 10px;border-radius:10px;cursor:pointer;border:2px solid transparent}
+#subway-chooser li{display:flex;gap:12px;align-items:center;padding:8px 10px;border-radius:10px;cursor:pointer;border:2px solid transparent;overflow:hidden}
 #subway-chooser li.on{background:#2b323b;border-color:#FFC20E}
 #subway-chooser li:hover{background:#262c34}
-#subway-chooser .n{flex:0 0 38px;height:38px;border-radius:7px;background:#FFC20E;color:#111;font:900 24px/38px system-ui;text-align:center}
+${chooserBadgeCss()}
 #subway-chooser .t{flex:1;min-width:0}
 #subway-chooser .t b{font-size:15px}
 #subway-chooser .t div{color:#adb5bd;font-size:12.5px}
@@ -185,6 +186,13 @@ export function mountSubway({ scene, overlay, data, world, terrain, renderer, ge
   let inside = null; // 지금 방: buildConcourse · buildPlatform · buildTrain 결과 (kind, zone, scene, camera, player, update, render, dispose)
   let mod = null;    // 지연 로드된 concourse 모듈
   const loadMod = () => (mod ? Promise.resolve(mod) : import('./concourse.js').then((m) => (mod = m)));
+  // [gunder] 강남역은 지하상가 장면을 쓴다. ?gunder=0 이면 다른 역과 같은 대합실 틀.
+  let underMod = null;
+  const gunderOn = params?.get?.('gunder') !== '0';
+  const useUnder = () => gunderOn && cur.def.id === 'gangnam';
+  const loadUnder = () => (underMod ? Promise.resolve(underMod) : import('../world/gangnamUnderground.js').then((m) => (underMod = m)));
+  const loadHall = () => (useUnder() ? loadUnder() : loadMod());
+  const hallReady = () => (useUnder() ? !!underMod : !!mod);
   let platMod = null, trainMod = null; // [subway] 2단계: 승강장·열차 (각각 지연 로드)
   const loadPlat = () => (platMod ? Promise.resolve(platMod) : import('./platform.js').then((m) => (platMod = m)));
   const loadTrain = () => (trainMod ? Promise.resolve(trainMod) : import('./train.js').then((m) => (trainMod = m)));
@@ -208,7 +216,7 @@ export function mountSubway({ scene, overlay, data, world, terrain, renderer, ge
         const tag = e.id === state.entry ? tr('들어온 출구', 'came in here') : (here && here.exits.includes(e) ? tr('가까운 출구', 'nearest') : '');
         const dir = en ? e.dir.en : e.dir.ko;
         const hints = e.hints.length ? e.hints.join(' · ') + tr(' 방면', '') : '';
-        return `<li data-i="${i}" class="${i === state.pick ? 'on' : ''}"><span class="n">${e.ref || '·'}</span><span class="t"><b>${exitLabel(e, en)}</b><div>${dir}${hints ? ' · ' + hints : ''}</div></span>${tag ? `<span class="tag">${tag}</span>` : ''}</li>`;
+        return `<li data-i="${i}" class="${i === state.pick ? 'on' : ''}">${chooserBadgeSpan(e.ref || '·', { kind: 'exit' })}<span class="t"><b>${exitLabel(e, en)}</b><div>${dir}${hints ? ' · ' + hints : ''}</div></span>${tag ? `<span class="tag">${tag}</span>` : ''}</li>`;
       }).join('')
     }</ul><div class="sc-f">${tr('↑↓ 또는 숫자로 고르고 Enter · Esc 닫기', '↑↓ or number, Enter to go · Esc to close')}</div>`;
     chooser.querySelectorAll('li').forEach((li) => { li.onclick = () => { const i = +li.dataset.i; cur.state.move(i - cur.state.pick); go(); }; });
@@ -217,7 +225,7 @@ export function mountSubway({ scene, overlay, data, world, terrain, renderer, ge
   function renderTransfer() {
     const L = LINES[tpick.line], en = isEn();
     chooser.innerHTML = `<div class="sc-h" style="background:${L.color};color:#fff">${tr('갈아타기 · 방면 고르기', 'Transfer · choose direction')}<small>${en ? L.en : L.ko}</small></div><ul>${
-      L.dirs.map((d, i) => `<li data-i="${i}" class="${i === tpick.pick ? 'on' : ''}"><span class="n" style="background:${L.color};color:#fff;font-size:15px">${L.short}</span><span class="t"><b>${en ? d.en : d.ko}</b><div>${en ? d.ko : d.en}</div></span></li>`).join('')
+      L.dirs.map((d, i) => `<li data-i="${i}" class="${i === tpick.pick ? 'on' : ''}">${chooserBadgeSpan(L.short, { kind: 'line', bg: L.color, color: '#fff' })}<span class="t"><b>${en ? d.en : d.ko}</b><div>${en ? d.ko : d.en}</div></span></li>`).join('')
     }</ul><div class="sc-f">${tr('↑↓ 고르고 Enter · Esc 닫기', '↑↓ then Enter · Esc to close')}</div>`;
     chooser.querySelectorAll('li').forEach((li) => { li.onclick = () => { tpick.pick = +li.dataset.i; goTransfer(); }; });
   }
@@ -237,7 +245,7 @@ export function mountSubway({ scene, overlay, data, world, terrain, renderer, ge
     fade.querySelector('.sf-t').textContent = e.exit.ref ? tr(`${n.name}역 ${e.exit.ref}번 출구`, `${n.nameEn} Stn. · Exit ${e.exit.ref}`) : stName(n);
     setBadges(n);
     setHint('');
-    loadMod(); // 페이드 동안 미리 받기
+    loadHall(); // 페이드 동안 미리 받기
     onEnter?.(e);
     return true;
   }
@@ -322,7 +330,7 @@ export function mountSubway({ scene, overlay, data, world, terrain, renderer, ge
     return swapTo(tr(`${cur.theme.name}역 · ${L.short} ${L.dirs[dir].ko}`, `${cur.theme.nameEn} · ${L.en} ${L.dirs[dir].en}`), () => makePlatform(line, dir), { lines: [L] });
   }
   function toConcourse(spawn) {
-    return swapTo(tr(`${cur.theme.name}역 대합실`, `${cur.theme.nameEn} Stn. concourse`), () => loadMod().then(() => makeConcourse(spawn)));
+    return swapTo(tr(`${cur.theme.name}역 대합실`, `${cur.theme.nameEn} Stn. concourse`), () => loadHall().then(() => makeConcourse(spawn)));
   }
   function toTrain(board) {
     const pl = inside, L = LINES[pl.line];
@@ -354,7 +362,7 @@ export function mountSubway({ scene, overlay, data, world, terrain, renderer, ge
     if (subT > 0 && (subT -= dt) <= 0) { if (voice.active) subT = 0.25; else sub.style.opacity = '0'; } // 말하는 동안은 자막 유지
     for (const ev of state.tick(dt)) {
       if (ev === 'load') {
-        if (!mod) { state._waitLoad = true; }
+        if (!hallReady()) { state._waitLoad = true; }
         else buildInside();
       } else if (ev === 'unload') {
         const e = cur.byId?.get(state.target) || cur.byId?.get(state.entry);
@@ -365,9 +373,10 @@ export function mountSubway({ scene, overlay, data, world, terrain, renderer, ge
         emitTransit({ mode: 'subway', phase: 'leave' }); // [econ-ui] 방문 끝 — 다음 승차는 새 요금
         setHint(''); sub.style.opacity = '0'; voice.cancel();
         onExit?.(e);
+        fareRide = null;
       }
     }
-    if (state._waitLoad && mod) { state._waitLoad = false; buildInside(); }
+    if (state._waitLoad && hallReady()) { state._waitLoad = false; buildInside(); }
     if (swap) tickSwap(dt);
     const sa = swapAlpha();
     fade.style.opacity = String(sa != null ? sa : state.phase === 'arriving' && !inside ? 1 : state.fadeAlpha());
@@ -396,8 +405,11 @@ export function mountSubway({ scene, overlay, data, world, terrain, renderer, ge
     inside.render();
     return true;
   }
+  let fareRide = null;
+  const fareWhere = () => (cur.theme?.name ? `${cur.theme.name}역` : '');
   function makeConcourse(spawn = null) {
-    const c = mod.buildConcourse({
+    const build = (useUnder() && underMod?.buildGangnamUnderground) ? underMod.buildGangnamUnderground : mod.buildConcourse;
+    const c = build({
       exits: cur.exits, groups: cur.groups, entryId: cur.state.entry, look: getLook?.(), renderer, theme: cur.theme, board: feed, spawn,
       onToast: (kind, _ln, info) => { if (kind === 'tap') { beep(); say(tr('삑 — 교통카드 태그', 'Beep — card tapped'), 1.3); emitTransit({ mode: 'subway', phase: 'tap', gate: info?.gate === 'out' ? 'out' : 'in' }); } }, // [econ-ui] trigger point
     });

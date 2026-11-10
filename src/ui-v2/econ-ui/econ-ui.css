@@ -208,7 +208,8 @@ body.ui-v2:not(.mobile) .ve-pay { display: flex; align-items: center; gap: 16px;
 body.ui-v2:not(.mobile) .ve-pay .ve-col { flex: 1; }
 body.ui-v2:not(.mobile) .ve-pay .v2-tag { align-self: flex-start; }
 body.ui-v2:not(.mobile) .ve-amtrow { align-items: baseline; gap: 10px; }
-body.ui-v2:not(.mobile) .ve-amt-big { font-size: 28px; font-weight: 900; color: #ff8a80; }
+body.ui-v2:not(.mobile) .ve-amt-center { justify-content: center; width: 100%; }
+body.ui-v2:not(.mobile) .ve-amt-big { font-size: 28px; font-weight: 900; color: #ff8a80; text-align: center; }
 body.ui-v2:not(.mobile) .ve-amt-big.free { color: #7ff0c8; }
 body.ui-v2:not(.mobile) .ve-after { font-size: 13px; color: var(--v2-sub); }
 body.ui-v2:not(.mobile) .ve-beep { position: relative; flex: none; display: grid; place-items: center; width: 88px; height: 88px; color: var(--c); }

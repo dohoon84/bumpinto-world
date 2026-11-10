@@ -7,7 +7,7 @@
 import { el, esc, ICON, headHtml, tagHtml, guestChip } from './kit.js';
 import { setTop, backChip, liveChip, langChip } from './topbar.js';
 import { regionSummary, stationLabel, readLastStation } from './data.js';
-import { OPEN_REGIONS, UPCOMING_REGIONS, getRegion, countryOf } from '../regions/index.js';
+import { OPEN_REGIONS, UPCOMING_REGIONS, getRegion, countryOf, regionBlurb } from '../regions/index.js';
 import { CORRIDOR_STATION_IDS, CORRIDOR_STATION_COUNT, corridorName, layoutCorridorMap, OPEN_BRANCH_IDS } from '../corridor/globeCorridor.js';
 import { lotteSiteLabel } from '../corridor/lotteOpening.js';
 import { isEn, tr, onLangChange } from '../i18n.js';
@@ -72,7 +72,7 @@ function mountGate({ root, corridorGlobe, enter, focus, teardown }, onBackToStar
       out.push({ c, open: !isSoon, html: card({ name: en ? (r.enName || r.name) : r.name, desc, open: !isSoon, colors: c === 'US' ? STRIP.us : STRIP.kr, attr: `data-enter-region="${r.id}"`, soonText: isSoon ? '11:00 KST' : '' }) });
     }
     if (cor) for (const r of UPCOMING_REGIONS.filter((x) => OPEN_BRANCH_IDS.has(x.id))) {
-      out.push({ c: countryOf(r), open: true, html: card({ name: en ? (r.enName || r.name) : r.name, desc: en ? (r.enDesc || r.desc) : r.desc, open: true, colors: STRIP.branch, attr: `data-enter-at="${r.id}"` }) });
+      out.push({ c: countryOf(r), open: true, html: card({ name: en ? (r.enName || r.name) : r.name, desc: regionBlurb(r, en, true), open: true, colors: STRIP.branch, attr: `data-enter-at="${r.id}"` }) });
     }
     for (const r of UPCOMING_REGIONS.filter((x) => !(cor && (CORRIDOR_STATION_IDS.has(x.id) || OPEN_BRANCH_IDS.has(x.id))))) {
       out.push({ c: countryOf(r), open: false, html: card({ name: en ? (r.enName || r.name) : r.name, desc: en ? (r.enDesc || r.desc) : r.desc, open: false, attr: `data-region="${r.id}" role="button" tabindex="0"` }) });
@@ -104,6 +104,31 @@ function mountGate({ root, corridorGlobe, enter, focus, teardown }, onBackToStar
     const avail = (root.clientHeight || innerHeight) - 58 - 12;
     return Math.max(0.9, Math.min(1.5, (avail - 300 - 38) / 430));
   }
+  function pickerMapWidth() {
+    const w = picker.clientWidth;
+    if (!w) return 560;
+    const cs = getComputedStyle(picker);
+    const pad = (parseFloat(cs.paddingLeft) || 0) + (parseFloat(cs.paddingRight) || 0);
+    return Math.max(260, Math.round(w - pad));
+  }
+  // 긴 이름표(청계산입구 등)가 패널 밖으로 잘리지 않게 맵 안쪽으로 민다.
+  function fitMapLabels(map, W) {
+    if (!map || !W) return;
+    const PAD = 8;
+    map.querySelectorAll('.v2-stn, .v2-lm').forEach((el) => {
+      const width = el.getBoundingClientRect().width;
+      let left = el.offsetLeft;
+      if (left < PAD) {
+        el.style.right = 'auto';
+        el.style.left = `${PAD}px`;
+        left = PAD;
+      }
+      if (left + width > W - PAD) {
+        el.style.right = 'auto';
+        el.style.left = `${Math.max(PAD, W - PAD - width)}px`;
+      }
+    });
+  }
   function stationById(id) { return allStations().find((x) => (x.live ? 'jeongja' : x.id) === id); }
   function selectedRow(id) {
     const s = stationById(id) || BASE.items[0];
@@ -114,14 +139,22 @@ function mountGate({ root, corridorGlobe, enter, focus, teardown }, onBackToStar
       <button type="button" class="v2-btn primary" data-v2-at="${sid}">${esc(tr(`${label}에 입장`, `Enter ${label}`))}</button></div>`;
   }
   function renderPicker() {
-    const en = isEn(), k = pickK(), W = 560, ox = (W - 320 * k) / 2, oy = 14, H = Math.round(430 * k + oy * 2 + 10);
+    const en = isEn(), k = pickK(), W = pickerMapWidth(), ox = (W - 320 * k) / 2, oy = 14, H = Math.round(430 * k + oy * 2 + 10);
     const P = (s) => [ox + s.dx * k, oy + s.dy * k];
     const sel = hot || defaultAt;
     let seg = '';
+    const byId = new Map([...BASE.items, ...BASE.branches].map((st) => [st.id, st]));
     for (const b of BASE.branches) {
       const shared = (b.from.lines || []).find((l) => (b.lines || []).includes(l)) || (b.lines || [])[0];
       const [x1, y1] = P(b.from), [x2, y2] = P(b);
       seg += `<path d="M${x1.toFixed(1)} ${y1.toFixed(1)} L${x2.toFixed(1)} ${y2.toFixed(1)}" stroke="${LINE_COLOR[shared] || '#9eb4c6'}" stroke-width="7" fill="none" stroke-linecap="round"/>`;
+      for (const id of b.links || []) {
+        const t = byId.get(id);
+        if (!t) continue;
+        const link = (b.lines || []).find((l) => (t.lines || []).includes(l)) || (b.lines || [])[0];
+        const [lx1, ly1] = P(b), [lx2, ly2] = P(t);
+        seg += `<path d="M${lx1.toFixed(1)} ${ly1.toFixed(1)} L${lx2.toFixed(1)} ${ly2.toFixed(1)}" stroke="${LINE_COLOR[link] || '#9eb4c6'}" stroke-width="7" fill="none" stroke-linecap="round"/>`;
+      }
     }
     for (let i = 1; i < BASE.items.length; i++) {
       const a = BASE.items[i - 1], b = BASE.items[i];
@@ -131,16 +164,30 @@ function mountGate({ root, corridorGlobe, enter, focus, teardown }, onBackToStar
     }
     const stations = [...BASE.items, ...BASE.branches];
     const colX = (side) => ox + (side === 'left' ? BASE.colL : BASE.colR) * k;
-    const leaders = stations.map((s) => { const [x, y] = P(s); return `<path d="M${x.toFixed(1)} ${y.toFixed(1)} L${colX(s.side).toFixed(1)} ${y.toFixed(1)}" stroke="#ffffff" stroke-opacity=".28" stroke-width="1.5"/>`; }).join('');
+    const Ly = (s) => oy + ((s.labelDy ?? s.dy) * k);
+    const leaders = stations.map((s) => {
+      if (s.labelAt === 'dot' || s.pin === 'dot') return '';
+      const [x, y] = P(s);
+      return `<path d="M${x.toFixed(1)} ${y.toFixed(1)} L${colX(s.side).toFixed(1)} ${Ly(s).toFixed(1)}" stroke="#ffffff" stroke-opacity=".28" stroke-width="1.5"/>`;
+    }).join('');
     const dots = stations.map((s) => {
-      const [x, y] = P(s), id = s.live ? 'jeongja' : s.id, on = id === sel;
-      return `<circle data-dot="${id}" cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${on ? 9 : 6}" fill="${on ? '#ffe169' : '#ffffff'}" stroke="${on ? '#f5a200' : '#122033'}" stroke-width="${on ? 4 : 3}"/>`;
+      const [x, y] = P(s), id = s.live ? 'jeongja' : s.id, on = !s.pass && id === sel;
+      const fill = on ? '#ffe169' : (s.pass ? '#9eb4c6' : '#ffffff');
+      const stroke = on ? '#f5a200' : (s.pass ? '#6b7a88' : '#122033');
+      return `<circle ${s.pass ? '' : `data-dot="${id}" `}cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${on ? 9 : (s.pass ? 4.5 : 6)}" fill="${fill}" stroke="${stroke}" stroke-width="${on ? 4 : 3}"/>`;
     }).join('');
     const [lx, ly] = P(BASE.landmark);
     const lm = `<rect x="${(lx - 6).toFixed(1)}" y="${(ly - 6).toFixed(1)}" width="12" height="12" transform="rotate(45 ${lx.toFixed(1)} ${ly.toFixed(1)})" fill="#4cc9f0" stroke="#ffffff" stroke-width="2"/>`;
     const chips = stations.map((s) => {
-      const [, y] = P(s), id = s.live ? 'jeongja' : s.id, on = id === sel, left = s.side === 'left';
-      const pos = left ? `right:${(W - colX('left') + 4).toFixed(1)}px` : `left:${(colX('right') + 4).toFixed(1)}px`;
+      const id = s.live ? 'jeongja' : s.id, on = !s.pass && id === sel, left = s.side === 'left';
+      const [px, py] = P(s);
+      const y = (s.labelAt === 'dot' || s.pin === 'dot') ? py : Ly(s);
+      const pos = (s.labelAt === 'dot' || s.pin === 'dot')
+        ? `left:${(px + 10).toFixed(1)}px`
+        : (left ? `right:${(W - colX('left') + 4).toFixed(1)}px` : `left:${(colX('right') + 4).toFixed(1)}px`);
+      if (s.pass) {
+        return `<span class="v2-stn is-pass" style="${pos};top:${(y - 13).toFixed(1)}px"><b>${esc(en ? s.en : s.ko)}</b><small>${esc(tr('통과', 'pass'))}</small></span>`;
+      }
       return `<button type="button" class="v2-stn${on ? ' on' : ''}" data-v2-at="${id}" data-hot="${id}" style="${pos};top:${(y - 13).toFixed(1)}px"><b>${esc(en ? s.en : s.ko)}</b><small>${esc(en ? s.ko : s.en)}</small></button>`;
     }).join('');
     const site = lotteSiteLabel(en);
@@ -153,6 +200,7 @@ function mountGate({ root, corridorGlobe, enter, focus, teardown }, onBackToStar
       <div class="v2-map" style="width:${W}px;height:${H}px"><svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" aria-hidden="true">${leaders}${seg}${dots}${lm}</svg>${chips}${lmChip}</div>
       <div class="v2-sel-slot">${selectedRow(sel)}</div>
       <p class="v2-foot">${esc(tr('실제 역 위치(OpenStreetMap) 기준 · 역 이름을 누르면 그 역에서 시작', 'Real station positions (OpenStreetMap) · click a station to start there'))}</p>`;
+    fitMapLabels(picker.querySelector('.v2-map'), W);
   }
   function renderMini() {
     const s = sum();
@@ -164,6 +212,7 @@ function mountGate({ root, corridorGlobe, enter, focus, teardown }, onBackToStar
 
   function setHot(id) {
     if (!id || hot === id || performance.now() - openedAt < 400) return;
+    if (stationById(id)?.pass) return;
     hot = id;
     picker.querySelectorAll('[data-hot]').forEach((b) => b.classList.toggle('on', b.dataset.hot === id));
     picker.querySelectorAll('[data-dot]').forEach((c) => {
@@ -195,8 +244,8 @@ function mountGate({ root, corridorGlobe, enter, focus, teardown }, onBackToStar
     view = 'station';
     hot = null;
     openedAt = performance.now();
-    renderPicker(); renderMini();
     world.hidden = true; picker.hidden = false; mini.hidden = false;
+    renderPicker(); renderMini();
     root.classList.add('v2-view-station');
     if (!corridorGlobe.isOpen()) corridorGlobe.toggle(true);
     focus?.('jeongja');

@@ -13,7 +13,7 @@ import { buildingMeshes, vcMat, paint } from '../tileMesh.js';
 import { buildPangyoDeckLights } from './pangyoDeckLights.js'; // [pangyo-deck-lights]
 import { watchEvening } from '../../evening.js';
 
-const LINE_COLOR = { 신분당선: '#d4003b', 경강선: '#0054a6', 수인분당선: '#f5a200' }; // [migeum] 수인분당선
+const LINE_COLOR = { 신분당선: '#d4003b', 경강선: '#0054a6', 수인분당선: '#f5a200', '2호선': '#00a84d' }; // [migeum] 수인분당선 [gangnam] 2호선
 const C = {
   stone: '#d8ccb8', stoneDark: '#bfb29c', reveal: '#a99c86', shopGlass: '#3e5566', cornice: '#efe8dc', canopy: '#5d646e',
   fin: '#dfe6ee', crown: '#eef2f6', mech: '#9aa3ad', podium: '#41586a', deckSide: '#9c9a96', deckTop: '#a8896b', rail: '#c9dbe4', column: '#c3c0ba',
@@ -38,8 +38,8 @@ const sign = () => (signMat ||= canvasMat(256, 64, (x) => {
   x.fillStyle = '#f4efe6'; x.textAlign = 'center'; x.font = 'bold 34px sans-serif'; x.fillText('현대백화점', 128, 38, 236);
   x.font = '13px sans-serif'; x.fillText('HYUNDAI DEPARTMENT STORE', 128, 56, 236);
 }));
-// 출구 번호판 아틀라스: 1~8 번 (64px 칸)
-const PLATE_N = 8;
+// 출구 번호판 아틀라스: 1~12 번 (64px 칸). 미금은 1–8, 강남은 1–12
+const PLATE_N = 12;
 const plate = () => (plateMat ||= canvasMat(64 * PLATE_N, 64, (x) => {
   for (let i = 0; i < PLATE_N; i++) {
     x.fillStyle = C.plate; x.fillRect(i * 64, 0, 64, 64);
@@ -266,7 +266,7 @@ function segD(px, pz, [ax, az], [bx, bz]) { const dx = bx - ax, dz = bz - az, L2
 // ---------- 지하철 출입구 ----------
 //   캐노피 3.4 × 7.5m, 길이 방향 = 가까운 보행로 방향(dir). 뒤쪽 벽 + 양옆 유리 + 지붕 유리, 앞 이마에 노선색 띠·번호판
 function buildEntrances(l) {
-  const P = l.model === 'migeumEntrances' ? 'migeum' : 'pangyo'; // [migeum] 같은 캐노피, 메시 이름만 다르게
+  const P = l.model === 'gangnamEntrances' ? 'gangnam' : l.model === 'migeumEntrances' ? 'migeum' : 'pangyo'; // [migeum] [gangnam] 같은 캐노피, 메시 이름만 다르게
   const g = new THREE.Group(); g.name = P + 'Entrances';
   const bag = Bag(), gl = Bag(), lit = Bag();
   const plates = [];
@@ -302,7 +302,7 @@ function buildEntrances(l) {
   return { group: g, night };
 }
 
-const BUILDERS = { pangyoDept: buildDept, pangyoTowers: buildTowers, pangyoDeck: buildDeck, pangyoEntrances: buildEntrances, migeumEntrances: buildEntrances, ncsoftRnd: buildNcsoft };
+const BUILDERS = { pangyoDept: buildDept, pangyoTowers: buildTowers, pangyoDeck: buildDeck, pangyoEntrances: buildEntrances, migeumEntrances: buildEntrances, gangnamEntrances: buildEntrances, ncsoftRnd: buildNcsoft };
 const TS = 500;
 const tileKeyOf = (l) => { const p = l.pos || l.entrances?.[0]; return `${Math.floor(p.x / TS)}_${Math.floor(p.z / TS)}`; };
 
@@ -312,6 +312,7 @@ export function createPangyoLandmarks(pg, { overlay = null, prefix = 'pangyo' } 
   const station = pg?.stations?.[0];
   const towards = station ? { x: station.x, z: station.z } : { x: 0, z: 0 };
   for (const l of pg?.landmarks || []) {
+    if (l.model === 'pangyoEntrances') continue; // 지하철 시스템이 화강석 캐노피·계단을 세움
     if (!BUILDERS[l.model]) continue;
     const k = tileKeyOf(l); if (!byTile.has(k)) byTile.set(k, []); byTile.get(k).push(l);
     if (overlay && l.label && l.pos) {

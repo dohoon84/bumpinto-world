@@ -105,6 +105,12 @@ function build() {
       const sy = (e.clientY - rect.top) * (cv.height / Math.max(1, rect.height));
       const hit = navHits.find((h) => (h.sx - sx) ** 2 + (h.sy - sy) ** 2 < h.r * h.r);
       if (hit && window.__jj?.bp24Nav?.guide?.(hit.id)) return; // [bp24nav] 매장 아이콘 → 문 앞 안내. 다른 클릭은 예전대로 위에서 보기
+      if (hit?.arcade) {
+        const pos = window.__jj?.player?.position;
+        const dest = { x: hit.wx, z: hit.wz, label: hit.name };
+        dispatchEvent(new CustomEvent('bw:nav-route', { detail: { points: pos ? [[pos.x, pos.z], [hit.wx, hit.wz]] : [[hit.wx, hit.wz]], dest } }));
+        return;
+      }
       const v = $('btn-view'); if (v && !v.hidden) v.click();
     }
   });
@@ -336,6 +342,22 @@ function draw(now, J, P) {
     }
   }
 
+  // [arcade] 오락실 아이콘 (편의점이 보일 때와 같이)
+  const arcs = J.arcadeGame?.stores || [];
+  for (const st of arcs) {
+    if (!st?.door) continue;
+    const [sx, sy] = toS(st.door[0], st.door[1]);
+    if (!inC(sx, sy, 2)) continue;
+    g.beginPath(); g.arc(sx, sy, 8, 0, Math.PI * 2); g.fillStyle = '#2a1848'; g.fill();
+    g.lineWidth = 1.6; g.strokeStyle = '#ff9ecd'; g.stroke();
+    g.fillStyle = '#ffe66d';
+    g.font = '800 10px Pretendard, "Noto Sans KR", sans-serif';
+    g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.fillText('오', sx, sy + 0.5);
+    navHits.push({ sx, sy, r: 12, id: st.id, name: st.name, arcade: true, wx: st.door[0], wz: st.door[1] });
+    if (hover) { const d = (hover.x - sx) ** 2 + (hover.y - sy) ** 2; if (d < hovD) { hovD = d; hov = { sx, sy, t: st.name }; } }
+  }
+
   // 목적지 (원 밖이면 테두리에 화살표)
   if (route?.dest) {
     const [sx, sy] = toS(route.dest.x, route.dest.z);
@@ -413,10 +435,12 @@ function busStops(J) {
 let plaqueText = '', plaqueAt = 0;
 function updatePlaque(J, x, z) {
   const now = performance.now(); if (now - plaqueAt < 500 && plaqueText) return; plaqueAt = now;
+  const cap = J.placeCaption?.(x, z);
   let best = null, bd = Infinity;
-  for (const s of subwayStations(J)) { const d = Math.hypot(s.x - x, s.z - z); if (d < bd) { bd = d; best = s; } }
+  if (!cap) for (const s of subwayStations(J)) { const d = Math.hypot(s.x - x, s.z - z); if (d < bd) { bd = d; best = s; } }
   let t;
   if (J.region?.id === 'starbase') t = 'Starbase';
+  else if (cap) t = tr(cap.name, cap.nameEn || cap.name); // [gangnam-night] 같은 섬의 역·랜드마크만
   else if (best && bd < 900) t = tr(`${best.name}역${bd > 250 ? ' 근처' : ''}`, `${best.nameEn || best.name}${bd > 250 ? ' area' : ' Stn.'}`);
   else t = tr('분당', 'Bundang');
   if (t !== plaqueText) { plaqueText = t; plaque.textContent = t; }

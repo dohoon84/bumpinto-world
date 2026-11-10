@@ -6,7 +6,7 @@
 import * as THREE from 'three';
 import { createBuilder, createAtlas, FONT, fitText, lineBadge } from './geom.js';
 import { LINES, DOOR_OFF, CAR_LEN } from './lines.js';
-import { platformLayout, announce, RIDE, trainRunZone, DOOR_W, BY_NAME, signText, MOTION, rideTimeline, rideState } from './ride.js';
+import { platformLayout, announce, RIDE, trainRunZone, DOOR_W, BY_NAME, signText, MOTION, rideTimeline, rideState, isPassStop } from './ride.js';
 import { buildScreenDoors, screenDoorFrame, CAR } from './trainParts.js';
 import { buildCrowd } from '../entities/avatarCrowd.js';
 import { createAvatar, animateAvatar } from '../entities/avatar.js';
@@ -241,10 +241,11 @@ export function buildTrain({ origin, line, dir, rides, board, renderer, look, on
     const n = curStop();
     if (stage === 'close') sayOnce('c0', 'closing');
     else if (stage === 'run') {
-      sayOnce('d' + i, 'depart', { name: n.name, nameEn: en(n.name) });
-      if (n.prof.d - sNow < 450) { const tr = transferOf(n.name); sayOnce('n' + i, 'next', { name: n.name, nameEn: en(n.name), transfer: tr?.ko, transferEn: tr?.en, transferJa: tr?.ja, door: n.game ? 'left' : '' /* [subway-ja] 내릴 수 있는 역 = 왼쪽 문 */ }); }
+      const pass = !n.game && isPassStop(line, n.name), opening = !!(n.game && n.name === '강남');
+      sayOnce('d' + i, 'depart', { name: n.name, nameEn: en(n.name), pass, opening });
+      if (n.prof.d - sNow < 450) { const tr = transferOf(n.name); sayOnce('n' + i, 'next', { name: n.name, nameEn: en(n.name), pass, opening, transfer: tr?.ko, transferEn: tr?.en, transferJa: tr?.ja, door: n.game ? 'left' : '' /* [subway-ja] 내릴 수 있는 역 = 왼쪽 문 */ }); }
     } else if (stage === 'stop') {
-      if (!n.game) sayOnce('x' + i, 'noAlight', { name: n.name, nameEn: en(n.name) }); else if (isLast()) sayOnce('l' + i, 'last', { name: n.name, nameEn: en(n.name) });
+      if (!n.game) sayOnce('x' + i, 'noAlight', { name: n.name, nameEn: en(n.name), pass: isPassStop(line, n.name) }); else if (isLast()) sayOnce('l' + i, 'last', { name: n.name, nameEn: en(n.name), opening: n.name === '강남' });
       if (t > MOTION.CLOSE_AT - 3.5 && !isLast()) sayOnce('cl' + i, 'closing');
     }
     return endNow ? { forceAlight: true } : null;
@@ -292,8 +293,13 @@ export function buildTrain({ origin, line, dir, rides, board, renderer, look, on
     // LED
     const n = curStop();
     if (stage === 'board' || stage === 'close') drawLed(`${L.dirs[dir].ko} · 다음 역 ${n?.name || ''}`, `${L.dirs[dir].en} · Next ${en(n?.name || '')}`, origin.name);
-    else if (stage === 'stop') drawLed(`이번 역 ${n.name}${n.game ? ' · 내리실 문은 왼쪽' : ' · 내릴 수 없음 (준비 중)'}`, `This stop ${en(n.name)}${n.game ? ' · Doors on the left' : ' · coming soon'}`, n.name);
-    else { const near = n.prof.d - sNow < 450; drawLed(`${near ? '이번 역' : '다음 역'} ${n.name}`, `${near ? 'This stop' : 'Next'} ${en(n.name)}`, so ? so.name : n.name); }
+    else if (stage === 'stop') {
+      const pass = !n.game && isPassStop(line, n.name), opening = !!(n.game && n.name === '강남');
+      const ko = pass ? `이번 역 ${n.name} · 통과 — 준비 중인 역` : `이번 역 ${n.name}${opening ? ' · 강남 개통' : ''}${n.game ? ' · 내리실 문은 왼쪽' : ' · 내릴 수 없음 (준비 중)'}`;
+      const enLine = pass ? '통과 — 준비 중인 역' : (opening ? '강남 개통' : `This stop ${en(n.name)}${n.game ? ' · Doors on the left' : ' · coming soon'}`);
+      drawLed(ko, enLine, n.name);
+    }
+    else { const near = n.prof.d - sNow < 450; const pass = !n.game && isPassStop(line, n.name), opening = !!(n.game && n.name === '강남'); drawLed(`${near ? '이번 역' : '다음 역'} ${n.name}${pass ? ' · 통과 — 준비 중인 역' : ''}${opening ? ' · 강남 개통' : ''}`, (pass || opening) ? (pass ? '통과 — 준비 중인 역' : '강남 개통') : `${near ? 'This stop' : 'Next'} ${en(n.name)}`, so ? so.name : n.name); }
     // 흔들림
     const acc = stage === 'run' ? (n.prof.at(t + 0.05).v - n.prof.at(t).v) / 0.05 : 0;
     drawStraps(THREE.MathUtils.clamp(-acc * 0.12, -0.25, 0.25) + Math.sin(clock * 2.1) * 0.02 * (v / RIDE.VMAX));

@@ -72,9 +72,11 @@ const SHOW_R = 140, LOD_R = 55, PLACE_R = 170, REPLACE_R = 230;
 const now = () => (typeof performance !== 'undefined' ? performance.now() : Date.now());
 
 // opts: mg(migeum/index.json) · loader · terrain · isFree(x,z) · freeSpot(x,z) · tileReady(key) · getHour · seed · count
-export function createMigeumPeds({ mg, loader, terrain = null, isFree = () => true, freeSpot = (x, z) => ({ x, z }), tileReady = () => true, getHour = gameHour, seed = 5151, count = 0, force = migeumNpcForce() } = {}) {
+// densityAt·lookFn·pathFor·hold 는 강남 NPC 가 같은 배치 루프를 쓸 때 넣는 선택 훅. 없으면 미금과 같다.
+export function createMigeumPeds({ mg, loader, terrain = null, isFree = () => true, freeSpot = (x, z) => ({ x, z }), tileReady = () => true, getHour = gameHour, seed = 5151, count = 0, force = migeumNpcForce(), densityAt = null, lookFn = null, pathFor = null, hold = null, placeR = PLACE_R, placeBurst = 4, spotOk = null, cull = null, preferNear = false, pickWalk = null } = {}) {
   count = force || count || MAX_PEDS;
-  const dens = (h) => { const d = pedDensityAt(h); return force ? { ...d, count: force } : d; };
+  const densFn = densityAt || pedDensityAt;
+  const dens = (h) => { const d = densFn(h); return force ? { ...d, count: force } : d; };
   let rs = seed; const rnd = () => ((rs = (rs * 16807) % 2147483647) / 2147483647);
   const exits = (mg?.stations || []).flatMap((s) => s.exits || []);
   let spots = null;
@@ -100,31 +102,44 @@ export function createMigeumPeds({ mg, loader, terrain = null, isFree = () => tr
   }
   const actors = [];
   for (let i = 0; i < count; i++) {
-    const mesh = createAvatar(townLook(rnd)); mesh.visible = false;
+    const mesh = createAvatar((lookFn || townLook)(rnd)); mesh.visible = false;
     actors.push({ i, mesh, parts: null, path: null, cum: null, L: 0, s: 0, dir: 1, speed: 1, idle: 0, y: 0, leaving: false, shown: false, kind: null, spot: null });
   }
   function chooseKind(mix) { let r = rnd(); for (const [k, w] of Object.entries(mix)) { r -= w; if (r <= 0) return k; } return 'exit'; }
   function place(a, fx, fz, D) {
-    const near = (s) => Math.abs(s.x - fx) < PLACE_R && Math.abs(s.z - fz) < PLACE_R;
+    const near = (s) => Math.abs(s.x - fx) < placeR && Math.abs(s.z - fz) < placeR && (!spotOk || spotOk(s, fx, fz));
     for (let t = 0; t < 4; t++) {
       const kind = t < 3 ? chooseKind(D.mix) : 'walk';
       let sp = null;
-      if (kind === 'walk') { // 보도: 시점 근처 지점 중 무작위(몇 번 뽑아 보고 가까운 것)
+      if (kind === 'walk') { // 보도: 시점 근처 지점 중 무작위(몇 번 뽑아 보고 가까운 것). preferNear 면 빈 자리 중 가장 가까운 곳.
         const L = spots.walk; if (!L.length) continue;
-        for (let k = 0; k < 12 && !sp; k++) { const c = L[Math.floor(rnd() * L.length)]; if (near(c)) sp = c; }
-        if (!sp) { const c = L.filter(near); if (c.length) sp = c[Math.floor(rnd() * c.length)]; }
+        if (pickWalk) sp = pickWalk(L, fx, fz, near, rnd);
+        else if (preferNear) {
+          let bd = Infinity, bl = Infinity;
+          for (const c of L) if (near(c)) {
+            const d = Math.hypot(c.x - fx, c.z - fz);
+            if (c.load < bl || (c.load === bl && d < bd)) { sp = c; bl = c.load; bd = d; }
+          }
+        } else {
+          for (let k = 0; k < 12 && !sp; k++) { const c = L[Math.floor(rnd() * L.length)]; if (near(c)) sp = c; }
+          if (!sp) { const c = L.filter(near); if (c.length) sp = c[Math.floor(rnd() * c.length)]; }
+        }
       } else {
         let best = Infinity;
         for (const c of spots[kind]) if (near(c)) { const n = c.load + rnd() * 0.9; if (n < best) { best = n; sp = c; } }
       }
       if (!sp) continue;
       const at = ready(sp, kind === 'shop' ? 40 : 12); if (!at) continue;
-      const path = freePath(at.x, at.z, 2.5, kind === 'exit' ? 10 : kind === 'shop' ? 12 : 22); // 출입구·상가 앞은 짧게 오가며 붐비게
+      const built = pathFor ? pathFor({ kind, at, rnd, spot: sp }) : null;
+      const cross = !!(built && !Array.isArray(built) && built.cross);
+      let path = Array.isArray(built) ? built : built?.pts;
+      if (!path || path.length < 2) path = freePath(at.x, at.z, 2.5, kind === 'exit' ? 10 : kind === 'shop' ? 12 : 22); // 출입구·상가 앞은 짧게 오가며 붐비게
       if (!path) continue;
       if (rnd() < 0.5) path.reverse(); // 절반은 그 장소로 '향해' 걷는다
       const cum = [0]; for (let k = 1; k < path.length; k++) cum.push(cum[k - 1] + Math.hypot(path[k][0] - path[k - 1][0], path[k][1] - path[k - 1][1]));
       if (a.spot) a.spot.load--; a.spot = sp; sp.load++;
-      Object.assign(a, { path, cum, L: cum[cum.length - 1], s: rnd() * cum[cum.length - 1], dir: rnd() < 0.5 ? 1 : -1, kind, idle: 0, leaving: false });
+      const L = cum[cum.length - 1];
+      Object.assign(a, { path, cum, L, s: cross ? (rnd() < 0.5 ? 0 : L) : rnd() * L, dir: rnd() < 0.5 ? 1 : -1, kind, idle: 0, leaving: false, cross });
       a.speed = (kind === 'exit' && (D.period === 'morning' || D.period === 'evening') ? 1.2 : 0.95) + rnd() * 0.3;
       return true;
     }
@@ -159,21 +174,29 @@ export function createMigeumPeds({ mg, loader, terrain = null, isFree = () => tr
         if (!want && a.path && !a.leaving) a.leaving = true;
         if (a.leaving && (!a.shown || Math.hypot(a.mesh.position.x - fx, a.mesh.position.z - fz) > 60)) hide(a);
         if (!a.path) {
-          if (want && check && placedNow < 4) { placedNow++; place(a, fx, fz, D); }
+          if (want && check && placedNow < placeBurst) { placedNow++; place(a, fx, fz, D); }
           if (!a.path) { if (a.mesh.visible) a.mesh.visible = false; a.shown = false; continue; }
         }
         if (want) act++;
         let v = 0;
         if (a.idle > 0) a.idle -= dt;
         else {
-          v = a.speed; a.s += a.dir * v * dt;
-          if (a.s <= 0 || a.s >= a.L) {
-            a.s = Math.max(0, Math.min(a.L, a.s)); a.dir *= -1; a.idle = (a.kind === 'shop' ? 3 : 1) + rnd() * 4;
-            if (a.leaving) { hide(a); continue; }
+          v = a.speed;
+          if (hold && a.path) {
+            const aheadS = Math.max(0, Math.min(a.L, a.s + a.dir * Math.max(1.2, v * 0.35)));
+            const ahead = sample(a, aheadS);
+            if (hold(a, ahead[0], ahead[1])) v = 0;
+          }
+          if (v > 0) {
+            a.s += a.dir * v * dt;
+            if (a.s <= 0 || a.s >= a.L) {
+              a.s = Math.max(0, Math.min(a.L, a.s)); a.dir *= -1; a.idle = (a.kind === 'shop' ? 3 : 1) + rnd() * 4;
+              if (a.leaving) { hide(a); continue; }
+            }
           }
         }
         const [x, z, dx, dz] = sample(a, a.s);
-        if (check && Math.hypot(x - fx, z - fz) > REPLACE_R) { hide(a); continue; }
+        if (check && (Math.hypot(x - fx, z - fz) > REPLACE_R || (cull && cull(x, z, fx, fz)))) { hide(a); continue; }
         const y = terrain ? terrain.getGroundHeight(x, z, a.y) : 0; a.y = y;
         a.mesh.position.set(x, y, z); a.mesh.rotation.y = Math.atan2(dx * a.dir, dz * a.dir);
         placed++; byKind[a.kind] = (byKind[a.kind] || 0) + 1;
@@ -231,7 +254,7 @@ export class MigeumCars extends JzCars {
 }
 
 // 배치 재질: vehicleMaterial 과 같은 셰이더 수정(차체만 인스턴스 색 · 저녁 등 발광)을 BatchedMesh 색(getBatchingColor)으로
-function batchedVehicleMaterial() {
+export function batchedVehicleMaterial() {
   const eve = { value: 0 };
   const m = new THREE.MeshLambertMaterial({ color: '#ffffff', vertexColors: true });
   m.onBeforeCompile = (sh) => {

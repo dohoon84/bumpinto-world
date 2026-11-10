@@ -3,12 +3,14 @@ import { Room } from "./room.js";
 import { handlePhotos } from "./photos.js";
 import { handleNoticeImages } from "./noticeImageFiles.js"; // [notice-images]
 import { subwayArrival } from "./subway.js";
+import { busArrivals } from "./bus.js"; // [livebus] 강남 버스 도착 (secret SEOUL_BUS_KEY, 25초 캐시)
 import { handleAuth, authCors } from "./account/routes.js"; // [accounts] 구글 로그인·세션·계정 (ACCOUNTS_ENABLED 일 때만)
 import { handleEcon } from "./account/econRoutes.js"; // [economy] /econ/* (ECONOMY_ENABLED 일 때만, 단계는 ECON_FEATURES)
 import { featureOn } from "./account/flags.js";
 import { accountForDevice } from "./account/store.js";
 import { clawbackBoardPost, onBoardUpdate, rewardBoardPost } from "./account/economy.js";
 import { handleBump24, settleBump24 } from "./bump24/routes.js"; // [bump24-rank]
+import { handleArcade } from "./arcade/routes.js"; // [arcade-pang]
 
 export { PhoneBook, Room };
 
@@ -96,7 +98,13 @@ export default {
     // [accounts] /auth/* 는 쿠키를 쓰므로 CORS 를 따로(허용 출처만 + credentials) 처리한다 — OPTIONS 포함
     if (url.pathname.startsWith("/auth/")) return handleAuth(request, env, url, { waitUntil: ctx?.waitUntil?.bind(ctx) });
     if (url.pathname.startsWith("/econ/")) return handleEcon(request, env, url);
-    if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: cors });
+    if (request.method === "OPTIONS") {
+      const extra = (url.pathname.startsWith("/arcade/") || url.pathname.startsWith("/bump24/"))
+        ? authCors(request, env)
+        : {};
+      return new Response(null, { status: 204, headers: { ...cors, ...extra } });
+    }
+    if (url.pathname.startsWith("/arcade/")) return handleArcade(request, env, url, { ...cors, ...authCors(request, env) }); // [arcade] OPTIONS 뒤에 둔다 — 앞에 있으면 404 로 POST 가 막힌다(BUMP24 교훈)
     if (url.pathname.startsWith("/bump24/")) return handleBump24(request, env, url, { ...cors, ...authCors(request, env) }); // [bump24-rank] OPTIONS(사전 요청) 처리 뒤에 둔다 — 앞에 있으면 404 로 POST 가 막힌다
     const queryRegion = (url.searchParams.get("region") || "jeongja").trim().toLowerCase() || "jeongja";
     const GLOBAL_BOOK_KEY = "jeongja"; // 단일 글로벌 번호부/패스포트 DB (모든 동네가 캐릭터·번호·문자 공유)
@@ -156,6 +164,7 @@ export default {
     if (url.pathname === "/photos" || url.pathname.startsWith("/photos/")) return handlePhotos(request, env, cors, url, ctx); // [photo-cloud] 사진 보관함 (R2)
     if (url.pathname === "/notice-images" || url.pathname.startsWith("/notice-images/")) return handleNoticeImages(request, env, cors, url); // [notice-images] 공지 사진 (같은 R2, notices/ 접두어)
     if (url.pathname === "/subway/arrival") return subwayArrival(request, env, cors, url, ctx); // [subway] 실시간 도착 (secret SEOUL_SUBWAY_KEY, 25초 캐시)
+    if (url.pathname === "/bus/arrivals") return busArrivals(request, env, cors, url, ctx); // [livebus] 버스 도착 (secret SEOUL_BUS_KEY, 25초 캐시)
     if (url.pathname === "/news-tip") return newsTip(request, env, cors); // [camera] 사진 뉴스 제보 (본문이 커서 따로 받음)
     const method = ROUTES[url.pathname];
     if (!method || request.method !== "POST") return json({ ok: false, error: "not_found" }, 404, cors);

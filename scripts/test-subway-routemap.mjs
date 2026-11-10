@@ -5,6 +5,7 @@ import { LINE_STOPS } from '../src/subway/stationsData.js';
 import { LINES } from '../src/subway/lines.js';
 import {
   routeMapEnabled, routeMapData, routeMapSlots, nearRouteMap, panelWindow, PANEL_RADIUS,
+  routeStripMarkup, routeListBadge, openingSoonLabel,
 } from '../src/subway/routeMap.js';
 
 assert.equal(routeMapEnabled(new URLSearchParams('')), true, '기본 켜짐');
@@ -64,6 +65,42 @@ assert.equal(nearRouteMap(40, -0.5, [{ x: 10, a: 9, b: 11, w: 2 }]), null);
   const mw = panelWindow(ml, PANEL_RADIUS);
   assert.equal(mw.from, 0, '모란은 8호선 시종착 → 왼쪽 잘림 없음');
   assert.equal(mw.moreLeft, false);
+}
+
+{
+  const gn = STATIONS.find((s) => s.id === 'gangnam');
+  if (gn) {
+    const shin = routeMapData(gn, 'shin');
+    for (const name of ['양재시민의숲', '양재']) {
+      const s = shin.stops.find((x) => x.name === name);
+      assert.equal(s.pass, true, name);
+      assert.equal(s.game, false, name);
+    }
+    for (const name of ['판교', '청계산입구']) {
+      const s = shin.stops.find((x) => x.name === name);
+      assert.equal(s.pass, false, `${name} is a game stop, not pass-through`);
+      assert.equal(s.game, true, name);
+    }
+    assert.equal(shin.stops.find((x) => x.name === '강남').pass, false);
+    assert.equal(shin.stops.find((x) => x.name === '강남').game, true);
+    assert.equal(openingSoonLabel('강남'), '');
+    assert.equal(openingSoonLabel('강남', true), '');
+    assert.equal(routeListBadge(shin.stops.find((x) => x.name === '강남')), '여기');
+    assert.equal(shin.stops.find((x) => x.name === '정자').pass, false);
+    const l2 = routeMapData(gn, 'l2');
+    for (const name of ['잠실새내', '종합운동장', '삼성', '선릉', '역삼']) assert.equal(l2.stops.find((x) => x.name === name).pass, true, name);
+    assert.equal(l2.stops.find((x) => x.name === '교대').pass, false, '개통 구간 밖은 통과 표기 없음');
+    assert.equal(l2.stops.find((x) => x.name === '잠실').pass, false);
+    const strip = routeStripMarkup(l2.stops);
+    const sam = l2.stops.find((x) => x.name === '삼성');
+    assert.match(strip, /class="srm-stop pass"/);
+    assert.equal(strip.includes('통과'), false, '가로 줄에는 통과 배지 없음');
+    assert.equal(routeListBadge(sam), '통과');
+    assert.equal(routeListBadge(l2.stops.find((x) => x.name === '강남')), '여기');
+    const shinStrip = routeStripMarkup(shin.stops);
+    assert.equal(shinStrip.includes('통과'), false);
+    assert.equal(routeListBadge(shin.stops.find((x) => x.name === '양재')), '통과');
+  }
 }
 
 // 로고/브랜드 문자열 금지 (데이터 필드)

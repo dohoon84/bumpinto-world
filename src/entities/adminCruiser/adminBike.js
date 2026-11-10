@@ -1,6 +1,7 @@
 // [bike] 관리자용 크루저 바이크: 인벤토리 소환/수납 · F 탑승/하차 · Space 윌리(앞바퀴 들기) · 탱크 색상(레드/블랙) · 멀티플레이(veh id 900/901)
 //   ?bike=0 끔 (기본 1)
 import * as THREE from 'three';
+import { inWorldBounds } from '../../corridor/islands.js'; // [gangnam]
 import { createBikeAudio } from './bikeAudio.js'; // [bikeaudio]
 import { createBike, setBikeBrake, setBikeTankColor, BDIM } from './bikeModel.js';
 import { twoBone } from '../giftRide/riderRig.js';
@@ -403,7 +404,7 @@ body.bike-near #trk-prompt, body.bike-riding #trk-prompt{display:none!important}
 
   // ---------- 물리(아케이드, 304 kg 묵직함: 요레이트/린/윌리에 관성) ----------
   const poseFits = (x, z, h) => { const s = Math.sin(h), c = Math.cos(h), bd = world.bounds;
-    if (x < bd.x0 || x > bd.x1 || z < bd.z0 || z > bd.z1) return false;
+    if (!inWorldBounds({ x, z }, bd)) return false;
     for (const [lx, lz] of HULL) if (world.isBlocked(x + lx * c + lz * s, z - lx * s + lz * c, 0.06)) return false; return true; };
   function ride(dt, f, s, boost, wheelie) {
     const vmax = boost ? BOOST_V : MAX_V;

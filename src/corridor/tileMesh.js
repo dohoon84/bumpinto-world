@@ -10,13 +10,63 @@ import {
 } from '../world.js';
 import { addInstancedTrees } from '../world/trees.js';
 import { addWindowLights } from '../world/windowLights.js';
+import { treeBlockedByPole } from '../gangnam/billboards/clearance.js'; // [gangnam-ads] 폴 4m 안 가로수 제외
 import { NIGHT_ON, NIGHT_V2, nightKind, nightSeed, nightCut, nightFacade, nightLodMaterial } from './nightLights.js';
 
 export const CAR_KINDS = new Set(['primary', 'secondary', 'tertiary', 'trunk', 'residential', 'unclassified', 'service', 'motorway', 'primary_link', 'secondary_link', 'trunk_link', 'motorway_link']);
 const TREE_KINDS = new Set(['primary', 'secondary', 'tertiary']);
+const fetchedCar = new Grid(30);
+const segNearFetched = (x, z, { ax, az, bx, bz, hw }) => {
+  const dx = bx - ax, dz = bz - az, L2 = dx * dx + dz * dz || 1, t = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / L2));
+  return Math.hypot(ax + dx * t - x, az + dz * t - z) < hw;
+};
+/** 타일 JSON 이 도착하면 차도 구간을 모아, 아직 안 만든 이웃 타일의 넓은 차로 위에도 가로수를 심지 않게 한다. */
+export function ingestTileRoads(roads) {
+  for (const r of roads || []) {
+    if (!r.p || r.p.length < 2) continue;
+    if (!CAR_KINDS.has(r.k) && r.k !== 'busway') continue;
+    for (let i = 1; i < r.p.length; i++) {
+      const [ax, az] = r.p[i - 1], [bx, bz] = r.p[i], hw = (r.w || 6) / 2 + 0.6;
+      fetchedCar.add({ ax, az, bx, bz, hw }, Math.min(ax, bx) - hw, Math.min(az, bz) - hw, Math.max(ax, bx) + hw, Math.max(az, bz) + hw);
+    }
+  }
+}
+export function fetchedOnRoad(x, z) {
+  return fetchedCar.query(x, z).some((s) => segNearFetched(x, z, s));
+}
 const LINE_KINDS = new Set(['primary', 'secondary', 'trunk']);
 const BLOCK = '#ebe4d4', WATER = '#7ec3e6', CENTER_LINE = '#f2d36b';
 const DEFAULT_ROAD = ['#b4b7bc', 0.08];
+const LINE_Y = 0.27; // above gyeongbuSpur 0.25, below paint 0.28 / zebra 0.32
+const WALK_ONLY = new Set(['footway', 'steps', 'pedestrian', 'path']);
+const SURFACE_SUPPRESS = new Set(['primary', 'secondary', 'tertiary', 'trunk', 'residential', 'unclassified', 'primary_link', 'secondary_link']);
+
+function distPointSeg(x, z, a, b) {
+  const dx = b[0] - a[0], dz = b[1] - a[1], L2 = dx * dx + dz * dz || 1;
+  const t = Math.max(0, Math.min(1, ((x - a[0]) * dx + (z - a[1]) * dz) / L2));
+  return Math.hypot(a[0] + dx * t - x, a[1] + dz * t - z);
+}
+
+/** 더 넓은 차도 리본이 이 구간을 덮으면 true. 같은 높이의 16m/26.4m 겹침 z-fighting 을 줄인다. */
+export function segmentCoveredByWiderRoad(ax, az, bx, bz, w, roads, self = null) {
+  const samples = [[ax, az], [(ax + bx) / 2, (az + bz) / 2], [bx, bz]];
+  for (const other of roads || []) {
+    if (other === self || !other.p || other.p.length < 2) continue;
+    if (WALK_ONLY.has(other.k)) continue;
+    if ((other.w || 0) < w + 0.4) continue;
+    let inside = true;
+    for (const [x, z] of samples) {
+      let best = Infinity;
+      for (let i = 1; i < other.p.length; i++) {
+        const d = distPointSeg(x, z, other.p[i - 1], other.p[i]);
+        if (d < best) best = d;
+      }
+      if (best + w / 2 > other.w / 2 + 0.35) { inside = false; break; }
+    }
+    if (inside) return true;
+  }
+  return false;
+}
 
 let flatMat = null;
 export const vcMat = () => (flatMat ||= new THREE.MeshLambertMaterial({ vertexColors: true }));
@@ -63,9 +113,29 @@ export function roadGeometries(roads, { lines = true, caps = true } = {}) {
   for (const r of roads) {
     if (!r.p || r.p.length < 2) continue;
     const [color, y] = ROAD_STYLE[r.k] || DEFAULT_ROAD;
-    geos.push(paint(ribbonGeo(r.p, r.w, y + (r.br ? 0.02 : 0), caps), color));
+    // Wider (and a stable first-point hash) sit a few mm higher so coincident ribbons do not shimmer.
+    const seed = Math.abs(((r.p[0][0] * 10) + (r.p[0][1] || 0)) | 0);
+    const yy = y + (r.br ? 0.02 : 0) + (r.w || 6) * 0.00025 + (seed % 5) * 0.0008;
+    const suppress = SURFACE_SUPPRESS.has(r.k);
+    let run = [];
+    const flush = () => {
+      if (run.length >= 2) geos.push(paint(ribbonGeo(run, r.w, yy, caps), color));
+      run = [];
+    };
+    for (let i = 0; i < r.p.length; i++) {
+      if (i === 0) { run = [r.p[0]]; continue; }
+      const a = r.p[i - 1], b = r.p[i];
+      if (suppress && segmentCoveredByWiderRoad(a[0], a[1], b[0], b[1], r.w || 6, roads, r)) {
+        flush();
+        run = [b];
+      } else {
+        if (!run.length) run = [a];
+        run.push(b);
+      }
+    }
+    flush();
   }
-  if (lines) for (const r of roads) if (LINE_KINDS.has(r.k) && r.p.length >= 2) geos.push(paint(ribbonGeo(r.p, 0.35, 0.09, false), CENTER_LINE));
+  if (lines) for (const r of roads) if (LINE_KINDS.has(r.k) && r.p.length >= 2) geos.push(paint(ribbonGeo(r.p, 0.35, LINE_Y, false), CENTER_LINE));
   return geos;
 }
 export function roadMesh(roads, opts) {
@@ -132,15 +202,18 @@ export function buildDetailTile(key, t, { terrain, onRoadAll }) {
 
   // 충돌(라이브와 같은 규칙: 아래가 뜬 건물(mh>=2.5)은 제외)
   const colliders = new Grid(40);
+  const solids = [];
   for (const b of t.b) {
-    if ((b.mh || 0) >= 2.5) continue;
+    if (!b.o || b.o.length < 3) continue;
     let mnx = Infinity, mnz = Infinity, mxx = -Infinity, mxz = -Infinity;
     for (const [x, z] of b.o) { mnx = Math.min(mnx, x); mxx = Math.max(mxx, x); mnz = Math.min(mnz, z); mxz = Math.max(mxz, z); }
+    solids.push({ ring: b.o, h: b.h || 0, mnx, mnz, mxx, mxz });
+    if ((b.mh || 0) >= 2.5) continue;
     colliders.add(b.o, mnx, mnz, mxx, mxz);
   }
   const roadGrid = new Grid(30);
   for (const r of t.r) {
-    if (!CAR_KINDS.has(r.k)) continue;
+    if (!CAR_KINDS.has(r.k) && r.k !== 'busway') continue;
     for (let i = 1; i < r.p.length; i++) {
       const [ax, az] = r.p[i - 1], [bx, bz] = r.p[i], hw = r.w / 2 + 0.6;
       roadGrid.add({ ax, az, bx, bz, hw }, Math.min(ax, bx) - hw, Math.min(az, bz) - hw, Math.max(ax, bx) + hw, Math.max(az, bz) + hw);
@@ -148,6 +221,14 @@ export function buildDetailTile(key, t, { terrain, onRoadAll }) {
   }
   const onRoad = (x, z) => roadGrid.query(x, z).some((s) => segNear(x, z, s));
   const blocked = (x, z) => colliders.query(x, z).some((ring) => pointInRing(x, z, ring));
+  const roofAt = (x, z) => {
+    let h = 0;
+    for (const s of solids) {
+      if (x < s.mnx || x > s.mxx || z < s.mnz || z > s.mxz || s.h <= h) continue;
+      if (pointInRing(x, z, s.ring)) h = s.h;
+    }
+    return h;
+  };
 
   // 가로수: buildWorld 와 같은 간격/오프셋/파라미터. 겹침(o) 구간은 이웃 조각이 심으므로 건너뜀.
   const treePts = [];
@@ -162,7 +243,7 @@ export function buildDetailTile(key, t, { terrain, onRoadAll }) {
       for (let s = 6; s < L; s += 14) for (const side of [-1, 1]) {
         const x = ax + ((bx - ax) * s) / L + nx * side * (r.w / 2 + 1.6), z = az + ((bz - az) * s) / L + nz * side * (r.w / 2 + 1.6);
         if (terrain && terrain.renderHeight(x, z) < -0.3) continue;
-        if (!onRoad(x, z) && !onRoadAll(x, z) && !blocked(x, z)) treePts.push([x, z]);
+        if (!onRoad(x, z) && !onRoadAll(x, z) && !fetchedOnRoad(x, z) && !blocked(x, z) && !treeBlockedByPole(x, z)) treePts.push([x, z]);
       }
     }
   }
@@ -172,7 +253,7 @@ export function buildDetailTile(key, t, { terrain, onRoadAll }) {
   // [night-buildings] v2 는 벽 셰이더(nightFacade)가 창 불빛을 그리므로 사각 창 메시(+1 draw/타일)를 만들지 않는다
   const lights = NIGHT_V2 && NIGHT_ON ? null : addWindowLights(group, t.b.filter((b) => !b.nr));
   return {
-    group, colliders, onRoad, blocked, treeCount: treePts.length,
+    group, colliders, onRoad, blocked, roofAt, treePts, treeCount: treePts.length,
     dispose() {
       lights?.stop?.();
       group.traverse((o) => {

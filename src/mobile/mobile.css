@@ -418,6 +418,13 @@ body.mobile #umbrella-actions { position: fixed !important; left: auto !importan
 body.mobile #subway-chooser { width: min(440px, calc(100vw - var(--m-l) - var(--m-r) - 170px)) !important; max-height: calc(100dvh - var(--m-t) - var(--m-b)); display: flex; flex-direction: column; }
 body.mobile #subway-chooser ul { max-height: none !important; flex: 1; min-height: 0; }
 body.mobile #subway-chooser .sc-f { display: none; }
+/* 노선 배지: PC(chooserBadge.js)와 같은 크기. 3자 이상(신분당·수인분당·2호선·2-1)도 줄바꿈·넘침 없음 */
+body.mobile #subway-chooser .n { flex: 0 0 auto; display: flex; align-items: center; justify-content: center; box-sizing: border-box; min-width: 38px; width: max-content; max-width: 100%; height: 38px; padding: 0 6px; line-height: 38px; white-space: nowrap; overflow: hidden; }
+body.mobile #subway-chooser .n[data-k=line] { font-size: 15px; }
+body.mobile #subway-chooser .n[data-k=line][data-n="3"] { font-size: 13px; }
+body.mobile #subway-chooser .n[data-k=line][data-n="4"] { font-size: 11px; }
+body.mobile #subway-chooser .n[data-k=exit][data-n="3"] { font-size: 16px; }
+body.mobile #subway-chooser .n[data-k=exit][data-n="4"] { font-size: 13px; }
 /* 카메라·사진 뷰어가 열려 있으면 HUD 는 숨김 (카메라 화면은 pointer-events:none 이라 아래 HUD 가 눌림) */
 body.mobile.cam-mode #m-hud, body.mobile.pv-open #m-hud { display: none; }
 /* 지명·정류장 라벨: 모바일에서 작게 (겹침·거리는 overlay.js 가 줄임) */
