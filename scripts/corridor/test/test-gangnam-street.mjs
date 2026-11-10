@@ -29,7 +29,7 @@ const ok = (m) => console.log(`ok ${++n} ${m}`);
     assert.ok(!/\d+\s*분/.test(s.routes.join(' ')));
     for (const r of s.routes) assert.ok(/^\d{2,5}$|^[가-힣]{1,2}\d{1,2}$/.test(r), r);
   }
-  assert.ok(j.props.length >= 80 && j.props.length <= 400, `props ${j.props.length}`);
+  assert.ok(j.props.length >= 80 && j.props.length <= 520, `props ${j.props.length}`);
   assert.ok(j.waiters.length >= 20 && j.waiters.length <= 280, `waiters ${j.waiters.length}`);
   const medMods = (j.modules || []).filter((m) => m.kind === 'median');
   assert.ok(medMods.length >= 10, `median modules ${medMods.length}`);
@@ -42,6 +42,13 @@ const ok = (m) => console.log(`ok ${++n} ${m}`);
   assert.ok((j.platforms || []).some((p) => p[3] >= 30 && p[3] <= 42), 'platform length');
   assert.ok((j.zebras || []).length >= 20, `zebras ${j.zebras.length}`);
   assert.ok((j.shops || []).length >= 40, `shops ${j.shops.length}`);
+  for (let i = 0; i < j.shops.length; i++) {
+    for (let k = i + 1; k < j.shops.length; k++) {
+      const d = Math.hypot(j.shops[i][0] - j.shops[k][0], j.shops[i][1] - j.shops[k][1]);
+      assert.ok(d >= 2.5, `overlapping shops d=${d.toFixed(2)}`);
+    }
+  }
+  assert.ok((j.benches || []).length >= 8, `benches ${(j.benches || []).length}`);
   assert.ok((j.tents || []).length >= 10, `tents ${j.tents.length}`);
   const shopBrand = /스타벅스|GS25|CU|세븐일레븐|배스킨|맥도날드|이디야|투썸/i;
   for (const name of ['골목24', '나인마트', '오후커피', '한그릇', '노을포차']) assert.ok(!shopBrand.test(name));
@@ -147,7 +154,16 @@ const ok = (m) => console.log(`ok ${++n} ${m}`);
   };
   for (const st of side) offLanes(st.x, st.z, `side ${st.ref || st.name}`);
   for (const m of (j.modules || []).filter((m) => m.kind !== 'median')) offLanes(m.x, m.z, 'side module');
-  ok(`island clear ${med.length} median, sidewalk ${side.length} side, paints ${j.paints.length}`);
+  let gn = 0, th = 0;
+  for (const sh of j.shops || []) {
+    const g = nearest(sh[0], sh[1], roads.filter((r) => r.n === '강남대로'));
+    const te = nearest(sh[0], sh[1], roads.filter((r) => r.n === '테헤란로'));
+    if (g && g.d < (g.road.w || 16) / 2 + 16) gn++;
+    if (te && te.d < (te.road.w || 16) / 2 + 16) th++;
+  }
+  assert.ok(gn >= 20, `강남대로 shops ${gn}`);
+  assert.ok(th >= 12, `테헤란로 shops ${th}`);
+  ok(`island clear ${med.length} median, sidewalk ${side.length} side, paints ${j.paints.length} aveShops ${gn}/${th}`);
 }
 
 {

@@ -410,6 +410,51 @@ function aframeGeo() {
 function acGeo() { return merge([boxGeo(0.95, 0.55, 0.42, 0, 0, 0), boxGeo(0.7, 0.12, 0.08, 0, -0.22, 0.22)]); }
 function trashGeo() { return merge([boxGeo(0.38, 0.28, 0.28, 0, 0.16, 0), boxGeo(0.32, 0.22, 0.24, 0.05, 0.38, 0.02)]); }
 function binGeo() { return merge([boxGeo(0.55, 0.85, 0.42, 0, 0.42, 0), boxGeo(0.5, 0.08, 0.38, 0, 0.88, 0)]); }
+function streetBenchGeo() {
+  return merge([
+    boxGeo(1.5, 0.08, 0.44, 0, 0.43, 0),
+    boxGeo(0.08, 0.43, 0.44, -0.66, 0.22, 0),
+    boxGeo(0.08, 0.43, 0.44, 0.66, 0.22, 0),
+    boxGeo(1.5, 0.34, 0.07, 0, 0.64, -0.19),
+  ]);
+}
+function dedupeShops(list) {
+  const out = [];
+  for (const sh of list) {
+    if (out.some((o) => Math.hypot(o[0] - sh[0], o[1] - sh[1]) < 2.6)) continue;
+    out.push(sh);
+  }
+  return out;
+}
+
+const IX_TREE = { x: -7144, z: -14531 };
+function slimIxTrees(scene) {
+  const m4 = new THREE.Matrix4();
+  const p = new THREE.Vector3(), q = new THREE.Quaternion(), s = new THREE.Vector3();
+  const world = new THREE.Vector3();
+  scene.traverse((o) => {
+    if (!o.isInstancedMesh || o.userData.gnIxSlim || !o.geometry) return;
+    const kind = o.geometry.type;
+    const rad = o.geometry.parameters?.radius;
+    const isCrown = kind === 'IcosahedronGeometry' || (rad >= 1.8 && rad <= 2.6);
+    const isTrunk = kind === 'CylinderGeometry' && (o.geometry.parameters?.height || 0) > 3;
+    if (!isCrown && !isTrunk) return;
+    let hit = 0;
+    for (let i = 0; i < o.count; i++) {
+      o.getMatrixAt(i, m4);
+      m4.decompose(p, q, s);
+      world.copy(p);
+      o.localToWorld(world);
+      if (Math.hypot(world.x - IX_TREE.x, world.z - IX_TREE.z) > 140) continue;
+      if (isCrown) { s.x *= 0.36; s.z *= 0.36; s.y *= 0.76; p.y += 2.25; }
+      else s.y *= 1.62;
+      m4.compose(p, q, s);
+      o.setMatrixAt(i, m4);
+      hit++;
+    }
+    if (hit) { o.instanceMatrix.needsUpdate = true; o.userData.gnIxSlim = true; }
+  });
+}
 
 export function createGangnamStreet({ scene, terrain = null, url, mobile = false }) {
   const root = new THREE.Group();
@@ -672,25 +717,35 @@ export function createGangnamStreet({ scene, terrain = null, url, mobile = false
         return im;
       }
 
-      const shopSrc = mobile ? (j.shops || []).filter((_, i) => i % 2 === 0) : (j.shops || []);
+      const shopSrc = dedupeShops(mobile ? (j.shops || []).filter((_, i) => i % 2 === 0) : (j.shops || []));
       const shopIm = inst(shopBodyGeo(), shopMat, shopSrc.length, 'gnStreetShop', true);
       const shopWin = inst(shopWinGeo(), shopWinMat, shopSrc.length, 'gnStreetShopWin');
       const shopSign = inst(new THREE.PlaneGeometry(1.7, 0.38), shopSignMat, shopSrc.length, 'gnStreetShopSign');
-      const shopRoom = inst(boxGeo(2.85, 1.62, 0.55, 0, 1.35, -0.58), shopRoomMat, shopSrc.length, 'gnStreetShopRoom');
-      const shopInterior = inst(new THREE.PlaneGeometry(2.55, 1.48), interiorMat, shopSrc.length, 'gnStreetShopInterior');
-      const shopPal = ['#2e6b4a', '#6b4a32', '#d4652a', '#6a3038'];
+      const shopRoom = inst(boxGeo(2.7, 1.55, 0.12, 0, 1.35, -1.25), shopRoomMat, shopSrc.length, 'gnStreetShopRoom');
+      shopRoom.visible = false; // 정면에서 어두운 룸 박스가 인테리어를 가려 창이 검게 보였다
+      const shopInterior = inst(new THREE.PlaneGeometry(2.58, 1.5), interiorMat, shopSrc.length, 'gnStreetShopInterior');
+      shopInterior.renderOrder = 2;
+      interiorMat.side = THREE.DoubleSide;
+      interiorMat.depthWrite = true;
+      interiorMat.depthTest = true;
+      interiorMat.polygonOffset = true;
+      interiorMat.polygonOffsetFactor = -20;
+      interiorMat.polygonOffsetUnits = -20;
+      const shopPal = ['#2e6b4a', '#6b4a32', '#d4652a', '#6a3038', '#3a4a72', '#8a5a28', '#4a6a58', '#703848'];
       const interiorSlots = [];
       shopSrc.forEach((sh, i) => {
         const gy = ground(sh[0], sh[1]);
-        StreetXform.compose(m4, quat, pos, scl, sh[0], gy, sh[1], sh[2], 1, 1, 1);
+        const sx = 0.88 + (sh[3] % 4) * 0.09;
+        const sy = 0.92 + ((sh[3] + i) % 3) * 0.08;
+        StreetXform.compose(m4, quat, pos, scl, sh[0], gy, sh[1], sh[2], sx, sy, 1);
         shopIm.setMatrixAt(i, m4);
         shopWin.setMatrixAt(i, m4);
         shopRoom.setMatrixAt(i, m4);
         shopIm.setColorAt(i, tmpC.set(shopPal[sh[3] % shopPal.length] || '#555'));
         const fx = Math.sin(sh[2]), fz = Math.cos(sh[2]);
-        StreetXform.compose(m4, quat, pos, scl, sh[0] + fx * 0.18, gy + 2.52, sh[1] + fz * 0.18, sh[2], 1, 1, 1);
+        StreetXform.compose(m4, quat, pos, scl, sh[0] + fx * 0.18, gy + 2.52 * sy, sh[1] + fz * 0.18, sh[2], sx, sy, 1);
         shopSign.setMatrixAt(i, m4);
-        StreetXform.compose(m4, quat, pos, scl, sh[0] + fx * 0.14, gy + 1.35, sh[1] + fz * 0.14, sh[2], 1, 1, 1);
+        StreetXform.compose(m4, quat, pos, scl, sh[0] - fx * 0.40, gy + 1.35 * sy, sh[1] - fz * 0.40, sh[2], sx, sy, 1);
         shopInterior.setMatrixAt(i, m4);
         const nameSlot = (sh[3] * 3 + i) % 12;
         interiorSlots.push(nameSlot <= 2 ? 0 : nameSlot <= 5 ? 1 : nameSlot <= 9 ? 2 : 3);
@@ -712,6 +767,7 @@ export function createGangnamStreet({ scene, terrain = null, url, mobile = false
       const acIm = placeList(mobile ? [] : (j.acs || []), acGeo(), new THREE.MeshLambertMaterial({ color: '#c5ccd3' }), 'gnStreetAc', 3.15);
       const trashIm = placeList(mobile ? [] : (j.trash || []), trashGeo(), new THREE.MeshLambertMaterial({ color: '#3a3a38' }), 'gnStreetTrash');
       const binIm = placeList(j.bins || [], binGeo(), new THREE.MeshLambertMaterial({ color: '#3d7a45' }), 'gnStreetBin');
+      const benchIm = placeList(j.benches || [], streetBenchGeo(), new THREE.MeshLambertMaterial({ color: '#6b5a44' }), 'gnStreetBench');
 
       let wires = null;
       const wsrc = mobile ? [] : (j.wires || []);
@@ -802,7 +858,7 @@ export function createGangnamStreet({ scene, terrain = null, url, mobile = false
     if (meshes.backMat) meshes.backMat.opacity = on ? (0.28 + n * 0.55) : 0;
     if (meshes.glassMat) meshes.glassMat.opacity = on ? (0.22 + n * 0.2) : 0;
     if (meshes.adGlowMat) meshes.adGlowMat.opacity = n * 0.55;
-    if (meshes.shopWinMat) meshes.shopWinMat.opacity = on ? (0.16 + n * 0.16) : 0;
+    if (meshes.shopWinMat) meshes.shopWinMat.opacity = on ? (0.05 + n * 0.07) : 0;
     if (meshes.pylonGlowMat) meshes.pylonGlowMat.opacity = n * 0.45;
     if (meshes.pylonGlows) meshes.pylonGlows.visible = on && n > 0.05;
     if (meshes.tentGlowMat) meshes.tentGlowMat.opacity = n * 0.62;
@@ -822,7 +878,7 @@ export function createGangnamStreet({ scene, terrain = null, url, mobile = false
     update(dt, x, z) {
       if (!meshes) return;
       acc += dt;
-      if (acc > 0.4) { acc = 0; near.here = near(x, z); }
+      if (acc > 0.25) { acc = 0; near.here = near(x, z); slimIxTrees(scene); }
       apply(nightFade());
     },
     dispose() {
