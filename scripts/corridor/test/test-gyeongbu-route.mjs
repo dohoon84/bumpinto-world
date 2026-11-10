@@ -256,7 +256,15 @@ const layout = expressLayout();
 const deckHalf = Math.max(Math.abs(layout.nbOuterEdge), Math.abs(layout.sbOuterEdge));
 const coverPts = ex.pts.filter(keepDeckPoint);
 const coverFn = (x, z, hw = 8) => distToPts(x, z, coverPts) < deckHalf + Math.max(0, hw) - 0.6;
-const visible = pangyoVisibleChunks(pangyo, coverFn);
+const visible = pangyoVisibleChunks(pangyo, coverFn, coverPts);
+const taperTips = [];
+for (const c of visible) {
+  for (const p of [c.pts[0], c.pts[c.pts.length - 1]]) {
+    if (distToPts(p[0], p[1], coverPts) < 40 && (p[3] || 7) < 1.6) taperTips.push(p);
+  }
+}
+assert.ok(taperTips.length >= 1, `연결로가 4+4 갓길에 테이퍼로 붙어야 한다 (${taperTips.length})`);
+
 const mainlineDup = visible.filter((c) => c.k === 'motorway' && Math.max(...c.pts.map((p) => p[3] || 0)) >= 16);
 assert.deepEqual(mainlineDup, [], `OSM 경부 본선 리본이 4+4 옆에 남음 ${mainlineDup.length}개`);
 const firstKept = ex.pts.find(keepDeckPoint);

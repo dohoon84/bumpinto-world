@@ -351,14 +351,14 @@ export function createCorridor({ scene, corridorData, terrain, world, renderer, 
   const coverPts = (corridorData.gangnamExpress?.pts || []).filter(keepDeckPoint);
   const deckHalf = Math.max(Math.abs(expressLayout().nbOuterEdge), Math.abs(expressLayout().sbOuterEdge));
   const pangyoCoverFn = coverPts.length ? (x, z, hw = 8) => distToPts(x, z, coverPts) < deckHalf + Math.max(0, hw) - 0.6 : null;
-  if (corridorData.pangyoExpress && !regions) { pangyoEx = buildPangyoExpress(corridorData.pangyoExpress, { coverFn: pangyoCoverFn }); root.add(pangyoEx.group); } // [pangyo-express] 판교IC~경부 합류(메시 2개)
+  if (corridorData.pangyoExpress && !regions) { pangyoEx = buildPangyoExpress(corridorData.pangyoExpress, { coverFn: pangyoCoverFn, deckPts: coverPts }); root.add(pangyoEx.group); } // [pangyo-express] 판교IC~경부 합류(메시 2개)
   else if (corridorData.pangyoExpress) {
     // [perf-memory] 고속도로 메시는 LOD 타일 거리 안(+여유)일 때만 만들고, 멀어지면 dispose
     const E = corridorData.pangyoExpress; let b = { x0: Infinity, x1: -Infinity, z0: Infinity, z1: -Infinity };
     for (const l of E.lines || []) for (const p of l.pts || []) { b.x0 = Math.min(b.x0, p[0]); b.x1 = Math.max(b.x1, p[0]); b.z0 = Math.min(b.z0, p[1]); b.z1 = Math.max(b.z1, p[1]); }
     if (!Number.isFinite(b.x0)) b = { x0: -1e9, x1: 1e9, z0: -1e9, z1: 1e9 };
     regions.register({ id: 'pangyo-express', boxes: [b], near: Q.lod + 300, far: Q.lod + 900,
-      onEnter() { if (!pangyoEx) { pangyoEx = buildPangyoExpress(E, { coverFn: pangyoCoverFn }); root.add(pangyoEx.group); } },
+      onEnter() { if (!pangyoEx) { pangyoEx = buildPangyoExpress(E, { coverFn: pangyoCoverFn, deckPts: coverPts }); root.add(pangyoEx.group); } },
       onLeave() { if (pangyoEx) { pangyoEx.dispose(); pangyoEx = null; } } });
   }
 

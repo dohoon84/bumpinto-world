@@ -9,6 +9,7 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import { pangyoEnabled, PANGYO_DIR } from './pangyo.js';
 import { ribbonGeo } from '../world.js';
 import { watchEvening } from '../evening.js';
+import { expressLayout } from './gyeongbuExpress.js';
 
 export const PANGYO_EXPRESS_FILE = PANGYO_DIR + 'express.json';
 export function pangyoExpressEnabled(search = typeof location !== 'undefined' ? location.search : '') {
@@ -195,11 +196,14 @@ function painted(g, color) {
 // 선을 따라 옆면(세로 띠): off = 중심선에서 옆 거리, top(i)/bot(i) = 점별 위/아래 높이
 function sideStrip(pts, off, top, bot) {
   const pos = [], idx = [];
+  const offAt = typeof off === 'function' ? off : () => off;
+  const o0 = offAt(0);
   for (let i = 0; i < pts.length; i++) {
     const a = pts[Math.max(0, i - 1)], b = pts[Math.min(pts.length - 1, i + 1)]; let dx = b[0] - a[0], dz = b[1] - a[1]; const L = Math.hypot(dx, dz) || 1; dx /= L; dz /= L;
-    const x = pts[i][0] - dz * off, z = pts[i][1] + dx * off;
+    const o = offAt(i);
+    const x = pts[i][0] - dz * o, z = pts[i][1] + dx * o;
     pos.push(x, top(i), z, x, bot(i), z);
-    if (i) { const k = (i - 1) * 2; if (off > 0) idx.push(k, k + 1, k + 2, k + 1, k + 3, k + 2); else idx.push(k, k + 2, k + 1, k + 1, k + 2, k + 3); }
+    if (i) { const k = (i - 1) * 2; if (o0 > 0) idx.push(k, k + 1, k + 2, k + 1, k + 3, k + 2); else idx.push(k, k + 2, k + 1, k + 1, k + 2, k + 3); }
   }
   const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setIndex(idx); g.computeVertexNormals(); return g;
 }
@@ -288,7 +292,9 @@ function taperEnds(pts, coverFn, length = 28) {
   if (pts.length < 3 || length <= 0) return pts;
   const out = pts.map((p) => p.slice());
   const apply = (fromStart) => {
-    // 본선에 붙는 잘린 끝은 폭을 바늘처럼 줄이지 않는다(갓길에 맞닿는 고어).
+    const tip = fromStart ? out[0] : out[out.length - 1];
+    // 이미 갓길로 줄어든 테이퍼, 또는 본선 안으로 잘린 고어는 폭을 더 줄이지 않는다.
+    if ((tip[3] || 7) < 1.2) return;
     if (towardCover(pts, fromStart, coverFn)) return;
     let acc = 0;
     if (fromStart) {
@@ -313,58 +319,251 @@ function isExpressMainline(l) {
   return l?.role === 'mainline' || l?.id === 'mainNB' || l?.id === 'mainSB';
 }
 
-/** OSM 경부 본선에 붙어 있던 램프 끝을 4+4 갓길로 당기고, 약 80m에 걸쳐 원래 선형으로 되돌린다. */
-function extendChunkToDeck(pts, coverFn) {
-  if (!coverFn || pts.length < 2) return pts;
-  const out = pts.map((p) => p.slice());
-  const fade = 80;
-  for (const fromStart of [true, false]) {
-    const p = fromStart ? out[0] : out[out.length - 1];
-    const hw = Math.max(3.2, (p[3] || 8) / 2);
-    if (coverFn(p[0], p[1], hw)) continue;
-    if (!coverFn(p[0], p[1], hw + 50)) continue;
-    let best = null, bestD = Infinity;
-    for (let a = 0; a < 16; a++) {
-      const ux = Math.cos((a * Math.PI) / 8), uz = Math.sin((a * Math.PI) / 8);
-      for (let d = 3; d <= 80; d += 3) {
-        if (!coverFn(p[0] + ux * d, p[1] + uz * d, hw)) continue;
-        if (d < bestD) { bestD = d; best = { ux, uz, d }; }
-        break;
-      }
-    }
-    if (!best) continue;
-    const ox = best.ux * best.d, oz = best.uz * best.d;
-    let acc = 0;
-    if (fromStart) {
-      out[0][0] += ox; out[0][1] += oz;
-      for (let i = 1; i < out.length && acc < fade; i++) {
-        acc += Math.hypot(out[i][0] - out[i - 1][0], out[i][1] - out[i - 1][1]);
-        const t = Math.max(0, 1 - acc / fade);
-        if (t <= 0) break;
-        out[i][0] += ox * t; out[i][1] += oz * t;
-      }
-    } else {
-      const last = out.length - 1;
-      out[last][0] += ox; out[last][1] += oz;
-      for (let i = last - 1; i >= 0 && acc < fade; i--) {
-        acc += Math.hypot(out[i + 1][0] - out[i][0], out[i + 1][1] - out[i][1]);
-        const t = Math.max(0, 1 - acc / fade);
-        if (t <= 0) break;
-        out[i][0] += ox * t; out[i][1] += oz * t;
-      }
-    }
+function nearestDeck(x, z, deckPts) {
+  if (!deckPts || deckPts.length < 2) return null;
+  let bestI = 1, bestT = 0, bestD = Infinity;
+  for (let i = 1; i < deckPts.length; i++) {
+    const ax = deckPts[i - 1][0], az = deckPts[i - 1][1];
+    const bx = deckPts[i][0], bz = deckPts[i][1];
+    const dx = bx - ax, dz = bz - az, L2 = dx * dx + dz * dz || 1;
+    const t = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / L2));
+    const d = Math.hypot(ax + dx * t - x, az + dz * t - z);
+    if (d < bestD) { bestD = d; bestI = i; bestT = t; }
   }
-  return out;
+  const ax = deckPts[bestI - 1][0], az = deckPts[bestI - 1][1];
+  const bx = deckPts[bestI][0], bz = deckPts[bestI][1];
+  const dx = bx - ax, dz = bz - az, L = Math.hypot(dx, dz) || 1;
+  const hx = dx / L, hz = dz / L;
+  return { i: bestI, t: bestT, d: bestD, x: ax + dx * bestT, z: az + dz * bestT, hx, hz, lx: hz, lz: -hx };
+}
+
+function walkDeckFrom(deckPts, near, dist) {
+  if (!near) return near;
+  if (Math.abs(dist) < 1e-6) return { x: near.x, z: near.z, hx: near.hx, hz: near.hz, lx: near.lx, lz: near.lz };
+  if (dist > 0) {
+    let x = near.x, z = near.z, i = near.i, remain = dist;
+    let bx = deckPts[i][0], bz = deckPts[i][1];
+    let seg = Math.hypot(bx - x, bz - z);
+    while (remain > seg && i < deckPts.length - 1) {
+      remain -= seg; x = bx; z = bz; i += 1;
+      bx = deckPts[i][0]; bz = deckPts[i][1];
+      seg = Math.hypot(bx - x, bz - z);
+    }
+    if (seg < 1e-9) return { x, z, hx: near.hx, hz: near.hz, lx: near.lx, lz: near.lz };
+    const hx = (bx - x) / seg, hz = (bz - z) / seg;
+    const t = Math.min(1, remain / seg);
+    return { x: x + (bx - x) * t, z: z + (bz - z) * t, hx, hz, lx: hz, lz: -hx };
+  }
+  let x = near.x, z = near.z, idx = near.i - 1, remain = -dist;
+  let ax = deckPts[idx][0], az = deckPts[idx][1];
+  let seg = Math.hypot(x - ax, z - az);
+  while (remain > seg && idx > 0) {
+    remain -= seg; x = ax; z = az; idx -= 1;
+    ax = deckPts[idx][0]; az = deckPts[idx][1];
+    seg = Math.hypot(x - ax, z - az);
+  }
+  if (seg < 1e-9) {
+    const j = Math.max(1, idx + 1);
+    const dx = deckPts[j][0] - deckPts[j - 1][0], dz = deckPts[j][1] - deckPts[j - 1][1], L = Math.hypot(dx, dz) || 1;
+    const hx = dx / L, hz = dz / L;
+    return { x, z, hx, hz, lx: hz, lz: -hx };
+  }
+  const hx = (x - ax) / seg, hz = (z - az) / seg;
+  const t = Math.min(1, remain / seg);
+  return { x: x + (ax - x) * t, z: z + (az - z) * t, hx, hz, lx: hz, lz: -hx };
+}
+
+function offsetPtsVariable(pts, side, margin = 0.6) {
+  return pts.map((p, i) => {
+    const a = pts[Math.max(0, i - 1)], b = pts[Math.min(pts.length - 1, i + 1)];
+    let dx = b[0] - a[0], dz = b[1] - a[1]; const L = Math.hypot(dx, dz) || 1; dx /= L; dz /= L;
+    const off = side * Math.max(0.15, (p[3] || 7) / 2 - margin);
+    return [p[0] - dz * off, p[1] + dx * off, p[2]];
+  });
+}
+
+function distFromEnd(pts, fromStart, i) {
+  let L = 0;
+  if (fromStart) {
+    for (let k = 1; k <= i; k++) L += Math.hypot(pts[k][0] - pts[k - 1][0], pts[k][1] - pts[k - 1][1]);
+  } else {
+    for (let k = pts.length - 1; k > i; k--) L += Math.hypot(pts[k][0] - pts[k - 1][0], pts[k][1] - pts[k - 1][1]);
+  }
+  return L;
+}
+
+function collectRuns(pts, pred) {
+  const out = [];
+  let cur = [];
+  for (let i = 0; i < pts.length; i++) {
+    if (pred(i)) cur.push(i);
+    else if (cur.length) { out.push(cur); cur = []; }
+  }
+  if (cur.length) out.push(cur);
+  return out.filter((r) => r.length > 1).map((r) => r.map((i) => pts[i]));
+}
+
+const JOIN_Y = 0.22; // ribbonGeo +0.1 → 0.32m, 4+4(0.30)보다 살짝 위
+const TAPER_LEN = 70;
+const PARALLEL_LEN = 55;
+const BLEND_LEN = 180;
+
+function headsIntoCover(pts, fromStart, coverFn) {
+  if (!coverFn || pts.length < 2) return false;
+  const a = fromStart ? pts[0] : pts[pts.length - 1];
+  const b = fromStart ? pts[1] : pts[pts.length - 2];
+  const dx = a[0] - b[0], dz = a[1] - b[1], L = Math.hypot(dx, dz) || 1;
+  const ux = dx / L, uz = dz / L;
+  const hw = Math.max(3.2, (a[3] || 8) / 2);
+  for (const d of [8, 16, 28, 45, 70]) {
+    if (coverFn(a[0] + ux * d, a[1] + uz * d, hw)) return true;
+  }
+  return false;
+}
+
+/** 램프 끝을 4+4 갓길을 따라 보조차로로 붙인 뒤 폭을 0으로 줄인다. */
+function joinEndToDeck(pts, fromStart, coverFn, deckPts) {
+  if (!coverFn || !deckPts || pts.length < 2) return { pts, join: null };
+  const tip = fromStart ? pts[0] : pts[pts.length - 1];
+  const nxt = fromStart ? pts[1] : pts[pts.length - 2];
+  const near = nearestDeck(tip[0], tip[1], deckPts);
+  if (!near || near.d > 90) return { pts, join: null };
+  // 본선 안으로 잘린 끝(요금소 부근 교차)은 그대로 두고, 본선 옆에서 끝나는 합류/분류만 테이퍼로 잇는다.
+  if (headsIntoCover(pts, fromStart, coverFn)) return { pts, join: null };
+
+  const layout = expressLayout();
+  const lat = (tip[0] - near.x) * near.lx + (tip[1] - near.z) * near.lz;
+  const side = lat >= 0 ? 1 : -1;
+  const edge = side > 0 ? layout.sbOuterEdge : layout.nbOuterEdge;
+  const auxW = Math.max(5.6, Math.min(7.2, tip[3] || 7));
+  const overlap = 0.85;
+  const innerOff = edge - side * overlap;
+  const bdx = nxt[0] - tip[0], bdz = nxt[1] - tip[1], bL = Math.hypot(bdx, bdz) || 1;
+  const bodyAlong = (bdx / bL) * near.hx + (bdz / bL) * near.hz;
+  const extSign = bodyAlong >= 0 ? -1 : 1;
+  const blendLen = Math.min(BLEND_LEN, Math.max(40, runLen(pts) * 0.55));
+
+  const centerOff = (width) => innerOff + side * (width / 2);
+  const atDeck = (along, width, y) => {
+    const q = walkDeckFrom(deckPts, near, extSign * along);
+    const off = centerOff(width);
+    return [q.x + q.lx * off, q.z + q.lz * off, y, width];
+  };
+
+  const built = [];
+  const nTaper = 8;
+  for (let i = 0; i <= nTaper; i++) {
+    const u = i / nTaper;
+    const along = TAPER_LEN + PARALLEL_LEN - u * TAPER_LEN;
+    const width = 0.4 + (auxW - 0.4) * (u * u * (3 - 2 * u));
+    built.push(atDeck(along, width, JOIN_Y));
+  }
+  const nPar = 6;
+  for (let i = 1; i <= nPar; i++) {
+    const u = i / nPar;
+    built.push(atDeck(PARALLEL_LEN * (1 - u), auxW, JOIN_Y));
+  }
+  const noseIndexBuilt = built.length - 1;
+
+  const orig = fromStart ? pts : pts.slice().reverse();
+  let acc = 0, cut = orig.length;
+  const blended = [];
+  for (let i = 1; i < orig.length; i++) {
+    acc += Math.hypot(orig[i][0] - orig[i - 1][0], orig[i][1] - orig[i - 1][1]);
+    if (acc >= blendLen) { cut = i; break; }
+    const t = acc / blendLen;
+    const sm = t * t * (3 - 2 * t);
+    const ref = nearestDeck(orig[i][0], orig[i][1], deckPts);
+    const parX = ref.x + ref.lx * centerOff(auxW);
+    const parZ = ref.z + ref.lz * centerOff(auxW);
+    blended.push([
+      parX + (orig[i][0] - parX) * sm,
+      parZ + (orig[i][1] - parZ) * sm,
+      JOIN_Y + ((orig[i][2] || 0) - JOIN_Y) * sm,
+      auxW + ((orig[i][3] || auxW) - auxW) * sm,
+    ]);
+  }
+  const rest = orig.slice(cut);
+  const forward = built.concat(blended, rest);
+  const out = fromStart ? forward : forward.slice().reverse();
+  const noseIndex = fromStart ? noseIndexBuilt : out.length - 1 - noseIndexBuilt;
+  return {
+    pts: out,
+    join: {
+      fromStart, side, auxW, edge, overlap, innerOff,
+      taperLen: TAPER_LEN, parallelLen: PARALLEL_LEN, blendLen, noseIndex,
+    },
+  };
+}
+
+function joinChunkToDeck(pts, coverFn, deckPts) {
+  if (!coverFn || !deckPts || pts.length < 2) return { pts, join: null };
+  let out = pts, join = null;
+  for (const fromStart of [true, false]) {
+    const r = joinEndToDeck(out, fromStart, coverFn, deckPts);
+    out = r.pts;
+    if (r.join) join = r.join;
+  }
+  return { pts: out, join };
+}
+
+function addMergeGore(add, pts, join, deckPts) {
+  if (!join || !deckPts || pts.length < 4) return;
+  const { fromStart, side, edge, innerOff, noseIndex, auxW } = join;
+  const n = pts.length;
+  const i0 = Math.max(0, Math.min(n - 1, noseIndex));
+  const dir = fromStart ? 1 : -1;
+  const gore = [];
+  for (let step = 0; step < 24; step++) {
+    const i = i0 + dir * step;
+    if (i < 1 || i > n - 2) break;
+    const p = pts[i];
+    const ref = nearestDeck(p[0], p[1], deckPts);
+    const ex = ref.x + ref.lx * edge, ez = ref.z + ref.lz * edge;
+    const a = pts[i - 1], b = pts[i + 1];
+    let dx = b[0] - a[0], dz = b[1] - a[1]; const L = Math.hypot(dx, dz) || 1; dx /= L; dz /= L;
+    const towardDeck = (p[0] - 2 * dz - ref.x) * ref.lx + (p[1] + 2 * dx - ref.z) * ref.lz;
+    const towardDeckN = (p[0] + 2 * dz - ref.x) * ref.lx + (p[1] - 2 * dx - ref.z) * ref.lz;
+    const innerSgn = Math.abs(towardDeck - innerOff) < Math.abs(towardDeckN - innerOff) ? 1 : -1;
+    const inner = [
+      p[0] - dz * innerSgn * Math.max(0.2, (p[3] || auxW) / 2 - 0.15),
+      p[1] + dx * innerSgn * Math.max(0.2, (p[3] || auxW) / 2 - 0.15),
+    ];
+    const gap = Math.hypot(inner[0] - ex, inner[1] - ez);
+    if (step > 1 && gap > 12) break;
+    if (gap < 0.6) continue;
+    gore.push({
+      mx: (ex + inner[0]) / 2, mz: (ez + inner[1]) / 2,
+      w: gap, y: JOIN_Y, hx: ref.hx, hz: ref.hz, ex, ez, ix: inner[0], iz: inner[1],
+    });
+  }
+  if (gore.length < 2) return;
+  add(ribbonGeo(gore.map((g) => [g.mx, g.mz, g.y, g.w]), gore[0].w, 0.1, false), COL.road);
+  const nChev = Math.min(7, gore.length);
+  for (let k = 0; k < nChev; k++) {
+    const g = gore[Math.round(k * (gore.length - 1) / Math.max(1, nChev - 1))];
+    const slant = 1.7;
+    const tip = fromStart ? -1 : 1; // 고어 코(평행 구간) 쪽
+    // V: 양 끝이 분류 쪽으로, 중간이 코 쪽으로
+    const a = [g.ex + g.hx * slant, g.ez + g.hz * slant, g.y];
+    const c = [g.ix + g.hx * slant, g.iz + g.hz * slant, g.y];
+    const b = [g.mx - g.hx * slant * 0.9 * tip, g.mz - g.hz * slant * 0.9 * tip, g.y];
+    add(ribbonGeo([a, b], 0.55, 0.16, false), COL.edge);
+    add(ribbonGeo([b, c], 0.55, 0.16, false), COL.edge);
+  }
 }
 
 /** 본선 커버를 적용한 뒤에 실제로 그릴 램프·모터웨이 조각. 테스트에서 겹침을 검사한다. */
-export function pangyoVisibleChunks(E, coverFn) {
+export function pangyoVisibleChunks(E, coverFn, deckPts = null) {
   const rawChunks = [];
   for (const l of E.lines || []) {
     // 4+4 가 있으면 OSM 경부 본선(mainNB/mainSB)은 그리지 않는다. 옆의 넓은 4차로 복제 차도가 되던 원인.
     if (coverFn && isExpressMainline(l)) continue;
     for (const raw of runs(l)) {
-      for (const c of piecesAway(raw, coverFn)) rawChunks.push({ k: l.k, pts: extendChunkToDeck(c, coverFn) });
+      for (const c of piecesAway(raw, coverFn)) {
+        const joined = joinChunkToDeck(c, coverFn, deckPts);
+        rawChunks.push({ k: l.k, pts: joined.pts, join: joined.join });
+      }
     }
   }
   const kept = new Set(dedupeChunks(rawChunks.map((c) => c.pts)));
@@ -443,36 +642,69 @@ export function buildPangyoExpress(E, opts = {}) {
   const add = (geo, color) => { if (geo) day.push(painted(geo, color)); };
   const DECK = E.meta?.rule?.deck ?? 1.5;
   const coverFn = typeof opts.coverFn === 'function' ? opts.coverFn : null;
-  for (const { k, pts: P0 } of pangyoVisibleChunks(E, coverFn)) {
+  const deckPts = Array.isArray(opts.deckPts) && opts.deckPts.length > 1 ? opts.deckPts : null;
+  for (const { k, pts: P0, join } of pangyoVisibleChunks(E, coverFn, deckPts)) {
     const main = k === 'motorway';
     const P = taperEnds(P0, coverFn);
-    const w = P[0][3];
+    const w = Math.max(...P.map((p) => p[3] || 0), P[0][3] || 7);
     const pts = P.map((p) => [p[0], p[1], p[2], p[3]]);
     add(ribbonGeo(pts, w, 0.1, false), main ? COL.mainRoad : COL.road);
-    const shoulder = Math.max(5.5, (w || 8) + 6);
     const grade = P.reduce((s, p) => s + p[2], 0) / P.length < 1.15;
+    const joinLen = join ? (join.taperLen + join.parallelLen + join.blendLen * 0.7) : 0;
+    const inJoin = (i) => !!(join && distFromEnd(pts, join.fromStart, i) < joinLen);
+    let innerSgn = 0;
+    if (join && deckPts) {
+      const mid = Math.max(1, Math.min(pts.length - 2, join.noseIndex));
+      const a = pts[mid - 1], b = pts[mid + 1];
+      let dx = b[0] - a[0], dz = b[1] - a[1]; const L = Math.hypot(dx, dz) || 1; dx /= L; dz /= L;
+      const dPos = nearestDeck(pts[mid][0] - dz * 2, pts[mid][1] + dx * 2, deckPts).d;
+      const dNeg = nearestDeck(pts[mid][0] + dz * 2, pts[mid][1] - dx * 2, deckPts).d;
+      innerSgn = dPos < dNeg ? 1 : -1;
+    }
     if (grade) {
-      add(ribbonGeo(pts.map((p) => [p[0], p[1], 0.03, shoulder]), shoulder, 0, false), '#5e7548');
+      add(ribbonGeo(pts.map((p) => [p[0], p[1], 0.03, Math.max(5.5, (p[3] || w) + 6)]), w + 6, 0, false), '#5e7548');
       for (const sgn of [1, -1]) {
+        if (join && innerSgn && sgn === innerSgn) continue;
         const embTop = (i) => pts[i][2] + 0.08;
         const embBot = () => 0.02;
-        add(sideStrip(pts, sgn * (w / 2 + 0.2), embTop, embBot), '#6a7a4e');
-        add(sideStrip(pts, sgn * (w / 2 + 7.5), embTop, embBot), '#567044');
+        add(sideStrip(pts, (i) => sgn * ((pts[i][3] || w) / 2 + 0.2), embTop, embBot), '#6a7a4e');
+        add(sideStrip(pts, (i) => sgn * ((pts[i][3] || w) / 2 + 7.5), embTop, embBot), '#567044');
       }
     }
-    // 차선: 양 끝 실선 + 차로 경계 점선(OSM lanes, 폭 규칙 3.3m — 데이터의 폭에서 역산)
-    add(ribbonGeo(offsetPts(pts, w / 2 - 0.6).map((p) => [p[0], p[1], p[2], 0.18]), 0.18, 0.13, false), COL.edge);
-    add(ribbonGeo(offsetPts(pts, -(w / 2 - 0.6)).map((p) => [p[0], p[1], p[2], 0.18]), 0.18, 0.13, false), COL.edge);
+    // 차선: 바깥 실선은 폭을 따라가고, 본선에 붙는 안쪽은 테이퍼가 끝날 때까지 점선
+    for (const sgn of [1, -1]) {
+      const edgePts = offsetPtsVariable(pts, sgn, 0.6);
+      if (join && innerSgn && sgn === innerSgn) {
+        const dashSrc = [];
+        const solidSrc = [];
+        for (let i = 0; i < pts.length; i++) {
+          if (inJoin(i)) dashSrc.push(pts[i]);
+          else solidSrc.push(pts[i]);
+        }
+        if (dashSrc.length > 1) {
+          for (const d of dashes(offsetPtsVariable(dashSrc, innerSgn, 1.85), 0, 0.13)) add(d, COL.line);
+        }
+        if (solidSrc.length > 1) add(ribbonGeo(offsetPtsVariable(solidSrc, sgn, 0.6).map((p) => [p[0], p[1], p[2], 0.18]), 0.18, 0.13, false), COL.edge);
+      } else {
+        add(ribbonGeo(edgePts.map((p) => [p[0], p[1], p[2], 0.18]), 0.18, 0.13, false), COL.edge);
+      }
+    }
     const lanes = Math.max(1, Math.round((w - 1.2) / 3.3));
     if (lanes > 1) for (let k = 1; k < lanes; k++) for (const d of dashes(pts, -w / 2 + 0.6 + ((w - 1.2) * k) / lanes, 0.13)) add(d, COL.line);
-    // 방호벽(콘크리트, 높이 0.9 · 폭 0.4 — 기본값) 양쪽
+    if (join && deckPts) addMergeGore(add, pts, join, deckPts);
+    // 방호벽: 본선에 붙는 안쪽과 폭이 좁아진 끝은 세우지 않는다
     for (const sgn of [1, -1]) {
-      const o = sgn * (w / 2 + 0.2), top = (i) => pts[i][2] + 1.0, bot = (i) => pts[i][2] + 0.1;
-      add(sideStrip(pts, o + sgn * 0.2, top, bot), COL.barrier); add(sideStrip(pts, o - sgn * 0.2, top, bot), COL.barrier);
-      add(ribbonGeo(offsetPts(pts, o).map((p) => [p[0], p[1], p[2] + 0.9, 0.4]), 0.4, 0.1, false), COL.edge);
-      // 상판 옆면(교량: 두께 DECK) · 옹벽(비교량: 0m 까지) — 0.6m 넘게 뜬 곳
+      const use = (i) => (pts[i][3] || w) >= 2 && !(join && innerSgn && sgn === innerSgn && inJoin(i));
+      for (const run of collectRuns(pts, use)) {
+        const top = (i) => run[i][2] + 1.0, bot = (i) => run[i][2] + 0.1;
+        add(sideStrip(run, (i) => sgn * ((run[i][3] || w) / 2 + 0.4), top, bot), COL.barrier);
+        add(sideStrip(run, (i) => sgn * ((run[i][3] || w) / 2), top, bot), COL.barrier);
+        add(ribbonGeo(offsetPtsVariable(run, sgn, -0.2).map((p) => [p[0], p[1], p[2] + 0.9, 0.4]), 0.4, 0.1, false), COL.edge);
+      }
       const bot2 = (i) => (pts[i][2] < 0.6 ? pts[i][2] + 0.1 : P[i][4] ? Math.max(0, pts[i][2] - DECK) : 0);
-      add(sideStrip(pts, sgn * (w / 2 + 0.4), (i) => pts[i][2] + 0.1, bot2), P.some((p) => p[4]) ? COL.side : COL.wall);
+      if (!(join && innerSgn && sgn === innerSgn)) {
+        add(sideStrip(pts, (i) => sgn * ((pts[i][3] || w) / 2 + 0.4), (i) => pts[i][2] + 0.1, bot2), P.some((p) => p[4]) ? COL.side : COL.wall);
+      }
     }
     // 교량 밑면
     if (P.some((p) => p[4] && p[2] > 1.6)) add(ribbonGeo(pts.map((p, i) => [p[0], p[1], P[i][4] ? Math.max(0.02, p[2] - DECK) : 0.02, p[3] + 0.8]), w + 0.8, 0, false), COL.under); // 양면 재질이라 아래에서도 보임
