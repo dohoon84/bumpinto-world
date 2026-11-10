@@ -425,26 +425,40 @@ stops.forEach((st, si) => {
   }
 });
 
-// 중앙섬에서 양쪽 인도로 잇는 횡단 얼룩말 — 플랫폼 중앙·양 끝
+// 중앙섬 가장자리에서 양쪽 연석까지, 버스전용차로를 포함해 차도를 끊기지 않게 잇는 횡단 얼룩말.
+// 예전에는 정류장 위치의 연석과 섬 위 along 점을 대각선으로 이었고, 그 결과 섬 끝 횡단보도의
+// 긴 축이 섬을 향하지 않아 버스차로·섬 옆이 비었다.
+function onCrossingLane(x, z, pad = 0.35) {
+  for (const r of daeroRoads) {
+    if (!r.p || r.p.length < 2 || r.k === 'service') continue;
+    const hit = projectOn(r.p, [x, z]);
+    if (hit.d < (r.w || 16) / 2 + pad) return true;
+  }
+  for (const r of busways) {
+    if (!r.p || r.p.length < 2) continue;
+    const hit = projectOn(r.p, [x, z]);
+    if (hit.d < (r.w || 4) / 2 + pad) return true;
+  }
+  return false;
+}
+
 const zebras = [];
 for (const st of stops) {
   if (st.kind !== 'median' || st.road !== '강남대로') continue;
-  const daes = distinctHits(nearestHits(st.x, st.z, daeroRoads, 42), 8).slice(0, 2);
-  if (!daes.length) continue;
   const span = (MED_N - 1) * MED_GAP;
+  const fx = Math.sin(st.yaw), fz = Math.cos(st.yaw);
   for (const along of [-span / 2, 0, span / 2]) {
-    const [bx, bz] = alongRight(st, along);
-    for (const h of daes) {
-      const rr = [Math.cos(h.yaw), -Math.sin(h.yaw)];
-      const signed = (st.x - h.pt[0]) * rr[0] + (st.z - h.pt[1]) * rr[1];
-      const outer = -(Math.sign(signed) || 1);
-      const half = (h.road.w || 16) / 2;
-      const ox = h.pt[0] + rr[0] * outer * half;
-      const oz = h.pt[1] + rr[1] * outer * half;
-      const cx = (bx + ox) / 2, cz = (bz + oz) / 2;
-      const len = hypot(ox - bx, oz - bz);
-      if (len < 6) continue;
-      zebras.push([r1(cx), r1(cz), r3(h.yaw + Math.PI / 2), 5.2, r1(len - 0.6)]);
+    const [ix, iz] = alongRight(st, along);
+    const inner = islandWidthAt(ix, iz) * 0.5 + 0.15;
+    for (const side of [-1, 1]) {
+      let outer = inner;
+      for (let d = inner; d <= 36; d += 0.35) {
+        if (onCrossingLane(ix + fx * side * d, iz + fz * side * d)) outer = d;
+      }
+      const across = outer - inner;
+      if (across < 4) continue;
+      const mid = (inner + outer) / 2;
+      zebras.push([r1(ix + fx * side * mid), r1(iz + fz * side * mid), r3(st.yaw), 5.2, r1(across)]);
     }
   }
 }

@@ -78,6 +78,102 @@ const ok = (m) => console.log(`ok ${++n} ${m}`);
   const index = J('public/corridor/gangnam/index.json');
   const tiles = Object.keys(index.tiles).sort().map((k) => J(`public/corridor/gangnam/tiles/${k}.json`));
   const roads = tiles.flatMap((t) => t.r || []);
+  const daeroRoads = roads.filter((r) => r.n === '강남대로' && r.k !== 'service');
+  const busways = roads.filter((r) => r.k === 'busway');
+  const hypot = Math.hypot;
+  const projectOn = (seq, p) => {
+    let best = Infinity, pt = seq[0], yaw = 0;
+    for (let i = 1; i < seq.length; i++) {
+      const a = seq[i - 1], b = seq[i];
+      const dx = b[0] - a[0], dz = b[1] - a[1], L2 = dx * dx + dz * dz || 1;
+      const t = Math.max(0, Math.min(1, ((p[0] - a[0]) * dx + (p[1] - a[1]) * dz) / L2));
+      const q = [a[0] + dx * t, a[1] + dz * t];
+      const d = hypot(q[0] - p[0], q[1] - p[1]);
+      if (d < best) { best = d; pt = q; yaw = Math.atan2(dx, dz); }
+    }
+    return { d: best, pt, yaw };
+  };
+  const onLane = (x, z, pad = 0.35) => {
+    for (const r of daeroRoads) {
+      if (!r.p || r.p.length < 2) continue;
+      if (projectOn(r.p, [x, z]).d < (r.w || 16) / 2 + pad) return true;
+    }
+    for (const r of busways) {
+      if (!r.p || r.p.length < 2) continue;
+      if (projectOn(r.p, [x, z]).d < (r.w || 4) / 2 + pad) return true;
+    }
+    return false;
+  };
+  const inZebra = (x, z, pad = 0.25) => {
+    for (const zd of j.zebras || []) {
+      const [cx, cz, yaw, sx, sz] = zd;
+      const dx = x - cx, dz = z - cz;
+      const c = Math.cos(yaw), s = Math.sin(yaw);
+      const lx = dx * c - dz * s, lz = dx * s + dz * c;
+      if (Math.max(0, Math.abs(lx) - sx / 2) ** 2 + Math.max(0, Math.abs(lz) - sz / 2) ** 2 <= pad * pad) return true;
+    }
+    return false;
+  };
+  const twoBus = (x, z) => {
+    const hits = [];
+    for (const r of busways) {
+      if (!r.p || r.p.length < 2) continue;
+      const hit = projectOn(r.p, [x, z]);
+      if (hit.d <= 45 && !hits.some((o) => hypot(o.pt[0] - hit.pt[0], o.pt[1] - hit.pt[1]) < 5.5)) hits.push({ ...hit, road: r });
+    }
+    for (let i = 0; i < hits.length; i++) {
+      for (let k = i + 1; k < hits.length; k++) {
+        const c2c = hypot(hits[i].pt[0] - hits[k].pt[0], hits[i].pt[1] - hits[k].pt[1]);
+        if (c2c >= 6.2 && c2c <= 15.5) return [hits[i], hits[k]];
+      }
+    }
+    return hits.slice(0, 1);
+  };
+  const islandW = (x, z) => {
+    const pair = twoBus(x, z);
+    if (pair.length < 2) return 3.6;
+    const c2c = hypot(pair[0].pt[0] - pair[1].pt[0], pair[0].pt[1] - pair[1].pt[1]);
+    const gap = c2c - (pair[0].road.w || 4) / 2 - (pair[1].road.w || 4) / 2;
+    return Math.max(3.2, Math.min(4.0, gap - 0.35));
+  };
+  const MED_N = 5, MED_GAP = 7.2, span = (MED_N - 1) * MED_GAP;
+  const targets = (j.stops || []).filter((st) => st.kind === 'median' && st.road === '강남대로' && /강남역/.test(st.name));
+  assert.ok(targets.length >= 2, `강남역 median stops ${targets.length}`);
+  let checked = 0, missed = 0;
+  const samples = [];
+  for (const st of targets) {
+    const fx = Math.sin(st.yaw), fz = Math.cos(st.yaw);
+    const rx = Math.cos(st.yaw), rz = -Math.sin(st.yaw);
+    for (const along of [-span / 2, 0, span / 2]) {
+      const ix = st.x + rx * along, iz = st.z + rz * along;
+      const inner = islandW(ix, iz) * 0.5 + 0.2;
+      for (const side of [-1, 1]) {
+        let lane = 0, hit = 0;
+        for (let d = inner; d <= 34; d += 0.6) {
+          const x = ix + fx * side * d, z = iz + fz * side * d;
+          if (!onLane(x, z)) continue;
+          lane++;
+          checked++;
+          if (inZebra(x, z)) hit++;
+          else {
+            missed++;
+            if (samples.length < 8) samples.push(`${st.ref} along=${along} side=${side} d=${d.toFixed(1)} @${x.toFixed(1)},${z.toFixed(1)}`);
+          }
+        }
+        assert.ok(lane >= 8, `${st.ref} side ${side} along ${along} only ${lane} carriageway samples`);
+      }
+    }
+  }
+  assert.equal(missed, 0, `zebra gaps ${missed}/${checked} ${samples.join(' | ')}`);
+  ok(`zebra covers full 강남역 carriageway ${checked - missed}/${checked} at ${targets.length} median stops`);
+}
+
+
+{
+  const j = J('public/corridor/gangnam/street.json');
+  const index = J('public/corridor/gangnam/index.json');
+  const tiles = Object.keys(index.tiles).sort().map((k) => J(`public/corridor/gangnam/tiles/${k}.json`));
+  const roads = tiles.flatMap((t) => t.r || []);
   const busways = roads.filter((r) => r.k === 'busway');
   const avenues = roads.filter((r) => r.n === '강남대로' || r.n === '테헤란로');
   const hypot = Math.hypot;
