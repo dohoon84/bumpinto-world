@@ -70,7 +70,8 @@ function inside(x, z, poly) {
 }
 
 const jeongja = readJson('public/jeongja.json');
-const prepared = prepareJeongjaBp24(structuredClone(jeongja), '');
+const jeongjaLive = structuredClone(jeongja);
+const prepared = prepareJeongjaBp24(jeongjaLive, '');
 const jz = new Map(prepared.map((st) => [st.id, st]));
 const fail = [];
 let checked = 0;
@@ -120,6 +121,33 @@ for (const spec of BP24_PLACEMENTS) {
       const wx = st.o[0] + st.ax[0] * x + st.b[0] * z, wz = st.o[1] + st.ax[1] * x + st.b[1] * z;
       if (!inside(wx, wz, ring)) { fail.push(`${spec.id} 실내가 건물 밖`); break; }
     }
+  }
+  if (spec.id === 'jz24') {
+    if (door.z > -374 || Math.abs(door.x + 169.8) > 3) fail.push(`${spec.id} 문이 OSM 북쪽 1층 면이 아님 (${door.x.toFixed(1)}, ${door.z.toFixed(1)})`);
+    if (st.W < 16) fail.push(`${spec.id} 긴 면에 안 붙음 폭 ${st.W}`);
+    if (!(st.b[1] > 0.9)) fail.push(`${spec.id} 앞면이 북쪽이 아님 ${st.b}`);
+    const host = jeongjaLive.buildings[24];
+    const hx = host.o.map((p) => p[0]), hz = host.o.map((p) => p[1]);
+    const hb = [Math.min(...hx), Math.min(...hz), Math.max(...hx), Math.max(...hz)];
+    const twins = jeongjaLive.buildings.filter((b) => {
+      if (!b?.o?.length) return false;
+      const xs = b.o.map((p) => p[0]), zs = b.o.map((p) => p[1]);
+      return Math.abs(Math.min(...xs) - hb[0]) < 0.8 && Math.abs(Math.min(...zs) - hb[1]) < 0.8
+        && Math.abs(Math.max(...xs) - hb[2]) < 0.8 && Math.abs(Math.max(...zs) - hb[3]) < 0.8;
+    });
+    if (twins.length < 2) fail.push(`${spec.id} 겹친 건물 쌍을 못 찾음`);
+    const drawn = twins.filter((b) => !b._skip);
+    if (!drawn.length) fail.push(`${spec.id} 호스트 건물까지 건너뛰어 위층이 없음`);
+    for (const b of drawn) {
+      if ((b.mh || 0) < st.gf - 0.01) fail.push(`${spec.id} 겹친 건물 1층이 그대로라 유리를 가림 mh=${b.mh}`);
+    }
+    if (!twins.some((b) => b !== host && b._skip && (b.mh || 0) >= st.gf - 0.01)) {
+      fail.push(`${spec.id} 겹친 건물 외벽을 건너뛰지 않아 창이 겹침`);
+    }
+  }
+  if (spec.id === 'cr12446') {
+    if ((st.recess || 0) < 1.5) fail.push(`${spec.id} 들인 간판이 사라짐 recess=${st.recess}`);
+    if (Math.hypot(door.x - 1630.7, door.z + 7393.7) > 6) fail.push(`${spec.id} 문이 OSM에서 멀다 (${door.x.toFixed(1)}, ${door.z.toFixed(1)})`);
   }
   if (spec.id === 'jz649') {
     const host = jeongja.buildings[spec.building];

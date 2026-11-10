@@ -138,8 +138,9 @@ export function assessStore(st, building, roads, parks) {
   const mid = roadClearance(roads, cx, cz);
   const walk = Math.min(walkClearance(roads, door[0], door[1]), walkClearance(roads, ahead[0], ahead[1]));
   if (dc < -0.8) reasons.push('문이 차도 안');
-  // 문 앞이 매장 중심보다 차도에 가깝고 18m 안이거나, 인도·보행로가 10m 안이면 문이 길을 본다.
+  // 문 앞이 매장 중심보다 차도에 가깝고 18m 안이거나, 인도·보행로가 20m 안이면 문이 길을 본다.
+  // (건물과 보행로 사이에 작은 광장·공터가 있는 1층 편의점도 인정)
   const facesRoad = Math.min(dc, ac) < mid - 0.25 && Math.min(dc, ac) < 18;
-  if (!facesRoad && walk > 10) reasons.push('문이 도로·인도를 안 봄');
+  if (!facesRoad && walk > 20) reasons.push('문이 도로·인도를 안 봄');
   return { ok: reasons.length === 0, reasons };
 }
