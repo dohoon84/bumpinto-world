@@ -533,17 +533,21 @@ export function buildGangnamUnderground({ exits, entryId, look, renderer, onToas
   const hang = (x, z, w, uv, ry = 0) => {
     const hh = w * (100 / 640);
     const y = CEIL - 0.4;
-    const depth = 0.34;
-    S.box(x, y, z, w + 0.1, hh + 0.1, depth, '#5c4a10', { ry });
+    const depth = 0.1;
+    // 노란 테두리 — 밑면·옆이 보여도 길찾기 간판으로 읽히게. 예전 올리브(#5c4a10)는 상자처럼 보였다.
+    S.box(x, y, z, w + 0.06, hh + 0.06, depth, '#c59214', { ry });
     const ox = Math.sin(ry) * (depth / 2 + 0.012);
     const oz = Math.cos(ry) * (depth / 2 + 0.012);
     G.quad(x + ox, y, z + oz, w, hh, '#ffffff', { ry, uv });
     G.quad(x - ox, y, z - oz, w, hh, '#ffffff', { ry: ry + Math.PI, uv });
     S.box(x, (y + hh / 2 + CEIL) / 2, z, 0.035, Math.max(0.12, CEIL - (y + hh / 2)), 0.035, '#adb5bd');
   };
-  hang(0, 0.15, 2.35, hangBoard(['10', '11', '1', '12'], '나가는 곳', 'Way Out', '북쪽 · 테헤란로  /  North · Teheran-ro'));
-  hang(-24, 0, 2.2, hangBoard(['8', '9'], '나가는 곳', 'Way Out', '서초대로  /  Seocho-daero'), Math.PI);
-  hang(24, 0, 2.2, hangBoard(['1', '12'], '나가는 곳', 'Way Out', '테헤란로  /  Teheran-ro'));
+  // 교차점: 남북 홀(ry=0, +z)과 東西 홀(ry=π/2, +x) 양쪽에서 얼굴이 보이게
+  const crossUv = hangBoard(['10', '11', '1', '12'], '나가는 곳', 'Way Out', '북쪽 · 테헤란로  /  North · Teheran-ro');
+  hang(0, 0.15, 2.35, crossUv, 0);
+  hang(0, 0.15, 2.35, crossUv, Math.PI / 2);
+  hang(-24, 0, 2.2, hangBoard(['8', '9'], '나가는 곳', 'Way Out', '서초대로  /  Seocho-daero'), Math.PI / 2);
+  hang(24, 0, 2.2, hangBoard(['1', '12'], '나가는 곳', 'Way Out', '테헤란로  /  Teheran-ro'), Math.PI / 2);
   hang(0, 20, 2.2, hangBoard(['2', '3', '4', '5', '6', '7'], '나가는 곳', 'Way Out', '강남대로 남쪽  /  South'), Math.PI);
   hang(0, 47, 2.15, hangBoard(['2', '3', '4'], '나가는 곳', 'Way Out', '남동  /  Southeast'), 0);
   const platUv = atlas.add(560, 96, (c, w, h) => {
