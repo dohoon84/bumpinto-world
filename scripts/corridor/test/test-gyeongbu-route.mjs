@@ -16,6 +16,7 @@ import {
 import { cheonggyeHeightAt, cheonggyeMeshHeightAt } from '../../../src/corridor/cheonggyeTerrain.js';
 import { expresswayMedianLine, keepDeckPoint, expressLayout, expressDeckLaneCenters } from '../../../src/corridor/gyeongbuExpress.js';
 import { pangyoTollLayout, pangyoTollSupports, pangyoTollLaneRects, pointInRotatedRect, pangyoVisibleChunks } from '../../../src/corridor/pangyoExpress.js';
+import { setExpressSurface, expressSurfaceHeight, expressDeckOffsets, EXPRESS_RIBBON_Y } from '../../../src/corridor/expressSurface.js';
 import { pointInBox } from '../../../src/corridor/islands.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
@@ -333,6 +334,77 @@ for (const q of junctionRide) {
 assert.deepEqual(noSurface.slice(0, 8), [], `차로 아래 노면 없음 ${JSON.stringify(noSurface[0] || {})} (${noSurface.length}곳)`);
 assert.deepEqual(overlapHits.slice(0, 8), [], `차로 위 리본 겹침 ${JSON.stringify(overlapHits[0] || {})} (${overlapHits.length}곳)`);
 
+// 깔린 메시 높이와 걷기·라이딩 지면 질의가 5m 마다 5cm 안으로 같아야 한다.
+// meshSurface: expresswayDeck yAt / ribbonGeo(p[2]+0.1). groundQuery: extras(올리기) + surface(맞추기).
+setExpressSurface({ deckPts: coverPts, rampChunks: visible });
+const SURF_TOL = 0.05;
+function groundQuery(x, z, refY = Infinity) {
+  let h = 0;
+  const extra = expressRoadHeight(x, z, ex.pts);
+  if (extra != null && extra > h && extra <= refY + 0.6) h = extra;
+  const surf = expressSurfaceHeight(x, z, refY);
+  if (surf != null && surf <= refY + 0.6) h = surf;
+  return h;
+}
+function meshDeckY(x, z) {
+  return expressRoadHeight(x, z, ex.pts) ?? EXPRESS_ROAD_Y;
+}
+const surfMiss = [];
+const deckOffs = expressDeckOffsets();
+let deckSamples = 0, rampSamples = 0;
+for (const q of junctionRide) {
+  if (distToPts(q.x, q.z, coverPts) > 5) continue;
+  const lx = q.hz, lz = -q.hx;
+  for (const spec of deckOffs) {
+    const x = q.x + lx * spec.off, z = q.z + lz * spec.off;
+    const meshSurface = meshDeckY(x, z);
+    const gq = groundQuery(x, z);
+    deckSamples++;
+    if (gq == null || !Number.isFinite(gq) || Math.abs(gq - meshSurface) > SURF_TOL) {
+      surfMiss.push({ kind: spec.name, s: +q.s.toFixed(1), x: +x.toFixed(1), z: +z.toFixed(1), meshSurface: +meshSurface.toFixed(3), groundQuery: gq == null ? null : +gq.toFixed(3) });
+    }
+  }
+}
+function sampleRun(pts, step, fn) {
+  let acc = 0, next = 0;
+  for (let i = 1; i < pts.length; i++) {
+    const a = pts[i - 1], b = pts[i];
+    const seg = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1e-9;
+    const hx = (b[0] - a[0]) / seg, hz = (b[1] - a[1]) / seg;
+    while (next <= acc + seg + 1e-9) {
+      const u = Math.max(0, Math.min(1, (next - acc) / seg));
+      fn(a, b, u, hx, hz, next);
+      next += step;
+    }
+    acc += seg;
+  }
+}
+for (const chunk of visible) {
+  const pts = chunk.pts;
+  if (!pts || pts.length < 2) continue;
+  sampleRun(pts, 5, (a, b, u, hx, hz) => {
+    const x = a[0] + (b[0] - a[0]) * u, z = a[1] + (b[1] - a[1]) * u;
+    const w = (a[3] || 7) * (1 - u) + (b[3] || 7) * u;
+    const meshSurface = (a[2] || 0) + ((b[2] || 0) - (a[2] || 0)) * u + EXPRESS_RIBBON_Y;
+    const lx = hz, lz = -hx;
+    const spots = [[x, z, 'cen']];
+    if (w > 2.4) {
+      const lat = w * 0.28;
+      spots.push([x + lx * lat, z + lz * lat, 'L'], [x - lx * lat, z - lz * lat, 'R']);
+    }
+    for (const [sx, sz, where] of spots) {
+      const gq = groundQuery(sx, sz);
+      rampSamples++;
+      if (gq == null || !Number.isFinite(gq) || Math.abs(gq - meshSurface) > SURF_TOL) {
+        surfMiss.push({ kind: `ramp:${chunk.k || 'link'}:${where}`, x: +sx.toFixed(1), z: +sz.toFixed(1), meshSurface: +meshSurface.toFixed(3), groundQuery: gq == null ? null : +gq.toFixed(3) });
+      }
+    }
+  });
+}
+assert.ok(deckSamples > 2000, `본선 차로·갓길 샘플 ${deckSamples}`);
+assert.ok(rampSamples > 80, `램프·테이퍼 샘플 ${rampSamples}`);
+assert.deepEqual(surfMiss.slice(0, 8), [], `지면 질의 ≠ 깔린 노면 ${JSON.stringify(surfMiss[0] || {})} (${surfMiss.length}곳)`);
+
 const layoutT = pangyoTollLayout(pangyo.toll);
 const supports = pangyoTollSupports(layoutT, pangyo.toll?.roof?.underside ?? 5.5);
 const islands = supports.map((s) => s.island);
@@ -350,4 +422,4 @@ for (const s of supports) {
   }
 }
 
-console.log(`gyeongbu route: ${samples.length} pts / 20m, dense ${dense.length}×${offsets.length} 메시, 분리대 ${median.length} (gap≤${maxGap.toFixed(2)}m turn≤${(maxTurn * 180 / Math.PI).toFixed(1)}°), 노면 y=${EXPRESS_ROAD_Y}, 전구간 ${ride.length} (Δy≤${maxRise.toFixed(3)}m/5m), 접근로 ${approachDeck.length}, 판교~양재 양차로 ${junctionRide.length}×2 겹침0 끊김0, 기둥 ${supports.length}. 고치기 전 막힘 ${stuckBefore.length}곳 첫 s=${first.s.toFixed(0)} (${first.x.toFixed(1)}, ${first.z.toFixed(1)})`);
+console.log(`gyeongbu route: ${samples.length} pts / 20m, dense ${dense.length}×${offsets.length} 메시, 분리대 ${median.length} (gap≤${maxGap.toFixed(2)}m turn≤${(maxTurn * 180 / Math.PI).toFixed(1)}°), 노면 y=${EXPRESS_ROAD_Y}, 전구간 ${ride.length} (Δy≤${maxRise.toFixed(3)}m/5m), 접근로 ${approachDeck.length}, 판교~양재 양차로 ${junctionRide.length}×2 겹침0 끊김0, 지면 ${deckSamples}+${rampSamples} Δy<${SURF_TOL}m, 기둥 ${supports.length}. 고치기 전 막힘 ${stuckBefore.length}곳 첫 s=${first.s.toFixed(0)} (${first.x.toFixed(1)}, ${first.z.toFixed(1)})`);

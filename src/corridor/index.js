@@ -19,13 +19,14 @@ import { createCorridorLife } from './life.js';
 import { extractLifeHints, gatherLifeHints } from './lifeHints.js'; // [life] 동네별 보행자·주차 위치 힌트
 import { setNightCut, updateNight } from './nightLights.js';
 import { pangyoEnabled, pangyoLinkEnabled, mergePangyoIndex, fetchCorridorTile, PANGYO_DIR } from './pangyo.js'; // [pangyo]
-import { pangyoExpressEnabled, PANGYO_EXPRESS_FILE, filterExpressHidden, buildPangyoExpress, expressHeightFn } from './pangyoExpress.js'; // [pangyo-express]
+import { pangyoExpressEnabled, PANGYO_EXPRESS_FILE, filterExpressHidden, buildPangyoExpress, expressHeightFn, pangyoVisibleChunks } from './pangyoExpress.js'; // [pangyo-express]
 import { createPangyoLandmarks } from './landmarks/pangyo.js'; // [pangyo]
 import { migeumEnabled, mergeMigeumIndex, MIGEUM_DIR, migeumSubwayDrawsEntrances, migeumTaxiEnabled, migeumBikeEnabled, MIGEUM_TAXIBIKE_FILE, pickMigeumTaxiBike } from './migeum.js'; // [migeum] [migeum-sub] [migeum-taxibike]
 import { gangnamEnabled, mergeGangnamIndex, GANGNAM_DIR, gangnamSubwayDrawsEntrances } from './gangnam.js'; // [gangnam]
 import { gangnamBusEnabled, GANGNAM_BUS_FILE, mountGangnamTransit } from './gangnamBus.js'; // [gangnam-bus]
 import { GYEONGBU_EXPRESS_FILE, gyeongbuExpressEnabled, keepDeckPoint, expressLayout } from './gyeongbuExpress.js'; // [gyeongbu-bus]
 import { mergeGyeongbuWorld, expressRoadHeight, setExpressHeightExtra, buildExpressHeightProfile, distToPts } from './gyeongbuWorld.js'; // [gyeongbu-bus]
+import { setExpressSurface, expressSurfaceHeight, onExpressPavement } from './expressSurface.js'; // [gyeongbu-bus]
 import { binGyeongbuMiniTiles, CHEONGGYE_STREETS_FILE, CHEONGGYE_BUILDINGS_FILE } from './gyeongbuMinimap.js'; // [gyeongbu-bus] 미니맵
 import { isMobileMode } from '../mobile/flag.js'; // [gangnam] 강남 박스 안에서만 모바일 품질 하향
 import { migeumBusEnabled } from './migeumBus.js'; // [migeum-bus]
@@ -124,6 +125,7 @@ export function createCorridor({ scene, corridorData, terrain, world, renderer, 
 
   const corridorOnRoad = (x, z) => {
     if (chOnRoad(x, z)) return true;
+    if (onExpressPavement(x, z, 2)) return true;
     for (const t of loaded) if (near(t, x, z, 40) && t.detail.onRoad(x, z)) return true;
     return false;
   };
@@ -416,6 +418,15 @@ export function createCorridor({ scene, corridorData, terrain, world, renderer, 
   if (terrain?.addGroundExtra && corridorData.gangnamExpress?.pts) {
     const expPts = corridorData.gangnamExpress.pts;
     terrain.addGroundExtra((x, z) => expressRoadHeight(x, z, expPts));
+  }
+  if (coverPts.length) {
+    const chunks = corridorData.pangyoExpress
+      ? pangyoVisibleChunks(corridorData.pangyoExpress, pangyoCoverFn, coverPts)
+      : [];
+    setExpressSurface({ deckPts: coverPts, rampChunks: chunks });
+  }
+  if (terrain?.addGroundSurface) {
+    terrain.addGroundSurface((x, z, refY) => expressSurfaceHeight(x, z, refY));
   }
   // [gyeongbu-bus] 본선 공백에는 상세 타일이 없다. 경부 본선·청계산로를 가상 타일로 미니맵에 올린다.
   const gbMini = (corridorData.gangnamExpress?.pts || corridorData.cheonggyeStreets)
