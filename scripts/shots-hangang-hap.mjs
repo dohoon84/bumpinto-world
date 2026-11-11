@@ -133,7 +133,8 @@ async function capture(page, tag) {
   await go(page, {
     x: up.x, z: up.z, y: await yOf(up.x, up.z),
     yaw: look(up.x, up.z, -4129.0, -17145.0),
-    dist: 13, pitch: 0.16, fov: 60,
+    // 카메라를 입구 밖, 소핏보다 낮게 두어 거더 앞면·난간과 터널 안 조명이 같이 보이게 한다.
+    dist: 17, pitch: 0.0, fov: 60,
   });
   await shot(page, `${tag}-02-olympic-underpass-v2`);
 

@@ -332,9 +332,15 @@ function createHapUnderpasses({ parent, osm, land }) {
   const tunnels = (osm?.ways || []).filter((w) => w.tunnel === 'yes' && (w.name || '').includes('나들목') && w.pts?.length >= 2);
   if (!olympic.length || !tunnels.length) return { group, setNight() {} };
 
-  const wallMat = new THREE.MeshLambertMaterial({ color: '#3e4248' });
-  const soffitMat = new THREE.MeshLambertMaterial({ color: '#2a2c30', side: THREE.DoubleSide });
+  // 박스 터널 안은 밝은 콘크리트 벽 + 천장 조명(자체 발광)으로 읽히게 한다. 예전 짙은 회색
+  // 벽은 그늘에서 검은 구멍이었다. 입구 위 올림픽대로는 거더 앞면(파사드)과 난간을 단다.
+  const wallMat = new THREE.MeshLambertMaterial({ color: '#a7a9a8', emissive: '#2c2a26' });
+  const earthMat = new THREE.MeshLambertMaterial({ color: '#6b6e70' });
+  const soffitMat = new THREE.MeshLambertMaterial({ color: '#8a8c8e', emissive: '#24221e', side: THREE.DoubleSide });
   const deckMat = new THREE.MeshLambertMaterial({ color: '#55585c' });
+  const fasciaMat = new THREE.MeshLambertMaterial({ color: '#c3c5c4' });
+  const parapetMat = new THREE.MeshLambertMaterial({ color: '#b2b4b3' });
+  const lampMat = new THREE.MeshBasicMaterial({ color: '#fff2cf' });
 
   for (const tun of tunnels) {
     const samples = resample(tun.pts, 8);
@@ -354,13 +360,16 @@ function createHapUnderpasses({ parent, osm, land }) {
     const tdx = b[0] - a[0], tdz = b[1] - a[1];
     const tL = Math.hypot(tdx, tdz) || 1;
     const soffitY = yOly - 0.45;
-    const impliedFloor = soffitY - 5.2;
     const half = Math.max(28, (best.ow.w || 19) * 0.5 + 20);
     const stations = [];
     for (const p of samples) {
       const tt = Math.max(0, Math.min(1, ((p[0] - a[0]) * tdx + (p[1] - a[1]) * tdz) / (tL * tL)));
-      const floorY = Math.min(ya + (yb - ya) * tt - 0.2, impliedFloor);
-      if (soffitY - floorY < 3.0) continue;
+      // 바닥 판은 길(hangangPaths 터널 높이 = min(보간, 지형) − 0.25) 바로 밑에 둔다.
+      // 예전 impliedFloor(소핏 − 5.2 m)는 길보다 2 m 낮아 길 옆으로 빈 구덩이가 보였다.
+      const gHere = heightAt(p[0], p[1]);
+      const lerpY = ya + (yb - ya) * tt;
+      const floorY = Math.min(lerpY, gHere == null ? lerpY : gHere) - 0.32;
+      if (soffitY - floorY < 2.6) continue;
       if (Math.hypot(p[0] - best.x, p[1] - best.z) > half) continue;
       stations.push({ x: p[0], z: p[1], floorY });
     }
@@ -396,8 +405,10 @@ function createHapUnderpasses({ parent, osm, land }) {
       group.add(wall);
       // Fill the hillside so the camera inside the box does not see sky
       // through FrontSide DEM (the old white void beside the portal).
-      const earth = new THREE.Mesh(new THREE.BoxGeometry(10, innerH + 6, len + 10), wallMat);
-      earth.position.set(midX + px * (hw + 5.6) * side, floorY + (innerH + 6) / 2 - 1.2, midZ + pz * (hw + 5.6) * side);
+      // 윗면은 올림픽대로 상판 높이까지만 — 예전에는 상판 위로 4.8 m 솟아 하늘에 검은 쐐기가 됐다.
+      const earthTop = yOly + 0.6, earthBot = floorY - 1.2;
+      const earth = new THREE.Mesh(new THREE.BoxGeometry(10, earthTop - earthBot, len + 10), earthMat);
+      earth.position.set(midX + px * (hw + 5.6) * side, (earthTop + earthBot) / 2, midZ + pz * (hw + 5.6) * side);
       earth.rotation.y = yaw;
       group.add(earth);
     }
@@ -408,6 +419,34 @@ function createHapUnderpasses({ parent, osm, land }) {
     deck.rotation.y = yaw;
     deck.name = `underpass-deck-${tun.name || tun.id}`;
     group.add(deck);
+
+    // 입구 양쪽: 거더 앞면(소핏 아래 0.1 m ~ 상판 위 0.25 m)과 그 위 난간(1.0 m).
+    const at = (mesh, along, y) => {
+      mesh.position.set(midX + ux * along, y, midZ + uz * along);
+      mesh.rotation.y = yaw;
+      group.add(mesh);
+    };
+    const faceH = yOly + 1.0 - (soffitY - 0.15);
+    for (const end of [-1, 1]) {
+      const edge = end * ((len + 2.2) / 2);
+      const fascia = new THREE.Mesh(new THREE.BoxGeometry(deckW + 0.4, faceH, 0.45), fasciaMat);
+      at(fascia, edge + end * 0.22, soffitY - 0.15 + faceH / 2);
+      fascia.name = `underpass-fascia-${tun.name || tun.id}`;
+      const parapet = new THREE.Mesh(new THREE.BoxGeometry(deckW + 0.4, 1.0, 0.3), parapetMat);
+      at(parapet, edge + end * 0.15, yOly + 1.0 + 0.5);
+      const cap = new THREE.Mesh(new THREE.BoxGeometry(deckW + 0.6, 0.12, 0.42), fasciaMat);
+      at(cap, edge + end * 0.15, yOly + 2.06);
+    }
+    // 천장 조명: 두 줄, 6 m 간격.
+    const lampGeo = new THREE.BoxGeometry(0.35, 0.1, 1.8);
+    for (let d = -len / 2 + 2; d <= len / 2 - 1.5; d += 6) {
+      for (const side of [-1, 1]) {
+        const lamp = new THREE.Mesh(lampGeo, lampMat);
+        lamp.position.set(midX + ux * d + px * hw * 0.45 * side, soffitY - 0.05, midZ + uz * d + pz * hw * 0.45 * side);
+        lamp.rotation.y = yaw;
+        group.add(lamp);
+      }
+    }
   }
 
   return {
@@ -415,7 +454,9 @@ function createHapUnderpasses({ parent, osm, land }) {
     setNight(v) {
       const t = Math.max(0, Math.min(1, v));
       soffitMat.emissive = soffitMat.emissive || new THREE.Color('#000000');
-      soffitMat.emissive.set(t > 0.35 ? '#1a140c' : '#000000');
+      soffitMat.emissive.set(t > 0.35 ? '#4a3f2c' : '#24221e');
+      wallMat.emissive.set(t > 0.35 ? '#5a4c34' : '#2c2a26');
+      fasciaMat.color.setRGB(0.76 * (1 - t) + 0.30 * t, 0.77 * (1 - t) + 0.30 * t, 0.77 * (1 - t) + 0.31 * t);
       deckMat.color.setRGB(0.33 * (1 - t) + 0.14 * t, 0.34 * (1 - t) + 0.14 * t, 0.36 * (1 - t) + 0.15 * t);
     },
   };
