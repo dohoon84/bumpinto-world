@@ -349,6 +349,15 @@ function draw(now, J, P) {
     if (hover) { const d = (hover.x - sx) ** 2 + (hover.y - sy) ** 2; if (d < hovD * 1.4) { hovD = d; hov = { sx, sy, t: name }; } }
   }
 
+  // [namsan] 케이블카 탑승 위치 (회현 하부 · 남산타워 상부). 정류장 OSM 좌표.
+  for (const st of cableStations(J)) {
+    const [sx, sy] = toS(st.x, st.z); if (!inC(sx, sy, 4)) continue;
+    drawCableMark(g, sx, sy);
+    const name = tr(st.label, st.labelEn || st.label);
+    labels.push({ sx, sy: sy - 12, t: name });
+    if (hover) { const d = (hover.x - sx) ** 2 + (hover.y - sy) ** 2; if (d < hovD * 1.5) { hovD = d; hov = { sx, sy, t: name }; } }
+  }
+
   // [bp24nav] 편의점 아이콘. 길찾기가 꺼져 있으면 points 가 비어 기존 점과 같다.
   navHits = [];
   const nav = J.bp24Nav;
@@ -437,6 +446,20 @@ function subwayStations(J) {
 function busStops(J) {
   const a = J.transit?.stops || [], b = J.corridor?.life?.buses?.stops || [];
   return b.length ? a.concat(b) : a;
+}
+function cableStations(J) {
+  return J?.namsan?.mini?.cableStations || J?.namsan?.cable?.stations || [];
+}
+function drawCableMark(g, sx, sy) {
+  g.beginPath(); g.arc(sx, sy, 7.2, 0, Math.PI * 2); g.fillStyle = '#0b1424'; g.fill();
+  g.beginPath(); g.arc(sx, sy, 5.8, 0, Math.PI * 2); g.fillStyle = '#e8b44c'; g.fill();
+  g.fillStyle = '#1a1520';
+  g.fillRect(sx - 3.2, sy - 0.5, 6.4, 4.3);
+  g.fillRect(sx - 0.55, sy - 4.3, 1.1, 4);
+  g.beginPath(); g.moveTo(sx - 3.4, sy - 4.1); g.lineTo(sx + 3.4, sy - 4.1); g.lineWidth = 1.2; g.strokeStyle = '#1a1520'; g.stroke();
+  g.fillStyle = '#f4f0e6';
+  g.fillRect(sx - 2.5, sy + 0.25, 2.05, 1.85);
+  g.fillRect(sx + 0.45, sy + 0.25, 2.05, 1.85);
 }
 let plaqueText = '', plaqueAt = 0;
 function updatePlaque(J, x, z) {

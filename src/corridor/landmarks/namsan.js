@@ -7,7 +7,7 @@ import { NT, namsanBaseY, inNamsanPark } from './namsanCoords.js';
 import { createNamsanTerrain } from './namsanTerrain.js';
 import { createNamsanTower } from './namsanTower.js';
 import { createNamsanInterior } from './namsanInterior.js';
-import { createNamsanCable } from './namsanCable.js';
+import { createNamsanCable, namsanCableStations } from './namsanCable.js';
 import { createNamsanCity } from './namsanCity.js';
 import { createNamsanRoads } from './namsanRoads.js';
 import { createNamsanLibrary } from './namsanLibrary.js';
@@ -56,6 +56,7 @@ export function namsanMini(city, osm, heightAt) {
     parks: (osm?.parks || []).filter((p) => p.o?.length >= 3).map((p) => ({ o: p.o })),
     water: [],
     waterLines: [],
+    cableStations: namsanCableStations(osm),
   };
 }
 

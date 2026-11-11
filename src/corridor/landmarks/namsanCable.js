@@ -10,6 +10,23 @@ function centroid(pts) {
   for (const p of pts) { x += p[0]; z += p[1]; n++; }
   return n ? { x: x / n, z: z / n } : { x: 0, z: 0 };
 }
+
+/** 미니맵·안내용 탑승 위치. 정류장 건물 중심(OSM footprint)을 쓰고, 없으면 케이블 양 끝 노드. */
+export function namsanCableStations(osm) {
+  const nodes = osm?.cable?.nodes || [];
+  const fromFoot = (pts) => (pts?.length >= 3 ? centroid(pts) : null);
+  const nodeAt = (i) => {
+    const n = nodes[i];
+    return n && Number.isFinite(+n.x) && Number.isFinite(+n.z) ? { x: +n.x, z: +n.z } : null;
+  };
+  const upper = fromFoot(osm?.upperStation?.pts) || nodeAt(0);
+  const lower = fromFoot(osm?.lowerStation?.pts) || nodeAt(nodes.length - 1);
+  const out = [];
+  if (upper) out.push({ id: 'namsan-cable-upper', which: 'upper', x: upper.x, z: upper.z, label: '케이블카 탑승 · 남산타워', labelEn: 'Cable car · Namsan Tower', icon: '🚠' });
+  if (lower) out.push({ id: 'namsan-cable-lower', which: 'lower', x: lower.x, z: lower.z, label: '케이블카 탑승 · 회현', labelEn: 'Cable car · Hoehyeon', icon: '🚠' });
+  return out;
+}
+
 function pointInRing(x, z, pts) {
   let inside = false;
   for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
@@ -446,6 +463,7 @@ export function createNamsanCable({ parent, osm, heightAt, overlay }) {
   }
 
   return {
+    stations: namsanCableStations(osm),
     group: g,
     get riding() { return !!ride; },
     update(dt) {

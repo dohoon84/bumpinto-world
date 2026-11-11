@@ -34,6 +34,7 @@ import { bp24Mode, createBp24 } from './bp24.js'; import { bp24LocationsFor, cor
 import { migeumWaterEnabled, MIGEUM_WATER_FILE, migeumChRoads, mergeMigeumWater, applyMigeumBank } from './migeumWater.js'; // [migeum-water]
 import { cityhallEnabled, CITYHALL_FILE, filterCityHallHidden, createCityHall } from './cityhall.js'; // [cityhall]
 import { namsanEnabled, namsanCableEnabled, NAMSAN_DEM_FILE, NAMSAN_OSM_FILE, NAMSAN_CITY_FILE, createNamsan } from './landmarks/namsan.js'; // [namsan]
+import { createNamsanNpc, namsanNpcEnabled } from './landmarks/namsanNpc.js'; // [namsan-npc]
 
 // streams: 탄천 지류 하도(streams.json). ?streams=0 이면 false → 예전과 같은 데이터만
 // [pangyo] pangyo: 판교역 일대(pangyo/index.json). ?pangyo=0 이면 false → 요청 없음
@@ -387,7 +388,15 @@ export function createCorridor({ scene, corridorData, terrain, world, renderer, 
 
   const stats = { builtDetail: 0, builtLod: 0, chRoads: ch.length, signals: crossings.signals, chTrees: 0 };
   let chTreesDone = false;
-  let life = null, pangyoNpc = null, migeumPeds = null, migeumNpc = null;
+  let life = null, pangyoNpc = null, migeumPeds = null, migeumNpc = null, namsanNpc = null;
+  // [namsan-npc] 코리더 life/traffic 과 따로 만든다(?clife=0 · ?ccars=0 이어도 남산 NPC 는 ?nnpc 로만 끔)
+  if (namsan && namsanNpcEnabled()) {
+    const mkNsNpc = () => createNamsanNpc({ namsan, osm: corridorData.namsan?.osm, city: corridorData.namsan?.city, parent: namsan.root });
+    if (regions && namsan.bounds) {
+      namsanNpc = lazyExtraCrowd(mkNsNpc);
+      regions.register({ id: 'namsan-npc', boxes: [namsan.bounds], near: 450, far: 1100, onEnter: () => { namsanNpc.load(); }, onLeave: () => namsanNpc.unload() });
+    } else namsanNpc = mkNsNpc();
+  }
   let rx = null, rz = null; // [perf-memory] 지난 프레임 위치(진행 방향 추정)
   const api = {
     root, bounds, stations, tiles, stats, crossings, landmarks, inLive,
@@ -427,6 +436,7 @@ export function createCorridor({ scene, corridorData, terrain, world, renderer, 
     get life() { return life; },
     get pangyoNpc() { return pangyoNpc; }, // [pangyo-npc]
     get migeumPeds() { return migeumPeds; }, get migeumNpc() { return migeumNpc; }, // [migeum-npc]
+    get namsanNpc() { return namsanNpc; }, // [namsan-npc]
     update(dt, x, z, mode = 'follow') {
       if (!chTreesDone) { chTreesDone = true; stats.chTrees = chTrees(); }
       acc += dt;
@@ -447,6 +457,7 @@ export function createCorridor({ scene, corridorData, terrain, world, renderer, 
         const fast = Math.hypot(vx, vz) > 400; // 텔레포트 한 프레임은 속도로 치지 않음
         regions.update(x, z, fast ? 0 : vx, fast ? 0 : vz, dt, fast);
       }
+      (namsanNpc?.real || (namsanNpc && !namsanNpc.lazy ? namsanNpc : null))?.update?.(dt, x, z); // [namsan-npc]
       homeLabelTick(x, z); // [pangyo-link]
     },
     setHomeStationLabel(item) { homeLabel = item; }, // [pangyo-link] game.js 가 정자역 라벨을 넘긴다
