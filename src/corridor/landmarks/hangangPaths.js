@@ -68,12 +68,34 @@ function nearAny(x, z, rings, pad) {
   return false;
 }
 
+function clipEastOf(pts, xmin) {
+  if (xmin == null || !pts || pts.length < 2) return pts;
+  const out = [];
+  for (let i = 0; i < pts.length; i++) {
+    const cur = pts[i];
+    const prev = i ? pts[i - 1] : null;
+    const cin = cur[0] >= xmin;
+    const pin = prev ? prev[0] >= xmin : cin;
+    if (prev && pin !== cin) {
+      const t = (xmin - prev[0]) / ((cur[0] - prev[0]) || 1e-12);
+      out.push([xmin, prev[1] + (cur[1] - prev[1]) * t]);
+    }
+    if (cin) out.push(cur);
+  }
+  return out.length >= 2 ? out : [];
+}
+
 function keepWay(w, ctx) {
   const n = w.name || '';
   const k = w.k;
   if (n === '잠수교') return false; // 회색 아스팔트 데크·보도가 그린다. 테라코타 자전거길 색을 쓰지 않는다.
+  if (ctx.pathWestClip != null && (n === '한강남자전거길' || n === '한강 자전거길')) {
+    const xs = (w.pts || []).map((p) => p[0]);
+    if (xs.length && Math.max(...xs) < ctx.pathWestClip) return false;
+  }
   if (k === 'cycleway') return true;
   if (n.includes('자전거') || n.includes('나들목')) return true;
+  if (n === '올림픽대로' && ctx.segment === 'hap') return true;
   if (k === 'bridge' && (n === '잠수교' || n === '반포대교')) return false; // outline rendered as deck
   // layer=2 반포대로·녹사평대로 는 반포대교 데크 메시가 이미 그 차로다. 리본으로 다시 깔면
   // 잠수교 윤곽 안 높이와 반포 높이가 섞여 사이 공간을 가르는 회색 대각선이 된다.
@@ -89,6 +111,7 @@ function keepWay(w, ctx) {
 function kindOf(w) {
   const n = w.name || '';
   if (n === '잠수교') return 'walk';
+  if (n === '올림픽대로') return 'trunk';
   if (w.k === 'cycleway' || n.includes('자전거')) return 'bike';
   if (w.layer === '2' && (n === '반포대로' || n === '녹사평대로')) return 'upper';
   if (w.k === 'steps') return 'steps';
@@ -120,7 +143,10 @@ export function createHangangPaths({ parent, osm, land }) {
   const banpoRing = osm?.banpo?.outline?.pts;
   const park = osm?.park?.ring?.pts;
   const near = [jamsuRing, banpoRing, park, osm?.jamsu?.centerline?.pts].filter(Boolean);
-  const ctx = { near };
+  if (osm?.meta?.segment === 'hap') {
+    for (const pk of osm?.parks || []) if (pk.o?.length >= 3) near.push(pk.o);
+  }
+  const ctx = { near, pathWestClip: osm?.meta?.pathWestClip, segment: osm?.meta?.segment };
 
   function surfaceAt(x, z, kind, w) {
     if (kind === 'upper' || (w?.layer === '2' && (w?.name === '반포대로' || w?.name === '녹사평대로'))) {
@@ -134,19 +160,37 @@ export function createHangangPaths({ parent, osm, land }) {
       if (q && q.dist < JAMSU_DECK_WIDTH / 2 + 0.5) return jamsuDeckY(x, z, osm, lv);
     }
     if (w?.tunnel === 'yes') {
+      const pts = w.pts || [];
+      if (pts.length >= 2) {
+        const a = pts[0], b = pts[pts.length - 1];
+        const ya = heightAt(a[0], a[1]);
+        const yb = heightAt(b[0], b[1]);
+        if (ya != null && yb != null) {
+          const dx = b[0] - a[0], dz = b[1] - a[1];
+          const L2 = dx * dx + dz * dz || 1;
+          const tt = Math.max(0, Math.min(1, ((x - a[0]) * dx + (z - a[1]) * dz) / L2));
+          const lerp = ya + (yb - ya) * tt;
+          const g = heightAt(x, z);
+          return Math.min(lerp, g == null ? lerp : g) - 0.25;
+        }
+      }
       const g = heightAt(x, z);
       return g == null ? null : g - 1.6;
     }
     return heightAt(x, z);
   }
 
-  const buckets = { bike: [], walk: [], steps: [], upper: [] };
+  const buckets = { bike: [], walk: [], steps: [], upper: [], trunk: [] };
   const kept = [];
   for (const w of osm?.ways || []) {
     if (!w.pts || w.pts.length < 2) continue;
     if (!keepWay(w, ctx)) continue;
     const kind = kindOf(w);
-    const ptsAll = resample(w.pts, kind === 'bike' ? 3.0 : 3.6);
+    let srcPts = w.pts;
+    if (ctx.pathWestClip != null && ((w.name || '') === '한강남자전거길' || (w.name || '') === '한강 자전거길' || (w.name || '') === '올림픽대로')) {
+      srcPts = clipEastOf(w.pts, ctx.pathWestClip);
+    }
+    const ptsAll = resample(srcPts, kind === 'bike' ? 3.0 : 3.6);
     if (ptsAll.length < 2) continue;
     const width = Math.max(2.2, Math.min(16, w.w || (kind === 'bike' ? 4 : 2.4)));
     const parts = partsOutsideRing(ptsAll, jamsuRing);
@@ -160,7 +204,7 @@ export function createHangangPaths({ parent, osm, land }) {
     if (drew) kept.push(w);
   }
 
-  const colors = { bike: '#d44b2c', walk: '#c9c2b4', steps: '#9a9084', upper: '#5a5d61' };
+  const colors = { bike: '#d44b2c', walk: '#c9c2b4', steps: '#9a9084', upper: '#5a5d61', trunk: '#54575c' };
   const mats = {};
   for (const [kind, list] of Object.entries(buckets)) {
     if (!list.length) continue;
@@ -176,7 +220,11 @@ export function createHangangPaths({ parent, osm, land }) {
   const edgeGeos = [], dashGeos = [];
   for (const w of kept) {
     if (kindOf(w) !== 'bike') continue;
-    const ptsAll = resample(w.pts, 2.2);
+    let markSrc = w.pts;
+    if (ctx.pathWestClip != null && ((w.name || '') === '한강남자전거길' || (w.name || '') === '한강 자전거길')) {
+      markSrc = clipEastOf(w.pts, ctx.pathWestClip);
+    }
+    const ptsAll = resample(markSrc, 2.2);
     const width = Math.max(2.2, Math.min(16, w.w || 4));
     const yFn = (x, z) => surfaceAt(x, z, 'bike', w);
     for (const pts of partsOutsideRing(ptsAll, jamsuRing)) {
@@ -245,19 +293,37 @@ export function createHangangPaths({ parent, osm, land }) {
     group.add(mesh);
   }
 
+  function onWay(w, x, z, pad = 0.4) {
+    const q = projectOnLine(x, z, w.pts);
+    if (!q || q.dist > (w.w || 3) * 0.55 + pad) return null;
+    return q;
+  }
+
+  function isTunnel(x, z) {
+    for (const w of kept) {
+      if (w.tunnel !== 'yes') continue;
+      if (onWay(w, x, z, 0.6)) return true;
+    }
+    return false;
+  }
+
   function floorY(x, z, refY = Infinity) {
     let best = null;
+    let tunnelY = null;
     const cap = Number.isFinite(refY) ? refY + 0.55 : Infinity;
     // 데크는 다리가 담당. 여기선 길 위만.
     for (const w of kept) {
-      const q = projectOnLine(x, z, w.pts);
-      if (!q || q.dist > (w.w || 3) * 0.55 + 0.4) continue;
+      const q = onWay(w, x, z);
+      if (!q) continue;
       const kind = kindOf(w);
       const y = surfaceAt(q.x, q.z, kind, w);
       if (y == null || y > cap) continue;
+      if (w.tunnel === 'yes') {
+        if (tunnelY == null || y < tunnelY) tunnelY = y;
+      }
       if (best == null || y > best) best = y;
     }
-    return best;
+    return tunnelY != null ? tunnelY : best;
   }
 
   function setNight(v) {
@@ -265,7 +331,8 @@ export function createHangangPaths({ parent, osm, land }) {
     if (mats.bike) mats.bike.color.setRGB(0.75 * (1 - t) + 0.22 * t, 0.34 * (1 - t) + 0.12 * t, 0.27 * (1 - t) + 0.10 * t);
     if (mats.walk) mats.walk.color.setRGB(0.45 * (1 - t) + 0.18 * t, 0.42 * (1 - t) + 0.16 * t, 0.38 * (1 - t) + 0.14 * t);
     if (mats.upper) mats.upper.color.setRGB(0.22 + 0.13 * (1 - t), 0.23 + 0.13 * (1 - t), 0.24 + 0.14 * (1 - t));
+    if (mats.trunk) mats.trunk.color.setRGB(0.28 * (1 - t) + 0.12 * t, 0.29 * (1 - t) + 0.13 * t, 0.31 * (1 - t) + 0.14 * t);
   }
 
-  return { group, floorY, setNight, kept };
+  return { group, floorY, isTunnel, setNight, kept };
 }

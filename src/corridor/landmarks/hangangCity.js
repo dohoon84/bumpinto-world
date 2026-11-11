@@ -143,9 +143,10 @@ export function createHangangCity({ parent, osm, land } = {}) {
     group.add(mesh);
   }
 
-  // 스카이라인 링 — 박스 바깥 원경
+  // 스카이라인 링 — 박스 바깥 원경. hap 박스는 수 km 라 스카이라인·치마를 올리면
+  // 잠실 타일·1구간과 겹친다.
   const b = land.bounds;
-  if (b) {
+  if (b && !osm?.meta?.skipSkyline) {
     const cx = (b.x0 + b.x1) / 2, cz = (b.z0 + b.z1) / 2;
     const rad = Math.hypot(b.x1 - b.x0, b.z1 - b.z0) * 0.55 + 120;
     const geo = new THREE.CylinderGeometry(rad, rad, 160, 64, 1, true);
@@ -164,7 +165,7 @@ export function createHangangCity({ parent, osm, land } = {}) {
   }
 
   // 섬 가장자리가 허공으로 끊기지 않게 DEM 박스 아래 치마
-  if (b) {
+  if (b && !osm?.meta?.skipSkyline) {
     const yb = (lv.waterY ?? -43) - 8;
     const w = b.x1 - b.x0, d = b.z1 - b.z0;
     const geo = new THREE.BoxGeometry(w + 4, 10, d + 4);

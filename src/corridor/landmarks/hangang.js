@@ -8,9 +8,12 @@ import { createHangangBridges } from './hangangBridges.js';
 import { createHangangPaths } from './hangangPaths.js';
 import { createHangangCity } from './hangangCity.js';
 import { createHangangProps } from './hangangProps.js';
+import { createHangangHap, mergeHangangMini } from './hangangHap.js';
 
 export const HANGANG_DEM_FILE = 'hangang/hangang-dem.json';
 export const HANGANG_OSM_FILE = 'hangang/hangang-osm.json';
+export const HAP_DEM_FILE = 'hangang/hap-dem.json';
+export const HAP_OSM_FILE = 'hangang/hap-osm.json';
 
 export function hangangEnabled(search = typeof location !== 'undefined' ? location.search : '') {
   return new URLSearchParams(search || '').get('hangang') !== '0';
@@ -42,7 +45,7 @@ export function hangangMini(osm) {
   return { roads: extraRoads, buildings, plazas: [], parks, water, waterLines: [] };
 }
 
-export function createHangang({ scene, overlay, terrain, dem, osm } = {}) {
+export function createHangang({ scene, overlay, terrain, dem, osm, hap } = {}) {
   const root = new THREE.Group();
   root.name = 'hangang';
   scene.add(root);
@@ -52,6 +55,9 @@ export function createHangang({ scene, overlay, terrain, dem, osm } = {}) {
   const paths = createHangangPaths({ parent: root, osm, land });
   const city = createHangangCity({ parent: root, osm, land });
   const props = createHangangProps({ parent: root, osm, land });
+  const hapApi = (hap?.dem && hap?.osm)
+    ? createHangangHap({ parent: root, overlay, terrain, dem: hap.dem, osm: hap.osm })
+    : null;
 
   const spawnSrc = osm?.spawn || osm?.connectEnds?.jamsuSouth;
   const spawn = spawnSrc
@@ -86,6 +92,14 @@ export function createHangang({ scene, overlay, terrain, dem, osm } = {}) {
   }
 
   function surfaceY(x, z, refY = Infinity) {
+    if (hapApi?.isTunnel?.(x, z)) {
+      const hy = hapApi.surfaceY?.(x, z, refY);
+      if (hy != null) return hy;
+    }
+    if (paths.isTunnel?.(x, z)) {
+      const py = paths.floorY?.(x, z, refY);
+      if (py != null) return py;
+    }
     const ys = [];
     const g = land.heightAt(x, z);
     if (g != null) ys.push(g);
@@ -93,6 +107,10 @@ export function createHangang({ scene, overlay, terrain, dem, osm } = {}) {
     if (by != null) ys.push(by);
     const py = paths.floorY?.(x, z, refY);
     if (py != null) ys.push(py);
+    if (hapApi) {
+      const hy = hapApi.surfaceY?.(x, z, refY);
+      if (hy != null) ys.push(hy);
+    }
     let best = null;
     const cap = Number.isFinite(refY) ? refY + 0.55 : Infinity;
     for (const y of ys) {
@@ -104,8 +122,8 @@ export function createHangang({ scene, overlay, terrain, dem, osm } = {}) {
 
   if (terrain?.addGroundSurface) {
     terrain.addGroundSurface((x, z, refY) => {
-      const b = land.bounds;
-      if (!b || x < b.x0 || x > b.x1 || z < b.z0 || z > b.z1) return null;
+      const boxes = [land.bounds, hapApi?.bounds].filter(Boolean);
+      if (!boxes.some((b) => x >= b.x0 && x <= b.x1 && z >= b.z0 && z <= b.z1)) return null;
       return surfaceY(x, z, refY);
     });
   }
@@ -116,7 +134,15 @@ export function createHangang({ scene, overlay, terrain, dem, osm } = {}) {
     paths.setNight(on ? 1 : 0);
     city.setNight?.(on ? 1 : 0);
     props.setNight?.(on ? 1 : 0);
+    hapApi?.setNight?.(on ? 1 : 0);
   });
+
+  const bounds = hapApi?.bounds ? {
+    x0: Math.min(land.bounds.x0, hapApi.bounds.x0),
+    x1: Math.max(land.bounds.x1, hapApi.bounds.x1),
+    z0: Math.min(land.bounds.z0, hapApi.bounds.z0),
+    z1: Math.max(land.bounds.z1, hapApi.bounds.z1),
+  } : land.bounds;
 
   const api = {
     root,
@@ -125,20 +151,29 @@ export function createHangang({ scene, overlay, terrain, dem, osm } = {}) {
       const prefer = (land.levels?.waterY ?? land.waterY ?? -43) + 4;
       return (surfaceY(spawn.x, spawn.z, prefer) ?? land.heightAt(spawn.x, spawn.z) ?? land.waterY) + 0.15;
     },
-    bounds: land.bounds,
-    heightAt: (x, z) => land.heightAt(x, z),
+    bounds,
+    heightAt: (x, z) => {
+      const a = land.heightAt(x, z);
+      const b = hapApi?.heightAt?.(x, z);
+      if (a == null) return b ?? null;
+      if (b == null) return a;
+      return Math.max(a, b);
+    },
     surfaceY,
     groundHeight: (x, z, refY) => surfaceY(x, z, refY),
     levels: land.levels,
     revetmentView: land.revetmentView || null,
-    connectEnds: osm?.connectEnds || {},
-    mini: hangangMini(osm),
+    connectEnds: { ...(osm?.connectEnds || {}), ...(hapApi?.connectEnds || {}) },
+    spawns: hapApi?.spawns || {},
+    hap: hapApi,
+    mini: mergeHangangMini(hangangMini(osm), hapApi ? hangangMini(hap?.osm) : null),
     setNight(v) {
       land.setNight(v);
       bridges.setNight(v);
       paths.setNight(v);
       city.setNight?.(v);
       props.setNight?.(v);
+      hapApi?.setNight?.(v);
     },
     update() {},
     tickPlayer() {},

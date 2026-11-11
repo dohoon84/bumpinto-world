@@ -70,8 +70,10 @@ export function createHangangProps({ parent, osm, land } = {}) {
     treePts.push([x, z]);
   };
   for (const t of osm?.trees || []) addTree(t.x, t.z);
-  alongWays(bikeWays, 22, (x, z, dx, dz, s) => {
-    const side = (Math.floor(s / 22) % 2 === 0) ? 1 : -1;
+  const sparse = osm?.meta?.segment === 'hap';
+  const treeStep = sparse ? 36 : 22;
+  alongWays(bikeWays, treeStep, (x, z, dx, dz, s) => {
+    const side = (Math.floor(s / treeStep) % 2 === 0) ? 1 : -1;
     addTree(x - dz * side * 4.6, z + dx * side * 4.6);
   });
   if (treePts.length) {
@@ -91,7 +93,7 @@ export function createHangangProps({ parent, osm, land } = {}) {
   const metal = new THREE.MeshLambertMaterial({ color: '#4a4e52' });
   mats.push(benchMat, metal);
   const benchPts = [...(osm?.benches || [])];
-  alongWays(bikeWays, 48, (x, z, dx, dz, s) => {
+  alongWays(bikeWays, sparse ? 72 : 48, (x, z, dx, dz, s) => {
     if (hash01(Math.floor(s) + 9) < 0.55) return;
     benchPts.push({ x: x + dz * 3.2, z: z - dx * 3.2, yaw: Math.atan2(dx, dz) + Math.PI / 2, approx: true });
   });
@@ -118,7 +120,9 @@ export function createHangangProps({ parent, osm, land } = {}) {
   mats.push(poleMat, headMat);
   const lamps = [];
   let poleI = 0;
-  alongWays(bikeWays, 32, (x, z, dx, dz) => {
+  const lampStep = sparse ? 48 : 32;
+  const lampEvery = sparse ? 3 : 2;
+  alongWays(bikeWays, lampStep, (x, z, dx, dz) => {
     const px = x - dz * 3.6, pz = z + dx * 3.6;
     if (inWater(px, pz, osm?.water)) return;
     const y = groundY(px, pz);
@@ -131,11 +135,15 @@ export function createHangangProps({ parent, osm, land } = {}) {
     head.rotation.y = Math.atan2(dx, dz);
     group.add(head);
     poleI++;
-    if (poleI % 2 === 0) {
+    // hap 는 길이 12 km 라 PointLight 를 심으면 fragment uniform 한도(4096)를 넘는다.
+    // 기둥·발광 갓만 두고, 점광원은 1구간처럼 짧은 박스에서만 쓴다.
+    if (!sparse && poleI % lampEvery === 0) {
       const light = new THREE.PointLight('#ffd8a0', 0, 16, 2);
       light.position.set(px, y + 5.05, pz);
       group.add(light);
       lamps.push({ light, head });
+    } else {
+      lamps.push({ light: null, head });
     }
   });
 
@@ -144,7 +152,7 @@ export function createHangangProps({ parent, osm, land } = {}) {
   const binMat = new THREE.MeshLambertMaterial({ color: '#3a5a48' });
   mats.push(binMat);
   const binPts = [...(osm?.bins || [])];
-  alongWays(bikeWays, 86, (x, z, dx, dz, s) => {
+  alongWays(bikeWays, sparse ? 120 : 86, (x, z, dx, dz, s) => {
     if (hash01(Math.floor(s) + 21) < 0.4) return;
     binPts.push({ x: x + dz * 3.0, z: z - dx * 3.0, approx: true });
   });
@@ -278,7 +286,7 @@ export function createHangangProps({ parent, osm, land } = {}) {
   function setNight(v) {
     const t = Math.max(0, Math.min(1, v));
     headMat.emissive.setRGB(0.55 * t, 0.42 * t, 0.22 * t);
-    for (const l of lamps) l.light.intensity = t * 2.2;
+    for (const l of lamps) { if (l.light) l.light.intensity = t * 2.2; }
   }
 
   return { group, setNight, treeCount: treePts.length };

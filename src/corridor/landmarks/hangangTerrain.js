@@ -96,17 +96,57 @@ export function measureHangangLevels(dem, osm) {
   };
 }
 
+export function blendOffset(x, z, blend) {
+  if (!blend) return 0;
+  const xEast = blend.xEast, xWest = blend.xWest;
+  const spanX = (xEast - xWest) || 1;
+  const tX = Math.max(0, Math.min(1, (xEast - x) / spanX));
+  const offsetX = (1 - tX) * (blend.offset0 ?? 0);
+  if (blend.zSouth == null || blend.zHap == null) return offsetX;
+  const spanZ = (blend.zSouth - blend.zHap) || 1;
+  const tZ = Math.max(0, Math.min(1, (blend.zSouth - z) / spanZ));
+  const offsetS = blend.offsetSouth ?? offsetX;
+  return offsetS * (1 - tZ) + offsetX * tZ;
+}
+
+export function waterYAt(x, z, lv, blend) {
+  return (lv?.waterY ?? -43) + blendOffset(x, z, blend);
+}
+
+function hanOuterCount(osm) {
+  const n = osm?.water?.han?.outers;
+  if (Number.isFinite(n)) return n;
+  return (osm?.water?.outers || []).length;
+}
+
+export function inHanRiver(x, z, osm) {
+  const n = hanOuterCount(osm);
+  const outers = (osm?.water?.outers || []).slice(0, n);
+  if (!outers.some((o) => o?.o && pointInRing(x, z, o.o))) return false;
+  const innerN = Number.isFinite(osm?.water?.han?.inners) ? osm.water.han.inners : (osm?.water?.inners || []).length;
+  const inners = (osm?.water?.inners || []).slice(0, innerN);
+  return !inners.some((inn) => inn?.o && pointInRing(x, z, inn.o));
+}
+
 export function makeHangangHeightAt(dem, osm = null) {
   const datum = dem?.datum ?? HG.datum;
   const lv = measureHangangLevels(dem, osm);
+  const blend = osm?.meta?.datumBlend || null;
   function eleAt(x, z) {
     const e = sampleDem(dem, x, z);
     if (e == null) return null;
-    if (inWater(x, z, osm?.water)) return lv.waterEle;
+    const off = blendOffset(x, z, blend);
+    if (inWater(x, z, osm?.water)) {
+      // 한강은 clip 안에서 거의 평평한 풀(25백분위). 탄천만 해당하는 칸은
+      // 상류 DEM(이 지점 해발 ~17 m)을 따른다. 한강 수위를 쓰면 남쪽 이음에서
+      // 약 10 m 구덩이가 생긴다.
+      if (!inHanRiver(x, z, osm) && e > lv.waterEle + 1.5) return e + off;
+      return lv.waterEle + off;
+    }
     const seorae = osm?.seorae?.ring?.pts;
-    if (seorae && pointInRing(x, z, seorae)) return Math.max(e, lv.waterEle + 0.85);
+    if (seorae && pointInRing(x, z, seorae)) return Math.max(e, lv.waterEle + 0.85) + off;
     // 강변 자전거길 DEM 이 수면 25백분위보다 살짝 낮게 나온 칸은 수면으로 올린다.
-    return Math.max(e, lv.waterEle);
+    return Math.max(e, lv.waterEle) + off;
   }
   function heightAt(x, z) {
     const e = eleAt(x, z);
@@ -384,10 +424,22 @@ export function createHangangTerrain({ parent, dem, osm }) {
   const REV_STEPS = 11;
   const REV_TREAD = 1.22;
   const REV_SPAN = REV_STEPS * REV_TREAD;
-  const parkRing = osm?.park?.ring?.pts || osm?.parks?.find((pk) => pk.name === '반포한강공원')?.o;
-  const rawShoreChains = (osm?.water?.outers?.length)
-    ? parkShoreChains(osm.water, parkRing, 28).map((raw) => resampleShore(raw, 3.2)).filter((c) => c.length >= 2)
-    : [];
+  const parkRingsForShore = [];
+  if (osm?.meta?.segment === 'hap') {
+    for (const pk of osm?.parks || []) if (pk.o?.length >= 3) parkRingsForShore.push(pk.o);
+  } else {
+    const one = osm?.park?.ring?.pts || osm?.parks?.find((pk) => pk.name === '반포한강공원')?.o;
+    if (one) parkRingsForShore.push(one);
+  }
+  const rawShoreChains = [];
+  if (osm?.water?.outers?.length) {
+    for (const parkRing of parkRingsForShore) {
+      for (const raw of parkShoreChains(osm.water, parkRing, 28)) {
+        const c = resampleShore(raw, 3.2);
+        if (c.length >= 2) rawShoreChains.push(c);
+      }
+    }
+  }
   // 수면 링은 relation/152336 을 조립한 닫힌 외곽이다. 임의 제방 offset 은 넣지 않고
   // 법선만 부드럽게 해서 단이 톱니처럼 벌어지지 않게 한다.
   const shoreChains = rawShoreChains.map((chain) => {
@@ -418,7 +470,7 @@ export function createHangangTerrain({ parent, dem, osm }) {
     if (lat2 > 36) return null;
     if (d < -0.5 || d > REV_SPAN + 1.8) return null;
     const topX = best.x + best.sx * REV_SPAN, topZ = best.z + best.sz * REV_SPAN;
-    const yWater = lv.waterY + 0.05;
+    const yWater = waterYAt(best.x, best.z, lv, osm?.meta?.datumBlend) + 0.05;
     const yGrass = heightAt(topX, topZ);
     const yTop = (yGrass != null && yGrass > yWater + 1.2) ? yGrass : (yWater + REV_STEPS * 0.42);
     if (d > REV_SPAN) {
@@ -430,7 +482,8 @@ export function createHangangTerrain({ parent, dem, osm }) {
   }
 
   if (dem) {
-    const sub = 2;
+    const sub = osm?.meta?.demSub ?? 2;
+    const visualXMin = osm?.meta?.visualXMin;
     const nx = (dem.nx - 1) * sub + 1, nz = (dem.nz - 1) * sub + 1;
     const pos = new Float32Array(nx * nz * 3);
     const col = new Float32Array(nx * nz * 3);
@@ -447,7 +500,7 @@ export function createHangangTerrain({ parent, dem, osm }) {
         if (wetV) {
           // 수면 메시(waterY+0.03)와 DEM 이 같은 높이에 있으면 반투명 강물이
           // 젖은 잔디텍스처와 z-fight 해서 검녹 반점이 된다.
-          y = lv.waterY - 1.4;
+          y = heightAt(x, z) - 1.4;
         } else {
           const by = revetmentBandY(x, z);
           if (by != null) y = Math.min(y, by);
@@ -483,6 +536,10 @@ export function createHangangTerrain({ parent, dem, osm }) {
     }
     for (let j = 0; j < nz - 1; j++) {
       for (let i = 0; i < nx - 1; i++) {
+        if (visualXMin != null) {
+          const xb = dem.x0 + ((i + 1) / sub) * dem.dx;
+          if (xb < visualXMin) continue;
+        }
         const a = j * nx + i, b = a + 1, c = a + nx, d = c + 1;
         idx.push(a, c, b, b, c, d);
       }
@@ -526,6 +583,17 @@ export function createHangangTerrain({ parent, dem, osm }) {
         .map((inn) => inn.o);
       const mesh = flatPolyMesh(outer.o, holes, lv.waterY + 0.03, '#2a6a78', 'hangang-water');
       if (mesh) {
+        if (osm?.meta?.datumBlend) {
+          const pos = mesh.geometry.attributes.position;
+          for (let i = 0; i < pos.count; i++) {
+            const vx = pos.getX(i), vz = pos.getZ(i);
+            const hy = heightAt(vx, vz);
+            const flat = waterYAt(vx, vz, lv, osm.meta.datumBlend);
+            pos.setY(i, ((hy != null && !inHanRiver(vx, vz, osm)) ? hy : flat) + 0.03);
+          }
+          pos.needsUpdate = true;
+          mesh.geometry.computeVertexNormals();
+        }
         mesh.material = new THREE.MeshPhongMaterial({
           color: '#1c5c6e',
           transparent: true,
@@ -611,7 +679,7 @@ export function createHangangTerrain({ parent, dem, osm }) {
         const sx = p.sx, sz = p.sz;
         const topX = p.x + sx * (steps * tread), topZ = p.z + sz * (steps * tread);
         if (inWater(topX, topZ, osm.water)) { flush(); continue; }
-        const yWater = lv.waterY + 0.05;
+        const yWater = waterYAt(p.x, p.z, lv, osm?.meta?.datumBlend) + 0.05;
         const yGrass = heightAt(topX, topZ);
         if (yGrass == null) { flush(); continue; }
         const yTop = Math.max(yGrass, yWater + 0.35);
