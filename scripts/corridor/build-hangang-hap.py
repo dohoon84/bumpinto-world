@@ -9,7 +9,7 @@ way as build-hangang.py (join member ways, then clip) so shoreline chords
 do not fill land with water.
 """
 from __future__ import annotations
-import json, math, os, sys, time, urllib.error, urllib.request
+import json, math, os, sys, time, heapq, urllib.error, urllib.request
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -429,6 +429,88 @@ def stitch_spine(ways, start, end, max_jump=35.0):
     return [[round(p[0], 1), round(p[1], 1)] for p in chain]
 
 
+
+def dijkstra_spine(ways, start, end, attach_start=40.0, attach_end=20.0, join_m=12.0):
+    """Shortest path along named bike ways. Avoids the river centerline the greedy stitch followed."""
+    nodes, adj = {}, {}
+
+    def keypt(p):
+        return (round(p[0], 1), round(p[1], 1))
+
+    def add_node(p):
+        k = keypt(p)
+        if k not in nodes:
+            nodes[k] = (float(p[0]), float(p[1]))
+            adj[k] = []
+        return k
+
+    def add_edge(a, b):
+        ka, kb = add_node(a), add_node(b)
+        d = math.hypot(a[0] - b[0], a[1] - b[1])
+        if d < 1e-4:
+            return
+        adj[ka].append((kb, d))
+        adj[kb].append((ka, d))
+
+    for w in ways:
+        pts = w.get('pts') or []
+        for i in range(1, len(pts)):
+            add_edge(pts[i - 1], pts[i])
+    ends = []
+    for w in ways:
+        pts = w.get('pts') or []
+        if len(pts) >= 2:
+            ends.append(pts[0])
+            ends.append(pts[-1])
+    for i, a in enumerate(ends):
+        for b in ends[i + 1:]:
+            d = math.hypot(a[0] - b[0], a[1] - b[1])
+            if 0.6 < d <= join_m:
+                add_edge(a, b)
+
+    def nearest(pt, limit):
+        best, bd = None, limit
+        for k, (x, z) in nodes.items():
+            d = math.hypot(pt[0] - x, pt[1] - z)
+            if d < bd:
+                best, bd = k, d
+        return best, bd
+
+    src, _ = nearest(start, attach_start)
+    dst, _ = nearest(end, attach_end)
+    if src is None or dst is None:
+        return []
+    dist = {src: 0.0}
+    prev = {}
+    hq = [(0.0, src)]
+    seen = set()
+    while hq:
+        d, u = heapq.heappop(hq)
+        if u in seen:
+            continue
+        seen.add(u)
+        if u == dst:
+            break
+        for v, w in adj[u]:
+            nd = d + w
+            if nd < dist.get(v, 1e18):
+                dist[v] = nd
+                prev[v] = u
+                heapq.heappush(hq, (nd, v))
+    if dst not in prev and dst != src:
+        return []
+    path = [dst]
+    while path[-1] != src:
+        path.append(prev[path[-1]])
+    path.reverse()
+    pts = [list(nodes[k]) for k in path]
+    if math.hypot(pts[0][0] - start[0], pts[0][1] - start[1]) > 0.4:
+        pts.insert(0, [start[0], start[1]])
+    if math.hypot(pts[-1][0] - end[0], pts[-1][1] - end[1]) > 0.4:
+        pts.append([end[0], end[1]])
+    return [[round(p[0], 1), round(p[1], 1)] for p in pts]
+
+
 def clip_and_assemble_rel(rid, name, els, ways, nodes, xmin, xmax, zmin, zmax):
     rel = next((e for e in els if e['type'] == 'relation' and e['id'] == rid), None)
     if not rel:
@@ -646,7 +728,7 @@ def build_osm(els):
             continue
         cx = sum(p[0] for p in pts) / len(pts)
         cz = sum(p[1] for p in pts) / len(pts)
-        if dist_to_pts(cx, cz, bike_samples) > 60:
+        if dist_to_pts(cx, cz, bike_samples) > 280:
             continue
         h = None
         if tags.get('height'):
@@ -663,9 +745,14 @@ def build_osm(els):
             'id': w['id'], 'o': pts, 'h': round(h or 12, 1),
             'k': tags.get('building') if tags.get('building') != 'yes' else 'yes',
             'name': tags.get('name'),
+            'cz': cz,
         })
-        if len(buildings) >= 380:
-            break
+
+    # Prefer 한강남 변 건물(청담·압구정·잠원) so the 380 cap is not filled by 수서 only.
+    buildings.sort(key=lambda b: (0 if b.get('cz', 0) < -16000 else 1, -(b.get('h') or 0)))
+    buildings = buildings[:720]
+    for b in buildings:
+        b.pop('cz', None)
 
     # drop long leftover footways far from bike path / parks
     park_samples = []
@@ -718,20 +805,15 @@ def build_osm(els):
     extra_tan = [w for w in out_ways if w.get('id') in tan_member_ids and w not in tan_ways]
     tan_ways = tan_ways + extra_tan
 
-    # stitch 탄천 from existing end toward 합수부 (north = more-negative z), then 한강남 west to banpoEast
-    hap_target = (-200.0, -17650.0)  # approximate 합수부; refined after stitch
-    tan_spine = stitch_spine(tan_ways, TANCHEON_END, hap_target, max_jump=45)
-    nam_start = tan_spine[-1] if tan_spine else hap_target
-    nam_spine = stitch_spine(nam_ways, nam_start, BANPO_EAST, max_jump=40)
-    spine = tan_spine[:]
-    if nam_spine:
-        if spine and near_pt(spine[-1], nam_spine[0], 8):
-            spine.extend(nam_spine[1:])
-        elif spine:
-            # record the junction gap; still connect for the test to measure
-            spine.extend(nam_spine)
-        else:
-            spine = nam_spine
+    # Shortest path on named 탄천 자전거* + 한강남자전거길 only.
+    # Greedy stitch followed way/768407483 (name=탄천 river centerline) east to 광나루.
+    spine_ways = [w for w in out_ways if (
+        (w.get('name') or '').startswith('탄천 자전거')
+        or (w.get('name') or '') in ('한강남자전거길', '한강 자전거길')
+    )]
+    spine = dijkstra_spine(spine_ways, TANCHEON_END, BANPO_EAST)
+    tan_spine = [p for p in spine if p[0] > -3600] if spine else []
+    nam_spine = [p for p in spine if p[0] <= -3600] if spine else []
 
     def end_points(name):
         pts = []
@@ -751,7 +833,24 @@ def build_osm(els):
         'tancheonSouth': {'name': '기존 탄천 자전거도로 북단 (채널 오버레이)', 'x': TANCHEON_END[0], 'z': TANCHEON_END[1]},
         'banpoEast': {'name': '한강남자전거길 → 반포 1구간', 'x': BANPO_EAST[0], 'z': BANPO_EAST[1]},
     }
-    if tan_spine:
+    join = None
+    join_d = 1e18
+    for tw in out_ways:
+        if not (tw.get('name') or '').startswith('탄천 자전거'):
+            continue
+        for tp in (tw['pts'][0], tw['pts'][-1]):
+            for nw in nam_ways:
+                for np_ in (nw['pts'][0], nw['pts'][-1]):
+                    d = math.hypot(tp[0] - np_[0], tp[1] - np_[1])
+                    if d < join_d:
+                        join_d = d
+                        join = tp
+    if join and join_d < 8:
+        connect['tancheonHap'] = {
+            'name': '탄천 자전거길 북단 (합수부)',
+            'x': join[0], 'z': join[1],
+        }
+    elif tan_spine:
         connect['tancheonHap'] = {
             'name': '탄천 자전거길 북단 (합수부)',
             'x': tan_spine[-1][0], 'z': tan_spine[-1][1],
@@ -768,12 +867,16 @@ def build_osm(els):
     jamwon_spawn = None
     if jamwon_park and jamwon_park.get('o'):
         o = jamwon_park['o']
-        pcx = sum(p[0] for p in o) / len(o)
-        pcz = sum(p[1] for p in o) / len(o)
+        # 잠원 남단은 한남대교(x≈−8436)와 반포(x≈−9800) 사이. 공원 링 중심은 강 한복판이라 쓰지 않는다.
         best, best_d = None, 1e18
+        target = (-8698.5, -17023.6)
         for w in nam_ways:
             for p in w['pts']:
-                d = math.hypot(p[0] - pcx, p[1] - pcz)
+                if p[0] > -8200 or p[0] < -9200:
+                    continue
+                if p[1] < -17400 or p[1] > -16600:
+                    continue
+                d = math.hypot(p[0] - target[0], p[1] - target[1])
                 if d < best_d:
                     best, best_d = p, d
         if best:
