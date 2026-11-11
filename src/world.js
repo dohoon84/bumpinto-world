@@ -124,9 +124,9 @@ export function buildWorld(scene, data, region = null, opts = {}) {
   // 물(탄천) — 강 폴리곤 + 중심선 리본(폴리곤이 없을 때 대비)
   const waterMat = mat('#7ec3e6');
   const wg = flatGeo(data.water, 0.04);
-  if (wg) { const m = new THREE.Mesh(fixNormalsUp(wg), waterMat); m.receiveShadow = true; scene.add(m); }
+  if (wg) { const m = new THREE.Mesh(fixNormalsUp(wg), waterMat); m.receiveShadow = true; m.name = 'liveWater'; scene.add(m); }
   const wl = data.waterLines.map((l) => ribbonGeo(l.p, data.water.length > 1 ? 8 : l.w, 0.035));
-  if (wl.length) scene.add(new THREE.Mesh(mergeGeometries(wl), waterMat));
+  if (wl.length) { const m = new THREE.Mesh(mergeGeometries(wl), waterMat); m.name = 'liveWaterLines'; scene.add(m); }
 
   // 도로
   const roadGroups = {};

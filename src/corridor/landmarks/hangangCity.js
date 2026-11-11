@@ -59,7 +59,7 @@ function ribbon(pts, width, yFn, dy = 0.08) {
   return g;
 }
 
-export function createHangangCity({ parent, osm, land } = {}) {
+export function createHangangCity({ parent, osm, land, expressXMax = null } = {}) {
   const group = new THREE.Group();
   group.name = 'hangang-city';
   parent.add(group);
@@ -126,12 +126,24 @@ export function createHangangCity({ parent, osm, land } = {}) {
     if (!elevated && tot && wetN / tot > 0.45) continue;
     accepted.push(w);
     const width = Math.max(6.5, Math.min(22, w.w || 15.6));
-    const geo = ribbon(pts, width, (x, z) => {
-      const g = heightAt(x, z) ?? lv.waterY;
-      if (elevated) return Math.max(g + 6.5, lv.waterY + 12);
-      return g + 0.14;
-    }, 0.1);
-    if (geo) exprGeos.push(geo);
+    // DEM 밖(heightAt null)이나 expressXMax 동쪽은 그리지 않는다. 예전에는 1구간 DEM 밖
+    // 올림픽대로가 수면 높이(−43 m)로 합수부까지 깔려 2구간 둔치 아래 검은 판이 되었다.
+    const runs = [];
+    let run = [];
+    for (const p of pts) {
+      const ok = heightAt(p[0], p[1]) != null && (expressXMax == null || p[0] <= expressXMax);
+      if (ok) run.push(p);
+      else { if (run.length >= 2) runs.push(run); run = []; }
+    }
+    if (run.length >= 2) runs.push(run);
+    for (const r of runs) {
+      const geo = ribbon(r, width, (x, z) => {
+        const g = heightAt(x, z) ?? lv.waterY;
+        if (elevated) return Math.max(g + 6.5, lv.waterY + 12);
+        return g + 0.14;
+      }, 0.1);
+      if (geo) exprGeos.push(geo);
+    }
   }
   if (exprGeos.length) {
     const merged = exprGeos.length === 1 ? exprGeos[0] : mergeGeometries(exprGeos, false);

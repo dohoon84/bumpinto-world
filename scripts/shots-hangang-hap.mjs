@@ -15,13 +15,14 @@ const browser = await chromium.launch({
     '--enable-unsafe-swiftshader',
     '--ignore-gpu-blocklist',
     '--no-sandbox',
+    '--js-flags=--max-old-space-size=4096',
   ],
 });
 const errs = [];
 const Q = 'enter=1&name=Tester&ws=mock&bus=sim&weather=clear&noticePopup=0&bgm=0&subwayVoice=0&subwayRt=0&npcs=0&taxis=0&police=0&trucks=0&clife=0&bike=0&roadbike=0&superbike=0&pangyonpc=0&cityhall=0&pangyo=0&migeum=0&controlscard=0&ntower=0&at=tancheon-hap';
 
 async function open(tag, { hour = 14, extra = '' } = {}) {
-  const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+  const page = await browser.newPage({ viewport: { width: +(process.env.VW || 1440), height: +(process.env.VH || 900) } });
   page.on('pageerror', (e) => { errs.push(`${tag}: ${e.message}`); console.error('pageerror', tag, e.message); });
   page.on('console', (m) => { if (m.type() === 'error') console.error('console', tag, m.text()); });
   await page.route(/\.(woff2?|ttf|otf|eot)(\?|$)/i, (route) => route.abort());

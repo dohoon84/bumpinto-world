@@ -515,6 +515,14 @@ export function createHangangHap({ parent, overlay, terrain, dem, osm } = {}) {
     updateLights: (x, z) => props.updateLights?.(x, z),
     // 코리더 타일 바닥(y≈0)은 한강 둔치·수면보다 높아 베이지 판과 하늘색 물길 띠로
     // 떠 보인다. 한강 남단 쪽(z < -15800)에서 2구간 지형이 그 아래에 있으면 덮지 않는다.
+    // coversTileFlat 이 참인 곳은 이 사각형과 같다 (DEM 박스 ∩ x ≥ visualXMin ∩ z ≤ −15800).
+    flatClipRect() {
+      const b = land.bounds;
+      if (!b) return null;
+      const x0 = Math.max(b.x0, osm?.meta?.visualXMin ?? b.x0);
+      const z1 = Math.min(b.z1, -15800);
+      return (x0 < b.x1 && b.z0 < z1) ? { x0, x1: b.x1, z0: b.z0, z1 } : null;
+    },
     coversTileFlat(x, z) {
       const b = land.bounds;
       if (!b || x < b.x0 || x > b.x1 || z < b.z0 || z > b.z1) return false;

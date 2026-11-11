@@ -5,7 +5,7 @@
 // 라이브 정자 영역(liveBox + 탄천 띠) 안에는 아무것도 그리지 않으므로 기존 정자 화면/동작은 그대로다.
 import * as THREE from 'three';
 import { mergeTancheon, coveredFn, holeyGround, channelWaterMesh } from './tancheon.js';
-import { buildDetailTile, buildLodTile, roadMesh, CAR_KINDS, ingestTileRoads, setFlatClip, clipFlatGeometry } from './tileMesh.js';
+import { buildDetailTile, buildLodTile, roadMesh, CAR_KINDS, ingestTileRoads, setFlatClip, clipFlatGeometry, clipOutsideRect } from './tileMesh.js';
 import { applyTileCuts } from '../world/streams.js';
 import { buildCorridorCrossings } from './crossings.js';
 import { mountYatapSchoolZone } from './yatapSchoolZone.js'; // [schoolzone]
@@ -258,6 +258,7 @@ export function createCorridor({ scene, corridorData, terrain, world, renderer, 
   }
 
   // ---------- 바깥 바닥: 지형 평면(-3000..3000) 밖을 같은 바닥 재질로 채움 (terrain.build 뒤에 호출) ----------
+  let hapFlatRect = null; // [hangang] 2구간이 바닥을 그리는 사각형 (createHangang 뒤에 채움)
   function addOuterGround() {
     const mat = world.ground?.material; if (!mat) return;
     const B = index.meta.bounds, M = 3000, P = 800;
@@ -268,6 +269,7 @@ export function createCorridor({ scene, corridorData, terrain, world, renderer, 
       let g;
       if (covered) g = holeyGround(a, b, c, d, 0, 8, covered, TT.axis, S ? S.near : null);
       else { g = new THREE.PlaneGeometry(c - a, d - b); g.rotateX(-Math.PI / 2); g.translate((a + c) / 2, 0, (b + d) / 2); }
+      if (hapFlatRect) g = clipOutsideRect(g, hapFlatRect); // [hangang] 2구간 사각형 안은 한강 지형이 바닥
       const m = new THREE.Mesh(g, mat); m.receiveShadow = true; m.name = 'corridorOuterGround'; root.add(m);
     }
   }
@@ -423,6 +425,7 @@ const gnTransit = corridorData.gangnamTransit ? mountGangnamTransit(root, corrid
   // [hangang] 반포한강공원·잠수교 — 코리더 타일 밖 섬. ?hangang=0 이면 데이터 없음.
   let hangang = null;
   setFlatClip(null);
+  hapFlatRect = null;
   if (corridorData.hangang?.dem && corridorData.hangang?.osm) {
     hangang = createHangang({
       scene: root,
@@ -438,6 +441,19 @@ const gnTransit = corridorData.gangnamTransit ? mountGangnamTransit(root, corrid
       root.traverse((o) => {
         if (o.isMesh && (o.name === 'corridorFlat' || o.name === 'corridorLodFlat')) clipFlatGeometry(o.geometry);
       });
+      // 외곽 바닥(y=0)과 라이브 탄천 물길(y≈0.04)도 2구간 사각형 안에서는 한강 수면·둔치 위로
+      // 떠서 항공 샷의 베이지 판과 하늘색 띠가 된다. 삼각형을 사각형 경계로 잘라 바깥만 남긴다.
+      const rect = hangang.hap.flatClipRect?.();
+      hapFlatRect = rect || null;
+      if (rect) {
+        const targets = [];
+        root.traverse((o) => { if (o.isMesh && o.name === 'corridorOuterGround') targets.push(o); });
+        for (const o of root.parent?.children || []) if (o.isMesh && (o.name === 'liveWater' || o.name === 'liveWaterLines')) targets.push(o);
+        for (const o of targets) {
+          const ng = clipOutsideRect(o.geometry, rect);
+          if (ng !== o.geometry) { o.geometry.dispose(); o.geometry = ng; }
+        }
+      }
     }
   }
 

@@ -36,6 +36,9 @@ PATH_WEST_CLIP = -8910.0   # do not redraw 한강남자전거길 already in 1구
 VISUAL_XMIN = -8240.0      # do not draw a second DEM/water plate over 1구간
 TANCHEON_WATER_Y = -6.6    # public/terrain.json params.WATER
 FOOT_NEAR_BIKE = 55.0      # keep footways whose end is this close to a bike sample
+SKYLINE_TAGGED_M = 750.0   # south-bank skyline: OSM height/levels-tagged buildings this close to 올림픽대로
+SKYLINE_UNTAGGED_M = 420.0 # untagged (12 m default) only this close
+SKYLINE_CAP = 3200
 
 BBOXES = [
     # 탄천 south (수서·대치) — existing bike end
@@ -343,6 +346,25 @@ def keep_way(tags, name):
         return False
     return False
 
+def building_rec(w, pts, tags, cz):
+    h = None
+    if tags.get('height'):
+        try:
+            h = float(str(tags['height']).split(';')[0].replace('m', '').strip())
+        except ValueError:
+            h = None
+    if h is None and tags.get('building:levels'):
+        try:
+            h = float(str(tags['building:levels']).split(';')[0]) * 3.2
+        except ValueError:
+            h = None
+    return {
+        'id': w['id'], 'o': pts, 'h': round(h or 12, 1),
+        'k': tags.get('building') if tags.get('building') != 'yes' else 'yes',
+        'name': tags.get('name'),
+        'cz': cz,
+    }
+
 def dist_to_pts(x, z, samples):
     best = 1e18
     for p in samples:
@@ -647,6 +669,21 @@ def build_osm(els):
             if dist_to_pts(x, z, bike_samples) < 80:
                 benches.append({'id': nd['id'], 'x': x, 'z': z, 'k': tags.get('amenity')})
 
+    # 올림픽대로 samples (~30 m) for the south-bank skyline band
+    oly_samples = []
+    for w in out_ways:
+        if (w.get('name') or '') != '올림픽대로':
+            continue
+        pts = w['pts']
+        acc = 0.0
+        oly_samples.append(pts[0])
+        for i in range(1, len(pts)):
+            acc += math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1])
+            if acc >= 30:
+                oly_samples.append(pts[i])
+                acc = 0.0
+        oly_samples.append(pts[-1])
+    skyline = []
     for w in ways:
         tags = w.get('tags') or {}
         if not tags.get('building'):
@@ -658,29 +695,30 @@ def build_osm(els):
             continue
         cx = sum(p[0] for p in pts) / len(pts)
         cz = sum(p[1] for p in pts) / len(pts)
+        tagged_h = bool(tags.get('height') or tags.get('building:levels'))
+        # South-bank skyline beyond the 올림픽대로 embankment (잠원·압구정·청담·삼성·잠실).
+        # OSM footprints only; tagged heights out to SKYLINE_TAGGED_M, untagged
+        # (default 12 m) only close to the road.
+        if VISUAL_XMIN <= cx <= 600 and cz < -14800 and oly_samples:
+            d_oly = dist_to_pts(cx, cz, oly_samples)
+            if d_oly <= (SKYLINE_TAGGED_M if tagged_h else SKYLINE_UNTAGGED_M):
+                skyline.append((d_oly, w, pts, tags, cz))
         if dist_to_pts(cx, cz, bike_samples) > 280:
             continue
-        h = None
-        if tags.get('height'):
-            try:
-                h = float(str(tags['height']).split(';')[0].replace('m', '').strip())
-            except ValueError:
-                h = None
-        if h is None and tags.get('building:levels'):
-            try:
-                h = float(str(tags['building:levels']).split(';')[0]) * 3.2
-            except ValueError:
-                h = None
-        buildings.append({
-            'id': w['id'], 'o': pts, 'h': round(h or 12, 1),
-            'k': tags.get('building') if tags.get('building') != 'yes' else 'yes',
-            'name': tags.get('name'),
-            'cz': cz,
-        })
+        buildings.append(building_rec(w, pts, tags, cz))
 
     # Prefer 한강남 변 건물(청담·압구정·잠원) so the 380 cap is not filled by 수서 only.
     buildings.sort(key=lambda b: (0 if b.get('cz', 0) < -16000 else 1, -(b.get('h') or 0)))
     buildings = buildings[:720]
+    have = {b['id'] for b in buildings}
+    skyline.sort(key=lambda t: t[0])
+    n_sky = 0
+    for d_oly, w, pts, tags, cz in skyline:
+        if w['id'] in have or n_sky >= SKYLINE_CAP:
+            continue
+        buildings.append(building_rec(w, pts, tags, cz))
+        have.add(w['id'])
+        n_sky += 1
     for b in buildings:
         b.pop('cz', None)
 

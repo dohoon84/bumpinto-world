@@ -53,7 +53,8 @@ export function createHangang({ scene, overlay, terrain, dem, osm, hap } = {}) {
   const land = createHangangTerrain({ parent: root, dem, osm });
   const bridges = createHangangBridges({ parent: root, osm, land });
   const paths = createHangangPaths({ parent: root, osm, land });
-  const city = createHangangCity({ parent: root, osm, land });
+  // 2구간이 있으면 그 pathWestClip 동쪽 올림픽대로는 2구간이 깐다 (겹침·DEM 밖 −43 m 리본 방지).
+  const city = createHangangCity({ parent: root, osm, land, expressXMax: hap?.osm?.meta?.pathWestClip ?? null });
   const props = createHangangProps({ parent: root, osm, land });
   const hapApi = (hap?.dem && hap?.osm)
     ? createHangangHap({ parent: root, overlay, terrain, dem: hap.dem, osm: hap.osm })
