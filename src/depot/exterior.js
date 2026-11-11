@@ -15,8 +15,8 @@ function facadeTexture() {
 function signTexture() {
   const c = document.createElement('canvas'); c.width = 1024; c.height = 256;
   const g = c.getContext('2d');
-  g.fillStyle = '#1f4fa3'; g.fillRect(0, 0, 1024, 256);
-  g.fillStyle = '#f2b705'; g.fillRect(0, 206, 1024, 50);
+  g.fillStyle = '#1E5A45'; g.fillRect(0, 0, 1024, 256);
+  g.fillStyle = '#F2C230'; g.fillRect(0, 206, 1024, 50);
   g.fillStyle = '#fff'; g.textAlign = 'center'; g.textBaseline = 'middle';
   g.font = '900 120px "Pretendard", "Noto Sans KR", sans-serif'; g.fillText('범창고', 330, 108);
   g.font = '900 64px "Pretendard", "Noto Sans KR", sans-serif'; g.fillText('BUMP DEPOT', 760, 108);
@@ -44,13 +44,16 @@ export function buildDepotExterior(scene, { groundY = () => 0 } = {}) {
   // 정면 간판
   const sTex = signTexture();
   const signM = new THREE.MeshBasicMaterial({ map: sTex });
+  // 디자인 간판(facade.webp, 14 KB)을 받으면 교체 — 못 받으면 캔버스 간판 그대로
+  let fac = null, gone = false;
+  new THREE.TextureLoader().loadAsync(`${import.meta.env?.BASE_URL || '/'}depot/facade.webp`).then((t) => { if (gone) { t.dispose(); return; } t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; fac = t; signM.map = t; signM.needsUpdate = true; }).catch(() => {});
   const signG = new THREE.PlaneGeometry(28, 7);
   const sign = new THREE.Mesh(signG, signM); sign.position.set(cx + 14, yTop + S.h - 4.2, S.z0 - 0.06); sign.rotation.y = Math.PI; root.add(sign);
   // 출입구: 어두운 유리 + 캐노피(파란 처마) + 카트 보관소 지붕
   const glassM = new THREE.MeshLambertMaterial({ color: 0x23303f, emissive: 0x2a3b52, emissiveIntensity: 0.6 });
   const doorG = new THREE.PlaneGeometry(S.door.w, 3.4);
   const door = new THREE.Mesh(doorG, glassM); door.position.set(S.door.x, groundY(S.door.x, S.door.z) + 1.7, S.z0 - 0.05); door.rotation.y = Math.PI; root.add(door);
-  const canM = new THREE.MeshLambertMaterial({ color: 0x1f4fa3 });
+  const canM = new THREE.MeshLambertMaterial({ color: 0x1e5a45 });
   const canG = new THREE.BoxGeometry(22, 0.5, 6);
   const canopy = new THREE.Mesh(canG, canM); canopy.position.set(S.door.x - 4, groundY(S.door.x, S.door.z) + 4.4, S.z0 - 3); root.add(canopy);
   scene.add(root);
@@ -59,6 +62,6 @@ export function buildDepotExterior(scene, { groundY = () => 0 } = {}) {
     root, y0,
     // 바깥에서 건물 안으로 걸어 들어가지 않게 (출입구 앞은 문 안내로 처리)
     blocks(x, z, r = 0.4) { return x > S.x0 - r && x < S.x1 + r && z > S.z0 - r && z < S.z1 + r; },
-    dispose() { scene.remove(root); for (const d of disposables) d.dispose(); },
+    dispose() { gone = true; scene.remove(root); for (const d of disposables) d.dispose(); fac?.dispose(); },
   };
 }

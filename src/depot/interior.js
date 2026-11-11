@@ -44,16 +44,35 @@ function labelTex(p) {
     }
   });
 }
-function boxGeoLabeled(sx, sy, sz) {
+// 캔버스 라벨(512×256: 왼쪽 옆면 · 오른쪽 윗면) — 디자인 텍스처를 못 받았을 때만 씀
+function boxGeoLabeledCanvas(sx, sy, sz) {
   const g = new THREE.BoxGeometry(sx, sy, sz);
   const uv = g.attributes.uv;
   for (let f = 0; f < 6; f++) for (let k = 0; k < 4; k++) { const i = f * 4 + k; uv.setX(i, f === 2 ? 0.5 + uv.getX(i) * 0.5 : uv.getX(i) * 0.5); }
   return g;
 }
+// 디자인 상품 아틀라스(1024²): 왼쪽 위 = 앞(±z) · 오른쪽 위 = 옆(±x) · 왼쪽 아래 = 윗면(±y) · 오른쪽 아래 = 예비(빈 계란판)
+const QUAD = { front: [0, 0.5], side: [0.5, 0.5], top: [0, 0], spare: [0.5, 0] };
+function boxGeoAtlas(sx, sy, sz, topQuad = 'top') {
+  const g = new THREE.BoxGeometry(sx, sy, sz), uv = g.attributes.uv, e = 3 / 1024;
+  const faceQ = ['side', 'side', topQuad, topQuad, 'front', 'front'];
+  for (let f = 0; f < 6; f++) { const [u0, v0] = QUAD[faceQ[f]]; for (let k = 0; k < 4; k++) { const i = f * 4 + k; uv.setXY(i, u0 + e + uv.getX(i) * (0.5 - 2 * e), v0 + e + uv.getY(i) * (0.5 - 2 * e)); } }
+  return g;
+}
+const ASSET = `${import.meta.env?.BASE_URL || '/'}depot/`;
+async function loadDepotTextures(renderer) {
+  const tl = new THREE.TextureLoader(), maxAniso = Math.min(8, renderer?.capabilities?.getMaxAnisotropy?.() || 4);
+  const names = ['pk-egg', 'pk-water', 'pk-rice', 'pk-tissue', 'pk-ramen', 'pk-chips', 'pk-soda', 'aisle-01', 'aisle-02', 'aisle-03', 'aisle-05', 'hang-eggs-dairy', 'hang-water-drinks', 'hang-rice-grain', 'hang-ramen-snack', 'hang-household', 'rack-safety', 'floor-cart-only', 'floor-forklift', 'floor-hazard', 'egg-crack-1', 'egg-crack-2', 'yolk-puddle'];
+  const out = {};
+  await Promise.all(names.map((n) => tl.loadAsync(`${ASSET}${n}.webp`).then((t) => { t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = maxAniso; out[n] = t; }).catch(() => { /* 없으면 캔버스 대체 */ })));
+  return out;
+}
 
 export async function buildDepotInterior({ renderer, isMobile = false, onExit } = {}) {
   const disposables = [];
   const keep = (x) => { disposables.push(x); return x; };
+  const TX = await loadDepotTextures(renderer); for (const t of Object.values(TX)) keep(t);
+  const boxGeoLabeled = (sx, sy, sz, q) => (TX['pk-egg'] ? boxGeoAtlas(sx, sy, sz, q) : boxGeoLabeledCanvas(sx, sy, sz));
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0xdfe5ec);
   scene.fog = new THREE.Fog(0xdfe5ec, 45, 140);
@@ -98,18 +117,17 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit } 
   truss.count = tn; scene.add(truss);
   // 벽 구역 간판 (신선·냉동 등) — 실제 매장 동선 그림
   const zoneSign = (text, sub, x, z, ry, w = 14) => {
-    const t = keep(canvasTex(1024, 256, (g) => { g.fillStyle = '#1f4fa3'; g.fillRect(0, 0, 1024, 256); g.fillStyle = '#f2b705'; g.fillRect(0, 214, 1024, 42); g.fillStyle = '#fff'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.font = '900 120px "Pretendard","Noto Sans KR",sans-serif'; g.fillText(text, 512, 100); g.fillStyle = '#13203d'; g.font = '800 30px "Pretendard",sans-serif'; g.fillText(sub, 512, 236); }));
+    const t = keep(canvasTex(1024, 256, (g) => { g.fillStyle = '#1E5A45'; g.fillRect(0, 0, 1024, 256); g.fillStyle = '#F2C230'; g.fillRect(0, 214, 1024, 42); g.fillStyle = '#F3EADA'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.font = '900 120px "Pretendard","Noto Sans KR",sans-serif'; g.fillText(text, 512, 100); g.fillStyle = '#123B2D'; g.font = '800 30px "Pretendard",sans-serif'; g.fillText(sub, 512, 236); }));
     const m = keep(new THREE.MeshBasicMaterial({ map: t })); const gg = keep(new THREE.PlaneGeometry(w, w / 4));
     const s = new THREE.Mesh(gg, m); s.position.set(x, 6.6, z); s.rotation.y = ry; scene.add(s);
   };
   zoneSign('신선·정육', 'FRESH MEAT · DAIRY · EGGS', 30, D - 0.1, Math.PI, 18);
   zoneSign('냉동', 'FROZEN', W - 0.1, 50, -Math.PI / 2, 12);
-  zoneSign('음료·생수·쌀·생활', 'AISLE 21–23 · 대용량', 56.7, 12.9, 0, 10);
   zoneSign('범창고 BUMP DEPOT', '정자점 · 회원 아니어도 OK', 40, 0.1, 0, 22);
 
   // ---------- 파렛트 랙 (전 매장 인스턴스) ----------
-  const upM = keep(new THREE.MeshLambertMaterial({ color: 0xe8661a })); // 주황 기둥
-  const beamM = keep(new THREE.MeshLambertMaterial({ color: 0x1d4fa0 })); // 파랑 빔
+  const upM = keep(new THREE.MeshLambertMaterial({ color: 0x4a5a6a })); // 랙 블루그레이 기둥 (팔레트 #4A5A6A, 주황 X)
+  const beamM = keep(new THREE.MeshLambertMaterial({ color: 0x5c6d7e })); // 블루그레이 빔 (기둥보다 한 톤 밝게)
   const palM = keep(new THREE.MeshLambertMaterial({ color: 0xb08a58 }));
   const wrapM = keep(new THREE.MeshLambertMaterial({ color: 0xffffff, transparent: true, opacity: 0.92 }));
   const upG = keep(new THREE.BoxGeometry(0.09, RACK_H, 0.09)); upG.translate(0, RACK_H / 2, 0);
@@ -160,7 +178,7 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit } 
   // ---------- 상품 (상품별 InstancedMesh, 판매 파렛트 위에 실측 크기로 쌓기) ----------
   const prodMeshes = [];
   const prodGeo = {}, prodMat = {};
-  for (const p of PRODUCTS) { prodGeo[p.id] = keep(boxGeoLabeled(...p.size)); const t = keep(labelTex(p)); prodMat[p.id] = keep(new THREE.MeshLambertMaterial({ map: t })); }
+  for (const p of PRODUCTS) { prodGeo[p.id] = keep(boxGeoLabeled(...p.size)); const t = TX[`pk-${p.id}`] || keep(labelTex(p)); prodMat[p.id] = keep(new THREE.MeshLambertMaterial({ map: t })); }
   const order = ['water', 'soda', 'rice', 'egg', 'tissue', 'ramen', 'chips'];
   const stacks = {}; for (const id of order) stacks[id] = [];
   sellSlots.sort((a, b) => a.x - b.x || a.z - b.z);
@@ -189,8 +207,41 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit } 
   }
   // 통로 가격표(파렛트 앞 바닥 스탠드)
   const tagTex = {}; const tagG = keep(new THREE.PlaneGeometry(0.6, 0.3));
-  for (const p of PRODUCTS) { const t = keep(canvasTex(256, 128, (g) => { g.fillStyle = '#fff'; g.fillRect(0, 0, 256, 128); g.fillStyle = '#c62828'; g.fillRect(0, 0, 256, 34); g.fillStyle = '#fff'; g.font = '900 22px "Pretendard",sans-serif'; g.textAlign = 'center'; g.fillText(p.name, 128, 25); g.fillStyle = '#111'; g.font = '900 44px "Pretendard",sans-serif'; g.fillText(`${p.price.toLocaleString('ko-KR')}`, 118, 84); g.font = '700 18px "Pretendard",sans-serif'; g.fillText(`원 · ${p.kg}kg`, 128, 114); })); tagTex[p.id] = keep(new THREE.MeshBasicMaterial({ map: t })); }
+  for (const p of PRODUCTS) { const t = keep(canvasTex(512, 256, (g) => { // 디자인 가격표 양식(그린 띠 · 크림 바탕, 특가는 레드 띠)
+      const sale = p.id === 'ramen' || p.id === 'chips';
+      g.fillStyle = '#FBF7EE'; g.fillRect(0, 0, 512, 256); g.fillStyle = sale ? '#D9442E' : '#1E5A45'; g.fillRect(0, 0, 512, 54);
+      g.fillStyle = '#F3EADA'; g.font = '800 26px "Pretendard",sans-serif'; g.textAlign = 'left'; g.fillText(sale ? '범창고 특가' : '범창고 정자점', 22, 37);
+      g.fillStyle = '#22262A'; g.font = '800 34px "Pretendard",sans-serif'; g.fillText(p.name, 22, 100); g.fillStyle = '#5a5f63'; g.font = '600 22px "Pretendard",sans-serif'; g.fillText(`${p.sub} · ${p.kg} kg`, 22, 134);
+      g.textAlign = 'right'; g.fillStyle = sale ? '#D9442E' : '#22262A'; g.font = '800 84px "Pretendard",sans-serif'; g.fillText(p.price.toLocaleString('ko-KR'), 462, 222); g.font = '800 34px "Pretendard",sans-serif'; g.fillText('원', 498, 222);
+      g.fillStyle = '#22262A'; for (let i = 0; i < 26; i++) g.fillRect(22 + i * 6, 170, (i * 7) % 3 + 1, 60);
+    })); tagTex[p.id] = keep(new THREE.MeshBasicMaterial({ map: t })); }
   sellSlots.forEach((s, i) => { if (i % 4) return; const p = BY_ID[order[Math.floor(i / 4) % order.length]]; const tg = new THREE.Mesh(tagG, tagTex[p.id]); tg.position.set(s.x + s.face * 0.55, 1.62, s.z + 0.3); tg.rotation.y = s.face > 0 ? Math.PI / 2 : -Math.PI / 2; scene.add(tg); });
+
+  // ---------- 디자인 사인 (통로 번호 · 천장 걸이 · 랙 끝 안전 표지 · 바닥 스텐실) ----------
+  const AISLE_C = [RACK_X[0] + RACK_D + AISLE / 2, RACK_X[1] + RACK_D + AISLE / 2];
+  const signPlane = (tex, w, h, x, y, z, ry, { alpha = false, floor = false } = {}) => {
+    if (!tex) return null;
+    const m = keep(new THREE.MeshBasicMaterial({ map: tex, transparent: false, alphaTest: alpha ? 0.5 : 0, polygonOffset: floor, polygonOffsetFactor: floor ? -2 : 0, polygonOffsetUnits: floor ? -2 : 0 }));
+    const g = keep(new THREE.PlaneGeometry(w, h)); if (floor) g.rotateX(-Math.PI / 2);
+    const o = new THREE.Mesh(g, m); o.position.set(x, y, z); o.rotation.y = ry; scene.add(o); return o;
+  };
+  // 통로 번호: 랙 위(입구 쪽·안쪽 양면)
+  [['aisle-01', AISLE_C[0]], ['aisle-02', AISLE_C[1]]].forEach(([n, x]) => {
+    signPlane(TX[n], 2.6, 1.3, x, 5.4, DETAIL.z0 - 0.05, Math.PI); // 입구에서 보이는 면
+    signPlane(TX[n], 2.6, 1.3, x, 5.4, DETAIL.z0 - 0.0, 0); // 통로 안에서 보이는 면 (반대쪽 끝에서 돌아볼 때)
+  });
+  signPlane(TX['aisle-03'], 2.6, 1.3, RACK_X[2] + RACK_D + AISLE / 2, 5.4, DETAIL.z0 - 0.05, Math.PI);
+  signPlane(TX['aisle-05'], 2.6, 1.3, RACK_X[0] - AISLE / 2, 5.4, DETAIL.z0 - 0.05, Math.PI);
+  // 천장 걸이 카테고리 사인 (양면 = 같은 텍스처 두 장)
+  for (const [n, x, z] of [['hang-water-drinks', AISLE_C[0], 18.5], ['hang-eggs-dairy', AISLE_C[0], 28], ['hang-ramen-snack', AISLE_C[0], 37], ['hang-rice-grain', AISLE_C[1], 21], ['hang-household', AISLE_C[1], 33]]) {
+    signPlane(TX[n], 3.2, 0.8, x, 6.1, z, 0, { alpha: true }); signPlane(TX[n], 3.2, 0.8, x, 6.1, z - 0.01, Math.PI, { alpha: true });
+  }
+  // 랙 끝 안전 표지 '위층 재고는 지게차가 꺼내요'
+  for (const x of RACK_X) signPlane(TX['rack-safety'], 0.55, 1.1, x + RACK_D / 2, 1.55, DETAIL.z0 - 0.08, Math.PI);
+  // 바닥 스텐실
+  signPlane(TX['floor-cart-only'], 3.2, 1.6, 71.5, 0.006, 12.6, Math.PI, { alpha: true, floor: true });
+  signPlane(TX['floor-forklift'], 2.8, 2.8, 57, 0.006, 44, Math.PI, { alpha: true, floor: true });
+  if (TX['floor-hazard']) { const t = TX['floor-hazard']; t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(16, 1); signPlane(t, CORRAL.x1 - CORRAL.x0, 0.45, (CORRAL.x0 + CORRAL.x1) / 2, 0.006, CORRAL.z1 + 0.5, 0, { alpha: true, floor: true }); }
 
   // ---------- 카트 ----------
   const cg = buildCartGeometry(); keep(cg.wire); keep(cg.red); keep(cg.dark);
@@ -207,7 +258,7 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit } 
   for (let row = 0; row < 2; row++) for (let k = 0; k < 7; k++) corralPos.push({ x: CORRAL.x0 + 1.8 + row * 3.6, z: CORRAL.z0 + 0.7 + k * 0.3 });
   const setCorral = (n) => { corralPos.forEach((c, i) => { m4.compose(pv.set(c.x, 0, c.z), new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI), s1); for (const im of corral) im.setMatrixAt(i, m4); }); for (const im of corral) { im.count = n; im.instanceMatrix.needsUpdate = true; } };
   setCorral(14); scene.add(...corral);
-  const railM = keep(new THREE.MeshLambertMaterial({ color: 0x1d4fa0 }));
+  const railM = keep(new THREE.MeshLambertMaterial({ color: 0x1e5a45 }));
   const railG = keep(new THREE.BoxGeometry(0.06, 1.0, CORRAL.z1 - CORRAL.z0)); railG.translate(0, 0.5, (CORRAL.z0 + CORRAL.z1) / 2);
   for (const x of [CORRAL.x0, CORRAL.x0 + 3.6 * 0 + 3.6, CORRAL.x0 + 7.2]) { const r = new THREE.Mesh(railG, railM); r.position.x = x; scene.add(r); }
   const corralSign = keep(canvasTex(512, 160, (g) => { g.fillStyle = '#f2b705'; g.fillRect(0, 0, 512, 160); g.fillStyle = '#13203d'; g.textAlign = 'center'; g.font = '900 54px "Pretendard",sans-serif'; g.fillText('🛒 카트 보관소', 256, 72); g.font = '700 26px "Pretendard",sans-serif'; g.fillText('240L 대형 카트 · 최대 240 kg', 256, 124); }));
@@ -267,12 +318,12 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit } 
   <div class="dh-btns"><button data-a="place">놓기</button><button data-a="rot">돌리기</button><button data-a="tip">눕히기</button><button data-a="level">위/아래</button><button data-a="cancel">취소</button></div>`;
   const css = document.createElement('style');
   css.textContent = `#depot-hud{position:fixed;inset:0;pointer-events:none;z-index:57;font-family:'Pretendard','Noto Sans KR',system-ui,sans-serif;color:#fff}
-#depot-hud .dh-panel{position:absolute;left:16px;top:62px;background:rgba(13,26,51,.78);border-radius:12px;padding:8px 12px;font-size:13px;line-height:1.55;font-weight:600;max-width:340px}
-#depot-hud .dh-panel b{color:#f2b705;margin-right:8px;font-size:14px}#depot-hud .dh-kg{display:block;white-space:pre-line}
+#depot-hud .dh-panel{position:absolute;left:16px;top:62px;background:rgba(18,59,45,.88);border-radius:12px;padding:8px 12px;font-size:13px;line-height:1.55;font-weight:600;max-width:340px}
+#depot-hud .dh-panel b{color:#F2C230;margin-right:8px;font-size:14px}#depot-hud .dh-kg{display:block;white-space:pre-line}
 #depot-hud .dh-cross{position:absolute;left:50%;top:50%;width:8px;height:8px;margin:-4px 0 0 -4px;border-radius:50%;background:rgba(255,255,255,.85);box-shadow:0 0 0 2px rgba(0,0,0,.35)}
 #depot-hud .dh-target{position:absolute;left:50%;top:calc(50% + 22px);transform:translateX(-50%);background:rgba(255,255,255,.95);color:#13203d;border-radius:10px;padding:6px 12px;font-size:14px;font-weight:800;display:none;white-space:nowrap}
 #depot-hud .dh-toast{position:absolute;left:50%;top:70px;transform:translateX(-50%);background:#c62828;color:#fff;border-radius:12px;padding:10px 18px;font-size:17px;font-weight:900;display:none;box-shadow:0 8px 24px rgba(0,0,0,.3)}
-#depot-hud .dh-help{position:absolute;left:50%;bottom:100px;transform:translateX(-50%);background:rgba(13,26,51,.72);border-radius:10px;padding:6px 12px;font-size:12.5px;font-weight:600;white-space:nowrap}
+#depot-hud .dh-help{position:absolute;left:50%;bottom:100px;transform:translateX(-50%);background:rgba(18,59,45,.82);border-radius:10px;padding:6px 12px;font-size:12.5px;font-weight:600;white-space:nowrap}
 #depot-hud .dh-btns{position:absolute;right:16px;bottom:200px;display:none;flex-direction:column;gap:6px;pointer-events:auto}
 #depot-hud .dh-btns button{font:inherit;font-weight:800;font-size:13px;border:0;border-radius:10px;padding:8px 12px;background:rgba(255,255,255,.92);color:#13203d}
 #depot-hud.placing .dh-btns{display:flex}#depot-hud.placing .dh-cross{display:none}`;
@@ -301,6 +352,10 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit } 
   // ---------- 짐 ----------
   const eggGeo = keep(new THREE.SphereGeometry(1, 10, 8)); eggGeo.scale(0.022, 0.028, 0.022);
   const eggM = keep(new THREE.MeshLambertMaterial({ color: 0xffffff }));
+  const eggTrayM = keep(new THREE.MeshLambertMaterial({ color: 0xd2b27c }));
+  const decalG = keep(new THREE.PlaneGeometry(1, 1)); decalG.rotateX(-Math.PI / 2);
+  const decalMat = (t) => (t ? keep(new THREE.MeshBasicMaterial({ map: t, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 })) : null);
+  const crack1M = decalMat(TX['egg-crack-1']), crack2M = decalMat(TX['egg-crack-2']), puddleM = decalMat(TX['yolk-puddle']);
   const splatG = keep(new THREE.CircleGeometry(0.03, 12)); splatG.rotateX(-Math.PI / 2);
   const splatM = keep(new THREE.MeshLambertMaterial({ color: 0xf5a300 }));
   const ghostM = keep(new THREE.MeshBasicMaterial({ color: 0x33dd66, transparent: true, opacity: 0.35, depthWrite: false }));
@@ -308,13 +363,21 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit } 
   function itemDims(p, tip) { const [sx, sy, sz] = p.size; return tip ? [sx, sz, sy] : [sx, sy, sz]; }
   function makeItemMesh(p, tip) {
     const [sx, sy, sz] = itemDims(p, tip);
-    const g = p.kind === 'egg' ? new THREE.BoxGeometry(sx, 0.045, sz) : boxGeoLabeled(sx, sy, sz);
-    const mesh = new THREE.Mesh(g, p.kind === 'egg' ? keep(new THREE.MeshLambertMaterial({ color: 0xd2b27c })) : prodMat[p.id]);
+    const g = p.kind === 'egg' ? (TX['pk-egg'] ? boxGeoAtlas(sx, 0.045, sz, 'spare') : new THREE.BoxGeometry(sx, 0.045, sz)) : boxGeoLabeled(sx, sy, sz);
+    const mesh = new THREE.Mesh(g, p.kind === 'egg' ? (TX['pk-egg'] ? prodMat.egg : eggTrayM) : prodMat[p.id]);
     if (p.kind === 'egg') {
       g.translate(0, -sy / 2 + 0.0225, 0);
       const eggs = new THREE.InstancedMesh(eggGeo, eggM, 30); const th = [];
       for (let i = 0; i < 30; i++) { const cx = -sx / 2 + sx / 6 * ((i % 6) + 0.5), cz = -sz / 2 + sz / 5 * (Math.floor(i / 6) + 0.5); m4.makeTranslation(cx, -sy / 2 + 0.045, cz); eggs.setMatrixAt(i, m4); eggs.setColorAt(i, col.setHex(0xf6ead4)); th.push(Math.max(18, EGG.mean + EGG.sd * gauss())); }
-      eggs.userData = { th, broken: new Array(30).fill(false), force: new Float32Array(30), hold: new Uint8Array(30), cell: [sx / 6, sz / 5] };
+      eggs.userData = { th, broken: new Array(30).fill(false), stage: new Uint8Array(30), force: new Float32Array(30), hold: new Uint8Array(30), cell: [sx / 6, sz / 5], top: -sy / 2 + 0.045 };
+      // 파손 단계 데칼(디자인 fx): 1 실금 · 2 금+눌림 · 3~4 노른자 웅덩이 — 알 30칸마다 인스턴스, 처음엔 0 크기
+      const fx = {};
+      for (const [k, mat] of [['crack1', crack1M], ['crack2', crack2M], ['puddle', puddleM]]) {
+        if (!mat) continue;
+        const im = new THREE.InstancedMesh(decalG, mat, 30); m4.makeScale(0, 0, 0); for (let i = 0; i < 30; i++) im.setMatrixAt(i, m4);
+        im.renderOrder = 3; im.frustumCulled = false; mesh.add(im); fx[k] = im;
+      }
+      eggs.userData.fx = fx;
       mesh.add(eggs); mesh.userData.eggs = eggs;
     }
     return mesh;
@@ -418,13 +481,13 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit } 
   }
   function removeLast() {
     const it = items.pop(); if (!it) return;
-    world.removeBody(it.body); itemsRoot.remove(it.mesh); it.mesh.geometry.dispose(); it.mesh.userData.eggs?.dispose();
+    world.removeBody(it.body); itemsRoot.remove(it.mesh); it.mesh.geometry.dispose(); it.mesh.userData.eggs?.dispose(); for (const im of Object.values(it.mesh.userData.eggs?.userData.fx || {})) im.dispose();
     if (it.src) { it.src.im.setMatrixAt(it.src.id, it.src.m); it.src.im.instanceMatrix.needsUpdate = true; }
     for (const o of items) o.body.wakeUp();
   }
 
   // ---------- 계란 하중 ----------
-  const up = new CANNON.Vec3(0, 1, 0);
+  const up = new CANNON.Vec3(0, 1, 0), up3 = new THREE.Vector3(0, 1, 0);
   function eggLoads(dt) {
     const eggItems = items.filter((it) => it.mesh.userData.eggs);
     if (!eggItems.length) return;
@@ -473,16 +536,32 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit } 
     // 2) 임계 넘으면(3 프레임 이상 지속 또는 충격) 그 알만 깨짐
     for (const it of eggItems) {
       const eggs = it.mesh.userData.eggs, U = eggs.userData; let newly = 0;
+      const fx = U.fx || {}; let fxDirty = false;
       for (let i = 0; i < 30; i++) {
         if (U.broken[i]) continue;
-        if (U.force[i] > U.th[i]) U.hold[i]++; else U.hold[i] = 0;
-        if (U.hold[i] >= 3 || U.force[i] > U.th[i] * 2.5) {
-          U.broken[i] = true; newly++;
-          eggs.getMatrixAt(i, m4); pv.setFromMatrixPosition(m4);
-          m4.compose(pv.setY(pv.y - 0.012), q0, new THREE.Vector3(1.5, 0.3, 1.5)); eggs.setMatrixAt(i, m4); eggs.setColorAt(i, col.setHex(0xffb300));
-          const sp = new THREE.Mesh(splatG, splatM); sp.position.copy(pv).setY(pv.y - 0.006); sp.scale.setScalar(1 + Math.random() * 0.6); eggs.parent.add(sp);
+        const r = U.force[i] / U.th[i];
+        if (r > 1) U.hold[i]++; else U.hold[i] = 0;
+        const smash = r > 2.5;
+        eggs.getMatrixAt(i, m4); pv.setFromMatrixPosition(m4);
+        if (U.hold[i] >= 3 || smash) {
+          U.broken[i] = true; U.stage[i] = smash ? 4 : 3; newly++;
+          // 알은 납작하게 · 노른자 웅덩이 데칼
+          m4.compose(pv.setY(U.top + 0.004), q0, new THREE.Vector3(1.25, 0.22, 1.25)); eggs.setMatrixAt(i, m4); eggs.setColorAt(i, col.setHex(0xf2e2c4));
+          const ps = smash ? 0.085 : 0.06;
+          if (fx.puddle) { m4.compose(pv.setY(U.top + 0.008), new THREE.Quaternion().setFromAxisAngle(up3, Math.random() * 6.28), new THREE.Vector3(ps, 1, ps)); fx.puddle.setMatrixAt(i, m4); }
+          else { const sp = new THREE.Mesh(splatG, splatM); sp.position.copy(pv).setY(U.top + 0.006); eggs.parent.add(sp); }
+          if (fx.crack1) { m4.makeScale(0, 0, 0); fx.crack1.setMatrixAt(i, m4); }
+          fxDirty = true;
+        } else if (r >= 0.6 && U.stage[i] < (r >= 0.85 ? 2 : 1)) {
+          // 금 단계는 누적 · 금 간 알은 임계값이 ×0.8 (다음에 먼저 깨짐)
+          U.stage[i] = r >= 0.85 ? 2 : 1; U.th[i] *= 0.8;
+          const im = U.stage[i] === 2 ? fx.crack2 : fx.crack1;
+          if (U.stage[i] === 2) { m4.compose(pv, q0, new THREE.Vector3(1, 0.94, 1)); eggs.setMatrixAt(i, m4); if (fx.crack1) { m4.makeScale(0, 0, 0); fx.crack1.setMatrixAt(i, m4); } }
+          if (im) { m4.compose(pv.clone().setY(U.top + 0.03), new THREE.Quaternion().setFromAxisAngle(up3, Math.random() * 6.28), new THREE.Vector3(0.04, 1, 0.04)); im.setMatrixAt(i, m4); }
+          fxDirty = true; st.crackedEggs = (st.crackedEggs || 0) + 1;
         }
       }
+      if (fxDirty) { for (const im of Object.values(fx)) im.instanceMatrix.needsUpdate = true; eggs.instanceMatrix.needsUpdate = true; }
       if (newly) { eggs.instanceMatrix.needsUpdate = true; eggs.instanceColor.needsUpdate = true; st.brokenEggs += newly; blip('crack'); toast(`🥚 빠직! 계란 ${newly}개 깨짐 (${st.brokenEggs}/${st.eggTotal})`, 2400); }
     }
     void dt;
