@@ -16,7 +16,10 @@ const shot = async (name) => { await p.waitForTimeout(600); await p.screenshot({
 const metric = (label) => p.evaluate(async (label) => {
   window.gc?.(); await new Promise((r) => setTimeout(r, 300)); window.gc?.();
   const J = window.__jj, info = J.renderer.info;
-  await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+  await new Promise((r) => requestAnimationFrame(r));
+  info.autoReset = false; info.reset(); // 한 프레임 동안의 render() 호출 전부 합산
+  await new Promise((r) => requestAnimationFrame(() => r()));
+  info.autoReset = true;
   return { label, heapMB: +(performance.memory.usedJSHeapSize / 1048576).toFixed(1), geometries: info.memory.geometries, textures: info.memory.textures, drawCalls: info.render.calls, triangles: info.render.triangles, programs: info.programs?.length };
 }, label);
 const metrics = { runs: [] };
@@ -39,7 +42,7 @@ metrics.runs.push(await metric('outside-depot-door (외피만, 내부 모듈 pre
 await p.evaluate(() => window.__jj.depot.enter());
 await p.waitForFunction(() => window.__jj.depot.active && !window.__jj.depot.busy, null, { timeout: 90000 });
 await p.waitForTimeout(1500);
-await p.evaluate(() => { const d = window.__jj.depot.interior._dbg; d.setMe(70.5, 15.5, -0.5, -0.2); });
+await p.evaluate(() => { const d = window.__jj.depot.interior._dbg; d.setMe(72.6, 13.2, -0.5, -0.22); });
 await shot('02-entrance-corral.png');
 metrics.runs.push(await metric('inside-depot (빈 카트)'));
 metrics.inside = await p.evaluate(() => window.__jj.depot.interior.stats());
@@ -51,12 +54,14 @@ await shot('04-place-preview.png');
 await p.evaluate(() => window.__jj.depot.interior._dbg.cancelPlace());
 const loadLog = await p.evaluate(() => {
   const I = window.__jj.depot.interior, d = I._dbg, r = [];
-  r.push(['egg', d.drop('egg', 'upper', -0.12, -0.2, 0)]);
-  r.push(['chips', d.drop('chips', 'upper', 0.12, -0.3, 0)]);
-  r.push(['tissue', d.drop('tissue', 'upper', 0, 0.18, 0)]);
-  r.push(['ramen', d.drop('ramen', 'upper', 0, 0.2, Math.PI / 2)]);
-  r.push(['rice', d.drop('rice', 'lower', 0, 0.02, 0)]);
-  r.push(['water', d.drop('water', 'lower', 0, 0.02, 0)]);
+  r.push(['soda', d.drop('soda', 'lower', 0, -0.2, 0)]);
+  r.push(['water', d.drop('water', 'lower', 0, 0.3, 0)]);
+  r.push(['rice', d.drop('rice', 'upper', 0, 0.5, 0)]);
+  d.settle(0.6);
+  r.push(['egg', d.drop('egg', 'upper', 0, -0.3, 0)]);
+  r.push(['tissue', d.drop('tissue', 'upper', 0, 0.5, Math.PI / 2)]);
+  d.settle(0.6);
+  r.push(['chips', d.drop('chips', 'upper', 0, 0.5, 0, true)]);
   d.settle(2);
   return { r, kg: I.items.reduce((a, it) => a + it.p.kg, 0), broken: I.st.brokenEggs };
 });
@@ -77,11 +82,14 @@ const crush = await p.evaluate(() => {
   const a = I.st.brokenEggs;
   d.drop('soda', 'upper', 0, -0.15, Math.PI / 2);
   d.settle(1.5);
-  return { afterWater: a, afterSoda: I.st.brokenEggs, total: I.st.eggTotal };
+  return { afterWater: a, afterSoda: I.st.brokenEggs, total: I.st.eggTotal, cracked: I.st.crackedEggs || 0 };
 });
+await p.evaluate(() => { const d = window.__jj.depot.interior._dbg; d.camAt([0.75, 1.25, 0.25], [0, 0.6, -0.15]); });
+await shot('06a-egg-crush-loaded.png');
+await p.evaluate(() => { const I = window.__jj.depot.interior, d = I._dbg; d.removeLast(); d.removeLast(); });
 console.log('crush', JSON.stringify(crush));
 metrics.crush = crush;
-await p.evaluate(() => { const d = window.__jj.depot.interior._dbg; d.camAt([0.75, 1.25, 0.25], [0, 0.6, -0.15]); });
+await p.evaluate(() => { const d = window.__jj.depot.interior._dbg; d.camAt([0.0, 0.98, 0.22], [0, 0.5, -0.2]); });
 await shot('06-egg-crush.png');
 await p.evaluate(() => { const d = window.__jj.depot.interior._dbg; d.camAt(null); });
 metrics.speed = await p.evaluate(() => { const I = window.__jj.depot.interior; return [0, 40, 100, 160].map((kg) => I.measure(kg)); });
@@ -100,8 +108,8 @@ await p.setContent(`<html><body style="margin:0;background:#0d1a33;font-family:'
 <h1 style="margin:0 0 6px;font-size:30px">범창고 240L 카트 — 빈 카트 vs 무거운 카트</h1>
 <div style="color:#f2b705;font-weight:700;margin-bottom:22px">같은 주행 모델(구름저항 Crr 0.03 · 미는 힘 133 N · 출발 222 N)로 게임 안에서 측정 · 카트 자체 27 kg</div>
 <table style="border-collapse:collapse;font-size:22px;width:100%">
-<tr style="color:#9fb3d9;text-align:left"><th>짐</th><th>총 질량</th><th>0→1.2 m/s</th><th>손 놓고 굴러가는 거리</th><th>당겨서 멈추는 거리</th><th>제자리 90° 회전</th><th>출발에 필요한 힘</th></tr>
-${sp.map((s) => `<tr style="border-top:1px solid #2a3d66"><td style="padding:12px 0">${s.loadKg} kg</td><td>${s.totalKg} kg</td><td><b>${s.t0to12} 초</b></td><td>${s.coastM} m</td><td>${s.brakeM} m</td><td>${s.turn90s} 초</td><td>${s.breakawayN} N</td></tr>`).join('')}
+<tr style="color:#9fb3d9;text-align:left"><th>짐</th><th>총 질량</th><th>0→1 m/s</th><th>계속 밀 때 최고 속도</th><th>1 m/s에서 손 놓고 굴러가는 거리</th><th>1 m/s에서 당겨 멈추는 거리</th><th>제자리 90° 회전</th><th>출발에 필요한 힘</th></tr>
+${sp.map((s) => `<tr style="border-top:1px solid #2a3d66"><td style="padding:12px 0">${s.loadKg} kg</td><td>${s.totalKg} kg</td><td><b>${s.t0to1} 초</b></td><td>${s.vTop} m/s</td><td>${s.coastM} m</td><td>${s.brakeM} m</td><td>${s.turn90s} 초</td><td>${s.breakawayN} N</td></tr>`).join('')}
 </table>
 <div style="margin-top:22px;color:#c9d6f0;font-size:16px">계란 실험: 계란판 위 생수 2L×6 → ${crush.afterWater}개 깨짐, 그 위 탄산 24캔 추가 → 누적 ${crush.afterSoda}/${crush.total}개</div>
 </body></html>`);

@@ -9,7 +9,7 @@ export const BASKET = {
   floor: { x: 0.25, z0: -0.36, z1: 0.45 }, // 바닥 반폭 · 앞뒤
   top: { x: 0.285, z0: -0.52, z1: 0.47, yFront: 0.91, yRear: 0.99 }, // 테두리 (앞 깊이 440mm)
   tray: { y: 0.13, x: 0.24, z0: -0.35, z1: 0.4 }, // 아래 받침대 (휠베이스 745mm)
-  seat: { x: 0.2, z0: 0.24, z1: 0.46, y: 0.965, t: 0.03 }, // 유아석 바닥판 (아이 안 태울 땐 테두리 높이로 접힘 → 바구니 깊이 그대로 사용)
+  seat: { x: 0.2, z0: 0.24, z1: 0.46, y: 0.8, t: 0.03 }, // 유아석 판 (펼치면 이 높이 · 샘플은 뒷벽에 세워 접힌 상태)
   handle: { y: 1.02, z: 0.57 },
 };
 
@@ -76,7 +76,7 @@ export function buildCartGeometry() {
   // 손잡이(빨강) + 유아석(빨강 플라스틱)
   const hg = new THREE.CylinderGeometry(0.019, 0.019, 0.6, 12); hg.rotateZ(Math.PI / 2); hg.translate(0, B.handle.y, B.handle.z); red.push(hg);
   const S = B.seat;
-  const seat = new THREE.BoxGeometry(S.x * 2, S.t, S.z1 - S.z0); seat.translate(0, S.y, (S.z0 + S.z1) / 2); red.push(seat);
+  const seat = new THREE.BoxGeometry(S.x * 2, 0.34, S.t); seat.translate(0, B.top.yRear - 0.19, B.floor.z1 - 0.01); red.push(seat); // 유아석 판: 안 쓸 땐 뒷벽에 세워 접힘
   const back = new THREE.BoxGeometry(S.x * 2, 0.16, 0.02); back.rotateX(-0.25); back.translate(0, S.y + 0.1, S.z1 - 0.02); red.push(back);
   for (const sx of [-1, 1]) { const cap = new THREE.BoxGeometry(0.07, 0.05, 0.1); cap.translate(sx * 0.27, B.top.yFront + 0.01, B.top.z0 + 0.06); red.push(cap); }
   // 바퀴 125mm × 4 + 포크

@@ -239,7 +239,7 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit } 
   // 랙 끝 안전 표지 '위층 재고는 지게차가 꺼내요'
   for (const x of RACK_X) signPlane(TX['rack-safety'], 0.55, 1.1, x + RACK_D / 2, 1.55, DETAIL.z0 - 0.08, Math.PI);
   // 바닥 스텐실
-  signPlane(TX['floor-cart-only'], 3.2, 1.6, 71.5, 0.006, 12.6, Math.PI, { alpha: true, floor: true });
+  signPlane(TX['floor-cart-only'], 3.2, 1.6, 71.5, 0.006, 12.6, 0, { alpha: true, floor: true });
   signPlane(TX['floor-forklift'], 2.8, 2.8, 57, 0.006, 44, Math.PI, { alpha: true, floor: true });
   if (TX['floor-hazard']) { const t = TX['floor-hazard']; t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(16, 1); signPlane(t, CORRAL.x1 - CORRAL.x0, 0.45, (CORRAL.x0 + CORRAL.x1) / 2, 0.006, CORRAL.z1 + 0.5, 0, { alpha: true, floor: true }); }
 
@@ -259,11 +259,11 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit } 
   const setCorral = (n) => { corralPos.forEach((c, i) => { m4.compose(pv.set(c.x, 0, c.z), new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI), s1); for (const im of corral) im.setMatrixAt(i, m4); }); for (const im of corral) { im.count = n; im.instanceMatrix.needsUpdate = true; } };
   setCorral(14); scene.add(...corral);
   const railM = keep(new THREE.MeshLambertMaterial({ color: 0x1e5a45 }));
-  const railG = keep(new THREE.BoxGeometry(0.06, 1.0, CORRAL.z1 - CORRAL.z0)); railG.translate(0, 0.5, (CORRAL.z0 + CORRAL.z1) / 2);
+  const railG = keep(new THREE.BoxGeometry(0.05, 0.05, CORRAL.z1 - CORRAL.z0)); railG.translate(0, 0.95, (CORRAL.z0 + CORRAL.z1) / 2); // 보관소 가이드 레일(가는 봉)
   for (const x of [CORRAL.x0, CORRAL.x0 + 3.6 * 0 + 3.6, CORRAL.x0 + 7.2]) { const r = new THREE.Mesh(railG, railM); r.position.x = x; scene.add(r); }
   const corralSign = keep(canvasTex(512, 160, (g) => { g.fillStyle = '#f2b705'; g.fillRect(0, 0, 512, 160); g.fillStyle = '#13203d'; g.textAlign = 'center'; g.font = '900 54px "Pretendard",sans-serif'; g.fillText('🛒 카트 보관소', 256, 72); g.font = '700 26px "Pretendard",sans-serif'; g.fillText('240L 대형 카트 · 최대 240 kg', 256, 124); }));
   const csM = keep(new THREE.MeshBasicMaterial({ map: corralSign })); const csG = keep(new THREE.PlaneGeometry(2.6, 0.8));
-  const cs = new THREE.Mesh(csG, csM); cs.position.set((CORRAL.x0 + CORRAL.x1) / 2, 2.3, CORRAL.z1 + 0.05); cs.rotation.y = Math.PI; scene.add(cs);
+  const cs = new THREE.Mesh(csG, csM); cs.position.set((CORRAL.x0 + CORRAL.x1) / 2, 2.3, CORRAL.z1 + 0.05); cs.rotation.y = 0; scene.add(cs);
   // 입구 유리문 (안에서 본 모습)
   const doorM = keep(new THREE.MeshBasicMaterial({ color: 0xbfe3ff, transparent: true, opacity: 0.55 }));
   const doorG = keep(new THREE.PlaneGeometry(DOOR.w, 3.4)); const door = new THREE.Mesh(doorG, doorM); door.position.set(DOOR.x, 1.7, 0.12); scene.add(door);
@@ -286,18 +286,18 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit } 
   addBox(B.top.x, 0.3, 0.012, 0, B.floorY + 0.29, B.floor.z1 + 0.015); // 뒷벽
   { const dz = B.top.z0 - B.floor.z0, dy = B.top.yFront - B.floorY, L = Math.hypot(dz, dy), ang = Math.atan2(-dz, dy);
     addBox(B.top.x, L / 2 + 0.05, 0.012, 0, B.floorY + dy / 2, B.floor.z0 + dz / 2 - 0.012, -ang); } // 앞 경사벽
-  addBox(B.seat.x, B.seat.t / 2, (B.seat.z1 - B.seat.z0) / 2, 0, B.seat.y, (B.seat.z0 + B.seat.z1) / 2); // 유아석 바닥판
+  // 유아석 판은 뒷벽에 접혀 있음(뒷벽 충돌체로 충분)
   addBox(B.tray.x + 0.02, 0.01, (B.tray.z1 - B.tray.z0) / 2, 0, B.tray.y - 0.01, (B.tray.z0 + B.tray.z1) / 2); // 아래 받침대
   for (const sx of [-1, 1]) addBox(0.008, 0.025, (B.tray.z1 - B.tray.z0) / 2, sx * (B.tray.x + 0.01), B.tray.y + 0.02, (B.tray.z0 + B.tray.z1) / 2);
   addBox(B.tray.x, 0.025, 0.008, 0, B.tray.y + 0.02, B.tray.z0 - 0.01);
   world.addBody(cartBody);
   const LEVELS = {
     upper: { y: B.floorY, x: B.floor.x - 0.008, z1: B.floor.z1 - 0.003, frontZ: (y) => B.floor.z0 - (y - B.floorY) * ((B.floor.z0 - B.top.z0) / (B.top.yFront - B.floorY)) - 0.005, ceil: B.top.yFront + 0.38, vol: 0 },
-    lower: { y: B.tray.y, x: B.tray.x - 0.005, z1: B.tray.z1 - 0.005, frontZ: () => B.tray.z0 + 0.005, ceil: B.floorY - 0.025, vol: 0 },
+    lower: { y: B.tray.y, x: B.tray.x - 0.005, z1: B.tray.z1 - 0.005, frontZ: () => B.tray.z0 + 0.005, ceil: B.floorY - 0.012, vol: 0 },
   };
   LEVELS.upper.vol = (2 * B.floor.x) * (B.floor.z1 - B.floor.z0 + 0.08) * (B.top.yFront - B.floorY + 0.04); // 모델 안쪽 부피 (m³)
   LEVELS.lower.vol = (2 * B.tray.x) * (B.tray.z1 - B.tray.z0) * (LEVELS.lower.ceil - B.tray.y);
-  const staticObs = [{ x0: -B.seat.x, x1: B.seat.x, y0: B.seat.y - B.seat.t / 2, y1: B.seat.y + B.seat.t / 2, z0: B.seat.z0, z1: B.seat.z1 }];
+  const staticObs = [];
 
   // ---------- 상태 ----------
   const items = []; // {p, body, mesh, level, eggs?}
@@ -481,6 +481,7 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit } 
   }
   function removeLast() {
     const it = items.pop(); if (!it) return;
+    if (it.mesh.userData.eggs) { st.eggTotal -= 30; st.brokenEggs -= it.mesh.userData.eggs.userData.broken.filter(Boolean).length; }
     world.removeBody(it.body); itemsRoot.remove(it.mesh); it.mesh.geometry.dispose(); it.mesh.userData.eggs?.dispose(); for (const im of Object.values(it.mesh.userData.eggs?.userData.fx || {})) im.dispose();
     if (it.src) { it.src.im.setMatrixAt(it.src.id, it.src.m); it.src.im.instanceMatrix.needsUpdate = true; }
     for (const o of items) o.body.wakeUp();
@@ -547,8 +548,8 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit } 
           U.broken[i] = true; U.stage[i] = smash ? 4 : 3; newly++;
           // 알은 납작하게 · 노른자 웅덩이 데칼
           m4.compose(pv.setY(U.top + 0.004), q0, new THREE.Vector3(1.25, 0.22, 1.25)); eggs.setMatrixAt(i, m4); eggs.setColorAt(i, col.setHex(0xf2e2c4));
-          const ps = smash ? 0.085 : 0.06;
-          if (fx.puddle) { m4.compose(pv.setY(U.top + 0.008), new THREE.Quaternion().setFromAxisAngle(up3, Math.random() * 6.28), new THREE.Vector3(ps, 1, ps)); fx.puddle.setMatrixAt(i, m4); }
+          const ps = smash ? 0.13 : 0.095;
+          if (fx.puddle) { m4.compose(pv.setY(U.top + 0.016), new THREE.Quaternion().setFromAxisAngle(up3, Math.random() * 6.28), new THREE.Vector3(ps, 1, ps)); fx.puddle.setMatrixAt(i, m4); }
           else { const sp = new THREE.Mesh(splatG, splatM); sp.position.copy(pv).setY(U.top + 0.006); eggs.parent.add(sp); }
           if (fx.crack1) { m4.makeScale(0, 0, 0); fx.crack1.setMatrixAt(i, m4); }
           fxDirty = true;
@@ -620,7 +621,7 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit } 
     c.ax = (c.vx - ovx) / Math.max(dt, 1e-3); c.az = (c.vz - ovz) / Math.max(dt, 1e-3);
     // 0 → 1.2 m/s 걸린 시간 기록
     const sp = Math.hypot(c.vx, c.vz);
-    if (sp < 0.03 && f > 0) st.accT = 0; else if (st.accT != null && sp < 1.2) st.accT += dt; else if (st.accT != null && sp >= 1.2) { st.lastAccel = st.accT; st.accT = null; }
+    if (sp < 0.03 && f > 0) st.accT = 0; else if (st.accT != null && sp < 1.0) st.accT += dt; else if (st.accT != null && sp >= 1.0) { st.lastAccel = st.accT; st.accT = null; }
     // 플레이어는 손잡이 뒤
     st.me.x = c.x - fx2 * 0.95; st.me.z = c.z - fz2 * 0.95; st.me.yaw = c.yaw;
   }
@@ -671,7 +672,7 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit } 
     if (st.mode === 'place') {
       camBlend = Math.min(1, camBlend + dt * 4);
       // 카트 위에서 내려다보기 (아래 받침대는 옆에서 낮게)
-      if (st.level === 'upper') { camLocal.set(0.0, 1.95, 1.25); camTarget.set(0, 0.62, -0.08); }
+      if (st.level === 'upper') { camLocal.set(0.0, 1.72, 0.98); camTarget.set(0, 0.55, -0.12); }
       else { camLocal.set(0.95, 0.62, 0.95); camTarget.set(0, 0.24, 0.0); }
       camPos.copy(camLocal).applyMatrix4(cart.matrixWorld); const tgt = camTarget.clone().applyMatrix4(cart.matrixWorld);
       camera.position.lerp(camPos, camBlend < 1 ? Math.min(1, dt * 8) : 1); camera.lookAt(tgt);
@@ -689,7 +690,7 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit } 
     const lines = [];
     if (st.hasCart) {
       lines.push(`카트 ${CART.mass} kg + 짐 ${kg.toFixed(1)} kg = ${(CART.mass + kg).toFixed(1)} kg`);
-      lines.push(`₩ ${loadWon().toLocaleString('ko-KR')} · ${sp.toFixed(2)} m/s${st.lastAccel != null ? ` · 0→1.2 m/s ${st.lastAccel.toFixed(1)}초` : ''}`);
+      lines.push(`₩ ${loadWon().toLocaleString('ko-KR')} · ${sp.toFixed(2)} m/s${st.lastAccel != null ? ` · 0→1 m/s ${st.lastAccel.toFixed(1)}초` : ''}`);
       lines.push(`윗바구니 ${fill('upper')}% · 아래 받침대 ${fill('lower')}%${st.eggTotal ? ` · 🥚 깨짐 ${st.brokenEggs}/${st.eggTotal}` : ''}`);
     } else lines.push('입구 카트 보관소에서 카트를 잡으세요');
     elKg.textContent = lines.join('\n');
@@ -798,14 +799,15 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit } 
     items.length = 0; items.push(...fake);
     const c = st.cart; c.x = 57; c.z = 30; c.yaw = 0; c.vx = c.vz = c.w = 0; st.accT = null;
     const obsSave = obstacles.splice(0, obstacles.length);
-    let t = 0; while (Math.hypot(c.vx, c.vz) < 1.2 && t < 30) { driveCart(1 / 120, { f: 1, s: 0 }); t += 1 / 120; }
-    const z0 = c.z; let tc = 0; while (Math.hypot(c.vx, c.vz) > 0.01 && tc < 30) { driveCart(1 / 120, { f: 0, s: 0 }); tc += 1 / 120; }
+    let t = 0; while (Math.hypot(c.vx, c.vz) < 1.0 && t < 30) { driveCart(1 / 120, { f: 1, s: 0 }); t += 1 / 120; }
+    let tv = 0; while (tv < 12) { driveCart(1 / 120, { f: 1, s: 0 }); tv += 1 / 120; } const vTop = Math.hypot(c.vx, c.vz); // 계속 밀 때 최고 속도
+    c.vx = 0; c.vz = -1.0; const z0 = c.z; let tc = 0; while (Math.hypot(c.vx, c.vz) > 0.01 && tc < 30) { driveCart(1 / 120, { f: 0, s: 0 }); tc += 1 / 120; }
     const coast = Math.abs(c.z - z0);
-    c.x = 57; c.z = 30; c.vx = 0; c.vz = -1.2; c.yaw = 0; const z1 = c.z; let tb = 0; while (Math.hypot(c.vx, c.vz) > 0.01 && tb < 30) { driveCart(1 / 120, { f: -1, s: 0 }); tb += 1 / 120; if (c.vz > 0) break; }
+    c.x = 57; c.z = 30; c.vx = 0; c.vz = -1.0; c.yaw = 0; const z1 = c.z; let tb = 0; while (Math.hypot(c.vx, c.vz) > 0.01 && tb < 30) { driveCart(1 / 120, { f: -1, s: 0 }); tb += 1 / 120; if (c.vz > 0) break; }
     const brake = Math.abs(c.z - z1);
     c.vx = c.vz = c.w = 0; c.yaw = 0; let tt = 0; while (Math.abs(c.yaw) < Math.PI / 2 && tt < 30) { driveCart(1 / 120, { f: 0, s: 1 }); tt += 1 / 120; }
     obstacles.push(...obsSave); items.length = 0; items.push(...saveItems); Object.assign(st.cart, save);
-    return { loadKg: extraKg, totalKg: CART.mass + extraKg, t0to12: +t.toFixed(2), coastM: +coast.toFixed(2), brakeM: +brake.toFixed(2), turn90s: +tt.toFixed(2), breakawayN: +(CART.breakaway * CART.crr * (CART.mass + extraKg) * CART.g).toFixed(0) };
+    return { loadKg: extraKg, totalKg: CART.mass + extraKg, t0to1: +t.toFixed(2), vTop: +vTop.toFixed(2), coastM: +coast.toFixed(2), brakeM: +brake.toFixed(2), turn90s: +tt.toFixed(2), breakawayN: +(CART.breakaway * CART.crr * (CART.mass + extraKg) * CART.g).toFixed(0) };
   }
 
   // 바깥(game.js)이 이름표·말풍선 위치를 읽는 '내 아바타' 자리 — 1인칭이라 화면엔 안 그림
