@@ -142,12 +142,14 @@ async function capture(page, tag) {
   });
   await shot(page, `${tag}-03-under-bridge`);
 
-  // 4. Aerial of 합수부 from the river (north of the join, looking south)
+  // 4. Aerial of 합수부 from the river (north of the join, looking south).
+  //    Same convention as 1구간 aerial: stand near the water, long dist, pitch +0.48.
   const hap = v.hap;
+  const ax = hap.x + 80, az = hap.z - 480;
   await go(page, {
-    x: hap.x + 40, z: hap.z - 720, y: (v.yHap ?? -6) + 110,
-    yaw: look(hap.x + 40, hap.z - 720, hap.x, hap.z + 40),
-    dist: 260, pitch: -0.48, fov: 54, hidePlayer: true,
+    x: ax, z: az, y: (v.yHap ?? -6) - 6,
+    yaw: look(ax, az, hap.x - 20, hap.z + 30),
+    dist: 420, pitch: 0.48, fov: 52, hidePlayer: true,
   });
   await shot(page, `${tag}-04-hap-aerial`);
 
