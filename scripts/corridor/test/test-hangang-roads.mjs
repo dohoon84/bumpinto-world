@@ -186,4 +186,16 @@ function resample2(pts, step = 4) {
   ok(`DEM covers connect ends; grid ${dem.nx}×${dem.nz}, ele ${dem.eleMin}–${dem.eleMax}`);
 }
 
+
+{
+  assert.ok((osm.buildings || []).length >= 200, `buildings ${osm.buildings?.length}`);
+  assert.ok((osm.trees || []).length >= 20, `trees ${osm.trees?.length}`);
+  assert.equal((osm.islets || []).length, 4);
+  const tags = osm.jamsu?.centerline?.tags || {};
+  assert.equal(tags.highway, 'cycleway');
+  assert.ok(!tags.width && !tags.lanes, 'no invented width/lanes on 잠수교 centerline');
+  assert.equal(osm.jamsu?.outline?.tags?.['bridge:structure'] || osm.jamsu?.outline?.tags?.['man_made'], osm.jamsu?.outline?.tags?.['bridge:structure'] ? 'beam' : 'bridge');
+  ok(`enrichment: buildings ${osm.buildings.length}, trees ${osm.trees.length}, islets ${osm.islets.length}; 잠수교 outline widthEst ${osm.jamsu.outline.widthEst} from area/length`);
+}
+
 console.log(`\n${n} checks passed`);

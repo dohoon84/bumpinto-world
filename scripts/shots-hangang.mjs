@@ -77,15 +77,35 @@ async function viewpoints(page) {
     const mid = { x: (js.x + jn.x) / 2, z: (js.z + jn.z) / 2 };
     const low = (h.levels?.waterY ?? -43) + 4;
     const yAt = (x, z, ref) => h.surfaceY(x, z, ref);
-    const path = { x: js.x - 95, z: js.z + 14 };
-    const terrace = { x: js.x - 220, z: js.z + 8 };
+    const waterY = h.levels?.waterY ?? -43;
+    const landY = (x, z) => h.heightAt(x, z);
+    // 남단 교대 바로 남쪽 자전거길 — 두 데크가 강을 건너는 모습이 보이게
+    let path = { x: js.x - 14, z: js.z + 28 };
+    for (const [x, z] of [[js.x - 14, js.z + 22], [js.x - 22, js.z + 34], [js.x - 8, js.z + 40], [js.x - 30, js.z + 36]]) {
+      const y = landY(x, z);
+      if (y != null && y > waterY + 1.4) { path = { x, z }; break; }
+    }
+    // 서쪽으로 육지를 따라가다가 물 직전에서 멈춤 → 호안을 내려다보며 다리를 봄
+    let terrace = { x: js.x - 90, z: js.z + 32 };
+    for (let i = 0; i < 28; i++) {
+      const x = js.x - 70 - i * 14, z = js.z + 28;
+      const y = landY(x, z);
+      if (y == null || y <= waterY + 1.2) break;
+      terrace = { x, z };
+    }
+    for (let i = 1; i < 10; i++) {
+      const x = terrace.x, z = terrace.z - 6;
+      const y = landY(x, z);
+      if (y == null || y <= waterY + 0.95) break;
+      terrace = { x, z };
+    }
     return {
       js, jn, mid, path, terrace,
-      waterY: h.levels?.waterY,
-      yPath: yAt(path.x, path.z) ?? h.heightAt(path.x, path.z),
+      waterY,
+      yPath: yAt(path.x, path.z) ?? landY(path.x, path.z),
       yMidLow: yAt(mid.x, mid.z, low),
       yMidHigh: yAt(mid.x, mid.z, Infinity),
-      yTerrace: yAt(terrace.x, terrace.z) ?? h.heightAt(terrace.x, terrace.z),
+      yTerrace: yAt(terrace.x, terrace.z) ?? landY(terrace.x, terrace.z),
       yJsLow: yAt(js.x, js.z, low),
     };
   });
@@ -95,44 +115,54 @@ async function shootSet(page, suffix) {
   const v = await viewpoints(page);
   console.log('viewpoints', suffix, v);
 
-  // 1) 잠수교 from the south-bank bike path, looking out along both decks
+  // 1) eye level from the south-bank bike path toward 잠수교 / 반포대교
   {
     const x = v.path.x, z = v.path.z;
     const y = (v.yPath ?? -40) + 0.15;
     const yaw = look(x, z, v.mid.x, v.mid.z);
-    await go(page, { x, z, y, yaw, dist: 5.6, pitch: 0.22, fov: 58 });
-    await shot(page, `jamsu-from-bikepath-${suffix}`);
-    console.log('wrote', `jamsu-from-bikepath-${suffix}.png`);
+    await go(page, { x, z, y, yaw, dist: 5.0, pitch: 0.06, fov: 62 });
+    await shot(page, `jamsu-from-bikepath-v2-${suffix}`);
+    console.log('wrote', `jamsu-from-bikepath-v2-${suffix}.png`);
   }
 
-  // 2) on the lower deck under 반포대교, looking along 잠수교 with a bit of river
+  // 2) on the 잠수교 lower deck — lane markings, railings, bike/walk strip
+  {
+    const x = v.mid.x, z = v.mid.z;
+    const y = (v.yMidLow ?? -40.3) + 0.12;
+    const yaw = look(x, z, v.jn.x, v.jn.z);
+    await go(page, { x, z, y, yaw, dist: 6.2, pitch: -0.16, fov: 62 });
+    await shot(page, `jamsu-on-deck-v2-${suffix}`);
+    console.log('wrote', `jamsu-on-deck-v2-${suffix}.png`);
+  }
+
+  // 3) under 반포대교, looking along 잠수교 with river and girders
   {
     const x = v.mid.x, z = v.mid.z;
     const y = (v.yMidLow ?? -40.3) + 0.12;
     const yaw = look(x, z, v.jn.x + 55, v.jn.z);
-    await go(page, { x, z, y, yaw, dist: 8.2, pitch: -0.34, fov: 68 });
-    await shot(page, `jamsu-under-banpo-${suffix}`);
-    console.log('wrote', `jamsu-under-banpo-${suffix}.png`);
+    await go(page, { x, z, y, yaw, dist: 8.2, pitch: -0.28, fov: 68 });
+    await shot(page, `jamsu-under-banpo-v2-${suffix}`);
+    console.log('wrote', `jamsu-under-banpo-v2-${suffix}.png`);
   }
 
-  // 3) 반포한강공원 terraces, near the river edge west of the south abutment
+  // 4) 반포 계단식 호안, looking toward the water and both bridges
   {
     const x = v.terrace.x, z = v.terrace.z;
     const y = (v.yTerrace ?? -40) + 0.12;
     const yaw = look(x, z, v.mid.x, v.mid.z);
-    await go(page, { x, z, y, yaw, dist: 5.6, pitch: 0.22, fov: 60 });
-    await shot(page, `park-terraces-${suffix}`);
-    console.log('wrote', `park-terraces-${suffix}.png`);
+    await go(page, { x, z, y, yaw, dist: 6.0, pitch: 0.08, fov: 64 });
+    await shot(page, `park-terraces-v2-${suffix}`);
+    console.log('wrote', `park-terraces-v2-${suffix}.png`);
   }
 
-  // 4) aerial from the east so the two stacked decks separate
+  // 5) aerial from the east — city ring, expressways, stacked decks
   {
-    const x = v.mid.x + 540, z = v.mid.z + 90;
+    const x = v.mid.x + 320, z = v.mid.z + 480;
     const y = (v.yMidLow ?? -40) + 2;
     const yaw = look(x, z, v.mid.x, v.mid.z);
-    await go(page, { x, z, y, yaw, dist: 820, pitch: 0.5, fov: 50, hidePlayer: true });
-    await shot(page, `aerial-segment-${suffix}`);
-    console.log('wrote', `aerial-segment-${suffix}.png`);
+    await go(page, { x, z, y, yaw, dist: 760, pitch: 0.36, fov: 54, hidePlayer: true });
+    await shot(page, `aerial-segment-v2-${suffix}`);
+    console.log('wrote', `aerial-segment-v2-${suffix}.png`);
   }
 }
 

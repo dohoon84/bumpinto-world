@@ -74,7 +74,8 @@ function keepWay(w, ctx) {
   if (k === 'cycleway') return true;
   if (n.includes('자전거') || n.includes('나들목') || n === '잠수교') return true;
   if (k === 'bridge' && (n === '잠수교' || n === '반포대교')) return false; // outline rendered as deck
-  if ((k === 'primary' || k === 'primary_link') && w.layer === '2' && (n === '반포대로' || n === '녹사평대로')) return true;
+  // layer=2 반포대로·녹사평대로 는 반포대교 데크 메시가 이미 그 차로다. 리본으로 다시 깔면
+  // 잠수교 윤곽 안 높이와 반포 높이가 섞여 사이 공간을 가르는 회색 대각선이 된다.
   if (k === 'steps' || k === 'path' || k === 'pedestrian') {
     return nearAny(w.pts[0][0], w.pts[0][1], ctx.near, 90) || nearAny(w.pts[w.pts.length - 1][0], w.pts[w.pts.length - 1][1], ctx.near, 90);
   }
@@ -105,10 +106,10 @@ export function createHangangPaths({ parent, osm, land }) {
   const ctx = { near };
 
   function surfaceAt(x, z, kind, w) {
-    if (jamsuRing && pointInRing(x, z, jamsuRing)) return jamsuDeckY(x, z, osm, lv);
-    if (kind === 'upper' || (banpoRing && pointInRing(x, z, banpoRing) && (w?.layer === '2' || w?.name === '반포대로' || w?.name === '녹사평대로'))) {
+    if (kind === 'upper' || (w?.layer === '2' && (w?.name === '반포대로' || w?.name === '녹사평대로'))) {
       return banpoDeckY(x, z, osm, lv, heightAt);
     }
+    if (jamsuRing && pointInRing(x, z, jamsuRing)) return jamsuDeckY(x, z, osm, lv);
     // 잠수교 중심선 근처는 하부 데크
     const cl = osm?.jamsu?.centerline?.pts;
     if (cl) {
@@ -137,7 +138,7 @@ export function createHangangPaths({ parent, osm, land }) {
     kept.push(w);
   }
 
-  const colors = { bike: '#4e7a45', walk: '#b7b1a6', steps: '#9a9084', upper: '#5a5d61' };
+  const colors = { bike: '#c05645', walk: '#c9c2b4', steps: '#9a9084', upper: '#5a5d61' };
   const mats = {};
   for (const [kind, list] of Object.entries(buckets)) {
     if (!list.length) continue;
@@ -147,6 +148,76 @@ export function createHangangPaths({ parent, osm, land }) {
     const mesh = new THREE.Mesh(merged, mat);
     mesh.receiveShadow = true;
     mesh.name = 'hangang-path-' + kind;
+    group.add(mesh);
+  }
+
+  const edgeGeos = [], dashGeos = [];
+  for (const w of kept) {
+    if (kindOf(w) !== 'bike') continue;
+    const pts = resample(w.pts, 2.2);
+    if (pts.length < 2) continue;
+    const width = Math.max(2.2, Math.min(16, w.w || 4));
+    const yFn = (x, z) => surfaceAt(x, z, 'bike', w);
+    // 흰 가장자리: 중심에서 ±(width/2 - 0.14) 에 12 cm 리본
+    const hw = width / 2 - 0.14;
+    for (const side of [-1, 1]) {
+      const shifted = pts.map((p, i) => {
+        const a = pts[Math.max(0, i - 1)], b = pts[Math.min(pts.length - 1, i + 1)];
+        let dx = b[0] - a[0], dz = b[1] - a[1];
+        const L = Math.hypot(dx, dz) || 1;
+        dx /= L; dz /= L;
+        return [p[0] - dz * hw * side, p[1] + dx * hw * side];
+      });
+      const geo = drapedRibbonGeo(shifted, 0.13, yFn, 0.075);
+      if (geo) edgeGeos.push(geo);
+    }
+    if (width >= 3) {
+      // 노란 중앙 점선: 2.2 m 긋고 2.0 m 비움. 대시마다 한 폴리라인.
+      let acc = 0;
+      let dash = null;
+      const flush = () => {
+        if (dash && dash.length >= 2) {
+          const geo = drapedRibbonGeo(dash, 0.14, yFn, 0.08);
+          if (geo) dashGeos.push(geo);
+        }
+        dash = null;
+      };
+      for (let i = 1; i < pts.length; i++) {
+        const ax = pts[i - 1][0], az = pts[i - 1][1], bx = pts[i][0], bz = pts[i][1];
+        const seg = Math.hypot(bx - ax, bz - az) || 1;
+        const dx = (bx - ax) / seg, dz = (bz - az) / seg;
+        let s0 = 0;
+        while (s0 < seg) {
+          const along = acc + s0;
+          const inDash = (along % 4.2) < 2.2;
+          const s1 = Math.min(seg, s0 + 0.8);
+          const px = ax + dx * s0, pz = az + dz * s0;
+          if (inDash) {
+            if (!dash) dash = [[px, pz]];
+            dash.push([ax + dx * s1, az + dz * s1]);
+          } else flush();
+          s0 = s1;
+        }
+        acc += seg;
+      }
+      flush();
+    }
+  }
+  const markMats = {};
+  if (edgeGeos.length) {
+    const merged = edgeGeos.length === 1 ? edgeGeos[0] : mergeGeometries(edgeGeos, false);
+    const mat = new THREE.MeshLambertMaterial({ color: '#f2f0ea', side: THREE.DoubleSide });
+    markMats.edge = mat;
+    const mesh = new THREE.Mesh(merged, mat);
+    mesh.name = 'hangang-path-edge';
+    group.add(mesh);
+  }
+  if (dashGeos.length) {
+    const merged = dashGeos.length === 1 ? dashGeos[0] : mergeGeometries(dashGeos, false);
+    const mat = new THREE.MeshLambertMaterial({ color: '#e6c04a', side: THREE.DoubleSide });
+    markMats.center = mat;
+    const mesh = new THREE.Mesh(merged, mat);
+    mesh.name = 'hangang-path-center';
     group.add(mesh);
   }
 
@@ -167,7 +238,7 @@ export function createHangangPaths({ parent, osm, land }) {
 
   function setNight(v) {
     const t = Math.max(0, Math.min(1, v));
-    if (mats.bike) mats.bike.color.setRGB(0.18 + 0.12 * (1 - t), 0.32 + 0.16 * (1 - t), 0.16 + 0.11 * (1 - t));
+    if (mats.bike) mats.bike.color.setRGB(0.75 * (1 - t) + 0.22 * t, 0.34 * (1 - t) + 0.12 * t, 0.27 * (1 - t) + 0.10 * t);
     if (mats.walk) mats.walk.color.setRGB(0.45 * (1 - t) + 0.18 * t, 0.42 * (1 - t) + 0.16 * t, 0.38 * (1 - t) + 0.14 * t);
     if (mats.upper) mats.upper.color.setRGB(0.22 + 0.13 * (1 - t), 0.23 + 0.13 * (1 - t), 0.24 + 0.14 * (1 - t));
   }

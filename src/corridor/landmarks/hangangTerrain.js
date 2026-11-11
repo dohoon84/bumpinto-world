@@ -219,6 +219,34 @@ function riverFacingEdges(park, water, step = 8) {
   return edges;
 }
 
+
+function grassTex() {
+  if (typeof document === 'undefined') return null;
+  const W = 256, c = document.createElement('canvas');
+  c.width = W; c.height = W;
+  const d = c.getContext('2d');
+  d.fillStyle = '#4e6e32';
+  d.fillRect(0, 0, W, W);
+  let seed = 1301;
+  const rnd = () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
+  for (let i = 0; i < 2200; i++) {
+    const x = rnd() * W, y = rnd() * W;
+    const r = 0.6 + rnd() * 2.4;
+    const tone = rnd();
+    d.fillStyle = tone < 0.35
+      ? `rgba(${70 + rnd() * 30},${90 + rnd() * 40},${40 + rnd() * 20},${0.35 + rnd() * 0.35})`
+      : tone < 0.7
+        ? `rgba(${90 + rnd() * 50},${110 + rnd() * 50},${45 + rnd() * 25},${0.28 + rnd() * 0.35})`
+        : `rgba(${120 + rnd() * 40},${118 + rnd() * 30},${70 + rnd() * 20},${0.18 + rnd() * 0.25})`;
+    d.beginPath(); d.arc(x, y, r, 0, Math.PI * 2); d.fill();
+  }
+  const t = new THREE.CanvasTexture(c);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.anisotropy = 4;
+  return t;
+}
+
 export function createHangangTerrain({ parent, dem, osm }) {
   const group = new THREE.Group();
   group.name = 'hangang-terrain';
@@ -237,6 +265,7 @@ export function createHangangTerrain({ parent, dem, osm }) {
     const nx = (dem.nx - 1) * sub + 1, nz = (dem.nz - 1) * sub + 1;
     const pos = new Float32Array(nx * nz * 3);
     const col = new Float32Array(nx * nz * 3);
+    const uv = new Float32Array(nx * nz * 2);
     const idx = [];
     const parkRings = (osm?.parks || []).map((p) => p.o).filter((o) => o && o.length >= 3);
     for (let j = 0; j < nz; j++) {
@@ -247,21 +276,29 @@ export function createHangangTerrain({ parent, dem, osm }) {
         if (y == null) y = lv.waterY;
         const k = (j * nx + i) * 3;
         pos[k] = x; pos[k + 1] = y; pos[k + 2] = z;
+        uv[(j * nx + i) * 2] = (x - dem.x0) / 28;
+        uv[(j * nx + i) * 2 + 1] = (z - dem.z0) / 28;
         const e = y + datum;
         const nrm = hash01(i, j);
         const wet = inWater(x, z, osm?.water);
+        const nearWater = !wet && (
+          inWater(x + 10, z, osm?.water) || inWater(x - 10, z, osm?.water)
+          || inWater(x, z + 10, osm?.water) || inWater(x, z - 10, osm?.water)
+        );
         const park = pointInRings(x, z, parkRings.map((o) => ({ o })));
         let r, g, b;
         if (wet) {
           r = 0.18 + nrm * 0.02; g = 0.28 + nrm * 0.03; b = 0.26 + nrm * 0.03;
+        } else if (nearWater) {
+          r = 0.58 + nrm * 0.06; g = 0.52 + nrm * 0.05; b = 0.36 + nrm * 0.04;
         } else if (park) {
-          r = 0.28 + nrm * 0.05; g = 0.46 + nrm * 0.07; b = 0.22 + nrm * 0.04;
+          r = 0.42 + nrm * 0.10; g = 0.58 + nrm * 0.12; b = 0.28 + nrm * 0.06;
         } else if (e < 9) {
-          r = 0.42 + nrm * 0.05; g = 0.40 + nrm * 0.04; b = 0.30 + nrm * 0.03;
+          r = 0.46 + nrm * 0.06; g = 0.44 + nrm * 0.05; b = 0.32 + nrm * 0.03;
         } else if (e < 16) {
-          r = 0.34 + nrm * 0.04; g = 0.38 + nrm * 0.04; b = 0.28 + nrm * 0.03;
+          r = 0.38 + nrm * 0.05; g = 0.42 + nrm * 0.05; b = 0.30 + nrm * 0.03;
         } else {
-          r = 0.30 + nrm * 0.04; g = 0.32 + nrm * 0.03; b = 0.30 + nrm * 0.03;
+          r = 0.34 + nrm * 0.04; g = 0.36 + nrm * 0.04; b = 0.32 + nrm * 0.03;
         }
         col[k] = r; col[k + 1] = g; col[k + 2] = b;
       }
@@ -275,9 +312,14 @@ export function createHangangTerrain({ parent, dem, osm }) {
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
     geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+    geo.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
     geo.setIndex(idx);
     geo.computeVertexNormals();
-    const mat = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.FrontSide });
+    const mat = new THREE.MeshLambertMaterial({
+      vertexColors: true,
+      map: grassTex(),
+      side: THREE.FrontSide,
+    });
     mats.push(mat);
     const mesh = new THREE.Mesh(geo, mat);
     mesh.receiveShadow = true;
@@ -295,10 +337,17 @@ export function createHangangTerrain({ parent, dem, osm }) {
           return pointInRing(c.x, c.z, outer.o);
         })
         .map((inn) => inn.o);
-      const mesh = flatPolyMesh(outer.o, holes, lv.waterY, '#2a6a78', 'hangang-water');
+      const mesh = flatPolyMesh(outer.o, holes, lv.waterY + 0.03, '#2a6a78', 'hangang-water');
       if (mesh) {
-        mesh.material.transparent = true;
-        mesh.material.opacity = 0.88;
+        mesh.material = new THREE.MeshPhongMaterial({
+          color: '#247086',
+          transparent: true,
+          opacity: 0.82,
+          shininess: 86,
+          specular: '#9ad4de',
+          side: THREE.DoubleSide,
+          emissive: '#000000',
+        });
         mats.push(mesh.material);
         group.add(mesh);
         waterMeshes.push(mesh);
@@ -306,91 +355,74 @@ export function createHangangTerrain({ parent, dem, osm }) {
     }
   }
 
-  // 공원 잔디를 DEM 위에 살짝 덮어 윤곽을 분명히
-  const grassMats = [];
-  for (const p of osm?.parks || []) {
-    if (!p.o || p.o.length < 3) continue;
-    const c = centroid(p.o);
-    const y = (heightAt(c.x, c.z) ?? lv.waterY + 2) + 0.04;
-    const mesh = flatPolyMesh(p.o, [], y, p.name === '서래섬' ? '#4a7a3a' : '#3f6b32', p.name === '서래섬' ? 'hangang-seorae' : 'hangang-park');
-    if (mesh) {
-      // drape vertices onto DEM so the plate does not float
-      const pos = mesh.geometry.attributes.position;
-      for (let i = 0; i < pos.count; i++) {
-        const x = pos.getX(i), z = pos.getZ(i);
-        const gy = heightAt(x, z);
-        pos.setY(i, (gy ?? y) + 0.05);
-      }
-      pos.needsUpdate = true;
-      mesh.geometry.computeVertexNormals();
-      mats.push(mesh.material);
-      grassMats.push(mesh.material);
-      group.add(mesh);
-    }
-  }
-  for (const g of osm?.grass || []) {
-    if (!g.o || g.o.length < 3) continue;
-    const c = centroid(g.o);
-    const y = (heightAt(c.x, c.z) ?? lv.waterY + 2) + 0.06;
-    const mesh = flatPolyMesh(g.o, [], y, '#4d7a38', 'hangang-grass');
-    if (!mesh) continue;
-    const pos = mesh.geometry.attributes.position;
-    for (let i = 0; i < pos.count; i++) {
-      const x = pos.getX(i), z = pos.getZ(i);
-      const gy = heightAt(x, z);
-      pos.setY(i, (gy ?? y) + 0.06);
-    }
-    pos.needsUpdate = true;
-    mats.push(mesh.material);
-    group.add(mesh);
-  }
+  // 공원 ShapeGeometry 판은 쓰지 않는다. 오목한 반포한강공원이 눈높이 거대 삼각형(녹색 벽)이 된다.
+  // 잔디는 DEM 정점색 + 타일 텍스처로만 그린다.
 
-  // 둔치 테라스: 공원 강변을 따라 안쪽으로 4단. 각 단은 DEM 위에 앉힌다.
+  // 계단식 호안: 공원 강변에서 물을 향해 내려가는 콘크리트 단.
+  // OSM 에 terrace/revetment way 가 없어 강변 윤곽+수면으로 만들었다(approximate).
   const parkRing = osm?.park?.ring?.pts || osm?.parks?.find((p) => p.name === '반포한강공원')?.o;
-  const terraceMat = new THREE.MeshLambertMaterial({ color: '#c4b7a2', side: THREE.DoubleSide });
-  mats.push(terraceMat);
+  const terraceMat = new THREE.MeshLambertMaterial({ color: '#c9c2b4', side: THREE.DoubleSide });
+  const riserMat = new THREE.MeshLambertMaterial({ color: '#b3ada0', side: THREE.DoubleSide });
+  mats.push(terraceMat, riserMat);
   if (parkRing) {
-    const edges = riverFacingEdges(parkRing, osm?.water, 10);
-    const bands = 4;
-    const bandW = 7.2;
-    const pos = [], idx = [];
-    let vbase = 0;
+    const edges = riverFacingEdges(parkRing, osm?.water, 8);
+    const steps = 8;
+    const tread = 1.42;
+    const rise = 0.38;
+    const tpos = [], tidx = [], rpos = [], ridx = [];
+    let tv = 0, rv = 0;
     for (const e of edges) {
       const dx = e.b[0] - e.a[0], dz = e.b[1] - e.a[1];
       const L = Math.hypot(dx, dz) || 1;
       const px = -dz / L, pz = dx / L;
-      // 안쪽 = 공원 중심 쪽
       const pc = centroid(parkRing);
       const midX = (e.a[0] + e.b[0]) / 2, midZ = (e.a[1] + e.b[1]) / 2;
       const inward = (pc.x - midX) * px + (pc.z - midZ) * pz;
-      const sx = inward >= 0 ? px : -px;
-      const sz = inward >= 0 ? pz : -pz;
-      for (let b = 0; b < bands; b++) {
-        const d0 = 1.2 + b * bandW, d1 = d0 + bandW - 0.25;
+      let sx = inward >= 0 ? -px : px;
+      let sz = inward >= 0 ? -pz : pz;
+      if (!inWater(midX + sx * 12, midZ + sz * 12, osm?.water)) { sx = -sx; sz = -sz; }
+      if (!inWater(midX + sx * 12, midZ + sz * 12, osm?.water)
+        && !inWater(midX + sx * 22, midZ + sz * 22, osm?.water)) continue;
+      for (let b = 0; b < steps; b++) {
+        const d0 = 0.35 + b * tread, d1 = d0 + tread - 0.05;
+        const yTread = lv.waterY + 0.2 + (steps - 1 - b) * rise;
         const q = [
           [e.a[0] + sx * d0, e.a[1] + sz * d0],
           [e.b[0] + sx * d0, e.b[1] + sz * d0],
           [e.b[0] + sx * d1, e.b[1] + sz * d1],
           [e.a[0] + sx * d1, e.a[1] + sz * d1],
         ];
-        const ys = q.map(([x, z]) => {
-          const g = heightAt(x, z);
-          const stepped = lv.waterY + 1.15 + b * 0.72;
-          return Math.max(stepped, (g ?? stepped)) + 0.03;
-        });
-        for (let i = 0; i < 4; i++) pos.push(q[i][0], ys[i], q[i][1]);
-        idx.push(vbase, vbase + 1, vbase + 2, vbase, vbase + 2, vbase + 3);
-        vbase += 4;
+        for (let i = 0; i < 4; i++) tpos.push(q[i][0], yTread, q[i][1]);
+        tidx.push(tv, tv + 1, tv + 2, tv, tv + 2, tv + 3);
+        tv += 4;
+        const yLow = (b === steps - 1) ? lv.waterY + 0.04 : (lv.waterY + 0.2 + (steps - 2 - b) * rise);
+        rpos.push(
+          q[2][0], yTread, q[2][1],
+          q[3][0], yTread, q[3][1],
+          q[3][0], yLow, q[3][1],
+          q[2][0], yLow, q[2][1],
+        );
+        ridx.push(rv, rv + 1, rv + 2, rv, rv + 2, rv + 3);
+        rv += 4;
       }
     }
-    if (pos.length) {
+    if (tpos.length) {
       const geo = new THREE.BufferGeometry();
-      geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-      geo.setIndex(idx);
+      geo.setAttribute('position', new THREE.Float32BufferAttribute(tpos, 3));
+      geo.setIndex(tidx);
       geo.computeVertexNormals();
       const mesh = new THREE.Mesh(geo, terraceMat);
       mesh.receiveShadow = true;
-      mesh.name = 'hangang-terraces';
+      mesh.name = 'hangang-revetment';
+      group.add(mesh);
+    }
+    if (rpos.length) {
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.Float32BufferAttribute(rpos, 3));
+      geo.setIndex(ridx);
+      geo.computeVertexNormals();
+      const mesh = new THREE.Mesh(geo, riserMat);
+      mesh.name = 'hangang-revetment-risers';
       group.add(mesh);
     }
   }

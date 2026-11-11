@@ -2850,6 +2850,10 @@ function frame() {
     if (corridor?.namsan?.tower && Math.hypot(P.x - corridor.namsan.tower.ox, P.z - corridor.namsan.tower.oz) < 8000) {
       scene.fog.near = 650; scene.fog.far = 10500;
     }
+    const hb = corridor?.hangang?.bounds;
+    if (hb && P.x >= hb.x0 - 200 && P.x <= hb.x1 + 200 && P.z >= hb.z0 - 200 && P.z <= hb.z1 + 200) {
+      scene.fog.near = 650; scene.fog.far = 10500;
+    }
     // 가슴 높이 피벗을 공전하고, 시선은 피벗을 지나 앞쪽으로 보낸다.
     // 그래서 좌우는 한 바퀴, 위는 하늘, 아래는 바닥까지 화면 가운데로 들어온다.
     const eye = P.y + 1.6, yaw = cam.yaw, pitch = cam.pitch;

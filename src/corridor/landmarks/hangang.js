@@ -6,6 +6,8 @@ import { HG, centroid } from './hangangCoords.js';
 import { createHangangTerrain } from './hangangTerrain.js';
 import { createHangangBridges } from './hangangBridges.js';
 import { createHangangPaths } from './hangangPaths.js';
+import { createHangangCity } from './hangangCity.js';
+import { createHangangProps } from './hangangProps.js';
 
 export const HANGANG_DEM_FILE = 'hangang/hangang-dem.json';
 export const HANGANG_OSM_FILE = 'hangang/hangang-osm.json';
@@ -21,12 +23,23 @@ export function hangangMini(osm) {
     const n = w.name || '';
     if (w.k === 'cycleway' || n.includes('자전거') || n === '잠수교' || n.includes('나들목')) {
       extraRoads.push({ k: 'cycleway', p: w.pts, w: w.w || 4 });
+    } else if (n === '올림픽대로' || n === '강변북로') {
+      extraRoads.push({ k: 'trunk', p: w.pts, w: w.w || 15 });
+    } else if (n === '반포대로' || n === '녹사평대로') {
+      extraRoads.push({ k: 'primary', p: w.pts, w: w.w || 12 });
+    } else if (w.k === 'footway' || w.k === 'path' || w.k === 'pedestrian') {
+      extraRoads.push({ k: 'footway', p: w.pts, w: w.w || 2.2 });
     }
   }
-  if (osm?.jamsu?.centerline?.pts) extraRoads.push({ k: 'cycleway', p: osm.jamsu.centerline.pts, w: 5 });
+  if (osm?.jamsu?.centerline?.pts) extraRoads.push({ k: 'cycleway', p: osm.jamsu.centerline.pts, w: 6 });
+  if (osm?.banpo?.outline?.pts) extraRoads.push({ k: 'primary', p: osm.banpo.outline.pts, w: osm.banpo.outline.widthEst || 20 });
   const parks = (osm?.parks || []).filter((p) => p.o?.length >= 3).map((p) => ({ o: p.o }));
-  const water = (osm?.water?.outers || []).filter((p) => p.o?.length >= 3).map((p) => ({ o: p.o }));
-  return { roads: extraRoads, buildings: [], plazas: [], parks, water, waterLines: [] };
+  const water = (osm?.water?.outers || []).filter((p) => p.o?.length >= 3).map((p) => ({
+    o: p.o,
+    holes: (osm?.water?.inners || []).map((h) => h.o).filter((o) => o && o.length >= 3),
+  }));
+  const buildings = (osm?.buildings || []).filter((b) => b.o?.length >= 3).map((b) => ({ o: b.o }));
+  return { roads: extraRoads, buildings, plazas: [], parks, water, waterLines: [] };
 }
 
 export function createHangang({ scene, overlay, terrain, dem, osm } = {}) {
@@ -37,6 +50,8 @@ export function createHangang({ scene, overlay, terrain, dem, osm } = {}) {
   const land = createHangangTerrain({ parent: root, dem, osm });
   const bridges = createHangangBridges({ parent: root, osm, land });
   const paths = createHangangPaths({ parent: root, osm, land });
+  const city = createHangangCity({ parent: root, osm, land });
+  const props = createHangangProps({ parent: root, osm, land });
 
   const spawnSrc = osm?.spawn || osm?.connectEnds?.jamsuSouth;
   const spawn = spawnSrc
@@ -99,6 +114,8 @@ export function createHangang({ scene, overlay, terrain, dem, osm } = {}) {
     land.setNight(on ? 1 : 0);
     bridges.setNight(on ? 1 : 0);
     paths.setNight(on ? 1 : 0);
+    city.setNight?.(on ? 1 : 0);
+    props.setNight?.(on ? 1 : 0);
   });
 
   const api = {
@@ -119,6 +136,8 @@ export function createHangang({ scene, overlay, terrain, dem, osm } = {}) {
       land.setNight(v);
       bridges.setNight(v);
       paths.setNight(v);
+      city.setNight?.(v);
+      props.setNight?.(v);
     },
     update() {},
     tickPlayer() {},

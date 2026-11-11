@@ -53,7 +53,7 @@ relation/11173732 (`type=bridge`, `distance=795 m`, `start_date=1976-07-15`, `na
 | way/815547952 | 남단 짧은 자전거길 | 10.4 m. 남단 끝 `(-9741.7, -15961.4)` = 스폰 |
 | way/586051611 | 북단 접근. `highway=cycleway`, `name=녹사평대로`, `tunnel=yes`, `layer=-1` | 322.1 m. 북단 끝이 잠수교 북단 `(-10084.1, -16854.5)` 에 붙음 |
 
-**폭:** OSM 윤곽의 평균 폭이 5.6 m 이다. 흔히 말하는 차도 폭 18 m 는 이 윤곽에 없고, 여기서 만들지 않았다. 데크는 way/1091571021 그대로 그린다.
+**폭:** 중심선 way/596516315 에는 `width`·`lanes` 태그가 없다 (`highway=cycleway`, `foot=designated`, `bicycle=designated`, `motor_vehicle=no`, `oneway=no`). 윤곽 way/1091571021 는 `man_made=bridge` 이고 이름도 잠수교라, 인도 조각이 아니라 매핑된 전체 데크 윤곽으로 읽힌다. `bridge:structure=beam`. `width` 태그는 없고 면적÷길이로 구한 `widthEst` 가 5.6 m 이다. 예전에 말하던 차도 폭 약 18 m 는 이 태그에 없어서 만들지 않았다. 데크는 윤곽 그대로 그린다.
 
 ### 반포대교
 
@@ -62,7 +62,7 @@ relation/11173732 (`type=bridge`, `distance=795 m`, `start_date=1976-07-15`, `na
 | way/1085504592 | 윤곽. `man_made=bridge`, `layer=2`, `height=3` (데크 두께로 읽음. 형하 공간이 아님), `material=reinforced_concrete`, `bridge:structure=beam`, `wikidata=Q255506`. `widthEst` 20.0 m, `lengthEst` 1892.3 m (육지 진입부 포함) |
 | relation/14471133 | 받은 multipolygon. outer 가 way/1085504592 |
 
-같은 bbox 안에 `layer=2` `bridge=yes` 인 반포대로(way/37928409, way/674432572, `lanes=4`)와 녹사평대로(way/1091571409, way/1091571410, `lanes=4`)가 있다. 상부 차로 리본은 그렸고, 올림픽대로·강변북로는 겹침을 피하려고 이번엔 빼 두었다.
+같은 bbox 안에 `layer=2` `bridge=yes` 인 반포대로와 녹사평대로가 있다. 이 차로 리본은 반포대교 데크와 높이가 섞여 잠수교 위를 가르는 회색 대각선이 되어서 뺐다. 상부 차로는 반포대교 데크 메시가 담당한다. 올림픽대로·강변북로는 고가/육지 리본으로 그렸다.
 
 ### 반포한강공원 · 한강 · 서래섬
 
@@ -106,21 +106,26 @@ AWS Terrain Tiles terrarium z=14 (`s3://elevation-tiles-prod/terrarium/{z}/{x}/{
 
 ## 1구간에 그린 것
 
-- DEM 높이장(2배 업샘플) + 한강 수면(relation/152336) + 공원·잔디 판
-- 둔치 테라스 4단: 공원 윤곽의 강변 변을 따라 안쪽으로 폭 7.2 m. OSM 에 terrace way 가 없어 윤곽+DEM 에서 만들었다. 각 단 `max(수면+1.15+단×0.72, DEM)`
-- 잠수교·반포대교 데크(윗면·아랫면·옆면)와 난간. 윤곽은 OSM 그대로
-- 교각: 잠수교 중심선을 따라 수면 위에 52 m 간격, 반포 폭의 0.38배만큼 양쪽에 두 개. OSM 교각 노드가 아니라 만든 것이다
-- 반포대교 아래 밤 조명(`PointLight #ffcc88`). 브랜드 로고 없음
-- 자전거길·산책로·나들목·상부 차로: `drapedRibbonGeo`. 잠수교 윤곽 안이거나 중심선 8 m 안은 잠수교 데크 높이, `tunnel=yes` 는 1.6 m 내림
+- DEM 높이장(2배 업샘플) + 한강 수면(relation/152336, Phong 반사). 공원 ShapeGeometry 판은 쓰지 않는다 — 오목한 반포한강공원 판이 눈높이 거대 삼각형(녹색 벽)이 되었다. 잔디는 DEM 정점색과 타일 텍스처로만 그린다
+- 계단식 호안: 공원 강변에서 물을 향해 8단(디딤 1.42 m, 높이 0.38 m). OSM terrace way 가 없어 윤곽+수면으로 만들었다(approximate)
+- 잠수교·반포대교 데크(윗면·아랫면·옆면). 잠수교에는 흰 가장자리·노란 중앙 점선·자전거/보행 구분선(approximate)과 기둥+난간. 반포대교 아래에는 종·횡 거더, 쌍벽식 교각과 캡 보
+- 교각: 잠수교 중심선을 따라 수면 위에 52 m 간격. OSM 교각 노드가 아니라 만든 것이다
+- 반포대교 아래 밤 조명(`PointLight #ffcc88` + 아랫면 emissive). 브랜드 로고 없음
+- 자전거길·산책로·나들목: `drapedRibbonGeo`. 한강 자전거길은 테라코타색, 3 m 이상은 노란 중앙 점선과 흰 가장자리, 산책로는 베이지. 잠수교 윤곽 안이거나 중심선 8 m 안은 잠수교 데크 높이, `tunnel=yes` 는 1.6 m 내림
+- OSM 건물 295동 압출(반포·서래·용산 가장자리), 올림픽대로·강변북로 리본, 스카이라인 링, DEM 아래 치마
+- 나무: OSM `natural=tree` 31그루 + 길을 따라 심은 가로수(approximate). `natural=tree_row` 는 이 bbox 에 없었다
+- 벤치 6 / 휴지통 6 (OSM) + 가로등·볼라드·「Seoul Bike Path」풍 초록 표지(로고 없음, approximate)
+- 세빛섬 네 섬: relation/4077217 외곽만 부유 플랫폼으로. 이름·브랜드는 넣지 않았다
 - 라벨: 잠수교, 반포대교, 반포한강공원
+- HUD 미니맵·휴대폰 지도: 강·공원·자전거길·다리·올림픽대로/강변북로
 - 이동: `?at=hangang` 또는 여행 목록 «반포한강공원» → 잠수교 남단
-- 카메라 `far` 를 남산과 같이 14000 까지. 한강 박스 안에서는 카메라가 지형 높이를 따라가 산비탈에 파묻히지 않게 했다
+- 카메라 `far` 14000, 한강 박스 안 안개 near 650 / far 10500 (남산과 같음)
 
 파일:
 
-- `public/corridor/hangang/hangang-osm.json` (약 241 KB)
+- `public/corridor/hangang/hangang-osm.json` (약 313 KB)
 - `public/corridor/hangang/hangang-dem.json` (약 118 KB)
-- `src/corridor/landmarks/hangang.js` 와 `hangangCoords.js`, `hangangTerrain.js`, `hangangBridges.js`, `hangangPaths.js`
+- `src/corridor/landmarks/hangang.js` 와 `hangangCoords.js`, `hangangTerrain.js`, `hangangBridges.js`, `hangangPaths.js`, `hangangCity.js`, `hangangProps.js`
 
 ## 이어 붙일 끝점
 
@@ -144,18 +149,19 @@ AWS Terrain Tiles terrarium z=14 (`s3://elevation-tiles-prod/terrarium/{z}/{x}/{
 
 남산과 같은 섬이라 정자 타일을 다시 그리지 않는다. DEM 은 25 m 격자 168×148 을 두 배로 올려 약 335×295 꼭짓점. 자전거·보행 리본은 재질별로 합친다. 교각은 `InstancedMesh`. 반포대교 아래 점광원은 중심선 70 m 간격. `?hangang=0` 이면 JSON 도 받지 않는다.
 
-드로우콜·용량을 프레임 단위로 재지는 않았다. JSON 두 파일은 약 241 KB + 118 KB.
+드로우콜·용량을 프레임 단위로 재지는 않았다. JSON 두 파일은 약 313 KB + 118 KB.
 
-## 아직 남은 것
+## 아직 남은 것 · 근사로 그린 것
 
-- 잠수교 OSM 윤곽 평균 폭 5.6 m. 실제 보행 폭이 더 넓다면 OSM 을 고치거나, 실측 근거가 생긴 뒤에만 넓힌다
-- 교각 위치는 OSM 노드가 아니다
-- 둔치 테라스는 OSM terrace way 가 아니라 공원 강변+DEM 으로 만들었다
-- 달빛무지개분수(way/261980547)는 브랜드 없이 물 시트만 넣을지 다음에 정한다
-- 올림픽대로·강변북로 고가, 북단 터널(녹사평대로)의 더 자세한 단면은 다음 구간
+- 잠수교 OSM 윤곽 평균 폭 5.6 m (매핑된 전체 데크). 실제 보행 폭이 더 넓다는 실측이 생기면 그때 넓힌다
+- 교각 위치·거더 간격은 OSM 노드가 아니다 (52 m / 9 m)
+- 계단식 호안은 OSM terrace way 가 아니라 공원 강변+수면으로 만들었다
+- 잠수교 자전거/보행 구분선은 `lanes` 태그가 없어 데크 한쪽 약 1.7 m 로 나눴다
+- 길을 따라 심은 가로수·가로등·볼라드·자전거길 표지는 OSM 점이 부족해서 간격을 정해 넣었다 (`approx`)
+- 세빛섬은 외곽만 쓰는 무명 부유 플랫폼이다
+- 달빛무지개분수(way/261980547)는 브랜드 없이 메시를 넣지 않았다
+- 스카이라인 링은 OSM 건물이 아닌 원경 텍스처다
 - 탄천 축이 합수부에 닿지 않아 성남에서 잠수교까지 한 번에 달릴 수 없다
 - 한남에서 남산 `hannam` 팁까지 아직 비어 있다
 - 자전거 탄 NPC 메쉬는 아직 없다
 - 스폰과 카메라는 겹친 데크에서 플레이어 높이(`refY`)를 넘겨 잠수교에 머물게 했다. `?at=hangang` 은 잠수교 남단 높이로 내린다
-- 반포대교 아랫면은 긴 윤곽을 ShapeGeometry 로 나눠 삼각형 경계가 보일 수 있다. 밤에는 교각 끝에 따뜻한 조명이 닿지만 아랫면 전체는 아직 어둡다
-- 눈높이에서 강을 바라보면 공원 판(큰 ShapeGeometry)이 앞을 가리키기도 한다. 둔치 4단은 항공 샷에서 강변 흰 띠로 더 잘 보인다
