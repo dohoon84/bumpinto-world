@@ -119,9 +119,7 @@ export function createHangangProps({ parent, osm, land } = {}) {
   const headMat = new THREE.MeshLambertMaterial({ color: '#d8d2c4', emissive: '#000000' });
   mats.push(poleMat, headMat);
   const lamps = [];
-  let poleI = 0;
   const lampStep = sparse ? 48 : 32;
-  const lampEvery = sparse ? 3 : 2;
   alongWays(bikeWays, lampStep, (x, z, dx, dz) => {
     const px = x - dz * 3.6, pz = z + dx * 3.6;
     if (inWater(px, pz, osm?.water)) return;
@@ -134,17 +132,10 @@ export function createHangangProps({ parent, osm, land } = {}) {
     head.position.set(px + dz * 0.15, y + 5.15, pz - dx * 0.15);
     head.rotation.y = Math.atan2(dx, dz);
     group.add(head);
-    poleI++;
-    // hap 는 12 km 라 가로등마다 PointLight 를 심으면 fragment uniform 한도를 넘는다.
-    // 갓은 다 두고, 점광원은 1구간은 그대로, hap 은 카메라 근처 몇 개만 빌려 쓴다.
-    if (!sparse && poleI % lampEvery === 0) {
-      const light = new THREE.PointLight('#ffd8a0', 0, 16, 2);
-      light.position.set(px, y + 5.05, pz);
-      group.add(light);
-      lamps.push({ light, head, x: px, y: y + 5.05, z: pz });
-    } else {
-      lamps.push({ light: null, head, x: px, y: y + 5.05, z: pz });
-    }
+    // 가로등마다 PointLight 를 심으면 모든 조명 재질 셰이더에 점광원이 수백 개 들어가
+    // 실제 GPU 의 fragment uniform 한도(보통 1024 vec4)를 넘어 정자동까지 셰이더가 깨진다.
+    // 갓은 다 두고, 점광원은 카메라 근처 몇 개만 작은 풀에서 빌려 쓴다 (1구간·2구간 공통).
+    lamps.push({ head, x: px, y: y + 5.05, z: pz });
   });
 
   // --- bins: OSM + a few extras ---
@@ -283,26 +274,29 @@ export function createHangangProps({ parent, osm, land } = {}) {
     }
   }
 
+  // 점광원 풀: 개수가 고정이라 셰이더 재컴파일이 없다. 1구간 4 + 2구간 4.
   const pool = [];
-  if (sparse) {
-    for (let i = 0; i < 8; i++) {
-      const light = new THREE.PointLight('#ffd8a0', 0, 32, 1.45);
-      group.add(light);
-      pool.push(light);
-    }
+  const POOL = 4;
+  const lightDist = sparse ? 32 : 16, lightDecay = sparse ? 1.45 : 2, lightPeak = sparse ? 2.6 : 2.2;
+  for (let i = 0; i < POOL; i++) {
+    const light = new THREE.PointLight('#ffd8a0', 0, lightDist, lightDecay);
+    light.name = 'hangang-lamp-pool';
+    group.add(light);
+    pool.push(light);
   }
   let nightT = 0;
 
   function updateLights(px, pz) {
-    if (!pool.length || !lamps.length) return;
-    const ranked = lamps
+    if (!pool.length) return;
+    const ranked = nightT > 0 ? lamps
       .map((l) => ({ l, d: (l.x - px) ** 2 + (l.z - pz) ** 2 }))
-      .sort((a, b) => a.d - b.d);
+      .filter((r) => r.d < 400 * 400)
+      .sort((a, b) => a.d - b.d) : [];
     for (let i = 0; i < pool.length; i++) {
       const pick = ranked[i];
       if (!pick) { pool[i].intensity = 0; continue; }
       pool[i].position.set(pick.l.x, pick.l.y, pick.l.z);
-      pool[i].intensity = nightT * 2.6;
+      pool[i].intensity = nightT * lightPeak;
     }
   }
 
@@ -310,7 +304,6 @@ export function createHangangProps({ parent, osm, land } = {}) {
     const t = Math.max(0, Math.min(1, v));
     nightT = t;
     headMat.emissive.setRGB(0.92 * t, 0.72 * t, 0.34 * t);
-    for (const l of lamps) { if (l.light) l.light.intensity = t * 2.2; }
     if (!t) for (const pl of pool) pl.intensity = 0;
   }
 

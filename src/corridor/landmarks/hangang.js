@@ -15,6 +15,13 @@ export const HANGANG_OSM_FILE = 'hangang/hangang-osm.json';
 export const HAP_DEM_FILE = 'hangang/hap-dem.json';
 export const HAP_OSM_FILE = 'hangang/hap-osm.json';
 
+// 점 (x, z) 에서 사각형 b 까지 거리 (안이면 0)
+function rectDist(b, x, z) {
+  if (!b) return Infinity;
+  const dx = Math.max(b.x0 - x, 0, x - b.x1), dz = Math.max(b.z0 - z, 0, z - b.z1);
+  return Math.hypot(dx, dz);
+}
+
 export function hangangEnabled(search = typeof location !== 'undefined' ? location.search : '') {
   return new URLSearchParams(search || '').get('hangang') !== '0';
 }
@@ -145,8 +152,19 @@ export function createHangang({ scene, overlay, terrain, dem, osm, hap } = {}) {
     z1: Math.max(land.bounds.z1, hapApi.bounds.z1),
   } : land.bounds;
 
+  // [hangang-isolation] 점광원(가로등·반포대교 아랫면 풀)은 한강 구간 근처에서만 켠다.
+  const poolLights = [];
+  root.traverse((o) => { if (o.isLight) poolLights.push(o); });
+  let lightsOn = true, lightT = 1, lastLX = Infinity, lastLZ = Infinity;
+  function setLightsVisible(v) {
+    lightsOn = v;
+    for (const l of poolLights) l.visible = v;
+  }
+  setLightsVisible(false); // 첫 tickPlayer 에서 플레이어 위치로 정한다 (기본 스폰은 정자)
+
   const api = {
     root,
+    poolLightCount: poolLights.length,
     spawn,
     spawnY: () => {
       const prefer = (land.levels?.waterY ?? land.waterY ?? -43) + 4;
@@ -178,9 +196,23 @@ export function createHangang({ scene, overlay, terrain, dem, osm, hap } = {}) {
       hapApi?.setNight?.(v);
     },
     update() {},
-    tickPlayer(_dt, player) {
+    tickPlayer(dt, player) {
       const px = player?.position?.x, pz = player?.position?.z;
       if (px == null) return;
+      // [hangang-isolation] 한강 구간 밖(정자·서현·강남·남산)에서는 한강 점광원을 셰이더에서 뺀다.
+      //   점광원 풀은 구간 근처(경계 +800 m)에서만 보이고, 멀어지면(+1200 m) 숨긴다(경계에서 깜빡임 방지).
+      //   보이는 점광원 수가 바뀔 때만 셰이더가 한 번 다시 컴파일된다.
+      const d = rectDist(bounds, px, pz);
+      if (lightsOn && d > 1200) setLightsVisible(false);
+      else if (!lightsOn && d < 800) setLightsVisible(true);
+      // 카메라 far(14 km) 밖이면 한강 메시 1만여 개를 프러스텀 검사에서도 뺀다. 화면은 같다.
+      root.visible = d < 15000;
+      if (!lightsOn) return;
+      lightT += dt || 0;
+      if (lightT < 0.2 && Math.abs(px - lastLX) + Math.abs(pz - lastLZ) < 6) return;
+      lightT = 0; lastLX = px; lastLZ = pz;
+      props.updateLights?.(px, pz);
+      bridges.updateLights?.(px, pz);
       hapApi?.updateLights?.(px, pz);
     },
     dispose() {

@@ -521,15 +521,34 @@ export function createHangangBridges({ parent, osm, land }) {
         const y = bY(x, z) - lv.banpoThick - 1.45;
         // 중심선 한 줄이면 중앙 거더 옆면이 그늘지고, 시선 방향에서 검은 띠가 된다.
         // 좌우에서 비춰 거더 면이 읽히게 한다.
-        for (const side of [-1.85, 1.85]) {
-          const light = new THREE.PointLight('#ffcc88', 0, 28, 2);
-          light.position.set(x + px * side, y, z + pz * side);
-          light.name = 'banpo-under-light';
-          group.add(light);
-          lamps.push(light);
-        }
+        // 점광원은 위치만 모아 두고, 가까운 몇 개만 풀(underPool)에서 켠다.
+        for (const side of [-1.85, 1.85]) lamps.push({ x: x + px * side, y, z: z + pz * side });
       }
       acc += L;
+    }
+  }
+
+  // 반포대교 아랫면 점광원 풀 — 아랫면 조명 위치 수백 개 중 카메라 근처 6개만 켠다.
+  //   (점광원을 다 심으면 모든 조명 재질 셰이더가 GPU uniform 한도를 넘어 정자동까지 깨진다.)
+  const underPool = [];
+  for (let i = 0; i < (lamps.length ? 6 : 0); i++) {
+    const light = new THREE.PointLight('#ffcc88', 0, 28, 2);
+    light.name = 'banpo-under-light';
+    group.add(light);
+    underPool.push(light);
+  }
+  let nightT = 0;
+  function updateLights(px, pz) {
+    if (!underPool.length) return;
+    const ranked = nightT > 0 ? lamps
+      .map((l) => ({ l, d: (l.x - px) ** 2 + (l.z - pz) ** 2 }))
+      .filter((r) => r.d < 600 * 600)
+      .sort((a, b) => a.d - b.d) : [];
+    for (let i = 0; i < underPool.length; i++) {
+      const pick = ranked[i];
+      if (!pick) { underPool[i].intensity = 0; continue; }
+      underPool[i].position.set(pick.l.x, pick.l.y, pick.l.z);
+      underPool[i].intensity = nightT * 9.5;
     }
   }
 
@@ -552,7 +571,8 @@ export function createHangangBridges({ parent, osm, land }) {
 
   function setNight(v) {
     const t = Math.max(0, Math.min(1, v));
-    for (const l of lamps) l.intensity = t * 9.5;
+    nightT = t;
+    if (!t) for (const l of underPool) l.intensity = 0;
     for (const m of soffitMats) {
       // 약한 채움만 — 예전의 0.62 균일 emissive 슬래브는 쓰지 않는다.
       if (m.emissive) m.emissive.setRGB(0.10 * t, 0.075 * t, 0.045 * t);
@@ -566,5 +586,5 @@ export function createHangangBridges({ parent, osm, land }) {
     });
   }
 
-  return { group, floorY, setNight, jamsuY: jY, banpoY: bY };
+  return { group, floorY, setNight, updateLights, jamsuY: jY, banpoY: bY };
 }

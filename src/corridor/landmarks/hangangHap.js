@@ -392,7 +392,8 @@ function createHapUnderpasses({ parent, osm, land }) {
     soffit.name = `underpass-soffit-${tun.name || tun.id}`;
     group.add(soffit);
 
-    const floor = new THREE.Mesh(new THREE.BoxGeometry(hw * 2 + 0.6, 0.45, len + 1.6), wallMat);
+    // 바닥 판은 양옆 흙막이(earth)까지, 입구 밖 5 m 까지 덮어 터널 입구 옆 지형 구멍(흰 하늘)을 막는다.
+    const floor = new THREE.Mesh(new THREE.BoxGeometry(hw * 2 + 21, 0.45, len + 10), earthMat);
     floor.position.set(midX, floorY - 0.1, midZ);
     floor.rotation.y = yaw;
     floor.name = `underpass-floor-${tun.name || tun.id}`;
