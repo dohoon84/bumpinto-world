@@ -258,6 +258,7 @@ export function createHangangCity({ parent, osm, land, expressXMax = null } = {}
     mesh.receiveShadow = true;
     group.add(mesh);
   }
+  const deckMats = [];
   const deckParts = [
     [deckTopGeos, '#5c6168', 'hangang-express-deck'],
     [soffitGeos, '#7a7d80', 'hangang-express-soffit'],
@@ -269,6 +270,7 @@ export function createHangangCity({ parent, osm, land, expressXMax = null } = {}
     const merged = geos.length === 1 ? geos[0] : mergeGeometries(geos.map((g) => (g.index ? g.toNonIndexed() : g)).map((g) => { g.deleteAttribute('uv'); return g; }), false);
     const mat = new THREE.MeshLambertMaterial({ color, side: THREE.DoubleSide });
     mats.push(mat);
+    deckMats.push([mat, new THREE.Color(color)]);
     const mesh = new THREE.Mesh(merged, mat);
     mesh.name = name;
     mesh.receiveShadow = true;
@@ -315,6 +317,8 @@ export function createHangangCity({ parent, osm, land, expressXMax = null } = {}
     for (const m of mats) {
       if (!m.color || m.map) continue;
     }
+    // 밤에는 고가 콘크리트(거더면·난간·교각)가 낮 색 그대로 하얗게 뜨지 않게 어둡힌다.
+    for (const [m, base] of deckMats) m.color.copy(base).multiplyScalar(1 - 0.62 * t);
   }
 
   return { group, setNight, buildingCount: bld.length };
