@@ -2,7 +2,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { buildingMeshes } from '../tileMesh.js';
-import { inWater, centroid, projectOnLine, polylineLen } from './hangangCoords.js';
+import { inWater, centroid, projectOnLine, polylineLen, resamplePolyline } from './hangangCoords.js';
 
 function skylineTex() {
   const W = 2048, H = 256;
@@ -59,6 +59,47 @@ function ribbon(pts, width, yFn, dy = 0.08) {
   return g;
 }
 
+
+// 점마다 높이(ys)가 정해진 폴리라인을 옆으로 off 만큼 밀어 세로 띠(y+dyA..y+dyB)를 만든다.
+// off=0, dyA=dyB 이면 수평 띠(폭 width)다.
+function laneNormals(pts) {
+  const out = [];
+  for (let i = 0; i < pts.length; i++) {
+    const a = pts[Math.max(0, i - 1)], b = pts[Math.min(pts.length - 1, i + 1)];
+    let dx = b[0] - a[0], dz = b[1] - a[1];
+    const L = Math.hypot(dx, dz) || 1;
+    out.push([-dz / L, dx / L]);
+  }
+  return out;
+}
+function flatStrip(pts, ys, width, dy) {
+  const nr = laneNormals(pts), pos = [], idx = [];
+  for (let i = 0; i < pts.length; i++) {
+    const [nx, nz] = nr[i], p = pts[i], hw = width / 2, y = ys[i] + dy;
+    pos.push(p[0] + nx * hw, y, p[1] + nz * hw, p[0] - nx * hw, y, p[1] - nz * hw);
+    if (i > 0) { const k = (i - 1) * 2; idx.push(k, k + 2, k + 1, k + 1, k + 2, k + 3); }
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setIndex(idx);
+  g.computeVertexNormals();
+  return g;
+}
+function wallStrip(pts, ys, off, dyA, dyB) {
+  const nr = laneNormals(pts), pos = [], idx = [];
+  for (let i = 0; i < pts.length; i++) {
+    const [nx, nz] = nr[i], p = pts[i];
+    const x = p[0] + nx * off, z = p[1] + nz * off;
+    pos.push(x, ys[i] + dyA, z, x, ys[i] + dyB, z);
+    if (i > 0) { const k = (i - 1) * 2; idx.push(k, k + 2, k + 1, k + 1, k + 2, k + 3); }
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setIndex(idx);
+  g.computeVertexNormals();
+  return g;
+}
+
 export function createHangangCity({ parent, osm, land, expressXMax = null } = {}) {
   const group = new THREE.Group();
   group.name = 'hangang-city';
@@ -105,6 +146,72 @@ export function createHangangCity({ parent, osm, land, expressXMax = null } = {}
     if (eb !== ea) return eb - ea;
     return polylineLen(b.pts) - polylineLen(a.pts);
   });
+  // 고가(bridge=yes / layer≥1) 가닥: 두께 없는 띠는 아래에서 보면 회색 벽, 옆에서 보면
+  // 하늘에 뜬 검은 선이었다. 상판(두께)·옆 거더면·난간·교각으로 만들고, 양 끝은
+  // 지형 높이에서 최대 6 % 경사로 올라가게 해 평면 도로와 이어 붙인다.
+  const pathWays = (osm?.ways || []).filter((w) => w.pts?.length >= 2
+    && ['cycleway', 'footway', 'path', 'pedestrian', 'track', 'steps'].includes(w.k));
+  const deckTopGeos = [], fasciaGeos = [], soffitGeos = [], pierGeos = [];
+  const DECK_T = 1.1, PARAPET_H = 1.0, CLEAR = 6.0, GRADE = 0.06;
+  function elevatedDeck(run, width) {
+    const pts = resamplePolyline(run, 6);
+    if (pts.length < 2) return;
+    const s = [0];
+    for (let i = 1; i < pts.length; i++) s.push(s[i - 1] + Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]));
+    const L = s[s.length - 1];
+    const nr = laneNormals(pts);
+    const hw = width / 2;
+    // 상판 폭 전체(가운데·양 끝) 중 가장 높은 땅을 기준으로 다리 밑 높이를 잡는다.
+    const gs = pts.map((p, i) => {
+      let g = -Infinity;
+      for (const o of [0, -hw, hw]) {
+        const y = heightAt(p[0] + nr[i][0] * o, p[1] + nr[i][1] * o);
+        if (y != null && y > g) g = y;
+      }
+      return Number.isFinite(g) ? g : lv.waterY;
+    });
+    const yA = gs[0] + 0.14, yB = gs[gs.length - 1] + 0.14;
+    let ys = pts.map((p, i) => Math.max(yA + (yB - yA) * (s[i] / (L || 1)), gs[i] + CLEAR));
+    // 이동 평균으로 지형 요철을 지운 뒤 끝 경사 제한을 건다.
+    for (let pass = 0; pass < 3; pass++) {
+      ys = ys.map((_, i) => {
+        let a = 0, n = 0;
+        for (let k = Math.max(0, i - 3); k <= Math.min(ys.length - 1, i + 3); k++) { a += ys[k]; n++; }
+        return Math.max(a / n, gs[i] + 0.14);
+      });
+    }
+    ys = ys.map((y, i) => Math.min(y, yA + GRADE * s[i], yB + GRADE * (L - s[i])));
+    ys = ys.map((y, i) => Math.max(y, gs[i] + 0.14));
+    deckTopGeos.push(flatStrip(pts, ys, width, 0.1));
+    soffitGeos.push(flatStrip(pts, ys, width, 0.1 - DECK_T));
+    for (const side of [-1, 1]) {
+      fasciaGeos.push(wallStrip(pts, ys, side * hw, 0.1 - DECK_T, 0.1 + PARAPET_H));
+      fasciaGeos.push(wallStrip(pts, ys, side * (hw - 0.3), 0.1, 0.1 + PARAPET_H));
+    }
+    for (let d = 14; d < L - 8; d += 28) {
+      let i = 1;
+      while (i < s.length - 1 && s[i] < d) i++;
+      const lift = ys[i] - DECK_T - gs[i];
+      if (lift < 3.2) continue;
+      for (const side of [-1, 1]) {
+        const off = side * Math.max(1.5, hw - 2.0);
+        const px = pts[i][0] + nr[i][0] * off, pz = pts[i][1] + nr[i][1] * off;
+        let onPath = false;
+        for (const w of pathWays) {
+          const q = projectOnLine(px, pz, w.pts);
+          if (q && q.dist < (w.w || 3) / 2 + 1.6) { onPath = true; break; }
+        }
+        if (onPath) continue;
+        const gy = heightAt(px, pz) ?? gs[i];
+        const h = ys[i] + 0.1 - DECK_T - gy + 0.4;
+        if (h < 2) continue;
+        const pg = new THREE.BoxGeometry(1.3, h, 1.3);
+        pg.translate(px, gy - 0.4 + h / 2, pz);
+        pierGeos.push(pg);
+      }
+    }
+  }
+
   for (const w of candidates) {
     const pts = w.pts;
     let hit = 0, n = 0;
@@ -137,11 +244,8 @@ export function createHangangCity({ parent, osm, land, expressXMax = null } = {}
     }
     if (run.length >= 2) runs.push(run);
     for (const r of runs) {
-      const geo = ribbon(r, width, (x, z) => {
-        const g = heightAt(x, z) ?? lv.waterY;
-        if (elevated) return Math.max(g + 6.5, lv.waterY + 12);
-        return g + 0.14;
-      }, 0.1);
+      if (elevated) { elevatedDeck(r, width); continue; }
+      const geo = ribbon(r, width, (x, z) => (heightAt(x, z) ?? lv.waterY) + 0.14, 0.1);
       if (geo) exprGeos.push(geo);
     }
   }
@@ -152,6 +256,23 @@ export function createHangangCity({ parent, osm, land, expressXMax = null } = {}
     const mesh = new THREE.Mesh(merged, mat);
     mesh.name = 'hangang-express';
     mesh.receiveShadow = true;
+    group.add(mesh);
+  }
+  const deckParts = [
+    [deckTopGeos, '#5c6168', 'hangang-express-deck'],
+    [soffitGeos, '#7a7d80', 'hangang-express-soffit'],
+    [fasciaGeos, '#a9acae', 'hangang-express-fascia'],
+    [pierGeos, '#8f9396', 'hangang-express-piers'],
+  ];
+  for (const [geos, color, name] of deckParts) {
+    if (!geos.length) continue;
+    const merged = geos.length === 1 ? geos[0] : mergeGeometries(geos.map((g) => (g.index ? g.toNonIndexed() : g)).map((g) => { g.deleteAttribute('uv'); return g; }), false);
+    const mat = new THREE.MeshLambertMaterial({ color, side: THREE.DoubleSide });
+    mats.push(mat);
+    const mesh = new THREE.Mesh(merged, mat);
+    mesh.name = name;
+    mesh.receiveShadow = true;
+    mesh.castShadow = name === 'hangang-express-piers';
     group.add(mesh);
   }
 

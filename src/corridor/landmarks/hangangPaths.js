@@ -95,7 +95,9 @@ function keepWay(w, ctx) {
   }
   if (k === 'cycleway') return true;
   if (n.includes('자전거') || n.includes('나들목')) return true;
-  if (n === '올림픽대로' && ctx.segment === 'hap') return true;
+  // 고가(bridge=yes / layer≥1) 올림픽대로는 hangangCity 가 교각 위 상판으로 그린다.
+  // 지형에 깔면 다리 밑 자전거길 옆에 회색 판이 한 번 더 생긴다.
+  if (n === '올림픽대로' && ctx.segment === 'hap') return !(w.bridge === 'yes' || Number(w.layer) >= 1);
   if (k === 'bridge' && (n === '잠수교' || n === '반포대교')) return false; // outline rendered as deck
   // layer=2 반포대로·녹사평대로 는 반포대교 데크 메시가 이미 그 차로다. 리본으로 다시 깔면
   // 잠수교 윤곽 안 높이와 반포 높이가 섞여 사이 공간을 가르는 회색 대각선이 된다.

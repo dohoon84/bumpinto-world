@@ -122,7 +122,8 @@ async function capture(page, tag) {
   await go(page, {
     x: exit.x, z: exit.z, y: await yOf(exit.x, exit.z),
     yaw: look(exit.x, exit.z, -4100, -16890),
-    dist: 18, pitch: 0.08, fov: 62,
+    // 카메라가 올림픽대로 고가(way/46709880) 상판 높이에 걸리지 않게 낮게 둔다.
+    dist: 14, pitch: 0.0, fov: 62,
   });
   await shot(page, `${tag}-01-hap-exit-v2`);
 
