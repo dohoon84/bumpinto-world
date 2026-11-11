@@ -22,9 +22,49 @@ export function namsanCableStations(osm) {
   const upper = fromFoot(osm?.upperStation?.pts) || nodeAt(0);
   const lower = fromFoot(osm?.lowerStation?.pts) || nodeAt(nodes.length - 1);
   const out = [];
-  if (upper) out.push({ id: 'namsan-cable-upper', which: 'upper', x: upper.x, z: upper.z, label: '케이블카 탑승 · 남산타워', labelEn: 'Cable car · Namsan Tower', icon: '🚠' });
-  if (lower) out.push({ id: 'namsan-cable-lower', which: 'lower', x: lower.x, z: lower.z, label: '케이블카 탑승 · 회현', labelEn: 'Cable car · Hoehyeon', icon: '🚠' });
+  if (upper) out.push({ id: 'namsan-cable-upper', which: 'upper', x: upper.x, z: upper.z, label: '케이블카 탑승 · 남산타워', labelEn: 'Cable car · Namsan Tower', shortLabel: '케이블카 타워', shortLabelEn: 'Cable Tower', icon: '🚠' });
+  if (lower) out.push({ id: 'namsan-cable-lower', which: 'lower', x: lower.x, z: lower.z, label: '케이블카 탑승 · 회현', labelEn: 'Cable car · Hoehyeon', shortLabel: '케이블카 회현', shortLabelEn: 'Cable Hoehyeon', icon: '🚠' });
   return out;
+}
+
+/** 정류장 건물에서 케이블 반대쪽 벽(출입문)의 중점과 바깥 방향. stationBuilding 의 facingOpp 과 같다. */
+export function namsanStationDoors(osm) {
+  const nodes = osm?.cable?.nodes || [];
+  const nodeAt = (i) => {
+    const n = nodes[i];
+    return n && Number.isFinite(+n.x) && Number.isFinite(+n.z) ? { x: +n.x, z: +n.z } : null;
+  };
+  return {
+    upper: stationDoorFromPts(osm?.upperStation?.pts, nodeAt(0)),
+    lower: stationDoorFromPts(osm?.lowerStation?.pts, nodeAt(nodes.length - 1)),
+  };
+}
+
+function stationDoorFromPts(pts, face) {
+  if (!pts || pts.length < 3) return null;
+  const c = centroid(pts);
+  if (!face) return { x: c.x, z: c.z, nx: 0, nz: 1, cx: c.x, cz: c.z };
+  const faceAng = Math.atan2(face.x - c.x, face.z - c.z);
+  let best = null, bestL = 0;
+  for (let i = 0; i < pts.length; i++) {
+    const a = pts[i], b = pts[(i + 1) % pts.length];
+    const dx = b[0] - a[0], dz = b[1] - a[1], L = Math.hypot(dx, dz);
+    if (L < 1.2) continue;
+    const mx = (a[0] + b[0]) * 0.5, mz = (a[1] + b[1]) * 0.5;
+    const ang = Math.atan2(mx - c.x, mz - c.z);
+    let d = ang - faceAng;
+    while (d > Math.PI) d -= Math.PI * 2;
+    while (d < -Math.PI) d += Math.PI * 2;
+    if (Math.abs(d) > 2.2 && L > 4.2 && L > bestL) {
+      const nd = Math.hypot(mx - c.x, mz - c.z) || 1;
+      bestL = L;
+      best = { x: mx, z: mz, nx: (mx - c.x) / nd, nz: (mz - c.z) / nd, cx: c.x, cz: c.z, L };
+    }
+  }
+  if (best) return best;
+  const ang = faceAng + Math.PI;
+  const nx = Math.sin(ang), nz = Math.cos(ang);
+  return { x: c.x + nx * 8, z: c.z + nz * 8, nx, nz, cx: c.x, cz: c.z, L: 0 };
 }
 
 function pointInRing(x, z, pts) {

@@ -2738,7 +2738,10 @@ function frame() {
     const eye = P.y + 1.6, yaw = cam.yaw, pitch = cam.pitch, dist = cam.dist;
     const bx = Math.sin(yaw), bz = Math.cos(yaw), cp = Math.cos(pitch), sp = Math.sin(pitch), aim = 4;
     const camX = P.x + bx * dist * cp, camZ = P.z + bz * dist * cp;
-    const camFloor = terrain ? 1.2 + terrain.renderHeight(camX, camZ) : 0.45; // [terrain] 카메라가 제방 속으로 안 들어가게
+    // renderHeight 는 정자 DEM 만 본다. 남산 높이는 addGroundExtra → getGroundHeight 로만 들어가서
+    // 산비탈에서 follow 카메라가 회색 경사면 속에 묻히지 않게 걸을 수 있는 표면을 쓴다.
+    const camH = terrain?.getGroundHeight ? terrain.getGroundHeight(camX, camZ) : terrain?.renderHeight?.(camX, camZ);
+    const camFloor = terrain ? 1.2 + (Number.isFinite(camH) ? camH : 0) : 0.45;
     camera.position.set(camX, Math.max(camFloor, eye + dist * sp), camZ);
     camera.lookAt(P.x - bx * aim * cp, eye - aim * sp, P.z - bz * aim * cp); // [terrain] 시선 기준 높이는 P.y + 1.6
     sun.target.position.copy(P);

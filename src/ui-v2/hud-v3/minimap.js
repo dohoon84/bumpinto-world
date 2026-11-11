@@ -350,11 +350,15 @@ function draw(now, J, P) {
   }
 
   // [namsan] 케이블카 탑승 위치 (회현 하부 · 남산타워 상부). 정류장 OSM 좌표.
+  // 멀리 보면 긴 라벨이 원 테두리에 잘리므로 짧은 이름 + 원 안쪽으로 앵커를 민다.
+  const cableFar = prefs.zi >= 2;
   for (const st of cableStations(J)) {
     const [sx, sy] = toS(st.x, st.z); if (!inC(sx, sy, 4)) continue;
     drawCableMark(g, sx, sy);
-    const name = tr(st.label, st.labelEn || st.label);
-    labels.push({ sx, sy: sy - 12, t: name });
+    const name = cableFar
+      ? tr(st.shortLabel || st.label, st.shortLabelEn || st.labelEn || st.label)
+      : tr(st.label, st.labelEn || st.label);
+    labels.push(fitCableLabel(sx, sy, name));
     if (hover) { const d = (hover.x - sx) ** 2 + (hover.y - sy) ** 2; if (d < hovD * 1.5) { hovD = d; hov = { sx, sy, t: name }; } }
   }
 
@@ -399,7 +403,8 @@ function draw(now, J, P) {
   g.textAlign = 'center'; g.textBaseline = 'bottom'; g.lineJoin = 'round';
   if (hov && !labels.some((l) => l.t === hov.t)) labels.push({ sx: hov.sx, sy: hov.sy - 8, t: hov.t, hi: 1 });
   for (const l of labels) {
-    const lx = Math.max(R - 70, Math.min(R + 70, l.sx)), ly = Math.max(16, l.sy);
+    const lx = l.fit ? l.sx : Math.max(R - 70, Math.min(R + 70, l.sx));
+    const ly = l.fit ? l.sy : Math.max(16, l.sy);
     g.lineWidth = 3.2; g.strokeStyle = 'rgba(8, 16, 30, .92)'; g.strokeText(l.t, lx, ly);
     g.fillStyle = l.hi ? '#ffe169' : '#e8f2f8'; g.fillText(l.t, lx, ly);
   }
@@ -449,6 +454,19 @@ function busStops(J) {
 }
 function cableStations(J) {
   return J?.namsan?.mini?.cableStations || J?.namsan?.cable?.stations || [];
+}
+function fitCableLabel(sx, sy, text) {
+  const hw = Math.max(24, String(text || '').length * 5.7);
+  const pad = Math.min(46, Math.max(18, hw * 0.48));
+  const clamp = (x, y) => {
+    const dx = x - R, dy = y - R, d = Math.hypot(dx, dy), maxR = R - pad;
+    if (d <= maxR) return [x, y];
+    const k = maxR / (d || 1);
+    return [R + dx * k, R + dy * k];
+  };
+  let lx = sx, ly = sy < R * 0.38 ? sy + 16 : sy - 12;
+  [lx, ly] = clamp(lx, ly);
+  return { sx: lx, sy: ly, t: text, fit: 1 };
 }
 function drawCableMark(g, sx, sy) {
   g.beginPath(); g.arc(sx, sy, 7.2, 0, Math.PI * 2); g.fillStyle = '#0b1424'; g.fill();

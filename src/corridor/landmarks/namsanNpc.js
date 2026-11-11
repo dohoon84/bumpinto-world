@@ -9,8 +9,9 @@ import { createAvatar, animateAvatar } from '../../entities/avatar.js';
 import { buildCrowd } from '../../entities/avatarCrowd.js';
 import { gameHour } from '../../weather.js';
 import { NT } from './namsanCoords.js';
+import { namsanStationDoors } from './namsanCable.js';
 
-export const MAX_NPC = 52;
+export const MAX_NPC = 84;
 
 export function namsanNpcEnabled(search = typeof location !== 'undefined' ? location.search : '') {
   const q = new URLSearchParams(search || '');
@@ -22,15 +23,17 @@ export function namsanNpcForce(search = typeof location !== 'undefined' ? locati
   return n > 0 ? Math.min(n, 200) : 0;
 }
 
-const MIX = { plaza: 0.26, queue: 0.2, station: 0.12, library: 0.14, spring: 0.1, walk: 0.18 };
+const MIX = { plaza: 0.22, photo: 0.12, queue: 0.18, station: 0.1, library: 0.12, spring: 0.08, walk: 0.18 };
+const PLAZA_MIX = { plaza: 0.5, photo: 0.28, queue: 0.06, station: 0.04, walk: 0.08, library: 0.02, spring: 0.02 };
+const STATION_MIX = { queue: 0.42, station: 0.22, plaza: 0.08, photo: 0.04, walk: 0.14, library: 0.05, spring: 0.05 };
 
 export function namsanNpcDensityAt(h) {
   const hour = ((h % 24) + 24) % 24;
-  if (hour < 6 || hour >= 23) return { count: 10, period: 'night', mix: { plaza: 0.2, queue: 0.08, station: 0.12, library: 0.1, spring: 0.08, walk: 0.42 } };
-  if (hour < 10) return { count: 28, period: 'morning', mix: MIX };
-  if (hour < 17) return { count: 48, period: 'day', mix: MIX };
-  if (hour < 21) return { count: 36, period: 'evening', mix: MIX };
-  return { count: 16, period: 'late', mix: MIX };
+  if (hour < 6 || hour >= 23) return { count: 16, period: 'night', mix: { plaza: 0.22, photo: 0.1, queue: 0.08, station: 0.1, library: 0.08, spring: 0.08, walk: 0.34 } };
+  if (hour < 10) return { count: 56, period: 'morning', mix: MIX };
+  if (hour < 17) return { count: 72, period: 'day', mix: MIX };
+  if (hour < 21) return { count: 56, period: 'evening', mix: MIX };
+  return { count: 24, period: 'late', mix: MIX };
 }
 
 const TOPS = ['#f4f4f2', '#2f3a4a', '#c9ced6', '#e8e0d2', '#7d8b99', '#a7b3a0', '#d35454', '#5d7fb5', '#f0c75e', '#3b3f45', '#9b6fb0', '#ffffff'];
@@ -171,6 +174,8 @@ export function createNamsanNpc({
     return !!(namsan?.isBlocked?.(x, z, Math.max(0.55, pad * 0.7)));
   };
   const walkOk = (x, z) => Number.isFinite(x) && Number.isFinite(z) && !inBuilding(x, z, 1.1) && roadClear(x, z) >= 0.5;
+  // 정류장 앞 에이프런은 건물 pad(1.1)나 서비스 도로 가장자리에 걸릴 수 있어 줄을 세울 때는 조금 느슨하게 본다.
+  const queueOk = (x, z) => Number.isFinite(x) && Number.isFinite(z) && !inBuilding(x, z, 0.38) && !(namsan?.isBlocked?.(x, z, 0.42)) && roadClear(x, z) >= -0.2;
 
   function around(c, r0, r1, n) {
     const out = [];
@@ -184,25 +189,20 @@ export function createNamsanNpc({
     return out;
   }
 
-  function queueSlots(pts, towardX, towardZ, n = 8) {
+  function queueAtDoor(door, n = 9, at) {
     const out = [];
-    if (!pts || pts.length < 3) return out;
-    const c = centroid(pts);
-    let dx = towardX - c.x, dz = towardZ - c.z;
-    const L = Math.hypot(dx, dz) || 1;
-    dx /= L; dz /= L;
-    let start = null;
-    for (let t = 2; t <= 30; t += 0.55) {
-      const x = c.x + dx * t, z = c.z + dz * t;
-      if (walkOk(x, z)) { start = { x, z }; break; }
-    }
-    if (!start) return out;
-    const px = -dz, pz = dx;
+    if (!door) return out;
+    const nx = door.nx, nz = door.nz, px = -nz, pz = nx;
+    const faceYaw = Math.atan2(-nx, -nz);
     for (let i = 0; i < n; i++) {
-      const col = i % 2, row = Math.floor(i / 2);
-      const x = start.x + dx * row * 0.88 + px * (col ? 0.72 : 0);
-      const z = start.z + dz * row * 0.88 + pz * (col ? 0.72 : 0);
-      if (walkOk(x, z)) out.push({ x, z, yaw: Math.atan2(c.x - x, c.z - z) });
+      const side = i % 2 ? 0.2 : -0.16;
+      const x = door.x + nx * (1.9 + i * 0.8) + px * side;
+      const z = door.z + nz * (1.9 + i * 0.8) + pz * side;
+      if (queueOk(x, z)) out.push({ x, z, yaw: faceYaw, at });
+      else {
+        const x2 = x + px * 0.7, z2 = z + pz * 0.7;
+        if (queueOk(x2, z2)) out.push({ x: x2, z: z2, yaw: faceYaw, at });
+      }
     }
     return out;
   }
@@ -239,28 +239,53 @@ export function createNamsanNpc({
   }
 
   const plaza = [];
-  for (let ring = 0; ring < 4; ring++) {
-    const r = 24 + ring * 12, n = 8 + ring * 4;
+  const photo = [];
+  const door = namsan?.tower?.door;
+  for (let ring = 0; ring < 6; ring++) {
+    const r = 18 + ring * 8, n = 12 + ring * 4;
     for (let i = 0; i < n; i++) {
-      const a = (i / n) * Math.PI * 2 + ring * 0.18;
+      const a = (i / n) * Math.PI * 2 + ring * 0.11;
       const x = NT.tx + Math.cos(a) * r, z = NT.tz + Math.sin(a) * r;
       if (walkOk(x, z)) plaza.push({ x, z });
     }
   }
+  if (door) {
+    const nx = door.nx || 1, nz = door.nz || 0, px = -nz, pz = nx;
+    for (let i = 0; i < 32; i++) {
+      const out = 3.4 + (i % 8) * 2.15 + rnd() * 0.5;
+      const side = (Math.floor(i / 8) - 1.5) * 2.45 + (rnd() - 0.5) * 1.1;
+      const x = door.x + nx * out + px * side, z = door.z + nz * out + pz * side;
+      if (!walkOk(x, z)) continue;
+      plaza.push({ x, z });
+      if (i % 2 === 0) photo.push({ x, z, yaw: Math.atan2(NT.tx - x, NT.tz - z) });
+    }
+    const approach = Math.atan2(nx, nz);
+    for (let i = 0; i < 18; i++) {
+      const a = approach + (i / 18 - 0.5) * 1.7;
+      const r = 22 + (i % 5) * 4.2;
+      const x = NT.tx + Math.sin(a) * r, z = NT.tz + Math.cos(a) * r;
+      if (!walkOk(x, z)) continue;
+      plaza.push({ x, z });
+      photo.push({ x, z, yaw: Math.atan2(NT.tx - x, NT.tz - z) });
+    }
+  }
+  const ringPts = namsan?.tower?.plazaPts;
+  if (ringPts && ringPts.length >= 3) {
+    const rc = centroid(ringPts);
+    for (let i = 0; i < ringPts.length; i++) {
+      const pt = ringPts[i];
+      const nd = Math.hypot(pt[0] - rc.x, pt[1] - rc.z) || 1;
+      const x = pt[0] + ((pt[0] - rc.x) / nd) * 2.5, z = pt[1] + ((pt[1] - rc.z) / nd) * 2.5;
+      if (!walkOk(x, z)) continue;
+      plaza.push({ x, z });
+      if (i % 2 === 0) photo.push({ x, z, yaw: Math.atan2(NT.tx - x, NT.tz - z) });
+    }
+  }
 
-  const nodes = osm?.cable?.nodes || [];
-  const lowerNode = nodes[nodes.length - 1], prevNode = nodes[nodes.length - 2];
-  const lowerToward = (loC && lowerNode && prevNode)
-    ? { x: loC.x + (lowerNode.x - prevNode.x), z: loC.z + (lowerNode.z - prevNode.z) }
-    : loC ? { x: loC.x - 18, z: loC.z - 18 } : null;
-
+  const doors = namsanStationDoors(osm);
   const queue = [];
-  if (osm?.upperStation?.pts) {
-    for (const s of queueSlots(osm.upperStation.pts, NT.tx, NT.tz, 8)) queue.push({ ...s, at: 'upper' });
-  }
-  if (osm?.lowerStation?.pts && lowerToward) {
-    for (const s of queueSlots(osm.lowerStation.pts, lowerToward.x, lowerToward.z, 8)) queue.push({ ...s, at: 'lower' });
-  }
+  for (const s of queueAtDoor(doors.upper, 9, 'upper')) queue.push(s);
+  for (const s of queueAtDoor(doors.lower, 9, 'lower')) queue.push(s);
 
   const station = around(upC, 8, 16, 14).concat(around(loC, 8, 16, 14));
   const library = [];
@@ -286,7 +311,7 @@ export function createNamsanNpc({
     for (let i = 0; i < line.length; i += 3) walk.push({ x: line[i][0], z: line[i][1], line });
   }
 
-  const spots = { plaza, queue, station, library, spring, walk };
+  const spots = { plaza, photo, queue, station, library, spring, walk };
   const box = namsan?.bounds || { x0: NT.tx - 900, x1: NT.tx + 400, z0: NT.tz - 900, z1: NT.tz + 400 };
   const boxDist = (x, z) => Math.hypot(Math.max(box.x0 - x, 0, x - box.x1), Math.max(box.z0 - z, 0, z - box.z1));
 
@@ -329,39 +354,76 @@ export function createNamsanNpc({
     for (const [k, w] of Object.entries(mix)) { r -= w; if (r <= 0) return k; }
     return 'plaza';
   }
-  function place(a, fx, fz, D) {
+  function mixFor(fx, fz, D) {
+    if (Math.hypot(fx - NT.tx, fz - NT.tz) < 95) return PLAZA_MIX;
+    if ((upC && Math.hypot(fx - upC.x, fz - upC.z) < 55) || (loC && Math.hypot(fx - loC.x, fz - loC.z) < 55)) return STATION_MIX;
+    return D.mix;
+  }
+  function standPath(x, z, yaw) {
+    return [[x, z], [x + Math.sin(yaw || 0) * 0.04, z + Math.cos(yaw || 0) * 0.04]];
+  }
+  function assign(a, kind, sp, path, extra = {}) {
+    const cum = [0];
+    for (let k = 1; k < path.length; k++) cum.push(cum[k - 1] + Math.hypot(path[k][0] - path[k - 1][0], path[k][1] - path[k - 1][1]));
+    if (a.spot) a.spot.load = (a.spot.load || 1) - 1;
+    a.spot = sp; sp.load = (sp.load || 0) + 1;
+    Object.assign(a, { path, cum, L: cum[cum.length - 1] || 0.01, s: extra.s != null ? extra.s : rnd() * (cum[cum.length - 1] || 0.01), dir: extra.dir ?? (rnd() < 0.5 ? 1 : -1), kind, idle: extra.idle || 0, leaving: false, yawFix: extra.yawFix ?? null, speed: extra.speed ?? (0.95 + rnd() * 0.3) });
+    return true;
+  }
+  function assignQueue(a, sp) {
+    return assign(a, 'queue', sp, standPath(sp.x, sp.z, sp.yaw), { yawFix: sp.yaw ?? 0, idle: 80 + rnd() * 40, speed: 0, s: 0, dir: 1 });
+  }
+  function ensureQueues(fx, fz) {
+    const groups = { upper: [], lower: [] };
+    for (const s of spots.queue) {
+      if (Math.hypot(s.x - fx, s.z - fz) > PLACE_R) continue;
+      (groups[s.at] || (groups[s.at] = [])).push(s);
+    }
+    for (const slots of Object.values(groups)) {
+      if (!slots.length) continue;
+      const taken = new Set();
+      for (const a of actors) {
+        if (a.kind === 'queue' && a.spot && slots.includes(a.spot)) taken.add(a.spot);
+      }
+      for (const slot of slots) {
+        if (taken.has(slot)) continue;
+        const free = actors.find((a) => a.i < D.count && !a.path);
+        if (!free) break;
+        assignQueue(free, slot);
+      }
+    }
+  }
+  function place(a, fx, fz, D, preferKind) {
     const near = (s) => Math.abs(s.x - fx) < PLACE_R && Math.abs(s.z - fz) < PLACE_R;
+    const mix = mixFor(fx, fz, D);
     for (let t = 0; t < 5; t++) {
-      const kind = t < 4 ? chooseKind(D.mix) : 'plaza';
+      const kind = preferKind || (t < 4 ? chooseKind(mix) : 'plaza');
       const cand = (spots[kind] || []).filter(near);
       if (!cand.length) continue;
       let sp = null, best = Infinity;
       for (const c of cand) { const n = (c.load || 0) + rnd() * 0.85; if (n < best) { best = n; sp = c; } }
-      if (!sp || !walkOk(sp.x, sp.z)) continue;
-      let path = null, yawFix = null, idle = 0, speed = 0.95 + rnd() * 0.3;
-      if (kind === 'queue') {
-        path = [[sp.x, sp.z], [sp.x + Math.sin(sp.yaw || 0) * 0.04, sp.z + Math.cos(sp.yaw || 0) * 0.04]];
-        yawFix = sp.yaw ?? 0;
-        idle = 80 + rnd() * 40;
-        speed = 0;
-      } else if (kind === 'walk' && sp.line) {
-        path = sliceLine(sp.line) || freePath(sp.x, sp.z, 2.6, 22);
-        speed = 1.05 + rnd() * 0.35;
-      } else {
-        const toward = (kind === 'library' || kind === 'spring')
-          ? Math.atan2(NT.tz - sp.z, NT.tx - sp.x)
-          : null;
-        const nStep = kind === 'plaza' ? 16 : kind === 'station' ? 10 : 14;
-        path = freePath(sp.x, sp.z, 2.3, nStep, toward);
-        if (path && rnd() < 0.45) path.reverse();
+      if (!sp) continue;
+      if (kind === 'queue' && (sp.load || 0) >= 1) continue;
+      if (kind !== 'queue' && !walkOk(sp.x, sp.z)) continue;
+      if (kind === 'queue' && !queueOk(sp.x, sp.z)) continue;
+      if (kind === 'queue') return assignQueue(a, sp);
+      if (kind === 'photo' || (kind === 'plaza' && rnd() < 0.4)) {
+        const yaw = sp.yaw != null ? sp.yaw : Math.atan2(NT.tx - sp.x, NT.tz - sp.z);
+        return assign(a, kind === 'photo' ? 'photo' : 'plaza', sp, standPath(sp.x, sp.z, yaw), { yawFix: yaw, idle: 14 + rnd() * 22, speed: 0, s: 0, dir: 1 });
       }
+      if (kind === 'walk' && sp.line) {
+        const path = sliceLine(sp.line) || freePath(sp.x, sp.z, 2.6, 22);
+        if (!path) continue;
+        return assign(a, kind, sp, path, { speed: 1.05 + rnd() * 0.35 });
+      }
+      const toward = (kind === 'library' || kind === 'spring')
+        ? Math.atan2(NT.tz - sp.z, NT.tx - sp.x)
+        : null;
+      const nStep = kind === 'plaza' ? 14 : kind === 'station' ? 10 : 14;
+      const path = freePath(sp.x, sp.z, 2.3, nStep, toward);
       if (!path) continue;
-      const cum = [0];
-      for (let k = 1; k < path.length; k++) cum.push(cum[k - 1] + Math.hypot(path[k][0] - path[k - 1][0], path[k][1] - path[k - 1][1]));
-      if (a.spot) a.spot.load = (a.spot.load || 1) - 1;
-      a.spot = sp; sp.load = (sp.load || 0) + 1;
-      Object.assign(a, { path, cum, L: cum[cum.length - 1] || 0.01, s: kind === 'queue' ? 0 : rnd() * (cum[cum.length - 1] || 0.01), dir: rnd() < 0.5 ? 1 : -1, kind, idle, leaving: false, yawFix, speed });
-      return true;
+      if (rnd() < 0.45) path.reverse();
+      return assign(a, kind, sp, path);
     }
     a.path = null; return false;
   }
@@ -392,20 +454,33 @@ export function createNamsanNpc({
       if (dAcc > 2) { dAcc = 0; D = dens(getHour()); stats.period = D.period; stats.target = D.count; }
       let have = 0; for (const a of actors) if (a.path) have++;
       const check = chk > 1 || have < D.count / 2; if (check) chk = 0;
+      if (check) ensureQueues(fx, fz);
       let placedNow = 0, act = 0, vis = 0, placed = 0; const byKind = {};
+      const dPl = Math.hypot(fx - NT.tx, fz - NT.tz);
+      let plazaNear = 0;
+      if (check && dPl < 95) {
+        for (const a of actors) {
+          if (a.path && (a.kind === 'plaza' || a.kind === 'photo') && Math.hypot((a.mesh.position.x || 0) - fx, (a.mesh.position.z || 0) - fz) < 75) plazaNear++;
+        }
+      }
       for (const a of actors) {
         const want = a.i < D.count;
         if (!want && a.path && !a.leaving) a.leaving = true;
         if (a.leaving && (!a.shown || Math.hypot(a.mesh.position.x - fx, a.mesh.position.z - fz) > 60)) hide(a);
         if (!a.path) {
-          if (want && check && placedNow < 6) { placedNow++; place(a, fx, fz, D); }
+          if (want && check && placedNow < 14) {
+            placedNow++;
+            let pref = null;
+            if (dPl < 95 && plazaNear < 22) pref = rnd() < 0.4 ? 'photo' : 'plaza';
+            if (place(a, fx, fz, D, pref) && (a.kind === 'plaza' || a.kind === 'photo')) plazaNear++;
+          }
           if (!a.path) { if (a.mesh.visible) a.mesh.visible = false; a.shown = false; continue; }
         }
         if (want) act++;
         let v = 0;
         if (a.idle > 0) a.idle -= dt;
-        else if (a.kind === 'queue') {
-          v = 0; a.idle = 30 + rnd() * 20;
+        else if (a.kind === 'queue' || a.kind === 'photo' || a.speed === 0) {
+          v = 0; a.idle = 16 + rnd() * 18;
         } else {
           v = a.speed; a.s += a.dir * v * dt;
           if (a.s <= 0 || a.s >= a.L) {
@@ -415,7 +490,7 @@ export function createNamsanNpc({
         }
         const [x, z, dx, dz] = sample(a, a.s);
         if (check && Math.hypot(x - fx, z - fz) > REPLACE_R) { hide(a); continue; }
-        if (check && !walkOk(x, z)) { hide(a); continue; }
+        if (check && !(a.kind === 'queue' ? queueOk(x, z) : walkOk(x, z))) { hide(a); continue; }
         const y = groundY(x, z, a.y); a.y = y;
         a.mesh.position.set(x, y, z);
         a.mesh.rotation.y = a.yawFix != null ? a.yawFix : Math.atan2(dx * a.dir, dz * a.dir);
