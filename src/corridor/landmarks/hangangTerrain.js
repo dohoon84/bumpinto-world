@@ -201,7 +201,7 @@ export function makeHangangHeightAt(dem, osm = null) {
       let tunW = 0, tunE = land;
       for (const w of tunnelWays) {
         const q = projectOnLine(x, z, w.pts);
-        const hw = (w.w || 5) * 0.5 + 14;
+        const hw = (w.w || 5) * 0.5 + 26;
         if (!q || q.dist > hw) continue;
         const a = w.pts[0], b = w.pts[w.pts.length - 1];
         const ea = sampleDem(dem, a[0], a[1]);
@@ -594,7 +594,8 @@ export function createHangangTerrain({ parent, dem, osm }) {
         const z = dem.z0 + (j / sub) * dem.dz;
         let y = heightAt(x, z);
         if (y == null) y = lv.waterY;
-        const wetV = inWater(x, z, osm?.water) || (y <= lv.waterY + 1.15);
+        const wyHere = waterYAt(x, z, lv, osm?.meta?.datumBlend) ?? lv.waterY;
+        const wetV = inWater(x, z, osm?.water) || (y <= wyHere + 1.2);
         if (wetV) {
           // 수면 메시(waterY+0.03)와 DEM 이 같은 높이에 있으면 반투명 강물이
           // 젖은 잔디텍스처와 z-fight 해서 검녹 반점이 된다.
@@ -625,7 +626,7 @@ export function createHangangTerrain({ parent, dem, osm }) {
         let r, g, b;
         if (wet) {
           r = 0.18 + nrm * 0.02; g = 0.28 + nrm * 0.03; b = 0.26 + nrm * 0.03;
-        } else if (hapPark || park) {
+        } else if (hapPark || park || osm?.meta?.segment === 'hap') {
           r = 0.50 + nrm * 0.08; g = 0.66 + nrm * 0.10; b = 0.32 + nrm * 0.05;
         } else if (nearWater) {
           r = 0.58 + nrm * 0.06; g = 0.52 + nrm * 0.05; b = 0.36 + nrm * 0.04;
@@ -714,9 +715,14 @@ export function createHangangTerrain({ parent, dem, osm }) {
           const vert = (i) => (idx ? idx.getX(i) : i);
           for (let t = 0; t < triN; t++) {
             const ia = vert(t * 3), ib = vert(t * 3 + 1), ic = vert(t * 3 + 2);
-            const cx = (pos.getX(ia) + pos.getX(ib) + pos.getX(ic)) / 3;
-            const cz = (pos.getZ(ia) + pos.getZ(ib) + pos.getZ(ic)) / 3;
-            if (inHanRiver(cx, cz, osm) || cz < hapZ - 8) continue;
+            const xs = [pos.getX(ia), pos.getX(ib), pos.getX(ic)];
+            const zs = [pos.getZ(ia), pos.getZ(ib), pos.getZ(ic)];
+            const cx = (xs[0] + xs[1] + xs[2]) / 3;
+            const cz = (zs[0] + zs[1] + zs[2]) / 3;
+            // Fat ShapeGeometry triangles can sit in 탄천 while one vertex
+            // reaches into the 한강; test every vertex, not just the centroid.
+            if (zs.some((z) => z < hapZ - 8)) continue;
+            if (inHanRiver(cx, cz, osm) || xs.some((x, k) => inHanRiver(x, zs[k], osm))) continue;
             keep.push(ia, ib, ic);
           }
           mesh.geometry.setIndex(keep);

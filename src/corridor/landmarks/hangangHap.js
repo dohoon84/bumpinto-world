@@ -394,6 +394,12 @@ function createHapUnderpasses({ parent, osm, land }) {
       wall.position.set(midX + px * (hw + 0.25) * side, floorY + innerH / 2, midZ + pz * (hw + 0.25) * side);
       wall.rotation.y = yaw;
       group.add(wall);
+      // Fill the hillside so the camera inside the box does not see sky
+      // through FrontSide DEM (the old white void beside the portal).
+      const earth = new THREE.Mesh(new THREE.BoxGeometry(10, innerH + 6, len + 10), wallMat);
+      earth.position.set(midX + px * (hw + 5.6) * side, floorY + (innerH + 6) / 2 - 1.2, midZ + pz * (hw + 5.6) * side);
+      earth.rotation.y = yaw;
+      group.add(earth);
     }
 
     const deckW = Math.max(hw * 2 + 10, best.ow.w || 19);
