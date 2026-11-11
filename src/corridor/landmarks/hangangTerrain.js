@@ -103,6 +103,8 @@ export function makeHangangHeightAt(dem, osm = null) {
     const e = sampleDem(dem, x, z);
     if (e == null) return null;
     if (inWater(x, z, osm?.water)) return lv.waterEle;
+    const seorae = osm?.seorae?.ring?.pts;
+    if (seorae && pointInRing(x, z, seorae)) return Math.max(e, lv.waterEle + 0.85);
     // 강변 자전거길 DEM 이 수면 25백분위보다 살짝 낮게 나온 칸은 수면으로 올린다.
     return Math.max(e, lv.waterEle);
   }
@@ -279,6 +281,92 @@ function waterLandEdges(water, step = 9) {
   return edges;
 }
 
+
+function parkShoreChains(water, park, minLen = 28) {
+  const chains = [];
+  const onPark = (x, z) => {
+    if (!park) return false;
+    if (pointInRing(x, z, park)) return true;
+    for (const [dx, dz] of [[22, 0], [-22, 0], [0, 22], [0, -22], [16, 16], [-16, 16]]) {
+      if (pointInRing(x + dx, z + dz, park)) return true;
+    }
+    return false;
+  };
+  const reachesParkLand = (mx, mz, sx, sz) => {
+    for (let d = 2; d <= 40; d += 2) {
+      const x = mx + sx * d, z = mz + sz * d;
+      if (!inWater(x, z, water) && onPark(x, z)) return true;
+    }
+    return false;
+  };
+  const snapShore = (x, z, sx, sz) => {
+    let lx = x, lz = z;
+    if (!inWater(x, z, water)) return { x, z, sx, sz };
+    for (let d = 1; d <= 44; d += 1) {
+      const px = x + sx * d, pz = z + sz * d;
+      if (!inWater(px, pz, water)) return { x: lx, z: lz, sx, sz };
+      lx = px; lz = pz;
+    }
+    return null;
+  };
+  for (const outer of water?.outers || []) {
+    const ring = outer.o;
+    if (!ring || ring.length < 2) continue;
+    let cur = [];
+    const flush = () => {
+      if (cur.length >= 2) {
+        let L = 0;
+        for (let i = 1; i < cur.length; i++) L += Math.hypot(cur[i].x - cur[i - 1].x, cur[i].z - cur[i - 1].z);
+        if (L >= minLen) chains.push(cur);
+      }
+      cur = [];
+    };
+    for (let i = 1; i < ring.length; i++) {
+      const a = ring[i - 1], b = ring[i];
+      const mx = (a[0] + b[0]) / 2, mz = (a[1] + b[1]) / 2;
+      const dx = b[0] - a[0], dz = b[1] - a[1];
+      const L = Math.hypot(dx, dz) || 1;
+      const px = -dz / L, pz = dx / L;
+      const w1 = inWater(mx + px * 8, mz + pz * 8, water);
+      const w2 = inWater(mx - px * 8, mz - pz * 8, water);
+      let sx, sz;
+      if (!w1 && w2) { sx = px; sz = pz; }
+      else if (w1 && !w2) { sx = -px; sz = -pz; }
+      else { flush(); continue; }
+      if (!onPark(mx + sx * 6, mz + sz * 6) && !reachesParkLand(mx, mz, sx, sz)) { flush(); continue; }
+      const sa = snapShore(a[0], a[1], sx, sz);
+      const sb = snapShore(b[0], b[1], sx, sz);
+      if (!sa || !sb) { flush(); continue; }
+      if (!cur.length) cur.push(sa);
+      cur.push(sb);
+    }
+    flush();
+  }
+  return chains;
+}
+
+function resampleShore(chain, step = 3.2) {
+  if (!chain || chain.length < 2) return chain || [];
+  const out = [chain[0]];
+  for (let i = 1; i < chain.length; i++) {
+    let ax = out[out.length - 1].x, az = out[out.length - 1].z;
+    const bx = chain[i].x, bz = chain[i].z;
+    let dx = bx - ax, dz = bz - az, L = Math.hypot(dx, dz);
+    if (L < 1e-4) continue;
+    dx /= L; dz /= L;
+    const sx = (out[out.length - 1].sx + chain[i].sx) * 0.5;
+    const sz = (out[out.length - 1].sz + chain[i].sz) * 0.5;
+    const sl = Math.hypot(sx, sz) || 1;
+    while (L > step) {
+      ax += dx * step; az += dz * step;
+      out.push({ x: ax, z: az, sx: sx / sl, sz: sz / sl });
+      L -= step;
+    }
+    out.push(chain[i]);
+  }
+  return out;
+}
+
 export function createHangangTerrain({ parent, dem, osm }) {
   const group = new THREE.Group();
   group.name = 'hangang-terrain';
@@ -291,6 +379,84 @@ export function createHangangTerrain({ parent, dem, osm }) {
     : { x0: -12000, z0: -18000, x1: -8500, z1: -14800 };
 
   const mats = [];
+
+  // 호안은 DEM보다 먼저 체인을 잡아, 잔디가 콘크리트 단을 덮지 않게 낮춘다.
+  const REV_STEPS = 11;
+  const REV_TREAD = 1.22;
+  const REV_SPAN = REV_STEPS * REV_TREAD;
+  const parkRing = osm?.park?.ring?.pts || osm?.parks?.find((pk) => pk.name === '반포한강공원')?.o;
+  const rawShoreChains = (osm?.water?.outers?.length)
+    ? parkShoreChains(osm.water, parkRing, 28).map((raw) => resampleShore(raw, 3.2)).filter((c) => c.length >= 2)
+    : [];
+  // OSM 수면 외곽이 강 쪽으로 떠 있으면, DEM 이 수면보다 높아지는 첫 지점까지 안쪽으로 당긴다.
+  const raiseShore = (p) => {
+    const sx = p.sx, sz = p.sz;
+    for (let d = 0; d <= 220; d += 1) {
+      const x = p.x + sx * d, z = p.z + sz * d;
+      if (inWater(x, z, osm?.water)) continue;
+      const gy = heightAt(x, z);
+      if (gy != null && gy > lv.waterY + 0.6) {
+        return { x: p.x + sx * Math.max(0, d - 0.5), z: p.z + sz * Math.max(0, d - 0.5), sx, sz };
+      }
+    }
+    return null;
+  };
+  const shoreChains = rawShoreChains.map((chain) => {
+    const shifts = chain.map((p) => {
+      const r = raiseShore(p);
+      return r ? Math.hypot(r.x - p.x, r.z - p.z) : null;
+    });
+    let last = 0;
+    for (let i = 0; i < shifts.length; i++) {
+      if (shifts[i] == null) shifts[i] = last;
+      else last = shifts[i];
+    }
+    last = shifts[shifts.length - 1] || 0;
+    for (let i = shifts.length - 1; i >= 0; i--) {
+      if (shifts[i] == null) shifts[i] = last;
+      else last = shifts[i];
+    }
+    const sm = shifts.map((_, i) => {
+      let acc = 0, n = 0;
+      for (let k = i - 4; k <= i + 4; k++) {
+        if (k >= 0 && k < shifts.length) { acc += shifts[k]; n++; }
+      }
+      return n ? acc / n : 0;
+    });
+    return chain.map((p, i) => ({
+      x: p.x + p.sx * sm[i],
+      z: p.z + p.sz * sm[i],
+      sx: p.sx,
+      sz: p.sz,
+    }));
+  }).filter((c) => c.length >= 2);
+  const shoreSamples = [];
+  for (const c of shoreChains) for (const p of c) shoreSamples.push(p);
+
+  function revetmentBandY(x, z) {
+    if (!shoreSamples.length) return null;
+    let best = null, bestD2 = 18 * 18;
+    for (const p of shoreSamples) {
+      const dx = x - p.x, dz = z - p.z;
+      const d2 = dx * dx + dz * dz;
+      if (d2 < bestD2) { bestD2 = d2; best = p; }
+    }
+    if (!best) return null;
+    const d = (x - best.x) * best.sx + (z - best.z) * best.sz;
+    const lat2 = (x - best.x) * (x - best.x) + (z - best.z) * (z - best.z) - d * d;
+    if (lat2 > 36) return null;
+    if (d < -0.5 || d > REV_SPAN + 1.8) return null;
+    const topX = best.x + best.sx * REV_SPAN, topZ = best.z + best.sz * REV_SPAN;
+    const yWater = lv.waterY + 0.05;
+    const yGrass = heightAt(topX, topZ);
+    const yTop = (yGrass != null && yGrass > yWater + 1.2) ? yGrass : (yWater + REV_STEPS * 0.42);
+    if (d > REV_SPAN) {
+      const fade = Math.min(1, (d - REV_SPAN) / 1.6);
+      return yTop - 0.08 * (1 - fade);
+    }
+    const t = Math.max(0, Math.min(1, d / REV_SPAN));
+    return yWater + (yTop - yWater) * t - 0.08;
+  }
 
   if (dem) {
     const sub = 2;
@@ -306,6 +472,11 @@ export function createHangangTerrain({ parent, dem, osm }) {
         const z = dem.z0 + (j / sub) * dem.dz;
         let y = heightAt(x, z);
         if (y == null) y = lv.waterY;
+        const wetV = inWater(x, z, osm?.water);
+        if (!wetV) {
+          const by = revetmentBandY(x, z);
+          if (by != null) y = Math.min(y, by);
+        }
         const k = (j * nx + i) * 3;
         pos[k] = x; pos[k + 1] = y; pos[k + 2] = z;
         uv[(j * nx + i) * 2] = (x - dem.x0) / 28;
@@ -363,10 +534,19 @@ export function createHangangTerrain({ parent, dem, osm }) {
   const waterMeshes = [];
   if (osm?.water?.outers?.length) {
     for (const outer of osm.water.outers) {
+      const isletRings = (osm?.islets || []).map((isle) => isle.o).filter((o) => o && o.length >= 3);
       const holes = (osm.water.inners || [])
         .filter((inn) => {
+          if (!inn.o || inn.o.length < 3) return false;
           const c = centroid(inn.o);
-          return pointInRing(c.x, c.z, outer.o);
+          if (!pointInRing(c.x, c.z, outer.o)) return false;
+          // 세빛섬 발자국은 부유 구조물이지 육지가 아니다. 구멍을 내면 평평한 잔디 섬이 된다.
+          for (const r of isletRings) {
+            if (pointInRing(c.x, c.z, r)) return false;
+            const ic = centroid(r);
+            if (Math.hypot(c.x - ic.x, c.z - ic.z) < 48) return false;
+          }
+          return true;
         })
         .map((inn) => inn.o);
       const mesh = flatPolyMesh(outer.o, holes, lv.waterY + 0.03, '#2a6a78', 'hangang-water');
@@ -375,8 +555,8 @@ export function createHangangTerrain({ parent, dem, osm }) {
           color: '#247086',
           transparent: true,
           opacity: 0.82,
-          shininess: 86,
-          specular: '#9ad4de',
+          shininess: 22,
+          specular: '#3d7a86',
           side: THREE.DoubleSide,
           emissive: '#000000',
         });
@@ -390,102 +570,97 @@ export function createHangangTerrain({ parent, dem, osm }) {
   // 공원 ShapeGeometry 판은 쓰지 않는다. 오목한 반포한강공원이 눈높이 거대 삼각형(녹색 벽)이 된다.
   // 잔디는 DEM 정점색 + 타일 텍스처로만 그린다.
 
-  // 계단식 호안: 한강 수면 외곽에서 육지 쪽으로 회색 콘크리트 단.
-  // OSM terrace way 가 없어 수면 링 + 수면 높이로 만들었다(approximate).
+  // 계단식 호안: 공원에 닿는 수면 외곽을 이은 연속 체인.
+  // OSM terrace way 가 없어 수면 링 + 수면·지면 높이로 만들었다(approximate).
   const terraceMat = new THREE.MeshLambertMaterial({ color: '#9a9b95', side: THREE.DoubleSide });
   const riserMat = new THREE.MeshLambertMaterial({ color: '#4e4f49', side: THREE.DoubleSide });
   mats.push(terraceMat, riserMat);
   const topCenters = [];
-  const steps = 11;
-  const tread = 1.22;
-  const rise = 0.48;
-  if (osm?.water?.outers?.length) {
-    const park = osm?.park?.ring?.pts || osm?.parks?.find((pk) => pk.name === '반포한강공원')?.o;
-    const edges = waterLandEdges(osm.water, 8).filter((e) => {
-      const lx = (e.a[0] + e.b[0]) / 2 + e.sx * 6;
-      const lz = (e.a[1] + e.b[1]) / 2 + e.sz * 6;
-      if (park && pointInRing(lx, lz, park)) return true;
-      if (park) {
-        for (const [dx, dz] of [[22, 0], [-22, 0], [0, 22], [0, -22], [16, 16], [-16, 16]]) {
-          if (pointInRing(lx + dx, lz + dz, park)) return true;
+  const steps = REV_STEPS;
+  const tread = REV_TREAD;
+  if (shoreChains.length) {
+    const tpos = [], tidx = [], rpos = [], ridx = [], npos = [], nidx = [], epos = [], eidx = [];
+    let tv = 0, rv = 0, nv = 0, ev = 0;
+    for (const chain of shoreChains) {
+      if (chain.length < 2) continue;
+      const cols = [];
+      for (const p of chain) {
+        const sx = p.sx, sz = p.sz;
+        const topX = p.x + sx * (steps * tread), topZ = p.z + sz * (steps * tread);
+        if (inWater(topX, topZ, osm.water)) continue;
+        const yWater = lv.waterY + 0.05;
+        const yGrass = heightAt(topX, topZ);
+        if (yGrass == null || yGrass < yWater + 0.55) continue;
+        const yTop = yGrass;
+        const ys = [];
+        const pts = [];
+        for (let s = 0; s <= steps; s++) {
+          const d = s * tread;
+          pts.push([p.x + sx * d, p.z + sz * d]);
+          ys.push(yWater + (yTop - yWater) * (s / steps));
+        }
+        cols.push({ pts, ys, sx, sz, p });
+      }
+      for (let i = 0; i < cols.length - 1; i++) {
+        const a = cols[i], b = cols[i + 1];
+        for (let s = 0; s < steps; s++) {
+          const a0 = a.pts[s], a1 = a.pts[s + 1], b0 = b.pts[s], b1 = b.pts[s + 1];
+          const yA1 = a.ys[s + 1], yB1 = b.ys[s + 1];
+          const yA0 = a.ys[s], yB0 = b.ys[s];
+          tpos.push(a0[0], yA1, a0[1], b0[0], yB1, b0[1], b1[0], yB1, b1[1], a1[0], yA1, a1[1]);
+          tidx.push(tv, tv + 1, tv + 2, tv, tv + 2, tv + 3);
+          tv += 4;
+          rpos.push(a0[0], yA1, a0[1], b0[0], yB1, b0[1], b0[0], yB0, b0[1], a0[0], yA0, a0[1]);
+          ridx.push(rv, rv + 1, rv + 2, rv, rv + 2, rv + 3);
+          rv += 4;
+          const nd = 0.1;
+          const anx0 = a.p.x + a.sx * (s * tread), anz0 = a.p.z + a.sz * (s * tread);
+          const bnx0 = b.p.x + b.sx * (s * tread), bnz0 = b.p.z + b.sz * (s * tread);
+          const anx1 = a.p.x + a.sx * (s * tread + nd), anz1 = a.p.z + a.sz * (s * tread + nd);
+          const bnx1 = b.p.x + b.sx * (s * tread + nd), bnz1 = b.p.z + b.sz * (s * tread + nd);
+          const yN = (yA1 + yB1) * 0.5 + 0.02;
+          npos.push(anx0, yA1 + 0.02, anz0, bnx0, yB1 + 0.02, bnz0, bnx1, yB1 + 0.02, bnz1, anx1, yA1 + 0.02, anz1);
+          nidx.push(nv, nv + 1, nv + 2, nv, nv + 2, nv + 3);
+          nv += 4;
         }
       }
-      return false;
-    });
-    const tpos = [], tidx = [], rpos = [], ridx = [], npos = [], nidx = [];
-    let tv = 0, rv = 0, nv = 0;
-    for (const e of edges) {
-      const sx = e.sx, sz = e.sz;
-      for (let b = 0; b < steps; b++) {
-        const d0 = 0.25 + b * tread, d1 = d0 + tread - 0.06;
-        const yTread = lv.waterY + 0.16 + b * rise;
-        const q = [
-          [e.a[0] + sx * d0, e.a[1] + sz * d0],
-          [e.b[0] + sx * d0, e.b[1] + sz * d0],
-          [e.b[0] + sx * d1, e.b[1] + sz * d1],
-          [e.a[0] + sx * d1, e.a[1] + sz * d1],
-        ];
-        for (let i = 0; i < 4; i++) tpos.push(q[i][0], yTread, q[i][1]);
-        tidx.push(tv, tv + 1, tv + 2, tv, tv + 2, tv + 3);
-        tv += 4;
-        const yLow = (b === 0) ? lv.waterY + 0.04 : (lv.waterY + 0.16 + (b - 1) * rise);
-        // riser at the waterward (low) edge of this tread = d0 side = q[0], q[1]
-        rpos.push(
-          q[0][0], yTread, q[0][1],
-          q[1][0], yTread, q[1][1],
-          q[1][0], yLow, q[1][1],
-          q[0][0], yLow, q[0][1],
-        );
-        ridx.push(rv, rv + 1, rv + 2, rv, rv + 2, rv + 3);
-        rv += 4;
-        // dark nosing so treads read at a glance
-        const nx0 = e.a[0] + sx * d0, nz0 = e.a[1] + sz * d0;
-        const nx1 = e.b[0] + sx * d0, nz1 = e.b[1] + sz * d0;
-        const nx2 = e.b[0] + sx * (d0 + 0.11), nz2 = e.b[1] + sz * (d0 + 0.11);
-        const nx3 = e.a[0] + sx * (d0 + 0.11), nz3 = e.a[1] + sz * (d0 + 0.11);
-        const yN = yTread + 0.025;
-        npos.push(nx0, yN, nz0, nx1, yN, nz1, nx2, yN, nz2, nx3, yN, nz3);
-        nidx.push(nv, nv + 1, nv + 2, nv, nv + 2, nv + 3);
-        nv += 4;
-        if (b === steps - 1) {
-          topCenters.push({
-            x: (q[2][0] + q[3][0]) / 2,
-            z: (q[2][1] + q[3][1]) / 2,
-            y: yTread,
-            lookX: (e.a[0] + e.b[0]) / 2 - sx * 6,
-            lookZ: (e.a[1] + e.b[1]) / 2 - sz * 6,
-          });
+      // 양쪽 끝을 수직 측벽으로 막아 톱니를 없앤다
+      for (const col of [cols[0], cols[cols.length - 1]]) {
+        for (let s = 0; s < steps; s++) {
+          const p0 = col.pts[s], p1 = col.pts[s + 1];
+          epos.push(p0[0], col.ys[s + 1], p0[1], p1[0], col.ys[s + 1], p1[1], p1[0], col.ys[s], p1[1], p0[0], col.ys[s], p0[1]);
+          eidx.push(ev, ev + 1, ev + 2, ev, ev + 2, ev + 3);
+          ev += 4;
         }
       }
+      for (let ci = 0; ci < cols.length; ci++) {
+        if (ci % 6 !== 0 && ci !== cols.length - 1) continue;
+        const col = cols[ci];
+        const last = col.pts[steps];
+        topCenters.push({
+          x: last[0], z: last[1], y: col.ys[steps],
+          lookX: col.p.x - col.sx * 10,
+          lookZ: col.p.z - col.sz * 10,
+          waterX: col.p.x,
+          waterZ: col.p.z,
+        });
+      }
     }
-    if (tpos.length) {
+    const addMesh = (pos, idx, mat, name, recv) => {
+      if (!pos.length) return;
       const geo = new THREE.BufferGeometry();
-      geo.setAttribute('position', new THREE.Float32BufferAttribute(tpos, 3));
-      geo.setIndex(tidx);
+      geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+      geo.setIndex(idx);
       geo.computeVertexNormals();
-      const mesh = new THREE.Mesh(geo, terraceMat);
-      mesh.receiveShadow = true;
-      mesh.name = 'hangang-revetment';
+      const mesh = new THREE.Mesh(geo, mat);
+      if (recv) mesh.receiveShadow = true;
+      mesh.name = name;
       group.add(mesh);
-    }
-    if (rpos.length) {
-      const geo = new THREE.BufferGeometry();
-      geo.setAttribute('position', new THREE.Float32BufferAttribute(rpos, 3));
-      geo.setIndex(ridx);
-      geo.computeVertexNormals();
-      const mesh = new THREE.Mesh(geo, riserMat);
-      mesh.name = 'hangang-revetment-risers';
-      group.add(mesh);
-    }
-    if (npos.length) {
-      const geo = new THREE.BufferGeometry();
-      geo.setAttribute('position', new THREE.Float32BufferAttribute(npos, 3));
-      geo.setIndex(nidx);
-      geo.computeVertexNormals();
-      const mesh = new THREE.Mesh(geo, riserMat);
-      mesh.name = 'hangang-revetment-noses';
-      group.add(mesh);
-    }
+    };
+    addMesh(tpos, tidx, terraceMat, 'hangang-revetment', true);
+    addMesh(rpos, ridx, riserMat, 'hangang-revetment-risers', false);
+    addMesh(npos, nidx, riserMat, 'hangang-revetment-noses', false);
+    addMesh(epos, eidx, riserMat, 'hangang-revetment-ends', false);
   }
   let revetmentView = null;
   {
@@ -493,21 +668,25 @@ export function createHangangTerrain({ parent, dem, osm }) {
     const midB = cl && cl.length >= 2
       ? { x: (cl[0][0] + cl[cl.length - 1][0]) / 2, z: (cl[0][1] + cl[cl.length - 1][1]) / 2 }
       : { x: -9913, z: -16408 };
-    const prefer = { x: -9920, z: -15940 };
-    let bestD = Infinity;
+    // 잠수교 남단 서쪽 본류 호안을 고른다. 체인 중점만 쓰면 서래섬 수로 쪽에 떨어진다.
+    const prefer = { x: -9850, z: -15940 };
+    let bestMain = null, bestMainD = Infinity;
+    let bestAny = null, bestAnyD = Infinity;
     for (const c of topCenters) {
-      if (c.x > -9780 || c.x < -10350) continue;
+      if (c.x > -9520 || c.x < -10550) continue;
+      if (inWater(c.x, c.z, osm?.water)) continue;
+      const gy = heightAt(c.x, c.z);
+      if (gy == null || gy < lv.waterY + 0.5) continue;
       const d = Math.hypot(c.x - prefer.x, c.z - prefer.z);
-      if (d < bestD) {
-        bestD = d;
-        revetmentView = {
-          ...c,
-          lookX: c.lookX * 0.4 + midB.x * 0.6,
-          lookZ: c.lookZ * 0.4 + midB.z * 0.6,
-        };
-      }
+      const view = {
+        ...c,
+        lookX: c.lookX * 0.9 + midB.x * 0.1,
+        lookZ: c.lookZ * 0.9 + midB.z * 0.1,
+      };
+      if (d < bestAnyD) { bestAnyD = d; bestAny = view; }
+      if (c.waterZ < -15910 && d < bestMainD) { bestMainD = d; bestMain = view; }
     }
-    if (!revetmentView && topCenters.length) revetmentView = topCenters[Math.floor(topCenters.length / 2)];
+    revetmentView = bestMain || bestAny || (topCenters.length ? topCenters[Math.floor(topCenters.length / 2)] : null);
   }
 
   const dayColors = new Map();

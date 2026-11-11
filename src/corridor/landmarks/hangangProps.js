@@ -1,4 +1,4 @@
-// [hangang] 나무·벤치·가로등·휴지통·볼라드·자전거길 표지·무명 부유섬.
+// [hangang] 나무·벤치·가로등·휴지통·볼라드·자전거길 표지·한강 부유 문화섬(로고 없음).
 //   OSM natural=tree / amenity=bench / waste_basket 를 쓰고, 부족한 구간은 길을 따라 심는다(approximate).
 import * as THREE from 'three';
 import { addInstancedTrees } from '../../world/trees.js';
@@ -191,30 +191,88 @@ export function createHangangProps({ parent, osm, land } = {}) {
     group.add(board);
   });
 
-  // --- floating islands from OSM islet outers; no brand names ---
+  // --- 한강 부유 문화섬: OSM islet 발자국(relation/4077217 계열). 로고·상호 없음.
+  function ringShapeXZ(ring) {
+    const pts = ring[0][0] === ring.at(-1)[0] && ring[0][1] === ring.at(-1)[1] ? ring.slice(0, -1) : ring.slice();
+    const sh = new THREE.Shape();
+    sh.moveTo(pts[0][0], pts[0][1]);
+    for (let i = 1; i < pts.length; i++) sh.lineTo(pts[i][0], pts[i][1]);
+    sh.closePath();
+    return { sh, pts };
+  }
+  function insetTowardCentroid(ring, dist) {
+    const c = centroid(ring);
+    return ring.map((p) => {
+      const dx = c.x - p[0], dz = c.z - p[1];
+      const L = Math.hypot(dx, dz) || 1;
+      return [p[0] + (dx / L) * dist, p[1] + (dz / L) * dist];
+    });
+  }
+  const pontoonMat = new THREE.MeshLambertMaterial({ color: '#8a8680' });
+  const bodyMat = new THREE.MeshLambertMaterial({ color: '#6d828e', transparent: true, opacity: 0.94 });
+  const roofMat = new THREE.MeshLambertMaterial({ color: '#5a6b74' });
+  mats.push(pontoonMat, bodyMat, roofMat);
   for (const isle of osm?.islets || []) {
     if (!isle.o || isle.o.length < 4) continue;
-    const c = centroid(isle.o);
-    const y = (lv.waterY ?? -43) + 1.15;
-    const sh = new THREE.Shape();
-    const ring = isle.o[0][0] === isle.o.at(-1)[0] && isle.o[0][1] === isle.o.at(-1)[1] ? isle.o.slice(0, -1) : isle.o;
-    sh.moveTo(ring[0][0], ring[0][1]);
-    for (let i = 1; i < ring.length; i++) sh.lineTo(ring[i][0], ring[i][1]);
-    sh.closePath();
-    const deck = new THREE.ExtrudeGeometry(sh, { depth: 1.4, bevelEnabled: false });
-    deck.rotateX(-Math.PI / 2);
-    const deckM = new THREE.Mesh(deck, new THREE.MeshLambertMaterial({ color: '#d8d4cc' }));
+    const { sh, pts } = ringShapeXZ(isle.o);
+    let area = 0;
+    for (let i = 0; i < pts.length; i++) {
+      const a = pts[i], b = pts[(i + 1) % pts.length];
+      area += a[0] * b[1] - b[0] * a[1];
+    }
+    area = Math.abs(area) * 0.5;
+    const y = (lv.waterY ?? -43) + 0.28;
+    const pontoon = new THREE.ExtrudeGeometry(sh, { depth: 1.55, bevelEnabled: false });
+    pontoon.rotateX(-Math.PI / 2);
+    const deckM = new THREE.Mesh(pontoon, pontoonMat);
     deckM.position.y = y;
-    deckM.name = 'hangang-islet';
+    deckM.name = 'hangang-islet-pontoon';
     group.add(deckM);
-    mats.push(deckM.material);
-    const mass = new THREE.Mesh(
-      new THREE.BoxGeometry(Math.max(8, (isle.o.length > 8 ? 14 : 10)), 6.5, Math.max(6, 9)),
-      new THREE.MeshLambertMaterial({ color: '#e8eef2', transparent: true, opacity: 0.88 }),
-    );
-    mass.position.set(c.x, y + 3.2, c.z);
-    group.add(mass);
-    mats.push(mass.material);
+    const inset = insetTowardCentroid(pts, Math.min(5.5, Math.sqrt(area) * 0.12));
+    if (inset.length >= 4) {
+      const massH = area > 2800 ? 11.5 : area > 1400 ? 8.2 : 5.4;
+      const { sh: msh } = ringShapeXZ(inset);
+      const body = new THREE.ExtrudeGeometry(msh, { depth: massH, bevelEnabled: false });
+      body.rotateX(-Math.PI / 2);
+      const bodyM = new THREE.Mesh(body, bodyMat);
+      bodyM.position.y = y + 1.55;
+      bodyM.name = 'hangang-islet-mass';
+      group.add(bodyM);
+      const roof = new THREE.ExtrudeGeometry(msh, { depth: 0.55, bevelEnabled: false });
+      roof.rotateX(-Math.PI / 2);
+      const roofM = new THREE.Mesh(roof, roofMat);
+      roofM.position.y = y + 1.55 + massH;
+      roofM.name = 'hangang-islet-roof';
+      group.add(roofM);
+    }
+  }
+
+  // 서래섬(way/25979109, leisure=park, place=islet): 잔디 섬. 가장자리를 따라 나무.
+  const seorae = osm?.seorae?.ring?.pts;
+  if (seorae && seorae.length >= 4) {
+    const seoraeTrees = [];
+    for (let i = 1; i < seorae.length; i++) {
+      const a = seorae[i - 1], b = seorae[i];
+      const L = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1;
+      const n = Math.max(1, Math.round(L / 18));
+      for (let k = 0; k < n; k++) {
+        const t = (k + 0.5) / n;
+        const x = a[0] + (b[0] - a[0]) * t, z = a[1] + (b[1] - a[1]) * t;
+        const c = centroid(seorae);
+        const dx = c.x - x, dz = c.z - z;
+        const D = Math.hypot(dx, dz) || 1;
+        seoraeTrees.push([x + (dx / D) * 8, z + (dz / D) * 8]);
+      }
+    }
+    if (seoraeTrees.length) {
+      let seed = 4517;
+      addInstancedTrees(group, seoraeTrees, {
+        rnd: () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; },
+        crownRadius: 2.1, crownY: 4.6, trunkHeight: 3.2,
+        scaleMin: 0.7, scaleSpan: 0.45,
+        getY: (x, z) => heightAt(x, z) ?? ((lv.waterY ?? -43) + 0.8),
+      });
+    }
   }
 
   function setNight(v) {

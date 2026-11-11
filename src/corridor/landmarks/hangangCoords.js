@@ -114,3 +114,119 @@ export function jamsuDeckRing(osm, width = JAMSU_DECK_WIDTH) {
   if (ring.length) ring.push(ring[0].slice());
   return ring;
 }
+
+export function resamplePolyline(pts, step = 8) {
+  if (!pts || pts.length < 2) return pts ? pts.map((p) => p.slice()) : [];
+  const out = [[pts[0][0], pts[0][1]]];
+  for (let i = 1; i < pts.length; i++) {
+    let ax = out[out.length - 1][0], az = out[out.length - 1][1];
+    const bx = pts[i][0], bz = pts[i][1];
+    let dx = bx - ax, dz = bz - az, L = Math.hypot(dx, dz);
+    if (L < 1e-6) continue;
+    dx /= L; dz /= L;
+    while (L > step) {
+      ax += dx * step; az += dz * step;
+      out.push([ax, az]);
+      L -= step;
+    }
+    out.push([bx, bz]);
+  }
+  return out;
+}
+
+export function sampleChain(pts, count) {
+  if (!pts || pts.length < 2 || count < 2) return pts ? pts.map((p) => p.slice()) : [];
+  const total = polylineLen(pts) || 1;
+  const out = [];
+  for (let i = 0; i < count; i++) {
+    const target = (i / (count - 1)) * total;
+    let acc = 0, placed = false;
+    for (let k = 1; k < pts.length; k++) {
+      const ax = pts[k - 1][0], az = pts[k - 1][1], bx = pts[k][0], bz = pts[k][1];
+      const L = Math.hypot(bx - ax, bz - az) || 1e-9;
+      if (acc + L >= target || k === pts.length - 1) {
+        const t = Math.max(0, Math.min(1, (target - acc) / L));
+        out.push([ax + (bx - ax) * t, az + (bz - az) * t]);
+        placed = true;
+        break;
+      }
+      acc += L;
+    }
+    if (!placed) out.push(pts[pts.length - 1].slice());
+  }
+  return out;
+}
+
+/** 길쭉한 닫힌 윤곽을 가장 긴 변 방향 축에 수직인 교점으로 양옆 체인으로 나눈다. */
+export function chainsFromClosedRing(ring, step = 8) {
+  if (!ring || ring.length < 4) return null;
+  const pts = (Math.hypot(ring[0][0] - ring[ring.length - 1][0], ring[0][1] - ring[ring.length - 1][1]) < 1.2)
+    ? ring.slice(0, -1) : ring.slice();
+  const n = pts.length;
+  let e0 = 0, eL = 0;
+  for (let i = 0; i < n; i++) {
+    const a = pts[i], b = pts[(i + 1) % n];
+    const L = Math.hypot(b[0] - a[0], b[1] - a[1]);
+    if (L > eL) { eL = L; e0 = i; }
+  }
+  const a = pts[e0], b = pts[(e0 + 1) % n];
+  const axisLen = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1;
+  const dx = (b[0] - a[0]) / axisLen, dz = (b[1] - a[1]) / axisLen;
+  const px = -dz, pz = dx;
+  let tMin = Infinity, tMax = -Infinity;
+  for (const p of pts) {
+    const t = (p[0] - a[0]) * dx + (p[1] - a[1]) * dz;
+    if (t < tMin) tMin = t;
+    if (t > tMax) tMax = t;
+  }
+  const span = tMax - tMin;
+  const count = Math.max(4, Math.ceil(span / step) + 1);
+  const left = [], right = [];
+  const cross = (ux, uz, vx, vz) => ux * vz - uz * vx;
+  for (let i = 0; i < count; i++) {
+    const t = tMin + (span * i) / (count - 1);
+    const ox = a[0] + dx * t, oz = a[1] + dz * t;
+    const hits = [];
+    for (let k = 0; k < n; k++) {
+      const pa = pts[k], pb = pts[(k + 1) % n];
+      const ex = pb[0] - pa[0], ez = pb[1] - pa[1];
+      const den = cross(px, pz, ex, ez);
+      if (Math.abs(den) < 1e-9) continue;
+      const sx = pa[0] - ox, sz = pa[1] - oz;
+      const u = cross(sx, sz, px, pz) / den;
+      if (u < -0.02 || u > 1.02) continue;
+      hits.push(cross(sx, sz, ex, ez) / den);
+    }
+    if (hits.length < 2) continue;
+    hits.sort((p, q) => p - q);
+    let sMin = hits[0], sMax = hits[hits.length - 1], score = Infinity;
+    for (let p = 0; p < hits.length; p++) {
+      for (let q = p + 1; q < hits.length; q++) {
+        const w = hits[q] - hits[p];
+        if (w < 10 || w > 36) continue;
+        const sc = Math.min(Math.abs(hits[p]), Math.abs(hits[q])) + Math.abs(w - 22);
+        if (sc < score) { score = sc; sMin = hits[p]; sMax = hits[q]; }
+      }
+    }
+    if (!(sMax - sMin >= 10 && sMax - sMin <= 36)) continue;
+    left.push([ox + px * sMin, oz + pz * sMin]);
+    right.push([ox + px * sMax, oz + pz * sMax]);
+  }
+  if (left.length < 2) return null;
+  const fL = [left[0]], fR = [right[0]];
+  for (let i = 1; i < left.length; i++) {
+    const mx0 = (left[i - 1][0] + right[i - 1][0]) / 2, mz0 = (left[i - 1][1] + right[i - 1][1]) / 2;
+    const mx1 = (left[i][0] + right[i][0]) / 2, mz1 = (left[i][1] + right[i][1]) / 2;
+    const d = Math.hypot(mx1 - mx0, mz1 - mz0);
+    if (d > 14) {
+      const nIns = Math.max(2, Math.floor(d / 8));
+      for (let k = 1; k < nIns; k++) {
+        const t = k / nIns;
+        fL.push([left[i - 1][0] + (left[i][0] - left[i - 1][0]) * t, left[i - 1][1] + (left[i][1] - left[i - 1][1]) * t]);
+        fR.push([right[i - 1][0] + (right[i][0] - right[i - 1][0]) * t, right[i - 1][1] + (right[i][1] - right[i - 1][1]) * t]);
+      }
+    }
+    fL.push(left[i]); fR.push(right[i]);
+  }
+  return { left: fL, right: fR };
+}

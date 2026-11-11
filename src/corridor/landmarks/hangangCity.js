@@ -2,7 +2,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { buildingMeshes } from '../tileMesh.js';
-import { inWater, centroid } from './hangangCoords.js';
+import { inWater, centroid, projectOnLine, polylineLen } from './hangangCoords.js';
 
 function skylineTex() {
   const W = 2048, H = 256;
@@ -87,17 +87,50 @@ export function createHangangCity({ parent, osm, land } = {}) {
   }
 
   // 올림픽대로 · 강변북로
+  // OSM: 남단 긴 두 가닥(각 폭 19.1 m)은 올림픽대로 양방향 — 지형에 붙인다.
+  // 북단 강변북로는 이 clip 에서 점이 한강 폴리곤 안에 들어가 있다. 예전엔
+  // 수면+13 m 로 올려 강 위 떠 있는 겹친 리본(매듭·z-fighting 흰 점)이 됐다.
+  // 터널은 빼고, 같은 이름과 대부분 겹치면 건너뛰며, 고가 태그가 있을 때만 띄운다.
+  // 고가 태그 없이 수면 안에 점이 많은 가닥은 그리지 않는다.
   const exprGeos = [];
-  for (const w of osm?.ways || []) {
+  const accepted = [];
+  const candidates = (osm?.ways || []).filter((w) => {
     const n = w.name || '';
-    if (n !== '올림픽대로' && n !== '강변북로') continue;
-    if (!w.pts || w.pts.length < 2) continue;
-    const width = Math.max(12, w.w || 15.6);
+    if (n !== '올림픽대로' && n !== '강변북로') return false;
+    if (!w.pts || w.pts.length < 2) return false;
+    if (w.tunnel === 'yes' || Number(w.layer) < 0) return false;
+    return polylineLen(w.pts) >= 40;
+  }).sort((a, b) => {
+    const ea = (a.bridge === 'yes' || Number(a.layer) >= 1) ? 1 : 0;
+    const eb = (b.bridge === 'yes' || Number(b.layer) >= 1) ? 1 : 0;
+    if (eb !== ea) return eb - ea;
+    return polylineLen(b.pts) - polylineLen(a.pts);
+  });
+  for (const w of candidates) {
+    const pts = w.pts;
+    let hit = 0, n = 0;
+    for (let i = 0; i < pts.length; i += Math.max(1, Math.floor(pts.length / 12))) {
+      n++;
+      for (const other of accepted) {
+        const q = projectOnLine(pts[i][0], pts[i][1], other.pts);
+        if (q && q.dist < 11) { hit++; break; }
+      }
+    }
+    if (n && accepted.length && hit / n > 0.62) continue;
     const elevated = w.bridge === 'yes' || Number(w.layer) >= 1;
-    const geo = ribbon(w.pts, width, (x, z) => {
+    let wetN = 0, tot = 0;
+    for (let i = 0; i < pts.length; i += Math.max(1, Math.floor(pts.length / 16))) {
+      tot++;
+      if (inWater(pts[i][0], pts[i][1], osm?.water)) wetN++;
+    }
+    // 이 clip 의 강변북로는 점이 한강 폴리곤 안에 들어가 있다(매핑 오차).
+    // 고가 태그가 없으면 강 위 떠 있는 막대로 그리지 않는다.
+    if (!elevated && tot && wetN / tot > 0.45) continue;
+    accepted.push(w);
+    const width = Math.max(6.5, Math.min(22, w.w || 15.6));
+    const geo = ribbon(pts, width, (x, z) => {
       const g = heightAt(x, z) ?? lv.waterY;
-      if (inWater(x, z, osm?.water)) return lv.waterY + 13;
-      if (elevated) return Math.max(g + 1.4, lv.waterY + 11);
+      if (elevated) return Math.max(g + 6.5, lv.waterY + 12);
       return g + 0.14;
     }, 0.1);
     if (geo) exprGeos.push(geo);

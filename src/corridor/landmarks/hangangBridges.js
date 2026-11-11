@@ -1,7 +1,7 @@
 // [hangang] 잠수교(하부 저수위 데크)와 반포대교(상부 데크·교각).
 //   윤곽은 OSM way/1091571021 · way/1085504592. 높이는 실측 DEM 접근부 + 수면.
 import * as THREE from 'three';
-import { pointInRing, inWater, projectOnLine, polylineLen, centroid, JAMSU_DECK_WIDTH, jamsuDeckRing } from './hangangCoords.js';
+import { pointInRing, inWater, projectOnLine, polylineLen, centroid, JAMSU_DECK_WIDTH, jamsuDeckRing, chainsFromClosedRing } from './hangangCoords.js';
 import { jamsuDeckY, banpoDeckY } from './hangangTerrain.js';
 
 function remapShapeToY(geo, yOf) {
@@ -23,6 +23,78 @@ function ringShape(ring) {
   for (let i = 1; i < pts.length; i++) sh.lineTo(pts[i][0], pts[i][1]);
   sh.closePath();
   return { sh, pts };
+}
+
+function faceDown(geo) {
+  geo.computeVertexNormals();
+  const nrm = geo.attributes.normal;
+  if (!nrm) return geo;
+  let ay = 0;
+  for (let i = 0; i < nrm.count; i++) ay += nrm.getY(i);
+  if (ay > 0) {
+    for (let i = 0; i < nrm.count; i++) nrm.setXYZ(i, -nrm.getX(i), -nrm.getY(i), -nrm.getZ(i));
+    nrm.needsUpdate = true;
+  }
+  return geo;
+}
+
+// 긴 얇은 윤곽을 ShapeGeometry/earcut 로 메우면 중앙이 비어 밤하늘이 검은 띠로 보인다.
+// 양옆 체인을 쿼드 스트립으로 이어 단일 상판(반포대교는 너비 약 20–25 m 의 한 장)을 닫는다.
+function stripDeckMeshes(left, right, yAt, thick, topColor, sideColor, name) {
+  const n = Math.min(left?.length || 0, right?.length || 0);
+  if (n < 2) return [];
+  const topPos = [], botPos = [], idx = [];
+  for (let i = 0; i < n; i++) {
+    const lx = left[i][0], lz = left[i][1], rx = right[i][0], rz = right[i][1];
+    const yL = yAt(lx, lz), yR = yAt(rx, rz);
+    topPos.push(lx, yL, lz, rx, yR, rz);
+    botPos.push(lx, yL - thick, lz, rx, yR - thick, rz);
+    if (i) {
+      const a = (i - 1) * 2, b = a + 1, c = i * 2, d = c + 1;
+      idx.push(a, c, b, b, c, d);
+    }
+  }
+  const topG = new THREE.BufferGeometry();
+  topG.setAttribute('position', new THREE.Float32BufferAttribute(topPos, 3));
+  topG.setIndex(idx);
+  topG.computeVertexNormals();
+  const botG = new THREE.BufferGeometry();
+  botG.setAttribute('position', new THREE.Float32BufferAttribute(botPos, 3));
+  botG.setIndex(idx.slice());
+  faceDown(botG);
+  const topMat = new THREE.MeshLambertMaterial({ color: topColor, side: THREE.DoubleSide });
+  const sideMat = new THREE.MeshLambertMaterial({ color: sideColor, side: THREE.DoubleSide });
+  const topM = new THREE.Mesh(topG, topMat);
+  const botM = new THREE.Mesh(botG, sideMat);
+  topM.name = name + '-top';
+  botM.name = name + '-soffit';
+  topM.receiveShadow = true;
+  const pos = [], sidx = [];
+  const pushSide = (a, b) => {
+    const ya = yAt(a[0], a[1]), yb = yAt(b[0], b[1]);
+    const k = pos.length / 3;
+    pos.push(a[0], ya, a[1], b[0], yb, b[1], b[0], yb - thick, b[1], a[0], ya - thick, a[1]);
+    sidx.push(k, k + 1, k + 2, k, k + 2, k + 3);
+  };
+  for (let i = 1; i < n; i++) {
+    pushSide(left[i - 1], left[i]);
+    pushSide(right[i - 1], right[i]);
+  }
+  pushSide(left[0], right[0]);
+  pushSide(left[n - 1], right[n - 1]);
+  const sideG = new THREE.BufferGeometry();
+  sideG.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  sideG.setIndex(sidx);
+  sideG.computeVertexNormals();
+  const sideM = new THREE.Mesh(sideG, sideMat);
+  sideM.name = name + '-sides';
+  return [topM, botM, sideM];
+}
+
+function deckFromRing(ring, yAt, thick, topColor, sideColor, name) {
+  const ch = chainsFromClosedRing(ring, 8);
+  if (ch) return stripDeckMeshes(ch.left, ch.right, yAt, thick, topColor, sideColor, name);
+  return deckMeshes(ring, yAt, thick, topColor, sideColor, name);
 }
 
 function deckMeshes(ring, yAt, thick, topColor, sideColor, name) {
@@ -306,7 +378,7 @@ function makeJamsuWalks(ring, yAt) {
   geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
   geo.setIndex(idx);
   geo.computeVertexNormals();
-  const m = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ color: '#9a9c98', side: THREE.DoubleSide }));
+  const m = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ color: '#e8eae4', side: THREE.DoubleSide }));
   m.name = 'jamsu-sidewalk';
   return [m];
 }
@@ -393,11 +465,7 @@ export function createHangangBridges({ parent, osm, land }) {
   function addDeck(meshes) {
     for (const m of meshes) {
       if (m.name.endsWith('-soffit')) {
-        const nrm = m.geometry.attributes.normal;
-        if (nrm) {
-          for (let i = 0; i < nrm.count; i++) nrm.setXYZ(i, -nrm.getX(i), -nrm.getY(i), -nrm.getZ(i));
-          nrm.needsUpdate = true;
-        }
+        faceDown(m.geometry);
         m.material = new THREE.MeshPhongMaterial({
           color: m.name.startsWith('banpo') ? '#3a332c' : '#5a6064',
           shininess: 22,
@@ -410,11 +478,11 @@ export function createHangangBridges({ parent, osm, land }) {
       group.add(m); mats.push(m.material);
     }
   }
-  addDeck(deckMeshes(jamsuRing, jY, lv.jamsuThick, '#6a6e72', '#5a5e62', 'jamsu-deck'));
+  addDeck(deckFromRing(jamsuRing, jY, lv.jamsuThick, '#6a6e72', '#5a5e62', 'jamsu-deck'));
   for (const m of makeJamsuMarkings(osm, lv)) { group.add(m); mats.push(m.material); }
   for (const m of makeJamsuWalks(jamsuRing, jY)) { group.add(m); mats.push(m.material); }
   for (const m of makePostRails(jamsuRing, jY, '#c5ccd1', 2.4)) { group.add(m); mats.push(m.material); }
-  addDeck(deckMeshes(banpoRing, bY, lv.banpoThick, '#6d7074', '#3c342c', 'banpo-deck'));
+  addDeck(deckFromRing(banpoRing, bY, lv.banpoThick, '#6d7074', '#3c342c', 'banpo-deck'));
   // 반포대교는 낮은 콘크리트 난간만. 긴 윤곽에 튜브 난간을 얹으면 하늘로 선이 뻗는다.
   for (const m of railMeshes(banpoRing, bY, '#5a5854')) {
     group.add(m); mats.push(m.material);

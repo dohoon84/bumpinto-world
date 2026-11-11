@@ -152,7 +152,7 @@ export function createHangangPaths({ parent, osm, land }) {
     const parts = partsOutsideRing(ptsAll, jamsuRing);
     let drew = false;
     for (const pts of parts) {
-      const geo = drapedRibbonGeo(pts, width, (x, z) => surfaceAt(x, z, kind, w), kind === 'upper' ? 0.06 : 0.05);
+      const geo = drapedRibbonGeo(pts, width, (x, z) => surfaceAt(x, z, kind, w), kind === 'upper' ? 0.06 : (kind === 'bike' ? 0.09 : 0.05));
       if (!geo) continue;
       buckets[kind].push(geo);
       drew = true;
@@ -160,7 +160,7 @@ export function createHangangPaths({ parent, osm, land }) {
     if (drew) kept.push(w);
   }
 
-  const colors = { bike: '#c05645', walk: '#c9c2b4', steps: '#9a9084', upper: '#5a5d61' };
+  const colors = { bike: '#d44b2c', walk: '#c9c2b4', steps: '#9a9084', upper: '#5a5d61' };
   const mats = {};
   for (const [kind, list] of Object.entries(buckets)) {
     if (!list.length) continue;
