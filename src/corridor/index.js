@@ -5,7 +5,7 @@
 // 라이브 정자 영역(liveBox + 탄천 띠) 안에는 아무것도 그리지 않으므로 기존 정자 화면/동작은 그대로다.
 import * as THREE from 'three';
 import { mergeTancheon, coveredFn, holeyGround, channelWaterMesh } from './tancheon.js';
-import { buildDetailTile, buildLodTile, roadMesh, CAR_KINDS, ingestTileRoads } from './tileMesh.js';
+import { buildDetailTile, buildLodTile, roadMesh, CAR_KINDS, ingestTileRoads, setFlatClip, clipFlatGeometry } from './tileMesh.js';
 import { applyTileCuts } from '../world/streams.js';
 import { buildCorridorCrossings } from './crossings.js';
 import { mountYatapSchoolZone } from './yatapSchoolZone.js'; // [schoolzone]
@@ -422,6 +422,7 @@ const gnTransit = corridorData.gangnamTransit ? mountGangnamTransit(root, corrid
 
   // [hangang] 반포한강공원·잠수교 — 코리더 타일 밖 섬. ?hangang=0 이면 데이터 없음.
   let hangang = null;
+  setFlatClip(null);
   if (corridorData.hangang?.dem && corridorData.hangang?.osm) {
     hangang = createHangang({
       scene: root,
@@ -431,6 +432,13 @@ const gnTransit = corridorData.gangnamTransit ? mountGangnamTransit(root, corrid
       osm: corridorData.hangang.osm,
       hap: corridorData.hangang.hap || null,
     });
+    // [hangang] 2구간 지형 위에 떠 있던 코리더 타일 바닥(베이지 판·물길 띠)을 뺀다.
+    if (hangang?.hap) {
+      setFlatClip((x, z) => hangang.coversTileFlat(x, z));
+      root.traverse((o) => {
+        if (o.isMesh && (o.name === 'corridorFlat' || o.name === 'corridorLodFlat')) clipFlatGeometry(o.geometry);
+      });
+    }
   }
 
 

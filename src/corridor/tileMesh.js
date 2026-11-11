@@ -78,6 +78,27 @@ export function paint(g, color) {
   g.setAttribute('color', new THREE.BufferAttribute(a, 3));
   return g;
 }
+// [hangang] 다른 지형이 덮는 곳의 평면 바닥 삼각형을 뺀다 (index.js 가 설정).
+let flatClip = null;
+export function setFlatClip(fn) { flatClip = typeof fn === 'function' ? fn : null; }
+export function clipFlatGeometry(g) {
+  if (!g || !flatClip) return g;
+  const pos = g.attributes.position;
+  const idx = g.index;
+  const n = idx ? idx.count : pos.count;
+  const v = (i) => (idx ? idx.getX(i) : i);
+  const keep = [];
+  let dropped = 0;
+  for (let i = 0; i + 2 < n; i += 3) {
+    const a = v(i), b = v(i + 1), c = v(i + 2);
+    const cx = (pos.getX(a) + pos.getX(b) + pos.getX(c)) / 3;
+    const cz = (pos.getZ(a) + pos.getZ(b) + pos.getZ(c)) / 3;
+    if (flatClip(cx, cz)) { dropped++; continue; }
+    keep.push(a, b, c);
+  }
+  if (dropped) g.setIndex(keep);
+  return g;
+}
 const strip = (g) => { if (g.attributes.uv) g.deleteAttribute('uv'); if (g.attributes.uv1) g.deleteAttribute('uv1'); return g; };
 function merged(geos) {
   const list = geos.filter(Boolean);
@@ -101,7 +122,7 @@ function flatLayer(t, terrain) {
     const pts = terrain ? l.p.map(([x, z]) => [x, z, terrain.waterLineY ? terrain.waterLineY(x, z) : terrain.baseHeight(x, z) < -0.5 ? terrain.params.WATER - 0.005 : 0]) : l.p;
     add(ribbonGeo(pts, l.w, 0.035), WATER);
   }
-  const g = merged(geos);
+  const g = clipFlatGeometry(merged(geos));
   if (!g) return null;
   const m = new THREE.Mesh(g, vcMat()); m.receiveShadow = true; m.name = 'corridorFlat';
   return m;
@@ -313,8 +334,8 @@ export function buildLodTile(key, L, { roadKinds, buildingKinds }, terrain = nul
   for (const [k, ...rest] of L.p) (byKind[k] ||= []).push(rest);
   for (const [k, list] of Object.entries(byKind)) add(flatGeo(polys(list), parkY(k)), PARK_COLOR[k] || '#b5dda3');
   add(flatGeo(polys(L.w), 0.04), WATER);
-  const fg = merged(geos);
-  if (fg) { const m = new THREE.Mesh(fg, vcMat()); m.receiveShadow = true; group.add(m); }
+  const fg = clipFlatGeometry(merged(geos));
+  if (fg) { const m = new THREE.Mesh(fg, vcMat()); m.receiveShadow = true; m.name = 'corridorLodFlat'; group.add(m); }
   const roads = L.r.map(([w, ki, fl, br]) => ({ w, k: roadKinds[ki], p: unflat(fl), br }));
   terrain?.liftRoads?.(roads);
   const rm = roadMesh(roads, { lines: false }); if (rm) { rm.receiveShadow = false; group.add(rm); }

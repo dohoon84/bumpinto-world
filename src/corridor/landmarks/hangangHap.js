@@ -513,6 +513,17 @@ export function createHangangHap({ parent, overlay, terrain, dem, osm } = {}) {
     setNight,
     isTunnel: (x, z) => paths.isTunnel?.(x, z),
     updateLights: (x, z) => props.updateLights?.(x, z),
+    // 코리더 타일 바닥(y≈0)은 한강 둔치·수면보다 높아 베이지 판과 하늘색 물길 띠로
+    // 떠 보인다. 한강 남단 쪽(z < -15800)에서 2구간 지형이 그 아래에 있으면 덮지 않는다.
+    coversTileFlat(x, z) {
+      const b = land.bounds;
+      if (!b || x < b.x0 || x > b.x1 || z < b.z0 || z > b.z1) return false;
+      if (osm?.meta?.visualXMin != null && x < osm.meta.visualXMin) return false;
+      if (z > -15800) return false;
+      if (inWater(x, z, osm?.water)) return true;
+      const g = land.heightAt(x, z);
+      return g != null && g < -0.4;
+    },
   };
 }
 

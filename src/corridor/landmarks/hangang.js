@@ -166,6 +166,7 @@ export function createHangang({ scene, overlay, terrain, dem, osm, hap } = {}) {
     connectEnds: { ...(osm?.connectEnds || {}), ...(hapApi?.connectEnds || {}) },
     spawns: hapApi?.spawns || {},
     hap: hapApi,
+    coversTileFlat: (x, z) => !!hapApi?.coversTileFlat?.(x, z),
     mini: mergeHangangMini(hangangMini(osm), hapApi ? hangangMini(hap?.osm) : null),
     setNight(v) {
       land.setNight(v);
