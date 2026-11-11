@@ -251,7 +251,8 @@ AWS Terrain Tiles terrarium z=14 (`s3://elevation-tiles-prod/terrarium/{z}/{x}/{
 - 2구간 교각 간격·거더 디테일은 OSM 교각 노드가 없어 1구간과 같이 간격을 정해 넣었다 (approximate)
 - 2구간 나들목 박스는 OSM `tunnel=yes` + `올림픽대로` 교차로 위치를 잡았고, 내부 높이·벽 두께는 표지된 값이 아니라 통과할 만큼만 잡았다 (approximate). z=14 DEM 이 제방을 부드럽게 뭉개 두어서 언덕 속에 박스가 묻히는 곳이 있다
 - 2구간 가로등은 폴·발광 갓만 있고 PointLight 는 없다. 12 km 를 켜면 SwiftShader `MAX_FRAGMENT_UNIFORM_VECTORS` 를 넘겼다
-- 2구간 척추는 `build-hangang-hap.py` 의 다익스트라(탄천 자전거* + 한강남자전거길)로 이으며, 탐욕 연결이 타던 탄천 하상 중심선(way/768407483)은 쓰지 않는다
+- 2구간 척추는 `build-hangang-hap.py` 의 다익스트라(탄천 자전거* + 한강남자전거길)로 이으며, 탐욕 연결이 타던 탄천 하상 중심선(way/768407483)은 쓰지 않는다. 탐욕 연결 함수는 빌더에서 지웠다. 끝점끼리 잇는 거리 `join_m` 은 20 m 다(banpoEast 앞 way/925101289 → way/919393789 가 노드를 나누지 않고 15.3 m 떨어져 있다)
+- 원본 캐시(`/tmp/hangang-hap-raw`)로 `HAP_OUT=/tmp/hap-rebuild python3 scripts/corridor/build-hangang-hap.py` 를 돌리면 커밋된 `hap-osm.json` 과 spine(390점)·water·bridges·buildings·parks·trees·amenities·connectEnds·spawns·meta 가 같고, `hap-dem.json` 은 바이트까지 같다. 다른 것은 두 가지다. ① 짧은 보행로 6개(way/74395454, 372587560, 802097661, 802097666, 952935076, 1175590020)가 다시 만들면 들어간다. 커밋된 JSON 을 만들 때 이것을 뺀 규칙이 빌더에 남아 있지 않아, 만든 규칙을 넣지 않고 커밋된 JSON 을 그대로 둔다. ② 커밋된 `stats` 는 예전 빌드 값(buildings 380, tanSpineM 4289.0 등)이 남은 것이고, 빌더는 합수부 꼭짓점에서 척추를 나눠 탄천 5742.1 m + 한강남 6655.4 m 로 센다
 - 탄천 수면은 상류 DEM 을 따르고, 한강 수면은 25백분위 풀을 쓴다. 합류부에서 두 수위가 만나는 짧은 단차는 실측 차이이다
 - 자전거 탄 NPC 메쉬는 아직 없다
 - 스폰과 카메라는 겹친 데크에서 플레이어 높이(`refY`)를 넘겨 잠수교에 머물게 했다. `?at=hangang` 은 잠수교 남단 높이로 내린다

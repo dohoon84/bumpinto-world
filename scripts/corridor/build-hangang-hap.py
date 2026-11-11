@@ -14,7 +14,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 RAW = Path(os.environ.get('HAP_RAW', '/tmp/hangang-hap-raw'))
-OUT = ROOT / 'public/corridor/hangang'
+OUT = Path(os.environ.get('HAP_OUT', ROOT / 'public/corridor/hangang'))
 UA = 'bumpinto-world/hangang-course (https://github.com/dohoon84/bumpinto-world; ODbL research)'
 
 CENTER = {'lat': 37.3665, 'lon': 127.10835}
@@ -35,6 +35,7 @@ HANGANG_X1 = -8250.0
 PATH_WEST_CLIP = -8910.0   # do not redraw 한강남자전거길 already in 1구간
 VISUAL_XMIN = -8240.0      # do not draw a second DEM/water plate over 1구간
 TANCHEON_WATER_Y = -6.6    # public/terrain.json params.WATER
+FOOT_NEAR_BIKE = 55.0      # keep footways whose end is this close to a bike sample
 
 BBOXES = [
     # 탄천 south (수서·대치) — existing bike end
@@ -350,88 +351,14 @@ def dist_to_pts(x, z, samples):
             best = d
     return best
 
-def stitch_spine(ways, start, end, max_jump=35.0):
-    """Greedy walk along ways from start to end. Returns resampled polyline."""
-    unused = []
-    for w in ways:
-        pts = w.get('pts') or []
-        if len(pts) < 2:
-            continue
-        unused.append({'id': w.get('id'), 'pts': pts, 'name': w.get('name') or ''})
-    if not unused:
-        return []
+def dijkstra_spine(ways, start, end, attach_start=40.0, attach_end=20.0, join_m=20.0):
+    """Shortest path along named bike ways (the only spine builder).
 
-    def nearest_end(pt, pool):
-        best = None
-        best_d = 1e18
-        best_rev = False
-        for i, w in enumerate(pool):
-            d0 = math.hypot(pt[0] - w['pts'][0][0], pt[1] - w['pts'][0][1])
-            d1 = math.hypot(pt[0] - w['pts'][-1][0], pt[1] - w['pts'][-1][1])
-            if d0 < best_d:
-                best, best_d, best_rev = i, d0, False
-            if d1 < best_d:
-                best, best_d, best_rev = i, d1, True
-        return best, best_d, best_rev
-
-    # start at the way-end closest to `start`
-    idx, d, rev = nearest_end(start, unused)
-    if idx is None or d > 80:
-        # try nearest vertex, not just ends
-        best_i, best_d, best_k = None, 1e18, 0
-        for i, w in enumerate(unused):
-            for k, p in enumerate(w['pts']):
-                dd = math.hypot(start[0] - p[0], start[1] - p[1])
-                if dd < best_d:
-                    best_i, best_d, best_k = i, dd, k
-        if best_i is None:
-            return []
-        w = unused.pop(best_i)
-        chain = w['pts'][best_k:]
-        if len(chain) < 2:
-            chain = list(reversed(w['pts'][:best_k + 1]))
-    else:
-        w = unused.pop(idx)
-        chain = list(reversed(w['pts'])) if rev else list(w['pts'])
-
-    guard = 0
-    while unused and guard < 400:
-        guard += 1
-        tip = chain[-1]
-        # if we are already close to the end, stop when extending would go away
-        d_end = math.hypot(tip[0] - end[0], tip[1] - end[1])
-        idx, d, rev = nearest_end(tip, unused)
-        if idx is None:
-            break
-        if d > max_jump:
-            break
-        nxt = unused.pop(idx)
-        add = list(reversed(nxt['pts'])) if rev else list(nxt['pts'])
-        # skip duplicate first point
-        if near_pt(add[0], tip, 2.0):
-            add = add[1:]
-        if not add:
-            continue
-        new_tip = add[-1]
-        new_d_end = math.hypot(new_tip[0] - end[0], new_tip[1] - end[1])
-        # prefer getting closer to the destination once we're in the west half
-        chain.extend(add)
-        if new_d_end < 8:
-            break
-    # append exact end if close
-    if chain and math.hypot(chain[-1][0] - end[0], chain[-1][1] - end[1]) < 40:
-        if not near_pt(chain[-1], end, 0.6):
-            chain.append([end[0], end[1]])
-    # prepend exact start if close
-    if chain and math.hypot(chain[0][0] - start[0], chain[0][1] - start[1]) < 40:
-        if not near_pt(chain[0], start, 0.6):
-            chain.insert(0, [start[0], start[1]])
-    return [[round(p[0], 1), round(p[1], 1)] for p in chain]
-
-
-
-def dijkstra_spine(ways, start, end, attach_start=40.0, attach_end=20.0, join_m=12.0):
-    """Shortest path along named bike ways. Avoids the river centerline the greedy stitch followed."""
+    Graph = consecutive OSM vertices of each way + way-end to way-end links up
+    to join_m (OSM ways that touch without sharing a node, e.g. the 925101289 →
+    919393789 hop at banpoEast is 15.3 m). A greedy nearest-end walk used to
+    follow way/768407483 (탄천 river centerline) instead; it is gone.
+    """
     nodes, adj = {}, {}
 
     def keypt(p):
@@ -661,6 +588,9 @@ def build_osm(els):
         closed = len(pts) >= 4 and math.hypot(pts[0][0] - pts[-1][0], pts[0][1] - pts[-1][1]) < 1.2
 
         if tags.get('leisure') == 'park':
+            # 한강공원만 (동네 어린이공원 등은 용량 때문에 뺀다)
+            if '한강공원' not in name.replace(' ', ''):
+                continue
             parks.append({'id': w['id'], 'name': name or None, 'nameEn': tags.get('name:en'),
                           'k': 'park', 'o': pts})
             continue
@@ -770,20 +700,19 @@ def build_osm(els):
         if k in ('cycleway',) or '자전거' in n or '나들목' in n or n in ('올림픽대로', '강변북로'):
             kept_ways.append(w)
             continue
-        if k == 'bridge' or n in BRIDGE_NAMES or any(bn in n for bn in BRIDGE_NAMES):
+        if n in BRIDGE_NAMES:
             kept_ways.append(w)
             continue
         if k in ('footway', 'path', 'steps', 'pedestrian', 'service'):
             p0, p1 = w['pts'][0], w['pts'][-1]
-            if (dist_to_pts(p0[0], p0[1], bike_samples) < 70
-                    or dist_to_pts(p1[0], p1[1], bike_samples) < 70
+            if (dist_to_pts(p0[0], p0[1], bike_samples) < FOOT_NEAR_BIKE
+                    or dist_to_pts(p1[0], p1[1], bike_samples) < FOOT_NEAR_BIKE
                     or (park_samples and (dist_to_pts(p0[0], p0[1], park_samples) < 80
                                           or dist_to_pts(p1[0], p1[1], park_samples) < 80))):
                 kept_ways.append(w)
             continue
         if w.get('bridge') or w.get('layer'):
-            if (w.get('name') or '') in ('올림픽대로', '강변북로') or any(
-                    bn in (w.get('name') or '') for bn in BRIDGE_NAMES):
+            if (w.get('name') or '') in ('올림픽대로', '강변북로'):
                 kept_ways.append(w)
             continue
         # do not keep leftover named streets (분당수서로 등)
@@ -812,8 +741,6 @@ def build_osm(els):
         or (w.get('name') or '') in ('한강남자전거길', '한강 자전거길')
     )]
     spine = dijkstra_spine(spine_ways, TANCHEON_END, BANPO_EAST)
-    tan_spine = [p for p in spine if p[0] > -3600] if spine else []
-    nam_spine = [p for p in spine if p[0] <= -3600] if spine else []
 
     def end_points(name):
         pts = []
@@ -847,14 +774,18 @@ def build_osm(els):
                         join = tp
     if join and join_d < 8:
         connect['tancheonHap'] = {
-            'name': '탄천 자전거길 북단 (합수부)',
+            'name': '탄천 자전거길 → 한강남자전거길 (합수부)',
             'x': join[0], 'z': join[1],
         }
-    elif tan_spine:
-        connect['tancheonHap'] = {
-            'name': '탄천 자전거길 북단 (합수부)',
-            'x': tan_spine[-1][0], 'z': tan_spine[-1][1],
-        }
+    # split the spine at the 합수부 junction vertex (탄천 | 한강남)
+    k_hap = None
+    if spine and connect.get('tancheonHap'):
+        hx, hz = connect['tancheonHap']['x'], connect['tancheonHap']['z']
+        k_hap = min(range(len(spine)), key=lambda i: math.hypot(spine[i][0] - hx, spine[i][1] - hz))
+    tan_spine = spine[:k_hap + 1] if k_hap is not None else []
+    nam_spine = spine[k_hap:] if k_hap is not None else []
+    spine_max_seg = max((math.hypot(spine[i][0] - spine[i - 1][0], spine[i][1] - spine[i - 1][1])
+                         for i in range(1, len(spine))), default=0.0)
     if south_bike:
         west = extremum(south_bike, lambda p: p[0], rev=False)
         east = extremum(south_bike, lambda p: p[0], rev=True)
@@ -959,7 +890,7 @@ def build_osm(els):
         'spine': spine,
         'connectEnds': connect,
         'spawns': {
-            'tancheon-hap': {'x': hap_spawn['x'], 'z': hap_spawn['z'], 'name': hap_spawn.get('name') or '탄천합수부'},
+            'tancheon-hap': {'x': hap_spawn['x'], 'z': hap_spawn['z'], 'name': '탄천합수부'},
             'jamwon': jamwon_spawn or {'x': -7800.0, 'z': -16500.0, 'name': '잠원한강공원'},
         },
         'routes': {
@@ -990,6 +921,7 @@ def build_osm(els):
             'spineM': round(polyline_len(spine), 1) if spine else 0,
             'tanSpineM': round(polyline_len(tan_spine), 1) if tan_spine else 0,
             'namSpineM': round(polyline_len(nam_spine), 1) if nam_spine else 0,
+            'spineMaxSeg': round(spine_max_seg, 1),
         },
     }
     return data
@@ -1006,7 +938,7 @@ def terrarium_height(px):
     r, g, b = px[0], px[1], px[2]
     return (r * 256 + g + b / 256) - 32768
 
-def fetch_dem():
+def fetch_dem(spine=None):
     z = 14
     x0, z1 = xz(CLIP['lat0'], CLIP['lon0'])
     x1, z0 = xz(CLIP['lat1'], CLIP['lon1'])
@@ -1017,6 +949,10 @@ def fetch_dem():
     # cover banpoEast (x=-8923.9) so heightAt works at the 1구간 join,
     # even though the visual mesh is clipped at VISUAL_XMIN
     gx0 = min(gx0, math.floor(-9100 / 25) * 25)
+    # 한강남자전거길 goes ~50 m north of the clip near 압구정·성수 (z≈−18578):
+    # cover the spine plus one row so heightAt never clamps on the path.
+    if spine:
+        gz0 = min(gz0, math.floor(min(p[1] for p in spine) / 25) * 25 - 25)
     dx = dz = 25.0
     nx = int(round((gx1 - gx0) / dx)) + 1
     nz = int(round((gz1 - gz0) / dz)) + 1
@@ -1024,7 +960,7 @@ def fetch_dem():
 
     from PIL import Image
     lons = [CLIP['lon0'], CLIP['lon1'], CENTER['lon'] + gx0 / KX]
-    lats = [CLIP['lat0'], CLIP['lat1']]
+    lats = [CLIP['lat0'], CLIP['lat1'], CENTER['lat'] - gz0 / KZ]
     txs, tys = [], []
     for lo in lons:
         for la in lats:
@@ -1143,7 +1079,7 @@ def main():
     print(f"  spawns {osm.get('spawns')}")
 
     print('fetch DEM…')
-    dem = fetch_dem()
+    dem = fetch_dem(osm.get('spine'))
     blend = osm['meta']['datumBlend']
     if dem.get('eleJoin') is not None:
         blend['eleJoin'] = dem['eleJoin']
