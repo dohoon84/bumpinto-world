@@ -2843,9 +2843,17 @@ function frame() {
   remotes.update(dt);
   myBubble.tick();
 
+  // 케이블카는 캐빈을 먼저 옮긴 다음 카메라를 둔다(한 프레임 늦지 않게).
+  if (corridor) {
+    const cPre = cam.mode === 'follow' ? player.position : sun.target.position;
+    corridor.update(dt, cPre.x, cPre.z, cam.mode);
+    corridor.namsan?.tickPlayer?.(dt, player, cam);
+  }
+
   // 카메라
   const P = player.position;
   if (ride?.camera(camera, dt)) sun.target.position.copy(P); // [ride] 창가 1인칭 / 뒤쪽 3인칭
+  else if (corridor?.namsan?.cable?.applyRideCamera?.(camera, dt, player, cam)) sun.target.position.copy(P);
   else if (cam.mode === 'follow') {
     // 남산 일대는 도심 야경이 수 km 까지 보여야 해서 안개를 멀리 민다.
     if (corridor?.namsan?.tower && Math.hypot(P.x - corridor.namsan.tower.ox, P.z - corridor.namsan.tower.oz) < 8000) {
@@ -2891,7 +2899,6 @@ function frame() {
     camera.position.copy(c).add(tmp); camera.lookAt(c);
     sun.target.position.copy(c);
   }
-  if (corridor) { const c = cam.mode === 'follow' ? P : sun.target.position; corridor.update(dt, c.x, c.z, cam.mode); corridor.namsan?.tickPlayer?.(dt, player, cam); } // [corridor] 타일 스트리밍(프레임당 최대 1개 빌드) // [namsan]
   jeongjaBp24?.update(player.position.x, player.position.z); // [bump24-jeongja] 가까운 매장만 실내
   bp24Nav?.update(dt); // [bp24nav] 표지 까딱임 · 안내선 시작점
   if (playgrounds) { const c = cam.mode === 'follow' ? P : sun.target.position; playgrounds.update(dt, c.x, c.z, cam.mode); } // [playgrounds] 거리·타일 기준 표시

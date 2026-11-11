@@ -4,12 +4,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { NT } from './namsanCoords.js';
-
-function centroid(pts) {
-  let x = 0, z = 0, n = 0;
-  for (const p of pts) { x += p[0]; z += p[1]; n++; }
-  return n ? { x: x / n, z: z / n } : { x: 0, z: 0 };
-}
+import { centroid, pointInRing, planStationAccess } from './namsanCableAccess.js';
 
 /** 미니맵·안내용 탑승 위치. 정류장 건물 중심(OSM footprint)을 쓰고, 없으면 케이블 양 끝 노드. */
 export function namsanCableStations(osm) {
@@ -67,15 +62,6 @@ function stationDoorFromPts(pts, face) {
   return { x: c.x + nx * 8, z: c.z + nz * 8, nx, nz, cx: c.x, cz: c.z, L: 0 };
 }
 
-function pointInRing(x, z, pts) {
-  let inside = false;
-  for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
-    const xi = pts[i][0], zi = pts[i][1], xj = pts[j][0], zj = pts[j][1];
-    const hit = ((zi > z) !== (zj > z)) && (x < (xj - xi) * (z - zi) / ((zj - zi) || 1e-9) + xi);
-    if (hit) inside = !inside;
-  }
-  return inside;
-}
 function makeSign(text, w, h, bg = '#1c2834', fg = '#f3f6f8') {
   const c = document.createElement('canvas'); c.width = 768; c.height = 192;
   const x = c.getContext('2d');
@@ -370,6 +356,33 @@ export function createNamsanCable({ parent, osm, heightAt, overlay, guide = fals
   const lowerSt = stationBuilding(lowerPts, lowerY, '남산 케이블카 · 하부', pts[pts.length - 1]);
   g.add(upperSt, lowerSt);
 
+  const access = planStationAccess(osm, heightAt);
+  const rampMat = new THREE.MeshLambertMaterial({ color: '#cfc6b6' });
+  const riserMat = new THREE.MeshLambertMaterial({ color: '#b7aea0' });
+  for (const r of access.ramps) {
+    const yaw = Math.atan2(r.ux, r.uz);
+    if (Math.abs(r.h0 - r.h1) < 0.25) {
+      const slab = new THREE.Mesh(new THREE.BoxGeometry(r.hw * 2, 0.16, r.L + 0.25), rampMat);
+      slab.position.set((r.ax + r.bx) * 0.5, r.h0 - 0.02, (r.az + r.bz) * 0.5);
+      slab.rotation.y = yaw;
+      g.add(slab);
+      continue;
+    }
+    const n = Math.max(4, Math.round(Math.abs(r.h0 - r.h1) / 0.16));
+    for (let i = 0; i < n; i++) {
+      const t0 = i / n, t1 = (i + 1) / n;
+      const y0 = r.h0 + (r.h1 - r.h0) * t0;
+      const y1 = r.h0 + (r.h1 - r.h0) * t1;
+      const mid = (t0 + t1) * 0.5;
+      const depth = r.L / n + 0.03;
+      const h = Math.max(0.1, Math.abs(y0 - y1) + 0.07);
+      const step = new THREE.Mesh(new THREE.BoxGeometry(r.hw * 2, h, depth), i % 2 ? riserMat : rampMat);
+      step.position.set(r.ax + r.ux * r.L * mid, Math.min(y0, y1) + h * 0.5, r.az + r.uz * r.L * mid);
+      step.rotation.y = yaw;
+      g.add(step);
+    }
+  }
+
   if (overlay) {
     overlay.add({ cls: 'label', text: '🚠 남산 케이블카', getPos: () => new THREE.Vector3(pts[0].x, upperY + 12, pts[0].z), maxDist: 140 });
     overlay.add({ cls: 'label', text: '🚠 남산 케이블카 · 회현', getPos: () => new THREE.Vector3(pts[pts.length - 1].x, lowerY + 12, pts[pts.length - 1].z), maxDist: 400 });
@@ -408,6 +421,7 @@ export function createNamsanCable({ parent, osm, heightAt, overlay, guide = fals
     window.addEventListener('keydown', (e) => {
       if (!ride || e.repeat || e.code !== 'KeyT') return;
       viewMode = viewMode === 'auto' ? 'city' : viewMode === 'city' ? 'tower' : 'auto';
+      ride.reframe = true;
       showHint(true);
     });
   }
@@ -431,59 +445,62 @@ export function createNamsanCable({ parent, osm, heightAt, overlay, guide = fals
   }
 
   function isBlocked(x, z, r = 0.35) {
-    for (const st of [upperSt, lowerSt]) {
-      const pts2 = st.userData.pts; if (!pts2) continue;
-      if (!pointInRing(x, z, pts2)) continue;
-      // block walls: near edge
-      let best = Infinity;
-      for (let i = 0; i < pts2.length; i++) {
-        const a = pts2[i], b = pts2[(i + 1) % pts2.length];
-        const dx = b[0] - a[0], dz = b[1] - a[1], L2 = dx * dx + dz * dz || 1;
-        const t = Math.max(0, Math.min(1, ((x - a[0]) * dx + (z - a[1]) * dz) / L2));
-        best = Math.min(best, Math.hypot(x - (a[0] + dx * t), z - (a[1] + dz * t)));
-      }
-      if (best < 0.45 + r) {
-        // leave door gaps facing the cable node and the opposite entrance
-        const c = st.userData.center;
-        const facing = st === upperSt ? pts[0] : pts[pts.length - 1];
-        const ox2 = c.x - (facing.x - c.x);
-        const oz2 = c.z - (facing.z - c.z);
-        if (Math.hypot(x - facing.x, z - facing.z) < 3.8 || Math.hypot(x - ox2, z - oz2) < 3.8) return false;
-        return true;
-      }
-    }
-    return false;
+    return access.isBlocked(x, z, r);
   }
 
-  let hold = 0, holdAt = null;
+  let hold = 0, holdAt = null, prevX = null, prevZ = null;
   let armed = true, queued = false, atWhich = null, lastArrived = null, boardSeq = 0, arriveSeq = 0;
   const doors = namsanStationDoors(osm);
+  const rideCam = { x: 0, y: 0, z: 0, lx: 0, ly: 0, lz: 0, on: false };
+
+  function lookWant(tCabin, dest) {
+    if (viewMode !== 'auto') return viewMode;
+    const goingUp = dest === 'upper';
+    return (goingUp && tCabin < 0.2) ? 'tower' : 'city';
+  }
+  function frameYaw(p, want) {
+    const lookX = want === 'tower' ? NT.tx : CITY.x;
+    const lookZ = want === 'tower' ? NT.tz : CITY.z;
+    const toward = Math.atan2(p.x - lookX, p.z - lookZ);
+    const sx = Math.sin(toward + Math.PI / 2), sz = Math.cos(toward + Math.PI / 2);
+    const sign = (sx * (CITY.x - p.x) + sz * (CITY.z - p.z)) >= 0 ? 1 : -1;
+    return toward + sign * 0.55;
+  }
+  function framePitch(want) { return want === 'tower' ? 0.10 : 0.16; }
+  function applyRideFrame(cam, p, dest, tCabin, snap = false) {
+    if (!cam) return;
+    const want = lookWant(tCabin, dest);
+    const yaw = frameYaw(p, want);
+    cam.yaw = yaw;
+    cam.pitch = framePitch(want);
+    cam.distMin = 6;
+    cam.distMax = 36;
+    if (snap || cam.dist < 5 || cam.dist > 28) cam.dist = 10.5;
+  }
+
   function tickPlayer(dt, player, cam) {
     if (!player) return;
+    const px = player.position.x, pz = player.position.z;
+    const moved = prevX == null ? 0 : Math.hypot(px - prevX, pz - prevZ);
+    const still = moved < Math.max(0.12, (Number.isFinite(dt) ? dt : 0.016) * 0.85);
+    prevX = px; prevZ = pz;
     if (ride) {
       const tCabin = ride.cabin === 'A' ? u : 1 - u;
       const p = at(tCabin);
-      const sway = Math.sin((performance.now() / 1000) * 1.3) * 0.04;
-      // feet on the cabin floor; nudge toward the look so the camera behind stays inside
-      const goingUp = ride.dest === 'upper';
-      let want = viewMode === 'auto'
-        ? (goingUp && tCabin < 0.2 ? 'tower' : 'city')
-        : viewMode;
+      const want = lookWant(tCabin, ride.dest);
       const lookX = want === 'tower' ? NT.tx : CITY.x;
       const lookZ = want === 'tower' ? NT.tz : CITY.z;
       const lookYaw = Math.atan2(p.x - lookX, p.z - lookZ);
       const lx = Math.sin(lookYaw), lz = Math.cos(lookYaw);
-      // sit slightly toward the city window so the opposite bench stays behind the camera
-      player.position.set(p.x - lx * 0.22 + sway * 0.08, p.y - 3.88, p.z - lz * 0.22);
-      if (cam) {
-        cam.distMin = 0.7;
-        cam.yaw += (lookYaw - cam.yaw) * Math.min(1, dt * 2.0);
-        const wantPitch = want === 'city' ? 0.1 : -0.08;
-        cam.pitch += (wantPitch - cam.pitch) * Math.min(1, dt * 1.6);
-        cam.dist = 0.8;
+      // 캐빈 경로를 따라 앉힌다. 흔들림은 메시에만 두고 플레이어·카메라에는 안 태운다.
+      player.position.set(p.x - lx * 0.22, p.y - 3.88, p.z - lz * 0.22);
+      player.rotation.y = lookYaw + Math.PI;
+      if (cam && (ride.reframe || !ride.framed)) {
+        applyRideFrame(cam, p, ride.dest, tCabin, !ride.framed);
+        ride.framed = true;
+        ride.reframe = false;
       }
       showHint(true);
-      // arrival
       const arrived = ride.dest === 'upper' ? tCabin < 0.012 : tCabin > 0.988;
       if (arrived && dwell > 1.6) {
         const st = ride.dest === 'upper' ? pts[0] : pts[pts.length - 1];
@@ -500,9 +517,11 @@ export function createNamsanCable({ parent, osm, heightAt, overlay, guide = fals
         armed = false;
         queued = false;
         ride = null;
+        rideCam.on = false;
         hold = 0;
         showHint(false);
         if (cam && 'distMin' in cam) delete cam.distMin;
+        if (cam && 'distMax' in cam) delete cam.distMax;
         if (cam && cam.dist < 5) cam.dist = 8;
       }
       return;
@@ -512,21 +531,54 @@ export function createNamsanCable({ parent, osm, heightAt, overlay, guide = fals
     const atSt = up || low;
     atWhich = atSt ? atSt.which : null;
     if (atSt) {
-      if (holdAt === atSt.which) hold += dt; else { hold = 0; holdAt = atSt.which; queued = false; }
+      const inZone = access.inBoardZone(player.position.x, player.position.z, atSt.which);
+      if (holdAt !== atSt.which) { hold = 0; holdAt = atSt.which; queued = false; }
+      else if (still && inZone) hold += dt;
+      else hold = 0;
       if (!guide) {
-        if (hold > 0.85 && dwell > 1.8) board(atSt.which);
-      } else if (armed && docked() && dwell > 0.35 && (queued || hold > 1.0)) board(atSt.which);
+        if (inZone && hold > 0.85 && dwell > 1.8) board(atSt.which);
+      } else if (armed && docked() && dwell > 0.35 && (queued || (inZone && hold > 1.0))) board(atSt.which);
     } else { hold = 0; holdAt = null; armed = true; queued = false; }
   }
   function docked() { return dwell > 0 && (u <= 0 || u >= 1); }
   function board(which) {
-    // board the cabin that is currently at this station
     const aAtUpper = u < 0.05;
     const cabin = which === 'upper' ? (aAtUpper ? 'A' : 'B') : (aAtUpper ? 'B' : 'A');
-    ride = { cabin, dest: which === 'upper' ? 'lower' : 'upper' };
+    ride = { cabin, dest: which === 'upper' ? 'lower' : 'upper', framed: false, reframe: false };
+    rideCam.on = false;
     hold = 0;
     queued = false;
     boardSeq++;
+  }
+
+  // 캐빈 옆 3/4 추적. 경로만 따라가고 캐빈 흔들림·지형 camFloor 는 쓰지 않는다.
+  function applyRideCamera(camera, dt, player, cam) {
+    if (!ride || !camera || !cam || cam.mode === 'overview') return false;
+    const tCabin = ride.cabin === 'A' ? u : 1 - u;
+    const p = at(tCabin);
+    if (!ride.framed) {
+      applyRideFrame(cam, p, ride.dest, tCabin, true);
+      ride.framed = true;
+    }
+    const cabinY = p.y - 2.35;
+    const dist = Math.max(cam.distMin ?? 6, cam.dist);
+    const yaw = cam.yaw, pitch = cam.pitch;
+    const bx = Math.sin(yaw), bz = Math.cos(yaw), cp = Math.cos(pitch), sp = Math.sin(pitch);
+    const wantX = p.x + bx * dist * cp;
+    const wantY = cabinY + dist * sp;
+    const wantZ = p.z + bz * dist * cp;
+    const lookX = p.x, lookY = cabinY, lookZ = p.z;
+    const k = rideCam.on ? (1 - Math.exp(-Math.max(0, dt) * 8.5)) : 1;
+    if (!rideCam.on) rideCam.on = true;
+    rideCam.x += (wantX - rideCam.x) * k;
+    rideCam.y += (wantY - rideCam.y) * k;
+    rideCam.z += (wantZ - rideCam.z) * k;
+    rideCam.lx += (lookX - rideCam.lx) * k;
+    rideCam.ly += (lookY - rideCam.ly) * k;
+    rideCam.lz += (lookZ - rideCam.lz) * k;
+    camera.position.set(rideCam.x, rideCam.y, rideCam.z);
+    camera.lookAt(rideCam.lx, rideCam.ly, rideCam.lz);
+    return true;
   }
   /** E·탭: 정차 중이면 바로 타고, 아니면 다음 칸을 예약(서 있으면 자동 탑승). */
   function actBoard() {
@@ -562,15 +614,13 @@ export function createNamsanCable({ parent, osm, heightAt, overlay, guide = fals
       if (cabinB.userData.ceilLight) cabinB.userData.ceilLight.material.emissiveIntensity = 0.7 + v * 0.5;
     },
     isBlocked,
-    floorY(x, z, refY) {
-      if (upperPts && pointInRing(x, z, upperPts) && (!Number.isFinite(refY) || Math.abs(refY - upperY) < 4)) return upperY + 0.12;
-      if (lowerPts && pointInRing(x, z, lowerPts) && (!Number.isFinite(refY) || Math.abs(refY - lowerY) < 4)) return lowerY + 0.12;
-      return null;
-    },
+    floorY: access.floorY,
+    applyRideCamera,
+    access,
     at,
     pts,
     stage(t) { u = Math.max(0, Math.min(1, t)); dwell = 10; placeCabin(cabinA, u, 0); placeCabin(cabinB, 1 - u, 1.7); },
-    setView(mode) { viewMode = mode || 'auto'; },
+    setView(mode) { viewMode = mode || 'auto'; if (ride) ride.reframe = true; },
     get viewMode() { return viewMode; },
     // [cableguide] 안내·탑승 UX 용 상태
     stationInfo: [
