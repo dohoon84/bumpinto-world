@@ -107,13 +107,13 @@ const sp = metrics.speed;
 await p.setContent(`<html><body style="margin:0;background:#0d1a33;font-family:'Noto Sans KR',sans-serif;color:#fff;padding:36px 44px">
 <h1 style="margin:0 0 6px;font-size:30px">범창고 240L 카트 — 빈 카트 vs 무거운 카트</h1>
 <div style="color:#f2b705;font-weight:700;margin-bottom:22px">같은 주행 모델(구름저항 Crr 0.03 · 미는 힘 133 N · 출발 222 N)로 게임 안에서 측정 · 카트 자체 27 kg</div>
-<table style="border-collapse:collapse;font-size:22px;width:100%">
-<tr style="color:#9fb3d9;text-align:left"><th>짐</th><th>총 질량</th><th>0→1 m/s</th><th>계속 밀 때 최고 속도</th><th>1 m/s에서 손 놓고 굴러가는 거리</th><th>1 m/s에서 당겨 멈추는 거리</th><th>제자리 90° 회전</th><th>출발에 필요한 힘</th></tr>
+<table style="border-collapse:collapse;font-size:19px;width:100%">
+<tr style="color:#9fb3d9;text-align:left"><th style="width:80px">짐</th><th style="width:90px">총 질량</th><th>0→1 m/s</th><th>계속 밀 때 최고 속도</th><th>1 m/s에서 손 놓고 굴러가는 거리</th><th>1 m/s에서 당겨 멈추는 거리</th><th>제자리 90° 회전</th><th>출발에 필요한 힘</th></tr>
 ${sp.map((s) => `<tr style="border-top:1px solid #2a3d66"><td style="padding:12px 0">${s.loadKg} kg</td><td>${s.totalKg} kg</td><td><b>${s.t0to1} 초</b></td><td>${s.vTop} m/s</td><td>${s.coastM} m</td><td>${s.brakeM} m</td><td>${s.turn90s} 초</td><td>${s.breakawayN} N</td></tr>`).join('')}
 </table>
 <div style="margin-top:22px;color:#c9d6f0;font-size:16px">계란 실험: 계란판 위 생수 2L×6 → ${crush.afterWater}개 깨짐, 그 위 탄산 24캔 추가 → 누적 ${crush.afterSoda}/${crush.total}개</div>
 </body></html>`);
-await p.setViewportSize({ width: 1280, height: 520 });
+await p.setViewportSize({ width: 1440, height: 600 });
 await p.screenshot({ path: OUT + '07-speed-empty-vs-heavy.png' });
 metrics.errors = errs;
 writeFileSync(OUT + 'metrics.json', JSON.stringify(metrics, null, 2));
