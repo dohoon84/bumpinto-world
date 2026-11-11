@@ -2420,6 +2420,7 @@ leaveBtn.onclick = () => {
   startLobby?.();
 };
 input.onKey = (e) => {
+  if (corridor?.namsan?.cableGuide?.onKey?.(e)) return; // [cableguide] 케이블카 승강장 E/Enter: 바로 타기·다음 칸 예약
   if (arcadeGame?.onKey(e)) return; // [arcade] 오락실·범핑팡
   if (bump24Game?.onKey(e)) return; // [bump24game] 매장 들어가기·담기
   if (subway?.onKey(e)) return; // [subway] 입구 앞 E · 대합실 안에서는 출구 고르기 등

@@ -126,7 +126,8 @@ function stationBuilding(pts, y, name, face) {
   g.add(new THREE.Mesh(roof, new THREE.MeshLambertMaterial({ color: '#8b6a3a' })));
   const floor = new THREE.ExtrudeGeometry(shape, { depth: 0.12, bevelEnabled: false });
   floor.rotateX(-Math.PI / 2); floor.translate(c.x, y + 0.06, c.z);
-  g.add(new THREE.Mesh(floor, new THREE.MeshLambertMaterial({ color: '#cfc6b6' })));
+  const floorMesh = new THREE.Mesh(floor, new THREE.MeshLambertMaterial({ color: '#cfc6b6' }));
+  g.add(floorMesh);
   const fx = Math.sin(faceAng), fz = Math.cos(faceAng);
   const plat = new THREE.Mesh(new THREE.BoxGeometry(8, 0.18, 3.2), new THREE.MeshLambertMaterial({ color: '#f0e6c8' }));
   plat.position.set(c.x + fx * 0.6, y + 0.2, c.z + fz * 0.6);
@@ -156,6 +157,10 @@ function stationBuilding(pts, y, name, face) {
   g.userData.center = c;
   g.userData.pts = pts;
   g.userData.y = y;
+  g.userData.faceAng = faceAng;
+  g.userData.wallH = wallH;
+  g.userData.plat = plat;
+  g.userData.floor = floorMesh;
   return g;
 }
 
@@ -270,13 +275,16 @@ function makeCabin() {
   return g;
 }
 
-export function createNamsanCable({ parent, osm, heightAt, overlay }) {
+// guide=true ([cableguide], ?cableguide=0 로 끔): 승강장에서 E/탭으로 바로 타기·다음 칸 예약,
+//   도착 직후 같은 자리에 서 있어도 곧장 되돌아 타지 않게(armed), 내린 뒤 출입문 안쪽에 세운다.
+//   guide=false 면 예전 그대로(0.85초 서 있기 + 정차 초반 1.4초 창).
+export function createNamsanCable({ parent, osm, heightAt, overlay, guide = false }) {
   const g = new THREE.Group();
   g.name = 'namsan-cable';
   parent.add(g);
 
   const nodes = (osm?.cable?.nodes || []).map((n) => ({ x: n.x, z: n.z, kind: (n.tags || {}).aerialway || 'pylon' }));
-  if (nodes.length < 2) return { group: g, riding: false, update() {}, setNight() {}, tickPlayer() {}, isBlocked() { return false; }, floorY() { return null; } };
+  if (nodes.length < 2) return { group: g, riding: false, stations: [], stationInfo: [], update() {}, setNight() {}, tickPlayer() {}, isBlocked() { return false; }, floorY() { return null; } };
 
   // OSM order: upper(남산타워) → pylons → lower(회현동). Keep that, t=0 at upper, t=1 at lower.
   const pts = nodes.map((n) => {
@@ -448,6 +456,8 @@ export function createNamsanCable({ parent, osm, heightAt, overlay }) {
   }
 
   let hold = 0, holdAt = null;
+  let armed = true, queued = false, atWhich = null, lastArrived = null, boardSeq = 0, arriveSeq = 0;
+  const doors = namsanStationDoors(osm);
   function tickPlayer(dt, player, cam) {
     if (!player) return;
     if (ride) {
@@ -478,7 +488,17 @@ export function createNamsanCable({ parent, osm, heightAt, overlay }) {
       if (arrived && dwell > 1.6) {
         const st = ride.dest === 'upper' ? pts[0] : pts[pts.length - 1];
         const sy = ride.dest === 'upper' ? upperY : lowerY;
-        player.position.set(st.x + 3.2, sy + 0.3, st.z + 1.4);
+        const dr = guide ? doors[ride.dest] : null;
+        if (dr) {
+          // 출입문 안쪽 2.4 m, 바깥을 보게 — 나가는 길이 바로 보인다
+          player.position.set(dr.x - dr.nx * 2.4, sy + 0.15, dr.z - dr.nz * 2.4);
+          player.rotation.y = Math.atan2(dr.nx, dr.nz);
+          if (cam) cam.yaw = Math.atan2(-dr.nx, -dr.nz);
+        } else player.position.set(st.x + 3.2, sy + 0.3, st.z + 1.4);
+        lastArrived = ride.dest;
+        arriveSeq++;
+        armed = false;
+        queued = false;
         ride = null;
         hold = 0;
         showHint(false);
@@ -490,16 +510,31 @@ export function createNamsanCable({ parent, osm, heightAt, overlay }) {
     const up = nearStation(player.position.x, player.position.z, 'upper');
     const low = nearStation(player.position.x, player.position.z, 'lower');
     const atSt = up || low;
+    atWhich = atSt ? atSt.which : null;
     if (atSt) {
-      if (holdAt === atSt.which) hold += dt; else { hold = 0; holdAt = atSt.which; }
-      if (hold > 0.85 && dwell > 1.8) {
-        // board the cabin that is currently at this station
-        const aAtUpper = u < 0.05;
-        const cabin = atSt.which === 'upper' ? (aAtUpper ? 'A' : 'B') : (aAtUpper ? 'B' : 'A');
-        ride = { cabin, dest: atSt.which === 'upper' ? 'lower' : 'upper' };
-        hold = 0;
-      }
-    } else { hold = 0; holdAt = null; }
+      if (holdAt === atSt.which) hold += dt; else { hold = 0; holdAt = atSt.which; queued = false; }
+      if (!guide) {
+        if (hold > 0.85 && dwell > 1.8) board(atSt.which);
+      } else if (armed && docked() && dwell > 0.35 && (queued || hold > 1.0)) board(atSt.which);
+    } else { hold = 0; holdAt = null; armed = true; queued = false; }
+  }
+  function docked() { return dwell > 0 && (u <= 0 || u >= 1); }
+  function board(which) {
+    // board the cabin that is currently at this station
+    const aAtUpper = u < 0.05;
+    const cabin = which === 'upper' ? (aAtUpper ? 'A' : 'B') : (aAtUpper ? 'B' : 'A');
+    ride = { cabin, dest: which === 'upper' ? 'lower' : 'upper' };
+    hold = 0;
+    queued = false;
+    boardSeq++;
+  }
+  /** E·탭: 정차 중이면 바로 타고, 아니면 다음 칸을 예약(서 있으면 자동 탑승). */
+  function actBoard() {
+    if (ride || !atWhich) return false;
+    armed = true;
+    if (docked() && dwell > 0.35) board(atWhich);
+    else queued = true;
+    return true;
   }
 
   return {
@@ -537,5 +572,23 @@ export function createNamsanCable({ parent, osm, heightAt, overlay }) {
     stage(t) { u = Math.max(0, Math.min(1, t)); dwell = 10; placeCabin(cabinA, u, 0); placeCabin(cabinB, 1 - u, 1.7); },
     setView(mode) { viewMode = mode || 'auto'; },
     get viewMode() { return viewMode; },
+    // [cableguide] 안내·탑승 UX 용 상태
+    stationInfo: [
+      { which: 'upper', group: upperSt, node: pts[0], y: upperY, door: doors.upper, pts: upperPts, dest: '회현', name: '남산타워' },
+      { which: 'lower', group: lowerSt, node: pts[pts.length - 1], y: lowerY, door: doors.lower, pts: lowerPts, dest: '남산타워', name: '회현' },
+    ],
+    get atStation() { return ride ? null : atWhich; },
+    get docked() { return docked(); },
+    /** 다음 칸이 이 정류장에 서기까지 남은 초 (정차 중이면 0). 두 정류장에 동시에 선다(교행). */
+    get nextArrival() { return docked() ? 0 : (dir > 0 ? 1 - u : u) * RIDE_DUR; },
+    get dwellLeft() { return Math.max(0, dwell); },
+    get queued() { return queued; },
+    get armed() { return armed; },
+    get rideDest() { return ride ? ride.dest : null; },
+    get lastArrived() { return lastArrived; },
+    get boardSeq() { return boardSeq; },
+    get arriveSeq() { return arriveSeq; },
+    rideDur: RIDE_DUR,
+    actBoard,
   };
 }

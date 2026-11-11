@@ -8,6 +8,7 @@ import { createNamsanTerrain } from './namsanTerrain.js';
 import { createNamsanTower } from './namsanTower.js';
 import { createNamsanInterior } from './namsanInterior.js';
 import { createNamsanCable, namsanCableStations } from './namsanCable.js';
+import { cableGuideEnabled, createNamsanCableGuide } from './namsanCableGuide.js'; // [cableguide]
 import { createNamsanCity } from './namsanCity.js';
 import { createNamsanRoads } from './namsanRoads.js';
 import { createNamsanLibrary } from './namsanLibrary.js';
@@ -68,11 +69,18 @@ export function createNamsan({ scene, overlay, terrain, dem, osm, city = null, c
   const land = createNamsanTerrain({ parent: root, dem, osm });
   const tower = createNamsanTower({ parent: root, osm, baseY: land.baseY, env: null, renderer });
   const interior = createNamsanInterior({ parent: root, osm, baseY: land.baseY, tower });
-  const car = cable ? createNamsanCable({ parent: root, osm, heightAt: land.heightAt, overlay, baseY: land.baseY }) : null;
+  const guideOn = !!cable && cableGuideEnabled(); // [cableguide] ?cableguide=0 이면 예전 그대로
+  const car = cable ? createNamsanCable({ parent: root, osm, heightAt: land.heightAt, overlay, baseY: land.baseY, guide: guideOn }) : null;
   const roads = createNamsanRoads({ parent: root, osm, heightAt: land.heightAt, overlay, city });
   roads.setDoor?.(tower.door);
   const library = createNamsanLibrary({ parent: root, osm, heightAt: land.heightAt, overlay });
   const downtown = createNamsanCity({ parent: root, data: city, heightAt: land.heightAt, parks: osm?.parks || [], osm });
+  let cableGuide = null;
+  if (guideOn && car) {
+    try {
+      cableGuide = createNamsanCableGuide({ parent: root, cable: car, ways: roads.ways || [], city, heightAt: land.heightAt, surfaceY: (x, z, refY) => surfaceY(x, z, refY) });
+    } catch (e) { console.warn('[cableguide] off:', e?.message || e); cableGuide = null; }
+  }
 
   // 원점 하늘 돔(r=3000)은 남산(약 23 km)에 닿지 않는다. 플레이어를 따라가는
   // 남산 전용 하늘을 두고, 톤매핑에 짓눌리지 않는 남색으로 칠한다.
@@ -179,6 +187,7 @@ export function createNamsan({ scene, overlay, terrain, dem, osm, city = null, c
     tower.setNight(on ? 1 : 0);
     interior.setNight(on ? 1 : 0);
     car?.setNight(on ? 1 : 0);
+    cableGuide?.setNight(on ? 1 : 0);
     land.setNight(on ? 1 : 0);
     roads.setNight?.(on ? 1 : 0);
     library.setNight?.(on ? 1 : 0);
@@ -235,6 +244,7 @@ export function createNamsan({ scene, overlay, terrain, dem, osm, city = null, c
     isBlocked,
     get riding() { return !!(car?.riding || interior.riding); },
     get cable() { return car; },
+    get cableGuide() { return cableGuide; }, // [cableguide]
     get tower() { return tower; },
     get interior() { return interior; },
     get city() { return downtown; },
@@ -245,6 +255,7 @@ export function createNamsan({ scene, overlay, terrain, dem, osm, city = null, c
     tickPlayer(dt, player, cam) {
       interior.tickPlayer?.(dt, player, cam);
       car?.tickPlayer?.(dt, player, cam);
+      cableGuide?.update(dt, player, (typeof window !== 'undefined' && window.__jj?.camera) || null); // [cableguide]
       // 원점 하늘 돔은 남산(23 km)에 닿지 않는다. 남산 전용 구를 카메라에 붙인다.
       const cam3 = (typeof window !== 'undefined' && window.__jj?.camera) || null;
       if (cam3?.position) sky.position.copy(cam3.position);
@@ -267,6 +278,7 @@ export function createNamsan({ scene, overlay, terrain, dem, osm, city = null, c
       tower.setNight(v);
       interior.setNight(v);
       car?.setNight(v);
+      cableGuide?.setNight(v);
       land.setNight(v);
       roads.setNight?.(v);
       library.setNight?.(v);
