@@ -83,7 +83,7 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit } 
   for (const z of [10.5, 12.0]) { m4.compose(new THREE.Vector3(57, 0.004, z), new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI / 2), new THREE.Vector3(1, 1, 30)); lines.setMatrixAt(li++, m4); }
   lines.count = li; scene.add(lines);
   const wallM = keep(new THREE.MeshLambertMaterial({ color: 0xe9ebee, side: THREE.BackSide }));
-  const shellG = keep(new THREE.BoxGeometry(W, CEIL, D)); shellG.translate(W / 2, CEIL / 2, D / 2);
+  const shellG = keep(new THREE.BoxGeometry(W, CEIL, D)); shellG.translate(W / 2, CEIL / 2 - 0.05, D / 2); // 바닥면과 z-fighting 방지
   scene.add(new THREE.Mesh(shellG, wallM));
   // 천장 트러스 + 조명 패널 (발광 재질, 라이트 아님)
   const lampM = keep(new THREE.MeshBasicMaterial({ color: 0xffffff }));
@@ -267,13 +267,13 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit } 
   <div class="dh-btns"><button data-a="place">놓기</button><button data-a="rot">돌리기</button><button data-a="tip">눕히기</button><button data-a="level">위/아래</button><button data-a="cancel">취소</button></div>`;
   const css = document.createElement('style');
   css.textContent = `#depot-hud{position:fixed;inset:0;pointer-events:none;z-index:57;font-family:'Pretendard','Noto Sans KR',system-ui,sans-serif;color:#fff}
-#depot-hud .dh-panel{position:absolute;left:16px;top:14px;background:rgba(13,26,51,.78);border-radius:12px;padding:8px 12px;font-size:13px;line-height:1.55;font-weight:600;max-width:340px}
+#depot-hud .dh-panel{position:absolute;left:16px;top:62px;background:rgba(13,26,51,.78);border-radius:12px;padding:8px 12px;font-size:13px;line-height:1.55;font-weight:600;max-width:340px}
 #depot-hud .dh-panel b{color:#f2b705;margin-right:8px;font-size:14px}#depot-hud .dh-kg{display:block;white-space:pre-line}
 #depot-hud .dh-cross{position:absolute;left:50%;top:50%;width:8px;height:8px;margin:-4px 0 0 -4px;border-radius:50%;background:rgba(255,255,255,.85);box-shadow:0 0 0 2px rgba(0,0,0,.35)}
 #depot-hud .dh-target{position:absolute;left:50%;top:calc(50% + 22px);transform:translateX(-50%);background:rgba(255,255,255,.95);color:#13203d;border-radius:10px;padding:6px 12px;font-size:14px;font-weight:800;display:none;white-space:nowrap}
 #depot-hud .dh-toast{position:absolute;left:50%;top:70px;transform:translateX(-50%);background:#c62828;color:#fff;border-radius:12px;padding:10px 18px;font-size:17px;font-weight:900;display:none;box-shadow:0 8px 24px rgba(0,0,0,.3)}
-#depot-hud .dh-help{position:absolute;left:50%;bottom:18px;transform:translateX(-50%);background:rgba(13,26,51,.72);border-radius:10px;padding:6px 12px;font-size:12.5px;font-weight:600;white-space:nowrap}
-#depot-hud .dh-btns{position:absolute;right:16px;bottom:60px;display:none;flex-direction:column;gap:6px;pointer-events:auto}
+#depot-hud .dh-help{position:absolute;left:50%;bottom:100px;transform:translateX(-50%);background:rgba(13,26,51,.72);border-radius:10px;padding:6px 12px;font-size:12.5px;font-weight:600;white-space:nowrap}
+#depot-hud .dh-btns{position:absolute;right:16px;bottom:200px;display:none;flex-direction:column;gap:6px;pointer-events:auto}
 #depot-hud .dh-btns button{font:inherit;font-weight:800;font-size:13px;border:0;border-radius:10px;padding:8px 12px;background:rgba(255,255,255,.92);color:#13203d}
 #depot-hud.placing .dh-btns{display:flex}#depot-hud.placing .dh-cross{display:none}`;
   document.head.appendChild(css); document.body.appendChild(hud);
@@ -372,7 +372,7 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit } 
       if (!moved) break;
     }
     const zMin = L.frontZ(y) + hz;
-    const fits = x - hx >= -L.x - 1e-4 && x + hx <= L.x + 1e-4 && z - hz >= zMin - 1e-3 && z + hz <= L.z1 + 1e-3 && y + h <= L.ceil;
+    const fits = x - hx >= -L.x - 1e-4 && x + hx <= L.x + 1e-4 && z - hz >= zMin - hz - 1e-3 && z + hz <= L.z1 + 1e-3 && y + h <= L.ceil;
     return { x, y: y + h / 2 + 0.002, z, ok: fits, top: y + h };
   }
   let ghostSol = null;
@@ -465,8 +465,8 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit } 
           function dist2(i) { const cx = -sx / 2 + cw * ((i % 6) + 0.5), cz = -sz / 2 + cd * (Math.floor(i / 6) + 0.5); return (cx - loc.x) ** 2 + (cz - loc.z) ** 2; }
         } else { // 단단한 박스 모서리·면: 접촉점마다 가까운 알 2개
           const ci = Math.min(5, Math.max(0, Math.floor((loc.x + sx / 2) / cw))), cj = Math.min(4, Math.max(0, Math.floor((loc.z + sz / 2) / cd)));
-          const i0 = cj * 6 + ci, i1 = cj * 6 + Math.min(5, ci + (loc.x > -sx / 2 + cw * (ci + 0.5) ? 1 : -1 < 0 ? 0 : -1));
-          U.force[i0] += F / 2; U.force[Math.max(0, i1)] += F / 2;
+          const nb = THREE.MathUtils.clamp(ci + (loc.x > -sx / 2 + cw * (ci + 0.5) ? 1 : -1), 0, 5); // 접촉점 쪽 이웃 알
+          U.force[cj * 6 + ci] += F / 2; U.force[cj * 6 + nb] += F / 2;
         }
       }
     }
@@ -584,6 +584,11 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit } 
   function updateCamera(dt) {
     const c = st.cart;
     cart.position.set(c.x, 0, c.z); cart.rotation.y = c.yaw;
+    if (st.camOv) { // 스샷·검증용 고정 시점 (카트 기준 좌표)
+      cart.updateMatrixWorld(true);
+      camera.position.copy(st.camOv.pos).applyMatrix4(cart.matrixWorld); camera.lookAt(st.camOv.tgt.clone().applyMatrix4(cart.matrixWorld));
+      return;
+    }
     if (st.mode === 'place') {
       camBlend = Math.min(1, camBlend + dt * 4);
       // 카트 위에서 내려다보기 (아래 받침대는 옆에서 낮게)
@@ -697,6 +702,7 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit } 
       ghostSol = solveGhost();
       if (ghost && ghostSol) { ghost.position.set(ghostSol.x, ghostSol.y, ghostSol.z); ghost.rotation.set(0, st.rotY, 0); ghostM.color.setHex(ghostSol.ok ? 0x33dd66 : 0xff4444); ghostEdgeM.color.setHex(ghostSol.ok ? 0x1aff70 : 0xff2222); }
     }
+    selfAvatar.position.set(st.me.x, 0, st.me.z); selfAvatar.rotation.y = st.me.yaw;
     updateCamera(dt);
     hover = st.mode === 'walk' ? pickTarget() : null;
     if (st.toastT > 0) { st.toastT -= dt; if (st.toastT <= 0) elToast.style.display = 'none'; }
@@ -723,9 +729,11 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit } 
     return { loadKg: extraKg, totalKg: CART.mass + extraKg, t0to12: +t.toFixed(2), coastM: +coast.toFixed(2), brakeM: +brake.toFixed(2), turn90s: +tt.toFixed(2), breakawayN: +(CART.breakaway * CART.crr * (CART.mass + extraKg) * CART.g).toFixed(0) };
   }
 
+  // 바깥(game.js)이 이름표·말풍선 위치를 읽는 '내 아바타' 자리 — 1인칭이라 화면엔 안 그림
+  const selfAvatar = new THREE.Object3D(); selfAvatar.userData = { jumpY: 0, sit: false };
   updateCamera(0);
   const api = {
-    scene, camera, update, render, onKey, stats, measure, st, items, LEVELS,
+    player: selfAvatar, scene, camera, update, render, onKey, stats, measure, st, items, LEVELS,
     get hover() { return hover; },
     _dbg: {
       grabCart, releaseCart, place, cancelPlace, pick, removeLast, toggleLevel, rotate, solve: () => solveGhost(),
@@ -734,6 +742,7 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit } 
       hold(id) { const p = BY_ID[id]; st.held = { p, src: null }; st.mode = 'place'; st.rotY = 0; st.tip = false; st.nudge.x = st.nudge.z = 0; setGhost(p); hud.classList.add('placing'); },
       setGhostAt(level, x, z, rotY = 0, tip = false) { st.level = level; st.gx = x; st.gz = z; st.rotY = rotY; st.tip = tip; st.nudge.x = st.nudge.z = 0; },
       drop(id, level, x, z, rotY = 0, tip = false) { api._dbg.hold(id); api._dbg.setGhostAt(level, x, z, rotY, tip); if (st.held && itemDims(st.held.p, tip).join() !== ghost?.userData.dims) { setGhost(st.held.p); ghost.userData.dims = itemDims(st.held.p, tip).join(); } ghostSol = solveGhost(); return place(); },
+      camAt(pos, tgt) { st.camOv = pos ? { pos: new THREE.Vector3(...pos), tgt: new THREE.Vector3(...tgt) } : null; },
       settle(sec = 1.5) { for (let t = 0; t < sec; t += 1 / 60) { cart.updateMatrixWorld(true); stepPhysics(1 / 60); } },
       push(sec, f = 1, s = 0, run = false) { for (let t = 0; t < sec; t += 1 / 60) { driveCart(1 / 60, { f, s, run }); cart.updateMatrixWorld(true); stepPhysics(1 / 60); } },
     },

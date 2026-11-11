@@ -1307,7 +1307,7 @@ function landDepot() { // [depot] ?at=depot → 범창고 입구 앞
   const { x, z } = DEPOT_SPAWN;
   player.position.set(x, terrain ? terrain.getGroundHeight(x, z, 0) : 0, z);
   player.rotation.y = DEPOT_SPAWN.yaw;
-  cam.yaw = DEPOT_SPAWN.face; cam.pitch = -0.04; cam.dist = 8;
+  cam.yaw = DEPOT_SPAWN.face; cam.pitch = 0.18; cam.dist = 9;
   setViewMode('follow');
   return true;
 }
