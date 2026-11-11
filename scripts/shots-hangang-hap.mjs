@@ -61,6 +61,7 @@ async function go(page, { x, z, y, yaw = 0, dist = 22, pitch = 0.28, fov = 55, h
     document.getElementById('stop-panel')?.classList.remove('open');
     document.getElementById('corridor-stop-panel')?.classList.remove('open');
     document.querySelectorAll('.tag, .emote-floater').forEach((el) => { el.style.display = 'none'; el.hidden = true; });
+    J.hangang?.tickPlayer?.(0, J.player);
   }, { x, z, y, yaw, dist, pitch, fov, hidePlayer });
   await page.waitForTimeout(1800);
 }
@@ -121,7 +122,7 @@ async function capture(page, tag) {
     yaw: look(exit.x, exit.z, -4100, -17240),
     dist: 16, pitch: 0.10, fov: 62,
   });
-  await shot(page, `${tag}-01-hap-exit`);
+  await shot(page, `${tag}-01-hap-exit-v2`);
 
   // 2. 청담나들목 (way/700471394, tunnel=yes, layer=-1) just river-side of
   //    where it crosses 올림픽대로 way/46676451 at (-4129, -17145).
@@ -131,16 +132,16 @@ async function capture(page, tag) {
     yaw: look(up.x, up.z, -4129.0, -17145.0),
     dist: 13, pitch: 0.16, fov: 60,
   });
-  await shot(page, `${tag}-02-olympic-underpass`);
+  await shot(page, `${tag}-02-olympic-underpass-v2`);
 
-  // 3. 한강남자전거길 nearest 영동대교 outline (way/842101798)
-  const br = { x: -4743.0, z: -17793.7 };
+  // 3. Beside 영동대교 (way/842101798): bike path 39 m from the outline, looking under the deck
+  const br = { x: -4712.8, z: -17762.3 };
   await go(page, {
     x: br.x, z: br.z, y: await yOf(br.x, br.z),
-    yaw: look(br.x, br.z, -4618.1, -17886.4),
-    dist: 18, pitch: 0.28, fov: 58,
+    yaw: look(br.x, br.z, -4679.1, -17840.0),
+    dist: 14, pitch: 0.20, fov: 60,
   });
-  await shot(page, `${tag}-03-under-bridge`);
+  await shot(page, `${tag}-03-under-bridge-v2`);
 
   // 4. Aerial of 합수부 from the river (north of the join, looking south).
   //    Same convention as 1구간 aerial: stand near the water, long dist, pitch +0.48.
@@ -151,7 +152,7 @@ async function capture(page, tag) {
     yaw: look(ax, az, hap.x - 20, hap.z + 30),
     dist: 420, pitch: 0.48, fov: 52, hidePlayer: true,
   });
-  await shot(page, `${tag}-04-hap-aerial`);
+  await shot(page, `${tag}-04-hap-aerial-v2`);
 
   // 5. Join into 반포 — just east of banpoEast on way/925101289, looking west
   const join = { x: -8919.5, z: -16713.4 };
@@ -160,7 +161,7 @@ async function capture(page, tag) {
     yaw: look(join.x, join.z, -9000, -16640),
     dist: 16, pitch: 0.12, fov: 58,
   });
-  await shot(page, `${tag}-05-banpo-join`);
+  await shot(page, `${tag}-05-banpo-join-v2`);
 }
 
 const day = await open('day', { hour: 14 });

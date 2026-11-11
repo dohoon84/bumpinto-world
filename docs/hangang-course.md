@@ -251,7 +251,7 @@ AWS Terrain Tiles terrarium z=14 (`s3://elevation-tiles-prod/terrarium/{z}/{x}/{
 - 2구간 교각 간격·거더 디테일은 OSM 교각 노드가 없어 1구간과 같이 간격을 정해 넣었다 (approximate)
 - 2구간 나들목 박스는 OSM `tunnel=yes` + `올림픽대로` 교차로 위치를 잡았고, 내부 높이·벽 두께는 표지된 값이 아니라 통과할 만큼만 잡았다 (approximate). z=14 DEM 이 제방을 부드럽게 뭉개 두어서 언덕 속에 박스가 묻히는 곳이 있다
 - 2구간 가로등은 폴·발광 갓만 있고 PointLight 는 없다. 12 km 를 켜면 SwiftShader `MAX_FRAGMENT_UNIFORM_VECTORS` 를 넘겼다
-- `build-hangang-hap.py` 의 첫 척추는 탐욕 연결이라 탄천 하상 중심선(way/768407483)을 탈 수 있다. 커밋된 `hap-osm.json` 척추는 탄천 자전거길·한강남자전거길만 쓰는 다익스트라로 다시 이었다
+- 2구간 척추는 `build-hangang-hap.py` 의 다익스트라(탄천 자전거* + 한강남자전거길)로 이으며, 탐욕 연결이 타던 탄천 하상 중심선(way/768407483)은 쓰지 않는다
 - 탄천 수면은 상류 DEM 을 따르고, 한강 수면은 25백분위 풀을 쓴다. 합류부에서 두 수위가 만나는 짧은 단차는 실측 차이이다
 - 자전거 탄 NPC 메쉬는 아직 없다
 - 스폰과 카메라는 겹친 데크에서 플레이어 높이(`refY`)를 넘겨 잠수교에 머물게 했다. `?at=hangang` 은 잠수교 남단 높이로 내린다
