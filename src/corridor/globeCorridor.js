@@ -20,6 +20,11 @@ export function migeumGlobeEnabled(search = typeof location !== 'undefined' ? lo
 export function gangnamGlobeEnabled(search = typeof location !== 'undefined' ? location.search : '') {
   return gangnamEnabled(search);
 }
+// [namsan] ?ntower=0 이면 지구본·ui-v2 역 선택에서 남산서울타워 항목을 숨긴다 (createNamsan 의 namsanEnabled 와 같은 규칙)
+export function namsanGlobeEnabled(search = typeof location !== 'undefined' ? location.search : '') {
+  return new URLSearchParams(search || '').get('ntower') !== '0';
+}
+export const NAMSAN_LANDMARK = { id: 'ntower', ko: '남산서울타워', en: 'N Seoul Tower', landmark: true, namsan: true };
 export const BRANCH_STATIONS = [
   ...(pangyoEnabled() ? PANGYO_GLOBE_STATIONS : []),
   ...(migeumGlobeEnabled() ? MIGEUM_GLOBE_STATIONS : []),
@@ -29,6 +34,7 @@ export const BRANCH_STATIONS = [
 // 입장·하차 없는 통과 점. 노선도에만 그리고 COUNT/입장 목록에는 넣지 않는다.
 const MAP_PASS_STATIONS = gangnamGlobeEnabled() ? SHINBUNDANG_PASS_STATIONS : [];
 const MAP_STATIONS = BRANCH_STATIONS.concat(MAP_PASS_STATIONS);
+
 const ALL_STATIONS = CORRIDOR_STATIONS.concat(BRANCH_STATIONS);
 export const CORRIDOR_STATION_IDS = new Set(ALL_STATIONS.map((s) => s.id));
 // [globe-open] 지역 현황 목록에서 '열림'으로 따로 보이는 지선 역 (판교역 → 입장하면 ?at=pangyo 와 같은 자리). ?pangyo=0 이면 빈 목록 → 기존 그대로
@@ -40,6 +46,7 @@ export const OPEN_BRANCH_STATIONS = BRANCH_STATIONS;
 export const CORRIDOR_STATION_COUNT = ALL_STATIONS.length + 1;
 // 입장 화면(로비 제목·로딩 문구)에 쓰는 역 이름 — ?at= 역 id 기준
 export function corridorStationLabel(id) {
+  if (id === 'ntower' || id === 'namsan') return { ko: '남산서울타워', en: 'N Seoul Tower', short: 'N Seoul Tower' };
   if (id === CORRIDOR_LANDMARK.id) return lotteClock.isOpen() ? { ko: CORRIDOR_LANDMARK.ko, en: CORRIDOR_LANDMARK.en, short: CORRIDOR_LANDMARK.en }
     : { ko: '잠실 랜드마크 공사현장', en: 'Jamsil Landmark site', short: 'Jamsil Landmark' }; // 오픈 전(lotteOpening.js)
   const s = ALL_STATIONS.find((x) => x.id === id);
@@ -149,6 +156,9 @@ export function mountGlobeCorridor({ root, camera, anchorSpot, globe, isEn, onEn
 
   function lineText(s) {
     if (s.live) return isEn() ? '🚇 Jeongja Stn. · Suin-Bundang · Shinbundang — the original Jeongja-dong (same entry as before)' : '🚇 정자역 · 수인분당선 · 신분당선 — 기존 정자동 그대로 입장';
+    if (s.id === 'ntower' || s.namsan) {
+      return isEn() ? '🏙️ N Seoul Tower — start at the tower plaza (Namsan)' : '🏙️ 남산서울타워 — 타워 앞 광장에서 시작 (남산)';
+    }
     if (s.landmark) {
       const site = lotteSiteLabel(isEn());
       if (site) return isEn() ? `🚧 ${site.main} — grand opening countdown at the site (Jamsil)` : `🚧 ${site.main} — 현장에서 오픈 카운트다운 (잠실)`;
@@ -204,7 +214,8 @@ export function mountGlobeCorridor({ root, camera, anchorSpot, globe, isEn, onEn
       <div class="gcm-hd"><div>🚇 ${corridorName(en)}<small>${en ? `Jeongja → Jamsil · ${CORRIDOR_STATION_COUNT} stations · pick one to start` : `정자 → 잠실 · ${CORRIDOR_STATION_COUNT}개 역 · 시작할 역을 고르세요`}</small></div>
         <button type="button" class="gcm-close" aria-label="${en ? 'Close' : '닫기'}">✕</button></div>
       <div class="gcm-body" style="height:${L.height}px;width:${L.width}px"><svg width="${L.width}" height="${L.height}">${seg}${leaders}${dots}</svg>${labels}</div>
-      <div class="gcm-ft">${en ? 'Real station positions (OpenStreetMap). Scroll to zoom the globe.' : '실제 역 위치(OpenStreetMap) 기준 · 휠로 지구본 확대/축소'}</div>`;
+      <div class="gcm-ft">${en ? 'Real station positions (OpenStreetMap). Scroll to zoom the globe.' : '실제 역 위치(OpenStreetMap) 기준 · 휠로 지구본 확대/축소'}</div>
+      ${namsanGlobeEnabled() ? `<button type="button" class="gcm-stn" data-corridor-at="ntower" data-hot="ntower" style="position:relative;margin-top:8px;left:0;top:0">${en ? '🏙️ N Seoul Tower · start at the plaza' : '🏙️ 남산서울타워 · 광장에서 시작'}</button>` : ''}`;
     hot = null;
   }
   function setHot(id) {
@@ -212,7 +223,7 @@ export function mountGlobeCorridor({ root, camera, anchorSpot, globe, isEn, onEn
     hot = id;
     panel.querySelectorAll('[data-hot]').forEach((el) => el.classList.toggle('is-hot', el.dataset.hot === id));
     panel.querySelectorAll('[data-dot]').forEach((el) => el.classList.toggle('is-hot', el.dataset.dot === id));
-    const s = [...L.items, ...L.branches, L.landmark].find((x) => x.id === id);
+    const s = [...L.items, ...L.branches, L.landmark, ...(namsanGlobeEnabled() ? [NAMSAN_LANDMARK] : [])].find((x) => x.id === id);
     const ft = panel.querySelector('.gcm-ft');
     if (ft) ft.textContent = s ? lineText(s) : (isEn() ? 'Real station positions (OpenStreetMap). Scroll to zoom the globe.' : '실제 역 위치(OpenStreetMap) 기준 · 휠로 지구본 확대/축소');
   }

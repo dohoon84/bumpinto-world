@@ -78,6 +78,75 @@ export function paint(g, color) {
   g.setAttribute('color', new THREE.BufferAttribute(a, 3));
   return g;
 }
+// [hangang] 다른 지형이 덮는 곳의 평면 바닥 삼각형을 뺀다 (index.js 가 설정).
+let flatClip = null;
+export function setFlatClip(fn) { flatClip = typeof fn === 'function' ? fn : null; }
+export function clipFlatGeometry(g) {
+  if (!g || !flatClip) return g;
+  const pos = g.attributes.position;
+  const idx = g.index;
+  const n = idx ? idx.count : pos.count;
+  const v = (i) => (idx ? idx.getX(i) : i);
+  const keep = [];
+  let dropped = 0;
+  for (let i = 0; i + 2 < n; i += 3) {
+    const a = v(i), b = v(i + 1), c = v(i + 2);
+    const cx = (pos.getX(a) + pos.getX(b) + pos.getX(c)) / 3;
+    const cz = (pos.getZ(a) + pos.getZ(b) + pos.getZ(c)) / 3;
+    if (flatClip(cx, cz)) { dropped++; continue; }
+    keep.push(a, b, c);
+  }
+  if (dropped) g.setIndex(keep);
+  return g;
+}
+// [hangang] 평평한 바닥(외곽 바닥·라이브 물길)에서 사각형 r 안을 정확히 잘라 낸다.
+//   큰 셀 삼각형은 무게중심으로 빼면 구멍이나 남는 조각이 생겨, 반평면으로 잘라 바깥 조각만 남긴다.
+export function clipOutsideRect(g, r) {
+  if (!g || !r) return g;
+  const pos = g.attributes.position, idx = g.index;
+  const n = idx ? idx.count : pos.count;
+  const v = (i) => (idx ? idx.getX(i) : i);
+  const out = [];
+  let touched = false;
+  const clip = (poly, axis, val, keepLess) => {
+    const res = [];
+    for (let i = 0; i < poly.length; i++) {
+      const a = poly[i], b = poly[(i + 1) % poly.length];
+      const ina = keepLess ? a[axis] <= val : a[axis] >= val;
+      const inb = keepLess ? b[axis] <= val : b[axis] >= val;
+      if (ina) res.push(a);
+      if (ina !== inb) {
+        const t = (val - a[axis]) / ((b[axis] - a[axis]) || 1e-12);
+        res.push([a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t]);
+      }
+    }
+    return res;
+  };
+  const emit = (poly) => {
+    for (let i = 1; i + 1 < poly.length; i++) out.push(...poly[0], ...poly[i], ...poly[i + 1]);
+  };
+  for (let i = 0; i + 2 < n; i += 3) {
+    const tri = [v(i), v(i + 1), v(i + 2)].map((k) => [pos.getX(k), pos.getY(k), pos.getZ(k)]);
+    const xs = tri.map((p) => p[0]), zs = tri.map((p) => p[2]);
+    if (Math.max(...xs) <= r.x0 || Math.min(...xs) >= r.x1 || Math.max(...zs) <= r.z0 || Math.min(...zs) >= r.z1) {
+      out.push(...tri[0], ...tri[1], ...tri[2]);
+      continue;
+    }
+    touched = true;
+    emit(clip(tri, 0, r.x0, true));
+    emit(clip(tri, 0, r.x1, false));
+    const mid = clip(clip(tri, 0, r.x0, false), 0, r.x1, true);
+    emit(clip(mid, 2, r.z0, true));
+    emit(clip(mid, 2, r.z1, false));
+  }
+  if (!touched) return g;
+  const ng = new THREE.BufferGeometry();
+  ng.setAttribute('position', new THREE.Float32BufferAttribute(out, 3));
+  const nrm = new Float32Array(out.length);
+  for (let i = 1; i < nrm.length; i += 3) nrm[i] = 1;
+  ng.setAttribute('normal', new THREE.BufferAttribute(nrm, 3));
+  return ng;
+}
 const strip = (g) => { if (g.attributes.uv) g.deleteAttribute('uv'); if (g.attributes.uv1) g.deleteAttribute('uv1'); return g; };
 function merged(geos) {
   const list = geos.filter(Boolean);
@@ -101,7 +170,7 @@ function flatLayer(t, terrain) {
     const pts = terrain ? l.p.map(([x, z]) => [x, z, terrain.waterLineY ? terrain.waterLineY(x, z) : terrain.baseHeight(x, z) < -0.5 ? terrain.params.WATER - 0.005 : 0]) : l.p;
     add(ribbonGeo(pts, l.w, 0.035), WATER);
   }
-  const g = merged(geos);
+  const g = clipFlatGeometry(merged(geos));
   if (!g) return null;
   const m = new THREE.Mesh(g, vcMat()); m.receiveShadow = true; m.name = 'corridorFlat';
   return m;
@@ -313,8 +382,8 @@ export function buildLodTile(key, L, { roadKinds, buildingKinds }, terrain = nul
   for (const [k, ...rest] of L.p) (byKind[k] ||= []).push(rest);
   for (const [k, list] of Object.entries(byKind)) add(flatGeo(polys(list), parkY(k)), PARK_COLOR[k] || '#b5dda3');
   add(flatGeo(polys(L.w), 0.04), WATER);
-  const fg = merged(geos);
-  if (fg) { const m = new THREE.Mesh(fg, vcMat()); m.receiveShadow = true; group.add(m); }
+  const fg = clipFlatGeometry(merged(geos));
+  if (fg) { const m = new THREE.Mesh(fg, vcMat()); m.receiveShadow = true; m.name = 'corridorLodFlat'; group.add(m); }
   const roads = L.r.map(([w, ki, fl, br]) => ({ w, k: roadKinds[ki], p: unflat(fl), br }));
   terrain?.liftRoads?.(roads);
   const rm = roadMesh(roads, { lines: false }); if (rm) { rm.receiveShadow = false; group.add(rm); }

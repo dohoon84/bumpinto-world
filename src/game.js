@@ -310,13 +310,17 @@ const camera = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, 0.3, 50
 
 // 하늘(그라데이션 돔). 색은 한국 표준시와 날씨에 맞춰 다시 칠한다.
 let skyGeo;
+let skyDome;
 {
   const g = new THREE.SphereGeometry(3000, 24, 12), col = [], top = new THREE.Color('#7ec4ef'), bot = new THREE.Color('#e9f6fb');
   const p = g.attributes.position;
   for (let i = 0; i < p.count; i++) { const t = Math.max(0, p.getY(i) / 3000); const c = bot.clone().lerp(top, Math.pow(t, 0.6)); col.push(c.r, c.g, c.b); }
   g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
   skyGeo = g;
-  scene.add(new THREE.Mesh(g, new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.BackSide, fog: false, depthWrite: false })));
+  skyDome = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.BackSide, fog: false, depthWrite: false }));
+  skyDome.name = 'sky-dome';
+  skyDome.frustumCulled = false;
+  scene.add(skyDome);
 }
 const hemi = new THREE.HemisphereLight('#ffffff', '#c9b99a', 1.6);
 scene.add(hemi);
@@ -342,6 +346,9 @@ const corridorClock = { simTime: () => null };
 let ride = null; // [ride] mountRide (코리더가 있을 때만)
 const liveBus = corridorDir && corridorData?.gangnam && liveBusEnabled() ? createLiveBusFeed() : null; // [livebus]
 const corridor = corridorData ? createCorridor({ scene, corridorData, terrain, world, renderer, overlay, params, getSimTime: () => corridorClock.simTime(), liveBus }) : null;
+if (corridor?.namsan || corridor?.hangang) { camera.far = Math.max(camera.far, 14000); camera.updateProjectionMatrix(); } // [namsan] [hangang]
+
+
 if (terrain) { terrain.build(scene, world, overlay); world.groundY = terrain.getGroundHeight; world.vehicleY = terrain.getVehicleHeight; }
 if (corridor) {
   corridor.afterTerrain();
@@ -773,6 +780,14 @@ function nearestSpotLabel(x, z) {
     if (d < bestDist) {
       bestDist = d;
       bestText = l.text;
+    }
+  }
+  const nt = corridor?.namsan?.tower;
+  if (nt) {
+    const d = Math.hypot(x - nt.ox, z - nt.oz);
+    if (d < 450 && d < bestDist) {
+      bestDist = d;
+      bestText = isEn() ? 'N Seoul Tower' : '남산서울타워';
     }
   }
   return { name: bestText, dist: Math.round(bestDist) };
@@ -2222,7 +2237,7 @@ homeBtn.onclick = () => {
   rememberPlace(true);
 };
 // [corridor] 순간이동(지구본 역 선택 · ?at=<역>|lotte) · 성능 HUD(`)
-function teleportTo(x, z) {
+function teleportTo(x, z, y) {
   ride?.forceAlight('teleport'); // [ride] 순간이동·지구본 이동이면 자동 하차
   if (bikes.riding) dismountBike();
   if (adminBike?.riding) adminBike.dismount();
@@ -2230,7 +2245,8 @@ function teleportTo(x, z) {
   standUpFromSeat();
   wakeFromAfk();
   renderEmoteBar(); // 앉아 있다 순간이동하면 C 칩 표시도 '앉기'로 되돌림
-  player.position.set(x, terrain ? terrain.getGroundHeight(x, z, 0) : 0, z);
+  const gy = (y != null && Number.isFinite(y)) ? y : (terrain ? terrain.getGroundHeight(x, z, 0) : 0);
+  player.position.set(x, gy, z);
   setMode('follow');
   rememberPlace(true);
 }
@@ -2404,6 +2420,7 @@ leaveBtn.onclick = () => {
   startLobby?.();
 };
 input.onKey = (e) => {
+  if (corridor?.namsan?.cableGuide?.onKey?.(e)) return; // [cableguide] 케이블카 승강장 E/Enter: 바로 타기·다음 칸 예약
   if (arcadeGame?.onKey(e)) return; // [arcade] 오락실·범핑팡
   if (bump24Game?.onKey(e)) return; // [bump24game] 매장 들어가기·담기
   if (subway?.onKey(e)) return; // [subway] 입구 앞 E · 대합실 안에서는 출구 고르기 등
@@ -2607,7 +2624,7 @@ function frame() {
   }
   if (cam.mode === 'follow') {
     // pitch +: 내려다보기, -: 올려다보기. ±90° 직전에서 멈춰 시점이 뒤집히지 않게 한다.
-    cam.yaw += dy; cam.pitch = THREE.MathUtils.clamp(cam.pitch + dp, -1.2, 1.45); cam.dist = THREE.MathUtils.clamp(cam.dist * (1 + dz), 4, 120);
+    cam.yaw += dy; cam.pitch = THREE.MathUtils.clamp(cam.pitch + dp, -1.2, 1.45); cam.dist = THREE.MathUtils.clamp(cam.dist * (1 + dz), cam.distMin ?? 4, cam.distMax ?? 120);
   } else { ov.yaw += dy; ov.pitch = THREE.MathUtils.clamp(ov.pitch + dp, 0.08, 1.5); ov.dist = THREE.MathUtils.clamp(ov.dist * (1 + dz), 150, 2500); }
 
   // 이동. 걸을 때는 카메라 기준, 바이크는 핸들(W 전진 · A/D 회전). 건물 안으로는 못 들어감.
@@ -2826,10 +2843,27 @@ function frame() {
   remotes.update(dt);
   myBubble.tick();
 
+  // 케이블카는 캐빈을 먼저 옮긴 다음 카메라를 둔다(한 프레임 늦지 않게).
+  if (corridor) {
+    const cPre = cam.mode === 'follow' ? player.position : sun.target.position;
+    corridor.update(dt, cPre.x, cPre.z, cam.mode);
+    corridor.namsan?.tickPlayer?.(dt, player, cam);
+    corridor.hangang?.tickPlayer?.(dt, player, cam);
+  }
+
   // 카메라
   const P = player.position;
   if (ride?.camera(camera, dt)) sun.target.position.copy(P); // [ride] 창가 1인칭 / 뒤쪽 3인칭
+  else if (corridor?.namsan?.cable?.applyRideCamera?.(camera, dt, player, cam)) sun.target.position.copy(P);
   else if (cam.mode === 'follow') {
+    // 남산 일대는 도심 야경이 수 km 까지 보여야 해서 안개를 멀리 민다.
+    if (corridor?.namsan?.tower && Math.hypot(P.x - corridor.namsan.tower.ox, P.z - corridor.namsan.tower.oz) < 8000) {
+      scene.fog.near = 650; scene.fog.far = 10500;
+    }
+    const hgFog = corridor?.hangang; // [hangang-isolation] 한강 땅(다른 섬 제외) 200 m 안에서만
+    if (hgFog?.ownDist && hgFog.ownDist(P.x, P.z) <= 200) {
+      scene.fog.near = 650; scene.fog.far = 10500;
+    }
     // 가슴 높이 피벗을 공전하고, 시선은 피벗을 지나 앞쪽으로 보낸다.
     // 그래서 좌우는 한 바퀴, 위는 하늘, 아래는 바닥까지 화면 가운데로 들어온다.
     const eye = P.y + 1.6, yaw = cam.yaw, pitch = cam.pitch;
@@ -2844,7 +2878,25 @@ function frame() {
     }
     const bx = Math.sin(yaw), bz = Math.cos(yaw), cp = Math.cos(pitch), sp = Math.sin(pitch), aim = 4;
     const camX = P.x + bx * dist * cp, camZ = P.z + bz * dist * cp;
-    const camFloor = terrain ? 1.2 + terrain.renderHeight(camX, camZ) : 0.45; // [terrain] 카메라가 제방 속으로 안 들어가게
+    // renderHeight 는 정자 DEM 만 본다. 남산 높이는 addGroundExtra 로만 들어가서
+    // 산비탈에서 follow 카메라가 회색 경사면 속에 묻히지 않게 그 표면을 쓴다.
+    // getGroundHeight(Infinity) 는 다리 상판·고속도로 extras 와 남산 DEM 바깥 분지 폴백(~40 m)까지
+    // 끌어올려 정자·탄천 둔치·고속도로 아래에서 카메라가 떠 버리므로, 플레이어 근처 단차만 보고
+    // 남산 구역에서만 캡 없는 남산 높이를 추가로 취한다.
+    const renderH = terrain?.renderHeight?.(camX, camZ);
+    const walkH = terrain?.getGroundHeight?.(camX, camZ, P.y);
+    let camH = Number.isFinite(walkH) ? walkH : renderH;
+    const nt = corridor?.namsan?.tower;
+    if (nt && Math.hypot(P.x - nt.ox, P.z - nt.oz) < 2800) {
+      const nsH = corridor.namsan.surfaceY?.(camX, camZ) ?? corridor.namsan.heightAt?.(camX, camZ);
+      if (Number.isFinite(nsH) && !(Number.isFinite(camH) && camH >= nsH)) camH = nsH;
+    }
+    const hg = corridor?.hangang;
+    if (hg?.owns?.(P.x, P.z)) { // [hangang-isolation] 강남역 섬 등 다른 섬 안에서는 카메라 바닥을 건드리지 않는다
+      const hgH = hg.surfaceY?.(camX, camZ, P.y) ?? hg.heightAt?.(camX, camZ);
+      if (Number.isFinite(hgH) && !(Number.isFinite(camH) && camH >= hgH)) camH = hgH;
+    }
+    const camFloor = terrain ? 1.2 + (Number.isFinite(camH) ? camH : 0) : 0.45;
     camera.position.set(camX, Math.max(camFloor, eye + dist * sp), camZ);
     camera.lookAt(P.x - bx * aim * cp, eye - aim * sp, P.z - bz * aim * cp); // [terrain] 시선 기준 높이는 P.y + 1.6
     sun.target.position.copy(P);
@@ -2857,7 +2909,6 @@ function frame() {
     camera.position.copy(c).add(tmp); camera.lookAt(c);
     sun.target.position.copy(c);
   }
-  if (corridor) { const c = cam.mode === 'follow' ? P : sun.target.position; corridor.update(dt, c.x, c.z, cam.mode); } // [corridor] 타일 스트리밍(프레임당 최대 1개 빌드)
   jeongjaBp24?.update(player.position.x, player.position.z); // [bump24-jeongja] 가까운 매장만 실내
   bp24Nav?.update(dt); // [bp24nav] 표지 까딱임 · 안내선 시작점
   if (playgrounds) { const c = cam.mode === 'follow' ? P : sun.target.position; playgrounds.update(dt, c.x, c.z, cam.mode); } // [playgrounds] 거리·타일 기준 표시
@@ -2884,6 +2935,8 @@ function frame() {
   roadster?.update(dt); // [roadster] 시네마틱 카메라가 켜져 있으면 camera/sun.target 덮어씀
   launch?.update(dt); // [launch] 5분 주기 발사·핫스테이징·젓가락 캐치 쇼
   sun.position.copy(sun.target.position).addScaledVector(atmosphere.sunDir, 500);
+  // 원점에 고정된 r=3000 하늘은 남산(약 23 km) 밖에서 보이지 않는다. 카메라를 따라가게 한다.
+  if (skyDome) skyDome.position.copy(camera.position);
   renderer.render(scene, camera);
   perfHud.tick();
   bgm?.setDuck(!!ride?.active || !!adminBike?.riding || !!giftMount() || !!subway?.voiceActive); // [bgm] 버스·바이크 소리 · [subway-voice] 지하철 안내 방송 중 살짝 줄임 (바뀔 때만 동작)
@@ -2902,8 +2955,9 @@ window.__jj = {
   createAvatar,
   sanitizeLook,
   perfmem: perfMem, // [perf-memory]
-  ready: true, region, tower, renderer, corridor, schoolZone: corridor?.schoolZone || null, playgrounds, streetlights, pangyoLamps, migeumLamps, gangnamNight, gangnamAds, gangnamNightlife, gangnamNpc, gangnamStreet, gangnamBrt, liveBus, // [corridor] [schoolzone] [playgrounds] [streetlights] [gangnam-night] [gangnam-nightlife] [gangnam-npc] [gangnam-street] [gangnam-brt] [livebus]
+ready: true, region, tower, renderer, corridor, namsan: corridor?.namsan || null, hangang: corridor?.hangang || null, schoolZone: corridor?.schoolZone || null, playgrounds, streetlights, pangyoLamps, migeumLamps, gangnamNight, gangnamAds, gangnamNightlife, gangnamNpc, gangnamStreet, gangnamBrt, liveBus, // [corridor] [schoolzone] [playgrounds] [streetlights] [gangnam-night] [gangnam-nightlife] [gangnam-npc] [gangnam-street] [gangnam-brt] [livebus] [namsan]
   placeCaption: (x, z) => placeCaption(x, z, placeList, corridor?.bounds?.islands), // [gangnam-night]
+
   bungeo, // [bungeo]
   launch, roadster, trucks, bike: adminBike, giftRides, inventory, data, world, npcs, transit, camera, cam, ov, setMode, terrain, taxis, jzTraffic, police, weather: atmosphere, umbrellas, dogPark, strayCats, // [terrain] [taxi] [roadster] [tower] [launch] [truck] [bike] [roadbike] [inventory]
   get player() { return player; },

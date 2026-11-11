@@ -287,7 +287,145 @@ function drawBp24(ctx, x, z, w, h, viewW, viewH) {
   }
 }
 
+function drawNamsanMini(ctx, x, z, w, h, viewW, viewH) {
+  const n = (typeof window !== 'undefined' && window.__jj?.namsan) || null;
+  const mini = n?.mini;
+  const nt = n?.tower;
+  if (!mini || !nt) return false;
+  const nd = Math.hypot((nt.ox ?? nt.x) - x, (nt.oz ?? nt.z) - z);
+  if (!Number.isFinite(nd) || nd >= 2800) return false;
+  const px = w / viewW;
+  const X = (wx) => w / 2 + (wx - x) * px;
+  const Y = (wz) => h / 2 + (wz - z) * px;
+  const strokePts = (pts) => {
+    if (!pts || pts.length < 2) return;
+    ctx.beginPath();
+    for (let i = 0; i < pts.length; i++) {
+      const sx = X(pts[i][0]), sy = Y(pts[i][1]);
+      if (i === 0) ctx.moveTo(sx, sy); else ctx.lineTo(sx, sy);
+    }
+    ctx.stroke();
+  };
+  const fillPts = (pts) => {
+    if (!pts || pts.length < 3) return;
+    ctx.beginPath();
+    for (let i = 0; i < pts.length; i++) {
+      const sx = X(pts[i][0]), sy = Y(pts[i][1]);
+      if (i === 0) ctx.moveTo(sx, sy); else ctx.lineTo(sx, sy);
+    }
+    ctx.closePath();
+    ctx.fill();
+  };
+  ctx.save();
+  ctx.fillStyle = '#86bf7c';
+  for (const p of mini.parks || []) fillPts(p.o);
+  ctx.fillStyle = '#e9dfca';
+  for (const p of mini.plazas || []) fillPts(p.o);
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  const CAR = new Set(['motorway', 'trunk', 'primary', 'secondary', 'tertiary', 'residential', 'unclassified', 'service', 'living_street', 'road']);
+  for (const r of mini.roads || []) {
+    if (!r.p || r.p.length < 2) continue;
+    if (r.k === 'aerialway') {
+      ctx.strokeStyle = '#e8d296';
+      ctx.lineWidth = Math.max(1.6, 3 * px);
+      ctx.setLineDash([7, 4]);
+      strokePts(r.p);
+      ctx.setLineDash([]);
+      continue;
+    }
+    const car = CAR.has(r.k);
+    ctx.strokeStyle = car ? '#8d939c' : '#d9c8a4';
+    ctx.lineWidth = Math.max(car ? 2.2 : 1.2, (r.w || (car ? 7 : 2.2)) * px * 0.8);
+    strokePts(r.p);
+  }
+  ctx.font = `700 ${Math.round(Math.max(10, w * 0.075))}px sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'bottom';
+  ctx.lineWidth = 3;
+  ctx.strokeStyle = 'rgba(235, 228, 212, 0.92)';
+  ctx.strokeText('남산', w / 2, h - 6);
+  ctx.fillStyle = '#1a2740';
+  ctx.fillText('남산', w / 2, h - 6);
+  ctx.restore();
+  return true;
+}
+
+
+function drawHangangMini(ctx, x, z, w, h, viewW, viewH) {
+  const hg = (typeof window !== 'undefined' && window.__jj?.hangang) || null;
+  const mini = hg?.mini;
+  const b = hg?.bounds;
+  if (!mini || !b) return false;
+  if (x < b.x0 - 500 || x > b.x1 + 500 || z < b.z0 - 500 || z > b.z1 + 500) return false;
+  if (hg.ownDist && hg.ownDist(x, z) > 500) return false; // [hangang-isolation] 강남역 섬 위에 한강 미니맵을 덧그리지 않는다
+  const px = w / viewW;
+  const X = (wx) => w / 2 + (wx - x) * px;
+  const Y = (wz) => h / 2 + (wz - z) * px;
+  const strokePts = (pts) => {
+    if (!pts || pts.length < 2) return;
+    ctx.beginPath();
+    for (let i = 0; i < pts.length; i++) {
+      const sx = X(pts[i][0]), sy = Y(pts[i][1]);
+      if (i === 0) ctx.moveTo(sx, sy); else ctx.lineTo(sx, sy);
+    }
+    ctx.stroke();
+  };
+  const fillPts = (pts, holes) => {
+    if (!pts || pts.length < 3) return;
+    ctx.beginPath();
+    for (let i = 0; i < pts.length; i++) {
+      const sx = X(pts[i][0]), sy = Y(pts[i][1]);
+      if (i === 0) ctx.moveTo(sx, sy); else ctx.lineTo(sx, sy);
+    }
+    ctx.closePath();
+    for (const hpts of holes || []) {
+      if (!hpts || hpts.length < 3) continue;
+      for (let i = 0; i < hpts.length; i++) {
+        const sx = X(hpts[i][0]), sy = Y(hpts[i][1]);
+        if (i === 0) ctx.moveTo(sx, sy); else ctx.lineTo(sx, sy);
+      }
+      ctx.closePath();
+    }
+    ctx.fill('evenodd');
+  };
+  ctx.save();
+  ctx.fillStyle = '#5aa0c4';
+  for (const p of mini.water || []) fillPts(p.o, p.holes);
+  ctx.fillStyle = '#86bf7c';
+  for (const p of mini.parks || []) fillPts(p.o);
+  ctx.fillStyle = 'rgba(160, 186, 218, 0.35)';
+  for (const bld of mini.buildings || []) fillPts(bld.o);
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  const CAR = new Set(['motorway', 'trunk', 'primary', 'secondary', 'tertiary', 'residential', 'unclassified', 'service', 'living_street', 'road']);
+  for (const r of mini.roads || []) {
+    if (!r.p || r.p.length < 2) continue;
+    if (r.k === 'cycleway') {
+      ctx.strokeStyle = '#c05645';
+      ctx.lineWidth = Math.max(1.8, (r.w || 4) * px * 0.85);
+      strokePts(r.p);
+      continue;
+    }
+    const car = CAR.has(r.k);
+    ctx.strokeStyle = car ? '#8d939c' : '#d9c8a4';
+    ctx.lineWidth = Math.max(car ? 2.2 : 1.1, (r.w || (car ? 7 : 2.2)) * px * 0.8);
+    strokePts(r.p);
+  }
+  ctx.font = `700 ${Math.round(Math.max(10, w * 0.07))}px sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'bottom';
+  ctx.lineWidth = 3;
+  ctx.strokeStyle = 'rgba(235, 228, 212, 0.92)';
+  ctx.strokeText('한강', w / 2, h - 6);
+  ctx.fillStyle = '#1a2740';
+  ctx.fillText('한강', w / 2, h - 6);
+  ctx.restore();
+  return true;
+}
+
 export function mountPhone({ data, region = null, extraTiles = null, placeAt = null, peerHere = null } = {}) { // [corridor] extraTiles(): [{ b, canvas }] (라이브 지도 아래에 깔림) [gangnam-night] placeAt·peerHere
+
   const canvas = document.getElementById('phone-map');
   const ctx = canvas.getContext('2d');
   const map = drawBaseMap(data, region);
@@ -334,6 +472,8 @@ export function mountPhone({ data, region = null, extraTiles = null, placeAt = n
         }
       }
       ctx.drawImage(src, sx, sy, viewW * scale, viewH * scale, 0, 0, w, h);
+      drawNamsanMini(ctx, x, z, w, h, viewW, viewH);
+      drawHangangMini(ctx, x, z, w, h, viewW, viewH);
 
       const s = w / Math.max(1, canvas.clientWidth);
       const now = performance.now();

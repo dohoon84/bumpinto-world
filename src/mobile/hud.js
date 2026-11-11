@@ -471,6 +471,9 @@ export function mountMobileHud({ handset } = {}) {
       A.riding = false;
       return A;
     }
+    // [cableguide] 남산 케이블카 승강장: 타기 · 다음 칸 예약
+    const cg = J?.namsan?.cableGuide;
+    if (cg?.canAct && !J?.namsan?.cable?.riding) { add(cg.actLabel || t('케이블카 타기', 'Board'), 'train', () => cg.act()); return A; }
     if (r?.mode === 'bus') {
       A.riding = true;
       if (r.dwell) add(t('내리기', 'Get off'), 'door', key('KeyE'));
