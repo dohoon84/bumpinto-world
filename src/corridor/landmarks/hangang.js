@@ -176,7 +176,11 @@ export function createHangang({ scene, overlay, terrain, dem, osm, hap } = {}) {
       hapApi?.setNight?.(v);
     },
     update() {},
-    tickPlayer() {},
+    tickPlayer(_dt, player) {
+      const px = player?.position?.x, pz = player?.position?.z;
+      if (px == null) return;
+      hapApi?.updateLights?.(px, pz);
+    },
     dispose() {
       unwatch?.();
       scene.remove(root);

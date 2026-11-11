@@ -135,15 +135,15 @@ export function createHangangProps({ parent, osm, land } = {}) {
     head.rotation.y = Math.atan2(dx, dz);
     group.add(head);
     poleI++;
-    // hap 는 길이 12 km 라 PointLight 를 심으면 fragment uniform 한도(4096)를 넘는다.
-    // 기둥·발광 갓만 두고, 점광원은 1구간처럼 짧은 박스에서만 쓴다.
+    // hap 는 12 km 라 가로등마다 PointLight 를 심으면 fragment uniform 한도를 넘는다.
+    // 갓은 다 두고, 점광원은 1구간은 그대로, hap 은 카메라 근처 몇 개만 빌려 쓴다.
     if (!sparse && poleI % lampEvery === 0) {
       const light = new THREE.PointLight('#ffd8a0', 0, 16, 2);
       light.position.set(px, y + 5.05, pz);
       group.add(light);
-      lamps.push({ light, head });
+      lamps.push({ light, head, x: px, y: y + 5.05, z: pz });
     } else {
-      lamps.push({ light: null, head });
+      lamps.push({ light: null, head, x: px, y: y + 5.05, z: pz });
     }
   });
 
@@ -283,11 +283,36 @@ export function createHangangProps({ parent, osm, land } = {}) {
     }
   }
 
-  function setNight(v) {
-    const t = Math.max(0, Math.min(1, v));
-    headMat.emissive.setRGB(0.55 * t, 0.42 * t, 0.22 * t);
-    for (const l of lamps) { if (l.light) l.light.intensity = t * 2.2; }
+  const pool = [];
+  if (sparse) {
+    for (let i = 0; i < 8; i++) {
+      const light = new THREE.PointLight('#ffd8a0', 0, 32, 1.45);
+      group.add(light);
+      pool.push(light);
+    }
+  }
+  let nightT = 0;
+
+  function updateLights(px, pz) {
+    if (!pool.length || !lamps.length) return;
+    const ranked = lamps
+      .map((l) => ({ l, d: (l.x - px) ** 2 + (l.z - pz) ** 2 }))
+      .sort((a, b) => a.d - b.d);
+    for (let i = 0; i < pool.length; i++) {
+      const pick = ranked[i];
+      if (!pick) { pool[i].intensity = 0; continue; }
+      pool[i].position.set(pick.l.x, pick.l.y, pick.l.z);
+      pool[i].intensity = nightT * 2.6;
+    }
   }
 
-  return { group, setNight, treeCount: treePts.length };
+  function setNight(v) {
+    const t = Math.max(0, Math.min(1, v));
+    nightT = t;
+    headMat.emissive.setRGB(0.92 * t, 0.72 * t, 0.34 * t);
+    for (const l of lamps) { if (l.light) l.light.intensity = t * 2.2; }
+    if (!t) for (const pl of pool) pl.intensity = 0;
+  }
+
+  return { group, setNight, updateLights, treeCount: treePts.length };
 }

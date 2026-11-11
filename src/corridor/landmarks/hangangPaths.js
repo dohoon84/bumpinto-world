@@ -328,7 +328,11 @@ export function createHangangPaths({ parent, osm, land }) {
 
   function setNight(v) {
     const t = Math.max(0, Math.min(1, v));
-    if (mats.bike) mats.bike.color.setRGB(0.75 * (1 - t) + 0.22 * t, 0.34 * (1 - t) + 0.12 * t, 0.27 * (1 - t) + 0.10 * t);
+    if (mats.bike) {
+      mats.bike.color.setRGB(0.75 * (1 - t) + 0.28 * t, 0.34 * (1 - t) + 0.14 * t, 0.27 * (1 - t) + 0.10 * t);
+      mats.bike.emissive = mats.bike.emissive || new THREE.Color('#000000');
+      mats.bike.emissive.setRGB(0.22 * t, 0.10 * t, 0.04 * t);
+    }
     if (mats.walk) mats.walk.color.setRGB(0.45 * (1 - t) + 0.18 * t, 0.42 * (1 - t) + 0.16 * t, 0.38 * (1 - t) + 0.14 * t);
     if (mats.upper) mats.upper.color.setRGB(0.22 + 0.13 * (1 - t), 0.23 + 0.13 * (1 - t), 0.24 + 0.14 * (1 - t));
     if (mats.trunk) mats.trunk.color.setRGB(0.28 * (1 - t) + 0.12 * t, 0.29 * (1 - t) + 0.13 * t, 0.31 * (1 - t) + 0.14 * t);
