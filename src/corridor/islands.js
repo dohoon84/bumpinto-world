@@ -103,3 +103,10 @@ export function clampWorld(x, z, b) {
   }
   return { x: bx, z: bz };
 }
+
+// [hangang-isolation] 이미 있는 섬 사각형·경부 띠 안이면 true
+export function makeForeignFn(islands, corridors) {
+  const boxes = (islands || []).filter(Boolean);
+  const strips = (corridors || []).filter((c) => c?.pts?.length);
+  return (x, z) => boxes.some((b) => pointInBox(x, z, b)) || strips.some((c) => inCorridor(x, z, c));
+}

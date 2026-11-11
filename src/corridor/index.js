@@ -7,6 +7,7 @@ import * as THREE from 'three';
 import { mergeTancheon, coveredFn, holeyGround, channelWaterMesh } from './tancheon.js';
 import { buildDetailTile, buildLodTile, roadMesh, CAR_KINDS, ingestTileRoads, setFlatClip, clipFlatGeometry, clipOutsideRect } from './tileMesh.js';
 import { applyTileCuts } from '../world/streams.js';
+import { makeForeignFn } from './islands.js'; // [hangang-isolation]
 import { buildCorridorCrossings } from './crossings.js';
 import { mountYatapSchoolZone } from './yatapSchoolZone.js'; // [schoolzone]
 import { createLandmarks } from './landmarks/index.js';
@@ -434,6 +435,8 @@ const gnTransit = corridorData.gangnamTransit ? mountGangnamTransit(root, corrid
       dem: corridorData.hangang.dem,
       osm: corridorData.hangang.osm,
       hap: corridorData.hangang.hap || null,
+      // [hangang-isolation] 이미 있는 섬(정자·탄천 본선, 강남역 등)과 경부 띠 안은 한강이 땅을 덮지 않는다.
+      foreign: makeForeignFn(index.meta?.islands || [index.meta.bounds], index.meta?.corridors || []),
     });
     // [hangang] 2구간 지형 위에 떠 있던 코리더 타일 바닥(베이지 판·물길 띠)을 뺀다.
     if (hangang?.hap) {
@@ -530,12 +533,15 @@ const gnTransit = corridorData.gangnamTransit ? mountGangnamTransit(root, corrid
     if (bounds.islands?.length) bounds.islands.push(nb);
   }
   if (hangang?.bounds) {
-    const hb = { x0: hangang.bounds.x0, x1: hangang.bounds.x1, z0: hangang.bounds.z0, z1: hangang.bounds.z1 };
-    bounds.x0 = Math.min(bounds.x0, hb.x0);
-    bounds.x1 = Math.max(bounds.x1, hb.x1);
-    bounds.z0 = Math.min(bounds.z0, hb.z0);
-    bounds.z1 = Math.max(bounds.z1, hb.z1);
-    if (bounds.islands?.length) bounds.islands.push(hb);
+    // [hangang-isolation] 1구간·2구간 사각형을 따로 섬으로 넣는다 (합친 사각형은 강남역~반포 사이 빈 땅까지 덮었다).
+    for (const b of hangang.boxes || [hangang.bounds]) {
+      const hb = { x0: b.x0, x1: b.x1, z0: b.z0, z1: b.z1 };
+      bounds.x0 = Math.min(bounds.x0, hb.x0);
+      bounds.x1 = Math.max(bounds.x1, hb.x1);
+      bounds.z0 = Math.min(bounds.z0, hb.z0);
+      bounds.z1 = Math.max(bounds.z1, hb.z1);
+      if (bounds.islands?.length) bounds.islands.push(hb);
+    }
   }
 
   const inLive = (x, z) => x >= live.x0 && x <= live.x1 && z >= live.z0 && z <= live.z1;

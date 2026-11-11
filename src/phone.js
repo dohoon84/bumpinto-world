@@ -358,6 +358,7 @@ function drawHangangMini(ctx, x, z, w, h, viewW, viewH) {
   const b = hg?.bounds;
   if (!mini || !b) return false;
   if (x < b.x0 - 500 || x > b.x1 + 500 || z < b.z0 - 500 || z > b.z1 + 500) return false;
+  if (hg.ownDist && hg.ownDist(x, z) > 500) return false; // [hangang-isolation] 강남역 섬 위에 한강 미니맵을 덧그리지 않는다
   const px = w / viewW;
   const X = (wx) => w / 2 + (wx - x) * px;
   const Y = (wz) => h / 2 + (wz - z) * px;

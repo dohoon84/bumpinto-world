@@ -52,7 +52,7 @@ export function hangangMini(osm) {
   return { roads: extraRoads, buildings, plazas: [], parks, water, waterLines: [] };
 }
 
-export function createHangang({ scene, overlay, terrain, dem, osm, hap } = {}) {
+export function createHangang({ scene, overlay, terrain, dem, osm, hap, foreign = null } = {}) {
   const root = new THREE.Group();
   root.name = 'hangang';
   scene.add(root);
@@ -64,7 +64,7 @@ export function createHangang({ scene, overlay, terrain, dem, osm, hap } = {}) {
   const city = createHangangCity({ parent: root, osm, land, expressXMax: hap?.osm?.meta?.pathWestClip ?? null });
   const props = createHangangProps({ parent: root, osm, land });
   const hapApi = (hap?.dem && hap?.osm)
-    ? createHangangHap({ parent: root, overlay, terrain, dem: hap.dem, osm: hap.osm })
+    ? createHangangHap({ parent: root, overlay, terrain, dem: hap.dem, osm: hap.osm, foreign })
     : null;
 
   const spawnSrc = osm?.spawn || osm?.connectEnds?.jamsuSouth;
@@ -99,7 +99,29 @@ export function createHangang({ scene, overlay, terrain, dem, osm, hap } = {}) {
     });
   }
 
+  // [hangang-isolation] 한강이 "자기 땅"으로 쓰는 곳: 1구간 DEM 사각형, 또는 2구간 DEM 사각형 중
+  //   다른 섬(정자·탄천 본선, 강남역, 경부 띠) 밖이거나 합수부 사각형 안. 그 밖에서는 땅 높이·안개·카메라·
+  //   미니맵·조명 모두 손대지 않는다.
+  const boxes = [land.bounds, hapApi?.bounds].filter(Boolean);
+  const inBox = (b, x, z) => x >= b.x0 && x <= b.x1 && z >= b.z0 && z <= b.z1;
+  const isForeign = typeof foreign === 'function' ? foreign : () => false;
+  function owns(x, z) {
+    if (inBox(land.bounds, x, z) && !isForeign(x, z)) return true;
+    return !!(hapApi?.bounds && inBox(hapApi.bounds, x, z) && hapApi.owns(x, z));
+  }
+  // 한강 땅까지 거리 근사: 사각형 밖이면 사각형 거리, 사각형 안인데 다른 섬이면 Infinity(멀다)
+  function ownDist(x, z) {
+    if (owns(x, z)) return 0;
+    // 사각형 안인데 다른 섬이면 Infinity(멀다). 2구간 박스가 강남역을 덮어도,
+    // 1구간(반포)까지 거리가 1 km 쯤이라 조명이 켜진 채로 남을 수 있다.
+    if (boxes.some((b) => inBox(b, x, z))) return Infinity;
+    let d = Infinity;
+    for (const b of boxes) d = Math.min(d, rectDist(b, x, z));
+    return d;
+  }
+
   function surfaceY(x, z, refY = Infinity) {
+    if (!owns(x, z)) return null;
     if (hapApi?.isTunnel?.(x, z)) {
       const hy = hapApi.surfaceY?.(x, z, refY);
       if (hy != null) return hy;
@@ -109,7 +131,7 @@ export function createHangang({ scene, overlay, terrain, dem, osm, hap } = {}) {
       if (py != null) return py;
     }
     const ys = [];
-    const g = land.heightAt(x, z);
+    const g = isForeign(x, z) ? null : land.heightAt(x, z);
     if (g != null) ys.push(g);
     const by = bridges.floorY?.(x, z, refY);
     if (by != null) ys.push(by);
@@ -129,11 +151,7 @@ export function createHangang({ scene, overlay, terrain, dem, osm, hap } = {}) {
   }
 
   if (terrain?.addGroundSurface) {
-    terrain.addGroundSurface((x, z, refY) => {
-      const boxes = [land.bounds, hapApi?.bounds].filter(Boolean);
-      if (!boxes.some((b) => x >= b.x0 && x <= b.x1 && z >= b.z0 && z <= b.z1)) return null;
-      return surfaceY(x, z, refY);
-    });
+    terrain.addGroundSurface((x, z, refY) => surfaceY(x, z, refY));
   }
 
   const unwatch = watchEvening((on) => {
@@ -165,6 +183,9 @@ export function createHangang({ scene, overlay, terrain, dem, osm, hap } = {}) {
   const api = {
     root,
     poolLightCount: poolLights.length,
+    owns,
+    ownDist,
+    boxes,
     spawn,
     spawnY: () => {
       const prefer = (land.levels?.waterY ?? land.waterY ?? -43) + 4;
@@ -172,7 +193,7 @@ export function createHangang({ scene, overlay, terrain, dem, osm, hap } = {}) {
     },
     bounds,
     heightAt: (x, z) => {
-      const a = land.heightAt(x, z);
+      const a = isForeign(x, z) ? null : land.heightAt(x, z);
       const b = hapApi?.heightAt?.(x, z);
       if (a == null) return b ?? null;
       if (b == null) return a;
@@ -202,11 +223,11 @@ export function createHangang({ scene, overlay, terrain, dem, osm, hap } = {}) {
       // [hangang-isolation] 한강 구간 밖(정자·서현·강남·남산)에서는 한강 점광원을 셰이더에서 뺀다.
       //   점광원 풀은 구간 근처(경계 +800 m)에서만 보이고, 멀어지면(+1200 m) 숨긴다(경계에서 깜빡임 방지).
       //   보이는 점광원 수가 바뀔 때만 셰이더가 한 번 다시 컴파일된다.
-      const d = rectDist(bounds, px, pz);
+      const d = ownDist(px, pz);
       if (lightsOn && d > 1200) setLightsVisible(false);
       else if (!lightsOn && d < 800) setLightsVisible(true);
       // 카메라 far(14 km) 밖이면 한강 메시 1만여 개를 프러스텀 검사에서도 뺀다. 화면은 같다.
-      root.visible = d < 15000;
+      root.visible = rectDist(bounds, px, pz) < 15000;
       if (!lightsOn) return;
       lightT += dt || 0;
       if (lightT < 0.2 && Math.abs(px - lastLX) + Math.abs(pz - lastLZ) < 6) return;

@@ -10,6 +10,7 @@ import path from 'node:path';
 import * as THREE from 'three';
 import { createHangang } from '../../../src/corridor/landmarks/hangang.js';
 import { setFlatClip, clipFlatGeometry, clipOutsideRect } from '../../../src/corridor/tileMesh.js';
+import { makeForeignFn } from '../../../src/corridor/islands.js';
 
 const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), '../../..');
 const J = (f) => JSON.parse(fs.readFileSync(path.join(ROOT, f), 'utf8'));
@@ -19,18 +20,29 @@ const hap = { dem: J('public/corridor/hangang/hap-dem.json'), osm: J('public/cor
 let n = 0;
 const ok = (s) => { n++; console.log('ok', n, s); };
 
-// 다른 지역 기준점 (월드 좌표, 정자역 원점). 남산·강남은 한강 북쪽/남쪽이지만 한강 경계 밖이다.
+// 다른 지역 기준점 (월드 좌표, 정자역 원점, hangangCoords.projectLatLon 과 같은 투영). 남산서울타워는 OSM 37.55127,126.98830.
 const PLACES = {
   '정자동 스폰': [0, 8],
-  '서현': [2300, -2600],
+  '서현역': [1325, -2035],
   '탄천 코리더(수내)': [600, -1800],
-  '강남역': [-7600, -9900],
+  '남산서울타워': [-10622, -20424],
+  '강남역': [-7098, -14453],
 };
 
+// 실제 코리더 섬 (develop 런타임 index.meta.islands / corridors 와 같은 값: 본선(정자~탄천), 강남역, 양재, 남산)
+const ISLANDS = [
+  { x0: -2500, x1: 3500, z0: -18000, z1: 2500 },
+  { x0: -7500, x1: -6000, z0: -15500, z1: -14000 },
+  { x0: -5650, x1: -3450, z0: -10000, z1: -8150 },
+];
+const foreign = makeForeignFn(ISLANDS, []);
 const scene = new THREE.Scene();
-const hg = createHangang({ scene, overlay: null, terrain: null, dem, osm, hap });
+const surfaces = [];
+const terrain = { addGroundSurface: (f) => surfaces.push(f) };
+const hg = createHangang({ scene, overlay: null, terrain, dem, osm, hap, foreign });
 assert.ok(hg?.bounds, 'hangang bounds');
 const B = hg.bounds;
+console.log('hangang bounds', JSON.stringify(B));
 const count = () => { let c = 0; scene.traverse((o) => { if (o.isLight) c++; }); return c; };
 const visibleLights = () => { let c = 0; scene.traverseVisible((o) => { if (o.isLight) c++; }); return c; };
 
@@ -43,14 +55,36 @@ const visibleLights = () => { let c = 0; scene.traverseVisible((o) => { if (o.is
 
 const player = { position: new THREE.Vector3() };
 for (const [name, [x, z]] of Object.entries(PLACES)) {
-  const inside = x >= B.x0 && x <= B.x1 && z >= B.z0 && z <= B.z1;
-  assert.ok(!inside, `${name} must be outside hangang bounds`);
   player.position.set(x, 0, z);
   hg.setNight(1);
   hg.tickPlayer(0.016, player);
   assert.equal(visibleLights(), 0, `${name}: no hangang light reaches shaders`);
   assert.equal(hg.coversTileFlat(x, z), false, `${name}: tile floor not clipped`);
-  ok(`${name}: 0 hangang lights in shaders, tile floor untouched`);
+  for (const f of surfaces) assert.equal(f(x, z, Infinity), null, `${name}: no hangang ground surface`);
+  assert.equal(hg.heightAt(x, z), null, `${name}: no hangang height`);
+  assert.equal(hg.owns(x, z), false, `${name}: not hangang land`);
+  ok(`${name}: 0 hangang lights, no ground surface, tile floor untouched`);
+}
+
+{
+  // 2구간 DEM 사각형이 강남역 섬을 덮지만, 그 안에는 한강 지형·수면 삼각형이 없어야 한다.
+  const g = ISLANDS[1];
+  let inside = 0;
+  hg.root.traverse((o) => {
+    if (!o.isMesh || !(o.name === 'hangang-dem' || o.name === 'hangang-water')) return;
+    const pos = o.geometry.attributes.position, idx = o.geometry.index;
+    const n = idx ? idx.count : pos.count, v = (i) => (idx ? idx.getX(i) : i);
+    for (let i = 0; i + 2 < n; i += 3) {
+      const cx = (pos.getX(v(i)) + pos.getX(v(i + 1)) + pos.getX(v(i + 2))) / 3;
+      const cz = (pos.getZ(v(i)) + pos.getZ(v(i + 1)) + pos.getZ(v(i + 2))) / 3;
+      if (cx > g.x0 && cx < g.x1 && cz > g.z0 && cz < g.z1) inside++;
+    }
+  });
+  assert.equal(inside, 0, `hangang terrain/water triangles inside 강남역 island: ${inside}`);
+  ok('no hangang terrain/water triangles inside the 강남역 island');
+  const hapPt = hg.spawns['tancheon-hap'];
+  assert.ok(hg.owns(hapPt.x, hapPt.z) && surfaces[0](hapPt.x, hapPt.z, Infinity) != null, '합수부 still hangang ground');
+  ok('합수부 is still hangang ground');
 }
 
 {
@@ -68,6 +102,18 @@ for (const [name, [x, z]] of Object.entries(PLACES)) {
   hg.tickPlayer(1, player);
   assert.equal(visibleLights(), 0, 'lights hidden again after leaving hangang');
   ok('leaving hangang hides pool lights again');
+
+  // 한강에서 강남역으로 바로 가면, 2구간 박스 안이지만 다른 섬이므로 조명을 꺼야 한다.
+  // (ownDist 가 1구간 반포까지 거리(~1 km)로 남으면 히스테리시스 때문에 불이 유지된다.)
+  player.position.set(s.x, 0, s.z);
+  hg.tickPlayer(1, player);
+  assert.ok(visibleLights() > 0, 'lights on at hangang before 강남역 hop');
+  const [gx, gz] = PLACES['강남역'];
+  player.position.set(gx, 0, gz);
+  hg.tickPlayer(1, player);
+  assert.ok(hg.ownDist(gx, gz) > 1200, `강남역 ownDist ${hg.ownDist(gx, gz)} should be far`);
+  assert.equal(visibleLights(), 0, '강남역 after hangang: hangang lights hidden');
+  ok('hopping from hangang to 강남역 hides pool lights');
 }
 
 {

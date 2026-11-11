@@ -463,7 +463,7 @@ function createHapUnderpasses({ parent, osm, land }) {
   };
 }
 
-export function createHangangHap({ parent, overlay, terrain, dem, osm } = {}) {
+export function createHangangHap({ parent, overlay, terrain, dem, osm, foreign = null } = {}) {
   const root = new THREE.Group();
   root.name = 'hangang-hap';
   parent.add(root);
@@ -478,6 +478,28 @@ export function createHangangHap({ parent, overlay, terrain, dem, osm } = {}) {
   const city = createHangangCity({ parent: root, osm, land });
   const bridges = createHapBridges({ parent: root, osm, land });
   const underpasses = createHapUnderpasses({ parent: root, osm, land });
+
+  // [hangang-isolation] 2구간 DEM 사각형(−9100..600 × −18625..−13200)은 강남역 섬·경부 띠·탄천 코리더
+  //   본선 섬과 겹친다. 그 섬들 안에서는 한강 지형·수면을 그리지 않고 땅 높이도 내주지 않는다.
+  //   예외: 합수부 사각형(flatClipRect, z ≤ −15800)은 한강 지형이 바닥이다(코리더 타일 바닥을 뺀 곳).
+  const clipRectOf = () => {
+    const b = land.bounds;
+    if (!b) return null;
+    const x0 = Math.max(b.x0, osm?.meta?.visualXMin ?? b.x0);
+    const z1 = Math.min(b.z1, -15800);
+    return (x0 < b.x1 && b.z0 < z1) ? { x0, x1: b.x1, z0: b.z0, z1 } : null;
+  };
+  const ownRect = clipRectOf();
+  const inRect = (r, x, z) => !!r && x >= r.x0 && x <= r.x1 && z >= r.z0 && z <= r.z1;
+  const isForeign = typeof foreign === 'function' ? foreign : () => false;
+  const owns = (x, z) => inRect(ownRect, x, z) || !isForeign(x, z);
+  const ownHeightAt = (x, z) => (owns(x, z) ? land.heightAt(x, z) : null);
+  if (typeof foreign === 'function') {
+    root.traverse((o) => {
+      if (!o.isMesh || !(o.name === 'hangang-dem' || o.name === 'hangang-water')) return;
+      dropTriangles(o.geometry, (cx, cz) => !owns(cx, cz));
+    });
+  }
   const props = createHangangProps({ parent: root, osm, land });
 
   if (overlay) {
@@ -519,7 +541,7 @@ export function createHangangHap({ parent, overlay, terrain, dem, osm } = {}) {
       if (py != null) return py;
     }
     const ys = [];
-    const g = land.heightAt(x, z);
+    const g = ownHeightAt(x, z);
     if (g != null) ys.push(g);
     const by = bridges.floorY?.(x, z, refY);
     if (by != null) ys.push(by);
@@ -546,7 +568,8 @@ export function createHangangHap({ parent, overlay, terrain, dem, osm } = {}) {
   return {
     root,
     bounds: land.bounds,
-    heightAt: (x, z) => land.heightAt(x, z),
+    heightAt: (x, z) => ownHeightAt(x, z),
+    owns,
     surfaceY,
     levels: land.levels,
     mini: null,
@@ -558,13 +581,7 @@ export function createHangangHap({ parent, overlay, terrain, dem, osm } = {}) {
     // 코리더 타일 바닥(y≈0)은 한강 둔치·수면보다 높아 베이지 판과 하늘색 물길 띠로
     // 떠 보인다. 한강 남단 쪽(z < -15800)에서 2구간 지형이 그 아래에 있으면 덮지 않는다.
     // coversTileFlat 이 참인 곳은 이 사각형과 같다 (DEM 박스 ∩ x ≥ visualXMin ∩ z ≤ −15800).
-    flatClipRect() {
-      const b = land.bounds;
-      if (!b) return null;
-      const x0 = Math.max(b.x0, osm?.meta?.visualXMin ?? b.x0);
-      const z1 = Math.min(b.z1, -15800);
-      return (x0 < b.x1 && b.z0 < z1) ? { x0, x1: b.x1, z0: b.z0, z1 } : null;
-    },
+    flatClipRect: () => (ownRect ? { ...ownRect } : null),
     coversTileFlat(x, z) {
       const b = land.bounds;
       if (!b || x < b.x0 || x > b.x1 || z < b.z0 || z > b.z1) return false;
@@ -575,6 +592,25 @@ export function createHangangHap({ parent, overlay, terrain, dem, osm } = {}) {
       return land.heightAt(x, z) != null;
     },
   };
+}
+
+// [hangang-isolation] 무게중심이 drop(cx, cz) 인 삼각형을 인덱스에서 뺀다.
+function dropTriangles(g, drop) {
+  const pos = g?.attributes?.position;
+  if (!pos) return;
+  const idx = g.index;
+  const n = idx ? idx.count : pos.count;
+  const v = (i) => (idx ? idx.getX(i) : i);
+  const keep = [];
+  let dropped = 0;
+  for (let i = 0; i + 2 < n; i += 3) {
+    const a = v(i), b = v(i + 1), c = v(i + 2);
+    const cx = (pos.getX(a) + pos.getX(b) + pos.getX(c)) / 3;
+    const cz = (pos.getZ(a) + pos.getZ(b) + pos.getZ(c)) / 3;
+    if (drop(cx, cz)) { dropped++; continue; }
+    keep.push(a, b, c);
+  }
+  if (dropped) { g.setIndex(keep); g.computeBoundingSphere?.(); g.computeBoundingBox?.(); }
 }
 
 export function mergeHangangMini(a, b) {

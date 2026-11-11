@@ -2850,8 +2850,8 @@ function frame() {
     if (corridor?.namsan?.tower && Math.hypot(P.x - corridor.namsan.tower.ox, P.z - corridor.namsan.tower.oz) < 8000) {
       scene.fog.near = 650; scene.fog.far = 10500;
     }
-    const hb = corridor?.hangang?.bounds;
-    if (hb && P.x >= hb.x0 - 200 && P.x <= hb.x1 + 200 && P.z >= hb.z0 - 200 && P.z <= hb.z1 + 200) {
+    const hgFog = corridor?.hangang; // [hangang-isolation] 한강 땅(다른 섬 제외) 200 m 안에서만
+    if (hgFog?.ownDist && hgFog.ownDist(P.x, P.z) <= 200) {
       scene.fog.near = 650; scene.fog.far = 10500;
     }
     // 가슴 높이 피벗을 공전하고, 시선은 피벗을 지나 앞쪽으로 보낸다.
@@ -2882,7 +2882,7 @@ function frame() {
       if (Number.isFinite(nsH) && !(Number.isFinite(camH) && camH >= nsH)) camH = nsH;
     }
     const hg = corridor?.hangang;
-    if (hg?.bounds && P.x >= hg.bounds.x0 && P.x <= hg.bounds.x1 && P.z >= hg.bounds.z0 && P.z <= hg.bounds.z1) {
+    if (hg?.owns?.(P.x, P.z)) { // [hangang-isolation] 강남역 섬 등 다른 섬 안에서는 카메라 바닥을 건드리지 않는다
       const hgH = hg.surfaceY?.(camX, camZ, P.y) ?? hg.heightAt?.(camX, camZ);
       if (Number.isFinite(hgH) && !(Number.isFinite(camH) && camH >= hgH)) camH = hgH;
     }
