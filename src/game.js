@@ -346,7 +346,7 @@ const corridorClock = { simTime: () => null };
 let ride = null; // [ride] mountRide (코리더가 있을 때만)
 const liveBus = corridorDir && corridorData?.gangnam && liveBusEnabled() ? createLiveBusFeed() : null; // [livebus]
 const corridor = corridorData ? createCorridor({ scene, corridorData, terrain, world, renderer, overlay, params, getSimTime: () => corridorClock.simTime(), liveBus }) : null;
-if (corridor?.namsan) { camera.far = Math.max(camera.far, 14000); camera.updateProjectionMatrix(); } // [namsan] 잠실·강남에서도 실루엣이 보이게
+if (corridor?.namsan || corridor?.hangang) { camera.far = Math.max(camera.far, 14000); camera.updateProjectionMatrix(); } // [namsan] [hangang]
 
 
 if (terrain) { terrain.build(scene, world, overlay); world.groundY = terrain.getGroundHeight; world.vehicleY = terrain.getVehicleHeight; }
@@ -2877,6 +2877,11 @@ function frame() {
       const nsH = corridor.namsan.surfaceY?.(camX, camZ) ?? corridor.namsan.heightAt?.(camX, camZ);
       if (Number.isFinite(nsH) && !(Number.isFinite(camH) && camH >= nsH)) camH = nsH;
     }
+    const hg = corridor?.hangang;
+    if (hg?.bounds && P.x >= hg.bounds.x0 && P.x <= hg.bounds.x1 && P.z >= hg.bounds.z0 && P.z <= hg.bounds.z1) {
+      const hgH = hg.surfaceY?.(camX, camZ, P.y) ?? hg.heightAt?.(camX, camZ);
+      if (Number.isFinite(hgH) && !(Number.isFinite(camH) && camH >= hgH)) camH = hgH;
+    }
     const camFloor = terrain ? 1.2 + (Number.isFinite(camH) ? camH : 0) : 0.45;
     camera.position.set(camX, Math.max(camFloor, eye + dist * sp), camZ);
     camera.lookAt(P.x - bx * aim * cp, eye - aim * sp, P.z - bz * aim * cp); // [terrain] 시선 기준 높이는 P.y + 1.6
@@ -2890,7 +2895,7 @@ function frame() {
     camera.position.copy(c).add(tmp); camera.lookAt(c);
     sun.target.position.copy(c);
   }
-  if (corridor) { const c = cam.mode === 'follow' ? P : sun.target.position; corridor.update(dt, c.x, c.z, cam.mode); corridor.namsan?.tickPlayer?.(dt, player, cam); } // [corridor] 타일 스트리밍(프레임당 최대 1개 빌드) // [namsan]
+  if (corridor) { const c = cam.mode === 'follow' ? P : sun.target.position; corridor.update(dt, c.x, c.z, cam.mode); corridor.namsan?.tickPlayer?.(dt, player, cam); corridor.hangang?.tickPlayer?.(dt, player, cam); } // [corridor] [namsan] [hangang]
   jeongjaBp24?.update(player.position.x, player.position.z); // [bump24-jeongja] 가까운 매장만 실내
   bp24Nav?.update(dt); // [bp24nav] 표지 까딱임 · 안내선 시작점
   if (playgrounds) { const c = cam.mode === 'follow' ? P : sun.target.position; playgrounds.update(dt, c.x, c.z, cam.mode); } // [playgrounds] 거리·타일 기준 표시
@@ -2937,7 +2942,7 @@ window.__jj = {
   createAvatar,
   sanitizeLook,
   perfmem: perfMem, // [perf-memory]
-ready: true, region, tower, renderer, corridor, namsan: corridor?.namsan || null, schoolZone: corridor?.schoolZone || null, playgrounds, streetlights, pangyoLamps, migeumLamps, gangnamNight, gangnamAds, gangnamNightlife, gangnamNpc, gangnamStreet, gangnamBrt, liveBus, // [corridor] [schoolzone] [playgrounds] [streetlights] [gangnam-night] [gangnam-nightlife] [gangnam-npc] [gangnam-street] [gangnam-brt] [livebus] [namsan]
+ready: true, region, tower, renderer, corridor, namsan: corridor?.namsan || null, hangang: corridor?.hangang || null, schoolZone: corridor?.schoolZone || null, playgrounds, streetlights, pangyoLamps, migeumLamps, gangnamNight, gangnamAds, gangnamNightlife, gangnamNpc, gangnamStreet, gangnamBrt, liveBus, // [corridor] [schoolzone] [playgrounds] [streetlights] [gangnam-night] [gangnam-nightlife] [gangnam-npc] [gangnam-street] [gangnam-brt] [livebus] [namsan]
   placeCaption: (x, z) => placeCaption(x, z, placeList, corridor?.bounds?.islands), // [gangnam-night]
 
   bungeo, // [bungeo]

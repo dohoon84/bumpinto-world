@@ -1,0 +1,131 @@
+// [hangang] 한강 자전거 코스 1구간 — 반포한강공원 + 잠수교 + 반포대교.
+//   기본 켜짐. ?hangang=0 이면 전부 끈다. 브랜드 로고 없음.
+import * as THREE from 'three';
+import { watchEvening } from '../../evening.js';
+import { HG, centroid } from './hangangCoords.js';
+import { createHangangTerrain } from './hangangTerrain.js';
+import { createHangangBridges } from './hangangBridges.js';
+import { createHangangPaths } from './hangangPaths.js';
+
+export const HANGANG_DEM_FILE = 'hangang/hangang-dem.json';
+export const HANGANG_OSM_FILE = 'hangang/hangang-osm.json';
+
+export function hangangEnabled(search = typeof location !== 'undefined' ? location.search : '') {
+  return new URLSearchParams(search || '').get('hangang') !== '0';
+}
+
+export function hangangMini(osm) {
+  const extraRoads = [];
+  for (const w of osm?.ways || []) {
+    if (!w.pts || w.pts.length < 2) continue;
+    const n = w.name || '';
+    if (w.k === 'cycleway' || n.includes('자전거') || n === '잠수교' || n.includes('나들목')) {
+      extraRoads.push({ k: 'cycleway', p: w.pts, w: w.w || 4 });
+    }
+  }
+  if (osm?.jamsu?.centerline?.pts) extraRoads.push({ k: 'cycleway', p: osm.jamsu.centerline.pts, w: 5 });
+  const parks = (osm?.parks || []).filter((p) => p.o?.length >= 3).map((p) => ({ o: p.o }));
+  const water = (osm?.water?.outers || []).filter((p) => p.o?.length >= 3).map((p) => ({ o: p.o }));
+  return { roads: extraRoads, buildings: [], plazas: [], parks, water, waterLines: [] };
+}
+
+export function createHangang({ scene, overlay, terrain, dem, osm } = {}) {
+  const root = new THREE.Group();
+  root.name = 'hangang';
+  scene.add(root);
+
+  const land = createHangangTerrain({ parent: root, dem, osm });
+  const bridges = createHangangBridges({ parent: root, osm, land });
+  const paths = createHangangPaths({ parent: root, osm, land });
+
+  const spawnSrc = osm?.spawn || osm?.connectEnds?.jamsuSouth;
+  const spawn = spawnSrc
+    ? { x: spawnSrc.x, z: spawnSrc.z, name: spawnSrc.name || '잠수교 남단' }
+    : { x: -9741.7, z: -15961.4, name: '잠수교 남단' };
+
+  if (overlay) {
+    const jamsuC = osm?.jamsu?.outline?.pts ? centroid(osm.jamsu.outline.pts) : { x: spawn.x, z: spawn.z };
+    overlay.add({
+      cls: 'label landmark',
+      text: '🌉 잠수교 Jamsugyo · 795m',
+      getPos: () => new THREE.Vector3(jamsuC.x, bridges.jamsuY(jamsuC.x, jamsuC.z) + 6, jamsuC.z),
+      maxDist: 9000,
+      minDist: 40,
+    });
+    const banpoC = osm?.banpo?.outline?.pts ? centroid(osm.banpo.outline.pts) : jamsuC;
+    overlay.add({
+      cls: 'label landmark',
+      text: '🌉 반포대교 Banpo Bridge',
+      getPos: () => new THREE.Vector3(banpoC.x, bridges.banpoY(banpoC.x, banpoC.z) + 8, banpoC.z),
+      maxDist: 9000,
+      minDist: 80,
+    });
+    const parkC = osm?.park?.ring?.pts ? centroid(osm.park.ring.pts) : { x: spawn.x - 200, z: spawn.z + 80 };
+    overlay.add({
+      cls: 'label landmark',
+      text: '🌳 반포한강공원 Banpo Hangang Park',
+      getPos: () => new THREE.Vector3(parkC.x, (land.heightAt(parkC.x, parkC.z) ?? land.waterY) + 8, parkC.z),
+      maxDist: 8000,
+      minDist: 40,
+    });
+  }
+
+  function surfaceY(x, z, refY = Infinity) {
+    const ys = [];
+    const g = land.heightAt(x, z);
+    if (g != null) ys.push(g);
+    const by = bridges.floorY?.(x, z, refY);
+    if (by != null) ys.push(by);
+    const py = paths.floorY?.(x, z, refY);
+    if (py != null) ys.push(py);
+    let best = null;
+    const cap = Number.isFinite(refY) ? refY + 0.55 : Infinity;
+    for (const y of ys) {
+      if (y == null || y > cap) continue;
+      if (best == null || y > best) best = y;
+    }
+    return best;
+  }
+
+  if (terrain?.addGroundSurface) {
+    terrain.addGroundSurface((x, z, refY) => {
+      const b = land.bounds;
+      if (!b || x < b.x0 || x > b.x1 || z < b.z0 || z > b.z1) return null;
+      return surfaceY(x, z, refY);
+    });
+  }
+
+  const unwatch = watchEvening((on) => {
+    land.setNight(on ? 1 : 0);
+    bridges.setNight(on ? 1 : 0);
+    paths.setNight(on ? 1 : 0);
+  });
+
+  const api = {
+    root,
+    spawn,
+    spawnY: () => {
+      const prefer = (land.levels?.waterY ?? land.waterY ?? -43) + 4;
+      return (surfaceY(spawn.x, spawn.z, prefer) ?? land.heightAt(spawn.x, spawn.z) ?? land.waterY) + 0.15;
+    },
+    bounds: land.bounds,
+    heightAt: (x, z) => land.heightAt(x, z),
+    surfaceY,
+    groundHeight: (x, z, refY) => surfaceY(x, z, refY),
+    levels: land.levels,
+    connectEnds: osm?.connectEnds || {},
+    mini: hangangMini(osm),
+    setNight(v) {
+      land.setNight(v);
+      bridges.setNight(v);
+      paths.setNight(v);
+    },
+    update() {},
+    tickPlayer() {},
+    dispose() {
+      unwatch?.();
+      scene.remove(root);
+    },
+  };
+  return api;
+}
