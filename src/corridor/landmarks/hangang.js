@@ -130,6 +130,7 @@ export function createHangang({ scene, overlay, terrain, dem, osm } = {}) {
     surfaceY,
     groundHeight: (x, z, refY) => surfaceY(x, z, refY),
     levels: land.levels,
+    revetmentView: land.revetmentView || null,
     connectEnds: osm?.connectEnds || {},
     mini: hangangMini(osm),
     setNight(v) {

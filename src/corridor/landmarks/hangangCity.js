@@ -117,7 +117,7 @@ export function createHangangCity({ parent, osm, land } = {}) {
   if (b) {
     const cx = (b.x0 + b.x1) / 2, cz = (b.z0 + b.z1) / 2;
     const rad = Math.hypot(b.x1 - b.x0, b.z1 - b.z0) * 0.55 + 120;
-    const geo = new THREE.CylinderGeometry(rad, rad, 72, 64, 1, true);
+    const geo = new THREE.CylinderGeometry(rad, rad, 160, 64, 1, true);
     const mat = new THREE.MeshBasicMaterial({
       map: skylineTex(),
       side: THREE.BackSide,
@@ -127,7 +127,7 @@ export function createHangangCity({ parent, osm, land } = {}) {
     });
     mats.push(mat);
     const mesh = new THREE.Mesh(geo, mat);
-    mesh.position.set(cx, (lv.waterY ?? -43) + 28, cz);
+    mesh.position.set(cx, (lv.waterY ?? -43) + 55, cz);
     mesh.name = 'hangang-skyline';
     group.add(mesh);
   }

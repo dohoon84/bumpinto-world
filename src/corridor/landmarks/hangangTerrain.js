@@ -247,6 +247,38 @@ function grassTex() {
   return t;
 }
 
+
+function waterLandEdges(water, step = 9) {
+  const edges = [];
+  for (const outer of water?.outers || []) {
+    const ring = outer.o;
+    if (!ring || ring.length < 2) continue;
+    for (let i = 1; i < ring.length; i++) {
+      const a = ring[i - 1], b = ring[i];
+      const mx = (a[0] + b[0]) / 2, mz = (a[1] + b[1]) / 2;
+      const dx = b[0] - a[0], dz = b[1] - a[1];
+      const L = Math.hypot(dx, dz) || 1;
+      const px = -dz / L, pz = dx / L;
+      const w1 = inWater(mx + px * 8, mz + pz * 8, water);
+      const w2 = inWater(mx - px * 8, mz - pz * 8, water);
+      let sx, sz;
+      if (!w1 && w2) { sx = px; sz = pz; }
+      else if (w1 && !w2) { sx = -px; sz = -pz; }
+      else continue;
+      const n = Math.max(1, Math.ceil(L / step));
+      for (let s = 0; s < n; s++) {
+        const t0 = s / n, t1 = (s + 1) / n;
+        edges.push({
+          a: [a[0] + (b[0] - a[0]) * t0, a[1] + (b[1] - a[1]) * t0],
+          b: [a[0] + (b[0] - a[0]) * t1, a[1] + (b[1] - a[1]) * t1],
+          sx, sz,
+        });
+      }
+    }
+  }
+  return edges;
+}
+
 export function createHangangTerrain({ parent, dem, osm }) {
   const group = new THREE.Group();
   group.name = 'hangang-terrain';
@@ -358,34 +390,35 @@ export function createHangangTerrain({ parent, dem, osm }) {
   // 공원 ShapeGeometry 판은 쓰지 않는다. 오목한 반포한강공원이 눈높이 거대 삼각형(녹색 벽)이 된다.
   // 잔디는 DEM 정점색 + 타일 텍스처로만 그린다.
 
-  // 계단식 호안: 공원 강변에서 물을 향해 내려가는 콘크리트 단.
-  // OSM 에 terrace/revetment way 가 없어 강변 윤곽+수면으로 만들었다(approximate).
-  const parkRing = osm?.park?.ring?.pts || osm?.parks?.find((p) => p.name === '반포한강공원')?.o;
-  const terraceMat = new THREE.MeshLambertMaterial({ color: '#c9c2b4', side: THREE.DoubleSide });
-  const riserMat = new THREE.MeshLambertMaterial({ color: '#b3ada0', side: THREE.DoubleSide });
+  // 계단식 호안: 한강 수면 외곽에서 육지 쪽으로 회색 콘크리트 단.
+  // OSM terrace way 가 없어 수면 링 + 수면 높이로 만들었다(approximate).
+  const terraceMat = new THREE.MeshLambertMaterial({ color: '#9a9b95', side: THREE.DoubleSide });
+  const riserMat = new THREE.MeshLambertMaterial({ color: '#4e4f49', side: THREE.DoubleSide });
   mats.push(terraceMat, riserMat);
-  if (parkRing) {
-    const edges = riverFacingEdges(parkRing, osm?.water, 8);
-    const steps = 8;
-    const tread = 1.42;
-    const rise = 0.38;
-    const tpos = [], tidx = [], rpos = [], ridx = [];
-    let tv = 0, rv = 0;
+  const topCenters = [];
+  const steps = 11;
+  const tread = 1.22;
+  const rise = 0.48;
+  if (osm?.water?.outers?.length) {
+    const park = osm?.park?.ring?.pts || osm?.parks?.find((pk) => pk.name === '반포한강공원')?.o;
+    const edges = waterLandEdges(osm.water, 8).filter((e) => {
+      const lx = (e.a[0] + e.b[0]) / 2 + e.sx * 6;
+      const lz = (e.a[1] + e.b[1]) / 2 + e.sz * 6;
+      if (park && pointInRing(lx, lz, park)) return true;
+      if (park) {
+        for (const [dx, dz] of [[22, 0], [-22, 0], [0, 22], [0, -22], [16, 16], [-16, 16]]) {
+          if (pointInRing(lx + dx, lz + dz, park)) return true;
+        }
+      }
+      return false;
+    });
+    const tpos = [], tidx = [], rpos = [], ridx = [], npos = [], nidx = [];
+    let tv = 0, rv = 0, nv = 0;
     for (const e of edges) {
-      const dx = e.b[0] - e.a[0], dz = e.b[1] - e.a[1];
-      const L = Math.hypot(dx, dz) || 1;
-      const px = -dz / L, pz = dx / L;
-      const pc = centroid(parkRing);
-      const midX = (e.a[0] + e.b[0]) / 2, midZ = (e.a[1] + e.b[1]) / 2;
-      const inward = (pc.x - midX) * px + (pc.z - midZ) * pz;
-      let sx = inward >= 0 ? -px : px;
-      let sz = inward >= 0 ? -pz : pz;
-      if (!inWater(midX + sx * 12, midZ + sz * 12, osm?.water)) { sx = -sx; sz = -sz; }
-      if (!inWater(midX + sx * 12, midZ + sz * 12, osm?.water)
-        && !inWater(midX + sx * 22, midZ + sz * 22, osm?.water)) continue;
+      const sx = e.sx, sz = e.sz;
       for (let b = 0; b < steps; b++) {
-        const d0 = 0.35 + b * tread, d1 = d0 + tread - 0.05;
-        const yTread = lv.waterY + 0.2 + (steps - 1 - b) * rise;
+        const d0 = 0.25 + b * tread, d1 = d0 + tread - 0.06;
+        const yTread = lv.waterY + 0.16 + b * rise;
         const q = [
           [e.a[0] + sx * d0, e.a[1] + sz * d0],
           [e.b[0] + sx * d0, e.b[1] + sz * d0],
@@ -395,15 +428,34 @@ export function createHangangTerrain({ parent, dem, osm }) {
         for (let i = 0; i < 4; i++) tpos.push(q[i][0], yTread, q[i][1]);
         tidx.push(tv, tv + 1, tv + 2, tv, tv + 2, tv + 3);
         tv += 4;
-        const yLow = (b === steps - 1) ? lv.waterY + 0.04 : (lv.waterY + 0.2 + (steps - 2 - b) * rise);
+        const yLow = (b === 0) ? lv.waterY + 0.04 : (lv.waterY + 0.16 + (b - 1) * rise);
+        // riser at the waterward (low) edge of this tread = d0 side = q[0], q[1]
         rpos.push(
-          q[2][0], yTread, q[2][1],
-          q[3][0], yTread, q[3][1],
-          q[3][0], yLow, q[3][1],
-          q[2][0], yLow, q[2][1],
+          q[0][0], yTread, q[0][1],
+          q[1][0], yTread, q[1][1],
+          q[1][0], yLow, q[1][1],
+          q[0][0], yLow, q[0][1],
         );
         ridx.push(rv, rv + 1, rv + 2, rv, rv + 2, rv + 3);
         rv += 4;
+        // dark nosing so treads read at a glance
+        const nx0 = e.a[0] + sx * d0, nz0 = e.a[1] + sz * d0;
+        const nx1 = e.b[0] + sx * d0, nz1 = e.b[1] + sz * d0;
+        const nx2 = e.b[0] + sx * (d0 + 0.11), nz2 = e.b[1] + sz * (d0 + 0.11);
+        const nx3 = e.a[0] + sx * (d0 + 0.11), nz3 = e.a[1] + sz * (d0 + 0.11);
+        const yN = yTread + 0.025;
+        npos.push(nx0, yN, nz0, nx1, yN, nz1, nx2, yN, nz2, nx3, yN, nz3);
+        nidx.push(nv, nv + 1, nv + 2, nv, nv + 2, nv + 3);
+        nv += 4;
+        if (b === steps - 1) {
+          topCenters.push({
+            x: (q[2][0] + q[3][0]) / 2,
+            z: (q[2][1] + q[3][1]) / 2,
+            y: yTread,
+            lookX: (e.a[0] + e.b[0]) / 2 - sx * 6,
+            lookZ: (e.a[1] + e.b[1]) / 2 - sz * 6,
+          });
+        }
       }
     }
     if (tpos.length) {
@@ -425,6 +477,37 @@ export function createHangangTerrain({ parent, dem, osm }) {
       mesh.name = 'hangang-revetment-risers';
       group.add(mesh);
     }
+    if (npos.length) {
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.Float32BufferAttribute(npos, 3));
+      geo.setIndex(nidx);
+      geo.computeVertexNormals();
+      const mesh = new THREE.Mesh(geo, riserMat);
+      mesh.name = 'hangang-revetment-noses';
+      group.add(mesh);
+    }
+  }
+  let revetmentView = null;
+  {
+    const cl = osm?.jamsu?.centerline?.pts;
+    const midB = cl && cl.length >= 2
+      ? { x: (cl[0][0] + cl[cl.length - 1][0]) / 2, z: (cl[0][1] + cl[cl.length - 1][1]) / 2 }
+      : { x: -9913, z: -16408 };
+    const prefer = { x: -9920, z: -15940 };
+    let bestD = Infinity;
+    for (const c of topCenters) {
+      if (c.x > -9780 || c.x < -10350) continue;
+      const d = Math.hypot(c.x - prefer.x, c.z - prefer.z);
+      if (d < bestD) {
+        bestD = d;
+        revetmentView = {
+          ...c,
+          lookX: c.lookX * 0.4 + midB.x * 0.6,
+          lookZ: c.lookZ * 0.4 + midB.z * 0.6,
+        };
+      }
+    }
+    if (!revetmentView && topCenters.length) revetmentView = topCenters[Math.floor(topCenters.length / 2)];
   }
 
   const dayColors = new Map();
@@ -440,11 +523,12 @@ export function createHangangTerrain({ parent, dem, osm }) {
       m.material.emissive.set(t > 0.35 ? '#0a2030' : '#000000');
       m.material.color.setRGB(0.16 * (1 - t) + 0.07 * t, 0.42 * (1 - t) + 0.12 * t, 0.47 * (1 - t) + 0.16 * t);
     }
-    terraceMat.color.setRGB(0.77 * (1 - t) + 0.28 * t, 0.72 * (1 - t) + 0.24 * t, 0.64 * (1 - t) + 0.20 * t);
+    terraceMat.color.setRGB(0.56 * (1 - t) + 0.22 * t, 0.56 * (1 - t) + 0.22 * t, 0.54 * (1 - t) + 0.20 * t);
+    riserMat.color.setRGB(0.44 * (1 - t) + 0.16 * t, 0.44 * (1 - t) + 0.16 * t, 0.42 * (1 - t) + 0.15 * t);
   }
 
   return {
-    group, heightAt, levels: lv, bounds, waterY: lv.waterY,
+    group, heightAt, levels: lv, bounds, waterY: lv.waterY, revetmentView,
     jamsuDeckY: (x, z) => jamsuDeckY(x, z, osm, lv),
     banpoDeckY: (x, z) => banpoDeckY(x, z, osm, lv, heightAt),
     setNight,

@@ -76,3 +76,41 @@ export function distToPoly(x, z, pts) {
   const q = projectOnLine(x, z, pts);
   return q ? q.dist : Infinity;
 }
+
+/** 잠수교 실제 데크 폭.
+ * OSM way/1091571021 (윤곽)에는 width·lanes 태그가 없고, 면적÷길이 widthEst 는 5.6 m
+ * (양 끝 폭 약 4.7–9.5 m)이다. 중심선 way/596516315 는 보행화 이후 highway=cycleway 이고
+ * width·lanes 가 없다. 이 bbox 에 차도·보도를 나눈 평행 way 도 없다.
+ * 물리 폭은 한국민족문화대백과사전(한국학중앙연구원) 「잠수교」 항목의 18.0 m 를 쓴다.
+ * https://encykorea.aks.ac.kr/Article/E0048181
+ * 「너비 18.0m, 길이 795.0m」(집필 변근주, 2023-02-07 수정; 참고문헌
+ * 『반포대교가설공사실시설계종합보고서』, 서울특별시, 1975).
+ * 한국어 위키백과 「반포대교」 잠수교 절도 폭 18 m, 왕복 4차로로 적고 있다.
+ */
+export const JAMSU_DECK_WIDTH = 18;
+
+export function offsetLine(pts, dist) {
+  if (!pts || pts.length < 2) return [];
+  const out = [];
+  const n = pts.length;
+  for (let i = 0; i < n; i++) {
+    const a = pts[Math.max(0, i - 1)], b = pts[Math.min(n - 1, i + 1)], p = pts[i];
+    let dx = b[0] - a[0], dz = b[1] - a[1];
+    const L = Math.hypot(dx, dz) || 1;
+    dx /= L; dz /= L;
+    out.push([p[0] - dz * dist, p[1] + dx * dist]);
+  }
+  return out;
+}
+
+/** 중심선을 따라 폭 `width` 인 닫힌 데크 윤곽. OSM 얇은 윤곽 대신 쓴다. */
+export function jamsuDeckRing(osm, width = JAMSU_DECK_WIDTH) {
+  const line = osm?.jamsu?.centerline?.pts;
+  if (!line || line.length < 2) return osm?.jamsu?.outline?.pts || null;
+  const half = width / 2;
+  const left = offsetLine(line, half);
+  const right = offsetLine(line, -half);
+  const ring = left.concat(right.slice().reverse());
+  if (ring.length) ring.push(ring[0].slice());
+  return ring;
+}

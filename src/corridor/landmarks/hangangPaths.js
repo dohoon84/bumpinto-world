@@ -2,7 +2,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { fixNormalsUp } from '../../world.js';
-import { projectOnLine, pointInRing, inWater } from './hangangCoords.js';
+import { projectOnLine, pointInRing, inWater, jamsuDeckRing, JAMSU_DECK_WIDTH } from './hangangCoords.js';
 import { jamsuDeckY, banpoDeckY } from './hangangTerrain.js';
 
 function resample(pts, step = 3.2) {
@@ -71,8 +71,9 @@ function nearAny(x, z, rings, pad) {
 function keepWay(w, ctx) {
   const n = w.name || '';
   const k = w.k;
+  if (n === '잠수교') return false; // 회색 아스팔트 데크·보도가 그린다. 테라코타 자전거길 색을 쓰지 않는다.
   if (k === 'cycleway') return true;
-  if (n.includes('자전거') || n.includes('나들목') || n === '잠수교') return true;
+  if (n.includes('자전거') || n.includes('나들목')) return true;
   if (k === 'bridge' && (n === '잠수교' || n === '반포대교')) return false; // outline rendered as deck
   // layer=2 반포대로·녹사평대로 는 반포대교 데크 메시가 이미 그 차로다. 리본으로 다시 깔면
   // 잠수교 윤곽 안 높이와 반포 높이가 섞여 사이 공간을 가르는 회색 대각선이 된다.
@@ -87,10 +88,26 @@ function keepWay(w, ctx) {
 
 function kindOf(w) {
   const n = w.name || '';
-  if (w.k === 'cycleway' || n.includes('자전거') || n === '잠수교') return 'bike';
+  if (n === '잠수교') return 'walk';
+  if (w.k === 'cycleway' || n.includes('자전거')) return 'bike';
   if (w.layer === '2' && (n === '반포대로' || n === '녹사평대로')) return 'upper';
   if (w.k === 'steps') return 'steps';
   return 'walk';
+}
+
+
+function partsOutsideRing(pts, ring) {
+  if (!ring) return [pts];
+  const parts = [];
+  let cur = [];
+  for (const p of pts) {
+    if (pointInRing(p[0], p[1], ring)) {
+      if (cur.length >= 2) parts.push(cur);
+      cur = [];
+    } else cur.push(p);
+  }
+  if (cur.length >= 2) parts.push(cur);
+  return parts;
 }
 
 export function createHangangPaths({ parent, osm, land }) {
@@ -99,7 +116,7 @@ export function createHangangPaths({ parent, osm, land }) {
   parent.add(group);
   const lv = land.levels;
   const heightAt = land.heightAt;
-  const jamsuRing = osm?.jamsu?.outline?.pts;
+  const jamsuRing = jamsuDeckRing(osm) || osm?.jamsu?.outline?.pts;
   const banpoRing = osm?.banpo?.outline?.pts;
   const park = osm?.park?.ring?.pts;
   const near = [jamsuRing, banpoRing, park, osm?.jamsu?.centerline?.pts].filter(Boolean);
@@ -114,7 +131,7 @@ export function createHangangPaths({ parent, osm, land }) {
     const cl = osm?.jamsu?.centerline?.pts;
     if (cl) {
       const q = projectOnLine(x, z, cl);
-      if (q && q.dist < 8) return jamsuDeckY(x, z, osm, lv);
+      if (q && q.dist < JAMSU_DECK_WIDTH / 2 + 0.5) return jamsuDeckY(x, z, osm, lv);
     }
     if (w?.tunnel === 'yes') {
       const g = heightAt(x, z);
@@ -129,13 +146,18 @@ export function createHangangPaths({ parent, osm, land }) {
     if (!w.pts || w.pts.length < 2) continue;
     if (!keepWay(w, ctx)) continue;
     const kind = kindOf(w);
-    const pts = resample(w.pts, kind === 'bike' ? 3.0 : 3.6);
-    if (pts.length < 2) continue;
+    const ptsAll = resample(w.pts, kind === 'bike' ? 3.0 : 3.6);
+    if (ptsAll.length < 2) continue;
     const width = Math.max(2.2, Math.min(16, w.w || (kind === 'bike' ? 4 : 2.4)));
-    const geo = drapedRibbonGeo(pts, width, (x, z) => surfaceAt(x, z, kind, w), kind === 'upper' ? 0.06 : 0.05);
-    if (!geo) continue;
-    buckets[kind].push(geo);
-    kept.push(w);
+    const parts = partsOutsideRing(ptsAll, jamsuRing);
+    let drew = false;
+    for (const pts of parts) {
+      const geo = drapedRibbonGeo(pts, width, (x, z) => surfaceAt(x, z, kind, w), kind === 'upper' ? 0.06 : 0.05);
+      if (!geo) continue;
+      buckets[kind].push(geo);
+      drew = true;
+    }
+    if (drew) kept.push(w);
   }
 
   const colors = { bike: '#c05645', walk: '#c9c2b4', steps: '#9a9084', upper: '#5a5d61' };
@@ -154,10 +176,11 @@ export function createHangangPaths({ parent, osm, land }) {
   const edgeGeos = [], dashGeos = [];
   for (const w of kept) {
     if (kindOf(w) !== 'bike') continue;
-    const pts = resample(w.pts, 2.2);
-    if (pts.length < 2) continue;
+    const ptsAll = resample(w.pts, 2.2);
     const width = Math.max(2.2, Math.min(16, w.w || 4));
     const yFn = (x, z) => surfaceAt(x, z, 'bike', w);
+    for (const pts of partsOutsideRing(ptsAll, jamsuRing)) {
+    if (pts.length < 2) continue;
     // 흰 가장자리: 중심에서 ±(width/2 - 0.14) 에 12 cm 리본
     const hw = width / 2 - 0.14;
     for (const side of [-1, 1]) {
@@ -201,6 +224,7 @@ export function createHangangPaths({ parent, osm, land }) {
         acc += seg;
       }
       flush();
+    }
     }
   }
   const markMats = {};
