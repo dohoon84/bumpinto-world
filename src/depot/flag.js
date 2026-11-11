@@ -14,4 +14,4 @@ export const DEPOT_SITE = Object.freeze({
   door: Object.freeze({ x: -492, z: 500, w: 8 }), // 출입구 중심(벽 위) · 폭
 });
 // ?at=depot 착지점: 출입구 앞 6 m, 문을 바라봄 (+z 방향 = 남쪽)
-export const DEPOT_SPAWN = Object.freeze({ x: -492, z: 493.5, yaw: 0, face: Math.PI });
+export const DEPOT_SPAWN = Object.freeze({ x: -492, z: 496.5, yaw: 0, face: Math.PI });
