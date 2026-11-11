@@ -132,6 +132,57 @@ export function makeHangangHeightAt(dem, osm = null) {
   const datum = dem?.datum ?? HG.datum;
   const lv = measureHangangLevels(dem, osm);
   const blend = osm?.meta?.datumBlend || null;
+  const isHap = osm?.meta?.segment === 'hap';
+  const olympicWays = isHap
+    ? (osm?.ways || []).filter((w) => w.name === '올림픽대로' && w.pts?.length >= 2)
+    : [];
+  const tunnelWays = isHap
+    ? (osm?.ways || []).filter((w) => w.tunnel === 'yes' && (w.name || '').includes('나들목') && w.pts?.length >= 2)
+    : [];
+  const parkRings = (osm?.parks || []).map((p) => p.o).filter((o) => o && o.length >= 3);
+  // Local riverside target along x (a single 12 km percentile pulled the
+  // 청담 bank down toward the lower 반포 elevations and made a 4 m step).
+  let parkXs = null, parkYs = null;
+  if (isHap) {
+    const BIN = 120;
+    const buckets = new Map();
+    for (const w of osm?.ways || []) {
+      if ((w.name || '') !== '한강남자전거길' || !w.pts) continue;
+      for (const pt of w.pts) {
+        if (inWater(pt[0], pt[1], osm?.water)) continue;
+        const s = sampleDem(dem, pt[0], pt[1]);
+        if (s == null || s <= lv.waterEle) continue;
+        const k = Math.round(pt[0] / BIN);
+        let arr = buckets.get(k);
+        if (!arr) { arr = []; buckets.set(k, arr); }
+        arr.push(s);
+      }
+    }
+    const keys = [...buckets.keys()].sort((a, b) => a - b);
+    parkXs = []; parkYs = [];
+    for (const k of keys) {
+      const arr = buckets.get(k).sort((a, b) => a - b);
+      parkXs.push(k * BIN);
+      parkYs.push(arr[Math.floor(arr.length * 0.35)]);
+    }
+  }
+  function parkTypicalAt(x) {
+    if (!parkXs || !parkXs.length) return lv.waterEle + 3.2;
+    if (x <= parkXs[0]) return parkYs[0];
+    if (x >= parkXs[parkXs.length - 1]) return parkYs[parkYs.length - 1];
+    let i = 1;
+    while (i < parkXs.length && parkXs[i] < x) i++;
+    const t = (x - parkXs[i - 1]) / ((parkXs[i] - parkXs[i - 1]) || 1);
+    return parkYs[i - 1] * (1 - t) + parkYs[i] * t;
+  }
+  function minDistWays(x, z, ways) {
+    let best = Infinity;
+    for (const w of ways) {
+      const q = projectOnLine(x, z, w.pts);
+      if (q && q.dist < best) best = q.dist;
+    }
+    return best;
+  }
   function eleAt(x, z) {
     const e = sampleDem(dem, x, z);
     if (e == null) return null;
@@ -145,8 +196,48 @@ export function makeHangangHeightAt(dem, osm = null) {
     }
     const seorae = osm?.seorae?.ring?.pts;
     if (seorae && pointInRing(x, z, seorae)) return Math.max(e, lv.waterEle + 0.85) + off;
-    // 강변 자전거길 DEM 이 수면 25백분위보다 살짝 낮게 나온 칸은 수면으로 올린다.
-    return Math.max(e, lv.waterEle) + off;
+    let land = Math.max(e, lv.waterEle);
+    if (isHap) {
+      let tunW = 0, tunE = land;
+      for (const w of tunnelWays) {
+        const q = projectOnLine(x, z, w.pts);
+        const hw = (w.w || 5) * 0.5 + 14;
+        if (!q || q.dist > hw) continue;
+        const a = w.pts[0], b = w.pts[w.pts.length - 1];
+        const ea = sampleDem(dem, a[0], a[1]);
+        const eb = sampleDem(dem, b[0], b[1]);
+        if (ea == null || eb == null) continue;
+        const dx = b[0] - a[0], dz = b[1] - a[1];
+        const L2 = dx * dx + dz * dz || 1;
+        const tt = Math.max(0, Math.min(1, ((x - a[0]) * dx + (z - a[1]) * dz) / L2));
+        const floor = ea + (eb - ea) * tt;
+        const fall = Math.max(0, 1 - q.dist / hw);
+        const ww = fall * fall * fall;
+        if (ww > tunW) { tunW = ww; tunE = floor; }
+      }
+      if (tunW > 0.05) {
+        land = land * (1 - tunW) + Math.min(land, tunE) * tunW;
+      } else {
+        const dOly = olympicWays.length ? minDistWays(x, z, olympicWays) : Infinity;
+        let inPark = false;
+        for (const r of parkRings) if (pointInRing(x, z, r)) { inPark = true; break; }
+        // Distance north to the 한강 only — 탄천 water must not trigger a flatten
+        // or the corridor join at (32, −13552) drops 3 m toward the 한강 profile.
+        let dW = 240;
+        for (let d = 0; d <= 220; d += 8) {
+          if (inHanRiver(x, z - d, osm)
+            || inHanRiver(x + 12, z - d, osm)
+            || inHanRiver(x - 12, z - d, osm)) { dW = d; break; }
+        }
+        const waterFade = dW >= 240 ? 0 : (inPark ? 1 : Math.max(0, 1 - Math.max(0, dW - 140) / 70));
+        const olyFade = Math.max(0, Math.min(1, (dOly - 14) / 55));
+        const w = 0.78 * waterFade * olyFade;
+        if (w > 0.02) {
+          land = land * (1 - w) + parkTypicalAt(x) * w;
+        }
+      }
+    }
+    return land + off;
   }
   function heightAt(x, z) {
     const e = eleAt(x, z);
@@ -517,13 +608,19 @@ export function createHangangTerrain({ parent, dem, osm }) {
           || inWater(x, z + 10, osm?.water) || inWater(x, z - 10, osm?.water)
         );
         const park = pointInRings(x, z, parkRings.map((o) => ({ o })));
+        const hapPark = !wet && osm?.meta?.segment === 'hap' && (
+          park || (
+            (inWater(x, z - 22, osm?.water) || inWater(x, z - 40, osm?.water)
+              || inWater(x + 18, z, osm?.water) || inWater(x - 18, z, osm?.water))
+          )
+        );
         let r, g, b;
         if (wet) {
           r = 0.18 + nrm * 0.02; g = 0.28 + nrm * 0.03; b = 0.26 + nrm * 0.03;
+        } else if (hapPark || park) {
+          r = 0.50 + nrm * 0.08; g = 0.66 + nrm * 0.10; b = 0.32 + nrm * 0.05;
         } else if (nearWater) {
           r = 0.58 + nrm * 0.06; g = 0.52 + nrm * 0.05; b = 0.36 + nrm * 0.04;
-        } else if (park) {
-          r = 0.42 + nrm * 0.10; g = 0.58 + nrm * 0.12; b = 0.28 + nrm * 0.06;
         } else if (e < 9) {
           r = 0.46 + nrm * 0.06; g = 0.44 + nrm * 0.05; b = 0.32 + nrm * 0.03;
         } else if (e < 16) {
@@ -565,7 +662,11 @@ export function createHangangTerrain({ parent, dem, osm }) {
   // 한강 수면 (relation/152336 을 clip 한 outer/inner)
   const waterMeshes = [];
   if (osm?.water?.outers?.length) {
+    const hanN = hanOuterCount(osm);
+    let outerI = 0;
     for (const outer of osm.water.outers) {
+      const thisIsHan = outerI < hanN;
+      outerI += 1;
       const isletRings = (osm?.islets || []).map((isle) => isle.o).filter((o) => o && o.length >= 3);
       const holes = (osm.water.inners || [])
         .filter((inn) => {
@@ -593,6 +694,19 @@ export function createHangangTerrain({ parent, dem, osm }) {
           }
           pos.needsUpdate = true;
           mesh.geometry.computeVertexNormals();
+        }
+        // 탄천 수면 링이 합수부에서 한강 안으로 삐져 나온 삼각형을 뺀다 (항공 샷의 파란 띠).
+        if (!thisIsHan && hanN > 0 && mesh.geometry.index) {
+          const pos = mesh.geometry.attributes.position;
+          const idx = mesh.geometry.index;
+          const keep = [];
+          for (let i = 0; i < idx.count; i += 3) {
+            const ia = idx.getX(i), ib = idx.getX(i + 1), ic = idx.getX(i + 2);
+            const cx = (pos.getX(ia) + pos.getX(ib) + pos.getX(ic)) / 3;
+            const cz = (pos.getZ(ia) + pos.getZ(ib) + pos.getZ(ic)) / 3;
+            if (!inHanRiver(cx, cz, osm)) keep.push(ia, ib, ic);
+          }
+          mesh.geometry.setIndex(keep);
         }
         mesh.material = new THREE.MeshPhongMaterial({
           color: '#1c5c6e',
