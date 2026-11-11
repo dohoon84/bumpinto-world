@@ -34,6 +34,7 @@ let navHits = []; // [bp24nav] 이번 프레임 매장 아이콘 (클릭 판정)
 const chunks = new Map(); // key → { c, s, ver, used }
 let liveIdx = null; // { data, map: Map(chunkKey → feats) }
 let namsanIdx = null; // { mini, map }
+let hangangIdx = null; // { mini, map }
 const bboxOf = new WeakMap();
 const stats = { frames: 0, ms: 0, msMax: 0, chunkMs: 0, chunkRenders: 0, bytes: 0 };
 let onChange = () => {};
@@ -72,7 +73,7 @@ function close() {
   syncCornerPhone(false);
   // 닫으면 캐시 전부 버림(메모리 0). 다시 열면 보이는 청크만 다시 그린다(청크당 수 ms)
   for (const c of chunks.values()) { c.c.width = 0; c.c.height = 0; }
-  chunks.clear(); liveIdx = null; namsanIdx = null; stats.bytes = 0;
+  chunks.clear(); liveIdx = null; namsanIdx = null; hangangIdx = null; stats.bytes = 0;
 }
 
 function build() {
@@ -192,6 +193,33 @@ function namsanFeats() {
   namsanIdx = { mini, map };
   return map;
 }
+function hangangFeats() {
+  const mini = jj()?.hangang?.mini; if (!mini) return null;
+  if (hangangIdx?.mini === mini) return hangangIdx.map;
+  const map = new Map();
+  for (const k of MINI_KINDS) for (const f of mini[k] || []) {
+    const [x0, z0, x1, z1] = bb(f); if (!Number.isFinite(x0)) continue;
+    for (let i = Math.floor(x0 / CHUNK); i <= Math.floor(x1 / CHUNK); i++) for (let j = Math.floor(z0 / CHUNK); j <= Math.floor(z1 / CHUNK); j++) {
+      const key = ck(i, j); let m = map.get(key); if (!m) map.set(key, (m = emptyFeats())); m[k].push(f);
+    }
+  }
+  hangangIdx = { mini, map };
+  return map;
+}
+function landmarkFeats() {
+  const maps = [namsanFeats(), hangangFeats()].filter(Boolean);
+  if (!maps.length) return null;
+  if (maps.length === 1) return maps[0];
+  const out = new Map();
+  for (const map of maps) {
+    for (const [key, feats] of map) {
+      let m = out.get(key);
+      if (!m) { m = emptyFeats(); out.set(key, m); }
+      for (const k of MINI_KINDS) if (feats[k]?.length) m[k].push(...feats[k]);
+    }
+  }
+  return out;
+}
 /** 청크 한 칸에 들어갈 것: 라이브 + 그 칸과 이웃 8칸 코리더 타일(타일 경계를 넘는 길도 끊기지 않게) */
 function featsFor(i, j, L, T, N) {
   const out = emptyFeats(); const x0 = i * CHUNK, z0 = j * CHUNK, x1 = x0 + CHUNK, z1 = z0 + CHUNK;
@@ -297,7 +325,7 @@ function draw(now, J, P) {
 
   // 청크 붙이기
   const cs = Math.min(1.5, Math.max(0.2, Math.round(k * dpr * 20) / 20)); // 청크 해상도(px/m) — 확대 단계마다 하나
-  const L = live(), T = corridorTiles(), N = namsanFeats();
+  const L = live(), T = corridorTiles(), N = landmarkFeats();
   const reach = viewR * 1.42 + 20; // 회전해도 원을 덮는 반경
   g.save();
   g.translate(R, R); g.rotate(theta); g.scale(k, k); g.translate(-x, -z);

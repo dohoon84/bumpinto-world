@@ -31,6 +31,26 @@ export function mountTravel({ corridor, home, teleport }) {
     const n = corridor.namsan;
     dests.push({ id: 'ntower', en: 'N Seoul Tower', ko: '남산서울타워', x: n.spawn.x, z: n.spawn.z, getY: () => n.spawnY() });
   }
+  if (corridor.hangang) {
+    const h = corridor.hangang;
+    dests.push({ id: 'hangang', en: 'Banpo Hangang Park', ko: '반포한강공원', x: h.spawn.x, z: h.spawn.z, getY: () => h.spawnY() });
+    const hap = h.spawns?.['tancheon-hap'];
+    if (hap) {
+      dests.push({
+        id: 'tancheon-hap', en: 'Tancheon Confluence', ko: '탄천합수부',
+        x: hap.x, z: hap.z,
+        getY: () => (h.surfaceY(hap.x, hap.z, (h.levels?.waterY ?? -43) + 8) ?? h.heightAt(hap.x, hap.z) ?? h.spawnY()) + 0.15,
+      });
+    }
+    const jam = h.spawns?.jamwon;
+    if (jam) {
+      dests.push({
+        id: 'jamwon', en: 'Jamwon Hangang Park', ko: '잠원한강공원',
+        x: jam.x, z: jam.z,
+        getY: () => (h.surfaceY(jam.x, jam.z, (h.levels?.waterY ?? -43) + 8) ?? h.heightAt(jam.x, jam.z) ?? h.spawnY()) + 0.15,
+      });
+    }
+  }
 
   const render = () => {
     const en = isEn();
@@ -40,7 +60,7 @@ export function mountTravel({ corridor, home, teleport }) {
       const b = document.createElement('button'); b.type = 'button';
       const site = d.id === 'lotte' ? lotteSiteLabel(en) : null; // 오픈 전: 건설중 공정률
       b.innerHTML = site ? `<span>🚧 ${site.main}</span><span class="ko">${site.sub}</span>`
-        : `<span>${d.id === 'lotte' || d.id === 'ntower' ? '🏙️' : '🚇'} ${en ? d.en : d.ko}</span><span class="ko">${en ? d.ko : d.en}</span>`;
+        : `<span>${d.id === 'lotte' || d.id === 'ntower' ? '🏙️' : (d.id === 'hangang' || d.id === 'tancheon-hap' || d.id === 'jamwon') ? '🌉' : '🚇'} ${en ? d.en : d.ko}</span><span class="ko">${en ? d.ko : d.en}</span>`;
       b.onclick = () => go(d.id);
       panel.appendChild(b);
     }
