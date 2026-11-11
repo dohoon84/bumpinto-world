@@ -12,29 +12,77 @@ const SKIP_BRIDGE = new Set(['반포대교', '잠수교']);
 
 function outlineCenterline(ring, step = 16) {
   if (!ring || ring.length < 4) return { pts: [], widths: [] };
-  let zMin = Infinity, zMax = -Infinity;
+  let xMin = Infinity, xMax = -Infinity, zMin = Infinity, zMax = -Infinity;
   for (const pt of ring) {
+    if (pt[0] < xMin) xMin = pt[0];
+    if (pt[0] > xMax) xMax = pt[0];
     if (pt[1] < zMin) zMin = pt[1];
     if (pt[1] > zMax) zMax = pt[1];
   }
+  const alongZ = (zMax - zMin) >= (xMax - xMin);
   const pts = [];
   const widths = [];
-  for (let z = zMin + 3; z <= zMax - 3; z += step) {
-    const xs = [];
-    for (let i = 1; i < ring.length; i++) {
-      const a = ring[i - 1], b = ring[i];
-      if (a[1] === b[1]) continue;
-      if ((a[1] - z) * (b[1] - z) > 0) continue;
-      const u = (z - a[1]) / (b[1] - a[1]);
-      if (u < -1e-6 || u > 1 + 1e-6) continue;
-      xs.push(a[0] + (b[0] - a[0]) * u);
+  if (alongZ) {
+    for (let z = zMin + 3; z <= zMax - 3; z += step) {
+      const xs = [];
+      for (let i = 1; i < ring.length; i++) {
+        const a = ring[i - 1], b = ring[i];
+        if (a[1] === b[1]) continue;
+        if ((a[1] - z) * (b[1] - z) > 0) continue;
+        const u = (z - a[1]) / (b[1] - a[1]);
+        if (u < -1e-6 || u > 1 + 1e-6) continue;
+        xs.push(a[0] + (b[0] - a[0]) * u);
+      }
+      if (xs.length < 2) continue;
+      const lo = Math.min(...xs), hi = Math.max(...xs);
+      pts.push([(lo + hi) / 2, z]);
+      widths.push(Math.max(10, Math.min(64, hi - lo)));
     }
-    if (xs.length < 2) continue;
-    const lo = Math.min(...xs), hi = Math.max(...xs);
-    pts.push([(lo + hi) / 2, z]);
-    widths.push(Math.max(8, hi - lo));
+  } else {
+    for (let x = xMin + 3; x <= xMax - 3; x += step) {
+      const zs = [];
+      for (let i = 1; i < ring.length; i++) {
+        const a = ring[i - 1], b = ring[i];
+        if (a[0] === b[0]) continue;
+        if ((a[0] - x) * (b[0] - x) > 0) continue;
+        const u = (x - a[0]) / (b[0] - a[0]);
+        if (u < -1e-6 || u > 1 + 1e-6) continue;
+        zs.push(a[1] + (b[1] - a[1]) * u);
+      }
+      if (zs.length < 2) continue;
+      const lo = Math.min(...zs), hi = Math.max(...zs);
+      pts.push([x, (lo + hi) / 2]);
+      widths.push(Math.max(10, Math.min(64, hi - lo)));
+    }
   }
   return { pts, widths };
+}
+
+function nearWaterPt(x, z, water, pad = 18) {
+  if (inWater(x, z, water)) return true;
+  return inWater(x, z - pad, water) || inWater(x, z + pad, water)
+    || inWater(x - pad, z, water) || inWater(x + pad, z, water);
+}
+
+function clipAxisToCrossing(pts, osm, padM = 100) {
+  if (!pts || pts.length < 2) return pts;
+  let first = -1, last = -1;
+  for (let i = 0; i < pts.length; i++) {
+    if (!nearWaterPt(pts[i][0], pts[i][1], osm?.water, 22)) continue;
+    if (first < 0) first = i;
+    last = i;
+  }
+  if (first < 0) return pts;
+  const grow = (i0, dir) => {
+    let i = i0, acc = 0;
+    while (i + dir >= 0 && i + dir < pts.length && acc < padM) {
+      const a = pts[i], b = pts[i + dir];
+      acc += Math.hypot(b[0] - a[0], b[1] - a[1]);
+      i += dir;
+    }
+    return i;
+  };
+  return pts.slice(grow(first, -1), grow(last, 1) + 1);
 }
 
 function resample(pts, step = 8) {
@@ -60,38 +108,50 @@ function resample(pts, step = 8) {
 
 function abutmentYs(br, osm, land) {
   const pts = br.pts || [];
-  const south = [], north = [];
   let zMin = Infinity, zMax = -Infinity;
   for (const p of pts) {
     if (p[1] < zMin) zMin = p[1];
     if (p[1] > zMax) zMax = p[1];
   }
-  const span = (zMax - zMin) || 1;
-  for (const p of resample(pts, 12)) {
-    if (inWater(p[0], p[1], osm?.water)) continue;
-    const g = land.heightAt(p[0], p[1]);
-    if (g == null) continue;
-    const wy = waterYAt(p[0], p[1], land.levels, osm?.meta?.datumBlend);
-    if (g < wy + 4) continue;
-    if ((p[1] - zMin) / span < 0.28) north.push(g);
-    if ((p[1] - zMin) / span > 0.72) south.push(g);
-  }
-  const med = (arr, fb) => (arr.length ? arr.slice().sort((a, b) => a - b)[Math.floor(arr.length / 2)] : fb);
-  const fallback = (land.levels?.waterY ?? -43) + 12;
-  return { southY: med(south, fallback), northY: med(north, fallback), zMin, zMax };
+  // Water-edge approach only. Following inland hills made giant arches
+  // (deck rode the 청담 ridge, then dropped to water+12).
+  const edgeY = (fromSouth) => {
+    const seq = fromSouth
+      ? [...pts].sort((a, b) => b[1] - a[1])
+      : [...pts].sort((a, b) => a[1] - b[1]);
+    let lastLand = null;
+    for (const p of seq) {
+      if (inWater(p[0], p[1], osm?.water)) {
+        if (lastLand != null) return lastLand;
+        break;
+      }
+      const g = land.heightAt(p[0], p[1]);
+      const wy = waterYAt(p[0], p[1], land.levels, osm?.meta?.datumBlend);
+      if (g != null && g > wy + 1.2) lastLand = g;
+    }
+    return lastLand;
+  };
+  const fallbackAt = (z) => {
+    const wy = waterYAt(pts[0][0], z, land.levels, osm?.meta?.datumBlend);
+    return (wy ?? (land.levels?.waterY ?? -43)) + 16;
+  };
+  let southY = edgeY(true);
+  let northY = edgeY(false);
+  if (southY == null) southY = fallbackAt(zMax);
+  if (northY == null) northY = fallbackAt(zMin);
+  // Hangang 대교 sit well above the water; do not sag into an arch.
+  const minClear = (land.levels?.waterY ?? -43) + 14;
+  southY = Math.max(southY, minClear);
+  northY = Math.max(northY, minClear);
+  return { southY, northY, zMin, zMax };
 }
 
 function deckYAt(x, z, br, osm, land, abut) {
   const wy = waterYAt(x, z, land.levels, osm?.meta?.datumBlend);
-  const overWater = inWater(x, z, osm?.water);
-  if (!overWater) {
-    const g = land.heightAt(x, z);
-    if (g != null && g > wy + 5) return Math.max(g, Math.min(abut.southY, abut.northY));
-  }
   const t = abut.zMax === abut.zMin ? 0.5 : (z - abut.zMin) / (abut.zMax - abut.zMin);
   const tt = Math.max(0, Math.min(1, t));
-  // z 가 클수록 남쪽
-  return abut.northY + (abut.southY - abut.northY) * tt;
+  const y = abut.northY + (abut.southY - abut.northY) * tt;
+  return Math.max(y, (wy ?? (land.levels?.waterY ?? -43)) + 13);
 }
 
 function createHapBridges({ parent, osm, land } = {}) {
@@ -134,9 +194,11 @@ function createHapBridges({ parent, osm, land } = {}) {
     if (outline?.pts) {
       const sliced = outlineCenterline(outline.pts, 14);
       if (sliced.pts.length >= 2) {
-        axisSrc = sliced.pts;
+        axisSrc = clipAxisToCrossing(sliced.pts, osm, 90);
         widthAlong = sliced.widths;
       }
+    } else if (axisSrc) {
+      axisSrc = clipAxisToCrossing(axisSrc, osm, 90);
     }
     if (!axisSrc || axisSrc.length < 2) continue;
     const axis = resample(axisSrc, 10);
@@ -205,28 +267,30 @@ function createHapBridges({ parent, osm, land } = {}) {
       group.add(mesh);
     }
 
-    // piers over water (approximate spacing; OSM 교각 노드 없음)
-    const pierGeo = new THREE.BoxGeometry(hw * 1.15, 1, 1.6);
-    const pierDummy = [];
+    // piers over water and where the deck stands well above ground (path side)
+    const pierGeo = new THREE.BoxGeometry(Math.max(2.2, hw * 0.55), 1, 2.0);
     let acc = 0;
     for (let i = 1; i < axis.length; i++) {
       const ax = axis[i - 1][0], az = axis[i - 1][1], bx = axis[i][0], bz = axis[i][1];
       const seg = Math.hypot(bx - ax, bz - az);
       acc += seg;
-      if (acc < 46) continue;
+      if (acc < 42) continue;
       acc = 0;
       const mx = (ax + bx) / 2, mz = (az + bz) / 2;
-      if (!inWater(mx, mz, osm?.water)) continue;
       const yTop = deckYAt(mx, mz, outline || line, osm, land, abut) - thick;
-      const yBot = waterYAt(mx, mz, land.levels, osm?.meta?.datumBlend) - 1.2;
+      const wet = inWater(mx, mz, osm?.water);
+      const g = land.heightAt(mx, mz);
+      const yBot = wet
+        ? (waterYAt(mx, mz, land.levels, osm?.meta?.datumBlend) - 1.2)
+        : (g == null ? null : g - 0.2);
+      if (yBot == null) continue;
+      if (!wet && (yTop - yBot) < 4.5) continue;
       const h = Math.max(4, yTop - yBot);
       const mesh = new THREE.Mesh(pierGeo, pierMat);
       mesh.position.set(mx, yBot + h / 2, mz);
       mesh.scale.y = h;
-      const dx = bx - ax, dz = bz - az;
-      mesh.rotation.y = Math.atan2(dx, dz);
+      mesh.rotation.y = Math.atan2(bx - ax, bz - az);
       group.add(mesh);
-      pierDummy.push(mesh);
     }
     const c = centroid(axis);
     infos.push({ name, x: c.x, z: c.z, y: deckYAt(c.x, c.z, outline || line, osm, land, abut), abut });
@@ -440,6 +504,7 @@ export function createHangangHap({ parent, overlay, terrain, dem, osm } = {}) {
     connectEnds: osm?.connectEnds || {},
     setNight,
     isTunnel: (x, z) => paths.isTunnel?.(x, z),
+    updateLights: (x, z) => props.updateLights?.(x, z),
   };
 }
 
