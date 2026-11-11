@@ -84,6 +84,7 @@
     "bp24:entry": "node scripts/e2e-bump24-jeongja-entry.mjs"
   },
   "dependencies": {
+    "cannon-es": "^0.20.0",
     "three": "^0.186.1"
   },
   "devDependencies": {
