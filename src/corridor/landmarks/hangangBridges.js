@@ -186,22 +186,29 @@ function makeGirders(osm, lv, heightAt) {
   if (!line) return [];
   const spots = collectAxisSpots(line, 9, 30);
   const beamGeo = new THREE.BoxGeometry(1, 1, 1);
-  const mat = new THREE.MeshPhongMaterial({ color: '#8a7a68', shininess: 12, specular: '#2a241c' });
+  const mat = new THREE.MeshPhongMaterial({
+    color: '#a09078',
+    shininess: 28,
+    specular: '#5a4e3c',
+    emissive: '#000000',
+  });
   const dummy = new THREE.Object3D();
   const xAxis = new THREE.Vector3(1, 0, 0);
   const along = new THREE.Vector3();
   const across = new THREE.Vector3();
   const xf = [];
-  // 중앙(0) 거더는 시선 방향 밑면이 비어 검은 쐐기가 되므로 빼 둔다.
-  const offsets = [-7.2, -3.6, 3.6, 7.2];
+  // 중앙 종거더를 다시 넣는다. 예전 0.26 m 폭 상자는 시선 방향에서 검은 쐐기가 됐고,
+  // 빼 두면 아랫면 가운데가 조명 없는 검은 띠로 남는다. 폭·높이를 키워 옆면과 밑면이 보이게 한다.
+  const offsets = [-7.2, -3.6, 0, 3.6, 7.2];
   for (const s of spots) {
     if (banpoRing && !pointInRing(s.x, s.z, banpoRing) && !inWater(s.x, s.z, osm?.water)) continue;
     const top = banpoDeckY(s.x, s.z, osm, lv, heightAt) - lv.banpoThick - 0.28;
     along.set(s.dx, 0, s.dz).normalize();
     across.set(s.px, 0, s.pz).normalize();
     for (const off of offsets) {
-      dummy.position.set(s.x + s.px * off, top, s.z + s.pz * off);
-      dummy.scale.set(9.2, 0.4, 0.26);
+      const isCenter = off === 0;
+      dummy.position.set(s.x + s.px * off, top - (isCenter ? 0.22 : 0), s.z + s.pz * off);
+      dummy.scale.set(9.2, isCenter ? 0.82 : 0.4, isCenter ? 1.55 : 0.26);
       dummy.quaternion.setFromUnitVectors(xAxis, along);
       dummy.updateMatrix();
       xf.push(dummy.matrix.clone());
@@ -467,9 +474,9 @@ export function createHangangBridges({ parent, osm, land }) {
       if (m.name.endsWith('-soffit')) {
         faceDown(m.geometry);
         m.material = new THREE.MeshPhongMaterial({
-          color: m.name.startsWith('banpo') ? '#3a332c' : '#5a6064',
-          shininess: 22,
-          specular: '#2c261e',
+          color: m.name.startsWith('banpo') ? '#5c544a' : '#5a6064',
+          shininess: 26,
+          specular: '#3c342c',
           side: THREE.DoubleSide,
           emissive: '#000000',
         });
@@ -500,21 +507,27 @@ export function createHangangBridges({ parent, osm, land }) {
   const lamps = [];
   const line = osm?.jamsu?.centerline?.pts;
   if (line) {
-    const step = 22;
+    const step = 18;
     let acc = 0;
     for (let i = 1; i < line.length; i++) {
       const ax = line[i - 1][0], az = line[i - 1][1], bx = line[i][0], bz = line[i][1];
       const L = Math.hypot(bx - ax, bz - az) || 1;
+      const dx = (bx - ax) / L, dz = (bz - az) / L;
+      const px = -dz, pz = dx;
       for (let s = 0; s < L; s += step) {
         if (acc + s < 50 || acc + s > polylineLen(line) - 50) continue;
         const t = s / L;
         const x = ax + (bx - ax) * t, z = az + (bz - az) * t;
-        const y = bY(x, z) - lv.banpoThick - 1.35;
-        const light = new THREE.PointLight('#ffcc88', 0, 26, 2);
-        light.position.set(x, y, z);
-        light.name = 'banpo-under-light';
-        group.add(light);
-        lamps.push(light);
+        const y = bY(x, z) - lv.banpoThick - 1.45;
+        // 중심선 한 줄이면 중앙 거더 옆면이 그늘지고, 시선 방향에서 검은 띠가 된다.
+        // 좌우에서 비춰 거더 면이 읽히게 한다.
+        for (const side of [-1.85, 1.85]) {
+          const light = new THREE.PointLight('#ffcc88', 0, 28, 2);
+          light.position.set(x + px * side, y, z + pz * side);
+          light.name = 'banpo-under-light';
+          group.add(light);
+          lamps.push(light);
+        }
       }
       acc += L;
     }
@@ -539,12 +552,18 @@ export function createHangangBridges({ parent, osm, land }) {
 
   function setNight(v) {
     const t = Math.max(0, Math.min(1, v));
-    for (const l of lamps) l.intensity = t * 8.5;
+    for (const l of lamps) l.intensity = t * 9.5;
     for (const m of soffitMats) {
-      // 점광원이 아랫면에 퍼지게. 균일 emissive 는 쓰지 않는다.
-      if (m.emissive) m.emissive.setRGB(0.05 * t, 0.035 * t, 0.02 * t);
+      // 약한 채움만 — 예전의 0.62 균일 emissive 슬래브는 쓰지 않는다.
+      if (m.emissive) m.emissive.setRGB(0.10 * t, 0.075 * t, 0.045 * t);
       m.emissiveIntensity = 1;
     }
+    group.traverse((obj) => {
+      if (obj.name === 'banpo-girders' && obj.material?.emissive) {
+        obj.material.emissive.setRGB(0.18 * t, 0.13 * t, 0.08 * t);
+        obj.material.emissiveIntensity = 1;
+      }
+    });
   }
 
   return { group, floorY, setNight, jamsuY: jY, banpoY: bY };

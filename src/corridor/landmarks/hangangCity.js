@@ -88,10 +88,9 @@ export function createHangangCity({ parent, osm, land } = {}) {
 
   // 올림픽대로 · 강변북로
   // OSM: 남단 긴 두 가닥(각 폭 19.1 m)은 올림픽대로 양방향 — 지형에 붙인다.
-  // 북단 강변북로는 이 clip 에서 점이 한강 폴리곤 안에 들어가 있다. 예전엔
-  // 수면+13 m 로 올려 강 위 떠 있는 겹친 리본(매듭·z-fighting 흰 점)이 됐다.
-  // 터널은 빼고, 같은 이름과 대부분 겹치면 건너뛰며, 고가 태그가 있을 때만 띄운다.
-  // 고가 태그 없이 수면 안에 점이 많은 가닥은 그리지 않는다.
+  // 북단 강변북로는 조립된 한강 링 바깥(육지)에 있다. 고가 태그가 있으면 띄우고
+  // 없으면 지형에 붙인다. 터널은 빼며, 같은 이름과 대부분 겹치면 건너뛴다.
+  // 고가 태그 없이 수면 안에 점이 많은 가닥만 그리지 않는다.
   const exprGeos = [];
   const accepted = [];
   const candidates = (osm?.ways || []).filter((w) => {
@@ -123,8 +122,7 @@ export function createHangangCity({ parent, osm, land } = {}) {
       tot++;
       if (inWater(pts[i][0], pts[i][1], osm?.water)) wetN++;
     }
-    // 이 clip 의 강변북로는 점이 한강 폴리곤 안에 들어가 있다(매핑 오차).
-    // 고가 태그가 없으면 강 위 떠 있는 막대로 그리지 않는다.
+    // 수면 안에 점이 많은 무태그 가닥은 그리지 않는다(강 위 뜬 막대 방지).
     if (!elevated && tot && wetN / tot > 0.45) continue;
     accepted.push(w);
     const width = Math.max(6.5, Math.min(22, w.w || 15.6));

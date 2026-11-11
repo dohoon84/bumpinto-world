@@ -84,6 +84,87 @@ def in_clip_ll(lat, lon, pad=0.004):
     return (CLIP['lat0'] - pad <= lat <= CLIP['lat1'] + pad
             and CLIP['lon0'] - pad <= lon <= CLIP['lon1'] + pad)
 
+def near_pt(a, b, eps=1.5):
+    return math.hypot(a[0] - b[0], a[1] - b[1]) < eps
+
+def assemble_rings(segments):
+    """Join open multipolygon member ways that share endpoints into closed rings.
+    Treating each member as its own ring (implicit first-to-last close) fills
+    land on the far side of a shoreline segment — that put 강변북로 in the river.
+    """
+    used = [False] * len(segments)
+    rings = []
+    for i, seg in enumerate(segments):
+        if used[i]:
+            continue
+        chain = list(seg['o'])
+        ids = [seg['id']]
+        role = seg.get('role') or 'outer'
+        used[i] = True
+        grew = True
+        while grew:
+            grew = False
+            head, tail = chain[0], chain[-1]
+            for j, other in enumerate(segments):
+                if used[j]:
+                    continue
+                pts = other['o']
+                if near_pt(tail, pts[0]):
+                    chain.extend(pts[1:]); ids.append(other['id']); used[j] = True; grew = True; break
+                if near_pt(tail, pts[-1]):
+                    chain.extend(list(reversed(pts))[1:]); ids.append(other['id']); used[j] = True; grew = True; break
+                if near_pt(head, pts[-1]):
+                    chain = pts[:-1] + chain; ids.insert(0, other['id']); used[j] = True; grew = True; break
+                if near_pt(head, pts[0]):
+                    chain = list(reversed(pts))[:-1] + chain; ids.insert(0, other['id']); used[j] = True; grew = True; break
+        rec = {'id': ids[0], 'role': role, 'o': [[round(pt[0], 1), round(pt[1], 1)] for pt in chain]}
+        if len(ids) > 1:
+            rec['ids'] = ids
+        rings.append(rec)
+    return rings
+
+def clip_ring_to_box(poly, xmin, xmax, zmin, zmax):
+    pts = [list(p) for p in poly]
+    if len(pts) >= 2 and near_pt(pts[0], pts[-1], 1e-6):
+        pts = pts[:-1]
+    def clip_edge(poly, inside, intersect):
+        if not poly:
+            return []
+        out = []
+        prev = poly[-1]
+        for cur in poly:
+            if inside(cur):
+                if not inside(prev):
+                    out.append(intersect(prev, cur))
+                out.append(cur)
+            elif inside(prev):
+                out.append(intersect(prev, cur))
+            prev = cur
+        return out
+    def lerp(a, b, t):
+        return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t]
+    pts = clip_edge(pts, lambda p: p[0] >= xmin, lambda a, b: lerp(a, b, (xmin - a[0]) / ((b[0] - a[0]) or 1e-12)))
+    pts = clip_edge(pts, lambda p: p[0] <= xmax, lambda a, b: lerp(a, b, (xmax - a[0]) / ((b[0] - a[0]) or 1e-12)))
+    pts = clip_edge(pts, lambda p: p[1] >= zmin, lambda a, b: lerp(a, b, (zmin - a[1]) / ((b[1] - a[1]) or 1e-12)))
+    pts = clip_edge(pts, lambda p: p[1] <= zmax, lambda a, b: lerp(a, b, (zmax - a[1]) / ((b[1] - a[1]) or 1e-12)))
+    if pts and not near_pt(pts[0], pts[-1], 0.05):
+        pts.append(pts[0][:])
+    return [[round(p[0], 1), round(p[1], 1)] for p in pts]
+
+def point_in_ring(x, z, ring):
+    if not ring or len(ring) < 3:
+        return False
+    inside = False
+    n = len(ring)
+    j = n - 1
+    for i in range(n):
+        xi, zi = ring[i]; xj, zj = ring[j]
+        if ((zi > z) != (zj > z)) and (x < (xj - xi) * (z - zi) / ((zj - zi) or 1e-12) + xi):
+            inside = not inside
+        j = i
+    return inside
+
+
 def way_pts(way, nodes):
     out = []
     ll = []
@@ -291,11 +372,15 @@ def build_osm(els):
                 rec['lengthEst'] = round(polyline_len(pts) / 2, 1)
         out_ways.append(rec)
 
-    # 한강 multipolygon rings
+    # 한강 multipolygon rings — join member ways that share endpoints, then
+    # clip the closed ring to the playable box. Each member is often an open
+    # shoreline segment; closing it alone (first→last chord of several km)
+    # treats the north bank as water.
     water_rel = next((e for e in rels if e['id'] == 152336), None)
     han_outers, han_inners = [], []
     if water_rel:
         wmap = {e['id']: e for e in ways}
+        raw_outer, raw_inner = [], []
         for m in water_rel.get('members') or []:
             if m['type'] != 'way':
                 continue
@@ -305,13 +390,32 @@ def build_osm(els):
             pts, ll = way_pts(ww, nodes)
             if len(pts) < 2:
                 continue
-            if not any(in_clip_ll(lat, lon, pad=0.008) for lat, lon in ll):
-                continue
             rec = {'id': ww['id'], 'role': m.get('role') or 'outer', 'o': pts}
             if (m.get('role') or 'outer') == 'inner':
-                han_inners.append(rec)
+                raw_inner.append(rec)
             else:
-                han_outers.append(rec)
+                raw_outer.append(rec)
+        assembled_outer = assemble_rings(raw_outer)
+        assembled_inner = assemble_rings(raw_inner)
+        cx0, cz_s = xz(CLIP['lat0'], CLIP['lon0'])
+        cx1, cz_n = xz(CLIP['lat1'], CLIP['lon1'])
+        pad = 200.0
+        xmin, xmax = min(cx0, cx1) - pad, max(cx0, cx1) + pad
+        zmin, zmax = min(cz_s, cz_n) - pad, max(cz_s, cz_n) + pad
+        for rec in assembled_outer:
+            clipped = clip_ring_to_box(rec['o'], xmin, xmax, zmin, zmax)
+            if len(clipped) < 4:
+                continue
+            rec = dict(rec)
+            rec['o'] = clipped
+            han_outers.append(rec)
+        for rec in assembled_inner:
+            pts = rec['o']
+            cx = sum(p[0] for p in pts) / len(pts)
+            cz = sum(p[1] for p in pts) / len(pts)
+            if not any(point_in_ring(cx, cz, o['o']) for o in han_outers):
+                continue
+            han_inners.append(rec)
 
     def find_way(wid):
         return next((w for w in ways if w['id'] == wid), None)
