@@ -699,7 +699,9 @@ export function createHangangTerrain({ parent, dem, osm }) {
             const vx = pos.getX(i), vz = pos.getZ(i);
             const hy = heightAt(vx, vz);
             const flat = waterYAt(vx, vz, lv, osm.meta.datumBlend);
-            pos.setY(i, ((hy != null && !inHanRiver(vx, vz, osm)) ? hy : flat) + 0.03);
+            // 한강 링은 늘 평평한 풀. 경계 꼭짓점은 inHanRiver 가 false 로 나와 둔치 높이로
+            // 들리면서, 합수부에서 강을 가로지르는 긴 삼각형(항공 샷의 파란 띠)이 됐다.
+            pos.setY(i, ((!thisIsHan && hy != null && !inHanRiver(vx, vz, osm)) ? hy : flat) + 0.03);
           }
           pos.needsUpdate = true;
           mesh.geometry.computeVertexNormals();

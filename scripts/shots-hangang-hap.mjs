@@ -67,7 +67,8 @@ async function go(page, { x, z, y, yaw = 0, dist = 22, pitch = 0.28, fov = 55, h
 }
 
 const look = (fromX, fromZ, toX, toZ) => Math.atan2(fromX - toX, fromZ - toZ);
-const shot = (page, name) => page.screenshot({ path: `${OUT}/${name}.png`, timeout: 150000, animations: 'disabled' });
+const ONLY = process.env.ONLY ? new RegExp(process.env.ONLY) : null;
+const shot = (page, name) => (ONLY && !ONLY.test(name)) ? null : page.screenshot({ path: `${OUT}/${name}.png`, timeout: 150000, animations: 'disabled' });
 
 async function viewpoints(page) {
   return page.evaluate(() => {
@@ -165,13 +166,17 @@ async function capture(page, tag) {
   await shot(page, `${tag}-05-banpo-join-v2`);
 }
 
-const day = await open('day', { hour: 14 });
-await capture(day, 'day');
-await day.close();
-
-const night = await open('night', { hour: 21 });
-await capture(night, 'night');
-await night.close();
+const TAGS = (process.env.TAGS || 'day,night').split(',');
+if (TAGS.includes('day')) {
+  const day = await open('day', { hour: 14 });
+  await capture(day, 'day');
+  await day.close();
+}
+if (TAGS.includes('night')) {
+  const night = await open('night', { hour: 21 });
+  await capture(night, 'night');
+  await night.close();
+}
 
 await browser.close();
 if (errs.length) {

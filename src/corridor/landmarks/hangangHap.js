@@ -521,8 +521,8 @@ export function createHangangHap({ parent, overlay, terrain, dem, osm } = {}) {
       if (osm?.meta?.visualXMin != null && x < osm.meta.visualXMin) return false;
       if (z > -15800) return false;
       if (inWater(x, z, osm?.water)) return true;
-      const g = land.heightAt(x, z);
-      return g != null && g < -0.4;
+      // 2구간 DEM 이 있는 한강 남단은 그 지형이 바닥이다 (타일 블록 바닥 = 베이지 판).
+      return land.heightAt(x, z) != null;
     },
   };
 }
