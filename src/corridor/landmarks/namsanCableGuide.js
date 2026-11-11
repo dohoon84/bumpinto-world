@@ -364,24 +364,72 @@ export function createNamsanCableGuide({ parent, cable, ways = [], city = null, 
   for (const r of city?.roads || []) if (r?.p?.length >= 2) lines.push(r.p);
   const graph = buildCableGraph(lines, stations.map((s) => s.out));
 
-  // ---- 바닥 화살표 (인스턴스 1개)
+  // ---- 바닥 화살표 (본색 + 짙은 테두리). 비탈면 법선에 붙이고, 낮에도 대비가 나오게.
   const arrowMat = new THREE.MeshBasicMaterial({
-    color: '#ffffff', transparent: true, opacity: 0.95, depthWrite: false, side: THREE.DoubleSide,
+    color: '#ffffff', transparent: true, opacity: 0.98, depthWrite: false, side: THREE.DoubleSide,
+    toneMapped: false, fog: false, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4,
+  });
+  const rimMat = new THREE.MeshBasicMaterial({
+    color: '#08244a', transparent: true, opacity: 0.9, depthWrite: false, side: THREE.DoubleSide,
     toneMapped: false, fog: false, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3,
   });
-  const arrows = new THREE.InstancedMesh(chevronGeo(), arrowMat, MAX_ARROWS);
+  const chev = chevronGeo();
+  const arrows = new THREE.InstancedMesh(chev, arrowMat, MAX_ARROWS);
+  const rims = new THREE.InstancedMesh(chev, rimMat, MAX_ARROWS);
   arrows.name = 'namsan-cable-arrows';
-  arrows.count = 0;
-  arrows.frustumCulled = false;
-  arrows.renderOrder = 3;
-  arrows.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-  arrows.setColorAt(0, new THREE.Color('#2ec4ff'));
+  rims.name = 'namsan-cable-arrow-rims';
+  for (const m of [arrows, rims]) {
+    m.count = 0;
+    m.frustumCulled = false;
+    m.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+  }
+  arrows.renderOrder = 4;
+  rims.renderOrder = 3;
+  arrows.setColorAt(0, new THREE.Color('#0a7ae0'));
+  rims.setColorAt(0, new THREE.Color('#08244a'));
+  group.add(rims);
   group.add(arrows);
   const dummy = new THREE.Object3D();
   dummy.rotation.order = 'YXZ';
-  const colA = new THREE.Color('#1aa7ff'), colB = new THREE.Color('#bff3ff'), tmpC = new THREE.Color();
-  let placed = []; // [{x,y,z,s}] s = 문까지 남은 거리
+  const _n = new THREE.Vector3(), _f = new THREE.Vector3(), _r = new THREE.Vector3(), _y = new THREE.Vector3(), _m = new THREE.Matrix4();
+  const colDayA = new THREE.Color('#005cbc'), colDayB = new THREE.Color('#39c4ff');
+  const colNgtA = new THREE.Color('#1488ff'), colNgtB = new THREE.Color('#e4f8ff');
+  const colA = new THREE.Color(), colB = new THREE.Color(), tmpC = new THREE.Color();
+  let placed = []; // [{x,y,z,yaw,s,sc,flat}] s = 문까지 남은 거리
   let pathKey = '';
+
+  function slopeAt(x, z) {
+    const e = 0.8;
+    const hx = (groundAt(x + e, z) - groundAt(x - e, z)) / (2 * e);
+    const hz = (groundAt(x, z + e) - groundAt(x, z - e)) / (2 * e);
+    return _n.set(-(Number.isFinite(hx) ? hx : 0), 1, -(Number.isFinite(hz) ? hz : 0)).normalize();
+  }
+  function poseArrow(p, scale) {
+    dummy.scale.setScalar(scale);
+    if (p.flat) {
+      dummy.position.set(p.x, p.y, p.z);
+      dummy.rotation.set(-Math.PI / 2, p.yaw, 0, 'YXZ');
+      dummy.updateMatrix();
+      return;
+    }
+    dummy.rotation.set(0, 0, 0);
+    const n = slopeAt(p.x, p.z);
+    const lift = 0.07;
+    dummy.position.set(p.x + n.x * lift, p.y + n.y * lift, p.z + n.z * lift);
+    const hx = Math.sin(p.yaw), hz = Math.cos(p.yaw);
+    _f.set(hx, 0, hz).addScaledVector(n, -_f.dot(n));
+    if (_f.lengthSq() < 1e-6) _f.set(hx, 0, hz);
+    _f.normalize();
+    _r.crossVectors(n, _f).normalize();
+    _y.copy(_f).multiplyScalar(-1); // 쉐브론 팁이 -Y 이므로 +Y = 진행 반대
+    dummy.quaternion.setFromRotationMatrix(_m.makeBasis(_r, _y, n));
+    dummy.updateMatrix();
+  }
+  function clearArrows() {
+    arrows.count = 0;
+    rims.count = 0;
+    pathKey = '';
+  }
 
   function layPath(path, st) {
     // 문 바깥 → 문 → 승강장까지 이어 붙인다
@@ -391,25 +439,25 @@ export function createNamsanCableGuide({ parent, cable, ways = [], city = null, 
     for (let i = 1; i < full.length; i++) total += Math.hypot(full[i][0] - full[i - 1][0], full[i][1] - full[i - 1][1]);
     const rs = resample(full, STEP);
     placed = [];
-    let acc = 0;
     for (let i = 0; i < rs.length && placed.length < MAX_ARROWS; i++) {
       const p = rs[i];
-      acc = i * STEP;
+      const acc = i * STEP;
       if (acc < 3) continue; // 발밑은 비운다
       const inside = st.pts && pointInRing(p.x, p.z, st.pts);
-      const y = inside ? st.y + 0.2 : groundAt(p.x, p.z) + 0.22;
-      placed.push({ x: p.x, y, z: p.z, yaw: Math.atan2(p.hx, p.hz), s: total - acc, sc: inside ? 0.75 : 1.55 });
+      const y = inside ? st.y + 0.2 : groundAt(p.x, p.z);
+      placed.push({ x: p.x, y, z: p.z, yaw: Math.atan2(p.hx, p.hz), s: total - acc, sc: inside ? 0.8 : 1.7, flat: !!inside });
     }
     for (let i = 0; i < placed.length; i++) {
       const p = placed[i];
-      dummy.position.set(p.x, p.y, p.z);
-      dummy.rotation.set(-Math.PI / 2, p.yaw, 0, 'YXZ');
-      dummy.scale.setScalar(p.sc);
-      dummy.updateMatrix();
+      poseArrow(p, p.sc);
       arrows.setMatrixAt(i, dummy.matrix);
+      poseArrow(p, p.sc * 1.22);
+      rims.setMatrixAt(i, dummy.matrix);
     }
     arrows.count = placed.length;
+    rims.count = placed.length;
     arrows.instanceMatrix.needsUpdate = true;
+    rims.instanceMatrix.needsUpdate = true;
   }
 
   // ---- 표지 (스프라이트, 멀어질수록 커져 화면 크기 유지)
@@ -570,7 +618,7 @@ export function createNamsanCableGuide({ parent, cable, ways = [], city = null, 
 
     // 바닥 화살표
     const show = !riding && !atSt && st && d < SHOW_R;
-    if (!show) { arrows.count = 0; pathKey = ''; }
+    if (!show) clearArrows();
     else {
       repathT -= dt;
       const k = `${st.which}|${Math.round(P.x / 3)}|${Math.round(P.z / 3)}`;
@@ -581,10 +629,12 @@ export function createNamsanCableGuide({ parent, cable, ways = [], city = null, 
         const path = graph.pathFrom(P.x, P.z, idx) || [[P.x, P.z], [st.out.x, st.out.z]];
         layPath(path, st);
       }
-      // 문 쪽으로 흐르는 빛
+      // 문 쪽으로 흐르는 빛 (낮은 진한 파랑, 밤은 더 밝게)
+      colA.lerpColors(colDayA, colNgtA, night);
+      colB.lerpColors(colDayB, colNgtB, night);
       for (let i = 0; i < placed.length; i++) {
         const w = 0.5 + 0.5 * Math.sin((placed[i].s * 0.22) + time * 5.0);
-        tmpC.copy(colA).lerp(colB, w * w);
+        tmpC.copy(colA).lerp(colB, w * w * 0.75);
         arrows.setColorAt(i, tmpC);
       }
       if (arrows.instanceColor) arrows.instanceColor.needsUpdate = true;
