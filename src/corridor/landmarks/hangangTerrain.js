@@ -210,7 +210,14 @@ export function makeHangangHeightAt(dem, osm = null) {
         const dx = b[0] - a[0], dz = b[1] - a[1];
         const L2 = dx * dx + dz * dz || 1;
         const tt = Math.max(0, Math.min(1, ((x - a[0]) * dx + (z - a[1]) * dz) / L2));
-        const floor = ea + (eb - ea) * tt;
+        let floor = ea + (eb - ea) * tt;
+        // DEM is the 올림픽대로 deck; cut a real underpass (~5 m clearance).
+        for (const ow of olympicWays) {
+          const oq = projectOnLine(x, z, ow.pts);
+          if (!oq || oq.dist > 40) continue;
+          const oe = sampleDem(dem, oq.x, oq.z);
+          if (oe != null) floor = Math.min(floor, oe - 5.2);
+        }
         const fall = Math.max(0, 1 - q.dist / hw);
         const ww = fall * fall * fall;
         if (ww > tunW) { tunW = ww; tunE = floor; }
@@ -587,11 +594,12 @@ export function createHangangTerrain({ parent, dem, osm }) {
         const z = dem.z0 + (j / sub) * dem.dz;
         let y = heightAt(x, z);
         if (y == null) y = lv.waterY;
-        const wetV = inWater(x, z, osm?.water);
+        const wetV = inWater(x, z, osm?.water) || (y <= lv.waterY + 1.15);
         if (wetV) {
           // 수면 메시(waterY+0.03)와 DEM 이 같은 높이에 있으면 반투명 강물이
           // 젖은 잔디텍스처와 z-fight 해서 검녹 반점이 된다.
-          y = heightAt(x, z) - 1.4;
+          // 수면 링에 안 들어갔지만 표고가 수면인 칸은 베이지 빈 판이 된다.
+          y = (heightAt(x, z) ?? lv.waterY) - 1.4;
         } else {
           const by = revetmentBandY(x, z);
           if (by != null) y = Math.min(y, by);
@@ -602,14 +610,14 @@ export function createHangangTerrain({ parent, dem, osm }) {
         uv[(j * nx + i) * 2 + 1] = (z - dem.z0) / 28;
         const e = y + datum;
         const nrm = hash01(i, j);
-        const wet = inWater(x, z, osm?.water);
+        const wet = wetV;
         const nearWater = !wet && (
           inWater(x + 10, z, osm?.water) || inWater(x - 10, z, osm?.water)
           || inWater(x, z + 10, osm?.water) || inWater(x, z - 10, osm?.water)
         );
         const park = pointInRings(x, z, parkRings.map((o) => ({ o })));
         const hapPark = !wet && osm?.meta?.segment === 'hap' && (
-          park || (
+          park || nearWater || (
             (inWater(x, z - 22, osm?.water) || inWater(x, z - 40, osm?.water)
               || inWater(x + 18, z, osm?.water) || inWater(x - 18, z, osm?.water))
           )
@@ -695,16 +703,21 @@ export function createHangangTerrain({ parent, dem, osm }) {
           pos.needsUpdate = true;
           mesh.geometry.computeVertexNormals();
         }
-        // 탄천 수면 링이 합수부에서 한강 안으로 삐져 나온 삼각형을 뺀다 (항공 샷의 파란 띠).
-        if (!thisIsHan && hanN > 0 && mesh.geometry.index) {
+        // 탄천 수면 링이 합수부 북쪽으로 한강 홈을 따라 올라가 파란 띠가 된다.
+        // 한강 폴리곤이 그 홈을 비우므로 inHanRiver 만으로는 안 잘린다.
+        if (!thisIsHan && hanN > 0) {
+          const hapZ = osm?.spawns?.['tancheon-hap']?.z ?? -16796;
           const pos = mesh.geometry.attributes.position;
           const idx = mesh.geometry.index;
           const keep = [];
-          for (let i = 0; i < idx.count; i += 3) {
-            const ia = idx.getX(i), ib = idx.getX(i + 1), ic = idx.getX(i + 2);
+          const triN = idx ? idx.count / 3 : pos.count / 3;
+          const vert = (i) => (idx ? idx.getX(i) : i);
+          for (let t = 0; t < triN; t++) {
+            const ia = vert(t * 3), ib = vert(t * 3 + 1), ic = vert(t * 3 + 2);
             const cx = (pos.getX(ia) + pos.getX(ib) + pos.getX(ic)) / 3;
             const cz = (pos.getZ(ia) + pos.getZ(ib) + pos.getZ(ic)) / 3;
-            if (!inHanRiver(cx, cz, osm)) keep.push(ia, ib, ic);
+            if (inHanRiver(cx, cz, osm) || cz < hapZ - 8) continue;
+            keep.push(ia, ib, ic);
           }
           mesh.geometry.setIndex(keep);
         }

@@ -119,7 +119,7 @@ async function capture(page, tag) {
   const exit = { x: -3770.3, z: -16826.9 };
   await go(page, {
     x: exit.x, z: exit.z, y: await yOf(exit.x, exit.z),
-    yaw: look(exit.x, exit.z, -4100, -17240),
+    yaw: look(exit.x, exit.z, -3886.4, -17049.1),
     dist: 16, pitch: 0.10, fov: 62,
   });
   await shot(page, `${tag}-01-hap-exit-v2`);
@@ -135,11 +135,11 @@ async function capture(page, tag) {
   await shot(page, `${tag}-02-olympic-underpass-v2`);
 
   // 3. Beside 영동대교 (way/842101798): bike path 39 m from the outline, looking under the deck
-  const br = { x: -4712.8, z: -17762.3 };
+  const br = { x: -4688.0, z: -17776.0 };
   await go(page, {
     x: br.x, z: br.z, y: await yOf(br.x, br.z),
-    yaw: look(br.x, br.z, -4679.1, -17840.0),
-    dist: 14, pitch: 0.20, fov: 60,
+    yaw: look(br.x, br.z, -4665.0, -17870.0),
+    dist: 12, pitch: 0.02, fov: 62,
   });
   await shot(page, `${tag}-03-under-bridge-v2`);
 

@@ -204,13 +204,14 @@ function createHapBridges({ parent, osm, land } = {}) {
     const axis = resample(axisSrc, 10);
     const abut = abutmentYs({ pts: axisSrc }, osm, land);
     const width0 = outline?.widthEst || line?.w || 18;
+    const widthCap = Math.max(16, Math.min(42, (outline?.widthEst || width0) * 1.2));
     const widthAt = (i) => {
       if (widthAlong && widthAlong.length) {
         const tt = axis.length <= 1 ? 0 : i / (axis.length - 1);
         const k = Math.min(widthAlong.length - 1, Math.max(0, Math.round(tt * (widthAlong.length - 1))));
-        return Math.max(10, Math.min(56, widthAlong[k]));
+        return Math.max(10, Math.min(widthCap, widthAlong[k]));
       }
-      return Math.max(10, Math.min(36, width0));
+      return Math.max(10, Math.min(widthCap, width0));
     };
     const hw = Math.max(7, Math.min(28, width0)) / 2;
     let thick = 2.5;
@@ -274,7 +275,7 @@ function createHapBridges({ parent, osm, land } = {}) {
       const ax = axis[i - 1][0], az = axis[i - 1][1], bx = axis[i][0], bz = axis[i][1];
       const seg = Math.hypot(bx - ax, bz - az);
       acc += seg;
-      if (acc < 42) continue;
+      if (acc < 28) continue;
       acc = 0;
       const mx = (ax + bx) / 2, mz = (az + bz) / 2;
       const yTop = deckYAt(mx, mz, outline || line, osm, land, abut) - thick;
@@ -353,11 +354,12 @@ function createHapUnderpasses({ parent, osm, land }) {
     const tdx = b[0] - a[0], tdz = b[1] - a[1];
     const tL = Math.hypot(tdx, tdz) || 1;
     const soffitY = yOly - 0.45;
-    const half = Math.max(22, (best.ow.w || 19) * 0.5 + 16);
+    const impliedFloor = soffitY - 5.2;
+    const half = Math.max(28, (best.ow.w || 19) * 0.5 + 20);
     const stations = [];
     for (const p of samples) {
       const tt = Math.max(0, Math.min(1, ((p[0] - a[0]) * tdx + (p[1] - a[1]) * tdz) / (tL * tL)));
-      const floorY = ya + (yb - ya) * tt - 0.2;
+      const floorY = Math.min(ya + (yb - ya) * tt - 0.2, impliedFloor);
       if (soffitY - floorY < 3.0) continue;
       if (Math.hypot(p[0] - best.x, p[1] - best.z) > half) continue;
       stations.push({ x: p[0], z: p[1], floorY });
