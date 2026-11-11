@@ -95,6 +95,8 @@ body.mobile.bw-signed-in #lobby-card .v2-save-google { display: none !important;
 #m-landing .m-stn-scroll::-webkit-scrollbar { display: none; }
 #m-landing .m-stn { height: 44px; padding: 0 14px; border: 1px solid rgba(18, 32, 51, .12); border-radius: 22px; background: rgba(255, 255, 255, .92); color: var(--m-ink); font: inherit; font-size: 14px; font-weight: 900; white-space: nowrap; cursor: pointer; }
 #m-landing .m-stn.on { background: var(--m-gold); color: #3a2a00; border-color: transparent; }
+#m-landing .m-stn-lm { background: rgba(76, 201, 240, .16); border-color: rgba(76, 201, 240, .65); color: #0b4a62; }
+#m-landing .m-stn-lm.on { background: var(--m-gold); color: #3a2a00; border-color: transparent; }
 #m-landing .m-region-card { flex: 1; min-height: 0; border-radius: 12px; background: #1a2744 center / cover no-repeat; }
 #m-landing .m-picked { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 12px; border: 1px solid rgba(255, 255, 255, .1); background: rgba(255, 255, 255, .06); flex: none; }
 #m-landing .m-picked > div { flex: 1; display: grid; gap: 2px; min-width: 0; }

@@ -1,7 +1,7 @@
 // [hud-v3-minimap] WoW 식 원형 미니맵 — PC HUD v3 에서 index.js 가 붙인다. 끄면(N · 지도·이동 → 미니맵) rAF·캐시 전부 해제 = 비용 0.
 //   3D 카메라·렌더 타깃을 하나도 더 만들지 않는다: 2D 캔버스 하나 + 500m 청크(코리더 타일과 같은 격자)별 오프스크린 캔버스.
 //   청크는 도로·공원·물·건물 외곽을 한 번만 그려 두고, 프레임마다(≈18fps, 바뀐 게 없으면 건너뜀) 이동·회전해 붙이고 점(역·정류장·접속자·경로)만 그린다.
-//   데이터: 라이브 동네(window.__jj.data = jeongja.json / starbase.json) + 코리더 상세 타일(corridor.miniTiles(), 타일 언로드 시 같이 사라짐).
+//   데이터: 라이브 동네(window.__jj.data = jeongja.json / starbase.json) + 코리더 상세 타일(corridor.miniTiles(), 타일 언로드 시 같이 사라짐) + 남산(namsan.mini: 광장·도로·케이블카).
 //   좌표: x 동쪽, z 남쪽(북쪽 = -z) → 화면 기본은 북쪽이 위. 회전 모드는 카메라가 보는 방향이 위.
 //   길 안내: 게임에 아직 경로 기능이 없어 이벤트로 받는다 — dispatchEvent(new CustomEvent('bw:nav-route', { detail: { points: [[x, z], …], dest: { x, z, label } } })) · detail null 이면 지움.
 import { tr, onLangChange } from '../../i18n.js';
@@ -33,6 +33,7 @@ let hover = null; // { x, y } CSS px (원 안 좌표)
 let navHits = []; // [bp24nav] 이번 프레임 매장 아이콘 (클릭 판정)
 const chunks = new Map(); // key → { c, s, ver, used }
 let liveIdx = null; // { data, map: Map(chunkKey → feats) }
+let namsanIdx = null; // { mini, map }
 const bboxOf = new WeakMap();
 const stats = { frames: 0, ms: 0, msMax: 0, chunkMs: 0, chunkRenders: 0, bytes: 0 };
 let onChange = () => {};
@@ -71,7 +72,7 @@ function close() {
   syncCornerPhone(false);
   // 닫으면 캐시 전부 버림(메모리 0). 다시 열면 보이는 청크만 다시 그린다(청크당 수 ms)
   for (const c of chunks.values()) { c.c.width = 0; c.c.height = 0; }
-  chunks.clear(); liveIdx = null; stats.bytes = 0;
+  chunks.clear(); liveIdx = null; namsanIdx = null; stats.bytes = 0;
 }
 
 function build() {
@@ -157,7 +158,8 @@ function bb(f) {
   const w = (f.w || 0) / 2; b = [x0 - w, z0 - w, x1 + w, z1 + w]; bboxOf.set(f, b); return b;
 }
 const KINDS = ['roads', 'parks', 'water', 'waterLines', 'buildings'];
-const emptyFeats = () => ({ roads: [], parks: [], water: [], waterLines: [], buildings: [] });
+const MINI_KINDS = [...KINDS, 'plazas'];
+const emptyFeats = () => ({ roads: [], parks: [], water: [], waterLines: [], buildings: [], plazas: [] });
 /** 라이브 동네 데이터 → 청크별 목록(참조만). 데이터가 바뀌면(지역 이동) 다시 */
 function live() {
   const data = jj()?.data; if (!data) return null;
@@ -177,20 +179,35 @@ function corridorTiles() {
   const m = new Map(); for (const t of c.miniTiles()) m.set(ck(Math.round(t.x0 / CHUNK), Math.round(t.z0 / CHUNK)), t);
   return m;
 }
+function namsanFeats() {
+  const mini = jj()?.namsan?.mini; if (!mini) return null;
+  if (namsanIdx?.mini === mini) return namsanIdx.map;
+  const map = new Map();
+  for (const k of MINI_KINDS) for (const f of mini[k] || []) {
+    const [x0, z0, x1, z1] = bb(f); if (!Number.isFinite(x0)) continue;
+    for (let i = Math.floor(x0 / CHUNK); i <= Math.floor(x1 / CHUNK); i++) for (let j = Math.floor(z0 / CHUNK); j <= Math.floor(z1 / CHUNK); j++) {
+      const key = ck(i, j); let m = map.get(key); if (!m) map.set(key, (m = emptyFeats())); m[k].push(f);
+    }
+  }
+  namsanIdx = { mini, map };
+  return map;
+}
 /** 청크 한 칸에 들어갈 것: 라이브 + 그 칸과 이웃 8칸 코리더 타일(타일 경계를 넘는 길도 끊기지 않게) */
-function featsFor(i, j, L, T) {
+function featsFor(i, j, L, T, N) {
   const out = emptyFeats(); const x0 = i * CHUNK, z0 = j * CHUNK, x1 = x0 + CHUNK, z1 = z0 + CHUNK;
   const hit = (f) => { const b = bb(f); return b[0] <= x1 && b[2] >= x0 && b[1] <= z1 && b[3] >= z0; };
   const lv = L?.get(ck(i, j)); if (lv) for (const k of KINDS) out[k].push(...lv[k]);
+  const nv = N?.get(ck(i, j)); if (nv) for (const k of MINI_KINDS) out[k].push(...(nv[k] || []));
   if (T) for (let di = -1; di <= 1; di++) for (let dj = -1; dj <= 1; dj++) {
     const t = T.get(ck(i + di, j + dj)); if (!t) continue;
     for (const k of KINDS) for (const f of t.data[k] || []) if (hit(f)) out[k].push(f);
   }
   return out;
 }
-function verFor(i, j, T, data) {
+function verFor(i, j, T, data, N) {
   let v = data ? 'L' : '';
   if (T) for (let di = -1; di <= 1; di++) for (let dj = -1; dj <= 1; dj++) if (T.has(ck(i + di, j + dj))) v += `${di}${dj}`;
+  if (N?.has(ck(i, j))) v += 'N';
   return v;
 }
 
@@ -211,13 +228,24 @@ function renderChunk(i, j, s, F) {
   for (const p of F.water) if (p.o?.length > 2) { g.beginPath(); ring(g, p.o); for (const h of p.holes || []) if (h.length > 2) ring(g, h); g.fill('evenodd'); }
   g.strokeStyle = 'rgba(64, 152, 226, .85)';
   for (const w of F.waterLines) if (w.p?.length > 1) { g.lineWidth = Math.max(px(2.5), w.w || 4); line(g, w.p); }
+  g.fillStyle = 'rgba(213, 203, 187, .62)';
+  for (const p of F.plazas || []) if (p.o?.length > 2) { g.beginPath(); ring(g, p.o); g.fill(); }
   g.fillStyle = 'rgba(160, 186, 218, .2)';
   if (s >= 0.4) for (const b of F.buildings) if (b.o?.length > 2) { g.beginPath(); ring(g, b.o); g.fill(); }
   const roads = F.roads;
   // 보행로(가늘게) → 차도 테두리 → 차도 속(작은 길 → 큰 길)
   g.strokeStyle = 'rgba(214, 196, 150, .55)';
   g.lineWidth = px(s >= 0.6 ? 1.2 : 0.8);
-  if (s >= 0.3) for (const r of roads) if (!MAJOR.has(r.k) && !MINOR.has(r.k) && r.p?.length > 1) line(g, r.p);
+  if (s >= 0.3) for (const r of roads) if (!MAJOR.has(r.k) && !MINOR.has(r.k) && r.k !== 'aerialway' && r.p?.length > 1) line(g, r.p);
+  // 광장 가장자리(보행로처럼) + 케이블카 선
+  g.strokeStyle = 'rgba(214, 196, 150, .8)';
+  g.lineWidth = px(1.6);
+  for (const p of F.plazas || []) if (p.o?.length > 2) { g.beginPath(); ring(g, p.o); g.stroke(); }
+  g.strokeStyle = 'rgba(232, 210, 150, .95)';
+  g.lineWidth = px(s >= 0.4 ? 2.2 : 1.6);
+  g.setLineDash([px(7), px(4)]);
+  for (const r of roads) if (r.k === 'aerialway' && r.p?.length > 1) line(g, r.p);
+  g.setLineDash([]);
   const car = roads.filter((r) => (MAJOR.has(r.k) || MINOR.has(r.k)) && r.p?.length > 1);
   const wOf = (r) => { const mj = MAJOR.has(r.k); return Math.min(px(mj ? 9 : 6), Math.max(px(mj ? 3.6 : 2.4), (r.w || (mj ? 12 : 6)) * (mj ? 0.85 : 0.75))); };
   g.strokeStyle = 'rgba(6, 12, 24, .7)';
@@ -269,19 +297,19 @@ function draw(now, J, P) {
 
   // 청크 붙이기
   const cs = Math.min(1.5, Math.max(0.2, Math.round(k * dpr * 20) / 20)); // 청크 해상도(px/m) — 확대 단계마다 하나
-  const L = live(), T = corridorTiles();
+  const L = live(), T = corridorTiles(), N = namsanFeats();
   const reach = viewR * 1.42 + 20; // 회전해도 원을 덮는 반경
   g.save();
   g.translate(R, R); g.rotate(theta); g.scale(k, k); g.translate(-x, -z);
   g.imageSmoothingEnabled = true;
   let budget = 2; // 한 번에 새로 그리는 청크 수 (첫 열림 끊김 방지)
   for (let i = Math.floor((x - reach) / CHUNK); i <= Math.floor((x + reach) / CHUNK); i++) for (let j = Math.floor((z - reach) / CHUNK); j <= Math.floor((z + reach) / CHUNK); j++) {
-    const key = ck(i, j), ver = verFor(i, j, T, L?.has(key)); let c = chunks.get(key);
+    const key = ck(i, j), ver = verFor(i, j, T, L?.has(key), N); let c = chunks.get(key);
     if (!ver) { if (c) dropChunk(key); continue; }
     if (!c || c.s !== cs || c.ver !== ver) {
       if (budget <= 0) { if (c) c.used = now; else continue; } else {
         budget--; if (c) dropChunk(key);
-        const F = featsFor(i, j, L, T);
+        const F = featsFor(i, j, L, T, N);
         c = { c: renderChunk(i, j, cs, F), s: cs, ver, used: now }; chunks.set(key, c); stats.bytes += c.c.width * c.c.height * 4;
       }
     }
@@ -325,6 +353,19 @@ function draw(now, J, P) {
     const name = tr(st.name, st.nameEn || st.name);
     if (labelAll) labels.push({ sx, sy: sy - 10, t: name });
     if (hover) { const d = (hover.x - sx) ** 2 + (hover.y - sy) ** 2; if (d < hovD * 1.4) { hovD = d; hov = { sx, sy, t: name }; } }
+  }
+
+  // [namsan] 케이블카 탑승 위치 (회현 하부 · 남산타워 상부). 정류장 OSM 좌표.
+  // 멀리 보면 긴 라벨이 원 테두리에 잘리므로 짧은 이름 + 원 안쪽으로 앵커를 민다.
+  const cableFar = prefs.zi >= 2;
+  for (const st of cableStations(J)) {
+    const [sx, sy] = toS(st.x, st.z); if (!inC(sx, sy, 4)) continue;
+    drawCableMark(g, sx, sy);
+    const name = cableFar
+      ? tr(st.shortLabel || st.label, st.shortLabelEn || st.labelEn || st.label)
+      : tr(st.label, st.labelEn || st.label);
+    labels.push(fitCableLabel(sx, sy, name));
+    if (hover) { const d = (hover.x - sx) ** 2 + (hover.y - sy) ** 2; if (d < hovD * 1.5) { hovD = d; hov = { sx, sy, t: name }; } }
   }
 
   // [bp24nav] 편의점 아이콘. 길찾기가 꺼져 있으면 points 가 비어 기존 점과 같다.
@@ -384,7 +425,8 @@ function draw(now, J, P) {
   g.textAlign = 'center'; g.textBaseline = 'bottom'; g.lineJoin = 'round';
   if (hov && !labels.some((l) => l.t === hov.t)) labels.push({ sx: hov.sx, sy: hov.sy - 8, t: hov.t, hi: 1 });
   for (const l of labels) {
-    const lx = Math.max(R - 70, Math.min(R + 70, l.sx)), ly = Math.max(16, l.sy);
+    const lx = l.fit ? l.sx : Math.max(R - 70, Math.min(R + 70, l.sx));
+    const ly = l.fit ? l.sy : Math.max(16, l.sy);
     g.lineWidth = 3.2; g.strokeStyle = 'rgba(8, 16, 30, .92)'; g.strokeText(l.t, lx, ly);
     g.fillStyle = l.hi ? '#ffe169' : '#e8f2f8'; g.fillText(l.t, lx, ly);
   }
@@ -432,6 +474,33 @@ function busStops(J) {
   const a = J.transit?.stops || [], b = J.corridor?.life?.buses?.stops || [];
   return b.length ? a.concat(b) : a;
 }
+function cableStations(J) {
+  return J?.namsan?.mini?.cableStations || J?.namsan?.cable?.stations || [];
+}
+function fitCableLabel(sx, sy, text) {
+  const hw = Math.max(24, String(text || '').length * 5.7);
+  const pad = Math.min(46, Math.max(18, hw * 0.48));
+  const clamp = (x, y) => {
+    const dx = x - R, dy = y - R, d = Math.hypot(dx, dy), maxR = R - pad;
+    if (d <= maxR) return [x, y];
+    const k = maxR / (d || 1);
+    return [R + dx * k, R + dy * k];
+  };
+  let lx = sx, ly = sy < R * 0.38 ? sy + 16 : sy - 12;
+  [lx, ly] = clamp(lx, ly);
+  return { sx: lx, sy: ly, t: text, fit: 1 };
+}
+function drawCableMark(g, sx, sy) {
+  g.beginPath(); g.arc(sx, sy, 7.2, 0, Math.PI * 2); g.fillStyle = '#0b1424'; g.fill();
+  g.beginPath(); g.arc(sx, sy, 5.8, 0, Math.PI * 2); g.fillStyle = '#e8b44c'; g.fill();
+  g.fillStyle = '#1a1520';
+  g.fillRect(sx - 3.2, sy - 0.5, 6.4, 4.3);
+  g.fillRect(sx - 0.55, sy - 4.3, 1.1, 4);
+  g.beginPath(); g.moveTo(sx - 3.4, sy - 4.1); g.lineTo(sx + 3.4, sy - 4.1); g.lineWidth = 1.2; g.strokeStyle = '#1a1520'; g.stroke();
+  g.fillStyle = '#f4f0e6';
+  g.fillRect(sx - 2.5, sy + 0.25, 2.05, 1.85);
+  g.fillRect(sx + 0.45, sy + 0.25, 2.05, 1.85);
+}
 let plaqueText = '', plaqueAt = 0;
 function updatePlaque(J, x, z) {
   const now = performance.now(); if (now - plaqueAt < 500 && plaqueText) return; plaqueAt = now;
@@ -439,8 +508,12 @@ function updatePlaque(J, x, z) {
   let best = null, bd = Infinity;
   if (!cap) for (const s of subwayStations(J)) { const d = Math.hypot(s.x - x, s.z - z); if (d < bd) { bd = d; best = s; } }
   let t;
+  const nt = J.namsan?.tower;
+  const nd = nt ? Math.hypot((nt.ox ?? nt.x) - x, (nt.oz ?? nt.z) - z) : Infinity;
   if (J.region?.id === 'starbase') t = 'Starbase';
-  else if (cap) t = tr(cap.name, cap.nameEn || cap.name); // [gangnam-night] 같은 섬의 역·랜드마크만
+else if (cap) t = tr(cap.name, cap.nameEn || cap.name); // [gangnam-night] 같은 섬의 역·랜드마크만
+  else if (Number.isFinite(nd) && nd < 2800) t = tr('남산', 'Namsan');
+
   else if (best && bd < 900) t = tr(`${best.name}역${bd > 250 ? ' 근처' : ''}`, `${best.nameEn || best.name}${bd > 250 ? ' area' : ' Stn.'}`);
   else t = tr('분당', 'Bundang');
   if (t !== plaqueText) { plaqueText = t; plaque.textContent = t; }

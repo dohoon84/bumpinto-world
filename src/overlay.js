@@ -7,10 +7,10 @@ export class Overlay {
   constructor(root, camera) { this.root = root; this.camera = camera; this.items = new Set(); this.zone = ''; this.homeCamera = camera; }
   // [zone] 실내 구역(지하철 대합실 등)에 들어가면 그 구역 항목만 그 구역 카메라로 투영. '' = 바깥(원래 카메라)
   setView(zone = '', camera = null) { this.zone = zone || ''; this.camera = camera || this.homeCamera; }
-  add({ cls, text = '', getPos, maxDist = 90, minDist = 0, zone = '' }) {
+  add({ cls, text = '', getPos, maxDist = 90, minDist = 0, zone = '', visibleIf = null }) {
     const el = document.createElement('div'); el.className = cls; el.textContent = text;
     this.root.appendChild(el);
-    const item = { el, getPos, maxDist, minDist, visible: true, hidden: false, zone };
+    const item = { el, getPos, maxDist, minDist, visible: true, hidden: false, zone, visibleIf };
     this.items.add(item); return item;
   }
   remove(item) { item.el.remove(); this.items.delete(item); }
@@ -18,7 +18,7 @@ export class Overlay {
     const cam = this.camera;
     // [mobile] 가로 폰: 지명·정류장 라벨을 덜 멀리까지, 위쪽 HUD 줄(상단 ~104px) 뒤로는 숨기고, 서로 겹치면 가까운 것만
     const mob = typeof document !== 'undefined' && document.body.classList.contains('mobile');
-    const cand = mob ? [] : null;
+    const cand = [];
     for (const it of this.items) {
       if (it.hidden || (it.zone || '') !== this.zone) { // [zone] 다른 구역 항목은 숨김
         if (it.visible) { it.el.style.display = 'none'; it.visible = false; }
@@ -29,19 +29,24 @@ export class Overlay {
       const kind = it.kind ??= (/^bubble/.test(it.el.className) ? 0 : /^tag/.test(it.el.className) ? 1 : 2); // 0 말풍선 · 1 이름표 · 2 지명 라벨
       const maxD = mob && kind === 2 ? it.maxDist * (/landmark|station/.test(it.el.className) ? 0.8 : 0.55) : it.maxDist;
       let show = p && d < maxD && d >= it.minDist;
+      if (show && it.visibleIf && !it.visibleIf(cam, p, d)) show = false;
       if (show) { v.copy(p).project(cam); show = v.z < 1 && v.z > -1 && Math.abs(v.x) < 1.2 && Math.abs(v.y) < 1.2; }
       let x = 0, y = 0;
       if (show) { x = ((v.x + 1) / 2) * w; y = ((1 - v.y) / 2) * h; }
-      if (show && mob && kind) {
-        if (y < 104) show = false; // 상단 HUD 두 줄 뒤
-        else cand.push({ it, d, x, y, kind });
-        if (cand.length && cand[cand.length - 1].it === it) continue; // 겹침 검사 뒤에 그린다
+      // 지명 라벨은 PC에서도 화면에서 겹치면 가까운 것만 남긴다 (남산 광장에서 팔각정·봉수대·케이블카가 입구와 겹치던 것).
+      // 모바일은 기존처럼 사람 이름표도 모아 검사하고, 상단 HUD 뒤는 숨긴다.
+      if (show && kind === 2) {
+        if (mob && y < 104) show = false;
+        else { cand.push({ it, d, x, y, kind }); continue; }
+      } else if (show && mob && kind === 1) {
+        if (y < 104) show = false;
+        else { cand.push({ it, d, x, y, kind }); continue; }
       }
       if (show !== it.visible) { it.el.style.display = show ? '' : 'none'; it.visible = show; }
       if (show) it.el.style.transform = `translate(${x}px, ${y}px) translate(-50%, -100%)`;
     }
-    if (!mob) return;
-    // 이름표(사람) 먼저, 그다음 가까운 순서. 이미 놓인 것과 겹치면 숨김
+    if (!cand.length) return;
+    // 이름표(사람) 먼저, 그다음 가까운 순서. 이미 놓인 것과 겹치면 지명 라벨은 숨김
     cand.sort((a, b) => a.kind - b.kind || a.d - b.d);
     const placed = [], now = performance.now();
     for (const c of cand) {

@@ -8,7 +8,8 @@ import { el, esc, ICON, headHtml, tagHtml, guestChip } from './kit.js';
 import { setTop, backChip, liveChip, langChip } from './topbar.js';
 import { regionSummary, stationLabel, readLastStation } from './data.js';
 import { OPEN_REGIONS, UPCOMING_REGIONS, getRegion, countryOf, regionBlurb } from '../regions/index.js';
-import { CORRIDOR_STATION_IDS, CORRIDOR_STATION_COUNT, corridorName, layoutCorridorMap, OPEN_BRANCH_IDS } from '../corridor/globeCorridor.js';
+import { CORRIDOR_STATION_IDS, CORRIDOR_STATION_COUNT, corridorName, layoutCorridorMap, OPEN_BRANCH_IDS, namsanGlobeEnabled, NAMSAN_LANDMARK } from '../corridor/globeCorridor.js';
+
 import { lotteSiteLabel } from '../corridor/lotteOpening.js';
 import { isEn, tr, onLangChange } from '../i18n.js';
 import { REPO_URL, isStarbaseLive } from '../worldGate.js';
@@ -98,7 +99,7 @@ function mountGate({ root, corridorGlobe, enter, focus, teardown }, onBackToStar
 
   // ---- 03 역 선택 (실제 역 좌표 · layoutCorridorMap 을 k 배로)
   const BASE = layoutCorridorMap({ height: 430, width: 320 });
-  const allStations = () => [...BASE.items, ...BASE.branches, BASE.landmark];
+  const allStations = () => [...BASE.items, ...BASE.branches, BASE.landmark, ...(namsanGlobeEnabled() ? [NAMSAN_LANDMARK] : [])];
   const linesOf = (s) => (s.live ? ['신분당선', '수인분당선'] : (s.lines || []));
   function pickK() {
     const avail = (root.clientHeight || innerHeight) - 58 - 12;
@@ -133,7 +134,9 @@ function mountGate({ root, corridorGlobe, enter, focus, teardown }, onBackToStar
   function selectedRow(id) {
     const s = stationById(id) || BASE.items[0];
     const sid = s.live ? 'jeongja' : s.id;
-    const label = s.landmark ? (lotteSiteLabel(isEn())?.main || stationLabel('jeongja', s.id)) : stationLabel('jeongja', sid === 'jeongja' ? null : sid);
+    const label = (s.id === 'ntower' || s.namsan)
+      ? stationLabel('jeongja', 'ntower')
+      : s.landmark ? (lotteSiteLabel(isEn())?.main || stationLabel('jeongja', s.id)) : stationLabel('jeongja', sid === 'jeongja' ? null : sid);
     const lines = linesOf(s).map((l) => (isEn() ? (LINE_EN[l] || l) : l)).join(' · ');
     return `<div class="v2-sel"><div class="v2-sel-t"><b>${esc(tr(`${label} 선택됨`, `${label} selected`))}</b><small>${esc(lines ? `${lines} · ${tr('다른 역은 지도에서 고르세요', 'pick another station on the map')}` : tr('다른 역은 지도에서 고르세요', 'pick another station on the map'))}</small></div>
       <button type="button" class="v2-btn primary" data-v2-at="${sid}">${esc(tr(`${label}에 입장`, `Enter ${label}`))}</button></div>`;
@@ -192,12 +195,16 @@ function mountGate({ root, corridorGlobe, enter, focus, teardown }, onBackToStar
     }).join('');
     const site = lotteSiteLabel(en);
     const lmChip = `<button type="button" class="v2-lm${sel === BASE.landmark.id ? ' on' : ''}" data-v2-at="${BASE.landmark.id}" data-hot="${BASE.landmark.id}" style="left:${(lx + 76).toFixed(1)}px;top:${Math.max(0, ly - 34).toFixed(1)}px">${esc(site ? site.main : (en ? BASE.landmark.en : BASE.landmark.ko))}</button>`;
+    // 남산은 분당–잠실 노선 밖이라 지도 범위를 넓히지 않는다. 기존 역·롯데 칩과 안 겹치는 왼쪽 위에 같은 .v2-lm 칩만 둔다.
+    const ntChip = namsanGlobeEnabled()
+      ? `<button type="button" class="v2-lm${sel === 'ntower' ? ' on' : ''}" data-v2-at="ntower" data-hot="ntower" style="left:12px;top:8px">${esc(en ? NAMSAN_LANDMARK.en : NAMSAN_LANDMARK.ko)}</button>`
+      : '';
     picker.innerHTML = `
       <div class="v2-hrow">${headHtml(corridorName(en), { size: 22, icon: ICON.train(20, '#ffe169') })}<span class="v2-pill v2-pill-lg">${esc(tr(`${CORRIDOR_STATION_COUNT}개 역`, `${CORRIDOR_STATION_COUNT} stations`))}</span><span class="v2-grow"></span>
         <button type="button" class="v2-close" data-v2="close" aria-label="${esc(tr('닫기', 'Close'))}">${ICON.close(16)}</button></div>
       <p class="v2-desc v2-desc-lg">${esc(tr(`정자 → 잠실 · ${CORRIDOR_STATION_COUNT}개 역 · 시작할 역을 고르세요`, `Jeongja → Jamsil · ${CORRIDOR_STATION_COUNT} stations · pick where to start`))}</p>
-      <div class="v2-tags">${tagHtml(tr('신분당선', 'Shinbundang'), '#d31145', { size: 11, cls: 'v2-tag-xs' })}${tagHtml(tr('수인분당선', 'Suin-Bundang'), '#f5a200', { size: 11, cls: 'v2-tag-xs' })}${tagHtml(tr('8호선', 'Line 8'), '#e6186c', { size: 11, cls: 'v2-tag-xs' })}${tagHtml(tr('롯데월드타워', 'Lotte World Tower'), '#4cc9f0', { size: 11, cls: 'v2-tag-xs' })}</div>
-      <div class="v2-map" style="width:${W}px;height:${H}px"><svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" aria-hidden="true">${leaders}${seg}${dots}${lm}</svg>${chips}${lmChip}</div>
+      <div class="v2-tags">${tagHtml(tr('신분당선', 'Shinbundang'), '#d31145', { size: 11, cls: 'v2-tag-xs' })}${tagHtml(tr('수인분당선', 'Suin-Bundang'), '#f5a200', { size: 11, cls: 'v2-tag-xs' })}${tagHtml(tr('8호선', 'Line 8'), '#e6186c', { size: 11, cls: 'v2-tag-xs' })}${tagHtml(tr('롯데월드타워', 'Lotte World Tower'), '#4cc9f0', { size: 11, cls: 'v2-tag-xs' })}${namsanGlobeEnabled() ? tagHtml(tr('남산서울타워', 'N Seoul Tower'), '#4cc9f0', { size: 11, cls: 'v2-tag-xs' }) : ''}</div>
+      <div class="v2-map" style="width:${W}px;height:${H}px"><svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" aria-hidden="true">${leaders}${seg}${dots}${lm}</svg>${chips}${lmChip}${ntChip}</div>
       <div class="v2-sel-slot">${selectedRow(sel)}</div>
       <p class="v2-foot">${esc(tr('실제 역 위치(OpenStreetMap) 기준 · 역 이름을 누르면 그 역에서 시작', 'Real station positions (OpenStreetMap) · click a station to start there'))}</p>`;
     fitMapLabels(picker.querySelector('.v2-map'), W);
