@@ -3,6 +3,7 @@
 //   고객 표시기 합계, 결제(표시·연습용 — 실제 bum/원 차감 없음, 서버 쓰기 없음), 영수증 출력 애니메이션(디자이너 영수증 양식),
 //   포장대·무료 빈 박스 코너, 출구 영수증 확인(직원 형광펜 줄긋기 / 파손 0건이면 '참 잘했어요' 도장), 줄 서는 NPC 손님(인스턴싱).
 //   오디오용 이벤트: window 'depot:sfx' CustomEvent { detail: { name, ... } } — 이름은 depot-coord.md 참고.
+import { cashierAt } from './story/cashiers.js';
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 
@@ -24,7 +25,6 @@ const sfx = (name, extra = {}) => {
   const a = AUDIO_NAME[name]; if (!a || !AUDIO?.play) return;
   try { AUDIO.play(a, { ...extra, ...(name.startsWith('checkout.belt') ? { on: name.endsWith('start'), id: `belt-${extra.lane ?? 0}` } : {}), ...(name === 'checkout.box.take' ? { material: 'cardboard' } : {}) }); } catch { /* 소리 없어도 됨 */ }
 };
-const CASHIERS = ['박스범', '스캔범', '바코범', '계산범', '영수범', '포장범', '카트범'];
 const FORTUNE = ['계란은 맨 위에', '오늘은 쌀을 아래칸에', '급정거는 계란의 적', '빈 박스는 무료, 인내심은 유료', '카트는 밀 때보다 멈출 때가 어렵다', '시식 코너는 두 바퀴까지'];
 
 export function createCheckout(ctx) {
@@ -275,9 +275,13 @@ body.mobile #depot-hud.co-busy .dh-target,body.mobile #depot-hud.co-rc .dh-targe
   const nearBoxes = () => st.me.x > CO.BOXC.x0 - 0.5 && st.me.x < CO.BOXC.x1 + 0.5 && st.me.z > CO.BOXC.z0 - 0.8 && st.me.z < CO.BOXC.z1 + 1 && PALS.some(([px, pz]) => Math.hypot(st.me.x - px, st.me.z - pz) < 2.0);
 
   function start(spot) {
-    if (!items.length) { toast('카트가 비어 있어요 · 상품을 담고 오세요', 1800, '#1f4fa3'); return; }
+    if (!items.length) { // R03 빈 카트 — 그 줄 계산원이 한마디(셀프는 기본 안내)
+      if (spot.self) toast('카트가 비어 있어요 · 상품을 담고 오세요', 1800, '#1f4fa3');
+      else { const c = cashierAt(spot.k); toast(`계산원 ${c.name}: ${c.r03}`, 2600, '#1f4fa3'); }
+      sfx('checkout.empty', { lane: spot.k + 1, self: spot.self }); return;
+    }
     co.phase = 'unload'; co.lane = spot.k; co.self = spot.self; co.total = 0; co.count = 0; co.lines = []; co.fly = []; co.belt = []; co.t = 0; co.scanT = 0; co.unloadT = 0.3; co.checked = false; co.paidItems = null; co.startT = st.t;
-    co.cashier = co.self ? '셀프' : CASHIERS[spot.k % CASHIERS.length];
+    co.cashierInfo = co.self ? null : cashierAt(spot.k); co.cashier = co.self ? '셀프' : co.cashierInfo.name;
     const c = cartPose(); c.vx = c.vz = c.w = 0;
     if (co.self) { const [kx, kz] = CO.KIOSK[spot.k]; c.x = kx + 0.15; c.z = kz + 1.35; c.yaw = 0; co.scanPos = new THREE.Vector3(kx - 0.12, 1.05, kz + 0.05); co.bagPos = new THREE.Vector3(kx + 0.68, 0.84, kz); }
     else { c.x = laneX(spot.k) + 0.15; c.z = 9.6; c.yaw = 0; co.scanPos = new THREE.Vector3(beltX(spot.k), 0.98, CO.SCAN_Z); co.bagPos = new THREE.Vector3(beltX(spot.k), 0.86, 5.0); }
@@ -295,6 +299,12 @@ body.mobile #depot-hud.co-busy .dh-target,body.mobile #depot-hud.co-rc .dh-targe
     hud.classList.add('co-busy');
     sfx('checkout.start', { lane: spot.k + 1, self: co.self }); if (!co.self) sfx('checkout.belt.start', { lane: spot.k, pos: { x: beltX(spot.k), y: 0.9, z: beltZc } });
     toast(co.self ? '셀프 계산 시작 · 상품이 하나씩 스캐너로 가요' : `계산대 ${String(spot.k + 1).padStart(2, '0')} · 캐셔 ${co.cashier}가 계산해 드려요 (무거운 건 카트째 스캔)`, 2600, '#1E5A45');
+    if (!co.self) { // 계산원 한마디: 한 개만 사면 R04, 아니면 그 사람 대표 대사(번갈아)
+      const c = co.cashierInfo, one = items.length === 1 && items[0].p.kg < 1;
+      const line = one ? c.r04 : c.lines[(co.greet = (co.greet || 0) + 1) % c.lines.length];
+      setTimeout(() => { if (co.phase !== 'idle') toast(`계산원 ${c.name}: ${line}`, 2600, '#1E5A45'); }, 2700);
+      sfx(one ? 'checkout.one' : 'checkout.greet', { lane: spot.k + 1, cashier: c.id });
+    }
   }
   function scanLine(it, handheld) {
     const bad = it.p.kind === 'egg' ? brokenIn(it.mesh) : 0;
@@ -456,7 +466,7 @@ ${T.dmg ? `<div class="r red"><span>변상 · 매장에서 깬 계란 ${T.storeE
     elChip.style.display = 'none'; elRc.style.display = 'block'; elRc.classList.add('on'); co.rcHideT = 6;
     sfx('checkout.receipt.check', { stamp: !!co.stamp }); checker.raise = 1.2;
     staff?.achieve?.(co.stamp ? '영수증 도장 — 참 잘했어요' : '출구 통과 (형광펜 쓱)');
-    toast(co.stamp ? '직원: 파손 0건! 참 잘했어요 도장 쾅 🐯 · E 로 나가기' : '직원: 확인했습니다~ 또 오세요! (형광펜 쓱) · E 로 나가기', 3200, '#1E5A45');
+    toast(co.stamp ? '직원: 파손 0건! 참 잘했어요 도장 쾅 ✨ · E 로 나가기' : '직원: 확인했습니다~ 또 오세요! (형광펜 쓱) · E 로 나가기', 3200, '#1E5A45');
     if (co.stamp) drawReceipt(1);
   }
 
@@ -541,7 +551,7 @@ ${T.dmg ? `<div class="r red"><span>변상 · 매장에서 깬 계란 ${T.storeE
     if (co.phase === 'unload' || co.phase === 'print') { if (k === 'Escape' && co.phase === 'unload') abort(); return true; }
     if (k !== 'KeyE' && k !== 'Space') return false;
     const spot = laneAtCart();
-    if (spot && !paidValid()) { if (spot.open) start(spot); else toast('계산 마감된 줄이에요 · 초록불 계산대로', 1600, '#8a5a00'); return true; }
+    if (spot && !paidValid()) { if (spot.open) start(spot); else toast(`계산 마감된 줄이에요 · 계산원 ${cashierAt(spot.k).name} 휴게 중 · 초록불 계산대로`, 2000, '#8a5a00'); return true; }
     if (nearExit()) {
       if (items.length && !paidValid()) { toast('계산 먼저 해 주세요 — 계산대는 오른쪽이에요', 1800, '#D9442E'); return true; }
       if (items.length && !co.checked) { checkReceipt(); return true; }
