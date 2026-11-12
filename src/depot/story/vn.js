@@ -99,10 +99,9 @@ const CSS = `
 #dp-story .lock{position:absolute;left:24px;bottom:150px;background:rgba(18,59,45,.85);color:#fff;border-radius:999px;padding:5px 12px;font-size:12px;font-weight:800;display:none}
 #dp-story .tapnote{position:absolute;left:50%;bottom:4px;transform:translateX(-50%);color:#fff;font-size:12px;font-weight:700;text-shadow:0 1px 2px #000;display:none}
 /* ---- 모바일 가로: 스토리 영역 x 216–619(403 폭) · 대화창 아래 끝 y 360 ---- */
-#dp-story.m .pt{height:300px;max-width:none;bottom:12px}
-#dp-story.m .pt.l{left:calc(50% - 200px)}#dp-story.m .pt.r{right:calc(50% - 200px)}
-#dp-story.m.choosing .pt{height:165px;bottom:84px}
-#dp-story.m .box{left:calc(50% - 210px);right:auto;width:403px;bottom:calc(100vh - 360px * 100vh / 393px);bottom:clamp(24px,8.4vh,40px);height:104px;min-height:0;border-radius:16px;border-width:3px;padding:20px 18px 8px;box-shadow:0 6px 0 rgba(18,59,45,.45)}
+#dp-story.m .pt{height:min(292px,76vh);max-width:none;bottom:0}
+#dp-story.m .pt.l{left:max(4px,env(safe-area-inset-left))}#dp-story.m .pt.r{right:max(4px,env(safe-area-inset-right))}
+#dp-story.m .box{left:var(--dp-mside,196px);right:var(--dp-mside,196px);width:auto;bottom:14px;height:100px;min-height:0;border-radius:16px;border-width:3px;padding:20px 18px 8px;box-shadow:0 6px 0 rgba(18,59,45,.45)}
 #dp-story.m .txt{font-size:15px;line-height:1.5}
 #dp-story.m .tag{left:18px;top:-17px;height:32px;font-size:15px;border-width:3px;padding:0 1.6em 0 1em}
 #dp-story.m .tag.pa{left:84px}
@@ -110,11 +109,11 @@ const CSS = `
 #dp-story.m .ctl{position:fixed;right:max(59px,env(safe-area-inset-right));top:12px;bottom:auto;gap:8px}
 #dp-story.m .ctl button{height:40px;font-size:14px;position:relative}#dp-story.m .ctl button::after{content:'';position:absolute;inset:-4px}
 #dp-story.m .ctl kbd{display:none}
-#dp-story.m .choices{left:calc(50% - 210px);right:auto;width:403px;bottom:150px;gap:6px}
-#dp-story.m .ch{height:38px;font-size:14px;border-width:3px;border-radius:12px}#dp-story.m .ch i{flex-basis:44px}
-#dp-story.m .pa-frame{width:64px;height:64px;left:calc(50% - 226px);bottom:calc(clamp(24px,8.4vh,40px) + 70px);border-width:4px}
+#dp-story.m .choices{left:var(--dp-mside,196px);right:var(--dp-mside,196px);width:auto;bottom:156px;gap:4px}
+#dp-story.m .ch{height:32px;font-size:13.5px;border-width:3px;border-radius:11px;box-shadow:0 4px 0 rgba(18,59,45,.35)}#dp-story.m .ch i{flex-basis:36px;margin-right:.6em}#dp-story.m .ch:hover,#dp-story.m .ch.sel{transform:none}
+#dp-story.m .pa-frame{width:96px;height:96px;left:calc(var(--dp-mside,196px) - 104px);bottom:14px;border-width:4px}
 #dp-story.m .mcard{top:60px;right:max(59px,env(safe-area-inset-right));width:300px;font-size:12px}#dp-story.m .mcard h5{font-size:17px}
-#dp-story.m .lock,#dp-story.m .tapnote{display:block}
+#dp-story.m .lock,#dp-story.m .tapnote{display:block}#dp-story.m .lock{left:auto;right:max(8px,env(safe-area-inset-right));bottom:118px;font-size:11px;padding:3px 9px;opacity:.9}#dp-story.m .tapnote{bottom:0;font-size:11px}
 #dp-story.m .card{padding:14px 22px}#dp-story.m .card h2{font-size:26px}#dp-story.m .card h3{font-size:17px}#dp-story.m .card p{font-size:13px}
 #dp-story.m .mode{gap:10px}#dp-story.m .mode h2{font-size:22px}#dp-story.m .mode p.sub{margin:-6px 0 0;font-size:12px}#dp-story.m .mode .mc{width:min(300px,36vw)}#dp-story.m .mode .mc h3{font-size:17px}#dp-story.m .mode .mc ul{font-size:12px;margin-bottom:8px}#dp-story.m .mode .mc img{aspect-ratio:640/250}
 #dp-story.m .set{left:50%;right:auto;top:12px;bottom:12px;transform:translateX(-50%);width:min(520px,calc(100vw - 144px));border:4px solid var(--deep);border-radius:18px;padding:12px 16px}
@@ -123,7 +122,9 @@ const CSS = `
 #dp-story.m .pa-chip{left:186px;top:14px;transform:none;animation:none;font-size:12px;padding:.35em .9em}#dp-story.m .pa-chip b{display:none}
 #dp-story.m .chip{top:var(--dp-chip-top,108px);min-width:0;max-width:220px}#dp-story.m .chip small{display:none}#dp-story.m .chip em{padding-bottom:4px}
 body.dp-chip-m #depot-hud .dh-help{display:none !important}
-body.dp-story-lock #m-joy,body.dp-story-lock .m-actions{opacity:.3;filter:grayscale(1);pointer-events:none !important}
+body.dp-story-lock #phone,body.dp-story-lock #handset,body.dp-story-lock #emote-bar,body.dp-story-lock form#chat,body.dp-story-lock #chat-log-panel,body.dp-story-lock #depot-hud .dh-help{opacity:0 !important;pointer-events:none !important;transform:translateY(24px);transition:opacity .2s,transform .2s}
+body.dp-story-lock #m-joy,body.dp-story-lock .m-actions,body.dp-story-lock .m-talk,body.dp-story-lock #m-hud .m-act{opacity:0 !important;pointer-events:none !important;transition:opacity .2s}
+body.dp-story-lock.dp-story-m #m-hud .m-tg[data-tg=bgm],body.dp-story-lock.dp-story-m #m-hud .m-tg[data-tg=phone],body.dp-story-lock.dp-story-m #m-hud .m-tg[data-tg=map],body.dp-story-lock.dp-story-m #m-event-btn,body.dp-story-lock.dp-story-m #depot-hud .dh-panel,body.dp-story-lock.dp-story-m #dp-story .gear,body.dp-story-lock.dp-story-m #dp-story .chip{opacity:0 !important;pointer-events:none !important;transition:opacity .2s}
 body.dp-story-lock .co-rcpt,body.dp-story-lock .co-chip,body.dp-story-lock #depot-ui .dp-pa,body.dp-story-lock #depot-hud .dh-toast{visibility:hidden !important}
 body.dp-story-lock #depot-hud .dh-help,body.dp-story-lock #depot-hud .dh-target,body.dp-story-lock #depot-hud .dh-cross{display:none !important}
 `;
@@ -152,7 +153,7 @@ export function createVN({ assetBase, isMobile = false, getSettings, onCue = () 
   function setOpen(on) {
     if (S.open === on) return;
     S.open = on; root.classList.toggle('open', on); S.openedAt = performance.now();
-    document.body.classList.toggle('dp-story-lock', on);
+    document.body.classList.toggle('dp-story-lock', on); document.body.classList.toggle('dp-story-m', !!isMobile && on);
     onLock(on);
     if (!on) { for (const p of Object.values(portraits)) { p.el.classList.remove('on'); p.who = ''; } root.classList.remove('pa'); S.auto = false; S.skip = false; updCtl(); }
   }
@@ -297,7 +298,7 @@ export function createVN({ assetBase, isMobile = false, getSettings, onCue = () 
     });
   }
   function modeSelect() {
-    onLock(true); document.body.classList.add('dp-story-lock');
+    onLock(true); document.body.classList.add('dp-story-lock'); if (isMobile) document.body.classList.add('dp-story-m');
     const html = `<div class="mode"><div style="font-size:clamp(28px,5vh,52px)">📦</div><h2>어떻게 장 볼까요?</h2><p class="sub">범창고 정자점에 처음 오셨네요</p><div class="cards">
       <button class="mc focus" data-v="story"><span class="rec">처음이면 추천</span><img src="${assetBase}story/mode-story.webp" alt=""><h3>스토리 모드</h3><ul><li>범창고 정자점의 7일 이야기</li><li>매일 터지는 사건 · 소소한 반응 50가지</li><li>한범숙·말순·범이·반값과 단골 되기</li></ul></button>
       <button class="mc" data-v="free"><img src="${assetBase}story/mode-free.webp" alt=""><h3>자유 장보기</h3><ul><li>이야기 없이 마음대로 카트 밀기</li><li>손님 NPC · 직원 잔소리·장난 반응은 그대로</li><li>사건·컷신 없음</li></ul></button>
@@ -306,7 +307,7 @@ export function createVN({ assetBase, isMobile = false, getSettings, onCue = () 
       const m = document.createElement('div'); m.innerHTML = html; const el = m.firstElementChild; root.appendChild(el); S.modal = el;
       let f = 0; const cards = [...el.querySelectorAll('.mc')];
       const focus = (i) => { f = i; cards.forEach((c, k) => c.classList.toggle('focus', k === i)); onCue('ui-mode-pick'); };
-      const done = (v) => { el.remove(); S.modal = null; onLock(false); document.body.classList.remove('dp-story-lock'); res(v); };
+      const done = (v) => { el.remove(); S.modal = null; onLock(false); document.body.classList.remove('dp-story-lock', 'dp-story-m'); res(v); };
       el.addEventListener('pointerdown', (e) => { const c = e.target.closest('.mc'); if (c) { e.stopPropagation(); done(c.dataset.v); } });
       S.modalKey = (k) => { if (k === 'ArrowLeft' || k === 'KeyA') focus(0); else if (k === 'ArrowRight' || k === 'KeyD') focus(1); else if (k === 'Enter' || k === 'Space') done(cards[f].dataset.v); };
     });
@@ -374,6 +375,6 @@ export function createVN({ assetBase, isMobile = false, getSettings, onCue = () 
     get isOpen() { return S.open || !!S.modal; }, get blocking() { return S.open || !!S.modal; },
     get skipping() { return S.skip || S.skipHold; },
     advance, _S: S,
-    dispose() { clearInterval(skipTimer); window.removeEventListener('keydown', onKeyDown, true); window.removeEventListener('keyup', onKeyUp, true); document.body.classList.remove('dp-story-lock', 'dp-chip-m'); root.remove(); css.remove(); },
+    dispose() { clearInterval(skipTimer); window.removeEventListener('keydown', onKeyDown, true); window.removeEventListener('keyup', onKeyUp, true); document.body.classList.remove('dp-story-lock', 'dp-chip-m', 'dp-story-m'); root.remove(); css.remove(); },
   };
 }
