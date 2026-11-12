@@ -8,6 +8,7 @@ import * as CANNON from 'cannon-es';
 import { PRODUCTS, BY_ID, CART, EGG } from './products.js';
 import { buildCartGeometry, BASKET } from './cartModel.js';
 import { buildProductGeometry, addProductShape } from './shapes.js';
+import { createStaff } from './staff.js';
 
 const W = 84, D = 120, CEIL = 9;
 const DOOR = { x: 69, w: 8 };
@@ -346,6 +347,13 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit } 
   const elKg = hud.querySelector('.dh-kg'), elTarget = hud.querySelector('.dh-target'), elToast = hud.querySelector('.dh-toast'), elHelp = hud.querySelector('.dh-help');
   hud.querySelector('.dh-btns').addEventListener('click', (e) => { const a = e.target?.dataset?.a; if (a === 'place') place(); else if (a === 'rot') rotate(Math.PI / 2); else if (a === 'tip') { st.tip = !st.tip; } else if (a === 'level') toggleLevel(); else if (a === 'cancel') cancelPlace(); });
   function toast(msg, ms = 1800, bg = '#c62828') { elToast.textContent = msg; elToast.style.background = bg; elToast.style.display = 'block'; st.toastT = ms / 1000; }
+  // ---------- 매장 직원 · 장난 감지 (staff.js) ----------
+  const staff = createStaff({ scene, camera, hud, keep, canvasTex, toast, st, onEscort() {
+    if (st.mode === 'place') cancelPlace();
+    if (st.hasCart) { st.hasCart = false; const c = st.cart; c.vx = c.vz = c.w = 0; }
+    st.me.x = DOOR.x + 1.5; st.me.z = 3.2; st.me.yaw = Math.PI; st.head.yaw = 0; st.head.pitch = -0.12;
+    toast('직원이 입구까지 모셔다 드렸어요 🙇 (카트는 그 자리에 · 초록 화살표)', 3200, '#1E5A45');
+  } });
 
   // ---------- 효과음(아주 짧게, WebAudio) ----------
   let ac = null;
@@ -447,7 +455,7 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit } 
     const wp = new THREE.Vector3(), wq = new THREE.Quaternion(); _m.decompose(wp, wq, new THREE.Vector3());
     const c = st.cart, v = new THREE.Vector3(b.velocity.x, b.velocity.y, b.velocity.z).applyAxisAngle(Y3, c.yaw); v.x += c.vx; v.z += c.vz;
     detachItem(it);
-    addFloorItem(it.p, it.mesh, wp, wq, v, it.src);
+    addFloorItem(it.p, it.mesh, wp, wq, v, it.src); staff.onFloor(true);
     toast(`${it.p.name} 바닥에 떨어짐 · 클릭해서 다시 집기`, 2000, '#8a5a00');
   }
   function addFloorItem(p, mesh, wp, wq, vel, src) {
@@ -616,7 +624,7 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit } 
       const q = itemQuat(st.rotY, st.tip); cart.updateMatrixWorld(true);
       _m.compose(_p.set(ghostSol.x, ghostSol.y + 0.02, ghostSol.z), q, _s).premultiply(cart.matrixWorld);
       const wp = new THREE.Vector3(), wq = new THREE.Quaternion(); _m.decompose(wp, wq, new THREE.Vector3());
-      addFloorItem(p, h.mesh || makeItemMesh(p), wp, wq, new THREE.Vector3(), h.src);
+      addFloorItem(p, h.mesh || makeItemMesh(p), wp, wq, new THREE.Vector3(), h.src); staff.onFloor(false);
     }
     st.held = null; setGhost(null); st.mode = 'walk'; hud.classList.remove('placing'); blip('place');
     st.placedOnce = true;
@@ -660,7 +668,7 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit } 
         const F = share + imp;
         const loc = low.body.pointToLocalFrame(s.pt);
         const U = eggs.userData, [cw, cd] = U.cell, [sx, , sz] = low.size;
-        if (it.p.soft) { // 부드러운 포대·봉지: 겹친 면적 전체로 퍼짐
+        if (it.p.soft || it.p.kind === 'egg') { // 부드러운 포대·봉지, 그리고 계란판 위 계란판(펄프 판이 포개져 하중이 판 전체로): 겹친 면적 전체로 퍼짐
           const a = bodyAabb(it.body), bA = bodyAabb(low.body);
           const ox = Math.max(0, Math.min(a.x1, bA.x1) - Math.max(a.x0, bA.x0)), oz = Math.max(0, Math.min(a.z1, bA.z1) - Math.max(a.z0, bA.z0));
           const n = Math.max(1, Math.min(30, Math.round((ox * oz) / (cw * cd))));
@@ -707,7 +715,7 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit } 
         }
       }
       if (fxDirty) { for (const im of Object.values(fx)) im.instanceMatrix.needsUpdate = true; eggs.instanceMatrix.needsUpdate = true; }
-      if (newly) { eggs.instanceMatrix.needsUpdate = true; eggs.instanceColor.needsUpdate = true; blip('crack'); if (!silent) { st.brokenEggs += newly; toast(`🥚 빠직! 계란 ${newly}개 깨짐 (${st.brokenEggs}/${st.eggTotal})`, 2400); } }
+      if (newly) { eggs.instanceMatrix.needsUpdate = true; eggs.instanceColor.needsUpdate = true; blip('crack'); staff.onEggsBroken(newly); if (!silent) { st.brokenEggs += newly; toast(`🥚 빠직! 계란 ${newly}개 깨짐 (${st.brokenEggs}/${st.eggTotal})`, 2400); } }
     }
   }
 
@@ -757,7 +765,7 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit } 
       if (hit) {
         nx += hit.nx * hit.pen; nz += hit.nz * hit.pen;
         const vn = c.vx * hit.nx + c.vz * hit.nz;
-        if (vn < 0) { c.vx -= vn * hit.nx * 1.3; c.vz -= vn * hit.nz * 1.3; if (-vn > 0.35) { st.shock = Math.min(1, -vn); blip('bump'); } }
+        if (vn < 0) { c.vx -= vn * hit.nx * 1.3; c.vz -= vn * hit.nz * 1.3; if (-vn > 0.35) { st.shock = Math.min(1, -vn); blip('bump'); } if (-vn > 1.2) staff.onRam(-vn - 1.2); }
       }
     }
     c.x = nx; c.z = nz;
@@ -839,6 +847,7 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit } 
       lines.push(`윗바구니 ${fill('upper')}% · 아래 받침대 ${fill('lower')}%${st.eggTotal ? ` · 🥚 깨짐 ${st.brokenEggs}/${st.eggTotal}` : ''}`);
     } else if (cart.visible) lines.push(`카트에서 손 놓음 · 초록 화살표 쪽 카트 옆에서 E${items.length ? ` (짐 ${items.length}개 그대로)` : ''}`);
     else lines.push('① 입구 카트 보관소에서 E 로 카트 잡기');
+    if (staff.S.eggsToday) lines.push(`🧾 변상 예정 ₩ ${staff.damageWon.toLocaleString('ko-KR')} (오늘 깬 계란 ${staff.S.eggsToday}개 · 표시용)`);
     if (!st.placedOnce) lines.push(st.mode === 'place' ? '③ 카트 안을 클릭하면 그 자리에 놓여요' : st.hasCart || cart.visible ? '② 선반 상품을 마우스로 클릭(가운데 조준 X)' : '');
     elKg.textContent = lines.join('\n');
     const help = st.mode === 'place'
@@ -955,6 +964,7 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit } 
     tickFloor(dt);
     selfAvatar.position.set(st.me.x, 0, st.me.z); selfAvatar.rotation.y = st.me.yaw;
     updateCamera(dt);
+    staff.tick(dt, { me: st.me, cartObj: st.cart, items, rimTop: B.top.yRear, cartHeld: st.hasCart, cartVisible: cart.visible });
     hover = st.mode === 'walk' ? pickTarget() : null;
     updateHighlight();
     marker.visible = !st.hasCart && cart.visible; if (marker.visible) { arrow.position.y = 1.55 + Math.sin(st.t * 3) * 0.06; arrow.rotation.y += dt * 1.5; }
@@ -997,13 +1007,15 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit } 
       setGhostAt(level, x, z, rotY = 0, tip = false) { st.level = level; st.gx = x; st.gz = z; st.fx = x; st.fz = z; st.rotY = rotY; st.tip = tip; st.nudge.x = st.nudge.z = 0; },
       drop(id, level, x, z, rotY = 0, tip = false) { api._dbg.hold(id); api._dbg.setGhostAt(level, x, z, rotY, tip); if (st.held && itemDims(st.held.p, tip).join() !== ghost?.userData.dims) { setGhost(st.held.p); ghost.userData.dims = itemDims(st.held.p, tip).join(); } ghostSol = solveGhost(); return place(); },
       firstOf(id) { const im = prodMeshes.find((m) => m.userData.pid === id); const l = im?.userData.list || []; return l.length ? { ...l[Math.floor(l.length / 2)] } : null; },
+      run(sec, dt = 1 / 30) { for (let t = 0; t < sec; t += dt) update(dt); },
+      mischief(kind, amt) { staff.mischief(kind, amt); }, staff: () => ({ ...staff.S, x: staff.root.position.x, z: staff.root.position.z, ach: staff.S.ach.slice() }), staffAt(x, z) { staff.root.position.set(x, 0, z); },
       camAt(pos, tgt) { st.camOv = pos ? { pos: new THREE.Vector3(...pos), tgt: new THREE.Vector3(...tgt) } : null; },
       settle(sec = 1.5) { for (let t = 0; t < sec; t += 1 / 60) { cart.updateMatrixWorld(true); stepPhysics(1 / 60); } },
       push(sec, f = 1, s = 0, run = false) { for (let t = 0; t < sec; t += 1 / 60) { driveCart(1 / 60, { f, s, run }); cart.updateMatrixWorld(true); stepPhysics(1 / 60); } },
     },
     dispose() {
       dom.removeEventListener('pointerdown', onDown); dom.removeEventListener('pointermove', onMove); window.removeEventListener('pointerup', onUp); dom.removeEventListener('wheel', onWheel); dom.removeEventListener('contextmenu', onCtx);
-      hud.remove(); css.remove(); try { ac?.close(); } catch { /* */ }
+      staff.dispose(); hud.remove(); css.remove(); try { ac?.close(); } catch { /* */ }
       const seen = new Set();
       scene.traverse((o) => {
         if (o.geometry && !seen.has(o.geometry)) { seen.add(o.geometry); o.geometry.dispose(); }
