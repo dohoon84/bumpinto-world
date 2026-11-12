@@ -47,7 +47,7 @@ const V = [
   ['06-upper-racks', [27.9, 1.4, 50], [27.9, 4.6, 66]],
   ['07-ceiling', [40, 1.6, 50], [44, 8.6, 70]],
   ['08-frozen', [78, 1.6, 72], [83.2, 1.2, 80]],
-  ['09-fresh-back', [46, 1.65, 111], [50, 1.05, 119]],
+  ['09-fresh-back', [43.5, 1.95, 114.6], [47.5, 0.95, 118.7]],
   ['10-produce', [16, 1.65, 107.5], [16, 0.7, 113]],
   ['11-bakery-west', [11, 1.6, 20], [5, 0.9, 28]],
   ['12-household-aisle', [17.2, 1.6, 48], [17.2, 1.4, 74]],
@@ -70,6 +70,22 @@ await p.evaluate(() => window.__jj.depot.leave());
 await p.waitForFunction(() => !window.__jj.depot.active && !window.__jj.depot.busy, null, { timeout: 60000 });
 await p.waitForTimeout(2500);
 M.runs.push(await metric('outside-door (after exit)'));
+// 모바일 844×390 (터치) 한 장 — 통로 가운데
+if (SHOTS && !ONLY) {
+  await p.close();
+  const mc = await b.newContext({ viewport: { width: 844, height: 390 }, isMobile: true, hasTouch: true, deviceScaleFactor: 1 });
+  const mp = await mc.newPage(); mp.on('pageerror', (e) => { errs.push(e.message); console.log('PAGEERR(m)', e.message); });
+  await mp.route(/\.(woff2?|ttf|otf|eot)(\?|$)/i, (r) => r.abort());
+  await mp.goto(`${BASE}?${Q}&at=depot&mobile=1`, { timeout: 240000 });
+  await mp.waitForFunction(() => window.__jj?.ready, null, { timeout: 300000 });
+  await mp.evaluate(() => window.__jj.depot.enter());
+  await mp.waitForFunction(() => window.__jj.depot.active && !window.__jj.depot.busy, null, { timeout: 120000 });
+  await mp.evaluate(() => { const d = window.__jj.depot.interior._dbg; d.setCart(0, 0, 0); d.camAt([29.0, 1.6, 30], [29.0, 1.5, 60]); d.run(0.05); });
+  await mp.waitForTimeout(1500);
+  M.mobile = await mp.evaluate(async () => { const info = window.__jj.renderer.info; await new Promise((r) => requestAnimationFrame(r)); info.autoReset = false; info.reset(); await new Promise((r) => requestAnimationFrame(() => r())); info.autoReset = true; return { drawCalls: info.render.calls, triangles: info.render.triangles }; });
+  console.log('mobile', JSON.stringify(M.mobile));
+  await mp.screenshot({ path: `${OUT}20-mobile-844x390.png` });
+}
 M.maxTris = Math.max(...M.views.map((v) => v.triangles)); M.maxCalls = Math.max(...M.views.map((v) => v.drawCalls));
 M.errors = errs;
 writeFileSync(`${OUT}metrics-${TAG}.json`, JSON.stringify(M, null, 1));

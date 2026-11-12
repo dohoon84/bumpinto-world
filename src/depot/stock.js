@@ -374,11 +374,14 @@ export function mountStock({ scene, keep, canvasTex: canvasTexFn, TX, racks, obs
     tex.anisotropy = 4;
     const geos = []; const mm = new THREE.Matrix4(), qq = new THREE.Quaternion();
     for (const sg of signs) {
-      const sl = slot.get(sg.key); const g = new THREE.PlaneGeometry(sg.w, sg.h); const uv = g.attributes.uv;
-      for (let i = 0; i < uv.count; i++) uv.setXY(i, (sl.x + uv.getX(i) * SW) / SA, 1 - (sl.y + (1 - uv.getY(i)) * sl.h) / SA);
-      g.applyMatrix4(mm.compose(pv.set(sg.x, sg.y, sg.z), qq.setFromAxisAngle(Y, sg.ry), s3.set(1, 1, 1))); geos.push(g);
+      const sl = slot.get(sg.key);
+      for (const back of [0, 1]) { // 앞·뒤 두 장 (DoubleSide 면 뒤에서 글자가 거울처럼 뒤집힘)
+        const g = new THREE.PlaneGeometry(sg.w, sg.h); const uv = g.attributes.uv;
+        for (let i = 0; i < uv.count; i++) uv.setXY(i, (sl.x + uv.getX(i) * SW) / SA, 1 - (sl.y + (1 - uv.getY(i)) * sl.h) / SA);
+        g.applyMatrix4(mm.compose(pv.set(sg.x, sg.y, sg.z), qq.setFromAxisAngle(Y, sg.ry + back * Math.PI), s3.set(1, 1, 1))); geos.push(g);
+      }
     }
-    const sm = new THREE.Mesh(keep(mergeGeometries(geos)), keep(new THREE.MeshBasicMaterial({ map: tex, side: THREE.DoubleSide, alphaTest: 0.5 })));
+    const sm = new THREE.Mesh(keep(mergeGeometries(geos)), keep(new THREE.MeshBasicMaterial({ map: tex, alphaTest: 0.5 })));
     geos.forEach((g) => g.dispose()); scene.add(sm);
   }
 
@@ -504,8 +507,13 @@ function buildFixtures({ scene, keep, ct, atlas, unitBox, obstacles, prodMeshes,
     const w = x1 - x0, cx = (x0 + x1) / 2;
     const body = new THREE.Mesh(keep(new THREE.BoxGeometry(w, 1.05, 1.15)), keep(new THREE.MeshLambertMaterial({ color })));
     body.position.set(cx, 0.52, z); scene.add(body);
-    const well = new THREE.Mesh(keep(new THREE.BoxGeometry(w - 0.1, 0.08, 0.9)), coldLight);
-    well.position.set(cx, 1.0, z - 0.05); scene.add(well);
+    const well = new THREE.Mesh(keep(new THREE.BoxGeometry(w - 0.1, 0.04, 0.9)), coldLight);
+    well.position.set(cx, 1.035, z - 0.05); scene.add(well); // 얼음 트레이 (몸체 윗면보다 살짝 위)
+    // 뒤 선반벽 + 위 조명 캐노피 + 앞 초록 띠 (정적 병합이라 드로콜 추가 없음)
+    const riser = new THREE.Mesh(keep(new THREE.BoxGeometry(w, 1.3, 0.12)), steel); riser.position.set(cx, 1.7, z + 0.52); scene.add(riser);
+    const canopy = new THREE.Mesh(keep(new THREE.BoxGeometry(w, 0.1, 0.7)), black); canopy.position.set(cx, 2.4, z + 0.2); scene.add(canopy);
+    const strip = new THREE.Mesh(keep(new THREE.BoxGeometry(w - 0.2, 0.04, 0.5)), coldLight); strip.position.set(cx, 2.34, z + 0.2); scene.add(strip);
+    const band = new THREE.Mesh(keep(new THREE.BoxGeometry(w, 0.14, 0.02)), green); band.position.set(cx, 0.82, z - 0.585); scene.add(band);
     const guard = new THREE.Mesh(keep(new THREE.PlaneGeometry(w - 0.15, 0.28)), glassM);
     guard.position.set(cx, 1.22, z - 0.5); scene.add(guard);
     const kick = new THREE.Mesh(keep(new THREE.BoxGeometry(w, 0.18, 1.15)), black);
@@ -515,10 +523,13 @@ function buildFixtures({ scene, keep, ct, atlas, unitBox, obstacles, prodMeshes,
     for (let i = 0; i < skus.length; i++) {
       const p = BY_ID[skus[i]]; if (!p) continue;
       const [sx, sy, sz] = p.size;
-      const tx = x0 + 0.35 + i * ((w - 0.5) / skus.length);
+      // 칸 폭 가득 · 깊이 2–3줄 · 앞줄 가운데만 집기 (빈 매대처럼 보이지 않게)
+      const seg = (w - 0.3) / skus.length, sx0 = x0 + 0.15 + i * seg;
+      const nA = Math.max(1, Math.floor((seg - 0.1) / (sx + 0.03))), nR = Math.max(1, Math.min(3, Math.floor(0.8 / (sz + 0.03))));
       const list = freshCluster.items.get(p.id) || []; freshCluster.items.set(p.id, list);
-      for (let k = 0; k < 3; k++) for (let row = 0; row < 2; row++) {
-        list.push({ x: tx + (k - 1) * (sx + 0.02), y: 1.05 + sy / 2, z: z - 0.15 + (row - 0.4) * (sz + 0.02), rot: 0, face: 1, pickable: row === 0 && k === 1 && PICKABLE_IDS.has(p.id), sx, sy, sz, pid: p.id });
+      for (let k = 0; k < nA; k++) for (let row = 0; row < nR; row++) {
+        const stack = row === nR - 1 && sy < 0.12 && k % 2 === 0 ? 2 : 1; // 뒷줄은 가끔 두 단
+        for (let h = 0; h < stack; h++) list.push({ x: sx0 + 0.05 + (k + 0.5) * (seg - 0.1) / nA, y: 1.05 + sy * (h + 0.5), z: z - 0.42 + (row + 0.5) * (0.8 / nR), rot: 0, face: 1, pickable: row === 0 && h === 0 && k % 3 === 1 && PICKABLE_IDS.has(p.id), sx, sy, sz, pid: p.id });
       }
     }
   }
