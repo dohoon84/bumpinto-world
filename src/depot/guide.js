@@ -111,8 +111,14 @@ export function createGuide({ scene, camera, keep = (x) => x, obstacles, isMobil
 #dp-guide-edge.m i{width:32px;height:32px;left:-16px;top:-16px}#dp-guide-edge.m i::after{left:9px;top:6px}#dp-guide-edge.m b{top:18px;font-size:11px}`;
   document.head.appendChild(css); document.body.appendChild(edge); if (isMobile) edge.classList.add('m');
   const arrowEl = edge.querySelector('i'), distEl = edge.querySelector('b');
-  const AVOID = ['#depot-hud .dh-panel', '#h3-mm', '#dp-story .chip', '#dp-story .gear', '#dp-story .rx', '#m-joy', '.m-actions', '#m-hud .m-tg', '.co-chip', '#depot-hud .dh-help', '#dp-story .mcard'];
+  const AVOID = ['#depot-hud .dh-panel', '#h3-mm', '#dp-story .chip', '#dp-story .gear', '#dp-story .rx', '#m-joy', '.m-actions', '#m-hud .m-tg', '.co-chip', '#depot-hud .dh-help', '#dp-story .mcard', '#dp-story .mchip'];
   const rects = []; let rectT = 0;
+  const safe = { l: 0, r: 0 }; // 노치(가로 화면): env(safe-area-inset-*) — 모바일은 viewport-fit=cover
+  let probe = null;
+  function readSafe() {
+    if (!probe) { probe = document.createElement('div'); probe.style.cssText = 'position:fixed;left:0;top:0;width:0;height:0;visibility:hidden;pointer-events:none;padding-left:env(safe-area-inset-left,0px);padding-right:env(safe-area-inset-right,0px)'; document.body.appendChild(probe); }
+    const cs = getComputedStyle(probe); safe.l = parseFloat(cs.paddingLeft) || 0; safe.r = parseFloat(cs.paddingRight) || 0;
+  }
   function refreshRects() {
     rects.length = 0;
     for (const sel of AVOID) for (const el of document.querySelectorAll(sel)) { if (!el.offsetParent && getComputedStyle(el).position !== 'fixed') continue; const r = el.getBoundingClientRect(); if (r.width > 2 && r.height > 2) rects.push(r); }
@@ -162,7 +168,7 @@ export function createGuide({ scene, camera, keep = (x) => x, obstacles, isMobil
     }
     chev.count = cnt; chev.instanceMatrix.needsUpdate = true;
     // 화면 밖이면 가장자리 화살표
-    if ((rectT -= dt) <= 0) { rectT = 0.5; refreshRects(); }
+    if ((rectT -= dt) <= 0) { rectT = 0.5; refreshRects(); if (isMobile) readSafe(); }
     v.set(tg.x, 1.4, tg.z).applyMatrix4(camera.matrixWorldInverse);
     const behind = v.z > 0;
     v.applyMatrix4(camera.projectionMatrix);
@@ -170,7 +176,7 @@ export function createGuide({ scene, camera, keep = (x) => x, obstacles, isMobil
     const on = !behind && Math.abs(nx) < 0.92 && Math.abs(ny) < 0.9;
     if (on) { if (S.edgeOn) { edge.style.display = 'none'; S.edgeOn = false; } }
     else {
-      const W = innerWidth, H = innerHeight, mx = isMobile ? 34 : 42, my = isMobile ? 30 : 42;
+      const W = innerWidth, H = innerHeight, mx = isMobile ? 34 + Math.max(safe.l, safe.r) : 42, my = isMobile ? 30 : 42;
       let ax = nx, ay = -ny; const m = Math.max(Math.abs(ax) / 1, Math.abs(ay) / 1) || 1; ax /= m; ay /= m;
       if (behind && Math.abs(ax) < 0.2 && ay < 0) ay = 1; // 바로 뒤 → 아래쪽
       let x = W / 2 + ax * (W / 2 - mx), y = H / 2 + ay * (H / 2 - my);
@@ -223,6 +229,6 @@ export function createGuide({ scene, camera, keep = (x) => x, obstacles, isMobil
     root, set, setHidden, tick, arrive, dist, mmDraw, solve, rasterize,
     get target() { return S.target; },
     _dbg: () => ({ pathN, pathLen: +pathLen.toFixed(1), chev: chev.count, edge: S.edgeOn, hidden: S.hidden, target: S.target && { x: S.target.x, z: S.target.z } }),
-    dispose() { edge.remove(); css.remove(); root.removeFromParent(); chev.dispose(); },
+    dispose() { edge.remove(); probe?.remove(); css.remove(); root.removeFromParent(); chev.dispose(); },
   };
 }

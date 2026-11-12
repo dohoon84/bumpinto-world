@@ -123,6 +123,13 @@ const CSS = `
 #dp-story.m .choices{left:var(--dp-mside,196px);right:var(--dp-mside,196px);width:auto;bottom:156px;gap:4px}
 #dp-story.m .ch{height:32px;font-size:13.5px;border-width:3px;border-radius:11px;box-shadow:0 4px 0 rgba(18,59,45,.35)}#dp-story.m .ch i{flex-basis:36px;margin-right:.6em}#dp-story.m .ch:hover,#dp-story.m .ch.sel{transform:none}
 #dp-story.m .pa-frame{width:96px;height:96px;left:calc(var(--dp-mside,196px) - 104px);bottom:14px;border-width:4px}
+#dp-story .mchip{display:none}
+#dp-story.m .mchip{position:absolute;top:60px;right:max(59px,calc(var(--sa-r,0px) + 12px));width:250px;background:var(--paper);border:3px solid var(--deep);border-radius:14px;overflow:hidden;box-shadow:0 5px 0 rgba(18,59,45,.35);font-size:12px;font-weight:700;pointer-events:auto;cursor:pointer;animation:dpIn .25s}
+#dp-story.m .mchip.on{display:block}#dp-story.m .mchip h4{margin:0;display:flex;justify-content:space-between;background:var(--red);color:#fff;padding:3px 10px;font-size:11px;letter-spacing:.04em}#dp-story.m .mchip h4 i{font-style:normal;opacity:.85}
+#dp-story.m .mchip h5{margin:4px 10px 0;font-size:14.5px;font-weight:800;color:var(--deep)}#dp-story.m .mchip em{display:block;margin:1px 10px 5px;font-style:normal;color:var(--green);font-weight:800;font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#dp-story.m .mchip dl{display:none;margin:0 10px 7px;grid-template-columns:auto 1fr;gap:2px 8px}#dp-story.m .mchip.open dl{display:grid}#dp-story.m .mchip dt{color:var(--green);font-weight:900}#dp-story.m .mchip dd{margin:0}
+#dp-story.m .mchip small{display:block;margin:-3px 10px 5px;color:#9A9C98;font-weight:700;font-size:11px}#dp-story.m .mchip.open small{display:none}
+#dp-story.m .gear{left:calc(16px + var(--sa-l,0px))}
 #dp-story.m .mcard{top:60px;right:max(59px,env(safe-area-inset-right));width:300px;font-size:12px}#dp-story.m .mcard h5{font-size:17px}
 #dp-story.m .lock,#dp-story.m .tapnote{display:block}#dp-story.m .lock{left:auto;right:max(8px,env(safe-area-inset-right));bottom:118px;font-size:11px;padding:3px 9px;opacity:.9}#dp-story.m .tapnote{bottom:0;font-size:11px}
 #dp-story.m .card{padding:14px 22px}#dp-story.m .card h2{font-size:26px}#dp-story.m .card h3{font-size:17px}#dp-story.m .card p{font-size:13px}
@@ -135,7 +142,7 @@ const CSS = `
 body.dp-chip-m #depot-hud .dh-help{display:none !important}
 body.dp-story-lock #phone,body.dp-story-lock #handset,body.dp-story-lock #emote-bar,body.dp-story-lock form#chat,body.dp-story-lock #chat-log-panel,body.dp-story-lock #depot-hud .dh-help,body.dp-story-lock #h3-mm{opacity:0 !important;pointer-events:none !important;transform:translateY(24px);transition:opacity .2s,transform .2s}
 body.dp-story-lock #m-joy,body.dp-story-lock .m-actions,body.dp-story-lock .m-talk,body.dp-story-lock #m-hud .m-act{opacity:0 !important;pointer-events:none !important;transition:opacity .2s}
-body.dp-story-lock.dp-story-m #m-hud .m-tg[data-tg=bgm],body.dp-story-lock.dp-story-m #m-hud .m-tg[data-tg=phone],body.dp-story-lock.dp-story-m #m-hud .m-tg[data-tg=map],body.dp-story-lock.dp-story-m #m-event-btn,body.dp-story-lock.dp-story-m #depot-hud .dh-panel,body.dp-story-lock.dp-story-m #dp-story .gear,body.dp-story-lock.dp-story-m #dp-story .chip{opacity:0 !important;pointer-events:none !important;transition:opacity .2s}
+body.dp-story-lock.dp-story-m #m-hud .m-tg[data-tg=bgm],body.dp-story-lock.dp-story-m #m-hud .m-tg[data-tg=phone],body.dp-story-lock.dp-story-m #m-hud .m-tg[data-tg=map],body.dp-story-lock.dp-story-m #m-event-btn,body.dp-story-lock.dp-story-m #depot-hud .dh-panel,body.dp-story-lock.dp-story-m #dp-story .gear,body.dp-story-lock.dp-story-m #dp-story .mchip,body.dp-story-lock.dp-story-m #dp-story .chip{opacity:0 !important;pointer-events:none !important;transition:opacity .2s}
 body.dp-story-lock .co-rcpt,body.dp-story-lock .co-chip,body.dp-story-lock #depot-ui .dp-pa,body.dp-story-lock #depot-hud .dh-toast{visibility:hidden !important}
 body.dp-story-lock #depot-hud .dh-help,body.dp-story-lock #depot-hud .dh-target,body.dp-story-lock #depot-hud .dh-cross{display:none !important}
 `;
@@ -150,10 +157,10 @@ export function createVN({ assetBase, isMobile = false, getSettings, onCue = () 
   <div class="box"><div class="tag hide"></div><div class="txt"></div><div class="next"></div></div>
   <div class="ctl"><button data-c="log">${isMobile ? '≡ ' : ''}로그<kbd>L</kbd></button><button data-c="auto">자동<kbd>A</kbd></button><button data-c="skip">건너뛰기 ▸▸<kbd>Ctrl</kbd></button><button data-c="exit" class="exit">나가기<kbd>Esc</kbd></button></div>
   <div class="choices"></div><div class="lock">대화 중 · 조작 잠금</div><div class="tapnote">◎ 화면 아무 곳이나 탭</div></div>
-  <div class="chip"></div><div class="rx"></div><button class="gear">⚙ 설정</button>`;
+  <div class="chip"></div><div class="mchip"></div><div class="rx"></div><button class="gear">⚙ 설정</button>`;
   document.body.appendChild(root);
   const $ = (s) => root.querySelector(s);
-  const vn = $('.vn'), box = $('.box'), tag = $('.tag'), txt = $('.txt'), ptL = $('.pt.l'), ptR = $('.pt.r'), choicesEl = $('.choices'), chip = $('.chip'), rx = $('.rx'), paFrame = $('.pa-frame');
+  const vn = $('.vn'), box = $('.box'), tag = $('.tag'), txt = $('.txt'), ptL = $('.pt.l'), ptR = $('.pt.r'), choicesEl = $('.choices'), chip = $('.chip'), mchip = $('.mchip'), rx = $('.rx'), paFrame = $('.pa-frame');
   paFrame.style.backgroundImage = `url(${assetBase}story/pa-speaker.webp)`;
   const S = { open: false, typing: false, full: '', shown: 0, adv: null, auto: false, skip: false, skipHold: false, log: [], choosing: false, modal: null, openedAt: 0, seen: false, tipShown: false, cur: null };
   const portraits = { l: { el: ptL, who: '' }, r: { el: ptR, who: '' } };
@@ -315,13 +322,34 @@ export function createVN({ assetBase, isMobile = false, getSettings, onCue = () 
     c.innerHTML = `<h2>${day}일차</h2><h3>${esc(title || '')}</h3><p>${esc(subtitle || '')}</p>${missed ? `<span class="miss">어제 놓친 사건 · ${esc(missed)}</span>` : ''}`;
     root.appendChild(c); await sleep(missed ? 2600 : 1600); c.remove();
   }
+  // 모바일: 왼쪽 칩 대신 오른쪽 카드 하나 — 다음 할 일(➜ 목적지 · m) 한 줄 + 목표/성공/보상은 처음 몇 초만 펼침, 탭하면 다시 펼침
+  const M = { det: null, detName: '', openT: 0, ev: null, sig: '' };
+  function renderM() {
+    const ev = M.ev; if (!ev) { mchip.classList.remove('on'); return; }
+    const det = M.det && M.detName === ev.name ? M.det : null, open = !!det && performance.now() < M.openT;
+    const sig = `${ev.head}|${ev.name}|${ev.where}|${ev.note}|${open}|${!!det}`; if (sig === M.sig) return; M.sig = sig;
+    mchip.classList.add('on'); mchip.classList.toggle('open', open);
+    mchip.innerHTML = `<h4>${esc(ev.head || '오늘의 사건')}${det && !open ? '<i>▾ 탭: 자세히</i>' : ''}</h4><h5>${esc(ev.name)}</h5><em>${esc(ev.where || '')}</em>${det ? `<dl>${det}</dl>` : ''}${ev.onTap || !det ? `<small>${esc(ev.note || '')}</small>` : ''}`;
+  }
+  mchip.addEventListener('pointerdown', (e) => {
+    e.stopPropagation(); e.preventDefault();
+    if (M.ev?.onTap) { M.ev.onTap(); return; }
+    if (M.det) { M.openT = performance.now() < M.openT ? 0 : performance.now() + 6000; M.sig = ''; renderM(); setTimeout(() => { M.sig = ''; renderM(); }, 6100); }
+  });
   async function missionCard(ev) {
     onCue('mission-chip');
+    if (isMobile) { // 따로 큰 카드 안 띄우고 오른쪽 카드를 4초 펼침
+      M.det = `<dt>목표</dt><dd>${esc(ev.goal)}</dd><dt>성공</dt><dd>${esc(ev.success)}</dd><dt>보상</dt><dd>활기 +${ev.reward?.vitality || 0} · 단골 도장</dd>`; M.detName = ev.name; M.openT = performance.now() + 4000;
+      if (!M.ev || M.ev.name !== ev.name) M.ev = { name: ev.name, where: '', note: '' };
+      M.sig = ''; renderM(); setTimeout(() => { M.sig = ''; renderM(); }, 4100);
+      await sleep(3400); return;
+    }
     const c = document.createElement('div'); c.className = 'mcard';
     c.innerHTML = `<h4>오늘의 사건</h4><h5>${esc(ev.name)}</h5><dl><dt>목표</dt><dd>${esc(ev.goal)}</dd><dt>성공</dt><dd>${esc(ev.success)}</dd><dt>보상</dt><dd>활기 +${ev.reward?.vitality || 0} · 단골 도장</dd></dl>`;
     root.appendChild(c); await sleep(3400); c.remove();
   }
   function setChip(ev) {
+    if (isMobile) { M.ev = ev || null; chip.style.display = 'none'; document.body.classList.toggle('dp-chip-m', !!ev); renderM(); return; }
     if (!ev) { chip.style.display = 'none'; document.body.classList.remove('dp-chip-m'); return; }
     chip.style.display = 'block'; document.body.classList.toggle('dp-chip-m', !!isMobile);
     chip.style.pointerEvents = ev.onTap ? 'auto' : 'none'; chip.style.cursor = ev.onTap ? 'pointer' : '';
