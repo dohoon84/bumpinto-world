@@ -769,6 +769,7 @@ function* hangangTerrainGen({ parent, dem, osm }, sliced = false) {
           const triN = idx ? idx.count / 3 : pos.count / 3;
           const vert = (i) => (idx ? idx.getX(i) : i);
           for (let t = 0; t < triN; t++) {
+            if (sliced && t > 0 && (t & 2047) === 0) yield;
             const ia = vert(t * 3), ib = vert(t * 3 + 1), ic = vert(t * 3 + 2);
             const xs = [pos.getX(ia), pos.getX(ib), pos.getX(ic)];
             const zs = [pos.getZ(ia), pos.getZ(ib), pos.getZ(ic)];
@@ -782,6 +783,7 @@ function* hangangTerrainGen({ parent, dem, osm }, sliced = false) {
           }
           mesh.geometry.setIndex(keep);
         }
+        if (sliced) yield;
         mesh.material = new THREE.MeshPhongMaterial({
           color: '#1c5c6e',
           transparent: true,
@@ -795,6 +797,7 @@ function* hangangTerrainGen({ parent, dem, osm }, sliced = false) {
         group.add(mesh);
         waterMeshes.push(mesh);
       }
+      if (sliced) yield;
     }
   }
   if (sliced) yield;
@@ -979,6 +982,7 @@ export async function createHangangTerrainAsync(opts, yieldFn, slicer) {
       await slicer.tick();
       n = g.next();
     }
+    slicer.flush('hangang-terrain-end');
     return n.value;
   }
   const now = () => (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
