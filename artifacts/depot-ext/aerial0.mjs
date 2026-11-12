@@ -1,0 +1,11 @@
+import { open, cam } from './lib.mjs';
+const { b, p, bootMs } = await open('&at=depot', { w: 960, h: 600 });
+console.log('boot', bootMs);
+const out = new URL('./', import.meta.url).pathname;
+const shot = async (n) => { await p.screenshot({ path: out + n, timeout: 240000 }); console.log('shot', n); };
+const info = await p.evaluate(() => { const J = window.__jj; const g = (x,z)=>J.terrain?J.terrain.getGroundHeight(x,z,0):null; const r=[]; for (let z=300; z<=660; z+=40) { const row=[]; for (let x=-600; x<=-440; x+=20) row.push(+(g(x,z)||0).toFixed(2)); r.push(z+': '+row.join(' ')); } return { r, terrain: !!J.terrain, blocked: [[-520,450],[-445,450],[-590,450],[-520,350],[-440,330],[-380,330]].map(([x,z])=>J.world.isBlocked(x,z,0.4)) }; });
+console.log(JSON.stringify(info, null, 1));
+await cam(p, { tp: [-520, 450], cam: { yaw: Math.PI, pitch: 1.4, dist: 170 } }); await p.waitForTimeout(4000); await shot('pre-aerial.png');
+await cam(p, { tp: [-400, 330], cam: { yaw: -Math.PI/2, pitch: 0.35, dist: 30 } }); await p.waitForTimeout(4000); await shot('pre-cross.png');
+await cam(p, { tp: [-470, 330], cam: { yaw: 0, pitch: 1.2, dist: 120 } }); await p.waitForTimeout(4000); await shot('pre-cross-aerial.png');
+await b.close();
