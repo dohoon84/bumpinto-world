@@ -37,7 +37,7 @@ const enterDepot = async (p) => {
   await p.waitForTimeout(1200);
   await p.evaluate(() => { window.__sfx = []; window.__jj.depot.interior._dbg.elec.setAudio({ play: (n, o) => window.__sfx.push(n + (o?.on === false ? ':off' : o?.on ? ':on' : '')) }); });
 };
-const cam = (p, pos, tgt, pre = '') => p.evaluate(([pos, tgt, pre]) => { const d = window.__jj.depot.interior._dbg; if (pre) (0, eval)(pre); d.camWorld(pos, tgt); d.run(0.4); }, [pos, tgt, pre]);
+const cam = (p, pos, tgt, pre = '') => p.evaluate(([pos, tgt, pre]) => { const d = window.__jj.depot.interior._dbg; if (pre) (0, eval)(pre); d.setMe(pos[0], pos[2], Math.atan2(pos[0] - tgt[0], pos[2] - tgt[2])); d.camWorld(pos, tgt); d.run(0.4); }, [pos, tgt, pre]);
 
 // ───────── 데스크톱 ─────────
 {
@@ -51,7 +51,7 @@ const cam = (p, pos, tgt, pre = '') => p.evaluate(([pos, tgt, pre]) => { const d
   }
   await enterDepot(p);
   if (want('wide')) { await cam(p, [74.25, 1.75, 16.2], [74.25, 2.55, 29.5]); metrics.runs.push(await metric(p, 'tv-wall-wide')); await shot('01-tv-wall-wide.png'); }
-  if (want('close')) { await cam(p, [71.4, 1.55, 27.3], [75.2, 2.1, 29.45]); await shot('02-tv-wall-close.png'); }
+  if (want('close')) { await cam(p, [72.6, 1.6, 26.6], [74.4, 2.05, 29.45]); await shot('02-tv-wall-close.png'); }
   if (want('flicker')) { await cam(p, [72.5, 1.6, 24.5], [74.5, 2.3, 29.45], 'window.__jj.depot.interior._dbg.elec.flicker(0.8)'); await shot('02b-tv-wall-flicker.png'); }
   if (want('fridge')) {
     await p.evaluate(() => { const e = window.__jj.depot.interior._dbg.elec; for (let i = 0; i < 6; i++) e.openFridge(i, i % 2 === 0); });
@@ -62,7 +62,7 @@ const cam = (p, pos, tgt, pre = '') => p.evaluate(([pos, tgt, pre]) => { const d
   if (want('washer')) { await p.evaluate(() => { const e = window.__jj.depot.interior._dbg.elec; e.act('washer', 0); e.act('washer', 1); }); await cam(p, [75.4, 1.5, 32.6], [75.6, 0.65, 30.4]); await shot('04-washer.png'); }
   if (want('small')) { await cam(p, [78.2, 1.55, 33.05], [78.3, 0.95, 34.6]); await shot('05-small-appliances.png'); }
   if (want('laptop')) { await cam(p, [67.3, 1.5, 33.25], [67.6, 0.95, 34.6]); metrics.runs.push(await metric(p, 'tables')); await shot('06-laptop-table.png'); }
-  if (want('robot')) { await cam(p, [79.8, 1.95, 35.5], [79.8, 0.0, 38.8]); await shot('07-robot-vacuum.png'); }
+  if (want('robot')) { { const rb = await p.evaluate(() => { const r = window.__jj.depot.interior._dbg.elec.S.robots[0]; return [r.x, r.z]; }); await cam(p, [rb[0] - 0.2, 0.75, rb[1] - 1.15], [rb[0], 0.05, rb[1]]); } await shot('07-robot-vacuum.png'); }
   if (want('chair')) { await p.evaluate(() => window.__jj.depot.interior._dbg.elec.act('chair', 0)); await cam(p, [66.2, 1.6, 36.2], [66.0, 0.7, 38.8]); await shot('07b-massage-chair.png'); }
   if (want('cart')) {
     const load = await p.evaluate(() => {
@@ -79,10 +79,11 @@ const cam = (p, pos, tgt, pre = '') => p.evaluate(([pos, tgt, pre]) => { const d
     await shot('08-85-box-in-cart.png');
     await p.evaluate(() => { const d = window.__jj.depot.interior._dbg; d.camAt(null); d.releaseCart(); });
   }
-  if (want('island')) { await cam(p, [74.5, 1.7, 17.6], [68.5, 0.9, 13.8]); await shot('09-box-island.png'); }
+  if (want('island')) { await cam(p, [71.2, 1.55, 10.6], [69.4, 0.75, 14.2]); await shot('09-box-island.png'); }
   // 소리 이벤트: 문 열기/닫기·세탁기·TV·청소기
   metrics.sfx = await p.evaluate(async () => {
     const d = window.__jj.depot.interior._dbg, e = d.elec;
+    d.camWorld([20, 1.7, 5], [10, 1.7, 5]); d.run(0.5); window.__sfx.length = 0;
     e.act('fridge', 1); d.run(0.2); e.act('fridge', 1); d.run(0.2); e.act('washer', 2); d.run(8);
     d.camWorld([74, 1.7, 22], [74, 2, 29]); d.run(0.5); d.camWorld([80, 1.7, 37], [80, 0, 39]); d.run(0.5); d.camWorld(null);
     return [...new Set(window.__sfx)];
@@ -114,12 +115,13 @@ for (const [w, h, tag] of [[390, 844, 'portrait'], [844, 390, 'landscape']]) {
   await p.touchscreen.tap(fx[0], fx[1]); await p.waitForTimeout(1500);
   r.fridgeTap = await p.evaluate(() => ({ want: window.__jj.depot.interior._dbg.elec.S.fridges[0].want, open: +window.__jj.depot.interior._dbg.elec.S.fridges[0].open.toFixed(2) }));
   await p.screenshot({ path: OUT + `11-mobile-${tag}-fridge-tap.png` });
-  // 3) 박스 집기 — 앞 섬의 55" 박스를 화면 중앙에 두고 탭
-  await p.evaluate(() => { const I = window.__jj.depot.interior, d = I._dbg; d.elec.openFridge(0, false); d.setMe(72.75, 15.6, 0, -0.35); d.run(0.4); });
-  const hov = await p.evaluate(() => window.__jj.depot.interior.hover?.p?.id || window.__jj.depot.interior.hover?.id || !!window.__jj.depot.interior.hover);
-  await p.touchscreen.tap(w / 2, h / 2); await p.waitForTimeout(800);
+  // 3) 박스 집기 — 카트를 잡고 앞 섬 55" 박스 앞에서 화면 가운데(조준점)를 탭
+  await p.evaluate(() => { const I = window.__jj.depot.interior, d = I._dbg; d.elec.openFridge(0, false); d.grabCart(); d.setCart(72.75, 12.45, Math.PI); I.st.head.pitch = -0.5; d.run(0.4); });
+  const hov = await p.evaluate(() => { const h = window.__jj.depot.interior.hover; return h?.p?.id || h?.id || (h ? 'yes' : null); });
+  await p.touchscreen.tap(w / 2, h / 2); await p.waitForTimeout(900);
   r.pick = await p.evaluate((hov) => { const I = window.__jj.depot.interior; return { hover: hov, mode: I.st.mode, held: I.st.held?.p?.id || null }; }, hov);
   await p.screenshot({ path: OUT + `12-mobile-${tag}-pick.png` });
+  if (r.pick.held) { await p.touchscreen.tap(w / 2, h / 2 + 40); await p.waitForTimeout(900); r.place = await p.evaluate(() => { const I = window.__jj.depot.interior; return { mode: I.st.mode, items: I.items.map((it) => it.p.id) }; }); await p.screenshot({ path: OUT + `13-mobile-${tag}-placed.png` }); }
   r.errs = errs; console.log('mobile', JSON.stringify(r));
   (metrics.mobile ||= []).push(r);
   await ctx.close();

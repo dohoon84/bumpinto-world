@@ -10,6 +10,7 @@
 //   staff.js 는 수정하지 않음(카트가 TV에 부딪히면 화면만 깜빡, 충돌은 기존 장애물 경로).
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import { BY_ID } from './products.js';
 
 export const ELEC_ZONE = { x0: 64.0, x1: 83.7, z0: 13.0, z1: 40.5 };
@@ -78,7 +79,7 @@ class GeoBag {
   box(w, h, d, x, y, z, color, ry = 0, rx = 0, rz = 0) { return this.add(new THREE.BoxGeometry(w, h, d), color, mat4(x, y, z, rx, ry, rz)); }
   cyl(rt, rb, h, seg, x, y, z, color, rx = 0, ry = 0, rz = 0, open = false) { return this.add(new THREE.CylinderGeometry(rt, rb, h, seg, 1, open), color, mat4(x, y, z, rx, ry, rz)); }
   disc(r, seg, x, y, z, color, rx = 0, ry = 0) { return this.add(new THREE.CircleGeometry(r, seg), color, mat4(x, y, z, rx, ry, 0)); }
-  torus(R, r, x, y, z, color, rx = 0, ry = 0, seg = 28) { return this.add(new THREE.TorusGeometry(R, r, 6, seg), color, mat4(x, y, z, rx, ry, 0)); }
+  torus(R, r, x, y, z, color, rx = 0, ry = 0, seg = 20) { return this.add(new THREE.TorusGeometry(R, r, 6, seg), color, mat4(x, y, z, rx, ry, 0)); }
   build() { if (!this.parts.length) return null; const g = mergeGeometries(this.parts); for (const p of this.parts) p.dispose(); this.parts = []; return g; }
 }
 function insideTube(r, h, seg) { // 안쪽에서 보는 원통(드럼 안벽)
@@ -135,9 +136,15 @@ vec3 scnNight(vec2 p, float a, float t) {
   vec2 pd = (p - vec2(tx, peak + .2)) * vec2(1., 2.4);
   if (length(pd) < .032) col = vec3(.12, .12, .18) + vec3(1., .8, .5) * step(.45, fract(p.x * 90.)) * step(abs(pd.y), .012) * .9;
   col += vec3(1., .25, .2) * smoothstep(.013, .0, length(p - vec2(tx, peak + .31))) * step(.5, fract(t * .8)) * 1.5;
-  if (p.y < .3) {
-    vec2 g = floor(p * vec2(150., 95.)); float on = step(.55, h21(g)) * smoothstep(.31, .14, p.y) * step(.125, p.y);
-    col += on * (.55 + .45 * sin(t * 2. + h21(g + 3.) * 30.)) * mix(vec3(1., .74, .38), vec3(.6, .82, 1.), h21(g + 7.));
+  // 강 건너 빌딩 스카이라인: 폭이 다른 빌딩 + 작은 창문 격자(층·칸 사이 여백) + 옥상 경고등
+  float bx = floor(p.x * 34.), bh = .15 + .12 * h21(vec2(bx, 3.)) * h21(vec2(bx, 9.)) + .05 * step(.82, h21(vec2(bx, 5.)));
+  if (p.y > .125 && p.y < bh) {
+    col = vec3(.03, .035, .07) + .02 * h21(vec2(bx, 1.));
+    vec2 wp = vec2(p.x * 34. - bx, (p.y - .125) * 260.), wc = floor(wp * vec2(7., 1.));
+    float win = step(.18, fract(wp.x * 7.)) * step(.3, fract(wp.y)) * step(.08, wp.x) * step(wp.x, .92);
+    float lit = step(.42, h21(wc + bx * 13.)) * (.75 + .25 * sin(t * .7 + h21(wc + 2.) * 20.));
+    col += win * lit * mix(vec3(1., .78, .42), vec3(.72, .86, 1.), step(.6, h21(wc + 7. + bx))) * .85;
+    col += vec3(1., .15, .1) * step(bh - .006, p.y) * step(abs(wp.x - .5), .06) * step(.5, fract(t * .6 + bx * .37)) * 2.;
   }
   if (p.y < .125) {
     float rip = sin(p.x * 70. + t * 2. + sin(p.y * 120.) * 2.) * .5 + .5;
@@ -470,7 +477,7 @@ export function mountElectronics({ scene, keep, canvasTex, obstacles, prodMeshes
   };
   const frontStock = [['fryer', 75.0, 14.0], ['micro', 76.3, 14.0], ['vac', 77.6, 14.0], ['cooker', 78.9, 14.0], ['console', 80.2, 14.0], ['laptop', 75.0, 15.25], ['headset', 76.3, 15.25]];
   const stockLists = {};
-  for (const [pid, x, z] of frontStock) { (stockLists[pid] ||= []).push(...palletStack(pid, x, z, pid === 'laptop' || pid === 'headset' ? 0.7 : 1.15)); if (z < 15) { tagAt(pid === 'vac' ? 'robot' : pid, x, 1.55, z - 0.53, Math.PI, 0.8); stat.box(0.025, 1.45, 0.025, x, 0.72, z - 0.52, post); } else tagAt(pid, x + 0.62, 0.5, z, -Math.PI / 2, 0.7); }
+  for (const [pid, x, z] of frontStock) { (stockLists[pid] ||= []).push(...palletStack(pid, x, z, pid === 'headset' ? 0.42 : pid === 'laptop' ? 0.7 : 1.15)); if (z < 15) { tagAt(pid === 'vac' ? 'robot' : pid, x, 1.55, z - 0.53, Math.PI, 0.8); stat.box(0.025, 1.45, 0.025, x, 0.72, z - 0.52, post); } else tagAt(pid, x + 0.62, 0.5, z, -Math.PI / 2, 0.7); }
   ob(74.35, 80.85, 13.45, 14.55); ob(74.35, 76.95, 14.7, 15.8);
   for (const [pid, list] of Object.entries(stockLists)) stackBoxes(pid, list);
 
@@ -632,7 +639,7 @@ export function mountElectronics({ scene, keep, canvasTex, obstacles, prodMeshes
   const fryCol = [[0xf2f3f1, 0x30353c], [0x2b2f35, 0x1a1d22], [0xb8d8cf, 0xf2f3f1]];
   for (let i = 0; i < 3; i++) { // 에어프라이어 — 둥근 몸통 + 앞 바스켓 서랍 + 위 디스플레이
     const x = 76.25 + i * 0.5, { r, h } = DISPLAY.fryer, [b1, b2] = fryCol[i], z = TZ, y0 = TH + 0.02;
-    gloss.cyl(r * 0.92, r, h * 0.9, 24, x, y0 + h * 0.45, z, b1); gloss.cyl(r * 0.8, r * 0.92, h * 0.1, 24, x, y0 + h * 0.95, z, b1);
+    gloss.cyl(r * 0.92, r, h * 0.9, 18, x, y0 + h * 0.45, z, b1); gloss.cyl(r * 0.8, r * 0.92, h * 0.1, 18, x, y0 + h * 0.95, z, b1);
     gloss.box(r * 1.35, h * 0.42, 0.05, x, y0 + h * 0.27, z - r + 0.012, b2);
     gloss.box(0.05, 0.035, 0.09, x, y0 + h * 0.33, z - r - 0.05, b2); gloss.box(0.05, 0.08, 0.03, x, y0 + h * 0.29, z - r - 0.08, b2);
     gloss.box(r * 1.1, 0.06, 0.012, x, y0 + h * 0.72, z - r * 0.88, 0x101317, 0, -0.35);
@@ -738,13 +745,32 @@ export function mountElectronics({ scene, keep, canvasTex, obstacles, prodMeshes
 
   // ---------- 안마의자 2 (x 64.9–67.2, -z 를 봄) ----------
   const MZ = 38.8;
+  const RB = (w, h, d, r = 0.05) => new RoundedBoxGeometry(w, h, d, 1, Math.min(r, w / 2.05, h / 2.05, d / 2.05));
   for (let i = 0; i < 2; i++) {
-    const x = 65.4 + i * 1.3, c = i ? 0x5a3b2a : 0xe8dccb, c2 = i ? 0x3d2a1e : 0xc8b8a2;
-    stat.box(0.62, 0.42, 0.7, x, 0.21, MZ, c2); gloss.box(0.56, 0.12, 0.62, x, 0.48, MZ - 0.02, c);
-    gloss.box(0.6, 0.95, 0.24, x, 0.95, MZ + 0.38, c, 0, -0.32); gloss.box(0.44, 0.22, 0.26, x, 1.42, MZ + 0.52, c2, 0, -0.32);
-    gloss.box(0.16, 0.36, 0.78, x - 0.36, 0.62, MZ, c2); gloss.box(0.16, 0.36, 0.78, x + 0.36, 0.62, MZ, c2);
-    gloss.box(0.5, 0.42, 0.18, x, 0.3, MZ - 0.5, c, 0, 0.5);
-    glow.box(0.12, 0.04, 0.004, x + 0.36, 0.82, MZ - 0.392, 0x5fd4ff);
+    // 셸(유광 하드커버) + 쿠션(가죽) + 다리 마사지부 — 실제 안마의자처럼 둥근 덩어리, 등받이 뒤로 젖힘
+    const x = 65.4 + i * 1.3, shell = i ? 0x26282c : 0xf3f0ea, cush = i ? 0x6b4632 : 0xd8c4a6, dk = i ? 0x141517 : 0x8f8676;
+    const C = new THREE.Matrix4().makeTranslation(x, 0, MZ);
+    const put = (bag, g, col, m) => bag.add(g, col, new THREE.Matrix4().multiplyMatrices(C, m));
+    const backF = new THREE.Matrix4().multiplyMatrices(mat4(0, 0.5, 0.3), mat4(0, 0, 0, 0.3)); // 등받이 프레임 (뒤로 0.3rad)
+    const inBack = (lx, ly, lz, rx = 0, ry = 0, rz = 0) => new THREE.Matrix4().multiplyMatrices(backF, mat4(lx, ly, lz, rx, ry, rz));
+    const legF = new THREE.Matrix4().multiplyMatrices(mat4(0, 0.5, -0.33), mat4(0, 0, 0, 0.42)); // 다리부 (앞으로 뻗음)
+    const inLeg = (lx, ly, lz) => new THREE.Matrix4().multiplyMatrices(legF, mat4(lx, ly, lz));
+    put(stat, RB(0.64, 0.2, 0.78, 0.06), dk, mat4(0, 0.1, 0.02));
+    put(gloss, RB(0.5, 0.15, 0.62, 0.06), cush, mat4(0, 0.47, -0.03));
+    for (const sg of [-1, 1]) {
+      put(gloss, RB(0.16, 0.46, 0.9, 0.07), shell, mat4(sg * 0.33, 0.55, 0.0));
+      put(gloss, RB(0.13, 0.06, 0.66, 0.03), cush, mat4(sg * 0.33, 0.8, -0.04));
+      put(glow, new THREE.BoxGeometry(0.004, 0.025, 0.6), i ? 0xffb347 : 0x5fd4ff, mat4(sg * 0.412, 0.55, 0.0));
+      put(gloss, RB(0.1, 0.36, 0.26, 0.04), shell, inBack(sg * 0.28, 0.98, 0.02)); // 머리 날개
+    }
+    put(gloss, RB(0.66, 1.12, 0.22, 0.09), shell, inBack(0, 0.56, 0.12));
+    put(gloss, RB(0.46, 0.92, 0.1, 0.05), cush, inBack(0, 0.5, -0.03));
+    for (let k = 0; k < 4; k++) put(stat, new THREE.BoxGeometry(0.4, 0.012, 0.012), dk, inBack(0, 0.18 + k * 0.2, -0.082)); // 쿠션 퀼팅 홈
+    put(gloss, new THREE.CapsuleGeometry(0.075, 0.26, 2, 8), cush, inBack(0, 1.02, -0.06, 0, 0, Math.PI / 2)); // 목베개
+    put(gloss, RB(0.5, 0.5, 0.22, 0.07), shell, inLeg(0, -0.25, 0));
+    for (const sg of [-1, 1]) put(stat, RB(0.17, 0.4, 0.06, 0.03), cush, inLeg(sg * 0.11, -0.24, -0.1)); // 발 홈 2개
+    put(gloss, RB(0.07, 0.03, 0.16, 0.012), 0x1c1e21, mat4(0.33, 0.845, -0.25)); // 리모컨
+    put(glow, new THREE.BoxGeometry(0.05, 0.004, 0.08), 0x5fd4ff, mat4(0.33, 0.862, -0.25));
     tgt('chair', i, x - 0.45, 0, MZ - 0.7, x + 0.45, 1.5, MZ + 0.6, '안마의자');
   }
   ob(64.9, 67.15, MZ - 0.65, MZ + 0.62);
@@ -831,7 +857,8 @@ export function mountElectronics({ scene, keep, canvasTex, obstacles, prodMeshes
     if (sh && sh.distance < 4.5 && (!best || sh.distance < best.d)) best = { t: { kind: 'staff' }, d: sh.distance };
     return best?.t || null;
   }
-  const hintOf = (t) => {
+  const hintOf = (t) => { const h = hint0(t); return isMobile ? h.replace(/^클릭(\/E)? =/, '탭 =') : h; };
+  const hint0 = (t) => {
     if (!t) return '';
     if (t.kind === 'fridge') return S.fridges[t.i].want ? `클릭/E = ${t.label} 닫기` : `클릭/E = ${t.label} 열기 · 안에 불 들어와요`;
     if (t.kind === 'washer' || t.kind === 'dryer') return `클릭/E = ${t.label} 돌려 보기`;
