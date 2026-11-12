@@ -1,0 +1,177 @@
+{
+  "runs": [
+    {
+      "label": "tv-wall-wide",
+      "heapMB": 372.6,
+      "drawCalls": 69,
+      "triangles": 2254894,
+      "frameMs": 0.3,
+      "elec": {
+        "zone": "electronics",
+        "meshes": 45,
+        "draws": 50,
+        "instanced": 31,
+        "instCount": 453,
+        "tris": 29414,
+        "screens": 50,
+        "lod": 0,
+        "flickerT": 0,
+        "visible": true,
+        "cheap": false
+      },
+      "scene": {
+        "meshes": 142,
+        "tris": 3916228
+      }
+    },
+    {
+      "label": "fridges",
+      "heapMB": 371.9,
+      "drawCalls": 109,
+      "triangles": 2522568,
+      "frameMs": 0.6,
+      "elec": {
+        "zone": "electronics",
+        "meshes": 45,
+        "draws": 50,
+        "instanced": 31,
+        "instCount": 453,
+        "tris": 29414,
+        "screens": 50,
+        "lod": 0,
+        "flickerT": 0,
+        "visible": true,
+        "cheap": false
+      },
+      "scene": {
+        "meshes": 142,
+        "tris": 3916228
+      }
+    },
+    {
+      "label": "tables",
+      "heapMB": 371.6,
+      "drawCalls": 32,
+      "triangles": 1283354,
+      "frameMs": 0.4,
+      "elec": {
+        "zone": "electronics",
+        "meshes": 45,
+        "draws": 50,
+        "instanced": 31,
+        "instCount": 453,
+        "tris": 29414,
+        "screens": 50,
+        "lod": 0,
+        "flickerT": 0,
+        "visible": true,
+        "cheap": false
+      },
+      "scene": {
+        "meshes": 142,
+        "tris": 3916228
+      }
+    }
+  ],
+  "errs": [],
+  "defaultEntryErrs": [],
+  "tvInCart": {
+    "ok": true,
+    "kg": 31.9,
+    "n": 1,
+    "ids": [
+      "tv85"
+    ]
+  },
+  "sfx": [
+    "elec-fridge-open",
+    "elec-fridge-close",
+    "elec-washer:on",
+    "elec-tv:on",
+    "elec-washer:off",
+    "elec-vac:on"
+  ],
+  "desktopErrs": [],
+  "mobile": [
+    {
+      "tag": "portrait",
+      "tv": {
+        "label": "mobile-portrait-tvwall",
+        "heapMB": 349,
+        "drawCalls": 33,
+        "triangles": 131526,
+        "frameMs": 0.8,
+        "elec": {
+          "zone": "electronics",
+          "meshes": 45,
+          "draws": 50,
+          "instanced": 31,
+          "instCount": 453,
+          "tris": 29414,
+          "screens": 50,
+          "lod": 0,
+          "flickerT": 0,
+          "visible": true,
+          "cheap": true
+        },
+        "scene": {
+          "meshes": 142,
+          "tris": 3916228
+        }
+      },
+      "fridgeTap": {
+        "want": 0,
+        "open": 0
+      },
+      "pick": {
+        "hover": "tv55",
+        "mode": "walk",
+        "held": null
+      },
+      "errs": []
+    },
+    {
+      "tag": "landscape",
+      "tv": {
+        "label": "mobile-landscape-tvwall",
+        "heapMB": 362.8,
+        "drawCalls": 56,
+        "triangles": 2254476,
+        "frameMs": 0.7,
+        "elec": {
+          "zone": "electronics",
+          "meshes": 45,
+          "draws": 50,
+          "instanced": 31,
+          "instCount": 453,
+          "tris": 29414,
+          "screens": 50,
+          "lod": 0,
+          "flickerT": 0,
+          "visible": true,
+          "cheap": true
+        },
+        "scene": {
+          "meshes": 142,
+          "tris": 3916228
+        }
+      },
+      "fridgeTap": {
+        "want": 1,
+        "open": 0.24
+      },
+      "pick": {
+        "hover": "tv55",
+        "mode": "place",
+        "held": "tv55"
+      },
+      "place": {
+        "mode": "walk",
+        "items": [
+          "tv55"
+        ]
+      },
+      "errs": []
+    }
+  ]
+}

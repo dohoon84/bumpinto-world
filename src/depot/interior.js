@@ -14,6 +14,7 @@ import { registerStockProducts } from './stockCatalog.js';
 import { buildDepotCeiling } from './ceiling.js';
 import { mountStock } from './stock.js';
 import { createCheckout } from './checkout.js';
+import { mountElectronics } from './electronics.js';
 
 const W = 84, D = 120, CEIL = 9;
 const DOOR = { x: 69, w: 8 };
@@ -172,7 +173,7 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit, a
   const prodMeshes = [];
   const productGeo = (p) => buildProductGeometry(p, { boxGeo: boxGeoLabeled });
   const addPhysShape = (body, p) => addProductShape(body, p, CANNON);
-  const prodMat = {};
+  const prodGeo = {}, prodMat = {}; // prodGeo: 가전 코너(electronics.js)가 자기 상품 지오메트리를 넣음
   for (const p of PRODUCTS) { const t = TX[`pk-${p.tex || p.id}`] || keep(labelTex(p)); prodMat[p.id] = keep(new THREE.MeshLambertMaterial({ map: t })); }
   const stock = mountStock({ scene, keep, canvasTex, TX, racks, obstacles, wraps, boxGeoLabeled, isMobile });
   prodMeshes.push(...stock.prodMeshes);
@@ -310,6 +311,8 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit, a
     st.me.x = DOOR.x + 1.5; st.me.z = 3.2; st.me.yaw = Math.PI; st.head.yaw = 0; st.head.pitch = -0.12;
     toast('직원이 입구까지 모셔다 드렸어요 🙇 (카트는 그 자리에 · 초록 화살표)', 3200, '#1E5A45');
   } });
+  // 가전 코너 (입구 동쪽 복도). 장애물·픽 메시는 배열에 추가만 함.
+  const elec = mountElectronics({ scene, keep, canvasTex, obstacles, prodMeshes, prodGeo, prodMat, audio, toast, isMobile });
 
   // ---------- 효과음(아주 짧게, WebAudio) ----------
   function blip(kind, extra) {
@@ -772,6 +775,7 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit, a
   function updateCamera(dt) {
     const c = st.cart;
     cart.position.set(c.x, 0, c.z); cart.rotation.y = c.yaw;
+    if (st.camWorld) { camera.position.copy(st.camWorld.pos); camera.lookAt(st.camWorld.tgt); return; }
     if (st.camOv) { // 스샷·검증용 고정 시점 (카트 기준 좌표)
       cart.updateMatrixWorld(true);
       camera.position.copy(st.camOv.pos).applyMatrix4(cart.matrixWorld); camera.lookAt(st.camOv.tgt.clone().applyMatrix4(cart.matrixWorld));
@@ -815,6 +819,7 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit, a
     else if (st.mode === 'walk' && (coP = checkout.prompt())) { elTarget.style.display = 'block'; elTarget.textContent = coP.text; elTarget.style.background = coP.bg || ''; }
     else if (st.mode === 'walk' && nearMyCart()) { elTarget.style.display = 'block'; elTarget.style.background = ''; elTarget.textContent = `E 카트 잡기${items.length ? ` · 짐 ${items.length}개 그대로` : ''}${hover ? ` · 클릭 = ${hover.p.name} 집기` : ''}`; }
     else if (hover && st.mode === 'walk') { elTarget.style.display = 'block'; elTarget.style.background = ''; elTarget.textContent = `${hover.kind === 'floor' ? '(바닥) ' : hover.kind === 'cart' ? '(카트 속) ' : ''}${hover.p.name} · ${hover.p.kg} kg · ${hover.p.price.toLocaleString('ko-KR')}원 — 클릭/E 집기`; }
+    else if (st.elecHover && st.mode === 'walk') { elTarget.style.display = 'block'; elTarget.style.background = ''; elTarget.textContent = st.elecHover.label; }
     else if (st.mode === 'walk' && nearCorral() && !st.hasCart) { elTarget.style.display = 'block'; elTarget.textContent = 'E 카트 잡기 (240L)'; }
     else if (st.mode === 'walk' && nearDoor() && !st.hasCart) { elTarget.style.display = 'block'; elTarget.textContent = 'E 나가기'; }
     else elTarget.style.display = 'none';
@@ -870,6 +875,7 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit, a
     if (st.mode === 'place') { if (e.button === 2) cancelPlace(); else place(); return; }
     // 클릭한 그 자리의 상품 (마우스 위치 레이)
     if (e.pointerType === 'mouse') { const r0 = dom.getBoundingClientRect(); const t = pickTarget(new THREE.Vector2(((e.clientX - r0.left) / r0.width) * 2 - 1, -((e.clientY - r0.top) / r0.height) * 2 + 1)); if (t) hover = t; }
+    if (!hover) { const r0 = dom.getBoundingClientRect(); ray.setFromCamera(ndc.set(((e.clientX - r0.left) / r0.width) * 2 - 1, -((e.clientY - r0.top) / r0.height) * 2 + 1), camera); ray.far = REACH; if (elec.handleClick(ray)) return; }
     if (hover) pick(); else if (nearMyCart()) regrabCart(); else if (!st.hasCart && nearCorral() && !cart.visible) grabCart();
   };
   const onWheel = (e) => { if (st.mode === 'place') { rotate(Math.sign(e.deltaY) * Math.PI / 12); e.preventDefault(); } };
@@ -896,6 +902,7 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit, a
     if (k === 'KeyE' || k === 'Space') {
       if (nearMyCart()) regrabCart(); // 놓은 카트 옆에서는 E = 항상 카트 잡기 (상품은 클릭)
       else if (hover && (st.hasCart || cart.visible)) pick();
+      else if (!hover && st.elecHover) { ray.setFromCamera(mouse.on ? ndc.set(mouse.x, mouse.y) : ndc.set(0, 0), camera); ray.far = REACH; elec.handleClick(ray); } // 가전 체험(냉장고 문·드럼·채널)
       else if (!st.hasCart && nearCorral() && cart.visible && items.length) toast(`내 카트(짐 ${items.length}개)는 ${Math.round(cartDist())} m 떨어진 초록 화살표 자리에 있어요`, 2600, '#1E5A45');
       else if (!st.hasCart && nearCorral()) grabCart();
       else if (st.hasCart && nearCorral() && !items.length) { releaseCart(); cart.visible = false; setCorral(14); }
@@ -921,7 +928,9 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit, a
       else { if (Math.abs(st.head.yaw) > 0) { st.me.yaw += st.head.yaw; st.head.yaw = 0; } walk(dt, axes); }
     } else if (st.hasCart) driveCart(dt, { f: 0, s: 0 });
     cart.updateMatrixWorld(true);
+    const shockNow = st.shock;
     stepPhysics(dt);
+    st._shockNow = shockNow;
     if (st.mode === 'place' && st.held) {
       // 휠·키로 바뀐 눕힘 반영
       const want = itemDims(st.held.p, st.tip).join(); if (ghost?.userData.dims !== want) { setGhost(st.held.p); ghost.userData.dims = want; }
@@ -939,6 +948,9 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit, a
     staff.tick(dt, { me: st.me, cartObj: st.cart, items, rimTop: B.top.yRear, cartHeld: st.hasCart, cartVisible: cart.visible });
     stock.tick(camera);
     hover = st.mode === 'walk' ? pickTarget() : null;
+    if (st.mode === 'walk') { ray.setFromCamera(mouse.on ? ndc.set(mouse.x, mouse.y) : ndc.set(0, 0), camera); ray.far = REACH; st.elecHover = elec.probe(ray); }
+    else st.elecHover = null;
+    elec.tick(dt, { camera, me: st.me, cart: st.cart, shock: st._shockNow || 0, hud });
     updateHighlight();
     marker.visible = !st.hasCart && cart.visible; if (marker.visible) { arrow.position.y = 1.55 + Math.sin(st.t * 3) * 0.06; arrow.rotation.y += dt * 1.5; }
     if (st.toastT > 0) { st.toastT -= dt; if (st.toastT <= 0) elToast.style.display = 'none'; }
@@ -952,7 +964,7 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit, a
   function render(r) { r.render(scene, camera); }
 
   // ---------- 테스트·스샷용 ----------
-  function stats() { let tris = 0, meshes = 0; scene.traverse((o) => { if (o.isMesh) { meshes++; const n = o.geometry.index ? o.geometry.index.count / 3 : o.geometry.attributes.position.count / 3; tris += n * (o.isInstancedMesh ? o.count : 1); } }); return { meshes, tris: Math.round(tris), items: items.length, bodies: world.bodies.length, products: prodMeshes.reduce((a, m) => a + m.count, 0) }; }
+  function stats() { let tris = 0, meshes = 0; scene.traverse((o) => { if (o.isMesh) { meshes++; const n = o.geometry.index ? o.geometry.index.count / 3 : o.geometry.attributes.position.count / 3; tris += n * (o.isInstancedMesh ? o.count : 1); } }); return { meshes, tris: Math.round(tris), items: items.length, bodies: world.bodies.length, products: prodMeshes.reduce((a, m) => a + m.count, 0), elec: elec.metrics() }; }
   // 같은 주행 모델로 0 → 1.2 m/s 시간, 1.2 m/s 에서 손 놓고/당겨 멈추는 거리, 제자리 90° 회전 시간
   function measure(extraKg) {
     const save = { ...st.cart }, saveItems = items.slice();
@@ -1001,13 +1013,15 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit, a
       ghostState() { return ghostSol && { where: ghostSol.where, state: ghostSol.state }; },
       mischief(kind, amt) { staff.mischief(kind, amt); }, staff: () => ({ ...staff.S, x: staff.root.position.x, z: staff.root.position.z, ach: staff.S.ach.slice() }), staffAt(x, z) { staff.root.position.set(x, 0, z); },
       co: checkout.dbg, ach: (t) => staff.achieve(t),
-      camAt(pos, tgt) { st.camOv = pos ? { pos: new THREE.Vector3(...pos), tgt: new THREE.Vector3(...tgt) } : null; },
+      elec: elec._dbg, openElecDoors: (v) => elec.openAllDoors(v),
+      camAt(pos, tgt) { st.camOv = pos ? { pos: new THREE.Vector3(...pos), tgt: new THREE.Vector3(...tgt) } : null; st.camWorld = null; },
+      camWorld(pos, tgt) { st.camWorld = pos ? { pos: new THREE.Vector3(...pos), tgt: new THREE.Vector3(...tgt) } : null; st.camOv = null; },
       settle(sec = 1.5) { for (let t = 0; t < sec; t += 1 / 60) { cart.updateMatrixWorld(true); stepPhysics(1 / 60); } },
       push(sec, f = 1, s = 0, run = false) { for (let t = 0; t < sec; t += 1 / 60) { driveCart(1 / 60, { f, s, run }); cart.updateMatrixWorld(true); stepPhysics(1 / 60); } },
     },
     dispose() {
       dom.removeEventListener('pointerdown', onDown); dom.removeEventListener('pointermove', onMove); window.removeEventListener('pointerup', onUp); dom.removeEventListener('wheel', onWheel); dom.removeEventListener('contextmenu', onCtx);
-      staff.dispose(); checkout.dispose(); hud.remove(); css.remove();
+      elec.dispose(); staff.dispose(); checkout.dispose(); hud.remove(); css.remove();
       const seen = new Set();
       scene.traverse((o) => {
         if (o.geometry && !seen.has(o.geometry)) { seen.add(o.geometry); o.geometry.dispose(); }

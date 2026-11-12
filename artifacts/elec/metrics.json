@@ -1,0 +1,65 @@
+{
+  "runs": [
+    {
+      "label": "tv-wall",
+      "heapMB": 463.1,
+      "geometries": 607,
+      "textures": 105,
+      "drawCalls": 69,
+      "triangles": 106594,
+      "programs": 54,
+      "elec": {
+        "zone": "electronics",
+        "meshes": 238,
+        "instanced": 19,
+        "instCount": 112,
+        "tris": 6442,
+        "lod": 0,
+        "flickerT": 0
+      }
+    },
+    {
+      "label": "inside-electronics-cage",
+      "heapMB": 464.1,
+      "geometries": 625,
+      "textures": 110,
+      "drawCalls": 87,
+      "triangles": 3849320,
+      "programs": 57,
+      "elec": {
+        "zone": "electronics",
+        "meshes": 238,
+        "instanced": 19,
+        "instCount": 112,
+        "tris": 6442,
+        "lod": 0,
+        "flickerT": 0
+      }
+    }
+  ],
+  "errs": [],
+  "tvInCart": {
+    "ok": true,
+    "kg": 63,
+    "n": 1,
+    "ids": [
+      "tv85"
+    ]
+  },
+  "inside": {
+    "meshes": 336,
+    "tris": 3890696,
+    "items": 1,
+    "bodies": 3,
+    "products": 12671,
+    "elec": {
+      "zone": "electronics",
+      "meshes": 238,
+      "instanced": 19,
+      "instCount": 112,
+      "tris": 6442,
+      "lod": 0,
+      "flickerT": 0
+    }
+  }
+}

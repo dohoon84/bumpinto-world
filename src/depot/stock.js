@@ -2,7 +2,7 @@
 //   가까운 파렛트만 낱개 상자, 8~12 m 밖은 파렛트 한 덩어리(임포스터). 병/롤 상세 메시는 선반에 쓰지 않는다.
 import * as THREE from 'three';
 import { PRODUCTS, BY_ID } from './products.js';
-import { registerStockProducts, PICKABLE_IDS } from './stockCatalog.js';
+import { registerStockProducts, PICKABLE_IDS, STOCK_PRODUCTS } from './stockCatalog.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 
 const W = 84, D = 120, CEIL = 9;
@@ -158,8 +158,11 @@ function boxGeoForCell(sx, sy, sz, cx, cy) {
   return g;
 }
 
+const BASE_IDS = ['egg', 'water', 'rice', 'tissue', 'ramen', 'chips', 'soda', 'melon', 'meat', 'bottle'];
 function makeAtlas(keep) {
-  const list = PRODUCTS.slice();
+  // 아틀라스 64칸: 장보기 기본 10종 + 진열 카탈로그만 (가전·구매카드는 electronics.js 가 따로 그림 — 넣으면 칸이 넘쳐 뒤 상품이 빠짐)
+  const ids = new Set([...BASE_IDS, ...STOCK_PRODUCTS.map((p) => p.id)]);
+  const list = PRODUCTS.filter((p) => ids.has(p.id));
   const index = {};
   const t = canvasTex(ATLAS_S, ATLAS_S, (g) => {
     g.fillStyle = '#ddd'; g.fillRect(0, 0, ATLAS_S, ATLAS_S);
