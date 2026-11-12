@@ -857,7 +857,7 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit } 
     if (elHelp.textContent !== help) elHelp.textContent = help;
     elTarget.style.background = '';
     if (st.mode === 'place' && ghostSol) { elTarget.style.display = 'block'; elTarget.textContent = ghostSol.where === 'floor' ? '매장 바닥에 내려놓기' : { green: '안정적 — 여기 놓으면 OK', yellow: '흔들흔들 — 카트 움직이면 떨어질 수도', red: '위태위태 — 떨어질 것 같아요 (그래도 놓을 수 있음)' }[ghostSol.state]; elTarget.style.background = { green: '#e8fff0', yellow: '#fff6d6', red: '#ffe3e0' }[ghostSol.state]; }
-    else if (st.mode === 'walk' && nearMyCart() && !hover) { elTarget.style.display = 'block'; elTarget.style.background = ''; elTarget.textContent = `E 카트 잡기${items.length ? ` · 짐 ${items.length}개 그대로` : ''}`; }
+    else if (st.mode === 'walk' && nearMyCart()) { elTarget.style.display = 'block'; elTarget.style.background = ''; elTarget.textContent = `E 카트 잡기${items.length ? ` · 짐 ${items.length}개 그대로` : ''}${hover ? ` · 클릭 = ${hover.p.name} 집기` : ''}`; }
     else if (hover && st.mode === 'walk') { elTarget.style.display = 'block'; elTarget.style.background = ''; elTarget.textContent = `${hover.kind === 'floor' ? '(바닥) ' : hover.kind === 'cart' ? '(카트 속) ' : ''}${hover.p.name} · ${hover.p.kg} kg · ${hover.p.price.toLocaleString('ko-KR')}원 — 클릭/E 집기`; }
     else if (st.mode === 'walk' && nearCorral() && !st.hasCart) { elTarget.style.display = 'block'; elTarget.textContent = 'E 카트 잡기 (240L)'; }
     else if (st.mode === 'walk' && nearDoor() && !st.hasCart) { elTarget.style.display = 'block'; elTarget.textContent = 'E 나가기'; }
@@ -891,8 +891,12 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit } 
     const r = dom.getBoundingClientRect(); ndc.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
     ray.setFromCamera(ndc, camera);
     const L = LEVELS[st.level];
-    const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -L.y); plane.applyMatrix4(cart.matrixWorld);
-    const hit = ray.ray.intersectPlane(plane, new THREE.Vector3()); if (hit) { cart.worldToLocal(hit); st.gx = hit.x; st.gz = hit.z; }
+    // 조준: ① 카트 속 상품 윗면 ② 바구니 입구(테두리 높이) ③ 받침 평면 순서 — 쌓인 짐이나 테두리를 가리켜도 그 자리로
+    const aimAt = (h) => { const pl = new THREE.Plane(new THREE.Vector3(0, 1, 0), -h); pl.applyMatrix4(cart.matrixWorld); const v = ray.ray.intersectPlane(pl, new THREE.Vector3()); return v && cart.worldToLocal(v); };
+    const ih = st.level === 'upper' && ray.intersectObjects(items.filter((it) => it.level === 'upper' && it.mesh !== st.held?.mesh).map((it) => it.mesh), true)[0];
+    const rim = st.level === 'upper' && aimAt(RIM_Y), inTop = rim && Math.abs(rim.x) <= B.top.x + 0.12 && rim.z >= B.top.z0 - 0.12 && rim.z <= B.top.z1 + 0.12;
+    const hit = ih ? cart.worldToLocal(ih.point.clone()) : inTop ? rim : aimAt(L.y);
+    if (hit) { st.gx = hit.x; st.gz = hit.z; }
     const fh = ray.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), new THREE.Vector3()); // 매장 바닥(카트 밖에 놓기)
     if (fh) { cart.worldToLocal(fh); const d = Math.hypot(fh.x, fh.z), k = d > 2.2 ? 2.2 / d : 1; st.fx = fh.x * k; st.fz = fh.z * k; }
     st.nudge.x = st.nudge.z = 0;
@@ -927,8 +931,8 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit } 
     }
     if (e.repeat) return true;
     if (k === 'KeyE' || k === 'Space') {
-      if (hover && (st.hasCart || cart.visible)) pick();
-      else if (nearMyCart()) regrabCart();
+      if (nearMyCart()) regrabCart(); // 놓은 카트 옆에서는 E = 항상 카트 잡기 (상품은 클릭)
+      else if (hover && (st.hasCart || cart.visible)) pick();
       else if (!st.hasCart && nearCorral() && cart.visible && items.length) toast(`내 카트(짐 ${items.length}개)는 ${Math.round(cartDist())} m 떨어진 초록 화살표 자리에 있어요`, 2600, '#1E5A45');
       else if (!st.hasCart && nearCorral()) grabCart();
       else if (st.hasCart && nearCorral() && !items.length) { releaseCart(); cart.visible = false; setCorral(14); }
@@ -1008,6 +1012,9 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit } 
       drop(id, level, x, z, rotY = 0, tip = false) { api._dbg.hold(id); api._dbg.setGhostAt(level, x, z, rotY, tip); if (st.held && itemDims(st.held.p, tip).join() !== ghost?.userData.dims) { setGhost(st.held.p); ghost.userData.dims = itemDims(st.held.p, tip).join(); } ghostSol = solveGhost(); return place(); },
       firstOf(id) { const im = prodMeshes.find((m) => m.userData.pid === id); const l = im?.userData.list || []; return l.length ? { ...l[Math.floor(l.length / 2)] } : null; },
       run(sec, dt = 1 / 30) { for (let t = 0; t < sec; t += dt) update(dt); },
+      floorCount() { return floorItems.length; },
+      clearFloor() { while (floorItems.length) { const fi = floorItems[0]; removeFloorItem(fi); disposeItemMesh(fi.mesh); } },
+      ghostState() { return ghostSol && { where: ghostSol.where, state: ghostSol.state }; },
       mischief(kind, amt) { staff.mischief(kind, amt); }, staff: () => ({ ...staff.S, x: staff.root.position.x, z: staff.root.position.z, ach: staff.S.ach.slice() }), staffAt(x, z) { staff.root.position.set(x, 0, z); },
       camAt(pos, tgt) { st.camOv = pos ? { pos: new THREE.Vector3(...pos), tgt: new THREE.Vector3(...tgt) } : null; },
       settle(sec = 1.5) { for (let t = 0; t < sec; t += 1 / 60) { cart.updateMatrixWorld(true); stepPhysics(1 / 60); } },

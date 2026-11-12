@@ -27,11 +27,11 @@ function atlasBox(sx, sy, sz, seg = 1, faces = ['side', 'side', 'top', 'top', 'f
   return g;
 }
 // 병 하나: 몸통 + 어깨(원뿔대) + 뚜껑
-function bottleGeo(r, h, labelU0, labelU1) {
+function bottleGeo(r, h, labelU0, labelU1, seg = 14) {
   const bodyH = h * 0.72, shH = h * 0.18, capH = h * 0.1;
-  const body = toQuad(new THREE.CylinderGeometry(r, r, bodyH, 14, 1, false), 'front', labelU0, labelU1, 0.05, 0.95); body.translate(0, -h / 2 + bodyH / 2, 0);
-  const sh = toQuad(new THREE.CylinderGeometry(r * 0.36, r, shH, 14, 1, false), 'front', labelU0, labelU1, 0.95, 1); sh.translate(0, -h / 2 + bodyH + shH / 2, 0);
-  const cap = toQuad(new THREE.CylinderGeometry(r * 0.3, r * 0.3, capH, 10, 1, false), 'top', 0.45, 0.55, 0.45, 0.55); cap.translate(0, h / 2 - capH / 2, 0);
+  const body = toQuad(new THREE.CylinderGeometry(r, r, bodyH, seg, 1, false), 'front', labelU0, labelU1, 0.05, 0.95); body.translate(0, -h / 2 + bodyH / 2, 0);
+  const sh = toQuad(new THREE.CylinderGeometry(r * 0.36, r, shH, seg, 1, false), 'front', labelU0, labelU1, 0.95, 1); sh.translate(0, -h / 2 + bodyH + shH / 2, 0);
+  const cap = toQuad(new THREE.CylinderGeometry(r * 0.3, r * 0.3, capH, Math.max(6, seg - 4), 1, false), 'top', 0.45, 0.55, 0.45, 0.55); cap.translate(0, h / 2 - capH / 2, 0);
   return mergeGeometries([body, sh, cap]);
 }
 
@@ -41,7 +41,7 @@ export function buildProductGeometry(p, { boxGeo }) {
   if (S === 'cyl') return bottleGeo(sx / 2, sy, 0, 1 / 3);
   if (S === 'bottles') { // nx × nz 병 + 아래 필름 받침
     const [nx, nz] = p.grid, r = Math.min(sx / nx, sz / nz) / 2 * 0.98, parts = [];
-    for (let i = 0; i < nx; i++) for (let j = 0; j < nz; j++) { const b = bottleGeo(r, sy, p.labelU?.[0] ?? 0, p.labelU?.[1] ?? 1); b.translate(-sx / 2 + (i + 0.5) * sx / nx, 0, -sz / 2 + (j + 0.5) * sz / nz); parts.push(b); }
+    for (let i = 0; i < nx; i++) for (let j = 0; j < nz; j++) { const b = bottleGeo(r, sy, p.labelU?.[0] ?? 0, p.labelU?.[1] ?? 1, 8); b.translate(-sx / 2 + (i + 0.5) * sx / nx, 0, -sz / 2 + (j + 0.5) * sz / nz); parts.push(b); }
     const film = atlasBox(sx, sy * 0.22, sz, 1, ['front', 'front', 'top', 'top', 'front', 'front']); toQuad(film, 'front', 0, 1, 0.0, 0.25); film.translate(0, -sy / 2 + sy * 0.11, 0);
     parts.push(film);
     return mergeGeometries(parts);
@@ -49,7 +49,7 @@ export function buildProductGeometry(p, { boxGeo }) {
   if (S === 'rolls') { // 롤 기둥들 + 가운데 라벨 띠
     const [nx, nz] = p.grid, r = Math.min(sx / nx, sz / nz) / 2 * 0.97, parts = [];
     for (let i = 0; i < nx; i++) for (let j = 0; j < nz; j++) {
-      const c = new THREE.CylinderGeometry(r, r, sy, 12, 1, false); toQuad(c, 'front', 0.02, 0.12, 0.05, 0.3, (k) => k < (12 + 1) * 2); // 옆면: 하얀 롤
+      const c = new THREE.CylinderGeometry(r, r, sy, 8, 1, false); toQuad(c, 'front', 0.02, 0.12, 0.05, 0.3, (k) => k < (8 + 1) * 2); // 옆면: 하얀 롤
       toQuad(c, 'top', 0.1, 0.2, 0.2, 0.8, (k) => k >= (12 + 1) * 2); c.translate(-sx / 2 + (i + 0.5) * sx / nx, 0, -sz / 2 + (j + 0.5) * sz / nz); parts.push(c);
     }
     const band = atlasBox(sx + 0.006, sy * 0.34, sz + 0.006, 1, ['side', 'side', 'top', 'top', 'front', 'front']);
