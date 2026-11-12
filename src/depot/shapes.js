@@ -36,6 +36,7 @@ function bottleGeo(r, h, labelU0, labelU1, seg = 14) {
 }
 
 export function buildProductGeometry(p, { boxGeo }) {
+  if (p.geo) return p.geo(); // 모듈이 직접 만든 형상(가전 박스 UV 등)
   const [sx, sy, sz] = p.size, S = p.shape || 'box';
   if (S === 'sphere') { const g = new THREE.SphereGeometry(sx / 2, 22, 16); toQuad(g, 'front'); g.scale(1, sy / sx, sz / sx); return g; }
   if (S === 'cyl') return bottleGeo(sx / 2, sy, 0, 1 / 3);

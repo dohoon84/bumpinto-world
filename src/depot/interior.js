@@ -71,7 +71,7 @@ async function loadDepotTextures(renderer) {
   return out;
 }
 
-export async function buildDepotInterior({ renderer, isMobile = false, onExit } = {}) {
+export async function buildDepotInterior({ renderer, isMobile = false, onExit, audio = null } = {}) {
   const disposables = [];
   const keep = (x) => { disposables.push(x); return x; };
   const TX = await loadDepotTextures(renderer); for (const t of Object.values(TX)) keep(t);
@@ -357,7 +357,7 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit } 
     toast('직원이 입구까지 모셔다 드렸어요 🙇 (카트는 그 자리에 · 초록 화살표)', 3200, '#1E5A45');
   } });
   // 가전 코너 (입구 동쪽 복도). 장애물·픽 메시는 배열에 추가만 함.
-  const elec = mountElectronics({ scene, keep, canvasTex, obstacles, prodMeshes, prodGeo, prodMat });
+  const elec = mountElectronics({ scene, keep, canvasTex, obstacles, prodMeshes, prodGeo, prodMat, audio, toast, isMobile });
 
   // ---------- 효과음(아주 짧게, WebAudio) ----------
   let ac = null;
@@ -940,6 +940,7 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit } 
     if (k === 'KeyE' || k === 'Space') {
       if (nearMyCart()) regrabCart(); // 놓은 카트 옆에서는 E = 항상 카트 잡기 (상품은 클릭)
       else if (hover && (st.hasCart || cart.visible)) pick();
+      else if (!hover && st.elecHover) { ray.setFromCamera(mouse.on ? ndc.set(mouse.x, mouse.y) : ndc.set(0, 0), camera); ray.far = REACH; elec.handleClick(ray); } // 가전 체험(냉장고 문·드럼·채널)
       else if (!st.hasCart && nearCorral() && cart.visible && items.length) toast(`내 카트(짐 ${items.length}개)는 ${Math.round(cartDist())} m 떨어진 초록 화살표 자리에 있어요`, 2600, '#1E5A45');
       else if (!st.hasCart && nearCorral()) grabCart();
       else if (st.hasCart && nearCorral() && !items.length) { releaseCart(); cart.visible = false; setCorral(14); }
