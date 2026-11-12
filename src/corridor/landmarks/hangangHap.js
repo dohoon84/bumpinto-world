@@ -501,6 +501,7 @@ function finishHangangHap({ parent, overlay, terrain, dem, osm, foreign = null, 
     });
   }
   const props = createHangangProps({ parent: root, osm, land });
+  if (typeof foreign === 'function') clearIslandOverlaysSync(root, islandFloorFn(ownRect, owns)); // [jamsil-float]
   return finishHangangHapApi({ overlay, osm, root, land, paths, city, bridges, underpasses, props, ownRect, owns, ownHeightAt });
 }
 
@@ -518,6 +519,70 @@ function hapOwnsFn(ownRect, isForeign, land, osm) {
     const h = land.heightAt(x, z);
     return h != null && h < HAP_ISLAND_FLOOR_Y;
   };
+}
+
+// [jamsil-float] 793ecf5 뒤로 섬 위 시가지(합수부 사각형 안 · 다른 섬 · 2구간이 땅을 안 맡는 곳)는 코리더 타일 바닥(y≈0)이 이긴다.
+//   그런데 2구간 길(산책로·자전거길·중앙선·점선)·소품·시가 오버레이는 예전 DEM 높이(수 m 위)로 지어져 도시 길 위에 떠 보였다.
+//   2구간이 땅을 안 맡는 자리(지형 삼각형을 빼는 것과 같은 owns 판정)의 오버레이는 그리지 않는다. 다리·고가·호안은 그대로 둔다.
+const HAP_OVERLAY_GROUPS = new Set(['hangang-paths', 'hangang-props', 'hangang-city']);
+//   합수부 사각형 밖의 다른 섬(석촌·송파 쪽 z > −15800, 경부 띠 등)도 지형은 이미 안 그리므로 같은 판정(!owns)으로 뺀다.
+function islandFloorFn(ownRect, owns) {
+  return (x, z) => !owns(x, z);
+}
+function hapOverlayTargets(root) {
+  const list = [];
+  for (const grp of root.children) {
+    if (!HAP_OVERLAY_GROUPS.has(grp.name)) continue;
+    grp.updateMatrixWorld(true);
+    grp.traverse((o) => { if ((o.isMesh || o.isLine || o.isPoints) && o.geometry?.attributes?.position) list.push(o); });
+  }
+  return list;
+}
+function clearIslandOverlay(o, floor) {
+  const e = o.matrixWorld.elements;
+  const wx = (x, z) => e[0] * x + e[8] * z + e[12], wz = (x, z) => e[2] * x + e[10] * z + e[14];
+  const g = o.geometry;
+  if (o.isInstancedMesh) {
+    const m = new THREE.Matrix4(), v = new THREE.Vector3(), zero = new THREE.Matrix4().makeScale(0, 0, 0);
+    let n = 0;
+    for (let i = 0; i < o.count; i++) {
+      o.getMatrixAt(i, m); v.setFromMatrixPosition(m).applyMatrix4(o.matrixWorld);
+      if (floor(v.x, v.z)) { o.setMatrixAt(i, zero); n++; }
+    }
+    if (n) o.instanceMatrix.needsUpdate = true;
+    return n;
+  }
+  if (!g.boundingSphere) g.computeBoundingSphere();
+  const bs = g.boundingSphere, r = bs.radius * o.matrixWorld.getMaxScaleOnAxis();
+  if (r < 25) { // 작은 소품 한 개: 중심으로 판정
+    const c = bs.center.clone().applyMatrix4(o.matrixWorld);
+    if (floor(c.x, c.z)) { o.removeFromParent(); return 1; }
+    return 0;
+  }
+  const pos = g.attributes.position, idx = g.index, N = idx ? idx.count : pos.count, at = (i) => (idx ? idx.getX(i) : i);
+  const k = o.isLineSegments ? 2 : o.isLine || o.isPoints ? 0 : 3;
+  if (!k) return 0;
+  const keep = []; let dropped = 0;
+  for (let i = 0; i + k - 1 < N; i += k) {
+    let cx = 0, cz = 0;
+    for (let j = 0; j < k; j++) { const q = at(i + j); cx += pos.getX(q) / k; cz += pos.getZ(q) / k; }
+    if (floor(wx(cx, cz), wz(cx, cz))) { dropped++; continue; }
+    for (let j = 0; j < k; j++) keep.push(at(i + j));
+  }
+  if (dropped) { g.setIndex(keep); g.computeBoundingSphere(); g.computeBoundingBox(); }
+  return dropped;
+}
+async function clearIslandOverlays(root, floor, slicer = null) {
+  if (!floor) return 0;
+  let n = 0;
+  for (const o of hapOverlayTargets(root)) { n += clearIslandOverlay(o, floor); if (slicer) await slicer.tick('hangang-hap-island'); }
+  return n;
+}
+function clearIslandOverlaysSync(root, floor) {
+  if (!floor) return 0;
+  let n = 0;
+  for (const o of hapOverlayTargets(root)) n += clearIslandOverlay(o, floor);
+  return n;
 }
 
 // [hangang-isolation] 무게중심이 drop(cx, cz) 인 삼각형을 인덱스에서 뺀다.
@@ -639,6 +704,10 @@ async function finishHangangHapAsync({ parent, overlay, terrain, dem, osm, forei
     : createHangangProps({ parent: root, osm, land });
   if (slicer) slicer.flush('hangang-hap-props');
   else if (y) await y();
+  if (typeof foreign === 'function') { // [jamsil-float]
+    await clearIslandOverlays(root, islandFloorFn(ownRect, owns), slicer);
+    if (slicer) slicer.flush('hangang-hap-island');
+  }
 
   // labels + API: same as finishHangangHap from overlay onward
   return finishHangangHapApi({ overlay, osm, foreign, root, land, paths, city, bridges, underpasses, props, ownRect, owns, ownHeightAt });
