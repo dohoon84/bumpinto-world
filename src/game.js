@@ -97,6 +97,9 @@ import { mountSeoulToll } from './world/seoulToll.js'; // [gyeongbu-bus] 서울�
 import { mountCheonggyeTerrain } from './corridor/cheonggyeTerrain.js'; // [gyeongbu-bus] 청계산 지형
 import { createServerClock } from './subway/clock.js'; // [subway-sync] 서버 시계 (같은 열차 = 같은 순간)
 import { isMobileMode } from './mobile/flag.js'; // [mobile]
+import { mobileProfile } from './mobile/profile.js'; // [mobile-profile] ?mprof=0 이면 예전 품질
+import { warmupRenderer } from './render/warmup.js'; // [boot-fast] 로딩 화면에서 셰이더 프리웜
+import { propShadowsEnabled, silenceSmallPropShadows } from './perf/propShadows.js'; // 작은 소품 그림자 패스 생략
 import { mountSubway, zoneLabel as subwayZoneLabel } from './subway/index.js'; // [subway] 정자역·코리더 역 출입구(실제 OSM 출구) + 지하 대합실. ?subway=0 이면 끔
 import { arriveFixEnabled, pickFirstEnabled, entrySpawn, withArriveCap } from './corridor/arrive.js'; // [arrivefix] #43 (?arrivefix=0) · [pickfirst] #42 (?pickfirst=0)
 import { mountBump24Game } from './bump24game/index.js'; // [bump24game] BUMP24 30초 장보기 (시청점 ?bp24=1&bp24game=1, 정자점은 기본 주소)
@@ -299,14 +302,35 @@ markBoot('data-loaded');
 
 // --- 렌더러/씬 ---
 const subwayOn = region.id === 'jeongja' && params.get('subway') !== '0'; // [subway]
-const renderer = new THREE.WebGLRenderer({ antialias: true, logarithmicDepthBuffer: true, preserveDrawingBuffer: params.has('shot'), ...(subwayOn ? { stencil: true } : {}) }); // [subway] 출입구 계단 구멍은 스텐실로 그림
-renderer.setPixelRatio(Math.min(devicePixelRatio, mobileMode ? 1.5 : 2)); // [mobile] 폰은 1.5배까지만
+const mprof = mobileProfile(params, mobileMode); // antialias 등은 컨텍스트 생성 전에 결정 (?mprof=0 이면 예전 설정)
+const renderer = new THREE.WebGLRenderer({ antialias: mprof.antialias, logarithmicDepthBuffer: mprof.logarithmicDepthBuffer, preserveDrawingBuffer: params.has('shot'), ...(subwayOn ? { stencil: true } : {}) }); // [subway] 출입구 계단 구멍은 스텐실로 그림. [mobile-profile] 폰은 MSAA 를 끈다. 로그 깊이는 남산·한강 깜빡임을 피하려고 켠다
+renderer.setPixelRatio(mprof.pixelRatio);
 renderer.setSize(innerWidth, innerHeight);
 markSlowGpu(renderer);
+if (mprof.on && landmarkBuildGate.slowGpu && renderer.getPixelRatio() > 1) {
+  renderer.setPixelRatio(1);
+  renderer.setSize(innerWidth, innerHeight);
+}
 const wantShadow = !params.has('noshadow') && !(mobileMode && params.get('shadow') !== '1'); // [mobile] 폰은 그림자 끔 (?shadow=1 로 켬)
 renderer.shadowMap.enabled = wantShadow && !bootFastEnabled(params);
 renderer.shadowMap.type = THREE.PCFShadowMap;
 document.getElementById('app').appendChild(renderer.domElement);
+// [webgl] 폰에서 텍스처·드로우가 많을 때 컨텍스트가 죽으면 탭이 새로고침된 것처럼 튕긴다. 자동 리로드는 하지 않고 안내만 띄운다.
+renderer.domElement.addEventListener('webglcontextlost', (e) => {
+  e.preventDefault();
+  console.warn('[webgl] context lost');
+  if (document.getElementById('bw-gl-lost')) return;
+  const el = document.createElement('div');
+  el.id = 'bw-gl-lost';
+  el.setAttribute('role', 'alertdialog');
+  el.style.cssText = 'position:fixed;inset:0;z-index:9000;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.55);font-family:system-ui,sans-serif';
+  el.innerHTML = '<div style="background:#1b2430;color:#f4f7fb;padding:22px 24px;border-radius:16px;max-width:20rem;text-align:center">'
+    + '<b style="display:block;margin-bottom:8px">화면을 다시 그릴 수 없어요</b>'
+    + '<p style="margin:0 0 14px;font-size:14px;line-height:1.45;opacity:.9">메모리가 부족해 그래픽이 끊겼어요. 페이지를 다시 열면 이어갈 수 있어요.</p>'
+    + '<button type="button" id="bw-gl-lost-go" style="padding:10px 16px;border:0;border-radius:10px;background:#ffe169;color:#1b2430;font-weight:700;cursor:pointer">다시 열기</button></div>';
+  el.querySelector('#bw-gl-lost-go').onclick = () => location.reload();
+  document.body.appendChild(el);
+});
 const bgm = mountBgm({ params }); // [bgm] 배경음악 + 상단 미니 플레이어 (입장 때 시작, ?bgm=0 이면 null)
 const memHud = mountMemHud({ // [memory] ?mem=1 일 때만 설치 (기본 꺼짐)
   renderer, params, getCorridor: () => corridor,
@@ -1279,7 +1303,7 @@ const leaveBtn = document.getElementById('btn-leave');
 if (globeBtn) globeBtn.hidden = !joined;
 leaveBtn.hidden = !joined;
 const reopenGate = () => {
-  if (mobileMode) { // [mobile] 모바일은 지구본 대신 모바일 시작화면으로
+  if (mobileMode) { // [mobile] 모바일은 지구본 대신 모바일 시작화면으로 (전체 리로드는 UX 결정 — 바꾸지 않음)
     const u = new URL(location.href);
     for (const k of ['enter', 'passport', 'from', 'at']) u.searchParams.delete(k);
     location.href = u.toString();
@@ -3025,7 +3049,16 @@ function frame() {
 }
 // [perf-memory] 정적 병합·인스턴싱·먼 소품 숨기기 (?perfmem=0 이면 null, 예전과 같음). 첫 프레임 전에 한 번
 const perfMem = mountPerfMem({ scene, renderer, camera, params, getPlayer: () => player, corridor, bikes });
+if (propShadowsEnabled(params)) {
+  const n = silenceSmallPropShadows(scene);
+  if (n) markBoot('prop-shadows-off');
+}
 addEventListener('resize', () => { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); });
+// [boot-fast] 로딩(또는 로비) 화면이 떠 있는 동안 셰이더를 데워, 첫 present 의 ~5s GPU 스톨을 그쪽으로 옮긴다
+markBoot('warmup-start');
+const warm = await warmupRenderer(renderer, scene, camera, { maxMs: 4000, yieldFn: bootYield || undefined });
+markBoot('warmup-done');
+if (warm) (window.__boot ||= {}).warmup = { ms: +warm.ms.toFixed(1), textures: warm.textures, parallel: warm.parallel };
 requestAnimationFrame(frame);
 
 // 스크린샷/디버그용 훅
