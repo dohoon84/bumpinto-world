@@ -63,7 +63,7 @@ function boxGeoAtlas(sx, sy, sz, topQuad = 'top') {
 const ASSET = `${import.meta.env?.BASE_URL || '/'}depot/`;
 async function loadDepotTextures(renderer) {
   const tl = new THREE.TextureLoader(), maxAniso = Math.min(8, renderer?.capabilities?.getMaxAnisotropy?.() || 4);
-  const names = ['pk-egg', 'pk-water', 'pk-rice', 'pk-tissue', 'pk-ramen', 'pk-chips', 'pk-soda', 'aisle-01', 'aisle-02', 'aisle-03', 'aisle-05', 'hang-eggs-dairy', 'hang-water-drinks', 'hang-rice-grain', 'hang-ramen-snack', 'hang-household', 'rack-safety', 'floor-cart-only', 'floor-forklift', 'floor-hazard', 'egg-crack-1', 'egg-crack-2', 'yolk-puddle'];
+  const names = ['pk-melon', 'pk-meat', 'pk-egg', 'pk-water', 'pk-rice', 'pk-tissue', 'pk-ramen', 'pk-chips', 'pk-soda', 'aisle-01', 'aisle-02', 'aisle-03', 'aisle-05', 'hang-eggs-dairy', 'hang-water-drinks', 'hang-rice-grain', 'hang-ramen-snack', 'hang-household', 'rack-safety', 'floor-cart-only', 'floor-forklift', 'floor-hazard', 'egg-crack-1', 'egg-crack-2', 'yolk-puddle'];
   const out = {};
   await Promise.all(names.map((n) => tl.loadAsync(`${ASSET}${n}.webp`).then((t) => { t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = maxAniso; out[n] = t; }).catch(() => { /* 없으면 캔버스 대체 */ })));
   return out;
@@ -181,8 +181,8 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit } 
   const productGeo = (p) => buildProductGeometry(p, { boxGeo: boxGeoLabeled });
   const addPhysShape = (body, p) => addProductShape(body, p, CANNON);
   const prodGeo = {}, prodMat = {};
-  for (const p of PRODUCTS) { prodGeo[p.id] = keep(productGeo(p)); const t = TX[`pk-${p.id}`] || keep(labelTex(p)); prodMat[p.id] = keep(new THREE.MeshLambertMaterial({ map: t })); }
-  const order = ['water', 'soda', 'rice', 'egg', 'tissue', 'ramen', 'chips'];
+  for (const p of PRODUCTS) { prodGeo[p.id] = keep(productGeo(p)); const t = TX[`pk-${p.tex || p.id}`] || keep(labelTex(p)); prodMat[p.id] = keep(new THREE.MeshLambertMaterial({ map: t })); }
+  const order = ['water', 'soda', 'rice', 'egg', 'tissue', 'ramen', 'chips', 'melon', 'meat', 'bottle'];
   const stacks = {}; for (const id of order) stacks[id] = [];
   sellSlots.sort((a, b) => a.x - b.x || a.z - b.z);
   sellSlots.forEach((s, i) => {
@@ -191,7 +191,7 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit } 
     // 파렛트 1.2 m 가 통로 방향(z), 1.0 m 가 깊이(x). 상품 긴 변을 통로 방향으로.
     const along = Math.max(sx, sz), deep = Math.min(sx, sz), rot = sx >= sz ? Math.PI / 2 : 0;
     const nA = Math.max(1, Math.floor(1.2 / along)), nD = Math.max(1, Math.floor(1.0 / deep));
-    const maxH = p.id === 'egg' ? 0.75 : p.id === 'chips' ? 1.3 : 1.35;
+    const maxH = p.id === 'egg' || p.id === 'melon' ? 0.75 : p.id === 'meat' ? 0.3 : p.id === 'chips' ? 1.3 : 1.35;
     const nY = Math.max(1, Math.floor(maxH / sy));
     for (let y = 0; y < nY; y++) for (let a = 0; a < nA; a++) for (let d = 0; d < nD; d++) {
       // 맨 위층은 통로 쪽 앞줄을 조금 비워 '팔린' 느낌
@@ -412,7 +412,8 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit } 
     addPhysShape(body, p);
     body.position.set(x, y, z);
     const q = quat || itemQuat(rotY, tip); body.quaternion.set(q.x, q.y, q.z, q.w);
-    body.linearDamping = p.kind === 'egg' ? 0.45 : 0.12; body.angularDamping = p.kind === 'egg' ? 0.85 : p.shape === 'sphere' ? 0.5 : 0.35; // 계란판은 튀지 않고 바로 자리 잡게 body.sleepSpeedLimit = 0.05; body.sleepTimeLimit = 0.5;
+    body.linearDamping = p.kind === 'egg' ? 0.45 : 0.12; body.angularDamping = p.kind === 'egg' ? 0.85 : p.shape === 'sphere' ? 0.5 : 0.35; // 계란판은 튀지 않고 바로 자리 잡게
+    body.sleepSpeedLimit = 0.05; body.sleepTimeLimit = 0.5;
     world.addBody(body);
     const mesh = reuse || makeItemMesh(p); itemsRoot.add(mesh); mesh.position.set(x, y, z); mesh.quaternion.copy(q);
     const it = { p, body, mesh, level, size: p.size.slice(), src: st.held?.src || null };
@@ -995,6 +996,7 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit } 
       hold(id) { const p = BY_ID[id]; st.held = { p, src: null }; st.mode = 'place'; st.rotY = 0; st.tip = false; st.nudge.x = st.nudge.z = 0; setGhost(p); hud.classList.add('placing'); },
       setGhostAt(level, x, z, rotY = 0, tip = false) { st.level = level; st.gx = x; st.gz = z; st.fx = x; st.fz = z; st.rotY = rotY; st.tip = tip; st.nudge.x = st.nudge.z = 0; },
       drop(id, level, x, z, rotY = 0, tip = false) { api._dbg.hold(id); api._dbg.setGhostAt(level, x, z, rotY, tip); if (st.held && itemDims(st.held.p, tip).join() !== ghost?.userData.dims) { setGhost(st.held.p); ghost.userData.dims = itemDims(st.held.p, tip).join(); } ghostSol = solveGhost(); return place(); },
+      firstOf(id) { const im = prodMeshes.find((m) => m.userData.pid === id); const l = im?.userData.list || []; return l.length ? { ...l[Math.floor(l.length / 2)] } : null; },
       camAt(pos, tgt) { st.camOv = pos ? { pos: new THREE.Vector3(...pos), tgt: new THREE.Vector3(...tgt) } : null; },
       settle(sec = 1.5) { for (let t = 0; t < sec; t += 1 / 60) { cart.updateMatrixWorld(true); stepPhysics(1 / 60); } },
       push(sec, f = 1, s = 0, run = false) { for (let t = 0; t < sec; t += 1 / 60) { driveCart(1 / 60, { f, s, run }); cart.updateMatrixWorld(true); stepPhysics(1 / 60); } },

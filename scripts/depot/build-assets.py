@@ -55,3 +55,36 @@ save(f'{FX}/decal-egg-crack-2.png', 'egg-crack-2', (128, 128))
 save(f'{FX}/decal-yolk-puddle.png', 'yolk-puddle', (256, 256))
 save(f'{FX}/decal-yolk-drip.png', 'yolk-drip', (128, 256))
 print('ok')
+
+# ---- 2차: 상자 아닌 모양용 (수박·고기 트레이·병 묶음) ----
+import random, math
+random.seed(7)
+def melon():
+    im = Image.new('RGB', (Q, Q), '#3f8f3a'); d = ImageDraw.Draw(im)
+    for k in range(9):  # 세로(경선) 줄무늬 — 구 UV 에서 u 가 둘레
+        x0 = k * Q / 9
+        pts = [(x0 + 10 * math.sin(y / 23 + k) + 8 * math.sin(y / 9), y) for y in range(0, Q + 8, 8)]
+        d.line(pts, fill='#173f1b', width=26)
+    for _ in range(900):
+        x, y = random.randrange(Q), random.randrange(Q); d.point((x, y), fill='#5aa84e')
+    return im
+def meat_top():
+    im = Image.new('RGB', (Q, Q), '#f4f4f0'); d = ImageDraw.Draw(im)
+    d.rounded_rectangle((30, 40, Q - 30, Q - 40), 40, fill='#c9454a')
+    for k in range(5):
+        y = 70 + k * 85
+        d.rectangle((40, y, Q - 40, y + 14 + (k % 2) * 8), fill='#f3d9cc')
+        for _ in range(30):
+            x = random.randrange(50, Q - 50); d.ellipse((x, y + 20, x + random.randrange(8, 30), y + 26 + random.randrange(4, 12)), fill='#eabfb3')
+    d.rounded_rectangle((Q - 200, Q - 150, Q - 40, Q - 50), 14, fill='#1E5A45')
+    d.text((Q - 186, Q - 135), 'BUMP PORK', fill='#F3EADA'); d.text((Q - 186, Q - 110), '1.0kg  25,900', fill='#F2C230')
+    return im
+def foam_side():
+    im = Image.new('RGB', (Q, Q), '#f5f5f2'); d = ImageDraw.Draw(im)
+    for y in range(0, Q, 24): d.line((0, y, Q, y), fill='#e6e6e1', width=3)
+    return im
+atlas('melon', melon(), melon(), melon())
+atlas('meat', foam_side(), foam_side(), meat_top())
+cf = load(f'{PK}/cola-1.5Lx12-box-front.png')
+atlas('soda', crop(cf, (0.04, 0.12, 0.96, 0.72), '#4a1410'), fit(load(f'{PK}/cola-1.5Lx12-box-side.png')), solid('#c62828'))
+print('ok2')
