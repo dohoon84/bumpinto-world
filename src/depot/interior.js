@@ -16,10 +16,13 @@ import { mountStock } from './stock.js';
 import { createCheckout } from './checkout.js';
 import { mountElectronics } from './electronics.js';
 import { createShoppers } from './npcs.js';
+import { createGuide } from './guide.js';
 import NPC_TYPES from './story/data/npc-types.json';
 
 const W = 84, D = 120, CEIL = 9;
 const DOOR = { x: 69, w: 8 };
+// [depot-live] 나가는 곳은 출구(checkout.js CO.EXIT x 6, 서쪽 끝)뿐 — 입구(DOOR)로는 못 나감
+export const EXIT_TARGET = Object.freeze({ id: 'exit', label: '출구 EXIT (계산대 지나 왼쪽 끝)', x: 6, z: 1.0, ax: 6, az: 2.4, r: 1.9, y: 3.0 });
 const CORRAL = { x0: 74, x1: 82, z0: 2.5, z1: 9 };
 const RACK_D = 2.2, AISLE = 3.35, BAY = 2.7, BEAMS = [1.85, 3.2, 4.5], RACK_H = 4.57;
 const DETAIL = { z0: 14, bays: 10 }; // 상세 구역: z 14 ~ 41
@@ -246,7 +249,20 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit, a
   // 입구 유리문 (안에서 본 모습)
   const doorM = keep(new THREE.MeshBasicMaterial({ color: 0xbfe3ff, transparent: true, opacity: 0.55 }));
   const doorG = keep(new THREE.PlaneGeometry(DOOR.w, 3.4)); const door = new THREE.Mesh(doorG, doorM); door.position.set(DOOR.x, 1.7, 0.12); scene.add(door);
-  const exitTex = keep(canvasTex(256, 96, (g) => { g.fillStyle = '#1b8a3a'; g.fillRect(0, 0, 256, 96); g.fillStyle = '#fff'; g.font = '900 40px "Pretendard",sans-serif'; g.textAlign = 'center'; g.fillText('출입구 EXIT', 128, 62); }));
+  const exitTex = keep(canvasTex(256, 96, (g) => { g.fillStyle = '#1f4fa3'; g.fillRect(0, 0, 256, 96); g.fillStyle = '#fff'; g.font = '900 40px "Pretendard",sans-serif'; g.textAlign = 'center'; g.fillText('입구 ENTRANCE', 128, 62); }));
+  { // 출구 안내 표지: 계산대 줄 위(앞 가로 통로)에 '← 출구' 3장(매장 안쪽에서 보는 면) + 입구 들어서면 보이는 '출구 →' 1장
+    const mk = (right) => keep(canvasTex(512, 160, (g) => {
+      g.fillStyle = '#1b8a3a'; g.fillRect(0, 0, 512, 160); g.fillStyle = '#fff'; g.textAlign = 'center';
+      g.save(); if (right) { g.translate(512, 0); g.scale(-1, 1); }
+      g.beginPath(); g.moveTo(40, 80); g.lineTo(100, 30); g.lineTo(100, 58); g.lineTo(150, 58); g.lineTo(150, 102); g.lineTo(100, 102); g.lineTo(100, 130); g.closePath(); g.fill(); g.restore();
+      const cx = right ? 182 : 330;
+      g.font = '900 64px "Pretendard",sans-serif'; g.fillText('출구 EXIT', cx, 84); g.font = '700 28px "Pretendard",sans-serif'; g.fillText('계산 후 이쪽으로', cx, 130);
+    }));
+    const sG = keep(new THREE.PlaneGeometry(2.4, 0.75));
+    const sL = keep(new THREE.MeshBasicMaterial({ map: mk(false) })), sR = keep(new THREE.MeshBasicMaterial({ map: mk(true) }));
+    for (const x of [58, 38, 20]) { const m = new THREE.Mesh(sG, sL); m.position.set(x, 4.3, 13.7); m.name = 'exit-way-sign'; scene.add(m); } // +z 면: 안쪽에서 계산대 쪽을 보면 화살표가 서쪽(왼쪽)
+    const m2 = new THREE.Mesh(sG, sR); m2.position.set(DOOR.x - 1.5, 3.4, 9.2); m2.rotation.y = Math.PI; m2.name = 'exit-way-sign'; scene.add(m2); // 입구에서 안쪽(+z)을 보면 서쪽이 오른쪽
+  }
   const exM = keep(new THREE.MeshBasicMaterial({ map: exitTex })); const exG = keep(new THREE.PlaneGeometry(1.6, 0.6)); const ex = new THREE.Mesh(exG, exM); ex.position.set(DOOR.x, 3.8, 0.15); scene.add(ex);
 
   // ---------- 물리 (카트 좌표계) ----------
@@ -821,7 +837,7 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit, a
     const help = st.mode === 'place'
       ? `클릭 = 가리킨 곳에 놓기 · 우클릭/Esc 취소 · (선택) 휠·Q/E 돌리기 · R 눕히기 · Tab 아래 받침대 · 방향키 1 cm`
       : st.hasCart ? 'W/S 밀기 · A/D 방향 · 드래그 둘러보기 · 상품 클릭 = 집기 · 카트 속 상품도 클릭해 다시 집기 · G 카트 놓기'
-        : 'WASD 걷기 · 드래그 둘러보기 · E 카트 잡기 · 출입구에서 E 나가기';
+        : 'WASD 걷기 · 드래그 둘러보기 · E 카트 잡기 · 왼쪽 끝 출구(EXIT)에서 E 나가기';
     if (elHelp.textContent !== help) elHelp.textContent = help;
     elTarget.style.background = ''; let coP = null;
     if (st.mode === 'place' && ghostSol) { elTarget.style.display = 'block'; elTarget.textContent = ghostSol.where === 'floor' ? '매장 바닥에 내려놓기' : { green: '안정적 — 여기 놓으면 OK', yellow: '흔들흔들 — 카트 움직이면 떨어질 수도', red: '위태위태 — 떨어질 것 같아요 (그래도 놓을 수 있음)' }[ghostSol.state]; elTarget.style.background = { green: '#e8fff0', yellow: '#fff6d6', red: '#ffe3e0' }[ghostSol.state]; }
@@ -830,7 +846,7 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit, a
     else if (hover && st.mode === 'walk') { elTarget.style.display = 'block'; elTarget.style.background = ''; elTarget.textContent = `${hover.kind === 'floor' ? '(바닥) ' : hover.kind === 'cart' ? '(카트 속) ' : ''}${hover.p.name} · ${hover.p.kg} kg · ${hover.p.price.toLocaleString('ko-KR')}원 — 클릭/E 집기`; }
     else if (st.elecHover && st.mode === 'walk') { elTarget.style.display = 'block'; elTarget.style.background = ''; elTarget.textContent = st.elecHover.label; }
     else if (st.mode === 'walk' && nearCorral() && !st.hasCart) { elTarget.style.display = 'block'; elTarget.textContent = 'E 카트 잡기 (240L)'; }
-    else if (st.mode === 'walk' && nearDoor() && !st.hasCart) { elTarget.style.display = 'block'; elTarget.textContent = 'E 나가기'; }
+    else if (st.mode === 'walk' && nearDoor()) { elTarget.style.display = 'block'; elTarget.textContent = '입구 전용 · 나가는 곳은 ← 왼쪽 끝 출구 EXIT'; }
     else elTarget.style.display = 'none';
     if (isMobile) for (const el of [elKg, elHelp, elTarget]) touchEl(el);
   }
@@ -841,6 +857,12 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit, a
   }
   const nearCorral = () => st.me.x > CORRAL.x0 - 1.5 && st.me.x < CORRAL.x1 + 1.5 && st.me.z > CORRAL.z0 - 1 && st.me.z < CORRAL.z1 + 2.5;
   const nearDoor = () => Math.abs(st.me.x - DOOR.x) < DOOR.w / 2 && st.me.z < 2.4;
+  let exitHintT = 0;
+  function exitHint() { // 입구에서 나가려 하면: 출구 쪽으로 안내선을 잠깐 켬 (스토리가 따로 안내 중이면 그대로)
+    const t = performance.now(); if (t - exitHintT < 1200) return; exitHintT = t;
+    toast('여기는 입구예요 · 나가는 곳은 계산대 지나 왼쪽 끝 초록 출구 EXIT 예요', 3200, '#1E5A45');
+    if (story?.hintExit) story.hintExit(25); else if (!guide.target || guide.target.id === 'exit') { guide.set(EXIT_TARGET); st.exitGuideT = 25; }
+  }
   // 손 놓은 내 카트: 손잡이(카트 뒤)나 카트 몸통에서 1.5 m 안이면 잡을 수 있음 (바라볼 필요 없음)
   const cartDist = () => { const c = st.cart, hx = c.x + Math.sin(c.yaw) * 0.6, hz = c.z + Math.cos(c.yaw) * 0.6; return Math.min(Math.hypot(st.me.x - hx, st.me.z - hz), Math.hypot(st.me.x - c.x, st.me.z - c.z)); };
   const nearMyCart = () => !st.hasCart && cart.visible && cartDist() < 1.5;
@@ -915,11 +937,11 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit, a
       else if (!st.hasCart && nearCorral() && cart.visible && items.length) toast(`내 카트(짐 ${items.length}개)는 ${Math.round(cartDist())} m 떨어진 초록 화살표 자리에 있어요`, 2600, '#1E5A45');
       else if (!st.hasCart && nearCorral()) grabCart();
       else if (st.hasCart && nearCorral() && !items.length) { releaseCart(); cart.visible = false; setCorral(14); }
-      else if (!st.hasCart && nearDoor()) onExit?.();
+      else if (nearDoor()) exitHint(); // [depot-live] 입구로는 못 나감 — 출구(왼쪽 끝 EXIT)로 안내
       else if (hover && !st.hasCart) pick();
     } else if (k === 'KeyG' && st.hasCart) { releaseCart(); toast('카트 놓음 · 카트 옆에서 E 로 다시 잡기', 1600, '#1E5A45'); }
     else if (k === 'KeyX' && st.hasCart) removeLast();
-    else if (k === 'Escape' && !st.hasCart && nearDoor()) onExit?.();
+    else if (k === 'Escape' && nearDoor()) exitHint();
     return true;
   }
 
@@ -958,6 +980,8 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit, a
     staff.tick(dt, { me: st.me, cartObj: st.cart, items, rimTop: B.top.yRear, cartHeld: st.hasCart, cartVisible: cart.visible });
     shoppers.tick(dt, { me: st.me, cart: cart.visible ? st.cart : null });
     story?.tick(dt);
+    if (st.exitGuideT > 0) { st.exitGuideT -= dt; if (st.exitGuideT <= 0 && guide.target?.id === 'exit' && !story?.wantsExitGuide?.()) guide.set(null); }
+    guide.tick(dt, st.me);
     stock.tick(camera);
     detailCull(dt);
     hover = st.mode === 'walk' ? pickTarget() : null;
@@ -977,6 +1001,8 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit, a
   // ---------- 손님 NPC 8유형 (npcs.js) — 기본은 꺼 둠, 스토리/자유 모드가 setActive 로 켬 ----------
   const shoppers = createShoppers({ scene, keep, obstacles, isBlocked: (x, z, r) => !!collide2D(x, z, r), types: NPC_TYPES.types, isMobile });
   shoppers.setActive([]);
+  // ---------- 목적지 안내 (guide.js) — 스토리 사건·미션이 set 으로 켬 ----------
+  const guide = createGuide({ scene, camera, keep, obstacles, isMobile, canvasTex });
   // 작은 소품 거리 컬링 (가전 코너·계산대·직원·집기): 반지름 < 2 m 메시가 카메라에서 DETAIL_R 넘게 멀면 레이어 0 에서 뺌.
   //   visible 은 각 모듈이 쓰므로 건드리지 않고 layers 로만. 움직이는 것(로봇·손님)도 matrixWorld 로 0.25 초마다 다시 잼.
   const DETAIL_R = isMobile ? 22 : 32, detailList = [];
@@ -1034,7 +1060,8 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit, a
       const t = elTarget.style.display === 'block' ? (elTarget.dataset.raw ?? elTarget.textContent) : '', key = (code) => () => onKey({ code });
       if (st.mode === 'place') return [{ label: '놓기', icon: 'bag', run: key('Space') }, { label: '돌리기', icon: 'board', run: key('KeyQ'), gold: false }, { label: '놓기 취소', icon: 'stop', run: key('Escape'), gold: false }];
       const out = [];
-      if (/^E /.test(t)) out.push({ label: t.slice(2).split(/ [·(]/)[0].trim(), icon: 'bag', run: key('KeyE') });
+      if (st.mode === 'walk' && nearDoor()) out.push({ label: '출구 안내', icon: 'door', run: () => exitHint() }); // 입구로는 못 나감
+      else if (/^E /.test(t)) out.push({ label: t.slice(2).split(/ [·(]/)[0].trim(), icon: 'bag', run: key('KeyE') });
       else if (hover && /E 집기/.test(t)) out.push({ label: '집기', icon: 'bag', run: key('KeyE') });
       if (st.hasCart) out.push({ label: '카트 놓기', icon: 'stop', run: key('KeyG'), gold: false });
       return out.length ? out : null;
@@ -1049,6 +1076,7 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit, a
       firstOf(id) { const l = []; for (const m of prodMeshes) (m.userData.list || []).forEach((it, i) => { if ((m.userData.pids ? m.userData.pids[i] : m.userData.pid) === id) l.push(it); }); return l.length ? { ...l[Math.floor(l.length / 2)] } : null; },
       run(sec, dt = 1 / 30) { for (let t = 0; t < sec; t += dt) update(dt); },
       floorCount() { return floorItems.length; },
+      floorIds() { return floorItems.map((f) => f.p.id); },
       clearFloor() { while (floorItems.length) { const fi = floorItems[0]; removeFloorItem(fi); disposeItemMesh(fi.mesh); } },
       ghostState() { return ghostSol && { where: ghostSol.where, state: ghostSol.state }; },
       mischief(kind, amt) { staff.mischief(kind, amt); }, staff: () => ({ ...staff.S, x: staff.root.position.x, z: staff.root.position.z, ach: staff.S.ach.slice() }), staffAt(x, z) { staff.root.position.set(x, 0, z); },
@@ -1075,17 +1103,19 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit, a
       scene.clear();
     },
   };
+  api.mmDraw = (g, R) => guide.mmDraw(g, R, st.me, st.hasCart ? st.cart.yaw : st.me.yaw + (st.head?.yaw || 0));
+  api._dbg.guide = guide;
   // ---------- 스토리 모드 (story/index.js, 지연 로드). ?depotStory=0 이면 끔 ----------
   let story = null, disposed = false;
   if (new URLSearchParams(location.search).get('depotStory') !== '0') {
     import('./story/index.js').then((m) => {
       if (disposed) return;
-      story = m.createStory({ THREE, scene, keep, camera, st, items, loadKg, staff, checkout, shoppers, api, audio, isMobile, ASSET, onExit, getLevel: getAudioLevel });
+      story = m.createStory({ THREE, scene, keep, camera, st, items, loadKg, staff, checkout, shoppers, guide, exitTarget: EXIT_TARGET, cartObj: cart, api, audio, isMobile, ASSET, onExit, getLevel: getAudioLevel });
       audioTaps.push((n, o) => story?.onAudio(n, o));
     }).catch((e) => console.warn('[depot-story]', e));
   }
   Object.defineProperty(api._dbg, 'story', { get: () => story });
   const dispose0 = api.dispose;
-  api.dispose = () => { disposed = true; try { story?.dispose(); } catch (e) { console.warn('[depot-story]', e); } story = null; dispose0(); };
+  api.dispose = () => { disposed = true; try { story?.dispose(); } catch (e) { console.warn('[depot-story]', e); } story = null; guide.dispose(); dispose0(); };
   return api;
 }

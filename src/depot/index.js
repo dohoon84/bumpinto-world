@@ -115,6 +115,7 @@ body.depot-inside #ve-hud{display:none !important} /* 매장 안: 왼쪽 위 할
     view: () => (active && interior ? { scene: interior.scene, camera: interior.camera } : null),
     blocks: (x, z, r) => !active && ext.blocks(x, z, r),
     exterior: ext,
+    mmDraw: (g, R) => (active && interior?.mmDraw ? (interior.mmDraw(g, R), true) : false), // [depot-live] 매장 안 미니맵(평면·경로·목적지 핀)
     mapMarker: ext.marker, guide: () => ext.way.guide(), // [depot-ext] 미니맵 아이콘 · 문 앞 안내선
     dispose() { try { audio?.dispose(); } catch { /* */ } audio = null; interior?.dispose(); interior = null; ext.dispose(); root.remove(); st.remove(); },
     _dbg: { get mod() { return mod; }, loadMod, get interior() { return interior; }, get audio() { return audio; }, loadAudio },

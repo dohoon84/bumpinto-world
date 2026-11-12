@@ -301,6 +301,7 @@ function loop(now) {
 
 let headSm = null;
 function draw(now, J, P) {
+  if (J.depot?.active && J.depot.mmDraw) { drawDepotInside(J); return; } // [depot-live] 매장 안: 평면도 + 목적지 핀
   const x = P.position.x, z = P.position.z;
   const viewYaw = J.cam?.mode === 'overview' ? (J.ov?.yaw ?? 0) : (J.cam?.yaw ?? 0);
   const theta = prefs.rot ? viewYaw : 0; // 화면 회전각: 카메라 정면(-sin, -cos) 이 위로
@@ -487,6 +488,15 @@ function draw(now, J, P) {
   updatePlaque(J, x, z);
   const ms = performance.now() - t0;
   stats.frames++; stats.ms = stats.ms ? stats.ms * 0.9 + ms * 0.1 : ms; if (stats.frames > 5) stats.msMax = Math.max(stats.msMax, ms);
+}
+function drawDepotInside(J) {
+  const dpr = Math.min(devicePixelRatio || 1, 2), W = Math.round(D * dpr);
+  if (cv.width !== W) { cv.width = W; cv.height = W; }
+  const g = ctx; g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, D, D);
+  g.save(); g.beginPath(); g.arc(R, R, R, 0, Math.PI * 2); g.clip();
+  g.fillStyle = 'rgba(8, 16, 30, .9)'; g.fillRect(0, 0, D, D);
+  try { J.depot.mmDraw(g, R); } catch { /* */ }
+  g.restore(); sig = ''; setCompass(0);
 }
 let lastFull = 0, lastEvict = 0;
 function dropChunk(key) { const c = chunks.get(key); if (!c) return; stats.bytes -= c.c.width * c.c.height * 4; c.c.width = 0; c.c.height = 0; chunks.delete(key); }
