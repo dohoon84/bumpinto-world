@@ -154,6 +154,50 @@ function flatCart(L, z0 = -0.38, load = []) {
   for (const [w, h, d, c, x, y, z] of load) box(L, w, h, d, c, x, 0.27 + y + h / 2, zc + z);
 }
 
+/** 핸드 파렛트 트럭(직원 진열용): 손잡이 z = z0, 포크·파렛트·박스 더미가 앞(-z) */
+function palletJack(L, z0 = -0.35, load = []) {
+  const zc = z0 - 0.75;
+  box(L, 0.05, 0.9, 0.05, C.handle, 0, 0.62, z0 + 0.02, -0.25); box(L, 0.36, 0.05, 0.05, C.handle, 0, 1.06, z0 + 0.12);
+  box(L, 0.3, 0.16, 0.22, C.red, 0, 0.12, z0 - 0.12); box(L, 0.08, 0.1, 0.1, C.black, 0, 0.05, z0 - 0.06);
+  for (const sx of [-0.2, 0.2]) box(L, 0.16, 0.06, 1.15, C.red, sx, 0.07, zc - 0.05);
+  box(L, 0.8, 0.12, 1.0, C.kraft, 0, 0.16, zc); for (const sx of [-0.33, 0, 0.33]) box(L, 0.1, 0.02, 1.0, '#9a7348', sx, 0.23, zc);
+  for (const [w, h, d, c, x, y, z] of load) box(L, w, h, d, c, x, 0.24 + y + h / 2, zc + z);
+}
+const BOXES = (cols) => { const out = []; let k = 0; for (let y = 0; y < 3; y++) for (const [x, z] of [[-0.2, -0.24], [0.2, -0.24], [-0.2, 0.24], [0.2, 0.24]]) { if (y === 2 && (k % 3 === 1)) { k++; continue; } out.push([0.36, 0.28, 0.44, cols[k++ % cols.length], x, y * 0.29, z]); } return out; };
+const basket = (L, col) => (x, y, z) => { box(L, 0.34, 0.2, 0.24, col, x + 0.03, y - 0.2, z - 0.02); box(L, 0.012, 0.18, 0.012, '#3a3a3a', x - 0.1, y - 0.06, z - 0.02); box(L, 0.012, 0.18, 0.012, '#3a3a3a', x + 0.14, y - 0.06, z - 0.02); box(L, 0.1, 0.08, 0.08, C.yellow, x + 0.05, y - 0.06, z - 0.02); };
+const STAFF = { shirt: '#f3eada', vest: '#1E5A45', pants: '#2a3340', badge: '#F2C230' };
+// [depot-live] 배경 손님·직원 (활기) — 같은 리그·병합 방식, 유형당 메시 1개. ambient = 스토리 사건과 상관없이 매장을 채움
+const AMBIENT_LOOKS = {
+  'stocker-a': (L) => { const r = [person(L, { p: 0, shirt: STAFF.shirt, sleeve: 'long', vest: STAFF.vest, pants: STAFF.pants, badge: STAFF.badge, hat: 'cap', hatC: STAFF.vest, hair: C.hairBk, shoes: '#2a2420', pose: { armL: [0.72, 0], armR: [0.72, 0] } })];
+    palletJack(L, -0.35, BOXES([C.kraft, '#b7834a', C.cream, '#d9a65a'])); return r; },
+  'stocker-b': (L) => { const r = [person(L, { p: 0, s: 0.98, shirt: STAFF.shirt, sleeve: 'short', vest: STAFF.vest, pants: STAFF.pants, badge: STAFF.badge, hair: C.hairBr, hairStyle: 'pony', shoes: '#2a2420', pose: { armL: [0.72, 0], armR: [0.72, 0] } })];
+    flatCart(L, -0.4, [[0.6, 0.26, 0.42, C.water, 0, 0, -0.35], [0.6, 0.26, 0.42, C.water, 0, 0.26, -0.35], [0.55, 0.3, 0.45, C.kraft, 0, 0, 0.15], [0.5, 0.26, 0.4, '#e9e4d8', 0, 0.3, 0.15]]); return r; },
+  'crowd-1': (L) => { const r = [person(L, { p: 0, shirt: '#7b5aa6', sleeve: 'long', pants: '#2b2f3a', hair: C.hairBk, hairStyle: 'long', shoes: '#f4f2ec', blush: true })]; stdCart(L, -0.38, [[0.3, 0.2, 0.25, '#e8b0a0', -0.08, 0, 0.1], [0.14, 0.3, 0.14, '#4c8a3a', 0.15, 0, -0.15]]); return r; },
+  'crowd-2': (L) => { const r = [person(L, { p: 0, w: 1.1, shirt: '#2f6fb0', sleeve: 'short', pants: C.khaki, hair: C.hairBk, hairStyle: 'short', glasses: true, shoes: '#3a2f28' })]; stdCart(L, -0.38, [[0.4, 0.26, 0.3, C.kraft, 0, 0, 0], [0.24, 0.26, 0.36, C.water, 0.1, 0.26, -0.1]]); return r; },
+  'crowd-3': (L) => [person(L, { p: 0, s: 0.95, shirt: '#e0a030', sleeve: 'long', pants: '#3d5a8a', hair: C.hairBr, hairStyle: 'bob', shoes: '#6b4a32', pose: { armL: [0.9, 0.25], bendL: 1.7, swingR: true, pick: true }, hold: { l: basket(L, '#d9442e') } })],
+  'crowd-4': (L) => { const r = [person(L, { p: 0, shirt: '#3a8f6a', hood: true, sleeve: 'long', pants: C.black, hair: C.hairBk, hairStyle: 'side', earbuds: true, shoes: '#e8e8e8' })]; stdCart(L, -0.38, [[0.2, 0.3, 0.14, '#f3a33c', -0.1, 0, 0], [0.34, 0.12, 0.26, C.yellow, 0.06, 0, 0.2]]); return r; },
+  'crowd-5': (L) => { const r = [person(L, { p: 0, s: 0.94, stoop: 0.12, shirt: '#c0567a', sleeve: 'long', pants: '#5a5560', hair: C.gray2, hairStyle: 'perm', shoes: '#3a3030', glasses: true })]; stdCart(L, -0.38, [[0.36, 0.16, 0.28, '#9ad08a', 0, 0, 0], [0.2, 0.2, 0.2, '#b71c1c', 0.1, 0.16, 0.1]]); return r; },
+  'crowd-6': (L) => { const r = [person(L, { p: 0, w: 1.05, shirt: C.white, collar: '#2a2c30', sleeve: 'long', pants: '#2a2c30', hair: C.hairBk, hairStyle: 'short', shoes: '#1c1c1c' })]; stdCart(L, -0.38, [[0.46, 0.3, 0.34, C.cream, 0, 0, -0.1], [0.46, 0.3, 0.34, C.cream, 0, 0.3, -0.1]]); return r; },
+  kid: (L) => [person(L, { p: 0, s: 0.62, shirt: '#f2c230', stripes: '#d9442e', sleeve: 'short', pants: '#2f6fb0', shorts: true, socks: C.white, hair: C.hairBk, hairStyle: 'short', blush: true, mouth: 'o', shoes: '#e86a8a', pose: { swingL: true, swingR: true, armL: [0.3, 0], armR: [0.3, 0] } })],
+  comparer: (L) => [person(L, { p: 0, shirt: '#8d6a48', sleeve: 'long', pants: C.jeans, hair: C.hairBr, hairStyle: 'bun', glasses: true, shoes: '#3a2f28', pose: { armL: [1.15, 0.35], armR: [1.15, -0.35], bend: 1.5, pick: false, noLookHold: true },
+    hold: { l: (x, y, z) => box(L, 0.12, 0.17, 0.08, '#e2572a', x, y + 0.08, z - 0.04), r: (x, y, z) => box(L, 0.12, 0.17, 0.08, '#2f6fb0', x, y + 0.08, z - 0.04) } })],
+  caller: (L) => [person(L, { p: 0, w: 1.05, shirt: '#5a6470', sleeve: 'long', coat: '#3a4048', pants: '#2a2c30', hair: C.hairBk, hairStyle: 'side', shoes: '#1c1c1c', mouth: 'o', pose: { armR: [2.75, -0.55], bendR: 2.6, armL: [0.25, 0], swingL: true, pick: false },
+    hold: { r: (x, y, z) => box(L, 0.03, 0.14, 0.075, '#20232a', x - 0.02, y + 0.05, z) } })],
+  // 시식 코너(6.5, 39.6): 말순 할머니(직원 앞치마) + 줄 선 손님 셋 — 제자리(fixed), 이쑤시개 내밀기·받아 먹기
+  'sample-staff': (L) => [person(L, { p: 0, s: 0.92, stoop: 0.16, shirt: '#f3eada', sleeve: 'long', apron: STAFF.vest, pants: '#5a5560', hat: 'band', hair: C.gray2, hairStyle: 'perm', blush: true, mouth: 'smile', shoes: '#3a3030',
+    pose: { armL: [0.95, 0.2], armR: [0.7, 0], bendL: 1.6, pick: true }, hold: { l: (x, y, z) => { box(L, 0.22, 0.02, 0.15, '#f3eada', x, y + 0.01, z - 0.04); for (let k = 0; k < 3; k++) box(L, 0.05, 0.03, 0.04, '#f2c230', x - 0.06 + k * 0.06, y + 0.035, z - 0.04); } } })],
+  'sample-queue': (L) => [
+    person(L, { p: 0, shirt: '#c0567a', sleeve: 'long', pants: '#3d3a48', hair: C.hairBk, hairStyle: 'long', shoes: '#f4f2ec', mouth: 'chew', blush: true, pose: { armL: [1.0, -0.35], armR: [0.2, 0], bendL: 2.2, pick: false }, hold: { l: (x, y, z) => box(L, 0.008, 0.09, 0.008, '#e8d4a8', x, y + 0.06, z - 0.02) } }),
+    person(L, { p: 1, x: 0.25, z: 0.8, w: 1.08, shirt: '#2f6fb0', sleeve: 'short', pants: C.khaki, hair: C.hairBk, hairStyle: 'short', glasses: true, shoes: '#3a2f28', pose: { armL: [0.15, 0], armR: [0.15, 0], pick: false } }),
+    person(L, { p: 2, x: 0.55, z: 1.55, s: 0.7, shirt: '#f2c230', sleeve: 'short', pants: '#2f6fb0', shorts: true, socks: C.white, hair: C.hairBr, hairStyle: 'bob', blush: true, mouth: 'o', shoes: '#e86a8a', pose: { armL: [0.3, 0.2], armR: [0.3, -0.2], pick: false } }),
+  ],
+};
+// 제자리 배경 인물: 위치·방향 고정, 장애물 사각형 고정
+const AMBIENT_FIXED = { 'sample-staff': { x: 7.75, z: 39.65, yaw: Math.PI, rect: null }, 'sample-queue': { x: 6.3, z: 41.75, yaw: 0, rect: { x0: 5.95, x1: 7.2, z0: 41.4, z1: 43.6 } } };
+const AMBIENT_ORDER = ['sample-staff', 'stocker-a', 'sample-queue', 'crowd-1', 'kid', 'crowd-2', 'comparer', 'stocker-b', 'crowd-3', 'caller', 'crowd-4', 'crowd-5', 'crowd-6'];
+const AMBIENT_MOBILE = 5; // (시식 직원은 예전 고정 마네킹 자리 대신이라 포함, 손님 4) // 모바일 손님 상한(배경) — 메시도 이 수만 만듦
+const AMBIENT_SPEED = { 'stocker-a': 0.65, 'stocker-b': 0.75, kid: 1.9, comparer: 0.8, caller: 0.55 };
+const AMBIENT_START = { 'stocker-a': [53.9, 77], 'stocker-b': [17.9, 44], 'crowd-1': [23.4, 107.2], 'crowd-2': [40.1, 44], 'crowd-3': [29.0, 107.2], 'crowd-4': [64.8, 77], 'crowd-5': [34.5, 77], 'crowd-6': [59.4, 107.2], kid: [40.1, 107.2], comparer: [17.9, 77], caller: [64.8, 44] };
 // 유형별 사람들 + 카트. 반환 = 리그 배열
 const LOOKS = {
   family: (L) => [
@@ -189,8 +233,8 @@ const LOOKS = {
     hold: { r: (x, y, z) => { cyl(L, 0.012, 0.72, '#6a4a30', x, y - 0.36, z - 0.02); box(L, 0.1, 0.02, 0.02, '#6a4a30', x, y + 0.01, z - 0.06); },
       l: (x, y, z) => { box(L, 0.24, 0.13, 0.15, '#d84a3a', x, y - 0.12, z - 0.02); box(L, 0.012, 0.12, 0.012, '#b03a2a', x - 0.1, y - 0.01, z - 0.02); box(L, 0.012, 0.12, 0.012, '#b03a2a', x + 0.1, y - 0.01, z - 0.02); box(L, 0.08, 0.06, 0.06, '#8ac04a', x, y - 0.03, z - 0.02); } } })],
 };
-const WIDTH = { family: 1.0, couple: 0.6, 'bulk-boss': 0.55, 'camping-dad': 0.62, elder: 0.32, spy: 0.34 };
-const LEN = { 'bulk-boss': 1.95, elder: 0.5, spy: 0.55 };
+const WIDTH = { family: 1.0, couple: 0.6, 'bulk-boss': 0.55, 'camping-dad': 0.62, elder: 0.32, spy: 0.34, 'stocker-a': 0.55, 'stocker-b': 0.5, 'crowd-3': 0.36, kid: 0.26, comparer: 0.36, caller: 0.34 };
+const LEN = { 'bulk-boss': 1.95, elder: 0.5, spy: 0.55, 'stocker-a': 1.75, 'stocker-b': 1.95, 'crowd-3': 0.5, kid: 0.4, comparer: 0.5, caller: 0.5 };
 const EXTRA_TYPES = [{ id: 'elder', name: '지팡이 어르신', speed: 0.55 }, { id: 'spy', name: '수상한 손님', speed: 1.0 }];
 
 export function createShoppers({ scene, keep = (x) => x, obstacles, isBlocked, types, isMobile = false }) {
@@ -231,18 +275,21 @@ mat3 npcRot() { vec2 a = uRot[int(aBone + 0.5)]; float cp = cos(a.x), sp = sin(a
   const T = Object.fromEntries([...(types || []), ...EXTRA_TYPES].map((t) => [t.id, t]));
   let seed = 7; const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
   const START = { family: [29.0, 44], couple: [53.9, 77], 'bulk-boss': [47.2, 44], 'sample-uncle': [64.8, 107.2], 'gym-bro': [59.4, 44], 'sale-hunter': [40.1, 77], 'phone-zombie': [34.5, 44], 'camping-dad': [69.4, 77], elder: [23.4, 77], spy: [47.2, 107.2] };
-  for (const id of Object.keys(LOOKS)) {
-    const L = []; const rigs = LOOKS[id](L);
+  const ambIds = AMBIENT_ORDER.slice(0, isMobile ? AMBIENT_MOBILE : AMBIENT_ORDER.length);
+  for (const id of [...Object.keys(LOOKS), ...ambIds]) {
+    const amb = !LOOKS[id];
+    const L = []; const rigs = (LOOKS[id] || AMBIENT_LOOKS[id])(L);
     const g = keep(mergeGeometries(L)); L.forEach((x) => x.dispose()); g.computeBoundingSphere(); g.boundingSphere.radius += 0.5; // 팔 들어 올림 여유
     const mat = makeMat();
     const mesh = new THREE.Mesh(g, mat); mesh.name = `shopper-${id}`; mesh.matrixAutoUpdate = true;
     root.add(mesh);
-    const [sx, sz] = START[id] || [47.2, 44];
+    const [sx, sz] = START[id] || AMBIENT_START[id] || [47.2, 44];
     const n0 = nearestNode(sx, sz);
-    const t = T[id] || {}, speed = t.speed || 1.1;
+    const t = T[id] || { name: id.startsWith('stocker') ? '진열 직원' : id === 'kid' ? '뛰는 꼬마' : id === 'sample-staff' ? '시식 직원' : id === 'sample-queue' ? '시식 줄' : '손님', speed: AMBIENT_SPEED[id] }, speed = t.speed || 1.0 + rnd() * 0.25;
     const rect = { x0: 0, x1: 0, z0: 0, z1: 0, npc: id };
-    list.push({ id, name: t.name || id, mesh, x: nodes[n0].x, z: nodes[n0].z, yaw: 0, from: n0, to: n0, prev: -1, speed, v: 0, stopT: 1 + rnd() * 3, phase: rnd() * 6, rect, active: true, sprintT: 0, visits: 0, inZoneT: 0, zone: '', len: LEN[id] || 1.45, half: WIDTH[id] || 0.42, skew: 0, rigs, uRot: mat.userData.uRot.value, wp: rnd() * 6, hy: 0, pickT: 0, pickSide: 1 });
+    list.push({ id, name: t.name || id, mesh, x: nodes[n0].x, z: nodes[n0].z, yaw: 0, from: n0, to: n0, prev: -1, speed, v: 0, stopT: 1 + rnd() * 3, phase: rnd() * 6, rect, active: true, sprintT: 0, visits: 0, inZoneT: 0, zone: '', len: LEN[id] || 1.45, half: WIDTH[id] || 0.42, skew: 0, rigs, uRot: mat.userData.uRot.value, wp: rnd() * 6, hy: 0, pickT: 0, pickSide: 1, ambient: amb });
   }
+  for (const n of list) { const f = AMBIENT_FIXED[n.id]; if (!f) continue; n.fixed = f; n.x = f.x; n.z = f.z; n.yaw = f.yaw; n.stopT = 1e9; n.restock = n.id === 'sample-staff'; n.pickSide = -1; n.mesh.position.set(f.x, 0, f.z); n.mesh.rotation.y = f.yaw; }
   const zoneOf = (x, z) => { for (const [k, pts] of Object.entries(ZONES)) for (const [zx, zz] of pts) if (Math.abs(zx - x) < 2.5 && Math.abs(zz - z) < 6) return k; return ''; };
   const WANT = { family: ['snack', 'produce'], couple: ['produce', 'snack'], 'bulk-boss': ['rice', 'water'], 'sample-uncle': ['deli', 'bakery'], 'gym-bro': ['water'], 'sale-hunter': ['snack', 'rice'], 'phone-zombie': [], 'camping-dad': ['seasonal'], elder: ['produce', 'bakery'], spy: ['snack', 'rice'] };
   function pickNext(n) {
@@ -259,12 +306,14 @@ mat3 npcRot() { vec2 a = uRot[int(aBone + 0.5)]; float cp = cos(a.x), sp = sin(a
     return best;
   }
   function setRect(n) {
+    if (n.fixed) { const r = n.fixed.rect; if (r) Object.assign(n.rect, r); else Object.assign(n.rect, OFF); return; } // 시식 직원은 매대 장애물 안
+
     const fx = -Math.sin(n.yaw), fz = -Math.cos(n.yaw), cx = n.x + fx * (n.len / 2 - 0.25), cz = n.z + fz * (n.len / 2 - 0.25);
     const hx = Math.abs(fx) * n.len / 2 + Math.abs(fz) * n.half, hz = Math.abs(fz) * n.len / 2 + Math.abs(fx) * n.half;
     n.rect.x0 = cx - hx; n.rect.x1 = cx + hx; n.rect.z0 = cz - hz; n.rect.z1 = cz + hz;
   }
-  for (const n of list) { setRect(n); obstacles.push(n.rect); }
   const OFF = { x0: -999, x1: -998, z0: -999, z1: -998 };
+  for (const n of list) { setRect(n); obstacles.push(n.rect); }
 
   function setActive(ids) {
     const on = new Set(ids);
@@ -275,6 +324,11 @@ mat3 npcRot() { vec2 a = uRot[int(aBone + 0.5)]; float cp = cos(a.x), sp = sin(a
     t += dt;
     for (const n of list) {
       if (!n.active) continue;
+      if (n.fixed) { // 제자리: 직원은 이쑤시개 쟁반 내밀기(집기 동작), 줄 맨 앞은 오물오물 · 가끔 한 칸 앞으로 들썩
+        n.v = 0; n.stopT = 1e9;
+        n.mesh.position.y = n.id === 'sample-queue' ? Math.max(0, Math.sin(t * 0.5 + n.phase)) ** 8 * 0.03 : 0;
+        animate(n, dt, me); continue;
+      }
       const a = nodes[n.to];
       // 정지(유형별 습관)
       if (n.stage) { n.stage.t -= dt; n.v = 0; n.stopT = Math.max(n.stopT, 0.5); if (n.stage.t <= 0) { Object.assign(n, n.stage.back); n.stage = null; n.stopT = 1; } } // 연출로 잠깐 세운 뒤 원래 자리로
@@ -298,6 +352,12 @@ mat3 npcRot() { vec2 a = uRot[int(aBone + 0.5)]; float cp = cos(a.x), sp = sin(a
         if (n.id === 'family' && rnd() < 0.35) n.stopT = 6 + rnd() * 4;
         if (n.id === 'phone-zombie' && rnd() < 0.45) { n.stopT = 10 + rnd() * 10; n.skew = (rnd() < 0.5 ? -1 : 1) * 0.45; }
         if (n.id === 'couple' && rnd() < 0.25) n.stopT = 3 + rnd() * 3;
+        // 배경: 진열 직원은 랙 앞에서 오래 서서 채우고, 비교 손님은 두 상품을 들고 번갈아 보고, 통화 손님은 자주 멈춤, 꼬마는 잠깐씩 멈칫
+        if (n.id.startsWith('stocker') && rnd() < 0.55) { n.stopT = 7 + rnd() * 6; n.restock = true; n.pickSide = rnd() < 0.5 ? 1 : -1; }
+        if (n.id === 'comparer' && rnd() < 0.5) { n.stopT = 8 + rnd() * 7; n.compare = true; }
+        if (n.id === 'caller' && rnd() < 0.4) n.stopT = 5 + rnd() * 6;
+        if (n.id === 'kid' && rnd() < 0.2) n.stopT = 0.8 + rnd() * 1.2;
+        if (n.id.startsWith('crowd') && rnd() < 0.3) n.stopT = 2 + rnd() * 4;
       } else if (n.v > 0) {
         const step = Math.min(d, n.v * dt); n.x += dx / d * step; n.z += dz / d * step;
         const want = Math.atan2(-dx, -dz);
@@ -306,7 +366,7 @@ mat3 npcRot() { vec2 a = uRot[int(aBone + 0.5)]; float cp = cos(a.x), sp = sin(a
         if (n.id === 'phone-zombie' && n.stopT <= 0 && rnd() < dt * 0.04) { n.stopT = 10 + rnd() * 8; n.skew = (rnd() < 0.5 ? -1 : 1) * 0.45; }
         if (n.id === 'family' && n.stopT <= 0 && rnd() < dt * 0.02) n.stopT = 6 + rnd() * 4;
       }
-      if (n.stopT <= 0) n.skew *= Math.max(0, 1 - dt * 2);
+      if (n.stopT <= 0) { n.skew *= Math.max(0, 1 - dt * 2); n.restock = false; n.compare = false; }
       const zig = n.id === 'couple' ? Math.sin(t * 0.9 + n.phase) * 0.28 : 0; // 둘이 의견이 달라 좌우로 흔들림
       const bob = n.v > 0.05 ? Math.abs(Math.sin(t * 7 * Math.max(0.6, n.v) + n.phase)) * 0.025 : 0;
       n.mesh.position.set(n.x + Math.cos(n.yaw) * zig, bob, n.z - Math.sin(n.yaw) * zig);
@@ -323,14 +383,15 @@ mat3 npcRot() { vec2 a = uRot[int(aBone + 0.5)]; float cp = cos(a.x), sp = sin(a
     let look = Math.sin(t * 0.45 + n.phase) * 0.25 * (1 - a);
     if (me) { const dx = me.x - n.x, dz = me.z - n.z, d = Math.hypot(dx, dz); if (d < 7 && d > 0.3) { let r = Math.atan2(-dx, -dz) - n.mesh.rotation.y; r = Math.atan2(Math.sin(r), Math.cos(r)); if (Math.abs(r) < 1.9) look = Math.max(-0.85, Math.min(0.85, r)); } }
     // 집기: 관심 구역에서 멈춤 → 2.6초 주기로 한쪽 팔을 선반으로
-    const picking = n.stopT > 0.6 && n.zone && (WANT[n.id] || []).includes(n.zone);
+    const picking = n.stopT > 0.6 && ((n.zone && (WANT[n.id] || []).includes(n.zone)) || n.restock);
     if (picking) { n.pickT += dt; if (n.pickT > 5.2) { n.pickT = 0; n.pickSide = -n.pickSide; } } else n.pickT = 0;
     const pk = picking ? Math.max(0, Math.sin(Math.min(1, n.pickT / 2.6) * Math.PI)) : 0;
     if (pk > 0.05) look = -n.pickSide * 1.0 * pk + look * (1 - pk);
+    if (n.compare && n.stopT > 0.3) look = (Math.sin(t * 1.9 + n.phase) > 0 ? 0.42 : -0.42); // 두 상품 번갈아 보기
     n.hy += (look - n.hy) * Math.min(1, dt * 4);
     const sw = Math.sin(n.wp) * a;
     for (const r of n.rigs) {
-      const b = 1 + r.p * 6, f = r.kid ? 1.25 : 1, sl = Math.sin(n.wp * f) * a;
+      const b = 1 + r.p * 6, f = r.kid ? 1.25 : 1, sl = Math.sin(n.wp * f) * a * (n.id === 'kid' ? 1.5 : 1);
       let [lp, ly] = r.armL, [rp, ry] = r.armR;
       if (r.swingL) lp += -sl * 0.42; if (r.swingR) rp += sl * 0.42;
       if (r.pick && pk > 0) { if (n.pickSide > 0) { rp += (1.75 - rp) * pk; ry += (-1.15 - ry) * pk; } else { lp += (1.75 - lp) * pk; ly += (1.15 - ly) * pk; } }
@@ -344,5 +405,7 @@ mat3 npcRot() { vec2 a = uRot[int(aBone + 0.5)]; float cp = cos(a.x), sp = sin(a
   function rush(id, sec) { const n = list.find((q) => q.id === id && q.active); if (!n || n.stage) return; n.sprintT = sec; n.stopT = 0; }
   const near = (id, x, z, r) => list.find((n) => n.active && n.id === id && Math.hypot(n.x - x, n.z - z) < r) || null;
   function dispose() { for (const n of list) { const i = obstacles.indexOf(n.rect); if (i >= 0) obstacles.splice(i, 1); } root.removeFromParent(); }
-  return { root, list, tick, setActive, near, stage, rush, nodes, dispose, get count() { return list.filter((n) => n.active).length; } };
+  /** 배경 손님·직원 id (우선순위 순, n 명까지 · 모바일은 만든 만큼만) */
+  const ambient = (n = 99) => list.filter((x) => x.ambient).slice(0, n).map((x) => x.id);
+  return { root, list, tick, setActive, near, stage, rush, nodes, dispose, ambient, get count() { return list.filter((n) => n.active).length; } };
 }

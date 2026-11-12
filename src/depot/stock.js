@@ -351,7 +351,8 @@ export function mountStock({ scene, keep, canvasTex: canvasTexFn, TX, racks, obs
     const ends = [r.z0 - 0.85, r.z0 + r.bays * BAY + 0.85];
     for (const z of ends) {
       if (z < 13.8 || z > 107.5) continue;
-      if ((z > 42 && z < 46) || (z > 75 && z < 79) || (z > 13.8 && z < 15) || (z > 105 && z < 107.5)) {
+      // 랙 끝 z 는 41.85 / 46.15 / 74.85 / 79.15 — 예전 창(42–46, 75–79)에 안 걸려 파렛트가 하나도 안 생겼음 → 창을 넓힘
+      if ((z > 41.5 && z < 46.5) || (z > 74.5 && z < 79.5) || (z > 13.8 && z < 15) || (z > 105 && z < 107.5)) {
         const id = promoIds[ei++ % promoIds.length], p = BY_ID[id]; if (!p) continue;
         const x = r.x0 + RACK_D / 2;
         endPals.push({ x, y: 0.14, z, id, color: p.color });
@@ -365,6 +366,29 @@ export function mountStock({ scene, keep, canvasTex: canvasTexFn, TX, racks, obs
           list.push({ x: x - (nX * sx) / 2 + sx * (ix + 0.5), y: 0.14 + sy * (y + 0.5), z: z - (nZ * sz) / 2 + sz * (iz + 0.5), rot: 0, face: 1, pickable, sx, sy, sz, pid: p.id });
         }
       }
+    }
+  }
+  // [depot-story v0.5] 타임세일 특가 매대 (targets.json timesale-endcap 47, 44): 메인 통로 x 43–50 × 교차 통로 z 41–47 — 범라면 40봉 박스 파렛트 + 빨간 가격표.
+  //   손님 길(47.2, 44)을 막지 않게 서쪽으로 1.1 m (x 45.9). E03 '3분 타임세일 러시' · E14 스티커 배달 자리.
+  const TIMESALE = { x: 45.9, z: 44.0 };
+  {
+    const p = BY_ID.ramen;
+    if (p) {
+      const { x, z } = TIMESALE;
+      endPals.push({ x, y: 0.14, z, id: 'ramen', color: p.color });
+      endObst.push({ x0: x - 0.65, x1: x + 0.65, z0: z - 0.55, z1: z + 0.55 });
+      const [sx, sy, sz] = p.size, list = endClusterA.items.get(p.id) || []; endClusterA.items.set(p.id, list);
+      const nX = Math.max(1, Math.floor(1.15 / sx)), nZ = Math.max(1, Math.floor(1.0 / sz)), nY = 2;
+      for (let y = 0; y < nY; y++) for (let ix = 0; ix < nX; ix++) for (let iz = 0; iz < nZ; iz++) list.push({ x: x - (nX * sx) / 2 + sx * (ix + 0.5), y: 0.14 + sy * (y + 0.5), z: z - (nZ * sz) / 2 + sz * (iz + 0.5), rot: 0, face: 1, pickable: y === nY - 1, sx, sy, sz, pid: p.id });
+      const signT = keep(ct(512, 256, (g) => {
+        g.fillStyle = '#D9442E'; g.fillRect(0, 0, 512, 256); g.fillStyle = '#F2C230'; g.fillRect(0, 196, 512, 60);
+        g.fillStyle = '#fff'; g.font = '900 64px "Pretendard",sans-serif'; g.textAlign = 'center'; g.fillText('타임세일', 256, 92);
+        g.font = '800 40px "Pretendard",sans-serif'; g.fillText('범라면 40봉 반값', 256, 160);
+        g.fillStyle = '#123B2D'; g.font = '900 34px "Pretendard",sans-serif'; g.fillText('방송 나오면 3분!', 256, 238);
+      }));
+      const signM = keep(new THREE.MeshBasicMaterial({ map: signT, side: THREE.DoubleSide }));
+      const sign = new THREE.Mesh(keep(new THREE.PlaneGeometry(1.2, 0.6)), signM); sign.position.set(x, 2.0, z); sign.rotation.y = Math.PI / 2; sign.name = 'timesale-sign'; scene.add(sign);
+      const pole = new THREE.Mesh(keep(new THREE.CylinderGeometry(0.025, 0.025, 1.7, 6)), keep(new THREE.MeshLambertMaterial({ color: 0x6c757b }))); pole.position.set(x, 0.85 + 0.14, z); scene.add(pole);
     }
   }
   obstacles.push(...endObst);
@@ -998,7 +1022,7 @@ function buildTasting(scene, keep, ct, { x, z }) {
   const legL = new THREE.Mesh(legG, pants), legR = new THREE.Mesh(legG, pants);
   legL.position.set(-0.09, 0.36, 0); legR.position.set(0.09, 0.36, 0);
   root.add(torso, apron, head, cap, legL, legR);
-  root.position.set(x + 1.3, 0, z); root.rotation.y = Math.PI; scene.add(root);
+  root.position.set(x + 1.3, 0, z); root.rotation.y = Math.PI; // [depot-live] 고정 마네킹 대신 npcs.js 'sample-staff'(말순 할머니 리그)가 이 자리에 섬 — 장면에는 안 붙임
   const table = new THREE.Mesh(keep(new THREE.BoxGeometry(2.2, 0.9, 0.8)), keep(new THREE.MeshLambertMaterial({ color: 0x1e5a45 })));
   table.position.set(x, 0.45, z); scene.add(table);
   const tray = new THREE.Mesh(keep(new THREE.BoxGeometry(0.7, 0.03, 0.45)), keep(new THREE.MeshLambertMaterial({ color: 0xf3eada })));
