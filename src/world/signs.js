@@ -122,14 +122,26 @@ function styleOf(label) {
 }
 
 const texCache = new Map();
+let SIGN_W = 1024, SIGN_H = 288, SIGN_ANISO = 8;
+export function setSignTier(mobile) {
+  SIGN_W = mobile ? 512 : 1024;
+  SIGN_H = mobile ? 144 : 288;
+  SIGN_ANISO = mobile ? 2 : 8;
+}
+export function clearSignCache() {
+  for (const t of texCache.values()) { try { t.dispose(); } catch { /* */ } }
+  texCache.clear();
+}
 function canvasTexture(draw, key) {
   if (texCache.has(key)) return texCache.get(key);
   const cv = document.createElement('canvas');
-  cv.width = 1024; cv.height = 288;
-  draw(cv.getContext('2d'), cv);
+  cv.width = SIGN_W; cv.height = SIGN_H;
+  const g = cv.getContext('2d');
+  if (SIGN_W !== 1024 || SIGN_H !== 288) g.scale(SIGN_W / 1024, SIGN_H / 288);
+  draw(g, cv);
   const tex = new THREE.CanvasTexture(cv);
   tex.colorSpace = THREE.SRGBColorSpace;
-  tex.anisotropy = 8;
+  tex.anisotropy = SIGN_ANISO;
   texCache.set(key, tex);
   return tex;
 }
