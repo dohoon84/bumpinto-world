@@ -20,7 +20,7 @@ const KIND_LINE = {
   block: () => '고객님~ 카트가 통로를 막고 있어요 ^^;',
 };
 
-export function createStaff({ scene, camera, hud, keep, canvasTex, toast, st, onEscort }) {
+export function createStaff({ scene, camera, hud, keep, canvasTex, toast, st, onEscort, getAvoid = null, isBlocked: isBlockedFn = null }) {
   // ---------- 모델 (로우폴리 · 초록 앞치마 · 자체 디자인) ----------
   const root = new THREE.Group();
   const skin = keep(new THREE.MeshLambertMaterial({ color: 0xf0c9a0 })), shirt = keep(new THREE.MeshLambertMaterial({ color: 0xf3eada }));
@@ -65,7 +65,7 @@ export function createStaff({ scene, camera, hud, keep, canvasTex, toast, st, on
   css.textContent = `#depot-hud .dh-bubble{position:absolute;transform:translate(-50%,-100%);background:#fff;color:#13203d;border:3px solid #1E5A45;border-radius:16px;padding:8px 14px;font-size:15px;font-weight:800;white-space:nowrap;display:none;box-shadow:0 6px 18px rgba(0,0,0,.25)}
 #depot-hud .dh-bubble:after{content:'';position:absolute;left:50%;bottom:-12px;margin-left:-9px;border:9px solid transparent;border-top-color:#1E5A45;border-bottom:0}
 #depot-hud .dh-bubble.lv3{border-color:#D9442E}#depot-hud .dh-bubble.lv3:after{border-top-color:#D9442E}
-#depot-hud .dh-ach{position:absolute;left:16px;top:calc(var(--dh-msg-top,200px) + 58px);max-width:min(340px,calc(100vw - 32px));display:flex;flex-direction:column;gap:6px;align-items:flex-start}
+#depot-hud .dh-ach{position:absolute;left:16px;top:var(--dh-msg-top2,calc(var(--dh-msg-top,200px) + 58px));max-width:min(340px,calc(100vw - 32px));display:flex;flex-direction:column;gap:6px;align-items:flex-start}
 #depot-hud .dh-ach div{background:#F2C230;color:#13203d;border-radius:12px;padding:8px 14px;font-size:14px;font-weight:900;box-shadow:0 6px 16px rgba(0,0,0,.25);animation:dhach .35s ease-out}
 @keyframes dhach{from{transform:translateX(-30px);opacity:0}to{transform:none;opacity:1}}`;
   document.head.appendChild(css);
@@ -149,7 +149,7 @@ export function createStaff({ scene, camera, hud, keep, canvasTex, toast, st, on
     return [vx, vz];
   }
   let blocked = null;
-  function tick(dt, { me, cartObj, items, rimTop, cartHeld, cartVisible, avoid: extra = [], isBlocked = null }) {
+  function tick(dt, { me, cartObj, items, rimTop, cartHeld, cartVisible, avoid: extra = getAvoid?.() || [], isBlocked = isBlockedFn }) {
     blocked = isBlocked;
     const avoid = [...extra]; if (cartVisible) avoid.push({ x: cartObj.x, z: cartObj.z, r: 0.75 });
     S.t = (S.t || 0) + dt; S.score = Math.max(0, S.score - dt * 0.12); // 천천히 식음

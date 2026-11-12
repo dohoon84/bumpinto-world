@@ -16,12 +16,19 @@ export const laneX = (k) => CO.X0 + k * CO.DX;
 const beltX = (k) => laneX(k) - 1.05;
 const EGG_WON = Math.round(8480 / 30);
 const won = (n) => `${Math.round(n).toLocaleString('ko-KR')}`;
-const sfx = (name, extra = {}) => { try { window.dispatchEvent(new CustomEvent('depot:sfx', { detail: { name, ...extra } })); } catch { /* 오디오 없음 */ } };
+// 오디오: D 스트림 audio.play(name, opts) 가 있으면 그 이름으로, 항상 window 'depot:sfx' 이벤트도 보냄
+const AUDIO_NAME = { 'checkout.scan': 'checkout-scan', 'checkout.scan.handheld': 'checkout-scan', 'checkout.belt.start': 'checkout-belt', 'checkout.belt.stop': 'checkout-belt', 'checkout.receipt.print': 'checkout-printer', 'checkout.pay': 'checkout-pay', 'checkout.done': 'checkout-done', 'checkout.receipt.check': 'checkout-done', 'checkout.box.take': 'item-pick', 'checkout.unload': 'item-place' };
+let AUDIO = null;
+const sfx = (name, extra = {}) => {
+  try { window.dispatchEvent(new CustomEvent('depot:sfx', { detail: { name, ...extra } })); } catch { /* 이벤트 없음 */ }
+  const a = AUDIO_NAME[name]; if (!a || !AUDIO?.play) return;
+  try { AUDIO.play(a, { ...extra, ...(name.startsWith('checkout.belt') ? { on: name.endsWith('start'), id: `belt-${extra.lane ?? 0}` } : {}), ...(name === 'checkout.box.take' ? { material: 'cardboard' } : {}) }); } catch { /* 소리 없어도 됨 */ }
+};
 const CASHIERS = ['박스범', '스캔범', '바코범', '계산범', '영수범', '포장범', '카트범'];
 const FORTUNE = ['계란은 맨 위에', '오늘은 쌀을 아래칸에', '급정거는 계란의 적', '빈 박스는 무료, 인내심은 유료', '카트는 밀 때보다 멈출 때가 어렵다', '시식 코너는 두 바퀴까지'];
 
 export function createCheckout(ctx) {
-  const { scene, camera, keep, canvasTex, hud, toast, st, items, cart, cg, obstacles, staff, brokenIn, ASSET } = ctx;
+  const { scene, camera, keep, canvasTex, hud, toast, st, items, cart, cg, obstacles, staff, brokenIn, ASSET } = ctx; AUDIO = ctx.audio || null;
   const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), v3 = new THREE.Vector3(), s1 = new THREE.Vector3(1, 1, 1), UP = new THREE.Vector3(0, 1, 0);
   const yawQ = (y) => q.setFromAxisAngle(UP, y);
   const tl = new THREE.TextureLoader(), TX = {};
@@ -194,23 +201,30 @@ export function createCheckout(ctx) {
 
   // ---------- 플레이어 계산 ----------
   const css = document.createElement('style');
-  css.textContent = `#depot-hud .co-scan{position:absolute;left:16px;top:44%;background:rgba(18,59,45,.94);border-radius:16px;padding:12px 18px;min-width:200px;box-shadow:0 10px 26px rgba(0,0,0,.35);display:none;animation:coPop .22s ease-out}
+  css.textContent = `#depot-hud .co-scan{position:absolute;left:16px;top:var(--dh-msg-top3,var(--dh-msg-top,200px));background:rgba(18,59,45,.94);border-radius:16px;padding:12px 18px;min-width:200px;box-shadow:0 10px 26px rgba(0,0,0,.35);display:none;animation:coPop .22s ease-out}
 #depot-hud .co-scan b{display:block;color:#F2C230;font-size:15px}#depot-hud .co-scan .n{font-size:20px;font-weight:900}#depot-hud .co-scan .p{font-size:30px;font-weight:900;letter-spacing:-.5px}
 #depot-hud .co-scan.bad{background:#D9442E}#depot-hud .co-scan.bad b{color:#fff}
 @keyframes coPop{from{transform:scale(.85);opacity:.3}to{transform:none;opacity:1}}
-#depot-hud .co-pay{position:absolute;left:16px;top:var(--dh-msg-top,200px);width:min(330px,calc(100vw - 32px));background:#FBF7EE;color:#22262A;border-radius:16px;padding:14px 16px 12px;box-shadow:0 14px 34px rgba(0,0,0,.4);pointer-events:auto;display:none}
+#depot-hud .co-pay{position:absolute;box-sizing:border-box;left:16px;top:var(--dh-msg-top3,var(--dh-msg-top,200px));width:min(330px,calc(100vw - 32px));background:#FBF7EE;color:#22262A;border-radius:16px;padding:14px 16px 12px;box-shadow:0 14px 34px rgba(0,0,0,.4);pointer-events:auto;display:none}
 #depot-hud .co-pay h3{margin:0 0 8px;font-size:16px;color:#1E5A45}#depot-hud .co-pay .r{display:flex;justify-content:space-between;font-size:14px;font-weight:700;padding:2px 0}
 #depot-hud .co-pay .r.red{color:#D9442E}#depot-hud .co-pay .tot{border-top:2px dashed #c9bfa8;margin-top:6px;padding-top:6px;font-size:22px;font-weight:900}
-#depot-hud .co-pay img{width:150px;float:right;margin:-4px 0 4px 8px;border-radius:8px;transform:rotate(-4deg);box-shadow:0 6px 14px rgba(0,0,0,.25);animation:coCard .5s ease-out}
+#depot-hud .co-pay img{position:absolute;right:-12px;top:6px;width:100px;border-radius:8px;transform:rotate(6deg);box-shadow:0 6px 14px rgba(0,0,0,.3);animation:coCard .5s ease-out}
+#depot-hud .co-pay h3{padding-right:96px}
 @keyframes coCard{from{transform:translateX(60px) rotate(8deg);opacity:0}}
 #depot-hud .co-pay button{font:inherit;font-weight:900;border:0;border-radius:10px;padding:9px 10px;margin-top:8px;width:100%;background:#1E5A45;color:#F3EADA;font-size:14px;cursor:pointer}
 #depot-hud .co-pay button.alt{background:#e7dfcd;color:#22262A;margin-top:6px}#depot-hud .co-pay .note{font-size:11px;color:#6b6f72;margin-top:6px;font-weight:600}
-#depot-hud .co-rcpt{position:absolute;left:16px;top:var(--dh-msg-top,200px);width:250px;max-height:calc(100vh - var(--dh-msg-top,200px) - 170px);overflow:auto;pointer-events:auto;display:none;filter:drop-shadow(0 10px 22px rgba(0,0,0,.35));scrollbar-width:none}
+#depot-hud .co-rcpt{position:absolute;left:16px;top:var(--dh-msg-top3,var(--dh-msg-top,200px));width:250px;max-height:calc(100vh - var(--dh-msg-top3,var(--dh-msg-top,200px)) - 170px);overflow:auto;pointer-events:auto;display:none;filter:drop-shadow(0 10px 22px rgba(0,0,0,.35));scrollbar-width:none}
 #depot-hud .co-rcpt canvas{width:100%;display:block;clip-path:inset(0 0 100% 0);transition:clip-path 2.3s linear}#depot-hud .co-rcpt.on canvas{clip-path:inset(0 0 0 0)}
 #depot-hud .co-rcpt .x{position:sticky;top:6px;float:right;margin-right:6px;background:#1E5A45;color:#fff;border-radius:50%;width:24px;height:24px;text-align:center;line-height:24px;font-weight:900;cursor:pointer;z-index:2}
-#depot-hud .co-chip{position:absolute;left:16px;top:var(--dh-msg-top,200px);background:#FBF7EE;color:#1E5A45;border-radius:12px;padding:7px 12px;font-weight:900;font-size:13px;pointer-events:auto;cursor:pointer;display:none;box-shadow:0 6px 16px rgba(0,0,0,.3)}
+#depot-hud .co-chip{position:absolute;left:16px;top:var(--dh-msg-top3,var(--dh-msg-top,200px));background:#FBF7EE;color:#1E5A45;border-radius:12px;padding:7px 12px;font-weight:900;font-size:13px;pointer-events:auto;cursor:pointer;display:none;box-shadow:0 6px 16px rgba(0,0,0,.3)}
 @media (max-width:560px){#depot-hud .co-rcpt{width:190px}#depot-hud .co-scan{top:40%;min-width:160px}#depot-hud .co-scan .p{font-size:24px}}
-#depot-hud.co-busy .dh-toast{top:calc(var(--dh-msg-top,200px) + 0px)}`;
+
+body.mobile #depot-hud .co-pay,body.mobile #depot-hud .co-rcpt,body.mobile #depot-hud .co-chip,body.mobile #depot-hud .co-scan{left:50%;transform:translateX(-50%);top:calc(var(--m-t,12px) + 54px)}
+body.mobile #depot-hud .co-pay{width:min(330px,calc(100vw - 32px));max-height:calc(100vh - var(--m-t,12px) - 66px);overflow:auto;padding:10px 12px}
+body.mobile #depot-hud .co-pay button{min-height:44px}
+body.mobile #depot-hud .co-rcpt{width:210px;max-height:calc(100vh - var(--m-t,12px) - 66px)}
+body.mobile #depot-hud .co-scan{animation:none}
+@media (max-height:500px){body.mobile #depot-hud .co-pay img{width:72px;top:4px}body.mobile #depot-hud .co-pay h3{padding-right:70px;margin-bottom:4px}body.mobile #depot-hud .co-pay .r{padding:0}}`;
   document.head.appendChild(css);
   const el = (cls, html = '') => { const d = document.createElement('div'); d.className = cls; d.innerHTML = html; hud.appendChild(d); return d; };
   const elScan = el('co-scan'), elPay = el('co-pay'), elRc = el('co-rcpt', '<div class="x" title="접기">–</div>'), elChip = el('co-chip');
@@ -270,7 +284,7 @@ export function createCheckout(ctx) {
     drawDisplay(null);
     if (!co.self) { const g = dividers; m4.makeScale(0, 0, 0); g.setMatrixAt(spot.k, m4); g.instanceMatrix.needsUpdate = true; }
     hud.classList.add('co-busy');
-    sfx('checkout.start', { lane: spot.k + 1, self: co.self }); if (!co.self) sfx('checkout.belt.start');
+    sfx('checkout.start', { lane: spot.k + 1, self: co.self }); if (!co.self) sfx('checkout.belt.start', { lane: spot.k, pos: { x: beltX(spot.k), y: 0.9, z: beltZc } });
     toast(co.self ? '셀프 계산 시작 · 상품이 하나씩 스캐너로 가요' : `계산대 ${String(spot.k + 1).padStart(2, '0')} · 캐셔 ${co.cashier}가 계산해 드려요 (무거운 건 카트째 스캔)`, 2600, '#1E5A45');
   }
   function scanLine(it, handheld) {
@@ -328,7 +342,7 @@ export function createCheckout(ctx) {
       // 4) 무거운 건 카트째 핸드 스캔
       for (const h of co.heavy) if (!h.done && co.t > h.t) { h.done = true; scanLine(h.it, true); laserT = 0.35; laserTo = h.it.mesh.getWorldPosition(new THREE.Vector3()); cashierSwing = 0.4; }
       const done = !co.queue.length && !co.belt.length && co.fly.every((f) => f.state === 'rest') && co.heavy.every((h) => h.done);
-      if (done) { co.phase = 'pay'; co.payT = 0.5; if (!co.self) sfx('checkout.belt.stop'); if (!co.self) { m4.makeTranslation(beltX(k), CO.BELT.y + 0.035, CO.BELT.z1 - 0.3); dividers.setMatrixAt(k, m4); dividers.instanceMatrix.needsUpdate = true; } }
+      if (done) { co.phase = 'pay'; co.payT = 0.5; if (!co.self) sfx('checkout.belt.stop', { lane: k, pos: { x: beltX(k), y: 0.9, z: beltZc } }); if (!co.self) { m4.makeTranslation(beltX(k), CO.BELT.y + 0.035, CO.BELT.z1 - 0.3); dividers.setMatrixAt(k, m4); dividers.instanceMatrix.needsUpdate = true; } }
     } else if (co.phase === 'pay' && co.payT != null) {
       co.payT -= dt; if (co.payT <= 0) { co.payT = null; showPay(); }
     } else if (co.phase === 'print') {
@@ -383,14 +397,14 @@ ${T.dmg ? `<div class="r red"><span>변상 · 매장에서 깬 계란 ${T.storeE
     for (const s of shoppers) if (s.state === 'hold') { s.state = s.slot ? 'queue' : 'serve'; s.tz = s.slot ? 12.9 : 9.2; }
     staff?.achieve?.(co.lines.some((l) => l.bad) ? '계란 깨고도 당당하게 계산' : `첫 계산 완료 — ${won(co.T.total)}원`);
     toast('계산 완료! 출구(왼쪽 끝 초록 EXIT)에서 영수증을 보여 주세요', 3600, '#1E5A45');
-    co.rcHideT = 9; co.rc3dT = 12;
+    co.rcHideT = 9; co.rc3dT = 12; sfx('checkout.done', { won: co.T.total });
   }
   function abort() {
     for (const f of co.fly) { root.remove(f.mesh); f.it.mesh.visible = true; }
     co.fly = []; co.belt = []; co.bagStack = 0; co.phase = 'idle'; elPay.style.display = 'none'; elScan.style.display = 'none'; gun.visible = false; disp.visible = false; hud.classList.remove('co-busy');
     for (const s of shoppers) if (s.state === 'hold') { s.state = s.slot ? 'queue' : 'serve'; s.tz = s.slot ? 12.9 : 9.2; }
     if (!co.self && co.lane >= 0) { m4.makeTranslation(beltX(co.lane), CO.BELT.y + 0.035, CO.BELT.z1 - 0.3); dividers.setMatrixAt(co.lane, m4); dividers.instanceMatrix.needsUpdate = true; }
-    sfx('checkout.cancel'); toast('계산 취소 · 상품은 카트에 그대로', 1600, '#8a5a00');
+    if (!co.self && co.lane >= 0) sfx('checkout.belt.stop', { lane: co.lane }); sfx('checkout.cancel'); toast('계산 취소 · 상품은 카트에 그대로', 1600, '#8a5a00');
   }
 
   // ---------- 영수증 (디자이너 receipt-long 양식 · 런타임 캔버스) ----------
@@ -524,11 +538,21 @@ ${T.dmg ? `<div class="r red"><span>변상 · 매장에서 깬 계란 ${T.storeE
     if (nearBoxes() && st.hasCart) { takeBox(); return true; }
     return false;
   }
+  // 모바일 상황별 행동 버튼 (mobile/hud.js 가 0.5초마다 읽음) — PC 의 E/Esc 를 그대로 탭으로
+  function mobileActs() {
+    if (co.phase === 'pay') return [{ label: '범카드 결제', icon: 'bag', run: () => pay('card') }, { label: '현금 결제', icon: 'bag', run: () => pay('cash'), gold: false }, { label: '계산 취소', icon: 'stop', run: () => abort(), gold: false }];
+    if (co.phase === 'unload') return [{ label: '계산 취소', icon: 'stop', run: () => abort(), gold: false }];
+    if (co.phase === 'print') return [];
+    const p = prompt();
+    if (!p || !p.text.startsWith('E ')) return null;
+    const label = p.text.slice(2).split(/ [·(]/)[0].trim();
+    return [{ label, icon: nearExit() ? 'door' : nearBoxes() ? 'bag' : 'board', run: () => onKey('KeyE') }];
+  }
   return {
-    tick, onKey, prompt, CO,
+    tick, onKey, prompt, CO, mobileActs,
     get busy() { return co.phase === 'unload' || co.phase === 'pay' || co.phase === 'print'; },
     avoid() { return shoppers.map((s) => ({ x: laneX(s.lane) + 0.15, z: s.z, r: 0.7 })).concat([{ x: CO.CHECK.x, z: CO.CHECK.z, r: 0.5 }]); },
-    dbg: { start(k, self = false) { start({ k, self, open: true }); }, pay, check: checkReceipt, abort, state: () => ({ phase: co.phase, lane: co.lane, total: co.total, count: co.count, lines: co.lines.length, paid: !!paidValid(), checked: co.checked, T: co.T, boxes: co.boxes }), takeBox, shoppers: () => shoppers.map((s) => ({ lane: s.lane, z: +s.z.toFixed(2), state: s.state })) },
+    dbg: { hide(v) { root.visible = !v; }, start(k, self = false) { start({ k, self, open: true }); }, pay, check: checkReceipt, abort, state: () => ({ phase: co.phase, lane: co.lane, total: co.total, count: co.count, lines: co.lines.length, paid: !!paidValid(), checked: co.checked, T: co.T, boxes: co.boxes }), takeBox, shoppers: () => shoppers.map((s) => ({ lane: s.lane, z: +s.z.toFixed(2), state: s.state })) },
     dispose() { css.remove(); elScan.remove(); elPay.remove(); elRc.remove(); elChip.remove(); for (const b of co.boxMeshes || []) cart.remove(b); },
   };
 }

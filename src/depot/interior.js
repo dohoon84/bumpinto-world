@@ -349,7 +349,7 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit } 
   hud.querySelector('.dh-btns').addEventListener('click', (e) => { const a = e.target?.dataset?.a; if (a === 'place') place(); else if (a === 'rot') rotate(Math.PI / 2); else if (a === 'tip') { st.tip = !st.tip; } else if (a === 'level') toggleLevel(); else if (a === 'cancel') cancelPlace(); });
   function toast(msg, ms = 1800, bg = '#c62828') { elToast.textContent = msg; elToast.style.background = bg; elToast.style.display = 'block'; st.toastT = ms / 1000; }
   // ---------- 매장 직원 · 장난 감지 (staff.js) ----------
-  const staff = createStaff({ scene, camera, hud, keep, canvasTex, toast, st, onEscort() {
+  const staff = createStaff({ scene, camera, hud, keep, canvasTex, toast, st, getAvoid: () => floorItems.map((fi) => ({ x: fi.mesh.position.x, z: fi.mesh.position.z, r: 0.3 })).concat(checkout.avoid()), isBlocked: (x, z) => !!collide2D(x, z, 0.3), onEscort() {
     if (st.mode === 'place') cancelPlace();
     if (st.hasCart) { st.hasCart = false; const c = st.cart; c.vx = c.vz = c.w = 0; }
     st.me.x = DOOR.x + 1.5; st.me.z = 3.2; st.me.yaw = Math.PI; st.head.yaw = 0; st.head.pitch = -0.12;
@@ -948,7 +948,7 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit } 
   }
 
   // ---------- 계산대 구역 (checkout.js) ----------
-  const checkout = createCheckout({ scene, camera, keep, canvasTex, hud, toast, st, items, cart, cg, cartMats: { wire: wireM, red: redM, dark: darkM }, obstacles, staff, brokenIn, onExit, ASSET });
+  const checkout = createCheckout({ scene, camera, keep, canvasTex, hud, toast, st, items, cart, cg, cartMats: { wire: wireM, red: redM, dark: darkM }, obstacles, staff, brokenIn, onExit, ASSET, audio: typeof audio !== 'undefined' ? audio : null }); // eslint-disable-line no-undef
 
   // ---------- 프레임 ----------
   function update(dt, { look = [0, 0, 0], axes = { f: 0, s: 0 }, frozen = false } = {}) {
@@ -973,15 +973,15 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit } 
       }
     }
     tickFloor(dt);
+    checkout.tick(dt); // 계산대 구역
     selfAvatar.position.set(st.me.x, 0, st.me.z); selfAvatar.rotation.y = st.me.yaw;
     updateCamera(dt);
-    staff.tick(dt, { me: st.me, cartObj: st.cart, items, rimTop: B.top.yRear, cartHeld: st.hasCart, cartVisible: cart.visible, avoid: floorItems.map((fi) => ({ x: fi.mesh.position.x, z: fi.mesh.position.z, r: 0.3 })).concat(checkout.avoid()), isBlocked: (x, z) => !!collide2D(x, z, 0.3) });
-    checkout.tick(dt);
-    hover = st.mode === 'walk' && !checkout.busy ? pickTarget() : null;
+    staff.tick(dt, { me: st.me, cartObj: st.cart, items, rimTop: B.top.yRear, cartHeld: st.hasCart, cartVisible: cart.visible });
+    hover = st.mode === 'walk' ? pickTarget() : null;
     updateHighlight();
     marker.visible = !st.hasCart && cart.visible; if (marker.visible) { arrow.position.y = 1.55 + Math.sin(st.t * 3) * 0.06; arrow.rotation.y += dt * 1.5; }
     if (st.toastT > 0) { st.toastT -= dt; if (st.toastT <= 0) elToast.style.display = 'none'; }
-    { const pb = Math.round(elPanel.getBoundingClientRect().bottom + 10); if (pb !== st.msgTop) { st.msgTop = pb; hud.style.setProperty('--dh-msg-top', `${pb}px`); } } // 알림은 왼쪽 정보 상자 바로 아래 (미니맵·폰 위젯과 안 겹침)
+    { const pb = Math.round(elPanel.getBoundingClientRect().bottom + 10); if (pb !== st.msgTop) { st.msgTop = pb; hud.style.setProperty('--dh-msg-top', `${pb}px`); } const tb = elToast.style.display === 'block' ? Math.round(elToast.getBoundingClientRect().bottom + 8) : pb; if (tb !== st.msgTop2) { st.msgTop2 = tb; hud.style.setProperty('--dh-msg-top2', `${tb}px`); } const ach = st.achEl || (st.achEl = hud.querySelector('.dh-ach')); const ab = ach && ach.childElementCount ? Math.round(ach.getBoundingClientRect().bottom + 8) : tb; if (ab !== st.msgTop3) { st.msgTop3 = ab; hud.style.setProperty('--dh-msg-top3', `${ab}px`); } } // 알림은 왼쪽 정보 상자 바로 아래 (미니맵·폰 위젯과 안 겹침)
     updateHud();
   }
   function render(r) { r.render(scene, camera); }
@@ -1012,6 +1012,7 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit } 
   const api = {
     player: selfAvatar, scene, camera, update, render, onKey, stats, measure, st, items, LEVELS,
     get hover() { return hover; },
+    mobileActs() { const c = checkout.mobileActs(); if (c) return c; const t = elTarget.style.display === 'block' ? elTarget.textContent : ''; return /^E /.test(t) ? [{ label: t.slice(2).split(/ [·(]/)[0].trim(), icon: 'bag', run: () => onKey({ code: 'KeyE' }) }] : null; }, // 모바일 행동 버튼 (계산·출구·카트 잡기 등 E)
     _dbg: {
       grabCart, releaseCart, place, cancelPlace, pick, removeLast, toggleLevel, rotate, solve: () => solveGhost(),
       setMe(x, z, yaw, pitch = -0.12) { st.me.x = x; st.me.z = z; st.me.yaw = yaw; st.head.yaw = 0; st.head.pitch = pitch; },
@@ -1025,7 +1026,7 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit } 
       clearFloor() { while (floorItems.length) { const fi = floorItems[0]; removeFloorItem(fi); disposeItemMesh(fi.mesh); } },
       ghostState() { return ghostSol && { where: ghostSol.where, state: ghostSol.state }; },
       mischief(kind, amt) { staff.mischief(kind, amt); }, staff: () => ({ ...staff.S, x: staff.root.position.x, z: staff.root.position.z, ach: staff.S.ach.slice() }), staffAt(x, z) { staff.root.position.set(x, 0, z); },
-      co: checkout.dbg,
+      co: checkout.dbg, ach: (t) => staff.achieve(t),
       camAt(pos, tgt) { st.camOv = pos ? { pos: new THREE.Vector3(...pos), tgt: new THREE.Vector3(...tgt) } : null; },
       settle(sec = 1.5) { for (let t = 0; t < sec; t += 1 / 60) { cart.updateMatrixWorld(true); stepPhysics(1 / 60); } },
       push(sec, f = 1, s = 0, run = false) { for (let t = 0; t < sec; t += 1 / 60) { driveCart(1 / 60, { f, s, run }); cart.updateMatrixWorld(true); stepPhysics(1 / 60); } },
