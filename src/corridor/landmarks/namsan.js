@@ -4,6 +4,9 @@
 import * as THREE from 'three';
 import { watchEvening } from '../../evening.js';
 import { NT, namsanBaseY, inNamsanPark } from './namsanCoords.js';
+import { syncLandmarkDormant, landmarkDormEnabled } from './lazyLandmarks.js'; // [station-loop]
+const DORM = landmarkDormEnabled();
+const namsanBoundsDist = (b, x, z) => (b ? Math.hypot(Math.max(b.x0 - x, 0, x - b.x1), Math.max(b.z0 - z, 0, z - b.z1)) : 0);
 import { createNamsanTerrain } from './namsanTerrain.js';
 import { createNamsanTower } from './namsanTower.js';
 import { createNamsanInterior } from './namsanInterior.js';
@@ -233,6 +236,8 @@ function completeNamsan({ scene, overlay, terrain, osm, city, root, land, tower,
 
   if (terrain?.addGroundExtra) {
     terrain.addGroundExtra((x, z, refY) => {
+      // [station-loop] 남산 밖(경계 + 600 m) 질의는 바로 null. 예전엔 정자 NPC·차 높이 질의마다 남산 길 전체를 훑어 프레임 JS 의 13% 를 먹었다.
+      if (DORM && namsanBoundsDist(land.bounds, x, z) > 600) return null;
       const y = surfaceY(x, z, refY);
       return y;
     });
@@ -287,6 +292,8 @@ function completeNamsan({ scene, overlay, terrain, osm, city, root, land, tower,
     mini: namsanMini(city, osm, land.heightAt), // [hud-v3-minimap] 광장·도로·케이블카·공원
     stage(u) { car?.stage?.(u); },
     tickPlayer(dt, player, cam) {
+      // [station-loop] 남산 경계에서 8 km 밖이면 남산(카메라에 붙는 남산 하늘 구 포함)을 렌더·갱신에서 뺀다
+      if (DORM && player?.position && !syncLandmarkDormant(root, namsanBoundsDist(land.bounds, player.position.x, player.position.z))) return;
       interior.tickPlayer?.(dt, player, cam);
       car?.tickPlayer?.(dt, player, cam);
       cableGuide?.update(dt, player, (typeof window !== 'undefined' && window.__jj?.camera) || null); // [cableguide]
@@ -300,6 +307,7 @@ function completeNamsan({ scene, overlay, terrain, osm, city, root, land, tower,
       }
     },
     update(dt) {
+      if (DORM && !root.visible) return; // [station-loop] 멀리 있어 꺼진 동안은 애니메이션도 쉰다
       tower.update?.(dt);
       interior.update?.(dt);
       car?.update?.(dt);

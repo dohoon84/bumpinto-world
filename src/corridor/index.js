@@ -650,7 +650,11 @@ const gnTransit = corridorData.gangnamTransit ? mountGangnamTransit(root, corrid
   }
   if (terrain?.addGroundExtra && corridorData.gangnamExpress?.pts) {
     const expPts = corridorData.gangnamExpress.pts;
-    terrain.addGroundExtra((x, z) => expressRoadHeight(x, z, expPts));
+    // [station-loop] 경부 본선 bbox(+200 m) 밖은 선분 전체 거리 계산을 건너뛴다(포장 반경 << 200 m, 결과 동일).
+    let ex0 = Infinity, ex1 = -Infinity, ez0 = Infinity, ez1 = -Infinity;
+    for (const p of expPts) { ex0 = Math.min(ex0, p[0]); ex1 = Math.max(ex1, p[0]); ez0 = Math.min(ez0, p[1]); ez1 = Math.max(ez1, p[1]); }
+    ex0 -= 200; ex1 += 200; ez0 -= 200; ez1 += 200;
+    terrain.addGroundExtra((x, z) => (x < ex0 || x > ex1 || z < ez0 || z > ez1 ? null : expressRoadHeight(x, z, expPts)));
   }
   if (coverPts.length) {
     const chunks = corridorData.pangyoExpress
