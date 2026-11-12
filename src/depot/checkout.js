@@ -3,7 +3,7 @@
 //   고객 표시기 합계, 결제(표시·연습용 — 실제 bum/원 차감 없음, 서버 쓰기 없음), 영수증 출력 애니메이션(디자이너 영수증 양식),
 //   포장대·무료 빈 박스 코너, 출구 영수증 확인(직원 형광펜 줄긋기 / 파손 0건이면 '참 잘했어요' 도장), 줄 서는 NPC 손님(인스턴싱).
 //   오디오용 이벤트: window 'depot:sfx' CustomEvent { detail: { name, ... } } — 이름은 depot-coord.md 참고.
-import { cashierAt } from './story/cashiers.js';
+import { cashierAt as laneCashier } from './story/cashiers.js';
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 
@@ -277,11 +277,11 @@ body.mobile #depot-hud.co-busy .dh-target,body.mobile #depot-hud.co-rc .dh-targe
   function start(spot) {
     if (!items.length) { // R03 빈 카트 — 그 줄 계산원이 한마디(셀프는 기본 안내)
       if (spot.self) toast('카트가 비어 있어요 · 상품을 담고 오세요', 1800, '#1f4fa3');
-      else { const c = cashierAt(spot.k); toast(`계산원 ${c.name}: ${c.r03}`, 2600, '#1f4fa3'); }
+      else { const c = laneCashier(spot.k); toast(`계산원 ${c.name}: ${c.r03}`, 2600, '#1f4fa3'); }
       sfx('checkout.empty', { lane: spot.k + 1, self: spot.self }); return;
     }
     co.phase = 'unload'; co.lane = spot.k; co.self = spot.self; co.total = 0; co.count = 0; co.lines = []; co.fly = []; co.belt = []; co.t = 0; co.scanT = 0; co.unloadT = 0.3; co.checked = false; co.paidItems = null; co.startT = st.t;
-    co.cashierInfo = co.self ? null : cashierAt(spot.k); co.cashier = co.self ? '셀프' : co.cashierInfo.name;
+    co.cashierInfo = co.self ? null : laneCashier(spot.k); co.cashier = co.self ? '셀프' : co.cashierInfo.name;
     const c = cartPose(); c.vx = c.vz = c.w = 0;
     if (co.self) { const [kx, kz] = CO.KIOSK[spot.k]; c.x = kx + 0.15; c.z = kz + 1.35; c.yaw = 0; co.scanPos = new THREE.Vector3(kx - 0.12, 1.05, kz + 0.05); co.bagPos = new THREE.Vector3(kx + 0.68, 0.84, kz); }
     else { c.x = laneX(spot.k) + 0.15; c.z = 9.6; c.yaw = 0; co.scanPos = new THREE.Vector3(beltX(spot.k), 0.98, CO.SCAN_Z); co.bagPos = new THREE.Vector3(beltX(spot.k), 0.86, 5.0); }
@@ -529,7 +529,7 @@ ${T.dmg ? `<div class="r red"><span>변상 · 매장에서 깬 계란 ${T.storeE
     if (co.phase === 'pay') return { text: 'E 범카드로 결제 · Esc 취소 (연습용 · 실제 차감 없음)', bg: '#fff6d6' };
     if (co.phase === 'print') return { text: '영수증 출력 중… 지이잉', bg: '#e8fff0' };
     const spot = laneAtCart();
-    if (spot && !paidValid()) return spot.open ? { text: `E 계산 시작 · ${spot.self ? '셀프 계산대' : `계산대 ${String(spot.k + 1).padStart(2, '0')}`} (상품 ${items.length}개)` } : { text: '계산 마감된 줄이에요 · 초록불 계산대로 가 주세요', bg: '#ffe3e0' };
+    if (spot && !paidValid()) return spot.open ? { text: `E 계산 시작 · ${spot.self ? '셀프 계산대' : `계산대 ${String(spot.k + 1).padStart(2, '0')}`} (상품 ${items.length}개)` } : { text: `계산 마감된 줄이에요 · 계산원 ${laneCashier(spot.k).name} 휴게 중 · 초록불 계산대로 가 주세요`, bg: '#ffe3e0' };
     if (nearExit()) {
       if (items.length && !paidValid()) return { text: '계산 먼저 해 주세요 · 계산대는 오른쪽 → (초록불)', bg: '#ffe3e0' };
       if (items.length && !co.checked) return { text: 'E 영수증 보여 주기 (출구 직원)' };
@@ -551,7 +551,7 @@ ${T.dmg ? `<div class="r red"><span>변상 · 매장에서 깬 계란 ${T.storeE
     if (co.phase === 'unload' || co.phase === 'print') { if (k === 'Escape' && co.phase === 'unload') abort(); return true; }
     if (k !== 'KeyE' && k !== 'Space') return false;
     const spot = laneAtCart();
-    if (spot && !paidValid()) { if (spot.open) start(spot); else toast(`계산 마감된 줄이에요 · 계산원 ${cashierAt(spot.k).name} 휴게 중 · 초록불 계산대로`, 2000, '#8a5a00'); return true; }
+    if (spot && !paidValid()) { if (spot.open) start(spot); else toast(`계산 마감된 줄이에요 · 계산원 ${laneCashier(spot.k).name} 휴게 중 · 초록불 계산대로`, 2000, '#8a5a00'); return true; }
     if (nearExit()) {
       if (items.length && !paidValid()) { toast('계산 먼저 해 주세요 — 계산대는 오른쪽이에요', 1800, '#D9442E'); return true; }
       if (items.length && !co.checked) { checkReceipt(); return true; }
