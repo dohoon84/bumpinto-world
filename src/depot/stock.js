@@ -129,15 +129,61 @@ function paintCell(g, cx, cy, p) {
     g.font = `700 ${side ? 14 : 16}px "Pretendard","Noto Sans KR",sans-serif`;
     g.fillText((sub || p.sub || '').slice(0, 14), x + w / 2, y + h * 0.62);
   };
-  face(x0, y0, h, h, p.color, p.name.split(' ')[0], p.sub);           // 앞 (위-왼)
-  face(x0 + h, y0, h, h, p.color, p.name.split(' ')[0], `${p.kg}kg`, true); // 옆
-  if (p.kind === 'tray' || p.id === 'mackerel') { // 위: 흰 스티로폼 트레이 + 랩 아래 고기·생선 결 + 가격 스티커
-    g.fillStyle = '#f4f2ee'; g.fillRect(x0, y0 + h, h, h);
-    g.fillStyle = p.color; g.fillRect(x0 + 10, y0 + h + 10, h - 20, h - 20);
-    g.strokeStyle = p.id === 'salmon' ? 'rgba(255,240,225,.75)' : p.id === 'mackerel' ? 'rgba(40,60,80,.55)' : 'rgba(255,235,230,.6)'; g.lineWidth = 3;
-    for (let k = 0; k < 9; k++) { const yy = y0 + h + 18 + k * (h - 36) / 8; g.beginPath(); g.moveTo(x0 + 14, yy); g.bezierCurveTo(x0 + h * 0.35, yy - 8, x0 + h * 0.65, yy + 8, x0 + h - 14, yy + (k % 2 ? 4 : -4)); g.stroke(); }
-    g.fillStyle = 'rgba(255,255,255,.18)'; g.fillRect(x0 + 10, y0 + h + 10, h * 0.35, h - 20); // 랩 광택
-    g.fillStyle = '#F2C230'; g.fillRect(x0 + h - 52, y0 + h + h - 40, 42, 28); g.fillStyle = '#22262A'; g.font = '900 13px "Pretendard",sans-serif'; g.textAlign = 'center'; g.fillText('100g', x0 + h - 31, y0 + h + h - 22);
+  if (p.kind === 'tray') { // 트레이 옆면: 위 랩 아래 내용물 색 · 아래 흰 스티로폼 테두리 · 작은 노란 스티커(큰 글씨 상자처럼 안 보이게)
+    for (const [fx, sw] of [[x0, 1], [x0 + h, 0.8]]) {
+      g.fillStyle = p.color; g.fillRect(fx, y0, h, h * 0.5);
+      g.fillStyle = 'rgba(255,255,255,.22)'; g.fillRect(fx, y0 + h * 0.08, h, h * 0.08);
+      g.fillStyle = '#f1efea'; g.fillRect(fx, y0 + h * 0.5, h, h * 0.5);
+      g.fillStyle = 'rgba(0,0,0,.08)'; g.fillRect(fx, y0 + h * 0.5, h, 6);
+      g.fillStyle = '#F2C230'; g.fillRect(fx + h * 0.56, y0 + h * 0.2, h * 0.34 * sw, h * 0.6);
+      g.fillStyle = '#22262A'; g.font = '900 22px "Pretendard",sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
+      g.fillText(p.name.split(' ')[1]?.slice(0, 3) || '', fx + h * (0.56 + 0.17 * sw), y0 + h * 0.5);
+    }
+  } else {
+    face(x0, y0, h, h, p.color, p.name.split(' ')[0], p.sub);           // 앞 (위-왼)
+    face(x0 + h, y0, h, h, p.color, p.name.split(' ')[0], `${p.kg}kg`, true); // 옆
+  }
+  if (p.kind === 'tray' || p.id === 'mackerel') { // 위: 흰 스티로폼 트레이 + 랩 아래 내용물(품목마다 다른 모양) + 가격 스티커
+    const X = x0, Y = y0 + h, ell = (x, y, rx, ry, rot, fill) => { g.beginPath(); g.ellipse(x, y, rx, ry, rot, 0, Math.PI * 2); g.fillStyle = fill; g.fill(); };
+    g.fillStyle = '#f4f2ee'; g.fillRect(X, Y, h, h);
+    g.fillStyle = 'rgba(0,0,0,.10)'; g.fillRect(X + 6, Y + 6, h - 12, h - 12);
+    if (p.id === 'meat') { // 삼겹살: 비스듬히 겹친 4장, 살·지방 층
+      for (let k = 0; k < 4; k++) {
+        const sy = Y + 16 + k * (h - 32) / 4, sh = (h - 32) / 4 + 6;
+        g.fillStyle = k % 2 ? '#c9454a' : '#d4565a'; g.fillRect(X + 12 + (k % 2) * 6, sy, h - 30, sh);
+        g.fillStyle = '#f6e3d8'; for (const f of [0.18, 0.52, 0.8]) g.fillRect(X + 12 + (k % 2) * 6, sy + sh * f, h - 30, 3 + (k + f * 10) % 3);
+        g.fillStyle = 'rgba(0,0,0,.18)'; g.fillRect(X + 12 + (k % 2) * 6, sy + sh - 3, h - 30, 3);
+      }
+    } else if (p.id === 'beef') { // 등심: 큰 덩어리 2개 + 마블링 점
+      for (const [ex, ey] of [[0.32, 0.5], [0.7, 0.5]]) {
+        ell(X + h * ex, Y + h * ey, h * 0.2, h * 0.36, 0.12, '#a8323a');
+        g.fillStyle = 'rgba(250,236,226,.85)';
+        for (let k = 0; k < 26; k++) { const a2 = k * 2.39, r2 = Math.sqrt(k / 26); g.fillRect(X + h * ex + Math.cos(a2) * r2 * h * 0.16, Y + h * ey + Math.sin(a2) * r2 * h * 0.3, 3 + (k % 3), 2); }
+        g.strokeStyle = '#f2e0d0'; g.lineWidth = 5; g.beginPath(); g.ellipse(X + h * ex, Y + h * ey, h * 0.2, h * 0.36, 0.12, -0.9, 0.9); g.stroke();
+      }
+    } else if (p.id === 'chicken') { // 생닭 2마리: 몸통 + 다리
+      for (const ex of [0.3, 0.7]) {
+        ell(X + h * ex, Y + h * 0.46, h * 0.17, h * 0.26, 0, '#f3d3b0');
+        ell(X + h * (ex - 0.1), Y + h * 0.76, h * 0.06, h * 0.1, 0.4, '#ecc49c'); ell(X + h * (ex + 0.1), Y + h * 0.76, h * 0.06, h * 0.1, -0.4, '#ecc49c');
+        g.strokeStyle = 'rgba(190,140,100,.5)'; g.lineWidth = 2; g.beginPath(); g.moveTo(X + h * ex, Y + h * 0.26); g.lineTo(X + h * ex, Y + h * 0.66); g.stroke();
+      }
+    } else if (p.id === 'mackerel') { // 고등어: 은빛 배 + 등 줄무늬 2마리
+      for (const [ey, d] of [[0.33, 1], [0.67, -1]]) {
+        ell(X + h * 0.5, Y + h * ey, h * 0.38, h * 0.12, 0, '#c8d4dc');
+        g.save(); g.beginPath(); g.ellipse(X + h * 0.5, Y + h * ey, h * 0.38, h * 0.12, 0, 0, Math.PI * 2); g.clip();
+        g.fillStyle = '#3a5a72'; g.fillRect(X, Y + h * ey - h * 0.12, h, h * 0.1);
+        g.strokeStyle = '#22384a'; g.lineWidth = 2; for (let k = 0; k < 9; k++) { g.beginPath(); g.moveTo(X + h * (0.16 + k * 0.075), Y + h * ey - h * 0.12); g.lineTo(X + h * (0.2 + k * 0.075), Y + h * ey - h * 0.03); g.stroke(); }
+        g.restore();
+        g.beginPath(); g.moveTo(X + h * (0.5 + d * 0.38), Y + h * ey); g.lineTo(X + h * (0.5 + d * 0.48), Y + h * ey - 12); g.lineTo(X + h * (0.5 + d * 0.48), Y + h * ey + 12); g.closePath(); g.fillStyle = '#3a5a72'; g.fill();
+      }
+    } else { // 연어 등: 주황 필렛 + 흰 결
+      g.fillStyle = p.color; g.fillRect(X + 12, Y + 12, h - 24, h - 24);
+      g.strokeStyle = 'rgba(255,240,225,.75)'; g.lineWidth = 3;
+      for (let k = 0; k < 9; k++) { const yy = Y + 18 + k * (h - 36) / 8; g.beginPath(); g.moveTo(X + 14, yy); g.bezierCurveTo(X + h * 0.35, yy - 8, X + h * 0.65, yy + 8, X + h - 14, yy + (k % 2 ? 4 : -4)); g.stroke(); }
+    }
+    g.fillStyle = 'rgba(255,255,255,.2)'; g.fillRect(X + 10, Y + 10, h * 0.3, h - 20); // 랩 광택
+    g.fillStyle = '#F2C230'; g.fillRect(X + h - 54, Y + h - 40, 44, 28); g.fillStyle = '#22262A'; g.font = '900 13px "Pretendard",sans-serif'; g.textAlign = 'center';
+    g.fillText(p.id === 'chicken' ? '2마리' : p.id === 'mackerel' ? '10팩' : '100g', X + h - 32, Y + h - 22);
   } else {
     g.fillStyle = p.color; g.fillRect(x0, y0 + h, h, h); // 위
     g.fillStyle = p.ink || '#222'; g.font = '900 32px "Pretendard",sans-serif'; g.textAlign = 'center';
@@ -553,6 +599,7 @@ function buildFixtures({ scene, keep, ct, atlas, unitBox, obstacles, prodMeshes,
     // 뒤판(밝은 스테인리스) + 뒤판 위 거울 선반 + 흰 캐노피 + 조명 + 앞 초록 띠
     const riser = new THREE.Mesh(keep(new THREE.BoxGeometry(w, 1.25, 0.1)), caseIn); riser.position.set(cx, 1.62, z + 0.55); scene.add(riser);
     const shelf = new THREE.Mesh(keep(new THREE.BoxGeometry(w - 0.1, 0.03, 0.32)), caseIn); shelf.position.set(cx, 1.72, z + 0.36); scene.add(shelf);
+    const shelf2 = new THREE.Mesh(keep(new THREE.BoxGeometry(w - 0.1, 0.03, 0.24)), caseIn); shelf2.position.set(cx, 2.0, z + 0.42); scene.add(shelf2); // 위 선반(뒷줄 가득)
     const canopy = new THREE.Mesh(keep(new THREE.BoxGeometry(w, 0.08, 0.75)), caseBody); canopy.position.set(cx, 2.3, z + 0.18); scene.add(canopy);
     const strip = new THREE.Mesh(keep(new THREE.BoxGeometry(w - 0.2, 0.03, 0.55)), coldLight); strip.position.set(cx, 2.255, z + 0.18); scene.add(strip);
     const strip2 = new THREE.Mesh(keep(new THREE.BoxGeometry(w - 0.2, 0.025, 0.05)), warmLight); strip2.position.set(cx, 1.70, z + 0.2); scene.add(strip2);
@@ -565,21 +612,24 @@ function buildFixtures({ scene, keep, ct, atlas, unitBox, obstacles, prodMeshes,
     const seg = (w - 0.3) / skus.length;
     for (let i = 0; i < skus.length; i++) {
       const p = BY_ID[skus[i]]; if (!p) continue;
-      const [sx, sy, sz] = p.size;
+      const [sx, sy0, sz] = p.size, sy = p.kind === 'tray' ? Math.min(sy0, 0.075) : sy0; // 진열 트레이는 납작하게
       const sx0 = x0 + 0.15 + i * seg;
       if (i > 0) for (let k = 0; k < 6; k++) { const gm = new THREE.Mesh(keep(new THREE.IcosahedronGeometry(0.075, 0)), garnish); gm.scale.set(1, 0.7, 1); gm.position.set(sx0 + (k % 2 ? 0.02 : -0.02), 1.08, z - 0.4 + k * 0.15); scene.add(gm); } // 칸막이 채소(파슬리·상추 덩이)
       const nA = Math.max(1, Math.floor((seg - 0.1) / (sx + 0.02))), nR = Math.max(1, Math.min(4, Math.floor(0.86 / (sz + 0.02))));
       const list = freshCluster.items.get(p.id) || []; freshCluster.items.set(p.id, list);
       for (let k = 0; k < nA; k++) for (let row = 0; row < nR; row++) {
         const stack = sy < 0.12 ? (row >= nR - 2 ? 2 : 1) + (row === nR - 1 && k % 3 === 0 ? 1 : 0) : 1;
-        const jx = (hash01(k * 3.1 + row + i * 17 + z) - 0.5) * 0.03, jr = (hash01(k + row * 5.7 + i) - 0.5) * 0.12;
+        const jx = (hash01(k * 3.1 + row + i * 17 + z) - 0.5) * 0.03, jr = (hash01(k + row * 5.7 + i) - 0.5) * 0.12 + (hash01(k * 2.3 + row + i) > 0.5 ? Math.PI : 0);
         for (let hh = 0; hh < stack; hh++) list.push({ x: sx0 + 0.05 + (k + 0.5) * (seg - 0.1) / nA + jx, y: 1.04 + (ice ? 0.03 : 0) + sy * (hh + 0.5), z: z - 0.44 + (row + 0.5) * (0.86 / nR), rot: jr, face: 1, pickable: row === 0 && hh === 0 && k % 3 === 1 && PICKABLE_IDS.has(p.id), sx, sy, sz, pid: p.id });
       }
       // 뒤판 선반에도 한 줄 (밀도)
-      for (let k = 0; k < nA; k += 2) list.push({ x: sx0 + 0.05 + (k + 0.5) * (seg - 0.1) / nA, y: 1.735 + sy / 2, z: z + 0.36, rot: 0, face: 1, pickable: false, sx, sy, sz, pid: p.id });
+      for (let k = 0; k < nA; k++) for (const [ty, tz] of [[1.735, 0.36], [2.015, 0.42]]) {
+        const st2 = sy < 0.08 && hash01(k * 1.7 + i + ty) > 0.45 ? 2 : 1;
+        for (let hh = 0; hh < st2; hh++) list.push({ x: sx0 + 0.05 + (k + 0.5) * (seg - 0.1) / nA, y: ty + sy * (hh + 0.5), z: z + tz, rot: hash01(k + i * 3 + hh) > 0.5 ? Math.PI : 0, face: 1, pickable: false, sx, sy, sz, pid: p.id });
+      }
     }
   }
-  openCase(30, 42, 118.7, ['meat', 'chicken', 'beef', 'chicken', 'meat'], { k0: 0 }); // 정육 (빨강·분홍)
+  openCase(30, 42, 118.7, ['meat', 'beef', 'chicken', 'meat', 'beef', 'chicken'], { k0: 0 }); // 정육 (빨강·분홍)
   openCase(42.4, 52, 118.7, ['salmon', 'mackerel', 'salmon', 'mackerel'], { ice: true, k0: 4 }); // 수산 (얼음 위)
   openCase(52.4, 63.5, 118.7, ['milk', 'yogurt', 'cheese', 'butter', 'egg'], { k0: 6 }); // 유제품·계란
 
