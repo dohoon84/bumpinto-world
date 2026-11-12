@@ -55,7 +55,7 @@ export function createStory(ctx) {
   const v3 = new THREE.Vector3();
   function speakerPos(who) {
     if (who === 'beomsuk' && staff?.root) return staff.root.position;
-    if (who.startsWith('npc:')) { const n = shoppers?.list.find((x) => x.id === who.slice(4) && x.active); if (n) return { x: n.x, y: 0, z: n.z }; }
+    if (who.startsWith('npc:') || who === 'spy') { const n = shoppers?.list.find((x) => x.id === (who === 'spy' ? 'spy' : who.slice(4)) && x.active); if (n) return { x: n.x, y: 0, z: n.z }; }
     return null;
   }
   function project(p, y = 2.2) {
@@ -94,6 +94,7 @@ export function createStory(ctx) {
       if (pid === 'melon') flags.melonPick = true;
       if (shoppers?.near('sale-hunter', st.me.x, st.me.z, 3)) reactions.fire('R19', { force: false });
     }
+    if (name === 'item-place' && (opts.away || 0) > 8) reactions.fire('R15'); // 원래 진열대에서 8 m 넘게 떨어진 바닥에 내려놓음
     if (name === 'item-place' && save.day >= 2 && save.yesterday?.receipt?.length) {
       const pid = opts.product?.id; if (pid && save.yesterday.receipt.includes(pid)) reactions.fire('R50');
     }
@@ -237,11 +238,13 @@ export function createStory(ctx) {
 
   // ---------- 하루 시작 / 돌아옴 / 나가기 ----------
   function npcsForDay() {
+    if (mode() === 'story') makeCoins(); else removeCoins();
     if (!shoppers) return;
     if (mode() === 'free') { shoppers.setActive(shoppers.list.map((n) => n.id)); return; }
     const v = save.vitality, cap = v <= 30 ? 2 : v <= 60 ? 4 : 8;
     const ids = (NPCT.types || []).filter((t) => (t.fromDay || 1) <= save.day).map((t) => t.id).slice(0, cap);
-    if (save.day >= 1) ids.push('elder'); // 매일 오는 동네 어르신(지팡이) — 배경 손님
+    if (save.day >= 1) ids.push('elder');
+    if (save.day >= 3) ids.push('spy'); // 3일차부터 수상한 손님(싹쓸마트) — R48 // 매일 오는 동네 어르신(지팡이) — 배경 손님
     shoppers.setActive(ids);
   }
   function comebackLine() {
@@ -299,6 +302,35 @@ export function createStory(ctx) {
   }
   const period = (h) => (h >= 10 && h < 12 ? 'open' : h >= 12 && h < 14 ? 'lunch' : h >= 14 && h < 17 ? 'afternoon' : h >= 18 && h < 21 ? 'evening' : h >= 21 && h < 22 ? 'closing' : h >= 22 || h < 10 ? 'night' : 'afternoon');
 
+  // ---------- 포인트 코인 (R34): 스토리 모드에서 하루 3개, 통로 바닥에 반짝 — 주우면 +10 포인트, 같은 날 두 번째부터 범이 반응 ----------
+  const COIN_SPOTS = [[23.4, 60], [40.1, 92], [53.9, 52], [34.5, 107.2], [59.4, 77], [64.8, 30], [29.0, 77], [47.2, 66]];
+  let coins = null;
+  function makeCoins() {
+    if (coins || mode() !== 'story') return;
+    const g = keep(new THREE.CylinderGeometry(0.11, 0.11, 0.025, 14)); g.rotateX(Math.PI / 2);
+    const m = keep(new THREE.MeshLambertMaterial({ color: 0xf2c230, emissive: 0x8a6a10 }));
+    const im = new THREE.InstancedMesh(g, m, 3); im.name = 'story-coins'; im.frustumCulled = false; scene.add(im);
+    const seed = [...String(save.todayKey || '')].reduce((a, ch) => a + ch.charCodeAt(0), save.day * 7);
+    const pts = [0, 1, 2].map((i) => COIN_SPOTS[(seed + i * 3) % COIN_SPOTS.length]);
+    coins = { im, pts: pts.map(([x, z]) => ({ x: x + 0.6, z, got: false })), t: 0, m4: new THREE.Matrix4(), q: new THREE.Quaternion(), e: new THREE.Euler() };
+  }
+  function removeCoins() { if (!coins) return; coins.im.removeFromParent(); coins.im.dispose(); coins = null; }
+  function coinTick(dt) {
+    if (!coins) return; coins.t += dt;
+    const me = st.me;
+    coins.pts.forEach((c, i) => {
+      if (!c.got && Math.hypot(me.x - c.x, me.z - c.z) < 0.9) {
+        c.got = true; save.today.coins = (save.today.coins || 0) + 1; save.points = (save.points || 0) + 10; sfx.cue('toast-pop');
+        vn.toast({ name: '포인트 코인', text: `+10 포인트 (오늘 ${save.today.coins}개)`, ms: 1800 });
+        if (save.today.coins >= 2) reactions.fire('R34');
+      }
+      coins.q.setFromEuler(coins.e.set(0, coins.t * 2.4 + i, 0));
+      coins.m4.compose(new THREE.Vector3(c.x, c.got ? -5 : 0.32 + Math.sin(coins.t * 3 + i) * 0.04, c.z), coins.q, new THREE.Vector3(1, 1, 1));
+      coins.im.setMatrixAt(i, coins.m4);
+    });
+    coins.im.instanceMatrix.needsUpdate = true;
+  }
+
   // ---------- 반응 감지 (0.25초마다) ----------
   const det = { t: 0, speedT: 0, idleT: 0, tvT: 0, zombieT: 0, eggs: 0, floor: 0, rams: 0, tower: 0, ice: null, inBakery: false, inSeason: false, period: '', hour: -1, lastX: 0, lastZ: 0 };
   function detect(dt) {
@@ -334,6 +366,13 @@ export function createStory(ctx) {
     const nearDoor = me.x > 65 && me.x < 73 && me.z < 12;
     if (nearDoor && !det.door && save.ev?.E12 && shoppers?.list.some((n) => n.id === 'sample-uncle' && n.active) && Math.random() < 0.3) fire('R46'); det.door = nearDoor;
     const hour = (() => { const w = window.__jj?.weather?.state; return typeof w?.hour === 'number' ? w.hour : new Date().getHours(); })();
+    // R24 계산대 줄에서 40초 넘게 계산 시작을 못 함(내 줄만 느림)
+    det.laneT = inLane && checkoutState().phase === 'idle' && sp < 0.2 ? (det.laneT || 0) + dt : 0; if (det.laneT > 40) { fire('R24'); det.laneT = 0; }
+    // R47 밤(22시 이후) 지게차 통로 표지(57, 44) 8 m 안
+    if (hour >= 22 && Math.hypot(me.x - 57, me.z - 44) < 8) fire('R47');
+    // R48 수상한 손님(spy) 4 m 안 + 내 짐이 그 장바구니(약 6 kg)보다 무거움
+    if (shoppers?.near('spy', me.x, me.z, 4) && kg > 6) fire('R48');
+    coinTick(dt);
     const bak = me.x < 13 && me.z > 14 && me.z < 40; if (bak && !det.inBakery && hour < 13) fire('R36'); det.inBakery = bak;
     const sea = me.x > 66 && me.x < 80 && me.z > 48 && me.z < 106; if (sea && !det.inSeason && [10, 11].includes(new Date().getMonth())) fire('R38'); det.inSeason = sea;
     const pr = period(hour); if (det.period && pr !== det.period) fire('R33', { key: pr }); det.period = pr;
@@ -421,7 +460,7 @@ export function createStory(ctx) {
     get mode() { return mode(); },
     colBottom: () => colBottom,
     vn, reactions, save,
-    _dbg: { save: () => JSON.parse(JSON.stringify(save)), runFrom, startMission, mission: () => mission && { id: mission.id, taken: mission.taken, result: mission.result, recalled: mission.recalled }, takeTower: () => mission && !mission.taken && takeTower(), switchMode, fire: (id, o) => reactions.fire(id, { force: true, ...o }), setFreq: (f) => { session.freq = f; }, npcs: npcsForDay, hits: () => hits.slice(), setDay: (d) => { save.day = d; }, stagePZ: () => stagePhoneZombie(true) },
+    _dbg: { save: () => JSON.parse(JSON.stringify(save)), runFrom, startMission, mission: () => mission && { id: mission.id, taken: mission.taken, result: mission.result, recalled: mission.recalled }, takeTower: () => mission && !mission.taken && takeTower(), switchMode, fire: (id, o) => reactions.fire(id, { force: true, ...o }), setFreq: (f) => { session.freq = f; }, npcs: npcsForDay, hits: () => hits.slice(), setDay: (d) => { save.day = d; }, npcs: () => npcsForDay(), coins: () => coins && coins.pts.map((c) => ({ ...c })), stagePZ: () => stagePhoneZombie(true) },
     dispose() {
       if (!leftSaved && (save.mode === 'story') && !session.noPersist) {
         const kind = running ? 'dialogue' : mission && !mission.result ? 'event' : items.length && !flags.paid ? 'cart' : null;
@@ -429,7 +468,7 @@ export function createStory(ctx) {
         if (running && !save.intro[save.day]) save.intro[save.day] = 0;
         persist();
       }
-      alive = false; clearTimeout(paTimer); clearTimeout(stageTimer); window.removeEventListener('depot:sfx', onSfx); window.removeEventListener('depot:pa', onPa); for (const w of waiters.done) w(); vn.dispose(); sfx.dispose();
+      alive = false; removeCoins(); clearTimeout(paTimer); clearTimeout(stageTimer); window.removeEventListener('depot:sfx', onSfx); window.removeEventListener('depot:pa', onPa); for (const w of waiters.done) w(); vn.dispose(); sfx.dispose();
     },
   };
 }

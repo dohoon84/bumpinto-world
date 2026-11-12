@@ -69,6 +69,9 @@ function person(L, o) {
   if (o.stripes) for (const yy of [0.88, 1.0, 1.12]) B(0.405 * w, 0.035, 0.245, o.stripes, 0, yy, sz * 0.4, -st);
   if (o.vest) { R(0.42 * w, 0.46, 0.26, 0.06, o.vest, 0, 1.03, sz * 0.4, -st); B(0.08, 0.44, 0.262, shirt, 0, 1.04, sz * 0.4, -st); if (o.vestPockets) for (const sx of [-0.11, 0.11]) B(0.1, 0.08, 0.02, o.vestPockets, sx * w, 0.95, -0.13 + sz * 0.4); if (o.plaid) for (const yy of [0.88, 1.0, 1.12]) B(0.425 * w, 0.012, 0.264, o.plaid, 0, yy, sz * 0.4, -st); }
   if (o.apron) { B(0.36 * w, 0.62, 0.02, o.apron, 0, 0.92, -0.13 + sz * 0.4); B(0.03, 0.3, 0.02, o.apron, -0.12, 1.22, -0.125); B(0.03, 0.3, 0.02, o.apron, 0.12, 1.22, -0.125); B(0.14, 0.08, 0.025, '#a87a44', 0, 0.86, -0.145 + sz * 0.4); }
+  if (o.coat) { R(0.43 * w, 0.5, 0.27, 0.06, o.coat, 0, 1.03, sz * 0.4, -st); R(0.42 * w, 0.36, 0.26, 0.05, o.coat, 0, 0.62, 0.0); B(0.06, 0.04, 0.02, '#8a6a3a', 0.1, 1.1, -0.14); B(0.12, 0.84, 0.272, o.coatInner || shirt, 0, 0.84, -0.002); for (const sx of [-0.08, 0.08]) B(0.1, 0.12, 0.03, o.coat, sx, 1.24, -0.13, 0, 0, sx > 0 ? -0.4 : 0.4); }
+  if (o.scarf) { R(0.26, 0.08, 0.2, 0.035, o.scarf, 0, 1.28, sz); B(0.07, 0.22, 0.03, o.scarf, 0.06, 1.14, -0.13 + sz); }
+  if (o.badge) E(0.025, 0.025, 0.01, o.badge, -0.11, 1.15, -0.14 + sz * 0.4, 6);
   if (o.hood) R(0.3, 0.14, 0.12, 0.05, shirt, 0, 1.25, 0.12 + sz, -st);
   if (o.collar) { B(0.09, 0.04, 0.05, o.collar, -0.06, 1.28, -0.1 + sz, 0, 0.3, 0.35); B(0.09, 0.04, 0.05, o.collar, 0.06, 1.28, -0.1 + sz, 0, -0.3, -0.35); }
   if (o.tee) B(0.12, 0.18, 0.01, o.tee, 0, 1.18, -0.122 + sz, -st);
@@ -91,6 +94,7 @@ function person(L, o) {
     else { B(0.036, 0.011, 0.01, mc, 0, my - 0.004, fz); B(0.02, 0.011, 0.01, mc, -0.025, my + 0.002, fz, 0, 0, -0.55); B(0.02, 0.011, 0.01, mc, 0.025, my + 0.002, fz, 0, 0, 0.55); }
     if (o.blush) for (const sx of [-0.095, 0.095]) E(0.025, 0.014, 0.005, '#f2a5a0', sx, cy - 0.03, fz + 0.012);
     if (o.glasses) { for (const sx of [-0.062, 0.062]) { B(0.07, 0.008, 0.008, '#3a3a3a', sx, cy + 0.04, fz - 0.012); B(0.07, 0.008, 0.008, '#3a3a3a', sx, cy - 0.02, fz - 0.012); B(0.008, 0.06, 0.008, '#3a3a3a', sx - 0.035, cy + 0.01, fz - 0.012); B(0.008, 0.06, 0.008, '#3a3a3a', sx + 0.035, cy + 0.01, fz - 0.012); } }
+    if (o.shades) { for (const sx of [-0.062, 0.062]) E(0.04, 0.04, 0.01, '#1c1c22', sx, cy + 0.0, fz - 0.014, 8); B(0.05, 0.01, 0.01, '#1c1c22', 0, cy + 0.01, fz - 0.016); }
     if (o.earbuds) for (const sx of [-0.16, 0.16]) E(0.016, 0.02, 0.016, '#ffffff', sx, cy - 0.01, hz - 0.01, 4);
     if (o.beard) B(0.18, 0.05, 0.02, o.beard, 0, cy - 0.105, fz + 0.02);
     // 머리카락
@@ -177,14 +181,17 @@ const LOOKS = {
     stdCart(L, -0.38, [[0.16, 0.2, 0.12, C.white, 0.1, 0, 0.1]]); return r; },
   'camping-dad': (L) => { const r = [person(L, { p: 0, w: 1.08, shirt: C.white, sleeve: 'short', vest: C.olive, vestPockets: '#4a5530', pants: C.khaki, hat: 'cap', hatC: C.olive, hair: C.hairBr, beard: '#5a3a22', shoes: '#5a4632' })];
     stdCart(L, -0.38, [[0.42, 0.3, 0.34, C.kraft, -0.04, 0, -0.18], [0.36, 0.26, 0.28, C.blue, 0.06, 0, 0.22], [0.42, 0.04, 0.5, C.green, 0.36, 0.3, 0.05, 0, 0, 0.5]]); return r; }, // 접이식 의자가 옆으로 삐져나옴
+  spy: (L) => [person(L, { p: 0, s: 1.02, shirt: '#e8e2d6', coat: '#C9A877', coatInner: '#e8e2d6', sleeve: 'long', sleeveC: '#C9A877', pants: '#3a3448', hat: 'cap', hatC: '#6B4FA0', hair: '#1C1C20', skin: '#E8C29C', shades: true, beard: '#1C1C20', scarf: '#5A3E8E', badge: '#d9b030', mouth: 'flat', shoes: '#2a2430',
+    pose: { armL: [0.25, 0.15], armR: [0.1, 0], bendL: 1.3, bendR: 0.3, swingR: true, pick: true },
+    hold: { l: (x, y, z) => { box(L, 0.3, 0.16, 0.2, '#6B4FA0', x, y - 0.13, z - 0.04); box(L, 0.014, 0.14, 0.014, '#4a3478', x - 0.12, y - 0.01, z - 0.04); box(L, 0.014, 0.14, 0.014, '#4a3478', x + 0.12, y - 0.01, z - 0.04); box(L, 0.1, 0.07, 0.07, '#f2c230', x - 0.05, y - 0.02, z - 0.04); box(L, 0.08, 0.06, 0.06, '#f2c230', x + 0.07, y - 0.03, z - 0.04); } } })],
   elder: (L) => [person(L, { p: 0, s: 0.93, stoop: 0.22, shirt: '#b8a0c8', sleeve: 'long', pants: '#5a5560', hair: C.gray2, hairStyle: 'perm', glasses: true, blush: true, shoes: '#3a3030',
     pose: { armL: [0.2, 0.1], armR: [0.15, 0], bendL: 1.2, bendR: 0.5, swingL: false, swingR: true, pick: false },
     hold: { r: (x, y, z) => { cyl(L, 0.012, 0.72, '#6a4a30', x, y - 0.36, z - 0.02); box(L, 0.1, 0.02, 0.02, '#6a4a30', x, y + 0.01, z - 0.06); },
       l: (x, y, z) => { box(L, 0.24, 0.13, 0.15, '#d84a3a', x, y - 0.12, z - 0.02); box(L, 0.012, 0.12, 0.012, '#b03a2a', x - 0.1, y - 0.01, z - 0.02); box(L, 0.012, 0.12, 0.012, '#b03a2a', x + 0.1, y - 0.01, z - 0.02); box(L, 0.08, 0.06, 0.06, '#8ac04a', x, y - 0.03, z - 0.02); } } })],
 };
-const WIDTH = { family: 1.0, couple: 0.6, 'bulk-boss': 0.55, 'camping-dad': 0.62, elder: 0.32 };
-const LEN = { 'bulk-boss': 1.95, elder: 0.5 };
-const EXTRA_TYPES = [{ id: 'elder', name: '지팡이 어르신', speed: 0.55 }];
+const WIDTH = { family: 1.0, couple: 0.6, 'bulk-boss': 0.55, 'camping-dad': 0.62, elder: 0.32, spy: 0.34 };
+const LEN = { 'bulk-boss': 1.95, elder: 0.5, spy: 0.55 };
+const EXTRA_TYPES = [{ id: 'elder', name: '지팡이 어르신', speed: 0.55 }, { id: 'spy', name: '수상한 손님', speed: 1.0 }];
 
 export function createShoppers({ scene, keep = (x) => x, obstacles, isBlocked, types, isMobile = false }) {
   const root = new THREE.Group(); root.name = 'depot-shoppers'; scene.add(root);
@@ -223,7 +230,7 @@ mat3 npcRot() { vec2 a = uRot[int(aBone + 0.5)]; float cp = cos(a.x), sp = sin(a
   const list = [];
   const T = Object.fromEntries([...(types || []), ...EXTRA_TYPES].map((t) => [t.id, t]));
   let seed = 7; const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
-  const START = { family: [29.0, 44], couple: [53.9, 77], 'bulk-boss': [47.2, 44], 'sample-uncle': [64.8, 107.2], 'gym-bro': [59.4, 44], 'sale-hunter': [40.1, 77], 'phone-zombie': [34.5, 44], 'camping-dad': [69.4, 77], elder: [23.4, 77] };
+  const START = { family: [29.0, 44], couple: [53.9, 77], 'bulk-boss': [47.2, 44], 'sample-uncle': [64.8, 107.2], 'gym-bro': [59.4, 44], 'sale-hunter': [40.1, 77], 'phone-zombie': [34.5, 44], 'camping-dad': [69.4, 77], elder: [23.4, 77], spy: [47.2, 107.2] };
   for (const id of Object.keys(LOOKS)) {
     const L = []; const rigs = LOOKS[id](L);
     const g = keep(mergeGeometries(L)); L.forEach((x) => x.dispose()); g.computeBoundingSphere(); g.boundingSphere.radius += 0.5; // 팔 들어 올림 여유
@@ -237,7 +244,7 @@ mat3 npcRot() { vec2 a = uRot[int(aBone + 0.5)]; float cp = cos(a.x), sp = sin(a
     list.push({ id, name: t.name || id, mesh, x: nodes[n0].x, z: nodes[n0].z, yaw: 0, from: n0, to: n0, prev: -1, speed, v: 0, stopT: 1 + rnd() * 3, phase: rnd() * 6, rect, active: true, sprintT: 0, visits: 0, inZoneT: 0, zone: '', len: LEN[id] || 1.45, half: WIDTH[id] || 0.42, skew: 0, rigs, uRot: mat.userData.uRot.value, wp: rnd() * 6, hy: 0, pickT: 0, pickSide: 1 });
   }
   const zoneOf = (x, z) => { for (const [k, pts] of Object.entries(ZONES)) for (const [zx, zz] of pts) if (Math.abs(zx - x) < 2.5 && Math.abs(zz - z) < 6) return k; return ''; };
-  const WANT = { family: ['snack', 'produce'], couple: ['produce', 'snack'], 'bulk-boss': ['rice', 'water'], 'sample-uncle': ['deli', 'bakery'], 'gym-bro': ['water'], 'sale-hunter': ['snack', 'rice'], 'phone-zombie': [], 'camping-dad': ['seasonal'], elder: ['produce', 'bakery'] };
+  const WANT = { family: ['snack', 'produce'], couple: ['produce', 'snack'], 'bulk-boss': ['rice', 'water'], 'sample-uncle': ['deli', 'bakery'], 'gym-bro': ['water'], 'sale-hunter': ['snack', 'rice'], 'phone-zombie': [], 'camping-dad': ['seasonal'], elder: ['produce', 'bakery'], spy: ['snack', 'rice'] };
   function pickNext(n) {
     const node = nodes[n.to], opts = node.nb.filter((j) => j !== n.prev);
     const pool = opts.length ? opts : node.nb; if (!pool.length) return n.to;

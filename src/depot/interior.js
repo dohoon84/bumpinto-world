@@ -578,7 +578,7 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit, a
   }
   function place() {
     if (st.mode !== 'place' || !ghostSol) return false;
-    const h = st.held, p = h.p;
+    const h = st.held, p = h.p; let away = 0;
     if (ghostSol.where !== 'floor') {
       if (items.length >= MAX_ITEMS) { toast(`카트 안 상품은 ${MAX_ITEMS}개까지 (샘플 성능 상한)`, 1600, '#8a5a00'); return false; }
       if (loadKg() + p.kg > CART.maxLoad) { toast(`카트 허용 하중 ${CART.maxLoad} kg 초과`, 1600); return false; }
@@ -589,8 +589,9 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit, a
       _m.compose(_p.set(ghostSol.x, ghostSol.y + 0.02, ghostSol.z), q, _s).premultiply(cart.matrixWorld);
       const wp = new THREE.Vector3(), wq = new THREE.Quaternion(); _m.decompose(wp, wq, new THREE.Vector3());
       addFloorItem(p, h.mesh || makeItemMesh(p), wp, wq, new THREE.Vector3(), h.src); staff.onFloor(false);
+      if (h.src?.m) away = Math.hypot(wp.x - h.src.m.elements[12], wp.z - h.src.m.elements[14]); // 스토리 R15: 원래 진열대에서 먼 바닥
     }
-    st.held = null; setGhost(null); st.mode = 'walk'; hud.classList.remove('placing'); blip('place', { kg: p.kg, product: p });
+    st.held = null; setGhost(null); st.mode = 'walk'; hud.classList.remove('placing'); blip('place', { kg: p.kg, product: p, away });
     if (ghostSol.state === 'yellow' || ghostSol.state === 'red') audio?.wobble?.();
     st.placedOnce = true;
     return true;
