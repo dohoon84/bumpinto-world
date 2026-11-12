@@ -131,9 +131,18 @@ function paintCell(g, cx, cy, p) {
   };
   face(x0, y0, h, h, p.color, p.name.split(' ')[0], p.sub);           // 앞 (위-왼)
   face(x0 + h, y0, h, h, p.color, p.name.split(' ')[0], `${p.kg}kg`, true); // 옆
-  g.fillStyle = p.color; g.fillRect(x0, y0 + h, h, h); // 위
-  g.fillStyle = p.ink || '#222'; g.font = '900 32px "Pretendard",sans-serif'; g.textAlign = 'center';
-  g.fillText(p.name.split(' ')[0], x0 + h / 2, y0 + h + h / 2);
+  if (p.kind === 'tray' || p.id === 'mackerel') { // 위: 흰 스티로폼 트레이 + 랩 아래 고기·생선 결 + 가격 스티커
+    g.fillStyle = '#f4f2ee'; g.fillRect(x0, y0 + h, h, h);
+    g.fillStyle = p.color; g.fillRect(x0 + 10, y0 + h + 10, h - 20, h - 20);
+    g.strokeStyle = p.id === 'salmon' ? 'rgba(255,240,225,.75)' : p.id === 'mackerel' ? 'rgba(40,60,80,.55)' : 'rgba(255,235,230,.6)'; g.lineWidth = 3;
+    for (let k = 0; k < 9; k++) { const yy = y0 + h + 18 + k * (h - 36) / 8; g.beginPath(); g.moveTo(x0 + 14, yy); g.bezierCurveTo(x0 + h * 0.35, yy - 8, x0 + h * 0.65, yy + 8, x0 + h - 14, yy + (k % 2 ? 4 : -4)); g.stroke(); }
+    g.fillStyle = 'rgba(255,255,255,.18)'; g.fillRect(x0 + 10, y0 + h + 10, h * 0.35, h - 20); // 랩 광택
+    g.fillStyle = '#F2C230'; g.fillRect(x0 + h - 52, y0 + h + h - 40, 42, 28); g.fillStyle = '#22262A'; g.font = '900 13px "Pretendard",sans-serif'; g.textAlign = 'center'; g.fillText('100g', x0 + h - 31, y0 + h + h - 22);
+  } else {
+    g.fillStyle = p.color; g.fillRect(x0, y0 + h, h, h); // 위
+    g.fillStyle = p.ink || '#222'; g.font = '900 32px "Pretendard",sans-serif'; g.textAlign = 'center';
+    g.fillText(p.name.split(' ')[0], x0 + h / 2, y0 + h + h / 2);
+  }
   // 예비: 파렛트 랩 줄무늬
   g.fillStyle = '#e8e4da'; g.fillRect(x0 + h, y0 + h, h, h);
   g.strokeStyle = 'rgba(180,200,210,.55)'; g.lineWidth = 4;
@@ -259,7 +268,7 @@ export function mountStock({ scene, keep, canvasTex: canvasTexFn, TX, racks, obs
             const hMax = lv === 0 ? (p.kind === 'tray' ? 0.35 : 1.28) : 1.12;
             if (lv > 0) {
               // 상단: 랩 파렛트 한 덩어리
-              c.palettes.push({ x: px, y: y0, z, w: 1.16, h: hMax, d: 0.98, color: p.color, id: p.id });
+              c.palettes.push({ x: px, y: y0, z, w: 1.16, h: hMax, d: 0.98, color: p.color, id: p.id, up: true });
               continue;
             }
             // 하단: 안쪽은 색 상자 한 덩어리, 통로 앞줄만 낱개(집기)
@@ -508,53 +517,92 @@ function buildFixtures({ scene, keep, ct, atlas, unitBox, obstacles, prodMeshes,
   buildItemIMs(seaCluster, atlas, unitBox, prodMeshes, m4, pv, qy, s3, col, Y);
 
   // ===== 후면 신선: 정육/수산/유제품 오픈 케이스 (벽 z≈118.8) =====
+  //   밝은 스테인리스 안쪽·흰 캐노피 조명·가격 띠·얼음 바닥(수산)·초록 칸막이. 모두 공유 재질이라 mergeStatics 로 드로콜 그대로.
   const freshCluster = addCluster(40, 114);
-  function openCase(x0, x1, z, skus, color = 0x7a838c) {
+  const caseIn = keep(new THREE.MeshLambertMaterial({ color: 0xe6ebef, emissive: 0x2a3036 })); // 케이스 안쪽·뒤판 (밝게)
+  const caseBody = keep(new THREE.MeshLambertMaterial({ color: 0xdfe4e8 }));
+  const iceT = keep(ct(256, 128, (g) => { g.fillStyle = '#eef7fb'; g.fillRect(0, 0, 256, 128); for (let k = 0; k < 900; k++) { g.fillStyle = `rgba(${150 + Math.random() * 60 | 0},${200 + Math.random() * 40 | 0},235,${0.25 + Math.random() * 0.4})`; g.fillRect(Math.random() * 256, Math.random() * 128, 2 + Math.random() * 5, 2 + Math.random() * 4); } }));
+  iceT.wrapS = iceT.wrapT = THREE.RepeatWrapping;
+  const iceM = keep(new THREE.MeshBasicMaterial({ map: iceT }));
+  const garnish = keep(new THREE.MeshLambertMaterial({ color: 0x4f9a3a, emissive: 0x10260c }));
+  // 가격 띠: 한 장 텍스처에 칸 10개 — 칸마다 UV 로 골라 씀
+  const PRICE = [['범한돈 삼겹살', '100g 2,590'], ['범우 등심', '100g 6,980'], ['범닭 한 마리', '1kg 7,490'], ['범한돈 목살', '100g 2,390'], ['노르웨이 연어', '100g 4,290'], ['범고등어', '2손 9,900'], ['범우유 2.3L', '5,680'], ['범요거트', '12입 8,990'], ['범치즈', '36매 9,480'], ['범버터', '454g 8,900']];
+  const priceT = keep(ct(2048, 64, (g) => PRICE.forEach(([n, pr], k) => {
+    const x = k * 204.8; g.fillStyle = '#FBF7EE'; g.fillRect(x, 0, 204.8, 64); g.fillStyle = k % 4 === 0 ? '#D9442E' : '#1E5A45'; g.fillRect(x, 0, 8, 64);
+    g.fillStyle = '#22262A'; g.font = '800 20px "Pretendard",sans-serif'; g.textAlign = 'left'; g.textBaseline = 'middle'; g.fillText(n, x + 16, 20);
+    g.fillStyle = k % 4 === 0 ? '#D9442E' : '#22262A'; g.font = '900 26px "Pretendard",sans-serif'; g.textAlign = 'right'; g.fillText(pr, x + 196, 46);
+    g.fillStyle = '#c9bfa8'; g.fillRect(x + 203, 0, 2, 64);
+  })));
+  const priceM = keep(new THREE.MeshBasicMaterial({ map: priceT }));
+  function priceStrip(x0, w, y, z, k0, n) { // 케이스 앞 모서리, 칸 n개
+    const seg = w / n;
+    for (let k = 0; k < n; k++) {
+      const g = new THREE.PlaneGeometry(seg - 0.04, 0.07); const uv = g.attributes.uv; const ki = (k0 + k) % PRICE.length;
+      for (let q = 0; q < uv.count; q++) uv.setX(q, (ki + uv.getX(q)) / PRICE.length);
+      const m = new THREE.Mesh(keep(g), priceM); m.position.set(x0 + seg * (k + 0.5), y, z); scene.add(m);
+    }
+  }
+  function openCase(x0, x1, z, skus, { ice = false, k0 = 0 } = {}) {
     const w = x1 - x0, cx = (x0 + x1) / 2;
-    const body = new THREE.Mesh(keep(new THREE.BoxGeometry(w, 1.05, 1.15)), keep(new THREE.MeshLambertMaterial({ color })));
-    body.position.set(cx, 0.52, z); scene.add(body);
-    const well = new THREE.Mesh(keep(new THREE.BoxGeometry(w - 0.1, 0.04, 0.9)), coldLight);
-    well.position.set(cx, 1.035, z - 0.05); scene.add(well); // 얼음 트레이 (몸체 윗면보다 살짝 위)
-    // 뒤 선반벽 + 위 조명 캐노피 + 앞 초록 띠 (정적 병합이라 드로콜 추가 없음)
-    const riser = new THREE.Mesh(keep(new THREE.BoxGeometry(w, 1.3, 0.12)), steel); riser.position.set(cx, 1.7, z + 0.52); scene.add(riser);
-    const canopy = new THREE.Mesh(keep(new THREE.BoxGeometry(w, 0.1, 0.7)), black); canopy.position.set(cx, 2.4, z + 0.2); scene.add(canopy);
-    const strip = new THREE.Mesh(keep(new THREE.BoxGeometry(w - 0.2, 0.04, 0.5)), coldLight); strip.position.set(cx, 2.34, z + 0.2); scene.add(strip);
-    const band = new THREE.Mesh(keep(new THREE.BoxGeometry(w, 0.14, 0.02)), green); band.position.set(cx, 0.82, z - 0.585); scene.add(band);
-    const guard = new THREE.Mesh(keep(new THREE.PlaneGeometry(w - 0.15, 0.28)), glassM);
-    guard.position.set(cx, 1.22, z - 0.5); scene.add(guard);
-    const kick = new THREE.Mesh(keep(new THREE.BoxGeometry(w, 0.18, 1.15)), black);
-    kick.position.set(cx, 0.09, z); scene.add(kick);
-    obstacles.push({ x0, x1, z0: z - 0.6, z1: z + 0.58 });
-    // 트레이
+    const body = new THREE.Mesh(keep(new THREE.BoxGeometry(w, 0.98, 1.15)), caseBody); body.position.set(cx, 0.49, z); scene.add(body);
+    const well = new THREE.Mesh(keep(new THREE.BoxGeometry(w - 0.1, 0.04, 0.95)), ice ? iceM : caseIn);
+    well.position.set(cx, 1.0, z - 0.03); scene.add(well);
+    if (ice) { // 얼음 둔덕: 낮은 상자 몇 개
+      for (let k = 0; k < Math.floor(w / 0.9); k++) { const m = new THREE.Mesh(keep(new THREE.BoxGeometry(0.7, 0.05, 0.85)), iceM); m.position.set(x0 + 0.5 + k * 0.9, 1.035, z - 0.03); scene.add(m); }
+    }
+    // 뒤판(밝은 스테인리스) + 뒤판 위 거울 선반 + 흰 캐노피 + 조명 + 앞 초록 띠
+    const riser = new THREE.Mesh(keep(new THREE.BoxGeometry(w, 1.25, 0.1)), caseIn); riser.position.set(cx, 1.62, z + 0.55); scene.add(riser);
+    const shelf = new THREE.Mesh(keep(new THREE.BoxGeometry(w - 0.1, 0.03, 0.32)), caseIn); shelf.position.set(cx, 1.72, z + 0.36); scene.add(shelf);
+    const canopy = new THREE.Mesh(keep(new THREE.BoxGeometry(w, 0.08, 0.75)), caseBody); canopy.position.set(cx, 2.3, z + 0.18); scene.add(canopy);
+    const strip = new THREE.Mesh(keep(new THREE.BoxGeometry(w - 0.2, 0.03, 0.55)), coldLight); strip.position.set(cx, 2.255, z + 0.18); scene.add(strip);
+    const strip2 = new THREE.Mesh(keep(new THREE.BoxGeometry(w - 0.2, 0.025, 0.05)), warmLight); strip2.position.set(cx, 1.70, z + 0.2); scene.add(strip2);
+    const band = new THREE.Mesh(keep(new THREE.BoxGeometry(w, 0.14, 0.02)), green); band.position.set(cx, 0.8, z - 0.585); scene.add(band);
+    const guard = new THREE.Mesh(keep(new THREE.PlaneGeometry(w - 0.15, 0.24)), glassM); guard.position.set(cx, 1.2, z - 0.52); scene.add(guard);
+    const kick = new THREE.Mesh(keep(new THREE.BoxGeometry(w, 0.16, 1.1)), black); kick.position.set(cx, 0.08, z - 0.02); scene.add(kick);
+    priceStrip(x0 + 0.1, w - 0.2, 1.03, z - 0.592, k0, skus.length * 2);
+    obstacles.push({ x0, x1, z0: z - 0.6, z1: z + 0.6 });
+    // 트레이: 칸 폭 가득 · 4줄 · 뒷줄은 계단처럼 높게 · 칸 사이 초록 칸막이(채소 장식)
+    const seg = (w - 0.3) / skus.length;
     for (let i = 0; i < skus.length; i++) {
       const p = BY_ID[skus[i]]; if (!p) continue;
       const [sx, sy, sz] = p.size;
-      // 칸 폭 가득 · 깊이 2–3줄 · 앞줄 가운데만 집기 (빈 매대처럼 보이지 않게)
-      const seg = (w - 0.3) / skus.length, sx0 = x0 + 0.15 + i * seg;
-      const nA = Math.max(1, Math.floor((seg - 0.1) / (sx + 0.03))), nR = Math.max(1, Math.min(3, Math.floor(0.8 / (sz + 0.03))));
+      const sx0 = x0 + 0.15 + i * seg;
+      if (i > 0) for (let k = 0; k < 6; k++) { const gm = new THREE.Mesh(keep(new THREE.IcosahedronGeometry(0.075, 0)), garnish); gm.scale.set(1, 0.7, 1); gm.position.set(sx0 + (k % 2 ? 0.02 : -0.02), 1.08, z - 0.4 + k * 0.15); scene.add(gm); } // 칸막이 채소(파슬리·상추 덩이)
+      const nA = Math.max(1, Math.floor((seg - 0.1) / (sx + 0.02))), nR = Math.max(1, Math.min(4, Math.floor(0.86 / (sz + 0.02))));
       const list = freshCluster.items.get(p.id) || []; freshCluster.items.set(p.id, list);
       for (let k = 0; k < nA; k++) for (let row = 0; row < nR; row++) {
-        const stack = row === nR - 1 && sy < 0.12 && k % 2 === 0 ? 2 : 1; // 뒷줄은 가끔 두 단
-        for (let h = 0; h < stack; h++) list.push({ x: sx0 + 0.05 + (k + 0.5) * (seg - 0.1) / nA, y: 1.05 + sy * (h + 0.5), z: z - 0.42 + (row + 0.5) * (0.8 / nR), rot: 0, face: 1, pickable: row === 0 && h === 0 && k % 3 === 1 && PICKABLE_IDS.has(p.id), sx, sy, sz, pid: p.id });
+        const stack = sy < 0.12 ? (row >= nR - 2 ? 2 : 1) + (row === nR - 1 && k % 3 === 0 ? 1 : 0) : 1;
+        const jx = (hash01(k * 3.1 + row + i * 17 + z) - 0.5) * 0.03, jr = (hash01(k + row * 5.7 + i) - 0.5) * 0.12;
+        for (let hh = 0; hh < stack; hh++) list.push({ x: sx0 + 0.05 + (k + 0.5) * (seg - 0.1) / nA + jx, y: 1.04 + (ice ? 0.03 : 0) + sy * (hh + 0.5), z: z - 0.44 + (row + 0.5) * (0.86 / nR), rot: jr, face: 1, pickable: row === 0 && hh === 0 && k % 3 === 1 && PICKABLE_IDS.has(p.id), sx, sy, sz, pid: p.id });
       }
+      // 뒤판 선반에도 한 줄 (밀도)
+      for (let k = 0; k < nA; k += 2) list.push({ x: sx0 + 0.05 + (k + 0.5) * (seg - 0.1) / nA, y: 1.735 + sy / 2, z: z + 0.36, rot: 0, face: 1, pickable: false, sx, sy, sz, pid: p.id });
     }
   }
-  openCase(30, 42, 118.7, ['meat', 'beef', 'chicken', 'meat']); // 정육
-  openCase(42.4, 52, 118.7, ['salmon', 'mackerel', 'salmon']); // 수산
-  openCase(52.4, 63.5, 118.7, ['milk', 'yogurt', 'cheese', 'butter', 'egg']); // 유제품·계란
+  openCase(30, 42, 118.7, ['meat', 'chicken', 'beef', 'chicken', 'meat'], { k0: 0 }); // 정육 (빨강·분홍)
+  openCase(42.4, 52, 118.7, ['salmon', 'mackerel', 'salmon', 'mackerel'], { ice: true, k0: 4 }); // 수산 (얼음 위)
+  openCase(52.4, 63.5, 118.7, ['milk', 'yogurt', 'cheese', 'butter', 'egg'], { k0: 6 }); // 유제품·계란
 
-  // 계란/유제품 캐비닛 일부 업라이트 (짧은 유리문)
+  // 계란/유제품 업라이트 냉장고: 통짜 상자 대신 열린 앞면(옆판·뒤판·천장·선반 3단·조명) — 안의 계란이 보임
   {
-    const cx = 58, z = 116.4;
-    const cab = new THREE.Mesh(keep(new THREE.BoxGeometry(10, 2.0, 0.85)), steel);
-    cab.position.set(cx, 1.0, z); scene.add(cab);
-    const gl = new THREE.Mesh(keep(new THREE.PlaneGeometry(9.6, 1.7)), glassM);
-    gl.position.set(cx, 1.1, z - 0.43); scene.add(gl);
+    const cx = 58, z = 116.4, W2 = 10, H2 = 2.0, D2 = 0.85;
+    const parts = [
+      [W2, 0.06, D2, cx, H2 - 0.03, z, caseBody], [W2, 0.12, D2, cx, 0.06, z, black], [W2, H2, 0.05, cx, H2 / 2, z + D2 / 2 - 0.025, caseIn],
+      [0.06, H2, D2, cx - W2 / 2 + 0.03, H2 / 2, z, caseBody], [0.06, H2, D2, cx + W2 / 2 - 0.03, H2 / 2, z, caseBody],
+      [W2 - 0.1, 0.12, 0.04, cx, H2 - 0.1, z - D2 / 2 + 0.02, green],
+    ];
+    for (let sh = 0; sh < 3; sh++) parts.push([W2 - 0.12, 0.03, D2 - 0.1, cx, 0.36 + sh * 0.5, z + 0.03, caseIn]);
+    for (let k = 1; k < 5; k++) parts.push([0.05, H2 - 0.2, 0.05, cx - W2 / 2 + k * W2 / 5, H2 / 2, z - D2 / 2 + 0.03, caseBody]); // 문틀
+    for (const [w3, h3, d3, x3, y3, z3, m3] of parts) { const m = new THREE.Mesh(keep(new THREE.BoxGeometry(w3, h3, d3)), m3); m.position.set(x3, y3, z3); scene.add(m); }
+    const lt = new THREE.Mesh(keep(new THREE.BoxGeometry(W2 - 0.2, 0.03, 0.06)), coldLight); lt.position.set(cx, H2 - 0.16, z - 0.3); scene.add(lt);
+    const gl = new THREE.Mesh(keep(new THREE.PlaneGeometry(W2 - 0.2, H2 - 0.3)), glassM); gl.position.set(cx, 1.05, z - D2 / 2 - 0.01); scene.add(gl);
     obstacles.push({ x0: 53, x1: 63, z0: z - 0.45, z1: z + 0.45 });
-    const p = BY_ID.egg; const [sx, sy, sz] = p.size;
-    const list = freshCluster.items.get('egg') || []; freshCluster.items.set('egg', list);
+    const ids2 = ['egg', 'milk', 'yogurt', 'egg', 'cheese', 'egg', 'milk', 'butter'];
     for (let i = 0; i < 8; i++) for (let sh = 0; sh < 3; sh++) {
-      list.push({ x: 53.6 + i * 1.1, y: 0.4 + sh * 0.5 + sy / 2, z: z - 0.1, rot: 0, face: 1, pickable: sh === 1 && i % 2 === 0, sx, sy, sz, pid: 'egg' });
+      const p = BY_ID[ids2[(i + sh) % ids2.length]]; if (!p) continue; const [sx, sy, sz] = p.size;
+      const list = freshCluster.items.get(p.id) || []; freshCluster.items.set(p.id, list);
+      const n = Math.max(1, Math.min(4, Math.floor(1.05 / (sx + 0.02))));
+      for (let k = 0; k < n; k++) for (let row = 0; row < 2; row++) list.push({ x: 53.3 + i * 1.18 + (k + 0.5) * (1.1 / n), y: 0.375 + sh * 0.5 + sy / 2, z: z - 0.2 + row * Math.min(0.32, sz + 0.03), rot: 0, face: 1, pickable: p.id === 'egg' && row === 0 && k === 0 && sh === 1, sx, sy, sz, pid: p.id });
     }
   }
   buildItemIMs(freshCluster, atlas, unitBox, prodMeshes, m4, pv, qy, s3, col, Y);
@@ -752,6 +800,52 @@ function buildFixtures({ scene, keep, ct, atlas, unitBox, obstacles, prodMeshes,
 
 function buildItemIMs() { /* 데이터는 cluster.items 에 쌓고, 메시는 finalizeStock 에서 합침 */ }
 
+const hash01 = (x) => { const v = Math.sin(x * 12.9898 + 78.233) * 43758.5453; return v - Math.floor(v); };
+// 적재 면 단위 상자: 칸(0,0) 기준 UV — ±x(통로 쪽) = 앞 패널, ±z = 옆, ±y = 윗면. aCell 로 칸 이동.
+function loadGeo(N) {
+  const g = new THREE.BoxGeometry(1, 1, 1), uv = g.attributes.uv, q = 0.5 / N, v0 = 1 - 1 / N, e = 3 / 2048;
+  const faceUV = [[0, v0 + q], [0, v0 + q], [q, v0], [q, v0], [q, v0 + q], [q, v0 + q]]; // +x -x +y -y +z -z
+  for (let f = 0; f < 6; f++) for (let k = 0; k < 4; k++) { const i = f * 4 + k; uv.setXY(i, faceUV[f][0] + e + uv.getX(i) * (q - 2 * e), faceUV[f][1] + e + uv.getY(i) * (q - 2 * e)); }
+  return g;
+}
+// 칸 = [앞 | 옆] / [윗면 | 예비]. 앞: 상자 격자 + 인쇄 패널 + 테이프 + 수축 랩 광택. 홀수 품목은 '인쇄 박스', 짝수는 크라프트 박스에 띠 인쇄.
+function paintLoad(g, x0, y0, S, p, i) {
+  const h = S / 2, printed = i % 2 === 1, kraft = ['#c9a66b', '#bf9a5c', '#d1b07a'][i % 3];
+  const small = p.size[1] < 0.2, cols = small ? 4 : 3, rows = small ? 5 : 4;
+  const crate = (x, y, w, hh, front) => {
+    g.fillStyle = '#5b4a33'; g.fillRect(x, y, w, hh); // 이음새 그림자
+    const cw = w / cols, chh = hh / rows;
+    for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
+      const bx = x + c * cw + 1.5, by = y + r * chh + 1.5, bw = cw - 3, bh = chh - 3, sh = (hash01(i * 31 + r * 7 + c) - 0.5) * 18;
+      g.fillStyle = printed ? p.color : kraft; g.fillRect(bx, by, bw, bh);
+      g.fillStyle = `rgba(${sh > 0 ? '255,255,255' : '0,0,0'},${Math.abs(sh) / 100})`; g.fillRect(bx, by, bw, bh);
+      if (front) {
+        if (printed) { g.fillStyle = 'rgba(255,255,255,.85)'; g.fillRect(bx + bw * 0.1, by + bh * 0.28, bw * 0.8, bh * 0.36); g.fillStyle = p.ink === '#fff' ? '#22262A' : (p.ink || '#22262A'); }
+        else { g.fillStyle = p.color; g.fillRect(bx, by + bh * 0.3, bw, bh * 0.34); g.fillStyle = p.ink || '#fff'; }
+        g.font = `900 ${Math.max(9, Math.round(bh * 0.2))}px "Pretendard","Noto Sans KR",sans-serif`; g.textAlign = 'center'; g.textBaseline = 'middle';
+        g.fillText(p.name.split(' ')[0].slice(0, 5), bx + bw / 2, by + bh * 0.47);
+        g.fillStyle = 'rgba(0,0,0,.25)'; g.fillRect(bx + bw * 0.08, by + bh * 0.78, bw * 0.3, 2); // 바코드 자리
+      }
+      g.fillStyle = 'rgba(40,30,20,.35)'; g.fillRect(bx, by + bh * 0.08, bw, 2); // 상자 뚜껑 접힘선
+      g.fillStyle = 'rgba(214,190,140,.7)'; g.fillRect(bx + bw / 2 - 3, by, 6, bh * 0.12); // 테이프
+    }
+  };
+  const wrap = (x, y, w, hh) => { // 수축 랩: 전체 살짝 뿌옇게 + 사선 광택 + 세로 하이라이트
+    g.fillStyle = 'rgba(235,242,248,.10)'; g.fillRect(x, y, w, hh);
+    g.save(); g.beginPath(); g.rect(x, y, w, hh); g.clip();
+    for (let k = -2; k < 7; k++) { const gx = x + k * w * 0.2 + hash01(i + k) * 10; const gr = g.createLinearGradient(gx, y, gx + w * 0.12, y); gr.addColorStop(0, 'rgba(255,255,255,0)'); gr.addColorStop(0.5, `rgba(255,255,255,${0.10 + hash01(i * 3 + k) * 0.16})`); gr.addColorStop(1, 'rgba(255,255,255,0)'); g.fillStyle = gr; g.beginPath(); g.moveTo(gx, y); g.lineTo(gx + w * 0.12, y); g.lineTo(gx + w * 0.12 - hh * 0.25, y + hh); g.lineTo(gx - hh * 0.25, y + hh); g.fill(); }
+    g.strokeStyle = 'rgba(255,255,255,.35)'; g.lineWidth = 2; for (let k = 0; k < 5; k++) { const yy = y + hh * (0.15 + 0.18 * k); g.beginPath(); g.moveTo(x, yy); g.bezierCurveTo(x + w * 0.3, yy - 6, x + w * 0.7, yy + 6, x + w, yy); g.stroke(); }
+    g.restore();
+  };
+  crate(x0, y0, h, h, true); wrap(x0, y0, h, h);
+  crate(x0 + h, y0, h, h, false); wrap(x0 + h, y0, h, h);
+  // 윗면: 상자 윗면 + 테이프 십자 + 랩
+  g.fillStyle = '#5b4a33'; g.fillRect(x0, y0 + h, h, h);
+  for (let r = 0; r < 3; r++) for (let c = 0; c < cols; c++) { const bx = x0 + c * h / cols + 1.5, by = y0 + h + r * h / 3 + 1.5, bw = h / cols - 3, bh = h / 3 - 3; g.fillStyle = printed ? p.color : kraft; g.fillRect(bx, by, bw, bh); g.fillStyle = 'rgba(214,190,140,.8)'; g.fillRect(bx, by + bh / 2 - 3, bw, 6); }
+  wrap(x0, y0 + h, h, h);
+  g.fillStyle = '#e8e4da'; g.fillRect(x0 + h, y0 + h, h, h);
+}
+
 function finalizeStock({ scene, keep, clusters, atlas, unitBox, prodMeshes, tagG, ct, proxyMat, m4, pv, qy, s3, col, Y, q0 }) {
   // 상단 랩 파렛트: 맵 없이 품목색 한 메시 (얼룩 아틀라스 UV 제거)
   const uppers = [];
@@ -765,12 +859,22 @@ function finalizeStock({ scene, keep, clusters, atlas, unitBox, prodMeshes, tagG
     if (c.tags) allTags.push(...c.tags);
   }
   if (uppers.length) {
-    const im = new THREE.InstancedMesh(unitBox, proxyMat, uppers.length);
+    // 랩 파렛트·하단 덩어리: 품목별 '적재 면' 아틀라스(골판지 이음새·인쇄 패널·랩 광택) + aCell → 여전히 InstancedMesh 1개
+    const ids = [...new Set(uppers.map((pl) => pl.id).filter((id) => BY_ID[id]))];
+    const N = Math.max(1, Math.ceil(Math.sqrt(ids.length))), LS = 2048, LC = LS / N, lix = new Map(ids.map((id, i) => [id, i]));
+    const tex = keep(ct(LS, LS, (g) => ids.forEach((id, i) => paintLoad(g, (i % N) * LC, Math.floor(i / N) * LC, LC, BY_ID[id], i))));
+    tex.anisotropy = 4;
+    const geo = keep(loadGeo(N)); const aCell = new Float32Array(uppers.length * 2);
+    const im = new THREE.InstancedMesh(geo, cellMaterial(keep, new THREE.MeshLambertMaterial({ map: tex })), uppers.length);
     uppers.forEach((pl, i) => {
-      m4.compose(pv.set(pl.x, pl.y + pl.h / 2, pl.z), q0, s3.set(pl.w, pl.h, pl.d));
+      const r = hash01(i * 7.31 + pl.z * 3.7 + pl.x), h = pl.up ? pl.h * (0.72 + 0.28 * r) : pl.h; // 상단은 높이 들쭉날쭉
+      qy.setFromAxisAngle(Y, (r > 0.5 ? Math.PI : 0)); // 앞뒤 뒤집어 같은 그림 반복 덜 보이게
+      m4.compose(pv.set(pl.x, pl.y + h / 2, pl.z), qy, s3.set(pl.w, h, pl.d));
       im.setMatrixAt(i, m4);
-      col.setStyle(pl.color || '#d9d0c4'); im.setColorAt(i, col);
+      const k = lix.get(pl.id) ?? 0; aCell[2 * i] = (k % N) / N; aCell[2 * i + 1] = -Math.floor(k / N) / N;
+      const v = 0.86 + 0.14 * hash01(i * 1.93 + 0.5); col.setRGB(v, v, v); im.setColorAt(i, col);
     });
+    geo.setAttribute('aCell', new THREE.InstancedBufferAttribute(aCell, 2));
     im.instanceColor.needsUpdate = true; im.computeBoundingSphere(); scene.add(im);
   }
   // 상품: SKU 별 InstancedMesh(수십 드로콜) → 앞·중·뒤 구역별 1개 (aCell 로 아틀라스 칸 선택)

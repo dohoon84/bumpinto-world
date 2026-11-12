@@ -71,7 +71,7 @@ export const STOCK_PRODUCTS = [
     data: { size: 'est 대형 스티로폼 트레이 280×200', kg: 'est 고기 1kg + 트레이·랩 80g', price: 'est 게임 가안(한우 등심 시세 변동 큼)' } },
   { id: 'salmon', name: '범연어 필렛', sub: '생연어 1kg', size: [0.32, 0.06, 0.18], kg: 1.08, price: 32900, color: '#e07a62', ink: '#fff', kind: 'tray', shape: 'tray',
     data: { size: 'est 필렛 트레이 320×180', kg: 'est 1kg + 트레이', price: 'est 게임 가안' } },
-  { id: 'mackerel', name: '범고등어 10팩', sub: '순살 구이용', size: [0.36, 0.10, 0.26], kg: 2.4, price: 24900, color: '#4a6a8a', ink: '#fff', kind: 'box',
+  { id: 'mackerel', name: '범고등어 10팩', sub: '순살 구이용', size: [0.36, 0.10, 0.26], kg: 2.4, price: 24900, color: '#9fb2c2', ink: '#1a2a3a', kind: 'box',
     data: { size: 'est 진공팩 10입 박스', kg: 'est', price: 'est 게임 가안' } },
   { id: 'chicken', name: '범닭 생닭 2마리', sub: '토종 아닌 일반 1.1kg×2', size: [0.30, 0.14, 0.24], kg: 2.3, price: 14900, color: '#f3d3b0', ink: '#5a2a1a', kind: 'tray', shape: 'tray',
     data: { size: 'est', kg: 'est 1.1×2 + 포장', price: 'est 게임 가안' } },
