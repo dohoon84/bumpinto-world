@@ -193,7 +193,7 @@ const AMBIENT_LOOKS = {
   ],
 };
 // 제자리 배경 인물: 위치·방향 고정, 장애물 사각형 고정
-const AMBIENT_FIXED = { 'sample-staff': { x: 7.75, z: 39.65, yaw: Math.PI, rect: null }, 'sample-queue': { x: 6.3, z: 41.75, yaw: 0, rect: { x0: 5.95, x1: 7.2, z0: 41.4, z1: 43.6 } } };
+const AMBIENT_FIXED = { 'sample-staff': { x: 7.75, z: 39.65, yaw: -Math.PI / 2, rect: null }, 'sample-queue': { x: 9.05, z: 39.75, yaw: Math.PI / 2, rect: { x0: 8.75, x1: 10.85, z0: 39.15, z1: 40.15 } } }; // 줄은 매대 동쪽(열린 쪽)에서 서쪽을 보고 섬
 const AMBIENT_ORDER = ['sample-staff', 'stocker-a', 'sample-queue', 'crowd-1', 'kid', 'crowd-2', 'comparer', 'stocker-b', 'crowd-3', 'caller', 'crowd-4', 'crowd-5', 'crowd-6'];
 const AMBIENT_MOBILE = 5; // (시식 직원은 예전 고정 마네킹 자리 대신이라 포함, 손님 4) // 모바일 손님 상한(배경) — 메시도 이 수만 만듦
 const AMBIENT_SPEED = { 'stocker-a': 0.65, 'stocker-b': 0.75, kid: 1.9, comparer: 0.8, caller: 0.55 };
