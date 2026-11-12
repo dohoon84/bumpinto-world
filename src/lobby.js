@@ -646,7 +646,15 @@ export function openLobby({ sms, region = null, onJoin, onBack }) {
     import('./account/lobbyAccount.js')
       .then((m) => m.detectLobbyAccount({ sms, saved, look, fallbackName: isEn() ? 'Guest' : '손님' }))
       .catch(() => null)
-      .then((found) => {
+      .then(async (found) => {
+        if (found?.me?.consent?.needsTerms) {
+          try {
+            const { ensureAccountConsent } = await import('./account/consent.js');
+            const g = await ensureAccountConsent({ me: found.me });
+            if (!g.ok) found = null;
+            else if (g.me) found = { ...found, me: g.me };
+          } catch { /* 동의 창을 못 열면 계정 입장은 유지하되, 다음 화면에서 다시 묻는다 */ }
+        }
         card.classList.remove('is-acct-checking');
         if (!found || !root.contains(card)) { if (root.contains(card)) guestPreview(); return; }
         ticket += 1; // 게스트 미리보기가 늦게 와서 덮어쓰지 않게

@@ -26,7 +26,9 @@ async function call(path, { method = 'GET', body } = {}) {
 export const accountApi = {
   config: () => call('/auth/config'),
   me: (deviceId) => call(`/auth/me?deviceId=${encodeURIComponent(deviceId || '')}`),
-  google: (credential, deviceId) => call('/auth/google', { method: 'POST', body: { credential, deviceId } }),
+  google: (credential, deviceId, consent = {}) => call('/auth/google', { method: 'POST', body: { credential, deviceId, ...consent } }),
   link: (deviceId) => call('/auth/link', { method: 'POST', body: { deviceId } }),
   logout: (all = false) => call('/auth/logout', { method: 'POST', body: { all: !!all } }),
+  consent: (body) => call('/auth/consent', { method: 'POST', body }),
+  marketing: (optIn) => call('/auth/marketing', { method: 'POST', body: { optIn: !!optIn } }),
 };

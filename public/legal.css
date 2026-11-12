@@ -1,0 +1,79 @@
+/* 이용약관·개인정보처리방침 초안 — 정적 페이지. WebGL 없음. */
+:root {
+  --ink: #122033;
+  --muted: #4a5c73;
+  --line: rgba(18, 32, 51, .14);
+  --bg: #f6f3ec;
+  --paper: #fffdf8;
+  --accent: #f5a200;
+  --banner: #fff3c4;
+}
+* { box-sizing: border-box; }
+html { color-scheme: light; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font: 16px/1.7 "Pretendard", "Apple SD Gothic Neo", "Noto Sans KR", "Segoe UI", sans-serif;
+  letter-spacing: -0.01em;
+}
+a { color: #0b5cab; }
+a:hover { color: #084a89; }
+.wrap { max-width: 760px; margin: 0 auto; padding: 24px 20px 80px; }
+.top {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  margin-bottom: 20px;
+}
+.brand { display: flex; flex-direction: column; gap: 2px; text-decoration: none; color: inherit; }
+.brand b { font-size: 15px; }
+.brand small { color: var(--muted); font-size: 12px; }
+.back {
+  height: 36px; padding: 0 14px; border-radius: 999px;
+  border: 1.5px solid var(--line); background: #fff; color: var(--ink);
+  font: inherit; font-weight: 700; font-size: 13px; text-decoration: none;
+  display: inline-flex; align-items: center;
+}
+.draft {
+  background: var(--banner);
+  border: 1.5px solid rgba(245, 162, 0, .45);
+  border-radius: 14px;
+  padding: 12px 16px;
+  font-size: 14px;
+  line-height: 1.55;
+  margin: 0 0 24px;
+}
+h1 { font-size: 28px; line-height: 1.25; margin: 0 0 8px; letter-spacing: -0.03em; }
+.meta { color: var(--muted); font-size: 14px; margin: 0 0 28px; }
+article {
+  background: var(--paper);
+  border: 1.5px solid var(--line);
+  border-radius: 18px;
+  padding: 28px 28px 36px;
+  box-shadow: 0 8px 24px rgba(18, 32, 51, .06);
+}
+h2 {
+  font-size: 18px;
+  margin: 28px 0 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+}
+h2:first-child { margin-top: 0; border-top: 0; padding-top: 0; }
+p, li { color: #1c2b3d; }
+ul, ol { padding-left: 1.25em; margin: 8px 0 12px; }
+li { margin: 4px 0; }
+.ph {
+  display: inline-block;
+  background: #fff3c4;
+  border: 1px dashed #d49200;
+  border-radius: 6px;
+  padding: 0 6px;
+  font-weight: 700;
+  font-size: 0.95em;
+}
+footer { margin-top: 28px; color: var(--muted); font-size: 13px; }
+nav.toc { font-size: 14px; margin: 0 0 20px; }
+nav.toc a { margin-right: 10px; }
+@media (max-width: 560px) {
+  article { padding: 20px 16px 28px; }
+  h1 { font-size: 24px; }
+}

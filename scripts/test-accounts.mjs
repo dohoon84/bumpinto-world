@@ -65,9 +65,12 @@ function sqlOf(db) {
   };
 }
 const MIGRATION = readFileSync(new URL('../server/phone/migrations/0001_accounts.sql', import.meta.url), 'utf8');
+const MIGRATION_CONSENT = readFileSync(new URL('../server/phone/migrations/0007_account_consent.sql', import.meta.url), 'utf8');
+const CONSENT = { termsVersion: '2026-11-13', privacyVersion: '2026-11-13' };
 function makeEnv(vars = {}) {
   const d1raw = new DatabaseSync(':memory:');
   d1raw.exec(MIGRATION);
+  d1raw.exec(MIGRATION_CONSENT);
   const dodb = new DatabaseSync(':memory:');
   const ctx = {
     storage: {
@@ -272,7 +275,7 @@ function makeAuth(env, jwks) {
   giveGift(dodb, pc1, 'roadbike-cr1', 2);
   addPhoto(dodb, pc1, 'p1', 'sha-a', NOW - 5000);
   addPhoto(dodb, pc1, 'p2', 'sha-b', NOW - 4000);
-  let r = await a.call('POST', '/auth/google', { credential: await idToken(), deviceId: pc1 });
+  let r = await a.call('POST', '/auth/google', { credential: await idToken(), deviceId: pc1, ...CONSENT });
   assert.equal(r.status, 200, JSON.stringify(r.json));
   assert.equal(r.json.created, true); assert.equal(r.json.link.status, 'linked'); assert.equal(r.json.primaryUserId, pc1);
   assert.ok(a.cookie.startsWith('bw_s=v1.')); assert.equal(r.json.balance, undefined);
@@ -316,7 +319,7 @@ function makeAuth(env, jwks) {
 
   // 다른 구글 계정이 PC2 로 로그인 → 이전 안 함
   const c = makeAuth(env, cache);
-  r = await c.call('POST', '/auth/google', { credential: await idToken({ sub: '2000002', email: 'b@example.com' }), deviceId: pc2 });
+  r = await c.call('POST', '/auth/google', { credential: await idToken({ sub: '2000002', email: 'b@example.com' }), deviceId: pc2, ...CONSENT });
   assert.equal(r.status, 200); assert.equal(r.json.link.status, 'linked_to_other_account'); assert.equal(r.json.primaryUserId, null);
   assert.equal(qty(dodb, pc2, 'roadbike-cr1'), 5); assert.equal(qty(dodb, pc1, 'roadbike-cr1'), 3);
   ok('device linked to another account → linked_to_other_account, nothing merged');
@@ -363,7 +366,7 @@ function makeAuth(env, jwks) {
   const pc1 = await join(env, crypto.randomUUID(), 'D1');
   const pc2 = await join(env, crypto.randomUUID(), 'D2');
   giveGift(dodb, pc2, 'superbike-rr', 1);
-  await a.call('POST', '/auth/google', { credential: await idToken(), deviceId: pc1 });
+  await a.call('POST', '/auth/google', { credential: await idToken(), deviceId: pc1, ...CONSENT });
   const r = await a.call('POST', '/auth/link', { deviceId: pc2 });
   assert.equal(r.json.migrate.mode, 'dry'); assert.equal(qty(dodb, pc2, 'superbike-rr'), 1); assert.equal(qty(dodb, pc1, 'superbike-rr'), 0);
   assert.equal(d1raw.prepare("SELECT COUNT(*) AS c FROM migrations_log WHERE mode = 'dry'").get().c > 0, true);
@@ -381,7 +384,7 @@ function makeAuth(env, jwks) {
   const a = makeAuth(env, cache);
   const pc = await join(env, crypto.randomUUID(), 'Beta');
   dodb.prepare('UPDATE users SET created_at = ? WHERE id = ?').run(Date.parse('2026-10-01T00:00:00Z'), pc);
-  let r = await a.call('POST', '/auth/google', { credential: await idToken({ sub: 'beta-1' }), deviceId: pc });
+  let r = await a.call('POST', '/auth/google', { credential: await idToken({ sub: 'beta-1' }), deviceId: pc, ...CONSENT });
   assert.equal(r.json.balance.free, 30000); assert.deepEqual(r.json.granted.map((g) => g.reason).sort(), ['beta', 'welcome']);
   ok('economy on: welcome 20,000 + beta 10,000 for a pre-open device');
   r = await a.call('POST', '/auth/google', { credential: await idToken({ sub: 'beta-1' }), deviceId: pc });
@@ -391,13 +394,13 @@ function makeAuth(env, jwks) {
   const late = makeAuth(env, cache);
   const lateNow = Date.parse(openAt) + 31 * 86400_000;
   const lateSec = Math.floor(lateNow / 1000);
-  r = await late.call('POST', '/auth/google', { credential: await idToken({ sub: 'late-1', iat: lateSec - 5, exp: lateSec + 3600 }), deviceId: crypto.randomUUID() }, { now: lateNow });
+  r = await late.call('POST', '/auth/google', { credential: await idToken({ sub: 'late-1', iat: lateSec - 5, exp: lateSec + 3600 }), deviceId: crypto.randomUUID(), ...CONSENT }, { now: lateNow });
   assert.equal(r.status, 200, JSON.stringify(r.json));
   assert.equal(r.json.balance.free, 20000); ok('new account after the 30-day window: welcome only');
   const env2 = makeEnv({ ECONOMY_ENABLED: '1', ECONOMY_OPEN_AT: '' });
   const z = makeAuth(env2.env, cache);
   const pcz = await join(env2.env, crypto.randomUUID(), 'NoOpen');
-  r = await z.call('POST', '/auth/google', { credential: await idToken({ sub: 'z' }), deviceId: pcz });
+  r = await z.call('POST', '/auth/google', { credential: await idToken({ sub: 'z' }), deviceId: pcz, ...CONSENT });
   assert.equal(r.json.balance.free, 20000); ok('ECONOMY_OPEN_AT empty → no beta grant');
 }
 
