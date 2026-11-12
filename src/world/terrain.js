@@ -424,7 +424,10 @@ export function createTerrain(T, data) {
         if (full && !main) { pos.length = start; quad(a, b, c, d); }
         return !!full;
       };
-      const S = Math.max(x1 - x0, z1 - z0), nx = Math.ceil((x1 - x0) / (S / 4)), nz = Math.ceil((z1 - z0) / (S / 4));
+      // [jamsil-perf] 윗칸을 200m 안팎으로 잘게(예전 S/4 ≈ 1.5km): 한 칸이 슬라이서 한 걸음이라 하천 근처 칸이 2초씩 멈추던 것을 나눈다.
+      //   평평한 바닥이라 칸이 잘아져도 모양은 같고 삼각형만 수백 개 늘어난다.
+      const TOP = Math.max(4, Math.ceil(Math.max(x1 - x0, z1 - z0) / 200));
+      const S = Math.max(x1 - x0, z1 - z0), nx = Math.ceil((x1 - x0) / (S / TOP)), nz = Math.ceil((z1 - z0) / (S / TOP));
       const sx = (x1 - x0) / nx, sz = (z1 - z0) / nz;
       let steps = 0;
       for (let i = 0; i < nx; i++) for (let j = 0; j < nz; j++) {
@@ -684,8 +687,10 @@ export function createTerrain(T, data) {
 
     // 5) 제방 숲(OSM forest 폴리곤) 나무 — 지형 높이에 맞춰
     const tp = []; let sd = 11; const rnd = () => ((sd = (sd * 16807) % 2147483647) / 2147483647);
+    let parkN = 0;
     for (const q of parkCols) {
       if (!['forest', 'wood', 'scrub'].includes(q.p.k)) continue;
+      if ((++parkN & 3) === 0) yield 'terrain-forest'; // [jamsil-perf] 숲 나무 자리 찾기를 나눠 긴 멈춤을 줄인다
       for (let x = q.a; x < q.c; x += 7) for (let z = q.b; z < q.d; z += 7) {
         const px = x + rnd() * 5, pz = z + rnd() * 5;
         if (pointInRing(px, pz, q.p.o) && !stairAt(px, pz, 2) && !deckAt(px, pz) && !world.onRoad(px, pz)) tp.push([px, pz]);
