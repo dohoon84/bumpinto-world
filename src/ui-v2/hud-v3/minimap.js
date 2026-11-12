@@ -106,6 +106,7 @@ function build() {
       const sx = (e.clientX - rect.left) * (cv.width / Math.max(1, rect.width));
       const sy = (e.clientY - rect.top) * (cv.height / Math.max(1, rect.height));
       const hit = navHits.find((h) => (h.sx - sx) ** 2 + (h.sy - sy) ** 2 < h.r * h.r);
+      if (hit?.depot && window.__jj?.depot?.guide?.()) return; // [depot-ext] 범창고 → 문 앞 안내
       if (hit && window.__jj?.bp24Nav?.guide?.(hit.id)) return; // [bp24nav] 매장 아이콘 → 문 앞 안내. 다른 클릭은 예전대로 위에서 보기
       if (hit?.arcade) {
         const pos = window.__jj?.player?.position;
@@ -427,6 +428,18 @@ function draw(now, J, P) {
     if (hover) { const d = (hover.x - sx) ** 2 + (hover.y - sy) ** 2; if (d < hovD) { hovD = d; hov = { sx, sy, t: st.name }; } }
   }
 
+  // [depot-ext] 범창고 아이콘(초록 사각 + 박스범 귀) · 이름 · 누르면 문 앞 안내선
+  const dm = J.depot?.mapMarker;
+  if (dm) {
+    const [sx, sy] = toS(dm.x, dm.z);
+    if (inC(sx, sy, 2)) {
+      drawDepotMark(g, sx, sy);
+      labels.push({ sx, sy: sy - 12, t: dm.label });
+      navHits.push({ sx, sy, r: 13, id: 'depot', name: dm.label, depot: true });
+      if (hover) { const d = (hover.x - sx) ** 2 + (hover.y - sy) ** 2; if (d < hovD) { hovD = d; hov = { sx, sy, t: dm.label }; } }
+    }
+  }
+
   // 목적지 (원 밖이면 테두리에 화살표)
   if (route?.dest) {
     const [sx, sy] = toS(route.dest.x, route.dest.z);
@@ -517,6 +530,14 @@ function fitCableLabel(sx, sy, text) {
   let lx = sx, ly = sy < R * 0.38 ? sy + 16 : sy - 12;
   [lx, ly] = clamp(lx, ly);
   return { sx: lx, sy: ly, t: text, fit: 1 };
+}
+function drawDepotMark(g, sx, sy) { // [depot-ext]
+  g.save(); g.translate(sx, sy);
+  g.fillStyle = '#F3EADA'; g.beginPath(); g.arc(-4.5, -7, 3.2, 0, Math.PI * 2); g.arc(4.5, -7, 3.2, 0, Math.PI * 2); g.fill();
+  g.beginPath(); g.roundRect ? g.roundRect(-9, -8, 18, 16, 4) : g.rect(-9, -8, 18, 16); g.fillStyle = '#1E5A45'; g.fill();
+  g.lineWidth = 1.6; g.strokeStyle = '#F3EADA'; g.stroke();
+  g.fillStyle = '#F2C230'; g.font = '900 10px Pretendard, "Noto Sans KR", sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('범', 0, 0.5);
+  g.restore();
 }
 function drawCableMark(g, sx, sy) {
   g.beginPath(); g.arc(sx, sy, 7.2, 0, Math.PI * 2); g.fillStyle = '#0b1424'; g.fill();

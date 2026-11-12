@@ -7,10 +7,10 @@ export { depotEnabled, DEPOT_AT, DEPOT_SPAWN, DEPOT_SITE } from './flag.js';
 
 const FADE = 0.35, DOOR_R = 4.2, PREFETCH_R = 120;
 
-export function mountDepot({ renderer, scene, getPlayer, groundY, canEnter = () => true, onInterior, isMobile = false, params } = {}) {
+export function mountDepot({ renderer, scene, getPlayer, groundY, canEnter = () => true, onInterior, isMobile = false, params, overlay = null } = {}) {
   const search = params ? `?${params}` : location.search;
   if (!depotEnabled(search)) return null;
-  const ext = buildDepotExterior(scene, { groundY: groundY || (() => 0) });
+  const ext = buildDepotExterior(scene, { groundY: groundY || (() => 0), overlay, getPos: () => getPlayer?.()?.position, lot: new URLSearchParams(search.replace(/^\?/, '')).get('depotlot') !== '0' }); // [depot-ext] ?depotlot=0 이면 주차장 디테일 끔
   let mod = null, modP = null, interior = null, active = false, busy = false, near = false;
   let fade = { t: 0, phase: '', leaving: false };
   const loadMod = () => (modP ||= import('./interior.js').then((m) => (mod = m)).catch((e) => { modP = null; console.warn('[depot]', e); return null; }));
@@ -69,6 +69,7 @@ body.depot-inside #ve-hud{display:none !important} /* 매장 안: 왼쪽 위 할
 
   function outdoorTick(dt, pos) {
     if (active || busy) { tickFade(dt); return; }
+    ext.update(dt, pos); // [depot-ext] 주차장 지연 생성·밤 조명·바닥 화살표
     if (!pos) { near = false; setHint(false); return; }
     const dDoor = Math.hypot(pos.x - S.door.x, pos.z - (S.z0 - 1.5));
     if (dDoor < PREFETCH_R && !modP) loadMod(); // 가까이 오면 내부 모듈만 미리 받아 둠(메모리에 장면은 아직 없음)
@@ -92,6 +93,7 @@ body.depot-inside #ve-hud{display:none !important} /* 매장 안: 왼쪽 위 할
     view: () => (active && interior ? { scene: interior.scene, camera: interior.camera } : null),
     blocks: (x, z, r) => !active && ext.blocks(x, z, r),
     exterior: ext,
+    mapMarker: ext.marker, guide: () => ext.way.guide(), // [depot-ext] 미니맵 아이콘 · 문 앞 안내선
     dispose() { interior?.dispose(); interior = null; ext.dispose(); root.remove(); st.remove(); },
     _dbg: { get mod() { return mod; }, loadMod, get interior() { return interior; } },
   };

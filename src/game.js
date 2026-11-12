@@ -701,7 +701,7 @@ const arcadeGame = mountArcade({
 if (arcadeGame) { const withArc = world.isBlocked; world.isBlocked = (x, z, r) => withArc(x, z, r) || arcadeGame.blocks(x, z, r); }
 // [depot] 범창고(BUMP DEPOT) 정자점 — 바깥은 외피만, 안(선반·상품·카트·물리)은 들어갈 때 지연 로드하고 나오면 해제. ?depot=0 끔.
 const depot = mountDepot({
-  renderer, scene, params, getPlayer: () => player, isMobile: mobileMode,
+  renderer, scene, params, overlay, getPlayer: () => player, isMobile: mobileMode, // [depot-ext] overlay = 이름표
   groundY: terrain ? (x, z) => terrain.getGroundHeight(x, z, 0) : null,
   canEnter: () => subwayCanEnter() && !subway?.active && !bump24Game?.active && !arcadeGame?.active,
   onInterior: (zone, inside) => {
