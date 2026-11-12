@@ -18,16 +18,16 @@ function rr(g, x, y, w, h, r) { g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + w
 function fitText(g, s, maxW, weight, px) { let p = px; g.font = font(weight, p); while (p > 8 && g.measureText(s).width > maxW) { p -= 2; g.font = font(weight, p); } return p; }
 function loadImg(name) { return new Promise((res) => { const im = new Image(); im.onload = () => res(im); im.onerror = () => res(null); im.src = `${BASE()}depot/${name}`; }); }
 
-// 박스범(상자 호랑이) 간이 아이콘 — 로고 이미지를 못 받았을 때·작은 자리용
-export function drawBoxBeom(g, x, y, s) {
+// 박스 마크(골판지 상자, 귀·얼굴 없음) 간이 아이콘 — 로고 이미지를 못 받았을 때·작은 자리용. logo-icon.webp 와 같은 모양.
+export function drawBoxMark(g, x, y, s) {
   g.save(); g.translate(x, y); g.scale(s / 100, s / 100);
-  g.fillStyle = C.cream; rr(g, 0, 10, 100, 90, 14); g.fill();
-  for (const ex of [14, 66]) { g.beginPath(); g.arc(ex + 10, 14, 13, 0, Math.PI * 2); g.fill(); }
-  g.fillStyle = C.kraft; rr(g, 6, 18, 88, 76, 10); g.fill();
-  g.fillStyle = C.deep; for (const ex of [24, 76]) { g.beginPath(); g.arc(ex, 15, 6, 0, Math.PI * 2); g.fill(); }
-  g.fillStyle = '#e4cfa6'; g.fillRect(42, 18, 16, 22);
-  g.fillStyle = C.deep; for (const yy of [52, 66, 80]) { g.beginPath(); g.moveTo(6, yy - 4); g.lineTo(22, yy); g.lineTo(6, yy + 4); g.fill(); g.beginPath(); g.moveTo(94, yy - 4); g.lineTo(78, yy); g.lineTo(94, yy + 4); g.fill(); }
-  g.beginPath(); g.arc(38, 58, 5, 0, Math.PI * 2); g.arc(62, 58, 5, 0, Math.PI * 2); g.fill();
+  g.lineJoin = 'round'; g.lineWidth = 6; g.strokeStyle = C.deep;
+  const poly = (pts, fill) => { g.beginPath(); pts.forEach(([px, py], i) => (i ? g.lineTo(px, py) : g.moveTo(px, py))); g.closePath(); g.fillStyle = fill; g.fill(); g.stroke(); };
+  poly([[50, 6], [92, 24], [50, 42], [8, 24]], '#d9a96a');          // 윗면
+  poly([[8, 24], [50, 42], [50, 96], [8, 78]], '#c99a5e');          // 왼쪽 면
+  poly([[50, 42], [92, 24], [92, 78], [50, 96]], C.kraft);          // 오른쪽 면
+  g.fillStyle = C.green; g.beginPath(); g.moveTo(28, 15); g.lineTo(36, 12); g.lineTo(78, 30); g.lineTo(70, 33); g.closePath(); g.fill(); // 테이프
+  g.beginPath(); g.moveTo(70, 33); g.lineTo(78, 30); g.lineTo(78, 46); g.lineTo(70, 49); g.closePath(); g.fill();
   g.restore();
 }
 
@@ -101,12 +101,12 @@ export function signAtlas({ k = 1 } = {}) {
     g.fillStyle = C.green; g.fillRect(0, 0, w, h);
     g.strokeStyle = C.cream; g.lineWidth = 10; rr(g, 14, 14, w - 28, h - 28, 26); g.stroke();
     if (logo) { const lh = 330, lw = lh * logo.width / logo.height; g.drawImage(logo, 90, (h - lh) / 2 - 10, lw, lh); g.fillStyle = C.cream; g.font = font(800, 120); g.textAlign = 'right'; g.textBaseline = 'middle'; g.fillText('정자점', w - 90, h / 2 - 30); g.fillStyle = C.yellow; g.font = font(700, 48); g.fillText('크게 사면 크게 웃어요', w - 92, h / 2 + 86); }
-    else { drawBoxBeom(g, 90, 110, 290); g.fillStyle = C.cream; g.textBaseline = 'middle'; g.textAlign = 'left'; g.font = font(900, 250); g.fillText('범창고', 430, h / 2 - 40); g.fillStyle = C.yellow; g.font = font(900, 88); g.fillText('B U M P   D E P O T', 440, h / 2 + 150); g.fillStyle = C.cream; g.font = font(800, 120); g.textAlign = 'right'; g.fillText('정자점', w - 90, h / 2 - 30); }
+    else { drawBoxMark(g, 90, 110, 290); g.fillStyle = C.cream; g.textBaseline = 'middle'; g.textAlign = 'left'; g.font = font(900, 250); g.fillText('범창고', 430, h / 2 - 40); g.fillStyle = C.yellow; g.font = font(900, 88); g.fillText('B U M P   D E P O T', 440, h / 2 + 150); g.fillStyle = C.cream; g.font = font(800, 120); g.textAlign = 'right'; g.fillText('정자점', w - 90, h / 2 - 30); }
   });
   const drawPyTop = (icon) => A.draw('pyTop', (g, w, h) => {
     g.fillStyle = C.green; g.fillRect(0, 0, w, h);
     g.strokeStyle = C.cream; g.lineWidth = 8; rr(g, 12, 12, w - 24, h - 24, 22); g.stroke();
-    if (icon) g.drawImage(icon, 136, 40, 240, 240); else drawBoxBeom(g, 146, 46, 220);
+    if (icon) g.drawImage(icon, 136, 40, 240, 240); else drawBoxMark(g, 146, 46, 220);
     g.fillStyle = C.cream; g.textAlign = 'center'; g.textBaseline = 'middle'; g.font = font(900, 150); g.fillText('범창고', w / 2, 380);
     g.fillStyle = C.yellow; g.font = font(900, 46); g.fillText('B U M P  D E P O T', w / 2, 466);
   });
@@ -150,7 +150,7 @@ export function signAtlas({ k = 1 } = {}) {
   posts.forEach(([a, b, c], i) => A.draw('post' + i, (g, w, h) => {
     g.fillStyle = C.green; g.fillRect(0, 0, w, h);
     g.fillStyle = C.yellow; g.fillRect(0, h - 14, w, 14);
-    drawBoxBeom(g, 16, 22, 96);
+    drawBoxMark(g, 16, 22, 96);
     g.fillStyle = C.cream; g.textBaseline = 'middle'; g.textAlign = 'left'; fitText(g, a, 230, 900, 58); g.fillText(a, 128, 58);
     g.fillStyle = C.yellow; g.font = font(900, 52); g.textAlign = 'right'; g.fillText(b, w - 18, 58);
     g.fillStyle = C.cream; g.font = font(700, 32); g.textAlign = 'left'; g.fillText(c, 128, 138);
@@ -208,20 +208,20 @@ export function bannerAtlas({ k = 1 } = {}) {
     g.fillStyle = acc; g.textAlign = 'center'; g.textBaseline = 'middle'; fitText(g, top, w - 30, 900, 44); g.fillText(top, w / 2, 70);
     g.fillStyle = fg; const n = big.length, px = n > 3 ? 92 : 112; let y = 190;
     for (const s of big) { fitText(g, s, w - 26, 900, px); g.fillText(s, w / 2, y); y += px * 1.18; }
-    drawBoxBeom(g, w / 2 - 50, h - 300, 100);
+    drawBoxMark(g, w / 2 - 50, h - 300, 100);
     g.fillStyle = fg; const lines = sub.split(' · '); let yy = h - 150; g.font = font(800, 30);
     for (const l of lines) { fitText(g, l, w - 30, 800, 32); g.fillText(l, w / 2, yy); yy += 40; }
   }));
   const hb = [[C.green, C.cream, '크게 사면 크게 웃어요 · 범창고 정자점'], [C.red, '#fff', '오픈 기념 대축제 · 전 품목 대용량 · 매일 낮은 가격'], [C.cream, C.deep, '카트는 크게, 계란은 살살 · 주차 3시간 무료']];
   hb.forEach(([bg, fg, s], i) => A.draw('hb' + i, (g, w, h) => {
     g.fillStyle = bg; g.fillRect(0, 0, w, h); g.fillStyle = C.yellow; g.fillRect(0, 0, w, 10); g.fillRect(0, h - 10, w, 10);
-    drawBoxBeom(g, 18, 26, 106);
+    drawBoxMark(g, 18, 26, 106);
     g.fillStyle = fg; g.textBaseline = 'middle'; g.textAlign = 'center'; fitText(g, s, w - 170, 900, 64); g.fillText(s, w / 2 + 60, h / 2 + 2);
   }));
   A.draw('truck', (g, w, h) => {
     g.fillStyle = C.cream; g.fillRect(0, 0, w, h);
     g.fillStyle = C.green; g.fillRect(0, h - 70, w, 70); g.fillStyle = C.kraft; g.fillRect(0, h - 82, w, 12);
-    drawBoxBeom(g, 30, 30, 120);
+    drawBoxMark(g, 30, 30, 120);
     g.fillStyle = C.green; g.textBaseline = 'middle'; g.textAlign = 'left'; g.font = font(900, 104); g.fillText('범창고', 170, 92);
     g.fillStyle = C.kraft; g.font = font(900, 40); g.fillText('B U M P   D E P O T', 176, 158);
     g.fillStyle = C.cream; g.font = font(800, 36); g.textAlign = 'right'; g.fillText('오늘도 크게 실어 갑니다 · 신선 배송', w - 24, h - 35);

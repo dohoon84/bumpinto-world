@@ -428,7 +428,7 @@ function draw(now, J, P) {
     if (hover) { const d = (hover.x - sx) ** 2 + (hover.y - sy) ** 2; if (d < hovD) { hovD = d; hov = { sx, sy, t: st.name }; } }
   }
 
-  // [depot-ext] 범창고 아이콘(초록 사각 + 박스범 귀) · 이름 · 누르면 문 앞 안내선
+  // [depot-ext] 범창고 아이콘(초록 사각 + 박스 마크) · 이름 · 누르면 문 앞 안내선
   const dm = J.depot?.mapMarker;
   if (dm) {
     const [sx, sy] = toS(dm.x, dm.z);
@@ -531,12 +531,15 @@ function fitCableLabel(sx, sy, text) {
   [lx, ly] = clamp(lx, ly);
   return { sx: lx, sy: ly, t: text, fit: 1 };
 }
-function drawDepotMark(g, sx, sy) { // [depot-ext]
+function drawDepotMark(g, sx, sy) { // [depot-ext] 초록 사각 + 작은 상자(귀 없음)
   g.save(); g.translate(sx, sy);
-  g.fillStyle = '#F3EADA'; g.beginPath(); g.arc(-4.5, -7, 3.2, 0, Math.PI * 2); g.arc(4.5, -7, 3.2, 0, Math.PI * 2); g.fill();
   g.beginPath(); g.roundRect ? g.roundRect(-9, -8, 18, 16, 4) : g.rect(-9, -8, 18, 16); g.fillStyle = '#1E5A45'; g.fill();
   g.lineWidth = 1.6; g.strokeStyle = '#F3EADA'; g.stroke();
-  g.fillStyle = '#F2C230'; g.font = '900 10px Pretendard, "Noto Sans KR", sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('범', 0, 0.5);
+  g.lineJoin = 'round'; g.lineWidth = 0.9; g.strokeStyle = '#123B2D';
+  const poly = (pts, fill) => { g.beginPath(); pts.forEach(([x, y], i) => (i ? g.lineTo(x, y) : g.moveTo(x, y))); g.closePath(); g.fillStyle = fill; g.fill(); g.stroke(); };
+  poly([[0, -5.5], [5, -3.4], [0, -1.3], [-5, -3.4]], '#E0B47A');
+  poly([[-5, -3.4], [0, -1.3], [0, 5], [-5, 3]], '#C99A5E');
+  poly([[0, -1.3], [5, -3.4], [5, 3], [0, 5]], '#B8864C');
   g.restore();
 }
 function drawCableMark(g, sx, sy) {
