@@ -10,6 +10,7 @@ import * as THREE from 'three';
 import { setHidden, repairClone } from './hide.js';
 
 const R = 'inst';
+const RF = 'instfar'; // [jamsil-perf]
 const BASE_OBC = THREE.Material.prototype.onBeforeCompile;
 const BASE_OBR_M = THREE.Material.prototype.onBeforeRender;
 const BASE_OBR_O = THREE.Object3D.prototype.onBeforeRender;
@@ -34,7 +35,22 @@ export function meshInstanceable(o) {
   return materialInstanceable(o.material);
 }
 
+// [jamsil-perf] 안개 대비 화면 크기: 작은 소품(사람·동물·자전거·택시·버스, 실제 반지름 ≤ 10 m)은
+//   화면 반지름(px) × (1 − 안개 비율) 이 이 값보다 작으면 안 그린다(데스크톱 사람 ≈ 700 m, 버스 ≈ 1.3 km 밖 — 안개에 거의 묻힌 1~2px 점).
+//   이때 인스턴싱 못 하는 부품(텍스처 차체·조명)도 같이 뺀다. 화면 크기 고정 스프라이트(이름표)와 fog:false 재질은 남긴다. ?farcull=0 이면 끔.
+export const FAR_CONTRAST_PX = 0.75;
+export const FAR_SMALL_R = 10;
+export function farContrastHide(r0, d, k, fog, px = FAR_CONTRAST_PX) {
+  if (!(k > 0) || r0 > FAR_SMALL_R || d <= r0) return false;
+  let f = 0;
+  if (fog?.isFog && fog.far > fog.near) f = Math.min(1, Math.max(0, (d - r0 - fog.near) / (fog.far - fog.near)));
+  return (r0 / d) * k * (1 - f) < px;
+}
+const farCullOn = () => typeof location === 'undefined' || new URLSearchParams(location.search).get('farcull') !== '0';
+const keepFar = (o) => { const m = o.material; if (o.isSprite && m?.sizeAttenuation === false) return true; return [].concat(m).some((x) => x && x.fog === false); };
+
 export function createInstancer(scene, { name = 'perfInstanced', pixelCull = false, rescanSec = 1 } = {}) {
+  const farCull = pixelCull && farCullOn();
   const group = new THREE.Group(); group.name = name; scene.add(group);
   const parts = new Map(); // key -> { geo, mat, lam, cast, recv, im, cap, n }
   const roots = new Map(); // root -> { list, r, active }
@@ -62,14 +78,26 @@ export function createInstancer(scene, { name = 'perfInstanced', pixelCull = fal
   }
   function scan(root, rec) {
     if (rec) for (const it of rec.list) { it.P.need--; setHidden(it.o, R, false); }
-    const list = [];
+    if (rec) for (const it of rec.rest) setHidden(it.o, RF, false);
+    const list = [], rest = [];
+    const all = new THREE.Box3();
     root.updateMatrixWorld(true);
     const inv = new THREE.Matrix4().copy(root.matrixWorld).invert();
     const box = new THREE.Box3(), tmp = new THREE.Box3(), rel = new THREE.Matrix4();
     const each = (o, fn) => { if (o !== root && (o.userData?.rig || o.userData?.perfNoInstance)) return; fn(o); for (const c of o.children) each(c, fn); }; // 다른 아바타(라이더 등)는 그쪽 루트가 따로 맡음
     each(root, (o) => {
       repairClone(o);
-      if (!meshInstanceable(o)) return;
+      if ((o.isMesh || o.isSprite || o.isLine || o.isPoints) && o.geometry?.attributes?.position) {
+        if (!o.geometry.boundingBox) o.geometry.computeBoundingBox();
+        if (!o.geometry.boundingBox.isEmpty()) all.union(tmp.copy(o.geometry.boundingBox).applyMatrix4(rel.multiplyMatrices(inv, o.matrixWorld)));
+      }
+      if (!meshInstanceable(o)) {
+        if ((o.isMesh || o.isSprite || o.isLine || o.isPoints) && o.geometry?.attributes?.position && !keepFar(o)) {
+          if (!o.geometry.boundingSphere) o.geometry.computeBoundingSphere();
+          rest.push({ o, r: o.geometry.boundingSphere.radius * o.matrixWorld.getMaxScaleOnAxis() / Math.max(1e-6, root.matrixWorld.getMaxScaleOnAxis()), h: false });
+        }
+        return;
+      }
       const P = part(o);
       list.push({ o, P, mat: o.material, geo: o.geometry });
       setHidden(o, R, true);
@@ -80,7 +108,8 @@ export function createInstancer(scene, { name = 'perfInstanced', pixelCull = fal
     const c = box.isEmpty() ? new THREE.Vector3() : box.getCenter(new THREE.Vector3());
     const r = box.isEmpty() ? 1 : box.getSize(new THREE.Vector3()).length() / 2;
     stats.rescans++;
-    return { list, c, r: r * 1.35 + 0.5, count: countDesc(root), active: rec ? rec.active : true };
+    const r0 = all.isEmpty() ? r : all.getSize(new THREE.Vector3()).length() / 2;
+    return { list, rest, c, r: r * 1.35 + 0.5, r0, far: false, count: countDesc(root), active: rec ? rec.active : true };
   }
   const countDesc = (root) => { let n = 0; root.traverse(() => { n++; }); return n; };
   const attached = (o) => { for (let p = o; p; p = p.parent) if (p === scene) return true; return false; };
@@ -91,12 +120,14 @@ export function createInstancer(scene, { name = 'perfInstanced', pixelCull = fal
   function release(root) {
     const rec = roots.get(root); if (!rec) return;
     for (const it of rec.list) { it.P.need--; setHidden(it.o, R, false); }
+    for (const it of rec.rest) setHidden(it.o, RF, false);
     roots.delete(root); stats.roots = roots.size;
   }
   // 타는 중인 자전거처럼 잠깐 원본으로 그리고 싶을 때
   function setActive(root, on) {
     const rec = roots.get(root); if (!rec || rec.active === on) return;
     rec.active = on; for (const it of rec.list) setHidden(it.o, R, on);
+    if (!on) { rec.far = false; for (const it of rec.rest) { it.h = false; setHidden(it.o, RF, false); } } // [jamsil-perf]
   }
 
   // 떠난 루트(판교 NPC·스트리밍 타일 등)만 쓰던 부품은 InstancedMesh 와 geometry 참조를 놓는다 (메모리 누수 방지)
@@ -125,6 +156,14 @@ export function createInstancer(scene, { name = 'perfInstanced', pixelCull = fal
       hidden += rec.list.length;
       if (!shownScene(root)) continue;
       sph.center.copy(rec.c).applyMatrix4(root.matrixWorld); sph.radius = rec.r * root.matrixWorld.getMaxScaleOnAxis();
+      if (farCull) { // [jamsil-perf]
+        //   덩어리가 통째로 작으면 다 빼고, 아니면 인스턴싱 못 한 부품(램프 렌즈·불빛 스프라이트 등)을 부품 크기로 하나씩 거른다
+        const sc = root.matrixWorld.getMaxScaleOnAxis(), d = sph.center.distanceTo(camera.position);
+        const far = farContrastHide(rec.r0 * sc, d, k, fog);
+        rec.far = far;
+        for (const it of rec.rest) { const h = far || farContrastHide(it.r * sc, d, k, fog); if (h !== it.h) { it.h = h; setHidden(it.o, RF, h); } }
+        if (far) { tiny++; continue; }
+      }
       if (!frustum.intersectsSphere(sph)) { culled++; continue; }
       if (pixelCull && k) { // 0.6px 미만이거나 (높이 40m 아래이면서) 안개 끝(fog.far) 밖 → 그려도 안 보임
         const d = sph.center.distanceTo(camera.position);

@@ -10,6 +10,30 @@ export function landmarkLazyEnabled(search = typeof location !== 'undefined' ? l
 export const LANDMARK_NEAR_M = 1800;
 /** 접근 중 미리 짓기(안개보다 훨씬 앞). 자전거 8.6 m/s × 여유 시간. */
 export const LANDMARK_PREFETCH_M = 8000;
+/**
+ * [station-loop] 한 번 지은 남산·한강을 멀리(경계에서 8 km 밖 = 처음 짓기 시작하는 거리) 떠나면 통째로 렌더·행렬 갱신에서 뺀다.
+ *   예전엔 한강(1.5만 메시)·남산이 한 번 지어지면 정자에 돌아와도 계속 그려져 draw call 이 5배, 프레임 JS 가 4배가 됐다.
+ *   8 km 밖은 안개(1.6 km)에 완전히 묻히고, 처음 들어올 때(아직 안 지은 상태)와 화면이 같다. 다시 7.4 km 안으로 오면 켠다.
+ *   ?landmarkdorm=0 이면 예전(한강 15 km, 남산 항상).
+ */
+export const LANDMARK_DORMANT_M = 8000;
+export const LANDMARK_WAKE_M = 7400;
+export function landmarkDormEnabled(search = typeof location !== 'undefined' ? location.search : '') {
+  const s = search instanceof URLSearchParams ? search : new URLSearchParams(search || '');
+  return s.get('landmarkdorm') !== '0';
+}
+/** root 를 d(경계까지 거리)에 따라 켜고 끈다. 꺼진 동안은 matrixWorld 갱신도 건너뛴다. 반환: 켜져 있나 */
+export function syncLandmarkDormant(root, d, { out = LANDMARK_DORMANT_M, wake = LANDMARK_WAKE_M } = {}) {
+  if (!root) return false;
+  const on = root.visible ? d <= out : d < wake;
+  if (on !== root.visible) {
+    root.visible = on;
+    root.matrixWorldAutoUpdate = on;
+    if (on) root.updateMatrixWorld(true);
+  }
+  return on;
+}
+
 /** 한 조각 JS 예산. 200ms 목표에서 GPU를 빼고도 여유. */
 export const LANDMARK_SLICE_MS = 8;
 /** [gangnam-enter] 텔레포트·?at= 처럼 도착이 메시를 기다리는 동안의 조각 예산. 로딩 화면·이동 대기 중이라 길게 잡아 양보 횟수를 줄인다. */

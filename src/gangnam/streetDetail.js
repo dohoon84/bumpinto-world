@@ -434,6 +434,7 @@ function dedupeShops(list) {
 }
 
 const IX_TREE = { x: -7144, z: -14531 };
+const FAR_IDLE = typeof location === 'undefined' || new URLSearchParams(location.search).get('farupdate') !== '0';
 function slimIxTrees(scene) {
   const m4 = new THREE.Matrix4();
   const p = new THREE.Vector3(), q = new THREE.Quaternion(), s = new THREE.Vector3();
@@ -883,13 +884,17 @@ export function createGangnamStreet({ scene, terrain = null, url, mobile = false
     stats.draws = on ? draws : 0;
   }
 
-  let acc = 0;
+  let acc = 0, wasOn = true;
   return {
     root, stats, ready,
     update(dt, x, z) {
       if (!meshes) return;
       acc += dt;
-      if (acc > 0.25) { acc = 0; near.here = near(x, z); slimIxTrees(scene); }
+      // [station-loop] 예전엔 정자에 있어도 0.25 초마다 장면 전체(4만+ 객체)를 훑었다. 강남역 나무(IX_TREE)에서 3 km 밖이면
+      //   (안개 1.6 km 밖이라 안 보임) 건너뛰고, 꺼진 채로 이미 반영됐으면 apply 의 root.traverse 도 쉰다. ?farupdate=0 이면 예전대로.
+      if (acc > 0.25) { acc = 0; near.here = near(x, z); if (!FAR_IDLE || !Number.isFinite(x) || Math.hypot(x - IX_TREE.x, z - IX_TREE.z) < 3000) slimIxTrees(scene); }
+      if (FAR_IDLE && !near.here && !wasOn) return;
+      wasOn = near.here;
       apply(nightFade());
     },
     dispose() {

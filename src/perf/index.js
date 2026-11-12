@@ -6,8 +6,11 @@ import { perfFlags } from './flags.js';
 import { createInstancer } from './instancer.js';
 import { mergeStatic } from './mergeStatic.js';
 import { createPropCull } from './propCull.js';
+import { fogCullQueue } from './cellMerge.js'; // [jamsil-perf]
 
 // 정적 병합 대상(scene 바로 아래 자식 이름). 움직이는 부분은 각 모듈에서 userData.perfDynamic 으로 표시해 둔다
+const LANDMARK_CULL = typeof location === 'undefined' || new URLSearchParams(location.search).get('landmarkcull') !== '0';
+
 export const MERGE_TARGETS = ['tancheon-dog-park', 'tancheon-stepping-stones', 'jeongja-station-plaza', 'jeongja-starbucks-crowd', 'starbucks-mullions'];
 
 export function mountPerfMem({ scene, renderer, camera, params, getPlayer = () => null, corridor = null, bikes = null } = {}) {
@@ -57,7 +60,10 @@ export function mountPerfMem({ scene, renderer, camera, params, getPlayer = () =
       if (!c.userData?.rig && smallGroup(c)) { inst.track(c); continue; } // 택시·순찰차·가게 같은 작은 덩어리: 같은 부품끼리 인스턴싱
       walk(c);
     }
-    for (const b of bikes?.list || []) if (b.mesh?.parent) inst.track(b.mesh); // 카카오바이크(같은 원형을 clone: 지오메트리·재질 공유)
+    for (const b of bikes?.list || []) if (b.mesh?.parent) inst.track(b.mesh);
+    // [jamsil-perf] 코리더 시내버스(corridorBuses 아래 버스 한 대 = userData.L): 같은 부품(바퀴·유리·범퍼)은 인스턴싱, 먼 버스·작은 부품은 화면 크기로 거른다
+    const cb = corridorRoot?.children?.find((c) => c.name === 'corridorBuses'); // buses.js 가 root 바로 아래에 둔다
+    if (cb) for (const c of cb.children) if (c.userData?.L && !c.userData?.perfNoInstance) inst.track(c); // 카카오바이크(같은 원형을 clone: 지오메트리·재질 공유)
     // 플레이어 아바타가 바뀌었으면(옷 갈아입기) 옛 추적을 푼다
     if (player && inst.has(player)) inst.release(player);
   }
@@ -65,14 +71,30 @@ export function mountPerfMem({ scene, renderer, camera, params, getPlayer = () =
   // 3) 먼 소품 덩어리 숨기기 (안개 밖 · 0.5px 미만)
   const cull = F.propcull ? createPropCull({}) : null;
   out.cull = cull;
+  const lmSeen = new WeakMap();
   function discoverCull() {
-    if (!cull) return;
+    if (!cull) { fogCullQueue.length = 0; return; }
     const player = getPlayer();
     for (const c of scene.children) {
       if (c === corridorRoot || c === inst?.group || c === player || c.isLight || c.isCamera || c.userData?.perfNoCull) continue;
       if (c.userData?.rig || inst?.has(c) || bikes?.list?.some((b) => b.mesh === c)) continue; // 인스턴싱 대상은 instancer 가 화면 크기로 거른다
       if (!c.isMesh && !c.isGroup && c.type !== 'Object3D') continue;
       cull.add(c);
+    }
+    // [jamsil-perf] 코리더 안의 칸 메시(한강 길·소품, 경부 노면 글자)도 안개 밖이면 뺀다
+    while (fogCullQueue.length) { const m = fogCullQueue.pop(); if (m.parent) cull.add(m); }
+    // [station-loop] 남산·한강 다리도 안개(보통 1.6 km)에 완전히 묻히면 뺀다. 강남·탄천합수부에서 안 보이는 남산 길·실내·케이블카와
+    //   잠수교·반포대교 부품이 2천 draw 가까이 그려지고 있었다. 남산 산·타워는 하늘에 실루엣이 남으니 그대로 둔다. ?landmarkcull=0 이면 끔.
+    if (LANDMARK_CULL && corridorRoot) for (const top of corridorRoot.children) {
+      if (top.name !== 'namsan' && top.name !== 'hangang') continue;
+      const key = top.children.length + ':' + (top.children[top.children.length - 1]?.children.length || 0);
+      if (lmSeen.get(top) === key) continue; // 매초 한강 1.5만 객체를 훑지 않게, 바뀌었을 때만
+      lmSeen.set(top, key);
+      if (top.name === 'namsan') {
+        for (const c of top.children) if (/^namsan-/.test(c.name) && !/^namsan-(terrain|tower|sky|stars)/.test(c.name)) cull.add(c, { maxTopY: Infinity });
+      } else if (top.name === 'hangang') {
+        top.traverse((g) => { if (g.name === 'hangang-bridges' || g.name === 'hap-bridges' || g.name === 'hangang-hap-underpasses') for (const c of g.children) if (!c.isLight) cull.add(c); });
+      }
     }
   }
   discover(); discoverCull();
