@@ -172,7 +172,7 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit } 
   const addPhysShape = (body, p) => addProductShape(body, p, CANNON);
   const prodMat = {};
   for (const p of PRODUCTS) { const t = TX[`pk-${p.tex || p.id}`] || keep(labelTex(p)); prodMat[p.id] = keep(new THREE.MeshLambertMaterial({ map: t })); }
-  const stock = mountStock({ scene, keep, canvasTex, TX, racks, obstacles, wraps, boxGeoLabeled });
+  const stock = mountStock({ scene, keep, canvasTex, TX, racks, obstacles, wraps, boxGeoLabeled, isMobile });
   prodMeshes.push(...stock.prodMeshes);
 
   // ---------- 디자인 사인 (통로 번호 · 천장 걸이 · 랙 끝 안전 표지 · 바닥 스텐실) ----------

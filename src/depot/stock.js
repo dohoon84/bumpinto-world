@@ -209,7 +209,7 @@ function paintTag(g, p) {
   }
 }
 
-export function mountStock({ scene, keep, canvasTex: canvasTexFn, TX, racks, obstacles, wraps, boxGeoLabeled }) {
+export function mountStock({ scene, keep, canvasTex: canvasTexFn, TX, racks, obstacles, wraps, boxGeoLabeled, isMobile = false }) {
   registerStockProducts();
   if (wraps) wraps.visible = false;
   const ct = canvasTexFn || canvasTex;
@@ -392,9 +392,12 @@ export function mountStock({ scene, keep, canvasTex: canvasTexFn, TX, racks, obs
   mergeStatics(fxRoot, keep); // 집기 정적 메시 → 재질별 1개
   finalizeStock({ scene, keep, clusters, atlas, unitBox, prodMeshes, tagG, ct, proxyMat, m4, pv, qy, s3, col, Y, q0 });
 
+  // 먼 진열 띠는 끔: 낱개 상품이 사라져도 랩 파렛트·하단 색 상자(대역)가 그 자리를 채움. 모바일은 더 가깝게.
+  const FAR = isMobile ? 26 : 46;
   function tick(camera) {
     const x = camera.position.x, z = camera.position.z;
     fixtures.tick?.(camera, x, z);
+    for (const im of prodMeshes) { const zr = im.userData.zr; if (zr) im.visible = Math.max(0, zr[0] - z, z - zr[1]) < FAR; }
   }
 
   // 집기 레이캐스트: 픽 가능 인스턴스만 (list.pickable === false 는 pickTarget 에서 걸러지도록 userData.pickable)
@@ -770,10 +773,10 @@ function finalizeStock({ scene, keep, clusters, atlas, unitBox, prodMeshes, tagG
   // 상품: SKU 별 InstancedMesh(수십 드로콜) → 앞·중·뒤 구역별 1개 (aCell 로 아틀라스 칸 선택)
   const cellMat = cellMaterial(keep, atlas.mat.clone());
   const cellGeo0 = boxGeoForCell(1, 1, 1, 0, 0);
-  const regions = [[], [], []];
+  const BAND = 15, regions = Array.from({ length: 8 }, () => []); // z 15 m 띠 8개 → 거리 컬링 단위
   for (const [id, list] of allItems) {
     const cell = atlas.index[id]; if (!BY_ID[id] || !cell) continue;
-    for (const it of list) regions[it.z < 45 ? 0 : it.z < 78 ? 1 : 2].push([id, it, cell]);
+    for (const it of list) regions[Math.min(7, Math.max(0, Math.floor(it.z / BAND)))].push([id, it, cell]);
   }
   for (const reg of regions) {
     if (!reg.length) continue;
@@ -787,6 +790,7 @@ function finalizeStock({ scene, keep, clusters, atlas, unitBox, prodMeshes, tagG
     });
     geo.setAttribute('aCell', new THREE.InstancedBufferAttribute(aCell, 2));
     im.userData.pids = pids; im.userData.list = list; im.computeBoundingSphere();
+    im.userData.zr = [Math.min(...list.map((it) => it.z)) - 1, Math.max(...list.map((it) => it.z)) + 1];
     scene.add(im); prodMeshes.push(im);
   }
   cellGeo0.dispose();
