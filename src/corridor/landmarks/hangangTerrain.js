@@ -1028,6 +1028,8 @@ export async function createHangangTerrainAsync(opts, yieldFn, slicer) {
   if (!opts?.skipBake && !opts?.baked && opts?.bakeUrl) {
     const raw = await fetchHangangTerrainBake(opts.bakeUrl);
     if (raw) resolved = { ...opts, baked: raw };
+    if (slicer) slicer.mark();
+    console.info(`[hangang] terrain bake ${raw ? 'hit' : 'miss'} ${opts.bakeUrl}`);
   }
   const g = hangangTerrainGen(resolved, true);
   let n = g.next();

@@ -517,7 +517,7 @@ async function dropTrianglesAsync(g, drop, slicer) {
   const st = startDropTriangles(g, drop);
   if (!st) return;
   while (st.step(2000)) {
-    if (slicer) await slicer.tick();
+    if (slicer) await slicer.tick('hangang-hap-clip');
   }
   st.finish();
 }

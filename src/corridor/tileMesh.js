@@ -170,7 +170,7 @@ async function mergedAsync(geos, slicer) {
         for (const x of part) x.dispose();
         next.push(g);
       }
-      if (slicer) await slicer.tick();
+      if (slicer) await slicer.tick('buildings');
     }
     list = next;
   }
@@ -284,7 +284,7 @@ export function makeBuildingMeshAcc(seed0) {
     for (const [key, geos] of Object.entries(walls)) {
       const g = await mergedAsync(geos, slicer); if (!g) continue;
       const m = new THREE.Mesh(g, nightFacade(facadeMaterial(key), key)); m.castShadow = m.receiveShadow = true; out.push(m);
-      if (slicer) await slicer.tick();
+      if (slicer) await slicer.tick('buildings');
     }
     return out;
   }
@@ -301,7 +301,7 @@ export async function buildingMeshesAsync(list, seed0, slicer) {
   const acc = makeBuildingMeshAcc(seed0);
   for (let i = 0; i < list.length; i++) {
     acc.add(list[i]);
-    if (slicer) await slicer.tick();
+    if (slicer) await slicer.tick('buildings');
   }
   if (slicer) return acc.finishAsync(slicer);
   return acc.finish();

@@ -215,6 +215,7 @@ export function makeSlicer(yieldFn, { budgetMs = LANDMARK_SLICE_MS, name = '' } 
         last = now();
       }
     },
+    mark() { last = now(); },
     flush(label) {
       const t = now();
       if (t - last > 1) publish({ name: label || name, jsMs: +(t - last).toFixed(2) });

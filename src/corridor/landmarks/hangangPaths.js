@@ -136,21 +136,25 @@ function partsOutsideRing(pts, ring) {
 }
 
 function* mergeGeosGen(list, useGroups = false) {
-  if (!list.length) return null;
-  if (list.length === 1) return list[0];
-  const BATCH = 24;
+  if (!list.length) return [];
+  if (list.length === 1) return [list[0]];
+  const BATCH = 8;
   const mid = [];
   for (let i = 0; i < list.length; i += BATCH) {
     const part = list.slice(i, i + BATCH);
     mid.push(part.length === 1 ? part[0] : mergeGeometries(part, useGroups));
     yield;
   }
-  let out = mid[0];
-  for (let i = 1; i < mid.length; i++) {
-    out = mergeGeometries([out, mid[i]], useGroups);
-    yield;
+  return mid;
+}
+
+function addPathMeshes(group, geos, mat, name, receiveShadow = true) {
+  for (const g of geos) {
+    const mesh = new THREE.Mesh(g, mat);
+    mesh.name = name;
+    mesh.receiveShadow = receiveShadow;
+    group.add(mesh);
   }
-  return out;
 }
 
 function* hangangPathsGen({ parent, osm, land }) {
@@ -229,13 +233,10 @@ function* hangangPathsGen({ parent, osm, land }) {
   const mats = {};
   for (const [kind, list] of Object.entries(buckets)) {
     if (!list.length) continue;
-    const merged = yield* mergeGeosGen(list, false);
+    const parts = yield* mergeGeosGen(list, false);
     const mat = new THREE.MeshLambertMaterial({ color: colors[kind], side: THREE.DoubleSide });
     mats[kind] = mat;
-    const mesh = new THREE.Mesh(merged, mat);
-    mesh.receiveShadow = true;
-    mesh.name = 'hangang-path-' + kind;
-    group.add(mesh);
+    addPathMeshes(group, parts, mat, 'hangang-path-' + kind);
   }
 
   const edgeGeos = [], dashGeos = [];
@@ -299,20 +300,16 @@ function* hangangPathsGen({ parent, osm, land }) {
   }
   const markMats = {};
   if (edgeGeos.length) {
-    const merged = yield* mergeGeosGen(edgeGeos, false);
+    const parts = yield* mergeGeosGen(edgeGeos, false);
     const mat = new THREE.MeshLambertMaterial({ color: '#f2f0ea', side: THREE.DoubleSide });
     markMats.edge = mat;
-    const mesh = new THREE.Mesh(merged, mat);
-    mesh.name = 'hangang-path-edge';
-    group.add(mesh);
+    addPathMeshes(group, parts, mat, 'hangang-path-edge', false);
   }
   if (dashGeos.length) {
-    const merged = yield* mergeGeosGen(dashGeos, false);
+    const parts = yield* mergeGeosGen(dashGeos, false);
     const mat = new THREE.MeshLambertMaterial({ color: '#e6c04a', side: THREE.DoubleSide });
     markMats.center = mat;
-    const mesh = new THREE.Mesh(merged, mat);
-    mesh.name = 'hangang-path-center';
-    group.add(mesh);
+    addPathMeshes(group, parts, mat, 'hangang-path-center', false);
   }
 
   function onWay(w, x, z, pad = 0.4) {
@@ -374,7 +371,7 @@ export async function createHangangPathsAsync(opts, slicer) {
   const g = hangangPathsGen(opts);
   let n = g.next();
   while (!n.done) {
-    if (slicer) await slicer.tick();
+    if (slicer) await slicer.tick('hangang-paths');
     n = g.next();
   }
   return n.value;

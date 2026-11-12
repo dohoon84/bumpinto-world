@@ -327,7 +327,7 @@ export async function createHangangPropsAsync(opts, slicer) {
   const g = hangangPropsGen(opts);
   let n = g.next();
   while (!n.done) {
-    if (slicer) await slicer.tick();
+    if (slicer) await slicer.tick('hangang-props');
     n = g.next();
   }
   return n.value;
