@@ -573,7 +573,7 @@ export async function createHangangHapAsync({ parent, overlay, terrain, dem, osm
     ? () => new Promise((r) => requestAnimationFrame(() => r()))
     : () => Promise.resolve());
   const root = startHangangHap(parent, osm);
-  const land = await createHangangTerrainAsync({ parent: root, dem, osm }, y);
+  const land = await createHangangTerrainAsync({ parent: root, dem, osm }, y, slicer);
   if (slicer) slicer.flush('hangang-hap-terrain');
   await y();
   return finishHangangHapAsync({ parent, overlay, terrain, dem, osm, foreign, root, land }, y, slicer);
