@@ -2605,8 +2605,20 @@ function subwayPoseTick(dt, looked) {
 const timer = new THREE.Timer();
 const tmp = new THREE.Vector3();
 let moveSpeed = 0;
+// [resize] 창 크기 맞추기. resize 리스너는 부팅(데이터·월드 로딩 await)이 끝나야 걸리므로, 그 사이에 창을 넓히면(맥 전체화면·창 최대화)
+//   캔버스가 처음 크기(예: 화면 절반)로 남아 오른쪽이 배경 하늘색으로 비고, 매장처럼 innerWidth 로 화면비를 잡는 장면은 왼쪽에 찌그러져 보였다.
+//   그래서 매 프레임 캔버스 크기를 창 크기와 비교해 다르면 맞춘다(숫자 비교뿐이라 비용 없음).
+const _viewSize = new THREE.Vector2();
+function syncViewSize() {
+  const w = innerWidth, h = innerHeight;
+  if (!w || !h) return;
+  renderer.getSize(_viewSize);
+  if (_viewSize.x !== w || _viewSize.y !== h) renderer.setSize(w, h);
+  if (camera.aspect !== w / h) { camera.aspect = w / h; camera.updateProjectionMatrix(); }
+}
 function frame() {
   lastFrameAt = performance.now();
+  syncViewSize();
   timer.update(); const dt = Math.min(timer.getDelta(), 0.1);
   if ((document.body.classList.contains('in-gate') || document.body.classList.contains('in-lobby')) && !uiV2?.peekFrame()) { // [ui-v2] 입장 카드 뒤 역 장면: 잠깐만 그리고 멈춤
     input.consumeLook();
@@ -2989,7 +3001,7 @@ function frame() {
 }
 // [perf-memory] 정적 병합·인스턴싱·먼 소품 숨기기 (?perfmem=0 이면 null, 예전과 같음). 첫 프레임 전에 한 번
 const perfMem = mountPerfMem({ scene, renderer, camera, params, getPlayer: () => player, corridor, bikes });
-addEventListener('resize', () => { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); });
+addEventListener('resize', syncViewSize);
 requestAnimationFrame(frame);
 
 // 스크린샷/디버그용 훅
