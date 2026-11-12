@@ -572,6 +572,7 @@ function* hangangTerrainGen({ parent, dem, osm, baked = null, skipBake = false }
     : { x0: -12000, z0: -18000, x1: -8500, z1: -14800 };
 
   const mats = [];
+  if (sliced) yield 'hangang-height-at';
   let bake = skipBake ? null : decodeHangangTerrainBakeMaybe(baked);
   if (!bake && baked && !skipBake) {
     try {

@@ -121,6 +121,13 @@ function kindOf(w) {
 }
 
 
+function splitPoly(pts, size = 64) {
+  if (!pts || pts.length <= size + 1) return pts ? [pts] : [];
+  const out = [];
+  for (let i = 0; i < pts.length - 1; i += size) out.push(pts.slice(i, Math.min(pts.length, i + size + 1)));
+  return out;
+}
+
 function partsOutsideRing(pts, ring) {
   if (!ring) return [pts];
   const parts = [];
@@ -138,7 +145,7 @@ function partsOutsideRing(pts, ring) {
 function* mergeGeosGen(list, useGroups = false) {
   if (!list.length) return [];
   if (list.length === 1) return [list[0]];
-  const BATCH = 8;
+  const BATCH = 4;
   const mid = [];
   for (let i = 0; i < list.length; i += BATCH) {
     const part = list.slice(i, i + BATCH);
@@ -220,13 +227,15 @@ function* hangangPathsGen({ parent, osm, land }) {
     const parts = partsOutsideRing(ptsAll, jamsuRing);
     let drew = false;
     for (const pts of parts) {
-      const geo = drapedRibbonGeo(pts, width, (x, z) => surfaceAt(x, z, kind, w), kind === 'upper' ? 0.06 : (kind === 'bike' ? 0.09 : 0.05));
-      if (!geo) continue;
-      buckets[kind].push(geo);
-      drew = true;
+      for (const chunk of splitPoly(pts)) {
+        const geo = drapedRibbonGeo(chunk, width, (x, z) => surfaceAt(x, z, kind, w), kind === 'upper' ? 0.06 : (kind === 'bike' ? 0.09 : 0.05));
+        if (!geo) continue;
+        buckets[kind].push(geo);
+        drew = true;
+        yield;
+      }
     }
     if (drew) kept.push(w);
-    yield;
   }
 
   const colors = { bike: '#d44b2c', walk: '#c9c2b4', steps: '#9a9084', upper: '#5a5d61', trunk: '#54575c' };
@@ -261,8 +270,11 @@ function* hangangPathsGen({ parent, osm, land }) {
         dx /= L; dz /= L;
         return [p[0] - dz * hw * side, p[1] + dx * hw * side];
       });
-      const geo = drapedRibbonGeo(shifted, 0.13, yFn, 0.075);
-      if (geo) edgeGeos.push(geo);
+      for (const chunk of splitPoly(shifted)) {
+        const geo = drapedRibbonGeo(chunk, 0.13, yFn, 0.075);
+        if (geo) edgeGeos.push(geo);
+        yield;
+      }
     }
     if (width >= 3) {
       // 노란 중앙 점선: 2.2 m 긋고 2.0 m 비움. 대시마다 한 폴리라인.
@@ -276,6 +288,7 @@ function* hangangPathsGen({ parent, osm, land }) {
         dash = null;
       };
       for (let i = 1; i < pts.length; i++) {
+        if ((i & 31) === 0) yield;
         const ax = pts[i - 1][0], az = pts[i - 1][1], bx = pts[i][0], bz = pts[i][1];
         const seg = Math.hypot(bx - ax, bz - az) || 1;
         const dx = (bx - ax) / seg, dz = (bz - az) / seg;

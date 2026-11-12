@@ -98,7 +98,9 @@ function* hangangPropsGen({ parent, osm, land } = {}) {
     if (hash01(Math.floor(s) + 9) < 0.55) return;
     benchPts.push({ x: x + dz * 3.2, z: z - dx * 3.2, yaw: Math.atan2(dx, dz) + Math.PI / 2, approx: true });
   });
+  let bi = 0;
   for (const b of benchPts) {
+    if ((++bi & 31) === 0) yield;
     const y = groundY(b.x, b.z);
     if (y == null || inWater(b.x, b.z, osm?.water)) continue;
     const yaw = b.yaw ?? 0;
@@ -150,7 +152,9 @@ function* hangangPropsGen({ parent, osm, land } = {}) {
     if (hash01(Math.floor(s) + 21) < 0.4) return;
     binPts.push({ x: x + dz * 3.0, z: z - dx * 3.0, approx: true });
   });
+  let bini = 0;
   for (const b of binPts) {
+    if ((++bini & 31) === 0) yield;
     const y = groundY(b.x, b.z);
     if (y == null || inWater(b.x, b.z, osm?.water)) continue;
     const m = new THREE.Mesh(binGeo, binMat);
