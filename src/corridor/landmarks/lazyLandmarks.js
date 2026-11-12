@@ -12,6 +12,8 @@ export const LANDMARK_NEAR_M = 1800;
 export const LANDMARK_PREFETCH_M = 8000;
 /** 한 조각 JS 예산. 200ms 목표에서 GPU를 빼고도 여유. */
 export const LANDMARK_SLICE_MS = 8;
+/** [gangnam-enter] 텔레포트·?at= 처럼 도착이 메시를 기다리는 동안의 조각 예산. 로딩 화면·이동 대기 중이라 길게 잡아 양보 횟수를 줄인다. */
+export const LANDMARK_URGENT_SLICE_MS = 40;
 
 export function demBounds(dem) {
   if (!dem || !Number.isFinite(+dem.x0) || !Number.isFinite(+dem.nx) || !Number.isFinite(+dem.dx)) return null;
@@ -191,7 +193,7 @@ export function makeSlicer(yieldFn, { budgetMs = LANDMARK_SLICE_MS, name = '' } 
     async tick(label) {
       if (!yieldFn) return;
       const t = now();
-      if (t - last >= budgetMs) {
+      if (t - last >= (yieldFn.state?.budgetMs || budgetMs)) {
         const jsMs = +(t - last).toFixed(2);
         const y0 = now();
         await yieldFn();
