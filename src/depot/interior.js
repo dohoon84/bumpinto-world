@@ -173,7 +173,8 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit, a
   const prodMeshes = [];
   const productGeo = (p) => buildProductGeometry(p, { boxGeo: boxGeoLabeled });
   const addPhysShape = (body, p) => addProductShape(body, p, CANNON);
-  const prodGeo = {}, prodMat = {}; // prodGeo: 가전 코너(electronics.js)가 자기 상품 지오메트리를 넣음
+  const prodGeo = {}, prodMat = {}; // 가전 코너(electronics.js)가 가전 박스는 직접 넣고, 구매 카드(ticket_*) 등은 여기 것을 씀
+  for (const p of PRODUCTS) if (p.kind === 'ticket') prodGeo[p.id] = keep(productGeo(p));
   for (const p of PRODUCTS) { const t = TX[`pk-${p.tex || p.id}`] || keep(labelTex(p)); prodMat[p.id] = keep(new THREE.MeshLambertMaterial({ map: t })); }
   const stock = mountStock({ scene, keep, canvasTex, TX, racks, obstacles, wraps, boxGeoLabeled, isMobile });
   prodMeshes.push(...stock.prodMeshes);
@@ -989,7 +990,7 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit, a
   function render(r) { r.render(scene, camera); }
 
   // ---------- 테스트·스샷용 ----------
-  function stats() { let tris = 0, meshes = 0; scene.traverse((o) => { if (o.isMesh) { meshes++; const n = o.geometry.index ? o.geometry.index.count / 3 : o.geometry.attributes.position.count / 3; tris += n * (o.isInstancedMesh ? o.count : 1); } }); return { meshes, tris: Math.round(tris), items: items.length, bodies: world.bodies.length, products: prodMeshes.reduce((a, m) => a + m.count, 0), elec: elec.metrics() }; }
+  function stats() { let tris = 0, meshes = 0; scene.traverse((o) => { if (o.isMesh) { meshes++; const n = o.geometry.index ? o.geometry.index.count / 3 : (o.geometry.attributes.position?.count || 0) / 3; tris += n * (o.isInstancedMesh ? o.count : 1); } }); return { meshes, tris: Math.round(tris), items: items.length, bodies: world.bodies.length, products: prodMeshes.reduce((a, m) => a + m.count, 0), elec: elec.metrics() }; }
   // 같은 주행 모델로 0 → 1.2 m/s 시간, 1.2 m/s 에서 손 놓고/당겨 멈추는 거리, 제자리 90° 회전 시간
   function measure(extraKg) {
     const save = { ...st.cart }, saveItems = items.slice();
