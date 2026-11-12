@@ -167,15 +167,17 @@ export function buildDepotCeiling(scene, { renderer, keep, shellMesh } = {}) {
   lamps.count = hoods.count = rods.count = i; scene.add(rods, hoods, lamps);
 
   // 랙 아래 값싼 AO: 반투명 어두운 타원(평면). 랙 좌표는 mount 쪽에서 더 넣을 수 있게 반환.
-  const aoM = keep(new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.16, depthWrite: false }));
-  const aoG = keep(new THREE.PlaneGeometry(1, 1)); aoG.rotateX(-Math.PI / 2);
+  const aoM = keep(new THREE.MeshBasicMaterial({ color: 0x2a2a28, transparent: true, opacity: 0.12, depthWrite: false, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 }));
+  const aoG = keep(new THREE.PlaneGeometry(1, 1));
   function addRackAO(racks, rackD, bay) {
-    let n = 0; for (const r of racks) n += 1;
-    const ao = new THREE.InstancedMesh(aoG, aoM, n);
+    // 지오메트리는 XY 평면, 인스턴스에서 -X 90° 돌려 바닥에 붙인다.
+    // (지오메트리를 먼저 돌리면 스케일 z 가 높이로 가 27 m 검은 벽이 된다)
+    const qAo = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), -Math.PI / 2);
+    const ao = new THREE.InstancedMesh(aoG, aoM, racks.length);
     let k = 0;
     for (const r of racks) {
       const len = r.bays * bay;
-      m4.compose(new THREE.Vector3(r.x0 + rackD / 2, 0.008, r.z0 + len / 2), new THREE.Quaternion(), new THREE.Vector3(rackD + 0.8, 1, len + 0.6));
+      m4.compose(new THREE.Vector3(r.x0 + rackD / 2, 0.008, r.z0 + len / 2), qAo, new THREE.Vector3(rackD + 0.8, len + 0.6, 1));
       ao.setMatrixAt(k++, m4);
     }
     ao.count = k; ao.renderOrder = 1; scene.add(ao);

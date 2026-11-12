@@ -225,22 +225,22 @@ export function mountStock({ scene, keep, canvasTex: canvasTexFn, TX, racks, obs
             const along = Math.max(sx, sz), deep = Math.min(sx, sz), rot = sx >= sz ? Math.PI / 2 : 0;
             const hMax = lv === 0 ? (p.kind === 'tray' ? 0.35 : 1.28) : 1.12;
             if (lv > 0) {
-              // 상단: 랩 파렛트 한 덩어리 (항상 보이는 프록시, 가까이선 색이 또렷)
+              // 상단: 랩 파렛트 한 덩어리
               c.palettes.push({ x: px, y: y0, z, w: 1.16, h: hMax, d: 0.98, color: p.color, id: p.id });
               continue;
             }
-            // 하단: 프록시도 만들어 두고, 가까이선 낱개 상자로 교체
-            c.palettes.push({ x: px, y: y0, z, w: 1.16, h: hMax, d: 0.98, color: p.color, id: p.id, ground: true });
+            // 하단: 안쪽은 색 상자 한 덩어리, 통로 앞줄만 낱개(집기)
+            c.palettes.push({ x: px, y: y0, z, w: 1.05, h: Math.max(0.45, hMax * 0.9), d: 0.72, color: p.color, id: p.id });
             const nA = Math.max(1, Math.floor(1.2 / along));
             const nD = Math.max(1, Math.floor(1.0 / deep));
-            const nY = Math.max(1, Math.floor(hMax / sy));
+            const nY = Math.max(1, Math.min(3, Math.floor(hMax / sy)));
             const list = c.items.get(p.id) || []; c.items.set(p.id, list);
-            for (let y = 0; y < nY; y++) for (let a = 0; a < nA; a++) for (let d = 0; d < nD; d++) {
-              if (y === nY - 1 && d === (face > 0 ? nD - 1 : 0) && (a + b) % 3 === 0) continue;
+            const dFront = face > 0 ? nD - 1 : 0;
+            for (let y = 0; y < nY; y++) for (let a = 0; a < nA; a++) {
+              if (y === nY - 1 && (a + b) % 3 === 0) continue;
               const iz = z - (nA * along) / 2 + along * (a + 0.5);
-              const ix = px - (nD * deep) / 2 + deep * (d + 0.5);
-              const pickable = PICKABLE_IDS.has(p.id) || true; // 하단 진열은 클릭으로 집기
-              list.push({ x: ix, y: y0 + sy * (y + 0.5), z: iz, rot, face, pickable, sx, sy, sz, pid: p.id });
+              const ix = px - (nD * deep) / 2 + deep * (dFront + 0.5);
+              list.push({ x: ix, y: y0 + sy * (y + 0.5), z: iz, rot, face, pickable: true, sx, sy, sz, pid: p.id });
             }
             if (b % 2 === 0 && dz < 0) c.tags.push({ p, x: px + face * 0.58, y: 1.62, z, face });
           }
