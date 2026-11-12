@@ -40,12 +40,12 @@ export function stalls() {
   return out;
 }
 
-export function buildDepotLot({ groundY = () => 0, signTex, signSlots, kitMat } = {}) {
+export function buildDepotLot({ groundY = () => 0, signTex, signSlots, kitMat, mobile = false } = {}) {
   const y0 = groundY(-527, 450) || 0;
   const root = new THREE.Group(); root.name = 'depot-lot';
   const disposables = [];
   const R = rng(20261112);
-  const ban = bannerAtlas(); disposables.push(ban);
+  const ban = bannerAtlas({ k: mobile ? 0.5 : 1 }); disposables.push(ban);
   const BS = ban.slots, SS = signSlots;
 
   // ---------- 아스팔트 (외곽 + 진입로 + 하역 차로 + 하역장) ----------
@@ -166,6 +166,7 @@ export function buildDepotLot({ groundY = () => 0, signTex, signSlots, kitMat } 
   for (const x of [cn.x0 + 0.6, cn.x0 + 8, cn.x1 - 8, cn.x1 - 0.6]) { K.box(0.45, cn.y, 0.45, x, y0 + cn.y / 2, cn.z0 + 0.5, '#e9e4d8'); K.box(0.7, 0.3, 0.7, x, y0 + 0.15, cn.z0 + 0.5, '#9a9c98'); blockers.push([x - 0.3, cn.z0 + 0.2, x + 0.3, cn.z0 + 0.8]); }
   K.box(cn.x1 - cn.x0 + 0.6, 0.7, cn.z1 - cn.z0 + 0.3, (cn.x0 + cn.x1) / 2, y0 + cn.y + 0.35, (cn.z0 + cn.z1) / 2, C.green);
   K.box(cn.x1 - cn.x0 + 0.7, 0.18, 0.2, (cn.x0 + cn.x1) / 2, y0 + cn.y + 0.75, cn.z0 - 0.05, C.yellow);
+  K.box(8.3, 2.25, 0.25, S.door.x + 1, y0 + cn.y + 1.7, cn.z0 + 0.5, C.deep); // 입구 간판 뒤판
   // 입구 옆 카트 보관(처마 밑, 문 서쪽): 손잡이 바깥, 두 줄
   for (const z of [493.3, 495.6]) { K.bar([cn.x0 + 0.8, y0 + 0.9, z - 0.55], [L.walkway.x0 - 1.4, y0 + 0.9, z - 0.55], 0.05, '#c9ced3'); for (let k = 0; k < 13; k++) cartAt(cn.x0 + 1.2 + k * 0.33, z, -Math.PI / 2); }
   // 자동문 틀 · 출구 처마
@@ -176,8 +177,8 @@ export function buildDepotLot({ groundY = () => 0, signTex, signSlots, kitMat } 
   K.box(L.exitDoor.w + 0.6, 0.3, 0.3, L.exitDoor.x, y0 + 3.15, 499.9, '#2b3036');
   for (const s of [-1, 1]) blockers.push([L.exitDoor.x + s * 5.2 - 0.25, 494.05, L.exitDoor.x + s * 5.2 + 0.25, 494.55]);
   // 풍선 아치(오픈 기념) — 입구 앞 횡단보도 위
-  { const ax = S.door.x, az = L.fire.z0 - 0.6, span = 5.6, hgt = 6.2, cols = [C.red, '#ffffff', C.yellow, C.green];
-    for (let i = 0; i <= 36; i++) { const t = i / 36, a = Math.PI * t, x = ax - Math.cos(a) * span, y = y0 + 0.6 + Math.sin(a) * hgt; K.sphere(0.48, x, y, az, cols[i % 4], { ws: 8, hs: 6 }); K.sphere(0.42, x, y, az + 0.55, cols[(i + 2) % 4], { ws: 8, hs: 6 }); }
+  { const ax = S.door.x, az = L.fire.z0 - 0.6, span = 4.8, hgt = 3.2, cols = [C.red, '#ffffff', C.yellow, C.green];
+    for (let i = 0; i <= 30; i++) { const t = i / 30, a = Math.PI * t, x = ax - Math.cos(a) * span, y = y0 + 0.6 + Math.sin(a) * hgt; K.sphere(0.4, x, y, az, cols[i % 4], { ws: 8, hs: 6 }); K.sphere(0.36, x, y, az + 0.48, cols[(i + 2) % 4], { ws: 8, hs: 6 }); }
     for (const s of [-1, 1]) { K.box(0.6, 0.6, 1.2, ax + s * span, y0 + 0.3, az + 0.27, '#3b4046'); blockers.push([ax + s * span - 0.5, az - 0.4, ax + s * span + 0.5, az + 1.0]); } }
   // 깃대(깃발은 따로 흔들리는 메시)
   const flagSpots = [];
@@ -221,7 +222,7 @@ export function buildDepotLot({ groundY = () => 0, signTex, signSlots, kitMat } 
   // 트럭 옆면 도장 (양쪽) + 뒷문
   for (const t of trucks) { const zc = t.z0 + t.tl / 2; Q.sign(t.x - t.w / 2 - 0.02, y0 + 2.9, zc, t.tl - 1, (t.tl - 1) / 3, -Math.PI / 2, BS.truck); Q.sign(t.x + t.w / 2 + 0.02, y0 + 2.9, zc, t.tl - 1, (t.tl - 1) / 3, Math.PI / 2, BS.truck, { flipU: false }); }
   // 풍선 아치 글씨판
-  Q.sign(S.door.x, y0 + 5.2, L.fire.z0 - 0.95, 4.2, 1.05, Math.PI, BS.balloon); Q.sign(S.door.x, y0 + 5.2, L.fire.z0 + 0.2, 4.2, 1.05, 0, BS.balloon);
+  Q.sign(S.door.x, y0 + 3.35, L.fire.z0 - 0.9, 3.4, 0.85, Math.PI, BS.balloon); Q.sign(S.door.x, y0 + 3.35, L.fire.z0 + 0.15, 3.4, 0.85, 0, BS.balloon);
   // 바닥 글씨
   const dy = y0 + 0.085;
   for (const s of ST) {
@@ -231,14 +232,14 @@ export function buildDepotLot({ groundY = () => 0, signTex, signSlots, kitMat } 
     const k = s.kind === 'dis' ? 'st_dis' : s.kind === 'family' ? 'st_family' : s.kind === 'ev' ? 'st_ev' : s.kind === 'kei' ? 'st_kei' : null;
     if (k) Q.decal(cx, dy, cz, 2.1, 1.05, head, BS[k]);
   }
-  Q.decal((L.walkway.x0 + L.walkway.x1) / 2, dy, 478, 5.2, 2.6, Math.PI, BS.st_walk);
-  Q.decal((L.walkway.x0 + L.walkway.x1) / 2, dy, 445, 5.2, 2.6, Math.PI, BS.st_walk);
-  Q.decal((L.walkway.x0 + L.walkway.x1) / 2, dy, 425, 5.2, 2.6, Math.PI, BS.st_depot);
+  Q.decal((L.walkway.x0 + L.walkway.x1) / 2, dy, 476.5, 5.2, 2.6, 0, BS.st_walk);
+  Q.decal((L.walkway.x0 + L.walkway.x1) / 2, dy, 445, 5.2, 2.6, 0, BS.st_walk);
+  Q.decal((L.walkway.x0 + L.walkway.x1) / 2, dy, 426, 5.2, 2.6, 0, BS.st_depot);
   Q.decal(-530, dy, (L.fire.z0 + L.fire.z1) / 2, 6, 3, -Math.PI / 2, BS.st_nostop);
   Q.decal(-570, dy, (L.fire.z0 + L.fire.z1) / 2, 6, 3, -Math.PI / 2, BS.st_slow);
-  for (const d of L.drives) { Q.decal(L.x0 - 3, dy, (d.z0 + d.z1) / 2 - 2, 3.6, 1.8, Math.PI / 2, BS.st_in); Q.decal(L.x0 - 3, dy, (d.z0 + d.z1) / 2 + 2, 3.6, 1.8, -Math.PI / 2, BS.st_out); }
+  for (const d of L.drives) { Q.decal(L.x0 - 3, dy, (d.z0 + d.z1) / 2 + 2, 3.6, 1.8, Math.PI / 2, BS.st_in); Q.decal(L.x0 - 3, dy, (d.z0 + d.z1) / 2 - 2, 3.6, 1.8, -Math.PI / 2, BS.st_out); } // 우측 통행: 들어오는 차(동쪽)는 남쪽 반
   for (const z of [431, 458]) Q.decal((L.westLane.x0 + L.westLane.x1) / 2, dy, z, 5, 2.5, Math.PI, BS.st_slow);
-  Q.decal(S.door.x, y0 + 0.13, 496.2, 5, 2.5, Math.PI, BS.st_shop);
+  Q.decal(S.door.x, y0 + 0.13, 495.6, 5, 2.5, 0, BS.st_shop);
   for (const s of corrals) Q.decal(s.x0 + SW * 1.5, dy, s.access === s.z1 ? s.z1 + 1.4 : s.z0 - 1.4, 3, 1.5, s.access === s.z1 ? Math.PI : 0, BS.st_cart);
   const bGeo = Q.geometry();
   const bMat = new THREE.MeshLambertMaterial({ map: ban.tex, alphaTest: 0.45, transparent: false, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -8, side: THREE.DoubleSide });
@@ -247,7 +248,7 @@ export function buildDepotLot({ groundY = () => 0, signTex, signSlots, kitMat } 
 
   // ---------- 밝은 간판(간판 아틀라스, MeshBasic): 입구·출구 처마 글씨, 카트 보관소, 영업시간, 처마 밑 조명 ----------
   const G = quads();
-  G.sign(S.door.x + 1, y0 + cn.y + 0.35, cn.z0 - 0.17, 9, 9 / 4, Math.PI, SS.enter);
+  G.sign(S.door.x + 1, y0 + cn.y + 0.7 + 1.0, cn.z0 + 0.35, 8, 2, Math.PI, SS.enter); // 처마 위에 선 입구 간판
   G.sign(L.exitDoor.x, y0 + 4.2, 493.85, 6, 1.5, Math.PI, SS.exit);
   G.sign(S.door.x - 7.5, y0 + 3.6, cn.z0 + 1.0, 3.6, 0.9, Math.PI, SS.cart);
   G.sign(S.door.x + 6.2, y0 + 2.2, L.tower.z0 - 0.06, 2.6, 0.65, Math.PI, SS.hours);

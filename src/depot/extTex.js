@@ -73,15 +73,15 @@ export function asphaltTexture() {
 }
 
 // ---------- 아틀라스 ----------
-class Atlas {
-  constructor(w, h) { [this.c, this.g] = canvas(w, h); this.W = w; this.H = h; this.slots = {}; }
+class Atlas { // k < 1 이면 같은 배치를 작은 캔버스에(모바일: 메모리 1/4)
+  constructor(w, h, k = 1) { [this.c, this.g] = canvas(Math.round(w * k), Math.round(h * k)); this.W = w; this.H = h; this.k = k; this.slots = {}; }
   slot(name, x, y, w, h) { this.slots[name] = { x, y, w, h, u0: x / this.W, u1: (x + w) / this.W, v0: 1 - (y + h) / this.H, v1: 1 - y / this.H }; return this.slots[name]; }
-  draw(name, fn) { const s = this.slots[name], g = this.g; g.save(); g.beginPath(); g.rect(s.x, s.y, s.w, s.h); g.clip(); g.translate(s.x, s.y); fn(g, s.w, s.h); g.restore(); }
+  draw(name, fn) { const s = this.slots[name], g = this.g, k = this.k; g.save(); g.scale(k, k); g.beginPath(); g.rect(s.x, s.y, s.w, s.h); g.clip(); g.translate(s.x, s.y); fn(g, s.w, s.h); g.restore(); }
 }
 
 /** 간판 아틀라스(밤에도 밝은 MeshBasic). 정면 큰 간판·탑 표지·LED 특가판·입구/출구·카트 보관소·이정표. */
-export function signAtlas() {
-  const A = new Atlas(2048, 1536);
+export function signAtlas({ k = 1 } = {}) {
+  const A = new Atlas(2048, 1536, k);
   A.slot('main', 0, 0, 2048, 512); // 정면 큰 간판 (4:1)
   A.slot('pyTop', 0, 512, 512, 512); // 탑 표지 위 (정사각)
   A.slot('pyMid', 512, 512, 1024, 256); // 탑 표지 가운데 BUMP DEPOT 정자점
@@ -127,8 +127,8 @@ export function signAtlas() {
   });
   A.draw('enter', (g, w, h) => {
     g.fillStyle = C.deep; g.fillRect(0, 0, w, h);
-    g.fillStyle = C.yellow; g.font = font(900, 64); g.textBaseline = 'middle'; g.textAlign = 'left'; g.fillText('범창고 입구', 28, h / 2 + 2);
-    g.fillStyle = C.cream; g.font = font(800, 34); g.textAlign = 'right'; g.fillText('ENTRANCE ▶', w - 24, h / 2 + 2);
+    g.fillStyle = C.yellow; g.font = font(900, 62); g.textBaseline = 'middle'; g.textAlign = 'center'; g.fillText('범창고 입구 ▶', w / 2, 50);
+    g.fillStyle = C.cream; g.font = font(800, 28); g.fillText('E N T R A N C E', w / 2, 103);
   });
   A.draw('exit', (g, w, h) => {
     g.fillStyle = C.deep; g.fillRect(0, 0, w, h);
@@ -146,7 +146,7 @@ export function signAtlas() {
     g.fillStyle = C.deep; g.font = font(800, 40); g.textBaseline = 'middle'; g.textAlign = 'center'; g.fillText('영업시간 10:00 – 23:00', w / 2, 44);
     g.fillStyle = C.red; g.font = font(700, 30); g.fillText('둘째·넷째 일요일 휴무 (아마도)', w / 2, 96);
   });
-  const posts = [['범창고', '◀  650 m', '정자역에서 걸어서 9분'], ['범창고', '▲  400 m', '길 건너 서쪽'], ['범창고', '▶  입구', '주차장 · 카트 보관소'], ['범창고 주차장', '▶  진입', '대왕판교로에서 우회전']];
+  const posts = [['범창고', '◀  650 m', '정자역에서 서남쪽 · 걸어서 9분'], ['범창고', '▶  150 m', '경부고속도로 건너편 · 지도 안내'], ['범창고', '▲  입구', '주차장 · 카트 보관소'], ['범창고 주차장', 'P  진입', '깃발 보이는 곳으로 · 3시간 무료']];
   posts.forEach(([a, b, c], i) => A.draw('post' + i, (g, w, h) => {
     g.fillStyle = C.green; g.fillRect(0, 0, w, h);
     g.fillStyle = C.yellow; g.fillRect(0, h - 14, w, 14);
@@ -181,8 +181,8 @@ export function signAtlas() {
 }
 
 /** 현수막·깃발·트럭 도장·바닥 글씨 아틀라스(낮/밤 조명 받는 Lambert, 바닥 글씨는 알파). 가까이 올 때만 만든다. */
-export function bannerAtlas() {
-  const A = new Atlas(2048, 2048);
+export function bannerAtlas({ k = 1 } = {}) {
+  const A = new Atlas(2048, 2048, k);
   for (let i = 0; i < 5; i++) A.slot('vb' + i, i * 256, 0, 256, 1024); // 세로 현수막 5종
   A.slot('hb0', 1280, 0, 768, 160); A.slot('hb1', 1280, 160, 768, 160); A.slot('hb2', 1280, 320, 768, 160); // 가로 현수막
   A.slot('truck', 1280, 480, 768, 256); // 트럭 옆면

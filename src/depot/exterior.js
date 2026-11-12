@@ -9,16 +9,20 @@ import { kit, kitMaterial, quads } from './extKit.js';
 import { createDepotWayfinding } from './extWay.js';
 import { createNightFade } from '../world/nightLights.js';
 
-const NEAR_IN = 420, NEAR_OUT = 560, FAR_R = 1500;
+const FAR_R = 1500;
+// 박스 6면 → 3 draw: ±x 한 그룹, +y(지붕) 한 그룹, ±z 한 그룹, 바닥(-y)은 안 그린다
+function packBox(g) { g.clearGroups(); g.addGroup(0, 12, 0); g.addGroup(12, 6, 2); g.addGroup(24, 12, 4); return g; }
 
-export function buildDepotExterior(scene, { groundY = () => 0, overlay = null, getPos = null, lot = true } = {}) {
+export function buildDepotExterior(scene, { groundY = () => 0, overlay = null, getPos = null, lot = true, mobile = false } = {}) {
+  const t0 = performance.now();
+  const NEAR_IN = mobile ? 320 : 420, NEAR_OUT = mobile ? 440 : 560; // 모바일은 더 가까이 와서 만들고 빨리 해제
   const W = S.x1 - S.x0, D = S.z1 - S.z0, cx = (S.x0 + S.x1) / 2, cz = (S.z0 + S.z1) / 2;
   const ys = [[S.x0, S.z0], [S.x1, S.z0], [S.x0, S.z1], [S.x1, S.z1], [cx, cz]].map(([x, z]) => groundY(x, z) || 0);
   const y0 = Math.min(...ys), yTop = Math.max(...ys);
   const root = new THREE.Group(); root.name = 'depot-exterior';
   const far = new THREE.Group(); far.name = 'depot-far'; root.add(far);
   const disposables = [];
-  const sign = signAtlas(); disposables.push(sign);
+  const sign = signAtlas({ k: mobile ? 0.5 : 1 }); disposables.push(sign);
   const SS = sign.slots;
   const kitMat = kitMaterial(); disposables.push(kitMat);
   const signMat = new THREE.MeshBasicMaterial({ map: sign.tex, toneMapped: false, side: THREE.FrontSide }); disposables.push(signMat);
@@ -29,7 +33,7 @@ export function buildDepotExterior(scene, { groundY = () => 0, overlay = null, g
   const wTz = wT.clone(); wTz.needsUpdate = true; wTz.repeat.set(D / 8, 1);
   const rT = roofTexture(); rT.repeat.set(W / 4, D / 4);
   const wallX = new THREE.MeshLambertMaterial({ map: wT }), wallZ = new THREE.MeshLambertMaterial({ map: wTz }), roofM = new THREE.MeshLambertMaterial({ map: rT });
-  const box = new THREE.BoxGeometry(W, H, D);
+  const box = packBox(new THREE.BoxGeometry(W, H, D));
   const body = new THREE.Mesh(box, [wallZ, wallZ, roofM, roofM, wallX, wallX]); body.position.set(cx, y0 - 0.6 + H / 2, cz); body.name = 'depot-shell'; far.add(body);
   disposables.push(wT, wTz, rT, wallX, wallZ, roofM, box);
   // 입구 위 초록 탑(정면 1.2 m 돌출)
@@ -37,7 +41,7 @@ export function buildDepotExterior(scene, { groundY = () => 0, overlay = null, g
   const gT = wallTexture('green'); gT.repeat.set(tW / 8, 1);
   const gTs = gT.clone(); gTs.needsUpdate = true; gTs.repeat.set(tD / 8, 1);
   const towerM = new THREE.MeshLambertMaterial({ map: gT }), towerS = new THREE.MeshLambertMaterial({ map: gTs }), towerTop = new THREE.MeshLambertMaterial({ color: C.deep });
-  const tBox = new THREE.BoxGeometry(tW, T.h + 0.6, tD);
+  const tBox = packBox(new THREE.BoxGeometry(tW, T.h + 0.6, tD));
   const tower = new THREE.Mesh(tBox, [towerS, towerS, towerTop, towerTop, towerM, towerM]); tower.position.set((T.x0 + T.x1) / 2, y0 - 0.6 + (T.h + 0.6) / 2, T.z0 + tD / 2); tower.name = 'depot-tower'; far.add(tower);
   disposables.push(gT, gTs, towerM, towerS, towerTop, tBox);
 
@@ -55,7 +59,7 @@ export function buildDepotExterior(scene, { groundY = () => 0, overlay = null, g
 
   // 밝은 간판: 탑 정면 큰 간판, 옆벽 간판 2, 탑 표지 판(앞뒤)
   const Q = quads();
-  Q.sign((T.x0 + T.x1) / 2, y0 + T.h - 4.6, T.z0 - 0.05, 30, 7.5, Math.PI, SS.main);
+  Q.sign((T.x0 + T.x1) / 2, y0 + T.h - 4.15, T.z0 - 0.05, 30, 7.5, Math.PI, SS.main);
   Q.sign(S.x0 - 0.08, y0 + 6.3, 588, 22, 5.5, -Math.PI / 2, SS.side);
   Q.sign(S.x1 + 0.08, y0 + 6.3, 588, 22, 5.5, Math.PI / 2, SS.side);
   for (const p of L.pylons) {
@@ -77,15 +81,17 @@ export function buildDepotExterior(scene, { groundY = () => 0, overlay = null, g
   const baseRects = rects.length;
   const bb = { x0: Math.min(L.roadInX, L.x0) - 5, x1: L.service.x1 + 2, z0: 395, z1: L.dock.z1 + 2 };
 
-  const way = createDepotWayfinding({ scene, overlay, groundY, signTex: sign.tex, signSlots: SS, kitMat, getPos });
+  const way = createDepotWayfinding({ scene, overlay, groundY, signTex: sign.tex, signSlots: SS, kitMat, getPos, mobile });
   const night = createNightFade();
   let near = null, nearP = null, gone = false, lastNight = -1;
-  const stats = { near: false, buildMs: 0 };
+  const stats = { near: false, buildMs: 0, farMs: Math.round((performance.now() - t0) * 10) / 10, mobile };
   async function buildNear() {
     const t0 = performance.now();
     const m = await import('./extLot.js');
     if (gone || near) return;
-    near = m.buildDepotLot({ groundY, signTex: sign.tex, signSlots: SS, kitMat });
+    const t1 = performance.now();
+    near = m.buildDepotLot({ groundY, signTex: sign.tex, signSlots: SS, kitMat, mobile });
+    stats.lotBuildMs = Math.round(performance.now() - t1);
     root.add(near.root);
     for (const b of near.blockers) rects.push(b);
     stats.near = true; stats.buildMs = Math.round(performance.now() - t0); stats.cars = near.cars; stats.stalls = near.stalls;

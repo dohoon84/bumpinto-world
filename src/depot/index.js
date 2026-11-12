@@ -10,7 +10,7 @@ const FADE = 0.35, DOOR_R = 4.2, PREFETCH_R = 120;
 export function mountDepot({ renderer, scene, getPlayer, groundY, canEnter = () => true, onInterior, isMobile = false, params, overlay = null } = {}) {
   const search = params ? `?${params}` : location.search;
   if (!depotEnabled(search)) return null;
-  const ext = buildDepotExterior(scene, { groundY: groundY || (() => 0), overlay, getPos: () => getPlayer?.()?.position, lot: new URLSearchParams(search.replace(/^\?/, '')).get('depotlot') !== '0' }); // [depot-ext] ?depotlot=0 이면 주차장 디테일 끔
+  const ext = buildDepotExterior(scene, { groundY: groundY || (() => 0), overlay, getPos: () => getPlayer?.()?.position, mobile: isMobile, lot: new URLSearchParams(search.replace(/^\?/, '')).get('depotlot') !== '0' }); // [depot-ext] ?depotlot=0 이면 주차장 디테일 끔
   let mod = null, modP = null, interior = null, active = false, busy = false, near = false;
   let fade = { t: 0, phase: '', leaving: false };
   const loadMod = () => (modP ||= import('./interior.js').then((m) => (mod = m)).catch((e) => { modP = null; console.warn('[depot]', e); return null; }));
