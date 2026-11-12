@@ -137,6 +137,7 @@ export function mountTitles({
     },
     get ready() { return ready; },
     get stats() { return layer.stats; },
+    get boxes() { return layer.boxes; },
     get current() { return myCurrent; },
     get error() { return lastError; },
     client: api,

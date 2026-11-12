@@ -3,6 +3,11 @@ html, body { margin: 0; height: 100%; overflow: hidden; font-family: 'Pretendard
 #app { position: fixed; inset: 0; }
 #app canvas { display: block; touch-action: none; }
 #overlay { position: fixed; inset: 0; pointer-events: none; overflow: hidden; }
+/* 칭호 캔버스는 지명 라벨 위, 닉네임·말풍선 아래. HUD/모달은 #overlay 밖(z-index 5+)이라 그대로 위에 있다. */
+#overlay .label { z-index: 1; }
+#overlay #title-layer { z-index: 2; }
+#overlay .tag { z-index: 3; }
+#overlay .bubble { z-index: 4; }
 .tag, .bubble, .label { position: absolute; left: 0; top: 0; transform: translate(-50%, -100%); white-space: nowrap; will-change: transform; }
 .tag { font-size: 11px; font-weight: 600; color: #fff; background: rgba(30, 40, 60, .55); padding: 1px 6px; border-radius: 8px; }
 .tag.npc { background: rgba(80, 60, 140, .6); }

@@ -777,6 +777,7 @@ const presence = createPresence({ station: st, region });
 if (npcs.guard) presence.setGuard?.(npcs.guard);
 const remotes = new RemotePlayers(scene, overlay, presence, () => selfPos(), (t) => myBubble.say(t, 6000), terrain?.getGroundHeight, emoteFx); // [terrain] 원격 플레이어도 지형 높이
 const titleLayer = titlesEnabled(params) ? mountTitles({ renderer, camera, overlay, nameTag, remotes, presence, params }) : null; // [weekly-titles] 머리 위 칭호(아틀라스 메시 1, ?titles=0 끔, ?titlePreview=1 미리보기)
+if (titleLayer) overlay.getOccluders = () => titleLayer.boxes || [];
 // [bike] 관리자 크루저 (인벤토리에서 어느 지역이든 소환/수납 가능, ?bike=0 끔)
 let canRideAdminBike = () => false;
 let getAdminBikeTank = () => 'red';

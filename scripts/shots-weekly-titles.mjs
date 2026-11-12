@@ -37,6 +37,7 @@ async function openPage({ mobile = false, hour = 14, preview = 1, earn = 0, extr
     controlscard: '0',
     lang: 'ko',
   });
+  if (mobile) q.set('mobile', '1');
   const url = `${ORIGIN}/?${q}${extra}`;
   await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 120000 });
   await page.waitForFunction(() => window.__jj?.ready && window.__jj?.titles?.ready, null, { timeout: 180000 });

@@ -2,6 +2,7 @@
 import * as THREE from 'three';
 import { composeTitle, earnDuration, langPack, sfxCues, sortQuads } from './eval.js';
 import { prefersReducedMotion, useHalfAtlas } from './flag.js';
+import { fitWorldScale, isMobileDoc, ownRestScale, placeOrigin, worldScale as titleWorldScale } from './layout.js';
 import atlasJson from './assets/atlas.json';
 import atlasPng from './assets/atlas.png';
 import atlasHalfPng from './assets/atlas@0.5x.png';
@@ -9,7 +10,6 @@ import atlasHalfPng from './assets/atlas@0.5x.png';
 const MAX_QUADS = 256;
 const EFFECT_N = 6;
 const EARN_N = 2;
-const GAP_PT = 4;
 const FADE_MS = 200;
 const SWAP_MS = 150;
 
@@ -60,17 +60,18 @@ function makeGeometry() {
 
 function spriteOf(atlas, name) { return atlas.sprites?.[name]; }
 
-function writeQuad(pos, uv, col, qi, ox, oy, quad, spr) {
+function writeQuad(pos, uv, col, qi, ox, oy, quad, spr, worldScale = 1) {
   if (!spr) return false;
   const [w, h] = spr.sizePt;
   const [px, py] = spr.pivotPt;
   const sx = quad.scale?.[0] ?? 1, sy = quad.scale?.[1] ?? 1;
   const a = Math.max(0, Math.min(1, quad.alpha ?? 1));
   const [u0, v0, u1, v1] = spr.uv; // flipY=false
-  const x0 = ox + (0 - px) * sx + (quad.pos?.[0] || 0);
-  const y0 = oy + (0 - py) * sy + (quad.pos?.[1] || 0);
-  const x1 = ox + (w - px) * sx + (quad.pos?.[0] || 0);
-  const y1 = oy + (h - py) * sy + (quad.pos?.[1] || 0);
+  const s = worldScale;
+  const x0 = ox + ((0 - px) * sx + (quad.pos?.[0] || 0)) * s;
+  const y0 = oy + ((0 - py) * sy + (quad.pos?.[1] || 0)) * s;
+  const x1 = ox + ((w - px) * sx + (quad.pos?.[0] || 0)) * s;
+  const y1 = oy + ((h - py) * sy + (quad.pos?.[1] || 0)) * s;
   const vo = qi * 12, uvo = qi * 8, co = qi * 16;
   // y down (ortho top=0, bottom=h). corners: TL, TR, BL, BR. z=0 so bounding sphere is finite
   pos[vo + 0] = x0; pos[vo + 1] = y0; pos[vo + 2] = 0;
@@ -110,13 +111,14 @@ export function createTitleLayer({ renderer, camera, getCamera = null, getLang =
   geo.boundingSphere = new THREE.Sphere(new THREE.Vector3(), 1e6);
   scene.add(mesh);
 
-  // 본 월드 렌더러는 logarithmicDepthBuffer 를 써서 같은 컨텍스트에 정사영 오버레이를 합성하면
-  // 칭호가 프레임버퍼에 안 남는다. 라벨(#overlay) 아래에 투명 캔버스+전용 렌더러를 둔다.
+  // 본 월드 렌더러는 logarithmicDepthBuffer 를 써서 같은 컨텍스트에 정사영을 합성하면
+  // 칭호가 프레임버퍼에 안 남는다. 투명 캔버스+전용 렌더러를 #overlay 안에 둔다.
+  // z-index 는 지명 라벨 위, 닉네임·말풍선·HUD 아래(style.css).
   const canvas = document.createElement('canvas');
   canvas.id = 'title-layer';
-  canvas.style.cssText = 'position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none;';
+  canvas.style.cssText = 'position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none;z-index:2;';
   const host = (typeof document !== 'undefined' && (document.getElementById('overlay') || document.getElementById('app') || document.body));
-  if (host) host.insertBefore(canvas, host.firstChild);
+  if (host) host.appendChild(canvas);
   const dpr0 = (typeof devicePixelRatio === 'number' && devicePixelRatio > 0) ? Math.min(devicePixelRatio, 2) : 1;
   const overlayR = new THREE.WebGLRenderer({
     canvas, alpha: true, antialias: false, logarithmicDepthBuffer: false,
@@ -128,7 +130,7 @@ export function createTitleLayer({ renderer, camera, getCamera = null, getLang =
   overlayR.outputColorSpace = THREE.SRGBColorSpace;
   const wearers = new Map(); // key -> state
   let atlas = null;
-  let lastDraw = 0, lastTris = 0, lastQuads = 0;
+  let lastDraw = 0, lastTris = 0, lastQuads = 0, lastBoxes = [], lastScale = 1;
   let lastW = 0, lastH = 0;
   const tmp = new THREE.Vector3();
 
@@ -268,12 +270,22 @@ export function createTitleLayer({ renderer, camera, getCamera = null, getLang =
     if (tmp.z >= 1 || tmp.z <= -1 || Math.abs(tmp.x) > 1.2 || Math.abs(tmp.y) > 1.2) return null;
     const x = ((tmp.x + 1) / 2) * wPx;
     const y = ((1 - tmp.y) / 2) * hPx;
-    const labelH = tag?.el?.offsetHeight || tag?.h || 15;
     const dpr = (typeof devicePixelRatio === 'number' && devicePixelRatio > 0) ? devicePixelRatio : 1;
+    const el = tag?.el;
+    if (el && tag.visible !== false) {
+      const rect = el.getBoundingClientRect();
+      if (rect.height > 0 || rect.width > 0) {
+        return {
+          x: Math.round((rect.left + rect.width / 2) * dpr) / dpr,
+          labelTop: Math.round(rect.top * dpr) / dpr,
+          d, maxDist: maxD, visible: true,
+        };
+      }
+    }
+    const labelH = el?.offsetHeight || tag?.h || 15;
     const ox = Math.round(x * dpr) / dpr;
-    const top = y - labelH;
-    const oy = Math.round((top - GAP_PT) * dpr) / dpr;
-    return { x: ox, y: oy, d, visible: true };
+    const labelTop = Math.round((y - labelH) * dpr) / dpr;
+    return { x: ox, labelTop, d, maxDist: maxD, visible: true };
   }
 
   function render(rendererIn, wPx, hPx) {
@@ -318,19 +330,70 @@ export function createTitleLayer({ renderer, camera, getCamera = null, getLang =
         reducedRest: red && mode === 'rest',
       }));
       const fade = w.fade ?? 1;
-      entries.push({ w, quads: fade === 1 ? quads : quads.map((q) => ({ ...q, alpha: (q.alpha ?? 1) * fade })), d: w._scr.d });
+      const earning = mode === 'earn' || mode === 'reduced';
+      const mobile = isMobileDoc();
+      const restS = w.local ? ownRestScale(pack.rowWidthPt, mobile) : titleWorldScale({
+        local: false, rowWidthPt: pack.rowWidthPt, mobile, dist: w._scr.d, maxDist: w._scr.maxDist,
+      });
+      const ws = titleWorldScale({
+        local: !!w.local, rowWidthPt: pack.rowWidthPt, mobile, dist: w._scr.d, maxDist: w._scr.maxDist,
+        earning: !!w.local && earning, tMs: earning ? t : 0, durationMs: w.duration || earnDuration(pack, w.reducedEarn || red),
+        reduced: red || mode === 'reduced',
+      });
+      entries.push({
+        w,
+        pack,
+        quads: fade === 1 ? quads : quads.map((q) => ({ ...q, alpha: (q.alpha ?? 1) * fade })),
+        d: w._scr.d,
+        restScale: restS,
+        worldScale: ws,
+      });
     }
     // 먼 칭호부터
     entries.sort((a, b) => b.d - a.d);
     let qi = 0;
+    const boxes = [];
+    let shownScale = 1;
+    const mobile = isMobileDoc();
     for (const e of entries) {
-      const ox = e.w._scr.x, oy = e.w._scr.y;
+      let minYpt = 0, maxYpt = 0;
+      for (const q of e.quads) {
+        const spr = spriteOf(atlas.json, q.sprite);
+        if (!spr) continue;
+        const [pw, ph] = spr.sizePt;
+        const [ppx, ppy] = spr.pivotPt;
+        const sx = q.scale?.[0] ?? 1, sy = q.scale?.[1] ?? 1;
+        const y0 = (0 - ppy) * sy + (q.pos?.[1] || 0);
+        const y1 = (ph - ppy) * sy + (q.pos?.[1] || 0);
+        minYpt = Math.min(minYpt, y0, y1);
+        maxYpt = Math.max(maxYpt, y0, y1);
+      }
+      const ws = e.w.local ? fitWorldScale({
+        restScale: e.restScale, desired: e.worldScale,
+        minYpt, maxYpt, labelTop: e.w._scr.labelTop, mobile,
+      }) : e.worldScale;
+      const { ox, oy } = placeOrigin({
+        labelX: e.w._scr.x, labelTop: e.w._scr.labelTop,
+        restScale: e.restScale, worldScale: ws, minYpt, maxYpt, mobile,
+      });
+      if (e.w.local) shownScale = ws;
+      let l = Infinity, r = -Infinity, t = Infinity, b = -Infinity;
       for (const q of e.quads) {
         if (qi >= MAX_QUADS) break;
         const spr = spriteOf(atlas.json, q.sprite);
-        if (writeQuad(pos, uv, col, qi, ox, oy, q, spr)) qi += 1;
+        if (writeQuad(pos, uv, col, qi, ox, oy, q, spr, ws)) {
+          const vo = qi * 12;
+          l = Math.min(l, pos[vo], pos[vo + 6], pos[vo + 3], pos[vo + 9]);
+          r = Math.max(r, pos[vo], pos[vo + 6], pos[vo + 3], pos[vo + 9]);
+          t = Math.min(t, pos[vo + 1], pos[vo + 4], pos[vo + 7], pos[vo + 10]);
+          b = Math.max(b, pos[vo + 1], pos[vo + 4], pos[vo + 7], pos[vo + 10]);
+          qi += 1;
+        }
       }
+      if (l < r && t < b) boxes.push({ l: l - 8, r: r + 8, t: t - 8, b: b + 8 });
     }
+    lastBoxes = boxes;
+    lastScale = shownScale;
     geo.attributes.position.needsUpdate = true;
     geo.attributes.uv.needsUpdate = true;
     geo.attributes.color.needsUpdate = true;
@@ -354,7 +417,8 @@ export function createTitleLayer({ renderer, camera, getCamera = null, getLang =
       seekEarn(w, id || w.titleId, tMs, opts);
     },
     remove, render,
-    get stats() { return { quads: lastQuads, draws: lastDraw, tris: lastTris, wearers: wearers.size }; },
+    get stats() { return { quads: lastQuads, draws: lastDraw, tris: lastTris, wearers: wearers.size, scale: lastScale }; },
+    get boxes() { return lastBoxes; },
     wearers,
     scene, mesh,
     ready: () => !!atlas,
