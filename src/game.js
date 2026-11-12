@@ -17,6 +17,7 @@ import { sanitizeLook, readSavedPassport, isPassportActive, setPassportActive } 
 import { NPCs, getNpcCapForRegion } from './entities/npcs.js';
 import { createAtmosphere } from './weather.js';
 import { Overlay, Bubble } from './overlay.js';
+import { mountTitles, titlesEnabled } from './titles/index.js'; // [weekly-titles]
 import { EMOTE_LIST, EMOTE_BY_ID, EMOTE_BY_CODE, EmoteFX } from './emotes.js';
 import { Input } from './input.js';
 import { createPresence } from './net/presence.js';
@@ -775,6 +776,7 @@ const bp24Nav = mountBp24Nav({ // [bp24nav] ?bp24nav=0 이면 null. 매장 아�
 const presence = createPresence({ station: st, region });
 if (npcs.guard) presence.setGuard?.(npcs.guard);
 const remotes = new RemotePlayers(scene, overlay, presence, () => selfPos(), (t) => myBubble.say(t, 6000), terrain?.getGroundHeight, emoteFx); // [terrain] 원격 플레이어도 지형 높이
+const titleLayer = titlesEnabled(params) ? mountTitles({ renderer, camera, overlay, nameTag, remotes, presence, params }) : null; // [weekly-titles] 머리 위 칭호(아틀라스 메시 1, ?titles=0 끔, ?titlePreview=1 미리보기)
 // [bike] 관리자 크루저 (인벤토리에서 어느 지역이든 소환/수납 가능, ?bike=0 끔)
 let canRideAdminBike = () => false;
 let getAdminBikeTank = () => 'red';
@@ -2717,7 +2719,7 @@ function frame() {
     }
     if (joined) presence.sendState(subwayPresenceState() || { x: player.position.x, z: player.position.z, ry: player.rotation.y, moving: false, riding: false, jy: 0, emote: '', sit: '', afk: false, umb: '' });
     myBubble.tick();
-    overlay.update(innerWidth, innerHeight);
+    overlay.update(innerWidth, innerHeight); titleLayer?.render(renderer, innerWidth, innerHeight);
     emoteFx.update(dt, innerWidth, innerHeight);
     perfHud.tick();
     memHud.tick();
@@ -2728,7 +2730,7 @@ function frame() {
   // [arcade] 오락실 안
   if ((arcadeGame?.active || arcadeGame?.busy) && arcadeGame.frame(dt)) {
     myBubble.tick();
-    overlay.update(innerWidth, innerHeight);
+    overlay.update(innerWidth, innerHeight); titleLayer?.render(renderer, innerWidth, innerHeight);
     emoteFx.update(dt, innerWidth, innerHeight);
     perfHud.tick();
     memHud.tick();
@@ -2738,7 +2740,7 @@ function frame() {
   // [bump24game] 매장 안: 도시 렌더 건너뛰고 내부 장면만
   if ((bump24Game?.active || bump24Game?.busy) && bump24Game.frame(dt, [dy, dp, dz], input.axes())) {
     myBubble.tick();
-    overlay.update(innerWidth, innerHeight);
+    overlay.update(innerWidth, innerHeight); titleLayer?.render(renderer, innerWidth, innerHeight);
     emoteFx.update(dt, innerWidth, innerHeight);
     perfHud.tick();
     memHud.tick();
@@ -3062,7 +3064,7 @@ function frame() {
   if (skyDome) skyDome.position.copy(camera.position);
   if (!shouldSkipLandmarkPaint()) {
     renderer.render(scene, camera);
-    overlay.update(innerWidth, innerHeight);
+    overlay.update(innerWidth, innerHeight); titleLayer?.render(renderer, innerWidth, innerHeight);
     emoteFx.update(dt, innerWidth, innerHeight);
   }
   perfHud.tick();
@@ -3107,6 +3109,7 @@ ready: bootReady, region, tower, renderer, corridor, namsan: corridor?.namsan ||
   cameraApp, // [camera]
   subway, serverClock, // [subway] [subway-sync]
   bump24Game, arcadeGame, jeongjaBp24, bp24Nav, // [bump24game] [arcade] [bump24-jeongja] [bp24nav]
+  titles: titleLayer, // [weekly-titles]
   get pose() { return { sit: mySit, afk: myAfk, jy: jumpY }; }, // [subway-pose] 테스트용
   bgm, // [bgm]
   nearNpc(i = 0, d = 3) { const n = npcs.list[i]; player.position.set(n.pos.x + d, 0, n.pos.z + d * 0.5); },
