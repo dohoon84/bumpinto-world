@@ -1,5 +1,5 @@
 // [namsan] [hangang] 부트 때는 가벼운 스텁만 두고, 가까이 오면 메시를 만든다.
-import { NAMSAN_BOUNDS, HANGANG_BOXES, NAMSAN_SPAWN, HANGANG_SPAWN, emptyLandmarkMini } from './landmarkBounds.js';
+import { NAMSAN_BOUNDS, HANGANG_BOXES, NAMSAN_SPAWN, HANGANG_SPAWN, HANGANG_HAP_SPAWNS, emptyLandmarkMini } from './landmarkBounds.js';
 
 export function landmarkLazyEnabled(search = typeof location !== 'undefined' ? location.search : '') {
   const s = search instanceof URLSearchParams ? search : new URLSearchParams(search || '');
@@ -61,7 +61,7 @@ export function makeHangangMeta(data) {
     spawn,
     spawnY: () => spawn.y,
     mini: emptyLandmarkMini(),
-    spawns: { ...(data?.hap?.osm?.spawns || {}) },
+    spawns: { ...HANGANG_HAP_SPAWNS, ...(data?.hap?.osm?.spawns || {}) }, // [gangnam-enter] 탄천합수부·잠원 목적지가 지연 로딩에서도 남게
     connectEnds: { ...(data?.osm?.connectEnds || {}), ...(data?.hap?.osm?.connectEnds || {}) },
   };
 }
