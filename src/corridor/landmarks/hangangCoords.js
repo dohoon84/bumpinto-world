@@ -12,10 +12,55 @@ export function projectLatLon(lat, lon) {
   return { x: r1((lon - HG.lon0) * HG.kx), z: r1(-(lat - HG.lat0) * HG.kz) };
 }
 
+// [gangnam-enter] 긴 링(한강 수면 외곽 등 수천 점)은 z 띠별 변 목록을 한 번 만들어 둔다.
+//   같은 변에 같은 교차 판정을 하므로 결과는 전체 순회와 똑같고, 한강 높이 계산(inHanRiver 반복)이 수십 배 빨라진다.
+const RING_INDEX_MIN = 64;
+const RING_BAND_M = 16;
+const ringIndex = new WeakMap();
+function bandIndex(ring) {
+  let idx = ringIndex.get(ring);
+  if (idx !== undefined) return idx;
+  const n = ring.length;
+  let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
+  for (let i = 0; i < n; i++) {
+    const p = ring[i];
+    if (!p || !Number.isFinite(p[0]) || !Number.isFinite(p[1])) { ringIndex.set(ring, null); return null; }
+    if (p[0] < x0) x0 = p[0]; if (p[0] > x1) x1 = p[0];
+    if (p[1] < z0) z0 = p[1]; if (p[1] > z1) z1 = p[1];
+  }
+  const b0 = Math.floor(z0 / RING_BAND_M);
+  const nb = Math.floor(z1 / RING_BAND_M) - b0 + 1;
+  const bands = Array.from({ length: nb }, () => []);
+  for (let i = 0, j = n - 1; i < n; j = i++) {
+    const zi = ring[i][1], zj = ring[j][1];
+    if (zi === zj) continue; // 수평 변은 교차 판정에 걸리지 않는다
+    const lo = Math.floor(Math.min(zi, zj) / RING_BAND_M) - b0, hi = Math.floor(Math.max(zi, zj) / RING_BAND_M) - b0;
+    for (let b = lo; b <= hi; b++) bands[b].push(i, j);
+  }
+  idx = { x0, x1, z0, z1, b0, bands };
+  ringIndex.set(ring, idx);
+  return idx;
+}
+
 export function pointInRing(x, z, ring) {
   if (!ring || ring.length < 3) return false;
   let inside = false;
   const n = ring.length;
+  if (n >= RING_INDEX_MIN) {
+    const idx = bandIndex(ring);
+    if (idx) {
+      if (!(z >= idx.z0 && z <= idx.z1 && x <= idx.x1)) return false; // 밖이면 교차가 없다(x 가 왼쪽 밖이면 교차 수는 짝수)
+      const list = idx.bands[Math.floor(z / RING_BAND_M) - idx.b0];
+      if (!list) return false;
+      for (let k = 0; k < list.length; k += 2) {
+        const i = list[k], j = list[k + 1];
+        const xi = ring[i][0], zi = ring[i][1];
+        const xj = ring[j][0], zj = ring[j][1];
+        if (((zi > z) !== (zj > z)) && (x < (xj - xi) * (z - zi) / ((zj - zi) || 1e-12) + xi)) inside = !inside;
+      }
+      return inside;
+    }
+  }
   for (let i = 0, j = n - 1; i < n; j = i++) {
     const xi = ring[i][0], zi = ring[i][1];
     const xj = ring[j][0], zj = ring[j][1];
