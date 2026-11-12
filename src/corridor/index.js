@@ -7,6 +7,7 @@ import * as THREE from 'three';
 import { mergeTancheon, coveredFn, holeyGround, channelWaterMesh } from './tancheon.js';
 import { buildDetailTile, buildLodTile, roadMesh, CAR_KINDS, ingestTileRoads, setFlatClip, clipFlatGeometry, clipOutsideRect } from './tileMesh.js';
 import { propShadowsEnabled, silenceSmallPropShadows } from '../perf/propShadows.js';
+import { applyTextureBudget } from '../render/textureBudget.js';
 import { applyTileCuts } from '../world/streams.js';
 import { makeForeignFn } from './islands.js'; // [hangang-isolation]
 import { buildCorridorCrossings } from './crossings.js';
@@ -195,12 +196,14 @@ export async function createCorridor({ scene, corridorData, terrain, world, rend
       tile.hints = extractLifeHints(t.dData, live); // [life]
       t.dData = null; t.detail = tile; t.dState = 3; root.add(tile.group); loaded.push(t);
       if (propShadowsEnabled()) silenceSmallPropShadows(tile.group);
+      applyTextureBudget(tile.group);
       if (t.lod) t.lod.group.visible = false;
       stats.builtDetail++;
     } else if (job.kind === 'l' && t.lState === 2) {
       const tile = buildLodTile(t.key, t.lData, base, SD ? terrain : null);
       t.lData = null; t.lod = tile; t.lState = 3; root.add(tile.group);
       if (propShadowsEnabled()) silenceSmallPropShadows(tile.group);
+      applyTextureBudget(tile.group);
       tile.group.visible = t.dState !== 3;
       stats.builtLod++;
     }
@@ -571,6 +574,10 @@ const gnTransit = corridorData.gangnamTransit ? mountGangnamTransit(root, corrid
     if (namsanPending && landmarkNeeded(namsan, x, z, opts.lookX, opts.lookZ, radius)) jobs.push(buildNamsan(urgent));
     if (hangangPending && landmarkNeeded(hangang, x, z, opts.lookX, opts.lookZ, radius)) jobs.push(buildHangang(urgent));
     if (jobs.length) await Promise.all(jobs);
+    if (jobs.length) {
+      if (namsan?.root) applyTextureBudget(namsan.root);
+      if (hangang?.root) applyTextureBudget(hangang.root);
+    }
   }
 
   function needsLandmark(x, z) {

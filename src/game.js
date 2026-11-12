@@ -97,8 +97,8 @@ import { mountSeoulToll } from './world/seoulToll.js'; // [gyeongbu-bus] 서울�
 import { mountCheonggyeTerrain } from './corridor/cheonggyeTerrain.js'; // [gyeongbu-bus] 청계산 지형
 import { createServerClock } from './subway/clock.js'; // [subway-sync] 서버 시계 (같은 열차 = 같은 순간)
 import { isMobileMode } from './mobile/flag.js'; // [mobile]
-import { mobileProfile } from './mobile/profile.js'; // [mobile-profile] ?mprof=0 이면 예전 품질
-import { warmupRenderer } from './render/warmup.js'; // [boot-fast] 로딩 화면에서 셰이더 프리웜
+import { mobileProfile, mobileProfileEnabled } from './mobile/profile.js'; // [mobile-profile] ?mprof=0 이면 예전 품질
+import { applyTextureBudget, dropCpuSourcesAfterUpload } from './render/textureBudget.js'; // [mobile-profile] 긴 변 1024 캡 + 업로드 후 CPU 화상 폐기
 import { propShadowsEnabled, silenceSmallPropShadows } from './perf/propShadows.js'; // 작은 소품 그림자 패스 생략
 import { mountSubway, zoneLabel as subwayZoneLabel } from './subway/index.js'; // [subway] 정자역·코리더 역 출입구(실제 OSM 출구) + 지하 대합실. ?subway=0 이면 끔
 import { arriveFixEnabled, pickFirstEnabled, entrySpawn, withArriveCap } from './corridor/arrive.js'; // [arrivefix] #43 (?arrivefix=0) · [pickfirst] #42 (?pickfirst=0)
@@ -2683,6 +2683,29 @@ function frame() {
     requestAnimationFrame(frame);
     return;
   }
+  // 셰이더는 실제로 그려지는 첫 present 가 만든다. compile(scene) 은 숨은·먼 물체와
+  // DoubleSide 부가 배리언트까지 만들어 프로그램 수가 부모(00a8179)보다 늘어난다.
+  if (worldWarm && !worldWarm.noted && !document.body.classList.contains('in-lobby') && !document.body.classList.contains('in-gate')) {
+    if (mobileProfileEnabled(params, mobileMode)) applyTextureBudget(scene, { search: params, mobileMode });
+    const drop = mobileProfileEnabled(params, mobileMode) ? dropCpuSourcesAfterUpload(renderer, scene) : { dropped: 0 };
+    const info = renderer.info;
+    (window.__boot ||= {}).warmup = {
+      ms: 0,
+      mode: 'first-present',
+      textures: texBudget.count,
+      texChanged: texBudget.changed.slice(0, 12),
+      parallel: !!renderer.extensions?.has?.('KHR_parallel_shader_compile'),
+      programs: info.programs?.length,
+      cpuDropped: drop.dropped,
+    };
+    worldWarm.noted = true;
+    worldWarm.nextBudgetAt = performance.now() + 2000;
+    markBoot('warmup-first-present');
+  } else if (worldWarm?.noted && mobileProfileEnabled(params, mobileMode) && performance.now() >= (worldWarm.nextBudgetAt || 0)) {
+    // 스트리밍 타일·늦게 생긴 간판 아틀라스도 같은 1024 캡을 적용한다.
+    applyTextureBudget(scene, { search: params, mobileMode });
+    worldWarm.nextBudgetAt = performance.now() + 2000;
+  }
   const [dy, dp, dz] = input.consumeLook();
   // [subway] 대합실 안: 대합실만 갱신·렌더하고 바깥 월드(NPC·버스·코리더 타일·그림자)는 통째로 건너뜀
   if (subway?.zone) remotes.update(dt); // [zone] 대합실에 있는 다른 사람 (그리기 전에 위치 갱신)
@@ -3054,11 +3077,10 @@ if (propShadowsEnabled(params)) {
   if (n) markBoot('prop-shadows-off');
 }
 addEventListener('resize', () => { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); });
-// [boot-fast] 로딩(또는 로비) 화면이 떠 있는 동안 셰이더를 데워, 첫 present 의 ~5s GPU 스톨을 그쪽으로 옮긴다
-markBoot('warmup-start');
-const warm = await warmupRenderer(renderer, scene, camera, { maxMs: 4000, yieldFn: bootYield || undefined });
-markBoot('warmup-done');
-if (warm) (window.__boot ||= {}).warmup = { ms: +warm.ms.toFixed(1), textures: warm.textures, parallel: warm.parallel };
+// [boot-fast] 텍스처 예산은 첫 업로드 전에 적용한다. 셰이더 웜업은 ready 를 막지 않고, 로비/게이트가 끝난 뒤 프러스텀만 조각으로 데운다.
+const texBudget = applyTextureBudget(scene, { search: params, mobileMode });
+if (texBudget.count) markBoot('tex-budget-' + texBudget.count);
+const worldWarm = bootFast ? { noted: false } : null;
 requestAnimationFrame(frame);
 
 // 스크린샷/디버그용 훅
