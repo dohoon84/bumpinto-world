@@ -145,16 +145,17 @@ export function mountElectronics({ scene, keep, canvasTex, obstacles, prodMeshes
     const grp = new THREE.Group();
     const frame = new THREE.Mesh(keep(new THREE.BoxGeometry(U.w + bezel * 2, U.h + bezel * 2 + 0.04, U.d + 0.01)), blackM);
     const screen = new THREE.Mesh(keep(new THREE.PlaneGeometry(U.w, U.h)), tvScreenM);
-    screen.position.z = face * (U.d / 2 + 0.008);
-    const logo = new THREE.Mesh(keep(new THREE.PlaneGeometry(U.w * 0.22, 0.028)), creamBasic);
-    logo.position.set(0, -(U.h / 2 + 0.012), face * (U.d / 2 + 0.009));
+    screen.position.z = U.d / 2 + 0.008; // PlaneGeometry 는 +Z 를 봄
+    const logo = new THREE.Mesh(keep(new THREE.PlaneGeometry(U.w * 0.28, 0.032)), creamBasic);
+    logo.position.set(0, -(U.h / 2 + 0.014), U.d / 2 + 0.009);
     const stand = new THREE.Mesh(keep(new THREE.BoxGeometry(Math.min(0.42, U.w * 0.28), standH, standD)), blackM);
     stand.position.set(0, -(U.h / 2 + bezel + 0.02 + standH / 2), 0);
     const neck = new THREE.Mesh(keep(new THREE.BoxGeometry(0.06, 0.04, 0.04)), blackM);
     neck.position.set(0, -(U.h / 2 + bezel + 0.01), 0);
     grp.add(frame, screen, logo, stand, neck);
     grp.position.set(x, y, z);
-    grp.rotation.y = face > 0 ? 0 : Math.PI;
+    // face < 0 : 서쪽(통로, -X) = +Z 로컬을 -X 로. face > 0 : 동쪽.
+    grp.rotation.y = face > 0 ? Math.PI / 2 : -Math.PI / 2;
     root.add(grp);
     return grp;
   }
@@ -204,15 +205,15 @@ export function mountElectronics({ scene, keep, canvasTex, obstacles, prodMeshes
   // 85인치: 파렛트 하나당 1박스, 세워서(높이 1.237). 가로 2.008 m 가 z 방향이 되게 rot=π/2 → size x는 0.228.
   // size = [2.008, 1.237, 0.228]. rotY=π/2 → 가로가 통로(z)를 따라 2 m.
   const tv85list = [];
-  [16.4, 19.0, 21.6].forEach((z) => {
-    const x = 78.4, rot = Math.PI / 2;
+  [15.6, 18.2, 26.4].forEach((z) => {
+    const x = 80.0, rot = Math.PI / 2;
     palletAt(x, z, 0.50, 2.15);
     tv85list.push({ x, y: 0.14 + 1.237 / 2, z, rot });
   });
   stackBoxes('tv85', tv85list);
   const tv75list = [];
-  [24.4, 26.8].forEach((z) => {
-    const x = 78.4, rot = Math.PI / 2;
+  [24.6, 27.2].forEach((z) => {
+    const x = 80.0, rot = Math.PI / 2;
     palletAt(x, z, 0.45, 1.95);
     tv75list.push({ x, y: 0.14 + 1.118 / 2, z, rot });
   });
@@ -225,7 +226,7 @@ export function mountElectronics({ scene, keep, canvasTex, obstacles, prodMeshes
   });
   stackBoxes('tv65', tv65list);
   // 냉장고·세탁기·건조기 박스 (서쪽 줄 뒤쪽, 체험 본체 옆)
-  const bigBoxZ = { fridge: [14.6, 16.0], washer: [17.6], dryer: [19.0] };
+  const bigBoxZ = { fridge: [13.45, 20.55], washer: [21.55], dryer: [22.5] };
   Object.entries(bigBoxZ).forEach(([id, zs]) => {
     const p = BY_ID[id], list = [];
     zs.forEach((z) => {
@@ -256,14 +257,21 @@ export function mountElectronics({ scene, keep, canvasTex, obstacles, prodMeshes
   function makeFridge(x, z, beige = false) {
     const U = UNIT.fridge, bodyM = beige ? beigeM : steelM;
     const g = new THREE.Group(); g.position.set(x, 0, z);
-    const body = new THREE.Mesh(keep(new THREE.BoxGeometry(U.d, U.h, U.w)), bodyM);
-    body.position.set(0, U.h / 2, 0); g.add(body);
+    // 본체는 문 면보다 살짝 뒤로 — 앞면을 막지 않아 문 열리면 내부가 보인다
+    const body = new THREE.Mesh(keep(new THREE.BoxGeometry(U.d - 0.08, U.h, U.w)), bodyM);
+    body.position.set(-0.04, U.h / 2, 0); g.add(body);
     // 안쪽 (문 열리면 보임)
     const inner = new THREE.Mesh(keep(new THREE.BoxGeometry(U.d - 0.08, U.h - 0.1, U.w - 0.06)), keep(new THREE.MeshLambertMaterial({ color: 0xf4f1ea })));
     inner.position.set(0.02, U.h / 2, 0); g.add(inner);
+    const glow = new THREE.Mesh(keep(new THREE.PlaneGeometry(U.w - 0.2, 0.04)), keep(new THREE.MeshBasicMaterial({ color: 0xfff3d0 })));
+    glow.rotation.x = Math.PI / 2; glow.position.set(0.02, U.h - 0.12, 0); g.add(glow);
     for (let i = 0; i < 4; i++) {
-      const sh = new THREE.Mesh(keep(new THREE.BoxGeometry(U.d - 0.16, 0.02, U.w - 0.12)), creamM);
-      sh.position.set(0.02, 0.4 + i * 0.38, 0); g.add(sh);
+      const sh = new THREE.Mesh(keep(new THREE.BoxGeometry(U.d - 0.22, 0.02, U.w - 0.16)), creamM);
+      sh.position.set(0.0, 0.4 + i * 0.38, 0); g.add(sh);
+      if (i < 3) {
+        const bin = new THREE.Mesh(keep(new THREE.BoxGeometry(0.16, 0.12, 0.2)), keep(new THREE.MeshLambertMaterial({ color: [0xe07a5f, 0x81b29a, 0xf2cc8f][i] })));
+        bin.position.set(0.12, 0.47 + i * 0.38, (i - 1) * 0.18); g.add(bin);
+      }
     }
     const midY = U.h * 0.55, topH = U.h * 0.45, botH = U.h * 0.45;
     const doorT = 0.05, halfW = U.w / 2;
@@ -276,7 +284,7 @@ export function mountElectronics({ scene, keep, canvasTex, obstacles, prodMeshes
       hdl.position.set(doorT + 0.02, 0, -sign * (w * 0.15));
       pivot.add(door, hdl);
       g.add(pivot);
-      hingeDoor(pivot, pivot, 'y', sign * 1.7);
+      hingeDoor(pivot, pivot, 'y', -sign * 1.7);
     };
     mkDoor(halfW, topH - 0.02, midY + topH / 2, 0, -1, bodyM);
     mkDoor(halfW, topH - 0.02, midY + topH / 2, 0, +1, bodyM);
@@ -289,8 +297,8 @@ export function mountElectronics({ scene, keep, canvasTex, obstacles, prodMeshes
   function makeDrum(x, z, kind) {
     const U = UNIT[kind], bodyM = kind === 'dryer' ? creamM : steelM;
     const g = new THREE.Group(); g.position.set(x, 0, z);
-    const body = new THREE.Mesh(keep(new THREE.BoxGeometry(U.d, U.h, U.w)), bodyM);
-    body.position.set(0, U.h / 2, 0); g.add(body);
+    const body = new THREE.Mesh(keep(new THREE.BoxGeometry(U.d - 0.08, U.h, U.w)), bodyM);
+    body.position.set(-0.04, U.h / 2, 0); g.add(body);
     // 조작부
     const panel = new THREE.Mesh(keep(new THREE.BoxGeometry(0.02, 0.12, U.w - 0.08)), blackM);
     panel.position.set(U.d / 2 + 0.011, U.h - 0.12, 0); g.add(panel);
@@ -414,8 +422,8 @@ export function mountElectronics({ scene, keep, canvasTex, obstacles, prodMeshes
     // 스탠드에 세워 둔 각도
     g.add(body, scr); g.position.set(x, y + 0.08, z); g.rotation.set(-0.55, yaw, 0); root.add(g);
   }
-  [-1.3, 0, 1.3].forEach((dx, i) => openLaptop(79.2 + dx, 32.55, lY, i === 2 ? 0.15 : 0));
-  [-0.7, 0.7].forEach((dx) => openTablet(79.2 + dx, 32.15, lY, 0));
+  [-1.3, 0, 1.3].forEach((dx) => openLaptop(79.2 + dx, 32.45, lY, -Math.PI / 2));
+  [-0.7, 0.7].forEach((dx) => openTablet(79.2 + dx, 32.15, lY, -Math.PI / 2));
   // 픽 가능한 노트북 박스 (테이블 아래 선반 + 옆)
   const lapBoxY = table(79.2, 33.7, 2.2, 0.7, 0.45);
   const lapList = [], headList = [];
@@ -534,8 +542,8 @@ export function mountElectronics({ scene, keep, canvasTex, obstacles, prodMeshes
     const p = BY_ID[id], list = [];
     // 카운터 위 3장씩
     for (let k = 0; k < 3; k++) {
-      const z = CZ - 0.85 + i * 0.85, x = CX + CW / 2 - 0.18 - k * 0.02;
-      list.push({ x, y: 1.16 + p.size[1] / 2 + k * 0.01, z, rot: Math.PI / 2 });
+      const z = CZ - 0.85 + i * 0.85, x = CX + CW / 2 + 0.14 + k * 0.02;
+      list.push({ x, y: 1.15 + p.size[1] / 2, z, rot: 0 });
     }
     const geo = prodGeo[id];
     const im = new THREE.InstancedMesh(geo, ticketMat(p), list.length);

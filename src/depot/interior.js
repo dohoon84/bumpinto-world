@@ -821,6 +821,7 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit } 
   function updateCamera(dt) {
     const c = st.cart;
     cart.position.set(c.x, 0, c.z); cart.rotation.y = c.yaw;
+    if (st.camWorld) { camera.position.copy(st.camWorld.pos); camera.lookAt(st.camWorld.tgt); return; }
     if (st.camOv) { // 스샷·검증용 고정 시점 (카트 기준 좌표)
       cart.updateMatrixWorld(true);
       camera.position.copy(st.camOv.pos).applyMatrix4(cart.matrixWorld); camera.lookAt(st.camOv.tgt.clone().applyMatrix4(cart.matrixWorld));
@@ -1028,7 +1029,8 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit } 
       ghostState() { return ghostSol && { where: ghostSol.where, state: ghostSol.state }; },
       mischief(kind, amt) { staff.mischief(kind, amt); }, staff: () => ({ ...staff.S, x: staff.root.position.x, z: staff.root.position.z, ach: staff.S.ach.slice() }), staffAt(x, z) { staff.root.position.set(x, 0, z); },
       elec: elec._dbg, openElecDoors: (v) => elec.openAllDoors(v),
-      camAt(pos, tgt) { st.camOv = pos ? { pos: new THREE.Vector3(...pos), tgt: new THREE.Vector3(...tgt) } : null; },
+      camAt(pos, tgt) { st.camOv = pos ? { pos: new THREE.Vector3(...pos), tgt: new THREE.Vector3(...tgt) } : null; st.camWorld = null; },
+      camWorld(pos, tgt) { st.camWorld = pos ? { pos: new THREE.Vector3(...pos), tgt: new THREE.Vector3(...tgt) } : null; st.camOv = null; },
       settle(sec = 1.5) { for (let t = 0; t < sec; t += 1 / 60) { cart.updateMatrixWorld(true); stepPhysics(1 / 60); } },
       push(sec, f = 1, s = 0, run = false) { for (let t = 0; t < sec; t += 1 / 60) { driveCart(1 / 60, { f, s, run }); cart.updateMatrixWorld(true); stepPhysics(1 / 60); } },
     },

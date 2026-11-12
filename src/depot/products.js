@@ -23,11 +23,11 @@ export const PRODUCTS = [
   { id: 'bottle', name: '범샘물 2L 낱병', sub: '먹는샘물 2L', size: [0.09, 0.315, 0.09], kg: 2.04, price: 650, color: '#cfe9fb', ink: '#0d5ea8', kind: 'bottle', shape: 'cyl', tex: 'water',
     data: { size: 'est 2L×6 묶음 272×220×315 에서 병 1개 ≈ Ø90×315', kg: 'est 물 2kg + PET 약 40g', price: 'derived 2L×6 3,498원 ÷ 6 ≈ 583 → 650원(낱개 가안)' } },
   // 가전 코너 (feat/depot-electronics). 보이는 이름은 패러디. data 출처는 치수·무게 근거일 뿐 브랜드를 게임에 쓰지 않음.
-  { id: 'tv65', name: '범비전 65', sub: '4K 화면 164cm 박스', size: [1.576, 0.997, 0.172], kg: 37, price: 1290000, color: '#1a1d22', ink: '#F3EADA', kind: 'box',
+  { id: 'tv65', name: '범비전 65', sub: '4K 화면 164cm 박스', size: [1.576, 0.997, 0.172], kg: 37, price: 1290000, color: '#C8965A', ink: '#123B2D', kind: 'box',
     data: { size: 'real 2024 65인치 미드프리미엄 포장 1576×997×172mm (Sony K-65XR70 포장 스펙, 브랜드명 출처만)', kg: 'real 같은 포장 총중량 37kg', price: 'est 게임 가안' } },
-  { id: 'tv75', name: '범비전 75', sub: '4K 화면 189cm 박스', size: [1.790, 1.118, 0.182], kg: 52, price: 1890000, color: '#1a1d22', ink: '#F3EADA', kind: 'box',
+  { id: 'tv75', name: '범비전 75', sub: '4K 화면 189cm 박스', size: [1.790, 1.118, 0.182], kg: 52, price: 1890000, color: '#C8965A', ink: '#123B2D', kind: 'box',
     data: { size: 'real 2024 75인치 포장 1790×1118×182mm (Sony K-75XR70 포장 스펙, 브랜드명 출처만)', kg: 'real 같은 포장 총중량 52kg', price: 'est 게임 가안' } },
-  { id: 'tv85', name: '범비전 85', sub: '4K 화면 215cm 박스', size: [2.008, 1.237, 0.228], kg: 63, price: 2490000, color: '#1a1d22', ink: '#F3EADA', kind: 'box',
+  { id: 'tv85', name: '범비전 85', sub: '4K 화면 215cm 박스', size: [2.008, 1.237, 0.228], kg: 63, price: 2490000, color: '#C8965A', ink: '#123B2D', kind: 'box',
     data: { size: 'real 2024 85인치 포장 2008×1237×228mm (Sony K-85XR70 포장 스펙, 브랜드명 출처만) — 가로 약 2.0 m', kg: 'real 같은 포장 총중량 63kg', price: 'est 게임 가안' } },
   { id: 'fridge', name: '범쿨 4도어 870L', sub: '양문형 냉장고 박스', size: [0.98, 1.95, 0.98], kg: 171, price: 1890000, color: '#C8965A', ink: '#123B2D', kind: 'box',
     data: { size: 'est 본체 914×1860×918mm(국내 870L급 4도어, 다나와 2026 스펙) + 포장 여유', kg: 'est 본체 156kg(같은 급) + 포장 약 15kg', price: 'est 게임 가안' } },
@@ -50,12 +50,12 @@ export const PRODUCTS = [
   { id: 'console', name: '범스테이션', sub: '게임기 박스', size: [0.521, 0.191, 0.432], kg: 6.8, price: 599000, color: '#1a1d22', ink: '#F2C230', kind: 'box',
     data: { size: 'real 거치형 게임기 소매 박스 약 521×191×432mm (16×7.5×17 in 대, 흔한 디스크형 콘솔 포장)', kg: 'est 포장 총중량 약 6.8kg (본체 4.5kg대 + 패드·박스)', price: 'est 게임 가안' } },
   // 고가 케이지용 구매 카드 — 계산대(stream A)가 스캔할 수 있게 상품 엔트리로 노출. ticketFor = 본품 id.
-  { id: 'ticket_tv85', name: '구매 카드 범비전 85', sub: '계산대에서 찾아가세요', size: [0.12, 0.008, 0.18], kg: 0.008, price: 2490000, color: '#1E5A45', ink: '#F3EADA', kind: 'ticket', ticketFor: 'tv85',
-    data: { size: 'est 창고형 매장 행택 120×180×8mm', kg: 'est 카드지 8g', price: 'est 게임 가안 (본품과 동일)' } },
-  { id: 'ticket_laptop', name: '구매 카드 범북 16', sub: '계산대에서 찾아가세요', size: [0.12, 0.008, 0.18], kg: 0.008, price: 1490000, color: '#1E5A45', ink: '#F3EADA', kind: 'ticket', ticketFor: 'laptop',
-    data: { size: 'est 창고형 매장 행택 120×180×8mm', kg: 'est 카드지 8g', price: 'est 게임 가안 (본품과 동일)' } },
-  { id: 'ticket_console', name: '구매 카드 범스테이션', sub: '계산대에서 찾아가세요', size: [0.12, 0.008, 0.18], kg: 0.008, price: 599000, color: '#1E5A45', ink: '#F3EADA', kind: 'ticket', ticketFor: 'console',
-    data: { size: 'est 창고형 매장 행택 120×180×8mm', kg: 'est 카드지 8g', price: 'est 게임 가안 (본품과 동일)' } },
+  { id: 'ticket_tv85', name: '구매 카드 범비전 85', sub: '계산대에서 찾아가세요', size: [0.008, 0.18, 0.12], kg: 0.008, price: 2490000, color: '#1E5A45', ink: '#F3EADA', kind: 'ticket', ticketFor: 'tv85',
+    data: { size: 'est 창고형 매장 행택 8×180×120mm (세워 둔 카드)', kg: 'est 카드지 8g', price: 'est 게임 가안 (본품과 동일)' } },
+  { id: 'ticket_laptop', name: '구매 카드 범북 16', sub: '계산대에서 찾아가세요', size: [0.008, 0.18, 0.12], kg: 0.008, price: 1490000, color: '#1E5A45', ink: '#F3EADA', kind: 'ticket', ticketFor: 'laptop',
+    data: { size: 'est 창고형 매장 행택 8×180×120mm (세워 둔 카드)', kg: 'est 카드지 8g', price: 'est 게임 가안 (본품과 동일)' } },
+  { id: 'ticket_console', name: '구매 카드 범스테이션', sub: '계산대에서 찾아가세요', size: [0.008, 0.18, 0.12], kg: 0.008, price: 599000, color: '#1E5A45', ink: '#F3EADA', kind: 'ticket', ticketFor: 'console',
+    data: { size: 'est 창고형 매장 행택 8×180×120mm (세워 둔 카드)', kg: 'est 카드지 8g', price: 'est 게임 가안 (본품과 동일)' } },
 ];
 export const BY_ID = Object.fromEntries(PRODUCTS.map((p) => [p.id, p]));
 
