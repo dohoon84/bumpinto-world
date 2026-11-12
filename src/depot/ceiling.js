@@ -28,11 +28,11 @@ function makeEnvMap(renderer) {
   const box = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), mats);
   sc.add(box);
   const pmrem = new THREE.PMREMGenerator(renderer);
-  const env = pmrem.fromScene(sc, 0, 0.1, 10).texture;
+  const rt = pmrem.fromScene(sc, 0, 0.1, 10); // 렌더 타깃째 돌려줌 — texture.dispose() 만으로는 RT 가 남아 입장마다 텍스처 1개가 샘
   pmrem.dispose();
   box.geometry.dispose();
   for (const m of mats) { m.map.dispose(); m.dispose(); }
-  return env;
+  return rt;
 }
 
 export function buildDepotCeiling(scene, { renderer, keep, shellMesh } = {}) {
@@ -42,9 +42,9 @@ export function buildDepotCeiling(scene, { renderer, keep, shellMesh } = {}) {
   scene.fog = new THREE.Fog(0xb7bec6, 55, 150);
   if (renderer) {
     try {
-      const env = makeEnvMap(renderer);
-      keep?.(env);
-      scene.environment = env;
+      const rt = makeEnvMap(renderer);
+      keep?.(rt);
+      scene.environment = rt.texture;
       scene.environmentIntensity = 0.35;
     } catch { /* PMREM 실패해도 조명만으로 충분 */ }
   }
