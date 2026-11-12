@@ -67,6 +67,17 @@ const CSS = `
 #dp-story .modal .card{position:static;transform:none;text-align:left;max-width:min(640px,92vw)}
 #dp-story .modal ul{list-style:none;padding:0;margin:1em 0 0;font-weight:700;font-size:clamp(13px,2.1vh,20px);line-height:1.7}
 #dp-story .modal li::before{content:'●';margin-right:.5em}#dp-story .modal li.g::before{color:#2e8b57}#dp-story .modal li.o::before{color:var(--amber)}#dp-story .modal li.r::before{color:var(--red)}
+#dp-story .modal .pick{text-align:center;min-width:min(440px,90vw)}#dp-story .modal .pick .row{justify-content:center;flex-wrap:wrap}
+#dp-story .modal .pick .where{display:inline-block;margin-top:.6em;background:var(--cream);color:var(--deep);border-radius:10px;padding:.25em .8em;font-weight:800;font-size:clamp(12px,1.9vh,19px)}
+#dp-story .modal .pick button{margin-top:1em}#dp-story .modal .pick button.w{background:#fff}
+#dp-story .modal .nd{text-align:center;min-width:min(520px,92vw);background:var(--deep);color:var(--cream);border-color:var(--yellow)}
+#dp-story .modal .nd h2{color:var(--yellow)}#dp-story .modal .nd h3{color:var(--cream)}#dp-story .modal .nd p{color:#cfe0d6}
+#dp-story .modal .nd canvas{display:block;margin:.8em auto 0;width:min(300px,60vw);height:auto;border-radius:12px;border:3px solid var(--yellow)}
+#dp-story .modal .nd .tom{display:inline-block;background:var(--yellow);color:var(--deep);border-radius:999px;padding:.15em .9em;font-weight:900;font-size:clamp(12px,1.8vh,18px)}
+#dp-story .cut{position:absolute;right:4vw;top:10vh;width:min(360px,30vw);border:4px solid var(--deep);border-radius:16px;overflow:hidden;box-shadow:0 8px 0 rgba(18,59,45,.4);animation:dpIn .3s;pointer-events:none;z-index:2}
+#dp-story .cut canvas{display:block;width:100%;height:auto}
+#dp-story.m .cut{top:8px;right:max(59px,env(safe-area-inset-right));width:210px}
+#dp-story.m .modal .nd canvas{width:200px}#dp-story.m .modal .pick button,#dp-story.m .modal .nd button{margin-top:.6em;height:40px}
 #dp-story .modal .row{display:flex;gap:12px;justify-content:flex-end}#dp-story .modal .row button.w{background:#fff}
 #dp-story .log{position:absolute;inset:6vh 12vw;background:var(--paper);border:4px solid var(--deep);border-radius:22px;padding:2vh 2vw;overflow:auto;pointer-events:auto;font-size:clamp(13px,2.1vh,20px);line-height:1.6}
 #dp-story .log p{margin:.35em 0}#dp-story .log p b{color:var(--green);margin-right:.6em}#dp-story .log p.sk{color:#9A9C98}
@@ -227,7 +238,7 @@ export function createVN({ assetBase, isMobile = false, getSettings, onCue = () 
     });
   }
   function showFx(kind, pos) {
-    const e = document.createElement('div'); e.className = 'fx'; e.textContent = { anger: '💢', sweat: '💦', sparkle: '✨' }[kind] || '';
+    const e = document.createElement('div'); e.className = 'fx'; e.textContent = { anger: '💢', sweat: '💦', sparkle: '✨', exclaim: '❗' }[kind] || '';
     e.style.top = isMobile ? '120px' : '18vh'; e.style[pos === 'right' ? 'right' : 'left'] = isMobile ? 'calc(50% - 150px)' : '24vw';
     vn.appendChild(e); setTimeout(() => e.remove(), 1400);
   }
@@ -255,10 +266,37 @@ export function createVN({ assetBase, isMobile = false, getSettings, onCue = () 
     const m = document.createElement('div'); m.className = 'modal'; m.innerHTML = html; root.appendChild(m); S.modal = m;
     return new Promise((res) => { wire(m, (v) => { m.remove(); S.modal = null; res(v); }); });
   }
+
+  /** 고르기 카드 (이어서 하기 · 처음부터 · 다시 하기 · 자유 장보기). buttons: [{label, v, w(흰 버튼)}] → v */
+  function pickCard({ title, sub, where, buttons, cue = 'ui-pause' }) {
+    onCue(cue);
+    const html = `<div class="card pick"><h2>${esc(title || '')}</h2>${sub ? `<p>${esc(sub)}</p>` : ''}${where ? `<span class="where">${esc(where)}</span>` : ''}<div class="row">${buttons.map((b, i) => `<button class="${b.w ? 'w' : ''}" data-i="${i}">${esc(b.label)}${!isMobile && i === 0 ? ' <kbd>Enter</kbd>' : ''}</button>`).join('')}</div></div>`;
+    return modal(html, (m, done) => {
+      m.addEventListener('pointerdown', (e) => { const b = e.target.closest('button'); if (b) { e.stopPropagation(); onCue('ui-mode-pick'); done(buttons[+b.dataset.i].v); } });
+      S.modalKey = (k) => { if (k === 'Enter' || k === 'Space') done(buttons[0].v); else if (/^Digit[1-4]$/.test(k) && buttons[+k.slice(5) - 1]) done(buttons[+k.slice(5) - 1].v); };
+    });
+  }
+  /** 다음 날 미리보기 카드 (day.end nextDay) — canvas: 실루엣 그림(자리 표시) */
+  function nextDayCard({ day, title, hook, canvas, buttons }) {
+    onCue('stinger.nextday');
+    const html = `<div class="card nd"><span class="tom">다음 이야기</span><h2>${day}일차</h2><h3>${esc(title || '')}</h3>${hook ? `<p>${esc(hook)}</p>` : ''}<div class="ndc"></div><div class="row" style="justify-content:center">${buttons.map((b, i) => `<button class="${b.w ? 'w' : ''}" data-i="${i}">${esc(b.label)}</button>`).join('')}</div></div>`;
+    return modal(html, (m, done) => {
+      if (canvas) m.querySelector('.ndc').appendChild(canvas);
+      m.addEventListener('pointerdown', (e) => { const b = e.target.closest('button'); if (b) { e.stopPropagation(); onCue('ui-mode-pick'); done(buttons[+b.dataset.i].v); } });
+      S.modalKey = (k) => { if (k === 'Enter' || k === 'Space' || k === 'Escape') done(buttons[0].v); };
+    });
+  }
+  /** 컷 그림(오른쪽 위 작은 액자) — null 이면 닫음 */
+  let cutEl = null;
+  function cutIn(canvas) {
+    if (cutEl) { cutEl.remove(); cutEl = null; }
+    if (!canvas) return;
+    cutEl = document.createElement('div'); cutEl.className = 'cut'; cutEl.appendChild(canvas); root.appendChild(cutEl);
+  }
   function confirmExit() {
     onCue('ui-pause');
-    return modal(`<div class="card"><h3>오늘 장보기를 멈출까요?</h3><ul><li class="g">오늘 기록과 일차·단골도는 저장돼요</li><li class="o">끝까지 못 본 장면은 다음에 처음부터 다시 봐요</li><li class="r">계산 안 한 카트는 비워요 · 벌칙 없음</li></ul>
-      <div class="row"><button class="w" data-v="0">계속하기${isMobile ? '' : ' <kbd>Esc</kbd>'}</button><button data-v="1">저장하고 나가기${isMobile ? '' : ' <kbd>Enter</kbd>'}</button></div></div>`, (m, done) => {
+    return modal(`<div class="card"><h3>오늘 장보기를 멈출까요?</h3><ul><li class="g">오늘 기록과 일차·단골도는 저장돼요</li><li class="o">다음에 들어오면 같은 일차, 멈춘 곳부터 이어서 해요</li><li class="g">나가는 곳은 계산대 지나 왼쪽 끝 출구 EXIT · 안내선이 켜져요</li><li class="r">계산 안 한 카트는 비워요 · 벌칙 없음</li></ul>
+      <div class="row"><button class="w" data-v="0">계속하기${isMobile ? '' : ' <kbd>Esc</kbd>'}</button><button data-v="1">저장하고 출구로${isMobile ? '' : ' <kbd>Enter</kbd>'}</button></div></div>`, (m, done) => {
       m.addEventListener('pointerdown', (e) => { const v = e.target.closest('button')?.dataset.v; if (v != null) { e.stopPropagation(); done(v === '1'); } });
       S.modalKey = (k) => { if (k === 'Escape') done(false); else if (k === 'Enter') done(true); };
     });
@@ -286,7 +324,9 @@ export function createVN({ assetBase, isMobile = false, getSettings, onCue = () 
   function setChip(ev) {
     if (!ev) { chip.style.display = 'none'; document.body.classList.remove('dp-chip-m'); return; }
     chip.style.display = 'block'; document.body.classList.toggle('dp-chip-m', !!isMobile);
-    chip.innerHTML = `<b>오늘의 사건</b><span>${esc(ev.name)}</span><em>${esc(ev.where || '')}</em><small>${esc(ev.note || '안 가도 괜찮아요')}</small>`;
+    chip.style.pointerEvents = ev.onTap ? 'auto' : 'none'; chip.style.cursor = ev.onTap ? 'pointer' : '';
+    chip.onpointerdown = ev.onTap ? (e) => { e.stopPropagation(); e.preventDefault(); ev.onTap(); } : null;
+    chip.innerHTML = `<b>${esc(ev.head || '오늘의 사건')}</b><span>${esc(ev.name)}</span><em>${esc(ev.where || '')}</em><small>${esc(ev.note || '안 가도 괜찮아요')}</small>`;
   }
   function shakeChip() { chip.classList.remove('shake'); void chip.offsetWidth; chip.classList.add('shake'); }
   function stampCard({ day, result, vitality, stamps, note }) {
@@ -369,7 +409,7 @@ export function createVN({ assetBase, isMobile = false, getSettings, onCue = () 
   $('.gear').addEventListener('pointerdown', (e) => { e.stopPropagation(); e.preventDefault(); gearHandler?.(); });
   let gearHandler = null;
   return {
-    root, say, choose, close, dayCard, missionCard, setChip, shakeChip, stampCard, modeSelect, settings, confirmExit, toast, bubble, prefetch, setOffsets,
+    root, say, choose, close, pickCard, nextDayCard, cutIn, dayCard, missionCard, setChip, shakeChip, stampCard, modeSelect, settings, confirmExit, toast, bubble, prefetch, setOffsets,
     set onExit(f) { exitHandler = f; }, set onGear(f) { gearHandler = f; },
     setInGame(on) { root.classList.toggle('ingame', on); },
     get isOpen() { return S.open || !!S.modal; }, get blocking() { return S.open || !!S.modal; },

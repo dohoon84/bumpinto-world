@@ -18,7 +18,7 @@ export function pickLines(lines, n, key) {
   return nums.length ? lines[String(nums[0])] : Object.values(lines)[0];
 }
 
-export function createReactions({ save, getMode, getDay, getFreq, deliver, cue, now = () => performance.now() / 1000, rnd = Math.random }) {
+export function createReactions({ save, getMode, getDay, getFreq, deliver, cue, lineOk = () => true, now = () => performance.now() / 1000, rnd = Math.random }) {
   const R = { queue: [], last: -99, lastBy: {}, minute: [], lastFire: {}, t0: now(), quietUntil: 0, paUntil: 0, eventCast: null, counts: save.counts || (save.counts = {}), today: save.today || (save.today = {}), once: save.once || (save.once = {}) };
   function allowed(r) {
     if (!r) return false;
@@ -76,10 +76,12 @@ export function createReactions({ save, getMode, getDay, getFreq, deliver, cue, 
     const who = item.r.who;
     if (R.lastBy[who] != null && t - R.lastBy[who] < (DATA.globalRules?.frequency?.sameSpeakerGapSec || 30) && !p1) { if (R.queue.length > 1) { R.queue.push(R.queue.shift()); } return; }
     R.queue.shift();
-    const n = (R.counts[item.r.id] || 0) + 1; R.counts[item.r.id] = n;
+    const n = (R.counts[item.r.id] || 0) + 1;
+    const pool = (pickLines(item.r.lines, n, item.opts.key) || []).filter((l) => lineOk(who, l)); // 5일차 전 정체 대사 등 막기
+    if (!pool.length) return;
+    R.counts[item.r.id] = n;
     R.today[item.r.id] = (R.today[item.r.id] || 0) + 1;
     if (item.r.rarity === 'once') R.once[item.r.id] = 1;
-    const pool = pickLines(item.r.lines, n, item.opts.key) || [];
     let line = pool[Math.floor(rnd() * pool.length)] || '';
     for (const [k, v] of Object.entries(item.opts.vars || {})) line = line.split(`{${k}}`).join(String(v));
     R.last = t; R.lastBy[who] = t; R.minute.push(t);
