@@ -20,7 +20,7 @@ const KIND_LINE = {
   block: () => '고객님~ 카트가 통로를 막고 있어요 ^^;',
 };
 
-export function createStaff({ scene, camera, hud, keep, canvasTex, toast, st, onEscort, onSpeak, onAchieve }) {
+export function createStaff({ scene, camera, hud, keep, canvasTex, toast, st, onEscort, onSpeak, onAchieve, getAvoid = null, isBlocked: isBlockedFn = null }) {
   // ---------- 모델 (로우폴리 · 초록 앞치마 · 자체 디자인) ----------
   const root = new THREE.Group();
   const skin = keep(new THREE.MeshLambertMaterial({ color: 0xf0c9a0 })), shirt = keep(new THREE.MeshLambertMaterial({ color: 0xf3eada }));
@@ -41,7 +41,22 @@ export function createStaff({ scene, camera, hud, keep, canvasTex, toast, st, on
   const head = new THREE.Mesh(G(new THREE.SphereGeometry(0.15, 14, 10)), skin); head.position.y = 1.62;
   const cap = new THREE.Mesh(G(new THREE.CylinderGeometry(0.155, 0.16, 0.08, 14)), green); cap.position.y = 1.72;
   const brim = new THREE.Mesh(G(new THREE.BoxGeometry(0.22, 0.015, 0.12)), green); brim.position.set(0, 1.69, 0.16);
-  root.add(legL, legR, torso, apron, armL, armR, head, cap, brim);
+  // 얼굴: 표정 4종(웃음·보통·곤란·화남) 캔버스 텍스처를 머리 앞 작은 판에
+  const faceTex = ['smile', 'plain', 'sweat', 'angry'].map((k) => keep(canvasTex(128, 128, (g) => {
+    g.clearRect(0, 0, 128, 128); g.fillStyle = '#2a1d14'; g.strokeStyle = '#2a1d14'; g.lineWidth = 7; g.lineCap = 'round';
+    const eye = (x) => { if (k === 'smile') { g.beginPath(); g.arc(x, 52, 9, Math.PI * 1.1, Math.PI * 1.9); g.stroke(); } else { g.beginPath(); g.arc(x, 52, 7, 0, Math.PI * 2); g.fill(); } };
+    eye(40); eye(88);
+    if (k === 'angry') { g.beginPath(); g.moveTo(26, 30); g.lineTo(54, 40); g.moveTo(102, 30); g.lineTo(74, 40); g.stroke(); }
+    if (k === 'sweat') { g.beginPath(); g.moveTo(28, 34); g.lineTo(52, 30); g.moveTo(100, 34); g.lineTo(76, 30); g.stroke(); g.fillStyle = '#7cc6ff'; g.beginPath(); g.ellipse(108, 46, 7, 11, 0, 0, Math.PI * 2); g.fill(); g.fillStyle = '#2a1d14'; }
+    g.beginPath();
+    if (k === 'smile') g.arc(64, 78, 20, Math.PI * 0.15, Math.PI * 0.85); else if (k === 'plain') { g.moveTo(50, 90); g.lineTo(78, 90); } else if (k === 'sweat') { g.moveTo(48, 94); g.quadraticCurveTo(56, 84, 64, 92); g.quadraticCurveTo(72, 100, 80, 90); } else g.arc(64, 106, 18, Math.PI * 1.15, Math.PI * 1.85);
+    g.stroke();
+    g.fillStyle = 'rgba(240,120,120,.45)'; g.beginPath(); g.arc(24, 76, 9, 0, 7); g.arc(104, 76, 9, 0, 7); g.fill();
+  })));
+  const faceM = keep(new THREE.MeshBasicMaterial({ map: faceTex[0], transparent: true, depthWrite: false }));
+  const face = new THREE.Mesh(G(new THREE.PlaneGeometry(0.2, 0.2)), faceM); face.position.set(0, 1.62, 0.151);
+  let faceK = 0; const setFace = (k) => { if (k !== faceK) { faceK = k; faceM.map = faceTex[k]; } };
+  root.add(legL, legR, torso, apron, armL, armR, head, face, cap, brim);
   const HOME = { x: 57, z: 12.5 };
   root.position.set(HOME.x, 0, HOME.z); scene.add(root);
 
@@ -50,9 +65,9 @@ export function createStaff({ scene, camera, hud, keep, canvasTex, toast, st, on
   css.textContent = `#depot-hud .dh-bubble{position:absolute;transform:translate(-50%,-100%);background:#fff;color:#13203d;border:3px solid #1E5A45;border-radius:16px;padding:8px 14px;font-size:15px;font-weight:800;white-space:nowrap;display:none;box-shadow:0 6px 18px rgba(0,0,0,.25)}
 #depot-hud .dh-bubble:after{content:'';position:absolute;left:50%;bottom:-12px;margin-left:-9px;border:9px solid transparent;border-top-color:#1E5A45;border-bottom:0}
 #depot-hud .dh-bubble.lv3{border-color:#D9442E}#depot-hud .dh-bubble.lv3:after{border-top-color:#D9442E}
-#depot-hud .dh-ach{position:absolute;right:16px;top:130px;display:flex;flex-direction:column;gap:6px;align-items:flex-end}
+#depot-hud .dh-ach{position:absolute;left:16px;top:var(--dh-msg-top2,calc(var(--dh-msg-top,200px) + 58px));max-width:min(340px,calc(100vw - 32px));display:flex;flex-direction:column;gap:6px;align-items:flex-start}
 #depot-hud .dh-ach div{background:#F2C230;color:#13203d;border-radius:12px;padding:8px 14px;font-size:14px;font-weight:900;box-shadow:0 6px 16px rgba(0,0,0,.25);animation:dhach .35s ease-out}
-@keyframes dhach{from{transform:translateX(30px);opacity:0}to{transform:none;opacity:1}}`;
+@keyframes dhach{from{transform:translateX(-30px);opacity:0}to{transform:none;opacity:1}}`;
   document.head.appendChild(css);
   const bubble = document.createElement('div'); bubble.className = 'dh-bubble'; hud.appendChild(bubble);
   const achBox = document.createElement('div'); achBox.className = 'dh-ach'; hud.appendChild(achBox);
@@ -76,6 +91,7 @@ export function createStaff({ scene, camera, hud, keep, canvasTex, toast, st, on
     S.path = Math.abs(sx - tx) < 1.2 ? [{ x: tx, z: tz }] : [{ x: sx, z: zc }, { x: tx, z: zc }, { x: tx, z: tz }];
   }
   function say(text, lv) {
+    try { window.dispatchEvent(new CustomEvent('depot:sfx', { detail: { name: 'staff.line', level: lv, text } })); } catch { /* 오디오 없음 */ }
     S.line = text; S.bubbleT = 4.5; bubble.textContent = text; bubble.classList.toggle('lv3', lv >= 3);
     const v = new THREE.Vector3(root.position.x, 2.0, root.position.z).project(camera);
     if (!(v.z < 1 && Math.abs(v.x) < 1 && Math.abs(v.y) < 1)) toast(`🧑‍💼 직원: ${text}`, 2800, lv >= 3 ? '#D9442E' : '#1E5A45'); // 화면 밖이면 토스트로도
@@ -117,7 +133,27 @@ export function createStaff({ scene, camera, hud, keep, canvasTex, toast, st, on
   }
   const inAisle = (x, z) => ((z > 14 && z < 41) || (z > 47 && z < 74) || (z > 80 && z < 107)) && x > 14 && x < 66;
 
-  function tick(dt, { me, cartObj, items, rimTop, cartHeld, cartVisible }) {
+  // 플레이어에게서 STANDOFF 거리, 카트·장애물과 겹치지 않는 설 자리
+  const STANDOFF = 1.25;
+  function standSpot(me, avoid) {
+    const p = root.position, base = Math.atan2(p.x - me.x, p.z - me.z);
+    for (const da of [0, 0.5, -0.5, 1, -1, 1.6, -1.6, 2.4, -2.4, Math.PI]) {
+      const a = base + da, x = me.x + Math.sin(a) * STANDOFF, z = me.z + Math.cos(a) * STANDOFF;
+      if (!avoid.some((o) => Math.hypot(o.x - x, o.z - z) < o.r + 0.35) && !(blocked?.(x, z))) return { x, z };
+    }
+    return { x: me.x + Math.sin(base) * STANDOFF, z: me.z + Math.cos(base) * STANDOFF };
+  }
+  // 간단 조향: 가는 방향 + 가까운 카트·바닥 상품에서 밀어내는 힘
+  function steer(dx, dz, avoid) {
+    const p = root.position; let ax = 0, az = 0;
+    for (const o of avoid) { const ox = p.x - o.x, oz = p.z - o.z, d = Math.hypot(ox, oz), R = o.r + 0.55; if (d < R && d > 1e-3) { const k = (R - d) / R; ax += ox / d * k * 1.6; az += oz / d * k * 1.6; } }
+    const l = Math.hypot(dx, dz) || 1; let vx = dx / l + ax, vz = dz / l + az; const m = Math.hypot(vx, vz) || 1; vx /= m; vz /= m;
+    return [vx, vz];
+  }
+  let blocked = null;
+  function tick(dt, { me, cartObj, items, rimTop, cartHeld, cartVisible, avoid: extra = getAvoid?.() || [], isBlocked = isBlockedFn }) {
+    blocked = isBlocked;
+    const avoid = [...extra]; if (cartVisible) avoid.push({ x: cartObj.x, z: cartObj.z, r: 0.75 });
     S.t = (S.t || 0) + dt; S.score = Math.max(0, S.score - dt * 0.12); // 천천히 식음
     if (lvOf(S.score) < S.said && S.mode !== 'talk' && S.mode !== 'escort') S.said = lvOf(S.score);
     S.stackCd -= dt; S.towerT -= dt;
@@ -129,21 +165,26 @@ export function createStaff({ scene, camera, hud, keep, canvasTex, toast, st, on
     const p = root.position, dToMe = Math.hypot(me.x - p.x, me.z - p.z);
     let moving = false;
     if (S.mode === 'approach' || S.mode === 'return') {
-      if (S.mode === 'approach' && (S.path.length === 0 || S.repathT <= 0)) { routeTo(me.x, me.z); S.repathT = 1.2; }
+      if (S.mode === 'approach' && (S.path.length === 0 || S.repathT <= 0)) { const sp0 = standSpot(me, avoid); routeTo(sp0.x, sp0.z); S.repathT = 1.2; }
       S.repathT = (S.repathT ?? 0) - dt;
       if (S.mode === 'return' && S.path.length === 0) routeTo(HOME.x, HOME.z);
-      if (S.mode === 'approach' && dToMe < 1.7) { S.path = []; speakNow(); }
+      if (S.mode === 'approach' && dToMe < STANDOFF + 0.35) { S.path = []; speakNow(); }
       else if (S.path.length) {
         const w = S.path[0], dx = w.x - p.x, dz = w.z - p.z, d = Math.hypot(dx, dz), sp = S.mode === 'approach' ? 2.4 : 1.3;
-        if (d < 0.15) S.path.shift(); else { const k = Math.min(1, sp * dt / d); p.x += dx * k; p.z += dz * k; root.rotation.y = Math.atan2(dx, dz); moving = true; }
+        if (d < 0.25) S.path.shift(); else { const [vx, vz] = steer(dx, dz, avoid), st = Math.min(d, sp * dt), nx = p.x + vx * st, nz = p.z + vz * st; if (!blocked?.(nx, nz)) { p.x = nx; p.z = nz; } else { p.x += dx / d * st; p.z += dz / d * st; } root.rotation.y = Math.atan2(vx, vz); moving = true; }
         if (S.mode === 'return' && Math.hypot(HOME.x - p.x, HOME.z - p.z) < 0.2) { S.mode = 'idle'; S.path = []; }
       } else if (S.mode === 'return') S.mode = 'idle';
-    } else if (S.mode === 'talk') {
+    } else if (S.mode === 'talk' || S.mode === 'linger') {
+      // 말하는 중에도 1.2 m 이상 · 카트와 겹치지 않게 한 걸음 물러남
+      const tooClose = dToMe < STANDOFF - 0.15 || avoid.some((o) => Math.hypot(o.x - p.x, o.z - p.z) < o.r + 0.3);
+      if (tooClose) { const t = standSpot(me, avoid), dx = t.x - p.x, dz = t.z - p.z, d = Math.hypot(dx, dz); if (d > 0.05) { const k = Math.min(1, 1.6 * dt / d); p.x += dx * k; p.z += dz * k; moving = true; } }
+    }
+    if (S.mode === 'talk') {
       root.rotation.y = Math.atan2(me.x - p.x, me.z - p.z);
       S.talkT -= dt;
       if (S.talkT <= 0) {
         if (S.level >= 4) { // 입구까지 모셔다 드림
-          S.escorts++; onEscort(); p.set(me.x + 1.2, 0, me.z - 0.6); S.score = 5; S.said = 1; S.level = 1;
+          S.escorts++; onEscort(); p.set(me.x + 1.3, 0, me.z - 0.7); S.score = 5; S.said = 1; S.level = 1;
           say(S.escorts > 1 ? '또 오셨네요 고객님~ 이번엔 살살이요 ^^' : '여기서부터 천천히 다시 쇼핑하세요~ ^^', 1); S.mode = 'linger'; S.linger = 4;
           achieve(S.escorts > 1 ? `입구 에스코트 ${S.escorts}회` : '직원 에스코트 받음');
         } else if (S.pending) speakNow();
@@ -154,6 +195,7 @@ export function createStaff({ scene, camera, hud, keep, canvasTex, toast, st, on
       root.rotation.y = Math.atan2(me.x - p.x, me.z - p.z);
       S.linger -= dt; if (S.pending) S.mode = 'approach'; else if (S.linger <= 0) { S.mode = 'return'; S.path = []; }
     }
+    setFace(S.mode === 'talk' || S.mode === 'approach' ? (S.level >= 3 ? 3 : S.level === 2 ? 2 : 1) : 0);
     // 걷기 모션
     if (moving) S.walkPh += dt * 9; else S.walkPh *= 0.8;
     const sw = Math.sin(S.walkPh) * 0.5 * (moving ? 1 : 0);

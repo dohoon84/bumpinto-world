@@ -506,6 +506,8 @@ export function mountMobileHud({ handset } = {}) {
     if (dp) add(dp.open ? t('문 닫기', 'Close gate') : t('문 열기', 'Open gate'), 'door', key('KeyG'), false);
     const dn = $('donate-near-btn');
     if (shown(dn)) add(t('전단지', 'Flyer'), 'board', clk(dn), false);
+    const dpo = J?.depot?.active && J.depot.interior?.mobileActs?.(); // [depot] 범창고 안: 계산·출구·빈 박스·카트 (E/Esc 대신 탭)
+    if (dpo) { A.riding = true; for (const a of dpo.slice(0, 3)) add(a.label, a.icon || 'door', a.run, a.gold !== false); return A; }
     // [arcade] 오락실 — E/F/R 대신 터치 행동 버튼 (BUMP24 문 앞과 같은 패턴)
     const arc = J?.arcadeGame;
     if (arc && !S?.active) {
