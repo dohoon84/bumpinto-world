@@ -391,7 +391,7 @@ export function decodeHangangTerrainBake(input) {
   const g = decodeHangangTerrainBakeGen(input);
   let n = g.next();
   while (!n.done) n = g.next();
-  return n.value;
+  return enrichBakeMeshes(n.value);
 }
 
 export async function decodeHangangTerrainBakeBytes(input) {
@@ -491,6 +491,66 @@ export function materialForBakedMesh(name, { grassMap = null, terraceMat, riserM
   return riserMat || new THREE.MeshLambertMaterial({ color: '#4e4f49', side: THREE.DoubleSide });
 }
 
+
+/** 워커(메인 스레드 밖)에서 법선·바운딩 스피어를 미리 계산한다. apply 때는 붙이기만 한다. */
+export function computeNormalsAndBounds(position, index) {
+  const nVert = (position?.length || 0) / 3;
+  const normal = new Float32Array(Math.max(0, nVert * 3));
+  if (nVert > 0) {
+    const triCount = index ? (index.length / 3) : (nVert / 3);
+    for (let t = 0; t < triCount; t++) {
+      const ia = index ? index[t * 3] : t * 3;
+      const ib = index ? index[t * 3 + 1] : t * 3 + 1;
+      const ic = index ? index[t * 3 + 2] : t * 3 + 2;
+      const ax = position[ia * 3], ay = position[ia * 3 + 1], az = position[ia * 3 + 2];
+      const bx = position[ib * 3], by = position[ib * 3 + 1], bz = position[ib * 3 + 2];
+      const cx = position[ic * 3], cy = position[ic * 3 + 1], cz = position[ic * 3 + 2];
+      const abx = bx - ax, aby = by - ay, abz = bz - az;
+      const acx = cx - ax, acy = cy - ay, acz = cz - az;
+      const nx = aby * acz - abz * acy;
+      const ny = abz * acx - abx * acz;
+      const nz = abx * acy - aby * acx;
+      normal[ia * 3] += nx; normal[ia * 3 + 1] += ny; normal[ia * 3 + 2] += nz;
+      normal[ib * 3] += nx; normal[ib * 3 + 1] += ny; normal[ib * 3 + 2] += nz;
+      normal[ic * 3] += nx; normal[ic * 3 + 1] += ny; normal[ic * 3 + 2] += nz;
+    }
+    for (let i = 0; i < nVert; i++) {
+      const o = i * 3;
+      const x = normal[o], y = normal[o + 1], z = normal[o + 2];
+      const len = Math.hypot(x, y, z);
+      if (len > 1e-12) { normal[o] = x / len; normal[o + 1] = y / len; normal[o + 2] = z / len; }
+      else { normal[o] = 0; normal[o + 1] = 1; normal[o + 2] = 0; }
+    }
+  }
+  let minX = Infinity, minY = Infinity, minZ = Infinity, maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity;
+  for (let i = 0; i < nVert; i++) {
+    const x = position[i * 3], y = position[i * 3 + 1], z = position[i * 3 + 2];
+    if (x < minX) minX = x; if (y < minY) minY = y; if (z < minZ) minZ = z;
+    if (x > maxX) maxX = x; if (y > maxY) maxY = y; if (z > maxZ) maxZ = z;
+  }
+  if (!nVert) return { normal, boundingSphere: { cx: 0, cy: 0, cz: 0, r: 0 } };
+  const cx = (minX + maxX) * 0.5, cy = (minY + maxY) * 0.5, cz = (minZ + maxZ) * 0.5;
+  let r2 = 0;
+  for (let i = 0; i < nVert; i++) {
+    const dx = position[i * 3] - cx, dy = position[i * 3 + 1] - cy, dz = position[i * 3 + 2] - cz;
+    const d2 = dx * dx + dy * dy + dz * dz;
+    if (d2 > r2) r2 = d2;
+  }
+  return { normal, boundingSphere: { cx, cy, cz, r: Math.sqrt(r2) } };
+}
+
+export function enrichBakeMeshes(bake) {
+  if (!bake?.meshes) return bake;
+  for (const m of bake.meshes) {
+    if (!m.position) continue;
+    if (m.normal && m.boundingSphere) continue;
+    const e = computeNormalsAndBounds(m.position, m.index);
+    if (!m.normal) m.normal = e.normal;
+    if (!m.boundingSphere) m.boundingSphere = e.boundingSphere;
+  }
+  return bake;
+}
+
 export function applyBakedMesh(group, rec, { grassMap = null, terraceMat, riserMat, mats, waterMeshes, uvOrigin = null, uvScale = HANGANG_DEM_UV_SCALE } = {}) {
   const geo = new THREE.BufferGeometry();
   geo.setAttribute('position', new THREE.BufferAttribute(rec.position, 3));
@@ -501,6 +561,10 @@ export function applyBakedMesh(group, rec, { grassMap = null, terraceMat, riserM
   if (rec.index) geo.setIndex(new THREE.BufferAttribute(rec.index, 1));
   if (rec.normal) geo.setAttribute('normal', new THREE.BufferAttribute(rec.normal, 3));
   else geo.computeVertexNormals();
+  if (rec.boundingSphere) {
+    const s = rec.boundingSphere;
+    geo.boundingSphere = new THREE.Sphere(new THREE.Vector3(s.cx, s.cy, s.cz), s.r);
+  } else geo.computeBoundingSphere();
   let mat;
   if (rec.name === 'hangang-revetment') mat = terraceMat;
   else if (rec.name.startsWith('hangang-revetment')) mat = riserMat;

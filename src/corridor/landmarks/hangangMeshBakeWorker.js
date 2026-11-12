@@ -20,6 +20,7 @@ self.onmessage = async (e) => {
     const xfer = [];
     for (const m of bake.meshes || []) {
       if (m.position?.buffer) xfer.push(m.position.buffer);
+      if (m.normal?.buffer) xfer.push(m.normal.buffer);
       if (m.color?.buffer) xfer.push(m.color.buffer);
       if (m.uv?.buffer) xfer.push(m.uv.buffer);
       if (m.index?.buffer) xfer.push(m.index.buffer);
