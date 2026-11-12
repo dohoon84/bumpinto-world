@@ -71,8 +71,8 @@ export const STOCK_PRODUCTS = [
     data: { size: 'est 대형 스티로폼 트레이 280×200', kg: 'est 고기 1kg + 트레이·랩 80g', price: 'est 게임 가안(한우 등심 시세 변동 큼)' } },
   { id: 'salmon', name: '범연어 필렛', sub: '생연어 1kg', size: [0.32, 0.06, 0.18], kg: 1.08, price: 32900, color: '#e07a62', ink: '#fff', kind: 'tray', shape: 'tray',
     data: { size: 'est 필렛 트레이 320×180', kg: 'est 1kg + 트레이', price: 'est 게임 가안' } },
-  { id: 'mackerel', name: '범고등어 10팩', sub: '순살 구이용', size: [0.36, 0.10, 0.26], kg: 2.4, price: 24900, color: '#9fb2c2', ink: '#1a2a3a', kind: 'box',
-    data: { size: 'est 진공팩 10입 박스', kg: 'est', price: 'est 게임 가안' } },
+  { id: 'mackerel', name: '범고등어 2손', sub: '생물 손질 고등어', size: [0.32, 0.06, 0.20], kg: 1.3, price: 9900, color: '#9fb2c2', ink: '#1a2a3a', kind: 'tray', shape: 'tray', // [depot-live] 박스 → 랩 트레이 (얼음 위)
+    data: { size: 'est 2마리 랩 트레이', kg: 'est', price: 'est 게임 가안' } },
   { id: 'chicken', name: '범닭 생닭 2마리', sub: '토종 아닌 일반 1.1kg×2', size: [0.30, 0.14, 0.24], kg: 2.3, price: 14900, color: '#f3d3b0', ink: '#5a2a1a', kind: 'tray', shape: 'tray',
     data: { size: 'est', kg: 'est 1.1×2 + 포장', price: 'est 게임 가안' } },
   // ----- 과일·채소 -----
@@ -144,10 +144,6 @@ export const STOCK_PRODUCTS = [
   { id: 'anchovy', name: '범멸치 1.5kg', sub: '볶음용 지리멸치', size: [0.34, 0.10, 0.24], kg: 1.6, price: 27900, color: '#d8dee4', ink: '#1e4a8a', kind: 'box',
     data: { size: 'est', kg: 'est', price: 'est 게임 가안' } },
   { id: 'seaweed', name: '범김 전장 100매', sub: '구이용 김 대용량', size: [0.30, 0.08, 0.22], kg: 0.36, price: 15900, color: '#1a2a22', ink: '#9fd8c0', kind: 'box',
-    data: { size: 'est', kg: 'est', price: 'est 게임 가안' } },
-  { id: 'flatfish', name: '범광어 활어', sub: '수조 활어 (손질 요청)', size: [0.46, 0.24, 0.03], kg: 1.6, price: 35000, color: '#7a6a52', ink: '#fff', kind: 'box',
-    data: { size: 'est', kg: 'est', price: 'est 게임 가안' } },
-  { id: 'rockfish', name: '범우럭 활어', sub: '수조 활어 (손질 요청)', size: [0.36, 0.2, 0.04], kg: 0.9, price: 18000, color: '#4a4a42', ink: '#fff', kind: 'box',
     data: { size: 'est', kg: 'est', price: 'est 게임 가안' } },
   // ----- 유아 -----
   { id: 'diaper', name: '범기저귀 대형 120매', sub: '팬티형 3팩', size: [0.46, 0.36, 0.30], kg: 4.6, price: 45900, color: '#bfe0f5', ink: '#1e4a8a', kind: 'soft', soft: true,
@@ -240,8 +236,8 @@ export const PICKABLE_IDS = new Set([
   'milk', 'yogurt', 'cheese', 'mandu', 'pizza', 'icecream', 'beef', 'salmon',
   'apple', 'mandarin', 'onion', 'muffin', 'croissant', 'bread', 'beer', 'soju',
   'socks', 'petfood', 'kimchi', 'tent', 'rotisserie', 'chicken',
-  // [depot-live] 새 코너 — 수조 활어(flatfish·rockfish)는 수조 안이라 집기 불가
-  'shrimp', 'squid', 'crab', 'clam', 'octopus', 'abalone', 'sashimi', 'fzshrimp', 'anchovy', 'seaweed',
+  // [depot-live] 새 코너 — 수조 활어는 3D 물고기(stockFx)라 상품 칸 없음
+  'shrimp', 'mackerel', 'squid', 'crab', 'clam', 'octopus', 'abalone', 'sashimi', 'fzshrimp', 'anchovy', 'seaweed',
   'diaper', 'wipes', 'formula', 'shampoo', 'toothpaste', 'vitamin', 'potset', 'pan', 'container',
   'copypaper', 'notebook', 'pens', 'coffee', 'stickcoffee', 'nuts', 'oil', 'sesame',
   'potato', 'strawberry', 'grape', 'banchan', 'kimbap',

@@ -4,6 +4,7 @@ import * as THREE from 'three';
 import { PRODUCTS, BY_ID } from './products.js';
 import { registerStockProducts, PICKABLE_IDS, STOCK_PRODUCTS } from './stockCatalog.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { fxTime, SEA_GEO, makeSeaMat, makeWaterMat, gravelTex, instanced, produceGeos, makeProduceMat, producePile, MOUND_TINT } from './freshFx.js';
 
 const W = 84, D = 120, CEIL = 9;
 const RACK_D = 2.2, AISLE = 3.35, BAY = 2.7, BEAMS = [1.85, 3.2, 4.5];
@@ -131,10 +132,6 @@ const SEA_TOP = {
   banchan(g, X, Y, h) { for (const [k, c] of [[0, '#c96a2a'], [1, '#d8c8a8'], [2, '#6a3a1a']]) { g.fillStyle = '#ffffff'; g.fillRect(X + 12 + k * (h - 24) / 3, Y + 14, (h - 24) / 3 - 6, h - 28); g.fillStyle = c; for (let t = 0; t < 40; t++) g.fillRect(X + 18 + k * (h - 24) / 3 + (t * 37 % ((h - 24) / 3 - 18)), Y + 22 + (t * 53 % (h - 46)), 6, 3); } },
   kimbap(g, X, Y, h, ell) { for (let k = 0; k < 10; k++) { const cx = X + h * (0.16 + (k % 5) * 0.17), cy = Y + h * (k < 5 ? 0.33 : 0.68); ell(cx, cy, 17, 17, 0, '#1e2a1e'); ell(cx, cy, 13, 13, 0, '#f6f2e8'); ell(cx - 4, cy - 2, 3, 3, 0, '#e8a03a'); ell(cx + 4, cy + 1, 3, 3, 0, '#4f9a3a'); ell(cx, cy + 5, 3, 2, 0, '#d9442e'); } },
 };
-const LIVE_FISH = {
-  flatfish(g, x0, y0, h) { for (const fx of [x0, x0 + h]) { g.fillStyle = '#3d7ea0'; g.fillRect(fx, y0, h, h); g.beginPath(); g.ellipse(fx + h * 0.48, y0 + h * 0.5, h * 0.4, h * 0.2, 0, 0, Math.PI * 2); g.fillStyle = '#7a6a52'; g.fill(); g.fillStyle = 'rgba(40,30,20,.35)'; for (let k = 0; k < 18; k++) g.fillRect(fx + h * (0.15 + (k * 0.37) % 0.6), y0 + h * (0.38 + (k * 0.29) % 0.22), 5, 4); g.beginPath(); g.moveTo(fx + h * 0.86, y0 + h * 0.5); g.lineTo(fx + h * 0.98, y0 + h * 0.36); g.lineTo(fx + h * 0.98, y0 + h * 0.64); g.closePath(); g.fillStyle = '#6a5a44'; g.fill(); g.fillStyle = '#f2f2e8'; g.beginPath(); g.arc(fx + h * 0.2, y0 + h * 0.44, 5, 0, 7); g.fill(); g.fillStyle = '#111'; g.beginPath(); g.arc(fx + h * 0.2, y0 + h * 0.44, 2.5, 0, 7); g.fill(); } },
-  rockfish(g, x0, y0, h) { for (const fx of [x0, x0 + h]) { g.fillStyle = '#3d7ea0'; g.fillRect(fx, y0, h, h); g.beginPath(); g.ellipse(fx + h * 0.46, y0 + h * 0.52, h * 0.34, h * 0.24, 0, 0, Math.PI * 2); g.fillStyle = '#4a4a42'; g.fill(); g.fillStyle = '#3a3a34'; for (let k = 0; k < 7; k++) { g.beginPath(); g.moveTo(fx + h * (0.24 + k * 0.06), y0 + h * 0.3); g.lineTo(fx + h * (0.27 + k * 0.06), y0 + h * 0.18); g.lineTo(fx + h * (0.3 + k * 0.06), y0 + h * 0.3); g.fill(); } g.beginPath(); g.moveTo(fx + h * 0.78, y0 + h * 0.52); g.lineTo(fx + h * 0.95, y0 + h * 0.34); g.lineTo(fx + h * 0.95, y0 + h * 0.7); g.closePath(); g.fill(); g.fillStyle = '#f2e8c8'; g.beginPath(); g.arc(fx + h * 0.22, y0 + h * 0.46, 6, 0, 7); g.fill(); g.fillStyle = '#111'; g.beginPath(); g.arc(fx + h * 0.22, y0 + h * 0.46, 3, 0, 7); g.fill(); } },
-};
 // [depot-live] 10×10 = 100칸 (기본 10 + 카탈로그 86). 칸은 256px 기준으로 그리고 g.scale 로 줄임 — 폰 1280² 은 칸 128px 그대로.
 const ATLAS_N = 10;
 let ATLAS_S = 2048, CELL = ATLAS_S / ATLAS_N;
@@ -206,13 +203,12 @@ function paintCell(g, cx, cy, p) {
     }
     g.fillStyle = 'rgba(255,255,255,.2)'; g.fillRect(X + 10, Y + 10, h * 0.3, h - 20); // 랩 광택
     g.fillStyle = '#F2C230'; g.fillRect(X + h - 54, Y + h - 40, 44, 28); g.fillStyle = '#22262A'; g.font = '900 13px "Pretendard",sans-serif'; g.textAlign = 'center';
-    g.fillText(p.id === 'chicken' ? '2마리' : p.id === 'mackerel' ? '10팩' : TRAY_STICK[p.id] || '100g', X + h - 32, Y + h - 22);
+    g.fillText(p.id === 'chicken' ? '2마리' : p.id === 'mackerel' ? '2손' : TRAY_STICK[p.id] || '100g', X + h - 32, Y + h - 22);
   } else {
     g.fillStyle = p.color; g.fillRect(x0, y0 + h, h, h); // 위
     g.fillStyle = p.ink || '#222'; g.font = '900 32px "Pretendard",sans-serif'; g.textAlign = 'center';
     g.fillText(p.name.split(' ')[0], x0 + h / 2, y0 + h + h / 2);
   }
-  if (LIVE_FISH[p.id]) LIVE_FISH[p.id](g, x0, y0, h); // 수조 활어: 앞·옆 면을 물고기 옆모습으로 (투명 배경 대신 물빛)
   // 예비: 파렛트 랩 줄무늬
   g.fillStyle = '#e8e4da'; g.fillRect(x0 + h, y0 + h, h, h);
   g.strokeStyle = 'rgba(180,200,210,.55)'; g.lineWidth = 4;
@@ -452,6 +448,8 @@ export function mountStock({ scene, keep, canvasTex: canvasTexFn, TX, racks, obs
   hangSign('커피·견과', 'COFFEE · NUTS', 34.5, 92, null);
   hangSign('건어물·식용유', 'DRIED · OIL', 47.2, 92, null);
   hangSign('수산', 'SEAFOOD · 활어 · 얼음 진열', 73.5, 96.5, null);
+  // 낮게 하나 더: 교차 통로(z 88)에서 보면 높은 간판은 캐노피·천장 조명에 가려짐 → 얼음 진열대 앞끝 위 3.3 m
+  signs.push({ key: 'h:수산-low', img: null, title: '수산 SEAFOOD', sub: '활어 수조 · 얼음 진열 · 냉동 수산', tall: false, w: 4.2, h: 1.05, x: 77.2, y: 3.05, z: 90.8, ry: 0 });
   hangSign('냉동', 'FROZEN · 유리문 냉동창', 74, 70, null);
   hangSign('신선·정육', 'MEAT · FISH · DAIRY', 40, 112, null);
   hangSign('과일·채소', 'PRODUCE', 16, 112, null);
@@ -525,8 +523,8 @@ export function mountStock({ scene, keep, canvasTex: canvasTexFn, TX, racks, obs
 }
 
 // [depot-live] 수산 코너: x 66–80 · z 91.2–101.6 (동쪽 계절 매대 뒤쪽 절반 자리, 냉동창 x 81.9 앞 통로·손님 길 x 69.4·카트 길 x 72.8–74.2 는 비움)
-function buildSeafood({ scene, keep, addCluster, obstacles, palAt, mats }) {
-  const { steel, stain, black, glassM, iceM, caseBody, coldLight, green, garnish, priceM, PRICE_N } = mats;
+function buildSeafood({ scene, keep, addCluster, obstacles, palAt, mats, ct, isMobile }) {
+  const { steel, stain, black, glassM, iceT, caseBody, coldLight, green, garnish, priceM, PRICE_N } = mats;
   const PIDX = { salmon: 4, mackerel: 5, shrimp: 10, squid: 11, crab: 12, clam: 13, abalone: 14, sashimi: 15, octopus: 16 }; // 가격 띠 칸
   const box = (w, h, d, x, y, z, m) => { const o = new THREE.Mesh(keep(new THREE.BoxGeometry(w, h, d)), m); o.position.set(x, y, z); scene.add(o); return o; };
   const cl = addCluster(73.5, 96.4);
@@ -536,27 +534,51 @@ function buildSeafood({ scene, keep, addCluster, obstacles, palAt, mats }) {
     l.push({ sx, sy, sz, pid: id, face: 1, rot: 0, pickable: PICKABLE_IDS.has(id), ...it });
   };
   const Z0 = 91.2, Z1 = 101.6, L = Z1 - Z0, ZC = (Z0 + Z1) / 2;
-  const water = keep(new THREE.MeshLambertMaterial({ color: 0x3f9cc4, emissive: 0x0b2c3c, transparent: true, opacity: 0.3, depthWrite: false }));
+  const water = keep(makeWaterMat());
+  const gravel = keep(new THREE.MeshLambertMaterial({ map: keep(gravelTex(ct)) }));
+  // 얼음: 조명 받는 재질 + 울퉁불퉁한 면 (MeshBasic 평판이면 상자처럼 보임)
+  const iceL = keep(new THREE.MeshLambertMaterial({ map: iceT, emissive: 0x4a5a62 }));
   const garnG = keep(new THREE.IcosahedronGeometry(0.07, 0));
+  const dens = isMobile ? 0.6 : 1; // 폰: 낱개 수 줄임
+  const H = (x) => hash01(x * 1.618 + 0.37);
+  const sea = { fish: [], crab: [], shrimp: [], clam: [] }; // 3D 수산물 (종류마다 InstancedMesh 1개)
+  const priceTag = (x, y, z, ry, ki, w = 0.46, h = w / 3.2) => { // 가격 띠 칸 ki
+    const g = new THREE.PlaneGeometry(w, h), uv = g.attributes.uv;
+    for (let q = 0; q < uv.count; q++) uv.setX(q, (ki + uv.getX(q)) / PRICE_N);
+    const m = new THREE.Mesh(keep(g), priceM); m.rotation.y = ry; m.position.set(x, y, z); scene.add(m);
+  };
 
-  // 1) 활어 수조 3칸 (서쪽, 앞 유리 = +x · 손님 길 쪽)
+  // 1) 활어 수조 3칸 (서쪽, 앞 유리 = +x · 손님 길 쪽): 자갈 바닥 · 물(물결빛) · 위 조명 띠 · 3D 활어 · 앞 모서리 가격표
   const TX0 = 66.35, TX1 = 67.95, tcx = (TX0 + TX1) / 2, TD = TX1 - TX0, nT = 3, TL = L / nT;
+  const TANK = [ // 칸마다: 헤엄치는 물고기 [색, 길이], 바닥 광어 수, 꽃게 수, 가격표 칸
+    { swim: [[0x55554e, 0.36], [0x4a4a44, 0.32], [0xd8685a, 0.34], [0xc85a50, 0.3], [0x5a5a52, 0.38], [0xd8705e, 0.32]], flat: 0, crab: 0, tags: [18, 19] },
+    { swim: [[0x55554e, 0.34], [0x4e4e48, 0.3]], flat: 6, crab: 0, tags: [17, 17] },
+    { swim: [[0xd8685a, 0.3]], flat: 0, crab: 9, tags: [20, 20] },
+  ];
   for (let t = 0; t < nT; t++) {
-    const zc = Z0 + TL * (t + 0.5);
+    const zc = Z0 + TL * (t + 0.5), T = TANK[t];
     box(TD, 0.75, TL - 0.06, tcx, 0.375, zc, black); // 받침장
-    box(TD - 0.06, 0.04, TL - 0.12, tcx, 0.77, zc, stain); // 바닥
-    box(TD - 0.1, 0.92, TL - 0.16, tcx, 1.25, zc, water); // 물
+    box(TD - 0.06, 0.08, TL - 0.12, tcx, 0.79, zc, gravel); // 자갈 바닥
+    box(TD - 0.1, 0.88, TL - 0.16, tcx, 1.27, zc, water); // 물 (윗면 = 수면)
     box(0.04, 1.05, TL - 0.06, TX0 + 0.02, 1.27, zc, black); // 뒤판 (뒤 랙이 비치지 않게)
     for (const dz of [-1, 1]) box(TD - 0.06, 1.05, 0.03, tcx, 1.27, zc + dz * (TL / 2 - 0.04), steel); // 칸 옆판
     const fr = new THREE.Mesh(keep(new THREE.PlaneGeometry(TL - 0.1, 1.0)), glassM); fr.rotation.y = Math.PI / 2; fr.position.set(TX1 + 0.01, 1.27, zc); scene.add(fr);
     box(TD, 0.06, TL - 0.04, tcx, 1.79, zc, steel); // 위 테
     for (const dz of [-1, 1]) box(0.06, 1.05, 0.06, TX1, 1.27, zc + dz * (TL / 2 - 0.05), steel); // 칸 기둥
-    box(0.04, 0.03, TL - 0.2, TX1 - 0.1, 1.74, zc, coldLight); // 수조 조명
-    for (let k = 0; k < 7; k++) {
-      const id = k % 3 === 2 ? 'rockfish' : 'flatfish', r = hash01(t * 13.1 + k * 3.7);
-      put(id, { x: tcx + (r - 0.5) * 0.7, y: 0.95 + hash01(k * 5.3 + t) * 0.55, z: zc - TL / 2 + 0.4 + ((k + 0.5) / 7) * (TL - 0.8), rot: Math.PI / 2 + (r > 0.5 ? Math.PI : 0), pickable: false });
+    box(0.22, 0.03, TL - 0.2, tcx + 0.25, 1.755, zc, coldLight); // 수조 조명 띠 (위 테 안쪽)
+    box(0.05, 0.05, TL - 0.04, TX1 + 0.02, 0.78, zc, steel); // 앞 모서리 레일 (가격표 자리)
+    T.tags.forEach((ki, j) => priceTag(TX1 + 0.05, 0.66, zc + (j - 0.5) * 1.3, Math.PI / 2, ki));
+    T.swim.forEach(([color, len], k) => {
+      const r = H(t * 11 + k);
+      sea.fish.push({ x: tcx - 0.45 + H(t * 7 + k * 3) * 0.9, y: 1.0 + ((k + 0.5) / T.swim.length) * 0.5 + (r - 0.5) * 0.08, z: zc - TL / 2 + 0.6 + H(k * 5 + t) * (TL - 1.2),
+        s: [len, len, len], ry: (r > 0.5 ? Math.PI / 2 : -Math.PI / 2) + (H(k + t * 3) - 0.5) * 0.5, rz: (H(k * 2 + t) - 0.5) * 0.2, color, swim: 1 });
+    });
+    for (let k = 0; k < T.flat; k++) { const len = 0.38 + H(k + t * 9) * 0.12; // 광어: 바닥에 납작
+      sea.fish.push({ x: tcx - 0.5 + (k % 3) * 0.48 + (H(k * 3) - 0.5) * 0.12, y: 0.86 + (k > 2 ? 0.035 : 0), z: zc - TL / 2 + 0.7 + Math.floor(k / 3) * 1.15 + H(k * 7 + t) * 0.5,
+        s: [len, len * 1.35, len * 0.7], rx: Math.PI / 2, ry: H(k * 5) * 6.28, color: [0x7a6248, 0x6a5640, 0x84684a][k % 3] });
     }
-    for (let k = 0; k < 3; k++) put('crab', { x: tcx + (k - 1) * 0.36, y: 0.82, z: zc + (hash01(t * 2 + k) - 0.5) * (TL - 0.7), sy: 0.06, pickable: false });
+    for (let k = 0; k < T.crab; k++) sea.crab.push({ x: tcx - 0.5 + (k % 3) * 0.5, y: 0.84 + (k > 5 ? 0.06 : 0), z: zc - 1.1 + Math.floor(k / 3) * 0.9 + H(k + 3) * 0.3, s: [0.18, 0.18, 0.18], ry: H(k * 4) * 6.28, rx: (H(k) - 0.5) * 0.3, color: [0x6a6050, 0x5a5a6e, 0x6e5e4e][k % 3] });
+    for (let k = 0; k < 5; k++) sea.clam.push({ x: tcx - 0.55 + H(k * 9 + t) * 1.1, y: 0.85, z: zc - TL / 2 + 0.35 + H(k * 13 + t * 5) * (TL - 0.7), s: [0.14 + H(k) * 0.1, 0.12, 0.12 + H(k + 1) * 0.08], ry: H(k * 3) * 6, color: [0x8a857c, 0x6e6a62, 0xa09a8e][k % 3] }); // 수조 돌
   }
   obstacles.push({ x0: TX0, x1: TX1 + 0.06, z0: Z0, z1: Z1 });
 
@@ -577,41 +599,65 @@ function buildSeafood({ scene, keep, addCluster, obstacles, palAt, mats }) {
     }); }
   obstacles.push({ x0: CX0, x1: CX1, z0: Z0, z1: Z1 });
 
-  // 3) 얼음 진열대 2줄 (캐노피 조명 · 양옆 가격 띠 · 칸막이 채소 장식)
-  const tables = [[75.0, 76.4, ['shrimp', 'squid', 'crab', 'clam']], [77.9, 79.3, ['abalone', 'octopus', 'salmon', 'mackerel', 'shrimp']]];
-  for (const [x0, x1, skus] of tables) {
+  // 3) 얼음 진열대 2줄: 잘게 부순 얼음(울퉁불퉁한 면) 위에 3D 새우·꽃게·조개·전복·통생선 / 랩 포장 트레이 칸은 집기 가능
+  const tables = [[75.0, 76.4, ['shrimp:3d', 'squid', 'crab:3d', 'clam:3d']], [77.9, 79.3, ['abalone:3d', 'octopus', 'salmon:3d', 'mackerel:3d', 'shrimp']]];
+  for (const [x0, x1, secs] of tables) {
     const cx = (x0 + x1) / 2, w = x1 - x0;
     box(w, 0.86, L, cx, 0.43, ZC, caseBody);
     box(w - 0.1, 0.14, L - 0.1, cx, 0.07, ZC, black);
     for (const sx of [-1, 1]) box(0.02, 0.12, L, cx + sx * (w / 2 + 0.005), 0.72, ZC, green);
-    box(w - 0.06, 0.06, L - 0.06, cx, 0.89, ZC, iceM);
-    for (let z = Z0 + 0.5; z < Z1 - 0.3; z += 0.9) box(w - 0.34, 0.05, 0.7, cx, 0.94, z, iceM); // 얼음 둔덕
+    box(w - 0.06, 0.06, L - 0.06, cx, 0.89, ZC, iceL);
+    { const g = new THREE.PlaneGeometry(w - 0.08, L - 0.08, 16, 110); g.rotateX(-Math.PI / 2);
+      const ps = g.attributes.position, uv = g.attributes.uv;
+      for (let q = 0; q < ps.count; q++) { const px = ps.getX(q), pz = ps.getZ(q); const edge = Math.min(1, (w / 2 - 0.04 - Math.abs(px)) / 0.12);
+        ps.setY(q, (0.012 + 0.03 * H(px * 41 + pz * 17) + 0.02 * Math.sin(pz * 3.1 + px * 5)) * edge + 0.02 * edge); uv.setXY(q, uv.getX(q) * 3, uv.getY(q) * 22); }
+      g.computeVertexNormals(); const m = new THREE.Mesh(keep(g), iceL); m.position.set(cx, 0.925, ZC); scene.add(m); }
     for (const ez of [Z0 + 0.04, Z1 - 0.04]) { box(0.05, 1.45, 0.05, cx, 1.58, ez, steel); box(w, 0.05, 0.05, cx, 0.93, ez, steel); }
     box(w + 0.2, 0.06, L, cx, 2.3, ZC, caseBody); box(w - 0.2, 0.02, L - 0.3, cx, 2.265, ZC, coldLight);
+    const ids = secs.map((k) => k.split(':')[0]);
     for (const sd of [-1, 1]) { // 가격 띠 (칸 = 상품 2개)
-      const n = skus.length * 2, seg = (L - 0.2) / n;
-      for (let k = 0; k < n; k++) {
-        const g = new THREE.PlaneGeometry(seg - 0.04, 0.07), uv = g.attributes.uv, ki = (PIDX[skus[k >> 1]] ?? 10) % PRICE_N;
-        for (let q = 0; q < uv.count; q++) uv.setX(q, (ki + uv.getX(q)) / PRICE_N);
-        const m = new THREE.Mesh(keep(g), priceM); m.rotation.y = sd > 0 ? Math.PI / 2 : -Math.PI / 2;
-        m.position.set(cx + sd * (w / 2 + 0.018), 0.84, Z0 + 0.1 + seg * (k + 0.5)); scene.add(m);
-      }
+      const n = ids.length * 2, seg = (L - 0.2) / n;
+      for (let k = 0; k < n; k++) priceTag(cx + sd * (w / 2 + 0.018), 0.84, Z0 + 0.1 + seg * (k + 0.5), sd > 0 ? Math.PI / 2 : -Math.PI / 2, (PIDX[ids[k >> 1]] ?? 10) % PRICE_N, 0.36, 0.1125);
     }
-    const seg = (L - 0.3) / skus.length;
-    skus.forEach((id, i) => {
-      const p = BY_ID[id]; if (!p) return; const [sx, sy0, sz] = p.size, sy = Math.min(sy0, 0.075);
+    const seg = (L - 0.3) / secs.length, yI = 0.965;
+    secs.forEach((key, i) => {
+      const [id, d3] = key.split(':'); const p = BY_ID[id]; if (!p) return;
       const z0 = Z0 + 0.15 + i * seg;
-      if (i > 0) for (let k = 0; k < 4; k++) { const gm = new THREE.Mesh(garnG, garnish); gm.scale.set(1, 0.7, 1); gm.position.set(x0 + 0.2 + k * (w - 0.4) / 3, 0.98, z0); scene.add(gm); }
-      const nA = Math.max(1, Math.floor((seg - 0.1) / (sx + 0.02))), nR = Math.max(1, Math.min(4, Math.floor((w - 0.16) / (sz + 0.02))));
-      for (let a = 0; a < nA; a++) for (let r = 0; r < nR; r++) {
-        const mid = r > 0 && r < nR - 1, st = mid ? 2 : 1; // 가운데 줄은 두 단 (얼음 둔덕 위)
-        for (let hh = 0; hh < st; hh++) put(id, {
-          x: x0 + 0.08 + (r + 0.5) * (w - 0.16) / nR, y: 0.97 + sy * (hh + 0.5) + (mid ? 0.02 : 0), z: z0 + 0.05 + (a + 0.5) * (seg - 0.1) / nA,
-          rot: Math.PI / 2 + (hash01(a * 3.1 + r + i * 7) - 0.5) * 0.14 + (hash01(a + r * 5 + i) > 0.5 ? Math.PI : 0), sy, pickable: hh === st - 1 && PICKABLE_IDS.has(id) });
+      if (i > 0) for (let k = 0; k < 4; k++) { const gm = new THREE.Mesh(garnG, garnish); gm.scale.set(1, 0.7, 1); gm.position.set(x0 + 0.2 + k * (w - 0.4) / 3, 0.99, z0); scene.add(gm); }
+      const [sx, sy0, sz] = p.size, sy = Math.min(sy0, 0.075);
+      if (!d3) { // 랩 포장 트레이 칸
+        const nA = Math.max(1, Math.floor((seg - 0.1) / (sx + 0.02))), nR = Math.max(1, Math.min(4, Math.floor((w - 0.16) / (sz + 0.02))));
+        for (let a = 0; a < nA; a++) for (let r = 0; r < nR; r++) {
+          const mid = r > 0 && r < nR - 1, st = mid ? 2 : 1;
+          for (let hh = 0; hh < st; hh++) put(id, {
+            x: x0 + 0.08 + (r + 0.5) * (w - 0.16) / nR, y: yI + sy * (hh + 0.5) + (mid ? 0.02 : 0), z: z0 + 0.05 + (a + 0.5) * (seg - 0.1) / nA,
+            rot: Math.PI / 2 + (H(a * 3.1 + r + i * 7) - 0.5) * 0.14 + (H(a + r * 5 + i) > 0.5 ? Math.PI : 0), sy, pickable: hh === st - 1 && PICKABLE_IDS.has(id) });
+        }
+        return;
       }
+      // 3D 칸: 앞끝에 포장 트레이 2개(집기용, 양쪽 손님 길에서 하나씩) + 나머지는 얼음 위 낱개
+      for (const r of [0, 1]) put(id, { x: r ? x1 - 0.06 - sz / 2 : x0 + 0.06 + sz / 2, y: yI + sy / 2, z: z0 + 0.06 + sx / 2, rot: Math.PI / 2 + (r ? Math.PI : 0), sy, pickable: PICKABLE_IDS.has(id) });
+      const za = z0 + 0.12 + sx + 0.04, zb = z0 + seg - 0.06, xa = x0 + 0.1, xb = x1 - 0.1;
+      const grid = (dx, dz, fn) => { let k = 0; const sp = 1 / Math.sqrt(dens); for (let z = za + dz * sp / 2; z < zb; z += dz * sp) for (let x = xa + dx * sp / 2; x < xb; x += dx * sp) fn(x + (H(k * 1.3 + i) - 0.5) * dx * 0.4, z + (H(k * 2.7 + i) - 0.5) * dz * 0.4, k++, (x - xa) / (xb - xa)); };
+      const hump = (u) => 0.05 * Math.sin(Math.PI * Math.min(1, Math.max(0, u))); // 가운데가 봉긋
+      if (id === 'shrimp') { // 가지런히 줄지어 (머리 같은 방향) · 가운데는 두 겹
+        let k = 0; const dz = 0.088 / Math.sqrt(dens);
+        for (let z = za + 0.04, row = 0; z < zb; z += dz, row++) for (let x = xa + 0.09, c = 0; x < xb - 0.05; x += 0.2, c++) {
+          const u = (x - xa) / (xb - xa); k++;
+          for (let l = 0; l < (u > 0.25 && u < 0.75 ? 2 : 1); l++) sea.shrimp.push({ x: x + (H(k) - 0.5) * 0.02 + l * 0.03, y: yI + 0.018 + l * 0.032, z: z + l * dz * 0.5, s: [0.16, 0.16, 0.16], rx: -Math.PI / 2, ry: (c % 2 ? 0 : Math.PI) + (H(k * 3) - 0.5) * 0.25, color: [0xecc6b8, 0xe2bcae, 0xf2cfc0, 0xe8b4a2][(k + l) % 4] });
+        }
+      }
+      if (id === 'crab') grid(0.24, 0.22, (x, z, k, u) => { for (let l = 0; l < (u > 0.25 && u < 0.75 ? 2 : 1); l++) sea.crab.push({ x: x + l * 0.06, y: yI + 0.005 + l * 0.06, z: z + l * 0.08, s: [0.17, 0.17, 0.17], rx: (H(k) - 0.5) * 0.4, rz: (H(k + 2) - 0.5) * 0.3, ry: H(k * 5 + l) * 6.28, color: [0x7a6650, 0x6a5a72, 0xc8602a, 0x86705a][(k + l) % 4] }); });
+      if (id === 'clam') grid(0.065, 0.065, (x, z, k, u) => sea.clam.push({ x, y: yI + 0.012 + hump(u) * 0.8 + H(k + 9) * 0.01, z, s: [0.055 + H(k) * 0.015, 0.05, 0.055], rx: (H(k + 1) - 0.5) * 0.6, ry: H(k * 3) * 6.28, color: [0xc8b898, 0x9a8a6e, 0xd8ccb0, 0x7a6a58][k % 4] }));
+      if (id === 'abalone') grid(0.12, 0.11, (x, z, k, u) => sea.clam.push({ x, y: yI + 0.015 + hump(u) * 0.6, z, s: [0.11, 0.07, 0.085], ry: H(k * 3) * 6.28, color: [0x8a8a6a, 0x7a806a, 0x9a8e72][k % 3] }));
+      if (id === 'salmon') { let k = 0; for (let z = za + 0.08; z < zb; z += 0.17 / Math.sqrt(dens)) { k++; const len = 0.78 + H(k) * 0.12; sea.fish.push({ x: cx + (H(k + 4) - 0.5) * 0.12, y: yI + 0.035 + (k % 2) * 0.02, z, s: [len, len, len * 1.3], rx: Math.PI / 2, ry: (k % 2 ? 0 : Math.PI) + (H(k * 2) - 0.5) * 0.2, color: [0x8a98a8, 0x9aa4b0][k % 2] }); } }
+      if (id === 'mackerel') { let k = 0; for (let z = za + 0.05; z < zb; z += 0.1 / Math.sqrt(dens)) for (const sd2 of [-1, 1]) { k++; const len = 0.36 + H(k) * 0.05; sea.fish.push({ x: cx + sd2 * 0.3 + (H(k + 1) - 0.5) * 0.06, y: yI + 0.025 + (k % 3 === 0 ? 0.025 : 0), z: z + (sd2 > 0 ? 0.04 : 0), s: [len, len, len * 1.2], rx: Math.PI / 2, ry: (sd2 > 0 ? 0 : Math.PI) + 0.35 * sd2 + (H(k * 2) - 0.5) * 0.15, color: [0x2e5a6a, 0x335f72, 0x2a5262][k % 3] }); } }
     });
     obstacles.push({ x0, x1, z0: Z0, z1: Z1 });
   }
+  // 3D 수산물: 종류마다 InstancedMesh 1개 (물고기는 헤엄 셰이더, 얼음 위 것은 aSwim 0)
+  const seaMat = keep(makeSeaMat());
+  for (const [k, list] of Object.entries(sea)) { const im = instanced(keep(SEA_GEO[k]()), seaMat, list); if (im) { im.name = `sea-${k}`; scene.add(im); } }
   // 4) 스티로폼 수산 박스 파렛트 2개 (뒤쪽 끝, 하역 느낌)
   for (const [x, z, id] of [[75.7, 103.6, 'fzshrimp'], [78.6, 103.6, 'anchovy']]) {
     const p = BY_ID[id]; if (!p) continue; const [sx, sy, sz] = p.size;
@@ -725,7 +771,9 @@ function buildFixtures({ isMobile = false, scene, keep, ct, atlas, unitBox, obst
   const garnish = keep(new THREE.MeshLambertMaterial({ color: 0x4f9a3a, emissive: 0x10260c }));
   // 가격 띠: 한 장 텍스처에 칸 10개 — 칸마다 UV 로 골라 씀
   const PRICE = [['범한돈 삼겹살', '100g 2,590'], ['범우 등심', '100g 6,980'], ['범닭 한 마리', '1kg 7,490'], ['범한돈 목살', '100g 2,390'], ['노르웨이 연어', '100g 4,290'], ['범고등어', '2손 9,900'], ['범우유 2.3L', '5,680'], ['범요거트', '12입 8,990'], ['범치즈', '36매 9,480'], ['범버터', '454g 8,900'],
-    ['범새우 생물', '100g 2,490'], ['범오징어', '3미 17,900'], ['범꽃게', '1kg 16,450'], ['범바지락', '1kg 9,900'], ['범전복', '10미 39,900'], ['범참치회', '500g 22,900'], ['범문어 숙회', '600g 26,900']]; // [depot-live] 수산 코너
+    ['범새우 생물', '100g 2,490'], ['범오징어', '3미 17,900'], ['범꽃게', '1kg 16,450'], ['범바지락', '1kg 9,900'], ['범전복', '10미 39,900'], ['범참치회', '500g 22,900'], ['범문어 숙회', '600g 26,900'],
+    ['범광어 활어', '1kg 35,000'], ['범우럭 활어', '1kg 28,000'], ['범참돔 활어', '1kg 39,000'], ['범꽃게 활', '1kg 32,900'],
+    ['범로스트치킨', '1마리 7,990'], ['범반찬 3종', '9,900'], ['범김밥 2줄', '6,900']]; // [depot-live] 수산 코너 · 수조 가격표 17–20 · 델리 21–23
   const priceT = keep(ct(Math.ceil(204.8 * PRICE.length), 64, (g) => PRICE.forEach(([n, pr], k) => {
     const x = k * 204.8; g.fillStyle = '#FBF7EE'; g.fillRect(x, 0, 204.8, 64); g.fillStyle = k % 4 === 0 ? '#D9442E' : '#1E5A45'; g.fillRect(x, 0, 8, 64);
     g.fillStyle = '#22262A'; g.font = '800 20px "Pretendard",sans-serif'; g.textAlign = 'left'; g.textBaseline = 'middle'; g.fillText(n, x + 16, 20);
@@ -790,7 +838,7 @@ function buildFixtures({ isMobile = false, scene, keep, ct, atlas, unitBox, obst
   //   공유 재질(스테인리스·얼음·유리·가격 띠)만 써서 mergeStatics 로 합쳐짐. 새 드로콜은 수조 물 1개뿐. 상품은 아틀라스 인스턴스.
   // 따로 묶어 합치고 멀면 끔: 뒤 신선 케이스와 한 메시로 합치면 경계 구가 커져 먼 데서도 그려짐(+8 드로콜)
   const seaRoot = new THREE.Group(); seaRoot.name = 'depot-seafood'; scene.add(seaRoot);
-  buildSeafood({ scene: seaRoot, keep, addCluster, obstacles, palAt, mats: { steel, stain, black, glassM, iceM, caseBody, coldLight, green, garnish, priceM, PRICE_N: PRICE.length } });
+  buildSeafood({ scene: seaRoot, keep, addCluster, obstacles, palAt, ct, isMobile, mats: { steel, stain, black, glassM, iceT, caseBody, coldLight, green, garnish, priceM, PRICE_N: PRICE.length } });
   mergeStatics(seaRoot, keep);
   const SEA_FAR = isMobile ? 26 : 46;
 
@@ -834,32 +882,43 @@ function buildFixtures({ isMobile = false, scene, keep, ct, atlas, unitBox, obst
   ];
   const binG = keep(new THREE.BoxGeometry(3.4, 0.7, 2.2));
   const rimG = keep(new THREE.BoxGeometry(3.5, 0.08, 2.3));
-  const moundG = keep(new THREE.SphereGeometry(0.9, 8, 5, 0, Math.PI * 2, 0, Math.PI / 2));
+  const moundG = keep(new THREE.SphereGeometry(0.9, 12, 6, 0, Math.PI * 2, 0, Math.PI / 2));
   const binI = new THREE.InstancedMesh(binG, wood, bins.length);
   const rimI = new THREE.InstancedMesh(rimG, keep(new THREE.MeshLambertMaterial({ color: 0x6a4a22 })), bins.length);
-  const moundI = new THREE.InstancedMesh(moundG, keep(new THREE.MeshLambertMaterial({ color: 0xcc4444 })), bins.length);
+  const moundI = new THREE.InstancedMesh(moundG, keep(new THREE.MeshLambertMaterial({ color: 0xffffff })), bins.length);
+  // [depot-live] 낱개 과일·채소: 둔덕(같은 색 어둡게, 틈 메움) 위에 인스턴스로 하나하나 — 작은 것 20면체 1 드로콜 + 수박 1 드로콜
+  const pGeo = produceGeos(), pMat = keep(makeProduceMat()), pSmall = [], pBig = [];
+  let nMound = 0;
   bins.forEach((b, i) => {
     m4.makeTranslation(b.x, 0.35, b.z); binI.setMatrixAt(i, m4);
     m4.makeTranslation(b.x, 0.72, b.z); rimI.setMatrixAt(i, m4);
-    m4.compose(pv.set(b.x, 0.7, b.z), q0, s3.set(1.5, 0.55, 1.0)); moundI.setMatrixAt(i, m4);
-    col.setHex(b.color); moundI.setColorAt(i, col);
     obstacles.push({ x0: b.x - 1.75, x1: b.x + 1.75, z0: b.z - 1.15, z1: b.z + 1.15 });
     const p = BY_ID[b.id]; if (!p) return;
     const [sx, sy, sz] = p.size;
     const list = prodCluster.items.get(p.id) || []; prodCluster.items.set(p.id, list);
-    // 빈 위에 집기 가능한 상품 몇 개 (가까이서만 보임)
-    // [depot-live] 둔덕(높이 ~1.2) 속에 묻히지 않게 빈 앞·뒤 테두리 쪽(둔덕 밖)에 3개씩
-    for (let k = 0; k < 6; k++) {
-      const edge = k < 3 ? -1 : 1, zz = b.z + edge * (1.08 - Math.min(sz, 0.3) / 2);
-      list.push({ x: b.x + ((k % 3) - 1) * 1.1, y: 0.76 + sy / 2, z: zz, rot: 0, face: edge > 0 ? 1 : -1, pickable: true, sx, sy, sz, pid: p.id });
+    if (b.id === 'strawberry') { // 딸기는 팩(트레이)으로 빈 가득 — 팩이 곧 상품
+      const nA = Math.floor(3.2 / (sx + 0.03)), nR = Math.floor(2.0 / (sz + 0.03));
+      for (let a = 0; a < nA; a++) for (let r = 0; r < nR; r++) for (let hh = 0; hh < (r > 0 && r < nR - 1 ? 2 : 1); hh++)
+        list.push({ x: b.x - 1.6 + (a + 0.5) * 3.2 / nA, y: 0.7 + sy * (hh + 0.5), z: b.z - 1.0 + (r + 0.5) * 2.0 / nR, rot: (hash01(a + r * 7) - 0.5) * 0.1, face: 1, pickable: (r === 0 || r === nR - 1) && a % 3 === 1, sx, sy, sz, pid: p.id });
+      return;
     }
+    m4.compose(pv.set(b.x, 0.7, b.z), q0, s3.set(1.5, 0.55, 1.0)); moundI.setMatrixAt(nMound, m4);
+    col.setHex(MOUND_TINT[b.id] ?? b.color); moundI.setColorAt(nMound++, col);
+    const pile = producePile(b.id, b.x, b.z, { density: isMobile ? 0.55 : 1, seed: i });
+    pSmall.push(...pile.small); pBig.push(...pile.big);
+    // 상자 대신 빈 앞·뒤 테두리에 작은 가격 카드 (이걸 집으면 상품 1개가 카트로)
+    for (const edge of [-1, 1]) list.push({ x: b.x + edge * 0.9, y: 0.86, z: b.z + edge * 1.13, rot: 0, face: edge > 0 ? 1 : -1, pickable: true, sx: 0.24, sy: 0.16, sz: 0.012, pid: p.id });
   });
+  moundI.count = nMound;
   if (moundI.instanceColor) moundI.instanceColor.needsUpdate = true;
   scene.add(binI, rimI, moundI);
+  const fruitI = [instanced(keep(pGeo.small), pMat, pSmall), instanced(keep(pGeo.big), pMat, pBig)].filter(Boolean);
+  for (const f of fruitI) { f.name = 'depot-produce'; scene.add(f); }
   buildItemIMs(prodCluster, atlas, unitBox, prodMeshes, m4, pv, qy, s3, col, Y);
 
   // ===== 델리·로스티세리 x 66–82, z 109–116 =====
   const deliCluster = addCluster(74, 112.5);
+  let deliRoast = null;
   {
     const counter = new THREE.Mesh(keep(new THREE.BoxGeometry(14, 1.05, 1.4)), stain);
     counter.position.set(74, 0.52, 114.8); scene.add(counter);
@@ -879,6 +938,16 @@ function buildFixtures({ isMobile = false, scene, keep, ct, atlas, unitBox, obst
       const list = deliCluster.items.get(pr.id) || []; deliCluster.items.set(pr.id, list);
       for (let i = 0; i < n; i++) list.push({ x: 68.5 + i * 1.4, y: 1.12 + sy / 2, z: 114.7, rot: 0, face: 1, pickable: true, sx, sy, sz, pid: pr.id });
     }
+    // [depot-live] 진열장 앞 초록 띠 + 가격 띠, 유리 안 온열대 뒤쪽에 3D 통닭 두 줄 (작은 20면체 인스턴스, 1 드로콜)
+    const band = new THREE.Mesh(keep(new THREE.BoxGeometry(14, 0.14, 0.02)), green); band.position.set(74, 0.82, 114.09); scene.add(band);
+    for (let k = 0; k < 6; k++) { // 손님 쪽(-z)을 보게 뒤집어 붙임
+      const g = new THREE.PlaneGeometry(0.42, 0.13), uv = g.attributes.uv, ki = 21 + (k % 3);
+      for (let q = 0; q < uv.count; q++) uv.setX(q, (ki + uv.getX(q)) / PRICE.length);
+      const m = new THREE.Mesh(keep(g), priceM); m.rotation.y = Math.PI; m.position.set(68.6 + k * 2.15, 0.98, 114.075); scene.add(m);
+    }
+    const roast = [];
+    for (let r = 0; r < 2; r++) for (let i = 0; i < 17; i++) roast.push({ x: 67.8 + i * 0.78 + r * 0.39, y: 1.17 + r * 0.02, z: 115.05 + r * 0.3, s: [0.13, 0.085, 0.095], ry: (hash01(i + r * 9) - 0.5) * 0.6, color: [0xb8661e, 0xc87a2a, 0xa85a1a][(i + r) % 3] });
+    deliRoast = instanced(keep(produceGeos().small), keep(makeProduceMat()), roast); if (deliRoast) scene.add(deliRoast);
     // [depot-live] 반찬·김밥: 통닭 줄 앞(손님 쪽) 한 줄 더
     for (let i = 0; i < 18; i++) { const pr = BY_ID[i % 3 === 2 ? 'kimbap' : 'banchan']; if (!pr) continue; const [sx, sy, sz] = pr.size;
       const list = deliCluster.items.get(pr.id) || []; deliCluster.items.set(pr.id, list);
@@ -1007,8 +1076,11 @@ function buildFixtures({ isMobile = false, scene, keep, ct, atlas, unitBox, obst
   const qMist = new THREE.Quaternion().setFromAxisAngle(Y, -Math.PI / 2), one = new THREE.Vector3(1, 1, 1), mp = new THREE.Vector3();
   let tAcc = 0;
   function tick(camera, x, z) {
-    tAcc += 0.016;
+    tAcc += 0.016; fxTime.value = (performance.now() / 1000) % 3600;
     seaRoot.visible = Math.hypot(x - 73.5, z - 96.4) < SEA_FAR;
+    const fv = Math.hypot(x - 16, z - 112.5) < (isMobile ? 18 : 26); // 낱개 과일은 가까이서만 (멀면 둔덕 색이 대신)
+    for (const f of fruitI) f.visible = fv;
+    if (deliRoast) deliRoast.visible = Math.hypot(x - 74, z - 114.8) < SEA_FAR;
     let n = 0;
     for (const m of mistPlanes) {
       if (Math.hypot(x - m.x, z - m.z) >= 14) continue;
