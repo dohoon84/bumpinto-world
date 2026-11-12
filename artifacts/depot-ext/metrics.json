@@ -1,0 +1,204 @@
+{
+ "day": [
+  {
+   "label": "at door (near built)",
+   "drawCalls": 625,
+   "tris": 1863174,
+   "geos": 356,
+   "tex": 43,
+   "depotMeshesVisible": 25,
+   "near": {
+    "near": true,
+    "buildMs": 16253,
+    "farMs": 204.1,
+    "mobile": false,
+    "lotBuildMs": 117,
+    "cars": 87,
+    "stalls": 260
+   },
+   "arrows": 39,
+   "heapMB": 583.5
+  },
+  {
+   "label": "aerial",
+   "drawCalls": 578,
+   "tris": 1954922,
+   "geos": 368,
+   "tex": 45,
+   "depotMeshesVisible": 25,
+   "near": {
+    "near": true,
+    "buildMs": 16253,
+    "farMs": 204.1,
+    "mobile": false,
+    "lotBuildMs": 117,
+    "cars": 87,
+    "stalls": 260
+   },
+   "arrows": 70,
+   "heapMB": 567.2
+  },
+  {
+   "label": "at 정자역 (far)",
+   "drawCalls": 1410,
+   "tris": 2169854,
+   "geos": 904,
+   "tex": 96,
+   "depotMeshesVisible": 12,
+   "near": {
+    "near": false,
+    "buildMs": 16253,
+    "farMs": 204.1,
+    "mobile": false,
+    "lotBuildMs": 117,
+    "cars": 87,
+    "stalls": 260
+   },
+   "arrows": 25,
+   "heapMB": 530.9
+  },
+  {
+   "label": "300m east (far)",
+   "drawCalls": 625,
+   "tris": 3186719,
+   "geos": 940,
+   "tex": 108,
+   "depotMeshesVisible": 12,
+   "near": {
+    "near": false,
+    "buildMs": 16253,
+    "farMs": 204.1,
+    "mobile": false,
+    "lotBuildMs": 117,
+    "cars": 87,
+    "stalls": 260
+   },
+   "arrows": 36,
+   "heapMB": 534.5
+  }
+ ],
+ "dayErrors": [],
+ "dayBoot": 87212,
+ "mobile": [
+  {
+   "label": "mobile walkway → 입구",
+   "drawCalls": 614,
+   "tris": 1637519,
+   "depotMeshes": 21,
+   "depotTris": 60534,
+   "updateMs": 0.001,
+   "stats": {
+    "near": true,
+    "buildMs": 17033,
+    "farMs": 186.1,
+    "mobile": true,
+    "lotBuildMs": 107,
+    "cars": 87,
+    "stalls": 260
+   },
+   "arrows": 45,
+   "dpr": 1.5
+  },
+  {
+   "label": "mobile 대왕판교로 보도",
+   "drawCalls": 760,
+   "tris": 1682836,
+   "depotMeshes": 21,
+   "depotTris": 60358,
+   "updateMs": 0.001,
+   "stats": {
+    "near": true,
+    "buildMs": 17033,
+    "farMs": 186.1,
+    "mobile": true,
+    "lotBuildMs": 107,
+    "cars": 87,
+    "stalls": 260
+   },
+   "arrows": 23,
+   "dpr": 1.5
+  }
+ ],
+ "mobileErrors": [],
+ "mobileBoot": 89818,
+ "night": [
+  {
+   "label": "at door (near built)",
+   "drawCalls": 615,
+   "tris": 1623042,
+   "geos": 376,
+   "tex": 45,
+   "depotMeshesVisible": 26,
+   "near": {
+    "near": true,
+    "buildMs": 16712,
+    "farMs": 192.7,
+    "mobile": false,
+    "lotBuildMs": 94,
+    "cars": 87,
+    "stalls": 260
+   },
+   "arrows": 39,
+   "heapMB": 567.1
+  },
+  {
+   "label": "aerial",
+   "drawCalls": 529,
+   "tris": 1678396,
+   "geos": 393,
+   "tex": 47,
+   "depotMeshesVisible": 26,
+   "near": {
+    "near": true,
+    "buildMs": 16712,
+    "farMs": 192.7,
+    "mobile": false,
+    "lotBuildMs": 94,
+    "cars": 87,
+    "stalls": 260
+   },
+   "arrows": 70,
+   "heapMB": 566.5
+  },
+  {
+   "label": "at 정자역 (far)",
+   "drawCalls": 1026,
+   "tris": 1806986,
+   "geos": 926,
+   "tex": 97,
+   "depotMeshesVisible": 12,
+   "near": {
+    "near": false,
+    "buildMs": 16712,
+    "farMs": 192.7,
+    "mobile": false,
+    "lotBuildMs": 94,
+    "cars": 87,
+    "stalls": 260
+   },
+   "arrows": 25,
+   "heapMB": 587.8
+  },
+  {
+   "label": "300m east (far)",
+   "drawCalls": 573,
+   "tris": 2930931,
+   "geos": 971,
+   "tex": 110,
+   "depotMeshesVisible": 12,
+   "near": {
+    "near": false,
+    "buildMs": 16712,
+    "farMs": 192.7,
+    "mobile": false,
+    "lotBuildMs": 94,
+    "cars": 87,
+    "stalls": 260
+   },
+   "arrows": 36,
+   "heapMB": 590.9
+  }
+ ],
+ "nightErrors": [],
+ "nightBoot": 90098
+}
