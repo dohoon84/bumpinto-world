@@ -24,7 +24,7 @@ import { RemotePlayers } from './net/remotePlayers.js';
 import { CHAT_RADIUS } from './net/protocol.js';
 import { buildTransit, makeCrossingGuard, mergeSimExtra } from './transit/transit.js';
 import { pangyoLinkEnabled, PANGYO_LINK_FILE } from './corridor/pangyo.js'; // [pangyo-link]
-import { shouldSkipLandmarkPaint } from './corridor/landmarks/lazyLandmarks.js';
+import { shouldSkipLandmarkPaint, markSlowGpu } from './corridor/landmarks/lazyLandmarks.js';
 import { migeumBusEnabled, mergeMigeumBus, MIGEUM_BUS_FILE } from './corridor/migeumBus.js'; // [migeum-bus]
 import { clampWorld } from './corridor/islands.js'; // [gangnam]
 import { setNearScope, collectPlaces, placeCaption, sameIsland } from './corridor/nearScope.js'; // [gangnam-night]
