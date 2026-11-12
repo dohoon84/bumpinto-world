@@ -222,6 +222,7 @@ export function createStory(ctx) {
   }
   /** scene.checkout: 이번 방문에 이미 계산했으면 바로, 아니면 계산대 안내 → 계산 끝날 때까지 */
   async function waitCheckout(L) {
+    if (checkoutState().phase === 'done') flags.paid = true; // 사건 중에 이미 계산을 끝냈으면 다시 계산시키지 않음
     if (!flags.paid) {
       job = { kind: 'checkout', L, t0: now() };
       updateChip(true);
@@ -693,7 +694,8 @@ export function createStory(ctx) {
     vn.setOffsets({ gearTop: Math.round(pb + 8), chipTop: Math.round(pb + 8 + 40) });
     const chipOn = chip.style.display === 'block';
     colBottom = chipOn ? chip.getBoundingClientRect().bottom : gear.getBoundingClientRect().bottom;
-    const rxTop = isMobile ? 58 : checkout.busy ? 70 : Math.max(colBottom + 8, (st.msgTop3 || 0));
+    const mc = isMobile && vn.root.querySelector('.mchip.on'); // 모바일 오른쪽 사건 카드 아래로 (겹치지 않게)
+    const rxTop = isMobile ? (mc ? Math.round(mc.getBoundingClientRect().bottom + 6) : 58) : checkout.busy ? 70 : Math.max(colBottom + 8, (st.msgTop3 || 0));
     vn.setOffsets({ rxTop: Math.round(rxTop) });
     vn.root.querySelector('.rx').style.left = isMobile || checkout.busy ? '50%' : '16px';
     vn.root.querySelector('.rx').style.transform = isMobile || checkout.busy ? 'translateX(-50%)' : '';
