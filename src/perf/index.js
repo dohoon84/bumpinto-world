@@ -58,7 +58,10 @@ export function mountPerfMem({ scene, renderer, camera, params, getPlayer = () =
       if (!c.userData?.rig && smallGroup(c)) { inst.track(c); continue; } // 택시·순찰차·가게 같은 작은 덩어리: 같은 부품끼리 인스턴싱
       walk(c);
     }
-    for (const b of bikes?.list || []) if (b.mesh?.parent) inst.track(b.mesh); // 카카오바이크(같은 원형을 clone: 지오메트리·재질 공유)
+    for (const b of bikes?.list || []) if (b.mesh?.parent) inst.track(b.mesh);
+    // [jamsil-perf] 코리더 시내버스(corridorBuses 아래 버스 한 대 = userData.L): 같은 부품(바퀴·유리·범퍼)은 인스턴싱, 먼 버스·작은 부품은 화면 크기로 거른다
+    const cb = corridorRoot?.children?.find((c) => c.name === 'corridorBuses'); // buses.js 가 root 바로 아래에 둔다
+    if (cb) for (const c of cb.children) if (c.userData?.L && !c.userData?.perfNoInstance) inst.track(c); // 카카오바이크(같은 원형을 clone: 지오메트리·재질 공유)
     // 플레이어 아바타가 바뀌었으면(옷 갈아입기) 옛 추적을 푼다
     if (player && inst.has(player)) inst.release(player);
   }
