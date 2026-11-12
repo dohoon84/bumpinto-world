@@ -9,7 +9,7 @@ export function bootNeedsLandmarkData(search = typeof location !== 'undefined' ?
   const s = search instanceof URLSearchParams ? search : new URLSearchParams(search || '');
   const at = s.get('at') || '';
   if (!at) return false;
-  return /ntower|namsan|hangang|jamsu|jamsoo|banpo|hapjeong|\bhap\b|잠수|반포|남산|한강|합정/.test(at);
+  return /ntower|namsan|hangang|jamsu|jamsoo|banpo|jamwon|잠원|hapjeong|\bhap\b|잠수|반포|남산|한강|합정/.test(at);
 }
 
 export function markBoot(label) {

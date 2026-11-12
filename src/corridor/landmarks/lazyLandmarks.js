@@ -1,5 +1,5 @@
 // [namsan] [hangang] 부트 때는 가벼운 스텁만 두고, 가까이 오면 메시를 만든다.
-import { NAMSAN_BOUNDS, HANGANG_BOXES, NAMSAN_SPAWN, HANGANG_SPAWN, emptyLandmarkMini } from './landmarkBounds.js';
+import { NAMSAN_BOUNDS, HANGANG_BOXES, NAMSAN_SPAWN, HANGANG_SPAWN, HANGANG_HAP_SPAWNS, emptyLandmarkMini } from './landmarkBounds.js';
 
 export function landmarkLazyEnabled(search = typeof location !== 'undefined' ? location.search : '') {
   const s = search instanceof URLSearchParams ? search : new URLSearchParams(search || '');
@@ -12,6 +12,8 @@ export const LANDMARK_NEAR_M = 1800;
 export const LANDMARK_PREFETCH_M = 8000;
 /** 한 조각 JS 예산. 200ms 목표에서 GPU를 빼고도 여유. */
 export const LANDMARK_SLICE_MS = 8;
+/** [gangnam-enter] 텔레포트·?at= 처럼 도착이 메시를 기다리는 동안의 조각 예산. 로딩 화면·이동 대기 중이라 길게 잡아 양보 횟수를 줄인다. */
+export const LANDMARK_URGENT_SLICE_MS = 40;
 
 export function demBounds(dem) {
   if (!dem || !Number.isFinite(+dem.x0) || !Number.isFinite(+dem.nx) || !Number.isFinite(+dem.dx)) return null;
@@ -59,7 +61,7 @@ export function makeHangangMeta(data) {
     spawn,
     spawnY: () => spawn.y,
     mini: emptyLandmarkMini(),
-    spawns: { ...(data?.hap?.osm?.spawns || {}) },
+    spawns: { ...HANGANG_HAP_SPAWNS, ...(data?.hap?.osm?.spawns || {}) }, // [gangnam-enter] 탄천합수부·잠원 목적지가 지연 로딩에서도 남게
     connectEnds: { ...(data?.osm?.connectEnds || {}), ...(data?.hap?.osm?.connectEnds || {}) },
   };
 }
@@ -191,7 +193,7 @@ export function makeSlicer(yieldFn, { budgetMs = LANDMARK_SLICE_MS, name = '' } 
     async tick(label) {
       if (!yieldFn) return;
       const t = now();
-      if (t - last >= budgetMs) {
+      if (t - last >= (yieldFn.state?.budgetMs || budgetMs)) {
         const jsMs = +(t - last).toFixed(2);
         const y0 = now();
         await yieldFn();

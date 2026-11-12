@@ -46,7 +46,7 @@ import { hollowSeohyeonArcade } from '../arcade/locations.js'; // [arcade] 서�
 import { migeumWaterEnabled, MIGEUM_WATER_FILE, migeumChRoads, mergeMigeumWater, applyMigeumBank } from './migeumWater.js'; // [migeum-water]
 import { cityhallEnabled, CITYHALL_FILE, filterCityHallHidden, createCityHall } from './cityhall.js'; // [cityhall]
 import { namsanEnabled, namsanCableEnabled, NAMSAN_DEM_FILE, NAMSAN_OSM_FILE, NAMSAN_CITY_FILE } from './landmarks/namsanFlags.js'; // [namsan]
-import { landmarkLazyEnabled, LANDMARK_NEAR_M, LANDMARK_PREFETCH_M, makeNamsanMeta, makeHangangMeta, wrapLandmark, yieldPaint, makeBuildYield, makeSlicer, beginLandmarkBuild, landmarkBuildGate } from './landmarks/lazyLandmarks.js'; // [namsan] [hangang] 메시 지연 생성
+import { landmarkLazyEnabled, LANDMARK_NEAR_M, LANDMARK_PREFETCH_M, makeNamsanMeta, makeHangangMeta, wrapLandmark, yieldPaint, makeBuildYield, makeSlicer, beginLandmarkBuild, landmarkBuildGate, LANDMARK_URGENT_SLICE_MS } from './landmarks/lazyLandmarks.js'; // [namsan] [hangang] 메시 지연 생성
 import { createNamsanNpc, namsanNpcEnabled } from './landmarks/namsanNpc.js'; // [namsan-npc]
 import { hangangEnabled, HANGANG_DEM_FILE, HANGANG_OSM_FILE, HAP_DEM_FILE, HAP_OSM_FILE, HANGANG_TERRAIN_BAKE_FILE, HAP_TERRAIN_BAKE_FILE } from './landmarks/hangangFlags.js'; // [hangang]
 
@@ -506,7 +506,7 @@ const gnTransit = corridorData.gangnamTransit ? mountGangnamTransit(root, corrid
   async function buildNamsan(urgent = false) {
     if (!namsan || namsan.ready) return namsan;
     if (namsanBuilding) {
-      if (urgent && namsanYieldState) namsanYieldState.idle = false;
+      if (urgent && namsanYieldState) { namsanYieldState.idle = false; namsanYieldState.budgetMs = LANDMARK_URGENT_SLICE_MS; }
       if (urgent) landmarkBuildGate.urgent = true;
       return namsanBuilding;
     }
@@ -515,6 +515,7 @@ const gnTransit = corridorData.gangnamTransit ? mountGangnamTransit(root, corrid
       try {
         const y = makeBuildYield({ idle: !urgent });
         namsanYieldState = y.state;
+        if (urgent) y.state.budgetMs = LANDMARK_URGENT_SLICE_MS; // [gangnam-enter] 기다리는 도착이면 조각을 크게
         const slicer = makeSlicer(y, { name: 'namsan' });
         const t0 = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
         await loadNamsanData();
@@ -533,7 +534,7 @@ const gnTransit = corridorData.gangnamTransit ? mountGangnamTransit(root, corrid
   async function buildHangang(urgent = false) {
     if (!hangang || hangang.ready) return hangang;
     if (hangangBuilding) {
-      if (urgent && hangangYieldState) hangangYieldState.idle = false;
+      if (urgent && hangangYieldState) { hangangYieldState.idle = false; hangangYieldState.budgetMs = LANDMARK_URGENT_SLICE_MS; }
       if (urgent) landmarkBuildGate.urgent = true;
       return hangangBuilding;
     }
@@ -542,6 +543,7 @@ const gnTransit = corridorData.gangnamTransit ? mountGangnamTransit(root, corrid
       try {
         const y = makeBuildYield({ idle: !urgent });
         hangangYieldState = y.state;
+        if (urgent) y.state.budgetMs = LANDMARK_URGENT_SLICE_MS; // [gangnam-enter] 기다리는 도착이면 조각을 크게
         const slicer = makeSlicer(y, { name: 'hangang' });
         const t0 = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
         await loadHangangData();
@@ -566,21 +568,35 @@ const gnTransit = corridorData.gangnamTransit ? mountGangnamTransit(root, corrid
     return false;
   }
 
+  // [gangnam-enter] 이미 있는 섬(정자·탄천 본선·강남역)과 경부 띠는 남산·한강 땅이 아니다.
+  //   한강 2구간 DEM 사각형이 강남역 섬을 통째로 품고 있어서, 강남역 도착이 한강 전체 메시를 기다리며
+  //   로딩 화면이 끝나지 않았다. 섬 위 도착은 메시를 바로 짓기 시작만 하고 기다리지 않는다(한강 땅 위 도착은 그대로 기다림).
+  const onIsland = makeForeignFn(index.meta?.islands || [index.meta.bounds], index.meta?.corridors || []);
+  const settleLandmarks = () => {
+    if (namsan?.root) applyTextureBudget(namsan.root);
+    if (hangang?.root) applyTextureBudget(hangang.root);
+  };
+
   async function ensureLandmarks(x, z, opts = {}) {
     if (!Number.isFinite(x) || !Number.isFinite(z)) return;
     const urgent = !!opts.urgent;
     const radius = urgent ? LANDMARK_NEAR_M : LANDMARK_PREFETCH_M;
+    const wait = !urgent || !onIsland(x, z); // 섬 위 급한 도착은 기다리지 않는다
     const jobs = [];
-    if (namsanPending && landmarkNeeded(namsan, x, z, opts.lookX, opts.lookZ, radius)) jobs.push(buildNamsan(urgent));
-    if (hangangPending && landmarkNeeded(hangang, x, z, opts.lookX, opts.lookZ, radius)) jobs.push(buildHangang(urgent));
-    if (jobs.length) await Promise.all(jobs);
-    if (jobs.length) {
-      if (namsan?.root) applyTextureBudget(namsan.root);
-      if (hangang?.root) applyTextureBudget(hangang.root);
+    const hurry = urgent && wait; // 기다리지 않는 섬 위 도착은 평소 조각(8ms)으로 뒤에서 짓는다
+    if (namsanPending && landmarkNeeded(namsan, x, z, opts.lookX, opts.lookZ, radius)) jobs.push(buildNamsan(hurry));
+    if (hangangPending && landmarkNeeded(hangang, x, z, opts.lookX, opts.lookZ, radius)) jobs.push(buildHangang(hurry));
+    if (!jobs.length) return;
+    if (!wait) {
+      Promise.all(jobs).then(settleLandmarks, (e) => console.warn('[landmark] background build', e));
+      return;
     }
+    await Promise.all(jobs);
+    settleLandmarks();
   }
 
   function needsLandmark(x, z) {
+    if (onIsland(x, z)) return false; // [gangnam-enter] 섬 위 순간이동은 남산·한강 메시를 기다리지 않는다
     return landmarkNeeded(namsan, x, z) || landmarkNeeded(hangang, x, z);
   }
 
