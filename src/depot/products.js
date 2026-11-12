@@ -24,11 +24,12 @@ export const CART = {
   maxLoad: 240, // kg 허용 하중
   crr: 0.03, // 경질 우레탄 0.025~0.035 (CasterHQ)
   breakaway: 2, // 출발 힘 = 굴림 저항 × 1.5~3 (CasterHQ) → 2
-  push: 133, // N 계속 미는 힘 30 lb (NIOSH/Snook)
-  pushPeak: 222, // N 처음 순간 50 lb
+  // 게임 보정 GAME_BOOST ×1.4 (플레이테스트: 너무 느림). 실측 기준값: 미는 힘 133 N(30 lb, NIOSH/Snook) · 처음 222 N(50 lb) · 걷기 1.3 m/s
+  push: 133 * 1.4, // N
+  pushPeak: 222 * 1.4, // N
   g: 9.81,
-  walk: 1.3, run: 1.8, // m/s
-  handTorque: 2 * 133 * 0.29, // N·m 두 손 반대로 (손잡이 반폭 0.29 m, 추정)
+  walk: 1.3 * 1.4, run: 1.8 * 1.4, // m/s
+  handTorque: 2 * 133 * 0.29 * 1.3, // N·m 두 손 반대로 (손잡이 반폭 0.29 m, 추정) × 게임 보정
   scrubMu: 0.3, scrubArm: 0.05, // 회전 바퀴 마찰 토크 (기획안 식 2, 추정)
   latK: 150, // N·s/m 옆 미끄럼 감쇠 (추정)
 };

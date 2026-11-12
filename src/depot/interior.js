@@ -408,11 +408,11 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit } 
 
   const MAX_ITEMS = 40; // 카트 안 물리 물체 상한 (성능)
   function addItem(p, level, x, y, z, rotY, tip, reuse = null, quat = null) {
-    const body = new CANNON.Body({ mass: p.kg, material: p.soft ? mSoft : mItem });
+    const body = new CANNON.Body({ mass: p.kg, material: p.soft || p.kind === 'egg' ? mSoft : mItem });
     addPhysShape(body, p);
     body.position.set(x, y, z);
     const q = quat || itemQuat(rotY, tip); body.quaternion.set(q.x, q.y, q.z, q.w);
-    body.linearDamping = 0.12; body.angularDamping = p.shape === 'sphere' ? 0.5 : 0.35; body.sleepSpeedLimit = 0.05; body.sleepTimeLimit = 0.5;
+    body.linearDamping = p.kind === 'egg' ? 0.45 : 0.12; body.angularDamping = p.kind === 'egg' ? 0.85 : p.shape === 'sphere' ? 0.5 : 0.35; // 계란판은 튀지 않고 바로 자리 잡게 body.sleepSpeedLimit = 0.05; body.sleepTimeLimit = 0.5;
     world.addBody(body);
     const mesh = reuse || makeItemMesh(p); itemsRoot.add(mesh); mesh.position.set(x, y, z); mesh.quaternion.copy(q);
     const it = { p, body, mesh, level, size: p.size.slice(), src: st.held?.src || null };
@@ -655,7 +655,7 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit } 
         load.set(s.lower, (load.get(s.lower) || 0) + share);
         const low = byBody.get(s.lower); const eggs = low?.mesh.userData.eggs; if (!eggs) continue;
         // 충격: 상대 속도 > 0.25 m/s 이면 F ≈ m·Δv/Δt (Δt 10 ms)
-        const imp = Math.abs(s.rel) > 0.25 ? it.p.kg * Math.abs(s.rel) / 0.01 / sup.length : 0;
+        const imp = Math.abs(s.rel) > 0.6 ? it.p.kg * Math.abs(s.rel) / 0.025 / sup.length : 0; // 살살 놓기·느린 접촉은 0, 진짜 충격만 (펄프 트레이 완충 Δt≈25 ms, 추정)
         const F = share + imp;
         const loc = low.body.pointToLocalFrame(s.pt);
         const U = eggs.userData, [cw, cd] = U.cell, [sx, , sz] = low.size;
