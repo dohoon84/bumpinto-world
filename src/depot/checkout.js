@@ -562,7 +562,7 @@ ${T.dmg ? `<div class="r red"><span>변상 · 매장에서 깬 계란 ${T.storeE
     return [{ label, icon: nearExit() ? 'door' : nearBoxes() ? 'bag' : 'board', run: () => onKey('KeyE') }];
   }
   return {
-    tick, onKey, prompt, CO, mobileActs,
+    tick, onKey, prompt, CO, mobileActs, root,
     get busy() { return co.phase === 'unload' || co.phase === 'pay' || co.phase === 'print'; },
     avoid() { return shoppers.map((s) => ({ x: laneX(s.lane) + 0.15, z: s.z, r: 0.7 })).concat([{ x: CO.CHECK.x, z: CO.CHECK.z, r: 0.5 }]); },
     dbg: { hide(v) { root.visible = !v; }, start(k, self = false) { start({ k, self, open: true }); }, pay, check: checkReceipt, abort, state: () => ({ phase: co.phase, lane: co.lane, total: co.total, count: co.count, lines: co.lines.length, paid: !!paidValid(), checked: co.checked, T: co.T, boxes: co.boxes }), takeBox, shoppers: () => shoppers.map((s) => ({ lane: s.lane, z: +s.z.toFixed(2), state: s.state })) },

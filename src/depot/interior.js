@@ -947,6 +947,7 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit, a
     updateCamera(dt);
     staff.tick(dt, { me: st.me, cartObj: st.cart, items, rimTop: B.top.yRear, cartHeld: st.hasCart, cartVisible: cart.visible });
     stock.tick(camera);
+    detailCull(dt);
     hover = st.mode === 'walk' ? pickTarget() : null;
     if (st.mode === 'walk') { ray.setFromCamera(mouse.on ? ndc.set(mouse.x, mouse.y) : ndc.set(0, 0), camera); ray.far = REACH; st.elecHover = elec.probe(ray); }
     else st.elecHover = null;
@@ -959,6 +960,30 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit, a
     if (audio) {
       const c = st.cart;
       audio.tick(dt, { camera, cart: { held: st.hasCart, speed: Math.hypot(c.vx, c.vz), loadKg: loadKg(), x: c.x, z: c.z }, paused: frozen });
+    }
+  }
+  // 작은 소품 거리 컬링 (가전 코너·계산대·직원·집기): 반지름 < 2 m 메시가 카메라에서 DETAIL_R 넘게 멀면 레이어 0 에서 뺌.
+  //   visible 은 각 모듈이 쓰므로 건드리지 않고 layers 로만. 움직이는 것(로봇·손님)도 matrixWorld 로 0.25 초마다 다시 잼.
+  const DETAIL_R = isMobile ? 22 : 32, detailList = [];
+  {
+    const roots = [scene.getObjectByName('depot-electronics'), checkout.root, staff.root, stock.fxRoot].filter(Boolean);
+    for (const r of roots) r.traverse((o) => {
+      if (!o.isMesh) return;
+      const bs = o.isInstancedMesh ? (o.computeBoundingSphere(), o.boundingSphere) : (o.geometry.boundingSphere || (o.geometry.computeBoundingSphere(), o.geometry.boundingSphere));
+      if (!bs) return;
+      o.updateWorldMatrix(true, false);
+      const sc = o.matrixWorld.getMaxScaleOnAxis(), rad = bs.radius * sc;
+      if (rad < 2) detailList.push({ o, c: bs.center.clone(), rad });
+    });
+  }
+  let detailT = 0; const dv = new THREE.Vector3();
+  function detailCull(dt) {
+    if ((detailT -= dt) > 0) return; detailT = 0.25;
+    const cp = camera.position;
+    for (const d of detailList) {
+      dv.copy(d.c).applyMatrix4(d.o.matrixWorld);
+      const far = dv.distanceTo(cp) - d.rad > DETAIL_R;
+      if (far) d.o.layers.disable(0); else d.o.layers.enable(0);
     }
   }
   function render(r) { r.render(scene, camera); }

@@ -411,7 +411,7 @@ export function mountStock({ scene, keep, canvasTex: canvasTexFn, TX, racks, obs
     }
   }
 
-  return { prodMeshes, clusters, tick, fixtures };
+  return { prodMeshes, clusters, tick, fixtures, fxRoot };
 }
 
 function buildFixtures({ scene, keep, ct, atlas, unitBox, obstacles, prodMeshes, m4, pv, qy, s3, col, Y, q0, findCluster, addCluster, clusters }) {
