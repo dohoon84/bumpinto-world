@@ -224,7 +224,7 @@ body.mobile #depot-hud .co-pay{width:min(330px,calc(100vw - 32px));max-height:ca
 body.mobile #depot-hud .co-pay button{min-height:44px}body.mobile #depot-hud .co-pay .k{display:none}
 body.mobile #depot-hud .co-rcpt{width:210px;max-height:calc(100vh - var(--m-t,12px) - 66px)}
 body.mobile #depot-hud .co-scan{animation:none}
-body.mobile #depot-hud .dh-panel{top:calc(var(--m-t,12px) + 52px);max-width:min(230px,27vw);font-size:11.5px;line-height:1.4;padding:6px 10px}
+body.mobile #depot-hud .dh-panel{left:var(--m-l,16px);top:calc(var(--m-t,12px) + 52px);max-width:min(230px,27vw);font-size:11.5px;line-height:1.4;padding:6px 10px}
 body.mobile #depot-hud .dh-panel b{font-size:12.5px}
 body.mobile:has(#m-hud .m-bag:not([hidden])) #depot-hud .dh-panel{top:calc(var(--m-t,12px) + 98px)}
 body.mobile #depot-hud .dh-toast{max-width:min(230px,27vw);font-size:13px;padding:7px 11px;max-height:calc(4.2em + 14px);overflow:hidden}
@@ -523,6 +523,7 @@ ${T.dmg ? `<div class="r red"><span>변상 · 매장에서 깬 계란 ${T.storeE
   }
   // ---------- 공개 ----------
   function tick(dt) {
+    if (co.leaveAskT > 0) co.leaveAskT -= dt;
     beltTex.offset.y = (beltTex.offset.y + dt * 0.55 * 3) % 1; // 벨트 흐름 (모든 줄 공유)
     tickNpc(dt); tickPlayer(dt);
     { const on = elRc.style.display === 'block'; if (on !== co.rcOn) { co.rcOn = on; hud.classList.toggle('co-rc', on); } }
@@ -540,7 +541,7 @@ ${T.dmg ? `<div class="r red"><span>변상 · 매장에서 깬 계란 ${T.storeE
     const spot = laneAtCart();
     if (spot && !paidValid()) return spot.open ? { text: `E 계산 시작 · ${spot.self ? '셀프 계산대' : `계산대 ${String(spot.k + 1).padStart(2, '0')}`} (상품 ${items.length}개)` } : { text: `계산 마감된 줄이에요 · 계산원 ${laneCashier(spot.k).name} 휴게 중 · 초록불 계산대로 가 주세요`, bg: '#ffe3e0' };
     if (nearExit()) {
-      if (items.length && !paidValid()) return { text: '계산 먼저 해 주세요 · 계산대는 오른쪽 → (초록불)', bg: '#ffe3e0' };
+      if (items.length && !paidValid()) return co.leaveAskT > 0 ? { text: 'E 한 번 더: 안 사고 나가기 (카트는 직원이 정리 · 기록은 저장)', bg: '#ffe3e0' } : { text: 'E 안 사고 나가기 · 사려면 계산 먼저 (계산대는 오른쪽 →)', bg: '#ffe3e0' };
       if (items.length && !co.checked) return { text: 'E 영수증 보여 주기 (출구 직원)' };
       return { text: 'E 출구로 나가기' };
     }
@@ -562,7 +563,10 @@ ${T.dmg ? `<div class="r red"><span>변상 · 매장에서 깬 계란 ${T.storeE
     const spot = laneAtCart();
     if (spot && !paidValid()) { if (spot.open) start(spot); else toast(`계산 마감된 줄이에요 · 계산원 ${laneCashier(spot.k).name} 휴게 중 · 초록불 계산대로`, 2000, '#8a5a00'); return true; }
     if (nearExit()) {
-      if (items.length && !paidValid()) { toast('계산 먼저 해 주세요 — 계산대는 오른쪽이에요', 1800, '#D9442E'); return true; }
+      if (items.length && !paidValid()) { // 안 사고 나가기: 한 번 더 눌러야 (실수 방지)
+        if (!(co.leaveAskT > 0)) { co.leaveAskT = 3.5; toast('계산 안 한 상품은 두고 나가요 · 한 번 더 누르면 나가기 (사려면 오른쪽 계산대로)', 2600, '#D9442E'); return true; }
+        co.leaveAskT = 0; sfx('checkout.exit'); ctx.onExit?.(); return true;
+      }
       if (items.length && !co.checked) { checkReceipt(); return true; }
       sfx('checkout.exit'); ctx.onExit?.(); return true;
     }
