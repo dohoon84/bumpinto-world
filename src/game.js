@@ -3005,7 +3005,8 @@ function frame() {
     }
     // 가슴 높이 피벗을 공전하고, 시선은 피벗을 지나 앞쪽으로 보낸다.
     // 그래서 좌우는 한 바퀴, 위는 하늘, 아래는 바닥까지 화면 가운데로 들어온다.
-    const eye = P.y + 1.6, yaw = cam.yaw, pitch = cam.pitch;
+    const eye = P.y + 1.6, yaw = cam.yaw;
+    let pitch = cam.pitch;
     const gnBox = corridorData?.gangnam?.meta?.box;
     const inGn = gnBox && P.x >= gnBox.x0 && P.x <= gnBox.x1 && P.z >= gnBox.z0 && P.z <= gnBox.z1;
     let dist = cam.dist;
@@ -3014,6 +3015,14 @@ function frame() {
         const q = boomPoint(P.x, P.z, eye, yaw, pitch, d);
         return corridor.roofAt(q.x, q.z) > q.y + 0.6;
       });
+    }
+    if (depot && !depot.active && depot.blocks(P.x + Math.sin(yaw) * dist * Math.cos(pitch), P.z + Math.cos(yaw) * dist * Math.cos(pitch), 0.6)) { // [depot-live] 범창고 주차 차량·구조물 속으로 카메라가 들어가 검은 면이 비치지 않게
+      const inCar = (pt) => (d) => { const q = boomPoint(P.x, P.z, eye, yaw, pt, d); return q.y < P.y + 2.4 && depot.blocks(q.x, q.z, 0.35); };
+      // 먼저 차 지붕(승합차 1.96 m) 위로 들어 올려 보고(이번 프레임만, cam.pitch 는 그대로), 그래도 막히면 붐을 줄인다
+      const overCar = (pt) => (d) => { const q = boomPoint(P.x, P.z, eye, yaw, pt, d); return depot.blocks(q.x, q.z, 0.35, true) || (q.y < P.y + 2.15 && depot.blocks(q.x, q.z, 0.35)); };
+      const up = [0.35, 0.6, 0.85, 1.05].find((pt) => pt > pitch && shortenBoom(dist, overCar(pt), { min: 1.2 }) >= dist - 1e-3);
+      if (up != null) pitch = up;
+      else dist = shortenBoom(dist, inCar(pitch), { min: 1.2 });
     }
     const bx = Math.sin(yaw), bz = Math.cos(yaw), cp = Math.cos(pitch), sp = Math.sin(pitch), aim = 4;
     const camX = P.x + bx * dist * cp, camZ = P.z + bz * dist * cp;

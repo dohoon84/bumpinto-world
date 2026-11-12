@@ -115,9 +115,10 @@ export function buildDepotExterior(scene, { groundY = () => 0, overlay = null, g
       way.update(dt, pos);
     },
     // 바깥에서 건물·구조물·주차 차량 안으로 걸어 들어가지 않게 (출입구 앞은 문 안내로 처리)
-    blocks(x, z, r = 0.4) {
+    // tall: 건물·철탑 같은 높은 것(baseRects)만 — 주차 차량·말뚝 등 낮은 것은 빼고 본다 (카메라가 차 지붕 위로 넘어갈 때)
+    blocks(x, z, r = 0.4, tall = false) {
       if (x < bb.x0 || x > bb.x1 || z < bb.z0 || z > bb.z1) return false;
-      for (let i = 0; i < rects.length; i++) { const b = rects[i]; if (x > b[0] - r && x < b[2] + r && z > b[1] - r && z < b[3] + r) return true; }
+      for (let i = 0, n = tall ? baseRects : rects.length; i < n; i++) { const b = rects[i]; if (x > b[0] - r && x < b[2] + r && z > b[1] - r && z < b[3] + r) return true; }
       return false;
     },
     dispose() { gone = true; dropNear(); way.dispose(); night.dispose(); scene.remove(root); for (const d of disposables) d.dispose(); },
