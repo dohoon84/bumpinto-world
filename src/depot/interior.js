@@ -573,7 +573,7 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit, a
   }
   function cancelPlace() {
     if (st.mode !== 'place') return;
-    const h = st.held; st.held = null; h?.restore?.();
+    const h = st.held; st.held = null; h?.restore?.(); if (h?.p) tap('item-putback', { product: h.p }); // 스토리: 집었다 다시 내려놓기
     setGhost(null); st.mode = 'walk'; hud.classList.remove('placing');
   }
   function place() {
@@ -1052,7 +1052,7 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit, a
       ghostState() { return ghostSol && { where: ghostSol.where, state: ghostSol.state }; },
       mischief(kind, amt) { staff.mischief(kind, amt); }, staff: () => ({ ...staff.S, x: staff.root.position.x, z: staff.root.position.z, ach: staff.S.ach.slice() }), staffAt(x, z) { staff.root.position.set(x, 0, z); },
       co: checkout.dbg, ach: (t) => staff.achieve(t),
-      shoppers: { on: (ids) => shoppers.setActive(ids || shoppers.list.map((n) => n.id)), list: () => shoppers.list.map((n) => ({ id: n.id, x: +n.x.toFixed(2), z: +n.z.toFixed(2), v: +n.v.toFixed(2), active: n.active })), edges: () => shoppers.nodes.map((n) => [n.x, n.z, n.nb.length]), place(id, x, z, yaw = 0) { const n = shoppers.list.find((q) => q.id === id); if (n) { n.x = x; n.z = z; n.yaw = yaw; n.stopT = 99; } }, go() { for (const n of shoppers.list) { n.stopT = 0; n.to = n.from; } } },
+      shoppers: { on: (ids) => shoppers.setActive(ids || shoppers.list.map((n) => n.id)), list: () => shoppers.list.map((n) => ({ id: n.id, x: +n.x.toFixed(2), z: +n.z.toFixed(2), v: +n.v.toFixed(2), active: n.active, vis: n.mesh.visible })), edges: () => shoppers.nodes.map((n) => [n.x, n.z, n.nb.length]), place(id, x, z, yaw = 0) { const n = shoppers.list.find((q) => q.id === id); if (n) { n.x = x; n.z = z; n.yaw = yaw; n.stopT = 99; } }, go() { for (const n of shoppers.list) { n.stopT = 0; n.to = n.from; } } },
       elec: elec._dbg, openElecDoors: (v) => elec.openAllDoors(v),
       camAt(pos, tgt) { st.camOv = pos ? { pos: new THREE.Vector3(...pos), tgt: new THREE.Vector3(...tgt) } : null; st.camWorld = null; },
       camWorld(pos, tgt) { st.camWorld = pos ? { pos: new THREE.Vector3(...pos), tgt: new THREE.Vector3(...tgt) } : null; st.camOv = null; },

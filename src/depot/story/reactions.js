@@ -93,5 +93,6 @@ export function createReactions({ save, getMode, getDay, getFreq, deliver, cue, 
     setEventCast(c) { R.eventCast = c; },
     paNow() { R.paUntil = now() + 4; },
     resetDay() { for (const k of Object.keys(R.today)) delete R.today[k]; },
+    can: (id) => allowed(BY_ID[id]),
   };
 }

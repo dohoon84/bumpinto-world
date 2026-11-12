@@ -34,6 +34,7 @@ body.depot-inside #ve-hud{display:none !important} /* 매장 안: 왼쪽 위 할
   function showPa(text) {
     paEl.hidden = false; paEl.querySelector('span').textContent = text;
     clearTimeout(paHide); paHide = setTimeout(() => { paEl.hidden = true; }, 5500);
+    window.dispatchEvent(new CustomEvent('depot:pa', { detail: { text } })); // 스토리 반응(R29 할인 사냥꾼)
   }
   hintEl.onclick = () => { if (near && !active) enter(); };
   const setHint = (on) => { if (on === !hintEl.hidden) return; hintEl.hidden = !on; if (on) hintEl.innerHTML = `<kbd>${isMobile ? '탭' : 'E'}</kbd>범창고 들어가기 · 카트 끌고 장보기`; };

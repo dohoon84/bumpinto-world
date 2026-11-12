@@ -2,6 +2,7 @@
 //   나가기·놓침·돌아옴 규칙(exit-rules), 소리 신호(audio-cues), 손님 NPC 일차별 등장. interior.js 가 매장 생성 뒤 지연 import.
 //   저장: localStorage 'bw.depot.story.v1' (일차·본 대사·단골도·활기·도장·사건 상태·반응 횟수·어제 기록). 서버 저장 없음.
 //   URL: ?depotMode=story|free|ask(모드 다시 고르기) · ?depotStoryReset=1(저장 지움) · shot=1 이면 depotMode 없을 때 자유+반응 끔(스샷 고정).
+import { laneX, CO } from '../checkout.js';
 import SCRIPT from './data/day1-script.json';
 import EVENTS from './data/events.json';
 import EXIT from './data/exit-rules.json';
@@ -80,6 +81,7 @@ export function createStory(ctx) {
     save, getMode: mode, getDay: () => save.day, getFreq: () => session.freq ?? save.settings.reactionFreq,
     deliver: (x) => { deliver(x); if (!session.noPersist) persist(); }, cue: (n) => sfx.cue(n),
   });
+  const hits = []; { const f0 = reactions.fire; reactions.fire = (id, o) => { if (hits.length < 200) hits.push(id); return f0(id, o); }; } // 트리거 기록(테스트용 _dbg.hits)
 
   // ---------- 이벤트 입력: 오디오 신호(interior 의 audio 탭) + 계산대 depot:sfx ----------
   const waiters = { done: [] };
@@ -89,11 +91,13 @@ export function createStory(ctx) {
     if (name === 'cart-grab' && !flags.grabbed) { flags.grabbed = true; if (save.day === 1) reactions.fire('R10'); }
     if (name === 'item-pick') {
       const pid = opts.product?.id; flags.lastPick = pid;
+      if (pid === 'melon') flags.melonPick = true;
       if (shoppers?.near('sale-hunter', st.me.x, st.me.z, 3)) reactions.fire('R19', { force: false });
     }
     if (name === 'item-place' && save.day >= 2 && save.yesterday?.receipt?.length) {
       const pid = opts.product?.id; if (pid && save.yesterday.receipt.includes(pid)) reactions.fire('R50');
     }
+    if (name === 'item-putback' && opts.product?.id === 'melon' && flags.melonPick) { flags.melonPick = false; flags.melonBack = (flags.melonBack || 0) + 1; if (flags.melonBack >= 2) { flags.melonBack = 0; reactions.fire('R37'); } } // 수박 집었다 내려놓기 2번
     if (name === 'cart-release' && flags.paid && st.cart.x > 74 && st.cart.x < 82 && st.cart.z < 10) reactions.fire('R09');
   }
   function onSfx(e) {
@@ -105,6 +109,16 @@ export function createStory(ctx) {
     else if (d.name === 'checkout.receipt.check') reactions.fire('R44');
   }
   window.addEventListener('depot:sfx', onSfx);
+  // 방송실 안내 방송 문구(index.js showPa → depot:pa): 특가·반값·타임세일이면 3초 뒤 할인 사냥꾼 질주 + R29
+  let paTimer = 0;
+  function onPa(e) {
+    const text = e.detail?.text || ''; if (!alive) return;
+    reactions.paNow();
+    if (/반값|특가|타임세일|할인/.test(text) && shoppers?.list.some((n) => n.id === 'sale-hunter' && n.active)) {
+      clearTimeout(paTimer); paTimer = setTimeout(() => { if (!alive) return; shoppers.rush?.('sale-hunter', 9); reactions.fire('R29'); }, 3000);
+    }
+  }
+  window.addEventListener('depot:pa', onPa);
   const checkoutState = () => { try { return checkout.dbg.state(); } catch { return { phase: 'idle', lane: -1 }; } };
 
   // ---------- 대본 실행 ----------
@@ -180,7 +194,16 @@ export function createStory(ctx) {
     mission.broken = broken; mission.missing = missing;
     return broken >= 11 || missing >= 3 ? 'fail' : broken >= 4 || missing > 0 ? 'partial' : 'success';
   }
+  let stageTimer = 0;
+  function stagePhoneZombie(force = false) { // R23: 휴대폰 손님이 옆 계산대 줄에서 결제 실패(배터리 0%) — 잠깐 옆 줄에 세워 두고 말풍선
+    const lane = checkoutState().lane; if (lane < 0 || !shoppers?.stage || (!force && !reactions.can('R23'))) return;
+    const n = shoppers.list.find((x) => x.id === 'phone-zombie' && x.active); if (!n || (!force && Math.random() > 0.5)) return;
+    const k = CO.STAFFED.filter((j) => j !== lane).sort((a, b) => Math.abs(a - lane) - Math.abs(b - lane) || b - a)[0]; // 가장 가까운 열린 계산대
+    shoppers.stage('phone-zombie', laneX(k) + 0.2, 13.4, 0, 14);
+    clearTimeout(stageTimer); stageTimer = setTimeout(() => { if (alive) reactions.fire('R23', { force: true }); }, 2500);
+  }
   function onCheckoutStart() {
+    stagePhoneZombie();
     if (mode() !== 'story' || !mission || mission.result || !mission.taken) return;
     mission.result = evaluate(); save.ev[mission.id] = mission.result; persist();
     sfx.cue(mission.result === 'success' ? 'stinger.success' : mission.result === 'fail' ? 'stinger.comicfail' : 'stinger.partial');
@@ -218,6 +241,7 @@ export function createStory(ctx) {
     if (mode() === 'free') { shoppers.setActive(shoppers.list.map((n) => n.id)); return; }
     const v = save.vitality, cap = v <= 30 ? 2 : v <= 60 ? 4 : 8;
     const ids = (NPCT.types || []).filter((t) => (t.fromDay || 1) <= save.day).map((t) => t.id).slice(0, cap);
+    if (save.day >= 1) ids.push('elder'); // 매일 오는 동네 어르신(지팡이) — 배경 손님
     shoppers.setActive(ids);
   }
   function comebackLine() {
@@ -298,6 +322,17 @@ export function createStory(ctx) {
     det.tvT = inTv && !moved ? det.tvT + dt : 0; if (det.tvT > 20) { fire('R39'); det.tvT = 0; }
     if (Math.hypot(me.x - 66, me.z - 38.8) < 5) fire('R40');
     if (me.x > 76.2 - 6 && me.x < 83.3 + 6 && me.z > 37.2 - 6 && me.z < 40.3 + 6) fire('R41');
+    // R18 냉동 쇼케이스 앞(x 80–84.5, z 46–108)에서 15초 넘게 서서 고르기
+    det.frzT = me.x > 80 && me.x < 84.5 && me.z > 46 && me.z < 108 && !moved ? (det.frzT || 0) + dt : 0; if (det.frzT > 15) { fire('R18'); det.frzT = 0; }
+    // R20 시식대(6.5, 39.6) 2.2 m 안에 들어올 때마다 한 입 — 그날 세 번째에
+    const taste = me.x > 4.4 - 2.2 && me.x < 8.6 + 2.2 && me.z > 38.8 - 2.2 && me.z < 41.2 + 2.2;
+    if (taste && !det.taste) { save.today.samples = (save.today.samples || 0) + 1; if (save.today.samples === 3) fire('R20'); } det.taste = taste;
+    // R02 계산대 줄 역주행: 유인 계산대 통로(바닥 화살표 = -z 방향)에서 카트가 +z 로 3초
+    const inLane = st.hasCart && c.z > 6.5 && c.z < 12.8 && CO.STAFFED.some((k) => c.x > laneX(k) - 0.35 && c.x < laneX(k) + 0.95);
+    det.wrongT = inLane && c.vz > 0.3 ? (det.wrongT || 0) + dt : 0; if (det.wrongT > 3) { fire('R02'); det.wrongT = 0; }
+    // R46 고객센터(E12 이후) 입구 근처 환불 손님 — 30%
+    const nearDoor = me.x > 65 && me.x < 73 && me.z < 12;
+    if (nearDoor && !det.door && save.ev?.E12 && shoppers?.list.some((n) => n.id === 'sample-uncle' && n.active) && Math.random() < 0.3) fire('R46'); det.door = nearDoor;
     const hour = (() => { const w = window.__jj?.weather?.state; return typeof w?.hour === 'number' ? w.hour : new Date().getHours(); })();
     const bak = me.x < 13 && me.z > 14 && me.z < 40; if (bak && !det.inBakery && hour < 13) fire('R36'); det.inBakery = bak;
     const sea = me.x > 66 && me.x < 80 && me.z > 48 && me.z < 106; if (sea && !det.inSeason && [10, 11].includes(new Date().getMonth())) fire('R38'); det.inSeason = sea;
@@ -386,7 +421,7 @@ export function createStory(ctx) {
     get mode() { return mode(); },
     colBottom: () => colBottom,
     vn, reactions, save,
-    _dbg: { save: () => JSON.parse(JSON.stringify(save)), runFrom, startMission, mission: () => mission && { id: mission.id, taken: mission.taken, result: mission.result, recalled: mission.recalled }, takeTower: () => mission && !mission.taken && takeTower(), switchMode, fire: (id, o) => reactions.fire(id, { force: true, ...o }), setFreq: (f) => { session.freq = f; }, npcs: npcsForDay },
+    _dbg: { save: () => JSON.parse(JSON.stringify(save)), runFrom, startMission, mission: () => mission && { id: mission.id, taken: mission.taken, result: mission.result, recalled: mission.recalled }, takeTower: () => mission && !mission.taken && takeTower(), switchMode, fire: (id, o) => reactions.fire(id, { force: true, ...o }), setFreq: (f) => { session.freq = f; }, npcs: npcsForDay, hits: () => hits.slice(), setDay: (d) => { save.day = d; }, stagePZ: () => stagePhoneZombie(true) },
     dispose() {
       if (!leftSaved && (save.mode === 'story') && !session.noPersist) {
         const kind = running ? 'dialogue' : mission && !mission.result ? 'event' : items.length && !flags.paid ? 'cart' : null;
@@ -394,7 +429,7 @@ export function createStory(ctx) {
         if (running && !save.intro[save.day]) save.intro[save.day] = 0;
         persist();
       }
-      alive = false; window.removeEventListener('depot:sfx', onSfx); for (const w of waiters.done) w(); vn.dispose(); sfx.dispose();
+      alive = false; clearTimeout(paTimer); clearTimeout(stageTimer); window.removeEventListener('depot:sfx', onSfx); window.removeEventListener('depot:pa', onPa); for (const w of waiters.done) w(); vn.dispose(); sfx.dispose();
     },
   };
 }
