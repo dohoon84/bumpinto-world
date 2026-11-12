@@ -14,16 +14,7 @@ import { createNamsanRoads } from './namsanRoads.js';
 import { createNamsanLibrary } from './namsanLibrary.js';
 export { NT, namsanBaseY } from './namsanCoords.js';
 
-export const NAMSAN_DEM_FILE = 'namsan/namsan-dem.json';
-export const NAMSAN_OSM_FILE = 'namsan/namsan-osm.json';
-export const NAMSAN_CITY_FILE = 'namsan/namsan-city.json';
-
-export function namsanEnabled(search = typeof location !== 'undefined' ? location.search : '') {
-  return new URLSearchParams(search || '').get('ntower') !== '0';
-}
-export function namsanCableEnabled(search = typeof location !== 'undefined' ? location.search : '') {
-  return namsanEnabled(search) && new URLSearchParams(search || '').get('ncable') !== '0';
-}
+export { NAMSAN_DEM_FILE, NAMSAN_OSM_FILE, NAMSAN_CITY_FILE, namsanEnabled, namsanCableEnabled } from './namsanFlags.js';
 
 // 상수 NT 는 namsanCoords.js (순환 import 방지).
 

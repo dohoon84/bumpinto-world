@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { buildWorld } from './world.js';
+import { buildWorld, buildWorldAsync } from './world.js';
 import { prepareShops } from './world/groundFloorShops.js'; // [shops]
 import { prepareBuildingColours } from './world/buildingColours.js'; // [colours]
 import { createAvatar, animateAvatar, animateRide, clearRidePose } from './entities/avatar.js';
@@ -24,7 +24,8 @@ import { RemotePlayers } from './net/remotePlayers.js';
 import { CHAT_RADIUS } from './net/protocol.js';
 import { buildTransit, makeCrossingGuard, mergeSimExtra } from './transit/transit.js';
 import { pangyoLinkEnabled, PANGYO_LINK_FILE } from './corridor/pangyo.js'; // [pangyo-link]
-import { shouldSkipLandmarkPaint, markSlowGpu } from './corridor/landmarks/lazyLandmarks.js';
+import { shouldSkipLandmarkPaint, markSlowGpu, makeSlicer, landmarkLazyEnabled, makeBuildYield, landmarkBuildGate } from './corridor/landmarks/lazyLandmarks.js';
+import { bootFastEnabled, bootNeedsLandmarkData, markBoot } from './bootFast.js';
 import { migeumBusEnabled, mergeMigeumBus, MIGEUM_BUS_FILE } from './corridor/migeumBus.js'; // [migeum-bus]
 import { clampWorld } from './corridor/islands.js'; // [gangnam]
 import { setNearScope, collectPlaces, placeCaption, sameIsland } from './corridor/nearScope.js'; // [gangnam-night]
@@ -99,7 +100,7 @@ import { isMobileMode } from './mobile/flag.js'; // [mobile]
 import { mountSubway, zoneLabel as subwayZoneLabel } from './subway/index.js'; // [subway] 정자역·코리더 역 출입구(실제 OSM 출구) + 지하 대합실. ?subway=0 이면 끔
 import { arriveFixEnabled, pickFirstEnabled, entrySpawn, withArriveCap } from './corridor/arrive.js'; // [arrivefix] #43 (?arrivefix=0) · [pickfirst] #42 (?pickfirst=0)
 import { mountBump24Game } from './bump24game/index.js'; // [bump24game] BUMP24 30초 장보기 (시청점 ?bp24=1&bp24game=1, 정자점은 기본 주소)
-import { mountArcade, arcadeAtSpot, ARCADE_AT } from './arcade/index.js'; // [arcade] BUMP 오락실 · 범핑팡
+import { arcadeAtSpot, ARCADE_AT } from './arcade/flag.js'; // [arcade] 위치만 (게임 본체는 지연 로드)
 import { prepareJeongjaBp24, mountBasemapBp24, bp24DoorInfo } from './corridor/bp24.js'; // [bump24-jeongja]
 import { mountBp24Nav } from './corridor/bp24Nav.js'; // [bp24nav]
 import { BUMP24_JEONGJA_AT, bump24AtSpot } from './corridor/bp24Locations.js';
@@ -290,10 +291,11 @@ const [data, transitData] = await Promise.all([
 const [terrainData, driveData, corridorData, shopsData, coloursData] = await Promise.all([
   terrainUrl ? fetchJsonNull(terrainUrl) : null,
   driveUrl ? fetchJsonNull(driveUrl) : null,
-  corridorDir ? loadCorridorData(dataUrl(corridorDir), { streams: corridorStreams, fetchFn: fetchPrefetched }) : null,
+  corridorDir ? loadCorridorData(dataUrl(corridorDir), { streams: corridorStreams, fetchFn: fetchPrefetched, deferLandmarks: bootFastEnabled(params) && landmarkLazyEnabled(params) && !bootNeedsLandmarkData(params) }) : null,
   fetchOptionalJson(shopsFile), // [shops]
   fetchOptionalJson(coloursFile), // [colours]
 ]);
+markBoot('data-loaded');
 
 // --- 렌더러/씬 ---
 const subwayOn = region.id === 'jeongja' && params.get('subway') !== '0'; // [subway]
@@ -301,7 +303,8 @@ const renderer = new THREE.WebGLRenderer({ antialias: true, logarithmicDepthBuff
 renderer.setPixelRatio(Math.min(devicePixelRatio, mobileMode ? 1.5 : 2)); // [mobile] 폰은 1.5배까지만
 renderer.setSize(innerWidth, innerHeight);
 markSlowGpu(renderer);
-renderer.shadowMap.enabled = !params.has('noshadow') && !(mobileMode && params.get('shadow') !== '1'); // [mobile] 폰은 그림자 끔 (?shadow=1 로 켬)
+const wantShadow = !params.has('noshadow') && !(mobileMode && params.get('shadow') !== '1'); // [mobile] 폰은 그림자 끔 (?shadow=1 로 켬)
+renderer.shadowMap.enabled = wantShadow && !bootFastEnabled(params);
 renderer.shadowMap.type = THREE.PCFShadowMap;
 document.getElementById('app').appendChild(renderer.domElement);
 const bgm = mountBgm({ params }); // [bgm] 배경음악 + 상단 미니 플레이어 (입장 때 시작, ?bgm=0 이면 null)
@@ -337,14 +340,29 @@ scene.add(sun, sun.target);
 function setShadowSpan(span) { const c = sun.shadow.camera; c.left = c.bottom = -span; c.right = c.top = span; c.near = 1; c.far = span * 4 + 600; c.updateProjectionMatrix(); }
 
 // --- 월드 ---
+markBoot('world-start');
+const bootFast = bootFastEnabled(params);
+const bootYield = bootFast ? makeBuildYield({ idle: false }) : null;
+const bootSlicer = bootFast ? makeSlicer(bootYield, { name: 'boot' }) : null;
+if (bootYield) { await bootYield(); bootSlicer.mark(); } // 로딩 화면 한 프레임
+const bootFineBox = (() => {
+  if (!bootFast || !data?.meta?.bboxLocal) return null;
+  const b = data.meta.bboxLocal, pad = 1200;
+  return { x0: b.x0 - pad, z0: b.z0 - pad, x1: b.x1 + pad, z1: b.z1 + pad };
+})();
 const terrain = terrainData ? createTerrain(corridorTerrainData(terrainData, corridorData), data) : null; // [terrain] [corridor] 코리더 켜짐: 탄천 축 연장
 terrain?.annotate(data); // [terrain] 도로/수면에 높이 부여 (buildWorld 전에)
+markBoot('terrain-annotate');
+if (bootSlicer) bootSlicer.mark();
 const tower = region.features?.launchTower && params.get('tower') !== '0' ? createTowerAddon(data) : null; // [tower] buildWorld 전에 _skip 마킹
 const jeongjaBp24Prep = region.features?.jeongjaBuildings ? prepareJeongjaBp24(data, params) : []; // [bump24-jeongja] 1층을 비우기 전에
-const world = buildWorld(scene, data, region, { // [shops] 1층 상가 띠/차양/간판 · [colours] 건물 외벽·지붕 색
+const world = bootSlicer
+  ? await buildWorldAsync(scene, data, region, { shops: prepareShops(data, shopsData), colours: prepareBuildingColours(data, coloursData) }, bootSlicer)
+  : buildWorld(scene, data, region, { // [shops] 1층 상가 띠/차양/간판 · [colours] 건물 외벽·지붕 색
   shops: prepareShops(data, shopsData),
   colours: prepareBuildingColours(data, coloursData),
 });
+markBoot('buildWorld');
 tower?.build(scene, renderer); // [tower] 발사탑 1·2기(메카질라), 스타십 풀스택, 부스터 캐치, OLM, 탱크 팜 생성
 const jeongjaBp24 = jeongjaBp24Prep.length ? mountBasemapBp24(scene, jeongjaBp24Prep) : null; // [bump24-jeongja]
 const overlay = new Overlay(document.getElementById('overlay'), camera);
@@ -352,11 +370,13 @@ const corridorClock = { simTime: () => null };
 // [corridor] 정자 → 롯데월드타워 코리더: 탄천 구간 도로는 terrain.build 전에 annotate 해야 다리 구조물이 같이 생긴다
 let ride = null; // [ride] mountRide (코리더가 있을 때만)
 const liveBus = corridorDir && corridorData?.gangnam && liveBusEnabled() ? createLiveBusFeed() : null; // [livebus]
-const corridor = corridorData ? createCorridor({ scene, corridorData, terrain, world, renderer, overlay, params, getSimTime: () => corridorClock.simTime(), liveBus }) : null;
+const corridor = corridorData ? await createCorridor({ scene, corridorData, terrain, world, renderer, overlay, params, getSimTime: () => corridorClock.simTime(), liveBus, slicer: bootSlicer, nearBox: bootFineBox }) : null;
+markBoot('createCorridor');
 if (corridor?.namsan || corridor?.hangang) { camera.far = Math.max(camera.far, 14000); camera.updateProjectionMatrix(); } // [namsan] [hangang]
 
 
-if (terrain) { terrain.build(scene, world, overlay); world.groundY = terrain.getGroundHeight; world.vehicleY = terrain.getVehicleHeight; }
+if (terrain) { bootSlicer ? await terrain.buildAsync(scene, world, overlay, bootSlicer, { fineBox: bootFineBox }) : terrain.build(scene, world, overlay); world.groundY = terrain.getGroundHeight; world.vehicleY = terrain.getVehicleHeight; }
+markBoot('terrain-build');
 if (corridor) {
   corridor.afterTerrain();
   const liveBlocked = world.isBlocked, liveOnRoad = world.onRoad;
@@ -687,7 +707,8 @@ if (bump24Game) { const withB24 = world.isBlocked; world.isBlocked = (x, z, r) =
 // [arcade] BUMP 오락실 서현점 · 범핑팡 (?arcade=0 끔)
 // [arcade] 모바일은 presence join 전에도 문 앞 탭 입장이 되어야 함 → joined 불필요. 탈것·지하철·BUMP24 충돌만 막음.
 const arcadeCanApproach = () => !bikes.riding && !adminBike?.riding && !giftRiding() && !ride?.active && !trucks?.current && !subway?.active && !bump24Game?.active;
-const arcadeGame = mountArcade({
+let arcadeGame = null;
+const arcadeOpts = {
   renderer, scene, params, getPlayer: () => player, getCamera: () => camera,
   getAudioLevel: () => (bgm ? { muted: bgm.player.muted, volume: bgm.player.volume } : null),
   getSelfName: () => { try { return presence?.me?.name || '나'; } catch { return '나'; } },
@@ -703,8 +724,17 @@ const arcadeGame = mountArcade({
     myBubble.item.zone = zone;
     if (zone) emitMyStateNow();
   },
-});
-if (arcadeGame) { const withArc = world.isBlocked; world.isBlocked = (x, z, r) => withArc(x, z, r) || arcadeGame.blocks(x, z, r); }
+};
+const attachArcade = (game) => {
+  arcadeGame = game;
+  if (arcadeGame) { const withArc = world.isBlocked; world.isBlocked = (x, z, r) => withArc(x, z, r) || arcadeGame.blocks(x, z, r); }
+};
+const arcadeModP = import('./arcade/index.js');
+if (!bootFast || arcadeAtSpot(atQuery)) {
+  attachArcade((await arcadeModP).mountArcade(arcadeOpts));
+} else {
+  arcadeModP.then((m) => attachArcade(m.mountArcade(arcadeOpts))).catch((e) => console.warn('[arcade]', e));
+}
 const gyeongbuSoon = corridor && !corridorData?.gangnam ? mountGyeongbuSoon({ getPos: () => player.position, params, isEn }) : null; // [gyeongbu] 강남이 열려 있으면 본선이 이어지므로 안내하지 않음
 const seoulToll = mountSeoulToll(scene, location.search); // [gyeongbu-bus] 궁내동 서울요금소 (?seoultg=0 끔)
 void seoulToll;
@@ -2324,7 +2354,21 @@ else if (travel && atQuery) {
   bootReady = false;
   bootTravel = Promise.resolve(travel.go(atQuery)).catch((err) => {
     console.warn('[travel] at= failed', err);
-  }).then(() => { if (window.__jj) window.__jj.ready = true; });
+  }).then(() => {
+    if (window.__jj) window.__jj.ready = true;
+    // 소프트웨어 GPU 에서 첫 프레임 그림자 맵은 수 초짜리 롱태스크가 된다. 실기기만 입장 뒤 켠다 (?shadow=1 이면 강제).
+    if (wantShadow && !renderer.shadowMap.enabled && (params.get('shadow') === '1' || !landmarkBuildGate.slowGpu)) {
+      requestAnimationFrame(() => { renderer.shadowMap.enabled = true; });
+    }
+    // [boot-fast] 정자 근처를 먼저 연 뒤, 한 템포 쉬고 먼 탄천 바닥·수로를 조각으로 이어 짓는다
+    if (bootFast && terrain?.buildAsync && bootFineBox) {
+      const startRest = () => {
+        const restSlicer = makeSlicer(makeBuildYield({ idle: true }), { name: 'boot-rest' });
+        terrain.buildAsync(scene, world, overlay, restSlicer, { fineBox: null }).catch((e) => console.warn('[boot-fast] terrain rest', e));
+      };
+      setTimeout(startRest, 2500);
+    }
+  });
 }
 // [corridor] 지구본 역 선택 → 입장 완료 후 역 출구 앞 인도로 (위치 저장 성공 여부와 무관)
 corridorArrive = () => {

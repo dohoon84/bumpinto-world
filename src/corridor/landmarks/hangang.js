@@ -10,11 +10,7 @@ import { createHangangCity, createHangangCityAsync } from './hangangCity.js';
 import { createHangangProps, createHangangPropsAsync } from './hangangProps.js';
 import { createHangangHap, createHangangHapAsync, mergeHangangMini } from './hangangHap.js';
 
-export const HANGANG_DEM_FILE = 'hangang/hangang-dem.json';
-export const HANGANG_OSM_FILE = 'hangang/hangang-osm.json';
-export const HAP_DEM_FILE = 'hangang/hap-dem.json';
-export const HAP_OSM_FILE = 'hangang/hap-osm.json';
-export { HANGANG_TERRAIN_BAKE_FILE, HAP_TERRAIN_BAKE_FILE } from './hangangMeshBake.js';
+export { HANGANG_DEM_FILE, HANGANG_OSM_FILE, HAP_DEM_FILE, HAP_OSM_FILE, HANGANG_TERRAIN_BAKE_FILE, HAP_TERRAIN_BAKE_FILE, hangangEnabled } from './hangangFlags.js';
 
 // 점 (x, z) 에서 사각형 b 까지 거리 (안이면 0)
 function rectDist(b, x, z) {
@@ -23,9 +19,6 @@ function rectDist(b, x, z) {
   return Math.hypot(dx, dz);
 }
 
-export function hangangEnabled(search = typeof location !== 'undefined' ? location.search : '') {
-  return new URLSearchParams(search || '').get('hangang') !== '0';
-}
 
 export function hangangMini(osm) {
   const extraRoads = [];

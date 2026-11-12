@@ -1,10 +1,5 @@
 // [namsan] [hangang] 부트 때는 가벼운 스텁만 두고, 가까이 오면 메시를 만든다.
-import { NT } from './namsanCoords.js';
-import { namsanMini } from './namsan.js';
-import { hangangMini } from './hangang.js';
-import { mergeHangangMini } from './hangangHap.js';
-import { makeNamsanHeightAt } from './namsanTerrain.js';
-import { makeHangangHeightAt } from './hangangTerrain.js';
+import { NAMSAN_BOUNDS, HANGANG_BOXES, NAMSAN_SPAWN, HANGANG_SPAWN, emptyLandmarkMini } from './landmarkBounds.js';
 
 export function landmarkLazyEnabled(search = typeof location !== 'undefined' ? location.search : '') {
   const s = search instanceof URLSearchParams ? search : new URLSearchParams(search || '');
@@ -29,25 +24,22 @@ export function demBounds(dem) {
 }
 
 export function makeNamsanMeta(data) {
-  const dem = data?.dem, osm = data?.osm, city = data?.city;
-  const bounds = demBounds(dem);
-  const heightAt = dem ? makeNamsanHeightAt(dem, osm) : null;
-  const spawn = { x: NT.tx + 44, z: NT.tz + 6 };
-  const y = heightAt?.(spawn.x, spawn.z);
-  spawn.y = (y ?? 0) + 0.15;
+  // [boot-fast] DEM·city JSON 파싱과 heightAt/미니맵은 부트를 막지 않는다. 경계·스폰만 상수(또는 DEM 헤더)로 둔다.
+  const bounds = demBounds(data?.dem) || { ...NAMSAN_BOUNDS };
+  const spawn = { x: NAMSAN_SPAWN.x, z: NAMSAN_SPAWN.z, y: NAMSAN_SPAWN.y };
   return {
     bounds,
     boxes: bounds ? [bounds] : [],
     spawn,
-    spawnY: () => (heightAt?.(spawn.x, spawn.z) ?? spawn.y - 0.15) + 0.15,
-    mini: namsanMini(city, osm, heightAt || (() => 0)),
+    spawnY: () => spawn.y,
+    mini: emptyLandmarkMini(),
   };
 }
 
 export function makeHangangMeta(data) {
-  const dem = data?.dem, osm = data?.osm, hap = data?.hap;
-  const b1 = demBounds(dem);
-  const b2 = demBounds(hap?.dem);
+  // [boot-fast] heightAt·미니맵·OSM 스캔은 메시를 지을 때로 미룬다. 부트 스텁은 경계·스폰만.
+  const b1 = demBounds(data?.dem) || { ...HANGANG_BOXES[0] };
+  const b2 = demBounds(data?.hap?.dem) || { ...HANGANG_BOXES[1] };
   const boxes = [b1, b2].filter(Boolean);
   const bounds = boxes.length
     ? {
@@ -57,26 +49,18 @@ export function makeHangangMeta(data) {
       z1: Math.max(...boxes.map((b) => b.z1)),
     }
     : null;
-  const spawnSrc = osm?.spawn || osm?.connectEnds?.jamsuSouth;
+  const spawnSrc = data?.osm?.spawn || data?.osm?.connectEnds?.jamsuSouth;
   const spawn = spawnSrc
-    ? { x: spawnSrc.x, z: spawnSrc.z, name: spawnSrc.name || '잠수교 남단' }
-    : { x: -9741.7, z: -15961.4, name: '잠수교 남단' };
-  const heightAt = dem ? makeHangangHeightAt(dem, osm) : null;
-  const hapHeight = hap?.dem ? makeHangangHeightAt(hap.dem, hap.osm) : null;
-  const yAt = (x, z) => {
-    const a = heightAt?.(x, z);
-    if (a != null) return a;
-    return hapHeight?.(x, z);
-  };
-  spawn.y = (yAt(spawn.x, spawn.z) ?? 0) + 0.15;
+    ? { x: spawnSrc.x, z: spawnSrc.z, y: HANGANG_SPAWN.y, name: spawnSrc.name || HANGANG_SPAWN.name }
+    : { ...HANGANG_SPAWN };
   return {
     bounds,
     boxes,
     spawn,
-    spawnY: () => (yAt(spawn.x, spawn.z) ?? spawn.y - 0.15) + 0.15,
-    mini: mergeHangangMini(hangangMini(osm), hap?.osm ? hangangMini(hap.osm) : null),
-    spawns: { ...(hap?.osm?.spawns || {}) },
-    connectEnds: { ...(osm?.connectEnds || {}), ...(hap?.osm?.connectEnds || {}) },
+    spawnY: () => spawn.y,
+    mini: emptyLandmarkMini(),
+    spawns: { ...(data?.hap?.osm?.spawns || {}) },
+    connectEnds: { ...(data?.osm?.connectEnds || {}), ...(data?.hap?.osm?.connectEnds || {}) },
   };
 }
 

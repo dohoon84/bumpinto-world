@@ -43,20 +43,21 @@ import { bp24Mode, createBp24 } from './bp24.js'; import { bp24LocationsFor, cor
 import { hollowSeohyeonArcade } from '../arcade/locations.js'; // [arcade] 서현점 1층 비우기
 import { migeumWaterEnabled, MIGEUM_WATER_FILE, migeumChRoads, mergeMigeumWater, applyMigeumBank } from './migeumWater.js'; // [migeum-water]
 import { cityhallEnabled, CITYHALL_FILE, filterCityHallHidden, createCityHall } from './cityhall.js'; // [cityhall]
-import { namsanEnabled, namsanCableEnabled, NAMSAN_DEM_FILE, NAMSAN_OSM_FILE, NAMSAN_CITY_FILE, createNamsan, createNamsanAsync } from './landmarks/namsan.js'; // [namsan]
+import { namsanEnabled, namsanCableEnabled, NAMSAN_DEM_FILE, NAMSAN_OSM_FILE, NAMSAN_CITY_FILE } from './landmarks/namsanFlags.js'; // [namsan]
 import { landmarkLazyEnabled, LANDMARK_NEAR_M, LANDMARK_PREFETCH_M, makeNamsanMeta, makeHangangMeta, wrapLandmark, yieldPaint, makeBuildYield, makeSlicer, beginLandmarkBuild, landmarkBuildGate } from './landmarks/lazyLandmarks.js'; // [namsan] [hangang] 메시 지연 생성
 import { createNamsanNpc, namsanNpcEnabled } from './landmarks/namsanNpc.js'; // [namsan-npc]
-import { hangangEnabled, HANGANG_DEM_FILE, HANGANG_OSM_FILE, HAP_DEM_FILE, HAP_OSM_FILE, HANGANG_TERRAIN_BAKE_FILE, HAP_TERRAIN_BAKE_FILE, createHangang, createHangangAsync } from './landmarks/hangang.js'; // [hangang]
+import { hangangEnabled, HANGANG_DEM_FILE, HANGANG_OSM_FILE, HAP_DEM_FILE, HAP_OSM_FILE, HANGANG_TERRAIN_BAKE_FILE, HAP_TERRAIN_BAKE_FILE } from './landmarks/hangangFlags.js'; // [hangang]
 
 // streams: 탄천 지류 하도(streams.json). ?streams=0 이면 false → 예전과 같은 데이터만
 // [pangyo] pangyo: 판교역 일대(pangyo/index.json). ?pangyo=0 이면 false → 요청 없음
 // [migeum] migeum: 미금역 일대(migeum/index.json). ?migeum=0 이면 false → 요청 없음
-export async function loadCorridorData(baseUrl, { streams = true, pangyo = pangyoEnabled(), pangyoExpress = pangyo && pangyoExpressEnabled(), migeum = migeumEnabled(), migeumWater = migeum && migeumWaterEnabled(), migeumTaxi = migeum && migeumTaxiEnabled(), migeumBike = migeum && migeumBikeEnabled(), cityhall = cityhallEnabled(), gangnam = gangnamEnabled(), gangnamBus = gangnam && gangnamBusEnabled(), namsan = namsanEnabled(), hangang = hangangEnabled(), fetchFn = fetch } = {}) {
+export async function loadCorridorData(baseUrl, { streams = true, pangyo = pangyoEnabled(), pangyoExpress = pangyo && pangyoExpressEnabled(), migeum = migeumEnabled(), migeumWater = migeum && migeumWaterEnabled(), migeumTaxi = migeum && migeumTaxiEnabled(), migeumBike = migeum && migeumBikeEnabled(), cityhall = cityhallEnabled(), gangnam = gangnamEnabled(), gangnamBus = gangnam && gangnamBusEnabled(), namsan = namsanEnabled(), hangang = hangangEnabled(), deferLandmarks = false, fetchFn = fetch } = {}) {
   const get = (f) => fetchFn(baseUrl + f).then((r) => (r.ok ? r.json() : null)).catch(() => null);
   const pw = pangyo && pangyoWaterEnabled(); // [pangyo-water] ?pangyowater=0 이면 요청 없음
-  const [index, base, tancheon, streamsData, pg, pgx, water, mg, mgw, mgtb, ch, gn, gnBus, gnEx, gnCgSt, gnCgBd, nDem, nOsm, nCity, hDem, hOsm, hapDem, hapOsm] = await Promise.all([get('index.json'), get('base.json'), get('tancheon.json'), streams ? get('streams.json') : null, pangyo ? get(PANGYO_DIR + 'index.json') : null, pangyo && pangyoExpress ? get(PANGYO_EXPRESS_FILE) : null, pw ? get(PANGYO_WATER_FILE) : null, migeum ? get(MIGEUM_DIR + 'index.json') : null, migeum && migeumWater ? get(MIGEUM_WATER_FILE) : null, migeum && (migeumTaxi || migeumBike) ? get(MIGEUM_TAXIBIKE_FILE) : null, cityhall ? get(CITYHALL_FILE) : null, gangnam ? get(GANGNAM_DIR + 'index.json') : null, gangnamBus ? get(GANGNAM_BUS_FILE) : null, gangnam && gyeongbuExpressEnabled() ? get(GYEONGBU_EXPRESS_FILE) : null, gangnam ? get(CHEONGGYE_STREETS_FILE) : null, gangnam ? get(CHEONGGYE_BUILDINGS_FILE) : null, namsan ? get(NAMSAN_DEM_FILE) : null, namsan ? get(NAMSAN_OSM_FILE) : null, namsan ? get(NAMSAN_CITY_FILE) : null, hangang ? get(HANGANG_DEM_FILE) : null, hangang ? get(HANGANG_OSM_FILE) : null, hangang ? get(HAP_DEM_FILE) : null, hangang ? get(HAP_OSM_FILE) : null]); // [migeum-water] [migeum-taxibike] [cityhall] [gangnam] [gangnam-bus] [gyeongbu-bus] [namsan]
+  const loadLm = !deferLandmarks;
+  const [index, base, tancheon, streamsData, pg, pgx, water, mg, mgw, mgtb, ch, gn, gnBus, gnEx, gnCgSt, gnCgBd, nDem, nOsm, nCity, hDem, hOsm, hapDem, hapOsm] = await Promise.all([get('index.json'), get('base.json'), get('tancheon.json'), streams ? get('streams.json') : null, pangyo ? get(PANGYO_DIR + 'index.json') : null, pangyo && pangyoExpress ? get(PANGYO_EXPRESS_FILE) : null, pw ? get(PANGYO_WATER_FILE) : null, migeum ? get(MIGEUM_DIR + 'index.json') : null, migeum && migeumWater ? get(MIGEUM_WATER_FILE) : null, migeum && (migeumTaxi || migeumBike) ? get(MIGEUM_TAXIBIKE_FILE) : null, cityhall ? get(CITYHALL_FILE) : null, gangnam ? get(GANGNAM_DIR + 'index.json') : null, gangnamBus ? get(GANGNAM_BUS_FILE) : null, gangnam && gyeongbuExpressEnabled() ? get(GYEONGBU_EXPRESS_FILE) : null, gangnam ? get(CHEONGGYE_STREETS_FILE) : null, gangnam ? get(CHEONGGYE_BUILDINGS_FILE) : null, loadLm && namsan ? get(NAMSAN_DEM_FILE) : null, loadLm && namsan ? get(NAMSAN_OSM_FILE) : null, loadLm && namsan ? get(NAMSAN_CITY_FILE) : null, loadLm && hangang ? get(HANGANG_DEM_FILE) : null, loadLm && hangang ? get(HANGANG_OSM_FILE) : null, loadLm && hangang ? get(HAP_DEM_FILE) : null, loadLm && hangang ? get(HAP_OSM_FILE) : null]); // [migeum-water] [migeum-taxibike] [cityhall] [gangnam] [gangnam-bus] [gyeongbu-bus] [namsan] [boot-fast]
   const pgWater = pg ? water : null; // 판교 타일 없이 판교 지류 컷만 쓰지 않음
-  return index && base ? { index: gangnam ? mergeGyeongbuWorld(mergeGangnamIndex(mergeMigeumIndex(mergePangyoIndex(index, pg), mg), gn), gnEx?.pts) : mergeGangnamIndex(mergeMigeumIndex(mergePangyoIndex(index, pg), mg), gn), migeum: mg, gangnam: gn, gangnamTransit: gangnamBus ? gnBus : null, gangnamExpress: gnEx || null, migeumTaxiBike: mg ? pickMigeumTaxiBike(mgtb, { taxi: migeumTaxi, bike: migeumBike }) : null, base, baseUrl, tancheon, streams: mergePangyoStreams(streamsData, pgWater), pangyo: pg, pangyoExpress: pg ? pgx : null, pangyoWater: pgWater, migeumWater: mg ? mgw : null, cityhall: ch || null, cheonggyeStreets: gnCgSt || null, cheonggyeBuildings: gnCgBd || null, namsan: namsan ? { dem: nDem, osm: nOsm, city: nCity } : null, hangang: hangang ? { dem: hDem, osm: hOsm, hap: (hapDem && hapOsm) ? { dem: hapDem, osm: hapOsm } : null } : null } : null; // [pangyo-express] [pangyo-water] [migeum-water] [migeum-taxibike] [cityhall] [gangnam] [gangnam-bus] [gyeongbu-bus] [namsan]
+  return index && base ? { index: gangnam ? mergeGyeongbuWorld(mergeGangnamIndex(mergeMigeumIndex(mergePangyoIndex(index, pg), mg), gn), gnEx?.pts) : mergeGangnamIndex(mergeMigeumIndex(mergePangyoIndex(index, pg), mg), gn), migeum: mg, gangnam: gn, gangnamTransit: gangnamBus ? gnBus : null, gangnamExpress: gnEx || null, migeumTaxiBike: mg ? pickMigeumTaxiBike(mgtb, { taxi: migeumTaxi, bike: migeumBike }) : null, base, baseUrl, tancheon, streams: mergePangyoStreams(streamsData, pgWater), pangyo: pg, pangyoExpress: pg ? pgx : null, pangyoWater: pgWater, migeumWater: mg ? mgw : null, cityhall: ch || null, cheonggyeStreets: gnCgSt || null, cheonggyeBuildings: gnCgBd || null, namsan: namsan ? (loadLm ? { dem: nDem, osm: nOsm, city: nCity } : { deferred: true }) : null, hangang: hangang ? (loadLm && hDem && hOsm ? { dem: hDem, osm: hOsm, hap: (hapDem && hapOsm) ? { dem: hapDem, osm: hapOsm } : null } : { deferred: true }) : null } : null; // [pangyo-express] [pangyo-water] [migeum-water] [migeum-taxibike] [cityhall] [gangnam] [gangnam-bus] [gyeongbu-bus] [namsan] [boot-fast]
 
 }
 // [corridor] 탄천 지형: 코리더가 켜졌을 때만 라이브 terrain.json 뒤에 수내→잠실 축/단면을 이어 붙인다(라이브 구간 값은 그대로)
@@ -83,7 +84,7 @@ const segNear = (x, z, { ax, az, bx, bz, hw }) => {
   return Math.hypot(ax + dx * t - x, az + dz * t - z) < hw;
 };
 
-export function createCorridor({ scene, corridorData, terrain, world, renderer, overlay, params, getSimTime = () => null, liveBus = null }) {
+export async function createCorridor({ scene, corridorData, terrain, world, renderer, overlay, params, getSimTime = () => null, liveBus = null, slicer = null, nearBox = null }) {
   const { index, base, baseUrl } = corridorData;
   const TS = index.meta.tileSize;
   const live = index.meta.liveBox;
@@ -112,10 +113,13 @@ export function createCorridor({ scene, corridorData, terrain, world, renderer, 
   // [streams] 지류 위 다리(타일에 br=1 로 이미 있는 길): 상판 높이·교각·난간만 terrain 이 만든다. 리본은 타일이 그대로 그림
   const streamBridges = SD ? SD.bridges.map((r) => ({ ...r, p: r.p.map((p) => p.slice()) })) : [];
   terrain?.annotate({ roads: ch.concat(streamBridges), water: [], waterLines: [], parks: base.chParks.map((p) => ({ ...p })) });
+  if (slicer) await slicer.tick('corridor-annotate');
   const chMesh = roadMesh(ch); if (chMesh) root.add(chMesh);
+  if (slicer) await slicer.tick('corridor-roads');
   const chWater = corridorData.terrainT ? channelWaterMesh(mergeMigeumWater(corridorData.tancheon?.water, corridorData.migeumWater), terrain) : null; // [migeum-water] 미금 수면도 같은 메시 // 탄천 수면(수내→잠실)
   if (chWater && terrain.mainDrop) { const g = dropWaterGeometry(chWater.geometry, terrain); if (g !== chWater.geometry) { chWater.geometry.dispose(); chWater.geometry = g; } } // [pangyo-water]
   if (chWater) root.add(chWater);
+  if (slicer) await slicer.tick('corridor-water');
   const chGrid = new Grid(30);
   for (const r of ch) if (CAR_KINDS.has(r.k)) for (let i = 1; i < r.p.length; i++) {
     const [ax, az] = r.p[i - 1], [bx, bz] = r.p[i], hw = r.w / 2 + 0.6;
@@ -339,6 +343,7 @@ export function createCorridor({ scene, corridorData, terrain, world, renderer, 
         const nx = -(bz - az) / L, nz = (bx - ax) / L;
         for (let s = 6; s < L; s += 14) for (const side of [-1, 1]) {
           const x = ax + ((bx - ax) * s) / L + nx * side * (r.w / 2 + 1.6), z = az + ((bz - az) * s) / L + nz * side * (r.w / 2 + 1.6);
+          if (nearBox && (x < nearBox.x0 || x > nearBox.x1 || z < nearBox.z0 || z > nearBox.z1)) continue;
           if (terrain && terrain.renderHeight(x, z) < -0.3) continue;
           if (!onRoadAll(x, z) && !liveBlocked(x, z, 0)) pts.push([x, z]);
         }
@@ -352,6 +357,7 @@ export function createCorridor({ scene, corridorData, terrain, world, renderer, 
   const crossings = buildCorridorCrossings(root, base.crossings, { getSimTime });
   const schoolZone = mountYatapSchoolZone(root, params); // [schoolzone] 야탑초 어린이 보호구역. ?schoolzone=0 이면 null
   const landmarks = createLandmarks(root, index.landmarks, renderer);
+  if (slicer) await slicer.tick('corridor-landmarks');
   const bp24Search = params || (typeof location !== 'undefined' ? location.search : '');
   const bp24Kind = bp24Mode(bp24Search); // [bp24] ?bp24=1 목록 · ?bp24=demo 목록+데모
   const bp24List = [...corridorPlacements(bp24Search), ...(bp24Kind ? bp24LocationsFor(bp24Kind) : [])];
@@ -453,6 +459,21 @@ const gnTransit = corridorData.gangnamTransit ? mountGangnamTransit(root, corrid
     };
   }
 
+  async function loadNamsanData() {
+    const cur = corridorData.namsan;
+    if (cur?.dem && cur?.osm) return cur;
+    const [dem, osm, city] = await Promise.all([getJson(NAMSAN_DEM_FILE), getJson(NAMSAN_OSM_FILE), getJson(NAMSAN_CITY_FILE)]);
+    corridorData.namsan = { dem, osm, city };
+    return corridorData.namsan;
+  }
+  async function loadHangangData() {
+    const cur = corridorData.hangang;
+    if (cur?.dem && cur?.osm) return cur;
+    const [dem, osm, hapDem, hapOsm] = await Promise.all([getJson(HANGANG_DEM_FILE), getJson(HANGANG_OSM_FILE), getJson(HAP_DEM_FILE), getJson(HAP_OSM_FILE)]);
+    corridorData.hangang = { dem, osm, hap: (hapDem && hapOsm) ? { dem: hapDem, osm: hapOsm } : null };
+    return corridorData.hangang;
+  }
+
   function attachNamsanNpc() {
     if (namsanNpc || !namsan?.ready || !namsanNpcEnabled()) return;
     const mkNsNpc = () => createNamsanNpc({ namsan, osm: corridorData.namsan?.osm, city: corridorData.namsan?.city, parent: namsan.root });
@@ -479,7 +500,9 @@ const gnTransit = corridorData.gangnamTransit ? mountGangnamTransit(root, corrid
         namsanYieldState = y.state;
         const slicer = makeSlicer(y, { name: 'namsan' });
         const t0 = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
-        namsan._bind(await createNamsanAsync(namsanOpts(), y, slicer));
+        await loadNamsanData();
+        const nsMod = await import('./landmarks/namsan.js');
+        namsan._bind(await nsMod.createNamsanAsync(namsanOpts(), y, slicer));
         namsanPending = false;
         attachNamsanNpc();
         const ms = ((typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now()) - t0;
@@ -504,7 +527,9 @@ const gnTransit = corridorData.gangnamTransit ? mountGangnamTransit(root, corrid
         hangangYieldState = y.state;
         const slicer = makeSlicer(y, { name: 'hangang' });
         const t0 = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
-        hangang._bind(await createHangangAsync(hangangOpts(), y, slicer));
+        await loadHangangData();
+        const hgMod = await import('./landmarks/hangang.js');
+        hangang._bind(await hgMod.createHangangAsync(hangangOpts(), y, slicer));
         applyHangangClip(hangang);
         hangangPending = false;
         const ms = ((typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now()) - t0;
@@ -540,16 +565,20 @@ const gnTransit = corridorData.gangnamTransit ? mountGangnamTransit(root, corrid
 
   if (corridorData.namsan) {
     namsan = wrapLandmark(makeNamsanMeta(corridorData.namsan));
-    if (lazyLandmarks) namsanPending = true;
+    if (lazyLandmarks || corridorData.namsan.deferred) namsanPending = true;
     else {
-      namsan._bind(createNamsan(namsanOpts()));
+      await loadNamsanData();
+      const nsMod = await import('./landmarks/namsan.js');
+      namsan._bind(nsMod.createNamsan(namsanOpts()));
     }
   }
-  if (corridorData.hangang?.dem && corridorData.hangang?.osm) {
+  if (corridorData.hangang) {
     hangang = wrapLandmark(makeHangangMeta(corridorData.hangang));
-    if (lazyLandmarks) hangangPending = true;
+    if (lazyLandmarks || corridorData.hangang.deferred || !corridorData.hangang.dem) hangangPending = true;
     else {
-      hangang._bind(createHangang(hangangOpts()));
+      await loadHangangData();
+      const hgMod = await import('./landmarks/hangang.js');
+      hangang._bind(hgMod.createHangang(hangangOpts()));
       applyHangangClip(hangang);
     }
   }
