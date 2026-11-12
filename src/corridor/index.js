@@ -6,6 +6,7 @@
 import * as THREE from 'three';
 import { mergeTancheon, coveredFn, holeyGround, channelWaterMesh } from './tancheon.js';
 import { buildDetailTile, buildLodTile, roadMesh, CAR_KINDS, ingestTileRoads, setFlatClip, clipFlatGeometry, clipOutsideRect } from './tileMesh.js';
+import { propShadowsEnabled, silenceSmallPropShadows } from '../perf/propShadows.js';
 import { applyTileCuts } from '../world/streams.js';
 import { makeForeignFn } from './islands.js'; // [hangang-isolation]
 import { buildCorridorCrossings } from './crossings.js';
@@ -73,6 +74,7 @@ export function corridorTerrainData(terrainData, corridorData) {
 
 const KEEP_MINI = (() => { try { return isHudV3(); } catch { return false; } })(); // [hud-v3-minimap]
 const QUALITY = { low: { detail: 450, lod: 1500 }, med: { detail: 650, lod: 1800 }, high: { detail: 850, lod: 2400 } };
+const TILE_BUILD_BUDGET_MS = 8; // 한 프레임에 타일 빌드에 쓸 예산. 첫 타일은 무조건 하고, 남은 시간으로 더 붙인다.
 const OVERVIEW_LOD = 4200;
 const LINE_COLOR = { 신분당선: '#d4003b', 수인분당선: '#f5a200', 경강선: '#0054a6', '2호선': '#00a84d', '3호선': '#ef7c1c', '8호선': '#e6186c', '9호선': '#bdb092' };
 const LINE_EN = { 신분당선: 'Shinbundang', 수인분당선: 'Suin-Bundang', 경강선: 'Gyeonggang', '2호선': 'Line 2', '3호선': 'Line 3', '8호선': 'Line 8', '9호선': 'Line 9' };
@@ -170,6 +172,16 @@ export async function createCorridor({ scene, corridorData, terrain, world, rend
   };
   const onRoadAll = (x, z) => liveOnRoad(x, z) || corridorOnRoad(x, z);
 
+  function buildQueued(budgetMs = TILE_BUILD_BUDGET_MS) {
+    if (!buildQueue.length) return;
+    const t0 = performance.now();
+    let n = 0;
+    // 최소 1장은 짓고, 예산이 남으면 더 붙인다. 한 장의 빌드 자체는 쪼개지 않는다(셀 그리드 개편은 이 작업 밖).
+    while (buildQueue.length && (n === 0 || performance.now() - t0 < budgetMs)) {
+      buildOne();
+      n++;
+    }
+  }
   function buildOne() {
     const job = buildQueue.shift(); if (!job) return;
     const t = tiles.get(job.key);
@@ -182,11 +194,13 @@ export async function createCorridor({ scene, corridorData, terrain, world, rend
       if (KEEP_MINI) tile.mini = miniData(t, t.dData); // [hud-v3-minimap] 타일이 언로드되면 같이 사라진다
       tile.hints = extractLifeHints(t.dData, live); // [life]
       t.dData = null; t.detail = tile; t.dState = 3; root.add(tile.group); loaded.push(t);
+      if (propShadowsEnabled()) silenceSmallPropShadows(tile.group);
       if (t.lod) t.lod.group.visible = false;
       stats.builtDetail++;
     } else if (job.kind === 'l' && t.lState === 2) {
       const tile = buildLodTile(t.key, t.lData, base, SD ? terrain : null);
       t.lData = null; t.lod = tile; t.lState = 3; root.add(tile.group);
+      if (propShadowsEnabled()) silenceSmallPropShadows(tile.group);
       tile.group.visible = t.dState !== 3;
       stats.builtLod++;
     }
@@ -728,7 +742,7 @@ const gnTransit = corridorData.gangnamTransit ? mountGangnamTransit(root, corrid
       if (!chTreesDone) { chTreesDone = true; stats.chTrees = chTrees(); }
       acc += dt;
       if (acc > 0.25 || mode !== lastMode) { acc = 0; lastMode = mode; stream(x, z, mode); }
-      buildOne();
+      buildQueued();
       updateSigns();
       crossings.update(dt);
       landmarks.update(dt);
