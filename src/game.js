@@ -99,7 +99,7 @@ import { mountBp24Nav } from './corridor/bp24Nav.js'; // [bp24nav]
 import { BUMP24_JEONGJA_AT, bump24AtSpot } from './corridor/bp24Locations.js';
 import { mountDepot, DEPOT_AT, DEPOT_SPAWN } from './depot/index.js'; // [depot] 범창고 정자점 (?depot=0 끔, ?at=depot 입구 앞)
 import { evictGpu } from './evictGpu.js'; // [memory] 매장 입장 때 바깥 월드 GPU 를 잠시 내림
-import { dropCpu, clearGroup } from './hibernate.js'; // [memory] 폰: 바깥 월드 CPU(정점·캔버스)도 내림
+import { clearGroup, usedOutside } from './hibernate.js'; // [memory] 폰: 바깥 월드 CPU(정점·캔버스)도 내림
 import { clearWorldVisualCaches } from './world.js';
 import { isUiV2, uiV2Wanted } from './ui-v2/flag.js'; // [ui-v2] 게임 UI v2 (기본 켜짐 · ?ui=v1 끔)
 import { controlsCardWanted } from './controlsCard/flag.js'; // [controls-card] 가운데 조작 안내 (기본 켜짐 · ?controlscard=0 이면 예전 접기)
@@ -739,11 +739,10 @@ const PARK_DROP_NAMES = new Set([
   'corridor', 'cheonggyeTerrain', 'perfInstanced',
   'gangnamStreet', 'gangnamNightlife',
 ]); // 매장 안에서 안 보이는 먼 지역·코리더 CPU. 나오면 근처 타일은 stream 이 다시 올린다.
-function parkFarOutdoor(on) {
+function parkFarOutdoor(on) { // 숨기기만: 이 묶음들은 나올 때 다시 지을 길이 없어서 CPU 를 내리면 빈 메시·빈 텍스처로 남는다
   for (const ch of scene.children) {
     if (!PARK_DROP_NAMES.has(ch.name)) continue;
     if (on) {
-      try { dropCpu(ch); } catch (e) { console.warn('[depot-park]', e); }
       ch.visible = false;
       ch.userData.bwParked = true;
     } else if (ch.userData.bwParked) {
@@ -759,7 +758,10 @@ function parkWorldForDepot(on) {
     try { corridor?.unloadAll?.(); } catch (e) { console.warn('[depot-park]', e); }
     try { evictGpu(scene); } catch (e) { console.warn('[depot-park]', e); }
     if (mobileMode) {
-      try { clearGroup(worldRoot); } catch (e) { console.warn('[depot-park]', e); }
+      // 월드 루트 밖에서도 쓰는 지오메트리·텍스처(택시·광장·코리더 파사드 등)는 남긴다 — 나와서 다시 지을 때 그대로 씀
+      let keep = null;
+      try { keep = usedOutside(scene, [worldRoot]); } catch (e) { console.warn('[depot-park]', e); }
+      try { clearGroup(worldRoot, keep); } catch (e) { console.warn('[depot-park]', e); }
       try { clearWorldVisualCaches(); } catch (e) { console.warn('[depot-park]', e); }
       worldRoot.visible = false;
       try { parkFarOutdoor(true); } catch (e) { console.warn('[depot-park]', e); }
