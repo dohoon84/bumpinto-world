@@ -1,9 +1,17 @@
-// 한강 지형 bake gzip 풀기 + 디코드는 워커에서 해서 메인 스레드 롱태스크를 피한다.
+// 한강 지형 bake 를 워커에서 fetch·gzip 풀기·디코드 해서 메인 스레드 롱태스크를 피한다.
 import { decodeHangangTerrainBakeBytes } from './hangangMeshBake.js';
 
 self.onmessage = async (e) => {
   try {
-    const buffer = e.data?.buffer;
+    let buffer = e.data?.buffer;
+    if (!buffer && e.data?.url) {
+      const r = await fetch(e.data.url);
+      if (!r.ok) {
+        self.postMessage({ ok: false, error: 'fetch ' + r.status });
+        return;
+      }
+      buffer = await r.arrayBuffer();
+    }
     if (!buffer) {
       self.postMessage({ ok: false, error: 'no buffer' });
       return;

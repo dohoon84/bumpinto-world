@@ -159,7 +159,7 @@ async function mergedAsync(geos, slicer) {
   let list = geos.filter(Boolean);
   if (!list.length) return null;
   if (list.length === 1) return list[0];
-  const BATCH = 4;
+  const BATCH = 2;
   while (list.length > 1) {
     const next = [];
     for (let i = 0; i < list.length; i += BATCH) {

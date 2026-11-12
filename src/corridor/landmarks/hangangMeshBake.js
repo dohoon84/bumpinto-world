@@ -423,11 +423,16 @@ export async function fetchHangangTerrainBake(url, fetchFn = fetch) {
 }
 
 export async function fetchAndDecodeHangangTerrainBake(url, fetchFn = fetch) {
-  const bytes = await fetchHangangTerrainBake(url, fetchFn);
-  if (!bytes) return null;
   try {
+    if (url && typeof Worker === 'function') {
+      const bake = await decodeInWorker({ url });
+      if (bake) return bake;
+    }
+    const bytes = await fetchHangangTerrainBake(url, fetchFn);
+    if (!bytes) return null;
     if (typeof Worker === 'function') {
-      const bake = await decodeInWorker(bytes);
+      const copy = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
+      const bake = await decodeInWorker({ buffer: copy, transfer: [copy] });
       if (bake) return bake;
     }
     return await decodeHangangTerrainBakeBytes(bytes);
@@ -437,7 +442,7 @@ export async function fetchAndDecodeHangangTerrainBake(url, fetchFn = fetch) {
   }
 }
 
-function decodeInWorker(bytes) {
+function decodeInWorker(msg) {
   return new Promise((resolve) => {
     let worker;
     const fail = () => resolve(null);
@@ -455,8 +460,9 @@ function decodeInWorker(bytes) {
       else fail();
     };
     worker.onerror = () => { clearTimeout(t); try { worker.terminate(); } catch {} fail(); };
-    const copy = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
-    worker.postMessage({ buffer: copy }, [copy]);
+    const xfer = msg.transfer || (msg.buffer ? [msg.buffer] : []);
+    const payload = { url: msg.url, buffer: msg.buffer };
+    worker.postMessage(payload, xfer);
   });
 }
 
