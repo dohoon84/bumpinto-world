@@ -224,7 +224,7 @@ body.mobile #depot-hud .co-pay{width:min(330px,calc(100vw - 32px));max-height:ca
 body.mobile #depot-hud .co-pay button{min-height:44px}body.mobile #depot-hud .co-pay .k{display:none}
 body.mobile #depot-hud .co-rcpt{width:210px;max-height:calc(100vh - var(--m-t,12px) - 66px)}
 body.mobile #depot-hud .co-scan{animation:none}
-body.mobile #depot-hud .dh-panel{left:var(--m-l,16px);top:calc(var(--m-t,12px) + 52px);max-width:min(230px,27vw);font-size:11.5px;line-height:1.4;padding:6px 10px}
+body.mobile #depot-hud .dh-panel{visibility:hidden;height:0;min-height:0;padding:0;overflow:hidden;border:0;left:var(--m-l,16px);top:calc(var(--m-t,12px) + 52px);max-width:min(230px,27vw);font-size:11.5px;line-height:1.4;padding:6px 10px}
 body.mobile #depot-hud .dh-panel b{font-size:12.5px}
 body.mobile:has(#m-hud .m-bag:not([hidden])) #depot-hud .dh-panel{top:calc(var(--m-t,12px) + 98px)}
 body.mobile #depot-hud .dh-toast{max-width:min(230px,27vw);font-size:13px;padding:7px 11px;max-height:calc(4.2em + 14px);overflow:hidden}

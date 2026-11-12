@@ -128,7 +128,7 @@ const CSS = `
 #dp-story.m .mchip.on{display:block}#dp-story.m .mchip h4{margin:0;display:flex;justify-content:space-between;background:var(--red);color:#fff;padding:3px 10px;font-size:11px;letter-spacing:.04em}#dp-story.m .mchip h4 i{font-style:normal;opacity:.85}
 #dp-story.m .mchip h5{margin:4px 10px 0;font-size:14.5px;font-weight:800;color:var(--deep)}#dp-story.m .mchip em{display:block;margin:1px 10px 5px;font-style:normal;color:var(--green);font-weight:800;font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 #dp-story.m .mchip dl{display:none;margin:0 10px 7px;grid-template-columns:auto 1fr;gap:2px 8px}#dp-story.m .mchip.open dl{display:grid}#dp-story.m .mchip dt{color:var(--green);font-weight:900}#dp-story.m .mchip dd{margin:0}
-#dp-story.m .mchip small{display:block;margin:-3px 10px 5px;color:#9A9C98;font-weight:700;font-size:11px}#dp-story.m .mchip.open small{display:none}
+#dp-story.m .mchip small{display:block;margin:-3px 10px 5px;color:#9A9C98;font-weight:700;font-size:11px}#dp-story.m .mchip.open small:not(.tip):not(.st){display:none}#dp-story.m .mchip small.tip{margin:0 10px 5px;color:var(--deep);font-weight:800;font-size:11.5px}#dp-story.m .mchip small.st{margin:-2px 10px 5px;color:#6a6f6a}#dp-story.m .mchip h4+small.tip{margin-top:5px}
 #dp-story.m .gear{left:calc(16px + var(--sa-l,0px))}
 #dp-story.m .mcard{top:60px;right:max(59px,env(safe-area-inset-right));width:300px;font-size:12px}#dp-story.m .mcard h5{font-size:17px}
 #dp-story.m .lock,#dp-story.m .tapnote{display:block}#dp-story.m .lock{left:auto;right:max(8px,env(safe-area-inset-right));bottom:118px;font-size:11px;padding:3px 9px;opacity:.9}#dp-story.m .tapnote{bottom:0;font-size:11px}
@@ -323,13 +323,21 @@ export function createVN({ assetBase, isMobile = false, getSettings, onCue = () 
     root.appendChild(c); await sleep(missed ? 2600 : 1600); c.remove();
   }
   // 모바일: 왼쪽 칩 대신 오른쪽 카드 하나 — 다음 할 일(➜ 목적지 · m) 한 줄 + 목표/성공/보상은 처음 몇 초만 펼침, 탭하면 다시 펼침
-  const M = { det: null, detName: '', openT: 0, ev: null, sig: '' };
+  const M = { det: null, detName: '', openT: 0, ev: null, sig: '', hint: '', stat: '' };
   function renderM() {
-    const ev = M.ev; if (!ev) { mchip.classList.remove('on'); return; }
+    const hint = M.ev && /^①/.test(M.hint) ? M.hint.replace(/^①[^·]*(· )?/, '') : M.hint; // 사건 카드가 이미 '먼저 카트 ➜' 를 말하면 ① 은 뺌
+    const tip = `${hint ? `<small class="tip">${esc(hint)}</small>` : ''}${M.stat ? `<small class="st">${esc(M.stat)}</small>` : ''}`;
+    let ev = M.ev;
+    if (!ev) { // 사건이 없을 때도 범창고 안내(왼쪽 상자 대신)는 여기
+      if (!M.hint && !M.stat) { if (M.sig !== '') { M.sig = ''; mchip.classList.remove('on'); } return; }
+      const sig = `hint|${M.hint}|${M.stat}`; if (sig === M.sig) return; M.sig = sig;
+      mchip.classList.add('on'); mchip.classList.remove('open');
+      mchip.innerHTML = `<h4>범창고</h4>${tip}`; return;
+    }
     const det = M.det && M.detName === ev.name ? M.det : null, open = !!det && performance.now() < M.openT;
-    const sig = `${ev.head}|${ev.name}|${ev.where}|${ev.note}|${open}|${!!det}`; if (sig === M.sig) return; M.sig = sig;
+    const sig = `${ev.head}|${ev.name}|${ev.where}|${ev.note}|${open}|${!!det}|${M.hint}|${M.stat}`; if (sig === M.sig) return; M.sig = sig;
     mchip.classList.add('on'); mchip.classList.toggle('open', open);
-    mchip.innerHTML = `<h4>${esc(ev.head || '오늘의 사건')}${det && !open ? '<i>▾ 탭: 자세히</i>' : ''}</h4><h5>${esc(ev.name)}</h5><em>${esc(ev.where || '')}</em>${det ? `<dl>${det}</dl>` : ''}${ev.onTap || !det ? `<small>${esc(ev.note || '')}</small>` : ''}`;
+    mchip.innerHTML = `<h4>${esc(ev.head || '오늘의 사건')}${det && !open ? '<i>▾ 탭: 자세히</i>' : ''}</h4><h5>${esc(ev.name)}</h5><em>${esc(ev.where || '')}</em>${det ? `<dl>${det}</dl>` : ''}${ev.onTap || !det ? `<small>${esc(ev.note || '')}</small>` : ''}${tip}`;
   }
   mchip.addEventListener('pointerdown', (e) => {
     e.stopPropagation(); e.preventDefault();
@@ -348,6 +356,7 @@ export function createVN({ assetBase, isMobile = false, getSettings, onCue = () 
     c.innerHTML = `<h4>오늘의 사건</h4><h5>${esc(ev.name)}</h5><dl><dt>목표</dt><dd>${esc(ev.goal)}</dd><dt>성공</dt><dd>${esc(ev.success)}</dd><dt>보상</dt><dd>활기 +${ev.reward?.vitality || 0} · 단골 도장</dd></dl>`;
     root.appendChild(c); await sleep(3400); c.remove();
   }
+  function setHint(h) { if (!isMobile) return; const a = h?.hint || '', b = h?.stat || ''; if (a === M.hint && b === M.stat) return; M.hint = a; M.stat = b; renderM(); }
   function setChip(ev) {
     if (isMobile) { M.ev = ev || null; chip.style.display = 'none'; document.body.classList.toggle('dp-chip-m', !!ev); renderM(); return; }
     if (!ev) { chip.style.display = 'none'; document.body.classList.remove('dp-chip-m'); return; }
@@ -437,7 +446,7 @@ export function createVN({ assetBase, isMobile = false, getSettings, onCue = () 
   $('.gear').addEventListener('pointerdown', (e) => { e.stopPropagation(); e.preventDefault(); gearHandler?.(); });
   let gearHandler = null;
   return {
-    root, say, choose, close, pickCard, nextDayCard, cutIn, dayCard, missionCard, setChip, shakeChip, stampCard, modeSelect, settings, confirmExit, toast, bubble, prefetch, setOffsets,
+    root, say, choose, close, pickCard, nextDayCard, cutIn, dayCard, missionCard, setChip, setHint, shakeChip, stampCard, modeSelect, settings, confirmExit, toast, bubble, prefetch, setOffsets,
     set onExit(f) { exitHandler = f; }, set onGear(f) { gearHandler = f; },
     setInGame(on) { root.classList.toggle('ingame', on); },
     get isOpen() { return S.open || !!S.modal; }, get blocking() { return S.open || !!S.modal; },

@@ -678,6 +678,7 @@ export function createStory(ctx) {
       const ex = tickExit(step);
       if (mode() === 'story' && !exitReq) { tickMission(step); tickJob(); }
       if (mode() === 'story' || ex) updateChip(false);
+      if (isMobile) vn.setHint(api.mobileHint?.()); // 모바일: 왼쪽 범창고 상자 대신 오른쪽 카드에 안내 한 줄
       // 레이아웃: 왼쪽 정보 상자 아래 [설정] [미션 칩] → interior 토스트들은 그 아래(colBottom)
       layout();
     }

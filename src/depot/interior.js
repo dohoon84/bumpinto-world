@@ -850,6 +850,11 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit, a
     if (staff.S.eggsToday) lines.push(`🧾 변상 예정 ₩ ${staff.damageWon.toLocaleString('ko-KR')} (오늘 깬 계란 ${staff.S.eggsToday}개 · 표시용)`);
     if (!st.placedOnce) lines.push(st.mode === 'place' ? '③ 카트 안을 클릭하면 그 자리에 놓여요' : st.hasCart || cart.visible ? '② 선반 상품을 마우스로 클릭(가운데 조준 X)' : '');
     elKg.textContent = lines.join('\n');
+    if (isMobile) { // [depot-live] 모바일은 왼쪽 상자를 숨기고 이 두 줄만 오른쪽 사건 카드(story vn)로 — 단계 안내 + 짧은 카트 요약
+      touchEl(elKg); const L2 = elKg.textContent.split('\n');
+      st.mHint = L2.filter((l) => /^[①②③🧾]|^카트에서 손 놓음/.test(l)).join(' · ');
+      st.mStat = st.hasCart ? `짐 ${kg.toFixed(1)} kg · ₩ ${loadWon().toLocaleString('ko-KR')}${st.eggTotal ? ` · 🥚 ${st.brokenEggs}/${st.eggTotal}` : ''}` : '';
+    }
     const help = st.mode === 'place'
       ? `클릭 = 가리킨 곳에 놓기 · 우클릭/Esc 취소 · (선택) 휠·Q/E 돌리기 · R 눕히기 · Tab 아래 받침대 · 방향키 1 cm`
       : st.hasCart ? 'W/S 밀기 · A/D 방향 · 드래그 둘러보기 · 상품 클릭 = 집기 · 카트 속 상품도 클릭해 다시 집기 · G 카트 놓기'
@@ -1071,6 +1076,7 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit, a
   const api = {
     player: selfAvatar, scene, camera, update, render, onKey, stats, measure, st, items, LEVELS,
     get hover() { return hover; },
+    mobileHint() { return { hint: st.mHint || '', stat: st.mStat || '' }; }, // 모바일 오른쪽 카드용
     mobileActs() { // 모바일 행동 버튼 (계산·출구·카트 잡기·집기·카트 놓기·놓기 등) — 터치 안내 문구의 「…」 와 같은 이름
       const c = checkout.mobileActs(); if (c) return c;
       const t = elTarget.style.display === 'block' ? (elTarget.dataset.raw ?? elTarget.textContent) : '', key = (code) => () => onKey({ code });
