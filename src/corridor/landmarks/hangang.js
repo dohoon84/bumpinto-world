@@ -3,12 +3,12 @@
 import * as THREE from 'three';
 import { watchEvening } from '../../evening.js';
 import { HG, centroid } from './hangangCoords.js';
-import { createHangangTerrain } from './hangangTerrain.js';
+import { createHangangTerrain, createHangangTerrainAsync } from './hangangTerrain.js';
 import { createHangangBridges } from './hangangBridges.js';
 import { createHangangPaths } from './hangangPaths.js';
 import { createHangangCity } from './hangangCity.js';
 import { createHangangProps } from './hangangProps.js';
-import { createHangangHap, mergeHangangMini } from './hangangHap.js';
+import { createHangangHap, createHangangHapAsync, mergeHangangMini } from './hangangHap.js';
 
 export const HANGANG_DEM_FILE = 'hangang/hangang-dem.json';
 export const HANGANG_OSM_FILE = 'hangang/hangang-osm.json';
@@ -66,7 +66,10 @@ export function createHangang({ scene, overlay, terrain, dem, osm, hap, foreign 
   const hapApi = (hap?.dem && hap?.osm)
     ? createHangangHap({ parent: root, overlay, terrain, dem: hap.dem, osm: hap.osm, foreign })
     : null;
+  return finishHangang({ scene, overlay, terrain, dem, osm, hap, foreign, root, land, bridges, paths, city, props, hapApi });
+}
 
+function finishHangang({ scene, overlay, terrain, dem, osm, hap, foreign, root, land, bridges, paths, city, props, hapApi }) {
   const spawnSrc = osm?.spawn || osm?.connectEnds?.jamsuSouth;
   const spawn = spawnSrc
     ? { x: spawnSrc.x, z: spawnSrc.z, name: spawnSrc.name || '잠수교 남단' }
@@ -243,3 +246,29 @@ export function createHangang({ scene, overlay, terrain, dem, osm, hap, foreign 
   };
   return api;
 }
+
+export async function createHangangAsync({ scene, overlay, terrain, dem, osm, hap, foreign = null } = {}, yieldFn) {
+  const y = yieldFn || (typeof requestAnimationFrame === 'function'
+    ? () => new Promise((r) => requestAnimationFrame(() => r()))
+    : () => Promise.resolve());
+  const root = new THREE.Group();
+  root.name = 'hangang';
+  scene.add(root);
+
+  const land = await createHangangTerrainAsync({ parent: root, dem, osm }, y);
+  await y();
+  const bridges = createHangangBridges({ parent: root, osm, land });
+  await y();
+  const paths = createHangangPaths({ parent: root, osm, land });
+  await y();
+  const city = createHangangCity({ parent: root, osm, land, expressXMax: hap?.osm?.meta?.pathWestClip ?? null });
+  await y();
+  const props = createHangangProps({ parent: root, osm, land });
+  await y();
+  const hapApi = (hap?.dem && hap?.osm)
+    ? await createHangangHapAsync({ parent: root, overlay, terrain, dem: hap.dem, osm: hap.osm, foreign }, y)
+    : null;
+  await y();
+  return finishHangang({ scene, overlay, terrain, dem, osm, hap, foreign, root, land, bridges, paths, city, props, hapApi });
+}
+

@@ -46,7 +46,7 @@ import { cityhallEnabled, CITYHALL_FILE, filterCityHallHidden, createCityHall } 
 import { namsanEnabled, namsanCableEnabled, NAMSAN_DEM_FILE, NAMSAN_OSM_FILE, NAMSAN_CITY_FILE, createNamsan } from './landmarks/namsan.js'; // [namsan]
 import { landmarkLazyEnabled, LANDMARK_NEAR_M, makeNamsanMeta, makeHangangMeta, wrapLandmark, yieldPaint } from './landmarks/lazyLandmarks.js'; // [namsan] [hangang] 메시 지연 생성
 import { createNamsanNpc, namsanNpcEnabled } from './landmarks/namsanNpc.js'; // [namsan-npc]
-import { hangangEnabled, HANGANG_DEM_FILE, HANGANG_OSM_FILE, HAP_DEM_FILE, HAP_OSM_FILE, createHangang } from './landmarks/hangang.js'; // [hangang]
+import { hangangEnabled, HANGANG_DEM_FILE, HANGANG_OSM_FILE, HAP_DEM_FILE, HAP_OSM_FILE, createHangang, createHangangAsync } from './landmarks/hangang.js'; // [hangang]
 
 // streams: 탄천 지류 하도(streams.json). ?streams=0 이면 false → 예전과 같은 데이터만
 // [pangyo] pangyo: 판교역 일대(pangyo/index.json). ?pangyo=0 이면 false → 요청 없음
@@ -482,7 +482,7 @@ const gnTransit = corridorData.gangnamTransit ? mountGangnamTransit(root, corrid
     hangangBuilding = (async () => {
       if (!urgent) await yieldPaint();
       const t0 = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
-      hangang._bind(createHangang(hangangOpts()));
+      hangang._bind(await createHangangAsync(hangangOpts(), yieldPaint));
       applyHangangClip(hangang);
       hangangPending = false;
       const ms = ((typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now()) - t0;

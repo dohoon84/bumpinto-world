@@ -3,7 +3,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { inWater, centroid, projectOnLine } from './hangangCoords.js';
-import { createHangangTerrain, waterYAt } from './hangangTerrain.js';
+import { createHangangTerrain, createHangangTerrainAsync, waterYAt } from './hangangTerrain.js';
 import { createHangangPaths } from './hangangPaths.js';
 import { createHangangCity } from './hangangCity.js';
 import { createHangangProps } from './hangangProps.js';
@@ -463,17 +463,18 @@ function createHapUnderpasses({ parent, osm, land }) {
   };
 }
 
-export function createHangangHap({ parent, overlay, terrain, dem, osm, foreign = null } = {}) {
+function startHangangHap(parent, osm) {
   const root = new THREE.Group();
   root.name = 'hangang-hap';
   parent.add(root);
-
   if (Array.isArray(osm?.amenities)) {
     osm.benches = osm.amenities.filter((a) => a.k === 'bench');
     osm.bins = osm.amenities.filter((a) => a.k === 'waste_basket');
   }
+  return root;
+}
 
-  const land = createHangangTerrain({ parent: root, dem, osm });
+function finishHangangHap({ parent, overlay, terrain, dem, osm, foreign = null, root, land } = {}) {
   const paths = createHangangPaths({ parent: root, osm, land });
   const city = createHangangCity({ parent: root, osm, land });
   const bridges = createHapBridges({ parent: root, osm, land });
@@ -625,3 +626,20 @@ export function mergeHangangMini(a, b) {
     waterLines: [...(a.waterLines || []), ...(b.waterLines || [])],
   };
 }
+
+export function createHangangHap({ parent, overlay, terrain, dem, osm, foreign = null } = {}) {
+  const root = startHangangHap(parent, osm);
+  const land = createHangangTerrain({ parent: root, dem, osm });
+  return finishHangangHap({ parent, overlay, terrain, dem, osm, foreign, root, land });
+}
+
+export async function createHangangHapAsync({ parent, overlay, terrain, dem, osm, foreign = null } = {}, yieldFn) {
+  const y = yieldFn || (typeof requestAnimationFrame === 'function'
+    ? () => new Promise((r) => requestAnimationFrame(() => r()))
+    : () => Promise.resolve());
+  const root = startHangangHap(parent, osm);
+  const land = await createHangangTerrainAsync({ parent: root, dem, osm }, y);
+  await y();
+  return finishHangangHap({ parent, overlay, terrain, dem, osm, foreign, root, land });
+}
+

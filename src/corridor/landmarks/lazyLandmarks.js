@@ -12,7 +12,7 @@ export function landmarkLazyEnabled(search = typeof location !== 'undefined' ? l
 }
 
 /** 안개 far(1800m)보다 충분히 앞에서 짓기 시작. */
-export const LANDMARK_NEAR_M = 4000;
+export const LANDMARK_NEAR_M = 2200;
 
 export function demBounds(dem) {
   if (!dem || !Number.isFinite(+dem.x0) || !Number.isFinite(+dem.nx) || !Number.isFinite(+dem.dx)) return null;

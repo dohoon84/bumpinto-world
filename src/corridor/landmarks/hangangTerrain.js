@@ -558,7 +558,7 @@ function resampleShore(chain, step = 3.2) {
   return out;
 }
 
-export function createHangangTerrain({ parent, dem, osm }) {
+function* hangangTerrainGen({ parent, dem, osm }, sliced = false) {
   const group = new THREE.Group();
   group.name = 'hangang-terrain';
   parent.add(group);
@@ -688,6 +688,7 @@ export function createHangangTerrain({ parent, dem, osm }) {
         }
         col[k] = r; col[k + 1] = g; col[k + 2] = b;
       }
+      if (sliced) yield;
     }
     for (let j = 0; j < nz - 1; j++) {
       for (let i = 0; i < nx - 1; i++) {
@@ -949,3 +950,26 @@ export function createHangangTerrain({ parent, dem, osm }) {
     setNight,
   };
 }
+
+export function createHangangTerrain(opts) {
+  const g = hangangTerrainGen(opts, false);
+  let n = g.next();
+  while (!n.done) n = g.next();
+  return n.value;
+}
+
+export async function createHangangTerrainAsync(opts, yieldFn) {
+  const y = yieldFn || (typeof requestAnimationFrame === 'function'
+    ? () => new Promise((r) => requestAnimationFrame(() => r()))
+    : () => Promise.resolve());
+  const g = hangangTerrainGen(opts, true);
+  let n = g.next();
+  const now = () => (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+  let last = now();
+  while (!n.done) {
+    if (now() - last > 45) { await y(); last = now(); }
+    n = g.next();
+  }
+  return n.value;
+}
+
