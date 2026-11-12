@@ -38,8 +38,9 @@ export function shouldShowPoster(params, storage = globalThis.localStorage, now 
 }
 
 const CSS = `
-#bw-bp24-poster{position:fixed;inset:0;z-index:5100;display:flex;align-items:center;justify-content:center;box-sizing:border-box;padding:max(10px,env(safe-area-inset-top)) max(10px,env(safe-area-inset-right)) max(10px,env(safe-area-inset-bottom)) max(10px,env(safe-area-inset-left));background:rgba(4,8,18,.72);overflow:hidden;font-family:inherit}
-#bw-bp24-poster .bpp-card{display:flex;flex-direction:column;align-items:center;width:100%;height:100%;max-height:100%;min-height:0;gap:10px}
+#bw-bp24-poster{position:fixed;inset:0;z-index:5100;display:flex;align-items:center;justify-content:center;box-sizing:border-box;padding:max(10px,env(safe-area-inset-top)) max(10px,env(safe-area-inset-right)) max(10px,env(safe-area-inset-bottom)) max(10px,env(safe-area-inset-left));background:rgba(4,8,18,.72);overflow:hidden;font-family:inherit;pointer-events:none}
+#bw-bp24-poster .bpp-card{display:flex;flex-direction:column;align-items:center;width:100%;height:100%;max-height:100%;min-height:0;gap:10px;pointer-events:none}
+#bw-bp24-poster .bpp-shot,#bw-bp24-poster .bpp-row{pointer-events:auto}
 #bw-bp24-poster .bpp-frame{flex:1 1 auto;min-height:0;min-width:0;width:100%;display:flex;align-items:center;justify-content:center}
 #bw-bp24-poster .bpp-shot{position:relative;max-width:min(720px,100%);line-height:0}
 #bw-bp24-poster img{display:block;max-width:100%;max-height:calc(100dvh - 110px);width:auto;height:auto;object-fit:contain;border-radius:14px;box-shadow:0 18px 50px rgba(0,0,0,.45)}
@@ -78,15 +79,22 @@ export function showPoster({ params = new URLSearchParams(location.search), stor
     done = true;
     if (forever) dismissPosterForever(storage);
     document.removeEventListener('keydown', onKey, true);
+    document.removeEventListener('pointerdown', onOutside, true);
     root.remove();
     style.remove();
     resolve();
   };
   const onKey = (e) => { if (e.key === 'Escape') { e.stopPropagation(); finish(false); } };
+  // 레이아웃은 그대로 두고, 포스터 그림·버튼만 입력을 받는다. HUD·월드를 누르면 포스터를 닫고 그 탭은 그대로 메뉴에 전달한다.
+  const onOutside = (e) => {
+    if (e.target.closest?.('.bpp-shot, .bpp-row, .bpp-never, .bpp-close, .bpp-x')) return;
+    finish(false);
+  };
   root.addEventListener('click', (e) => {
-    if (e.target === root || e.target.closest('[data-close]')) finish(false);
+    if (e.target.closest('[data-close]')) finish(false);
     else if (e.target.closest('[data-never]')) finish(true);
   });
+  document.addEventListener('pointerdown', onOutside, true);
   document.addEventListener('keydown', onKey, true);
   document.body.appendChild(root);
   root.querySelector('.bpp-close')?.focus();

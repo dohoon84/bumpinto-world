@@ -155,6 +155,27 @@ function merged(geos) {
   for (const x of list) x.dispose();
   return g;
 }
+async function mergedAsync(geos, slicer) {
+  let list = geos.filter(Boolean);
+  if (!list.length) return null;
+  if (list.length === 1) return list[0];
+  const BATCH = 2;
+  while (list.length > 1) {
+    const next = [];
+    for (let i = 0; i < list.length; i += BATCH) {
+      const part = list.slice(i, i + BATCH);
+      if (part.length === 1) next.push(part[0]);
+      else {
+        const g = mergeGeometries(part);
+        for (const x of part) x.dispose();
+        next.push(g);
+      }
+      if (slicer) await slicer.tick('buildings');
+    }
+    list = next;
+  }
+  return list[0];
+}
 const parkY = (k) => (k === 'plaza' ? 0.03 : 0.02 + (k === 'park' ? 0 : 0.005));
 
 // 바닥·공원·물·물길 (모두 수평 평면)
@@ -215,15 +236,15 @@ export function roadMesh(roads, opts) {
 }
 
 // 건물: world.js buildWorld 의 건물 루프와 같은 색 규칙(종류색 + 시드 편차, 지붕 어둡게, 벽은 파사드 텍스처)
-export function buildingMeshes(list, seed0) {
+export function makeBuildingMeshAcc(seed0) {
   const roofs = [], walls = {};
   const c = new THREE.Color(), roof = new THREE.Color(), wallTint = new THREE.Color();
   let seed = seed0 % 2147483647 || 1; const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
-  for (const b of list) {
-    if (b.nr) continue;
+  function add(b) {
+    if (!b || b.nr) return;
     const minH = b.mh || 0, h = Math.max(0.35, b.h - minH);
     let g;
-    try { g = new THREE.ExtrudeGeometry(toShape(b.o, b.holes || []), { depth: h, bevelEnabled: false, UVGenerator: FACADE_UV }); } catch { continue; }
+    try { g = new THREE.ExtrudeGeometry(toShape(b.o, b.holes || []), { depth: h, bevelEnabled: false, UVGenerator: FACADE_UV }); } catch { return; }
     g.rotateX(-Math.PI / 2); g.translate(0, minH, 0);
     c.set(BUILDING_COLOR[b.k] || BUILDING_COLOR.yes).offsetHSL((rnd() - 0.5) * 0.04, (rnd() - 0.5) * 0.08, (rnd() - 0.5) * 0.06);
     if (b.s === 'default') c.offsetHSL(0, -0.05, 0.02);
@@ -246,14 +267,44 @@ export function buildingMeshes(list, seed0) {
     if (cap) { if (cap.attributes.uv) cap.deleteAttribute('uv'); if (cap.attributes.aNL) cap.deleteAttribute('aNL'); roofs.push(cap); }
     if (side) (walls[facadeKey(b.k)] ||= []).push(side);
   }
-  const out = [];
-  const rg = merged(roofs);
-  if (rg) { const m = new THREE.Mesh(rg, vcMat()); m.castShadow = m.receiveShadow = true; out.push(m); }
-  for (const [key, geos] of Object.entries(walls)) {
-    const g = merged(geos); if (!g) continue;
-    const m = new THREE.Mesh(g, nightFacade(facadeMaterial(key), key)); m.castShadow = m.receiveShadow = true; out.push(m);
+  function finish() {
+    const out = [];
+    const rg = merged(roofs);
+    if (rg) { const m = new THREE.Mesh(rg, vcMat()); m.castShadow = m.receiveShadow = true; out.push(m); }
+    for (const [key, geos] of Object.entries(walls)) {
+      const g = merged(geos); if (!g) continue;
+      const m = new THREE.Mesh(g, nightFacade(facadeMaterial(key), key)); m.castShadow = m.receiveShadow = true; out.push(m);
+    }
+    return out;
   }
-  return out;
+  async function finishAsync(slicer) {
+    const out = [];
+    const rg = await mergedAsync(roofs, slicer);
+    if (rg) { const m = new THREE.Mesh(rg, vcMat()); m.castShadow = m.receiveShadow = true; out.push(m); }
+    for (const [key, geos] of Object.entries(walls)) {
+      const g = await mergedAsync(geos, slicer); if (!g) continue;
+      const m = new THREE.Mesh(g, nightFacade(facadeMaterial(key), key)); m.castShadow = m.receiveShadow = true; out.push(m);
+      if (slicer) await slicer.tick('buildings');
+    }
+    return out;
+  }
+  return { add, finish, finishAsync };
+}
+
+export function buildingMeshes(list, seed0) {
+  const acc = makeBuildingMeshAcc(seed0);
+  for (const b of list) acc.add(b);
+  return acc.finish();
+}
+
+export async function buildingMeshesAsync(list, seed0, slicer) {
+  const acc = makeBuildingMeshAcc(seed0);
+  for (let i = 0; i < list.length; i++) {
+    acc.add(list[i]);
+    if (slicer) await slicer.tick('buildings');
+  }
+  if (slicer) return acc.finishAsync(slicer);
+  return acc.finish();
 }
 
 const hashKey = (key) => { let h = 2166136261; for (const ch of key) h = Math.imul(h ^ ch.charCodeAt(0), 16777619); return (h >>> 0) || 1; };

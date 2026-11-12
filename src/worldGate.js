@@ -6,37 +6,18 @@ import { MAP_W, MAP_H, LAND, KOREA } from './worldLand.js';
 import { trackEvent } from './analytics.js';
 import { OPEN_REGIONS, UPCOMING_REGIONS, getCurrentRegion, getRegion, countryOf, regionBlurb } from './regions/index.js';
 import { isEn, tr, toggleLang, onLangChange } from './i18n.js';
+import { isMobileMode } from './mobile/flag.js';
+import { mobileProfileEnabled } from './mobile/profile.js';
+import { warmupRenderer } from './render/warmup.js';
 import { corridorGlobeEnabled, mountGlobeCorridor, CORRIDOR_STATION_IDS, CORRIDOR_STATION_COUNT, corridorName, OPEN_BRANCH_IDS, OPEN_MAINLINE_STATIONS, OPEN_BRANCH_STATIONS } from './corridor/globeCorridor.js'; // [corridor]
 
 export { OPEN_REGIONS, UPCOMING_REGIONS };
+import {
+  REPO_URL, STARBASE_OPEN_AT, starbaseRemainingMs, isStarbaseLive, phoneStatsUrl, getGateDecorator, setGateDecorator,
+} from './worldGateFlags.js';
+export { REPO_URL, STARBASE_OPEN_AT, starbaseRemainingMs, isStarbaseLive, phoneStatsUrl, setGateDecorator };
 
 const LAT0 = -56, LAT1 = 82;
-export const REPO_URL = 'https://github.com/dohoon84/bumpinto-world';
-const DEFAULT_PHONE_BASE = import.meta.env?.VITE_PHONE_URL || 'https://jeongja-phone.xn0texn073.workers.dev';
-
-// 스타베이스 정식 오픈 시각: 2026-10-29 11:00:00 KST (UTC+9)
-export const STARBASE_OPEN_AT = Date.parse('2026-10-29T11:00:00+09:00');
-
-function isLocalHost() {
-  if (typeof location === 'undefined') return false;
-  const h = location.hostname;
-  return h === 'localhost' || h === '127.0.0.1' || h === '[::1]' || h.endsWith('.local');
-}
-
-function isForceUnlocked() {
-  if (typeof location === 'undefined') return false;
-  const params = new URLSearchParams(location.search);
-  return params.get('unlock') === '1' || params.get('starbase') === 'open';
-}
-
-export function starbaseRemainingMs(now = Date.now()) {
-  if (isForceUnlocked()) return 0;
-  return Math.max(0, STARBASE_OPEN_AT - now);
-}
-
-export function isStarbaseLive(now = Date.now()) {
-  return starbaseRemainingMs(now) <= 0;
-}
 
 function formatHms(ms) {
   const totalSec = Math.max(0, Math.ceil(ms / 1000));
@@ -44,21 +25,6 @@ function formatHms(ms) {
   const mm = String(Math.floor((totalSec % 3600) / 60)).padStart(2, '0');
   const ss = String(totalSec % 60).padStart(2, '0');
   return { hh, mm, ss, text: `${hh}:${mm}:${ss}` };
-}
-
-export function phoneStatsUrl(regionId = 'jeongja') {
-  const params = new URLSearchParams(location.search);
-  const smsParam = params.get('sms');
-  const q = `?region=${encodeURIComponent(regionId)}`;
-  if (smsParam === 'off') return '';
-  if (smsParam === 'local') return `http://127.0.0.1:8789/stats${q}`;
-  if (smsParam === 'prod' || smsParam === 'live') return `${DEFAULT_PHONE_BASE.replace(/\/$/, '')}/stats${q}`;
-  if (params.has('sms')) {
-    const b = (smsParam || '').replace(/\/$/, '');
-    return b ? `${b}/stats${q}` : '';
-  }
-  if (isLocalHost()) return '';
-  return `${DEFAULT_PHONE_BASE.replace(/\/$/, '')}/stats${q}`;
 }
 
 function unproj(px, py) {
@@ -143,9 +109,7 @@ function lonLat(lon, lat, radius) {
   );
 }
 
-// [ui-v2] ?ui=v2 일 때 ui-v2/gate.js 가 지구본 위에 게임 패널(월드 선택 · 역 선택)을 얹는다. 없으면 null → 기존 그대로
-let gateDecorator = null;
-export function setGateDecorator(fn) { gateDecorator = typeof fn === 'function' ? fn : null; }
+// [ui-v2] 패널은 worldGateFlags.setGateDecorator 로 얹는다.
 
 export function openWorldGate({ onEnter }) {
   const root = document.getElementById('world-gate');
@@ -267,7 +231,7 @@ export function openWorldGate({ onEnter }) {
   const prevDigits = ['', '', '', '', '', ''];
 
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
-  renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+  renderer.setPixelRatio(Math.min(devicePixelRatio, mobileProfileEnabled(typeof location !== 'undefined' ? location.search : '', isMobileMode()) ? 1 : (isMobileMode() ? 1.5 : 2)));
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(35, 1, 0.1, 50);
   camera.position.set(0, 0.15, 3.15);
@@ -932,25 +896,19 @@ export function openWorldGate({ onEnter }) {
     }
   });
   // [ui-v2] 게임 패널 얹기 (기본 꺼짐: gateDecorator 가 null)
+  const gateDecorator = getGateDecorator();
   decor = gateDecorator ? gateDecorator({ root, corridorGlobe, enter, focus: focusRegionOnGlobe, teardown }) : null;
   canvas.addEventListener('pointercancel', clearDrag);
   canvas.addEventListener('lostpointercapture', clearDrag);
   addEventListener('blur', clearDrag);
   fit();
   addEventListener('resize', onResize);
-  // [globe-startup] 셰이더 프리웜: KHR_parallel_shader_compile 이 있으면 지구본 셰이더를 백그라운드에서 링크하고,
-  //   지구 텍스처도 미리 올린 뒤 첫 프레임을 그린다 → 첫 render() 가 링크/업로드를 기다리며 메인 스레드를 막지 않음.
-  //   확장이 없으면(동기 컴파일) 기다릴 이유가 없으니 바로 시작, 있어도 최대 300ms 만 기다린다.
+  // [globe-startup] 셰이더 프리웜은 src/render/warmup.js 공유 헬퍼. 확장이 있으면 백그라운드 링크, 최대 300ms.
   let started = false;
   const start = () => {
     if (started || !alive) return;
     started = true;
     raf = requestAnimationFrame(loop);
   };
-  try {
-    renderer.initTexture(earth.material.map);
-    if (renderer.extensions.has('KHR_parallel_shader_compile')) renderer.compileAsync(scene, camera).then(start, start);
-    else start();
-  } catch { /* 구형 three/드라이버: 바로 시작 */ start(); }
-  setTimeout(start, 300);
+  warmupRenderer(renderer, scene, camera, { textures: earth.material?.map ? [earth.material.map] : [], maxMs: 300, onlyParallel: true }).then(start, start);
 }

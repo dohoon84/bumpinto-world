@@ -2,7 +2,7 @@
 //   흐름: 01 시작화면 → 02 월드 선택(지구본) → 03 역 선택 → 04 캐릭터 입장(그 역 배경) → 05 입장 로딩 → 06 HUD
 //   스타일은 모두 body.ui-v2:not(.mobile) 아래로만 건다(모바일 PR #25 의 body.mobile 과 겹치지 않게).
 import './ui-v2.css';
-import { setGateDecorator } from '../worldGate.js';
+import { setGateDecorator } from '../worldGateFlags.js';
 import { makeGateDecorator, setGateView } from './gate.js';
 import { openStart } from './start.js';
 import { mountEntryWatch, setEntryStation, beforeLobby as entryBeforeLobby, peekFrame as entryPeekFrame } from './entry.js';

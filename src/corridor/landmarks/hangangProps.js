@@ -1,7 +1,7 @@
 // [hangang] 나무·벤치·가로등·휴지통·볼라드·자전거길 표지·한강 부유 문화섬(로고 없음).
 //   OSM natural=tree / amenity=bench / waste_basket 를 쓰고, 부족한 구간은 길을 따라 심는다(approximate).
 import * as THREE from 'three';
-import { addInstancedTrees } from '../../world/trees.js';
+import { addInstancedTrees, addInstancedTreesGen } from '../../world/trees.js';
 import { inWater, centroid, pointInRing, projectOnLine } from './hangangCoords.js';
 
 function hash01(i) {
@@ -10,8 +10,8 @@ function hash01(i) {
   return ((n ^ (n >>> 16)) >>> 0) / 4294967296;
 }
 
-function alongWays(ways, step, fn) {
-  let acc = 0;
+function* alongWays(ways, step, fn) {
+  let acc = 0, n = 0;
   for (const w of ways) {
     const pts = w.pts || w;
     if (!pts || pts.length < 2) continue;
@@ -25,6 +25,7 @@ function alongWays(ways, step, fn) {
       local += L;
     }
     acc += local;
+    if ((++n & 3) === 0) yield 'hangang-props';
   }
 }
 
@@ -32,7 +33,7 @@ function boxMesh(w, h, d, color) {
   return new THREE.Mesh(new THREE.BoxGeometry(w, h, d), new THREE.MeshLambertMaterial({ color }));
 }
 
-export function createHangangProps({ parent, osm, land } = {}) {
+function* hangangPropsGen({ parent, osm, land } = {}) {
   const group = new THREE.Group();
   group.name = 'hangang-props';
   parent.add(group);
@@ -72,13 +73,13 @@ export function createHangangProps({ parent, osm, land } = {}) {
   for (const t of osm?.trees || []) addTree(t.x, t.z);
   const sparse = osm?.meta?.segment === 'hap';
   const treeStep = sparse ? 36 : 22;
-  alongWays(bikeWays, treeStep, (x, z, dx, dz, s) => {
+  yield* alongWays(bikeWays, treeStep, (x, z, dx, dz, s) => {
     const side = (Math.floor(s / treeStep) % 2 === 0) ? 1 : -1;
     addTree(x - dz * side * 4.6, z + dx * side * 4.6);
   });
   if (treePts.length) {
     let treeSeed = 7919;
-    addInstancedTrees(group, treePts, {
+    yield* addInstancedTreesGen(group, treePts, {
       rnd: () => { treeSeed = (treeSeed * 16807) % 2147483647; return treeSeed / 2147483647; },
       crownRadius: 2.4, crownY: 5.2, trunkTop: 0.18, trunkBottom: 0.26,
       trunkHeight: 3.8, trunkColor: '#7a6248', scaleMin: 0.75, scaleSpan: 0.7,
@@ -86,6 +87,7 @@ export function createHangangProps({ parent, osm, land } = {}) {
     });
   }
 
+  yield;
   // --- benches: OSM + approximate along river-facing walks ---
   const benchGeo = new THREE.BoxGeometry(1.5, 0.08, 0.42);
   const benchMat = new THREE.MeshLambertMaterial({ color: '#6b4e32' });
@@ -93,11 +95,13 @@ export function createHangangProps({ parent, osm, land } = {}) {
   const metal = new THREE.MeshLambertMaterial({ color: '#4a4e52' });
   mats.push(benchMat, metal);
   const benchPts = [...(osm?.benches || [])];
-  alongWays(bikeWays, sparse ? 72 : 48, (x, z, dx, dz, s) => {
+  yield* alongWays(bikeWays, sparse ? 72 : 48, (x, z, dx, dz, s) => {
     if (hash01(Math.floor(s) + 9) < 0.55) return;
     benchPts.push({ x: x + dz * 3.2, z: z - dx * 3.2, yaw: Math.atan2(dx, dz) + Math.PI / 2, approx: true });
   });
+  let bi = 0;
   for (const b of benchPts) {
+    if ((++bi & 31) === 0) yield;
     const y = groundY(b.x, b.z);
     if (y == null || inWater(b.x, b.z, osm?.water)) continue;
     const yaw = b.yaw ?? 0;
@@ -112,6 +116,7 @@ export function createHangangProps({ parent, osm, land } = {}) {
     }
   }
 
+  yield;
   // --- streetlights along bike path (approximate spacing) ---
   const poleGeo = new THREE.CylinderGeometry(0.07, 0.09, 5.2, 6);
   const poleMat = new THREE.MeshLambertMaterial({ color: '#3e4246' });
@@ -120,7 +125,7 @@ export function createHangangProps({ parent, osm, land } = {}) {
   mats.push(poleMat, headMat);
   const lamps = [];
   const lampStep = sparse ? 48 : 32;
-  alongWays(bikeWays, lampStep, (x, z, dx, dz) => {
+  yield* alongWays(bikeWays, lampStep, (x, z, dx, dz) => {
     const px = x - dz * 3.6, pz = z + dx * 3.6;
     if (inWater(px, pz, osm?.water)) return;
     const y = groundY(px, pz);
@@ -138,16 +143,19 @@ export function createHangangProps({ parent, osm, land } = {}) {
     lamps.push({ head, x: px, y: y + 5.05, z: pz });
   });
 
+  yield;
   // --- bins: OSM + a few extras ---
   const binGeo = new THREE.CylinderGeometry(0.22, 0.24, 0.7, 8);
   const binMat = new THREE.MeshLambertMaterial({ color: '#3a5a48' });
   mats.push(binMat);
   const binPts = [...(osm?.bins || [])];
-  alongWays(bikeWays, sparse ? 120 : 86, (x, z, dx, dz, s) => {
+  yield* alongWays(bikeWays, sparse ? 120 : 86, (x, z, dx, dz, s) => {
     if (hash01(Math.floor(s) + 21) < 0.4) return;
     binPts.push({ x: x + dz * 3.0, z: z - dx * 3.0, approx: true });
   });
+  let bini = 0;
   for (const b of binPts) {
+    if ((++bini & 31) === 0) yield;
     const y = groundY(b.x, b.z);
     if (y == null || inWater(b.x, b.z, osm?.water)) continue;
     const m = new THREE.Mesh(binGeo, binMat);
@@ -155,6 +163,7 @@ export function createHangangProps({ parent, osm, land } = {}) {
     group.add(m);
   }
 
+  yield;
   // --- bollards near 나들목 ends (approximate) ---
   const bolGeo = new THREE.CylinderGeometry(0.09, 0.11, 0.85, 6);
   const bolMat = new THREE.MeshLambertMaterial({ color: '#cfc8b8' });
@@ -172,12 +181,13 @@ export function createHangangProps({ parent, osm, land } = {}) {
     }
   }
 
+  yield;
   // --- generic bike-path signs (no third-party logos) ---
   const signBoard = new THREE.BoxGeometry(0.7, 0.5, 0.04);
   const signMat = new THREE.MeshLambertMaterial({ color: '#2f6b3c' });
   const postGeo = new THREE.CylinderGeometry(0.04, 0.045, 2.4, 6);
   mats.push(signMat);
-  alongWays(bikeWays.filter((w) => (w.name || '').includes('자전거') || w.name === '잠수교'), 160, (x, z, dx, dz, s) => {
+  yield* alongWays(bikeWays.filter((w) => (w.name || '').includes('자전거') || w.name === '잠수교'), 160, (x, z, dx, dz, s) => {
     const px = x - dz * 4.2, pz = z + dx * 4.2;
     const y = groundY(px, pz);
     if (y == null || inWater(px, pz, osm?.water)) return;
@@ -190,6 +200,7 @@ export function createHangangProps({ parent, osm, land } = {}) {
     group.add(board);
   });
 
+  yield;
   // --- 한강 부유 문화섬: OSM islet 발자국(relation/4077217 계열). 로고·상호 없음.
   function ringShapeXZ(ring) {
     const pts = ring[0][0] === ring.at(-1)[0] && ring[0][1] === ring.at(-1)[1] ? ring.slice(0, -1) : ring.slice();
@@ -265,7 +276,7 @@ export function createHangangProps({ parent, osm, land } = {}) {
     }
     if (seoraeTrees.length) {
       let seed = 4517;
-      addInstancedTrees(group, seoraeTrees, {
+      yield* addInstancedTreesGen(group, seoraeTrees, {
         rnd: () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; },
         crownRadius: 2.1, crownY: 4.6, trunkHeight: 3.2,
         scaleMin: 0.7, scaleSpan: 0.45,
@@ -309,3 +320,21 @@ export function createHangangProps({ parent, osm, land } = {}) {
 
   return { group, setNight, updateLights, treeCount: treePts.length };
 }
+
+export function createHangangProps(opts) {
+  const g = hangangPropsGen(opts);
+  let n = g.next();
+  while (!n.done) n = g.next();
+  return n.value;
+}
+
+export async function createHangangPropsAsync(opts, slicer) {
+  const g = hangangPropsGen(opts);
+  let n = g.next();
+  while (!n.done) {
+    if (slicer) await slicer.tick('hangang-props');
+    n = g.next();
+  }
+  return n.value;
+}
+

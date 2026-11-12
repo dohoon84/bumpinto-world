@@ -3,17 +3,14 @@
 import * as THREE from 'three';
 import { watchEvening } from '../../evening.js';
 import { HG, centroid } from './hangangCoords.js';
-import { createHangangTerrain } from './hangangTerrain.js';
+import { createHangangTerrain, createHangangTerrainAsync } from './hangangTerrain.js';
 import { createHangangBridges } from './hangangBridges.js';
-import { createHangangPaths } from './hangangPaths.js';
-import { createHangangCity } from './hangangCity.js';
-import { createHangangProps } from './hangangProps.js';
-import { createHangangHap, mergeHangangMini } from './hangangHap.js';
+import { createHangangPaths, createHangangPathsAsync } from './hangangPaths.js';
+import { createHangangCity, createHangangCityAsync } from './hangangCity.js';
+import { createHangangProps, createHangangPropsAsync } from './hangangProps.js';
+import { createHangangHap, createHangangHapAsync, mergeHangangMini } from './hangangHap.js';
 
-export const HANGANG_DEM_FILE = 'hangang/hangang-dem.json';
-export const HANGANG_OSM_FILE = 'hangang/hangang-osm.json';
-export const HAP_DEM_FILE = 'hangang/hap-dem.json';
-export const HAP_OSM_FILE = 'hangang/hap-osm.json';
+export { HANGANG_DEM_FILE, HANGANG_OSM_FILE, HAP_DEM_FILE, HAP_OSM_FILE, HANGANG_TERRAIN_BAKE_FILE, HAP_TERRAIN_BAKE_FILE, hangangEnabled } from './hangangFlags.js';
 
 // 점 (x, z) 에서 사각형 b 까지 거리 (안이면 0)
 function rectDist(b, x, z) {
@@ -22,9 +19,6 @@ function rectDist(b, x, z) {
   return Math.hypot(dx, dz);
 }
 
-export function hangangEnabled(search = typeof location !== 'undefined' ? location.search : '') {
-  return new URLSearchParams(search || '').get('hangang') !== '0';
-}
 
 export function hangangMini(osm) {
   const extraRoads = [];
@@ -66,7 +60,10 @@ export function createHangang({ scene, overlay, terrain, dem, osm, hap, foreign 
   const hapApi = (hap?.dem && hap?.osm)
     ? createHangangHap({ parent: root, overlay, terrain, dem: hap.dem, osm: hap.osm, foreign })
     : null;
+  return finishHangang({ scene, overlay, terrain, dem, osm, hap, foreign, root, land, bridges, paths, city, props, hapApi });
+}
 
+function finishHangang({ scene, overlay, terrain, dem, osm, hap, foreign, root, land, bridges, paths, city, props, hapApi }) {
   const spawnSrc = osm?.spawn || osm?.connectEnds?.jamsuSouth;
   const spawn = spawnSrc
     ? { x: spawnSrc.x, z: spawnSrc.z, name: spawnSrc.name || '잠수교 남단' }
@@ -243,3 +240,43 @@ export function createHangang({ scene, overlay, terrain, dem, osm, hap, foreign 
   };
   return api;
 }
+
+export async function createHangangAsync({ scene, overlay, terrain, dem, osm, hap, foreign = null, bakeUrl = null } = {}, yieldFn, slicer) {
+  const y = yieldFn || (typeof requestAnimationFrame === 'function'
+    ? () => new Promise((r) => requestAnimationFrame(() => r()))
+    : () => Promise.resolve());
+  const root = new THREE.Group();
+  root.name = 'hangang';
+  root.visible = false; // 짓는 동안은 안 보이게. 끝나면 킨다.
+  scene.add(root);
+
+  const land = await createHangangTerrainAsync({ parent: root, dem, osm, bakeUrl }, y, slicer);
+  if (slicer) slicer.flush('hangang-s1-terrain');
+  await y();
+  const bridges = createHangangBridges({ parent: root, osm, land });
+  if (slicer) slicer.flush('hangang-s1-bridges');
+  await y();
+  const paths = slicer
+    ? await createHangangPathsAsync({ parent: root, osm, land }, slicer)
+    : createHangangPaths({ parent: root, osm, land });
+  if (slicer) slicer.flush('hangang-s1-paths');
+  else await y();
+  const city = slicer
+    ? await createHangangCityAsync({ parent: root, osm, land, expressXMax: hap?.osm?.meta?.pathWestClip ?? null }, slicer)
+    : createHangangCity({ parent: root, osm, land, expressXMax: hap?.osm?.meta?.pathWestClip ?? null });
+  if (slicer) slicer.flush('hangang-s1-city');
+  else await y();
+  const props = slicer
+    ? await createHangangPropsAsync({ parent: root, osm, land }, slicer)
+    : createHangangProps({ parent: root, osm, land });
+  if (slicer) slicer.flush('hangang-s1-props');
+  await y();
+  const hapApi = (hap?.dem && hap?.osm)
+    ? await createHangangHapAsync({ parent: root, overlay, terrain, dem: hap.dem, osm: hap.osm, foreign, bakeUrl: hap.bakeUrl || null }, y, slicer)
+    : null;
+  await y();
+  const api = finishHangang({ scene, overlay, terrain, dem, osm, hap, foreign, root, land, bridges, paths, city, props, hapApi });
+  root.visible = true;
+  return api;
+}
+

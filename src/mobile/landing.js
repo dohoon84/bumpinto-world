@@ -7,7 +7,7 @@ import { enterFullscreen, shouldShowHomeScreenHint, dismissHomeScreenHint } from
 import { OPEN_REGIONS, getCurrentRegion, getRegion, navigateToRegion } from '../regions/index.js';
 import { OPEN_MAINLINE_STATIONS, OPEN_BRANCH_STATIONS, corridorName, namsanGlobeEnabled, NAMSAN_LANDMARK } from '../corridor/globeCorridor.js';
 import { readSavedPassport, isPassportActive } from '../look.js';
-import { isStarbaseLive } from '../worldGate.js';
+import { isStarbaseLive } from '../worldGateFlags.js';
 import { isEn, toggleLang } from '../i18n.js';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));

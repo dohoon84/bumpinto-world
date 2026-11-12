@@ -5,6 +5,8 @@ import { createAvatar } from './entities/avatar.js';
 import { LOOK_CHOICES, LOOK_TABS, COLOR_FIELDS, PROFILE_KEY, sanitizeLook } from './look.js';
 import { isEn, tr, toggleLang, onLangChange } from './i18n.js';
 import { accountsOn } from './account/flags.js'; // [accounts] 가벼운 스위치만 — 계정 입장 UI 는 켜졌을 때만 동적으로
+import { isMobileMode } from './mobile/flag.js';
+import { mobileProfileEnabled } from './mobile/profile.js';
 
 const ENTER_LINES = [
   '정자역 광장으로 걸어 들어가는 중',
@@ -337,7 +339,7 @@ export function openLobby({ sms, region = null, onJoin, onBack }) {
 
   const view = root.querySelector('#lobby-preview');
   const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-  renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+  renderer.setPixelRatio(Math.min(devicePixelRatio, mobileProfileEnabled(typeof location !== 'undefined' ? location.search : '', isMobileMode()) ? 1 : (isMobileMode() ? 1.5 : 2)));
   view.appendChild(renderer.domElement);
   const scene = new THREE.Scene();
   scene.background = new THREE.Color('#1a2744');

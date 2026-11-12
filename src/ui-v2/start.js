@@ -6,7 +6,7 @@ import { setTop, liveChip, langChip, contributeChip } from './topbar.js';
 import { googleButton, requestGoogleSignIn, googleNotReadyText, googleSignInReady, onGoogleReady, GOOGLE_G_SVG } from './google.js';
 import { regionSummary, readLastStation, stationLabel } from './data.js';
 import { tr, isEn, onLangChange } from '../i18n.js';
-import { REPO_URL } from '../worldGate.js';
+import { REPO_URL } from '../worldGateFlags.js';
 import { trackEvent } from '../analytics.js';
 import { mountBgVideo } from '../landing/bgVideo.js';
 import { dismissEarlyStart, takeEarlyPending } from './earlyStart.js';

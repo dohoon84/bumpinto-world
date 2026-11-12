@@ -1,7 +1,7 @@
 // [ui-v2] 화면들이 같이 쓰는 값: 열린 역 수(지구본과 같은 규칙), 위성 관측 집계, 마지막 역(이어하기).
 import { OPEN_REGIONS, UPCOMING_REGIONS, getRegion, countryOf } from '../regions/index.js';
 import { corridorGlobeEnabled, CORRIDOR_STATION_IDS, OPEN_BRANCH_IDS, OPEN_MAINLINE_STATIONS, OPEN_BRANCH_STATIONS, corridorStationLabel } from '../corridor/globeCorridor.js';
-import { isStarbaseLive, phoneStatsUrl } from '../worldGate.js';
+import { isStarbaseLive, phoneStatsUrl } from '../worldGateFlags.js';
 import { isEn, tr } from '../i18n.js';
 
 export const corridorOn = () => corridorGlobeEnabled(new URLSearchParams(location.search), getRegion('jeongja'));

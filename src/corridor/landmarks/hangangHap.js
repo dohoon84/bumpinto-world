@@ -3,10 +3,10 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { inWater, centroid, projectOnLine } from './hangangCoords.js';
-import { createHangangTerrain, waterYAt } from './hangangTerrain.js';
-import { createHangangPaths } from './hangangPaths.js';
-import { createHangangCity } from './hangangCity.js';
-import { createHangangProps } from './hangangProps.js';
+import { createHangangTerrain, createHangangTerrainAsync, waterYAt } from './hangangTerrain.js';
+import { createHangangPaths, createHangangPathsAsync } from './hangangPaths.js';
+import { createHangangCity, createHangangCityAsync } from './hangangCity.js';
+import { createHangangProps, createHangangPropsAsync } from './hangangProps.js';
 
 const SKIP_BRIDGE = new Set(['반포대교', '잠수교']);
 
@@ -463,17 +463,18 @@ function createHapUnderpasses({ parent, osm, land }) {
   };
 }
 
-export function createHangangHap({ parent, overlay, terrain, dem, osm, foreign = null } = {}) {
+function startHangangHap(parent, osm) {
   const root = new THREE.Group();
   root.name = 'hangang-hap';
   parent.add(root);
-
   if (Array.isArray(osm?.amenities)) {
     osm.benches = osm.amenities.filter((a) => a.k === 'bench');
     osm.bins = osm.amenities.filter((a) => a.k === 'waste_basket');
   }
+  return root;
+}
 
-  const land = createHangangTerrain({ parent: root, dem, osm });
+function finishHangangHap({ parent, overlay, terrain, dem, osm, foreign = null, root, land } = {}) {
   const paths = createHangangPaths({ parent: root, osm, land });
   const city = createHangangCity({ parent: root, osm, land });
   const bridges = createHapBridges({ parent: root, osm, land });
@@ -501,7 +502,135 @@ export function createHangangHap({ parent, overlay, terrain, dem, osm, foreign =
     });
   }
   const props = createHangangProps({ parent: root, osm, land });
+  return finishHangangHapApi({ overlay, osm, root, land, paths, city, bridges, underpasses, props, ownRect, owns, ownHeightAt });
+}
 
+// [hangang-isolation] 무게중심이 drop(cx, cz) 인 삼각형을 인덱스에서 뺀다.
+function dropTriangles(g, drop) {
+  const st = startDropTriangles(g, drop);
+  if (!st) return;
+  while (st.step(4000)) { /* sync */ }
+  st.finish();
+}
+
+async function dropTrianglesAsync(g, drop, slicer) {
+  const st = startDropTriangles(g, drop);
+  if (!st) return;
+  while (st.step(2000)) {
+    if (slicer) await slicer.tick('hangang-hap-clip');
+  }
+  st.finish();
+}
+
+function startDropTriangles(g, drop) {
+  const pos = g?.attributes?.position;
+  if (!pos) return null;
+  const idx = g.index;
+  const n = idx ? idx.count : pos.count;
+  const v = (i) => (idx ? idx.getX(i) : i);
+  const keep = [];
+  let dropped = 0;
+  let i = 0;
+  return {
+    step(budget) {
+      const end = Math.min(n, i + budget * 3);
+      for (; i + 2 < end; i += 3) {
+        const a = v(i), b = v(i + 1), c = v(i + 2);
+        const cx = (pos.getX(a) + pos.getX(b) + pos.getX(c)) / 3;
+        const cz = (pos.getZ(a) + pos.getZ(b) + pos.getZ(c)) / 3;
+        if (drop(cx, cz)) { dropped++; continue; }
+        keep.push(a, b, c);
+      }
+      return i + 2 < n;
+    },
+    finish() {
+      if (dropped) { g.setIndex(keep); g.computeBoundingSphere?.(); g.computeBoundingBox?.(); }
+    },
+  };
+}
+
+export function mergeHangangMini(a, b) {
+  if (!a) return b || { roads: [], buildings: [], plazas: [], parks: [], water: [], waterLines: [] };
+  if (!b) return a;
+  return {
+    roads: [...(a.roads || []), ...(b.roads || [])],
+    buildings: [...(a.buildings || []), ...(b.buildings || [])],
+    plazas: [...(a.plazas || []), ...(b.plazas || [])],
+    parks: [...(a.parks || []), ...(b.parks || [])],
+    water: [...(a.water || []), ...(b.water || [])],
+    waterLines: [...(a.waterLines || []), ...(b.waterLines || [])],
+  };
+}
+
+export function createHangangHap({ parent, overlay, terrain, dem, osm, foreign = null } = {}) {
+  const root = startHangangHap(parent, osm);
+  const land = createHangangTerrain({ parent: root, dem, osm });
+  return finishHangangHap({ parent, overlay, terrain, dem, osm, foreign, root, land });
+}
+
+export async function createHangangHapAsync({ parent, overlay, terrain, dem, osm, foreign = null, bakeUrl = null } = {}, yieldFn, slicer) {
+  const y = yieldFn || (typeof requestAnimationFrame === 'function'
+    ? () => new Promise((r) => requestAnimationFrame(() => r()))
+    : () => Promise.resolve());
+  const root = startHangangHap(parent, osm);
+  const land = await createHangangTerrainAsync({ parent: root, dem, osm, bakeUrl }, y, slicer);
+  if (slicer) slicer.flush('hangang-hap-terrain');
+  await y();
+  return finishHangangHapAsync({ parent, overlay, terrain, dem, osm, foreign, root, land }, y, slicer);
+}
+
+async function finishHangangHapAsync({ parent, overlay, terrain, dem, osm, foreign = null, root, land } = {}, y, slicer) {
+  const paths = slicer
+    ? await createHangangPathsAsync({ parent: root, osm, land }, slicer)
+    : createHangangPaths({ parent: root, osm, land });
+  if (slicer) slicer.flush('hangang-hap-paths');
+  else if (y) await y();
+  const city = slicer
+    ? await createHangangCityAsync({ parent: root, osm, land }, slicer)
+    : createHangangCity({ parent: root, osm, land });
+  if (slicer) slicer.flush('hangang-hap-city');
+  else if (y) await y();
+  const bridges = createHapBridges({ parent: root, osm, land });
+  if (y) await y();
+  const underpasses = createHapUnderpasses({ parent: root, osm, land });
+  if (y) await y();
+
+  const clipRectOf = () => {
+    const b = land.bounds;
+    if (!b) return null;
+    const x0 = Math.max(b.x0, osm?.meta?.visualXMin ?? b.x0);
+    const z1 = Math.min(b.z1, -15800);
+    return (x0 < b.x1 && b.z0 < z1) ? { x0, x1: b.x1, z0: b.z0, z1 } : null;
+  };
+  const ownRect = clipRectOf();
+  const inRect = (r, x, z) => !!r && x >= r.x0 && x <= r.x1 && z >= r.z0 && z <= r.z1;
+  const isForeign = typeof foreign === 'function' ? foreign : () => false;
+  const owns = (x, z) => inRect(ownRect, x, z) || !isForeign(x, z);
+  const ownHeightAt = (x, z) => (owns(x, z) ? land.heightAt(x, z) : null);
+  if (typeof foreign === 'function') {
+    const meshes = [];
+    root.traverse((o) => {
+      if (!o.isMesh || !(o.name === 'hangang-dem' || o.name === 'hangang-water')) return;
+      meshes.push(o);
+    });
+    for (const o of meshes) {
+      if (slicer) await dropTrianglesAsync(o.geometry, (cx, cz) => !owns(cx, cz), slicer);
+      else dropTriangles(o.geometry, (cx, cz) => !owns(cx, cz));
+    }
+  }
+  if (slicer) slicer.flush('hangang-hap-clip');
+  else if (y) await y();
+  const props = slicer
+    ? await createHangangPropsAsync({ parent: root, osm, land }, slicer)
+    : createHangangProps({ parent: root, osm, land });
+  if (slicer) slicer.flush('hangang-hap-props');
+  else if (y) await y();
+
+  // labels + API: same as finishHangangHap from overlay onward
+  return finishHangangHapApi({ overlay, osm, foreign, root, land, paths, city, bridges, underpasses, props, ownRect, owns, ownHeightAt });
+}
+
+function finishHangangHapApi({ overlay, osm, root, land, paths, city, bridges, underpasses, props, ownRect, owns, ownHeightAt }) {
   if (overlay) {
     const hap = osm?.spawns?.['tancheon-hap'] || osm?.connectEnds?.tancheonHap;
     if (hap) {
@@ -594,34 +723,3 @@ export function createHangangHap({ parent, overlay, terrain, dem, osm, foreign =
   };
 }
 
-// [hangang-isolation] 무게중심이 drop(cx, cz) 인 삼각형을 인덱스에서 뺀다.
-function dropTriangles(g, drop) {
-  const pos = g?.attributes?.position;
-  if (!pos) return;
-  const idx = g.index;
-  const n = idx ? idx.count : pos.count;
-  const v = (i) => (idx ? idx.getX(i) : i);
-  const keep = [];
-  let dropped = 0;
-  for (let i = 0; i + 2 < n; i += 3) {
-    const a = v(i), b = v(i + 1), c = v(i + 2);
-    const cx = (pos.getX(a) + pos.getX(b) + pos.getX(c)) / 3;
-    const cz = (pos.getZ(a) + pos.getZ(b) + pos.getZ(c)) / 3;
-    if (drop(cx, cz)) { dropped++; continue; }
-    keep.push(a, b, c);
-  }
-  if (dropped) { g.setIndex(keep); g.computeBoundingSphere?.(); g.computeBoundingBox?.(); }
-}
-
-export function mergeHangangMini(a, b) {
-  if (!a) return b || { roads: [], buildings: [], plazas: [], parks: [], water: [], waterLines: [] };
-  if (!b) return a;
-  return {
-    roads: [...(a.roads || []), ...(b.roads || [])],
-    buildings: [...(a.buildings || []), ...(b.buildings || [])],
-    plazas: [...(a.plazas || []), ...(b.plazas || [])],
-    parks: [...(a.parks || []), ...(b.parks || [])],
-    water: [...(a.water || []), ...(b.water || [])],
-    waterLines: [...(a.waterLines || []), ...(b.waterLines || [])],
-  };
-}
