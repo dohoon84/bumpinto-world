@@ -3,6 +3,7 @@
 import * as THREE from 'three';
 import { PRODUCTS, BY_ID } from './products.js';
 import { registerStockProducts, PICKABLE_IDS } from './stockCatalog.js';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 
 const W = 84, D = 120, CEIL = 9;
 const RACK_D = 2.2, AISLE = 3.35, BAY = 2.7, BEAMS = [1.85, 3.2, 4.5];
@@ -84,6 +85,37 @@ function canvasTex(w, h, draw, srgb = true) {
   const t = new THREE.CanvasTexture(c); if (srgb) t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; return t;
 }
 
+// 인스턴스마다 아틀라스 칸을 고르는 재질: 지오메트리 UV 는 (0,0) 칸 기준, 인스턴스 속성 aCell 로 칸만큼 밀어 준다.
+//   SKU 마다 InstancedMesh 를 따로 두던 걸(드로콜 수십 개) 구역별 1개로 합치는 데 쓴다.
+function cellMaterial(keep, m) {
+  m.onBeforeCompile = (sh) => { sh.vertexShader = `attribute vec2 aCell;\n${sh.vertexShader.replace('#include <uv_vertex>', '#include <uv_vertex>\n#ifdef USE_MAP\n\tvMapUv += aCell;\n#endif')}`; };
+  m.customProgramCacheKey = () => 'depot-cell-atlas';
+  return keep(m);
+}
+// 정적 메시를 재질별로 한 지오메트리로 굽기 (작은 InstancedMesh 도 펼쳐서). userData.dynamic 은 건드리지 않음.
+function mergeStatics(root, keep) {
+  const buckets = new Map();
+  for (const o of [...root.children]) {
+    if (!o.isMesh || o.userData.dynamic || Array.isArray(o.material)) continue;
+    if (o.isInstancedMesh && (o.count > 12 || o.instanceColor)) continue;
+    const b = buckets.get(o.material) || []; b.push(o); buckets.set(o.material, b);
+  }
+  const mi = new THREE.Matrix4();
+  for (const [mat, list] of buckets) {
+    if (list.length < 2 && !list[0].isInstancedMesh) continue;
+    const geos = [];
+    for (const o of list) {
+      o.updateMatrix();
+      const base = o.geometry.index ? o.geometry.toNonIndexed() : o.geometry.clone();
+      for (const k of Object.keys(base.attributes)) if (k !== 'position' && k !== 'normal' && k !== 'uv') base.deleteAttribute(k);
+      if (o.isInstancedMesh) { for (let i = 0; i < o.count; i++) { o.getMatrixAt(i, mi); geos.push(base.clone().applyMatrix4(mi.premultiply(o.matrix))); } base.dispose(); } else geos.push(base.applyMatrix4(o.matrix));
+      root.remove(o);
+    }
+    const g = keep(mergeGeometries(geos)); geos.forEach((x) => x.dispose());
+    if (g) root.add(new THREE.Mesh(g, mat));
+  }
+}
+
 // 2048 아틀라스: 8×8 칸(256px). 칸 안은 기존 상품 텍스처와 같이 앞/옆/위/예비.
 const ATLAS_N = 8, ATLAS_S = 2048, CELL = ATLAS_S / ATLAS_N;
 function paintCell(g, cx, cy, p) {
@@ -151,8 +183,7 @@ function makeAtlas(keep) {
   return { mat, geo, index, proxyGeo, tex: t };
 }
 
-function signTex(keep, canvasTexFn, title, sub, w = 1024, h = 256) {
-  return keep(canvasTexFn(w, h, (g) => {
+function paintSign(g, w, h, title, sub) {
     g.fillStyle = '#1E5A45'; g.fillRect(0, 0, w, h);
     g.fillStyle = '#F2C230'; g.fillRect(0, h - 40, w, 40);
     g.fillStyle = '#F3EADA'; g.textAlign = 'center'; g.textBaseline = 'middle';
@@ -160,12 +191,11 @@ function signTex(keep, canvasTexFn, title, sub, w = 1024, h = 256) {
     g.fillText(title, w / 2, h * 0.42);
     g.fillStyle = '#123B2D'; g.font = '800 28px "Pretendard",sans-serif';
     g.fillText(sub, w / 2, h - 20);
-  }));
 }
 
-function tagTex(keep, canvasTexFn, p) {
+function paintTag(g, p) {
   const sale = p.id === 'ramen' || p.id === 'chips' || p.id === 'cookie' || p.id === 'cupramen';
-  return keep(canvasTexFn(512, 256, (g) => {
+  {
     g.fillStyle = '#FBF7EE'; g.fillRect(0, 0, 512, 256);
     g.fillStyle = sale ? '#D9442E' : '#1E5A45'; g.fillRect(0, 0, 512, 54);
     g.fillStyle = '#F3EADA'; g.font = '800 26px "Pretendard",sans-serif'; g.textAlign = 'left';
@@ -176,7 +206,7 @@ function tagTex(keep, canvasTexFn, p) {
     g.font = '800 72px "Pretendard",sans-serif'; g.fillText(p.price.toLocaleString('ko-KR'), 462, 220);
     g.font = '800 30px "Pretendard",sans-serif'; g.fillText('원', 498, 220);
     g.fillStyle = '#22262A'; for (let i = 0; i < 26; i++) g.fillRect(22 + i * 6, 168, (i * 7) % 3 + 1, 50);
-  }));
+  }
 }
 
 export function mountStock({ scene, keep, canvasTex: canvasTexFn, TX, racks, obstacles, wraps, boxGeoLabeled }) {
@@ -251,7 +281,6 @@ export function mountStock({ scene, keep, canvasTex: canvasTexFn, TX, racks, obs
 
   // 클러스터 데이터만 모으고, 메시는 맨 끝 finalizeStock 에서 SKU 별로 합친다.
   const tagG = keep(new THREE.PlaneGeometry(0.62, 0.31));
-  const tagMats = {};
   const proxyMat = keep(new THREE.MeshLambertMaterial({ color: 0xffffff }));
 
   // ----- 엔드캡 (교차 통로 특가 파렛트) -----
@@ -299,13 +328,10 @@ export function mountStock({ scene, keep, canvasTex: canvasTexFn, TX, racks, obs
   const hangY = 6.2;
   const aisleXs = [17.9, 23.4, 29.0, 34.5, 40.1, 48.3, 53.9, 59.4, 64.8];
   const hangZ = { A: 22, B: 58, C: 92 };
-  const hangMatCache = {};
-  const hangG = keep(new THREE.PlaneGeometry(3.2, 0.8));
+  // 사인 아틀라스 (2048², 칸 512×128 · 통로 번호는 512×256) 에 모두 그려 한 메시로 합침 → 드로콜 1
+  const signs = [];
   function hangSign(title, sub, x, z, tex) {
-    const m = tex
-      ? keep(new THREE.MeshBasicMaterial({ map: tex, transparent: true, alphaTest: 0.5, side: THREE.DoubleSide }))
-      : keep(new THREE.MeshBasicMaterial({ map: (hangMatCache[title] ||= signTex(keep, ct, title, sub)), side: THREE.DoubleSide }));
-    const a = new THREE.Mesh(hangG, m); a.position.set(x, hangY, z); scene.add(a);
+    signs.push({ key: tex ? `tx:${tex.uuid}` : `h:${title}`, img: tex?.image || null, title, sub, tall: false, w: 3.2, h: 0.8, x, y: hangY, z, ry: 0 });
   }
   const TEX_HANG = { 53.9: TX?.['hang-water-drinks'], 59.4: TX?.['hang-rice-grain'] || TX?.['hang-ramen-snack'], 48.3: TX?.['hang-household'], 29.0: TX?.['hang-ramen-snack'] };
   for (const x of aisleXs) {
@@ -324,18 +350,44 @@ export function mountStock({ scene, keep, canvasTex: canvasTexFn, TX, racks, obs
 
   // 통로 번호 (왼쪽 블록에도)
   const aisleNo = [['01', 53.9], ['02', 59.4], ['03', 64.8], ['05', 48.3], ['06', 17.9], ['07', 23.4], ['08', 29.0], ['09', 34.5], ['10', 40.1]];
-  const aisleG = keep(new THREE.PlaneGeometry(2.6, 1.3));
   for (const [no, x] of aisleNo) {
     if (no === '01' || no === '02' || no === '03' || no === '05') continue; // 기존 interior 사인
-    const tex = signTex(keep, ct, no, (HANG_COPY[x] || ['', ''])[0], 1024, 512);
-    const m = keep(new THREE.MeshBasicMaterial({ map: tex, side: THREE.DoubleSide }));
-    const s = new THREE.Mesh(aisleG, m); s.position.set(x, 5.4, 13.95); s.rotation.y = Math.PI; scene.add(s);
+    signs.push({ key: `a:${no}`, title: no, sub: (HANG_COPY[x] || ['', ''])[0], tall: true, w: 2.6, h: 1.3, x, y: 5.4, z: 13.95, ry: Math.PI });
+  }
+  {
+    const SA = 2048, SW = 512, SH = 128, COLS = SA / SW;
+    const slot = new Map(); let nShort = 0, nTall = 0;
+    for (const sg of signs) {
+      if (slot.has(sg.key)) continue;
+      if (sg.tall) { const i = nTall++; slot.set(sg.key, { x: (i % COLS) * SW, y: (12 + 2 * Math.floor(i / COLS)) * SH, h: 2 * SH, sg }); } // 12–15 행
+      else { const i = nShort++; slot.set(sg.key, { x: (i % COLS) * SW, y: Math.floor(i / COLS) * SH, h: SH, sg }); } // 0–11 행 (48장)
+    }
+    const tex = keep(ct(SA, SA, (g) => {
+      g.clearRect(0, 0, SA, SA);
+      for (const { x, y, h, sg } of slot.values()) {
+        g.save(); g.translate(x, y);
+        if (sg.img && sg.img.width) g.drawImage(sg.img, 0, 0, SW, h);
+        else { g.scale(SW / 1024, h / (sg.tall ? 512 : 256)); paintSign(g, 1024, sg.tall ? 512 : 256, sg.title, sg.sub); }
+        g.restore();
+      }
+    }));
+    tex.anisotropy = 4;
+    const geos = []; const mm = new THREE.Matrix4(), qq = new THREE.Quaternion();
+    for (const sg of signs) {
+      const sl = slot.get(sg.key); const g = new THREE.PlaneGeometry(sg.w, sg.h); const uv = g.attributes.uv;
+      for (let i = 0; i < uv.count; i++) uv.setXY(i, (sl.x + uv.getX(i) * SW) / SA, 1 - (sl.y + (1 - uv.getY(i)) * sl.h) / SA);
+      g.applyMatrix4(mm.compose(pv.set(sg.x, sg.y, sg.z), qq.setFromAxisAngle(Y, sg.ry), s3.set(1, 1, 1))); geos.push(g);
+    }
+    const sm = new THREE.Mesh(keep(mergeGeometries(geos)), keep(new THREE.MeshBasicMaterial({ map: tex, side: THREE.DoubleSide, alphaTest: 0.5 })));
+    geos.forEach((g) => g.dispose()); scene.add(sm);
   }
 
   // ----- 주변 집기: 냉동·신선·베이커리·주류·펫·계절·의류·시식·델리 -----
-  const fixtures = buildFixtures({ scene, keep, ct, atlas, unitBox, obstacles, prodMeshes, m4, pv, qy, s3, col, Y, q0, findCluster, addCluster, clusters });
+  const fxRoot = new THREE.Group(); scene.add(fxRoot);
+  const fixtures = buildFixtures({ scene: fxRoot, keep, ct, atlas, unitBox, obstacles, prodMeshes, m4, pv, qy, s3, col, Y, q0, findCluster, addCluster, clusters });
 
-  finalizeStock({ scene, keep, clusters, atlas, unitBox, prodMeshes, tagG, tagMats, tagTex, ct, proxyMat, m4, pv, qy, s3, col, Y, q0 });
+  mergeStatics(fxRoot, keep); // 집기 정적 메시 → 재질별 1개
+  finalizeStock({ scene, keep, clusters, atlas, unitBox, prodMeshes, tagG, ct, proxyMat, m4, pv, qy, s3, col, Y, q0 });
 
   function tick(camera) {
     const x = camera.position.x, z = camera.position.z;
@@ -374,6 +426,7 @@ function buildFixtures({ scene, keep, ct, atlas, unitBox, obstacles, prodMeshes,
   const mistShared = keep(new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.0, depthWrite: false, side: THREE.DoubleSide, fog: true }));
 
   const mistPlanes = [];
+  const palAt = []; // 바닥 파렛트 (x,z) — 끝에서 InstancedMesh 1개
   const caseCluster = addCluster(74, 76);
 
   // ===== 냉동: 동쪽 벽 x 82.0–83.7, z 46–107, 유리문 케이스 =====
@@ -410,9 +463,7 @@ function buildFixtures({ scene, keep, ct, atlas, unitBox, obstacles, prodMeshes,
       }
     }
     // 냉기 안개 (문 앞, 가까운 케이스만 tick 에서 켬)
-    const mist = new THREE.Mesh(mistGeo, mistShared);
-    mist.position.set(FZ_X - FZ_W / 2 - 0.05, 1.1, z); mist.rotation.y = -Math.PI / 2;
-    scene.add(mist); mistPlanes.push({ mesh: mist, z, x: FZ_X - FZ_W / 2 });
+    mistPlanes.push({ z, x: FZ_X - FZ_W / 2 });
   }
   shells.count = nUnit; lights.count = nUnit; doors.count = frostI.count = di;
   scene.add(shells, lights, doors, frostI);
@@ -438,8 +489,7 @@ function buildFixtures({ scene, keep, ct, atlas, unitBox, obstacles, prodMeshes,
         list.push({ x: x - 0.5 + (ix + 0.5) * (1.0 / nX), y: 0.14 + sy * (y + 0.5), z: z - 0.4 + (iz + 0.5) * (0.85 / nZ), rot: 0, face: 1, pickable: y === nY - 1 && ix === 0 && PICKABLE_IDS.has(p.id), sx, sy, sz, pid: p.id });
       }
       // 바닥 파렛트
-      const pal = new THREE.Mesh(palGeo, palMat);
-      pal.position.set(x, 0.07, z); scene.add(pal);
+      palAt.push(x, z);
       obstacles.push({ x0: x - 0.65, x1: x + 0.65, z0: z - 0.55, z1: z + 0.55 });
       seaCluster.palettes = seaCluster.palettes || [];
       seaCluster.palettes.push({ x, y: 0.14, z, w: 1.1, h: 1.15, d: 0.95, color: p.color, ground: true });
@@ -613,8 +663,7 @@ function buildFixtures({ scene, keep, ct, atlas, unitBox, obstacles, prodMeshes,
   for (let z = 44; z < 69; z += 3.6) {
     for (const x of [3.6, 8.8]) {
       const p = BY_ID[z % 7.2 < 3.6 ? 'beer' : 'soju'];
-      const pal = new THREE.Mesh(palGeo, palMat);
-      pal.position.set(x, 0.07, z); scene.add(pal);
+      palAt.push(x, z);
       obstacles.push({ x0: x - 0.65, x1: x + 0.65, z0: z - 0.55, z1: z + 0.55 });
       const [sx, sy, sz] = p.size;
       const list = alcCluster.items.get(p.id) || []; alcCluster.items.set(p.id, list);
@@ -645,8 +694,7 @@ function buildFixtures({ scene, keep, ct, atlas, unitBox, obstacles, prodMeshes,
   for (let z = 74; z < 104; z += 3.8) {
     for (const x of [3.6, 8.8]) {
       const p = BY_ID[petIds[pi++ % petIds.length]];
-      const pal = new THREE.Mesh(palGeo, palMat);
-      pal.position.set(x, 0.07, z); scene.add(pal);
+      palAt.push(x, z);
       obstacles.push({ x0: x - 0.65, x1: x + 0.65, z0: z - 0.55, z1: z + 0.55 });
       const [sx, sy, sz] = p.size;
       const list = petCluster.items.get(p.id) || []; petCluster.items.set(p.id, list);
@@ -661,18 +709,25 @@ function buildFixtures({ scene, keep, ct, atlas, unitBox, obstacles, prodMeshes,
   }
   buildItemIMs(petCluster, atlas, unitBox, prodMeshes, m4, pv, qy, s3, col, Y);
 
+  // 바닥 파렛트 1 드로콜
+  if (palAt.length) {
+    const pals = new THREE.InstancedMesh(palGeo, palMat, palAt.length / 2);
+    for (let i = 0; i < palAt.length / 2; i++) { m4.makeTranslation(palAt[2 * i], 0.07, palAt[2 * i + 1]); pals.setMatrixAt(i, m4); }
+    pals.computeBoundingSphere(); scene.add(pals);
+  }
+  // 냉기 안개: 가까운 케이스만 InstancedMesh 1개로 (문 앞에서 살랑)
+  const mistI = new THREE.InstancedMesh(mistGeo, mistShared, mistPlanes.length); mistI.count = 0; mistI.frustumCulled = false; mistI.userData.dynamic = true; scene.add(mistI);
+  const qMist = new THREE.Quaternion().setFromAxisAngle(Y, -Math.PI / 2), one = new THREE.Vector3(1, 1, 1), mp = new THREE.Vector3();
   let tAcc = 0;
   function tick(camera, x, z) {
     tAcc += 0.016;
+    let n = 0;
     for (const m of mistPlanes) {
-      const d = Math.hypot(x - m.x, z - m.z);
-      const on = d < 14;
-      m.mesh.visible = on;
-      if (on) {
-        m.mesh.material.opacity = 0.08 + 0.07 * (0.5 + 0.5 * Math.sin(tAcc * 1.5 + m.z));
-        m.mesh.position.y = 1.0 + 0.15 * Math.sin(tAcc + m.z);
-      }
+      if (Math.hypot(x - m.x, z - m.z) >= 14) continue;
+      mistI.setMatrixAt(n++, m4.compose(mp.set(m.x - 0.05, 1.0 + 0.15 * Math.sin(tAcc + m.z), m.z), qMist, one));
     }
+    mistI.count = n; mistI.visible = n > 0;
+    if (n) { mistI.instanceMatrix.needsUpdate = true; mistShared.opacity = 0.08 + 0.07 * (0.5 + 0.5 * Math.sin(tAcc * 1.5)); }
     tasting.tick?.(tAcc);
   }
   return { tick };
@@ -680,7 +735,7 @@ function buildFixtures({ scene, keep, ct, atlas, unitBox, obstacles, prodMeshes,
 
 function buildItemIMs() { /* 데이터는 cluster.items 에 쌓고, 메시는 finalizeStock 에서 합침 */ }
 
-function finalizeStock({ scene, keep, clusters, atlas, unitBox, prodMeshes, tagG, tagMats, tagTex, ct, proxyMat, m4, pv, qy, s3, col, Y, q0 }) {
+function finalizeStock({ scene, keep, clusters, atlas, unitBox, prodMeshes, tagG, ct, proxyMat, m4, pv, qy, s3, col, Y, q0 }) {
   // 상단 랩 파렛트: 맵 없이 품목색 한 메시 (얼룩 아틀라스 UV 제거)
   const uppers = [];
   const allItems = new Map(); // id -> list
@@ -701,27 +756,48 @@ function finalizeStock({ scene, keep, clusters, atlas, unitBox, prodMeshes, tagG
     });
     im.instanceColor.needsUpdate = true; im.computeBoundingSphere(); scene.add(im);
   }
+  // 상품: SKU 별 InstancedMesh(수십 드로콜) → 앞·중·뒤 구역별 1개 (aCell 로 아틀라스 칸 선택)
+  const cellMat = cellMaterial(keep, atlas.mat.clone());
+  const cellGeo0 = boxGeoForCell(1, 1, 1, 0, 0);
+  const regions = [[], [], []];
   for (const [id, list] of allItems) {
-    const p = BY_ID[id]; if (!p || !list.length) continue;
-    const im = new THREE.InstancedMesh(atlas.geo[id] || unitBox, atlas.mat, list.length);
-    list.forEach((it, i) => {
-      qy.setFromAxisAngle(Y, (it.rot || 0) + ((it.face ?? 1) > 0 ? 0 : Math.PI));
-      m4.compose(pv.set(it.x, it.y, it.z), qy, s3.set(it.sx, it.sy, it.sz));
-      im.setMatrixAt(i, m4);
-    });
-    im.userData.pid = id; im.userData.list = list; im.computeBoundingSphere();
-    im.frustumCulled = true; scene.add(im); prodMeshes.push(im);
+    const cell = atlas.index[id]; if (!BY_ID[id] || !cell) continue;
+    for (const it of list) regions[it.z < 45 ? 0 : it.z < 78 ? 1 : 2].push([id, it, cell]);
   }
-  const bySku = new Map();
-  for (const t of allTags) { const arr = bySku.get(t.p.id) || []; arr.push(t); bySku.set(t.p.id, arr); }
-  for (const [id, arr] of bySku) {
-    const p = BY_ID[id]; if (!p) continue;
-    tagMats[id] ||= keep(new THREE.MeshBasicMaterial({ map: tagTex(keep, ct, p) }));
-    const im = new THREE.InstancedMesh(tagG, tagMats[id], arr.length);
-    arr.forEach((t, i) => {
+  for (const reg of regions) {
+    if (!reg.length) continue;
+    const geo = keep(cellGeo0.clone()); const aCell = new Float32Array(reg.length * 2);
+    const im = new THREE.InstancedMesh(geo, cellMat, reg.length);
+    const pids = new Array(reg.length), list = new Array(reg.length);
+    reg.forEach(([id, it, cell], i) => {
+      qy.setFromAxisAngle(Y, (it.rot || 0) + ((it.face ?? 1) > 0 ? 0 : Math.PI));
+      m4.compose(pv.set(it.x, it.y, it.z), qy, s3.set(it.sx, it.sy, it.sz)); im.setMatrixAt(i, m4);
+      aCell[2 * i] = cell.cx / ATLAS_N; aCell[2 * i + 1] = -cell.cy / ATLAS_N; pids[i] = id; list[i] = it;
+    });
+    geo.setAttribute('aCell', new THREE.InstancedBufferAttribute(aCell, 2));
+    im.userData.pids = pids; im.userData.list = list; im.computeBoundingSphere();
+    scene.add(im); prodMeshes.push(im);
+  }
+  cellGeo0.dispose();
+  // 가격표: SKU 별 텍스처·메시 → 2048² 아틀라스(칸 256×128) + InstancedMesh 1개
+  const tagIds = [...new Set(allTags.map((t) => t.p.id))].filter((id) => BY_ID[id]).slice(0, 128);
+  if (tagIds.length) {
+    const TC = 8, TR = 16, TS = 2048, tix = new Map(tagIds.map((id, i) => [id, i]));
+    const tex = keep(ct(TS, TS, (g) => {
+      tagIds.forEach((id, i) => { g.save(); g.translate((i % TC) * 256, Math.floor(i / TC) * 128); g.scale(0.5, 0.5); paintTag(g, BY_ID[id]); g.restore(); });
+    }));
+    tex.anisotropy = 4;
+    const tags = allTags.filter((t) => tix.has(t.p.id));
+    const geo = keep(tagG.clone()); const uv = geo.attributes.uv;
+    for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) / TC, (TR - 1 + uv.getY(i)) / TR);
+    const aCell = new Float32Array(tags.length * 2);
+    const im = new THREE.InstancedMesh(geo, cellMaterial(keep, new THREE.MeshBasicMaterial({ map: tex })), tags.length);
+    tags.forEach((t, i) => {
       qy.setFromAxisAngle(Y, t.face > 0 ? Math.PI / 2 : -Math.PI / 2);
       m4.compose(pv.set(t.x, t.y, t.z), qy, s3.set(1, 1, 1)); im.setMatrixAt(i, m4);
+      const k = tix.get(t.p.id); aCell[2 * i] = (k % TC) / TC; aCell[2 * i + 1] = -Math.floor(k / TC) / TR;
     });
+    geo.setAttribute('aCell', new THREE.InstancedBufferAttribute(aCell, 2));
     im.computeBoundingSphere(); scene.add(im);
   }
 }
@@ -770,7 +846,7 @@ function buildTasting(scene, keep, ct, { x, z }) {
     g.fillText('맛보세요~ 방금 나왔어요', 256, 95);
   }));
   const bubble = new THREE.Mesh(keep(new THREE.PlaneGeometry(1.6, 0.5)), keep(new THREE.MeshBasicMaterial({ map: bubbleT, transparent: true })));
-  bubble.position.set(x + 1.3, 2.05, z); scene.add(bubble);
+  bubble.position.set(x + 1.3, 2.05, z); bubble.userData.dynamic = true; scene.add(bubble);
   return {
     tick(t) {
       root.position.y = 0.01 * Math.sin(t * 2);

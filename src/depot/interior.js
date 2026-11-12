@@ -517,7 +517,8 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit } 
     const loose = [...items.map((it) => it.mesh), ...floorItems.map((f) => f.mesh)];
     const hit = ray.intersectObjects([...prodMeshes, ...loose], false)[0];
     if (!hit) return null;
-    if (hit.object.isInstancedMesh && hit.instanceId != null && hit.object.userData.pid) return { kind: 'shelf', im: hit.object, id: hit.instanceId, p: BY_ID[hit.object.userData.pid], dist: hit.distance };
+    const pid = hit.object.isInstancedMesh && hit.instanceId != null ? (hit.object.userData.pids?.[hit.instanceId] ?? hit.object.userData.pid) : null; // 구역별 합친 진열 메시는 인스턴스마다 SKU
+    if (pid) return { kind: 'shelf', im: hit.object, id: hit.instanceId, p: BY_ID[pid], dist: hit.distance };
     const it = items.find((i) => i.mesh === hit.object); if (it) return { kind: 'cart', it, p: it.p, dist: hit.distance };
     const fi = floorItems.find((f) => f.mesh === hit.object); if (fi) return { kind: 'floor', fi, p: fi.p, dist: hit.distance };
     return null;
@@ -965,7 +966,7 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit } 
       hold(id) { const p = BY_ID[id]; st.held = { p, src: null }; st.mode = 'place'; st.rotY = 0; st.tip = false; st.nudge.x = st.nudge.z = 0; setGhost(p); hud.classList.add('placing'); },
       setGhostAt(level, x, z, rotY = 0, tip = false) { st.level = level; st.gx = x; st.gz = z; st.fx = x; st.fz = z; st.rotY = rotY; st.tip = tip; st.nudge.x = st.nudge.z = 0; },
       drop(id, level, x, z, rotY = 0, tip = false) { api._dbg.hold(id); api._dbg.setGhostAt(level, x, z, rotY, tip); if (st.held && itemDims(st.held.p, tip).join() !== ghost?.userData.dims) { setGhost(st.held.p); ghost.userData.dims = itemDims(st.held.p, tip).join(); } ghostSol = solveGhost(); return place(); },
-      firstOf(id) { const im = prodMeshes.find((m) => m.userData.pid === id); const l = im?.userData.list || []; return l.length ? { ...l[Math.floor(l.length / 2)] } : null; },
+      firstOf(id) { const l = []; for (const m of prodMeshes) (m.userData.list || []).forEach((it, i) => { if ((m.userData.pids ? m.userData.pids[i] : m.userData.pid) === id) l.push(it); }); return l.length ? { ...l[Math.floor(l.length / 2)] } : null; },
       run(sec, dt = 1 / 30) { for (let t = 0; t < sec; t += dt) update(dt); },
       floorCount() { return floorItems.length; },
       clearFloor() { while (floorItems.length) { const fi = floorItems[0]; removeFloorItem(fi); disposeItemMesh(fi.mesh); } },

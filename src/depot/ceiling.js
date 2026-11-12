@@ -100,7 +100,7 @@ export function buildDepotCeiling(scene, { renderer, keep, shellMesh } = {}) {
   const ZS = []; for (let z = 7.5; z < D; z += 7.5) ZS.push(z);
   const chords = new THREE.InstancedMesh(chordG, steel, ZS.length * 2);
   const webs = new THREE.InstancedMesh(webG, steelDark, ZS.length * 40);
-  const diags = new THREE.InstancedMesh(diagG, steelDark, ZS.length * 40);
+  const diags = new THREE.InstancedMesh(diagG, steelDark, ZS.length * 52); // x 3–81 / 3.2 = 25칸 × 사재 2 — 40 이면 넘쳐서 쓰레기 행렬이 검은 삼각형으로 그려졌음
   const cols = new THREE.InstancedMesh(colG, steel, ZS.length * 8);
   const qDiag = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), 0.55);
   const qDiag2 = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), -0.55);
