@@ -400,20 +400,22 @@ export function createTerrain(T, data) {
   }
 
   // ---- 메시 ----
-  function build(scene, world, overlay) {
+  function* buildGen(scene, world, overlay, opts = {}) {
     const inBox = (x, z) => x >= bb.x0 && x <= bb.x1 && z >= bb.z0 && z <= bb.z1;
     // 1) 바닥 평면(world.ground / world.block)을 하천 구간만 비운 격자로 교체
     const coveredMain = (x, z) => { const q = project(x, z); if (!q || q.end) return false; const p = profAt(q); return Math.abs(q.d) < p.top + MARGIN; };
     const covered = streams ? (x, z) => coveredMain(x, z) || streams.covered(x, z) : coveredMain;
+    const fine = opts.fineBox || null;
+    const inFine = (x, z, pad = 0) => !fine || (x >= fine.x0 - pad && x <= fine.x1 + pad && z >= fine.z0 - pad && z <= fine.z1 + pad);
+    const overlapsFine = (x0, z0, x1, z1, pad = 0) => !fine || !(x1 < fine.x0 - pad || x0 > fine.x1 + pad || z1 < fine.z0 - pad || z0 > fine.z1 + pad);
     const axS = ax.filter((_, i) => i % 5 === 0);
-    const nearMain = (x, z, r) => { const lim = (r + 140) ** 2; for (const [px, pz] of axS) if ((px - x) ** 2 + (pz - z) ** 2 < lim) return true; return false; };
-    function holeyPlane(x0, z0, x1, z1, y, minCell) {
+    const nearMain = (x, z, r) => { if (fine && !inFine(x, z, r + 140)) return false; const lim = (r + 140) ** 2; for (const [px, pz] of axS) if ((px - x) ** 2 + (pz - z) ** 2 < lim) return true; return false; };
+    function* holeyPlaneGen(x0, z0, x1, z1, y, minCell) {
       const pos = [];
       const quad = (a, b, c, d) => pos.push(a, y, b, a, y, d, c, y, b, c, y, b, a, y, d, c, y, d);
-      // 돌려주는 값: 구멍 없이 다 채워졌나. [streams] 지류 때문에만 쪼갠 셀은 네 조각이 다 채워지면 한 장으로 되돌림
-      // (평면이라 모양 그대로, 본류 근처 격자는 streams=0 과 똑같이)
       const rec = (a, b, c, d) => {
         const w = c - a, cx = (a + c) / 2, cz = (b + d) / 2, rad = Math.hypot(w, d - b) / 2;
+        if (fine && !overlapsFine(a, b, c, d, 0)) { quad(a, b, c, d); return true; }
         const main = nearMain(cx, cz, rad);
         if (!main && !(streams && streams.near(cx, cz, rad))) { quad(a, b, c, d); return true; }
         if (w <= minCell) { if ([[a, b], [c, b], [a, d], [c, d], [cx, cz]].every(([x, z]) => covered(x, z))) return false; quad(a, b, c, d); return true; }
@@ -424,24 +426,41 @@ export function createTerrain(T, data) {
       };
       const S = Math.max(x1 - x0, z1 - z0), nx = Math.ceil((x1 - x0) / (S / 4)), nz = Math.ceil((z1 - z0) / (S / 4));
       const sx = (x1 - x0) / nx, sz = (z1 - z0) / nz;
+      let steps = 0;
       for (let i = 0; i < nx; i++) for (let j = 0; j < nz; j++) {
-        // 셀을 정사각형에 가깝게 쪼개서 재귀
         const a = x0 + i * sx, b = z0 + j * sz, k = Math.max(1, Math.round(sx / sz));
         for (let m = 0; m < k; m++) rec(a + (m * sx) / k, b, a + ((m + 1) * sx) / k, b + sz);
+        if ((++steps & 0) === 0) yield 'terrain-ground';
       }
       const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
       const n = new Float32Array(pos.length); for (let i = 1; i < n.length; i += 3) n[i] = 1; g.setAttribute('normal', new THREE.BufferAttribute(n, 3));
       return g;
     }
-    if (world.ground) { world.ground.geometry.dispose(); world.ground.geometry = holeyPlane(-3000, -3000, 3000, 3000, 0, 8); world.ground.rotation.set(0, 0, 0); world.ground.position.set(0, 0, 0); }
-    if (world.block) { world.block.geometry.dispose(); world.block.geometry = holeyPlane(bb.x0, bb.z0, bb.x1, bb.z1, 0.01, 6); world.block.rotation.set(0, 0, 0); world.block.position.set(0, 0, 0); }
+    if (world.ground) {
+      const hg = holeyPlaneGen(-3000, -3000, 3000, 3000, 0, fine ? 24 : 8);
+      let hn = hg.next();
+      while (!hn.done) { yield hn.value; hn = hg.next(); }
+      world.ground.geometry.dispose(); world.ground.geometry = hn.value; world.ground.rotation.set(0, 0, 0); world.ground.position.set(0, 0, 0);
+    }
+    yield 'terrain-ground';
+    if (world.block) {
+      const hg = holeyPlaneGen(bb.x0, bb.z0, bb.x1, bb.z1, 0.01, fine ? 16 : 6);
+      let hn = hg.next();
+      while (!hn.done) { yield hn.value; hn = hg.next(); }
+      world.block.geometry.dispose(); world.block.geometry = hn.value; world.block.rotation.set(0, 0, 0); world.block.position.set(0, 0, 0);
+    }
+    yield 'terrain-block';
 
     // 2) 하천 지형 메시 (축을 따라가는 단면 격자)
     const cBlock = new THREE.Color('#ebe4d4'), cGround = new THREE.Color('#efe9dc'), cFlood = new THREE.Color('#c3d59c'), cSlope = new THREE.Color('#8fc07a'), cWall = new THREE.Color('#aaa596'), cBank = new THREE.Color('#bcae86'), cBed = new THREE.Color('#74b2d3');
     const parkCols = corridorParks.map((p) => { let a = Infinity, b = Infinity, c = -Infinity, d = -Infinity; for (const [x, z] of p.o) { a = Math.min(a, x); b = Math.min(b, z); c = Math.max(c, x); d = Math.max(d, z); } return { p, a, b, c, d, col: new THREE.Color(PARK_COLOR[p.k] || '#b5dda3') }; });
     const parkAt = (x, z) => { for (const q of parkCols) if (x >= q.a && x <= q.c && z >= q.b && z <= q.d && pointInRing(x, z, q.p.o) && !(q.p.holes || []).some((h) => pointInRing(x, z, h))) return q; return null; };
     const rows = [];
-    for (let i = 0; i < N; i++) { const [x, z] = ax[i], near = x > bb.x0 - 250 && x < bb.x1 + 250 && z > bb.z0 - 250 && z < bb.z1 + 250; if (near || i % 4 === 0 || i === N - 1) rows.push(i); }
+    for (let i = 0; i < N; i++) {
+      const [x, z] = ax[i], near = x > bb.x0 - 250 && x < bb.x1 + 250 && z > bb.z0 - 250 && z < bb.z1 + 250;
+      if (fine && !inFine(x, z, 200) && !near) continue;
+      if (near || i % 4 === 0 || i === N - 1) rows.push(i);
+    }
     const lin = (a, b, n) => Array.from({ length: n }, (_, k) => a + ((b - a) * (k + 1)) / (n + 1));
     const colsFor = (toe, top, w) => {
       const wb = Math.max(1, w - 1), wt = Math.min(toe - 0.5, w + 1.2);
@@ -449,7 +468,9 @@ export function createTerrain(T, data) {
     };
     const pos = [], col = [], idx = []; let C = 0;
     const tmpc = new THREE.Color();
+    let rowN = 0;
     for (const i of rows) {
+      if ((++rowN & 3) === 0) yield 'terrain-channel-rows';
       const a = ax[Math.max(0, i - 1)], b = ax[Math.min(N - 1, i + 1)], L = Math.hypot(b[0] - a[0], b[1] - a[1]);
       const dx = (b[0] - a[0]) / L, dz = (b[1] - a[1]) / L, nx = dz, nz = -dx; // d>0 방향
       const L_ = colsFor(prof.toeL[i], prof.topL[i], prof.wL[i]), R_ = colsFor(prof.toeR[i], prof.topR[i], prof.wR[i]);
@@ -481,7 +502,9 @@ export function createTerrain(T, data) {
     const domPts = (q) => [...q, [(q[0][0] + q[3][0]) / 2, (q[0][1] + q[3][1]) / 2], [(q[0][0] + q[1][0]) / 2, (q[0][1] + q[1][1]) / 2], [(q[0][0] + q[2][0]) / 2, (q[0][1] + q[2][1]) / 2], [(q[3][0] + q[1][0]) / 2, (q[3][1] + q[1][1]) / 2], [(q[3][0] + q[2][0]) / 2, (q[3][1] + q[2][1]) / 2]].some(([x, z]) => dominated(x, z));
     const SUB = 4;
     let droppedQuads = 0, subQuads = 0;
-    for (let r = 1; r < rows.length; r++) for (let c = 1; c < C; c++) {
+    for (let r = 1; r < rows.length; r++) {
+      if ((r & 1) === 0) yield 'terrain-channel-idx';
+      for (let c = 1; c < C; c++) {
       const a = (r - 1) * C + c - 1, b = a + 1, d = r * C + c - 1, e = d + 1;
       const q = [a, b, d, e].map((k) => [pos[k * 3], pos[k * 3 + 2]]);
       if (!dominated || !domPts(q)) { idx.push(a, d, b, b, d, e); continue; }
@@ -502,11 +525,14 @@ export function createTerrain(T, data) {
         idx.push(sa, sd, sb, sb, sd, se); subQuads++;
       }
     }
+    }
+    yield 'terrain-channel-idx-done';
     const cg = new THREE.BufferGeometry();
     cg.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); cg.setAttribute('color', new THREE.Float32BufferAttribute(col, 3)); cg.setIndex(idx); cg.computeVertexNormals();
     // 축 방향에 따라 삼각형 감김이 뒤집힐 수 있으니 양면
     const channel = new THREE.Mesh(cg, new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide }));
     channel.receiveShadow = true; channel.name = 'tancheon-terrain'; scene.add(channel);
+    yield 'terrain-channel';
     // [streams] 지류 하도 + 수면 (메시 1개, 본류와 같은 재질 종류)
     let streamMesh = null;
     if (streams) {
@@ -665,6 +691,7 @@ export function createTerrain(T, data) {
         if (pointInRing(px, pz, q.p.o) && !stairAt(px, pz, 2) && !deckAt(px, pz) && !world.onRoad(px, pz)) tp.push([px, pz]);
       }
     }
+    yield 'terrain-streams';
     if (tp.length) {
       addInstancedTrees(scene, tp, {
         rnd,
@@ -680,6 +707,23 @@ export function createTerrain(T, data) {
       });
     }
     return { channel, streamMesh, stoneMesh, bridgeLights, treeCount: tp.length };
+  }
+
+  function build(scene, world, overlay, opts) {
+    const g = buildGen(scene, world, overlay, opts);
+    let n = g.next();
+    while (!n.done) n = g.next();
+    return n.value;
+  }
+
+  async function buildAsync(scene, world, overlay, slicer, opts) {
+    const g = buildGen(scene, world, overlay, opts);
+    let n = g.next();
+    while (!n.done) {
+      if (slicer) await slicer.tick(n.value || 'terrain');
+      n = g.next();
+    }
+    return n.value;
   }
 
   // NPC 산책 경로: 도로 -> 계단 -> 둔치를 따라 강변으로 (가까운 계단 기준)
@@ -715,5 +759,5 @@ export function createTerrain(T, data) {
     }
     return pts.length > 6 ? pts : null;
   }
-  return { params: P, baseHeight, renderHeight, getGroundHeight, groundY: getGroundHeight, getVehicleHeight, vehicleY: getVehicleHeight, deckAt, canMove, annotate, liftRoads, waterLineY, streams, build, stairs, decks, addDeckSegment, addGroundExtra, addGroundSurface, project, riversideRoute, bankPath, stairAt, fords, fordAt, grade, waterSurface, mainDrop: MD ? mainDrop : null, mainDropBox: dropBox, floorAt, mainWater };
+  return { params: P, baseHeight, renderHeight, getGroundHeight, groundY: getGroundHeight, getVehicleHeight, vehicleY: getVehicleHeight, deckAt, canMove, annotate, liftRoads, waterLineY, streams, build, buildAsync, stairs, decks, addDeckSegment, addGroundExtra, addGroundSurface, project, riversideRoute, bankPath, stairAt, fords, fordAt, grade, waterSurface, mainDrop: MD ? mainDrop : null, mainDropBox: dropBox, floorAt, mainWater };
 }

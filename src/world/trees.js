@@ -47,7 +47,14 @@ export function pickFoliageColor(rnd = Math.random, season = getSeason(), target
 }
 
 // 가로수·제방 숲 등에 쓰는 대량 InstancedMesh 나무 빌더
-export function addInstancedTrees(scene, points, {
+export function addInstancedTrees(scene, points, opts) {
+  const g = addInstancedTreesGen(scene, points, opts);
+  let n = g.next();
+  while (!n.done) n = g.next();
+  return n.value;
+}
+
+export function* addInstancedTreesGen(scene, points, {
   rnd = Math.random,
   season = getSeason(),
   crownRadius = 2.2,
@@ -79,7 +86,8 @@ export function addInstancedTrees(scene, points, {
   const col = new THREE.Color();
   const up = new THREE.Vector3(0, 1, 0);
 
-  points.forEach(([x, z], i) => {
+  for (let i = 0; i < points.length; i++) {
+    const [x, z] = points[i];
     const k = scaleMin + rnd() * scaleSpan;
     const y = getY ? getY(x, z) : 0;
     q.setFromAxisAngle(up, rnd() * 6);
@@ -88,7 +96,8 @@ export function addInstancedTrees(scene, points, {
     crowns.setMatrixAt(i, m4);
     trunks.setMatrixAt(i, m4);
     crowns.setColorAt(i, pickFoliageColor(rnd, season, col));
-  });
+    if ((i & 63) === 63) yield;
+  }
 
   if (crowns.instanceColor) crowns.instanceColor.needsUpdate = true;
   crowns.castShadow = trunks.castShadow = true;

@@ -1,6 +1,8 @@
 // [hangang] 반포·잠수교 일대 지형 — AWS terrarium DEM + 한강 수면 + 반포한강공원 둔치 테라스.
 import * as THREE from 'three';
 import { HG, pointInRing, pointInRings, inWater, centroid, projectOnLine } from './hangangCoords.js';
+import { applyHangangTerrainBakeGen, loadHangangTerrainBakeSync, decodeHangangTerrainBakeMaybe, decodeHangangTerrainBakeGen, fetchAndDecodeHangangTerrainBake } from './hangangMeshBake.js';
+
 
 function sampleDem(dem, x, z) {
   if (!dem) return null;
@@ -12,6 +14,59 @@ function sampleDem(dem, x, z) {
   const fu = u - i0, fv = v - j0;
   const a = h[j0 * nx + i0], b = h[j0 * nx + i1], c = h[j1 * nx + i0], d = h[j1 * nx + i1];
   return a * (1 - fu) * (1 - fv) + b * fu * (1 - fv) + c * (1 - fu) * fv + d * fu * fv;
+}
+
+
+// 호안 샘플 최근접 검색. 선형 스캔은 합수부 DEM(수면 링 × 정점)에서 O(n·m) 이 되어 기동을 막는다.
+// 격자 한 칸 = 검색 반지름(18 m). 질의는 주변 5×5 칸만 본다. 같은 거리면 원래 배열 앞쪽을 고른다.
+export const SHORE_SEARCH_R = 18;
+export function makeShoreIndex(samples, radius = SHORE_SEARCH_R) {
+  const cell = radius;
+  const inv = 1 / cell;
+  const buckets = new Map();
+  const list = samples.map((p, i) => ({ p, i }));
+  for (const item of list) {
+    const ix = Math.floor(item.p.x * inv);
+    const iz = Math.floor(item.p.z * inv);
+    const k = ix + ',' + iz;
+    let b = buckets.get(k);
+    if (!b) { b = []; buckets.set(k, b); }
+    b.push(item);
+  }
+  return { buckets, inv, radius, radius2: radius * radius, n: samples.length };
+}
+export function nearestShoreIndexed(index, x, z) {
+  if (!index?.n) return null;
+  const { buckets, inv, radius2 } = index;
+  const ix = Math.floor(x * inv);
+  const iz = Math.floor(z * inv);
+  let best = null, bestD2 = radius2, bestI = Infinity;
+  // 5×5: 칸 크기=반지름일 때 모서리·부동소수 경계에서도 빠지지 않게
+  for (let jz = iz - 2; jz <= iz + 2; jz++) {
+    for (let jx = ix - 2; jx <= ix + 2; jx++) {
+      const b = buckets.get(jx + ',' + jz);
+      if (!b) continue;
+      for (const { p, i } of b) {
+        const dx = x - p.x, dz = z - p.z;
+        const d2 = dx * dx + dz * dz;
+        if (d2 < bestD2 || (d2 === bestD2 && i < bestI)) {
+          bestD2 = d2;
+          best = p;
+          bestI = i;
+        }
+      }
+    }
+  }
+  return best;
+}
+export function nearestShoreLinear(samples, x, z, radius = SHORE_SEARCH_R) {
+  let best = null, bestD2 = radius * radius;
+  for (const p of samples) {
+    const dx = x - p.x, dz = z - p.z;
+    const d2 = dx * dx + dz * dz;
+    if (d2 < bestD2) { bestD2 = d2; best = p; }
+  }
+  return best;
 }
 
 function hash01(ix, iz) {
@@ -39,18 +94,27 @@ function offsetRing(pts, dist) {
 }
 
 export function measureHangangLevels(dem, osm) {
+  const g = measureHangangLevelsGen(dem, osm);
+  let n = g.next();
+  while (!n.done) n = g.next();
+  return n.value;
+}
+
+export function* measureHangangLevelsGen(dem, osm) {
   const datum = dem?.datum ?? HG.datum;
   const waterSamples = [];
   const park = osm?.park?.ring?.pts || osm?.parks?.find((p) => p.name === '반포한강공원')?.o;
   // DEM inside OSM 한강 rings (outers minus inners)
   if (dem && osm?.water?.outers?.length) {
     const x0 = dem.x0, z0 = dem.z0, x1 = dem.x0 + (dem.nx - 1) * dem.dx, z1 = dem.z0 + (dem.nz - 1) * dem.dz;
+    let row = 0;
     for (let z = z0; z <= z1; z += dem.dz) {
       for (let x = x0; x <= x1; x += dem.dx) {
         if (!inWater(x, z, osm.water)) continue;
         const e = sampleDem(dem, x, z);
         if (e != null && e > -5 && e < 40) waterSamples.push(e);
       }
+      if ((++row & 7) === 0) yield 'hangang-height-at';
     }
   }
   waterSamples.sort((a, b) => a - b);
@@ -128,9 +192,21 @@ export function inHanRiver(x, z, osm) {
   return !inners.some((inn) => inn?.o && pointInRing(x, z, inn.o));
 }
 
-export function makeHangangHeightAt(dem, osm = null) {
+export function makeHangangHeightAt(dem, osm = null, lv = null) {
+  const g = makeHangangHeightAtGen(dem, osm, lv);
+  let n = g.next();
+  while (!n.done) n = g.next();
+  return n.value;
+}
+
+export function* makeHangangHeightAtGen(dem, osm = null, lv = null) {
   const datum = dem?.datum ?? HG.datum;
-  const lv = measureHangangLevels(dem, osm);
+  if (!lv) {
+    const g = measureHangangLevelsGen(dem, osm);
+    let n = g.next();
+    while (!n.done) { yield n.value; n = g.next(); }
+    lv = n.value;
+  }
   const blend = osm?.meta?.datumBlend || null;
   const isHap = osm?.meta?.segment === 'hap';
   const olympicWays = isHap
@@ -146,7 +222,9 @@ export function makeHangangHeightAt(dem, osm = null) {
   if (isHap) {
     const BIN = 120;
     const buckets = new Map();
+    let parkScan = 0;
     for (const w of osm?.ways || []) {
+      if ((++parkScan & 31) === 0) yield 'hangang-height-at';
       if ((w.name || '') !== '한강남자전거길' || !w.pts) continue;
       for (const pt of w.pts) {
         if (inWater(pt[0], pt[1], osm?.water)) continue;
@@ -505,11 +583,20 @@ function resampleShore(chain, step = 3.2) {
   return out;
 }
 
-export function createHangangTerrain({ parent, dem, osm }) {
+function* hangangTerrainGen({ parent, dem, osm, baked = null, skipBake = false } = {}, sliced = false) {
   const group = new THREE.Group();
   group.name = 'hangang-terrain';
   parent.add(group);
-  const heightAt = makeHangangHeightAt(dem, osm);
+  let heightAt;
+  {
+    const hg = makeHangangHeightAtGen(dem, osm);
+    let step = hg.next();
+    while (!step.done) {
+      if (sliced) yield step.value || 'hangang-height-at';
+      step = hg.next();
+    }
+    heightAt = step.value;
+  }
   const lv = heightAt.levels;
   const datum = lv.datum;
   let bounds = dem
@@ -517,6 +604,54 @@ export function createHangangTerrain({ parent, dem, osm }) {
     : { x0: -12000, z0: -18000, x1: -8500, z1: -14800 };
 
   const mats = [];
+  if (sliced) yield 'hangang-height-at';
+  let bake = skipBake ? null : decodeHangangTerrainBakeMaybe(baked);
+  if (!bake && baked && !skipBake) {
+    try {
+      const dec = decodeHangangTerrainBakeGen(baked);
+      let step = dec.next();
+      while (!step.done) {
+        if (sliced) yield step.value;
+        step = dec.next();
+      }
+      bake = step.value;
+    } catch (e) {
+      console.warn('[hangang] terrain bake decode failed:', e?.message || e);
+      bake = null;
+    }
+  }
+  if (!bake && !skipBake) bake = loadHangangTerrainBakeSync(osm);
+  if (bake?.meshes?.length) {
+    const applyGen = applyHangangTerrainBakeGen(group, bake, { grassMap: grassTex() });
+    let step = applyGen.next();
+    while (!step.done) {
+      if (sliced) yield step.value;
+      step = applyGen.next();
+    }
+    const applied = step.value;
+    mats.push(...applied.mats);
+    const waterMeshes = applied.waterMeshes;
+    const terraceMat = applied.terraceMat;
+    const riserMat = applied.riserMat;
+    const revetmentView = applied.revetmentView;
+    function setNight(v) {
+      const t = Math.max(0, Math.min(1, v));
+      for (const m of waterMeshes) {
+        if (!m.material.emissive) m.material.emissive = new THREE.Color('#061018');
+        m.material.emissive.set(t > 0.35 ? '#0a2030' : '#000000');
+        m.material.color.setRGB(0.16 * (1 - t) + 0.07 * t, 0.42 * (1 - t) + 0.12 * t, 0.47 * (1 - t) + 0.16 * t);
+      }
+      terraceMat.color.setRGB(0.56 * (1 - t) + 0.22 * t, 0.56 * (1 - t) + 0.22 * t, 0.54 * (1 - t) + 0.20 * t);
+      riserMat.color.setRGB(0.44 * (1 - t) + 0.16 * t, 0.44 * (1 - t) + 0.16 * t, 0.42 * (1 - t) + 0.15 * t);
+    }
+    return {
+      group, heightAt, levels: lv, bounds, waterY: lv.waterY, revetmentView,
+      jamsuDeckY: (x, z) => jamsuDeckY(x, z, osm, lv),
+      banpoDeckY: (x, z) => banpoDeckY(x, z, osm, lv, heightAt),
+      setNight,
+    };
+  }
+
 
   // 호안은 DEM보다 먼저 체인을 잡아, 잔디가 콘크리트 단을 덮지 않게 낮춘다.
   const REV_STEPS = 11;
@@ -554,14 +689,10 @@ export function createHangangTerrain({ parent, dem, osm }) {
   const shoreSamples = [];
   for (const c of shoreChains) for (const p of c) shoreSamples.push(p);
 
+  const shoreIndex = makeShoreIndex(shoreSamples, SHORE_SEARCH_R);
   function revetmentBandY(x, z) {
     if (!shoreSamples.length) return null;
-    let best = null, bestD2 = 18 * 18;
-    for (const p of shoreSamples) {
-      const dx = x - p.x, dz = z - p.z;
-      const d2 = dx * dx + dz * dz;
-      if (d2 < bestD2) { bestD2 = d2; best = p; }
-    }
+    const best = nearestShoreIndexed(shoreIndex, x, z);
     if (!best) return null;
     const d = (x - best.x) * best.sx + (z - best.z) * best.sz;
     const lat2 = (x - best.x) * (x - best.x) + (z - best.z) * (z - best.z) - d * d;
@@ -639,6 +770,7 @@ export function createHangangTerrain({ parent, dem, osm }) {
         }
         col[k] = r; col[k + 1] = g; col[k + 2] = b;
       }
+      if (sliced) yield;
     }
     for (let j = 0; j < nz - 1; j++) {
       for (let i = 0; i < nx - 1; i++) {
@@ -649,13 +781,16 @@ export function createHangangTerrain({ parent, dem, osm }) {
         const a = j * nx + i, b = a + 1, c = a + nx, d = c + 1;
         idx.push(a, c, b, b, c, d);
       }
+      if (sliced && (j & 7) === 7) yield;
     }
+    if (sliced) yield;
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
     geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
     geo.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
     geo.setIndex(idx);
     geo.computeVertexNormals();
+    if (sliced) yield;
     const mat = new THREE.MeshLambertMaterial({
       vertexColors: true,
       map: grassTex(),
@@ -716,6 +851,7 @@ export function createHangangTerrain({ parent, dem, osm }) {
           const triN = idx ? idx.count / 3 : pos.count / 3;
           const vert = (i) => (idx ? idx.getX(i) : i);
           for (let t = 0; t < triN; t++) {
+            if (sliced && t > 0 && (t & 2047) === 0) yield;
             const ia = vert(t * 3), ib = vert(t * 3 + 1), ic = vert(t * 3 + 2);
             const xs = [pos.getX(ia), pos.getX(ib), pos.getX(ic)];
             const zs = [pos.getZ(ia), pos.getZ(ib), pos.getZ(ic)];
@@ -729,6 +865,7 @@ export function createHangangTerrain({ parent, dem, osm }) {
           }
           mesh.geometry.setIndex(keep);
         }
+        if (sliced) yield;
         mesh.material = new THREE.MeshPhongMaterial({
           color: '#1c5c6e',
           transparent: true,
@@ -742,8 +879,10 @@ export function createHangangTerrain({ parent, dem, osm }) {
         group.add(mesh);
         waterMeshes.push(mesh);
       }
+      if (sliced) yield;
     }
   }
+  if (sliced) yield;
 
   // 공원 ShapeGeometry 판은 쓰지 않는다. 오목한 반포한강공원이 눈높이 거대 삼각형(녹색 벽)이 된다.
   // 잔디는 DEM 정점색 + 타일 텍스처로만 그린다.
@@ -759,7 +898,7 @@ export function createHangangTerrain({ parent, dem, osm }) {
   if (shoreChains.length) {
     const tpos = [], tidx = [], rpos = [], ridx = [], npos = [], nidx = [], epos = [], eidx = [];
     let tv = 0, rv = 0, nv = 0, ev = 0;
-    const emitRun = (cols) => {
+    function* emitRun(cols) {
       if (cols.length < 2) return;
       for (let i = 0; i < cols.length - 1; i++) {
         const a = cols[i], b = cols[i + 1];
@@ -784,6 +923,7 @@ export function createHangangTerrain({ parent, dem, osm }) {
           nidx.push(nv, nv + 1, nv + 2, nv, nv + 2, nv + 3);
           nv += 4;
         }
+        if (sliced && (i & 3) === 3) yield;
       }
       for (const col of [cols[0], cols[cols.length - 1]]) {
         for (let s = 0; s < steps; s++) {
@@ -809,14 +949,14 @@ export function createHangangTerrain({ parent, dem, osm }) {
     for (const chain of shoreChains) {
       if (chain.length < 2) continue;
       const cols = [];
-      const flush = () => { emitRun(cols); cols.length = 0; };
+      const flush = function* () { if (cols.length) { yield* emitRun(cols); cols.length = 0; } };
       for (const p of chain) {
         const sx = p.sx, sz = p.sz;
         const topX = p.x + sx * (steps * tread), topZ = p.z + sz * (steps * tread);
-        if (inWater(topX, topZ, osm.water)) { flush(); continue; }
+        if (inWater(topX, topZ, osm.water)) { yield* flush(); continue; }
         const yWater = waterYAt(p.x, p.z, lv, osm?.meta?.datumBlend) + 0.05;
         const yGrass = heightAt(topX, topZ);
-        if (yGrass == null) { flush(); continue; }
+        if (yGrass == null) { yield* flush(); continue; }
         const yTop = Math.max(yGrass, yWater + 0.35);
         const ys = [];
         const pts = [];
@@ -827,11 +967,12 @@ export function createHangangTerrain({ parent, dem, osm }) {
         }
         if (cols.length) {
           const prev = cols[cols.length - 1];
-          if (Math.hypot(p.x - prev.p.x, p.z - prev.p.z) > 7.5) flush();
+          if (Math.hypot(p.x - prev.p.x, p.z - prev.p.z) > 7.5) yield* flush();
         }
         cols.push({ pts, ys, sx, sz, p });
       }
-      flush();
+      yield* flush();
+      if (sliced) yield;
     }
     const addMesh = (pos, idx, mat, name, recv) => {
       if (!pos.length) return;
@@ -845,9 +986,13 @@ export function createHangangTerrain({ parent, dem, osm }) {
       group.add(mesh);
     };
     addMesh(tpos, tidx, terraceMat, 'hangang-revetment', true);
+    if (sliced) yield;
     addMesh(rpos, ridx, riserMat, 'hangang-revetment-risers', false);
+    if (sliced) yield;
     addMesh(npos, nidx, riserMat, 'hangang-revetment-noses', false);
+    if (sliced) yield;
     addMesh(epos, eidx, riserMat, 'hangang-revetment-ends', false);
+    if (sliced) yield;
   }
   let revetmentView = null;
   {
@@ -900,3 +1045,41 @@ export function createHangangTerrain({ parent, dem, osm }) {
     setNight,
   };
 }
+
+export function createHangangTerrain(opts) {
+  const g = hangangTerrainGen(opts, false);
+  let n = g.next();
+  while (!n.done) n = g.next();
+  return n.value;
+}
+
+export async function createHangangTerrainAsync(opts, yieldFn, slicer) {
+  const y = yieldFn || (typeof requestAnimationFrame === 'function'
+    ? () => new Promise((r) => requestAnimationFrame(() => r()))
+    : () => Promise.resolve());
+  let resolved = opts;
+  if (!opts?.skipBake && !opts?.baked && opts?.bakeUrl) {
+    const bake = await fetchAndDecodeHangangTerrainBake(opts.bakeUrl);
+    if (bake) resolved = { ...opts, baked: bake };
+    if (slicer) slicer.mark();
+    console.info(`[hangang] terrain bake ${bake ? 'hit' : 'miss'} ${opts.bakeUrl}`);
+  }
+  const g = hangangTerrainGen(resolved, true);
+  let n = g.next();
+  if (slicer) {
+    while (!n.done) {
+      await slicer.tick(typeof n.value === 'string' ? n.value : undefined);
+      n = g.next();
+    }
+    slicer.flush('hangang-terrain-end');
+    return n.value;
+  }
+  const now = () => (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+  let last = now();
+  while (!n.done) {
+    if (now() - last > 45) { await y(); last = now(); }
+    n = g.next();
+  }
+  return n.value;
+}
+
