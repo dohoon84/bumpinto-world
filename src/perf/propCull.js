@@ -5,6 +5,8 @@
 //   덩어리 = 등록한 root (보통 scene 바로 아래 자식). 움직이는 root 도 되도록 경계는 root 로컬에서 한 번 구하고 매번 root 행렬로 옮긴다.
 import * as THREE from 'three';
 import { setHidden } from './hide.js';
+import { farContrastHide } from './instancer.js'; // [jamsil-perf]
+const farCullOn = () => typeof location === 'undefined' || new URLSearchParams(location.search).get('farcull') !== '0';
 
 const R = 'cull';
 export function createPropCull({ minPx = 0.5, maxTopY = 40, intervalSec = 0.2, getFogFar = null } = {}) {
@@ -12,6 +14,7 @@ export function createPropCull({ minPx = 0.5, maxTopY = 40, intervalSec = 0.2, g
   const stats = { roots: 0, hiddenRoots: 0, hiddenMeshes: 0, fog: 0, tiny: 0 };
   const sph = new THREE.Vector3();
   let acc = Infinity, last = -1, tick = 0;
+  const farOn = farCullOn();
   function measure(root) {
     root.updateMatrixWorld(true);
     const inv = new THREE.Matrix4().copy(root.matrixWorld).invert(), rel = new THREE.Matrix4();
@@ -29,7 +32,7 @@ export function createPropCull({ minPx = 0.5, maxTopY = 40, intervalSec = 0.2, g
     });
     if (box.isEmpty()) return null;
     const c = box.getCenter(new THREE.Vector3()), r = box.getSize(new THREE.Vector3()).length() / 2;
-    return { c, r: r * 1.15 + 1, top: wbox.max.y, meshes, count: countDesc(root), hidden: false };
+    return { c, r: r * 1.15 + 1, r0: r, top: wbox.max.y, meshes, count: countDesc(root), hidden: false };
   }
   const countDesc = (root) => { let n = 0; root.traverse(() => { n++; }); return n; };
   function add(root) { if (!root || items.has(root)) return false; const m = measure(root); if (!m) return false; items.set(root, m); stats.roots = items.size; return true; }
@@ -53,7 +56,9 @@ export function createPropCull({ minPx = 0.5, maxTopY = 40, intervalSec = 0.2, g
       const near = d - r;
       const hideFog = near > fogFar * 1.02 && it.top < maxTopY;
       const hideTiny = k > 0 && d > r && (r / d) * k < minPx;
-      const hide = hideFog || hideTiny;
+      // [jamsil-perf] 작은 덩어리(실제 반지름 ≤ 10 m)는 안개 대비 화면 크기로도 거른다(instancer 와 같은 기준)
+      const hideFar = farOn && it.top < maxTopY && farContrastHide(it.r0 * root.matrixWorld.getMaxScaleOnAxis(), d, k, scene.fog);
+      const hide = hideFog || hideTiny || hideFar;
       show(it, !hide);
       if (hide) { hr++; hm += it.meshes.length; if (hideFog) fog++; else tiny++; }
     }
