@@ -7,6 +7,7 @@ import * as THREE from 'three';
 import * as CANNON from 'cannon-es';
 import { PRODUCTS, BY_ID, CART, EGG } from './products.js';
 import { buildCartGeometry, BASKET } from './cartModel.js';
+import { buildProductGeometry, addProductShape } from './shapes.js';
 
 const W = 84, D = 120, CEIL = 9;
 const DOOR = { x: 69, w: 8 };
@@ -177,8 +178,10 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit } 
 
   // ---------- 상품 (상품별 InstancedMesh, 판매 파렛트 위에 실측 크기로 쌓기) ----------
   const prodMeshes = [];
+  const productGeo = (p) => buildProductGeometry(p, { boxGeo: boxGeoLabeled });
+  const addPhysShape = (body, p) => addProductShape(body, p, CANNON);
   const prodGeo = {}, prodMat = {};
-  for (const p of PRODUCTS) { prodGeo[p.id] = keep(boxGeoLabeled(...p.size)); const t = TX[`pk-${p.id}`] || keep(labelTex(p)); prodMat[p.id] = keep(new THREE.MeshLambertMaterial({ map: t })); }
+  for (const p of PRODUCTS) { prodGeo[p.id] = keep(productGeo(p)); const t = TX[`pk-${p.id}`] || keep(labelTex(p)); prodMat[p.id] = keep(new THREE.MeshLambertMaterial({ map: t })); }
   const order = ['water', 'soda', 'rice', 'egg', 'tissue', 'ramen', 'chips'];
   const stacks = {}; for (const id of order) stacks[id] = [];
   sellSlots.sort((a, b) => a.x - b.x || a.z - b.z);
@@ -292,8 +295,8 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit } 
   const B = BASKET, cartBody = new CANNON.Body({ mass: 0, material: mCart, type: CANNON.Body.STATIC });
   const addBox = (hx, hy, hz, x, y, z, rx = 0) => { cartBody.addShape(new CANNON.Box(new CANNON.Vec3(hx, hy, hz)), new CANNON.Vec3(x, y, z), new CANNON.Quaternion().setFromEuler(rx, 0, 0)); };
   addBox(B.top.x, 0.01, (B.floor.z1 - B.floor.z0 + 0.3) / 2, 0, B.floorY - 0.01, (B.floor.z0 + B.floor.z1) / 2 - 0.1); // 바구니 바닥(아래 받침대의 천장도 됨)
-  for (const sx of [-1, 1]) addBox(0.012, 0.3, 0.52, sx * (B.floor.x + 0.02), B.floorY + 0.29, -0.02); // 옆벽
-  addBox(B.top.x, 0.3, 0.012, 0, B.floorY + 0.29, B.floor.z1 + 0.015); // 뒷벽
+  for (const sx of [-1, 1]) addBox(0.012, 0.25, 0.52, sx * (B.floor.x + 0.02), B.floorY + 0.24, -0.02); // 옆벽 (위 끝 = 테두리 높이)
+  addBox(B.top.x, 0.26, 0.012, 0, B.floorY + 0.26, B.floor.z1 + 0.015); // 뒷벽
   { const dz = B.top.z0 - B.floor.z0, dy = B.top.yFront - B.floorY, L = Math.hypot(dz, dy), ang = Math.atan2(-dz, dy);
     addBox(B.top.x, L / 2 + 0.05, 0.012, 0, B.floorY + dy / 2, B.floor.z0 + dz / 2 - 0.012, -ang); } // 앞 경사벽
   // 유아석 판은 뒷벽에 접혀 있음(뒷벽 충돌체로 충분)
@@ -301,6 +304,8 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit } 
   for (const sx of [-1, 1]) addBox(0.008, 0.025, (B.tray.z1 - B.tray.z0) / 2, sx * (B.tray.x + 0.01), B.tray.y + 0.02, (B.tray.z0 + B.tray.z1) / 2);
   addBox(B.tray.x, 0.025, 0.008, 0, B.tray.y + 0.02, B.tray.z0 - 0.01);
   world.addBody(cartBody);
+  // 카트 밑 바닥(받침대 아래로 빠진 물체용)
+  world.addBody(new CANNON.Body({ mass: 0, type: CANNON.Body.STATIC, material: mCart, shape: new CANNON.Box(new CANNON.Vec3(1.5, 0.05, 1.5)), position: new CANNON.Vec3(0, -0.05, 0) }));
   const LEVELS = {
     upper: { y: B.floorY, x: B.floor.x - 0.008, z1: B.floor.z1 - 0.003, frontZ: (y) => B.floor.z0 - (y - B.floorY) * ((B.floor.z0 - B.top.z0) / (B.top.yFront - B.floorY)) - 0.005, ceil: B.top.yFront + 0.38, vol: 0 },
     lower: { y: B.tray.y, x: B.tray.x - 0.005, z1: B.tray.z1 - 0.005, frontZ: () => B.tray.z0 + 0.005, ceil: B.floorY - 0.012, vol: 0 },
@@ -317,7 +322,7 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit } 
     me: { x: DOOR.x + 1.5, z: 3.2, yaw: Math.PI }, // 입구 안쪽, 보관소 쪽
     head: { yaw: 0, pitch: -0.12 },
     cart: { x: (CORRAL.x0 + CORRAL.x1) / 2 - 3, z: CORRAL.z1 + 1.5, yaw: Math.PI, vx: 0, vz: 0, w: 0, ax: 0, az: 0 },
-    held: null, ghost: null, level: 'upper', gx: 0, gz: 0, rotY: 0, tip: false, nudge: { x: 0, z: 0 },
+    held: null, ghost: null, level: 'upper', gx: 0, gz: 0, fx: 0, fz: 0, placedOnce: false, rotY: 0, tip: false, nudge: { x: 0, z: 0 },
     brokenEggs: 0, eggTotal: 0, t: 0, lastAccel: null, toastT: 0, shock: 0,
   };
   cart.visible = false;
@@ -370,11 +375,14 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit } 
   const splatM = keep(new THREE.MeshLambertMaterial({ color: 0xf5a300 }));
   const ghostM = keep(new THREE.MeshBasicMaterial({ color: 0x33dd66, transparent: true, opacity: 0.35, depthWrite: false }));
   const ghostEdgeM = keep(new THREE.LineBasicMaterial({ color: 0x1aff70 }));
-  function itemDims(p, tip) { const [sx, sy, sz] = p.size; return tip ? [sx, sz, sy] : [sx, sy, sz]; }
-  function makeItemMesh(p, tip) {
-    const [sx, sy, sz] = itemDims(p, tip);
-    const g = p.kind === 'egg' ? (TX['pk-egg'] ? boxGeoAtlas(sx, 0.045, sz, 'spare') : new THREE.BoxGeometry(sx, 0.045, sz)) : boxGeoLabeled(sx, sy, sz);
+  function itemDims(p, tip) { const [sx, sy, sz] = p.size; return tip ? [sx, sz, sy] : [sx, sy, sz]; } // 눕힌 상태의 축 정렬 크기(배치 계산용)
+  const Y3 = new THREE.Vector3(0, 1, 0), qTip = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), Math.PI / 2);
+  const itemQuat = (rotY, tip, out = new THREE.Quaternion()) => { out.setFromAxisAngle(Y3, rotY); if (tip) out.multiply(qTip); return out; };
+  function makeItemMesh(p) { // 원래 자세(눕힘·회전은 쿼터니언으로)
+    const [sx, sy, sz] = p.size;
+    const g = p.kind === 'egg' ? (TX['pk-egg'] ? boxGeoAtlas(sx, 0.045, sz, 'spare') : new THREE.BoxGeometry(sx, 0.045, sz)) : productGeo(p);
     const mesh = new THREE.Mesh(g, p.kind === 'egg' ? (TX['pk-egg'] ? prodMat.egg : eggTrayM) : prodMat[p.id]);
+    mesh.userData.ownGeo = true;
     if (p.kind === 'egg') {
       g.translate(0, -sy / 2 + 0.0225, 0);
       const eggs = new THREE.InstancedMesh(eggGeo, eggM, 30); const th = [];
@@ -392,31 +400,83 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit } 
     }
     return mesh;
   }
+  function disposeItemMesh(mesh) { if (mesh.userData.ownGeo) mesh.geometry.dispose(); mesh.userData.eggs?.dispose(); for (const im of Object.values(mesh.userData.eggs?.userData.fx || {})) im.dispose(); }
+  const brokenIn = (mesh) => mesh.userData.eggs ? mesh.userData.eggs.userData.broken.filter(Boolean).length : 0;
   function gauss() { let u = 0, v = 0; while (!u) u = Math.random(); while (!v) v = Math.random(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v); }
   const loadKg = () => items.reduce((a, it) => a + it.p.kg, 0);
   const loadWon = () => items.reduce((a, it) => a + it.p.price, 0) - st.brokenEggs * Math.round(8480 / 30);
 
-  function addItem(p, level, x, y, z, rotY, tip) {
-    const [sx, sy, sz] = itemDims(p, tip);
-    const body = new CANNON.Body({ mass: p.kg, material: p.soft ? mSoft : mItem, shape: new CANNON.Box(new CANNON.Vec3(sx / 2, sy / 2, sz / 2)) });
-    body.position.set(x, y, z); body.quaternion.setFromEuler(0, rotY, 0);
-    body.linearDamping = 0.12; body.angularDamping = 0.35; body.sleepSpeedLimit = 0.04; body.sleepTimeLimit = 0.4;
+  const MAX_ITEMS = 40; // 카트 안 물리 물체 상한 (성능)
+  function addItem(p, level, x, y, z, rotY, tip, reuse = null, quat = null) {
+    const body = new CANNON.Body({ mass: p.kg, material: p.soft ? mSoft : mItem });
+    addPhysShape(body, p);
+    body.position.set(x, y, z);
+    const q = quat || itemQuat(rotY, tip); body.quaternion.set(q.x, q.y, q.z, q.w);
+    body.linearDamping = 0.12; body.angularDamping = p.shape === 'sphere' ? 0.5 : 0.35; body.sleepSpeedLimit = 0.05; body.sleepTimeLimit = 0.5;
     world.addBody(body);
-    const mesh = makeItemMesh(p, tip); itemsRoot.add(mesh);
-    const it = { p, body, mesh, level, size: [sx, sy, sz], src: st.held?.src || null };
+    const mesh = reuse || makeItemMesh(p); itemsRoot.add(mesh); mesh.position.set(x, y, z); mesh.quaternion.copy(q);
+    const it = { p, body, mesh, level, size: p.size.slice(), src: st.held?.src || null };
     items.push(it);
-    if (p.kind === 'egg') st.eggTotal += 30;
+    if (p.kind === 'egg') { st.eggTotal += 30; st.brokenEggs += brokenIn(mesh); }
     for (const o of items) o.body.wakeUp();
     return it;
   }
+  // 카트에서 빼기(메시는 넘겨줄 수 있게 남김)
+  function detachItem(it) {
+    const i = items.indexOf(it); if (i < 0) return;
+    items.splice(i, 1); world.removeBody(it.body); itemsRoot.remove(it.mesh);
+    if (it.mesh.userData.eggs) { st.eggTotal -= 30; st.brokenEggs -= brokenIn(it.mesh); }
+    for (const o of items) o.body.wakeUp();
+  }
 
-  // ---------- 고스트 (놓기 미리보기) ----------
+  // ---------- 바닥에 떨어진 상품 (월드 좌표, 물리 없이 간단 낙하 후 정지 · 다시 집기 가능) ----------
+  const floorRoot = new THREE.Group(); scene.add(floorRoot);
+  const floorItems = [];
+  const _m = new THREE.Matrix4(), _p = new THREE.Vector3(), _q = new THREE.Quaternion(), _s = new THREE.Vector3(1, 1, 1);
+  function settleQuat(p, q) { // 가장 위를 향한 면으로 눕히기
+    if (p.shape === 'sphere') return { tq: q.clone(), half: p.size[1] / 2 };
+    let best = 0, bd = -1, sign = 1; const ax = [new THREE.Vector3(1, 0, 0), new THREE.Vector3(0, 1, 0), new THREE.Vector3(0, 0, 1)];
+    ax.forEach((a, k) => { a.applyQuaternion(q); const d = Math.abs(a.y); if (d > bd) { bd = d; best = k; sign = Math.sign(a.y) || 1; } });
+    const tq = new THREE.Quaternion().setFromUnitVectors(ax[best].clone().multiplyScalar(sign), Y3).multiply(q);
+    return { tq, half: p.size[best] / 2 };
+  }
+  function toFloor(it) {
+    const b = it.body;
+    _m.compose(_p.set(b.position.x, b.position.y, b.position.z), _q.set(b.quaternion.x, b.quaternion.y, b.quaternion.z, b.quaternion.w), _s).premultiply(cart.matrixWorld);
+    const wp = new THREE.Vector3(), wq = new THREE.Quaternion(); _m.decompose(wp, wq, new THREE.Vector3());
+    const c = st.cart, v = new THREE.Vector3(b.velocity.x, b.velocity.y, b.velocity.z).applyAxisAngle(Y3, c.yaw); v.x += c.vx; v.z += c.vz;
+    detachItem(it);
+    addFloorItem(it.p, it.mesh, wp, wq, v, it.src);
+    toast(`${it.p.name} 바닥에 떨어짐 · 클릭해서 다시 집기`, 2000, '#8a5a00');
+  }
+  function addFloorItem(p, mesh, wp, wq, vel, src) {
+    floorRoot.add(mesh); mesh.position.copy(wp); mesh.quaternion.copy(wq);
+    const { tq, half } = settleQuat(p, wq);
+    const fi = { p, mesh, vel: vel.clone(), tq, half, settled: false, src, size: p.size };
+    floorItems.push(fi); return fi;
+  }
+  function tickFloor(dt) {
+    for (const fi of floorItems) {
+      if (fi.settled) continue;
+      const m = fi.mesh; fi.vel.y -= 9.81 * dt; fi.vel.x *= 0.985; fi.vel.z *= 0.985;
+      m.position.addScaledVector(fi.vel, dt); m.quaternion.slerp(fi.tq, Math.min(1, dt * 7));
+      if (m.position.y <= fi.half) {
+        const vImp = Math.max(0, -fi.vel.y); m.position.y = fi.half; m.quaternion.copy(fi.tq); fi.settled = true;
+        blip('bump');
+        // 계란판 낙하: 알마다 F ≈ (알 1개 질량)·v / 4 ms — 같은 파괴 하중 분포(34±6 N)로 판정
+        const eggs = m.userData.eggs;
+        if (eggs && vImp > 0.5) { const U = eggs.userData; for (let i = 0; i < 30; i++) U.force[i] = 0.054 * vImp / 0.004 * (0.6 + Math.random() * 0.8); const before = brokenIn(m); for (let k = 0; k < 3; k++) resolveEggs([{ mesh: m }], true); U.force.fill(0); const n = brokenIn(m) - before; if (n) toast(`🥚 바닥에 떨어져 계란 ${n}개 깨짐`, 2400); }
+      }
+    }
+  }
+  function removeFloorItem(fi) { const i = floorItems.indexOf(fi); if (i >= 0) floorItems.splice(i, 1); floorRoot.remove(fi.mesh); }
+
+  // ---------- 고스트 (놓기 미리보기) — 어디든 놓을 수 있음, 색은 안정도 힌트일 뿐 ----------
   let ghost = null;
   function setGhost(p) {
     if (ghost) { itemsRoot.remove(ghost); ghost.geometry.dispose(); ghost.children[0]?.geometry.dispose(); ghost = null; }
     if (!p) return;
-    const [sx, sy, sz] = itemDims(p, st.tip);
-    const g = new THREE.BoxGeometry(sx, sy, sz);
+    const g = new THREE.BoxGeometry(...p.size);
     ghost = new THREE.Mesh(g, ghostM); ghost.renderOrder = 5;
     ghost.add(new THREE.LineSegments(new THREE.EdgesGeometry(g), ghostEdgeM));
     itemsRoot.add(ghost);
@@ -428,28 +488,59 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit } 
   }
   function bodyAabb(b) { b.updateAABB(); return { x0: b.aabb.lowerBound.x, x1: b.aabb.upperBound.x, y0: b.aabb.lowerBound.y, y1: b.aabb.upperBound.y, z0: b.aabb.lowerBound.z, z1: b.aabb.upperBound.z }; }
   const overlapXZ = (a, b, e = 0.002) => a.x0 < b.x1 - e && a.x1 > b.x0 + e && a.z0 < b.z1 - e && a.z1 > b.z0 + e;
-  // 놓을 자리: 바닥에서 시작해 겹치는 물체 위로 올라감(밑으로 들어갈 공간이 있으면 그대로)
+  const clipXZ = (a, b) => ({ x0: Math.max(a.x0, b.x0), x1: Math.min(a.x1, b.x1), z0: Math.max(a.z0, b.z0), z1: Math.min(a.z1, b.z1) });
+  const areaXZ = (r) => Math.max(0, r.x1 - r.x0) * Math.max(0, r.z1 - r.z0);
+  const RIM_Y = (B.top.yFront + B.top.yRear) / 2;
+  const basketFloor = { x0: -B.floor.x, x1: B.floor.x, z0: B.floor.z0, z1: B.floor.z1 };
+  const trayRect = { x0: -B.tray.x, x1: B.tray.x, z0: B.tray.z0, z1: B.tray.z1 };
+  // 놓을 자리: 가리킨 곳 그대로(자르지 않음). 바구니 안이면 바닥부터, 벽에 걸치면 테두리 위, 바깥이면 매장 바닥.
+  // 겹치는 상품이 있으면 그 위로 올림. 안정도: 받치는 면적 비율 + 무게중심이 받침 영역 안인지.
   function solveGhost() {
     const p = st.held?.p; if (!p) return null;
-    const L = LEVELS[st.level], dims = itemDims(p, st.tip), rot = st.rotY;
+    const dims = itemDims(p, st.tip), rot = st.rotY;
     const probe = aabbOf(0, 0, 0, dims, rot), hx = (probe.x1 - probe.x0) / 2, hz = (probe.z1 - probe.z0) / 2, h = dims[1];
-    let x = THREE.MathUtils.clamp(st.gx + st.nudge.x, -L.x + hx, L.x - hx);
-    let z = st.gz + st.nudge.z;
-    let y = L.y;
-    const obs = [...staticObs, ...items.filter((it) => it.level === st.level || st.level === 'upper').map((it) => bodyAabb(it.body))];
+    let x = st.gx + st.nudge.x, z = st.gz + st.nudge.z, where;
+    if (st.level === 'lower') {
+      where = Math.abs(x) <= B.tray.x + 0.05 && z >= B.tray.z0 - 0.05 && z <= B.tray.z1 + 0.05 ? 'lower' : 'floor';
+    } else where = Math.abs(x) <= B.top.x + 0.04 && z >= B.top.z0 - 0.04 && z <= B.top.z1 + 0.04 ? 'basket' : 'floor';
+    if (where === 'floor') { x = st.fx + st.nudge.x; z = st.fz + st.nudge.z; }
+    const fp = { x0: x - hx, x1: x + hx, z0: z - hz, z1: z + hz };
+    if (where === 'basket' && (fp.x0 < -B.floor.x - 0.004 || fp.x1 > B.floor.x + 0.004 || fp.z1 > B.floor.z1 + 0.004 || fp.z0 < B.top.z0 - 0.004 || (fp.z0 < B.floor.z0 && fp.z0 < LEVELS.upper.frontZ(B.floorY + h)))) where = 'rim';
+    const base = where === 'basket' ? B.floorY : where === 'rim' ? RIM_Y : where === 'lower' ? B.tray.y : 0;
+    let y = base;
+    const obs = where === 'floor' ? [] : items.filter((it) => (where === 'lower') === (it.level === 'lower')).map((it) => bodyAabb(it.body));
     for (let k = 0; k < 24; k++) {
-      const zMin = L.frontZ(y) + hz; z = THREE.MathUtils.clamp(z, zMin, L.z1 - hz);
-      const a = { x0: x - hx, x1: x + hx, z0: z - hz, z1: z + hz };
       let moved = false;
-      for (const o of obs) if (overlapXZ(a, o) && o.y0 < y + h - 0.004 && o.y1 > y + 0.004) { y = o.y1 + 0.0005; moved = true; }
+      for (const o of obs) if (overlapXZ(fp, o) && o.y0 < y + h - 0.004 && o.y1 > y + 0.004) { y = o.y1 + 0.0005; moved = true; }
       if (!moved) break;
     }
-    const zMin = L.frontZ(y) + hz;
-    const fits = x - hx >= -L.x - 1e-4 && x + hx <= L.x + 1e-4 && z - hz >= zMin - hz - 1e-3 && z + hz <= L.z1 + 1e-3 && y + h <= L.ceil;
-    return { x, y: y + h / 2 + 0.002, z, ok: fits, top: y + h };
+    // 받침 영역
+    const sup = [];
+    if (Math.abs(y - base) < 0.002) {
+      if (where === 'basket') sup.push(clipXZ(fp, basketFloor));
+      else if (where === 'lower') sup.push(clipXZ(fp, trayRect));
+      else if (where === 'floor') sup.push(fp);
+      else if (where === 'rim') { // 철망 테두리(가는 선)
+        for (const wx of [-B.floor.x - 0.02, B.floor.x + 0.02]) if (fp.x0 < wx && fp.x1 > wx) sup.push(clipXZ(fp, { x0: wx - 0.012, x1: wx + 0.012, z0: B.top.z0, z1: B.top.z1 }));
+        if (fp.z0 < B.floor.z1 + 0.015 && fp.z1 > B.floor.z1 + 0.015) sup.push(clipXZ(fp, { x0: -B.top.x, x1: B.top.x, z0: B.floor.z1, z1: B.floor.z1 + 0.03 }));
+        if (fp.z0 < B.top.z0 + 0.01 && fp.z1 > B.top.z0) sup.push(clipXZ(fp, { x0: -B.top.x, x1: B.top.x, z0: B.top.z0 - 0.01, z1: B.top.z0 + 0.02 }));
+      }
+    }
+    for (const o of obs) if (overlapXZ(fp, o) && Math.abs(o.y1 - y) < 0.015) sup.push(clipXZ(fp, o));
+    const supA = sup.reduce((a, r) => a + areaXZ(r), 0), fpA = areaXZ(fp), ratio = Math.min(1, supA / fpA);
+    let state = 'red';
+    if (sup.length && supA > 1e-5) {
+      const hull = sup.reduce((a, r) => ({ x0: Math.min(a.x0, r.x0), x1: Math.max(a.x1, r.x1), z0: Math.min(a.z0, r.z0), z1: Math.max(a.z1, r.z1) }), { x0: 1e9, x1: -1e9, z0: 1e9, z1: -1e9 });
+      const margin = Math.min(x - hull.x0, hull.x1 - x, z - hull.z0, hull.z1 - z);
+      const tall = h > 1.8 * Math.min(hx, hz) * 2 && p.shape !== 'cyl';
+      if (margin < 0) state = 'red';
+      else if (ratio < 0.5 || margin < 0.03 || where === 'rim' || (where !== 'floor' && y + h > B.top.yRear + 0.3) || (tall && where !== 'floor')) state = 'yellow';
+      else state = 'green';
+    }
+    return { x, y: y + h / 2 + 0.003, z, ok: true, state, where, ratio, top: y + h };
   }
   let ghostSol = null;
-  function toggleLevel() { st.level = st.level === 'upper' ? 'lower' : 'upper'; st.nudge.x = st.nudge.z = 0; }
+  function toggleLevel() { st.level = st.level === 'upper' ? 'lower' : 'upper'; st.nudge.x = st.nudge.z = 0; st.gx = 0; st.gz = 0; }
   function rotate(a) { st.rotY = (st.rotY + a) % (Math.PI * 2); }
 
   // ---------- 집기·놓기 ----------
@@ -460,51 +551,80 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit } 
   const REACH = 4.5;
   function pickTarget(at) {
     ray.setFromCamera(at || (mouse.on ? ndc.set(mouse.x, mouse.y) : ndc.set(0, 0)), camera); ray.far = REACH;
-    const hit = ray.intersectObjects(prodMeshes, false)[0];
-    if (!hit || hit.instanceId == null) return null;
-    return { im: hit.object, id: hit.instanceId, p: BY_ID[hit.object.userData.pid], dist: hit.distance };
+    const loose = [...items.map((it) => it.mesh), ...floorItems.map((f) => f.mesh)];
+    const hit = ray.intersectObjects([...prodMeshes, ...loose], false)[0];
+    if (!hit) return null;
+    if (hit.object.isInstancedMesh && hit.instanceId != null && hit.object.userData.pid) return { kind: 'shelf', im: hit.object, id: hit.instanceId, p: BY_ID[hit.object.userData.pid], dist: hit.distance };
+    const it = items.find((i) => i.mesh === hit.object); if (it) return { kind: 'cart', it, p: it.p, dist: hit.distance };
+    const fi = floorItems.find((f) => f.mesh === hit.object); if (fi) return { kind: 'floor', fi, p: fi.p, dist: hit.distance };
+    return null;
   }
   const hlS = new THREE.Matrix4();
   function updateHighlight() {
     if (!hover || st.mode !== 'walk') { hlBox.visible = false; dom.style.cursor = ''; return; }
-    hover.im.getMatrixAt(hover.id, m4); const [sx, sy, sz] = hover.p.size;
-    hlS.makeScale(sx * 1.04, sy * 1.04, sz * 1.04); hlBox.matrix.multiplyMatrices(m4, hlS); hlBox.matrixWorldNeedsUpdate = true;
+    const [sx, sy, sz] = hover.p.size; hlS.makeScale(sx * 1.05, sy * 1.05, sz * 1.05);
+    if (hover.kind === 'shelf') hover.im.getMatrixAt(hover.id, m4); else { const o = hover.kind === 'cart' ? hover.it.mesh : hover.fi.mesh; o.updateMatrixWorld(); m4.copy(o.matrixWorld); }
+    hlBox.matrix.multiplyMatrices(m4, hlS); hlBox.matrixWorldNeedsUpdate = true;
     hlBox.visible = true; hlM.opacity = 0.75 + 0.25 * Math.sin(st.t * 8); dom.style.cursor = 'pointer';
+  }
+  // 기본 자세: 긴 변을 카트 길이 방향으로, 키 큰 봉지·박스는 눕혀서(넘어지지 않게)
+  function autoPose(p) {
+    const [sx, sy, sz] = p.size;
+    st.rotY = sx > sz + 0.01 ? Math.PI / 2 : 0;
+    st.tip = p.shape !== 'cyl' && p.shape !== 'sphere' && sy > 1.6 * Math.min(sx, sz);
   }
   function pick() {
     if (!hover || st.mode !== 'walk') return false;
     if (!st.hasCart && !cart.visible) { toast('먼저 입구 카트 보관소에서 카트를 잡으세요 (E)', 2200, '#1f4fa3'); return false; }
     const c = st.cart, d = Math.hypot(c.x - st.me.x, c.z - st.me.z);
     if (d > 7) { toast('카트가 너무 멀어요 · 카트 가까이에서 집어요', 1500, '#1f4fa3'); return false; }
-    const { im, id, p } = hover;
-    im.getMatrixAt(id, m4); const saved = m4.clone();
-    m4.makeScale(0, 0, 0); im.setMatrixAt(id, m4); im.instanceMatrix.needsUpdate = true;
-    st.held = { p, src: { im, id, m: saved } };
-    st.mode = 'place'; st.level = p.kg >= 12 ? 'lower' : 'upper'; st.rotY = 0; st.tip = false; st.nudge.x = st.nudge.z = 0;
-    // 처음 위치: 비어 있는 쪽 앞부분
-    st.gx = 0; st.gz = st.level === 'upper' ? -0.1 : 0;
-    setGhost(p); hud.classList.add('placing'); blip('pick');
+    const h = hover; let restore = null, mesh = null, src = null;
+    if (h.kind === 'shelf') {
+      h.im.getMatrixAt(h.id, m4); const saved = m4.clone();
+      m4.makeScale(0, 0, 0); h.im.setMatrixAt(h.id, m4); h.im.instanceMatrix.needsUpdate = true;
+      src = { im: h.im, id: h.id, m: saved };
+      restore = () => { h.im.setMatrixAt(h.id, saved); h.im.instanceMatrix.needsUpdate = true; };
+    } else if (h.kind === 'cart') {
+      const it = h.it, P = it.body.position.clone(), Q = it.body.quaternion.clone(), lv = it.level;
+      detachItem(it); mesh = it.mesh; src = it.src;
+      restore = () => { const q = new THREE.Quaternion(Q.x, Q.y, Q.z, Q.w); addItem(it.p, lv, P.x, P.y + 0.01, P.z, 0, false, mesh, q); };
+    } else {
+      const fi = h.fi; removeFloorItem(fi); mesh = fi.mesh; src = fi.src;
+      restore = () => { floorRoot.add(fi.mesh); floorItems.push(fi); };
+    }
+    st.held = { p: h.p, src, mesh, restore };
+    st.mode = 'place'; st.level = 'upper'; autoPose(h.p); st.nudge.x = st.nudge.z = 0;
+    st.gx = 0; st.gz = -0.05; st.fx = 0; st.fz = -0.05;
+    setGhost(h.p); hud.classList.add('placing'); blip('pick'); hlBox.visible = false;
     return true;
   }
   function cancelPlace() {
     if (st.mode !== 'place') return;
-    const s = st.held?.src; if (s) { s.im.setMatrixAt(s.id, s.m); s.im.instanceMatrix.needsUpdate = true; }
-    st.held = null; setGhost(null); st.mode = 'walk'; hud.classList.remove('placing');
+    const h = st.held; st.held = null; h?.restore?.();
+    setGhost(null); st.mode = 'walk'; hud.classList.remove('placing');
   }
   function place() {
     if (st.mode !== 'place' || !ghostSol) return false;
-    if (!ghostSol.ok) { toast(st.level === 'lower' ? '아래 받침대에 안 들어가요 (높이 32 cm)' : '자리가 없어요 · 돌리거나(Q/E) 눕혀(R) 보세요', 1600, '#8a5a00'); return false; }
-    if (loadKg() + st.held.p.kg > CART.maxLoad) { toast(`카트 허용 하중 ${CART.maxLoad} kg 초과`, 1600); return false; }
-    addItem(st.held.p, st.level, ghostSol.x, ghostSol.y, ghostSol.z, st.rotY, st.tip);
+    const h = st.held, p = h.p;
+    if (ghostSol.where !== 'floor') {
+      if (items.length >= MAX_ITEMS) { toast(`카트 안 상품은 ${MAX_ITEMS}개까지 (샘플 성능 상한)`, 1600, '#8a5a00'); return false; }
+      if (loadKg() + p.kg > CART.maxLoad) { toast(`카트 허용 하중 ${CART.maxLoad} kg 초과`, 1600); return false; }
+      addItem(p, ghostSol.where === 'lower' ? 'lower' : 'upper', ghostSol.x, ghostSol.y, ghostSol.z, st.rotY, st.tip, h.mesh);
+      if (ghostSol.state === 'red') toast('위태위태… 떨어질 수 있어요', 1200, '#8a5a00');
+    } else { // 매장 바닥에 내려놓기
+      const q = itemQuat(st.rotY, st.tip); cart.updateMatrixWorld(true);
+      _m.compose(_p.set(ghostSol.x, ghostSol.y + 0.02, ghostSol.z), q, _s).premultiply(cart.matrixWorld);
+      const wp = new THREE.Vector3(), wq = new THREE.Quaternion(); _m.decompose(wp, wq, new THREE.Vector3());
+      addFloorItem(p, h.mesh || makeItemMesh(p), wp, wq, new THREE.Vector3(), h.src);
+    }
     st.held = null; setGhost(null); st.mode = 'walk'; hud.classList.remove('placing'); blip('place');
+    st.placedOnce = true;
     return true;
   }
-  function removeLast() {
-    const it = items.pop(); if (!it) return;
-    if (it.mesh.userData.eggs) { st.eggTotal -= 30; st.brokenEggs -= it.mesh.userData.eggs.userData.broken.filter(Boolean).length; }
-    world.removeBody(it.body); itemsRoot.remove(it.mesh); it.mesh.geometry.dispose(); it.mesh.userData.eggs?.dispose(); for (const im of Object.values(it.mesh.userData.eggs?.userData.fx || {})) im.dispose();
+  function removeLast() { // X: 마지막에 넣은 상품을 원래 선반으로
+    const it = items[items.length - 1]; if (!it) return;
+    detachItem(it); disposeItemMesh(it.mesh);
     if (it.src) { it.src.im.setMatrixAt(it.src.id, it.src.m); it.src.im.instanceMatrix.needsUpdate = true; }
-    for (const o of items) o.body.wakeUp();
   }
 
   // ---------- 계란 하중 ----------
@@ -554,7 +674,10 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit } 
         }
       }
     }
-    // 2) 임계 넘으면(3 프레임 이상 지속 또는 충격) 그 알만 깨짐
+    resolveEggs(eggItems);
+  }
+  // 2) 임계 넘으면(3 프레임 이상 지속 또는 충격) 그 알만 깨짐 — 카트 안 하중·바닥 낙하 충격 공용
+  function resolveEggs(eggItems, silent = false) {
     for (const it of eggItems) {
       const eggs = it.mesh.userData.eggs, U = eggs.userData; let newly = 0;
       const fx = U.fx || {}; let fxDirty = false;
@@ -583,9 +706,8 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit } 
         }
       }
       if (fxDirty) { for (const im of Object.values(fx)) im.instanceMatrix.needsUpdate = true; eggs.instanceMatrix.needsUpdate = true; }
-      if (newly) { eggs.instanceMatrix.needsUpdate = true; eggs.instanceColor.needsUpdate = true; st.brokenEggs += newly; blip('crack'); toast(`🥚 빠직! 계란 ${newly}개 깨짐 (${st.brokenEggs}/${st.eggTotal})`, 2400); }
+      if (newly) { eggs.instanceMatrix.needsUpdate = true; eggs.instanceColor.needsUpdate = true; blip('crack'); if (!silent) { st.brokenEggs += newly; toast(`🥚 빠직! 계란 ${newly}개 깨짐 (${st.brokenEggs}/${st.eggTotal})`, 2400); } }
     }
-    void dt;
   }
 
   // ---------- 카트 주행 ----------
@@ -656,7 +778,7 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit } 
   const FIXED = 1 / 120;
   let acc = 0;
   function stepPhysics(dt) {
-    if (!items.length) return;
+    if (!items.length) { st.shock = 0; return; }
     const c = st.cart, fx = -Math.sin(c.yaw), fz = -Math.cos(c.yaw), rx = Math.cos(c.yaw), rz = -Math.sin(c.yaw);
     let axl = c.ax * rx + c.az * rz, azl = -(c.ax * fx + c.az * fz);
     if (st.shock) { const k = st.shock * 9; azl += k; st.shock = 0; } // 부딪힘: 앞으로 쏠림
@@ -671,10 +793,12 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit } 
       world.step(FIXED); acc -= FIXED;
       eggLoads(FIXED);
     }
-    for (const it of items) {
-      const b = it.body;
-      if (b.position.y < -0.5) { b.position.set(0, 1.2, 0); b.velocity.setZero(); } // 떨어지면 되돌림(안전장치)
-      it.mesh.position.set(b.position.x, b.position.y, b.position.z); it.mesh.quaternion.set(b.quaternion.x, b.quaternion.y, b.quaternion.z, b.quaternion.w);
+    for (const it of items.slice()) {
+      const b = it.body, P = b.position;
+      // 카트 밖으로 넘어가 테두리 아래로 떨어지면 → 매장 바닥 물체로 넘김
+      const outside = Math.abs(P.x) > B.top.x + 0.05 || P.z < B.top.z0 - 0.08 || P.z > B.top.z1 + 0.1;
+      if ((outside && P.y < 0.6) || P.y < -0.2) { toFloor(it); continue; }
+      it.mesh.position.set(P.x, P.y, P.z); it.mesh.quaternion.set(b.quaternion.x, b.quaternion.y, b.quaternion.z, b.quaternion.w);
     }
   }
 
@@ -712,15 +836,19 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit } 
       lines.push(`카트 ${CART.mass} kg + 짐 ${kg.toFixed(1)} kg = ${(CART.mass + kg).toFixed(1)} kg`);
       lines.push(`₩ ${loadWon().toLocaleString('ko-KR')} · ${sp.toFixed(2)} m/s${st.lastAccel != null ? ` · 0→1 m/s ${st.lastAccel.toFixed(1)}초` : ''}`);
       lines.push(`윗바구니 ${fill('upper')}% · 아래 받침대 ${fill('lower')}%${st.eggTotal ? ` · 🥚 깨짐 ${st.brokenEggs}/${st.eggTotal}` : ''}`);
-    } else lines.push('입구 카트 보관소에서 카트를 잡으세요');
+    } else if (cart.visible) lines.push(`카트에서 손 놓음 · 초록 화살표 쪽 카트 옆에서 E${items.length ? ` (짐 ${items.length}개 그대로)` : ''}`);
+    else lines.push('① 입구 카트 보관소에서 E 로 카트 잡기');
+    if (!st.placedOnce) lines.push(st.mode === 'place' ? '③ 카트 안을 클릭하면 그 자리에 놓여요' : st.hasCart || cart.visible ? '② 선반 상품을 마우스로 클릭(가운데 조준 X)' : '');
     elKg.textContent = lines.join('\n');
     const help = st.mode === 'place'
-      ? `마우스 = 위치 · ←↑↓→ 1 cm · Q/E 90° · 휠 15° · R 눕히기 · Tab 위/아래칸 · 클릭/Space 놓기 · Esc 취소`
-      : st.hasCart ? 'W/S 밀기·당기기 · A/D 방향 · Shift 빠르게 · 드래그 둘러보기 · 상품 보고 E/클릭 집기 · X 마지막 빼기 · G 카트 놓기'
-        : 'WASD 걷기 · 드래그 둘러보기 · 카트 보관소에서 E 카트 잡기 · 출입구에서 E 나가기';
+      ? `클릭 = 가리킨 곳에 놓기 · 우클릭/Esc 취소 · (선택) 휠·Q/E 돌리기 · R 눕히기 · Tab 아래 받침대 · 방향키 1 cm`
+      : st.hasCart ? 'W/S 밀기 · A/D 방향 · 드래그 둘러보기 · 상품 클릭 = 집기 · 카트 속 상품도 클릭해 다시 집기 · G 카트 놓기'
+        : 'WASD 걷기 · 드래그 둘러보기 · E 카트 잡기 · 출입구에서 E 나가기';
     if (elHelp.textContent !== help) elHelp.textContent = help;
-    if (st.mode === 'walk' && nearMyCart() && !hover) { elTarget.style.display = 'block'; elTarget.textContent = `E 카트 잡기${items.length ? ` · 짐 ${items.length}개 그대로` : ''}`; }
-    else if (hover && st.mode === 'walk') { elTarget.style.display = 'block'; elTarget.textContent = `${hover.p.name} · ${hover.p.kg} kg · ${hover.p.price.toLocaleString('ko-KR')}원 — E 집기`; }
+    elTarget.style.background = '';
+    if (st.mode === 'place' && ghostSol) { elTarget.style.display = 'block'; elTarget.textContent = ghostSol.where === 'floor' ? '매장 바닥에 내려놓기' : { green: '안정적 — 여기 놓으면 OK', yellow: '흔들흔들 — 카트 움직이면 떨어질 수도', red: '위태위태 — 떨어질 것 같아요 (그래도 놓을 수 있음)' }[ghostSol.state]; elTarget.style.background = { green: '#e8fff0', yellow: '#fff6d6', red: '#ffe3e0' }[ghostSol.state]; }
+    else if (st.mode === 'walk' && nearMyCart() && !hover) { elTarget.style.display = 'block'; elTarget.style.background = ''; elTarget.textContent = `E 카트 잡기${items.length ? ` · 짐 ${items.length}개 그대로` : ''}`; }
+    else if (hover && st.mode === 'walk') { elTarget.style.display = 'block'; elTarget.style.background = ''; elTarget.textContent = `${hover.kind === 'floor' ? '(바닥) ' : hover.kind === 'cart' ? '(카트 속) ' : ''}${hover.p.name} · ${hover.p.kg} kg · ${hover.p.price.toLocaleString('ko-KR')}원 — 클릭/E 집기`; }
     else if (st.mode === 'walk' && nearCorral() && !st.hasCart) { elTarget.style.display = 'block'; elTarget.textContent = 'E 카트 잡기 (240L)'; }
     else if (st.mode === 'walk' && nearDoor() && !st.hasCart) { elTarget.style.display = 'block'; elTarget.textContent = 'E 나가기'; }
     else elTarget.style.display = 'none';
@@ -754,8 +882,10 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit } 
     ray.setFromCamera(ndc, camera);
     const L = LEVELS[st.level];
     const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -L.y); plane.applyMatrix4(cart.matrixWorld);
-    const hit = ray.ray.intersectPlane(plane, new THREE.Vector3()); if (!hit) return;
-    cart.worldToLocal(hit); st.gx = hit.x; st.gz = hit.z; st.nudge.x = st.nudge.z = 0;
+    const hit = ray.ray.intersectPlane(plane, new THREE.Vector3()); if (hit) { cart.worldToLocal(hit); st.gx = hit.x; st.gz = hit.z; }
+    const fh = ray.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), new THREE.Vector3()); // 매장 바닥(카트 밖에 놓기)
+    if (fh) { cart.worldToLocal(fh); const d = Math.hypot(fh.x, fh.z), k = d > 2.2 ? 2.2 / d : 1; st.fx = fh.x * k; st.fz = fh.z * k; }
+    st.nudge.x = st.nudge.z = 0;
   };
   const onUp = (e) => {
     const d = down; down = null; if (!d) return;
@@ -815,8 +945,13 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit } 
       // 휠·키로 바뀐 눕힘 반영
       const want = itemDims(st.held.p, st.tip).join(); if (ghost?.userData.dims !== want) { setGhost(st.held.p); ghost.userData.dims = want; }
       ghostSol = solveGhost();
-      if (ghost && ghostSol) { ghost.position.set(ghostSol.x, ghostSol.y, ghostSol.z); ghost.rotation.set(0, st.rotY, 0); ghostM.color.setHex(ghostSol.ok ? 0x33dd66 : 0xff4444); ghostEdgeM.color.setHex(ghostSol.ok ? 0x1aff70 : 0xff2222); }
+      if (ghost && ghostSol) {
+        ghost.position.set(ghostSol.x, ghostSol.y, ghostSol.z); itemQuat(st.rotY, st.tip, ghost.quaternion);
+        const C = { green: [0x33dd66, 0x1aff70], yellow: [0xffc400, 0xffd84a], red: [0xff4444, 0xff2222] }[ghostSol.state];
+        ghostM.color.setHex(C[0]); ghostEdgeM.color.setHex(C[1]); ghostM.opacity = ghostSol.state === 'yellow' ? 0.3 + 0.15 * Math.sin(st.t * 10) : 0.35;
+      }
     }
+    tickFloor(dt);
     selfAvatar.position.set(st.me.x, 0, st.me.z); selfAvatar.rotation.y = st.me.yaw;
     updateCamera(dt);
     hover = st.mode === 'walk' ? pickTarget() : null;
@@ -858,7 +993,7 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit } 
       setMe(x, z, yaw, pitch = -0.12) { st.me.x = x; st.me.z = z; st.me.yaw = yaw; st.head.yaw = 0; st.head.pitch = pitch; },
       setCart(x, z, yaw) { const c = st.cart; c.x = x; c.z = z; c.yaw = yaw; c.vx = c.vz = c.w = 0; st.me.x = x + Math.sin(yaw) * 0.95; st.me.z = z + Math.cos(yaw) * 0.95; st.me.yaw = yaw; },
       hold(id) { const p = BY_ID[id]; st.held = { p, src: null }; st.mode = 'place'; st.rotY = 0; st.tip = false; st.nudge.x = st.nudge.z = 0; setGhost(p); hud.classList.add('placing'); },
-      setGhostAt(level, x, z, rotY = 0, tip = false) { st.level = level; st.gx = x; st.gz = z; st.rotY = rotY; st.tip = tip; st.nudge.x = st.nudge.z = 0; },
+      setGhostAt(level, x, z, rotY = 0, tip = false) { st.level = level; st.gx = x; st.gz = z; st.fx = x; st.fz = z; st.rotY = rotY; st.tip = tip; st.nudge.x = st.nudge.z = 0; },
       drop(id, level, x, z, rotY = 0, tip = false) { api._dbg.hold(id); api._dbg.setGhostAt(level, x, z, rotY, tip); if (st.held && itemDims(st.held.p, tip).join() !== ghost?.userData.dims) { setGhost(st.held.p); ghost.userData.dims = itemDims(st.held.p, tip).join(); } ghostSol = solveGhost(); return place(); },
       camAt(pos, tgt) { st.camOv = pos ? { pos: new THREE.Vector3(...pos), tgt: new THREE.Vector3(...tgt) } : null; },
       settle(sec = 1.5) { for (let t = 0; t < sec; t += 1 / 60) { cart.updateMatrixWorld(true); stepPhysics(1 / 60); } },
