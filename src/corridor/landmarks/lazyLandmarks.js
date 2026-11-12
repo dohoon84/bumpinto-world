@@ -142,7 +142,26 @@ export function yieldIdle() {
   return yieldPaint();
 }
 
-export const landmarkBuildGate = { active: 0, urgent: false, lastPaint: 0 };
+export const landmarkBuildGate = { active: 0, urgent: false, frames: 0, slowGpu: false };
+
+export function markSlowGpu(renderer) {
+  try {
+    const gl = renderer?.getContext?.() || renderer;
+    if (!gl?.getParameter) return false;
+    const ext = gl.getExtension?.('WEBGL_debug_renderer_info');
+    const info = [
+      ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : '',
+      ext ? gl.getParameter(ext.UNMASKED_VENDOR_WEBGL) : '',
+      gl.getParameter(gl.RENDERER),
+      gl.getParameter(gl.VENDOR),
+    ].join(' ');
+    const slow = /swiftshader|llvmpipe|softpipe|software|microsoft basic render/i.test(info);
+    landmarkBuildGate.slowGpu = slow;
+    return slow;
+  } catch {
+    return false;
+  }
+}
 
 export function beginLandmarkBuild(urgent = false) {
   landmarkBuildGate.active += 1;
@@ -153,16 +172,13 @@ export function beginLandmarkBuild(urgent = false) {
   };
 }
 
-/** 짓는 동안 GPU 프레임을 가끔만 그려 JS가 진행되게 한다. SwiftShader 에서는 한 프레임이 수 초라서 await rAF 를 쓰면 빌드가 멈춘다. */
+/** SwiftShader 한 프레임이 수 초라서, 소프트웨어 GPU에서는 짓는 동안 그림을 거의 생략한다. 실제 GPU는 매 프레임 그린다. */
 export function shouldSkipLandmarkPaint() {
   if (!landmarkBuildGate.active) return false;
-  const now = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
-  const minGap = landmarkBuildGate.urgent ? 250 : 100;
-  if (now - landmarkBuildGate.lastPaint >= minGap) {
-    landmarkBuildGate.lastPaint = now;
-    return false;
-  }
-  return true;
+  if (!landmarkBuildGate.slowGpu) return false;
+  landmarkBuildGate.frames += 1;
+  // 소프트웨어 GPU: 아주 가끔만 그려서 JS 조각이 프레임에 먹히지 않게 한다.
+  return landmarkBuildGate.frames % 240 !== 1;
 }
 
 /** 긴 작업을 매크로태스크로만 끊는다. rAF/idle 을 기다리지 않는다(게임 루프가 이미 그림을 그린다). */

@@ -300,6 +300,7 @@ const subwayOn = region.id === 'jeongja' && params.get('subway') !== '0'; // [su
 const renderer = new THREE.WebGLRenderer({ antialias: true, logarithmicDepthBuffer: true, preserveDrawingBuffer: params.has('shot'), ...(subwayOn ? { stencil: true } : {}) }); // [subway] 출입구 계단 구멍은 스텐실로 그림
 renderer.setPixelRatio(Math.min(devicePixelRatio, mobileMode ? 1.5 : 2)); // [mobile] 폰은 1.5배까지만
 renderer.setSize(innerWidth, innerHeight);
+markSlowGpu(renderer);
 renderer.shadowMap.enabled = !params.has('noshadow') && !(mobileMode && params.get('shadow') !== '1'); // [mobile] 폰은 그림자 끔 (?shadow=1 로 켬)
 renderer.shadowMap.type = THREE.PCFShadowMap;
 document.getElementById('app').appendChild(renderer.domElement);
