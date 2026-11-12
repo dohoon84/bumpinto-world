@@ -5,7 +5,12 @@ import { prepareBuildingColours } from './world/buildingColours.js'; // [colours
 import { createAvatar, animateAvatar, animateRide, clearRidePose } from './entities/avatar.js';
 import { KakaoBikes } from './entities/bike.js';
 import { openLobby, getEnterScreen } from './lobby.js';
-import { openWorldGate, isStarbaseLive } from './worldGate.js';
+import { isStarbaseLive } from './worldGateFlags.js';
+let _openWorldGate = null;
+async function openWorldGate(opts) {
+  if (!_openWorldGate) _openWorldGate = import('./worldGate.js').then((m) => m.openWorldGate);
+  return (await _openWorldGate)(opts);
+}
 import { getCurrentRegion, getRegion, navigateToRegion, isFlightBetween } from './regions/index.js';
 import { isEn, tr, toggleLang, onLangChange } from './i18n.js';
 import { sanitizeLook, readSavedPassport, isPassportActive, setPassportActive } from './look.js';
@@ -1308,7 +1313,7 @@ function landBump24At() {
   setViewMode('follow');
   return true;
 }
-function completeWorldJoin(name, look, session) {
+async function completeWorldJoin(name, look, session) {
   setPassportActive(true);
   me.name = name; me.color = look.color; me.look = look;
   mySit = ''; myAfk = false; myEmote = ''; myEmoteUntil = 0; idleTime = 0;
@@ -1318,6 +1323,18 @@ function completeWorldJoin(name, look, session) {
   const continued = continueEntry || takeContinue(); continueEntry = false; // [pickfirst] PC gateOpts.continue · 모바일 '계속하기'
   const rp = resumePlace ?? takeResumePlace(); resumePlace = null; // [econ-mobile] 모바일은 시작화면이 넘겨준 자리 (역을 직접 고르면 entrySpawn 이 무시)
   const spawn = entrySpawn({ resume: rp, bounds: corridor?.bounds || world.bounds, inWater: world.inWater, picked, continued, sessionPlace: session?.place || null, at: corridorAt, placeOf: arriveTravel ? (id) => arriveTravel.placeOf(id) : null, fix: arriveFix, pickFirst });
+  // [namsan] [hangang] 저장 자리·역 도착이 남산/한강이면 메시를 먼저 짓는다
+  if (corridor?.ensureNear) {
+    let ex, ez;
+    if (spawn.kind === 'resume' && rp && Number.isFinite(rp.x)) { ex = rp.x; ez = rp.z; }
+    else if (spawn.kind === 'session' && session?.place && Number.isFinite(session.place.x)) { ex = session.place.x; ez = session.place.z; }
+    else if (spawn.kind === 'station' && Number.isFinite(spawn.x)) { ex = spawn.x; ez = spawn.z; }
+    else if (corridorAt && arriveTravel) {
+      const d = arriveTravel.placeOf(corridorAt);
+      if (d && Number.isFinite(d.x)) { ex = d.x; ez = d.z; }
+    }
+    if (Number.isFinite(ex)) await corridor.ensureNear(ex, ez, { urgent: true });
+  }
   if (landArcade() || landBump24Jeongja() || landBump24At()) { arriveTravel?.cancel?.(); corridorAt = null; } // [arcade] [bump24-stores]
   else if (spawn.kind === 'resume') { arriveTravel?.cancel?.(); corridorAt = null; applySession({ place: rp }); }
   else if (spawn.kind === 'session') { if (spawn.stay) { arriveTravel?.cancel?.(); corridorAt = null; } applySession(session); }
@@ -2238,6 +2255,11 @@ homeBtn.onclick = () => {
 };
 // [corridor] 순간이동(지구본 역 선택 · ?at=<역>|lotte) · 성능 HUD(`)
 function teleportTo(x, z, y) {
+  const move = () => teleportToMove(x, z, y);
+  if (corridor?.needsLandmark?.(x, z)) return corridor.ensureNear(x, z, { urgent: true }).then(move);
+  return move();
+}
+function teleportToMove(x, z, y) {
   ride?.forceAlight('teleport'); // [ride] 순간이동·지구본 이동이면 자동 하차
   if (bikes.riding) dismountBike();
   if (adminBike?.riding) adminBike.dismount();
@@ -2290,10 +2312,18 @@ const cameraApp = mountCamera({ // [camera]
   },
   getView: () => arcadeGame?.view() || bump24Game?.view() || subway?.view() || null, // [camera] [arcade] [bump24game] 매장·지하 장면
 });
+let bootReady = true;
+let bootTravel = Promise.resolve();
 if (arcadeAtSpot(atQuery)) landArcade(); // [arcade] arcade-seohyeon · arcade-jeongja
 else if (atQuery === BUMP24_JEONGJA_AT) landBump24Jeongja(); // [bump24-jeongja] ?shot=1 처럼 입장 함수를 안 타는 시작
 else if (landBump24At()) { /* [bump24-stores] */ }
-else if (travel && atQuery) travel.go(atQuery);
+else if (travel && atQuery) {
+  // [namsan] [hangang] ?at= 스폰은 메시가 생긴 뒤에 __jj.ready 를 켠다
+  bootReady = false;
+  bootTravel = Promise.resolve(travel.go(atQuery)).catch((err) => {
+    console.warn('[travel] at= failed', err);
+  }).then(() => { if (window.__jj) window.__jj.ready = true; });
+}
 // [corridor] 지구본 역 선택 → 입장 완료 후 역 출구 앞 인도로 (위치 저장 성공 여부와 무관)
 corridorArrive = () => {
   if (!corridorAt || !travel) return undefined;
@@ -2955,7 +2985,7 @@ window.__jj = {
   createAvatar,
   sanitizeLook,
   perfmem: perfMem, // [perf-memory]
-ready: true, region, tower, renderer, corridor, namsan: corridor?.namsan || null, hangang: corridor?.hangang || null, schoolZone: corridor?.schoolZone || null, playgrounds, streetlights, pangyoLamps, migeumLamps, gangnamNight, gangnamAds, gangnamNightlife, gangnamNpc, gangnamStreet, gangnamBrt, liveBus, // [corridor] [schoolzone] [playgrounds] [streetlights] [gangnam-night] [gangnam-nightlife] [gangnam-npc] [gangnam-street] [gangnam-brt] [livebus] [namsan]
+ready: bootReady, region, tower, renderer, corridor, namsan: corridor?.namsan || null, hangang: corridor?.hangang || null, schoolZone: corridor?.schoolZone || null, playgrounds, streetlights, pangyoLamps, migeumLamps, gangnamNight, gangnamAds, gangnamNightlife, gangnamNpc, gangnamStreet, gangnamBrt, liveBus, // [corridor] [schoolzone] [playgrounds] [streetlights] [gangnam-night] [gangnam-nightlife] [gangnam-npc] [gangnam-street] [gangnam-brt] [livebus] [namsan]
   placeCaption: (x, z) => placeCaption(x, z, placeList, corridor?.bounds?.islands), // [gangnam-night]
 
   bungeo, // [bungeo]
@@ -2963,7 +2993,12 @@ ready: true, region, tower, renderer, corridor, namsan: corridor?.namsan || null
   get player() { return player; },
   get arriving() { return arriving; }, // [arrivefix]
   gateEnter(at) { if (!joined) return; setPassportActive(true); pauseWorldSession(); handleGateEnter(region.id, at ? { at } : undefined); }, // [arrivefix] 테스트용: 게임 안 🌏 → 역 고르기와 같은 흐름
-  teleport(x, z, y) { ride?.forceAlight('teleport'); if (bikes.riding) dismountBike(); if (adminBike?.riding) adminBike.dismount(); dismountGiftRides(); player.position.set(x, y ?? (terrain ? terrain.getGroundHeight(x, z, 0) : 0), z); }, // [terrain] [bike] [roadbike]
+  teleport(x, z, y) {
+    const move = () => { ride?.forceAlight('teleport'); if (bikes.riding) dismountBike(); if (adminBike?.riding) adminBike.dismount(); dismountGiftRides(); player.position.set(x, y ?? (terrain ? terrain.getGroundHeight(x, z, 0) : 0), z); };
+    if (corridor?.needsLandmark?.(x, z)) return corridor.ensureNear(x, z, { urgent: true }).then(move);
+    move();
+  }, // [terrain] [bike] [roadbike] [namsan] [hangang]
+
   bikes, toggleRide, triggerEmote,
   get ride() { return ride; }, remotes, presence, // [ride]
   cameraApp, // [camera]

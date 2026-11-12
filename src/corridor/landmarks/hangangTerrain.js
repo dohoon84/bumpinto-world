@@ -14,6 +14,59 @@ function sampleDem(dem, x, z) {
   return a * (1 - fu) * (1 - fv) + b * fu * (1 - fv) + c * (1 - fu) * fv + d * fu * fv;
 }
 
+
+// 호안 샘플 최근접 검색. 선형 스캔은 합수부 DEM(수면 링 × 정점)에서 O(n·m) 이 되어 기동을 막는다.
+// 격자 한 칸 = 검색 반지름(18 m). 질의는 주변 5×5 칸만 본다. 같은 거리면 원래 배열 앞쪽을 고른다.
+export const SHORE_SEARCH_R = 18;
+export function makeShoreIndex(samples, radius = SHORE_SEARCH_R) {
+  const cell = radius;
+  const inv = 1 / cell;
+  const buckets = new Map();
+  const list = samples.map((p, i) => ({ p, i }));
+  for (const item of list) {
+    const ix = Math.floor(item.p.x * inv);
+    const iz = Math.floor(item.p.z * inv);
+    const k = ix + ',' + iz;
+    let b = buckets.get(k);
+    if (!b) { b = []; buckets.set(k, b); }
+    b.push(item);
+  }
+  return { buckets, inv, radius, radius2: radius * radius, n: samples.length };
+}
+export function nearestShoreIndexed(index, x, z) {
+  if (!index?.n) return null;
+  const { buckets, inv, radius2 } = index;
+  const ix = Math.floor(x * inv);
+  const iz = Math.floor(z * inv);
+  let best = null, bestD2 = radius2, bestI = Infinity;
+  // 5×5: 칸 크기=반지름일 때 모서리·부동소수 경계에서도 빠지지 않게
+  for (let jz = iz - 2; jz <= iz + 2; jz++) {
+    for (let jx = ix - 2; jx <= ix + 2; jx++) {
+      const b = buckets.get(jx + ',' + jz);
+      if (!b) continue;
+      for (const { p, i } of b) {
+        const dx = x - p.x, dz = z - p.z;
+        const d2 = dx * dx + dz * dz;
+        if (d2 < bestD2 || (d2 === bestD2 && i < bestI)) {
+          bestD2 = d2;
+          best = p;
+          bestI = i;
+        }
+      }
+    }
+  }
+  return best;
+}
+export function nearestShoreLinear(samples, x, z, radius = SHORE_SEARCH_R) {
+  let best = null, bestD2 = radius * radius;
+  for (const p of samples) {
+    const dx = x - p.x, dz = z - p.z;
+    const d2 = dx * dx + dz * dz;
+    if (d2 < bestD2) { bestD2 = d2; best = p; }
+  }
+  return best;
+}
+
 function hash01(ix, iz) {
   let n = (ix * 374761393 + iz * 668265263) | 0;
   n = (n ^ (n >>> 13)) * 1274126177;
@@ -554,14 +607,10 @@ export function createHangangTerrain({ parent, dem, osm }) {
   const shoreSamples = [];
   for (const c of shoreChains) for (const p of c) shoreSamples.push(p);
 
+  const shoreIndex = makeShoreIndex(shoreSamples, SHORE_SEARCH_R);
   function revetmentBandY(x, z) {
     if (!shoreSamples.length) return null;
-    let best = null, bestD2 = 18 * 18;
-    for (const p of shoreSamples) {
-      const dx = x - p.x, dz = z - p.z;
-      const d2 = dx * dx + dz * dz;
-      if (d2 < bestD2) { bestD2 = d2; best = p; }
-    }
+    const best = nearestShoreIndexed(shoreIndex, x, z);
     if (!best) return null;
     const d = (x - best.x) * best.sx + (z - best.z) * best.sz;
     const lat2 = (x - best.x) * (x - best.x) + (z - best.z) * (z - best.z) - d * d;

@@ -12,7 +12,7 @@ import { CORRIDOR_STATION_IDS, CORRIDOR_STATION_COUNT, corridorName, layoutCorri
 
 import { lotteSiteLabel } from '../corridor/lotteOpening.js';
 import { isEn, tr, onLangChange } from '../i18n.js';
-import { REPO_URL, isStarbaseLive } from '../worldGate.js';
+import { REPO_URL, isStarbaseLive } from '../worldGateFlags.js';
 
 const LINE_COLOR = { '수인분당선': '#f5a200', '신분당선': '#d31145', '8호선': '#e6186c', '2호선': '#33a23d', '3호선': '#fe5b10', '9호선': '#bdb092', '경강선': '#0054a6' };
 const LINE_EN = { '수인분당선': 'Suin-Bundang', '신분당선': 'Shinbundang', '8호선': 'Line 8', '2호선': 'Line 2', '3호선': 'Line 3', '9호선': 'Line 9', '경강선': 'Gyeonggang' };

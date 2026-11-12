@@ -36,7 +36,7 @@ import { isEn, onLangChange } from '../i18n.js'; // [pangyo-link] 판교역 라�
 import { createPangyoNpc, pangyoNpcEnabled } from './pangyoNpc.js'; // [pangyo-npc]
 import { migeumNpcEnabled, migeumNpcLoader, createMigeumPeds, combineCrowds, mountMigeumNpc } from './migeumNpc.js'; import { migeumCorridorRoadsOn } from './migeumRoads.js'; // [migeum-npc] [migeum-roads]
 import { perfFlags } from '../perf/flags.js'; // [perf-memory]
-import { createRegionRegistry } from '../perf/regions.js'; // [perf-memory]
+import { createRegionRegistry, distToBoxes } from '../perf/regions.js'; // [perf-memory]
 import { lazyExtraCrowd } from '../perf/lazyCrowd.js'; // [perf-memory]
 import { pangyoWaterEnabled, PANGYO_WATER_FILE, attachMainDrop, mergePangyoStreams, dropWaterGeometry } from './pangyoWater.js'; // [pangyo-water]
 import { bp24Mode, createBp24 } from './bp24.js'; import { bp24LocationsFor, corridorPlacements } from './bp24Locations.js'; // [bp24] 체인 매장
@@ -44,6 +44,7 @@ import { hollowSeohyeonArcade } from '../arcade/locations.js'; // [arcade] 서�
 import { migeumWaterEnabled, MIGEUM_WATER_FILE, migeumChRoads, mergeMigeumWater, applyMigeumBank } from './migeumWater.js'; // [migeum-water]
 import { cityhallEnabled, CITYHALL_FILE, filterCityHallHidden, createCityHall } from './cityhall.js'; // [cityhall]
 import { namsanEnabled, namsanCableEnabled, NAMSAN_DEM_FILE, NAMSAN_OSM_FILE, NAMSAN_CITY_FILE, createNamsan } from './landmarks/namsan.js'; // [namsan]
+import { landmarkLazyEnabled, LANDMARK_NEAR_M, makeNamsanMeta, makeHangangMeta, wrapLandmark, yieldPaint } from './landmarks/lazyLandmarks.js'; // [namsan] [hangang] 메시 지연 생성
 import { createNamsanNpc, namsanNpcEnabled } from './landmarks/namsanNpc.js'; // [namsan-npc]
 import { hangangEnabled, HANGANG_DEM_FILE, HANGANG_OSM_FILE, HAP_DEM_FILE, HAP_OSM_FILE, createHangang } from './landmarks/hangang.js'; // [hangang]
 
@@ -408,59 +409,126 @@ export function createCorridor({ scene, corridorData, terrain, world, renderer, 
   }
 
 const gnTransit = corridorData.gangnamTransit ? mountGangnamTransit(root, corridorData.gangnamTransit, { overlay, express: corridorData.gangnamExpress, liveBus }) : null; // [gangnam-bus] [gyeongbu-bus] [livebus]
-  // [namsan] 남산서울타워 — OSM 실제 좌표. 코리더 타일 밖이라 항상 만든다. ?ntower=0 이면 데이터 없음.
-  let namsan = null;
-  if (corridorData.namsan) {
-    namsan = createNamsan({
-      scene: root,
-      overlay,
-      terrain,
-      dem: corridorData.namsan.dem,
-      osm: corridorData.namsan.osm,
-      city: corridorData.namsan.city,
-      cable: namsanCableEnabled(),
-      renderer,
-    });
-  }
-
-  // [hangang] 반포한강공원·잠수교 — 코리더 타일 밖 섬. ?hangang=0 이면 데이터 없음.
-  let hangang = null;
+  // [namsan] [hangang] 기본은 메시를 늦게 만든다(?lazylandmark=0 이면 예전처럼 부트에 전부 생성).
+  // 미니맵·이동 목적지·섬 경계는 스텁으로 바로 쓰고, 메시는 가까이 오거나 ?at=/텔레포트일 때 짓는다.
+  let namsan = null, hangang = null, namsanNpc = null;
+  let namsanPending = false, hangangPending = false;
+  let namsanBuilding = null, hangangBuilding = null;
+  const lazyLandmarks = landmarkLazyEnabled(params || (typeof location !== 'undefined' ? location.search : ''));
   setFlatClip(null);
   hapFlatRect = null;
-  if (corridorData.hangang?.dem && corridorData.hangang?.osm) {
-    hangang = createHangang({
-      scene: root,
-      overlay,
-      terrain,
-      dem: corridorData.hangang.dem,
-      osm: corridorData.hangang.osm,
-      hap: corridorData.hangang.hap || null,
-      // [hangang-isolation] 이미 있는 섬(정자·탄천 본선, 강남역 등)과 경부 띠 안은 한강이 땅을 덮지 않는다.
-      foreign: makeForeignFn(index.meta?.islands || [index.meta.bounds], index.meta?.corridors || []),
+
+  function applyHangangClip(h) {
+    setFlatClip(null);
+    hapFlatRect = null;
+    if (!h?.hap) return;
+    setFlatClip((x, z) => h.coversTileFlat(x, z));
+    root.traverse((o) => {
+      if (o.isMesh && (o.name === 'corridorFlat' || o.name === 'corridorLodFlat')) clipFlatGeometry(o.geometry);
     });
-    // [hangang] 2구간 지형 위에 떠 있던 코리더 타일 바닥(베이지 판·물길 띠)을 뺀다.
-    if (hangang?.hap) {
-      setFlatClip((x, z) => hangang.coversTileFlat(x, z));
-      root.traverse((o) => {
-        if (o.isMesh && (o.name === 'corridorFlat' || o.name === 'corridorLodFlat')) clipFlatGeometry(o.geometry);
-      });
-      // 외곽 바닥(y=0)과 라이브 탄천 물길(y≈0.04)도 2구간 사각형 안에서는 한강 수면·둔치 위로
-      // 떠서 항공 샷의 베이지 판과 하늘색 띠가 된다. 삼각형을 사각형 경계로 잘라 바깥만 남긴다.
-      const rect = hangang.hap.flatClipRect?.();
-      hapFlatRect = rect || null;
-      if (rect) {
-        const targets = [];
-        root.traverse((o) => { if (o.isMesh && o.name === 'corridorOuterGround') targets.push(o); });
-        for (const o of root.parent?.children || []) if (o.isMesh && (o.name === 'liveWater' || o.name === 'liveWaterLines')) targets.push(o);
-        for (const o of targets) {
-          const ng = clipOutsideRect(o.geometry, rect);
-          if (ng !== o.geometry) { o.geometry.dispose(); o.geometry = ng; }
-        }
+    const rect = h.hap.flatClipRect?.();
+    hapFlatRect = rect || null;
+    if (rect) {
+      const targets = [];
+      root.traverse((o) => { if (o.isMesh && o.name === 'corridorOuterGround') targets.push(o); });
+      for (const o of root.parent?.children || []) if (o.isMesh && (o.name === 'liveWater' || o.name === 'liveWaterLines')) targets.push(o);
+      for (const o of targets) {
+        const ng = clipOutsideRect(o.geometry, rect);
+        if (ng !== o.geometry) { o.geometry.dispose(); o.geometry = ng; }
       }
     }
   }
 
+  function namsanOpts() {
+    const ns = corridorData.namsan;
+    return { scene: root, overlay, terrain, dem: ns.dem, osm: ns.osm, city: ns.city, cable: namsanCableEnabled(), renderer };
+  }
+  function hangangOpts() {
+    const hg = corridorData.hangang;
+    return {
+      scene: root, overlay, terrain, dem: hg.dem, osm: hg.osm, hap: hg.hap || null,
+      foreign: makeForeignFn(index.meta?.islands || [index.meta.bounds], index.meta?.corridors || []),
+    };
+  }
 
+  function attachNamsanNpc() {
+    if (namsanNpc || !namsan?.ready || !namsanNpcEnabled()) return;
+    const mkNsNpc = () => createNamsanNpc({ namsan, osm: corridorData.namsan?.osm, city: corridorData.namsan?.city, parent: namsan.root });
+    if (regions && namsan.bounds) {
+      namsanNpc = lazyExtraCrowd(mkNsNpc);
+      regions.register({ id: 'namsan-npc', boxes: [namsan.bounds], near: 450, far: 1100, onEnter: () => { namsanNpc.load(); }, onLeave: () => namsanNpc.unload() });
+    } else namsanNpc = mkNsNpc();
+  }
+
+  async function buildNamsan(urgent = false) {
+    if (!namsan || namsan.ready) return namsan;
+    if (namsanBuilding) return namsanBuilding;
+    namsanBuilding = (async () => {
+      if (!urgent) await yieldPaint();
+      const t0 = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+      namsan._bind(createNamsan(namsanOpts()));
+      namsanPending = false;
+      attachNamsanNpc();
+      const ms = ((typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now()) - t0;
+      console.info(`[namsan] lazy-built in ${Math.round(ms)}ms`);
+      return namsan;
+    })();
+    return namsanBuilding;
+  }
+
+  async function buildHangang(urgent = false) {
+    if (!hangang || hangang.ready) return hangang;
+    if (hangangBuilding) return hangangBuilding;
+    hangangBuilding = (async () => {
+      if (!urgent) await yieldPaint();
+      const t0 = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+      hangang._bind(createHangang(hangangOpts()));
+      applyHangangClip(hangang);
+      hangangPending = false;
+      const ms = ((typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now()) - t0;
+      console.info(`[hangang] lazy-built in ${Math.round(ms)}ms`);
+      return hangang;
+    })();
+    return hangangBuilding;
+  }
+
+  function landmarkNeeded(stub, x, z, lookX, lookZ) {
+    if (!stub || stub.ready) return false;
+    const boxes = stub.boxes || (stub.bounds ? [stub.bounds] : []);
+    if (!boxes.length) return false;
+    if (distToBoxes(x, z, boxes) <= LANDMARK_NEAR_M) return true;
+    if (lookX != null && Number.isFinite(lookX) && distToBoxes(lookX, lookZ, boxes) <= LANDMARK_NEAR_M) return true;
+    return false;
+  }
+
+  async function ensureLandmarks(x, z, opts = {}) {
+    if (!Number.isFinite(x) || !Number.isFinite(z)) return;
+    const urgent = !!opts.urgent;
+    const jobs = [];
+    if (namsanPending && landmarkNeeded(namsan, x, z, opts.lookX, opts.lookZ)) jobs.push(buildNamsan(urgent));
+    if (hangangPending && landmarkNeeded(hangang, x, z, opts.lookX, opts.lookZ)) jobs.push(buildHangang(urgent));
+    if (jobs.length) await Promise.all(jobs);
+  }
+
+  function needsLandmark(x, z) {
+    return landmarkNeeded(namsan, x, z) || landmarkNeeded(hangang, x, z);
+  }
+
+  if (corridorData.namsan) {
+    namsan = wrapLandmark(makeNamsanMeta(corridorData.namsan));
+    if (lazyLandmarks) namsanPending = true;
+    else {
+      namsan._bind(createNamsan(namsanOpts()));
+    }
+  }
+  if (corridorData.hangang?.dem && corridorData.hangang?.osm) {
+    hangang = wrapLandmark(makeHangangMeta(corridorData.hangang));
+    if (lazyLandmarks) hangangPending = true;
+    else {
+      hangang._bind(createHangang(hangangOpts()));
+      applyHangangClip(hangang);
+    }
+  }
 
   const tower = index.landmarks.find((l) => l.id === 'lotte-world-tower');
   let lotte = null;
@@ -548,15 +616,9 @@ const gnTransit = corridorData.gangnamTransit ? mountGangnamTransit(root, corrid
 
   const stats = { builtDetail: 0, builtLod: 0, chRoads: ch.length, signals: crossings.signals, chTrees: 0 };
   let chTreesDone = false;
-  let life = null, pangyoNpc = null, migeumPeds = null, migeumNpc = null, namsanNpc = null;
-  // [namsan-npc] 코리더 life/traffic 과 따로 만든다(?clife=0 · ?ccars=0 이어도 남산 NPC 는 ?nnpc 로만 끔)
-  if (namsan && namsanNpcEnabled()) {
-    const mkNsNpc = () => createNamsanNpc({ namsan, osm: corridorData.namsan?.osm, city: corridorData.namsan?.city, parent: namsan.root });
-    if (regions && namsan.bounds) {
-      namsanNpc = lazyExtraCrowd(mkNsNpc);
-      regions.register({ id: 'namsan-npc', boxes: [namsan.bounds], near: 450, far: 1100, onEnter: () => { namsanNpc.load(); }, onLeave: () => namsanNpc.unload() });
-    } else namsanNpc = mkNsNpc();
-  }
+  let life = null, pangyoNpc = null, migeumPeds = null, migeumNpc = null;
+  // [namsan-npc] 남산 메시가 생긴 뒤 attachNamsanNpc() 에서 붙인다(?clife=0 · ?ccars=0 이어도 ?nnpc 로만 끔)
+  if (!lazyLandmarks) attachNamsanNpc();
   let rx = null, rz = null; // [perf-memory] 지난 프레임 위치(진행 방향 추정)
   const api = {
     root, bounds, stations, tiles, stats, crossings, landmarks, inLive,
@@ -569,6 +631,8 @@ const gnTransit = corridorData.gangnamTransit ? mountGangnamTransit(root, corrid
     get cityhall() { return cityhall; }, // [cityhall]
     get namsan() { return namsan; }, // [namsan]
     get hangang() { return hangang; }, // [hangang]
+    ensureNear: (x, z, opts) => ensureLandmarks(x, z, opts), // [namsan] [hangang] 텔레포트·?at= 전에 메시 생성
+    needsLandmark: (x, z) => needsLandmark(x, z),
     regions, // [perf-memory] 지역 지연 로드 레지스트리(null 이면 꺼짐). 미금 등은 regions.register({...}) 로 붙는다 — docs/perf-memory.md
     liveBox: live, // [ride]
     get lotte() { return lotte; },
@@ -600,6 +664,14 @@ const gnTransit = corridorData.gangnamTransit ? mountGangnamTransit(root, corrid
     get migeumPeds() { return migeumPeds; }, get migeumNpc() { return migeumNpc; }, // [migeum-npc]
     get namsanNpc() { return namsanNpc; }, // [namsan-npc]
     update(dt, x, z, mode = 'follow') {
+      if (namsanPending || hangangPending) {
+        let lx, lz;
+        if (rx != null) {
+          const vx = x - rx, vz = z - rz, spd = Math.hypot(vx, vz);
+          if (spd > 0.4) { lx = x + (vx / spd) * 2500; lz = z + (vz / spd) * 2500; }
+        }
+        void ensureLandmarks(x, z, { lookX: lx, lookZ: lz });
+      }
       if (!chTreesDone) { chTreesDone = true; stats.chTrees = chTrees(); }
       acc += dt;
       if (acc > 0.25 || mode !== lastMode) { acc = 0; lastMode = mode; stream(x, z, mode); }
@@ -628,6 +700,7 @@ const gnTransit = corridorData.gangnamTransit ? mountGangnamTransit(root, corrid
     // 위치 주변 상세 타일을 즉시 로드·빌드 (텔레포트/스크린샷용)
     async preload(x, z, r = Q.detail) {
       regions?.update(x, z, 0, 0, 0, true); // [perf-memory] 텔레포트 도착지 지역을 바로 로드
+      await ensureLandmarks(x, z, { urgent: true }); // [namsan] [hangang] 도착 전 메시
       const list = [...tiles.values()].filter((t) => rectDist(x, z, t.x0, t.z0, TS) < r);
       // 프레임 스트리머(아직 플레이어는 출발지)가 로딩 중인 먼 타일을 언로드하면 응답이 버려지므로, 빌드될 때까지 몇 번 다시 요청
       for (let i = 0; i < 4; i++) {
