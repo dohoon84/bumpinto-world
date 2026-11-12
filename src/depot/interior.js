@@ -276,7 +276,9 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit, a
     }));
     const sG = keep(new THREE.PlaneGeometry(2.4, 0.75));
     const sL = keep(new THREE.MeshBasicMaterial({ map: mk(false) })), sR = keep(new THREE.MeshBasicMaterial({ map: mk(true) }));
-    for (const x of [58, 38, 20]) { const m = new THREE.Mesh(sG, sL); m.position.set(x, 4.3, 13.7); m.name = 'exit-way-sign'; scene.add(m); } // +z 면: 안쪽에서 계산대 쪽을 보면 화살표가 서쪽(왼쪽)
+    // 통로 한가운데 위에 단다 (랙 앞면 위에 걸면 통로 안에서 랙 기둥에 화살표 쪽이 가려짐): 통로 B · 14+k 랙열 사이 통로 2곳
+    const AX = [RACK_X[1] + RACK_D + AISLE / 2, 14 + 4 * (RACK_D + AISLE) + RACK_D + AISLE / 2, 14 + 1 * (RACK_D + AISLE) + RACK_D + AISLE / 2];
+    for (const x of AX) { const m = new THREE.Mesh(sG, sL); m.position.set(x, 4.3, 13.7); m.name = 'exit-way-sign'; scene.add(m); } // +z 면: 안쪽에서 계산대 쪽을 보면 화살표가 서쪽(왼쪽)
     const m2 = new THREE.Mesh(sG, sR); m2.position.set(DOOR.x - 1.5, 3.4, 9.2); m2.rotation.y = Math.PI; m2.name = 'exit-way-sign'; scene.add(m2); // 입구에서 안쪽(+z)을 보면 서쪽이 오른쪽
   }
   const exM = keep(new THREE.MeshBasicMaterial({ map: exitTex })); const exG = keep(new THREE.PlaneGeometry(1.6, 0.6)); const ex = new THREE.Mesh(exG, exM); ex.position.set(DOOR.x, 3.8, 0.15); scene.add(ex);
