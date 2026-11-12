@@ -1,0 +1,103 @@
+{
+  "runs": [],
+  "errs": [],
+  "defaultEntryErrs": [],
+  "tvInCart": {
+    "ok": true,
+    "kg": 31.9,
+    "n": 1,
+    "ids": [
+      "tv85"
+    ]
+  },
+  "sfx": [
+    "elec-fridge-open",
+    "elec-fridge-close",
+    "elec-washer:on",
+    "elec-tv:on",
+    "elec-vac:on"
+  ],
+  "desktopErrs": [],
+  "mobile": [
+    {
+      "tag": "portrait",
+      "tv": {
+        "label": "mobile-portrait-tvwall",
+        "heapMB": 365.3,
+        "drawCalls": 32,
+        "triangles": 130014,
+        "frameMs": 0.6,
+        "elec": {
+          "zone": "electronics",
+          "meshes": 44,
+          "draws": 49,
+          "instanced": 30,
+          "instCount": 497,
+          "tris": 28502,
+          "screens": 50,
+          "lod": 0,
+          "flickerT": 0,
+          "visible": true,
+          "cheap": true
+        },
+        "scene": {
+          "meshes": 141,
+          "tris": 3915316
+        }
+      },
+      "fridgeTap": {
+        "want": 0,
+        "open": 0
+      },
+      "pick": {
+        "hover": "tv55",
+        "mode": "walk",
+        "held": null
+      },
+      "errs": []
+    },
+    {
+      "tag": "landscape",
+      "tv": {
+        "label": "mobile-landscape-tvwall",
+        "heapMB": 345.8,
+        "drawCalls": 55,
+        "triangles": 2252964,
+        "frameMs": 1.1,
+        "elec": {
+          "zone": "electronics",
+          "meshes": 44,
+          "draws": 49,
+          "instanced": 30,
+          "instCount": 497,
+          "tris": 28502,
+          "screens": 50,
+          "lod": 0,
+          "flickerT": 0,
+          "visible": true,
+          "cheap": true
+        },
+        "scene": {
+          "meshes": 141,
+          "tris": 3915316
+        }
+      },
+      "fridgeTap": {
+        "want": 1,
+        "open": 0.16
+      },
+      "pick": {
+        "hover": "tv55",
+        "mode": "place",
+        "held": "tv55"
+      },
+      "place": {
+        "mode": "walk",
+        "items": [
+          "tv55"
+        ]
+      },
+      "errs": []
+    }
+  ]
+}

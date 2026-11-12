@@ -40,7 +40,7 @@ const CH_AVG = [[0.32, 0.2, 0.42], [0.38, 0.62, 0.48], [0.7, 0.4, 0.65], [0.12, 
 const SEG = 14;
 // 가격표 (게임 가안 = est)
 const TAGS = {
-  tv85: { name: '범비전 85형 4K', sub: 'BUMPVISION · 120Hz · 박스 63kg', price: 2490000, sale: true },
+  tv85: { name: '범비전 85형 4K', sub: 'BUMPVISION · 120Hz · 박스 31.9kg', price: 2490000, sale: true },
   tv75: { name: '범비전 75형 4K', sub: 'BUMPVISION · 120Hz · 박스 52kg', price: 1890000 },
   tv65: { name: '범비전 65형 4K', sub: 'BUMPVISION · 박스 37kg', price: 1290000 },
   tv55: { name: '범비전 55형 4K', sub: 'BUMPVISION · 박스 29kg', price: 849000, sale: true },
@@ -831,7 +831,7 @@ export function mountElectronics({ scene, keep, canvasTex, obstacles, prodMeshes
     '85인치는 카트에 눕혀서 실어 보세요~',
     '고가 상품은 구매 카드를 뽑아 계산대로 가시면 됩니다',
     '냉장고·세탁기는 열어 보고 돌려 보셔도 돼요 (체험용)',
-    '85인치 박스가 63 kg이에요, 허리 조심하세요',
+    '85인치 박스가 31.9 kg, 가로 2 m 넘어요. 둘이 드세요',
     '카트로 TV를 받으면 화면이 지지직해요 ^^;',
     'TV 월 누르면 채널이 바뀌어요',
   ];
