@@ -50,7 +50,7 @@ M.payState = await ev(() => window.__jj.depot.interior._dbg.co.state());
 await shot('04-payment-panel');
 await ev(() => window.__jj.depot.interior.onKey({ code: 'KeyE' }));
 await run(1.9);
-await ev(() => window.__jj.depot.interior._dbg.camAt([-0.25, 1.32, -3.15], [-0.98, 1.02, -3.8]));
+await ev(() => window.__jj.depot.interior._dbg.camAt([-0.78, 1.04, -3.6], [-0.98, 0.93, -3.8]));
 await shot('05-receipt-printing');
 await run(2);
 M.done = await ev(() => window.__jj.depot.interior._dbg.co.state());

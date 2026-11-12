@@ -3,6 +3,7 @@
 //   물리: cannon-es (이 청크에만 들어감). 카트 좌표계 안에서 상품만 시뮬레이션하고, 카트 가속도는 관성력으로 넣는다.
 //   카트 주행: m = 27 kg + 짐, 굴림 저항 Crr·m·g, 출발 힘 2배, 미는 힘 133 N(처음 222 N), 회전 관성 Σm·r² (기획안 식 1~3).
 //   계란: 판 위 접촉점·면적으로 알마다 힘을 나눠, 알마다 뽑은 파괴 하중(34±6 N)을 넘으면 그 알만 깨짐.
+import { touchText } from './touchText.js';
 import * as THREE from 'three';
 import * as CANNON from 'cannon-es';
 import { PRODUCTS, BY_ID, CART, EGG } from './products.js';
@@ -347,7 +348,7 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit } 
   document.head.appendChild(css); document.body.appendChild(hud);
   const elPanel = hud.querySelector('.dh-panel'), elKg = hud.querySelector('.dh-kg'), elTarget = hud.querySelector('.dh-target'), elToast = hud.querySelector('.dh-toast'), elHelp = hud.querySelector('.dh-help');
   hud.querySelector('.dh-btns').addEventListener('click', (e) => { const a = e.target?.dataset?.a; if (a === 'place') place(); else if (a === 'rot') rotate(Math.PI / 2); else if (a === 'tip') { st.tip = !st.tip; } else if (a === 'level') toggleLevel(); else if (a === 'cancel') cancelPlace(); });
-  function toast(msg, ms = 1800, bg = '#c62828') { elToast.textContent = msg; elToast.style.background = bg; elToast.style.display = 'block'; st.toastT = ms / 1000; }
+  function toast(msg, ms = 1800, bg = '#c62828') { elToast.textContent = isMobile ? touchText(msg) : msg; elToast.style.background = bg; elToast.style.display = 'block'; st.toastT = ms / 1000; }
   // ---------- 매장 직원 · 장난 감지 (staff.js) ----------
   const staff = createStaff({ scene, camera, hud, keep, canvasTex, toast, st, getAvoid: () => floorItems.map((fi) => ({ x: fi.mesh.position.x, z: fi.mesh.position.z, r: 0.3 })).concat(checkout.avoid()), isBlocked: (x, z) => !!collide2D(x, z, 0.3), onEscort() {
     if (st.mode === 'place') cancelPlace();
@@ -864,6 +865,12 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit } 
     else if (st.mode === 'walk' && nearCorral() && !st.hasCart) { elTarget.style.display = 'block'; elTarget.textContent = 'E 카트 잡기 (240L)'; }
     else if (st.mode === 'walk' && nearDoor() && !st.hasCart) { elTarget.style.display = 'block'; elTarget.textContent = 'E 나가기'; }
     else elTarget.style.display = 'none';
+    if (isMobile) for (const el of [elKg, elHelp, elTarget]) touchEl(el);
+  }
+  // 터치: 키 이름 대신 탭/행동 버튼 문구 (원문은 data-raw 에 — mobileActs 가 버튼 라벨을 원문에서 뽑음)
+  function touchEl(el) {
+    const raw = el.textContent; if (raw === el.dataset.tt) return;
+    const t = touchText(raw); el.dataset.raw = raw; el.dataset.tt = t; if (t !== raw) el.textContent = t;
   }
   const nearCorral = () => st.me.x > CORRAL.x0 - 1.5 && st.me.x < CORRAL.x1 + 1.5 && st.me.z > CORRAL.z0 - 1 && st.me.z < CORRAL.z1 + 2.5;
   const nearDoor = () => Math.abs(st.me.x - DOOR.x) < DOOR.w / 2 && st.me.z < 2.4;
@@ -1012,7 +1019,16 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit } 
   const api = {
     player: selfAvatar, scene, camera, update, render, onKey, stats, measure, st, items, LEVELS,
     get hover() { return hover; },
-    mobileActs() { const c = checkout.mobileActs(); if (c) return c; const t = elTarget.style.display === 'block' ? elTarget.textContent : ''; return /^E /.test(t) ? [{ label: t.slice(2).split(/ [·(]/)[0].trim(), icon: 'bag', run: () => onKey({ code: 'KeyE' }) }] : null; }, // 모바일 행동 버튼 (계산·출구·카트 잡기 등 E)
+    mobileActs() { // 모바일 행동 버튼 (계산·출구·카트 잡기·집기·카트 놓기·놓기 등) — 터치 안내 문구의 「…」 와 같은 이름
+      const c = checkout.mobileActs(); if (c) return c;
+      const t = elTarget.style.display === 'block' ? (elTarget.dataset.raw ?? elTarget.textContent) : '', key = (code) => () => onKey({ code });
+      if (st.mode === 'place') return [{ label: '놓기', icon: 'bag', run: key('Space') }, { label: '돌리기', icon: 'board', run: key('KeyQ'), gold: false }, { label: '놓기 취소', icon: 'stop', run: key('Escape'), gold: false }];
+      const out = [];
+      if (/^E /.test(t)) out.push({ label: t.slice(2).split(/ [·(]/)[0].trim(), icon: 'bag', run: key('KeyE') });
+      else if (hover && /E 집기/.test(t)) out.push({ label: '집기', icon: 'bag', run: key('KeyE') });
+      if (st.hasCart) out.push({ label: '카트 놓기', icon: 'stop', run: key('KeyG'), gold: false });
+      return out.length ? out : null;
+    },
     _dbg: {
       grabCart, releaseCart, place, cancelPlace, pick, removeLast, toggleLevel, rotate, solve: () => solveGhost(),
       setMe(x, z, yaw, pitch = -0.12) { st.me.x = x; st.me.z = z; st.me.yaw = yaw; st.head.yaw = 0; st.head.pitch = pitch; },

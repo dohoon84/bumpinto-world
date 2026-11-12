@@ -35,6 +35,16 @@ await p.goto(`${BASE}?${Q}`, { timeout: 240000 });
 await p.waitForFunction(() => window.__jj?.ready, null, { timeout: 300000 });
 await ev(() => window.__jj.depot.enter());
 await p.waitForFunction(() => window.__jj.depot.active && !window.__jj.depot.busy, null, { timeout: 120000 });
+// 터치 안내 문구: 들어온 직후(카트 없음) · 카트 잡은 뒤 — 키 이름(E·WASD·G·Esc·클릭) 없이 탭/버튼 문구여야
+const hints = () => ev(() => { const t = (s) => document.querySelector(s)?.textContent || ''; return { panel: t('#depot-hud .dh-kg'), help: t('#depot-hud .dh-help'), target: t('#depot-hud .dh-target') }; });
+const keyRe = /(^|[^가-힣A-Za-z])(E|G|R|Q|Esc|WASD|W\/S|A\/D|Tab)([^A-Za-z]|$)|클릭|마우스/;
+await p.waitForTimeout(1300);
+M.hintsEntry = await hints(); M.hintsEntry.keys = keyRe.test(Object.values(M.hintsEntry).join(' '));
+await step('m-entrance', 'm00-landscape-entrance'); console.log('hints', JSON.stringify(M.hintsEntry));
+await ev(() => { const d = window.__jj.depot.interior._dbg; d.setMe(29, 30, 0); d.grabCart(); d.run(0.3); });
+await p.waitForTimeout(1300);
+M.hintsCart = await hints(); M.hintsCart.keys = keyRe.test(Object.values(M.hintsCart).join(' '));
+await step('m-cart', 'm00b-landscape-with-cart'); console.log('hints', JSON.stringify(M.hintsCart));
 // 장보기 상태: 카트 + 상품 8개, 계산대 04 앞
 await ev(() => { const d = window.__jj.depot.interior._dbg; d.setMe(77, 11, 0); d.grabCart();
   d.drop('egg', 'upper', -0.08, 0.15, 0); d.drop('chips', 'upper', 0.1, -0.2, 0); d.drop('ramen', 'upper', 0.0, 0.2, 0); d.drop('tissue', 'upper', 0, -0.1, 0); d.drop('meat', 'upper', 0.12, 0.0, 0); d.drop('soda', 'upper', -0.1, -0.25, 0); d.drop('rice', 'lower', 0, 0, 0); d.drop('water', 'lower', 0.05, 0.2, 0); d.run(1.5);

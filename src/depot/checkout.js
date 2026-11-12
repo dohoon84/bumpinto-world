@@ -208,8 +208,8 @@ export function createCheckout(ctx) {
 #depot-hud .co-pay{position:absolute;box-sizing:border-box;left:16px;top:var(--dh-msg-top3,var(--dh-msg-top,200px));width:min(330px,calc(100vw - 32px));background:#FBF7EE;color:#22262A;border-radius:16px;padding:14px 16px 12px;box-shadow:0 14px 34px rgba(0,0,0,.4);pointer-events:auto;display:none}
 #depot-hud .co-pay h3{margin:0 0 8px;font-size:16px;color:#1E5A45}#depot-hud .co-pay .r{display:flex;justify-content:space-between;font-size:14px;font-weight:700;padding:2px 0}
 #depot-hud .co-pay .r.red{color:#D9442E}#depot-hud .co-pay .tot{border-top:2px dashed #c9bfa8;margin-top:6px;padding-top:6px;font-size:22px;font-weight:900}
-#depot-hud .co-pay img{position:absolute;right:-12px;top:6px;width:100px;border-radius:8px;transform:rotate(6deg);box-shadow:0 6px 14px rgba(0,0,0,.3);animation:coCard .5s ease-out}
-#depot-hud .co-pay h3{padding-right:96px}
+#depot-hud .co-pay img{position:absolute;right:-10px;top:6px;width:92px;border-radius:8px;transform:rotate(6deg);box-shadow:0 6px 14px rgba(0,0,0,.3);animation:coCard .5s ease-out}
+#depot-hud .co-pay h3{padding-right:96px;min-height:52px}#depot-hud.co-busy .dh-target{top:auto;bottom:150px}
 @keyframes coCard{from{transform:translateX(60px) rotate(8deg);opacity:0}}
 #depot-hud .co-pay button{font:inherit;font-weight:900;border:0;border-radius:10px;padding:9px 10px;margin-top:8px;width:100%;background:#1E5A45;color:#F3EADA;font-size:14px;cursor:pointer}
 #depot-hud .co-pay button.alt{background:#e7dfcd;color:#22262A;margin-top:6px}#depot-hud .co-pay .note{font-size:11px;color:#6b6f72;margin-top:6px;font-weight:600}
@@ -221,16 +221,17 @@ export function createCheckout(ctx) {
 
 body.mobile #depot-hud .co-pay,body.mobile #depot-hud .co-rcpt,body.mobile #depot-hud .co-chip,body.mobile #depot-hud .co-scan{left:50%;transform:translateX(-50%);top:calc(var(--m-t,12px) + 54px)}
 body.mobile #depot-hud .co-pay{width:min(330px,calc(100vw - 32px));max-height:calc(100vh - var(--m-t,12px) - 66px);overflow:auto;padding:10px 12px}
-body.mobile #depot-hud .co-pay button{min-height:44px}
+body.mobile #depot-hud .co-pay button{min-height:44px}body.mobile #depot-hud .co-pay .k{display:none}
 body.mobile #depot-hud .co-rcpt{width:210px;max-height:calc(100vh - var(--m-t,12px) - 66px)}
 body.mobile #depot-hud .co-scan{animation:none}
 body.mobile #depot-hud .dh-panel{top:calc(var(--m-t,12px) + 52px);max-width:min(230px,27vw);font-size:11.5px;line-height:1.4;padding:6px 10px}
 body.mobile #depot-hud .dh-panel b{font-size:12.5px}
+body.mobile:has(#m-hud .m-bag:not([hidden])) #depot-hud .dh-panel{top:calc(var(--m-t,12px) + 98px)}
 body.mobile #depot-hud .dh-toast{max-width:min(230px,27vw);font-size:13px;padding:7px 11px;max-height:calc(4.2em + 14px);overflow:hidden}
 body.mobile #depot-hud .dh-ach{max-width:min(230px,27vw)}body.mobile #depot-hud .dh-ach div{font-size:12.5px;padding:6px 11px}
 body.mobile #depot-hud .dh-ach div:not(:last-child){display:none}
 body.mobile #depot-hud.co-busy .dh-target,body.mobile #depot-hud.co-rc .dh-target,body.mobile #depot-hud.co-busy .dh-help,body.mobile #depot-hud.co-rc .dh-help{display:none!important}
-@media (max-height:500px){body.mobile #depot-hud .co-pay img{width:72px;top:4px}body.mobile #depot-hud .co-pay h3{padding-right:70px;margin-bottom:4px}body.mobile #depot-hud .co-pay .r{padding:0}}`;
+@media (max-height:500px){body.mobile #depot-hud .co-pay img{width:54px;top:6px;right:8px;transform:rotate(4deg)}body.mobile #depot-hud .co-pay h3{padding-right:60px;margin-bottom:4px;min-height:36px;display:flex;align-items:center}body.mobile #depot-hud .co-pay .r{padding:0}}`;
   document.head.appendChild(css);
   const el = (cls, html = '') => { const d = document.createElement('div'); d.className = cls; d.innerHTML = html; hud.appendChild(d); return d; };
   const elScan = el('co-scan'), elPay = el('co-pay'), elRc = el('co-rcpt', '<div class="x" title="접기">–</div>'), elChip = el('co-chip');
@@ -282,7 +283,9 @@ body.mobile #depot-hud.co-busy .dh-target,body.mobile #depot-hud.co-rc .dh-targe
     else { c.x = laneX(spot.k) + 0.15; c.z = 9.6; c.yaw = 0; co.scanPos = new THREE.Vector3(beltX(spot.k), 0.98, CO.SCAN_Z); co.bagPos = new THREE.Vector3(beltX(spot.k), 0.86, 5.0); }
     st.me.x = c.x; st.me.z = c.z + 0.95; st.me.yaw = 0; st.head.yaw = co.self ? 0.15 : 0.75; st.head.pitch = -0.38;
     // 이 줄의 손님은 뒤로 비켜 섬
-    for (const s of shoppers) if (s.lane === spot.k) { s.state = 'hold'; s.tz = 13.3 + s.slot * 1.6; }
+    for (const s of shoppers) if (s.lane === spot.k) { s.state = 'hold'; s.xo = 0; s.tz = 13.3 + s.slot * 1.6; }
+    for (const it of items) { const b = it.body; b.velocity.set(0, 0, 0); b.angularVelocity.set(0, 0, 0); b.sleep?.(); } // 줄 맞춰 세울 때 짐이 튀어 나가지 않게
+    c.ax = c.az = 0;
     const list = items.slice();
     co.queue = list.filter((it) => it.p.kg < 10 && it.p.kind !== 'bulk');
     co.heavy = list.filter((it) => !co.queue.includes(it)).map((it, i) => ({ it, t: 0.9 + i * 1.0, done: false }));
@@ -319,6 +322,7 @@ body.mobile #depot-hud.co-busy .dh-target,body.mobile #depot-hud.co-rc .dh-targe
       co.unloadT -= dt;
       const lastOnBelt = co.belt[co.belt.length - 1];
       const roomAtStart = co.self ? co.belt.length === 0 && !co.fly.some((f) => f.state === 'arc') : !lastOnBelt || lastOnBelt.z < CO.BELT.z1 - 0.35 - lastOnBelt.d / 2 - 0.12;
+      if (co.queue.some((it) => !items.includes(it)) || co.heavy.some((h) => !h.done && !items.includes(h.it))) { co.queue = co.queue.filter((it) => items.includes(it)); co.heavy = co.heavy.filter((h) => h.done || items.includes(h.it)); } // 계산 중 떨어진 상품은 청구 안 함
       if (co.unloadT <= 0 && co.queue.length && roomAtStart) {
         const it = co.queue.shift(), f = flyerOf(it); co.fly.push(f); co.unloadT = co.self ? 0.9 : 0.5;
         f.to = co.self ? co.scanPos.clone().setY(co.scanPos.y + f.h / 2 + 0.06) : new THREE.Vector3(bxk, CO.BELT.y + f.h / 2 + 0.01, CO.BELT.z1 - 0.3 - f.d / 2);
@@ -353,7 +357,7 @@ body.mobile #depot-hud.co-busy .dh-target,body.mobile #depot-hud.co-rc .dh-targe
       co.payT -= dt; if (co.payT <= 0) { co.payT = null; showPay(); }
     } else if (co.phase === 'print') {
       co.printT += dt; const p = Math.min(1, co.printT / 2.3);
-      const W = 0.16, H = W * rcCanvas.height / rcCanvas.width;
+      const W = 0.18, H = W * rcCanvas.height / rcCanvas.width;
       rc3d.scale.set(W, Math.max(0.001, H * p), 1); rcTex.repeat.set(1, p); rcTex.offset.set(0, 1 - p);
       if (co.printT > 2.6) finish();
     }
@@ -379,7 +383,7 @@ ${T.exch ? `<div class="r red"><span>파손 교환 (카트 속 깨진 계란)</s
 ${T.dmg ? `<div class="r red"><span>변상 · 매장에서 깬 계란 ${T.storeEggs}알</span><span>+${won(T.dmg)}원</span></div>` : ''}
 <div class="r tot"><span>합계</span><span>${won(T.total)}원</span></div>
 <div style="clear:both;font-size:12.5px;font-weight:700;color:#1E5A45;margin-top:4px">"회원카드 보여 주세요~" · 골드범 회원 확인 ✔</div>
-<button data-a="card">💳 범카드로 결제 (E)</button><button class="alt" data-a="cash">현금(원)으로 결제</button><button class="alt" data-a="cancel">계산 취소 (Esc)</button>
+<button data-a="card">💳 범카드로 결제<span class="k"> (E)</span></button><button class="alt" data-a="cash">현금(원)으로 결제</button><button class="alt" data-a="cancel">계산 취소<span class="k"> (Esc)</span></button>
 <div class="note">연습용 결제 화면이에요 · 실제 bum·원은 빠져나가지 않아요 (표시용)</div>`;
     elPay.style.display = 'block'; drawDisplay({ name: '합계', won: T.total });
     if (!co.self) { const c = cashierAt(co.lane); co.say = '회원카드 보여 주세요~'; void c; }
@@ -457,12 +461,14 @@ ${T.dmg ? `<div class="r red"><span>변상 · 매장에서 깬 계란 ${T.storeE
   }
 
   // ---------- NPC 손님 ----------
+  const npcTurn = (s) => (s.state === 'enter' && s.xo ? (s.xo > 0 ? Math.PI / 2 : -Math.PI / 2) : 0); // 옆으로 걸어 들어올 때 카트·사람 방향
   function tickNpc(dt) {
     const pc = cartPose();
     for (const s of shoppers) {
       if (s.state === 'serve') { s.tz = 9.2; s.wait -= dt; if (s.wait <= 0) { s.state = 'leave'; s.tz = 4.2; } }
       else if (s.state === 'queue') { const ahead = shoppers.find((o) => o !== s && o.lane === s.lane && (o.state === 'serve' || o.state === 'leave')); s.tz = 12.9; if (!ahead) { s.state = 'serve'; s.wait = 7 + Math.random() * 6; } }
-      else if (s.state === 'leave' && s.z < 4.35) { s.state = 'queue'; s.z = 13.4; s.scale = 0; s.tz = 12.9; s.items = 3 + Math.floor(Math.random() * 3); } // 출구 쪽으로 나가고 줄 끝에서 새 손님
+      else if (s.state === 'leave' && s.z < 4.35) { s.state = 'enter'; s.scale = 1; s.z = 13.45; s.tz = 13.45; s.xo = (s.lane % 2 ? 1 : -1) * (4.5 + Math.random() * 2.5); s.items = 3 + Math.floor(Math.random() * 3); } // 출구로 나가면, 새 손님이 뒤 통로에서 옆으로 걸어 들어와 줄 끝에 섬 (뿅 나타나지 않게)
+      if (s.state === 'enter') { const d = Math.min(Math.abs(s.xo), 1.0 * dt); s.xo -= Math.sign(s.xo) * d; s.moving = true; if (Math.abs(s.xo) < 0.02) { s.xo = 0; s.state = 'queue'; s.tz = 12.9; } continue; }
       // 플레이어 카트가 바로 앞이면 멈춤
       const blockedByMe = Math.abs(pc.x - laneX(s.lane)) < 1.0 && pc.z < s.z && s.z - pc.z < 2.2 && s.tz < s.z;
       if (!blockedByMe) { const dz = s.tz - s.z; s.z += Math.sign(dz) * Math.min(Math.abs(dz), 0.9 * dt); s.moving = Math.abs(dz) > 0.02; } else s.moving = false;
@@ -471,7 +477,7 @@ ${T.dmg ? `<div class="r red"><span>변상 · 매장에서 깬 계란 ${T.storeE
     // 행렬
     let ni = 0;
     shoppers.forEach((s, i) => {
-      const x = laneX(s.lane) + 0.15; m4.compose(v3.set(x, 0, s.z), yawQ(Math.PI), new THREE.Vector3(s.scale, s.scale, s.scale)); for (const im of npcCart) im.setMatrixAt(i, m4);
+      const x = laneX(s.lane) + 0.15 + (s.xo || 0); m4.compose(v3.set(x, 0, s.z), yawQ(Math.PI + npcTurn(s)), new THREE.Vector3(s.scale, s.scale, s.scale)); for (const im of npcCart) im.setMatrixAt(i, m4);
       // 카트 속 상품 몇 개 (계산 중이면 벨트 위로)
       for (let j = 0; j < 3; j++) { const inCart = !(s.state === 'serve' && s.wait < 6); m4.compose(v3.set(x + (j - 1) * 0.15, 0.62 + (j % 2) * 0.12, s.z - 0.1 + (j % 2) * 0.12), yawQ(j), new THREE.Vector3(0.22 * s.scale * (inCart ? 1 : 0), 0.18 * s.scale, 0.2 * s.scale)); npcItems.setMatrixAt(ni++, m4); }
     });
@@ -486,7 +492,7 @@ ${T.dmg ? `<div class="r red"><span>변상 · 매장에서 깬 계란 ${T.storeE
     // 사람 (캐셔는 스캔 동작으로 살짝 숙임)
     people.forEach((p, i) => {
       let x = p.x, z = p.z, yaw = p.yaw, bob = 0, lean = 0;
-      if (p.kind === 'shopper') { const s = p.ref; x = laneX(s.lane) + 0.15; z = s.z + 0.95; yaw = Math.PI; bob = s.moving ? Math.abs(Math.sin(st.t * 8 + p.ph)) * 0.04 : 0; }
+      if (p.kind === 'shopper') { const s = p.ref, dt2 = npcTurn(s); x = laneX(s.lane) + 0.15 + (s.xo || 0) + 0.95 * Math.sin(dt2); z = s.z + 0.95 * Math.cos(dt2); yaw = Math.PI + dt2; bob = s.moving ? Math.abs(Math.sin(st.t * 8 + p.ph)) * 0.04 : 0; }
       if (p.kind === 'cashier') { const busy = co.lane === p.lane && co.phase === 'unload' && !co.self ? 1 : shoppers.some((s) => s.lane === p.lane && s.state === 'serve' && s.wait < 6) ? 0.6 : 0; lean = busy * (0.12 + 0.1 * Math.sin(st.t * 6 + p.ph)); }
       if (p.kind === 'checker' && p.raise > 0) { p.raise -= 1 / 60; lean = -0.15 * Math.sin(p.raise * 8); }
       const sc = p.kind === 'shopper' ? p.ref.scale : 1;
