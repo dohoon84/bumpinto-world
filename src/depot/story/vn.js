@@ -166,7 +166,7 @@ export function createVN({ assetBase, isMobile = false, getSettings, onCue = () 
   const portraits = { l: { el: ptL, who: '' }, r: { el: ptR, who: '' } };
   const preload = new Map();
   const img = (who, ex) => `${assetBase}story/${who}-${ex || 'neutral'}.webp`;
-  function prefetch(who) { for (const ex of ['neutral', 'angry', 'laugh', 'surprised']) { const u = img(who, ex); if (!preload.has(u)) { const i = new Image(); i.src = u; preload.set(u, i); } } }
+  function prefetch(who) { const exs = isMobile ? ['neutral'] : ['neutral', 'angry', 'laugh', 'surprised']; for (const ex of exs) { const u = img(who, ex); if (!preload.has(u)) { const i = new Image(); i.src = u; preload.set(u, i); } } }
 
   function setOpen(on) {
     if (S.open === on) return;

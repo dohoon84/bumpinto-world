@@ -57,6 +57,7 @@ export function createDepotAudio({
   Offline = typeof window !== 'undefined' ? (window.OfflineAudioContext || window.webkitOfflineAudioContext || null) : null,
   sfxOff = (() => { try { return new URLSearchParams(location.search).get('rideSfx') === '0' || new URLSearchParams(location.search).get('depotSfx') === '0'; } catch { return false; } })(),
   bgmOff = (() => { try { return new URLSearchParams(location.search).get('bgm') === '0'; } catch { return false; } })(),
+  isMobile = false,
 } = {}) {
   let ctx = null, master = null, sfxBus = null, bgmBus = null, ambBus = null, comp = null, analyser = null;
   let entered = false, disposed = false, gen = 0, leaveTok = 0, hidden = typeof document !== 'undefined' && document.hidden;
@@ -118,10 +119,20 @@ export function createDepotAudio({
     if (baking) return baking;
     baking = (async () => {
       const out = Object.create(null);
+      // 폰: 효과음은 22kHz 로 구워 힙을 줄인다. 스피커에서는 차이가 거의 없다.
+      const sr = isMobile ? 22050 : c.sampleRate;
+      const bakeCtx = sr === c.sampleRate ? c : {
+        sampleRate: sr,
+        createBuffer: (ch, n, s) => (typeof AudioBuffer === 'function'
+          ? new AudioBuffer({ length: n, numberOfChannels: ch, sampleRate: s || sr })
+          : c.createBuffer(ch, n, s || sr)),
+      };
       for (const [k, fn] of Object.entries(SFX_BAKE)) {
-        try { out[k] = fn(c); } catch (e) { console.warn('[depot-audio] bake', k, e?.message || e); }
+        try { out[k] = fn(bakeCtx); } catch (e) { console.warn('[depot-audio] bake', k, e?.message || e); }
       }
-      if (Offline && !bgmOff) {
+      // 폰: 16초 스테레오 BGM 두 곡을 Offline 으로 구우면 입장·카트 잡을 때 한순간에 수십 MB 가 더 생긴다.
+      //   라이브 시퀀서 폴백(startBgmBuffers)으로 같은 곡을 연다.
+      if (Offline && !bgmOff && !isMobile) {
         try {
           out.__bgm0 = await bakeBgmPhrase(Offline, c.sampleRate, 0, BGM_BARS);
           out.__bgm1 = await bakeBgmPhrase(Offline, c.sampleRate, 1, BGM_BARS);
@@ -573,6 +584,14 @@ export function createDepotAudio({
     events: EVENT_NAMES,
     _dbg: {
       buffers: () => buffers && Object.keys(buffers),
+      bufferBytes: () => {
+        if (!buffers) return 0;
+        let n = 0;
+        for (const b of Object.values(buffers)) {
+          if (b && b.length && b.numberOfChannels) n += b.length * b.numberOfChannels * 4;
+        }
+        return n;
+      },
       voices: () => voices.length,
       loops: () => [...loops.keys()],
       paNow: (text) => play('pa-chime', { text }),

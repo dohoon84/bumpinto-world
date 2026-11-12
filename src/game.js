@@ -99,6 +99,8 @@ import { mountBp24Nav } from './corridor/bp24Nav.js'; // [bp24nav]
 import { BUMP24_JEONGJA_AT, bump24AtSpot } from './corridor/bp24Locations.js';
 import { mountDepot, DEPOT_AT, DEPOT_SPAWN } from './depot/index.js'; // [depot] 범창고 정자점 (?depot=0 끔, ?at=depot 입구 앞)
 import { evictGpu } from './evictGpu.js'; // [memory] 매장 입장 때 바깥 월드 GPU 를 잠시 내림
+import { dropCpu, clearGroup } from './hibernate.js'; // [memory] 폰: 바깥 월드 CPU(정점·캔버스)도 내림
+import { clearWorldVisualCaches } from './world.js';
 import { isUiV2, uiV2Wanted } from './ui-v2/flag.js'; // [ui-v2] 게임 UI v2 (기본 켜짐 · ?ui=v1 끔)
 import { controlsCardWanted } from './controlsCard/flag.js'; // [controls-card] 가운데 조작 안내 (기본 켜짐 · ?controlscard=0 이면 예전 접기)
 
@@ -356,10 +358,11 @@ const terrain = terrainData ? createTerrain(corridorTerrainData(terrainData, cor
 terrain?.annotate(data); // [terrain] 도로/수면에 높이 부여 (buildWorld 전에)
 const tower = region.features?.launchTower && params.get('tower') !== '0' ? createTowerAddon(data) : null; // [tower] buildWorld 전에 _skip 마킹
 const jeongjaBp24Prep = region.features?.jeongjaBuildings ? prepareJeongjaBp24(data, params) : []; // [bump24-jeongja] 1층을 비우기 전에
-const world = buildWorld(scene, data, region, { // [shops] 1층 상가 띠/차양/간판 · [colours] 건물 외벽·지붕 색
-  shops: prepareShops(data, shopsData),
-  colours: prepareBuildingColours(data, coloursData),
-});
+const worldRoot = new THREE.Group(); worldRoot.name = 'jeongja-world'; scene.add(worldRoot); // [memory] 정자 로컬 월드를 한 그룹에 모아 매장 안에서 내릴 수 있게
+const shopsPrep = prepareShops(data, shopsData);
+const coloursPrep = prepareBuildingColours(data, coloursData);
+const worldOpts = { shops: shopsPrep, colours: coloursPrep, isMobile: mobileMode };
+let world = buildWorld(worldRoot, data, region, worldOpts); // [shops] 1층 상가 띠/차양/간판 · [colours] 건물 외벽·지붕 색
 tower?.build(scene, renderer); // [tower] 발사탑 1·2기(메카질라), 스타십 풀스택, 부스터 캐치, OLM, 탱크 팜 생성
 const jeongjaBp24 = jeongjaBp24Prep.length ? mountBasemapBp24(scene, jeongjaBp24Prep) : null; // [bump24-jeongja]
 const overlay = new Overlay(document.getElementById('overlay'), camera);
@@ -371,7 +374,7 @@ const corridor = corridorData ? createCorridor({ scene, corridorData, terrain, w
 if (corridor?.namsan || corridor?.hangang) { camera.far = Math.max(camera.far, 14000); camera.updateProjectionMatrix(); } // [namsan] [hangang]
 
 
-if (terrain) { terrain.build(scene, world, overlay); world.groundY = terrain.getGroundHeight; world.vehicleY = terrain.getVehicleHeight; }
+if (terrain) { terrain.build(worldRoot, world, overlay); world.groundY = terrain.getGroundHeight; world.vehicleY = terrain.getVehicleHeight; }
 if (corridor) {
   corridor.afterTerrain();
   const liveBlocked = world.isBlocked, liveOnRoad = world.onRoad;
@@ -722,16 +725,59 @@ const arcadeGame = mountArcade({
 if (arcadeGame) { const withArc = world.isBlocked; world.isBlocked = (x, z, r) => withArc(x, z, r) || arcadeGame.blocks(x, z, r); }
 // [depot] 범창고(BUMP DEPOT) 정자점 — 바깥은 외피만, 안(선반·상품·카트·물리)은 들어갈 때 지연 로드하고 나오면 해제. ?depot=0 끔.
 let worldParkedForDepot = false;
+let worldCpuDropped = false;
+function rebuildJeongjaWorld() {
+  try { clearGroup(worldRoot); } catch (e) { console.warn('[depot-park]', e); }
+  try { clearWorldVisualCaches(); } catch (e) { console.warn('[depot-park]', e); }
+  const next = buildWorld(worldRoot, data, region, { ...worldOpts, reuseData: true });
+  world.ground = next.ground;
+  world.block = next.block;
+  if (terrain) terrain.build(worldRoot, world, overlay);
+  worldRoot.visible = true;
+}
+const PARK_DROP_NAMES = new Set([
+  'corridor', 'cheonggyeTerrain', 'perfInstanced',
+  'gangnamStreet', 'gangnamNightlife',
+]); // 매장 안에서 안 보이는 먼 지역·코리더 CPU. 나오면 근처 타일은 stream 이 다시 올린다.
+function parkFarOutdoor(on) {
+  for (const ch of scene.children) {
+    if (!PARK_DROP_NAMES.has(ch.name)) continue;
+    if (on) {
+      try { dropCpu(ch); } catch (e) { console.warn('[depot-park]', e); }
+      ch.visible = false;
+      ch.userData.bwParked = true;
+    } else if (ch.userData.bwParked) {
+      ch.visible = true;
+      ch.userData.bwParked = false;
+    }
+  }
+}
 function parkWorldForDepot(on) {
   if (on) {
     if (worldParkedForDepot) return;
     worldParkedForDepot = true;
     try { corridor?.unloadAll?.(); } catch (e) { console.warn('[depot-park]', e); }
     try { evictGpu(scene); } catch (e) { console.warn('[depot-park]', e); }
-    if (mobileMode) { renderer.setPixelRatio(1); renderer.setSize(innerWidth, innerHeight, false); }
+    if (mobileMode) {
+      try { clearGroup(worldRoot); } catch (e) { console.warn('[depot-park]', e); }
+      try { clearWorldVisualCaches(); } catch (e) { console.warn('[depot-park]', e); }
+      worldRoot.visible = false;
+      try { parkFarOutdoor(true); } catch (e) { console.warn('[depot-park]', e); }
+      worldCpuDropped = true;
+      renderer.setPixelRatio(1); renderer.setSize(innerWidth, innerHeight, false);
+    }
   } else if (worldParkedForDepot) {
     worldParkedForDepot = false;
     if (mobileMode) { renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5)); renderer.setSize(innerWidth, innerHeight, false); }
+    if (worldCpuDropped) {
+      worldCpuDropped = false;
+      try { rebuildJeongjaWorld(); } catch (e) { console.warn('[depot-park]', e); }
+      try { parkFarOutdoor(false); } catch (e) { console.warn('[depot-park]', e); }
+      try {
+        const p = player?.position;
+        if (p && corridor?.preload) corridor.preload(p.x, p.z, 180);
+      } catch (e) { console.warn('[depot-park]', e); }
+    }
   }
 }
 const depot = mountDepot({
@@ -2937,7 +2983,7 @@ function frame() {
   myBubble.tick();
 
   // 케이블카는 캐빈을 먼저 옮긴 다음 카메라를 둔다(한 프레임 늦지 않게).
-  if (corridor) {
+  if (corridor && !worldParkedForDepot) {
     const cPre = cam.mode === 'follow' ? player.position : sun.target.position;
     corridor.update(dt, cPre.x, cPre.z, cam.mode);
     corridor.namsan?.tickPlayer?.(dt, player, cam);
@@ -3052,7 +3098,7 @@ ready: true, region, tower, renderer, corridor, namsan: corridor?.namsan || null
   placeCaption: (x, z) => placeCaption(x, z, placeList, corridor?.bounds?.islands), // [gangnam-night]
 
   bungeo, // [bungeo]
-  launch, roadster, trucks, bike: adminBike, giftRides, inventory, data, world, npcs, transit, camera, cam, ov, setMode, terrain, taxis, jzTraffic, police, weather: atmosphere, umbrellas, dogPark, strayCats, // [terrain] [taxi] [roadster] [tower] [launch] [truck] [bike] [roadbike] [inventory]
+  launch, roadster, trucks, bike: adminBike, giftRides, inventory, data, world, worldRoot, npcs, transit, camera, cam, ov, setMode, terrain, taxis, jzTraffic, police, weather: atmosphere, umbrellas, dogPark, strayCats, // [terrain] [taxi] [roadster] [tower] [launch] [truck] [bike] [roadbike] [inventory]
   get player() { return player; },
   get arriving() { return arriving; }, // [arrivefix]
   gateEnter(at) { if (!joined) return; setPassportActive(true); pauseWorldSession(); handleGateEnter(region.id, at ? { at } : undefined); }, // [arrivefix] 테스트용: 게임 안 🌏 → 역 고르기와 같은 흐름

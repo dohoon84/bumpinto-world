@@ -50,6 +50,7 @@ body.depot-inside #ve-hud{display:none !important} /* 매장 안: 왼쪽 위 할
         getLevel: () => getAudioLevel?.() || { muted: false, volume: 0.55 },
         getBgmPlayer,
         onAnnounce: showPa,
+        isMobile,
       });
       audio.enter();
     });
@@ -74,23 +75,30 @@ body.depot-inside #ve-hud{display:none !important} /* 매장 안: 왼쪽 위 할
       throw e;
     }
   }
-  function finishLeave() {
+  async function finishLeave() {
     onInterior?.('', null);
     interior?.dispose(); interior = null; active = false; document.body.classList.remove('depot-inside');
-    try { onPark?.(false); } catch (e) { console.warn('[depot-park]', e); }
+    fadeSub.textContent = '주변을 다시 그리는 중';
+    try { await Promise.resolve(onPark?.(false)); } catch (e) { console.warn('[depot-park]', e); }
     try { audio?.leave(); } catch (e) { console.warn('[depot-audio]', e); }
     paEl.hidden = true;
     const p = getPlayer?.()?.position; if (p) { p.x = DEPOT_SPAWN.x; p.z = DEPOT_SPAWN.z; }
   }
-  let building = false;
+  let building = false, leavingWait = false;
   function tickFade(dt) {
     if (!fade.phase) return;
     fade.t += dt;
     const a = fade.phase === 'out' ? Math.min(1, fade.t / FADE) : Math.max(0, 1 - fade.t / FADE);
     fadeEl.style.opacity = String(a);
     if (fade.phase === 'out' && fade.t >= FADE) {
-      if (fade.leaving) { finishLeave(); fade = { t: -0.1, phase: 'in', leaving: false }; }
-      else if (!active && !building) {
+      if (fade.leaving) {
+        if (!leavingWait) {
+          leavingWait = true;
+          fadeSub.textContent = '주변을 다시 그리는 중';
+          finishLeave().then(() => { leavingWait = false; fade = { t: -0.1, phase: 'in', leaving: false }; })
+            .catch((e) => { console.warn('[depot]', e); leavingWait = false; fade = { t: -0.1, phase: 'in', leaving: false }; });
+        }
+      } else if (!active && !building) {
         building = true;
         build().then(() => { building = false; fade = { t: -0.1, phase: 'in', leaving: false }; })
           .catch((e) => { building = false; console.warn('[depot]', e); fade = { t: 0, phase: 'in', leaving: false }; });
