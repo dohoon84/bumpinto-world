@@ -35,12 +35,13 @@ function makeEnvMap(renderer) {
   return rt;
 }
 
-export function buildDepotCeiling(scene, { renderer, keep, shellMesh } = {}) {
+export function buildDepotCeiling(scene, { renderer, keep, shellMesh, isMobile = false } = {}) {
   const m4 = new THREE.Matrix4();
   // 배경·안개: 찬 회색, 멀리 갈수록 살짝 먹먹하게 (흰 날림 방지)
   scene.background = new THREE.Color(0xb7bec6);
   scene.fog = new THREE.Fog(0xb7bec6, 55, 150);
-  if (renderer) {
+  // 모바일: PMREM 은 입장 때 렌더러 피크 메모리를 키워 컨텍스트를 잃는 경우가 있다. 반구+방향광만으로도 충분.
+  if (renderer && !isMobile) {
     try {
       const rt = makeEnvMap(renderer);
       keep?.(rt);

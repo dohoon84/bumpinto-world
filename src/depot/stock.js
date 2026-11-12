@@ -117,7 +117,9 @@ function mergeStatics(root, keep) {
 }
 
 // 2048 아틀라스: 8×8 칸(256px). 칸 안은 기존 상품 텍스처와 같이 앞/옆/위/예비.
-const ATLAS_N = 8, ATLAS_S = 2048, CELL = ATLAS_S / ATLAS_N;
+const ATLAS_N = 8;
+let ATLAS_S = 2048, CELL = ATLAS_S / ATLAS_N;
+function setAtlasTier(mobile) { ATLAS_S = mobile ? 1024 : 2048; CELL = ATLAS_S / ATLAS_N; }
 function paintCell(g, cx, cy, p) {
   const x0 = cx * CELL, y0 = cy * CELL, h = CELL / 2;
   const face = (x, y, w, h, fill, title, sub, side = false) => {
@@ -268,6 +270,7 @@ function paintTag(g, p) {
 }
 
 export function mountStock({ scene, keep, canvasTex: canvasTexFn, TX, racks, obstacles, wraps, boxGeoLabeled, isMobile = false }) {
+  setAtlasTier(isMobile);
   registerStockProducts();
   if (wraps) wraps.visible = false;
   const ct = canvasTexFn || canvasTex;
@@ -437,14 +440,14 @@ export function mountStock({ scene, keep, canvasTex: canvasTexFn, TX, racks, obs
     signs.push({ key: `a:${no}`, title: no, sub: (HANG_COPY[x] || ['', ''])[0], tall: true, w: 2.6, h: 1.3, x, y: 5.4, z: 13.95, ry: Math.PI });
   }
   {
-    const SA = 2048, SW = 512, SH = 128, COLS = SA / SW;
+    const SA = isMobile ? 1024 : 2048, SW = SA / 4, SH = SA / 16, COLS = SA / SW;
     const slot = new Map(); let nShort = 0, nTall = 0;
     for (const sg of signs) {
       if (slot.has(sg.key)) continue;
       if (sg.tall) { const i = nTall++; slot.set(sg.key, { x: (i % COLS) * SW, y: (12 + 2 * Math.floor(i / COLS)) * SH, h: 2 * SH, sg }); } // 12–15 행
       else { const i = nShort++; slot.set(sg.key, { x: (i % COLS) * SW, y: Math.floor(i / COLS) * SH, h: SH, sg }); } // 0–11 행 (48장)
     }
-    const tex = keep(ct(SA, SA, (g) => {
+    const tex = keep(canvasTex(SA, SA, (g) => {
       g.clearRect(0, 0, SA, SA);
       for (const { x, y, h, sg } of slot.values()) {
         g.save(); g.translate(x, y);
@@ -472,7 +475,7 @@ export function mountStock({ scene, keep, canvasTex: canvasTexFn, TX, racks, obs
   const fixtures = buildFixtures({ scene: fxRoot, keep, ct, atlas, unitBox, obstacles, prodMeshes, m4, pv, qy, s3, col, Y, q0, findCluster, addCluster, clusters });
 
   mergeStatics(fxRoot, keep); // 집기 정적 메시 → 재질별 1개
-  finalizeStock({ scene, keep, clusters, atlas, unitBox, prodMeshes, tagG, ct, proxyMat, m4, pv, qy, s3, col, Y, q0 });
+  finalizeStock({ scene, keep, clusters, atlas, unitBox, prodMeshes, tagG, ct, proxyMat, m4, pv, qy, s3, col, Y, q0, isMobile });
 
   // 먼 진열 띠는 끔: 낱개 상품이 사라져도 랩 파렛트·하단 색 상자(대역)가 그 자리를 채움. 모바일은 더 가깝게.
   const FAR = isMobile ? 26 : 46;
@@ -920,7 +923,7 @@ function paintLoad(g, x0, y0, S, p, i) {
   g.fillStyle = '#e8e4da'; g.fillRect(x0 + h, y0 + h, h, h);
 }
 
-function finalizeStock({ scene, keep, clusters, atlas, unitBox, prodMeshes, tagG, ct, proxyMat, m4, pv, qy, s3, col, Y, q0 }) {
+function finalizeStock({ scene, keep, clusters, atlas, unitBox, prodMeshes, tagG, ct, proxyMat, m4, pv, qy, s3, col, Y, q0, isMobile = false }) {
   // 상단 랩 파렛트: 맵 없이 품목색 한 메시 (얼룩 아틀라스 UV 제거)
   const uppers = [];
   const allItems = new Map(); // id -> list
@@ -935,8 +938,8 @@ function finalizeStock({ scene, keep, clusters, atlas, unitBox, prodMeshes, tagG
   if (uppers.length) {
     // 랩 파렛트·하단 덩어리: 품목별 '적재 면' 아틀라스(골판지 이음새·인쇄 패널·랩 광택) + aCell → 여전히 InstancedMesh 1개
     const ids = [...new Set(uppers.map((pl) => pl.id).filter((id) => BY_ID[id]))];
-    const N = Math.max(1, Math.ceil(Math.sqrt(ids.length))), LS = 2048, LC = LS / N, lix = new Map(ids.map((id, i) => [id, i]));
-    const tex = keep(ct(LS, LS, (g) => ids.forEach((id, i) => paintLoad(g, (i % N) * LC, Math.floor(i / N) * LC, LC, BY_ID[id], i))));
+    const N = Math.max(1, Math.ceil(Math.sqrt(ids.length))), LS = isMobile ? 1024 : 2048, LC = LS / N, lix = new Map(ids.map((id, i) => [id, i]));
+    const tex = keep(canvasTex(LS, LS, (g) => ids.forEach((id, i) => paintLoad(g, (i % N) * LC, Math.floor(i / N) * LC, LC, BY_ID[id], i))));
     tex.anisotropy = 4;
     const geo = keep(loadGeo(N)); const aCell = new Float32Array(uppers.length * 2);
     const im = new THREE.InstancedMesh(geo, cellMaterial(keep, new THREE.MeshLambertMaterial({ map: tex })), uppers.length);
@@ -978,9 +981,9 @@ function finalizeStock({ scene, keep, clusters, atlas, unitBox, prodMeshes, tagG
   // 가격표: SKU 별 텍스처·메시 → 2048² 아틀라스(칸 256×128) + InstancedMesh 1개
   const tagIds = [...new Set(allTags.map((t) => t.p.id))].filter((id) => BY_ID[id]).slice(0, 128);
   if (tagIds.length) {
-    const TC = 8, TR = 16, TS = 2048, tix = new Map(tagIds.map((id, i) => [id, i]));
-    const tex = keep(ct(TS, TS, (g) => {
-      tagIds.forEach((id, i) => { g.save(); g.translate((i % TC) * 256, Math.floor(i / TC) * 128); g.scale(0.5, 0.5); paintTag(g, BY_ID[id]); g.restore(); });
+    const TC = 8, TR = 16, TS = isMobile ? 1024 : 2048, tw = TS / TC, th = TS / TR, tix = new Map(tagIds.map((id, i) => [id, i]));
+    const tex = keep(canvasTex(TS, TS, (g) => {
+      tagIds.forEach((id, i) => { g.save(); g.translate((i % TC) * tw, Math.floor(i / TC) * th); g.scale(tw / 512, th / 256); paintTag(g, BY_ID[id]); g.restore(); });
     }));
     tex.anisotropy = 4;
     const tags = allTags.filter((t) => tix.has(t.p.id));
