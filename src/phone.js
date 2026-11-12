@@ -287,7 +287,7 @@ function drawBp24(ctx, x, z, w, h, viewW, viewH) {
   }
 }
 
-// [depot-ext] 범창고: 지도 안이면 초록 상자 아이콘+이름, 밖이면(1.6 km 안) 가장자리 화살표+거리. 누르면 문 앞 안내선
+// [depot-ext] 범창고: 지도 안이면 초록 사각+상자 마크(귀 없음)+이름, 밖이면(1.6 km 안) 가장자리 화살표+거리. 누르면 문 앞 안내선
 function drawDepotMini(ctx, x, z, w, h, viewW, viewH, s) {
   const dm = window.__jj?.depot?.mapMarker;
   const canvas = ctx.canvas;
@@ -302,10 +302,15 @@ function drawDepotMini(ctx, x, z, w, h, viewW, viewH, s) {
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.lineJoin = 'round';
   if (inside) {
     const r = Math.max(8, w / 24);
-    ctx.fillStyle = '#F3EADA'; ctx.beginPath(); ctx.arc(sx - r * 0.5, sy - r * 0.85, r * 0.36, 0, Math.PI * 2); ctx.arc(sx + r * 0.5, sy - r * 0.85, r * 0.36, 0, Math.PI * 2); ctx.fill();
     ctx.fillStyle = '#1E5A45'; ctx.strokeStyle = '#F3EADA'; ctx.lineWidth = 1.6 * s;
     ctx.beginPath(); if (ctx.roundRect) ctx.roundRect(sx - r, sy - r * 0.9, r * 2, r * 1.8, r * 0.35); else ctx.rect(sx - r, sy - r * 0.9, r * 2, r * 1.8); ctx.fill(); ctx.stroke();
-    ctx.fillStyle = '#F2C230'; ctx.fillText('범', sx, sy + 0.5);
+    { // 작은 상자 마크(귀·동물 요소 없음) — hud-v3 minimap drawDepotMark 와 같은 모양
+      const k = r / 9; ctx.lineJoin = 'round'; ctx.lineWidth = 0.9 * k; ctx.strokeStyle = '#123B2D';
+      const poly = (pts, fill) => { ctx.beginPath(); pts.forEach(([px2, py2], i) => (i ? ctx.lineTo(sx + px2 * k, sy + py2 * k) : ctx.moveTo(sx + px2 * k, sy + py2 * k))); ctx.closePath(); ctx.fillStyle = fill; ctx.fill(); ctx.stroke(); };
+      poly([[0, -5.5], [5, -3.4], [0, -1.3], [-5, -3.4]], '#E0B47A');
+      poly([[-5, -3.4], [0, -1.3], [0, 5], [-5, 3]], '#C99A5E');
+      poly([[0, -1.3], [5, -3.4], [5, 3], [0, 5]], '#B8864C');
+    }
     ctx.lineWidth = 3 * s; ctx.strokeStyle = 'rgba(16,32,51,.92)'; ctx.strokeText(dm.label, sx, sy + r + 8 * s); ctx.fillStyle = '#ffffff'; ctx.fillText(dm.label, sx, sy + r + 8 * s);
     canvas._depotHit = { sx, sy, r: r + 6 };
   } else if (dist < 1600) {
