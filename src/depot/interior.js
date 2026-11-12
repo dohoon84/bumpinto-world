@@ -252,6 +252,16 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit } 
   cart.add(new THREE.Mesh(cg.wire, wireM), new THREE.Mesh(cg.red, redM), new THREE.Mesh(cg.dark, darkM));
   const itemsRoot = new THREE.Group(); cart.add(itemsRoot);
   scene.add(cart);
+  // 내 카트 표시(손 놓았을 때만): 위에 초록 화살표 + 바닥 링
+  const markM = keep(new THREE.MeshBasicMaterial({ color: 0x2fd27a, transparent: true, opacity: 0.85, depthWrite: false }));
+  const arrowG = keep(new THREE.ConeGeometry(0.12, 0.26, 4)); arrowG.rotateX(Math.PI); // 아래를 가리킴
+  const ringG = keep(new THREE.RingGeometry(0.78, 0.86, 40)); ringG.rotateX(-Math.PI / 2);
+  const marker = new THREE.Group(); const arrow = new THREE.Mesh(arrowG, markM); arrow.position.y = 1.55; const ring = new THREE.Mesh(ringG, markM); ring.position.y = 0.01;
+  marker.add(arrow, ring); marker.visible = false; cart.add(marker);
+  // 마우스로 가리킨 상품 테두리(노란 상자 선, 항상 위에 보임)
+  const hlG = keep(new THREE.EdgesGeometry(new THREE.BoxGeometry(1, 1, 1)));
+  const hlM = keep(new THREE.LineBasicMaterial({ color: 0xffd400, depthTest: false, transparent: true }));
+  const hlBox = new THREE.LineSegments(hlG, hlM); hlBox.matrixAutoUpdate = false; hlBox.renderOrder = 10; hlBox.visible = false; scene.add(hlBox);
   // 보관소 카트들(겹쳐 꽂힌 줄) — 인스턴스 3개
   const corral = [new THREE.InstancedMesh(cg.wire, wireM, 14), new THREE.InstancedMesh(cg.red, redM, 14), new THREE.InstancedMesh(cg.dark, darkM, 14)];
   const corralPos = [];
@@ -318,7 +328,7 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit } 
   <div class="dh-btns"><button data-a="place">놓기</button><button data-a="rot">돌리기</button><button data-a="tip">눕히기</button><button data-a="level">위/아래</button><button data-a="cancel">취소</button></div>`;
   const css = document.createElement('style');
   css.textContent = `#depot-hud{position:fixed;inset:0;pointer-events:none;z-index:57;font-family:'Pretendard','Noto Sans KR',system-ui,sans-serif;color:#fff}
-#depot-hud .dh-panel{position:absolute;left:16px;top:62px;background:rgba(18,59,45,.88);border-radius:12px;padding:8px 12px;font-size:13px;line-height:1.55;font-weight:600;max-width:340px}
+#depot-hud .dh-panel{position:absolute;left:16px;top:84px;background:rgba(18,59,45,.88);border-radius:12px;padding:8px 12px;font-size:13px;line-height:1.55;font-weight:600;max-width:340px}
 #depot-hud .dh-panel b{color:#F2C230;margin-right:8px;font-size:14px}#depot-hud .dh-kg{display:block;white-space:pre-line}
 #depot-hud .dh-cross{position:absolute;left:50%;top:50%;width:8px;height:8px;margin:-4px 0 0 -4px;border-radius:50%;background:rgba(255,255,255,.85);box-shadow:0 0 0 2px rgba(0,0,0,.35)}
 #depot-hud .dh-target{position:absolute;left:50%;top:calc(50% + 22px);transform:translateX(-50%);background:rgba(255,255,255,.95);color:#13203d;border-radius:10px;padding:6px 12px;font-size:14px;font-weight:800;display:none;white-space:nowrap}
@@ -445,17 +455,27 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit } 
   // ---------- 집기·놓기 ----------
   const ray = new THREE.Raycaster(); const ndc = new THREE.Vector2();
   let hover = null;
-  function pickTarget() {
-    ray.setFromCamera(ndc.set(0, 0), camera); ray.far = 3.2;
+  // PC: 마우스 커서 위치에서 레이 (가운데 조준 불필요) · 모바일/키보드: 화면 가운데
+  const mouse = { on: false, x: 0, y: 0 };
+  const REACH = 4.5;
+  function pickTarget(at) {
+    ray.setFromCamera(at || (mouse.on ? ndc.set(mouse.x, mouse.y) : ndc.set(0, 0)), camera); ray.far = REACH;
     const hit = ray.intersectObjects(prodMeshes, false)[0];
     if (!hit || hit.instanceId == null) return null;
     return { im: hit.object, id: hit.instanceId, p: BY_ID[hit.object.userData.pid], dist: hit.distance };
   }
+  const hlS = new THREE.Matrix4();
+  function updateHighlight() {
+    if (!hover || st.mode !== 'walk') { hlBox.visible = false; dom.style.cursor = ''; return; }
+    hover.im.getMatrixAt(hover.id, m4); const [sx, sy, sz] = hover.p.size;
+    hlS.makeScale(sx * 1.04, sy * 1.04, sz * 1.04); hlBox.matrix.multiplyMatrices(m4, hlS); hlBox.matrixWorldNeedsUpdate = true;
+    hlBox.visible = true; hlM.opacity = 0.75 + 0.25 * Math.sin(st.t * 8); dom.style.cursor = 'pointer';
+  }
   function pick() {
     if (!hover || st.mode !== 'walk') return false;
-    if (!st.hasCart) { toast('먼저 입구 카트 보관소에서 카트를 잡으세요 (E)', 2200, '#1f4fa3'); return false; }
+    if (!st.hasCart && !cart.visible) { toast('먼저 입구 카트 보관소에서 카트를 잡으세요 (E)', 2200, '#1f4fa3'); return false; }
     const c = st.cart, d = Math.hypot(c.x - st.me.x, c.z - st.me.z);
-    if (d > 4) { toast('카트가 너무 멀어요', 1500, '#1f4fa3'); return false; }
+    if (d > 7) { toast('카트가 너무 멀어요 · 카트 가까이에서 집어요', 1500, '#1f4fa3'); return false; }
     const { im, id, p } = hover;
     im.getMatrixAt(id, m4); const saved = m4.clone();
     m4.makeScale(0, 0, 0); im.setMatrixAt(id, m4); im.instanceMatrix.needsUpdate = true;
@@ -699,13 +719,22 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit } 
       : st.hasCart ? 'W/S 밀기·당기기 · A/D 방향 · Shift 빠르게 · 드래그 둘러보기 · 상품 보고 E/클릭 집기 · X 마지막 빼기 · G 카트 놓기'
         : 'WASD 걷기 · 드래그 둘러보기 · 카트 보관소에서 E 카트 잡기 · 출입구에서 E 나가기';
     if (elHelp.textContent !== help) elHelp.textContent = help;
-    if (hover && st.mode === 'walk') { elTarget.style.display = 'block'; elTarget.textContent = `${hover.p.name} · ${hover.p.kg} kg · ${hover.p.price.toLocaleString('ko-KR')}원 — E 집기`; }
+    if (st.mode === 'walk' && nearMyCart() && !hover) { elTarget.style.display = 'block'; elTarget.textContent = `E 카트 잡기${items.length ? ` · 짐 ${items.length}개 그대로` : ''}`; }
+    else if (hover && st.mode === 'walk') { elTarget.style.display = 'block'; elTarget.textContent = `${hover.p.name} · ${hover.p.kg} kg · ${hover.p.price.toLocaleString('ko-KR')}원 — E 집기`; }
     else if (st.mode === 'walk' && nearCorral() && !st.hasCart) { elTarget.style.display = 'block'; elTarget.textContent = 'E 카트 잡기 (240L)'; }
     else if (st.mode === 'walk' && nearDoor() && !st.hasCart) { elTarget.style.display = 'block'; elTarget.textContent = 'E 나가기'; }
     else elTarget.style.display = 'none';
   }
   const nearCorral = () => st.me.x > CORRAL.x0 - 1.5 && st.me.x < CORRAL.x1 + 1.5 && st.me.z > CORRAL.z0 - 1 && st.me.z < CORRAL.z1 + 2.5;
   const nearDoor = () => Math.abs(st.me.x - DOOR.x) < DOOR.w / 2 && st.me.z < 2.4;
+  // 손 놓은 내 카트: 손잡이(카트 뒤)나 카트 몸통에서 1.5 m 안이면 잡을 수 있음 (바라볼 필요 없음)
+  const cartDist = () => { const c = st.cart, hx = c.x + Math.sin(c.yaw) * 0.6, hz = c.z + Math.cos(c.yaw) * 0.6; return Math.min(Math.hypot(st.me.x - hx, st.me.z - hz), Math.hypot(st.me.x - c.x, st.me.z - c.z)); };
+  const nearMyCart = () => !st.hasCart && cart.visible && cartDist() < 1.5;
+  function regrabCart() {
+    st.hasCart = true; const c = st.cart; c.vx = c.vz = c.w = 0;
+    st.me.x = c.x + Math.sin(c.yaw) * 0.95; st.me.z = c.z + Math.cos(c.yaw) * 0.95; st.me.yaw = c.yaw; st.head.yaw = 0; st.head.pitch = -0.32;
+    blip('pick'); toast('카트 다시 잡음', 900, '#1E5A45');
+  }
   function grabCart() {
     st.hasCart = true; cart.visible = true; setCorral(13);
     const c = st.cart; c.x = st.me.x; c.z = st.me.z; c.yaw = st.me.yaw + st.head.yaw; st.head.yaw = 0; st.head.pitch = -0.32;
@@ -719,6 +748,7 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit } 
   let down = null;
   const onDown = (e) => { down = { x: e.clientX, y: e.clientY, t: performance.now() }; };
   const onMove = (e) => {
+    if (e.pointerType === 'mouse') { const r0 = dom.getBoundingClientRect(); mouse.on = true; mouse.x = ((e.clientX - r0.left) / r0.width) * 2 - 1; mouse.y = -((e.clientY - r0.top) / r0.height) * 2 + 1; }
     if (st.mode !== 'place') return;
     const r = dom.getBoundingClientRect(); ndc.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
     ray.setFromCamera(ndc, camera);
@@ -731,7 +761,10 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit } 
     const d = down; down = null; if (!d) return;
     if (Math.hypot(e.clientX - d.x, e.clientY - d.y) > 8 || performance.now() - d.t > 500) return;
     if (e.target !== dom) return;
-    if (st.mode === 'place') { if (e.button === 2) cancelPlace(); else place(); } else if (hover) pick();
+    if (st.mode === 'place') { if (e.button === 2) cancelPlace(); else place(); return; }
+    // 클릭한 그 자리의 상품 (마우스 위치 레이)
+    if (e.pointerType === 'mouse') { const r0 = dom.getBoundingClientRect(); const t = pickTarget(new THREE.Vector2(((e.clientX - r0.left) / r0.width) * 2 - 1, -((e.clientY - r0.top) / r0.height) * 2 + 1)); if (t) hover = t; }
+    if (hover) pick(); else if (nearMyCart()) regrabCart(); else if (!st.hasCart && nearCorral() && !cart.visible) grabCart();
   };
   const onWheel = (e) => { if (st.mode === 'place') { rotate(Math.sign(e.deltaY) * Math.PI / 12); e.preventDefault(); } };
   const onCtx = (e) => { if (st.mode === 'place') e.preventDefault(); };
@@ -754,12 +787,14 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit } 
     }
     if (e.repeat) return true;
     if (k === 'KeyE' || k === 'Space') {
-      if (hover && st.hasCart) pick();
+      if (hover && (st.hasCart || cart.visible)) pick();
+      else if (nearMyCart()) regrabCart();
+      else if (!st.hasCart && nearCorral() && cart.visible && items.length) toast(`내 카트(짐 ${items.length}개)는 ${Math.round(cartDist())} m 떨어진 초록 화살표 자리에 있어요`, 2600, '#1E5A45');
       else if (!st.hasCart && nearCorral()) grabCart();
       else if (st.hasCart && nearCorral() && !items.length) { releaseCart(); cart.visible = false; setCorral(14); }
       else if (!st.hasCart && nearDoor()) onExit?.();
       else if (hover && !st.hasCart) pick();
-    } else if (k === 'KeyG' && st.hasCart) releaseCart();
+    } else if (k === 'KeyG' && st.hasCart) { releaseCart(); toast('카트 놓음 · 카트 옆에서 E 로 다시 잡기', 1600, '#1E5A45'); }
     else if (k === 'KeyX' && st.hasCart) removeLast();
     else if (k === 'Escape' && !st.hasCart && nearDoor()) onExit?.();
     return true;
@@ -785,6 +820,8 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit } 
     selfAvatar.position.set(st.me.x, 0, st.me.z); selfAvatar.rotation.y = st.me.yaw;
     updateCamera(dt);
     hover = st.mode === 'walk' ? pickTarget() : null;
+    updateHighlight();
+    marker.visible = !st.hasCart && cart.visible; if (marker.visible) { arrow.position.y = 1.55 + Math.sin(st.t * 3) * 0.06; arrow.rotation.y += dt * 1.5; }
     if (st.toastT > 0) { st.toastT -= dt; if (st.toastT <= 0) elToast.style.display = 'none'; }
     updateHud();
   }

@@ -22,6 +22,7 @@ export function mountDepot({ renderer, scene, getPlayer, groundY, canEnter = () 
 #depot-ui .dp-hint{position:absolute;left:50%;bottom:120px;transform:translateX(-50%);background:rgba(20,40,90,.88);color:#fff;padding:10px 18px;border-radius:999px;font-weight:800;font-size:15px;pointer-events:auto;cursor:pointer;box-shadow:0 6px 20px rgba(0,0,0,.25)}
 #depot-ui .dp-hint kbd{background:#f2b705;color:#13203d;border-radius:6px;padding:1px 7px;margin-right:8px;font-weight:900}
 #depot-ui .dp-fade{position:absolute;inset:0;background:#0d1a33;opacity:0;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#fff;gap:8px;transition:none}
+body.depot-inside #ve-hud{display:none !important} /* 매장 안: 왼쪽 위 할 일 패널 접기(겹침 방지) */
 #depot-ui .dp-fade b{font-size:30px;letter-spacing:1px}#depot-ui .dp-fade span{font-size:15px;color:#f2b705;font-weight:700}`;
   document.head.appendChild(st); document.body.appendChild(root);
   const hintEl = root.querySelector('.dp-hint'), fadeEl = root.querySelector('.dp-fade'), fadeSub = fadeEl.querySelector('span');
