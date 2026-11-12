@@ -542,6 +542,9 @@ export function openLobby({ sms, region = null, onJoin, onBack }) {
     cancelAnimationFrame(raf);
     removeEventListener('resize', onResize);
     ro?.disconnect();
+    // 미리보기 캔버스를 바로 떼어 forceContextLoss 가 숨은 로비에서 늦게 터지지 않게 한다
+    try { renderer.domElement.remove(); } catch { /* */ }
+    try { view.replaceChildren(); } catch { /* */ }
     releaseRenderer(renderer);
   };
 

@@ -650,6 +650,11 @@ const gnTransit = corridorData.gangnamTransit ? mountGangnamTransit(root, corrid
       }
       return { x: x0, z: z0 };
     },
+    // 실내(범창고 등)에 들어갈 때 바깥 타일을 내려 메모리 확보. 나오면 stream 이 다시 올린다.
+    unloadAll() {
+      buildQueue.length = 0;
+      for (const t of tiles.values()) { unloadDetail(t); unloadLod(t); }
+    },
     counts() {
       let d = 0, l = 0; for (const t of tiles.values()) { if (t.dState === 3) d++; if (t.lState === 3 && t.lod.group.visible) l++; }
       return { detail: d, lod: l, queue: buildQueue.length };

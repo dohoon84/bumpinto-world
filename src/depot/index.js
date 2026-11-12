@@ -7,7 +7,7 @@ export { depotEnabled, DEPOT_AT, DEPOT_SPAWN, DEPOT_SITE } from './flag.js';
 
 const FADE = 0.35, DOOR_R = 4.2, PREFETCH_R = 120;
 
-export function mountDepot({ renderer, scene, getPlayer, groundY, canEnter = () => true, onInterior, isMobile = false, params, getAudioLevel, getBgmPlayer, overlay = null } = {}) {
+export function mountDepot({ renderer, scene, getPlayer, groundY, canEnter = () => true, onInterior, onPark, isMobile = false, params, getAudioLevel, getBgmPlayer, overlay = null } = {}) {
   const search = params ? `?${params}` : location.search;
   if (!depotEnabled(search)) return null;
   const ext = buildDepotExterior(scene, { groundY: groundY || (() => 0), overlay, getPos: () => getPlayer?.()?.position, mobile: isMobile, lot: new URLSearchParams(search.replace(/^\?/, '')).get('depotlot') !== '0' }); // [depot-ext] ?depotlot=0 이면 주차장 디테일 끔
@@ -60,15 +60,24 @@ body.depot-inside #ve-hud{display:none !important} /* 매장 안: 왼쪽 위 할
     busy = true; fade = { t: 0, phase: 'out', leaving: true }; fadeSub.textContent = '또 오세요!';
   }
   async function build() {
-    const m = await loadMod();
-    if (!m) throw new Error('depot interior load failed');
-    interior = await m.buildDepotInterior({ renderer, isMobile, onExit: () => leave(), audio, getAudioLevel });
-    active = true; document.body.classList.add('depot-inside');
-    onInterior?.('depot', interior);
+    // 내부를 만들기 전에 바깥 월드를 내려, 입장 피크 메모리가 폰 한도를 넘기지 않게
+    try { onPark?.(true); } catch (e) { console.warn('[depot-park]', e); }
+    try { ext.park?.(); } catch (e) { console.warn('[depot-park]', e); }
+    try {
+      const m = await loadMod();
+      if (!m) throw new Error('depot interior load failed');
+      interior = await m.buildDepotInterior({ renderer, isMobile, onExit: () => leave(), audio, getAudioLevel });
+      active = true; document.body.classList.add('depot-inside');
+      onInterior?.('depot', interior);
+    } catch (e) {
+      try { onPark?.(false); } catch { /* */ }
+      throw e;
+    }
   }
   function finishLeave() {
     onInterior?.('', null);
     interior?.dispose(); interior = null; active = false; document.body.classList.remove('depot-inside');
+    try { onPark?.(false); } catch (e) { console.warn('[depot-park]', e); }
     try { audio?.leave(); } catch (e) { console.warn('[depot-audio]', e); }
     paEl.hidden = true;
     const p = getPlayer?.()?.position; if (p) { p.x = DEPOT_SPAWN.x; p.z = DEPOT_SPAWN.z; }

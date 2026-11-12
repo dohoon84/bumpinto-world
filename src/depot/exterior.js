@@ -101,6 +101,7 @@ export function buildDepotExterior(scene, { groundY = () => 0, overlay = null, g
   return {
     root, y0, way, stats,
     get near() { return near; },
+    park: dropNear, // 매장 안: 주차장 디테일을 내려 메모리 확보. 나오면 update 가 다시 만든다
     marker: way.marker,
     update(dt, pos) {
       night.update(dt);

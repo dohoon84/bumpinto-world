@@ -29,9 +29,22 @@ const DETAIL = { z0: 14, bays: 10 }; // 상세 구역: z 14 ~ 41
 const RACK_X = [50, 50 + RACK_D + AISLE, 50 + 2 * (RACK_D + AISLE)]; // 랙 왼쪽 x (통로 A: 52.2~55.55, 통로 B: 57.75~61.1)
 const EYE = 1.6;
 
+let texScale = 1; // 모바일은 0.5 — 캔버스 텍스처 해상도만 줄이고 모양은 같다
 function canvasTex(w, h, draw, srgb = true) {
-  const c = document.createElement('canvas'); c.width = w; c.height = h; draw(c.getContext('2d'), w, h);
-  const t = new THREE.CanvasTexture(c); if (srgb) t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; return t;
+  const W = Math.max(32, Math.round(w * texScale)), H = Math.max(32, Math.round(h * texScale));
+  const c = document.createElement('canvas'); c.width = W; c.height = H;
+  const g = c.getContext('2d');
+  if (W !== w || H !== h) g.scale(W / w, H / h); // 그림 좌표는 그대로, 픽셀만 줄임
+  draw(g, w, h);
+  const t = new THREE.CanvasTexture(c); if (srgb) t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = texScale < 1 ? 2 : 4; return t;
+}
+function fitTexture(t, maxEdge) {
+  const img = t?.image; if (!img || !img.width) return t;
+  const w = img.width, h = img.height; if (Math.max(w, h) <= maxEdge) return t;
+  const s = maxEdge / Math.max(w, h);
+  const c = document.createElement('canvas'); c.width = Math.max(1, Math.round(w * s)); c.height = Math.max(1, Math.round(h * s));
+  c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+  t.image = c; t.needsUpdate = true; return t;
 }
 function labelTex(p) {
   return canvasTex(512, 256, (g) => {
@@ -82,6 +95,7 @@ async function loadDepotTextures(renderer) {
 }
 
 export async function buildDepotInterior({ renderer, isMobile = false, onExit, audio: audioIn = null, getAudioLevel = null } = {}) {
+  texScale = isMobile ? 0.5 : 1;
   // [depot-story] 오디오 탭: 매장 소리 이름(cart-grab·item-pick…)을 스토리 반응 감지로도 흘림. 공유 audio 객체는 건드리지 않고 감쌈.
   const audioTaps = [];
   const tap = (n, o) => { for (const f of audioTaps) { try { f(n, o || {}); } catch (e) { console.warn('[depot-story]', e); } } };
@@ -89,7 +103,9 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit, a
   const audioOrTap = audio || { play: (n, o) => { tap(n, o); return false; } };
   const disposables = [];
   const keep = (x) => { disposables.push(x); return x; };
-  const TX = await loadDepotTextures(renderer); for (const t of Object.values(TX)) keep(t);
+  const TX = await loadDepotTextures(renderer);
+  if (isMobile) for (const t of Object.values(TX)) fitTexture(t, 512);
+  for (const t of Object.values(TX)) { t.anisotropy = Math.min(t.anisotropy || 4, isMobile ? 2 : 8); keep(t); }
   registerStockProducts();
   const boxGeoLabeled = (sx, sy, sz, q) => (TX['pk-egg'] ? boxGeoAtlas(sx, sy, sz, q) : boxGeoLabeledCanvas(sx, sy, sz));
   const scene = new THREE.Scene();
@@ -117,7 +133,7 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit, a
   const wallM = keep(new THREE.MeshLambertMaterial({ color: 0x8b9298, side: THREE.BackSide }));
   const shellG = keep(new THREE.BoxGeometry(W, CEIL, D)); shellG.translate(W / 2, CEIL / 2 - 0.05, D / 2); // 바닥면과 z-fighting 방지
   const shellMesh = new THREE.Mesh(shellG, wallM); scene.add(shellMesh);
-  const ceiling = buildDepotCeiling(scene, { renderer, keep, shellMesh });
+  const ceiling = buildDepotCeiling(scene, { renderer, keep, shellMesh, isMobile });
   // 벽 구역 간판 (신선·냉동 등) — 실제 매장 동선 그림
   const zoneSign = (text, sub, x, z, ry, w = 14) => {
     const t = keep(canvasTex(1024, 256, (g) => { g.fillStyle = '#1E5A45'; g.fillRect(0, 0, 1024, 256); g.fillStyle = '#F2C230'; g.fillRect(0, 214, 1024, 42); g.fillStyle = '#F3EADA'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.font = '900 120px "Pretendard","Noto Sans KR",sans-serif'; g.fillText(text, 512, 100); g.fillStyle = '#123B2D'; g.font = '800 30px "Pretendard",sans-serif'; g.fillText(sub, 512, 236); }));

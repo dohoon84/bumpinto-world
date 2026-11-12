@@ -98,6 +98,7 @@ import { prepareJeongjaBp24, mountBasemapBp24, bp24DoorInfo } from './corridor/b
 import { mountBp24Nav } from './corridor/bp24Nav.js'; // [bp24nav]
 import { BUMP24_JEONGJA_AT, bump24AtSpot } from './corridor/bp24Locations.js';
 import { mountDepot, DEPOT_AT, DEPOT_SPAWN } from './depot/index.js'; // [depot] 범창고 정자점 (?depot=0 끔, ?at=depot 입구 앞)
+import { evictGpu } from './evictGpu.js'; // [memory] 매장 입장 때 바깥 월드 GPU 를 잠시 내림
 import { isUiV2, uiV2Wanted } from './ui-v2/flag.js'; // [ui-v2] 게임 UI v2 (기본 켜짐 · ?ui=v1 끔)
 import { controlsCardWanted } from './controlsCard/flag.js'; // [controls-card] 가운데 조작 안내 (기본 켜짐 · ?controlscard=0 이면 예전 접기)
 
@@ -106,7 +107,13 @@ const mobileMode = isMobileMode(); // [mobile] 모바일 모드(핸드폰·?mobi
 const region = getCurrentRegion();
 const shot = params.has('shot');
 const uiV2 = !shot && isUiV2() ? await import('./ui-v2/index.js') : null; // [ui-v2] 시작화면 → 월드 → 역 → 입장 → 로딩 → HUD
-const autoEnter = params.get('enter') === '1';
+// 의도치 않은 새로고침(모바일 메모리 부족으로 탭이 죽을 때)이면 시작/로그인 화면으로 튕기지 않고 입장 카드로 이어간다.
+// 지구본·나가기로 직접 나갈 때는 playAlive(false) 로 지운다.
+const PLAY_ALIVE = 'bw.play.alive';
+function playAlive(on) { try { if (on) sessionStorage.setItem(PLAY_ALIVE, '1'); else sessionStorage.removeItem(PLAY_ALIVE); } catch { /* 저장소 막힘 */ } }
+function wasPlayAlive() { try { return sessionStorage.getItem(PLAY_ALIVE) === '1'; } catch { return false; } }
+const crashResume = wasPlayAlive();
+const autoEnter = params.get('enter') === '1' || crashResume;
 const passportEnter = params.get('passport') === '1';
 const fromRegionId = params.get('from');
 const fromRegion = fromRegionId && fromRegionId !== region.id ? getRegion(fromRegionId) : null;
@@ -298,6 +305,20 @@ renderer.setSize(innerWidth, innerHeight);
 renderer.shadowMap.enabled = !params.has('noshadow') && !(mobileMode && params.get('shadow') !== '1'); // [mobile] 폰은 그림자 끔 (?shadow=1 로 켬)
 renderer.shadowMap.type = THREE.PCFShadowMap;
 document.getElementById('app').appendChild(renderer.domElement);
+// 컨텍스트를 잃어도 페이지를 새로고침(로그인 화면)하지 않고, 복구되면 그 자리에서 다시 그린다.
+let glContextLost = false;
+renderer.domElement.addEventListener('webglcontextlost', (e) => {
+  e.preventDefault();
+  glContextLost = true;
+}, false);
+renderer.domElement.addEventListener('webglcontextrestored', () => {
+  glContextLost = false;
+  try {
+    renderer.resetState();
+    renderer.setPixelRatio(Math.min(devicePixelRatio, mobileMode ? (document.body.classList.contains('depot-inside') ? 1 : 1.5) : 2));
+    renderer.setSize(innerWidth, innerHeight, false);
+  } catch (err) { console.warn('[webgl-restore]', err); }
+}, false);
 const bgm = mountBgm({ params }); // [bgm] 배경음악 + 상단 미니 플레이어 (입장 때 시작, ?bgm=0 이면 null)
 const memHud = mountMemHud({ // [memory] ?mem=1 일 때만 설치 (기본 꺼짐)
   renderer, params, getCorridor: () => corridor,
@@ -700,12 +721,26 @@ const arcadeGame = mountArcade({
 });
 if (arcadeGame) { const withArc = world.isBlocked; world.isBlocked = (x, z, r) => withArc(x, z, r) || arcadeGame.blocks(x, z, r); }
 // [depot] 범창고(BUMP DEPOT) 정자점 — 바깥은 외피만, 안(선반·상품·카트·물리)은 들어갈 때 지연 로드하고 나오면 해제. ?depot=0 끔.
+let worldParkedForDepot = false;
+function parkWorldForDepot(on) {
+  if (on) {
+    if (worldParkedForDepot) return;
+    worldParkedForDepot = true;
+    try { corridor?.unloadAll?.(); } catch (e) { console.warn('[depot-park]', e); }
+    try { evictGpu(scene); } catch (e) { console.warn('[depot-park]', e); }
+    if (mobileMode) { renderer.setPixelRatio(1); renderer.setSize(innerWidth, innerHeight, false); }
+  } else if (worldParkedForDepot) {
+    worldParkedForDepot = false;
+    if (mobileMode) { renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5)); renderer.setSize(innerWidth, innerHeight, false); }
+  }
+}
 const depot = mountDepot({
   renderer, scene, params, overlay, getPlayer: () => player, isMobile: mobileMode, // [depot-ext] overlay = 이름표
   groundY: terrain ? (x, z) => terrain.getGroundHeight(x, z, 0) : null,
   canEnter: () => subwayCanEnter() && !subway?.active && !bump24Game?.active && !arcadeGame?.active,
   getAudioLevel: () => (bgm ? { muted: bgm.player.muted, volume: bgm.player.volume } : null),
   getBgmPlayer: () => bgm?.player || null,
+  onPark: parkWorldForDepot,
   onInterior: (zone, inside) => {
     selfInterior = inside;
     overlay.setView(zone, inside?.camera);
@@ -1262,6 +1297,7 @@ if (globeBtn) globeBtn.hidden = !joined;
 leaveBtn.hidden = !joined;
 const reopenGate = () => {
   if (mobileMode) { // [mobile] 모바일은 지구본 대신 모바일 시작화면으로
+    playAlive(false);
     const u = new URL(location.href);
     for (const k of ['enter', 'passport', 'from', 'at']) u.searchParams.delete(k);
     location.href = u.toString();
@@ -1365,6 +1401,7 @@ function completeWorldJoin(name, look, session) {
   me.phone = sms.session?.phone || '';
   presence.connect(me);
   joined = true;
+  playAlive(true);
   bgm?.enter(); // [bgm] 입장: opening_day 부터 (사용자 입력이 아직 없었으면 첫 클릭/키 입력 때)
   adminBike?.refreshStyle?.();
   inventory?.refresh();
@@ -2444,6 +2481,7 @@ if (globeBtn) {
 }
 leaveBtn.onclick = () => {
   if (!joined) return;
+  playAlive(false);
   setPassportActive(false);
   pauseWorldSession();
   startLobby?.();
@@ -2618,6 +2656,7 @@ function syncViewSize() {
 }
 function frame() {
   lastFrameAt = performance.now();
+  if (glContextLost) { requestAnimationFrame(frame); return; }
   syncViewSize();
   timer.update(); const dt = Math.min(timer.getDelta(), 0.1);
   if ((document.body.classList.contains('in-gate') || document.body.classList.contains('in-lobby')) && !uiV2?.peekFrame()) { // [ui-v2] 입장 카드 뒤 역 장면: 잠깐만 그리고 멈춤
