@@ -70,7 +70,7 @@ async function loadDepotTextures(renderer) {
   return out;
 }
 
-export async function buildDepotInterior({ renderer, isMobile = false, onExit } = {}) {
+export async function buildDepotInterior({ renderer, isMobile = false, onExit, audio = null } = {}) {
   const disposables = [];
   const keep = (x) => { disposables.push(x); return x; };
   const TX = await loadDepotTextures(renderer); for (const t of Object.values(TX)) keep(t);
@@ -348,7 +348,7 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit } 
   hud.querySelector('.dh-btns').addEventListener('click', (e) => { const a = e.target?.dataset?.a; if (a === 'place') place(); else if (a === 'rot') rotate(Math.PI / 2); else if (a === 'tip') { st.tip = !st.tip; } else if (a === 'level') toggleLevel(); else if (a === 'cancel') cancelPlace(); });
   function toast(msg, ms = 1800, bg = '#c62828') { elToast.textContent = msg; elToast.style.background = bg; elToast.style.display = 'block'; st.toastT = ms / 1000; }
   // ---------- 매장 직원 · 장난 감지 (staff.js) ----------
-  const staff = createStaff({ scene, camera, hud, keep, canvasTex, toast, st, onEscort() {
+  const staff = createStaff({ scene, camera, hud, keep, canvasTex, toast, st, onSpeak: (text, lv, pos) => audio?.play('staff-talk', { text, level: lv, pos }), onAchieve: () => audio?.play('achievement'), onEscort() {
     if (st.mode === 'place') cancelPlace();
     if (st.hasCart) { st.hasCart = false; const c = st.cart; c.vx = c.vz = c.w = 0; }
     st.me.x = DOOR.x + 1.5; st.me.z = 3.2; st.me.yaw = Math.PI; st.head.yaw = 0; st.head.pitch = -0.12;
@@ -356,20 +356,15 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit } 
   } });
 
   // ---------- 효과음(아주 짧게, WebAudio) ----------
-  let ac = null;
-  function blip(kind) {
-    try {
-      ac ||= new (window.AudioContext || window.webkitAudioContext)();
-      const t = ac.currentTime, g = ac.createGain(); g.connect(ac.destination);
-      if (kind === 'crack') {
-        const n = ac.createBufferSource(), buf = ac.createBuffer(1, ac.sampleRate * 0.12, ac.sampleRate), d = buf.getChannelData(0);
-        for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / d.length, 3);
-        n.buffer = buf; n.connect(g); g.gain.setValueAtTime(0.35, t); n.start(t);
-      } else {
-        const o = ac.createOscillator(); o.type = kind === 'bump' ? 'square' : 'triangle'; o.frequency.setValueAtTime(kind === 'bump' ? 90 : 520, t); o.connect(g);
-        g.gain.setValueAtTime(0.08, t); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.15); o.start(t); o.stop(t + 0.16);
-      }
-    } catch { /* 소리 없어도 됨 */ }
+  function blip(kind, extra) {
+    if (!audio) return;
+    if (kind === 'crack') audio.play('egg-crack', extra || {});
+    else if (kind === 'bump') audio.play('cart-bump', extra || {});
+    else if (kind === 'pick') audio.play('item-pick', extra || {});
+    else if (kind === 'place') audio.play('item-place', extra || {});
+    else if (kind === 'grab') audio.play('cart-grab', extra || {});
+    else if (kind === 'release') audio.play('cart-release', extra || {});
+    else if (kind === 'fall') audio.play('item-fall', extra || {});
   }
 
   // ---------- 짐 ----------
@@ -456,6 +451,7 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit } 
     const c = st.cart, v = new THREE.Vector3(b.velocity.x, b.velocity.y, b.velocity.z).applyAxisAngle(Y3, c.yaw); v.x += c.vx; v.z += c.vz;
     detachItem(it);
     addFloorItem(it.p, it.mesh, wp, wq, v, it.src); staff.onFloor(true);
+    blip('fall', { kg: it.p.kg, pos: wp });
     toast(`${it.p.name} 바닥에 떨어짐 · 클릭해서 다시 집기`, 2000, '#8a5a00');
   }
   function addFloorItem(p, mesh, wp, wq, vel, src) {
@@ -471,7 +467,7 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit } 
       m.position.addScaledVector(fi.vel, dt); m.quaternion.slerp(fi.tq, Math.min(1, dt * 7));
       if (m.position.y <= fi.half) {
         const vImp = Math.max(0, -fi.vel.y); m.position.y = fi.half; m.quaternion.copy(fi.tq); fi.settled = true;
-        blip('bump');
+        blip('fall', { kg: fi.p.kg, pos: m.position });
         // 계란판 낙하: 알마다 F ≈ (알 1개 질량)·v / 4 ms — 같은 파괴 하중 분포(34±6 N)로 판정
         const eggs = m.userData.eggs;
         if (eggs && vImp > 0.5) { const U = eggs.userData; for (let i = 0; i < 30; i++) U.force[i] = 0.054 * vImp / 0.004 * (0.6 + Math.random() * 0.8); const before = brokenIn(m); for (let k = 0; k < 3; k++) resolveEggs([{ mesh: m }], true); U.force.fill(0); const n = brokenIn(m) - before; if (n) toast(`🥚 바닥에 떨어져 계란 ${n}개 깨짐`, 2400); }
@@ -604,7 +600,7 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit } 
     st.held = { p: h.p, src, mesh, restore };
     st.mode = 'place'; st.level = 'upper'; autoPose(h.p); st.nudge.x = st.nudge.z = 0;
     st.gx = 0; st.gz = -0.05; st.fx = 0; st.fz = -0.05;
-    setGhost(h.p); hud.classList.add('placing'); blip('pick'); hlBox.visible = false;
+    setGhost(h.p); hud.classList.add('placing'); blip('pick', { product: h.p }); hlBox.visible = false;
     return true;
   }
   function cancelPlace() {
@@ -626,7 +622,8 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit } 
       const wp = new THREE.Vector3(), wq = new THREE.Quaternion(); _m.decompose(wp, wq, new THREE.Vector3());
       addFloorItem(p, h.mesh || makeItemMesh(p), wp, wq, new THREE.Vector3(), h.src); staff.onFloor(false);
     }
-    st.held = null; setGhost(null); st.mode = 'walk'; hud.classList.remove('placing'); blip('place');
+    st.held = null; setGhost(null); st.mode = 'walk'; hud.classList.remove('placing'); blip('place', { kg: p.kg, product: p });
+    if (ghostSol.state === 'yellow' || ghostSol.state === 'red') audio?.wobble?.();
     st.placedOnce = true;
     return true;
   }
@@ -715,7 +712,7 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit } 
         }
       }
       if (fxDirty) { for (const im of Object.values(fx)) im.instanceMatrix.needsUpdate = true; eggs.instanceMatrix.needsUpdate = true; }
-      if (newly) { eggs.instanceMatrix.needsUpdate = true; eggs.instanceColor.needsUpdate = true; blip('crack'); staff.onEggsBroken(newly); if (!silent) { st.brokenEggs += newly; toast(`🥚 빠직! 계란 ${newly}개 깨짐 (${st.brokenEggs}/${st.eggTotal})`, 2400); } }
+      if (newly) { eggs.instanceMatrix.needsUpdate = true; eggs.instanceColor.needsUpdate = true; blip('crack', { n: newly, splat: newly >= 4, pos: { x: st.cart.x, y: 0.9, z: st.cart.z } }); staff.onEggsBroken(newly); if (!silent) { st.brokenEggs += newly; toast(`🥚 빠직! 계란 ${newly}개 깨짐 (${st.brokenEggs}/${st.eggTotal})`, 2400); } }
     }
   }
 
@@ -765,7 +762,7 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit } 
       if (hit) {
         nx += hit.nx * hit.pen; nz += hit.nz * hit.pen;
         const vn = c.vx * hit.nx + c.vz * hit.nz;
-        if (vn < 0) { c.vx -= vn * hit.nx * 1.3; c.vz -= vn * hit.nz * 1.3; if (-vn > 0.35) { st.shock = Math.min(1, -vn); blip('bump'); } if (-vn > 1.2) staff.onRam(-vn - 1.2); }
+        if (vn < 0) { c.vx -= vn * hit.nx * 1.3; c.vz -= vn * hit.nz * 1.3; if (-vn > 0.35) { st.shock = Math.min(1, -vn); blip('bump', { pos: { x: c.x, y: 0.4, z: c.z }, gain: Math.min(1.2, -vn) }); } if (-vn > 1.2) staff.onRam(-vn - 1.2); }
       }
     }
     c.x = nx; c.z = nz;
@@ -808,6 +805,7 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit } 
       const outside = Math.abs(P.x) > B.top.x + 0.05 || P.z < B.top.z0 - 0.08 || P.z > B.top.z1 + 0.1;
       if ((outside && P.y < 0.6) || P.y < -0.2) { toFloor(it); continue; }
       it.mesh.position.set(P.x, P.y, P.z); it.mesh.quaternion.set(b.quaternion.x, b.quaternion.y, b.quaternion.z, b.quaternion.w);
+      const av = b.angularVelocity; if (audio && (av.x * av.x + av.y * av.y + av.z * av.z) > 1.6) audio.wobble({ x: st.cart.x, y: P.y, z: st.cart.z });
     }
   }
 
@@ -871,15 +869,15 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit } 
   function regrabCart() {
     st.hasCart = true; const c = st.cart; c.vx = c.vz = c.w = 0;
     st.me.x = c.x + Math.sin(c.yaw) * 0.95; st.me.z = c.z + Math.cos(c.yaw) * 0.95; st.me.yaw = c.yaw; st.head.yaw = 0; st.head.pitch = -0.32;
-    blip('pick'); toast('카트 다시 잡음', 900, '#1E5A45');
+    blip('grab'); toast('카트 다시 잡음', 900, '#1E5A45');
   }
   function grabCart() {
     st.hasCart = true; cart.visible = true; setCorral(13);
     const c = st.cart; c.x = st.me.x; c.z = st.me.z; c.yaw = st.me.yaw + st.head.yaw; st.head.yaw = 0; st.head.pitch = -0.32;
     c.x += -Math.sin(c.yaw) * 0.95; c.z += -Math.cos(c.yaw) * 0.95; c.vx = c.vz = c.w = 0;
-    blip('pick');
+    blip('grab');
   }
-  function releaseCart() { st.hasCart = false; st.head.pitch = -0.1; st.cart.vx = st.cart.vz = st.cart.w = 0; }
+  function releaseCart() { st.hasCart = false; st.head.pitch = -0.1; st.cart.vx = st.cart.vz = st.cart.w = 0; blip('release'); }
 
   // ---------- 입력 ----------
   const dom = renderer.domElement;
@@ -974,6 +972,10 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit } 
     marker.visible = !st.hasCart && cart.visible; if (marker.visible) { arrow.position.y = 1.55 + Math.sin(st.t * 3) * 0.06; arrow.rotation.y += dt * 1.5; }
     if (st.toastT > 0) { st.toastT -= dt; if (st.toastT <= 0) elToast.style.display = 'none'; }
     updateHud();
+    if (audio) {
+      const c = st.cart;
+      audio.tick(dt, { camera, cart: { held: st.hasCart, speed: Math.hypot(c.vx, c.vz), loadKg: loadKg(), x: c.x, z: c.z }, paused: frozen });
+    }
   }
   function render(r) { r.render(scene, camera); }
 
@@ -1022,7 +1024,7 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit } 
     },
     dispose() {
       dom.removeEventListener('pointerdown', onDown); dom.removeEventListener('pointermove', onMove); window.removeEventListener('pointerup', onUp); dom.removeEventListener('wheel', onWheel); dom.removeEventListener('contextmenu', onCtx);
-      staff.dispose(); hud.remove(); css.remove(); try { ac?.close(); } catch { /* */ }
+      staff.dispose(); hud.remove(); css.remove();
       const seen = new Set();
       scene.traverse((o) => {
         if (o.geometry && !seen.has(o.geometry)) { seen.add(o.geometry); o.geometry.dispose(); }

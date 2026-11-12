@@ -20,7 +20,7 @@ const KIND_LINE = {
   block: () => '고객님~ 카트가 통로를 막고 있어요 ^^;',
 };
 
-export function createStaff({ scene, camera, hud, keep, canvasTex, toast, st, onEscort }) {
+export function createStaff({ scene, camera, hud, keep, canvasTex, toast, st, onEscort, onSpeak, onAchieve }) {
   // ---------- 모델 (로우폴리 · 초록 앞치마 · 자체 디자인) ----------
   const root = new THREE.Group();
   const skin = keep(new THREE.MeshLambertMaterial({ color: 0xf0c9a0 })), shirt = keep(new THREE.MeshLambertMaterial({ color: 0xf3eada }));
@@ -61,6 +61,7 @@ export function createStaff({ scene, camera, hud, keep, canvasTex, toast, st, on
     while (achBox.children.length > 3) achBox.firstChild.remove();
     setTimeout(() => d.remove(), 4200);
     S.ach.push(text);
+    onAchieve?.(text);
   }
 
   // ---------- 상태 ----------
@@ -78,6 +79,7 @@ export function createStaff({ scene, camera, hud, keep, canvasTex, toast, st, on
     S.line = text; S.bubbleT = 4.5; bubble.textContent = text; bubble.classList.toggle('lv3', lv >= 3);
     const v = new THREE.Vector3(root.position.x, 2.0, root.position.z).project(camera);
     if (!(v.z < 1 && Math.abs(v.x) < 1 && Math.abs(v.y) < 1)) toast(`🧑‍💼 직원: ${text}`, 2800, lv >= 3 ? '#D9442E' : '#1E5A45'); // 화면 밖이면 토스트로도
+    onSpeak?.(text, lv, root.position);
   }
   // 장난 이벤트: kind, 점수
   function mischief(kind, amt) {
