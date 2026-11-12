@@ -9,7 +9,7 @@ import { createNamsanTower } from './namsanTower.js';
 import { createNamsanInterior } from './namsanInterior.js';
 import { createNamsanCable, namsanCableStations } from './namsanCable.js';
 import { cableGuideEnabled, createNamsanCableGuide } from './namsanCableGuide.js'; // [cableguide]
-import { createNamsanCity } from './namsanCity.js';
+import { createNamsanCity, createNamsanCityAsync } from './namsanCity.js';
 import { createNamsanRoads } from './namsanRoads.js';
 import { createNamsanLibrary } from './namsanLibrary.js';
 export { NT, namsanBaseY } from './namsanCoords.js';
@@ -75,6 +75,49 @@ export function createNamsan({ scene, overlay, terrain, dem, osm, city = null, c
   roads.setDoor?.(tower.door);
   const library = createNamsanLibrary({ parent: root, osm, heightAt: land.heightAt, overlay });
   const downtown = createNamsanCity({ parent: root, data: city, heightAt: land.heightAt, parks: osm?.parks || [], osm });
+  return completeNamsan({ scene, overlay, terrain, osm, city, cable, root, land, tower, interior, car, roads, library, downtown, guideOn });
+}
+
+export async function createNamsanAsync({ scene, overlay, terrain, dem, osm, city = null, cable = true, renderer = null } = {}, yieldFn, slicer) {
+  const y = yieldFn || (typeof requestAnimationFrame === 'function'
+    ? () => new Promise((r) => requestAnimationFrame(() => r()))
+    : () => Promise.resolve());
+  const root = new THREE.Group();
+  root.name = 'namsan';
+  root.visible = false;
+  scene.add(root);
+
+  const land = createNamsanTerrain({ parent: root, dem, osm });
+  if (slicer) slicer.flush('namsan-terrain');
+  await y();
+  const tower = createNamsanTower({ parent: root, osm, baseY: land.baseY, env: null, renderer });
+  if (slicer) slicer.flush('namsan-tower');
+  await y();
+  const interior = createNamsanInterior({ parent: root, osm, baseY: land.baseY, tower });
+  if (slicer) slicer.flush('namsan-interior');
+  await y();
+  const guideOn = !!cable && cableGuideEnabled();
+  const car = cable ? createNamsanCable({ parent: root, osm, heightAt: land.heightAt, overlay, baseY: land.baseY, guide: guideOn }) : null;
+  if (slicer) slicer.flush('namsan-cable');
+  await y();
+  const roads = createNamsanRoads({ parent: root, osm, heightAt: land.heightAt, overlay, city });
+  roads.setDoor?.(tower.door);
+  if (slicer) slicer.flush('namsan-roads');
+  await y();
+  const library = createNamsanLibrary({ parent: root, osm, heightAt: land.heightAt, overlay });
+  if (slicer) slicer.flush('namsan-library');
+  await y();
+  const downtown = slicer
+    ? await createNamsanCityAsync({ parent: root, data: city, heightAt: land.heightAt, parks: osm?.parks || [], osm }, slicer)
+    : createNamsanCity({ parent: root, data: city, heightAt: land.heightAt, parks: osm?.parks || [], osm });
+  if (slicer) slicer.flush('namsan-city');
+  await y();
+  const api = completeNamsan({ scene, overlay, terrain, osm, city, cable, root, land, tower, interior, car, roads, library, downtown, guideOn });
+  root.visible = true;
+  return api;
+}
+
+function completeNamsan({ scene, overlay, terrain, osm, city, root, land, tower, interior, car, roads, library, downtown, guideOn }) {
   let cableGuide = null;
   if (guideOn && car) {
     try {

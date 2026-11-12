@@ -699,13 +699,16 @@ function* hangangTerrainGen({ parent, dem, osm }, sliced = false) {
         const a = j * nx + i, b = a + 1, c = a + nx, d = c + 1;
         idx.push(a, c, b, b, c, d);
       }
+      if (sliced && (j & 7) === 7) yield;
     }
+    if (sliced) yield;
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
     geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
     geo.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
     geo.setIndex(idx);
     geo.computeVertexNormals();
+    if (sliced) yield;
     const mat = new THREE.MeshLambertMaterial({
       vertexColors: true,
       map: grassTex(),
@@ -794,6 +797,7 @@ function* hangangTerrainGen({ parent, dem, osm }, sliced = false) {
       }
     }
   }
+  if (sliced) yield;
 
   // 공원 ShapeGeometry 판은 쓰지 않는다. 오목한 반포한강공원이 눈높이 거대 삼각형(녹색 벽)이 된다.
   // 잔디는 DEM 정점색 + 타일 텍스처로만 그린다.
@@ -898,6 +902,7 @@ function* hangangTerrainGen({ parent, dem, osm }, sliced = false) {
     addMesh(rpos, ridx, riserMat, 'hangang-revetment-risers', false);
     addMesh(npos, nidx, riserMat, 'hangang-revetment-noses', false);
     addMesh(epos, eidx, riserMat, 'hangang-revetment-ends', false);
+    if (sliced) yield;
   }
   let revetmentView = null;
   {
@@ -958,12 +963,19 @@ export function createHangangTerrain(opts) {
   return n.value;
 }
 
-export async function createHangangTerrainAsync(opts, yieldFn) {
+export async function createHangangTerrainAsync(opts, yieldFn, slicer) {
   const y = yieldFn || (typeof requestAnimationFrame === 'function'
     ? () => new Promise((r) => requestAnimationFrame(() => r()))
     : () => Promise.resolve());
   const g = hangangTerrainGen(opts, true);
   let n = g.next();
+  if (slicer) {
+    while (!n.done) {
+      await slicer.tick();
+      n = g.next();
+    }
+    return n.value;
+  }
   const now = () => (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
   let last = now();
   while (!n.done) {

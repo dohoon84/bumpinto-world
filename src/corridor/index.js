@@ -43,8 +43,8 @@ import { bp24Mode, createBp24 } from './bp24.js'; import { bp24LocationsFor, cor
 import { hollowSeohyeonArcade } from '../arcade/locations.js'; // [arcade] 서현점 1층 비우기
 import { migeumWaterEnabled, MIGEUM_WATER_FILE, migeumChRoads, mergeMigeumWater, applyMigeumBank } from './migeumWater.js'; // [migeum-water]
 import { cityhallEnabled, CITYHALL_FILE, filterCityHallHidden, createCityHall } from './cityhall.js'; // [cityhall]
-import { namsanEnabled, namsanCableEnabled, NAMSAN_DEM_FILE, NAMSAN_OSM_FILE, NAMSAN_CITY_FILE, createNamsan } from './landmarks/namsan.js'; // [namsan]
-import { landmarkLazyEnabled, LANDMARK_NEAR_M, makeNamsanMeta, makeHangangMeta, wrapLandmark, yieldPaint } from './landmarks/lazyLandmarks.js'; // [namsan] [hangang] 메시 지연 생성
+import { namsanEnabled, namsanCableEnabled, NAMSAN_DEM_FILE, NAMSAN_OSM_FILE, NAMSAN_CITY_FILE, createNamsan, createNamsanAsync } from './landmarks/namsan.js'; // [namsan]
+import { landmarkLazyEnabled, LANDMARK_NEAR_M, LANDMARK_PREFETCH_M, makeNamsanMeta, makeHangangMeta, wrapLandmark, yieldPaint, makeBuildYield, makeSlicer } from './landmarks/lazyLandmarks.js'; // [namsan] [hangang] 메시 지연 생성
 import { createNamsanNpc, namsanNpcEnabled } from './landmarks/namsanNpc.js'; // [namsan-npc]
 import { hangangEnabled, HANGANG_DEM_FILE, HANGANG_OSM_FILE, HAP_DEM_FILE, HAP_OSM_FILE, createHangang, createHangangAsync } from './landmarks/hangang.js'; // [hangang]
 
@@ -460,17 +460,25 @@ const gnTransit = corridorData.gangnamTransit ? mountGangnamTransit(root, corrid
     } else namsanNpc = mkNsNpc();
   }
 
+  let namsanYieldState = null;
+  let hangangYieldState = null;
+
   async function buildNamsan(urgent = false) {
     if (!namsan || namsan.ready) return namsan;
-    if (namsanBuilding) return namsanBuilding;
+    if (namsanBuilding) {
+      if (urgent && namsanYieldState) namsanYieldState.idle = false;
+      return namsanBuilding;
+    }
     namsanBuilding = (async () => {
-      if (!urgent) await yieldPaint();
+      const y = makeBuildYield({ idle: !urgent });
+      namsanYieldState = y.state;
+      const slicer = makeSlicer(y, { name: 'namsan' });
       const t0 = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
-      namsan._bind(createNamsan(namsanOpts()));
+      namsan._bind(await createNamsanAsync(namsanOpts(), y, slicer));
       namsanPending = false;
       attachNamsanNpc();
       const ms = ((typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now()) - t0;
-      console.info(`[namsan] lazy-built in ${Math.round(ms)}ms`);
+      console.info(`[namsan] lazy-built in ${Math.round(ms)}ms jsMax=${slicer.maxJs().toFixed(1)}`);
       return namsan;
     })();
     return namsanBuilding;
@@ -478,35 +486,41 @@ const gnTransit = corridorData.gangnamTransit ? mountGangnamTransit(root, corrid
 
   async function buildHangang(urgent = false) {
     if (!hangang || hangang.ready) return hangang;
-    if (hangangBuilding) return hangangBuilding;
+    if (hangangBuilding) {
+      if (urgent && hangangYieldState) hangangYieldState.idle = false;
+      return hangangBuilding;
+    }
     hangangBuilding = (async () => {
-      if (!urgent) await yieldPaint();
+      const y = makeBuildYield({ idle: !urgent });
+      hangangYieldState = y.state;
+      const slicer = makeSlicer(y, { name: 'hangang' });
       const t0 = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
-      hangang._bind(await createHangangAsync(hangangOpts(), yieldPaint));
+      hangang._bind(await createHangangAsync(hangangOpts(), y, slicer));
       applyHangangClip(hangang);
       hangangPending = false;
       const ms = ((typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now()) - t0;
-      console.info(`[hangang] lazy-built in ${Math.round(ms)}ms`);
+      console.info(`[hangang] lazy-built in ${Math.round(ms)}ms jsMax=${slicer.maxJs().toFixed(1)}`);
       return hangang;
     })();
     return hangangBuilding;
   }
 
-  function landmarkNeeded(stub, x, z, lookX, lookZ) {
+  function landmarkNeeded(stub, x, z, lookX, lookZ, radius = LANDMARK_NEAR_M) {
     if (!stub || stub.ready) return false;
     const boxes = stub.boxes || (stub.bounds ? [stub.bounds] : []);
     if (!boxes.length) return false;
-    if (distToBoxes(x, z, boxes) <= LANDMARK_NEAR_M) return true;
-    if (lookX != null && Number.isFinite(lookX) && distToBoxes(lookX, lookZ, boxes) <= LANDMARK_NEAR_M) return true;
+    if (distToBoxes(x, z, boxes) <= radius) return true;
+    if (lookX != null && Number.isFinite(lookX) && distToBoxes(lookX, lookZ, boxes) <= radius) return true;
     return false;
   }
 
   async function ensureLandmarks(x, z, opts = {}) {
     if (!Number.isFinite(x) || !Number.isFinite(z)) return;
     const urgent = !!opts.urgent;
+    const radius = urgent ? LANDMARK_NEAR_M : LANDMARK_PREFETCH_M;
     const jobs = [];
-    if (namsanPending && landmarkNeeded(namsan, x, z, opts.lookX, opts.lookZ)) jobs.push(buildNamsan(urgent));
-    if (hangangPending && landmarkNeeded(hangang, x, z, opts.lookX, opts.lookZ)) jobs.push(buildHangang(urgent));
+    if (namsanPending && landmarkNeeded(namsan, x, z, opts.lookX, opts.lookZ, radius)) jobs.push(buildNamsan(urgent));
+    if (hangangPending && landmarkNeeded(hangang, x, z, opts.lookX, opts.lookZ, radius)) jobs.push(buildHangang(urgent));
     if (jobs.length) await Promise.all(jobs);
   }
 

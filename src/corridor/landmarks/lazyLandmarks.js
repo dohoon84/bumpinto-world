@@ -11,8 +11,12 @@ export function landmarkLazyEnabled(search = typeof location !== 'undefined' ? l
   return s.get('lazylandmark') !== '0';
 }
 
-/** 안개 far(1800m). 남산 타워~한강 남단이 약 1.9km라 더 넓히면 둘을 같이 짓는다. */
+/** 안개 far(1800m). 텔레포트·?at= 는 이 안에 들어올 때만 기다린다. */
 export const LANDMARK_NEAR_M = 1800;
+/** 접근 중 미리 짓기(안개보다 훨씬 앞). 자전거 8.6 m/s × 여유 시간. */
+export const LANDMARK_PREFETCH_M = 8000;
+/** 한 조각 JS 예산. 200ms 목표에서 GPU를 빼고도 여유. */
+export const LANDMARK_SLICE_MS = 8;
 
 export function demBounds(dem) {
   if (!dem || !Number.isFinite(+dem.x0) || !Number.isFinite(+dem.nx) || !Number.isFinite(+dem.dx)) return null;
@@ -118,4 +122,74 @@ export function wrapLandmark(meta) {
 export function yieldPaint() {
   if (typeof requestAnimationFrame !== 'function') return Promise.resolve();
   return new Promise((r) => requestAnimationFrame(() => r()));
+}
+
+export function yieldMacrotask() {
+  if (typeof MessageChannel === 'function') {
+    return new Promise((r) => {
+      const ch = new MessageChannel();
+      ch.port1.onmessage = () => r();
+      ch.port2.postMessage(0);
+    });
+  }
+  return new Promise((r) => setTimeout(r, 0));
+}
+
+export function yieldIdle() {
+  if (typeof requestIdleCallback === 'function') {
+    return new Promise((r) => requestIdleCallback(() => r(), { timeout: 32 }));
+  }
+  return yieldPaint();
+}
+
+/** 대부분 매크로태스크로 긴 작업을 끊고, 가끔 한 프레임·idle을 양보해 플레이어가 움직이게 한다. */
+export function makeBuildYield({ idle = false } = {}) {
+  const state = { idle: !!idle };
+  let n = 0;
+  async function buildYield() {
+    n += 1;
+    const useIdle = !!state.idle;
+    const paintEvery = useIdle ? 6 : 10;
+    if (n % paintEvery === 0) {
+      if (useIdle) await yieldIdle();
+      else await yieldPaint();
+      return;
+    }
+    await yieldMacrotask();
+  }
+  buildYield.state = state;
+  return buildYield;
+}
+
+export function makeSlicer(yieldFn, { budgetMs = LANDMARK_SLICE_MS, name = '' } = {}) {
+  const now = () => (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+  let last = now();
+  const slices = [];
+  const publish = (row) => {
+    slices.push(row);
+    if (typeof window !== 'undefined') {
+      const boot = (window.__boot ||= {});
+      (boot.lazySlices ||= []).push(row);
+    }
+  };
+  return {
+    slices,
+    async tick() {
+      if (!yieldFn) return;
+      const t = now();
+      if (t - last >= budgetMs) {
+        const jsMs = +(t - last).toFixed(2);
+        const y0 = now();
+        await yieldFn();
+        publish({ name, jsMs, yieldMs: +(now() - y0).toFixed(2) });
+        last = now();
+      }
+    },
+    flush(label) {
+      const t = now();
+      if (t - last > 1) publish({ name: label || name, jsMs: +(t - last).toFixed(2) });
+      last = now();
+    },
+    maxJs() { return slices.reduce((m, s) => Math.max(m, s.jsMs || 0), 0); },
+  };
 }

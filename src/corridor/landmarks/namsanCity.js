@@ -3,7 +3,7 @@
 //   간선도로는 노면 + 가로등 글로우 + 차량 궤적, 그 밖은 지평선 스카이라인 링.
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { buildingMeshes, roadGeometries, paint } from '../tileMesh.js';
+import { buildingMeshes, buildingMeshesAsync, roadGeometries, paint } from '../tileMesh.js';
 import { ribbonGeo, fixNormalsUp } from '../../world.js';
 import { NT, namsanBasinY, inNamsanPark } from './namsanCoords.js';
 import { namsanRenderedWay } from './namsanTerrain.js';
@@ -270,7 +270,7 @@ export function cityJunctionApproaches(osm, cityRoads) {
   return kept;
 }
 
-export function createNamsanCity({ parent, data, heightAt, parks = [], osm = null }) {
+function beginNamsanCity({ parent, data, heightAt, parks = [], osm = null } = {}) {
   const g = new THREE.Group();
   g.name = 'namsan-city';
   parent.add(g);
@@ -281,12 +281,9 @@ export function createNamsanCity({ parent, data, heightAt, parks = [], osm = nul
   };
   const buildings = data?.buildings || [];
   const roads = data?.roads || [];
-  if (!buildings.length && !roads.length) return empty;
-
+  if (!buildings.length && !roads.length) return { empty };
   const nightMats = [];
   const track = (mat, dayE = 0, nightE = 1) => { nightMats.push({ mat, dayE, nightE }); return mat; };
-
-  // ----- ground disk so downtown is not floating in void -----
   const disk = new THREE.Mesh(
     new THREE.CircleGeometry(3900, 72),
     new THREE.MeshLambertMaterial({ color: '#3c403a' }),
@@ -295,9 +292,6 @@ export function createNamsanCity({ parent, data, heightAt, parks = [], osm = nul
   disk.position.set(NT.tx, namsanBasinY(2000) - 0.8, NT.tz);
   disk.receiveShadow = true;
   g.add(disk);
-
-  // ----- extruded OSM buildings, batched by quadrant -----
-  // 남산공원(OSM park/wood/forest)과 정상 부근 높은 지형 위의 시가지 압출은 빼 둔다.
   const buckets = [[], [], [], []];
   for (const b of buildings) {
     const o = b.o;
@@ -320,15 +314,42 @@ export function createNamsanCity({ parent, data, heightAt, parks = [], osm = nul
     const qi = (c.x >= NT.tx ? 1 : 0) + (c.z >= NT.tz ? 2 : 0);
     buckets[qi].push(item);
   }
-  for (let i = 0; i < buckets.length; i++) {
-    const list = buckets[i];
-    if (!list.length) continue;
-    for (const m of buildingMeshes(list, 4797 + i * 97)) {
-      m.name = 'namsan-city-b' + i;
-      g.add(m);
-    }
-  }
+  return { g, empty: null, data, heightAt, parks, osm, buildings, roads, nightMats, track, disk, buckets };
+}
 
+function addNamsanCityMeshes(ctx, meshes, i) {
+  for (const m of meshes) {
+    m.name = 'namsan-city-b' + i;
+    ctx.g.add(m);
+  }
+}
+
+export function createNamsanCity(opts = {}) {
+  const ctx = beginNamsanCity(opts);
+  if (ctx.empty) return ctx.empty;
+  for (let i = 0; i < ctx.buckets.length; i++) {
+    const list = ctx.buckets[i];
+    if (!list.length) continue;
+    addNamsanCityMeshes(ctx, buildingMeshes(list, 4797 + i * 97), i);
+  }
+  return dressNamsanCity(ctx);
+}
+
+export async function createNamsanCityAsync(opts = {}, slicer) {
+  const ctx = beginNamsanCity(opts);
+  if (ctx.empty) return ctx.empty;
+  for (let i = 0; i < ctx.buckets.length; i++) {
+    const list = ctx.buckets[i];
+    if (!list.length) continue;
+    addNamsanCityMeshes(ctx, await buildingMeshesAsync(list, 4797 + i * 97, slicer), i);
+    if (slicer) await slicer.tick();
+  }
+  if (slicer) slicer.flush('namsan-city-buildings');
+  return dressNamsanCity(ctx);
+}
+
+function dressNamsanCity(ctx) {
+  const { g, heightAt, osm, roads, nightMats, track, disk } = ctx;
   // ----- roads (follow sampled ground) -----
   // namsanRoads already draws the park / 소월로 / 공원길 asphalt. The city
   // pass uses a lighter #949aa3 plate plus a yellow #f2d36b center line, so

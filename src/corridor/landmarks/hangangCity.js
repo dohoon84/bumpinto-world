@@ -1,7 +1,7 @@
 // [hangang] 반포·서래·용산 가장자리 OSM 건물 압출 + 올림픽대로·강변북로 + 스카이라인.
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { buildingMeshes } from '../tileMesh.js';
+import { buildingMeshes, buildingMeshesAsync } from '../tileMesh.js';
 import { inWater, centroid, projectOnLine, polylineLen, resamplePolyline } from './hangangCoords.js';
 
 function skylineTex() {
@@ -100,14 +100,13 @@ function wallStrip(pts, ys, off, dyA, dyB) {
   return g;
 }
 
-export function createHangangCity({ parent, osm, land, expressXMax = null } = {}) {
+function beginHangangCity({ parent, osm, land, expressXMax = null } = {}) {
   const group = new THREE.Group();
   group.name = 'hangang-city';
   parent.add(group);
   const heightAt = land.heightAt;
   const lv = land.levels;
   const mats = [];
-
   const bld = [];
   for (const b of osm?.buildings || []) {
     if (!b.o || b.o.length < 4) continue;
@@ -120,13 +119,31 @@ export function createHangangCity({ parent, osm, land, expressXMax = null } = {}
     if (wet > b.o.length * 0.3) continue;
     bld.push({ o: b.o, holes: b.holes || [], h: b.h || 10, mh: g, k: b.k || 'yes' });
   }
-  if (bld.length) {
-    for (const m of buildingMeshes(bld, 2711)) {
-      group.add(m);
-      if (m.material) mats.push(m.material);
-    }
-  }
+  return { group, osm, land, expressXMax, heightAt, lv, mats, bld };
+}
 
+function addCityBuildingMeshes(ctx, meshes) {
+  for (const m of meshes) {
+    ctx.group.add(m);
+    if (m.material) ctx.mats.push(m.material);
+  }
+}
+
+export function createHangangCity(opts = {}) {
+  const ctx = beginHangangCity(opts);
+  if (ctx.bld.length) addCityBuildingMeshes(ctx, buildingMeshes(ctx.bld, 2711));
+  return dressHangangCity(ctx);
+}
+
+export async function createHangangCityAsync(opts = {}, slicer) {
+  const ctx = beginHangangCity(opts);
+  if (ctx.bld.length) addCityBuildingMeshes(ctx, await buildingMeshesAsync(ctx.bld, 2711, slicer));
+  if (slicer) await slicer.tick();
+  return dressHangangCity(ctx, slicer);
+}
+
+function dressHangangCity(ctx, slicer) {
+  const { group, osm, land, expressXMax, heightAt, lv, mats, bld } = ctx;
   // 올림픽대로 · 강변북로
   // OSM: 남단 긴 두 가닥(각 폭 19.1 m)은 올림픽대로 양방향 — 지형에 붙인다.
   // 북단 강변북로는 조립된 한강 링 바깥(육지)에 있다. 고가 태그가 있으면 띄우고

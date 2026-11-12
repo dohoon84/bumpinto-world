@@ -135,7 +135,7 @@ function partsOutsideRing(pts, ring) {
   return parts;
 }
 
-export function createHangangPaths({ parent, osm, land }) {
+function* hangangPathsGen({ parent, osm, land }) {
   const group = new THREE.Group();
   group.name = 'hangang-paths';
   parent.add(group);
@@ -204,6 +204,7 @@ export function createHangangPaths({ parent, osm, land }) {
       drew = true;
     }
     if (drew) kept.push(w);
+    yield;
   }
 
   const colors = { bike: '#d44b2c', walk: '#c9c2b4', steps: '#9a9084', upper: '#5a5d61', trunk: '#54575c' };
@@ -342,3 +343,21 @@ export function createHangangPaths({ parent, osm, land }) {
 
   return { group, floorY, isTunnel, setNight, kept };
 }
+
+export function createHangangPaths(opts) {
+  const g = hangangPathsGen(opts);
+  let n = g.next();
+  while (!n.done) n = g.next();
+  return n.value;
+}
+
+export async function createHangangPathsAsync(opts, slicer) {
+  const g = hangangPathsGen(opts);
+  let n = g.next();
+  while (!n.done) {
+    if (slicer) await slicer.tick();
+    n = g.next();
+  }
+  return n.value;
+}
+
