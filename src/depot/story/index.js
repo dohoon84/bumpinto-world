@@ -690,7 +690,10 @@ export function createStory(ctx) {
   let colBottom = 0;
   function layout() {
     const panel = document.querySelector('#depot-hud .dh-panel'); if (!panel) return;
-    const pb = panel.getBoundingClientRect().bottom;
+    let pb = panel.getBoundingClientRect().bottom;
+    if (isMobile) { // 폰: 왼쪽 위 둘째 줄(가방·구글 연동 칩)이 보이면 그 아래로 — 카트를 잡아 가방이 숨어도 연동 칩이 남음
+      for (const e of document.querySelectorAll('#m-hud .m-row2-l > *')) { const r = e.getBoundingClientRect(); if (r.height > 2 && !e.hidden && getComputedStyle(e).display !== 'none' && getComputedStyle(e).visibility !== 'hidden') pb = Math.max(pb, r.bottom); }
+    }
     const gear = vn.root.querySelector('.gear'), chip = vn.root.querySelector('.chip');
     vn.setOffsets({ gearTop: Math.round(pb + 8), chipTop: Math.round(pb + 8 + 40) });
     const chipOn = chip.style.display === 'block';
