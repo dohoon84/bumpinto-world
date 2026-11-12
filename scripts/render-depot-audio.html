@@ -1,0 +1,28 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>depot audio preview render</title>
+<pre id="log">rendering…</pre>
+<script type="module">
+const log = (s) => { document.getElementById('log').textContent += '\n' + s; console.log(s); };
+try {
+  const { renderDepotAudioPreviews, encodeWav } = await import('/src/depot/audioPatch.js');
+  const Offline = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+  const list = await renderDepotAudioPreviews(Offline, 44100);
+  log('rendered ' + list.length);
+  for (const item of list) {
+    const wav = item.wav || encodeWav(item.buffer);
+    const r = await fetch('/__save/' + encodeURIComponent(item.name) + '.wav', {
+      method: 'POST', headers: { 'content-type': 'application/octet-stream' }, body: wav,
+    });
+    const j = await r.json();
+    log('wrote ' + item.name + '.wav ' + j.bytes + 'b');
+  }
+  await fetch('/__done', { method: 'POST' });
+  log('done');
+  document.title = 'depot-audio-render-ok';
+} catch (e) {
+  log('FAIL ' + (e && e.stack || e));
+  document.title = 'depot-audio-render-fail';
+  try { await fetch('/__done?fail=1', { method: 'POST', body: String(e && e.stack || e) }); } catch {}
+}
+</script>

@@ -7,25 +7,34 @@ export { depotEnabled, DEPOT_AT, DEPOT_SPAWN, DEPOT_SITE } from './flag.js';
 
 const FADE = 0.35, DOOR_R = 4.2, PREFETCH_R = 120;
 
-export function mountDepot({ renderer, scene, getPlayer, groundY, canEnter = () => true, onInterior, isMobile = false, params } = {}) {
+export function mountDepot({ renderer, scene, getPlayer, groundY, canEnter = () => true, onInterior, isMobile = false, params, getAudioLevel, getBgmPlayer } = {}) {
   const search = params ? `?${params}` : location.search;
   if (!depotEnabled(search)) return null;
   const ext = buildDepotExterior(scene, { groundY: groundY || (() => 0) });
   let mod = null, modP = null, interior = null, active = false, busy = false, near = false;
   let fade = { t: 0, phase: '', leaving: false };
+  let audio = null, audioMod = null, audioP = null;
   const loadMod = () => (modP ||= import('./interior.js').then((m) => (mod = m)).catch((e) => { modP = null; console.warn('[depot]', e); return null; }));
+  const loadAudio = () => (audioP ||= import('./audio.js').then((m) => (audioMod = m)).catch((e) => { audioP = null; console.warn('[depot-audio]', e); return null; }));
 
   const root = document.createElement('div'); root.id = 'depot-ui';
-  root.innerHTML = '<div class="dp-hint" hidden></div><div class="dp-fade"><b>범창고 BUMP DEPOT</b><span></span></div>';
+  root.innerHTML = '<div class="dp-hint" hidden></div><div class="dp-fade"><b>범창고 BUMP DEPOT</b><span></span></div><div class="dp-pa" hidden><i>딩동댕</i><span></span></div>';
   const st = document.createElement('style');
   st.textContent = `#depot-ui{position:fixed;inset:0;pointer-events:none;z-index:58;font-family:'Pretendard','Noto Sans KR',system-ui,sans-serif}
 #depot-ui .dp-hint{position:absolute;left:50%;bottom:120px;transform:translateX(-50%);background:rgba(20,40,90,.88);color:#fff;padding:10px 18px;border-radius:999px;font-weight:800;font-size:15px;pointer-events:auto;cursor:pointer;box-shadow:0 6px 20px rgba(0,0,0,.25)}
 #depot-ui .dp-hint kbd{background:#f2b705;color:#13203d;border-radius:6px;padding:1px 7px;margin-right:8px;font-weight:900}
 #depot-ui .dp-fade{position:absolute;inset:0;background:#0d1a33;opacity:0;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#fff;gap:8px;transition:none}
 body.depot-inside #ve-hud{display:none !important} /* 매장 안: 왼쪽 위 할 일 패널 접기(겹침 방지) */
-#depot-ui .dp-fade b{font-size:30px;letter-spacing:1px}#depot-ui .dp-fade span{font-size:15px;color:#f2b705;font-weight:700}`;
+#depot-ui .dp-fade b{font-size:30px;letter-spacing:1px}#depot-ui .dp-fade span{font-size:15px;color:#f2b705;font-weight:700}
+#depot-ui .dp-pa{position:absolute;left:16px;top:42%;transform:translateY(-50%);max-width:280px;background:rgba(18,59,45,.9);color:#fff;border-left:4px solid #F2C230;border-radius:0 12px 12px 0;padding:10px 14px;font-size:13.5px;font-weight:700;line-height:1.45;box-shadow:0 8px 20px rgba(0,0,0,.25);pointer-events:none}
+#depot-ui .dp-pa i{display:block;color:#F2C230;font-style:normal;font-size:11px;letter-spacing:.08em;margin-bottom:2px;font-weight:900}`;
   document.head.appendChild(st); document.body.appendChild(root);
-  const hintEl = root.querySelector('.dp-hint'), fadeEl = root.querySelector('.dp-fade'), fadeSub = fadeEl.querySelector('span');
+  const hintEl = root.querySelector('.dp-hint'), fadeEl = root.querySelector('.dp-fade'), fadeSub = fadeEl.querySelector('span'), paEl = root.querySelector('.dp-pa');
+  let paHide = 0;
+  function showPa(text) {
+    paEl.hidden = false; paEl.querySelector('span').textContent = text;
+    clearTimeout(paHide); paHide = setTimeout(() => { paEl.hidden = true; }, 5500);
+  }
   hintEl.onclick = () => { if (near && !active) enter(); };
   const setHint = (on) => { if (on === !hintEl.hidden) return; hintEl.hidden = !on; if (on) hintEl.innerHTML = `<kbd>${isMobile ? '탭' : 'E'}</kbd>범창고 들어가기 · 카트 끌고 장보기`; };
 
@@ -33,6 +42,16 @@ body.depot-inside #ve-hud{display:none !important} /* 매장 안: 왼쪽 위 할
     if (active || busy || !canEnter()) return false;
     busy = true; fade = { t: 0, phase: 'out', leaving: false }; fadeSub.textContent = '대용량 창고형 할인점 · 카트는 입구 카트 보관소에서';
     setHint(false); loadMod();
+    // [depot-audio] 페이드와 함께 매장 BGM 시작(월드 OST 는 hold). 모듈은 입장 때 지연 로드.
+    loadAudio().then((m) => {
+      if (!m) return;
+      audio ||= m.createDepotAudio({
+        getLevel: () => getAudioLevel?.() || { muted: false, volume: 0.55 },
+        getBgmPlayer,
+        onAnnounce: showPa,
+      });
+      audio.enter();
+    });
     return true;
   }
   function leave() {
@@ -42,13 +61,15 @@ body.depot-inside #ve-hud{display:none !important} /* 매장 안: 왼쪽 위 할
   async function build() {
     const m = await loadMod();
     if (!m) throw new Error('depot interior load failed');
-    interior = await m.buildDepotInterior({ renderer, isMobile, onExit: () => leave() });
+    interior = await m.buildDepotInterior({ renderer, isMobile, onExit: () => leave(), audio });
     active = true; document.body.classList.add('depot-inside');
     onInterior?.('depot', interior);
   }
   function finishLeave() {
     onInterior?.('', null);
     interior?.dispose(); interior = null; active = false; document.body.classList.remove('depot-inside');
+    try { audio?.leave(); } catch (e) { console.warn('[depot-audio]', e); }
+    paEl.hidden = true;
     const p = getPlayer?.()?.position; if (p) { p.x = DEPOT_SPAWN.x; p.z = DEPOT_SPAWN.z; }
   }
   let building = false;
@@ -92,7 +113,7 @@ body.depot-inside #ve-hud{display:none !important} /* 매장 안: 왼쪽 위 할
     view: () => (active && interior ? { scene: interior.scene, camera: interior.camera } : null),
     blocks: (x, z, r) => !active && ext.blocks(x, z, r),
     exterior: ext,
-    dispose() { interior?.dispose(); interior = null; ext.dispose(); root.remove(); st.remove(); },
-    _dbg: { get mod() { return mod; }, loadMod, get interior() { return interior; } },
+    dispose() { try { audio?.dispose(); } catch { /* */ } audio = null; interior?.dispose(); interior = null; ext.dispose(); root.remove(); st.remove(); },
+    _dbg: { get mod() { return mod; }, loadMod, get interior() { return interior; }, get audio() { return audio; }, loadAudio },
   };
 }

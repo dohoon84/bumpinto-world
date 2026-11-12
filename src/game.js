@@ -704,6 +704,8 @@ const depot = mountDepot({
   renderer, scene, params, getPlayer: () => player, isMobile: mobileMode,
   groundY: terrain ? (x, z) => terrain.getGroundHeight(x, z, 0) : null,
   canEnter: () => subwayCanEnter() && !subway?.active && !bump24Game?.active && !arcadeGame?.active,
+  getAudioLevel: () => (bgm ? { muted: bgm.player.muted, volume: bgm.player.volume } : null),
+  getBgmPlayer: () => bgm?.player || null,
   onInterior: (zone, inside) => {
     selfInterior = inside;
     overlay.setView(zone, inside?.camera);

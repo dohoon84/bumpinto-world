@@ -238,23 +238,33 @@ export function createBgmPlayer({ base = './', storage = null, onChange = () => 
     viz.synthetic = true;
     return synthSpectrum(t, viz.out);
   }
+  // [depot] 매장 등 외부 음원이 HUD 제목·막대·진행을 잠시 빌려 쓴다. 월드 덱은 hold(true) 로 따로 멈춤.
+  let external = null;
   const api = {
     get ext() { return ext; },
     get started() { return s.started; },
-    get playing() { return s.playing; },
+    get playing() { return external ? (!s.userPaused && !s.hidden && external.playing !== false) : s.playing; },
     get paused() { return s.userPaused; },
     get waiting() { return s.waitGesture; },
     get muted() { return s.muted; },
     get volume() { return s.volume; },
-    get track() { const d = s.cur; return d && d.idx >= 0 ? { id: order[d.idx].id, title: titleOf(order[d.idx].id), index: d.idx } : { id: order[0].id, title: titleOf(order[0].id), index: 0 }; },
+    get track() {
+      if (external) return { id: external.id, title: external.title || titleOf(external.id), index: -1 };
+      const d = s.cur; return d && d.idx >= 0 ? { id: order[d.idx].id, title: titleOf(order[d.idx].id), index: d.idx } : { id: order[0].id, title: titleOf(order[0].id), index: 0 };
+    },
     /** 지금 곡 진행률 0..1 (표시 전용) */
     progress() {
+      if (external?.progress) { try { return Math.min(1, Math.max(0, Number(external.progress()) || 0)); } catch { return 0; } }
       const d = s.cur; if (!d || d.idx < 0) return 0;
       const skip = order[d.idx].skip || 0, dur = d.el.duration;
       return Number.isFinite(dur) && dur > skip ? Math.min(1, Math.max(0, (d.el.currentTime - skip) / (dur - skip))) : 0;
     },
     /** 주파수 크기(0..255) — 재생 중이 아니면 null */
     spectrum() {
+      if (external) {
+        if (s.userPaused) return null;
+        try { return external.spectrum?.() || null; } catch { return null; }
+      }
       if (!s.an || !s.playing) return null;
       s.an.getByteFrequencyData(levels);
       return vizFallback(levels);
@@ -277,6 +287,9 @@ export function createBgmPlayer({ base = './', storage = null, onChange = () => 
       applyVol(); emit('state');
     },
     setDuck(on) { on = !!on; if (on === s.duck) return; s.duck = on; applyVol(0.25); },
+    /** 외부 음원(범창고 매장 BGM 등). info={id,title,playing?,progress?,spectrum?} / null 이면 해제. */
+    setExternal(info) { external = info || null; emit('track'); },
+    get external() { return !!external; },
     /** 외부(오락실 게임 등)가 월드 OST 를 완전히 멈춤. userPaused·muted 는 건드리지 않음. */
     hold(on) {
       on = !!on;
