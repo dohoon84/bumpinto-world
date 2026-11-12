@@ -2,6 +2,9 @@
 import * as THREE from 'three';
 import { composeTitle, earnDuration, langPack, sfxCues, sortQuads } from './eval.js';
 import { prefersReducedMotion, useHalfAtlas } from './flag.js';
+import atlasJson from './assets/atlas.json';
+import atlasPng from './assets/atlas.png';
+import atlasHalfPng from './assets/atlas@0.5x.png';
 
 const MAX_QUADS = 256;
 const EFFECT_N = 6;
@@ -10,14 +13,20 @@ const GAP_PT = 4;
 const FADE_MS = 200;
 const SWAP_MS = 150;
 
-export function pickAtlasUrl(atlasJson, half) {
-  return half ? new URL('./assets/atlas@0.5x.png', import.meta.url) : new URL('./assets/atlas.png', import.meta.url);
+export function pickAtlasUrl(half) {
+  return half ? atlasHalfPng : atlasPng;
+}
+
+function loadTexture(url) {
+  return new Promise((resolve, reject) => {
+    const loader = new THREE.TextureLoader();
+    loader.load(url, resolve, undefined, (err) => reject(err || new Error('title atlas load failed')));
+  });
 }
 
 export async function loadAtlas(half = false) {
-  const json = (await import('./assets/atlas.json')).default;
-  const url = pickAtlasUrl(json, half);
-  const tex = await new THREE.TextureLoader().loadAsync(url.href);
+  const url = pickAtlasUrl(half);
+  const tex = await loadTexture(url);
   tex.colorSpace = THREE.SRGBColorSpace;
   tex.flipY = false; // atlas.uv 원점이 왼쪽 위
   tex.premultiplyAlpha = false;
@@ -27,11 +36,11 @@ export async function loadAtlas(half = false) {
   tex.wrapS = THREE.ClampToEdgeWrapping;
   tex.wrapT = THREE.ClampToEdgeWrapping;
   tex.needsUpdate = true;
-  return { json, tex, half };
+  return { json: atlasJson, tex, half };
 }
 
 function makeGeometry() {
-  const pos = new Float32Array(MAX_QUADS * 4 * 2);
+  const pos = new Float32Array(MAX_QUADS * 4 * 3);
   const uv = new Float32Array(MAX_QUADS * 4 * 2);
   const col = new Float32Array(MAX_QUADS * 4 * 4);
   const idx = new Uint16Array(MAX_QUADS * 6);
@@ -41,7 +50,7 @@ function makeGeometry() {
     idx[i * 6 + 3] = v + 1; idx[i * 6 + 4] = v + 3; idx[i * 6 + 5] = v + 2;
   }
   const geo = new THREE.BufferGeometry();
-  geo.setAttribute('position', new THREE.BufferAttribute(pos, 2));
+  geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
   geo.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
   geo.setAttribute('color', new THREE.BufferAttribute(col, 4));
   geo.setIndex(new THREE.BufferAttribute(idx, 1));
@@ -62,16 +71,16 @@ function writeQuad(pos, uv, col, qi, ox, oy, quad, spr) {
   const y0 = oy + (0 - py) * sy + (quad.pos?.[1] || 0);
   const x1 = ox + (w - px) * sx + (quad.pos?.[0] || 0);
   const y1 = oy + (h - py) * sy + (quad.pos?.[1] || 0);
-  const vo = qi * 8, co = qi * 16;
-  // y down (ortho top=0, bottom=h). corners: TL, TR, BL, BR
-  pos[vo + 0] = x0; pos[vo + 1] = y0;
-  pos[vo + 2] = x1; pos[vo + 3] = y0;
-  pos[vo + 4] = x0; pos[vo + 5] = y1;
-  pos[vo + 6] = x1; pos[vo + 7] = y1;
-  uv[vo + 0] = u0; uv[vo + 1] = v0;
-  uv[vo + 2] = u1; uv[vo + 3] = v0;
-  uv[vo + 4] = u0; uv[vo + 5] = v1;
-  uv[vo + 6] = u1; uv[vo + 7] = v1;
+  const vo = qi * 12, uvo = qi * 8, co = qi * 16;
+  // y down (ortho top=0, bottom=h). corners: TL, TR, BL, BR. z=0 so bounding sphere is finite
+  pos[vo + 0] = x0; pos[vo + 1] = y0; pos[vo + 2] = 0;
+  pos[vo + 3] = x1; pos[vo + 4] = y0; pos[vo + 5] = 0;
+  pos[vo + 6] = x0; pos[vo + 7] = y1; pos[vo + 8] = 0;
+  pos[vo + 9] = x1; pos[vo + 10] = y1; pos[vo + 11] = 0;
+  uv[uvo + 0] = u0; uv[uvo + 1] = v0;
+  uv[uvo + 2] = u1; uv[uvo + 3] = v0;
+  uv[uvo + 4] = u0; uv[uvo + 5] = v1;
+  uv[uvo + 6] = u1; uv[uvo + 7] = v1;
   for (let i = 0; i < 4; i++) { col[co + i * 4] = 1; col[co + i * 4 + 1] = 1; col[co + i * 4 + 2] = 1; col[co + i * 4 + 3] = a; }
   return true;
 }
@@ -83,11 +92,40 @@ export function createTitleLayer({ renderer, camera, getCamera = null, getLang =
   const { geo, pos, uv, col } = makeGeometry();
   const mat = new THREE.MeshBasicMaterial({
     transparent: true, vertexColors: true, depthTest: false, depthWrite: false,
-    premultipliedAlpha: false, toneMapped: false,
+    premultipliedAlpha: false, toneMapped: false, side: THREE.DoubleSide,
   });
+  // 본 렌더러는 logarithmicDepthBuffer 를 켠다. 같은 렌더러로 정사영 오버레이를 그리면
+  // 로그 깊이 셰이더가 조각을 버려 칭호가 안 보이므로, 이 머티리얼만 로그 깊이를 끈다.
+  mat.onBeforeCompile = (shader) => {
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <logdepthbuf_pars_vertex>', '')
+      .replace('#include <logdepthbuf_vertex>', '');
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <logdepthbuf_pars_fragment>', '')
+      .replace('#include <logdepthbuf_fragment>', '');
+  };
+  mat.customProgramCacheKey = () => 'title-nologdepth';
   const mesh = new THREE.Mesh(geo, mat);
   mesh.frustumCulled = false;
+  geo.boundingSphere = new THREE.Sphere(new THREE.Vector3(), 1e6);
   scene.add(mesh);
+
+  // 본 월드 렌더러는 logarithmicDepthBuffer 를 써서 같은 컨텍스트에 정사영 오버레이를 합성하면
+  // 칭호가 프레임버퍼에 안 남는다. 라벨(#overlay) 아래에 투명 캔버스+전용 렌더러를 둔다.
+  const canvas = document.createElement('canvas');
+  canvas.id = 'title-layer';
+  canvas.style.cssText = 'position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none;';
+  const host = (typeof document !== 'undefined' && (document.getElementById('overlay') || document.getElementById('app') || document.body));
+  if (host) host.insertBefore(canvas, host.firstChild);
+  const dpr0 = (typeof devicePixelRatio === 'number' && devicePixelRatio > 0) ? Math.min(devicePixelRatio, 2) : 1;
+  const overlayR = new THREE.WebGLRenderer({
+    canvas, alpha: true, antialias: false, logarithmicDepthBuffer: false,
+    premultipliedAlpha: false, depth: false, stencil: false,
+  });
+  overlayR.setClearColor(0x000000, 0);
+  overlayR.setPixelRatio(dpr0);
+  overlayR.autoClear = true;
+  overlayR.outputColorSpace = THREE.SRGBColorSpace;
   const wearers = new Map(); // key -> state
   let atlas = null;
   let lastDraw = 0, lastTris = 0, lastQuads = 0;
@@ -128,7 +166,21 @@ export function createTitleLayer({ renderer, camera, getCamera = null, getLang =
     const red = reduced();
     w.reducedEarn = red;
     w.duration = earnDuration(pack, red);
+    w.holdEarn = false;
+    w.frozenT = null;
     if (sfx) w.sfxHandle = sfx.schedule(sfxCues(pack, red), { other: !w.local, reduced: red, onStop() { w.sfxHandle = null; } });
+  }
+
+  // 스크린샷·디버그용. tMs 시점으로 고정하고 시간 점프 가드를 끈다.
+  function seekEarn(w, titleId, tMs, { mute = true } = {}) {
+    playEarn(w, titleId);
+    if (mute && w.sfxHandle) { try { w.sfxHandle.stop(); } catch { /* */ } w.sfxHandle = null; }
+    const t = Math.max(0, Number(tMs) || 0);
+    const now = performance.now();
+    w.t0 = now - t;
+    w.lastClock = now;
+    w.holdEarn = true;
+    w.frozenT = t;
   }
 
   function setTitle(key, { titleId, tag, getPos, local = false, earn = false } = {}) {
@@ -188,8 +240,14 @@ export function createTitleLayer({ renderer, camera, getCamera = null, getLang =
     if (w.state === 'earn') {
       const dtJump = now - (w.lastClock || now);
       w.lastClock = now;
-      if (dtJump > 500) { w.state = 'rest'; if (w.sfxHandle) try { w.sfxHandle.stop(); } catch { /* */ } w.sfxHandle = null; return; }
-      if (now - w.t0 >= (w.duration || 0)) {
+      // 백그라운드 탭에서만 연출을 건너뛴다. 스크린샷 히치(>500ms)에 끊기지 않게.
+      if (!w.holdEarn && dtJump > 500 && typeof document !== 'undefined' && document.hidden) {
+        w.state = 'rest';
+        if (w.sfxHandle) try { w.sfxHandle.stop(); } catch { /* */ }
+        w.sfxHandle = null;
+        return;
+      }
+      if (!w.holdEarn && now - w.t0 >= (w.duration || 0)) {
         w.state = 'rest';
         if (w.sfxHandle) { /* let sfx finish */ }
       }
@@ -225,6 +283,7 @@ export function createTitleLayer({ renderer, camera, getCamera = null, getLang =
       cam.left = 0; cam.right = wPx; cam.top = 0; cam.bottom = hPx;
       cam.updateProjectionMatrix();
       lastW = wPx; lastH = hPx;
+      try { overlayR.setSize(wPx, hPx, false); } catch { /* */ }
     }
     const now = performance.now();
     const red = reduced();
@@ -253,7 +312,7 @@ export function createTitleLayer({ renderer, camera, getCamera = null, getLang =
       if (mode === 'rest' && red) mode = 'rest';
       const pack = langPack(atlas.json, w.titleId, getLang());
       if (!pack) continue;
-      const t = (mode === 'earn' || mode === 'reduced') ? (now - w.t0) : now;
+      const t = (mode === 'earn' || mode === 'reduced') ? (w.frozenT != null ? w.frozenT : (now - w.t0)) : now;
       const quads = sortQuads(composeTitle(pack, mode === 'reduced' ? 'reduced' : mode, t, {
         phase: w.phase,
         reducedRest: red && mode === 'rest',
@@ -279,20 +338,21 @@ export function createTitleLayer({ renderer, camera, getCamera = null, getLang =
     lastQuads = qi;
     lastTris = qi * 2;
     mesh.visible = qi > 0;
-    if (qi > 0) {
-      const prev = r.autoClear;
-      r.autoClear = false;
-      r.render(scene, cam);
-      r.autoClear = prev;
-      lastDraw = 1;
-    } else {
-      lastDraw = 0;
+    mesh.visible = qi > 0;
+    if (overlayR) {
+      if (qi === 0) overlayR.clear();
+      else overlayR.render(scene, cam);
     }
+    lastDraw = qi > 0 ? 1 : 0;
     return { quads: lastQuads, draws: lastDraw, tris: lastTris };
   }
 
   return {
     setAtlas, ensure, setTitle, playEarn: (key, id) => { const w = wearers.get(key); if (w) playEarn(w, id || w.titleId); },
+    seekEarn: (key, id, tMs, opts) => {
+      const w = wearers.get(key) || ensure(key);
+      seekEarn(w, id || w.titleId, tMs, opts);
+    },
     remove, render,
     get stats() { return { quads: lastQuads, draws: lastDraw, tris: lastTris, wearers: wearers.size }; },
     wearers,

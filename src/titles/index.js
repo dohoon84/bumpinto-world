@@ -21,6 +21,7 @@ export function mountTitles({
   const api = createTitleClient();
   let myCurrent = null;
   let ready = false;
+  let lastError = null;
   const previewId = titlePreviewId(search);
   const wantEarn = titlePreviewEarn(search);
 
@@ -31,7 +32,7 @@ export function mountTitles({
       layer.setTitle(SELF, { titleId: previewId, tag: nameTag, getPos: nameTag?.getPos, local: true, earn: wantEarn });
     }
     bootMine();
-  }).catch((e) => { console.warn('[titles] atlas', e); });
+  }).catch((e) => { lastError = String(e?.message || e); console.warn('[titles] atlas', e); });
 
   async function bootMine() {
     if (previewId) return; // 미리보기가 서버 칭호를 덮음
@@ -129,9 +130,15 @@ export function mountTitles({
     reload: bootMine,
     preview(id, earn = false) { layer.setTitle(SELF, { titleId: id, tag: nameTag, getPos: nameTag?.getPos, local: true, earn }); },
     playEarn(id) { layer.setTitle(SELF, { titleId: id || previewId || myCurrent?.titleId, tag: nameTag, getPos: nameTag?.getPos, local: true, earn: true }); },
+    seekEarn(id, tMs) {
+      const titleId = id || previewId || myCurrent?.titleId;
+      layer.setTitle(SELF, { titleId, tag: nameTag, getPos: nameTag?.getPos, local: true });
+      layer.seekEarn(SELF, titleId, tMs);
+    },
     get ready() { return ready; },
     get stats() { return layer.stats; },
     get current() { return myCurrent; },
+    get error() { return lastError; },
     client: api,
     layer,
   };
