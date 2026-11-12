@@ -1,7 +1,7 @@
 // [hangang] 반포·잠수교 일대 지형 — AWS terrarium DEM + 한강 수면 + 반포한강공원 둔치 테라스.
 import * as THREE from 'three';
 import { HG, pointInRing, pointInRings, inWater, centroid, projectOnLine } from './hangangCoords.js';
-import { applyHangangTerrainBakeGen, loadHangangTerrainBakeSync, decodeHangangTerrainBakeMaybe, decodeHangangTerrainBakeGen, fetchHangangTerrainBake } from './hangangMeshBake.js';
+import { applyHangangTerrainBakeGen, loadHangangTerrainBakeSync, decodeHangangTerrainBakeMaybe, decodeHangangTerrainBakeGen, fetchAndDecodeHangangTerrainBake } from './hangangMeshBake.js';
 
 
 function sampleDem(dem, x, z) {
@@ -94,18 +94,27 @@ function offsetRing(pts, dist) {
 }
 
 export function measureHangangLevels(dem, osm) {
+  const g = measureHangangLevelsGen(dem, osm);
+  let n = g.next();
+  while (!n.done) n = g.next();
+  return n.value;
+}
+
+export function* measureHangangLevelsGen(dem, osm) {
   const datum = dem?.datum ?? HG.datum;
   const waterSamples = [];
   const park = osm?.park?.ring?.pts || osm?.parks?.find((p) => p.name === '반포한강공원')?.o;
   // DEM inside OSM 한강 rings (outers minus inners)
   if (dem && osm?.water?.outers?.length) {
     const x0 = dem.x0, z0 = dem.z0, x1 = dem.x0 + (dem.nx - 1) * dem.dx, z1 = dem.z0 + (dem.nz - 1) * dem.dz;
+    let row = 0;
     for (let z = z0; z <= z1; z += dem.dz) {
       for (let x = x0; x <= x1; x += dem.dx) {
         if (!inWater(x, z, osm.water)) continue;
         const e = sampleDem(dem, x, z);
         if (e != null && e > -5 && e < 40) waterSamples.push(e);
       }
+      if ((++row & 7) === 0) yield 'hangang-height-at';
     }
   }
   waterSamples.sort((a, b) => a - b);
@@ -183,9 +192,21 @@ export function inHanRiver(x, z, osm) {
   return !inners.some((inn) => inn?.o && pointInRing(x, z, inn.o));
 }
 
-export function makeHangangHeightAt(dem, osm = null) {
+export function makeHangangHeightAt(dem, osm = null, lv = null) {
+  const g = makeHangangHeightAtGen(dem, osm, lv);
+  let n = g.next();
+  while (!n.done) n = g.next();
+  return n.value;
+}
+
+export function* makeHangangHeightAtGen(dem, osm = null, lv = null) {
   const datum = dem?.datum ?? HG.datum;
-  const lv = measureHangangLevels(dem, osm);
+  if (!lv) {
+    const g = measureHangangLevelsGen(dem, osm);
+    let n = g.next();
+    while (!n.done) { yield n.value; n = g.next(); }
+    lv = n.value;
+  }
   const blend = osm?.meta?.datumBlend || null;
   const isHap = osm?.meta?.segment === 'hap';
   const olympicWays = isHap
@@ -201,7 +222,9 @@ export function makeHangangHeightAt(dem, osm = null) {
   if (isHap) {
     const BIN = 120;
     const buckets = new Map();
+    let parkScan = 0;
     for (const w of osm?.ways || []) {
+      if ((++parkScan & 31) === 0) yield 'hangang-height-at';
       if ((w.name || '') !== '한강남자전거길' || !w.pts) continue;
       for (const pt of w.pts) {
         if (inWater(pt[0], pt[1], osm?.water)) continue;
@@ -564,7 +587,16 @@ function* hangangTerrainGen({ parent, dem, osm, baked = null, skipBake = false }
   const group = new THREE.Group();
   group.name = 'hangang-terrain';
   parent.add(group);
-  const heightAt = makeHangangHeightAt(dem, osm);
+  let heightAt;
+  {
+    const hg = makeHangangHeightAtGen(dem, osm);
+    let step = hg.next();
+    while (!step.done) {
+      if (sliced) yield step.value || 'hangang-height-at';
+      step = hg.next();
+    }
+    heightAt = step.value;
+  }
   const lv = heightAt.levels;
   const datum = lv.datum;
   let bounds = dem
@@ -1027,10 +1059,10 @@ export async function createHangangTerrainAsync(opts, yieldFn, slicer) {
     : () => Promise.resolve());
   let resolved = opts;
   if (!opts?.skipBake && !opts?.baked && opts?.bakeUrl) {
-    const raw = await fetchHangangTerrainBake(opts.bakeUrl);
-    if (raw) resolved = { ...opts, baked: raw };
+    const bake = await fetchAndDecodeHangangTerrainBake(opts.bakeUrl);
+    if (bake) resolved = { ...opts, baked: bake };
     if (slicer) slicer.mark();
-    console.info(`[hangang] terrain bake ${raw ? 'hit' : 'miss'} ${opts.bakeUrl}`);
+    console.info(`[hangang] terrain bake ${bake ? 'hit' : 'miss'} ${opts.bakeUrl}`);
   }
   const g = hangangTerrainGen(resolved, true);
   let n = g.next();

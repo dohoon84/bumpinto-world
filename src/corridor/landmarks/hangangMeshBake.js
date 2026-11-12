@@ -1,14 +1,16 @@
-// 한강 지형 메시(DEM·수면·호안)를 미리 구워 둔 바이너리. 런타임에 ShapeGeometry / 큰 computeVertexNormals 를 피한다.
+// 한강 지형 메시(DEM·수면·호안)를 양자화·gzip 으로 구워 둔다.
+// 위치는 메시 bbox 기준 Int16, 법선은 올리지 않고 로드 때 다시 계산, 인덱스는 델타 varint.
+// DEM UV 는 (x - origin) / 28 로 복원하므로 파일에 넣지 않는다.
 import * as THREE from 'three';
 
-export const HANGANG_TERRAIN_BAKE_FILE = 'hangang/s1-terrain-meshes.bin';
-export const HAP_TERRAIN_BAKE_FILE = 'hangang/hap-terrain-meshes.bin';
+export const HANGANG_TERRAIN_BAKE_FILE = 'hangang/s1-terrain-meshes.bin.gz';
+export const HAP_TERRAIN_BAKE_FILE = 'hangang/hap-terrain-meshes.bin.gz';
 export const HANGANG_MESH_BAKE_MAGIC = 0x48474d42; // HGMB
-export const HANGANG_MESH_BAKE_VERSION = 1;
-
-export function hangangTerrainBakeFile(osm) {
-  return osm?.meta?.segment === 'hap' ? HAP_TERRAIN_BAKE_FILE : HANGANG_TERRAIN_BAKE_FILE;
-}
+export const HANGANG_MESH_BAKE_VERSION = 2;
+export const HANGANG_DEM_UV_SCALE = 28;
+const I16 = 32767;
+const MAX_U16_VERTS = 65535;
+const SMALL_F32_VERTS = 4000;
 
 const MESH_NAMES = new Set([
   'hangang-dem',
@@ -18,6 +20,10 @@ const MESH_NAMES = new Set([
   'hangang-revetment-noses',
   'hangang-revetment-ends',
 ]);
+
+export function hangangTerrainBakeFile(osm) {
+  return osm?.meta?.segment === 'hap' ? HAP_TERRAIN_BAKE_FILE : HANGANG_TERRAIN_BAKE_FILE;
+}
 
 function collectMeshes(group) {
   const list = [];
@@ -34,67 +40,225 @@ function attrArray(geo, name) {
   return src instanceof Float32Array ? src : new Float32Array(src);
 }
 
-export function encodeHangangTerrainBake(group, { revetmentView = null } = {}) {
-  const meshes = collectMeshes(group).map((mesh) => {
+function asBytes(arr) {
+  if (!arr) return null;
+  return arr.byteLength ? new Uint8Array(arr.buffer, arr.byteOffset, arr.byteLength) : new Uint8Array(0);
+}
+
+function zigzagEncode(n) {
+  return ((n << 1) ^ (n >> 31)) >>> 0;
+}
+function zigzagDecode(u) {
+  return (u >>> 1) ^ -(u & 1);
+}
+function writeUvarint(bytes, n) {
+  n = n >>> 0;
+  while (n >= 0x80) {
+    bytes.push((n & 0x7f) | 0x80);
+    n >>>= 7;
+  }
+  bytes.push(n);
+}
+function readUvarint(bytes, i) {
+  let n = 0, shift = 0;
+  for (;;) {
+    const b = bytes[i++];
+    n |= (b & 0x7f) << shift;
+    if ((b & 0x80) === 0) return [n >>> 0, i];
+    shift += 7;
+    if (shift > 35) throw new Error('hangang terrain bake: bad varint');
+  }
+}
+
+export function encodeDeltaIndices(index) {
+  const bytes = [];
+  let prev = 0;
+  for (let i = 0; i < index.length; i++) {
+    writeUvarint(bytes, zigzagEncode(index[i] - prev));
+    prev = index[i];
+  }
+  return Uint8Array.from(bytes);
+}
+
+export function decodeDeltaIndices(bytes, count, typ = 'u16') {
+  const out = typ === 'u32' ? new Uint32Array(count) : new Uint16Array(count);
+  let i = 0, prev = 0;
+  for (let k = 0; k < count; k++) {
+    const [u, ni] = readUvarint(bytes, i);
+    i = ni;
+    prev = prev + zigzagDecode(u);
+    out[k] = prev;
+  }
+  if (i !== bytes.length && i !== bytes.byteLength) {
+    // trailing pad is ok
+  }
+  return out;
+}
+
+function componentBounds(arr, dim) {
+  const min = new Array(dim).fill(Infinity);
+  const max = new Array(dim).fill(-Infinity);
+  for (let i = 0; i < arr.length; i += dim) {
+    for (let k = 0; k < dim; k++) {
+      const v = arr[i + k];
+      if (v < min[k]) min[k] = v;
+      if (v > max[k]) max[k] = v;
+    }
+  }
+  return { min, max };
+}
+
+function quantizeI16(arr, dim) {
+  const { min, max } = componentBounds(arr, dim);
+  const q = new Int16Array(arr.length);
+  const scale = min.map((mn, k) => {
+    const span = max[k] - mn;
+    return span === 0 ? 1 : span / I16;
+  });
+  for (let i = 0; i < arr.length; i += dim) {
+    for (let k = 0; k < dim; k++) {
+      let t = Math.round((arr[i + k] - min[k]) / scale[k]);
+      if (t < 0) t = 0;
+      if (t > I16) t = I16;
+      q[i + k] = t;
+    }
+  }
+  return { q, min, max };
+}
+
+function dequantizeI16(q, min, max, dim) {
+  const out = new Float32Array(q.length);
+  const scale = min.map((mn, k) => {
+    const span = max[k] - mn;
+    return span === 0 ? 1 : span / I16;
+  });
+  for (let i = 0; i < q.length; i += dim) {
+    for (let k = 0; k < dim; k++) out[i + k] = min[k] + q[i + k] * scale[k];
+  }
+  return out;
+}
+
+function colorsToU8(arr) {
+  const q = new Uint8Array(arr.length);
+  for (let i = 0; i < arr.length; i++) {
+    const v = arr[i];
+    q[i] = Math.round(Math.min(1, Math.max(0, v)) * 255);
+  }
+  return q;
+}
+function colorsFromU8(q) {
+  const out = new Float32Array(q.length);
+  for (let i = 0; i < q.length; i++) out[i] = q[i] / 255;
+  return out;
+}
+
+function splitForU16(pos, color, index, maxVerts = MAX_U16_VERTS) {
+  if (!index) return [{ pos, color, index: null }];
+  if (pos.length / 3 <= maxVerts) return [{ pos, color, index }];
+  const out = [];
+  let map = new Map(), cPos = [], cCol = color ? [] : null, cIdx = [];
+  const flush = () => {
+    if (!cIdx.length) return;
+    out.push({
+      pos: new Float32Array(cPos),
+      color: cCol ? new Float32Array(cCol) : null,
+      index: cIdx,
+    });
+    map = new Map();
+    cPos = [];
+    cCol = color ? [] : null;
+    cIdx = [];
+  };
+  const vertCount = () => cPos.length / 3;
+  for (let t = 0; t < index.length; t += 3) {
+    const tri = [index[t], index[t + 1], index[t + 2]];
+    let need = 0;
+    for (const v of tri) if (!map.has(v)) need++;
+    if (vertCount() + need > maxVerts) flush();
+    for (const v of tri) {
+      let nv = map.get(v);
+      if (nv == null) {
+        nv = vertCount();
+        map.set(v, nv);
+        cPos.push(pos[v * 3], pos[v * 3 + 1], pos[v * 3 + 2]);
+        if (cCol) cCol.push(color[v * 3], color[v * 3 + 1], color[v * 3 + 2]);
+      }
+      cIdx.push(nv);
+    }
+  }
+  flush();
+  return out;
+}
+
+export function encodeHangangTerrainBake(group, { revetmentView = null, uvOrigin = null, uvScale = HANGANG_DEM_UV_SCALE } = {}) {
+  const collected = collectMeshes(group);
+  const headerMeshes = [];
+  const chunks = [];
+  const add = (arr) => {
+    const buf = arr instanceof Uint8Array ? arr : asBytes(arr);
+    if (!buf) return;
+    chunks.push(buf);
+  };
+  for (const mesh of collected) {
     const geo = mesh.geometry;
     const position = attrArray(geo, 'position');
-    const normal = attrArray(geo, 'normal');
     const color = attrArray(geo, 'color');
-    const uv = attrArray(geo, 'uv');
     let index = null;
     if (geo.index) {
       const arr = geo.index.array;
-      index = arr instanceof Uint32Array ? arr : new Uint32Array(arr);
+      index = Array.from(arr, (v) => v);
     }
-    return {
-      name: mesh.name,
-      receiveShadow: !!mesh.receiveShadow,
-      position,
-      normal,
-      color,
-      uv,
-      index,
-    };
-  });
+    const pieces = splitForU16(position, color, index);
+    for (const p of pieces) {
+      const verts = p.pos.length / 3;
+      const posCodec = verts >= SMALL_F32_VERTS ? 'i16' : 'f32';
+      let posMin = null, posMax = null;
+      if (posCodec === 'i16') {
+        const q = quantizeI16(p.pos, 3);
+        posMin = q.min;
+        posMax = q.max;
+        add(q.q);
+      } else {
+        add(p.pos instanceof Float32Array ? p.pos : new Float32Array(p.pos));
+      }
+      const hasColor = !!p.color;
+      if (hasColor) add(colorsToU8(p.color));
+      const indexBytes = p.index ? encodeDeltaIndices(p.index) : new Uint8Array(0);
+      add(indexBytes);
+      headerMeshes.push({
+        name: mesh.name,
+        receiveShadow: !!mesh.receiveShadow,
+        verts,
+        indexCount: p.index ? p.index.length : 0,
+        indexBytes: indexBytes.byteLength,
+        indexType: verts <= MAX_U16_VERTS ? 'u16' : 'u32',
+        posCodec,
+        posMin,
+        posMax,
+        hasColor,
+      });
+    }
+  }
   const header = {
     version: HANGANG_MESH_BAKE_VERSION,
     revetmentView: revetmentView || null,
-    meshes: meshes.map((m) => ({
-      name: m.name,
-      receiveShadow: m.receiveShadow,
-      verts: m.position.length / 3,
-      hasNormal: !!m.normal,
-      hasColor: !!m.color,
-      hasUv: !!m.uv,
-      indexCount: m.index ? m.index.length : 0,
-    })),
+    uvOrigin: uvOrigin || null,
+    uvScale: uvScale || HANGANG_DEM_UV_SCALE,
+    meshes: headerMeshes,
   };
   const json = new TextEncoder().encode(JSON.stringify(header));
-  const pad = (n) => (4 - (n % 4)) % 4;
+  const pad = (4 - (json.length % 4)) % 4;
+  const dataOff = 16 + json.length + pad;
   let payload = 0;
-  const chunks = [];
-  const add = (arr) => {
-    if (!arr) return;
-    const buf = arr.byteLength ? new Uint8Array(arr.buffer, arr.byteOffset, arr.byteLength) : new Uint8Array(0);
-    chunks.push(buf);
-    payload += buf.byteLength;
-  };
-  for (const m of meshes) {
-    add(m.position);
-    add(m.normal);
-    add(m.color);
-    add(m.uv);
-    add(m.index);
-  }
-  const headerBytes = 16 + json.length + pad(json.length);
-  const out = new Uint8Array(headerBytes + payload);
+  for (const c of chunks) payload += c.byteLength;
+  const out = new Uint8Array(dataOff + payload);
   const view = new DataView(out.buffer);
   view.setUint32(0, HANGANG_MESH_BAKE_MAGIC, true);
   view.setUint32(4, HANGANG_MESH_BAKE_VERSION, true);
   view.setUint32(8, json.length, true);
-  view.setUint32(12, headerBytes, true);
+  view.setUint32(12, dataOff, true);
   out.set(json, 16);
-  let off = headerBytes;
+  let off = dataOff;
   for (const c of chunks) {
     out.set(c, off);
     off += c.byteLength;
@@ -102,51 +266,125 @@ export function encodeHangangTerrainBake(group, { revetmentView = null } = {}) {
   return out;
 }
 
+function isGzip(bytes) {
+  return bytes && bytes.length >= 2 && bytes[0] === 0x1f && bytes[1] === 0x8b;
+}
+
+export function gunzipSync(input) {
+  const bytes = toU8(input);
+  if (!isGzip(bytes)) return bytes;
+  if (typeof process !== 'undefined' && process.getBuiltinModule) {
+    const zlib = process.getBuiltinModule('zlib');
+    const out = zlib.gunzipSync(bytes);
+    return out instanceof Uint8Array ? out : new Uint8Array(out);
+  }
+  throw new Error('hangang terrain bake: sync gunzip needs zlib');
+}
+
+export async function gunzipAsync(input) {
+  const bytes = toU8(input);
+  if (!isGzip(bytes)) return bytes;
+  if (typeof DecompressionStream === 'function') {
+    const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'));
+    return new Uint8Array(await new Response(stream).arrayBuffer());
+  }
+  return gunzipSync(bytes);
+}
+
+function toU8(input) {
+  if (input instanceof Uint8Array) return input;
+  if (input instanceof ArrayBuffer) return new Uint8Array(input);
+  if (input?.buffer) return new Uint8Array(input.buffer, input.byteOffset, input.byteLength);
+  throw new Error('hangang terrain bake: expected bytes');
+}
+
 export function* decodeHangangTerrainBakeGen(input) {
-  const bytes = input instanceof Uint8Array
-    ? input
-    : input instanceof ArrayBuffer
-      ? new Uint8Array(input)
-      : new Uint8Array(input.buffer, input.byteOffset, input.byteLength);
+  let bytes = toU8(input);
+  if (isGzip(bytes)) bytes = gunzipSync(bytes);
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   if (view.getUint32(0, true) !== HANGANG_MESH_BAKE_MAGIC) throw new Error('hangang terrain bake: bad magic');
   const version = view.getUint32(4, true);
-  if (version !== HANGANG_MESH_BAKE_VERSION) throw new Error('hangang terrain bake: unsupported version ' + version);
+  if (version !== 1 && version !== 2) throw new Error('hangang terrain bake: unsupported version ' + version);
   const jsonLen = view.getUint32(8, true);
   const dataOff = view.getUint32(12, true);
   const header = JSON.parse(new TextDecoder().decode(bytes.subarray(16, 16 + jsonLen)));
   let off = dataOff;
-  const takeF32 = (count) => {
-    const n = count * 4;
+  const copyTyped = (slice, Ctor, bytesPer) => {
+    const n = slice.byteLength / bytesPer;
+    if (slice.byteOffset % bytesPer === 0) {
+      const copy = new Ctor(n);
+      copy.set(new Ctor(slice.buffer, slice.byteOffset, n));
+      return copy;
+    }
+    const tmp = new Uint8Array(slice.byteLength);
+    tmp.set(slice);
+    return new Ctor(tmp.buffer);
+  };
+  const take = (n, typ) => {
     const slice = bytes.subarray(off, off + n);
     off += n;
-    const copy = new Float32Array(slice.length / 4);
-    copy.set(new Float32Array(slice.buffer, slice.byteOffset, copy.length));
-    return copy;
+    if (typ === 'u8') {
+      const c = new Uint8Array(n);
+      c.set(slice);
+      return c;
+    }
+    if (typ === 'i16') return copyTyped(slice, Int16Array, 2);
+    if (typ === 'u16') return copyTyped(slice, Uint16Array, 2);
+    if (typ === 'u32') return copyTyped(slice, Uint32Array, 4);
+    return copyTyped(slice, Float32Array, 4);
   };
-  const takeU32 = (count) => {
-    const n = count * 4;
-    const slice = bytes.subarray(off, off + n);
-    off += n;
-    const copy = new Uint32Array(slice.length / 4);
-    copy.set(new Uint32Array(slice.buffer, slice.byteOffset, copy.length));
-    return copy;
-  };
+
+  if (version === 1) {
+    const takeF32 = (count) => take(count * 4, 'f32');
+    const takeU32 = (count) => take(count * 4, 'u32');
+    const meshes = [];
+    for (const m of header.meshes) {
+      const rec = {
+        name: m.name,
+        receiveShadow: !!m.receiveShadow,
+        position: takeF32(m.verts * 3),
+      };
+      if (m.hasNormal) takeF32(m.verts * 3); // skip, recompute
+      if (m.hasColor) rec.color = takeF32(m.verts * 3);
+      if (m.hasUv) rec.uv = takeF32(m.verts * 2);
+      if (m.indexCount) rec.index = takeU32(m.indexCount);
+      meshes.push(rec);
+      yield 'hangang-bake-decode-' + m.name;
+    }
+    return { revetmentView: header.revetmentView || null, uvOrigin: header.uvOrigin || null, uvScale: header.uvScale || HANGANG_DEM_UV_SCALE, meshes };
+  }
+
   const meshes = [];
   for (const m of header.meshes) {
-    const rec = {
+    let position;
+    if (m.posCodec === 'i16') {
+      const q = take(m.verts * 3 * 2, 'i16');
+      position = dequantizeI16(q, m.posMin, m.posMax, 3);
+    } else {
+      position = take(m.verts * 3 * 4, 'f32');
+    }
+    let color = null;
+    if (m.hasColor) color = colorsFromU8(take(m.verts * 3, 'u8'));
+    let index = null;
+    if (m.indexCount) {
+      const raw = take(m.indexBytes, 'u8');
+      index = decodeDeltaIndices(raw, m.indexCount, m.indexType || 'u16');
+    }
+    meshes.push({
       name: m.name,
       receiveShadow: !!m.receiveShadow,
-      position: takeF32(m.verts * 3),
-    };
-    if (m.hasNormal) rec.normal = takeF32(m.verts * 3);
-    if (m.hasColor) rec.color = takeF32(m.verts * 3);
-    if (m.hasUv) rec.uv = takeF32(m.verts * 2);
-    if (m.indexCount) rec.index = takeU32(m.indexCount);
-    meshes.push(rec);
+      position,
+      color,
+      index,
+    });
     yield 'hangang-bake-decode-' + m.name;
   }
-  return { revetmentView: header.revetmentView || null, meshes };
+  return {
+    revetmentView: header.revetmentView || null,
+    uvOrigin: header.uvOrigin || null,
+    uvScale: header.uvScale || HANGANG_DEM_UV_SCALE,
+    meshes,
+  };
 }
 
 export function decodeHangangTerrainBake(input) {
@@ -154,6 +392,23 @@ export function decodeHangangTerrainBake(input) {
   let n = g.next();
   while (!n.done) n = g.next();
   return n.value;
+}
+
+export async function decodeHangangTerrainBakeBytes(input) {
+  const unzipped = await gunzipAsync(input);
+  return decodeHangangTerrainBake(unzipped);
+}
+
+function demUvFromPositions(position, origin, scale) {
+  if (!origin || !position) return null;
+  const n = position.length / 3;
+  const uv = new Float32Array(n * 2);
+  const s = scale || HANGANG_DEM_UV_SCALE;
+  for (let i = 0; i < n; i++) {
+    uv[i * 2] = (position[i * 3] - origin[0]) / s;
+    uv[i * 2 + 1] = (position[i * 3 + 2] - origin[1]) / s;
+  }
+  return uv;
 }
 
 export async function fetchHangangTerrainBake(url, fetchFn = fetch) {
@@ -165,6 +420,44 @@ export async function fetchHangangTerrainBake(url, fetchFn = fetch) {
   } catch {
     return null;
   }
+}
+
+export async function fetchAndDecodeHangangTerrainBake(url, fetchFn = fetch) {
+  const bytes = await fetchHangangTerrainBake(url, fetchFn);
+  if (!bytes) return null;
+  try {
+    if (typeof Worker === 'function') {
+      const bake = await decodeInWorker(bytes);
+      if (bake) return bake;
+    }
+    return await decodeHangangTerrainBakeBytes(bytes);
+  } catch (e) {
+    console.warn('[hangang] terrain bake decode failed:', e?.message || e);
+    return null;
+  }
+}
+
+function decodeInWorker(bytes) {
+  return new Promise((resolve) => {
+    let worker;
+    const fail = () => resolve(null);
+    try {
+      worker = new Worker(new URL('./hangangMeshBakeWorker.js', import.meta.url), { type: 'module' });
+    } catch {
+      fail();
+      return;
+    }
+    const t = setTimeout(() => { try { worker.terminate(); } catch {} fail(); }, 60000);
+    worker.onmessage = (e) => {
+      clearTimeout(t);
+      try { worker.terminate(); } catch {}
+      if (e.data?.ok && e.data.bake?.meshes) resolve(e.data.bake);
+      else fail();
+    };
+    worker.onerror = () => { clearTimeout(t); try { worker.terminate(); } catch {} fail(); };
+    const copy = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
+    worker.postMessage({ buffer: copy }, [copy]);
+  });
 }
 
 function waterMat() {
@@ -192,13 +485,16 @@ export function materialForBakedMesh(name, { grassMap = null, terraceMat, riserM
   return riserMat || new THREE.MeshLambertMaterial({ color: '#4e4f49', side: THREE.DoubleSide });
 }
 
-export function applyBakedMesh(group, rec, { grassMap = null, terraceMat, riserMat, mats, waterMeshes } = {}) {
+export function applyBakedMesh(group, rec, { grassMap = null, terraceMat, riserMat, mats, waterMeshes, uvOrigin = null, uvScale = HANGANG_DEM_UV_SCALE } = {}) {
   const geo = new THREE.BufferGeometry();
   geo.setAttribute('position', new THREE.BufferAttribute(rec.position, 3));
-  if (rec.normal) geo.setAttribute('normal', new THREE.BufferAttribute(rec.normal, 3));
   if (rec.color) geo.setAttribute('color', new THREE.BufferAttribute(rec.color, 3));
-  if (rec.uv) geo.setAttribute('uv', new THREE.BufferAttribute(rec.uv, 2));
+  let uv = rec.uv;
+  if (!uv && rec.name === 'hangang-dem') uv = demUvFromPositions(rec.position, uvOrigin, uvScale);
+  if (uv) geo.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
   if (rec.index) geo.setIndex(new THREE.BufferAttribute(rec.index, 1));
+  if (rec.normal) geo.setAttribute('normal', new THREE.BufferAttribute(rec.normal, 3));
+  else geo.computeVertexNormals();
   let mat;
   if (rec.name === 'hangang-revetment') mat = terraceMat;
   else if (rec.name.startsWith('hangang-revetment')) mat = riserMat;
@@ -217,7 +513,7 @@ export function* applyHangangTerrainBakeGen(group, bake, { grassMap = null } = {
   const riserMat = new THREE.MeshLambertMaterial({ color: '#4e4f49', side: THREE.DoubleSide });
   const mats = [];
   const waterMeshes = [];
-  const ctx = { grassMap, terraceMat, riserMat, mats, waterMeshes };
+  const ctx = { grassMap, terraceMat, riserMat, mats, waterMeshes, uvOrigin: bake.uvOrigin || null, uvScale: bake.uvScale || HANGANG_DEM_UV_SCALE };
   for (const rec of bake.meshes) {
     applyBakedMesh(group, rec, ctx);
     yield 'hangang-bake-apply-' + rec.name;
@@ -237,9 +533,15 @@ export function loadHangangTerrainBakeSync(osm) {
   try {
     const fs = process.getBuiltinModule('fs');
     const path = process.getBuiltinModule('path');
-    const file = path.resolve(process.cwd(), 'public/corridor', hangangTerrainBakeFile(osm));
-    if (!fs.existsSync(file)) return null;
-    return decodeHangangTerrainBake(fs.readFileSync(file));
+    const base = path.resolve(process.cwd(), 'public/corridor', hangangTerrainBakeFile(osm));
+    const candidates = [base];
+    if (base.endsWith('.gz')) candidates.push(base.slice(0, -3));
+    else candidates.push(base + '.gz');
+    for (const file of candidates) {
+      if (!fs.existsSync(file)) continue;
+      return decodeHangangTerrainBake(gunzipSync(fs.readFileSync(file)));
+    }
+    return null;
   } catch {
     return null;
   }
