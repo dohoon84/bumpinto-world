@@ -9,6 +9,7 @@ import { PRODUCTS, BY_ID, CART, EGG } from './products.js';
 import { buildCartGeometry, BASKET } from './cartModel.js';
 import { buildProductGeometry, addProductShape } from './shapes.js';
 import { createStaff } from './staff.js';
+import { createCheckout } from './checkout.js';
 
 const W = 84, D = 120, CEIL = 9;
 const DOOR = { x: 69, w: 8 };
@@ -338,13 +339,13 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit } 
 #depot-hud .dh-panel b{color:#F2C230;margin-right:8px;font-size:14px}#depot-hud .dh-kg{display:block;white-space:pre-line}
 #depot-hud .dh-cross{position:absolute;left:50%;top:50%;width:8px;height:8px;margin:-4px 0 0 -4px;border-radius:50%;background:rgba(255,255,255,.85);box-shadow:0 0 0 2px rgba(0,0,0,.35)}
 #depot-hud .dh-target{position:absolute;left:50%;top:calc(50% + 22px);transform:translateX(-50%);background:rgba(255,255,255,.95);color:#13203d;border-radius:10px;padding:6px 12px;font-size:14px;font-weight:800;display:none;white-space:nowrap}
-#depot-hud .dh-toast{position:absolute;left:50%;top:70px;transform:translateX(-50%);background:#c62828;color:#fff;border-radius:12px;padding:10px 18px;font-size:17px;font-weight:900;display:none;box-shadow:0 8px 24px rgba(0,0,0,.3)}
+#depot-hud .dh-toast{position:absolute;left:16px;top:var(--dh-msg-top,200px);max-width:min(340px,calc(100vw - 32px));background:#c62828;color:#fff;border-radius:12px;padding:9px 14px;font-size:15px;line-height:1.4;font-weight:900;display:none;box-shadow:0 8px 24px rgba(0,0,0,.3)}
 #depot-hud .dh-help{position:absolute;left:50%;bottom:100px;transform:translateX(-50%);background:rgba(18,59,45,.82);border-radius:10px;padding:6px 12px;font-size:12.5px;font-weight:600;white-space:nowrap}
 #depot-hud .dh-btns{position:absolute;right:16px;bottom:200px;display:none;flex-direction:column;gap:6px;pointer-events:auto}
 #depot-hud .dh-btns button{font:inherit;font-weight:800;font-size:13px;border:0;border-radius:10px;padding:8px 12px;background:rgba(255,255,255,.92);color:#13203d}
 #depot-hud.placing .dh-btns{display:flex}#depot-hud.placing .dh-cross{display:none}`;
   document.head.appendChild(css); document.body.appendChild(hud);
-  const elKg = hud.querySelector('.dh-kg'), elTarget = hud.querySelector('.dh-target'), elToast = hud.querySelector('.dh-toast'), elHelp = hud.querySelector('.dh-help');
+  const elPanel = hud.querySelector('.dh-panel'), elKg = hud.querySelector('.dh-kg'), elTarget = hud.querySelector('.dh-target'), elToast = hud.querySelector('.dh-toast'), elHelp = hud.querySelector('.dh-help');
   hud.querySelector('.dh-btns').addEventListener('click', (e) => { const a = e.target?.dataset?.a; if (a === 'place') place(); else if (a === 'rot') rotate(Math.PI / 2); else if (a === 'tip') { st.tip = !st.tip; } else if (a === 'level') toggleLevel(); else if (a === 'cancel') cancelPlace(); });
   function toast(msg, ms = 1800, bg = '#c62828') { elToast.textContent = msg; elToast.style.background = bg; elToast.style.display = 'block'; st.toastT = ms / 1000; }
   // ---------- 매장 직원 · 장난 감지 (staff.js) ----------
@@ -855,8 +856,9 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit } 
       : st.hasCart ? 'W/S 밀기 · A/D 방향 · 드래그 둘러보기 · 상품 클릭 = 집기 · 카트 속 상품도 클릭해 다시 집기 · G 카트 놓기'
         : 'WASD 걷기 · 드래그 둘러보기 · E 카트 잡기 · 출입구에서 E 나가기';
     if (elHelp.textContent !== help) elHelp.textContent = help;
-    elTarget.style.background = '';
+    elTarget.style.background = ''; let coP = null;
     if (st.mode === 'place' && ghostSol) { elTarget.style.display = 'block'; elTarget.textContent = ghostSol.where === 'floor' ? '매장 바닥에 내려놓기' : { green: '안정적 — 여기 놓으면 OK', yellow: '흔들흔들 — 카트 움직이면 떨어질 수도', red: '위태위태 — 떨어질 것 같아요 (그래도 놓을 수 있음)' }[ghostSol.state]; elTarget.style.background = { green: '#e8fff0', yellow: '#fff6d6', red: '#ffe3e0' }[ghostSol.state]; }
+    else if (st.mode === 'walk' && (coP = checkout.prompt())) { elTarget.style.display = 'block'; elTarget.textContent = coP.text; elTarget.style.background = coP.bg || ''; }
     else if (st.mode === 'walk' && nearMyCart()) { elTarget.style.display = 'block'; elTarget.style.background = ''; elTarget.textContent = `E 카트 잡기${items.length ? ` · 짐 ${items.length}개 그대로` : ''}${hover ? ` · 클릭 = ${hover.p.name} 집기` : ''}`; }
     else if (hover && st.mode === 'walk') { elTarget.style.display = 'block'; elTarget.style.background = ''; elTarget.textContent = `${hover.kind === 'floor' ? '(바닥) ' : hover.kind === 'cart' ? '(카트 속) ' : ''}${hover.p.name} · ${hover.p.kg} kg · ${hover.p.price.toLocaleString('ko-KR')}원 — 클릭/E 집기`; }
     else if (st.mode === 'walk' && nearCorral() && !st.hasCart) { elTarget.style.display = 'block'; elTarget.textContent = 'E 카트 잡기 (240L)'; }
@@ -904,7 +906,7 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit } 
   const onUp = (e) => {
     const d = down; down = null; if (!d) return;
     if (Math.hypot(e.clientX - d.x, e.clientY - d.y) > 8 || performance.now() - d.t > 500) return;
-    if (e.target !== dom) return;
+    if (e.target !== dom || checkout.busy) return;
     if (st.mode === 'place') { if (e.button === 2) cancelPlace(); else place(); return; }
     // 클릭한 그 자리의 상품 (마우스 위치 레이)
     if (e.pointerType === 'mouse') { const r0 = dom.getBoundingClientRect(); const t = pickTarget(new THREE.Vector2(((e.clientX - r0.left) / r0.width) * 2 - 1, -((e.clientY - r0.top) / r0.height) * 2 + 1)); if (t) hover = t; }
@@ -930,6 +932,7 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit } 
       return true;
     }
     if (e.repeat) return true;
+    if (checkout.onKey(k)) return true; // 계산·출구·빈 박스
     if (k === 'KeyE' || k === 'Space') {
       if (nearMyCart()) regrabCart(); // 놓은 카트 옆에서는 E = 항상 카트 잡기 (상품은 클릭)
       else if (hover && (st.hasCart || cart.visible)) pick();
@@ -944,13 +947,17 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit } 
     return true;
   }
 
+  // ---------- 계산대 구역 (checkout.js) ----------
+  const checkout = createCheckout({ scene, camera, keep, canvasTex, hud, toast, st, items, cart, cg, cartMats: { wire: wireM, red: redM, dark: darkM }, obstacles, staff, brokenIn, onExit, ASSET });
+
   // ---------- 프레임 ----------
   function update(dt, { look = [0, 0, 0], axes = { f: 0, s: 0 }, frozen = false } = {}) {
     dt = Math.min(dt, 0.05); st.t += dt;
     if (camera.aspect !== innerWidth / innerHeight) { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); }
     if (st.mode === 'walk' && !frozen) {
       st.head.yaw += look[0] || 0; st.head.pitch = THREE.MathUtils.clamp(st.head.pitch - (look[1] || 0) * 0.8, -1.1, 0.6);
-      if (st.hasCart) { st.head.yaw = THREE.MathUtils.clamp(st.head.yaw, -1.4, 1.4); driveCart(dt, axes); }
+      if (checkout.busy) driveCart(dt, { f: 0, s: 0 }); // 계산 중엔 카트 고정 (둘러보기만)
+      else if (st.hasCart) { st.head.yaw = THREE.MathUtils.clamp(st.head.yaw, -1.4, 1.4); driveCart(dt, axes); }
       else { if (Math.abs(st.head.yaw) > 0) { st.me.yaw += st.head.yaw; st.head.yaw = 0; } walk(dt, axes); }
     } else if (st.hasCart) driveCart(dt, { f: 0, s: 0 });
     cart.updateMatrixWorld(true);
@@ -968,11 +975,13 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit } 
     tickFloor(dt);
     selfAvatar.position.set(st.me.x, 0, st.me.z); selfAvatar.rotation.y = st.me.yaw;
     updateCamera(dt);
-    staff.tick(dt, { me: st.me, cartObj: st.cart, items, rimTop: B.top.yRear, cartHeld: st.hasCart, cartVisible: cart.visible });
-    hover = st.mode === 'walk' ? pickTarget() : null;
+    staff.tick(dt, { me: st.me, cartObj: st.cart, items, rimTop: B.top.yRear, cartHeld: st.hasCart, cartVisible: cart.visible, avoid: floorItems.map((fi) => ({ x: fi.mesh.position.x, z: fi.mesh.position.z, r: 0.3 })).concat(checkout.avoid()), isBlocked: (x, z) => !!collide2D(x, z, 0.3) });
+    checkout.tick(dt);
+    hover = st.mode === 'walk' && !checkout.busy ? pickTarget() : null;
     updateHighlight();
     marker.visible = !st.hasCart && cart.visible; if (marker.visible) { arrow.position.y = 1.55 + Math.sin(st.t * 3) * 0.06; arrow.rotation.y += dt * 1.5; }
     if (st.toastT > 0) { st.toastT -= dt; if (st.toastT <= 0) elToast.style.display = 'none'; }
+    { const pb = Math.round(elPanel.getBoundingClientRect().bottom + 10); if (pb !== st.msgTop) { st.msgTop = pb; hud.style.setProperty('--dh-msg-top', `${pb}px`); } } // 알림은 왼쪽 정보 상자 바로 아래 (미니맵·폰 위젯과 안 겹침)
     updateHud();
   }
   function render(r) { r.render(scene, camera); }
@@ -1016,13 +1025,14 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit } 
       clearFloor() { while (floorItems.length) { const fi = floorItems[0]; removeFloorItem(fi); disposeItemMesh(fi.mesh); } },
       ghostState() { return ghostSol && { where: ghostSol.where, state: ghostSol.state }; },
       mischief(kind, amt) { staff.mischief(kind, amt); }, staff: () => ({ ...staff.S, x: staff.root.position.x, z: staff.root.position.z, ach: staff.S.ach.slice() }), staffAt(x, z) { staff.root.position.set(x, 0, z); },
+      co: checkout.dbg,
       camAt(pos, tgt) { st.camOv = pos ? { pos: new THREE.Vector3(...pos), tgt: new THREE.Vector3(...tgt) } : null; },
       settle(sec = 1.5) { for (let t = 0; t < sec; t += 1 / 60) { cart.updateMatrixWorld(true); stepPhysics(1 / 60); } },
       push(sec, f = 1, s = 0, run = false) { for (let t = 0; t < sec; t += 1 / 60) { driveCart(1 / 60, { f, s, run }); cart.updateMatrixWorld(true); stepPhysics(1 / 60); } },
     },
     dispose() {
       dom.removeEventListener('pointerdown', onDown); dom.removeEventListener('pointermove', onMove); window.removeEventListener('pointerup', onUp); dom.removeEventListener('wheel', onWheel); dom.removeEventListener('contextmenu', onCtx);
-      staff.dispose(); hud.remove(); css.remove(); try { ac?.close(); } catch { /* */ }
+      staff.dispose(); checkout.dispose(); hud.remove(); css.remove(); try { ac?.close(); } catch { /* */ }
       const seen = new Set();
       scene.traverse((o) => {
         if (o.geometry && !seen.has(o.geometry)) { seen.add(o.geometry); o.geometry.dispose(); }
