@@ -1,7 +1,7 @@
 import {
   CAP_DAY, CAP_MONTH, CAP_WEEK, DAILY_BUM, LIMIT_MSG, OPENING_MS, PART_BUM,
   attemptCap, bestScore, boardView, dailyRankPays, decideAttempt, kstDayKey,
-  monthlyAnnounceMs, monthlyPays, participationPay, payOnce, pointRows, rankRows, weekKey, weeklyPays,
+  monthlyAnnounceMs, monthlyPays, participationPay, payOnce, pointRows, rankRows, titleHistoryLabel, weekKey, weekPeriodLabel, weeklyPays, WEEKLY_TITLES,
 } from '../server/phone/src/bump24/rules.js';
 
 const assert = (c, m) => { if (!c) throw new Error(m); };
@@ -52,7 +52,21 @@ const points = pointRows([
 ]);
 assert(points.find((p) => p.accountId === 'u').points === 5 && points.find((p) => p.guest).points === 3, 'guest points count, user sums');
 const wk = weeklyPays(points, '2026-11-09');
-assert(wk.length === 1 && wk[0].accountId === 'u' && wk[0].title === '장보기왕', 'weekly skips guest');
+assert(wk.length === 1 && wk[0].accountId === 'u' && wk[0].title === 'title_bigspender', 'weekly skips guest, 1st gets 편의점 큰손');
+const three = weeklyPays([
+  { rank: 1, accountId: 'a', guest: false, name: 'A' },
+  { rank: 2, accountId: 'b', guest: false, name: 'B' },
+  { rank: 3, accountId: 'c', guest: false, name: 'C' },
+  { rank: 4, accountId: 'd', guest: false, name: 'D' },
+  { rank: 1, accountId: null, guest: true, name: '손님' },
+], '2026-11-09');
+assert(three.find((p) => p.accountId === 'a').title === WEEKLY_TITLES[1].id, '1 편의점 큰손');
+assert(three.find((p) => p.accountId === 'b').title === WEEKLY_TITLES[2].id, '2 플렉스 단골');
+assert(three.find((p) => p.accountId === 'c').title === WEEKLY_TITLES[3].id, '3 1+1 사냥꾼');
+assert(three.find((p) => p.accountId === 'd').title == null, '4th has no title');
+assert(!three.some((p) => p.guest || !p.accountId), 'guest not paid weekly');
+assert(weekPeriodLabel('2026-11-09') === '11월 2주차', weekPeriodLabel('2026-11-09'));
+assert(titleHistoryLabel('2026-11-09', 'title_bigspender') === '11월 2주차 편의점 큰손', 'history label');
 const mo = monthlyPays(points, '2026-11');
 assert(mo[0].amount === 10000, 'monthly 1st');
 assert(new Date(monthlyAnnounceMs(2026, 11) + 9 * 3600e3).toISOString().slice(0, 10) === '2026-12-07', 'first monthly announce');

@@ -81,7 +81,8 @@
     "econ:test": "node scripts/test-econ-mock.mjs && node scripts/test-fare-pop.mjs",
     "arrive:test": "node scripts/test-station-arrive.mjs",
     "arrive:e2e": "node scripts/e2e-station-arrive.mjs",
-    "bp24:entry": "node scripts/e2e-bump24-jeongja-entry.mjs"
+    "bp24:entry": "node scripts/e2e-bump24-jeongja-entry.mjs",
+    "titles:test": "node scripts/test-bp24-rank.mjs && node scripts/test-weekly-titles.mjs"
   },
   "dependencies": {
     "three": "^0.186.1"

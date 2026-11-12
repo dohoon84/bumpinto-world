@@ -2,8 +2,9 @@
 import { appendLedger } from '../account/ledger.js';
 import {
   bestScore, boardView, dailyRankPays, decideAttempt, kstDayKey, monthKey, monthlyPays,
-  participationPay, pointRows, rankRows, weekKey, weeklyPays,
+  participationPay, pointRows, rankRows, weekKey, weeklyPays, weeklyTitleOf,
 } from './rules.js';
+import { awardWeeklyTitles } from './titles.js';
 
 export function rankEnabled(env) {
   return String(env?.BP24_RANK_ENABLED ?? '1') !== '0';
@@ -144,6 +145,7 @@ export async function settleWeek(db, env, week, days, now) {
   for (const day of days) tops.push(...(await dayTops(db, day)).tops);
   const rows = pointRows(tops);
   await savePodium(db, `week:${week}`, rows, now);
+  try { await awardWeeklyTitles(db, week, rows, now); } catch { /* 마이그레이션 전이면 범 지급만 */ }
   return applyPays(db, env, weeklyPays(rows, week).map((p) => ({ ...p, playerKey: `a:${p.accountId}` })), now, `week:${week}`);
 }
 export async function settleMonth(db, env, month, days, now) {
@@ -176,7 +178,9 @@ async function applyPays(db, env, pays, now, period) {
         accountId: p.accountId, amount: p.amount, kind: 'free', reason: 'bp24', ref: p.storeId || period, idempotencyKey: p.key,
       }, { now });
     }
-    await addNotice(db, { ...p, text: `+${p.amount} bum` }, now);
+    const def = p.title ? weeklyTitleOf(p.rank) : null;
+    const text = def ? `${def.ko} · +${p.amount} bum` : `+${p.amount} bum`;
+    await addNotice(db, { ...p, text }, now);
     applied.push(p.key);
   }
   return applied;
