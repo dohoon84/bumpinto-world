@@ -224,6 +224,12 @@ body.mobile #depot-hud .co-pay{width:min(330px,calc(100vw - 32px));max-height:ca
 body.mobile #depot-hud .co-pay button{min-height:44px}
 body.mobile #depot-hud .co-rcpt{width:210px;max-height:calc(100vh - var(--m-t,12px) - 66px)}
 body.mobile #depot-hud .co-scan{animation:none}
+body.mobile #depot-hud .dh-panel{top:calc(var(--m-t,12px) + 52px);max-width:min(230px,27vw);font-size:11.5px;line-height:1.4;padding:6px 10px}
+body.mobile #depot-hud .dh-panel b{font-size:12.5px}
+body.mobile #depot-hud .dh-toast{max-width:min(230px,27vw);font-size:13px;padding:7px 11px;max-height:calc(4.2em + 14px);overflow:hidden}
+body.mobile #depot-hud .dh-ach{max-width:min(230px,27vw)}body.mobile #depot-hud .dh-ach div{font-size:12.5px;padding:6px 11px}
+body.mobile #depot-hud .dh-ach div:not(:last-child){display:none}
+body.mobile #depot-hud.co-busy .dh-target,body.mobile #depot-hud.co-rc .dh-target,body.mobile #depot-hud.co-busy .dh-help,body.mobile #depot-hud.co-rc .dh-help{display:none!important}
 @media (max-height:500px){body.mobile #depot-hud .co-pay img{width:72px;top:4px}body.mobile #depot-hud .co-pay h3{padding-right:70px;margin-bottom:4px}body.mobile #depot-hud .co-pay .r{padding:0}}`;
   document.head.appendChild(css);
   const el = (cls, html = '') => { const d = document.createElement('div'); d.className = cls; d.innerHTML = html; hud.appendChild(d); return d; };
@@ -494,6 +500,7 @@ ${T.dmg ? `<div class="r red"><span>변상 · 매장에서 깬 계란 ${T.storeE
   function tick(dt) {
     beltTex.offset.y = (beltTex.offset.y + dt * 0.55 * 3) % 1; // 벨트 흐름 (모든 줄 공유)
     tickNpc(dt); tickPlayer(dt);
+    { const on = elRc.style.display === 'block'; if (on !== co.rcOn) { co.rcOn = on; hud.classList.toggle('co-rc', on); } }
     if (co.phase === 'done') {
       if (co.rcHideT > 0) { co.rcHideT -= dt; if (co.rcHideT <= 0) { elRc.style.display = 'none'; elChip.style.display = 'block'; elChip.textContent = `🧾 영수증 ${won(co.T.total)}원${co.checked ? ' · 확인 ✔' : ' (출구에서 보여 주기)'}`; } }
       if (co.rc3dT > 0) { co.rc3dT -= dt; if (co.rc3dT <= 0) { rc3d.visible = false; disp.visible = false; } }
