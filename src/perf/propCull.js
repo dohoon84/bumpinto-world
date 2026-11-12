@@ -32,10 +32,11 @@ export function createPropCull({ minPx = 0.5, maxTopY = 40, intervalSec = 0.2, g
     });
     if (box.isEmpty()) return null;
     const c = box.getCenter(new THREE.Vector3()), r = box.getSize(new THREE.Vector3()).length() / 2;
-    return { c, r: r * 1.15 + 1, r0: r, top: wbox.max.y, meshes, count: countDesc(root), hidden: false };
+    return { c, r: r * 1.15 + 1, r0: r, top: wbox.max.y, meshes, count: countDesc(root), hidden: false, maxTopY: null };
   }
   const countDesc = (root) => { let n = 0; root.traverse(() => { n++; }); return n; };
-  function add(root) { if (!root || items.has(root)) return false; const m = measure(root); if (!m) return false; items.set(root, m); stats.roots = items.size; return true; }
+  // opts.maxTopY: 이 덩어리만의 실루엣 높이 한계(남산 산 위 소품처럼 뒤가 늘 안개 낀 산이면 Infinity)
+  function add(root, opts = null) { if (!root || items.has(root)) return false; const m = measure(root); if (!m) return false; if (opts?.maxTopY != null) m.maxTopY = opts.maxTopY; items.set(root, m); stats.roots = items.size; return true; }
   function show(it, on) { if (it.hidden === !on) return; it.hidden = !on; for (const o of it.meshes) setHidden(o, R, !on); }
   function remove(root) { const it = items.get(root); if (!it) return; show(it, true); items.delete(root); stats.roots = items.size; }
   function sync(renderer, scene, camera) {
@@ -49,15 +50,16 @@ export function createPropCull({ minPx = 0.5, maxTopY = 40, intervalSec = 0.2, g
     for (const [root, it0] of items) {
       let it = it0;
       if (!root.parent) { remove(root); continue; }
-      if (recount && countDesc(root) !== it.count) { show(it, true); const m = measure(root); if (!m) continue; items.set(root, (it = m)); }
+      if (recount && countDesc(root) !== it.count) { show(it, true); const m = measure(root); if (!m) continue; m.maxTopY = it.maxTopY; items.set(root, (it = m)); }
+      const topY = it.maxTopY ?? maxTopY;
       sph.copy(it.c).applyMatrix4(root.matrixWorld);
       const r = it.r * root.matrixWorld.getMaxScaleOnAxis();
       const d = sph.distanceTo(camera.position);
       const near = d - r;
-      const hideFog = near > fogFar * 1.02 && it.top < maxTopY;
+      const hideFog = near > fogFar * 1.02 && it.top < topY;
       const hideTiny = k > 0 && d > r && (r / d) * k < minPx;
       // [jamsil-perf] 작은 덩어리(실제 반지름 ≤ 10 m)는 안개 대비 화면 크기로도 거른다(instancer 와 같은 기준)
-      const hideFar = farOn && it.top < maxTopY && farContrastHide(it.r0 * root.matrixWorld.getMaxScaleOnAxis(), d, k, scene.fog);
+      const hideFar = farOn && it.top < topY && farContrastHide(it.r0 * root.matrixWorld.getMaxScaleOnAxis(), d, k, scene.fog);
       const hide = hideFog || hideTiny || hideFar;
       show(it, !hide);
       if (hide) { hr++; hm += it.meshes.length; if (hideFog) fog++; else tiny++; }
