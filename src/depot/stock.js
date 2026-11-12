@@ -21,8 +21,8 @@ const AISLE_SKU = {
     29.0: ['chips', 'choco', 'cookie', 'cereal'],
     34.5: ['rice', 'grain', 'flour', 'sauce'],
     40.1: ['ramen', 'cupramen', 'ricepack', 'canned'],
-    45.6: ['tissue', 'detergent', 'trashbag', 'towel'],
-    48.3: ['tissue', 'towel', 'detergent', 'trashbag'],
+    45.6: ['diaper', 'wipes', 'formula', 'tissue'], // [depot-live] 유아
+    48.3: ['shampoo', 'toothpaste', 'vitamin', 'detergent'], // [depot-live] 뷰티·건강
     53.9: ['water', 'soda', 'juice', 'ion', 'tea', 'bottle'],
     59.4: ['rice', 'ramen', 'cupramen', 'grain'],
     64.8: ['chips', 'choco', 'cookie', 'cereal'],
@@ -34,8 +34,8 @@ const AISLE_SKU = {
     29.0: ['water', 'soda', 'juice', 'ion'],
     34.5: ['tissue', 'detergent', 'dishsoap', 'trashbag'],
     40.1: ['ramen', 'cupramen', 'ricepack', 'canned'],
-    45.6: ['tissue', 'towel', 'wrap', 'foil'],
-    48.3: ['tissue', 'detergent', 'towel', 'trashbag'],
+    45.6: ['potset', 'pan', 'container', 'wrap'], // [depot-live] 주방용품
+    48.3: ['copypaper', 'notebook', 'pens', 'tissue'], // [depot-live] 문구·사무
     53.9: ['water', 'soda', 'juice', 'ion', 'tea'],
     59.4: ['ramen', 'cupramen', 'ricepack', 'canned'],
     64.8: ['chips', 'choco', 'cookie', 'cereal'],
@@ -45,10 +45,10 @@ const AISLE_SKU = {
     17.9: ['cereal', 'cookie', 'choco', 'flour'],
     23.4: ['canned', 'sauce', 'ricepack', 'cupramen'],
     29.0: ['ion', 'tea', 'juice', 'water'],
-    34.5: ['detergent', 'dishsoap', 'trashbag', 'tissue'],
+    34.5: ['coffee', 'stickcoffee', 'nuts', 'tea'], // [depot-live] 커피·견과
     40.1: ['ramen', 'canned', 'sauce', 'ricepack'],
-    45.6: ['flour', 'grain', 'sauce', 'canned'],
-    48.3: ['tissue', 'towel', 'detergent', 'wrap'],
+    45.6: ['seaweed', 'anchovy', 'nuts', 'canned'], // [depot-live] 건어물
+    48.3: ['oil', 'sesame', 'sauce', 'flour'], // [depot-live] 식용유·양념
     53.9: ['ion', 'tea', 'juice', 'water', 'soda'],
     59.4: ['cereal', 'cookie', 'choco', 'flour'],
     64.8: ['chips', 'choco', 'cookie', 'ramen'],
@@ -117,11 +117,31 @@ function mergeStatics(root, keep) {
 }
 
 // 2048 아틀라스: 8×8 칸(256px). 칸 안은 기존 상품 텍스처와 같이 앞/옆/위/예비.
-const ATLAS_N = 8;
+// [depot-live] 새 수산 트레이 윗면 그림 (랩 아래 내용물) · 스티커 문구
+const TRAY_STICK = { shrimp: '1kg', squid: '3미', crab: '2kg', clam: '1kg', octopus: '600g', abalone: '10미', sashimi: '500g', strawberry: '1kg', banchan: '3종', kimbap: '2줄' };
+const SEA_TOP = {
+  shrimp(g, X, Y, h, ell) { for (let k = 0; k < 14; k++) { const a = (k % 7) / 7, r = Math.floor(k / 7); const cx = X + h * (0.16 + a * 0.7), cy = Y + h * (0.34 + r * 0.34); g.strokeStyle = '#f08a6a'; g.lineWidth = 9; g.beginPath(); g.arc(cx, cy, 10, 0.3, Math.PI * 1.6); g.stroke(); g.strokeStyle = '#ffd2bf'; g.lineWidth = 2; g.stroke(); ell(cx + 9, cy - 6, 3, 2, 0, '#22262A'); } },
+  squid(g, X, Y, h, ell) { for (const ey of [0.3, 0.55, 0.8]) { ell(X + h * 0.42, Y + h * ey, h * 0.26, h * 0.08, 0, '#efe1d4'); g.fillStyle = '#e8c9b4'; g.beginPath(); g.moveTo(X + h * 0.1, Y + h * ey); g.lineTo(X + h * 0.2, Y + h * (ey - 0.07)); g.lineTo(X + h * 0.2, Y + h * (ey + 0.07)); g.fill(); g.strokeStyle = '#d8b8a0'; g.lineWidth = 3; for (let t = 0; t < 4; t++) { g.beginPath(); g.moveTo(X + h * 0.66, Y + h * ey + (t - 1.5) * 4); g.lineTo(X + h * 0.9, Y + h * ey + (t - 1.5) * 6); g.stroke(); } } },
+  crab(g, X, Y, h, ell) { for (const [ex, ey] of [[0.3, 0.32], [0.7, 0.32], [0.3, 0.72], [0.7, 0.72]]) { g.strokeStyle = '#a8402a'; g.lineWidth = 4; for (let t = -2; t <= 2; t++) { g.beginPath(); g.moveTo(X + h * ex, Y + h * ey); g.lineTo(X + h * (ex + 0.2), Y + h * (ey + t * 0.05)); g.moveTo(X + h * ex, Y + h * ey); g.lineTo(X + h * (ex - 0.2), Y + h * (ey + t * 0.05)); g.stroke(); } ell(X + h * ex, Y + h * ey, h * 0.13, h * 0.09, 0, '#c9563a'); ell(X + h * ex, Y + h * (ey - 0.02), h * 0.08, h * 0.04, 0, '#e07a5a'); } },
+  clam(g, X, Y, h, ell) { for (let k = 0; k < 30; k++) { const a = k * 2.39, r = Math.sqrt(k / 30) * h * 0.36; const cx = X + h / 2 + Math.cos(a) * r, cy = Y + h / 2 + Math.sin(a) * r; ell(cx, cy, 11, 8, a, k % 3 ? '#b8a88a' : '#8a7a62'); g.strokeStyle = 'rgba(60,50,40,.5)'; g.lineWidth = 1; g.beginPath(); g.ellipse(cx, cy, 7, 5, a, 0, Math.PI * 2); g.stroke(); } },
+  octopus(g, X, Y, h, ell) { g.strokeStyle = '#b0445a'; g.lineWidth = 10; for (let t = 0; t < 8; t++) { const a = t * Math.PI / 4; g.beginPath(); g.moveTo(X + h / 2, Y + h / 2); g.quadraticCurveTo(X + h / 2 + Math.cos(a + 0.5) * h * 0.3, Y + h / 2 + Math.sin(a + 0.5) * h * 0.3, X + h / 2 + Math.cos(a) * h * 0.4, Y + h / 2 + Math.sin(a) * h * 0.4); g.stroke(); } ell(X + h / 2, Y + h / 2, h * 0.14, h * 0.12, 0, '#c45a6a'); g.fillStyle = '#f2d8d8'; for (let t = 0; t < 16; t++) { const a = t * 0.79; g.fillRect(X + h / 2 + Math.cos(a) * h * 0.25, Y + h / 2 + Math.sin(a) * h * 0.25, 3, 3); } },
+  abalone(g, X, Y, h, ell) { for (let k = 0; k < 10; k++) { const cx = X + h * (0.18 + (k % 5) * 0.16), cy = Y + h * (k < 5 ? 0.33 : 0.68); ell(cx, cy, h * 0.075, h * 0.11, 0.2, '#5a6a5a'); ell(cx, cy, h * 0.05, h * 0.08, 0.2, '#c8b89a'); } },
+  sashimi(g, X, Y, h) { for (let k = 0; k < 9; k++) { g.fillStyle = k % 3 === 2 ? '#e8a0a0' : '#c2303a'; g.fillRect(X + 18 + (k % 3) * (h - 36) / 3, Y + 18 + Math.floor(k / 3) * (h - 36) / 3, (h - 36) / 3 - 6, (h - 36) / 3 - 6); } g.fillStyle = '#4f9a3a'; g.fillRect(X + h - 40, Y + 18, 18, 30); },
+  strawberry(g, X, Y, h, ell) { for (let k = 0; k < 20; k++) { const cx = X + h * (0.14 + (k % 5) * 0.18), cy = Y + h * (0.16 + Math.floor(k / 5) * 0.2); ell(cx, cy, 12, 14, 0, '#d9303a'); g.fillStyle = '#3f8a2a'; g.fillRect(cx - 6, cy - 16, 12, 5); g.fillStyle = '#f6e3a0'; g.fillRect(cx - 4, cy - 2, 2, 2); g.fillRect(cx + 3, cy + 4, 2, 2); } },
+  banchan(g, X, Y, h) { for (const [k, c] of [[0, '#c96a2a'], [1, '#d8c8a8'], [2, '#6a3a1a']]) { g.fillStyle = '#ffffff'; g.fillRect(X + 12 + k * (h - 24) / 3, Y + 14, (h - 24) / 3 - 6, h - 28); g.fillStyle = c; for (let t = 0; t < 40; t++) g.fillRect(X + 18 + k * (h - 24) / 3 + (t * 37 % ((h - 24) / 3 - 18)), Y + 22 + (t * 53 % (h - 46)), 6, 3); } },
+  kimbap(g, X, Y, h, ell) { for (let k = 0; k < 10; k++) { const cx = X + h * (0.16 + (k % 5) * 0.17), cy = Y + h * (k < 5 ? 0.33 : 0.68); ell(cx, cy, 17, 17, 0, '#1e2a1e'); ell(cx, cy, 13, 13, 0, '#f6f2e8'); ell(cx - 4, cy - 2, 3, 3, 0, '#e8a03a'); ell(cx + 4, cy + 1, 3, 3, 0, '#4f9a3a'); ell(cx, cy + 5, 3, 2, 0, '#d9442e'); } },
+};
+const LIVE_FISH = {
+  flatfish(g, x0, y0, h) { for (const fx of [x0, x0 + h]) { g.fillStyle = '#3d7ea0'; g.fillRect(fx, y0, h, h); g.beginPath(); g.ellipse(fx + h * 0.48, y0 + h * 0.5, h * 0.4, h * 0.2, 0, 0, Math.PI * 2); g.fillStyle = '#7a6a52'; g.fill(); g.fillStyle = 'rgba(40,30,20,.35)'; for (let k = 0; k < 18; k++) g.fillRect(fx + h * (0.15 + (k * 0.37) % 0.6), y0 + h * (0.38 + (k * 0.29) % 0.22), 5, 4); g.beginPath(); g.moveTo(fx + h * 0.86, y0 + h * 0.5); g.lineTo(fx + h * 0.98, y0 + h * 0.36); g.lineTo(fx + h * 0.98, y0 + h * 0.64); g.closePath(); g.fillStyle = '#6a5a44'; g.fill(); g.fillStyle = '#f2f2e8'; g.beginPath(); g.arc(fx + h * 0.2, y0 + h * 0.44, 5, 0, 7); g.fill(); g.fillStyle = '#111'; g.beginPath(); g.arc(fx + h * 0.2, y0 + h * 0.44, 2.5, 0, 7); g.fill(); } },
+  rockfish(g, x0, y0, h) { for (const fx of [x0, x0 + h]) { g.fillStyle = '#3d7ea0'; g.fillRect(fx, y0, h, h); g.beginPath(); g.ellipse(fx + h * 0.46, y0 + h * 0.52, h * 0.34, h * 0.24, 0, 0, Math.PI * 2); g.fillStyle = '#4a4a42'; g.fill(); g.fillStyle = '#3a3a34'; for (let k = 0; k < 7; k++) { g.beginPath(); g.moveTo(fx + h * (0.24 + k * 0.06), y0 + h * 0.3); g.lineTo(fx + h * (0.27 + k * 0.06), y0 + h * 0.18); g.lineTo(fx + h * (0.3 + k * 0.06), y0 + h * 0.3); g.fill(); } g.beginPath(); g.moveTo(fx + h * 0.78, y0 + h * 0.52); g.lineTo(fx + h * 0.95, y0 + h * 0.34); g.lineTo(fx + h * 0.95, y0 + h * 0.7); g.closePath(); g.fill(); g.fillStyle = '#f2e8c8'; g.beginPath(); g.arc(fx + h * 0.22, y0 + h * 0.46, 6, 0, 7); g.fill(); g.fillStyle = '#111'; g.beginPath(); g.arc(fx + h * 0.22, y0 + h * 0.46, 3, 0, 7); g.fill(); } },
+};
+// [depot-live] 10×10 = 100칸 (기본 10 + 카탈로그 86). 칸은 256px 기준으로 그리고 g.scale 로 줄임 — 폰 1280² 은 칸 128px 그대로.
+const ATLAS_N = 10;
 let ATLAS_S = 2048, CELL = ATLAS_S / ATLAS_N;
-function setAtlasTier(mobile) { ATLAS_S = mobile ? 1024 : 2048; CELL = ATLAS_S / ATLAS_N; }
+function setAtlasTier(mobile) { ATLAS_S = mobile ? 1280 : 2048; CELL = ATLAS_S / ATLAS_N; }
+const PAINT = 256; // paintCell 논리 칸 크기
 function paintCell(g, cx, cy, p) {
-  const x0 = cx * CELL, y0 = cy * CELL, h = CELL / 2;
+  const x0 = cx * PAINT, y0 = cy * PAINT, h = PAINT / 2;
   const face = (x, y, w, h, fill, title, sub, side = false) => {
     g.fillStyle = fill; g.fillRect(x, y, w, h);
     g.fillStyle = 'rgba(0,0,0,.08)'; g.fillRect(x, y, w, 8);
@@ -178,6 +198,7 @@ function paintCell(g, cx, cy, p) {
         g.restore();
         g.beginPath(); g.moveTo(X + h * (0.5 + d * 0.38), Y + h * ey); g.lineTo(X + h * (0.5 + d * 0.48), Y + h * ey - 12); g.lineTo(X + h * (0.5 + d * 0.48), Y + h * ey + 12); g.closePath(); g.fillStyle = '#3a5a72'; g.fill();
       }
+    } else if (SEA_TOP[p.id]) { SEA_TOP[p.id](g, X, Y, h, ell, p);
     } else { // 연어 등: 주황 필렛 + 흰 결
       g.fillStyle = p.color; g.fillRect(X + 12, Y + 12, h - 24, h - 24);
       g.strokeStyle = 'rgba(255,240,225,.75)'; g.lineWidth = 3;
@@ -185,12 +206,13 @@ function paintCell(g, cx, cy, p) {
     }
     g.fillStyle = 'rgba(255,255,255,.2)'; g.fillRect(X + 10, Y + 10, h * 0.3, h - 20); // 랩 광택
     g.fillStyle = '#F2C230'; g.fillRect(X + h - 54, Y + h - 40, 44, 28); g.fillStyle = '#22262A'; g.font = '900 13px "Pretendard",sans-serif'; g.textAlign = 'center';
-    g.fillText(p.id === 'chicken' ? '2마리' : p.id === 'mackerel' ? '10팩' : '100g', X + h - 32, Y + h - 22);
+    g.fillText(p.id === 'chicken' ? '2마리' : p.id === 'mackerel' ? '10팩' : TRAY_STICK[p.id] || '100g', X + h - 32, Y + h - 22);
   } else {
     g.fillStyle = p.color; g.fillRect(x0, y0 + h, h, h); // 위
     g.fillStyle = p.ink || '#222'; g.font = '900 32px "Pretendard",sans-serif'; g.textAlign = 'center';
     g.fillText(p.name.split(' ')[0], x0 + h / 2, y0 + h + h / 2);
   }
+  if (LIVE_FISH[p.id]) LIVE_FISH[p.id](g, x0, y0, h); // 수조 활어: 앞·옆 면을 물고기 옆모습으로 (투명 배경 대신 물빛)
   // 예비: 파렛트 랩 줄무늬
   g.fillStyle = '#e8e4da'; g.fillRect(x0 + h, y0 + h, h, h);
   g.strokeStyle = 'rgba(180,200,210,.55)'; g.lineWidth = 4;
@@ -217,7 +239,7 @@ function boxGeoForCell(sx, sy, sz, cx, cy) {
 
 const BASE_IDS = ['egg', 'water', 'rice', 'tissue', 'ramen', 'chips', 'soda', 'melon', 'meat', 'bottle'];
 function makeAtlas(keep) {
-  // 아틀라스 64칸: 장보기 기본 10종 + 진열 카탈로그만 (가전·구매카드는 electronics.js 가 따로 그림 — 넣으면 칸이 넘쳐 뒤 상품이 빠짐)
+  // 아틀라스 100칸: 장보기 기본 10종 + 진열 카탈로그만 (가전·구매카드는 electronics.js 가 따로 그림 — 넣으면 칸이 넘쳐 뒤 상품이 빠짐)
   const ids = new Set([...BASE_IDS, ...STOCK_PRODUCTS.map((p) => p.id)]);
   const list = PRODUCTS.filter((p) => ids.has(p.id));
   const index = {};
@@ -225,9 +247,9 @@ function makeAtlas(keep) {
     g.fillStyle = '#ddd'; g.fillRect(0, 0, ATLAS_S, ATLAS_S);
     list.forEach((p, i) => {
       const cx = i % ATLAS_N, cy = Math.floor(i / ATLAS_N);
-      if (cy >= ATLAS_N) return;
+      if (cy >= ATLAS_N) { console.warn('[depot-stock] atlas full, skipped', p.id); return; }
       index[p.id] = { cx, cy, i };
-      paintCell(g, cx, cy, p);
+      g.save(); g.translate(cx * CELL, cy * CELL); g.scale(CELL / PAINT, CELL / PAINT); paintCell(g, 0, 0, p); g.restore();
     });
   });
   keep(t);
@@ -419,11 +441,16 @@ export function mountStock({ scene, keep, canvasTex: canvasTexFn, TX, racks, obs
     signs.push({ key: tex ? `tx:${tex.uuid}` : `h:${title}`, img: tex?.image || null, title, sub, tall: false, w: 3.2, h: 0.8, x, y: hangY, z, ry: 0 });
   }
   const TEX_HANG = { 53.9: TX?.['hang-water-drinks'], 59.4: TX?.['hang-rice-grain'] || TX?.['hang-ramen-snack'], 48.3: TX?.['hang-household'], 29.0: TX?.['hang-ramen-snack'] };
+  // [depot-live] 메인 통로(48.3)는 블록마다 코너가 달라 블록별 문구
+  const HANG_AT = { '48.3:28': ['유아·뷰티', 'BABY · BEAUTY'], '48.3:58': ['주방용품·문구', 'KITCHEN · OFFICE'] };
   for (const x of aisleXs) {
     const copy = HANG_COPY[x] || ['범창고', 'BUMP DEPOT'];
-    hangSign(copy[0], copy[1], x, 28, TEX_HANG[x]); // 통로당 1장 (양면)
-    if (x < 50) hangSign(copy[0], copy[1], x, 58, TEX_HANG[x]);
+    const at = (z) => HANG_AT[`${x}:${z}`];
+    hangSign(...(at(28) || copy), x, 28, at(28) ? null : TEX_HANG[x]); // 통로당 1장 (양면)
+    if (x < 50) hangSign(...(at(58) || copy), x, 58, at(58) ? null : TEX_HANG[x]);
   }
+  hangSign('커피·견과', 'COFFEE · NUTS', 34.5, 92, null);
+  hangSign('건어물·식용유', 'DRIED · OIL', 47.2, 92, null);
   hangSign('냉동', 'FROZEN · 유리문 냉동창', 74, 70, null);
   hangSign('신선·정육', 'MEAT · FISH · DAIRY', 40, 112, null);
   hangSign('과일·채소', 'PRODUCE', 16, 112, null);
@@ -472,7 +499,7 @@ export function mountStock({ scene, keep, canvasTex: canvasTexFn, TX, racks, obs
 
   // ----- 주변 집기: 냉동·신선·베이커리·주류·펫·계절·의류·시식·델리 -----
   const fxRoot = new THREE.Group(); scene.add(fxRoot);
-  const fixtures = buildFixtures({ scene: fxRoot, keep, ct, atlas, unitBox, obstacles, prodMeshes, m4, pv, qy, s3, col, Y, q0, findCluster, addCluster, clusters });
+  const fixtures = buildFixtures({ isMobile, scene: fxRoot, keep, ct, atlas, unitBox, obstacles, prodMeshes, m4, pv, qy, s3, col, Y, q0, findCluster, addCluster, clusters });
 
   mergeStatics(fxRoot, keep); // 집기 정적 메시 → 재질별 1개
   finalizeStock({ scene, keep, clusters, atlas, unitBox, prodMeshes, tagG, ct, proxyMat, m4, pv, qy, s3, col, Y, q0, isMobile });
@@ -496,7 +523,7 @@ export function mountStock({ scene, keep, canvasTex: canvasTexFn, TX, racks, obs
   return { prodMeshes, clusters, tick, fixtures, fxRoot };
 }
 
-function buildFixtures({ scene, keep, ct, atlas, unitBox, obstacles, prodMeshes, m4, pv, qy, s3, col, Y, q0, findCluster, addCluster, clusters }) {
+function buildFixtures({ isMobile = false, scene, keep, ct, atlas, unitBox, obstacles, prodMeshes, m4, pv, qy, s3, col, Y, q0, findCluster, addCluster, clusters }) {
   const steel = keep(new THREE.MeshLambertMaterial({ color: 0x6a7380 }));
   const stain = keep(new THREE.MeshLambertMaterial({ color: 0x9aa3ab }));
   const wood = keep(new THREE.MeshLambertMaterial({ color: 0x8a6232 }));
@@ -512,7 +539,7 @@ function buildFixtures({ scene, keep, ct, atlas, unitBox, obstacles, prodMeshes,
   const warmLight = keep(new THREE.MeshBasicMaterial({ color: 0xffd89a }));
   const black = keep(new THREE.MeshLambertMaterial({ color: 0x2a2e32 }));
   const palGeo = keep(new THREE.BoxGeometry(1.219, 0.14, 1.016));
-  const palMat = keep(new THREE.MeshLambertMaterial({ color: 0xb08a58 }));
+  const palMat = keep(new THREE.MeshLambertMaterial({ color: 0xffffff })); // 색은 인스턴스마다 (PAL_C)
   const mistGeo = keep(new THREE.PlaneGeometry(2.25, 1.4));
   const mistShared = keep(new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.0, depthWrite: false, side: THREE.DoubleSide, fog: true }));
 
@@ -589,6 +616,7 @@ function buildFixtures({ scene, keep, ct, atlas, unitBox, obstacles, prodMeshes,
   // 계절 프록시
   buildItemIMs(seaCluster, atlas, unitBox, prodMeshes, m4, pv, qy, s3, col, Y);
 
+
   // ===== 후면 신선: 정육/수산/유제품 오픈 케이스 (벽 z≈118.8) =====
   //   밝은 스테인리스 안쪽·흰 캐노피 조명·가격 띠·얼음 바닥(수산)·초록 칸막이. 모두 공유 재질이라 mergeStatics 로 드로콜 그대로.
   const freshCluster = addCluster(40, 114);
@@ -600,7 +628,7 @@ function buildFixtures({ scene, keep, ct, atlas, unitBox, obstacles, prodMeshes,
   const garnish = keep(new THREE.MeshLambertMaterial({ color: 0x4f9a3a, emissive: 0x10260c }));
   // 가격 띠: 한 장 텍스처에 칸 10개 — 칸마다 UV 로 골라 씀
   const PRICE = [['범한돈 삼겹살', '100g 2,590'], ['범우 등심', '100g 6,980'], ['범닭 한 마리', '1kg 7,490'], ['범한돈 목살', '100g 2,390'], ['노르웨이 연어', '100g 4,290'], ['범고등어', '2손 9,900'], ['범우유 2.3L', '5,680'], ['범요거트', '12입 8,990'], ['범치즈', '36매 9,480'], ['범버터', '454g 8,900']];
-  const priceT = keep(ct(2048, 64, (g) => PRICE.forEach(([n, pr], k) => {
+  const priceT = keep(ct(Math.ceil(204.8 * PRICE.length), 64, (g) => PRICE.forEach(([n, pr], k) => {
     const x = k * 204.8; g.fillStyle = '#FBF7EE'; g.fillRect(x, 0, 204.8, 64); g.fillStyle = k % 4 === 0 ? '#D9442E' : '#1E5A45'; g.fillRect(x, 0, 8, 64);
     g.fillStyle = '#22262A'; g.font = '800 20px "Pretendard",sans-serif'; g.textAlign = 'left'; g.textBaseline = 'middle'; g.fillText(n, x + 16, 20);
     g.fillStyle = k % 4 === 0 ? '#D9442E' : '#22262A'; g.font = '900 26px "Pretendard",sans-serif'; g.textAlign = 'right'; g.fillText(pr, x + 196, 46);
@@ -660,6 +688,7 @@ function buildFixtures({ scene, keep, ct, atlas, unitBox, obstacles, prodMeshes,
   openCase(42.4, 52, 118.7, ['salmon', 'mackerel', 'salmon', 'mackerel'], { ice: true, k0: 4 }); // 수산 (얼음 위)
   openCase(52.4, 63.5, 118.7, ['milk', 'yogurt', 'cheese', 'butter', 'egg'], { k0: 6 }); // 유제품·계란
 
+
   // 계란/유제품 업라이트 냉장고: 통짜 상자 대신 열린 앞면(옆판·뒤판·천장·선반 3단·조명) — 안의 계란이 보임
   {
     const cx = 58, z = 116.4, W2 = 10, H2 = 2.0, D2 = 0.85;
@@ -693,9 +722,9 @@ function buildFixtures({ scene, keep, ct, atlas, unitBox, obstacles, prodMeshes,
     { x: 19.5, z: 111.5, id: 'onion', color: 0x8a6a30 },
     { x: 24, z: 111.5, id: 'banana', color: 0xc8a028 },
     { x: 28, z: 111.5, id: 'cabbage', color: 0x6a8a40 },
-    { x: 8, z: 114.6, id: 'apple', color: 0x8a2a1a },
-    { x: 13, z: 114.6, id: 'mandarin', color: 0xb85a10 },
-    { x: 18, z: 114.6, id: 'onion', color: 0x8a6a30 },
+    { x: 8, z: 114.6, id: 'potato', color: 0x9a7a4a }, // [depot-live] 감자·딸기·포도 추가 (중복 빈 대신)
+    { x: 13, z: 114.6, id: 'strawberry', color: 0xb8202a },
+    { x: 18, z: 114.6, id: 'grape', color: 0x7aa83a },
     { x: 23.5, z: 114.6, id: 'melon', color: 0x2d6a2d },
   ];
   const binG = keep(new THREE.BoxGeometry(3.4, 0.7, 2.2));
@@ -714,8 +743,10 @@ function buildFixtures({ scene, keep, ct, atlas, unitBox, obstacles, prodMeshes,
     const [sx, sy, sz] = p.size;
     const list = prodCluster.items.get(p.id) || []; prodCluster.items.set(p.id, list);
     // 빈 위에 집기 가능한 상품 몇 개 (가까이서만 보임)
-    for (let k = 0; k < 4; k++) {
-      list.push({ x: b.x + (k % 2 ? 0.45 : -0.45), y: 0.85 + sy / 2, z: b.z + (k < 2 ? 0.35 : -0.35), rot: 0, face: 1, pickable: true, sx, sy, sz, pid: p.id });
+    // [depot-live] 둔덕(높이 ~1.2) 속에 묻히지 않게 빈 앞·뒤 테두리 쪽(둔덕 밖)에 3개씩
+    for (let k = 0; k < 6; k++) {
+      const edge = k < 3 ? -1 : 1, zz = b.z + edge * (1.08 - Math.min(sz, 0.3) / 2);
+      list.push({ x: b.x + ((k % 3) - 1) * 1.1, y: 0.76 + sy / 2, z: zz, rot: 0, face: edge > 0 ? 1 : -1, pickable: true, sx, sy, sz, pid: p.id });
     }
   });
   if (moundI.instanceColor) moundI.instanceColor.needsUpdate = true;
@@ -743,6 +774,10 @@ function buildFixtures({ scene, keep, ct, atlas, unitBox, obstacles, prodMeshes,
       const list = deliCluster.items.get(pr.id) || []; deliCluster.items.set(pr.id, list);
       for (let i = 0; i < n; i++) list.push({ x: 68.5 + i * 1.4, y: 1.12 + sy / 2, z: 114.7, rot: 0, face: 1, pickable: true, sx, sy, sz, pid: pr.id });
     }
+    // [depot-live] 반찬·김밥: 통닭 줄 앞(손님 쪽) 한 줄 더
+    for (let i = 0; i < 18; i++) { const pr = BY_ID[i % 3 === 2 ? 'kimbap' : 'banchan']; if (!pr) continue; const [sx, sy, sz] = pr.size;
+      const list = deliCluster.items.get(pr.id) || []; deliCluster.items.set(pr.id, list);
+      list.push({ x: 67.9 + i * 0.72, y: 1.12 + sy / 2, z: 114.3, rot: 0, face: 1, pickable: true, sx, sy, sz, pid: pr.id }); }
   }
   buildItemIMs(deliCluster, atlas, unitBox, prodMeshes, m4, pv, qy, s3, col, Y);
 
@@ -854,7 +889,12 @@ function buildFixtures({ scene, keep, ct, atlas, unitBox, obstacles, prodMeshes,
   // 바닥 파렛트 1 드로콜
   if (palAt.length) {
     const pals = new THREE.InstancedMesh(palGeo, palMat, palAt.length / 2);
-    for (let i = 0; i < palAt.length / 2; i++) { m4.makeTranslation(palAt[2 * i], 0.07, palAt[2 * i + 1]); pals.setMatrixAt(i, m4); }
+    const PAL_C = [0xb08a58, 0x9a744a, 0xc49a66, 0x2f6fb0, 0xb08a58, 0x8a9096]; // [depot-live] 원목 3톤 · 파란 플라스틱 · 회색 플라스틱
+    for (let i = 0; i < palAt.length / 2; i++) {
+      m4.makeTranslation(palAt[2 * i], 0.07, palAt[2 * i + 1]); pals.setMatrixAt(i, m4);
+      col.setHex(PAL_C[Math.floor(hash01(palAt[2 * i] * 1.7 + palAt[2 * i + 1]) * PAL_C.length)]); pals.setColorAt(i, col);
+    }
+    if (pals.instanceColor) pals.instanceColor.needsUpdate = true;
     pals.computeBoundingSphere(); scene.add(pals);
   }
   // 냉기 안개: 가까운 케이스만 InstancedMesh 1개로 (문 앞에서 살랑)
