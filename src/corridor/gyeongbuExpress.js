@@ -2,6 +2,7 @@
 //   차체는 정자역 시내버스와 같은 createBus 파이프라인(직행좌석 도색, 12.6m 3축 코치, LED 행선판).
 //   운수사·제작사 로고와 브랜드 글자는 넣지 않는다.
 import * as THREE from 'three';
+import { splitBigMeshes } from '../perf/terrainChunks.js'; // [jamsil-perf]
 import { cellMerge, cellMergeEnabled } from '../perf/cellMerge.js'; // [jamsil-perf]
 import { ribbonGeo, fixNormalsUp } from '../world.js';
 import { busLateralM, chainageAfter, enRoute, nextExpress } from './gyeongbuSpeed.js';
@@ -771,6 +772,8 @@ export function mountGyeongbuExpress(group, data, { overlay, liveBus = null, til
     const smooth = resampleXZ(chaikin(trunk, 2), 5);
     group.add(busLaneMarkings(smooth.length > 3 ? smooth : trunk, data, yAt));
   }
+  // [jamsil-perf] 고속도로 몸체·성토·갓길 잔디(수십만 삼각형, 절두체 컬링 꺼짐)를 1.5km 칸으로 쪼개 화면 밖 칸은 안 그린다
+  splitBigMeshes(group, { minTris: 20000, cell: 1500, maxChunks: 12 });
 
   const cap = 8;
   const dest = { 9004: '강남역', 1151: '강남역' };

@@ -13,6 +13,7 @@
 //     build(scene, world, overlay) buildWorld 후 호출: 바닥 평면 구멍 + 하천 지형 메시 + 계단 + 징검다리 + 다리 구조물 + 저녁 다리 조명(bridgeLights.js)
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { splitByCells, terrainLodEnabled } from '../perf/terrainChunks.js'; // [jamsil-perf]
 import { addInstancedTrees } from './trees.js';
 import { createStreams } from './streams.js';
 import { buildBridgeLights } from './bridgeLights.js';
@@ -534,7 +535,9 @@ export function createTerrain(T, data) {
     cg.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); cg.setAttribute('color', new THREE.Float32BufferAttribute(col, 3)); cg.setIndex(idx); cg.computeVertexNormals();
     // 축 방향에 따라 삼각형 감김이 뒤집힐 수 있으니 양면
     const channel = new THREE.Mesh(cg, new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide }));
-    channel.receiveShadow = true; channel.name = 'tancheon-terrain'; scene.add(channel);
+    channel.receiveShadow = true; channel.name = 'tancheon-terrain';
+    // [jamsil-perf] 탄천 하도(16 km 띠, 수십만 삼각형)를 1.2km 칸으로 쪼개 화면 밖 칸은 안 그린다(정점 버퍼는 같이 씀)
+    if (terrainLodEnabled()) scene.add(splitByCells(channel, { cell: 1200 })); else scene.add(channel);
     yield 'terrain-channel';
     // [streams] 지류 하도 + 수면 (메시 1개, 본류와 같은 재질 종류)
     let streamMesh = null;
