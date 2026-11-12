@@ -644,7 +644,7 @@ function buildSeafood({ scene, keep, addCluster, obstacles, palAt, mats, ct, isM
         let k = 0; const dz = 0.088 / Math.sqrt(dens);
         for (let z = za + 0.04, row = 0; z < zb; z += dz, row++) for (let x = xa + 0.09, c = 0; x < xb - 0.05; x += 0.2, c++) {
           const u = (x - xa) / (xb - xa); k++;
-          for (let l = 0; l < (u > 0.25 && u < 0.75 ? 2 : 1); l++) sea.shrimp.push({ x: x + (H(k) - 0.5) * 0.02 + l * 0.03, y: yI + 0.018 + l * 0.032, z: z + l * dz * 0.5, s: [0.16, 0.16, 0.16], rx: -Math.PI / 2, ry: (c % 2 ? 0 : Math.PI) + (H(k * 3) - 0.5) * 0.25, color: [0xecc6b8, 0xe2bcae, 0xf2cfc0, 0xe8b4a2][(k + l) % 4] });
+          for (let l = 0; l < (u > 0.25 && u < 0.75 ? 2 : 1); l++) sea.shrimp.push({ x: x + (H(k) - 0.5) * 0.02 + l * 0.03, y: yI + 0.018 + l * 0.032, z: z + l * dz * 0.5, s: [0.16, 0.16, 0.16], rx: -Math.PI / 2, ry: (c % 2 ? 0 : Math.PI) + (H(k * 3) - 0.5) * 0.25, color: [0xf6a888, 0xf29a78, 0xf8b49a, 0xeec0b0][(k + l) % 4] });
         }
       }
       if (id === 'crab') grid(0.24, 0.22, (x, z, k, u) => { for (let l = 0; l < (u > 0.25 && u < 0.75 ? 2 : 1); l++) sea.crab.push({ x: x + l * 0.06, y: yI + 0.005 + l * 0.06, z: z + l * 0.08, s: [0.17, 0.17, 0.17], rx: (H(k) - 0.5) * 0.4, rz: (H(k + 2) - 0.5) * 0.3, ry: H(k * 5 + l) * 6.28, color: [0x7a6650, 0x6a5a72, 0xc8602a, 0x86705a][(k + l) % 4] }); });
@@ -789,7 +789,8 @@ function buildFixtures({ isMobile = false, scene, keep, ct, atlas, unitBox, obst
       const m = new THREE.Mesh(keep(g), priceM); m.position.set(x0 + seg * (k + 0.5), y, z); scene.add(m);
     }
   }
-  function openCase(x0, x1, z, skus, { ice = false, k0 = 0 } = {}) {
+  const caseFish = []; // [depot-live] 뒤 수산 케이스: 고등어 칸은 얼음 위 통고등어 (3D 인스턴스)
+  function openCase(x0, x1, z, skus, { ice = false, k0 = 0, whole = [] } = {}) {
     const w = x1 - x0, cx = (x0 + x1) / 2;
     const body = new THREE.Mesh(keep(new THREE.BoxGeometry(w, 0.98, 1.15)), caseBody); body.position.set(cx, 0.49, z); scene.add(body);
     const well = new THREE.Mesh(keep(new THREE.BoxGeometry(w - 0.1, 0.04, 0.95)), ice ? iceM : caseIn);
@@ -818,7 +819,13 @@ function buildFixtures({ isMobile = false, scene, keep, ct, atlas, unitBox, obst
       if (i > 0) for (let k = 0; k < 6; k++) { const gm = new THREE.Mesh(keep(new THREE.IcosahedronGeometry(0.075, 0)), garnish); gm.scale.set(1, 0.7, 1); gm.position.set(sx0 + (k % 2 ? 0.02 : -0.02), 1.08, z - 0.4 + k * 0.15); scene.add(gm); } // 칸막이 채소(파슬리·상추 덩이)
       const nA = Math.max(1, Math.floor((seg - 0.1) / (sx + 0.02))), nR = Math.max(1, Math.min(4, Math.floor(0.86 / (sz + 0.02))));
       const list = freshCluster.items.get(p.id) || []; freshCluster.items.set(p.id, list);
-      for (let k = 0; k < nA; k++) for (let row = 0; row < nR; row++) {
+      const w3 = whole.includes(p.id);
+      if (w3) { // 앞줄(포장 트레이, 집기용)만 남기고 뒤는 통생선을 비스듬히 줄지어
+        let q = 0;
+        for (let fx = sx0 + 0.1; fx < sx0 + seg - 0.12; fx += 0.11) for (const fz of [z - 0.08, z + 0.24]) { q++; const len = 0.36 + hash01(q + i) * 0.05;
+          caseFish.push({ x: fx + (hash01(q * 3 + i) - 0.5) * 0.02, y: 1.075 + (q % 3 === 0 ? 0.02 : 0), z: fz, s: [len, len, len * 1.2], rx: Math.PI / 2, ry: Math.PI / 2 + 0.5 + (hash01(q * 7) - 0.5) * 0.15, color: [0x2e5a6a, 0x335f72, 0x2a5262][q % 3] }); }
+      }
+      for (let k = 0; k < nA; k++) for (let row = 0; row < (w3 ? 1 : nR); row++) {
         const stack = sy < 0.12 ? (row >= nR - 2 ? 2 : 1) + (row === nR - 1 && k % 3 === 0 ? 1 : 0) : 1;
         const jx = (hash01(k * 3.1 + row + i * 17 + z) - 0.5) * 0.03, jr = (hash01(k + row * 5.7 + i) - 0.5) * 0.12 + (hash01(k * 2.3 + row + i) > 0.5 ? Math.PI : 0);
         for (let hh = 0; hh < stack; hh++) list.push({ x: sx0 + 0.05 + (k + 0.5) * (seg - 0.1) / nA + jx, y: 1.04 + (ice ? 0.03 : 0) + sy * (hh + 0.5), z: z - 0.44 + (row + 0.5) * (0.86 / nR), rot: jr, face: 1, pickable: row === 0 && hh === 0 && k % 3 === 1 && PICKABLE_IDS.has(p.id), sx, sy, sz, pid: p.id });
@@ -831,7 +838,8 @@ function buildFixtures({ isMobile = false, scene, keep, ct, atlas, unitBox, obst
     }
   }
   openCase(30, 42, 118.7, ['meat', 'beef', 'chicken', 'meat', 'beef', 'chicken'], { k0: 0 }); // 정육 (빨강·분홍)
-  openCase(42.4, 52, 118.7, ['salmon', 'mackerel', 'salmon', 'mackerel'], { ice: true, k0: 4 }); // 수산 (얼음 위)
+  openCase(42.4, 52, 118.7, ['salmon', 'mackerel', 'salmon', 'mackerel'], { ice: true, k0: 4, whole: ['mackerel'] }); // 수산 (얼음 위)
+  { const im = instanced(keep(SEA_GEO.fish()), keep(makeSeaMat()), caseFish); if (im) { im.name = 'sea-case-fish'; scene.add(im); } }
   openCase(52.4, 63.5, 118.7, ['milk', 'yogurt', 'cheese', 'butter', 'egg'], { k0: 6 }); // 유제품·계란
 
   // ===== [depot-live] 수산 코너 x 66–80, z 90.5–102: 활어 수조 · 냉동 수산 평대 · 얼음 진열대 2줄 =====
@@ -920,8 +928,10 @@ function buildFixtures({ isMobile = false, scene, keep, ct, atlas, unitBox, obst
   const deliCluster = addCluster(74, 112.5);
   let deliRoast = null;
   {
-    const counter = new THREE.Mesh(keep(new THREE.BoxGeometry(14, 1.05, 1.4)), stain);
+    const counter = new THREE.Mesh(keep(new THREE.BoxGeometry(14, 1.05, 1.4)), caseBody); // [depot-live] 회색 통짜 → 흰 진열장 + 검은 걸레받이
     counter.position.set(74, 0.52, 114.8); scene.add(counter);
+    const kick = new THREE.Mesh(keep(new THREE.BoxGeometry(14.02, 0.16, 1.42)), black); kick.position.set(74, 0.08, 114.8); scene.add(kick);
+    const top = new THREE.Mesh(keep(new THREE.BoxGeometry(14.1, 0.04, 1.5)), stain); top.position.set(74, 1.06, 114.8); scene.add(top);
     const warm = new THREE.Mesh(keep(new THREE.BoxGeometry(13.4, 0.05, 1.1)), warmLight);
     warm.position.set(74, 1.08, 114.8); scene.add(warm);
     const hood = new THREE.Mesh(keep(new THREE.BoxGeometry(14, 0.08, 1.6)), black);

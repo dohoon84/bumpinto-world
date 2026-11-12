@@ -27,8 +27,8 @@ function fishGeo() {
   body.computeVertexNormals();
   const tail = tri([[-0.42, 0, 0], [-0.7, 0.2, 0], [-0.6, 0, 0], [-0.42, 0, 0], [-0.6, 0, 0], [-0.7, -0.2, 0]]);
   const fin = tri([[0.16, 0.15, 0], [-0.26, 0.12, 0], [-0.08, 0.27, 0]]);
-  const eyeL = new THREE.SphereGeometry(0.038, 5, 3); eyeL.translate(0.34, 0.045, 0.052);
-  const eyeR = new THREE.SphereGeometry(0.038, 5, 3); eyeR.translate(0.34, 0.045, -0.052);
+  const eyeL = new THREE.SphereGeometry(0.028, 5, 3); eyeL.translate(0.34, 0.045, 0.052);
+  const eyeR = new THREE.SphereGeometry(0.028, 5, 3); eyeR.translate(0.34, 0.045, -0.052);
   const parts = [
     shaded(body, (x, y) => [0.62 + 0.25 * sstep(-0.1, 0.12, -y), sstep(0.02, -0.1, y)]),
     shaded(tail, () => [0.55, 0]), shaded(fin, () => [0.5, 0]),
@@ -56,14 +56,17 @@ function crabGeo() {
 // 새우: 굽은 몸통 마디 4개 + 꼬리 부채 (길이 ~1)
 function shrimpGeo() {
   const parts = [];
-  for (let i = 0; i < 4; i++) {
-    const a = 0.2 + i * 0.5, r = 0.11 - i * 0.017;
-    const s = new THREE.SphereGeometry(r, 5, 3); s.scale(1.5, 1, 0.85); s.rotateZ(a + Math.PI / 2);
-    s.translate(Math.cos(a) * 0.32 + 0.1, Math.sin(a) * 0.32, 0); parts.push(shaded(s, (x, y) => [(i === 0 ? 0.62 : 0.82) + 0.18 * sstep(-0.2, 0.3, y) - 0.1 * (i % 2), 0])); // 마디마다 명암
+  const N = 6;
+  for (let i = 0; i < N; i++) { // 굽은 마디 6개 (머리 쪽 굵고 꼬리 쪽 가늚) · 마디마다 명암 띠
+    const a = 0.1 + i * 0.36, r = 0.105 - i * 0.011;
+    const sg = new THREE.SphereGeometry(r, 6, 4); sg.scale(1.35, 1, 0.8); sg.rotateZ(a + Math.PI / 2);
+    sg.translate(Math.cos(a) * 0.32 + 0.1, Math.sin(a) * 0.32, 0);
+    parts.push(shaded(sg, (x, y) => [(i % 2 ? 0.78 : 0.92) + 0.1 * sstep(-0.2, 0.3, y), 0]));
   }
-  const a = 2.0 + 0.25, tx = Math.cos(a) * 0.32 + 0.1, ty = Math.sin(a) * 0.32;
-  parts.push(shaded(tri([[tx, ty, 0], [tx - 0.24, ty - 0.1, 0.1], [tx - 0.24, ty - 0.1, -0.1]]), () => [0.45, 0])); // 꼬리 부채 (진하게)
-  const head = new THREE.ConeGeometry(0.1, 0.25, 4); head.rotateZ(-Math.PI / 2 - 0.2); head.translate(0.52, 0.0, 0); parts.push(shaded(head, () => [0.55, 0])); // 머리 (회색빛)
+  const a = 0.1 + N * 0.36, tx = Math.cos(a) * 0.32 + 0.1, ty = Math.sin(a) * 0.32;
+  parts.push(shaded(tri([[tx + 0.03, ty + 0.02, 0], [tx - 0.17, ty + 0.1, 0.015], [tx - 0.12, ty - 0.13, 0.015]]), () => [0.55, 0])); // 꼬리 부채 (몸이 굽은 평면에 펼침 — 얼음 위에 눕힐 때 서지 않게)
+  const head = new THREE.ConeGeometry(0.1, 0.24, 5); head.rotateZ(-Math.PI / 2 - 0.25); head.translate(0.5, 0.02, 0); parts.push(shaded(head, () => [0.62, 0])); // 머리 (회색빛)
+  for (const sz of [-1, 1]) { const ey = new THREE.SphereGeometry(0.022, 4, 3); ey.translate(0.46, 0.06, sz * 0.05); parts.push(shaded(ey, () => [0.05, 0])); }
   return mergeGeometries(parts);
 }
 // 조개·전복·자갈 돌: 납작한 공 (폭 1)
