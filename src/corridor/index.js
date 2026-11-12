@@ -44,7 +44,7 @@ import { hollowSeohyeonArcade } from '../arcade/locations.js'; // [arcade] 서�
 import { migeumWaterEnabled, MIGEUM_WATER_FILE, migeumChRoads, mergeMigeumWater, applyMigeumBank } from './migeumWater.js'; // [migeum-water]
 import { cityhallEnabled, CITYHALL_FILE, filterCityHallHidden, createCityHall } from './cityhall.js'; // [cityhall]
 import { namsanEnabled, namsanCableEnabled, NAMSAN_DEM_FILE, NAMSAN_OSM_FILE, NAMSAN_CITY_FILE, createNamsan, createNamsanAsync } from './landmarks/namsan.js'; // [namsan]
-import { landmarkLazyEnabled, LANDMARK_NEAR_M, LANDMARK_PREFETCH_M, makeNamsanMeta, makeHangangMeta, wrapLandmark, yieldPaint, makeBuildYield, makeSlicer } from './landmarks/lazyLandmarks.js'; // [namsan] [hangang] 메시 지연 생성
+import { landmarkLazyEnabled, LANDMARK_NEAR_M, LANDMARK_PREFETCH_M, makeNamsanMeta, makeHangangMeta, wrapLandmark, yieldPaint, makeBuildYield, makeSlicer, beginLandmarkBuild, landmarkBuildGate } from './landmarks/lazyLandmarks.js'; // [namsan] [hangang] 메시 지연 생성
 import { createNamsanNpc, namsanNpcEnabled } from './landmarks/namsanNpc.js'; // [namsan-npc]
 import { hangangEnabled, HANGANG_DEM_FILE, HANGANG_OSM_FILE, HAP_DEM_FILE, HAP_OSM_FILE, createHangang, createHangangAsync } from './landmarks/hangang.js'; // [hangang]
 
@@ -467,19 +467,23 @@ const gnTransit = corridorData.gangnamTransit ? mountGangnamTransit(root, corrid
     if (!namsan || namsan.ready) return namsan;
     if (namsanBuilding) {
       if (urgent && namsanYieldState) namsanYieldState.idle = false;
+      if (urgent) landmarkBuildGate.urgent = true;
       return namsanBuilding;
     }
     namsanBuilding = (async () => {
-      const y = makeBuildYield({ idle: !urgent });
-      namsanYieldState = y.state;
-      const slicer = makeSlicer(y, { name: 'namsan' });
-      const t0 = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
-      namsan._bind(await createNamsanAsync(namsanOpts(), y, slicer));
-      namsanPending = false;
-      attachNamsanNpc();
-      const ms = ((typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now()) - t0;
-      console.info(`[namsan] lazy-built in ${Math.round(ms)}ms jsMax=${slicer.maxJs().toFixed(1)}`);
-      return namsan;
+      const done = beginLandmarkBuild(urgent);
+      try {
+        const y = makeBuildYield({ idle: !urgent });
+        namsanYieldState = y.state;
+        const slicer = makeSlicer(y, { name: 'namsan' });
+        const t0 = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+        namsan._bind(await createNamsanAsync(namsanOpts(), y, slicer));
+        namsanPending = false;
+        attachNamsanNpc();
+        const ms = ((typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now()) - t0;
+        console.info(`[namsan] lazy-built in ${Math.round(ms)}ms jsMax=${slicer.maxJs().toFixed(1)}`);
+        return namsan;
+      } finally { done(); }
     })();
     return namsanBuilding;
   }
@@ -488,19 +492,23 @@ const gnTransit = corridorData.gangnamTransit ? mountGangnamTransit(root, corrid
     if (!hangang || hangang.ready) return hangang;
     if (hangangBuilding) {
       if (urgent && hangangYieldState) hangangYieldState.idle = false;
+      if (urgent) landmarkBuildGate.urgent = true;
       return hangangBuilding;
     }
     hangangBuilding = (async () => {
-      const y = makeBuildYield({ idle: !urgent });
-      hangangYieldState = y.state;
-      const slicer = makeSlicer(y, { name: 'hangang' });
-      const t0 = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
-      hangang._bind(await createHangangAsync(hangangOpts(), y, slicer));
-      applyHangangClip(hangang);
-      hangangPending = false;
-      const ms = ((typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now()) - t0;
-      console.info(`[hangang] lazy-built in ${Math.round(ms)}ms jsMax=${slicer.maxJs().toFixed(1)}`);
-      return hangang;
+      const done = beginLandmarkBuild(urgent);
+      try {
+        const y = makeBuildYield({ idle: !urgent });
+        hangangYieldState = y.state;
+        const slicer = makeSlicer(y, { name: 'hangang' });
+        const t0 = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+        hangang._bind(await createHangangAsync(hangangOpts(), y, slicer));
+        applyHangangClip(hangang);
+        hangangPending = false;
+        const ms = ((typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now()) - t0;
+        console.info(`[hangang] lazy-built in ${Math.round(ms)}ms jsMax=${slicer.maxJs().toFixed(1)}`);
+        return hangang;
+      } finally { done(); }
     })();
     return hangangBuilding;
   }

@@ -24,6 +24,7 @@ import { RemotePlayers } from './net/remotePlayers.js';
 import { CHAT_RADIUS } from './net/protocol.js';
 import { buildTransit, makeCrossingGuard, mergeSimExtra } from './transit/transit.js';
 import { pangyoLinkEnabled, PANGYO_LINK_FILE } from './corridor/pangyo.js'; // [pangyo-link]
+import { shouldSkipLandmarkPaint } from './corridor/landmarks/lazyLandmarks.js';
 import { migeumBusEnabled, mergeMigeumBus, MIGEUM_BUS_FILE } from './corridor/migeumBus.js'; // [migeum-bus]
 import { clampWorld } from './corridor/islands.js'; // [gangnam]
 import { setNearScope, collectPlaces, placeCaption, sameIsland } from './corridor/nearScope.js'; // [gangnam-night]
@@ -2967,12 +2968,14 @@ function frame() {
   sun.position.copy(sun.target.position).addScaledVector(atmosphere.sunDir, 500);
   // 원점에 고정된 r=3000 하늘은 남산(약 23 km) 밖에서 보이지 않는다. 카메라를 따라가게 한다.
   if (skyDome) skyDome.position.copy(camera.position);
-  renderer.render(scene, camera);
+  if (!shouldSkipLandmarkPaint()) {
+    renderer.render(scene, camera);
+    overlay.update(innerWidth, innerHeight);
+    emoteFx.update(dt, innerWidth, innerHeight);
+  }
   perfHud.tick();
   bgm?.setDuck(!!ride?.active || !!adminBike?.riding || !!giftMount() || !!subway?.voiceActive); // [bgm] 버스·바이크 소리 · [subway-voice] 지하철 안내 방송 중 살짝 줄임 (바뀔 때만 동작)
   memHud.tick();
-  overlay.update(innerWidth, innerHeight);
-  emoteFx.update(dt, innerWidth, innerHeight);
   requestAnimationFrame(frame);
 }
 // [perf-memory] 정적 병합·인스턴싱·먼 소품 숨기기 (?perfmem=0 이면 null, 예전과 같음). 첫 프레임 전에 한 번

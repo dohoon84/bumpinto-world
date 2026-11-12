@@ -142,19 +142,33 @@ export function yieldIdle() {
   return yieldPaint();
 }
 
-/** 대부분 매크로태스크로 긴 작업을 끊고, 가끔 한 프레임·idle을 양보해 플레이어가 움직이게 한다. */
+export const landmarkBuildGate = { active: 0, urgent: false, lastPaint: 0 };
+
+export function beginLandmarkBuild(urgent = false) {
+  landmarkBuildGate.active += 1;
+  if (urgent) landmarkBuildGate.urgent = true;
+  return () => {
+    landmarkBuildGate.active = Math.max(0, landmarkBuildGate.active - 1);
+    if (!landmarkBuildGate.active) landmarkBuildGate.urgent = false;
+  };
+}
+
+/** 짓는 동안 GPU 프레임을 가끔만 그려 JS가 진행되게 한다. SwiftShader 에서는 한 프레임이 수 초라서 await rAF 를 쓰면 빌드가 멈춘다. */
+export function shouldSkipLandmarkPaint() {
+  if (!landmarkBuildGate.active) return false;
+  const now = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+  const minGap = landmarkBuildGate.urgent ? 250 : 100;
+  if (now - landmarkBuildGate.lastPaint >= minGap) {
+    landmarkBuildGate.lastPaint = now;
+    return false;
+  }
+  return true;
+}
+
+/** 긴 작업을 매크로태스크로만 끊는다. rAF/idle 을 기다리지 않는다(게임 루프가 이미 그림을 그린다). */
 export function makeBuildYield({ idle = false } = {}) {
   const state = { idle: !!idle };
-  let n = 0;
   async function buildYield() {
-    n += 1;
-    const useIdle = !!state.idle;
-    const paintEvery = useIdle ? 6 : 10;
-    if (n % paintEvery === 0) {
-      if (useIdle) await yieldIdle();
-      else await yieldPaint();
-      return;
-    }
     await yieldMacrotask();
   }
   buildYield.state = state;
