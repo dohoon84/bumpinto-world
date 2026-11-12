@@ -95,6 +95,7 @@ export function signAtlas({ k = 1 } = {}) {
   A.slot('glass', 256, 1216, 256, 256); // 자동문 유리(안쪽 매장 불빛)
   A.slot('pyBack', 512, 1216, 512, 256); // 탑 표지 아래 주차장 입구
   A.slot('white', 1024, 1216, 64, 64);
+  for (const [i, n] of ['arrowL', 'arrowR', 'arrowU'].entries()) A.slot(n, 1088 + i * 128, 1216, 128, 128); // 이정표 화살표(면마다 길 방향으로 골라 붙임)
   A.slots.side = A.slots.main; // 옆벽 큰 간판 = 정면 간판과 같은 그림
 
   const drawMain = (logo) => A.draw('main', (g, w, h) => {
@@ -146,15 +147,21 @@ export function signAtlas({ k = 1 } = {}) {
     g.fillStyle = C.deep; g.font = font(800, 40); g.textBaseline = 'middle'; g.textAlign = 'center'; g.fillText('영업시간 10:00 – 23:00', w / 2, 44);
     g.fillStyle = C.red; g.font = font(700, 30); g.fillText('둘째·넷째 일요일 휴무 (아마도)', w / 2, 96);
   });
-  const posts = [['범창고', '◀  650 m', '정자역에서 서남쪽 · 걸어서 9분'], ['범창고', '▶  150 m', '경부고속도로 건너편 · 지도 안내'], ['범창고', '▲  입구', '주차장 · 카트 보관소'], ['범창고 주차장', 'P  진입', '깃발 보이는 곳으로 · 3시간 무료']];
+  const posts = [['범창고', '650 m', '정자역에서 서남쪽 · 걸어서 9분'], ['범창고', '150 m', '경부고속도로 건너편 · 지도 안내'], ['범창고', '입구', '주차장 · 카트 보관소'], ['범창고 주차장', 'P  진입', '깃발 보이는 곳으로 · 3시간 무료']];
   posts.forEach(([a, b, c], i) => A.draw('post' + i, (g, w, h) => {
     g.fillStyle = C.green; g.fillRect(0, 0, w, h);
     g.fillStyle = C.yellow; g.fillRect(0, h - 14, w, 14);
-    drawBoxMark(g, 16, 22, 96);
-    g.fillStyle = C.cream; g.textBaseline = 'middle'; g.textAlign = 'left'; fitText(g, a, 230, 900, 58); g.fillText(a, 128, 58);
+    if (i === 3) drawBoxMark(g, 16, 22, 96); // 0–2: 왼쪽 네모 칸은 비워 둠 → 면마다 맞는 화살표 판(arrowL/R/U)을 그 위에 붙임 (글자와 안 겹침)
+    g.fillStyle = C.cream; g.textBaseline = 'middle'; g.textAlign = 'left'; fitText(g, a, i === 3 ? 230 : 210, 900, 58); g.fillText(a, 128, 58);
     g.fillStyle = C.yellow; g.font = font(900, 52); g.textAlign = 'right'; g.fillText(b, w - 18, 58);
     g.fillStyle = C.cream; g.font = font(700, 32); g.textAlign = 'left'; g.fillText(c, 128, 138);
   }));
+  for (const [n, rot] of [['arrowL', Math.PI], ['arrowR', 0], ['arrowU', -Math.PI / 2]]) A.draw(n, (g, w, h) => {
+    g.fillStyle = C.green; g.fillRect(0, 0, w, h);
+    g.fillStyle = C.yellow; g.beginPath(); g.arc(w / 2, h / 2, w * 0.46, 0, 7); g.fill();
+    g.save(); g.translate(w / 2, h / 2); g.rotate(rot); g.fillStyle = C.deep;
+    g.beginPath(); g.moveTo(w * 0.34, 0); g.lineTo(w * 0.02, -w * 0.28); g.lineTo(w * 0.02, -w * 0.11); g.lineTo(-w * 0.32, -w * 0.11); g.lineTo(-w * 0.32, w * 0.11); g.lineTo(w * 0.02, w * 0.11); g.lineTo(w * 0.02, w * 0.28); g.closePath(); g.fill(); g.restore();
+  });
   A.draw('canopyLight', (g, w, h) => { const gr = g.createLinearGradient(0, 0, 0, h); gr.addColorStop(0, '#fffbe8'); gr.addColorStop(1, '#ffe9b0'); g.fillStyle = gr; g.fillRect(0, 0, w, h); });
   A.draw('glass', (g, w, h) => {
     const gr = g.createLinearGradient(0, 0, 0, h); gr.addColorStop(0, '#9fc3d6'); gr.addColorStop(0.55, '#e8f1f2'); gr.addColorStop(1, '#c9d2cf'); g.fillStyle = gr; g.fillRect(0, 0, w, h);

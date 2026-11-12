@@ -434,6 +434,7 @@ function draw(now, J, P) {
   if (dm) {
     const [sx, sy] = toS(dm.x, dm.z);
     if (inC(sx, sy, 2)) {
+      depotPulse(g, sx, sy, 10, 1); // [depot-live] 반짝이는 고리 — 바닥 화살표 대신 미니맵에서 눈에 띄게
       drawDepotMark(g, sx, sy);
       labels.push({ sx, sy: sy - 12, t: dm.label });
       navHits.push({ sx, sy, r: 13, id: 'depot', name: dm.label, depot: true });
@@ -540,6 +541,13 @@ function fitCableLabel(sx, sy, text) {
   let lx = sx, ly = sy < R * 0.38 ? sy + 16 : sy - 12;
   [lx, ly] = clamp(lx, ly);
   return { sx: lx, sy: ly, t: text, fit: 1 };
+}
+function depotPulse(g, sx, sy, r0, k) { // 1.6초 주기 두 겹 고리 + 노란 후광 (할당 없음)
+  const t = (performance.now() % 1600) / 1600;
+  g.save();
+  g.globalAlpha = 0.35 + 0.25 * Math.sin(t * Math.PI * 2); g.fillStyle = '#F2C230'; g.beginPath(); g.arc(sx, sy, r0 + 3 * k, 0, Math.PI * 2); g.fill();
+  for (let o = 0; o < 1; o += 0.5) { const u = (t + o) % 1; g.globalAlpha = (1 - u) * 0.9; g.lineWidth = 2.4 * k; g.strokeStyle = '#F2C230'; g.beginPath(); g.arc(sx, sy, r0 + u * 14 * k, 0, Math.PI * 2); g.stroke(); }
+  g.restore();
 }
 function drawDepotMark(g, sx, sy) { // [depot-ext] 초록 사각 + 작은 상자(귀 없음)
   g.save(); g.translate(sx, sy);

@@ -302,6 +302,10 @@ function drawDepotMini(ctx, x, z, w, h, viewW, viewH, s) {
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.lineJoin = 'round';
   if (inside) {
     const r = Math.max(8, w / 24);
+    { const t = (performance.now() % 1600) / 1600; ctx.save(); // [depot-live] 반짝이는 고리 (hud-v3 미니맵과 같은 모양)
+      ctx.globalAlpha = 0.35 + 0.25 * Math.sin(t * Math.PI * 2); ctx.fillStyle = '#F2C230'; ctx.beginPath(); ctx.arc(sx, sy, r * 1.25, 0, Math.PI * 2); ctx.fill();
+      for (let o = 0; o < 1; o += 0.5) { const u = (t + o) % 1; ctx.globalAlpha = (1 - u) * 0.9; ctx.lineWidth = 2.4 * s; ctx.strokeStyle = '#F2C230'; ctx.beginPath(); ctx.arc(sx, sy, r * 1.15 + u * 14 * s, 0, Math.PI * 2); ctx.stroke(); }
+      ctx.restore(); }
     ctx.fillStyle = '#1E5A45'; ctx.strokeStyle = '#F3EADA'; ctx.lineWidth = 1.6 * s;
     ctx.beginPath(); if (ctx.roundRect) ctx.roundRect(sx - r, sy - r * 0.9, r * 2, r * 1.8, r * 0.35); else ctx.rect(sx - r, sy - r * 0.9, r * 2, r * 1.8); ctx.fill(); ctx.stroke();
     { // 작은 상자 마크(귀·동물 요소 없음) — hud-v3 minimap drawDepotMark 와 같은 모양
@@ -319,6 +323,7 @@ function drawDepotMini(ctx, x, z, w, h, viewW, viewH, s) {
     sx = w / 2 + Math.cos(a) * k; sy = h / 2 + Math.sin(a) * k;
     ctx.save(); ctx.translate(sx, sy); ctx.rotate(a);
     ctx.beginPath(); ctx.moveTo(8 * s, 0); ctx.lineTo(-5 * s, -6 * s); ctx.lineTo(-2 * s, 0); ctx.lineTo(-5 * s, 6 * s); ctx.closePath();
+    { const t = (performance.now() % 1600) / 1600; ctx.shadowColor = '#F2C230'; ctx.shadowBlur = (6 + 8 * Math.sin(t * Math.PI * 2) ** 2) * s; } // 가장자리 화살표도 반짝
     ctx.fillStyle = '#2fae74'; ctx.strokeStyle = '#0d2a20'; ctx.lineWidth = 1.5 * s; ctx.fill(); ctx.stroke(); ctx.restore();
     const t = `범창고 ${dist >= 1000 ? (dist / 1000).toFixed(1) + 'km' : Math.round(dist / 10) * 10 + 'm'}`;
     const tx = sx - Math.cos(a) * 16 * s, ty = sy - Math.sin(a) * 12 * s;
