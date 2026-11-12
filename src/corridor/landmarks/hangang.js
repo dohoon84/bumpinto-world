@@ -14,6 +14,7 @@ export const HANGANG_DEM_FILE = 'hangang/hangang-dem.json';
 export const HANGANG_OSM_FILE = 'hangang/hangang-osm.json';
 export const HAP_DEM_FILE = 'hangang/hap-dem.json';
 export const HAP_OSM_FILE = 'hangang/hap-osm.json';
+export { HANGANG_TERRAIN_BAKE_FILE, HAP_TERRAIN_BAKE_FILE } from './hangangMeshBake.js';
 
 // 점 (x, z) 에서 사각형 b 까지 거리 (안이면 0)
 function rectDist(b, x, z) {
@@ -247,7 +248,7 @@ function finishHangang({ scene, overlay, terrain, dem, osm, hap, foreign, root, 
   return api;
 }
 
-export async function createHangangAsync({ scene, overlay, terrain, dem, osm, hap, foreign = null } = {}, yieldFn, slicer) {
+export async function createHangangAsync({ scene, overlay, terrain, dem, osm, hap, foreign = null, bakeUrl = null } = {}, yieldFn, slicer) {
   const y = yieldFn || (typeof requestAnimationFrame === 'function'
     ? () => new Promise((r) => requestAnimationFrame(() => r()))
     : () => Promise.resolve());
@@ -256,7 +257,7 @@ export async function createHangangAsync({ scene, overlay, terrain, dem, osm, ha
   root.visible = false; // 짓는 동안은 안 보이게. 끝나면 킨다.
   scene.add(root);
 
-  const land = await createHangangTerrainAsync({ parent: root, dem, osm }, y, slicer);
+  const land = await createHangangTerrainAsync({ parent: root, dem, osm, bakeUrl }, y, slicer);
   if (slicer) slicer.flush('hangang-s1-terrain');
   await y();
   const bridges = createHangangBridges({ parent: root, osm, land });
@@ -278,7 +279,7 @@ export async function createHangangAsync({ scene, overlay, terrain, dem, osm, ha
   if (slicer) slicer.flush('hangang-s1-props');
   await y();
   const hapApi = (hap?.dem && hap?.osm)
-    ? await createHangangHapAsync({ parent: root, overlay, terrain, dem: hap.dem, osm: hap.osm, foreign }, y, slicer)
+    ? await createHangangHapAsync({ parent: root, overlay, terrain, dem: hap.dem, osm: hap.osm, foreign, bakeUrl: hap.bakeUrl || null }, y, slicer)
     : null;
   await y();
   const api = finishHangang({ scene, overlay, terrain, dem, osm, hap, foreign, root, land, bridges, paths, city, props, hapApi });

@@ -1,6 +1,8 @@
 // [hangang] 반포·잠수교 일대 지형 — AWS terrarium DEM + 한강 수면 + 반포한강공원 둔치 테라스.
 import * as THREE from 'three';
 import { HG, pointInRing, pointInRings, inWater, centroid, projectOnLine } from './hangangCoords.js';
+import { applyHangangTerrainBakeGen, loadHangangTerrainBakeSync, decodeHangangTerrainBakeMaybe, decodeHangangTerrainBakeGen, fetchHangangTerrainBake } from './hangangMeshBake.js';
+
 
 function sampleDem(dem, x, z) {
   if (!dem) return null;
@@ -558,7 +560,7 @@ function resampleShore(chain, step = 3.2) {
   return out;
 }
 
-function* hangangTerrainGen({ parent, dem, osm }, sliced = false) {
+function* hangangTerrainGen({ parent, dem, osm, baked = null, skipBake = false } = {}, sliced = false) {
   const group = new THREE.Group();
   group.name = 'hangang-terrain';
   parent.add(group);
@@ -570,6 +572,53 @@ function* hangangTerrainGen({ parent, dem, osm }, sliced = false) {
     : { x0: -12000, z0: -18000, x1: -8500, z1: -14800 };
 
   const mats = [];
+  let bake = skipBake ? null : decodeHangangTerrainBakeMaybe(baked);
+  if (!bake && baked && !skipBake) {
+    try {
+      const dec = decodeHangangTerrainBakeGen(baked);
+      let step = dec.next();
+      while (!step.done) {
+        if (sliced) yield step.value;
+        step = dec.next();
+      }
+      bake = step.value;
+    } catch (e) {
+      console.warn('[hangang] terrain bake decode failed:', e?.message || e);
+      bake = null;
+    }
+  }
+  if (!bake && !skipBake) bake = loadHangangTerrainBakeSync(osm);
+  if (bake?.meshes?.length) {
+    const applyGen = applyHangangTerrainBakeGen(group, bake, { grassMap: grassTex() });
+    let step = applyGen.next();
+    while (!step.done) {
+      if (sliced) yield step.value;
+      step = applyGen.next();
+    }
+    const applied = step.value;
+    mats.push(...applied.mats);
+    const waterMeshes = applied.waterMeshes;
+    const terraceMat = applied.terraceMat;
+    const riserMat = applied.riserMat;
+    const revetmentView = applied.revetmentView;
+    function setNight(v) {
+      const t = Math.max(0, Math.min(1, v));
+      for (const m of waterMeshes) {
+        if (!m.material.emissive) m.material.emissive = new THREE.Color('#061018');
+        m.material.emissive.set(t > 0.35 ? '#0a2030' : '#000000');
+        m.material.color.setRGB(0.16 * (1 - t) + 0.07 * t, 0.42 * (1 - t) + 0.12 * t, 0.47 * (1 - t) + 0.16 * t);
+      }
+      terraceMat.color.setRGB(0.56 * (1 - t) + 0.22 * t, 0.56 * (1 - t) + 0.22 * t, 0.54 * (1 - t) + 0.20 * t);
+      riserMat.color.setRGB(0.44 * (1 - t) + 0.16 * t, 0.44 * (1 - t) + 0.16 * t, 0.42 * (1 - t) + 0.15 * t);
+    }
+    return {
+      group, heightAt, levels: lv, bounds, waterY: lv.waterY, revetmentView,
+      jamsuDeckY: (x, z) => jamsuDeckY(x, z, osm, lv),
+      banpoDeckY: (x, z) => banpoDeckY(x, z, osm, lv, heightAt),
+      setNight,
+    };
+  }
+
 
   // 호안은 DEM보다 먼저 체인을 잡아, 잔디가 콘크리트 단을 덮지 않게 낮춘다.
   const REV_STEPS = 11;
@@ -841,7 +890,7 @@ function* hangangTerrainGen({ parent, dem, osm }, sliced = false) {
           nidx.push(nv, nv + 1, nv + 2, nv, nv + 2, nv + 3);
           nv += 4;
         }
-        if (sliced && (i & 15) === 15) yield;
+        if (sliced && (i & 3) === 3) yield;
       }
       for (const col of [cols[0], cols[cols.length - 1]]) {
         for (let s = 0; s < steps; s++) {
@@ -975,11 +1024,16 @@ export async function createHangangTerrainAsync(opts, yieldFn, slicer) {
   const y = yieldFn || (typeof requestAnimationFrame === 'function'
     ? () => new Promise((r) => requestAnimationFrame(() => r()))
     : () => Promise.resolve());
-  const g = hangangTerrainGen(opts, true);
+  let resolved = opts;
+  if (!opts?.skipBake && !opts?.baked && opts?.bakeUrl) {
+    const raw = await fetchHangangTerrainBake(opts.bakeUrl);
+    if (raw) resolved = { ...opts, baked: raw };
+  }
+  const g = hangangTerrainGen(resolved, true);
   let n = g.next();
   if (slicer) {
     while (!n.done) {
-      await slicer.tick();
+      await slicer.tick(typeof n.value === 'string' ? n.value : undefined);
       n = g.next();
     }
     slicer.flush('hangang-terrain-end');

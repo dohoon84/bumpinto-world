@@ -204,14 +204,14 @@ export function makeSlicer(yieldFn, { budgetMs = LANDMARK_SLICE_MS, name = '' } 
   };
   return {
     slices,
-    async tick() {
+    async tick(label) {
       if (!yieldFn) return;
       const t = now();
       if (t - last >= budgetMs) {
         const jsMs = +(t - last).toFixed(2);
         const y0 = now();
         await yieldFn();
-        publish({ name, jsMs, yieldMs: +(now() - y0).toFixed(2) });
+        publish({ name: label || name, jsMs, yieldMs: +(now() - y0).toFixed(2) });
         last = now();
       }
     },

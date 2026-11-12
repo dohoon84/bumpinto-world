@@ -46,7 +46,7 @@ import { cityhallEnabled, CITYHALL_FILE, filterCityHallHidden, createCityHall } 
 import { namsanEnabled, namsanCableEnabled, NAMSAN_DEM_FILE, NAMSAN_OSM_FILE, NAMSAN_CITY_FILE, createNamsan, createNamsanAsync } from './landmarks/namsan.js'; // [namsan]
 import { landmarkLazyEnabled, LANDMARK_NEAR_M, LANDMARK_PREFETCH_M, makeNamsanMeta, makeHangangMeta, wrapLandmark, yieldPaint, makeBuildYield, makeSlicer, beginLandmarkBuild, landmarkBuildGate } from './landmarks/lazyLandmarks.js'; // [namsan] [hangang] 메시 지연 생성
 import { createNamsanNpc, namsanNpcEnabled } from './landmarks/namsanNpc.js'; // [namsan-npc]
-import { hangangEnabled, HANGANG_DEM_FILE, HANGANG_OSM_FILE, HAP_DEM_FILE, HAP_OSM_FILE, createHangang, createHangangAsync } from './landmarks/hangang.js'; // [hangang]
+import { hangangEnabled, HANGANG_DEM_FILE, HANGANG_OSM_FILE, HAP_DEM_FILE, HAP_OSM_FILE, HANGANG_TERRAIN_BAKE_FILE, HAP_TERRAIN_BAKE_FILE, createHangang, createHangangAsync } from './landmarks/hangang.js'; // [hangang]
 
 // streams: 탄천 지류 하도(streams.json). ?streams=0 이면 false → 예전과 같은 데이터만
 // [pangyo] pangyo: 판교역 일대(pangyo/index.json). ?pangyo=0 이면 false → 요청 없음
@@ -446,7 +446,9 @@ const gnTransit = corridorData.gangnamTransit ? mountGangnamTransit(root, corrid
   function hangangOpts() {
     const hg = corridorData.hangang;
     return {
-      scene: root, overlay, terrain, dem: hg.dem, osm: hg.osm, hap: hg.hap || null,
+      scene: root, overlay, terrain, dem: hg.dem, osm: hg.osm,
+      bakeUrl: baseUrl + HANGANG_TERRAIN_BAKE_FILE,
+      hap: hg.hap ? { ...hg.hap, bakeUrl: baseUrl + HAP_TERRAIN_BAKE_FILE } : null,
       foreign: makeForeignFn(index.meta?.islands || [index.meta.bounds], index.meta?.corridors || []),
     };
   }

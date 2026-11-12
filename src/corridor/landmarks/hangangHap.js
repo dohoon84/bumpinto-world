@@ -568,12 +568,12 @@ export function createHangangHap({ parent, overlay, terrain, dem, osm, foreign =
   return finishHangangHap({ parent, overlay, terrain, dem, osm, foreign, root, land });
 }
 
-export async function createHangangHapAsync({ parent, overlay, terrain, dem, osm, foreign = null } = {}, yieldFn, slicer) {
+export async function createHangangHapAsync({ parent, overlay, terrain, dem, osm, foreign = null, bakeUrl = null } = {}, yieldFn, slicer) {
   const y = yieldFn || (typeof requestAnimationFrame === 'function'
     ? () => new Promise((r) => requestAnimationFrame(() => r()))
     : () => Promise.resolve());
   const root = startHangangHap(parent, osm);
-  const land = await createHangangTerrainAsync({ parent: root, dem, osm }, y, slicer);
+  const land = await createHangangTerrainAsync({ parent: root, dem, osm, bakeUrl }, y, slicer);
   if (slicer) slicer.flush('hangang-hap-terrain');
   await y();
   return finishHangangHapAsync({ parent, overlay, terrain, dem, osm, foreign, root, land }, y, slicer);

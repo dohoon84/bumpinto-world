@@ -132,17 +132,49 @@ function addCityBuildingMeshes(ctx, meshes) {
 export function createHangangCity(opts = {}) {
   const ctx = beginHangangCity(opts);
   if (ctx.bld.length) addCityBuildingMeshes(ctx, buildingMeshes(ctx.bld, 2711));
-  return dressHangangCity(ctx);
+  return finishDress(dressHangangCityGen(ctx));
 }
 
 export async function createHangangCityAsync(opts = {}, slicer) {
   const ctx = beginHangangCity(opts);
   if (ctx.bld.length) addCityBuildingMeshes(ctx, await buildingMeshesAsync(ctx.bld, 2711, slicer));
-  if (slicer) await slicer.tick();
-  return dressHangangCity(ctx, slicer);
+  if (slicer) await slicer.tick('hangang-city-buildings');
+  return runDressAsync(dressHangangCityGen(ctx), slicer);
 }
 
-function dressHangangCity(ctx, slicer) {
+function finishDress(gen) {
+  let n = gen.next();
+  while (!n.done) n = gen.next();
+  return n.value;
+}
+
+async function runDressAsync(gen, slicer) {
+  let n = gen.next();
+  while (!n.done) {
+    if (slicer) await slicer.tick(typeof n.value === 'string' ? n.value : 'hangang-city-dress');
+    n = gen.next();
+  }
+  return n.value;
+}
+
+function* mergeGeosGen(geos, label) {
+  if (!geos.length) return null;
+  if (geos.length === 1) return geos[0];
+  const CHUNK = 6;
+  let parts = geos;
+  while (parts.length > 1) {
+    const next = [];
+    for (let i = 0; i < parts.length; i += CHUNK) {
+      const sl = parts.slice(i, i + CHUNK);
+      next.push(sl.length === 1 ? sl[0] : mergeGeometries(sl, false));
+      yield label;
+    }
+    parts = next;
+  }
+  return parts[0];
+}
+
+function* dressHangangCityGen(ctx) {
   const { group, osm, land, expressXMax, heightAt, lv, mats, bld } = ctx;
   // 올림픽대로 · 강변북로
   // OSM: 남단 긴 두 가닥(각 폭 19.1 m)은 올림픽대로 양방향 — 지형에 붙인다.
@@ -261,13 +293,14 @@ function dressHangangCity(ctx, slicer) {
     }
     if (run.length >= 2) runs.push(run);
     for (const r of runs) {
-      if (elevated) { elevatedDeck(r, width); continue; }
+      if (elevated) { elevatedDeck(r, width); yield 'hangang-city-deck'; continue; }
       const geo = ribbon(r, width, (x, z) => (heightAt(x, z) ?? lv.waterY) + 0.14, 0.1);
       if (geo) exprGeos.push(geo);
     }
+    yield 'hangang-city-dress';
   }
   if (exprGeos.length) {
-    const merged = exprGeos.length === 1 ? exprGeos[0] : mergeGeometries(exprGeos, false);
+    const merged = yield* mergeGeosGen(exprGeos, 'hangang-city-express');
     const mat = new THREE.MeshLambertMaterial({ color: '#5c6168', side: THREE.DoubleSide });
     mats.push(mat);
     const mesh = new THREE.Mesh(merged, mat);
@@ -284,7 +317,14 @@ function dressHangangCity(ctx, slicer) {
   ];
   for (const [geos, color, name] of deckParts) {
     if (!geos.length) continue;
-    const merged = geos.length === 1 ? geos[0] : mergeGeometries(geos.map((g) => (g.index ? g.toNonIndexed() : g)).map((g) => { g.deleteAttribute('uv'); return g; }), false);
+    const prepared = [];
+    for (const g of geos) {
+      const ng = g.index ? g.toNonIndexed() : g;
+      ng.deleteAttribute('uv');
+      prepared.push(ng);
+      yield name + '-prep';
+    }
+    const merged = yield* mergeGeosGen(prepared, name + '-merge');
     const mat = new THREE.MeshLambertMaterial({ color, side: THREE.DoubleSide });
     mats.push(mat);
     deckMats.push([mat, new THREE.Color(color)]);
@@ -294,6 +334,7 @@ function dressHangangCity(ctx, slicer) {
     mesh.castShadow = name === 'hangang-express-piers';
     group.add(mesh);
   }
+  yield 'hangang-city-skyline';
 
   // 스카이라인 링 — 박스 바깥 원경. hap 박스는 수 km 라 스카이라인·치마를 올리면
   // 잠실 타일·1구간과 겹친다.
