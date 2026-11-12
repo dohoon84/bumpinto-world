@@ -431,7 +431,7 @@ export async function createCorridor({ scene, corridorData, terrain, world, rend
     } else mount();
   }
 
-const gnTransit = corridorData.gangnamTransit ? mountGangnamTransit(root, corridorData.gangnamTransit, { overlay, express: corridorData.gangnamExpress, liveBus }) : null; // [gangnam-bus] [gyeongbu-bus] [livebus]
+const gnTransit = corridorData.gangnamTransit ? mountGangnamTransit(root, corridorData.gangnamTransit, { overlay, express: corridorData.gangnamExpress, liveBus, tiles: { size: TS, keys: new Set(Object.keys(index.tiles || {})) } }) : null; // [gangnam-bus] [gyeongbu-bus] [livebus]
   // [namsan] [hangang] 기본은 메시를 늦게 만든다(?lazylandmark=0 이면 예전처럼 부트에 전부 생성).
   // 미니맵·이동 목적지·섬 경계는 스텁으로 바로 쓰고, 메시는 가까이 오거나 ?at=/텔레포트일 때 짓는다.
   let namsan = null, hangang = null, namsanNpc = null;

@@ -649,8 +649,24 @@ function cityClipWeight(x, z) {
   return d / feather;
 }
 
+// [seokchon-fill] 메움 상자(x ≤ 480, z ≥ −15850)는 탄천 본선의 석촌·송파 시가 타일과도 겹친다. 경부에서 멀수록 최대 5.5 m 까지
+//   솟는 숲 언덕이라, 그 타일 위에서는 길 너머 지평선에 짙은 초록 띠(벽)로 떠 보였다. 강남 시가처럼 코리더 타일이 있는 칸 안은
+//   시가 바닥보다 낮추고(타일 바닥이 이김), 타일 밖 90 m 는 서서히 원래 높이로 돌린다. tiles 를 안 주면 예전과 같다.
+function tileClipWeight(x, z, tiles) {
+  if (!tiles?.keys?.size || !tiles.size) return 1;
+  const S = tiles.size, tx = Math.floor(x / S), tz = Math.floor(z / S), feather = 90;
+  let d = Infinity;
+  for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) {
+    if (!tiles.keys.has(`${tx + i}_${tz + j}`)) continue;
+    const x0 = (tx + i) * S, z0 = (tz + j) * S;
+    const dx = Math.max(x0 - x, 0, x - (x0 + S)), dz = Math.max(z0 - z, 0, z - (z0 + S));
+    d = Math.min(d, Math.hypot(dx, dz));
+  }
+  return d >= feather ? 1 : d / feather;
+}
+
 /** 코리더 메움 지면 높이. 시가 타일 안은 시가 바닥보다 낮거나 없음. */
-export function corridorFillHeight(x, z, pts) {
+export function corridorFillHeight(x, z, pts, tiles = null) {
   const B = CORRIDOR_FILL_BOX;
   if (x < B.x0 || x > B.x1 || z < B.z0 || z > B.z1) return null;
   const d = pts?.length ? distToPts(x, z, pts) : 1e9;
@@ -658,13 +674,13 @@ export function corridorFillHeight(x, z, pts) {
   const n = hash01(Math.round(x * 0.2), Math.round(z * 0.2));
   let y = (pangyo && d > 90) ? -0.08 : 0.025;
   if (!pangyo && d > 100) y += Math.min(5.5, (d - 100) * 0.0035) * (0.25 + n * 0.75);
-  const w = cityClipWeight(x, z);
+  const w = Math.min(cityClipWeight(x, z), tileClipWeight(x, z, tiles)); // [seokchon-fill]
   if (w <= 0) return CORRIDOR_FILL_CITY_Y;
   if (w < 1) y = CORRIDOR_FILL_CITY_Y + (y - CORRIDOR_FILL_CITY_Y) * w;
   return y;
 }
 
-function corridorLandMesh(pts) {
+function corridorLandMesh(pts, tiles = null) {
   // 판교 시가~양재 사이 회색 클리어 색이 보이지 않도록 코리더 전체를 숲·잔디 지면으로 덮는다.
   // 강남 시가 타일 안은 시가 바닥보다 낮춰, 도로·보도가 풀언덕에 묻히지 않게 한다.
   const { x0, x1, z0, z1 } = CORRIDOR_FILL_BOX;
@@ -682,7 +698,7 @@ function corridorLandMesh(pts) {
       const x = x0 + ix * step, z = z0 + iz * step;
       const d = pts?.length ? distToPts(x, z, pts) : 1e9;
       const n = hash01(Math.round(x * 0.2), Math.round(z * 0.2));
-      const y = corridorFillHeight(x, z, pts) ?? 0.025;
+      const y = corridorFillHeight(x, z, pts, tiles) ?? 0.025;
       pos[i * 3] = x; pos[i * 3 + 1] = y; pos[i * 3 + 2] = z;
       const c = (d < 110 || y < 0.8) ? grass : (n > 0.58 ? forest : woods);
       col[i * 3] = c.r; col[i * 3 + 1] = c.g; col[i * 3 + 2] = c.b;
@@ -731,7 +747,7 @@ export function expressDeckLaneCenters(rawPts) {
   return out;
 }
 
-export function mountGyeongbuExpress(group, data, { overlay, liveBus = null } = {}) {
+export function mountGyeongbuExpress(group, data, { overlay, liveBus = null, tiles = null } = {}) {
   if (!data?.pts?.length || !data.routes?.length) return null;
   const yAt = (x, z) => expressRoadHeight(x, z, data.pts) ?? EXPRESS_ROAD_Y;
   const approach = data.pts.filter((p) => p[3] === 'approach' && keepDeckPoint(p));
@@ -741,7 +757,7 @@ export function mountGyeongbuExpress(group, data, { overlay, liveBus = null } = 
   if (apronA) group.add(apronA);
   const apronS = grassApron(spurLand, 320);
   if (apronS) group.add(apronS);
-  group.add(corridorLandMesh(data.pts));
+  group.add(corridorLandMesh(data.pts, tiles)); // [seokchon-fill]
   group.add(gangnamSeamFill());
   const treesA = vergeTrees(approach, 28, data.pts);
   if (treesA) group.add(treesA);
