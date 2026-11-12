@@ -491,9 +491,8 @@ function finishHangangHap({ parent, overlay, terrain, dem, osm, foreign = null, 
     return (x0 < b.x1 && b.z0 < z1) ? { x0, x1: b.x1, z0: b.z0, z1 } : null;
   };
   const ownRect = clipRectOf();
-  const inRect = (r, x, z) => !!r && x >= r.x0 && x <= r.x1 && z >= r.z0 && z <= r.z1;
   const isForeign = typeof foreign === 'function' ? foreign : () => false;
-  const owns = (x, z) => inRect(ownRect, x, z) || !isForeign(x, z);
+  const owns = hapOwnsFn(ownRect, isForeign, land, osm); // [jamsil-ground]
   const ownHeightAt = (x, z) => (owns(x, z) ? land.heightAt(x, z) : null);
   if (typeof foreign === 'function') {
     root.traverse((o) => {
@@ -503,6 +502,22 @@ function finishHangangHap({ parent, overlay, terrain, dem, osm, foreign = null, 
   }
   const props = createHangangProps({ parent: root, osm, land });
   return finishHangangHapApi({ overlay, osm, root, land, paths, city, bridges, underpasses, props, ownRect, owns, ownHeightAt });
+}
+
+// [jamsil-ground] 합수부 사각형(z ≤ −15800)은 코리더 본선 섬(잠실·송파·석촌·롯데월드타워)과 겹친다.
+//   예전(3bbe093~)엔 사각형 안이면 섬 위라도 2구간 지형이 바닥을 차지해, 도시 바닥(y≈0)보다 수 m 높은
+//   DEM 풀밭이 잠실 일대 길·인도·역 출구를 덮었다. 섬 위에서는 물이거나 DEM 이 타일 바닥보다 낮은 곳(둔치·탄천 물길)만
+//   한강 지형이 맡고, 시가지(DEM ≥ 타일 바닥)는 코리더 타일 바닥을 그대로 둔다.
+const HAP_ISLAND_FLOOR_Y = 0.5;
+function hapOwnsFn(ownRect, isForeign, land, osm) {
+  const inRect = (x, z) => !!ownRect && x >= ownRect.x0 && x <= ownRect.x1 && z >= ownRect.z0 && z <= ownRect.z1;
+  return (x, z) => {
+    if (!isForeign(x, z)) return true;
+    if (!inRect(x, z)) return false;
+    if (inWater(x, z, osm?.water)) return true;
+    const h = land.heightAt(x, z);
+    return h != null && h < HAP_ISLAND_FLOOR_Y;
+  };
 }
 
 // [hangang-isolation] 무게중심이 drop(cx, cz) 인 삼각형을 인덱스에서 뺀다.
@@ -603,9 +618,8 @@ async function finishHangangHapAsync({ parent, overlay, terrain, dem, osm, forei
     return (x0 < b.x1 && b.z0 < z1) ? { x0, x1: b.x1, z0: b.z0, z1 } : null;
   };
   const ownRect = clipRectOf();
-  const inRect = (r, x, z) => !!r && x >= r.x0 && x <= r.x1 && z >= r.z0 && z <= r.z1;
   const isForeign = typeof foreign === 'function' ? foreign : () => false;
-  const owns = (x, z) => inRect(ownRect, x, z) || !isForeign(x, z);
+  const owns = hapOwnsFn(ownRect, isForeign, land, osm); // [jamsil-ground]
   const ownHeightAt = (x, z) => (owns(x, z) ? land.heightAt(x, z) : null);
   if (typeof foreign === 'function') {
     const meshes = [];
@@ -716,6 +730,7 @@ function finishHangangHapApi({ overlay, osm, root, land, paths, city, bridges, u
       if (!b || x < b.x0 || x > b.x1 || z < b.z0 || z > b.z1) return false;
       if (osm?.meta?.visualXMin != null && x < osm.meta.visualXMin) return false;
       if (z > -15800) return false;
+      if (!owns(x, z)) return false; // [jamsil-ground] 섬 위 시가지는 타일 바닥을 남긴다
       if (inWater(x, z, osm?.water)) return true;
       // 2구간 DEM 이 있는 한강 남단은 그 지형이 바닥이다 (타일 블록 바닥 = 베이지 판).
       return land.heightAt(x, z) != null;
