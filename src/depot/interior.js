@@ -15,6 +15,8 @@ import { buildDepotCeiling } from './ceiling.js';
 import { mountStock } from './stock.js';
 import { createCheckout } from './checkout.js';
 import { mountElectronics } from './electronics.js';
+import { createShoppers } from './npcs.js';
+import NPC_TYPES from './story/data/npc-types.json';
 
 const W = 84, D = 120, CEIL = 9;
 const DOOR = { x: 69, w: 8 };
@@ -76,7 +78,12 @@ async function loadDepotTextures(renderer) {
   return out;
 }
 
-export async function buildDepotInterior({ renderer, isMobile = false, onExit, audio = null } = {}) {
+export async function buildDepotInterior({ renderer, isMobile = false, onExit, audio: audioIn = null, getAudioLevel = null } = {}) {
+  // [depot-story] 오디오 탭: 매장 소리 이름(cart-grab·item-pick…)을 스토리 반응 감지로도 흘림. 공유 audio 객체는 건드리지 않고 감쌈.
+  const audioTaps = [];
+  const tap = (n, o) => { for (const f of audioTaps) { try { f(n, o || {}); } catch (e) { console.warn('[depot-story]', e); } } };
+  const audio = audioIn ? Object.assign(Object.create(audioIn), { play: (n, o) => { tap(n, o); return audioIn.play(n, o); } }) : null;
+  const audioOrTap = audio || { play: (n, o) => { tap(n, o); return false; } };
   const disposables = [];
   const keep = (x) => { disposables.push(x); return x; };
   const TX = await loadDepotTextures(renderer); for (const t of Object.values(TX)) keep(t);
@@ -317,14 +324,14 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit, a
 
   // ---------- 효과음(아주 짧게, WebAudio) ----------
   function blip(kind, extra) {
-    if (!audio) return;
-    if (kind === 'crack') audio.play('egg-crack', extra || {});
-    else if (kind === 'bump') audio.play('cart-bump', extra || {});
-    else if (kind === 'pick') audio.play('item-pick', extra || {});
-    else if (kind === 'place') audio.play('item-place', extra || {});
-    else if (kind === 'grab') audio.play('cart-grab', extra || {});
-    else if (kind === 'release') audio.play('cart-release', extra || {});
-    else if (kind === 'fall') audio.play('item-fall', extra || {});
+    const A = audioOrTap; // 소리 모듈이 없어도 스토리 탭은 받음
+    if (kind === 'crack') A.play('egg-crack', extra || {});
+    else if (kind === 'bump') A.play('cart-bump', extra || {});
+    else if (kind === 'pick') A.play('item-pick', extra || {});
+    else if (kind === 'place') A.play('item-place', extra || {});
+    else if (kind === 'grab') A.play('cart-grab', extra || {});
+    else if (kind === 'release') A.play('cart-release', extra || {});
+    else if (kind === 'fall') A.play('item-fall', extra || {});
   }
 
   // ---------- 짐 ----------
@@ -921,6 +928,7 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit, a
   // ---------- 프레임 ----------
   function update(dt, { look = [0, 0, 0], axes = { f: 0, s: 0 }, frozen = false } = {}) {
     dt = Math.min(dt, 0.05); st.t += dt;
+    if (story?.locked) frozen = true; // 대화창·모드 선택 중엔 조작 잠금 (카트는 손 놓은 것처럼 감속)
     if (camera.aspect !== innerWidth / innerHeight) { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); }
     if (st.mode === 'walk' && !frozen) {
       st.head.yaw += look[0] || 0; st.head.pitch = THREE.MathUtils.clamp(st.head.pitch - (look[1] || 0) * 0.8, -1.1, 0.6);
@@ -947,6 +955,8 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit, a
     selfAvatar.position.set(st.me.x, 0, st.me.z); selfAvatar.rotation.y = st.me.yaw;
     updateCamera(dt);
     staff.tick(dt, { me: st.me, cartObj: st.cart, items, rimTop: B.top.yRear, cartHeld: st.hasCart, cartVisible: cart.visible });
+    shoppers.tick(dt, { me: st.me, cart: cart.visible ? st.cart : null });
+    story?.tick(dt);
     stock.tick(camera);
     detailCull(dt);
     hover = st.mode === 'walk' ? pickTarget() : null;
@@ -956,18 +966,21 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit, a
     updateHighlight();
     marker.visible = !st.hasCart && cart.visible; if (marker.visible) { arrow.position.y = 1.55 + Math.sin(st.t * 3) * 0.06; arrow.rotation.y += dt * 1.5; }
     if (st.toastT > 0) { st.toastT -= dt; if (st.toastT <= 0) elToast.style.display = 'none'; }
-    { const pb = Math.round(elPanel.getBoundingClientRect().bottom + 10); if (pb !== st.msgTop) { st.msgTop = pb; hud.style.setProperty('--dh-msg-top', `${pb}px`); } const tb = elToast.style.display === 'block' ? Math.round(elToast.getBoundingClientRect().bottom + 8) : pb; if (tb !== st.msgTop2) { st.msgTop2 = tb; hud.style.setProperty('--dh-msg-top2', `${tb}px`); } const ach = st.achEl || (st.achEl = hud.querySelector('.dh-ach')); const ab = ach && ach.childElementCount ? Math.round(ach.getBoundingClientRect().bottom + 8) : tb; if (ab !== st.msgTop3) { st.msgTop3 = ab; hud.style.setProperty('--dh-msg-top3', `${ab}px`); } } // 알림은 왼쪽 정보 상자 바로 아래 (미니맵·폰 위젯과 안 겹침)
+    { const pb = Math.round(Math.max(elPanel.getBoundingClientRect().bottom, story?.colBottom() || 0) + 10); if (pb !== st.msgTop) { st.msgTop = pb; hud.style.setProperty('--dh-msg-top', `${pb}px`); } const tb = elToast.style.display === 'block' ? Math.round(elToast.getBoundingClientRect().bottom + 8) : pb; if (tb !== st.msgTop2) { st.msgTop2 = tb; hud.style.setProperty('--dh-msg-top2', `${tb}px`); } const ach = st.achEl || (st.achEl = hud.querySelector('.dh-ach')); const ab = ach && ach.childElementCount ? Math.round(ach.getBoundingClientRect().bottom + 8) : tb; if (ab !== st.msgTop3) { st.msgTop3 = ab; hud.style.setProperty('--dh-msg-top3', `${ab}px`); } } // 알림은 왼쪽 정보 상자 바로 아래 (미니맵·폰 위젯과 안 겹침)
     updateHud();
     if (audio) {
       const c = st.cart;
       audio.tick(dt, { camera, cart: { held: st.hasCart, speed: Math.hypot(c.vx, c.vz), loadKg: loadKg(), x: c.x, z: c.z }, paused: frozen });
     }
   }
+  // ---------- 손님 NPC 8유형 (npcs.js) — 기본은 꺼 둠, 스토리/자유 모드가 setActive 로 켬 ----------
+  const shoppers = createShoppers({ scene, keep, obstacles, isBlocked: (x, z, r) => !!collide2D(x, z, r), types: NPC_TYPES.types, isMobile });
+  shoppers.setActive([]);
   // 작은 소품 거리 컬링 (가전 코너·계산대·직원·집기): 반지름 < 2 m 메시가 카메라에서 DETAIL_R 넘게 멀면 레이어 0 에서 뺌.
   //   visible 은 각 모듈이 쓰므로 건드리지 않고 layers 로만. 움직이는 것(로봇·손님)도 matrixWorld 로 0.25 초마다 다시 잼.
   const DETAIL_R = isMobile ? 22 : 32, detailList = [];
   {
-    const roots = [scene.getObjectByName('depot-electronics'), checkout.root, staff.root, stock.fxRoot].filter(Boolean);
+    const roots = [scene.getObjectByName('depot-electronics'), checkout.root, staff.root, stock.fxRoot, shoppers.root].filter(Boolean);
     for (const r of roots) r.traverse((o) => {
       if (!o.isMesh) return;
       const bs = o.isInstancedMesh ? (o.computeBoundingSphere(), o.boundingSphere) : (o.geometry.boundingSphere || (o.geometry.computeBoundingSphere(), o.geometry.boundingSphere));
@@ -1039,6 +1052,7 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit, a
       ghostState() { return ghostSol && { where: ghostSol.where, state: ghostSol.state }; },
       mischief(kind, amt) { staff.mischief(kind, amt); }, staff: () => ({ ...staff.S, x: staff.root.position.x, z: staff.root.position.z, ach: staff.S.ach.slice() }), staffAt(x, z) { staff.root.position.set(x, 0, z); },
       co: checkout.dbg, ach: (t) => staff.achieve(t),
+      shoppers: { on: (ids) => shoppers.setActive(ids || shoppers.list.map((n) => n.id)), list: () => shoppers.list.map((n) => ({ id: n.id, x: +n.x.toFixed(2), z: +n.z.toFixed(2), v: +n.v.toFixed(2), active: n.active })), edges: () => shoppers.nodes.map((n) => [n.x, n.z, n.nb.length]), place(id, x, z, yaw = 0) { const n = shoppers.list.find((q) => q.id === id); if (n) { n.x = x; n.z = z; n.yaw = yaw; n.stopT = 99; } }, go() { for (const n of shoppers.list) { n.stopT = 0; n.to = n.from; } } },
       elec: elec._dbg, openElecDoors: (v) => elec.openAllDoors(v),
       camAt(pos, tgt) { st.camOv = pos ? { pos: new THREE.Vector3(...pos), tgt: new THREE.Vector3(...tgt) } : null; st.camWorld = null; },
       camWorld(pos, tgt) { st.camWorld = pos ? { pos: new THREE.Vector3(...pos), tgt: new THREE.Vector3(...tgt) } : null; st.camOv = null; },
@@ -1060,5 +1074,17 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit, a
       scene.clear();
     },
   };
+  // ---------- 스토리 모드 (story/index.js, 지연 로드). ?depotStory=0 이면 끔 ----------
+  let story = null, disposed = false;
+  if (new URLSearchParams(location.search).get('depotStory') !== '0') {
+    import('./story/index.js').then((m) => {
+      if (disposed) return;
+      story = m.createStory({ THREE, scene, keep, camera, st, items, loadKg, staff, checkout, shoppers, api, audio, isMobile, ASSET, onExit, getLevel: getAudioLevel });
+      audioTaps.push((n, o) => story?.onAudio(n, o));
+    }).catch((e) => console.warn('[depot-story]', e));
+  }
+  Object.defineProperty(api._dbg, 'story', { get: () => story });
+  const dispose0 = api.dispose;
+  api.dispose = () => { disposed = true; try { story?.dispose(); } catch (e) { console.warn('[depot-story]', e); } story = null; dispose0(); };
   return api;
 }

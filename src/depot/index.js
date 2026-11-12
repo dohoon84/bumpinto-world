@@ -61,7 +61,7 @@ body.depot-inside #ve-hud{display:none !important} /* 매장 안: 왼쪽 위 할
   async function build() {
     const m = await loadMod();
     if (!m) throw new Error('depot interior load failed');
-    interior = await m.buildDepotInterior({ renderer, isMobile, onExit: () => leave(), audio });
+    interior = await m.buildDepotInterior({ renderer, isMobile, onExit: () => leave(), audio, getAudioLevel });
     active = true; document.body.classList.add('depot-inside');
     onInterior?.('depot', interior);
   }
