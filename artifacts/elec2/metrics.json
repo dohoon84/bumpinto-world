@@ -2,57 +2,9 @@
   "runs": [
     {
       "label": "tv-wall-wide",
-      "heapMB": 372.6,
+      "heapMB": 371.1,
       "drawCalls": 69,
-      "triangles": 2254894,
-      "frameMs": 0.3,
-      "elec": {
-        "zone": "electronics",
-        "meshes": 45,
-        "draws": 50,
-        "instanced": 31,
-        "instCount": 453,
-        "tris": 29414,
-        "screens": 50,
-        "lod": 0,
-        "flickerT": 0,
-        "visible": true,
-        "cheap": false
-      },
-      "scene": {
-        "meshes": 142,
-        "tris": 3916228
-      }
-    },
-    {
-      "label": "fridges",
-      "heapMB": 371.9,
-      "drawCalls": 109,
-      "triangles": 2522568,
-      "frameMs": 0.6,
-      "elec": {
-        "zone": "electronics",
-        "meshes": 45,
-        "draws": 50,
-        "instanced": 31,
-        "instCount": 453,
-        "tris": 29414,
-        "screens": 50,
-        "lod": 0,
-        "flickerT": 0,
-        "visible": true,
-        "cheap": false
-      },
-      "scene": {
-        "meshes": 142,
-        "tris": 3916228
-      }
-    },
-    {
-      "label": "tables",
-      "heapMB": 371.6,
-      "drawCalls": 32,
-      "triangles": 1283354,
+      "triangles": 2265226,
       "frameMs": 0.4,
       "elec": {
         "zone": "electronics",
@@ -60,7 +12,7 @@
         "draws": 50,
         "instanced": 31,
         "instCount": 453,
-        "tris": 29414,
+        "tris": 39746,
         "screens": 50,
         "lod": 0,
         "flickerT": 0,
@@ -69,7 +21,55 @@
       },
       "scene": {
         "meshes": 142,
-        "tris": 3916228
+        "tris": 3926560
+      }
+    },
+    {
+      "label": "fridges",
+      "heapMB": 372.3,
+      "drawCalls": 109,
+      "triangles": 2532900,
+      "frameMs": 0.8,
+      "elec": {
+        "zone": "electronics",
+        "meshes": 45,
+        "draws": 50,
+        "instanced": 31,
+        "instCount": 453,
+        "tris": 39746,
+        "screens": 50,
+        "lod": 0,
+        "flickerT": 0,
+        "visible": true,
+        "cheap": false
+      },
+      "scene": {
+        "meshes": 142,
+        "tris": 3926560
+      }
+    },
+    {
+      "label": "tables",
+      "heapMB": 371.9,
+      "drawCalls": 32,
+      "triangles": 1289762,
+      "frameMs": 0.3,
+      "elec": {
+        "zone": "electronics",
+        "meshes": 45,
+        "draws": 50,
+        "instanced": 31,
+        "instCount": 453,
+        "tris": 39746,
+        "screens": 50,
+        "lod": 0,
+        "flickerT": 0,
+        "visible": true,
+        "cheap": false
+      },
+      "scene": {
+        "meshes": 142,
+        "tris": 3926560
       }
     }
   ],
@@ -97,17 +97,17 @@
       "tag": "portrait",
       "tv": {
         "label": "mobile-portrait-tvwall",
-        "heapMB": 349,
+        "heapMB": 364.1,
         "drawCalls": 33,
-        "triangles": 131526,
-        "frameMs": 0.8,
+        "triangles": 130902,
+        "frameMs": 0.7,
         "elec": {
           "zone": "electronics",
           "meshes": 45,
           "draws": 50,
           "instanced": 31,
-          "instCount": 453,
-          "tris": 29414,
+          "instCount": 330,
+          "tris": 27314,
           "screens": 50,
           "lod": 0,
           "flickerT": 0,
@@ -116,7 +116,7 @@
         },
         "scene": {
           "meshes": 142,
-          "tris": 3916228
+          "tris": 3914128
         }
       },
       "fridgeTap": {
@@ -134,17 +134,17 @@
       "tag": "landscape",
       "tv": {
         "label": "mobile-landscape-tvwall",
-        "heapMB": 362.8,
+        "heapMB": 345.5,
         "drawCalls": 56,
-        "triangles": 2254476,
+        "triangles": 2253852,
         "frameMs": 0.7,
         "elec": {
           "zone": "electronics",
           "meshes": 45,
           "draws": 50,
           "instanced": 31,
-          "instCount": 453,
-          "tris": 29414,
+          "instCount": 330,
+          "tris": 27314,
           "screens": 50,
           "lod": 0,
           "flickerT": 0,
@@ -153,7 +153,7 @@
         },
         "scene": {
           "meshes": 142,
-          "tris": 3916228
+          "tris": 3914128
         }
       },
       "fridgeTap": {
