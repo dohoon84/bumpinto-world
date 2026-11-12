@@ -6,7 +6,7 @@ import { inWater, centroid, projectOnLine } from './hangangCoords.js';
 import { createHangangTerrain, createHangangTerrainAsync, waterYAt } from './hangangTerrain.js';
 import { createHangangPaths, createHangangPathsAsync } from './hangangPaths.js';
 import { createHangangCity, createHangangCityAsync } from './hangangCity.js';
-import { createHangangProps } from './hangangProps.js';
+import { createHangangProps, createHangangPropsAsync } from './hangangProps.js';
 
 const SKIP_BRIDGE = new Set(['반포대교', '잠수교']);
 
@@ -620,7 +620,9 @@ async function finishHangangHapAsync({ parent, overlay, terrain, dem, osm, forei
   }
   if (slicer) slicer.flush('hangang-hap-clip');
   else if (y) await y();
-  const props = createHangangProps({ parent: root, osm, land });
+  const props = slicer
+    ? await createHangangPropsAsync({ parent: root, osm, land }, slicer)
+    : createHangangProps({ parent: root, osm, land });
   if (slicer) slicer.flush('hangang-hap-props');
   else if (y) await y();
 

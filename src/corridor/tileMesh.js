@@ -155,6 +155,27 @@ function merged(geos) {
   for (const x of list) x.dispose();
   return g;
 }
+async function mergedAsync(geos, slicer) {
+  let list = geos.filter(Boolean);
+  if (!list.length) return null;
+  if (list.length === 1) return list[0];
+  const BATCH = 24;
+  while (list.length > 1) {
+    const next = [];
+    for (let i = 0; i < list.length; i += BATCH) {
+      const part = list.slice(i, i + BATCH);
+      if (part.length === 1) next.push(part[0]);
+      else {
+        const g = mergeGeometries(part);
+        for (const x of part) x.dispose();
+        next.push(g);
+      }
+      if (slicer) await slicer.tick();
+    }
+    list = next;
+  }
+  return list[0];
+}
 const parkY = (k) => (k === 'plaza' ? 0.03 : 0.02 + (k === 'park' ? 0 : 0.005));
 
 // 바닥·공원·물·물길 (모두 수평 평면)
@@ -256,7 +277,18 @@ export function makeBuildingMeshAcc(seed0) {
     }
     return out;
   }
-  return { add, finish };
+  async function finishAsync(slicer) {
+    const out = [];
+    const rg = await mergedAsync(roofs, slicer);
+    if (rg) { const m = new THREE.Mesh(rg, vcMat()); m.castShadow = m.receiveShadow = true; out.push(m); }
+    for (const [key, geos] of Object.entries(walls)) {
+      const g = await mergedAsync(geos, slicer); if (!g) continue;
+      const m = new THREE.Mesh(g, nightFacade(facadeMaterial(key), key)); m.castShadow = m.receiveShadow = true; out.push(m);
+      if (slicer) await slicer.tick();
+    }
+    return out;
+  }
+  return { add, finish, finishAsync };
 }
 
 export function buildingMeshes(list, seed0) {
@@ -271,6 +303,7 @@ export async function buildingMeshesAsync(list, seed0, slicer) {
     acc.add(list[i]);
     if (slicer) await slicer.tick();
   }
+  if (slicer) return acc.finishAsync(slicer);
   return acc.finish();
 }
 

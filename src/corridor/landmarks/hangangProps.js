@@ -32,7 +32,7 @@ function boxMesh(w, h, d, color) {
   return new THREE.Mesh(new THREE.BoxGeometry(w, h, d), new THREE.MeshLambertMaterial({ color }));
 }
 
-export function createHangangProps({ parent, osm, land } = {}) {
+function* hangangPropsGen({ parent, osm, land } = {}) {
   const group = new THREE.Group();
   group.name = 'hangang-props';
   parent.add(group);
@@ -86,6 +86,7 @@ export function createHangangProps({ parent, osm, land } = {}) {
     });
   }
 
+  yield;
   // --- benches: OSM + approximate along river-facing walks ---
   const benchGeo = new THREE.BoxGeometry(1.5, 0.08, 0.42);
   const benchMat = new THREE.MeshLambertMaterial({ color: '#6b4e32' });
@@ -112,6 +113,7 @@ export function createHangangProps({ parent, osm, land } = {}) {
     }
   }
 
+  yield;
   // --- streetlights along bike path (approximate spacing) ---
   const poleGeo = new THREE.CylinderGeometry(0.07, 0.09, 5.2, 6);
   const poleMat = new THREE.MeshLambertMaterial({ color: '#3e4246' });
@@ -138,6 +140,7 @@ export function createHangangProps({ parent, osm, land } = {}) {
     lamps.push({ head, x: px, y: y + 5.05, z: pz });
   });
 
+  yield;
   // --- bins: OSM + a few extras ---
   const binGeo = new THREE.CylinderGeometry(0.22, 0.24, 0.7, 8);
   const binMat = new THREE.MeshLambertMaterial({ color: '#3a5a48' });
@@ -155,6 +158,7 @@ export function createHangangProps({ parent, osm, land } = {}) {
     group.add(m);
   }
 
+  yield;
   // --- bollards near 나들목 ends (approximate) ---
   const bolGeo = new THREE.CylinderGeometry(0.09, 0.11, 0.85, 6);
   const bolMat = new THREE.MeshLambertMaterial({ color: '#cfc8b8' });
@@ -172,6 +176,7 @@ export function createHangangProps({ parent, osm, land } = {}) {
     }
   }
 
+  yield;
   // --- generic bike-path signs (no third-party logos) ---
   const signBoard = new THREE.BoxGeometry(0.7, 0.5, 0.04);
   const signMat = new THREE.MeshLambertMaterial({ color: '#2f6b3c' });
@@ -190,6 +195,7 @@ export function createHangangProps({ parent, osm, land } = {}) {
     group.add(board);
   });
 
+  yield;
   // --- 한강 부유 문화섬: OSM islet 발자국(relation/4077217 계열). 로고·상호 없음.
   function ringShapeXZ(ring) {
     const pts = ring[0][0] === ring.at(-1)[0] && ring[0][1] === ring.at(-1)[1] ? ring.slice(0, -1) : ring.slice();
@@ -309,3 +315,21 @@ export function createHangangProps({ parent, osm, land } = {}) {
 
   return { group, setNight, updateLights, treeCount: treePts.length };
 }
+
+export function createHangangProps(opts) {
+  const g = hangangPropsGen(opts);
+  let n = g.next();
+  while (!n.done) n = g.next();
+  return n.value;
+}
+
+export async function createHangangPropsAsync(opts, slicer) {
+  const g = hangangPropsGen(opts);
+  let n = g.next();
+  while (!n.done) {
+    if (slicer) await slicer.tick();
+    n = g.next();
+  }
+  return n.value;
+}
+

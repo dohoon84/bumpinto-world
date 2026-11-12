@@ -813,7 +813,7 @@ function* hangangTerrainGen({ parent, dem, osm }, sliced = false) {
   if (shoreChains.length) {
     const tpos = [], tidx = [], rpos = [], ridx = [], npos = [], nidx = [], epos = [], eidx = [];
     let tv = 0, rv = 0, nv = 0, ev = 0;
-    const emitRun = (cols) => {
+    function* emitRun(cols) {
       if (cols.length < 2) return;
       for (let i = 0; i < cols.length - 1; i++) {
         const a = cols[i], b = cols[i + 1];
@@ -838,6 +838,7 @@ function* hangangTerrainGen({ parent, dem, osm }, sliced = false) {
           nidx.push(nv, nv + 1, nv + 2, nv, nv + 2, nv + 3);
           nv += 4;
         }
+        if (sliced && (i & 15) === 15) yield;
       }
       for (const col of [cols[0], cols[cols.length - 1]]) {
         for (let s = 0; s < steps; s++) {
@@ -863,14 +864,14 @@ function* hangangTerrainGen({ parent, dem, osm }, sliced = false) {
     for (const chain of shoreChains) {
       if (chain.length < 2) continue;
       const cols = [];
-      const flush = () => { emitRun(cols); cols.length = 0; };
+      const flush = function* () { if (cols.length) { yield* emitRun(cols); cols.length = 0; } };
       for (const p of chain) {
         const sx = p.sx, sz = p.sz;
         const topX = p.x + sx * (steps * tread), topZ = p.z + sz * (steps * tread);
-        if (inWater(topX, topZ, osm.water)) { flush(); continue; }
+        if (inWater(topX, topZ, osm.water)) { yield* flush(); continue; }
         const yWater = waterYAt(p.x, p.z, lv, osm?.meta?.datumBlend) + 0.05;
         const yGrass = heightAt(topX, topZ);
-        if (yGrass == null) { flush(); continue; }
+        if (yGrass == null) { yield* flush(); continue; }
         const yTop = Math.max(yGrass, yWater + 0.35);
         const ys = [];
         const pts = [];
@@ -881,11 +882,12 @@ function* hangangTerrainGen({ parent, dem, osm }, sliced = false) {
         }
         if (cols.length) {
           const prev = cols[cols.length - 1];
-          if (Math.hypot(p.x - prev.p.x, p.z - prev.p.z) > 7.5) flush();
+          if (Math.hypot(p.x - prev.p.x, p.z - prev.p.z) > 7.5) yield* flush();
         }
         cols.push({ pts, ys, sx, sz, p });
       }
-      flush();
+      yield* flush();
+      if (sliced) yield;
     }
     const addMesh = (pos, idx, mat, name, recv) => {
       if (!pos.length) return;
@@ -899,8 +901,11 @@ function* hangangTerrainGen({ parent, dem, osm }, sliced = false) {
       group.add(mesh);
     };
     addMesh(tpos, tidx, terraceMat, 'hangang-revetment', true);
+    if (sliced) yield;
     addMesh(rpos, ridx, riserMat, 'hangang-revetment-risers', false);
+    if (sliced) yield;
     addMesh(npos, nidx, riserMat, 'hangang-revetment-noses', false);
+    if (sliced) yield;
     addMesh(epos, eidx, riserMat, 'hangang-revetment-ends', false);
     if (sliced) yield;
   }

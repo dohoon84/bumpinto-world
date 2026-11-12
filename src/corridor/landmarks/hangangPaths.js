@@ -135,6 +135,24 @@ function partsOutsideRing(pts, ring) {
   return parts;
 }
 
+function* mergeGeosGen(list, useGroups = false) {
+  if (!list.length) return null;
+  if (list.length === 1) return list[0];
+  const BATCH = 24;
+  const mid = [];
+  for (let i = 0; i < list.length; i += BATCH) {
+    const part = list.slice(i, i + BATCH);
+    mid.push(part.length === 1 ? part[0] : mergeGeometries(part, useGroups));
+    yield;
+  }
+  let out = mid[0];
+  for (let i = 1; i < mid.length; i++) {
+    out = mergeGeometries([out, mid[i]], useGroups);
+    yield;
+  }
+  return out;
+}
+
 function* hangangPathsGen({ parent, osm, land }) {
   const group = new THREE.Group();
   group.name = 'hangang-paths';
@@ -211,7 +229,7 @@ function* hangangPathsGen({ parent, osm, land }) {
   const mats = {};
   for (const [kind, list] of Object.entries(buckets)) {
     if (!list.length) continue;
-    const merged = list.length === 1 ? list[0] : mergeGeometries(list, false);
+    const merged = yield* mergeGeosGen(list, false);
     const mat = new THREE.MeshLambertMaterial({ color: colors[kind], side: THREE.DoubleSide });
     mats[kind] = mat;
     const mesh = new THREE.Mesh(merged, mat);
@@ -277,10 +295,11 @@ function* hangangPathsGen({ parent, osm, land }) {
       flush();
     }
     }
+    yield;
   }
   const markMats = {};
   if (edgeGeos.length) {
-    const merged = edgeGeos.length === 1 ? edgeGeos[0] : mergeGeometries(edgeGeos, false);
+    const merged = yield* mergeGeosGen(edgeGeos, false);
     const mat = new THREE.MeshLambertMaterial({ color: '#f2f0ea', side: THREE.DoubleSide });
     markMats.edge = mat;
     const mesh = new THREE.Mesh(merged, mat);
@@ -288,7 +307,7 @@ function* hangangPathsGen({ parent, osm, land }) {
     group.add(mesh);
   }
   if (dashGeos.length) {
-    const merged = dashGeos.length === 1 ? dashGeos[0] : mergeGeometries(dashGeos, false);
+    const merged = yield* mergeGeosGen(dashGeos, false);
     const mat = new THREE.MeshLambertMaterial({ color: '#e6c04a', side: THREE.DoubleSide });
     markMats.center = mat;
     const mesh = new THREE.Mesh(merged, mat);

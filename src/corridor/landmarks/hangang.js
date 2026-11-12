@@ -7,7 +7,7 @@ import { createHangangTerrain, createHangangTerrainAsync } from './hangangTerrai
 import { createHangangBridges } from './hangangBridges.js';
 import { createHangangPaths, createHangangPathsAsync } from './hangangPaths.js';
 import { createHangangCity, createHangangCityAsync } from './hangangCity.js';
-import { createHangangProps } from './hangangProps.js';
+import { createHangangProps, createHangangPropsAsync } from './hangangProps.js';
 import { createHangangHap, createHangangHapAsync, mergeHangangMini } from './hangangHap.js';
 
 export const HANGANG_DEM_FILE = 'hangang/hangang-dem.json';
@@ -272,7 +272,9 @@ export async function createHangangAsync({ scene, overlay, terrain, dem, osm, ha
     : createHangangCity({ parent: root, osm, land, expressXMax: hap?.osm?.meta?.pathWestClip ?? null });
   if (slicer) slicer.flush('hangang-s1-city');
   else await y();
-  const props = createHangangProps({ parent: root, osm, land });
+  const props = slicer
+    ? await createHangangPropsAsync({ parent: root, osm, land }, slicer)
+    : createHangangProps({ parent: root, osm, land });
   if (slicer) slicer.flush('hangang-s1-props');
   await y();
   const hapApi = (hap?.dem && hap?.osm)
