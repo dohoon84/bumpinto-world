@@ -76,6 +76,13 @@ class GeoBag {
     for (let i = 0; i < n; i++) { c[i * 3] = col.r; c[i * 3 + 1] = col.g; c[i * 3 + 2] = col.b; }
     g.setAttribute('color', new THREE.BufferAttribute(c, 3)); this.parts.push(g); return g;
   }
+  // ---- 냉장고 속 일반 식품 (로고 없음, 저폴리) — 기준점 = 바닥 중앙 ----
+  carton(x, y, z, w, h, body, roof) { this.box(w, h, w, x, y + h / 2, z, body); this.box(w * 0.7, w * 0.7, w * 0.98, x, y + h, z, roof, 0, 0, Math.PI / 4); } // 우유팩: 몸통 + 박공 지붕
+  bottle(x, y, z, r, h, body, cap) { this.add(new THREE.CylinderGeometry(r * 0.5, r, h * 0.85, 6, 1, true), body, mat4(x, y + h * 0.425, z)); this.box(r * 0.8, h * 0.15, r * 0.8, x, y + h * 0.925, z, cap); }
+  tub(x, y, z, w, h, d, food, lid) { this.box(w, h, d, x, y + h / 2, z, food); this.box(w + 0.006, 0.014, d + 0.006, x, y + h + 0.007, z, lid); } // 반찬통: 내용물 색 몸통 + 색 뚜껑
+  ball(x, y, z, r, color, sy = 1) { this.add(new THREE.IcosahedronGeometry(r, 0), color, mat4(x, y + r * sy, z, 0, 0, 0, 1, sy, 1)); }
+  eggs(x, y, z, nx = 5, nz = 2) { this.box(nx * 0.05 + 0.01, 0.03, nz * 0.05 + 0.01, x, y + 0.015, z, 0xcbb894); for (let i = 0; i < nx; i++) for (let j = 0; j < nz; j++) this.add(new THREE.OctahedronGeometry(0.021), (i + j) % 3 ? 0xf1e2c6 : 0xe9cfa4, mat4(x + (i - (nx - 1) / 2) * 0.05, y + 0.045, z + (j - (nz - 1) / 2) * 0.05, 0, 0.4, 0, 1, 1.3, 1)); } // 계란판
+  meat(x, y, z, flesh) { this.box(0.2, 0.024, 0.14, x, y + 0.012, z, 0xf2f2ef); this.box(0.165, 0.022, 0.105, x, y + 0.035, z, flesh); this.box(0.05, 0.002, 0.03, x + 0.05, y + 0.047, z + 0.03, 0xf4f1e6); } // 랩 씌운 고기 트레이 + 가격 스티커
   box(w, h, d, x, y, z, color, ry = 0, rx = 0, rz = 0) { return this.add(new THREE.BoxGeometry(w, h, d), color, mat4(x, y, z, rx, ry, rz)); }
   cyl(rt, rb, h, seg, x, y, z, color, rx = 0, ry = 0, rz = 0, open = false) { return this.add(new THREE.CylinderGeometry(rt, rb, h, seg, 1, open), color, mat4(x, y, z, rx, ry, rz)); }
   disc(r, seg, x, y, z, color, rx = 0, ry = 0) { return this.add(new THREE.CircleGeometry(r, seg), color, mat4(x, y, z, rx, ry, 0)); }
@@ -477,7 +484,7 @@ export function mountElectronics({ scene, keep, canvasTex, obstacles, prodMeshes
   };
   const frontStock = [['fryer', 75.0, 14.0], ['micro', 76.3, 14.0], ['vac', 77.6, 14.0], ['cooker', 78.9, 14.0], ['console', 80.2, 14.0], ['laptop', 75.0, 15.25], ['headset', 76.3, 15.25]];
   const stockLists = {};
-  for (const [pid, x, z] of frontStock) { (stockLists[pid] ||= []).push(...palletStack(pid, x, z, pid === 'headset' ? 0.42 : pid === 'laptop' ? 0.7 : 1.15)); if (z < 15) { tagAt(pid === 'vac' ? 'robot' : pid, x, 1.55, z - 0.53, Math.PI, 0.8); stat.box(0.025, 1.45, 0.025, x, 0.72, z - 0.52, post); } else tagAt(pid, x + 0.62, 0.5, z, -Math.PI / 2, 0.7); }
+  for (const [pid, x, z] of frontStock) { (stockLists[pid] ||= []).push(...palletStack(pid, x, z, pid === 'headset' ? 0.28 : pid === 'laptop' ? 0.7 : 1.15)); if (z < 15) { tagAt(pid === 'vac' ? 'robot' : pid, x, 1.55, z - 0.53, Math.PI, 0.8); stat.box(0.025, 1.45, 0.025, x, 0.72, z - 0.52, post); } else tagAt(pid, x + 0.62, 0.5, z, -Math.PI / 2, 0.7); }
   ob(74.35, 80.85, 13.45, 14.55); ob(74.35, 76.95, 14.7, 15.8);
   for (const [pid, list] of Object.entries(stockLists)) stackBoxes(pid, list);
 
@@ -495,7 +502,12 @@ export function mountElectronics({ scene, keep, canvasTex, obstacles, prodMeshes
   const doorInnerGeo = (side) => { // 문 안쪽 라이너 + 도어 포켓 + 병 (흰색 고정, 발광)
     const b = new GeoBag();
     b.box(doorW * 0.88, doorH * 0.9, 0.012, side * doorW / 2, doorH / 2, -0.006, 0xf7f9fa);
-    for (let k = 0; k < 4; k++) { b.box(doorW * 0.8, 0.07, 0.1, side * doorW / 2, 0.15 + k * 0.24, -0.06, 0xdfeef6); for (let j = 0; j < 3; j++) b.box(0.07, 0.12 + ((k + j) % 2) * 0.05, 0.07, side * (0.08 + j * 0.12), 0.24 + k * 0.24 + ((k + j) % 2) * 0.025, -0.06, [0xd9442e, 0xf2c230, 0x2fbf71, 0xffffff, 0x2a6fdb][(k + j * 2) % 5]); }
+    for (let k = 0; k < 4; k++) { b.box(doorW * 0.8, 0.07, 0.1, side * doorW / 2, 0.15 + k * 0.24, -0.06, 0xdfeef6); const y0 = 0.125 + k * 0.24; // 도어 포켓: 아래 = 큰 병, 위로 갈수록 우유팩·소스병·작은 병
+      for (let j = 0; j < (k === 3 ? 0 : 2); j++) { const xx = side * (0.1 + j * 0.17), q = (k * 3 + j + (side > 0 ? 1 : 0)) % 4;
+        if (k === 0) b.bottle(xx, y0, -0.06, 0.036, 0.27, [0xcfe8f3, 0xf29a2e, 0x9fd36a][j], [0x2a6fdb, 0x2fae5b, 0xf2c230][j]);
+        else if (k === 1) b.carton(xx, y0, -0.06, 0.07, 0.17, [0xf6b24a, 0xf1d86e][j], [0x2fae5b, 0x3f7fd6][j]); // 문 쪽은 흰 라이너라 색 있는 주스·바나나우유 팩
+        else if (k === 2) b.bottle(xx, y0, -0.06, 0.028, 0.16, [0x8a2b1c, 0xd94a2e, 0xf3d36b, 0x4a2a18][q], [0xf2f2ef, 0x22262a, 0xd9442e, 0xf2c230][q]);
+        else b.tub(xx, y0, -0.06, 0.07, 0.06, 0.07, [0xf4e6c8, 0xd7a54a, 0xc94c3a, 0xeaeaea][q], [0xd9442e, 0x2fae5b, 0x2a6fdb, 0xf2c230][q]); } }
     b.box(0.006, doorH * 0.9, 0.02, side * 0.004, doorH / 2, -0.004, 0x9aa3ad); // 가스켓
     if (side < 0) { b.box(0.13, 0.2, 0.004, side * doorW * 0.5, doorH * 0.62, 0.054, 0x0e1216); b.box(0.09, 0.03, 0.002, side * doorW * 0.5, doorH * 0.66, 0.057, 0x5fd4ff); b.box(0.09, 0.012, 0.002, side * doorW * 0.5, doorH * 0.6, 0.057, 0x2fd27a); b.box(0.02, 0.02, 0.002, side * doorW * 0.5 - 0.035, doorH * 0.555, 0.057, 0xe8ecef); b.box(0.02, 0.02, 0.002, side * doorW * 0.5 + 0.035, doorH * 0.555, 0.057, 0xe8ecef); } // 디스플레이(발광)
     return b.build();
@@ -506,7 +518,9 @@ export function mountElectronics({ scene, keep, canvasTex, obstacles, prodMeshes
     b.box(FR.w - 0.1, 0.012, D, 0, -drH / 2 + 0.03, -D / 2, 0xe6eef3);
     for (const sx of [-1, 1]) b.box(0.012, drH - 0.06, D, sx * (FR.w / 2 - 0.05), 0, -D / 2, 0xe6eef3);
     b.box(FR.w - 0.1, drH - 0.06, 0.012, 0, 0, -D, 0xe6eef3);
-    for (let j = 0; j < 6; j++) b.box(0.12, 0.06 + (j % 3) * 0.03, 0.18, -FR.w / 2 + 0.14 + j * 0.13, -drH / 2 + 0.07 + (j % 3) * 0.015, -0.14 - (j % 2) * 0.24, [0x7fb7e6, 0xf4c430, 0xffffff, 0xd9442e, 0x9fd8a8, 0xe8a87c][j]);
+    const fy = -drH / 2 + 0.036; // 서랍(신선칸): 고기·생선 트레이, 당근·양파·파프리카
+    b.meat(-0.25, fy, -0.16, 0xc63f48); b.meat(0.0, fy, -0.16, 0xee9a74);
+    b.ball(0.2, fy, -0.12, 0.045, 0xe8791f, 0.8); b.ball(0.28, fy, -0.2, 0.045, 0xd8a95a, 0.85); b.ball(0.2, fy, -0.27, 0.05, 0xd8342b, 0.85);
     return b.build();
   };
   const FINISH = [[0xc9ced3, 'fridge'], [0xc2c7cc, 'fridge'], [0x1b1e23, 'fridge'], [0x23272d, 'fridge'], [0xeeeeea, 'kimchi'], [0xb7c7c2, 'kimchi']]; // 스테인리스 2 · 블랙 글라스 2 · 김치냉장고 2
@@ -526,17 +540,27 @@ export function mountElectronics({ scene, keep, canvasTex, obstacles, prodMeshes
     glow.box(0.25, 0.012, 0.03, x, doorY0 + doorH - 0.055, FZ + 0.2, 0xfffbe8); // 천장 LED 바
     for (let k = 0; k < 3; k++) {
       const sy = doorY0 + 0.2 + k * 0.28; gloss.box(w - 0.1, 0.01, d - 0.16, x, sy, FZ - 0.02, 0xbcd6e4);
-      for (let j = 0; j < 5; j++) {
-        const hue = [0xe8553e, 0x7cc35a, 0xf4c430, 0xffffff, 0x4a90d9, 0xc9845a][(i + j + k) % 6], bh = 0.07 + ((i * 7 + j * 3 + k) % 4) * 0.035;
-        const fx = x - w / 2 + 0.13 + j * 0.16, fz = FZ - 0.12 + ((j + k) % 2) * 0.16;
-        if ((j + k) % 3 === 0) glow.cyl(0.035, 0.035, bh + 0.05, 8, fx, sy + (bh + 0.05) / 2 + 0.006, fz, hue); else glow.box(0.11, bh, 0.13, fx, sy + bh / 2 + 0.006, fz, hue);
-      }
     }
     if (label === 'kimchi') for (let j = 0; j < 3; j++) glow.box(0.24, 0.16, 0.3, x - 0.27 + j * 0.27, doorY0 + 0.1, FZ, 0xd9442e);
     S.fridges.push({ x, open: 0, want: 0, t: 0, fc });
     tgt('fridge', i, x - w / 2, 0, fFront - 0.1, x + w / 2, h, fFront + 0.2, label === 'kimchi' ? '김치냉장고 문' : '냉장고 문');
     if (i % 2 === 0) tagAt(label, x + 0.5, h + 0.18, fFront - 0.3, 0, 0.9);
   });
+  { // 선반 식품 세트 1벌을 만들어 냉장고 6대에 인스턴스 (draw 1) — 양배추·반찬통·계란판·우유·요거트·병·과일 그릇
+    const f = new GeoBag(), sh = (k) => doorY0 + 0.2 + k * 0.28 + 0.005;
+    let y = sh(0); f.ball(-0.24, y, -0.12, 0.115, 0x9fcf6e, 0.9); f.ball(-0.26, y + 0.01, -0.1, 0.1, 0xc9e6a2, 0.95); // 양배추(겉잎·속잎)
+    f.tub(-0.02, y, -0.14, 0.13, 0.06, 0.1, 0xc9402e, 0x2fae5b); f.tub(-0.02, y + 0.074, -0.14, 0.13, 0.05, 0.1, 0x6f9a3a, 0xf2c230); f.tub(0.16, y, -0.14, 0.13, 0.06, 0.1, 0xe7c35a, 0x2a6fdb); f.tub(0.3, y, -0.02, 0.1, 0.05, 0.1, 0x8a5a2e, 0xd9442e); // 반찬통(김치·나물·계란말이·장조림)
+    y = sh(1); f.eggs(-0.2, y, -0.08, 4, 2); f.carton(0.1, y, -0.14, 0.075, 0.19, 0xfafaf7, 0x3f7fd6); f.carton(0.2, y, -0.14, 0.075, 0.19, 0xfafaf7, 0xd9442e);
+    f.add(new THREE.CylinderGeometry(0.032, 0.026, 0.065, 6), 0xf6f1ea, mat4(0.31, y + 0.0325, -0.04)); f.add(new THREE.CylinderGeometry(0.032, 0.026, 0.065, 6), 0xf2b8c6, mat4(0.31, y + 0.0325, -0.12)); // 요거트 컵
+    y = sh(2); f.bottle(-0.31, y, -0.14, 0.036, 0.22, 0xcfe8f3, 0x2a6fdb); f.bottle(-0.22, y, -0.14, 0.036, 0.22, 0xf29a2e, 0x2fae5b);
+    f.add(new THREE.CylinderGeometry(0.11, 0.065, 0.055, 8), 0xf0f3f5, mat4(0.06, y + 0.0275, -0.1)); // 과일 그릇 + 사과·오렌지·배
+    f.ball(0.02, y + 0.04, -0.12, 0.038, 0xd8342b); f.ball(0.1, y + 0.04, -0.1, 0.038, 0xf39a1e); f.ball(0.05, y + 0.06, -0.06, 0.036, 0xd9cf6a);
+    f.tub(0.27, y, -0.12, 0.12, 0.08, 0.12, 0xf4f1e8, 0x22262a); // 두부·반찬 큰 통
+    const foodGeo = keep(f.build()), foodMat = keep(new THREE.MeshLambertMaterial({ vertexColors: true, emissive: 0x2a2c2e }));
+    const food = new THREE.InstancedMesh(foodGeo, foodMat, FINISH.length);
+    FINISH.forEach((_, i) => { _m.makeTranslation(fridgeX(i), 0, FZ); food.setMatrixAt(i, _m); });
+    food.computeBoundingSphere(); root.add(food);
+  }
   ob(fridgeX(0) - FR.w / 2, fridgeX(5) + FR.w / 2, BACK_Z, fFront + 0.08);
   const nF = FINISH.length;
   const doorMat = keep(new THREE.MeshPhongMaterial({ vertexColors: true, shininess: 90, specular: 0x6a6e72 }));

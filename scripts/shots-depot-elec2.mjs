@@ -57,6 +57,7 @@ const cam = (p, pos, tgt, pre = '') => p.evaluate(([pos, tgt, pre]) => { const d
     await p.evaluate(() => { const e = window.__jj.depot.interior._dbg.elec; for (let i = 0; i < 6; i++) e.openFridge(i, i % 2 === 0); });
     await cam(p, [70.1, 1.65, 33.7], [70.1, 1.0, 30.4]); metrics.runs.push(await metric(p, 'fridges')); await shot('03-fridge-open.png');
     await cam(p, [67.75, 1.55, 32.3], [67.65, 1.0, 30.4]); await shot('03b-fridge-open-close.png');
+    await cam(p, [67.7, 1.42, 31.55], [67.6, 1.12, 30.3]); await shot('03c-fridge-food-closeup.png');
     await p.evaluate(() => { const e = window.__jj.depot.interior._dbg.elec; for (let i = 0; i < 6; i++) e.openFridge(i, false); });
   }
   if (want('washer')) { await p.evaluate(() => { const e = window.__jj.depot.interior._dbg.elec; e.act('washer', 0); e.act('washer', 1); }); await cam(p, [75.4, 1.5, 32.6], [75.6, 0.65, 30.4]); await shot('04-washer.png'); }
@@ -114,6 +115,7 @@ for (const [w, h, tag] of [[390, 844, 'portrait'], [844, 390, 'landscape']]) {
   const fx = await p.evaluate(() => { const I = window.__jj.depot.interior, t = I._dbg.elec.targets.find((t) => t.kind === 'fridge' && t.i === 0); const c = t.box.getCenter(new (I.camera.position.constructor)()); c.y = 1.3; c.project(I.camera); return [(c.x + 1) / 2 * innerWidth, (1 - c.y) / 2 * innerHeight]; });
   await p.touchscreen.tap(fx[0], fx[1]); await p.waitForTimeout(1500);
   r.fridgeTap = await p.evaluate(() => ({ want: window.__jj.depot.interior._dbg.elec.S.fridges[0].want, open: +window.__jj.depot.interior._dbg.elec.S.fridges[0].open.toFixed(2) }));
+  await p.evaluate(() => window.__jj.depot.interior._dbg.run(1.2)); // 탭으로 열린 문 애니메이션을 끝까지 (swiftshader 프레임이 느려서)
   await p.screenshot({ path: OUT + `11-mobile-${tag}-fridge-tap.png` });
   // 3) 박스 집기 — 카트를 잡고 앞 섬 55" 박스 앞에서 화면 가운데(조준점)를 탭
   await p.evaluate(() => { const I = window.__jj.depot.interior, d = I._dbg; d.elec.openFridge(0, false); d.grabCart(); d.setCart(72.75, 12.45, Math.PI); I.st.head.pitch = -0.5; d.run(0.4); });
