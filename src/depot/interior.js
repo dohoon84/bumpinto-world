@@ -9,6 +9,9 @@ import { PRODUCTS, BY_ID, CART, EGG } from './products.js';
 import { buildCartGeometry, BASKET } from './cartModel.js';
 import { buildProductGeometry, addProductShape } from './shapes.js';
 import { createStaff } from './staff.js';
+import { registerStockProducts } from './stockCatalog.js';
+import { buildDepotCeiling } from './ceiling.js';
+import { mountStock } from './stock.js';
 
 const W = 84, D = 120, CEIL = 9;
 const DOOR = { x: 69, w: 8 };
@@ -74,16 +77,11 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit, a
   const disposables = [];
   const keep = (x) => { disposables.push(x); return x; };
   const TX = await loadDepotTextures(renderer); for (const t of Object.values(TX)) keep(t);
+  registerStockProducts();
   const boxGeoLabeled = (sx, sy, sz, q) => (TX['pk-egg'] ? boxGeoAtlas(sx, sy, sz, q) : boxGeoLabeledCanvas(sx, sy, sz));
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color(0xdfe5ec);
-  scene.fog = new THREE.Fog(0xdfe5ec, 45, 140);
   const camera = new THREE.PerspectiveCamera(68, innerWidth / innerHeight, 0.05, 200);
   camera.rotation.order = 'YXZ';
-  // 조명: 이 Scene 안에만 (바깥 셰이더와 무관). 창고 형광등처럼 밝고 평평하게.
-  scene.add(new THREE.HemisphereLight(0xffffff, 0xb8b4a8, 2.2));
-  const sun = new THREE.DirectionalLight(0xffffff, 1.1); sun.position.set(20, 40, 10); scene.add(sun);
-  scene.add(new THREE.AmbientLight(0xffffff, 0.35));
 
   // ---------- 바닥·벽·천장 ----------
   const floorTex = keep(canvasTex(512, 512, (g) => {
@@ -103,20 +101,10 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit, a
   for (const x of [RACK_X[0] + RACK_D + 0.15, RACK_X[1] - 0.15, RACK_X[1] + RACK_D + 0.15, RACK_X[2] - 0.15]) { m4.compose(new THREE.Vector3(x, 0.004, DETAIL.z0 + 13.5), new THREE.Quaternion(), new THREE.Vector3(1, 1, 27)); lines.setMatrixAt(li++, m4); }
   for (const z of [10.5, 12.0]) { m4.compose(new THREE.Vector3(57, 0.004, z), new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI / 2), new THREE.Vector3(1, 1, 30)); lines.setMatrixAt(li++, m4); }
   lines.count = li; scene.add(lines);
-  const wallM = keep(new THREE.MeshLambertMaterial({ color: 0xe9ebee, side: THREE.BackSide }));
+  const wallM = keep(new THREE.MeshLambertMaterial({ color: 0x8b9298, side: THREE.BackSide }));
   const shellG = keep(new THREE.BoxGeometry(W, CEIL, D)); shellG.translate(W / 2, CEIL / 2 - 0.05, D / 2); // 바닥면과 z-fighting 방지
-  scene.add(new THREE.Mesh(shellG, wallM));
-  // 천장 트러스 + 조명 패널 (발광 재질, 라이트 아님)
-  const lampM = keep(new THREE.MeshBasicMaterial({ color: 0xffffff }));
-  const lampG = keep(new THREE.BoxGeometry(0.35, 0.08, 4));
-  const lamps = new THREE.InstancedMesh(lampG, lampM, 300); let ln = 0;
-  for (let x = 4; x < W; x += 6) for (let z = 4; z < D; z += 7) { m4.makeTranslation(x, CEIL - 0.6, z); lamps.setMatrixAt(ln++, m4); }
-  lamps.count = ln; scene.add(lamps);
-  const trussM = keep(new THREE.MeshLambertMaterial({ color: 0x9aa3ad }));
-  const trussG = keep(new THREE.BoxGeometry(W, 0.35, 0.18)); trussG.translate(W / 2, 0, 0);
-  const truss = new THREE.InstancedMesh(trussG, trussM, 20); let tn = 0;
-  for (let z = 7.5; z < D; z += 7) { m4.makeTranslation(0, CEIL - 0.3, z); truss.setMatrixAt(tn++, m4); }
-  truss.count = tn; scene.add(truss);
+  const shellMesh = new THREE.Mesh(shellG, wallM); scene.add(shellMesh);
+  const ceiling = buildDepotCeiling(scene, { renderer, keep, shellMesh });
   // 벽 구역 간판 (신선·냉동 등) — 실제 매장 동선 그림
   const zoneSign = (text, sub, x, z, ry, w = 14) => {
     const t = keep(canvasTex(1024, 256, (g) => { g.fillStyle = '#1E5A45'; g.fillRect(0, 0, 1024, 256); g.fillStyle = '#F2C230'; g.fillRect(0, 214, 1024, 42); g.fillStyle = '#F3EADA'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.font = '900 120px "Pretendard","Noto Sans KR",sans-serif'; g.fillText(text, 512, 100); g.fillStyle = '#123B2D'; g.font = '800 30px "Pretendard",sans-serif'; g.fillText(sub, 512, 236); }));
@@ -174,52 +162,18 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit, a
   }
   ups.count = iu; beams.count = ib; pals.count = ip; wraps.count = iw;
   scene.add(ups, beams, pals, wraps);
+  ceiling.addRackAO?.(racks, RACK_D, BAY);
   // 벽(바깥 테두리)·계산대 자리도 장애물
   obstacles.push({ x0: -1, x1: 0.3, z0: 0, z1: D }, { x0: W - 0.3, x1: W + 1, z0: 0, z1: D }, { x0: 0, x1: W, z0: -1, z1: 0.3 }, { x0: 0, x1: W, z0: D - 0.3, z1: D + 1 });
 
-  // ---------- 상품 (상품별 InstancedMesh, 판매 파렛트 위에 실측 크기로 쌓기) ----------
+  // ---------- 상품 (카트에 담을 때 쓸 상세 지오메트리 + 매장 진열은 stock.js 가 InstancedMesh·LOD 로) ----------
   const prodMeshes = [];
   const productGeo = (p) => buildProductGeometry(p, { boxGeo: boxGeoLabeled });
   const addPhysShape = (body, p) => addProductShape(body, p, CANNON);
-  const prodGeo = {}, prodMat = {};
-  for (const p of PRODUCTS) { prodGeo[p.id] = keep(productGeo(p)); const t = TX[`pk-${p.tex || p.id}`] || keep(labelTex(p)); prodMat[p.id] = keep(new THREE.MeshLambertMaterial({ map: t })); }
-  const order = ['water', 'soda', 'rice', 'egg', 'tissue', 'ramen', 'chips', 'melon', 'meat', 'bottle'];
-  const stacks = {}; for (const id of order) stacks[id] = [];
-  sellSlots.sort((a, b) => a.x - b.x || a.z - b.z);
-  sellSlots.forEach((s, i) => {
-    const p = BY_ID[order[Math.floor(i / 4) % order.length]];
-    const [sx, sy, sz] = p.size;
-    // 파렛트 1.2 m 가 통로 방향(z), 1.0 m 가 깊이(x). 상품 긴 변을 통로 방향으로.
-    const along = Math.max(sx, sz), deep = Math.min(sx, sz), rot = sx >= sz ? Math.PI / 2 : 0;
-    const nA = Math.max(1, Math.floor(1.2 / along)), nD = Math.max(1, Math.floor(1.0 / deep));
-    const maxH = p.id === 'egg' || p.id === 'melon' ? 0.75 : p.id === 'meat' ? 0.3 : p.id === 'chips' ? 1.3 : 1.35;
-    const nY = Math.max(1, Math.floor(maxH / sy));
-    for (let y = 0; y < nY; y++) for (let a = 0; a < nA; a++) for (let d = 0; d < nD; d++) {
-      // 맨 위층은 통로 쪽 앞줄을 조금 비워 '팔린' 느낌
-      if (y === nY - 1 && d === (s.face > 0 ? nD - 1 : 0) && (a + i) % 3 === 0) continue;
-      const z = s.z - (nA * along) / 2 + along * (a + 0.5);
-      const x = s.x - (nD * deep) / 2 + deep * (d + 0.5);
-      stacks[p.id].push({ x, y: s.y + sy * (y + 0.5), z, rot, face: s.face });
-    }
-  });
-  for (const p of PRODUCTS) {
-    const list = stacks[p.id];
-    const im = new THREE.InstancedMesh(prodGeo[p.id], prodMat[p.id], Math.max(1, list.length));
-    list.forEach((it, i) => { m4.compose(pv.set(it.x, it.y, it.z), new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), it.rot + (it.face > 0 ? 0 : Math.PI)), s1); im.setMatrixAt(i, m4); });
-    im.count = list.length; im.userData.pid = p.id; im.userData.list = list; im.computeBoundingSphere();
-    scene.add(im); prodMeshes.push(im);
-  }
-  // 통로 가격표(파렛트 앞 바닥 스탠드)
-  const tagTex = {}; const tagG = keep(new THREE.PlaneGeometry(0.6, 0.3));
-  for (const p of PRODUCTS) { const t = keep(canvasTex(512, 256, (g) => { // 디자인 가격표 양식(그린 띠 · 크림 바탕, 특가는 레드 띠)
-      const sale = p.id === 'ramen' || p.id === 'chips';
-      g.fillStyle = '#FBF7EE'; g.fillRect(0, 0, 512, 256); g.fillStyle = sale ? '#D9442E' : '#1E5A45'; g.fillRect(0, 0, 512, 54);
-      g.fillStyle = '#F3EADA'; g.font = '800 26px "Pretendard",sans-serif'; g.textAlign = 'left'; g.fillText(sale ? '범창고 특가' : '범창고 정자점', 22, 37);
-      g.fillStyle = '#22262A'; g.font = '800 34px "Pretendard",sans-serif'; g.fillText(p.name, 22, 100); g.fillStyle = '#5a5f63'; g.font = '600 22px "Pretendard",sans-serif'; g.fillText(`${p.sub} · ${p.kg} kg`, 22, 134);
-      g.textAlign = 'right'; g.fillStyle = sale ? '#D9442E' : '#22262A'; g.font = '800 84px "Pretendard",sans-serif'; g.fillText(p.price.toLocaleString('ko-KR'), 462, 222); g.font = '800 34px "Pretendard",sans-serif'; g.fillText('원', 498, 222);
-      g.fillStyle = '#22262A'; for (let i = 0; i < 26; i++) g.fillRect(22 + i * 6, 170, (i * 7) % 3 + 1, 60);
-    })); tagTex[p.id] = keep(new THREE.MeshBasicMaterial({ map: t })); }
-  sellSlots.forEach((s, i) => { if (i % 4) return; const p = BY_ID[order[Math.floor(i / 4) % order.length]]; const tg = new THREE.Mesh(tagG, tagTex[p.id]); tg.position.set(s.x + s.face * 0.55, 1.62, s.z + 0.3); tg.rotation.y = s.face > 0 ? Math.PI / 2 : -Math.PI / 2; scene.add(tg); });
+  const prodMat = {};
+  for (const p of PRODUCTS) { const t = TX[`pk-${p.tex || p.id}`] || keep(labelTex(p)); prodMat[p.id] = keep(new THREE.MeshLambertMaterial({ map: t })); }
+  const stock = mountStock({ scene, keep, canvasTex, TX, racks, obstacles, wraps, boxGeoLabeled, isMobile });
+  prodMeshes.push(...stock.prodMeshes);
 
   // ---------- 디자인 사인 (통로 번호 · 천장 걸이 · 랙 끝 안전 표지 · 바닥 스텐실) ----------
   const AISLE_C = [RACK_X[0] + RACK_D + AISLE / 2, RACK_X[1] + RACK_D + AISLE / 2];
@@ -559,7 +513,8 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit, a
     const loose = [...items.map((it) => it.mesh), ...floorItems.map((f) => f.mesh)];
     const hit = ray.intersectObjects([...prodMeshes, ...loose], false)[0];
     if (!hit) return null;
-    if (hit.object.isInstancedMesh && hit.instanceId != null && hit.object.userData.pid) return { kind: 'shelf', im: hit.object, id: hit.instanceId, p: BY_ID[hit.object.userData.pid], dist: hit.distance };
+    const pid = hit.object.isInstancedMesh && hit.instanceId != null ? (hit.object.userData.pids?.[hit.instanceId] ?? hit.object.userData.pid) : null; // 구역별 합친 진열 메시는 인스턴스마다 SKU
+    if (pid) return { kind: 'shelf', im: hit.object, id: hit.instanceId, p: BY_ID[pid], dist: hit.distance };
     const it = items.find((i) => i.mesh === hit.object); if (it) return { kind: 'cart', it, p: it.p, dist: hit.distance };
     const fi = floorItems.find((f) => f.mesh === hit.object); if (fi) return { kind: 'floor', fi, p: fi.p, dist: hit.distance };
     return null;
@@ -967,6 +922,7 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit, a
     selfAvatar.position.set(st.me.x, 0, st.me.z); selfAvatar.rotation.y = st.me.yaw;
     updateCamera(dt);
     staff.tick(dt, { me: st.me, cartObj: st.cart, items, rimTop: B.top.yRear, cartHeld: st.hasCart, cartVisible: cart.visible });
+    stock.tick(camera);
     hover = st.mode === 'walk' ? pickTarget() : null;
     updateHighlight();
     marker.visible = !st.hasCart && cart.visible; if (marker.visible) { arrow.position.y = 1.55 + Math.sin(st.t * 3) * 0.06; arrow.rotation.y += dt * 1.5; }
@@ -1012,7 +968,7 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit, a
       hold(id) { const p = BY_ID[id]; st.held = { p, src: null }; st.mode = 'place'; st.rotY = 0; st.tip = false; st.nudge.x = st.nudge.z = 0; setGhost(p); hud.classList.add('placing'); },
       setGhostAt(level, x, z, rotY = 0, tip = false) { st.level = level; st.gx = x; st.gz = z; st.fx = x; st.fz = z; st.rotY = rotY; st.tip = tip; st.nudge.x = st.nudge.z = 0; },
       drop(id, level, x, z, rotY = 0, tip = false) { api._dbg.hold(id); api._dbg.setGhostAt(level, x, z, rotY, tip); if (st.held && itemDims(st.held.p, tip).join() !== ghost?.userData.dims) { setGhost(st.held.p); ghost.userData.dims = itemDims(st.held.p, tip).join(); } ghostSol = solveGhost(); return place(); },
-      firstOf(id) { const im = prodMeshes.find((m) => m.userData.pid === id); const l = im?.userData.list || []; return l.length ? { ...l[Math.floor(l.length / 2)] } : null; },
+      firstOf(id) { const l = []; for (const m of prodMeshes) (m.userData.list || []).forEach((it, i) => { if ((m.userData.pids ? m.userData.pids[i] : m.userData.pid) === id) l.push(it); }); return l.length ? { ...l[Math.floor(l.length / 2)] } : null; },
       run(sec, dt = 1 / 30) { for (let t = 0; t < sec; t += dt) update(dt); },
       floorCount() { return floorItems.length; },
       clearFloor() { while (floorItems.length) { const fi = floorItems[0]; removeFloorItem(fi); disposeItemMesh(fi.mesh); } },
