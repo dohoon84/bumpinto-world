@@ -3,6 +3,7 @@
 import * as THREE from 'three';
 import { addInstancedTrees, addInstancedTreesGen } from '../../world/trees.js';
 import { inWater, centroid, pointInRing, projectOnLine } from './hangangCoords.js';
+import { cellMergeEnabled, cellMergeGen } from '../../perf/cellMerge.js'; // [jamsil-perf]
 
 function hash01(i) {
   let n = (i * 374761393) | 0;
@@ -318,6 +319,9 @@ function* hangangPropsGen({ parent, osm, land } = {}) {
     if (!t) for (const pl of pool) pl.intensity = 0;
   }
 
+  // [jamsil-perf] 벤치·가로등·휴지통·볼라드·표지판은 움직이지 않으므로 400 m 칸 × 재질로 합친다(합수부에서 draw call 약 1000 → 수십).
+  //   재질은 그대로 공유하므로 밤 조명(headMat.emissive)도 똑같이 바뀐다. ?cellmerge=0 이면 예전처럼 하나씩.
+  if (cellMergeEnabled()) yield* cellMergeGen(group, { cell: 400 });
   return { group, setNight, updateLights, treeCount: treePts.length };
 }
 

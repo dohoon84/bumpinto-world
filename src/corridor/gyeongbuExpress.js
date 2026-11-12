@@ -2,6 +2,7 @@
 //   차체는 정자역 시내버스와 같은 createBus 파이프라인(직행좌석 도색, 12.6m 3축 코치, LED 행선판).
 //   운수사·제작사 로고와 브랜드 글자는 넣지 않는다.
 import * as THREE from 'three';
+import { cellMerge, cellMergeEnabled } from '../perf/cellMerge.js'; // [jamsil-perf]
 import { ribbonGeo, fixNormalsUp } from '../world.js';
 import { busLateralM, chainageAfter, enRoute, nextExpress } from './gyeongbuSpeed.js';
 import { EXPRESS_ROAD_Y, EXPRESS_PAVE_R, expressRoadHeight, inPangyoCity, inGangnamCity, GANGNAM_CITY, nearPangyoToll, distToPts } from './gyeongbuWorld.js';
@@ -160,6 +161,9 @@ function busLaneMarkings(pts, data, yAt = null) {
     wrap.rotation.y = ang;
     return wrap;
   }));
+  // [jamsil-perf] 90 m 마다 노면 글자·420 m 마다 표지판이 메시 하나씩(글자는 절두체 컬링도 꺼짐)이라 경부 전체 약 360 draw call 이
+  //   잠실·정자 어디서나 매 프레임 그려졌다. 800 m 칸 × 재질로 합쳐 모양은 그대로, 칸 단위로 컬링한다. ?cellmerge=0 이면 예전대로.
+  if (cellMergeEnabled()) cellMerge(g, { cell: 800, allowTransparent: true });
   return g;
 }
 

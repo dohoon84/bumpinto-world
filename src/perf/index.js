@@ -6,6 +6,7 @@ import { perfFlags } from './flags.js';
 import { createInstancer } from './instancer.js';
 import { mergeStatic } from './mergeStatic.js';
 import { createPropCull } from './propCull.js';
+import { fogCullQueue } from './cellMerge.js'; // [jamsil-perf]
 
 // 정적 병합 대상(scene 바로 아래 자식 이름). 움직이는 부분은 각 모듈에서 userData.perfDynamic 으로 표시해 둔다
 export const MERGE_TARGETS = ['tancheon-dog-park', 'tancheon-stepping-stones', 'jeongja-station-plaza', 'jeongja-starbucks-crowd', 'starbucks-mullions'];
@@ -66,7 +67,7 @@ export function mountPerfMem({ scene, renderer, camera, params, getPlayer = () =
   const cull = F.propcull ? createPropCull({}) : null;
   out.cull = cull;
   function discoverCull() {
-    if (!cull) return;
+    if (!cull) { fogCullQueue.length = 0; return; }
     const player = getPlayer();
     for (const c of scene.children) {
       if (c === corridorRoot || c === inst?.group || c === player || c.isLight || c.isCamera || c.userData?.perfNoCull) continue;
@@ -74,6 +75,8 @@ export function mountPerfMem({ scene, renderer, camera, params, getPlayer = () =
       if (!c.isMesh && !c.isGroup && c.type !== 'Object3D') continue;
       cull.add(c);
     }
+    // [jamsil-perf] 코리더 안의 칸 메시(한강 길·소품, 경부 노면 글자)도 안개 밖이면 뺀다
+    while (fogCullQueue.length) { const m = fogCullQueue.pop(); if (m.parent) cull.add(m); }
   }
   discover(); discoverCull();
   out.stats.mountMs = Math.round(performance.now() - t0); out.stats.mergeMs = Math.round(mergeMs);
