@@ -24,6 +24,12 @@ const PA_TEXTS = [
   '냉동 코너 온도를 점검했습니다 · 아이스크림도 있어요',
   '카트는 출입구 카트 보관소에 반납해 주세요',
   '신선·정육 코너, 오늘 들어온 범한돈 삼겹살 안내 드립니다',
+  '시식 코너 말순 할머니의 범란말이, 지금 막 부쳤어요',
+  '통로에서는 카트를 천천히 밀어 주세요 · 어린이 손님 조심',
+  '범샘물 2L 묶음, 1번 통로에 다시 채워 드렸어요',
+  '계산대 04번, 09번 바로 계산 가능합니다',
+  '분실물 안내: 노란 장바구니를 고객센터에 맡아 두었어요',
+  '직원이 진열 중입니다 · 지게차 통로 근처에서는 잠시 기다려 주세요',
 ];
 
 const DEFAULT_LEVEL = () => {
@@ -64,7 +70,7 @@ export function createDepotAudio({
   let rollSrc = null, rollGain = null, rollRate = 1, rollOn = false;
   let hvacSrc = null, hvacGain = null, crowdSrc = null, crowdGain = null;
   let freezerSrc = null, freezerGain = null, freezerPan = null;
-  let lastJoint = 0, cartDist = 0, paTimer = 0, paFirst = true;
+  let lastJoint = 0, cartDist = 0, paTimer = 0, paFirst = true, bgmMul = 1, crowdK = 1;
   let lastWobbleAt = 0, lastStaffAt = 0;
   const levels = new Uint8Array(128);
   const listenerFwd = { x: 0, y: 0, z: -1 }, listenerUp = { x: 0, y: 1, z: 0 };
@@ -482,16 +488,18 @@ export function createDepotAudio({
     const wantPause = !!(paused || pl?.paused);
     if (wantPause !== userPaused) {
       userPaused = wantPause;
-      fadeBgmTo(userPaused ? 0 : Math.max(0.0001, 0.72 * bgmLvl()), 0.25);
+      fadeBgmTo(userPaused ? 0 : Math.max(0.0001, 0.72 * bgmLvl() * bgmMul), 0.25);
     }
     const gSfx = sfxLvl();
     const gBgm = bgmLvl();
     if (bgmBus && !userPaused) {
       // 볼륨 슬라이더 반영 (페이드 중이 아닐 때만 살살)
-      const target = 0.72 * gBgm;
+      const target = 0.72 * gBgm * bgmMul;
       if (Math.abs(bgmBus.gain.value - target) > 0.04) bgmBus.gain.setTargetAtTime(Math.max(0.0001, target), ctx.currentTime, 0.12);
     }
     if (ambBus) ambBus.gain.setTargetAtTime(Math.max(0.0001, 0.7 * gSfx), ctx.currentTime, 0.2);
+    // 구역 웅성거림: 계산대·입구 쪽(z < 22)이 가장 시끄럽고, 냉동·창고 안쪽은 조용 — 손님 수(crowdK)도 반영
+    if (crowdGain && cart && Number.isFinite(cart.z)) { const zf = cart.z < 22 ? 1.35 : cart.z < 60 ? 1.0 : 0.75; try { crowdGain.gain.setTargetAtTime(Math.max(0.0001, 0.12 * zf * crowdK * Math.max(gSfx, 0.0001)), ctx.currentTime, 0.8); } catch { /* */ } }
     if (camera) setListener(camera);
 
     // 카트 바퀴
@@ -532,7 +540,7 @@ export function createDepotAudio({
       paTimer -= dt;
       if (paTimer <= 0) {
         play('pa-chime', { text: PA_TEXTS[Math.floor(Math.random() * PA_TEXTS.length)] });
-        paTimer = (paFirst ? 55 : 50) + Math.random() * 30;
+        paTimer = (paFirst ? 40 : 36) + Math.random() * 22; // 활기: 36–58초마다
         paFirst = false;
       }
     }
@@ -556,6 +564,9 @@ export function createDepotAudio({
     wobble,
     setListener,
     materialOf,
+    /** 대본 BGM 분위기: 매장 곡 볼륨 배수 (story/sfx.js 가 고리 음악을 얹을 때 낮춤) */
+    setBgmMul(k = 1, ramp = 1.2) { bgmMul = Math.max(0, Math.min(1, k)); if (bgmBus && ctx && !userPaused) fadeBgmTo(Math.max(0.0001, 0.72 * bgmLvl() * bgmMul), ramp); },
+    setCrowd(k = 1) { crowdK = Math.max(0.3, Math.min(2, k)); },
     get entered() { return entered; },
     get ready() { return !!buffers; },
     get ctxState() { return ctx?.state || null; },

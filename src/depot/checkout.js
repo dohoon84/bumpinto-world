@@ -475,7 +475,7 @@ ${T.dmg ? `<div class="r red"><span>변상 · 매장에서 깬 계란 ${T.storeE
   function tickNpc(dt) {
     const pc = cartPose();
     for (const s of shoppers) {
-      if (s.state === 'serve') { s.tz = 9.2; s.wait -= dt; if (s.wait <= 0) { s.state = 'leave'; s.tz = 4.2; } }
+      if (s.state === 'serve') { s.tz = 9.2; s.wait -= dt; if (s.wait <= 0) { s.state = 'leave'; s.tz = 4.2; } npcBeep(s, dt); }
       else if (s.state === 'queue') { const ahead = shoppers.find((o) => o !== s && o.lane === s.lane && (o.state === 'serve' || o.state === 'leave')); s.tz = 12.9; if (!ahead) { s.state = 'serve'; s.wait = 7 + Math.random() * 6; } }
       else if (s.state === 'leave' && s.z < 4.35) { s.state = 'enter'; s.scale = 1; s.z = 13.45; s.tz = 13.45; s.xo = (s.lane % 2 ? 1 : -1) * (4.5 + Math.random() * 2.5); s.items = 3 + Math.floor(Math.random() * 3); } // 출구로 나가면, 새 손님이 뒤 통로에서 옆으로 걸어 들어와 줄 끝에 섬 (뿅 나타나지 않게)
       if (s.state === 'enter') { const d = Math.min(Math.abs(s.xo), 1.0 * dt); s.xo -= Math.sign(s.xo) * d; s.moving = true; if (Math.abs(s.xo) < 0.02) { s.xo = 0; s.state = 'queue'; s.tz = 12.9; } continue; }
@@ -503,7 +503,7 @@ ${T.dmg ? `<div class="r red"><span>변상 · 매장에서 깬 계란 ${T.storeE
     people.forEach((p, i) => {
       let x = p.x, z = p.z, yaw = p.yaw, bob = 0, lean = 0;
       if (p.kind === 'shopper') { const s = p.ref, dt2 = npcTurn(s); x = laneX(s.lane) + 0.15 + (s.xo || 0) + 0.95 * Math.sin(dt2); z = s.z + 0.95 * Math.cos(dt2); yaw = Math.PI + dt2; bob = s.moving ? Math.abs(Math.sin(st.t * 8 + p.ph)) * 0.04 : 0; }
-      if (p.kind === 'cashier') { const busy = co.lane === p.lane && co.phase === 'unload' && !co.self ? 1 : shoppers.some((s) => s.lane === p.lane && s.state === 'serve' && s.wait < 6) ? 0.6 : 0; lean = busy * (0.12 + 0.1 * Math.sin(st.t * 6 + p.ph)); }
+      if (p.kind === 'cashier') { const busy = co.lane === p.lane && co.phase === 'unload' && !co.self ? 1 : shoppers.some((s) => s.lane === p.lane && s.state === 'serve' && s.wait < 6) ? 0.6 : 0; lean = busy * (0.12 + 0.1 * Math.sin(st.t * 6 + p.ph)); yaw += busy * 0.38 * Math.sin(st.t * 3.1 + p.ph); } // 벨트 → 스캐너 → 봉투 쪽으로 몸 돌리기
       if (p.kind === 'checker' && p.raise > 0) { p.raise -= 1 / 60; lean = -0.15 * Math.sin(p.raise * 8); }
       const sc = p.kind === 'shopper' ? p.ref.scale : 1;
       m4.compose(v3.set(x, bob, z), new THREE.Quaternion().setFromEuler(new THREE.Euler(lean, yaw, 0, 'YXZ')), new THREE.Vector3(sc, sc, sc));
@@ -512,6 +512,15 @@ ${T.dmg ? `<div class="r red"><span>변상 · 매장에서 깬 계란 ${T.storeE
     for (const im of pI) im.instanceMatrix.needsUpdate = true;
   }
 
+  // [depot-live] 옆 줄 손님 계산: 캐셔가 스캔할 때마다 '삑' (가까울 때만 · 위치 소리, 할당 없음)
+  const beepPos = { x: 0, y: 1.0, z: CO.SCAN_Z };
+  function npcBeep(s, dt) {
+    if (!(s.wait < 6 && s.wait > 0.6)) return;
+    s.beepT = (s.beepT ?? 0.4) - dt; if (s.beepT > 0) return;
+    s.beepT = 0.5 + Math.random() * 0.6;
+    const bx = beltX(s.lane); if (Math.abs(st.me.x - bx) > 14 || st.me.z > 22) return;
+    beepPos.x = bx; try { AUDIO?.play?.('checkout-scan', { pos: beepPos, gain: 0.32 }); } catch { /* 소리 없어도 됨 */ }
+  }
   // ---------- 공개 ----------
   function tick(dt) {
     beltTex.offset.y = (beltTex.offset.y + dt * 0.55 * 3) % 1; // 벨트 흐름 (모든 줄 공유)
