@@ -137,18 +137,14 @@ export function buildDepotCeiling(scene, { renderer, keep, shellMesh } = {}) {
   const skyG = keep(new THREE.BoxGeometry(5.5, 0.06, 3.2));
   const frameM = keep(new THREE.MeshLambertMaterial({ color: 0x3a4248 }));
   const frameG = keep(new THREE.BoxGeometry(5.9, 0.1, 3.6));
-  const beamM = keep(new THREE.MeshBasicMaterial({ color: 0xe8f0f8, transparent: true, opacity: 0.045, depthWrite: false, side: THREE.DoubleSide }));
-  const beamG = keep(new THREE.BoxGeometry(5.2, 4.5, 3.0));
   const skys = new THREE.InstancedMesh(skyG, skyM, 16);
   const frames = new THREE.InstancedMesh(frameG, frameM, 16);
-  const beams = new THREE.InstancedMesh(beamG, beamM, 16);
   let ns = 0;
   for (const x of [18, 42, 66]) for (const z of [18, 42, 66, 94]) {
     m4.makeTranslation(x, CEIL - 0.08, z); skys.setMatrixAt(ns, m4); frames.setMatrixAt(ns, m4);
-    m4.makeTranslation(x, CEIL - 2.4, z); beams.setMatrixAt(ns, m4);
     ns++;
   }
-  skys.count = frames.count = beams.count = ns; scene.add(frames, skys, beams);
+  skys.count = frames.count = ns; scene.add(frames, skys);
 
   // 하이베이 조명 (발광 원판 + 갓) — 라이트 아님
   const lampM = keep(new THREE.MeshBasicMaterial({ color: 0xfff6e0 }));
