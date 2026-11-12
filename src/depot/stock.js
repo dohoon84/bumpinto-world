@@ -789,6 +789,7 @@ function buildFixtures({ isMobile = false, scene, keep, ct, atlas, unitBox, obst
       const m = new THREE.Mesh(keep(g), priceM); m.position.set(x0 + seg * (k + 0.5), y, z); scene.add(m);
     }
   }
+  let caseFishIM = null;
   const caseFish = []; // [depot-live] 뒤 수산 케이스: 고등어 칸은 얼음 위 통고등어 (3D 인스턴스)
   function openCase(x0, x1, z, skus, { ice = false, k0 = 0, whole = [] } = {}) {
     const w = x1 - x0, cx = (x0 + x1) / 2;
@@ -839,7 +840,7 @@ function buildFixtures({ isMobile = false, scene, keep, ct, atlas, unitBox, obst
   }
   openCase(30, 42, 118.7, ['meat', 'beef', 'chicken', 'meat', 'beef', 'chicken'], { k0: 0 }); // 정육 (빨강·분홍)
   openCase(42.4, 52, 118.7, ['salmon', 'mackerel', 'salmon', 'mackerel'], { ice: true, k0: 4, whole: ['mackerel'] }); // 수산 (얼음 위)
-  { const im = instanced(keep(SEA_GEO.fish()), keep(makeSeaMat()), caseFish); if (im) { im.name = 'sea-case-fish'; scene.add(im); } }
+  { const im = instanced(keep(SEA_GEO.fish()), keep(makeSeaMat()), caseFish); if (im) { im.name = 'sea-case-fish'; scene.add(im); caseFishIM = im; } }
   openCase(52.4, 63.5, 118.7, ['milk', 'yogurt', 'cheese', 'butter', 'egg'], { k0: 6 }); // 유제품·계란
 
   // ===== [depot-live] 수산 코너 x 66–80, z 90.5–102: 활어 수조 · 냉동 수산 평대 · 얼음 진열대 2줄 =====
@@ -1091,6 +1092,7 @@ function buildFixtures({ isMobile = false, scene, keep, ct, atlas, unitBox, obst
     const fv = Math.hypot(x - 16, z - 112.5) < (isMobile ? 18 : 26); // 낱개 과일은 가까이서만 (멀면 둔덕 색이 대신)
     for (const f of fruitI) f.visible = fv;
     if (deliRoast) deliRoast.visible = Math.hypot(x - 74, z - 114.8) < SEA_FAR;
+    if (caseFishIM) caseFishIM.visible = Math.hypot(x - 47.2, z - 118.7) < SEA_FAR;
     let n = 0;
     for (const m of mistPlanes) {
       if (Math.hypot(x - m.x, z - m.z) >= 14) continue;
