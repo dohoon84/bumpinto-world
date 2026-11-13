@@ -1,1 +1,1575 @@
-{"_about":"배경음악 큐와 효과음 목록 v0.4. 소리는 만들지 않고 분위기·BPM·악기만 적음. 이름은 /workspace/depot-coord.md 의 D 스트림 audio.play 이름과 A 스트림 depot:sfx 이름을 그대로 쓰고, 새 이름은 newSfx / status:\"new\" 로 따로 표시. v0.5: 2·3일차용 이름 추가(addedIn 0.5). 기존 이름·내용은 그대로. v0.6: 4·5일차 대본에 쓰는 새 효과음 7개(newSfxV06, addedIn 0.6). v0.7: 6·7일차 대본에 쓰는 새 효과음 11개 + 스팅어 2개(newSfxV07, addedIn 0.7). BGM 은 새로 안 만듦(bgm.cartrace·dawn·legend·audit·emotional·closing 기존 큐). v0.8: 8·9일차 새 효과음 6개 + 스팅어 1개(newSfxV08, addedIn 0.8). BGM 은 기존 큐만 씀(bgm.tailing 을 경쟁 마트 장면에 재사용).","version":"0.8","existing":{"audioPlay":["cart-grab","cart-release","cart-bump","cart-joint","item-pick","item-place","item-fall","item-wobble","egg-crack","egg-splat","staff-talk","achievement","pa-chime","freezer-door","freezer-hum","checkout-scan","checkout-belt","checkout-printer","checkout-pay","checkout-done","elec-tv","elec-fridge-open","elec-fridge-close","elec-washer","elec-vac"],"depotSfxEvents":["checkout.start","checkout.unload","checkout.scan","checkout.scan.handheld","checkout.belt.start","checkout.belt.stop","checkout.total","checkout.pay","checkout.receipt.print","checkout.done","checkout.receipt.check","checkout.box.take","checkout.cancel","checkout.exit","staff.line"],"bgmTitle":"Aisle Sunshine"},"newSfx":{"forklift-beep":"지게차 후진 경고음(삐-삐-), 공간음, 루프 {on,id,pos}","massage-chair":"안마의자 모터 웅- + 두드림, 루프","snore":"코 고는 소리 2회(코믹, 작게)","coin-pickup":"포인트 코인 줍기(작은 띠링)","freezer-alarm":"냉동고 문 15초 열림 경고 삐삐(문 근처 공간음)","sample-tray":"시식 이쑤시개·접시 달그락","umbrella-bag":"우산 비닐 씌우는 바스락","rain-roof":"창고 지붕 빗소리 앰비언스 루프(비 오는 날)","deli-bell":"델리 통닭 나왔을 때 종 땡땡","crowd-murmur":"손님 웅성거림 앰비언스 루프(시간대별 볼륨)","pay-fail":"결제 단말 실패음 띠-","cart-coin-lock":"카트 동전 잠금 딸깍","chalk-scribble":"칠판 분필 쓱쓱","mop-squeak":"대걸레 끽끽","applause":"박수 소리(작게→크게 레이어)","toast-pop":"반응 말풍선/토스트 뜰 때 아주 작은 뽁(설정에서 끌 수 있음)","mission-chip":"미션 칩 뜰 때 짧은 2음","recall-call":"범이가 다시 부를 때 휘파람 + \"손님!\"(목소리 없이 효과음만)","missed-stamp":"다음 날 놓침 회색 도장 쿵(작게)","ui-pause":"일시정지 창 열림·닫힘","ui-mode-pick":"모드 카드 고를 때 툭","grab-bump":"두 사람 손이 같은 상품에 닿을 때 툭 + 멈칫","kid-giggle":"꼬마 웃음(말소리 없이)","tv-demo-loop":"TV 벽 데모 음악(elec-tv 루프 위에 얹는 작은 멜로디)","door-chime":"입구 자동문 열릴 때 띵동(입장·돌아옴)","pan-sizzle":"시식 코너 철판 지글지글(짧게 1.5초, 할머니 등장·볶음 컷)","sticker-peel":"스티커 떼는 찌익(짧게)","timer-tick":"미션 남은 시간 1분·마지막 10초 째깍(HUD 타이머와 맞춤)","tissue-tumble":"보들범 팩이 줄줄이 무너지는 푹-푹-푹(부드러운 비닐 팩 여러 개, 1.8초). 무너짐 컷 d4_019","kid-cry":"꼬마가 '으앙' 하고 우는 짧은 소리(말소리 없이 0.8초, 작게·코믹). E12 cart-bump 때, 3초 쿨다운","speed-warn":"아기 의자 탑승 중 1.0 m/s 넘으면 부드러운 삐삐 두 번(0.4초). 과속이 이어지면 1초마다","suspicion-rise":"미행 의심 게이지가 오를 때 클라리넷 짧은 상승음(루프 아님, 게이지 25 단위로 1번)","camera-shutter":"휴대폰 셔터 찰칵(0.3초) + 작은 플래시 핑. E05 촬영 순간·d5_021","stinger.reveal":"정체 공개 스팅어 2초: 탐탐 쾅 + 클라리넷 허세 라인(motif.spy 변주) + 심벌 짧게. d5_031·d5_089b","lava-hiss":"바퀴가 선 밖일 때 치익 + 아주 작은 '앗 뜨거' 삑(말소리 없이). 선 밖에 있는 동안 0.5초마다","race-countdown":"경주 출발 삑-삑-삑-뽀옹(3·2·1·출발, 2.4초). d6_034 t0. 범숙 목소리 대신 소리만","lap-bell":"한 바퀴마다 땡 한 번(맑은 핸드벨 0.5초). 마지막 바퀴는 두 번","flashlight-click":"손전등 딸깍(0.15초). 켜고 끌 때마다","forklift-spot":"지게차 불빛에 걸림: 경고 삐-익 + 낮은 쿵(0.8초), 화면 하얗게 0.3초와 같이","gold-box-open":"금빛 박스 뚜껑 + 작은 반짝 글리산도 + 종이 바스락(1.6초). d6_066·d6_068","melt-drip":"아이스크림 녹음 +5% 때 똑(물방울 0.2초). 게이지 80% 넘으면 피치 낮게","tablet-tap":"감사관 태블릿 톡·톡(유리 두드림 0.2초). 감사관 대사·감사 중 깨진 알·체크 확인 때","check-stamp":"체크리스트 도장 탁(고무도장 0.3초). 결과 화면 칸마다 1번","gold-stamp":"금도장 쾅 + 반짝(0.9초, 엔딩 A 도장 카드). 직원 넷이 찍으니 4번, 0.35초 간격","pa-sniff":"방송 마이크 너머 훌쩍(말소리 없이 0.6초, 코믹하게 작게). d7_072·d7_101·d7_123","phone-buzz":"휴대폰 진동 지잉-지잉(0.8초). 반기철 본부 전화 d7_160","motif.auditor":"감사관 모티프 2초: 마른 메트로놈 틱 4번 + 바순 짧은 두 음(무표정, 코믹). 첫 등장 d7_010","stinger.finale":"1주차 마무리 스팅어 4초: Aisle Sunshine 첫 소절을 76 BPM 으로 느리게 + 종. 엔딩 카드(d7_180)","flyer-flutter":"전단지 여러 장이 바람에 날림(종이 펄럭 1.2초, 자동문 바람과 같이). d8_027","flyer-scoop":"전단지 1장이 카트에 붙음(바스락 + 작은 틱 0.2초). 12장째는 두 번","convoy-horn":"보라 카트 행렬 앞 카트의 자전거 벨 같은 따릉-따릉(0.6초, 코믹). 행렬 출발·건널 틈 4초 시작 때","stopwatch-click":"팀장 스톱워치 딸깍(금속 0.15초). 팀장 대사·기록 때","soup-slosh":"수레 국물 출렁(찰랑 0.4초). 출렁 2번째는 크게, 3번째(넘침)는 철퍽 + stinger.comicfail","wagon-creak":"떡볶이 수레 바퀴 삐걱 루프(속도에 비례, 1.2 m/s 넘으면 높아짐)"},"bgm":[{"id":"bgm.shop","title":"Aisle Sunshine","status":"existing","note":"프로토타입 매장 BGM(월드 OST, 입장 때 hold + 크로스페이드, HUD 제목). 아래 stems 와 시간대 변형은 NEW","scenes":["평소 장보기","자유 장보기"],"mood":"밝고 여유로운 주말 장보기","bpm":104,"instruments":["일렉 피아노","우쿨렐레","핑거 스냅","부드러운 베이스","비브라폰"],"stems":{"base":"패드 + 베이스","groove":"퍼커션","lead":"멜로디","crowd":"매장 웅성거림(crowd-murmur)"},"byTime":{"open 10–11":"base + lead(작게)","lunch 12–13":"base + groove + lead + crowd(크게)","afternoon 14–16":"base + groove(작게), lead 끔(나른함)","evening 18–20":"전부 + crowd 최대","closing 21:50–22":"bgm.closing 으로 크로스페이드","night 22–10":"bgm.dawn"},"byWeather":{"rain":"전체에 저역 통과 필터 살짝 + rain-roof 레이어"},"usedBy":["기본","R33","8일차 A 경로 w2_a10, E15 결과 뒤"]},{"id":"bgm.tension","title":"흔들흔들","status":"new","scenes":["E01 흔들리는 범란 탑","E04 보들범 산사태"],"mood":"코믹한 긴장(아직 안 무너짐)","bpm":104,"instruments":["스네어 롤","우드블록","낮은 첼로 피치카토"],"layerOn":"bgm.shop","note":"따로 트랙이 아니라 bgm.shop 위에 얹는 스템. 흔들림(item-wobble) 세기에 따라 볼륨","usedBy":["E01","E04","R07","R13","E12 길 잃은 꼬마 (약하게, 찾으면 bgm.emotional 짧게)","4일차 d4_019~d4_036(E04), d4_048(E12 약하게)","8일차 E15·E16"]},{"id":"bgm.timesale","title":"3분 전쟁","status":"new","scenes":["E03 3분 타임세일 러시","특가 방송"],"mood":"신나는 질주, 시장 경매 같은 소란","bpm":148,"instruments":["브라스 스탭","서프 기타","카운트다운 틱","휘슬","탬버린"],"stems":{"main":"전체","last30":"16비트 하이햇 + 상승음(마지막 30초 추가)"},"in":"pa-chime 끝나고 1.2초 크로스페이드 + 스팅어","usedBy":["E03","R29","3일차 d3_043"]},{"id":"bgm.tailing","title":"선글라스 미행","status":"new","scenes":["E05 수상한 손님 미행","반값 등장"],"mood":"살금살금 코믹 스파이","bpm":92,"instruments":["피치카토 현","업라이트 베이스","봉고","클라리넷 슬라이드"],"stems":{"sneak":"베이스 + 피치카토","close":"반값과 4 m 안이면 클라리넷 + 봉고 추가","spotted":"들키면 1초 정지 후 스팅어 stinger.spotted"},"usedBy":["E05","R40","R48","E14 엉뚱한 반값 스티커(sneak 스템만)","3일차 수상한 손님 첫 등장 d3_026","2일차 끝 유리문 d2_145","5일차 d5_018(E05), d5_030 정체 공개","8일차 d8_020~d8_042(경쟁 마트 견학)","9일차 d9_008(시식 천막)"]},{"id":"bgm.lava","title":"바닥은 용암입니다","status":"new","scenes":["E06 바닥은 용암입니다"],"mood":"장난스러운 비상사태","bpm":120,"instruments":["장난감 신스","마림바","낮은 팀파니 롤","경보음 같은 화음"],"usedBy":["E06","5일차 d5_052"]},{"id":"bgm.cartrace","title":"마감 후 그랑프리","status":"new","scenes":["E07 폐점 후 카트 경주"],"mood":"불 꺼진 매장 레이스","bpm":160,"instruments":["칩튠 신스 리드","록 드럼","디스토션 베이스","엔진 같은 신스"],"stems":{"lap1":"드럼 + 베이스","lap2":"+ 리드","lap3":"+ 합창 패드, 한 키 올림"},"usedBy":["E07","6일차 d6_028~d6_046(E07)"]},{"id":"bgm.dawn","title":"새벽 3시 창고","status":"new","scenes":["E08 새벽 3시 비밀 창고 칸","야간 개장(22–10시)"],"mood":"조용하고 신비로운 빈 창고","bpm":70,"instruments":["앰비언트 패드","뮤트 피아노","오르골","먼 냉동고 소리(freezer-hum 루프와 섞음)"],"usedBy":["E08","R33 night","R47","6일차 d6_051~d6_076(E08 03:00)"]},{"id":"bgm.legend","title":"전설의 한 통","status":"new","scenes":["E09 전설의 아이스크림"],"mood":"신비 → 따뜻함","bpm":90,"instruments":["하프","첼레스타","현악 트레몰로"],"out":"성공하면 bgm.emotional 로 4초 크로스페이드","usedBy":["E09","R17 복선 대사","7일차 d7_049(E09 성공)"]},{"id":"bgm.audit","title":"본사 감사관","status":"new","scenes":["E11 본사 감사의 날"],"mood":"딱딱한 긴장 + 코믹","bpm":100,"instruments":["마칭 스네어","타자기","낮은 현 스타카토","시계 째깍"],"stems":{"base":"스네어 + 현","check":"체크리스트 1개 통과마다 브라스 한 줄씩 추가(최대 5)"},"usedBy":["E11","7일차 d7_010~d7_067(E11)","8일차 B 경로 w2_b10(감사관 인사)"]},{"id":"bgm.emotional","title":"하나 더 먹고 가","status":"new","scenes":["할머니 옛날 이야기","E10 기립박수","엔딩 A","단골도 5 대사"],"mood":"따뜻하고 뭉클","bpm":76,"instruments":["어쿠스틱 기타","피아노","첼로","휘파람"],"usedBy":["E02 성공","E09 성공","E10","E11 엔딩 A","2일차 할머니 분식집 이야기 d2_090","4일차 E12 성공·부분 d4_051, d4_053","7일차 d7_042(E10), d7_071 마지막 방송, 엔딩 A·B"]},{"id":"bgm.closing","title":"오늘도 고마웠어요","status":"new","scenes":["마감 10분 전(21:50~)","하루 끝 도장"],"mood":"느린 왈츠, 아쉬운 마감","bpm":84,"meter":"3/4","instruments":["아코디언","오르골","브러시 드럼"],"note":"실제 매장 마감곡을 흉내 내지 않은 새 곡","usedBy":["R32","R33 closing","일차 끝","d2_140","d3_090","6일차 d6_026·d6_090, 7일차 엔딩 C·d7_163","8일차 d8_081, 9일차 마감 방송"]},{"id":"bgm.free","title":"Aisle Sunshine (자유 장보기)","status":"new","scenes":["자유 장보기"],"mood":"bgm.shop 과 같음, lead 스템 작게","bpm":104,"note":"bgm.shop 을 그대로 쓰고 사건 큐는 안 씀","usedBy":["modeSelect free"]},{"id":"bgm.errand","title":"할머니 심부름","status":"new","addedIn":"0.5","scenes":["E02 말순 할머니의 오늘 메뉴","E13 할머니 주먹밥 배달"],"mood":"종종걸음 심부름, 따뜻하지만 바쁨","bpm":116,"instruments":["우쿨렐레 스트럼","오르골(할머니 모티프 세 음 변주)","쉐이커","피치카토 베이스"],"stems":{"main":"전체","hurry":"남은 시간 60초부터 쉐이커 2배 + 반음 올림"},"out":"결과 컷에서 bgm.emotional 로 2초 크로스페이드","usedBy":["E02","E13","9일차 E17·E18"]}],"stingers":[{"id":"stinger.success","status":"new","len":"3초","desc":"마림바 + 브라스 짧은 팡파르","usedBy":["사건 성공","R06"]},{"id":"stinger.comicfail","status":"new","len":"2.5초","desc":"트롬본 워워워 + 슬라이드 휘슬","usedBy":["E01 탑 붕괴","E04 실패","E03 0개","R12"]},{"id":"stinger.partial","status":"new","len":"2초","desc":"마림바 두 음, 아쉬움","usedBy":["사건 보통 결과"]},{"id":"stinger.spotted","status":"new","len":"1.5초","desc":"탐탐 쾅 + 클라리넷 낮은 음","usedBy":["E05 들킴","R40","d5_023","d5_025"]},{"id":"stinger.daycard","status":"new","len":"2초","desc":"창고 셔터 올라가는 소리 + 우쿨렐레 코드","usedBy":["일차 카드"]},{"id":"stinger.stamp","status":"new","len":"1.5초","desc":"도장 쿵 + 반짝","usedBy":["하루 끝 도장"]},{"id":"motif.beomsuk","status":"new","len":"1초","desc":"스네어 한 번 + 피아노 두 음(단호)","usedBy":["범숙 대화 시작"]},{"id":"motif.halmeoni","status":"new","len":"1초","desc":"오르골 세 음(따뜻)","usedBy":["할머니 대화 시작"]},{"id":"motif.beomi","status":"new","len":"1초","desc":"실로폰 미끄럼(허둥지둥)","usedBy":["범이 대화 시작"]},{"id":"motif.spy","status":"new","len":"1초","desc":"클라리넷 낮은 음 + 탐탐(허세)","usedBy":["반값 대화 시작"]},{"id":"pa-chime","status":"existing","desc":"딩동댕 + 왼쪽 토스트(프로토타입)","usedBy":["방송실 점장 전부","R33","R35"]},{"id":"stinger.nextday","status":"new","addedIn":"0.5","len":"2.5초","desc":"TV 예고편 같은 '다음 이 시간에' 브라스 두 음 + 셔터 내려가는 소리","usedBy":["day.end nextDay 예고 카드"]},{"id":"stinger.reveal","status":"new","addedIn":"0.6","len":"2초","desc":"정체 공개 스팅어 2초: 탐탐 쾅 + 클라리넷 허세 라인(motif.spy 변주) + 심벌 짧게. d5_031·d5_089b","usedBy":["5일차 반기철 정체 공개 d5_031, d5_089b"]},{"id":"motif.auditor","status":"new","addedIn":"0.7","len":"2초","desc":"감사관 모티프 2초: 마른 메트로놈 틱 4번 + 바순 짧은 두 음(무표정, 코믹). 첫 등장 d7_010","usedBy":["7일차 d7_010 감사관 등장"]},{"id":"stinger.finale","status":"new","addedIn":"0.7","len":"4초","desc":"1주차 마무리 스팅어 4초: Aisle Sunshine 첫 소절을 76 BPM 으로 느리게 + 종. 엔딩 카드(d7_180)","usedBy":["7일차 d7_180 엔딩 A·B 카드"]},{"id":"motif.rivalboss","status":"new","addedIn":"0.8","len":"2초","desc":"팀장 모티프 2초: 하프시코드 세 음 + 스톱워치 틱(상냥하지만 차가움). 첫 등장 d8_022","usedBy":["8일차 d8_022, 9일차 d9_010"]}],"mix":{"crossfade":{"default":"2.0초 이퀄 파워","toEvent":"1.2초 + 스팅어","backToShop":"3.0초","toNight":"6초(천천히)"},"ducking":{"dialogue":"BGM -9 dB, lead 스템 끔, 0.4초 어택 / 0.8초 릴리스","paChime":"-12 dB, 2.5초 (프로토타입 pa-chime 과 같게)","stinger":"-6 dB, 스팅어 길이만큼","reactionToast":"없음(작은 toast-pop 만)"},"flags":"?bgm=0 이면 매장 BGM 끔, 효과음은 남김. ?depotSfx=0 / ?rideSfx=0 이면 효과음 끔 (depot-coord.md 규칙 그대로)","priority":"사건 BGM > 마감/야간 > 평소. 사건 끝나면 시간대에 맞는 bgm.shop 변형으로 돌아감"},"eventSfx":{"E01":["item-wobble","egg-crack","egg-splat","achievement","stinger.success|comicfail"],"E02":["item-pick","sample-tray","pan-sizzle","item-place {kg}","timer-tick","achievement"],"E03":["pa-chime","crowd-murmur(크게)","cart-bump","item-pick {material:cardboard}","timer-tick (마지막 10초)","motif.spy"],"E04":["item-wobble","item-fall {kg}","tissue-tumble","mop-squeak","pa-chime"],"E05":["cart-joint(작게)","suspicion-rise","camera-shutter","grab-bump","stinger.spotted","stinger.reveal","motif.spy"],"E06":["pa-chime","lava-hiss","item-place","cart-joint","achievement"],"E07":["race-countdown","lap-bell","cart-grab","cart-bump","cart-joint","item-fall {kg}","applause"],"E08":["flashlight-click","forklift-beep","forklift-spot","freezer-hum","gold-box-open","door-chime(느리게)","rain-roof(아주 낮게, 바람 느낌)"],"E09":["freezer-door","melt-drip","freezer-alarm","stinger.success","achievement"],"E10":["item-place {kg}","applause","achievement"],"E11":["motif.auditor","tablet-tap","check-stamp","motif.spy","checkout-scan","checkout-printer","checkout-done","pa-sniff","gold-stamp","phone-buzz","stinger.finale"],"E12":["kid-giggle","kid-cry","speed-warn","cart-joint(느리게)","door-chime"],"E13":["sample-tray","item-wobble","checkout-scan","stinger.success|partial|comicfail"],"E14":["sticker-peel","item-pick","motif.spy","stinger.success|partial"],"E15":["convoy-horn","cart-bump","egg-crack","item-place {kg}","stopwatch-click","timer-tick"],"E16":["flyer-flutter","flyer-scoop","door-chime"],"E17":["wagon-creak","soup-slosh","speed-warn","sample-tray","stinger.success|partial|comicfail"],"E18":["item-pick","massage-chair","snore","stinger.success|partial|comicfail"]},"reactionSfx":{"R01":{"name":"통로에 두고 간 카트","sfx":["staff-talk","toast-pop"],"existing":["staff-talk"],"new":["toast-pop"]},"R02":{"name":"역주행","sfx":["staff-talk","cart-joint","toast-pop"],"existing":["staff-talk","cart-joint"],"new":["toast-pop"]},"R03":{"name":"빈 카트로 계산대","sfx":["checkout-scan","toast-pop"],"existing":["checkout-scan"],"new":["toast-pop"]},"R04":{"name":"큰 카트에 물건 하나","sfx":["checkout-scan","toast-pop"],"existing":["checkout-scan"],"new":["toast-pop"]},"R05":{"name":"카트 과속","sfx":["staff-talk","toast-pop"],"existing":["staff-talk"],"new":["toast-pop"]},"R06":{"name":"짐 150 kg 돌파","sfx":["achievement","toast-pop"],"existing":["achievement"],"new":["toast-pop"]},"R07":{"name":"허용 하중 가까이","sfx":["item-wobble","toast-pop"],"existing":["item-wobble"],"new":["toast-pop"]},"R08":{"name":"카트 범퍼카 3번","sfx":["cart-bump","toast-pop"],"existing":["cart-bump"],"new":["toast-pop"]},"R09":{"name":"카트 제자리 반납","sfx":["cart-release","toast-pop"],"existing":["cart-release"],"new":["toast-pop"]},"R10":{"name":"100원 카트 동전","sfx":["cart-grab","toast-pop"],"existing":["cart-grab"],"new":["toast-pop"]},"R11":{"name":"계란 1개 깨짐","sfx":["egg-crack","toast-pop"],"existing":["egg-crack"],"new":["toast-pop"]},"R12":{"name":"계란 10개 이상","sfx":["egg-splat","toast-pop"],"existing":["egg-splat"],"new":["toast-pop"]},"R13":{"name":"계란탑 5층","sfx":["achievement","item-wobble","toast-pop"],"existing":["achievement","item-wobble"],"new":["toast-pop"]},"R14":{"name":"같은 상품 10개","sfx":["item-place","toast-pop"],"existing":["item-place"],"new":["toast-pop"]},"R15":{"name":"상품 엉뚱한 칸에","sfx":["item-place","staff-talk","toast-pop"],"existing":["item-place","staff-talk"],"new":["toast-pop"]},"R16":{"name":"바닥에 내려놓기 5개","sfx":["item-fall","toast-pop"],"existing":["item-fall"],"new":["toast-pop"]},"R17":{"name":"아이스크림 방치","sfx":["freezer-hum","toast-pop"],"existing":["freezer-hum"],"new":["toast-pop"]},"R18":{"name":"냉동고 문 오래 열기","sfx":["freezer-door","freezer-hum","toast-pop"],"existing":["freezer-door","freezer-hum"],"new":["toast-pop"]},"R19":{"name":"같은 상품 두 사람이 동시에","sfx":["item-pick","toast-pop"],"existing":["item-pick"],"new":["toast-pop"]},"R20":{"name":"시식 3번","sfx":["item-pick","toast-pop"],"existing":["item-pick"],"new":["toast-pop"]},"R21":{"name":"시식만 도는 아저씨","sfx":["staff-talk","toast-pop"],"existing":["staff-talk"],"new":["toast-pop"]},"R22":{"name":"대량구매 사장님 추월","sfx":["cart-joint","toast-pop"],"existing":["cart-joint"],"new":["toast-pop"]},"R23":{"name":"휴대폰 배터리 0%","sfx":["checkout-pay","toast-pop"],"existing":["checkout-pay"],"new":["toast-pop"]},"R24":{"name":"내가 고른 줄만 느림","sfx":["toast-pop"],"existing":[],"new":["toast-pop"]},"R25":{"name":"길 잃은 꼬마 (예고)","sfx":["toast-pop"],"existing":[],"new":["toast-pop"]},"R26":{"name":"휴대폰 손님이 통로 막음","sfx":["toast-pop"],"existing":[],"new":["toast-pop"]},"R27":{"name":"커플 말다툼","sfx":["toast-pop"],"existing":[],"new":["toast-pop"]},"R28":{"name":"헬스장 청년 생수 들기","sfx":["toast-pop"],"existing":[],"new":["toast-pop"]},"R29":{"name":"할인 사냥꾼 질주","sfx":["pa-chime","toast-pop"],"existing":["pa-chime"],"new":["toast-pop"]},"R30":{"name":"캠핑 아빠 시즌 매대","sfx":["toast-pop"],"existing":[],"new":["toast-pop"]},"R31":{"name":"비 오는 날 우산 코너","sfx":["staff-talk","toast-pop"],"existing":["staff-talk"],"new":["toast-pop"]},"R32":{"name":"폐점 직전 입장","sfx":["pa-chime","toast-pop"],"existing":["pa-chime"],"new":["toast-pop"]},"R33":{"name":"시간대별 매장 분위기","sfx":["toast-pop"],"existing":[],"new":["toast-pop"]},"R34":{"name":"포인트 코인 또 줍기","sfx":["toast-pop"],"existing":[],"new":["toast-pop"]},"R35":{"name":"갓 나온 통닭","sfx":["pa-chime","toast-pop"],"existing":["pa-chime"],"new":["toast-pop"]},"R36":{"name":"갓 구운 빵","sfx":["toast-pop"],"existing":[],"new":["toast-pop"]},"R37":{"name":"수박 두드리기","sfx":["item-pick","toast-pop"],"existing":["item-pick"],"new":["toast-pop"]},"R38":{"name":"김장철 매대","sfx":["toast-pop"],"existing":[],"new":["toast-pop"]},"R39":{"name":"전자 코너 TV 벽","sfx":["elec-tv","toast-pop"],"existing":["elec-tv"],"new":["toast-pop"]},"R40":{"name":"안마의자에서 졸고 있는 반값","sfx":["massage-chair","snore","toast-pop"],"existing":[],"new":["massage-chair","snore","toast-pop"]},"R41":{"name":"로봇청소기 쫓는 범이","sfx":["elec-vac","toast-pop"],"existing":["elec-vac"],"new":["toast-pop"]},"R42":{"name":"빈 박스 챙기기","sfx":["item-pick","toast-pop"],"existing":["item-pick"],"new":["toast-pop"]},"R43":{"name":"회원카드로 결제","sfx":["checkout-pay","toast-pop"],"existing":["checkout-pay"],"new":["toast-pop"]},"R44":{"name":"출구 영수증 확인","sfx":["checkout-printer","toast-pop"],"existing":["checkout-printer"],"new":["toast-pop"]},"R45":{"name":"가만히 서 있기","sfx":["toast-pop"],"existing":[],"new":["toast-pop"]},"R46":{"name":"고객센터 환불 손님","sfx":["toast-pop"],"existing":[],"new":["toast-pop"]},"R47":{"name":"지게차 후진 경고","sfx":["forklift-beep","toast-pop"],"existing":[],"new":["forklift-beep","toast-pop"]},"R48":{"name":"반값의 라이벌 카트","sfx":["toast-pop"],"existing":[],"new":["toast-pop"]},"R49":{"name":"오늘의 손님 칠판","sfx":["toast-pop"],"existing":[],"new":["toast-pop"]},"R50":{"name":"처음 산 상품 기억","sfx":["toast-pop"],"existing":[],"new":["toast-pop"]},"R51":{"name":"심부름 카트 60kg","sfx":["item-wobble","toast-pop"],"existing":["item-wobble"],"new":["toast-pop"]},"R52":{"name":"계란 위에 쌀 포대","sfx":["item-place","item-wobble","toast-pop"],"existing":["item-place","item-wobble"],"new":["toast-pop"]},"R53":{"name":"쟁반 싣고 급정거","sfx":["item-wobble","toast-pop"],"existing":["item-wobble"],"new":["toast-pop"]},"R54":{"name":"스티커 상품 도로 진열","sfx":["sticker-peel","toast-pop"],"existing":[],"new":["sticker-peel","toast-pop"]},"R55":{"name":"수상한 손님 카트에 쿵","sfx":["cart-bump","motif.spy","toast-pop"],"existing":["cart-bump"],"new":["motif.spy","toast-pop"]},"R56":{"name":"가짜 타임세일에 질주","sfx":["staff-talk","toast-pop"],"existing":["staff-talk"],"new":["toast-pop"]}},"newSfxV05":["pan-sizzle","sticker-peel","timer-tick"],"newSfxV06":["tissue-tumble","kid-cry","speed-warn","suspicion-rise","camera-shutter","stinger.reveal","lava-hiss"],"newSfxV07":["race-countdown","lap-bell","flashlight-click","forklift-spot","gold-box-open","melt-drip","tablet-tap","check-stamp","gold-stamp","pa-sniff","phone-buzz","motif.auditor","stinger.finale"],"newSfxV08":["flyer-flutter","flyer-scoop","convoy-horn","stopwatch-click","soup-slosh","wagon-creak","motif.rivalboss"]}
+{
+ "_about": "배경음악 큐와 효과음 목록 v0.4. 소리는 만들지 않고 분위기·BPM·악기만 적음. 이름은 /workspace/depot-coord.md 의 D 스트림 audio.play 이름과 A 스트림 depot:sfx 이름을 그대로 쓰고, 새 이름은 newSfx / status:\"new\" 로 따로 표시. v0.5: 2·3일차용 이름 추가(addedIn 0.5). 기존 이름·내용은 그대로. v0.6: 4·5일차 대본에 쓰는 새 효과음 7개(newSfxV06, addedIn 0.6). v0.7: 6·7일차 대본에 쓰는 새 효과음 11개 + 스팅어 2개(newSfxV07, addedIn 0.7). BGM 은 새로 안 만듦(bgm.cartrace·dawn·legend·audit·emotional·closing 기존 큐). v0.8: 8·9일차 새 효과음 6개 + 스팅어 1개(newSfxV08, addedIn 0.8). BGM 은 기존 큐만 씀(bgm.tailing 을 경쟁 마트 장면에 재사용). v0.9: 10~14일차 새 효과음 8개(newSfxV09, addedIn 0.9). BGM 은 기존 큐만.",
+ "version": "0.9",
+ "existing": {
+  "audioPlay": [
+   "cart-grab",
+   "cart-release",
+   "cart-bump",
+   "cart-joint",
+   "item-pick",
+   "item-place",
+   "item-fall",
+   "item-wobble",
+   "egg-crack",
+   "egg-splat",
+   "staff-talk",
+   "achievement",
+   "pa-chime",
+   "freezer-door",
+   "freezer-hum",
+   "checkout-scan",
+   "checkout-belt",
+   "checkout-printer",
+   "checkout-pay",
+   "checkout-done",
+   "elec-tv",
+   "elec-fridge-open",
+   "elec-fridge-close",
+   "elec-washer",
+   "elec-vac"
+  ],
+  "depotSfxEvents": [
+   "checkout.start",
+   "checkout.unload",
+   "checkout.scan",
+   "checkout.scan.handheld",
+   "checkout.belt.start",
+   "checkout.belt.stop",
+   "checkout.total",
+   "checkout.pay",
+   "checkout.receipt.print",
+   "checkout.done",
+   "checkout.receipt.check",
+   "checkout.box.take",
+   "checkout.cancel",
+   "checkout.exit",
+   "staff.line"
+  ],
+  "bgmTitle": "Aisle Sunshine"
+ },
+ "newSfx": {
+  "forklift-beep": "지게차 후진 경고음(삐-삐-), 공간음, 루프 {on,id,pos}",
+  "massage-chair": "안마의자 모터 웅- + 두드림, 루프",
+  "snore": "코 고는 소리 2회(코믹, 작게)",
+  "coin-pickup": "포인트 코인 줍기(작은 띠링)",
+  "freezer-alarm": "냉동고 문 15초 열림 경고 삐삐(문 근처 공간음)",
+  "sample-tray": "시식 이쑤시개·접시 달그락",
+  "umbrella-bag": "우산 비닐 씌우는 바스락",
+  "rain-roof": "창고 지붕 빗소리 앰비언스 루프(비 오는 날)",
+  "deli-bell": "델리 통닭 나왔을 때 종 땡땡",
+  "crowd-murmur": "손님 웅성거림 앰비언스 루프(시간대별 볼륨)",
+  "pay-fail": "결제 단말 실패음 띠-",
+  "cart-coin-lock": "카트 동전 잠금 딸깍",
+  "chalk-scribble": "칠판 분필 쓱쓱",
+  "mop-squeak": "대걸레 끽끽",
+  "applause": "박수 소리(작게→크게 레이어)",
+  "toast-pop": "반응 말풍선/토스트 뜰 때 아주 작은 뽁(설정에서 끌 수 있음)",
+  "mission-chip": "미션 칩 뜰 때 짧은 2음",
+  "recall-call": "범이가 다시 부를 때 휘파람 + \"손님!\"(목소리 없이 효과음만)",
+  "missed-stamp": "다음 날 놓침 회색 도장 쿵(작게)",
+  "ui-pause": "일시정지 창 열림·닫힘",
+  "ui-mode-pick": "모드 카드 고를 때 툭",
+  "grab-bump": "두 사람 손이 같은 상품에 닿을 때 툭 + 멈칫",
+  "kid-giggle": "꼬마 웃음(말소리 없이)",
+  "tv-demo-loop": "TV 벽 데모 음악(elec-tv 루프 위에 얹는 작은 멜로디)",
+  "door-chime": "입구 자동문 열릴 때 띵동(입장·돌아옴)",
+  "pan-sizzle": "시식 코너 철판 지글지글(짧게 1.5초, 할머니 등장·볶음 컷)",
+  "sticker-peel": "스티커 떼는 찌익(짧게)",
+  "timer-tick": "미션 남은 시간 1분·마지막 10초 째깍(HUD 타이머와 맞춤)",
+  "tissue-tumble": "보들범 팩이 줄줄이 무너지는 푹-푹-푹(부드러운 비닐 팩 여러 개, 1.8초). 무너짐 컷 d4_019",
+  "kid-cry": "꼬마가 '으앙' 하고 우는 짧은 소리(말소리 없이 0.8초, 작게·코믹). E12 cart-bump 때, 3초 쿨다운",
+  "speed-warn": "아기 의자 탑승 중 1.0 m/s 넘으면 부드러운 삐삐 두 번(0.4초). 과속이 이어지면 1초마다",
+  "suspicion-rise": "미행 의심 게이지가 오를 때 클라리넷 짧은 상승음(루프 아님, 게이지 25 단위로 1번)",
+  "camera-shutter": "휴대폰 셔터 찰칵(0.3초) + 작은 플래시 핑. E05 촬영 순간·d5_021",
+  "stinger.reveal": "정체 공개 스팅어 2초: 탐탐 쾅 + 클라리넷 허세 라인(motif.spy 변주) + 심벌 짧게. d5_031·d5_089b",
+  "lava-hiss": "바퀴가 선 밖일 때 치익 + 아주 작은 '앗 뜨거' 삑(말소리 없이). 선 밖에 있는 동안 0.5초마다",
+  "race-countdown": "경주 출발 삑-삑-삑-뽀옹(3·2·1·출발, 2.4초). d6_034 t0. 범숙 목소리 대신 소리만",
+  "lap-bell": "한 바퀴마다 땡 한 번(맑은 핸드벨 0.5초). 마지막 바퀴는 두 번",
+  "flashlight-click": "손전등 딸깍(0.15초). 켜고 끌 때마다",
+  "forklift-spot": "지게차 불빛에 걸림: 경고 삐-익 + 낮은 쿵(0.8초), 화면 하얗게 0.3초와 같이",
+  "gold-box-open": "금빛 박스 뚜껑 + 작은 반짝 글리산도 + 종이 바스락(1.6초). d6_066·d6_068",
+  "melt-drip": "아이스크림 녹음 +5% 때 똑(물방울 0.2초). 게이지 80% 넘으면 피치 낮게",
+  "tablet-tap": "감사관 태블릿 톡·톡(유리 두드림 0.2초). 감사관 대사·감사 중 깨진 알·체크 확인 때",
+  "check-stamp": "체크리스트 도장 탁(고무도장 0.3초). 결과 화면 칸마다 1번",
+  "gold-stamp": "금도장 쾅 + 반짝(0.9초, 엔딩 A 도장 카드). 직원 넷이 찍으니 4번, 0.35초 간격",
+  "pa-sniff": "방송 마이크 너머 훌쩍(말소리 없이 0.6초, 코믹하게 작게). d7_072·d7_101·d7_123",
+  "phone-buzz": "휴대폰 진동 지잉-지잉(0.8초). 반기철 본부 전화 d7_160",
+  "motif.auditor": "감사관 모티프 2초: 마른 메트로놈 틱 4번 + 바순 짧은 두 음(무표정, 코믹). 첫 등장 d7_010",
+  "stinger.finale": "1주차 마무리 스팅어 4초: Aisle Sunshine 첫 소절을 76 BPM 으로 느리게 + 종. 엔딩 카드(d7_180)",
+  "flyer-flutter": "전단지 여러 장이 바람에 날림(종이 펄럭 1.2초, 자동문 바람과 같이). d8_027",
+  "flyer-scoop": "전단지 1장이 카트에 붙음(바스락 + 작은 틱 0.2초). 12장째는 두 번",
+  "convoy-horn": "보라 카트 행렬 앞 카트의 자전거 벨 같은 따릉-따릉(0.6초, 코믹). 행렬 출발·건널 틈 4초 시작 때",
+  "stopwatch-click": "팀장 스톱워치 딸깍(금속 0.15초). 팀장 대사·기록 때",
+  "soup-slosh": "수레 국물 출렁(찰랑 0.4초). 출렁 2번째는 크게, 3번째(넘침)는 철퍽 + stinger.comicfail",
+  "wagon-creak": "떡볶이 수레 바퀴 삐걱 루프(속도에 비례, 1.2 m/s 넘으면 높아짐)",
+  "auction-bell": "경매 종 땡-땡(0.5초, 시장 경매 느낌). 10일차 점장 경매 방송·E19 시작",
+  "cart-train-break": "카트 열차 끊김(철컥 풀림 + 바퀴 굴러가는 소리 0.8초). E20",
+  "pouch-rustle": "천 주머니 부스럭 + 종이 펴는 소리(0.7초). 12일차 메모",
+  "door-creak": "방송실 문 삐걱(1.2초, 낮고 길게). 13일차 d13_043. 문은 반쯤까지만",
+  "slot-ok": "바닥 칸 맞음 딩(0.3초, 밝게). E22",
+  "slot-miss": "바닥 칸 삐뚤 뚱(0.3초, 낮게). E22",
+  "versus-horn": "대결 출발 경적 + 관중 와(1.0초). E23",
+  "rival-checkout": "팀장 쪽 계산 끝 알림(다른 계산대 삑 + 스톱워치 딸깍 0.6초). E23 — 플레이어보다 먼저면 화면 위 대결 바 깜빡"
+ },
+ "bgm": [
+  {
+   "id": "bgm.shop",
+   "title": "Aisle Sunshine",
+   "status": "existing",
+   "note": "프로토타입 매장 BGM(월드 OST, 입장 때 hold + 크로스페이드, HUD 제목). 아래 stems 와 시간대 변형은 NEW",
+   "scenes": [
+    "평소 장보기",
+    "자유 장보기"
+   ],
+   "mood": "밝고 여유로운 주말 장보기",
+   "bpm": 104,
+   "instruments": [
+    "일렉 피아노",
+    "우쿨렐레",
+    "핑거 스냅",
+    "부드러운 베이스",
+    "비브라폰"
+   ],
+   "stems": {
+    "base": "패드 + 베이스",
+    "groove": "퍼커션",
+    "lead": "멜로디",
+    "crowd": "매장 웅성거림(crowd-murmur)"
+   },
+   "byTime": {
+    "open 10–11": "base + lead(작게)",
+    "lunch 12–13": "base + groove + lead + crowd(크게)",
+    "afternoon 14–16": "base + groove(작게), lead 끔(나른함)",
+    "evening 18–20": "전부 + crowd 최대",
+    "closing 21:50–22": "bgm.closing 으로 크로스페이드",
+    "night 22–10": "bgm.dawn"
+   },
+   "byWeather": {
+    "rain": "전체에 저역 통과 필터 살짝 + rain-roof 레이어"
+   },
+   "usedBy": [
+    "기본",
+    "R33",
+    "8일차 A 경로 w2_a10, E15 결과 뒤"
+   ]
+  },
+  {
+   "id": "bgm.tension",
+   "title": "흔들흔들",
+   "status": "new",
+   "scenes": [
+    "E01 흔들리는 범란 탑",
+    "E04 보들범 산사태"
+   ],
+   "mood": "코믹한 긴장(아직 안 무너짐)",
+   "bpm": 104,
+   "instruments": [
+    "스네어 롤",
+    "우드블록",
+    "낮은 첼로 피치카토"
+   ],
+   "layerOn": "bgm.shop",
+   "note": "따로 트랙이 아니라 bgm.shop 위에 얹는 스템. 흔들림(item-wobble) 세기에 따라 볼륨",
+   "usedBy": [
+    "E01",
+    "E04",
+    "R07",
+    "R13",
+    "E12 길 잃은 꼬마 (약하게, 찾으면 bgm.emotional 짧게)",
+    "4일차 d4_019~d4_036(E04), d4_048(E12 약하게)",
+    "8일차 E15·E16",
+    "10일차 d10_008",
+    "11일차 d11_007",
+    "14일차 d14_005"
+   ]
+  },
+  {
+   "id": "bgm.timesale",
+   "title": "3분 전쟁",
+   "status": "new",
+   "scenes": [
+    "E03 3분 타임세일 러시",
+    "특가 방송"
+   ],
+   "mood": "신나는 질주, 시장 경매 같은 소란",
+   "bpm": 148,
+   "instruments": [
+    "브라스 스탭",
+    "서프 기타",
+    "카운트다운 틱",
+    "휘슬",
+    "탬버린"
+   ],
+   "stems": {
+    "main": "전체",
+    "last30": "16비트 하이햇 + 상승음(마지막 30초 추가)"
+   },
+   "in": "pa-chime 끝나고 1.2초 크로스페이드 + 스팅어",
+   "usedBy": [
+    "E03",
+    "R29",
+    "3일차 d3_043",
+    "10일차 E19"
+   ]
+  },
+  {
+   "id": "bgm.tailing",
+   "title": "선글라스 미행",
+   "status": "new",
+   "scenes": [
+    "E05 수상한 손님 미행",
+    "반값 등장"
+   ],
+   "mood": "살금살금 코믹 스파이",
+   "bpm": 92,
+   "instruments": [
+    "피치카토 현",
+    "업라이트 베이스",
+    "봉고",
+    "클라리넷 슬라이드"
+   ],
+   "stems": {
+    "sneak": "베이스 + 피치카토",
+    "close": "반값과 4 m 안이면 클라리넷 + 봉고 추가",
+    "spotted": "들키면 1초 정지 후 스팅어 stinger.spotted"
+   },
+   "usedBy": [
+    "E05",
+    "R40",
+    "R48",
+    "E14 엉뚱한 반값 스티커(sneak 스템만)",
+    "3일차 수상한 손님 첫 등장 d3_026",
+    "2일차 끝 유리문 d2_145",
+    "5일차 d5_018(E05), d5_030 정체 공개",
+    "8일차 d8_020~d8_042(경쟁 마트 견학)",
+    "9일차 d9_008(시식 천막)"
+   ]
+  },
+  {
+   "id": "bgm.lava",
+   "title": "바닥은 용암입니다",
+   "status": "new",
+   "scenes": [
+    "E06 바닥은 용암입니다"
+   ],
+   "mood": "장난스러운 비상사태",
+   "bpm": 120,
+   "instruments": [
+    "장난감 신스",
+    "마림바",
+    "낮은 팀파니 롤",
+    "경보음 같은 화음"
+   ],
+   "usedBy": [
+    "E06",
+    "5일차 d5_052"
+   ]
+  },
+  {
+   "id": "bgm.cartrace",
+   "title": "마감 후 그랑프리",
+   "status": "new",
+   "scenes": [
+    "E07 폐점 후 카트 경주"
+   ],
+   "mood": "불 꺼진 매장 레이스",
+   "bpm": 160,
+   "instruments": [
+    "칩튠 신스 리드",
+    "록 드럼",
+    "디스토션 베이스",
+    "엔진 같은 신스"
+   ],
+   "stems": {
+    "lap1": "드럼 + 베이스",
+    "lap2": "+ 리드",
+    "lap3": "+ 합창 패드, 한 키 올림"
+   },
+   "usedBy": [
+    "E07",
+    "6일차 d6_028~d6_046(E07)",
+    "11일차 E20",
+    "14일차 E23"
+   ]
+  },
+  {
+   "id": "bgm.dawn",
+   "title": "새벽 3시 창고",
+   "status": "new",
+   "scenes": [
+    "E08 새벽 3시 비밀 창고 칸",
+    "야간 개장(22–10시)"
+   ],
+   "mood": "조용하고 신비로운 빈 창고",
+   "bpm": 70,
+   "instruments": [
+    "앰비언트 패드",
+    "뮤트 피아노",
+    "오르골",
+    "먼 냉동고 소리(freezer-hum 루프와 섞음)"
+   ],
+   "usedBy": [
+    "E08",
+    "R33 night",
+    "R47",
+    "6일차 d6_051~d6_076(E08 03:00)",
+    "12일차 03:00 E21"
+   ]
+  },
+  {
+   "id": "bgm.legend",
+   "title": "전설의 한 통",
+   "status": "new",
+   "scenes": [
+    "E09 전설의 아이스크림"
+   ],
+   "mood": "신비 → 따뜻함",
+   "bpm": 90,
+   "instruments": [
+    "하프",
+    "첼레스타",
+    "현악 트레몰로"
+   ],
+   "out": "성공하면 bgm.emotional 로 4초 크로스페이드",
+   "usedBy": [
+    "E09",
+    "R17 복선 대사",
+    "7일차 d7_049(E09 성공)"
+   ]
+  },
+  {
+   "id": "bgm.audit",
+   "title": "본사 감사관",
+   "status": "new",
+   "scenes": [
+    "E11 본사 감사의 날"
+   ],
+   "mood": "딱딱한 긴장 + 코믹",
+   "bpm": 100,
+   "instruments": [
+    "마칭 스네어",
+    "타자기",
+    "낮은 현 스타카토",
+    "시계 째깍"
+   ],
+   "stems": {
+    "base": "스네어 + 현",
+    "check": "체크리스트 1개 통과마다 브라스 한 줄씩 추가(최대 5)"
+   },
+   "usedBy": [
+    "E11",
+    "7일차 d7_010~d7_067(E11)",
+    "8일차 B 경로 w2_b10(감사관 인사)",
+    "14일차 B 재감사 d14_017, d14_051~055"
+   ]
+  },
+  {
+   "id": "bgm.emotional",
+   "title": "하나 더 먹고 가",
+   "status": "new",
+   "scenes": [
+    "할머니 옛날 이야기",
+    "E10 기립박수",
+    "엔딩 A",
+    "단골도 5 대사"
+   ],
+   "mood": "따뜻하고 뭉클",
+   "bpm": 76,
+   "instruments": [
+    "어쿠스틱 기타",
+    "피아노",
+    "첼로",
+    "휘파람"
+   ],
+   "usedBy": [
+    "E02 성공",
+    "E09 성공",
+    "E10",
+    "E11 엔딩 A",
+    "2일차 할머니 분식집 이야기 d2_090",
+    "4일차 E12 성공·부분 d4_051, d4_053",
+    "7일차 d7_042(E10), d7_071 마지막 방송, 엔딩 A·B",
+    "11일차 수료식",
+    "13일차 방송실 문",
+    "14일차 레시피·엔딩 W2A·W2B"
+   ]
+  },
+  {
+   "id": "bgm.closing",
+   "title": "오늘도 고마웠어요",
+   "status": "new",
+   "scenes": [
+    "마감 10분 전(21:50~)",
+    "하루 끝 도장"
+   ],
+   "mood": "느린 왈츠, 아쉬운 마감",
+   "bpm": 84,
+   "meter": "3/4",
+   "instruments": [
+    "아코디언",
+    "오르골",
+    "브러시 드럼"
+   ],
+   "note": "실제 매장 마감곡을 흉내 내지 않은 새 곡",
+   "usedBy": [
+    "R32",
+    "R33 closing",
+    "일차 끝",
+    "d2_140",
+    "d3_090",
+    "6일차 d6_026·d6_090, 7일차 엔딩 C·d7_163",
+    "8일차 d8_081, 9일차 마감 방송",
+    "10~13일차 마감 방송",
+    "14일차 W2C, d14_162"
+   ]
+  },
+  {
+   "id": "bgm.free",
+   "title": "Aisle Sunshine (자유 장보기)",
+   "status": "new",
+   "scenes": [
+    "자유 장보기"
+   ],
+   "mood": "bgm.shop 과 같음, lead 스템 작게",
+   "bpm": 104,
+   "note": "bgm.shop 을 그대로 쓰고 사건 큐는 안 씀",
+   "usedBy": [
+    "modeSelect free"
+   ]
+  },
+  {
+   "id": "bgm.errand",
+   "title": "할머니 심부름",
+   "status": "new",
+   "addedIn": "0.5",
+   "scenes": [
+    "E02 말순 할머니의 오늘 메뉴",
+    "E13 할머니 주먹밥 배달"
+   ],
+   "mood": "종종걸음 심부름, 따뜻하지만 바쁨",
+   "bpm": 116,
+   "instruments": [
+    "우쿨렐레 스트럼",
+    "오르골(할머니 모티프 세 음 변주)",
+    "쉐이커",
+    "피치카토 베이스"
+   ],
+   "stems": {
+    "main": "전체",
+    "hurry": "남은 시간 60초부터 쉐이커 2배 + 반음 올림"
+   },
+   "out": "결과 컷에서 bgm.emotional 로 2초 크로스페이드",
+   "usedBy": [
+    "E02",
+    "E13",
+    "9일차 E17·E18",
+    "13일차 E22"
+   ]
+  }
+ ],
+ "stingers": [
+  {
+   "id": "stinger.success",
+   "status": "new",
+   "len": "3초",
+   "desc": "마림바 + 브라스 짧은 팡파르",
+   "usedBy": [
+    "사건 성공",
+    "R06"
+   ]
+  },
+  {
+   "id": "stinger.comicfail",
+   "status": "new",
+   "len": "2.5초",
+   "desc": "트롬본 워워워 + 슬라이드 휘슬",
+   "usedBy": [
+    "E01 탑 붕괴",
+    "E04 실패",
+    "E03 0개",
+    "R12"
+   ]
+  },
+  {
+   "id": "stinger.partial",
+   "status": "new",
+   "len": "2초",
+   "desc": "마림바 두 음, 아쉬움",
+   "usedBy": [
+    "사건 보통 결과"
+   ]
+  },
+  {
+   "id": "stinger.spotted",
+   "status": "new",
+   "len": "1.5초",
+   "desc": "탐탐 쾅 + 클라리넷 낮은 음",
+   "usedBy": [
+    "E05 들킴",
+    "R40",
+    "d5_023",
+    "d5_025"
+   ]
+  },
+  {
+   "id": "stinger.daycard",
+   "status": "new",
+   "len": "2초",
+   "desc": "창고 셔터 올라가는 소리 + 우쿨렐레 코드",
+   "usedBy": [
+    "일차 카드"
+   ]
+  },
+  {
+   "id": "stinger.stamp",
+   "status": "new",
+   "len": "1.5초",
+   "desc": "도장 쿵 + 반짝",
+   "usedBy": [
+    "하루 끝 도장"
+   ]
+  },
+  {
+   "id": "motif.beomsuk",
+   "status": "new",
+   "len": "1초",
+   "desc": "스네어 한 번 + 피아노 두 음(단호)",
+   "usedBy": [
+    "범숙 대화 시작"
+   ]
+  },
+  {
+   "id": "motif.halmeoni",
+   "status": "new",
+   "len": "1초",
+   "desc": "오르골 세 음(따뜻)",
+   "usedBy": [
+    "할머니 대화 시작"
+   ]
+  },
+  {
+   "id": "motif.beomi",
+   "status": "new",
+   "len": "1초",
+   "desc": "실로폰 미끄럼(허둥지둥)",
+   "usedBy": [
+    "범이 대화 시작"
+   ]
+  },
+  {
+   "id": "motif.spy",
+   "status": "new",
+   "len": "1초",
+   "desc": "클라리넷 낮은 음 + 탐탐(허세)",
+   "usedBy": [
+    "반값 대화 시작"
+   ]
+  },
+  {
+   "id": "pa-chime",
+   "status": "existing",
+   "desc": "딩동댕 + 왼쪽 토스트(프로토타입)",
+   "usedBy": [
+    "방송실 점장 전부",
+    "R33",
+    "R35"
+   ]
+  },
+  {
+   "id": "stinger.nextday",
+   "status": "new",
+   "addedIn": "0.5",
+   "len": "2.5초",
+   "desc": "TV 예고편 같은 '다음 이 시간에' 브라스 두 음 + 셔터 내려가는 소리",
+   "usedBy": [
+    "day.end nextDay 예고 카드"
+   ]
+  },
+  {
+   "id": "stinger.reveal",
+   "status": "new",
+   "addedIn": "0.6",
+   "len": "2초",
+   "desc": "정체 공개 스팅어 2초: 탐탐 쾅 + 클라리넷 허세 라인(motif.spy 변주) + 심벌 짧게. d5_031·d5_089b",
+   "usedBy": [
+    "5일차 반기철 정체 공개 d5_031, d5_089b"
+   ]
+  },
+  {
+   "id": "motif.auditor",
+   "status": "new",
+   "addedIn": "0.7",
+   "len": "2초",
+   "desc": "감사관 모티프 2초: 마른 메트로놈 틱 4번 + 바순 짧은 두 음(무표정, 코믹). 첫 등장 d7_010",
+   "usedBy": [
+    "7일차 d7_010 감사관 등장"
+   ]
+  },
+  {
+   "id": "stinger.finale",
+   "status": "new",
+   "addedIn": "0.7",
+   "len": "4초",
+   "desc": "1주차 마무리 스팅어 4초: Aisle Sunshine 첫 소절을 76 BPM 으로 느리게 + 종. 엔딩 카드(d7_180)",
+   "usedBy": [
+    "7일차 d7_180 엔딩 A·B 카드"
+   ]
+  },
+  {
+   "id": "motif.rivalboss",
+   "status": "new",
+   "addedIn": "0.8",
+   "len": "2초",
+   "desc": "팀장 모티프 2초: 하프시코드 세 음 + 스톱워치 틱(상냥하지만 차가움). 첫 등장 d8_022",
+   "usedBy": [
+    "8일차 d8_022, 9일차 d9_010"
+   ]
+  }
+ ],
+ "mix": {
+  "crossfade": {
+   "default": "2.0초 이퀄 파워",
+   "toEvent": "1.2초 + 스팅어",
+   "backToShop": "3.0초",
+   "toNight": "6초(천천히)"
+  },
+  "ducking": {
+   "dialogue": "BGM -9 dB, lead 스템 끔, 0.4초 어택 / 0.8초 릴리스",
+   "paChime": "-12 dB, 2.5초 (프로토타입 pa-chime 과 같게)",
+   "stinger": "-6 dB, 스팅어 길이만큼",
+   "reactionToast": "없음(작은 toast-pop 만)"
+  },
+  "flags": "?bgm=0 이면 매장 BGM 끔, 효과음은 남김. ?depotSfx=0 / ?rideSfx=0 이면 효과음 끔 (depot-coord.md 규칙 그대로)",
+  "priority": "사건 BGM > 마감/야간 > 평소. 사건 끝나면 시간대에 맞는 bgm.shop 변형으로 돌아감"
+ },
+ "eventSfx": {
+  "E01": [
+   "item-wobble",
+   "egg-crack",
+   "egg-splat",
+   "achievement",
+   "stinger.success|comicfail"
+  ],
+  "E02": [
+   "item-pick",
+   "sample-tray",
+   "pan-sizzle",
+   "item-place {kg}",
+   "timer-tick",
+   "achievement"
+  ],
+  "E03": [
+   "pa-chime",
+   "crowd-murmur(크게)",
+   "cart-bump",
+   "item-pick {material:cardboard}",
+   "timer-tick (마지막 10초)",
+   "motif.spy"
+  ],
+  "E04": [
+   "item-wobble",
+   "item-fall {kg}",
+   "tissue-tumble",
+   "mop-squeak",
+   "pa-chime"
+  ],
+  "E05": [
+   "cart-joint(작게)",
+   "suspicion-rise",
+   "camera-shutter",
+   "grab-bump",
+   "stinger.spotted",
+   "stinger.reveal",
+   "motif.spy"
+  ],
+  "E06": [
+   "pa-chime",
+   "lava-hiss",
+   "item-place",
+   "cart-joint",
+   "achievement"
+  ],
+  "E07": [
+   "race-countdown",
+   "lap-bell",
+   "cart-grab",
+   "cart-bump",
+   "cart-joint",
+   "item-fall {kg}",
+   "applause"
+  ],
+  "E08": [
+   "flashlight-click",
+   "forklift-beep",
+   "forklift-spot",
+   "freezer-hum",
+   "gold-box-open",
+   "door-chime(느리게)",
+   "rain-roof(아주 낮게, 바람 느낌)"
+  ],
+  "E09": [
+   "freezer-door",
+   "melt-drip",
+   "freezer-alarm",
+   "stinger.success",
+   "achievement"
+  ],
+  "E10": [
+   "item-place {kg}",
+   "applause",
+   "achievement"
+  ],
+  "E11": [
+   "motif.auditor",
+   "tablet-tap",
+   "check-stamp",
+   "motif.spy",
+   "checkout-scan",
+   "checkout-printer",
+   "checkout-done",
+   "pa-sniff",
+   "gold-stamp",
+   "phone-buzz",
+   "stinger.finale"
+  ],
+  "E12": [
+   "kid-giggle",
+   "kid-cry",
+   "speed-warn",
+   "cart-joint(느리게)",
+   "door-chime"
+  ],
+  "E13": [
+   "sample-tray",
+   "item-wobble",
+   "checkout-scan",
+   "stinger.success|partial|comicfail"
+  ],
+  "E14": [
+   "sticker-peel",
+   "item-pick",
+   "motif.spy",
+   "stinger.success|partial"
+  ],
+  "E15": [
+   "convoy-horn",
+   "cart-bump",
+   "egg-crack",
+   "item-place {kg}",
+   "stopwatch-click",
+   "timer-tick"
+  ],
+  "E16": [
+   "flyer-flutter",
+   "flyer-scoop",
+   "door-chime"
+  ],
+  "E17": [
+   "wagon-creak",
+   "soup-slosh",
+   "speed-warn",
+   "sample-tray",
+   "stinger.success|partial|comicfail"
+  ],
+  "E18": [
+   "item-pick",
+   "massage-chair",
+   "snore",
+   "stinger.success|partial|comicfail"
+  ],
+  "E19": [
+   "auction-bell",
+   "cart-grab",
+   "cart-bump",
+   "item-place",
+   "stopwatch-click",
+   "timer-tick",
+   "stinger.success|partial|comicfail"
+  ],
+  "E20": [
+   "cart-joint",
+   "cart-train-break",
+   "cart-bump",
+   "stopwatch-click",
+   "timer-tick",
+   "applause",
+   "achievement"
+  ],
+  "E21": [
+   "flashlight-click",
+   "forklift-beep",
+   "forklift-spot",
+   "stinger.spotted",
+   "pouch-rustle",
+   "cart-bump",
+   "pa-chime"
+  ],
+  "E22": [
+   "slot-ok",
+   "slot-miss",
+   "item-place",
+   "stopwatch-click",
+   "timer-tick",
+   "stinger.success|partial|comicfail"
+  ],
+  "E23": [
+   "versus-horn",
+   "rival-checkout",
+   "stopwatch-click",
+   "egg-crack",
+   "cart-bump",
+   "checkout-done",
+   "timer-tick"
+  ],
+  "E24": [
+   "motif.auditor",
+   "tablet-tap",
+   "check-stamp"
+  ]
+ },
+ "reactionSfx": {
+  "R01": {
+   "name": "통로에 두고 간 카트",
+   "sfx": [
+    "staff-talk",
+    "toast-pop"
+   ],
+   "existing": [
+    "staff-talk"
+   ],
+   "new": [
+    "toast-pop"
+   ]
+  },
+  "R02": {
+   "name": "역주행",
+   "sfx": [
+    "staff-talk",
+    "cart-joint",
+    "toast-pop"
+   ],
+   "existing": [
+    "staff-talk",
+    "cart-joint"
+   ],
+   "new": [
+    "toast-pop"
+   ]
+  },
+  "R03": {
+   "name": "빈 카트로 계산대",
+   "sfx": [
+    "checkout-scan",
+    "toast-pop"
+   ],
+   "existing": [
+    "checkout-scan"
+   ],
+   "new": [
+    "toast-pop"
+   ]
+  },
+  "R04": {
+   "name": "큰 카트에 물건 하나",
+   "sfx": [
+    "checkout-scan",
+    "toast-pop"
+   ],
+   "existing": [
+    "checkout-scan"
+   ],
+   "new": [
+    "toast-pop"
+   ]
+  },
+  "R05": {
+   "name": "카트 과속",
+   "sfx": [
+    "staff-talk",
+    "toast-pop"
+   ],
+   "existing": [
+    "staff-talk"
+   ],
+   "new": [
+    "toast-pop"
+   ]
+  },
+  "R06": {
+   "name": "짐 150 kg 돌파",
+   "sfx": [
+    "achievement",
+    "toast-pop"
+   ],
+   "existing": [
+    "achievement"
+   ],
+   "new": [
+    "toast-pop"
+   ]
+  },
+  "R07": {
+   "name": "허용 하중 가까이",
+   "sfx": [
+    "item-wobble",
+    "toast-pop"
+   ],
+   "existing": [
+    "item-wobble"
+   ],
+   "new": [
+    "toast-pop"
+   ]
+  },
+  "R08": {
+   "name": "카트 범퍼카 3번",
+   "sfx": [
+    "cart-bump",
+    "toast-pop"
+   ],
+   "existing": [
+    "cart-bump"
+   ],
+   "new": [
+    "toast-pop"
+   ]
+  },
+  "R09": {
+   "name": "카트 제자리 반납",
+   "sfx": [
+    "cart-release",
+    "toast-pop"
+   ],
+   "existing": [
+    "cart-release"
+   ],
+   "new": [
+    "toast-pop"
+   ]
+  },
+  "R10": {
+   "name": "100원 카트 동전",
+   "sfx": [
+    "cart-grab",
+    "toast-pop"
+   ],
+   "existing": [
+    "cart-grab"
+   ],
+   "new": [
+    "toast-pop"
+   ]
+  },
+  "R11": {
+   "name": "계란 1개 깨짐",
+   "sfx": [
+    "egg-crack",
+    "toast-pop"
+   ],
+   "existing": [
+    "egg-crack"
+   ],
+   "new": [
+    "toast-pop"
+   ]
+  },
+  "R12": {
+   "name": "계란 10개 이상",
+   "sfx": [
+    "egg-splat",
+    "toast-pop"
+   ],
+   "existing": [
+    "egg-splat"
+   ],
+   "new": [
+    "toast-pop"
+   ]
+  },
+  "R13": {
+   "name": "계란탑 5층",
+   "sfx": [
+    "achievement",
+    "item-wobble",
+    "toast-pop"
+   ],
+   "existing": [
+    "achievement",
+    "item-wobble"
+   ],
+   "new": [
+    "toast-pop"
+   ]
+  },
+  "R14": {
+   "name": "같은 상품 10개",
+   "sfx": [
+    "item-place",
+    "toast-pop"
+   ],
+   "existing": [
+    "item-place"
+   ],
+   "new": [
+    "toast-pop"
+   ]
+  },
+  "R15": {
+   "name": "상품 엉뚱한 칸에",
+   "sfx": [
+    "item-place",
+    "staff-talk",
+    "toast-pop"
+   ],
+   "existing": [
+    "item-place",
+    "staff-talk"
+   ],
+   "new": [
+    "toast-pop"
+   ]
+  },
+  "R16": {
+   "name": "바닥에 내려놓기 5개",
+   "sfx": [
+    "item-fall",
+    "toast-pop"
+   ],
+   "existing": [
+    "item-fall"
+   ],
+   "new": [
+    "toast-pop"
+   ]
+  },
+  "R17": {
+   "name": "아이스크림 방치",
+   "sfx": [
+    "freezer-hum",
+    "toast-pop"
+   ],
+   "existing": [
+    "freezer-hum"
+   ],
+   "new": [
+    "toast-pop"
+   ]
+  },
+  "R18": {
+   "name": "냉동고 문 오래 열기",
+   "sfx": [
+    "freezer-door",
+    "freezer-hum",
+    "toast-pop"
+   ],
+   "existing": [
+    "freezer-door",
+    "freezer-hum"
+   ],
+   "new": [
+    "toast-pop"
+   ]
+  },
+  "R19": {
+   "name": "같은 상품 두 사람이 동시에",
+   "sfx": [
+    "item-pick",
+    "toast-pop"
+   ],
+   "existing": [
+    "item-pick"
+   ],
+   "new": [
+    "toast-pop"
+   ]
+  },
+  "R20": {
+   "name": "시식 3번",
+   "sfx": [
+    "item-pick",
+    "toast-pop"
+   ],
+   "existing": [
+    "item-pick"
+   ],
+   "new": [
+    "toast-pop"
+   ]
+  },
+  "R21": {
+   "name": "시식만 도는 아저씨",
+   "sfx": [
+    "staff-talk",
+    "toast-pop"
+   ],
+   "existing": [
+    "staff-talk"
+   ],
+   "new": [
+    "toast-pop"
+   ]
+  },
+  "R22": {
+   "name": "대량구매 사장님 추월",
+   "sfx": [
+    "cart-joint",
+    "toast-pop"
+   ],
+   "existing": [
+    "cart-joint"
+   ],
+   "new": [
+    "toast-pop"
+   ]
+  },
+  "R23": {
+   "name": "휴대폰 배터리 0%",
+   "sfx": [
+    "checkout-pay",
+    "toast-pop"
+   ],
+   "existing": [
+    "checkout-pay"
+   ],
+   "new": [
+    "toast-pop"
+   ]
+  },
+  "R24": {
+   "name": "내가 고른 줄만 느림",
+   "sfx": [
+    "toast-pop"
+   ],
+   "existing": [],
+   "new": [
+    "toast-pop"
+   ]
+  },
+  "R25": {
+   "name": "길 잃은 꼬마 (예고)",
+   "sfx": [
+    "toast-pop"
+   ],
+   "existing": [],
+   "new": [
+    "toast-pop"
+   ]
+  },
+  "R26": {
+   "name": "휴대폰 손님이 통로 막음",
+   "sfx": [
+    "toast-pop"
+   ],
+   "existing": [],
+   "new": [
+    "toast-pop"
+   ]
+  },
+  "R27": {
+   "name": "커플 말다툼",
+   "sfx": [
+    "toast-pop"
+   ],
+   "existing": [],
+   "new": [
+    "toast-pop"
+   ]
+  },
+  "R28": {
+   "name": "헬스장 청년 생수 들기",
+   "sfx": [
+    "toast-pop"
+   ],
+   "existing": [],
+   "new": [
+    "toast-pop"
+   ]
+  },
+  "R29": {
+   "name": "할인 사냥꾼 질주",
+   "sfx": [
+    "pa-chime",
+    "toast-pop"
+   ],
+   "existing": [
+    "pa-chime"
+   ],
+   "new": [
+    "toast-pop"
+   ]
+  },
+  "R30": {
+   "name": "캠핑 아빠 시즌 매대",
+   "sfx": [
+    "toast-pop"
+   ],
+   "existing": [],
+   "new": [
+    "toast-pop"
+   ]
+  },
+  "R31": {
+   "name": "비 오는 날 우산 코너",
+   "sfx": [
+    "staff-talk",
+    "toast-pop"
+   ],
+   "existing": [
+    "staff-talk"
+   ],
+   "new": [
+    "toast-pop"
+   ]
+  },
+  "R32": {
+   "name": "폐점 직전 입장",
+   "sfx": [
+    "pa-chime",
+    "toast-pop"
+   ],
+   "existing": [
+    "pa-chime"
+   ],
+   "new": [
+    "toast-pop"
+   ]
+  },
+  "R33": {
+   "name": "시간대별 매장 분위기",
+   "sfx": [
+    "toast-pop"
+   ],
+   "existing": [],
+   "new": [
+    "toast-pop"
+   ]
+  },
+  "R34": {
+   "name": "포인트 코인 또 줍기",
+   "sfx": [
+    "toast-pop"
+   ],
+   "existing": [],
+   "new": [
+    "toast-pop"
+   ]
+  },
+  "R35": {
+   "name": "갓 나온 통닭",
+   "sfx": [
+    "pa-chime",
+    "toast-pop"
+   ],
+   "existing": [
+    "pa-chime"
+   ],
+   "new": [
+    "toast-pop"
+   ]
+  },
+  "R36": {
+   "name": "갓 구운 빵",
+   "sfx": [
+    "toast-pop"
+   ],
+   "existing": [],
+   "new": [
+    "toast-pop"
+   ]
+  },
+  "R37": {
+   "name": "수박 두드리기",
+   "sfx": [
+    "item-pick",
+    "toast-pop"
+   ],
+   "existing": [
+    "item-pick"
+   ],
+   "new": [
+    "toast-pop"
+   ]
+  },
+  "R38": {
+   "name": "김장철 매대",
+   "sfx": [
+    "toast-pop"
+   ],
+   "existing": [],
+   "new": [
+    "toast-pop"
+   ]
+  },
+  "R39": {
+   "name": "전자 코너 TV 벽",
+   "sfx": [
+    "elec-tv",
+    "toast-pop"
+   ],
+   "existing": [
+    "elec-tv"
+   ],
+   "new": [
+    "toast-pop"
+   ]
+  },
+  "R40": {
+   "name": "안마의자에서 졸고 있는 반값",
+   "sfx": [
+    "massage-chair",
+    "snore",
+    "toast-pop"
+   ],
+   "existing": [],
+   "new": [
+    "massage-chair",
+    "snore",
+    "toast-pop"
+   ]
+  },
+  "R41": {
+   "name": "로봇청소기 쫓는 범이",
+   "sfx": [
+    "elec-vac",
+    "toast-pop"
+   ],
+   "existing": [
+    "elec-vac"
+   ],
+   "new": [
+    "toast-pop"
+   ]
+  },
+  "R42": {
+   "name": "빈 박스 챙기기",
+   "sfx": [
+    "item-pick",
+    "toast-pop"
+   ],
+   "existing": [
+    "item-pick"
+   ],
+   "new": [
+    "toast-pop"
+   ]
+  },
+  "R43": {
+   "name": "회원카드로 결제",
+   "sfx": [
+    "checkout-pay",
+    "toast-pop"
+   ],
+   "existing": [
+    "checkout-pay"
+   ],
+   "new": [
+    "toast-pop"
+   ]
+  },
+  "R44": {
+   "name": "출구 영수증 확인",
+   "sfx": [
+    "checkout-printer",
+    "toast-pop"
+   ],
+   "existing": [
+    "checkout-printer"
+   ],
+   "new": [
+    "toast-pop"
+   ]
+  },
+  "R45": {
+   "name": "가만히 서 있기",
+   "sfx": [
+    "toast-pop"
+   ],
+   "existing": [],
+   "new": [
+    "toast-pop"
+   ]
+  },
+  "R46": {
+   "name": "고객센터 환불 손님",
+   "sfx": [
+    "toast-pop"
+   ],
+   "existing": [],
+   "new": [
+    "toast-pop"
+   ]
+  },
+  "R47": {
+   "name": "지게차 후진 경고",
+   "sfx": [
+    "forklift-beep",
+    "toast-pop"
+   ],
+   "existing": [],
+   "new": [
+    "forklift-beep",
+    "toast-pop"
+   ]
+  },
+  "R48": {
+   "name": "반값의 라이벌 카트",
+   "sfx": [
+    "toast-pop"
+   ],
+   "existing": [],
+   "new": [
+    "toast-pop"
+   ]
+  },
+  "R49": {
+   "name": "오늘의 손님 칠판",
+   "sfx": [
+    "toast-pop"
+   ],
+   "existing": [],
+   "new": [
+    "toast-pop"
+   ]
+  },
+  "R50": {
+   "name": "처음 산 상품 기억",
+   "sfx": [
+    "toast-pop"
+   ],
+   "existing": [],
+   "new": [
+    "toast-pop"
+   ]
+  },
+  "R51": {
+   "name": "심부름 카트 60kg",
+   "sfx": [
+    "item-wobble",
+    "toast-pop"
+   ],
+   "existing": [
+    "item-wobble"
+   ],
+   "new": [
+    "toast-pop"
+   ]
+  },
+  "R52": {
+   "name": "계란 위에 쌀 포대",
+   "sfx": [
+    "item-place",
+    "item-wobble",
+    "toast-pop"
+   ],
+   "existing": [
+    "item-place",
+    "item-wobble"
+   ],
+   "new": [
+    "toast-pop"
+   ]
+  },
+  "R53": {
+   "name": "쟁반 싣고 급정거",
+   "sfx": [
+    "item-wobble",
+    "toast-pop"
+   ],
+   "existing": [
+    "item-wobble"
+   ],
+   "new": [
+    "toast-pop"
+   ]
+  },
+  "R54": {
+   "name": "스티커 상품 도로 진열",
+   "sfx": [
+    "sticker-peel",
+    "toast-pop"
+   ],
+   "existing": [],
+   "new": [
+    "sticker-peel",
+    "toast-pop"
+   ]
+  },
+  "R55": {
+   "name": "수상한 손님 카트에 쿵",
+   "sfx": [
+    "cart-bump",
+    "motif.spy",
+    "toast-pop"
+   ],
+   "existing": [
+    "cart-bump"
+   ],
+   "new": [
+    "motif.spy",
+    "toast-pop"
+   ]
+  },
+  "R56": {
+   "name": "가짜 타임세일에 질주",
+   "sfx": [
+    "staff-talk",
+    "toast-pop"
+   ],
+   "existing": [
+    "staff-talk"
+   ],
+   "new": [
+    "toast-pop"
+   ]
+  }
+ },
+ "newSfxV05": [
+  "pan-sizzle",
+  "sticker-peel",
+  "timer-tick"
+ ],
+ "newSfxV06": [
+  "tissue-tumble",
+  "kid-cry",
+  "speed-warn",
+  "suspicion-rise",
+  "camera-shutter",
+  "stinger.reveal",
+  "lava-hiss"
+ ],
+ "newSfxV07": [
+  "race-countdown",
+  "lap-bell",
+  "flashlight-click",
+  "forklift-spot",
+  "gold-box-open",
+  "melt-drip",
+  "tablet-tap",
+  "check-stamp",
+  "gold-stamp",
+  "pa-sniff",
+  "phone-buzz",
+  "motif.auditor",
+  "stinger.finale"
+ ],
+ "newSfxV08": [
+  "flyer-flutter",
+  "flyer-scoop",
+  "convoy-horn",
+  "stopwatch-click",
+  "soup-slosh",
+  "wagon-creak",
+  "motif.rivalboss"
+ ],
+ "newSfxV09": [
+  "auction-bell",
+  "cart-train-break",
+  "pouch-rustle",
+  "door-creak",
+  "slot-ok",
+  "slot-miss",
+  "versus-horn",
+  "rival-checkout"
+ ]
+}

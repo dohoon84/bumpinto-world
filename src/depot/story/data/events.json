@@ -1,1 +1,2045 @@
-{"_about":"범창고 스토리 모드 사건 목록 (가안). 모든 사건과 수치는 게임용 창작이고 실제 매장 정보가 아닙니다. 무게는 depot-design 패키지 기준(범쌀 20kg, 범샘물 2L×6 약 12kg, 범란 30구 약 1.9kg, 카트 27kg)입니다. v0.4: 각 사건에 audio(BGM 큐·효과음, story/audio-cues.json) 연결, 무시했을 때 규칙은 story/exit-rules.json, 소소한 반응은 story/reactions.json. v0.5: 2·3일차 대본(day2-script.jsonl, day3-script.jsonl) 추가. 사건마다 target(길 안내 마커 최종 목표)·waypoints(들를 곳) 추가 — 위치 id 는 story/targets.json. 작은 사건 E13(2일차)·E14(3일차) 추가. E02 배경음악을 심부름 큐(bgm.errand)로 바꾸고 성공 컷에 bgm.emotional. v0.6: 4·5일차 대본(day4-script, day5-script) 추가. E04·E05·E06·E12 에 target·waypoints·script·missedRule·판정 필드 추가. E05 는 결과와 상관없이 5일차에 정체 공개(성공 = 증거 사진). v0.7: 6·7일차 대본(day6-script, day7-script) 추가. E07·E08·E09·E10·E11 에 target·waypoints·script·judge·missedRule 등 추가. 엔딩 활기 계산은 맨 위 endingVitality. v0.8: 2주차. E15~E18(8·9일차) 상세 판정, E19~E24(10~14일차) 개요(status outline). 2주차 활기 계산은 맨 위 week2Vitality.","version":"0.8","meters":{"vitality":{"name":"매장 활기","start":12,"max":100,"note":"하루 결과로 오름. 7일차 엔딩 분기에 사용 v0.8: 2주차 시작 때 floor(1주차 최종 ÷ 2), 최대 40 으로 다시 시작(week2Vitality)"},"affinity":{"name":"단골도","per":["beomsuk","halmeoni","beomi","spy"],"min":0,"max":5,"note":"하트 5칸. 범숙은 3부터 츤데레 대사"},"stamps":{"name":"단골 도장","slots":7,"note":"하루를 마칠 때 1개. 골드범 회원카드와 연결할지는 미정 v0.8: 2주차는 새 도장 카드(7칸, 8~14일차). 1주차 카드는 액자(A) / 보관(B)"}},"results":{"success":"성공","partial":"부분 성공","fail":"실패(게임오버 없음, 다음 날로 진행)"},"existingHooks":{"_note":"프로토타입 staff.js에 이미 있는 값과 이벤트(읽기만 했고 수정하지 않음). 사건 판정에 그대로 쓰면 됩니다.","eggsToday":"오늘 깬 계란 수 (onEggsBroken)","floorDrops":"바닥에 떨어진 상품 수 (onFloor)","rams":"카트로 들이받은 횟수 (onRam)","towerBest":"카트 속 계란판 최대 층수 (towerHeight)","mischief.level":"직원 짜증 단계 0~4. 범숙 표정: 0~1 기본, 2 놀람, 3~4 화남","audio":"pa-chime, egg-crack, cart-bump, achievement, freezer-door, checkout-* (D 스트림 이벤트 이름)"},"events":[{"id":"E01","name":"흔들리는 범란 탑","day":1,"type":"main","cast":["beomi","beomsuk"],"trigger":"1일차 입장 컷신 직후, 계란·유제품 걸이 사인 아래","setup":"범이가 처음 쌓은 범란 판 탑(12판)이 흔들린다. 탑을 통째로 카트에 받아 계산대까지 옮긴다.","goal":"범란 30구 5판 이상을 카트에 담아 계산대 통과","success":"깨진 알 3개 이하","partial":"깨진 알 4~10개","fail":"깨진 알 11개 이상, 또는 탑이 바닥으로 무너짐(floorDrops에 범란 3판 이상)","physics":["eggsToday","towerBest","카트 급정거 감속도","cart-bump"],"tuning":{"eggTrays":5,"maxBrokenForSuccess":3,"timeLimitSec":null},"reward":{"vitality":10,"affinity":{"beomi":1},"stamp":1,"unlock":"범이 퀘스트 보드"},"storeChange":"입구에 '오늘의 손님' 칠판이 생기고 범이 이름표에 '수습 1일차' 스티커가 붙음","bonus":"towerBest 5층 이상이면 업적 '범란 마천루'와 범숙 놀람 표정 컷","audio":{"bgm":["bgm.tension"],"sfx":["item-wobble","egg-crack","egg-splat","achievement","stinger.success|comicfail"]},"ifIgnored":"exit-rules.json ignoreEvent (미션 칩 → 범이 1번 부름 → 계산하면 놓침)","target":"checkout","waypoints":[{"target":"aisle-01-eggs","label":"흔들리는 범란 탑"}],"script":"day1-script.jsonl d1_032"},{"id":"E02","name":"말순 할머니의 오늘 메뉴","day":2,"type":"main","cast":["halmeoni"],"trigger":"2일차 입장 컷신 뒤, 시식 코너 첫 도착(대본 roam d2_025)","setup":"말순 할머니가 오늘 메뉴 '범쌀 주먹밥과 계란말이' 재료를 부탁한다. 무게가 맞아야 맛이 난다고 우긴다.","goal":"범쌀 20kg 1포, 범란 2판, 범샘물 2L×6 1팩을 시식 코너까지 배달 (쇼츠 1화 예고: '쌀 20kg · 계란 2판 · 물 6병, 4분 안에, 한 알도 깨지 말 것')","success":"4분 안에 도착, 깨진 알 0개","partial":"시간 초과 또는 깨진 알 1~5개","fail":"범쌀 포대가 바닥에 떨어짐","physics":["카트 총무게(약 63kg)로 느려지는 가속","eggsToday","floorDrops"],"tuning":{"timeLimitSec":240,"targetCartKg":63},"reward":{"vitality":10,"affinity":{"halmeoni":1},"stamp":1,"item":"할머니 주먹밥(다음 사건 1회 카트 흔들림 −20%)"},"storeChange":"시식 코너 테이블 1개 → 2개, '시식만 도는 아저씨' NPC 첫 등장","audio":{"bgm":["bgm.errand","bgm.emotional (결과 컷)"],"sfx":["item-pick","sample-tray","pan-sizzle","item-place {kg}","timer-tick","achievement"]},"ifIgnored":"exit-rules.json ignoreEvent (미션 칩 → 범이 1번 부름 → 계산하면 놓침)","target":"sample-corner","waypoints":[{"target":"aisle-02-rice","item":"rice","n":1},{"target":"aisle-01-eggs","item":"egg","n":2},{"target":"aisle-01-water","item":"water","n":1}],"script":"day2-script.jsonl d2_047"},{"id":"E03","name":"3분 타임세일 러시","day":3,"type":"main","cast":["pa","spy","beomsuk"],"trigger":"3일차 E14 가 끝나고 자유 장보기 120초 뒤(대본 roam d3_037). 그 사이 45초에 '연습 방송'(가짜 타임세일) 1번","setup":"'지금부터 3분 동안 범라면 40봉 반값!' 할인 사냥꾼 손님들과 수상한 손님이 특가 매대로 몰려든다.","goal":"180초 안에 범라면 40봉 박스 2개를 카트에 확보","success":"박스 2개 이상","partial":"박스 1개","fail":"0개 (수상한 손님이 싹쓸이)","physics":["NPC 카트와 충돌 시 박스가 미끄러짐","rams 3회 이상이면 범숙 화남 컷","특가 매대 박스 낙하"],"tuning":{"timeLimitSec":180,"boxesOnPallet":8,"rivalGrabIntervalSec":14,"saleHunters":4},"reward":{"vitality":12,"stamp":1,"affinity":{"beomsuk":1},"unlock":"수상한 손님 인물 카드(정체 ???)"},"storeChange":"특가 매대(레드 가격표) 2개 증설, 가족·할인 사냥꾼 NPC 등장, 방송 빈도 증가","audio":{"bgm":["bgm.timesale"],"sfx":["pa-chime","crowd-murmur(크게)","cart-bump","item-pick {material:cardboard}","timer-tick (마지막 10초)","motif.spy"]},"ifIgnored":"exit-rules.json ignoreEvent (미션 칩 → 범이 1번 부름 → 계산하면 놓침)","target":"timesale-endcap","waypoints":[{"target":"timesale-endcap","item":"ramen","n":2}],"missedRule":"타이머가 끝날 때까지 특가 매대 6 m 안에 한 번도 안 들어옴 → 놓침(d3_085). E03 시작 전에 계산 → 놓침(d3_088)","script":"day3-script.jsonl d3_043"},{"id":"E04","name":"보들범 산사태","day":4,"type":"main","cast":["beomi","beomsuk"],"trigger":"4일차 생활용품 통로 입장 시, 범이가 맨 아래 팩을 빼다가 피라미드가 무너짐","setup":"보들범 30롤 팩 피라미드가 통로로 쏟아진다. 굴러다니는 팩을 카트로 모아 파렛트에 다시 쌓는다.","goal":"120초 안에 보들범 12팩을 파렛트 구역에 반납","success":"12팩 반납, 다른 손님과 충돌 0회","partial":"8~11팩","fail":"7팩 이하","physics":["가볍고 큰 팩(약 4.5kg)이 카트 위로 넘침","적재 부피 한계","통로 밖으로 굴러간 팩"],"tuning":{"timeLimitSec":120,"packs":12,"packKg":4.5},"reward":{"vitality":10,"affinity":{"beomi":1,"beomsuk":1},"stamp":1},"storeChange":"생활용품 코너 확장(피라미드 2배), 재고 담당 직원 1명 추가","audio":{"bgm":["bgm.tension"],"sfx":["item-wobble","item-fall {kg}","tissue-tumble","mop-squeak","pa-chime"]},"ifIgnored":"exit-rules.json ignoreEvent (미션 칩 → 범이 1번 부름 → 계산하면 놓침)","target":"tissue-pyramid","waypoints":[{"target":"aisle-02-household","item":"tissue","n":12,"loose":true}],"judge":{"returned":"파렛트 2.5 m 안에 내려놓은(또는 카트째 세운) 보들범 팩 수(무너진 팩만 셈, 매대 새 상품은 안 셈)","bumps":"다른 손님(NPC)·직원과 cart-bump 수(bumpTarget 필요, 랙은 안 셈)","success":"returned 12 && bumps 0","partial":"returned 8–11, 또는 12 && bumps ≥1","fail":"returned ≤7"},"missedRule":"120초 동안 무너진 팩을 하나도 안 건드림 → 놓침(범이가 주움, d4_036). E04 진행 중 계산 → E04·E12 놓침(d4_088)","recallLine":"생활용품 코너에서 휴지가… 아니에요, 그냥 와 보세요!","script":"day4-script.jsonl d4_025","spyCameo":"t45 수상한 손님이 팩 1개를 파렛트에 슬쩍 올려 둠(반납 수에는 안 셈)"},{"id":"E05","name":"수상한 손님 미행","day":5,"type":"main","cast":["spy","beomsuk"],"trigger":"5일차, 한범숙 주임이 '저 손님 매일 특가만 쓸어 가요' 하고 부탁","setup":"보라 장바구니 손님을 들키지 않게 따라가 증거를 잡는다.","goal":"90초 동안 4~12m 거리를 유지하다가, 상대가 할인 스티커 상품을 10개째 담는 순간 촬영(F키/화면 버튼)","success":"들키지 않고 촬영","partial":"들켰지만 촬영 성공","fail":"놓침(12m 초과 10초) 또는 촬영 전 2번 들킴","physics":["카트 소음 = 속도 × (1 + 짐 무게/100kg). 6m 안에서 1.5m/s를 넘으면 의심 게이지 상승","랙 끝에 숨으면 의심 게이지 감소","cart-bump 소리는 즉시 의심"],"tuning":{"durationSec":90,"minDistM":4,"maxDistM":12,"noiseSpeedLimit":1.5},"reward":{"vitality":12,"affinity":{"beomsuk":1},"stamp":1,"unlock":"정체 공개: 경쟁 마트 요원 반기철(별명 '반값') — 가게 이름은 미정이라 대사에 안 씀"},"storeChange":"통로 끝에 볼록거울 설치, 커플·휴대폰 손님 NPC 등장, 방송실 창문 블라인드가 반쯤 열림(실루엣만)","audio":{"bgm":["bgm.tailing"],"sfx":["cart-joint(작게)","suspicion-rise","camera-shutter","grab-bump","stinger.spotted","stinger.reveal","motif.spy"]},"ifIgnored":"exit-rules.json ignoreEvent (미션 칩 → 범이 1번 부름 → 계산하면 놓침)","target":"timesale-endcap","follow":{"who":"spy","startAt":"aisle-01-water","route":["aisle-01-water","aisle-02-rice","aisle-02-household","massage-chair","timesale-endcap"],"grabs":10,"photoAtGrab":10,"photoWindowSec":2.0,"loseSec":10,"spottedMax":2},"judge":{"suspicion":"0–100. 6 m 안에서 소음(속도 × (1 + 짐 kg/100)) > 1.5 이면 초당 +25, 4 m 안이면 초당 +40, cart-bump 즉시 100. 랙 끝 1 m 안에 멈춰 있으면 초당 −30. 100 이 되면 '들킴' 1번(게이지 40 으로 내려감)","success":"10번째 담기 ±2초 안에 촬영 && 들킴 0","partial":"촬영 성공 && 들킴 1","fail":"12 m 넘게 10초 또는 촬영 전 들킴 2번 또는 촬영 실패(창 놓침)","missed":"시작 뒤 60초 동안 12 m 안으로 한 번도 안 옴"},"missedRule":"60초 동안 12 m 안에 안 옴 → 놓침(d5_026, 정체 공개는 그대로). 진행 중 계산 → E05·E06 놓침, 계산대에서 정체 공개(d5_088)","recallLine":"손님, 그 선글라스 손님 또 왔어요. 주임님이 부탁하신대요!","script":"day5-script.jsonl d5_018","reveal":{"node":"d5_032","flag":"flag.spyRevealed","nameTag":"반기철(반값)","note":"결과와 상관없이 5일차에 공개(d5_036 선택지에서 flag 설정). 성공·부분은 증거 사진이 있고, 실패·놓침은 반값이 허세로 스스로 밝힘. 7일차 최종 방해와 이어짐"},"unlock":"인물 카드 '반기철(반값)' (성공·부분이면 '열 번째' 증거 사진 포함)"},{"id":"E06","name":"바닥은 용암입니다","day":5,"type":"side","cast":["pa"],"trigger":"5일차 E05 결과·정체 공개 뒤(결과와 상관없이) 방송실 점장의 막장 방송(d5_045~046)","setup":"'지금부터 노란 선 바깥 바닥은 용암입니다. 농담 아닙니다. 아마도.' 바닥 노란 선 안에서만 움직인다.","goal":"60초 안에 범샘물 2L×6 3팩을 계산대 앞 노란 선 구역까지","success":"선 밖으로 나간 시간 0초","partial":"선 밖 3초 이하","fail":"선 밖 3초 초과","physics":["카트 바퀴 4개 중 하나라도 선 밖이면 '앗 뜨거' 카메라 흔들림","무거울수록 회전 반경 커짐"],"tuning":{"timeLimitSec":60,"waterPacks":3},"reward":{"vitality":6,"stamp":0,"achievement":"용암 위의 장보기"},"storeChange":"없음(점장 방송 강도 1단계 상승)","audio":{"bgm":["bgm.lava"],"sfx":["pa-chime","lava-hiss","item-place","cart-joint","achievement"]},"ifIgnored":"exit-rules.json ignoreEvent (미션 칩 → 범이 1번 부름 → 계산하면 놓침)","target":"lava-goal","waypoints":[{"target":"aisle-01-water","item":"water","n":3}],"lava":{"safeZones":["lava-lane-01","lava-link-01","lava-front-band","lava-goal"],"startOn":"카트가 처음 안전 구역에 들어간 때부터 60초와 선 밖 시간을 셈","wheelRule":"바퀴 4개 중 하나라도 선 밖이면 선 밖(카메라 '앗 뜨거' 흔들림 + lava-hiss)"},"judge":{"success":"60초 안에 lava-goal 도착(카트 안 범샘물 3팩 이상, 전부터 담겨 있던 것도 인정) && 선 밖 0초","partial":"도착 && 선 밖 ≤3초","fail":"선 밖 >3초 또는 60초 초과"},"missedRule":"방송 뒤 60초 동안 안전 구역에 한 번도 안 들어감 → 놓침(d5_066). 진행 중 계산 → 놓침(d5_088)","recallLine":"점장님 방송 또 시작했어요… 바닥 조심하세요!","script":"day5-script.jsonl d5_052"},{"id":"E07","name":"폐점 후 카트 경주","day":6,"type":"main","cast":["beomi","beomsuk"],"trigger":"6일차 계산(d6_023) 뒤 마감 방송(d6_026) → 범이의 도전(d6_028)","setup":"불 반쯤 꺼진 매장. 통로 02 범쌀 3포대(재고, 계산 안 함)를 실은 카트로 메인 통로 한 바퀴 코스를 범이와 세 바퀴.","goal":"50kg 이상 실은 카트로 3바퀴, 75초 안","success":"범이보다 먼저 도착, 떨어뜨린 상품 0","partial":"이겼지만 상품 1~2개 떨어뜨림, 또는 75초 안이지만 패배","fail":"75초 초과","physics":["무거울수록 관성 커져 코너에서 밀림","급회전 시 짐 쏠림·낙하","범이 카트는 가볍지만 실수로 2번 멈춤"],"tuning":{"laps":3,"minLoadKg":50,"timeLimitSec":75,"rivalStumbles":2},"reward":{"vitality":10,"affinity":{"beomi":2},"stamp":1,"unlock":"새벽 3시 방송 예고"},"storeChange":"계산대 4레인 상시 운영(지금은 2레인만 켜 둠), 냉동 코너 확장, 야간 조명 모드 해금","audio":{"bgm":["bgm.cartrace"],"sfx":["race-countdown","lap-bell","cart-grab","cart-bump","cart-joint","item-fall {kg}","applause"]},"ifIgnored":"exit-rules.json ignoreEvent (미션 칩 → 범이 1번 부름 → 계산하면 놓침)","target":"race-start","waypoints":[{"target":"aisle-02-rice","item":"rice","n":3,"stock":true}],"race":{"start":"race-start","finish":"race-start","checkpoints":["timesale-endcap","aisle-01-eggs"],"laps":3,"lapLengthM":76,"minLoadKg":50,"rival":{"who":"beomi","cartKg":35,"stumbles":2,"stumbleAtLap":[1,3],"paceMps":3.1},"countdown":3},"judge":{"lap":"출발선 → timesale-endcap 3 m 안 → aisle-01-eggs 2.6 m 안 → 출발선, 순서대로 지나야 1바퀴","drops":"경주 중 floorDrops 증가분(범쌀 포대 포함)","success":"3바퀴 <= 75초 && 범이보다 먼저 && drops 0","partial":"(이김 && drops 1–2) 또는 (<= 75초 && 범이에게 짐)","fail":"75초 초과 또는 drops >= 3","lowLoad":"출발선에서 카트 짐 < 50kg 이면 출발 막음(d6_035), 타이머 안 감","missed":"d6_032 '퇴근' 선택 또는 90초 동안 출발선에 안 감"},"missedRule":"계산 뒤 사건이라 '계산하면 놓침' 없음. 거절 선택지 또는 90초 동안 출발선 안 옴 → 놓침(d6_048, markMissed). 새벽 사건 E08 은 그대로 이어짐","recallLine":"손님! 마감했는데 한 판만요! 카트 경주요!","script":"day6-script.jsonl d6_034","stockReturn":"경주 뒤 범쌀 3포대는 자동으로 매대에 돌아감(계산·영수증에 안 들어감)"},{"id":"E08","name":"새벽 3시 비밀 창고 칸","day":6,"type":"main","cast":["pa","halmeoni"],"trigger":"6일차 E07 뒤 시계 03:00(d6_051 timeskip). 점장의 속삭이는 방송 d6_052~053","setup":"평소엔 없는 랙 끝 칸이 열린다. 불 꺼진 매장을 손전등 빛만으로 지나, 순찰하는 지게차 불빛을 피해 칸 안의 금빛 박스를 꺼낸다.","goal":"금빛 박스 1개를 들고 입구까지","success":"지게차 불빛에 걸리지 않음","partial":"1번 걸림(박스는 지킴)","fail":"2번 걸림, 박스는 제자리로","physics":["금빛 박스는 무거움(30kg)이라 카트 반응이 둔해짐","어둠 속 바닥 물건과 충돌 시 소리로 들킴"],"tuning":{"forkliftPatrols":2,"goldBoxKg":30,"flashlightConeDeg":40},"reward":{"vitality":8,"item":"금빛 박스(할머니 계란말이 레시피 쪽지 반쪽 + 뒷면 '냉동 코너 맨 아래 칸, 전설')","stamp":0,"flag":"flag.recipeHalf = 1 (성공·부분)"},"storeChange":"뒤쪽 벽 '비밀 창고' 표식(성공·부분 금빛, 실패·놓침 희미하게). 이후 매일 03:00 에 열림","audio":{"bgm":["bgm.dawn"],"sfx":["flashlight-click","forklift-beep","forklift-spot","freezer-hum","gold-box-open","door-chime(느리게)","rain-roof(아주 낮게, 바람 느낌)"]},"ifIgnored":"exit-rules.json ignoreEvent (미션 칩 → 범이 1번 부름 → 계산하면 놓침)","target":"entrance-mat","waypoints":[{"target":"secret-shelf","item":"goldbox","n":1,"kg":30}],"stealth":{"forklifts":[{"id":"fl-1","route":["forklift-lane-back"],"speedMps":1.4,"coneDeg":40,"rangeM":9},{"id":"fl-2","route":["forklift-lane-cross"],"speedMps":1.2,"coneDeg":40,"rangeM":9}],"flashlight":{"coneDeg":40,"toggle":{"pc":"L","mobile":"손전등 버튼"},"offSpeedMul":0.6},"caughtMax":2,"checkpoints":["secret-shelf","timesale-endcap"],"noise":"어두운 바닥 물건 cart-bump → 가까운 지게차가 소리 쪽으로 6초 돌아봄"},"judge":{"caught":"지게차 불빛 원뿔(40°, 9 m) 안에 카트가 0.5초 넘게 있으면 1번. 걸리면 마지막 체크포인트로(박스는 그대로)","success":"입구 도착 && caught 0","partial":"입구 도착 && caught 1","fail":"caught 2(박스가 칸으로 돌아감) 또는 240초 초과","missed":"d6_059 '집에 간다' 또는 90초 동안 비밀 칸에 안 감"},"missedRule":"거절 선택지 또는 90초 동안 secret-shelf 안 옴 → 놓침(d6_075). 실패·놓침이어도 할머니가 E09 단서(맨 아래 칸)를 말해 줌","recallLine":"손님 이 시간에… 뒤쪽 벽에서 소리 나요. 같이 가 봐요!","script":"day6-script.jsonl d6_061"},{"id":"E09","name":"전설의 아이스크림","day":7,"type":"side","cast":["halmeoni"],"trigger":"7일차 감사(E11) 중 freezer-legend 에서 '범설빙 왕통'을 꺼낸 순간(sideMissions pickup). 단서는 6일차 E08(실패·놓침이면 할머니 기억, d7_027)","setup":"할머니가 젊을 때 먹었다는 '범설빙 왕통'이 딱 1개 있다. 녹기 전에 계산해야 한다.","goal":"꺼낸 순간부터 150초 안에 계산 완료","success":"녹음 게이지 50% 미만","partial":"50~99%","fail":"100%(녹아 버림, 할머니 웃음 컷으로 위로)","physics":["녹음 속도 = 기본 + 카트 흔들림(cart-bump 1회당 +5%)","무거운 상품 아래 깔리면 찌그러짐(계란과 같은 압력 판정)"],"tuning":{"timeLimitSec":150,"bumpMeltPct":5},"reward":{"vitality":6,"affinity":{"halmeoni":2},"achievement":"전설을 맛본 손님"},"storeChange":"냉동 코너에 '오늘의 전설' 칸 생김","audio":{"bgm":["bgm.legend","bgm.emotional"],"sfx":["freezer-door","melt-drip","freezer-alarm","stinger.success","achievement"]},"ifIgnored":"exit-rules.json ignoreEvent (미션 칩 → 범이 1번 부름 → 계산하면 놓침)","target":"freezer-legend","concurrentWith":"E11","melt":{"basePctPerSec":0.3,"bumpPct":5,"crushPct":20,"over150s":"150초가 지나면 100%"},"judge":{"melt":"꺼낸 때부터 0.3%/초 + cart-bump 1번 +5% + 무거운 상품에 눌리면 +20%(계란 압력 판정 재사용)","success":"checkout.done 때 melt < 50","partial":"50 <= melt < 100","fail":"melt 100(녹아 버림, 할머니 웃음 컷 d7_054)","missed":"계산 때까지 안 꺼냄(d7_056)"},"missedRule":"꺼내지 않고 계산 → 놓침. 감사(E11)와 같이 끝남","recallLine":"할머니가 냉동 코너에서 손님 기다리세요. 급하대요!","script":"day7-script.jsonl d7_031 sideMissions"},{"id":"E10","name":"200kg 기립박수","day":7,"type":"main","cast":["beomsuk","beomi","halmeoni"],"trigger":"7일차 감사(E11) 계산 때 총무게 판정(체크 c3 과 같은 값). 따로 시작하지 않음","setup":"총무게 200kg(카트 포함)을 넘긴 카트가 계산대에 들어오면 직원 전원이 나와 박수를 친다.","goal":"카트 포함 200kg 이상으로 계산대 통과","success":"200kg 이상, 깨진 알 0개","partial":"200kg 이상, 깨진 알 있음","fail":"200kg 미만","physics":["200kg 근처에서 제동 거리 2배","카트 처짐 연출(depot-design storyboard-01)","적재율 링"],"tuning":{"targetKg":200},"reward":{"vitality":10,"achievement":"기립박수","affinity":{"beomsuk":1}},"storeChange":"계산대 위 '오늘의 최고 카트' 사진 액자(성공·부분)","audio":{"bgm":["bgm.emotional"],"sfx":["item-place {kg}","applause","achievement"]},"ifIgnored":"exit-rules.json ignoreEvent (미션 칩 → 범이 1번 부름 → 계산하면 놓침)","concurrentWith":"E11","judge":{"kg":"계산대 진입 때 카트 안 상품 kg + 카트 27kg","success":"kg >= 200 && eggsToday(감사 시작 뒤) 0","partial":"kg >= 200 && 깨진 알 >= 1","fail":"kg < 200"},"missedRule":"놓침 없음(계산하면 항상 판정)","script":"day7-script.jsonl d7_040"},{"id":"E11","name":"본사 감사의 날","day":7,"type":"finale","cast":["beomsuk","beomi","halmeoni","spy","pa","auditor"],"trigger":"7일차 입장. 본사 감사관(남색 정장, 태블릿)이 매장 입구에 서 있다","setup":"감사관이 손님 한 명의 장보기를 처음부터 끝까지 지켜본다. 싹쓸마트 요원 반값이 마지막 방해에 나선다.","goal":"감사 체크리스트 5개 중 많이 달성","checklist":["깨진 알 0개","적재율 85% 이상","카트 포함 200kg 이상(E10)","반값의 통로 막기 3번 피하기","10분 안에 계산 완료"],"success":"체크 4개 이상","partial":"체크 2~3개","fail":"체크 0~1개","physics":["반값이 카트로 통로를 막음(밀면 rams로 집계, 감점)","모든 기존 판정"],"tuning":{"timeLimitSec":600},"endings":[{"id":"END_A","if":"매장 활기 >= 70","name":"정자점 존속 확정","scene":"감사관 '존속 확정입니다.' 점장 방송이 처음으로 울음, 직원 넷이 단골 도장 카드 7칸째에 금도장","script":"d7_100","next":"2주차 w2_000"},{"id":"END_B","if":"45 <= 매장 활기 < 70","name":"조건부 존속","scene":"감사관 '한 주 더 지켜보죠.' 2주차 해금","script":"d7_120","next":"2주차 w2_000"},{"id":"END_C","if":"매장 활기 < 45","name":"폐점 유예","scene":"범숙 '…내일도 와요. 딱히 손님 때문은 아니고요.' 진행도 유지한 채 1주차 재도전","script":"d7_140","next":"d1_000 (flag.week1Retry)"}],"reward":{"stamp":1,"unlock":"2주차 '경쟁 마트의 반격'(가게 이름 미정 — 대사에서는 '경쟁 마트'). 엔딩 C 는 1주차 재도전"},"storeChange":"엔딩별 간판: '오픈 기념 세일 연장'(A) / '리뉴얼 준비 중'(B, C)","audio":{"bgm":["bgm.audit","bgm.emotional","bgm.closing"],"sfx":["motif.auditor","tablet-tap","check-stamp","motif.spy","checkout-scan","checkout-printer","checkout-done","pa-sniff","gold-stamp","phone-buzz","stinger.finale"]},"ifIgnored":"놓침 없음: 계산 때 체크리스트 채점","target":"checkout","script":"day7-script.jsonl d7_031","audit":{"checklist":["c1 깨진 알 0개 (eggsToday)","c2 적재율 85% 이상 (loadRatio, 계산대 도착 때)","c3 카트 포함 200kg (= E10)","c4 반값 방해 3번 피하기 (spyBlocks)","c5 10분 안 계산 (감사 시작 → checkout.done ≤ 600초)"],"spyBlocks":[{"id":"b1","target":"spy-block-1","after":45},{"id":"b2","target":"spy-block-2","after":180},{"id":"b3","target":"spy-block-3","after":330}],"dodgeRule":"플레이어가 15 m 안에 오면 반기철 카트가 막음. 20초 안에 안 밀고(rams·bumpTarget spy 0) 막힌 곳 너머 4 m 로 빠져나가면 피함","auditorFollow":"auditor-post 에서 시작, 플레이어 6 m 뒤"},"judge":{"success":"체크 >= 4","partial":"체크 2–3","fail":"체크 0–1","missed":"없음"},"endingRule":"엔딩은 체크리스트가 아니라 매장 활기(endingVitality)로 정함. 체크리스트 결과는 감사관 대사(d7_059/062/065)만 바꿈"},{"id":"E12","name":"꼬마 손님 길 찾기","day":4,"type":"side","cast":["beomi"],"trigger":"4일차 E04 결과 컷 바로 뒤(d4_040). 무너진 휴지 더미 너머로 엄마를 놓친 꼬마(3일차 d3_060 의 그 꼬마)","setup":"꼬마를 카트 아기 의자에 태워 고객센터(입구 옆)까지 데려다준다.","goal":"아기 의자에 태운 채 고객센터 도착","success":"속도 1.0m/s 이하 유지, 충돌 0회","partial":"충돌 1회 또는 과속 5초 이하","fail":"충돌 2회 이상(아이가 울어 범이가 대신 데려감)","physics":["아기 의자 탑승 중 속도 상한 경고","cart-bump 시 아이 울음"],"tuning":{"speedLimit":1.0,"overSpeedGraceSec":5,"timeoutSec":180},"reward":{"vitality":5,"affinity":{"beomi":1}},"storeChange":"입구 옆 고객센터 창구가 열림","audio":{"bgm":["bgm.shop","bgm.tension","bgm.emotional"],"sfx":["kid-giggle","kid-cry","speed-warn","cart-joint(느리게)","door-chime"]},"ifIgnored":"exit-rules.json ignoreEvent (미션 칩 → 범이 1번 부름 → 계산하면 놓침)","target":"customer-desk","waypoints":[{"target":"kid-spot","item":"kid","n":1,"rider":true}],"judge":{"success":"탑승부터 도착까지 bumps 0 && 과속(>1.0 m/s) 0초","partial":"bumps 1 또는 과속 누적 ≤5초","fail":"bumps ≥2(아이가 울어 범이가 대신 데려감, d4_054) 또는 과속 누적 >5초"},"missedRule":"180초 동안 꼬마를 안 태움 → 놓침(범이가 데려감, d4_056). 진행 중 계산 → 놓침(d4_087)","recallLine":"손님! 꼬마가 혼자 있어요. 같이 고객센터 가 줘요!","script":"day4-script.jsonl d4_048"},{"id":"E13","name":"할머니 주먹밥 배달","day":2,"type":"side","cast":["halmeoni","cashier"],"trigger":"2일차 E02 결과 컷 직후(결과와 상관없이), 말순 할머니의 부탁","setup":"점심을 거른 계산원 김미소에게 할머니가 주먹밥 쟁반을 보낸다. 쟁반은 카트 위에서 쉽게 미끄러진다.","goal":"주먹밥 쟁반(새 소품)을 카트에 싣고 계산대 07까지","success":"들이받기 0회, 쟁반 안 떨어짐","partial":"들이받기 1~2회 또는 급정거 경고 3회 이상(쟁반은 지킴)","fail":"쟁반이 바닥에 떨어짐(floorDrops 에 riceball-tray)","physics":["쟁반은 가볍고(1.2kg) 마찰이 작아 급정거·급회전에 미끄러짐","rams","floorDrops","카트 급정거 감속도(E01 과 같은 값)"],"tuning":{"trayKg":1.2,"timeLimitSec":null,"hardBrakeWarn":3},"reward":{"vitality":3,"stamp":0,"unlock":"계산원 김미소가 손님을 알아봄(계산대 반응 R03·R04·R43 에 '주먹밥 손님' 변형 대사)"},"storeChange":"계산대 07 모니터 옆에 '할머니 주먹밥 고마워요' 메모","target":"lane-07","waypoints":[],"audio":{"bgm":["bgm.errand"],"sfx":["sample-tray","item-wobble","checkout-scan","stinger.success|partial|comicfail"]},"ifIgnored":"exit-rules.json ignoreEvent (미션 칩 → 범이 1번 부름 → 다른 계산대에서 계산하면 놓침, d2_130). 계산대 07에서 계산하면 도착으로 침","recallLine":"손님! 주먹밥 쟁반이요! 07번 계산대 김미소 씨 배고프대요!","missedLines":{"cashier":"어제 주먹밥은 할머니가 직접 갖다주셨어요. 맛있었어요~"},"script":"day2-script.jsonl d2_106","newProp":{"id":"riceball-tray","name":"할머니 주먹밥 쟁반","kg":1.2,"size":[0.42,0.06,0.3],"material":"tray","note":"상품이 아니라 소품. 계산대에서 스캔하지 않고 김미소에게 건넴"}},{"id":"E14","name":"엉뚱한 반값 스티커","day":3,"type":"side","cast":["beomsuk","beomi","spy"],"trigger":"3일차 입장 컷신. 누군가 상품 여기저기에 매장 것이 아닌 노란 '반값' 스티커를 붙여 놓음(구석에 작은 빗자루 그림)","setup":"스티커가 붙은 상품 3개를 찾아 카트에 담고, 특가 매대에서 기다리는 한범숙 주임에게 가져간다. 도중에 수상한 손님이 근처를 서성인다.","goal":"스티커 붙은 범샘물·범쌀·보들범 각 1개를 카트에 담아 특가 매대까지","success":"3개 모두, 150초 안, 들이받기 0회","partial":"3개 모두지만 150초 넘김 또는 들이받기 1회 이상","fail":"2개 이하로 도착, 또는 240초가 지남(1개 이상 담았을 때)","missedRule":"240초 동안 스티커 상품을 하나도 안 담음 → 놓침(범이가 대신 뗌, d3_024). 사건을 막지 않음","physics":["범쌀 20kg + 범샘물 13kg + 보들범 4.5kg 약 37.5kg 로 카트가 무거워짐","rams","스티커 상품을 진열대에 도로 놓으면 R54"],"tuning":{"stickerItems":3,"goodTimeSec":150,"timeoutSec":240,"spyHoverSec":40},"reward":{"vitality":3,"stamp":0,"affinity":{"beomsuk":1},"unlock":"'빗자루 스티커' 단서 카드(E05 복선)"},"storeChange":"직원 게시판에 빗자루 스티커 3장이 증거로 붙음(4일차부터 보임)","target":"timesale-endcap","waypoints":[{"target":"aisle-01-water","item":"water","n":1,"sticker":true},{"target":"aisle-02-rice","item":"rice","n":1,"sticker":true},{"target":"aisle-02-household","item":"tissue","n":1,"sticker":true}],"audio":{"bgm":["bgm.tailing (sneak 스템만, 작게)"],"sfx":["sticker-peel","item-pick","motif.spy","stinger.success|partial"]},"ifIgnored":"놓침이 계산으로 정해지지 않음: 240초 타임아웃 → 결과를 정하고 대본 d3_020 으로. 그 전에 계산하면 놓침 + E03 도 놓침(d3_088)","recallLine":"손님! 스티커 붙은 상품 세 개요! 주임님이 특가 매대에서 기다리세요!","missedLines":{"beomi":"어제 스티커는 제가 다 뗐어요! 손톱이 다 닳았어요."},"script":"day3-script.jsonl d3_018"},{"id":"E15","name":"보라 카트 행렬","day":8,"type":"main","cast":["halmeoni","spy","rivalboss"],"trigger":"8일차 팀장의 '보라 카트 부대, 출발'(d8_041) 뒤 할머니 잔치국수 재료 부탁(d8_047)","setup":"보라 조끼 직원이 미는 카트 3대가 한 줄로 앞 랙 둘레를 돈다. 시식 코너는 행렬 고리 서쪽이라 재료를 싣고 꼭 행렬을 가로질러야 한다.","goal":"범샘물 2팩 + 범란 2판을 시식 코너까지(240초)","success":"행렬과 충돌 0 && 깨진 알 0","partial":"충돌 1회 또는 깨진 알 1~6","fail":"충돌 2회 이상 또는 깨진 알 7 이상 또는 240초 초과","physics":["행렬 카트 3대(각 60kg)는 멈추지 않고 밀고 감 — 부딪히면 내 카트가 밀림","특가 매대 앞 4초 멈춤 = 건널 틈","계란 2판 + 물 26kg 로 무게중심이 낮아 급회전은 괜찮지만 제동 거리가 김"],"tuning":{"timeLimitSec":240,"convoySpeedMps":1.3,"gapM":2.4,"pauseSec":4,"convoyKg":60},"reward":{"vitality":10,"affinity":{"halmeoni":1}},"storeChange":"시식 코너 국수 냄비. 성공이면 9일차 아침 '행렬 뚫은 손님' 대사(d9_003)","audio":{"bgm":["bgm.tension","bgm.shop"],"sfx":["convoy-horn","cart-bump","egg-crack","item-place {kg}","stopwatch-click","timer-tick"]},"ifIgnored":"exit-rules.json ignoreEvent (미션 칩 → 범이 1번 부름 → 계산하면 놓침)","target":"sample-corner","waypoints":[{"target":"aisle-01-water","item":"water","n":2},{"target":"aisle-01-eggs","item":"egg","n":2}],"convoy":{"route":["convoy-loop"],"carts":3,"speedMps":1.3,"gapM":2.4,"pauseAt":"timesale-endcap","pauseSec":4,"driverOfLast":"spy"},"judge":{"hits":"행렬 카트(bumpTarget convoy)와 cart-bump 횟수. 같은 카트 1초 안 연속은 1번","eggs":"미션 시작 뒤 eggsToday 증가분","success":"도착 && hits 0 && eggs 0","partial":"도착 && (hits 1 || 1<=eggs<=6)","fail":"hits >= 2 || eggs >= 7 || 240초 초과","missed":"240초 동안 재료를 하나도 안 담음, 또는 도중 계산"},"missedRule":"재료를 안 담고 240초 → 놓침(d8_068). 진행 중 계산 → 놓침","recallLine":"할머니 국수 물 끓어요! 행렬 사이로 와 주세요!","script":"day8-script.jsonl d8_052"},{"id":"E16","name":"보라 전단지 바람","day":8,"type":"side","cast":["beomi","spy"],"trigger":"8일차 합류 직후 반기철이 든 전단지가 자동문 바람에 흩어짐(d8_027)","setup":"입구 안쪽 바닥에 보라 전단지 16장. 카트로 밟고 지나가면 바퀴·바닥판에 붙는다.","goal":"60초 안에 12장 이상 카트로 쓸어 담기","success":"12장 이상","partial":"8~11장","fail":"7장 이하","physics":["전단지는 납작한 loose prop. 카트가 0.5 m 안을 1.0 m/s 이하로 지나가면 붙음","빠르게 지나가면 바람에 다시 날림(1.8 m/s 넘으면 붙은 것도 1장 떨어짐)"],"tuning":{"timeLimitSec":60,"flyers":16,"need":12,"pickRadiusM":0.5,"pickMaxSpeed":1.0,"blowOffSpeed":1.8},"reward":{"vitality":3,"affinity":{"beomi":1}},"storeChange":"입구 '보라 전단지 재활용함'(성공·부분)","audio":{"bgm":["bgm.tension"],"sfx":["flyer-flutter","flyer-scoop","door-chime"]},"ifIgnored":"놓침(범이가 빗자루로 쓸음, d8_036)","target":"flyer-zone","waypoints":[{"target":"flyer-zone","item":"flyer","n":12,"loose":true}],"judge":{"scooped":"E04 slide.scooped 판정 재사용(줍는 물건만 flyer)","success":"scooped >= 12","partial":"8 <= scooped <= 11","fail":"scooped <= 7","missed":"거절 선택지 또는 60초 동안 flyer-zone 안 옴 또는 도중 계산"},"missedRule":"거절(d8_029 세 번째) 또는 60초 동안 안 옴 → 놓침(d8_036)","recallLine":"손님! 전단지가 계산대까지 와요! 카트로요!","script":"day8-script.jsonl d8_031"},{"id":"E17","name":"떡볶이 수레 2호점","day":9,"type":"main","cast":["halmeoni","beomsuk","rivalboss"],"trigger":"9일차 경쟁 마트 시식 천막(d9_008) → 범숙의 2호 시식대 결정(d9_016)","setup":"할머니 떡볶이 수레(솥 + 국물, 40kg)를 카트 앞 고리에 걸고 시식 코너에서 입구 2호 시식대까지.","goal":"수레를 2호 시식대까지(180초)","success":"출렁 0~1 && 과속(>1.2 m/s) 누적 4초 이하","partial":"출렁 2 또는 과속 누적 4~8초","fail":"출렁 3(국물 넘침) 또는 과속 누적 8초 초과","physics":["수레 40kg 가 카트 앞에서 끌림(관성 큼)","급제동·cart-bump 마다 국물 출렁 1(E13 쟁반 판정 재사용)","속도 상한 1.2 m/s(E12 탑승 속도 판정 재사용)"],"tuning":{"timeoutSec":180,"speedLimit":1.2,"overSpeedGraceSec":4,"spillAt":3,"wagonKg":40},"reward":{"vitality":10,"affinity":{"halmeoni":1}},"storeChange":"입구 '2호 시식대' 상시(성공·부분). 실패·놓침이면 10일차까지만","audio":{"bgm":["bgm.errand"],"sfx":["wagon-creak","soup-slosh","speed-warn","sample-tray","stinger.success|partial|comicfail"]},"ifIgnored":"exit-rules.json ignoreEvent","target":"sample-corner-2","waypoints":[{"target":"sample-corner","item":"sample-wagon","n":1,"rider":true,"kg":40}],"judge":{"slosh":"수레를 건 뒤 (급제동: 속도 감소 dv > 0.5 && 직전 속도 > 0.8) 또는 cart-bump 1번 = 출렁 1","speed":"카트 속도 > 1.2 m/s 누적 시간","success":"도착 && slosh <= 1 && over <= 4초","partial":"도착 && (slosh == 2 || 4 < over <= 8)","fail":"slosh >= 3(넘침, 수레는 그 자리에) || over > 8 || 180초 초과","missed":"180초 동안 수레를 안 걺 또는 도중 계산"},"missedRule":"거절(d9_021 세 번째) 또는 180초 동안 안 걺 → 놓침(d9_038)","recallLine":"손님! 할머니 수레요! 국물 식어요!","script":"day9-script.jsonl d9_023"},{"id":"E18","name":"반값 대신 장보기","day":9,"type":"side","cast":["spy"],"trigger":"9일차 팀장이 천막으로 돌아간 뒤(d9_043) 반기철의 부탁(d9_045)","setup":"손목을 삔 반기철 대신 팀장 장보기 목록(범샘물·보들범·범란 하나씩)을 담아 안마의자로 가져다준다.","goal":"세 상품을 담아 안마의자까지(150초)","success":"세 개 모두 && 깨진 알 0","partial":"세 개 모두 && 깨진 알 1 이상","fail":"150초 안에 못 옴(일부만 담음)","physics":["범샘물 13kg + 보들범 4.5kg + 범란 1.6kg. 계란이 맨 위에 오면 잘 깨짐"],"tuning":{"timeoutSec":150},"reward":{"vitality":3,"affinity":{"spy":1}},"storeChange":"반기철이 안마의자 단골이 됨(R69)","audio":{"bgm":["bgm.errand"],"sfx":["item-pick","massage-chair","snore","stinger.success|partial|comicfail"]},"ifIgnored":"놓침(반기철이 직접 삼, d9_058)","target":"massage-chair","waypoints":[{"target":"aisle-01-water","item":"water","n":1},{"target":"aisle-02-household","item":"tissue","n":1},{"target":"aisle-01-eggs","item":"egg","n":1}],"handOver":"안마의자 2.5 m 안에 들어오면 세 상품을 카트에서 빼서 넘김(영수증·계산에 안 들어감). NEW","judge":{"success":"세 개 && 미션 중 eggsToday 증가 0","partial":"세 개 && 깨진 알 >= 1","fail":"150초 초과(하나라도 빠짐)","missed":"거절 또는 하나도 안 담고 150초 또는 도중 계산"},"missedRule":"거절(d9_049 세 번째) 또는 150초 → 놓침(d9_058)","recallLine":"반값 아저씨가 안마의자에서 손님 부르세요!","script":"day9-script.jsonl d9_051"},{"id":"E19","name":"1원 전쟁 타임세일","day":10,"type":"main","status":"outline","cast":["beomsuk","pa","rivalboss"],"goal":"경쟁 마트 '1원 싸게'에 맞불 타임세일. 150초 안에 범라면 박스 3개를 특가 매대에서 계산대 앞 '맞불 매대'까지(보라 카트 3대가 같은 박스를 노림)","judge":{"success":"3박스 && 보라 카트 충돌 0","partial":"2박스 또는 충돌 1","fail":"0~1박스"},"reward":{"vitality":12},"note":"E03 타임세일 재사용(rival 3대, rivalGrabIntervalSec 10). 새 위치: counter-endcap(계산대 앞 맞불 매대)","script":"미작성(week2-outline.md)"},{"id":"E20","name":"카트 열차 정리","day":11,"type":"main","status":"outline","cast":["beomi","beomsuk"],"goal":"범이 수습 마지막 날 평가. 보라 카트 부대가 매장 곳곳에 두고 간 카트 5대를 한 줄로 끼워 120초 안에 카트 보관소까지","judge":{"success":"5대 && 열차 끊김 0 && 매대 충돌 0","partial":"5대 && 끊김 1 또는 4대","fail":"3대 이하"},"reward":{"vitality":10},"note":"NEW 미션 cartTrain(카트 끼우기 joint, 급회전 시 끊김). 성공·부분이면 flag.beomiHired = 1(범이 정직원 명찰)","script":"미작성(week2-outline.md)"},{"id":"E21","name":"새벽 3시, 둘이서","day":12,"type":"main","status":"outline","cast":["halmeoni","spy","pa"],"goal":"03:00 비밀 창고 칸이 다시 열림. 반기철이 뒤에서 따라옴(소리 냄). 지게차 불빛을 피해 '보라 주머니'를 입구까지","judge":{"success":"걸림 0","partial":"걸림 1","fail":"걸림 2"},"reward":{"vitality":8},"note":"E08 stealth 재사용 + follow(반기철이 3 m 뒤 따라옴, 그의 cart-bump 도 소음). 주머니 안: 할머니 메모 '반쪽은 국물 언니에게'. flag.recipeClue = 1","script":"미작성(week2-outline.md)"},{"id":"E22","name":"무대 설치","day":13,"type":"main","status":"outline","cast":["beomsuk","beomi","pa","rivalboss"],"goal":"내일 '동네 장보기 대결' 무대. 범콜라 12팩 4개를 입구 앞 바닥 표시 4칸에 정확히 세우기(칸 0.6 m, 방향 20° 안)","judge":{"success":"4칸 모두","partial":"2~3칸","fail":"0~1칸"},"reward":{"vitality":10},"note":"NEW 미션 parking(정밀 주차). 방송실 문이 처음으로 반쯤 열림(얼굴은 안 보임, 마이크 줄만)","script":"미작성(week2-outline.md)"},{"id":"E23","name":"동네 장보기 대결","day":14,"type":"main","status":"outline","cast":["rivalboss","spy","halmeoni","beomsuk","beomi"],"goal":"같은 장보기 목록(계란말이·잔치 재료 6가지)을 팀장 + 보라 카트 부대와 동시에 담아 계산(300초)","judge":{"success":"팀장보다 먼저 계산 && 깨진 알 0","partial":"먼저 계산 && 깨진 알 1+ 또는 늦지만 목록 완성","fail":"목록 미완성"},"reward":{"vitality":12},"note":"NEW 미션 versus(라이벌 쇼퍼 경로·담기 시뮬레이션). aff.spy >= 3 이면 반기철이 보라 카트 한 대를 막아 줌(7일차의 반대)","script":"미작성(week2-outline.md)"},{"id":"E24","name":"재감사","day":14,"type":"side","status":"outline","cast":["auditor"],"goal":"B 경로만(flag.w1Ending == 'B'). E23 안에서 감사 체크 5개를 같이 채점(E11 audit 재사용)","judge":{"success":"체크 4 이상","partial":"체크 2~3","fail":"체크 0~1"},"reward":{"vitality":0},"note":"E11 과 같이 활기 없음. 대사·간판만 바꿈. 체크(안): c1 깨진 알 0, c2 보라 카트 충돌 0, c3 2호 시식대 줄(E17), c4 300초 안 계산, c5 반기철에게 봉투 권하기(선택지)","script":"미작성(week2-outline.md)"}],"targetsFile":"story/targets.json","endingVitality":{"start":12,"max":100,"perEvent":"성공 = 표의 값, 부분 = 절반(내림), 실패·놓침 = 0. E11 은 활기 없음","main":{"E01":10,"E02":10,"E03":12,"E04":10,"E05":12,"E07":10,"E08":8,"E10":10},"mainMax":94,"side":{"E06":6,"E09":6,"E12":5,"E13":3,"E14":3},"when":"7일차 d7_080(branch on meter.vitality, commit today)에서 오늘 E10·E09 결과까지 먼저 더한 뒤 판정. day.end(vitality committed)는 다시 더하지 않음","ranges":{"A":">= 70","B":"45–69","C":"< 45"},"examples":["메인 8개 모두 성공 = 94 → A","메인 절반(약 40) 성공 + 부분 몇 개 = 52~60 → B","1·2일차만 성공 = 32 → C"],"note":"지금 코드 endDay 는 DAY_MAIN 결과만 더함(v0.6 README 5번). 사이드까지 더할지 정하면 A 문턱(70)이 쉬워짐 — 둘 다 이 범위로 플레이 가능 v0.8: 2주차는 week2Vitality(따로 계산, 같은 규칙)"},"week2Vitality":{"start":"floor(1주차 최종 활기 / 2), 최대 40. A(70~100) → 35~40, B(45~69) → 22~34. 1주차 값은 flag.w1Vitality 에 보관","max":100,"perEvent":"성공 = 표의 값, 부분 = 절반(내림), 실패·놓침 = 0 (endingVitality 와 같은 규칙). E24 는 활기 없음","main":{"E15":10,"E17":10,"E19":12,"E20":10,"E21":8,"E22":10,"E23":12},"mainMax":72,"side":{"E16":3,"E18":3},"ranges":{"W2A":">= 75","W2B":"50–74","W2C":"< 50"},"when":"14일차 엔딩 분기(branch on meter.vitality, commit today, flagKey w2Ending — NEW)에서 오늘 E23 까지 더한 뒤","examples":["A 경로 시작 38 + 메인 5개 성공(52) = 90 → W2A","B 경로 시작 26 + 메인 4개 성공(42) + 부분 2개(10) = 78 → W2A","B 경로 시작 24 + 성공 2개(20) = 44 → W2C(2주차 재도전)"],"note":"지금 러너 endDay 는 부분 = 6, 실패 = 2 고정(endingVitality 의 '절반, 0'과 다름). 2주차도 같은 식을 쓸지 정해 주세요(README 질문 3)","dayMain":{"8":"E15","9":"E17","10":"E19","11":"E20","12":"E21","13":"E22","14":"E23"},"daySide":{"8":"E16","9":"E18","14":"E24"}}}
+{
+ "_about": "범창고 스토리 모드 사건 목록 (가안). 모든 사건과 수치는 게임용 창작이고 실제 매장 정보가 아닙니다. 무게는 depot-design 패키지 기준(범쌀 20kg, 범샘물 2L×6 약 12kg, 범란 30구 약 1.9kg, 카트 27kg)입니다. v0.4: 각 사건에 audio(BGM 큐·효과음, story/audio-cues.json) 연결, 무시했을 때 규칙은 story/exit-rules.json, 소소한 반응은 story/reactions.json. v0.5: 2·3일차 대본(day2-script.jsonl, day3-script.jsonl) 추가. 사건마다 target(길 안내 마커 최종 목표)·waypoints(들를 곳) 추가 — 위치 id 는 story/targets.json. 작은 사건 E13(2일차)·E14(3일차) 추가. E02 배경음악을 심부름 큐(bgm.errand)로 바꾸고 성공 컷에 bgm.emotional. v0.6: 4·5일차 대본(day4-script, day5-script) 추가. E04·E05·E06·E12 에 target·waypoints·script·missedRule·판정 필드 추가. E05 는 결과와 상관없이 5일차에 정체 공개(성공 = 증거 사진). v0.7: 6·7일차 대본(day6-script, day7-script) 추가. E07·E08·E09·E10·E11 에 target·waypoints·script·judge·missedRule 등 추가. 엔딩 활기 계산은 맨 위 endingVitality. v0.8: 2주차. E15~E18(8·9일차) 상세 판정, E19~E24(10~14일차) 개요(status outline). 2주차 활기 계산은 맨 위 week2Vitality. v0.9: E19~E24(10~14일차) 상세 판정(outline 해제). 2주차 엔딩 W2A/W2B/W2C 는 week2Vitality.",
+ "version": "0.9",
+ "meters": {
+  "vitality": {
+   "name": "매장 활기",
+   "start": 12,
+   "max": 100,
+   "note": "하루 결과로 오름. 7일차 엔딩 분기에 사용 v0.8: 2주차 시작 때 floor(1주차 최종 ÷ 2), 최대 40 으로 다시 시작(week2Vitality)"
+  },
+  "affinity": {
+   "name": "단골도",
+   "per": [
+    "beomsuk",
+    "halmeoni",
+    "beomi",
+    "spy"
+   ],
+   "min": 0,
+   "max": 5,
+   "note": "하트 5칸. 범숙은 3부터 츤데레 대사"
+  },
+  "stamps": {
+   "name": "단골 도장",
+   "slots": 7,
+   "note": "하루를 마칠 때 1개. 골드범 회원카드와 연결할지는 미정 v0.8: 2주차는 새 도장 카드(7칸, 8~14일차). 1주차 카드는 액자(A) / 보관(B)"
+  }
+ },
+ "results": {
+  "success": "성공",
+  "partial": "부분 성공",
+  "fail": "실패(게임오버 없음, 다음 날로 진행)"
+ },
+ "existingHooks": {
+  "_note": "프로토타입 staff.js에 이미 있는 값과 이벤트(읽기만 했고 수정하지 않음). 사건 판정에 그대로 쓰면 됩니다.",
+  "eggsToday": "오늘 깬 계란 수 (onEggsBroken)",
+  "floorDrops": "바닥에 떨어진 상품 수 (onFloor)",
+  "rams": "카트로 들이받은 횟수 (onRam)",
+  "towerBest": "카트 속 계란판 최대 층수 (towerHeight)",
+  "mischief.level": "직원 짜증 단계 0~4. 범숙 표정: 0~1 기본, 2 놀람, 3~4 화남",
+  "audio": "pa-chime, egg-crack, cart-bump, achievement, freezer-door, checkout-* (D 스트림 이벤트 이름)"
+ },
+ "events": [
+  {
+   "id": "E01",
+   "name": "흔들리는 범란 탑",
+   "day": 1,
+   "type": "main",
+   "cast": [
+    "beomi",
+    "beomsuk"
+   ],
+   "trigger": "1일차 입장 컷신 직후, 계란·유제품 걸이 사인 아래",
+   "setup": "범이가 처음 쌓은 범란 판 탑(12판)이 흔들린다. 탑을 통째로 카트에 받아 계산대까지 옮긴다.",
+   "goal": "범란 30구 5판 이상을 카트에 담아 계산대 통과",
+   "success": "깨진 알 3개 이하",
+   "partial": "깨진 알 4~10개",
+   "fail": "깨진 알 11개 이상, 또는 탑이 바닥으로 무너짐(floorDrops에 범란 3판 이상)",
+   "physics": [
+    "eggsToday",
+    "towerBest",
+    "카트 급정거 감속도",
+    "cart-bump"
+   ],
+   "tuning": {
+    "eggTrays": 5,
+    "maxBrokenForSuccess": 3,
+    "timeLimitSec": null
+   },
+   "reward": {
+    "vitality": 10,
+    "affinity": {
+     "beomi": 1
+    },
+    "stamp": 1,
+    "unlock": "범이 퀘스트 보드"
+   },
+   "storeChange": "입구에 '오늘의 손님' 칠판이 생기고 범이 이름표에 '수습 1일차' 스티커가 붙음",
+   "bonus": "towerBest 5층 이상이면 업적 '범란 마천루'와 범숙 놀람 표정 컷",
+   "audio": {
+    "bgm": [
+     "bgm.tension"
+    ],
+    "sfx": [
+     "item-wobble",
+     "egg-crack",
+     "egg-splat",
+     "achievement",
+     "stinger.success|comicfail"
+    ]
+   },
+   "ifIgnored": "exit-rules.json ignoreEvent (미션 칩 → 범이 1번 부름 → 계산하면 놓침)",
+   "target": "checkout",
+   "waypoints": [
+    {
+     "target": "aisle-01-eggs",
+     "label": "흔들리는 범란 탑"
+    }
+   ],
+   "script": "day1-script.jsonl d1_032"
+  },
+  {
+   "id": "E02",
+   "name": "말순 할머니의 오늘 메뉴",
+   "day": 2,
+   "type": "main",
+   "cast": [
+    "halmeoni"
+   ],
+   "trigger": "2일차 입장 컷신 뒤, 시식 코너 첫 도착(대본 roam d2_025)",
+   "setup": "말순 할머니가 오늘 메뉴 '범쌀 주먹밥과 계란말이' 재료를 부탁한다. 무게가 맞아야 맛이 난다고 우긴다.",
+   "goal": "범쌀 20kg 1포, 범란 2판, 범샘물 2L×6 1팩을 시식 코너까지 배달 (쇼츠 1화 예고: '쌀 20kg · 계란 2판 · 물 6병, 4분 안에, 한 알도 깨지 말 것')",
+   "success": "4분 안에 도착, 깨진 알 0개",
+   "partial": "시간 초과 또는 깨진 알 1~5개",
+   "fail": "범쌀 포대가 바닥에 떨어짐",
+   "physics": [
+    "카트 총무게(약 63kg)로 느려지는 가속",
+    "eggsToday",
+    "floorDrops"
+   ],
+   "tuning": {
+    "timeLimitSec": 240,
+    "targetCartKg": 63
+   },
+   "reward": {
+    "vitality": 10,
+    "affinity": {
+     "halmeoni": 1
+    },
+    "stamp": 1,
+    "item": "할머니 주먹밥(다음 사건 1회 카트 흔들림 −20%)"
+   },
+   "storeChange": "시식 코너 테이블 1개 → 2개, '시식만 도는 아저씨' NPC 첫 등장",
+   "audio": {
+    "bgm": [
+     "bgm.errand",
+     "bgm.emotional (결과 컷)"
+    ],
+    "sfx": [
+     "item-pick",
+     "sample-tray",
+     "pan-sizzle",
+     "item-place {kg}",
+     "timer-tick",
+     "achievement"
+    ]
+   },
+   "ifIgnored": "exit-rules.json ignoreEvent (미션 칩 → 범이 1번 부름 → 계산하면 놓침)",
+   "target": "sample-corner",
+   "waypoints": [
+    {
+     "target": "aisle-02-rice",
+     "item": "rice",
+     "n": 1
+    },
+    {
+     "target": "aisle-01-eggs",
+     "item": "egg",
+     "n": 2
+    },
+    {
+     "target": "aisle-01-water",
+     "item": "water",
+     "n": 1
+    }
+   ],
+   "script": "day2-script.jsonl d2_047"
+  },
+  {
+   "id": "E03",
+   "name": "3분 타임세일 러시",
+   "day": 3,
+   "type": "main",
+   "cast": [
+    "pa",
+    "spy",
+    "beomsuk"
+   ],
+   "trigger": "3일차 E14 가 끝나고 자유 장보기 120초 뒤(대본 roam d3_037). 그 사이 45초에 '연습 방송'(가짜 타임세일) 1번",
+   "setup": "'지금부터 3분 동안 범라면 40봉 반값!' 할인 사냥꾼 손님들과 수상한 손님이 특가 매대로 몰려든다.",
+   "goal": "180초 안에 범라면 40봉 박스 2개를 카트에 확보",
+   "success": "박스 2개 이상",
+   "partial": "박스 1개",
+   "fail": "0개 (수상한 손님이 싹쓸이)",
+   "physics": [
+    "NPC 카트와 충돌 시 박스가 미끄러짐",
+    "rams 3회 이상이면 범숙 화남 컷",
+    "특가 매대 박스 낙하"
+   ],
+   "tuning": {
+    "timeLimitSec": 180,
+    "boxesOnPallet": 8,
+    "rivalGrabIntervalSec": 14,
+    "saleHunters": 4
+   },
+   "reward": {
+    "vitality": 12,
+    "stamp": 1,
+    "affinity": {
+     "beomsuk": 1
+    },
+    "unlock": "수상한 손님 인물 카드(정체 ???)"
+   },
+   "storeChange": "특가 매대(레드 가격표) 2개 증설, 가족·할인 사냥꾼 NPC 등장, 방송 빈도 증가",
+   "audio": {
+    "bgm": [
+     "bgm.timesale"
+    ],
+    "sfx": [
+     "pa-chime",
+     "crowd-murmur(크게)",
+     "cart-bump",
+     "item-pick {material:cardboard}",
+     "timer-tick (마지막 10초)",
+     "motif.spy"
+    ]
+   },
+   "ifIgnored": "exit-rules.json ignoreEvent (미션 칩 → 범이 1번 부름 → 계산하면 놓침)",
+   "target": "timesale-endcap",
+   "waypoints": [
+    {
+     "target": "timesale-endcap",
+     "item": "ramen",
+     "n": 2
+    }
+   ],
+   "missedRule": "타이머가 끝날 때까지 특가 매대 6 m 안에 한 번도 안 들어옴 → 놓침(d3_085). E03 시작 전에 계산 → 놓침(d3_088)",
+   "script": "day3-script.jsonl d3_043"
+  },
+  {
+   "id": "E04",
+   "name": "보들범 산사태",
+   "day": 4,
+   "type": "main",
+   "cast": [
+    "beomi",
+    "beomsuk"
+   ],
+   "trigger": "4일차 생활용품 통로 입장 시, 범이가 맨 아래 팩을 빼다가 피라미드가 무너짐",
+   "setup": "보들범 30롤 팩 피라미드가 통로로 쏟아진다. 굴러다니는 팩을 카트로 모아 파렛트에 다시 쌓는다.",
+   "goal": "120초 안에 보들범 12팩을 파렛트 구역에 반납",
+   "success": "12팩 반납, 다른 손님과 충돌 0회",
+   "partial": "8~11팩",
+   "fail": "7팩 이하",
+   "physics": [
+    "가볍고 큰 팩(약 4.5kg)이 카트 위로 넘침",
+    "적재 부피 한계",
+    "통로 밖으로 굴러간 팩"
+   ],
+   "tuning": {
+    "timeLimitSec": 120,
+    "packs": 12,
+    "packKg": 4.5
+   },
+   "reward": {
+    "vitality": 10,
+    "affinity": {
+     "beomi": 1,
+     "beomsuk": 1
+    },
+    "stamp": 1
+   },
+   "storeChange": "생활용품 코너 확장(피라미드 2배), 재고 담당 직원 1명 추가",
+   "audio": {
+    "bgm": [
+     "bgm.tension"
+    ],
+    "sfx": [
+     "item-wobble",
+     "item-fall {kg}",
+     "tissue-tumble",
+     "mop-squeak",
+     "pa-chime"
+    ]
+   },
+   "ifIgnored": "exit-rules.json ignoreEvent (미션 칩 → 범이 1번 부름 → 계산하면 놓침)",
+   "target": "tissue-pyramid",
+   "waypoints": [
+    {
+     "target": "aisle-02-household",
+     "item": "tissue",
+     "n": 12,
+     "loose": true
+    }
+   ],
+   "judge": {
+    "returned": "파렛트 2.5 m 안에 내려놓은(또는 카트째 세운) 보들범 팩 수(무너진 팩만 셈, 매대 새 상품은 안 셈)",
+    "bumps": "다른 손님(NPC)·직원과 cart-bump 수(bumpTarget 필요, 랙은 안 셈)",
+    "success": "returned 12 && bumps 0",
+    "partial": "returned 8–11, 또는 12 && bumps ≥1",
+    "fail": "returned ≤7"
+   },
+   "missedRule": "120초 동안 무너진 팩을 하나도 안 건드림 → 놓침(범이가 주움, d4_036). E04 진행 중 계산 → E04·E12 놓침(d4_088)",
+   "recallLine": "생활용품 코너에서 휴지가… 아니에요, 그냥 와 보세요!",
+   "script": "day4-script.jsonl d4_025",
+   "spyCameo": "t45 수상한 손님이 팩 1개를 파렛트에 슬쩍 올려 둠(반납 수에는 안 셈)"
+  },
+  {
+   "id": "E05",
+   "name": "수상한 손님 미행",
+   "day": 5,
+   "type": "main",
+   "cast": [
+    "spy",
+    "beomsuk"
+   ],
+   "trigger": "5일차, 한범숙 주임이 '저 손님 매일 특가만 쓸어 가요' 하고 부탁",
+   "setup": "보라 장바구니 손님을 들키지 않게 따라가 증거를 잡는다.",
+   "goal": "90초 동안 4~12m 거리를 유지하다가, 상대가 할인 스티커 상품을 10개째 담는 순간 촬영(F키/화면 버튼)",
+   "success": "들키지 않고 촬영",
+   "partial": "들켰지만 촬영 성공",
+   "fail": "놓침(12m 초과 10초) 또는 촬영 전 2번 들킴",
+   "physics": [
+    "카트 소음 = 속도 × (1 + 짐 무게/100kg). 6m 안에서 1.5m/s를 넘으면 의심 게이지 상승",
+    "랙 끝에 숨으면 의심 게이지 감소",
+    "cart-bump 소리는 즉시 의심"
+   ],
+   "tuning": {
+    "durationSec": 90,
+    "minDistM": 4,
+    "maxDistM": 12,
+    "noiseSpeedLimit": 1.5
+   },
+   "reward": {
+    "vitality": 12,
+    "affinity": {
+     "beomsuk": 1
+    },
+    "stamp": 1,
+    "unlock": "정체 공개: 경쟁 마트 요원 반기철(별명 '반값') — 가게 이름은 미정이라 대사에 안 씀"
+   },
+   "storeChange": "통로 끝에 볼록거울 설치, 커플·휴대폰 손님 NPC 등장, 방송실 창문 블라인드가 반쯤 열림(실루엣만)",
+   "audio": {
+    "bgm": [
+     "bgm.tailing"
+    ],
+    "sfx": [
+     "cart-joint(작게)",
+     "suspicion-rise",
+     "camera-shutter",
+     "grab-bump",
+     "stinger.spotted",
+     "stinger.reveal",
+     "motif.spy"
+    ]
+   },
+   "ifIgnored": "exit-rules.json ignoreEvent (미션 칩 → 범이 1번 부름 → 계산하면 놓침)",
+   "target": "timesale-endcap",
+   "follow": {
+    "who": "spy",
+    "startAt": "aisle-01-water",
+    "route": [
+     "aisle-01-water",
+     "aisle-02-rice",
+     "aisle-02-household",
+     "massage-chair",
+     "timesale-endcap"
+    ],
+    "grabs": 10,
+    "photoAtGrab": 10,
+    "photoWindowSec": 2.0,
+    "loseSec": 10,
+    "spottedMax": 2
+   },
+   "judge": {
+    "suspicion": "0–100. 6 m 안에서 소음(속도 × (1 + 짐 kg/100)) > 1.5 이면 초당 +25, 4 m 안이면 초당 +40, cart-bump 즉시 100. 랙 끝 1 m 안에 멈춰 있으면 초당 −30. 100 이 되면 '들킴' 1번(게이지 40 으로 내려감)",
+    "success": "10번째 담기 ±2초 안에 촬영 && 들킴 0",
+    "partial": "촬영 성공 && 들킴 1",
+    "fail": "12 m 넘게 10초 또는 촬영 전 들킴 2번 또는 촬영 실패(창 놓침)",
+    "missed": "시작 뒤 60초 동안 12 m 안으로 한 번도 안 옴"
+   },
+   "missedRule": "60초 동안 12 m 안에 안 옴 → 놓침(d5_026, 정체 공개는 그대로). 진행 중 계산 → E05·E06 놓침, 계산대에서 정체 공개(d5_088)",
+   "recallLine": "손님, 그 선글라스 손님 또 왔어요. 주임님이 부탁하신대요!",
+   "script": "day5-script.jsonl d5_018",
+   "reveal": {
+    "node": "d5_032",
+    "flag": "flag.spyRevealed",
+    "nameTag": "반기철(반값)",
+    "note": "결과와 상관없이 5일차에 공개(d5_036 선택지에서 flag 설정). 성공·부분은 증거 사진이 있고, 실패·놓침은 반값이 허세로 스스로 밝힘. 7일차 최종 방해와 이어짐"
+   },
+   "unlock": "인물 카드 '반기철(반값)' (성공·부분이면 '열 번째' 증거 사진 포함)"
+  },
+  {
+   "id": "E06",
+   "name": "바닥은 용암입니다",
+   "day": 5,
+   "type": "side",
+   "cast": [
+    "pa"
+   ],
+   "trigger": "5일차 E05 결과·정체 공개 뒤(결과와 상관없이) 방송실 점장의 막장 방송(d5_045~046)",
+   "setup": "'지금부터 노란 선 바깥 바닥은 용암입니다. 농담 아닙니다. 아마도.' 바닥 노란 선 안에서만 움직인다.",
+   "goal": "60초 안에 범샘물 2L×6 3팩을 계산대 앞 노란 선 구역까지",
+   "success": "선 밖으로 나간 시간 0초",
+   "partial": "선 밖 3초 이하",
+   "fail": "선 밖 3초 초과",
+   "physics": [
+    "카트 바퀴 4개 중 하나라도 선 밖이면 '앗 뜨거' 카메라 흔들림",
+    "무거울수록 회전 반경 커짐"
+   ],
+   "tuning": {
+    "timeLimitSec": 60,
+    "waterPacks": 3
+   },
+   "reward": {
+    "vitality": 6,
+    "stamp": 0,
+    "achievement": "용암 위의 장보기"
+   },
+   "storeChange": "없음(점장 방송 강도 1단계 상승)",
+   "audio": {
+    "bgm": [
+     "bgm.lava"
+    ],
+    "sfx": [
+     "pa-chime",
+     "lava-hiss",
+     "item-place",
+     "cart-joint",
+     "achievement"
+    ]
+   },
+   "ifIgnored": "exit-rules.json ignoreEvent (미션 칩 → 범이 1번 부름 → 계산하면 놓침)",
+   "target": "lava-goal",
+   "waypoints": [
+    {
+     "target": "aisle-01-water",
+     "item": "water",
+     "n": 3
+    }
+   ],
+   "lava": {
+    "safeZones": [
+     "lava-lane-01",
+     "lava-link-01",
+     "lava-front-band",
+     "lava-goal"
+    ],
+    "startOn": "카트가 처음 안전 구역에 들어간 때부터 60초와 선 밖 시간을 셈",
+    "wheelRule": "바퀴 4개 중 하나라도 선 밖이면 선 밖(카메라 '앗 뜨거' 흔들림 + lava-hiss)"
+   },
+   "judge": {
+    "success": "60초 안에 lava-goal 도착(카트 안 범샘물 3팩 이상, 전부터 담겨 있던 것도 인정) && 선 밖 0초",
+    "partial": "도착 && 선 밖 ≤3초",
+    "fail": "선 밖 >3초 또는 60초 초과"
+   },
+   "missedRule": "방송 뒤 60초 동안 안전 구역에 한 번도 안 들어감 → 놓침(d5_066). 진행 중 계산 → 놓침(d5_088)",
+   "recallLine": "점장님 방송 또 시작했어요… 바닥 조심하세요!",
+   "script": "day5-script.jsonl d5_052"
+  },
+  {
+   "id": "E07",
+   "name": "폐점 후 카트 경주",
+   "day": 6,
+   "type": "main",
+   "cast": [
+    "beomi",
+    "beomsuk"
+   ],
+   "trigger": "6일차 계산(d6_023) 뒤 마감 방송(d6_026) → 범이의 도전(d6_028)",
+   "setup": "불 반쯤 꺼진 매장. 통로 02 범쌀 3포대(재고, 계산 안 함)를 실은 카트로 메인 통로 한 바퀴 코스를 범이와 세 바퀴.",
+   "goal": "50kg 이상 실은 카트로 3바퀴, 75초 안",
+   "success": "범이보다 먼저 도착, 떨어뜨린 상품 0",
+   "partial": "이겼지만 상품 1~2개 떨어뜨림, 또는 75초 안이지만 패배",
+   "fail": "75초 초과",
+   "physics": [
+    "무거울수록 관성 커져 코너에서 밀림",
+    "급회전 시 짐 쏠림·낙하",
+    "범이 카트는 가볍지만 실수로 2번 멈춤"
+   ],
+   "tuning": {
+    "laps": 3,
+    "minLoadKg": 50,
+    "timeLimitSec": 75,
+    "rivalStumbles": 2
+   },
+   "reward": {
+    "vitality": 10,
+    "affinity": {
+     "beomi": 2
+    },
+    "stamp": 1,
+    "unlock": "새벽 3시 방송 예고"
+   },
+   "storeChange": "계산대 4레인 상시 운영(지금은 2레인만 켜 둠), 냉동 코너 확장, 야간 조명 모드 해금",
+   "audio": {
+    "bgm": [
+     "bgm.cartrace"
+    ],
+    "sfx": [
+     "race-countdown",
+     "lap-bell",
+     "cart-grab",
+     "cart-bump",
+     "cart-joint",
+     "item-fall {kg}",
+     "applause"
+    ]
+   },
+   "ifIgnored": "exit-rules.json ignoreEvent (미션 칩 → 범이 1번 부름 → 계산하면 놓침)",
+   "target": "race-start",
+   "waypoints": [
+    {
+     "target": "aisle-02-rice",
+     "item": "rice",
+     "n": 3,
+     "stock": true
+    }
+   ],
+   "race": {
+    "start": "race-start",
+    "finish": "race-start",
+    "checkpoints": [
+     "timesale-endcap",
+     "aisle-01-eggs"
+    ],
+    "laps": 3,
+    "lapLengthM": 76,
+    "minLoadKg": 50,
+    "rival": {
+     "who": "beomi",
+     "cartKg": 35,
+     "stumbles": 2,
+     "stumbleAtLap": [
+      1,
+      3
+     ],
+     "paceMps": 3.1
+    },
+    "countdown": 3
+   },
+   "judge": {
+    "lap": "출발선 → timesale-endcap 3 m 안 → aisle-01-eggs 2.6 m 안 → 출발선, 순서대로 지나야 1바퀴",
+    "drops": "경주 중 floorDrops 증가분(범쌀 포대 포함)",
+    "success": "3바퀴 <= 75초 && 범이보다 먼저 && drops 0",
+    "partial": "(이김 && drops 1–2) 또는 (<= 75초 && 범이에게 짐)",
+    "fail": "75초 초과 또는 drops >= 3",
+    "lowLoad": "출발선에서 카트 짐 < 50kg 이면 출발 막음(d6_035), 타이머 안 감",
+    "missed": "d6_032 '퇴근' 선택 또는 90초 동안 출발선에 안 감"
+   },
+   "missedRule": "계산 뒤 사건이라 '계산하면 놓침' 없음. 거절 선택지 또는 90초 동안 출발선 안 옴 → 놓침(d6_048, markMissed). 새벽 사건 E08 은 그대로 이어짐",
+   "recallLine": "손님! 마감했는데 한 판만요! 카트 경주요!",
+   "script": "day6-script.jsonl d6_034",
+   "stockReturn": "경주 뒤 범쌀 3포대는 자동으로 매대에 돌아감(계산·영수증에 안 들어감)"
+  },
+  {
+   "id": "E08",
+   "name": "새벽 3시 비밀 창고 칸",
+   "day": 6,
+   "type": "main",
+   "cast": [
+    "pa",
+    "halmeoni"
+   ],
+   "trigger": "6일차 E07 뒤 시계 03:00(d6_051 timeskip). 점장의 속삭이는 방송 d6_052~053",
+   "setup": "평소엔 없는 랙 끝 칸이 열린다. 불 꺼진 매장을 손전등 빛만으로 지나, 순찰하는 지게차 불빛을 피해 칸 안의 금빛 박스를 꺼낸다.",
+   "goal": "금빛 박스 1개를 들고 입구까지",
+   "success": "지게차 불빛에 걸리지 않음",
+   "partial": "1번 걸림(박스는 지킴)",
+   "fail": "2번 걸림, 박스는 제자리로",
+   "physics": [
+    "금빛 박스는 무거움(30kg)이라 카트 반응이 둔해짐",
+    "어둠 속 바닥 물건과 충돌 시 소리로 들킴"
+   ],
+   "tuning": {
+    "forkliftPatrols": 2,
+    "goldBoxKg": 30,
+    "flashlightConeDeg": 40
+   },
+   "reward": {
+    "vitality": 8,
+    "item": "금빛 박스(할머니 계란말이 레시피 쪽지 반쪽 + 뒷면 '냉동 코너 맨 아래 칸, 전설')",
+    "stamp": 0,
+    "flag": "flag.recipeHalf = 1 (성공·부분)"
+   },
+   "storeChange": "뒤쪽 벽 '비밀 창고' 표식(성공·부분 금빛, 실패·놓침 희미하게). 이후 매일 03:00 에 열림",
+   "audio": {
+    "bgm": [
+     "bgm.dawn"
+    ],
+    "sfx": [
+     "flashlight-click",
+     "forklift-beep",
+     "forklift-spot",
+     "freezer-hum",
+     "gold-box-open",
+     "door-chime(느리게)",
+     "rain-roof(아주 낮게, 바람 느낌)"
+    ]
+   },
+   "ifIgnored": "exit-rules.json ignoreEvent (미션 칩 → 범이 1번 부름 → 계산하면 놓침)",
+   "target": "entrance-mat",
+   "waypoints": [
+    {
+     "target": "secret-shelf",
+     "item": "goldbox",
+     "n": 1,
+     "kg": 30
+    }
+   ],
+   "stealth": {
+    "forklifts": [
+     {
+      "id": "fl-1",
+      "route": [
+       "forklift-lane-back"
+      ],
+      "speedMps": 1.4,
+      "coneDeg": 40,
+      "rangeM": 9
+     },
+     {
+      "id": "fl-2",
+      "route": [
+       "forklift-lane-cross"
+      ],
+      "speedMps": 1.2,
+      "coneDeg": 40,
+      "rangeM": 9
+     }
+    ],
+    "flashlight": {
+     "coneDeg": 40,
+     "toggle": {
+      "pc": "L",
+      "mobile": "손전등 버튼"
+     },
+     "offSpeedMul": 0.6
+    },
+    "caughtMax": 2,
+    "checkpoints": [
+     "secret-shelf",
+     "timesale-endcap"
+    ],
+    "noise": "어두운 바닥 물건 cart-bump → 가까운 지게차가 소리 쪽으로 6초 돌아봄"
+   },
+   "judge": {
+    "caught": "지게차 불빛 원뿔(40°, 9 m) 안에 카트가 0.5초 넘게 있으면 1번. 걸리면 마지막 체크포인트로(박스는 그대로)",
+    "success": "입구 도착 && caught 0",
+    "partial": "입구 도착 && caught 1",
+    "fail": "caught 2(박스가 칸으로 돌아감) 또는 240초 초과",
+    "missed": "d6_059 '집에 간다' 또는 90초 동안 비밀 칸에 안 감"
+   },
+   "missedRule": "거절 선택지 또는 90초 동안 secret-shelf 안 옴 → 놓침(d6_075). 실패·놓침이어도 할머니가 E09 단서(맨 아래 칸)를 말해 줌",
+   "recallLine": "손님 이 시간에… 뒤쪽 벽에서 소리 나요. 같이 가 봐요!",
+   "script": "day6-script.jsonl d6_061"
+  },
+  {
+   "id": "E09",
+   "name": "전설의 아이스크림",
+   "day": 7,
+   "type": "side",
+   "cast": [
+    "halmeoni"
+   ],
+   "trigger": "7일차 감사(E11) 중 freezer-legend 에서 '범설빙 왕통'을 꺼낸 순간(sideMissions pickup). 단서는 6일차 E08(실패·놓침이면 할머니 기억, d7_027)",
+   "setup": "할머니가 젊을 때 먹었다는 '범설빙 왕통'이 딱 1개 있다. 녹기 전에 계산해야 한다.",
+   "goal": "꺼낸 순간부터 150초 안에 계산 완료",
+   "success": "녹음 게이지 50% 미만",
+   "partial": "50~99%",
+   "fail": "100%(녹아 버림, 할머니 웃음 컷으로 위로)",
+   "physics": [
+    "녹음 속도 = 기본 + 카트 흔들림(cart-bump 1회당 +5%)",
+    "무거운 상품 아래 깔리면 찌그러짐(계란과 같은 압력 판정)"
+   ],
+   "tuning": {
+    "timeLimitSec": 150,
+    "bumpMeltPct": 5
+   },
+   "reward": {
+    "vitality": 6,
+    "affinity": {
+     "halmeoni": 2
+    },
+    "achievement": "전설을 맛본 손님"
+   },
+   "storeChange": "냉동 코너에 '오늘의 전설' 칸 생김",
+   "audio": {
+    "bgm": [
+     "bgm.legend",
+     "bgm.emotional"
+    ],
+    "sfx": [
+     "freezer-door",
+     "melt-drip",
+     "freezer-alarm",
+     "stinger.success",
+     "achievement"
+    ]
+   },
+   "ifIgnored": "exit-rules.json ignoreEvent (미션 칩 → 범이 1번 부름 → 계산하면 놓침)",
+   "target": "freezer-legend",
+   "concurrentWith": "E11",
+   "melt": {
+    "basePctPerSec": 0.3,
+    "bumpPct": 5,
+    "crushPct": 20,
+    "over150s": "150초가 지나면 100%"
+   },
+   "judge": {
+    "melt": "꺼낸 때부터 0.3%/초 + cart-bump 1번 +5% + 무거운 상품에 눌리면 +20%(계란 압력 판정 재사용)",
+    "success": "checkout.done 때 melt < 50",
+    "partial": "50 <= melt < 100",
+    "fail": "melt 100(녹아 버림, 할머니 웃음 컷 d7_054)",
+    "missed": "계산 때까지 안 꺼냄(d7_056)"
+   },
+   "missedRule": "꺼내지 않고 계산 → 놓침. 감사(E11)와 같이 끝남",
+   "recallLine": "할머니가 냉동 코너에서 손님 기다리세요. 급하대요!",
+   "script": "day7-script.jsonl d7_031 sideMissions"
+  },
+  {
+   "id": "E10",
+   "name": "200kg 기립박수",
+   "day": 7,
+   "type": "main",
+   "cast": [
+    "beomsuk",
+    "beomi",
+    "halmeoni"
+   ],
+   "trigger": "7일차 감사(E11) 계산 때 총무게 판정(체크 c3 과 같은 값). 따로 시작하지 않음",
+   "setup": "총무게 200kg(카트 포함)을 넘긴 카트가 계산대에 들어오면 직원 전원이 나와 박수를 친다.",
+   "goal": "카트 포함 200kg 이상으로 계산대 통과",
+   "success": "200kg 이상, 깨진 알 0개",
+   "partial": "200kg 이상, 깨진 알 있음",
+   "fail": "200kg 미만",
+   "physics": [
+    "200kg 근처에서 제동 거리 2배",
+    "카트 처짐 연출(depot-design storyboard-01)",
+    "적재율 링"
+   ],
+   "tuning": {
+    "targetKg": 200
+   },
+   "reward": {
+    "vitality": 10,
+    "achievement": "기립박수",
+    "affinity": {
+     "beomsuk": 1
+    }
+   },
+   "storeChange": "계산대 위 '오늘의 최고 카트' 사진 액자(성공·부분)",
+   "audio": {
+    "bgm": [
+     "bgm.emotional"
+    ],
+    "sfx": [
+     "item-place {kg}",
+     "applause",
+     "achievement"
+    ]
+   },
+   "ifIgnored": "exit-rules.json ignoreEvent (미션 칩 → 범이 1번 부름 → 계산하면 놓침)",
+   "concurrentWith": "E11",
+   "judge": {
+    "kg": "계산대 진입 때 카트 안 상품 kg + 카트 27kg",
+    "success": "kg >= 200 && eggsToday(감사 시작 뒤) 0",
+    "partial": "kg >= 200 && 깨진 알 >= 1",
+    "fail": "kg < 200"
+   },
+   "missedRule": "놓침 없음(계산하면 항상 판정)",
+   "script": "day7-script.jsonl d7_040"
+  },
+  {
+   "id": "E11",
+   "name": "본사 감사의 날",
+   "day": 7,
+   "type": "finale",
+   "cast": [
+    "beomsuk",
+    "beomi",
+    "halmeoni",
+    "spy",
+    "pa",
+    "auditor"
+   ],
+   "trigger": "7일차 입장. 본사 감사관(남색 정장, 태블릿)이 매장 입구에 서 있다",
+   "setup": "감사관이 손님 한 명의 장보기를 처음부터 끝까지 지켜본다. 싹쓸마트 요원 반값이 마지막 방해에 나선다.",
+   "goal": "감사 체크리스트 5개 중 많이 달성",
+   "checklist": [
+    "깨진 알 0개",
+    "적재율 85% 이상",
+    "카트 포함 200kg 이상(E10)",
+    "반값의 통로 막기 3번 피하기",
+    "10분 안에 계산 완료"
+   ],
+   "success": "체크 4개 이상",
+   "partial": "체크 2~3개",
+   "fail": "체크 0~1개",
+   "physics": [
+    "반값이 카트로 통로를 막음(밀면 rams로 집계, 감점)",
+    "모든 기존 판정"
+   ],
+   "tuning": {
+    "timeLimitSec": 600
+   },
+   "endings": [
+    {
+     "id": "END_A",
+     "if": "매장 활기 >= 70",
+     "name": "정자점 존속 확정",
+     "scene": "감사관 '존속 확정입니다.' 점장 방송이 처음으로 울음, 직원 넷이 단골 도장 카드 7칸째에 금도장",
+     "script": "d7_100",
+     "next": "2주차 w2_000"
+    },
+    {
+     "id": "END_B",
+     "if": "45 <= 매장 활기 < 70",
+     "name": "조건부 존속",
+     "scene": "감사관 '한 주 더 지켜보죠.' 2주차 해금",
+     "script": "d7_120",
+     "next": "2주차 w2_000"
+    },
+    {
+     "id": "END_C",
+     "if": "매장 활기 < 45",
+     "name": "폐점 유예",
+     "scene": "범숙 '…내일도 와요. 딱히 손님 때문은 아니고요.' 진행도 유지한 채 1주차 재도전",
+     "script": "d7_140",
+     "next": "d1_000 (flag.week1Retry)"
+    }
+   ],
+   "reward": {
+    "stamp": 1,
+    "unlock": "2주차 '경쟁 마트의 반격'(가게 이름 미정 — 대사에서는 '경쟁 마트'). 엔딩 C 는 1주차 재도전"
+   },
+   "storeChange": "엔딩별 간판: '오픈 기념 세일 연장'(A) / '리뉴얼 준비 중'(B, C)",
+   "audio": {
+    "bgm": [
+     "bgm.audit",
+     "bgm.emotional",
+     "bgm.closing"
+    ],
+    "sfx": [
+     "motif.auditor",
+     "tablet-tap",
+     "check-stamp",
+     "motif.spy",
+     "checkout-scan",
+     "checkout-printer",
+     "checkout-done",
+     "pa-sniff",
+     "gold-stamp",
+     "phone-buzz",
+     "stinger.finale"
+    ]
+   },
+   "ifIgnored": "놓침 없음: 계산 때 체크리스트 채점",
+   "target": "checkout",
+   "script": "day7-script.jsonl d7_031",
+   "audit": {
+    "checklist": [
+     "c1 깨진 알 0개 (eggsToday)",
+     "c2 적재율 85% 이상 (loadRatio, 계산대 도착 때)",
+     "c3 카트 포함 200kg (= E10)",
+     "c4 반값 방해 3번 피하기 (spyBlocks)",
+     "c5 10분 안 계산 (감사 시작 → checkout.done ≤ 600초)"
+    ],
+    "spyBlocks": [
+     {
+      "id": "b1",
+      "target": "spy-block-1",
+      "after": 45
+     },
+     {
+      "id": "b2",
+      "target": "spy-block-2",
+      "after": 180
+     },
+     {
+      "id": "b3",
+      "target": "spy-block-3",
+      "after": 330
+     }
+    ],
+    "dodgeRule": "플레이어가 15 m 안에 오면 반기철 카트가 막음. 20초 안에 안 밀고(rams·bumpTarget spy 0) 막힌 곳 너머 4 m 로 빠져나가면 피함",
+    "auditorFollow": "auditor-post 에서 시작, 플레이어 6 m 뒤"
+   },
+   "judge": {
+    "success": "체크 >= 4",
+    "partial": "체크 2–3",
+    "fail": "체크 0–1",
+    "missed": "없음"
+   },
+   "endingRule": "엔딩은 체크리스트가 아니라 매장 활기(endingVitality)로 정함. 체크리스트 결과는 감사관 대사(d7_059/062/065)만 바꿈"
+  },
+  {
+   "id": "E12",
+   "name": "꼬마 손님 길 찾기",
+   "day": 4,
+   "type": "side",
+   "cast": [
+    "beomi"
+   ],
+   "trigger": "4일차 E04 결과 컷 바로 뒤(d4_040). 무너진 휴지 더미 너머로 엄마를 놓친 꼬마(3일차 d3_060 의 그 꼬마)",
+   "setup": "꼬마를 카트 아기 의자에 태워 고객센터(입구 옆)까지 데려다준다.",
+   "goal": "아기 의자에 태운 채 고객센터 도착",
+   "success": "속도 1.0m/s 이하 유지, 충돌 0회",
+   "partial": "충돌 1회 또는 과속 5초 이하",
+   "fail": "충돌 2회 이상(아이가 울어 범이가 대신 데려감)",
+   "physics": [
+    "아기 의자 탑승 중 속도 상한 경고",
+    "cart-bump 시 아이 울음"
+   ],
+   "tuning": {
+    "speedLimit": 1.0,
+    "overSpeedGraceSec": 5,
+    "timeoutSec": 180
+   },
+   "reward": {
+    "vitality": 5,
+    "affinity": {
+     "beomi": 1
+    }
+   },
+   "storeChange": "입구 옆 고객센터 창구가 열림",
+   "audio": {
+    "bgm": [
+     "bgm.shop",
+     "bgm.tension",
+     "bgm.emotional"
+    ],
+    "sfx": [
+     "kid-giggle",
+     "kid-cry",
+     "speed-warn",
+     "cart-joint(느리게)",
+     "door-chime"
+    ]
+   },
+   "ifIgnored": "exit-rules.json ignoreEvent (미션 칩 → 범이 1번 부름 → 계산하면 놓침)",
+   "target": "customer-desk",
+   "waypoints": [
+    {
+     "target": "kid-spot",
+     "item": "kid",
+     "n": 1,
+     "rider": true
+    }
+   ],
+   "judge": {
+    "success": "탑승부터 도착까지 bumps 0 && 과속(>1.0 m/s) 0초",
+    "partial": "bumps 1 또는 과속 누적 ≤5초",
+    "fail": "bumps ≥2(아이가 울어 범이가 대신 데려감, d4_054) 또는 과속 누적 >5초"
+   },
+   "missedRule": "180초 동안 꼬마를 안 태움 → 놓침(범이가 데려감, d4_056). 진행 중 계산 → 놓침(d4_087)",
+   "recallLine": "손님! 꼬마가 혼자 있어요. 같이 고객센터 가 줘요!",
+   "script": "day4-script.jsonl d4_048"
+  },
+  {
+   "id": "E13",
+   "name": "할머니 주먹밥 배달",
+   "day": 2,
+   "type": "side",
+   "cast": [
+    "halmeoni",
+    "cashier"
+   ],
+   "trigger": "2일차 E02 결과 컷 직후(결과와 상관없이), 말순 할머니의 부탁",
+   "setup": "점심을 거른 계산원 김미소에게 할머니가 주먹밥 쟁반을 보낸다. 쟁반은 카트 위에서 쉽게 미끄러진다.",
+   "goal": "주먹밥 쟁반(새 소품)을 카트에 싣고 계산대 07까지",
+   "success": "들이받기 0회, 쟁반 안 떨어짐",
+   "partial": "들이받기 1~2회 또는 급정거 경고 3회 이상(쟁반은 지킴)",
+   "fail": "쟁반이 바닥에 떨어짐(floorDrops 에 riceball-tray)",
+   "physics": [
+    "쟁반은 가볍고(1.2kg) 마찰이 작아 급정거·급회전에 미끄러짐",
+    "rams",
+    "floorDrops",
+    "카트 급정거 감속도(E01 과 같은 값)"
+   ],
+   "tuning": {
+    "trayKg": 1.2,
+    "timeLimitSec": null,
+    "hardBrakeWarn": 3
+   },
+   "reward": {
+    "vitality": 3,
+    "stamp": 0,
+    "unlock": "계산원 김미소가 손님을 알아봄(계산대 반응 R03·R04·R43 에 '주먹밥 손님' 변형 대사)"
+   },
+   "storeChange": "계산대 07 모니터 옆에 '할머니 주먹밥 고마워요' 메모",
+   "target": "lane-07",
+   "waypoints": [],
+   "audio": {
+    "bgm": [
+     "bgm.errand"
+    ],
+    "sfx": [
+     "sample-tray",
+     "item-wobble",
+     "checkout-scan",
+     "stinger.success|partial|comicfail"
+    ]
+   },
+   "ifIgnored": "exit-rules.json ignoreEvent (미션 칩 → 범이 1번 부름 → 다른 계산대에서 계산하면 놓침, d2_130). 계산대 07에서 계산하면 도착으로 침",
+   "recallLine": "손님! 주먹밥 쟁반이요! 07번 계산대 김미소 씨 배고프대요!",
+   "missedLines": {
+    "cashier": "어제 주먹밥은 할머니가 직접 갖다주셨어요. 맛있었어요~"
+   },
+   "script": "day2-script.jsonl d2_106",
+   "newProp": {
+    "id": "riceball-tray",
+    "name": "할머니 주먹밥 쟁반",
+    "kg": 1.2,
+    "size": [
+     0.42,
+     0.06,
+     0.3
+    ],
+    "material": "tray",
+    "note": "상품이 아니라 소품. 계산대에서 스캔하지 않고 김미소에게 건넴"
+   }
+  },
+  {
+   "id": "E14",
+   "name": "엉뚱한 반값 스티커",
+   "day": 3,
+   "type": "side",
+   "cast": [
+    "beomsuk",
+    "beomi",
+    "spy"
+   ],
+   "trigger": "3일차 입장 컷신. 누군가 상품 여기저기에 매장 것이 아닌 노란 '반값' 스티커를 붙여 놓음(구석에 작은 빗자루 그림)",
+   "setup": "스티커가 붙은 상품 3개를 찾아 카트에 담고, 특가 매대에서 기다리는 한범숙 주임에게 가져간다. 도중에 수상한 손님이 근처를 서성인다.",
+   "goal": "스티커 붙은 범샘물·범쌀·보들범 각 1개를 카트에 담아 특가 매대까지",
+   "success": "3개 모두, 150초 안, 들이받기 0회",
+   "partial": "3개 모두지만 150초 넘김 또는 들이받기 1회 이상",
+   "fail": "2개 이하로 도착, 또는 240초가 지남(1개 이상 담았을 때)",
+   "missedRule": "240초 동안 스티커 상품을 하나도 안 담음 → 놓침(범이가 대신 뗌, d3_024). 사건을 막지 않음",
+   "physics": [
+    "범쌀 20kg + 범샘물 13kg + 보들범 4.5kg 약 37.5kg 로 카트가 무거워짐",
+    "rams",
+    "스티커 상품을 진열대에 도로 놓으면 R54"
+   ],
+   "tuning": {
+    "stickerItems": 3,
+    "goodTimeSec": 150,
+    "timeoutSec": 240,
+    "spyHoverSec": 40
+   },
+   "reward": {
+    "vitality": 3,
+    "stamp": 0,
+    "affinity": {
+     "beomsuk": 1
+    },
+    "unlock": "'빗자루 스티커' 단서 카드(E05 복선)"
+   },
+   "storeChange": "직원 게시판에 빗자루 스티커 3장이 증거로 붙음(4일차부터 보임)",
+   "target": "timesale-endcap",
+   "waypoints": [
+    {
+     "target": "aisle-01-water",
+     "item": "water",
+     "n": 1,
+     "sticker": true
+    },
+    {
+     "target": "aisle-02-rice",
+     "item": "rice",
+     "n": 1,
+     "sticker": true
+    },
+    {
+     "target": "aisle-02-household",
+     "item": "tissue",
+     "n": 1,
+     "sticker": true
+    }
+   ],
+   "audio": {
+    "bgm": [
+     "bgm.tailing (sneak 스템만, 작게)"
+    ],
+    "sfx": [
+     "sticker-peel",
+     "item-pick",
+     "motif.spy",
+     "stinger.success|partial"
+    ]
+   },
+   "ifIgnored": "놓침이 계산으로 정해지지 않음: 240초 타임아웃 → 결과를 정하고 대본 d3_020 으로. 그 전에 계산하면 놓침 + E03 도 놓침(d3_088)",
+   "recallLine": "손님! 스티커 붙은 상품 세 개요! 주임님이 특가 매대에서 기다리세요!",
+   "missedLines": {
+    "beomi": "어제 스티커는 제가 다 뗐어요! 손톱이 다 닳았어요."
+   },
+   "script": "day3-script.jsonl d3_018"
+  },
+  {
+   "id": "E15",
+   "name": "보라 카트 행렬",
+   "day": 8,
+   "type": "main",
+   "cast": [
+    "halmeoni",
+    "spy",
+    "rivalboss"
+   ],
+   "trigger": "8일차 팀장의 '보라 카트 부대, 출발'(d8_041) 뒤 할머니 잔치국수 재료 부탁(d8_047)",
+   "setup": "보라 조끼 직원이 미는 카트 3대가 한 줄로 앞 랙 둘레를 돈다. 시식 코너는 행렬 고리 서쪽이라 재료를 싣고 꼭 행렬을 가로질러야 한다.",
+   "goal": "범샘물 2팩 + 범란 2판을 시식 코너까지(240초)",
+   "success": "행렬과 충돌 0 && 깨진 알 0",
+   "partial": "충돌 1회 또는 깨진 알 1~6",
+   "fail": "충돌 2회 이상 또는 깨진 알 7 이상 또는 240초 초과",
+   "physics": [
+    "행렬 카트 3대(각 60kg)는 멈추지 않고 밀고 감 — 부딪히면 내 카트가 밀림",
+    "특가 매대 앞 4초 멈춤 = 건널 틈",
+    "계란 2판 + 물 26kg 로 무게중심이 낮아 급회전은 괜찮지만 제동 거리가 김"
+   ],
+   "tuning": {
+    "timeLimitSec": 240,
+    "convoySpeedMps": 1.3,
+    "gapM": 2.4,
+    "pauseSec": 4,
+    "convoyKg": 60
+   },
+   "reward": {
+    "vitality": 10,
+    "affinity": {
+     "halmeoni": 1
+    }
+   },
+   "storeChange": "시식 코너 국수 냄비. 성공이면 9일차 아침 '행렬 뚫은 손님' 대사(d9_003)",
+   "audio": {
+    "bgm": [
+     "bgm.tension",
+     "bgm.shop"
+    ],
+    "sfx": [
+     "convoy-horn",
+     "cart-bump",
+     "egg-crack",
+     "item-place {kg}",
+     "stopwatch-click",
+     "timer-tick"
+    ]
+   },
+   "ifIgnored": "exit-rules.json ignoreEvent (미션 칩 → 범이 1번 부름 → 계산하면 놓침)",
+   "target": "sample-corner",
+   "waypoints": [
+    {
+     "target": "aisle-01-water",
+     "item": "water",
+     "n": 2
+    },
+    {
+     "target": "aisle-01-eggs",
+     "item": "egg",
+     "n": 2
+    }
+   ],
+   "convoy": {
+    "route": [
+     "convoy-loop"
+    ],
+    "carts": 3,
+    "speedMps": 1.3,
+    "gapM": 2.4,
+    "pauseAt": "timesale-endcap",
+    "pauseSec": 4,
+    "driverOfLast": "spy"
+   },
+   "judge": {
+    "hits": "행렬 카트(bumpTarget convoy)와 cart-bump 횟수. 같은 카트 1초 안 연속은 1번",
+    "eggs": "미션 시작 뒤 eggsToday 증가분",
+    "success": "도착 && hits 0 && eggs 0",
+    "partial": "도착 && (hits 1 || 1<=eggs<=6)",
+    "fail": "hits >= 2 || eggs >= 7 || 240초 초과",
+    "missed": "240초 동안 재료를 하나도 안 담음, 또는 도중 계산"
+   },
+   "missedRule": "재료를 안 담고 240초 → 놓침(d8_068). 진행 중 계산 → 놓침",
+   "recallLine": "할머니 국수 물 끓어요! 행렬 사이로 와 주세요!",
+   "script": "day8-script.jsonl d8_052"
+  },
+  {
+   "id": "E16",
+   "name": "보라 전단지 바람",
+   "day": 8,
+   "type": "side",
+   "cast": [
+    "beomi",
+    "spy"
+   ],
+   "trigger": "8일차 합류 직후 반기철이 든 전단지가 자동문 바람에 흩어짐(d8_027)",
+   "setup": "입구 안쪽 바닥에 보라 전단지 16장. 카트로 밟고 지나가면 바퀴·바닥판에 붙는다.",
+   "goal": "60초 안에 12장 이상 카트로 쓸어 담기",
+   "success": "12장 이상",
+   "partial": "8~11장",
+   "fail": "7장 이하",
+   "physics": [
+    "전단지는 납작한 loose prop. 카트가 0.5 m 안을 1.0 m/s 이하로 지나가면 붙음",
+    "빠르게 지나가면 바람에 다시 날림(1.8 m/s 넘으면 붙은 것도 1장 떨어짐)"
+   ],
+   "tuning": {
+    "timeLimitSec": 60,
+    "flyers": 16,
+    "need": 12,
+    "pickRadiusM": 0.5,
+    "pickMaxSpeed": 1.0,
+    "blowOffSpeed": 1.8
+   },
+   "reward": {
+    "vitality": 3,
+    "affinity": {
+     "beomi": 1
+    }
+   },
+   "storeChange": "입구 '보라 전단지 재활용함'(성공·부분)",
+   "audio": {
+    "bgm": [
+     "bgm.tension"
+    ],
+    "sfx": [
+     "flyer-flutter",
+     "flyer-scoop",
+     "door-chime"
+    ]
+   },
+   "ifIgnored": "놓침(범이가 빗자루로 쓸음, d8_036)",
+   "target": "flyer-zone",
+   "waypoints": [
+    {
+     "target": "flyer-zone",
+     "item": "flyer",
+     "n": 12,
+     "loose": true
+    }
+   ],
+   "judge": {
+    "scooped": "E04 slide.scooped 판정 재사용(줍는 물건만 flyer)",
+    "success": "scooped >= 12",
+    "partial": "8 <= scooped <= 11",
+    "fail": "scooped <= 7",
+    "missed": "거절 선택지 또는 60초 동안 flyer-zone 안 옴 또는 도중 계산"
+   },
+   "missedRule": "거절(d8_029 세 번째) 또는 60초 동안 안 옴 → 놓침(d8_036)",
+   "recallLine": "손님! 전단지가 계산대까지 와요! 카트로요!",
+   "script": "day8-script.jsonl d8_031"
+  },
+  {
+   "id": "E17",
+   "name": "떡볶이 수레 2호점",
+   "day": 9,
+   "type": "main",
+   "cast": [
+    "halmeoni",
+    "beomsuk",
+    "rivalboss"
+   ],
+   "trigger": "9일차 경쟁 마트 시식 천막(d9_008) → 범숙의 2호 시식대 결정(d9_016)",
+   "setup": "할머니 떡볶이 수레(솥 + 국물, 40kg)를 카트 앞 고리에 걸고 시식 코너에서 입구 2호 시식대까지.",
+   "goal": "수레를 2호 시식대까지(180초)",
+   "success": "출렁 0~1 && 과속(>1.2 m/s) 누적 4초 이하",
+   "partial": "출렁 2 또는 과속 누적 4~8초",
+   "fail": "출렁 3(국물 넘침) 또는 과속 누적 8초 초과",
+   "physics": [
+    "수레 40kg 가 카트 앞에서 끌림(관성 큼)",
+    "급제동·cart-bump 마다 국물 출렁 1(E13 쟁반 판정 재사용)",
+    "속도 상한 1.2 m/s(E12 탑승 속도 판정 재사용)"
+   ],
+   "tuning": {
+    "timeoutSec": 180,
+    "speedLimit": 1.2,
+    "overSpeedGraceSec": 4,
+    "spillAt": 3,
+    "wagonKg": 40
+   },
+   "reward": {
+    "vitality": 10,
+    "affinity": {
+     "halmeoni": 1
+    }
+   },
+   "storeChange": "입구 '2호 시식대' 상시(성공·부분). 실패·놓침이면 10일차까지만",
+   "audio": {
+    "bgm": [
+     "bgm.errand"
+    ],
+    "sfx": [
+     "wagon-creak",
+     "soup-slosh",
+     "speed-warn",
+     "sample-tray",
+     "stinger.success|partial|comicfail"
+    ]
+   },
+   "ifIgnored": "exit-rules.json ignoreEvent",
+   "target": "sample-corner-2",
+   "waypoints": [
+    {
+     "target": "sample-corner",
+     "item": "sample-wagon",
+     "n": 1,
+     "rider": true,
+     "kg": 40
+    }
+   ],
+   "judge": {
+    "slosh": "수레를 건 뒤 (급제동: 속도 감소 dv > 0.5 && 직전 속도 > 0.8) 또는 cart-bump 1번 = 출렁 1",
+    "speed": "카트 속도 > 1.2 m/s 누적 시간",
+    "success": "도착 && slosh <= 1 && over <= 4초",
+    "partial": "도착 && (slosh == 2 || 4 < over <= 8)",
+    "fail": "slosh >= 3(넘침, 수레는 그 자리에) || over > 8 || 180초 초과",
+    "missed": "180초 동안 수레를 안 걺 또는 도중 계산"
+   },
+   "missedRule": "거절(d9_021 세 번째) 또는 180초 동안 안 걺 → 놓침(d9_038)",
+   "recallLine": "손님! 할머니 수레요! 국물 식어요!",
+   "script": "day9-script.jsonl d9_023"
+  },
+  {
+   "id": "E18",
+   "name": "반값 대신 장보기",
+   "day": 9,
+   "type": "side",
+   "cast": [
+    "spy"
+   ],
+   "trigger": "9일차 팀장이 천막으로 돌아간 뒤(d9_043) 반기철의 부탁(d9_045)",
+   "setup": "손목을 삔 반기철 대신 팀장 장보기 목록(범샘물·보들범·범란 하나씩)을 담아 안마의자로 가져다준다.",
+   "goal": "세 상품을 담아 안마의자까지(150초)",
+   "success": "세 개 모두 && 깨진 알 0",
+   "partial": "세 개 모두 && 깨진 알 1 이상",
+   "fail": "150초 안에 못 옴(일부만 담음)",
+   "physics": [
+    "범샘물 13kg + 보들범 4.5kg + 범란 1.6kg. 계란이 맨 위에 오면 잘 깨짐"
+   ],
+   "tuning": {
+    "timeoutSec": 150
+   },
+   "reward": {
+    "vitality": 3,
+    "affinity": {
+     "spy": 1
+    }
+   },
+   "storeChange": "반기철이 안마의자 단골이 됨(R69)",
+   "audio": {
+    "bgm": [
+     "bgm.errand"
+    ],
+    "sfx": [
+     "item-pick",
+     "massage-chair",
+     "snore",
+     "stinger.success|partial|comicfail"
+    ]
+   },
+   "ifIgnored": "놓침(반기철이 직접 삼, d9_058)",
+   "target": "massage-chair",
+   "waypoints": [
+    {
+     "target": "aisle-01-water",
+     "item": "water",
+     "n": 1
+    },
+    {
+     "target": "aisle-02-household",
+     "item": "tissue",
+     "n": 1
+    },
+    {
+     "target": "aisle-01-eggs",
+     "item": "egg",
+     "n": 1
+    }
+   ],
+   "handOver": "안마의자 2.5 m 안에 들어오면 세 상품을 카트에서 빼서 넘김(영수증·계산에 안 들어감). NEW",
+   "judge": {
+    "success": "세 개 && 미션 중 eggsToday 증가 0",
+    "partial": "세 개 && 깨진 알 >= 1",
+    "fail": "150초 초과(하나라도 빠짐)",
+    "missed": "거절 또는 하나도 안 담고 150초 또는 도중 계산"
+   },
+   "missedRule": "거절(d9_049 세 번째) 또는 150초 → 놓침(d9_058)",
+   "recallLine": "반값 아저씨가 안마의자에서 손님 부르세요!",
+   "script": "day9-script.jsonl d9_051"
+  },
+  {
+   "id": "E19",
+   "name": "1원 전쟁 타임세일",
+   "day": 10,
+   "type": "main",
+   "cast": [
+    "beomsuk",
+    "pa",
+    "rivalboss",
+    "spy"
+   ],
+   "trigger": "10일차 경쟁 마트 '무조건 1원 싸게' 현수막(d10_008) → 점장 경매 방송 '오후 3시 맞불 타임세일'(d10_013)",
+   "setup": "특가 매대 파렛트에 범라면 박스 6개. 보라 카트 3대가 10초마다 1박스씩 가져간다. 박스를 카트에 실어 계산대 앞 '맞불 매대'에 세 개 놓아야 한다.",
+   "goal": "150초 안에 범라면 박스 3개를 맞불 매대(counter-endcap)까지",
+   "success": "3박스 && 보라 카트 충돌 0",
+   "partial": "3박스 && 충돌 1~2, 또는 2박스",
+   "fail": "0~1박스, 또는 충돌 3 이상",
+   "physics": [
+    "박스 1개 9kg(40봉). 3개 실으면 27kg — 급회전 때 위 박스가 미끄러짐(E03 과 같음)",
+    "보라 카트(60kg)는 멈추지 않고 파렛트로 직진, 부딪히면 내 카트가 밀림",
+    "맞불 매대 2 m 안에서 1초 멈추면 박스 1개가 매대로 옮겨짐"
+   ],
+   "tuning": {
+    "timeLimitSec": 150,
+    "boxesOnPallet": 6,
+    "rivalCarts": 3,
+    "rivalGrabIntervalSec": 10,
+    "boxKg": 9,
+    "dropHoldSec": 1.0,
+    "dropR": 2.0
+   },
+   "reward": {
+    "vitality": 12,
+    "affinity": {
+     "beomsuk": 1
+    }
+   },
+   "storeChange": "계산대 앞 '맞불 매대' POP(성공·부분이면 11일차까지)",
+   "audio": {
+    "bgm": [
+     "bgm.timesale"
+    ],
+    "sfx": [
+     "auction-bell",
+     "cart-grab",
+     "cart-bump",
+     "item-place",
+     "stopwatch-click",
+     "timer-tick",
+     "stinger.success|partial|comicfail"
+    ]
+   },
+   "ifIgnored": "exit-rules.json ignoreEvent",
+   "target": "counter-endcap",
+   "waypoints": [
+    {
+     "target": "timesale-endcap",
+     "item": "ramen",
+     "n": 3
+    }
+   ],
+   "rival": {
+    "who": "purple-squad",
+    "carts": 3,
+    "from": "squad-gate",
+    "to": "timesale-endcap",
+    "grabIntervalSec": 10,
+    "bumpTarget": "rival-cart"
+   },
+   "judge": {
+    "boxes": "맞불 매대에 놓인 박스 수(카트에 실린 채는 안 셈)",
+    "hits": "bumpTarget rival-cart cart-bump 횟수(같은 카트 1초 안 연속은 1번)",
+    "success": "boxes == 3 && hits == 0",
+    "partial": "(boxes == 3 && 1 <= hits <= 2) || boxes == 2",
+    "fail": "boxes <= 1 || hits >= 3",
+    "missed": "150초 동안 박스를 하나도 안 실음, 또는 도중 계산",
+    "earlyEnd": "boxes == 3 이면 바로 끝"
+   },
+   "missedRule": "거절(d10_020 세 번째) 또는 박스 0 으로 150초 → 놓침(d10_038). 진행 중 계산 → 놓침",
+   "recallLine": "손님! 경매 시작했어요! 범라면 박스요!",
+   "script": "day10-script.jsonl d10_022",
+   "note": "E03 타임세일 재사용(rival 대상만 보라 카트, 도착점 추가). 팀장 첫 angry 는 결과 무관(d10_040)",
+   "addedIn": "0.9"
+  },
+  {
+   "id": "E20",
+   "name": "카트 열차 정리",
+   "day": 11,
+   "type": "main",
+   "cast": [
+    "beomi",
+    "beomsuk",
+    "rivalboss"
+   ],
+   "trigger": "11일차 보라 조끼가 견학 중 빌린 카트 5대를 매장 곳곳에 두고 감(d11_007) → 범이 수습 마지막 평가(d11_012)",
+   "setup": "범창고 카트 5대가 매장 다섯 곳에 서 있다. 내 카트 뒤에 한 대씩 끼워 열차를 만들고 출입구 옆 카트 보관소까지.",
+   "goal": "120초 안에 5대를 한 줄로 끼워 카트 보관소까지",
+   "success": "5대 && 끊김 0 && 매대 충돌 0",
+   "partial": "5대 && (끊김 1 || 매대 충돌 1~2), 또는 4대",
+   "fail": "3대 이하, 또는 120초 초과",
+   "physics": [
+    "카트 1대 18kg. 5대 끼우면 길이 약 5 m, 뒤쪽이 바깥으로 휨(꼬리 스윙)",
+    "1.2 m/s 넘는 속도로 초당 70° 넘게 꺾으면 맨 뒤 칸이 끊김(그 자리에 섬, 다시 끼울 수 있음)",
+    "끼우기: 카트 뒤 0.8 m 안에서 1.0 m/s 이하로 다가가면 철컥"
+   ],
+   "tuning": {
+    "timeLimitSec": 120,
+    "startWithinSec": 60,
+    "carts": 5,
+    "cartKg": 18,
+    "linkRadiusM": 0.8,
+    "linkMaxSpeed": 1.0,
+    "breakTurnDegPerSec": 70,
+    "breakMinSpeed": 1.2
+   },
+   "reward": {
+    "vitality": 10,
+    "affinity": {
+     "beomi": 1
+    }
+   },
+   "storeChange": "카트 보관소 '오늘의 열차' 사진(성공·부분). 범이 명찰: 성공·부분 '정직원 이범준'(flag.beomiHired) / 실패·놓침 '수습(연장)'",
+   "audio": {
+    "bgm": [
+     "bgm.cartrace"
+    ],
+    "sfx": [
+     "cart-joint",
+     "cart-train-break",
+     "cart-bump",
+     "stopwatch-click",
+     "timer-tick",
+     "applause",
+     "achievement"
+    ]
+   },
+   "ifIgnored": "exit-rules.json ignoreEvent",
+   "target": "cart-corral",
+   "waypoints": [
+    {
+     "target": "cart-stray-1",
+     "item": "stray-cart",
+     "n": 1
+    },
+    {
+     "target": "cart-stray-2",
+     "item": "stray-cart",
+     "n": 1
+    },
+    {
+     "target": "cart-stray-3",
+     "item": "stray-cart",
+     "n": 1
+    },
+    {
+     "target": "cart-stray-4",
+     "item": "stray-cart",
+     "n": 1
+    },
+    {
+     "target": "cart-stray-5",
+     "item": "stray-cart",
+     "n": 1
+    }
+   ],
+   "cartTrain": {
+    "max": 5,
+    "linkRadiusM": 0.8,
+    "linkMaxSpeed": 1.0,
+    "eachKg": 18,
+    "breakTurnDegPerSec": 70,
+    "breakMinSpeed": 1.2
+   },
+   "judge": {
+    "linked": "도착 때 열차에 끼워진 카트 수",
+    "breaks": "끊김 횟수(다시 끼워도 셈)",
+    "rackHits": "열차(아무 칸)와 매대·벽 cart-bump 횟수",
+    "success": "도착 && linked == 5 && breaks == 0 && rackHits == 0",
+    "partial": "도착 && ((linked == 5 && (breaks == 1 || 1 <= rackHits <= 2)) || linked == 4)",
+    "fail": "linked <= 3 || 120초 초과",
+    "missed": "60초 안에 첫 카트를 안 끼움, 거절, 또는 도중 계산"
+   },
+   "flags": {
+    "flag.beomiHired": "성공·부분이면 수료식 선택지(d11_045)에서 1"
+   },
+   "missedRule": "거절(d11_015 세 번째) 또는 60초 안에 한 대도 안 끼움 → 놓침(d11_038). 진행 중 계산 → 놓침",
+   "recallLine": "손님! 카트 열차 출발해야 해요! 제 평가예요!",
+   "script": "day11-script.jsonl d11_017",
+   "note": "NEW 미션 cartTrain. 1주차 E07 벌칙 '카트 열 대 정리'의 보답",
+   "addedIn": "0.9"
+  },
+  {
+   "id": "E21",
+   "name": "새벽 3시, 둘이서",
+   "day": 12,
+   "type": "main",
+   "cast": [
+    "halmeoni",
+    "spy",
+    "pa"
+   ],
+   "trigger": "12일차 계산 뒤 03:00 timeskip(d12_015), 두 목소리 속삭임 방송(d12_016~017)",
+   "setup": "뒤쪽 벽 비밀 칸이 다시 열렸다. 안에 보라 주머니. 반기철이 3 m 뒤에서 카트를 밀며 따라온다(가끔 덜컹). 지게차 2대 불빛을 피해 입구 매트까지.",
+   "goal": "보라 주머니를 입구 매트까지, 지게차 불빛에 안 걸리게(210초)",
+   "success": "걸림 0",
+   "partial": "걸림 1",
+   "fail": "걸림 2(주머니가 반기철 손에서 떨어짐, 그래도 메모는 봄)",
+   "physics": [
+    "E08 stealth 그대로(지게차 2대, 시야 40°·9 m, 손전등 끄면 속도 ×0.6)",
+    "반기철 카트(20kg)가 3 m 뒤를 따라옴. 25~40초마다 한 번 덜컹 = 소음(가까운 지게차가 6초 돌아봄)",
+    "반기철 카트가 불빛에 들어가도 걸림 1"
+   ],
+   "tuning": {
+    "timeLimitSec": 210,
+    "startWithinSec": 90,
+    "caughtMax": 2,
+    "followDistM": 3,
+    "followNoiseEverySec": [
+     25,
+     40
+    ],
+    "pouchKg": 1
+   },
+   "reward": {
+    "vitality": 8,
+    "affinity": {
+     "halmeoni": 1,
+     "spy": 1
+    }
+   },
+   "storeChange": "비밀 칸 표식에 보라 리본(성공·부분). 인물 카드 '할머니 메모'(결과 무관)",
+   "audio": {
+    "bgm": [
+     "bgm.dawn"
+    ],
+    "sfx": [
+     "flashlight-click",
+     "forklift-beep",
+     "forklift-spot",
+     "stinger.spotted",
+     "pouch-rustle",
+     "cart-bump",
+     "pa-chime"
+    ]
+   },
+   "ifIgnored": "exit-rules.json afterCheckout(계산 뒤 사건)",
+   "target": "entrance-mat",
+   "waypoints": [
+    {
+     "target": "secret-shelf",
+     "item": "purple-pouch",
+     "n": 1,
+     "kg": 1
+    }
+   ],
+   "follow": {
+    "who": "spy",
+    "distM": 3,
+    "cartKg": 20,
+    "noiseEverySec": [
+     25,
+     40
+    ],
+    "bumpIsNoise": true
+   },
+   "judge": {
+    "caught": "플레이어 또는 반기철 카트가 지게차 시야에 1.5초 이상 들어간 횟수",
+    "success": "도착 && caught == 0",
+    "partial": "도착 && caught == 1",
+    "fail": "caught >= 2 || 210초 초과",
+    "missed": "거절, 또는 90초 안에 시작 안 함"
+   },
+   "flags": {
+    "flag.recipeClue": "메모를 본 뒤(d12_045 두 선택지) 1 — 결과·놓침 무관"
+   },
+   "missedRule": "거절(d12_024 세 번째) 또는 90초 안에 시작 안 함 → 놓침(d12_048). 메모는 할머니가 그대로 말해 줌",
+   "recallLine": "(속삭임) 젊은이, 주머니는 저 벽 끝이야.",
+   "script": "day12-script.jsonl d12_026",
+   "note": "E08 stealth 재사용 + follow(NEW: 따라오는 NPC 카트, E05 tail 반대 방향)",
+   "addedIn": "0.9"
+  },
+  {
+   "id": "E22",
+   "name": "무대 설치",
+   "day": 13,
+   "type": "main",
+   "cast": [
+    "beomsuk",
+    "beomi",
+    "rivalboss",
+    "pa"
+   ],
+   "trigger": "13일차 팀장이 대결 규칙을 말함(d13_006) → 범숙 '범콜라 12팩 네 개로 무대 다리'(d13_009)",
+   "setup": "입구 앞 바닥에 무대 다리 칸 4개(데칼, 화살표 방향 표시). 범콜라 12팩 4개를 싣고 칸마다 정확히 세워 내려놓는다.",
+   "goal": "180초 안에 4칸 모두 칸 안 0.6 m, 방향 20° 안에 내려놓기",
+   "success": "4칸 모두 맞음",
+   "partial": "2~3칸 맞음",
+   "fail": "0~1칸 맞음, 또는 180초 초과",
+   "physics": [
+    "범콜라 12팩 1개 4.5kg. 4팩 18kg 이라 가볍지만 급정거 때 팩이 미끄러져 앞으로 쏠림",
+    "내려놓기: 칸 안에서 속도 0.15 m/s 이하로 1.5초 멈추면 1팩(되돌릴 수 없음)",
+    "칸 4는 출입문 쪽이라 손님 NPC 가 지나감"
+   ],
+   "tuning": {
+    "timeLimitSec": 180,
+    "slots": 4,
+    "tolM": 0.6,
+    "tolDeg": 20,
+    "holdSec": 1.5,
+    "holdMaxSpeed": 0.15,
+    "packKg": 4.5
+   },
+   "reward": {
+    "vitality": 10,
+    "affinity": {
+     "beomsuk": 1
+    }
+   },
+   "storeChange": "14일차 대결 무대: 성공 반듯 / 부분 살짝 기울어짐 / 실패·놓침 범숙이 밤새 맞춤(14일차 첫 대사 d14_003·d14_004)",
+   "audio": {
+    "bgm": [
+     "bgm.errand"
+    ],
+    "sfx": [
+     "slot-ok",
+     "slot-miss",
+     "item-place",
+     "stopwatch-click",
+     "timer-tick",
+     "stinger.success|partial|comicfail"
+    ]
+   },
+   "ifIgnored": "exit-rules.json ignoreEvent",
+   "target": "stage-area",
+   "waypoints": [
+    {
+     "target": "aisle-01-water",
+     "item": "cola12",
+     "n": 4
+    }
+   ],
+   "parking": {
+    "slots": [
+     "stage-slot-1",
+     "stage-slot-2",
+     "stage-slot-3",
+     "stage-slot-4"
+    ],
+    "tolM": 0.6,
+    "tolDeg": 20,
+    "holdSec": 1.5,
+    "maxSpeed": 0.15
+   },
+   "judge": {
+    "ok": "칸마다: |카트 중심 − 칸 중심| <= 0.6 m && |카트 방향 − headingDeg| <= 20° 일 때 내려놓은 팩 수",
+    "success": "ok == 4",
+    "partial": "2 <= ok <= 3",
+    "fail": "ok <= 1 || 180초 초과(그때까지 ok 로 판정하지 않고 fail)",
+    "missed": "거절, 또는 180초 동안 한 팩도 안 내려놓음, 또는 도중 계산"
+   },
+   "missedRule": "거절(d13_015 세 번째) 또는 180초 동안 0팩 → 놓침(d13_038). 진행 중 계산 → 놓침",
+   "recallLine": "손님! 무대 다리 세워야 해요! 범콜라요!",
+   "script": "day13-script.jsonl d13_017",
+   "note": "NEW 미션 parking(정밀 주차). 팀장 공개(d13_046)는 결과와 무관",
+   "addedIn": "0.9"
+  },
+  {
+   "id": "E23",
+   "name": "동네 장보기 대결",
+   "day": 14,
+   "type": "main",
+   "cast": [
+    "rivalboss",
+    "spy",
+    "halmeoni",
+    "beomsuk",
+    "beomi",
+    "cashier"
+   ],
+   "trigger": "14일차 생중계 방송(d14_005) → 팀장 목록 발표(d14_006) → 출발선 선택지(d14_019)",
+   "setup": "같은 목록 6가지(범란 2판, 범샘물, 범쌀, 범라면, 보들범)를 팀장 + 보라 카트 2대와 동시에 담아 계산. 재고는 넉넉해서 빼앗기 없음 — 길 막기와 속도 싸움.",
+   "goal": "300초 안에 목록 6가지를 담아 팀장보다 먼저 계산",
+   "success": "목록 완성 && 팀장보다 먼저 계산 && 깨진 알 0",
+   "partial": "목록 완성 && (먼저 계산 && 깨진 알 1+, 또는 늦게 계산)",
+   "fail": "목록 미완성으로 계산, 또는 300초 초과",
+   "physics": [
+    "팀장 카트는 정해진 경로(물→계란→라면→쌀→휴지→계산), 예상 230초",
+    "보라 카트 2대(pv-1·pv-2)는 통로 02·계란 코너에서 플레이어 앞을 가로지름(밀면 rival-cart 충돌, E24 c2 감점)",
+    "aff.spy >= 3 이면 40초부터 반기철이 pv-2 를 계란 코너 앞에서 30초 붙잡음",
+    "범쌀 20kg + 계란 2판: 쌀 위에 계란을 얹어야 안 깨짐(E01·E07 압력 판정)"
+   ],
+   "tuning": {
+    "timeLimitSec": 300,
+    "countdown": 3,
+    "bossFinishSec": 230,
+    "rivalSpeedMps": 1.25,
+    "squadSpeedMps": 1.4,
+    "allyMinAff": 3,
+    "allyHoldSec": 30
+   },
+   "reward": {
+    "vitality": 12,
+    "affinity": {
+     "beomsuk": 1,
+     "halmeoni": 1
+    }
+   },
+   "storeChange": "엔딩별 간판(W2A '동네 단골 1등' / W2B 보라 깃발 / W2C A '보라 카트 대여' 표지판)",
+   "audio": {
+    "bgm": [
+     "bgm.cartrace",
+     "bgm.emotional"
+    ],
+    "sfx": [
+     "versus-horn",
+     "rival-checkout",
+     "stopwatch-click",
+     "egg-crack",
+     "cart-bump",
+     "checkout-done",
+     "timer-tick"
+    ]
+   },
+   "ifIgnored": "exit-rules.json ignoreEvent",
+   "target": "checkout",
+   "waypoints": [
+    {
+     "target": "aisle-01-eggs",
+     "item": "egg",
+     "n": 2
+    },
+    {
+     "target": "aisle-01-water",
+     "item": "water",
+     "n": 1
+    },
+    {
+     "target": "aisle-02-rice",
+     "item": "rice",
+     "n": 1
+    },
+    {
+     "target": "timesale-endcap",
+     "item": "ramen",
+     "n": 1
+    },
+    {
+     "target": "aisle-02-household",
+     "item": "tissue",
+     "n": 1
+    }
+   ],
+   "versus": {
+    "rivals": [
+     "boss(rivalboss)",
+     "pv-1(purple-squad, blocker)",
+     "pv-2(purple-squad, blocker)"
+    ],
+    "bossFinishSec": 230,
+    "ally": "aff.spy >= 3 → spy 가 pv-2 를 30초 막음"
+   },
+   "judge": {
+    "listDone": "계산 때 목록 6칸이 모두 카트에 있음(범란은 2판이 2칸)",
+    "first": "플레이어 checkout.done 시각 < 팀장 rival-checkout 시각",
+    "eggs": "대결 시작 뒤 eggsToday 증가분",
+    "success": "listDone && first && eggs == 0",
+    "partial": "listDone && ((first && eggs >= 1) || !first)",
+    "fail": "!listDone || 300초 초과",
+    "missed": "출발 안 함(d14_019 세 번째), 또는 300초 동안 목록 0칸"
+   },
+   "missedRule": "구경(d14_019 세 번째) 또는 300초 동안 0칸 → 놓침(d14_048). B 경로는 E24 도 같이 놓침",
+   "recallLine": "손님! 대결 시작했어요! 목록 들고 가세요!",
+   "script": "day14-script.jsonl d14_025 (A) / d14_026 (B)",
+   "note": "NEW 미션 versus(라이벌 쇼퍼 경로·담기·계산 시뮬레이션). 레시피 완성(d14_060~)은 결과와 무관",
+   "addedIn": "0.9"
+  },
+  {
+   "id": "E24",
+   "name": "재감사",
+   "day": 14,
+   "type": "side",
+   "cast": [
+    "auditor",
+    "spy"
+   ],
+   "onlyIf": "flag.w1Ending == 'B'",
+   "trigger": "B 경로 14일차 감사관 등장(d14_017). E23 과 같이 시작(d14_026 sideMissions)",
+   "setup": "감사관이 7일차처럼 6 m 뒤에서 대결을 처음부터 끝까지 본다. 체크 5개.",
+   "goal": "재감사 체크 5개 중 많이 달성",
+   "success": "체크 4 이상",
+   "partial": "체크 2~3",
+   "fail": "체크 0~1",
+   "checklist": [
+    "c1 깨진 알 0개",
+    "c2 보라 카트와 충돌 0",
+    "c3 2호 시식대 줄(9일차 E17 성공·부분)",
+    "c4 300초 안에 계산",
+    "c5 반기철에게 봉투 권하기(d14_041 첫 선택지)"
+   ],
+   "physics": [
+    "E11 감사 그대로(감사관 NPC 6 m 뒤, 충돌 없음)",
+    "c5 는 계산 뒤 선택지로 확정"
+   ],
+   "tuning": {
+    "followDistM": 6,
+    "timeLimitSec": 300
+   },
+   "reward": {
+    "vitality": 0
+   },
+   "storeChange": "없음(대사만). 존속 판정은 2주차 엔딩(d14_080)에서",
+   "audio": {
+    "bgm": [
+     "bgm.audit"
+    ],
+    "sfx": [
+     "motif.auditor",
+     "tablet-tap",
+     "check-stamp"
+    ]
+   },
+   "ifIgnored": "놓침 = E23 놓침과 같이(chainMissed d14_026). A 경로에서는 시작하지 않음(기록 없음)",
+   "target": "checkout",
+   "audit": {
+    "checklist": [
+     "c1",
+     "c2",
+     "c3",
+     "c4",
+     "c5"
+    ],
+    "pass": {
+     "success": ">=4",
+     "partial": "2-3",
+     "fail": "0-1"
+    },
+    "auditorFollow": {
+     "startAt": "auditor-post",
+     "distM": 6
+    },
+    "finalizeAt": "d14_041"
+   },
+   "judge": {
+    "success": "체크 >= 4",
+    "partial": "체크 2–3",
+    "fail": "체크 0–1",
+    "missed": "E23 놓침(B 경로)"
+   },
+   "missedRule": "B 경로에서 E23 을 놓치면 E24 도 놓침(d14_057 '체크표를 비워 두죠')",
+   "script": "day14-script.jsonl d14_026 sideMissions, 결과 d14_050",
+   "note": "E11 audit 재사용. 활기 없음(week2Vitality E24 0). 감사관 대사(d14_051~057)만 바꿈",
+   "addedIn": "0.9"
+  }
+ ],
+ "targetsFile": "story/targets.json",
+ "endingVitality": {
+  "start": 12,
+  "max": 100,
+  "perEvent": "성공 = 표의 값, 부분 = 절반(내림), 실패·놓침 = 0. E11 은 활기 없음",
+  "main": {
+   "E01": 10,
+   "E02": 10,
+   "E03": 12,
+   "E04": 10,
+   "E05": 12,
+   "E07": 10,
+   "E08": 8,
+   "E10": 10
+  },
+  "mainMax": 94,
+  "side": {
+   "E06": 6,
+   "E09": 6,
+   "E12": 5,
+   "E13": 3,
+   "E14": 3
+  },
+  "when": "7일차 d7_080(branch on meter.vitality, commit today)에서 오늘 E10·E09 결과까지 먼저 더한 뒤 판정. day.end(vitality committed)는 다시 더하지 않음",
+  "ranges": {
+   "A": ">= 70",
+   "B": "45–69",
+   "C": "< 45"
+  },
+  "examples": [
+   "메인 8개 모두 성공 = 94 → A",
+   "메인 절반(약 40) 성공 + 부분 몇 개 = 52~60 → B",
+   "1·2일차만 성공 = 32 → C"
+  ],
+  "note": "지금 코드 endDay 는 DAY_MAIN 결과만 더함(v0.6 README 5번). 사이드까지 더할지 정하면 A 문턱(70)이 쉬워짐 — 둘 다 이 범위로 플레이 가능 v0.8: 2주차는 week2Vitality(따로 계산, 같은 규칙)"
+ },
+ "week2Vitality": {
+  "start": "floor(1주차 최종 활기 / 2), 최대 40. A(70~100) → 35~40, B(45~69) → 22~34. 1주차 값은 flag.w1Vitality 에 보관",
+  "max": 100,
+  "perEvent": "성공 = 표의 값, 부분 = 절반(내림), 실패·놓침 = 0 (endingVitality 와 같은 규칙). E24 는 활기 없음",
+  "main": {
+   "E15": 10,
+   "E17": 10,
+   "E19": 12,
+   "E20": 10,
+   "E21": 8,
+   "E22": 10,
+   "E23": 12
+  },
+  "mainMax": 72,
+  "side": {
+   "E16": 3,
+   "E18": 3
+  },
+  "ranges": {
+   "W2A": ">= 75",
+   "W2B": "50–74",
+   "W2C": "< 50"
+  },
+  "when": "14일차 엔딩 분기(branch on meter.vitality, commit today, flagKey w2Ending — NEW)에서 오늘 E23 까지 더한 뒤",
+  "examples": [
+   "A 경로 시작 38 + 메인 5개 성공(52) = 90 → W2A",
+   "B 경로 시작 26 + 메인 4개 성공(42) + 부분 2개(10) = 78 → W2A",
+   "B 경로 시작 24 + 성공 2개(20) = 44 → W2C(2주차 재도전)"
+  ],
+  "note": "지금 러너 endDay 는 부분 = 6, 실패 = 2 고정(endingVitality 의 '절반, 0'과 다름). 2주차도 같은 식을 쓸지 정해 주세요(README 질문 3)",
+  "dayMain": {
+   "8": "E15",
+   "9": "E17",
+   "10": "E19",
+   "11": "E20",
+   "12": "E21",
+   "13": "E22",
+   "14": "E23"
+  },
+  "daySide": {
+   "8": "E16",
+   "9": "E18",
+   "14": "E24 (B 경로만, 활기 0)"
+  },
+  "ending": {
+   "node": "d14_080",
+   "on": "meter.vitality",
+   "commit": "today",
+   "week": 2,
+   "flagKey": "w2Ending",
+   "ranges": [
+    {
+     "min": 75,
+     "ending": "W2A",
+     "name": "동네 단골 1등",
+     "goto": "d14_100",
+     "next": "w3_000 (없음)"
+    },
+    {
+     "min": 50,
+     "ending": "W2B",
+     "name": "나란히 영업",
+     "goto": "d14_120",
+     "next": "w3_000 (없음)"
+    },
+    {
+     "min": 0,
+     "ending": "W2C",
+     "name": "한 주 더, 또",
+     "goto": "d14_140",
+     "next": "w2_000 (2주차 재도전)"
+    }
+   ],
+   "maxCheck": "A 시작 40 + 메인 72 + 사이드 6 = 118 → 상한 100. B 최소 22 + 0 = 22 → W2C"
+  }
+ }
+}
