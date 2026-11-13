@@ -608,18 +608,19 @@
 #bw-raid .c-castrow em { font-style: normal; font-size: 12px; color: #ffecd2; font-weight: 700; }
 
 #bw-raid .c-party {
-  position: absolute; left: 24px; top: 427px; width: 216px; height: 226px;
-  background: linear-gradient(90deg, rgba(10,12,20,.78), rgba(10,12,20,0));
+  position: absolute; left: 24px; top: 414px; width: 216px; height: 222px;
+  background: linear-gradient(90deg, rgba(10,12,20,.72), rgba(10,12,20,0));
   border-left: 1px solid rgba(214,176,98,.85);
   padding: 4px 0 0 8px;
+  box-sizing: border-box;
 }
-#bw-raid .c-party header { display: flex; gap: 8px; align-items: baseline; height: 22px; }
+#bw-raid .c-party header { display: flex; gap: 8px; align-items: baseline; height: 18px; margin: 0; }
 #bw-raid .c-party header b { color: var(--gold-hi); font-size: 12px; }
 #bw-raid .c-party header span { color: var(--sub); font-size: 11px; }
 #bw-raid .c-mate {
   position: relative; height: 40px;
-  display: grid; grid-template-columns: 16px 42px 48px 1fr; grid-template-rows: 18px 5px 2px;
-  column-gap: 4px; align-items: center; row-gap: 2px;
+  display: grid; grid-template-columns: 16px 42px 48px 1fr; grid-template-rows: 16px 6px 3px;
+  column-gap: 4px; align-content: start; align-items: center; row-gap: 1px;
 }
 #bw-raid .c-mate .gem {
   width: 10px; height: 10px; margin-left: 2px; transform: rotate(45deg);

@@ -451,14 +451,16 @@ export async function createBoss(scene) {
     const climb = i % 5 >= 3;
     const kinds = ['shard_runner', 'rebar_brute', 'pier_colossus'];
     const kind = kinds[i % kinds.length];
-    const roles = ['tank', 'heal', 'ranged', 'player', 'tank', 'ranged'];
+    const roles = ['tank', 'heal', 'ranged'];
     const threat = roles[i % roles.length];
     if (mobFactory) {
       const p = fromFrame(spot.along, spot.across);
       const mob = mobFactory(kind, p.x, p.z);
       if (mob) {
         if (climb) mob.group.position.y = 0.35;
-        adds.push({ mesh: mob.group, mob, wait: 0.7 + (i % 3) * 0.25, threat, slot: i % 6, radius: ADD_R[kind] || 0.6, kind });
+        const add = { mesh: mob.group, mob, wait: 0.7 + (i % 3) * 0.25, threat, slot: i, radius: ADD_R[kind] || 0.6, kind };
+        markAdd(add);
+        adds.push(add);
         return;
       }
     }
@@ -467,7 +469,31 @@ export async function createBoss(scene) {
     mesh.position.set(p.x, 0.7, p.z);
     mesh.castShadow = true;
     scene.add(mesh);
-    adds.push({ mesh, wait: 0.4, threat, slot: i % 6, radius: 0.55, kind: 'capsule' });
+    const add = { mesh, wait: 0.4, threat, slot: i, radius: 0.55, kind: 'capsule' };
+    markAdd(add);
+    adds.push(add);
+  }
+
+  function markAdd(add) {
+    const color = add.threat === 'heal' ? '#ffe14a' : add.threat === 'ranged' ? '#3ddc84' : '#ff7a1a';
+    const group = new THREE.Group();
+    group.name = 'add-ring';
+    const disc = new THREE.Mesh(
+      new THREE.CircleGeometry(1.45, 28),
+      new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.38, depthTest: false, side: THREE.DoubleSide }),
+    );
+    const ring = new THREE.Mesh(
+      new THREE.RingGeometry(1.45, 1.78, 36),
+      new THREE.MeshBasicMaterial({ color, depthTest: false, side: THREE.DoubleSide }),
+    );
+    disc.rotation.x = -Math.PI / 2;
+    ring.rotation.x = -Math.PI / 2;
+    disc.position.y = 0.2;
+    ring.position.y = 0.22;
+    disc.renderOrder = 6;
+    ring.renderOrder = 7;
+    group.add(disc, ring);
+    add.mesh.add(group);
   }
 
   function addGoal(add, raiders) {
@@ -484,14 +510,17 @@ export async function createBoss(scene) {
     if (!pick.length) pick = pool;
     const t = pick[add.slot % pick.length];
     const bias = add.threat === 'heal' ? 2.2 : add.threat === 'player' ? 4.1 : add.threat === 'ranged' ? 1.15 : 0.15;
-    const ang = bias + (add.slot % 3) * ((Math.PI * 2) / 3);
-    const dist = 7.2 + (add.slot % 2) * 1.6;
+    const ang = bias + add.slot * ((Math.PI * 2) / 4);
+    const dist = 4.6 + (add.slot % 2) * 1.35;
     return { x: t.x + Math.cos(ang) * dist, z: t.z + Math.sin(ang) * dist, id: t.id, tx: t.x, tz: t.z };
   }
 
   function pushAdds(dt, raiders) {
     for (const add of adds) {
-      if (add.mob && !add.mob.ready) continue;
+      if (add.mob && !add.mob.ready) {
+        add.mob.update?.(dt);
+        if (!add.mob.ready) continue;
+      }
       const goal = addGoal(add, raiders);
       if (!goal) continue;
       const dx = goal.x - add.mesh.position.x;

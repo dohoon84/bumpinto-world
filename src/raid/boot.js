@@ -167,7 +167,7 @@ function refreshPortrait(id) {
   try {
     const pack = packs[id];
     pack?.animate?.(pack.group, 0.16, { speed: 0, phase: 'calm' });
-    hud.setPortrait(renderClassPortrait(renderer, pack.group, id));
+    hud.setPortrait(renderClassPortrait(renderer, pack.group, id), id);
   } catch (err) {
     console.warn('[raid] portrait', err);
   }
@@ -375,11 +375,17 @@ function layoutParty(id, opts = {}) {
   for (const a of party) addMark(a.mesh, a.name, a.classId, 'party');
   const mine = ROLE_OF[id] || 'dps';
   const frames = [
-    { id: 'me', name: PLAYER_NAME, role: getClass(id).name, kind: mine, hp: 1, isMe: true, lv: 1, icon: getClass(id).skills[0].id, resBar: getClass(id).resBar },
-    ...party.map((a) => ({ id: a.id, name: a.name, role: a.role, kind: a.kind, hp: 1, isMe: false, lv: 2, icon: a.icon, resBar: a.kind === 'tank' ? 'rage' : a.kind === 'heal' ? 'holy' : a.id === 'npc-mage' ? 'mp' : a.id === 'npc-sin' ? 'energy' : 'focus' })),
+    { id: 'me', name: PLAYER_NAME, role: getClass(id).name, kind: mine, classId: id, hp: 1, isMe: true, lv: 1, icon: getClass(id).skills[0].id, resBar: getClass(id).resBar },
+    ...party.map((a) => ({ id: a.id, name: a.name, role: a.role, kind: a.kind, classId: a.classId, hp: 1, isMe: false, lv: 2, icon: a.icon, resBar: a.kind === 'tank' ? 'rage' : a.kind === 'heal' ? 'holy' : a.id === 'npc-mage' ? 'mp' : a.id === 'npc-sin' ? 'energy' : 'focus' })),
   ];
-  const order = { tank: 0, heal: 1, dps: 2 };
-  frames.sort((a, b) => order[a.kind] - order[b.kind] || (a.isMe ? -1 : 1));
+  const kindRank = { tank: 1, heal: 2, dps: 3 };
+  const classRank = { mage: 0, archer: 1, assassin: 2, priest: 3, warrior: 4 };
+  frames.sort((a, b) => {
+    if (!!a.isMe !== !!b.isMe) return a.isMe ? -1 : 1;
+    const byKind = (kindRank[a.kind] ?? 9) - (kindRank[b.kind] ?? 9);
+    if (byKind) return byKind;
+    return (classRank[a.classId] ?? 9) - (classRank[b.classId] ?? 9);
+  });
   hud.setParty(frames);
 }
 
@@ -489,6 +495,24 @@ let lastLive = false;
 let trailOn = false;
 const playerTrail = [];
 let playerRibbon = null;
+const trailMeshes = [];
+function clearTrails() {
+  trailOn = false;
+  playerTrail.length = 0;
+  for (const mesh of trailMeshes) {
+    scene.remove(mesh);
+    mesh.geometry?.dispose();
+    mesh.material?.dispose();
+  }
+  trailMeshes.length = 0;
+  playerRibbon = null;
+  for (const a of party) {
+    a.record = false;
+    a.trail = [];
+    a._trailAcc = 0;
+    a._trailMesh = null;
+  }
+}
 function syncRibbon(mesh, points, color, name) {
   const n = Math.floor(points.length / 3);
   if (n < 2) return mesh;
@@ -517,8 +541,11 @@ function syncRibbon(mesh, points, color, name) {
     mesh.frustumCulled = false;
     mesh.renderOrder = 12;
     mesh.name = name;
+    mesh.visible = trailOn;
     scene.add(mesh);
+    trailMeshes.push(mesh);
   }
+  mesh.visible = trailOn;
   mesh.geometry.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
   mesh.geometry.computeBoundingSphere();
   return mesh;
@@ -1537,11 +1564,11 @@ function dressHud() {
     slots: true,
   };
   hud.setParty([
-    { id: 'p0', name: '도훈', role: '전사', hp: 0.82, sub: 0.64, aggro: true },
-    { id: 'p1', name: '하린', role: '마법사', hp: 0.55, sub: 0.72 },
-    { id: 'p2', name: '지우', role: '사제', hp: 0.91, sub: 0.48 },
-    { id: 'p3', name: '민재', role: '궁수', hp: 0.34, sub: 0.86 },
-    { id: 'p4', name: '서연', role: '암살자', hp: 0, sub: 0, down: true },
+    { id: 'me', name: '도훈', role: '전사', kind: 'tank', classId: 'warrior', hp: 0.82, sub: 0.64, aggro: true, isMe: true },
+    { id: 'npc-heal', name: '지우', role: '사제', kind: 'heal', classId: 'priest', hp: 0.91, sub: 0.48 },
+    { id: 'npc-mage', name: '하린', role: '마법사', kind: 'dps', classId: 'mage', hp: 0.55, sub: 0.72 },
+    { id: 'npc-bow', name: '민재', role: '궁수', kind: 'dps', classId: 'archer', hp: 0.34, sub: 0.86 },
+    { id: 'npc-sin', name: '서연', role: '암살자', kind: 'dps', classId: 'assassin', hp: 0, sub: 0, down: true },
   ]);
   boss.hurt(Math.round(boss.state.hpMax * 0.38));
 }
@@ -1787,9 +1814,18 @@ window.__raid = {
     },
     pause(v = true) { simPaused = v; },
     record(on = true) {
-      trailOn = !!on;
-      playerTrail.length = 0;
-      for (const a of party) { a.record = !!on; a.trail = []; a._trailAcc = 0; }
+      if (!on) {
+        clearTrails();
+        return;
+      }
+      clearTrails();
+      trailOn = true;
+      for (const a of party) { a.record = true; a.trail = []; a._trailAcc = 0; }
+    },
+    portraits() {
+      const out = {};
+      for (const id of CLASS_IDS) out[id] = renderClassPortrait(renderer, packs[id].group, id);
+      return out;
     },
     report() {
       const rows = party.map((a) => ({

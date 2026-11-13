@@ -250,6 +250,8 @@ export function createHud() {
       aura: icon.startsWith('buff_') || icon.startsWith('debuff_') ? icon : '',
     }));
     cells.push({ key: 'T', empty: true });
+    skillsEl.dataset.mode = 'live';
+    skillsEl.dataset.klass = active.id;
     skillsEl.innerHTML = cells.map((c) => `
       <button type="button" class="c-slot${c.empty ? ' is-empty' : ''}${c.skill?.locked ? ' locked' : ''}" ${c.skill ? `data-skill="${c.skill.id}"` : ''} ${c.aura ? `data-aura="${c.aura}" data-remain="8"` : ''}>
         ${c.icon ? `<img src="/dungeon/hud/icons/${c.icon}.png" alt="" />` : ''}
@@ -567,10 +569,11 @@ export function createHud() {
         });
       });
     },
-    setPortrait(url) {
+    setPortrait(url, classId) {
       const portrait = root.querySelector('[data-portrait]');
       if (!portrait || !url) return;
       portrait.dataset.lock = '1';
+      if (classId) portrait.dataset.klass = classId;
       portrait.src = url;
     },
     setClass(id) {
@@ -584,7 +587,7 @@ export function createHud() {
       const fill = root.querySelector('[data-rage-fill]');
       if (fill) fill.parentElement.dataset.res = active.resBar === 'mp' ? 'mana' : active.resBar;
       const portrait = root.querySelector('[data-portrait]');
-      if (portrait && !portrait.dataset.lock) portrait.removeAttribute('src');
+      if (portrait && portrait.dataset.klass && portrait.dataset.klass !== id) portrait.dataset.klass = id;
       const nameEl = root.querySelector('[data-player-name]');
       if (nameEl && !this.caption) nameEl.textContent = '도훈';
       paintSkills(active.skills);
@@ -811,7 +814,7 @@ export function createHud() {
         }
       }
       if (cap?.slots) {
-        if (skillsEl.dataset.mode !== 'show') paintShowcase();
+        if (skillsEl.dataset.mode !== 'live' || skillsEl.dataset.klass !== active.id) paintSkills(active.skills);
         const slots = skillsEl.querySelectorAll('.c-slot');
         const look = [
           ['', '', 0],
