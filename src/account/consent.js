@@ -89,11 +89,12 @@ let consentGate = null;
 
 function closeModal(wrap) {
   try { wrap.remove(); } catch { /* noop */ }
+  document.body.classList.remove('acct-consent-blocking');
 }
 
 /**
  * 기존 로그인 계정에 약관 재동의가 필요하면 차단 모달을 띄운다.
- * 거절/닫기 → 로그아웃 후 { ok:false, declined:true }.
+ * 배경 클릭으로는 닫히지 않는다. Escape 또는 '동의하지 않음' → 로그아웃 후 { ok:false, declined:true }.
  * 이미 동의한 상태면 { ok:true, me } 를 바로 반환.
  */
 export async function ensureAccountConsent({ me, cfg } = {}) {
@@ -102,6 +103,7 @@ export async function ensureAccountConsent({ me, cfg } = {}) {
   consentGate = (async () => {
     const conf = cfg || (await accountApi.config().catch(() => null));
     const result = await new Promise((resolve) => {
+      let done = false;
       const wrap = document.createElement('div');
       wrap.className = 'acct-signin acct-reconsent';
       wrap.setAttribute('role', 'dialog');
@@ -125,16 +127,36 @@ export async function ensureAccountConsent({ me, cfg } = {}) {
       agree.className = 'acct-btn primary';
       agree.textContent = tr('동의하고 계속', 'Agree and continue');
       agree.disabled = true;
-      const decline = document.createElement('button');
-      decline.type = 'button';
-      decline.className = 'acct-btn';
-      decline.textContent = tr('동의하지 않음', 'Decline');
+      const declineBtn = document.createElement('button');
+      declineBtn.type = 'button';
+      declineBtn.className = 'acct-btn';
+      declineBtn.textContent = tr('동의하지 않음', 'Decline');
       fields.onChange((ok) => { agree.disabled = !ok; });
-      const finish = (v) => { closeModal(wrap); resolve(v); };
-      decline.addEventListener('click', () => finish({ agreed: false }));
-      wrap.addEventListener('click', (e) => { if (e.target === wrap) finish({ agreed: false }); });
+      const onKey = (e) => {
+        if (e.key !== 'Escape') return;
+        e.preventDefault();
+        e.stopPropagation();
+        finish({ agreed: false });
+      };
+      const finish = (v) => {
+        if (done) return;
+        done = true;
+        document.removeEventListener('keydown', onKey, true);
+        closeModal(wrap);
+        resolve(v);
+      };
+      // 배경 클릭은 무시한다. 같은 클릭이 시작화면 '계속하기'로 새어나가지 않게 막는다.
+      const absorbBackdrop = (e) => {
+        if (e.target !== wrap) return;
+        e.preventDefault();
+        e.stopPropagation();
+      };
+      wrap.addEventListener('pointerdown', absorbBackdrop);
+      wrap.addEventListener('click', absorbBackdrop);
+      declineBtn.addEventListener('click', () => finish({ agreed: false }));
+      document.addEventListener('keydown', onKey, true);
       agree.addEventListener('click', async () => {
-        if (!fields.requiredOk()) return;
+        if (!fields.requiredOk() || done) return;
         agree.disabled = true;
         $('.acct-msg').textContent = tr('저장하는 중…', 'Saving…');
         const r = await accountApi.consent(fields.payload());
@@ -145,7 +167,8 @@ export async function ensureAccountConsent({ me, cfg } = {}) {
         }
         finish({ agreed: true, me: { ...me, ...r, consent: r.consent || me.consent }, marketing: r.marketing });
       });
-      $('.acct-actions').append(agree, decline);
+      $('.acct-actions').append(agree, declineBtn);
+      document.body.classList.add('acct-consent-blocking');
       document.body.appendChild(wrap);
     });
     if (!result.agreed) {

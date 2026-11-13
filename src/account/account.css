@@ -60,8 +60,11 @@
 .acct-gis-wait { margin: 8px 0; min-height: 44px; display: grid; place-items: center; text-align: center;
   border-radius: 999px; border: 1.5px dashed rgba(18, 32, 51, .22); color: #5a6b80; font-size: 12.5px; font-weight: 700; padding: 0 12px; }
 .acct-gis-wait[hidden], .acct-signin .acct-gis[hidden] { display: none; }
-.acct-reconsent { z-index: 110; }
+.acct-reconsent { z-index: 200; }
 .acct-reconsent .acct-note { margin: 0 0 10px; line-height: 1.5; color: #34465e; }
+body.acct-consent-blocking { pointer-events: none; }
+body.acct-consent-blocking .acct-reconsent { pointer-events: auto; }
+
 .acct-legal { margin-top: 10px; padding-top: 8px; border-top: 1px solid rgba(18, 32, 51, .08); }
 .acct-legal-links { font-size: 12.5px; font-weight: 700; }
 .acct-legal-links a { color: #0b5cab; }

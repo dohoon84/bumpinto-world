@@ -54,11 +54,13 @@ async function gateAccountConsent() {
   try {
     const { accountApi } = await import('../account/api.js');
     const me = await accountApi.me();
-    if (!me?.ok || !me.consent?.needsTerms) return { ok: true, me };
+    if (!me?.ok) return { ok: false, signedOut: true };
+    if (!me.consent?.needsTerms) return { ok: true, me };
     const { ensureAccountConsent } = await import('../account/consent.js');
     return ensureAccountConsent({ me });
   } catch {
-    return { ok: true };
+    // 약관 상태를 확인하지 못하면 계정으로 입장하지 않는다
+    return { ok: false, error: true };
   }
 }
 
@@ -115,7 +117,10 @@ export function openStart({ region, onGuest, onContinue, onGoogle, onAccount, de
       if (s && !s.isGuest && (s.signedIn ?? true)) {
         gateAccountConsent().then((g) => {
           if (!alive) return;
-          if (!g.ok) { ses = { isGuest: true, signedIn: false, accountId: null, displayName: null, provider: null }; render(); }
+          if (!g.ok && (g.declined || g.signedOut)) {
+            ses = { isGuest: true, signedIn: false, accountId: null, displayName: null, provider: null };
+          }
+          render();
         });
       }
     };
@@ -199,7 +204,9 @@ export function openStart({ region, onGuest, onContinue, onGoogle, onAccount, de
       const g = await gateAccountConsent();
       if (!alive) return;
       if (!g.ok) {
-        ses = { isGuest: true, signedIn: false, accountId: null, displayName: null, provider: null };
+        if (g.declined || g.signedOut) {
+          ses = { isGuest: true, signedIn: false, accountId: null, displayName: null, provider: null };
+        }
         b.disabled = false;
         render();
         return;
@@ -210,7 +217,10 @@ export function openStart({ region, onGuest, onContinue, onGoogle, onAccount, de
       (onAccount || onContinue)(d, ses);
       return;
     }
-    if (k === 'continue' && last) { trackEvent('uiv2_start_continue', { region: last.region, at: last.at || '' }); close(); onContinue(last, ses); return; }
+    if (k === 'continue' && last) {
+      if (signedIn()) return;
+      trackEvent('uiv2_start_continue', { region: last.region, at: last.at || '' }); close(); onContinue(last, ses); return;
+    }
     if (k === 'google') {
       trackEvent('uiv2_start_google');
       b.disabled = true;

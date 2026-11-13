@@ -35,11 +35,12 @@ async function gateAccountConsent() {
   try {
     const { accountApi } = await import('../account/api.js');
     const me = await accountApi.me();
-    if (!me?.ok || !me.consent?.needsTerms) return { ok: true, me };
+    if (!me?.ok) return { ok: false, signedOut: true };
+    if (!me.consent?.needsTerms) return { ok: true, me };
     const { ensureAccountConsent } = await import('../account/consent.js');
     return ensureAccountConsent({ me });
   } catch {
-    return { ok: true };
+    return { ok: false, error: true };
   }
 }
 
@@ -61,7 +62,7 @@ export function mountLanding() {
         ses = s || null;
         if (signedIn() && root.isConnected && st.view === 'start') {
           const g = await gateAccountConsent();
-          if (!g.ok) ses = { isGuest: true, signedIn: false };
+          if (!g.ok && (g.declined || g.signedOut)) ses = { isGuest: true, signedIn: false };
           if (root.isConnected && st.view === 'start') render();
         }
       }).catch(() => {});
@@ -207,13 +208,29 @@ export function mountLanding() {
         });
         return;
       }
-      if (act === 'pick') { st.view = 'pick'; render(); return; }
+      if (act === 'pick') {
+        if (signedIn()) {
+          b.disabled = true;
+          gateAccountConsent().then((g) => {
+            if (!g.ok) {
+              if (g.declined || g.signedOut) ses = { isGuest: true, signedIn: false };
+              b.disabled = false;
+              if (root.isConnected) render();
+              return;
+            }
+            st.view = 'pick';
+            render();
+          });
+          return;
+        }
+        st.view = 'pick'; render(); return;
+      }
       if (act === 'resume') {
         if (signedIn()) {
           b.disabled = true;
           gateAccountConsent().then((g) => {
             if (!g.ok) {
-              ses = { isGuest: true, signedIn: false };
+              if (g.declined || g.signedOut) ses = { isGuest: true, signedIn: false };
               b.disabled = false;
               if (root.isConnected && st.view === 'start') render();
               return;
@@ -224,7 +241,24 @@ export function mountLanding() {
         return;
       }
       if (act === 'back') { st.view = 'start'; render(); return; }
-      if (act === 'go') { b.disabled = true; go(); return; }
+      if (act === 'go') {
+        b.disabled = true;
+        if (signedIn()) {
+          gateAccountConsent().then((g) => {
+            if (!g.ok) {
+              if (g.declined || g.signedOut) ses = { isGuest: true, signedIn: false };
+              st.view = 'start';
+              b.disabled = false;
+              if (root.isConnected) render();
+              return;
+            }
+            go();
+          });
+          return;
+        }
+        go();
+        return;
+      }
       if (b.dataset.region) { st.region = b.dataset.region; st.station = 'jeongja'; render(); return; }
       if (b.dataset.stn) { st.station = b.dataset.stn; render(); }
     });
