@@ -11,12 +11,19 @@ import { OPEN_REGIONS, UPCOMING_REGIONS, getRegion, countryOf, regionBlurb } fro
 import { CORRIDOR_STATION_IDS, CORRIDOR_STATION_COUNT, corridorName, layoutCorridorMap, OPEN_BRANCH_IDS, namsanGlobeEnabled, NAMSAN_LANDMARK } from '../corridor/globeCorridor.js';
 
 import { lotteSiteLabel } from '../corridor/lotteOpening.js';
+import { buildRouteMap, lotteChipX, RM_LEGEND, RM_MODE, RM_COLOR, RM_PASS_SHORT_EN } from './routeMap.js';
 import { isEn, tr, onLangChange } from '../i18n.js';
 import { REPO_URL, isStarbaseLive } from '../worldGateFlags.js';
 
 const LINE_COLOR = { '수인분당선': '#f5a200', '신분당선': '#d31145', '8호선': '#e6186c', '2호선': '#33a23d', '3호선': '#fe5b10', '9호선': '#bdb092', '경강선': '#0054a6' };
 const LINE_EN = { '수인분당선': 'Suin-Bundang', '신분당선': 'Shinbundang', '8호선': 'Line 8', '2호선': 'Line 2', '3호선': 'Line 3', '9호선': 'Line 9', '경강선': 'Gyeonggang' };
 const COUNTRY = { KR: ['KR', '한국', 'Korea'], US: ['US', '미국', 'USA'], ETC: ['🌐', '기타', 'Other'] };
+// [route-map v1] 노선도 랜드마크 칩 아이콘 — 일반 도형(송신탑형 · 마천루형)만, 로고 아님
+const IC_TOWER = '<svg class="v2-ic" width="14" height="18" viewBox="0 0 14 18" fill="none" stroke="#bfefff" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="M7 1v5"/><rect x="4" y="6" width="6" height="3" rx="1.2"/><path d="M6 9l-1 8M8 9l1 8M4 17h6"/></svg>';
+const IC_SKY = '<svg class="v2-ic" width="12" height="18" viewBox="0 0 12 18" fill="none" stroke="#bfefff" stroke-width="1.6" stroke-linejoin="round" aria-hidden="true"><path d="M6 1L3.2 17h5.6L6 1z"/><path d="M2 17h8"/></svg>';
+const IC_OFF = '<svg class="v2-ic" width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="#9eb4c6" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 10L2.5 2.5M2.5 7V2.5H7"/></svg>';
+// 좁은 화면(< 768px)은 바텀시트 노선도. ui-v2 는 PC 전용(body.mobile·핸드폰이면 켜지지 않음)이라 데스크톱 창을 좁힌 경우다.
+const COMPACT_MQ = '(max-width: 767.98px)';
 const STRIP = { corridor: ['#f5a200', '#e6186c'], branch: ['#d31145', '#d31145'], us: ['#4cc9f0', '#1f5fbf'], kr: ['#d4003b', '#f5a200'] };
 
 let view = 'world'; // 다시 열 때(입장 카드 ‹ 노선 · 역 선택) 마지막 화면으로
@@ -97,38 +104,23 @@ function mountGate({ root, corridorGlobe, enter, focus, teardown }, onBackToStar
       <a class="v2-btn sm secondary v2-full" href="${REPO_URL}/blob/main/CONTRIBUTING.md" target="_blank" rel="noopener">${esc(tr('+ 내 동네 개척자로 참여하기 (GitHub)', '+ Contribute Your Neighborhood (GitHub)'))}</a>`;
   }
 
-  // ---- 03 역 선택 (실제 역 좌표 · layoutCorridorMap 을 k 배로)
+  // ---- 03 역 선택 (실제 역 좌표 · layoutCorridorMap → routeMap.js 배치, 시안 bw-route-map v1)
   const BASE = layoutCorridorMap({ height: 430, width: 320 });
   const allStations = () => [...BASE.items, ...BASE.branches, BASE.landmark, ...(namsanGlobeEnabled() ? [NAMSAN_LANDMARK] : [])];
   const linesOf = (s) => (s.live ? ['신분당선', '수인분당선'] : (s.lines || []));
+  let rm = null; // 마지막 노선도 배치 (setHot 이 점을 다시 그릴 때)
+  const isCompact = () => typeof matchMedia === 'function' && matchMedia(COMPACT_MQ).matches;
+  // 데스크톱 지도 배율 k (0.9–1.15): 화면 높이에서 머리·범례·띠·선택 바(약 360px)와 지도 여백(52)을 뺀 높이에 맞춘다
   function pickK() {
     const avail = (root.clientHeight || innerHeight) - 58 - 12;
-    return Math.max(0.9, Math.min(1.5, (avail - 300 - 38) / 430));
+    return Math.max(0.9, Math.min(1.15, (avail - 360 - 52) / 609));
   }
   function pickerMapWidth() {
     const w = picker.clientWidth;
-    if (!w) return 560;
+    if (!w) return isCompact() ? 358 : 672;
     const cs = getComputedStyle(picker);
     const pad = (parseFloat(cs.paddingLeft) || 0) + (parseFloat(cs.paddingRight) || 0);
     return Math.max(260, Math.round(w - pad));
-  }
-  // 긴 이름표(청계산입구 등)가 패널 밖으로 잘리지 않게 맵 안쪽으로 민다.
-  function fitMapLabels(map, W) {
-    if (!map || !W) return;
-    const PAD = 8;
-    map.querySelectorAll('.v2-stn, .v2-lm').forEach((el) => {
-      const width = el.getBoundingClientRect().width;
-      let left = el.offsetLeft;
-      if (left < PAD) {
-        el.style.right = 'auto';
-        el.style.left = `${PAD}px`;
-        left = PAD;
-      }
-      if (left + width > W - PAD) {
-        el.style.right = 'auto';
-        el.style.left = `${Math.max(PAD, W - PAD - width)}px`;
-      }
-    });
   }
   function stationById(id) { return allStations().find((x) => (x.live ? 'jeongja' : x.id) === id); }
   function selectedRow(id) {
@@ -138,76 +130,137 @@ function mountGate({ root, corridorGlobe, enter, focus, teardown }, onBackToStar
       ? stationLabel('jeongja', 'ntower')
       : s.landmark ? (lotteSiteLabel(isEn())?.main || stationLabel('jeongja', s.id)) : stationLabel('jeongja', sid === 'jeongja' ? null : sid);
     const lines = linesOf(s).map((l) => (isEn() ? (LINE_EN[l] || l) : l)).join(' · ');
-    return `<div class="v2-sel"><div class="v2-sel-t"><b>${esc(tr(`${label} 선택됨`, `${label} selected`))}</b><small>${esc(lines ? `${lines} · ${tr('다른 역은 지도에서 고르세요', 'pick another station on the map')}` : tr('다른 역은 지도에서 고르세요', 'pick another station on the map'))}</small></div>
+    const pick = tr('다른 역은 지도에서 고르세요', 'pick another station on the map');
+    // 좁은 화면: 이름표가 한 언어만 보여 주니 다른 언어 이름을 선택 바에 (8호선 · Jangji)
+    const other = isCompact() && !s.landmark ? (isEn() ? s.ko : s.en) : '';
+    const sub = isCompact() ? ([lines, other].filter(Boolean).join(' · ') || pick) : (lines ? `${lines} · ${pick}` : pick);
+    return `<div class="v2-sel"><div class="v2-sel-t"><b>${esc(tr(`${label} 선택됨`, `${label} selected`))}</b><small>${esc(sub)}</small></div>
       <button type="button" class="v2-btn primary" data-v2-at="${sid}">${esc(tr(`${label}에 입장`, `Enter ${label}`))}</button></div>`;
   }
-  function renderPicker() {
-    const en = isEn(), k = pickK(), W = pickerMapWidth(), ox = (W - 320 * k) / 2, oy = 14, H = Math.round(430 * k + oy * 2 + 10);
-    const P = (s) => [ox + s.dx * k, oy + s.dy * k];
-    const sel = hot || defaultAt;
-    let seg = '';
-    const byId = new Map([...BASE.items, ...BASE.branches].map((st) => [st.id, st]));
-    for (const b of BASE.branches) {
-      const shared = (b.from.lines || []).find((l) => (b.lines || []).includes(l)) || (b.lines || [])[0];
-      const [x1, y1] = P(b.from), [x2, y2] = P(b);
-      seg += `<path d="M${x1.toFixed(1)} ${y1.toFixed(1)} L${x2.toFixed(1)} ${y2.toFixed(1)}" stroke="${LINE_COLOR[shared] || '#9eb4c6'}" stroke-width="7" fill="none" stroke-linecap="round"/>`;
-      for (const id of b.links || []) {
-        const t = byId.get(id);
-        if (!t) continue;
-        const link = (b.lines || []).find((l) => (t.lines || []).includes(l)) || (b.lines || [])[0];
-        const [lx1, ly1] = P(b), [lx2, ly2] = P(t);
-        seg += `<path d="M${lx1.toFixed(1)} ${ly1.toFixed(1)} L${lx2.toFixed(1)} ${ly2.toFixed(1)}" stroke="${LINE_COLOR[link] || '#9eb4c6'}" stroke-width="7" fill="none" stroke-linecap="round"/>`;
-      }
+  const f1 = (v) => v.toFixed(1);
+  function dotSvg(st, [x, y], on, R) {
+    const r = on ? R + 3 : st.pass ? R - 1.5 : R;
+    if (st.xf && !on) return `<circle cx="${f1(x)}" cy="${f1(y)}" r="${r + 1.5}" fill="#ffffff" stroke="${RM_COLOR.ink}" stroke-width="3"/><circle cx="${f1(x)}" cy="${f1(y)}" r="${r - 2.5}" fill="${RM_COLOR.ink}"/>`;
+    const fill = on ? RM_COLOR.gold : (st.pass ? '#9eb4c6' : '#ffffff');
+    const stroke = on ? RM_COLOR.amber : (st.pass ? '#6b7a88' : RM_COLOR.ink);
+    return `<circle cx="${f1(x)}" cy="${f1(y)}" r="${r}" fill="${fill}" stroke="${stroke}" stroke-width="${on ? 4 : 3}"/>`;
+  }
+  function stationChip(s, en, compact, sel) {
+    const id = s.live ? 'jeongja' : s.id;
+    const main = en ? s.en : s.ko, sub = en ? s.ko : s.en;
+    if (s.pass) {
+      const short = compact && en ? (RM_PASS_SHORT_EN[id] || main) : main;
+      const tail = compact && en ? '' : `<small>${esc(tr('통과', 'pass'))}</small>`;
+      return `<span class="v2-stn is-pass" data-stn="${id}" title="${esc(`${main} · ${tr('통과', 'pass')}`)}"><b>${esc(short)}</b>${tail}</span>`;
     }
-    for (let i = 1; i < BASE.items.length; i++) {
-      const a = BASE.items[i - 1], b = BASE.items[i];
-      const shared = (a.lines || ['수인분당선']).find((l) => (b.lines || []).includes(l)) || (b.lines || [])[0];
-      const [x1, y1] = P(a), [x2, y2] = P(b);
-      seg += `<path d="M${x1.toFixed(1)} ${y1.toFixed(1)} L${x2.toFixed(1)} ${y2.toFixed(1)}" stroke="${LINE_COLOR[shared] || '#9eb4c6'}" stroke-width="7" fill="none" stroke-linecap="round"/>`;
-    }
-    const stations = [...BASE.items, ...BASE.branches];
-    const colX = (side) => ox + (side === 'left' ? BASE.colL : BASE.colR) * k;
-    const Ly = (s) => oy + ((s.labelDy ?? s.dy) * k);
-    const leaders = stations.map((s) => {
-      if (s.labelAt === 'dot' || s.pin === 'dot') return '';
-      const [x, y] = P(s);
-      return `<path d="M${x.toFixed(1)} ${y.toFixed(1)} L${colX(s.side).toFixed(1)} ${Ly(s).toFixed(1)}" stroke="#ffffff" stroke-opacity=".28" stroke-width="1.5"/>`;
-    }).join('');
-    const dots = stations.map((s) => {
-      const [x, y] = P(s), id = s.live ? 'jeongja' : s.id, on = !s.pass && id === sel;
-      const fill = on ? '#ffe169' : (s.pass ? '#9eb4c6' : '#ffffff');
-      const stroke = on ? '#f5a200' : (s.pass ? '#6b7a88' : '#122033');
-      return `<circle ${s.pass ? '' : `data-dot="${id}" `}cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${on ? 9 : (s.pass ? 4.5 : 6)}" fill="${fill}" stroke="${stroke}" stroke-width="${on ? 4 : 3}"/>`;
-    }).join('');
-    const [lx, ly] = P(BASE.landmark);
-    const lm = `<rect x="${(lx - 6).toFixed(1)}" y="${(ly - 6).toFixed(1)}" width="12" height="12" transform="rotate(45 ${lx.toFixed(1)} ${ly.toFixed(1)})" fill="#4cc9f0" stroke="#ffffff" stroke-width="2"/>`;
-    const chips = stations.map((s) => {
-      const id = s.live ? 'jeongja' : s.id, on = !s.pass && id === sel, left = s.side === 'left';
-      const [px, py] = P(s);
-      const y = (s.labelAt === 'dot' || s.pin === 'dot') ? py : Ly(s);
-      const pos = (s.labelAt === 'dot' || s.pin === 'dot')
-        ? `left:${(px + 10).toFixed(1)}px`
-        : (left ? `right:${(W - colX('left') + 4).toFixed(1)}px` : `left:${(colX('right') + 4).toFixed(1)}px`);
-      if (s.pass) {
-        return `<span class="v2-stn is-pass" style="${pos};top:${(y - 13).toFixed(1)}px"><b>${esc(en ? s.en : s.ko)}</b><small>${esc(tr('통과', 'pass'))}</small></span>`;
-      }
-      return `<button type="button" class="v2-stn${on ? ' on' : ''}" data-v2-at="${id}" data-hot="${id}" style="${pos};top:${(y - 13).toFixed(1)}px"><b>${esc(en ? s.en : s.ko)}</b><small>${esc(en ? s.ko : s.en)}</small></button>`;
-    }).join('');
-    const site = lotteSiteLabel(en);
-    const lmChip = `<button type="button" class="v2-lm${sel === BASE.landmark.id ? ' on' : ''}" data-v2-at="${BASE.landmark.id}" data-hot="${BASE.landmark.id}" style="left:${(lx + 76).toFixed(1)}px;top:${Math.max(0, ly - 34).toFixed(1)}px">${esc(site ? site.main : (en ? BASE.landmark.en : BASE.landmark.ko))}</button>`;
-    // 남산은 분당–잠실 노선 밖이라 지도 범위를 넓히지 않는다. 기존 역·롯데 칩과 안 겹치는 왼쪽 위에 같은 .v2-lm 칩만 둔다.
-    const ntChip = namsanGlobeEnabled()
-      ? `<button type="button" class="v2-lm${sel === 'ntower' ? ' on' : ''}" data-v2-at="ntower" data-hot="ntower" style="left:12px;top:8px">${esc(en ? NAMSAN_LANDMARK.en : NAMSAN_LANDMARK.ko)}</button>`
+    const on = id === sel;
+    return `<button type="button" class="v2-stn${on ? ' on' : ''}" data-stn="${id}" data-v2-at="${id}" data-hot="${id}"${compact ? ` aria-label="${esc(`${main} ${sub}`)}"` : ''}><b>${esc(main)}</b>${compact ? '' : `<small>${esc(sub)}</small>`}</button>`;
+  }
+  function landmarkChips(en, compact, sel) {
+    const site = lotteSiteLabel(en); // 오픈 전: 잠실 랜드마크 공사현장 (칩엔 짧게, 전체 문구는 선택 바·title)
+    const lotteMain = site ? tr('잠실 랜드마크', 'Jamsil Landmark') : (en ? BASE.landmark.en : BASE.landmark.ko);
+    const lotteSub = site ? tr(`공정률 ${site.pct}%`, `${site.pct}% built`) : (compact ? '' : tr('잠실', 'Jamsil'));
+    const lotte = `<button type="button" class="v2-lm${sel === BASE.landmark.id ? ' on' : ''}" data-v2-at="${BASE.landmark.id}" data-hot="${BASE.landmark.id}" title="${esc(site ? site.main : lotteMain)}">${IC_SKY}<span>${esc(lotteMain)}</span>${lotteSub ? `<small>${esc(lotteSub)}</small>` : ''}</button>`;
+    // 남산은 분당–잠실 노선 밖이라 지도 범위를 넓히지 않는다 → 띠 왼쪽 점선 칩(노선 밖 · 도심 방면)
+    const nt = namsanGlobeEnabled()
+      ? `<button type="button" class="v2-lm is-off${sel === 'ntower' ? ' on' : ''}" data-v2-at="ntower" data-hot="ntower">${IC_TOWER}<span>${esc(en ? NAMSAN_LANDMARK.en : NAMSAN_LANDMARK.ko)}</span><small>${IC_OFF}${esc(compact ? tr('노선 밖', 'Off line') : tr('노선 밖 · 도심 방면', 'Off line · toward downtown'))}</small></button>`
       : '';
+    return nt + lotte;
+  }
+  function renderPicker() {
+    const en = isEn(), compact = isCompact(), M = compact ? RM_MODE.mobile : RM_MODE.desktop;
+    picker.classList.toggle('is-compact', compact);
+    picker.classList.toggle('is-en', en);
+    root.classList.toggle('v2-rm-compact', compact);
+    const W = pickerMapWidth(), k = pickK();
+    const sel = hot || defaultAt;
+    const stations = [...BASE.items, ...BASE.branches];
+    const legend = RM_LEGEND.map((l) => `<span class="v2-lg"><i style="background:${LINE_COLOR[l]}"></i>${esc(en ? LINE_EN[l] : l)}</span>`).join('')
+      + (compact ? '' : `<span class="v2-lg k"><i class="dot"></i>${esc(tr('역', 'Station'))}</span><span class="v2-lg k"><i class="dot x"></i>${esc(tr('환승', 'Transfer'))}</span>`)
+      + `<span class="v2-lg k"><i class="dot p"></i>${esc(tr('통과', 'Pass'))}</span>`;
+    const foot = compact
+      ? tr('실제 역 위치(OpenStreetMap) 기준 · 일부 간격 보정 · 이름을 탭해 시작', 'Real positions (OpenStreetMap) · spacing adjusted · tap a name')
+      : tr('실제 역 위치(OpenStreetMap) 기준 · 역 이름을 누르면 그 역에서 시작', 'Real station positions (OpenStreetMap) · click a station to start there');
+    const desc = compact
+      ? tr('정자 → 잠실 · 시작할 역을 고르세요', 'Jeongja → Jamsil · pick where to start')
+      : tr(`정자 → 잠실 · ${CORRIDOR_STATION_COUNT}개 역 · 시작할 역을 고르세요`, `Jeongja → Jamsil · ${CORRIDOR_STATION_COUNT} stations · pick where to start`);
+    const selHtml = `<div class="v2-sel-slot">${selectedRow(sel)}</div>`;
+    const footHtml = `<p class="v2-foot">${esc(foot)}</p>`;
     picker.innerHTML = `
-      <div class="v2-hrow">${headHtml(corridorName(en), { size: 22, icon: ICON.train(20, '#ffe169') })}<span class="v2-pill v2-pill-lg">${esc(tr(`${CORRIDOR_STATION_COUNT}개 역`, `${CORRIDOR_STATION_COUNT} stations`))}</span><span class="v2-grow"></span>
+      ${compact ? '<span class="v2-grab" aria-hidden="true"></span>' : ''}
+      <div class="v2-hrow">${headHtml(corridorName(en), { size: compact ? 19 : 22, icon: ICON.train(20, '#ffe169') })}<span class="v2-pill v2-pill-lg">${esc(tr(`${CORRIDOR_STATION_COUNT}개 역`, `${CORRIDOR_STATION_COUNT} stations`))}</span><span class="v2-grow"></span>
         <button type="button" class="v2-close" data-v2="close" aria-label="${esc(tr('닫기', 'Close'))}">${ICON.close(16)}</button></div>
-      <p class="v2-desc v2-desc-lg">${esc(tr(`정자 → 잠실 · ${CORRIDOR_STATION_COUNT}개 역 · 시작할 역을 고르세요`, `Jeongja → Jamsil · ${CORRIDOR_STATION_COUNT} stations · pick where to start`))}</p>
-      <div class="v2-tags">${tagHtml(tr('신분당선', 'Shinbundang'), '#d31145', { size: 11, cls: 'v2-tag-xs' })}${tagHtml(tr('수인분당선', 'Suin-Bundang'), '#f5a200', { size: 11, cls: 'v2-tag-xs' })}${tagHtml(tr('8호선', 'Line 8'), '#e6186c', { size: 11, cls: 'v2-tag-xs' })}${tagHtml(tr('롯데월드타워', 'Lotte World Tower'), '#4cc9f0', { size: 11, cls: 'v2-tag-xs' })}${namsanGlobeEnabled() ? tagHtml(tr('남산서울타워', 'N Seoul Tower'), '#4cc9f0', { size: 11, cls: 'v2-tag-xs' }) : ''}</div>
-      <div class="v2-map" style="width:${W}px;height:${H}px"><svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" aria-hidden="true">${leaders}${seg}${dots}${lm}</svg>${chips}${lmChip}${ntChip}</div>
-      <div class="v2-sel-slot">${selectedRow(sel)}</div>
-      <p class="v2-foot">${esc(tr('실제 역 위치(OpenStreetMap) 기준 · 역 이름을 누르면 그 역에서 시작', 'Real station positions (OpenStreetMap) · click a station to start there'))}</p>`;
-    fitMapLabels(picker.querySelector('.v2-map'), W);
+      <p class="v2-desc v2-desc-lg">${esc(desc)}</p>
+      <div class="v2-legend">${legend}</div>
+      <div class="v2-mapwrap" style="width:${W}px">
+        <div class="v2-band" style="height:${M.bandH}px">${compact ? '' : `<span class="v2-band-cap">${esc(tr('랜드마크', 'Landmarks'))}</span>`}${landmarkChips(en, compact, sel)}<span class="v2-sight" aria-hidden="true"></span></div>
+        <div class="v2-map" style="width:${W}px"><svg width="${W}" height="0" aria-hidden="true"></svg>${stations.map((s) => stationChip(s, en, compact, sel)).join('')}</div>
+      </div>
+      ${compact ? footHtml + selHtml : selHtml + footHtml}`;
+    layoutPicker({ W, k, compact, M, sel });
+  }
+  // 실측 크기로 이름표를 배치하고 점·선·지시선을 그린다 (선택 상태 폭까지 재서, 골라서 커져도 안 겹친다)
+  function layoutPicker({ W, k, compact, M, sel }) {
+    const map = picker.querySelector('.v2-map'), svg = map.querySelector('svg');
+    const chips = new Map([...map.querySelectorAll('[data-stn]')].map((e) => [e.dataset.stn, e]));
+    const size = new Map();
+    for (const [id, e] of chips) {
+      const w0 = e.offsetWidth, h0 = e.offsetHeight;
+      let w1 = w0;
+      if (!e.classList.contains('is-pass')) { const was = e.classList.contains('on'); e.classList.toggle('on', !was); w1 = e.offsetWidth; e.classList.toggle('on', was); }
+      size.set(id, { w: Math.ceil(Math.max(w0, w1)) || 60, h: Math.ceil(h0) || (compact ? 32 : 26) });
+    }
+    const m = buildRouteMap(BASE, { mobile: compact, W, k }, (id) => size.get(id) || { w: 60, h: compact ? 32 : 26 });
+    rm = m;
+    map.style.height = `${m.H}px`;
+    svg.setAttribute('height', m.H); svg.setAttribute('viewBox', `0 0 ${W} ${m.H}`);
+    const lines = m.lines.map((l) => `<polyline points="${l.pts.map((p) => p.map(f1).join(',')).join(' ')}" stroke="${l.color}" stroke-width="${M.lw}" fill="none" stroke-linecap="round" stroke-linejoin="round"/>`).join('');
+    const leaders = m.labels.filter((l) => l.leader).map((l) => `<line x1="${f1(l.leader[0])}" y1="${f1(l.leader[1])}" x2="${f1(l.leader[2])}" y2="${f1(l.leader[3])}" stroke="#ffffff" stroke-opacity=".3" stroke-width="1.5"/>`).join('');
+    const dots = m.stations.map((st) => `<g data-dot="${st.id}">${dotSvg(st, m.pos.get(st.id), !st.pass && st.id === sel, M.dotR)}</g>`).join('');
+    let lm = '';
+    if (m.diamond) {
+      const [dx, dy] = m.diamond;
+      lm = `<line x1="${f1(dx)}" y1="0" x2="${f1(dx)}" y2="${f1(dy - 8)}" stroke="${RM_COLOR.cyan}" stroke-opacity=".75" stroke-width="1.5" stroke-dasharray="2 4" stroke-linecap="round"/>`
+        + `<rect x="${f1(dx - 6)}" y="${f1(dy - 6)}" width="12" height="12" transform="rotate(45 ${f1(dx)} ${f1(dy)})" fill="${RM_COLOR.cyan}" stroke="#ffffff" stroke-width="2"/>`;
+    }
+    svg.innerHTML = lines + leaders + dots + lm;
+    for (const l of m.labels) {
+      const e = chips.get(l.id);
+      if (!e) continue;
+      // 점 반대쪽으로만 커지게: 오른쪽 이름표는 left, 왼쪽 이름표는 right 기준
+      if (l.sd === 'RA' || l.sd === 'R') { e.style.left = `${f1(l.x)}px`; e.style.right = 'auto'; } else { e.style.right = `${f1(W - l.x - l.w)}px`; e.style.left = 'auto'; }
+      e.style.top = `${f1(l.y)}px`;
+      e.dataset.side = l.sd;
+    }
+    // 랜드마크 띠: 남산 칩은 왼쪽, 롯데 칩은 잠실 x 가운데(남산 칩 + 12px 이상), 칩 아래에서 띠 아래까지 점선 시선
+    const band = picker.querySelector('.v2-band');
+    const cap = band.querySelector('.v2-band-cap'), nt = band.querySelector('.v2-lm.is-off');
+    const lotte = band.querySelector(`.v2-lm[data-v2-at="${BASE.landmark.id}"]`), sight = band.querySelector('.v2-sight');
+    const chipTop = (M.bandH - M.chipH) / 2;
+    let namR = -Infinity;
+    if (nt) {
+      const ntLeft = cap ? cap.offsetLeft + cap.offsetWidth + 10 : 8;
+      nt.style.left = `${ntLeft}px`; nt.style.top = `${chipTop}px`;
+      namR = ntLeft + nt.offsetWidth;
+      // 영문 등으로 두 칩이 한 줄에 안 들어가면 남산 칩 보조 글자를 접는다
+      if (lotte && namR + 12 + lotte.offsetWidth > W - 8) { nt.classList.add('is-tight'); namR = ntLeft + nt.offsetWidth; }
+    }
+    if (lotte) {
+      const jx = m.diamond ? m.diamond[0] : W / 2;
+      const lx = lotteChipX(jx, lotte.offsetWidth, W, namR);
+      lotte.style.left = `${f1(lx)}px`; lotte.style.top = `${chipTop}px`;
+      sight.hidden = !m.diamond || !(jx > lx + 6 && jx < lx + lotte.offsetWidth - 6);
+      sight.style.left = `${f1(jx - 0.75)}px`; sight.style.top = `${chipTop + M.chipH}px`; sight.style.height = `${M.bandH - chipTop - M.chipH}px`;
+    }
+    // 좁은 화면: 선택 바는 시트 아래 고정 → 그만큼 아래 여백
+    const slot = picker.querySelector('.v2-sel-slot');
+    picker.style.paddingBottom = compact ? `${Math.ceil((slot?.offsetHeight || 90) + 9)}px` : '';
+    // 화면보다 길면(가로 모드·작은 창) 지도 영역만 세로 스크롤, 띠는 sticky
+    const wrap = picker.querySelector('.v2-mapwrap');
+    wrap.style.maxHeight = '';
+    const over = picker.scrollHeight - picker.clientHeight;
+    if (over > 1) wrap.style.maxHeight = `${Math.max(M.bandH + 180, wrap.offsetHeight - over - 2)}px`;
+    map.__rm = m; // 검증 스크립트(scripts/verify-route-map.mjs)가 실측 DOM 과 대조
   }
   function renderMini() {
     const s = sum();
@@ -222,11 +275,13 @@ function mountGate({ root, corridorGlobe, enter, focus, teardown }, onBackToStar
     if (stationById(id)?.pass) return;
     hot = id;
     picker.querySelectorAll('[data-hot]').forEach((b) => b.classList.toggle('on', b.dataset.hot === id));
-    picker.querySelectorAll('[data-dot]').forEach((c) => {
-      const on = c.dataset.dot === id;
-      c.setAttribute('r', on ? 9 : 6); c.setAttribute('fill', on ? '#ffe169' : '#ffffff');
-      c.setAttribute('stroke', on ? '#f5a200' : '#122033'); c.setAttribute('stroke-width', on ? 4 : 3);
-    });
+    if (rm) {
+      const R = rm.M.dotR;
+      picker.querySelectorAll('g[data-dot]').forEach((gEl) => {
+        const st = rm.stations.find((x) => x.id === gEl.dataset.dot);
+        if (st) gEl.innerHTML = dotSvg(st, rm.pos.get(st.id), !st.pass && st.id === id, R);
+      });
+    }
     const slot = picker.querySelector('.v2-sel-slot');
     if (slot) slot.innerHTML = selectedRow(id);
   }
@@ -241,7 +296,7 @@ function mountGate({ root, corridorGlobe, enter, focus, teardown }, onBackToStar
   function showWorld() {
     view = 'world';
     picker.hidden = true; mini.hidden = true; world.hidden = false;
-    root.classList.remove('v2-view-station');
+    root.classList.remove('v2-view-station', 'v2-rm-compact');
     if (corridorGlobe?.isOpen()) corridorGlobe.toggle(false);
     corridorGlobe?.zoomTo?.(99);
     top();
@@ -252,8 +307,8 @@ function mountGate({ root, corridorGlobe, enter, focus, teardown }, onBackToStar
     hot = null;
     openedAt = performance.now();
     world.hidden = true; picker.hidden = false; mini.hidden = false;
-    renderPicker(); renderMini();
     root.classList.add('v2-view-station');
+    renderPicker(); renderMini();
     if (!corridorGlobe.isOpen()) corridorGlobe.toggle(true);
     focus?.('jeongja');
     top();
@@ -287,7 +342,8 @@ function mountGate({ root, corridorGlobe, enter, focus, teardown }, onBackToStar
   };
   const onKey = (e) => { if (e.key === 'Escape' && view === 'station') showWorld(); };
   const onOver = (e) => { const b = e.target.closest('[data-hot]'); if (b && picker.contains(b)) setHot(b.dataset.hot); };
-  const onResize = () => { if (view === 'station') renderPicker(); };
+  let resizeRaf = 0;
+  const onResize = () => { if (view !== 'station') return; cancelAnimationFrame(resizeRaf); resizeRaf = requestAnimationFrame(() => { if (alive && view === 'station') renderPicker(); }); };
   root.addEventListener('click', onClick, true);
   root.addEventListener('keydown', (e) => { if ((e.key === 'Enter' || e.key === ' ') && e.target.matches?.('.v2-rcard[data-region]')) e.target.click(); });
   addEventListener('keydown', onKey);
@@ -306,7 +362,8 @@ function mountGate({ root, corridorGlobe, enter, focus, teardown }, onBackToStar
     removeEventListener('keydown', onKey);
     removeEventListener('resize', onResize);
     root.removeEventListener('click', onClick, true);
-    root.classList.remove('v2-gate', 'v2-view-station');
+    cancelAnimationFrame(resizeRaf);
+    root.classList.remove('v2-gate', 'v2-view-station', 'v2-rm-compact');
     world.remove(); picker.remove(); mini.remove();
   }
 
