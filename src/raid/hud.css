@@ -4,8 +4,10 @@
   --teal: #3ecfc6;
   --ink: #e7f3f6;
   --muted: #9eb4c4;
-  --panel: rgba(7, 14, 24, 0.78);
-  --line: rgba(230, 195, 106, 0.7);
+  --accent: #e6c36a;
+  --panel: rgba(8, 10, 16, 0.74);
+  --line: color-mix(in srgb, var(--accent) 70%, transparent);
+  font-size: clamp(12px, 0.95vw, 15px);
   position: fixed;
   inset: 0;
   z-index: 40;
@@ -23,7 +25,10 @@
   backdrop-filter: blur(8px);
 }
 
-#bw-raid .boss { width: min(520px, 46vw); padding: 6px 8px 4px; }
+#bw-raid .boss {
+  position: absolute; top: 12px; left: 50%; transform: translateX(-50%);
+  width: min(460px, 42vw); padding: 8px 12px 6px;
+}
 #bw-raid .boss-row { display: flex; align-items: center; gap: 10px; }
 #bw-raid .medallion {
   width: 36px; height: 36px; flex: none;
@@ -71,10 +76,19 @@
 #bw-raid .mate-top .role { margin-left: auto; color: var(--teal); font-size: 11px; }
 #bw-raid .thin { height: 8px; margin-top: 3px; border-radius: 4px; }
 #bw-raid .thin.hp > span { background: linear-gradient(90deg, #37d67a, #8ef0b0); }
-#bw-raid .thin.mp > span { background: linear-gradient(90deg, #3b82f6, #7ecbff); }
-#bw-raid .thin.rage > span { background: linear-gradient(90deg, #e8590c, #ffb15a); }
-#bw-raid .thin.focus > span { background: linear-gradient(90deg, #e67700, #ffe066); }
-#bw-raid .thin.energy > span { background: linear-gradient(90deg, #f0c14a, #fff6c2); }
+#bw-raid .thin.mp > span, #bw-raid .bar.mp > span { background: #8C7FFF; }
+#bw-raid .thin.rage > span, #bw-raid .bar.rage > span { background: #FF7A1A; }
+#bw-raid .thin.holy > span, #bw-raid .bar.holy > span { background: #FFC845; }
+#bw-raid .thin.focus > span, #bw-raid .bar.focus > span { background: #3DDC84; }
+#bw-raid .thin.energy > span, #bw-raid .bar.energy > span { background: #FF5C9A; }
+#bw-raid .portrait b {
+  position: absolute; left: 2px; top: 1px; font-size: 10px; font-weight: 900;
+}
+#bw-raid .portrait { position: relative; }
+#bw-raid .role-tank b { color: #FF7A1A; }
+#bw-raid .role-heal b { color: #FFC845; }
+#bw-raid .role-dps b { color: #8C7FFF; }
+#bw-raid .debuffs { min-height: 14px; font-size: 10px; font-weight: 800; color: #ffb4b4; }
 #bw-raid .mate.is-down { filter: grayscale(0.7) brightness(0.7); }
 
 #bw-raid .minimap-wrap { position: absolute; top: 16px; right: 16px; width: 176px; text-align: center; }
@@ -97,26 +111,39 @@
 #bw-raid .quest .tip { margin-top: 8px; font-size: 12px; line-height: 1.4; color: #d7efe8; }
 
 #bw-raid .dock {
-  position: absolute; left: 50%; bottom: 18px; transform: translateX(-50%);
+  position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%);
   display: flex; flex-direction: column; align-items: center; gap: 6px;
+  width: min(760px, 94vw);
 }
-#bw-raid .cluster { width: min(540px, 72vw); padding: 8px 12px 10px; }
-#bw-raid .cluster .label { display: flex; justify-content: space-between; margin-top: 6px; font-size: 12px; font-weight: 800; color: #d7efe8; }
+#bw-raid .plates { display: flex; gap: 12px; width: min(640px, 86vw); justify-content: space-between; }
+#bw-raid .plate { flex: 1; padding: 6px 8px 7px; }
+#bw-raid .plate-name { display: flex; gap: 8px; align-items: baseline; font-weight: 900; font-size: 13px; }
+#bw-raid .plate-name span, #bw-raid .plate-name b { margin-left: auto; color: var(--accent); font-weight: 800; }
+#bw-raid .label { display: flex; justify-content: space-between; margin-top: 4px; font-size: 11px; font-weight: 800; color: #d7efe8; }
+#bw-raid .pips { display: flex; gap: 4px; margin-top: 4px; }
+#bw-raid .pips i { width: 14px; height: 8px; border-radius: 2px; background: rgba(255,255,255,0.12); display: block; }
+#bw-raid .pips i.on { background: #FFC845; }
 #bw-raid .ragebar { width: min(460px, 70vw); padding: 4px 8px 6px; }
 #bw-raid .ragebar .label { display: flex; justify-content: space-between; font-size: 12px; font-weight: 800; color: #ffd7b0; }
 #bw-raid .skills { display: flex; gap: 8px; }
 #bw-raid .skill {
-  width: 74px; height: 74px; position: relative; border-radius: 10px;
+  width: clamp(54px, 4.6vw, 68px); height: clamp(54px, 4.6vw, 68px); position: relative; border-radius: 10px;
   border: 1px solid var(--gold);
   background: rgba(8, 14, 22, 0.88);
   color: white; padding: 0; cursor: pointer;
 }
 #bw-raid .skill.locked { cursor: default; opacity: 0.55; filter: grayscale(0.4); }
 #bw-raid .skill .ico { position: absolute; inset: 6px; }
+#bw-raid .skill .sweep, #bw-raid .skill .gcd {
+  position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+}
 #bw-raid .skill .sweep {
-  position: absolute; inset: 0; border-radius: inherit;
   background: conic-gradient(rgba(0, 0, 0, 0.72) calc(var(--p) * 1turn), transparent 0);
 }
+#bw-raid .skill .gcd {
+  background: conic-gradient(rgba(255, 255, 255, 0.38) calc(var(--g) * 1turn), transparent 0);
+}
+#bw-raid .skill.is-poor { filter: saturate(0.25) brightness(0.62); box-shadow: inset 0 0 0 2px #c44848; }
 #bw-raid .skill .key, #bw-raid .skill .cd {
   position: absolute; font-weight: 900; text-shadow: 0 1px 2px #000;
 }
@@ -133,8 +160,8 @@
   text-shadow: 0 2px 0 #000, 0 0 8px rgba(0,0,0,.45);
   pointer-events: none;
 }
-#bw-raid .float.dmg { color: #fff6c2; font-size: 20px; }
-#bw-raid .float.crit { color: #ffe14a; font-size: 26px; text-align: center; line-height: 1; }
+#bw-raid .float.dmg { color: #fff; font-size: 18px; }
+#bw-raid .float.crit { color: #ffe14a; font-size: 30px; text-align: center; line-height: 1; }
 #bw-raid .float.crit small { display: block; font-size: 11px; letter-spacing: 0.12em; }
 #bw-raid .float.heal { color: #7dffa8; font-size: 18px; }
 #bw-raid .float.hurt { color: #ff6b6b; font-size: 18px; }
@@ -202,13 +229,54 @@
 #bw-raid .warn strong { display: block; font-size: 64px; letter-spacing: 0.14em; color: #f7fbff; font-weight: 900; }
 #bw-raid .warn em { font-style: normal; font-size: 32px; color: #7ef6ff; font-weight: 900; }
 #bw-raid .meter {
-  position: absolute; right: 16px; bottom: 18px; min-width: 132px; padding: 8px 12px;
-  font-size: 13px; font-weight: 800;
+  position: absolute; right: 12px; bottom: 12px; min-width: 108px; padding: 6px 8px;
+  font-size: 12px; font-weight: 800;
 }
 #bw-raid .meter b { float: right; color: #fff6c2; }
-#bw-raid.is-peace .dock, #bw-raid.is-peace .party, #bw-raid.is-peace .meter, #bw-raid.is-peace .warn { display: none; }
+#bw-raid.is-peace .dock, #bw-raid.is-peace .party, #bw-raid.is-peace .meter, #bw-raid.is-peace .warn, #bw-raid.is-peace .boss, #bw-raid.is-peace .alert { display: none; }
+#bw-raid.is-calm .dock, #bw-raid.is-calm .party, #bw-raid.is-calm .meter, #bw-raid.is-calm .boss, #bw-raid.is-calm .quest, #bw-raid.is-calm .warn { display: none; }
+#bw-raid.is-alert .dock, #bw-raid.is-alert .party, #bw-raid.is-alert .meter, #bw-raid.is-alert .boss, #bw-raid.is-alert .quest { display: none; }
+#bw-raid .alert {
+  position: absolute; left: 50%; top: 16%; transform: translateX(-50%);
+  width: min(460px, 86vw); padding: 16px 18px 14px; text-align: center; pointer-events: auto;
+}
+#bw-raid .alert[hidden], #bw-raid .away[hidden], #bw-raid .vn[hidden] { display: none; }
+#bw-raid .alert h2 { margin: 4px 0; font-size: 26px; }
+#bw-raid .alert .count { margin: 0; font-size: 40px; font-weight: 900; letter-spacing: 0.08em; color: #fff; }
+#bw-raid .alert-line {
+  position: absolute; left: 50%; bottom: 18px; transform: translateX(-50%);
+  width: min(720px, 92vw); padding: 8px 14px; text-align: center;
+  background: rgba(8, 10, 16, 0.78); border: 1px solid var(--line); border-radius: 10px;
+  font-weight: 800; color: #d7efe8;
+}
+#bw-raid .alert-line[hidden] { display: none; }
+#bw-raid .alert-actions { display: flex; gap: 8px; justify-content: center; }
+#bw-raid .alert button, #bw-raid .vn-skip {
+  pointer-events: auto; border-radius: 10px; font: inherit; font-weight: 900; cursor: pointer; padding: 8px 16px;
+}
+#bw-raid .alert .primary { border: 0; background: linear-gradient(180deg, #ffe7a0, #e0b44a); color: #2a2114; }
+#bw-raid .alert .ghost, #bw-raid .vn-skip { border: 1px solid rgba(255,255,255,0.25); background: transparent; color: white; }
+#bw-raid .away {
+  position: absolute; top: 14px; left: 50%; transform: translateX(-50%);
+  padding: 8px 14px; background: rgba(8,10,16,0.8); border: 1px solid rgba(255,255,255,0.2);
+  border-radius: 999px; font-weight: 800;
+}
+#bw-raid .vn {
+  position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: flex-end;
+  padding: 24px 16px 36px; background: rgba(4, 6, 12, 0.45); pointer-events: auto;
+}
+#bw-raid .vn-card { width: min(680px, 94vw); display: grid; grid-template-columns: 92px 1fr; gap: 12px; padding: 14px; text-align: left; }
+#bw-raid .vn-portrait {
+  width: 92px; height: 112px; border-radius: 10px; display: grid; place-items: center;
+  background: radial-gradient(circle at 40% 30%, #3a4454, #141820 70%);
+  border: 1px solid var(--accent); font-size: 36px; font-weight: 900;
+}
+#bw-raid .vn-name { font-weight: 900; color: var(--gold); margin-bottom: 6px; }
+#bw-raid .vn-card p { margin: 0; line-height: 1.45; font-weight: 700; }
+#bw-raid .vn-skip { margin-top: 10px; }
+#bw-raid .vn-hint { margin-top: 6px; font-size: 12px; color: #c5d5de; }
 #bw-raid.is-peace .peace-note { display: block; }
-#bw-raid.is-pick .dock, #bw-raid.is-pick .party, #bw-raid.is-pick .quest, #bw-raid.is-pick .minimap-wrap, #bw-raid.is-pick .meter, #bw-raid.is-pick .warn { display: none; }
+#bw-raid.is-pick .dock, #bw-raid.is-pick .party, #bw-raid.is-pick .quest, #bw-raid.is-pick .minimap-wrap, #bw-raid.is-pick .meter, #bw-raid.is-pick .warn, #bw-raid.is-pick .alert, #bw-raid.is-pick .boss { display: none; }
 #bw-raid .peace-note button { display: block; margin: 8px auto 0; pointer-events: auto; border: 0; border-radius: 8px; padding: 8px 12px; font: inherit; font-weight: 900; background: #ffe7a0; color: #2a2114; cursor: pointer; }
 #bw-raid .pick { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; pointer-events: auto; background: rgba(4, 8, 16, 0.35); }
 #bw-raid .pick[hidden] { display: none; }

@@ -147,6 +147,11 @@ export function createRaidAudio() {
       } else if (name === 'transform') {
         tone(440, t, 0.35, 'sine', 0.05, master, 2000);
         tone(660, t + 0.08, 0.4, 'triangle', 0.04, master, 2200);
+      } else if (name === 'siren') {
+        tone(494, t, 0.32, 'sawtooth', 0.07, master, 1400);
+        tone(784, t + 0.26, 0.36, 'square', 0.05, master, 1600);
+        tone(494, t + 0.58, 0.4, 'sawtooth', 0.06, master, 1400);
+        noise(t, 0.2, 0.04, master, 900);
       } else if (name === 'warn') {
         tone(494, t, 0.16, 'square', 0.08, master, 1200);
         tone(740, t + 0.1, 0.28, 'triangle', 0.07, master, 1800);

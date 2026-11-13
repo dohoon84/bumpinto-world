@@ -180,14 +180,22 @@ export function applyClassScale(group, mul) {
 
 const glbAnim = new WeakMap();
 
+const CLIP_NAMES = ['idle', 'run', 'attack', 'hit', 'transform_in', 'cast', 'skill1', 'ready'];
+const LOOP_CLIPS = new Set(['idle', 'run', 'ready']);
+
 function bindClips(root, clips) {
   const mixer = new THREE.AnimationMixer(root);
   const actions = {};
-  for (const clip of clips) {
+  const cues = {};
+  for (const name of CLIP_NAMES) {
+    const clip = THREE.AnimationClip.findByName(clips, name);
+    if (!clip) continue;
     const action = mixer.clipAction(clip);
     action.enabled = true;
-    actions[clip.name] = action;
+    actions[name] = action;
+    cues[name] = Math.min(0.72, Math.max(0.16, clip.duration * 0.42));
   }
+  root.userData.clipCues = cues;
   const bag = { mixer, actions, clips, clip: '' };
   glbAnim.set(root, bag);
   return bag;
@@ -219,19 +227,24 @@ function fitGlb(root, targetHeight, authored) {
   root.position.set(-center.x * s, -box.min.y * s, -center.z * s);
 }
 
+function unfinished(bag, name) {
+  const action = bag.actions[name];
+  if (!action || bag.clip !== name) return false;
+  return action.time < action.getClip().duration - 0.05;
+}
+
 function clipName(bag, motion) {
   if (motion?.clip && bag.actions[motion.clip]) return motion.clip;
   if (motion?.phase === 'intro' && bag.actions.transform_in) return 'transform_in';
   if (motion?.hit && bag.actions.hit) return 'hit';
+  if (unfinished(bag, 'hit') && !motion?.attack) return 'hit';
+  if (motion?.cast && bag.actions.cast) return 'cast';
+  if (motion?.skill && bag.actions.skill1) return 'skill1';
   if (motion?.attack && bag.actions.attack) return 'attack';
-  if (bag.clip === 'attack' && bag.actions.attack) {
-    const action = bag.actions.attack;
-    if (action.time < action.getClip().duration - 0.05) return 'attack';
-  }
-  if (bag.clip === 'hit' && bag.actions.hit && !motion?.attack) {
-    const action = bag.actions.hit;
-    if (action.time < action.getClip().duration - 0.05) return 'hit';
-  }
+  if (unfinished(bag, 'cast')) return 'cast';
+  if (unfinished(bag, 'skill1')) return 'skill1';
+  if (unfinished(bag, 'attack')) return 'attack';
+  if ((motion?.ready || motion?.crouch) && bag.actions.ready && (motion?.speed || 0) < 0.8) return 'ready';
   if ((motion?.speed || 0) > 0.8 && bag.actions.run) return 'run';
   return bag.actions.idle ? 'idle' : bag.clip;
 }
@@ -239,7 +252,7 @@ function clipName(bag, motion) {
 function playClip(bag, name) {
   const next = bag.actions[name];
   if (!next || bag.clip === name) return;
-  const loop = name === 'idle' || name === 'run';
+  const loop = LOOP_CLIPS.has(name);
   next.reset();
   next.setLoop(loop ? THREE.LoopRepeat : THREE.LoopOnce, loop ? Infinity : 1);
   next.clampWhenFinished = !loop;
@@ -276,17 +289,18 @@ export async function withGlb(glbUrl, yaw, look, build, animate, heightMul = 1) 
       fitGlb(inner, CITIZEN_HEIGHT * heightMul, authored);
       if (yaw) inner.rotation.y = yaw;
       group.add(inner);
-      if (gltf.animations?.length) bindClips(group, gltf.animations);
+      const animations = gltf.animations || [];
+      if (animations.length) bindClips(group, animations);
       group.userData.heightMul = heightMul;
       group.userData.baseScale = 1;
       group.userData.authored = authored;
       const play = (g, dt, motion) => animateLoaded(g, dt, motion, animate);
-      return { group, animate: play, source: 'glb' };
+      return { group, animate: play, source: 'glb', animations };
     } catch (err) {
       console.warn('[raid] class GLB failed, using procedural', err);
     }
   }
-  return { group: build(look), animate, source: 'procedural' };
+  return { group: build(look), animate, source: 'procedural', animations: [] };
 }
 
 export function animateRig(group, dt, motion) {

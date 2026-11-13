@@ -192,11 +192,20 @@ function circleMesh(radius) {
   );
   fill.rotation.x = -Math.PI / 2;
   fill.position.y = -0.02;
+  fill.material.color.set('#d7fbff');
+  fill.material.opacity = 0.28;
   g.add(rim, cyan, fill);
   g.position.y = 0.14;
   g.visible = false;
   g.userData.r = radius;
+  g.userData.fill = fill;
   return g;
+}
+
+function paintFill(mesh, k) {
+  const fill = mesh.userData.fill;
+  if (!fill) return;
+  fill.scale.setScalar(Math.max(0.05, Math.min(1, k)));
 }
 
 function riftColumn() {
@@ -274,6 +283,7 @@ export function createBoss(scene) {
     mesh.visible = true;
     mesh.position.set(x, 0.12, z);
     mesh.scale.setScalar(1);
+    paintFill(mesh, 0.05);
   }
 
   function hideAll() {
@@ -343,6 +353,7 @@ export function createBoss(scene) {
       built.armL.rotation.x = -1.35 * (k < 0.82 ? k / 0.82 : 1);
       built.armR.rotation.x = built.armL.rotation.x;
       slam.scale.setScalar(1 + k * 0.04);
+      paintFill(slam, k);
       if (state.t >= 1.15 && !slamHit) {
         slamHit = true;
         onSlam?.('hit');
@@ -360,7 +371,10 @@ export function createBoss(scene) {
     } else if (state.phase === 'wind') {
       state.cast = Math.min(state.castMax, state.t);
       const k = state.t / state.castMax;
-      for (const w of winds) w.scale.setScalar(0.92 + k * 0.1);
+      for (const w of winds) {
+        w.scale.setScalar(0.92 + k * 0.1);
+        paintFill(w, k);
+      }
       built.group.scale.setScalar(1 + Math.sin(k * Math.PI) * 0.03);
       if (state.t >= state.castMax && !windHit) {
         windHit = true;

@@ -2,6 +2,14 @@ import './hud.css';
 import { CLASS_IDS, getClass } from './classes.js';
 import { toFrame, ALONG_MIN, ALONG_MAX, SAFE_ALONG, SAFE_R, BOSS_ALONG } from './layout.js';
 
+const VN_LINES = [
+  { name: '안내', text: '탄천 합수부 하늘이 갈라집니다. 이 장면은 이 화면에서만, 처음 한 번만 보입니다.' },
+  { name: '초행', text: '전생의 이력이 손을 잡아당깁니다. 평소의 몸은 잠시 뒤에 둡니다.' },
+  { name: '서린', text: '장판이 깔리기 전에 자리를 잡으세요. 기둥은 길을 따라 옵니다.' },
+  { name: '온유', text: '쓰러져도 노란 선에서 다시 일어납니다. 늦게 들어와도 보스가 살아 있으면 합류할 수 있습니다.' },
+  { name: '안내', text: '준비가 되면 출동을 누르세요.' },
+];
+
 const ICONS = {
   slash: '<svg viewBox="0 0 64 64"><path d="M12 50 L46 12" stroke="#ffe7a3" stroke-width="6" fill="none" stroke-linecap="round"/><path d="M40 10 h12 v12" stroke="#e6c36a" stroke-width="4" fill="none"/></svg>',
   charge: '<svg viewBox="0 0 64 64"><path d="M14 12 h22 l8 10 v24 l-8 8 H14 z" fill="#4e5966" stroke="#e6c36a" stroke-width="3"/><path d="M18 32 h16" stroke="#3ecfc6" stroke-width="4"/></svg>',
@@ -48,23 +56,55 @@ export function createHud() {
       <div class="dim">남은 시간 <b data-time>15:00</b></div>
       <div class="tip">TIP: 노란 선 안에서 열풍을 피하세요.</div>
     </aside>
-    <div class="dock">
-      <div class="skills" data-skills></div>
-      <div class="cluster panel">
-        <div class="boss-row">
-          <div class="medallion">홀</div>
-          <div><span class="boss-name">홀드</span><span class="boss-grade">C · 지역</span></div>
-          <div class="boss-num" data-boss-num>100%</div>
-        </div>
-        <div class="bar hp"><span data-boss-fill></span></div>
-        <div class="bar cast"><span data-cast-fill></span></div>
-        <div class="cast-label"><span data-cast-name></span><span data-cast-time></span></div>
-        <div class="label"><span>생명</span><span data-player-num>100 / 100</span></div>
-        <div class="bar thin hp"><span data-player-fill></span></div>
-        <div class="label"><span data-res-label>분노</span><span data-rage>0 / 100</span></div>
-        <div class="bar thin rage"><span data-rage-fill></span></div>
+    <section class="boss panel" data-boss>
+      <div class="boss-row">
+        <div class="medallion">홀</div>
+        <div><span class="boss-name">홀드</span><span class="boss-grade">C · 지역</span></div>
+        <div class="boss-num" data-boss-num>100%</div>
       </div>
+      <div class="bar hp"><span data-boss-fill></span></div>
+      <div class="bar cast"><span data-cast-fill></span></div>
+      <div class="cast-label"><span data-cast-name></span><span data-cast-time></span></div>
+    </section>
+    <div class="dock">
+      <div class="plates">
+        <div class="plate panel">
+          <div class="plate-name">초행 <span data-my-role>전사</span> <b data-player-num>100 / 100</b></div>
+          <div class="bar thin hp"><span data-player-fill></span></div>
+          <div class="label"><span data-res-label>분노</span><span data-rage>0 / 100</span></div>
+          <div class="bar thin rage"><span data-rage-fill></span></div>
+          <div class="pips" data-pips hidden></div>
+        </div>
+        <div class="plate panel">
+          <div class="plate-name">홀드 <span>대상</span></div>
+          <div class="bar thin hp"><span data-target-fill></span></div>
+          <div class="label"><span>대상 생명</span><span data-target-num>100%</span></div>
+        </div>
+      </div>
+      <div class="skills" data-skills></div>
       <div class="help">WASD 이동 · 휠 줌 · Space 회피 · 1–4 스킬 · 글로벌 쿨 1.2초</div>
+    </div>
+    <div class="away" data-away hidden>탄천 합수부에 균열이 열렸습니다</div>
+    <section class="alert panel" data-alert hidden>
+      <p class="kicker">탄천 균열 경보</p>
+      <h2 data-alert-title>하늘이 갈라집니다</h2>
+      <p class="count" data-alert-count>01:30</p>
+      <div class="alert-actions">
+        <button type="button" class="primary" data-deploy>출동</button>
+        <button type="button" class="ghost" data-open-pick>다른 이력</button>
+      </div>
+    </section>
+    <div class="alert-line" data-alert-line hidden></div>
+    <div class="vn" data-vn hidden>
+      <div class="vn-card panel">
+        <div class="vn-portrait" data-vn-who>초</div>
+        <div>
+          <div class="vn-name" data-vn-name>안내</div>
+          <p data-vn-text></p>
+        </div>
+      </div>
+      <button type="button" class="ghost vn-skip" data-vn-skip>건너뛰기</button>
+      <div class="vn-hint">클릭 · Space 로 다음</div>
     </div>
     <div class="warn" data-warn hidden>
       <strong data-warn-name></strong>
@@ -109,6 +149,8 @@ export function createHud() {
   document.body.appendChild(root);
 
   const party = root.querySelector('[data-party]');
+  let vnIndex = 0;
+  let cutscene = false;
 
   const skillsEl = root.querySelector('[data-skills]');
   let active = getClass('warrior');
@@ -118,6 +160,7 @@ export function createHud() {
       <button type="button" class="skill${s.locked ? ' locked' : ''}" data-skill="${s.id}" ${s.locked ? 'disabled' : ''}>
         <div class="ico">${ICONS[s.id] || ICONS.lock}</div>
         <div class="sweep" style="--p:0"></div>
+        <div class="gcd" style="--g:0"></div>
         <span class="key">${s.key}</span>
         <span class="cd"></span>
       </button>
@@ -224,6 +267,12 @@ export function createHud() {
       f.el.style.left = `${x}px`;
       f.el.style.top = `${y}px`;
       f.el.style.opacity = String(Math.max(0, f.life / 0.35));
+      let scale = 1;
+      if (f.kind === 'crit') {
+        const u = Math.min(1, (1.05 - f.life) / 0.22);
+        scale = 0.65 + Math.sin(u * Math.PI) * 0.6;
+      }
+      f.el.style.transform = `translate(-50%, -50%) scale(${scale})`;
     }
   }
 
@@ -235,12 +284,24 @@ export function createHud() {
     onMute: null,
     onPick: null,
     onRepick: null,
+    onDeploy: null,
+    cutsceneOpen: () => cutscene,
     bind() {
       root.querySelector('[data-peace]').addEventListener('click', () => this.onPeace?.());
       root.querySelector('[data-world]').addEventListener('click', () => this.onWorld?.());
       root.querySelector('[data-mute]').addEventListener('click', () => this.onMute?.());
       root.querySelector('[data-repick]').addEventListener('click', () => this.onRepick?.());
       root.querySelector('[data-pick-go]').addEventListener('click', () => this.onPick?.(picked));
+      root.querySelector('[data-deploy]').addEventListener('click', () => this.onDeploy?.());
+      root.querySelector('[data-open-pick]').addEventListener('click', () => this.showPick());
+      root.querySelector('[data-vn]').addEventListener('click', (e) => {
+        if (e.target.closest('[data-vn-skip]')) return;
+        this.advanceCutscene();
+      });
+      root.querySelector('[data-vn-skip]').addEventListener('click', (e) => {
+        e.stopPropagation();
+        this.closeCutscene();
+      });
       grid.querySelectorAll('[data-class]').forEach((btn) => {
         btn.addEventListener('click', () => {
           picked = btn.getAttribute('data-class');
@@ -251,6 +312,7 @@ export function createHud() {
     setClass(id) {
       active = getClass(id);
       picked = active.id;
+      root.style.setProperty('--accent', active.seam);
       root.querySelector('[data-res-label]').textContent = active.resLabel;
       const roleEl = root.querySelector('[data-my-role]');
       if (roleEl) roleEl.textContent = active.name;
@@ -271,13 +333,70 @@ export function createHud() {
     clearPeace() {
       root.classList.remove('is-peace');
     },
+    setMode(mode) {
+      root.classList.remove('is-calm', 'is-alert', 'is-fight');
+      if (mode === 'calm') root.classList.add('is-calm');
+      else if (mode === 'alert') root.classList.add('is-alert');
+      else if (mode === 'fight' || mode === 'intro' || mode === 'victory') root.classList.add('is-fight');
+    },
+    paintVn() {
+      const line = VN_LINES[Math.min(vnIndex, VN_LINES.length - 1)];
+      root.querySelector('[data-vn-name]').textContent = line.name;
+      root.querySelector('[data-vn-text]').textContent = line.text;
+      root.querySelector('[data-vn-who]').textContent = line.name.slice(0, 1);
+    },
+    openCutscene() {
+      cutscene = true;
+      vnIndex = 0;
+      root.classList.add('is-cutscene');
+      root.querySelector('[data-vn]').hidden = false;
+      this.paintVn();
+    },
+    advanceCutscene() {
+      if (!cutscene) return;
+      vnIndex += 1;
+      if (vnIndex >= VN_LINES.length) this.closeCutscene();
+      else this.paintVn();
+    },
+    closeCutscene() {
+      if (!cutscene) return;
+      cutscene = false;
+      root.classList.remove('is-cutscene');
+      root.querySelector('[data-vn]').hidden = true;
+      this.onIntroDone?.();
+    },
+    syncAlert(view) {
+      const box = root.querySelector('[data-alert]');
+      const away = root.querySelector('[data-away]');
+      if (!view.show) {
+        box.hidden = true;
+        root.querySelector('[data-alert-line]').hidden = true;
+        if (!view.away) away.hidden = true;
+        return;
+      }
+      if (!view.inRegion) {
+        box.hidden = true;
+        away.hidden = false;
+        return;
+      }
+      away.hidden = true;
+      box.hidden = !!view.covered;
+      const line = root.querySelector('[data-alert-line]');
+      line.hidden = !!view.covered || !view.line;
+      line.textContent = view.line || '';
+      const sec = Math.max(0, Math.ceil(view.remaining || 0));
+      root.querySelector('[data-alert-count]').textContent = `${String(Math.floor(sec / 60)).padStart(2, '0')}:${String(sec % 60).padStart(2, '0')}`;
+      root.querySelector('[data-alert-title]').textContent = sec > 0 ? '하늘이 갈라집니다' : '보스가 살아있는 동안 합류할 수 있습니다';
+    },
     setParty(frames) {
       party.innerHTML = frames.map((m) => `
         <div class="mate${m.isMe ? ' is-me' : ''}" data-mate="${m.id}">
-          <div class="portrait">${ICONS[m.icon] || ICONS.lock}</div>
+          <div class="portrait role-${m.kind || 'dps'}"><b>${m.kind === 'tank' ? '방' : m.kind === 'heal' ? '힐' : '딜'}</b>${ICONS[m.icon] || ICONS.lock}</div>
           <div>
             <div class="mate-top"><span class="lv">Lv.${m.lv || 1}</span><span>${m.name}</span><span class="role"${m.isMe ? ' data-my-role' : ''}>${m.role}</span></div>
             <div class="bar thin hp"><span data-hp></span></div>
+            <div class="bar thin ${m.resBar || 'rage'}"><span data-sub></span></div>
+            <div class="debuffs" data-debuffs></div>
           </div>
         </div>
       `).join('');
@@ -300,9 +419,9 @@ export function createHud() {
       const el = document.createElement('div');
       el.className = `float ${kind || 'dmg'}`;
       if (kind === 'crit') el.innerHTML = `${text}<small>CRITICAL</small>`;
-      else el.textContent = String(text);
+      else       el.textContent = String(text);
       root.querySelector('[data-floats]').appendChild(el);
-      floats.push({ el, pos: pos.clone(), life: kind === 'crit' ? 1.05 : 0.85, y: 0 });
+      floats.push({ el, pos: pos.clone(), life: kind === 'crit' ? 1.05 : 0.85, y: 0, kind });
     },
     showVictory() {
       root.querySelector('[data-victory]').classList.add('show');
@@ -336,25 +455,41 @@ export function createHud() {
       root.querySelector('[data-kills]').textContent = snap.kills;
       const t = Math.max(0, Math.ceil(snap.timeLeft));
       root.querySelector('[data-time]').textContent = `${String(Math.floor(t / 60)).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}`;
-      root.querySelector('[data-rage]').textContent = `${Math.round(snap.res)} / 100`;
-      setWidth(root.querySelector('[data-rage-fill]'), snap.res);
+      const resMax = snap.resMax || 100;
+      root.querySelector('[data-rage]').textContent = `${Math.round(snap.res)} / ${resMax}`;
+      setWidth(root.querySelector('[data-rage-fill]'), (snap.res / resMax) * 100);
+      const pips = root.querySelector('[data-pips]');
+      if (resMax <= 6) {
+        pips.hidden = false;
+        const key = `${snap.res}/${resMax}`;
+        if (pips.dataset.n !== key) {
+          pips.dataset.n = key;
+          pips.innerHTML = Array.from({ length: resMax }, (_, i) => `<i class="${i < snap.res ? 'on' : ''}"></i>`).join('');
+        }
+      } else pips.hidden = true;
+      setWidth(root.querySelector('[data-target-fill]'), pct * 100);
+      root.querySelector('[data-target-num]').textContent = `${Math.ceil(pct * 100)}%`;
 
       for (const row of snap.party || []) {
         const el = root.querySelector(`[data-mate="${row.id}"]`);
         if (!el) continue;
         el.classList.toggle('is-down', row.down);
         setWidth(el.querySelector('[data-hp]'), row.hp * 100);
+        const sub = el.querySelector('[data-sub]');
+        if (sub) setWidth(sub, (row.sub ?? 0) * 100);
+        const deb = el.querySelector('[data-debuffs]');
+        if (deb) deb.textContent = row.debuff ? '둔화' : '';
       }
       active.skills.forEach((s, i) => {
         const btn = root.querySelector(`[data-skill="${s.id}"]`);
         if (!btn) return;
         const cd = snap.cds[i] || 0;
-        const remain = Math.max(cd, snap.gcd || 0);
-        const denom = Math.max(s.cd || 0, 1.2);
-        const p = denom > 0 ? remain / denom : 0;
-        btn.querySelector('.sweep').style.setProperty('--p', String(p));
+        const own = s.cd > 0 ? cd / s.cd : 0;
+        btn.querySelector('.sweep').style.setProperty('--p', String(own));
+        const gcdEl = btn.querySelector('.gcd');
+        if (gcdEl) gcdEl.style.setProperty('--g', String(Math.min(1, (snap.gcd || 0) / 1.2)));
         btn.querySelector('.cd').textContent = cd > 0.05 ? cd.toFixed(1) : '';
-        btn.style.filter = !s.locked && s.cost && snap.res < s.cost ? 'brightness(0.55)' : '';
+        btn.classList.toggle('is-poor', !s.locked && s.cost > 0 && snap.res < s.cost);
       });
       if (bannerT > 0) {
         bannerT -= dt;

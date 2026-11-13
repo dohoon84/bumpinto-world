@@ -18,6 +18,11 @@ export function createVfx(scene) {
   const live = [];
 
   function add(mesh, life, spin) {
+    if (live.length > 96) {
+      mesh.geometry?.dispose();
+      mesh.material?.dispose();
+      return;
+    }
     mesh.userData.life = life;
     mesh.userData.max = life;
     mesh.userData.spin = spin || 0;
@@ -83,6 +88,63 @@ export function createVfx(scene) {
       m.position.set(x, y, z);
       add(m, 0.28, 0);
       m.userData.grow = 4;
+    },
+    sparks(x, y, z, color, n = 6) {
+      const count = Math.min(n, 10);
+      for (let i = 0; i < count; i++) {
+        const m = new THREE.Mesh(new THREE.SphereGeometry(0.06, 5, 4), fadeMat(color));
+        m.position.set(x, y, z);
+        const a = (i / count) * Math.PI * 2;
+        m.userData.vx = Math.cos(a) * (1.5 + (i % 3));
+        m.userData.vz = Math.sin(a) * (1.5 + (i % 3));
+        m.userData.vy = 1.2 + (i % 4) * 0.4;
+        add(m, 0.28, 0);
+      }
+    },
+    shockwave(x, z, color = '#ff7a1a') {
+      const m = new THREE.Mesh(new THREE.TorusGeometry(0.6, 0.08, 6, 24), fadeMat(color));
+      m.position.set(x, 0.2, z);
+      m.rotation.x = Math.PI / 2;
+      m.userData.grow = 4.5;
+      add(m, 0.32, 0);
+    },
+    rune(x, z, color = '#8C7FFF') {
+      const ring = new THREE.Mesh(new THREE.RingGeometry(0.8, 1.15, 28), fadeMat(color));
+      ring.position.set(x, 0.16, z);
+      ring.rotation.x = -Math.PI / 2;
+      ring.userData.grow = 1.4;
+      add(ring, 0.4, 2);
+      const inner = new THREE.Mesh(new THREE.CircleGeometry(0.45, 6), fadeMat('#ffffff'));
+      inner.position.set(x, 0.18, z);
+      inner.rotation.x = -Math.PI / 2;
+      inner.userData.grow = 2;
+      add(inner, 0.25, 0);
+    },
+    pillar(x, z, color = '#FFC845') {
+      const m = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.7, 3.2, 8, 1, true), fadeMat(color));
+      m.position.set(x, 1.6, z);
+      m.userData.grow = 0.4;
+      add(m, 0.45, 0);
+      const halo = new THREE.Mesh(new THREE.TorusGeometry(0.7, 0.05, 6, 20), fadeMat('#fff6c8'));
+      halo.position.set(x, 2.6, z);
+      halo.rotation.x = Math.PI / 2;
+      halo.userData.grow = 1.8;
+      add(halo, 0.4, 0);
+    },
+    trail(x, y, z, yaw, color) {
+      for (let i = 0; i < 4; i++) {
+        const m = new THREE.Mesh(new THREE.SphereGeometry(0.05, 5, 4), fadeMat(color));
+        m.position.set(x - Math.sin(yaw) * i * 0.28, y, z - Math.cos(yaw) * i * 0.28);
+        add(m, 0.16 + i * 0.02, 0);
+      }
+    },
+    streak(x, z, yaw, color = '#FF5C9A') {
+      for (let i = 0; i < 3; i++) {
+        const m = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.08, 1.4), fadeMat(color));
+        m.position.set(x - Math.sin(yaw) * i * 0.35, 1.1 + i * 0.05, z - Math.cos(yaw) * i * 0.35);
+        m.rotation.y = yaw;
+        add(m, 0.22, 0);
+      }
     },
     windStreak(x, z, yaw) {
       const m = new THREE.Mesh(new THREE.BoxGeometry(14, 0.22, 0.9), fadeMat('#ffb070'));

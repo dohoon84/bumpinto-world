@@ -11,7 +11,7 @@ function distBoss(x, z) {
   return Math.hypot(x - b.x, z - b.z);
 }
 
-export function createCombat({ audio, vfx, onFloat, onBossHurt, onBind, onHealParty }) {
+export function createCombat({ audio, vfx, onFloat, onBossHurt, onBind, onHealParty, onImpact }) {
   let cls = getClass('warrior');
   let skills = cls.skills;
   let cds = skills.map(() => 0);
@@ -19,7 +19,7 @@ export function createCombat({ audio, vfx, onFloat, onBossHurt, onBind, onHealPa
     hp: cls.hp,
     hpMax: cls.hp,
     res: cls.resStart,
-    resMax: 100,
+    resMax: cls.resMax || 100,
     level: 1,
     xp: 0,
     down: 0,
@@ -64,33 +64,58 @@ export function createCombat({ audio, vfx, onFloat, onBossHurt, onBind, onHealPa
     onBossHurt(hit.amount);
     state.dealt += hit.amount;
     onFloat(bossFloatPos(), hit.amount, hit.crit ? 'crit' : 'dmg');
+    onImpact?.({ amount: hit.amount, crit: hit.crit });
     audio.playSfx('hit');
+    vfx.sparks(x, y, z, hit.crit ? '#ffe14a' : skill.color, hit.crit ? 10 : 5);
     vfx.burst(x, y, z, hit.crit ? '#ffe14a' : skill.color);
     if (skill.gain) addRes(skill.gain);
     return true;
   }
 
+  function flourish(skill, x, z, yaw) {
+    const id = cls.id;
+    const color = skill.color;
+    if (id === 'warrior') {
+      vfx.slash(x, 1.45, z, yaw, '#ffe7a0');
+      vfx.shockwave(x, z, '#ff7a1a');
+      if (skill.kind === 'spin' || skill.kind === 'dash') vfx.shockwave(x, z, '#ffd2a8');
+    } else if (id === 'mage') {
+      vfx.rune(x, z, '#8C7FFF');
+      vfx.arrow(x, 1.7, z, yaw, '#c9d4ff');
+      vfx.burst(x, 1.3, z, '#9eb6ff');
+    } else if (id === 'priest') {
+      if (skill.kind === 'heal' || skill.kind === 'healParty') vfx.pillar(x, z, '#FFC845');
+      else {
+        vfx.rune(x, z, '#ffe7a0');
+        vfx.arrow(x, 1.6, z, yaw, '#fff1b8');
+      }
+    } else if (id === 'archer') {
+      vfx.arrow(x, 1.55, z, yaw, '#3DDC84');
+      vfx.trail(x, 1.55, z, yaw, '#b8ffd8');
+    } else if (id === 'assassin') {
+      vfx.streak(x, z, yaw, '#FF5C9A');
+      if (skill.kind !== 'stealth') vfx.slash(x, 1.2, z, yaw, '#ff5c9a');
+    } else {
+      vfx.slash(x, 1.3, z, yaw, color);
+    }
+  }
+
   function impact(skill, x, z, yaw) {
     const y = 1.35;
     audio.playSfx(skill.sfx || 'slash');
+    flourish(skill, x, z, yaw);
     if (skill.kind === 'melee') {
-      vfx.slash(x, y, z, yaw, skill.color);
       strike(skill, x, z, y);
     } else if (skill.kind === 'projectile') {
-      vfx.arrow(x, y + 0.2, z, yaw, skill.color);
       strike(skill, x, z, y + 0.4);
     } else if (skill.kind === 'nova') {
-      vfx.ring(x, 0.3, z, skill.color, 2.4);
       strike(skill, x, z, y);
     } else if (skill.kind === 'rain') {
-      for (let i = -2; i <= 2; i++) vfx.arrow(x, 2.2, z, yaw + i * 0.12, skill.color);
-      vfx.ring(x, 0.2, z, skill.color, 2.8);
+      for (let i = -2; i <= 2; i++) vfx.arrow(x, 2.4, z, yaw + i * 0.15, skill.color);
       strike(skill, x, z, 2);
     } else if (skill.kind === 'dash') {
-      vfx.ring(x, 0.2, z, skill.color, 1.2);
       strike(skill, x, z, y);
     } else if (skill.kind === 'spin') {
-      vfx.ring(x, 0.9, z, skill.color, 2.2);
       strike(skill, x, z, y);
     } else if (skill.kind === 'shout') {
       vfx.ring(x, 0.45, z, skill.color, 2.6);
@@ -146,7 +171,8 @@ export function createCombat({ audio, vfx, onFloat, onBossHurt, onBind, onHealPa
       state.classId = cls.id;
       state.hpMax = cls.hp;
       state.hp = cls.hp;
-      state.res = cls.resStart;
+      state.resMax = cls.resMax || 100;
+      state.res = Math.min(state.resMax, cls.resStart);
       state.buff = 0;
       state.nextMul = 1;
       state.stealth = 0;
@@ -227,12 +253,15 @@ export function createCombat({ audio, vfx, onFloat, onBossHurt, onBind, onHealPa
       if (state.attack) {
         state.attackT += dt;
         const skill = skills.find((s) => s.id === state.attack);
-        const impactAt = skill?.kind === 'dash' ? 0.16 : skill?.kind === 'rain' ? 0.2 : 0.12;
+        const spell = skill && ['projectile', 'nova', 'rain', 'heal', 'healParty', 'shout', 'bind'].includes(skill.kind);
+        const cues = ctx.clipCues || {};
+        const impactAt = (spell ? cues.cast : cues.skill1) || cues.attack || (skill?.kind === 'dash' ? 0.18 : 0.28);
         if (!state.hitSent && state.attackT >= impactAt) {
           state.hitSent = true;
           if (skill) impact(skill, ctx.x, ctx.z, ctx.yaw);
         }
-        if (state.attackT >= (skill?.lock || 0.3)) state.attack = '';
+        const hold = Math.max(skill?.lock || 0.3, impactAt + 0.08);
+        if (state.attackT >= hold) state.attack = '';
       }
       state.attackLock = Math.max(0, state.attackLock - dt);
       if (state.down > 0) {

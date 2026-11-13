@@ -5,6 +5,7 @@ import { createArena } from './arena.js';
 import { ghostOf, setGhostOpacity } from './models/kit.js';
 import { createClassModel } from './models/index.js';
 import { CLASS_GLB, CLASS_IDS, CLASS_MARKS, getClass, normalizeClass } from './classes.js';
+import { consumeIntroReset, createRiftClock, introSeen, markIntroSeen } from './riftClock.js';
 import { createBoss } from './boss.js';
 import { createCombat } from './combat.js';
 import { createHud } from './hud.js';
@@ -60,7 +61,7 @@ try {
   ]);
   composer = new EffectComposer(renderer);
   composer.addPass(new RenderPass(scene, camera));
-  const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth / 2, innerHeight / 2), 0.32, 0.28, 0.72);
+  const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth / 2, innerHeight / 2), 0.2, 0.32, 0.88);
   composer.addPass(bloom);
   composer.addPass(new OutputPass());
 } catch (err) {
@@ -94,8 +95,10 @@ for (const id of CLASS_IDS) {
     packs[id].group.userData.headY = mark.head;
   }
 }
+consumeIntroReset(params);
+const rift = createRiftClock(params);
 const asked = normalizeClass(params.get('class'));
-const autoStart = !!(asked || shot);
+const autoStart = ['transform', 'form', 'fight', 'victory'].includes(shot);
 let classId = asked || 'warrior';
 let form = null;
 let ghost = null;
@@ -164,8 +167,8 @@ function layoutParty(id) {
   });
   const mine = ROLE_OF[id] || 'dps';
   const frames = [
-    { id: 'me', name: '초행', role: getClass(id).name, kind: mine, hp: 1, isMe: true, lv: 1, icon: getClass(id).skills[0].id },
-    ...party.map((a) => ({ id: a.id, name: a.name, role: a.role, kind: a.kind, hp: 1, isMe: false, lv: 2, icon: a.icon })),
+    { id: 'me', name: '초행', role: getClass(id).name, kind: mine, hp: 1, isMe: true, lv: 1, icon: getClass(id).skills[0].id, resBar: getClass(id).resBar },
+    ...party.map((a) => ({ id: a.id, name: a.name, role: a.role, kind: a.kind, hp: 1, isMe: false, lv: 2, icon: a.icon, resBar: a.kind === 'tank' ? 'rage' : a.kind === 'heal' ? 'holy' : a.id === 'npc-mage' ? 'mp' : a.id === 'npc-sin' ? 'energy' : 'focus' })),
   ];
   const order = { tank: 0, heal: 1, dps: 2 };
   frames.sort((a, b) => order[a.kind] - order[b.kind] || (a.isMe ? -1 : 1));
@@ -194,12 +197,25 @@ const combat = createCombat({
       hud.float(a.mesh.position.clone().setY(2.1), '+', 'heal');
     }
   },
+  onImpact({ amount, crit }) {
+    shake = Math.min(0.5, shake + (crit ? 0.28 : amount > 80 ? 0.16 : 0.06));
+    if (crit || amount > 90) hitStop = 0.05;
+  },
 });
 combat.setClass(classId);
 hud.setClass(classId);
 layoutParty(classId);
 
-let phase = autoStart ? 'intro' : 'pick';
+let phase = autoStart ? 'intro' : 'calm';
+let shake = 0;
+let hitStop = 0;
+let alerted = false;
+let sirenPlayed = false;
+const DIALOGUE = [
+  '초행: 하늘이 갈라집니다. 장판을 먼저 보세요.',
+  '서린: 흰 원 밖으로, 노란 선 안으로.',
+  '온유: 쓰러져도 노란 선에서 일어납니다.',
+];
 let introT = 0;
 let burstDone = false;
 let introStart = performance.now();
@@ -271,6 +287,11 @@ function beginRaid(id) {
   hud.setClass(id);
   hud.hidePick();
   hud.clearPeace();
+  hud.closeCutscene();
+  hud.setMode('fight');
+  boss.group.visible = true;
+  arena.setMood('rift');
+  arena.setRain(true);
   citizen.visible = true;
   for (const a of party) a.mesh.visible = true;
   if (fresh) {
@@ -305,8 +326,9 @@ hud.onWorld = () => {
   location.assign(url.toString());
 };
 hud.onPick = (id) => beginRaid(id);
-hud.onRepick = () => { if (phase === 'peace') hud.showPick(); };
-if (!autoStart) hud.showPick();
+hud.onDeploy = () => beginRaid(classId);
+hud.onIntroDone = () => markIntroSeen();
+hud.onRepick = () => { if (phase === 'peace' || phase === 'alert' || phase === 'calm') hud.showPick(); };
 hud.onMute = () => {
   audio.unlock();
   audio.setMuted(!audio.muted);
@@ -348,6 +370,7 @@ function finishIntro() {
   form.group.scale.setScalar(restScale());
   ghost.visible = false;
   phase = 'fight';
+  hud.setMode('fight');
   if (shot === 'form') return;
   audio.playBgm('boss');
   hud.banner(`${getClass(classId).name}의 이력이 인쇄됩니다`);
@@ -423,7 +446,13 @@ function frame() {
     fpsFrames = 0;
     fpsAcc = 0;
   }
-  if (!simPaused) step(dt);
+  let sim = dt;
+  if (hitStop > 0) {
+    hitStop = Math.max(0, hitStop - dt);
+    sim *= 0.12;
+  }
+  if (!simPaused) step(sim);
+  tickAlert();
   rim.intensity = form.group.visible || ghost.visible ? 8 : 1.2;
   const focus = actor.position;
   arena.update(dt, focus);
@@ -450,9 +479,11 @@ function frame() {
     dealt: st.dealt,
     healed: st.healed,
     gcd: st.gcd,
+    resMax: st.resMax,
+    debuff: st.debuff,
     party: [
-      { id: 'me', hp: st.hp / st.hpMax, down: st.down > 0 },
-      ...party.map((a) => ({ id: a.id, hp: a.hp, down: false })),
+      { id: 'me', hp: st.hp / st.hpMax, down: st.down > 0, sub: st.res / (st.resMax || 1), debuff: st.debuff > 0 },
+      ...party.map((a) => ({ id: a.id, hp: a.hp, down: false, sub: 0.75, debuff: false })),
     ],
   });
   const lookYaw = camYaw;
@@ -466,6 +497,11 @@ function frame() {
   const crown = form?.group?.userData?.crownY;
   const lookY = portrait ? (shot === 'form' && crown ? crown : shot === 'form' ? 1.35 : 1.15) : 0.2;
   camera.lookAt(focus.x + lx * aim, lookY, focus.z + lz * aim);
+  if (shake > 0) {
+    camera.position.x += (Math.random() - 0.5) * shake;
+    camera.position.y += (Math.random() - 0.5) * shake * 0.4;
+    shake = Math.max(0, shake - dt * 1.6);
+  }
   renderFrame();
   requestAnimationFrame(frame);
 }
@@ -535,6 +571,7 @@ function step(dt) {
     z: actor.position.z,
     yaw: actor.rotation.y,
     onRevive,
+    clipCues: form.group.userData.clipCues,
   });
 
   windHot = boss.state.castName === '열풍';
@@ -593,6 +630,8 @@ function step(dt) {
     }
   }
 
+  const sk = st.attack ? combat.skill(st.attack) : null;
+  const spell = !!sk && ['projectile', 'nova', 'rain', 'heal', 'healParty', 'shout', 'bind'].includes(sk.kind);
   const motion = {
     speed: moveSpeed,
     attack: st.attack,
@@ -600,6 +639,9 @@ function step(dt) {
     hit: st.hitT > 0,
     phase,
     clip: phase === 'intro' ? 'transform_in' : '',
+    cast: spell,
+    skill: !!sk && !spell,
+    ready: classId === 'assassin' && phase === 'fight' && moveSpeed < 0.8 && !st.attack && st.hitT <= 0,
   };
   form.animate(form.group, dt, motion);
   if (phase === 'intro' && ghost?.userData) form.animate(ghost, dt, motion);
@@ -641,6 +683,11 @@ addEventListener('keydown', (e) => {
   if (e.repeat) return;
   const slot = { Digit1: 0, Numpad1: 0, Digit2: 1, Numpad2: 1, Digit3: 2, Numpad3: 2, Digit4: 3, Numpad4: 3 }[e.code];
   if (slot != null) useSkill(combat.skills[slot]?.id);
+  if (e.code === 'Space' && hud.cutsceneOpen()) {
+    e.preventDefault();
+    hud.advanceCutscene();
+    return;
+  }
   if (e.code === 'Space' && phase === 'fight') {
     const f = (keys.has('KeyW') || keys.has('ArrowUp') ? 1 : 0) - (keys.has('KeyS') || keys.has('ArrowDown') ? 1 : 0);
     const s = (keys.has('KeyD') || keys.has('ArrowRight') ? 1 : 0) - (keys.has('KeyA') || keys.has('ArrowLeft') ? 1 : 0);
@@ -668,6 +715,60 @@ addEventListener('resize', () => {
   renderer.setSize(innerWidth, innerHeight);
   composer?.setSize(innerWidth, innerHeight);
 });
+
+function beginAlert() {
+  if (alerted || phase === 'fight' || phase === 'intro' || phase === 'victory' || phase === 'peace') return;
+  alerted = true;
+  phase = 'alert';
+  hud.setMode('alert');
+  if (!rift.inRegion()) return;
+  arena.setMood('rift');
+  arena.setRain(true);
+  boss.group.visible = true;
+  if (!sirenPlayed) {
+    sirenPlayed = true;
+    audio.playSfx('siren');
+  }
+  if (shot === 'cutscene' || (shot !== 'alert' && !introSeen())) hud.openCutscene();
+}
+
+function tickAlert() {
+  if (autoStart || shot === 'calm' || phase === 'fight' || phase === 'intro' || phase === 'victory' || phase === 'peace') {
+    if (phase !== 'alert') hud.syncAlert({ show: false });
+    return;
+  }
+  const snap = rift.snapshot();
+  if (!alerted && phase === 'calm' && snap.active) beginAlert();
+  hud.syncAlert({
+    show: phase === 'alert',
+    inRegion: rift.inRegion(),
+    remaining: snap.remaining,
+    line: DIALOGUE[Math.floor(performance.now() / 4000) % DIALOGUE.length],
+    away: phase === 'alert' && !rift.inRegion(),
+    covered: hud.cutsceneOpen(),
+  });
+}
+
+if (!autoStart && shot !== 'alert' && shot !== 'cutscene') {
+  if (shot === 'calm') rift.applyServerEvent({ startAt: Date.now() + 3_600_000 });
+  arena.setMood('peace', true);
+  arena.setRain(false);
+  hud.setMode('calm');
+  boss.group.visible = false;
+  for (const a of party) a.mesh.visible = false;
+}
+if (shot === 'alert' || shot === 'cutscene') {
+  rift.applyServerEvent({ startAt: Date.now() - 1500 });
+  if (rift.inRegion()) {
+    arena.setMood('rift', true);
+    arena.setRain(true);
+  } else {
+    arena.setMood('peace', true);
+    arena.setRain(false);
+    boss.group.visible = false;
+  }
+  beginAlert();
+}
 
 if (shot === 'transform') {
   poseGhost(0.55);
@@ -708,7 +809,12 @@ requestAnimationFrame(frame);
 window.__raid = {
   ready: true,
   source: form.source,
+  rift: {
+    snapshot: () => rift.snapshot(),
+    applyServerEvent: (ev) => rift.applyServerEvent(ev),
+  },
   get clip() { return form.group.userData.clipName || ''; },
+  get clips() { return (form.animations || []).map((c) => c.name); },
   get clipTime() { return form.group.userData.clipTime || 0; },
   get classId() { return classId; },
   get phase() { return phase; },

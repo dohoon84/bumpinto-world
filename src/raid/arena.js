@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import {
-  ALONG_MIN, ALONG_MAX, PATH_YAW, TANGENT, PERP, fromFrame, safePoint,
+  ALONG_MIN, ALONG_MAX, PATH_YAW, TANGENT, PERP, fromFrame, safePoint, bossPoint,
 } from './layout.js';
 
 function pathTex() {
@@ -306,6 +306,63 @@ export function createArena(scene) {
   const rain = makeRain(1400);
   scene.add(rain);
 
+  const bossAt = bossPoint();
+  const portal = new THREE.Group();
+  const portalRing = new THREE.Mesh(
+    new THREE.TorusGeometry(7.5, 0.28, 8, 40),
+    new THREE.MeshBasicMaterial({ color: '#ff5ca8', transparent: true, opacity: 0.9, depthWrite: false }),
+  );
+  const portalDisc = new THREE.Mesh(
+    new THREE.CircleGeometry(7.1, 40),
+    new THREE.MeshBasicMaterial({ color: '#2a0840', transparent: true, opacity: 0.45, side: THREE.DoubleSide, depthWrite: false }),
+  );
+  portal.add(portalRing, portalDisc);
+  portal.position.set(bossAt.x, 16, bossAt.z);
+  portal.rotation.x = Math.PI / 2.4;
+  scene.add(portal);
+  const riftLight = new THREE.PointLight('#c45cff', 0, 70, 2);
+  riftLight.position.set(bossAt.x, 12, bossAt.z);
+  scene.add(riftLight);
+
+  const pillars = [];
+  for (let i = 0; i < 4; i++) {
+    const p = fromFrame(18 + (i % 2) * 8, i < 2 ? -7 : 7);
+    const mesh = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.35, 0.55, 6, 6),
+      new THREE.MeshStandardMaterial({ color: '#2a2030', emissive: '#ff4d8d', emissiveIntensity: 0.8, roughness: 0.45, metalness: 0.4 }),
+    );
+    mesh.position.set(p.x, 3, p.z);
+    pillars.push(mesh);
+    root.add(mesh);
+  }
+  const cracks = [];
+  for (let i = 0; i < 5; i++) {
+    const p = fromFrame(16 + i * 2.2, (i - 2) * 1.1);
+    const mesh = new THREE.Mesh(
+      new THREE.PlaneGeometry(2.4, 0.16),
+      new THREE.MeshBasicMaterial({ color: '#ffb089', transparent: true, opacity: 0.85, depthWrite: false, side: THREE.DoubleSide }),
+    );
+    mesh.rotation.x = -Math.PI / 2;
+    mesh.rotation.z = i * 0.4;
+    mesh.position.set(p.x, 0.09, p.z);
+    cracks.push(mesh);
+    root.add(mesh);
+  }
+  const ashCount = 360;
+  const ashArr = new Float32Array(ashCount * 3);
+  for (let i = 0; i < ashCount; i++) {
+    ashArr[i * 3] = (Math.random() - 0.5) * 40;
+    ashArr[i * 3 + 1] = Math.random() * 12;
+    ashArr[i * 3 + 2] = (Math.random() - 0.5) * 40;
+  }
+  const ashGeo = new THREE.BufferGeometry();
+  ashGeo.setAttribute('position', new THREE.BufferAttribute(ashArr, 3));
+  const ash = new THREE.Points(ashGeo, new THREE.PointsMaterial({
+    color: '#ffc2a8', size: 0.14, transparent: true, opacity: 0, depthWrite: false,
+  }));
+  ash.frustumCulled = false;
+  scene.add(ash);
+
   const hemi = new THREE.HemisphereLight('#6e4d92', '#14343c', 0.62);
   scene.add(hemi);
   const dir = new THREE.DirectionalLight('#d5e4ff', 0.9);
@@ -326,14 +383,14 @@ export function createArena(scene) {
   scene.add(warm);
 
   const rift = {
-    top: new THREE.Color('#16082a'),
-    mid: new THREE.Color('#14505c'),
-    bot: new THREE.Color('#3a1868'),
-    fog: new THREE.Color('#1a2744'),
-    hemiSky: new THREE.Color('#6e4d92'),
-    hemiGround: new THREE.Color('#14343c'),
-    dir: new THREE.Color('#d5e4ff'),
-    water: new THREE.Color('#0c3c46'),
+    top: new THREE.Color('#14040e'),
+    mid: new THREE.Color('#5a1848'),
+    bot: new THREE.Color('#3a0c18'),
+    fog: new THREE.Color('#2a1024'),
+    hemiSky: new THREE.Color('#6a3058'),
+    hemiGround: new THREE.Color('#1a1020'),
+    dir: new THREE.Color('#e7c4ff'),
+    water: new THREE.Color('#1a2438'),
   };
   const peace = {
     top: new THREE.Color('#2a4470'),
@@ -358,6 +415,7 @@ export function createArena(scene) {
 
   let mood = 'rift';
   let moodT = 1;
+  let riftAmt = 1;
   let flash = 0;
   let boltIn = 4 + Math.random() * 4;
   let rainOn = true;
@@ -385,15 +443,49 @@ export function createArena(scene) {
     sky,
     safeRing,
     safeFill,
-    setMood(next) {
+    setMood(next, immediate) {
       mood = next;
-      moodT = 0;
+      moodT = immediate ? 1 : 0;
+      if (immediate) {
+        mixToward(next === 'peace' ? peace : rift, 8);
+        riftAmt = next === 'peace' ? 0 : 1;
+      }
     },
     setRain(on) { rainOn = on; rain.visible = on; },
     setSafeHot(on) { safePulse = on ? 1 : 0; },
     update(dt, focus) {
       moodT = Math.min(1, moodT + dt);
+      const goal = mood === 'peace' ? 0 : 1;
+      riftAmt += (goal - riftAmt) * (1 - Math.exp(-dt * 1.15));
       mixToward(mood === 'peace' ? peace : rift, dt);
+      portal.visible = riftAmt > 0.04;
+      portalRing.material.opacity = riftAmt * 0.9;
+      portalDisc.material.opacity = riftAmt * 0.4;
+      portal.rotation.z += dt * 0.35;
+      riftLight.intensity = riftAmt * 18;
+      pillars.forEach((mesh) => {
+        mesh.visible = riftAmt > 0.08;
+        mesh.material.emissiveIntensity = riftAmt * 1.2;
+      });
+      cracks.forEach((mesh) => {
+        mesh.visible = riftAmt > 0.08;
+        mesh.material.opacity = riftAmt * 0.85;
+      });
+      ash.material.opacity = riftAmt * 0.75;
+      if (focus && riftAmt > 0.02) {
+        const arr = ash.geometry.attributes.position.array;
+        for (let i = 0; i < ashCount; i++) {
+          arr[i * 3 + 1] += dt * (0.4 + (i % 5) * 0.15);
+          arr[i * 3] += Math.sin(i + performance.now() * 0.001) * dt * 0.4;
+          if (arr[i * 3 + 1] > 14) arr[i * 3 + 1] = 0.2;
+        }
+        ash.geometry.attributes.position.needsUpdate = true;
+        ash.position.set(focus.x, 0, focus.z);
+        portal.position.x = bossAt.x + (focus.x - bossAt.x) * 0.15;
+        portal.position.z = bossAt.z + (focus.z - bossAt.z) * 0.15;
+        riftLight.position.x = portal.position.x;
+        riftLight.position.z = portal.position.z;
+      }
       if (mood === 'peace') {
         scene.fog.near = 40;
         scene.fog.far = 160;
