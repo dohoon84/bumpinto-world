@@ -14,8 +14,8 @@ export const MYEONGDONG_BOUNDS = { x0: -11420, z0: -22080, x1: -10530, z1: -2130
 export const MYEONGDONG_APRON = { x0: -11530, z0: -22300, x1: -10455, z1: -21300 };
 /** 명동역 → 남산오르미 → 케이블카 하부정류장 길안내 띠 (남산 섬 안, 길안내만 그린다) */
 export const MYEONGDONG_LINK = { x0: -11160, z0: -21300, x1: -10900, z1: -20990 };
-/** 명동역 6번 출구 앞 명동8길 입구 (OSM node/3403067532 근처 인도). 높이는 DEM 이 생긴 뒤 spawnY() 로 */
-export const MYEONGDONG_SPAWN = { x: -10912.5, z: -21468, y: 10.2, name: '명동역 6번 출구' };
+/** 명동역 6번 출구 계단 위(명동8길 입구 인도). myeongdongStation.js 가 계산하는 자리와 같게 둔다(빌드 로그 spawn=). face = 북쪽(명동 거리)을 보는 cam.yaw */
+export const MYEONGDONG_SPAWN = { x: -10915.6, z: -21492.5, y: 10.3, face: -0.015, name: '명동역 6번 출구' };
 /** 4호선 하늘색 (서울교통공사 노선색) */
 export const LINE4_COLOR = '#00A5DE';
 const MD_ON = myeongdongEnabled();

@@ -217,7 +217,8 @@ function drawGuideBoard(g, w, h) {
 function drawPlain(g, w, h, color) { g.fillStyle = color; g.fillRect(0, 0, w, h); }
 
 /** 명동 아틀라스. uv(name) → [u0, v0, u1, v1] (three 텍스처 좌표, flipY 반영) */
-export function createMyeongdongAtlas() {
+/** tick 을 주면 항목마다 쉬어 가는 Promise 를 돌려준다 (지연 빌드에서 긴 작업 하나가 프레임을 막지 않게) */
+export function createMyeongdongAtlas(tick = null) {
   const W = 2048, H = 2048, PAD = 4;
   const items = [];
   SHOP_SIGNS.forEach((s, i) => items.push({ name: 'h' + i, w: 500, h: 96, draw: (g, w, h) => drawHSign(g, w, h, s, i) }));
@@ -251,20 +252,28 @@ export function createMyeongdongAtlas() {
   canvas.width = W; canvas.height = H;
   const g = canvas.getContext('2d');
   g.fillStyle = '#000'; g.fillRect(0, 0, W, H);
-  for (const it of items) {
-    g.save();
-    g.translate(it.x, it.y);
-    g.beginPath(); g.rect(0, 0, it.w, it.h); g.clip();
-    it.draw(g, it.w, it.h);
-    g.restore();
-    // 밉맵 번짐 방지: 가장자리 픽셀을 PAD 만큼 늘린다
-    g.drawImage(canvas, it.x, it.y, it.w, 1, it.x, it.y - PAD, it.w, PAD);
-    g.drawImage(canvas, it.x, it.y + it.h - 1, it.w, 1, it.x, it.y + it.h, it.w, PAD);
-    g.drawImage(canvas, it.x, it.y - PAD, 1, it.h + PAD * 2, it.x - PAD, it.y - PAD, PAD, it.h + PAD * 2);
-    g.drawImage(canvas, it.x + it.w - 1, it.y - PAD, 1, it.h + PAD * 2, it.x + it.w, it.y - PAD, PAD, it.h + PAD * 2);
+  // 항목마다 작은 캔버스에 그리고 가장자리를 PAD 만큼 늘린 뒤(밉맵 번짐 방지) 아틀라스에 한 번 붙인다.
+  //   (2048² 캔버스를 자기 자신에 drawImage 하면 매번 전체 스냅샷이 떠서 수 초가 걸렸다)
+  const sc = document.createElement('canvas'), sg = sc.getContext('2d');
+  const paint = (it) => {
+    const w = it.w + PAD * 2, h = it.h + PAD * 2;
+    if (sc.width < w || sc.height < h) { sc.width = Math.max(sc.width, w); sc.height = Math.max(sc.height, h); }
+    sg.setTransform(1, 0, 0, 1, 0, 0); sg.clearRect(0, 0, w, h);
+    sg.save(); sg.translate(PAD, PAD); sg.beginPath(); sg.rect(0, 0, it.w, it.h); sg.clip();
+    it.draw(sg, it.w, it.h);
+    sg.restore();
+    sg.drawImage(sc, PAD, PAD, it.w, 1, PAD, 0, it.w, PAD);
+    sg.drawImage(sc, PAD, PAD + it.h - 1, it.w, 1, PAD, PAD + it.h, it.w, PAD);
+    sg.drawImage(sc, PAD, 0, 1, h, 0, 0, PAD, h);
+    sg.drawImage(sc, PAD + it.w - 1, 0, 1, h, PAD + it.w, 0, PAD, h);
+    g.drawImage(sc, 0, 0, w, h, it.x - PAD, it.y - PAD, w, h);
     // 반 텍셀 안쪽으로 UV 를 잡는다
     map.set(it.name, [(it.x + 0.5) / W, 1 - (it.y + it.h - 0.5) / H, (it.x + it.w - 0.5) / W, 1 - (it.y + 0.5) / H]);
-  }
+  };
+  if (tick) return (async () => { for (const it of items) { paint(it); await tick('md-atlas'); } return finish(); })();
+  for (const it of items) paint(it);
+  return finish();
+  function finish() {
   const texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.SRGBColorSpace;
   texture.anisotropy = 8;
@@ -272,6 +281,7 @@ export function createMyeongdongAtlas() {
   texture.minFilter = THREE.LinearMipmapLinearFilter;
   texture.name = 'myeongdong-atlas';
   return { texture, canvas, uv: (n) => map.get(n) || map.get('c-white'), usedH, items };
+  }
 }
 
 export { rr as roundRectPath };

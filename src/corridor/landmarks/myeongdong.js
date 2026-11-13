@@ -125,7 +125,13 @@ function buildingHeight(b) {
 
 export async function createMyeongdongAsync(opts = {}, yieldFn = null, slicer = null) {
   const { scene, overlay, terrain, data, namsan = null } = opts;
-  const tick = async (label) => { if (slicer) await slicer.tick(label); };
+  const T = [];
+  let tLast = typeof performance !== 'undefined' ? performance.now() : 0;
+  const tick = async (label) => {
+    if (typeof performance !== 'undefined') { const n = performance.now(); if (n - tLast > 40) T.push(`${label}:${Math.round(n - tLast)}`); }
+    if (slicer) await slicer.tick(label);
+    if (typeof performance !== 'undefined') tLast = performance.now();
+  };
   const root = new THREE.Group();
   root.name = 'myeongdong';
   root.visible = false;
@@ -133,7 +139,7 @@ export async function createMyeongdongAsync(opts = {}, yieldFn = null, slicer = 
 
   const land = makeMyeongdongLand(data, { namsanHeightAt: namsan?.heightAt ? (x, z) => namsan.heightAt(x, z) : null });
   const { heightAt, bounds: B, apron: A } = land;
-  const atlas = createMyeongdongAtlas();
+  const atlas = await createMyeongdongAtlas(slicer ? tick : null);
   await tick('md-atlas');
 
   // ---------- 땅 (바깥 띠 포함, 5 m 격자) ----------
@@ -334,6 +340,7 @@ export async function createMyeongdongAsync(opts = {}, yieldFn = null, slicer = 
     return { x: s.x, z: s.z, y: heightAt(s.x, s.z) + 0.15, name: s.name || MYEONGDONG_SPAWN.name };
   })();
   root.visible = true;
+  console.info(`[myeongdong] spawn=${spawn.x.toFixed(1)},${spawn.z.toFixed(1)} face=${(station.spawnFace ?? 0).toFixed(3)} guide=${station.info?.pathLen}m slow=${T.join(' ')}`);
   let lastP = null;
   const api = {
     root,

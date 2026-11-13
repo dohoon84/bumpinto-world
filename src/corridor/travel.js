@@ -33,7 +33,7 @@ export function mountTravel({ corridor, home, teleport }) {
   }
   if (corridor.myeongdong) { // [myeongdong] 명동역 6번 출구 (4호선). 높이는 명동 땅(addGroundSurface)이 준다
     const m = corridor.myeongdong;
-    dests.push({ id: 'myeongdong', en: 'Myeongdong', ko: '명동', x: m.spawn.x, z: m.spawn.z, face: () => m.face, line: '4호선' });
+    dests.push({ id: 'myeongdong', en: 'Myeongdong', ko: '명동', x: m.spawn.x, z: m.spawn.z, face: () => m.face, line: '4호선', getYAt: (x, z) => m.surfaceY(x, z) ?? m.spawnY() });
   }
   if (corridor.hangang) {
     const h = corridor.hangang;
@@ -96,12 +96,12 @@ export function mountTravel({ corridor, home, teleport }) {
     if (mine !== epoch) return false;
     const p = bestSpot(d);
     if (mine !== epoch) return false;
-    teleport(p.x, p.z, d.getY?.(), d.face?.());
+    teleport(p.x, p.z, d.getYAt ? d.getYAt(p.x, p.z) : d.getY?.(), d.face?.());
     // 도착 후 한 번 더: 타일이 늦게 빌드됐으면 인도(차도·건물 밖)로 다시 맞춘다
     await corridor.preload(d.x, d.z);
     if (mine !== epoch) return false;
     const q = corridor.freeSpot(p.x, p.z);
-    if (Math.hypot(q.x - p.x, q.z - p.z) > 0.01) teleport(q.x, q.z, d.getY?.());
+    if (Math.hypot(q.x - p.x, q.z - p.z) > 0.01) teleport(q.x, q.z, d.getYAt ? d.getYAt(q.x, q.z) : d.getY?.());
     return true;
   }
   // [arrivefix] 그 역 주변 타일만 미리 받기 (이동은 하지 않음) — 로그인 상태 입장에서 서버 입장 요청과 동시에
