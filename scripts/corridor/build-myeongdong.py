@@ -166,6 +166,10 @@ def main():
             elif hw in ('primary', 'trunk', 'secondary') and t.get('lanes'):
                 ln = num(t.get('lanes')) or 0
                 wd = max(wd, ln * 3.3 + 2)
+            if hw in ('primary', 'trunk', 'secondary', 'tertiary', 'primary_link', 'secondary_link', 'tertiary_link', 'trunk_link'):
+                # [md-roads] 교차로 회전 차로까지 센 lanes(회현 소공로 11) → 38 m 리본이 보도·광장을 덮었다. 차종별 상한 (myeongdong.js 와 같게)
+                cap = 13.6 if t.get('oneway') == 'yes' else 22 if hw in ('primary', 'trunk') else 18 if hw == 'secondary' else 14
+                wd = min(wd, cap)
             o = {'id': w['id'], 'k': hw, 'w': round(wd, 1), 'pts': pts}
             if t.get('name'): o['n'] = t['name']
             if t.get('name:en'): o['ne'] = t['name:en']

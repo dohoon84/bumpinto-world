@@ -21,7 +21,8 @@ const SIG_ON = typeof location === 'undefined' || new URLSearchParams(location.s
 const CAR = new Set(['trunk', 'primary', 'secondary', 'tertiary', 'primary_link', 'secondary_link', 'tertiary_link', 'trunk_link']);
 const PED = new Set(['pedestrian', 'living_street', 'footway', 'steps', 'path', 'corridor', 'cycleway']);
 const ROAD_COL = {
-  car: '#3b3e44', residential: '#cbbca8', service: '#bdb3a6', unclassified: '#c4b6a3',
+  // [md-roads] 차도는 조금 밝게(#3b3e44 → #4a4d53) — 낮에도 새까만 판처럼 보였다
+  car: '#4a4d53', residential: '#cbbca8', service: '#bdb3a6', unclassified: '#c4b6a3',
   pedestrian: '#d6c8b2', living_street: '#d0c2ae', footway: '#ddd5c8', steps: '#c9c2b8', path: '#c8bfae', corridor: '#ddd5c8', cycleway: '#c9b9a8',
 };
 
@@ -58,7 +59,9 @@ function asphaltTexture() {
   return t;
 }
 
-/** 길 리본을 지형에 붙여 깐다 (세그먼트를 3 m 로 쪼개 높이를 다시 잰다). UV 는 월드 m/4 */
+/** 길 리본을 지형에 붙여 깐다 (세그먼트를 3 m 로 쪼개 높이를 다시 잰다). UV 는 월드 m/4
+ *  [md-roads] 폭 방향도 ≤ 5 m 칸으로 쪼개 칸 꼭짓점마다 높이를 잰다 — 넓은 차도(소공로 20 m+)를 양 끝 두 점만 붙이면
+ *  굽은 비탈에서 가운데가 땅에 묻히거나 떠서, 땅·보도가 뚫고 나와 들쭉날쭉한 검은 얼룩처럼 보였다. */
 function drapeRibbon(buf, pts, w, heightAt, yOff, col, clip) {
   const hw = w / 2;
   const P = [];
@@ -68,24 +71,27 @@ function drapeRibbon(buf, pts, w, heightAt, yOff, col, clip) {
     for (let k = 1; k <= n; k++) P.push([a[0] + (b[0] - a[0]) * k / n, a[1] + (b[1] - a[1]) * k / n]);
   }
   if (P.length < 2) return;
-  const L = [], R = [];
+  const nc = Math.max(1, Math.ceil(w / 5)), cols = nc + 1; // 땅 격자(5 m)와 같은 촘촘함
+  const rows = [];
   for (let i = 0; i < P.length; i++) {
     const a = P[Math.max(0, i - 1)], b = P[Math.min(P.length - 1, i + 1)];
     let tx = b[0] - a[0], tz = b[1] - a[1]; const tl = Math.hypot(tx, tz) || 1; tx /= tl; tz /= tl;
-    const nx = -tz, nz = tx;
-    const lx = P[i][0] + nx * hw, lz = P[i][1] + nz * hw, rx = P[i][0] - nx * hw, rz = P[i][1] - nz * hw;
-    L.push([lx, heightAt(lx, lz) + yOff, lz]); R.push([rx, heightAt(rx, rz) + yOff, rz]);
+    const nx = -tz, nz = tx, row = [];
+    for (let c = 0; c < cols; c++) { const f = -hw + (2 * hw) * c / nc, x = P[i][0] + nx * f, z = P[i][1] + nz * f; row.push([x, heightAt(x, z) + yOff, z]); }
+    rows.push(row);
   }
   for (let i = 1; i < P.length; i++) {
     const mx = (P[i][0] + P[i - 1][0]) / 2, mz = (P[i][1] + P[i - 1][1]) / 2;
     if (clip && !clip(mx, mz)) continue;
-    const a = R[i - 1], b = R[i], c = L[i], d = L[i - 1];
-    const uv = (q) => [q[0] / 4, q[2] / 4];
+    const r0 = rows[i - 1], r1 = rows[i];
     const base = buf.count;
-    for (const q of [a, b, c, d]) { buf.p.push(q[0], q[1], q[2]); buf.n.push(0, 1, 0); }
-    for (const q of [a, b, c, d]) { const [u, v] = uv(q); buf.uv.push(u, v); }
-    for (let k = 0; k < 4; k++) buf.c.push(col[0], col[1], col[2]);
-    buf.i.push(base, base + 2, base + 1, base, base + 3, base + 2);
+    for (const q of r0) { buf.p.push(q[0], q[1], q[2]); buf.n.push(0, 1, 0); buf.uv.push(q[0] / 4, q[2] / 4); buf.c.push(col[0], col[1], col[2]); }
+    for (const q of r1) { buf.p.push(q[0], q[1], q[2]); buf.n.push(0, 1, 0); buf.uv.push(q[0] / 4, q[2] / 4); buf.c.push(col[0], col[1], col[2]); }
+    // 옛 쿼드(a=R[i-1], b=R[i], c=L[i], d=L[i-1]; a,c,b · a,d,c) 와 같은 감김. 열 0 = 오른쪽(-hw) → 열 nc = 왼쪽(+hw)
+    for (let c = 0; c < nc; c++) {
+      const a = base + c, b = base + cols + c, cc = base + cols + c + 1, d = base + c + 1;
+      buf.i.push(a, cc, b, a, d, cc);
+    }
   }
 }
 
@@ -231,6 +237,15 @@ export async function createMyeongdongAsync(opts = {}, yieldFn = null, slicer = 
   await tick('md-ground');
 
   // ---------- 길 (차도 아스팔트 + 명동 보행 골목 블록 포장) ----------
+  // [md-roads] OSM 폭·차로 수가 교차로 회전 차로까지 센 곳(회현 소공로 lanes=11 → 38 m)은 차도 리본이 보도·광장을 덮었다.
+  //   차종별 상한으로 줄인다(양방향 간선 ≤ 22 m · 일방 ≤ 13.6 m(4차로)). 충돌·미니맵·보행 검사도 같은 폭을 쓰게 data 에서 고친다.
+  for (const w of data.ways || []) {
+    if (!CAR.has(w.k) || w._wc) continue;
+    const cap = w.ow ? 13.6 : (w.k === 'primary' || w.k === 'trunk') ? 22 : w.k === 'secondary' ? 18 : 14;
+    if (w.w > cap) { w.w0 = w.w; w.w = cap; }
+    if (w.ln) w.ln = Math.min(w.ln, Math.max(1, Math.floor((w.w - (w.ow ? 0.6 : 2)) / 3.25)));
+    w._wc = 1;
+  }
   const ways = (data.ways || []).filter((w) => w.pts?.length >= 2 && !w.tun);
   const roadMat = new THREE.MeshLambertMaterial({ map: asphaltTexture(), vertexColors: true, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
   const roadGrid = new CellGrid(24);
@@ -287,14 +302,35 @@ export async function createMyeongdongAsync(opts = {}, yieldFn = null, slicer = 
       const shape = a.o.map(([x, z]) => new THREE.Vector2(x, z));
       let tris; try { tris = THREE.ShapeUtils.triangulateShape(shape, []); } catch { continue; }
       const col = hex3(green ? (a.k === 'wood' ? '#4d7a3d' : '#6f9e52') : '#c9c4bb'); // 보행 광장: 모래색 → 돌색
-      const pos = [], nrm = [], uv = [];
-      for (const [x, z] of a.o) { pos.push(x, heightAt(x, z) + (green ? 0.12 : 0.11), z); nrm.push(0, 1, 0); uv.push(x / 4, z / 4); }
-      const idx = [];
+      // [md-roads] 면을 꼭짓점 높이로만 깔면 넓은 광장 삼각형이 굽은 비탈 위로 최대 1 m 넘게 떠서(보도 위 판) 들쭉날쭉했다.
+      //   면이 땅에서 0.12 m 넘게 벗어나는 삼각형만 (변 6 m 까지) 쪼개고 새 꼭짓점마다 땅 높이를 다시 잰다.
+      const yo = green ? 0.12 : 0.11;
+      const pos = [], nrm = [], uv = [], idx = [];
+      const put = (x, z) => { pos.push(x, heightAt(x, z) + yo, z); nrm.push(0, 1, 0); uv.push(x / 4, z / 4); return pos.length / 3 - 1; };
+      const emit = (p0, p1, p2, depth) => {
+        const e = Math.max(Math.hypot(p1[0] - p0[0], p1[1] - p0[1]), Math.hypot(p2[0] - p1[0], p2[1] - p1[1]), Math.hypot(p0[0] - p2[0], p0[1] - p2[1]));
+        // 평평한 곳은 그대로(삼각형 수 아끼기) — 변 가운데·무게중심의 땅 높이가 면에서 0.12 m 넘게 벗어날 때만 쪼갠다
+        let dev = 0;
+        if (e > 6 && depth < 7) {
+          const h0 = heightAt(p0[0], p0[1]), h1 = heightAt(p1[0], p1[1]), h2 = heightAt(p2[0], p2[1]);
+          for (const [u, v, w] of [[0.5, 0.5, 0], [0, 0.5, 0.5], [0.5, 0, 0.5], [1 / 3, 1 / 3, 1 / 3]]) {
+            const x = p0[0] * u + p1[0] * v + p2[0] * w, z = p0[1] * u + p1[1] * v + p2[1] * w;
+            dev = Math.max(dev, Math.abs(heightAt(x, z) - (h0 * u + h1 * v + h2 * w)));
+          }
+        }
+        if (dev > 0.12) {
+          const m01 = [(p0[0] + p1[0]) / 2, (p0[1] + p1[1]) / 2], m12 = [(p1[0] + p2[0]) / 2, (p1[1] + p2[1]) / 2], m20 = [(p2[0] + p0[0]) / 2, (p2[1] + p0[1]) / 2];
+          emit(p0, m01, m20, depth + 1); emit(m01, p1, m12, depth + 1); emit(m20, m12, p2, depth + 1); emit(m01, m12, m20, depth + 1);
+          return;
+        }
+        idx.push(put(p0[0], p0[1]), put(p1[0], p1[1]), put(p2[0], p2[1]));
+      };
       for (const t of tris) {
         const [p0, p1, p2] = [a.o[t[0]], a.o[t[1]], a.o[t[2]]];
         const up = (p1[1] - p0[1]) * (p2[0] - p0[0]) - (p1[0] - p0[0]) * (p2[1] - p0[1]); // (p1-p0)×(p2-p0) 의 y
-        if (up > 0) idx.push(t[0], t[1], t[2]); else idx.push(t[0], t[2], t[1]);
+        if (up > 0) emit(p0, p1, p2, 0); else emit(p0, p2, p1, 0);
       }
+      if (pos.length / 3 > 60000) continue; // 터무니없이 큰 면은 건너뜀
       buf.raw(pos, idx, nrm, uv, col);
     }
     const g = buf.build();
