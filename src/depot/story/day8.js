@@ -161,7 +161,7 @@ export function createDay8Props({ THREE, scene, keep, cartObj = null, isMobile =
   const lam = (o = {}) => keep(new THREE.MeshLambertMaterial({ vertexColors: true, ...o }));
   function buildBoss() { // 경쟁 마트 팀장: 50대 초반 여자 — 진보라 재킷 · 회색 바지 · 단발 · 스톱워치 (사람, 동물·마스코트 아님)
     const pos = [], col = [], nrm = [];
-    personParts(pos, col, nrm, { legs: 0x55575e, top: 0x4b2a7a, hair: 0x2b2420, hairLong: true, prop: 'stopwatch', skin: 0xeec3a0 });
+    personParts(pos, col, nrm, { legs: 0x3c3450, top: 0x5e4596, hair: 0xb9b6b2, hairLong: true, prop: 'stopwatch', skin: 0xf1cba8 }); // characters.json palette (은회색 단발 · 보라 재킷)
     box(pos, col, 0, 1.36, 0.135, 0.14, 0.26, 0.01, hex(0xe9e3f2), nrm); // 블라우스 깃
     const m = new THREE.Mesh(geo(THREE, keep, pos, col, nrm), lam()); m.name = 'story-rivalboss'; return m;
   }
@@ -182,7 +182,7 @@ export function createDay8Props({ THREE, scene, keep, cartObj = null, isMobile =
   function ensureCss() {
     if (css || typeof document === 'undefined') return;
     css = document.createElement('style'); css.id = 'dp-d8-css';
-    css.textContent = `#dp-d8c{position:fixed;left:50%;top:38%;transform:translate(-50%,-50%);z-index:60;pointer-events:none;background:#fffaf0;border:3px solid #1e5a45;border-radius:16px;padding:14px 18px 12px;box-shadow:0 10px 40px rgba(0,0,0,.35);font:800 14px Pretendard,"Noto Sans KR",sans-serif;color:#1e5a45;text-align:center;animation:dpd8 .4s}
+    css.textContent = `#dp-d8c{position:fixed;left:50%;top:30%;transform:translate(-50%,-50%);z-index:63;pointer-events:none;background:#fffaf0;border:3px solid #1e5a45;border-radius:16px;padding:14px 18px 12px;box-shadow:0 10px 40px rgba(0,0,0,.35);font:800 14px Pretendard,"Noto Sans KR",sans-serif;color:#1e5a45;text-align:center;animation:dpd8 .4s}
 #dp-d8c h4{margin:0 0 8px;font:900 17px Pretendard,sans-serif}#dp-d8c .row{display:flex;gap:${isMobile ? 6 : 9}px;justify-content:center}#dp-d8c .row i{width:${isMobile ? 30 : 38}px;height:${isMobile ? 30 : 38}px;border-radius:50%;border:3px dashed #9bb8a8;display:block}#dp-d8c .row i.on{border:3px solid #d9a21a;background:radial-gradient(circle,#fff6c8,#f2c230)}#dp-d8c p{margin:8px 0 0;font-weight:700;color:#4d6b5d}
 @keyframes dpd8{0%{transform:translate(-50%,-50%) scale(.6);opacity:0}100%{transform:translate(-50%,-50%) scale(1);opacity:1}}`;
     document.head.appendChild(css);
@@ -234,7 +234,7 @@ export function createDay8Props({ THREE, scene, keep, cartObj = null, isMobile =
       if (typeof document === 'undefined') return; ensureCss(); card?.remove();
       card = document.createElement('div'); card.id = 'dp-d8c';
       card.innerHTML = `<h4>2주차 단골 도장 카드</h4><div class="row">${Array.from({ length: 7 }, (_, i) => `<i class="${i < n ? 'on' : ''}"></i>`).join('')}</div><p>${ending === 'A' ? '1주차 금도장 카드는 액자에 넣었어요' : '8일차부터 새 카드 · 0/7'}</p>`;
-      document.body.appendChild(card); const c = card; setTimeout(() => { c.remove(); if (card === c) card = null; }, 2800);
+      document.body.appendChild(card); const c = card; setTimeout(() => { c.remove(); if (card === c) card = null; }, 4500);
     },
     stats() { return { boss: !!boss?.parent, squad: crewMode, crew: crew?.parent ? crew.count : 0, carts: carts?.parent ? 3 : 0, flyers: !!flyers?.parent, tent: !!tent?.parent, bin: !!bin?.parent, card: !!card }; },
     clearStage() { api.boss(null); api.squad(null); },
