@@ -1,6 +1,7 @@
 // [namsan] 남산서울타워(N서울타워) — OSM 실제 좌표·표고 위에 절차적 타워·지형·실내·케이블카.
 //   기본 켜짐. ?ntower=0 이면 전부 끄고, ?ncable=0 이면 케이블카만 끈다.
 //   브랜드 로고/실제 매장명/마스코트 없음. 층별 안내는 일반 이름만 쓴다.
+import { myeongdongClaims } from './myeongdongFlags.js'; // [myeongdong]
 import * as THREE from 'three';
 import { watchEvening } from '../../evening.js';
 import { NT, namsanBaseY, inNamsanPark } from './namsanCoords.js';
@@ -29,6 +30,7 @@ export function namsanMini(city, osm, heightAt) {
     if (!o || o.length < 3) return false;
     let x = 0, z = 0;
     for (const p of o) { x += p[0]; z += p[1]; }
+    if (myeongdongClaims(x / o.length, z / o.length)) return false; // [myeongdong]
     return !inNamsanPark(x / o.length, z / o.length, osm?.parks, heightAt);
   });
   const extraRoads = [];

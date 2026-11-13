@@ -47,6 +47,7 @@ export const CORRIDOR_STATION_COUNT = ALL_STATIONS.length + 1;
 // 입장 화면(로비 제목·로딩 문구)에 쓰는 역 이름 — ?at= 역 id 기준
 export function corridorStationLabel(id) {
   if (id === 'ntower' || id === 'namsan') return { ko: '남산서울타워', en: 'N Seoul Tower', short: 'N Seoul Tower' };
+  if (id === 'myeongdong') return { ko: '명동역', en: 'Myeongdong Station', short: 'Myeongdong' }; // [myeongdong] 4호선
   if (id === CORRIDOR_LANDMARK.id) return lotteClock.isOpen() ? { ko: CORRIDOR_LANDMARK.ko, en: CORRIDOR_LANDMARK.en, short: CORRIDOR_LANDMARK.en }
     : { ko: '잠실 랜드마크 공사현장', en: 'Jamsil Landmark site', short: 'Jamsil Landmark' }; // 오픈 전(lotteOpening.js)
   const s = ALL_STATIONS.find((x) => x.id === id);

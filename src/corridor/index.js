@@ -46,8 +46,9 @@ import { hollowSeohyeonArcade } from '../arcade/locations.js'; // [arcade] 서�
 import { migeumWaterEnabled, MIGEUM_WATER_FILE, migeumChRoads, mergeMigeumWater, applyMigeumBank } from './migeumWater.js'; // [migeum-water]
 import { cityhallEnabled, CITYHALL_FILE, filterCityHallHidden, createCityHall } from './cityhall.js'; // [cityhall]
 import { namsanEnabled, namsanCableEnabled, NAMSAN_DEM_FILE, NAMSAN_OSM_FILE, NAMSAN_CITY_FILE } from './landmarks/namsanFlags.js'; // [namsan]
-import { landmarkLazyEnabled, LANDMARK_NEAR_M, LANDMARK_PREFETCH_M, makeNamsanMeta, makeHangangMeta, wrapLandmark, yieldPaint, makeBuildYield, makeSlicer, beginLandmarkBuild, landmarkBuildGate, LANDMARK_URGENT_SLICE_MS } from './landmarks/lazyLandmarks.js'; // [namsan] [hangang] 메시 지연 생성
+import { landmarkLazyEnabled, LANDMARK_NEAR_M, LANDMARK_PREFETCH_M, makeNamsanMeta, makeHangangMeta, makeMyeongdongMeta, wrapLandmark, yieldPaint, makeBuildYield, makeSlicer, beginLandmarkBuild, landmarkBuildGate, LANDMARK_URGENT_SLICE_MS } from './landmarks/lazyLandmarks.js'; // [namsan] [hangang] 메시 지연 생성
 import { createNamsanNpc, namsanNpcEnabled } from './landmarks/namsanNpc.js'; // [namsan-npc]
+import { myeongdongEnabled, MYEONGDONG_FILE } from './landmarks/myeongdongFlags.js'; // [myeongdong]
 import { hangangEnabled, HANGANG_DEM_FILE, HANGANG_OSM_FILE, HAP_DEM_FILE, HAP_OSM_FILE, HANGANG_TERRAIN_BAKE_FILE, HAP_TERRAIN_BAKE_FILE } from './landmarks/hangangFlags.js'; // [hangang]
 
 // streams: 탄천 지류 하도(streams.json). ?streams=0 이면 false → 예전과 같은 데이터만
@@ -160,6 +161,7 @@ export async function createCorridor({ scene, corridorData, terrain, world, rend
         if (namsan.isBlocked(x + dx, z + dz, r)) return true;
       }
     }
+    if (myeongdong?.ready && myeongdong.isBlocked(x, z, r)) return true; // [myeongdong] 건물·성당·노점·역 캐노피 (자체 반경 판정)
     return false;
   };
   // [gangnam-night] 카메라가 건물 안에 들어가지 않게. 로드된 상세 타일의 지붕 높이.
@@ -437,6 +439,7 @@ const gnTransit = corridorData.gangnamTransit ? mountGangnamTransit(root, corrid
   let namsan = null, hangang = null, namsanNpc = null;
   let namsanPending = false, hangangPending = false;
   let namsanBuilding = null, hangangBuilding = null;
+  let myeongdong = null, myeongdongPending = false, myeongdongBuilding = null; // [myeongdong] 항상 지연 (남산을 먼저 짓고 이음매를 맞춘다)
   const lazyLandmarks = landmarkLazyEnabled(params || (typeof location !== 'undefined' ? location.search : ''));
   setFlatClip(null);
   hapFlatRect = null;
@@ -531,6 +534,37 @@ const gnTransit = corridorData.gangnamTransit ? mountGangnamTransit(root, corrid
     return namsanBuilding;
   }
 
+  // [myeongdong] 명동: 남산(이음매 높이·케이블카)을 먼저 짓고 그 북쪽에 붙인다
+  let myeongdongYieldState = null;
+  async function buildMyeongdong(urgent = false) {
+    if (!myeongdong || myeongdong.ready) return myeongdong;
+    if (myeongdongBuilding) {
+      if (urgent && myeongdongYieldState) { myeongdongYieldState.idle = false; myeongdongYieldState.budgetMs = LANDMARK_URGENT_SLICE_MS; }
+      if (urgent) landmarkBuildGate.urgent = true;
+      return myeongdongBuilding;
+    }
+    myeongdongBuilding = (async () => {
+      if (namsan && !namsan.ready) { try { await buildNamsan(urgent); } catch (e) { console.warn('[myeongdong] namsan first', e); } }
+      const done = beginLandmarkBuild(urgent);
+      try {
+        const y = makeBuildYield({ idle: !urgent });
+        myeongdongYieldState = y.state;
+        if (urgent) y.state.budgetMs = LANDMARK_URGENT_SLICE_MS;
+        const slicer = makeSlicer(y, { name: 'myeongdong' });
+        const t0 = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+        const data = await getJson(MYEONGDONG_FILE);
+        if (!data) { console.warn('[myeongdong] no data'); myeongdongPending = false; return myeongdong; }
+        const mdMod = await import('./landmarks/myeongdong.js');
+        myeongdong._bind(await mdMod.createMyeongdongAsync({ scene: root, overlay, terrain, data, namsan: namsan?.ready ? namsan : null }, y, slicer));
+        myeongdongPending = false;
+        const ms = ((typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now()) - t0;
+        console.info(`[myeongdong] lazy-built in ${Math.round(ms)}ms jsMax=${slicer.maxJs().toFixed(1)}`);
+        return myeongdong;
+      } finally { done(); }
+    })();
+    return myeongdongBuilding;
+  }
+
   async function buildHangang(urgent = false) {
     if (!hangang || hangang.ready) return hangang;
     if (hangangBuilding) {
@@ -575,6 +609,7 @@ const gnTransit = corridorData.gangnamTransit ? mountGangnamTransit(root, corrid
   const settleLandmarks = () => {
     if (namsan?.root) applyTextureBudget(namsan.root);
     if (hangang?.root) applyTextureBudget(hangang.root);
+    if (myeongdong?.root) applyTextureBudget(myeongdong.root); // [myeongdong]
   };
 
   async function ensureLandmarks(x, z, opts = {}) {
@@ -586,6 +621,7 @@ const gnTransit = corridorData.gangnamTransit ? mountGangnamTransit(root, corrid
     const hurry = urgent && wait; // 기다리지 않는 섬 위 도착은 평소 조각(8ms)으로 뒤에서 짓는다
     if (namsanPending && landmarkNeeded(namsan, x, z, opts.lookX, opts.lookZ, radius)) jobs.push(buildNamsan(hurry));
     if (hangangPending && landmarkNeeded(hangang, x, z, opts.lookX, opts.lookZ, radius)) jobs.push(buildHangang(hurry));
+    if (myeongdongPending && landmarkNeeded(myeongdong, x, z, opts.lookX, opts.lookZ, radius)) jobs.push(buildMyeongdong(hurry)); // [myeongdong]
     if (!jobs.length) return;
     if (!wait) {
       Promise.all(jobs).then(settleLandmarks, (e) => console.warn('[landmark] background build', e));
@@ -597,7 +633,7 @@ const gnTransit = corridorData.gangnamTransit ? mountGangnamTransit(root, corrid
 
   function needsLandmark(x, z) {
     if (onIsland(x, z)) return false; // [gangnam-enter] 섬 위 순간이동은 남산·한강 메시를 기다리지 않는다
-    return landmarkNeeded(namsan, x, z) || landmarkNeeded(hangang, x, z);
+    return landmarkNeeded(namsan, x, z) || landmarkNeeded(hangang, x, z) || landmarkNeeded(myeongdong, x, z);
   }
 
   if (corridorData.namsan) {
@@ -608,6 +644,12 @@ const gnTransit = corridorData.gangnamTransit ? mountGangnamTransit(root, corrid
       const nsMod = await import('./landmarks/namsan.js');
       namsan._bind(nsMod.createNamsan(namsanOpts()));
     }
+  }
+  // [myeongdong] 남산이 켜져 있을 때만 (남산 지형·케이블카와 이어진다). ?myeongdong=0 이면 없음
+  if (corridorData.namsan && myeongdongEnabled(params || (typeof location !== 'undefined' ? location.search : ''))) {
+    myeongdong = wrapLandmark(makeMyeongdongMeta());
+    myeongdongPending = true;
+    if (!lazyLandmarks) await buildMyeongdong(true);
   }
   if (corridorData.hangang) {
     hangang = wrapLandmark(makeHangangMeta(corridorData.hangang));
@@ -694,6 +736,14 @@ const gnTransit = corridorData.gangnamTransit ? mountGangnamTransit(root, corrid
     bounds.z1 = Math.max(bounds.z1, nb.z1);
     if (bounds.islands?.length) bounds.islands.push(nb);
   }
+  if (myeongdong?.bounds) { // [myeongdong] 남산 섬 북쪽 변(z=-21300)에 맞닿은 섬 → 명동역에서 남산오르미까지 걸어서 이어진다
+    const mb = { ...myeongdong.bounds };
+    bounds.x0 = Math.min(bounds.x0, mb.x0);
+    bounds.x1 = Math.max(bounds.x1, mb.x1);
+    bounds.z0 = Math.min(bounds.z0, mb.z0);
+    bounds.z1 = Math.max(bounds.z1, mb.z1);
+    if (bounds.islands?.length) bounds.islands.push(mb);
+  }
   if (hangang?.bounds) {
     // [hangang-isolation] 1구간·2구간 사각형을 따로 섬으로 넣는다 (합친 사각형은 강남역~반포 사이 빈 땅까지 덮었다).
     for (const b of hangang.boxes || [hangang.bounds]) {
@@ -725,6 +775,7 @@ const gnTransit = corridorData.gangnamTransit ? mountGangnamTransit(root, corrid
     get cityhall() { return cityhall; }, // [cityhall]
     get namsan() { return namsan; }, // [namsan]
     get hangang() { return hangang; }, // [hangang]
+    get myeongdong() { return myeongdong; }, // [myeongdong]
     ensureNear: (x, z, opts) => ensureLandmarks(x, z, opts), // [namsan] [hangang] 텔레포트·?at= 전에 메시 생성
     needsLandmark: (x, z) => needsLandmark(x, z),
     regions, // [perf-memory] 지역 지연 로드 레지스트리(null 이면 꺼짐). 미금 등은 regions.register({...}) 로 붙는다 — docs/perf-memory.md
@@ -758,7 +809,7 @@ const gnTransit = corridorData.gangnamTransit ? mountGangnamTransit(root, corrid
     get migeumPeds() { return migeumPeds; }, get migeumNpc() { return migeumNpc; }, // [migeum-npc]
     get namsanNpc() { return namsanNpc; }, // [namsan-npc]
     update(dt, x, z, mode = 'follow') {
-      if (namsanPending || hangangPending) {
+      if (namsanPending || hangangPending || myeongdongPending) {
         let lx, lz;
         if (rx != null) {
           const vx = x - rx, vz = z - rz, spd = Math.hypot(vx, vz);
@@ -776,6 +827,7 @@ const gnTransit = corridorData.gangnamTransit ? mountGangnamTransit(root, corrid
       cityhall?.update(dt); // [cityhall] 음악분수 애니메이션
       namsan?.update(dt); // [namsan]
       hangang?.update?.(dt); // [hangang]
+      myeongdong?.update?.(dt); // [myeongdong]
       lotte?.update(dt);
       bp24?.update(dt, x, z); // [bp24] 가까운 매장만 실내를 만든다
       updateNight(dt); // [corridor] 저녁 건물 불빛 페이드

@@ -2313,8 +2313,8 @@ homeBtn.onclick = () => {
   rememberPlace(true);
 };
 // [corridor] 순간이동(지구본 역 선택 · ?at=<역>|lotte) · 성능 HUD(`)
-function teleportTo(x, z, y) {
-  const move = () => teleportToMove(x, z, y);
+function teleportTo(x, z, y, face) {
+  const move = () => { teleportToMove(x, z, y); if (Number.isFinite(face)) { cam.yaw = face; cam.pitch = Math.min(cam.pitch, 0.12); } }; // [myeongdong] 도착 방향(명동 거리를 보게)
   if (corridor?.needsLandmark?.(x, z)) return corridor.ensureNear(x, z, { urgent: true }).then(move);
   return move();
 }
@@ -2975,6 +2975,7 @@ function frame() {
     corridor.update(dt, cPre.x, cPre.z, cam.mode);
     corridor.namsan?.tickPlayer?.(dt, player, cam);
     corridor.hangang?.tickPlayer?.(dt, player, cam);
+    corridor.myeongdong?.tickPlayer?.(dt, player, cam); // [myeongdong]
   }
 
   // 카메라
@@ -3013,7 +3014,12 @@ function frame() {
     const walkH = terrain?.getGroundHeight?.(camX, camZ, P.y);
     let camH = Number.isFinite(walkH) ? walkH : renderH;
     const nt = corridor?.namsan?.tower;
-    if (nt && Math.hypot(P.x - nt.ox, P.z - nt.oz) < 2800) {
+    const md = corridor?.myeongdong; // [myeongdong] 명동 땅 위면 남산 높이 대신 명동 높이로 카메라 바닥
+    const mdOwn = md?.ready && md.ownDist?.(camX, camZ) <= 60;
+    if (mdOwn) {
+      const mdH = md.heightAt?.(camX, camZ);
+      if (Number.isFinite(mdH) && !(Number.isFinite(camH) && camH >= mdH)) camH = mdH;
+    } else if (nt && Math.hypot(P.x - nt.ox, P.z - nt.oz) < 2800) {
       const nsH = corridor.namsan.surfaceY?.(camX, camZ) ?? corridor.namsan.heightAt?.(camX, camZ);
       if (Number.isFinite(nsH) && !(Number.isFinite(camH) && camH >= nsH)) camH = nsH;
     }
@@ -3091,7 +3097,7 @@ window.__jj = {
   createAvatar,
   sanitizeLook,
   perfmem: perfMem, // [perf-memory]
-ready: bootReady, region, tower, renderer, corridor, namsan: corridor?.namsan || null, hangang: corridor?.hangang || null, schoolZone: corridor?.schoolZone || null, playgrounds, streetlights, pangyoLamps, migeumLamps, gangnamNight, gangnamAds, gangnamNightlife, gangnamNpc, gangnamStreet, gangnamBrt, liveBus, // [corridor] [schoolzone] [playgrounds] [streetlights] [gangnam-night] [gangnam-nightlife] [gangnam-npc] [gangnam-street] [gangnam-brt] [livebus] [namsan]
+ready: bootReady, region, tower, renderer, corridor, namsan: corridor?.namsan || null, hangang: corridor?.hangang || null, myeongdong: corridor?.myeongdong || null, schoolZone: corridor?.schoolZone || null, playgrounds, streetlights, pangyoLamps, migeumLamps, gangnamNight, gangnamAds, gangnamNightlife, gangnamNpc, gangnamStreet, gangnamBrt, liveBus, // [corridor] [schoolzone] [playgrounds] [streetlights] [gangnam-night] [gangnam-nightlife] [gangnam-npc] [gangnam-street] [gangnam-brt] [livebus] [namsan]
   placeCaption: (x, z) => placeCaption(x, z, placeList, corridor?.bounds?.islands), // [gangnam-night]
 
   bungeo, // [bungeo]
