@@ -112,7 +112,7 @@ export function chooseSkill(actor, ctx) {
   const v = actor.vitals;
   if (!v || v.down > 0 || v.gcd > 0) return null;
   const downed = ctx.allies.find((a) => a !== actor && a.vitals.down >= 6 && v.rezCd <= 0);
-  const hurt = lowest(ctx.allies, actor, 0.96);
+  const hurt = lowest(ctx.allies, actor, 0.78);
   const dist = ctx.distBoss;
   if (actor.classId === 'priest') {
     if (downed) return 'rez';

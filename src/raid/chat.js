@@ -2,11 +2,11 @@
 // RoomChannel.attach(transport) 를 붙이면 같은 방 소켓으로 나간다. 없으면 이 화면 안에서만 돈다.
 
 const ALLY = [
-  { name: '한결', color: '#FF7A1A', line: '장판 먼저 봅니다. 방패는 제가.' },
-  { name: '온유', color: '#FFC845', line: '체력 볼게요. 노란 선으로 오세요.' },
-  { name: '서린', color: '#8C7FFF', line: '다음 장판, 왼쪽으로 빠지세요.' },
-  { name: '시우', color: '#3DDC84', line: '표식 쪽에 맞출게요.' },
-  { name: '무영', color: '#FF5C9A', line: '뒤는 비웠습니다.' },
+  { name: '강산', color: '#FF7A1A', line: '장판 먼저 봅니다. 방패는 제가.' },
+  { name: '지우', color: '#FFC845', line: '체력 볼게요. 노란 선으로 오세요.' },
+  { name: '하린', color: '#8C7FFF', line: '다음 장판, 왼쪽으로 빠지세요.' },
+  { name: '민재', color: '#3DDC84', line: '표식 쪽에 맞출게요.' },
+  { name: '서연', color: '#FF5C9A', line: '뒤는 비웠습니다.' },
 ];
 
 function mockReply(channel, emit) {

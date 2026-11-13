@@ -165,7 +165,9 @@ function mountForm(id) {
 }
 function refreshPortrait(id) {
   try {
-    hud.setPortrait(renderClassPortrait(renderer, packs[id].group, id));
+    const pack = packs[id];
+    pack?.animate?.(pack.group, 0.16, { speed: 0, phase: 'calm' });
+    hud.setPortrait(renderClassPortrait(renderer, pack.group, id));
   } catch (err) {
     console.warn('[raid] portrait', err);
   }
@@ -178,12 +180,13 @@ boss.setObstacles(env.obstacles || []);
 const home = boss.home;
 
 const ROLE_OF = { warrior: 'tank', priest: 'heal', mage: 'dps', archer: 'dps', assassin: 'dps' };
+const PLAYER_NAME = '도훈';
 const NPC_POOL = [
-  { id: 'npc-tank', name: '한결', role: '전사', kind: 'tank', color: '#ff6a22', icon: 'charge', classId: 'warrior' },
-  { id: 'npc-heal', name: '온유', role: '사제', kind: 'heal', color: '#e6c36a', icon: 'heal', classId: 'priest' },
-  { id: 'npc-mage', name: '서린', role: '마법사', kind: 'dps', color: '#7aa6ff', icon: 'shard', classId: 'mage' },
-  { id: 'npc-bow', name: '시우', role: '궁수', kind: 'dps', color: '#3dff9a', icon: 'shot', classId: 'archer' },
-  { id: 'npc-sin', name: '무영', role: '암살자', kind: 'dps', color: '#ff3355', icon: 'daggers', classId: 'assassin' },
+  { id: 'npc-tank', name: '강산', role: '전사', kind: 'tank', color: '#ff6a22', icon: 'charge', classId: 'warrior' },
+  { id: 'npc-heal', name: '지우', role: '사제', kind: 'heal', color: '#e6c36a', icon: 'heal', classId: 'priest' },
+  { id: 'npc-mage', name: '하린', role: '마법사', kind: 'dps', color: '#7aa6ff', icon: 'shard', classId: 'mage' },
+  { id: 'npc-bow', name: '민재', role: '궁수', kind: 'dps', color: '#3dff9a', icon: 'shot', classId: 'archer' },
+  { id: 'npc-sin', name: '서연', role: '암살자', kind: 'dps', color: '#ff3355', icon: 'daggers', classId: 'assassin' },
 ];
 const ALLY_SLOTS = [
   [3.1, -0.35],
@@ -192,9 +195,9 @@ const ALLY_SLOTS = [
   [0.2, -2.05],
 ];
 const CLASS_TINT = {
-  warrior: '#FFB000',
-  priest: '#FFC845',
-  mage: '#B060FF',
+  warrior: '#FF7A1A',
+  priest: '#FFE14A',
+  mage: '#7B6CFF',
   archer: '#3DDC84',
   assassin: '#FF3D8A',
 };
@@ -360,7 +363,7 @@ function layoutParty(id, opts = {}) {
   clearMarks('party');
   clearMarks('player');
   for (const a of party) scene.remove(a.mesh);
-  const picked = opts.all ? NPC_POOL.slice() : NPC_POOL.filter((n) => n.classId !== id);
+  const picked = NPC_POOL.filter((n) => n.classId !== id).slice(0, 4);
   party = picked.map((n, i) => {
     const mesh = makeCompanion(n);
     scene.add(mesh);
@@ -368,11 +371,11 @@ function layoutParty(id, opts = {}) {
     return { ...n, mesh, hp: 1, vitals, cd: 0.6 + i * 0.35, ang: i, swing: 0, swingId: '', taunt: 8, moving: false, think: 0.15 + i * 0.08, goal: null, dodgeWait: 0.16, slot: i, rezLeft: 0 };
   });
   settleParty(actor.rotation.y);
-  addMark(form.group, '초행', id, 'player');
+  addMark(form.group, PLAYER_NAME, id, 'player');
   for (const a of party) addMark(a.mesh, a.name, a.classId, 'party');
   const mine = ROLE_OF[id] || 'dps';
   const frames = [
-    { id: 'me', name: '초행', role: getClass(id).name, kind: mine, hp: 1, isMe: true, lv: 1, icon: getClass(id).skills[0].id, resBar: getClass(id).resBar },
+    { id: 'me', name: PLAYER_NAME, role: getClass(id).name, kind: mine, hp: 1, isMe: true, lv: 1, icon: getClass(id).skills[0].id, resBar: getClass(id).resBar },
     ...party.map((a) => ({ id: a.id, name: a.name, role: a.role, kind: a.kind, hp: 1, isMe: false, lv: 2, icon: a.icon, resBar: a.kind === 'tank' ? 'rage' : a.kind === 'heal' ? 'holy' : a.id === 'npc-mage' ? 'mp' : a.id === 'npc-sin' ? 'energy' : 'focus' })),
   ];
   const order = { tank: 0, heal: 1, dps: 2 };
@@ -470,7 +473,9 @@ function castNpc(a) {
       v.healed += skill.heal;
     } else if (hurt) {
       const before = hurt.vitals.hp;
-      hurt.vitals.hp = Math.min(hurt.vitals.hpMax, hurt.vitals.hp + skill.heal);
+      const cap = Math.round(hurt.vitals.hpMax * 0.82);
+      const room = Math.max(0, cap - hurt.vitals.hp);
+      hurt.vitals.hp = Math.min(hurt.vitals.hpMax, hurt.vitals.hp + Math.min(skill.heal, room));
       hurt.hp = hurt.vitals.hp / hurt.vitals.hpMax;
       const got = Math.round(hurt.vitals.hp - before);
       v.healed += got;
@@ -478,13 +483,54 @@ function castNpc(a) {
     }
   }
 }
-let tankCleave = 2.4;
+let tankCleave = 1.2;
+let partyChip = 0.45;
 let lastLive = false;
+let trailOn = false;
+const playerTrail = [];
+let playerRibbon = null;
+function syncRibbon(mesh, points, color, name) {
+  const n = Math.floor(points.length / 3);
+  if (n < 2) return mesh;
+  const half = 0.48;
+  const pos = [];
+  for (let i = 0; i < n - 1; i++) {
+    const x0 = points[i * 3];
+    const z0 = points[i * 3 + 2];
+    const x1 = points[(i + 1) * 3];
+    const z1 = points[(i + 1) * 3 + 2];
+    const dx = x1 - x0;
+    const dz = z1 - z0;
+    const len = Math.hypot(dx, dz) || 1;
+    const px = (-dz / len) * half;
+    const pz = (dx / len) * half;
+    const y = 1.05;
+    pos.push(
+      x0 + px, y, z0 + pz, x0 - px, y, z0 - pz, x1 + px, y, z1 + pz,
+      x0 - px, y, z0 - pz, x1 - px, y, z1 - pz, x1 + px, y, z1 + pz,
+    );
+  }
+  if (!mesh) {
+    const geo = new THREE.BufferGeometry();
+    const mat = new THREE.MeshBasicMaterial({ color, side: THREE.DoubleSide, depthTest: false });
+    mesh = new THREE.Mesh(geo, mat);
+    mesh.frustumCulled = false;
+    mesh.renderOrder = 12;
+    mesh.name = name;
+    scene.add(mesh);
+  }
+  mesh.geometry.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  mesh.geometry.computeBoundingSphere();
+  return mesh;
+}
 function settleParty(yaw, dt = 0, live = false) {
   lastLive = !!live;
   const st = combat.state;
   const bossPos = boss.group.position;
-  if (live) tankCleave -= dt;
+  if (live) {
+    tankCleave -= dt;
+    partyChip -= dt;
+  }
   party.forEach((a, i) => {
     if (a.vitals) {
       a.vitals.gcd = Math.max(0, a.vitals.gcd - dt);
@@ -530,16 +576,12 @@ function settleParty(yaw, dt = 0, live = false) {
       a.vitals.distN += 1;
       if (a.record) {
         a.trail = a.trail || [];
-        if (a.trail.length < 900) a.trail.push(a.mesh.position.x, 0.25, a.mesh.position.z);
-        let line = a._trailLine;
-        if (!line) {
-          line = new THREE.Line(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color: CLASS_TINT[a.classId] || '#fff' }));
-          line.frustumCulled = false;
-          line.name = `trail-${a.classId}`;
-          scene.add(line);
-          a._trailLine = line;
+        a._trailAcc = (a._trailAcc || 0) + dt;
+        if (a._trailAcc > 0.08 && a.trail.length < 2400) {
+          a._trailAcc = 0;
+          a.trail.push(a.mesh.position.x, 0.55, a.mesh.position.z);
+          a._trailMesh = syncRibbon(a._trailMesh, a.trail, CLASS_TINT[a.classId] || '#fff', `trail-${a.classId}`);
         }
-        line.geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(a.trail), 3));
       }
     } else {
       goal = allyGoal(i, actor.position, yaw, a.kind);
@@ -577,11 +619,14 @@ function settleParty(yaw, dt = 0, live = false) {
       if (a.swing === 0 && a.swingId === 'rez' && a.rezTarget) reviveMate(a.rezTarget, a);
     }
     if (live && a.vitals.gcd <= 0 && a.swing <= 0) castNpc(a);
+    if (live && partyChip <= 0 && a.vitals.down <= 0) {
+      hurtMate(a, a.kind === 'tank' ? 28 : 16, a.kind);
+    }
     if (live && a.kind === 'tank' && tankCleave <= 0 && a.vitals.down <= 0) {
       const near = Math.hypot(a.mesh.position.x - bossPos.x, a.mesh.position.z - bossPos.z) < 9;
       if (near) {
-        tankCleave = 3.4;
-        hurtMate(a, 22, 'cleave');
+        tankCleave = 2.6;
+        hurtMate(a, 26, 'cleave');
       }
     }
     const pack = packs[a.classId];
@@ -598,6 +643,10 @@ function settleParty(yaw, dt = 0, live = false) {
       });
     }
   });
+  if (live && partyChip <= 0) {
+    partyChip = 2.4;
+    if (combat.state.down <= 0) combat.damagePlayer(14);
+  }
 }
 
 const hud = createHud();
@@ -605,7 +654,7 @@ hud.bind();
 let chat;
 const room = createRaidRoom({
   roomId: 'tancheon-hold',
-  name: '초행',
+  name: PLAYER_NAME,
   onMessage: (msg) => chat?.push(msg),
 });
 chat = mountRaidChat(hud.root, room);
@@ -669,9 +718,9 @@ const extras = [];
 let bossStage = 1;
 const earForward = new THREE.Vector3();
 const DIALOGUE = [
-  '초행: 하늘이 갈라집니다. 장판을 먼저 보세요.',
-  '서린: 흰 원 밖으로, 노란 선 안으로.',
-  '온유: 쓰러져도 노란 선에서 일어납니다.',
+  '도훈: 하늘이 갈라집니다. 장판을 먼저 보세요.',
+  '하린: 흰 원 밖으로, 노란 선 안으로.',
+  '지우: 쓰러져도 노란 선에서 일어납니다.',
 ];
 let introT = 0;
 let burstDone = false;
@@ -1077,7 +1126,7 @@ function step(dt) {
       );
       if (sid === 'rez') {
         const downed = party.find((m) => m.vitals.down >= 6);
-        if (downed) reviveMate(downed, { name: '초행', vitals: playerStats });
+        if (downed) reviveMate(downed, { name: PLAYER_NAME, vitals: playerStats });
       } else if (sid) useSkill(sid, true);
     }
   }
@@ -1205,6 +1254,14 @@ function step(dt) {
   }
 
   settleParty(fighting && !boss.state.dead ? PATH_YAW : actor.rotation.y, dt, fighting && !boss.state.dead);
+  if (trailOn && fighting) {
+    const lx = playerTrail[playerTrail.length - 3];
+    const lz = playerTrail[playerTrail.length - 1];
+    const moved = playerTrail.length < 3 || Math.hypot(actor.position.x - lx, actor.position.z - lz) > 0.18;
+    if (moved) playerTrail.push(actor.position.x, 0.55, actor.position.z);
+    if (playerTrail.length > 2400) playerTrail.splice(0, playerTrail.length - 2400);
+    playerRibbon = syncRibbon(playerRibbon, playerTrail, CLASS_TINT[classId] || '#fff', `trail-player-${classId}`);
+  }
 
   const sk = st.attack ? combat.skill(st.attack) : null;
   const basicSwing = !!sk && (sk.kind === 'melee' || sk.id === 'shot');
@@ -1702,11 +1759,38 @@ window.__raid = {
     showDefeat() { phase = 'defeat'; hud.showDefeat(); },
     setAuto(on) { setAuto(on); },
     auto() { return { on: autoOn, hold: autoHold }; },
-    fullParty() { layoutParty(classId, { all: true }); finishIntro(); },
+    fullParty() { layoutParty(classId); finishIntro(); },
+    start() {
+      if (phase !== 'fight' && phase !== 'intro') beginRaid(classId);
+      finishIntro();
+      hud.caption = null;
+    },
+    clearCaption() { hud.caption = null; },
     wave(n) { boss.spawnWave(n); },
-    downMate(i = 0) { const a = party[i]; if (a) hurtMate(a, 9999, 'dps'); },
+    pile() { boss.pileAdds?.(); },
+    adds() { return boss.addSpots?.() || []; },
+    downMate(i = 0) {
+      const a = party[i];
+      if (!a?.vitals) return;
+      a.vitals.iframe = 0;
+      a.vitals.hp = 0;
+      a.vitals.down = 9;
+      a.vitals.deaths += 1;
+      a.hp = 0;
+    },
+    advance(seconds = 8) {
+      const was = simPaused;
+      simPaused = true;
+      const n = Math.max(1, Math.round(seconds / 0.05));
+      for (let i = 0; i < n; i++) step(0.05);
+      simPaused = was;
+    },
     pause(v = true) { simPaused = v; },
-    record(on = true) { for (const a of party) { a.record = on; a.trail = []; } },
+    record(on = true) {
+      trailOn = !!on;
+      playerTrail.length = 0;
+      for (const a of party) { a.record = !!on; a.trail = []; a._trailAcc = 0; }
+    },
     report() {
       const rows = party.map((a) => ({
         class: a.classId,
@@ -1720,7 +1804,7 @@ window.__raid = {
         down: a.vitals.down > 0,
       }));
       rows.push({
-        class: classId, name: '초행',
+        class: classId, name: PLAYER_NAME,
         dist: playerStats.distN ? +(playerStats.distSum / playerStats.distN).toFixed(1) : 0,
         skills: playerStats.skills, dealt: playerStats.dealt, healed: playerStats.healed,
         deaths: combat.state.down > 0 ? 1 : 0, hp: +(combat.state.hp / combat.state.hpMax).toFixed(2),

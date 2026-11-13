@@ -451,8 +451,8 @@ export async function createBoss(scene) {
     const climb = i % 5 >= 3;
     const kinds = ['shard_runner', 'rebar_brute', 'pier_colossus'];
     const kind = kinds[i % kinds.length];
-    const roll = (i * 7 + 3) % 10;
-    const threat = roll < 6 ? 'tank' : roll < 8 ? 'heal' : roll < 9 ? 'ranged' : 'player';
+    const roles = ['tank', 'heal', 'ranged', 'player', 'tank', 'ranged'];
+    const threat = roles[i % roles.length];
     if (mobFactory) {
       const p = fromFrame(spot.along, spot.across);
       const mob = mobFactory(kind, p.x, p.z);
@@ -483,8 +483,9 @@ export async function createBoss(scene) {
     ));
     if (!pick.length) pick = pool;
     const t = pick[add.slot % pick.length];
-    const ang = (add.slot / 6) * Math.PI * 2 + 0.35;
-    const dist = Math.max((add.mob?.reach || 1.35) + 0.45, 1.75);
+    const bias = add.threat === 'heal' ? 2.2 : add.threat === 'player' ? 4.1 : add.threat === 'ranged' ? 1.15 : 0.15;
+    const ang = bias + (add.slot % 3) * ((Math.PI * 2) / 3);
+    const dist = 7.2 + (add.slot % 2) * 1.6;
     return { x: t.x + Math.cos(ang) * dist, z: t.z + Math.sin(ang) * dist, id: t.id, tx: t.x, tz: t.z };
   }
 
@@ -503,9 +504,9 @@ export async function createBoss(scene) {
         const ox = add.mesh.position.x - other.mesh.position.x;
         const oz = add.mesh.position.z - other.mesh.position.z;
         const d = Math.hypot(ox, oz) || 0.001;
-        const min = ((add.radius || 0.6) + (other.radius || 0.6)) * 1.2;
+        const min = Math.max(2.45, ((add.radius || 0.6) + (other.radius || 0.6)) * 1.45);
         if (d < min) {
-          const push = (min - d) * 2.4;
+          const push = (min - d) * 4.2;
           vx += (ox / d) * push;
           vz += (oz / d) * push;
         }
@@ -522,17 +523,15 @@ export async function createBoss(scene) {
         }
       }
       const swinging = add.mob?.clip === 'attack';
-      if (!swinging) {
-        const sp = Math.hypot(vx, vz) || 1;
-        const speed = add.mob?.speed || 2.4;
-        add.mesh.position.x += (vx / sp) * dt * speed;
-        add.mesh.position.z += (vz / sp) * dt * speed;
-        add.mesh.rotation.y = Math.atan2(goal.tx - add.mesh.position.x, goal.tz - add.mesh.position.z);
-      }
+      const sp = Math.hypot(vx, vz) || 1;
+      const speed = (add.mob?.speed || 2.6) * (swinging && len < 1.2 ? 0.35 : 1);
+      add.mesh.position.x += (vx / sp) * dt * speed;
+      add.mesh.position.z += (vz / sp) * dt * speed;
+      add.mesh.rotation.y = Math.atan2(goal.tx - add.mesh.position.x, goal.tz - add.mesh.position.z);
       if (add.mesh.position.y > 0.02) add.mesh.position.y = Math.max(0, add.mesh.position.y - dt * 1.4);
       add._goal = goal;
     }
-    for (let n = 0; n < 2; n++) {
+    for (let n = 0; n < 4; n++) {
       for (let i = 0; i < adds.length; i++) {
         for (let j = i + 1; j < adds.length; j++) {
           const a = adds[i];
@@ -540,9 +539,9 @@ export async function createBoss(scene) {
           const ox = b.mesh.position.x - a.mesh.position.x;
           const oz = b.mesh.position.z - a.mesh.position.z;
           const d = Math.hypot(ox, oz) || 0.001;
-          const min = (a.radius || 0.6) + (b.radius || 0.6);
+          const min = Math.max(2.3, (a.radius || 0.6) + (b.radius || 0.6));
           if (d >= min) continue;
-          const push = (min - d) * 0.5;
+          const push = (min - d) * 0.65;
           const nx = ox / d;
           const nz = oz / d;
           a.mesh.position.x -= nx * push;
@@ -1023,6 +1022,22 @@ export async function createBoss(scene) {
     setObstacles(list) { obstacles = list || []; },
     spawnWave(n = 4) {
       for (let i = 0; i < n; i++) spawnAdd(adds.length);
+    },
+    pileAdds() {
+      const p = built.group.position;
+      adds.forEach((add, i) => {
+        const j = (i - (adds.length - 1) / 2) * 0.18;
+        add.mesh.position.set(p.x + j, 0, p.z + j * 0.25);
+        if (add.mob) add.mob.ready = true;
+      });
+    },
+    addSpots() {
+      return adds.map((add) => ({
+        x: +add.mesh.position.x.toFixed(2),
+        z: +add.mesh.position.z.toFixed(2),
+        threat: add.threat,
+        id: add._goal?.id || '',
+      }));
     },
     hideDress,
     reset,

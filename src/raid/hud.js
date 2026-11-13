@@ -4,9 +4,9 @@ import { toFrame, ALONG_MIN, ALONG_MAX, SAFE_ALONG, SAFE_R, BOSS_ALONG } from '.
 
 const VN_LINES = [
   { name: '안내', text: '탄천 합수부 하늘이 갈라집니다. 이 장면은 이 화면에서만, 처음 한 번만 보입니다.' },
-  { name: '초행', text: '익숙한 손놀림이 돌아옵니다. 평소의 몸은 잠시 뒤에 둡니다.' },
-  { name: '서린', text: '장판이 깔리기 전에 자리를 잡으세요. 기둥은 길을 따라 옵니다.' },
-  { name: '온유', text: '쓰러져도 노란 선에서 다시 일어납니다. 늦게 들어와도 보스가 살아 있으면 합류할 수 있습니다.' },
+  { name: '도훈', text: '익숙한 손놀림이 돌아옵니다. 평소의 몸은 잠시 뒤에 둡니다.' },
+  { name: '하린', text: '장판이 깔리기 전에 자리를 잡으세요. 기둥은 길을 따라 옵니다.' },
+  { name: '지우', text: '쓰러져도 노란 선에서 다시 일어납니다. 늦게 들어와도 보스가 살아 있으면 합류할 수 있습니다.' },
   { name: '안내', text: '준비가 되면 출동을 누르세요.' },
 ];
 
@@ -67,7 +67,7 @@ export function createHud() {
           <em data-boss-pct>100%</em>
         </div>
         <div class="c-boss-line">
-          <svg class="c-cap" viewBox="0 0 92 36" aria-hidden="true"><path d="M86 18C62 4 28 2 6 12" fill="none" stroke="#6a4814" stroke-width="3.2"/><path d="M86 18C62 32 28 34 6 24" fill="none" stroke="#6a4814" stroke-width="3.2"/><path d="M84 18C64 8 34 7 12 15" fill="none" stroke="#f0c45a" stroke-width="1.6"/><path d="M84 18C64 28 34 29 12 21" fill="none" stroke="#f0c45a" stroke-width="1.6"/><path d="M78 18H58" stroke="#f0c45a" stroke-width="1.6"/><path d="M70 12l6 6-6 6-6-6z" fill="#e8b64a"/><path d="M70 15l3 3-3 3-3-3z" fill="#9a1c22"/><path d="M48 18h8" stroke="#e8b64a" stroke-width="1.4"/><circle cx="44" cy="18" r="1.4" fill="#f0c45a"/></svg>
+          <svg class="c-cap" viewBox="0 0 96 40" aria-hidden="true"><g stroke-linecap="round"><path d="M78 20 L8 3" stroke="#6a4010" stroke-width="3.4"/><path d="M78 20 L3 9" stroke="#6a4010" stroke-width="3.2"/><path d="M78 20 L0 20" stroke="#6a4010" stroke-width="3.4"/><path d="M78 20 L3 31" stroke="#6a4010" stroke-width="3.2"/><path d="M78 20 L8 37" stroke="#6a4010" stroke-width="3.4"/><path d="M76 20 L14 6" stroke="#f6d78a" stroke-width="1.7"/><path d="M76 20 L8 12" stroke="#f6d78a" stroke-width="1.6"/><path d="M76 20 L6 20" stroke="#ffe7a8" stroke-width="1.8"/><path d="M76 20 L8 28" stroke="#f6d78a" stroke-width="1.6"/><path d="M76 20 L14 34" stroke="#f6d78a" stroke-width="1.7"/></g><path d="M82 20 H92" stroke="#f0c45a" stroke-width="2"/><path d="M84 11 l7 9 -7 9 -7 -9 z" fill="#e8b64a" stroke="#fff1c2" stroke-width="0.7"/><path d="M84 15.5 l2.6 4.5 -2.6 4.5 -2.6 -4.5 z" fill="#b4232c"/></svg>
           <div class="c-hp">
             <span class="ghost" data-boss-ghost></span>
             <span class="fill" data-boss-fill></span>
@@ -75,7 +75,7 @@ export function createHud() {
             <i class="tick" style="left:66.66%"></i>
             <b data-boss-num>0 / 0</b>
           </div>
-          <svg class="c-cap flip" viewBox="0 0 92 36" aria-hidden="true"><path d="M86 18C62 4 28 2 6 12" fill="none" stroke="#6a4814" stroke-width="3.2"/><path d="M86 18C62 32 28 34 6 24" fill="none" stroke="#6a4814" stroke-width="3.2"/><path d="M84 18C64 8 34 7 12 15" fill="none" stroke="#f0c45a" stroke-width="1.6"/><path d="M84 18C64 28 34 29 12 21" fill="none" stroke="#f0c45a" stroke-width="1.6"/><path d="M78 18H58" stroke="#f0c45a" stroke-width="1.6"/><path d="M70 12l6 6-6 6-6-6z" fill="#e8b64a"/><path d="M70 15l3 3-3 3-3-3z" fill="#9a1c22"/><path d="M48 18h8" stroke="#e8b64a" stroke-width="1.4"/><circle cx="44" cy="18" r="1.4" fill="#f0c45a"/></svg>
+          <svg class="c-cap flip" viewBox="0 0 96 40" aria-hidden="true"><g stroke-linecap="round"><path d="M78 20 L8 3" stroke="#6a4010" stroke-width="3.4"/><path d="M78 20 L3 9" stroke="#6a4010" stroke-width="3.2"/><path d="M78 20 L0 20" stroke="#6a4010" stroke-width="3.4"/><path d="M78 20 L3 31" stroke="#6a4010" stroke-width="3.2"/><path d="M78 20 L8 37" stroke="#6a4010" stroke-width="3.4"/><path d="M76 20 L14 6" stroke="#f6d78a" stroke-width="1.7"/><path d="M76 20 L8 12" stroke="#f6d78a" stroke-width="1.6"/><path d="M76 20 L6 20" stroke="#ffe7a8" stroke-width="1.8"/><path d="M76 20 L8 28" stroke="#f6d78a" stroke-width="1.6"/><path d="M76 20 L14 34" stroke="#f6d78a" stroke-width="1.7"/></g><path d="M82 20 H92" stroke="#f0c45a" stroke-width="2"/><path d="M84 11 l7 9 -7 9 -7 -9 z" fill="#e8b64a" stroke="#fff1c2" stroke-width="0.7"/><path d="M84 15.5 l2.6 4.5 -2.6 4.5 -2.6 -4.5 z" fill="#b4232c"/></svg>
         </div>
         <div class="c-castrow">
           <img data-aura="debuff_burn" data-remain="6" src="/dungeon/hud/icons/debuff_burn.png" alt="" />
@@ -98,7 +98,7 @@ export function createHud() {
           <img data-aura="buff_haste" data-remain="8" src="/dungeon/hud/icons/buff_haste.png" alt="" />
           <span>8s</span>
         </div>
-        <div class="c-vname"><b data-player-name>초행</b><span data-my-role>전사</span><em data-player-num>100 / 100</em></div>
+        <div class="c-vname"><b data-player-name>도훈</b><span data-my-role>전사</span><em data-player-num>100 / 100</em></div>
         <div class="c-hp thin"><span class="ghost" data-player-ghost></span><span class="fill" data-player-fill></span></div>
         <div class="c-res" data-res="rage"><span data-rage-fill></span></div>
         <span class="c-resread" data-res-read>분노 0</span>
@@ -146,7 +146,7 @@ export function createHud() {
       <div class="face" data-face>초</div>
       <div class="plates">
         <div class="plate panel">
-          <div class="plate-name">초행 <span>전사</span> <b>100 / 100</b></div>
+          <div class="plate-name">도훈 <span>전사</span> <b>100 / 100</b></div>
           <div class="bar thin hp"><span></span></div>
           <div class="label"><span data-res-label>분노</span><span>0 / 100</span></div>
           <div class="bar thin rage"><span></span></div>
@@ -315,24 +315,41 @@ export function createHud() {
       <small>남은 시간 ${remain || '—'}</small>`;
   }
   function placeTip(anchor) {
+    tip.style.width = '300px';
     const r = anchor.getBoundingClientRect();
-    const w = tip.offsetWidth;
-    const h = tip.offsetHeight;
-    let x = r.left + r.width / 2 - w / 2;
-    let y = r.top - h - 10;
-    if (y < 8) y = r.bottom + 10;
-    x = Math.max(8, Math.min(window.innerWidth - w - 8, x));
-    y = Math.max(8, Math.min(window.innerHeight - h - 8, y));
-    const chat = root.querySelector('.rchat')?.getBoundingClientRect();
-    const partyBox = root.querySelector('.c-party')?.getBoundingClientRect();
-    const box = { left: x, top: y, right: x + w, bottom: y + h };
-    const hits = (o) => o && box.left < o.right && box.right > o.left && box.top < o.bottom && box.bottom > o.top;
-    if (hits(chat) || hits(partyBox)) {
-      y = Math.max(8, r.top - h - 10);
-      x = Math.max(8, Math.min(window.innerWidth - w - 8, r.right + 8));
+    const w = tip.offsetWidth || 300;
+    const h = tip.offsetHeight || 120;
+    const blocks = ['.c-warn', '.rchat', '.c-party', '.c-portrait', '.c-vitals', '.c-boss', '.c-map', '.c-skills', '.c-auto']
+      .map((sel) => root.querySelector(sel)?.getBoundingClientRect())
+      .filter((o) => o && o.width > 4 && o.height > 4);
+    const hits = (o, box) => box.left < o.right - 1 && box.right > o.left + 1 && box.top < o.bottom - 1 && box.bottom > o.top + 1;
+    const warn = root.querySelector('.c-warn')?.getBoundingClientRect();
+    const aboveWarn = warn && warn.height > 4 ? warn.top - h - 12 : r.top - h - 14;
+    const spots = [
+      { x: r.left + r.width / 2 - w / 2, y: aboveWarn },
+      { x: r.left - w - 14, y: Math.min(r.top, aboveWarn) },
+      { x: r.right + 14, y: Math.min(r.top, aboveWarn) },
+      { x: r.left + r.width / 2 - w / 2, y: 640 },
+    ];
+    let placed = null;
+    for (const spot of spots) {
+      const x = Math.max(12, Math.min(window.innerWidth - w - 12, spot.x));
+      const y = Math.max(12, Math.min(window.innerHeight - h - 12, spot.y));
+      const box = { left: x, top: y, right: x + w, bottom: y + h };
+      if (!blocks.some((o) => hits(o, box))) {
+        placed = { x, y };
+        break;
+      }
     }
-    tip.style.left = `${x}px`;
-    tip.style.top = `${y}px`;
+    if (!placed) {
+      const y = Math.max(12, aboveWarn);
+      placed = {
+        x: Math.max(12, Math.min(window.innerWidth - w - 12, r.left + r.width / 2 - w / 2)),
+        y: Math.max(12, Math.min(window.innerHeight - h - 12, y)),
+      };
+    }
+    tip.style.left = `${placed.x}px`;
+    tip.style.top = `${placed.y}px`;
   }
   function fillTip(anchor) {
     const skillId = anchor.getAttribute('data-skill');
@@ -569,7 +586,7 @@ export function createHud() {
       const portrait = root.querySelector('[data-portrait]');
       if (portrait && !portrait.dataset.lock) portrait.removeAttribute('src');
       const nameEl = root.querySelector('[data-player-name]');
-      if (nameEl && !this.caption) nameEl.textContent = '초행';
+      if (nameEl && !this.caption) nameEl.textContent = '도훈';
       paintSkills(active.skills);
       grid.querySelectorAll('.class-card').forEach((el) => el.classList.toggle('is-on', el.getAttribute('data-class') === active.id));
     },
@@ -641,16 +658,19 @@ export function createHud() {
       root.querySelector('[data-alert-title]').textContent = sec > 0 ? '하늘이 갈라집니다' : '보스가 살아 있는 동안 합류할 수 있습니다';
     },
     setParty(frames) {
-      party.innerHTML = `<header><b>파티</b><span>${frames.length}/5</span></header>` + frames.map((m) => {
-        const gem = m.down ? '#5a5c64' : (m.gem || GEM[m.role] || '#8C7FFF');
+      const rows = frames.slice(0, 5);
+      party.innerHTML = `<header><b>파티</b><span>${rows.length}/5</span></header>` + rows.map((m) => {
+        const dead = !!(m.down || (m.hp ?? 1) <= 0);
+        const gem = dead ? '#5a5c64' : (m.gem || GEM[m.role] || '#8C7FFF');
+        const hp = dead ? 0 : Math.round((m.hp ?? 1) * 100);
         return `
-        <div class="c-mate${m.down ? ' is-dead' : ''}${m.aggro ? ' is-aggro' : ''}" data-mate="${m.id}">
+        <div class="c-mate${dead ? ' is-dead' : ''}${m.aggro ? ' is-aggro' : ''}" data-mate="${m.id}" data-gem="${GEM[m.role] || '#8C7FFF'}">
           <i class="gem" style="--gem:${gem}"></i>
           <b>${m.name}</b>
           <span class="role" style="color:${gem}">${m.role}</span>
-          <em data-pct>${m.down ? '부활 대기' : `${Math.round((m.hp ?? 1) * 100)}%`}</em>
-          <div class="hp"><span data-hp style="width:${Math.round((m.hp ?? 1) * 100)}%"></span></div>
-          <div class="rs" style="--res:${gem}"><span data-sub style="width:${Math.round((m.sub ?? 0.5) * 100)}%"></span></div>
+          <em data-pct>${dead ? '부활 대기' : `${hp}%`}</em>
+          <div class="hp"><span data-hp style="width:${hp}%"></span></div>
+          <div class="rs" style="--res:${gem}"><span data-sub style="width:${dead ? 0 : Math.round((m.sub ?? 0.5) * 100)}%"></span></div>
         </div>`;
       }).join('');
     },
@@ -779,12 +799,15 @@ export function createHud() {
         for (const row of snap.party || []) {
           const el = root.querySelector(`[data-mate="${row.id}"]`);
           if (!el) continue;
-          el.classList.toggle('is-dead', row.down || row.hp <= 0);
-          setWidth(el.querySelector('[data-hp]'), row.hp * 100);
+          const dead = !!(row.down || row.hp <= 0);
+          el.classList.toggle('is-dead', dead);
+          const gem = el.querySelector('.gem');
+          if (gem) gem.style.setProperty('--gem', dead ? '#5a5c64' : (el.dataset.gem || '#8C7FFF'));
+          setWidth(el.querySelector('[data-hp]'), dead ? 0 : row.hp * 100);
           const sub = el.querySelector('[data-sub]');
-          if (sub) setWidth(sub, (row.sub ?? 0) * 100);
+          if (sub) setWidth(sub, dead ? 0 : (row.sub ?? 0) * 100);
           const pctEl = el.querySelector('[data-pct]');
-          if (pctEl) pctEl.textContent = row.down || row.hp <= 0 ? '부활 대기' : `${Math.round(row.hp * 100)}%`;
+          if (pctEl) pctEl.textContent = dead ? '부활 대기' : `${Math.round(row.hp * 100)}%`;
         }
       }
       if (cap?.slots) {
