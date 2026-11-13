@@ -1,6 +1,7 @@
 // 사제. 금테 갑주, 머리 위 빛 고리, 등불 지팡이. 교체: ?priestGlb=
 import * as THREE from 'three';
-import { buildCarapace, put, seamMat, withGlb, animateRig } from './kit.js';
+import { CITIZEN_HEIGHT, CLASS_SCALE } from '../classes.js';
+import { applyClassScale, buildCarapace, put, seamMat, withGlb, animateRig } from './kit.js';
 
 const GOLD = seamMat('#ffd27a');
 
@@ -18,7 +19,7 @@ function build() {
   const group = buildCarapace({ name: 'bw-priest', bulk: 1.05, seam: '#e6c36a', plate: '#5c5648' });
   const pose = group.userData.pose;
   const rig = group.children[0];
-  const halo = put(rig, new THREE.Mesh(new THREE.TorusGeometry(0.28, 0.02, 6, 20), GOLD), 0, 2.62, 0);
+  const halo = put(rig, new THREE.Mesh(new THREE.TorusGeometry(0.16, 0.012, 6, 20), GOLD), 0, CITIZEN_HEIGHT, 0);
   halo.rotation.x = Math.PI / 2;
   halo.name = 'halo';
   for (const side of [-1, 1]) {
@@ -28,9 +29,9 @@ function build() {
   weapon.rotation.z = -0.2;
   pose.handR.add(weapon);
   pose.rings = [halo];
-  return group;
+  return applyClassScale(group, CLASS_SCALE.priest);
 }
 
 export function createPriestModel(opts = {}) {
-  return withGlb(opts.glbUrl, opts.yaw, opts.look, build, animateRig);
+  return withGlb(opts.glbUrl, opts.yaw, opts.look, build, animateRig, CLASS_SCALE.priest);
 }

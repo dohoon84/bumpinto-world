@@ -1,6 +1,7 @@
 // 마법사. 로브 갑주, 떠 있는 룬 고리, 푸른 수정 지팡이. 교체: ?mageGlb=
 import * as THREE from 'three';
-import { buildCarapace, put, seamMat, withGlb, animateRig } from './kit.js';
+import { CITIZEN_HEIGHT, CLASS_SCALE } from '../classes.js';
+import { applyClassScale, buildCarapace, put, seamMat, withGlb, animateRig } from './kit.js';
 
 const CRYSTAL = seamMat('#7aa6ff');
 
@@ -23,8 +24,9 @@ function build() {
     0, 0.85, 0,
   );
   robe.scale.z = 0.7;
-  const rings = [1.35, 1.7, 2.05].map((y, i) => {
-    const r = put(group.children[0], new THREE.Mesh(new THREE.TorusGeometry(0.42 + i * 0.06, 0.015, 6, 20), seamMat('#8aa4ff')), 0, y, 0);
+  const H = CITIZEN_HEIGHT;
+  const rings = [0.58, 0.72, 0.84].map((t, i) => {
+    const r = put(group.children[0], new THREE.Mesh(new THREE.TorusGeometry(0.16 + i * 0.03, 0.012, 6, 20), seamMat('#8aa4ff')), 0, H * t, 0);
     r.rotation.x = 0.4 + i * 0.2;
     return r;
   });
@@ -32,9 +34,9 @@ function build() {
   weapon.rotation.z = -0.15;
   pose.handR.add(weapon);
   pose.rings = rings;
-  return group;
+  return applyClassScale(group, CLASS_SCALE.mage);
 }
 
 export function createMageModel(opts = {}) {
-  return withGlb(opts.glbUrl, opts.yaw, opts.look, build, animateRig);
+  return withGlb(opts.glbUrl, opts.yaw, opts.look, build, animateRig, CLASS_SCALE.mage);
 }

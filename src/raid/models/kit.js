@@ -2,6 +2,7 @@
 // 각 직업 파일은 이 도우미 위에 자기 메시만 올린다. 디자이너 GLB 는 glbUrl 로 통째로 갈아끼운다.
 import * as THREE from 'three';
 import { getHeadGeometry, getFaceMaterial } from '../../entities/faceTexture.js';
+import { CITIZEN_HEIGHT } from '../classes.js';
 
 export function put(parent, mesh, x, y, z) {
   mesh.position.set(x, y, z);
@@ -73,6 +74,7 @@ export function buildCarapace({
   plate = '#4e5966',
   hood = false,
   spikes = false,
+  height = CITIZEN_HEIGHT,
 } = {}) {
   const group = new THREE.Group();
   group.name = name;
@@ -81,56 +83,58 @@ export function buildCarapace({
   const U = new THREE.MeshStandardMaterial({ color: '#2a3138', metalness: 0.35, roughness: 0.58 });
   const S = seamMat(seam);
   const b = bulk;
+  const H = height;
+  const u = H / 8;
 
-  put(rig, new THREE.Mesh(new THREE.BoxGeometry(0.48 * b, 0.26, 0.28), U), 0, 1.26, 0);
-  put(rig, new THREE.Mesh(new THREE.BoxGeometry(0.58 * b, 0.5, 0.34), P), 0, 1.7, 0.02);
-  put(rig, new THREE.Mesh(new THREE.BoxGeometry(0.045, 0.42, 0.03), S), 0, 1.72, 0.18);
-  put(rig, new THREE.Mesh(new THREE.BoxGeometry(0.5 * b, 0.035, 0.03), S), 0, 1.5, 0.16);
+  const chest = put(rig, new THREE.Mesh(new THREE.BoxGeometry(1.85 * u * b, 1.55 * u, 1.15 * u), P), 0, 5.45 * u, 0.02 * u);
+  chest.name = 'chest';
+  put(rig, new THREE.Mesh(new THREE.BoxGeometry(1.55 * u * b, 0.7 * u, 1.05 * u), U), 0, 4.15 * u, 0);
+  put(rig, new THREE.Mesh(new THREE.BoxGeometry(0.08 * u, 1.35 * u, 0.06 * u), S), 0, 5.5 * u, 0.58 * u);
+  put(rig, new THREE.Mesh(new THREE.BoxGeometry(1.5 * u * b, 0.07 * u, 0.06 * u), S), 0, 4.85 * u, 0.55 * u);
   for (let i = 0; i < 3; i++) {
-    const back = put(rig, new THREE.Mesh(new THREE.BoxGeometry(0.36 * b - i * 0.04, 0.1, 0.1), P), 0, 1.46 + i * 0.16, -0.22);
-    back.rotation.x = -0.3;
-    put(rig, new THREE.Mesh(new THREE.BoxGeometry(0.28 * b, 0.02, 0.02), S), 0, 1.46 + i * 0.16, -0.16);
+    const back = put(rig, new THREE.Mesh(new THREE.BoxGeometry((1.5 - i * 0.12) * u * b, 0.28 * u, 0.22 * u), P), 0, (4.7 + i * 0.45) * u, -0.62 * u);
+    back.rotation.x = -0.28;
   }
   for (const side of [-1, 1]) {
-    put(rig, new THREE.Mesh(new THREE.BoxGeometry(0.3 * b, 0.16, 0.34), P), side * 0.46 * b, 1.96, 0);
-    put(rig, new THREE.Mesh(new THREE.BoxGeometry(0.24 * b, 0.03, 0.04), S), side * 0.46 * b, 1.88, 0.14);
+    put(rig, new THREE.Mesh(new THREE.BoxGeometry(0.85 * u * b, 0.42 * u, 0.95 * u), P), side * 1.25 * u * b, 6.45 * u, 0);
+    put(rig, new THREE.Mesh(new THREE.BoxGeometry(0.7 * u * b, 0.07 * u, 0.08 * u), S), side * 1.25 * u * b, 6.25 * u, 0.42 * u);
   }
 
-  put(rig, new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.42, 0.4), P), 0, 2.26, 0);
-  put(rig, new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.055, 0.05), S), 0, 2.2, 0.19);
+  const helm = put(rig, new THREE.Mesh(new THREE.BoxGeometry(0.78 * u, 0.92 * u, 0.86 * u), P), 0, H - 0.46 * u, 0);
+  helm.name = 'helmet';
+  put(rig, new THREE.Mesh(new THREE.BoxGeometry(0.62 * u, 0.1 * u, 0.08 * u), S), 0, H - 0.55 * u, 0.42 * u);
   if (hood) {
-    const cowl = put(rig, new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.32, 0.42), U), 0, 2.38, -0.08);
-    cowl.scale.set(1, 0.72, 1);
+    const hoodH = 0.55 * u;
+    put(rig, new THREE.Mesh(new THREE.BoxGeometry(1.05 * u, hoodH, 1.05 * u), U), 0, H - hoodH * 0.45, -0.08 * u);
   }
   if (spikes) {
     for (const side of [-1, 1]) {
-      const sp = put(rig, new THREE.Mesh(new THREE.ConeGeometry(0.07, 0.32, 4), P), side * 0.52 * b, 2.12, -0.02);
-      sp.rotation.z = side * -0.9;
+      const sp = put(rig, new THREE.Mesh(new THREE.ConeGeometry(0.12 * u, 0.55 * u, 4), P), side * 1.55 * u * b, 6.35 * u, 0);
+      sp.rotation.z = side * -1.15;
     }
-    const spine = put(rig, new THREE.Mesh(new THREE.ConeGeometry(0.08, 0.36, 4), P), 0, 1.9, -0.32);
-    spine.rotation.x = 1.05;
   }
 
   function leg(side) {
     const pivot = new THREE.Group();
-    pivot.position.set(side * 0.17 * b, 1.14, 0);
+    pivot.position.set(side * 0.42 * u * b, 4 * u, 0);
     rig.add(pivot);
-    put(pivot, new THREE.Mesh(new THREE.BoxGeometry(0.22 * b, 0.44, 0.24), P), 0, -0.24, 0);
-    put(pivot, new THREE.Mesh(new THREE.BoxGeometry(0.16 * b, 0.4, 0.18), U), 0, -0.64, 0);
-    put(pivot, new THREE.Mesh(new THREE.BoxGeometry(0.025, 0.34, 0.025), S), side * 0.1 * b, -0.62, 0.09);
-    put(pivot, new THREE.Mesh(new THREE.BoxGeometry(0.24 * b, 0.14, 0.36), P), 0, -0.9, 0.05);
+    put(pivot, new THREE.Mesh(new THREE.BoxGeometry(0.55 * u * b, 1.85 * u, 0.58 * u), P), 0, -0.95 * u, 0);
+    put(pivot, new THREE.Mesh(new THREE.BoxGeometry(0.42 * u * b, 1.7 * u, 0.48 * u), U), 0, -2.85 * u, 0);
+    put(pivot, new THREE.Mesh(new THREE.BoxGeometry(0.06 * u, 1.5 * u, 0.06 * u), S), side * 0.24 * u * b, -2.7 * u, 0.22 * u);
+    const footH = 0.38 * u;
+    put(pivot, new THREE.Mesh(new THREE.BoxGeometry(0.62 * u * b, footH, 0.95 * u), P), 0, footH / 2 - 4 * u, 0.12 * u);
     return pivot;
   }
 
   function arm(side) {
     const pivot = new THREE.Group();
-    pivot.position.set(side * 0.5 * b, 1.86, 0);
+    pivot.position.set(side * 1.35 * u * b, 6.35 * u, 0);
     rig.add(pivot);
-    put(pivot, new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.38, 0.16), P), 0, -0.22, 0);
-    put(pivot, new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.34, 0.14), U), 0, -0.58, 0);
-    put(pivot, new THREE.Mesh(new THREE.BoxGeometry(0.025, 0.3, 0.025), S), 0, -0.52, 0.08);
+    put(pivot, new THREE.Mesh(new THREE.BoxGeometry(0.42 * u, 1.35 * u, 0.42 * u), P), 0, -0.7 * u, 0);
+    put(pivot, new THREE.Mesh(new THREE.BoxGeometry(0.36 * u, 1.25 * u, 0.36 * u), U), 0, -1.95 * u, 0);
+    put(pivot, new THREE.Mesh(new THREE.BoxGeometry(0.06 * u, 1.1 * u, 0.06 * u), S), 0, -1.9 * u, 0.2 * u);
     const hand = new THREE.Group();
-    hand.position.set(side * 0.02, -0.82, 0.06);
+    hand.position.set(side * 0.02 * u, -2.65 * u, 0.08 * u);
     pivot.add(hand);
     pivot.userData.hand = hand;
     return pivot;
@@ -160,13 +164,20 @@ export function finish(group, rig) {
   return group;
 }
 
-function fitGlb(root) {
+export function applyClassScale(group, mul) {
+  group.userData.heightMul = mul;
+  group.userData.baseScale = mul;
+  group.scale.setScalar(mul);
+  return group;
+}
+
+function fitGlb(root, targetHeight) {
   const box = new THREE.Box3().setFromObject(root);
   const size = new THREE.Vector3();
   const center = new THREE.Vector3();
   box.getSize(size);
   box.getCenter(center);
-  const s = 2.35 / Math.max(0.001, size.y);
+  const s = targetHeight / Math.max(0.001, size.y);
   root.scale.setScalar(s);
   root.position.set(-center.x * s, -box.min.y * s, -center.z * s);
   root.traverse((o) => {
@@ -177,7 +188,7 @@ function fitGlb(root) {
   });
 }
 
-export async function withGlb(glbUrl, yaw, look, build, animate) {
+export async function withGlb(glbUrl, yaw, look, build, animate, heightMul = 1) {
   if (glbUrl) {
     try {
       const { GLTFLoader } = await import('three/examples/jsm/loaders/GLTFLoader.js');
@@ -185,9 +196,11 @@ export async function withGlb(glbUrl, yaw, look, build, animate) {
       const group = new THREE.Group();
       group.name = 'bw-class';
       const inner = gltf.scene;
-      fitGlb(inner);
+      fitGlb(inner, CITIZEN_HEIGHT * heightMul);
       if (yaw) inner.rotation.y = yaw;
       group.add(inner);
+      group.userData.heightMul = heightMul;
+      group.userData.baseScale = 1;
       return { group, animate, source: 'glb' };
     } catch (err) {
       console.warn('[raid] class GLB failed, using procedural', err);

@@ -289,9 +289,23 @@ function enterPeace() {
   actor.rotation.x = 0;
 }
 
+function restScale() {
+  return form.group.userData.baseScale || 1;
+}
+
+function grownScale(t) {
+  const mul = form.group.userData.heightMul || 1;
+  const base = restScale();
+  const start = base / mul;
+  const k = t < 0.7 ? 0 : Math.min(1, (t - 0.7) / 0.7);
+  const ease = k * k * (3 - 2 * k);
+  return start + (base - start) * ease;
+}
+
 function finishIntro() {
   citizen.visible = false;
   form.group.visible = true;
+  form.group.scale.setScalar(restScale());
   ghost.visible = false;
   phase = 'fight';
   if (shot === 'form') return;
@@ -313,7 +327,7 @@ function poseGhost(t) {
     actor.position.z - fz * back + rz * side,
   );
   ghost.visible = t > 0.2;
-  ghost.scale.setScalar(1.08);
+  ghost.scale.setScalar(grownScale(t));
   if (t < 0.9) {
     ghost.position.copy(behind);
     setGhostOpacity(ghost, Math.max(0, Math.min(0.78, (t - 0.2) / 0.4)));
@@ -538,9 +552,13 @@ function step(dt) {
   if (citizen.visible) animateAvatar(citizen, phase === 'peace' || phase === 'pick' ? moveSpeed : 0.2, dt);
   animateAvatar(mage, 0.4, dt);
   animateAvatar(priest, 0.3, dt);
-  if (st.stealth > 0 && form.group.visible) form.group.scale.setScalar(0.94);
-  else if (st.iframe > 0 && form.group.visible) form.group.scale.setScalar(1 + Math.sin(performance.now() * 0.05) * 0.012);
-  else form.group.scale.setScalar(1);
+  if (phase !== 'intro') {
+    const base = form.group.userData.baseScale || 1;
+    let pulse = 1;
+    if (st.stealth > 0) pulse = 0.94;
+    else if (st.iframe > 0) pulse = 1 + Math.sin(performance.now() * 0.05) * 0.012;
+    form.group.scale.setScalar(base * pulse);
+  }
 }
 
 renderer.domElement.addEventListener('pointerdown', (e) => {

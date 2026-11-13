@@ -1,6 +1,7 @@
 // 암살자. 날씬한 가시 갑각, 곡쌍검, 진홍 이음새, 연기 꼬리. 교체: ?assassinGlb=
 import * as THREE from 'three';
-import { buildCarapace, put, seamMat, withGlb, animateRig } from './kit.js';
+import { CLASS_SCALE } from '../classes.js';
+import { applyClassScale, buildCarapace, put, seamMat, withGlb, animateRig } from './kit.js';
 
 const EDGE = seamMat('#ff3355');
 const STEEL = new THREE.MeshStandardMaterial({ color: '#c5ced6', metalness: 0.8, roughness: 0.25 });
@@ -36,9 +37,9 @@ function build() {
   }
   group.children[0].add(smoke);
   pose.smoke = smoke;
-  return group;
+  return applyClassScale(group, CLASS_SCALE.assassin);
 }
 
 export function createAssassinModel(opts = {}) {
-  return withGlb(opts.glbUrl, opts.yaw, opts.look, build, animateRig);
+  return withGlb(opts.glbUrl, opts.yaw, opts.look, build, animateRig, CLASS_SCALE.assassin);
 }

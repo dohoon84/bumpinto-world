@@ -1,6 +1,7 @@
 // 궁수. 마른 후드 바이저, 빛나는 장궁, 녹색 이음새. 교체: ?archerGlb=
 import * as THREE from 'three';
-import { buildCarapace, put, seamMat, withGlb, animateRig } from './kit.js';
+import { CLASS_SCALE } from '../classes.js';
+import { applyClassScale, buildCarapace, put, seamMat, withGlb, animateRig } from './kit.js';
 
 const GLOW = seamMat('#3dff9a');
 const WOOD = new THREE.MeshStandardMaterial({ color: '#243028', metalness: 0.35, roughness: 0.55 });
@@ -33,9 +34,9 @@ function build() {
   for (let i = 0; i < 3; i++) {
     put(group.children[0], new THREE.Mesh(new THREE.BoxGeometry(0.015, 0.28, 0.015), GLOW), -0.2 + i * 0.04, 1.85, -0.3);
   }
-  return group;
+  return applyClassScale(group, CLASS_SCALE.archer);
 }
 
 export function createArcherModel(opts = {}) {
-  return withGlb(opts.glbUrl, opts.yaw, opts.look, build, animateRig);
+  return withGlb(opts.glbUrl, opts.yaw, opts.look, build, animateRig, CLASS_SCALE.archer);
 }

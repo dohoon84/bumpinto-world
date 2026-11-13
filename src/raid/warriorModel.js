@@ -1,7 +1,7 @@
 // 전사. 두꺼운 흑갑, 대검, 타워 실드, 주황 이음새. 교체: ?warriorGlb= (전신, 키 약 2.35m)
 import * as THREE from 'three';
-import { buildCarapace, put, seamMat } from './models/kit.js';
-import { withGlb } from './models/kit.js';
+import { CLASS_SCALE } from './classes.js';
+import { applyClassScale, buildCarapace, put, seamMat, withGlb } from './models/kit.js';
 
 const BLADE = new THREE.MeshStandardMaterial({ color: '#c5ced6', metalness: 0.82, roughness: 0.22 });
 const EDGE = seamMat('#ff8a3a');
@@ -54,7 +54,7 @@ function build() {
   pose.sword = sword;
   pose.shield = shield;
   pose.capePivot = capePivot;
-  return group;
+  return applyClassScale(group, CLASS_SCALE.warrior);
 }
 
 export function animateWarrior(group, dt, motion) {
@@ -93,5 +93,5 @@ export function animateWarrior(group, dt, motion) {
 }
 
 export function createWarriorModel(opts = {}) {
-  return withGlb(opts.glbUrl, opts.yaw, opts.look, build, animateWarrior);
+  return withGlb(opts.glbUrl, opts.yaw, opts.look, build, animateWarrior, CLASS_SCALE.warrior);
 }

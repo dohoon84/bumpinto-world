@@ -1,4 +1,13 @@
 // 던전 입장 전에 고르는 다섯 직업. 던전 안에서는 바꾸지 않는다.
+// 시민 키는 발바닥(0.04)에서 짧은 머리 끝까지. createAvatar(CITIZEN_LOOK) 가시 메시 기준.
+export const CITIZEN_HEIGHT = 1.8856;
+export const CLASS_SCALE = {
+  warrior: 1.7,
+  mage: 1.65,
+  priest: 1.6,
+  archer: 1.62,
+  assassin: 1.55,
+};
 const lock = (key) => ({ id: 'lock' + key, name: '잠김', key, cd: 0, cost: 0, lock: 0, locked: true, kind: 'lock' });
 
 function skill(partial) {
@@ -12,6 +21,7 @@ export const CLASSES = {
     role: '탱커',
     blurb: '중갑과 타워 실드. 분노가 오를수록 크게 벤다.',
     seam: '#ff6a22',
+    heightMul: CLASS_SCALE.warrior,
     res: 'rage',
     resLabel: '분노',
     resBar: 'rage',
@@ -33,6 +43,7 @@ export const CLASSES = {
     role: '원거리',
     blurb: '수정 지팡이와 룬 고리. 마나로 얼음 파편을 던진다.',
     seam: '#6a7bff',
+    heightMul: CLASS_SCALE.mage,
     res: 'mana',
     resLabel: '마나',
     resBar: 'mp',
@@ -54,6 +65,7 @@ export const CLASSES = {
     role: '치유',
     blurb: '금테 갑주와 등불 지팡이. 자신과 동료를 살린다.',
     seam: '#e6c36a',
+    heightMul: CLASS_SCALE.priest,
     res: 'mana',
     resLabel: '마나',
     resBar: 'mp',
@@ -75,6 +87,7 @@ export const CLASSES = {
     role: '원거리',
     blurb: '후드 장궁. 맞출수록 집중이 오른다.',
     seam: '#3dff9a',
+    heightMul: CLASS_SCALE.archer,
     res: 'focus',
     resLabel: '집중',
     resBar: 'focus',
@@ -96,6 +109,7 @@ export const CLASSES = {
     role: '근거리',
     blurb: '가시 갑각과 곡쌍검. 기력으로 파고든다.',
     seam: '#ff3355',
+    heightMul: CLASS_SCALE.assassin,
     res: 'energy',
     resLabel: '기력',
     resBar: 'energy',
