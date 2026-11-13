@@ -3,6 +3,9 @@
 //   큐 2개(우선순위로 밀어냄, 우선순위별 만료), 조용한 때(대화창·입장 15초·결제 화면=계산원만·방송 4초·사건 중 배경 수다 끔).
 //   우선순위 1(안전)은 '끄기'여도 나옴. 자유 장보기는 freeMode=true 만. 트리거는 detect() 가 프레임마다 보내는 신호로 판정.
 import DATA from './data/reactions.json';
+import { byFlagPick } from './byFlag.js';
+
+export { byFlagPick };
 
 const BY_ID = Object.fromEntries(DATA.reactions.map((r) => [r.id, r]));
 const RARITY = { common: 1, uncommon: 0.5, rare: 0.15, once: 1 };
@@ -66,7 +69,9 @@ export function createReactions({ save, getMode, getDay, getFreq, deliver, cue, 
     R.minute = R.minute.filter((x) => t - x < 60);
     R.queue = R.queue.filter((q) => t - q.t < (EXPIRE[q.r.priority] || 6) + (ctx.dialog && q.r.priority <= 2 ? 60 : 0));
     if (!R.queue.length) return;
-    const item = R.queue[0];
+    const q0 = R.queue[0], rr = byFlagPick(q0.r, getFlag);
+    if (!rr) { R.queue.shift(); return; }
+    const item = rr === q0.r ? q0 : { ...q0, r: rr };
     if (quietFor(item, ctx)) return;
     const p1 = item.r.priority === 1;
     if (!p1) {
