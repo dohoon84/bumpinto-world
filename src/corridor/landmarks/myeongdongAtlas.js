@@ -81,19 +81,20 @@ export const V_SIGNS = [
   ['BEAUTY', '#111111', '#ff5ccf'], ['COSME', '#00c2a8', '#ffffff'], ['SALE', '#ffe169', '#e60012'], ['K-POP', '#120b2e', '#46f0ff'],
 ];
 // 노점 메뉴 [ko, en, price, bg, fg]
+// 노점 메뉴 [ko, en, price, bg, fg] — 번호 = myeongdongFood.js 음식 종류
 export const STALL_MENUS = [
-  ['떡볶이', 'TTEOKBOKKI', '₩4,000', '#e63946', '#ffffff'],
-  ['호떡', 'HOTTEOK', '₩2,000', '#f4a261', '#2b1600'],
+  ['떡볶이·어묵', 'TTEOKBOKKI & FISH CAKE', '₩4,000', '#e63946', '#ffffff'],
   ['계란빵', 'EGG BREAD', '₩2,500', '#ffd166', '#2b1600'],
-  ['닭꼬치', 'CHICKEN SKEWER', '₩5,000', '#9d0208', '#ffe8d6'],
-  ['랍스터 치즈구이', 'LOBSTER CHEESE', '₩15,000', '#d00000', '#ffffff'],
-  ['딸기모찌', 'STRAWBERRY MOCHI', '₩5,000', '#ffafcc', '#7a0b3a'],
   ['회오리감자', 'TORNADO POTATO', '₩5,000', '#ffb703', '#1d1d1d'],
-  ['어묵', 'FISH CAKE · おでん', '₩1,500', '#1d3557', '#f1faee'],
-  ['군밤', 'ROASTED CHESTNUT', '₩5,000', '#6b3e26', '#ffe8c2'],
-  ['붕어빵', 'BUNGEOPPANG', '₩3,000', '#e9c46a', '#3b1f00'],
-  ['탕후루', 'TANGHULU', '₩4,000', '#ff4d6d', '#ffffff'],
-  ['고기만두', 'DUMPLINGS', '₩4,000', '#f8f9fa', '#9d0208'],
+  ['랍스터 치즈구이', 'GRILLED LOBSTER', '₩20,000', '#d00000', '#ffffff'],
+  ['대왕문어꼬치', 'GIANT OCTOPUS SKEWER', '₩12,000', '#7b2cbf', '#ffffff'],
+  ['호떡', 'HOTTEOK · SWEET PANCAKE', '₩2,000', '#f4a261', '#2b1600'],
+  ['딸기 탕후루', 'STRAWBERRY TANGHULU', '₩4,000', '#ff4d6d', '#ffffff'],
+  ['군밤', 'ROASTED CHESTNUTS', '₩5,000', '#6b3e26', '#ffe8c2'],
+  ['닭꼬치', 'CHICKEN SKEWER', '₩5,000', '#9d0208', '#ffe8d6'],
+  ['붕어빵', 'FISH BUN · 3 FOR', '₩3,000', '#e9c46a', '#3b1f00'],
+  ['딸기모찌', 'STRAWBERRY MOCHI', '₩5,000', '#ffafcc', '#7a0b3a'],
+  ['고기만두', 'STEAMED DUMPLINGS', '₩4,000', '#f8f9fa', '#9d0208'],
 ];
 export const NEON = { pink: '#ff3fb4', cyan: '#2ef2ff', violet: '#a35cff', green: '#3dff7a', yellow: '#ffe14a', white: '#fff6e8', orange: '#ff8a1f', red: '#ff2b3a', warm: '#ffd38a', l4: '#00A5DE' };
 
@@ -153,6 +154,15 @@ function drawXBanner(g, w, h, [big, small, bg, fg]) {
   g.globalAlpha = 0.35; g.fillRect(8, h * 0.45, w - 16, 2); g.globalAlpha = 1;
 }
 
+function drawTag(g, w, h, [ko, en, price, bg, fg]) {
+  g.fillStyle = '#ffffff'; g.fillRect(0, 0, w, h);
+  g.fillStyle = bg; g.fillRect(0, 0, w, h * 0.42);
+  g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.fillStyle = fg; fitFont(g, ko, w - 8, h * 0.3); g.fillText(ko, w / 2, h * 0.22);
+  g.fillStyle = '#111'; fitFont(g, price, w - 8, h * 0.32); g.fillText(price, w / 2, h * 0.6);
+  g.fillStyle = '#444'; fitFont(g, en, w - 6, h * 0.14, 800); g.fillText(en, w / 2, h * 0.87);
+}
+
 function drawMenu(g, w, h, [ko, en, price, bg, fg]) {
   g.fillStyle = bg; g.fillRect(0, 0, w, h);
   g.fillStyle = fg; g.textBaseline = 'middle'; g.textAlign = 'left';
@@ -164,21 +174,6 @@ function drawMenu(g, w, h, [ko, en, price, bg, fg]) {
   fitFont(g, price, w * 0.34, h * 0.3, 900);
   g.fillText(price, w - 10, h * 0.5);
   g.strokeStyle = fg; g.lineWidth = 3; g.strokeRect(3, 3, w - 6, h - 6);
-}
-
-function drawFood(g, w, h, i) {
-  const r = rnd32(4242 + i * 31);
-  g.fillStyle = '#9aa0a6'; g.fillRect(0, 0, w, h); // 스테인리스 판
-  g.fillStyle = '#c7ccd1'; g.fillRect(3, 3, w - 6, h - 6);
-  const kinds = [
-    () => { g.fillStyle = '#d62828'; for (let k = 0; k < 90; k++) { const x = 10 + r() * (w - 20), y = 8 + r() * (h - 16); g.fillRect(x, y, 10, 4); } }, // 떡볶이
-    () => { for (let k = 0; k < 8; k++) { g.fillStyle = '#c47a2c'; g.beginPath(); g.ellipse(18 + k * ((w - 30) / 8), h / 2, 12, 10, 0, 0, 6.3); g.fill(); g.fillStyle = '#e9a85a'; g.beginPath(); g.arc(14 + k * ((w - 30) / 8), h / 2 - 3, 4, 0, 6.3); g.fill(); } }, // 호떡
-    () => { for (let k = 0; k < 9; k++) { g.fillStyle = '#e9b44c'; g.fillRect(8 + k * ((w - 16) / 9), h * 0.2, (w - 40) / 9, h * 0.6); g.fillStyle = '#fff4c2'; g.beginPath(); g.arc(8 + k * ((w - 16) / 9) + 10, h / 2, 6, 0, 6.3); g.fill(); } }, // 계란빵
-    () => { for (let k = 0; k < 12; k++) { g.fillStyle = '#5c3a1e'; g.fillRect(8 + k * ((w - 16) / 12), 6, 2, h - 12); g.fillStyle = k % 2 ? '#9c2a10' : '#b5491a'; g.fillRect(4 + k * ((w - 16) / 12), h * 0.25, 10, h * 0.5); } }, // 꼬치
-    () => { for (let k = 0; k < 6; k++) { g.fillStyle = '#e85d04'; g.beginPath(); g.ellipse(22 + k * ((w - 40) / 6), h / 2, 16, 8, 0.3, 0, 6.3); g.fill(); g.fillStyle = '#ffd166'; g.fillRect(14 + k * ((w - 40) / 6), h / 2 - 3, 16, 5); } }, // 랍스터
-    () => { for (let k = 0; k < 14; k++) { g.fillStyle = '#fff'; g.beginPath(); g.arc(12 + k * ((w - 20) / 14), h / 2, 7, 0, 6.3); g.fill(); g.fillStyle = '#e63946'; g.beginPath(); g.arc(12 + k * ((w - 20) / 14), h / 2 - 3, 3, 0, 6.3); g.fill(); } }, // 모찌
-  ];
-  kinds[i % kinds.length]();
 }
 
 function drawStationSign(g, w, h) {
@@ -228,7 +223,7 @@ export function createMyeongdongAtlas(tick = null) {
   X_BANNERS.forEach((s, i) => items.push({ name: 'xb' + i, w: 64, h: 192, draw: (g, w, h) => drawXBanner(g, w, h, s) }));
   V_SIGNS.forEach((s, i) => items.push({ name: 'v' + i, w: 80, h: 368, draw: (g, w, h) => drawVSign(g, w, h, s) }));
   STALL_MENUS.forEach((s, i) => items.push({ name: 'menu' + i, w: 248, h: 64, draw: (g, w, h) => drawMenu(g, w, h, s) }));
-  for (let i = 0; i < 6; i++) items.push({ name: 'food' + i, w: 248, h: 56, draw: (g, w, h) => drawFood(g, w, h, i) });
+  STALL_MENUS.forEach((s, i) => items.push({ name: 'tag' + i, w: 120, h: 72, draw: (g, w, h) => drawTag(g, w, h, s) }));
   items.push({ name: 'station', w: 512, h: 128, draw: drawStationSign });
   for (let n = 1; n <= 12; n++) items.push({ name: 'exit' + n, w: 56, h: 56, draw: (g, w, h) => drawExitNo(g, w, h, n) });
   items.push({ name: 'guide', w: 96, h: 96, draw: drawGuide });

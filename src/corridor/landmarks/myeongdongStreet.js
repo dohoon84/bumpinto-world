@@ -3,6 +3,8 @@
 import * as THREE from 'three';
 import { GeoBuf, hex3, CellGrid, distToSeg, mulberry, hash01, pointInRing } from './myeongdongGeo.js';
 import { SHOP_SIGNS, V_SIGNS, STALL_MENUS, SIGN_TYPES, X_BANNERS } from './myeongdongAtlas.js';
+import { stallFoodKinds } from './myeongdongFood.js';
+import { gameHour } from '../../weather.js';
 import { SHOP_ROOMS, createShopInteriorAtlas, createShopInteriorMaterial } from './myeongdongShops.js';
 
 const ALL_SIGNS = SHOP_SIGNS.map((_, i) => i);
@@ -237,22 +239,24 @@ export async function createMyeongdongStreet({ parent, data, land, atlas, ways, 
       if (jn) continue;
       if (bldAt(x, z, 2.2)) continue;
       if (station?.near?.(x, z, 6)) continue;
-      stallSpots.push({ x, z, tx, tz, w, menu: Math.floor(hash01(Math.round(x * 10), Math.round(z * 10)) * STALL_MENUS.length) });
+      let menu = Math.floor(hash01(Math.round(x * 10), Math.round(z * 10)) * STALL_MENUS.length);
+      const prev = stallSpots[stallSpots.length - 1];
+      if (prev && prev.menu === menu) menu = (menu + 1 + Math.floor(hash01(Math.round(z), 3) * 5)) % STALL_MENUS.length; // 옆 노점과 메뉴 겹치지 않게
+      // 실제 명동 노점: 대부분 늦은 오후(16시)부터, 일부만 낮(11시)부터
+      stallSpots.push({ x, z, tx, tz, w, menu, day: hash01(Math.round(x * 7), Math.round(z * 7)) < 0.35 });
     }
   }
-  const stallN = stallSpots.length;
+  stallSpots.sort((a, b) => (b.day ? 1 : 0) - (a.day ? 1 : 0)); // 낮 노점 먼저 → 낮엔 앞부분만 그린다(drawRange / count)
+  const stallN = stallSpots.length, stallDayN = stallSpots.filter((s) => s.day).length;
   const bodyBuf = new GeoBuf({ uv: false, color: true });
   bodyBuf.box(0, 0.8, 0, 2.5, 0.9, 1.3, 0, undefined, hex3('#c4c9cf'));
   bodyBuf.box(0, 1.28, 0, 2.62, 0.06, 1.46, 0, undefined, hex3('#e3e6ea'));
-  bodyBuf.box(-0.55, 1.36, 0, 1.0, 0.1, 0.9, 0, undefined, hex3('#2b2d31'));
-  // 철판 위 음식 (떡볶이 빨강 · 꼬치 갈색 · 계란빵 노랑) + 앞판 색 띠
-  bodyBuf.box(-0.55, 1.45, 0, 0.86, 0.1, 0.72, 0, undefined, hex3('#d9381e'));
-  for (let k = 0; k < 5; k++) bodyBuf.box(0.35 + k * 0.16, 1.4, 0, 0.08, 0.06, 0.62, 0, undefined, hex3(k % 2 ? '#8a4b24' : '#b5652d'));
-  bodyBuf.box(1.05, 1.4, -0.3, 0.3, 0.1, 0.3, 0, undefined, hex3('#f2c14e'));
-  bodyBuf.box(1.05, 1.4, 0.3, 0.3, 0.1, 0.3, 0, undefined, hex3('#f2c14e'));
   for (const sz of [-0.66, 0.66]) bodyBuf.box(0, 0.62, sz, 2.5, 0.18, 0.02, 0, undefined, hex3('#ffd23f'));
   for (const sx of [-1.05, 1.05]) for (const sz of [-0.55, 0.55]) bodyBuf.box(sx, 0.17, sz, 0.3, 0.3, 0.12, 0, undefined, hex3('#1c1c1f'));
   for (const sx of [-1.25, 1.25]) for (const sz of [-0.68, 0.68]) bodyBuf.box(sx, 1.95, sz, 0.05, 1.3, 0.05, 0, undefined, hex3('#8d939b'));
+  // 가스통 · 아이스박스 (판매대 밑)
+  bodyBuf.box(0.75, 0.25, -0.75, 0.3, 0.5, 0.3, 0, undefined, hex3('#c0392b'));
+  bodyBuf.box(-0.7, 0.2, 0.78, 0.5, 0.36, 0.34, 0, undefined, hex3('#2e86de'));
   const canBuf = new GeoBuf({ uv: false, color: true });
   // 박공 천막 (줄무늬: 색 / 흰색 번갈아) + 앞뒤 늘어진 가장자리
   for (let k = 0; k < 6; k++) {
@@ -269,31 +273,71 @@ export async function createMyeongdongStreet({ parent, data, land, atlas, ways, 
   const canCols = ['#d62828', '#1d4e89', '#2a9d8f', '#f4a261', '#e76f51', '#8338ec', '#ff006e', '#ffbe0b'].map((c) => new THREE.Color(c));
   const M = new THREE.Matrix4(), Q = new THREE.Quaternion(), Y = new THREE.Vector3(0, 1, 0), S1 = new THREE.Vector3(1, 1, 1), V = new THREE.Vector3();
   const bulbs = [], bulbCols = [];
+  const stallBulbs = [], stallBulbCols = [];
   const vendors = [];
+  // 음식(종류별 로컬 지오메트리 × 노점 행렬) + 메뉴판·가격표(아틀라스) — 각 1 메시, 낮엔 앞부분만
+  const kinds = stallFoodKinds();
+  const FS = 1.25, FSXZ = 1.08, FTOP = 1.31; // 음식은 판매대 윗면 기준 1.25배 높이(멀리서도 알아보게)
+  const foodP = [], foodN = [], foodC = [], foodI = [];
+  const tagBuf = new GeoBuf({ uv: true, color: false });
+  let foodDayIdx = 0, tagDayIdx = 0;
   stallSpots.forEach((st, i) => {
     const gy = heightAt(st.x, st.z);
     const ry = Math.atan2(-st.tz, st.tx);
     Q.setFromAxisAngle(Y, ry); V.set(st.x, gy, st.z);
     M.compose(V, Q, S1); stallBody.setMatrixAt(i, M); stallCan.setMatrixAt(i, M);
     stallCan.setColorAt(i, canCols[i % canCols.length]);
-    // 메뉴판(양쪽) · 음식 판 · 전구 — 아틀라스 메시에 붙인다
-    const nx = -st.tz, nz = st.tx; // 길 오른쪽(로컬 +z 쪽 = 노점 옆면)
-    for (const s of [1, -1]) {
-      wallQuad(signBuf, st.x + nx * s * 1.03, gy + 1.78, st.z + nz * s * 1.03, nx * s, nz * s, 2.2, 0.62, U('menu' + st.menu));
+    const e = M.elements, kd = kinds[st.menu % kinds.length], base = foodP.length / 3;
+    for (let k = 0; k < kd.p.length; k += 3) {
+      const x = kd.p[k] * FSXZ, y = FTOP + (kd.p[k + 1] - FTOP) * FS, z = kd.p[k + 2] * FSXZ, nx0 = kd.n[k], ny0 = kd.n[k + 1], nz0 = kd.n[k + 2];
+      foodP.push(e[0] * x + e[4] * y + e[8] * z + e[12], e[1] * x + e[5] * y + e[9] * z + e[13], e[2] * x + e[6] * y + e[10] * z + e[14]);
+      foodN.push(e[0] * nx0 + e[8] * nz0, ny0, e[2] * nx0 + e[10] * nz0);
+      foodC.push(kd.c[k], kd.c[k + 1], kd.c[k + 2]);
     }
-    const fy = gy + 1.32, hw = 0.55, hd = 0.36, cx = st.x + st.tx * 0.55, cz = st.z + st.tz * 0.55;
-    signBuf.quad([cx - st.tx * hw + nx * hd, fy, cz - st.tz * hw + nz * hd], [cx + st.tx * hw + nx * hd, fy, cz + st.tz * hw + nz * hd], [cx + st.tx * hw - nx * hd, fy, cz + st.tz * hw - nz * hd], [cx - st.tx * hw - nx * hd, fy, cz - st.tz * hw - nz * hd], U('food' + (st.menu % 6)), null, [0, 1, 0]);
-    for (const k of [-1, 0, 1]) { bulbs.push(st.x + st.tx * k * 0.95, gy + 2.36, st.z + st.tz * k * 0.95); bulbCols.push(1, 0.82, 0.55); }
+    for (const q of kd.i) foodI.push(base + q);
+    // 메뉴판(양쪽) · 세운 가격표(양쪽)
+    const nx = -st.tz, nz = st.tx; // 길 오른쪽(로컬 +z 쪽 = 노점 옆면)
+    for (const s2 of [1, -1]) {
+      // 메뉴판은 천막 처마 밑(판매대 위 음식이 보이게 위로)
+      wallQuad(tagBuf, st.x + nx * s2 * 1.02, gy + 1.98, st.z + nz * s2 * 1.02, nx * s2, nz * s2, 2.3, 0.46, U('menu' + st.menu));
+      const tx0 = st.x + nx * s2 * 0.6 + st.tx * 0.95, tz0 = st.z + nz * s2 * 0.6 + st.tz * 0.95;
+      wallQuad(tagBuf, tx0, gy + 1.33, tz0, nx * s2, nz * s2, 0.34, 0.2, U('tag' + st.menu));
+    }
+    for (const k of [-1, 0, 1]) { stallBulbs.push(st.x + st.tx * k * 0.95, gy + 2.36, st.z + st.tz * k * 0.95); stallBulbCols.push(1, 0.82, 0.55); }
     // 장수(노점 주인) — 한쪽 옆
     vendors.push([st.x - nx * 0.95 + st.tx * 0.6, st.z - nz * 0.95 + st.tz * 0.6, Math.atan2(nx, nz)]);
-    const blk = { x: st.x, z: st.z, tx: st.tx, tz: st.tz, hl: 1.4, hd: 0.8 };
+    const blk = { x: st.x, z: st.z, tx: st.tx, tz: st.tz, hl: 1.4, hd: 0.8, i };
     blockers.push(blk); block.add(blk, st.x - 2, st.z - 2, st.x + 2, st.z + 2);
+    if (i === stallDayN - 1) { foodDayIdx = foodI.length; tagDayIdx = tagBuf.i.length; }
   });
   stallBody.instanceMatrix.needsUpdate = true; stallCan.instanceMatrix.needsUpdate = true;
   if (stallCan.instanceColor) stallCan.instanceColor.needsUpdate = true;
   stallBody.count = stallN; stallCan.count = stallN;
   stallBody.computeBoundingSphere(); stallCan.computeBoundingSphere();
   if (stallN) g.add(stallBody, stallCan);
+  let foodMesh = null, tagMesh = null;
+  // 노점 음식: 전구 아래라 제 색으로 빛나게(정점색 × uGlow 를 자체 발광에 더함 — 진짜 조명 없이)
+  const foodMat = new THREE.MeshLambertMaterial({ vertexColors: true });
+  const foodGlow = { value: 0.12 };
+  foodMat.onBeforeCompile = (sh) => {
+    sh.uniforms.uGlow = foodGlow;
+    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nuniform float uGlow;')
+      .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += diffuseColor.rgb * uGlow;');
+  };
+  foodMat.customProgramCacheKey = () => 'md-stall-food-v1';
+  if (foodP.length) {
+    const fg = new THREE.BufferGeometry();
+    fg.setAttribute('position', new THREE.Float32BufferAttribute(foodP, 3));
+    fg.setAttribute('normal', new THREE.Float32BufferAttribute(foodN, 3));
+    fg.setAttribute('color', new THREE.Float32BufferAttribute(foodC, 3));
+    fg.setIndex(foodP.length / 3 > 65535 ? new THREE.Uint32BufferAttribute(foodI, 1) : new THREE.Uint16BufferAttribute(foodI, 1));
+    fg.computeBoundingSphere();
+    foodMesh = new THREE.Mesh(fg, foodMat); foodMesh.name = 'myeongdong-stall-food'; g.add(foodMesh);
+  }
+  const tagMat = new THREE.MeshLambertMaterial({ map: atlas.texture, emissive: '#ffffff', emissiveMap: atlas.texture, emissiveIntensity: 0.3 });
+  const tagGeo = tagBuf.build();
+  if (tagGeo) { tagMesh = new THREE.Mesh(tagGeo, tagMat); tagMesh.name = 'myeongdong-stall-menus'; g.add(tagMesh); }
+  const foodTris = foodI.length / 3;
   await tick?.('md-stalls');
 
   // ---------- 3) 골목 위 전구 줄 (지그재그) ----------
@@ -333,6 +377,9 @@ export async function createMyeongdongStreet({ parent, data, land, atlas, ways, 
     wires = new THREE.LineSegments(lg, new THREE.LineBasicMaterial({ color: '#1d1f24' }));
     wires.name = 'myeongdong-festoon-wires'; g.add(wires);
   }
+  const festoonBulbN = bulbs.length / 3;
+  for (let k = 0; k < stallBulbs.length; k++) bulbs.push(stallBulbs[k]);
+  for (let k = 0; k < stallBulbCols.length; k++) bulbCols.push(stallBulbCols[k]);
   const bulbGeo = new THREE.BufferGeometry();
   bulbGeo.setAttribute('position', new THREE.Float32BufferAttribute(bulbs, 3));
   bulbGeo.setAttribute('color', new THREE.Float32BufferAttribute(bulbCols, 3));
@@ -476,12 +523,32 @@ export async function createMyeongdongStreet({ parent, data, land, atlas, ways, 
     pBody.instanceMatrix.needsUpdate = true; pHead.instanceMatrix.needsUpdate = true;
   }
   updatePeds(0.016, null);
-  vendors.forEach(() => {});
+  // ---------- 노점 영업시간: 16:00–23:30 전부, 11:00–16:00 낮 노점(약 35%)만, 그 밖엔 닫음 ----------
+  //   ?mdstalls=all|day|none 로 고정. 닫힌 노점은 그리지 않고(instance count · drawRange) 막지도 않는다.
+  const vendorM = vendors.map((_, k) => { const m = new THREE.Matrix4(); pBody.getMatrixAt(NP + k, m); return m; });
+  const ZERO = new THREE.Matrix4().makeScale(0, 0, 0);
+  const forceStalls = typeof location !== 'undefined' ? new URLSearchParams(location.search).get('mdstalls') : null;
+  let openN = stallN, hourT = 0;
+  const stallModeAt = (h) => (forceStalls === 'all' || forceStalls === 'day' || forceStalls === 'none' ? forceStalls : h >= 16 && h < 23.5 ? 'all' : h >= 11 && h < 16 ? 'day' : 'none');
+  function applyStallHours(mode) {
+    const n = mode === 'all' ? stallN : mode === 'day' ? stallDayN : 0;
+    if (n === openN) return;
+    openN = n;
+    stallBody.count = stallCan.count = n;
+    if (foodMesh) foodMesh.geometry.setDrawRange(0, n === stallN ? Infinity : n === stallDayN ? foodDayIdx : 0);
+    if (tagMesh) tagMesh.geometry.setDrawRange(0, n === stallN ? Infinity : n === stallDayN ? tagDayIdx : 0);
+    bulbGeo.setDrawRange(0, festoonBulbN + n * 3);
+    for (let k = 0; k < vendors.length; k++) pBody.setMatrixAt(NP + k, k < n ? vendorM[k] : ZERO), pHead.setMatrixAt(NP + k, k < n ? vendorM[k] : ZERO);
+    pBody.instanceMatrix.needsUpdate = true; pHead.instanceMatrix.needsUpdate = true;
+  }
+  const hourNow = () => { try { return gameHour(); } catch { return 20; } };
+  applyStallHours(stallModeAt(hourNow()));
 
   function isBlocked(x, z, r = 0.4) {
     for (const b of block.query(x, z)) {
       const dx = x - b.x, dz = z - b.z;
       const u = Math.abs(dx * b.tx + dz * b.tz), v = Math.abs(-dx * b.tz + dz * b.tx);
+      if (b.i >= openN) continue; // 닫은 노점
       if (u < b.hl + r && v < b.hd + r) return true;
     }
     return false;
@@ -490,7 +557,8 @@ export async function createMyeongdongStreet({ parent, data, land, atlas, ways, 
   return {
     group: g,
     cosmeticsShops,
-    stallSpots: stallSpots.map((s) => ({ x: +s.x.toFixed(1), z: +s.z.toFixed(1), menu: STALL_MENUS[s.menu][1] })),
+    stallSpots: stallSpots.map((s) => ({ x: +s.x.toFixed(1), z: +s.z.toFixed(1), menu: STALL_MENUS[s.menu][1], kind: s.menu, day: s.day, tx: +s.tx.toFixed(3), tz: +s.tz.toFixed(3) })),
+    get stallsOpen() { return openN; },
     isBlocked,
     setNight(v) {
       // 가게 실내: 낮엔 유리 반사 + 약간 어둡게, 밤엔 실내가 주인공(1 을 넘지 않게 → 번짐 없음)
@@ -503,12 +571,17 @@ export async function createMyeongdongStreet({ parent, data, land, atlas, ways, 
       bulbMat.opacity = 0.35 + v * 0.65; bulbMat.size = 0.55 + v * 0.35;
       lampGlowMat.opacity = v * 0.8; lampGlow.visible = v > 0.02;
       canMat.emissiveIntensity = v * 0.22;
+      foodGlow.value = 0.12 + v * 0.6; // 노점 전구 아래 음식
+      tagMat.emissiveIntensity = 0.3 + v * 0.7; tagMat.color.setScalar(1 - v * 0.35);
       stallMat.color.setScalar(1 - v * 0.25);
       bodyMat.color.setScalar(1 - v * 0.3); headMat.color.setScalar(1 - v * 0.3);
     },
-    update(dt, pp) { updatePeds(dt, pp); },
+    update(dt, pp) {
+      updatePeds(dt, pp);
+      hourT -= dt; if (hourT <= 0) { hourT = 2; applyStallHours(stallModeAt(hourNow())); }
+    },
     shops: shopsOut,
-    stats() { return { types: typeCount, banners: nBanner, promoters: promoters.length, fronts: nFront, signs: nSign, blades: nBlade, stalls: stallN, lamps: lampSpots.length, bulbs: bulbs.length / 3, peds: NP, signVerts: signGeo ? signGeo.attributes.position.count : 0 }; },
+    stats() { return { types: typeCount, banners: nBanner, promoters: promoters.length, fronts: nFront, signs: nSign, blades: nBlade, stalls: stallN, stallsDay: stallDayN, stallsOpen: openN, foodTris, lamps: lampSpots.length, bulbs: bulbs.length / 3, peds: NP, signVerts: signGeo ? signGeo.attributes.position.count : 0 }; },
   };
 }
 

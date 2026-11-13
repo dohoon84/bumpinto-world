@@ -369,6 +369,14 @@ const PAINTERS = [
   (g, s, r) => fashionRoom(g, s, 2, r),
 ];
 
+function extrude(g, [x, y, w, h], P = 4) {
+  const cv = g.canvas;
+  g.drawImage(cv, x, y, w, 1, x, y - P, w, P);
+  g.drawImage(cv, x, y + h - 1, w, 1, x, y + h, w, P);
+  g.drawImage(cv, x, y - P, 1, h + 2 * P, x - P, y - P, P, h + 2 * P);
+  g.drawImage(cv, x + w - 1, y - P, 1, h + 2 * P, x + w, y - P, P, h + 2 * P);
+}
+
 /** 실내 아틀라스. tick 을 주면 칸마다 쉬어 간다 */
 export async function createShopInteriorAtlas(tick = null) {
   if (typeof document === 'undefined') return null;
@@ -376,14 +384,17 @@ export async function createShopInteriorAtlas(tick = null) {
   const c = document.createElement('canvas'); c.width = W; c.height = H;
   const g = c.getContext('2d');
   g.clearRect(0, 0, W, H);
+  // 칸마다 작은 캔버스에 그리고 가장자리를 늘린 뒤 한 번에 붙인다(큰 캔버스 자기 복사는 느리다)
+  const tc = document.createElement('canvas'); tc.width = TILE_W; tc.height = TILE_H;
+  const tg = tc.getContext('2d');
+  const sub = { back: R_BACK, front: R_FRONT, side: R_SIDE, floor: R_FLOOR, ceil: R_CEIL };
   for (let i = 0; i < PAINTERS.length; i++) {
     const ox = (i % ROOM_COLS) * TILE_W, oy = Math.floor(i / ROOM_COLS) * TILE_H;
-    const off = (q) => [ox + q[0], oy + q[1], q[2], q[3]];
-    const sub = { back: off(R_BACK), front: off(R_FRONT), side: off(R_SIDE), floor: off(R_FLOOR), ceil: off(R_CEIL) };
-    g.save(); g.beginPath(); g.rect(ox, oy, TILE_W, TILE_H); g.clip();
-    // 하위 사각형 둘레를 같은 색으로 4px 넓혀(밉맵 번짐 방지) — 먼저 넓게 칠하고 위에 정식으로 그린다
-    PAINTERS[i](g, sub, rnd32(5150 + i * 97));
-    g.restore();
+    tg.setTransform(1, 0, 0, 1, 0, 0); tg.clearRect(0, 0, TILE_W, TILE_H);
+    PAINTERS[i](tg, sub, rnd32(5150 + i * 97));
+    // 불투명 하위 사각형 가장자리를 4px 바깥으로 늘린다(밉맵에서 투명 틈이 검게 번지지 않게)
+    for (const q of [R_BACK, R_SIDE, R_FLOOR, R_CEIL]) extrude(tg, q);
+    g.drawImage(tc, ox, oy);
     if (tick) await tick('md-rooms');
   }
   const t = new THREE.CanvasTexture(c);
@@ -412,6 +423,7 @@ export function createShopInteriorMaterial(atlas) {
       .replace('#include <common>', `#include <common>
 uniform sampler2D uRoomTex; uniform vec2 uAtlas; uniform float uBright; uniform float uRefl; uniform vec3 uSky;
 varying vec4 vRoom; varying vec2 vLuv; varying vec3 vWPos; varying vec3 vWN;
+vec2 clampLen(vec2 v, float m) { float l = length(v); return l > m ? v * (m / l) : v; }
 vec2 roomUV(float idx, vec4 rc, vec2 st) {
   float col = mod(idx, ${ROOM_COLS}.0), row = floor(idx / ${ROOM_COLS}.0);
   st = clamp(st, 0.004, 0.996);
@@ -422,8 +434,8 @@ vec2 roomUV(float idx, vec4 rc, vec2 st) {
   vec3 N = normalize(vWN); vec3 Rt = normalize(vec3(N.z, 0.0, -N.x));
   vec3 V = normalize(vWPos - cameraPosition);
   vec3 d = vec3(dot(V, Rt), V.y, -dot(V, N));
-  d.z = max(d.z, 0.02);
-  float w = vRoom.y, h = vRoom.z, D = vRoom.w, idx = vRoom.x;
+  d.z = max(d.z, 0.28); // 아주 비스듬하면 방을 얕게 — 늘어진 텍셀·자글거림 방지
+  float w = vRoom.y, h = vRoom.z, D = vRoom.w, idx = floor(vRoom.x + 0.5); // 보간 오차(4.9999)로 옆 칸을 읽지 않게
   vec3 p = vec3(vLuv.x * w, vLuv.y * h, 0.0);
   float tx = d.x > 0.0 ? (w - p.x) / max(d.x, 1e-4) : p.x / max(-d.x, 1e-4);
   float ty = d.y > 0.0 ? (h - p.y) / max(d.y, 1e-4) : p.y / max(-d.y, 1e-4);
@@ -435,6 +447,8 @@ vec2 roomUV(float idx, vec4 rc, vec2 st) {
   vec2 kB = vec2(${R_BACK[2]}.0, ${R_BACK[3]}.0) / uAtlas, kS = vec2(${R_SIDE[2]}.0, ${R_SIDE[3]}.0) / uAtlas;
   vec2 gBx = dFdx(stB) * kB, gBy = dFdy(stB) * kB, gSx = dFdx(stS) * kS, gSy = dFdy(stS) * kS, gFx = dFdx(stF) * kS, gFy = dFdy(stF) * kS;
   vec2 gx = dFdx(vLuv) * kB, gy = dFdy(vLuv) * kB;
+  float gMax = 6.0 / uAtlas.x; // 밉 단계 상한(이웃 칸 번짐 방지)
+  gBx = clampLen(gBx, gMax); gBy = clampLen(gBy, gMax); gSx = clampLen(gSx, gMax); gSy = clampLen(gSy, gMax); gFx = clampLen(gFx, gMax); gFy = clampLen(gFy, gMax); gx = clampLen(gx, gMax); gy = clampLen(gy, gMax);
   vec3 ic; float shade;
   if (t == tz) { ic = textureGrad(uRoomTex, roomUV(idx, vec4(${R_BACK.join('.0,')}.0), stB), gBx, gBy).rgb; shade = 0.92; }
   else if (t == tx) { ic = textureGrad(uRoomTex, roomUV(idx, vec4(${R_SIDE.join('.0,')}.0), stS), gSx, gSy).rgb; shade = 0.84; }
@@ -447,6 +461,6 @@ vec2 roomUV(float idx, vec4 rc, vec2 st) {
   diffuseColor.rgb = mix(glass, fr.rgb, fr.a) * uBright;
 }`);
   };
-  m.customProgramCacheKey = () => 'md-shop-interior-v2';
+  m.customProgramCacheKey = () => 'md-shop-interior-v4';
   return { material: m, uniforms };
 }
