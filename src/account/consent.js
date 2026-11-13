@@ -48,8 +48,8 @@ function fieldHtml({ termsHref, privacyHref, marketingDefault = false }) {
   const tPrivacy = tr('개인정보처리방침', 'Privacy Policy');
   return `
     <div class="acct-consent">
-      <label class="acct-check"><input type="checkbox" data-consent="terms"> <span>${tr('[필수] ', '[Required] ')}<a href="${termsHref}" target="_blank" rel="noopener">${tTerms}</a>${tr(' 동의', ' agreement')}</span></label>
-      <label class="acct-check"><input type="checkbox" data-consent="privacy"> <span>${tr('[필수] ', '[Required] ')}<a href="${privacyHref}" target="_blank" rel="noopener">${tPrivacy}</a>${tr(' 동의', ' agreement')}</span></label>
+      <label class="acct-check"><input type="checkbox" data-consent="terms"> <span class="acct-check-req">${tr('[필수] ', '[Required] ')}<a href="${termsHref}" target="_blank" rel="noopener">${tTerms}</a>${tr(' 동의', ' agreement')}</span></label>
+      <label class="acct-check"><input type="checkbox" data-consent="privacy"> <span class="acct-check-req">${tr('[필수] ', '[Required] ')}<a href="${privacyHref}" target="_blank" rel="noopener">${tPrivacy}</a>${tr(' 동의', ' agreement')}</span></label>
       <label class="acct-check"><input type="checkbox" data-consent="marketing"${marketingDefault ? ' checked' : ''}> <span>${tr('[선택] 새 지역 오픈·이벤트 소식을 이메일로 받아볼게요', '[Optional] Email me about new districts and events')}</span></label>
     </div>`;
 }
@@ -58,7 +58,7 @@ function fieldHtml({ termsHref, privacyHref, marketingDefault = false }) {
  * 로그인 창·계정 칩 로그인 영역에 필수/선택 체크박스를 붙인다.
  * @returns {{ requiredOk: () => boolean, payload: () => object, onChange: (fn) => void }}
  */
-export function mountConsentFields(host, { cfg, marketingDefault = false } = {}) {
+export function mountConsentFields(host, { cfg, marketingDefault = false, initial } = {}) {
   const wrap = document.createElement('div');
   wrap.innerHTML = fieldHtml({
     termsHref: legalHref('terms', cfg),
@@ -69,8 +69,12 @@ export function mountConsentFields(host, { cfg, marketingDefault = false } = {})
   const terms = wrap.querySelector('[data-consent="terms"]');
   const privacy = wrap.querySelector('[data-consent="privacy"]');
   const marketing = wrap.querySelector('[data-consent="marketing"]');
+  terms.checked = !!initial?.terms;
+  privacy.checked = !!initial?.privacy;
+  marketing.checked = !!(initial?.marketing ?? marketingDefault);
   const requiredOk = () => !!(terms.checked && privacy.checked);
   const payload = () => ({ ...versionsFrom(cfg), marketingOptIn: !!marketing.checked });
+  const snapshot = () => ({ terms: !!terms.checked, privacy: !!privacy.checked, marketing: !!marketing.checked });
   const listeners = [];
   const fire = () => listeners.forEach((fn) => fn(requiredOk()));
   terms.addEventListener('change', fire);
@@ -80,6 +84,7 @@ export function mountConsentFields(host, { cfg, marketingDefault = false } = {})
   return {
     requiredOk,
     payload,
+    snapshot,
     onChange(fn) { listeners.push(fn); fn(requiredOk()); },
     root: wrap,
   };

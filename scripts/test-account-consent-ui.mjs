@@ -8,6 +8,7 @@ const start = src('../src/ui-v2/start.js');
 const landing = src('../src/mobile/landing.js');
 const lobby = src('../src/lobby.js');
 const signin = src('../src/account/signin.js');
+const ui = src('../src/account/ui.js');
 
 let n = 0;
 const ok = (m) => console.log('  ok', ++n, m);
@@ -63,5 +64,29 @@ assert.match(lobby, /if \(acct\?\.me\?\.consent\?\.needsTerms\)/);
 assert.match(lobby, /const g = await ensureAccountConsent\(\{ me: acct\.me \}\)/);
 assert.match(lobby, /if \(!g\.ok\) \{\s*acct = null;/s);
 ok('lobby does not enter as an account without confirmed terms');
+
+
+// ── 인게임 계정 칩 로그인 팝오버에도 필수/선택 체크박스가 있고, 동의 전에 로그인을 막는다 ──
+assert.match(ui, /import \{ ensureAccountConsent, fmtAgreedAt, legalHref, mountConsentFields \} from '\.\/consent\.js'/);
+assert.match(ui, /import \{ googleSignIn, isLocalHost, devLogin \} from '\.\/signin\.js'/);
+assert.match(ui, /loginFields = mountConsentFields\(body, \{ cfg: state\.cfg, initial: pendingConsent \}\)/);
+assert.match(ui, /button\(tr\('구글로 계속'/);
+assert.match(ui, /button\(tr\('개발용 로그인 \(로컬\)'/);
+assert.match(ui, /googleBtn\.disabled = !on/);
+assert.match(ui, /if \(devBtn\) devBtn\.disabled = !on/);
+assert.match(ui, /async function startLogin\(\) \{\s*if \(!requireLoginConsent\(\)\) return;/s);
+assert.match(ui, /googleSignIn\(\{ deviceId: deviceId\(\), clientId: state\.cfg\?\.clientId \|\| GOOGLE_CLIENT_ID, consent \}\)/);
+assert.match(ui, /const r = await devLogin\(deviceId\(\), consent\)/);
+assert.doesNotMatch(ui, /async function startDevLogin\(\) \{[\s\S]*?await startLogin\(\)/);
+ok('in-game account-chip popover mounts consent fields and blocks Google/dev login until required checks');
+
+assert.match(signin, /export async function googleSignIn\(\{ deviceId = currentDeviceId\(\), clientId, consent \} = \{\}\)/);
+assert.match(signin, /const preset = \(consent\?\.termsVersion && consent\?\.privacyVersion\)/);
+assert.match(signin, /if \(preset\) \$\('\.acct-fields'\)\.hidden = true/);
+ok('googleSignIn reuses pre-agreed consent from the account-chip popover and does not ask twice');
+
+assert.match(consent, /class="acct-check-req"/);
+assert.match(consent, /const snapshot = \(\) => \(\{ terms: !!terms\.checked, privacy: !!privacy\.checked, marketing: !!marketing\.checked \}\)/);
+ok('required consent labels stay on one line; checkbox state can be restored after render');
 
 console.log(`account-consent-ui: ${n} passed`);

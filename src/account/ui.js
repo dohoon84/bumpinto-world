@@ -4,8 +4,8 @@
 import { tr, isEn, onLangChange } from '../i18n.js';
 import { accountApi } from './api.js';
 import { GOOGLE_CLIENT_ID } from './flags.js';
-import { googleSignIn, isLocalHost } from './signin.js';
-import { ensureAccountConsent, fmtAgreedAt, legalHref } from './consent.js';
+import { googleSignIn, isLocalHost, devLogin } from './signin.js';
+import { ensureAccountConsent, fmtAgreedAt, legalHref, mountConsentFields } from './consent.js';
 import './account.css';
 
 const DEVICE_KEY = 'jeongja3d.device'; // src/sms.js 와 같은 키
@@ -56,6 +56,8 @@ export function mountAccount({ sms } = {}) {
   const $ = (sel) => panel.querySelector(sel);
 
   const state = { cfg: null, me: null, busy: false, msg: '' };
+  let loginFields = null;
+  const pendingConsent = { terms: false, privacy: false, marketing: false };
 
   function render() {
     const me = state.me;
@@ -73,6 +75,8 @@ export function mountAccount({ sms } = {}) {
     const actions = $('.acct-actions');
     actions.replaceChildren();
     if (me?.account) {
+      loginFields = null;
+      pendingConsent.terms = pendingConsent.privacy = pendingConsent.marketing = false;
       head.textContent = me.account.name || tr('내 계정', 'My account');
       const rows = [];
       if (me.account.email) rows.push(`<div class="acct-row"><span>${tr('구글', 'Google')}</span><b></b></div>`);
@@ -96,9 +100,27 @@ export function mountAccount({ sms } = {}) {
         '로그인하면 여러 PC 에서 같은 캐릭터·선물·사진을 이어서 써요. 로그인 안 해도 지금처럼 놀 수 있어요.',
         'Sign in to keep the same character, gifts and photos across PCs. You can keep playing as a guest.',
       )}</p>`;
-      actions.append(button(tr('구글로 계속', 'Continue with Google'), startLogin, 'primary'));
+      loginFields = mountConsentFields(body, { cfg: state.cfg, initial: pendingConsent });
+      const googleBtn = button(tr('구글로 계속', 'Continue with Google'), startLogin, 'primary');
+      actions.append(googleBtn);
       // 로컬 시험(localhost·같은 와이파이 아이폰): 서버 DEV_LOGIN=1 일 때만 — 구글은 http LAN 출처를 받지 않음
-      if (state.cfg?.devLogin && isLocalHost()) actions.append(button(tr('개발용 로그인 (로컬)', 'Dev sign-in (local)'), startDevLogin));
+      let devBtn = null;
+      if (state.cfg?.devLogin && isLocalHost()) {
+        devBtn = button(tr('개발용 로그인 (로컬)', 'Dev sign-in (local)'), startDevLogin);
+        actions.append(devBtn);
+      }
+      const syncLoginBtns = (ok) => {
+        const on = !!ok && !state.busy;
+        googleBtn.disabled = !on;
+        if (devBtn) devBtn.disabled = !on;
+      };
+      loginFields.onChange((ok) => {
+        const snap = loginFields.snapshot();
+        pendingConsent.terms = snap.terms;
+        pendingConsent.privacy = snap.privacy;
+        pendingConsent.marketing = snap.marketing;
+        syncLoginBtns(ok);
+      });
     }
     actions.append(button(tr('닫기', 'Close'), () => toggle(false)));
     $('.acct-msg').textContent = state.msg;
@@ -190,12 +212,18 @@ export function mountAccount({ sms } = {}) {
   }
 
   async function applyLogin(r) {
-    if (!r) return;
+    if (!r) {
+      state.busy = false;
+      render();
+      return;
+    }
     if (!r.ok) {
+      state.busy = false;
       state.msg = errText(r.error);
       render();
       return;
     }
+    state.busy = false;
     const linkMsg = LINK_TEXT[r.link?.status]?.() || '';
     const granted = (r.granted || []).reduce((a, g) => a + g.amount, 0);
     state.msg = [linkMsg, granted ? tr(`${fmt(granted)} bum 을 받았어요.`, `You received ${fmt(granted)} bum.`) : ''].filter(Boolean).join(' ');
@@ -204,16 +232,36 @@ export function mountAccount({ sms } = {}) {
     if (r.link?.status !== 'linked_to_other_account') adoptIfNeeded(r.primaryUserId);
   }
 
+  function requireLoginConsent() {
+    if (loginFields?.requiredOk()) return true;
+    state.msg = tr('필수 약관에 동의해 주세요.', 'Please agree to the required terms.');
+    const msg = $('.acct-msg');
+    if (msg) msg.textContent = state.msg;
+    return false;
+  }
+
   async function startLogin() {
+    if (!requireLoginConsent()) return;
+    const consent = loginFields.payload();
     state.msg = '';
-    render();
-    const r = await googleSignIn({ deviceId: deviceId(), clientId: state.cfg?.clientId || GOOGLE_CLIENT_ID });
+    state.busy = true;
+    const msg = $('.acct-msg');
+    if (msg) msg.textContent = '';
+    panel.querySelectorAll('.acct-actions .acct-btn').forEach((b) => { b.disabled = true; });
+    const r = await googleSignIn({ deviceId: deviceId(), clientId: state.cfg?.clientId || GOOGLE_CLIENT_ID, consent });
     await applyLogin(r);
   }
 
   async function startDevLogin() {
-    // 로컬 개발 로그인도 같은 약관 동의 창을 거친다
-    await startLogin();
+    if (!requireLoginConsent()) return;
+    const consent = loginFields.payload();
+    state.msg = '';
+    state.busy = true;
+    const msg = $('.acct-msg');
+    if (msg) msg.textContent = '';
+    panel.querySelectorAll('.acct-actions .acct-btn').forEach((b) => { b.disabled = true; });
+    const r = await devLogin(deviceId(), consent);
+    await applyLogin(r);
   }
 
   async function logout() {

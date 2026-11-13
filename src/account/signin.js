@@ -61,12 +61,15 @@ export async function devLogin(deviceId, consent = {}) {
  * @returns {Promise<null | { ok: boolean, error?: string, account?: object, granted?: Array, link?: object, primaryUserId?: string }>}
  *   null = 사용자가 닫음
  */
-export async function googleSignIn({ deviceId = currentDeviceId(), clientId } = {}) {
+export async function googleSignIn({ deviceId = currentDeviceId(), clientId, consent } = {}) {
   const cfg = await accountApi.config().catch(() => null);
   if (cfg && cfg.ok === false && cfg.error) return { ok: false, error: cfg.error };
   if (cfg && cfg.enabled === false) return { ok: false, error: 'accounts_disabled' };
   const id = clientId || cfg?.clientId || GOOGLE_CLIENT_ID;
   const showDev = isLocal() && !!cfg?.devLogin;
+  const preset = (consent?.termsVersion && consent?.privacyVersion)
+    ? { termsVersion: consent.termsVersion, privacyVersion: consent.privacyVersion, marketingOptIn: !!consent.marketingOptIn }
+    : null;
 
   return new Promise((resolve) => {
     let done = false;
@@ -76,7 +79,10 @@ export async function googleSignIn({ deviceId = currentDeviceId(), clientId } = 
     wrap.innerHTML = `<div class="acct-signin-card"><div class="acct-head"></div><div class="acct-fields"></div><div class="acct-gis"></div><div class="acct-gis-wait" hidden></div><div class="acct-msg" role="status"></div><div class="acct-actions"></div></div>`;
     const $ = (s) => wrap.querySelector(s);
     $('.acct-head').textContent = tr('Google 계정으로 로그인', 'Sign in with Google');
-    const fields = mountConsentFields($('.acct-fields'), { cfg });
+    const fields = preset
+      ? { requiredOk: () => true, payload: () => preset, onChange(fn) { fn(true); } }
+      : mountConsentFields($('.acct-fields'), { cfg });
+    if (preset) $('.acct-fields').hidden = true;
     const wait = $('.acct-gis-wait');
     wait.textContent = tr('위 필수 항목에 동의하면 로그인이 열려요.', 'Agree to the required items to enable sign-in.');
     const gis = $('.acct-gis');
