@@ -70,6 +70,32 @@ function graniteCanvas() {
   return c;
 }
 const tex = (c, rep = true) => { const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; if (rep) t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 8; return t; };
+// 밤 가짜 조명 텍스처 (실제 라이트·그림자 없음). 바닥 원형 웅덩이 + 정면 아래에서 올라오는 빛.
+function poolCanvas() {
+  const c = document.createElement('canvas'); c.width = c.height = 64;
+  const g = c.getContext('2d');
+  const r = g.createRadialGradient(32, 32, 1, 32, 32, 32);
+  r.addColorStop(0, 'rgba(255,232,196,1)'); r.addColorStop(0.35, 'rgba(255,200,130,0.55)');
+  r.addColorStop(0.72, 'rgba(255,170,90,0.12)'); r.addColorStop(1, 'rgba(255,160,80,0)');
+  g.fillStyle = r; g.fillRect(0, 0, 64, 64);
+  return c;
+}
+function washCanvas() {
+  const c = document.createElement('canvas'); c.width = 64; c.height = 128;
+  const g = c.getContext('2d');
+  const v = g.createLinearGradient(0, 128, 0, 0); // v=0 바닥이 밝고, 위로 갈수록 사라짐
+  v.addColorStop(0, 'rgba(255,220,170,1)'); v.addColorStop(0.4, 'rgba(255,190,130,0.4)'); v.addColorStop(1, 'rgba(255,170,100,0)');
+  g.fillStyle = v; g.fillRect(0, 0, 64, 128);
+  const h = g.createLinearGradient(0, 0, 64, 0);
+  h.addColorStop(0, 'rgba(0,0,0,1)'); h.addColorStop(0.18, 'rgba(0,0,0,0)'); h.addColorStop(0.82, 'rgba(0,0,0,0)'); h.addColorStop(1, 'rgba(0,0,0,1)');
+  g.globalCompositeOperation = 'destination-out'; g.fillStyle = h; g.fillRect(0, 0, 64, 128);
+  return c;
+}
+const nightGlowMat = (map) => new THREE.MeshBasicMaterial({
+  map, color: '#ffd9a0', vertexColors: true, transparent: true, opacity: 0, depthWrite: false,
+  blending: THREE.AdditiveBlending, toneMapped: false, side: THREE.DoubleSide,
+  polygonOffset: true, polygonOffsetFactor: -6, polygonOffsetUnits: -6,
+});
 
 export function createMyeongdongCathedral({ parent, data, land, overlay, atlas = null }) {
   const o = data.cathedral?.o;
@@ -251,10 +277,10 @@ export function createMyeongdongCathedral({ parent, data, land, overlay, atlas =
 
   // ---- [myeongdong-detail] 정면 광장: 화강암 판석 포장 + 앞 계단 + 낮은 담 + 나무·벤치·성모상 + 입구 문(간판) + 등 ----
   //   땅 높이(myeongdongLand hill.plaza)가 광장을 평평하게, 계단 자리를 곧은 경사로 만든다. 여기선 그 위에 덮기만 한다.
-  //   draw: 포장 1 · 소품(담·계단·나무·벤치·문) 1 · 간판 1 · 등 1
+  //   draw: 포장 1 · 소품(담·계단·나무·벤치·문) 1 · 간판 1 · 등 1 · 밤 바닥 웅덩이 1 · 정면 업라이트 1
   const PL = land.hill?.plaza, F = land.hill?.frame;
   const blockers = []; // 축 좌표 사각형 { u0, u1, v0, v1 }
-  let lampMat = null, signMat = null;
+  let lampMat = null, signMat = null, plazaMat = null, poolMat = null, washMat = null, poolMesh = null, washMesh = null;
   if (PL && F) {
     const top = land.hill.top;
     const H = (u, v) => { const [x, z] = F.W(u, v); return land.heightAt(x, z); };
@@ -280,7 +306,8 @@ export function createMyeongdongCathedral({ parent, data, land, overlay, atlas =
       geo.setAttribute('normal', new THREE.Float32BufferAttribute(nrm, 3));
       geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
       geo.setIndex(idx); geo.computeBoundingSphere();
-      const pm = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ map: tex(graniteCanvas()), polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 }));
+      plazaMat = new THREE.MeshLambertMaterial({ map: tex(graniteCanvas()), emissive: '#ffd9a0', emissiveIntensity: 0, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 });
+      const pm = new THREE.Mesh(geo, plazaMat);
       pm.name = 'myeongdong-cathedral-plaza'; pm.receiveShadow = true; g.add(pm); meshes.push(pm);
     }
     const props = new GeoBuf({ uv: false, color: true });
@@ -368,6 +395,53 @@ export function createMyeongdongCathedral({ parent, data, land, overlay, atlas =
       signMat = new THREE.MeshLambertMaterial({ map: atlas.texture, emissive: '#ffffff', emissiveMap: atlas.texture, emissiveIntensity: 0.25 });
       const sm = new THREE.Mesh(sb.build(), signMat); sm.name = 'myeongdong-cathedral-sign'; g.add(sm);
     }
+    // ---- 밤 가짜 조명: 등 밑·계단·정면 앞 바닥 웅덩이 1메시 + 벽돌 정면 업라이트 1메시 (실제 Light 없음)
+    {
+      const poolBuf = new GeoBuf({ uv: true, color: true });
+      const ux = F.ax, uz = F.az, vx = -F.az, vz = F.ax;
+      const poolAt = (u, v, r = 3.5, col = [1, 0.86, 0.58]) => {
+        const [x, z] = F.W(u, v), y = land.heightAt(x, z) + 0.22;
+        poolBuf.quad(
+          [x - ux * r - vx * r, y, z - uz * r - vz * r],
+          [x + ux * r - vx * r, y, z + uz * r - vz * r],
+          [x + ux * r + vx * r, y, z + uz * r + vz * r],
+          [x - ux * r + vx * r, y, z - uz * r + vz * r],
+          [0, 0, 1, 1], col, [0, 1, 0],
+        );
+      };
+      for (let u = PL.u0 + 5; u < PL.u1; u += 10) { poolAt(u, PL.v0 + 0.8, 3.6); poolAt(u, PL.v1 - 0.8, 3.6); }
+      for (const v of [gL, gR]) poolAt(gateU, v, 3.3, [1, 0.88, 0.62]);
+      for (let k = 0; k < 4; k++) poolAt(PL.u1 + PL.stairRun * (0.15 + k * 0.24), sc, 2.7, [1, 0.84, 0.55]);
+      poolAt(PL.u0 + 5, (PL.v0 + PL.v1) / 2, 8.5, [1, 0.82, 0.55]); // 정면 앞 넓은 바닥 빛
+      for (let u = PL.u0 + 14; u < PL.u1 - 2; u += 11) poolAt(u, (PL.sv0 + PL.sv1) / 2, 3.8, [1, 0.83, 0.54]);
+      poolMat = nightGlowMat(tex(poolCanvas(), false));
+      poolMesh = new THREE.Mesh(poolBuf.build(), poolMat);
+      poolMesh.name = 'myeongdong-cathedral-pools'; poolMesh.visible = false; g.add(poolMesh);
+      const washBuf = new GeoBuf({ uv: true, color: true });
+      const facadeWash = (u, v0, v1, y0, y1, out = 0.2, col = [1, 0.84, 0.58]) => {
+        const p0 = W(u, v0), p1 = W(u, v1), ox = ax * out, oz = az * out;
+        washBuf.quad(
+          [p0[0] + ox, Y(y0), p0[1] + oz], [p1[0] + ox, Y(y0), p1[1] + oz],
+          [p1[0] + ox, Y(y1), p1[1] + oz], [p0[0] + ox, Y(y1), p0[1] + oz],
+          [0, 0, 1, 1], col, [ax, 0, az],
+        );
+      };
+      facadeWash(uF + 0.04, -TW / 2, TW / 2, 0.15, T_H - 1.5, 0.22); // 종탑 정면
+      for (const s of [-1, 1]) facadeWash(uF - 0.12, s * TW / 2, s * hw, 0.15, AISLE_H + 0.8, 0.2); // 측랑 정면
+      // 종탑·측랑 옆면도 아래만 살짝 (광장에서 옆 실루엣이 덜 어둡게)
+      for (const s of [-1, 1]) {
+        const p0 = W(tu - TW / 2, s * TW / 2), p1 = W(tu + TW / 2, s * TW / 2);
+        const ox = -az * s * 0.18, oz = ax * s * 0.18;
+        washBuf.quad(
+          [p0[0] + ox, Y(0.15), p0[1] + oz], [p1[0] + ox, Y(0.15), p1[1] + oz],
+          [p1[0] + ox, Y(T_H * 0.55), p1[1] + oz], [p0[0] + ox, Y(T_H * 0.55), p0[1] + oz],
+          [0, 0, 1, 1], [1, 0.8, 0.52], [-az * s, 0, ax * s],
+        );
+      }
+      washMat = nightGlowMat(tex(washCanvas(), false));
+      washMesh = new THREE.Mesh(washBuf.build(), washMat);
+      washMesh.name = 'myeongdong-cathedral-wash'; washMesh.visible = false; g.add(washMesh);
+    }
     console.info(`[myeongdong] cathedral plaza ${(PL.u1 - PL.u0).toFixed(0)}×${(PL.v1 - PL.v0).toFixed(0)} m, stairs ${N} × ${rise.toFixed(2)} m, top=${top.toFixed(1)} bottom=${yBot.toFixed(1)}`);
   }
 
@@ -392,8 +466,12 @@ export function createMyeongdongCathedral({ parent, data, land, overlay, atlas =
       stoneMat.emissiveIntensity = v * 0.35;
       goldMat.emissiveIntensity = 0.15 + v * 0.9;
       roofMat.color.set(v > 0.5 ? '#4a5559' : '#7c8a8f');
-      if (lampMat) lampMat.color.set(v > 0.5 ? '#ffd9a0' : '#8a8478');
+      if (lampMat) lampMat.color.set(v > 0.5 ? '#ffe7b8' : '#8a8478');
       if (signMat) signMat.emissiveIntensity = 0.25 + v * 0.8;
+      if (plazaMat) plazaMat.emissiveIntensity = v * 0.14;
+      const on = v > 0.02;
+      if (poolMat) { poolMat.opacity = v * 0.9; if (poolMesh) poolMesh.visible = on; }
+      if (washMat) { washMat.opacity = v * 0.7; if (washMesh) washMesh.visible = on; }
     },
   };
 }
