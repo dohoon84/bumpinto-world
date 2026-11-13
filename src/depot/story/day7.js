@@ -193,7 +193,8 @@ export function createDay7Props({ THREE, scene, keep, cartObj = null, isMobile =
       if (!o) { hud?.remove(); hud = null; return; }
       ensureCss(); if (!hud) { hud = document.createElement('div'); hud.id = 'dp-d7'; document.body.appendChild(hud); }
       const n = o.checks ? Object.values(o.checks).filter(Boolean).length : 0;
-      hud.innerHTML = `<h5><span>본사 감사 체크리스트</span><span>${o.checks ? `${n}/5` : '4개면 통과'}</span></h5><ul>${Object.keys(LBL).map((k) => `<li class="${o.checks ? (o.checks[k] ? 'ok' : (o.result || o.lost?.[k]) ? 'no' : '') : ''}"><span>${LBL[k]}</span><b>${o.checks ? (o.checks[k] ? '✓' : (o.result || o.lost?.[k]) ? '✗' : '') : ''} ${o.vals?.[k] ?? ''}</b></li>`).join('')}</ul>${o.result ? `<div class="stp">${o.result === 'success' ? '통과' : o.result === 'partial' ? '보류' : '미달'}</div>` : ''}`;
+      const LB = o.labels || LBL; hud.classList.toggle('w2', !!o.labels);
+      hud.innerHTML = `<h5><span>${o.title || '본사 감사 체크리스트'}</span><span>${o.checks ? `${n}/5` : '4개면 통과'}</span></h5><ul>${Object.keys(LB).map((k) => `<li class="${o.checks ? (o.checks[k] ? 'ok' : (o.result || o.lost?.[k]) ? 'no' : (o.pending?.[k] ? 'pd' : '')) : ''}"><span>${LB[k]}</span><b>${o.checks ? (o.checks[k] ? '✓' : (o.result || o.lost?.[k]) ? '✗' : '') : ''} ${o.vals?.[k] ?? ''}</b></li>`).join('')}</ul>${o.result ? `<div class="stp">${o.result === 'success' ? '통과' : o.result === 'partial' ? '보류' : '미달'}</div>` : ''}`;
     },
     /** 녹음 게이지 (null 치움) */
     melt(o) {
