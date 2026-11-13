@@ -33,6 +33,7 @@ const route = await page.evaluate((at) => {
   const c = md.cathedral; const f = c.facade;
   return { start: [md.spawn.x, md.spawn.z], wps: [[-10916, -21540], [-10916, -21560], [-10921, -21640], [-10930, -21700], [-10980, -21800], [f[0] + c.axis[0] * 30, f[1] + c.axis[1] * 30], [f[0] + c.axis[0] * 6, f[1] + c.axis[1] * 6]] };
 }, at);
+if (process.env.FROM) { const k = +process.env.FROM; route.start = route.wps[k - 1] || route.start; route.wps = route.wps.slice(k); } // FROM=4 → 명동길부터 성당까지
 await page.evaluate(async ([x, z]) => { const J = window.__jj; await J.corridor?.preload?.(x, z); await J.teleport(x, z); J.wake?.(); }, route.start);
 await page.waitForTimeout(4000);
 // 측정 시작
