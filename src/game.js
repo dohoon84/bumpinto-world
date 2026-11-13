@@ -2975,7 +2975,7 @@ function frame() {
     corridor.update(dt, cPre.x, cPre.z, cam.mode);
     corridor.namsan?.tickPlayer?.(dt, player, cam);
     corridor.hangang?.tickPlayer?.(dt, player, cam);
-    corridor.myeongdong?.tickPlayer?.(dt, player, cam); // [myeongdong]
+    corridor.myeongdong?.tickPlayer?.(dt, player, cam, atmosphere); // [myeongdong] [myeongdong-cathedral] 해 방향·날씨
   }
 
   // 카메라
@@ -3002,6 +3002,10 @@ function frame() {
         const q = boomPoint(P.x, P.z, eye, yaw, pitch, d);
         return corridor.roofAt(q.x, q.z) > q.y + 0.6;
       });
+    }
+    const mdC = corridor?.myeongdong; // [myeongdong-cathedral] 성당 안에서는 붐을 실내 공간 안으로
+    if (mdC?.ready && mdC.inCathedral?.(P.x, P.z)) {
+      dist = shortenBoom(dist, (d) => { const q = boomPoint(P.x, P.z, eye, yaw, pitch, d); return !mdC.camInside(q.x, q.z, q.y); }, { min: 1.2 });
     }
     const bx = Math.sin(yaw), bz = Math.cos(yaw), cp = Math.cos(pitch), sp = Math.sin(pitch), aim = 4;
     const camX = P.x + bx * dist * cp, camZ = P.z + bz * dist * cp;

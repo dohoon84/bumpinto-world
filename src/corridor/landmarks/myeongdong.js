@@ -445,10 +445,16 @@ export async function createMyeongdongAsync(opts = {}, yieldFn = null, slicer = 
       shops: street.shops,
     },
     get poolLightCount() { return 0; },
-    tickPlayer(dt, player) {
+    tickPlayer(dt, player, cam, sky) {
       if (DORM && player?.position && !syncLandmarkDormant(root, boundsDist(A, player.position.x, player.position.z))) return;
       lastP = player?.position || null;
+      cathedral.tickPlayer?.(dt, player, sky); // [myeongdong-cathedral] 실내 보이기 + 해 방향 빛
     },
+    /** [myeongdong-cathedral] 카메라 점이 성당 실내 공간 안인가 (game.js 따라보기 붐 줄이기) */
+    camInside: (x, z, y) => !!cathedral.camInside?.(x, z, y),
+    inCathedral: (x, z) => !!cathedral.playerInside?.(x, z),
+    cathedralAt: (u, v) => cathedral.at?.(u, v) ?? null,
+    get cathedralInterior() { return cathedral.interior || null; },
     update(dt) {
       // [myeongdong] 케이블카 길안내 화살표가 명동 골목을 따라가게 (남산이 명동보다 늦게 지어져도 한 번만)
       if (!guideLinesSent && namsan?.cableGuide?.addLines) { guideLinesSent = true; namsan.cableGuide.addLines(ways.map((w) => w.pts)); }

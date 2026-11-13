@@ -16,6 +16,14 @@ const VIEWS0 = [
   { name: 'cathedral', px: 'cath', back: 22, side: -3.5, pitch: -0.18, dist: 10 },
   { name: 'cathedral-stairs', px: 'cath', back: 52, side: -3.5, pitch: -0.14, dist: 11 },
   { name: 'cathedral-aerial', px: 'cath', back: 10, ov: true, dist: 95, pitch: 0.55, yawOff: 0.5 },
+  // [myeongdong-cathedral] 옆·뒤 공중 + 정문 앞 + 실내 (u,v = 성당 축 좌표, 문자열이면 F.<이름> 식)
+  { name: 'cathedral-side', px: 'cath', back: 10, ov: true, dist: 110, pitch: 0.42, yawOff: 1.25 },
+  { name: 'cathedral-door', px: 'cathIn', u: 'F.uF+9', v: 0, tu: 'F.uF', tv: 0, pitch: -0.22, dist: 6 },
+  { name: 'in-nave', px: 'cathIn', u: 'F.uBF-1.5', v: 0, tu: 'F.uC-4', tv: 0, pitch: -0.06, dist: 4.5, inside: true },
+  { name: 'in-vault', px: 'cathIn', u: '(F.uT+F.uBF)/2', v: 0, tu: 'F.uC', tv: 0, pitch: -1.05, dist: 3.2, inside: true },
+  { name: 'in-floorlight', px: 'cathPatch', pitch: 0.62, dist: 4.5, inside: true },
+  { name: 'in-rose', px: 'cathIn', u: 'F.uBF-7', v: 0, tu: 'F.uF', tv: 0, pitch: -0.5, dist: 2.5, inside: true },
+  { name: 'in-apse', px: 'cathIn', u: 'F.uT+4', v: 0, tu: 'F.uC-6', tv: 0, pitch: -0.32, dist: 3.5, inside: true },
   // 낮에 열린 회오리감자 노점 클로즈업 (닫힌 노점을 비추지 않게 day+kind 지정)
   { name: 'food-closeup', px: 'stallSide', kind: 2, day: true, near: [-10916, -21580], side: 1.7, yawOff: -0.35, pitch: 0.38, dist: 4.0 },
   { name: 'cable-link', px: -11030, pz: -21085, yaw: 0.35, pitch: 0.25, dist: 12 },
@@ -58,6 +66,19 @@ for (const v of VIEWS) {
     if (px === 'exitSign') { // [text-orientation] 명동역 출구 표지판 앞(back>0) / 뒤(back<0)에서. ref = 출구 번호
       const e = md.station.exits.find((q) => String(q.ref) === String(v.ref || 6)) || md.station.exits[0];
       const b = v.back ?? 7; px = e.x + e.ax * b + (v.side || 0) * -e.az; pz = e.z + e.az * b + (v.side || 0) * e.ax; yaw = toward(px, pz, e.x, e.z) + (v.yawOff || 0);
+    }
+    if (px === 'cathIn' || px === 'cathPatch') { // [myeongdong-cathedral] 성당 축 좌표
+      const F = md.cathedral.frame; const U = (q) => (typeof q === 'number' ? q : Function('F', 'return ' + q)(F));
+      md.cathedralInterior?.setVisible?.(true);
+      if (px === 'cathPatch') {
+        const c = md.cathedralInterior?.brightPatch?.(); // 가장 밝은 빛 조각 (없으면 측랑 바닥)
+        const A = md.cathedralAt(F.uT + F.BAY * 2.5, 6.5), T = c || md.cathedralAt(F.uT + F.BAY * 2.5, 11);
+        const dx = T[0] - A[0], dz = T[1] - A[1], d = Math.hypot(dx, dz) || 1;
+        px = T[0] - dx / d * 3.2; pz = T[1] - dz / d * 3.2; yaw = toward(px, pz, T[0], T[1]) + (v.yawOff || 0);
+      } else {
+        const [x, z] = md.cathedralAt(U(v.u), U(v.v)), [tx, tz] = md.cathedralAt(U(v.tu), U(v.tv));
+        px = x; pz = z; yaw = toward(px, pz, tx, tz) + (v.yawOff || 0);
+      }
     }
     if (px === 'stall') { const st = md.hooks.stalls[v.i || 0]; px = st.x + (v.ox || 0); pz = st.z + (v.oz || 0); }
     if (px === 'stallSide') { // [myeongdong-detail] 노점 옆(보도)에서 판매대를 내려다보기. kind 를 주면 그 음식 노점
