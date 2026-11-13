@@ -140,6 +140,7 @@ export function wrapLandmark(meta) {
     camInside: (...a) => impl?.camInside?.(...a) ?? false, // [myeongdong-cathedral] 성당 실내 카메라
     inCathedral: (...a) => impl?.inCathedral?.(...a) ?? false,
     cathedralAt: (...a) => impl?.cathedralAt?.(...a) ?? null,
+    cathedralUV: (...a) => impl?.cathedralUV?.(...a) ?? null,
     get cathedralInterior() { return impl?.cathedralInterior ?? null; },
     get hooks() { return impl?.hooks ?? null; }, // [myeongdong] 미니게임 A·C 훅
     get face() { return impl?.face ?? meta.face ?? null; }, // [myeongdong] 도착 때 카메라 방향

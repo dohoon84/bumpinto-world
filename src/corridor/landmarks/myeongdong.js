@@ -454,6 +454,7 @@ export async function createMyeongdongAsync(opts = {}, yieldFn = null, slicer = 
     camInside: (x, z, y) => !!cathedral.camInside?.(x, z, y),
     inCathedral: (x, z) => !!cathedral.playerInside?.(x, z),
     cathedralAt: (u, v) => cathedral.at?.(u, v) ?? null,
+    cathedralUV: (x, z) => cathedral.uv?.(x, z) ?? null,
     get cathedralInterior() { return cathedral.interior || null; },
     update(dt) {
       // [myeongdong] 케이블카 길안내 화살표가 명동 골목을 따라가게 (남산이 명동보다 늦게 지어져도 한 번만)

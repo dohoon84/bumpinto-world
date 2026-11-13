@@ -776,6 +776,21 @@ const bp24Nav = mountBp24Nav({ // [bp24nav] ?bp24nav=0 이면 null. 매장 아�
 const presence = createPresence({ station: st, region });
 if (npcs.guard) presence.setGuard?.(npcs.guard);
 const remotes = new RemotePlayers(scene, overlay, presence, () => selfPos(), (t) => myBubble.say(t, 6000), terrain?.getGroundHeight, emoteFx); // [terrain] 원격 플레이어도 지형 높이
+// [myeongdong-cathedral] 성당 실내 전용 레이어(1). 실내는 창·벽이 닫혀 있어 바깥 도시를 그릴 필요가 없다 → draw 수를 실내 몫으로 줄인다.
+const CATH_LAYER = 1;
+let cathLayerReady = null;
+function layerAll(o) { o.traverse((c) => c.layers.enable(CATH_LAYER)); }
+function cathedralLayer() {
+  const md = corridor?.myeongdong;
+  if (cam.mode !== 'follow' || !md?.ready || !md.camInside?.(camera.position.x, camera.position.z, camera.position.y)) return false;
+  const cg = md.cathedralInterior?.group?.parent;
+  if (!cg) return false;
+  if (cathLayerReady !== cg) { cathLayerReady = cg; layerAll(cg); for (const c of scene.children) if (c.isLight) c.layers.enable(CATH_LAYER); if (skyDome) skyDome.layers.enable(CATH_LAYER); }
+  layerAll(player); // 옷·장비가 바뀌어도 따라가게 매번
+  for (const p of remotes.peers.values()) { layerAll(p.mesh); layerAll(p.bikeMesh); }
+  camera.layers.set(CATH_LAYER);
+  return true;
+}
 const titleLayer = titlesEnabled(params) ? mountTitles({ renderer, camera, overlay, nameTag, remotes, presence, params }) : null; // [weekly-titles] 머리 위 칭호(아틀라스 메시 1, ?titles=0 끔, ?titlePreview=1 미리보기)
 if (titleLayer) overlay.getOccluders = () => titleLayer.boxes || [];
 // [bike] 관리자 크루저 (인벤토리에서 어느 지역이든 소환/수납 가능, ?bike=0 끔)
@@ -3074,7 +3089,9 @@ function frame() {
   // 원점에 고정된 r=3000 하늘은 남산(약 23 km) 밖에서 보이지 않는다. 카메라를 따라가게 한다.
   if (skyDome) skyDome.position.copy(camera.position);
   if (!shouldSkipLandmarkPaint()) {
+    const inCath = cathedralLayer(); // [myeongdong-cathedral] 카메라가 성당 안이면 성당·아바타·조명만 그린다(창은 불투명 → 바깥은 안 보임)
     renderer.render(scene, camera);
+    if (inCath) camera.layers.set(0);
     overlay.update(innerWidth, innerHeight); titleLayer?.render(renderer, innerWidth, innerHeight);
     emoteFx.update(dt, innerWidth, innerHeight);
   }

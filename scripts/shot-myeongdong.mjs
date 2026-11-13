@@ -6,6 +6,7 @@ import { chromium } from 'playwright';
 const [PORT = '5203', HOUR = '14', W = '1280', H = '800', ONLY = ''] = process.argv.slice(2);
 const OUT = process.env.OUT || 'artifacts/myeongdong';
 const MOBILE = +W < 900;
+const WEATHER = process.env.WEATHER || 'clear', WTAG = WEATHER === 'clear' ? '' : '-' + WEATHER; // [myeongdong-cathedral] 비 샷
 // 시점: 플레이어 위치(px,pz) + 카메라 yaw(앞 = (-sin, -cos)) / pitch / dist. ov = 공중(overview)
 const VIEWS0 = [
   { name: 'station-exit', px: 'spawn', yaw: 'face', pitch: 0.08, dist: 7.5 },
@@ -21,8 +22,8 @@ const VIEWS0 = [
   { name: 'cathedral-door', px: 'cathIn', u: 'F.uF+9', v: 0, tu: 'F.uF', tv: 0, pitch: -0.22, dist: 6 },
   { name: 'in-nave', px: 'cathIn', u: 'F.uBF-1.5', v: 0, tu: 'F.uC-4', tv: 0, pitch: -0.06, dist: 4.5, inside: true },
   { name: 'in-vault', px: 'cathIn', u: '(F.uT+F.uBF)/2', v: 0, tu: 'F.uC', tv: 0, pitch: -1.05, dist: 3.2, inside: true },
-  { name: 'in-floorlight', px: 'cathPatch', pitch: 0.62, dist: 4.5, inside: true },
-  { name: 'in-rose', px: 'cathIn', u: 'F.uBF-7', v: 0, tu: 'F.uF', tv: 0, pitch: -0.5, dist: 2.5, inside: true },
+  { name: 'in-floorlight', px: 'cathPatch', pitch: 0.42, dist: 3, inside: true },
+  { name: 'in-rose', px: 'cathIn', u: 'F.uBF-11', v: 0, tu: 'F.uF', tv: 0, pitch: -0.42, dist: 2.2, inside: true },
   { name: 'in-apse', px: 'cathIn', u: 'F.uT+4', v: 0, tu: 'F.uC-6', tv: 0, pitch: -0.32, dist: 3.5, inside: true },
   // 낮에 열린 회오리감자 노점 클로즈업 (닫힌 노점을 비추지 않게 day+kind 지정)
   { name: 'food-closeup', px: 'stallSide', kind: 2, day: true, near: [-10916, -21580], side: 1.7, yawOff: -0.35, pitch: 0.38, dist: 4.0 },
@@ -39,7 +40,7 @@ if (process.env.BREAKDOWN) await page.addInitScript((d) => { window.__MD_BREAKDO
 const errors = [], warns = [];
 page.on('pageerror', (e) => errors.push('pageerror: ' + e.message));
 page.on('console', (m) => { const t = m.text(); if (m.type() === 'error') errors.push(t); else if (/myeongdong/.test(t)) warns.push(t); });
-const q = `ws=mock&at=myeongdong&hour=${HOUR}&weather=clear&shot=1&noticePopup=0&controlscard=0${MOBILE ? '&mobile=1' : ''}${process.env.EXTRA ? '&' + process.env.EXTRA : ''}`;
+const q = `ws=mock&at=myeongdong&hour=${HOUR}&weather=${WEATHER}&shot=1&noticePopup=0&controlscard=0${MOBILE ? '&mobile=1' : ''}${process.env.EXTRA ? '&' + process.env.EXTRA : ''}`;
 await page.goto(`http://127.0.0.1:${PORT}/?${q}`);
 await page.waitForFunction(() => window.__jj?.ready && window.__jj?.myeongdong?.ready, null, { timeout: 240000 });
 await page.waitForTimeout(5000);
@@ -54,6 +55,7 @@ for (const v of VIEWS) {
     if (px === 'spawn') { px = md.spawn.x; pz = md.spawn.z; }
     if (px === 'ntower') { const t = J.namsan?.spawn; px = t.x; pz = t.z; }
     if (yaw === 'face') yaw = md.face;
+    if (v.to && typeof px === 'number') yaw = Math.atan2(-(v.to[0] - px), -(v.to[1] - pz)) + (v.yawOff || 0); // 바라볼 점 [x,z]
     const toward = (fx, fz, tx, tz) => Math.atan2(-(tx - fx), -(tz - fz));
     if (px === 'cath') { const c = md.cathedral; const f = c.facade; const k = v.back || 0; const sd = v.side || 0; px = f[0] + c.axis[0] * k - c.axis[1] * sd; pz = f[1] + c.axis[1] * k + c.axis[0] * sd; yaw = toward(px, pz, c.x, c.z) + (v.yawOff || 0); }
     if (px === 'cableLower') { // [myeongdong-detail] 남산 케이블카 하부정류장 입구 앞
@@ -71,10 +73,10 @@ for (const v of VIEWS) {
       const F = md.cathedral.frame; const U = (q) => (typeof q === 'number' ? q : Function('F', 'return ' + q)(F));
       md.cathedralInterior?.setVisible?.(true);
       if (px === 'cathPatch') {
-        const c = md.cathedralInterior?.brightPatch?.(); // 가장 밝은 빛 조각 (없으면 측랑 바닥)
-        const A = md.cathedralAt(F.uT + F.BAY * 2.5, 6.5), T = c || md.cathedralAt(F.uT + F.BAY * 2.5, 11);
-        const dx = T[0] - A[0], dz = T[1] - A[1], d = Math.hypot(dx, dz) || 1;
-        px = T[0] - dx / d * 3.2; pz = T[1] - dz / d * 3.2; yaw = toward(px, pz, T[0], T[1]) + (v.yawOff || 0);
+        // 가장 밝은 바닥 빛 조각 (없으면 측랑 바닥). 플레이어는 같은 u 의 가운데 통로(v=0)에서 그쪽을 내려다본다
+        const c = md.cathedralInterior?.brightPatch?.(), T = c || md.cathedralAt(F.uT + F.BAY * 2.5, 11);
+        const [tu2, tv2] = md.cathedralUV(T[0], T[1]); const A = md.cathedralAt(tu2 + 5, 0); // 가운데 통로(의자 없음)에서 비스듬히
+        px = A[0]; pz = A[1]; yaw = toward(px, pz, T[0], T[1]) + (v.yawOff || 0);
       } else {
         const [x, z] = md.cathedralAt(U(v.u), U(v.v)), [tx, tz] = md.cathedralAt(U(v.tu), U(v.tv));
         px = x; pz = z; yaw = toward(px, pz, tx, tz) + (v.yawOff || 0);
@@ -130,12 +132,12 @@ for (const v of VIEWS) {
   });
   res.views[v.name] = { ...info, ...m };
   await page.evaluate(() => window.__jj.wake?.()); await page.waitForTimeout(1500); // 느린 swiftshader 에서 쌓인 자동 AFK(Zzz) 풀기
-  await page.screenshot({ path: `${OUT}/${W}x${H}-h${HOUR}-${v.name}.png` });
+  await page.screenshot({ path: `${OUT}/${W}x${H}-h${HOUR}${WTAG}-${v.name}.png` });
   console.log(v.name, JSON.stringify(res.views[v.name]));
 }
 res.stats = await page.evaluate(() => window.__jj.myeongdong?.stats?.());
 res.errors = errors.slice(0, 20);
-fs.writeFileSync(`${OUT}/metrics-${W}x${H}-h${HOUR}.json`, JSON.stringify(res, null, 1));
+fs.mkdirSync(OUT, { recursive: true }); fs.writeFileSync(`${OUT}/metrics-${W}x${H}-h${HOUR}${WTAG}.json`, JSON.stringify(res, null, 1));
 console.log('stats', JSON.stringify(res.stats));
 console.log('build', warns.slice(0, 5));
 console.log('errors', res.errors);

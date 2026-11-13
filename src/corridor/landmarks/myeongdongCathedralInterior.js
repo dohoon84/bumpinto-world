@@ -161,7 +161,7 @@ export function createCathedralInterior({ parent, L, glassTex, atlas }) {
       const a = [u - tu * w / 2 + iu * off, v - tv * w / 2 + iv * off], b = [u + tu * w / 2 + iu * off, v + tv * w / 2 + iv * off];
       const pa0 = P(a[0], a[1], y0), pb0 = P(b[0], b[1], y0), pb1 = P(b[0], b[1], y1), pa1 = P(a[0], a[1], y1);
       gl.quad(pa0, pb0, pb1, pa1, cell);
-      wins.push({ c: [[a[0], a[1], y0], [b[0], b[1], y0], [b[0], b[1], y1], [a[0], a[1], y1]], n: [-iu, -iv], cell, tint, u, v, y: (y0 + y1) / 2 });
+      wins.push({ c: [[a[0], a[1], y0], [b[0], b[1], y0], [b[0], b[1], y1], [a[0], a[1], y1]], n: [-iu, -iv], cell, tint, u, v, y: (y0 + y1) / 2, big: Math.min(1, Math.sqrt(6 / Math.max(1e-3, Math.hypot(b[0] - a[0], b[1] - a[1]) * (y1 - y0)))) });
       if (reveal > 0) { // 창 둘레 깊이(돌 틀)
         const r = reveal, A2 = [a[0] + iu * r - tu * 0.12, a[1] + iv * r - tv * 0.12], B2 = [b[0] + iu * r + tu * 0.12, b[1] + iv * r + tv * 0.12];
         quad4([a[0], a[1], y0], [a[0], a[1], y1], [A2[0], A2[1], y1 + 0.1], [A2[0], A2[1], y0 - 0.1], PLASTER);
@@ -560,14 +560,14 @@ export function createCathedralInterior({ parent, L, glassTex, atlas }) {
     const sun = dayK * (wet ? 0.12 : clearK);
     const key = `${sL[0].toFixed(3)},${sL[1].toFixed(3)},${sL[2].toFixed(3)},${sun.toFixed(2)}`;
     if (key === dyn.lastKey) return; dyn.lastKey = key;
-    const rayK = wet ? 0 : sun * 0.032;
+    const rayK = wet ? 0 : sun * 0.024;
     dyn.patchMesh.visible = sun > 0.01; dyn.rayMesh.visible = rayK > 0.003;
     const { wins, pPos, pCol, rPos, rCol } = dyn;
     dyn.best = null; let bestK = 0;
     wins.forEach((w, i) => {
       const cos = sL[0] * w.n[0] + sL[1] * w.n[1];
       const lit = sun > 0.01 && sL[2] > 0.02 && cos > 0.04 && projectWin(w, sL, corners);
-      const k = lit ? sun * smooth(0.04, 0.4, cos) * (projKind === 'y' ? 0.85 : 0.5) : 0;
+      const k = lit ? sun * smooth(0.04, 0.4, cos) * (projKind === 'y' ? 0.62 : 0.42) * w.big : 0; // 큰 창(삼연창·장미창)은 조각이 커서 겹치면 하얗게 뜬다 → 면적으로 눌러 준다
       if (lit && projKind === 'y') { // 열린 바닥(장의자 밖)에 떨어진 조각을 먼저
         const bx = (corners[0][0] + corners[2][0]) / 2, bz = (corners[0][2] + corners[2][2]) / 2, [bu, bv] = L.toUV(bx, bz);
         const score = k * (isBlocked(bu, bv, 0.6) ? 0.3 : 1); if (score > bestK) { bestK = score; dyn.best = [bx, bz]; }

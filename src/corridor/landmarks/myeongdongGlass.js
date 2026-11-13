@@ -182,7 +182,7 @@ export function glassAtlas() {
   // 흐린 사본 (빛 조각): 작게 줄여 퍼지게 + 색을 진하게
   const b = document.createElement('canvas'); b.width = 512; b.height = 384;
   const bg = b.getContext('2d');
-  bg.filter = 'blur(3px) saturate(1.6)';
+  bg.filter = 'blur(1.6px) saturate(2.4) brightness(0.92)';
   bg.drawImage(c, 0, 0, 512, 384);
   bg.filter = 'none';
   cache = {

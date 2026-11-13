@@ -639,6 +639,7 @@ export function createMyeongdongCathedral({ parent, data, land, overlay, atlas =
     interior: inner,
     /** 축 좌표 → 세계 (샷 스크립트용) */
     at: (u, v) => W(u, v),
+    uv: (x, z) => toUV(x, z),
     isBlocked(x, z, r = 0.4) {
       if (Math.hypot(x - cx, z - cz) > (uMax - uMin) + 70) return false;
       const [u, v] = toUV(x, z);
