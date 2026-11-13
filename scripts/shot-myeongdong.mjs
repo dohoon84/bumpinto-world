@@ -35,6 +35,9 @@ const q = `ws=mock&at=myeongdong&hour=${HOUR}&weather=clear&shot=1&noticePopup=0
 await page.goto(`http://127.0.0.1:${PORT}/?${q}`);
 await page.waitForFunction(() => window.__jj?.ready && window.__jj?.myeongdong?.ready, null, { timeout: 240000 });
 await page.waitForTimeout(5000);
+// 소프트웨어 GPU 에서는 한강·남산을 짓는 동안 그림을 거의 건너뛴다 → 다 지어 그림이 다시 돌 때까지 기다린다(묵은 화면 방지)
+const waitPaint = async () => { for (let i = 0; i < 150; i++) { const f = await page.evaluate(async () => { const R = window.__jj.renderer; const a = R.info.render.frame; await new Promise((r) => setTimeout(r, 1500)); return R.info.render.frame - a; }); if (f >= 2) return; } };
+await waitPaint();
 const res = { q, views: {}, build: warns };
 for (const v of VIEWS) {
   const info = await page.evaluate(async (v) => {
@@ -73,6 +76,7 @@ for (const v of VIEWS) {
     return { px: +px.toFixed?.(1), pz: +pz.toFixed?.(1), yaw: typeof yaw === 'number' ? +yaw.toFixed(4) : yaw, y: +J.player?.position.y.toFixed(2) };
   }, v);
   await page.waitForTimeout(4000);
+  await waitPaint();
   const m = await page.evaluate(async () => {
     const R = window.__jj.renderer; await new Promise((ok) => requestAnimationFrame(() => requestAnimationFrame(ok)));
     const info = R.info;

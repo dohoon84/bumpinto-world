@@ -117,7 +117,9 @@ function completeNamsan({ scene, overlay, terrain, osm, city, root, land, tower,
   let cableGuide = null;
   if (guideOn && car) {
     try {
-      cableGuide = createNamsanCableGuide({ parent: root, cable: car, ways: roads.ways || [], city, heightAt: land.heightAt, surfaceY: (x, z, refY) => surfaceY(x, z, refY) });
+      // [myeongdong] 명동 상자 안에서는 명동 바닥(보도·계단·성당 마당) 위에 화살표를 깐다. 예전엔 남산 지형 높이(약 9 m 아래)라 바닥에 묻혀 안 보였다.
+      const mdFloor = terrain?.getGroundHeight ? (x, z) => (myeongdongClaims(x, z, 0, MYEONGDONG_BOUNDS) ? terrain.getGroundHeight(x, z) : null) : null;
+      cableGuide = createNamsanCableGuide({ parent: root, cable: car, ways: roads.ways || [], city, heightAt: land.heightAt, surfaceY: (x, z, refY) => surfaceY(x, z, refY), floorAt: mdFloor });
     } catch (e) { console.warn('[cableguide] off:', e?.message || e); cableGuide = null; }
   }
 

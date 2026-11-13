@@ -334,7 +334,7 @@ function createDom(onTap) {
 }
 
 // ---------------------------------------------------------------- main
-export function createNamsanCableGuide({ parent, cable, ways = [], city = null, heightAt, surfaceY = null } = {}) {
+export function createNamsanCableGuide({ parent, cable, ways = [], city = null, heightAt, surfaceY = null, floorAt = null } = {}) {
   const info = cable?.stationInfo || [];
   const group = new THREE.Group();
   group.name = 'namsan-cable-guide';
@@ -348,9 +348,14 @@ export function createNamsanCableGuide({ parent, cable, ways = [], city = null, 
     const key = Math.round(x * 20) * 2097152 + Math.round(z * 20);
     const c = gCache.get(key);
     if (c !== undefined) return c;
-    const h = heightAt(x, z);
-    const s = surfaceY ? surfaceY(x, z, h + 1.4) : null;
-    const y = Number.isFinite(s) ? s : h;
+    const f = floorAt ? floorAt(x, z) : null; // [myeongdong] 명동 바닥이 있으면 그 위
+    let y;
+    if (Number.isFinite(f)) y = f + 0.12; // 명동 골목 포장(+0.06~0.1) 위로
+    else {
+      const h = heightAt(x, z);
+      const s = surfaceY ? surfaceY(x, z, h + 1.4) : null;
+      y = Number.isFinite(s) ? s : h;
+    }
     if (gCache.size > 40000) gCache.clear();
     gCache.set(key, y);
     return y;
@@ -371,7 +376,7 @@ export function createNamsanCableGuide({ parent, cable, ways = [], city = null, 
   const lines = [];
   for (const w of ways) if (w?.pts?.length >= 2) lines.push(w.pts);
   for (const r of city?.roads || []) if (r?.p?.length >= 2) lines.push(r.p);
-  const graph = buildCableGraph(lines, stations.map((s) => s.out));
+  let graph = buildCableGraph(lines, stations.map((s) => s.out));
 
   // ---- 바닥 화살표 (본색 + 짙은 테두리). 비탈면 법선에 붙이고, 낮에도 대비가 나오게.
   const arrowMat = new THREE.MeshBasicMaterial({
@@ -673,9 +678,18 @@ export function createNamsanCableGuide({ parent, cable, ways = [], city = null, 
     tactMat.emissiveIntensity = 0.25 + night * 0.45;
   }
 
+  // [myeongdong] 나중에 지어진 명동 골목을 길 그래프에 더한다 → 명동에서 화살표가 건물을 뚫지 않고 골목을 따라간다
+  function addLines(extra) {
+    if (!extra?.length) return;
+    for (const p of extra) if (p?.length >= 2) lines.push(p);
+    graph = buildCableGraph(lines, stations.map((s) => s.out));
+    pathKey = ''; repathT = 0; gCache.clear();
+  }
+
   return {
     group,
-    graph,
+    get graph() { return graph; },
+    addLines,
     stations,
     update,
     setNight,

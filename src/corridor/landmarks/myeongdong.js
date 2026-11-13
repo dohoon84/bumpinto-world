@@ -306,7 +306,7 @@ export async function createMyeongdongAsync(opts = {}, yieldFn = null, slicer = 
     const g = heightAt(x, z);
     return c != null && c > g ? c : g;
   }
-  let unregSurface = null;
+  let unregSurface = null, guideLinesSent = false;
   if (terrain?.addGroundSurface) unregSurface = terrain.addGroundSurface((x, z, refY) => surfaceY(x, z, refY));
   function isBlocked(x, z, r = 0.4) {
     if (!land.inBox(x, z, 2)) return false;
@@ -377,6 +377,8 @@ export async function createMyeongdongAsync(opts = {}, yieldFn = null, slicer = 
       lastP = player?.position || null;
     },
     update(dt) {
+      // [myeongdong] 케이블카 길안내 화살표가 명동 골목을 따라가게 (남산이 명동보다 늦게 지어져도 한 번만)
+      if (!guideLinesSent && namsan?.cableGuide?.addLines) { guideLinesSent = true; namsan.cableGuide.addLines(ways.map((w) => w.pts)); }
       if (DORM && !root.visible) return;
       street.update(dt, lastP);
       station.update(dt, lastP);
