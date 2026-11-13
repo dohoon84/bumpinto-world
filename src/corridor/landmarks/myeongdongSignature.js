@@ -437,6 +437,20 @@ function buildNamdaemun(ctx) {
   }
   buf.box(gx, sy1 + 0.75, gz, 0.4, 1.3, 2.6, ry, uvOf(R.stone), hex3('#1f2c7a'));
   buf.box(gx, sy1 + 0.75, gz, 0.5, 0.5, 1.6, ry, uvOf(R.stone), hex3('#ffd23f'));
+  // [md-market] 시장 골목 위로 가로지르는 빨강·노랑·파랑 삼각 깃발 줄 + 붉은 등 (멀리서도 '시장 골목'으로 읽히게). 충돌 없음(머리 위 5 m)
+  { const fl = [hex3('#e63946'), hex3('#ffd23f'), hex3('#2a6fdb'), hex3('#ffffff'), hex3('#2a9d8f')];
+    for (let k = 1; k <= 7; k++) {
+      const d = 9 * k, cx = gx + tx * d, cz = gz + tz * d; if (cx < -11520) break;
+      const hw = Math.max(2.6, half - 0.8), yy = y0 + 6.2;
+      buf.box(cx, yy + 0.05, cz, 0.05, 0.05, 2 * hw, ry, uvOf(R.stone), hex3('#333333'));
+      for (let i = 0; i < 9; i++) {
+        const f = -hw + (2 * hw) * (i + 0.5) / 9, px = cx + nx * f, pz = cz + nz * f, sag = 0.5 * (1 - (f / hw) ** 2);
+        const A = [px - nx * 0.5, yy, pz - nz * 0.5], B = [px + nx * 0.5, A[1], pz + nz * 0.5], C = [px, A[1] - 1.1 - sag * 0.2, pz];
+        buf.raw([...A, ...B, ...C], [0, 1, 2, 0, 2, 1], [tx, 0, tz, tx, 0, tz, tx, 0, tz], [0.5, 0.5, 0.5, 0.5, 0.5, 0.5], fl[(i + k) % fl.length]);
+      }
+      if (k % 2) for (const f of [-hw * 0.5, 0, hw * 0.5]) buf.box(cx + nx * f, yy - 1.6, cz + nz * f, 0.5, 0.75, 0.5, ry, uvOf(R.stone), hex3('#d62828'));
+    }
+  }
   labels.push({ text: '🏮 남대문시장 Namdaemun Market', x: gx, z: gz, y: y0 + 11, maxDist: 1800, minDist: 10, cls: 'label landmark' });
   // 시장 골목 노점: 남대문시장길 양쪽 (게이트 안쪽부터 바깥 띠 끝까지)
   const ids = new Set([301285279, 78503333, 788296725, 382947009]);
