@@ -114,11 +114,11 @@ export function createVersusHud({ isMobile = false } = {}) {
     show(o) {
       if (typeof document === 'undefined') return;
       if (!o) { el?.remove(); el = null; css?.remove(); css = null; return; }
-      if (!css) { css = document.createElement('style'); css.id = 'dp-vs-css'; css.textContent = `#dp-vs{position:fixed;left:50%;top:${isMobile ? 6 : 14}px;transform:translateX(-50%);z-index:30;display:flex;gap:${isMobile ? 8 : 14}px;align-items:center;padding:${isMobile ? '4px 10px' : '8px 16px'};border-radius:14px;background:rgba(18,32,28,.86);color:#f3eada;font:700 ${isMobile ? 11 : 14}px Pretendard,system-ui,sans-serif;box-shadow:0 4px 0 rgba(0,0,0,.25);pointer-events:none;white-space:nowrap}
-#dp-vs .sd{display:flex;align-items:center;gap:6px}#dp-vs i{display:inline-block;width:${isMobile ? 8 : 11}px;height:${isMobile ? 8 : 11}px;border-radius:3px;background:rgba(255,255,255,.18);margin-right:2px}
+      if (!css) { css = document.createElement('style'); css.id = 'dp-vs-css'; css.textContent = `#dp-vs{position:fixed;left:50%;top:${isMobile ? 6 : 74}px;transform:translateX(-50%);z-index:62;display:flex;gap:${isMobile ? 6 : 14}px;align-items:center;padding:${isMobile ? '3px 9px' : '8px 16px'};border-radius:14px;background:rgba(18,32,28,.86);color:#f3eada;font:700 ${isMobile ? 11 : 14}px Pretendard,system-ui,sans-serif;box-shadow:0 4px 0 rgba(0,0,0,.25);pointer-events:none;white-space:nowrap}
+#dp-vs .sd{display:flex;align-items:center;gap:${isMobile ? 3 : 6}px}#dp-vs i{display:inline-block;width:${isMobile ? 7 : 11}px;height:${isMobile ? 7 : 11}px;border-radius:3px;background:rgba(255,255,255,.18);margin-right:2px}
 #dp-vs i.me{background:#35e07a}#dp-vs i.rv{background:#a675e8}#dp-vs .vs{color:#f2d21e;font-weight:900}#dp-vs .t{opacity:.85;font-variant-numeric:tabular-nums}#dp-vs .go{color:#35e07a}`; document.head.appendChild(css); }
       if (!el) { el = document.createElement('div'); el.id = 'dp-vs'; document.body.appendChild(el); }
-      el.innerHTML = o.count > 0 ? `<span class="vs">${o.count}</span>` : `<span class="sd">나 ${dots(o.me, 6, 'me')}</span><span class="vs">VS</span><span class="sd">${o.rivalName || '팀장'} ${dots(o.rival, 6, 'rv')}</span><span class="t">${o.rivalDone ? '팀장 계산 끝!' : `팀장 계산까지 ~${mm(o.rivalLeft)}`} · 남은 ${mm(o.left)}</span>`;
+      el.innerHTML = o.count > 0 ? `<span class="vs">${o.count}</span>` : `<span class="sd">나 ${dots(o.me, 6, 'me')}</span><span class="vs">VS</span><span class="sd">${o.rivalName || '팀장'} ${dots(o.rival, 6, 'rv')}</span><span class="t">${o.rivalDone ? '팀장 계산 끝!' : isMobile ? `팀장 ~${mm(o.rivalLeft)}` : `팀장 계산까지 ~${mm(o.rivalLeft)}`} · 남은 ${mm(o.left)}</span>`;
     },
     get on() { return !!el; },
     dispose() { el?.remove(); el = null; css?.remove(); css = null; },

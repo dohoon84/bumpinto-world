@@ -1179,7 +1179,7 @@ export function createStory(ctx) {
   function noteE23(m) { const tv = now() - m.tv0; return tv < 0 ? '셋, 둘, 하나…' : `목록 ${slotsNow()}/6 · 깨진 알 ${Math.max(0, staff.S.eggsToday - m.base.eggs)} · 보라 카트 충돌 ${m.rivalHits} · 남은 ${mmss(m.limit - tv)}`; }
   function tickE23(m, t, dt) {
     const tv = now() - m.tv0;
-    if (tv < 0) { if ((m.hudT -= dt) <= 0 || m.hudT == null) { m.hudT = 0.2; vsHud.show({ count: Math.ceil(-tv) }); } return; }
+    if (tv < 0) { if (!((m.hudT = (m.hudT || 0) - (dt || 0)) > 0)) { m.hudT = 0.2; vsHud.show({ count: Math.ceil(-tv) }); } return; }
     const R = placeRivals(m, tv, !lock.vn);
     if (!m.bossDone && tv >= m.bossDoneT) { m.bossDone = true; const b = R[m.ids.indexOf('boss')]; sfx.cue('rival-checkout', { pos: { x: b?.x || 38, y: 1, z: b?.z || 12 } }); vn.toast({ face: face('rivalboss'), name: nameOf('rivalboss')[0], text: '(딸깍) 계산 끝. 손님은요?', ms: 2600 }); }
     if (st.hasCart && !lock.vn) { // 보라 카트 접촉: 같은 카트 1초 안 연속은 1번
@@ -1191,7 +1191,7 @@ export function createStory(ctx) {
       });
     }
     if (m.aud) { const S = m.aud.step(dt, posNow()); d7.auditor({ x: S.x, z: S.z, yaw: S.yaw, v: S.v }); }
-    if ((m.hudT -= dt) <= 0 || m.hudT == null) { m.hudT = 0.2; const b = R[m.ids.indexOf('boss')]; vsHud.show({ me: slotsNow(), rival: b?.list || 0, rivalName: nameOf('rivalboss')[0].replace(/ 팀장$/, ''), rivalLeft: m.bossDoneT - tv, rivalDone: tv >= m.bossDoneT, left: m.limit - tv }); }
+    if (!((m.hudT = (m.hudT || 0) - (dt || 0)) > 0)) { m.hudT = 0.2; const b = R[m.ids.indexOf('boss')]; vsHud.show({ me: slotsNow(), rival: b?.list || 0, rivalName: nameOf('rivalboss')[0].replace(/ 팀장$/, ''), rivalLeft: m.bossDoneT - tv, rivalDone: tv >= m.bossDoneT, left: m.limit - tv }); }
     const lt = m.limit - tv; if (lt < 10 && lt > 0 && Math.floor(lt) !== m.tickS) { m.tickS = Math.floor(lt); sfx.cue('timer-tick'); }
     if (tv >= m.limit && !m.co) { const r = evalE23({ slots: slotsNow(), timeUp: true, checkedOut: false }); e24At(m, tv, false); endMission(r, r === 'missed' ? (m.L.onMissed || resumeOf(m)) : resumeOf(m)); }
     void t;
@@ -1957,6 +1957,8 @@ export function createStory(ctx) {
       d8: () => ({ props: d8.stats(), d9: d9.stats(), stage: { auditor: stg.auditor, rivalboss: stg.rivalboss, squad: stg.squad, spy: stg.spy, spyN: !!stg.spyN }, convoy: stg.convoy && { d: +stg.convoy.S.d.toFixed(2), hits: stg.convoy.S.hits, paused: stg.convoy.paused(), carts: stg.convoy.C.map((x) => ({ x: +x.x.toFixed(2), z: +x.z.toFixed(2) })) }, hits: mission?.hits, fly: mission?.fly && { ...mission.fly.S, left: mission.fly.left(), states: mission.fly.F.map((f) => f.state[0]).join(''), floor: mission.fly.F.filter((f) => f.state === 'floor').map((f) => [+f.x.toFixed(2), +f.z.toFixed(2)]) }, lockVn: lock.vn, blocking: !!vn.blocking, mode: mode(), exitReq: !!exitReq, wag: mission?.wag && { ...mission.wag.S }, extraKg: st.extraKg || 0 }),
       d11: () => ({ props: d11.stats(), e20: mission?.train ? { ...mission.train.S, linked: [...mission.train.S.linked], carts: mission.train.C.map((c) => ({ x: +c.x.toFixed(2), z: +c.z.toFixed(2), s: c.state[0] })) } : null, trainObs: trainObs.length, extraKg: st.extraKg || 0 }),
       d10: () => ({ props: d10.stats(), e19: mission?.id === 'E19' ? { placed: mission.placed, hits: mission.hits, gain: gainE19(mission), remaining: mission.remaining, holdT: mission.holdT } : null, endcapObs: !!endcapObs }),
+      setSave: (o) => { Object.assign(save, o); },
+      ms: (k) => { try { return JSON.parse(JSON.stringify(mission?.[k] ?? null, (kk, v) => (v && typeof v === 'object' && (v.isObject3D || v.isMaterial || v.isBufferGeometry) ? undefined : typeof v === 'function' ? undefined : v))); } catch { return 'unserializable'; } },
       applyStage: (o) => applyStage(o), convoyOn: () => convoyOn(),
       setFlags: (o) => { for (const [k, v] of Object.entries(o)) { if (v == null) delete save.flags[k]; else save.flags[k] = v; } }, convoyD: (dd) => { const cv = stg.convoy; if (cv) { cv.S.d = dd; cv.S.pauseT = 0; cv.step(0); } },
       photo: () => photoE05(),

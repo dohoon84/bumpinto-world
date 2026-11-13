@@ -153,7 +153,7 @@ export function createDay7Props({ THREE, scene, keep, cartObj = null, isMobile =
   function ensureCss() {
     if (css || typeof document === 'undefined') return;
     css = document.createElement('style'); css.id = 'dp-d7-css';
-    css.textContent = `#dp-d7{position:fixed;right:${isMobile ? 8 : 16}px;top:${isMobile ? 120 : 236}px;z-index:40;background:rgba(14,22,40,.86);color:#fff;border:2px solid #f2c230;border-radius:14px;padding:9px 12px;font:600 12.5px Pretendard,"Noto Sans KR",sans-serif;min-width:${isMobile ? 170 : 220}px;pointer-events:none}
+    css.textContent = `#dp-d7{position:fixed;right:${isMobile ? 8 : 16}px;top:${isMobile ? 150 : 236}px;z-index:40;background:rgba(14,22,40,.86);color:#fff;border:2px solid #f2c230;border-radius:14px;padding:9px 12px;font:600 12.5px Pretendard,"Noto Sans KR",sans-serif;min-width:${isMobile ? 170 : 220}px;pointer-events:none}
 #dp-d7 h5{margin:0 0 5px;font:900 13px Pretendard,sans-serif;color:#f2c230;display:flex;justify-content:space-between}
 #dp-d7 li{list-style:none;display:flex;justify-content:space-between;gap:10px;padding:2px 0}#dp-d7 ul{margin:0;padding:0}
 #dp-d7 li b{font-weight:900}#dp-d7 li.ok b{color:#7be08a}#dp-d7 li.no b{color:#ff7a6a}#dp-d7 li.no span{opacity:.75;text-decoration:line-through}
