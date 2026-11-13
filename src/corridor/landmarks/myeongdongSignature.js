@@ -4,7 +4,7 @@
 //   재질: 아틀라스 캔버스 한 장(낮 색 + 밤 빛 emissiveMap) → 건물마다 병합 메시 1개(draw 1). 미디어 파사드만 따로(밤에만, draw 1).
 //   실제 Light 없음. 충돌은 외곽선(myeongdong.js bldGrid). 이름표는 한국어 + 영어.
 import * as THREE from 'three';
-import { GeoBuf, hex3, pointInRing, cathedralFrame, hash01 } from './myeongdongGeo.js';
+import { GeoBuf, hex3, pointInRing, cathedralFrame, hash01, CellGrid } from './myeongdongGeo.js';
 import { MD_FONT } from './myeongdongAtlas.js';
 
 /** 모델이 대신 그리는 OSM 건물 way id (일반 건물 병합에서 뺀다. 충돌은 그대로) */
@@ -365,25 +365,85 @@ function buildBok(ctx) {
   }
 }
 
+// ---------------------------------------------------------------- 남대문시장
+const MARKET_GATE = { a: [-11351, -21467], b: [-11388, -21458], t: 0.35 }; // 남대문시장길 위 (신세계 서쪽 · 한국은행 맞은편 시장 들머리)
+function buildNamdaemun(ctx) {
+  const { buf, labels, heightAt, data, bldAt, blockers } = ctx;
+  const { a, b, t } = MARKET_GATE;
+  const gx = a[0] + (b[0] - a[0]) * t, gz = a[1] + (b[1] - a[1]) * t;
+  const L = Math.hypot(b[0] - a[0], b[1] - a[1]), tx = (b[0] - a[0]) / L, tz = (b[1] - a[1]) / L; // 길 방향(서쪽 = 시장 안)
+  const nx = -tz, nz = tx; // 길 가로 방향
+  const y0 = heightAt(gx, gz);
+  const blue = hex3('#2a3a9a'), ry = Math.atan2(nx, nz);
+  let half = 5.6; while (half > 3 && bldAt && (bldAt(gx + nx * half, gz + nz * half, 0.5) || bldAt(gx - nx * half, gz - nz * half, 0.5))) half -= 0.4; // 기둥이 건물에 박히지 않게
+  // 기둥 2개 + 파란 간판 틀 + 위 'GATE' 장식
+  for (const s of [-1, 1]) { const px = gx + nx * half * s, pz = gz + nz * half * s; buf.box(px, y0 + 3.9, pz, 0.7, 8.2, 0.7, ry, uvOf(R.stone), blue); blockers.push({ x: px, z: pz, tx: nx, tz: nz, hl: 0.5, hd: 0.5 }); }
+  const sy0 = y0 + 5.3, sy1 = y0 + 7.9, sw = half * 2 + 0.9;
+  buf.box(gx, (sy0 + sy1) / 2, gz, 0.45, sy1 - sy0 + 0.3, sw + 0.3, ry, uvOf(R.stone), blue);
+  // 앞(동쪽, 명동에서 오는 쪽)·뒤 간판 면
+  for (const s of [1, -1]) {
+    const ox = gx - tx * 0.24 * s, oz = gz - tz * 0.24 * s; const fnx = -tx * s, fnz = -tz * s; const rx = fnz, rz = -fnx;
+    const A = [ox - rx * sw / 2, sy0, oz - rz * sw / 2], B = [ox + rx * sw / 2, sy0, oz + rz * sw / 2];
+    buf.quad(A, B, [B[0], sy1, B[2]], [A[0], sy1, A[2]], uvOf(R.sMarket), [1, 1, 1], [fnx, 0, fnz]);
+  }
+  buf.box(gx, sy1 + 0.75, gz, 0.4, 1.3, 2.6, ry, uvOf(R.stone), hex3('#1f2c7a'));
+  buf.box(gx, sy1 + 0.75, gz, 0.5, 0.5, 1.6, ry, uvOf(R.stone), hex3('#ffd23f'));
+  labels.push({ text: '🏮 남대문시장 Namdaemun Market', x: gx, z: gz, y: y0 + 11, maxDist: 1800, minDist: 10, cls: 'label landmark' });
+  // 시장 골목 노점: 남대문시장길 양쪽 (게이트 안쪽부터 바깥 띠 끝까지)
+  const ids = new Set([301285279, 78503333, 788296725, 382947009]);
+  const lines = (data.ways || []).filter((w) => ids.has(w.id));
+  const r = rnd(4242); const awn = [R.awn0, R.awn1, R.awn2, R.awn3];
+  const goods = ['#e63946', '#f4a261', '#2a9d8f', '#e9c46a', '#8ecae6', '#ffb4c6', '#6d597a', '#f1faee', '#264653'].map(hex3);
+  let n = 0;
+  for (const w of lines) for (let i = 1, pts = w.pts; i < pts.length; i++) {
+    const p = pts[i - 1], q = pts[i]; const sl = Math.hypot(q[0] - p[0], q[1] - p[1]); if (sl < 3) continue;
+    const ux = (q[0] - p[0]) / sl, uz = (q[1] - p[1]) / sl, vx = -uz, vz = ux, sr = Math.atan2(ux, uz);
+    for (let d = 1.6; d < sl - 1.6; d += 3.1) for (const side of [-1, 1]) {
+      const off = (w.w || 4) / 2 + 0.85; const x = p[0] + ux * d + vx * off * side, z = p[1] + uz * d + vz * off * side;
+      if (Math.hypot(x - gx, z - gz) < 7) continue;
+      if (bldAt && bldAt(x, z, 0.9)) continue;
+      if (x > -11345 || x < -11530) continue;
+      const y = heightAt(x, z); const k = Math.floor(r() * 4);
+      // 판매대 + 상품 더미 + 차양(줄무늬) + 옷걸이 기둥
+      buf.box(x, y + 0.45, z, 1.3, 0.9, 2.5, sr, uvOf(R.stone), hex3('#6b4f36'));
+      for (let m = 0; m < 4; m++) buf.box(x + ux * (m - 1.5) * 0.55, y + 1.05 + r() * 0.2, z + uz * (m - 1.5) * 0.55, 0.9, 0.35 + r() * 0.35, 0.5, sr, uvOf(R.stone), goods[Math.floor(r() * goods.length)]);
+      const ax = x - vx * side * 0.4, az = z - vz * side * 0.4; // 차양은 길 쪽으로 조금 기울게
+      const w2 = 1.45, d2 = 1.2; const h0 = y + 2.5, h1 = y + 2.15;
+      const P0 = [ax - ux * w2 + vx * side * d2 * -1, h0, az - uz * w2 + vz * side * d2 * -1];
+      const P1 = [ax + ux * w2 + vx * side * d2 * -1, h0, az + uz * w2 + vz * side * d2 * -1];
+      const P2 = [ax + ux * w2 + vx * side * d2 * 0.8, h1, az + uz * w2 + vz * side * d2 * 0.8];
+      const P3 = [ax - ux * w2 + vx * side * d2 * 0.8, h1, az - uz * w2 + vz * side * d2 * 0.8];
+      buf.quad(P0, P1, P2, P3, uvOf(awn[k]), [1, 1, 1]); buf.quad(P3, P2, P1, P0, uvOf(awn[k]), [0.8, 0.8, 0.8]);
+      if (r() < 0.5) { buf.box(x + vx * side * 0.9, y + 1.1, z + vz * side * 0.9, 0.12, 2.2, 0.12, sr, uvOf(R.stone), hex3('#555')); for (let m = 0; m < 3; m++) buf.box(x + vx * side * 0.9 + ux * (m - 1) * 0.5, y + 1.5, z + vz * side * 0.9 + uz * (m - 1) * 0.5, 0.45, 0.9, 0.06, sr + Math.PI / 2, uvOf(R.stone), goods[Math.floor(r() * goods.length)]); }
+      blockers.push({ x, z, tx: ux, tz: uz, hl: 1.35, hd: 0.75 });
+      n++;
+    }
+  }
+  return n;
+}
+
 // ---------------------------------------------------------------- 진입점
 /**
- * @param {{ parent: THREE.Object3D, data: any, heightAt: (x:number,z:number)=>number, overlay?: any }} o
+ * @param {{ parent: THREE.Object3D, data: any, heightAt: (x:number,z:number)=>number, overlay?: any, bldAt?: (x:number,z:number,pad?:number)=>any }} o
  */
-export function createMyeongdongSignature({ parent, data, heightAt, overlay = null }) {
+export function createMyeongdongSignature({ parent, data, heightAt, overlay = null, bldAt = null }) {
   const g = new THREE.Group(); g.name = 'myeongdong-signature'; parent.add(g);
   const byId = new Map(); for (const b of data.buildings || []) if (SIGNATURE_IDS.has(b.id)) byId.set(b.id, b);
   const baseOf = (o) => { let mn = Infinity; for (const [x, z] of o) mn = Math.min(mn, heightAt(x, z)); return mn; };
   const M = sharedMats();
-  const meshes = [], labels = [], media = [];
+  const meshes = [], labels = [], media = [], blockers = [];
   const one = (name, fn) => {
     const buf = new GeoBuf({ uv: true, color: true });
-    fn({ byId, baseOf, buf, labels, heightAt, media });
+    fn({ byId, baseOf, buf, labels, heightAt, media, data, bldAt, blockers });
     const geo = buf.build(); if (!geo) return;
     const m = new THREE.Mesh(geo, M.body); m.name = name; m.castShadow = false; m.receiveShadow = false; g.add(m); meshes.push(m);
   };
   one('md-sig-lotte', buildLotte);
   one('md-sig-shinsegae', buildShinsegae);
   one('md-sig-bok', buildBok);
+  one('md-sig-namdaemun', buildNamdaemun);
+  // 시장 노점 · 게이트 기둥 충돌 (방향 있는 상자)
+  const blockGrid = new CellGrid(16); for (const b of blockers) { const e = Math.max(b.hl, b.hd) + 0.5; blockGrid.add(b, b.x - e, b.z - e, b.x + e, b.z + e); }
   // 신세계 밤 미디어 파사드: 면 몇 장 + 흐르는 텍스처(가산 혼합, 밤에만 보임, draw 1)
   let mediaMesh = null, mediaTex = null;
   if (media.length) {
@@ -411,8 +471,12 @@ export function createMyeongdongSignature({ parent, data, heightAt, overlay = nu
     group: g,
     footprints: [...byId.values()].map((b) => ({ o: b.o })),
     setNight(v) { M.body.emissiveIntensity = 0.05 + v * 0.95; if (mediaMesh) mediaMesh.visible = v > 0.5; },
+    isBlocked(x, z, r = 0.4) {
+      for (const b of blockGrid.query(x, z)) { const dx = x - b.x, dz = z - b.z; if (Math.abs(dx * b.tx + dz * b.tz) < b.hl + r && Math.abs(dz * b.tx - dx * b.tz) < b.hd + r) return true; }
+      return false;
+    },
     update(dt = 0) { if (mediaMesh?.visible && mediaTex) mediaTex.offset.x = (mediaTex.offset.x + dt * 0.035) % 1; },
-    stats() { return { meshes: meshes.length, tris: meshes.reduce((s, m) => s + (m.geometry.index ? m.geometry.index.count / 3 : 0), 0) }; },
+    stats() { return { blockers: blockers.length, meshes: meshes.length, tris: meshes.reduce((s, m) => s + (m.geometry.index ? m.geometry.index.count / 3 : 0), 0) }; },
   };
 }
 void pointInRing; void hash01;

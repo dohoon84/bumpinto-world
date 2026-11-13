@@ -287,7 +287,7 @@ export async function createMyeongdongAsync(opts = {}, yieldFn = null, slicer = 
   };
 
   // ---------- 성당 · 역/길안내 · 거리(간판·노점·가로등·사람) ----------
-  const signature = SIG_ON ? createMyeongdongSignature({ parent: root, data, heightAt, overlay }) : null; // [myeongdong-signature]
+  const signature = SIG_ON ? createMyeongdongSignature({ parent: root, data, heightAt, overlay, bldAt }) : null; // [myeongdong-signature]
   await tick('md-signature');
   const cathedral = createMyeongdongCathedral({ parent: root, data, land, overlay, atlas });
   await tick('md-cathedral');
@@ -320,6 +320,7 @@ export async function createMyeongdongAsync(opts = {}, yieldFn = null, slicer = 
     if (cathedral.isBlocked?.(x, z, r)) return true;
     if (street.isBlocked?.(x, z, r)) return true;
     if (station.isBlocked?.(x, z, r)) return true;
+    if (signature?.isBlocked(x, z, r)) return true; // [myeongdong-signature] 남대문시장 노점·게이트
     return false;
   }
 
