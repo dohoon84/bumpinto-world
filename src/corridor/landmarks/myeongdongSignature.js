@@ -17,28 +17,29 @@ export const SIGNATURE_IDS = new Set([
 ]);
 
 // ---------------------------------------------------------------- 아틀라스 (1024², 256 칸)
-const AW = 1024;
+const AW = 1024, AH = 1280; // [md-lotte] 아래 256 줄은 롯데 1층 쇼윈도·붉은 세로 현수막
 const R = {
   dept: [0, 0, 256, 256], office: [256, 0, 256, 256], glass: [512, 0, 256, 256], bronze: [768, 0, 256, 256],
   stoneWin: [0, 256, 256, 256], arch: [256, 256, 256, 256], stone: [512, 256, 256, 256], copper: [768, 256, 256, 256],
   sLotte: [0, 512, 512, 128], sAvenuel: [512, 512, 512, 64], sYoung: [512, 576, 512, 64],
   sShinsegae: [0, 640, 512, 64], sHeritage: [512, 640, 512, 64], sBok: [0, 704, 512, 64], sMuseum: [512, 704, 512, 64],
   sMarket: [0, 768, 1024, 160],
+  shop: [0, 1024, 256, 256], banner: [256, 1024, 128, 256], bannerL: [384, 1024, 128, 256],
   awn0: [0, 928, 256, 96], awn1: [256, 928, 256, 96], awn2: [512, 928, 256, 96], awn3: [768, 928, 256, 96],
 };
 /** 아틀라스 칸 하나가 덮는 실제 크기 [가로 m, 세로 m] (창 크기가 실물처럼 보이게) */
 const TILE = { dept: [28, 17.5], office: [13, 21], glass: [8, 21], bronze: [15, 20], stoneWin: [12, 12.5], arch: [9, 7], stone: [10, 10], copper: [8, 8] };
 const T = (k) => TILE[k];
-const uvOf = (r, inset = 1.5) => [(r[0] + inset) / AW, 1 - (r[1] + r[3] - inset) / AW, (r[0] + r[2] - inset) / AW, 1 - (r[1] + inset) / AW];
+const uvOf = (r, inset = 1.5) => [(r[0] + inset) / AW, 1 - (r[1] + r[3] - inset) / AH, (r[0] + r[2] - inset) / AW, 1 - (r[1] + inset) / AH];
 
 function rnd(seed) { let s = seed >>> 0 || 1; return () => ((s = (s * 16807) % 2147483647) / 2147483647); }
 
 function drawAtlas() {
-  const c = document.createElement('canvas'); c.width = c.height = AW;
-  const e = document.createElement('canvas'); e.width = e.height = AW;
+  const c = document.createElement('canvas'); c.width = AW; c.height = AH;
+  const e = document.createElement('canvas'); e.width = AW; e.height = AH;
   const g = c.getContext('2d'), h = e.getContext('2d');
-  g.fillStyle = '#8a8a8a'; g.fillRect(0, 0, AW, AW);
-  h.fillStyle = '#000'; h.fillRect(0, 0, AW, AW);
+  g.fillStyle = '#8a8a8a'; g.fillRect(0, 0, AW, AH);
+  h.fillStyle = '#000'; h.fillRect(0, 0, AW, AH);
   const r = rnd(77);
   // 창 격자 칸: (bg, frame, glass, 밤 불빛 확률)
   const grid = (rc, { bg, glass, cols, rows, mx, my, lit = 0.6, warm = '#ffd9a0', band = null }) => {
@@ -110,6 +111,24 @@ function drawAtlas() {
     const [x0, y0, w, hh] = R['awn' + k]; for (let i = 0; i < 8; i++) { g.fillStyle = i % 2 ? b : a; g.fillRect(x0 + i * 32, y0, 32, hh); }
     h.fillStyle = a; h.globalAlpha = 0.25; h.fillRect(x0, y0, w, hh); h.globalAlpha = 1;
   });
+  // [md-lotte] 1층 쇼윈도: 짙은 유리 + 은빛 문설주, 밤엔 따뜻하게 환한 진열창 (256² = 가로 14 m × 세로 8.5 m)
+  { const [x0, y0, w, hh] = R.shop; g.fillStyle = '#34312e'; g.fillRect(x0, y0, w, hh);
+    h.fillStyle = '#000'; h.fillRect(x0, y0, w, hh);
+    for (let i = 0; i < 4; i++) { const x = x0 + 6 + i * 62, y = y0 + 40, ww = 56, wh = hh - 52;
+      const gr = g.createLinearGradient(0, y, 0, y + wh); gr.addColorStop(0, '#3d4a58'); gr.addColorStop(1, '#8a97a3'); g.fillStyle = gr; g.fillRect(x, y, ww, wh);
+      g.fillStyle = 'rgba(255,255,255,.22)'; g.beginPath(); g.moveTo(x + 8, y); g.lineTo(x + 30, y); g.lineTo(x + 6, y + wh); g.lineTo(x - 8, y + wh); g.fill();
+      // 마네킹 실루엣 + 진열 선반
+      g.fillStyle = 'rgba(20,20,24,.7)'; g.fillRect(x + 22, y + wh * 0.28, 12, wh * 0.5); g.beginPath(); g.arc(x + 28, y + wh * 0.22, 6, 0, 7); g.fill();
+      h.fillStyle = i % 2 ? '#ffe2a8' : '#fff0cc'; h.globalAlpha = 0.9; h.fillRect(x, y, ww, wh); h.globalAlpha = 1; }
+    g.fillStyle = '#c9ccd0'; g.fillRect(x0, y0 + 36, w, 5); g.fillStyle = '#1c1b1a'; g.fillRect(x0, y0, w, 36);
+    h.fillStyle = '#ffd9a0'; h.globalAlpha = 0.45; h.fillRect(x0 + 8, y0 + 14, w - 16, 8); h.globalAlpha = 1; }
+  // [md-lotte] 붉은 세로 현수막 (LOTTE 를 세로로): banner = 흰 글자 / bannerL = 금색 글자
+  for (const [k, fg] of [['banner', '#ffffff'], ['bannerL', '#ffe9a8']]) {
+    const [x0, y0, w, hh] = R[k]; g.fillStyle = '#c8101a'; g.fillRect(x0, y0, w, hh); g.fillStyle = 'rgba(0,0,0,.18)'; g.fillRect(x0, y0, 6, hh); g.fillRect(x0 + w - 6, y0, 6, hh);
+    g.fillStyle = fg; g.textAlign = 'center'; g.textBaseline = 'middle'; g.font = `900 ${Math.floor(w * 0.66)}px ${MD_FONT}`;
+    'LOTTE'.split('').forEach((ch, i) => g.fillText(ch, x0 + w / 2, y0 + 30 + i * ((hh - 40) / 5) + 20));
+    h.fillStyle = '#ff5050'; h.fillRect(x0, y0, w, hh); h.globalAlpha = 0.6; h.fillStyle = '#fff'; h.textAlign = 'center'; h.textBaseline = 'middle'; h.font = g.font;
+    'LOTTE'.split('').forEach((ch, i) => h.fillText(ch, x0 + w / 2, y0 + 30 + i * ((hh - 40) / 5) + 20)); h.globalAlpha = 1; }
   return { c, e };
 }
 
@@ -193,15 +212,25 @@ function buildLotte(ctx) {
   if (store) {
     const o = store.o, y0 = baseOf(o), podTop = y0 + 54;
     prism(buf, o, y0 - 0.4, podTop, uvOf(R.dept), ...T('dept'), W, uvOf(R.stone), hex3('#9a958c'));
+    // [md-lotte] 1층 쇼윈도 띠 + 캐노피 (본점 앞을 걸을 때 백화점 입구로 보이게)
+    const ccwL = ringArea(o) > 0; // wall() 은 P→Q 의 왼쪽이 바깥 — ccw 링이면 뒤집어 부른다 (prism 과 같음)
+    for (const e of edgesOut(o)) if (e.L > 9) {
+      const [A, B] = ccwL ? [e.q, e.p] : [e.p, e.q];
+      wall(buf, A, B, y0 - 0.2, y0 + 8.6, uvOf(R.shop), 14, 8.8, W, 0.14);
+      wall(buf, A, B, y0 + 8.6, y0 + 9.1, uvOf(R.copper), 12, 0.5, hex3('#2a2928'), 1.1);
+    }
     // 꼭대기 띠(어두운 처마)
     for (const e of edgesOut(o)) wall(buf, e.p, e.q, podTop - 0.1, podTop + 2.2, uvOf(R.copper), 12, 2.3, hex3('#6c6a66'), 0.25);
     // 사거리 쪽 큰 간판 (긴 벽 중 사거리를 보는 면)
     const [cx, cz] = centroid(o); const dx = toward[0] - cx, dz = toward[1] - cz, dl = Math.hypot(dx, dz);
     for (const e of edgesOut(o)) {
       if (e.L < 28) continue; const k = (e.nx * dx + e.nz * dz) / dl; if (k < 0.35) continue;
-      const w = Math.min(e.L * 0.55, 40), hgt = w / 4;
+      const w = Math.min(e.L * 0.7, 56), hgt = w / 4;
       signOn(buf, e.p, e.q, 0.45, w, podTop - 2.5 - hgt, podTop - 2.5, uvOf(R.sLotte), [e.nx, e.nz]);
-      signOn(buf, e.p, e.q, 0.45, 16, y0 + 5.2, y0 + 9.2, uvOf(R.sLotte), [e.nx, e.nz]);
+      signOn(buf, e.p, e.q, 1.3, 18, y0 + 9.6, y0 + 13.6, uvOf(R.sLotte), [e.nx, e.nz]); // 입구 위 작은 LOTTE
+      // 붉은 세로 현수막 (간판 아래 벽, 길이 따라 일정 간격)
+      const nb = Math.max(2, Math.floor(e.L / 14)); const tx = (e.q[0] - e.p[0]) / e.L, tz = (e.q[1] - e.p[1]) / e.L; const bh = Math.min(26, podTop - y0 - 24);
+      if (bh > 8) for (let i = 0; i < nb; i++) { const t = (i + 0.5) / nb; const P = [e.p[0] + tx * e.L * t - tx * 0.01, e.p[1] + tz * e.L * t - tz * 0.01], Q = [P[0] + tx * 0.02, P[1] + tz * 0.02]; signOn(buf, P, Q, 0.55, 3.4, y0 + 12.5, y0 + 12.5 + bh, uvOf(i % 2 ? R.bannerL : R.banner), [e.nx, e.nz]); }
     }
     // 신관 타워(롯데호텔 신관, 147 m): 사거리에서 먼 쪽 절반 위로
     const F = cathedralFrame(o);
