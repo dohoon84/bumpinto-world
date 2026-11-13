@@ -50,6 +50,20 @@ async function signInFromStart() {
   }
 }
 
+async function gateAccountConsent() {
+  try {
+    const { accountApi } = await import('../account/api.js');
+    const me = await accountApi.me();
+    if (!me?.ok) return { ok: false, signedOut: true };
+    if (!me.consent?.needsTerms) return { ok: true, me };
+    const { ensureAccountConsent } = await import('../account/consent.js');
+    return ensureAccountConsent({ me });
+  } catch {
+    // 약관 상태를 확인하지 못하면 계정으로 입장하지 않는다
+    return { ok: false, error: true };
+  }
+}
+
 /**
  * 로그인된 계정(econ.getSession() 이 게스트가 아님)이면 '게스트로 계속' 대신 계정 이름이 붙은 '계속하기'(primary) — 두 번째 기기에서 로그인한 뒤 시작화면으로
  *   한 번 돌아왔을 때 '게스트'로 들어가 계정 잔액이 보이는 혼란을 없앤다. Google 버튼은 이 상태에서 숨긴다. 게스트 화면은 그대로.
@@ -96,7 +110,20 @@ export function openStart({ region, onGuest, onContinue, onGoogle, onAccount, de
   let offSes = null;
   const signedIn = () => !!(ses && !ses.isGuest && (ses.signedIn ?? true));
   if (checking) {
-    const done = (s) => { if (!alive) return; if (s) ses = s; if (checking || s) { checking = false; render(); } };
+    const done = (s) => {
+      if (!alive) return;
+      if (s) ses = s;
+      if (checking || s) { checking = false; render(); }
+      if (s && !s.isGuest && (s.signedIn ?? true)) {
+        gateAccountConsent().then((g) => {
+          if (!alive) return;
+          if (!g.ok && (g.declined || g.signedOut)) {
+            ses = { isGuest: true, signedIn: false, accountId: null, displayName: null, provider: null };
+          }
+          render();
+        });
+      }
+    };
     setTimeout(() => done(null), 1500);
     import('./econ/index.js').then(({ econ }) => {
       if (!alive) return;
@@ -129,7 +156,7 @@ export function openStart({ region, onGuest, onContinue, onGoogle, onAccount, de
       ${checking ? `<p class="v2-note v2-checking">${esc(tr('계정 확인 중…', 'Checking your account…'))}</p>` : signedIn() ? acctBlock() : `<div class="v2-gsi-slot"></div>
       <p class="v2-note">${esc(tr('잔액·기록이 계정에 저장돼요 · 다른 기기에서도 이어하기', 'Balance and records are saved to your account · continue on any device'))}</p>
       <button type="button" class="v2-btn secondary v2-full" data-v2="guest">${esc(tr('게스트로 계속', 'Continue as Guest'))}</button>
-      <p class="v2-note">${esc(tr('게스트는 이 기기에만 저장 · 나중에 Google 연결 가능', 'Guests are saved on this device only · link Google later'))}</p>`}
+      <p class="v2-note">${esc(tr('게스트는 이 기기에만 저장돼요. 계정·업데이트 소식은 Google 로그인과 약관 동의가 필요해요.', 'Guests are saved on this device only. An account and update emails need Google sign-in and terms agreement.'))}</p>`}
       <p class="v2-msg" role="status" ${msg ? '' : 'hidden'}>${esc(msg)}</p>
       <div class="v2-open-now">
         <span class="v2-open-k">${esc(tr('지금 열린 곳', 'Open now'))}</span>
@@ -172,8 +199,28 @@ export function openStart({ region, onGuest, onContinue, onGoogle, onAccount, de
     if (!b) return;
     const k = b.dataset.v2;
     if (k === 'guest') { trackEvent('uiv2_start_guest'); close(); onGuest(); return; }
-    if (k === 'account') { const d = dest(); trackEvent('uiv2_start_account', { region: d.region, at: d.at || '', last: last ? 1 : 0 }); close(); (onAccount || onContinue)(d, ses); return; }
-    if (k === 'continue' && last) { trackEvent('uiv2_start_continue', { region: last.region, at: last.at || '' }); close(); onContinue(last, ses); return; }
+    if (k === 'account') {
+      b.disabled = true;
+      const g = await gateAccountConsent();
+      if (!alive) return;
+      if (!g.ok) {
+        if (g.declined || g.signedOut) {
+          ses = { isGuest: true, signedIn: false, accountId: null, displayName: null, provider: null };
+        }
+        b.disabled = false;
+        render();
+        return;
+      }
+      const d = dest();
+      trackEvent('uiv2_start_account', { region: d.region, at: d.at || '', last: last ? 1 : 0 });
+      close();
+      (onAccount || onContinue)(d, ses);
+      return;
+    }
+    if (k === 'continue' && last) {
+      if (signedIn()) return;
+      trackEvent('uiv2_start_continue', { region: last.region, at: last.at || '' }); close(); onContinue(last, ses); return;
+    }
     if (k === 'google') {
       trackEvent('uiv2_start_google');
       b.disabled = true;

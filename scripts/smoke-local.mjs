@@ -19,6 +19,11 @@ const qRows = (p) => p.locator('.ve-quests .ve-qlist .ve-qcard:not([data-quest="
 const shot = (p, name) => p.screenshot({ path: `${OUT}/${name}.png`, timeout: 120000 }).catch((e) => console.log(`  (스크린샷 ${name} 실패: ${e.message.split('\n')[0]})`));
 const api = (p, path, init) => p.evaluate(async ([path, init]) => { const r = await fetch('/_phone' + path, { credentials: 'include', ...(init || {}) }); const j = await r.json().catch(() => null); return { status: r.status, body: j?.data ?? j }; }, [path, init || null]);
 const click = (p, sel) => p.locator(sel).first().click({ force: true, timeout: 20000 });
+const agreeRequiredConsent = async (p) => {
+  await p.locator('[data-consent="terms"]').first().check();
+  await p.locator('[data-consent="privacy"]').first().check();
+};
+
 const busRide = (p) => p.evaluate(async () => { const { charge } = await import('/src/ride/fare.js'); return charge({ code: 'bus.base', mode: 'bus', meta: { route: 'smoke' } }); });
 
 function d1(sql) {
@@ -65,6 +70,7 @@ async function pc(mode) {
   } else {
     await click(p, '[data-v2=google]');
     await p.waitForSelector('text=개발용 로그인 (로컬)', { timeout: 20000 });
+    await agreeRequiredConsent(p);
     await shot(p, `${tag}-0-signin-window`);
     await click(p, 'text=개발용 로그인 (로컬)');
     await p.waitForTimeout(4000);
@@ -238,6 +244,7 @@ async function mobile(mode) {
   } else {
     const dev = p.getByText('개발용 로그인 (로컬)').first();
     check(`${tag}: 개발용 로그인 버튼(LAN)`, await dev.isVisible().catch(() => false));
+    await agreeRequiredConsent(p);
     const bb = await dev.boundingBox().catch(() => null);
     if (bb) await p.touchscreen.tap(bb.x + bb.width / 2, bb.y + bb.height / 2);
     await p.waitForTimeout(3000);
@@ -275,7 +282,7 @@ async function entryMobileAccount() {
   await p.goto(URL0);
   await p.waitForSelector('#m-landing [data-act="pick"]', { timeout: 90000 });
   // 개발용 로그인 = 메뉴 '개발용 로그인 (로컬)' 버튼과 같은 호출(signin.devLogin) + 같은 대표 캐릭터 맞춤(adoptPrimary)
-  const r = await p.evaluate(async () => { const m = await import('/src/account/signin.js'); const r = await m.devLogin(m.currentDeviceId()); if (r.ok && r.primaryUserId) m.adoptPrimary(r.primaryUserId, { delayMs: 999999 }); return { ok: r.ok, status: r.status, primary: !!r.primaryUserId }; });
+  const r = await p.evaluate(async () => { const m = await import('/src/account/signin.js'); const c = await import('/src/account/consent.js'); const r = await m.devLogin(m.currentDeviceId(), { termsVersion: c.TERMS_VERSION, privacyVersion: c.PRIVACY_VERSION }); if (r.ok && r.primaryUserId) m.adoptPrimary(r.primaryUserId, { delayMs: 999999 }); return { ok: r.ok, status: r.status, primary: !!r.primaryUserId }; });
   check(`${tag}: 개발용 로그인`, r.ok, `HTTP ${r.status} · 대표 캐릭터 ${r.primary ? '있음' : '없음'}`);
   const card = async (n) => {
     await p.waitForFunction(() => { const c = document.querySelector('#lobby-card'); const g = document.querySelector('#lobby-go');
@@ -360,6 +367,7 @@ async function mobileV2(p, ctx, b, tag, mode, tap, errs) {
     await dev.waitFor({ timeout: 30000 }).catch(() => {});
     await shot(p, `${tag}-4-signin`);
     check(`${tag}: 개발용 로그인 버튼(LAN)`, await dev.isVisible().catch(() => false));
+    await agreeRequiredConsent(p);
     const bb = await dev.boundingBox().catch(() => null);
     if (bb) await p.touchscreen.tap(bb.x + bb.width / 2, bb.y + bb.height / 2);
     await p.waitForTimeout(6000);

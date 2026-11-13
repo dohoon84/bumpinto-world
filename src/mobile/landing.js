@@ -31,6 +31,19 @@ function regionList() {
   });
 }
 
+async function gateAccountConsent() {
+  try {
+    const { accountApi } = await import('../account/api.js');
+    const me = await accountApi.me();
+    if (!me?.ok) return { ok: false, signedOut: true };
+    if (!me.consent?.needsTerms) return { ok: true, me };
+    const { ensureAccountConsent } = await import('../account/consent.js');
+    return ensureAccountConsent({ me });
+  } catch {
+    return { ok: false, error: true };
+  }
+}
+
 export function mountLanding() {
   return new Promise((resolve) => {
     const root = document.createElement('div');
@@ -45,7 +58,14 @@ export function mountLanding() {
     if (uiV2Wanted()) { // [ui-v2-default] 기본 v2 · ?ui=v1 끔
       import('../ui-v2/data.js').then((d) => { v2data = d; lastSt = d.readLastStation(); if (signedIn() && root.isConnected && st.view === 'start') render(); }).catch(() => {});
       import('../ui-v2/resume.js').then((m) => { rmod = m; }).catch(() => {});
-      import('../ui-v2/econ/index.js').then(({ econ }) => econ.getSession()).then((s) => { ses = s || null; if (signedIn() && root.isConnected && st.view === 'start') render(); }).catch(() => {});
+      import('../ui-v2/econ/index.js').then(({ econ }) => econ.getSession()).then(async (s) => {
+        ses = s || null;
+        if (signedIn() && root.isConnected && st.view === 'start') {
+          const g = await gateAccountConsent();
+          if (!g.ok && (g.declined || g.signedOut)) ses = { isGuest: true, signedIn: false };
+          if (root.isConnected && st.view === 'start') render();
+        }
+      }).catch(() => {});
       // [mobile-google] 게스트 시작화면에도 PC 와 같은 'Google 계정으로 로그인'. 로그인 훅이 등록된 뒤(계정 기능 켜짐)에만 보인다
       import('../ui-v2/google.js').then((g) => {
         gmod = g;
@@ -138,7 +158,7 @@ export function mountLanding() {
             ${!signedIn() && gMsg ? `<small class="m-gmsg" role="status">${esc(gMsg)}</small>` : ''}
             <button type="button" class="m-btn ${signedIn() ? 'm-secondary' : 'm-primary'}" data-act="pick">${t('입장할 곳 고르기', 'Choose where to start')}</button>
             ${signedIn() ? '' : resumeBtn}
-            ${signedIn() ? `<small>${esc(lastSt ? t(`지난번 역 · ${lastSt.label} 입장 카드로 바로 · 이 계정 캐릭터·잔액 그대로`, `Straight to ${lastSt.label} (your last station) · same account character and balance`) : t(`${acctDest().label} 입장 카드로 바로 · 이 계정 캐릭터·잔액 그대로`, `Straight to ${acctDest().label} · same account character and balance`))}</small>` : `<small>${saved ? t('이 폰에 저장된 캐릭터로 바로 들어가요', 'Jump back in with the character saved on this phone') : t('다음 화면에서 지역과 역을 고르고, 캐릭터를 만들어요', 'Pick a region and station, then make your character')}</small>`}
+            ${signedIn() ? `<small>${esc(lastSt ? t(`지난번 역 · ${lastSt.label} 입장 카드로 바로 · 이 계정 캐릭터·잔액 그대로`, `Straight to ${lastSt.label} (your last station) · same account character and balance`) : t(`${acctDest().label} 입장 카드로 바로 · 이 계정 캐릭터·잔액 그대로`, `Straight to ${acctDest().label} · same account character and balance`))}</small>` : `<small>${saved ? t('이 폰에 저장된 캐릭터로 바로 들어가요', 'Jump back in with the character saved on this phone') : t('다음 화면에서 지역과 역을 고르고, 캐릭터를 만들어요', 'Pick a region and station, then make your character')}</small><small>${t('게스트는 이 기기에만 저장돼요. 계정·업데이트 소식은 Google 로그인과 약관 동의가 필요해요.', 'Guests are saved on this device only. An account and update emails need Google sign-in and terms agreement.')}</small>`}
           </div>
           ${shouldShowHomeScreenHint() ? `<div class="m-a2hs" role="note"><span>${t('홈 화면에 추가하면 전체 화면으로 플레이할 수 있어요', 'Add to Home Screen to play in full screen')}</span><button type="button" data-act="a2hs-x" aria-label="${t('닫기', 'Close')}">✕</button></div>` : ''}
           <a class="m-chip m-bl" href="https://github.com/dohoon84/bumpinto-world" target="_blank" rel="noopener">⭐ ${t('GitHub에서 함께 만들기', 'Build it with us on GitHub')}</a>`;
@@ -188,10 +208,57 @@ export function mountLanding() {
         });
         return;
       }
-      if (act === 'pick') { st.view = 'pick'; render(); return; }
-      if (act === 'resume') { if (signedIn()) resumeAccount(); else resume(); return; }
+      if (act === 'pick') {
+        if (signedIn()) {
+          b.disabled = true;
+          gateAccountConsent().then((g) => {
+            if (!g.ok) {
+              if (g.declined || g.signedOut) ses = { isGuest: true, signedIn: false };
+              b.disabled = false;
+              if (root.isConnected) render();
+              return;
+            }
+            st.view = 'pick';
+            render();
+          });
+          return;
+        }
+        st.view = 'pick'; render(); return;
+      }
+      if (act === 'resume') {
+        if (signedIn()) {
+          b.disabled = true;
+          gateAccountConsent().then((g) => {
+            if (!g.ok) {
+              if (g.declined || g.signedOut) ses = { isGuest: true, signedIn: false };
+              b.disabled = false;
+              if (root.isConnected && st.view === 'start') render();
+              return;
+            }
+            resumeAccount();
+          });
+        } else resume();
+        return;
+      }
       if (act === 'back') { st.view = 'start'; render(); return; }
-      if (act === 'go') { b.disabled = true; go(); return; }
+      if (act === 'go') {
+        b.disabled = true;
+        if (signedIn()) {
+          gateAccountConsent().then((g) => {
+            if (!g.ok) {
+              if (g.declined || g.signedOut) ses = { isGuest: true, signedIn: false };
+              st.view = 'start';
+              b.disabled = false;
+              if (root.isConnected) render();
+              return;
+            }
+            go();
+          });
+          return;
+        }
+        go();
+        return;
+      }
       if (b.dataset.region) { st.region = b.dataset.region; st.station = 'jeongja'; render(); return; }
       if (b.dataset.stn) { st.station = b.dataset.stn; render(); }
     });

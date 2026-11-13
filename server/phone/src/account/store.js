@@ -23,6 +23,11 @@ function clip(v, n) {
   return s ? s.slice(0, n) : null;
 }
 
+export async function accountByGoogleSub(db, sub) {
+  if (!sub) return null;
+  return db.prepare("SELECT * FROM accounts WHERE google_sub = ?").bind(String(sub)).first();
+}
+
 export async function upsertAccount(db, claims, now = Date.now()) {
   const id = crypto.randomUUID();
   const row = await db

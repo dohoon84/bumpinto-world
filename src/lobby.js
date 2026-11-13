@@ -646,7 +646,18 @@ export function openLobby({ sms, region = null, onJoin, onBack }) {
     import('./account/lobbyAccount.js')
       .then((m) => m.detectLobbyAccount({ sms, saved, look, fallbackName: isEn() ? 'Guest' : '손님' }))
       .catch(() => null)
-      .then((found) => {
+      .then(async (found) => {
+        if (found?.me?.consent?.needsTerms) {
+          try {
+            const { ensureAccountConsent } = await import('./account/consent.js');
+            const g = await ensureAccountConsent({ me: found.me });
+            if (!g.ok) found = null;
+            else if (g.me) found = { ...found, me: g.me };
+          } catch {
+            // 약관을 확인하지 못하면 계정으로 입장하지 않는다
+            found = null;
+          }
+        }
         card.classList.remove('is-acct-checking');
         if (!found || !root.contains(card)) { if (root.contains(card)) guestPreview(); return; }
         ticket += 1; // 게스트 미리보기가 늦게 와서 덮어쓰지 않게
@@ -718,6 +729,23 @@ export function openLobby({ sms, region = null, onJoin, onBack }) {
       return;
     }
     error.textContent = '';
+    if (acct?.me?.consent?.needsTerms) {
+      try {
+        const { ensureAccountConsent } = await import('./account/consent.js');
+        const g = await ensureAccountConsent({ me: acct.me });
+        if (!g.ok) {
+          acct = null;
+          card.classList.remove('is-account', 'is-acct-edit', 'is-acct-checking');
+          document.body.classList.remove('bw-signed-in');
+          guestPreview();
+          return;
+        }
+        if (g.me) acct = { ...acct, me: g.me };
+      } catch {
+        error.textContent = tr('약관 동의를 확인하지 못했어요. 잠시 후 다시 시도해 주세요.', 'Could not confirm terms agreement. Please try again.');
+        return;
+      }
+    }
     joining = true;
     go.disabled = true;
     const screen = getEnterScreen();
