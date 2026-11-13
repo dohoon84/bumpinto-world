@@ -627,7 +627,8 @@ export function createCathedralInterior({ parent, L, glassTex, atlas }) {
     // 재질 밝기
     const amb = new THREE.Color(0.46, 0.37, 0.27).lerp(new THREE.Color(1, 0.97, 0.93).multiplyScalar(0.5 + 0.2 * (wet ? 0.3 : clearK)), dayK);
     mats.st.color.copy(amb); mats.fl.color.copy(amb); mats.pew.color.copy(amb); mats.dc.color.copy(amb);
-    for (const m of worship.lamMats) m.color.copy(amb).multiplyScalar(1.15); // [cathedral-sit] 기도하는 사람 몸도 실내 밝기로
+    // [cathedral-sit] 기도하는 사람 몸도 실내 밝기로. 밤엔 game.js 가 성당 안 프레임만 hemi 를 실내 밝기로 올린다
+    for (const m of worship.lamMats) m.color.copy(amb).multiplyScalar(1.15 * (1 + 0.5 * nightK));
     const gk = 0.18 + dayK * (wet ? 0.62 : 0.6 + 0.45 * clearK);
     mats.gl.color.setRGB(gk * (dayK > 0.2 ? 1 : 0.8), gk * (dayK > 0.2 ? 1 : 0.85), gk);
     mats.bulb.color.setRGB(0.55 + nightK * 0.45, 0.5 + nightK * 0.36, 0.42 + nightK * 0.12);
