@@ -629,6 +629,7 @@ export function createNamsanTerrain({ parent, dem, osm }) {
       const dT = Math.hypot(jx - NT.tx, jz - NT.tz);
       if (dT < 70) continue;
       if (onWay(jx, jz) || onLibrary(jx, jz)) continue;
+      if (myeongdongClaims(jx, jz, 3)) continue; // [md-trees] 명동 땅(바깥 띠 포함)은 남산 DEM 이 아니라 명동 높이 — 남산 숲 나무가 퇴계로·소공로 위에 떠 있었다
       if (Math.hypot(jx + 10705, jz + 20554) < 28) continue;
       if (Math.hypot(jx + 10998, jz + 21021) < 36) continue;
       const y = heightAt(jx, jz);
@@ -648,6 +649,7 @@ export function createNamsanTerrain({ parent, dem, osm }) {
       const dT = Math.hypot(jx - NT.tx, jz - NT.tz);
       if (dT < 72 || dT > 280) continue;
       if (onWay(jx, jz) || onLibrary(jx, jz)) continue;
+      if (myeongdongClaims(jx, jz, 3)) continue; // [md-trees] 명동 땅(바깥 띠 포함)은 남산 DEM 이 아니라 명동 높이 — 남산 숲 나무가 퇴계로·소공로 위에 떠 있었다
       if (Math.hypot(jx + 10705, jz + 20554) < 28) continue;
       const y = heightAt(jx, jz);
       if (y < 8) continue;
@@ -664,6 +666,7 @@ export function createNamsanTerrain({ parent, dem, osm }) {
       const jx = x + (hash01(Math.round(x), Math.round(z) + 3) - 0.5) * 11;
       const jz = z + (hash01(Math.round(z), Math.round(x) + 5) - 0.5) * 11;
       if (onWay(jx, jz) || onLibrary(jx, jz)) continue;
+      if (myeongdongClaims(jx, jz, 3)) continue; // [md-trees] 명동 땅(바깥 띠 포함)은 남산 DEM 이 아니라 명동 높이 — 남산 숲 나무가 퇴계로·소공로 위에 떠 있었다
       const y = heightAt(jx, jz);
       if (y < 2) continue;
       const s = Math.hypot(heightAt(jx + 6, jz) - heightAt(jx - 6, jz), heightAt(jx, jz + 6) - heightAt(jx, jz - 6)) / 12;
