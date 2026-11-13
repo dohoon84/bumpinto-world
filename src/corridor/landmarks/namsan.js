@@ -1,7 +1,7 @@
 // [namsan] 남산서울타워(N서울타워) — OSM 실제 좌표·표고 위에 절차적 타워·지형·실내·케이블카.
 //   기본 켜짐. ?ntower=0 이면 전부 끄고, ?ncable=0 이면 케이블카만 끈다.
 //   브랜드 로고/실제 매장명/마스코트 없음. 층별 안내는 일반 이름만 쓴다.
-import { myeongdongClaims } from './myeongdongFlags.js'; // [myeongdong]
+import { myeongdongClaims, inMyeongdong } from './myeongdongFlags.js'; // [myeongdong]
 import * as THREE from 'three';
 import { watchEvening } from '../../evening.js';
 import { NT, namsanBaseY, inNamsanPark } from './namsanCoords.js';
@@ -272,6 +272,7 @@ function completeNamsan({ scene, overlay, terrain, osm, city, root, land, tower,
     return !!(tower.isBlocked?.(x, z, r) || interior.isBlocked?.(x, z, r) || car?.isBlocked?.(x, z, r) || land.isBlocked?.(x, z, r) || library.isBlocked?.(x, z, r));
   }
 
+  const farInt = root.getObjectByName('namsan-interior'), farGuides = root.getObjectByName('namsan-guides'); // [myeongdong]
   let night = 0;
   const api = {
     root,
@@ -296,6 +297,15 @@ function completeNamsan({ scene, overlay, terrain, osm, city, root, land, tower,
     tickPlayer(dt, player, cam) {
       // [station-loop] 남산 경계에서 8 km 밖이면 남산(카메라에 붙는 남산 하늘 구 포함)을 렌더·갱신에서 뺀다
       if (DORM && player?.position && !syncLandmarkDormant(root, namsanBoundsDist(land.bounds, player.position.x, player.position.z))) return;
+      // [myeongdong] 먼 남산 디테일 끄기: 타워 전망대 내부(약 250 드로우)는 타워에서 700 m 밖이면, 길 안내 화살표(낱개 메시 약 90)는
+      //   명동 상자 안에 있으면 안 그린다 — 명동에서 남산 쪽을 볼 때 1000 드로우 아래로.
+      if (player?.position) {
+        const px = player.position.x, pz = player.position.z;
+        const iv = interior.riding || Math.hypot(px - NT.tx, pz - NT.tz) < 700;
+        if (farInt && farInt.visible !== iv) farInt.visible = iv;
+        const gv = !inMyeongdong(px, pz);
+        if (farGuides && farGuides.visible !== gv) farGuides.visible = gv;
+      }
       interior.tickPlayer?.(dt, player, cam);
       car?.tickPlayer?.(dt, player, cam);
       cableGuide?.update(dt, player, (typeof window !== 'undefined' && window.__jj?.camera) || null); // [cableguide]
