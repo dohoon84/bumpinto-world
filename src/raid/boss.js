@@ -233,21 +233,7 @@ export function createBoss(scene) {
   built.group.rotation.y = PATH_YAW + Math.PI;
   built.group.scale.setScalar(1.45);
   scene.add(built.group);
-  for (let i = 0; i < 3; i++) {
-    const mob = new THREE.Group();
-    const body = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.45, 1.3), new THREE.MeshStandardMaterial({ color: '#c4b8ae', roughness: 0.8 }));
-    body.position.y = 0.7;
-    mob.add(body);
-    for (const [sx, sz] of [[-0.3, 0.4], [0.3, 0.4], [-0.3, -0.4], [0.3, -0.4]]) {
-      const leg = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.55, 0.16), new THREE.MeshStandardMaterial({ color: '#8d847c' }));
-      leg.position.set(sx, 0.28, sz);
-      mob.add(leg);
-    }
-    const spot = fromFrame(BOSS_ALONG - 3, (i - 1) * 4.5);
-    mob.position.set(spot.x, 0, spot.z);
-    mob.rotation.y = PATH_YAW + Math.PI;
-    scene.add(mob);
-  }
+  let mobFactory = null;
 
   const light = new THREE.PointLight('#ff7a3a', 18, 26, 2);
   light.position.set(home.x, 8, home.z);
@@ -310,6 +296,16 @@ export function createBoss(scene) {
   }
 
   function spawnAdd(side) {
+    if (mobFactory) {
+      const kinds = ['shard_runner', 'rebar_brute', 'pier_colossus'];
+      const kind = kinds[adds.length % kinds.length];
+      const spot = fromFrame(BOSS_ALONG - 6, side * 2.6);
+      const mob = mobFactory(kind, spot.x, spot.z);
+      if (mob) {
+        adds.push({ mesh: mob.group, mob, wait: 1.8 });
+        return;
+      }
+    }
     const mesh = new THREE.Mesh(new THREE.CapsuleGeometry(0.28, 0.55, 4, 8), addMat);
     mesh.position.set(home.x + side * 2.2, 0.7, home.z + 1.4);
     mesh.castShadow = true;
@@ -535,6 +531,7 @@ export function createBoss(scene) {
     }
     for (let i = adds.length - 1; i >= 0; i--) {
       const add = adds[i];
+      if (add.mob && !add.mob.ready) continue;
       const dx = player.x - add.mesh.position.x;
       const dz = player.z - add.mesh.position.z;
       const len = Math.hypot(dx, dz) || 1;
@@ -634,6 +631,7 @@ export function createBoss(scene) {
     home,
     forceWind,
     forceSlam,
+    setMobFactory(fn) { mobFactory = fn; },
     hideDress,
     reset,
     slow,

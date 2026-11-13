@@ -163,11 +163,13 @@ function dressBattlefield(scene) {
   const beamMat = new THREE.MeshBasicMaterial({
     color: '#d7e7ff', transparent: true, opacity: 0.22, depthWrite: false, side: THREE.DoubleSide,
   });
-  for (let i = 0; i < 3; i++) {
-    const beam = new THREE.Mesh(new THREE.ConeGeometry(4, 28, 8, 1, true), beamMat);
-    const p = fromFrame(BOSS_ALONG + 6, (i - 1) * 22);
-    beam.position.set(p.x, 16, p.z);
+  for (const across of [-28, 30]) {
+    const beam = new THREE.Mesh(new THREE.ConeGeometry(1.6, 40, 6, 1, true), beamMat);
+    const p = fromFrame(BOSS_ALONG + 10, across);
+    beam.position.set(p.x, 24, p.z);
     beam.rotation.x = Math.PI;
+    beam.material = beamMat.clone();
+    beam.material.opacity = 0.07;
     scene.add(beam);
   }
   const rubble = new THREE.MeshStandardMaterial({ color: '#6e6560', roughness: 0.9 });
@@ -270,15 +272,18 @@ export function createArena(scene) {
       void main() {
         vec3 dir = normalize(vDir);
         float h = dir.y;
-        vec3 c = mix(uHorizon, uMid, smoothstep(-0.05, 0.38, h));
-        c = mix(c, uZenith, smoothstep(0.28, 0.85, h));
+        vec3 c = mix(uHorizon, uMid, smoothstep(0.05, 0.85, h) * 0.28);
         float ang = atan(dir.z, dir.x);
         float jag = sin(ang * 9.0 + uTime * 0.6) * 0.04 + sin(ang * 23.0 - uTime * 1.3) * 0.02;
         float band = abs(ang - 0.15 - jag);
         float crack = (1.0 - smoothstep(0.012, 0.02 + uRift * 0.28, band));
         crack *= smoothstep(0.08, 0.28, h) * (1.0 - smoothstep(0.62, 0.92, h));
+        float tear = 1.0 - smoothstep(0.012, 0.03 + uRift * 0.09, abs(h - 0.46 - jag));
+        tear *= 0.75 + 0.25 * sin(ang * 3.0 + uTime * 0.4);
         float pulse = 0.85 + 0.15 * sin(uTime * (uRift > 0.7 ? 5.0 : 1.6));
+        c += vec3(1.0, 0.55, 0.18) * tear * uRiftI * 0.55 * pulse;
         c += vec3(1.0, 0.42, 0.12) * crack * uRiftI * 0.22 * pulse;
+        c += vec3(1.0, 0.9, 0.7) * tear * tear * 0.45;
         c += vec3(1.0, 0.85, 0.6) * crack * crack * 0.35;
         c += vec3(0.7, 0.25, 0.15) * uFlash;
         gl_FragColor = vec4(c, 1.0);
@@ -328,7 +333,9 @@ export function createArena(scene) {
   neonMag.visible = false;
   root.add(neonMag);
 
-  root.add(skyline());
+  const boxes = skyline();
+  boxes.name = 'proc-skyline';
+  root.add(boxes);
   const bridge = new THREE.Mesh(bridgeGeo(), new THREE.MeshStandardMaterial({ color: '#2a3340', metalness: 0.4, roughness: 0.6 }));
   root.add(bridge);
 

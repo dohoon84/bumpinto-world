@@ -12,6 +12,7 @@ import { createHud } from './hud.js';
 import { createRaidAudio } from './audio.js';
 import { createVfx } from './vfx.js';
 import { createCity } from './city.js';
+import { createEnvKit } from './envkit.js';
 import { attachTrails, updateTrails } from './trails.js';
 import { createRaidRoom, mountRaidChat } from './chat.js';
 import { CITIZEN_LOOK } from './look.js';
@@ -51,7 +52,7 @@ document.getElementById('app').appendChild(renderer.domElement);
 renderer.domElement.addEventListener('contextmenu', (e) => e.preventDefault());
 
 const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, 0.15, 400);
+const camera = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, 0.15, 1200);
 
 let composer = null;
 let bloomOn = true;
@@ -77,6 +78,10 @@ try {
 
 const arena = createArena(scene);
 const city = await createCity(scene);
+const env = await createEnvKit(scene);
+const procSky = scene.getObjectByName('proc-skyline');
+if (procSky) procSky.visible = false;
+city.root.visible = false;
 const vfx = createVfx(scene);
 const audio = createRaidAudio();
 const look = sanitizeLook(CITIZEN_LOOK);
@@ -107,7 +112,7 @@ for (const id of CLASS_IDS) {
 consumeIntroReset(params);
 const rift = createRiftClock(params);
 const asked = normalizeClass(params.get('class'));
-const autoStart = ['transform', 'form', 'fight', 'victory', 'skyline', 'phase1', 'phase3', 'close', 'slam', 'emerge', 'chat'].includes(shot);
+const autoStart = ['transform', 'form', 'fight', 'victory', 'skyline', 'phase1', 'phase3', 'close', 'slam', 'emerge', 'chat', 'bridge', 'mobs', 'collapse'].includes(shot);
 let classId = asked || 'warrior';
 let form = null;
 let ghost = null;
@@ -128,6 +133,7 @@ function mountForm(id) {
 mountForm(classId);
 
 const boss = createBoss(scene);
+boss.setMobFactory(env.spawnMob);
 const home = boss.home;
 
 const ROLE_OF = { warrior: 'tank', priest: 'heal', mage: 'dps', archer: 'dps', assassin: 'dps' };
@@ -253,6 +259,7 @@ let camYaw = PATH_YAW + (portrait ? Math.PI + 0.7 : 0.35);
 let camPitch = portrait ? 0.32 : 42 * Math.PI / 180;
 let camDist = shot === 'transform' ? 4.4 : shot === 'form' ? 4.8 : 30;
 let shotLookY = null;
+let shotAim = null;
 const keys = new Set();
 let shift = false;
 let dragging = false;
@@ -407,6 +414,7 @@ function finishIntro() {
   arena.setPhase('p1');
   city.setMood('rift');
   city.setStage(1);
+  env.setPhase(1);
   hud.banner('붕괴의 거수 · 홀드');
   room.system('전투 시작 · 1페이즈');
   audio.playSfx('transform');
@@ -499,6 +507,7 @@ function frame() {
   vfx.update(dt);
   audio.tick(dt);
   city.update(dt);
+  env.update(dt);
   const now = performance.now() / 1000;
   if (form?.group) updateTrails(form.group, now);
   if (ghost) updateTrails(ghost, now);
@@ -538,7 +547,7 @@ function frame() {
   const lz = Math.cos(lookYaw);
   const cp = Math.cos(pitch);
   camera.position.set(focus.x - lx * dist * cp, focus.y + dist * Math.sin(pitch), focus.z - lz * dist * cp);
-  const aim = shot === 'wide' ? 1.5 : portrait ? 0.1 : 6;
+  const aim = shotAim != null ? shotAim : shot === 'wide' ? 1.5 : portrait ? 0.1 : 6;
   const head = form?.group?.userData?.headY;
   const lookY = shotLookY != null ? shotLookY : shot === 'wide' ? 1.15 : portrait ? (head || 1.1) : 0.2;
   camera.lookAt(focus.x + lx * aim, lookY, focus.z + lz * aim);
@@ -663,6 +672,7 @@ function step(dt) {
       audio.setAmbience(stage);
       arena.setPhase(stage === 3 ? 'p3' : stage === 2 ? 'p2' : 'p1');
       city.setStage(stage);
+      env.setPhase(stage);
       city.setMood('rift');
       audio.playSfx('roar', { x: boss.group.position.x, z: boss.group.position.z, big: true });
       shake = Math.max(shake, stage === 3 ? 0.62 : 0.36);
@@ -1024,6 +1034,7 @@ if (shot === 'phase1') {
   placeFight(city.yaw, 0.42, 24, 14);
   arena.setPhase('p1', true);
   city.setStage(1);
+  env.setPhase(1);
 }
 if (shot === 'phase3') {
   placeFight(city.yaw, 0.4, 26, 15);
@@ -1031,11 +1042,42 @@ if (shot === 'phase3') {
   arena.setPhase('p3', true);
   city.setMood('rift');
   city.setStage(3);
+  env.setPhase(3);
   audio.setAmbience(3);
 }
 if (shot === 'close') {
   placeFight(PATH_YAW, 0.5, 9, 7);
   seedChat();
+}
+if (shot === 'bridge' || shot === 'collapse' || shot === 'mobs') {
+  showKnights();
+  const along = shot === 'mobs' ? -3 : 2;
+  const groups = extras.concat([form.group]);
+  groups.forEach((g, i) => {
+    const p = fromFrame(along, (i - 2) * 1.45);
+    g.position.set(p.x, 0, p.z);
+    g.rotation.set(0, PATH_YAW, 0);
+    g.visible = true;
+  });
+  const mid = fromFrame(along, 0);
+  actor.position.set(mid.x, 0, mid.z);
+  boss.group.visible = false;
+  boss.hideDress();
+  camYaw = PATH_YAW;
+  env.setDress(shot === 'collapse' ? 'collapsed' : 'bridge');
+  if (shot === 'mobs') {
+    env.showSpawn();
+    camPitch = 0.34;
+    camDist = 7;
+    shotLookY = 1.4;
+    shotAim = 5.5;
+  } else {
+    env.populateRoad();
+    camPitch = 0.16;
+    camDist = 14;
+    shotLookY = 16;
+    shotAim = 52;
+  }
 }
 if (shot === 'slam') {
   showKnights();
@@ -1064,6 +1106,7 @@ window.__raid = {
   arena,
   get actor() { return actor; },
   boss,
+  env,
   source: form.source,
   rift: {
     snapshot: () => rift.snapshot(),
