@@ -86,3 +86,35 @@ export function nearestHit(cands, far = Infinity) {
   for (const c of cands) if (c && c.dist != null && c.dist <= far && (!best || c.dist < best.dist)) best = c;
   return best;
 }
+
+/** 충돌체와 같은 비율의 반크기 (물리 모양: 포대는 가장자리가 얇아 작게, 낱병은 원기둥) — 겹침 감시용 */
+export function colliderHalf(p, size = p.size) {
+  const S = p.shape, k = S === 'pillow' ? [0.94, 0.92, 0.94] : S === 'cyl' ? [0.85, 1, 0.85] : [1, 1, 1];
+  return [size[0] / 2 * k[0], size[1] / 2 * k[1], size[2] / 2 * k[2]];
+}
+/** 쿼터니언 → 로컬 축 3개 (월드 방향) */
+export function quatAxes(q) {
+  const { x, y, z, w } = q;
+  return [[1 - 2 * (y * y + z * z), 2 * (x * y + z * w), 2 * (x * z - y * w)], [2 * (x * y - z * w), 1 - 2 * (x * x + z * z), 2 * (y * z + x * w)], [2 * (x * z + y * w), 2 * (y * z - x * w), 1 - 2 * (x * x + y * y)]];
+}
+/**
+ * 회전 상자 두 개 겹침 (SAT 15축). A,B = { c:{x,y,z}, ax:[[3]x3], h:[3] }
+ *  → 안 겹치면 null, 겹치면 { depth, n:[x,y,z] } (n: A→B 로 밀어낼 방향, 단위)
+ */
+export function obbOverlap(A, B) {
+  const D = [B.c.x - A.c.x, B.c.y - A.c.y, B.c.z - A.c.z];
+  const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+  const axes = [...A.ax, ...B.ax];
+  for (const a of A.ax) for (const b of B.ax) axes.push([a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]]);
+  let best = null;
+  for (const L of axes) {
+    const l = Math.hypot(L[0], L[1], L[2]); if (l < 1e-6) continue;
+    const n = [L[0] / l, L[1] / l, L[2] / l];
+    const ra = A.h[0] * Math.abs(dot(A.ax[0], n)) + A.h[1] * Math.abs(dot(A.ax[1], n)) + A.h[2] * Math.abs(dot(A.ax[2], n));
+    const rb = B.h[0] * Math.abs(dot(B.ax[0], n)) + B.h[1] * Math.abs(dot(B.ax[1], n)) + B.h[2] * Math.abs(dot(B.ax[2], n));
+    const dn = dot(D, n), o = ra + rb - Math.abs(dn);
+    if (o <= 0) return null;
+    if (!best || o < best.depth) best = { depth: o, n: dn < 0 ? [-n[0], -n[1], -n[2]] : n };
+  }
+  return best;
+}

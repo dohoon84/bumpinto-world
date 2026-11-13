@@ -9,7 +9,7 @@ import * as CANNON from 'cannon-es';
 import { PRODUCTS, BY_ID, CART, EGG } from './products.js';
 import { buildCartGeometry, BASKET } from './cartModel.js';
 import { buildProductGeometry, addProductShape } from './shapes.js';
-import { orientedAabb, itemAabb, stackY, findSpot, rayObb } from './cartPack.js';
+import { orientedAabb, itemAabb, stackY, findSpot, rayObb, colliderHalf, quatAxes, obbOverlap } from './cartPack.js';
 import { createStaff } from './staff.js';
 import { registerStockProducts } from './stockCatalog.js';
 import { buildDepotCeiling } from './ceiling.js';
@@ -413,7 +413,9 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit, a
 
   const MAX_ITEMS = 40; // 카트 안 물리 물체 상한 (성능)
   function addItem(p, level, x, y, z, rotY, tip, reuse = null, quat = null) {
-    const body = new CANNON.Body({ mass: p.kg, material: p.soft || p.kind === 'egg' ? mSoft : mItem });
+    // 물리 질량은 무게 비율을 줄여서(1+√kg: 20 kg 쌀 5.5 · 0.5 kg 과자 1.7) — 반복 풀이기가 무거운 짐 밑 가벼운 판을 못 받쳐 서로 박히던 문제.
+    //   중력·관성 가속도는 질량과 무관하고, 무게(하중·계란 파손·카트 주행)는 p.kg 를 그대로 씀
+    const body = new CANNON.Body({ mass: 1 + Math.sqrt(p.kg), material: p.soft || p.kind === 'egg' ? mSoft : mItem });
     addPhysShape(body, p);
     body.position.set(x, y, z);
     const q = quat || itemQuat(rotY, tip); body.quaternion.set(q.x, q.y, q.z, q.w);
@@ -830,6 +832,26 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit, a
     if (l > 0.01) { const sp = (axes.run ? 2.4 : 1.4) * Math.min(1, l) * (st.vMul || 1); mx /= l; mz /= l; let nx = me.x + mx * sp * dt, nz = me.z + mz * sp * dt; const h = collide2D(nx, nz, 0.3); if (h) { nx += h.nx * h.pen; nz += h.nz * h.pen; } me.x = nx; me.z = nz; }
   }
 
+  // ---------- 겹침 감시: 물리가 얇은 판·무거운 짐 밑에서 서로 박혀 버린 짐을 0.2 초마다 떼어 놓음 ----------
+  //   충돌체와 같은 크기로 SAT → 1 cm 넘게 박힌 쌍만, 위에 있는 짐을 밀어낼 방향으로 (옆으로 박혔으면 반씩)
+  let depenT = 0;
+  function depenetrate() {
+    if (items.length < 2) return 0;
+    const O = items.map((it) => { const b = it.body; b.updateAABB(); return { b, c: b.position, ax: quatAxes(b.quaternion), h: colliderHalf(it.p, it.size), sph: it.p.shape === 'sphere' }; });
+    let fixed = 0;
+    for (let i = 0; i < O.length; i++) for (let j = i + 1; j < O.length; j++) {
+      const A = O[i], B2 = O[j]; if (A.sph || B2.sph) continue;
+      const a = A.b.aabb, c = B2.b.aabb; if (a.upperBound.x < c.lowerBound.x || c.upperBound.x < a.lowerBound.x || a.upperBound.y < c.lowerBound.y || c.upperBound.y < a.lowerBound.y || a.upperBound.z < c.lowerBound.z || c.upperBound.z < a.lowerBound.z) continue;
+      const o = obbOverlap(A, B2); if (!o || o.depth < 0.01) continue;
+      const d = Math.min(0.03, o.depth + 0.001), n = o.n, push = (q, k) => { q.b.position.x += n[0] * k; q.b.position.y += n[1] * k; q.b.position.z += n[2] * k; const vn = q.b.velocity.x * n[0] + q.b.velocity.y * n[1] + q.b.velocity.z * n[2]; if (vn * k < 0) { q.b.velocity.x -= vn * n[0]; q.b.velocity.y -= vn * n[1]; q.b.velocity.z -= vn * n[2]; } q.b.wakeUp(); };
+      if (Math.abs(n[1]) > 0.7) { if (n[1] > 0) push(B2, d); else push(A, -d); } // 위아래로 박힘: 위 짐만 올림 (n 은 A→B)
+      else { push(A, -d / 2); push(B2, d / 2); }
+      fixed++; if (st.depenLog) st.depenLog.push(`${items[i].p.id}×${items[j].p.id} ${(o.depth * 100).toFixed(1)}cm n${n.map((v) => v.toFixed(2))}`);
+    }
+    st.depenFixes = (st.depenFixes || 0) + fixed;
+    return fixed;
+  }
+
   // ---------- 물리 스텝 (카트 좌표계 관성력) ----------
   const FIXED = 1 / 120;
   let acc = 0;
@@ -849,6 +871,7 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit, a
       world.step(FIXED); acc -= FIXED;
       eggLoads(FIXED);
     }
+    if ((depenT -= dt) <= 0) { depenT = 0.2; depenetrate(); }
     for (const it of items.slice()) {
       const b = it.body, P = b.position;
       // 카트 밖으로 넘어가 테두리 아래로 떨어지면 → 매장 바닥 물체로 넘김

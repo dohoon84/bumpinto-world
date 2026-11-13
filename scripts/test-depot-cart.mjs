@@ -1,7 +1,7 @@
 // [depot] 카트 짐 겹침·집기 판정 회귀 테스트 (DOM 없음) — node scripts/test-depot-cart.mjs (npm run depot:cart:test)
 //   도훈 제보: 범쌀 20kg 포대 안에 보들범 30롤이 박혀 보이고, 클릭/E 가 다른 상품을 집음.
 import assert from 'node:assert/strict';
-import { orientedAabb, overlapDepth, findSpot, stackY, rayObb, nearestHit } from '../src/depot/cartPack.js';
+import { orientedAabb, overlapDepth, findSpot, stackY, rayObb, nearestHit, obbOverlap, quatAxes, colliderHalf } from '../src/depot/cartPack.js';
 import { BY_ID } from '../src/depot/products.js';
 import { BASKET as B } from '../src/depot/cartModel.js';
 
@@ -101,5 +101,15 @@ const inside = (placed, L, tag) => { for (const o of placed) { assert.ok(o.a.x0 
   assert.equal(rayObb({ x: -2, y: 0, z: 0.3 }, { x: 1, y: 0, z: 0 }, { x: 0, y: 0, z: 0 }, qY(Math.PI / 2), [0.4, 0.1, 1.0]), null, 'rotated OBB miss');
   assert.equal(nearestHit([{ id: 'a', dist: 2 }, { id: 'b', dist: 1 }, { id: 'c', dist: null }]).id, 'b');
   assert.equal(nearestHit([{ id: 'a', dist: 5 }], 4.5), null, 'beyond reach');
+}
+// ---------- 겹침 감시 (물리로 박힌 짐 떼기): SAT 깊이·방향 ----------
+{
+  const box = (c, q, h) => ({ c, ax: quatAxes(q), h });
+  assert.equal(obbOverlap(box({ x: 0, y: 0, z: 0 }, Q0, [0.1, 0.1, 0.1]), box({ x: 0.25, y: 0, z: 0 }, Q0, [0.1, 0.1, 0.1])), null, 'apart');
+  const o = obbOverlap(box({ x: 0, y: 0, z: 0 }, Q0, [0.15, 0.035, 0.15]), box({ x: 0.01, y: 0.05, z: 0 }, Q0, [0.13, 0.025, 0.1]));
+  assert.ok(o && Math.abs(o.depth - 0.01) < 1e-9 && o.n[1] > 0.99, `egg tray under meat tray: 1 cm, push meat up (${JSON.stringify(o)})`);
+  const r = obbOverlap(box({ x: 0, y: 0, z: 0 }, qY(0.3), [0.2, 0.2, 0.2]), box({ x: 0.35, y: 0, z: 0 }, qY(-0.2), [0.2, 0.2, 0.2]));
+  assert.ok(r && r.n[0] > 0.8, 'rotated side overlap pushes along +x');
+  assert.deepEqual(colliderHalf(BY_ID.rice).map((v) => +v.toFixed(4)), [0.188, 0.0598, 0.282], 'rice collider = physics pillow box');
 }
 console.log('depot cart pack/pick: ok');

@@ -46,6 +46,7 @@ const shelf = await p.evaluate(async () => {
 });
 console.log('shelf', JSON.stringify(shelf));
 check(shelf.overlapPairs === 0, `shelf overlaps: ${JSON.stringify(shelf.kinds)}`);
+if (!MOB) { await ev(() => window.__jj.depot.interior._dbg.camWorld([6.3, 1.75, 15.2], [6.3, 0.95, 19.5])); await p.waitForTimeout(1500); await p.screenshot({ path: `${OUT}/shelf-bakery-lanes-1280x800.png` }); await ev(() => window.__jj.depot.interior._dbg.camWorld(null)); }
 
 // 보이는 크기 상자(OBB) 쌍 겹침 깊이 — SAT 15축
 await ev(() => {
@@ -61,7 +62,7 @@ await ev(() => {
 });
 const load = await ev(() => {
   const I = window.__jj.depot.interior, d = I._dbg, r = [];
-  d.setMe(77, 11, 0); d.grabCart(); d.setCart(53.9, 30, 0);
+  d.setMe(77, 11, 0); d.grabCart(); d.setCart(53.9, 30, 0); I.st.depenLog = [];
   // 도훈 제보 순서: 범쌀 20kg → 같은 자리에 보들범 30롤 → 작은 것들 (자꾸 같은 곳을 가리켜도)
   for (const [id, lv, x, z, rot, tip] of [['rice', 'upper', 0, 0.05, 0], ['tissue', 'upper', 0, 0.05, Math.PI / 2], ['chips', 'upper', 0.0, 0.05, 0, true], ['bottle', 'upper', 0.2, -0.3, 0], ['meat', 'upper', -0.1, 0.05, 0], ['egg', 'upper', 0, 0.05, 0],
     ['soda', 'lower', 0, -0.15, 0], ['water', 'lower', 0, -0.15, 0], ['water', 'lower', 0, -0.15, 0], ['ramen', 'upper', 0, 0.05, 0], ['ramen', 'upper', 0, 0.05, 0]]) {
@@ -129,6 +130,8 @@ check(tested.has('rice') && tested.has('tissue'), 'rice (bottom, under the tissu
 
 const metric = await ev(async () => { window.gc?.(); const J = window.__jj, info = J.renderer.info; await new Promise((r) => requestAnimationFrame(r)); info.autoReset = false; info.reset(); await new Promise((r) => requestAnimationFrame(() => r())); info.autoReset = true; return { draws: info.render.calls, tris: info.render.triangles, geos: info.memory.geometries, tex: info.memory.textures, heapMB: +(performance.memory.usedJSHeapSize / 1048576).toFixed(1) }; });
 console.log('metric', JSON.stringify(metric));
+console.log('depenetration fixes', await ev(() => window.__jj.depot.interior.st.depenFixes || 0));
+if (process.env.DBG) console.log(await ev(() => (window.__jj.depot.interior.st.depenLog || []).join('\n')));
 await ev(() => { const d = window.__jj.depot.interior._dbg; d.push(3, 1); d.push(2, 1, 1); d.push(1.2, -1); d.settle(2); });
 ov = await ev(() => window.__cartOverlaps()); console.log('overlap after drive', ov); check(!ov.length, `overlap after drive: ${ov}`);
 const floorAfter = await ev(() => window.__jj.depot.interior._dbg.floorIds()); console.log('fell to floor', floorAfter);
