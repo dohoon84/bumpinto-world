@@ -10,6 +10,8 @@ import { MD_FONT } from './myeongdongAtlas.js';
 /** 모델이 대신 그리는 OSM 건물 way id (일반 건물 병합에서 뺀다. 충돌은 그대로) */
 export const SIGNATURE_IDS = new Set([
   233592424, 233592423, 577594782, // 롯데백화점 본점 · 에비뉴엘 · 롯데영플라자
+  301284818, 301284814, 781964195, // 신세계 본관(옛 미쓰코시) · 더 헤리티지(옛 제일은행) · 신관
+  781662004, 781662005, // 본관 정면에 붙은 작은 OSM 조각(입구 캐노피) — 모델 입구가 대신한다
 ]);
 
 // ---------------------------------------------------------------- 아틀라스 (1024², 256 칸)
@@ -224,6 +226,78 @@ function buildLotte(ctx) {
   }
 }
 
+
+// ---------------------------------------------------------------- 신세계
+const ROUNDABOUT = [-11262, -21566]; // 한국은행 앞 분수 로터리 (본관 정면이 보는 곳)
+function facing(o, pt) { // 외곽선 변 중 pt 를 가장 잘 보는 변
+  const [cx, cz] = centroid(o); const dx = pt[0] - cx, dz = pt[1] - cz, dl = Math.hypot(dx, dz) || 1;
+  let best = null, bk = -2; for (const e of edgesOut(o)) { const k = (e.nx * dx + e.nz * dz) / dl + Math.min(e.L, 40) / 400; if (k > bk) { bk = k; best = e; } }
+  return best;
+}
+function columns(buf, e, n, y0, y1, out, sz, col, span = 0.8) {
+  const tx = (e.q[0] - e.p[0]) / e.L, tz = (e.q[1] - e.p[1]) / e.L; const mx = (e.p[0] + e.q[0]) / 2, mz = (e.p[1] + e.q[1]) / 2;
+  const W = e.L * span; const ry = Math.atan2(tx, tz);
+  for (let i = 0; i < n; i++) { const t = n === 1 ? 0 : -W / 2 + W * i / (n - 1); buf.box(mx + tx * t + e.nx * out, (y0 + y1) / 2, mz + tz * t + e.nz * out, sz, y1 - y0, sz, ry, uvOf(R.stone), col); }
+}
+function buildShinsegae(ctx) {
+  const { byId, baseOf, buf, labels, media } = ctx;
+  const main = byId.get(301284818), her = byId.get(301284814), tower = byId.get(781964195);
+  const W = [1, 1, 1], gold = hex3('#d9a93a');
+  if (tower) { // 신관(2005, 19층) — 유리
+    const o = tower.o, y0 = baseOf(o), top = y0 + 88;
+    prism(buf, o, y0 - 0.4, top, uvOf(R.glass), ...T('glass'), hex3('#d5e2ee'), uvOf(R.stone), hex3('#7c8590'));
+    const e = facing(o, ROUNDABOUT); if (e) signOn(buf, e.p, e.q, 0.4, Math.min(e.L * 0.5, 34), top - 7.5, top - 7.5 + Math.min(e.L * 0.5, 34) / 8, uvOf(R.sShinsegae), [e.nx, e.nz]);
+  }
+  if (her) { // 더 헤리티지 = 옛 제일은행 본점(1935) — 화강석 + 큰 기둥
+    const o = her.o, y0 = baseOf(o), top = y0 + 21; const [cx, cz] = centroid(o);
+    prism(buf, o, y0 - 0.4, top, uvOf(R.arch), ...T('arch'), hex3('#e3ddd0'), uvOf(R.stone), hex3('#a9a296'));
+    for (const e of edgesOut(o)) wall(buf, e.p, e.q, top - 0.2, top + 1.6, uvOf(R.stone), 10, 1.8, hex3('#d6cfc1'), 0.5);
+    const e = facing(o, ROUNDABOUT);
+    if (e) { columns(buf, e, 6, y0, y0 + 14, 1.2, 1.5, hex3('#ece6da'), 0.7); signOn(buf, e.p, e.q, 1.3, Math.min(e.L * 0.55, 24), y0 + 15, y0 + 15 + Math.min(e.L * 0.55, 24) / 8, uvOf(R.sHeritage), [e.nx, e.nz]); }
+    labels.push({ text: '신세계 더 헤리티지 The Heritage (옛 제일은행 1935)', x: cx, z: cz, y: top + 5, maxDist: 350, minDist: 12, cls: 'label' });
+  }
+  if (main) { // 본관(1930 옛 미쓰코시) — 크림색 돌, 5층, 가운데 발코니·시계·금빛 입구
+    const o = main.o, y0 = baseOf(o), top = y0 + 24; const [cx, cz] = centroid(o);
+    prism(buf, o, y0 - 0.4, top, uvOf(R.stoneWin), ...T('stoneWin'), hex3('#efe9dd'), uvOf(R.stone), hex3('#b9b2a5'));
+    for (const e of edgesOut(o)) { wall(buf, e.p, e.q, top - 0.3, top + 1.4, uvOf(R.stone), 10, 1.7, hex3('#d9d2c4'), 0.6); wall(buf, e.p, e.q, y0 + 4.6, y0 + 5.1, uvOf(R.stone), 10, 0.5, hex3('#d9d2c4'), 0.35); }
+    // 꼭대기 한 층 물러난 층(펜트하우스)
+    const inner = o.map(([x, z]) => [x + (cx - x) * 0.12, z + (cz - z) * 0.12]);
+    prism(buf, inner, top + 1.4, top + 5, uvOf(R.stoneWin), ...T('stoneWin'), hex3('#e6e0d4'), uvOf(R.stone), hex3('#a8a195'));
+    const e = facing(o, ROUNDABOUT);
+    if (e) {
+      const tx = (e.q[0] - e.p[0]) / e.L, tz = (e.q[1] - e.p[1]) / e.L, mx = (e.p[0] + e.q[0]) / 2, mz = (e.p[1] + e.q[1]) / 2, ry = Math.atan2(tx, tz);
+      // 가운데 돌출 발코니(3층) + 난간
+      buf.box(mx + e.nx * 1.2, y0 + 13.2, mz + e.nz * 1.2, 2.4, 0.5, 18, ry, uvOf(R.stone), hex3('#e8e2d6'));
+      buf.box(mx + e.nx * 2.3, y0 + 14.0, mz + e.nz * 2.3, 0.2, 1.1, 18, ry, uvOf(R.stone), hex3('#f4efe6'));
+      // 시계(동그란 판 대신 팔각 상자) + 금빛 입구 아치 + SHINSEGAE 글씨
+      buf.box(mx + e.nx * 0.5, y0 + 10.2, mz + e.nz * 0.5, 0.3, 2.4, 2.4, ry, uvOf(R.stone), hex3('#5a4a2a')); buf.box(mx + e.nx * 0.7, y0 + 10.2, mz + e.nz * 0.7, 0.1, 1.9, 1.9, ry, uvOf(R.stone), hex3('#fbf7ea'));
+      buf.box(mx + e.nx * 0.9 - tx * 3.2, y0 + 3, mz + e.nz * 0.9 - tz * 3.2, 1.0, 6, 1.0, ry, uvOf(R.stone), gold);
+      buf.box(mx + e.nx * 0.9 + tx * 3.2, y0 + 3, mz + e.nz * 0.9 + tz * 3.2, 1.0, 6, 1.0, ry, uvOf(R.stone), gold);
+      buf.box(mx + e.nx * 0.9, y0 + 6.4, mz + e.nz * 0.9, 1.0, 1.2, 7.4, ry, uvOf(R.stone), gold);
+      signOn(buf, e.p, e.q, 0.7, 20, top - 3.6, top - 1.1, uvOf(R.sShinsegae), [e.nx, e.nz]);
+      // 밤 미디어 파사드: 정면 + 양옆 모서리 면
+      media.push({ e, y0: y0 + 5.4, y1: top - 4.0 });
+      for (const f of edgesOut(o)) if (f !== e && f.L > 18 && (f.nx * e.nx + f.nz * e.nz) > -0.2 && (f.nx * e.nx + f.nz * e.nz) < 0.7) media.push({ e: f, y0: y0 + 5.4, y1: top - 4.0 });
+    }
+    labels.push({ text: '🏬 신세계백화점 본점 Shinsegae Department Store · 1930', x: cx, z: cz, y: top + 10, maxDist: 2600, minDist: 20, cls: 'label landmark' });
+  }
+}
+
+/** 미디어 파사드 텍스처: 가로로 흐르는 빛 띠 · 별 · 눈송이 (글씨는 진짜 간판과 겹쳐 뺐다) (밤에만, offset 만 움직여 다시 올리지 않음) */
+function mediaTexture() {
+  const c = document.createElement('canvas'); c.width = 1024; c.height = 256; const g = c.getContext('2d');
+  const grd = g.createLinearGradient(0, 0, 1024, 0);
+  ['#ff2d75', '#ffb703', '#22d3ee', '#7c3aed', '#ff2d75'].forEach((col, i, a) => grd.addColorStop(i / (a.length - 1), col));
+  g.fillStyle = '#05060c'; g.fillRect(0, 0, 1024, 256);
+  g.globalAlpha = 0.55; g.fillStyle = grd; for (let y = 0; y < 256; y += 32) g.fillRect(0, y, 1024, 14); g.globalAlpha = 1;
+  const r = rnd(9);
+  for (let k = 0; k < 160; k++) { const x = r() * 1024, y = r() * 256, s = 1 + r() * 3; g.fillStyle = `hsla(${r() * 360},90%,${70 + r() * 25}%,${0.6 + r() * 0.4})`; g.beginPath(); g.arc(x, y, s, 0, Math.PI * 2); g.fill(); }
+  g.strokeStyle = '#ffffff'; g.lineWidth = 3;
+  for (let k = 0; k < 10; k++) { const x = 50 + k * 100 + r() * 20, y = 40 + r() * 170, s = 14 + r() * 10; for (let a = 0; a < 3; a++) { const t = a * Math.PI / 3; g.beginPath(); g.moveTo(x - Math.cos(t) * s, y - Math.sin(t) * s); g.lineTo(x + Math.cos(t) * s, y + Math.sin(t) * s); g.stroke(); } }
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.wrapS = THREE.RepeatWrapping;
+  return t;
+}
+
 // ---------------------------------------------------------------- 진입점
 /**
  * @param {{ parent: THREE.Object3D, data: any, heightAt: (x:number,z:number)=>number, overlay?: any }} o
@@ -233,20 +307,43 @@ export function createMyeongdongSignature({ parent, data, heightAt, overlay = nu
   const byId = new Map(); for (const b of data.buildings || []) if (SIGNATURE_IDS.has(b.id)) byId.set(b.id, b);
   const baseOf = (o) => { let mn = Infinity; for (const [x, z] of o) mn = Math.min(mn, heightAt(x, z)); return mn; };
   const M = sharedMats();
-  const meshes = [], labels = [];
+  const meshes = [], labels = [], media = [];
   const one = (name, fn) => {
     const buf = new GeoBuf({ uv: true, color: true });
-    fn({ byId, baseOf, buf, labels, heightAt });
+    fn({ byId, baseOf, buf, labels, heightAt, media });
     const geo = buf.build(); if (!geo) return;
     const m = new THREE.Mesh(geo, M.body); m.name = name; m.castShadow = false; m.receiveShadow = false; g.add(m); meshes.push(m);
   };
   one('md-sig-lotte', buildLotte);
+  one('md-sig-shinsegae', buildShinsegae);
+  // 신세계 밤 미디어 파사드: 면 몇 장 + 흐르는 텍스처(가산 혼합, 밤에만 보임, draw 1)
+  let mediaMesh = null, mediaTex = null;
+  if (media.length) {
+    const buf = new GeoBuf({ uv: true });
+    let u = 0;
+    for (const { e, y0, y1 } of media) {
+      const k = 0.94, ax = e.p[0] + (e.q[0] - e.p[0]) * (1 - k) / 2, az = e.p[1] + (e.q[1] - e.p[1]) * (1 - k) / 2;
+      const bx = e.q[0] - (e.q[0] - e.p[0]) * (1 - k) / 2, bz = e.q[1] - (e.q[1] - e.p[1]) * (1 - k) / 2;
+      const o = 0.28, du = (e.L * k) / ((y1 - y0) * 4);
+      // 밖에서 보면 왼→오 = p→q 의 반대일 수 있어 법선 기준으로 맞춘다: right = (nz, -nx)
+      const flip = ((bx - ax) * e.nz + (bz - az) * -e.nx) < 0;
+      const L = flip ? [bx, bz] : [ax, az], Rr = flip ? [ax, az] : [bx, bz];
+      buf.quad([L[0] + e.nx * o, y0, L[1] + e.nz * o], [Rr[0] + e.nx * o, y0, Rr[1] + e.nz * o], [Rr[0] + e.nx * o, y1, Rr[1] + e.nz * o], [L[0] + e.nx * o, y1, L[1] + e.nz * o], [u, 0, u + du, 1], null, [e.nx, 0, e.nz]);
+      u += du;
+    }
+    const geo = buf.build();
+    if (geo) {
+      mediaTex = mediaTexture();
+      const mat = new THREE.MeshBasicMaterial({ map: mediaTex, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false, fog: true, color: 0xb0b0b0 });
+      mediaMesh = new THREE.Mesh(geo, mat); mediaMesh.name = 'md-sig-shinsegae-media'; mediaMesh.visible = false; mediaMesh.renderOrder = 2; g.add(mediaMesh); meshes.push(mediaMesh);
+    }
+  }
   if (overlay) for (const L of labels) overlay.add({ cls: L.cls, text: L.text, getPos: () => new THREE.Vector3(L.x, L.y, L.z), maxDist: L.maxDist, minDist: L.minDist });
   return {
     group: g,
     footprints: [...byId.values()].map((b) => ({ o: b.o })),
-    setNight(v) { M.body.emissiveIntensity = 0.05 + v * 0.95; },
-    update() {},
+    setNight(v) { M.body.emissiveIntensity = 0.05 + v * 0.95; if (mediaMesh) mediaMesh.visible = v > 0.5; },
+    update(dt = 0) { if (mediaMesh?.visible && mediaTex) mediaTex.offset.x = (mediaTex.offset.x + dt * 0.035) % 1; },
     stats() { return { meshes: meshes.length, tris: meshes.reduce((s, m) => s + (m.geometry.index ? m.geometry.index.count / 3 : 0), 0) }; },
   };
 }
