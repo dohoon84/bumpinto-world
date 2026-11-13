@@ -252,6 +252,46 @@ body.ui-v2:not(.mobile) .v2-picker.is-compact .v2-sel-t b { font-size: 16px; }
 body.ui-v2:not(.mobile) .v2-picker.is-compact .v2-sel-t small { font-size: 12px; }
 body.ui-v2:not(.mobile) .v2-picker.is-compact .v2-sel .v2-btn { padding: 0 20px; font-size: 15px; }
 
+/* [route-map landscape] 폰 가로(높이 ≤ 500px · 가로 방향): 전체 화면 · 왼쪽 가로 고리 노선도 · 오른쪽 좁은 칸(선택 역 + 입장 버튼 항상 보임). 데스크톱·바텀시트와 별도 */
+body.ui-v2:not(.mobile) .v2-gate.v2-rm-land .v2-mini { display: none; }
+body.ui-v2.v2-rm-land-on:not(.mobile) #v2-top { display: none; }
+body.ui-v2:not(.mobile) .v2-picker.is-land { position: fixed; inset: 0; z-index: 70; width: auto; max-height: none; overflow: hidden; border-radius: 0; border: 0; display: grid; grid-template-columns: minmax(0, 1fr) 216px; gap: 10px; padding: max(6px, env(safe-area-inset-top)) max(10px, env(safe-area-inset-right)) max(6px, env(safe-area-inset-bottom)) max(10px, env(safe-area-inset-left)); background: radial-gradient(120% 90% at 30% 50%, rgba(29, 46, 75, .97), rgba(11, 19, 33, .98)); }
+body.ui-v2:not(.mobile) .v2-picker.is-land .v2-lmap { position: relative; min-width: 0; min-height: 0; border-radius: 14px; background: rgba(8, 16, 30, .32); border: 1px solid rgba(255, 255, 255, .06); overflow: hidden; }
+body.ui-v2:not(.mobile) .v2-picker.is-land .v2-lmap svg { position: absolute; left: 0; top: 0; pointer-events: none; }
+body.ui-v2:not(.mobile) .v2-picker.is-land .v2-stn { height: 32px; min-width: 44px; justify-content: center; padding: 0 10px; }
+body.ui-v2:not(.mobile) .v2-picker.is-land .v2-stn[data-side="C"] { transform: translate(-50%, -50%); }
+body.ui-v2:not(.mobile) .v2-picker.is-land .v2-stn::before { content: ''; position: absolute; left: 0; right: 0; top: -6px; bottom: -6px; }
+body.ui-v2:not(.mobile) .v2-picker.is-land .v2-stn b { font-size: 14px; }
+body.ui-v2:not(.mobile) .v2-picker.is-land .v2-stn.on { height: 34px; padding: 0 10px; }
+body.ui-v2:not(.mobile) .v2-picker.is-land .v2-stn.on b { font-size: 14px; }
+body.ui-v2:not(.mobile) .v2-picker.is-land .v2-stn.is-pass { height: 22px; min-width: 0; padding: 0 7px; gap: 4px; }
+body.ui-v2:not(.mobile) .v2-picker.is-land .v2-stn.is-pass::before { content: none; }
+body.ui-v2:not(.mobile) .v2-picker.is-land .v2-stn.is-pass b { font-size: 11.5px; }
+body.ui-v2:not(.mobile) .v2-picker.is-land .v2-stn.is-pass small { font-size: 10px; }
+body.ui-v2:not(.mobile) .v2-picker.is-land.is-en .v2-stn:not(.is-pass) { padding: 0 8px; }
+body.ui-v2:not(.mobile) .v2-picker.is-land.is-en .v2-stn:not(.is-pass) b { font-size: 13px; }
+body.ui-v2:not(.mobile) .v2-picker.is-land .v2-lside { display: flex; flex-direction: column; gap: 8px; min-width: 0; min-height: 0; overflow: hidden auto; scrollbar-width: none; }
+body.ui-v2:not(.mobile) .v2-picker.is-land .v2-lside > * { flex: none; }
+body.ui-v2:not(.mobile) .v2-picker.is-land .v2-lside > .v2-grow { flex: 1 1 0; min-height: 0; }
+body.ui-v2:not(.mobile) .v2-picker.is-land .v2-hrow { gap: 6px; min-height: 44px; }
+body.ui-v2:not(.mobile) .v2-picker.is-land .v2-hrow h2, body.ui-v2:not(.mobile) .v2-picker.is-land .v2-hrow .v2-head { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+body.ui-v2:not(.mobile) .v2-picker.is-land .v2-close { flex: none; width: 44px; height: 44px; }
+body.ui-v2:not(.mobile) .v2-picker.is-land .v2-ldesc { margin: -4px 0 0; font-size: 12px; color: var(--v2-sub); }
+body.ui-v2:not(.mobile) .v2-picker.is-land .v2-legend { display: flex; flex-wrap: wrap; gap: 4px 10px; }
+body.ui-v2:not(.mobile) .v2-picker.is-land .v2-lg { font-size: 11px; gap: 5px; }
+body.ui-v2:not(.mobile) .v2-picker.is-land .v2-lg i { width: 14px; height: 4px; }
+body.ui-v2:not(.mobile) .v2-picker.is-land .v2-lmarks { display: flex; flex-direction: column; gap: 6px; }
+body.ui-v2:not(.mobile) .v2-picker.is-land .v2-lm { position: relative; height: 40px; padding: 0 10px; font-size: 13px; }
+body.ui-v2:not(.mobile) .v2-picker.is-land .v2-lm span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+body.ui-v2:not(.mobile) .v2-picker.is-land .v2-lm small { font-size: 10.5px; margin-left: auto; }
+body.ui-v2:not(.mobile) .v2-picker.is-land .v2-sel { flex-direction: column; align-items: stretch; gap: 8px; padding: 10px; border-radius: 14px; background: linear-gradient(180deg, #2a3346, #1a2436); box-shadow: 0 6px 18px rgba(0, 0, 0, .35); }
+body.ui-v2:not(.mobile) .v2-picker.is-land .v2-sel-t { gap: 2px; }
+body.ui-v2:not(.mobile) .v2-picker.is-land .v2-sel-t b { font-size: 15px; line-height: 1.25; }
+body.ui-v2:not(.mobile) .v2-picker.is-land .v2-sel-t small { font-size: 11.5px; }
+body.ui-v2:not(.mobile) .v2-picker.is-land .v2-sel .v2-btn { width: 100%; height: auto; min-height: 48px; padding: 8px 12px; font-size: 15px; line-height: 1.2; white-space: normal; text-align: center; }
+/* 아주 낮은 화면(≤ 370px): 설명 줄 생략 */
+@media (max-height: 370px) { body.ui-v2:not(.mobile) .v2-picker.is-land .v2-ldesc { display: none; } body.ui-v2:not(.mobile) .v2-picker.is-land .v2-lm { height: 38px; } }
+
 /* ---------- 04 캐릭터 입장 (기존 lobby DOM) ---------- */
 body.ui-v2:not(.mobile).in-lobby #lobby { background: linear-gradient(180deg, rgba(7, 13, 28, .35), rgba(7, 13, 28, .15) 50%, rgba(7, 13, 28, .55)); padding-top: 58px; }
 body.ui-v2:not(.mobile) #lobby-card { box-sizing: border-box; grid-template-columns: 240px 1fr; gap: 18px; width: min(760px, 100%); padding: 16px; border-radius: 16px; background: var(--v2-panel-fill); border: 1.5px solid rgba(255, 255, 255, .18); box-shadow: var(--v2-panel-fx); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); color: var(--v2-txt); }

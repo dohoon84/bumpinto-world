@@ -12,6 +12,7 @@ import { CORRIDOR_STATION_IDS, CORRIDOR_STATION_COUNT, corridorName, layoutCorri
 
 import { lotteSiteLabel } from '../corridor/lotteOpening.js';
 import { buildRouteMap, lotteChipX, RM_LEGEND, RM_MODE, RM_COLOR, RM_PASS_SHORT_EN } from './routeMap.js';
+import { buildLandMap } from './routeMapLand.js';
 import { isEn, tr, onLangChange } from '../i18n.js';
 import { REPO_URL, isStarbaseLive } from '../worldGateFlags.js';
 
@@ -24,6 +25,8 @@ const IC_SKY = '<svg class="v2-ic" width="12" height="18" viewBox="0 0 12 18" fi
 const IC_OFF = '<svg class="v2-ic" width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="#9eb4c6" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 10L2.5 2.5M2.5 7V2.5H7"/></svg>';
 // 좁은 화면(< 768px)은 바텀시트 노선도. ui-v2 는 PC 전용(body.mobile·핸드폰이면 켜지지 않음)이라 데스크톱 창을 좁힌 경우다.
 const COMPACT_MQ = '(max-width: 767.98px)';
+// [route-map landscape] 높이가 낮은 가로 화면(폰 가로 844×390 · 740×360 · 932×430 등)은 전체 화면 가로 노선도(routeMapLand.js) — 바텀시트보다 우선
+const LAND_MQ = '(max-height: 500px) and (orientation: landscape)';
 const STRIP = { corridor: ['#f5a200', '#e6186c'], branch: ['#d31145', '#d31145'], us: ['#4cc9f0', '#1f5fbf'], kr: ['#d4003b', '#f5a200'] };
 
 let view = 'world'; // 다시 열 때(입장 카드 ‹ 노선 · 역 선택) 마지막 화면으로
@@ -109,7 +112,8 @@ function mountGate({ root, corridorGlobe, enter, focus, teardown }, onBackToStar
   const allStations = () => [...BASE.items, ...BASE.branches, BASE.landmark, ...(namsanGlobeEnabled() ? [NAMSAN_LANDMARK] : [])];
   const linesOf = (s) => (s.live ? ['신분당선', '수인분당선'] : (s.lines || []));
   let rm = null; // 마지막 노선도 배치 (setHot 이 점을 다시 그릴 때)
-  const isCompact = () => typeof matchMedia === 'function' && matchMedia(COMPACT_MQ).matches;
+  const isLand = () => typeof matchMedia === 'function' && matchMedia(LAND_MQ).matches;
+  const isCompact = () => typeof matchMedia === 'function' && matchMedia(COMPACT_MQ).matches && !isLand();
   // 데스크톱 지도 배율 k (0.9–1.15): 화면 높이에서 머리·범례·띠·선택 바(약 360px)와 지도 여백(52)을 뺀 높이에 맞춘다
   function pickK() {
     const avail = (root.clientHeight || innerHeight) - 58 - 12;
@@ -132,8 +136,9 @@ function mountGate({ root, corridorGlobe, enter, focus, teardown }, onBackToStar
     const lines = linesOf(s).map((l) => (isEn() ? (LINE_EN[l] || l) : l)).join(' · ');
     const pick = tr('다른 역은 지도에서 고르세요', 'pick another station on the map');
     // 좁은 화면: 이름표가 한 언어만 보여 주니 다른 언어 이름을 선택 바에 (8호선 · Jangji)
-    const other = isCompact() && !s.landmark ? (isEn() ? s.ko : s.en) : '';
-    const sub = isCompact() ? ([lines, other].filter(Boolean).join(' · ') || pick) : (lines ? `${lines} · ${pick}` : pick);
+    const touch = isCompact() || isLand();
+    const other = touch && !s.landmark ? (isEn() ? s.ko : s.en) : '';
+    const sub = touch ? ([lines, other].filter(Boolean).join(' · ') || pick) : (lines ? `${lines} · ${pick}` : pick);
     return `<div class="v2-sel"><div class="v2-sel-t"><b>${esc(tr(`${label} 선택됨`, `${label} selected`))}</b><small>${esc(sub)}</small></div>
       <button type="button" class="v2-btn primary" data-v2-at="${sid}">${esc(tr(`${label}에 입장`, `Enter ${label}`))}</button></div>`;
   }
@@ -167,7 +172,68 @@ function mountGate({ root, corridorGlobe, enter, focus, teardown }, onBackToStar
       : '';
     return nt + lotte;
   }
+  // [route-map landscape] 폰 가로 전용: 전체 화면 · 왼쪽 가로 고리 노선도(큰 칩) · 오른쪽 좁은 칸(제목·범례·랜드마크·선택 역 + 입장 버튼 고정)
+  //   칩·랜드마크는 누르면 '선택'만(바로 입장하지 않음) → 오른쪽 아래 입장 버튼으로 들어간다.
+  function renderLand() {
+    const en = isEn();
+    picker.classList.add('is-land'); picker.classList.remove('is-compact');
+    picker.classList.toggle('is-en', en);
+    root.classList.add('v2-rm-land'); root.classList.remove('v2-rm-compact');
+    document.body.classList.add('v2-rm-land-on'); // 상단 바(#v2-top)를 가린다 — 닫기(×)가 '월드 선택'과 같은 동작
+    picker.style.paddingBottom = '';
+    const sel = hot || defaultAt;
+    const stations = [...BASE.items, ...BASE.branches];
+    const legend = RM_LEGEND.map((l) => `<span class="v2-lg"><i style="background:${LINE_COLOR[l]}"></i>${esc(en ? LINE_EN[l] : l)}</span>`).join('')
+      + `<span class="v2-lg k"><i class="dot p"></i>${esc(tr('통과', 'Pass'))}</span>`;
+    picker.innerHTML = `
+      <div class="v2-lmap"><svg aria-hidden="true"></svg>${stations.map((s) => stationChip(s, en, true, sel)).join('')}</div>
+      <aside class="v2-lside">
+        <div class="v2-hrow">${headHtml(corridorName(en), { size: 16, icon: ICON.train(18, '#ffe169') })}<span class="v2-grow"></span>
+          <button type="button" class="v2-close" data-v2="close" aria-label="${esc(tr('닫기', 'Close'))}">${ICON.close(16)}</button></div>
+        <p class="v2-ldesc">${esc(tr(`정자 → 잠실 · ${CORRIDOR_STATION_COUNT}개 역`, `Jeongja → Jamsil · ${CORRIDOR_STATION_COUNT} stations`))}</p>
+        <div class="v2-legend">${legend}</div>
+        <div class="v2-lmarks">${landmarkChips(en, true, sel)}</div>
+        <span class="v2-grow"></span>
+        <div class="v2-sel-slot">${selectedRow(sel)}</div>
+      </aside>`;
+    // 지도·랜드마크 칩은 선택 전용 (입장은 선택 바 버튼만)
+    picker.querySelectorAll('.v2-lmap [data-v2-at], .v2-lmarks [data-v2-at]').forEach((e) => { e.dataset.pick = e.dataset.v2At; delete e.dataset.v2At; });
+    layoutLand(sel);
+  }
+  function layoutLand(sel) {
+    const map = picker.querySelector('.v2-lmap'), svg = map.querySelector('svg');
+    const W = Math.max(320, map.clientWidth || 520), H = Math.max(220, map.clientHeight || 320);
+    const chips = new Map([...map.querySelectorAll('[data-stn]')].map((e) => [e.dataset.stn, e]));
+    const size = new Map();
+    for (const [id, e] of chips) {
+      const w0 = e.offsetWidth, h0 = e.offsetHeight;
+      let w1 = w0;
+      if (!e.classList.contains('is-pass')) { const was = e.classList.contains('on'); e.classList.toggle('on', !was); w1 = e.offsetWidth; e.classList.toggle('on', was); }
+      size.set(id, { w: Math.ceil(Math.max(w0, w1)) || 60, h: Math.ceil(h0) || 32 });
+    }
+    const list = [...BASE.items, ...BASE.branches].map((s) => ({ id: s.live ? 'jeongja' : s.id, ko: s.ko, en: s.en, pass: !!s.pass, lines: linesOf(s) }));
+    const m = buildLandMap(list, { W, H }, (id) => size.get(id));
+    rm = m;
+    svg.setAttribute('width', W); svg.setAttribute('height', H); svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+    const lines = m.lines.map((l) => `<polyline points="${l.pts.map((p) => p.map(f1).join(',')).join(' ')}" stroke="${l.color}" stroke-width="${m.M.lw}" fill="none" stroke-linecap="round" stroke-linejoin="round"/>`).join('');
+    const dots = m.stations.map((st) => `<g data-dot="${st.id}">${dotSvg(st, m.pos.get(st.id), !st.pass && st.id === sel, m.M.dotR)}</g>`).join('');
+    // 고리 안쪽 빈자리에 조작 안내(장식, 터치 없음)
+    const { xJ, xR, yMid } = m.rows;
+    const hint = `<text x="${f1((xJ + xR) / 2 + 24)}" y="${f1(yMid + 5)}" text-anchor="middle" font-size="13" font-weight="700" fill="#9eb4c6" fill-opacity=".55">${esc(tr('역을 눌러 고른 뒤 오른쪽 아래 입장', 'Tap a station, then Enter'))}</text>`;
+    svg.innerHTML = lines + dots + hint;
+    for (const l of m.labels) {
+      const e = chips.get(l.id);
+      if (!e) continue;
+      // 가운데 이름표는 점 위/아래 가운데 기준(선택돼 커져도 가운데 유지), 오른쪽 이름표는 left 기준
+      e.style.left = `${f1(l.sd === 'C' ? l.x + l.w / 2 : l.x)}px`; e.style.right = 'auto';
+      e.style.top = `${f1(l.y)}px`;
+      e.dataset.side = l.sd;
+    }
+    map.__rm = m; // 검증 스크립트가 실측 DOM 과 대조
+  }
   function renderPicker() {
+    if (isLand()) { renderLand(); return; }
+    picker.classList.remove('is-land'); root.classList.remove('v2-rm-land'); document.body.classList.remove('v2-rm-land-on');
     const en = isEn(), compact = isCompact(), M = compact ? RM_MODE.mobile : RM_MODE.desktop;
     picker.classList.toggle('is-compact', compact);
     picker.classList.toggle('is-en', en);
@@ -270,8 +336,8 @@ function mountGate({ root, corridorGlobe, enter, focus, teardown }, onBackToStar
       <p class="v2-desc">${esc(tr('다른 지역은 ‹ 월드 선택에서 고르세요', 'Pick other regions from ‹ World Select'))}</p>`;
   }
 
-  function setHot(id) {
-    if (!id || hot === id || performance.now() - openedAt < 400) return;
+  function setHot(id, force = false) {
+    if (!id || hot === id || (!force && performance.now() - openedAt < 400)) return;
     if (stationById(id)?.pass) return;
     hot = id;
     picker.querySelectorAll('[data-hot]').forEach((b) => b.classList.toggle('on', b.dataset.hot === id));
@@ -296,7 +362,7 @@ function mountGate({ root, corridorGlobe, enter, focus, teardown }, onBackToStar
   function showWorld() {
     view = 'world';
     picker.hidden = true; mini.hidden = true; world.hidden = false;
-    root.classList.remove('v2-view-station', 'v2-rm-compact');
+    root.classList.remove('v2-view-station', 'v2-rm-compact', 'v2-rm-land'); document.body.classList.remove('v2-rm-land-on');
     if (corridorGlobe?.isOpen()) corridorGlobe.toggle(false);
     corridorGlobe?.zoomTo?.(99);
     top();
@@ -333,6 +399,8 @@ function mountGate({ root, corridorGlobe, enter, focus, teardown }, onBackToStar
       if (v2.dataset.v2 === 'close') showWorld();
       return;
     }
+    const pk = t.closest('[data-pick]');
+    if (pk && picker.contains(pk)) { e.stopPropagation(); e.preventDefault(); setHot(pk.dataset.pick, true); return; }
     const at = t.closest('[data-v2-at]');
     if (at && picker.contains(at)) { e.stopPropagation(); e.preventDefault(); goStation(at.dataset.v2At); return; }
     if (corridorGlobe && (t.closest('[data-corridor-open]') || t.closest('#gate-corridor') || t.closest('.gate-focus-chip[data-focus-region="jeongja"]'))) {
@@ -341,7 +409,7 @@ function mountGate({ root, corridorGlobe, enter, focus, teardown }, onBackToStar
     }
   };
   const onKey = (e) => { if (e.key === 'Escape' && view === 'station') showWorld(); };
-  const onOver = (e) => { const b = e.target.closest('[data-hot]'); if (b && picker.contains(b)) setHot(b.dataset.hot); };
+  const onOver = (e) => { if (e.type === 'pointerover' && picker.classList.contains('is-land')) return; /* 가로 폰: 탭(클릭)으로만 고른다 — 마우스로 입장 버튼까지 가며 선택이 바뀌지 않게 */ const b = e.target.closest('[data-hot]'); if (b && picker.contains(b)) setHot(b.dataset.hot); };
   let resizeRaf = 0;
   const onResize = () => { if (view !== 'station') return; cancelAnimationFrame(resizeRaf); resizeRaf = requestAnimationFrame(() => { if (alive && view === 'station') renderPicker(); }); };
   root.addEventListener('click', onClick, true);
@@ -363,7 +431,7 @@ function mountGate({ root, corridorGlobe, enter, focus, teardown }, onBackToStar
     removeEventListener('resize', onResize);
     root.removeEventListener('click', onClick, true);
     cancelAnimationFrame(resizeRaf);
-    root.classList.remove('v2-gate', 'v2-view-station', 'v2-rm-compact');
+    root.classList.remove('v2-gate', 'v2-view-station', 'v2-rm-compact', 'v2-rm-land'); document.body.classList.remove('v2-rm-land-on');
     world.remove(); picker.remove(); mini.remove();
   }
 
