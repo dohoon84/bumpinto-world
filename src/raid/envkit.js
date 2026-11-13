@@ -6,9 +6,9 @@ import { fromFrame, PATH_YAW } from './layout.js';
 const VARIANTS = ['apt_A', 'apt_B', 'apt_C', 'apt_D', 'apt_E', 'com_A', 'com_B'];
 const STATES = ['intact', 'damaged', 'collapsed'];
 const MOBS = {
-  shard_runner: { file: 'mob_shard_runner', crack: 1, move: 'run', speed: 4.2 },
-  rebar_brute: { file: 'mob_rebar_brute', crack: 1.6, move: 'walk', speed: 2.2 },
-  pier_colossus: { file: 'mob_pier_colossus', crack: 2.5, move: 'walk', speed: 1.5 },
+  shard_runner: { file: 'mob_shard_runner', crack: 1, move: 'run', speed: 4.2, impact: 0.43, power: 9, reach: 1.35 },
+  rebar_brute: { file: 'mob_rebar_brute', crack: 1.6, move: 'walk', speed: 2.2, impact: 0.5, power: 16, reach: 1.9 },
+  pier_colossus: { file: 'mob_pier_colossus', crack: 2.5, move: 'walk', speed: 1.5, impact: 0.55, power: 24, reach: 2.6 },
 };
 
 const uLit = { value: 0.3 };
@@ -24,6 +24,11 @@ function patchGlow(root) {
     for (const mat of mats) {
       if (!/glow/i.test(mat.name || '')) continue;
       mat.toneMapped = false;
+      if (/mob_/i.test(mat.name)) {
+        if (mat.color) mat.color.multiplyScalar(2.8);
+        if (mat.emissive) mat.emissiveIntensity = Math.max(mat.emissiveIntensity || 1, 4);
+        continue;
+      }
       mat.onBeforeCompile = (shader) => {
         shader.uniforms.uLit = uLit;
         shader.vertexShader = shader.vertexShader
@@ -92,9 +97,11 @@ export async function createEnvKit(scene) {
       props[name] = gltf.scene;
     }),
     ...Object.entries(MOBS).map(async ([id, spec]) => {
-      const gltf = await load(`/dungeon/env/mobs/${spec.file}.meshopt.glb`);
+      const gltf = await load(`/dungeon/env/mobs/v2/${spec.file}.meshopt.glb`);
       patchGlow(gltf.scene);
-      mobs[id] = { scene: gltf.scene, clips: gltf.animations, spec };
+      const meta = gltf.parser?.json?.scenes?.[0]?.extras?.bw?.clips || [];
+      const impactFrac = meta.find((c) => c.name === 'attack')?.impactFrac ?? spec.impact;
+      mobs[id] = { scene: gltf.scene, clips: gltf.animations, spec, impactFrac };
     }),
   ]);
 
@@ -269,9 +276,13 @@ export async function createEnvKit(scene) {
       ready: false,
       dead: false,
       speed: src.spec.speed,
+      power: src.spec.power,
+      reach: src.spec.reach,
+      impactFrac: src.impactFrac,
       play(name, loop = false) {
         const next = actions[name];
         if (!next) return;
+        if (name === 'attack') mob._impact = false;
         Object.values(actions).forEach((a) => { if (a !== next) a.fadeOut(0.12); });
         next.reset();
         next.setLoop(loop ? THREE.LoopRepeat : THREE.LoopOnce, loop ? Infinity : 1);
@@ -281,16 +292,29 @@ export async function createEnvKit(scene) {
       },
       update(dt) {
         mixer.update(dt);
+        const atk = actions.attack;
+        if (mob.clip === 'attack' && atk && !mob._impact) {
+          const dur = atk.getClip().duration || 1;
+          if (atk.time >= dur * mob.impactFrac) mob._impact = true;
+        }
         const death = actions.death;
         if (mob.clip === 'death' && death && death.time >= death.getClip().duration * 0.7) {
           death.paused = true;
           mob.dead = true;
         }
       },
+      consumeImpact() {
+        if (!mob._impact) return false;
+        mob._impact = false;
+        return true;
+      },
     };
     mixer.addEventListener('finished', (e) => {
-      if (e.action.getClip().name === 'spawn') {
+      const name = e.action.getClip().name;
+      if (name === 'spawn') {
         mob.ready = true;
+        mob.play(src.spec.move, true);
+      } else if (name === 'attack') {
         mob.play(src.spec.move, true);
       }
     });
@@ -352,6 +376,24 @@ export async function createEnvKit(scene) {
     }
   }
 
+  function showImpact() {
+    const lineup = [
+      ['shard_runner', 10, -3.2],
+      ['rebar_brute', 13, 0.2],
+      ['pier_colossus', 16, 3.6],
+    ];
+    for (const [kind, along, across] of lineup) {
+      const p = fromFrame(along, across);
+      const mob = makeMob(kind, p.x, p.z, yawFwd + Math.PI);
+      if (!mob) continue;
+      const clip = mobs[kind].clips.find((c) => c.name === 'attack');
+      mob.ready = true;
+      mob.play('attack', false);
+      mob.update((clip?.duration || 1) * mob.impactFrac);
+      mob.hold = true;
+    }
+  }
+
   function populateRoad() {
     const pack = [
       ['shard_runner', 14, 1.1],
@@ -389,6 +431,7 @@ export async function createEnvKit(scene) {
     setDress,
     spawnMob,
     showSpawn,
+    showImpact,
     populateRoad,
     update,
     uLit,

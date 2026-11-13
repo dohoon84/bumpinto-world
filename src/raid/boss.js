@@ -535,11 +535,20 @@ export function createBoss(scene) {
       const dx = player.x - add.mesh.position.x;
       const dz = player.z - add.mesh.position.z;
       const len = Math.hypot(dx, dz) || 1;
-      add.mesh.position.x += (dx / len) * dt * (state.stage === 3 ? 3.4 : 2.4);
-      add.mesh.position.z += (dz / len) * dt * (state.stage === 3 ? 3.4 : 2.4);
-      add.mesh.rotation.y = Math.atan2(dx, dz);
+      const reach = add.mob?.reach || 1.15;
+      const swinging = add.mob?.clip === 'attack';
+      if (!swinging) {
+        const speed = add.mob?.speed || (state.stage === 3 ? 3.4 : 2.4);
+        add.mesh.position.x += (dx / len) * dt * speed;
+        add.mesh.position.z += (dz / len) * dt * speed;
+        add.mesh.rotation.y = Math.atan2(dx, dz);
+      }
       add.wait = Math.max(0, add.wait - dt);
-      if (len < 1.15 && add.wait <= 0) {
+      if (add.mob && len < reach && !swinging && add.wait <= 0) add.mob.play('attack');
+      if (add.mob?.consumeImpact() && len < reach + 0.8) {
+        add.wait = 0.45;
+        onPlayerHit?.(add.mob.power || 12, 'add');
+      } else if (!add.mob && len < 1.15 && add.wait <= 0) {
         add.wait = 1.1;
         onPlayerHit?.(12, 'add');
       }

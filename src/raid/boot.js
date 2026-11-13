@@ -112,7 +112,7 @@ for (const id of CLASS_IDS) {
 consumeIntroReset(params);
 const rift = createRiftClock(params);
 const asked = normalizeClass(params.get('class'));
-const autoStart = ['transform', 'form', 'fight', 'victory', 'skyline', 'phase1', 'phase3', 'close', 'slam', 'emerge', 'chat', 'bridge', 'mobs', 'collapse', 'vfx', 'vfxall'].includes(shot);
+const autoStart = ['transform', 'form', 'fight', 'victory', 'skyline', 'phase1', 'phase3', 'close', 'slam', 'emerge', 'chat', 'bridge', 'mobs', 'collapse', 'vfx', 'vfxall', 'mobsv2'].includes(shot);
 let classId = asked || 'warrior';
 let form = null;
 let ghost = null;
@@ -649,12 +649,16 @@ function step(dt) {
   boss.update(dt, {
     fightOn: fighting && !boss.state.dead,
     player: actor.position,
-    onPlayerHit(amount) {
+    onPlayerHit(amount, kind) {
       const before = st.hp;
       combat.damagePlayer(amount);
       if (st.hp < before) {
         const crown = form.group.userData.crownY || 1.8;
         hud.float(asVec({ x: actor.position.x, y: crown + 0.25, z: actor.position.z }), amount, 'hurt');
+        if (kind === 'add') {
+          audio.playSfx('hit', { x: actor.position.x, z: actor.position.z });
+          vfx.sparks(actor.position.x, crown, actor.position.z, '#FFB428', 8);
+        }
       }
     },
     onWind(kind) {
@@ -1077,6 +1081,31 @@ if (shot === 'bridge' || shot === 'collapse' || shot === 'mobs') {
     shotLookY = 16;
     shotAim = 52;
   }
+}
+if (shot === 'mobsv2') {
+  showKnights();
+  const along = 2;
+  const groups = extras.concat([form.group]);
+  groups.forEach((g, i) => {
+    const p = fromFrame(along, (i - 2) * 1.6);
+    g.position.set(p.x, 0, p.z);
+    g.rotation.set(0, PATH_YAW, 0);
+    g.visible = true;
+  });
+  const mid = fromFrame(along, 0);
+  actor.position.set(mid.x, 0, mid.z);
+  boss.group.visible = false;
+  boss.hideDress();
+  env.showImpact();
+  for (const mob of env.liveMobs) {
+    const p = mob.group.position;
+    vfx.sparks(p.x, 1.8, p.z, '#FFB428', 5);
+  }
+  camYaw = PATH_YAW;
+  camPitch = 50 * Math.PI / 180;
+  camDist = 20;
+  shotLookY = 0.5;
+  shotAim = 12;
 }
 if (shot === 'vfx' || shot === 'vfxall') {
   showKnights();
