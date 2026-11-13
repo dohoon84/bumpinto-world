@@ -9,6 +9,7 @@ import * as CANNON from 'cannon-es';
 import { PRODUCTS, BY_ID, CART, EGG } from './products.js';
 import { buildCartGeometry, BASKET } from './cartModel.js';
 import { buildProductGeometry, addProductShape } from './shapes.js';
+import { orientedAabb, itemAabb, stackY, findSpot, rayObb } from './cartPack.js';
 import { createStaff } from './staff.js';
 import { registerStockProducts } from './stockCatalog.js';
 import { buildDepotCeiling } from './ceiling.js';
@@ -499,6 +500,7 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit, a
   const RIM_Y = (B.top.yFront + B.top.yRear) / 2;
   const basketFloor = { x0: -B.floor.x, x1: B.floor.x, z0: B.floor.z0, z1: B.floor.z1 };
   const trayRect = { x0: -B.tray.x, x1: B.tray.x, z0: B.tray.z0, z1: B.tray.z1 };
+  const UPPER_CEIL = B.top.yRear + 0.5; // 윗바구니 짐 윗면 한계 (테두리 위 50 cm) — 넘으면 다른 빈자리, 없으면 '카트 꽉 참'
   // 놓을 자리: 가리킨 곳 그대로(자르지 않음). 바구니 안이면 바닥부터, 벽에 걸치면 테두리 위, 바깥이면 매장 바닥.
   // 겹치는 상품이 있으면 그 위로 올림. 안정도: 받치는 면적 비율 + 무게중심이 받침 영역 안인지.
   function solveGhost() {
@@ -512,13 +514,16 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit, a
     if (where === 'floor') { x = st.fx + st.nudge.x; z = st.fz + st.nudge.z; }
     const fp = { x0: x - hx, x1: x + hx, z0: z - hz, z1: z + hz };
     if (where === 'basket' && (fp.x0 < -B.floor.x - 0.004 || fp.x1 > B.floor.x + 0.004 || fp.z1 > B.floor.z1 + 0.004 || fp.z0 < B.top.z0 - 0.004 || (fp.z0 < B.floor.z0 && fp.z0 < LEVELS.upper.frontZ(B.floorY + h)))) where = 'rim';
-    const base = where === 'basket' ? B.floorY : where === 'rim' ? RIM_Y : where === 'lower' ? B.tray.y : 0;
-    let y = base;
-    const obs = where === 'floor' ? [] : items.filter((it) => (where === 'lower') === (it.level === 'lower')).map((it) => bodyAabb(it.body));
-    for (let k = 0; k < 24; k++) {
-      let moved = false;
-      for (const o of obs) if (overlapXZ(fp, o) && o.y0 < y + h - 0.004 && o.y1 > y + 0.004) { y = o.y1 + 0.0005; moved = true; }
-      if (!moved) break;
+    let base = where === 'basket' ? B.floorY : where === 'rim' ? RIM_Y : where === 'lower' ? B.tray.y : 0;
+    // 겹침 판정: 두 층 짐 전부 · 보이는 크기 그대로(물리 포대처럼 줄인 상자 X) — 아래 받침대 짐이 바구니 바닥을 뚫고 올라온 경우도 잡힘
+    const obs = where === 'floor' ? [] : items.map(itemAabb);
+    let full = false, y = base;
+    if (where !== 'floor') {
+      // 윗바구니: 혼자서도 높은 상품(가전 상자)은 바닥에 한 개는 놓을 수 있게
+      const ceil = where === 'lower' ? LEVELS.lower.ceil : Math.max(UPPER_CEIL, B.floorY + h + 0.001), region = where === 'lower' ? trayRect : basketFloor;
+      let s = findSpot({ hx, hz, h, x, z, base, obs, ceil, region: where === 'rim' ? null : region });
+      if (s.full && where === 'rim') { s = findSpot({ hx, hz, h, x, z, base: B.floorY, obs, ceil, region: basketFloor }); if (!s.full) { where = 'basket'; base = B.floorY; } }
+      full = s.full; y = s.y; if (s.moved) { x = s.x; z = s.z; fp.x0 = x - hx; fp.x1 = x + hx; fp.z0 = z - hz; fp.z1 = z + hz; }
     }
     // 받침 영역
     const sup = [];
@@ -535,7 +540,7 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit, a
     for (const o of obs) if (overlapXZ(fp, o) && Math.abs(o.y1 - y) < 0.015) sup.push(clipXZ(fp, o));
     const supA = sup.reduce((a, r) => a + areaXZ(r), 0), fpA = areaXZ(fp), ratio = Math.min(1, supA / fpA);
     let state = 'red';
-    if (sup.length && supA > 1e-5) {
+    if (!full && sup.length && supA > 1e-5) {
       const hull = sup.reduce((a, r) => ({ x0: Math.min(a.x0, r.x0), x1: Math.max(a.x1, r.x1), z0: Math.min(a.z0, r.z0), z1: Math.max(a.z1, r.z1) }), { x0: 1e9, x1: -1e9, z0: 1e9, z1: -1e9 });
       const margin = Math.min(x - hull.x0, hull.x1 - x, z - hull.z0, hull.z1 - z);
       const tall = h > 1.8 * Math.min(hx, hz) * 2 && p.shape !== 'cyl';
@@ -543,7 +548,7 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit, a
       else if (ratio < 0.5 || margin < 0.03 || where === 'rim' || (where !== 'floor' && y + h > B.top.yRear + 0.3) || (tall && where !== 'floor')) state = 'yellow';
       else state = 'green';
     }
-    return { x, y: y + h / 2 + 0.003, z, ok: true, state, where, ratio, top: y + h };
+    return { x, y: y + h / 2 + 0.003, z, ok: !full, full, state, where, ratio, top: y + h };
   }
   let ghostSol = null;
   function toggleLevel() { st.level = st.level === 'upper' ? 'lower' : 'upper'; st.nudge.x = st.nudge.z = 0; st.gx = 0; st.gz = 0; }
@@ -555,22 +560,41 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit, a
   // PC: 마우스 커서 위치에서 레이 (가운데 조준 불필요) · 모바일/키보드: 화면 가운데
   const mouse = { on: false, x: 0, y: 0 };
   const REACH = 4.5;
+  // 집기 대상: 진열 인스턴스는 레이캐스트, 카트 속·바닥 상품은 자기 상자(보이는 크기 OBB)에 레이 → 가장 가까운 것 하나.
+  //   (예전: 메시 모양 그대로 맞혀서 화장지 롤 사이 틈·겹친 짐 너머의 다른 상품이 잡힘)
+  const _wp = new THREE.Vector3(), _wq = new THREE.Quaternion(), _ws = new THREE.Vector3();
   function pickTarget(at) {
     ray.setFromCamera(at || (mouse.on ? ndc.set(mouse.x, mouse.y) : ndc.set(0, 0)), camera); ray.far = REACH;
-    const loose = [...items.map((it) => it.mesh), ...floorItems.map((f) => f.mesh)];
-    const hit = ray.intersectObjects([...prodMeshes, ...loose], false)[0];
-    if (!hit) return null;
-    const pid = hit.object.isInstancedMesh && hit.instanceId != null ? (hit.object.userData.pids?.[hit.instanceId] ?? hit.object.userData.pid) : null; // 구역별 합친 진열 메시는 인스턴스마다 SKU
-    if (pid) return { kind: 'shelf', im: hit.object, id: hit.instanceId, p: BY_ID[pid], dist: hit.distance };
-    const it = items.find((i) => i.mesh === hit.object); if (it) return { kind: 'cart', it, p: it.p, dist: hit.distance };
-    const fi = floorItems.find((f) => f.mesh === hit.object); if (fi) return { kind: 'floor', fi, p: fi.p, dist: hit.distance };
-    return null;
+    let best = null;
+    for (const hit of ray.intersectObjects(prodMeshes, false)) {
+      const im = hit.object, id = hit.instanceId;
+      const pid = im.isInstancedMesh && id != null ? (im.userData.pids?.[id] ?? im.userData.pid) : null; // 구역별 합친 진열 메시는 인스턴스마다 SKU
+      const L = im.userData.list?.[id];
+      // 안쪽·아래 단(집기 불가) 상품이나 SKU 없는 메시는 가림막: 그 뒤 상품을 대신 집지 않음
+      best = pid && BY_ID[pid] && L?.pickable !== false ? { kind: 'shelf', im, id, p: BY_ID[pid], dist: hit.distance } : { kind: 'block', dist: hit.distance };
+      break;
+    }
+    const o = ray.ray.origin, d = ray.ray.direction;
+    const test = (mesh, p, size, mk) => {
+      mesh.updateWorldMatrix(true, false); mesh.matrixWorld.decompose(_wp, _wq, _ws);
+      const t = rayObb(o, d, _wp, _wq, size);
+      if (t != null && t <= REACH && (!best || t < best.dist)) best = mk(t);
+    };
+    for (const it of items) test(it.mesh, it.p, it.size, (t) => ({ kind: 'cart', it, p: it.p, dist: t }));
+    for (const fi of floorItems) test(fi.mesh, fi.p, fi.p.size, (t) => ({ kind: 'floor', fi, p: fi.p, dist: t }));
+    return best && best.kind !== 'block' ? best : null;
   }
   const hlS = new THREE.Matrix4();
   function updateHighlight() {
     if (!hover || st.mode !== 'walk') { hlBox.visible = false; dom.style.cursor = ''; return; }
-    const [sx, sy, sz] = hover.p.size; hlS.makeScale(sx * 1.05, sy * 1.05, sz * 1.05);
-    if (hover.kind === 'shelf') hover.im.getMatrixAt(hover.id, m4); else { const o = hover.kind === 'cart' ? hover.it.mesh : hover.fi.mesh; o.updateMatrixWorld(); m4.copy(o.matrixWorld); }
+    if (hover.kind === 'shelf') { // 인스턴스 행렬(진열은 크기까지 들어 있음) × 지오메트리 상자 — 집힐 그 상품 하나만 테두리
+      const im = hover.im, g = im.geometry; if (!g.boundingBox) g.computeBoundingBox();
+      const bb = g.boundingBox; im.getMatrixAt(hover.id, m4); m4.premultiply(im.matrixWorld);
+      hlS.makeScale((bb.max.x - bb.min.x) * 1.05, (bb.max.y - bb.min.y) * 1.05, (bb.max.z - bb.min.z) * 1.05).setPosition((bb.min.x + bb.max.x) / 2, (bb.min.y + bb.max.y) / 2, (bb.min.z + bb.max.z) / 2);
+    } else { // 카트 속·바닥: 집기 판정과 같은 상자
+      const [sx, sy, sz] = hover.kind === 'cart' ? hover.it.size : hover.p.size; hlS.makeScale(sx * 1.05, sy * 1.05, sz * 1.05);
+      const ob = hover.kind === 'cart' ? hover.it.mesh : hover.fi.mesh; ob.updateMatrixWorld(); m4.copy(ob.matrixWorld);
+    }
     hlBox.matrix.multiplyMatrices(m4, hlS); hlBox.matrixWorldNeedsUpdate = true;
     hlBox.visible = true; hlM.opacity = 0.75 + 0.25 * Math.sin(st.t * 8); dom.style.cursor = 'pointer';
   }
@@ -594,7 +618,11 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit, a
     } else if (h.kind === 'cart') {
       const it = h.it, P = it.body.position.clone(), Q = it.body.quaternion.clone(), lv = it.level;
       detachItem(it); mesh = it.mesh; src = it.src;
-      restore = () => { const q = new THREE.Quaternion(Q.x, Q.y, Q.z, Q.w); addItem(it.p, lv, P.x, P.y + 0.01, P.z, 0, false, mesh, q); };
+      restore = () => { // 집는 사이 위 짐이 내려앉았으면 그 자리 그대로 되돌리지 않고 겹치는 짐 위로 올려서 (겹쳐 박힘 방지)
+        const q = new THREE.Quaternion(Q.x, Q.y, Q.z, Q.w), a = orientedAabb(P, q, it.size), h = a.y1 - a.y0;
+        const y0 = stackY(a, h, a.y0 + 0.01, items.map(itemAabb));
+        addItem(it.p, lv, P.x, P.y + (y0 - a.y0), P.z, 0, false, mesh, q);
+      };
     } else {
       const fi = h.fi; removeFloorItem(fi); mesh = fi.mesh; src = fi.src;
       restore = () => { floorRoot.add(fi.mesh); floorItems.push(fi); };
@@ -614,6 +642,7 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit, a
     if (st.mode !== 'place' || !ghostSol) return false;
     const h = st.held, p = h.p; let away = 0;
     if (ghostSol.where !== 'floor') {
+      if (ghostSol.full) { toast(ghostSol.where === 'lower' ? '아래 받침대가 꽉 찼어요 · 윗바구니(Tab)에 놓거나 카트에서 빼고 넣어요' : '카트가 꽉 찼어요 · 더 쌓을 자리가 없어요 (아래 받침대 Tab · X 마지막 상품 빼기)', 2200, '#8a5a00'); return false; }
       if (items.length >= MAX_ITEMS) { toast(`카트 안 상품은 ${MAX_ITEMS}개까지 (샘플 성능 상한)`, 1600, '#8a5a00'); return false; }
       if (loadKg() + p.kg > CART.maxLoad) { toast(`카트 허용 하중 ${CART.maxLoad} kg 초과`, 1600); return false; }
       addItem(p, ghostSol.where === 'lower' ? 'lower' : 'upper', ghostSol.x, ghostSol.y, ghostSol.z, st.rotY, st.tip, h.mesh);
@@ -876,7 +905,7 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit, a
         : 'WASD 걷기 · 드래그 둘러보기 · E 카트 잡기 · 왼쪽 끝 출구(EXIT)에서 E 나가기';
     if (elHelp.textContent !== help) elHelp.textContent = help;
     elTarget.style.background = ''; let coP = null;
-    if (st.mode === 'place' && ghostSol) { elTarget.style.display = 'block'; elTarget.textContent = ghostSol.where === 'floor' ? '매장 바닥에 내려놓기' : { green: '안정적 — 여기 놓으면 OK', yellow: '흔들흔들 — 카트 움직이면 떨어질 수도', red: '위태위태 — 떨어질 것 같아요 (그래도 놓을 수 있음)' }[ghostSol.state]; elTarget.style.background = { green: '#e8fff0', yellow: '#fff6d6', red: '#ffe3e0' }[ghostSol.state]; }
+    if (st.mode === 'place' && ghostSol) { elTarget.style.display = 'block'; elTarget.textContent = ghostSol.where === 'floor' ? '매장 바닥에 내려놓기' : ghostSol.full ? (ghostSol.where === 'lower' ? '아래 받침대 꽉 참 — 여기엔 못 놓아요' : '카트 꽉 참 — 더 쌓을 자리가 없어요') : { green: '안정적 — 여기 놓으면 OK', yellow: '흔들흔들 — 카트 움직이면 떨어질 수도', red: '위태위태 — 떨어질 것 같아요 (그래도 놓을 수 있음)' }[ghostSol.state]; elTarget.style.background = { green: '#e8fff0', yellow: '#fff6d6', red: '#ffe3e0' }[ghostSol.state]; }
     else if (st.mode === 'walk' && (coP = checkout.prompt())) { elTarget.style.display = 'block'; elTarget.textContent = coP.text; elTarget.style.background = coP.bg || ''; }
     else if (st.mode === 'walk' && nearMyCart()) { elTarget.style.display = 'block'; elTarget.style.background = ''; elTarget.textContent = `E 카트 잡기${items.length ? ` · 짐 ${items.length}개 그대로` : ''}${hover ? ` · 클릭 = ${hover.p.name} 집기` : ''}`; }
     else if (hover && st.mode === 'walk') { elTarget.style.display = 'block'; elTarget.style.background = ''; elTarget.textContent = `${hover.kind === 'floor' ? '(바닥) ' : hover.kind === 'cart' ? '(카트 속) ' : ''}${hover.p.name} · ${hover.p.kg} kg · ${hover.p.price.toLocaleString('ko-KR')}원 — 클릭/E 집기`; }
@@ -941,7 +970,8 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit, a
     if (e.target !== dom || checkout.busy) return;
     if (st.mode === 'place') { if (e.button === 2) cancelPlace(); else place(); return; }
     // 클릭한 그 자리의 상품 (마우스 위치 레이)
-    if (e.pointerType === 'mouse') { const r0 = dom.getBoundingClientRect(); const t = pickTarget(new THREE.Vector2(((e.clientX - r0.left) / r0.width) * 2 - 1, -((e.clientY - r0.top) / r0.height) * 2 + 1)); if (t) hover = t; }
+    // 마우스·터치 모두 누른 그 자리 상품 (모바일 탭도 화면 가운데가 아니라 손가락 아래 상품) — 아무것도 없으면 집지 않음
+    { const r0 = dom.getBoundingClientRect(); hover = pickTarget(new THREE.Vector2(((e.clientX - r0.left) / r0.width) * 2 - 1, -((e.clientY - r0.top) / r0.height) * 2 + 1)); }
     if (!hover) { const r0 = dom.getBoundingClientRect(); ray.setFromCamera(ndc.set(((e.clientX - r0.left) / r0.width) * 2 - 1, -((e.clientY - r0.top) / r0.height) * 2 + 1), camera); ray.far = REACH; if (elec.handleClick(ray)) return; }
     if (hover) pick(); else if (nearMyCart()) regrabCart(); else if (!st.hasCart && nearCorral() && !cart.visible) grabCart();
   };

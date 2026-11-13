@@ -21,6 +21,7 @@
     "shops:test": "node scripts/test-ground-floor-shops.mjs",
     "photo-cloud:test": "node scripts/test-photo-cloud.mjs",
     "accounts:test": "node scripts/test-accounts.mjs && node scripts/test-account-consent.mjs && node scripts/test-account-consent-ui.mjs",
+    "depot:cart:test": "node scripts/test-depot-cart.mjs",
     "depot:day4:test": "node scripts/test-depot-day4.mjs",
     "depot:day5:test": "node scripts/test-depot-day5.mjs",
     "depot:day6:test": "node scripts/test-depot-day6.mjs",
