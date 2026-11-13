@@ -76,13 +76,15 @@ body.depot-inside #ve-hud{display:none !important} /* 매장 안: 왼쪽 위 할
     }
   }
   async function finishLeave() {
-    onInterior?.('', null);
-    interior?.dispose(); interior = null; active = false; document.body.classList.remove('depot-inside');
+    // dispose 가 중간에 던지더라도 active/interior 를 꼭 비워, 페이드가 멈춘 채 매장 업데이트를 반복하지 않게 한다.
+    try { onInterior?.('', null); } catch (e) { console.warn('[depot]', e); }
+    try { interior?.dispose(); } catch (e) { console.warn('[depot]', e); }
+    interior = null; active = false; document.body.classList.remove('depot-inside');
     fadeSub.textContent = '주변을 다시 그리는 중';
     try { await Promise.resolve(onPark?.(false)); } catch (e) { console.warn('[depot-park]', e); }
     try { audio?.leave(); } catch (e) { console.warn('[depot-audio]', e); }
     paEl.hidden = true;
-    const p = getPlayer?.()?.position; if (p) { p.x = DEPOT_SPAWN.x; p.z = DEPOT_SPAWN.z; }
+    try { const p = getPlayer?.()?.position; if (p) { p.x = DEPOT_SPAWN.x; p.z = DEPOT_SPAWN.z; } } catch (e) { console.warn('[depot]', e); }
   }
   let building = false, leavingWait = false;
   function tickFade(dt) {

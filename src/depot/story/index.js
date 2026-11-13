@@ -1967,12 +1967,18 @@ export function createStory(ctx) {
       skipMissionClock: (sec) => { if (mission) mission.t0 -= sec; if (job) job.t0 -= sec; }, takeTower: () => mission && !mission.taken && takeTower(), switchMode, cancelExit, exitReq: () => exitReq, fire: (id, o) => reactions.fire(id, { force: true, ...o }), setFreq: (f) => { session.freq = f; }, hits: () => hits.slice(), setDay: (d) => { save.day = d; save.beat = null; save.replay = null; }, setEv: (o) => { save.ev = { ...o }; save.audit = null; }, noPersist: () => { session.noPersist = true; }, npcs: () => npcsForDay(), coins: () => coins && coins.pts.map((c) => ({ ...c })), stagePZ: () => stagePhoneZombie(true),
       collide: (x, z, r = 0.3) => ctx.collide?.(x, z, r) || null, obstacles: () => (ctx.obstacles || []).filter((o) => !o.npc && o.x0 > -900).map((o) => ({ x0: o.x0, x1: o.x1, z0: o.z0, z1: o.z1, story: o.story })) },
     dispose() {
-      if (!leftSaved && (save.mode === 'story') && !session.noPersist) {
-        const kind = talking ? 'dialogue' : mission && !mission.result ? 'event' : items.length && !flags.paid ? 'cart' : null;
-        if (kind) save.left = { at: Date.now(), kind, n: items.length };
-        persist(); // 하루(save.day)와 체크포인트(save.beat)는 그대로 — 나가기는 멈춤일 뿐
-      }
-      alive = false; runTok++; props.dispose(); d4.dispose(); d5.dispose(); d6.dispose(); d7.dispose(); clearStage(); d8.dispose(); d9.dispose(); setEndcap(false); d10.dispose(); clearTrain(); d11.dispose(); d12.dispose(); setStage(null); d13.dispose(); vsHud.dispose(); st.vMul = 1; st.extraKg = 0; if (mission?.id === 'E05' || mission?.spyN) shoppers?.puppet?.('spy', false); guide.set(null); vn.setChip(null); removeCoins(); clearTimeout(paTimer); clearTimeout(stageTimer); window.removeEventListener('depot:sfx', onSfx); window.removeEventListener('depot:pa', onPa); for (const w of waiters.done) w(); vn.dispose(); sfx.dispose();
+      alive = false; runTok++;
+      try {
+        if (!leftSaved && (save.mode === 'story') && !session.noPersist) {
+          const kind = talking ? 'dialogue' : mission && !mission.result ? 'event' : items.length && !flags.paid ? 'cart' : null;
+          if (kind) save.left = { at: Date.now(), kind, n: items.length };
+          persist(); // 하루(save.day)와 체크포인트(save.beat)는 그대로 — 나가기는 멈춤일 뿐
+        }
+        props.dispose(); d4.dispose(); d5.dispose(); d6.dispose(); d7.dispose(); clearStage(); d8.dispose(); d9.dispose(); setEndcap(false); d10.dispose(); clearTrain(); d11.dispose(); d12.dispose(); setStage(null); d13.dispose(); vsHud.dispose(); st.vMul = 1; st.extraKg = 0; if (mission?.id === 'E05' || mission?.spyN) shoppers?.puppet?.('spy', false); guide.set(null); vn.setChip(null); removeCoins(); clearTimeout(paTimer); clearTimeout(stageTimer); window.removeEventListener('depot:sfx', onSfx); window.removeEventListener('depot:pa', onPa); for (const w of waiters.done.splice(0)) w(); sfx.dispose();
+      } catch (e) { console.warn('[depot-story]', e); }
+      try { vn.dispose(); } catch (e) { console.warn('[depot-story]', e); }
+      document.body.classList.remove('dp-story-lock', 'dp-chip-m', 'dp-story-m');
     },
+
   };
 }
