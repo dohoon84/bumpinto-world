@@ -13,7 +13,7 @@ const VIEWS0 = [
   { name: 'food-stalls', px: -10921, pz: -21640, yaw: -0.25, pitch: 0.2, dist: 9 },
   { name: 'myeongdong-gil', px: -10980, pz: -21800, yaw: -1.45, pitch: 0.12, dist: 9 },
   // 첨탑·십자가가 1280x800 과 모바일 가로 844x390 모두에 들어오게 조금 물러서서 위를 본다
-  { name: 'cathedral', px: 'cath', back: 30, side: -2, pitch: -0.22, dist: 12 },
+  { name: 'cathedral', px: 'cath', back: 24, side: -2, pitch: -0.28, dist: 11 },
   { name: 'cathedral-stairs', px: 'cath', back: 52, side: -3.5, pitch: -0.06, dist: 10 },
   { name: 'cathedral-aerial', px: 'cath', back: 10, ov: true, dist: 95, pitch: 0.55, yawOff: 0.5 },
   // 낮에 열린 회오리감자 노점 클로즈업 (닫힌 노점을 비추지 않게 day+kind 지정)
