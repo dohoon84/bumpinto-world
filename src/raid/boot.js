@@ -19,7 +19,7 @@ import { attachTrails, updateTrails } from './trails.js';
 import { createRaidRoom, mountRaidChat } from './chat.js';
 import { virtualPad } from '../input.js';
 import {
-  PATH_YAW, BOSS_ALONG, spawnPoint, safePoint, bossPoint, clampArena, pushOutOfBoss, fromFrame,
+  PATH_YAW, BOSS_ALONG, spawnPoint, safePoint, bossPoint, clampArena, pushOutOfBoss, fromFrame, toFrame,
 } from './layout.js';
 import { bossFrame, chooseSkill, hurtVitals, makeVitals, roleGoal } from './partyAi.js';
 
@@ -1134,6 +1134,128 @@ function win() {
 
 const clock = new THREE.Clock();
 
+const camRay = new THREE.Raycaster();
+const fadedMeshes = new Map();
+let occluderList = [];
+let occluderFresh = 0;
+
+function occluderMeshes() {
+  const now = performance.now();
+  if (now - occluderFresh < 400 && occluderList.length) return occluderList;
+  const list = [];
+  const take = (root) => {
+    root?.traverse((o) => {
+      if (!o.isMesh || !o.visible) return;
+      list.push(o);
+    });
+  };
+  take(boss.group);
+  take(city.root);
+  take(env.root);
+  occluderList = list;
+  occluderFresh = now;
+  return list;
+}
+
+function fadeMesh(mesh) {
+  const mat = mesh.material;
+  if (!mat || Array.isArray(mat) || mesh.isInstancedMesh) return;
+  if (!fadedMeshes.has(mesh)) {
+    fadedMeshes.set(mesh, {
+      opacity: mat.opacity ?? 1,
+      transparent: mat.transparent,
+      depthWrite: mat.depthWrite,
+    });
+  }
+  mat.transparent = true;
+  mat.opacity = 0.25;
+  mat.depthWrite = false;
+  mat.needsUpdate = true;
+}
+
+function restoreFaded(keep) {
+  for (const [mesh, saved] of fadedMeshes) {
+    if (keep?.has(mesh)) continue;
+    const mat = mesh.material;
+    if (mat && !Array.isArray(mat)) {
+      mat.opacity = saved.opacity;
+      mat.transparent = saved.transparent;
+      mat.depthWrite = saved.depthWrite;
+      mat.needsUpdate = true;
+    }
+    fadedMeshes.delete(mesh);
+  }
+}
+
+function inBoss(object) {
+  let node = object;
+  while (node) {
+    if (node === boss.group) return true;
+    node = node.parent;
+  }
+  return false;
+}
+
+function clearCamera(desired, look) {
+  const origin = actor.position.clone();
+  origin.y = 3.4;
+  const dir = desired.clone().sub(origin);
+  const len = dir.length();
+  if (len < 0.5) {
+    restoreFaded();
+    return desired;
+  }
+  dir.multiplyScalar(1 / len);
+  const meshes = occluderMeshes();
+  camRay.set(origin, dir);
+  camRay.far = len;
+  const hits = camRay.intersectObjects(meshes, false);
+  let pos = desired.clone();
+  if (hits.length && hits[0].distance < len - 0.5) {
+    const travel = Math.max(3.2, hits[0].distance - 1.35);
+    pos.copy(origin).addScaledVector(dir, Math.min(travel, len));
+  }
+  const home = boss.group.position;
+  const dx = pos.x - home.x;
+  const dz = pos.z - home.z;
+  const hd = Math.hypot(dx, dz);
+  const minR = 18;
+  if (hd < minR) {
+    const k = minR / (hd || 0.001);
+    pos.x = home.x + dx * k;
+    pos.z = home.z + dz * k;
+    pos.y = Math.max(pos.y, 9);
+  }
+  const down = new THREE.Vector3(0, -1, 0);
+  for (let step = 0; step < 5; step++) {
+    const probe = pos.clone();
+    probe.y += 30;
+    camRay.set(probe, down);
+    camRay.far = 30;
+    const roof = camRay.intersectObjects(meshes, false)[0];
+    if (!roof || roof.point.y < pos.y + 0.6) break;
+    const framed = toFrame(pos.x, pos.z);
+    const next = fromFrame(framed.along, framed.across * 0.45);
+    pos.x = next.x;
+    pos.z = next.z;
+    pos.y = Math.max(pos.y + 1.5, roof.point.y + 1.8);
+  }
+  const view = look.clone().sub(pos);
+  const viewLen = view.length() || 1;
+  view.multiplyScalar(1 / viewLen);
+  camRay.set(pos, view);
+  camRay.far = Math.min(viewLen, 6);
+  const blocked = camRay.intersectObjects(meshes, false);
+  const keep = new Set();
+  for (const hit of blocked) {
+    if (hit.distance > 1.7 || hit.object.isInstancedMesh) continue;
+    fadeMesh(hit.object);
+    keep.add(hit.object);
+  }
+  restoreFaded(keep);
+  return pos;
+}
+
 function frame() {
   const raw = clock.getDelta();
   const dt = Math.min(raw || 0.016, 0.05);
@@ -1207,11 +1329,17 @@ function frame() {
   const aim = shotAim != null ? shotAim : shot === 'wide' ? 1.5 : portrait ? 0.1 : bossView ? 18 : 6;
   const head = form?.group?.userData?.headY;
   const lookY = shotLookY != null ? shotLookY : shot === 'wide' ? 1.15 : portrait ? (head || 1.1) : bossView ? 7 : 0.2;
-  camera.lookAt(focus.x + lx * aim, lookY, focus.z + lz * aim);
+  const lookTarget = new THREE.Vector3(focus.x + lx * aim, lookY, focus.z + lz * aim);
   if (camLock) {
     camera.position.set(camLock.px, camLock.py, camLock.pz);
-    camera.lookAt(camLock.tx, camLock.ty, camLock.tz);
+    lookTarget.set(camLock.tx, camLock.ty, camLock.tz);
   }
+  if (!portrait) {
+    camera.position.copy(clearCamera(camera.position, lookTarget));
+  } else {
+    restoreFaded();
+  }
+  camera.lookAt(lookTarget);
   syncMarks();
   flames.update(dt);
   if (shake > 0) {
@@ -1978,6 +2106,25 @@ window.__raid = {
       return marks.filter((g) => g.visible && g.userData.screen).map((g) => g.userData.screen);
     },
     flat() { bloomOn = false; },
+    melee() {
+      finishIntro();
+      const b = boss.group.position;
+      const fx = Math.sin(PATH_YAW);
+      const fz = Math.cos(PATH_YAW);
+      const rx = Math.cos(PATH_YAW);
+      const rz = -Math.sin(PATH_YAW);
+      actor.position.set(b.x - fx * 6.4 + rx * 3.4, 0, b.z - fz * 6.4 + rz * 3.4);
+      actor.rotation.y = Math.atan2(b.x - actor.position.x, b.z - actor.position.z);
+      form.group.visible = true;
+      citizen.visible = false;
+      camYaw = PATH_YAW;
+      camPitch = 0.58;
+      camDist = 16;
+      camLock = null;
+      shotLookY = 3.2;
+      shotAim = 8;
+      simPaused = true;
+    },
     report() {
       const rows = party.map((a) => ({
         class: a.classId,
