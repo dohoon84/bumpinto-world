@@ -10,6 +10,17 @@ import { createPropCull } from './propCull.js';
 // 정적 병합 대상(scene 바로 아래 자식 이름). 움직이는 부분은 각 모듈에서 userData.perfDynamic 으로 표시해 둔다
 export const MERGE_TARGETS = ['tancheon-dog-park', 'tancheon-stepping-stones', 'jeongja-station-plaza', 'jeongja-starbucks-crowd', 'starbucks-mullions'];
 
+// [depot-perf] 월드 묶음 그룹(userData.perfContainer, 예: game.js 의 'jeongja-world')은 투명하게 본다:
+//   그 자식들을 scene 바로 아래 자식처럼 병합·인스턴싱·먼 소품 숨기기 대상으로 삼는다.
+//   (정자 월드를 한 그룹에 모으자 병합 대상·작은 덩어리·컬링 단위가 통째로 빠져 draw call 이 거의 두 배가 됐었다)
+export function perfTops(scene) {
+  const out = [];
+  for (const c of scene.children) {
+    if (c.userData?.perfContainer) { for (const k of c.children) out.push(k); } else out.push(c);
+  }
+  return out;
+}
+
 export function mountPerfMem({ scene, renderer, camera, params, getPlayer = () => null, corridor = null, bikes = null } = {}) {
   const F = perfFlags(params);
   if (!F.master) return null;
@@ -18,13 +29,16 @@ export function mountPerfMem({ scene, renderer, camera, params, getPlayer = () =
   const out = { flags: F, merges: [], stats: {}, instancer: null, cull: null };
 
   // 1) 정적 병합 (+ matshare: 같은 값 재질끼리 묶기)
-  if (F.meshmerge) {
-    for (const o of scene.children.slice()) {
-      if (!MERGE_TARGETS.includes(o.name)) continue;
+  function mergeTargets() {
+    if (!F.meshmerge) return;
+    for (const o of perfTops(scene)) {
+      if (!MERGE_TARGETS.includes(o.name) || o.userData.perfMerged) continue;
+      o.userData.perfMerged = true;
       const m = mergeStatic(o, { matshare: F.matshare, keepOriginals: check });
       out.merges.push({ name: o.name, ...m.stats, watch: m.watch });
     }
   }
+  mergeTargets();
   const mergeMs = performance.now() - t0;
 
   // 2) 인스턴싱: 아바타(userData.rig: 사람·강아지·고양이·비둘기)와 그 밖의 반복 소품(카카오바이크)
@@ -52,7 +66,7 @@ export function mountPerfMem({ scene, renderer, camera, params, getPlayer = () =
       if (o.userData?.rig || o.userData?.perfInstance) { inst.track(o); return; }
       for (const c of o.children) walk(c);
     };
-    for (const c of scene.children) {
+    for (const c of perfTops(scene)) {
       if (skipTop.has(c) || c === player || c.userData?.perfNoInstance) continue;
       if (!c.userData?.rig && smallGroup(c)) { inst.track(c); continue; } // 택시·순찰차·가게 같은 작은 덩어리: 같은 부품끼리 인스턴싱
       walk(c);
@@ -68,7 +82,7 @@ export function mountPerfMem({ scene, renderer, camera, params, getPlayer = () =
   function discoverCull() {
     if (!cull) return;
     const player = getPlayer();
-    for (const c of scene.children) {
+    for (const c of perfTops(scene)) {
       if (c === corridorRoot || c === inst?.group || c === player || c.isLight || c.isCamera || c.userData?.perfNoCull) continue;
       if (c.userData?.rig || inst?.has(c) || bikes?.list?.some((b) => b.mesh === c)) continue; // 인스턴싱 대상은 instancer 가 화면 크기로 거른다
       if (!c.isMesh && !c.isGroup && c.type !== 'Object3D') continue;
@@ -86,6 +100,11 @@ export function mountPerfMem({ scene, renderer, camera, params, getPlayer = () =
     if (acc > 1) { acc = 0; discover(); discoverCull(); }
     if (cull && c === camera) cull.sync(r, s, c);
     inst?.sync(r, c, s.fog);
+  };
+  // 월드 묶음을 다시 지은 뒤(폰: 범창고에서 나올 때) 새 병합 대상·덩어리를 바로 다시 잡는다. 떨어져 나간 옛 메시는 instancer·cull 이 parent 로 알아서 푼다.
+  out.rescan = () => {
+    if (out.merges.length > 64) out.merges.splice(0, out.merges.length - 32); // 여러 번 드나들어도 기록이 쌓이지 않게
+    mergeTargets(); discover(); discoverCull();
   };
   out.check = () => out.merges.map((m) => ({ name: m.name, changed: m.watch() }));
   out.summary = () => ({

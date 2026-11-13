@@ -358,7 +358,7 @@ const terrain = terrainData ? createTerrain(corridorTerrainData(terrainData, cor
 terrain?.annotate(data); // [terrain] 도로/수면에 높이 부여 (buildWorld 전에)
 const tower = region.features?.launchTower && params.get('tower') !== '0' ? createTowerAddon(data) : null; // [tower] buildWorld 전에 _skip 마킹
 const jeongjaBp24Prep = region.features?.jeongjaBuildings ? prepareJeongjaBp24(data, params) : []; // [bump24-jeongja] 1층을 비우기 전에
-const worldRoot = new THREE.Group(); worldRoot.name = 'jeongja-world'; scene.add(worldRoot); // [memory] 정자 로컬 월드를 한 그룹에 모아 매장 안에서 내릴 수 있게
+const worldRoot = new THREE.Group(); worldRoot.name = 'jeongja-world'; worldRoot.userData.perfContainer = true; scene.add(worldRoot); // [memory] 정자 로컬 월드를 한 그룹에 모아 매장 안에서 내릴 수 있게
 const shopsPrep = prepareShops(data, shopsData);
 const coloursPrep = prepareBuildingColours(data, coloursData);
 const worldOpts = { shops: shopsPrep, colours: coloursPrep, isMobile: mobileMode };
@@ -774,6 +774,7 @@ function parkWorldForDepot(on) {
     if (worldCpuDropped) {
       worldCpuDropped = false;
       try { rebuildJeongjaWorld(); } catch (e) { console.warn('[depot-park]', e); }
+      try { perfMem?.rescan?.(); } catch (e) { console.warn('[depot-park]', e); } // [depot-perf] 새로 지은 월드도 병합·인스턴싱·컬링
       try { parkFarOutdoor(false); } catch (e) { console.warn('[depot-park]', e); }
       try {
         const p = player?.position;
