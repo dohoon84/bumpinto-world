@@ -914,6 +914,33 @@ function placeFight(yaw, pitch, dist, back) {
   camPitch = pitch;
   camDist = dist;
 }
+function showKnights() {
+  finishIntro();
+  for (const a of party) a.mesh.visible = false;
+  const ids = ['warrior', 'mage', 'priest', 'archer', 'assassin'];
+  ids.forEach((id, i) => {
+    const g = id === classId ? form.group : cloneAnimated(packs[id].group);
+    if (g.parent) g.parent.remove(g);
+    scene.add(g);
+    if (id !== classId) {
+      extras.push(g);
+      attachTrails(g, id, scene);
+    }
+    const p = fromFrame(BOSS_ALONG - 8, (i - 2) * 1.7);
+    g.position.set(p.x, 0, p.z);
+    g.rotation.set(0, PATH_YAW, 0);
+    g.visible = true;
+    g.userData.shotClass = id;
+  });
+  const mid = fromFrame(BOSS_ALONG - 8, 0);
+  actor.position.set(mid.x, 0, mid.z);
+  camYaw = PATH_YAW;
+  camPitch = 0.28;
+  camDist = 8.5;
+  hud.banner('');
+  const banner = document.querySelector('#bw-raid [data-banner]');
+  if (banner) banner.hidden = true;
+}
 function seedChat() {
   chat.push({ channel: 'party', name: '한결', color: '#FF7A1A', text: '장판 먼저 봅니다. 방패는 제가.', self: false, t: Date.now() });
   chat.push({ channel: 'party', name: '온유', color: '#FFC845', text: '체력 볼게요. 노란 선으로 오세요.', self: false, t: Date.now() });
@@ -922,15 +949,25 @@ function seedChat() {
   chat.push({ channel: 'system', name: '시스템', text: '치명타 3,912', system: true, kind: 'crit', t: Date.now() });
   chat.push({ channel: 'system', name: '시스템', text: '온유 치유 +420', system: true, kind: 'heal', t: Date.now() });
 }
-if (shot === 'fight' || shot === 'chat') {
-  placeFight(PATH_YAW + 0.35, 0.62, 18, 12);
-  boss.forceWind();
-  combat.state.res = Math.max(combat.state.res, 55);
+if (shot === 'fight' || shot === 'chat' || shot === 'party') {
+  showKnights();
+  const mid = fromFrame(BOSS_ALONG - 6, 0);
+  vfx.classLook(classId, mid.x, mid.z, PATH_YAW);
   seedChat();
-  hud.float(new THREE.Vector3(bossPoint().x, 8.2, bossPoint().z), 168, 'crit');
+}
+if (shot === 'skill') {
+  showKnights();
+  const mine = extras.concat(form.group).find((g) => g.userData.shotClass === classId || g === form.group);
+  const p = mine?.position || actor.position;
+  vfx.classLook(classId, p.x, p.z, PATH_YAW);
+  camDist = 6.2;
+  camPitch = 0.22;
 }
 if (shot === 'skyline' || shot === 'emerge') {
-  placeFight(city.yaw, shot === 'emerge' ? 0.3 : 0.4, shot === 'emerge' ? 20 : 28, 16);
+  showKnights();
+  camYaw = city.yaw;
+  camPitch = shot === 'emerge' ? 0.22 : 0.32;
+  camDist = shot === 'emerge' ? 14 : 18;
   arena.setPhase('p1', true);
   city.setMood('rift');
   city.setStage(1);
@@ -954,9 +991,11 @@ if (shot === 'close') {
   seedChat();
 }
 if (shot === 'slam') {
-  placeFight(PATH_YAW + 0.2, 0.48, 16, 11);
+  showKnights();
   boss.forceSlam();
   vfx.slam(boss.group.position.x, boss.group.position.z);
+  camDist = 12;
+  camPitch = 0.34;
   seedChat();
 }
 if (shot === 'victory') {

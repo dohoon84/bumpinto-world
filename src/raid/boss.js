@@ -152,61 +152,77 @@ function buildBossMesh() {
   return { group, armL, armR, legL, legR, rockMat, sigil };
 }
 
+const teleMap = new THREE.TextureLoader().load('/dungeon/vfx/decals/tele_circle.png');
+teleMap.colorSpace = THREE.SRGBColorSpace;
+
+function telegraphMat(color) {
+  return new THREE.ShaderMaterial({
+    uniforms: {
+      uMap: { value: teleMap },
+      uFill: { value: 0.05 },
+      uColor: { value: new THREE.Color(color) },
+    },
+    transparent: true,
+    depthWrite: false,
+    side: THREE.DoubleSide,
+    polygonOffset: true,
+    polygonOffsetFactor: -2,
+    vertexShader: `
+      varying vec2 vUv;
+      void main() {
+        vUv = uv;
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+      }
+    `,
+    fragmentShader: `
+      uniform sampler2D uMap;
+      uniform float uFill;
+      uniform vec3 uColor;
+      varying vec2 vUv;
+      void main() {
+        vec2 p = vUv * 2.0 - 1.0;
+        float ang = atan(p.x, -p.y);
+        if (ang < 0.0) ang += 6.2831853;
+        float a = ang / 6.2831853;
+        vec4 tex = texture2D(uMap, vUv);
+        float dist = length(p);
+        float rim = smoothstep(0.72, 0.86, dist) * (1.0 - smoothstep(0.96, 1.02, dist));
+        float inside = step(a, uFill) * (1.0 - smoothstep(0.86, 1.0, dist));
+        float alpha = tex.a * (rim * 0.9 + inside * 0.28);
+        if (alpha < 0.03) discard;
+        gl_FragColor = vec4(uColor, alpha);
+      }
+    `,
+  });
+}
+
 function circleMesh(radius) {
-  const g = new THREE.Group();
-  const rim = new THREE.Mesh(
-    new THREE.RingGeometry(radius * 0.9, radius, 48),
-    new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 1, side: THREE.DoubleSide, depthWrite: false }),
-  );
-  rim.rotation.x = -Math.PI / 2;
-  const cyan = new THREE.Mesh(
-    new THREE.RingGeometry(radius * 0.8, radius * 0.9, 48),
-    new THREE.MeshBasicMaterial({ color: '#7ef6ff', transparent: true, opacity: 0.95, side: THREE.DoubleSide, depthWrite: false }),
-  );
-  cyan.rotation.x = -Math.PI / 2;
-  cyan.position.y = -0.01;
-  const fill = new THREE.Mesh(
-    new THREE.CircleGeometry(radius * 0.9, 40),
-    new THREE.MeshBasicMaterial({ color: '#07242c', transparent: true, opacity: 0.35, side: THREE.DoubleSide, depthWrite: false }),
-  );
+  const mat = telegraphMat('#ff6a1a');
+  const fill = new THREE.Mesh(new THREE.CircleGeometry(radius, 48), mat);
   fill.rotation.x = -Math.PI / 2;
-  fill.position.y = -0.02;
-  fill.material.color.set('#d7fbff');
-  fill.material.opacity = 0.28;
-  g.add(rim, cyan, fill);
-  g.position.y = 0.14;
-  g.visible = false;
-  g.userData.r = radius;
-  g.userData.fill = fill;
-  return g;
+  fill.position.y = 0.06;
+  fill.visible = false;
+  fill.userData.r = radius;
+  fill.userData.fill = fill;
+  fill.renderOrder = 2;
+  return fill;
 }
 
 function paintFill(mesh, k) {
   const fill = mesh.userData.fill;
-  if (!fill) return;
-  fill.scale.setScalar(Math.max(0.05, Math.min(1, k)));
+  const mat = fill?.material;
+  if (mat?.uniforms?.uFill) mat.uniforms.uFill.value = Math.max(0.02, Math.min(1, k));
 }
 
 function riftColumn() {
   const g = new THREE.Group();
-  const shell = new THREE.Mesh(
-    new THREE.CylinderGeometry(1.15, 1.85, 10, 14, 1, true),
-    new THREE.MeshBasicMaterial({ color: '#bff7ff', transparent: true, opacity: 0.28, depthWrite: false, side: THREE.DoubleSide }),
-  );
-  shell.position.y = 5;
-  const core = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.22, 0.22, 10, 8, 1, true),
-    new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.75, depthWrite: false, side: THREE.DoubleSide }),
-  );
-  core.position.y = 5;
-  const ring = new THREE.Mesh(
-    new THREE.RingGeometry(1.55, 1.95, 32),
-    new THREE.MeshBasicMaterial({ color: '#7ef6ff', transparent: true, opacity: 1, side: THREE.DoubleSide, depthWrite: false }),
-  );
-  ring.rotation.x = -Math.PI / 2;
-  ring.position.y = 0.18;
-  g.add(shell, core, ring);
-  g.userData.r = 1.9;
+  const mat = telegraphMat('#ff8a3a');
+  const disc = new THREE.Mesh(new THREE.CircleGeometry(1.7, 32), mat);
+  disc.rotation.x = -Math.PI / 2;
+  disc.position.y = 0.07;
+  g.add(disc);
+  g.userData.r = 1.7;
+  g.userData.fill = disc;
   return g;
 }
 
@@ -216,6 +232,21 @@ export function createBoss(scene) {
   built.group.position.set(home.x, 0, home.z);
   built.group.rotation.y = PATH_YAW + Math.PI;
   scene.add(built.group);
+  for (let i = 0; i < 3; i++) {
+    const mob = new THREE.Group();
+    const body = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.45, 1.3), new THREE.MeshStandardMaterial({ color: '#c4b8ae', roughness: 0.8 }));
+    body.position.y = 0.7;
+    mob.add(body);
+    for (const [sx, sz] of [[-0.3, 0.4], [0.3, 0.4], [-0.3, -0.4], [0.3, -0.4]]) {
+      const leg = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.55, 0.16), new THREE.MeshStandardMaterial({ color: '#8d847c' }));
+      leg.position.set(sx, 0.28, sz);
+      mob.add(leg);
+    }
+    const spot = fromFrame(BOSS_ALONG - 3, (i - 1) * 4.5);
+    mob.position.set(spot.x, 0, spot.z);
+    mob.rotation.y = PATH_YAW + Math.PI;
+    scene.add(mob);
+  }
 
   const light = new THREE.PointLight('#ff7a3a', 18, 26, 2);
   light.position.set(home.x, 8, home.z);

@@ -389,7 +389,7 @@
   width: min(578px, calc(100vw - 420px)); margin: 0;
 }
 #bw-raid.is-fight .face {
-  position: absolute; left: -84px; bottom: 4px;
+  position: absolute; left: 8px; bottom: 4px;
   width: 76px; height: 76px; border-radius: 50%;
   display: grid; place-items: center;
   border: 2px solid var(--gold);
@@ -464,6 +464,10 @@
   #bw-raid.is-fight .boss { width: min(320px, calc(100vw - 240px)); }
   #bw-raid.is-fight .warn { display: none; }
 }
+@media (min-height: 900px) and (max-width: 1700px) {
+  #bw-raid.is-fight .dock { left: 560px; transform: none; width: min(560px, calc(100vw - 584px)); }
+  #bw-raid.is-fight .rchat { width: 400px; }
+}
 @media (min-height: 900px) {
   #bw-raid.is-fight .party { top: 427px; left: 24px; width: 216px; }
   #bw-raid.is-fight .raid-chip, #bw-raid.is-fight .boss, #bw-raid.is-fight .minimap-wrap { top: 24px; }
@@ -481,7 +485,7 @@
   #bw-raid.is-fight .party, #bw-raid.is-fight .meter, #bw-raid.is-fight .mix, #bw-raid.is-fight .quest { display: none; }
   #bw-raid.is-fight .rchat { height: 88px; width: min(300px, 46vw); bottom: 8px; left: 8px; }
   #bw-raid.is-fight .dock { bottom: 8px; width: min(460px, 52vw); }
-  #bw-raid.is-fight .face { width: 48px; height: 48px; left: -56px; font-size: 18px; }
+  #bw-raid.is-fight .face { width: 48px; height: 48px; left: 8px; font-size: 18px; }
   #bw-raid.is-fight .warn { bottom: 96px; }
 }
 @media (max-width: 720px) {

@@ -1,5 +1,45 @@
 import * as THREE from 'three';
 
+const texCache = new Map();
+function tex(url) {
+  if (!texCache.has(url)) {
+    const map = new THREE.TextureLoader().load(`${url}?v=v41fx`);
+    map.colorSpace = THREE.SRGBColorSpace;
+    texCache.set(url, map);
+  }
+  return texCache.get(url);
+}
+function billboard(rootAdd, url, x, y, z, w, h, color = '#ffffff') {
+  const mat = new THREE.SpriteMaterial({
+    map: tex(url),
+    color,
+    transparent: true,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending,
+  });
+  const s = new THREE.Sprite(mat);
+  s.position.set(x, y, z);
+  s.scale.set(w, h || w, 1);
+  s.userData.life = 1.1;
+  s.userData.max = 1.1;
+  return s;
+}
+function groundDecal(url, x, z, size, color = '#ffffff') {
+  const mat = new THREE.MeshBasicMaterial({
+    map: tex(url),
+    color,
+    transparent: true,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending,
+    side: THREE.DoubleSide,
+  });
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(size, size), mat);
+  m.rotation.x = -Math.PI / 2;
+  m.position.set(x, 0.12, z);
+  m.renderOrder = 3;
+  return m;
+}
+
 function fadeMat(color) {
   return new THREE.MeshBasicMaterial({
     color,
@@ -121,15 +161,63 @@ export function createVfx(scene) {
       add(inner, 0.25, 0);
     },
     pillar(x, z, color = '#FFC845') {
-      const m = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.7, 3.2, 8, 1, true), fadeMat(color));
-      m.position.set(x, 1.6, z);
-      m.userData.grow = 0.4;
-      add(m, 0.45, 0);
-      const halo = new THREE.Mesh(new THREE.TorusGeometry(0.7, 0.05, 6, 20), fadeMat('#fff6c8'));
-      halo.position.set(x, 2.6, z);
-      halo.rotation.x = Math.PI / 2;
-      halo.userData.grow = 1.8;
-      add(halo, 0.4, 0);
+      const col = billboard(null, '/dungeon/vfx/magic/heal_pillar.png', x, 1.8, z, 0.9, 3.6, color);
+      add(col, 1.1, 0);
+      const halo = billboard(null, '/dungeon/vfx/rings/halo.png', x, 3.2, z, 1.3, 1.3, '#FFFBE8');
+      add(halo, 0.8, 0);
+    },
+    shield(x, z) {
+      const dome = billboard(null, '/dungeon/vfx/magic/shield_bubble.png', x, 1.2, z, 2.2, 2.2, '#FFC845');
+      add(dome, 1.2, 0);
+    },
+    holyBurst(x, z) {
+      const burst = billboard(null, '/dungeon/vfx/rings/halo_burst.png', x, 1.4, z, 2.8, 2.8, '#FFC845');
+      add(burst, 0.45, 0);
+    },
+    multi(x, z, yaw) {
+      for (let i = -2; i <= 2; i++) {
+        const s = billboard(null, '/dungeon/vfx/trails/arrow_trail.png', x + Math.sin(yaw + i * 0.12) * 1.6, 1.4, z + Math.cos(yaw + i * 0.12) * 1.6, 1.6, 0.28, '#3DDC84');
+        s.material.rotation = -(yaw + i * 0.12);
+        add(s, 0.28, 0);
+      }
+    },
+    pierce(x, z, yaw) {
+      const s = billboard(null, '/dungeon/vfx/trails/arrow_trail.png', x + Math.sin(yaw) * 2.4, 1.45, z + Math.cos(yaw) * 2.4, 3.4, 0.35, '#E8FFE8');
+      s.material.rotation = -yaw;
+      add(s, 0.3, 0);
+      add(groundDecal('/dungeon/vfx/particles/impact_ring.png', x + Math.sin(yaw) * 3, z + Math.cos(yaw) * 3, 1.2, '#3DDC84'), 0.25, 0);
+    },
+    arrowRain(x, z) {
+      for (let i = 0; i < 6; i++) {
+        const s = billboard(null, '/dungeon/vfx/trails/arrow_trail.png', x + (i % 3) - 1, 2.4 + (i % 2) * 0.4, z + Math.floor(i / 3) - 0.4, 0.2, 1.1, '#7DFFB0');
+        add(s, 0.4, 0);
+      }
+    },
+    blink(x, z, yaw) {
+      const a = billboard(null, '/dungeon/vfx/particles/flash.png', x, 1.1, z, 1.2, 1.2, '#FF5C9A');
+      const b = billboard(null, '/dungeon/vfx/particles/flash.png', x + Math.sin(yaw) * 2.2, 1.1, z + Math.cos(yaw) * 2.2, 1.2, 1.2, '#FF3B4E');
+      add(a, 0.25, 0);
+      add(b, 0.25, 0);
+    },
+    combo(x, z, yaw) {
+      for (let i = 0; i < 3; i++) {
+        const s = billboard(null, '/dungeon/vfx/slashes/slash_crescent.png', x, 1.15 + i * 0.15, z, 1.6, 1.6, i === 1 ? '#FF5C9A' : '#FFD0E4');
+        s.material.rotation = yaw + i * 0.8;
+        add(s, 0.28, 0);
+      }
+    },
+    poison(x, z) {
+      for (let i = 0; i < 5; i++) {
+        const s = billboard(null, '/dungeon/vfx/particles/poison_drip.png', x + (i - 2) * 0.35, 0.6 + (i % 2) * 0.4, z, 0.45, 0.7, '#80E040');
+        add(s, 0.7, 0);
+      }
+    },
+    classLook(id, x, z, yaw) {
+      if (id === 'warrior') { this.whirl(x, z); this.slam(x + Math.sin(yaw) * 1.5, z + Math.cos(yaw) * 1.5); }
+      else if (id === 'mage') { this.fireball(x, 1.6, z, yaw); this.frost(x, z); this.bolt(x, z, yaw); }
+      else if (id === 'priest') { this.pillar(x, z); this.shield(x, z); this.holyBurst(x, z); }
+      else if (id === 'archer') { this.multi(x, z, yaw); this.pierce(x, z, yaw); }
+      else if (id === 'assassin') { this.combo(x, z, yaw); this.blink(x, z, yaw); this.poison(x, z); }
     },
     trail(x, y, z, yaw, color) {
       for (let i = 0; i < 4; i++) {
@@ -147,118 +235,38 @@ export function createVfx(scene) {
       }
     },
     charge(x, z, yaw) {
-      this.streak(x, z, yaw, '#ffd2a8');
-      const flash = new THREE.Mesh(new THREE.CircleGeometry(1.1, 16), fadeMat('#fff1d2'));
-      flash.position.set(x, 1.2, z);
-      flash.lookAt(x + Math.sin(yaw), 1.2, z + Math.cos(yaw));
-      add(flash, 0.16, 0);
-      flash.userData.grow = 2;
+      const s = billboard(null, '/dungeon/vfx/trails/dash_trail.png', x + Math.sin(yaw) * 1.2, 1.1, z + Math.cos(yaw) * 1.2, 2.4, 0.7, '#FF7A1A');
+      s.material.rotation = -yaw;
+      add(s, 0.45, 0);
+      add(groundDecal('/dungeon/vfx/rings/shockwave_ring.png', x, z, 2.2, '#FF7A1A'), 0.4, 0);
     },
     slam(x, z) {
-      this.shockwave(x, z, '#ffe7a0');
-      this.shockwave(x, z, '#ff7a1a');
-      for (let i = 0; i < 8; i++) {
-        const m = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.12, 0.22), fadeMat(i % 2 ? '#8a5a32' : '#ffe1b0'));
-        m.position.set(x, 0.2, z);
-        const a = (i / 8) * Math.PI * 2;
-        m.userData.vx = Math.cos(a) * 3.2;
-        m.userData.vz = Math.sin(a) * 3.2;
-        m.userData.vy = 2.4;
-        add(m, 0.45, 0);
-      }
-      const crack = new THREE.Mesh(new THREE.RingGeometry(0.4, 2.2, 6), fadeMat('#ffb089'));
-      crack.rotation.x = -Math.PI / 2;
-      crack.position.set(x, 0.08, z);
-      add(crack, 0.7, 0);
+      add(groundDecal('/dungeon/vfx/rings/shockwave_ring.png', x, z, 4.6, '#FF7A1A'), 0.55, 0);
+      add(groundDecal('/dungeon/vfx/decals/ground_crack.png', x, z, 4.2, '#FF6A1A'), 0.9, 0);
+      const flash = billboard(null, '/dungeon/vfx/particles/strike_flash.png', x, 1.6, z, 1.4, 2.4, '#FFF3C4');
+      add(flash, 0.28, 0);
     },
     whirl(x, z) {
-      for (let i = 0; i < 3; i++) {
-        const arc = new THREE.Mesh(new THREE.TorusGeometry(1.1 + i * 0.45, 0.05, 6, 20), fadeMat(i === 1 ? '#fff6d8' : '#ffb15a'));
-        arc.position.set(x, 0.9 + i * 0.25, z);
-        arc.rotation.x = Math.PI / 2;
-        add(arc, 0.34, 6 + i);
-      }
+      add(groundDecal('/dungeon/vfx/slashes/spin_slash_ring.png', x, z, 3.2, '#FF7A1A'), 0.6, 2);
+      const slash = billboard(null, '/dungeon/vfx/slashes/slash_crescent.png', x, 1.2, z, 2.2, 2.2, '#FF7A1A');
+      add(slash, 0.35, 0);
     },
     fireball(x, y, z, yaw) {
-      const m = new THREE.Mesh(new THREE.SphereGeometry(0.28, 8, 6), fadeMat('#ff7a1a'));
-      m.position.set(x, y, z);
-      m.userData.vx = Math.sin(yaw) * 16;
-      m.userData.vz = Math.cos(yaw) * 16;
-      add(m, 0.32, 0);
-      this.burst(x + Math.sin(yaw) * 4, y, z + Math.cos(yaw) * 4, '#ffb15a');
+      const orb = billboard(null, '/dungeon/vfx/particles/fireball_orb.png', x + Math.sin(yaw) * 1.4, y, z + Math.cos(yaw) * 1.4, 0.9, 0.9);
+      add(orb, 0.7, 0);
+      add(groundDecal('/dungeon/vfx/rings/rune_circle.png', x, z, 1.6, '#8C7FFF'), 0.4, 1);
+      const boom = billboard(null, '/dungeon/vfx/flipbooks/explosion_4x4.png', x + Math.sin(yaw) * 3, y, z + Math.cos(yaw) * 3, 2.6, 2.6);
+      add(boom, 0.7, 0);
     },
     frost(x, z) {
-      for (let i = 0; i < 7; i++) {
-        const m = new THREE.Mesh(new THREE.ConeGeometry(0.12, 0.7, 5), fadeMat('#d7f6ff'));
-        const a = (i / 7) * Math.PI * 2;
-        m.position.set(x + Math.cos(a) * 1.1, 0.35, z + Math.sin(a) * 1.1);
-        m.rotation.z = a;
-        add(m, 0.4, 0);
-      }
-      this.rune(x, z, '#9fd6ff');
+      add(groundDecal('/dungeon/vfx/rings/frost_ring.png', x, z, 3.4, '#8FD8FF'), 0.7, 0);
+      add(groundDecal('/dungeon/vfx/rings/rune_circle.png', x, z, 2.2, '#8C7FFF'), 0.5, 1);
     },
     bolt(x, z, yaw) {
-      let px = x;
-      let pz = z;
-      for (let i = 0; i < 5; i++) {
-        const m = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.08, 1.1), fadeMat('#f4fbff'));
-        const j = (i % 2 ? 0.35 : -0.35);
-        m.position.set(px + Math.cos(yaw) * j, 1.6, pz);
-        m.rotation.y = yaw + j;
-        add(m, 0.16, 0);
-        px += Math.sin(yaw) * 1.1;
-        pz += Math.cos(yaw) * 1.1;
-      }
-    },
-    shield(x, z) {
-      const dome = new THREE.Mesh(new THREE.SphereGeometry(1.15, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2), fadeMat('#ffe7a0'));
-      dome.position.set(x, 0.05, z);
-      add(dome, 0.7, 0);
-    },
-    holyBurst(x, z) {
-      for (let i = 0; i < 8; i++) {
-        const m = new THREE.Mesh(new THREE.BoxGeometry(0.08, 2.2, 0.08), fadeMat('#fff6c8'));
-        const a = (i / 8) * Math.PI * 2;
-        m.position.set(x + Math.cos(a) * 0.8, 1.2, z + Math.sin(a) * 0.8);
-        add(m, 0.28, 0);
-      }
-      this.burst(x, 1.6, z, '#fff1b8');
-    },
-    multi(x, z, yaw) {
-      for (let i = -2; i <= 2; i++) this.arrow(x, 1.5, z, yaw + i * 0.12, '#b8ffd8');
-    },
-    pierce(x, z, yaw) {
-      const m = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.08, 6), fadeMat('#f4fff8'));
-      m.position.set(x + Math.sin(yaw) * 3, 1.45, z + Math.cos(yaw) * 3);
-      m.rotation.y = yaw;
-      add(m, 0.2, 0);
-    },
-    arrowRain(x, z) {
-      for (let i = 0; i < 8; i++) {
-        const m = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.7, 0.05), fadeMat('#fff1b8'));
-        m.position.set(x + (i % 4) - 1.5, 3.2 + (i % 3) * 0.4, z + Math.floor(i / 4) - 0.5);
-        m.userData.vy = -6;
-        add(m, 0.35, 0);
-      }
-    },
-    blink(x, z, yaw) {
-      this.streak(x, z, yaw, '#c9b6ff');
-      this.burst(x, 1, z, '#9aa6b2');
-      this.burst(x + Math.sin(yaw) * 3, 1, z + Math.cos(yaw) * 3, '#6a5a88');
-    },
-    combo(x, z, yaw) {
-      this.slash(x, 1.3, z, yaw, '#fff');
-      this.slash(x, 1.1, z, yaw + 1.2, '#ff5c9a');
-      this.slash(x, 1.5, z, yaw - 0.8, '#ffd0e4');
-    },
-    poison(x, z) {
-      for (let i = 0; i < 8; i++) {
-        const m = new THREE.Mesh(new THREE.SphereGeometry(0.16, 6, 5), fadeMat('#7dff6a'));
-        const a = (i / 8) * Math.PI * 2;
-        m.position.set(x + Math.cos(a) * 0.4, 0.4, z + Math.sin(a) * 0.4);
-        m.userData.vy = 1.1 + (i % 3) * 0.3;
-        add(m, 0.55, 0);
-      }
+      const bolt = billboard(null, '/dungeon/vfx/trails/lightning_bolt.png', x + Math.sin(yaw) * 1.5, 2.2, z + Math.cos(yaw) * 1.5, 0.8, 3.4, '#E0D4FF');
+      add(bolt, 0.22, 0);
+      const flash = billboard(null, '/dungeon/vfx/particles/strike_flash.png', x + Math.sin(yaw) * 2, 1.2, z + Math.cos(yaw) * 2, 1.6, 2.2, '#FFFFFF');
+      add(flash, 0.18, 0);
     },
     portal(x, z) {
       const ring = new THREE.Mesh(new THREE.TorusGeometry(1.4, 0.08, 6, 18), fadeMat('#c45cff'));

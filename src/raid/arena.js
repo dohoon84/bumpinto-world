@@ -322,22 +322,13 @@ export function createArena(scene) {
   portal.add(portalRing, portalDisc);
   portal.position.set(bossAt.x, 16, bossAt.z);
   portal.rotation.x = Math.PI / 2.4;
+  portal.visible = false;
   scene.add(portal);
   const riftLight = new THREE.PointLight(LIGHTING.riftColor, LIGHTING.riftI, 70, 2);
   riftLight.position.set(bossAt.x, 12, bossAt.z);
   scene.add(riftLight);
 
   const pillars = [];
-  for (let i = 0; i < 4; i++) {
-    const p = fromFrame(18 + (i % 2) * 8, i < 2 ? -7 : 7);
-    const mesh = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.35, 0.55, 6, 6),
-      new THREE.MeshStandardMaterial({ color: '#6a6460', emissive: LIGHTING.pillar, emissiveIntensity: 0.9, roughness: 0.6, metalness: 0.05 }),
-    );
-    mesh.position.set(p.x, 3, p.z);
-    pillars.push(mesh);
-    root.add(mesh);
-  }
   const cracks = [];
   for (let i = 0; i < 5; i++) {
     const p = fromFrame(16 + i * 2.2, (i - 2) * 1.1);
@@ -517,7 +508,7 @@ export function createArena(scene) {
       skyMat.uniforms.uRiftI.value = riftGlow;
       skyMat.uniforms.uTime.value += dt;
       if (mood === 'peace') scene.fog.color.lerp(new THREE.Color(spec.fog), k);
-      portal.visible = riftAmt > 0.04;
+      portal.visible = false;
       portalRing.material.opacity = riftAmt * 0.9;
       portalDisc.material.opacity = riftAmt * 0.4;
       portal.rotation.z += dt * 0.35;
