@@ -11,10 +11,13 @@ import { createMyeongdongAtlas } from './myeongdongAtlas.js';
 import { createMyeongdongStreet } from './myeongdongStreet.js';
 import { createMyeongdongCathedral } from './myeongdongCathedral.js';
 import { createMyeongdongStation } from './myeongdongStation.js';
+import { createMyeongdongSignature, SIGNATURE_IDS } from './myeongdongSignature.js'; // [myeongdong-signature]
 import { MYEONGDONG_SPAWN, LINE4_COLOR } from './myeongdongFlags.js';
 import { syncLandmarkDormant } from './lazyLandmarks.js';
 
 const DORM = typeof location === 'undefined' || new URLSearchParams(location.search).get('landmarkdorm') !== '0';
+/** [myeongdong-signature] ?mdsig=0 이면 대표 건물 모델 끄기 (예전 OSM 상자) */
+const SIG_ON = typeof location === 'undefined' || new URLSearchParams(location.search).get('mdsig') !== '0';
 const CAR = new Set(['trunk', 'primary', 'secondary', 'tertiary', 'primary_link', 'secondary_link', 'tertiary_link', 'trunk_link']);
 const PED = new Set(['pedestrian', 'living_street', 'footway', 'steps', 'path', 'corridor', 'cycleway']);
 const ROAD_COL = {
@@ -259,11 +262,12 @@ export async function createMyeongdongAsync(opts = {}, yieldFn = null, slicer = 
     for (const [x, z] of b.o) { const y = heightAt(x, z); mn = Math.min(mn, y); mx = Math.max(mx, y); }
     const ht = buildingHeight(b);
     const rec = { id: b.id, o: b.o, base: mn - 0.4, ground: mx, top: mx + ht, ht, cx, cz, k: b.k, floors: Math.max(1, Math.round((ht - 1.2) / 3.4)), inBox: land.inBox(cx, cz) };
-    blds.push(rec);
     let x0 = Infinity, z0 = Infinity, x1 = -Infinity, z1 = -Infinity;
     for (const [x, z] of b.o) { x0 = Math.min(x0, x); x1 = Math.max(x1, x); z0 = Math.min(z0, z); z1 = Math.max(z1, z); }
     rec.bb = [x0, z0, x1, z1];
     bldGrid.add(rec, x0, z0, x1, z1);
+    if (SIG_ON && SIGNATURE_IDS.has(b.id)) continue; // [myeongdong-signature] 모델이 그린다 (충돌만 남김, 간판·가게 앞면 없음)
+    blds.push(rec);
     const kind = b.k === 'hotel' ? 'hotel' : b.k === 'church' ? 'church' : (b.k && b.k !== 'yes') ? b.k : 'commercial';
     buckets[(cx >= cxMid ? 1 : 0) + (cz >= czMid ? 2 : 0)].push({ o: b.o, h: rec.top, mh: rec.base, k: kind });
   }
@@ -283,6 +287,8 @@ export async function createMyeongdongAsync(opts = {}, yieldFn = null, slicer = 
   };
 
   // ---------- 성당 · 역/길안내 · 거리(간판·노점·가로등·사람) ----------
+  const signature = SIG_ON ? createMyeongdongSignature({ parent: root, data, heightAt, overlay }) : null; // [myeongdong-signature]
+  await tick('md-signature');
   const cathedral = createMyeongdongCathedral({ parent: root, data, land, overlay, atlas });
   await tick('md-cathedral');
   const station = createMyeongdongStation({ parent: root, data, land, atlas, overlay, roadAt, bldAt, namsan });
@@ -320,7 +326,7 @@ export async function createMyeongdongAsync(opts = {}, yieldFn = null, slicer = 
   // ---------- 미니맵 ----------
   const mini = {
     roads: ways.filter((w) => w.pts.some(([x, z]) => land.inApron(x, z))).map((w) => ({ k: w.k, p: w.pts, w: w.w })),
-    buildings: blds.map((b) => ({ o: b.o })).concat(data.cathedral?.o ? [{ o: data.cathedral.o }] : []),
+    buildings: blds.map((b) => ({ o: b.o })).concat(data.cathedral?.o ? [{ o: data.cathedral.o }] : [], signature?.footprints || []),
     plazas: (data.areas || []).filter((a) => a.k === 'pedestrian' || a.k === 'ped').map((a) => ({ o: a.o })),
     parks: (data.areas || []).filter((a) => /garden|grass|park|wood/.test(a.k)).map((a) => ({ o: a.o })),
     water: [], waterLines: [],
@@ -335,6 +341,7 @@ export async function createMyeongdongAsync(opts = {}, yieldFn = null, slicer = 
     roadMat.color.setScalar(1 - night * 0.55);
     street.setNight(night);
     cathedral.setNight(night);
+    signature?.setNight(night);
     station.setNight(night);
   }
   const unwatch = watchEvening((on) => setNight(on ? 1 : 0));
@@ -381,6 +388,7 @@ export async function createMyeongdongAsync(opts = {}, yieldFn = null, slicer = 
       if (!guideLinesSent && namsan?.cableGuide?.addLines) { guideLinesSent = true; namsan.cableGuide.addLines(ways.map((w) => w.pts)); }
       if (DORM && !root.visible) return;
       street.update(dt, lastP);
+      signature?.update(dt);
       station.update(dt, lastP);
     },
     setNight,
@@ -389,7 +397,7 @@ export async function createMyeongdongAsync(opts = {}, yieldFn = null, slicer = 
       unregSurface?.();
       scene.remove(root);
     },
-    stats() { return { blds: blds.length, ways: ways.length, ...street.stats() }; },
+    stats() { return { blds: blds.length, ways: ways.length, ...street.stats(), signature: signature?.stats() || null }; },
   };
   void LINE4_COLOR;
   return api;
