@@ -11,6 +11,7 @@ import { MD_FONT } from './myeongdongAtlas.js';
 export const SIGNATURE_IDS = new Set([
   233592424, 233592423, 577594782, // 롯데백화점 본점 · 에비뉴엘 · 롯데영플라자
   301284818, 301284814, 781964195, // 신세계 본관(옛 미쓰코시) · 더 헤리티지(옛 제일은행) · 신관
+  348489095, 348490554, // 한국은행 화폐박물관(옛 조선은행 1912) · 한국은행 본관
   781662004, 781662005, // 본관 정면에 붙은 작은 OSM 조각(입구 캐노피) — 모델 입구가 대신한다
 ]);
 
@@ -298,6 +299,72 @@ function mediaTexture() {
   return t;
 }
 
+// ---------------------------------------------------------------- 한국은행
+function lathe(buf, cx, cz, y0, rings, seg, uv, col) { // rings: [[r, y], ...] 아래→위
+  const pos = [], nrm = [], uvs = [], idx = [];
+  const u0 = uv[0], v0 = uv[1], du = uv[2] - uv[0], dv = uv[3] - uv[1];
+  for (let j = 0; j < rings.length; j++) for (let i = 0; i <= seg; i++) {
+    const a = (i / seg) * Math.PI * 2, [r, y] = rings[j];
+    const jn = Math.min(rings.length - 1, j + 1), jp = Math.max(0, j - 1);
+    const dr = rings[jn][0] - rings[jp][0], dy = rings[jn][1] - rings[jp][1] || 1e-3; let nx = dy, ny = -dr; const nl = Math.hypot(nx, ny) || 1; nx /= nl; ny /= nl;
+    pos.push(cx + Math.sin(a) * r, y0 + y, cz + Math.cos(a) * r); nrm.push(Math.sin(a) * nx, ny, Math.cos(a) * nx);
+    uvs.push(u0 + du * ((i % 2 ? 1 : 0)), v0 + dv * (j / (rings.length - 1)));
+  }
+  for (let j = 0; j < rings.length - 1; j++) for (let i = 0; i < seg; i++) { const a = j * (seg + 1) + i, b = a + 1, c = a + seg + 1, d = c + 1; idx.push(a, b, d, a, d, c); }
+  buf.raw(pos, idx, nrm, uvs, col);
+}
+function turret(buf, x, z, y0, r, h, col) {
+  lathe(buf, x, z, y0, [[r, 0], [r, h * 0.5], [r, h]], 14, uvOf(R.arch), col);
+  lathe(buf, x, z, y0, [[r + 0.5, h], [r + 0.5, h + 0.8], [r * 0.98, h + 0.8]], 14, uvOf(R.stone), hex3('#d8d1c4'));
+  lathe(buf, x, z, y0, [[r * 0.98, h + 0.8], [r * 0.9, h + 2.6], [r * 0.7, h + 4.6], [r * 0.38, h + 5.9], [r * 0.12, h + 6.5]], 14, uvOf(R.copper), hex3('#ffffff'));
+  lathe(buf, x, z, y0, [[0.35, h + 6.4], [0.3, h + 8.5], [0.05, h + 9.6]], 6, uvOf(R.copper), hex3('#cfcfcf'));
+}
+function buildBok(ctx) {
+  const { byId, baseOf, buf, labels } = ctx;
+  const mus = byId.get(348489095), hq = byId.get(348490554);
+  if (hq) { // 한국은행 본관(새 건물, 16층) — 유리 + 돌 기단
+    const o = hq.o, y0 = baseOf(o), top = y0 + 66; const [cx, cz] = centroid(o);
+    prism(buf, o, y0 - 0.4, y0 + 8, uvOf(R.stone), ...T('stone'), hex3('#c9c3b8'));
+    prism(buf, o, y0 + 8, top, uvOf(R.glass), ...T('glass'), hex3('#c6d4df'), uvOf(R.stone), hex3('#7c8590'));
+    const e = facing(o, [-11330, -21560]); if (e) signOn(buf, e.p, e.q, 0.4, Math.min(e.L * 0.55, 28), y0 + 3.2, y0 + 3.2 + Math.min(e.L * 0.55, 28) / 8, uvOf(R.sBok), [e.nx, e.nz]);
+    if (e) signOn(buf, e.p, e.q, 0.4, Math.min(e.L * 0.5, 26), top - 5, top - 5 + Math.min(e.L * 0.5, 26) / 8, uvOf(R.sBok), [e.nx, e.nz]);
+    labels.push({ text: '한국은행 Bank of Korea (HQ)', x: cx, z: cz, y: top + 5, maxDist: 900, minDist: 20, cls: 'label' });
+  }
+  if (mus) { // 화폐박물관 = 옛 조선은행 본점(1912) — 화강석, 앞 모서리 돔 탑, 가운데 박공 현관
+    const o = mus.o, y0 = baseOf(o), top = y0 + 14.5; const [cx, cz] = centroid(o);
+    const stone = hex3('#ece6da');
+    prism(buf, o, y0 - 0.4, top, uvOf(R.arch), ...T('arch'), stone, uvOf(R.stone), hex3('#8f9894'));
+    for (const e of edgesOut(o)) { wall(buf, e.p, e.q, top - 0.2, top + 1.3, uvOf(R.stone), 10, 1.5, hex3('#ddd6c8'), 0.45); wall(buf, e.p, e.q, y0 - 0.4, y0 + 1.6, uvOf(R.stone), 10, 2, hex3('#b8b1a4'), 0.3); }
+    // 앞 = 남대문로(남쪽) · 로터리 쪽
+    const fr = [-11300, -21560];
+    const fx = fr[0] - cx, fz = fr[1] - cz, fl = Math.hypot(fx, fz); const ux = fx / fl, uz = fz / fl, sx = -uz, sz = ux;
+    let A = null, B = null, aBest = -Infinity, bBest = -Infinity;
+    for (const [x, z] of o) { const f = (x - cx) * ux + (z - cz) * uz, s = (x - cx) * sx + (z - cz) * sz; if (f + s > aBest) { aBest = f + s; A = [x, z]; } if (f - s > bBest) { bBest = f - s; B = [x, z]; } }
+    // 큰 탑(로터리 쪽) · 작은 탑
+    const near = (p) => Math.hypot(p[0] - ROUNDABOUT[0], p[1] - ROUNDABOUT[1]);
+    const [big, small] = near(A) < near(B) ? [A, B] : [B, A];
+    const inward = (p, k) => [p[0] + (cx - p[0]) * k / Math.hypot(cx - p[0], cz - p[1]), p[1] + (cz - p[1]) * k / Math.hypot(cx - p[0], cz - p[1])];
+    const bp = inward(big, 3.5), sp = inward(small, 2.6);
+    turret(buf, bp[0], bp[1], y0 - 0.4, 5.6, 20, stone);
+    turret(buf, sp[0], sp[1], y0 - 0.4, 3.6, 16.5, stone);
+    // 가운데 박공 현관 (앞 변 가운데)
+    const e = facing(o, fr);
+    if (e) {
+      const tx = (e.q[0] - e.p[0]) / e.L, tz = (e.q[1] - e.p[1]) / e.L, mx = (e.p[0] + e.q[0]) / 2, mz = (e.p[1] + e.q[1]) / 2, ry = Math.atan2(tx, tz);
+      for (const t of [-5.4, -1.8, 1.8, 5.4]) buf.box(mx + tx * t + e.nx * 4.2, y0 + 4.2, mz + tz * t + e.nz * 4.2, 1.1, 9.2, 1.1, ry, uvOf(R.stone), hex3('#f2ede3'));
+      buf.box(mx + e.nx * 2.6, y0 + 10, mz + e.nz * 2.6, 4.6, 2.4, 13.4, ry, uvOf(R.stone), hex3('#e4ddcf'));
+      // 박공(삼각): 앞 벽 위
+      const half = 7.2, ya = top + 1.2, yb = top + 4.6; const ox = mx + e.nx * 0.7, oz = mz + e.nz * 0.7;
+      const c = [ox, yb, oz];
+      // 바깥에서 보면 왼→오 = (nz, -nx)
+      const rx = e.nz, rz = -e.nx; const L = [ox - rx * half, ya, oz - rz * half], Rr = [ox + rx * half, ya, oz + rz * half];
+      buf.raw([...L, ...Rr, ...c], [0, 1, 2], [e.nx, 0, e.nz, e.nx, 0, e.nz, e.nx, 0, e.nz], [0.6, 0.6, 0.7, 0.6, 0.65, 0.7], hex3('#e9e3d6'));
+      signOn(buf, e.p, e.q, 4.95, 12, y0 + 9.25, y0 + 10.75, uvOf(R.sMuseum), [e.nx, e.nz]);
+    }
+    labels.push({ text: '🏛️ 한국은행 화폐박물관 Bank of Korea Money Museum · 1912', x: cx, z: cz, y: top + 14, maxDist: 2200, minDist: 18, cls: 'label landmark' });
+  }
+}
+
 // ---------------------------------------------------------------- 진입점
 /**
  * @param {{ parent: THREE.Object3D, data: any, heightAt: (x:number,z:number)=>number, overlay?: any }} o
@@ -316,6 +383,7 @@ export function createMyeongdongSignature({ parent, data, heightAt, overlay = nu
   };
   one('md-sig-lotte', buildLotte);
   one('md-sig-shinsegae', buildShinsegae);
+  one('md-sig-bok', buildBok);
   // 신세계 밤 미디어 파사드: 면 몇 장 + 흐르는 텍스처(가산 혼합, 밤에만 보임, draw 1)
   let mediaMesh = null, mediaTex = null;
   if (media.length) {
