@@ -91,10 +91,16 @@ export function dailyRankPays(stores) {
   return pays;
 }
 
-export function pointRows(dailyTops) {
+// opts.minParticipants: 그날 지점 참가자가 이 수보다 적으면 그 지점의 1~3위 점수를 뺀다(월간·기본 5).
+// opts.accountsOnly: 게스트를 순위 매기기 전에 빼서 로그인 계정끼리 1·2·3위를 정한다(주간).
+export function pointRows(dailyTops, opts = {}) {
+  const min = opts.minParticipants ?? MIN_PARTICIPANTS;
+  const accountsOnly = !!opts.accountsOnly;
   const map = new Map();
   for (const r of dailyTops) {
-    if (!r || r.rank > 3 || (r.participants || MIN_PARTICIPANTS) < MIN_PARTICIPANTS) continue;
+    if (!r || r.rank > 3) continue;
+    if (min > 0 && (r.participants || min) < min) continue;
+    if (accountsOnly && (r.guest || !r.accountId)) continue;
     const id = r.playerKey || r.accountId;
     const cur = map.get(id) || { playerKey: id, accountId: r.accountId || null, guest: !!r.guest, name: r.name || '', points: 0 };
     cur.points += RANK_POINTS[r.rank - 1];
@@ -103,6 +109,9 @@ export function pointRows(dailyTops) {
   }
   return [...map.values()].sort((a, b) => b.points - a.points || String(a.name).localeCompare(String(b.name))).map((r, i) => ({ ...r, rank: i + 1 }));
 }
+// 주간 정산(칭호·주간 범·주간 순위판): 최소 인원 없음, 게스트 제외
+export const WEEKLY_POINT_OPTS = Object.freeze({ minParticipants: 0, accountsOnly: true });
+export const weeklyPointRows = (dailyTops) => pointRows(dailyTops, WEEKLY_POINT_OPTS);
 
 function podiumPays(rows, amounts, rest, kind, periodKey, topN = 10) {
   return rows.filter((r) => r.rank <= topN && r.accountId && !r.guest).map((r) => ({

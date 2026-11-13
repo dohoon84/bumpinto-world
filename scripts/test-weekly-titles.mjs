@@ -199,4 +199,34 @@ const t3 = await loadTitles(db2, 'u3');
 assert.equal(t3.current?.titleId, 'title_bogohunter');
 ok('settleWeek writes titles for ranks 1-3');
 
+// settleWeek: 참가자 2~3명 지점도 주간에 반영, 게스트 1위는 건너뛰고 계정이 1·2·3위
+const raw3 = new DatabaseSync(':memory:');
+raw3.exec(readFileSync(new URL('../server/phone/migrations/0003_bump24_rank.sql', import.meta.url), 'utf8'));
+raw3.exec(readFileSync(new URL('../server/phone/migrations/0006_bump24_titles.sql', import.meta.url), 'utf8'));
+const db3 = d1Of(raw3);
+for (const day of days) {
+  // 게스트가 매일 1위, 계정 k1·k2·k3 이 2·3위 / 다른 지점 1위. 지점당 참가자 2~3명
+  const ins = (pk, acc, store, guest, score) => raw3.prepare(`INSERT INTO bump24_best (player_key, account_id, store_id, day_key, name, guest, score, at)
+    VALUES (?,?,?,?,?,?,?,?)`).run(pk, acc, store, day, pk, guest, score, now);
+  ins('g:dev1', null, 'sA', 1, 999);
+  ins('a:k1', 'k1', 'sA', 0, 500);
+  ins('a:k2', 'k2', 'sA', 0, 400);
+  ins('a:k3', 'k3', 'sB', 0, 300);
+  ins('a:k4', 'k4', 'sB', 0, 200);
+}
+const pays3 = await settleWeek(db3, null, week, days, now);
+assert.ok(pays3.length >= 4, `small/guest settleWeek pays ${pays3.length}`);
+const pod3 = raw3.prepare(`SELECT player_key, account_id, guest, rank, points FROM bump24_podium WHERE period = ? ORDER BY rank`).all(`week:${week}`);
+assert.ok(!pod3.some((r) => r.guest || !r.account_id), 'weekly podium has no guest');
+assert.equal(pod3[0].rank, 1);
+const titled = raw3.prepare('SELECT account_id, rank FROM bump24_titles WHERE week_key = ? ORDER BY rank').all(week);
+assert.equal(titled.length, 3, 'three titles awarded despite guest #1 every day');
+assert.deepEqual(titled.map((r) => Number(r.rank)), [1, 2, 3]);
+// k1: 매일 sA 2위(2점)=14, k3: 매일 sB 1위(3점)=21, k2: sA 3위(1점)=7, k4: sB 2위(2점)=14
+assert.equal(titled[0].account_id, 'k3');
+assert.ok(['k1', 'k4'].includes(titled[1].account_id) && ['k1', 'k4'].includes(titled[2].account_id));
+const settleKeys = raw3.prepare('SELECT account_id, amount, rank FROM bump24_settlement WHERE period = ? ORDER BY rank').all(`week:${week}`);
+assert.deepEqual(settleKeys.map((r) => Number(r.amount)), [3000, 2000, 1000, 500]);
+ok('settleWeek: no min participants, guests skipped before ranking');
+
 console.log('weekly titles ok', { tests: n });

@@ -1,7 +1,7 @@
 import {
   CAP_DAY, CAP_MONTH, CAP_WEEK, DAILY_BUM, LIMIT_MSG, OPENING_MS, PART_BUM,
   attemptCap, bestScore, boardView, dailyRankPays, decideAttempt, kstDayKey,
-  monthlyAnnounceMs, monthlyPays, participationPay, payOnce, pointRows, rankRows, titleHistoryLabel, weekKey, weekPeriodLabel, weeklyPays, WEEKLY_TITLES,
+  monthlyAnnounceMs, monthlyPays, participationPay, payOnce, pointRows, rankRows, weeklyPointRows, titleHistoryLabel, weekKey, weekPeriodLabel, weeklyPays, WEEKLY_TITLES,
 } from '../server/phone/src/bump24/rules.js';
 
 const assert = (c, m) => { if (!c) throw new Error(m); };
@@ -67,6 +67,37 @@ assert(three.find((p) => p.accountId === 'd').title == null, '4th has no title')
 assert(!three.some((p) => p.guest || !p.accountId), 'guest not paid weekly');
 assert(weekPeriodLabel('2026-11-09') === '11월 2주차', weekPeriodLabel('2026-11-09'));
 assert(titleHistoryLabel('2026-11-09', 'title_bigspender') === '11월 2주차 편의점 큰손', 'history label');
+// 주간: 최소 인원 없음 — 참가자 2명인 지점의 1·2위도 점수가 들어간다
+const small = [
+  { playerKey: 'a:x', accountId: 'x', name: 'X', rank: 1, participants: 2 },
+  { playerKey: 'a:y', accountId: 'y', name: 'Y', rank: 2, participants: 2 },
+];
+const wSmall = weeklyPointRows(small);
+assert(wSmall.length === 2 && wSmall[0].accountId === 'x' && wSmall[0].points === 3 && wSmall[1].points === 2, 'weekly counts a 2-participant store-day');
+assert(weeklyPays(wSmall, '2026-11-09').find((p) => p.accountId === 'x').title === WEEKLY_TITLES[1].id, 'weekly title from small store');
+// 월간·기본은 여전히 5명 규칙
+assert(pointRows(small).length === 0, 'monthly/default still drops <5 participants');
+assert(monthlyPays(pointRows(small), '2026-11').length === 0, 'monthly pays nothing for <5 store-day');
+// 주간: 게스트는 건너뛰고 계정끼리 1·2·3위
+const gTops = [
+  { playerKey: 'g:z', guest: true, accountId: null, name: '손님', rank: 1, participants: 4 },
+  { playerKey: 'g:z', guest: true, accountId: null, name: '손님', rank: 1, participants: 4 },
+  { playerKey: 'a:p', accountId: 'p', name: 'P', rank: 2, participants: 4 },
+  { playerKey: 'a:p', accountId: 'p', name: 'P', rank: 2, participants: 4 },
+  { playerKey: 'a:q', accountId: 'q', name: 'Q', rank: 3, participants: 4 },
+  { playerKey: 'a:q', accountId: 'q', name: 'Q', rank: 2, participants: 4 },
+  { playerKey: 'a:r', accountId: 'r', name: 'R', rank: 3, participants: 4 },
+  { playerKey: 'a:s', accountId: 's', name: 'S', rank: 3, participants: 4 },
+];
+const wG = weeklyPointRows(gTops);
+assert(!wG.some((r) => r.guest || !r.accountId), 'weekly rows exclude guests');
+assert(wG[0].accountId === 'p' && wG[0].rank === 1, 'P shifts to 1');
+assert(wG[1].accountId === 'q' && wG[1].rank === 2, 'Q shifts to 2');
+assert(wG[2].rank === 3 && ['r', 's'].includes(wG[2].accountId), 'R/S shifts to 3');
+const wGp = weeklyPays(wG, '2026-11-09');
+assert(wGp.filter((p) => p.title).length === 3, 'three titles awarded despite guest #1');
+assert(wGp.find((p) => p.accountId === 'p').amount === 3000 && wGp.find((p) => p.accountId === 'q').amount === 2000 && wGp.find((p) => p.rank === 3).amount === 1000, 'weekly 3000/2000/1000');
+assert(wGp.find((p) => p.rank === 4).amount === 500 && wGp.find((p) => p.rank === 4).title == null, '4th gets 500 no title');
 const mo = monthlyPays(points, '2026-11');
 assert(mo[0].amount === 10000, 'monthly 1st');
 assert(new Date(monthlyAnnounceMs(2026, 11) + 9 * 3600e3).toISOString().slice(0, 10) === '2026-12-07', 'first monthly announce');

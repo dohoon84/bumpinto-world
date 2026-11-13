@@ -2,7 +2,7 @@
 import { appendLedger } from '../account/ledger.js';
 import {
   bestScore, boardView, dailyRankPays, decideAttempt, kstDayKey, monthKey, monthlyPays,
-  participationPay, pointRows, rankRows, weekKey, weeklyPays, weeklyTitleOf,
+  participationPay, pointRows, rankRows, weekKey, weeklyPays, weeklyPointRows, weeklyTitleOf,
 } from './rules.js';
 import { awardWeeklyTitles } from './titles.js';
 
@@ -143,7 +143,7 @@ export async function settleDay(db, env, day, now) {
 export async function settleWeek(db, env, week, days, now) {
   const tops = [];
   for (const day of days) tops.push(...(await dayTops(db, day)).tops);
-  const rows = pointRows(tops);
+  const rows = weeklyPointRows(tops); // 최소 인원 없음, 게스트는 건너뛰고 계정끼리 1·2·3위
   await savePodium(db, `week:${week}`, rows, now);
   try { await awardWeeklyTitles(db, week, rows, now); } catch { /* 마이그레이션 전이면 범 지급만 */ }
   return applyPays(db, env, weeklyPays(rows, week).map((p) => ({ ...p, playerKey: `a:${p.accountId}` })), now, `week:${week}`);
