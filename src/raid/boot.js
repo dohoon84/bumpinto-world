@@ -13,6 +13,7 @@ import { createRaidAudio } from './audio.js';
 import { createVfx } from './vfx.js';
 import { createCity } from './city.js';
 import { createEnvKit } from './envkit.js';
+import { createFlames } from './flames.js';
 import { attachTrails, updateTrails } from './trails.js';
 import { createRaidRoom, mountRaidChat } from './chat.js';
 import { virtualPad } from '../input.js';
@@ -110,6 +111,9 @@ const procSky = scene.getObjectByName('proc-skyline');
 if (procSky) procSky.visible = false;
 city.root.visible = false;
 const vfx = createVfx(scene);
+const flames = createFlames(scene);
+flames.addAnchors(env.fireAnchors || []);
+vfx.bindFlames(flames);
 const audio = createRaidAudio();
 const look = sanitizeLook(CITIZEN_LOOK);
 
@@ -177,6 +181,63 @@ const ALLY_SLOTS = [
   [1.15, 1.9],
   [0.2, -2.05],
 ];
+const CLASS_TINT = {
+  warrior: '#FFB000',
+  priest: '#FFC845',
+  mage: '#B060FF',
+  archer: '#3DDC84',
+  assassin: '#FF3D8A',
+};
+const marks = [];
+function makeNameSprite(text, color) {
+  const canvas = document.createElement('canvas');
+  canvas.width = 256;
+  canvas.height = 64;
+  const g = canvas.getContext('2d');
+  g.font = '700 36px "Noto Sans CJK KR", "NanumSquareRound", sans-serif';
+  g.textAlign = 'center';
+  g.textBaseline = 'middle';
+  g.fillStyle = color;
+  g.fillText(text, 128, 34);
+  const map = new THREE.CanvasTexture(canvas);
+  map.colorSpace = THREE.SRGBColorSpace;
+  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map, transparent: true, depthWrite: false }));
+  sprite.scale.set(1.7, 0.42, 1);
+  sprite.position.y = 2.25;
+  return sprite;
+}
+function addMark(mesh, name, classId, kind) {
+  const color = CLASS_TINT[classId] || '#FFB000';
+  const g = new THREE.Group();
+  const ring = new THREE.Mesh(
+    new THREE.RingGeometry(0.52, 0.74, 28),
+    new THREE.MeshBasicMaterial({ color, side: THREE.DoubleSide, transparent: true, opacity: 0.92, depthWrite: false }),
+  );
+  ring.rotation.x = -Math.PI / 2;
+  ring.position.y = 0.07;
+  g.add(ring, makeNameSprite(name, color));
+  g.userData.follow = mesh;
+  g.userData.kind = kind;
+  scene.add(g);
+  marks.push(g);
+}
+function clearMarks(kind) {
+  for (let i = marks.length - 1; i >= 0; i--) {
+    if (marks[i].userData.kind !== kind) continue;
+    scene.remove(marks[i]);
+    marks.splice(i, 1);
+  }
+}
+function syncMarks() {
+  for (const g of marks) {
+    const m = g.userData.follow;
+    const on = !!(m && m.visible && m.parent);
+    g.visible = on;
+    if (!on) continue;
+    g.position.x = m.position.x;
+    g.position.z = m.position.z;
+  }
+}
 function makeAllyBody(color) {
   const g = new THREE.Group();
   const plate = new THREE.MeshStandardMaterial({ color: '#3e4854', metalness: 0.55, roughness: 0.42 });
@@ -225,6 +286,8 @@ function makeCompanion(n) {
   return makeAllyBody(n.color);
 }
 function layoutParty(id) {
+  clearMarks('party');
+  clearMarks('player');
   for (const a of party) scene.remove(a.mesh);
   const picked = NPC_POOL.filter((n) => n.classId !== id);
   party = picked.map((n, i) => {
@@ -233,6 +296,8 @@ function layoutParty(id) {
     return { ...n, mesh, hp: 1, cd: 0.6 + i * 0.35, ang: i, swing: 0, taunt: 8, moving: false };
   });
   settleParty(actor.rotation.y);
+  addMark(form.group, '초행', id, 'player');
+  for (const a of party) addMark(a.mesh, a.name, a.classId, 'party');
   const mine = ROLE_OF[id] || 'dps';
   const frames = [
     { id: 'me', name: '초행', role: getClass(id).name, kind: mine, hp: 1, isMe: true, lv: 1, icon: getClass(id).skills[0].id, resBar: getClass(id).resBar },
@@ -291,9 +356,9 @@ function settleParty(yaw, dt = 0, live = false) {
           boss.hurt(16);
           const yaw = Math.atan2(aimX - a.mesh.position.x, aimZ - a.mesh.position.z);
           const reach = Math.hypot(aimX - a.mesh.position.x, aimZ - a.mesh.position.z) || 1;
-          const hx = aimX + ((a.mesh.position.x - aimX) / reach) * 7;
-          const hz = aimZ + ((a.mesh.position.z - aimZ) / reach) * 7;
-          vfx.weaponSlash(hx, 5.6, hz, yaw, '#FFB000', 1);
+          const hx = aimX + ((a.mesh.position.x - aimX) / reach) * 5.2;
+          const hz = aimZ + ((a.mesh.position.z - aimZ) / reach) * 5.2;
+          vfx.weaponSlash(hx, 3.8, hz, yaw, '#FFB000', 1);
           hud.float(new THREE.Vector3(hx, 6.4, hz), 16, 'dmg');
           a.taunt -= 2.5;
           if (a.taunt <= 0) {
@@ -306,9 +371,9 @@ function settleParty(yaw, dt = 0, live = false) {
           boss.hurt(12);
           const yaw = Math.atan2(aimX - a.mesh.position.x, aimZ - a.mesh.position.z);
           const reach = Math.hypot(aimX - a.mesh.position.x, aimZ - a.mesh.position.z) || 1;
-          const hx = aimX + ((a.mesh.position.x - aimX) / reach) * 7;
-          const hz = aimZ + ((a.mesh.position.z - aimZ) / reach) * 7;
-          if (a.classId === 'assassin') vfx.weaponSlash(hx, 4.4, hz, yaw, '#FF3D8A', 2);
+          const hx = aimX + ((a.mesh.position.x - aimX) / reach) * 5.2;
+          const hz = aimZ + ((a.mesh.position.z - aimZ) / reach) * 5.2;
+          if (a.classId === 'assassin') vfx.weaponSlash(hx, 3.2, hz, yaw, '#FF3D8A', 2);
           else if (a.classId === 'archer') vfx.pierce(a.mesh.position.x, a.mesh.position.z, yaw);
           else if (a.classId === 'mage') vfx.sparks(hx, 5.2, hz, a.color, 6);
           else vfx.weaponSlash(hx, 5.4, hz, yaw, a.color || '#FFB000', 1);
@@ -371,7 +436,7 @@ const combat = createCombat({
     const list = [];
     if (!boss.state.dead) {
       const p = boss.group.position;
-      list.push({ x: p.x, y: 3.5, z: p.z, r: 4.2 });
+      list.push({ x: p.x, y: 3.2, z: p.z, r: 2.9 });
     }
     for (const mob of env.liveMobs || []) {
       if (mob.dead || !mob.group) continue;
@@ -411,7 +476,9 @@ let moveSpeed = 0;
 const portrait = shot === 'transform' || shot === 'form';
 let camYaw = PATH_YAW + (portrait ? Math.PI + 0.7 : 0.35);
 let camPitch = portrait ? 0.32 : 50 * Math.PI / 180;
-let camDist = shot === 'transform' ? 4.4 : shot === 'form' ? 4.8 : 46;
+let camDist = shot === 'transform' ? 4.4 : shot === 'form' ? 4.8 : 35;
+let camHold = 0;
+let camLock = null;
 let shotLookY = null;
 let shotAim = null;
 const keys = new Set();
@@ -695,6 +762,12 @@ function frame() {
       ...party.map((a) => ({ id: a.id, hp: a.hp, down: false, sub: 0.75, debuff: false })),
     ],
   });
+  if (camHold > 0) camHold = Math.max(0, camHold - dt);
+  if (phase === 'fight' && shotLookY == null && !portrait && camHold <= 0) {
+    const ph = boss.state?.phase;
+    const big = ph === 'spawn' || ph === 'slam' || ph === 'sweep' || ph === 'charge' || ph === 'wind';
+    camDist = THREE.MathUtils.damp(camDist, big ? 38 : 35, 3, dt);
+  }
   const lookYaw = camYaw;
   const pitch = camPitch;
   const dist = camDist;
@@ -703,10 +776,16 @@ function frame() {
   const cp = Math.cos(pitch);
   camera.position.set(focus.x - lx * dist * cp, focus.y + dist * Math.sin(pitch), focus.z - lz * dist * cp);
   const bossView = phase === 'fight' && shotLookY == null && !portrait;
-  const aim = shotAim != null ? shotAim : shot === 'wide' ? 1.5 : portrait ? 0.1 : bossView ? 18 : 6;
+  const aim = shotAim != null ? shotAim : shot === 'wide' ? 1.5 : portrait ? 0.1 : bossView ? 12 : 6;
   const head = form?.group?.userData?.headY;
-  const lookY = shotLookY != null ? shotLookY : shot === 'wide' ? 1.15 : portrait ? (head || 1.1) : bossView ? 7 : 0.2;
+  const lookY = shotLookY != null ? shotLookY : shot === 'wide' ? 1.15 : portrait ? (head || 1.1) : bossView ? 5 : 0.2;
   camera.lookAt(focus.x + lx * aim, lookY, focus.z + lz * aim);
+  if (camLock) {
+    camera.position.set(camLock.px, camLock.py, camLock.pz);
+    camera.lookAt(camLock.tx, camLock.ty, camLock.tz);
+  }
+  syncMarks();
+  flames.update(dt);
   if (shake > 0) {
     camera.position.x += (Math.random() - 0.5) * shake;
     camera.position.y += (Math.random() - 0.5) * shake * 0.4;
@@ -902,7 +981,8 @@ addEventListener('pointermove', (e) => {
 });
 addEventListener('wheel', (e) => {
   const zoomMin = portrait ? 4.5 : 16;
-  const zoomMax = portrait ? 12 : 46;
+  const zoomMax = portrait ? 12 : 40;
+  camHold = 3.5;
   camDist = Math.max(zoomMin, Math.min(zoomMax, camDist + Math.sign(e.deltaY) * (portrait ? 0.4 : 1.6)));
 }, { passive: true });
 
@@ -1059,6 +1139,7 @@ function placeFight(yaw, pitch, dist, back) {
 }
 function showKnights() {
   finishIntro();
+  clearMarks('shot');
   for (const a of party) a.mesh.visible = false;
   const ids = ['warrior', 'mage', 'priest', 'archer', 'assassin'];
   ids.forEach((id, i) => {
@@ -1068,20 +1149,22 @@ function showKnights() {
     if (id !== classId) {
       extras.push(g);
       attachTrails(g, id, scene);
+      const npc = NPC_POOL.find((n) => n.classId === id);
+      addMark(g, npc?.name || id, id, 'shot');
     }
-    const p = fromFrame(BOSS_ALONG - 14, (i - 2) * 2.2);
+    const p = fromFrame(BOSS_ALONG - 11, (i - 2) * 2.2);
     g.position.set(p.x, 0, p.z);
     g.rotation.set(0, PATH_YAW, 0);
     g.visible = true;
     g.userData.shotClass = id;
   });
-  const mid = fromFrame(BOSS_ALONG - 14, 0);
+  const mid = fromFrame(BOSS_ALONG - 11, 0);
   actor.position.set(mid.x, 0, mid.z);
   camYaw = PATH_YAW;
   camPitch = 50 * Math.PI / 180;
-  camDist = 46;
-  shotLookY = 7;
-  shotAim = 16;
+  camDist = 35;
+  shotLookY = null;
+  shotAim = null;
   if (phase !== 'fight') finishIntro();
   hud.banner('');
   const banner = document.querySelector('#bw-raid [data-banner]');
@@ -1280,6 +1363,7 @@ window.__raid = {
   ready: true,
   THREE,
   scene,
+  camera,
   renderer,
   arena,
   get actor() { return actor; },
@@ -1297,6 +1381,8 @@ window.__raid = {
   get clipTime() { return form.group.userData.clipTime || 0; },
   get classId() { return classId; },
   get phase() { return phase; },
+  get camDist() { return camDist; },
+  pad: virtualPad,
   get fps() { return fps; },
   stats() {
     return { fps: Math.round(fps), sceneDrawCalls, bloom: bloomOn };
@@ -1304,6 +1390,13 @@ window.__raid = {
   measure: measureScene,
   debug: {
     skipIntro() { if (phase === 'intro') finishIntro(); },
+    guard() {
+      combat.state.iframe = 60;
+      combat.state.down = 0;
+      combat.state.hp = combat.state.hpMax;
+    },
+    look(px, py, pz, tx, ty, tz) { camLock = { px, py, pz, tx, ty, tz }; },
+    unlock() { camLock = null; },
     poseKnights() {
       simPaused = true;
       const swing = (g, id) => {

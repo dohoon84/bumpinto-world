@@ -3,6 +3,8 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import { bossPoint, PATH_YAW, fromFrame, inSafe, toFrame, BOSS_ALONG } from './layout.js';
 
 export const BOSS_HP = 10800;
+// Authored Holde is 21.65 m. One uniform scale brings the feet-to-peak height to ~15 m.
+export const HOLDE_SCALE = 0.69;
 
 function crackTex() {
   const c = document.createElement('canvas');
@@ -298,20 +300,22 @@ export async function createBoss(scene) {
   const home = bossPoint();
   built.group.position.set(home.x, 0, home.z);
   built.group.rotation.y = PATH_YAW + Math.PI;
-  built.group.scale.setScalar(built.holde ? 1 : 1.45);
+  const S = built.holde ? HOLDE_SCALE : 1;
+  built.group.scale.setScalar(built.holde ? HOLDE_SCALE : 1.45);
   scene.add(built.group);
   if (built.crack) {
     built.crack.position.set(home.x, 0, home.z);
+    built.crack.scale.setScalar(S);
     scene.add(built.crack);
   }
   let mobFactory = null;
 
-  const light = new THREE.PointLight('#ff7a3a', 18, 26, 2);
-  light.position.set(home.x, 8, home.z);
+  const light = new THREE.PointLight('#ff7a3a', 18, 26 * S, 2);
+  light.position.set(home.x, 8 * S, home.z);
   scene.add(light);
 
-  const slam = circleMesh(4.8);
-  const winds = [0, 1, 2, 3].map(() => circleMesh(3.6));
+  const slam = circleMesh(4.8 * S);
+  const winds = [0, 1, 2, 3].map(() => circleMesh(3.6 * S));
   const columns = [0, 1].map((i) => {
     const col = riftColumn();
     const p = fromFrame(i === 0 ? 4 : 16, i === 0 ? -2.8 : 3.1);
@@ -354,7 +358,7 @@ export async function createBoss(scene) {
   const adds = [];
   const addMat = new THREE.MeshStandardMaterial({ color: '#3a2430', emissive: '#ff3355', emissiveIntensity: 0.8, roughness: 0.45 });
   const lane = new THREE.Mesh(
-    new THREE.PlaneGeometry(2.4, 16),
+    new THREE.PlaneGeometry(2.4 * S, 16 * S),
     new THREE.MeshBasicMaterial({ color: '#ffe1a8', transparent: true, opacity: 0.42, depthWrite: false, side: THREE.DoubleSide }),
   );
   lane.rotation.x = -Math.PI / 2;
@@ -417,7 +421,7 @@ export async function createBoss(scene) {
         new THREE.BoxGeometry(0.35 + (i % 3) * 0.12, 0.16, 0.42),
         new THREE.MeshStandardMaterial({ color: i % 2 ? '#8d8680' : '#5c534c', roughness: 0.9 }),
       );
-      m.position.set(x + (Math.random() - 0.5) * 3, 0.3, z + (Math.random() - 0.5) * 2);
+      m.position.set(x + (Math.random() - 0.5) * 3 * S, 0.3, z + (Math.random() - 0.5) * 2 * S);
       m.userData.vy = 3 + Math.random() * 3;
       m.userData.vx = (Math.random() - 0.5) * 3;
       m.userData.vz = (Math.random() - 0.5) * 3;
@@ -546,9 +550,9 @@ export async function createBoss(scene) {
       state.cast = Math.min(state.castMax, state.t);
       if (clipEvent(0.36, 'spawn-front')) {
         ctx.onSlam?.('hit');
-        tossDebris(built.group.position.x, built.group.position.z + 4, 12);
+        tossDebris(built.group.position.x, built.group.position.z + 4 * S, 12);
       }
-      if (clipEvent(0.66, 'spawn-hind')) tossDebris(built.group.position.x, built.group.position.z - 3, 6);
+      if (clipEvent(0.66, 'spawn-hind')) tossDebris(built.group.position.x, built.group.position.z - 3 * S, 6);
       if (clipEvent(0.78, 'spawn-roar')) ctx.onWind?.('hit');
       const spawnAct = built.actions.spawn;
       if (!built.holde || (spawnAct && spawnAct.time >= spawnAct.getClip().duration - 0.08)) {
@@ -594,8 +598,8 @@ export async function createBoss(scene) {
           const dx = player.x - charge.ax;
           const dz = player.z - charge.az;
           const len = Math.hypot(dx, dz) || 1;
-          charge.bx = charge.ax + (dx / len) * 14;
-          charge.bz = charge.az + (dz / len) * 14;
+          charge.bx = charge.ax + (dx / len) * 14 * S;
+          charge.bz = charge.az + (dz / len) * 14 * S;
           lane.visible = true;
           lane.position.set((charge.ax + charge.bx) / 2, 0.16, (charge.az + charge.bz) / 2);
           lane.rotation.z = Math.atan2(charge.bx - charge.ax, charge.bz - charge.az);
@@ -672,7 +676,7 @@ export async function createBoss(scene) {
         state.castName = '';
         state.cast = 0;
         state.castMax = 0;
-        built.group.scale.setScalar(1);
+        built.group.scale.setScalar(built.holde ? HOLDE_SCALE : 1);
         state.phase = 'idle';
         state.t = 1.6;
         if (built.holde) playClip('idle', true);
@@ -700,7 +704,7 @@ export async function createBoss(scene) {
         const t = Math.max(0, Math.min(1, ((px - charge.ax) * vx + (pz - charge.az) * vz) / len2));
         const cx = charge.ax + vx * t;
         const cz = charge.az + vz * t;
-        if ((px - cx) ** 2 + (pz - cz) ** 2 <= 1.7 * 1.7) onPlayerHit?.(36, 'charge');
+        if ((px - cx) ** 2 + (pz - cz) ** 2 <= (1.7 * S) * (1.7 * S)) onPlayerHit?.(36, 'charge');
         built.group.position.set(charge.bx, 0, charge.bz);
       }
       const chargeDone = built.holde
@@ -808,7 +812,7 @@ export async function createBoss(scene) {
     windHit = false;
     built.group.visible = true;
     built.group.position.y = 0;
-    built.group.scale.setScalar(built.holde ? 1 : 1);
+    built.group.scale.setScalar(built.holde ? HOLDE_SCALE : 1.45);
     applyArmor(1);
     if (built.holde) playClip('idle', true);
     built.group.rotation.z = 0;

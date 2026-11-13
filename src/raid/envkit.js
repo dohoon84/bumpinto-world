@@ -14,6 +14,165 @@ const MOBS = {
 
 const uLit = { value: 0.3 };
 
+function koreanSignMaterial() {
+  const canvas = document.createElement('canvas');
+  canvas.width = 512;
+  canvas.height = 220;
+  const g = canvas.getContext('2d');
+  g.fillStyle = '#0a4f8a';
+  g.fillRect(0, 0, 512, 220);
+  g.strokeStyle = '#f5f8fc';
+  g.lineWidth = 12;
+  g.strokeRect(8, 8, 496, 204);
+  g.fillStyle = '#f7fbff';
+  g.textAlign = 'center';
+  g.textBaseline = 'middle';
+  g.font = '700 78px "Noto Sans CJK KR", "NanumSquareRound", sans-serif';
+  g.fillText('탄천교', 256, 78);
+  g.font = '600 46px "Noto Sans CJK KR", "NanumSquareRound", sans-serif';
+  g.fillText('분당 방면', 256, 154);
+  const map = new THREE.CanvasTexture(canvas);
+  map.colorSpace = THREE.SRGBColorSpace;
+  return new THREE.MeshBasicMaterial({ map, side: THREE.DoubleSide });
+}
+
+function greenBlades(geo) {
+  if (geo.userData.signBlades) return geo.userData.signBlades;
+  const pos = geo.getAttribute('position');
+  const col = geo.getAttribute('color');
+  const empty = [];
+  if (!pos || !col) {
+    geo.userData.signBlades = empty;
+    return empty;
+  }
+  const pts = [];
+  for (let i = 0; i < col.count; i++) {
+    const r = col.getX(i);
+    const g = col.getY(i);
+    const b = col.getZ(i);
+    if (g > 0.16 && g > r + 0.07 && g > b + 0.03 && r < 0.5) {
+      pts.push([pos.getX(i), pos.getY(i), pos.getZ(i)]);
+    }
+  }
+  if (!pts.length || pts.length > 6000) {
+    geo.userData.signBlades = empty;
+    return empty;
+  }
+  const used = new Uint8Array(pts.length);
+  const blades = [];
+  for (let i = 0; i < pts.length; i++) {
+    if (used[i]) continue;
+    const members = [];
+    const stack = [i];
+    used[i] = 1;
+    while (stack.length) {
+      const k = stack.pop();
+      members.push(pts[k]);
+      const [x, y, z] = pts[k];
+      for (let j = 0; j < pts.length; j++) {
+        if (used[j]) continue;
+        const dx = pts[j][0] - x;
+        const dy = pts[j][1] - y;
+        const dz = pts[j][2] - z;
+        if (dx * dx + dy * dy + dz * dz < 6.5 * 6.5) {
+          used[j] = 1;
+          stack.push(j);
+        }
+      }
+    }
+    if (members.length < 4) continue;
+    let minX = Infinity; let minY = Infinity; let minZ = Infinity;
+    let maxX = -Infinity; let maxY = -Infinity; let maxZ = -Infinity;
+    for (const [x, y, z] of members) {
+      if (x < minX) minX = x; if (y < minY) minY = y; if (z < minZ) minZ = z;
+      if (x > maxX) maxX = x; if (y > maxY) maxY = y; if (z > maxZ) maxZ = z;
+    }
+    const dx = maxX - minX; const dy = maxY - minY; const dz = maxZ - minZ;
+    const span = Math.max(dx, dz);
+    const thin = Math.min(dx, dz);
+    if (thin > 0.9 || dy > 1.6 || dy < 0.04 || span > 8 || span < 0.5) continue;
+    blades.push({ minX, minY, minZ, maxX, maxY, maxZ, dx, dy, dz });
+  }
+  for (const blade of blades) {
+    const pad = 0.12;
+    const minX = blade.minX - pad; const maxX = blade.maxX + pad;
+    const minY = blade.minY - pad; const maxY = blade.maxY + pad;
+    const minZ = blade.minZ - pad; const maxZ = blade.maxZ + pad;
+    let fr = 0; let fg = 0; let fb = 0; let fn = 0;
+    for (let i = 0; i < col.count && fn < 40; i += 3) {
+      const x = pos.getX(i); const y = pos.getY(i); const z = pos.getZ(i);
+      if (x >= minX && x <= maxX && y >= minY && y <= maxY && z >= minZ && z <= maxZ) continue;
+      if (Math.abs(y - (blade.minY + blade.maxY) / 2) > blade.dy + 0.5) continue;
+      fr += col.getX(i); fg += col.getY(i); fb += col.getZ(i); fn += 1;
+    }
+    const cr = fn ? fr / fn : 0.55;
+    const cg = fn ? fg / fn : 0.52;
+    const cb = fn ? fb / fn : 0.5;
+    for (let i = 0; i < col.count; i++) {
+      const x = pos.getX(i); const y = pos.getY(i); const z = pos.getZ(i);
+      if (x < minX || x > maxX || y < minY || y > maxY || z < minZ || z > maxZ) continue;
+      col.setXYZ(i, cr, cg, cb);
+    }
+  }
+  if (blades.length) col.needsUpdate = true;
+  geo.userData.signBlades = blades;
+  return blades;
+}
+
+function faceTowardRoad(sign, parent, toward) {
+  const parentQ = new THREE.Quaternion();
+  parent.getWorldQuaternion(parentQ);
+  const z = toward.clone().normalize();
+  const x = new THREE.Vector3().crossVectors(new THREE.Vector3(0, 1, 0), z);
+  if (x.lengthSq() < 1e-6) x.set(1, 0, 0);
+  x.normalize();
+  const y = new THREE.Vector3().crossVectors(z, x).normalize();
+  const worldQ = new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(x, y, z));
+  sign.quaternion.copy(parentQ.invert()).multiply(worldQ);
+}
+
+function coverStreetSigns(slots) {
+  const mat = koreanSignMaterial();
+  let placed = 0;
+  for (const slot of slots) {
+    for (const state of Object.values(slot.states)) {
+      state.updateWorldMatrix(true, true);
+      state.traverse((o) => {
+        if (!o.isMesh || o.userData.koreanSign) return;
+        const blades = greenBlades(o.geometry);
+        if (!blades.length) return;
+        o.userData.koreanSign = true;
+        for (const blade of blades) {
+          const sign = new THREE.Mesh(new THREE.PlaneGeometry(2.2, 0.95), mat);
+          sign.name = 'korean-road-sign';
+          sign.position.set(
+            (blade.minX + blade.maxX) / 2,
+            (blade.minY + blade.maxY) / 2,
+            (blade.minZ + blade.maxZ) / 2,
+          );
+          o.add(sign);
+          o.updateWorldMatrix(true, true);
+          const world = new THREE.Vector3();
+          sign.getWorldPosition(world);
+          if (world.y < 1.4 || world.y > 9) {
+            o.remove(sign);
+            continue;
+          }
+          const road = fromFrame(slot.along, 0);
+          const toward = new THREE.Vector3(road.x - world.x, 0, road.z - world.z);
+          if (toward.lengthSq() < 0.01) toward.set(0, 0, 1);
+          toward.normalize();
+          const local = toward.clone().transformDirection(new THREE.Matrix4().copy(o.matrixWorld).invert());
+          sign.position.add(local.multiplyScalar(0.16));
+          faceTowardRoad(sign, o, toward);
+          placed += 1;
+        }
+      });
+    }
+  }
+  console.info('[raid] road signs', placed);
+}
+
 function faceRoad(side) {
   return PATH_YAW + (side > 0 ? Math.PI / 2 : -Math.PI / 2);
 }
@@ -366,16 +525,7 @@ export async function createEnvKit(scene) {
   }
 
   const blinks = [];
-  const flames = [];
-  const flameMap = new THREE.TextureLoader().load('/assets/vfx/thirdparty/unity/smallflame01.webp?v=tp');
-  flameMap.colorSpace = THREE.SRGBColorSpace;
-  flameMap.wrapS = THREE.ClampToEdgeWrapping;
-  flameMap.wrapT = THREE.ClampToEdgeWrapping;
-  flameMap.repeat.set(1 / 16, 1 / 4);
-  flameMap.offset.set(0, 1 - 1 / 4);
-  const flameMat = new THREE.SpriteMaterial({
-    map: flameMap, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, color: '#ffb060',
-  });
+  const fireAnchors = [];
 
   function addClone(name, along, across, yaw, s = 1) {
     const g = props[name].clone(true);
@@ -388,11 +538,10 @@ export async function createEnvKit(scene) {
       o.castShadow = false;
       if (o.name === 'fx_flame') {
         o.visible = false;
-        const sprite = new THREE.Sprite(flameMat.clone());
-        sprite.scale.set(2.6, 3.6, 1);
-        sprite.position.y = 1.5;
-        g.add(sprite);
-        flames.push(sprite);
+        o.updateWorldMatrix(true, true);
+        const wp = new THREE.Vector3();
+        o.getWorldPosition(wp);
+        fireAnchors.push({ x: wp.x, y: wp.y + 0.4, z: wp.z, size: 2.5, tint: '#e07038' });
       }
       if (/^beacon/.test(o.name) || o.name === 'bulb' || o.name === 'lamp') blinks.push(o);
     });
@@ -450,20 +599,34 @@ export async function createEnvKit(scene) {
   addCrack(4.2, 0.2, 1.6);
   addCrack(5.2, 1.7, 2.5);
 
-  const smokeMap = new THREE.TextureLoader().load('/assets/vfx/thirdparty/unity/wispysmoke01.webp?v=tp');
-  smokeMap.colorSpace = THREE.SRGBColorSpace;
-  smokeMap.wrapS = THREE.ClampToEdgeWrapping;
-  smokeMap.wrapT = THREE.ClampToEdgeWrapping;
-  smokeMap.repeat.set(1 / 8, 1 / 8);
-  smokeMap.offset.set(0, 1 - 1 / 8);
-  for (const [along, across] of [[16, 20], [14, -22], [42, 30], [40, -32]]) {
-    const s = new THREE.Sprite(new THREE.SpriteMaterial({
-      map: smokeMap, transparent: true, depthWrite: false, opacity: 0.55, color: '#5c463c',
-    }));
-    const p = fromFrame(along, across);
-    s.position.set(p.x, 18, p.z);
-    s.scale.set(8, 28, 1);
-    root.add(s);
+  try { coverStreetSigns(slots); } catch (err) { console.warn('[raid] signs', err); }
+  const v = new THREE.Vector3();
+  for (const slot of slots) {
+    if (slot.tier !== 'near') continue;
+    const state = slot.states.damaged;
+    state.updateWorldMatrix(true, true);
+    const road = fromFrame(slot.along, 0);
+    let best = null;
+    state.traverse((o) => {
+      if (!o.isMesh || !o.geometry?.attributes?.position) return;
+      const pos = o.geometry.attributes.position;
+      for (let i = 0; i < pos.count; i += 24) {
+        v.fromBufferAttribute(pos, i).applyMatrix4(o.matrixWorld);
+        if (v.y < 5 || v.y > 14) continue;
+        const d = (v.x - road.x) ** 2 + (v.z - road.z) ** 2;
+        if (!best || d < best.d) best = { x: v.x, y: v.y, z: v.z, d };
+      }
+    });
+    if (!best) continue;
+    const len = Math.hypot(road.x - best.x, road.z - best.z) || 1;
+    fireAnchors.push({
+      x: best.x + ((road.x - best.x) / len) * 0.35,
+      y: best.y,
+      z: best.z + ((road.z - best.z) / len) * 0.35,
+      size: 2.2,
+      tint: '#d06830',
+      light: false,
+    });
   }
   const beamMat = new THREE.MeshBasicMaterial({
     color: '#efe6d2', transparent: true, opacity: 0.07, depthWrite: false, side: THREE.DoubleSide,
@@ -632,14 +795,7 @@ export async function createEnvKit(scene) {
 
   const traffic = await addTraffic(gltfLoader, root);
 
-  let flameT = 0;
   function update(dt) {
-    flameT += dt;
-    const frame = Math.floor(flameT * 12) % 16;
-    const f = Math.floor(flameT * 18) % 64;
-    flameMap.offset.set((f % 16) / 16, 1 - (Math.floor(f / 16) + 1) / 4);
-    const s = Math.floor(flameT * 12) % 64;
-    smokeMap.offset.set((s % 8) / 8, 1 - (Math.floor(s / 8) + 1) / 8);
     const t = performance.now() * 0.001;
     blinks.forEach((node, i) => {
       const alt = node.name === 'beacon_blue' ? Math.sin(t * 9 + i) < 0 : Math.sin(t * 9 + i) > 0;
@@ -663,5 +819,6 @@ export async function createEnvKit(scene) {
     uLit,
     liveMobs,
     traffic,
+    fireAnchors,
   };
 }

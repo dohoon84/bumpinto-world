@@ -1,9 +1,10 @@
 import { bossPoint } from './layout.js';
+import { HOLDE_SCALE } from './boss.js';
 import { getClass } from './classes.js';
 
 function bossFloatPos() {
   const b = bossPoint();
-  return { x: b.x + (Math.random() - 0.5) * 1.2, y: 7.2 + Math.random() * 4.5, z: b.z };
+  return { x: b.x + (Math.random() - 0.5) * 1.2, y: (7.2 + Math.random() * 4.5) * HOLDE_SCALE, z: b.z };
 }
 
 function distBoss(x, z) {
@@ -78,12 +79,12 @@ export function createCombat({ audio, vfx, onFloat, onBossHurt, onBind, onHealPa
     const dx = x - b.x;
     const dz = z - b.z;
     const len = Math.hypot(dx, dz) || 1;
-    const hx = b.x + (dx / len) * 8;
-    const hz = b.z + (dz / len) * 8;
+    const hx = b.x + (dx / len) * 8 * HOLDE_SCALE;
+    const hz = b.z + (dz / len) * 8 * HOLDE_SCALE;
     if (id === 'charge') vfx.charge(x, z, yaw);
-    else if (id === 'slash') vfx.weaponSlash(hx, 6.2, hz, yaw, '#FFB000', 1);
+    else if (id === 'slash') vfx.weaponSlash(hx, 6.2 * HOLDE_SCALE, hz, yaw, '#FFB000', 1);
     else if (id === 'shout') vfx.ring(x, 0.4, z, '#FFB000', 3.2);
-    else if (id === 'daggers') vfx.weaponSlash(hx, 4.6, hz, yaw, '#FF3D8A', 2);
+    else if (id === 'daggers') vfx.weaponSlash(hx, 4.6 * HOLDE_SCALE, hz, yaw, '#FF3D8A', 2);
     else if (id === 'spin') vfx.whirl(x, z);
     else if (id === 'shard') vfx.fireball(x, 1.6, z, yaw);
     else if (id === 'nova' || id === 'blizzard') vfx.frost(x, z);

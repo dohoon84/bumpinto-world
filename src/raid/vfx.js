@@ -118,6 +118,7 @@ export function createVfx(scene) {
   root.name = 'raid-vfx';
   scene.add(root);
   const live = [];
+  let flamesApi = null;
 
   function add(mesh, life, spin) {
     if (live.length > 96) {
@@ -133,6 +134,7 @@ export function createVfx(scene) {
   }
 
   return {
+    bindFlames(api) { flamesApi = api; },
     root,
     slash(x, y, z, yaw, color = '#ffe7a0') {
       const arc = new THREE.Mesh(new THREE.TorusGeometry(1.15, 0.07, 6, 18, Math.PI * 0.85), fadeMat(color));
@@ -347,22 +349,9 @@ export function createVfx(scene) {
       const bz = z + fz * 3;
       add(facing(`${V3}/particles/comet_head_mage.png`, x + fx * 1.2, y + 0.4, z + fz * 1.2, 1.15, 1.15, '#FFFFFF'), 0.7, 0);
       add(facing(`${V3}/trails/comet_trail_mage.png`, x + fx * 0.4, y + 0.35, z + fz * 0.4, 3.6, 0.9, '#FFFFFF'), 0.6, 0);
-      const fire = flipTexture(`${TP}/unity/fireball01.webp`, 8, 8, 24);
       add(decal(`${TP}/summon/circle6a.webp`, x, z, 2.4, 2.4, '#FFFFFF'), 0.45, 0);
-      const fireGround = withMap(fire, bx, 0.08, bz, 6.6, 6.6, '#B060FF', 'normal', false);
-      fireGround.rotation.x = -Math.PI / 2;
-      add(fireGround, 0.85, 0);
-      [0, Math.PI / 2].forEach((yaw) => {
-        const q = withMap(fire, bx, 2.2, bz, 6.6, 6.6, '#B060FF', 'normal', false);
-        q.rotation.y = yaw;
-        add(q, 0.85, 0);
-      });
-      add(withMap(fire, bx, 2.4, bz, 6.6, 6.6, '#B060FF', 'normal', true), 0.85, 0);
+      if (flamesApi) flamesApi.burst(bx, 1.3, bz, { span: 6.6, tint: '#C080FF', smoke: '#6A5A68' });
       add(spark(`${TP}/kenney/spark_04.webp`, bx, 2.2, bz, 0.55, 0.55, '#FFE7A0'), 0.3, 0);
-      const smoke = flipTexture(`${TP}/unity/cloud01.webp`, 8, 8, 12);
-      const smokeMesh = withMap(smoke, bx, 0.1, bz, 8.0, 8.0, '#6A5A68', 'normal', false);
-      smokeMesh.rotation.x = -Math.PI / 2;
-      add(smokeMesh, 0.9, 0);
     },
     frost(x, z) {
       add(decal(`${V3}/contrast/frost_dark.png`, x, z, 8.0, 8.0, '#102028'), 0.8, 0);
@@ -388,8 +377,11 @@ export function createVfx(scene) {
       this.pillar(x, z, '#9b5cff');
     },
     impactBurst(x, y, z) {
-      const boom = flipTexture(`${TP}/unity/explosion00.webp`, 5, 5, 22);
-      add(withMap(boom, x, y, z, 3.2, 3.2, '#FFB000', 'normal', true), 0.45, 0);
+      if (flamesApi) flamesApi.burst(x, y, z, { span: 3.2, tint: '#FFB060', smoke: '#6a564c' });
+      else {
+        const boom = flipTexture(`${TP}/unity/explosion00.webp`, 5, 5, 22);
+        add(withMap(boom, x, y, z, 3.2, 3.2, '#FFB000', 'normal', true), 0.45, 0);
+      }
       add(spark(`${TP}/kenney/spark_04.webp`, x, y, z, 0.45, 0.45, '#FFE7A0'), 0.25, 0);
     },
     windStreak(x, z, yaw) {

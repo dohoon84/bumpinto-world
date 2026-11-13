@@ -181,8 +181,8 @@ export async function createCity(scene) {
   const smokeMap = new THREE.TextureLoader().load('/assets/vfx/thirdparty/kenney/circle_05.webp?v=tp');
   smokeMap.colorSpace = THREE.SRGBColorSpace;
   const smoke = new THREE.Points(smokeGeo, new THREE.PointsMaterial({
-    color: '#6a5348', map: smokeMap, size: 0.85, transparent: true, opacity: 0, depthWrite: false,
-    sizeAttenuation: true, alphaTest: 0.05,
+    color: '#6a5348', map: smokeMap, size: 8, transparent: true, opacity: 0, depthWrite: false,
+    sizeAttenuation: false, alphaTest: 0.25,
   }));
   smoke.material.onBeforeCompile = (shader) => {
     shader.vertexShader = shader.vertexShader.replace(
@@ -232,8 +232,7 @@ export async function createCity(scene) {
   function applyStage(next) {
     stage = next;
     mat.uniforms.uStage.value = next;
-    const show = mood > 0.2 ? Math.min(fires.length, next === 0 ? 0 : 2 + next * 2) : 0;
-    fires.forEach((s, i) => { s.visible = i < show; });
+    fires.forEach((s) => { s.visible = false; });
     smoke.material.opacity = mood * (0.08 + next * 0.05);
   }
 
@@ -258,12 +257,7 @@ export async function createCity(scene) {
         flashers[1].userData.base = '#3d7fe0';
         flashers[2].userData.base = '#ff9f1a';
       }
-      fires.forEach((s, i) => {
-        if (!s.visible) return;
-        const w = 2.6 + Math.sin(performance.now() * 0.01 + i) * 0.6;
-        s.scale.set(w, w * 1.4, 1);
-        s.material.opacity = 0.75 + stage * 0.08;
-      });
+      fires.forEach((s) => { s.visible = false; });
       lamps.forEach((lamp) => {
         const head = lamp.userData.head;
         if (!head) return;

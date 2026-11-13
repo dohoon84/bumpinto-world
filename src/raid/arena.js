@@ -139,35 +139,6 @@ function neonGeo() {
 }
 
 function dressBattlefield(scene) {
-  const smokeMap = new THREE.TextureLoader().load('/assets/vfx/thirdparty/unity/cloud01.webp?v=tp');
-  smokeMap.colorSpace = THREE.SRGBColorSpace;
-  smokeMap.wrapS = THREE.ClampToEdgeWrapping;
-  smokeMap.wrapT = THREE.ClampToEdgeWrapping;
-  smokeMap.repeat.set(1 / 8, 1 / 8);
-  smokeMap.offset.set(0, 1 - 1 / 8);
-  scene.userData.columnSmoke = smokeMap;
-  const fireMap = new THREE.TextureLoader().load('/assets/vfx/thirdparty/unity/smallflame01.webp?v=tp');
-  fireMap.colorSpace = THREE.SRGBColorSpace;
-  fireMap.wrapS = THREE.ClampToEdgeWrapping;
-  fireMap.wrapT = THREE.ClampToEdgeWrapping;
-  fireMap.repeat.set(1 / 16, 1 / 4);
-  fireMap.offset.set(0, 1 - 1 / 4);
-  scene.userData.columnFlame = fireMap;
-  for (let i = 0; i < 4; i++) {
-    const s = new THREE.Sprite(new THREE.SpriteMaterial({
-      map: smokeMap, transparent: true, depthWrite: false, opacity: 0.72, color: '#5c463c',
-    }));
-    const p = fromFrame(BOSS_ALONG + (i - 1.5) * 8, i % 2 ? 18 : -18);
-    s.position.set(p.x, 10, p.z);
-    s.scale.set(10, 22, 1);
-    scene.add(s);
-    const fire = new THREE.Sprite(new THREE.SpriteMaterial({
-      map: fireMap, color: '#ffb060', transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
-    }));
-    fire.position.set(p.x, 2.2, p.z);
-    fire.scale.set(4, 5.5, 1);
-    scene.add(fire);
-  }
   const beamMat = new THREE.MeshBasicMaterial({
     color: '#d7e7ff', transparent: true, opacity: 0.22, depthWrite: false, side: THREE.DoubleSide,
   });
@@ -242,7 +213,7 @@ function softPoints(color, size, opacity) {
     transparent: true,
     opacity,
     depthWrite: false,
-    sizeAttenuation: true,
+    sizeAttenuation: false,
     alphaTest: 0.05,
   });
   mat.onBeforeCompile = (shader) => {
@@ -417,7 +388,7 @@ export function createArena(scene) {
   }
   const ashGeo = new THREE.BufferGeometry();
   ashGeo.setAttribute('position', new THREE.BufferAttribute(ashArr, 3));
-  const ash = new THREE.Points(ashGeo, softPoints('#e4cbb8', 0.42, 0));
+  const ash = new THREE.Points(ashGeo, softPoints('#e4cbb8', 8, 0));
   ash.frustumCulled = false;
   scene.add(ash);
 
@@ -635,16 +606,6 @@ export function createArena(scene) {
       }
       flash = Math.max(0, flash - dt * 3.5);
       skyMat.uniforms.uFlash.value = flash;
-      const columnSmoke = scene.userData.columnSmoke;
-      if (columnSmoke) {
-        const s = Math.floor(performance.now() / 80) % 64;
-        columnSmoke.offset.set((s % 8) / 8, 1 - (Math.floor(s / 8) + 1) / 8);
-      }
-      const columnFlame = scene.userData.columnFlame;
-      if (columnFlame) {
-        const f = Math.floor(performance.now() / 70) % 64;
-        columnFlame.offset.set((f % 16) / 16, 1 - (Math.floor(f / 16) + 1) / 4);
-      }
       const pulse = 0.55 + Math.sin(performance.now() * 0.004) * 0.2 + safePulse * 0.6;
       safeRing.scale.setScalar(1);
       safeFill.material.opacity = 0.16 + safePulse * 0.14;

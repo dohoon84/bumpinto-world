@@ -17,7 +17,7 @@ export const SPAWN_ALONG = -2.4;
 export const ALONG_MIN = -18;
 export const ALONG_MAX = 34;
 export const ACROSS_MAX = 6.5;
-export const BOSS_BODY_R = 4.3;
+export const BOSS_BODY_R = 3;
 
 export function fromFrame(along, across) {
   return {
