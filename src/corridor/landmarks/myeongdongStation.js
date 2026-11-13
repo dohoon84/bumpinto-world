@@ -172,7 +172,7 @@ export function createMyeongdongStation({ parent, data, land, atlas, overlay, ro
   const startP = exStart ? [exStart.door.x, exStart.door.z] : [st.x, st.z];
   const path = shortestPath(ways, startP, foot) || [startP, foot];
   let pathLen = 0; for (let i = 1; i < path.length; i++) pathLen += Math.hypot(path[i][0] - path[i - 1][0], path[i][1] - path[i - 1][1]);
-  const guideY = (x, z) => heightAt(x, z) + 0.2;
+  const guideY = (x, z) => heightAt(x, z) + (land.inBox(x, z) ? 0.2 : 0.35);
   {
     const samples = resample(path, 5.5);
     for (let i = 1; i < samples.length - 1; i++) {
@@ -194,8 +194,9 @@ export function createMyeongdongStation({ parent, data, land, atlas, overlay, ro
       }
       if (bldAt(x, z, 0.3)) continue;
       const hwq = 0.6, hlq = 0.6, rx = -s.tz, rz = s.tx;
-      const y = guideY(x, z);
-      facedQuad(signs, [x - rx * hwq - s.tx * hlq, y, z - rz * hwq - s.tz * hlq], [x + rx * hwq - s.tx * hlq, y, z + rz * hwq - s.tz * hlq], [x + rx * hwq + s.tx * hlq, y, z + rz * hwq + s.tz * hlq], [x - rx * hwq + s.tx * hlq, y, z - rz * hwq + s.tz * hlq], U('guide'), [0, 1, 0]);
+      // 모서리마다 땅 높이(남산 비탈에서 판이 땅에 묻히지 않게)
+      const C = (a, b) => { const qx = x + rx * a * hwq + s.tx * b * hlq, qz = z + rz * a * hwq + s.tz * b * hlq; return [qx, guideY(qx, qz), qz]; };
+      facedQuad(signs, C(-1, -1), C(1, -1), C(1, 1), C(-1, 1), U('guide'), [0, 1, 0]);
     }
   }
   // 이정표: 출발·약 110 m 마다·오르미 앞

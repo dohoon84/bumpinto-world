@@ -251,6 +251,9 @@ export async function createMyeongdongAsync(opts = {}, yieldFn = null, slicer = 
     if (!land.inApron(cx, cz)) continue;
     // 성당 바로 옆 성당 부속(본당 지붕 조각 등)은 성당 모델이 대신한다
     if (land.hill && Math.hypot(cx - land.hill.cx, cz - land.hill.cz) < 34 && /church|cathedral/.test(b.k || '')) continue;
+    // 성당 외곽선과 겹치는 건물(같은 자리 중복 OSM 조각)도 뺀다 — 안 빼면 성당 벽에 상점 간판이 붙는다
+    if (data.cathedral?.o && (pointInRing(cx, cz, data.cathedral.o) || b.o.some(([x, z]) => pointInRing(x, z, data.cathedral.o)))) continue;
+    if (data.cathedral?.o && (b.h || 0) > 25 && data.cathedral.o.some((p, i, o) => { const q = o[(i + 1) % o.length]; return distToSeg(cx, cz, p[0], p[1], q[0], q[1]) < 12; })) continue; // 종탑(way/1139745172 · 47 m)은 성당 모델의 첨탑이 대신
     let mn = Infinity, mx = -Infinity;
     for (const [x, z] of b.o) { const y = heightAt(x, z); mn = Math.min(mn, y); mx = Math.max(mx, y); }
     const ht = buildingHeight(b);

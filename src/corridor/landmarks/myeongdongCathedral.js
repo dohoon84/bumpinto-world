@@ -240,7 +240,7 @@ export function createMyeongdongCathedral({ parent, data, land, overlay }) {
   {
     const buf = new GeoBuf({ uv: true, color: true });
     const pos = [], nrm = [], uv = [], idx = [];
-    const R = 22, n = 18, c = W(uF + 14, 0);
+    const R = 16, n = 18, c = W(uF + 11, 0);
     pos.push(c[0], land.heightAt(c[0], c[1]) + 0.13, c[1]); nrm.push(0, 1, 0); uv.push(0.5, 0.5);
     for (let k = 0; k <= n; k++) { const a = (k / n) * Math.PI * 2, x = c[0] + Math.cos(a) * R, z = c[1] + Math.sin(a) * R * 0.75; pos.push(x, land.heightAt(x, z) + 0.13, z); nrm.push(0, 1, 0); uv.push(x / 3, z / 3); }
     for (let k = 1; k <= n; k++) idx.push(0, k + 1, k);

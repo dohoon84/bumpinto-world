@@ -287,6 +287,58 @@ function drawBp24(ctx, x, z, w, h, viewW, viewH) {
   }
 }
 
+// [myeongdong] 명동 코너맵: 건물·길·광장·공원 + 명동역(4호선) + 명동성당 + 남산오르미 길안내(점선). 명동 땅 400 m 안이면 남산 대신 그린다.
+function drawMyeongdongMini(ctx, x, z, w, h, viewW) {
+  const md = (typeof window !== 'undefined' && window.__jj?.myeongdong) || null;
+  if (!md?.ready || !(md.ownDist?.(x, z) < 400)) return false;
+  const mini = md.mini;
+  if (!mini?.roads?.length) return false;
+  const px = w / viewW;
+  const X = (wx) => w / 2 + (wx - x) * px;
+  const Y = (wz) => h / 2 + (wz - z) * px;
+  const far = viewW * 0.75;
+  const near = (pts) => pts?.some?.(([a, b]) => Math.abs(a - x) < far && Math.abs(b - z) < far);
+  const path = (pts, close) => { ctx.beginPath(); pts.forEach(([a, b], i) => (i ? ctx.lineTo(X(a), Y(b)) : ctx.moveTo(X(a), Y(b)))); if (close) ctx.closePath(); };
+  ctx.save();
+  ctx.fillStyle = '#e6dccb'; ctx.fillRect(0, 0, w, h);
+  ctx.fillStyle = '#86bf7c';
+  for (const p of mini.parks || []) if (near(p.o)) { path(p.o, true); ctx.fill(); }
+  ctx.fillStyle = '#efe4cf';
+  for (const p of mini.plazas || []) if (near(p.o)) { path(p.o, true); ctx.fill(); }
+  ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  const CAR = new Set(['trunk', 'primary', 'secondary', 'tertiary', 'primary_link', 'secondary_link', 'tertiary_link']);
+  for (const r of mini.roads) {
+    if (!near(r.p)) continue;
+    const car = CAR.has(r.k);
+    ctx.strokeStyle = car ? '#8d939c' : '#fbf6ec';
+    ctx.lineWidth = Math.max(car ? 2.2 : 1.2, (r.w || (car ? 9 : 3)) * px * 0.85);
+    path(r.p); ctx.stroke();
+  }
+  ctx.fillStyle = '#c9c1b4'; ctx.strokeStyle = '#b1a898'; ctx.lineWidth = 1;
+  for (const b of mini.buildings || []) if (near(b.o)) { path(b.o, true); ctx.fill(); ctx.stroke(); }
+  const st = mini.station;
+  if (st?.guide?.length > 1) { ctx.setLineDash([5, 4]); ctx.strokeStyle = '#0b7fb0'; ctx.lineWidth = Math.max(2, 2.4 * px); path(st.guide); ctx.stroke(); ctx.setLineDash([]); }
+  const s = Math.max(1, w / 180);
+  const cath = md.cathedral;
+  if (cath) {
+    const cx = X(cath.x), cy = Y(cath.z);
+    ctx.fillStyle = '#7a3b2a'; ctx.fillRect(cx - 1.2 * s, cy - 6 * s, 2.4 * s, 12 * s); ctx.fillRect(cx - 4.5 * s, cy - 3 * s, 9 * s, 2.4 * s);
+  }
+  for (const e of st?.exits || []) { ctx.fillStyle = '#f2c200'; ctx.fillRect(X(e.x) - 2 * s, Y(e.z) - 2 * s, 4 * s, 4 * s); }
+  if (st) {
+    const sx = X(st.x), sy = Y(st.z);
+    ctx.beginPath(); ctx.arc(sx, sy, 7 * s, 0, Math.PI * 2); ctx.fillStyle = '#00A5DE'; ctx.fill();
+    ctx.lineWidth = 1.5 * s; ctx.strokeStyle = '#fff'; ctx.stroke();
+    ctx.fillStyle = '#fff'; ctx.font = `900 ${Math.round(9 * s)}px sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('4', sx, sy + 0.5);
+  }
+  ctx.font = `700 ${Math.round(Math.max(10, w * 0.075))}px sans-serif`;
+  ctx.textAlign = 'center'; ctx.textBaseline = 'bottom'; ctx.lineWidth = 3;
+  ctx.strokeStyle = 'rgba(235, 228, 212, 0.92)'; ctx.strokeText('명동 Myeongdong', w / 2, h - 6);
+  ctx.fillStyle = '#1a2740'; ctx.fillText('명동 Myeongdong', w / 2, h - 6);
+  ctx.restore();
+  return true;
+}
+
 function drawNamsanMini(ctx, x, z, w, h, viewW, viewH) {
   const n = (typeof window !== 'undefined' && window.__jj?.namsan) || null;
   const mini = n?.mini;
@@ -472,7 +524,7 @@ export function mountPhone({ data, region = null, extraTiles = null, placeAt = n
         }
       }
       ctx.drawImage(src, sx, sy, viewW * scale, viewH * scale, 0, 0, w, h);
-      drawNamsanMini(ctx, x, z, w, h, viewW, viewH);
+      if (!drawMyeongdongMini(ctx, x, z, w, h, viewW)) drawNamsanMini(ctx, x, z, w, h, viewW, viewH); // [myeongdong]
       drawHangangMini(ctx, x, z, w, h, viewW, viewH);
 
       const s = w / Math.max(1, canvas.clientWidth);

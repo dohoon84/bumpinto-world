@@ -182,13 +182,24 @@ export async function createMyeongdongStreet({ parent, data, land, atlas, ways, 
   bodyBuf.box(0, 0.8, 0, 2.5, 0.9, 1.3, 0, undefined, hex3('#c4c9cf'));
   bodyBuf.box(0, 1.28, 0, 2.62, 0.06, 1.46, 0, undefined, hex3('#e3e6ea'));
   bodyBuf.box(-0.55, 1.36, 0, 1.0, 0.1, 0.9, 0, undefined, hex3('#2b2d31'));
+  // 철판 위 음식 (떡볶이 빨강 · 꼬치 갈색 · 계란빵 노랑) + 앞판 색 띠
+  bodyBuf.box(-0.55, 1.45, 0, 0.86, 0.1, 0.72, 0, undefined, hex3('#d9381e'));
+  for (let k = 0; k < 5; k++) bodyBuf.box(0.35 + k * 0.16, 1.4, 0, 0.08, 0.06, 0.62, 0, undefined, hex3(k % 2 ? '#8a4b24' : '#b5652d'));
+  bodyBuf.box(1.05, 1.4, -0.3, 0.3, 0.1, 0.3, 0, undefined, hex3('#f2c14e'));
+  bodyBuf.box(1.05, 1.4, 0.3, 0.3, 0.1, 0.3, 0, undefined, hex3('#f2c14e'));
+  for (const sz of [-0.66, 0.66]) bodyBuf.box(0, 0.62, sz, 2.5, 0.18, 0.02, 0, undefined, hex3('#ffd23f'));
   for (const sx of [-1.05, 1.05]) for (const sz of [-0.55, 0.55]) bodyBuf.box(sx, 0.17, sz, 0.3, 0.3, 0.12, 0, undefined, hex3('#1c1c1f'));
   for (const sx of [-1.25, 1.25]) for (const sz of [-0.68, 0.68]) bodyBuf.box(sx, 1.95, sz, 0.05, 1.3, 0.05, 0, undefined, hex3('#8d939b'));
   const canBuf = new GeoBuf({ uv: false, color: true });
-  canBuf.box(0, 2.62, 0, 3.0, 0.08, 1.95, 0, undefined, [1, 1, 1]);
-  for (const sz of [-0.97, 0.97]) canBuf.box(0, 2.48, sz, 3.0, 0.24, 0.03, 0, undefined, [0.86, 0.86, 0.86]);
+  // 박공 천막 (줄무늬: 색 / 흰색 번갈아) + 앞뒤 늘어진 가장자리
+  for (let k = 0; k < 6; k++) {
+    const x0 = -1.5 + k * 0.5, x1 = x0 + 0.5, c = k % 2 ? [1, 1, 1] : [0.82, 0.82, 0.82];
+    canBuf.quad([x0, 2.5, 1.0], [x1, 2.5, 1.0], [x1, 2.95, 0], [x0, 2.95, 0], undefined, k % 2 ? [0.97, 0.95, 0.9] : c);
+    canBuf.quad([x1, 2.5, -1.0], [x0, 2.5, -1.0], [x0, 2.95, 0], [x1, 2.95, 0], undefined, k % 2 ? [0.97, 0.95, 0.9] : c);
+  }
+  for (const sz of [-1.0, 1.0]) canBuf.box(0, 2.4, sz, 3.0, 0.2, 0.03, 0, undefined, [0.86, 0.86, 0.86]);
   const stallMat = new THREE.MeshLambertMaterial({ vertexColors: true });
-  const canMat = new THREE.MeshLambertMaterial({ vertexColors: true, emissive: '#ffffff', emissiveIntensity: 0 });
+  const canMat = new THREE.MeshLambertMaterial({ vertexColors: true, emissive: '#ffffff', emissiveIntensity: 0, side: THREE.DoubleSide });
   const stallBody = new THREE.InstancedMesh(bodyBuf.build(), stallMat, Math.max(1, stallN));
   const stallCan = new THREE.InstancedMesh(canBuf.build(), canMat, Math.max(1, stallN));
   stallBody.name = 'myeongdong-stall-body'; stallCan.name = 'myeongdong-stall-canopy';
@@ -205,7 +216,7 @@ export async function createMyeongdongStreet({ parent, data, land, atlas, ways, 
     // 메뉴판(양쪽) · 음식 판 · 전구 — 아틀라스 메시에 붙인다
     const nx = -st.tz, nz = st.tx; // 길 오른쪽(로컬 +z 쪽 = 노점 옆면)
     for (const s of [1, -1]) {
-      wallQuad(signBuf, st.x + nx * s * 0.99, gy + 2.66, st.z + nz * s * 0.99, nx * s, nz * s, 2.2, 0.62, U('menu' + st.menu));
+      wallQuad(signBuf, st.x + nx * s * 1.03, gy + 1.78, st.z + nz * s * 1.03, nx * s, nz * s, 2.2, 0.62, U('menu' + st.menu));
     }
     const fy = gy + 1.32, hw = 0.55, hd = 0.36, cx = st.x + st.tx * 0.55, cz = st.z + st.tz * 0.55;
     signBuf.quad([cx - st.tx * hw + nx * hd, fy, cz - st.tz * hw + nz * hd], [cx + st.tx * hw + nx * hd, fy, cz + st.tz * hw + nz * hd], [cx + st.tx * hw - nx * hd, fy, cz + st.tz * hw - nz * hd], [cx - st.tx * hw - nx * hd, fy, cz - st.tz * hw - nz * hd], U('food' + (st.menu % 6)), null, [0, 1, 0]);
