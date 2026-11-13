@@ -144,7 +144,7 @@ export function createStealth({ lanes = [], speeds = [], shelf, mat, cps = [], t
       if (S.grace > 0) S.grace -= dt;
       let any = false;
       for (const f of F) {
-        const inside = inCone(f, me, t.coneDeg, range);
+        const inside = inCone(f, me, t.coneDeg, range) || (o.extra || []).some((p) => inCone(f, p, t.coneDeg, range)); // extra: 따라오는 카트(12일차 반기철)도 불빛에 들면 걸림
         f.seeT = inside ? f.seeT + dt : Math.max(0, f.seeT - dt * 2);
         if (inside) any = true;
         if (S.picked && S.grace <= 0 && f.seeT >= t.caughtSec) {
@@ -223,6 +223,13 @@ export function createDay6Props({ THREE, scene, keep, cartObj = null, isMobile =
     }
     const m = new THREE.Mesh(goldGeo, goldMat); m.name = 'story-gold-box'; return m;
   }
+  let pouchGeo = null;
+  function pouchMesh() { // 12일차 보라 주머니(1 kg): 정점 색 상자 2개 — 금빛 박스와 같은 재질 하나
+    if (!pouchGeo) { const pos = [], col = [], nrm = []; box(pos, col, 0, 0, 0, 0.26, 0.2, 0.2, hex(0x7a3fc0), nrm); box(pos, col, 0, 0.12, 0, 0.1, 0.05, 0.1, hex(0xd8c8f0), nrm); pouchGeo = geo(THREE, keep, pos, col, nrm); }
+    goldMat ||= keep(new THREE.MeshLambertMaterial({ vertexColors: true, emissive: 0x7a5200 }));
+    const m = new THREE.Mesh(pouchGeo, goldMat); m.name = 'story-purple-pouch'; return m;
+  }
+  let pouch = null, pouchShelf = null;
   function ensureCss() {
     if (css || typeof document === 'undefined') return;
     css = document.createElement('style'); css.id = 'dp-d6-css';
@@ -250,7 +257,13 @@ export function createDay6Props({ THREE, scene, keep, cartObj = null, isMobile =
     lifts(n) { while (lifts.length > n) lifts.pop().removeFromParent(); while (lifts.length < n) { const g = buildLift(); scene.add(g); lifts.push(g); } },
     updateLifts(F, hot = []) { F.forEach((f, i) => { const g = lifts[i]; if (!g) return; g.position.set(f.x, 0, f.z); g.rotation.y = Math.atan2(-f.dx, -f.dz); const c = g.userData.cone.material; c.color.setHex(hot[i] ? 0xff5a3a : 0xfff1a8); c.opacity = hot[i] ? 0.26 : 0.16; }); },
     /** 금빛 박스: 'shelf' 비밀 칸(뒤 벽) · 'cart' 카트 위 · null 치움 */
-    gold(where, at) {
+    gold(where, at, kind = 'gold') {
+      if (kind === 'pouch') { // 12일차: 같은 자리(비밀 칸 · 카트)에 보라 주머니
+        if (where === 'shelf') { pouchShelf ||= pouchMesh(); pouchShelf.position.set(at.x, 0.62, at.z); scene.add(pouchShelf); pouch?.removeFromParent(); return; }
+        pouchShelf?.removeFromParent();
+        if (where === 'cart' && cartObj) { pouch ||= pouchMesh(); pouch.position.set(0, 1.0, 0.1); cartObj.add(pouch); return; }
+        pouch?.removeFromParent(); return;
+      }
       if (where === 'shelf') { goldShelf ||= goldMesh(); goldShelf.position.set(at.x, 0.62, at.z); goldShelf.rotation.y = 0; scene.add(goldShelf); gold?.removeFromParent(); return; }
       goldShelf?.removeFromParent();
       if (where === 'cart' && cartObj) { gold ||= goldMesh(); gold.position.set(0, 1.08, 0.1); cartObj.add(gold); return; }
@@ -274,13 +287,13 @@ export function createDay6Props({ THREE, scene, keep, cartObj = null, isMobile =
     get light() { return lightOn; },
     countdown(n) { if (typeof document === 'undefined') return; ensureCss(); const e = document.createElement('div'); e.id = 'dp-d6-cnt'; e.textContent = n; document.body.appendChild(e); setTimeout(() => e.remove(), 950); },
     /** HUD: kind 'race' | 'stealth' | null */
-    hud(kind) {
+    hud(kind, title = '새벽 3시 · 금빛 박스') {
       if (typeof document === 'undefined') return;
       if (!kind) { hud?.remove(); hud = null; window.removeEventListener('keydown', keyL, true); return; }
       if (hud?.dataset.kind === kind) return; hud?.remove(); ensureCss();
       hud = document.createElement('div'); hud.id = 'dp-d6'; hud.dataset.kind = kind;
       hud.innerHTML = kind === 'race' ? '<div class="bx"><div class="big tv">1:15</div><div class="rw"><span class="lv">바퀴 0/3</span><span class="rv">범이 0/3</span></div><div class="rw"><span class="kv">짐 0 kg</span><span class="dv">떨어뜨림 0</span></div></div>'
-        : `<div class="bx"><div class="rw"><span>새벽 3시 · 금빛 박스</span><b class="bv">비밀 칸으로</b></div><div class="rw"><span class="cv">걸림 0/2</span><span class="tv">4:00</span></div></div><button class="lt" type="button">🔦<br>켜짐${isMobile ? '' : ' L'}</button>`;
+        : `<div class="bx"><div class="rw"><span>${title}</span><b class="bv">비밀 칸으로</b></div><div class="rw"><span class="cv">걸림 0/2</span><span class="tv">4:00</span></div></div><button class="lt" type="button">🔦<br>켜짐${isMobile ? '' : ' L'}</button>`;
       hud.querySelector('.lt')?.addEventListener('pointerdown', (e) => { e.stopPropagation(); e.preventDefault(); api.setLight(!lightOn); onLight(lightOn); });
       document.body.appendChild(hud);
       if (kind === 'stealth') window.addEventListener('keydown', keyL, true);
@@ -288,10 +301,10 @@ export function createDay6Props({ THREE, scene, keep, cartObj = null, isMobile =
     updateHud(o = {}) {
       if (!hud) return; const q = (s) => hud.querySelector(s); const mm = (s) => `${Math.floor(Math.max(0, s) / 60)}:${String(Math.floor(Math.max(0, s) % 60)).padStart(2, '0')}`;
       if (hud.dataset.kind === 'race') { q('.tv').textContent = o.phase === 'wait' ? '출발선으로' : o.phase === 'count' ? '준비…' : mm(o.left); q('.lv').textContent = `바퀴 ${o.lap}/${o.laps}`; q('.rv').textContent = `범이 ${Math.min(o.laps, o.rivalLap)}/${o.laps}${o.stumbling ? ' (꽈당)' : ''}`; q('.kv').textContent = `짐 ${Math.round(o.kg)} kg${o.kg < 50 ? ' (50kg 필요)' : ''}`; q('.dv').textContent = `떨어뜨림 ${o.drops}`; }
-      else { q('.bv').textContent = o.picked ? '입구 매트까지' : '뒤쪽 벽 비밀 칸으로'; q('.cv').textContent = `걸림 ${o.caught}/2${o.seeing ? ' · ⚠ 불빛!' : ''}`; q('.tv').textContent = mm(o.left); }
+      else { q('.bv').textContent = o.picked ? '입구 매트까지' : '뒤쪽 벽 비밀 칸으로'; if (o.extra) q('.bv').textContent += ` · ${o.extra}`; q('.cv').textContent = `걸림 ${o.caught}/2${o.seeing ? ' · ⚠ 불빛!' : ''}`; q('.tv').textContent = mm(o.left); }
     },
-    stats() { return { line: !!line?.parent, ghost: !!ghost?.parent, lifts: lifts.length, gold: !!gold?.parent || !!goldShelf?.parent, night, hud: hud?.dataset.kind || null, vig: !!vig }; },
-    dispose() { api.raceLine(false); api.ghost(null); api.lifts(0); api.gold(null); api.hud(null); api.night(0); vig?.remove(); vig = null; css?.remove(); css = null; },
+    stats() { return { line: !!line?.parent, ghost: !!ghost?.parent, lifts: lifts.length, gold: !!gold?.parent || !!goldShelf?.parent, pouch: pouch?.parent ? 'cart' : pouchShelf?.parent ? 'shelf' : null, night, hud: hud?.dataset.kind || null, vig: !!vig }; },
+    dispose() { api.raceLine(false); api.ghost(null); api.lifts(0); api.gold(null); api.gold(null, null, 'pouch'); api.hud(null); api.night(0); vig?.remove(); vig = null; css?.remove(); css = null; },
   };
   return api;
 }
