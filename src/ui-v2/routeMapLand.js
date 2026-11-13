@@ -5,6 +5,8 @@
 //   결과 모양은 routeMap.js buildRouteMap 과 같아서 auditRouteMap(겹침 검사)을 그대로 쓴다. 순수 함수(DOM 없음).
 import { RM_LINES } from './routeMap.js';
 
+// 영문 모드 가로 폰: 좁은 칸에 맞춰 긴 이름 줄임(전체 이름은 aria-label·선택 바)
+export const RM_LAND_SHORT_EN = { gachon: 'Gachon', garak: 'Garak', yangjaeforest: 'Yangjae Forest' };
 export const RM_LAND_MODE = { dotR: 6, lw: 6, minHit: 44, gapDot: 10, offY: 27, chipH: 32, margin: 6 };
 
 const order = (key, has) => (RM_LINES.find((l) => l.key === key)?.ids || []).filter((id) => has.has(id));
@@ -65,39 +67,83 @@ export function buildLandMap(stations, { W, H }, size) {
   const segs = [];
   for (const l of lines) for (let i = 1; i < l.pts.length; i++) segs.push([...l.pts[i - 1], ...l.pts[i], M.lw / 2, 'line:' + l.key]);
 
-  // 이름표 배치
+  // 터치 영역: 44px 기본, 아주 낮은 화면(740×360 등)에서 오른쪽 세로 줄 간격이 44 보다 좁으면 그 간격까지만(겹침 없이)
+  if (right.length > 1) M.minHit = Math.min(44, Math.floor((yB - yT) / (right.length - 1)) - 1);
+
+  // 이름표 배치 — 장애물: 이미 놓은 이름표·지시선·터치 영역, 노선, 점, 지도 테두리
   const placed = [];
+  const leaders = []; // [x1,y1,x2,y2]
   const boxOf = (l) => ({ l: l.x, r: l.x + l.w, t: l.y - l.h / 2, b: l.y + l.h / 2 });
-  const hitsAny = (bx, pad = 5) => placed.some((p) => { const q = boxOf(p); return bx.l < q.r + pad && q.l < bx.r + pad && bx.t < q.b + pad && q.t < bx.b + pad; });
+  const hitOf = (l) => { const h = Math.max(M.minHit, l.h); return { l: l.x, r: l.x + l.w, t: l.y - h / 2, b: l.y + h / 2 }; };
+  const inter = (a, q, pad) => a.l < q.r + pad && q.l < a.r + pad && a.t < q.b + pad && q.t < a.b + pad;
+  const segHits = (sg, bx, pad) => {
+    const [x1, y1, x2, y2, hw = 0] = sg;
+    const n = Math.max(6, Math.ceil(Math.hypot(x2 - x1, y2 - y1) / 2));
+    for (let i = 0; i <= n; i++) {
+      const px = x1 + (x2 - x1) * i / n, py = y1 + (y2 - y1) * i / n;
+      if (px > bx.l - hw - pad && px < bx.r + hw + pad && py > bx.t - hw - pad && py < bx.b + hw + pad) return true;
+    }
+    return false;
+  };
+  const blocked = (l) => {
+    const bx = boxOf(l);
+    if (bx.l < 3 || bx.r > W - 3 || bx.t < 2 || bx.b > H - 2) return true;
+    if (placed.some((p) => inter(bx, boxOf(p), 5))) return true;
+    // 누를 수 있는 칩끼리는 터치 영역(높이 minHit)도 안 겹치게
+    if (!l.pass) { const hb = hitOf(l); if (placed.some((p) => !p.pass && inter(hb, hitOf(p), -0.5))) return true; }
+    if (leaders.some((ld) => segHits([...ld, 0.75], bx, 3))) return true;
+    if (segs.some((sg) => segHits(sg, bx, 3))) return true;
+    for (const [id, [x, y]] of pos) if (id !== l.id && x > bx.l - 9 && x < bx.r + 9 && y > bx.t - 9 && y < bx.b + 9) return true;
+    if (l.leader) {
+      // 지시선이 다른 이름표·점을 지나지 않게
+      if (placed.some((p) => segHits([...l.leader, 0.75], boxOf(p), 2))) return true;
+      for (const [id, [x, y]] of pos) if (id !== l.id && segHits([...l.leader, 0.75], { l: x - M.dotR, r: x + M.dotR, t: y - M.dotR, b: y + M.dotR }, 1)) return true;
+    }
+    return false;
+  };
   const mk = (id, sd, x, y) => { const { w, h } = sz(id); const [nx, ny] = P(id); return { id, sd, nx, ny, w, h, x, y, pass: !!byId.get(id)?.pass, leader: null }; };
-  const center = (id, dir) => { const { w } = sz(id); const [nx, ny] = P(id); return mk(id, 'C', nx - w / 2, ny + dir * M.offY); };
+  const TIER = M.chipH + 8;
+  const center = (id, dir, tier = 0, dx = 0) => {
+    const { w, h } = sz(id); const [nx, ny] = P(id);
+    const l = mk(id, 'C', nx - w / 2 + dx, ny + dir * (M.offY + tier * TIER));
+    // 고리 안쪽 둘째·셋째 줄이나 점에서 많이 비킨 이름표는 점에서 이름표 가장자리까지 지시선
+    if (tier > 0 || Math.abs(dx) > w / 2 - 6) l.leader = [nx, ny + dir * (M.dotR + 1), nx + dx, l.y - dir * h / 2];
+    return l;
+  };
   // 오른쪽 세로(잠실·복정 포함): 점 오른쪽
   for (const id of right) { const [nx, ny] = P(id); placed.push(mk(id, 'R', nx + M.gapDot, ny)); }
   // 정자: 고리 안쪽(오른쪽), 미금: 점 아래
   { const [nx, ny] = P('jeongja'); placed.push(mk('jeongja', 'R', nx + M.gapDot + 2, ny)); }
   if (has.has('migeum')) placed.push(center('migeum', 1));
-  // 위 줄은 바깥(위) 우선, 아래 줄은 바깥(아래) 우선 — 부딪히면 안쪽, 둘 다 안 되면 덜 겹치는 쪽에서 x 를 조금 민다
+  // 위·아래 줄: 줄 배치 패턴(o=바깥, i=고리 안쪽, j/k=안쪽 둘째·셋째 줄 + 지시선)을 차례로 시험해 겹침 없는 첫 패턴을 쓴다.
+  //   이름표가 좁으면 'o'(전부 바깥), 넓으면 o/i 지그재그 → o,i,o,j … 로 넘어간다. 패턴 안에서도 x 를 조금(±24px) 밀 수 있다.
+  const PATTERNS = ['o', 'oi', 'io', 'oioj', 'ioj', 'oij', 'joi', 'ojoi', 'iojo', 'oiojoi', 'oiojok', 'ojoiok'];
+  const ROW = { o: [1, 0], i: [-1, 0], j: [-1, 1], k: [-1, 2] };
+  const DX = [0, 4, -4, 8, -8, 12, -12, 16, -16, 20, -20, 24, -24];
+  const tryPattern = (ids, outward, pat, rot) => {
+    const out = [];
+    for (let n = 0; n < ids.length; n++) {
+      const [d, tier] = ROW[pat[(n + rot) % pat.length]];
+      let ok = null;
+      for (const dx of DX) { const l = center(ids[n], d * outward, tier, dx); if (!blocked(l)) { ok = l; break; } }
+      if (!ok) { for (const l of out) { placed.pop(); if (l.leader) leaders.pop(); } return false; }
+      out.push(ok); placed.push(ok); if (ok.leader) leaders.push(ok.leader);
+    }
+    return true;
+  };
+  let fallback = 0;
   const track = (ids, outward) => {
+    for (const pat of PATTERNS) for (let rot = 0; rot < pat.length; rot++) if (tryPattern(ids, outward, pat, rot)) return;
+    fallback++;
+    // 마지막 수단: 하나씩 가장 덜 나쁜 자리(겹칠 수 있음 — 검증 스크립트가 잡는다)
     for (const id of ids) {
       let cand = null;
-      for (const dir of [outward, -outward]) {
-        const l = center(id, dir);
-        if (!hitsAny(boxOf(l))) { cand = l; break; }
-      }
-      if (!cand) {
-        for (const dx of [4, -4, 8, -8, 12, -12, 16, -16]) {
-          for (const dir of [outward, -outward]) {
-            const l = center(id, dir); l.x += dx;
-            if (!hitsAny(boxOf(l))) { cand = l; break; }
-          }
-          if (cand) break;
-        }
-      }
-      placed.push(cand || center(id, -outward));
+      for (const tier of [0, 1, 2]) for (const dx of DX) for (const dir of tier ? [-outward] : [outward, -outward]) { if (cand) break; const l = center(id, dir, tier, dx); if (!blocked(l)) cand = l; }
+      const l = cand || center(id, -outward);
+      placed.push(l); if (l.leader) leaders.push(l.leader);
     }
   };
   track(top, -1);
   track(su, 1);
-  const labels = placed;
-  return { mobile: true, land: true, W, H, k: 1, kx: 1, M, pos, lines, stations: st, segs, diamond: null, labels, rows: { yT, yB, yMid, xR, xJ } };
+  return { fallback, mobile: true, land: true, W, H, k: 1, kx: 1, M, pos, lines, stations: st, segs, diamond: null, labels: placed, rows: { yT, yB, yMid, xR, xJ } };
 }

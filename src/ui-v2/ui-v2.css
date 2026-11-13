@@ -274,7 +274,8 @@ body.ui-v2:not(.mobile) .v2-picker.is-land .v2-lside { display: flex; flex-direc
 body.ui-v2:not(.mobile) .v2-picker.is-land .v2-lside > * { flex: none; }
 body.ui-v2:not(.mobile) .v2-picker.is-land .v2-lside > .v2-grow { flex: 1 1 0; min-height: 0; }
 body.ui-v2:not(.mobile) .v2-picker.is-land .v2-hrow { gap: 6px; min-height: 44px; }
-body.ui-v2:not(.mobile) .v2-picker.is-land .v2-hrow h2, body.ui-v2:not(.mobile) .v2-picker.is-land .v2-hrow .v2-head { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+body.ui-v2:not(.mobile) .v2-picker.is-land .v2-hrow .v2-head { min-width: 0; }
+body.ui-v2:not(.mobile) .v2-picker.is-land .v2-hrow .v2-head-t { white-space: normal; line-height: 1.15; }
 body.ui-v2:not(.mobile) .v2-picker.is-land .v2-close { flex: none; width: 44px; height: 44px; }
 body.ui-v2:not(.mobile) .v2-picker.is-land .v2-ldesc { margin: -4px 0 0; font-size: 12px; color: var(--v2-sub); }
 body.ui-v2:not(.mobile) .v2-picker.is-land .v2-legend { display: flex; flex-wrap: wrap; gap: 4px 10px; }
@@ -289,6 +290,8 @@ body.ui-v2:not(.mobile) .v2-picker.is-land .v2-sel-t { gap: 2px; }
 body.ui-v2:not(.mobile) .v2-picker.is-land .v2-sel-t b { font-size: 15px; line-height: 1.25; }
 body.ui-v2:not(.mobile) .v2-picker.is-land .v2-sel-t small { font-size: 11.5px; }
 body.ui-v2:not(.mobile) .v2-picker.is-land .v2-sel .v2-btn { width: 100%; height: auto; min-height: 48px; padding: 8px 12px; font-size: 15px; line-height: 1.2; white-space: normal; text-align: center; }
+/* 영문 + 좁은 폭(< 800px): 영문 이름표가 넓어 옆 칸을 줄이고 지도를 넓힌다(제목·입장 버튼은 두 줄까지) */
+@media (max-width: 799.98px) { body.ui-v2:not(.mobile) .v2-picker.is-land.is-en { grid-template-columns: minmax(0, 1fr) 180px; } body.ui-v2:not(.mobile) .v2-picker.is-land.is-en .v2-lm small { display: none; } body.ui-v2:not(.mobile) .v2-picker.is-land.is-en .v2-head-t { font-size: 14px; } body.ui-v2:not(.mobile) .v2-picker.is-land.is-en .v2-lside { gap: 6px; } body.ui-v2:not(.mobile) .v2-picker.is-land.is-en .v2-sel-t b { font-size: 14px; } }
 /* 아주 낮은 화면(≤ 370px): 설명 줄 생략 */
 @media (max-height: 370px) { body.ui-v2:not(.mobile) .v2-picker.is-land .v2-ldesc { display: none; } body.ui-v2:not(.mobile) .v2-picker.is-land .v2-lm { height: 38px; } }
 

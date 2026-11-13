@@ -12,7 +12,7 @@ import { CORRIDOR_STATION_IDS, CORRIDOR_STATION_COUNT, corridorName, layoutCorri
 
 import { lotteSiteLabel } from '../corridor/lotteOpening.js';
 import { buildRouteMap, lotteChipX, RM_LEGEND, RM_MODE, RM_COLOR, RM_PASS_SHORT_EN } from './routeMap.js';
-import { buildLandMap } from './routeMapLand.js';
+import { buildLandMap, RM_LAND_SHORT_EN } from './routeMapLand.js';
 import { isEn, tr, onLangChange } from '../i18n.js';
 import { REPO_URL, isStarbaseLive } from '../worldGateFlags.js';
 
@@ -150,16 +150,17 @@ function mountGate({ root, corridorGlobe, enter, focus, teardown }, onBackToStar
     const stroke = on ? RM_COLOR.amber : (st.pass ? '#6b7a88' : RM_COLOR.ink);
     return `<circle cx="${f1(x)}" cy="${f1(y)}" r="${r}" fill="${fill}" stroke="${stroke}" stroke-width="${on ? 4 : 3}"/>`;
   }
-  function stationChip(s, en, compact, sel) {
+  function stationChip(s, en, compact, sel, land = false) {
     const id = s.live ? 'jeongja' : s.id;
-    const main = en ? s.en : s.ko, sub = en ? s.ko : s.en;
+    const full = en ? s.en : s.ko, sub = en ? s.ko : s.en;
+    const main = land && en ? (RM_LAND_SHORT_EN[id] || full) : full;
     if (s.pass) {
       const short = compact && en ? (RM_PASS_SHORT_EN[id] || main) : main;
       const tail = compact && en ? '' : `<small>${esc(tr('통과', 'pass'))}</small>`;
-      return `<span class="v2-stn is-pass" data-stn="${id}" title="${esc(`${main} · ${tr('통과', 'pass')}`)}"><b>${esc(short)}</b>${tail}</span>`;
+      return `<span class="v2-stn is-pass" data-stn="${id}" title="${esc(`${full} · ${tr('통과', 'pass')}`)}"><b>${esc(short)}</b>${tail}</span>`;
     }
     const on = id === sel;
-    return `<button type="button" class="v2-stn${on ? ' on' : ''}" data-stn="${id}" data-v2-at="${id}" data-hot="${id}"${compact ? ` aria-label="${esc(`${main} ${sub}`)}"` : ''}><b>${esc(main)}</b>${compact ? '' : `<small>${esc(sub)}</small>`}</button>`;
+    return `<button type="button" class="v2-stn${on ? ' on' : ''}" data-stn="${id}" data-v2-at="${id}" data-hot="${id}"${compact ? ` aria-label="${esc(`${full} ${sub}`)}"` : ''}><b>${esc(main)}</b>${compact ? '' : `<small>${esc(sub)}</small>`}</button>`;
   }
   function landmarkChips(en, compact, sel) {
     const site = lotteSiteLabel(en); // 오픈 전: 잠실 랜드마크 공사현장 (칩엔 짧게, 전체 문구는 선택 바·title)
@@ -186,7 +187,7 @@ function mountGate({ root, corridorGlobe, enter, focus, teardown }, onBackToStar
     const legend = RM_LEGEND.map((l) => `<span class="v2-lg"><i style="background:${LINE_COLOR[l]}"></i>${esc(en ? LINE_EN[l] : l)}</span>`).join('')
       + `<span class="v2-lg k"><i class="dot p"></i>${esc(tr('통과', 'Pass'))}</span>`;
     picker.innerHTML = `
-      <div class="v2-lmap"><svg aria-hidden="true"></svg>${stations.map((s) => stationChip(s, en, true, sel)).join('')}</div>
+      <div class="v2-lmap"><svg aria-hidden="true"></svg>${stations.map((s) => stationChip(s, en, true, sel, true)).join('')}</div>
       <aside class="v2-lside">
         <div class="v2-hrow">${headHtml(corridorName(en), { size: 16, icon: ICON.train(18, '#ffe169') })}<span class="v2-grow"></span>
           <button type="button" class="v2-close" data-v2="close" aria-label="${esc(tr('닫기', 'Close'))}">${ICON.close(16)}</button></div>
@@ -220,7 +221,8 @@ function mountGate({ root, corridorGlobe, enter, focus, teardown }, onBackToStar
     // 고리 안쪽 빈자리에 조작 안내(장식, 터치 없음)
     const { xJ, xR, yMid } = m.rows;
     const hint = `<text x="${f1((xJ + xR) / 2 + 24)}" y="${f1(yMid + 5)}" text-anchor="middle" font-size="13" font-weight="700" fill="#9eb4c6" fill-opacity=".55">${esc(tr('역을 눌러 고른 뒤 오른쪽 아래 입장', 'Tap a station, then Enter'))}</text>`;
-    svg.innerHTML = lines + dots + hint;
+    const leaders = m.labels.filter((l) => l.leader).map((l) => `<line x1="${f1(l.leader[0])}" y1="${f1(l.leader[1])}" x2="${f1(l.leader[2])}" y2="${f1(l.leader[3])}" stroke="#ffffff" stroke-opacity=".35" stroke-width="1.5"/>`).join('');
+    svg.innerHTML = lines + leaders + dots + hint;
     for (const l of m.labels) {
       const e = chips.get(l.id);
       if (!e) continue;
