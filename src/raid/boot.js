@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { createAvatar, animateAvatar } from '../entities/avatar.js';
 import { sanitizeLook } from '../look.js';
 import { createArena } from './arena.js';
-import { ghostOf, setGhostOpacity } from './models/kit.js';
+import { cloneAnimated, ghostOf, setGhostOpacity } from './models/kit.js';
 import { createClassModel } from './models/index.js';
 import { CITIZEN_HEIGHT, CLASS_GLB, CLASS_IDS, CLASS_MARKS, getClass, normalizeClass } from './classes.js';
 import { consumeIntroReset, createRiftClock, introSeen, markIntroSeen } from './riftClock.js';
@@ -13,7 +13,7 @@ import { createRaidAudio } from './audio.js';
 import { createVfx } from './vfx.js';
 import { CITIZEN_LOOK } from './look.js';
 import {
-  PATH_YAW, spawnPoint, safePoint, bossPoint, clampArena, pushOutOfBoss,
+  PATH_YAW, BOSS_ALONG, spawnPoint, safePoint, bossPoint, clampArena, pushOutOfBoss, fromFrame,
 } from './layout.js';
 
 const params = new URLSearchParams(location.search);
@@ -89,6 +89,7 @@ for (const id of CLASS_IDS) {
   const glbUrl = override === null ? CLASS_GLB[id] : (override || '');
   const yaw = Number(params.get(`${id}Yaw`) || (id === 'warrior' ? params.get('warriorYaw') : 0) || 0);
   packs[id] = await createClassModel(id, { look, glbUrl, yaw });
+  packs[id].group.userData.classId = id;
   const mark = CLASS_MARKS[id];
   if (packs[id].source === 'glb' && mark) {
     const fit = CITIZEN_HEIGHT / mark.height;
@@ -214,6 +215,7 @@ let hitStop = 0;
 let alerted = false;
 let sirenPlayed = false;
 let stepT = 0;
+const extras = [];
 let bossStage = 1;
 const earForward = new THREE.Vector3();
 const DIALOGUE = [
@@ -499,9 +501,9 @@ function frame() {
   const lz = Math.cos(lookYaw);
   const cp = Math.cos(pitch);
   camera.position.set(focus.x - lx * dist * cp, focus.y + dist * Math.sin(pitch), focus.z - lz * dist * cp);
-  const aim = portrait ? 0.1 : 6;
-  const crown = form?.group?.userData?.crownY;
-  const lookY = portrait ? (shot === 'form' && crown ? crown : shot === 'form' ? 1.35 : 1.15) : 0.2;
+  const aim = shot === 'wide' ? 1.5 : portrait ? 0.1 : 6;
+  const head = form?.group?.userData?.headY;
+  const lookY = shot === 'wide' ? 1.15 : portrait ? (head || 1.1) : 0.2;
   camera.lookAt(focus.x + lx * aim, lookY, focus.z + lz * aim);
   if (shake > 0) {
     camera.position.x += (Math.random() - 0.5) * shake;
@@ -678,6 +680,13 @@ function step(dt) {
     ready: classId === 'assassin' && phase === 'fight' && moveSpeed < 0.8 && !st.attack && st.hitT <= 0,
   };
   form.animate(form.group, dt, motion);
+  for (const extra of extras) {
+    form.animate(extra, dt, {
+      speed: 0,
+      phase: 'fight',
+      ready: extra.userData.classId === 'assassin',
+    });
+  }
   if (phase === 'intro' && ghost?.userData) form.animate(ghost, dt, motion);
   if (citizen.visible) animateAvatar(citizen, phase === 'peace' || phase === 'pick' ? moveSpeed : 0.2, dt);
   if (phase !== 'intro') {
@@ -816,6 +825,32 @@ if (shot === 'form') {
   camPitch = 0.32;
   camDist = 4.8;
   simPaused = true;
+}
+if (shot === 'wide') {
+  finishIntro();
+  citizen.visible = false;
+  for (const a of party) a.mesh.visible = false;
+  boss.group.visible = true;
+  arena.setMood('rift', true);
+  arena.setRain(true);
+  const ids = ['warrior', 'mage', 'priest', 'archer', 'assassin'];
+  ids.forEach((id, i) => {
+    const src = packs[id].group;
+    const g = id === classId ? form.group : cloneAnimated(src);
+    if (g.parent) g.parent.remove(g);
+    scene.add(g);
+    if (id !== classId) extras.push(g);
+    const p = fromFrame(BOSS_ALONG - 13, (i - 2) * 2.6);
+    g.position.set(p.x, 0, p.z);
+    g.rotation.set(0, PATH_YAW + Math.PI, 0);
+    g.visible = true;
+  });
+  const mid = fromFrame(BOSS_ALONG - 11, 0);
+  actor.position.set(mid.x, 0, mid.z);
+  boss.hideDress();
+  camYaw = PATH_YAW;
+  camPitch = 0.42;
+  camDist = 11;
 }
 if (shot === 'fight') {
   finishIntro();

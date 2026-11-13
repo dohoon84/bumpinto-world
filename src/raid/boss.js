@@ -267,6 +267,7 @@ export function createBoss(scene) {
     slow: 0,
     vortexWait: 0,
     stage: 1,
+    dress: true,
   };
 
   const windSpots = [
@@ -499,7 +500,7 @@ export function createBoss(scene) {
     const span = 22;
     let vortexHit = false;
     columns.forEach((col, i) => {
-      col.visible = !state.dead && fightOn;
+      col.visible = state.dress && !state.dead && fightOn;
       const travel = (vortexClock * 5.2 + i * span * 0.5) % span;
       const along = 2 + (i % 2 ? span - travel : travel);
       const across = i === 0 ? -2.8 : 3.1;
@@ -587,6 +588,11 @@ export function createBoss(scene) {
     state.slow = Math.max(state.slow, sec);
   }
 
+  function hideDress() {
+    state.dress = false;
+    columns.forEach((c) => { c.visible = false; });
+  }
+
   function forceWind() {
     state.phase = 'wind';
     state.t = 1.05;
@@ -604,6 +610,7 @@ export function createBoss(scene) {
     hurt,
     home,
     forceWind,
+    hideDress,
     reset,
     slow,
   };

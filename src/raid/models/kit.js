@@ -275,8 +275,22 @@ function animateLoaded(group, dt, motion, procedural) {
 export async function withGlb(glbUrl, yaw, look, build, animate, heightMul = 1) {
   if (glbUrl) {
     try {
-      const { GLTFLoader } = await import('three/examples/jsm/loaders/GLTFLoader.js');
-      const gltf = await new GLTFLoader().loadAsync(glbUrl);
+      const [{ GLTFLoader }, { MeshoptDecoder }] = await Promise.all([
+        import('three/examples/jsm/loaders/GLTFLoader.js'),
+        import('three/examples/jsm/libs/meshopt_decoder.module.js'),
+      ]);
+      if (MeshoptDecoder.ready) await MeshoptDecoder.ready;
+      const loader = new GLTFLoader();
+      loader.setMeshoptDecoder(MeshoptDecoder);
+      let gltf;
+      try {
+        gltf = await loader.loadAsync(glbUrl);
+      } catch (err) {
+        const plain = glbUrl.replace('.meshopt.glb', '.glb');
+        if (plain === glbUrl) throw err;
+        console.warn('[raid] meshopt failed, trying plain glb', err);
+        gltf = await loader.loadAsync(plain);
+      }
       const group = new THREE.Group();
       group.name = 'bw-class';
       const inner = gltf.scene;
@@ -352,6 +366,14 @@ export function animateRig(group, dt, motion) {
     group.rotation.x = 0;
     group.position.y = 0;
   }
+}
+
+export function cloneAnimated(group) {
+  const ghost = SkeletonUtils.clone(group);
+  const src = glbAnim.get(group);
+  if (src?.clips?.length) bindClips(ghost, src.clips);
+  ghost.userData.classId = group.userData.classId || '';
+  return ghost;
 }
 
 export function ghostOf(group, color = '#9fd6ff') {
