@@ -65,7 +65,7 @@ for (const v of VIEWS) {
     if (v.home) J.teleport(0, 0); else { await J.corridor.preload(px, pz); const y = md.owns(px, pz) ? md.surfaceY(px, pz) : (v.px === 'ntower' ? J.namsan.spawnY() : (J.namsan?.surfaceY?.(px, pz) ?? undefined)); J.teleport(px, pz, y); }
     if (v.ov) { J.setMode('overview'); Object.assign(J.ov, { dist: v.dist, pitch: v.pitch, yaw }); } else Object.assign(J.cam, { dist: v.dist, pitch: v.pitch, yaw });
     await new Promise((r) => setTimeout(r, 3000));
-    return { px: +px.toFixed?.(1), pz: +pz.toFixed?.(1), y: +J.player?.position.y.toFixed(2) };
+    return { px: +px.toFixed?.(1), pz: +pz.toFixed?.(1), yaw: typeof yaw === 'number' ? +yaw.toFixed(4) : yaw, y: +J.player?.position.y.toFixed(2) };
   }, v);
   await page.waitForTimeout(4000);
   const m = await page.evaluate(async () => {
