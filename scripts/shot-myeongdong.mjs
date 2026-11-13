@@ -102,6 +102,7 @@ for (const v of VIEWS) {
     await new Promise((r) => setTimeout(r, 3000));
     return { px: +px.toFixed?.(1), pz: +pz.toFixed?.(1), yaw: typeof yaw === 'number' ? +yaw.toFixed(4) : yaw, y: +J.player?.position.y.toFixed(2) };
   }, v);
+  if (process.env.HIDE) await page.evaluate((names) => { const J = window.__jj; let sc = J.player; while (sc.parent) sc = sc.parent; sc.traverse((o) => { if (names.includes(o.name)) o.visible = false; }); }, process.env.HIDE.split(',')); // [md-roadblotch] 디버그: 이름 맞는 메시 숨기기
   await page.waitForTimeout(4000);
   await waitPaint();
   const m = await page.evaluate(async () => {

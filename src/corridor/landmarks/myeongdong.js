@@ -190,16 +190,32 @@ export async function createMyeongdongAsync(opts = {}, yieldFn = null, slicer = 
   await tick('md-atlas');
 
   // ---------- 땅 (바깥 띠 포함, 5 m 격자) ----------
+  const GROUND_DROP = +(new URLSearchParams(typeof location !== 'undefined' ? location.search : '').get('mdgd') ?? 0.2); // [md-roadblotch] 땅을 길(+0.06)보다 확실히 아래로
   const groundMat = new THREE.MeshLambertMaterial({ map: paverTexture(), vertexColors: true });
   {
     const S = 5, gx0 = A.x0, gz0 = A.z0, nx = Math.ceil((A.x1 - A.x0) / S) + 1, nz = Math.ceil((A.z1 + 8 - A.z0) / S) + 1;
     const pos = new Float32Array(nx * nz * 3), uv = new Float32Array(nx * nz * 2), col = new Float32Array(nx * nz * 3), idx = [];
     for (let j = 0; j < nz; j++) for (let i = 0; i < nx; i++) {
       const x = Math.min(A.x1, gx0 + i * S), z = Math.min(A.z1 + 8, gz0 + j * S), k = j * nx + i;
-      pos[k * 3] = x; pos[k * 3 + 1] = heightAt(x, Math.min(z, A.z1)) - (z > A.z1 ? 0.05 : 0); pos[k * 3 + 2] = z;
+      pos[k * 3] = x; pos[k * 3 + 1] = heightAt(x, Math.min(z, A.z1)) - (z > A.z1 ? 0.05 : GROUND_DROP); pos[k * 3 + 2] = z;
       uv[k * 2] = x / 3; uv[k * 2 + 1] = z / 3;
       const out = land.inBox(x, z) ? 1 : 0.86;
       col[k * 3] = out; col[k * 3 + 1] = out; col[k * 3 + 2] = out;
+    }
+    // [md-roadblotch] 5 m 삼각형 면은 굽은 비탈에서 실제 높이(heightAt)보다 위로 솟아, 0.06 m 얹은 길 리본을 뚫고 보도색 얼룩으로 보였다(롯데 앞 을지로).
+    //   셀마다 표본 9점에서 면이 heightAt 보다 얼마나 높은지 재서, 그 셀 꼭짓점을 그만큼(+여유) 내린다. 내리기만 하므로 한 번이면 충분.
+    {
+      const low = new Float32Array(nx * nz);
+      for (let j = 0; j < nz - 1; j++) for (let i = 0; i < nx - 1; i++) {
+        const a = j * nx + i, b = a + 1, c = a + nx, d = c + 1; const ha = pos[a * 3 + 1], hb = pos[b * 3 + 1], hc = pos[c * 3 + 1], hd = pos[d * 3 + 1];
+        const x0 = pos[a * 3], z0 = pos[a * 3 + 2]; let dev = 0;
+        for (const v of [0.2, 0.5, 0.8]) for (const u of [0.2, 0.5, 0.8]) {
+          const h = u + v <= 1 ? ha + u * (hb - ha) + v * (hc - ha) : hd + (1 - u) * (hc - hd) + (1 - v) * (hb - hd);
+          const e = h - heightAt(x0 + u * S, Math.min(z0 + v * S, A.z1)); if (e > dev) dev = e;
+        }
+        if (dev > 0.02) { dev += 0.04; for (const k of [a, b, c, d]) if (dev > low[k]) low[k] = dev; }
+      }
+      for (let k = 0; k < nx * nz; k++) if (low[k] > 0) pos[k * 3 + 1] -= Math.min(low[k], 2.5);
     }
     for (let j = 0; j < nz - 1; j++) for (let i = 0; i < nx - 1; i++) { const a = j * nx + i, b = a + 1, c = a + nx, d = c + 1; idx.push(a, c, b, b, c, d); }
     const g = new THREE.BufferGeometry();
