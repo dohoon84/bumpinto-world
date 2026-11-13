@@ -547,8 +547,9 @@ export function createCathedralInterior({ parent, L, glassTex, atlas }) {
     const cloud = stt.cloud > 1 ? stt.cloud / 100 : (stt.cloud || 0);
     const wet = kind === 'rain' || kind === 'snow' || kind === 'storm';
     const clearK = wet ? 0.12 : kind === 'fog' ? 0.3 : Math.max(0.25, 1 - cloud * 0.75);
-    const dayK = smooth(-0.04, 0.28, sy);
     const nightK = Math.max(night || 0, 1 - smooth(-0.08, 0.12, sy));
+    // 해 높이만 보면 ?hour=21 처럼 해 방향이 늦게 따라오는 경우 밤에도 낮처럼 밝다 → 바깥 밤 값(night)으로 눌러 준다
+    const dayK = smooth(-0.04, 0.28, sy) * (1 - Math.min(1, night || 0));
     // 재질 밝기
     const amb = new THREE.Color(0.46, 0.37, 0.27).lerp(new THREE.Color(1, 0.97, 0.93).multiplyScalar(0.5 + 0.2 * (wet ? 0.3 : clearK)), dayK);
     mats.st.color.copy(amb); mats.fl.color.copy(amb); mats.pew.color.copy(amb); mats.dc.color.copy(amb);
