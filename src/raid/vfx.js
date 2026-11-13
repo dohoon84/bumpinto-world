@@ -9,9 +9,18 @@ function tex(url) {
   }
   return texCache.get(url);
 }
-function billboard(rootAdd, url, x, y, z, w, h, color = '#ffffff') {
+function cellMap(url, frame = 5, cols = 4) {
+  const map = tex(url).clone();
+  map.repeat.set(1 / cols, 1 / cols);
+  const col = frame % cols;
+  const row = Math.floor(frame / cols);
+  map.offset.set(col / cols, 1 - (row + 1) / cols);
+  map.needsUpdate = true;
+  return map;
+}
+function billboard(rootAdd, url, x, y, z, w, h, color = '#ffffff', map) {
   const mat = new THREE.SpriteMaterial({
-    map: tex(url),
+    map: map || tex(url),
     color,
     transparent: true,
     depthWrite: false,
@@ -161,22 +170,22 @@ export function createVfx(scene) {
       add(inner, 0.25, 0);
     },
     pillar(x, z, color = '#FFC845') {
-      const col = billboard(null, '/dungeon/vfx/magic/heal_pillar.png', x, 1.8, z, 0.9, 3.6, color);
+      const col = billboard(null, '/dungeon/vfx/magic/heal_pillar.png', x, 3.4, z, 2.2, 7.2, color);
       add(col, 1.1, 0);
       const halo = billboard(null, '/dungeon/vfx/rings/halo.png', x, 3.2, z, 1.3, 1.3, '#FFFBE8');
       add(halo, 0.8, 0);
     },
     shield(x, z) {
-      const dome = billboard(null, '/dungeon/vfx/magic/shield_bubble.png', x, 1.2, z, 2.2, 2.2, '#FFC845');
+      const dome = billboard(null, '/dungeon/vfx/magic/shield_bubble.png', x, 1.6, z, 4.2, 4.2, '#FFC845');
       add(dome, 1.2, 0);
     },
     holyBurst(x, z) {
-      const burst = billboard(null, '/dungeon/vfx/rings/halo_burst.png', x, 1.4, z, 2.8, 2.8, '#FFC845');
+      const burst = billboard(null, '/dungeon/vfx/rings/halo_burst.png', x, 2.2, z, 6, 6, '#FFC845');
       add(burst, 0.45, 0);
     },
     multi(x, z, yaw) {
       for (let i = -2; i <= 2; i++) {
-        const s = billboard(null, '/dungeon/vfx/trails/arrow_trail.png', x + Math.sin(yaw + i * 0.12) * 1.6, 1.4, z + Math.cos(yaw + i * 0.12) * 1.6, 1.6, 0.28, '#3DDC84');
+        const s = billboard(null, '/dungeon/vfx/trails/arrow_trail.png', x + Math.sin(yaw + i * 0.1) * 2.4, 2.2 + Math.abs(i) * 0.3, z + Math.cos(yaw + i * 0.1) * 2.4, 3.2, 0.55, '#3DDC84');
         s.material.rotation = -(yaw + i * 0.12);
         add(s, 0.28, 0);
       }
@@ -189,7 +198,7 @@ export function createVfx(scene) {
     },
     arrowRain(x, z) {
       for (let i = 0; i < 6; i++) {
-        const s = billboard(null, '/dungeon/vfx/trails/arrow_trail.png', x + (i % 3) - 1, 2.4 + (i % 2) * 0.4, z + Math.floor(i / 3) - 0.4, 0.2, 1.1, '#7DFFB0');
+        const s = billboard(null, '/dungeon/vfx/trails/arrow_trail.png', x + (i % 3) * 1.4 - 1.4, 4 + (i % 2) * 1.2, z + Math.floor(i / 3) * 1.2, 0.45, 2.6, '#7DFFB0');
         add(s, 0.4, 0);
       }
     },
@@ -201,7 +210,7 @@ export function createVfx(scene) {
     },
     combo(x, z, yaw) {
       for (let i = 0; i < 3; i++) {
-        const s = billboard(null, '/dungeon/vfx/slashes/slash_crescent.png', x, 1.15 + i * 0.15, z, 1.6, 1.6, i === 1 ? '#FF5C9A' : '#FFD0E4');
+        const s = billboard(null, '/dungeon/vfx/slashes/slash_crescent.png', x, 1.4 + i * 0.3, z, 3.6, 3.6, '#FF3B4E');
         s.material.rotation = yaw + i * 0.8;
         add(s, 0.28, 0);
       }
@@ -213,11 +222,11 @@ export function createVfx(scene) {
       }
     },
     classLook(id, x, z, yaw) {
-      if (id === 'warrior') { this.whirl(x, z); this.slam(x + Math.sin(yaw) * 1.5, z + Math.cos(yaw) * 1.5); }
-      else if (id === 'mage') { this.fireball(x, 1.6, z, yaw); this.frost(x, z); this.bolt(x, z, yaw); }
-      else if (id === 'priest') { this.pillar(x, z); this.shield(x, z); this.holyBurst(x, z); }
-      else if (id === 'archer') { this.multi(x, z, yaw); this.pierce(x, z, yaw); }
-      else if (id === 'assassin') { this.combo(x, z, yaw); this.blink(x, z, yaw); this.poison(x, z); }
+      if (id === 'warrior') this.slam(x + Math.sin(yaw) * 3, z + Math.cos(yaw) * 3);
+      else if (id === 'mage') this.fireball(x, 1.8, z, yaw);
+      else if (id === 'priest') this.pillar(x, z);
+      else if (id === 'archer') this.arrowRain(x + Math.sin(yaw) * 3, z + Math.cos(yaw) * 3);
+      else if (id === 'assassin') { this.combo(x, z, yaw); this.blink(x, z, yaw); }
     },
     trail(x, y, z, yaw, color) {
       for (let i = 0; i < 4; i++) {
@@ -241,32 +250,44 @@ export function createVfx(scene) {
       add(groundDecal('/dungeon/vfx/rings/shockwave_ring.png', x, z, 2.2, '#FF7A1A'), 0.4, 0);
     },
     slam(x, z) {
-      add(groundDecal('/dungeon/vfx/rings/shockwave_ring.png', x, z, 4.6, '#FF7A1A'), 0.55, 0);
-      add(groundDecal('/dungeon/vfx/decals/ground_crack.png', x, z, 4.2, '#FF6A1A'), 0.9, 0);
-      const flash = billboard(null, '/dungeon/vfx/particles/strike_flash.png', x, 1.6, z, 1.4, 2.4, '#FFF3C4');
-      add(flash, 0.28, 0);
+      add(groundDecal('/dungeon/vfx/rings/shockwave_ring.png', x, z, 14, '#FF7A1A'), 0.7, 0);
+      add(groundDecal('/dungeon/vfx/decals/ground_crack.png', x, z, 10, '#FF6A1A'), 1.1, 0);
+      add(billboard(null, '/dungeon/vfx/particles/strike_flash.png', x, 3.2, z, 3.2, 6.5, '#FFF3C4'), 0.35, 0);
+      for (let i = 0; i < 10; i++) {
+        const a = (i / 10) * Math.PI * 2;
+        const d = billboard(null, '/dungeon/vfx/particles/dust.png', x + Math.cos(a) * 2, 1.2, z + Math.sin(a) * 2, 1.6, 1.6, '#E8D2B0');
+        d.userData.vx = Math.cos(a) * 4;
+        d.userData.vz = Math.sin(a) * 4;
+        d.userData.vy = 2;
+        add(d, 0.6, 0);
+      }
     },
     whirl(x, z) {
-      add(groundDecal('/dungeon/vfx/slashes/spin_slash_ring.png', x, z, 3.2, '#FF7A1A'), 0.6, 2);
-      const slash = billboard(null, '/dungeon/vfx/slashes/slash_crescent.png', x, 1.2, z, 2.2, 2.2, '#FF7A1A');
-      add(slash, 0.35, 0);
+      add(groundDecal('/dungeon/vfx/slashes/spin_slash_ring.png', x, z, 8, '#FF7A1A'), 0.7, 2);
+      add(billboard(null, '/dungeon/vfx/slashes/slash_crescent.png', x, 1.6, z, 5, 5, '#FF7A1A'), 0.4, 0);
     },
     fireball(x, y, z, yaw) {
-      const orb = billboard(null, '/dungeon/vfx/particles/fireball_orb.png', x + Math.sin(yaw) * 1.4, y, z + Math.cos(yaw) * 1.4, 0.9, 0.9);
-      add(orb, 0.7, 0);
-      add(groundDecal('/dungeon/vfx/rings/rune_circle.png', x, z, 1.6, '#8C7FFF'), 0.4, 1);
-      const boom = billboard(null, '/dungeon/vfx/flipbooks/explosion_4x4.png', x + Math.sin(yaw) * 3, y, z + Math.cos(yaw) * 3, 2.6, 2.6);
-      add(boom, 0.7, 0);
+      add(billboard(null, '/dungeon/vfx/particles/fireball_orb.png', x + Math.sin(yaw) * 2, y + 1.2, z + Math.cos(yaw) * 2, 2.2, 2.2), 0.8, 0);
+      for (let i = 1; i <= 4; i++) {
+        add(billboard(null, '/dungeon/vfx/particles/ember.png', x + Math.sin(yaw) * i * 0.7, y + 1.1, z + Math.cos(yaw) * i * 0.7, 0.7, 0.7, '#FFB347'), 0.45, 0);
+      }
+      add(groundDecal('/dungeon/vfx/rings/rune_circle.png', x, z, 3.2, '#8C7FFF'), 0.45, 1);
+      const boom = billboard(null, '/dungeon/vfx/flipbooks/explosion_4x4.png', x + Math.sin(yaw) * 5, y + 2.2, z + Math.cos(yaw) * 5, 8, 8, '#ffffff', cellMap('/dungeon/vfx/flipbooks/explosion_4x4.png', 6));
+      add(boom, 0.8, 0);
+      add(billboard(null, '/dungeon/vfx/particles/soft_glow.png', x + Math.sin(yaw) * 5, y + 2, z + Math.cos(yaw) * 5, 6, 6, '#FF7A1A'), 0.5, 0);
     },
     frost(x, z) {
-      add(groundDecal('/dungeon/vfx/rings/frost_ring.png', x, z, 3.4, '#8FD8FF'), 0.7, 0);
-      add(groundDecal('/dungeon/vfx/rings/rune_circle.png', x, z, 2.2, '#8C7FFF'), 0.5, 1);
+      add(groundDecal('/dungeon/vfx/rings/frost_ring.png', x, z, 9, '#8FD8FF'), 0.8, 0);
+      add(groundDecal('/dungeon/vfx/rings/rune_circle.png', x, z, 4.5, '#8C7FFF'), 0.55, 1);
+      for (let i = 0; i < 8; i++) {
+        const a = (i / 8) * Math.PI * 2;
+        add(billboard(null, '/dungeon/vfx/particles/strike_flash.png', x + Math.cos(a) * 2.2, 1.4, z + Math.sin(a) * 2.2, 0.5, 1.4, '#8FD8FF'), 0.45, 0);
+      }
     },
     bolt(x, z, yaw) {
-      const bolt = billboard(null, '/dungeon/vfx/trails/lightning_bolt.png', x + Math.sin(yaw) * 1.5, 2.2, z + Math.cos(yaw) * 1.5, 0.8, 3.4, '#E0D4FF');
-      add(bolt, 0.22, 0);
-      const flash = billboard(null, '/dungeon/vfx/particles/strike_flash.png', x + Math.sin(yaw) * 2, 1.2, z + Math.cos(yaw) * 2, 1.6, 2.2, '#FFFFFF');
-      add(flash, 0.18, 0);
+      add(billboard(null, '/dungeon/vfx/trails/lightning_bolt.png', x + Math.sin(yaw) * 2, 4.2, z + Math.cos(yaw) * 2, 2.2, 8, '#F4F0FF'), 0.35, 0);
+      add(billboard(null, '/dungeon/vfx/particles/strike_flash.png', x + Math.sin(yaw) * 2.4, 1.5, z + Math.cos(yaw) * 2.4, 3.4, 4.5, '#FFFFFF'), 0.28, 0);
+      add(billboard(null, '/dungeon/vfx/particles/soft_glow.png', x + Math.sin(yaw) * 2, 3, z + Math.cos(yaw) * 2, 4, 6, '#8C7FFF'), 0.3, 0);
     },
     portal(x, z) {
       const ring = new THREE.Mesh(new THREE.TorusGeometry(1.4, 0.08, 6, 18), fadeMat('#c45cff'));

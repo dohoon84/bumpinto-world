@@ -1,0 +1,356 @@
+{
+ "size": [
+  1056,
+  660
+ ],
+ "cell": 128,
+ "padding": 4,
+ "scale": 2,
+ "frames": {
+  "class_warrior": {
+   "x": 2,
+   "y": 2,
+   "w": 128,
+   "h": 128,
+   "kind": "class",
+   "class": "warrior",
+   "label": "전사"
+  },
+  "warrior_attack": {
+   "x": 134,
+   "y": 2,
+   "w": 128,
+   "h": 128,
+   "kind": "skill",
+   "class": "warrior",
+   "label": "강타",
+   "glb_clip": "attack",
+   "resource": "분노"
+  },
+  "warrior_cast": {
+   "x": 266,
+   "y": 2,
+   "w": 128,
+   "h": 128,
+   "kind": "skill",
+   "class": "warrior",
+   "label": "불씨 함성",
+   "glb_clip": "cast",
+   "resource": "분노"
+  },
+  "warrior_skill1": {
+   "x": 398,
+   "y": 2,
+   "w": 128,
+   "h": 128,
+   "kind": "skill",
+   "class": "warrior",
+   "label": "방패 돌진",
+   "glb_clip": "skill1",
+   "resource": "분노"
+  },
+  "warrior_skill2": {
+   "x": 530,
+   "y": 2,
+   "w": 128,
+   "h": 128,
+   "kind": "skill",
+   "class": "warrior",
+   "label": "회전 베기",
+   "glb_clip": "cast",
+   "resource": "분노"
+  },
+  "class_mage": {
+   "x": 662,
+   "y": 2,
+   "w": 128,
+   "h": 128,
+   "kind": "class",
+   "class": "mage",
+   "label": "마법사"
+  },
+  "mage_attack": {
+   "x": 794,
+   "y": 2,
+   "w": 128,
+   "h": 128,
+   "kind": "skill",
+   "class": "mage",
+   "label": "룬 화살",
+   "glb_clip": "attack",
+   "resource": "마나"
+  },
+  "mage_cast": {
+   "x": 926,
+   "y": 2,
+   "w": 128,
+   "h": 128,
+   "kind": "skill",
+   "class": "mage",
+   "label": "크리스탈 폭발",
+   "glb_clip": "cast",
+   "resource": "마나"
+  },
+  "mage_skill1": {
+   "x": 2,
+   "y": 134,
+   "w": 128,
+   "h": 128,
+   "kind": "skill",
+   "class": "mage",
+   "label": "룬 고리",
+   "glb_clip": "skill1",
+   "resource": "마나"
+  },
+  "mage_skill2": {
+   "x": 134,
+   "y": 134,
+   "w": 128,
+   "h": 128,
+   "kind": "skill",
+   "class": "mage",
+   "label": "유성",
+   "glb_clip": "cast",
+   "resource": "마나"
+  },
+  "class_priest": {
+   "x": 266,
+   "y": 134,
+   "w": 128,
+   "h": 128,
+   "kind": "class",
+   "class": "priest",
+   "label": "사제"
+  },
+  "priest_attack": {
+   "x": 398,
+   "y": 134,
+   "w": 128,
+   "h": 128,
+   "kind": "skill",
+   "class": "priest",
+   "label": "빛의 일격",
+   "glb_clip": "attack",
+   "resource": "신성력"
+  },
+  "priest_cast": {
+   "x": 530,
+   "y": 134,
+   "w": 128,
+   "h": 128,
+   "kind": "skill",
+   "class": "priest",
+   "label": "치유의 빛",
+   "glb_clip": "cast",
+   "resource": "신성력"
+  },
+  "priest_skill1": {
+   "x": 662,
+   "y": 134,
+   "w": 128,
+   "h": 128,
+   "kind": "skill",
+   "class": "priest",
+   "label": "후광 보호막",
+   "glb_clip": "skill1",
+   "resource": "신성력"
+  },
+  "priest_skill2": {
+   "x": 794,
+   "y": 134,
+   "w": 128,
+   "h": 128,
+   "kind": "skill",
+   "class": "priest",
+   "label": "등불 축복",
+   "glb_clip": "cast",
+   "resource": "신성력"
+  },
+  "class_archer": {
+   "x": 926,
+   "y": 134,
+   "w": 128,
+   "h": 128,
+   "kind": "class",
+   "class": "archer",
+   "label": "궁수"
+  },
+  "archer_attack": {
+   "x": 2,
+   "y": 266,
+   "w": 128,
+   "h": 128,
+   "kind": "skill",
+   "class": "archer",
+   "label": "에너지 화살",
+   "glb_clip": "attack",
+   "resource": "집중"
+  },
+  "archer_cast": {
+   "x": 134,
+   "y": 266,
+   "w": 128,
+   "h": 128,
+   "kind": "skill",
+   "class": "archer",
+   "label": "화살비",
+   "glb_clip": "cast",
+   "resource": "집중"
+  },
+  "archer_skill1": {
+   "x": 266,
+   "y": 266,
+   "w": 128,
+   "h": 128,
+   "kind": "skill",
+   "class": "archer",
+   "label": "조준 사격",
+   "glb_clip": "skill1",
+   "resource": "집중"
+  },
+  "archer_skill2": {
+   "x": 398,
+   "y": 266,
+   "w": 128,
+   "h": 128,
+   "kind": "skill",
+   "class": "archer",
+   "label": "장궁 관통",
+   "glb_clip": "cast",
+   "resource": "집중"
+  },
+  "class_assassin": {
+   "x": 530,
+   "y": 266,
+   "w": 128,
+   "h": 128,
+   "kind": "class",
+   "class": "assassin",
+   "label": "암살자"
+  },
+  "assassin_attack": {
+   "x": 662,
+   "y": 266,
+   "w": 128,
+   "h": 128,
+   "kind": "skill",
+   "class": "assassin",
+   "label": "쌍곡도 베기",
+   "glb_clip": "attack",
+   "resource": "기력"
+  },
+  "assassin_cast": {
+   "x": 794,
+   "y": 266,
+   "w": 128,
+   "h": 128,
+   "kind": "skill",
+   "class": "assassin",
+   "label": "연막",
+   "glb_clip": "cast",
+   "resource": "기력"
+  },
+  "assassin_skill1": {
+   "x": 926,
+   "y": 266,
+   "w": 128,
+   "h": 128,
+   "kind": "skill",
+   "class": "assassin",
+   "label": "그림자 질주",
+   "glb_clip": "skill1",
+   "resource": "기력"
+  },
+  "assassin_skill2": {
+   "x": 2,
+   "y": 398,
+   "w": 128,
+   "h": 128,
+   "kind": "skill",
+   "class": "assassin",
+   "label": "급소 찌르기",
+   "glb_clip": "cast",
+   "resource": "기력"
+  },
+  "buff_power": {
+   "x": 134,
+   "y": 398,
+   "w": 128,
+   "h": 128,
+   "kind": "buff",
+   "label": "공격력 증가"
+  },
+  "buff_shield": {
+   "x": 266,
+   "y": 398,
+   "w": 128,
+   "h": 128,
+   "kind": "buff",
+   "label": "보호막"
+  },
+  "buff_regen": {
+   "x": 398,
+   "y": 398,
+   "w": 128,
+   "h": 128,
+   "kind": "buff",
+   "label": "지속 회복"
+  },
+  "buff_haste": {
+   "x": 530,
+   "y": 398,
+   "w": 128,
+   "h": 128,
+   "kind": "buff",
+   "label": "가속"
+  },
+  "debuff_burn": {
+   "x": 662,
+   "y": 398,
+   "w": 128,
+   "h": 128,
+   "kind": "debuff",
+   "label": "열풍 화상"
+  },
+  "debuff_slow": {
+   "x": 794,
+   "y": 398,
+   "w": 128,
+   "h": 128,
+   "kind": "debuff",
+   "label": "감속"
+  },
+  "debuff_stun": {
+   "x": 926,
+   "y": 398,
+   "w": 128,
+   "h": 128,
+   "kind": "debuff",
+   "label": "기절"
+  },
+  "debuff_bleed": {
+   "x": 2,
+   "y": 530,
+   "w": 128,
+   "h": 128,
+   "kind": "debuff",
+   "label": "출혈"
+  },
+  "debuff_armorbreak": {
+   "x": 134,
+   "y": 530,
+   "w": 128,
+   "h": 128,
+   "kind": "debuff",
+   "label": "방어 균열"
+  },
+  "debuff_rift": {
+   "x": 266,
+   "y": 530,
+   "w": 128,
+   "h": 128,
+   "kind": "debuff",
+   "label": "균열 표식"
+  }
+ }
+}

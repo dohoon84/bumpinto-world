@@ -12,7 +12,14 @@
   inset: 0;
   z-index: 40;
   pointer-events: none;
-  font-family: "Nanum Gothic", "Noto Sans CJK KR", "Noto Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+  font-family: "Noto Sans CJK KR", "Nanum Gothic", "Noto Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+  --ui: min(100vw / 1920px, 100vh / 1080px);
+  --gold-c: #d6b062;
+  --gold-hi: #ffe6a8;
+  --gold-lo: #785818;
+  --panel-c: rgba(10, 12, 20, 0.62);
+  --txt: #f0ece2;
+  --sub: #a4a8b6;
   color: var(--ink);
   user-select: none;
 }
@@ -493,4 +500,242 @@
   #bw-raid.is-fight .dock { left: 8px; right: 8px; width: auto; transform: none; bottom: 8px; }
   #bw-raid.is-fight .rchat { left: 8px; width: calc(100vw - 16px); height: 120px; bottom: 132px; }
   #bw-raid.is-fight .boss { width: calc(100vw - 16px); }
+}
+
+/* HUD C — 1920×1080 boxes from layout-rects.json, scaled by --ui */
+#bw-raid .c-stage { display: none; }
+#bw-raid.is-fight .boss,
+#bw-raid.is-fight .party,
+#bw-raid.is-fight .dock,
+#bw-raid.is-fight .quest,
+#bw-raid.is-fight .minimap-wrap,
+#bw-raid.is-fight .meter,
+#bw-raid.is-fight .mix,
+#bw-raid.is-fight .raid-chip,
+#bw-raid.is-fight .face,
+#bw-raid.is-fight > .warn { display: none !important; }
+#bw-raid.is-fight .c-stage {
+  display: block;
+  position: absolute;
+  left: 50%;
+  top: 0;
+  width: 1920px;
+  height: 1080px;
+  transform: translateX(-50%) scale(var(--ui));
+  transform-origin: top center;
+  pointer-events: none;
+  color: var(--txt);
+  font-variant-numeric: tabular-nums;
+}
+#bw-raid.is-fight .c-stage button { pointer-events: auto; }
+#bw-raid .c-stroke, #bw-raid .c-stage b, #bw-raid .c-stage span, #bw-raid .c-stage em {
+  text-shadow: 0 1px 0 #08080e, 0 0 2px #08080e, -1px 0 #08080e, 1px 0 #08080e, 0 -1px #08080e, 0 1px #08080e;
+}
+
+#bw-raid .c-toast {
+  position: absolute; left: 24px; top: 24px; width: 340px; height: 40px;
+  display: flex; align-items: center; gap: 8px; padding: 0 10px 0 14px;
+  background: linear-gradient(180deg, rgba(18,22,34,.72), rgba(4,5,9,.62));
+  border: 1px solid rgba(214,176,98,.7); border-radius: 6px;
+  box-shadow: inset 0 1px 0 rgba(255,240,210,.25), 0 3px 8px rgba(0,0,0,.35);
+}
+#bw-raid .c-toast i { width: 8px; height: 8px; border-radius: 50%; background: #ff5a46; box-shadow: 0 0 8px #ff5a46; flex: none; }
+#bw-raid .c-toast::before { content: ""; position: absolute; left: 1px; top: 6px; bottom: 6px; width: 3px; background: #e6463c; border-radius: 2px; }
+#bw-raid .c-toast b { font-size: 14px; font-weight: 700; }
+#bw-raid .c-toast span { font-size: 12px; color: var(--sub); font-weight: 500; }
+#bw-raid .c-toast em {
+  margin-left: auto; width: 30px; height: 22px; display: grid; place-items: center;
+  border: 1px solid rgba(214,176,98,.8); border-radius: 4px; background: rgba(30,30,40,.85);
+  font-style: normal; color: var(--gold-hi); font-size: 12px; font-weight: 700;
+}
+
+#bw-raid .c-boss { position: absolute; left: 680px; top: 24px; width: 560px; height: 64px; }
+#bw-raid .c-boss-top { display: flex; align-items: flex-end; gap: 8px; height: 18px; }
+#bw-raid .c-boss-top b { font-size: 19px; font-weight: 800; color: #fff4e4; letter-spacing: 0.02em; }
+#bw-raid .c-boss-top span { font-size: 12px; color: var(--sub); font-weight: 500; }
+#bw-raid .c-pips { display: flex; gap: 4px; margin-left: auto; }
+#bw-raid .c-pips i {
+  width: 8px; height: 8px; transform: rotate(45deg); background: #282834;
+  box-shadow: inset 0 0 0 1px var(--gold-lo);
+}
+#bw-raid .c-pips i.on { background: var(--gold-c); box-shadow: inset 0 0 0 1px var(--gold-hi); }
+#bw-raid .c-boss-top em { font-style: normal; font-size: 15px; font-weight: 800; color: var(--gold-hi); min-width: 42px; text-align: right; }
+#bw-raid .c-boss-line { display: flex; align-items: center; height: 22px; margin-top: 2px; }
+#bw-raid .c-cap { width: 64px; height: 22px; flex: none; margin: 0 -8px; }
+#bw-raid .c-cap.flip { transform: scaleX(-1); }
+#bw-raid .c-hp {
+  position: relative; flex: 1; height: 12px; border-radius: 6px; overflow: hidden;
+  background: #280e12; box-shadow: 0 0 0 1px #06060a, 0 0 0 2px rgba(214,176,98,.85);
+}
+#bw-raid .c-hp .ghost, #bw-raid .c-hp .fill { position: absolute; left: 0; top: 0; bottom: 0; width: 0; }
+#bw-raid .c-hp .ghost { background: #ffecaa; }
+#bw-raid .c-hp .fill { background: linear-gradient(#ff6060, #c4262c); box-shadow: inset 0 1px 0 rgba(255,255,255,.35); }
+#bw-raid .c-hp .tick { position: absolute; top: -3px; width: 0; height: 0; border-left: 3px solid transparent; border-right: 3px solid transparent; border-top: 4px solid var(--gold-hi); }
+#bw-raid .c-hp .tick::after { content: ""; position: absolute; left: -1px; top: 4px; width: 1px; height: 12px; background: var(--gold-hi); }
+#bw-raid .c-hp b {
+  position: absolute; inset: 0; display: grid; place-items: center;
+  font-size: 10px; font-weight: 700; color: #fff; letter-spacing: 0.02em;
+}
+#bw-raid .c-castrow { display: flex; align-items: center; gap: 6px; height: 20px; margin-top: 2px; }
+#bw-raid .c-castrow img { width: 18px; height: 18px; border-radius: 3px; }
+#bw-raid .c-castrow span { font-size: 12px; color: #ffc48c; font-weight: 700; }
+#bw-raid .c-cast { width: 200px; height: 4px; border-radius: 2px; background: rgba(30,18,12,.9); box-shadow: 0 0 0 1px rgba(0,0,0,.65); overflow: hidden; }
+#bw-raid .c-cast span { display: block; height: 100%; width: 0; background: linear-gradient(90deg, #ff8c28, #ffdc96); }
+#bw-raid .c-castrow em { font-style: normal; font-size: 12px; color: #ffecd2; font-weight: 700; }
+
+#bw-raid .c-party {
+  position: absolute; left: 24px; top: 427px; width: 216px; height: 226px;
+  background: linear-gradient(90deg, rgba(10,12,20,.78), rgba(10,12,20,0));
+  border-left: 1px solid rgba(214,176,98,.85);
+  padding: 4px 0 0 8px;
+}
+#bw-raid .c-party header { display: flex; gap: 8px; align-items: baseline; height: 22px; }
+#bw-raid .c-party header b { color: var(--gold-hi); font-size: 12px; }
+#bw-raid .c-party header span { color: var(--sub); font-size: 11px; }
+#bw-raid .c-mate {
+  position: relative; height: 40px;
+  display: grid; grid-template-columns: 16px 40px 52px 1fr; grid-template-rows: 16px 5px 2px;
+  column-gap: 4px; align-items: center;
+}
+#bw-raid .c-mate .gem {
+  width: 10px; height: 10px; margin-left: 2px; transform: rotate(45deg);
+  background: var(--gem); box-shadow: 0 0 6px var(--gem); border: 1px solid var(--gold-hi);
+  grid-row: 1; grid-column: 1;
+}
+#bw-raid .c-mate b { grid-row: 1; grid-column: 2; font-size: 14px; font-weight: 700; }
+#bw-raid .c-mate .role { grid-row: 1; grid-column: 3; font-size: 11px; font-weight: 500; }
+#bw-raid .c-mate em { grid-row: 1; grid-column: 4; justify-self: end; font-style: normal; font-size: 11px; font-weight: 700; color: #e6e6ec; }
+#bw-raid .c-mate .hp, #bw-raid .c-mate .rs { grid-column: 2 / 5; height: 100%; border-radius: 3px; background: rgba(20,18,26,.85); overflow: hidden; }
+#bw-raid .c-mate .hp { grid-row: 2; }
+#bw-raid .c-mate .rs { grid-row: 3; }
+#bw-raid .c-mate .hp span { display: block; height: 100%; background: linear-gradient(#ff6060, #c4262c); }
+#bw-raid .c-mate .rs span { display: block; height: 100%; background: var(--res, #ff7a1a); }
+#bw-raid .c-mate.is-dead b, #bw-raid .c-mate.is-dead em { color: #828690; }
+#bw-raid .c-mate.is-aggro::after {
+  content: ""; position: absolute; right: 0; top: 4px;
+  border-left: 8px solid #eb4632; border-top: 6px solid transparent; border-bottom: 6px solid transparent;
+}
+
+#bw-raid .c-vitals { position: absolute; left: 671px; top: 946px; width: 578px; height: 32px; }
+#bw-raid .c-buffs { position: absolute; left: 168px; top: 0; display: flex; gap: 3px; align-items: center; height: 14px; }
+#bw-raid .c-buffs img { width: 22px; height: 22px; border-radius: 4px; }
+#bw-raid .c-buffs span { font-size: 10px; color: #ced2e0; font-weight: 700; }
+#bw-raid .c-vname { display: flex; align-items: baseline; gap: 8px; height: 14px; }
+#bw-raid .c-vname b { font-size: 13px; }
+#bw-raid .c-vname span { font-size: 11px; color: var(--sub); font-weight: 500; }
+#bw-raid .c-vname em { margin-left: auto; font-style: normal; font-size: 11px; font-weight: 700; }
+#bw-raid .c-vitals .c-hp.thin { height: 8px; margin-top: 1px; }
+#bw-raid .c-res { position: relative; height: 4px; margin-top: 3px; border-radius: 2px; background: rgba(20,18,26,.9); overflow: hidden; }
+#bw-raid .c-res span { display: block; height: 100%; width: 0; }
+#bw-raid .c-res[data-res="rage"] span { background: linear-gradient(#ffc878, #ff7a1a); }
+#bw-raid .c-res[data-res="mana"] span { background: linear-gradient(#c4beff, #8c7fff); }
+#bw-raid .c-res[data-res="holy"] span { background: linear-gradient(#ffe28a, #ffc845); }
+#bw-raid .c-res[data-res="focus"] span { background: linear-gradient(#9dffc4, #3ddc84); }
+#bw-raid .c-res[data-res="energy"] span { background: linear-gradient(#ffb0cc, #ff5c9a); }
+#bw-raid .c-resread { position: absolute; left: 586px; top: 18px; font-size: 10px; color: #ffbe82; font-weight: 700; white-space: nowrap; }
+
+#bw-raid .c-portrait { position: absolute; left: 587px; top: 976px; width: 76px; height: 76px; }
+#bw-raid .c-portrait img {
+  position: absolute; left: 8px; top: 8px; width: 60px; height: 60px; border-radius: 50%; object-fit: cover;
+  box-shadow: 0 0 0 2px var(--gold-lo), 0 0 0 3px var(--gold-c), 0 0 0 7px rgba(30,26,18,.85);
+}
+#bw-raid .c-portrait span {
+  position: absolute; left: 0; right: 0; top: -12px; text-align: center;
+  font-size: 10px; color: var(--gold-hi); font-weight: 700;
+}
+#bw-raid .c-portrait b {
+  position: absolute; right: 0; bottom: 4px; width: 22px; height: 22px; border-radius: 50%;
+  display: grid; place-items: center; background: #0e0e16; border: 1px solid var(--gold-c);
+  color: var(--gold-hi); font-size: 11px;
+}
+
+#bw-raid .c-skills {
+  position: absolute; left: 671px; top: 986px; width: 578px; height: 70px;
+  display: flex; gap: 6px; align-items: center; justify-content: center;
+  background: linear-gradient(180deg, rgba(18,22,34,.7), rgba(4,5,9,.6));
+  border: 1px solid rgba(214,176,98,.55); border-radius: 10px;
+  box-shadow: inset 0 1px 0 rgba(255,240,210,.2), 0 4px 10px rgba(0,0,0,.35);
+}
+#bw-raid .c-slot {
+  width: 50px; height: 50px; padding: 0; position: relative; border: 0; border-radius: 8px;
+  background: #040509; box-shadow: 0 0 0 1px rgba(0,0,0,.8); cursor: pointer; overflow: hidden;
+}
+#bw-raid .c-slot img { width: 50px; height: 50px; display: block; border-radius: 8px; }
+#bw-raid .c-slot.is-empty { background: rgba(16,18,28,.7); box-shadow: inset 0 0 0 1px rgba(120,88,24,.5); }
+#bw-raid .c-slot .key {
+  position: absolute; left: 3px; top: 1px; font-size: 11px; color: #ced4e0; font-weight: 700;
+}
+#bw-raid .c-slot .cd {
+  position: absolute; inset: 0; display: grid; place-items: center; font-size: 19px; color: #fff;
+}
+#bw-raid .c-slot .sweep, #bw-raid .c-slot .gcd { position: absolute; inset: 2px; border-radius: 7px; pointer-events: none; }
+#bw-raid .c-slot.is-cd .sweep { background: conic-gradient(transparent calc((1 - var(--p)) * 1turn), rgba(4,6,12,.67) 0); }
+#bw-raid .c-slot.is-gcd .sweep { background: conic-gradient(transparent calc((1 - var(--p)) * 1turn), rgba(4,6,12,.43) 0); }
+#bw-raid .c-slot.is-nores { box-shadow: inset 0 0 0 2px #e63c3c; filter: grayscale(.7) brightness(.85); }
+#bw-raid .c-slot.is-proc { box-shadow: 0 0 8px 2px var(--gold-hi); }
+
+#bw-raid .c-warn {
+  position: absolute; left: 750px; top: 906px; width: 420px; height: 32px;
+  display: flex; align-items: center; gap: 8px; padding: 0 12px;
+  border-radius: 16px; background: rgba(48,8,10,.75);
+  border: 1px solid rgba(255,120,70,.8);
+  box-shadow: 0 0 12px rgba(255,90,40,.35);
+}
+#bw-raid .c-warn[hidden] { display: none; }
+#bw-raid .c-warn i {
+  width: 16px; height: 16px; display: grid; place-items: center; flex: none;
+  background: #ffc850; color: #280a00; font-style: normal; font-size: 11px; font-weight: 900;
+  clip-path: polygon(50% 0, 100% 100%, 0 100%);
+}
+#bw-raid .c-warn strong { font-size: 14px; font-weight: 700; color: #ffece0; letter-spacing: 0; }
+#bw-raid .c-warn em { margin-left: auto; font-style: normal; font-size: 13px; color: #ffc878; font-weight: 700; }
+
+#bw-raid .c-map { position: absolute; left: 1744px; top: 24px; width: 152px; }
+#bw-raid .c-map::before {
+  content: "N"; position: absolute; left: 0; right: 0; top: -16px; text-align: center;
+  color: var(--gold-hi); font-size: 10px; font-weight: 800;
+}
+#bw-raid .c-minimap {
+  width: 152px; height: 152px; border-radius: 50%; display: block;
+  background: rgba(14,18,30,.8);
+  box-shadow: 0 0 0 2px var(--gold-lo), 0 0 0 3px var(--gold-c), 0 0 0 8px rgba(214,176,98,.15);
+}
+#bw-raid .c-clock { margin-top: 8px; text-align: center; font-size: 17px; font-weight: 800; }
+#bw-raid .c-clocksub { text-align: center; font-size: 11px; color: var(--sub); font-weight: 500; }
+#bw-raid .c-dps {
+  display: block; margin: 6px 0 0 32px; width: 120px; height: 24px;
+  border-radius: 11px; border: 1px solid rgba(214,176,98,.45);
+  background: rgba(10,12,20,.55); color: #ced4e0; font: inherit; font-size: 11px; font-weight: 700;
+  cursor: pointer;
+}
+
+#bw-raid.is-fight .rchat {
+  left: calc(50% - 960px * var(--ui) + 24px * var(--ui)) !important;
+  top: calc(832px * var(--ui)) !important;
+  bottom: auto !important;
+  width: calc(420px * var(--ui)) !important;
+  height: calc(224px * var(--ui)) !important;
+  max-height: none !important;
+  padding: calc(8px * var(--ui));
+  border-radius: calc(8px * var(--ui));
+  background: rgba(10,12,20,.6);
+  border: 1px solid rgba(214,176,98,.55);
+  box-shadow: inset 0 1px 0 rgba(255,240,210,.18), 0 4px 10px rgba(0,0,0,.35);
+  font-size: calc(13px * var(--ui));
+}
+#bw-raid.is-fight .rchat.is-collapsed {
+  height: calc(36px * var(--ui)) !important;
+  width: calc(340px * var(--ui)) !important;
+}
+#bw-raid.is-fight .rchat-head { height: calc(28px * var(--ui)); }
+#bw-raid.is-fight .rchat-tabs button.on {
+  color: var(--gold-hi); background: rgba(214,176,98,.16); border-color: transparent;
+  box-shadow: inset 0 -2px 0 var(--gold-hi);
+}
+#bw-raid.is-fight .rchat-fold { width: 22px; color: var(--gold-hi); font-size: 16px; }
+#bw-raid.is-fight .rchat-log { height: calc(118px * var(--ui)); font-size: calc(13px * var(--ui)); font-weight: 500; }
+#bw-raid.is-fight .rchat-form input { height: calc(30px * var(--ui)); border-radius: 6px; background: rgba(4,5,10,.8); }
+#bw-raid.is-fight .rchat-form button {
+  height: calc(24px * var(--ui)); border-radius: 4px; background: transparent;
+  border: 1px solid rgba(214,176,98,.7); color: var(--gold-hi);
 }

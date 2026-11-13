@@ -75,7 +75,7 @@ function buildBossMesh() {
     metalness: 0.04,
     emissive: '#ff6a1a',
     emissiveMap: crackTex(),
-    emissiveIntensity: 1.15,
+    emissiveIntensity: 2.4,
   });
   const steel = new THREE.MeshStandardMaterial({ color: '#d5d8dc', metalness: 0.35, roughness: 0.48 });
   const rockGeo = new THREE.IcosahedronGeometry(1, 0);
@@ -231,6 +231,7 @@ export function createBoss(scene) {
   const home = bossPoint();
   built.group.position.set(home.x, 0, home.z);
   built.group.rotation.y = PATH_YAW + Math.PI;
+  built.group.scale.setScalar(1.45);
   scene.add(built.group);
   for (let i = 0; i < 3; i++) {
     const mob = new THREE.Group();

@@ -10,6 +10,16 @@ const VN_LINES = [
   { name: '안내', text: '준비가 되면 출동을 누르세요.' },
 ];
 
+const SKILL_ICON = {
+  slash: 'warrior_attack', charge: 'warrior_skill1', shout: 'warrior_cast', spin: 'warrior_skill2',
+  shard: 'mage_skill1', nova: 'mage_skill2', freeze: 'mage_cast', blizzard: 'mage_attack',
+  smite: 'priest_attack', heal: 'priest_cast', circle: 'priest_skill1', holy: 'priest_skill2',
+  shot: 'archer_attack', volley: 'archer_skill1', mark: 'archer_cast', rain: 'archer_skill2',
+  daggers: 'assassin_attack', shadow: 'assassin_skill1', stealth: 'assassin_cast', tape: 'assassin_skill2',
+};
+const EXTRA_KEYS = ['Q', 'E', 'R', 'F', 'G', 'T'];
+const GEM = { 전사: '#FF7A1A', 마법사: '#8C7FFF', 사제: '#FFC845', 궁수: '#3DDC84', 암살자: '#E5383B' };
+
 const ICONS = {
   slash: '<svg viewBox="0 0 64 64"><path d="M12 50 L46 12" stroke="#ffe7a3" stroke-width="6" fill="none" stroke-linecap="round"/><path d="M40 10 h12 v12" stroke="#e6c36a" stroke-width="4" fill="none"/></svg>',
   charge: '<svg viewBox="0 0 64 64"><path d="M14 12 h22 l8 10 v24 l-8 8 H14 z" fill="#4e5966" stroke="#e6c36a" stroke-width="3"/><path d="M18 32 h16" stroke="#3ecfc6" stroke-width="4"/></svg>',
@@ -42,11 +52,75 @@ export function createHud() {
   const root = document.createElement('div');
   root.id = 'bw-raid';
   root.innerHTML = `
+    <div class="c-stage" data-cstage>
+      <div class="c-toast">
+        <i></i>
+        <b>균열 · 탄천교</b>
+        <span data-stage>레이드 진행 중 · 1단계</span>
+        <em>J</em>
+      </div>
+      <div class="c-boss">
+        <div class="c-boss-top">
+          <b>홀드</b>
+          <span data-boss-sub>2장 · 탄천 보스</span>
+          <span class="c-pips" data-boss-pips><i class="on"></i><i class="on"></i><i></i></span>
+          <em data-boss-pct>100%</em>
+        </div>
+        <div class="c-boss-line">
+          <svg class="c-cap" viewBox="0 0 120 44" aria-hidden="true"><path d="M108 22C78 6 36 4 8 16" fill="none" stroke="#785818" stroke-width="4"/><path d="M108 22C78 38 36 40 8 28" fill="none" stroke="#785818" stroke-width="4"/><path d="M104 22C80 10 44 10 18 18" fill="none" stroke="#E8B64A" stroke-width="2"/><path d="M104 22C80 34 44 34 18 26" fill="none" stroke="#E8B64A" stroke-width="2"/><path d="M100 22H78" stroke="#E8B64A" stroke-width="2"/><polygon points="100,9 113,22 100,35 87,22" fill="#E8B64A"/><polygon points="100,15 107,22 100,29 93,22" fill="#961A20"/></svg>
+          <div class="c-hp">
+            <span class="ghost" data-boss-ghost></span>
+            <span class="fill" data-boss-fill></span>
+            <i class="tick" style="left:33.33%"></i>
+            <i class="tick" style="left:66.66%"></i>
+            <b data-boss-num>0 / 0</b>
+          </div>
+          <svg class="c-cap flip" viewBox="0 0 120 44" aria-hidden="true"><path d="M108 22C78 6 36 4 8 16" fill="none" stroke="#785818" stroke-width="4"/><path d="M108 22C78 38 36 40 8 28" fill="none" stroke="#785818" stroke-width="4"/><path d="M104 22C80 10 44 10 18 18" fill="none" stroke="#E8B64A" stroke-width="2"/><path d="M104 22C80 34 44 34 18 26" fill="none" stroke="#E8B64A" stroke-width="2"/><path d="M100 22H78" stroke="#E8B64A" stroke-width="2"/><polygon points="100,9 113,22 100,35 87,22" fill="#E8B64A"/><polygon points="100,15 107,22 100,29 93,22" fill="#961A20"/></svg>
+        </div>
+        <div class="c-castrow">
+          <img src="/dungeon/hud/icons/debuff_burn.png" alt="" />
+          <img src="/dungeon/hud/icons/debuff_armorbreak.png" alt="" />
+          <span data-cast-name></span>
+          <div class="c-cast"><span data-cast-fill></span></div>
+          <em data-cast-time></em>
+        </div>
+      </div>
+      <section class="c-party" data-party></section>
+      <div class="c-warn" data-warn hidden>
+        <i>!</i>
+        <strong data-warn-name></strong>
+        <em data-warn-time></em>
+      </div>
+      <div class="c-vitals">
+        <div class="c-buffs">
+          <img src="/dungeon/hud/icons/buff_power.png" alt="" />
+          <img src="/dungeon/hud/icons/buff_shield.png" alt="" />
+          <img src="/dungeon/hud/icons/buff_haste.png" alt="" />
+          <span>8s</span>
+        </div>
+        <div class="c-vname"><b data-player-name>초행</b><span data-my-role>전사</span><em data-player-num>100 / 100</em></div>
+        <div class="c-hp thin"><span class="ghost" data-player-ghost></span><span class="fill" data-player-fill></span></div>
+        <div class="c-res" data-res="rage"><span data-rage-fill></span></div>
+        <span class="c-resread" data-res-read>분노 0</span>
+      </div>
+      <div class="c-portrait">
+        <img data-portrait src="/dungeon/hud/portraits/portrait_warrior.png" alt="" />
+        <span data-form>변신 42%</span>
+        <b data-level>1</b>
+      </div>
+      <div class="c-skills" data-skills></div>
+      <div class="c-map">
+        <canvas class="c-minimap" width="152" height="152" data-map></canvas>
+        <div class="c-clock" data-clock>00:00</div>
+        <div class="c-clocksub">탄천교 · 제한 10:00</div>
+        <button type="button" class="c-dps" data-dps-toggle>피해량 ▸</button>
+      </div>
+    </div>
     <div class="flash" data-flash></div>
     <div class="raid-chip" data-raid-chip><i></i><b>균열 · 탄천</b><span data-stage>1단계</span></div>
-    <section class="party panel" data-party></section>
+    <section class="party panel"></section>
     <div class="minimap-wrap">
-      <canvas class="minimap" width="168" height="168" data-map></canvas>
+      <canvas class="minimap" width="168" height="168"></canvas>
       <div class="map-cap">탄천 자전거길</div>
       <div class="map-sub">합수부 · 균열</div>
     </div>
@@ -61,29 +135,29 @@ export function createHud() {
       <div class="boss-row">
         <div class="medallion">홀</div>
         <div><span class="boss-name">홀드</span><span class="boss-grade">C · 지역</span></div>
-        <div class="boss-num" data-boss-num>100%</div>
+        <div class="boss-num">100%</div>
       </div>
-      <div class="bar hp"><span data-boss-fill></span></div>
-      <div class="bar cast"><span data-cast-fill></span></div>
-      <div class="cast-label"><span data-cast-name></span><span data-cast-time></span></div>
+      <div class="bar hp"><span></span></div>
+      <div class="bar cast"><span></span></div>
+      <div class="cast-label"><span></span><span></span></div>
     </section>
     <div class="dock">
       <div class="face" data-face>초</div>
       <div class="plates">
         <div class="plate panel">
-          <div class="plate-name">초행 <span data-my-role>전사</span> <b data-player-num>100 / 100</b></div>
-          <div class="bar thin hp"><span data-player-fill></span></div>
-          <div class="label"><span data-res-label>분노</span><span data-rage>0 / 100</span></div>
-          <div class="bar thin rage"><span data-rage-fill></span></div>
+          <div class="plate-name">초행 <span>전사</span> <b>100 / 100</b></div>
+          <div class="bar thin hp"><span></span></div>
+          <div class="label"><span data-res-label>분노</span><span>0 / 100</span></div>
+          <div class="bar thin rage"><span></span></div>
           <div class="pips" data-pips hidden></div>
         </div>
         <div class="plate panel">
           <div class="plate-name">홀드 <span>대상</span></div>
-          <div class="bar thin hp"><span data-target-fill></span></div>
-          <div class="label"><span>대상 생명</span><span data-target-num>100%</span></div>
+          <div class="bar thin hp"><span></span></div>
+          <div class="label"><span>대상 생명</span><span>100%</span></div>
         </div>
       </div>
-      <div class="skills" data-skills></div>
+      <div class="skills"></div>
       <div class="help">WASD 이동 · 휠 줌 · Space 회피 · 1–4 스킬 · 글로벌 쿨 1.2초</div>
     </div>
     <div class="away" data-away hidden>탄천 합수부에 균열이 열렸습니다</div>
@@ -108,9 +182,9 @@ export function createHud() {
       <button type="button" class="ghost vn-skip" data-vn-skip>건너뛰기</button>
       <div class="vn-hint">클릭 · Space 로 다음</div>
     </div>
-    <div class="warn" data-warn hidden>
-      <strong data-warn-name></strong>
-      <em data-warn-time></em>
+    <div class="warn" hidden>
+      <strong></strong>
+      <em></em>
     </div>
     <aside class="meter panel">
       <div>피해 <b data-dealt>0</b></div>
@@ -162,13 +236,20 @@ export function createHud() {
   let active = getClass('warrior');
   let picked = 'warrior';
   function paintSkills(list) {
-    skillsEl.innerHTML = list.map((s) => `
-      <button type="button" class="skill${s.locked ? ' locked' : ''}" data-skill="${s.id}" ${s.locked ? 'disabled' : ''}>
-        <div class="ico">${ICONS[s.id] || ICONS.lock}</div>
-        <div class="sweep" style="--p:0"></div>
-        <div class="gcd" style="--g:0"></div>
-        <span class="key">${s.key}</span>
-        <span class="cd"></span>
+    const live = list.filter((s) => !s.locked);
+    const extras = ['buff_power', 'buff_shield', 'buff_haste', 'buff_regen', `class_${active.id}`];
+    const cells = [];
+    live.slice(0, 4).forEach((s) => cells.push({ skill: s, icon: SKILL_ICON[s.id], key: s.key }));
+    while (cells.length < 4) cells.push({ key: String(cells.length + 1) });
+    extras.forEach((icon, i) => cells.push({ icon, key: EXTRA_KEYS[i] }));
+    cells.push({ key: 'T', empty: true });
+    skillsEl.innerHTML = cells.map((c) => `
+      <button type="button" class="c-slot${c.empty ? ' is-empty' : ''}${c.skill?.locked ? ' locked' : ''}" ${c.skill ? `data-skill="${c.skill.id}"` : 'disabled'}>
+        ${c.icon ? `<img src="/dungeon/hud/icons/${c.icon}.png" alt="" />` : ''}
+        <span class="sweep" style="--p:0"></span>
+        <span class="gcd" style="--g:0"></span>
+        <b class="key">${c.key}</b>
+        <b class="cd"></b>
       </button>
     `).join('');
     skillsEl.querySelectorAll('[data-skill]').forEach((btn) => {
@@ -184,6 +265,7 @@ export function createHud() {
 
   const map = root.querySelector('[data-map]');
   const ctx = map.getContext('2d');
+  let mapMode = 'live';
   const floats = [];
   let bannerT = 0;
 
@@ -192,35 +274,61 @@ export function createHud() {
   }
 
   function drawMap(snap) {
-    const w = map.width;
-    const h = map.height;
+    root.querySelectorAll('[data-map]').forEach((canvas) => paintMap(canvas, snap));
+  }
+  function paintMap(mapCanvas, snap) {
+    const ctx = mapCanvas.getContext('2d');
+    const w = mapCanvas.width;
+    const h = mapCanvas.height;
     ctx.clearRect(0, 0, w, h);
     ctx.save();
+    ctx.beginPath();
+    ctx.arc(w / 2, h / 2, w / 2 - 1, 0, Math.PI * 2);
+    ctx.clip();
+    ctx.fillStyle = '#0e121e';
+    ctx.fillRect(0, 0, w, h);
     ctx.translate(w / 2, h / 2);
-    ctx.strokeStyle = '#16343a';
-    ctx.lineWidth = 10;
-    ctx.lineCap = 'round';
-    ctx.beginPath();
-    ctx.moveTo(0, 62);
-    ctx.lineTo(0, -62);
-    ctx.stroke();
-    ctx.strokeStyle = '#3ecfc6';
-    ctx.lineWidth = 4;
-    ctx.stroke();
-    ctx.strokeStyle = '#e15cff';
-    ctx.lineWidth = 3;
-    ctx.beginPath();
-    ctx.moveTo(-34, 28);
-    ctx.quadraticCurveTo(-16, 8, 0, -8);
-    ctx.stroke();
-    ctx.fillStyle = '#0b1218';
-    for (const y of [48, 16, -16, -48]) {
+    ctx.rotate(-0.55);
+    ctx.fillStyle = '#243e60';
+    ctx.fillRect(-w, -10, w * 2, 22);
+    ctx.fillStyle = '#c8c4bc';
+    ctx.fillRect(-w, -7, w * 2, 14);
+    ctx.rotate(0.55);
+    ctx.fillStyle = '#2c3040';
+    for (let i = 0; i < 5; i++) ctx.fillRect(-58 + i * 22, -50 + (i % 2) * 10, 12, 16);
+    if (mapMode === 'show') {
+      const dots = ['#FF7A1A', '#8C7FFF', '#FFC845', '#3DDC84', '#E5383B'];
+      dots.forEach((c, i) => {
+        ctx.fillStyle = c;
+        ctx.beginPath();
+        ctx.arc(-16 + i * 7, 2 + i * 2, 3.2, 0, Math.PI * 2);
+        ctx.fill();
+      });
+      ctx.fillStyle = '#ff463c';
       ctx.beginPath();
-      ctx.arc(0, y, 4.5, 0, Math.PI * 2);
+      ctx.arc(28, 14, 4.5, 0, Math.PI * 2);
       ctx.fill();
-      ctx.strokeStyle = '#e6c36a';
-      ctx.lineWidth = 1.5;
-      ctx.stroke();
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.moveTo(-22, -10);
+      ctx.lineTo(-30, 2);
+      ctx.lineTo(-14, 2);
+      ctx.fill();
+      ctx.restore();
+      ctx.save();
+      ctx.translate(w / 2, h / 2);
+      ctx.strokeStyle = 'rgba(214,176,98,.85)';
+      for (let k = 0; k < 24; k++) {
+        const a = (k / 24) * Math.PI * 2 - Math.PI / 2;
+        const r0 = w / 2 - 2;
+        const r1 = w / 2 - (k % 6 === 0 ? 8 : 5);
+        ctx.beginPath();
+        ctx.moveTo(Math.cos(a) * r0, Math.sin(a) * r0);
+        ctx.lineTo(Math.cos(a) * r1, Math.sin(a) * r1);
+        ctx.stroke();
+      }
+      ctx.restore();
+      return;
     }
     const span = ALONG_MAX - ALONG_MIN;
     const project = (along, across) => {
@@ -236,7 +344,7 @@ export function createHud() {
     ctx.stroke();
     const pf = toFrame(snap.x, snap.z);
     const [px, py] = project(pf.along, pf.across);
-    ctx.fillStyle = '#7ef0e4';
+    ctx.fillStyle = '#ffffff';
     ctx.beginPath();
     ctx.moveTo(px, py - 7);
     ctx.lineTo(px + 5, py + 5);
@@ -244,14 +352,11 @@ export function createHud() {
     ctx.fill();
     if (!snap.bossDead) {
       const [bx, by] = project(BOSS_ALONG, 0);
-      ctx.fillStyle = '#ff7a3a';
+      ctx.fillStyle = '#ff463c';
       ctx.beginPath();
       ctx.arc(bx, by, 5, 0, Math.PI * 2);
       ctx.fill();
     }
-    ctx.fillStyle = '#e6c36a';
-    ctx.font = '700 11px sans-serif';
-    ctx.fillText('N', -4, -64);
     ctx.restore();
   }
 
@@ -326,11 +431,16 @@ export function createHud() {
       active = getClass(id);
       picked = active.id;
       root.style.setProperty('--accent', active.seam);
-      root.querySelector('[data-res-label]').textContent = active.resLabel;
+      const label = root.querySelector('[data-res-label]');
+      if (label) label.textContent = active.resLabel;
       const roleEl = root.querySelector('[data-my-role]');
-      if (roleEl) roleEl.textContent = active.name;
+      if (roleEl && !this.caption) roleEl.textContent = active.name;
       const fill = root.querySelector('[data-rage-fill]');
-      fill.parentElement.className = `bar thin ${active.resBar}`;
+      if (fill) fill.parentElement.dataset.res = active.resBar === 'mp' ? 'mana' : active.resBar;
+      const portrait = root.querySelector('[data-portrait]');
+      if (portrait) portrait.src = `/dungeon/hud/portraits/portrait_${active.id}.png`;
+      const nameEl = root.querySelector('[data-player-name]');
+      if (nameEl && !this.caption) nameEl.textContent = '초행';
       paintSkills(active.skills);
       grid.querySelectorAll('.class-card').forEach((el) => el.classList.toggle('is-on', el.getAttribute('data-class') === active.id));
     },
@@ -402,17 +512,18 @@ export function createHud() {
       root.querySelector('[data-alert-title]').textContent = sec > 0 ? '하늘이 갈라집니다' : '보스가 살아있는 동안 합류할 수 있습니다';
     },
     setParty(frames) {
-      party.innerHTML = frames.map((m) => `
-        <div class="mate${m.isMe ? ' is-me' : ''}" data-mate="${m.id}">
-          <div class="portrait role-${m.kind || 'dps'}"><b>${m.kind === 'tank' ? '방' : m.kind === 'heal' ? '힐' : '딜'}</b>${ICONS[m.icon] || ICONS.lock}</div>
-          <div>
-            <div class="mate-top"><span class="lv">Lv.${m.lv || 1}</span><span>${m.name}</span><span class="role"${m.isMe ? ' data-my-role' : ''}>${m.role}</span></div>
-            <div class="bar thin hp"><span data-hp></span></div>
-            <div class="bar thin ${m.resBar || 'rage'}"><span data-sub></span></div>
-            <div class="debuffs" data-debuffs></div>
-          </div>
-        </div>
-      `).join('');
+      party.innerHTML = `<header><b>파티</b><span>${frames.length}/5</span></header>` + frames.map((m) => {
+        const gem = m.down ? '#5a5c64' : (m.gem || GEM[m.role] || '#8C7FFF');
+        return `
+        <div class="c-mate${m.down ? ' is-dead' : ''}${m.aggro ? ' is-aggro' : ''}" data-mate="${m.id}">
+          <i class="gem" style="--gem:${gem}"></i>
+          <b>${m.name}</b>
+          <span class="role" style="color:${gem}">${m.role}</span>
+          <em data-pct>${m.down ? '부활 대기' : `${Math.round((m.hp ?? 1) * 100)}%`}</em>
+          <div class="hp"><span data-hp style="width:${Math.round((m.hp ?? 1) * 100)}%"></span></div>
+          <div class="rs" style="--res:${gem}"><span data-sub style="width:${Math.round((m.sub ?? 0.5) * 100)}%"></span></div>
+        </div>`;
+      }).join('');
     },
     setMuted(muted) {
       root.querySelector('[data-mute]').textContent = muted ? '소리 꺼짐' : '소리 켜짐';
@@ -446,69 +557,116 @@ export function createHud() {
       root.classList.add('is-peace');
       this.hideVictory();
     },
+    caption: null,
     update(dt, camera, snap) {
-      const pct = snap.bossHp / snap.bossMax;
+      const cap = this.caption;
+      const pct = cap ? cap.bossFill : snap.bossHp / snap.bossMax;
       setWidth(root.querySelector('[data-boss-fill]'), pct * 100);
-      root.querySelector('[data-boss-num]').textContent = `${Math.ceil(pct * 100)}%  (${Math.ceil(snap.bossHp).toLocaleString('ko-KR')} / ${snap.bossMax.toLocaleString('ko-KR')})`;
-      const castPct = snap.castMax > 0 ? (snap.cast / snap.castMax) * 100 : 0;
+      setWidth(root.querySelector('[data-boss-ghost]'), Math.min(100, pct * 100 + (cap ? 6 : 4)));
+      root.querySelector('[data-boss-pct]').textContent = cap ? cap.bossPct : `${Math.ceil(pct * 100)}%`;
+      root.querySelector('[data-boss-num]').textContent = cap
+        ? cap.bossNum
+        : `${Math.ceil(snap.bossHp).toLocaleString('ko-KR')} / ${snap.bossMax.toLocaleString('ko-KR')}`;
+      const stage = snap.bossDead ? 3 : pct <= 0.25 ? 3 : pct <= 0.6 ? 2 : 1;
+      const sub = root.querySelector('[data-boss-sub]');
+      if (sub && !cap) sub.textContent = `${stage}장 · 탄천 보스`;
+      root.querySelectorAll('[data-boss-pips] i').forEach((pip, i) => pip.classList.toggle('on', i < stage));
+      const castPct = cap ? cap.castPct : (snap.castMax > 0 ? (snap.cast / snap.castMax) * 100 : 0);
       setWidth(root.querySelector('[data-cast-fill]'), castPct);
-      root.querySelector('[data-cast-name]').textContent = snap.castName ? `${snap.castName} 시전 중` : '';
       const castLeft = snap.castMax > 0 ? Math.max(0, snap.castMax - snap.cast) : 0;
-      root.querySelector('[data-cast-time]').textContent = snap.castMax > 0 ? `${castLeft.toFixed(1)}초` : '';
+      root.querySelector('[data-cast-name]').textContent = cap ? cap.cast : (snap.castName || '');
+      root.querySelector('[data-cast-time]').textContent = cap ? cap.castTime : (snap.castMax > 0 ? castLeft.toFixed(1) : '');
       const warn = root.querySelector('[data-warn]');
-      if (snap.castName) {
+      if (cap?.warn || snap.castName) {
         warn.hidden = false;
-        root.querySelector('[data-warn-name]').textContent = snap.castName;
-        root.querySelector('[data-warn-time]').textContent = castLeft.toFixed(1);
+        root.querySelector('[data-warn-name]').textContent = cap?.warn || `${snap.castName} · 머리 앞 60°에서 벗어나기`;
+        root.querySelector('[data-warn-time]').textContent = cap?.warnTime || castLeft.toFixed(1);
       } else warn.hidden = true;
-      setWidth(root.querySelector('[data-player-fill]'), (snap.hp / snap.hpMax) * 100);
-      root.querySelector('[data-player-num]').textContent = `${Math.ceil(snap.hp)} / ${snap.hpMax}`;
-      root.querySelector('[data-dealt]').textContent = Math.round(snap.dealt || 0).toLocaleString('ko-KR');
-      root.querySelector('[data-healed]').textContent = Math.round(snap.healed || 0).toLocaleString('ko-KR');
+      const hpPct = cap ? cap.playerPct : (snap.hp / snap.hpMax) * 100;
+      setWidth(root.querySelector('[data-player-fill]'), hpPct);
+      setWidth(root.querySelector('[data-player-ghost]'), Math.min(100, hpPct + 8));
+      root.querySelector('[data-player-num]').textContent = cap ? cap.playerNum : `${Math.ceil(snap.hp).toLocaleString('ko-KR')} / ${snap.hpMax.toLocaleString('ko-KR')}`;
+      const dealt = root.querySelector('[data-dealt]');
+      if (dealt) dealt.textContent = Math.round(snap.dealt || 0).toLocaleString('ko-KR');
+      const healed = root.querySelector('[data-healed]');
+      if (healed) healed.textContent = Math.round(snap.healed || 0).toLocaleString('ko-KR');
       const stageEl = root.querySelector('[data-stage]');
-      if (stageEl) {
-        const ratio = snap.bossMax ? snap.bossHp / snap.bossMax : 1;
-        stageEl.textContent = snap.bossDead ? '토벌' : ratio <= 0.25 ? '3단계' : ratio <= 0.6 ? '2단계' : '1단계';
+      if (stageEl) stageEl.textContent = snap.bossDead ? '토벌 완료' : `레이드 진행 중 · ${stage}단계`;
+      const clock = root.querySelector('[data-clock]');
+      if (clock) {
+        const elapsed = cap ? cap.elapsed : Math.max(0, 600 - (snap.timeLeft || 0));
+        const sec = Math.floor(elapsed);
+        clock.textContent = `${String(Math.floor(sec / 60)).padStart(2, '0')}:${String(sec % 60).padStart(2, '0')}`;
+      }
+      const lv = root.querySelector('[data-level]');
+      if (lv) lv.textContent = cap ? cap.level : String(snap.level || 1);
+      if (cap) {
+        const nameEl = root.querySelector('[data-player-name]');
+        if (nameEl) nameEl.textContent = cap.name;
+        const roleEl = root.querySelector('[data-my-role]');
+        if (roleEl) roleEl.textContent = cap.role;
       }
       root.querySelector('[data-kills]').textContent = snap.kills;
       const t = Math.max(0, Math.ceil(snap.timeLeft));
       root.querySelector('[data-time]').textContent = `${String(Math.floor(t / 60)).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}`;
       const resMax = snap.resMax || 100;
-      root.querySelector('[data-rage]').textContent = `${Math.round(snap.res)} / ${resMax}`;
-      setWidth(root.querySelector('[data-rage-fill]'), (snap.res / resMax) * 100);
+      const resPct = cap ? cap.resPct : (snap.res / resMax) * 100;
+      setWidth(root.querySelector('[data-rage-fill]'), resPct);
+      const resRead = root.querySelector('[data-res-read]');
+      if (resRead) resRead.textContent = cap ? cap.resRead : `${active.resLabel} ${Math.round(snap.res)}`;
       const pips = root.querySelector('[data-pips]');
-      if (resMax <= 6) {
+      if (pips && resMax <= 6) {
         pips.hidden = false;
         const key = `${snap.res}/${resMax}`;
         if (pips.dataset.n !== key) {
           pips.dataset.n = key;
           pips.innerHTML = Array.from({ length: resMax }, (_, i) => `<i class="${i < snap.res ? 'on' : ''}"></i>`).join('');
         }
-      } else pips.hidden = true;
-      setWidth(root.querySelector('[data-target-fill]'), pct * 100);
-      root.querySelector('[data-target-num]').textContent = `${Math.ceil(pct * 100)}%`;
+      } else if (pips) pips.hidden = true;
 
-      for (const row of snap.party || []) {
-        const el = root.querySelector(`[data-mate="${row.id}"]`);
-        if (!el) continue;
-        el.classList.toggle('is-down', row.down);
-        setWidth(el.querySelector('[data-hp]'), row.hp * 100);
-        const sub = el.querySelector('[data-sub]');
-        if (sub) setWidth(sub, (row.sub ?? 0) * 100);
-        const deb = el.querySelector('[data-debuffs]');
-        if (deb) deb.textContent = row.debuff ? '둔화' : '';
+      if (!cap) {
+        for (const row of snap.party || []) {
+          const el = root.querySelector(`[data-mate="${row.id}"]`);
+          if (!el) continue;
+          el.classList.toggle('is-dead', row.down || row.hp <= 0);
+          setWidth(el.querySelector('[data-hp]'), row.hp * 100);
+          const sub = el.querySelector('[data-sub]');
+          if (sub) setWidth(sub, (row.sub ?? 0) * 100);
+          const pctEl = el.querySelector('[data-pct]');
+          if (pctEl) pctEl.textContent = row.down || row.hp <= 0 ? '부활 대기' : `${Math.round(row.hp * 100)}%`;
+        }
       }
-      active.skills.forEach((s, i) => {
-        const btn = root.querySelector(`[data-skill="${s.id}"]`);
-        if (!btn) return;
-        const cd = snap.cds[i] || 0;
-        const own = s.cd > 0 ? cd / s.cd : 0;
-        btn.querySelector('.sweep').style.setProperty('--p', String(own));
-        const gcdEl = btn.querySelector('.gcd');
-        if (gcdEl) gcdEl.style.setProperty('--g', String(Math.min(1, (snap.gcd || 0) / 1.2)));
-        btn.querySelector('.cd').textContent = cd > 0.05 ? cd.toFixed(1) : '';
-        btn.classList.toggle('is-poor', !s.locked && s.cost > 0 && snap.res < s.cost);
-      });
+      if (cap?.slots) {
+        const slots = skillsEl.querySelectorAll('.c-slot');
+        const look = [
+          ['is-gcd', '', 0.3],
+          ['is-cd', '8', 0.6],
+          ['is-nores', '', 0],
+          ['is-proc', '', 0],
+          ['is-cd', '45', 0.85],
+        ];
+        slots.forEach((btn, i) => {
+          btn.classList.remove('is-gcd', 'is-cd', 'is-nores', 'is-proc');
+          const row = look[i];
+          if (!row) return;
+          btn.classList.add(row[0]);
+          btn.querySelector('.cd').textContent = row[1];
+          btn.querySelector('.sweep').style.setProperty('--p', String(row[2]));
+        });
+      } else {
+        active.skills.forEach((s, i) => {
+          const btn = root.querySelector(`[data-skill="${s.id}"]`);
+          if (!btn) return;
+          const cd = snap.cds[i] || 0;
+          const own = s.cd > 0 ? cd / s.cd : 0;
+          btn.querySelector('.sweep').style.setProperty('--p', String(own));
+          const gcdEl = btn.querySelector('.gcd');
+          if (gcdEl) gcdEl.style.setProperty('--g', String(Math.min(1, (snap.gcd || 0) / 1.2)));
+          btn.querySelector('.cd').textContent = cd > 0.05 ? (cd >= 10 ? Math.ceil(cd) : cd.toFixed(1)) : '';
+          btn.classList.toggle('is-cd', cd > 0.05);
+          btn.classList.toggle('is-nores', !s.locked && s.cost > 0 && snap.res < s.cost);
+        });
+      }
       if (bannerT > 0) {
         bannerT -= dt;
         if (bannerT <= 0) root.querySelector('[data-banner]').hidden = true;
@@ -518,6 +676,7 @@ export function createHud() {
         root.querySelector('[data-banner]').textContent = `쓰러졌습니다 · 노란 선에서 기상 ${Math.ceil(snap.down)}초`;
         bannerT = 0.2;
       }
+      mapMode = cap ? 'show' : 'live';
       drawMap(snap);
       tickFloats(dt, camera);
     },

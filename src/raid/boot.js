@@ -55,6 +55,7 @@ const camera = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, 0.15, 4
 
 let composer = null;
 let bloomOn = true;
+let bloomPass = null;
 try {
   const [{ EffectComposer }, { RenderPass }, { UnrealBloomPass }, { OutputPass }] = await Promise.all([
     import('three/examples/jsm/postprocessing/EffectComposer.js'),
@@ -64,8 +65,9 @@ try {
   ]);
   composer = new EffectComposer(renderer);
   composer.addPass(new RenderPass(scene, camera));
-  const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth / 2, innerHeight / 2), 0.2, 0.32, 0.88);
+  const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth / 2, innerHeight / 2), 0.48, 0.32, 0.78);
   composer.addPass(bloom);
+  bloomPass = bloom;
   composer.addPass(new OutputPass());
 } catch (err) {
   console.warn('[raid] bloom off', err);
@@ -250,6 +252,7 @@ const portrait = shot === 'transform' || shot === 'form';
 let camYaw = PATH_YAW + (portrait ? Math.PI + 0.7 : 0.35);
 let camPitch = portrait ? 0.32 : 42 * Math.PI / 180;
 let camDist = shot === 'transform' ? 4.4 : shot === 'form' ? 4.8 : 30;
+let shotLookY = null;
 const keys = new Set();
 let shift = false;
 let dragging = false;
@@ -391,6 +394,7 @@ function grownScale(t) {
 }
 
 function finishIntro() {
+  if (phase === 'fight' && form.group.visible) return;
   citizen.visible = false;
   form.group.visible = true;
   form.group.scale.setScalar(restScale());
@@ -536,7 +540,7 @@ function frame() {
   camera.position.set(focus.x - lx * dist * cp, focus.y + dist * Math.sin(pitch), focus.z - lz * dist * cp);
   const aim = shot === 'wide' ? 1.5 : portrait ? 0.1 : 6;
   const head = form?.group?.userData?.headY;
-  const lookY = shot === 'wide' ? 1.15 : portrait ? (head || 1.1) : 0.2;
+  const lookY = shotLookY != null ? shotLookY : shot === 'wide' ? 1.15 : portrait ? (head || 1.1) : 0.2;
   camera.lookAt(focus.x + lx * aim, lookY, focus.z + lz * aim);
   if (shake > 0) {
     camera.position.x += (Math.random() - 0.5) * shake;
@@ -926,42 +930,85 @@ function showKnights() {
       extras.push(g);
       attachTrails(g, id, scene);
     }
-    const p = fromFrame(BOSS_ALONG - 8, (i - 2) * 1.7);
+    const p = fromFrame(BOSS_ALONG - 14, (i - 2) * 2.2);
     g.position.set(p.x, 0, p.z);
     g.rotation.set(0, PATH_YAW, 0);
     g.visible = true;
     g.userData.shotClass = id;
   });
-  const mid = fromFrame(BOSS_ALONG - 8, 0);
+  const mid = fromFrame(BOSS_ALONG - 14, 0);
   actor.position.set(mid.x, 0, mid.z);
   camYaw = PATH_YAW;
-  camPitch = 0.28;
-  camDist = 8.5;
+  camPitch = 0.98;
+  camDist = 34;
+  shotLookY = 1.1;
+  if (phase !== 'fight') finishIntro();
   hud.banner('');
   const banner = document.querySelector('#bw-raid [data-banner]');
   if (banner) banner.hidden = true;
 }
 function seedChat() {
-  chat.push({ channel: 'party', name: '한결', color: '#FF7A1A', text: '장판 먼저 봅니다. 방패는 제가.', self: false, t: Date.now() });
-  chat.push({ channel: 'party', name: '온유', color: '#FFC845', text: '체력 볼게요. 노란 선으로 오세요.', self: false, t: Date.now() });
-  chat.push({ channel: 'raid', name: '서린', color: '#8C7FFF', text: '하늘 균열이 더 벌어집니다.', self: false, t: Date.now() });
-  chat.push({ channel: 'system', name: '시스템', text: '초행 슬래시 1,248', system: true, kind: 'hurt', t: Date.now() });
-  chat.push({ channel: 'system', name: '시스템', text: '치명타 3,912', system: true, kind: 'crit', t: Date.now() });
-  chat.push({ channel: 'system', name: '시스템', text: '온유 치유 +420', system: true, kind: 'heal', t: Date.now() });
+  const rows = [
+    ['party', '도훈', '#FF7A1A', '어그로 잡았어요, 다들 뒤쪽으로 모여요'],
+    ['party', '지우', '#FFC845', '힐 들어갑니다! 흰 원 밖으로'],
+    ['party', '하린', '#8C7FFF', '룬 고리 쿨 8초 남았어요'],
+    ['party', '민재', '#3DDC84', '머리 쪽 약점 노출, 집중 사격!'],
+    ['party', '서연', '#FF5C9A', '부활 대기 중… 10초만 버텨줘요'],
+    ['party', '지우', '#FFC845', '서연님 부활 들어가요'],
+  ];
+  for (const [channel, name, color, text] of rows) chat.push({ channel, name, color, text, self: false, t: Date.now() });
+}
+function dressHud() {
+  hud.caption = {
+    bossFill: 0.62,
+    bossPct: '62%',
+    bossNum: '1,248,600 / 2,014,000',
+    cast: '열풍 분사',
+    castTime: '0.6',
+    castPct: 55,
+    warn: '열풍 분사 · 머리 앞 60°에서 벗어나기',
+    warnTime: '1.2',
+    playerPct: 78,
+    playerNum: '18,720 / 24,000',
+    resPct: 64,
+    resRead: '분노 64',
+    name: '도훈',
+    role: '전사',
+    level: '24',
+    elapsed: 222,
+    slots: true,
+  };
+  hud.setParty([
+    { id: 'p0', name: '도훈', role: '전사', hp: 0.82, sub: 0.64, aggro: true },
+    { id: 'p1', name: '하린', role: '마법사', hp: 0.55, sub: 0.72 },
+    { id: 'p2', name: '지우', role: '사제', hp: 0.91, sub: 0.48 },
+    { id: 'p3', name: '민재', role: '궁수', hp: 0.34, sub: 0.86 },
+    { id: 'p4', name: '서연', role: '암살자', hp: 0, sub: 0, down: true },
+  ]);
+  boss.hurt(Math.round(boss.state.hpMax * 0.38));
+}
+function midFight() {
+  boss.hurt(4600);
+  const b = boss.group.position;
+  hud.float(new THREE.Vector3(b.x, 10, b.z), 2480, 'crit');
+  if (bloomPass) bloomPass.strength = classId === 'mage' ? 0.85 : 0.62;
 }
 if (shot === 'fight' || shot === 'chat' || shot === 'party') {
   showKnights();
   const mid = fromFrame(BOSS_ALONG - 6, 0);
   vfx.classLook(classId, mid.x, mid.z, PATH_YAW);
+  dressHud();
   seedChat();
 }
 if (shot === 'skill') {
   showKnights();
-  const mine = extras.concat(form.group).find((g) => g.userData.shotClass === classId || g === form.group);
-  const p = mine?.position || actor.position;
-  vfx.classLook(classId, p.x, p.z, PATH_YAW);
-  camDist = 6.2;
-  camPitch = 0.22;
+  const mine = extras.concat([form.group]).find((g) => g.userData.shotClass === classId) || form.group;
+  const p = mine.position;
+  vfx.classLook(classId, p.x + Math.sin(PATH_YAW) * 4, p.z + Math.cos(PATH_YAW) * 4, PATH_YAW);
+  dressHud();
+  camDist = 30;
+  camPitch = 0.92;
+  shotLookY = 1.4;
 }
 if (shot === 'skyline' || shot === 'emerge') {
   showKnights();
@@ -994,8 +1041,7 @@ if (shot === 'slam') {
   showKnights();
   boss.forceSlam();
   vfx.slam(boss.group.position.x, boss.group.position.z);
-  camDist = 12;
-  camPitch = 0.34;
+  dressHud();
   seedChat();
 }
 if (shot === 'victory') {

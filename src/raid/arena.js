@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import {
-  ALONG_MIN, ALONG_MAX, PATH_YAW, TANGENT, PERP, fromFrame, safePoint, bossPoint,
+  ALONG_MIN, ALONG_MAX, PATH_YAW, TANGENT, PERP, fromFrame, safePoint, bossPoint, BOSS_ALONG,
 } from './layout.js';
 import { LIGHTING, facadeMaterials, aimKeyAndRim } from './lighting.js';
 
@@ -136,6 +136,48 @@ function neonGeo() {
   }
   box.dispose();
   return mergeGeometries(geos, false);
+}
+
+function dressBattlefield(scene) {
+  const smokeMap = new THREE.TextureLoader().load('/dungeon/vfx/flipbooks/smoke_puff_4x4.png?v=v41fx');
+  smokeMap.colorSpace = THREE.SRGBColorSpace;
+  smokeMap.repeat.set(0.25, 0.25);
+  smokeMap.offset.set(0.25, 0.5);
+  const fireMap = new THREE.TextureLoader().load('/dungeon/vfx/particles/fireball_orb.png?v=v41fx');
+  fireMap.colorSpace = THREE.SRGBColorSpace;
+  for (let i = 0; i < 4; i++) {
+    const s = new THREE.Sprite(new THREE.SpriteMaterial({
+      map: smokeMap, transparent: true, depthWrite: false, opacity: 0.72, color: '#5c463c',
+    }));
+    const p = fromFrame(BOSS_ALONG + (i - 1.5) * 8, i % 2 ? 18 : -18);
+    s.position.set(p.x, 10, p.z);
+    s.scale.set(10, 22, 1);
+    scene.add(s);
+    const fire = new THREE.Sprite(new THREE.SpriteMaterial({
+      map: fireMap, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+    }));
+    fire.position.set(p.x, 2.2, p.z);
+    fire.scale.set(4, 5.5, 1);
+    scene.add(fire);
+  }
+  const beamMat = new THREE.MeshBasicMaterial({
+    color: '#d7e7ff', transparent: true, opacity: 0.22, depthWrite: false, side: THREE.DoubleSide,
+  });
+  for (let i = 0; i < 3; i++) {
+    const beam = new THREE.Mesh(new THREE.ConeGeometry(4, 28, 8, 1, true), beamMat);
+    const p = fromFrame(BOSS_ALONG + 6, (i - 1) * 22);
+    beam.position.set(p.x, 16, p.z);
+    beam.rotation.x = Math.PI;
+    scene.add(beam);
+  }
+  const rubble = new THREE.MeshStandardMaterial({ color: '#6e6560', roughness: 0.9 });
+  for (let i = 0; i < 8; i++) {
+    const rock = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.4, 0.7), rubble);
+    const p = fromFrame(BOSS_ALONG - 16 + i * 3, i % 2 ? 4.2 : -4.2);
+    rock.position.set(p.x, 0.2, p.z);
+    rock.rotation.y = i * 0.7;
+    scene.add(rock);
+  }
 }
 
 function skyline() {
@@ -329,6 +371,7 @@ export function createArena(scene) {
   scene.add(riftLight);
 
   const pillars = [];
+  dressBattlefield(scene);
   const cracks = [];
   for (let i = 0; i < 5; i++) {
     const p = fromFrame(16 + i * 2.2, (i - 2) * 1.1);
