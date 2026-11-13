@@ -10,7 +10,28 @@ export const WEEKLY_BUM = [3000, 2000, 1000];
 export const WEEKLY_REST = 500;
 export const MONTHLY_BUM = [10000, 6000, 4000];
 export const MONTHLY_REST = 1000;
-export const TITLE = '장보기왕';
+export const TITLE = '편의점 큰손'; // 예전 1위 이름 '장보기왕'을 대체. 지급 id 는 WEEKLY_TITLES
+export const WEEKLY_TITLES = Object.freeze({
+  1: Object.freeze({ id: 'title_bigspender', slug: 'bigspender', ko: '편의점 큰손', en: 'Big Spender' }),
+  2: Object.freeze({ id: 'title_flexregular', slug: 'flexregular', ko: '플렉스 단골', en: 'Flex Regular' }),
+  3: Object.freeze({ id: 'title_bogohunter', slug: 'bogohunter', ko: '1+1 사냥꾼', en: '1+1 Hunter' }),
+});
+export function weeklyTitleOf(rank) { return WEEKLY_TITLES[rank] || null; }
+export function weekPeriodLabel(weekMonday, lang = 'ko') {
+  const parts = String(weekMonday || '').split('-').map(Number);
+  const y = parts[0], m = parts[1], d = parts[2];
+  if (!y || !m || !d) return '';
+  const nth = Math.ceil(d / 7);
+  const monthsEn = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  if (lang === 'en') return `${monthsEn[m - 1] || m} week ${nth}`;
+  return `${m}월 ${nth}주차`;
+}
+export function titleHistoryLabel(weekMonday, titleId, lang = 'ko') {
+  const def = Object.values(WEEKLY_TITLES).find((x) => x.id === titleId);
+  const name = def ? (def[lang] || def.ko) : titleId;
+  const week = weekPeriodLabel(weekMonday, lang);
+  return week ? `${week} ${name}` : name;
+}
 export const LIMIT_MSG = '오늘 도전 완료, 연습은 계속 가능';
 export const CAP_DAY = PART_STORES * PART_BUM + DAILY_STORES * DAILY_BUM[0];
 export const CAP_WEEK = 7 * CAP_DAY + WEEKLY_BUM[0];
@@ -70,10 +91,16 @@ export function dailyRankPays(stores) {
   return pays;
 }
 
-export function pointRows(dailyTops) {
+// opts.minParticipants: 그날 지점 참가자가 이 수보다 적으면 그 지점의 1~3위 점수를 뺀다(월간·기본 5).
+// opts.accountsOnly: 게스트를 순위 매기기 전에 빼서 로그인 계정끼리 1·2·3위를 정한다(주간).
+export function pointRows(dailyTops, opts = {}) {
+  const min = opts.minParticipants ?? MIN_PARTICIPANTS;
+  const accountsOnly = !!opts.accountsOnly;
   const map = new Map();
   for (const r of dailyTops) {
-    if (!r || r.rank > 3 || (r.participants || MIN_PARTICIPANTS) < MIN_PARTICIPANTS) continue;
+    if (!r || r.rank > 3) continue;
+    if (min > 0 && (r.participants || min) < min) continue;
+    if (accountsOnly && (r.guest || !r.accountId)) continue;
     const id = r.playerKey || r.accountId;
     const cur = map.get(id) || { playerKey: id, accountId: r.accountId || null, guest: !!r.guest, name: r.name || '', points: 0 };
     cur.points += RANK_POINTS[r.rank - 1];
@@ -82,11 +109,14 @@ export function pointRows(dailyTops) {
   }
   return [...map.values()].sort((a, b) => b.points - a.points || String(a.name).localeCompare(String(b.name))).map((r, i) => ({ ...r, rank: i + 1 }));
 }
+// 주간 정산(칭호·주간 범·주간 순위판): 최소 인원 없음, 게스트 제외
+export const WEEKLY_POINT_OPTS = Object.freeze({ minParticipants: 0, accountsOnly: true });
+export const weeklyPointRows = (dailyTops) => pointRows(dailyTops, WEEKLY_POINT_OPTS);
 
 function podiumPays(rows, amounts, rest, kind, periodKey, topN = 10) {
   return rows.filter((r) => r.rank <= topN && r.accountId && !r.guest).map((r) => ({
     accountId: r.accountId, amount: r.rank <= 3 ? amounts[r.rank - 1] : rest, rank: r.rank, kind,
-    title: kind === 'weekly' && r.rank === 1 ? TITLE : null,
+    title: kind === 'weekly' ? (weeklyTitleOf(r.rank)?.id || null) : null,
     key: `bp24:${kind}:${periodKey}:${r.accountId}`,
   }));
 }

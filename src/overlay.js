@@ -49,6 +49,10 @@ export class Overlay {
     // 이름표(사람) 먼저, 그다음 가까운 순서. 이미 놓인 것과 겹치면 지명 라벨은 숨김
     cand.sort((a, b) => a.kind - b.kind || a.d - b.d);
     const placed = [], now = performance.now();
+    // 칭호 간판과 겹치는 지명 라벨은 숨긴다(한 프레임 전 박스).
+    for (const b of (this.getOccluders?.() || [])) {
+      if (b && b.l < b.r && b.t < b.b) placed.push({ l: b.l, r: b.r, t: b.t, b: b.b });
+    }
     for (const c of cand) {
       const it = c.it;
       if (!it.visible) { it.el.style.display = ''; it.visible = true; it.mt = 0; }

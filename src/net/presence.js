@@ -44,7 +44,8 @@ export class WebSocketPresence extends Emitter {
     ws.onopen = () => {
       this.retry = 1000;
       const phone = String(me.phone || '').replace(/\D/g, '').slice(0, 11);
-      ws.send(JSON.stringify({ t: 'hello', deviceId: deviceId(), name: me.name, color: me.color, look: me.look, ...(phone ? { phone } : {}) }));
+      const title = this.myTitle || me.title || '';
+      ws.send(JSON.stringify({ t: 'hello', deviceId: deviceId(), name: me.name, color: me.color, look: me.look, ...(phone ? { phone } : {}), ...(title ? { title } : {}) }));
       this.pingTimer = setInterval(() => {
         if (this.ws === ws && ws.readyState === 1) {
           try { ws.send(JSON.stringify({ t: 'ping' })); } catch {}
@@ -111,6 +112,12 @@ export class WebSocketPresence extends Emitter {
   }
   sendChat(text) { if (this.ws?.readyState === 1) this.ws.send(JSON.stringify({ t: 'chat', text })); }
   sendEmote(kind, combo = 1) { if (this.ws?.readyState === 1) this.ws.send(JSON.stringify({ t: 'emote', kind, combo })); }
+  // [weekly-titles] 머리 위 대표 칭호. 상태 틱에 넣지 않고 바뀔 때만 보냄
+  sendTitle({ title = '', earn = false } = {}) {
+    this.myTitle = title || '';
+    if (this.ws?.readyState !== 1) return;
+    this.ws.send(JSON.stringify({ t: 'title', title: this.myTitle, earn: !!earn }));
+  }
   // [economy] 상점에서 탈것을 산 직후: 서버(Room)가 계정 보유를 다시 읽어 { t:'holdings' } 로 돌려준다
   syncGifts() { if (this.ws?.readyState === 1) this.ws.send(JSON.stringify({ t: 'gifts_sync' })); }
   sendWeather(mode) {
@@ -269,6 +276,7 @@ export class MockPresence extends Emitter {
     // 목업 상대(판교러버)는 번호가 없다. 번호가 맞지 않으면 소유권을 넘기지 않는다.
     this.emit('gift', { t: 'gift', ok: false, error: 'phone_mismatch', item });
   }
+  sendTitle({ title = '', earn = false } = {}) { this.myTitle = title || ''; }
   close() {
     clearInterval(this.timer);
     clearTimeout(this.helloTimer);
