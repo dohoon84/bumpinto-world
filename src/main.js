@@ -3,6 +3,14 @@ import { initAnalytics, trackEvent } from './analytics.js';
 import { isMobileMode } from './mobile/flag.js';
 
 initAnalytics();
+// [raid] 탄천 균열 데모는 오픈월드를 불러오지 않는다. ?raid=tancheon
+const raidKind = new URLSearchParams(location.search).get('raid');
+if (raidKind === 'tancheon' || raidKind === 'hold') {
+  document.body.classList.remove('in-gate', 'bw-early-start');
+  const early = document.getElementById('bw-early-start');
+  if (early) early.hidden = true;
+  await import('./raid/boot.js');
+} else {
 // [bp24-poster] 이벤트 포스터는 첫 화면이 아니라 게임 입장 뒤에 띄운다 (game.js completeWorldJoin).
 import('./notice/launchPopup.js').then((m) => m.showLaunchNotice()).catch(() => {});
 
@@ -38,4 +46,5 @@ if (isMobileMode()) {
   mountMobileGate();
 } else {
   await import('./game.js');
+}
 }
