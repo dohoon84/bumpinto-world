@@ -74,8 +74,24 @@ function nearestKey(map, x) {
   for (const k of Object.keys(map)) { const d = Math.abs(+k - x); if (d < bd) { bd = d; best = k; } }
   return best;
 }
-function skusAt(x0, side, z0) {
+// 스토리 웨이포인트(targets.json) · interior.js 걸이 사인과 맞는 칸.
+//   AISLE_SKU 는 통로×블록마다 한 목록이라, 안내 기둥이 가리키는 칸만 따로 덮어 쓴다.
+//   aisle-01-eggs (53.9, 28.6) / hang-eggs-dairy: 범란. aisle-02-household (59.4, 33) / hang-household: 보들범.
+const BAY_SKU = [
+  { ax: 53.9, z0: 16.0, z1: 22.0, skus: ['water', 'water', 'water', 'water'] }, // aisle-01-water / hang-water-drinks
+  { ax: 53.9, z0: 25.5, z1: 31.8, skus: ['egg', 'egg', 'egg', 'egg'] },       // aisle-01-eggs / hang-eggs-dairy
+  { ax: 59.4, z0: 18.5, z1: 25.5, skus: ['rice', 'rice', 'grain', 'rice'] },  // aisle-02-rice / hang-rice-grain
+  { ax: 59.4, z0: 30.0, z1: 36.2, skus: ['tissue', 'tissue', 'towel', 'tissue'] }, // aisle-02-household / hang-household
+];
+function baySkus(ax, zc) {
+  if (zc == null) return null;
+  for (const b of BAY_SKU) if (Math.abs(ax - b.ax) < 1.2 && zc >= b.z0 && zc < b.z1) return b.skus;
+  return null;
+}
+function skusAt(x0, side, z0, zc) {
   const ax = side ? x0 + RACK_D + AISLE / 2 : x0 - AISLE / 2;
+  const bay = baySkus(ax, zc);
+  if (bay) return bay;
   const plan = AISLE_SKU[zBlockOf(z0)];
   const k = nearestKey(plan, ax);
   return plan[k] || ['water', 'ramen', 'chips', 'tissue'];
@@ -321,7 +337,7 @@ export function mountStock({ scene, keep, canvasTex: canvasTexFn, TX, racks, obs
     for (let b = 0; b < r.bays; b++) {
       const zc = r.z0 + b * BAY + BAY / 2;
       for (const side of [0, 1]) {
-        const skus = skusAt(r.x0, side, r.z0);
+        const skus = skusAt(r.x0, side, r.z0, zc);
         const px = r.x0 + (side ? RACK_D - 0.55 : 0.55);
         const face = side ? 1 : -1;
         for (const dz of [-0.64, 0.64]) {
@@ -440,6 +456,8 @@ export function mountStock({ scene, keep, canvasTex: canvasTexFn, TX, racks, obs
   // [depot-live] 메인 통로(48.3)는 블록마다 코너가 달라 블록별 문구
   const HANG_AT = { '48.3:28': ['유아·뷰티', 'BABY · BEAUTY'], '48.3:58': ['주방용품·문구', 'KITCHEN · OFFICE'] };
   for (const x of aisleXs) {
+    // 통로 01·02 걸이 사인은 interior.js 가 칸마다 붙임 (물/계란/라면 · 쌀/생활). 여기서 또 붙이면 '생수·음료'가 계란 코너를 가림.
+    if (x === 53.9 || x === 59.4) continue;
     const copy = HANG_COPY[x] || ['범창고', 'BUMP DEPOT'];
     const at = (z) => HANG_AT[`${x}:${z}`];
     hangSign(...(at(28) || copy), x, 28, at(28) ? null : TEX_HANG[x]); // 통로당 1장 (양면)
