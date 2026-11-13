@@ -382,10 +382,10 @@ export function createVN({ assetBase, isMobile = false, getSettings, onCue = () 
     });
   }
   /** 엔딩 카드 (7일차 day.end ui 'ending-card') — ending 'A'|'B'|'C' */
-  function endingCard({ ending, name, line, vitality, stamps, sign, rows = [], note }) {
+  function endingCard({ ending, name, line, vitality, stamps, sign, rows = [], note, week = 1 }) {
     onCue('stinger.stamp');
-    const tone = { A: ['#f2c230', '#123b2d', '존속 확정'], B: ['#7cc8f0', '#123b2d', '조건부 존속'], C: ['#c9cbc6', '#3a3d3b', '폐점 유예'] }[ending] || ['#f2c230', '#123b2d', ''];
-    const html = `<div class="card nd end-${esc(ending || '')}" style="border-color:${tone[0]}"><span class="tom" style="background:${tone[0]}">1주차 엔딩 ${esc(ending || '')}</span><h2 style="color:${tone[0]}">${esc(name || tone[2])}</h2>${line ? `<h3>${esc(line)}</h3>` : ''}${sign ? `<p style="margin-top:.7em"><span style="display:inline-block;border:3px solid ${tone[0]};border-radius:8px;padding:.2em .8em;color:#fff;font-weight:900">간판 · ${esc(sign)}</span></p>` : ''}<p>매장 활기 ${vitality} · 단골 도장 ${stamps}/7</p>${rows.length ? `<p style="font-size:clamp(11px,1.7vh,16px)">${rows.map(esc).join(' · ')}</p>` : ''}${note ? `<p>${esc(note)}</p>` : ''}<div class="row" style="justify-content:center"><button>확인</button></div></div>`;
+    const tone = { A: ['#f2c230', '#123b2d', '존속 확정'], B: ['#7cc8f0', '#123b2d', '조건부 존속'], C: ['#c9cbc6', '#3a3d3b', '폐점 유예'], W2A: ['#f2c230', '#123b2d', '동네 단골 1등'], W2B: ['#b48ae8', '#123b2d', '나란히 영업'], W2C: ['#c9cbc6', '#3a3d3b', '한 주 더, 또'] }[ending] || ['#f2c230', '#123b2d', ''];
+    const html = `<div class="card nd end-${esc(ending || '')}" style="border-color:${tone[0]}"><span class="tom" style="background:${tone[0]}">${week}주차 엔딩 ${esc(String(ending || '').replace(/^W\d/, ''))}</span><h2 style="color:${tone[0]}">${esc(name || tone[2])}</h2>${line ? `<h3>${esc(line)}</h3>` : ''}${sign ? `<p style="margin-top:.7em"><span style="display:inline-block;border:3px solid ${tone[0]};border-radius:8px;padding:.2em .8em;color:#fff;font-weight:900">간판 · ${esc(sign)}</span></p>` : ''}<p>매장 활기 ${vitality} · 단골 도장 ${stamps}/7</p>${rows.length ? `<p style="font-size:clamp(11px,1.7vh,16px)">${rows.map(esc).join(' · ')}</p>` : ''}${note ? `<p>${esc(note)}</p>` : ''}<div class="row" style="justify-content:center"><button>확인</button></div></div>`;
     return modal(html, (m, done) => {
       m.addEventListener('pointerdown', (e) => { if (e.target.closest('button')) { e.stopPropagation(); done(); } });
       S.modalKey = (k) => { if (k === 'Enter' || k === 'Space' || k === 'Escape') done(); };

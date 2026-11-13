@@ -32,6 +32,7 @@
     "depot:day12:test": "node scripts/test-depot-day12.mjs",
     "depot:day13:test": "node scripts/test-depot-day13.mjs",
     "depot:day14:test": "node scripts/test-depot-day14.mjs",
+    "depot:week2:test": "node scripts/test-depot-week2-endings.mjs",
     "economy:test": "node scripts/test-economy.mjs && node scripts/test-econ-client.mjs",
     "bgm:test": "node scripts/test-bgm.mjs",
     "corridor:tancheon": "node --max-old-space-size=8192 scripts/corridor/build-tancheon.mjs",

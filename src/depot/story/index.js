@@ -258,7 +258,7 @@ export function createStory(ctx) {
         if (L.cmd === 'scene.start') { talking = false; vn.close(); await dayStart(L); cur = L.next; continue; }
         if (L.cmd === 'timeskip') { talking = false; vn.close(); await timeskip(L); save.seen[cur] = 1; cur = L.next; continue; }
         if (L.cmd === 'sfx') { sfx.cue(fixCue(L.sfx)); await sleep(vn.skipping ? 80 : 450); cur = L.next; continue; }
-        if (L.cmd === 'branch' && L.ranges) { cur = branchEnding(L); continue; }
+        if (L.cmd === 'branch' && L.ranges) { cur = L.week === 2 ? branchEnding2(L) : branchEnding(L); continue; }
         if (L.cmd === 'branch' && L.gte != null) { const v = branchValue(L.on); cur = (v != null && v >= L.gte ? L.cases.true : null) || L.default || L.cases.false; continue; }
         if (L.cmd === 'branch') { const v = branchValue(L.on); cur = (v != null && L.cases[String(v)]) || L.default || L.cases.partial || Object.values(L.cases)[0]; continue; }
         if (L.cmd === 'roam') { talking = false; vn.close(); save.seen[cur] = 1; cur = await roam(L); if (tok !== runTok) return; continue; }
@@ -1325,6 +1325,16 @@ export function createStory(ctx) {
     else if (CHECKLIST_OFF.has(L.id)) d7.checklist(null);
   }
   /** d7_080: 엔딩 활기 = 12 + 사건별 활기 (오늘 E10·E09 포함, commit today) → A/B/C */
+  /** 2주차 엔딩(d14_080): 활기 = 지금 + 오늘 E23(성공 12 · 부분 6 · 실패·놓침 0) → W2A ≥75 · W2B 50–74 · W2C <50. flag.w2Ending 에만 저장(1주차 ending·w1Ending 그대로) */
+  function branchEnding2(L) {
+    const r23 = save.ev.E23 && save.ev.E23 !== 'active' ? save.ev.E23 : 'missed';
+    const vit = Math.min(100, (save.vitality || 0) + week2Gain(r23, W2V.main?.E23 ?? 12));
+    const r = pickRange(vit, L.ranges);
+    session.ending2 = { id: r?.ending || 'W2C', vit };
+    if (!save.replay && L.commit) { save.vitality = vit; save.flags[L.flagKey || 'w2Ending'] = r?.ending || 'W2C'; save.flags.w2Vitality = vit; }
+    persist();
+    return r?.goto || L.ranges[L.ranges.length - 1].goto;
+  }
   function branchEnding(L) {
     const { vit, parts } = endingVitality(save.ev, EVENTS.endingVitality || {});
     const r = pickRange(vit, L.ranges);
@@ -1516,6 +1526,7 @@ export function createStory(ctx) {
       save.day = (L.nextDay?.day) || d + 1;
     }
     save.replay = null; save.beat = null; save.beatDay = null; save.left = null; persist();
+    if (week && L.week === 2) { await endWeek2(L, replay); return; }
     if (week) { await endWeek(L, replay); return; }
     const RL = { success: '성공', partial: '부분 성공', fail: '실패', missed: '놓침' };
     const multi = ids.length > 1 ? `${ids.map((id, i) => `${EVENTS.events.find((e) => e.id === id)?.name || id} ${RL[rs[i]] || ''}`).join(' · ')}\n` : '';
@@ -1560,6 +1571,43 @@ export function createStory(ctx) {
     if (!alive) return;
     if (v === 'now') { npcsForDay(); runFrom(DAY_START[1]); return; }
     vn.toast({ face: face('beomi'), name: '범이', text: '다음에 들어오시면 1일차부터 다시예요!', ms: 4200 }); updateChip(true);
+  }
+  /** 2주차 엔딩 카드 → W2A·W2B: 3주차 예고(준비 중, save.day 15) / W2C: 2주차 재도전(8일차 w2_000 — 단골도·도장·업적·레시피 유지) */
+  const ENDING2 = { W2A: { name: '동네 단골 1등', sign: '동네 단골 1등', line: 'd14_105' }, W2B: { name: '나란히 영업', sign: '나란히 영업 중 (보라 깃발)', line: 'd14_124' }, W2C: { name: '한 주 더, 또', sign: null, line: 'd14_143' } };
+  async function endWeek2(L, replay) {
+    const e = session.ending2 || { id: save.flags.w2Ending || (L.ending === 'W2C' ? 'W2C' : 'W2B'), vit: save.vitality };
+    const id = L.ending === 'W2C' ? 'W2C' : e.id === 'W2C' ? 'W2B' : e.id, E = ENDING2[id];
+    const RL = { success: '성공', partial: '부분 성공', fail: '실패', missed: '놓침' };
+    const rows = [`장보기 대결 ${RL[save.ev.E23] || '놓침'}${save.e23?.first ? ' · 먼저 계산' : ''}`, save.flags.w1Ending === 'B' && `재감사 ${RL[save.ev.E24] || '놓침'}`, `무대 ${RL[save.ev.E22] || '놓침'}`].filter(Boolean);
+    const sign = id === 'W2C' ? (save.flags.w1Ending === 'A' ? "입구 옆 '보라 카트 대여'" : '리뉴얼 준비 중') : E.sign;
+    if (id !== 'W2C') sfx.cue('stinger.finale');
+    await vn.endingCard({ ending: id, week: 2, name: E.name, line: LINES[E.line]?.text, vitality: replay ? e.vit : save.vitality, stamps: save.stamps, sign, rows, note: replay ? '다시 하기 · 도장과 활기는 처음 한 번만 받아요' : '매장 변화: 주방 벽 레시피 카드(두 쪽)' });
+    session.ending2 = null;
+    if (!alive) return;
+    const nd = L.nextDay || {};
+    if (replay) { vn.toast({ face: face('beomi'), name: '범이', text: '오늘은 마음껏 둘러보세요~', ms: 3200 }); updateChip(true); return; }
+    if (id !== 'W2C') { // 3주차(w3_000) 대본은 없음 → 예고 카드만, 다음 입장은 15일차 '2주차 완결' 카드
+      save.day = 15; persist();
+      const ready = !!SCRIPTS[15];
+      const v = await vn.nextDayCard({ head: '다음 주 예고', dayLabel: `${nd.week || 3}주차`, title: nd.title, hook: ready ? (nd.hook || '') : `${nd.hook || ''}\n(3주차 이야기는 준비 중이에요)`, buttons: ready ? [{ label: '다음에 와서 이어 보기', v: 'later' }, { label: '바로 3주차 시작', v: 'now', w: 1 }] : [{ label: '확인', v: 'later' }], cue: nd.sfx || 'stinger.finale' });
+      if (!alive) return;
+      if (ready && v === 'now') { npcsForDay(); runFrom(DAY_START[15]); return; }
+      vn.toast({ face: face('beomi'), name: '범이', text: '2주차 끝! 3주차는 준비 중이에요 · 오늘은 마음껏 둘러보세요~', ms: 4200 }); updateChip(true);
+      return;
+    }
+    retryWeek2();
+    const v = await vn.nextDayCard({ day: 8, title: nd.title, hook: nd.hook, head: '2주차 다시', buttons: [{ label: '다음에 와서 다시 하기', v: 'later' }, { label: '바로 8일차 시작', v: 'now', w: 1 }], cue: nd.sfx || 'stinger.nextday' });
+    if (!alive) return;
+    if (v === 'now') { npcsForDay(); runFrom(DAY_START[8]); return; }
+    vn.toast({ face: face('beomi'), name: '범이', text: '다음에 들어오시면 8일차부터 다시예요!', ms: 4200 }); updateChip(true);
+  }
+  /** W2C: 8–14일차 사건·활기는 2주차 시작 값으로, 단골도·도장·업적·정체 공개·1주차 엔딩·레시피(반쪽)·오미숙 이름은 그대로. w2Init 유지 → weekStart 다시 안 돎 */
+  function retryWeek2() {
+    save.day = 8; save.vitality = save.flags.w2StartVitality ?? save.vitality;
+    for (let i = 15; i <= 24; i++) delete save.ev[`E${i}`];
+    for (let d = 8; d <= 14; d++) { delete save.cleared[d]; for (const f of DAY_FLAGS[d] || []) delete save.flags[f]; }
+    for (const k of ['e19Placed', 'e20', 'e22', 'e23', 'e24']) delete save[k];
+    save.flags.week2Retry = 1; save.flags.w2Init = 1; save.missed = null; save.beat = null; save.beatDay = null; persist();
   }
   /** 엔딩 C: 활기·사건 기록은 1주차 처음으로, 단골도·도장·업적·정체 공개는 그대로 (flag.week1Retry = 1일차 대사 2차 작업용) */
   function retryWeek() {
@@ -1623,7 +1671,8 @@ export function createStory(ctx) {
     if (!save.replay && !SCRIPTS[save.day]) {
       const last = Math.max(...Object.keys(SCRIPTS).map(Number));
       const wk2 = save.day === 8 && !SCRIPTS[8]; // 1주차 엔딩 A·B 뒤인데 2주차(w2_000) 대본이 없을 때만
-      const v = await vn.pickCard({ title: wk2 ? '1주차 완결!' : `${last}일차까지 다 봤어요!`, sub: wk2 ? '2주차 「경쟁 마트의 반격」은 준비 중이에요 · 그동안 다시 보거나 자유롭게 둘러보세요' : `${save.day}일차 이야기는 준비 중이에요 · 그동안 다시 보거나 자유롭게 둘러보세요`, buttons: [{ label: `${last}일차 다시 하기`, v: last }, { label: '1일차 다시 하기', v: 1, w: 1 }, { label: '자유 장보기', v: 'free', w: 1 }] });
+      const wk3 = save.day === 15 && !!save.flags.w2Ending; // 2주차 엔딩 W2A·W2B 뒤 (3주차 대본 없음)
+      const v = await vn.pickCard({ title: wk2 ? '1주차 완결!' : wk3 ? '2주차 완결!' : `${last}일차까지 다 봤어요!`, sub: wk2 ? '2주차 「경쟁 마트의 반격」은 준비 중이에요 · 그동안 다시 보거나 자유롭게 둘러보세요' : wk3 ? '3주차 이야기는 준비 중이에요 · 그동안 다시 보거나 자유롭게 둘러보세요' : `${save.day}일차 이야기는 준비 중이에요 · 그동안 다시 보거나 자유롭게 둘러보세요`, buttons: [{ label: `${last}일차 다시 하기`, v: last }, { label: '1일차 다시 하기', v: 1, w: 1 }, { label: '자유 장보기', v: 'free', w: 1 }] });
       if (!alive) return;
       if (v === 'free') { session.mode = 'free'; npcsForDay(); vn.toast({ name: '자유 장보기', text: '오늘은 사건 없이 둘러봐요 · 설정에서 다시 스토리로 바꿀 수 있어요', ms: 3600 }); return; }
       save.replay = v; resetDay(v); persist(); npcsForDay(); runFrom(DAY_START[v]); return;
