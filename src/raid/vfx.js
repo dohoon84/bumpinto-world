@@ -33,7 +33,7 @@ export function createVfx(scene) {
       arc.rotation.y = yaw;
       arc.rotation.z = -0.4;
       arc.rotation.x = Math.PI / 2.4;
-      add(arc, 0.22, 0);
+      add(arc, 0.14, 0);
     },
     arrow(x, y, z, yaw, color = '#ffe7a0') {
       const m = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.06, 0.72), fadeMat(color));
@@ -41,7 +41,7 @@ export function createVfx(scene) {
       m.rotation.y = yaw;
       m.userData.vx = Math.sin(yaw) * 22;
       m.userData.vz = Math.cos(yaw) * 22;
-      add(m, 0.34, 0);
+      add(m, 0.18, 0);
     },
     carapaceBurst(pos, color = '#ff6a22') {
       for (let i = 0; i < 16; i++) {
@@ -85,7 +85,7 @@ export function createVfx(scene) {
       m.userData.grow = 4;
     },
     windStreak(x, z, yaw) {
-      const m = new THREE.Mesh(new THREE.BoxGeometry(7, 0.08, 0.35), fadeMat('#ffb070'));
+      const m = new THREE.Mesh(new THREE.BoxGeometry(14, 0.22, 0.9), fadeMat('#ffb070'));
       m.position.set(x, 1.1, z);
       m.rotation.y = yaw;
       add(m, 0.55, 0);

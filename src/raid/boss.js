@@ -173,22 +173,52 @@ function buildBossMesh() {
   return { group, armL, armR, legL, legR, rockMat, sigil };
 }
 
-function circleMesh(color, radius) {
+function circleMesh(radius) {
   const g = new THREE.Group();
-  const ring = new THREE.Mesh(
-    new THREE.RingGeometry(radius * 0.82, radius, 32),
-    new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.9, side: THREE.DoubleSide, depthWrite: false }),
+  const rim = new THREE.Mesh(
+    new THREE.RingGeometry(radius * 0.9, radius, 48),
+    new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 1, side: THREE.DoubleSide, depthWrite: false }),
   );
-  ring.rotation.x = -Math.PI / 2;
+  rim.rotation.x = -Math.PI / 2;
+  const cyan = new THREE.Mesh(
+    new THREE.RingGeometry(radius * 0.8, radius * 0.9, 48),
+    new THREE.MeshBasicMaterial({ color: '#7ef6ff', transparent: true, opacity: 0.95, side: THREE.DoubleSide, depthWrite: false }),
+  );
+  cyan.rotation.x = -Math.PI / 2;
+  cyan.position.y = -0.01;
   const fill = new THREE.Mesh(
-    new THREE.CircleGeometry(radius * 0.82, 28),
-    new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.28, side: THREE.DoubleSide, depthWrite: false }),
+    new THREE.CircleGeometry(radius * 0.9, 40),
+    new THREE.MeshBasicMaterial({ color: '#07242c', transparent: true, opacity: 0.35, side: THREE.DoubleSide, depthWrite: false }),
   );
   fill.rotation.x = -Math.PI / 2;
-  fill.position.y = -0.01;
-  g.add(ring, fill);
-  g.position.y = 0.12;
+  fill.position.y = -0.02;
+  g.add(rim, cyan, fill);
+  g.position.y = 0.14;
   g.visible = false;
+  g.userData.r = radius;
+  return g;
+}
+
+function riftColumn() {
+  const g = new THREE.Group();
+  const shell = new THREE.Mesh(
+    new THREE.CylinderGeometry(1.15, 1.85, 10, 14, 1, true),
+    new THREE.MeshBasicMaterial({ color: '#bff7ff', transparent: true, opacity: 0.28, depthWrite: false, side: THREE.DoubleSide }),
+  );
+  shell.position.y = 5;
+  const core = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.22, 0.22, 10, 8, 1, true),
+    new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.75, depthWrite: false, side: THREE.DoubleSide }),
+  );
+  core.position.y = 5;
+  const ring = new THREE.Mesh(
+    new THREE.RingGeometry(1.55, 1.95, 32),
+    new THREE.MeshBasicMaterial({ color: '#7ef6ff', transparent: true, opacity: 1, side: THREE.DoubleSide, depthWrite: false }),
+  );
+  ring.rotation.x = -Math.PI / 2;
+  ring.position.y = 0.18;
+  g.add(shell, core, ring);
+  g.userData.r = 1.9;
   return g;
 }
 
@@ -203,9 +233,17 @@ export function createBoss(scene) {
   light.position.set(home.x, 8, home.z);
   scene.add(light);
 
-  const slam = circleMesh('#ff6a2a', 3.5);
-  const winds = [0, 1, 2, 3].map(() => circleMesh('#ff8a3a', 2.6));
-  scene.add(slam, ...winds);
+  const slam = circleMesh(4.8);
+  const winds = [0, 1, 2, 3].map(() => circleMesh(3.6));
+  const columns = [0, 1].map((i) => {
+    const col = riftColumn();
+    const p = fromFrame(i === 0 ? 4 : 16, i === 0 ? -2.8 : 3.1);
+    col.position.set(p.x, 0, p.z);
+    col.visible = false;
+    return col;
+  });
+  scene.add(slam, ...winds, ...columns);
+  let vortexClock = 0;
 
   const state = {
     hp: BOSS_HP,
@@ -218,6 +256,7 @@ export function createBoss(scene) {
     dead: false,
     hitFlash: 0,
     slow: 0,
+    vortexWait: 0,
   };
 
   const windSpots = [
@@ -231,12 +270,10 @@ export function createBoss(scene) {
   let windHit = false;
   let died = false;
 
-  function showCircle(mesh, x, z, r) {
+  function showCircle(mesh, x, z) {
     mesh.visible = true;
     mesh.position.set(x, 0.12, z);
-    const ring = mesh.children[0];
-    ring.scale.setScalar(1);
-    mesh.userData.r = r;
+    mesh.scale.setScalar(1);
   }
 
   function hideAll() {
@@ -247,6 +284,7 @@ export function createBoss(scene) {
   function update(dt, ctx) {
     const { fightOn, player, onPlayerHit, onWind, onSlam } = ctx;
     if (state.dead) {
+      columns.forEach((c) => { c.visible = false; });
       built.group.position.y = Math.max(-0.45, built.group.position.y - dt * 0.22);
       built.rockMat.emissiveIntensity = Math.max(0.1, built.rockMat.emissiveIntensity - dt * 0.8);
       light.intensity = Math.max(0, light.intensity - dt * 8);
@@ -266,6 +304,7 @@ export function createBoss(scene) {
     built.armR.rotation.x = Math.sin(performance.now() * 0.001 + 1) * 0.08;
 
     if (!fightOn) {
+      columns.forEach((c) => { c.visible = false; });
       state.phase = 'wait';
       return;
     }
@@ -287,16 +326,19 @@ export function createBoss(scene) {
         slamHit = false;
         windHit = false;
         if (state.phase === 'slam') {
-          showCircle(slam, player.x, player.z, 3.5);
+          showCircle(slam, player.x, player.z);
           onSlam?.('telegraph');
         } else {
-          windSpots.forEach((p, i) => showCircle(winds[i], p.x, p.z, 2.6));
+          windSpots.forEach((p, i) => showCircle(winds[i], p.x, p.z));
           state.castName = '열풍';
           state.castMax = 2.35;
           onWind?.('telegraph');
         }
       }
     } else if (state.phase === 'slam') {
+      state.castName = '내려찍기';
+      state.castMax = 1.15;
+      state.cast = Math.min(1.15, state.t);
       const k = Math.min(1, state.t / 1.15);
       built.armL.rotation.x = -1.35 * (k < 0.82 ? k / 0.82 : 1);
       built.armR.rotation.x = built.armL.rotation.x;
@@ -304,10 +346,9 @@ export function createBoss(scene) {
       if (state.t >= 1.15 && !slamHit) {
         slamHit = true;
         onSlam?.('hit');
-        const r = 3.5;
         const dx = player.x - slam.position.x;
         const dz = player.z - slam.position.z;
-        if (dx * dx + dz * dz <= r * r) onPlayerHit?.(34, 'slam');
+        if (dx * dx + dz * dz <= (slam.userData.r || 4.8) ** 2) onPlayerHit?.(34, 'slam');
       }
       if (state.t > 2.15) {
         hideAll();
@@ -329,7 +370,7 @@ export function createBoss(scene) {
           for (const w of winds) {
             const dx = player.x - w.position.x;
             const dz = player.z - w.position.z;
-            if (dx * dx + dz * dz <= 2.6 * 2.6) inOrange = true;
+            if (dx * dx + dz * dz <= (w.userData.r || 3.6) ** 2) inOrange = true;
           }
           onPlayerHit?.(inOrange ? 42 : 32, 'wind');
         }
@@ -344,6 +385,27 @@ export function createBoss(scene) {
         state.t = 1.6;
       }
     }
+
+    vortexClock += dt;
+    const span = 22;
+    let vortexHit = false;
+    columns.forEach((col, i) => {
+      col.visible = !state.dead && fightOn;
+      const travel = (vortexClock * 5.2 + i * span * 0.5) % span;
+      const along = 2 + (i % 2 ? span - travel : travel);
+      const across = i === 0 ? -2.8 : 3.1;
+      const p = fromFrame(along, across);
+      col.position.set(p.x, 0, p.z);
+      col.rotation.y += dt * 1.6;
+      if (!fightOn || state.dead || !player) return;
+      const dx = player.x - p.x;
+      const dz = player.z - p.z;
+      if (dx * dx + dz * dz <= col.userData.r ** 2) vortexHit = true;
+    });
+    if (vortexHit && state.vortexWait <= 0) {
+      state.vortexWait = 0.45;
+      onPlayerHit?.(14, 'vortex');
+    } else state.vortexWait = Math.max(0, (state.vortexWait || 0) - dt);
 
     light.position.set(built.group.position.x, 8.2, built.group.position.z);
   }
@@ -399,7 +461,7 @@ export function createBoss(scene) {
     state.castMax = 2.35;
     state.cast = 1.05;
     windHit = false;
-    windSpots.forEach((p, i) => showCircle(winds[i], p.x, p.z, 2.6));
+    windSpots.forEach((p, i) => showCircle(winds[i], p.x, p.z));
   }
 
   return {

@@ -1,8 +1,14 @@
 // 직업 모델이 같이 쓰는 얼굴 부착, GLB 끼우기, 유령 실루엣.
 // 각 직업 파일은 이 도우미 위에 자기 메시만 올린다. 디자이너 GLB 는 glbUrl 로 통째로 갈아끼운다.
 import * as THREE from 'three';
+import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import { getHeadGeometry, getFaceMaterial } from '../../entities/faceTexture.js';
 import { CITIZEN_HEIGHT } from '../classes.js';
+
+function rb(w, h, d) {
+  const r = Math.min(w, h, d) * 0.18;
+  return new RoundedBoxGeometry(w, h, d, 2, Math.max(0.008, r));
+}
 
 export function put(parent, mesh, x, y, z) {
   mesh.position.set(x, y, z);
@@ -86,9 +92,9 @@ export function buildCarapace({
   const H = height;
   const u = H / 8;
 
-  const chest = put(rig, new THREE.Mesh(new THREE.BoxGeometry(1.85 * u * b, 1.55 * u, 1.15 * u), P), 0, 5.45 * u, 0.02 * u);
+  const chest = put(rig, new THREE.Mesh(rb(1.85 * u * b, 1.55 * u, 1.15 * u), P), 0, 5.45 * u, 0.02 * u);
   chest.name = 'chest';
-  put(rig, new THREE.Mesh(new THREE.BoxGeometry(1.55 * u * b, 0.7 * u, 1.05 * u), U), 0, 4.15 * u, 0);
+  put(rig, new THREE.Mesh(rb(1.55 * u * b, 0.7 * u, 1.05 * u), U), 0, 4.15 * u, 0);
   put(rig, new THREE.Mesh(new THREE.BoxGeometry(0.08 * u, 1.35 * u, 0.06 * u), S), 0, 5.5 * u, 0.58 * u);
   put(rig, new THREE.Mesh(new THREE.BoxGeometry(1.5 * u * b, 0.07 * u, 0.06 * u), S), 0, 4.85 * u, 0.55 * u);
   for (let i = 0; i < 3; i++) {
@@ -96,11 +102,11 @@ export function buildCarapace({
     back.rotation.x = -0.28;
   }
   for (const side of [-1, 1]) {
-    put(rig, new THREE.Mesh(new THREE.BoxGeometry(0.85 * u * b, 0.42 * u, 0.95 * u), P), side * 1.25 * u * b, 6.45 * u, 0);
+    put(rig, new THREE.Mesh(rb(0.85 * u * b, 0.42 * u, 0.95 * u), P), side * 1.25 * u * b, 6.45 * u, 0);
     put(rig, new THREE.Mesh(new THREE.BoxGeometry(0.7 * u * b, 0.07 * u, 0.08 * u), S), side * 1.25 * u * b, 6.25 * u, 0.42 * u);
   }
 
-  const helm = put(rig, new THREE.Mesh(new THREE.BoxGeometry(0.78 * u, 0.92 * u, 0.86 * u), P), 0, H - 0.46 * u, 0);
+  const helm = put(rig, new THREE.Mesh(rb(0.78 * u, 0.92 * u, 0.86 * u), P), 0, H - 0.46 * u, 0);
   helm.name = 'helmet';
   put(rig, new THREE.Mesh(new THREE.BoxGeometry(0.62 * u, 0.1 * u, 0.08 * u), S), 0, H - 0.55 * u, 0.42 * u);
   if (hood) {
@@ -118,8 +124,8 @@ export function buildCarapace({
     const pivot = new THREE.Group();
     pivot.position.set(side * 0.42 * u * b, 4 * u, 0);
     rig.add(pivot);
-    put(pivot, new THREE.Mesh(new THREE.BoxGeometry(0.55 * u * b, 1.85 * u, 0.58 * u), P), 0, -0.95 * u, 0);
-    put(pivot, new THREE.Mesh(new THREE.BoxGeometry(0.42 * u * b, 1.7 * u, 0.48 * u), U), 0, -2.85 * u, 0);
+    put(pivot, new THREE.Mesh(rb(0.55 * u * b, 1.85 * u, 0.58 * u), P), 0, -0.95 * u, 0);
+    put(pivot, new THREE.Mesh(rb(0.42 * u * b, 1.7 * u, 0.48 * u), U), 0, -2.85 * u, 0);
     put(pivot, new THREE.Mesh(new THREE.BoxGeometry(0.06 * u, 1.5 * u, 0.06 * u), S), side * 0.24 * u * b, -2.7 * u, 0.22 * u);
     const footH = 0.38 * u;
     put(pivot, new THREE.Mesh(new THREE.BoxGeometry(0.62 * u * b, footH, 0.95 * u), P), 0, footH / 2 - 4 * u, 0.12 * u);

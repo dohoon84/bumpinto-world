@@ -23,14 +23,7 @@
   backdrop-filter: blur(8px);
 }
 
-#bw-raid .boss {
-  position: absolute;
-  top: 16px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: min(640px, 52vw);
-  padding: 8px 12px 10px;
-}
+#bw-raid .boss { width: min(520px, 46vw); padding: 6px 8px 4px; }
 #bw-raid .boss-row { display: flex; align-items: center; gap: 10px; }
 #bw-raid .medallion {
   width: 36px; height: 36px; flex: none;
@@ -62,8 +55,8 @@
 }
 
 #bw-raid .party {
-  position: absolute; top: 16px; left: 16px; width: 280px; padding: 8px;
-  display: flex; flex-direction: column; gap: 6px;
+  position: absolute; top: 22%; left: 16px; width: 250px; padding: 8px;
+  display: flex; flex-direction: column; gap: 5px;
 }
 #bw-raid .mate { display: grid; grid-template-columns: 42px 1fr; gap: 8px; align-items: center; }
 #bw-raid .portrait {
@@ -107,11 +100,13 @@
   position: absolute; left: 50%; bottom: 18px; transform: translateX(-50%);
   display: flex; flex-direction: column; align-items: center; gap: 6px;
 }
+#bw-raid .cluster { width: min(540px, 72vw); padding: 8px 12px 10px; }
+#bw-raid .cluster .label { display: flex; justify-content: space-between; margin-top: 6px; font-size: 12px; font-weight: 800; color: #d7efe8; }
 #bw-raid .ragebar { width: min(460px, 70vw); padding: 4px 8px 6px; }
 #bw-raid .ragebar .label { display: flex; justify-content: space-between; font-size: 12px; font-weight: 800; color: #ffd7b0; }
 #bw-raid .skills { display: flex; gap: 8px; }
 #bw-raid .skill {
-  width: 64px; height: 64px; position: relative; border-radius: 10px;
+  width: 74px; height: 74px; position: relative; border-radius: 10px;
   border: 1px solid var(--gold);
   background: rgba(8, 14, 22, 0.88);
   color: white; padding: 0; cursor: pointer;
@@ -138,7 +133,7 @@
   text-shadow: 0 2px 0 #000, 0 0 8px rgba(0,0,0,.45);
   pointer-events: none;
 }
-#bw-raid .float.dmg { color: #fff; font-size: 18px; }
+#bw-raid .float.dmg { color: #fff6c2; font-size: 20px; }
 #bw-raid .float.crit { color: #ffe14a; font-size: 26px; text-align: center; line-height: 1; }
 #bw-raid .float.crit small { display: block; font-size: 11px; letter-spacing: 0.12em; }
 #bw-raid .float.heal { color: #7dffa8; font-size: 18px; }
@@ -199,9 +194,21 @@
   position: absolute; left: 50%; bottom: 28px; transform: translateX(-50%);
   padding: 10px 14px; font-weight: 800; display: none;
 }
-#bw-raid.is-peace .dock, #bw-raid.is-peace .boss, #bw-raid.is-peace .party { display: none; }
+#bw-raid .warn {
+  position: absolute; left: 50%; top: 30%; transform: translate(-50%, -50%);
+  text-align: center; pointer-events: none; text-shadow: 0 6px 24px #000;
+}
+#bw-raid .warn[hidden] { display: none; }
+#bw-raid .warn strong { display: block; font-size: 64px; letter-spacing: 0.14em; color: #f7fbff; font-weight: 900; }
+#bw-raid .warn em { font-style: normal; font-size: 32px; color: #7ef6ff; font-weight: 900; }
+#bw-raid .meter {
+  position: absolute; right: 16px; bottom: 18px; min-width: 132px; padding: 8px 12px;
+  font-size: 13px; font-weight: 800;
+}
+#bw-raid .meter b { float: right; color: #fff6c2; }
+#bw-raid.is-peace .dock, #bw-raid.is-peace .party, #bw-raid.is-peace .meter, #bw-raid.is-peace .warn { display: none; }
 #bw-raid.is-peace .peace-note { display: block; }
-#bw-raid.is-pick .dock, #bw-raid.is-pick .boss, #bw-raid.is-pick .party, #bw-raid.is-pick .quest, #bw-raid.is-pick .minimap-wrap { display: none; }
+#bw-raid.is-pick .dock, #bw-raid.is-pick .party, #bw-raid.is-pick .quest, #bw-raid.is-pick .minimap-wrap, #bw-raid.is-pick .meter, #bw-raid.is-pick .warn { display: none; }
 #bw-raid .peace-note button { display: block; margin: 8px auto 0; pointer-events: auto; border: 0; border-radius: 8px; padding: 8px 12px; font: inherit; font-weight: 900; background: #ffe7a0; color: #2a2114; cursor: pointer; }
 #bw-raid .pick { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; pointer-events: auto; background: rgba(4, 8, 16, 0.35); }
 #bw-raid .pick[hidden] { display: none; }

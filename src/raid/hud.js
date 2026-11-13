@@ -35,16 +35,6 @@ export function createHud() {
   root.id = 'bw-raid';
   root.innerHTML = `
     <div class="flash" data-flash></div>
-    <section class="boss panel" data-boss>
-      <div class="boss-row">
-        <div class="medallion">홀</div>
-        <div><span class="boss-name">홀드</span><span class="boss-grade">C · 지역</span></div>
-        <div class="boss-num" data-boss-num>100%</div>
-      </div>
-      ${bar('hp')}
-      ${bar('cast')}
-      <div class="cast-label"><span data-cast-name></span><span data-cast-time></span></div>
-    </section>
     <section class="party panel" data-party></section>
     <div class="minimap-wrap">
       <canvas class="minimap" width="168" height="168" data-map></canvas>
@@ -59,13 +49,31 @@ export function createHud() {
       <div class="tip">TIP: 노란 선 안에서 열풍을 피하세요.</div>
     </aside>
     <div class="dock">
-      <div class="ragebar panel">
+      <div class="skills" data-skills></div>
+      <div class="cluster panel">
+        <div class="boss-row">
+          <div class="medallion">홀</div>
+          <div><span class="boss-name">홀드</span><span class="boss-grade">C · 지역</span></div>
+          <div class="boss-num" data-boss-num>100%</div>
+        </div>
+        <div class="bar hp"><span data-boss-fill></span></div>
+        <div class="bar cast"><span data-cast-fill></span></div>
+        <div class="cast-label"><span data-cast-name></span><span data-cast-time></span></div>
+        <div class="label"><span>생명</span><span data-player-num>100 / 100</span></div>
+        <div class="bar thin hp"><span data-player-fill></span></div>
         <div class="label"><span data-res-label>분노</span><span data-rage>0 / 100</span></div>
         <div class="bar thin rage"><span data-rage-fill></span></div>
       </div>
-      <div class="skills" data-skills></div>
-      <div class="help">WASD 이동 · Shift 달리기 · 드래그 시점 · Space 회피 · 1–4 스킬</div>
+      <div class="help">WASD 이동 · 휠 줌 · Space 회피 · 1–4 스킬 · 글로벌 쿨 1.2초</div>
     </div>
+    <div class="warn" data-warn hidden>
+      <strong data-warn-name></strong>
+      <em data-warn-time></em>
+    </div>
+    <aside class="meter panel">
+      <div>피해 <b data-dealt>0</b></div>
+      <div>치유 <b data-healed>0</b></div>
+    </aside>
     <div class="floats" data-floats></div>
     <div class="banner panel" data-banner hidden></div>
     <div class="card-wrap" data-victory>
@@ -101,21 +109,6 @@ export function createHud() {
   document.body.appendChild(root);
 
   const party = root.querySelector('[data-party]');
-  const mates = [
-    { id: 'me', name: '초행', role: '전사', icon: ICONS.charge, bar: 'rage' },
-    { id: 'mage', name: '서린', role: '마법사', icon: ICONS.shout, bar: 'mp' },
-    { id: 'priest', name: '온유', role: '사제', icon: ICONS.spin, bar: 'mp' },
-  ];
-  party.innerHTML = mates.map((m) => `
-    <div class="mate" data-mate="${m.id}">
-      <div class="portrait">${m.icon}</div>
-      <div>
-        <div class="mate-top"><span class="lv" data-lv>Lv.1</span><span>${m.name}</span><span class="role"${m.id === 'me' ? ' data-my-role' : ''}>${m.role}</span></div>
-        <div class="bar thin hp"><span data-hp></span></div>
-        <div class="bar thin ${m.bar}"><span data-sub></span></div>
-      </div>
-    </div>
-  `).join('');
 
   const skillsEl = root.querySelector('[data-skills]');
   let active = getClass('warrior');
@@ -259,7 +252,8 @@ export function createHud() {
       active = getClass(id);
       picked = active.id;
       root.querySelector('[data-res-label]').textContent = active.resLabel;
-      root.querySelector('[data-my-role]').textContent = active.name;
+      const roleEl = root.querySelector('[data-my-role]');
+      if (roleEl) roleEl.textContent = active.name;
       const fill = root.querySelector('[data-rage-fill]');
       fill.parentElement.className = `bar thin ${active.resBar}`;
       paintSkills(active.skills);
@@ -276,6 +270,17 @@ export function createHud() {
     },
     clearPeace() {
       root.classList.remove('is-peace');
+    },
+    setParty(frames) {
+      party.innerHTML = frames.map((m) => `
+        <div class="mate${m.isMe ? ' is-me' : ''}" data-mate="${m.id}">
+          <div class="portrait">${ICONS[m.icon] || ICONS.lock}</div>
+          <div>
+            <div class="mate-top"><span class="lv">Lv.${m.lv || 1}</span><span>${m.name}</span><span class="role"${m.isMe ? ' data-my-role' : ''}>${m.role}</span></div>
+            <div class="bar thin hp"><span data-hp></span></div>
+          </div>
+        </div>
+      `).join('');
     },
     setMuted(muted) {
       root.querySelector('[data-mute]').textContent = muted ? '소리 꺼짐' : '소리 켜짐';
@@ -311,35 +316,42 @@ export function createHud() {
     },
     update(dt, camera, snap) {
       const pct = snap.bossHp / snap.bossMax;
-      setWidth(root.querySelector('.boss .bar.hp > span'), pct * 100);
+      setWidth(root.querySelector('[data-boss-fill]'), pct * 100);
       root.querySelector('[data-boss-num]').textContent = `${Math.ceil(pct * 100)}%  (${Math.ceil(snap.bossHp).toLocaleString('ko-KR')} / ${snap.bossMax.toLocaleString('ko-KR')})`;
       const castPct = snap.castMax > 0 ? (snap.cast / snap.castMax) * 100 : 0;
-      setWidth(root.querySelector('.boss .bar.cast > span'), castPct);
+      setWidth(root.querySelector('[data-cast-fill]'), castPct);
       root.querySelector('[data-cast-name]').textContent = snap.castName ? `${snap.castName} 시전 중` : '';
-      root.querySelector('[data-cast-time]').textContent = snap.castMax > 0 ? `${Math.max(0, snap.castMax - snap.cast).toFixed(1)}초` : '';
+      const castLeft = snap.castMax > 0 ? Math.max(0, snap.castMax - snap.cast) : 0;
+      root.querySelector('[data-cast-time]').textContent = snap.castMax > 0 ? `${castLeft.toFixed(1)}초` : '';
+      const warn = root.querySelector('[data-warn]');
+      if (snap.castName) {
+        warn.hidden = false;
+        root.querySelector('[data-warn-name]').textContent = snap.castName;
+        root.querySelector('[data-warn-time]').textContent = castLeft.toFixed(1);
+      } else warn.hidden = true;
+      setWidth(root.querySelector('[data-player-fill]'), (snap.hp / snap.hpMax) * 100);
+      root.querySelector('[data-player-num]').textContent = `${Math.ceil(snap.hp)} / ${snap.hpMax}`;
+      root.querySelector('[data-dealt]').textContent = Math.round(snap.dealt || 0).toLocaleString('ko-KR');
+      root.querySelector('[data-healed]').textContent = Math.round(snap.healed || 0).toLocaleString('ko-KR');
       root.querySelector('[data-kills]').textContent = snap.kills;
       const t = Math.max(0, Math.ceil(snap.timeLeft));
       root.querySelector('[data-time]').textContent = `${String(Math.floor(t / 60)).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}`;
       root.querySelector('[data-rage]').textContent = `${Math.round(snap.res)} / 100`;
       setWidth(root.querySelector('[data-rage-fill]'), snap.res);
 
-      const rows = [
-        { id: 'me', hp: snap.hp / snap.hpMax, sub: snap.res, lv: snap.level, down: snap.down > 0 },
-        { id: 'mage', hp: snap.mageHp, sub: 80, lv: 2, down: false },
-        { id: 'priest', hp: snap.priestHp, sub: 70, lv: 2, down: false },
-      ];
-      for (const row of rows) {
+      for (const row of snap.party || []) {
         const el = root.querySelector(`[data-mate="${row.id}"]`);
+        if (!el) continue;
         el.classList.toggle('is-down', row.down);
-        el.querySelector('[data-lv]').textContent = `Lv.${row.lv}`;
         setWidth(el.querySelector('[data-hp]'), row.hp * 100);
-        setWidth(el.querySelector('[data-sub]'), row.sub);
       }
       active.skills.forEach((s, i) => {
         const btn = root.querySelector(`[data-skill="${s.id}"]`);
         if (!btn) return;
         const cd = snap.cds[i] || 0;
-        const p = s.cd > 0 ? cd / s.cd : 0;
+        const remain = Math.max(cd, snap.gcd || 0);
+        const denom = Math.max(s.cd || 0, 1.2);
+        const p = denom > 0 ? remain / denom : 0;
         btn.querySelector('.sweep').style.setProperty('--p', String(p));
         btn.querySelector('.cd').textContent = cd > 0.05 ? cd.toFixed(1) : '';
         btn.style.filter = !s.locked && s.cost && snap.res < s.cost ? 'brightness(0.55)' : '';

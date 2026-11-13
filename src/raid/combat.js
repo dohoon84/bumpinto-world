@@ -33,6 +33,9 @@ export function createCombat({ audio, vfx, onFloat, onBossHurt, onBind, onHealPa
     buff: 0,
     nextMul: 1,
     stealth: 0,
+    gcd: 0,
+    dealt: 0,
+    healed: 0,
     reviveGrace: 0,
     dodgeDir: { x: 0, z: 1 },
     hitSent: false,
@@ -58,6 +61,7 @@ export function createCombat({ audio, vfx, onFloat, onBossHurt, onBind, onHealPa
     if (distBoss(x, z) > skill.range) return false;
     const hit = roll(skill.power);
     onBossHurt(hit.amount);
+    state.dealt += hit.amount;
     onFloat(bossFloatPos(), hit.amount, hit.crit ? 'crit' : 'dmg');
     audio.playSfx('hit');
     vfx.burst(x, y, z, hit.crit ? '#ffe14a' : skill.color);
@@ -94,6 +98,7 @@ export function createCombat({ audio, vfx, onFloat, onBossHurt, onBind, onHealPa
       if (distBoss(x, z) <= skill.range && skill.power) {
         const hit = roll(skill.power);
         onBossHurt(hit.amount);
+        state.dealt += hit.amount;
         onFloat(bossFloatPos(), hit.amount, hit.crit ? 'crit' : 'dmg');
       }
     } else if (skill.kind === 'heal') {
@@ -120,7 +125,10 @@ export function createCombat({ audio, vfx, onFloat, onBossHurt, onBind, onHealPa
     const before = state.hp;
     state.hp = Math.min(state.hpMax, state.hp + amount);
     const got = Math.round(state.hp - before);
-    if (got > 0) onFloat(null, `+${got}`, 'heal');
+    if (got > 0) {
+      state.healed += got;
+      onFloat(null, `+${got}`, 'heal');
+    }
   }
 
   return {
@@ -128,6 +136,7 @@ export function createCombat({ audio, vfx, onFloat, onBossHurt, onBind, onHealPa
     get skills() { return skills; },
     get classId() { return cls.id; },
     skill(id) { return skills.find((s) => s.id === id); },
+    heal,
     setClass(id) {
       cls = getClass(id);
       skills = cls.skills;
@@ -143,10 +152,13 @@ export function createCombat({ audio, vfx, onFloat, onBossHurt, onBind, onHealPa
       state.attack = '';
       state.attackLock = 0;
       state.down = 0;
+      state.gcd = 0;
+      state.dealt = 0;
+      state.healed = 0;
     },
     moveMul() {
       if (state.down > 0 || state.dodgeT > 0) return 0;
-      let m = state.attackLock > 0 ? 0.45 : 1;
+      let m = state.attackLock > 0 ? 0.88 : 1;
       if (state.debuff > 0) m *= 0.85;
       if (state.stealth > 0) m *= 1.15;
       return m;
@@ -169,13 +181,14 @@ export function createCombat({ audio, vfx, onFloat, onBossHurt, onBind, onHealPa
       const i = skills.findIndex((s) => s.id === id);
       const skill = skills[i];
       if (!skill || skill.locked) return false;
-      if (cds[i] > 0 || state.attackLock > 0.05) return false;
+      if (state.gcd > 0 || cds[i] > 0 || state.attackLock > 0.05) return false;
       if (skill.cost && state.res < skill.cost) {
         onFloat(null, `${cls.resLabel} 부족`, 'info');
         return false;
       }
       if (skill.cost) addRes(-skill.cost);
       cds[i] = skill.cd;
+      state.gcd = 1.2;
       state.attack = id;
       state.attackT = 0;
       state.attackLock = skill.lock;
@@ -204,6 +217,7 @@ export function createCombat({ audio, vfx, onFloat, onBossHurt, onBind, onHealPa
       state.buff = Math.max(0, state.buff - dt);
       state.debuff = Math.max(0, state.debuff - dt);
       state.stealth = Math.max(0, state.stealth - dt);
+      state.gcd = Math.max(0, state.gcd - dt);
       state.reviveGrace = Math.max(0, state.reviveGrace - dt);
       if (cls.regen) addRes(cls.regen * dt);
       if (state.attack) {

@@ -10,9 +10,9 @@ import { createCombat } from './combat.js';
 import { createHud } from './hud.js';
 import { createRaidAudio } from './audio.js';
 import { createVfx } from './vfx.js';
-import { CITIZEN_LOOK, MAGE_LOOK, PRIEST_LOOK } from './look.js';
+import { CITIZEN_LOOK } from './look.js';
 import {
-  PATH_YAW, spawnPoint, safePoint, bossPoint, clampArena, pushOutOfBoss, fromFrame, SAFE_ALONG,
+  PATH_YAW, spawnPoint, safePoint, bossPoint, clampArena, pushOutOfBoss,
 } from './layout.js';
 
 const params = new URLSearchParams(location.search);
@@ -112,16 +112,59 @@ mountForm(classId);
 const boss = createBoss(scene);
 const home = boss.home;
 
-function ally(lookRaw, along, across) {
-  const p = fromFrame(along, across);
-  const av = createAvatar(sanitizeLook(lookRaw));
-  av.position.set(p.x, 0, p.z);
-  av.rotation.y = PATH_YAW;
-  scene.add(av);
-  return av;
+const ROLE_OF = { warrior: 'tank', priest: 'heal', mage: 'dps', archer: 'dps', assassin: 'dps' };
+const NPC_POOL = [
+  { id: 'npc-tank', name: '한결', role: '전사', kind: 'tank', color: '#ff6a22', icon: 'charge' },
+  { id: 'npc-heal', name: '온유', role: '사제', kind: 'heal', color: '#e6c36a', icon: 'heal' },
+  { id: 'npc-mage', name: '서린', role: '마법사', kind: 'dps', color: '#7aa6ff', icon: 'shard' },
+  { id: 'npc-bow', name: '시우', role: '궁수', kind: 'dps', color: '#3dff9a', icon: 'shot' },
+  { id: 'npc-sin', name: '무영', role: '암살자', kind: 'dps', color: '#ff3355', icon: 'daggers' },
+];
+function makeAllyBody(color) {
+  const g = new THREE.Group();
+  const plate = new THREE.MeshStandardMaterial({ color: '#3e4854', metalness: 0.55, roughness: 0.42 });
+  const seam = new THREE.MeshBasicMaterial({ color });
+  const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.22, 0.72, 4, 8), plate);
+  body.position.y = 1.1;
+  const head = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.32, 0.32), plate);
+  head.position.y = 1.78;
+  const vis = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.045, 0.04), seam);
+  vis.position.set(0, 1.76, 0.15);
+  const mark = new THREE.Mesh(
+    new THREE.RingGeometry(0.55, 0.78, 20),
+    new THREE.MeshBasicMaterial({ color, side: THREE.DoubleSide }),
+  );
+  mark.rotation.x = -Math.PI / 2;
+  mark.position.y = 0.08;
+  g.add(body, head, vis, mark);
+  g.scale.setScalar(1.45);
+  g.traverse((o) => { if (o.isMesh) o.castShadow = true; });
+  return g;
 }
-const mage = ally(MAGE_LOOK, SAFE_ALONG, -2.4);
-const priest = ally(PRIEST_LOOK, SAFE_ALONG, 2.4);
+let party = [];
+function layoutParty(id) {
+  for (const a of party) scene.remove(a.mesh);
+  const need = { tank: 1, heal: 1, dps: 3 };
+  need[ROLE_OF[id] || 'dps'] -= 1;
+  const picked = [];
+  for (const n of NPC_POOL) if (need[n.kind] > 0) { picked.push({ ...n }); need[n.kind] -= 1; }
+  const homeP = bossPoint();
+  party = picked.map((n, i) => {
+    const mesh = makeAllyBody(n.color);
+    const ang = (i / 4) * Math.PI * 2 + 0.5;
+    mesh.position.set(homeP.x + Math.cos(ang) * 8.2, 0, homeP.z + Math.sin(ang) * 8.2);
+    scene.add(mesh);
+    return { ...n, mesh, hp: 1, cd: 1 + i * 0.35, ang };
+  });
+  const mine = ROLE_OF[id] || 'dps';
+  const frames = [
+    { id: 'me', name: '초행', role: getClass(id).name, kind: mine, hp: 1, isMe: true, lv: 1, icon: getClass(id).skills[0].id },
+    ...party.map((a) => ({ id: a.id, name: a.name, role: a.role, kind: a.kind, hp: 1, isMe: false, lv: 2, icon: a.icon })),
+  ];
+  const order = { tank: 0, heal: 1, dps: 2 };
+  frames.sort((a, b) => order[a.kind] - order[b.kind] || (a.isMe ? -1 : 1));
+  hud.setParty(frames);
+}
 
 const hud = createHud();
 hud.bind();
@@ -133,8 +176,6 @@ function asVec(p) {
   return new THREE.Vector3(p.x, p.y ?? 2, p.z);
 }
 
-let allyMageHp = 1;
-let allyPriestHp = 1;
 const combat = createCombat({
   audio,
   vfx,
@@ -142,14 +183,15 @@ const combat = createCombat({
   onBossHurt(amount) { boss.hurt(amount); },
   onBind(sec) { boss.slow(sec); },
   onHealParty() {
-    allyMageHp = 1;
-    allyPriestHp = 1;
-    hud.float(mage.position.clone().setY(2.1), '+', 'heal');
-    hud.float(priest.position.clone().setY(2.1), '+', 'heal');
+    for (const a of party) {
+      a.hp = 1;
+      hud.float(a.mesh.position.clone().setY(2.1), '+', 'heal');
+    }
   },
 });
 combat.setClass(classId);
 hud.setClass(classId);
+layoutParty(classId);
 
 let phase = autoStart ? 'intro' : 'pick';
 let introT = 0;
@@ -160,12 +202,11 @@ let timeLeft = 15 * 60;
 let kills = '0 / 1';
 let simPaused = false;
 let won = false;
-let mageCd = 3.5;
-let priestCd = 8;
 let moveSpeed = 0;
-let camYaw = PATH_YAW + (shot === 'transform' ? Math.PI - 0.8 : shot === 'fight' ? 0.42 : 0.5);
-let camPitch = shot === 'transform' ? 0.18 : shot === 'fight' ? 0.38 : 0.32;
-let camDist = shot === 'transform' ? 5.4 : shot === 'fight' ? 15 : 9;
+const portrait = shot === 'transform' || shot === 'form';
+let camYaw = PATH_YAW + (portrait ? Math.PI + 0.7 : 0.35);
+let camPitch = portrait ? 0.32 : 50 * Math.PI / 180;
+let camDist = shot === 'transform' ? 6.2 : shot === 'form' ? 7.4 : 36;
 const keys = new Set();
 let shift = false;
 let dragging = false;
@@ -177,13 +218,6 @@ let fpsFrames = 0;
 let sceneDrawCalls = 0;
 let windHot = false;
 
-const bolt = new THREE.Mesh(
-  new THREE.SphereGeometry(0.18, 8, 6),
-  new THREE.MeshBasicMaterial({ color: '#9fd0ff' }),
-);
-bolt.visible = false;
-scene.add(bolt);
-let boltT = 0;
 const rim = new THREE.PointLight('#d5e4ff', 0, 9, 2);
 rim.position.set(0.9, 2.2, 1.4);
 actor.add(rim);
@@ -232,6 +266,7 @@ function beginRaid(id) {
   hud.hidePick();
   hud.clearPeace();
   citizen.visible = true;
+  for (const a of party) a.mesh.visible = true;
   if (fresh) {
     boss.reset();
     const s = spawnPoint();
@@ -243,9 +278,8 @@ function beginRaid(id) {
     timeLeft = 15 * 60;
     won = false;
     hud.hideVictory();
-    allyMageHp = 1;
-    allyPriestHp = 1;
   }
+  layoutParty(id);
   introStart = performance.now();
   introT = 0;
   burstDone = false;
@@ -280,7 +314,7 @@ function enterPeace() {
   citizen.visible = true;
   ghost.visible = false;
   boss.group.visible = false;
-  bolt.visible = false;
+  for (const a of party) a.mesh.visible = false;
   arena.setMood('peace');
   arena.setRain(false);
   arena.setSafeHot(false);
@@ -407,8 +441,13 @@ function frame() {
     cds: st.cds,
     kills,
     timeLeft,
-    mageHp: allyMageHp,
-    priestHp: allyPriestHp,
+    dealt: st.dealt,
+    healed: st.healed,
+    gcd: st.gcd,
+    party: [
+      { id: 'me', hp: st.hp / st.hpMax, down: st.down > 0 },
+      ...party.map((a) => ({ id: a.id, hp: a.hp, down: false })),
+    ],
   });
   const lookYaw = camYaw;
   const pitch = camPitch;
@@ -416,10 +455,10 @@ function frame() {
   const lx = Math.sin(lookYaw);
   const lz = Math.cos(lookYaw);
   const cp = Math.cos(pitch);
-  camera.position.set(focus.x - lx * dist * cp, focus.y + 2.15 + dist * Math.sin(pitch) * 0.55, focus.z - lz * dist * cp);
-  const aim = shot === 'transform' || shot === 'form' ? 0.1 : shot === 'fight' ? 7 : 3.6;
-  const lookY = shot === 'form' ? 1.25 : shot === 'transform' ? 1.15 : shot === 'fight' ? 2.8 : 1.55;
-  camera.lookAt(focus.x + lx * aim, focus.y + lookY, focus.z + lz * aim);
+  camera.position.set(focus.x - lx * dist * cp, focus.y + dist * Math.sin(pitch), focus.z - lz * dist * cp);
+  const aim = portrait ? 0.1 : 6;
+  const lookY = portrait ? (shot === 'form' ? 1.35 : 1.15) : 0.2;
+  camera.lookAt(focus.x + lx * aim, lookY, focus.z + lz * aim);
   renderFrame();
   requestAnimationFrame(frame);
 }
@@ -502,18 +541,19 @@ function step(dt) {
       if (st.hp < before) hud.float(asVec({ x: actor.position.x, y: 1.8, z: actor.position.z }), amount, 'hurt');
     },
     onWind(kind) {
-      if (kind === 'telegraph') hud.banner('열풍 — 노란 선 안으로');
-      else {
+      if (kind === 'telegraph') {
+        audio.playSfx('warn');
+        hud.banner('열풍 — 흰 원 밖, 노란 선 안');
+      } else {
         audio.playSfx('wind');
-        for (let i = 0; i < 5; i++) {
-          vfx.windStreak(actor.position.x + (i - 2) * 1.4, actor.position.z, PATH_YAW);
-        }
+        for (let i = 0; i < 4; i++) vfx.windStreak(actor.position.x + (i - 1.5) * 2.2, actor.position.z, PATH_YAW);
       }
     },
     onSlam(kind) {
-      if (kind === 'hit') {
+      if (kind === 'telegraph') audio.playSfx('warn');
+      else if (kind === 'hit') {
         audio.playSfx('slam');
-        vfx.ring(boss.group.position.x, 0.2, boss.group.position.z, '#ff8a3a', 3);
+        vfx.ring(boss.group.position.x, 0.25, boss.group.position.z, '#f4fbff', 6);
       }
     },
   });
@@ -521,37 +561,30 @@ function step(dt) {
   if (fighting && boss.state.dead) win();
 
   if (fighting && !boss.state.dead) {
-    mageCd -= dt;
-    if (mageCd <= 0) {
-      mageCd = 7.5;
-      bolt.visible = true;
-      bolt.position.copy(mage.position);
-      bolt.position.y = 1.3;
-      boltT = 0;
-    }
-    priestCd -= dt;
-    if (priestCd <= 0) {
-      priestCd = 16;
-      if (st.down <= 0 && st.hp < 90) combat.heal(18);
-    }
-  }
-  if (bolt.visible) {
-    boltT += dt;
     const b = bossPoint();
-    bolt.position.lerp(new THREE.Vector3(b.x, 7, b.z), Math.min(1, dt * 3));
-    if (boltT > 0.7) {
-      bolt.visible = false;
-      if (!boss.state.dead && fighting) {
-        boss.hurt(35);
-        hud.float(new THREE.Vector3(b.x, 9, b.z), 35, 'dmg');
+    for (const a of party) {
+      a.ang += dt * 0.22;
+      const radius = a.kind === 'tank' ? 6.6 : 8.6;
+      const spot = clampArena(b.x + Math.cos(a.ang) * radius, b.z + Math.sin(a.ang) * radius);
+      a.mesh.position.set(spot.x, 0, spot.z);
+      a.mesh.rotation.y = Math.atan2(b.x - spot.x, b.z - spot.z);
+      a.cd -= dt;
+      if (a.cd > 0) continue;
+      if (a.kind === 'heal') {
+        a.cd = 8;
+        if (st.down <= 0 && st.hp < st.hpMax * 0.9) combat.heal(14);
+      } else {
+        a.cd = a.kind === 'tank' ? 2.6 : 3.4;
+        const dmg = a.kind === 'tank' ? 18 : 14;
+        boss.hurt(dmg);
+        vfx.arrow(spot.x, 1.5, spot.z, a.mesh.rotation.y, a.color);
+        hud.float(new THREE.Vector3(b.x, 8.5, b.z), dmg, 'dmg');
       }
     }
   }
 
   if (form.group.visible) form.animate(form.group, dt, { speed: moveSpeed, attack: st.attack, attackT: st.attackT });
   if (citizen.visible) animateAvatar(citizen, phase === 'peace' || phase === 'pick' ? moveSpeed : 0.2, dt);
-  animateAvatar(mage, 0.4, dt);
-  animateAvatar(priest, 0.3, dt);
   if (phase !== 'intro') {
     const base = form.group.userData.baseScale || 1;
     let pulse = 1;
@@ -571,12 +604,14 @@ addEventListener('pointerup', () => { dragging = false; });
 addEventListener('pointermove', (e) => {
   if (!dragging) return;
   camYaw -= (e.clientX - lastX) * 0.005;
-  camPitch = Math.max(0.12, Math.min(1.05, camPitch + (e.clientY - lastY) * 0.003));
+  camPitch = Math.max(portrait ? 0.12 : 0.55, Math.min(1.05, camPitch + (e.clientY - lastY) * 0.003));
   lastX = e.clientX;
   lastY = e.clientY;
 });
 addEventListener('wheel', (e) => {
-  camDist = Math.max(6.5, Math.min(16, camDist + Math.sign(e.deltaY) * 0.6));
+  const zoomMin = portrait ? 4.5 : 16;
+  const zoomMax = portrait ? 12 : 46;
+  camDist = Math.max(zoomMin, Math.min(zoomMax, camDist + Math.sign(e.deltaY) * (portrait ? 0.4 : 1.6)));
 }, { passive: true });
 
 addEventListener('keydown', (e) => {
