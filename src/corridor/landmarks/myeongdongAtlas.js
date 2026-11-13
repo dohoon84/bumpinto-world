@@ -43,6 +43,35 @@ export const SHOP_SIGNS = [
   ['코스메 1+1', 'コスメ · 化妆品 · BEAUTY', '#ff7eb6', '#ffffff', '#ffffff'],
   ['호텔 범핀', 'HOTEL BUMPIN', '#14213d', '#fca311', '#e5e5e5'],
   ['떡볶이공작소', 'TTEOKBOKKI FACTORY', '#e63946', '#ffffff', '#ffd166'],
+  ['스트릿무드', 'STREET MOOD · 潮流', '#111111', '#ffffff', '#ff3b3b'],
+  ['데일리룩', 'DAILY LOOK · FASHION', '#f2efe9', '#222222', '#b08560'],
+  ['슈즈범프', 'SHOE BUMP · 운동화 · 鞋', '#ff6b00', '#ffffff', '#111111'],
+  ['스니커랩', 'SNEAKER LAB', '#1a1a1a', '#c8ff00', '#ffffff'],
+  ['구름다방', 'CLOUD CAFE · 咖啡', '#efe8dc', '#4b2e1e', '#c9a36b'],
+  ['밀크티하우스', 'MILK TEA HOUSE · 奶茶', '#f6d6b8', '#5a3a24', '#ffffff'],
+  ['명동환전소', 'MONEY EXCHANGE · 換錢 · 両替', '#ffe169', '#0d3b8c', '#0d3b8c'],
+  ['하늘약국', 'SKY PHARMACY · 藥局 · 薬局', '#16a34a', '#ffffff', '#ffffff'],
+];
+/** 1층 가게 종류 → 쓸 수 있는 간판(SHOP_SIGNS 번호). 노래방(29)·호텔(34)은 위층 간판에만 */
+export const SIGN_TYPES = {
+  beauty: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 17, 33],
+  fashion: [27, 28, 32, 36, 37, 23, 24],
+  shoes: [38, 39],
+  cafe: [19, 40, 41],
+  exchange: [16, 42],
+  convenience: [18],
+  pharmacy: [25, 43],
+  souvenir: [31, 22],
+  restaurant: [20, 21, 26, 30, 35],
+};
+// 가게 앞 X배너(세로 입간판) [위 큰 글, 아래 작은 글, bg, fg]
+export const X_BANNERS = [
+  ['1+1', 'EVENT · 이벤트', '#e60012', '#ffffff'],
+  ['TAX FREE', '즉시환급 · 免税', '#ffffff', '#e60012'],
+  ['70%', 'SALE · 세일', '#ff2d55', '#ffe169'],
+  ['10+10', 'MASK PACK · 마스크팩', '#ff7eb6', '#ffffff'],
+  ['NEW', 'K-BEAUTY · 新品', '#13b6c9', '#ffffff'],
+  ['2+1', 'SUN CARE · 선크림', '#ffc53d', '#3a2400'],
 ];
 // 세로 돌출 간판 (한 글자씩 세로로)
 export const V_SIGNS = [
@@ -114,40 +143,14 @@ function drawVSign(g, w, h, [txt, bg, fg]) {
   chars.forEach((c, k) => g.fillText(c, w / 2, 15 + step * (k + 0.5)));
 }
 
-function drawStorefront(g, w, h, i) {
-  const r = rnd32(1777 + i * 13);
-  const pal = [['#fff3f7', '#ff7eb6'], ['#f3fbff', '#22b8cf'], ['#fffaf0', '#f59f00'], ['#f5f5f5', '#495057'], ['#fff0f6', '#c2255c'], ['#f1fff4', '#2f9e44'], ['#fff9db', '#e67700'], ['#f8f0ff', '#7048e8']][i % 8];
-  // 실내 (밝은 조명)
-  const gr = g.createLinearGradient(0, 0, 0, h);
-  gr.addColorStop(0, pal[0]); gr.addColorStop(1, '#d9d4cf');
-  g.fillStyle = gr; g.fillRect(0, 0, w, h);
-  // 진열대 + 상품 점
-  const shelves = 4;
-  for (let s = 0; s < shelves; s++) {
-    const y = h * 0.18 + s * h * 0.17;
-    g.fillStyle = 'rgba(0,0,0,.18)'; g.fillRect(8, y + 16, w - 16, 3);
-    for (let x = 12; x < w - 12; x += 7 + r() * 5) {
-      const ph = 6 + r() * 10;
-      g.fillStyle = r() < 0.5 ? pal[1] : `hsl(${Math.floor(r() * 360)},70%,${55 + r() * 25}%)`;
-      g.fillRect(x, y + 16 - ph, 4 + r() * 3, ph);
-    }
-  }
-  // 천장 조명
-  g.fillStyle = 'rgba(255,255,255,.95)';
-  for (let x = 20; x < w; x += 46) g.fillRect(x, 6, 26, 4);
-  // 문 + 유리 반사
-  const dx = i % 2 ? w * 0.62 : w * 0.12, dw = w * 0.26;
-  g.fillStyle = 'rgba(255,255,255,.55)'; g.fillRect(dx, h * 0.22, dw, h * 0.78);
-  g.strokeStyle = '#2b2b2b'; g.lineWidth = 3; g.strokeRect(dx, h * 0.22, dw, h * 0.78);
-  g.fillStyle = 'rgba(255,255,255,.22)';
-  g.beginPath(); g.moveTo(0, h); g.lineTo(w * 0.25, 0); g.lineTo(w * 0.36, 0); g.lineTo(w * 0.11, h); g.fill();
-  // 유리창 프레임
-  g.fillStyle = '#26282c';
-  g.fillRect(0, 0, w, 4); g.fillRect(0, h - 8, w, 8); g.fillRect(0, 0, 4, h); g.fillRect(w - 4, 0, 4, h);
-  // 창 스티커
-  g.fillStyle = pal[1]; g.font = `900 ${h * 0.09}px ${MD_FONT}`; g.textAlign = 'left'; g.textBaseline = 'alphabetic';
-  const stick = ['1+1', 'SALE', 'OPEN', '免税', 'WELCOME', '50%', 'NEW', 'TAX FREE'][i % 8];
-  g.fillText(stick, i % 2 ? w * 0.08 : w * 0.45, h * 0.95);
+function drawXBanner(g, w, h, [big, small, bg, fg]) {
+  g.fillStyle = bg; g.fillRect(0, 0, w, h);
+  g.fillStyle = fg; g.fillRect(0, 0, w, 10); g.fillRect(0, h - 10, w, 10);
+  g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillStyle = fg;
+  fitFont(g, big, w - 10, w * 0.5); g.fillText(big, w / 2, h * 0.3);
+  const parts = small.split(' · ');
+  parts.forEach((p, k) => { fitFont(g, p, w - 10, w * 0.17, 800); g.fillText(p, w / 2, h * 0.55 + k * w * 0.22); });
+  g.globalAlpha = 0.35; g.fillRect(8, h * 0.45, w - 16, 2); g.globalAlpha = 1;
 }
 
 function drawMenu(g, w, h, [ko, en, price, bg, fg]) {
@@ -222,7 +225,7 @@ export function createMyeongdongAtlas(tick = null) {
   const W = 2048, H = 2048, PAD = 4;
   const items = [];
   SHOP_SIGNS.forEach((s, i) => items.push({ name: 'h' + i, w: 500, h: 96, draw: (g, w, h) => drawHSign(g, w, h, s, i) }));
-  for (let i = 0; i < 16; i++) items.push({ name: 'front' + i, w: 248, h: 160, draw: (g, w, h) => drawStorefront(g, w, h, i) });
+  X_BANNERS.forEach((s, i) => items.push({ name: 'xb' + i, w: 64, h: 192, draw: (g, w, h) => drawXBanner(g, w, h, s) }));
   V_SIGNS.forEach((s, i) => items.push({ name: 'v' + i, w: 80, h: 368, draw: (g, w, h) => drawVSign(g, w, h, s) }));
   STALL_MENUS.forEach((s, i) => items.push({ name: 'menu' + i, w: 248, h: 64, draw: (g, w, h) => drawMenu(g, w, h, s) }));
   for (let i = 0; i < 6; i++) items.push({ name: 'food' + i, w: 248, h: 56, draw: (g, w, h) => drawFood(g, w, h, i) });

@@ -367,6 +367,8 @@ export async function createMyeongdongAsync(opts = {}, yieldFn = null, slicer = 
       // [myeongdong-minigame C] 서울 첫날 코스 경유지 (명동역 → 남산오르미 → 케이블카 하부 → 남산타워)
       course: station.course,
       stalls: street.stallSpots,
+      // [myeongdong-detail] 1층 가게 문 앞 { type, x, z, face, w } (핵심 블록)
+      shops: street.shops,
     },
     get poolLightCount() { return 0; },
     tickPlayer(dt, player) {

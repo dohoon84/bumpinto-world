@@ -2,11 +2,28 @@
 //   draw: 간판/쇼윈도/노점메뉴 1 · 빛 번짐 1 · 노점 몸체 1 + 차양 1 · 가로등 1 · 빛 점 2 · 전선 1 · 사람 2 = 10 남짓
 import * as THREE from 'three';
 import { GeoBuf, hex3, CellGrid, distToSeg, mulberry, hash01, pointInRing } from './myeongdongGeo.js';
-import { SHOP_SIGNS, V_SIGNS, STALL_MENUS } from './myeongdongAtlas.js';
+import { SHOP_SIGNS, V_SIGNS, STALL_MENUS, SIGN_TYPES, X_BANNERS } from './myeongdongAtlas.js';
+import { SHOP_ROOMS, createShopInteriorAtlas, createShopInteriorMaterial } from './myeongdongShops.js';
 
-const COSMETIC = new Set([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 33]);
-const NON_COS = SHOP_SIGNS.map((_, i) => i).filter((i) => !COSMETIC.has(i));
-const COS = [...COSMETIC];
+const ALL_SIGNS = SHOP_SIGNS.map((_, i) => i);
+// OSM shop/amenity 값 → 1층 가게 종류
+const OSM_TYPE = {
+  cosmetics: 'beauty', beauty: 'beauty', perfumery: 'beauty',
+  clothes: 'fashion', fashion_accessories: 'fashion', sports: 'fashion', jewelry: 'fashion', department_store: 'fashion', mall: 'fashion', variety_store: 'fashion', optician: 'fashion',
+  shoes: 'shoes',
+  cafe: 'cafe', coffee: 'cafe', bakery: 'cafe', confectionery: 'cafe', chocolate: 'cafe',
+  convenience: 'convenience', supermarket: 'convenience',
+  pharmacy: 'pharmacy',
+  gift: 'souvenir', toys: 'souvenir', music: 'souvenir', stationery: 'souvenir', books: 'souvenir',
+  restaurant: 'restaurant', fast_food: 'restaurant',
+  bank: 'exchange', bureau_de_change: 'exchange',
+};
+// 명동 큰길(명동8길·명동길) 1층은 화장품 로드숍이 반쯤 — 실제 명동 거리 비율에 가깝게
+const MAIN_MIX = [['beauty', 0.42], ['fashion', 0.15], ['shoes', 0.06], ['cafe', 0.07], ['exchange', 0.06], ['convenience', 0.05], ['pharmacy', 0.05], ['souvenir', 0.08], ['restaurant', 0.06]];
+const SIDE_MIX = [['restaurant', 0.3], ['cafe', 0.14], ['convenience', 0.08], ['fashion', 0.15], ['beauty', 0.15], ['pharmacy', 0.05], ['souvenir', 0.07], ['exchange', 0.06]];
+const pickMix = (mix, r) => { let u = r(); for (const [k, w] of mix) { u -= w; if (u <= 0) return k; } return mix[0][0]; };
+
+
 const STALL_STREETS = new Set(['명동8길', '명동길', '명동10길']);
 const WALK_KINDS = new Set(['residential', 'pedestrian', 'living_street', 'service', 'footway', 'unclassified']);
 const CAR = new Set(['trunk', 'primary', 'secondary', 'tertiary', 'primary_link', 'secondary_link', 'tertiary_link']);
@@ -70,9 +87,32 @@ export async function createMyeongdongStreet({ parent, data, land, atlas, ways, 
   const U = (n) => atlas.uv(n);
   const neonKeys = ['pink', 'cyan', 'violet', 'green', 'yellow', 'white', 'orange', 'red'];
 
-  // ---------- 1) 1층 쇼윈도 · 간판 ----------
-  let nFront = 0, nSign = 0, nBlade = 0;
-  const pickSign = (r, cosBias) => (r() < cosBias ? COS[Math.floor(r() * COS.length)] : NON_COS[Math.floor(r() * NON_COS.length)]);
+  // ---------- 1) 1층 가게(종류별 실내 · 간판 · X배너 · 직원) ----------
+  let nFront = 0, nSign = 0, nBlade = 0, nBanner = 0;
+  const typeCount = {};
+  const shopsOut = [];
+  const promoters = [];
+  const pickSign = (r) => ALL_SIGNS[Math.floor(r() * ALL_SIGNS.length)];
+  const pickTypeSign = (t, r) => { const L = SIGN_TYPES[t] || ALL_SIGNS; return L[Math.floor(r() * L.length)]; };
+  // 실제 OSM 가게 점(939곳 in 핵심 블록) 격자
+  const shopGrid = new CellGrid(12);
+  for (const sp of data.shops || []) shopGrid.add(sp, sp[0] - 0.1, sp[1] - 0.1, sp[0] + 0.1, sp[1] + 0.1);
+  const osmTypeAt = (x, z) => {
+    let best = null, bd = 7.5;
+    for (const sp of shopGrid.query(x, z)) { const d = Math.hypot(sp[0] - x, sp[1] - z); if (d < bd && OSM_TYPE[sp[2]]) { bd = d; best = OSM_TYPE[sp[2]]; } }
+    return best;
+  };
+  const roomTex = await createShopInteriorAtlas(tick ? (l) => tick(l) : null);
+  const room = createShopInteriorMaterial(roomTex);
+  const shopP = [], shopN = [], shopUV = [], shopR = [], shopI = [];
+  const shopQuad = (x, y, z, nx, nz, w, h, idx, D) => {
+    const rx = nz, rz = -nx, hw = w / 2, base = shopP.length / 3;
+    shopP.push(x - rx * hw, y, z - rz * hw, x + rx * hw, y, z + rz * hw, x + rx * hw, y + h, z + rz * hw, x - rx * hw, y + h, z - rz * hw);
+    for (let k = 0; k < 4; k++) { shopN.push(nx, 0, nz); shopR.push(idx, w, h, D); }
+    shopUV.push(0, 0, 1, 0, 1, 1, 0, 1);
+    shopI.push(base, base + 1, base + 2, base, base + 2, base + 3);
+  };
+  const basketUV = U('c-canopyRed');
   for (const b of blds) {
     if (!b.inBox) continue;
     const o = b.o, r = mulberry(b.id % 2147483647);
@@ -91,24 +131,47 @@ export async function createMyeongdongStreet({ parent, data, land, atlas, ways, 
       const big = CAR.has(w.k);
       if (!core && !big && r() < 0.35) continue;
       const nb = Math.max(1, Math.round(L / 5.2)), bw = L / nb;
-      const cosBias = core ? 0.62 : 0.3;
-      for (let k = 0; k < nb; k++) {
+            for (let k = 0; k < nb; k++) {
         const t = (k + 0.5) * bw;
         const px = a[0] + tx * t, pz = a[1] + tz * t;
         const gy = heightAt(px + nx * 0.8, pz + nz * 0.8);
         const fx = px + nx * 0.05, fz = pz + nz * 0.05;
         const blank = r() < (core ? 0.06 : 0.22);
+        const mainSt = STALL_STREETS.has(w.n) || (core && (w.k === 'pedestrian' || w.k === 'living_street'));
+        let type = osmTypeAt(px + nx * 1.5, pz + nz * 1.5);
+        if (type === 'restaurant' && mainSt && r() < 0.65) type = null; // OSM 식당 점은 위층 식당이 많다
+        if (!type) type = pickMix(core && (mainSt || r() < 0.5) ? MAIN_MIX : SIDE_MIX, r);
         if (!blank) {
-          wallQuad(signBuf, fx, gy - 0.15, fz, nx, nz, bw - 0.25, 3.35, U('front' + Math.floor(r() * 16)));
-          nFront++;
+          const rooms = SHOP_ROOMS[type], ri = rooms[Math.floor(r() * rooms.length)];
+          shopQuad(fx, gy - 0.15, fz, nx, nz, bw - 0.25, 3.35, ri, type === 'exchange' ? 2.8 : 3.6 + r() * 1.2);
+          nFront++; typeCount[type] = (typeCount[type] || 0) + 1;
           // 빛 번짐 (밤에 거리 바닥으로)
           const sx = px + nx * 0.2, sz = pz + nz * 0.2, rx = nz, rz = -nx, hw = (bw - 0.2) / 2, D = 3.4;
           const y0 = gy + 0.16;
-          const ca = hex3(['#fff4e0', '#ffe3f1', '#e4f7ff', '#fff9d6'][Math.floor(r() * 4)]);
+          const ca = hex3(type === 'beauty' ? ['#ffe3f1', '#fff4e0', '#e4f7ff'][Math.floor(r() * 3)] : type === 'cafe' || type === 'restaurant' ? '#ffe0b0' : ['#fff4e0', '#e4f7ff', '#fff9d6'][Math.floor(r() * 3)]);
           spillBuf.quad([sx + rx * hw, y0, sz + rz * hw], [sx - rx * hw, y0, sz - rz * hw], [sx - rx * hw + nx * D, y0, sz - rz * hw + nz * D], [sx + rx * hw + nx * D, y0, sz + rz * hw + nz * D], [0, 0, 1, 1], ca, [0, 1, 0]);
+          if (core) shopsOut.push({ type, x: +(px + nx * 2.4).toFixed(1), z: +(pz + nz * 2.4).toFixed(1), face: +Math.atan2(nx, nz).toFixed(3), w: +(bw - 0.25).toFixed(2) });
+          // 화장품 가게 앞: X배너 입간판 · 바구니 든 직원(호객)
+          if (type === 'beauty' && bw > 3.2 && r() < (core ? 0.55 : 0.25)) {
+            const side = r() < 0.5 ? -1 : 1, ox = px + rx * side * (bw * 0.38) + nx * 0.9, oz = pz + rz * side * (bw * 0.38) + nz * 0.9;
+            const by = heightAt(ox, oz), xb = U('xb' + Math.floor(r() * X_BANNERS.length));
+            wallQuad(signBuf, ox, by + 0.12, oz, nx, nz, 0.62, 1.86, xb);
+            wallQuad(signBuf, ox - nx * 0.02, by + 0.12, oz - nz * 0.02, -nx, -nz, 0.62, 1.86, xb);
+            signBuf.box(ox - nx * 0.12, by + 0.06, oz - nz * 0.12, 0.7, 0.12, 0.42, Math.atan2(nx, nz), U('c-dark'));
+            nBanner++;
+          }
+          if (type === 'beauty' && core && r() < 0.3) {
+            const side = r() < 0.5 ? -1 : 1, ox = px - rx * side * (bw * 0.25) + nx * 1.4, oz = pz - rz * side * (bw * 0.25) + nz * 1.4;
+            if (!roadAt(ox, oz, 0.5, CAR)) {
+              const ry = Math.atan2(nx, nz), c = Math.cos(ry), s2 = Math.sin(ry), gy2 = heightAt(ox, oz);
+              promoters.push([ox, oz, ry]);
+              const lx = 0.4, lz = 0.12; // 오른손 바구니
+              signBuf.box(ox + lx * c + lz * s2, gy2 + 0.82, oz - lx * s2 + lz * c, 0.34, 0.2, 0.24, ry, basketUV);
+            }
+          }
         }
         if (!blank && r() < 0.9) {
-          const si = pickSign(r, cosBias);
+          const si = pickTypeSign(type, r);
           const sy = gy + 3.3, sh = 1.05;
           wallQuad(signBuf, px + nx * 0.42, sy, pz + nz * 0.42, nx, nz, bw - 0.15, sh, U('h' + si));
           // 간판 밑면 (어두운 판)
@@ -117,7 +180,7 @@ export async function createMyeongdongStreet({ parent, data, land, atlas, ways, 
           // 네온 띠
           if (r() < 0.6) wallQuad(signBuf, px + nx * 0.44, sy - 0.1, pz + nz * 0.44, nx, nz, bw - 0.15, 0.07, U('neon-' + neonKeys[Math.floor(r() * neonKeys.length)]));
           nSign++;
-          if (COSMETIC.has(si) && core) cosmeticsShops.push({ x: +(px + nx * 2.2).toFixed(1), z: +(pz + nz * 2.2).toFixed(1), face: Math.atan2(-nx, -nz), sign: SHOP_SIGNS[si][1] });
+          if (type === 'beauty' && core) cosmeticsShops.push({ x: +(px + nx * 2.2).toFixed(1), z: +(pz + nz * 2.2).toFixed(1), face: Math.atan2(-nx, -nz), sign: SHOP_SIGNS[si][1] });
         }
       }
       // 위층 가로 간판 (명동 특유의 층층 간판)
@@ -128,7 +191,7 @@ export async function createMyeongdongStreet({ parent, data, land, atlas, ways, 
           const span = L * (0.5 + r() * 0.4), off = (L - span) * r();
           const px = a[0] + tx * (off + span / 2), pz = a[1] + tz * (off + span / 2);
           const gy = heightAt(mx + nx, mz + nz);
-          wallQuad(signBuf, px + nx * 0.12, gy + 3.4 * f + 1.6, pz + nz * 0.12, nx, nz, span, 1.2, U('h' + pickSign(r, cosBias)));
+          wallQuad(signBuf, px + nx * 0.12, gy + 3.4 * f + 1.6, pz + nz * 0.12, nx, nz, span, 1.2, U('h' + pickSign(r)));
           nSign++;
         }
       }
@@ -319,6 +382,18 @@ export async function createMyeongdongStreet({ parent, data, land, atlas, ways, 
   const signGeo = signBuf.build();
   const signs = signGeo ? new THREE.Mesh(signGeo, signMat) : null;
   if (signs) { signs.name = 'myeongdong-signs'; g.add(signs); }
+  // 1층 가게 실내(인테리어 매핑) — 사각형 묶음 1개
+  let shopMesh = null;
+  if (shopP.length) {
+    const sg = new THREE.BufferGeometry();
+    sg.setAttribute('position', new THREE.Float32BufferAttribute(shopP, 3));
+    sg.setAttribute('normal', new THREE.Float32BufferAttribute(shopN, 3));
+    sg.setAttribute('uv', new THREE.Float32BufferAttribute(shopUV, 2));
+    sg.setAttribute('aRoom', new THREE.Float32BufferAttribute(shopR, 4));
+    sg.setIndex(shopP.length / 3 > 65535 ? new THREE.Uint32BufferAttribute(shopI, 1) : new THREE.Uint16BufferAttribute(shopI, 1));
+    sg.computeBoundingSphere();
+    shopMesh = new THREE.Mesh(sg, room.material); shopMesh.name = 'myeongdong-shopfronts'; g.add(shopMesh);
+  }
   const spillMat = new THREE.MeshBasicMaterial({ map: spillTexture(), vertexColors: true, transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 });
   const spillGeo = spillBuf.build();
   const spill = spillGeo ? new THREE.Mesh(spillGeo, spillMat) : null;
@@ -354,7 +429,7 @@ export async function createMyeongdongStreet({ parent, data, land, atlas, ways, 
     peds.push({ p, s: rnd() * p.L, dir: rnd() < 0.5 ? 1 : -1, lat, v: 0.85 + rnd() * 0.6, ph: rnd() * 6.28, stop: 0 });
   }
   const pg = personGeos();
-  const total = NP + vendors.length;
+  const total = NP + vendors.length + promoters.length;
   const bodyMat = new THREE.MeshLambertMaterial({ vertexColors: true });
   const headMat = new THREE.MeshLambertMaterial({ vertexColors: true });
   const pBody = new THREE.InstancedMesh(pg.body, bodyMat, Math.max(1, total));
@@ -365,6 +440,11 @@ export async function createMyeongdongStreet({ parent, data, land, atlas, ways, 
   vendors.forEach(([x, z, ry], k) => {
     const i = NP + k; Q.setFromAxisAngle(Y, ry); V.set(x, heightAt(x, z), z); M.compose(V, Q, S1);
     pBody.setMatrixAt(i, M); pHead.setMatrixAt(i, M); pBody.setColorAt(i, new THREE.Color('#f8f9fa'));
+  });
+  const uniCols = ['#ff4f9a', '#13b6c9', '#2f8f5b', '#7a3cff', '#e60012'].map((c) => new THREE.Color(c));
+  promoters.forEach(([x, z, ry], k) => {
+    const i = NP + vendors.length + k; Q.setFromAxisAngle(Y, ry); V.set(x, heightAt(x, z), z); M.compose(V, Q, S1);
+    pBody.setMatrixAt(i, M); pHead.setMatrixAt(i, M); pBody.setColorAt(i, uniCols[k % uniCols.length]);
   });
   pBody.count = pHead.count = total;
   if (pBody.instanceColor) pBody.instanceColor.needsUpdate = true;
@@ -413,7 +493,11 @@ export async function createMyeongdongStreet({ parent, data, land, atlas, ways, 
     stallSpots: stallSpots.map((s) => ({ x: +s.x.toFixed(1), z: +s.z.toFixed(1), menu: STALL_MENUS[s.menu][1] })),
     isBlocked,
     setNight(v) {
-      signMat.emissiveIntensity = 0.32 + v * 0.9;
+      // 가게 실내: 낮엔 유리 반사 + 약간 어둡게, 밤엔 실내가 주인공(1 을 넘지 않게 → 번짐 없음)
+      room.uniforms.uBright.value = 0.84 + v * 0.1;
+      room.uniforms.uRefl.value = 1 - v * 0.8;
+      room.uniforms.uSky.value.set(v > 0.5 ? '#1a2233' : '#bcd3e6');
+      signMat.emissiveIntensity = 0.32 + v * 0.78;
       signMat.color.setScalar(1 - v * 0.35);
       spillMat.opacity = v * 0.5; if (spill) spill.visible = v > 0.02;
       bulbMat.opacity = 0.35 + v * 0.65; bulbMat.size = 0.55 + v * 0.35;
@@ -423,7 +507,8 @@ export async function createMyeongdongStreet({ parent, data, land, atlas, ways, 
       bodyMat.color.setScalar(1 - v * 0.3); headMat.color.setScalar(1 - v * 0.3);
     },
     update(dt, pp) { updatePeds(dt, pp); },
-    stats() { return { fronts: nFront, signs: nSign, blades: nBlade, stalls: stallN, lamps: lampSpots.length, bulbs: bulbs.length / 3, peds: NP, signVerts: signGeo ? signGeo.attributes.position.count : 0 }; },
+    shops: shopsOut,
+    stats() { return { types: typeCount, banners: nBanner, promoters: promoters.length, fronts: nFront, signs: nSign, blades: nBlade, stalls: stallN, lamps: lampSpots.length, bulbs: bulbs.length / 3, peds: NP, signVerts: signGeo ? signGeo.attributes.position.count : 0 }; },
   };
 }
 

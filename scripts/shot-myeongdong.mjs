@@ -42,6 +42,12 @@ for (const v of VIEWS) {
     if (px === 'cath') { const c = md.cathedral; const f = c.facade; const k = v.back || 0; px = f[0] + c.axis[0] * k; pz = f[1] + c.axis[1] * k; yaw = toward(px, pz, c.x, c.z) + (v.yawOff || 0); }
     if (px === 'oreumi') { const c = md.hooks.course; const a = c[1], b = c[2]; px = a.x + (a.x - b.x) * 0.25 + (v.ox || 0); pz = a.z + (a.z - b.z) * 0.25 + (v.oz || 0); yaw = toward(px, pz, b.x, b.z) + (v.yawOff || 0); }
     if (px === 'stall') { const st = md.hooks.stalls[v.i || 0]; px = st.x + (v.ox || 0); pz = st.z + (v.oz || 0); }
+    if (px === 'shop') { // [myeongdong-detail] 종류(type)의 가게 중 near 에 가장 가까운 곳 문 앞
+      const L = md.hooks.shops.filter((s) => s.type === v.type && (!v.minW || s.w >= v.minW)); const [qx, qz] = v.near || [-10916, -21600];
+      L.sort((a, b) => Math.hypot(a.x - qx, a.z - qz) - Math.hypot(b.x - qx, b.z - qz));
+      const s = L[v.k || 0]; const nx = Math.sin(s.face), nz = Math.cos(s.face);
+      px = s.x + nx * (v.back || 0) + nz * (v.side || 0); pz = s.z + nz * (v.back || 0) - nx * (v.side || 0); yaw = s.face + (v.yawOff || 0);
+    }
     if (typeof yaw === 'string' && yaw.startsWith('to:')) { const [tx, tz] = yaw.slice(3).split(',').map(Number); yaw = toward(px, pz, tx, tz); }
     J.setMode('follow');
     if (v.home) J.teleport(0, 0); else { await J.corridor.preload(px, pz); const y = md.owns(px, pz) ? md.surfaceY(px, pz) : (v.px === 'ntower' ? J.namsan.spawnY() : (J.namsan?.surfaceY?.(px, pz) ?? undefined)); J.teleport(px, pz, y); }
