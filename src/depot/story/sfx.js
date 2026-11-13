@@ -34,6 +34,16 @@ const SYN = {
   'bgm.errand': [[523, 0, 0.12, 'triangle', 0.14], [659, 0.12, 0.12, 'triangle', 0.14], [784, 0.24, 0.12, 'triangle', 0.14], [1047, 0.36, 0.3, 'triangle', 0.14]], // 곡 들어갈 때 짧은 신호 (곡 자체는 아래 MOODS)
   arrive: [[784, 0, 0.1, 'triangle', 0.18], [1175, 0.09, 0.22, 'triangle', 0.18], [1568, 0.2, 0.3, 'sine', 0.08]],
   'kid-giggle': [[1400, 0, 0.05, 'sine', 0.08], [1600, 0.07, 0.05, 'sine', 0.08], [1500, 0.14, 0.06, 'sine', 0.08]],
+  'kid-cry': [[880, 0, 0.22, 'triangle', 0.07], [740, 0.2, 0.3, 'triangle', 0.07], [820, 0.55, 0.18, 'triangle', 0.05]], // E12 꼬마가 놀람(말소리 없이, 작게)
+  'sample-tray': [[3100, 0, 0.05, 'triangle', 0.07], [3600, 0.08, 0.05, 'triangle', 0.06], [2800, 0.15, 0.08, 'triangle', 0.05], [5000, 0, 0.04, 'noise', 0.05]], // 시식 이쑤시개·접시 달그락 (d5_072)
+  'mop-squeak': [[1400, 0, 0.12, 'sawtooth', 0.04], [1750, 0.1, 0.1, 'sawtooth', 0.04], [1500, 0.26, 0.14, 'sawtooth', 0.035]], // 대걸레 끽끽 (E04 정리)
+  // v0.6 새 소리 (audio-cues.json newSfxV06)
+  'tissue-tumble': [[420, 0, 0.16, 'noise', 0.26], [120, 0, 0.12, 'sine', 0.16], [380, 0.3, 0.16, 'noise', 0.24], [110, 0.3, 0.12, 'sine', 0.14], [460, 0.62, 0.16, 'noise', 0.22], [100, 0.62, 0.12, 'sine', 0.13], [400, 0.98, 0.16, 'noise', 0.2], [440, 1.3, 0.16, 'noise', 0.16], [90, 1.3, 0.12, 'sine', 0.1], [420, 1.6, 0.2, 'noise', 0.12]], // 보들범 팩 푹-푹-푹 1.8초
+  'speed-warn': [[1760, 0, 0.12, 'square', 0.06], [1760, 0.2, 0.12, 'square', 0.06]], // 아기 의자 과속 삐삐 0.4초
+  'suspicion-rise': [[294, 0, 0.18, 'square', 0.05], [349, 0.16, 0.18, 'square', 0.05], [415, 0.32, 0.3, 'square', 0.05], [208, 0, 0.5, 'triangle', 0.06]], // 미행 의심 상승(클라리넷 느낌)
+  'camera-shutter': [[4200, 0, 0.04, 'noise', 0.3], [2600, 0.07, 0.06, 'noise', 0.24], [2637, 0.1, 0.2, 'sine', 0.06]], // 휴대폰 찰칵 + 플래시 핑 0.3초
+  'stinger.reveal': [[147, 0, 0.35, 'sawtooth', 0.09], [175, 0.32, 0.35, 'sawtooth', 0.09], [208, 0.64, 0.35, 'sawtooth', 0.09], [294, 0.98, 1.0, 'sawtooth', 0.1], [587, 0.98, 1.0, 'triangle', 0.08], [1175, 1.2, 0.8, 'sine', 0.04], [73, 0.98, 1.0, 'sine', 0.22]], // 정체 공개 2초
+  'lava-hiss': [[5200, 0, 0.5, 'noise', 0.14], [2400, 0.02, 0.3, 'noise', 0.06]], // 바퀴가 선 밖 치익
 };
 
 export function createStorySfx({ audio, getLevel }) {
@@ -76,6 +86,7 @@ export function createStorySfx({ audio, getLevel }) {
     'bgm.tailing': { bpm: 92, mul: 0.3, wave: 'square', g: 0.035, notes: [0, null, 3, null, 0, 5, null, 3, 0, null, -2, null, 0, null, 3, 6], root: 294, bass: [0, 0, 3, -2], bassG: 0.1 },
     'bgm.timesale': { bpm: 148, mul: 0.3, wave: 'square', g: 0.045, notes: [0, 0, 7, 0, 12, 0, 7, 10, 0, 0, 7, 0, 12, 14, 12, 10], root: 440, bass: [0, 0, 5, 7], bassG: 0.1, hat: true },
     'bgm.closing': { bpm: 76, mul: 0.4, wave: 'sine', g: 0.06, notes: [12, 7, 4, 0, 5, 9, 12, 9, 7, 4, 2, 7, 0, null, null, null], root: 659, bass: [0, -5, -3, -5], bassG: 0.05, len: 0.9 },
+    'bgm.lava': { bpm: 120, mul: 0.35, wave: 'triangle', g: 0.05, notes: [0, 7, 3, 7, 0, 7, 5, 8, 0, 7, 3, 7, 10, 8, 7, 5], root: 330, bass: [0, 0, -4, -2], bassG: 0.09, hat: true }, // 막장 방송 '바닥은 용암'
     'bgm.tension': { bpm: 104, mul: 0.6, wave: 'triangle', g: 0.04, notes: [0, null, 0, null, 1, null, 0, null], root: 196, bass: [0, 1], bassG: 0.06 },
   };
   let mood = null, moodTimer = 0, moodBus = null, step = 0, nextT = 0;

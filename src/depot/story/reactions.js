@@ -18,7 +18,7 @@ export function pickLines(lines, n, key) {
   return nums.length ? lines[String(nums[0])] : Object.values(lines)[0];
 }
 
-export function createReactions({ save, getMode, getDay, getFreq, deliver, cue, lineOk = () => true, now = () => performance.now() / 1000, rnd = Math.random }) {
+export function createReactions({ save, getMode, getDay, getFreq, deliver, cue, lineOk = () => true, getFlag = (k) => save.flags?.[k], now = () => performance.now() / 1000, rnd = Math.random }) {
   const R = { queue: [], last: -99, lastBy: {}, minute: [], lastFire: {}, t0: now(), quietUntil: 0, paUntil: 0, eventCast: null, counts: save.counts || (save.counts = {}), today: save.today || (save.today = {}), once: save.once || (save.once = {}) };
   function allowed(r) {
     if (!r) return false;
@@ -26,6 +26,7 @@ export function createReactions({ save, getMode, getDay, getFreq, deliver, cue, 
     if (mode === 'free' && !r.freeMode) return false;
     if (mode === 'story' && Array.isArray(r.days) && (getDay() < r.days[0] || getDay() > r.days[r.days.length - 1])) return false;
     if (r.rarity === 'once' && R.once[r.id]) return false;
+    if (r.needsFlag && !getFlag(String(r.needsFlag).replace(/^flag\./, ''))) return false; // 예: R59 flag.spyRevealed
     if (r.perDayMax && (R.today[r.id] || 0) >= r.perDayMax) return false;
     const cd = r.cooldownSec || 0, lf = R.lastFire[r.id];
     if (cd && lf != null && now() - lf < cd) return false;

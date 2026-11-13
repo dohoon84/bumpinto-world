@@ -329,6 +329,10 @@ mat3 npcRot() { vec2 a = uRot[int(aBone + 0.5)]; float cp = cos(a.x), sp = sin(a
         n.mesh.position.y = n.id === 'sample-queue' ? Math.max(0, Math.sin(t * 0.5 + n.phase)) ** 8 * 0.03 : 0;
         animate(n, dt, me); continue;
       }
+      if (n.puppet) { // 스토리 연출(5일차 미행)이 x·z·yaw·v·stopT 를 직접 움직임 — 길찾기만 끄고 그리기·관절·충돌 사각형은 그대로
+        n.mesh.position.set(n.x, n.v > 0.05 ? Math.abs(Math.sin(t * 7 * Math.max(0.6, n.v) + n.phase)) * 0.025 : 0, n.z); n.mesh.rotation.y = n.yaw;
+        animate(n, dt, me); setRect(n); continue;
+      }
       const a = nodes[n.to];
       // 정지(유형별 습관)
       if (n.stage) { n.stage.t -= dt; n.v = 0; n.stopT = Math.max(n.stopT, 0.5); if (n.stage.t <= 0) { Object.assign(n, n.stage.back); n.stage = null; n.stopT = 1; } } // 연출로 잠깐 세운 뒤 원래 자리로
@@ -402,10 +406,17 @@ mat3 npcRot() { vec2 a = uRot[int(aBone + 0.5)]; float cp = cos(a.x), sp = sin(a
     return sw;
   }
   function stage(id, x, z, yaw, sec) { const n = list.find((q) => q.id === id && q.active); if (!n) return false; n.stage = { t: sec, back: n.stage?.back || { x: n.x, z: n.z, yaw: n.yaw, from: n.from, to: n.to, prev: n.prev } }; n.x = x; n.z = z; n.yaw = yaw; n.v = 0; n.skew = 0; return true; }
+  /** 연출용: 길찾기를 끄고 바깥에서 움직임(on) · 끄면 가장 가까운 길 점에서 다시 걷기 시작 */
+  function puppet(id, on) {
+    const n = list.find((q) => q.id === id); if (!n) return null;
+    if (on) { n.puppet = true; n.stage = null; n.stopT = 0; n.v = 0; n.restock = false; return n; }
+    if (n.puppet) { n.puppet = false; const k = nearestNode(n.x, n.z); n.from = n.to = k; n.prev = -1; n.stopT = 1; n.restock = false; }
+    return n;
+  }
   function rush(id, sec) { const n = list.find((q) => q.id === id && q.active); if (!n || n.stage) return; n.sprintT = sec; n.stopT = 0; }
   const near = (id, x, z, r) => list.find((n) => n.active && n.id === id && Math.hypot(n.x - x, n.z - z) < r) || null;
   function dispose() { for (const n of list) { const i = obstacles.indexOf(n.rect); if (i >= 0) obstacles.splice(i, 1); } root.removeFromParent(); }
   /** 배경 손님·직원 id (우선순위 순, n 명까지 · 모바일은 만든 만큼만) */
   const ambient = (n = 99) => list.filter((x) => x.ambient).slice(0, n).map((x) => x.id);
-  return { root, list, tick, setActive, near, stage, rush, nodes, dispose, ambient, get count() { return list.filter((n) => n.active).length; } };
+  return { root, list, tick, setActive, near, stage, rush, puppet, nodes, dispose, ambient, get count() { return list.filter((n) => n.active).length; } };
 }

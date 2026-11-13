@@ -1134,7 +1134,9 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit, a
   if (new URLSearchParams(location.search).get('depotStory') !== '0') {
     import('./story/index.js').then((m) => {
       if (disposed) return;
-      story = m.createStory({ THREE, scene, keep, camera, st, items, loadKg, staff, checkout, shoppers, guide, exitTarget: EXIT_TARGET, cartObj: cart, api, audio, isMobile, ASSET, onExit, getLevel: getAudioLevel });
+      const looks = {}; // 스토리 소품이 매장 상품 모양을 빌려 씀 (박스 12삼각형 + 상품 아틀라스 재질 그대로 — 새 텍스처 없음)
+      const look = (id) => { const p = BY_ID[id]; if (!p) return null; return (looks[id] ||= { geo: keep(boxGeoLabeled(...p.size)), mat: prodMat[id] }); };
+      story = m.createStory({ THREE, scene, keep, camera, st, items, loadKg, staff, checkout, shoppers, guide, exitTarget: EXIT_TARGET, cartObj: cart, api, audio, isMobile, ASSET, onExit, getLevel: getAudioLevel, obstacles, collide: collide2D, look });
       audioTaps.push((n, o) => story?.onAudio(n, o));
     }).catch((e) => console.warn('[depot-story]', e));
   }

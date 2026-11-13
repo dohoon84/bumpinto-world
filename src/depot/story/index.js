@@ -3,9 +3,6 @@
 //   저장: localStorage 'bw.depot.story.v1' (일차·본 대사·단골도·활기·도장·사건 상태·반응 횟수·어제 기록). 서버 저장 없음.
 //   URL: ?depotMode=story|free|ask(모드 다시 고르기) · ?depotStoryReset=1(저장 지움) · shot=1 이면 depotMode 없을 때 자유+반응 끔(스샷 고정).
 import { laneX, CO } from '../checkout.js';
-import DAY1 from './data/day1-script.json';
-import DAY2 from './data/day2-script.json';
-import DAY3 from './data/day3-script.json';
 import TARGETS from './data/targets.json';
 import EVENTS from './data/events.json';
 import EXIT from './data/exit-rules.json';
@@ -15,18 +12,25 @@ import { createReactions } from './reactions.js';
 import { createStorySfx } from './sfx.js';
 import { cashierAt } from './cashiers.js';
 import { createProps, spySilhouette, nextDayArt } from './props.js';
+import { createDay4Props, createEscort, evalE04, E04 as E04T, E12 as E12T, D4_SPOTS } from './day4.js';
+import { createDay5Props, createTail, createLava, buildSpyRoute, inRect, wheels, E05 as E05T, E06 as E06T, LAVA_GOAL } from './day5.js';
 
 const KEY = 'bw.depot.story.v1';
-const SCRIPTS = { 1: DAY1, 2: DAY2, 3: DAY3 }; // 대본이 있는 날 (v0.5: 1–3일차)
-const LINES = Object.fromEntries([...DAY1, ...DAY2, ...DAY3].map((l) => [l.id, l]));
-const DAY_START = { 1: 'd1_000', 2: 'd2_000', 3: 'd3_000' };
-const DAY_MAIN = { 1: 'E01', 2: 'E02', 3: 'E03' }; // 하루 끝 도장·활기 기준 사건
+// 대본이 있는 날: data/dayN-script.json 을 넣기만 하면 그 일차가 열림 (v0.6: 1–5일차). 없으면 '준비 중' 카드 그대로.
+const SCRIPTS = Object.fromEntries(Object.entries(import.meta.glob('./data/day*-script.json', { eager: true, import: 'default' }))
+  .map(([f, d]) => [Number(/day(\d+)-script\.json$/.exec(f)?.[1]), d]).filter(([n, d]) => n > 0 && Array.isArray(d) && d.length));
+const LINES = Object.fromEntries(Object.values(SCRIPTS).flat().map((l) => [l.id, l]));
+const DAY_START = Object.fromEntries(Object.entries(SCRIPTS).map(([n, d]) => [n, (d.find((l) => l.cmd === 'scene.start') || d[0]).id]));
+const DAY_MAIN = { 1: 'E01', 2: 'E02', 3: 'E03', 4: 'E04', 5: 'E05' }; // 하루 끝 도장·활기 기준 사건
+const DAY_SIDE = { 4: 'E12', 5: 'E06' }; // 사이드 사건: 성공 = 표의 활기(E12 +5 · E06 +6), 부분 = 2 (메인과 따로 더함, 상한 100)
+const MISSION_TARGET = { E04: 'tissue-pyramid', E12: 'customer-desk', E05: 'timesale-endcap', E06: 'lava-goal' }; // 대본·events.json 에 target 이 없을 때
 const DAY_FLAGS = { 2: ['d2Sticker'] };
-const REVEAL_DAY = 5; // 수상한 손님 정체(이름·가게)는 5일차 전에는 절대 안 보임
+const REVEAL_FLAG = 'spyRevealed'; // 수상한 손님 정체(이름)는 5일차 d5_036/d5_089c 선택지의 flag.spyRevealed 뒤에만 보임 (일차 기준 아님)
+const CHAIN_MISSED = EXIT.ignoreEvent?.chainMissed || {}; // 사건 중 계산 → 그날 남은 사건도 놓침 (mission.start 노드 id → 사건 id 들)
 const CUT_ON = { d2_143: () => spySilhouette() }, CUT_OFF = new Set(['d2_146', 'd2_147', 'd2_148', 'd2_150']);
 const PORTRAIT = { beomsuk: 'beomsuk', beomi: 'beomi', halmeoni: 'halmeoni', spy: 'spy', cashier: 'kimmiso' };
 const NAMES = { beomsuk: ['한범숙 주임', '매장 주임'], beomi: ['범이', '수습 알바'], halmeoni: ['말순 할머니', '시식 코너'], spy: ['수상한 손님', '???'], pa: ['방송실 점장', '방송 중'], me: ['나', ''], cashier: ['계산원 김미소', '계산대 07'] };
-const SPY_REVEALED = ['반기철', '싹쓸마트'];
+const SPY_REVEALED = ['반기철(반값)', '경쟁 마트 조사 요원']; // 가게 이름(싹쓸마트)은 미정이라 이름표·대사에 안 씀
 const NPC_NAME = Object.fromEntries((NPCT.types || []).map((t) => [t.id, t.name]));
 const EGG_TOWER = { x: 55.0, z: 28.6 }; // 통로 A '계란·유제품' 걸이 사인(53.9, 28) 아래, 랙 쪽에 붙임
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -62,9 +66,23 @@ export function createStory(ctx) {
   const tk = dayKey(); if (save.todayKey !== tk) { save.today = {}; save.todayKey = tk; }
   const mode = () => session.mode || save.mode || 'free';
   const curDay = () => save.replay || save.day;
-  const nameOf = (who) => (who === 'spy' && curDay() >= REVEAL_DAY ? SPY_REVEALED : NAMES[who] || [who, '']);
-  const lineOk = (who, line) => curDay() >= REVEAL_DAY || !/반기철|싹쓸마트/.test(String(line)); // 정체 대사 막기
+  // 정체 공개: 저장된 flag 기준. 1–5일차를 다시 할 때는 이번 판에서 공개 선택지를 지나야만 (저장 flag 는 그대로 둠)
+  const revealed = () => (save.replay && save.replay <= 5 ? !!session.revealed : !!save.flags[REVEAL_FLAG]);
+  const nameOf = (who) => (who === 'spy' && revealed() ? SPY_REVEALED : NAMES[who] || [who, '']);
+  const R58_FAIL = /^\(E12 실패·놓침\)\s*/;
+  const e12Bad = () => save.ev.E12 === 'fail' || save.ev.E12 === 'missed';
+  const lineOk = (who, line) => {
+    const L = String(line);
+    if (/싹쓸마트/.test(L)) return false; // 가게 이름 미정
+    if (/반기철/.test(L) && !revealed()) return false; // 정체 대사 막기
+    if (R58_FAIL.test(L)) return e12Bad(); // R58 크레용 그림: 실패·놓침 줄
+    if (reactions?.BY_ID?.R58?.lines?.['1']?.[0] === L) return !e12Bad();
+    return true;
+  };
   const props = createProps({ THREE, scene, keep, cartObj: ctx.cartObj || scene, items });
+  const d4 = createDay4Props({ THREE, scene, keep, cartObj: ctx.cartObj || scene, look: ctx.look, obstacles: ctx.obstacles, isMobile });
+  const TGS = Object.fromEntries((TARGETS.targets || []).map((t) => [t.id, t]));
+  const d5 = createDay5Props({ THREE, scene, keep, isMobile, tg: TGS, onPhoto: () => photoE05() });
   const art = { nextDay: (d) => nextDayArt(d) };
   const settings = () => save.settings;
 
@@ -87,7 +105,7 @@ export function createStory(ctx) {
     return { x: (v3.x + 1) / 2 * innerWidth, y: (1 - v3.y) / 2 * innerHeight };
   }
   function deliver({ r, line, speaker }) {
-    const who = r.who;
+    const who = r.who; line = String(line).replace(R58_FAIL, '');
     const ms = Math.min(5000, 2400 + line.length * 40);
     let name = who.startsWith('npc:') ? NPC_NAME[who.slice(4)] || '손님' : nameOf(who)[0];
     let fc = face(who);
@@ -101,7 +119,7 @@ export function createStory(ctx) {
   }
   let touchT = 0; const touchHeld = () => touchT > 3;
   const reactions = createReactions({
-    save, getMode: mode, getDay: () => curDay(), lineOk, getFreq: () => session.freq ?? save.settings.reactionFreq,
+    save, getMode: mode, getDay: () => curDay(), lineOk, getFlag: (k) => (k === REVEAL_FLAG ? revealed() : save.flags[k]), getFreq: () => session.freq ?? save.settings.reactionFreq,
     deliver: (x) => { deliver(x); if (!session.noPersist) persist(); }, cue: (n) => sfx.cue(n),
   });
   const hits = []; { const f0 = reactions.fire; reactions.fire = (id, o) => { if (hits.length < 200) hits.push(id); return f0(id, o); }; } // 트리거 기록(테스트용 _dbg.hits)
@@ -134,6 +152,8 @@ export function createStory(ctx) {
     }
     if (name === 'item-putback' && m && m.id === 'E14' && m.wps.some((w) => w.item === opts.product?.id)) reactions.fire('R54');
     if (name === 'cart-bump' && curDay() >= 3 && shoppers?.near('spy', st.me.x, st.me.z, 1.5)) reactions.fire('R55');
+    if (name === 'cart-bump' && m && m.id === 'E12' && !m.result) kidBump(m);
+    if (name === 'cart-bump' && m && m.id === 'E05' && !m.result) m.bumpFlag = true; // 쿵 소리 = 즉시 의심
     if (name === 'cart-release' && flags.paid && st.cart.x > 74 && st.cart.x < 82 && st.cart.z < 10) reactions.fire('R09');
   }
   function onSfx(e) {
@@ -171,7 +191,7 @@ export function createStory(ctx) {
   const CHECKPOINT = new Set(['scene.start', 'roam', 'mission.start', 'scene.checkout']);
   function setBeat(id) { if (!id) return; save.beat = id; save.beatDay = curDay(); persist(); }
   function applySet(set) {
-    for (const [k, v] of Object.entries(set || {})) { const [a, b] = k.split('.'); if (a === 'aff') save.aff[b] = Math.min(5, (save.aff[b] || 0) + v); else if (a === 'flag') save.flags[b] = v; }
+    for (const [k, v] of Object.entries(set || {})) { const [a, b] = k.split('.'); if (a === 'aff') save.aff[b] = Math.min(5, (save.aff[b] || 0) + v); else if (a === 'flag') { save.flags[b] = v; if (b === REVEAL_FLAG) session.revealed = !!v; } }
   }
   function branchValue(on) { // ev.E01 · flag.d2Sticker · mission.E02.result
     const [a, b] = String(on || '').split('.');
@@ -235,13 +255,16 @@ export function createStory(ctx) {
   }
 
   // ---------- 목표 위치 (targets.json) ----------
-  const TG = Object.fromEntries((TARGETS.targets || []).map((t) => [t.id, t]));
-  const ARRIVE = { 'sample-corner': { ax: 10.6, az: 37.6, r: 3.0, y: 2.6 }, 'timesale-endcap': { y: 2.6 } }; // 시식대 동쪽 통로에서 멈춤
+  const TG = TGS;
+  const LAVA_ZONES = ['lava-lane-01', 'lava-link-01', 'lava-front-band'].map((id) => TG[id]).filter((r) => r && r.x0 != null).concat([LAVA_GOAL]);
+  const ARRIVE = { 'sample-corner': { ax: 10.6, az: 37.6, r: 3.0, y: 2.6 }, 'timesale-endcap': { y: 2.6 }, // 시식대 동쪽 통로에서 멈춤
+    'tissue-pyramid': D4_SPOTS.pallet, 'customer-desk': D4_SPOTS.desk, 'kid-spot': D4_SPOTS.kid, // 4일차: 마커 고리는 파렛트·창구 앞
+    'lava-goal': { ...LAVA_GOAL, ax: LAVA_GOAL.x, az: LAVA_GOAL.z, r: 1.6, y: 2.2 } }; // 5일차 E06 도착 칸 (사각형 판정은 day5.js)
   const CORRAL = { id: 'corral', label: '카트 보관소 (출입구 옆)', x: 78, z: 5.8, ax: 72.6, az: 6.2, r: 2.6, y: 2.4 };
   function target(id) {
     if (id === 'checkout') return checkoutTarget();
     if (id === 'lane-07') return { id, label: '계산대 07 (계산원 김미소)', x: laneX(6) + 0.15, z: 9.6, ax: laneX(6) + 0.15, az: 10.4, r: 1.8, y: 2.5 };
-    const t = TG[id]; if (!t) return null;
+    const t = id === 'lava-goal' ? LAVA_GOAL : TG[id] || ARRIVE[id]; if (!t) return null;
     const o = ARRIVE[id] || {};
     return { id, label: t.label, x: t.x, z: t.z, ax: o.ax ?? t.x, az: o.az ?? t.z, r: o.r || t.r || 2.5, y: o.y || 2.4 };
   }
@@ -318,13 +341,17 @@ export function createStory(ctx) {
         id, ev, L, resolve, t0: now(), recalled: false, result: null, timed: 0, arrivedIdx: -1,
         resolveKind: L.resolve || (id === 'E01' ? 'checkout' : 'arrive'), limit: L.timeLimitSec || ev.tuning?.timeLimitSec || 0,
         base: { eggs: staff.S.eggsToday, floor: staff.S.floorDrops, rams: staff.S.rams }, taken: false, brakes: 0, near6: false,
-        wps: (L.waypoints || ev.waypoints || []).filter((w) => w.item), final: target(L.target || ev.target),
+        wps: (L.waypoints || ev.waypoints || []).filter((w) => w.item), final: target(L.target || ev.target || MISSION_TARGET[id]),
         n0: { ramen: cartHas('ramen') }, stickered: new Set(), remaining: ev.tuning?.boxesOnPallet || 8, rivalT: 0,
       };
       if (id === 'E01') { buildTower(); sfx.cue('item-wobble', { pos: { x: EGG_TOWER.x, y: 1, z: EGG_TOWER.z } }); }
       if (id === 'E13') props.tray(true);
       if (id === 'E14') props.shelfStickers(m.wps.map((w) => target(w.target)));
       if (id === 'E03') { shoppers?.rush?.('sale-hunter', 14); shoppers?.stage?.('spy', 46.0, 45.4, Math.PI / 2, 25); sfx.cue('motif.spy'); }
+      if (id === 'E04') startE04(m);
+      if (id === 'E12') startE12(m);
+      if (id === 'E05') startE05(m);
+      if (id === 'E06') startE06(m);
       vn.missionCard(ev); updateChip(true);
       reactions.setEventCast(ev.cast || []);
     });
@@ -337,6 +364,10 @@ export function createStory(ctx) {
     if (m.id === 'E01' && tower && result === 'missed') tower.visible = false;
     if (m.id === 'E13') props.tray(false, result === 'fail');
     if (m.id === 'E14') props.shelfStickers(null);
+    if (m.id === 'E04') d4.endSlide();
+    if (m.id === 'E12') endE12(m, result);
+    if (m.id === 'E05') endE05();
+    if (m.id === 'E06') endE06();
     mission = null; guide.set(null); updateChip(true);
     setBeat(next); persist();
     m.resolve(next);
@@ -348,6 +379,10 @@ export function createStory(ctx) {
     if (m.id === 'E01') return m.taken ? { ...checkoutTarget(), step: '계산대까지 살살' } : { ...target('aisle-01-eggs'), label: '흔들리는 범란 탑 (통로 01)' };
     if (m.id === 'E14') { for (let i = 0; i < m.wps.length; i++) { const w = m.wps[i]; if (!m.stickered.has(w.item)) return { ...target(w.target), label: w.label || w.item, step: `${m.stickered.size + 1}/${m.wps.length}`, wi: i }; } return { ...m.final, step: '주임님께' }; }
     if (m.id === 'E03') return { ...m.final, label: '특가 매대 (범라면 40봉)' };
+    if (m.id === 'E04') return stopE04(m);
+    if (m.id === 'E12') return m.esc.S.boarded ? { ...m.final, step: '2/2 · 천천히' } : { ...m.kidAt, step: '1/2' };
+    if (m.id === 'E05') return stopE05(m);
+    if (m.id === 'E06') return cartHas('water') < (m.ev.tuning?.waterPacks || E06T.waterPacks) ? { ...target('aisle-01-water'), label: '범샘물 2L×6 (통로 01 노란 선 안)', step: `1/2 · ${cartHas('water')}/3`, wi: 0 } : { ...m.final, step: '2/2 · 노란 선 안으로' };
     for (let i = 0; i < m.wps.length; i++) { const w = m.wps[i]; if (cartHas(w.item) < (w.n || 1)) return { ...target(w.target), label: w.label || w.item, step: `${i + 1}/${m.wps.length}`, wi: i }; }
     return m.final ? { ...m.final, step: m.wps.length ? '배달' : '' } : null;
   }
@@ -373,6 +408,188 @@ export function createStory(ctx) {
   function evalE14(m, t) { const rams = staff.S.rams - m.base.rams; return m.stickered.size < m.wps.length ? 'fail' : t <= (m.ev.tuning?.goodTimeSec || 150) && rams === 0 ? 'success' : 'partial'; }
   function boxesE03(m) { return Math.max(0, cartHas('ramen') - m.n0.ramen); }
   function evalE03(m) { const b = boxesE03(m); return b >= 2 ? 'success' : b === 1 ? 'partial' : m.near6 ? 'fail' : 'missed'; }
+  // ---------- 4일차: E04 보들범 산사태 · E12 꼬마 손님 길 찾기 (기믹·소품은 day4.js) ----------
+  const d4Cart = { x: 0, z: 0, vx: 0, vz: 0, yaw: 0, held: false };
+  function d4Tick(dt) { // 매 프레임: 팩 굴림·카트 담기/반납·꼬마 콩콩
+    const c = st.cart; d4Cart.x = c.x; d4Cart.z = c.z; d4Cart.vx = c.vx; d4Cart.vz = c.vz; d4Cart.yaw = c.yaw; d4Cart.held = !!st.hasCart;
+    d4.tick(dt, ctx.cartObj?.visible === false ? null : d4Cart);
+  }
+  const cartSpeed = () => (st.hasCart ? Math.hypot(st.cart.vx, st.cart.vz) : 0);
+  /** bumpTarget: 카트 앞·뒤 원이 손님 NPC 자리(사각형)·직원(범숙)에 닿음 — 사람마다 gap 초에 한 번만 셈. 랙(staff.S.rams)은 안 셈 */
+  function shopperContacts(m, gap = 1.5) {
+    if (!st.hasCart || cartSpeed() < 0.25) return 0;
+    const c = st.cart, fx = -Math.sin(c.yaw), fz = -Math.cos(c.yaw), tn = now(); let n = 0;
+    m.hitAt ||= {};
+    const pts = [0.32, -0.25].map((o) => [c.x + fx * o, c.z + fz * o]);
+    const touch = (id, hit) => { if (hit && tn - (m.hitAt[id] ?? -99) > gap) { m.hitAt[id] = tn; n++; } };
+    for (const s of shoppers?.list || []) {
+      if (!s.active || !s.rect || s.rect.x0 < -900) continue;
+      const r = s.rect; touch(s.id, pts.some(([px, pz]) => Math.hypot(px - Math.max(r.x0, Math.min(px, r.x1)), pz - Math.max(r.z0, Math.min(pz, r.z1))) < 0.36 + 0.1));
+    }
+    const sp = staff?.root?.position; if (sp && staff.root.visible !== false) touch('staff', pts.some(([px, pz]) => Math.hypot(px - sp.x, pz - sp.z) < 0.36 + 0.38));
+    return n;
+  }
+  let d4SfxT = 0, d4FullT = 0;
+  function onSlideEvent(kind, p) {
+    const pos = { x: p.x, y: 0.3, z: p.z }, tn = now();
+    if (kind === 'scoop') sfx.cue('item-pick', { pos });
+    else if (kind === 'return') { sfx.cue('item-place', { pos: { x: D4_SPOTS.pallet.x, y: 0.5, z: D4_SPOTS.pallet.z }, kg: E04T.packKg }); updateChip(true); }
+    else if ((kind === 'land' || kind === 'hit' || kind === 'kick') && tn - d4SfxT > 0.15) { d4SfxT = tn; sfx.cue('item-fall', { pos, kg: 4.5 }); }
+    if (kind === 'full' && tn - d4FullT > 6) { d4FullT = tn; if (!reactions.fire('R57', { force: true })) vn.toast({ face: face('beomi'), name: '범이', text: '카트가 꽉 찼어요! 파렛트에 먼저 내려 주세요', ms: 2600 }); } // R57 휴지 산
+  }
+  function startE04(m) {
+    const tu = m.ev.tuning || {};
+    m.packs = tu.packs || E04T.packs; m.cap = tu.cartCap || E04T.cap; m.limit ||= tu.timeLimitSec || E04T.timeLimitSec; m.hits = 0;
+    m.slide = d4.startSlide({ collide: ctx.collide, onEvent: onSlideEvent, t: { ...E04T, packs: m.packs, cap: m.cap, okMin: tu.okMinPacks || E04T.okMin, scoopMaxSpeed: tu.scoopMaxSpeed || E04T.scoopMaxSpeed } });
+    const P = D4_SPOTS.pallet; sfx.cue('item-wobble', { pos: { x: P.x, y: 1, z: P.z } }); setTimeout(() => alive && (sfx.cue('tissue-tumble'), sfx.cue('item-fall', { pos: { x: P.x, y: 0.4, z: P.z }, kg: 4.5 })), 450);
+  }
+  const hitsE04 = (m) => m.hits; // 손님·직원과 부딪힌 수 (랙은 안 셈 — judge.bumps)
+  const resultE04 = (m) => evalE04({ returned: m.slide.S.returned, collisions: hitsE04(m), engaged: m.slide.S.scooped > 0 || m.slide.S.kicks > 0 }, { ...E04T, packs: m.packs, okMin: m.ev.tuning?.okMinPacks || E04T.okMin });
+  function stopE04(m) {
+    const sl = m.slide, S = sl.S, left = sl.loose().length, back = { ...(m.final || target('tissue-pyramid')), step: `반납 ${S.returned}/${m.packs}` };
+    if (S.carried && (S.carried >= m.cap || !left)) return { ...back, label: `${back.label} · 카트에 ${S.carried}팩` };
+    const p = sl.nearestLoose(st.cart.x, st.cart.z);
+    if (!p) return back;
+    // 굴러가는 팩을 따라가되 0.75 m 넘게 움직였을 때만 목표 갱신 (경로 다시 풀기 줄임)
+    const k = m.packTg; if (!k || k.i !== p.i || Math.hypot(k.x - p.x, k.z - p.z) > 0.75 || sl.P[k.i].state !== 'loose') m.packTg = { i: p.i, x: p.x, z: p.z };
+    const g = m.packTg;
+    return { id: 'bodeul-pack', label: `굴러간 보들범 · 남은 ${left}팩`, x: g.x, z: g.z, ax: g.x, az: g.z, r: 1.0, y: 1.9, step: `반납 ${S.returned}/${m.packs}`, wi: g.i };
+  }
+  function tickE04(m, t) {
+    m.hits += shopperContacts(m);
+    const left = (m.limit || E04T.timeLimitSec) - t;
+    if (left < 10 && left > 0 && Math.floor(left) !== m.tickS) { m.tickS = Math.floor(left); sfx.cue('timer-tick'); }
+    if (m.slide.S.returned >= m.packs) { arrived(); endMission(resultE04(m), resumeOf(m)); return; }
+    if (left <= 0) { const r = resultE04(m); endMission(r, r === 'missed' ? (m.L.onMissed || resumeOf(m)) : resumeOf(m)); }
+  }
+  function startE12(m) {
+    m.esc = createEscort({ t: { ...E12T, speedLimit: m.ev.tuning?.speedLimit || E12T.speedLimit } });
+    const kw = (m.L.waypoints || m.ev.waypoints || []).find((w) => w.rider);
+    m.kidAt = { ...(target(m.L.kidAt || kw?.target || 'kid-spot') || D4_SPOTS.kid), label: kw?.label || '꼬마 손님 태우기' };
+    m.kidAt.ax ??= m.kidAt.x; m.kidAt.az ??= m.kidAt.z;
+    d4.kid('standing', m.kidAt); d4.desk(true);
+    sfx.cue('kid-giggle', { pos: { x: m.kidAt.x, y: 1, z: m.kidAt.z } });
+  }
+  function kidBump(m) {
+    if (!m.esc.bump(now())) return;
+    sfx.cue('kid-cry', { pos: { x: st.cart.x, y: 1, z: st.cart.z } }); updateChip(true);
+    if (!m.esc.failed()) vn.toast({ face: face('beomi'), name: '범이', text: '앗, 쿵! 꼬마가 놀랐어요… 한 번만 더 부딪히면 울어요', ms: 2800 });
+  }
+  function tickE12(m, dt) {
+    const e = m.esc, S = e.S, sp = cartSpeed();
+    if (!S.boarded) {
+      if (now() - m.t0 >= (m.L.timeoutSec || m.ev.tuning?.timeoutSec || E12T.timeoutSec)) { d4.kid('off'); endMission('missed', m.L.onMissed || resumeOf(m)); return; } // 180초 안 태움 → 범이가 데려감
+      if (st.hasCart && sp <= E12T.boardMaxSpeed && Math.hypot(st.cart.x - m.kidAt.x, st.cart.z - m.kidAt.z) < (m.kidAt.r || E12T.boardR) && !lock.vn) {
+        e.board(); d4.kid('riding'); sfx.cue('kid-giggle'); arrived(); m.arrivedKey = null;
+        vn.toast({ face: face('beomi'), name: '범이', text: '꼬마 손님 탑승! 고객센터까지 천천히요 · 1.0 m/s 이하', ms: 3400 });
+        updateChip(true);
+      }
+      return;
+    }
+    if (shopperContacts(m, E12T.bumpGapSec)) kidBump(m);
+    if (e.tick(dt, sp)) { sfx.cue('speed-warn'); vn.toast({ face: face('beomi'), name: '범이', text: `천천히요! 꼬마 손님이 타고 있어요 (${sp.toFixed(1)} m/s → 1.0 이하)`, ms: 2400 }); }
+    updateChip(true);
+    if (e.failed()) { d4.kid('off'); vn.toast({ face: face('beomi'), name: '범이', text: '으앙… 괜찮아, 괜찮아. 제가 고객센터로 데려갈게요!', ms: 3200 }); endMission('fail', resumeOf(m)); return; }
+    if (m.final && meNear(m.final) && sp <= E12T.boardMaxSpeed) { e.arrive(); arrived(); sfx.cue('door-chime'); endMission(e.result(), resumeOf(m)); }
+  }
+  function endE12(m, result) {
+    const ok = result === 'success' || result === 'partial';
+    if (ok) { d4.kid('desk', { x: D4_SPOTS.desk.x, z: D4_SPOTS.desk.z + 1.05 }); setTimeout(() => { if (alive && d4.kidState === 'desk') d4.kid('off'); }, 12000); } // 창구 앞에 내려 줌 → 잠시 뒤 보호자와 감
+    else { d4.kid('off'); d4.desk(false); }
+  }
+  function noteE12(m) {
+    const S = m.esc.S;
+    if (!S.boarded) return '꼬마 손님 옆에 카트를 살살 대 주세요 (0.6 m/s 이하)';
+    const sp = cartSpeed(), over = sp > E12T.speedLimit + 0.02;
+    return `${over ? '⚠ 천천히!' : '✓'} 속도 ${sp.toFixed(1)} m/s (1.0 이하) · 충돌 ${S.bumps}${S.overSec >= 0.5 ? ` · 과속 ${S.overSec.toFixed(1)}초` : ''}`;
+  }
+  // ---------- 5일차: E05 수상한 손님 미행 · E06 바닥은 용암입니다 (판정·상태·소품은 day5.js) ----------
+  let hideSpots = null, meLast = null, meSpeed = 0, d5HudT = 0, susCueT = 0, lavaHissT = 0, burnToastT = 0;
+  function rackEnds() { // 랙(긴 사각형) 끝 = 숨을 자리
+    if (hideSpots) return hideSpots;
+    hideSpots = [];
+    for (const o of ctx.obstacles || []) {
+      if (o.npc || o.story || o.x0 < -900) continue;
+      const w = o.x1 - o.x0, d = o.z1 - o.z0, cx = (o.x0 + o.x1) / 2, cz = (o.z0 + o.z1) / 2;
+      if (d > 6 && w < 3) hideSpots.push([cx, o.z0 - 0.6], [cx, o.z1 + 0.6]); else if (w > 6 && d < 3) hideSpots.push([o.x0 - 0.6, cz], [o.x1 + 0.6, cz]);
+    }
+    return hideSpots;
+  }
+  function startE05(m) {
+    const f = m.L.follow || m.ev.follow || {};
+    const t = { ...E05T, minDist: f.minDistM ?? E05T.minDist, maxDist: f.maxDistM ?? E05T.maxDist, loseSec: f.loseSec ?? E05T.loseSec, spottedMax: f.spottedMax ?? E05T.spottedMax, photoAt: f.photoAtGrab ?? E05T.photoAt, photoWindowSec: f.photo?.windowSec ?? f.photoWindowSec ?? E05T.photoWindowSec, durationSec: m.limit || E05T.durationSec };
+    m.tail = createTail({ route: buildSpyRoute(TG, t), t, onEvent: (k, a) => onTailEvent(m, k, a) });
+    const n = shoppers?.puppet?.('spy', true);
+    if (n && !n.active) { n.active = true; n.mesh.visible = true; }
+    m.spyN = n; d5.tailHud(true); sfx.cue('motif.spy');
+  }
+  function onTailEvent(m, k, a) {
+    const S = m.tail.S, pos = { x: S.x, y: 1, z: S.z }, tn = now();
+    if (k === 'grab') { sfx.cue('item-pick', { pos }); updateChip(true); }
+    else if (k === 'rise' && tn - susCueT > 1.5) { susCueT = tn; sfx.cue('suspicion-rise'); }
+    else if (k === 'spotted') {
+      sfx.cue('stinger.spotted'); vn.shakeChip();
+      vn.toast({ face: face('spy'), name: nameOf('spy')[0], text: a >= E05T.spottedMax ? '거기 카트! 아까부터 따라오는 거 다 알아요.' : '…방금 누가 나를 봤소? 기분 탓인가.', ms: 2600 });
+    }
+  }
+  function stopE05(m) {
+    const S = m.tail.S, k = m.spyTg;
+    if (!k || Math.hypot(k.x - S.x, k.z - S.z) > 1.0) m.spyTg = { x: S.x, z: S.z }; // 1 m 넘게 움직였을 때만 갱신
+    const g = m.spyTg;
+    return { id: 'spy-tail', label: `보라 모자 손님 · ${E05T.minDist}–${E05T.maxDist} m 유지`, x: g.x, z: g.z, ax: g.x, az: g.z, r: 0.01, y: 2.6, step: `담기 ${S.grabs}/10` };
+  }
+  function photoE05() {
+    const m = mission; if (!m || m.id !== 'E05' || m.result || !m.tail || lock.vn) return;
+    sfx.cue('camera-shutter'); d5.flash();
+    const r = m.tail.photo();
+    if (r === 'early') vn.toast({ face: face('beomi'), name: '범이', text: '아직이에요! 특가 상품 열 번째 담을 때요', ms: 2200 });
+    else if (r === 'far') vn.toast({ face: face('beomi'), name: '범이', text: `너무 멀어요! ${E05T.maxDist} m 안에서 찍어요`, ms: 2200 });
+    updateChip(true);
+  }
+  function endE05() {
+    d5.tailHud(false);
+    const n = shoppers?.puppet?.('spy', false); if (n) { n.restock = false; n.stopT = 4; }
+  }
+  function startE06(m) {
+    const ids = m.L.lava?.safeZones || m.ev.lava?.safeZones || ['lava-lane-01', 'lava-link-01', 'lava-front-band', 'lava-goal'];
+    const zones = ids.map((id) => (id === 'lava-goal' ? LAVA_GOAL : TG[id])).filter((r) => r && r.x0 != null);
+    m.lava = createLava({ zones, goal: LAVA_GOAL, t: { ...E06T, timeLimitSec: m.limit || E06T.timeLimitSec, outsideFailSec: m.L.lava?.outsideFailSec ?? E06T.outsideFailSec }, onEvent: (k) => onLavaEvent(m, k) });
+    d5.lava(true);
+  }
+  function onLavaEvent(m, k) {
+    const tn = now();
+    if (k === 'start') { sfx.cue('cart-joint'); vn.toast({ face: face('beomi'), name: '범이', text: '시작! 노란 선 밖은 용암이에요 · 바퀴 하나도 나가면 안 돼요', ms: 2600 }); }
+    else if (k === 'burn') { d5.burn(true); vn.shakeChip(); if (tn - burnToastT > 2.5) { burnToastT = tn; vn.toast({ face: face('beomi'), name: '범이', text: '앗 뜨거! 바퀴가 선 밖이에요!', ms: 1600 }); } }
+    else if (k === 'cool') d5.burn(false);
+    else if (k === 'needWater') vn.toast({ face: face('beomi'), name: '범이', text: `범샘물이 ${cartHas('water')}/3팩이에요! 통로 01 에서 더 담아 와요`, ms: 2600 });
+    else if (k === 'arrive') sfx.cue('item-place', { pos: { x: LAVA_GOAL.x, y: 0.5, z: LAVA_GOAL.z }, kg: 12 });
+  }
+  function endE06() { d5.burn(false); } // 데칼은 그날 그대로 (R60)
+  /** 매 프레임: 미행 spy 이동·의심 / 용암 바퀴 판정 (0.25초 틱보다 정확하게) */
+  function d5Tick(dt) {
+    const me = st.me; if (meLast) { const v = Math.hypot(me.x - meLast.x, me.z - meLast.z) / Math.max(dt, 1e-3); meSpeed += (v - meSpeed) * Math.min(1, dt * 8); } meLast = { x: me.x, z: me.z };
+    const m = mission; if (!m || m.result || lock.vn || exitReq) return;
+    if (m.id === 'E05' && m.tail && !m.tail.S.done) {
+      const sp = st.hasCart ? cartSpeed() : meSpeed, hiding = sp < E05T.hideSpeed && rackEnds().some(([x, z]) => Math.hypot(me.x - x, me.z - z) < E05T.hideR);
+      const S = m.tail.step(dt, { me, speed: sp, kg: st.hasCart ? loadKg() : 0, hiding, bump: m.bumpFlag }); m.bumpFlag = false; m.hiding = hiding;
+      const n = m.spyN; if (n) { n.x = S.x; n.z = S.z; n.yaw = S.yaw; n.v = S.v; n.stopT = S.picking || S.turnT > 0 ? 1 : 0; n.restock = S.picking; n.pickSide = S.side; }
+      if ((d5HudT -= dt) <= 0) { d5HudT = 0.1; const near10 = S.grabs >= 9 && !S.photo; d5.updateHud({ dist: S.dist, sus: S.sus, grabs: S.grabs, hot: near10, spotted: S.spotted }); }
+    } else if (m.id === 'E06' && m.lava && !m.lava.S.done) {
+      const S = m.lava.step(dt, { cart: st.hasCart ? st.cart : null, me, water: cartHas('water') });
+      if (S.out && (lavaHissT -= dt) <= 0) { lavaHissT = 0.7; sfx.cue('lava-hiss'); }
+    }
+  }
+  function tickE05(m, t) {
+    const S = m.tail.S;
+    if (S.done && !m.ending) { m.ending = true; const r = m.tail.result(); setTimeout(() => { if (alive && mission === m && !m.result) endMission(r, r === 'missed' ? (m.L.onMissed || resumeOf(m)) : resumeOf(m)); }, S.photo ? 900 : 300); }
+    if (!S.done) { const left = (m.limit || E05T.durationSec) - t; if (left < 10 && left > 0 && Math.floor(left) !== m.tickS) { m.tickS = Math.floor(left); sfx.cue('timer-tick'); } }
+  }
+  function tickE06(m, t) {
+    const S = m.lava.S, left = (m.limit || E06T.timeLimitSec) - m.lava.elapsed;
+    if (S.started && left < 10 && left > 0 && Math.floor(left) !== m.tickS) { m.tickS = Math.floor(left); sfx.cue('timer-tick'); }
+    if (S.done) { const r = S.result; if (r === 'success' || r === 'partial') arrived(); endMission(r, r === 'missed' ? (m.L.onMissed || resumeOf(m)) : resumeOf(m)); }
+    void t;
+  }
   function tickMission(dt) {
     const m = mission; if (!m || m.result) return;
     const t = now() - m.t0;
@@ -381,8 +598,8 @@ export function createStory(ctx) {
     guide.set(s);
     // 지금 목표에 처음 닿으면 반짝 (진열대 · 최종 목표)
     const sk = s ? `${s.id}:${s.wi ?? ''}` : ''; if (s && s.id !== 'corral' && sk !== m.arrivedKey && meNear(s)) { m.arrivedKey = sk; if (s !== m.final) arrived(); }
-    const engaged = m.taken || m.stickered.size > 0 || m.wps.some((w) => cartHas(w.item) > 0) || m.near6 || m.id === 'E13';
-    if (!m.recalled && !engaged && (t > 90 || inCheckoutZone())) { m.recalled = true; recall(EXIT.ignoreEvent.recallLines?.[m.id] || m.ev.recallLine || '손님! 한 번만 와 주세요!'); }
+    const engaged = m.taken || m.stickered.size > 0 || (m.id !== 'E06' && m.wps.some((w) => cartHas(w.item) > 0)) || m.near6 || m.id === 'E13' || m.slide?.S.scooped > 0 || m.esc?.S.boarded || m.tail?.S.contact || m.lava?.S.started;
+    if (!m.recalled && !engaged && (t > (m.id === 'E05' || m.id === 'E06' ? 30 : 90) || inCheckoutZone())) { m.recalled = true; recall(EXIT.ignoreEvent.recallLines?.[m.id] || m.ev.recallLine || '손님! 한 번만 와 주세요!'); }
     if (m.id === 'E01') {
       if (!m.taken && st.hasCart && Math.hypot(st.cart.x - EGG_TOWER.x, st.cart.z - EGG_TOWER.z) < 2.6 && !lock.vn) takeTower();
     } else if (m.id === 'E02') {
@@ -407,7 +624,10 @@ export function createStory(ctx) {
       const b = boxesE03(m);
       if (b >= 2 && d > 6) { endMission('success', resumeOf(m)); return; }
       if (left <= 0 || m.remaining + b <= 0) { const r = evalE03(m); endMission(r, r === 'missed' ? (m.L.onMissed || resumeOf(m)) : resumeOf(m)); }
-    }
+    } else if (m.id === 'E04') tickE04(m, t);
+    else if (m.id === 'E12') tickE12(m, dt);
+    else if (m.id === 'E05') tickE05(m, t);
+    else if (m.id === 'E06') tickE06(m, t);
   }
   let chipT = 0;
   function updateChip(force) {
@@ -431,6 +651,10 @@ export function createStory(ctx) {
       if (m.id === 'E13') note = `급정거 ${m.brakes}번 · 쟁반 미끄러워요`;
       if (m.id === 'E14') note = `스티커 ${m.stickered.size}/${m.wps.length} · ${mmss((m.L.timeoutSec || 240) - t)}`;
       if (m.id === 'E03') note = `남은 시간 ${mmss((m.limit || 180) - t)} · 내 박스 ${boxesE03(m)} · 매대 ${Math.max(0, m.remaining)}`;
+      if (m.id === 'E04') { const S = m.slide.S; note = `남은 시간 ${mmss((m.limit || E04T.timeLimitSec) - t)} · 반납 ${S.returned}/${m.packs} · 카트 ${S.carried}/${m.cap} · 충돌 ${hitsE04(m)}`; }
+      if (m.id === 'E12') note = noteE12(m);
+      if (m.id === 'E05') { const S = m.tail.S; note = `${mmss((m.limit || E05T.durationSec) - t)} · 거리 ${S.dist > 30 ? '30+' : S.dist.toFixed(0)} m · 의심 ${Math.round(S.sus)}%${m.hiding ? ' (숨음)' : ''}${S.spotted ? ` · 들킴 ${S.spotted}/2` : ''} · ${isMobile ? '촬영 버튼' : 'F 촬영'}`; }
+      if (m.id === 'E06') { const L = m.lava, S = L.S; note = S.started ? `남은 ${mmss((m.limit || E06T.timeLimitSec) - L.elapsed)} · 선 밖 ${S.outsideSec.toFixed(1)}초 (3초까지) · 범샘물 ${cartHas('water')}/3` : `노란 선 안으로 들어가면 시작 · 범샘물 ${cartHas('water')}/3`; }
       vn.setChip({ name: m.ev.name, where: s ? `➜ ${s.step ? `${s.step} · ` : ''}${s.label} · ${dist()} m` : '', note });
       return;
     }
@@ -461,6 +685,8 @@ export function createStory(ctx) {
     if (m.id === 'E13') { if (lane === 6) { arrived(); endMission(evalE13(m), resumeOf(m)); } else endMission('missed', m.L.onMissed || resumeOf(m)); return; }
     if (m.id === 'E14' && m.L.onCheckout) { markMissed('E03'); endMission('missed', m.L.onCheckout); return; }
     if (m.id === 'E03') { endMission(evalE03(m) === 'missed' ? 'missed' : evalE03(m), resumeOf(m)); }
+    if (m.id === 'E04' && m.slide.S.returned > 0) endMission(resultE04(m), resumeOf(m)); // 반납을 시작했으면 지금까지로 판정 (안 했으면 계산 끝에 놓침)
+    if (m.id === 'E12' && m.esc.S.boarded) { vn.toast({ face: face('beomi'), name: '범이', text: '꼬마 손님은 제가 고객센터로 데려갈게요!', ms: 3000 }); endMission(m.esc.failed() ? 'fail' : 'partial', resumeOf(m)); }
   }
   function onCheckoutDone() {
     const w = waiters.done.splice(0); w.forEach((f) => f());
@@ -471,7 +697,7 @@ export function createStory(ctx) {
     const m = mission; if (!m || m.result) { persist(); return; }
     // 사건 안 받고(또는 끝내기 전에) 계산 → 놓침
     const next = m.id === 'E01' ? (m.L.onMissed || 'd1_161') : (m.L.onCheckout || m.L.onMissed || resumeOf(m));
-    setTimeout(() => { if (alive && mission === m && !m.result) endMission('missed', next); }, 1200);
+    setTimeout(() => { if (alive && mission === m && !m.result) { endMission('missed', next); for (const id of CHAIN_MISSED[m.L.id] || []) if (id !== m.id && !save.ev[id]) markMissed(id); } }, 1200);
   }
   async function endDay(L) {
     const d = curDay(), main = DAY_MAIN[d], res = save.ev[main] && save.ev[main] !== 'active' ? save.ev[main] : 'missed';
@@ -481,6 +707,9 @@ export function createStory(ctx) {
       const gain = res === 'success' ? (ev?.reward?.vitality || 10) : res === 'partial' ? 6 : res === 'fail' ? 2 : 0;
       save.vitality = Math.min(100, save.vitality + gain);
       if (res === 'success') for (const [k, v] of Object.entries(ev?.reward?.affinity || {})) save.aff[k] = Math.min(5, (save.aff[k] || 0) + v);
+      const side = DAY_SIDE[d], sr = side && save.ev[side], sev = side && EVENTS.events.find((e) => e.id === side);
+      if (sr === 'success' || sr === 'partial') save.vitality = Math.min(100, save.vitality + (sr === 'success' ? (sev?.reward?.vitality || 5) : 2));
+      if (sr === 'success') for (const [k, v] of Object.entries(sev?.reward?.affinity || {})) save.aff[k] = Math.min(5, (save.aff[k] || 0) + v);
       if (!save.cleared[d]) save.stamps = Math.min(7, save.stamps + (L.stamp ?? 1));
       save.cleared[d] = 1;
       save.yesterday = { eggs: staff.S.eggsToday, kg: Math.round(save.best.kg || loadKg()), receipt: save.best.receipt || [], at: Date.now() };
@@ -503,6 +732,7 @@ export function createStory(ctx) {
   // ---------- 하루 시작 / 돌아옴 / 나가기 ----------
   function npcsForDay() {
     if (mode() === 'story') makeCoins(); else removeCoins();
+    if (mode() === 'story' && curDay() >= 5) d4.desk(true); // 4일차 끝부터 고객센터 창구 열림 (매장 변화)
     if (!shoppers) return;
     const bg = shoppers.ambient?.(mode() === 'free' ? 99 : curDay() <= 1 ? 3 : curDay() === 2 ? 5 : 99) || []; // 배경 손님·직원(활기)
     if (mode() === 'free') { shoppers.setActive(shoppers.list.filter((n) => !n.ambient).map((n) => n.id).concat(bg)); return; }
@@ -530,6 +760,7 @@ export function createStory(ctx) {
     if (L.cmd === 'branch' && /^mission\./.test(L.on || '')) return '사건 결과 이야기';
     return '이야기 중간부터';
   }
+  function clearActive(d) { for (const id of [DAY_MAIN[d], DAY_SIDE[d]]) if (id && save.ev[id] === 'active') save.ev[id] = null; }
   function resetDay(d) {
     for (const e of EVENTS.events) if (e.day === d) delete save.ev[e.id];
     for (const f of DAY_FLAGS[d] || []) delete save.flags[f];
@@ -554,7 +785,7 @@ export function createStory(ctx) {
     if (b && b !== DAY_START[d]) {
       const v = await vn.pickCard({ title: `${d}일차 이어서 하기`, sub: '나갔던 곳부터 이어서 해요 · 일차는 그대로예요', where: beatLabel(b), buttons: [{ label: '이어서 하기', v: 'resume' }, { label: '처음부터', v: 'restart', w: 1 }] });
       if (!alive) return;
-      if (v === 'restart') { resetDay(d); runFrom(DAY_START[d]); } else { if (save.ev[DAY_MAIN[d]] === 'active') save.ev[DAY_MAIN[d]] = null; runFrom(b); }
+      if (v === 'restart') { resetDay(d); runFrom(DAY_START[d]); } else { clearActive(d); runFrom(b); }
       return;
     }
     runFrom(DAY_START[d]);
@@ -642,6 +873,13 @@ export function createStory(ctx) {
     // R46 고객센터(E12 이후) 입구 근처 환불 손님 — 30%
     const nearDoor = me.x > 65 && me.x < 73 && me.z < 12;
     if (nearDoor && !det.door && save.ev?.E12 && shoppers?.list.some((n) => n.id === 'sample-uncle' && n.active) && Math.random() < 0.3) fire('R46'); det.door = nearDoor;
+    // R58 고객센터 크레용 그림(5일차~, E12 뒤) · R60 사건 없이 노란 선 안으로만 20 m (E06 뒤)
+    if (curDay() >= 5 && save.ev?.E12 && save.ev.E12 !== 'active' && Math.hypot(me.x - D4_SPOTS.desk.ax, me.z - D4_SPOTS.desk.az) < 3) fire('R58');
+    if (curDay() >= 5 && save.ev?.E06 && save.ev.E06 !== 'active' && !mission && st.hasCart) {
+      const ins = wheels(c).every(([x, z]) => LAVA_ZONES.some((r) => inRect(r, x, z)));
+      det.lavaD = ins ? (det.lavaD || 0) + Math.hypot(c.x - (det.lcx ?? c.x), c.z - (det.lcz ?? c.z)) : 0; det.lcx = c.x; det.lcz = c.z;
+      if (det.lavaD > 20) { fire('R60'); det.lavaD = 0; }
+    }
     const hour = (() => { const w = window.__jj?.weather?.state; return typeof w?.hour === 'number' ? w.hour : new Date().getHours(); })();
     // R24 계산대 줄에서 40초 넘게 계산 시작을 못 함(내 줄만 느림)
     det.laneT = inLane && checkoutState().phase === 'idle' && sp < 0.2 ? (det.laneT || 0) + dt : 0; if (det.laneT > 40) { fire('R24'); det.laneT = 0; }
@@ -683,6 +921,7 @@ export function createStory(ctx) {
       layout();
     }
     guide.setHidden(lock.vn || vn.blocking || (mode() !== 'story' && guide.target?.id !== 'exit'));
+    d4Tick(dt); d5Tick(dt);
     if (tower?.visible && mission && mission.id === 'E01' && !mission.taken) { const tt = performance.now() / 1000; tower.userData.trays.forEach((m, i) => { m.rotation.z = Math.sin(tt * 2.6 + i * 0.25) * 0.004 * i; m.position.x = Math.sin(tt * 2.6 + i * 0.25) * 0.0035 * i * i / 6; }); }
     for (let i = bubbles.length - 1; i >= 0; i--) { const b = bubbles[i]; if (!b.b.alive) { bubbles.splice(i, 1); continue; } const p = project(b.pos, b.y); if (p) { b.b.el.style.left = `${p.x}px`; b.b.el.style.top = `${p.y}px`; b.b.el.style.opacity = '1'; } else b.b.el.style.opacity = '0'; }
     reactions.tick({ dialog: lock.vn, payPanel: checkoutState().phase === 'pay', staffTalking: (staff.S.bubbleT || 0) > 0 });
@@ -713,14 +952,14 @@ export function createStory(ctx) {
   };
   function suspendStory() { // 진행 중인 대사·사건을 체크포인트(save.beat)에 멈춰 둠 — 다시 이어 갈 땐 resumeStory()
     runTok++; running = talking = false; vn.close();
-    if (mission && !mission.result) { save.ev[mission.id] = 'active'; if (mission.id === 'E13') props.tray(false); if (mission.id === 'E14') props.shelfStickers(null); }
+    if (mission && !mission.result) { save.ev[mission.id] = 'active'; if (mission.id === 'E13') props.tray(false); if (mission.id === 'E14') props.shelfStickers(null); if (mission.id === 'E04') d4.clearSlide(); if (mission.id === 'E12') { d4.kid('off'); d4.desk(false); } if (mission.id === 'E05') endE05(); if (mission.id === 'E06') { d5.burn(false); d5.lava(false); } }
     mission = null; job = null; guide.set(null); vn.setChip(null); if (tower) tower.visible = false; reactions.setEventCast(null);
     persist();
   }
   function resumeStory() {
     const d = curDay(), b = save.beat && save.beatDay === d && LINES[save.beat] ? save.beat : null;
     if (!SCRIPTS[d]) return;
-    if (save.ev[DAY_MAIN[d]] === 'active') save.ev[DAY_MAIN[d]] = null;
+    clearActive(d);
     runFrom(b || DAY_START[d]);
   }
   // ---------- 나가기 = 출구(왼쪽 끝 EXIT)로만 ----------
@@ -776,14 +1015,20 @@ export function createStory(ctx) {
     vn, reactions, save,
     _dbg: { save: () => JSON.parse(JSON.stringify(save)), runFrom, startMission, endMission, job: () => job && { kind: job.kind, id: job.L?.id, t: +(now() - job.t0).toFixed(1) }, curDay, running: () => running, talking: () => talking,
       mission: () => mission && { id: mission.id, taken: mission.taken, result: mission.result, recalled: mission.recalled, t: +(now() - mission.t0).toFixed(1), stop: mission.stop && { id: mission.stop.id, label: mission.stop.label, x: mission.stop.x, z: mission.stop.z, ax: mission.stop.ax, az: mission.stop.az }, stickered: [...mission.stickered], brakes: mission.brakes, remaining: mission.remaining, near6: mission.near6 },
-      skipMissionClock: (sec) => { if (mission) mission.t0 -= sec; if (job) job.t0 -= sec; }, takeTower: () => mission && !mission.taken && takeTower(), switchMode, cancelExit, exitReq: () => exitReq, fire: (id, o) => reactions.fire(id, { force: true, ...o }), setFreq: (f) => { session.freq = f; }, hits: () => hits.slice(), setDay: (d) => { save.day = d; save.beat = null; save.replay = null; }, npcs: () => npcsForDay(), coins: () => coins && coins.pts.map((c) => ({ ...c })), stagePZ: () => stagePhoneZombie(true) },
+      d4: () => ({ props: d4.stats(), slide: mission?.slide && { returned: mission.slide.S.returned, carried: mission.slide.S.carried, loose: mission.slide.loose().length, scooped: mission.slide.S.scooped, kicks: mission.slide.S.kicks, hits: hitsE04(mission), packs: mission.slide.P.map((p) => ({ i: p.i, x: +p.x.toFixed(2), z: +p.z.toFixed(2), y: +p.y.toFixed(2), s: p.state })) }, esc: mission?.esc && { ...mission.esc.S }, kidAt: mission?.kidAt, final: mission?.final && { x: mission.final.x, z: mission.final.z, ax: mission.final.ax, az: mission.final.az, r: mission.final.r } }),
+      d5: () => ({ props: d5.stats(), tail: mission?.tail && (({ x, z, yaw, v, seg, phase, grabs, dist, sus, spotted, contact, farT, photo, grab10T, done, result, reason, t }) => ({ x, z, yaw, v, seg, phase, grabs, dist, sus, spotted, contact, farT, photo, grab10T, done, result, reason, t }))(mission.tail.S), speed: mission?.tail?.route.speed, lava: mission?.lava && { ...mission.lava.S, elapsed: mission.lava.elapsed }, hiding: mission?.hiding, revealed: revealed(), spyName: nameOf('spy')[0] }),
+      photo: () => photoE05(),
+      /** 테스트 전용: 대본 없이 사건 하나만 바로 시작 (저장 안 함). trial('E04') · trial('E12', {kidAt:'aisle-01-eggs'}) → 결과 Promise */
+      trial: (id, o = {}) => { suspendStory(); exitReq = false; session.mode = 'story'; session.noPersist = true; vn.close(); return startMission({ id: `_trial_${id}`, cmd: 'mission.start', event: id, next: null, ...o }).then(() => save.ev[id]); },
+      skipMissionClock: (sec) => { if (mission) mission.t0 -= sec; if (job) job.t0 -= sec; }, takeTower: () => mission && !mission.taken && takeTower(), switchMode, cancelExit, exitReq: () => exitReq, fire: (id, o) => reactions.fire(id, { force: true, ...o }), setFreq: (f) => { session.freq = f; }, hits: () => hits.slice(), setDay: (d) => { save.day = d; save.beat = null; save.replay = null; }, npcs: () => npcsForDay(), coins: () => coins && coins.pts.map((c) => ({ ...c })), stagePZ: () => stagePhoneZombie(true),
+      collide: (x, z, r = 0.3) => ctx.collide?.(x, z, r) || null, obstacles: () => (ctx.obstacles || []).filter((o) => !o.npc && o.x0 > -900).map((o) => ({ x0: o.x0, x1: o.x1, z0: o.z0, z1: o.z1, story: o.story })) },
     dispose() {
       if (!leftSaved && (save.mode === 'story') && !session.noPersist) {
         const kind = talking ? 'dialogue' : mission && !mission.result ? 'event' : items.length && !flags.paid ? 'cart' : null;
         if (kind) save.left = { at: Date.now(), kind, n: items.length };
         persist(); // 하루(save.day)와 체크포인트(save.beat)는 그대로 — 나가기는 멈춤일 뿐
       }
-      alive = false; runTok++; props.dispose(); guide.set(null); vn.setChip(null); removeCoins(); clearTimeout(paTimer); clearTimeout(stageTimer); window.removeEventListener('depot:sfx', onSfx); window.removeEventListener('depot:pa', onPa); for (const w of waiters.done) w(); vn.dispose(); sfx.dispose();
+      alive = false; runTok++; props.dispose(); d4.dispose(); d5.dispose(); if (mission?.id === 'E05') shoppers?.puppet?.('spy', false); guide.set(null); vn.setChip(null); removeCoins(); clearTimeout(paTimer); clearTimeout(stageTimer); window.removeEventListener('depot:sfx', onSfx); window.removeEventListener('depot:pa', onPa); for (const w of waiters.done) w(); vn.dispose(); sfx.dispose();
     },
   };
 }
