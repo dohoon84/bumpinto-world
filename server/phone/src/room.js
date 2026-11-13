@@ -247,6 +247,11 @@ export class Room extends DurableObject {
     }
   }
 
+  #publicTitle(v) {
+    const s = typeof v === 'string' ? v.trim().slice(0, 40) : '';
+    return s === 'title_bigspender' || s === 'title_flexregular' || s === 'title_bogohunter' ? s : '';
+  }
+
   #peers(except) {
     this.#pruneStale(except);
     const list = [];
@@ -266,6 +271,7 @@ export class Room extends DurableObject {
           sit: peer.sit || "",
           afk: !!peer.afk,
           umb: peer.umb || "",
+          ...(peer.title ? { title: peer.title } : {}),
         });
       }
     }
@@ -358,6 +364,7 @@ export class Room extends DurableObject {
         ...(shopGifts.length ? { shopGifts } : {}), // [economy] 산 탈것(양도 불가) — 선물을 보낸 뒤에도 보유에 남긴다
         phone: owned.phone,
         lastSeen: now,
+        title: this.#publicTitle(m.title),
       };
       const peers = this.#peers(ws);
       ws.serializeAttachment(me);
@@ -369,6 +376,7 @@ export class Room extends DurableObject {
         x: me.x,
         z: me.z,
         ry: me.ry,
+        ...(me.title ? { title: me.title } : {}),
       };
       this.#send(ws, { t: "welcome", id: me.id, peers, gifts: me.gifts || [], weather: await this.#weatherMode() });
       this.#broadcast({ t: "join", peer: publicMe }, ws);
@@ -377,6 +385,12 @@ export class Room extends DurableObject {
     if (!me) return;
     me.lastSeen = now;
     if (!me.deviceId) me.deviceId = me.id;
+    if (m.t === "title") {
+      me.title = this.#publicTitle(m.title);
+      ws.serializeAttachment(me);
+      this.#broadcast({ t: "title", id: me.id, title: me.title, earn: !!m.earn }, ws);
+      return;
+    }
     if (m.t === "ping") {
       ws.serializeAttachment(me);
       this.#pruneStale(ws);

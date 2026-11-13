@@ -6,7 +6,7 @@
   top: 64px;
   right: 16px;
   z-index: 60;
-  width: 300px;
+  width: min(360px, calc(100vw - 24px));
   padding: 16px;
   border-radius: 16px;
   color: #122033;
@@ -17,13 +17,13 @@
 }
 #account-panel[hidden] { display: none; }
 #account-panel .acct-head { font-weight: 900; font-size: 15px; margin-bottom: 8px; }
-#account-panel .acct-note { margin: 0 0 8px; line-height: 1.45; color: #34465e; }
+#account-panel .acct-note { margin: 0 0 8px; line-height: 1.45; color: #34465e; word-break: keep-all; overflow-wrap: break-word; }
 #account-panel .acct-row { display: flex; justify-content: space-between; gap: 8px; padding: 4px 0; border-bottom: 1px solid rgba(18, 32, 51, .08); }
 #account-panel .acct-row b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 170px; }
 #account-panel .acct-gis { margin: 8px 0; min-height: 40px; }
 #account-panel .acct-msg { min-height: 0; margin: 6px 0; color: #34465e; line-height: 1.4; }
 #account-panel .acct-msg:empty { display: none; }
-#account-panel .acct-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 8px; }
+#account-panel .acct-actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; margin-top: 8px; }
 #account-panel .acct-btn {
   height: 40px;
   padding: 0 14px;
@@ -34,6 +34,7 @@
   font: inherit;
   font-weight: 800;
   cursor: pointer;
+  white-space: nowrap;
 }
 #account-panel .acct-btn.primary { background: #ffe169; border-color: #f5a200; }
 #account-panel .acct-btn:disabled { opacity: .6; cursor: default; }
@@ -48,3 +49,29 @@
 .acct-signin .acct-msg:empty { display: none; }
 .acct-signin .acct-actions { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; margin-top: 8px; }
 .acct-signin .acct-btn { height: 40px; padding: 0 14px; border-radius: 999px; border: 1.5px solid rgba(18, 32, 51, .16); background: #fff; color: #122033; font: inherit; font-weight: 800; cursor: pointer; }
+.acct-signin .acct-btn.primary { background: #ffe169; border-color: #f5a200; }
+.acct-signin .acct-btn:disabled { opacity: .45; cursor: default; }
+
+/* [accounts] 약관·수신동의 체크박스 · 재동의 모달 · 계정 패널 토글 */
+.acct-signin-card { width: min(380px, calc(100vw - 32px)); }
+.acct-consent, .acct-fields { margin: 8px 0 4px; display: flex; flex-direction: column; gap: 6px; }
+.acct-check { display: flex; align-items: flex-start; gap: 8px; line-height: 1.45; color: #34465e; font-size: 13px; cursor: pointer; }
+.acct-check input { margin: 3px 0 0; flex: 0 0 auto; accent-color: #f5a200; }
+.acct-check a { color: #0b5cab; font-weight: 700; }
+.acct-check span { min-width: 0; word-break: keep-all; overflow-wrap: break-word; }
+.acct-check-req { white-space: nowrap; }
+#account-panel .acct-consent { margin: 10px 0 2px; }
+.acct-gis-wait { margin: 8px 0; min-height: 44px; display: grid; place-items: center; text-align: center;
+  border-radius: 999px; border: 1.5px dashed rgba(18, 32, 51, .22); color: #5a6b80; font-size: 12.5px; font-weight: 700; padding: 0 12px; }
+.acct-gis-wait[hidden], .acct-signin .acct-gis[hidden] { display: none; }
+.acct-reconsent { z-index: 200; }
+.acct-reconsent .acct-note { margin: 0 0 10px; line-height: 1.5; color: #34465e; }
+body.acct-consent-blocking { pointer-events: none; }
+body.acct-consent-blocking .acct-reconsent { pointer-events: auto; }
+
+.acct-legal { margin-top: 10px; padding-top: 8px; border-top: 1px solid rgba(18, 32, 51, .08); }
+.acct-legal-links { font-size: 12.5px; font-weight: 700; }
+.acct-legal-links a { color: #0b5cab; }
+.acct-legal-date { margin: 4px 0 6px; color: #5a6b80; font-size: 12px; }
+.acct-market { margin-top: 6px; }
+#account-panel .acct-legal { font-size: 12.5px; }

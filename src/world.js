@@ -94,7 +94,7 @@ export function pointInRing(x, z, r) {
   return inside;
 }
 
-export function buildWorld(scene, data, region = null, opts = {}) {
+export function* buildWorldGen(scene, data, region = null, opts = {}) {
   const { shops = null, colours = null, isMobile = false, reuseData = false } = opts; // [shops] prepareShops() · [colours] prepareBuildingColours() 결과. 없으면 기존과 동일
   setSignTier(isMobile); // [memory] 폰은 간판 캔버스를 절반 해상도로 (모양은 같음)
   const isJeongja = region ? !!region.features?.jeongjaBuildings : data.station?.name !== 'Starbase';
@@ -112,6 +112,7 @@ export function buildWorld(scene, data, region = null, opts = {}) {
   const groundSpan = Math.max(6000, (x1 - x0) + 3200, (z1 - z0) + 3200);
   const ground = new THREE.Mesh(new THREE.PlaneGeometry(groundSpan, groundSpan), mat('#efe9dc'));
   ground.rotation.x = -Math.PI / 2; ground.position.set(cx, 0, cz); ground.receiveShadow = true; scene.add(ground);
+  yield 'world-ground';
   const block = new THREE.Mesh(new THREE.PlaneGeometry(x1 - x0, z1 - z0), mat('#ebe4d4'));
   block.rotation.x = -Math.PI / 2; block.position.set(cx, 0.01, cz); block.receiveShadow = true; scene.add(block);
 
@@ -128,6 +129,7 @@ export function buildWorld(scene, data, region = null, opts = {}) {
   if (wg) { const m = new THREE.Mesh(fixNormalsUp(wg), waterMat); m.receiveShadow = true; m.name = 'liveWater'; scene.add(m); }
   const wl = data.waterLines.map((l) => ribbonGeo(l.p, data.water.length > 1 ? 8 : l.w, 0.035));
   if (wl.length) { const m = new THREE.Mesh(mergeGeometries(wl), waterMat); m.name = 'liveWaterLines'; scene.add(m); }
+  yield 'world-parks';
 
   // 도로
   const roadGroups = {};
@@ -142,6 +144,7 @@ export function buildWorld(scene, data, region = null, opts = {}) {
   // 큰 도로 중앙선
   const lines = data.roads.filter((r) => ['primary', 'secondary', 'trunk'].includes(r.k)).map((r) => ribbonGeo(r.p, 0.35, 0.09, false));
   if (lines.length) scene.add(new THREE.Mesh(mergeGeometries(lines), mat('#f2d36b')));
+  yield 'world-roads';
 
   // 건물 (높이 = levels*3.2m, 없으면 기본 3층). 지붕은 단색, 벽은 종류별 창 타일.
   const roofs = [], walls = {}, colliders = new Grid();
@@ -215,7 +218,9 @@ export function buildWorld(scene, data, region = null, opts = {}) {
         addBuildingPart(pg, roof, c, wallTint, facadeKey(b.k), false, roofs, walls, NIGHT_V2 ? [ns, kind, 0] : null);
       }
     }
+    if ((bi & 7) === 7) yield 'world-buildings';
   }
+  yield 'world-buildings-done';
   if (roofs.length) {
     const bmesh = new THREE.Mesh(mergeGeometries(roofs), new THREE.MeshLambertMaterial({ vertexColors: true }));
     bmesh.castShadow = true; bmesh.receiveShadow = true; scene.add(bmesh);
@@ -224,7 +229,9 @@ export function buildWorld(scene, data, region = null, opts = {}) {
     const base = facadeMaterial(key, !!colours); // [colours]
     const mesh = new THREE.Mesh(mergeGeometries(geos), nightFacade(base, key, { id: 'live-' + key + (colours ? '|c' : ''), live: true })); // [night-buildings] ?nightLights=0 이면 base 그대로
     mesh.castShadow = true; mesh.receiveShadow = true; scene.add(mesh);
+    yield 'world-merge';
   }
+  yield 'world-merge-done';
   const starbucksRooms = isJeongja ? addStarbucksGlass(scene, shells) : [];
   if (isJeongja) {
     addNobiosShop(scene);
@@ -274,6 +281,7 @@ export function buildWorld(scene, data, region = null, opts = {}) {
     scaleMin: 0.8,
     scaleSpan: 0.5,
   });
+  yield 'world-trees';
 
   // 중심 표지(역/동네 중심 사인 기둥)
   const sp = { x: data.station.x, z: data.station.z };
@@ -310,6 +318,23 @@ export function buildWorld(scene, data, region = null, opts = {}) {
     return false;
   };
   return { isBlocked, onRoad, walkPaths, cityWalkPaths, inWater, signPos: sp, bounds: { x0, x1, z0, z1 }, treeCount: treePts.length, ground, block, starbucksRooms, shops: shopsLayer, colours }; // [terrain] ground/block: terrain.build 가 하천 구간을 비운 형상으로 교체
+}
+
+export function buildWorld(scene, data, region = null, opts = {}) {
+  const g = buildWorldGen(scene, data, region, opts);
+  let n = g.next();
+  while (!n.done) n = g.next();
+  return n.value;
+}
+
+export async function buildWorldAsync(scene, data, region, opts, slicer) {
+  const g = buildWorldGen(scene, data, region, opts);
+  let n = g.next();
+  while (!n.done) {
+    if (slicer) await slicer.tick(n.value || 'world');
+    n = g.next();
+  }
+  return n.value;
 }
 
 // 건물 한 덩이(ExtrudeGeometry)에 버텍스 색(윗면 top / 아랫면 bottom / 옆면 side)을 칠해 윗면은 roofs, 옆면은 walls[key] 에 넣고 geo 는 버린다.

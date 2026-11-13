@@ -20,7 +20,7 @@
     "colours:test": "node scripts/test-building-colours.mjs",
     "shops:test": "node scripts/test-ground-floor-shops.mjs",
     "photo-cloud:test": "node scripts/test-photo-cloud.mjs",
-    "accounts:test": "node scripts/test-accounts.mjs",
+    "accounts:test": "node scripts/test-accounts.mjs && node scripts/test-account-consent.mjs && node scripts/test-account-consent-ui.mjs",
     "depot:day4:test": "node scripts/test-depot-day4.mjs",
     "depot:day5:test": "node scripts/test-depot-day5.mjs",
     "depot:day6:test": "node scripts/test-depot-day6.mjs",
@@ -35,6 +35,7 @@
     "depot:week2:test": "node scripts/test-depot-week2-endings.mjs",
     "economy:test": "node scripts/test-economy.mjs && node scripts/test-econ-client.mjs",
     "bgm:test": "node scripts/test-bgm.mjs",
+    "routemap:test": "node scripts/test-route-map.mjs",
     "corridor:tancheon": "node --max-old-space-size=8192 scripts/corridor/build-tancheon.mjs",
     "corridor:transit": "node scripts/corridor/build-transit.mjs",
     "corridor:drive": "node scripts/corridor/build-drive.mjs",
@@ -93,7 +94,8 @@
     "econ:test": "node scripts/test-econ-mock.mjs && node scripts/test-fare-pop.mjs",
     "arrive:test": "node scripts/test-station-arrive.mjs",
     "arrive:e2e": "node scripts/e2e-station-arrive.mjs",
-    "bp24:entry": "node scripts/e2e-bump24-jeongja-entry.mjs"
+    "bp24:entry": "node scripts/e2e-bump24-jeongja-entry.mjs",
+    "titles:test": "node scripts/test-bp24-rank.mjs && node scripts/test-weekly-titles.mjs"
   },
   "dependencies": {
     "cannon-es": "^0.20.0",

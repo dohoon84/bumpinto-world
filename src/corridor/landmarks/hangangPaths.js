@@ -4,6 +4,7 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import { fixNormalsUp } from '../../world.js';
 import { projectOnLine, pointInRing, inWater, jamsuDeckRing, JAMSU_DECK_WIDTH } from './hangangCoords.js';
 import { jamsuDeckY, banpoDeckY } from './hangangTerrain.js';
+import { cellMergeEnabled, queueFogCull } from '../../perf/cellMerge.js'; // [jamsil-perf]
 
 function resample(pts, step = 3.2) {
   if (!pts || pts.length < 2) return pts || [];
@@ -121,6 +122,13 @@ function kindOf(w) {
 }
 
 
+function splitPoly(pts, size = 64) {
+  if (!pts || pts.length <= size + 1) return pts ? [pts] : [];
+  const out = [];
+  for (let i = 0; i < pts.length - 1; i += size) out.push(pts.slice(i, Math.min(pts.length, i + size + 1)));
+  return out;
+}
+
 function partsOutsideRing(pts, ring) {
   if (!ring) return [pts];
   const parts = [];
@@ -135,7 +143,60 @@ function partsOutsideRing(pts, ring) {
   return parts;
 }
 
-export function createHangangPaths({ parent, osm, land }) {
+// [jamsil-perf] 조각(64점 폴리라인)을 400 m 칸별로 끝까지 합친다. 예전(512ff61)엔 4개씩만 묶고 멈춰
+//   합수부 점선·가장자리선이 메시 수백 개(draw call 수백 개)로 남았다. 칸 하나는 작아서 한 번에 합쳐도 조각이 짧다.
+//   ?cellmerge=0 이면 512ff61 처럼 4개씩 묶음.
+const PATH_CELL_M = 400;
+function* mergeGeosGen(list, useGroups = false) {
+  if (!list.length) return [];
+  if (list.length === 1) return [list[0]];
+  if (!cellMergeEnabled()) {
+    const mid = [];
+    for (let i = 0; i < list.length; i += 4) {
+      const part = list.slice(i, i + 4);
+      mid.push(part.length === 1 ? part[0] : mergeGeometries(part, useGroups));
+      yield;
+    }
+    return mid;
+  }
+  const cells = new Map();
+  const c = new THREE.Vector3();
+  for (const g of list) {
+    if (!g.boundingBox) g.computeBoundingBox();
+    g.boundingBox.getCenter(c);
+    const key = `${Math.floor(c.x / PATH_CELL_M)},${Math.floor(c.z / PATH_CELL_M)}`;
+    let arr = cells.get(key);
+    if (!arr) cells.set(key, (arr = []));
+    arr.push(g);
+  }
+  const BATCH = 48;
+  const out = [];
+  for (const arr of cells.values()) {
+    if (arr.length === 1) { out.push(arr[0]); continue; }
+    const mid = [];
+    for (let i = 0; i < arr.length; i += BATCH) {
+      const part = arr.slice(i, i + BATCH);
+      mid.push(part.length === 1 ? part[0] : mergeGeometries(part, useGroups));
+      if (part.length > 1) for (const g of part) g.dispose();
+      yield;
+    }
+    if (mid.length === 1) out.push(mid[0]);
+    else { out.push(mergeGeometries(mid, useGroups)); for (const g of mid) g.dispose(); yield; }
+  }
+  return out;
+}
+
+function addPathMeshes(group, geos, mat, name, receiveShadow = true) {
+  for (const g of geos) {
+    const mesh = new THREE.Mesh(g, mat);
+    mesh.name = name;
+    mesh.receiveShadow = receiveShadow;
+    group.add(mesh);
+    if (cellMergeEnabled()) queueFogCull(mesh); // [jamsil-perf] 칸 메시: 안개 밖이면 렌더에서 뺀다
+  }
+}
+
+function* hangangPathsGen({ parent, osm, land }) {
   const group = new THREE.Group();
   group.name = 'hangang-paths';
   parent.add(group);
@@ -198,10 +259,13 @@ export function createHangangPaths({ parent, osm, land }) {
     const parts = partsOutsideRing(ptsAll, jamsuRing);
     let drew = false;
     for (const pts of parts) {
-      const geo = drapedRibbonGeo(pts, width, (x, z) => surfaceAt(x, z, kind, w), kind === 'upper' ? 0.06 : (kind === 'bike' ? 0.09 : 0.05));
-      if (!geo) continue;
-      buckets[kind].push(geo);
-      drew = true;
+      for (const chunk of splitPoly(pts)) {
+        const geo = drapedRibbonGeo(chunk, width, (x, z) => surfaceAt(x, z, kind, w), kind === 'upper' ? 0.06 : (kind === 'bike' ? 0.09 : 0.05));
+        if (!geo) continue;
+        buckets[kind].push(geo);
+        drew = true;
+        yield;
+      }
     }
     if (drew) kept.push(w);
   }
@@ -210,13 +274,10 @@ export function createHangangPaths({ parent, osm, land }) {
   const mats = {};
   for (const [kind, list] of Object.entries(buckets)) {
     if (!list.length) continue;
-    const merged = list.length === 1 ? list[0] : mergeGeometries(list, false);
+    const parts = yield* mergeGeosGen(list, false);
     const mat = new THREE.MeshLambertMaterial({ color: colors[kind], side: THREE.DoubleSide });
     mats[kind] = mat;
-    const mesh = new THREE.Mesh(merged, mat);
-    mesh.receiveShadow = true;
-    mesh.name = 'hangang-path-' + kind;
-    group.add(mesh);
+    addPathMeshes(group, parts, mat, 'hangang-path-' + kind);
   }
 
   const edgeGeos = [], dashGeos = [];
@@ -241,8 +302,11 @@ export function createHangangPaths({ parent, osm, land }) {
         dx /= L; dz /= L;
         return [p[0] - dz * hw * side, p[1] + dx * hw * side];
       });
-      const geo = drapedRibbonGeo(shifted, 0.13, yFn, 0.075);
-      if (geo) edgeGeos.push(geo);
+      for (const chunk of splitPoly(shifted)) {
+        const geo = drapedRibbonGeo(chunk, 0.13, yFn, 0.075);
+        if (geo) edgeGeos.push(geo);
+        yield;
+      }
     }
     if (width >= 3) {
       // 노란 중앙 점선: 2.2 m 긋고 2.0 m 비움. 대시마다 한 폴리라인.
@@ -256,6 +320,7 @@ export function createHangangPaths({ parent, osm, land }) {
         dash = null;
       };
       for (let i = 1; i < pts.length; i++) {
+        if ((i & 31) === 0) yield;
         const ax = pts[i - 1][0], az = pts[i - 1][1], bx = pts[i][0], bz = pts[i][1];
         const seg = Math.hypot(bx - ax, bz - az) || 1;
         const dx = (bx - ax) / seg, dz = (bz - az) / seg;
@@ -276,23 +341,20 @@ export function createHangangPaths({ parent, osm, land }) {
       flush();
     }
     }
+    yield;
   }
   const markMats = {};
   if (edgeGeos.length) {
-    const merged = edgeGeos.length === 1 ? edgeGeos[0] : mergeGeometries(edgeGeos, false);
+    const parts = yield* mergeGeosGen(edgeGeos, false);
     const mat = new THREE.MeshLambertMaterial({ color: '#f2f0ea', side: THREE.DoubleSide });
     markMats.edge = mat;
-    const mesh = new THREE.Mesh(merged, mat);
-    mesh.name = 'hangang-path-edge';
-    group.add(mesh);
+    addPathMeshes(group, parts, mat, 'hangang-path-edge', false);
   }
   if (dashGeos.length) {
-    const merged = dashGeos.length === 1 ? dashGeos[0] : mergeGeometries(dashGeos, false);
+    const parts = yield* mergeGeosGen(dashGeos, false);
     const mat = new THREE.MeshLambertMaterial({ color: '#e6c04a', side: THREE.DoubleSide });
     markMats.center = mat;
-    const mesh = new THREE.Mesh(merged, mat);
-    mesh.name = 'hangang-path-center';
-    group.add(mesh);
+    addPathMeshes(group, parts, mat, 'hangang-path-center', false);
   }
 
   function onWay(w, x, z, pad = 0.4) {
@@ -342,3 +404,21 @@ export function createHangangPaths({ parent, osm, land }) {
 
   return { group, floorY, isTunnel, setNight, kept };
 }
+
+export function createHangangPaths(opts) {
+  const g = hangangPathsGen(opts);
+  let n = g.next();
+  while (!n.done) n = g.next();
+  return n.value;
+}
+
+export async function createHangangPathsAsync(opts, slicer) {
+  const g = hangangPathsGen(opts);
+  let n = g.next();
+  while (!n.done) {
+    if (slicer) await slicer.tick('hangang-paths');
+    n = g.next();
+  }
+  return n.value;
+}
+

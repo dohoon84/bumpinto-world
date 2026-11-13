@@ -5,6 +5,8 @@ import { createAvatar } from './entities/avatar.js';
 import { LOOK_CHOICES, LOOK_TABS, COLOR_FIELDS, PROFILE_KEY, sanitizeLook } from './look.js';
 import { isEn, tr, toggleLang, onLangChange } from './i18n.js';
 import { accountsOn } from './account/flags.js'; // [accounts] 가벼운 스위치만 — 계정 입장 UI 는 켜졌을 때만 동적으로
+import { isMobileMode } from './mobile/flag.js';
+import { mobileProfileEnabled } from './mobile/profile.js';
 
 const ENTER_LINES = [
   '정자역 광장으로 걸어 들어가는 중',
@@ -337,7 +339,7 @@ export function openLobby({ sms, region = null, onJoin, onBack }) {
 
   const view = root.querySelector('#lobby-preview');
   const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-  renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+  renderer.setPixelRatio(Math.min(devicePixelRatio, mobileProfileEnabled(typeof location !== 'undefined' ? location.search : '', isMobileMode()) ? 1 : (isMobileMode() ? 1.5 : 2)));
   view.appendChild(renderer.domElement);
   const scene = new THREE.Scene();
   scene.background = new THREE.Color('#1a2744');
@@ -647,7 +649,18 @@ export function openLobby({ sms, region = null, onJoin, onBack }) {
     import('./account/lobbyAccount.js')
       .then((m) => m.detectLobbyAccount({ sms, saved, look, fallbackName: isEn() ? 'Guest' : '손님' }))
       .catch(() => null)
-      .then((found) => {
+      .then(async (found) => {
+        if (found?.me?.consent?.needsTerms) {
+          try {
+            const { ensureAccountConsent } = await import('./account/consent.js');
+            const g = await ensureAccountConsent({ me: found.me });
+            if (!g.ok) found = null;
+            else if (g.me) found = { ...found, me: g.me };
+          } catch {
+            // 약관을 확인하지 못하면 계정으로 입장하지 않는다
+            found = null;
+          }
+        }
         card.classList.remove('is-acct-checking');
         if (!found || !root.contains(card)) { if (root.contains(card)) guestPreview(); return; }
         ticket += 1; // 게스트 미리보기가 늦게 와서 덮어쓰지 않게
@@ -719,6 +732,23 @@ export function openLobby({ sms, region = null, onJoin, onBack }) {
       return;
     }
     error.textContent = '';
+    if (acct?.me?.consent?.needsTerms) {
+      try {
+        const { ensureAccountConsent } = await import('./account/consent.js');
+        const g = await ensureAccountConsent({ me: acct.me });
+        if (!g.ok) {
+          acct = null;
+          card.classList.remove('is-account', 'is-acct-edit', 'is-acct-checking');
+          document.body.classList.remove('bw-signed-in');
+          guestPreview();
+          return;
+        }
+        if (g.me) acct = { ...acct, me: g.me };
+      } catch {
+        error.textContent = tr('약관 동의를 확인하지 못했어요. 잠시 후 다시 시도해 주세요.', 'Could not confirm terms agreement. Please try again.');
+        return;
+      }
+    }
     joining = true;
     go.disabled = true;
     const screen = getEnterScreen();

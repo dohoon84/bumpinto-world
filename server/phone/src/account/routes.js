@@ -1,16 +1,20 @@
 // [accounts] /auth/* 라우트. ACCOUNTS_ENABLED 가 꺼져 있으면 config 만 {enabled:false} 로 답하고 나머지는 404.
-//   GET  /auth/config  → { enabled, clientId, economy }
-//   POST /auth/google  { credential, deviceId } → 구글 ID 토큰 검증 → 계정 찾기/만들기 → 기기 연결·이전 → 세션 쿠키
+//   GET  /auth/config  → { enabled, clientId, economy, consent }
+//   POST /auth/google  { credential, deviceId, termsVersion?, privacyVersion?, marketingOptIn? }
+//                      → 구글 ID 토큰 검증 → 계정 찾기/만들기(신규는 약관 필수) → 기기 연결·이전 → 세션 쿠키
 //   POST /auth/link    { deviceId }            → (로그인 상태) 이 기기를 계정에 붙이고 이전
 //   POST /auth/logout  { all? }                → 쿠키 삭제. all:true 면 모든 기기의 세션 무효(session_version+1)
-//   GET  /auth/me                              → 계정, 기기(가림), 대표 캐릭터 id, 잔액(경제 켜짐), 칭호용 기록 요약
-//   POST /auth/dev     { name?, sub?, deviceId } → [economy] 로컬 시험용 가짜 로그인. DEV_LOGIN=1 이고 요청 주소·Origin 이 localhost/사설 LAN 일 때만(배포 환경 404)
+//   GET  /auth/me                              → 계정, 기기(가림), 대표 캐릭터 id, 잔액, 칭호용 기록, consent
+//   POST /auth/consent { termsVersion, privacyVersion, marketingOptIn? } → (로그인 상태) 필수 약관 동의 저장
+//   POST /auth/marketing { optIn }             → (로그인 상태) 마케팅 수신동의 토글
+//   POST /auth/dev     { name?, sub?, deviceId, termsVersion?, privacyVersion?, marketingOptIn? } → 로컬 시험용 가짜 로그인
 // 쿠키를 쓰므로 CORS 는 허용 목록의 출처만, Allow-Credentials: true. "*" 는 쓰지 않는다.
 import { verifyGoogleIdToken } from "./google.js";
 import { clearSessionCookie, sessionCookie, sessionFromRequest, signSession } from "./session.js";
 import { accountsEnabled, accountsReady, devLoginAllowed, econFeatures, economyEnabled, devLoginOn, isPrivateDevHost, statsEnabled } from "./flags.js";
 import { econMode } from "./economy.js";
 import {
+  accountByGoogleSub,
   accountForSession,
   devicesOf,
   grantStarters,
@@ -19,6 +23,7 @@ import {
   reconcileAccount,
   upsertAccount,
 } from "./store.js";
+import { consentOf, consentPublicConfig, parseConsentInput, saveMarketingOptIn, saveRequiredConsent } from "./consent.js";
 import { getBalance } from "./ledger.js";
 import { logLoginDay, statsSummary } from "./stats.js";
 
@@ -134,6 +139,7 @@ async function mePayload(env, acc, deviceId, now) {
       current: !!deviceId && (d.device_id === deviceId || (d.merge_status === "primary" && acc.primary_user_id === deviceId)),
     })),
     economy: economyEnabled(env),
+    consent: consentOf(acc),
   };
   if (out.economy) out.balance = await getBalance(db, acc.id);
   if (statsEnabled(env)) out.stats = await statsSummary(db, acc.id);
@@ -157,6 +163,7 @@ export async function handleAuth(request, env, url, deps = {}) {
       {
         ok: true, enabled: ready, clientId: ready ? String(env.GOOGLE_CLIENT_ID).trim() : "", economy: economyEnabled(env),
         econ: { mode: econMode(env), features: econFeatures(env) }, devLogin: devLoginAllowed(env, url, request.headers.get("Origin") || ""),
+        consent: consentPublicConfig(),
       },
       200,
       cors,
@@ -191,8 +198,22 @@ export async function handleAuth(request, env, url, deps = {}) {
         if (!verified.ok) return json({ ok: false, error: verified.error }, 401, cors);
         claims = verified.claims;
       }
+      const existing = await accountByGoogleSub(db, claims.sub);
+      const consentIn = parseConsentInput(body);
+      if (!existing && !consentIn.requiredOk) return json({ ok: false, error: "consent_required" }, 400, cors);
       const { account, created } = await upsertAccount(db, claims, now);
       if (!account) return json({ ok: false, error: "server" }, 500, cors);
+      let marketing = null;
+      if (consentIn.requiredOk) {
+        const saved = await saveRequiredConsent(db, account, consentIn, now);
+        if (created && !saved.ok && saved.error === "consent_schema_missing") {
+          // 0007 미적용: 계정은 만들되 동의 저장만 건너뛴다(needsTerms 유지)
+        } else if (created && !saved.ok) {
+          return json({ ok: false, error: saved.error }, saved.error === "consent_required" ? 400 : 503, cors);
+        } else if (saved.ok) {
+          marketing = saved.marketing;
+        }
+      }
       const linked = await linkAndMigrate(env, account.id, body.deviceId, now, waitUntil);
       let grants = null;
       if (economyEnabled(env)) grants = await grantStarters(db, env, bookOf(env), account.id, now);
@@ -204,6 +225,8 @@ export async function handleAuth(request, env, url, deps = {}) {
           ok: true,
           created,
           account: publicAccount(fresh),
+          consent: consentOf(fresh),
+          ...(marketing ? { marketing } : {}),
           link: linked.link,
           primaryUserId: linked.primaryUserId,
           migrate: linked.migrate,
@@ -234,6 +257,32 @@ export async function handleAuth(request, env, url, deps = {}) {
       if (economyEnabled(env)) await grantStarters(db, env, bookOf(env), acc.id, now); // 멱등 — 이미 받았으면 그대로
       if (statsEnabled(env)) await logLoginDay(db, acc.id, now);
       return json(await mePayload(env, acc, deviceId, now), 200, cors);
+    }
+
+    if (path === "/auth/consent" && request.method === "POST") {
+      const { body, error } = await readBody(request);
+      if (error) return json({ ok: false, error }, 400, cors);
+      const consentIn = parseConsentInput(body);
+      const saved = await saveRequiredConsent(db, acc, consentIn, now);
+      if (!saved.ok) {
+        const status = saved.error === "consent_required" ? 400 : saved.error === "consent_schema_missing" ? 503 : 400;
+        return json({ ok: false, error: saved.error }, status, cors);
+      }
+      const fresh = (await db.prepare("SELECT * FROM accounts WHERE id = ?").bind(acc.id).first()) || acc;
+      return json({ ok: true, consent: consentOf(fresh), marketing: saved.marketing, account: publicAccount(fresh) }, 200, cors);
+    }
+
+    if (path === "/auth/marketing" && request.method === "POST") {
+      const { body, error } = await readBody(request);
+      if (error) return json({ ok: false, error }, 400, cors);
+      const optIn = body?.optIn === true || body?.optIn === 1 || body?.optIn === "1";
+      const saved = await saveMarketingOptIn(db, acc, optIn, now);
+      if (!saved.ok) {
+        const status = saved.error === "no_email" ? 400 : saved.error === "consent_schema_missing" ? 503 : 400;
+        return json({ ok: false, error: saved.error }, status, cors);
+      }
+      const fresh = (await db.prepare("SELECT * FROM accounts WHERE id = ?").bind(acc.id).first()) || acc;
+      return json({ ok: true, consent: consentOf(fresh), marketing: saved.marketing, account: publicAccount(fresh) }, 200, cors);
     }
 
     if (path === "/auth/link" && request.method === "POST") {

@@ -2,6 +2,7 @@
 import { sessionFromRequest } from '../account/session.js';
 import { mergeGuestBest, creditParticipation, ackNotices, attemptsUsed, pendingNotices, rankEnabled, recordRun, storeBoard } from './db.js';
 import { kstDayKey, LIMIT_MSG } from './rules.js';
+import { loadTitles, markTitleSeen, setFeaturedTitle } from './titles.js';
 
 function json(data, status, cors) {
   return new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json; charset=utf-8', ...cors } });
@@ -48,6 +49,30 @@ export async function handleBump24(request, env, url, cors) {
       const cap = who.guest ? 1 : 5;
       const usedUp = used >= cap;
       return json({ ok: true, guest: who.guest, used, left: Math.max(0, cap - used), usedUp, message: usedUp ? LIMIT_MSG : '' }, 200, cors);
+    }
+    if (request.method === 'GET' && path === '/bump24/titles') {
+      const who = await playerOf(request, env, {});
+      if (!who?.accountId) return json({ ok: true, guest: true, current: null, history: [], pendingEarn: false, featured: null }, 200, cors);
+      return json({ ok: true, ...(await loadTitles(env.DB, who.accountId)) }, 200, cors);
+    }
+    if (request.method === 'POST' && path === '/bump24/titles/seen') {
+      const body = await request.json().catch(() => ({}));
+      const who = await playerOf(request, env, body);
+      if (!who?.accountId) return json({ ok: false, error: 'login_required' }, 401, cors);
+      const week = String(body?.weekKey || '').slice(0, 16);
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(week)) return json({ ok: false, error: 'bad_week' }, 400, cors);
+      await markTitleSeen(env.DB, who.accountId, week, now);
+      return json({ ok: true, ...(await loadTitles(env.DB, who.accountId)) }, 200, cors);
+    }
+    if (request.method === 'POST' && path === '/bump24/titles/featured') {
+      const body = await request.json().catch(() => ({}));
+      const who = await playerOf(request, env, body);
+      if (!who?.accountId) return json({ ok: false, error: 'login_required' }, 401, cors);
+      const titleId = String(body?.titleId || '').slice(0, 40) || null;
+      const weekKey = String(body?.weekKey || '').slice(0, 16) || null;
+      const source = body?.source === 'karma' ? 'karma' : (titleId ? 'weekly' : 'auto');
+      const out = await setFeaturedTitle(env.DB, who.accountId, { titleId, weekKey, source }, now);
+      return json({ ok: true, ...out }, 200, cors);
     }
     if (request.method === 'GET' && path === '/bump24/pending') {
       const who = await playerOf(request, env, {});

@@ -3,10 +3,10 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { inWater, centroid, projectOnLine } from './hangangCoords.js';
-import { createHangangTerrain, waterYAt } from './hangangTerrain.js';
-import { createHangangPaths } from './hangangPaths.js';
-import { createHangangCity } from './hangangCity.js';
-import { createHangangProps } from './hangangProps.js';
+import { createHangangTerrain, createHangangTerrainAsync, waterYAt } from './hangangTerrain.js';
+import { createHangangPaths, createHangangPathsAsync } from './hangangPaths.js';
+import { createHangangCity, createHangangCityAsync } from './hangangCity.js';
+import { createHangangProps, createHangangPropsAsync } from './hangangProps.js';
 
 const SKIP_BRIDGE = new Set(['반포대교', '잠수교']);
 
@@ -463,17 +463,18 @@ function createHapUnderpasses({ parent, osm, land }) {
   };
 }
 
-export function createHangangHap({ parent, overlay, terrain, dem, osm, foreign = null } = {}) {
+function startHangangHap(parent, osm) {
   const root = new THREE.Group();
   root.name = 'hangang-hap';
   parent.add(root);
-
   if (Array.isArray(osm?.amenities)) {
     osm.benches = osm.amenities.filter((a) => a.k === 'bench');
     osm.bins = osm.amenities.filter((a) => a.k === 'waste_basket');
   }
+  return root;
+}
 
-  const land = createHangangTerrain({ parent: root, dem, osm });
+function finishHangangHap({ parent, overlay, terrain, dem, osm, foreign = null, root, land } = {}) {
   const paths = createHangangPaths({ parent: root, osm, land });
   const city = createHangangCity({ parent: root, osm, land });
   const bridges = createHapBridges({ parent: root, osm, land });
@@ -490,9 +491,8 @@ export function createHangangHap({ parent, overlay, terrain, dem, osm, foreign =
     return (x0 < b.x1 && b.z0 < z1) ? { x0, x1: b.x1, z0: b.z0, z1 } : null;
   };
   const ownRect = clipRectOf();
-  const inRect = (r, x, z) => !!r && x >= r.x0 && x <= r.x1 && z >= r.z0 && z <= r.z1;
   const isForeign = typeof foreign === 'function' ? foreign : () => false;
-  const owns = (x, z) => inRect(ownRect, x, z) || !isForeign(x, z);
+  const owns = hapOwnsFn(ownRect, isForeign, land, osm); // [jamsil-ground]
   const ownHeightAt = (x, z) => (owns(x, z) ? land.heightAt(x, z) : null);
   if (typeof foreign === 'function') {
     root.traverse((o) => {
@@ -501,7 +501,219 @@ export function createHangangHap({ parent, overlay, terrain, dem, osm, foreign =
     });
   }
   const props = createHangangProps({ parent: root, osm, land });
+  if (typeof foreign === 'function') clearIslandOverlaysSync(root, islandFloorFn(ownRect, owns)); // [jamsil-float]
+  return finishHangangHapApi({ overlay, osm, root, land, paths, city, bridges, underpasses, props, ownRect, owns, ownHeightAt });
+}
 
+// [jamsil-ground] 합수부 사각형(z ≤ −15800)은 코리더 본선 섬(잠실·송파·석촌·롯데월드타워)과 겹친다.
+//   예전(3bbe093~)엔 사각형 안이면 섬 위라도 2구간 지형이 바닥을 차지해, 도시 바닥(y≈0)보다 수 m 높은
+//   DEM 풀밭이 잠실 일대 길·인도·역 출구를 덮었다. 섬 위에서는 물이거나 DEM 이 타일 바닥보다 낮은 곳(둔치·탄천 물길)만
+//   한강 지형이 맡고, 시가지(DEM ≥ 타일 바닥)는 코리더 타일 바닥을 그대로 둔다.
+const HAP_ISLAND_FLOOR_Y = 0.5;
+function hapOwnsFn(ownRect, isForeign, land, osm) {
+  const inRect = (x, z) => !!ownRect && x >= ownRect.x0 && x <= ownRect.x1 && z >= ownRect.z0 && z <= ownRect.z1;
+  return (x, z) => {
+    if (!isForeign(x, z)) return true;
+    if (!inRect(x, z)) return false;
+    if (inWater(x, z, osm?.water)) return true;
+    const h = land.heightAt(x, z);
+    return h != null && h < HAP_ISLAND_FLOOR_Y;
+  };
+}
+
+// [jamsil-float] 793ecf5 뒤로 섬 위 시가지(합수부 사각형 안 · 다른 섬 · 2구간이 땅을 안 맡는 곳)는 코리더 타일 바닥(y≈0)이 이긴다.
+//   그런데 2구간 길(산책로·자전거길·중앙선·점선)·소품·시가 오버레이는 예전 DEM 높이(수 m 위)로 지어져 도시 길 위에 떠 보였다.
+//   2구간이 땅을 안 맡는 자리(지형 삼각형을 빼는 것과 같은 owns 판정)의 오버레이는 그리지 않는다. 다리·고가·호안은 그대로 둔다.
+const HAP_OVERLAY_GROUPS = new Set(['hangang-paths', 'hangang-props', 'hangang-city']);
+//   합수부 사각형 밖의 다른 섬(석촌·송파 쪽 z > −15800, 경부 띠 등)도 지형은 이미 안 그리므로 같은 판정(!owns)으로 뺀다.
+function islandFloorFn(ownRect, owns) {
+  return (x, z) => !owns(x, z);
+}
+function hapOverlayTargets(root) {
+  const list = [];
+  for (const grp of root.children) {
+    if (!HAP_OVERLAY_GROUPS.has(grp.name)) continue;
+    grp.updateMatrixWorld(true);
+    grp.traverse((o) => { if ((o.isMesh || o.isLine || o.isPoints) && o.geometry?.attributes?.position) list.push(o); });
+  }
+  return list;
+}
+function clearIslandOverlay(o, floor) {
+  const e = o.matrixWorld.elements;
+  const wx = (x, z) => e[0] * x + e[8] * z + e[12], wz = (x, z) => e[2] * x + e[10] * z + e[14];
+  const g = o.geometry;
+  if (o.isInstancedMesh) {
+    const m = new THREE.Matrix4(), v = new THREE.Vector3(), zero = new THREE.Matrix4().makeScale(0, 0, 0);
+    let n = 0;
+    for (let i = 0; i < o.count; i++) {
+      o.getMatrixAt(i, m); v.setFromMatrixPosition(m).applyMatrix4(o.matrixWorld);
+      if (floor(v.x, v.z)) { o.setMatrixAt(i, zero); n++; }
+    }
+    if (n) o.instanceMatrix.needsUpdate = true;
+    return n;
+  }
+  if (!g.boundingSphere) g.computeBoundingSphere();
+  const bs = g.boundingSphere, r = bs.radius * o.matrixWorld.getMaxScaleOnAxis();
+  if (r < 25) { // 작은 소품 한 개: 중심으로 판정
+    const c = bs.center.clone().applyMatrix4(o.matrixWorld);
+    if (floor(c.x, c.z)) { o.removeFromParent(); return 1; }
+    return 0;
+  }
+  const pos = g.attributes.position, idx = g.index, N = idx ? idx.count : pos.count, at = (i) => (idx ? idx.getX(i) : i);
+  const k = o.isLineSegments ? 2 : o.isLine || o.isPoints ? 0 : 3;
+  if (!k) return 0;
+  const keep = []; let dropped = 0;
+  for (let i = 0; i + k - 1 < N; i += k) {
+    let cx = 0, cz = 0;
+    for (let j = 0; j < k; j++) { const q = at(i + j); cx += pos.getX(q) / k; cz += pos.getZ(q) / k; }
+    if (floor(wx(cx, cz), wz(cx, cz))) { dropped++; continue; }
+    for (let j = 0; j < k; j++) keep.push(at(i + j));
+  }
+  if (dropped) { g.setIndex(keep); g.computeBoundingSphere(); g.computeBoundingBox(); }
+  return dropped;
+}
+async function clearIslandOverlays(root, floor, slicer = null) {
+  if (!floor) return 0;
+  let n = 0;
+  for (const o of hapOverlayTargets(root)) { n += clearIslandOverlay(o, floor); if (slicer) await slicer.tick('hangang-hap-island'); }
+  return n;
+}
+function clearIslandOverlaysSync(root, floor) {
+  if (!floor) return 0;
+  let n = 0;
+  for (const o of hapOverlayTargets(root)) n += clearIslandOverlay(o, floor);
+  return n;
+}
+
+// [hangang-isolation] 무게중심이 drop(cx, cz) 인 삼각형을 인덱스에서 뺀다.
+function dropTriangles(g, drop) {
+  const st = startDropTriangles(g, drop);
+  if (!st) return;
+  while (st.step(4000)) { /* sync */ }
+  st.finish();
+}
+
+async function dropTrianglesAsync(g, drop, slicer) {
+  const st = startDropTriangles(g, drop);
+  if (!st) return;
+  while (st.step(2000)) {
+    if (slicer) await slicer.tick('hangang-hap-clip');
+  }
+  st.finish();
+}
+
+function startDropTriangles(g, drop) {
+  const pos = g?.attributes?.position;
+  if (!pos) return null;
+  const idx = g.index;
+  const n = idx ? idx.count : pos.count;
+  const v = (i) => (idx ? idx.getX(i) : i);
+  const keep = [];
+  let dropped = 0;
+  let i = 0;
+  return {
+    step(budget) {
+      const end = Math.min(n, i + budget * 3);
+      for (; i + 2 < end; i += 3) {
+        const a = v(i), b = v(i + 1), c = v(i + 2);
+        const cx = (pos.getX(a) + pos.getX(b) + pos.getX(c)) / 3;
+        const cz = (pos.getZ(a) + pos.getZ(b) + pos.getZ(c)) / 3;
+        if (drop(cx, cz)) { dropped++; continue; }
+        keep.push(a, b, c);
+      }
+      return i + 2 < n;
+    },
+    finish() {
+      if (dropped) { g.setIndex(keep); g.computeBoundingSphere?.(); g.computeBoundingBox?.(); }
+    },
+  };
+}
+
+export function mergeHangangMini(a, b) {
+  if (!a) return b || { roads: [], buildings: [], plazas: [], parks: [], water: [], waterLines: [] };
+  if (!b) return a;
+  return {
+    roads: [...(a.roads || []), ...(b.roads || [])],
+    buildings: [...(a.buildings || []), ...(b.buildings || [])],
+    plazas: [...(a.plazas || []), ...(b.plazas || [])],
+    parks: [...(a.parks || []), ...(b.parks || [])],
+    water: [...(a.water || []), ...(b.water || [])],
+    waterLines: [...(a.waterLines || []), ...(b.waterLines || [])],
+  };
+}
+
+export function createHangangHap({ parent, overlay, terrain, dem, osm, foreign = null } = {}) {
+  const root = startHangangHap(parent, osm);
+  const land = createHangangTerrain({ parent: root, dem, osm });
+  return finishHangangHap({ parent, overlay, terrain, dem, osm, foreign, root, land });
+}
+
+export async function createHangangHapAsync({ parent, overlay, terrain, dem, osm, foreign = null, bakeUrl = null } = {}, yieldFn, slicer) {
+  const y = yieldFn || (typeof requestAnimationFrame === 'function'
+    ? () => new Promise((r) => requestAnimationFrame(() => r()))
+    : () => Promise.resolve());
+  const root = startHangangHap(parent, osm);
+  const land = await createHangangTerrainAsync({ parent: root, dem, osm, bakeUrl }, y, slicer);
+  if (slicer) slicer.flush('hangang-hap-terrain');
+  await y();
+  return finishHangangHapAsync({ parent, overlay, terrain, dem, osm, foreign, root, land }, y, slicer);
+}
+
+async function finishHangangHapAsync({ parent, overlay, terrain, dem, osm, foreign = null, root, land } = {}, y, slicer) {
+  const paths = slicer
+    ? await createHangangPathsAsync({ parent: root, osm, land }, slicer)
+    : createHangangPaths({ parent: root, osm, land });
+  if (slicer) slicer.flush('hangang-hap-paths');
+  else if (y) await y();
+  const city = slicer
+    ? await createHangangCityAsync({ parent: root, osm, land }, slicer)
+    : createHangangCity({ parent: root, osm, land });
+  if (slicer) slicer.flush('hangang-hap-city');
+  else if (y) await y();
+  const bridges = createHapBridges({ parent: root, osm, land });
+  if (y) await y();
+  const underpasses = createHapUnderpasses({ parent: root, osm, land });
+  if (y) await y();
+
+  const clipRectOf = () => {
+    const b = land.bounds;
+    if (!b) return null;
+    const x0 = Math.max(b.x0, osm?.meta?.visualXMin ?? b.x0);
+    const z1 = Math.min(b.z1, -15800);
+    return (x0 < b.x1 && b.z0 < z1) ? { x0, x1: b.x1, z0: b.z0, z1 } : null;
+  };
+  const ownRect = clipRectOf();
+  const isForeign = typeof foreign === 'function' ? foreign : () => false;
+  const owns = hapOwnsFn(ownRect, isForeign, land, osm); // [jamsil-ground]
+  const ownHeightAt = (x, z) => (owns(x, z) ? land.heightAt(x, z) : null);
+  if (typeof foreign === 'function') {
+    const meshes = [];
+    root.traverse((o) => {
+      if (!o.isMesh || !(o.name === 'hangang-dem' || o.name === 'hangang-water')) return;
+      meshes.push(o);
+    });
+    for (const o of meshes) {
+      if (slicer) await dropTrianglesAsync(o.geometry, (cx, cz) => !owns(cx, cz), slicer);
+      else dropTriangles(o.geometry, (cx, cz) => !owns(cx, cz));
+    }
+  }
+  if (slicer) slicer.flush('hangang-hap-clip');
+  else if (y) await y();
+  const props = slicer
+    ? await createHangangPropsAsync({ parent: root, osm, land }, slicer)
+    : createHangangProps({ parent: root, osm, land });
+  if (slicer) slicer.flush('hangang-hap-props');
+  else if (y) await y();
+  if (typeof foreign === 'function') { // [jamsil-float]
+    await clearIslandOverlays(root, islandFloorFn(ownRect, owns), slicer);
+    if (slicer) slicer.flush('hangang-hap-island');
+  }
+
+  // labels + API: same as finishHangangHap from overlay onward
+  return finishHangangHapApi({ overlay, osm, foreign, root, land, paths, city, bridges, underpasses, props, ownRect, owns, ownHeightAt });
+}
+
+function finishHangangHapApi({ overlay, osm, root, land, paths, city, bridges, underpasses, props, ownRect, owns, ownHeightAt }) {
   if (overlay) {
     const hap = osm?.spawns?.['tancheon-hap'] || osm?.connectEnds?.tancheonHap;
     if (hap) {
@@ -587,6 +799,7 @@ export function createHangangHap({ parent, overlay, terrain, dem, osm, foreign =
       if (!b || x < b.x0 || x > b.x1 || z < b.z0 || z > b.z1) return false;
       if (osm?.meta?.visualXMin != null && x < osm.meta.visualXMin) return false;
       if (z > -15800) return false;
+      if (!owns(x, z)) return false; // [jamsil-ground] 섬 위 시가지는 타일 바닥을 남긴다
       if (inWater(x, z, osm?.water)) return true;
       // 2구간 DEM 이 있는 한강 남단은 그 지형이 바닥이다 (타일 블록 바닥 = 베이지 판).
       return land.heightAt(x, z) != null;
@@ -594,34 +807,3 @@ export function createHangangHap({ parent, overlay, terrain, dem, osm, foreign =
   };
 }
 
-// [hangang-isolation] 무게중심이 drop(cx, cz) 인 삼각형을 인덱스에서 뺀다.
-function dropTriangles(g, drop) {
-  const pos = g?.attributes?.position;
-  if (!pos) return;
-  const idx = g.index;
-  const n = idx ? idx.count : pos.count;
-  const v = (i) => (idx ? idx.getX(i) : i);
-  const keep = [];
-  let dropped = 0;
-  for (let i = 0; i + 2 < n; i += 3) {
-    const a = v(i), b = v(i + 1), c = v(i + 2);
-    const cx = (pos.getX(a) + pos.getX(b) + pos.getX(c)) / 3;
-    const cz = (pos.getZ(a) + pos.getZ(b) + pos.getZ(c)) / 3;
-    if (drop(cx, cz)) { dropped++; continue; }
-    keep.push(a, b, c);
-  }
-  if (dropped) { g.setIndex(keep); g.computeBoundingSphere?.(); g.computeBoundingBox?.(); }
-}
-
-export function mergeHangangMini(a, b) {
-  if (!a) return b || { roads: [], buildings: [], plazas: [], parks: [], water: [], waterLines: [] };
-  if (!b) return a;
-  return {
-    roads: [...(a.roads || []), ...(b.roads || [])],
-    buildings: [...(a.buildings || []), ...(b.buildings || [])],
-    plazas: [...(a.plazas || []), ...(b.plazas || [])],
-    parks: [...(a.parks || []), ...(b.parks || [])],
-    water: [...(a.water || []), ...(b.water || [])],
-    waterLines: [...(a.waterLines || []), ...(b.waterLines || [])],
-  };
-}

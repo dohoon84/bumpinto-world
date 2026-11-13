@@ -1,10 +1,11 @@
 // [accounts] 오른쪽 위 막대의 작은 로그인 칩 + 계정 패널. ?accounts=1 일 때만 game.js 가 동적으로 불러온다.
 // 구글 로그인은 GIS ID 토큰 방식(팝업 / One Tap, redirect URI 없음). GIS 스크립트는 칩을 처음 누를 때만 받는다.
 // 로그인 뒤 서버가 정한 대표 캐릭터 id 가 지금 기기 id 와 다르면, PIN 로그인과 같은 방식으로 기기 id 를 바꾸고 새로고침한다.
-import { tr, onLangChange } from '../i18n.js';
+import { tr, isEn, onLangChange } from '../i18n.js';
 import { accountApi } from './api.js';
 import { GOOGLE_CLIENT_ID } from './flags.js';
-import { loadGis, devLogin, isLocalHost } from './signin.js';
+import { googleSignIn, isLocalHost, devLogin } from './signin.js';
+import { ensureAccountConsent, fmtAgreedAt, legalHref, mountConsentFields } from './consent.js';
 import './account.css';
 
 const DEVICE_KEY = 'jeongja3d.device'; // src/sms.js 와 같은 키
@@ -55,6 +56,8 @@ export function mountAccount({ sms } = {}) {
   const $ = (sel) => panel.querySelector(sel);
 
   const state = { cfg: null, me: null, busy: false, msg: '' };
+  let loginFields = null;
+  const pendingConsent = { terms: false, privacy: false, marketing: false };
 
   function render() {
     const me = state.me;
@@ -72,6 +75,8 @@ export function mountAccount({ sms } = {}) {
     const actions = $('.acct-actions');
     actions.replaceChildren();
     if (me?.account) {
+      loginFields = null;
+      pendingConsent.terms = pendingConsent.privacy = pendingConsent.marketing = false;
       head.textContent = me.account.name || tr('내 계정', 'My account');
       const rows = [];
       if (me.account.email) rows.push(`<div class="acct-row"><span>${tr('구글', 'Google')}</span><b></b></div>`);
@@ -87,6 +92,7 @@ export function mountAccount({ sms } = {}) {
       body.innerHTML = rows.join('');
       const emailEl = body.querySelector('.acct-row b');
       if (me.account.email && emailEl) emailEl.textContent = me.account.email; // 사용자 값은 textContent 로만
+      body.appendChild(consentPanel(me));
       actions.append(button(tr('로그아웃', 'Sign out'), logout));
     } else {
       head.textContent = tr('구글 계정으로 로그인', 'Sign in with Google');
@@ -94,9 +100,27 @@ export function mountAccount({ sms } = {}) {
         '로그인하면 여러 PC 에서 같은 캐릭터·선물·사진을 이어서 써요. 로그인 안 해도 지금처럼 놀 수 있어요.',
         'Sign in to keep the same character, gifts and photos across PCs. You can keep playing as a guest.',
       )}</p>`;
-      actions.append(button(tr('구글로 계속', 'Continue with Google'), startLogin, 'primary'));
+      loginFields = mountConsentFields(body, { cfg: state.cfg, initial: pendingConsent });
+      const googleBtn = button(tr('구글로 계속', 'Continue with Google'), startLogin, 'primary');
+      actions.append(googleBtn);
       // 로컬 시험(localhost·같은 와이파이 아이폰): 서버 DEV_LOGIN=1 일 때만 — 구글은 http LAN 출처를 받지 않음
-      if (state.cfg?.devLogin && isLocalHost()) actions.append(button(tr('개발용 로그인 (로컬)', 'Dev sign-in (local)'), startDevLogin));
+      let devBtn = null;
+      if (state.cfg?.devLogin && isLocalHost()) {
+        devBtn = button(tr('개발용 로그인 (로컬)', 'Dev sign-in (local)'), startDevLogin);
+        actions.append(devBtn);
+      }
+      const syncLoginBtns = (ok) => {
+        const on = !!ok && !state.busy;
+        googleBtn.disabled = !on;
+        if (devBtn) devBtn.disabled = !on;
+      };
+      loginFields.onChange((ok) => {
+        const snap = loginFields.snapshot();
+        pendingConsent.terms = snap.terms;
+        pendingConsent.privacy = snap.privacy;
+        pendingConsent.marketing = snap.marketing;
+        syncLoginBtns(ok);
+      });
     }
     actions.append(button(tr('닫기', 'Close'), () => toggle(false)));
     $('.acct-msg').textContent = state.msg;
@@ -110,6 +134,65 @@ export function mountAccount({ sms } = {}) {
     b.disabled = state.busy;
     b.addEventListener('click', fn);
     return b;
+  }
+
+  function consentPanel(me) {
+    const box = document.createElement('div');
+    box.className = 'acct-legal';
+    const c = me.consent || {};
+    const agreed = fmtAgreedAt(c.termsAgreedAt || c.privacyAgreedAt, isEn() ? 'en' : 'ko');
+    const termsA = document.createElement('a');
+    termsA.href = legalHref('terms', state.cfg);
+    termsA.target = '_blank';
+    termsA.rel = 'noopener';
+    termsA.textContent = tr('이용약관', 'Terms');
+    const privA = document.createElement('a');
+    privA.href = legalHref('privacy', state.cfg);
+    privA.target = '_blank';
+    privA.rel = 'noopener';
+    privA.textContent = tr('개인정보처리방침', 'Privacy');
+    const links = document.createElement('div');
+    links.className = 'acct-legal-links';
+    links.append(termsA, document.createTextNode(' · '), privA);
+    box.appendChild(links);
+    if (agreed) {
+      const when = document.createElement('div');
+      when.className = 'acct-legal-date';
+      when.textContent = tr(`약관 동의일 ${agreed}`, `Agreed on ${agreed}`);
+      box.appendChild(when);
+    }
+    const label = document.createElement('label');
+    label.className = 'acct-check acct-market';
+    const input = document.createElement('input');
+    input.type = 'checkbox';
+    input.checked = !!c.marketingOptIn;
+    input.disabled = !c.hasEmail || state.busy;
+    input.addEventListener('change', async () => {
+      const want = input.checked;
+      input.disabled = true;
+      const r = await accountApi.marketing(want);
+      input.disabled = !c.hasEmail;
+      if (!r.ok) {
+        input.checked = !want;
+        state.msg = r.error === 'no_email'
+          ? tr('이메일 정보가 없어 소식 수신을 켤 수 없어요.', 'An email is required to turn on updates.')
+          : tr(`저장하지 못했어요 (${r.error || '오류'})`, `Could not save (${r.error || 'error'})`);
+        render();
+        return;
+      }
+      if (r.consent) state.me = { ...state.me, consent: r.consent };
+      state.msg = want
+        ? tr('업데이트 소식을 이메일로 받아볼게요.', 'You will receive update emails.')
+        : tr('업데이트 소식 수신을 껐어요.', 'Update emails are turned off.');
+      render();
+    });
+    const span = document.createElement('span');
+    span.textContent = c.hasEmail
+      ? tr('새 지역 오픈·이벤트 소식을 이메일로 받아볼게요', 'Email me about new districts and events')
+      : tr('이메일이 없어 소식 수신을 켤 수 없어요', 'An email is required for update emails');
+    label.append(input, span);
+    box.appendChild(label);
+    return box;
   }
 
   function toggle(open = panel.hidden) {
@@ -128,67 +211,57 @@ export function mountAccount({ sms } = {}) {
     return true;
   }
 
-  async function onCredential(resp) {
-    if (!resp?.credential) return;
-    state.busy = true;
-    state.msg = tr('확인 중…', 'Checking…');
-    render();
-    const r = await accountApi.google(resp.credential, deviceId());
-    state.busy = false;
+  async function applyLogin(r) {
+    if (!r) {
+      state.busy = false;
+      render();
+      return;
+    }
     if (!r.ok) {
+      state.busy = false;
       state.msg = errText(r.error);
       render();
       return;
     }
+    state.busy = false;
     const linkMsg = LINK_TEXT[r.link?.status]?.() || '';
     const granted = (r.granted || []).reduce((a, g) => a + g.amount, 0);
     state.msg = [linkMsg, granted ? tr(`${fmt(granted)} bum 을 받았어요.`, `You received ${fmt(granted)} bum.`) : ''].filter(Boolean).join(' ');
-    $('.acct-gis').hidden = true;
     await refresh();
     try { dispatchEvent(new CustomEvent('bw:econ-changed', { detail: { reason: 'login' } })); } catch {}
     if (r.link?.status !== 'linked_to_other_account') adoptIfNeeded(r.primaryUserId);
+  }
+
+  function requireLoginConsent() {
+    if (loginFields?.requiredOk()) return true;
+    state.msg = tr('필수 약관에 동의해 주세요.', 'Please agree to the required terms.');
+    const msg = $('.acct-msg');
+    if (msg) msg.textContent = state.msg;
+    return false;
   }
 
   async function startLogin() {
-    const clientId = state.cfg?.clientId || GOOGLE_CLIENT_ID;
+    if (!requireLoginConsent()) return;
+    const consent = loginFields.payload();
     state.msg = '';
-    let google;
-    try {
-      google = await loadGis();
-    } catch {
-      state.msg = tr('구글 로그인 스크립트를 불러오지 못했어요.', 'Could not load Google sign-in.');
-      render();
-      return;
-    }
-    google.accounts.id.initialize({
-      client_id: clientId,
-      callback: onCredential,
-      ux_mode: 'popup',
-      auto_select: false,
-      cancel_on_tap_outside: true,
-      use_fedcm_for_prompt: true,
-      context: 'signin',
-    });
-    // One Tap 이 안 뜨는 환경(쿨다운·서드파티 쿠키 차단 등)을 위해 패널 안에 구글 버튼도 그린다
-    const host = $('.acct-gis');
-    host.hidden = false;
-    host.replaceChildren();
-    google.accounts.id.renderButton(host, { type: 'standard', theme: 'outline', size: 'medium', text: 'continue_with', shape: 'pill' });
-    google.accounts.id.prompt();
+    state.busy = true;
+    const msg = $('.acct-msg');
+    if (msg) msg.textContent = '';
+    panel.querySelectorAll('.acct-actions .acct-btn').forEach((b) => { b.disabled = true; });
+    const r = await googleSignIn({ deviceId: deviceId(), clientId: state.cfg?.clientId || GOOGLE_CLIENT_ID, consent });
+    await applyLogin(r);
   }
 
   async function startDevLogin() {
+    if (!requireLoginConsent()) return;
+    const consent = loginFields.payload();
+    state.msg = '';
     state.busy = true;
-    state.msg = tr('확인 중…', 'Checking…');
-    render();
-    const r = await devLogin(deviceId());
-    state.busy = false;
-    if (!r.ok) { state.msg = errText(r.error); render(); return; }
-    const granted = (r.granted || []).reduce((a, g) => a + g.amount, 0);
-    state.msg = granted ? tr(`${fmt(granted)} bum 을 받았어요.`, `You received ${fmt(granted)} bum.`) : '';
-    await refresh();
-    try { dispatchEvent(new CustomEvent('bw:econ-changed', { detail: { reason: 'login' } })); } catch {}
-    if (r.link?.status !== 'linked_to_other_account') adoptIfNeeded(r.primaryUserId);
+    const msg = $('.acct-msg');
+    if (msg) msg.textContent = '';
+    panel.querySelectorAll('.acct-actions .acct-btn').forEach((b) => { b.disabled = true; });
+    const r = await devLogin(deviceId(), consent);
+    await applyLogin(r);
   }
 
   async function logout() {
@@ -206,6 +279,16 @@ export function mountAccount({ sms } = {}) {
     const r = await accountApi.me(deviceId());
     state.me = r.ok ? r : null;
     render();
+    if (state.me?.consent?.needsTerms) {
+      const c = await ensureAccountConsent({ me: state.me, cfg: state.cfg });
+      if (!c.ok) {
+        state.me = null;
+        state.msg = tr('약관에 동의하지 않아 게스트로 계속해요.', 'You declined the terms and will continue as a guest.');
+      } else if (c.me) {
+        state.me = { ...state.me, ...c.me, consent: c.me.consent || state.me.consent };
+      }
+      render();
+    }
     return state.me;
   }
 

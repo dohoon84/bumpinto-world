@@ -4,26 +4,20 @@
 import * as THREE from 'three';
 import { watchEvening } from '../../evening.js';
 import { NT, namsanBaseY, inNamsanPark } from './namsanCoords.js';
+import { syncLandmarkDormant, landmarkDormEnabled } from './lazyLandmarks.js'; // [station-loop]
+const DORM = landmarkDormEnabled();
+const namsanBoundsDist = (b, x, z) => (b ? Math.hypot(Math.max(b.x0 - x, 0, x - b.x1), Math.max(b.z0 - z, 0, z - b.z1)) : 0);
 import { createNamsanTerrain } from './namsanTerrain.js';
 import { createNamsanTower } from './namsanTower.js';
 import { createNamsanInterior } from './namsanInterior.js';
 import { createNamsanCable, namsanCableStations } from './namsanCable.js';
 import { cableGuideEnabled, createNamsanCableGuide } from './namsanCableGuide.js'; // [cableguide]
-import { createNamsanCity } from './namsanCity.js';
+import { createNamsanCity, createNamsanCityAsync } from './namsanCity.js';
 import { createNamsanRoads } from './namsanRoads.js';
 import { createNamsanLibrary } from './namsanLibrary.js';
 export { NT, namsanBaseY } from './namsanCoords.js';
 
-export const NAMSAN_DEM_FILE = 'namsan/namsan-dem.json';
-export const NAMSAN_OSM_FILE = 'namsan/namsan-osm.json';
-export const NAMSAN_CITY_FILE = 'namsan/namsan-city.json';
-
-export function namsanEnabled(search = typeof location !== 'undefined' ? location.search : '') {
-  return new URLSearchParams(search || '').get('ntower') !== '0';
-}
-export function namsanCableEnabled(search = typeof location !== 'undefined' ? location.search : '') {
-  return namsanEnabled(search) && new URLSearchParams(search || '').get('ncable') !== '0';
-}
+export { NAMSAN_DEM_FILE, NAMSAN_OSM_FILE, NAMSAN_CITY_FILE, namsanEnabled, namsanCableEnabled } from './namsanFlags.js';
 
 // 상수 NT 는 namsanCoords.js (순환 import 방지).
 
@@ -75,6 +69,49 @@ export function createNamsan({ scene, overlay, terrain, dem, osm, city = null, c
   roads.setDoor?.(tower.door);
   const library = createNamsanLibrary({ parent: root, osm, heightAt: land.heightAt, overlay });
   const downtown = createNamsanCity({ parent: root, data: city, heightAt: land.heightAt, parks: osm?.parks || [], osm });
+  return completeNamsan({ scene, overlay, terrain, osm, city, cable, root, land, tower, interior, car, roads, library, downtown, guideOn });
+}
+
+export async function createNamsanAsync({ scene, overlay, terrain, dem, osm, city = null, cable = true, renderer = null } = {}, yieldFn, slicer) {
+  const y = yieldFn || (typeof requestAnimationFrame === 'function'
+    ? () => new Promise((r) => requestAnimationFrame(() => r()))
+    : () => Promise.resolve());
+  const root = new THREE.Group();
+  root.name = 'namsan';
+  root.visible = false;
+  scene.add(root);
+
+  const land = createNamsanTerrain({ parent: root, dem, osm });
+  if (slicer) slicer.flush('namsan-terrain');
+  await y();
+  const tower = createNamsanTower({ parent: root, osm, baseY: land.baseY, env: null, renderer });
+  if (slicer) slicer.flush('namsan-tower');
+  await y();
+  const interior = createNamsanInterior({ parent: root, osm, baseY: land.baseY, tower });
+  if (slicer) slicer.flush('namsan-interior');
+  await y();
+  const guideOn = !!cable && cableGuideEnabled();
+  const car = cable ? createNamsanCable({ parent: root, osm, heightAt: land.heightAt, overlay, baseY: land.baseY, guide: guideOn }) : null;
+  if (slicer) slicer.flush('namsan-cable');
+  await y();
+  const roads = createNamsanRoads({ parent: root, osm, heightAt: land.heightAt, overlay, city });
+  roads.setDoor?.(tower.door);
+  if (slicer) slicer.flush('namsan-roads');
+  await y();
+  const library = createNamsanLibrary({ parent: root, osm, heightAt: land.heightAt, overlay });
+  if (slicer) slicer.flush('namsan-library');
+  await y();
+  const downtown = slicer
+    ? await createNamsanCityAsync({ parent: root, data: city, heightAt: land.heightAt, parks: osm?.parks || [], osm }, slicer)
+    : createNamsanCity({ parent: root, data: city, heightAt: land.heightAt, parks: osm?.parks || [], osm });
+  if (slicer) slicer.flush('namsan-city');
+  await y();
+  const api = completeNamsan({ scene, overlay, terrain, osm, city, cable, root, land, tower, interior, car, roads, library, downtown, guideOn });
+  root.visible = true;
+  return api;
+}
+
+function completeNamsan({ scene, overlay, terrain, osm, city, root, land, tower, interior, car, roads, library, downtown, guideOn }) {
   let cableGuide = null;
   if (guideOn && car) {
     try {
@@ -199,6 +236,8 @@ export function createNamsan({ scene, overlay, terrain, dem, osm, city = null, c
 
   if (terrain?.addGroundExtra) {
     terrain.addGroundExtra((x, z, refY) => {
+      // [station-loop] 남산 밖(경계 + 600 m) 질의는 바로 null. 예전엔 정자 NPC·차 높이 질의마다 남산 길 전체를 훑어 프레임 JS 의 13% 를 먹었다.
+      if (DORM && namsanBoundsDist(land.bounds, x, z) > 600) return null;
       const y = surfaceY(x, z, refY);
       return y;
     });
@@ -253,6 +292,8 @@ export function createNamsan({ scene, overlay, terrain, dem, osm, city = null, c
     mini: namsanMini(city, osm, land.heightAt), // [hud-v3-minimap] 광장·도로·케이블카·공원
     stage(u) { car?.stage?.(u); },
     tickPlayer(dt, player, cam) {
+      // [station-loop] 남산 경계에서 8 km 밖이면 남산(카메라에 붙는 남산 하늘 구 포함)을 렌더·갱신에서 뺀다
+      if (DORM && player?.position && !syncLandmarkDormant(root, namsanBoundsDist(land.bounds, player.position.x, player.position.z))) return;
       interior.tickPlayer?.(dt, player, cam);
       car?.tickPlayer?.(dt, player, cam);
       cableGuide?.update(dt, player, (typeof window !== 'undefined' && window.__jj?.camera) || null); // [cableguide]
@@ -266,6 +307,7 @@ export function createNamsan({ scene, overlay, terrain, dem, osm, city = null, c
       }
     },
     update(dt) {
+      if (DORM && !root.visible) return; // [station-loop] 멀리 있어 꺼진 동안은 애니메이션도 쉰다
       tower.update?.(dt);
       interior.update?.(dt);
       car?.update?.(dt);

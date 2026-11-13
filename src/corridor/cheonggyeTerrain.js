@@ -6,6 +6,7 @@
 //   출입구 주변 차도·보도·횡단보도·버스 정류장은 OSM(청계산로와 옆 길)에서 구운 cheonggye-streets.json 으로 깔아, 출입구가 잔디 위가 아니라 인도 옆에 앉게 한다.
 //   ?cgterrain=0 또는 ?gangnam=0 이면 만들지 않는다.
 import * as THREE from 'three';
+import { gridLod, terrainLodEnabled } from '../perf/terrainChunks.js'; // [jamsil-perf]
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { watchEvening } from '../evening.js';
 import { ribbonGeo, fixNormalsUp, ROAD_STYLE } from '../world.js';
@@ -544,7 +545,7 @@ function buildGround(data, segs, localSegs = []) {
       treePos[i * 3 + 2] = z;
     }
   }
-  return { mesh, pos: treePos, nx, nz, x0, z0, dx, dz };
+  return { mesh, Nx, Nz, pos: treePos, nx, nz, x0, z0, dx, dz };
 }
 
 function treePrototype(trunkHex, crownHex, crownR, crownH) {
@@ -886,7 +887,8 @@ function assemble(data, buildingsData, streetsData) {
   const g = new THREE.Group();
   g.name = 'cheonggyeTerrainInner';
   const ground = buildGround(data, segs, localSegs);
-  g.add(ground.mesh);
+  // [jamsil-perf] 10m 격자 지형(126만 삼각형) → 1.28km 칸마다 거리 LOD(칸 중심 2km 안은 원본 그대로).
+  g.add(terrainLodEnabled() ? gridLod(ground.mesh, ground.Nx, ground.Nz) : ground.mesh);
   g.add(buildTrees(ground, segs));
   const barriers = buildBarriers(road);
   if (barriers) g.add(barriers);

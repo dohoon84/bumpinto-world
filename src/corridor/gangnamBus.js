@@ -127,7 +127,7 @@ function pointAt(pts, s) {
   return { x: p[0], z: p[1], ang: 0 };
 }
 
-export function mountGangnamTransit(root, data, { overlay, express = null, liveBus = null } = {}) {
+export function mountGangnamTransit(root, data, { overlay, express = null, liveBus = null, tiles = null } = {}) {
   if (!data?.pts?.length) return null;
   const group = new THREE.Group();
   group.name = 'gangnamGyeongbu';
@@ -170,7 +170,7 @@ export function mountGangnamTransit(root, data, { overlay, express = null, liveB
   }
   liveBus?.register(stops.filter((s) => s.arsId).map((s) => ({ ref: s.arsId, x: s.x, z: s.z })));
   root.add(group);
-  const expressRun = (express && gyeongbuExpressEnabled()) ? mountGyeongbuExpress(group, express, { overlay, liveBus }) : null;
+  const expressRun = (express && gyeongbuExpressEnabled()) ? mountGyeongbuExpress(group, express, { overlay, liveBus, tiles }) /* [seokchon-fill] */ : null;
   let lastMin = -1, lastBoard = 0;
 
   function update(_dt, x, z) {

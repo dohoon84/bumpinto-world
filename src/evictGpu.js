@@ -8,6 +8,8 @@ export function evictGpu(root) {
     if (!t || !t.isTexture || seen.has(t)) return;
     // 렌더 타깃·PMREM 은 dispose 하면 되살릴 소스 이미지가 없다
     if (t.isRenderTargetTexture || t.isPMREMTexture || t.isDepthTexture) return;
+    // [mobile-profile] 업로드 뒤 CPU 화상을 버린 텍스처(dropCpuSourcesAfterUpload)는 GPU 에서 내리면 다시 올릴 화상이 없다
+    if (t.userData?.bwCpuDropped || (!t.image && !t.source?.data)) return;
     seen.add(t);
     try { t.dispose(); } catch { /* 이미 내려간 텍스처 */ }
   };
