@@ -119,7 +119,7 @@ for (const [w, h, tag] of [[390, 844, 'portrait'], [844, 390, 'landscape']]) {
   await p.screenshot({ path: OUT + `11-mobile-${tag}-fridge-tap.png` });
   // 3) 박스 집기 — 카트를 잡고 앞 섬 55" 박스 앞에서 화면 가운데(조준점)를 탭
   await p.evaluate(() => { const I = window.__jj.depot.interior, d = I._dbg; d.elec.openFridge(0, false); d.grabCart(); d.setCart(72.75, 12.45, Math.PI); I.st.head.pitch = -0.5; d.run(0.4); });
-  const hov = await p.evaluate(() => { const h = window.__jj.depot.interior.hover; return h?.p?.id || h?.id || (h ? 'yes' : null); });
+  const hov = await p.evaluate(() => { const h = window.__jj.depot.interior.hoverItem?.(); return h?.p?.id || h?.id || (h ? 'yes' : null); });
   await p.touchscreen.tap(w / 2, h / 2); await p.waitForTimeout(900);
   r.pick = await p.evaluate((hov) => { const I = window.__jj.depot.interior; return { hover: hov, mode: I.st.mode, held: I.st.held?.p?.id || null }; }, hov);
   await p.screenshot({ path: OUT + `12-mobile-${tag}-pick.png` });

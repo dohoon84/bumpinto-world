@@ -258,6 +258,16 @@ void main(){
   float f = pow(1. - vUv.y, 2.4) * smoothstep(0., .08, vUv.x) * smoothstep(1., .92, vUv.x);
   float cols = .74 + .26 * sin(vUv.x * 40.); gl_FragColor = vec4(uCol * f * cols * uK, 1.); }`;
 
+// 가전 박스 형상(UV 4분할). 모듈 수준에 둬서, 상품 객체(BY_ID, 모듈 전역)에 붙는 p.geo 가 매장 장면 클로저를 붙잡지 않게 한다.
+const QUAD = { front: [0, 0.5], side: [0.5, 0.5], top: [0, 0], back: [0.5, 0] };
+function elecBoxGeo(sx, sy, sz, res) {
+  const g = new THREE.BoxGeometry(sx, sy, sz), uv = g.attributes.uv, e = 2 / res;
+  const faceQ = ['side', 'side', 'top', 'top', 'front', 'back'];
+  for (let f = 0; f < 6; f++) { const [u0, v0] = QUAD[faceQ[f]]; for (let k = 0; k < 4; k++) { const i = f * 4 + k; uv.setXY(i, u0 + e + uv.getX(i) * (0.5 - 2 * e), v0 + e + uv.getY(i) * (0.5 - 2 * e)); } }
+  return g;
+}
+const elecGeoFactory = (size, res) => () => elecBoxGeo(...size, res);
+
 export function mountElectronics({ scene, keep, canvasTex, obstacles, prodMeshes, prodGeo, prodMat, audio = null, toast = null, isMobile = false }) {
   const root = new THREE.Group(); root.name = 'depot-electronics'; scene.add(root);
   const stat = new GeoBag(), gloss = new GeoBag(), glow = new GeoBag();
@@ -443,18 +453,11 @@ export function mountElectronics({ scene, keep, canvasTex, obstacles, prodMeshes
       });
     });
   }
-  const QUAD = { front: [0, 0.5], side: [0.5, 0.5], top: [0, 0], back: [0.5, 0] };
-  function elecBoxGeo(sx, sy, sz, res) {
-    const g = new THREE.BoxGeometry(sx, sy, sz), uv = g.attributes.uv, e = 2 / res;
-    const faceQ = ['side', 'side', 'top', 'top', 'front', 'back'];
-    for (let f = 0; f < 6; f++) { const [u0, v0] = QUAD[faceQ[f]]; for (let k = 0; k < 4; k++) { const i = f * 4 + k; uv.setXY(i, u0 + e + uv.getX(i) * (0.5 - 2 * e), v0 + e + uv.getY(i) * (0.5 - 2 * e)); } }
-    return g;
-  }
   for (const id of Object.keys(ART)) {
     const p = BY_ID[id]; if (!p) continue;
     const res = (ART[id] === 'tv' || p.size[1] > 0.9) ? 1024 : 512;
     prodMat[id] = keep(new THREE.MeshLambertMaterial({ map: keep(boxArt(p)) }));
-    p.geo = () => elecBoxGeo(...p.size, res); // 카트에 담을 때 만드는 메시도 같은 UV (shapes.js 훅)
+    p.geo = elecGeoFactory(p.size, res); // 카트에 담을 때 만드는 메시도 같은 UV (shapes.js 훅)
     prodGeo[id] = keep(p.geo());
   }
   function stackBoxes(id, list) {

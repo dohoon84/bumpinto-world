@@ -1090,7 +1090,7 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit, a
   updateCamera(0);
   const api = {
     player: selfAvatar, scene, camera, update, render, onKey, stats, measure, st, items, LEVELS, returnItems,
-    get hover() { return hover; },
+    hoverItem: () => hover, // getter 대신 함수: 객체 리터럴 getter 는 V8 맵에 첫 매장의 클로저(장면 전체)를 남긴다
     mobileHint() { return { hint: st.mHint || '', stat: st.mStat || '' }; }, // 모바일 오른쪽 카드용
     mobileActs() { // 모바일 행동 버튼 (계산·출구·카트 잡기·집기·카트 놓기·놓기 등) — 터치 안내 문구의 「…」 와 같은 이름
       const c = checkout.mobileActs(); if (c) return c;
@@ -1150,11 +1150,13 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit, a
       const looks = {}; // 스토리 소품이 매장 상품 모양을 빌려 씀 (박스 12삼각형 + 상품 아틀라스 재질 그대로 — 새 텍스처 없음)
       const look = (id) => { const p = BY_ID[id]; if (!p) return null; return (looks[id] ||= { geo: keep(boxGeoLabeled(...p.size)), mat: prodMat[id] }); };
       story = m.createStory({ THREE, scene, keep, camera, st, items, loadKg, staff, checkout, shoppers, guide, exitTarget: EXIT_TARGET, cartObj: cart, api, audio, isMobile, ASSET, onExit, getLevel: getAudioLevel, obstacles, collide: collide2D, look });
+      api._dbg.story = story;
       audioTaps.push((n, o) => story?.onAudio(n, o));
     }).catch((e) => console.warn('[depot-story]', e));
   }
-  Object.defineProperty(api._dbg, 'story', { get: () => story });
+  // getter(defineProperty) 대신 값: 접근자 클로저가 V8 맵에 남아 나간 첫 매장(장면 전체)을 계속 붙잡았다
+  api._dbg.story = null;
   const dispose0 = api.dispose;
-  api.dispose = () => { disposed = true; try { story?.dispose(); } catch (e) { console.warn('[depot-story]', e); } story = null; guide.dispose(); dispose0(); };
+  api.dispose = () => { disposed = true; try { story?.dispose(); } catch (e) { console.warn('[depot-story]', e); } story = null; api._dbg.story = null; guide.dispose(); dispose0(); };
   return api;
 }
