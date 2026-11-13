@@ -6,6 +6,7 @@
 import * as THREE from 'three';
 import { GeoBuf, hex3, pointInRing, cathedralFrame, hash01, CellGrid } from './myeongdongGeo.js';
 import { MD_FONT } from './myeongdongAtlas.js';
+import { markTextRects } from './textQuad.js';
 
 /** 모델이 대신 그리는 OSM 건물 way id (일반 건물 병합에서 뺀다. 충돌은 그대로) */
 export const SIGNATURE_IDS = new Set([
@@ -118,6 +119,7 @@ function sharedMats() {
   const { c, e } = drawAtlas();
   const map = new THREE.CanvasTexture(c); map.colorSpace = THREE.SRGBColorSpace; map.anisotropy = 4;
   const emap = new THREE.CanvasTexture(e); emap.colorSpace = THREE.SRGBColorSpace;
+  markTextRects(map, Object.keys(R).filter((k) => /^s[A-Z]/.test(k)).map((k) => uvOf(R[k], 0))); // [text-orientation] 간판 칸
   const body = new THREE.MeshLambertMaterial({ map, emissiveMap: emap, emissive: 0xffffff, emissiveIntensity: 0.05, vertexColors: true });
   body.name = 'md-signature';
   shared = { map, emap, body };

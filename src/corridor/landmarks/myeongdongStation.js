@@ -3,6 +3,7 @@
 //   길안내 = 실제 OSM 길 그래프 최단 경로 위 쉐브론 + 이정표, 남산오르미(경사형 엘리베이터) 레일·정류장·움직이는 캐빈.
 //   draw: 캐노피 틀 1 + 유리 1 + 아틀라스(표지·쉐브론·이정표) 1 + 오르미 캐빈 2.
 import * as THREE from 'three';
+import { textQuad } from './textQuad.js';
 import { GeoBuf, hex3, distToSeg, hash01 } from './myeongdongGeo.js';
 import { MYEONGDONG_SPAWN } from './myeongdongFlags.js';
 
@@ -61,12 +62,9 @@ function shortestPath(ways, from, to) {
 }
 
 /** 법선 n 쪽이 앞면이 되게 정점 순서를 맞춰 넣는다 (텍스트가 뒤집히지 않게 uv 도 같이) */
-function facedQuad(buf, a, b, c, d, uv, n) {
-  const ux = b[0] - a[0], uy = b[1] - a[1], uz = b[2] - a[2], vx = d[0] - a[0], vy = d[1] - a[1], vz = d[2] - a[2];
-  const cx = uy * vz - uz * vy, cy = uz * vx - ux * vz, cz = ux * vy - uy * vx;
-  if (cx * n[0] + cy * n[1] + cz * n[2] >= 0) buf.quad(a, b, c, d, uv, null, n);
-  else buf.quad(b, a, d, c, [uv[2], uv[1], uv[0], uv[3]], null, n);
-}
+// [text-orientation] 옛 facedQuad 는 감기만 뒤집고 UV 를 따라 바꿔 "보이지만 거울인" 글씨를 만들었다 (명동역 표지판 좌우 반전).
+//   글씨 면은 공용 textQuad(앞 법선 + 글씨 위쪽으로 오른쪽을 계산) 로만 만든다.
+const facedQuad = textQuad;
 
 function resample(pts, step) {
   const out = [];
@@ -142,7 +140,8 @@ export function createMyeongdongStation({ parent, data, land, atlas, overlay, ro
     const sy = roofY0 + 0.05;
     const nIn = [ax, 0, az];
     facedQuad(signs, P(hl + 0.16, -hw * 0.95, sy), P(hl + 0.16, hw * 0.95 - 0.7, sy), P(hl + 0.16, hw * 0.95 - 0.7, sy + 0.62), P(hl + 0.16, -hw * 0.95, sy + 0.62), U('station'), nIn);
-    // 왼쪽→오른쪽 축이 바깥에서 보면 반대 → 앞면 정점 순서 고정: 오른손 법칙으로 nIn 쪽
+    // 표지판 뒷판(앞면만 그리는 글씨 판 뒤를 막는다: 뒤에서 보면 거울 글씨 대신 어두운 판)
+    frame.box(...P(hl + 0.12, (-hw * 0.95 + hw * 0.95) / 2, sy + 0.31), 0.06, 0.68, hw * 1.9 + 0.06, ry, undefined, dark);
     const exitUV = U('exit' + Math.min(12, +e.ref || 1));
     facedQuad(signs, P(hl + 0.16, hw * 0.95 - 0.66, sy), P(hl + 0.16, hw * 0.95, sy), P(hl + 0.16, hw * 0.95, sy + 0.62), P(hl + 0.16, hw * 0.95 - 0.66, sy + 0.62), exitUV, nIn);
     // 뒤쪽(도로에서 보이게) 큰 번호
@@ -328,7 +327,7 @@ export function createMyeongdongStation({ parent, data, land, atlas, overlay, ro
     spawnFace,
     near,
     isBlocked,
-    info: { x: st.x, z: st.z, name: '명동', nameEn: 'Myeongdong', line: '4호선', color: '#00A5DE', exits: exits.map((e) => ({ ref: e.ref, x: e.x, z: e.z })), pathLen: Math.round(pathLen) },
+    info: { x: st.x, z: st.z, name: '명동', nameEn: 'Myeongdong', line: '4호선', color: '#00A5DE', exits: exits.map((e) => ({ ref: e.ref, x: e.x, z: e.z, ax: +e.ax.toFixed(4), az: +e.az.toFixed(4) })), pathLen: Math.round(pathLen) },
     mini: { x: st.x, z: st.z, name: '명동', nameEn: 'Myeongdong', lines: ['4호선'], exits: exits.map((e) => ({ ref: e.ref, x: e.x, z: e.z })), guide: path.map((p) => [+p[0].toFixed(1), +p[1].toFixed(1)]), oreumi: [foot, top] },
     course,
     guidePath: path,

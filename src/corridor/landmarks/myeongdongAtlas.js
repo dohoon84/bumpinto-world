@@ -2,6 +2,7 @@
 //   명동의 간판·쇼윈도·노점은 전부 이 텍스처 한 장을 쓰는 병합 메시 1개로 그린다(draw 1).
 //   상호는 모두 지어낸 이름이다(실제 브랜드·상표 아님). 한국어·영어(+中文·日本語 한 줄)로 외국인 관광객 거리 느낌을 낸다.
 import * as THREE from 'three';
+import { markTextRects } from './textQuad.js';
 
 export const MD_FONT = '"Noto Sans KR","Apple SD Gothic Neo","Malgun Gothic","Gothic A1","Noto Sans CJK KR",sans-serif';
 
@@ -227,7 +228,7 @@ function drawPlain(g, w, h, color) { g.fillStyle = color; g.fillRect(0, 0, w, h)
 /** 명동 아틀라스. uv(name) → [u0, v0, u1, v1] (three 텍스처 좌표, flipY 반영) */
 /** tick 을 주면 항목마다 쉬어 가는 Promise 를 돌려준다 (지연 빌드에서 긴 작업 하나가 프레임을 막지 않게) */
 export function createMyeongdongAtlas(tick = null) {
-  const W = 2048, H = 2048, PAD = 4;
+  const W = 2048, PAD = 3;
   const items = [];
   SHOP_SIGNS.forEach((s, i) => items.push({ name: 'h' + i, w: 500, h: 96, draw: (g, w, h) => drawHSign(g, w, h, s, i) }));
   X_BANNERS.forEach((s, i) => items.push({ name: 'xb' + i, w: 64, h: 192, draw: (g, w, h) => drawXBanner(g, w, h, s) }));
@@ -243,20 +244,25 @@ export function createMyeongdongAtlas(tick = null) {
   for (const [k, c] of Object.entries({ steel: '#b8bec6', dark: '#2a2d33', glass: '#9fd3e6', canopyRed: '#d62828', canopyBlue: '#1d4e89', canopyGreen: '#2a9d8f', canopyYellow: '#f4a261', white: '#ffffff', black: '#0b0b0d' })) {
     items.push({ name: 'c-' + k, w: 24, h: 24, draw: (g, w, h) => drawPlain(g, w, h, c) });
   }
-  // 높이 내림차순 선반 패킹
+  // 스카이라인(아래-왼쪽) 패킹. 예전 선반 패킹은 2184 px 까지 넘쳐 메뉴·가격표·출구 번호·네온/기본 색 칸이
+  //   캔버스(2048) 밖 UV(v<0) 를 가리켰다 → 출구 번호판이 번호 없이 주황 칸으로 나왔다. 넘치면 높이를 두 배로.
+  const C = 2, cols = W / C, top = new Int32Array(cols);
+  let usedH = 0;
   items.sort((a, b) => b.h - a.h || b.w - a.w);
-  let x = 0, y = 0, rowH = 0;
   for (const it of items) {
-    const w = it.w + PAD * 2, h = it.h + PAD * 2;
-    if (x + w > W) { x = 0; y += rowH; rowH = 0; }
-    it.x = x + PAD; it.y = y + PAD; x += w; rowH = Math.max(rowH, h);
+    const w = Math.ceil((it.w + PAD * 2) / C), h = it.h + PAD * 2;
+    let bx = 0, by = Infinity;
+    for (let x0 = 0; x0 + w <= cols; x0++) { let m = 0; for (let k = x0; k < x0 + w; k++) if (top[k] > m) m = top[k]; if (m < by) { by = m; bx = x0; } }
+    for (let k = bx; k < bx + w; k++) top[k] = by + h;
+    it.x = bx * C + PAD; it.y = by + PAD; usedH = Math.max(usedH, by + h);
   }
-  const usedH = y + rowH;
+  const H = usedH <= 2048 ? 2048 : 4096;
+  if (usedH > H) console.error(`[myeongdong] atlas overflow ${usedH} > ${H}`);
   const canvas = typeof document !== 'undefined' ? document.createElement('canvas') : null;
   const map = new Map();
   if (!canvas) {
     for (const it of items) map.set(it.name, [it.x / W, 1 - (it.y + it.h) / H, (it.x + it.w) / W, 1 - it.y / H]);
-    return { texture: null, uv: (n) => map.get(n) || [0, 0, 0.001, 0.001], usedH, items };
+    return { texture: null, uv: (n) => map.get(n) || [0, 0, 0.001, 0.001], usedH, H, items };
   }
   canvas.width = W; canvas.height = H;
   const g = canvas.getContext('2d');
@@ -289,7 +295,9 @@ export function createMyeongdongAtlas(tick = null) {
   texture.generateMipmaps = true;
   texture.minFilter = THREE.LinearMipmapLinearFilter;
   texture.name = 'myeongdong-atlas';
-  return { texture, canvas, uv: (n) => map.get(n) || map.get('c-white'), usedH, items };
+  // [text-orientation] 글씨 칸 표시 (색 칸·쉐브론 제외) → auditTextMeshes 가 거울 글씨를 잡는다
+  markTextRects(texture, items.filter((it) => !/^(neon-|c-|guide$)/.test(it.name)).map((it) => map.get(it.name)));
+  return { texture, canvas, uv: (n) => map.get(n) || map.get('c-white'), usedH, H, items };
   }
 }
 

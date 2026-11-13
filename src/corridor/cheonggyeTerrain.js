@@ -334,7 +334,7 @@ function buildLocalStreets(streets, buildings) {
     extras.push(coloredBox(0.62, 0.84, 0.05, '#1f4f9a', s.x, 2.28, s.z));
     const tex = makeBusStopTex(s);
     const geo = new THREE.PlaneGeometry(0.58, 0.78);
-    const mat = new THREE.MeshBasicMaterial({ map: tex, toneMapped: false, side: THREE.DoubleSide });
+    const mat = new THREE.MeshBasicMaterial({ map: tex, toneMapped: false }); // [text-orientation] 앞면만 (뒤는 파란 판)
     const face = new THREE.Mesh(geo, mat);
     face.position.set(s.x, 2.28, s.z + 0.04);
     face.name = 'cheonggyeBusStop';

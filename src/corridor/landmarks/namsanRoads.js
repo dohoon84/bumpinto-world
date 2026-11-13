@@ -2,6 +2,7 @@
 //   브랜드 로고 없음. 타워 정류장은 OSM 표기(남산서울타워).
 //   남산도서관 정류장 노선은 공식 오시는길(01A·01B·402·405)만 적는다.
 import * as THREE from 'three';
+import { addTextBack } from './textQuad.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { ribbonGeo, fixNormalsUp } from '../../world.js';
 import { paint } from '../tileMesh.js';
@@ -1747,8 +1748,9 @@ export function createNamsanRoads({ parent, osm, heightAt, overlay = null, city 
     const backFrame = new THREE.Mesh(new THREE.BoxGeometry(0.08, 2.05, 4.85), steel);
     backFrame.position.set(sx + nrmx * 0.86, y + 1.28, sz + nrmz * 0.86); backFrame.rotation.y = ang; group.add(backFrame);
     const ad = new THREE.Mesh(new THREE.PlaneGeometry(4.2, 1.55), new THREE.MeshBasicMaterial({
-      map: adPanelTex(route, adCaption), toneMapped: false, fog: false, side: THREE.DoubleSide,
+      map: adPanelTex(route, adCaption), toneMapped: false, fog: false,
     }));
+    addTextBack(ad); // [text-orientation] 유리 너머(길 쪽)에서도 바른 글씨
     ad.position.set(sx + nrmx * 0.79, y + 1.38, sz + nrmz * 0.79);
     ad.rotation.y = Math.atan2(-nrmx, -nrmz);
     group.add(ad);
@@ -1774,8 +1776,9 @@ export function createNamsanRoads({ parent, osm, heightAt, overlay = null, city 
     pole.position.set(sx + hx * 3.15 + nrmx * 0.15, y + 1.73, sz + hz * 3.15 + nrmz * 0.15);
     group.add(pole);
     const flag = new THREE.Mesh(new THREE.PlaneGeometry(1.4, 0.88), new THREE.MeshBasicMaterial({
-      map: signTex(stopTitle, stopSub), toneMapped: false, side: THREE.DoubleSide, fog: false,
+      map: signTex(stopTitle, stopSub), toneMapped: false, fog: false,
     }));
+    addTextBack(flag); // [text-orientation] 깃발 표지 양면
     flag.position.set(sx + hx * 3.15 + nrmx * 0.15, y + 3.22, sz + hz * 3.15 + nrmz * 0.15);
     flag.rotation.y = routeFace;
     group.add(flag);

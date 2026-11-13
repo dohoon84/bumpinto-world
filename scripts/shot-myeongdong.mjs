@@ -55,6 +55,10 @@ for (const v of VIEWS) {
       const b = v.back || 10, sd = v.side || 0; px = d.x + d.nx * b + d.nz * sd; pz = d.z + d.nz * b - d.nx * sd; yaw = toward(px, pz, d.x, d.z) + (v.yawOff || 0);
     }
     if (px === 'oreumi') { const c = md.hooks.course; const a = c[1], b = c[2]; px = a.x + (a.x - b.x) * 0.25 + (v.ox || 0); pz = a.z + (a.z - b.z) * 0.25 + (v.oz || 0); yaw = toward(px, pz, b.x, b.z) + (v.yawOff || 0); }
+    if (px === 'exitSign') { // [text-orientation] 명동역 출구 표지판 앞(back>0) / 뒤(back<0)에서. ref = 출구 번호
+      const e = md.station.exits.find((q) => String(q.ref) === String(v.ref || 6)) || md.station.exits[0];
+      const b = v.back ?? 7; px = e.x + e.ax * b + (v.side || 0) * -e.az; pz = e.z + e.az * b + (v.side || 0) * e.ax; yaw = toward(px, pz, e.x, e.z) + (v.yawOff || 0);
+    }
     if (px === 'stall') { const st = md.hooks.stalls[v.i || 0]; px = st.x + (v.ox || 0); pz = st.z + (v.oz || 0); }
     if (px === 'stallSide') { // [myeongdong-detail] 노점 옆(보도)에서 판매대를 내려다보기. kind 를 주면 그 음식 노점
       const L = md.hooks.stalls.filter((s) => (v.kind == null || s.kind === v.kind) && (v.day == null || s.day === v.day)); const [qx, qz] = v.near || [-10930, -21650];
