@@ -1197,6 +1197,17 @@ function inBoss(object) {
   return false;
 }
 
+let meleeView = false;
+
+function belongsTo(object, root) {
+  let node = object;
+  while (node) {
+    if (node === root) return true;
+    node = node.parent;
+  }
+  return false;
+}
+
 function clearCamera(desired, look) {
   const origin = actor.position.clone();
   origin.y = 3.4;
@@ -1220,26 +1231,12 @@ function clearCamera(desired, look) {
   const dx = pos.x - home.x;
   const dz = pos.z - home.z;
   const hd = Math.hypot(dx, dz);
-  const minR = 14;
+  const minR = 18;
   if (hd < minR) {
     const k = minR / (hd || 0.001);
     pos.x = home.x + dx * k;
     pos.z = home.z + dz * k;
-    pos.y = Math.max(pos.y, 6);
-  }
-  let yaw = Math.atan2(pos.x - look.x, pos.z - look.z);
-  const orbit = Math.hypot(pos.x - look.x, pos.z - look.z) || 8;
-  for (let turn = 0; turn < 8; turn++) {
-    const dir = look.clone().sub(pos);
-    const span = dir.length() || 1;
-    dir.multiplyScalar(1 / span);
-    camRay.set(pos, dir);
-    camRay.far = Math.max(0.4, span - 0.6);
-    const block = camRay.intersectObjects(meshes, false).find((h) => !h.object.isInstancedMesh);
-    if (!block) break;
-    yaw += 0.32;
-    pos.x = look.x + Math.sin(yaw) * orbit;
-    pos.z = look.z + Math.cos(yaw) * orbit;
+    pos.y = Math.max(pos.y, 9);
   }
   const down = new THREE.Vector3(0, -1, 0);
   for (let step = 0; step < 5; step++) {
@@ -1255,30 +1252,49 @@ function clearCamera(desired, look) {
     pos.z = next.z;
     pos.y = Math.max(pos.y + 1.5, roof.point.y + 1.8);
   }
-  const away = pos.clone().sub(look);
-  if (away.lengthSq() > 0.01) away.normalize();
-  else away.set(0, 1, 0);
-  for (let nudge = 0; nudge < 4; nudge++) {
-    const view = look.clone().sub(pos);
-    const viewLen = view.length() || 1;
-    view.multiplyScalar(1 / viewLen);
-    camRay.set(pos, view);
-    camRay.far = 2.4;
-    const near = camRay.intersectObjects(meshes, false)[0];
-    if (!near || near.distance > 2.1 || near.object.isInstancedMesh) break;
-    pos.addScaledVector(away, 2.6 - near.distance);
-  }
   const view = look.clone().sub(pos);
   const viewLen = view.length() || 1;
   view.multiplyScalar(1 / viewLen);
   camRay.set(pos, view);
-  camRay.far = 1.8;
+  camRay.far = Math.min(viewLen, 6);
   const blocked = camRay.intersectObjects(meshes, false);
   const keep = new Set();
   for (const hit of blocked) {
-    if (hit.distance > 1.6 || hit.object.isInstancedMesh) continue;
+    if (hit.distance > 1.7 || hit.object.isInstancedMesh) continue;
     fadeMesh(hit.object);
     keep.add(hit.object);
+  }
+  if (meleeView) {
+    const bossChest = home.clone();
+    bossChest.y = 8;
+    const sights = [look, bossChest];
+    const body = new THREE.Box3().setFromObject(form.group);
+    if (!body.isEmpty()) {
+      for (let iy = 0; iy <= 3; iy++) {
+        for (let ix = 0; ix <= 2; ix++) {
+          sights.push(new THREE.Vector3(
+            THREE.MathUtils.lerp(body.min.x, body.max.x, ix / 2),
+            THREE.MathUtils.lerp(body.min.y, body.max.y, iy / 3),
+            THREE.MathUtils.lerp(body.min.z, body.max.z, 0.5),
+          ));
+        }
+      }
+    } else {
+      sights.push(actor.position.clone().setY(1.5));
+    }
+    for (const target of sights) {
+      const sight = target.clone().sub(pos);
+      const span = sight.length() || 1;
+      sight.multiplyScalar(1 / span);
+      camRay.set(pos, sight);
+      camRay.far = Math.max(0.5, span - 0.6);
+      for (const hit of camRay.intersectObjects(meshes, false)) {
+        if (hit.object.isInstancedMesh) continue;
+        if (inBoss(hit.object) || belongsTo(hit.object, actor) || belongsTo(hit.object, form.group)) continue;
+        fadeMesh(hit.object);
+        keep.add(hit.object);
+      }
+    }
   }
   restoreFaded(keep);
   return pos;
@@ -1362,7 +1378,7 @@ function frame() {
     camera.position.set(camLock.px, camLock.py, camLock.pz);
     lookTarget.set(camLock.tx, camLock.ty, camLock.tz);
   }
-  if (!portrait && !camLock) {
+  if (!portrait) {
     camera.position.copy(clearCamera(camera.position, lookTarget));
   } else {
     restoreFaded();
@@ -2140,7 +2156,11 @@ window.__raid = {
     melee() {
       finishIntro();
       const b = boss.group.position;
-      actor.position.set(6.33, 0, 25.22);
+      const fx = Math.sin(PATH_YAW);
+      const fz = Math.cos(PATH_YAW);
+      const rx = Math.cos(PATH_YAW);
+      const rz = -Math.sin(PATH_YAW);
+      actor.position.set(b.x - fx * 6.6 + rx * 6.4, 0, b.z - fz * 6.6 + rz * 6.4);
       actor.rotation.y = Math.atan2(b.x - actor.position.x, b.z - actor.position.z);
       if (form.group.parent !== actor) {
         form.group.parent?.remove(form.group);
@@ -2150,7 +2170,13 @@ window.__raid = {
       }
       form.group.visible = true;
       citizen.visible = false;
-      camLock = { px: 12.47, py: 4.29, pz: 23.41, tx: 6.33, ty: 1.43, tz: 25.22 };
+      camYaw = PATH_YAW + 0.55;
+      camPitch = 46 * Math.PI / 180;
+      camDist = 18;
+      camLock = null;
+      shotLookY = 2.6;
+      shotAim = 2.2;
+      meleeView = true;
       simPaused = true;
     },
     report() {
