@@ -202,6 +202,9 @@ const CLASS_TINT = {
   assassin: '#FF3D8A',
 };
 const marks = [];
+const MARK_BASE_Y = 2.25;
+const markWorld = new THREE.Vector3();
+const markNdc = new THREE.Vector3();
 function makeNameSprite(text, color) {
   const canvas = document.createElement('canvas');
   canvas.width = 256;
@@ -211,12 +214,16 @@ function makeNameSprite(text, color) {
   g.textAlign = 'center';
   g.textBaseline = 'middle';
   g.fillStyle = color;
+  const ink = Math.min(0.92, (g.measureText(text).width + 18) / canvas.width);
   g.fillText(text, 128, 34);
   const map = new THREE.CanvasTexture(canvas);
   map.colorSpace = THREE.SRGBColorSpace;
-  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map, transparent: true, depthWrite: false }));
+  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map, transparent: true, depthWrite: false, depthTest: false }));
   sprite.scale.set(1.7, 0.42, 1);
-  sprite.position.y = 2.25;
+  sprite.position.y = MARK_BASE_Y;
+  sprite.userData.ink = ink;
+  sprite.frustumCulled = false;
+  sprite.renderOrder = 20;
   return sprite;
 }
 function addMark(mesh, name, classId, kind) {
@@ -228,9 +235,12 @@ function addMark(mesh, name, classId, kind) {
   );
   ring.rotation.x = -Math.PI / 2;
   ring.position.y = 0.07;
-  g.add(ring, makeNameSprite(name, color));
+  const sprite = makeNameSprite(name, color);
+  g.add(ring, sprite);
   g.userData.follow = mesh;
   g.userData.kind = kind;
+  g.userData.label = name;
+  g.userData.sprite = sprite;
   scene.add(g);
   marks.push(g);
 }
@@ -241,14 +251,109 @@ function clearMarks(kind) {
     marks.splice(i, 1);
   }
 }
+const markDir = new THREE.Vector3();
+function viewSize() {
+  const el = renderer.domElement;
+  return { w: el.clientWidth || el.width || 1, h: el.clientHeight || el.height || 1 };
+}
+function projectAnchor(world, w, h) {
+  markNdc.copy(world).project(camera);
+  return {
+    behind: markNdc.z < -1 || markNdc.z > 1,
+    sx: (markNdc.x * 0.5 + 0.5) * w,
+    sy: (0.5 - markNdc.y * 0.5) * h,
+    dist: Math.max(0.35, world.distanceTo(camera.position)),
+  };
+}
+function placeSprite(g, sprite, sx, sy, dist) {
+  const { w, h } = viewSize();
+  markNdc.set((sx / w) * 2 - 1, 1 - (sy / h) * 2, 0.5).unproject(camera);
+  markDir.copy(markNdc).sub(camera.position).normalize();
+  markWorld.copy(camera.position).addScaledVector(markDir, dist);
+  sprite.position.set(markWorld.x - g.position.x, markWorld.y - g.position.y, markWorld.z - g.position.z);
+}
+function resolveNameplates(items, h) {
+  const gap = 6;
+  const top = 102;
+  const bottom = h - 188;
+  items.sort((a, b) => a.dist - b.dist);
+  const overlaps = (a, b) => Math.abs(a.sx - b.sx) < (a.gw + b.gw) / 2
+    && Math.abs(a.sy - b.sy) < (a.gh + b.gh) / 2;
+  for (let i = 0; i < items.length; i++) {
+    const a = items[i];
+    for (let pass = 0; pass < 8; pass++) {
+      let moved = false;
+      for (let j = 0; j < i; j++) {
+        const b = items[j];
+        if (b.hidden || !overlaps(a, b)) continue;
+        const up = b.sy - b.gh / 2 - gap - a.gh / 2;
+        const down = b.sy + b.gh / 2 + gap + a.gh / 2;
+        const upOk = up - a.gh / 2 >= top;
+        const downOk = down + a.gh / 2 <= bottom;
+        if (upOk) a.sy = up;
+        else if (downOk) a.sy = down;
+        else { a.hidden = true; break; }
+        moved = true;
+      }
+      if (a.hidden || !moved) break;
+    }
+  }
+}
 function syncMarks() {
+  camera.updateMatrixWorld(true);
+  const { w, h } = viewSize();
+  const focal = (h * 0.5) / Math.tan(THREE.MathUtils.degToRad(camera.fov) * 0.5);
+  const items = [];
   for (const g of marks) {
     const m = g.userData.follow;
-    const on = !!(m && m.visible && m.parent);
+    const sprite = g.userData.sprite;
+    const on = !!(m && m.visible && m.parent && sprite);
     g.visible = on;
+    g.userData.screen = null;
     if (!on) continue;
-    g.position.x = m.position.x;
-    g.position.z = m.position.z;
+    m.getWorldPosition(markWorld);
+    g.position.set(markWorld.x, 0, markWorld.z);
+    const anchor = markWorld.clone();
+    anchor.y = MARK_BASE_Y;
+    const proj = projectAnchor(anchor, w, h);
+    if (proj.behind) {
+      g.visible = false;
+      continue;
+    }
+    const cap = Math.min(1, 128 / Math.max(8, (1.7 * focal) / proj.dist));
+    sprite.scale.set(1.7 * cap, 0.42 * cap, 1);
+    const pw = sprite.scale.x * focal / proj.dist;
+    const ph = sprite.scale.y * focal / proj.dist;
+    const gw = pw * (sprite.userData.ink || 0.5);
+    const gh = ph * 0.72;
+    if (proj.sx < -gw || proj.sx > w + gw || proj.sy < -gh || proj.sy > h + gh) {
+      g.visible = false;
+      continue;
+    }
+    items.push({
+      g, sprite, dist: proj.dist, sx: proj.sx, sy: proj.sy, gw, gh, hidden: false,
+    });
+  }
+  const hudTop = 102;
+  const hudBot = h - 188;
+  for (const box of items) {
+    if (box.sy - box.gh / 2 < hudTop) box.sy = hudTop + box.gh / 2 + 4;
+    if (box.sy + box.gh / 2 > hudBot) box.sy = hudBot - box.gh / 2 - 4;
+  }
+  resolveNameplates(items, h);
+  for (const box of items) {
+    if (box.hidden) {
+      box.g.visible = false;
+      continue;
+    }
+    placeSprite(box.g, box.sprite, box.sx, box.sy, box.dist);
+    box.g.userData.screen = {
+      name: box.g.userData.label,
+      x: box.sx - box.gw / 2,
+      y: box.sy - box.gh / 2,
+      w: box.gw,
+      h: box.gh,
+    };
   }
 }
 function makeAllyBody(color) {
@@ -1858,6 +1963,10 @@ window.__raid = {
       return next;
     },
     playerLook() { return form?.group?.userData?.playerLook || null; },
+    nameplates() {
+      return marks.filter((g) => g.visible && g.userData.screen).map((g) => g.userData.screen);
+    },
+    flat() { bloomOn = false; },
     report() {
       const rows = party.map((a) => ({
         class: a.classId,
