@@ -41,7 +41,7 @@ try {
 
   const vis = await page.evaluate(() => {
     const chip = document.querySelector('.v2-picker .v2-lm[data-v2-at="ntower"]');
-    const tags = [...document.querySelectorAll('.v2-picker .v2-tags .v2-tag')].map((t) => t.textContent.trim());
+    const tags = [...document.querySelectorAll('.v2-picker .v2-legend .v2-lg')].map((t) => t.textContent.trim()); // [route-map v1] 범례 = 노선 4개 + 기호
     const lotte = document.querySelector('.v2-picker .v2-lm[data-v2-at="lotte"]');
     const map = document.querySelector('.v2-picker .v2-map');
     const cr = (el) => {
@@ -60,7 +60,8 @@ try {
   });
   console.log('picker', JSON.stringify(vis, null, 2));
   assert.equal(vis.hasChip, true, '남산서울타워 .v2-lm 칩이 없음');
-  assert.ok(vis.tags.includes('남산서울타워'), `태그 목록에 남산서울타워 없음: ${vis.tags.join(',')}`);
+  // [route-map v1] 랜드마크는 범례가 아니라 지도 위 랜드마크 띠에 있다
+  assert.ok(!vis.tags.includes('남산서울타워') && !vis.tags.includes('롯데월드타워'), `범례에 랜드마크가 섞임: ${vis.tags.join(',')}`);
   assert.ok(vis.lotte, '롯데월드타워 칩이 사라지면 안 됨');
   // 두 칩이 겹치면 안 됨
   if (vis.chip && vis.lotte) {
@@ -156,7 +157,7 @@ try {
   await openPicker(off);
   const hidden = await off.evaluate(() => ({
     chip: !!document.querySelector('.v2-picker .v2-lm[data-v2-at="ntower"]'),
-    tags: [...document.querySelectorAll('.v2-picker .v2-tags .v2-tag')].map((t) => t.textContent.trim()),
+    tags: [...document.querySelectorAll('.v2-picker .v2-legend .v2-lg')].map((t) => t.textContent.trim()),
   }));
   console.log('ntower=0', hidden);
   assert.equal(hidden.chip, false, '?ntower=0 인데 칩이 보임');
