@@ -1660,15 +1660,19 @@ export function createNamsanRoads({ parent, osm, heightAt, overlay = null, city 
   const pathBulb = new THREE.MeshBasicMaterial({ color: '#ffd089', transparent: true, opacity: 0, fog: false, toneMapped: false });
   if (trailLampPts.length) {
     const poleMat = new THREE.MeshLambertMaterial({ color: '#2c3036' });
+    // [myeongdong] 산책로 가로등 기둥·전구를 낱개 메시(가로등 수×2 드로우)에서 각각 한 덩어리로 합친다 — 명동·회현에서 남산을 볼 때 약 250 드로우 절약
+    const poleBase = new THREE.CylinderGeometry(0.045, 0.06, 2.7, 6), bulbBase = new THREE.SphereGeometry(0.13, 8, 6);
+    const poles = [], bulbs = [];
     for (const p of trailLampPts) {
       const y = heightAt(p.x, p.z);
-      const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.06, 2.7, 6), poleMat);
-      pole.position.set(p.x, y + 1.35, p.z);
-      group.add(pole);
-      const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.13, 8, 6), pathBulb);
-      bulb.position.set(p.x, y + 2.78, p.z);
-      group.add(bulb);
+      poles.push(poleBase.clone().translate(p.x, y + 1.35, p.z));
+      bulbs.push(bulbBase.clone().translate(p.x, y + 2.78, p.z));
     }
+    const pm = new THREE.Mesh(mergeGeometries(poles, false), poleMat); pm.name = 'namsan-trail-lamp-poles';
+    const bm = new THREE.Mesh(mergeGeometries(bulbs, false), pathBulb); bm.name = 'namsan-trail-lamp-bulbs';
+    group.add(pm, bm);
+    for (const g of poles) g.dispose(); for (const g of bulbs) g.dispose();
+    poleBase.dispose(); bulbBase.dispose();
   }
 
   // bus stop shelters at OSM 남산서울타워 platforms

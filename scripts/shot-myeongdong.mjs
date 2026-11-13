@@ -56,22 +56,23 @@ for (const v of VIEWS) {
     // fps (swiftshader = CPU 렌더라 실기기보다 훨씬 낮다 — 상대 비교용)
     const t0 = performance.now(); let n = 0; await new Promise((ok) => { const f = () => { n++; if (performance.now() - t0 < 2000) requestAnimationFrame(f); else ok(); }; requestAnimationFrame(f); });
     // 어느 덩어리가 그리나 (__MD_BREAKDOWN 일 때만): 보이는 메시 중 화면 안(경계구 중심 투영 근사)을 장면 2단 이름별로 센다
+    // 정확한 드로우 출처: 한 프레임 동안 그려진 객체마다 onBeforeRender 로 센다(장면 경로 앞 N단 이름별)
     const by = {};
     if (window.__MD_BREAKDOWN) {
-      const J = window.__jj, cam = J.camera; let sc = J.player; while (sc.parent) sc = sc.parent;
-      const V = J.player.position.constructor, v = new V(), cp = cam.getWorldPosition(new V());
-      sc.traverseVisible((o) => {
-        if (!(o.isMesh || o.isPoints || o.isLine || o.isSprite) || !o.geometry) return;
-        const g = o.geometry; if (!g.boundingSphere) g.computeBoundingSphere();
-        const bs = o.isInstancedMesh ? (o.boundingSphere || (o.computeBoundingSphere(), o.boundingSphere)) : g.boundingSphere;
-        v.copy(bs.center).applyMatrix4(o.matrixWorld);
-        const r = bs.radius * o.matrixWorld.getMaxScaleOnAxis();
-        const d = v.distanceTo(cp);
-        if (d > r) { v.project(cam); const m = 1 + r / Math.max(1, d) * 2; if (v.z > 1 || Math.abs(v.x) > m || Math.abs(v.y) > m) return; }
+      const J = window.__jj; let sc = J.player; while (sc.parent) sc = sc.parent;
+      const saved = [];
+      sc.traverse((o) => {
+        if (!(o.isMesh || o.isPoints || o.isLine || o.isSprite)) return;
         let a = o; const path = []; while (a.parent) { path.unshift(a.name || a.type); a = a.parent; }
         const k = path.slice(0, (path[0] === 'corridor' ? 2 : 1) + (window.__MD_BREAKDOWN - 1)).join('/');
-        by[k] = (by[k] || 0) + 1;
+        const prev = o.onBeforeRender; saved.push([o, prev, Object.prototype.hasOwnProperty.call(o, 'onBeforeRender')]);
+        o.onBeforeRender = function (...a2) { by[k] = (by[k] || 0) + 1; return prev.apply(this, a2); };
       });
+      const f0 = R.info.render.frame; const tw = performance.now();
+      while (R.info.render.frame < f0 + 2 && performance.now() - tw < 15000) await new Promise((ok) => requestAnimationFrame(ok));
+      const nf = Math.max(1, R.info.render.frame - f0);
+      for (const k in by) by[k] = Math.round(by[k] / nf);
+      for (const [o, prev, own] of saved) { if (own) o.onBeforeRender = prev; else delete o.onBeforeRender; }
     }
     return { by: window.__MD_BREAKDOWN ? Object.fromEntries(Object.entries(by).sort((a, b) => b[1] - a[1]).slice(0, 30)) : undefined, draws: info.render.calls, tris: info.render.triangles, geos: info.memory.geometries, tex: info.memory.textures, heapMB: performance.memory ? +(performance.memory.usedJSHeapSize / 1048576).toFixed(1) : null, fpsSw: +(n / ((performance.now() - t0) / 1000)).toFixed(1) };
   });
