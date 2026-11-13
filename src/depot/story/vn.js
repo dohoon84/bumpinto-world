@@ -284,9 +284,9 @@ export function createVN({ assetBase, isMobile = false, getSettings, onCue = () 
     });
   }
   /** 다음 날 미리보기 카드 (day.end nextDay) — canvas: 실루엣 그림(자리 표시) */
-  function nextDayCard({ day, title, hook, canvas, buttons }) {
-    onCue('stinger.nextday');
-    const html = `<div class="card nd"><span class="tom">다음 이야기</span><h2>${day}일차</h2><h3>${esc(title || '')}</h3>${hook ? `<p>${esc(hook)}</p>` : ''}<div class="ndc"></div><div class="row" style="justify-content:center">${buttons.map((b, i) => `<button class="${b.w ? 'w' : ''}" data-i="${i}">${esc(b.label)}</button>`).join('')}</div></div>`;
+  function nextDayCard({ day, title, hook, canvas, buttons, head = '다음 이야기', dayLabel, cue = 'stinger.nextday' }) {
+    onCue(cue);
+    const html = `<div class="card nd"><span class="tom">${esc(head)}</span><h2>${esc(dayLabel || `${day}일차`)}</h2><h3>${esc(title || '')}</h3>${hook ? `<p>${esc(hook)}</p>` : ''}<div class="ndc"></div><div class="row" style="justify-content:center">${buttons.map((b, i) => `<button class="${b.w ? 'w' : ''}" data-i="${i}">${esc(b.label)}</button>`).join('')}</div></div>`;
     return modal(html, (m, done) => {
       if (canvas) m.querySelector('.ndc').appendChild(canvas);
       m.addEventListener('pointerdown', (e) => { const b = e.target.closest('button'); if (b) { e.stopPropagation(); onCue('ui-mode-pick'); done(buttons[+b.dataset.i].v); } });
@@ -381,6 +381,16 @@ export function createVN({ assetBase, isMobile = false, getSettings, onCue = () 
       S.modalKey = (k) => { if (k === 'Enter' || k === 'Space' || k === 'Escape') done(); };
     });
   }
+  /** 엔딩 카드 (7일차 day.end ui 'ending-card') — ending 'A'|'B'|'C' */
+  function endingCard({ ending, name, line, vitality, stamps, sign, rows = [], note }) {
+    onCue('stinger.stamp');
+    const tone = { A: ['#f2c230', '#123b2d', '존속 확정'], B: ['#7cc8f0', '#123b2d', '조건부 존속'], C: ['#c9cbc6', '#3a3d3b', '폐점 유예'] }[ending] || ['#f2c230', '#123b2d', ''];
+    const html = `<div class="card nd end-${esc(ending || '')}" style="border-color:${tone[0]}"><span class="tom" style="background:${tone[0]}">1주차 엔딩 ${esc(ending || '')}</span><h2 style="color:${tone[0]}">${esc(name || tone[2])}</h2>${line ? `<h3>${esc(line)}</h3>` : ''}${sign ? `<p style="margin-top:.7em"><span style="display:inline-block;border:3px solid ${tone[0]};border-radius:8px;padding:.2em .8em;color:#fff;font-weight:900">간판 · ${esc(sign)}</span></p>` : ''}<p>매장 활기 ${vitality} · 단골 도장 ${stamps}/7</p>${rows.length ? `<p style="font-size:clamp(11px,1.7vh,16px)">${rows.map(esc).join(' · ')}</p>` : ''}${note ? `<p>${esc(note)}</p>` : ''}<div class="row" style="justify-content:center"><button>확인</button></div></div>`;
+    return modal(html, (m, done) => {
+      m.addEventListener('pointerdown', (e) => { if (e.target.closest('button')) { e.stopPropagation(); done(); } });
+      S.modalKey = (k) => { if (k === 'Enter' || k === 'Space' || k === 'Escape') done(); };
+    });
+  }
   function modeSelect() {
     onLock(true); document.body.classList.add('dp-story-lock'); if (isMobile) document.body.classList.add('dp-story-m');
     const html = `<div class="mode"><div style="font-size:clamp(28px,5vh,52px)">📦</div><h2>어떻게 장 볼까요?</h2><p class="sub">범창고 정자점에 처음 오셨네요</p><div class="cards">
@@ -453,7 +463,7 @@ export function createVN({ assetBase, isMobile = false, getSettings, onCue = () 
   $('.gear').addEventListener('pointerdown', (e) => { e.stopPropagation(); e.preventDefault(); gearHandler?.(); });
   let gearHandler = null;
   return {
-    root, say, choose, close, pickCard, nextDayCard, cutIn, dayCard, clockCard, missionCard, setChip, setHint, shakeChip, stampCard, modeSelect, settings, confirmExit, toast, bubble, prefetch, setOffsets,
+    root, say, choose, close, pickCard, nextDayCard, cutIn, dayCard, clockCard, endingCard, missionCard, setChip, setHint, shakeChip, stampCard, modeSelect, settings, confirmExit, toast, bubble, prefetch, setOffsets,
     set onExit(f) { exitHandler = f; }, set onGear(f) { gearHandler = f; },
     setInGame(on) { root.classList.toggle('ingame', on); },
     get isOpen() { return S.open || !!S.modal; }, get blocking() { return S.open || !!S.modal; },

@@ -166,13 +166,13 @@ export function createStealth({ lanes = [], speeds = [], shelf, mat, cps = [], t
 // ---------------------------------------------------------------- 3D·DOM (브라우저) ----------------------------------------------------------------
 function quad(pos, col, x0, z0, x1, z1, y, c) { const v = [[x0, z0], [x0, z1], [x1, z1], [x0, z0], [x1, z1], [x1, z0]]; for (const [x, z] of v) { pos.push(x, y, z); col.push(c[0], c[1], c[2]); } }
 /** 축 맞춘 상자(정점 색) → pos/col/nrm 배열에 36정점 */
-function box(pos, col, cx, cy, cz, sx, sy, sz, c, nrm) {
+export function box(pos, col, cx, cy, cz, sx, sy, sz, c, nrm) {
   const x0 = cx - sx / 2, x1 = cx + sx / 2, y0 = cy - sy / 2, y1 = cy + sy / 2, z0 = cz - sz / 2, z1 = cz + sz / 2;
   const F = [[[x1, y0, z0], [x1, y1, z0], [x1, y1, z1], [x1, y0, z1], [1, 0, 0]], [[x0, y0, z1], [x0, y1, z1], [x0, y1, z0], [x0, y0, z0], [-1, 0, 0]], [[x0, y1, z0], [x0, y1, z1], [x1, y1, z1], [x1, y1, z0], [0, 1, 0]], [[x0, y0, z1], [x0, y0, z0], [x1, y0, z0], [x1, y0, z1], [0, -1, 0]], [[x0, y0, z1], [x1, y0, z1], [x1, y1, z1], [x0, y1, z1], [0, 0, 1]], [[x1, y0, z0], [x0, y0, z0], [x0, y1, z0], [x1, y1, z0], [0, 0, -1]]];
   for (const [a, b, cc, d, n] of F) for (const p of [a, b, cc, a, cc, d]) { pos.push(...p); col.push(c[0], c[1], c[2]); nrm?.push(...n); }
 }
-const hex = (h) => [(h >> 16 & 255) / 255, (h >> 8 & 255) / 255, (h & 255) / 255];
-function geo(THREE, keep, pos, col, nrm) { const g = keep(new THREE.BufferGeometry()); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3)); if (nrm) g.setAttribute('normal', new THREE.Float32BufferAttribute(nrm, 3)); else g.computeVertexNormals(); g.computeBoundingSphere(); return g; }
+export const hex = (h) => [(h >> 16 & 255) / 255, (h >> 8 & 255) / 255, (h & 255) / 255];
+export function geo(THREE, keep, pos, col, nrm) { const g = keep(new THREE.BufferGeometry()); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3)); if (nrm) g.setAttribute('normal', new THREE.Float32BufferAttribute(nrm, 3)); else g.computeVertexNormals(); g.computeBoundingSphere(); return g; }
 
 /**
  * 6일차 소품: 출발선·아치(메시 1) · 범이 고스트 카트(1) · 지게차 2대(몸통 + 원뿔) · 금빛 박스(카트 위 / 비밀 칸) · 야간 조명 · 손전등 비네트 · 경주/잠입 HUD.
