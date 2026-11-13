@@ -82,4 +82,35 @@ assert.ok(RM.lotteChipX(650, 100, 672, 0) <= 672 - 8 - 100);
   }
 }
 assert.equal(fails, 0, `겹침 검사 실패 ${fails}건`);
+// [route-map landscape] 폰 가로 전용 배치(routeMapLand.js): 지도 칸 크기 = 844×390 · 740×360 · 932×430 화면에서 옆 칸(216px, 영문 <800px 은 180px)을 뺀 값
+{
+  const LAND = await import('../src/ui-v2/routeMapLand.js');
+  const list = [...all.values()].map((s) => ({ id: s.live ? 'jeongja' : s.id, ko: s.ko, en: s.en, pass: !!s.pass }));
+  const landSizer = (en) => (id) => {
+    const s = all.get(id), nm = en ? (LAND.RM_LAND_SHORT_EN[id] || s.en) : s.ko;
+    if (s.pass) return { w: Math.ceil(16 + tw(nm, 11.5) + (en ? 0 : 26)), h: 22 };
+    return { w: Math.max(46, Math.ceil((en ? 18 : 22) + tw(nm, en ? 13 : 14))), h: 34 };
+  };
+  for (const [vw, vh] of [[844, 390], [740, 360], [932, 430]]) {
+    for (const en of [false, true]) {
+      const side = en && vw < 800 ? 180 : 216;
+      const box = { W: vw - 20 - 10 - side, H: vh - 12 };
+      const m = LAND.buildLandMap(list, box, landSizer(en));
+      const rep = RM.auditRouteMap(m);
+      const tag = `land ${vw}x${vh}${en ? '/en' : '/ko'}`;
+      console.log(`${tag}: W=${box.W} H=${box.H} issues=${rep.issues.length} fallback=${m.fallback} minHit=${m.M.minHit}`);
+      if (rep.issues.length) { fails++; console.log('  ' + rep.issues.join('\n  ')); }
+      assert.equal(m.labels.length, 21, `${tag}: 이름표 21개`);
+      assert.ok(m.M.minHit >= 38, `${tag}: 터치 간격 ${m.M.minHit}`);
+    }
+  }
+  // 지선을 끈 주소(본선만)도 가로 배치가 그려지고 겹치지 않는다
+  const mainOnly = G.layoutCorridorMap({ height: 430, width: 320, branches: [] });
+  const mo = mainOnly.items.map((s) => ({ id: s.live ? 'jeongja' : s.id, ko: s.ko, en: s.en, pass: !!s.pass }));
+  const mm = LAND.buildLandMap(mo, { W: 598, H: 378 }, landSizer(false));
+  const mrep = RM.auditRouteMap(mm);
+  assert.equal(mm.labels.length, mainOnly.items.length);
+  if (mrep.issues.length) { fails++; console.log('land main-only: ' + mrep.issues.join(', ')); }
+}
+if (fails) { console.error(`route map: ${fails} layout(s) with issues`); process.exit(1); }
 console.log('route map OK');
