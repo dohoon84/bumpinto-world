@@ -139,12 +139,20 @@ function neonGeo() {
 }
 
 function dressBattlefield(scene) {
-  const smokeMap = new THREE.TextureLoader().load('/dungeon/vfx/flipbooks/smoke_puff_4x4.png?v=v41fx');
+  const smokeMap = new THREE.TextureLoader().load('/assets/vfx/thirdparty/unity/cloud01.webp?v=tp');
   smokeMap.colorSpace = THREE.SRGBColorSpace;
-  smokeMap.repeat.set(0.25, 0.25);
-  smokeMap.offset.set(0.25, 0.5);
-  const fireMap = new THREE.TextureLoader().load('/dungeon/vfx/particles/fireball_orb.png?v=v41fx');
+  smokeMap.wrapS = THREE.ClampToEdgeWrapping;
+  smokeMap.wrapT = THREE.ClampToEdgeWrapping;
+  smokeMap.repeat.set(1 / 8, 1 / 8);
+  smokeMap.offset.set(0, 1 - 1 / 8);
+  scene.userData.columnSmoke = smokeMap;
+  const fireMap = new THREE.TextureLoader().load('/assets/vfx/thirdparty/unity/smallflame01.webp?v=tp');
   fireMap.colorSpace = THREE.SRGBColorSpace;
+  fireMap.wrapS = THREE.ClampToEdgeWrapping;
+  fireMap.wrapT = THREE.ClampToEdgeWrapping;
+  fireMap.repeat.set(1 / 16, 1 / 4);
+  fireMap.offset.set(0, 1 - 1 / 4);
+  scene.userData.columnFlame = fireMap;
   for (let i = 0; i < 4; i++) {
     const s = new THREE.Sprite(new THREE.SpriteMaterial({
       map: smokeMap, transparent: true, depthWrite: false, opacity: 0.72, color: '#5c463c',
@@ -154,7 +162,7 @@ function dressBattlefield(scene) {
     s.scale.set(10, 22, 1);
     scene.add(s);
     const fire = new THREE.Sprite(new THREE.SpriteMaterial({
-      map: fireMap, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+      map: fireMap, color: '#ffb060', transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
     }));
     fire.position.set(p.x, 2.2, p.z);
     fire.scale.set(4, 5.5, 1);
@@ -621,6 +629,16 @@ export function createArena(scene) {
       }
       flash = Math.max(0, flash - dt * 3.5);
       skyMat.uniforms.uFlash.value = flash;
+      const columnSmoke = scene.userData.columnSmoke;
+      if (columnSmoke) {
+        const s = Math.floor(performance.now() / 80) % 64;
+        columnSmoke.offset.set((s % 8) / 8, 1 - (Math.floor(s / 8) + 1) / 8);
+      }
+      const columnFlame = scene.userData.columnFlame;
+      if (columnFlame) {
+        const f = Math.floor(performance.now() / 70) % 64;
+        columnFlame.offset.set((f % 16) / 16, 1 - (Math.floor(f / 16) + 1) / 4);
+      }
       const pulse = 0.55 + Math.sin(performance.now() * 0.004) * 0.2 + safePulse * 0.6;
       safeRing.scale.setScalar(1);
       safeFill.material.opacity = 0.16 + safePulse * 0.14;

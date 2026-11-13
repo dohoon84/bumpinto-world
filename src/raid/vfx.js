@@ -1,6 +1,42 @@
 import * as THREE from 'three';
 
 const V3 = '/dungeon/vfx/v3';
+const TP = '/assets/vfx/thirdparty';
+const flips = [];
+function flipTexture(url, cols, rows, fps = 18) {
+  const map = tex(url).clone();
+  map.wrapS = THREE.ClampToEdgeWrapping;
+  map.wrapT = THREE.ClampToEdgeWrapping;
+  map.repeat.set(1 / cols, 1 / rows);
+  map.userData.flip = { cols, rows, fps, frame: 0 };
+  flips.push(map);
+  return map;
+}
+function tickFlips(dt) {
+  for (const map of flips) {
+    const f = map.userData.flip;
+    f.frame = (f.frame + dt * f.fps) % (f.cols * f.rows);
+    const i = Math.floor(f.frame);
+    map.offset.set((i % f.cols) / f.cols, 1 - (Math.floor(i / f.cols) + 1) / f.rows);
+  }
+}
+function withMap(map, x, y, z, w, h, color, blend, face) {
+  const mat = new THREE.MeshBasicMaterial({
+    map,
+    color,
+    transparent: true,
+    depthWrite: false,
+    toneMapped: false,
+    blending: blend === 'add' ? THREE.AdditiveBlending : THREE.NormalBlending,
+    side: THREE.DoubleSide,
+  });
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), mat);
+  m.position.set(x, y, z);
+  m.renderOrder = face ? 5 : 4;
+  m.userData.op = 0.95;
+  if (face) m.userData.face = true;
+  return m;
+}
 const texCache = new Map();
 function tex(url) {
   if (!texCache.has(url)) {
@@ -191,7 +227,7 @@ export function createVfx(scene) {
       crossed(`${V3}/magic/heal_pillar.png`, x, 3.8, z, 2.2, 7.6, '#FFC845').forEach((m) => add(m, 1.2, 0));
       add(facing(`${V3}/magic/heal_pillar.png`, x, 3.8, z, 2.2, 7.6, '#FFC845'), 1.2, 0);
       add(spark(`${V3}/particles/soft_glow.png`, x, 0.4, z, 0.6, 0.6, '#FFE7A0'), 0.8, 0);
-      add(facing(`${V3}/rings/halo.png`, x, 7.2, z, 2.4, 2.4, '#FFC845', 'add'), 0.9, 0);
+      add(facing(`${TP}/glow/glow-circle.webp`, x, 7.2, z, 2.4, 2.4, '#FFC845'), 0.9, 0);
     },
     shield(x, z) {
       add(facing(`${V3}/magic/shield_bubble.png`, x, 1.8, z, 4.6, 4.6, '#FFC845'), 1.2, 0);
@@ -199,7 +235,7 @@ export function createVfx(scene) {
     },
     holyBurst(x, z) {
       add(decal(`${V3}/contrast/halo_dark.png`, x, z, 7.6, 7.6, '#3A2A10'), 0.45, 0);
-      add(facing(`${V3}/rings/halo_shockwave.png`, x, 1.6, z, 6.6, 6.6, '#FFC845'), 0.4, 0);
+      add(facing(`${TP}/glow/glow-circle.webp`, x, 1.6, z, 6.6, 6.6, '#FFC845'), 0.4, 0);
       add(spark(`${V3}/particles/flash.png`, x, 1.4, z, 0.7, 0.7, '#FFE7A0'), 0.25, 0);
     },
     multi(x, z, yaw) {
@@ -231,11 +267,11 @@ export function createVfx(scene) {
     combo(x, z, yaw) {
       const rolls = [-0.9, 0.15, 0.85];
       const sizes = [7.0, 6.6, 7.2];
+      const slashes = ['slash_01', 'slash_02', 'slash_03'];
       rolls.forEach((roll, i) => {
-        const tex = i === 2 ? `${V3}/slashes/crescent_bold_thin.png` : `${V3}/slashes/crescent_bold.png`;
-        const blend = i === 2 ? 'add' : 'normal';
-        add(facing(tex, x, 1.5, z, sizes[i], sizes[i], '#FF3D8A', blend, roll), 0.45, 0);
-        add(upright(tex, x, 1.5, z, sizes[i] * 0.85, sizes[i] * 0.85, yaw + roll, '#FF3D8A', blend), 0.45, 0);
+        const tex = `${TP}/kenney/${slashes[i]}.webp`;
+        add(facing(tex, x, 1.5, z, sizes[i], sizes[i], '#FF3D8A', 'normal', roll), 0.45, 0);
+        add(upright(tex, x, 1.5, z, sizes[i] * 0.85, sizes[i] * 0.85, yaw + roll, '#FF3D8A'), 0.45, 0);
       });
       add(spark(`${V3}/particles/flash.png`, x, 1.4, z, 0.7, 0.7, '#FFE7A0'), 0.25, 0);
     },
@@ -276,13 +312,15 @@ export function createVfx(scene) {
     },
     slam(x, z) {
       add(decal(`${V3}/contrast/ring_dark.png`, x, z, 9.5, 9.5, '#140C08'), 0.9, 0);
-      add(decal(`${V3}/rings/shockwave_ring.png`, x, z, 9.0, 9.0, '#FFB000'), 0.8, 0);
+      add(decal(`${TP}/glow/glow-circle.webp`, x, z, 9.0, 9.0, '#FFB000'), 0.8, 0);
       add(decal(`${V3}/decals/ground_crack.png`, x, z, 9.2, 9.2, '#E8C090'), 1.1, 0);
-      crossed(`${V3}/particles/strike_flash.png`, x, 1.5, z, 1.2, 2.6, '#FFE7A0', 'add').forEach((m) => add(m, 0.28, 0));
-      for (let i = 0; i < 8; i++) {
-        const a = (i / 8) * Math.PI * 2;
-        add(spark(`${V3}/particles/debris_chunk.png`, x + Math.cos(a) * 2.4, 0.6, z + Math.sin(a) * 2.4, 0.45, 0.45, '#E8C090'), 0.6, 0);
-      }
+      const dust = flipTexture(`${TP}/unity/wispysmoke01.webp`, 8, 8, 16);
+      const dustMesh = withMap(dust, x, 0.08, z, 9.0, 9.0, '#E8C090', 'normal', false);
+      dustMesh.rotation.x = -Math.PI / 2;
+      add(dustMesh, 0.9, 0);
+      const puff = flipTexture(`${TP}/unity/explosion01.webp`, 5, 5, 20);
+      add(withMap(puff, x, 1.2, z, 4.2, 4.2, '#FFB000', 'normal', true), 0.55, 0);
+      add(spark(`${TP}/kenney/flare_01.webp`, x, 1.4, z, 0.7, 0.7, '#FFE7A0'), 0.28, 0);
     },
     whirl(x, z) {
       add(decal(`${V3}/contrast/spin_dark.png`, x, z, 8.4, 8.4, '#140C08'), 0.8, 0);
@@ -298,12 +336,22 @@ export function createVfx(scene) {
       const bz = z + fz * 3;
       add(facing(`${V3}/particles/comet_head_mage.png`, x + fx * 1.2, y + 0.4, z + fz * 1.2, 1.15, 1.15, '#FFFFFF'), 0.7, 0);
       add(facing(`${V3}/trails/comet_trail_mage.png`, x + fx * 0.4, y + 0.35, z + fz * 0.4, 3.6, 0.9, '#FFFFFF'), 0.6, 0);
-      add(decal(`${V3}/contrast/burst_mage_dark.png`, bx, bz, 7.4, 7.4, '#100818'), 0.8, 0);
-      add(decal(`${V3}/particles/fire_burst_mage.png`, bx, bz, 6.6, 6.6, '#FFFFFF'), 0.85, 0);
-      crossed(`${V3}/particles/fire_burst_mage.png`, bx, 2.2, bz, 6.6, 6.6, '#FFFFFF').forEach((m) => add(m, 0.85, 0));
-      add(facing(`${V3}/particles/fire_burst_mage.png`, bx, 2.4, bz, 6.6, 6.6, '#FFFFFF'), 0.85, 0);
-      add(spark(`${V3}/particles/soft_glow.png`, bx, 2.2, bz, 0.7, 0.7, '#FFE7A0'), 0.3, 0);
-      add(decal(`${V3}/particles/smoke_ring.png`, bx, bz, 8.0, 8.0, '#FFFFFF'), 0.9, 0);
+      const fire = flipTexture(`${TP}/unity/fireball01.webp`, 8, 8, 24);
+      add(decal(`${TP}/summon/circle6a.webp`, x, z, 2.4, 2.4, '#FFFFFF'), 0.45, 0);
+      const fireGround = withMap(fire, bx, 0.08, bz, 6.6, 6.6, '#B060FF', 'normal', false);
+      fireGround.rotation.x = -Math.PI / 2;
+      add(fireGround, 0.85, 0);
+      [0, Math.PI / 2].forEach((yaw) => {
+        const q = withMap(fire, bx, 2.2, bz, 6.6, 6.6, '#B060FF', 'normal', false);
+        q.rotation.y = yaw;
+        add(q, 0.85, 0);
+      });
+      add(withMap(fire, bx, 2.4, bz, 6.6, 6.6, '#B060FF', 'normal', true), 0.85, 0);
+      add(spark(`${TP}/kenney/spark_04.webp`, bx, 2.2, bz, 0.55, 0.55, '#FFE7A0'), 0.3, 0);
+      const smoke = flipTexture(`${TP}/unity/cloud01.webp`, 8, 8, 12);
+      const smokeMesh = withMap(smoke, bx, 0.1, bz, 8.0, 8.0, '#6A5A68', 'normal', false);
+      smokeMesh.rotation.x = -Math.PI / 2;
+      add(smokeMesh, 0.9, 0);
     },
     frost(x, z) {
       add(decal(`${V3}/contrast/frost_dark.png`, x, z, 8.0, 8.0, '#102028'), 0.8, 0);
@@ -316,8 +364,8 @@ export function createVfx(scene) {
     },
     bolt(x, z, yaw) {
       crossed(`${V3}/contrast/bolt_dark.png`, x, 3.8, z, 2.0, 8.0, '#1A1030').forEach((m) => add(m, 0.35, 0));
-      crossed(`${V3}/trails/lightning_thick.png`, x, 3.8, z, 1.8, 7.6, '#C8B8FF', 'add').forEach((m) => add(m, 0.32, 0));
-      add(upright(`${V3}/trails/lightning_branch.png`, x, 3.2, z, 3.2, 5.2, yaw + 0.6, '#C8B8FF', 'add'), 0.3, 0);
+      crossed(`${TP}/calinou/lightning.webp`, x, 3.8, z, 1.8, 7.6, '#C8B8FF', 'add').forEach((m) => add(m, 0.32, 0));
+      add(upright(`${TP}/calinou/lightning.webp`, x, 3.2, z, 3.2, 5.2, yaw + 0.6, '#C8B8FF', 'add'), 0.3, 0);
       add(decal(`${V3}/particles/ground_splash.png`, x, z, 5.4, 5.4, '#FFFFFF'), 0.4, 0);
       add(spark(`${V3}/particles/flash.png`, x, 1.2, z, 0.7, 0.7, '#FFFFFF'), 0.2, 0);
     },
@@ -328,6 +376,11 @@ export function createVfx(scene) {
       add(ring, 0.8, 2);
       this.pillar(x, z, '#9b5cff');
     },
+    impactBurst(x, y, z) {
+      const boom = flipTexture(`${TP}/unity/explosion00.webp`, 5, 5, 22);
+      add(withMap(boom, x, y, z, 3.2, 3.2, '#FFB000', 'normal', true), 0.45, 0);
+      add(spark(`${TP}/kenney/spark_04.webp`, x, y, z, 0.45, 0.45, '#FFE7A0'), 0.25, 0);
+    },
     windStreak(x, z, yaw) {
       const m = new THREE.Mesh(new THREE.BoxGeometry(14, 0.22, 0.9), fadeMat('#ffb070'));
       m.position.set(x, 1.1, z);
@@ -336,6 +389,7 @@ export function createVfx(scene) {
       m.userData.drift = 10;
     },
     update(dt, camera) {
+      tickFlips(dt);
       for (let i = live.length - 1; i >= 0; i--) {
         const m = live[i];
         m.userData.life -= dt;

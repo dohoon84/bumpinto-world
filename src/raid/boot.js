@@ -658,6 +658,7 @@ function step(dt) {
         if (kind === 'add') {
           audio.playSfx('hit', { x: actor.position.x, z: actor.position.z });
           vfx.sparks(actor.position.x, crown, actor.position.z, '#FFB428', 8);
+          vfx.impactBurst(actor.position.x, crown, actor.position.z);
         }
       }
     },
@@ -840,7 +841,9 @@ function beginAlert() {
     sirenPlayed = true;
     audio.playSfx('siren');
   }
-  if (shot === 'cutscene' || (shot !== 'alert' && !introSeen())) hud.openCutscene();
+  const opening = shot === 'cutscene' || (shot !== 'alert' && !introSeen());
+  audio.playBgm(opening ? 'cutscene' : 'alert');
+  if (opening) hud.openCutscene();
 }
 
 function tickAlert() {

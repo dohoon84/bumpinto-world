@@ -1,6 +1,7 @@
 // Designer v4-env kit: buildings swap in place by phase, bridge props, rift mobs.
 import * as THREE from 'three';
 import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { fromFrame, PATH_YAW } from './layout.js';
 
 const VARIANTS = ['apt_A', 'apt_B', 'apt_C', 'apt_D', 'apt_E', 'com_A', 'com_B'];
@@ -79,6 +80,222 @@ function instanced(template, places) {
   return root;
 }
 
+const TRAFFIC = '/dungeon/env/traffic';
+const KENNEY_CARS = ['police', 'firetruck', 'ambulance', 'taxi', 'sedan', 'suv', 'truck'];
+const KENNEY_DEBRIS = [
+  'debris-bolt', 'debris-bumper', 'debris-door', 'debris-door-window', 'debris-drivetrain',
+  'debris-drivetrain-axle', 'debris-nut', 'debris-plate-a', 'debris-plate-b',
+  'debris-plate-small-a', 'debris-plate-small-b', 'debris-spoiler-a', 'debris-spoiler-b', 'debris-tire',
+];
+
+function tuneTrafficMat(src, key) {
+  const m = src.clone();
+  m.side = THREE.FrontSide;
+  if (m.metalness != null) m.metalness = Math.min(m.metalness, 0.22);
+  if (m.roughness != null) m.roughness = Math.max(m.roughness, 0.58);
+  if (key === 'brake' || key === 'head') {
+    m.emissiveIntensity = Math.max(m.emissiveIntensity || 0, 2.1);
+    if (!m.emissive || m.emissive.getHex() === 0) m.emissive = new THREE.Color(key === 'brake' ? '#ff4a32' : '#ffe2a8');
+  }
+  return m;
+}
+
+function matKey(mat, family) {
+  if (family === 'kenney') return 'kenney';
+  const name = (mat.name || '').toLowerCase();
+  if (name.includes('brake')) return 'brake';
+  if (name.includes('head')) return 'head';
+  return 'atlas';
+}
+
+function slimGeometry(src) {
+  const g = src.clone();
+  g.morphAttributes = {};
+  const keep = new Set(['position', 'normal', 'uv']);
+  for (const k of Object.keys(g.attributes)) if (!keep.has(k)) g.deleteAttribute(k);
+  const flat = g.index ? g.toNonIndexed() : g;
+  if (flat !== g) g.dispose();
+  if (!flat.getAttribute('normal')) flat.computeVertexNormals();
+  if (!flat.getAttribute('uv')) {
+    const count = flat.getAttribute('position').count;
+    flat.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(count * 2), 2));
+  }
+  return flat;
+}
+
+function trafficPlaces() {
+  const places = [];
+  let n = 0;
+  for (const side of [-1, 1]) {
+    for (let along = -16; along <= 52; along += 6.6) {
+      if (side > 0 && along > 16 && along < 26) continue;
+      if (side < 0 && along > 0 && along < 10) continue;
+      const across = side * (4.2 + (n % 2) * 0.28);
+      const yaw = PATH_YAW + (n % 4 === 0 ? Math.PI : 0) + ((n % 5) - 2) * 0.05;
+      places.push({
+        url: `${TRAFFIC}/kenney/${KENNEY_CARS[n % KENNEY_CARS.length]}.glb`,
+        along, across, yaw, scale: 1.48, family: 'kenney',
+      });
+      n += 1;
+    }
+  }
+  KENNEY_DEBRIS.forEach((name, i) => {
+    const side = i % 2 === 0 ? -1 : 1;
+    const tiny = /nut|bolt/.test(name);
+    places.push({
+      url: `${TRAFFIC}/kenney/${name}.glb`,
+      along: -14 + (i % 7) * 8.4 + (i > 6 ? 2.4 : 0),
+      across: side * (5.85 + (i % 3) * 0.22),
+      yaw: PATH_YAW + i * 0.7,
+      scale: tiny ? 1.7 : 1.15,
+      family: 'kenney',
+    });
+    places.push({
+      url: `${TRAFFIC}/kenney/${name}.glb`,
+      along: -8 + (i % 7) * 7.1,
+      across: side * -1 * (5.55 + (i % 2) * 0.3),
+      yaw: PATH_YAW + i * 0.4,
+      scale: tiny ? 1.5 : 1.05,
+      family: 'kenney',
+    });
+  });
+  const wrecks = [
+    ['Vehicle_Sports.gltf', 38, 0.35, 0.1, 1],
+    ['Vehicle_Pickup.gltf', 44.5, -1.55, 0.25, 1],
+    ['Vehicle_Truck_Armored.gltf', 50, 1.15, Math.PI + 0.2, 1],
+    ['Vehicle_Sports_Armored.gltf', -10, 0.15, 0.2, 1],
+    ['Vehicle_Pickup_Armored.gltf', -5.2, -1.35, Math.PI * 0.92, 1],
+    ['Vehicle_Truck.gltf', 33.5, 1.7, PATH_YAW + Math.PI, 1],
+  ];
+  for (const [file, along, across, yaw, scale] of wrecks) {
+    places.push({ url: `${TRAFFIC}/quaternius/${file}`, along, across, yaw, scale, family: 'quaternius' });
+  }
+  const scatter = [
+    ['Street_Straight_Crack1.gltf', 32, 0.2, PATH_YAW, 1],
+    ['Street_Straight_Crack2.gltf', -6.5, -0.3, PATH_YAW, 1],
+    ['Container_Red.gltf', 28, 8.4, PATH_YAW + 0.4, 1],
+    ['Container_Green.gltf', 36, -8.6, PATH_YAW - 0.2, 1],
+    ['TrafficLight_1.gltf', -2, 7.5, PATH_YAW, 1],
+    ['TrafficLight_1.gltf', 34, -7.4, PATH_YAW + Math.PI, 1],
+    ['Pallet.gltf', 27, 7.1, 0.4, 1],
+    ['Pallet_Broken.gltf', 35, -7.2, 1.2, 1],
+    ['Pallet.gltf', 47, 2.4, 0.6, 1],
+    ['Pallet_Broken.gltf', 41, -2.8, 2.1, 1],
+  ];
+  for (const [file, along, across, yaw, scale] of scatter) {
+    places.push({ url: `${TRAFFIC}/quaternius/${file}`, along, across, yaw, scale, family: 'quaternius' });
+  }
+  for (let i = 0; i < 10; i++) {
+    const file = i % 2 === 0 ? 'TrafficCone_1.gltf' : 'TrafficCone_2.gltf';
+    const cluster = i < 5 ? 7.4 : 31.2;
+    places.push({
+      url: `${TRAFFIC}/quaternius/${file}`,
+      along: cluster + (i % 5) * 1.15,
+      across: (i % 2 === 0 ? -1 : 1) * (2.15 + (i % 3) * 0.45),
+      yaw: i,
+      scale: 1,
+      family: 'quaternius',
+    });
+  }
+  for (let i = 0; i < 12; i++) {
+    const side = i % 2 === 0 ? -1 : 1;
+    places.push({
+      url: `${TRAFFIC}/quaternius/CinderBlock.gltf`,
+      along: -12 + i * 4.6,
+      across: side * (6.15 + (i % 3) * 0.18),
+      yaw: (i % 4) * 0.4,
+      scale: 1,
+      family: 'quaternius',
+    });
+  }
+  return places;
+}
+
+async function addTraffic(gltfLoader, parent) {
+  const places = trafficPlaces();
+  const urls = [...new Set(places.map((p) => p.url))];
+  const scenes = new Map();
+  await Promise.all(urls.map(async (url) => {
+    try {
+      const gltf = await gltfLoader.loadAsync(url);
+      gltf.scene.updateMatrixWorld(true);
+      scenes.set(url, gltf.scene);
+    } catch (err) {
+      console.warn('[raid] traffic', url, err);
+    }
+  }));
+  const buckets = new Map();
+  let placed = 0;
+  for (const place of places) {
+    const scene = scenes.get(place.url);
+    if (!scene) continue;
+    const box = new THREE.Box3().setFromObject(scene);
+    const lift = Number.isFinite(box.min.y) ? -box.min.y * place.scale + 0.04 : 0.04;
+    const p = fromFrame(place.along, place.across);
+    const q = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, place.yaw, 0));
+    const world = new THREE.Matrix4().compose(
+      new THREE.Vector3(p.x, lift, p.z),
+      q,
+      new THREE.Vector3(place.scale, place.scale, place.scale),
+    );
+    scene.traverse((o) => {
+      if (!o.isMesh || !o.geometry) return;
+      const mats = [].concat(o.material);
+      mats.forEach((mat, index) => {
+        if (!mat) return;
+        const key = matKey(mat, place.family);
+        let bucket = buckets.get(key);
+        if (!bucket) {
+          bucket = { geos: [], mat: tuneTrafficMat(mat, key) };
+          buckets.set(key, bucket);
+        }
+        const src = o.geometry;
+        let part = src;
+        if (mats.length > 1 && src.groups?.length && src.index) {
+          const group = src.groups[index];
+          if (!group) return;
+          part = src.clone();
+          const sliced = src.index.array.slice(group.start, group.start + group.count);
+          const IndexArray = src.index.array.constructor;
+          part.setIndex(new THREE.BufferAttribute(new IndexArray(sliced), 1));
+          part.clearGroups();
+        }
+        const baked = slimGeometry(part);
+        baked.applyMatrix4(o.matrixWorld);
+        baked.applyMatrix4(world);
+        bucket.geos.push(baked);
+        if (part !== src) part.dispose();
+      });
+    });
+    placed += 1;
+  }
+  const root = new THREE.Group();
+  root.name = 'traffic-jam';
+  let tris = 0;
+  for (const bucket of buckets.values()) {
+    if (!bucket.geos.length) continue;
+    let geo = null;
+    try {
+      geo = mergeGeometries(bucket.geos, false);
+    } catch (err) {
+      console.warn('[raid] traffic merge', err);
+    }
+    bucket.geos.forEach((g) => g.dispose());
+    if (!geo) continue;
+    geo.computeBoundingSphere();
+    const mesh = new THREE.Mesh(geo, bucket.mat);
+    mesh.castShadow = false;
+    mesh.receiveShadow = true;
+    mesh.frustumCulled = false;
+    root.add(mesh);
+    tris += (geo.index ? geo.index.count : geo.getAttribute('position').count) / 3;
+  }
+  parent.add(root);
+  const info = { placed, draws: root.children.length, tris: Math.round(tris) };
+  console.info('[raid] traffic', info);
+  return info;
+}
+
 export async function createEnvKit(scene) {
   const gltfLoader = await loader();
   const load = (url) => gltfLoader.loadAsync(url);
@@ -150,10 +367,12 @@ export async function createEnvKit(scene) {
 
   const blinks = [];
   const flames = [];
-  const flameMap = new THREE.TextureLoader().load('/dungeon/vfx/flipbooks/explosion_4x4.png?v=env');
+  const flameMap = new THREE.TextureLoader().load('/assets/vfx/thirdparty/unity/smallflame01.webp?v=tp');
   flameMap.colorSpace = THREE.SRGBColorSpace;
-  flameMap.repeat.set(0.25, 0.25);
-  flameMap.offset.set(0.5, 0.5);
+  flameMap.wrapS = THREE.ClampToEdgeWrapping;
+  flameMap.wrapT = THREE.ClampToEdgeWrapping;
+  flameMap.repeat.set(1 / 16, 1 / 4);
+  flameMap.offset.set(0, 1 - 1 / 4);
   const flameMat = new THREE.SpriteMaterial({
     map: flameMap, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, color: '#ffb060',
   });
@@ -231,10 +450,12 @@ export async function createEnvKit(scene) {
   addCrack(4.2, 0.2, 1.6);
   addCrack(5.2, 1.7, 2.5);
 
-  const smokeMap = new THREE.TextureLoader().load('/dungeon/vfx/flipbooks/smoke_puff_4x4.png?v=env');
+  const smokeMap = new THREE.TextureLoader().load('/assets/vfx/thirdparty/unity/wispysmoke01.webp?v=tp');
   smokeMap.colorSpace = THREE.SRGBColorSpace;
-  smokeMap.repeat.set(0.25, 0.25);
-  smokeMap.offset.set(0.25, 0.5);
+  smokeMap.wrapS = THREE.ClampToEdgeWrapping;
+  smokeMap.wrapT = THREE.ClampToEdgeWrapping;
+  smokeMap.repeat.set(1 / 8, 1 / 8);
+  smokeMap.offset.set(0, 1 - 1 / 8);
   for (const [along, across] of [[16, 20], [14, -22], [42, 30], [40, -32]]) {
     const s = new THREE.Sprite(new THREE.SpriteMaterial({
       map: smokeMap, transparent: true, depthWrite: false, opacity: 0.55, color: '#5c463c',
@@ -409,11 +630,16 @@ export async function createEnvKit(scene) {
     }
   }
 
+  const traffic = await addTraffic(gltfLoader, root);
+
   let flameT = 0;
   function update(dt) {
     flameT += dt;
     const frame = Math.floor(flameT * 12) % 16;
-    flameMap.offset.set((frame % 4) / 4, 1 - (Math.floor(frame / 4) + 1) / 4);
+    const f = Math.floor(flameT * 18) % 64;
+    flameMap.offset.set((f % 16) / 16, 1 - (Math.floor(f / 16) + 1) / 4);
+    const s = Math.floor(flameT * 12) % 64;
+    smokeMap.offset.set((s % 8) / 8, 1 - (Math.floor(s / 8) + 1) / 8);
     const t = performance.now() * 0.001;
     blinks.forEach((node, i) => {
       const alt = node.name === 'beacon_blue' ? Math.sin(t * 9 + i) < 0 : Math.sin(t * 9 + i) > 0;
@@ -436,5 +662,6 @@ export async function createEnvKit(scene) {
     update,
     uLit,
     liveMobs,
+    traffic,
   };
 }

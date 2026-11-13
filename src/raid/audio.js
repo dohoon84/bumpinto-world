@@ -1,46 +1,81 @@
 // 레이드 오디오. 파일은 public/dungeon/audio, 출처는 CREDITS.md.
 // 마스터 / BGM / 효과 버스. 큰 타격은 BGM 을 잠깐 낮추고, 보스·스킬은 위치 음이다.
 
+const FA = 'sfx/fa';
 const FILES = {
-  slash: ['sfx/blade_01.ogg', 'sfx/blade_02.ogg', 'sfx/blade_03.ogg'],
-  slam: ['sfx/blade_01.ogg', 'sfx/chain_03.ogg'],
-  charge: ['sfx/chain_03.ogg', 'sfx/blade_02.ogg'],
-  whirl: ['sfx/chop.ogg', 'sfx/blade_03.ogg'],
+  slash: ['sfx/knifeSlice.ogg', 'sfx/knifeSlice2.ogg', 'sfx/chop.ogg', 'sfx/blade_01.ogg'],
+  slam: [`${FA}/bang-01.ogg`, `${FA}/bang-03.ogg`, `${FA}/cannon-01.ogg`],
+  charge: [`${FA}/hit-plate-0.ogg`, `${FA}/hit-punch-0.ogg`, 'sfx/chain_03.ogg'],
+  whirl: ['sfx/chop.ogg', 'sfx/knifeSlice2.ogg', 'sfx/blade_03.ogg'],
   shout: ['sfx/creature_roar_01.ogg'],
   spin: ['sfx/blade_03.ogg', 'sfx/chop.ogg'],
-  fire: ['sfx/magic2.ogg'],
-  frost: ['sfx/coldsnap.wav'],
-  heal: ['sfx/heal.ogg'],
-  holy: ['sfx/bong_001.ogg'],
-  shield: ['sfx/metalLatch.ogg'],
-  pierce: ['sfx/drawKnife2.ogg'],
-  multi: ['sfx/drawKnife1.ogg'],
-  rain: ['sfx/metalPot1.ogg'],
-  blink: ['sfx/footstep02.ogg'],
-  combo: ['sfx/knifeSlice.ogg', 'sfx/knifeSlice2.ogg'],
+  fire: [`${FA}/spell-fire-01.ogg`, `${FA}/spell-fire-02.ogg`, `${FA}/spell-fire-03.ogg`, `${FA}/bang-04.ogg`],
+  frost: [`${FA}/spell-01.ogg`, `${FA}/spell-02.ogg`, 'sfx/coldsnap.wav'],
+  heal: ['sfx/heal.ogg', `${FA}/gem-01.ogg`, `${FA}/gem-02.ogg`, `${FA}/gem-03.ogg`],
+  holy: [`${FA}/gem-01.ogg`, `${FA}/gem-03.ogg`, 'sfx/bong_001.ogg'],
+  shield: [`${FA}/hit-plate-1.ogg`, 'sfx/metalLatch.ogg', `${FA}/hit-metal-1.ogg`],
+  pierce: ['sfx/drawKnife2.ogg', 'sfx/drawKnife1.ogg'],
+  multi: ['sfx/drawKnife1.ogg', 'sfx/knifeSlice.ogg'],
+  rain: [`${FA}/spell-02.ogg`, 'sfx/drawKnife1.ogg'],
+  blink: ['sfx/footstep02.ogg', `${FA}/spell-01.ogg`],
+  combo: ['sfx/knifeSlice.ogg', 'sfx/knifeSlice2.ogg', 'sfx/chop.ogg', 'sfx/blade_02.ogg'],
   dodge: ['sfx/footstep02.ogg', 'sfx/drawKnife1.ogg'],
-  hit: ['sfx/blade_01.ogg', 'sfx/metalPot1.ogg', 'sfx/metalPot2.ogg'],
-  hurt: ['sfx/metalLatch.ogg'],
-  wind: ['sfx/coldsnap.wav'],
-  transform: ['sfx/magic2.ogg'],
+  hit: [`${FA}/hit-metal-0.ogg`, `${FA}/hit-metal-1.ogg`, `${FA}/hit-metal-2.ogg`, `${FA}/hit-plate-0.ogg`, `${FA}/hit-punch-0.ogg`, `${FA}/hit-punch-1.ogg`],
+  hurt: [`${FA}/hit-plate-1.ogg`, `${FA}/hit-metal-2.ogg`, 'sfx/metalLatch.ogg'],
+  wind: ['sfx/coldsnap.wav', `${FA}/spell-02.ogg`],
+  transform: [`${FA}/spell-01.ogg`, `${FA}/hit-metal-0.ogg`],
   warn: ['sfx/bong_001.ogg', 'sfx/error_003.ogg'],
   ui: ['sfx/click_001.ogg', 'sfx/click_002.ogg', 'sfx/click_003.ogg'],
-  ice: ['sfx/magic.ogg', 'sfx/magic2.ogg'],
+  ice: [`${FA}/spell-01.ogg`, `${FA}/spell-02.ogg`],
   arrow: ['sfx/drawKnife1.ogg', 'sfx/drawKnife2.ogg'],
-  arrowHit: ['sfx/metalClick.ogg', 'sfx/metalPot1.ogg'],
+  arrowHit: [`${FA}/hit-punch-1.ogg`, `${FA}/hit-metal-1.ogg`],
   dagger: ['sfx/knifeSlice.ogg', 'sfx/knifeSlice2.ogg', 'sfx/chop.ogg'],
   siren: ['alert-siren.ogg'],
   roar: ['sfx/creature_roar_01.ogg', 'sfx/creature_roar_02.ogg', 'sfx/creature_roar_03.ogg'],
   step: ['sfx/footstep00.ogg', 'sfx/footstep01.ogg', 'sfx/footstep02.ogg', 'sfx/footstep03.ogg'],
   levelup: ['sfx/level-up.mp3'],
   victory: ['victory.ogg'],
+  bolt: [`${FA}/bang-03.ogg`, `${FA}/spell-02.ogg`],
+  poison: [`${FA}/spell-01.ogg`, `${FA}/spell-02.ogg`],
+  boom: [`${FA}/bang-01.ogg`, `${FA}/bang-02.ogg`, `${FA}/bang-06.ogg`, `${FA}/cannon-01.ogg`, `${FA}/cannon-02.ogg`],
+  crumble: [`${FA}/bang-08.ogg`, `${FA}/bang-10.ogg`, `${FA}/cannon-03.ogg`, `${FA}/bang-06.ogg`],
 };
 
 const MUSIC = {
   peace: 'bgm-calm.ogg',
-  1: 'bgm-phase1.ogg',
-  2: 'bgm-phase2.ogg',
+  alert: 'bgm-battle-a.ogg',
+  cutscene: 'bgm-qazi.ogg',
+  1: 'bgm-epic-boss.ogg',
+  2: 'bgm-pursuit.ogg',
   3: 'bgm-phase3.ogg',
+};
+
+// Peak-safe loudness so the new recordings sit with the existing mix.
+// BGM targets about -14 dB mean without crossing -1.5 dBTP. Quiet spell files are brought up to the same peak.
+const LOUD = {
+  'bgm-epic-boss.ogg': 0.53,
+  'bgm-qazi.ogg': 0.84,
+  'bgm-pursuit.ogg': 1.07,
+  'bgm-phase3.ogg': 0.85,
+  'bgm-battle-a.ogg': 0.87,
+  'sfx/heal.ogg': 2.37,
+  'sfx/fa/spell-fire-01.ogg': 6.68,
+  'sfx/fa/spell-fire-02.ogg': 14.62,
+  'sfx/fa/spell-fire-03.ogg': 4.79,
+  'sfx/fa/gem-02.ogg': 1.55,
+  'sfx/fa/bang-04.ogg': 1.07,
+  'sfx/fa/bang-01.ogg': 0.89,
+  'sfx/fa/bang-02.ogg': 0.89,
+  'sfx/fa/bang-03.ogg': 0.89,
+  'sfx/fa/bang-06.ogg': 0.89,
+  'sfx/fa/bang-08.ogg': 0.91,
+  'sfx/fa/bang-10.ogg': 0.91,
+  'sfx/fa/cannon-01.ogg': 0.89,
+  'sfx/fa/cannon-02.ogg': 0.89,
+  'sfx/fa/cannon-03.ogg': 0.89,
+  'sfx/fa/spell-01.ogg': 0.89,
+  'sfx/fa/gem-01.ogg': 0.89,
+  'sfx/fa/gem-03.ogg': 0.89,
 };
 
 function pick(list) {
@@ -65,64 +100,6 @@ export function createRaidAudio() {
   let musicToken = 0;
   let ambStage = 0;
   let ambT = 3;
-  const SYNTH = new Set(['bolt', 'poison', 'boom', 'crumble']);
-
-  function synth(kind, gain) {
-    const ac = ensure();
-    if (!ac || muted) return;
-    const t = ac.currentTime;
-    const o = ac.createOscillator();
-    const filter = ac.createBiquadFilter();
-    const g = ac.createGain();
-    o.connect(filter);
-    filter.connect(g);
-    g.connect(sfxBus);
-    if (kind === 'bolt') {
-      o.type = 'sawtooth';
-      o.frequency.setValueAtTime(320, t);
-      o.frequency.exponentialRampToValueAtTime(50, t + 0.16);
-      filter.type = 'highpass';
-      filter.frequency.value = 500;
-      g.gain.setValueAtTime(gain, t);
-      g.gain.exponentialRampToValueAtTime(0.001, t + 0.18);
-      o.start(t);
-      o.stop(t + 0.2);
-    } else if (kind === 'poison') {
-      o.type = 'triangle';
-      o.frequency.setValueAtTime(180, t);
-      o.frequency.linearRampToValueAtTime(90, t + 0.4);
-      filter.type = 'bandpass';
-      filter.frequency.value = 700;
-      g.gain.setValueAtTime(0.0001, t);
-      g.gain.linearRampToValueAtTime(gain * 0.45, t + 0.04);
-      g.gain.exponentialRampToValueAtTime(0.001, t + 0.42);
-      o.start(t);
-      o.stop(t + 0.44);
-    } else if (kind === 'boom') {
-      o.type = 'sine';
-      o.frequency.setValueAtTime(110, t);
-      o.frequency.exponentialRampToValueAtTime(32, t + 0.45);
-      filter.type = 'lowpass';
-      filter.frequency.value = 240;
-      g.gain.setValueAtTime(gain * 0.55, t);
-      g.gain.exponentialRampToValueAtTime(0.001, t + 0.5);
-      o.start(t);
-      o.stop(t + 0.52);
-    } else {
-      const len = Math.floor(ac.sampleRate * 0.35);
-      const buf = ac.createBuffer(1, len, ac.sampleRate);
-      const data = buf.getChannelData(0);
-      for (let i = 0; i < len; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / len);
-      const src = ac.createBufferSource();
-      src.buffer = buf;
-      filter.type = 'lowpass';
-      filter.frequency.value = 500;
-      src.connect(filter);
-      g.gain.setValueAtTime(gain * 0.35, t);
-      g.gain.exponentialRampToValueAtTime(0.001, t + 0.34);
-      src.start(t);
-    }
-  }
 
   function ensure() {
     if (ctx) return ctx;
@@ -226,12 +203,13 @@ export function createRaidAudio() {
     if (!buf || token !== musicToken || muted && false) return;
     const ac = ensure();
     if (!ac) return;
+    const level = LOUD[url] ?? 1;
     const next = playBuffer(buf, { loop, gain: 0.001, bus: 'music' });
     if (!next) return;
     const t = ac.currentTime;
     next.gain.gain.cancelScheduledValues(t);
     next.gain.gain.setValueAtTime(0.001, t);
-    next.gain.gain.linearRampToValueAtTime(1, t + 1.3);
+    next.gain.gain.linearRampToValueAtTime(level, t + 1.3);
     if (currentMusic) {
       const prev = currentMusic;
       prev.gain.gain.cancelScheduledValues(t);
@@ -244,6 +222,8 @@ export function createRaidAudio() {
 
   function musicForMode() {
     if (mode === 'peace') return MUSIC.peace;
+    if (mode === 'alert') return MUSIC.alert;
+    if (mode === 'cutscene') return MUSIC.cutscene;
     if (mode === 'boss') return MUSIC[bossPhase] || MUSIC[1];
     return null;
   }
@@ -290,7 +270,7 @@ export function createRaidAudio() {
     },
     playBgm(next) {
       ensure();
-      mode = next === 'boss' || next === 'peace' ? next : 'none';
+      mode = next === 'boss' || next === 'peace' || next === 'alert' || next === 'cutscene' ? next : 'none';
       if (mode === 'none') {
         musicToken += 1;
         if (currentMusic) {
@@ -308,15 +288,13 @@ export function createRaidAudio() {
       const ac = ensure();
       if (!ac || muted) return;
       if (ac.state === 'suspended') ac.resume();
-      if (SYNTH.has(name)) {
-        synth(name, (opts.gain || 0.7) * (0.9 + Math.random() * 0.15));
-        return;
-      }
       const list = FILES[name];
       if (!list) return;
       const url = pick(list);
-      const rate = name === 'siren' || name === 'levelup' ? 1 : 0.92 + Math.random() * 0.16;
-      const gain = (opts.gain || 0.85) * (0.9 + Math.random() * 0.2);
+      const steady = name === 'siren' || name === 'levelup' || name === 'victory';
+      const rate = steady ? 1 : 0.96 + Math.random() * 0.08;
+      const jitter = steady ? 1 : Math.pow(10, (Math.random() * 3 - 1.5) / 20);
+      const gain = (opts.gain || 0.85) * (LOUD[url] ?? 1) * jitter;
       load(url).then((buf) => {
         if (!buf) return;
         playBuffer(buf, { gain, rate, x: opts.x, z: opts.z, bus: 'sfx' });
