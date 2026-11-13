@@ -96,9 +96,17 @@ function toURL(pixels) {
   return canvas.toDataURL('image/png');
 }
 
-function consider(renderer, scene, box, winner) {
-  for (const distMul of [1, 1.25]) {
-    for (const side of [1, -1]) {
+function frontSide(root) {
+  const mesh = root.getObjectByName?.('player-face-mesh');
+  if (!mesh) return null;
+  const forward = new THREE.Vector3(0, 0, 1).applyQuaternion(mesh.getWorldQuaternion(new THREE.Quaternion()));
+  return forward.z >= 0 ? 1 : -1;
+}
+
+function consider(renderer, scene, box, winner, onlySide) {
+  const sides = onlySide == null ? [1, -1] : [onlySide];
+  for (const distMul of [1, 1.15]) {
+    for (const side of sides) {
       const s = shoot(renderer, scene, box, side, distMul);
       const ok = s.mean > 42 && s.skin > 12 && s.silver > 8;
       if ((ok && s.score > winner.score) || (!winner.ok && s.score > winner.score)) {
@@ -112,8 +120,23 @@ function consider(renderer, scene, box, winner) {
   return winner;
 }
 
+function lookKey(source) {
+  const look = source?.userData?.playerLook;
+  if (!look) return '';
+  return [
+    look.skin, look.hair, look.hairColor, look.face, look.eyes, look.brows,
+    look.mouth, look.eyeColor, look.blush, look.freckles, look.mole, look.beard, look.gender,
+  ].join('|');
+}
+
+export function clearPortraitCache() {
+  cache.clear();
+}
+
 export function renderClassPortrait(renderer, source, classId) {
-  const cached = cache.get(classId);
+  const key = `${classId}|${lookKey(source)}`;
+  const cached = cache.get(key);
+  if (cached) return cached;
   if (holder) {
     portraitScene.remove(holder);
     holder = null;
@@ -135,12 +158,13 @@ export function renderClassPortrait(renderer, source, classId) {
   prepare(holder);
   portraitScene.add(holder);
   holder.updateMatrixWorld(true);
+  const faceSide = frontSide(holder);
   let box = new THREE.Box3().setFromObject(holder);
   if (box.isEmpty() || box.max.y - box.min.y < 0.4) {
     const mark = CLASS_MARKS[classId];
     box = new THREE.Box3().setFromCenterAndSize(new THREE.Vector3(0, (mark?.crown || 1.9) / 2, 0), new THREE.Vector3(0.8, mark?.crown || 1.9, 0.6));
   }
-  consider(renderer, portraitScene, box, winner);
+  consider(renderer, portraitScene, box, winner, faceSide);
 
   if (!winner.ok) {
     const scene = sceneOf(source);
@@ -171,6 +195,6 @@ export function renderClassPortrait(renderer, source, classId) {
   renderer.setRenderTarget(prev);
   renderer.setClearColor(oldClear, oldAlpha);
   const url = winner.score > 0 ? toURL(best) : '';
-  if (winner.ok && url) cache.set(classId, url);
-  return cache.get(classId) || url;
+  if (winner.ok && url) cache.set(key, url);
+  return cache.get(key) || url;
 }

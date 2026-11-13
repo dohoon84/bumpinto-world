@@ -11,12 +11,25 @@ const VN_LINES = [
 ];
 
 const SKILL_ICON = {
-  slash: 'warrior_attack', charge: 'warrior_skill1', shout: 'warrior_cast', spin: 'warrior_skill2',
+  slash: 'warrior_attack', charge: 'warrior_dash', shout: 'warrior_skill1', spin: 'warrior_skill2',
   shard: 'mage_skill1', nova: 'mage_skill2', freeze: 'mage_cast', blizzard: 'mage_attack',
   smite: 'priest_attack', heal: 'priest_cast', circle: 'priest_skill1', holy: 'priest_skill2',
   shot: 'archer_attack', volley: 'archer_skill1', mark: 'archer_cast', rain: 'archer_skill2',
   daggers: 'assassin_attack', shadow: 'assassin_skill1', stealth: 'assassin_cast', tape: 'assassin_skill2',
 };
+// HUD C 전사 바. 불꽃(warrior_cast)은 마법사 전용이라 여기 두지 않는다.
+const WARRIOR_BAR = [
+  { key: '1', id: 'slash', icon: 'warrior_attack' },
+  { key: '2', id: 'charge', icon: 'warrior_dash' },
+  { key: '3', id: 'shout', icon: 'warrior_skill1' },
+  { key: '4', id: 'spin', icon: 'warrior_skill2' },
+  { key: 'Q', aura: 'buff_power', icon: 'buff_power' },
+  { key: 'E', aura: 'buff_shield', icon: 'buff_shield' },
+  { key: 'R', icon: 'buff_haste' },
+  { key: 'F', icon: 'hud_star' },
+  { key: 'G', icon: 'buff_regen' },
+  { key: 'T', empty: true },
+];
 const EXTRA_KEYS = ['Q', 'E', 'R', 'F', 'G', 'T'];
 const GEM = { 전사: '#FF7A1A', 마법사: '#8C7FFF', 사제: '#FFC845', 궁수: '#3DDC84', 암살자: '#E5383B' };
 
@@ -240,16 +253,28 @@ export function createHud() {
   let picked = 'warrior';
   function paintSkills(list) {
     const live = list.filter((s) => !s.locked);
-    const extras = ['buff_power', 'buff_shield', 'buff_haste', 'buff_regen', `class_${active.id}`];
-    const cells = [];
-    live.slice(0, 4).forEach((s) => cells.push({ skill: s, icon: SKILL_ICON[s.id], key: s.key }));
-    while (cells.length < 4) cells.push({ key: String(cells.length + 1) });
-    extras.forEach((icon, i) => cells.push({
-      icon,
-      key: EXTRA_KEYS[i],
-      aura: icon.startsWith('buff_') || icon.startsWith('debuff_') ? icon : '',
-    }));
-    cells.push({ key: 'T', empty: true });
+    const byId = Object.fromEntries(live.map((s) => [s.id, s]));
+    let cells;
+    if (active.id === 'warrior') {
+      cells = WARRIOR_BAR.map((c) => ({
+        key: c.key,
+        icon: c.icon,
+        empty: !!c.empty,
+        aura: c.aura || '',
+        skill: c.id ? byId[c.id] : null,
+      }));
+    } else {
+      const extras = ['buff_power', 'buff_shield', 'buff_haste', 'buff_regen', `class_${active.id}`];
+      cells = [];
+      live.slice(0, 4).forEach((s) => cells.push({ skill: s, icon: SKILL_ICON[s.id], key: s.key }));
+      while (cells.length < 4) cells.push({ key: String(cells.length + 1) });
+      extras.forEach((icon, i) => cells.push({
+        icon,
+        key: EXTRA_KEYS[i],
+        aura: icon.startsWith('buff_') || icon.startsWith('debuff_') ? icon : '',
+      }));
+      cells.push({ key: 'T', empty: true });
+    }
     skillsEl.dataset.mode = 'live';
     skillsEl.dataset.klass = active.id;
     skillsEl.innerHTML = cells.map((c) => `
@@ -272,33 +297,6 @@ export function createHud() {
     });
   }
   paintSkills(active.skills);
-  function paintShowcase() {
-    const slash = '<svg viewBox="0 0 50 50"><path d="M10 38 L36 12" stroke="#f4e2b0" stroke-width="4" fill="none" stroke-linecap="round"/><path d="M30 12 h10 v8" stroke="#e8b64a" stroke-width="3" fill="none"/></svg>';
-    const triple = '<svg viewBox="0 0 50 50"><path d="M12 36 L34 14 M16 40 L38 18 M20 44 L42 22" stroke="#d7e4f2" stroke-width="3" fill="none" stroke-linecap="round"/></svg>';
-    const star = '<svg viewBox="0 0 50 50"><path d="M25 8 L29 20 H42 L32 28 L36 40 L25 32 L14 40 L18 28 L8 20 H21 Z" fill="#f0c45a"/></svg>';
-    const cross = '<svg viewBox="0 0 50 50"><rect x="20" y="8" width="10" height="34" rx="2" fill="#f4e7b8"/><rect x="8" y="20" width="34" height="10" rx="2" fill="#f4e7b8"/></svg>';
-    const cells = [
-      { key: '1', skill: 'slash', img: '/dungeon/hud/icons/warrior_attack.png' },
-      { key: '2', skill: 'charge', svg: slash },
-      { key: '3', skill: 'shout', img: '/dungeon/hud/icons/warrior_skill1.png' },
-      { key: '4', skill: 'spin', img: '/dungeon/hud/icons/warrior_skill2.png' },
-      { key: 'Q', aura: 'buff_power', img: '/dungeon/hud/icons/warrior_cast.png' },
-      { key: 'E', aura: 'buff_shield', img: '/dungeon/hud/icons/buff_shield.png' },
-      { key: 'R', skill: 'daggers', svg: triple },
-      { key: 'F', aura: 'buff_haste', svg: star },
-      { key: 'G', skill: 'heal', svg: cross },
-      { key: 'T', empty: true },
-    ];
-    skillsEl.dataset.mode = 'show';
-    skillsEl.innerHTML = cells.map((c) => `
-      <button type="button" class="c-slot${c.empty ? ' is-empty' : ''}" ${c.skill ? `data-skill="${c.skill}"` : ''} ${c.aura ? `data-aura="${c.aura}" data-remain="8"` : ''}>
-        ${c.img ? `<img src="${c.img}" alt="" />` : (c.svg || '')}
-        <span class="sweep" style="--p:0"></span>
-        <b class="key">${c.key}</b>
-        <b class="cd"></b>
-      </button>
-    `).join('');
-  }
   const tip = root.querySelector('[data-tip]');
   let tipTimer = 0;
   function tipHtmlSkill(s, cls) {

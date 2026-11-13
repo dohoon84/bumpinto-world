@@ -1,6 +1,5 @@
 import * as THREE from 'three';
 import { createAvatar, animateAvatar } from '../entities/avatar.js';
-import { sanitizeLook } from '../look.js';
 import { createArena } from './arena.js';
 import { cloneAnimated, ghostOf, setGhostOpacity } from './models/kit.js';
 import { createClassModel } from './models/index.js';
@@ -14,11 +13,11 @@ import { createVfx } from './vfx.js';
 import { createCity } from './city.js';
 import { createEnvKit } from './envkit.js';
 import { createFlames } from './flames.js';
-import { renderClassPortrait } from './portrait.js';
+import { clearPortraitCache, renderClassPortrait } from './portrait.js';
+import { mountPlayerFace, readPlayerLook, writePlayerLook } from './playerFace.js';
 import { attachTrails, updateTrails } from './trails.js';
 import { createRaidRoom, mountRaidChat } from './chat.js';
 import { virtualPad } from '../input.js';
-import { CITIZEN_LOOK } from './look.js';
 import {
   PATH_YAW, BOSS_ALONG, spawnPoint, safePoint, bossPoint, clampArena, pushOutOfBoss, fromFrame,
 } from './layout.js';
@@ -117,7 +116,7 @@ const flames = createFlames(scene);
 flames.addAnchors(env.fireAnchors || []);
 vfx.bindFlames(flames);
 const audio = createRaidAudio();
-const look = sanitizeLook(CITIZEN_LOOK);
+const look = readPlayerLook();
 
 const actor = new THREE.Group();
 const spawn = spawnPoint();
@@ -134,6 +133,7 @@ for (const id of CLASS_IDS) {
   const yaw = Number(params.get(`${id}Yaw`) || (id === 'warrior' ? params.get('warriorYaw') : 0) || 0);
   packs[id] = await createClassModel(id, { look, glbUrl, yaw });
   packs[id].group.userData.classId = id;
+  if (packs[id].source === 'glb') mountPlayerFace(packs[id].group, look, id);
   const mark = CLASS_MARKS[id];
   if (packs[id].source === 'glb' && mark) {
     const fit = CITIZEN_HEIGHT / mark.height;
@@ -1449,8 +1449,29 @@ if (shot === 'alert' || shot === 'cutscene') {
 }
 
 if (shot === 'transform') {
-  poseGhost(0.55);
-  vfx.carapaceBurst(actor.position, getClass(classId).seam);
+  citizen.visible = false;
+  form.group.visible = true;
+  if (ghost) ghost.visible = false;
+  form.animate(form.group, 0.2, { speed: 0, phase: 'calm' });
+  form.group.updateMatrixWorld(true);
+  const faceMesh = form.group.getObjectByName('player-face-mesh');
+  const facePos = new THREE.Vector3();
+  if (faceMesh) faceMesh.getWorldPosition(facePos);
+  else facePos.set(actor.position.x, (form.group.userData.headY || 1.25) + 0.16, actor.position.z);
+  const forward = new THREE.Vector3(0, 0, 1);
+  if (faceMesh) forward.applyQuaternion(faceMesh.getWorldQuaternion(new THREE.Quaternion())).normalize();
+  const dist = 1.85;
+  camLock = {
+    px: facePos.x + forward.x * dist,
+    py: facePos.y + 0.06,
+    pz: facePos.z + forward.z * dist,
+    tx: facePos.x,
+    ty: facePos.y - 0.02,
+    tz: facePos.z,
+  };
+  bloomOn = false;
+  hud.setMode('fight');
+  arena.setMood('rift', true);
   simPaused = true;
 }
 if (shot === 'form') {
@@ -1827,6 +1848,16 @@ window.__raid = {
       for (const id of CLASS_IDS) out[id] = renderClassPortrait(renderer, packs[id].group, id);
       return out;
     },
+    setLook(raw) {
+      const next = writePlayerLook(raw);
+      clearPortraitCache();
+      for (const id of CLASS_IDS) {
+        if (packs[id].source === 'glb') mountPlayerFace(packs[id].group, next, id);
+      }
+      refreshPortrait(classId);
+      return next;
+    },
+    playerLook() { return form?.group?.userData?.playerLook || null; },
     report() {
       const rows = party.map((a) => ({
         class: a.classId,
