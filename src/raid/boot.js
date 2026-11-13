@@ -272,31 +272,37 @@ function placeSprite(g, sprite, sx, sy, dist) {
   markWorld.copy(camera.position).addScaledVector(markDir, dist);
   sprite.position.set(markWorld.x - g.position.x, markWorld.y - g.position.y, markWorld.z - g.position.z);
 }
-function resolveNameplates(items, h) {
-  const gap = 6;
-  const top = 102;
-  const bottom = h - 188;
+function resolveNameplates(items) {
+  const gap = 4;
+  const maxOff = 40;
   items.sort((a, b) => a.dist - b.dist);
   const overlaps = (a, b) => Math.abs(a.sx - b.sx) < (a.gw + b.gw) / 2
     && Math.abs(a.sy - b.sy) < (a.gh + b.gh) / 2;
   for (let i = 0; i < items.length; i++) {
     const a = items[i];
-    for (let pass = 0; pass < 8; pass++) {
+    if (a.g.userData.kind === 'player') {
+      a.hidden = true;
+      continue;
+    }
+    for (let pass = 0; pass < 6; pass++) {
       let moved = false;
       for (let j = 0; j < i; j++) {
         const b = items[j];
         if (b.hidden || !overlaps(a, b)) continue;
         const up = b.sy - b.gh / 2 - gap - a.gh / 2;
         const down = b.sy + b.gh / 2 + gap + a.gh / 2;
-        const upOk = up - a.gh / 2 >= top;
-        const downOk = down + a.gh / 2 <= bottom;
-        if (upOk) a.sy = up;
-        else if (downOk) a.sy = down;
-        else { a.hidden = true; break; }
-        moved = true;
+        const pick = Math.abs(up - a.baseSy) <= Math.abs(down - a.baseSy) ? up : down;
+        if (Math.abs(pick - a.baseSy) <= maxOff) {
+          a.sy = pick;
+          moved = true;
+        } else {
+          a.hidden = true;
+          break;
+        }
       }
       if (a.hidden || !moved) break;
     }
+    if (Math.abs(a.sy - a.baseSy) > maxOff) a.hidden = true;
   }
 }
 function syncMarks() {
@@ -331,16 +337,10 @@ function syncMarks() {
       continue;
     }
     items.push({
-      g, sprite, dist: proj.dist, sx: proj.sx, sy: proj.sy, gw, gh, hidden: false,
+      g, sprite, dist: proj.dist, sx: proj.sx, sy: proj.sy, baseSy: proj.sy, gw, gh, hidden: false,
     });
   }
-  const hudTop = 102;
-  const hudBot = h - 188;
-  for (const box of items) {
-    if (box.sy - box.gh / 2 < hudTop) box.sy = hudTop + box.gh / 2 + 4;
-    if (box.sy + box.gh / 2 > hudBot) box.sy = hudBot - box.gh / 2 - 4;
-  }
-  resolveNameplates(items, h);
+  resolveNameplates(items);
   for (const box of items) {
     if (box.hidden) {
       box.g.visible = false;
@@ -353,6 +353,7 @@ function syncMarks() {
       y: box.sy - box.gh / 2,
       w: box.gw,
       h: box.gh,
+      off: Math.round(box.sy - box.baseSy),
     };
   }
 }
@@ -937,6 +938,14 @@ function useSkill(id, fromAuto = false) {
   }
 }
 
+function aimFightCamera() {
+  if (portrait || camLock || shotLookY != null) return;
+  const b = boss.group.position;
+  camYaw = Math.atan2(b.x - actor.position.x, b.z - actor.position.z);
+  camPitch = 46 * Math.PI / 180;
+  camDist = 32;
+}
+
 function beginRaid(id) {
   if (phase === 'fight' || phase === 'intro') return;
   const fresh = phase === 'peace' || phase === 'victory' || phase === 'defeat';
@@ -966,6 +975,7 @@ function beginRaid(id) {
     hud.hideVictory();
   }
   layoutParty(id);
+  aimFightCamera();
   introStart = performance.now();
   introT = 0;
   burstDone = false;
@@ -1037,6 +1047,7 @@ function finishIntro() {
   form.group.scale.setScalar(restScale());
   ghost.visible = false;
   phase = 'fight';
+  aimFightCamera();
   hud.setMode('fight');
   for (const a of party) a.mesh.visible = true;
   if (shot === 'form') return;
@@ -1192,10 +1203,10 @@ function frame() {
   const lz = Math.cos(lookYaw);
   const cp = Math.cos(pitch);
   camera.position.set(focus.x - lx * dist * cp, focus.y + dist * Math.sin(pitch), focus.z - lz * dist * cp);
-  const bossView = phase === 'fight' && shotLookY == null && !portrait;
-  const aim = shotAim != null ? shotAim : shot === 'wide' ? 1.5 : portrait ? 0.1 : bossView ? 12 : 6;
+  const bossView = (phase === 'fight' || phase === 'intro') && shotLookY == null && !portrait && !camLock;
+  const aim = shotAim != null ? shotAim : shot === 'wide' ? 1.5 : portrait ? 0.1 : bossView ? 18 : 6;
   const head = form?.group?.userData?.headY;
-  const lookY = shotLookY != null ? shotLookY : shot === 'wide' ? 1.15 : portrait ? (head || 1.1) : bossView ? 5 : 0.2;
+  const lookY = shotLookY != null ? shotLookY : shot === 'wide' ? 1.15 : portrait ? (head || 1.1) : bossView ? 7 : 0.2;
   camera.lookAt(focus.x + lx * aim, lookY, focus.z + lz * aim);
   if (camLock) {
     camera.position.set(camLock.px, camLock.py, camLock.pz);

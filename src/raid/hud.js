@@ -501,6 +501,7 @@ export function createHud() {
   function tickFloats(dt, camera) {
     const w = innerWidth;
     const h = innerHeight;
+    const placed = [];
     for (let i = floats.length - 1; i >= 0; i--) {
       const f = floats[i];
       f.life -= dt;
@@ -511,15 +512,23 @@ export function createHud() {
         continue;
       }
       const v = f.pos.clone().project(camera);
-      const x = (v.x * 0.5 + 0.5) * w;
-      const y = (-v.y * 0.5 + 0.5) * h + f.y;
+      let x = (v.x * 0.5 + 0.5) * w + (f.x || 0) + (f.ox || 0);
+      let y = (-v.y * 0.5 + 0.5) * h + f.y + (f.oy || 0);
+      const mine = f.kind === 'crit' ? { w: 168, h: 72 } : { w: 64, h: 30 };
+      for (const p of placed) {
+        if (Math.abs(x - p.x) < (mine.w + p.w) / 2 && Math.abs(y - p.y) < (mine.h + p.h) / 2) {
+          f.oy = (f.oy || 0) - 34;
+          y -= 34;
+        }
+      }
+      placed.push({ x, y, w: mine.w, h: mine.h });
       f.el.style.left = `${x}px`;
       f.el.style.top = `${y}px`;
       f.el.style.opacity = String(Math.max(0, f.life / 0.35));
       let scale = 1;
       if (f.kind === 'crit') {
-        const u = Math.min(1, (1.05 - f.life) / 0.22);
-        scale = 0.65 + Math.sin(u * Math.PI) * 0.6;
+        const u = Math.min(1, (1.15 - f.life) / 0.28);
+        scale = 1.05 + Math.sin(u * Math.PI) * 0.45;
       }
       f.el.style.transform = `translate(-50%, -50%) scale(${scale})`;
     }
@@ -690,12 +699,44 @@ export function createHud() {
       bannerT = sec;
     },
     float(pos, text, kind) {
+      const numeric = typeof text === 'number' || /^-?\d+$/.test(String(text));
+      const amount = numeric ? Number(text) : 0;
+      const key = `${Math.round(pos.x / 1.5)}:${Math.round(pos.z / 1.5)}:${kind === 'heal' ? 'heal' : 'hit'}`;
+      const now = performance.now();
+      if (numeric) {
+        const prev = floats.find((f) => f.key === key && now - f.born < 140 && f.life > 0.35);
+        if (prev) {
+          prev.total += amount;
+          prev.born = now;
+          prev.life = Math.max(prev.life, prev.kind === 'crit' ? 0.95 : 0.75);
+          if (kind === 'crit') prev.kind = 'crit';
+          prev.el.className = `float ${prev.kind}`;
+          prev.el.innerHTML = prev.kind === 'crit' ? `${prev.total}<small>CRITICAL</small>` : String(prev.total);
+          return;
+        }
+      }
+      while (floats.length >= 12) {
+        const old = floats.shift();
+        old?.el.remove();
+      }
+      const siblings = floats.filter((f) => f.key === key).length;
       const el = document.createElement('div');
-      el.className = `float ${kind || 'dmg'}`;
-      if (kind === 'crit') el.innerHTML = `${text}<small>CRITICAL</small>`;
-      else       el.textContent = String(text);
+      const shown = kind || 'dmg';
+      el.className = `float ${shown}`;
+      if (shown === 'crit') el.innerHTML = `${text}<small>CRITICAL</small>`;
+      else el.textContent = String(text);
       root.querySelector('[data-floats]').appendChild(el);
-      floats.push({ el, pos: pos.clone(), life: kind === 'crit' ? 1.05 : 0.85, y: 0, kind });
+      floats.push({
+        el,
+        pos: pos.clone(),
+        life: shown === 'crit' ? 1.15 : 0.9,
+        y: -siblings * 34,
+        x: (Math.random() - 0.5) * 72,
+        kind: shown,
+        key,
+        total: amount,
+        born: now,
+      });
     },
     showResult(kind = 'victory') {
       const card = root.querySelector('[data-victory]');

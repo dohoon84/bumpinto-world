@@ -168,7 +168,7 @@
   pointer-events: none;
 }
 #bw-raid .float.dmg { color: #fff; font-size: 18px; }
-#bw-raid .float.crit { color: #ffe14a; font-size: 30px; text-align: center; line-height: 1; }
+#bw-raid .float.crit { color: #ffe14a; font-size: 42px; text-align: center; line-height: 1; }
 #bw-raid .float.crit small { display: block; font-size: 11px; letter-spacing: 0.12em; }
 #bw-raid .float.heal { color: #7dffa8; font-size: 18px; }
 #bw-raid .float.hurt { color: #ff6b6b; font-size: 18px; }
