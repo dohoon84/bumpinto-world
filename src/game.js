@@ -3096,6 +3096,7 @@ requestAnimationFrame(frame);
 window.__jj = {
   createAvatar,
   sanitizeLook,
+  wake: () => wakeFromAfk(), // [myeongdong] 스크린샷 스크립트: 느린 렌더에서 자동 AFK(Zzz) 풀기
   perfmem: perfMem, // [perf-memory]
 ready: bootReady, region, tower, renderer, corridor, namsan: corridor?.namsan || null, hangang: corridor?.hangang || null, myeongdong: corridor?.myeongdong || null, schoolZone: corridor?.schoolZone || null, playgrounds, streetlights, pangyoLamps, migeumLamps, gangnamNight, gangnamAds, gangnamNightlife, gangnamNpc, gangnamStreet, gangnamBrt, liveBus, // [corridor] [schoolzone] [playgrounds] [streetlights] [gangnam-night] [gangnam-nightlife] [gangnam-npc] [gangnam-street] [gangnam-brt] [livebus] [namsan]
   placeCaption: (x, z) => placeCaption(x, z, placeList, corridor?.bounds?.islands), // [gangnam-night]

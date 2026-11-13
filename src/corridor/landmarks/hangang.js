@@ -80,6 +80,7 @@ function finishHangang({ scene, overlay, terrain, dem, osm, hap, foreign, root, 
       getPos: () => new THREE.Vector3(jamsuC.x, bridges.jamsuY(jamsuC.x, jamsuC.z) + 6, jamsuC.z),
       maxDist: 9000,
       minDist: 40,
+      visibleIf: () => root.visible, // [myeongdong] 한강이 쉬는 동안 이름표도 숨김
     });
     const banpoC = osm?.banpo?.outline?.pts ? centroid(osm.banpo.outline.pts) : jamsuC;
     overlay.add({
@@ -88,6 +89,7 @@ function finishHangang({ scene, overlay, terrain, dem, osm, hap, foreign, root, 
       getPos: () => new THREE.Vector3(banpoC.x, bridges.banpoY(banpoC.x, banpoC.z) + 8, banpoC.z),
       maxDist: 9000,
       minDist: 80,
+      visibleIf: () => root.visible, // [myeongdong] 한강이 쉬는 동안 이름표도 숨김
     });
     const parkC = osm?.park?.ring?.pts ? centroid(osm.park.ring.pts) : { x: spawn.x - 200, z: spawn.z + 80 };
     overlay.add({
@@ -96,6 +98,7 @@ function finishHangang({ scene, overlay, terrain, dem, osm, hap, foreign, root, 
       getPos: () => new THREE.Vector3(parkC.x, (land.heightAt(parkC.x, parkC.z) ?? land.waterY) + 8, parkC.z),
       maxDist: 8000,
       minDist: 40,
+      visibleIf: () => root.visible, // [myeongdong] 한강이 쉬는 동안 이름표도 숨김
     });
   }
 

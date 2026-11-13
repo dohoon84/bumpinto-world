@@ -714,6 +714,7 @@ async function finishHangangHapAsync({ parent, overlay, terrain, dem, osm, forei
 }
 
 function finishHangangHapApi({ overlay, osm, root, land, paths, city, bridges, underpasses, props, ownRect, owns, ownHeightAt }) {
+  const rootShown = () => { for (let o = root; o; o = o.parent) if (!o.visible) return false; return true; }; // [myeongdong]
   if (overlay) {
     const hap = osm?.spawns?.['tancheon-hap'] || osm?.connectEnds?.tancheonHap;
     if (hap) {
@@ -723,6 +724,7 @@ function finishHangangHapApi({ overlay, osm, root, land, paths, city, bridges, u
         getPos: () => new THREE.Vector3(hap.x, (land.heightAt(hap.x, hap.z) ?? land.waterY) + 10, hap.z),
         maxDist: 9000,
         minDist: 50,
+        visibleIf: rootShown, // [myeongdong] 한강이 쉬는 동안 이름표도 숨김
       });
     }
     const jam = (osm?.parks || []).find((p) => p.name === '잠원한강공원');
@@ -734,6 +736,7 @@ function finishHangangHapApi({ overlay, osm, root, land, paths, city, bridges, u
         getPos: () => new THREE.Vector3(c.x, (land.heightAt(c.x, c.z) ?? land.waterY) + 8, c.z),
         maxDist: 8000,
         minDist: 40,
+        visibleIf: rootShown, // [myeongdong] 한강이 쉬는 동안 이름표도 숨김
       });
     }
     for (const br of bridges.infos) {
@@ -743,6 +746,7 @@ function finishHangangHapApi({ overlay, osm, root, land, paths, city, bridges, u
         getPos: () => new THREE.Vector3(br.x, br.y + 8, br.z),
         maxDist: 8000,
         minDist: 80,
+        visibleIf: rootShown, // [myeongdong] 한강이 쉬는 동안 이름표도 숨김
       });
     }
   }

@@ -77,6 +77,7 @@ for (const v of VIEWS) {
     return { by: window.__MD_BREAKDOWN ? Object.fromEntries(Object.entries(by).sort((a, b) => b[1] - a[1]).slice(0, 30)) : undefined, draws: info.render.calls, tris: info.render.triangles, geos: info.memory.geometries, tex: info.memory.textures, heapMB: performance.memory ? +(performance.memory.usedJSHeapSize / 1048576).toFixed(1) : null, fpsSw: +(n / ((performance.now() - t0) / 1000)).toFixed(1) };
   });
   res.views[v.name] = { ...info, ...m };
+  await page.evaluate(() => window.__jj.wake?.()); await page.waitForTimeout(1500); // 느린 swiftshader 에서 쌓인 자동 AFK(Zzz) 풀기
   await page.screenshot({ path: `${OUT}/${W}x${H}-h${HOUR}-${v.name}.png` });
   console.log(v.name, JSON.stringify(res.views[v.name]));
 }
