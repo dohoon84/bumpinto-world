@@ -19,7 +19,7 @@ function floorCanvas() {
   const c = document.createElement('canvas'); c.width = c.height = 512; const g = c.getContext('2d');
   let s = 77; const r = () => ((s = (s * 16807) % 2147483647) / 2147483647);
   for (let j = 0; j < 4; j++) for (let i = 0; i < 4; i++) {
-    const dark = (i + j) % 2; g.fillStyle = dark ? `hsl(20,10%,${30 + r() * 5}%)` : `hsl(38,18%,${78 + r() * 6}%)`; g.fillRect(i * 128, j * 128, 128, 128);
+    const dark = (i + j) % 2; g.fillStyle = dark ? `hsl(22,14%,${44 + r() * 5}%)` : `hsl(36,20%,${72 + r() * 5}%)`; g.fillRect(i * 128, j * 128, 128, 128);
     for (let k = 0; k < 90; k++) { g.strokeStyle = `rgba(${dark ? '255,255,255' : '90,70,60'},${0.04 + r() * 0.05})`; g.lineWidth = 1; g.beginPath(); const x = i * 128 + r() * 128, y = j * 128 + r() * 128; g.moveTo(x, y); g.lineTo(x + (r() - 0.5) * 40, y + (r() - 0.5) * 40); g.stroke(); }
   }
   g.strokeStyle = 'rgba(40,30,25,.5)'; g.lineWidth = 2; for (let k = 0; k <= 512; k += 128) { g.beginPath(); g.moveTo(k, 0); g.lineTo(k, 512); g.stroke(); g.beginPath(); g.moveTo(0, k); g.lineTo(512, k); g.stroke(); }
@@ -179,7 +179,7 @@ export function createCathedralInterior({ parent, L, glassTex, atlas }) {
     const dcell = (name, k = 0) => { const [x, y, w, h] = DC[name]; const x0 = x + k * w; return [x0 / DW_, 1 - (y + h) / DH_, (x0 + w) / DW_, 1 - y / DH_]; };
 
     // ================= 바닥 =================
-    const floorQ = (u0, u1, v0, v1, y = 0) => fl.quad(P(u0, v0, y), P(u1, v0, y), P(u1, v1, y), P(u0, v1, y), [u0 / 2, v0 / 2, u1 / 2, v1 / 2]);
+    const floorQ = (u0, u1, v0, v1, y = 0) => fl.quad(P(u0, v0, y), P(u1, v0, y), P(u1, v1, y), P(u0, v1, y), [u0 / 3.2, v0 / 3.2, u1 / 3.2, v1 / 3.2]);
     // GeoBuf.quad uv: a(u0,v0) b(u1,v0) … — 바닥 무늬 2 m 칸
     floorQ(uC + 1.2, uE + 0.6, -IHW, IHW);
     floorQ(uC, uC + 1.2, -IHW, -nI); floorQ(uC, uC + 1.2, nI, IHW);
@@ -469,7 +469,7 @@ export function createCathedralInterior({ parent, L, glassTex, atlas }) {
     const glassTint = new THREE.Color(1, 1, 1);
     mats = {
       st: new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.DoubleSide }),
-      fl: new THREE.MeshBasicMaterial({ map: tex(floorCanvas(), true) }),
+      fl: new THREE.MeshBasicMaterial({ map: tex(floorCanvas(), true), side: THREE.DoubleSide }), // 바닥 감김 방향이 축(u,v) 손잡이에 따라 뒤집혀 컬링되던 것(하얗게 뚫려 보임)
       pew: new THREE.MeshBasicMaterial({ vertexColors: true }),
       gl: new THREE.MeshBasicMaterial({ map: glassTex, alphaTest: 0.5, toneMapped: false, color: glassTint, side: THREE.DoubleSide }),
       dc: new THREE.MeshBasicMaterial({ map: tex(decorCanvas()), side: THREE.DoubleSide }),
