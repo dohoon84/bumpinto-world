@@ -1,6 +1,7 @@
 // [myeongdong] 명동 거리 꾸밈: 1층 쇼윈도 + 간판(가로·세로 돌출) + 네온 띠 + 밤 빛 번짐, 가운데 노점 행렬, 가로등, 골목 위 전구 줄, 사람.
 //   draw: 간판/쇼윈도/노점메뉴 1 · 빛 번짐 1 · 노점 몸체 1 + 차양 1 · 가로등 1 · 빛 점 2 · 전선 1 · 사람 2 = 10 남짓
 import * as THREE from 'three';
+import { createMyeongdongNpc } from './myeongdongNpc.js'; // [myeongdong-npc]
 import { GeoBuf, hex3, CellGrid, distToSeg, mulberry, hash01, pointInRing } from './myeongdongGeo.js';
 import { SHOP_SIGNS, V_SIGNS, STALL_MENUS, SIGN_TYPES, X_BANNERS } from './myeongdongAtlas.js';
 import { stallFoodKinds } from './myeongdongFood.js';
@@ -62,21 +63,6 @@ function along(pts, cum, s) {
   const a = pts[i - 1], b = pts[i], seg = cum[i] - cum[i - 1] || 1, t = Math.max(0, Math.min(1, (s - cum[i - 1]) / seg));
   const tx = (b[0] - a[0]) / seg, tz = (b[1] - a[1]) / seg;
   return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, tx, tz];
-}
-
-function personGeos() {
-  const body = new GeoBuf({ uv: false, color: true });
-  body.box(0, 0.42, 0, 0.3, 0.84, 0.2, 0, undefined, [0.32, 0.32, 0.36]); // 다리
-  body.box(0, 1.15, 0, 0.44, 0.62, 0.26, 0, undefined, [1, 1, 1]);       // 몸통(옷색 = instanceColor)
-  body.box(0.27, 1.05, 0, 0.1, 0.55, 0.12, 0, undefined, [1, 1, 1]);      // 팔
-  body.box(-0.27, 1.05, 0, 0.1, 0.55, 0.12, 0, undefined, [1, 1, 1]);
-  const head = new GeoBuf({ uv: false, color: true });
-  const sg = new THREE.SphereGeometry(0.13, 8, 6);
-  const p = sg.attributes.position.array, n = sg.attributes.normal.array;
-  const pos = []; for (let i = 0; i < p.length; i += 3) pos.push(p[i], p[i + 1] + 1.6, p[i + 2]);
-  head.raw(pos, Array.from(sg.index.array), Array.from(n), null, (k) => (p[k * 3 + 1] > 0.05 ? [0.12, 0.09, 0.07] : [0.93, 0.76, 0.62]));
-  sg.dispose();
-  return { body: body.build(), head: head.build() };
 }
 
 export async function createMyeongdongStreet({ parent, data, land, atlas, ways, blds, roadAt, bldAt, station, tick }) {
@@ -490,67 +476,17 @@ export async function createMyeongdongStreet({ parent, data, land, atlas, ways, 
   for (const p of paths) { p.cum = [0]; for (let i = 1; i < p.pts.length; i++) p.cum.push(p.cum[i - 1] + Math.hypot(p.pts[i][0] - p.pts[i - 1][0], p.pts[i][1] - p.pts[i - 1][1])); p.L = p.cum[p.cum.length - 1]; }
   const totalW = paths.reduce((s, p) => s + p.weight, 0);
   const mobile = typeof window !== 'undefined' && (window.matchMedia?.('(pointer: coarse)').matches || /mobile/i.test(location.search));
-  const NP = paths.length ? (mobile ? 170 : 320) : 0;
-  const peds = [];
-  for (let i = 0; i < NP; i++) {
-    let r = rnd() * totalW, p = paths[0];
-    for (const q of paths) { r -= q.weight; if (r <= 0) { p = q; break; } }
-    let lat = (rnd() * 2 - 1) * Math.max(0.2, p.w / 2 - 0.8);
-    if (p.stall && Math.abs(lat) < 1.6) lat = Math.sign(lat || 1) * (1.6 + rnd() * Math.max(0.2, p.w / 2 - 2.2));
-    peds.push({ p, s: rnd() * p.L, dir: rnd() < 0.5 ? 1 : -1, lat, v: 0.85 + rnd() * 0.6, ph: rnd() * 6.28, stop: 0 });
-  }
-  const pg = personGeos();
-  const total = NP + vendors.length + promoters.length;
-  const bodyMat = new THREE.MeshLambertMaterial({ vertexColors: true });
-  const headMat = new THREE.MeshLambertMaterial({ vertexColors: true });
-  const pBody = new THREE.InstancedMesh(pg.body, bodyMat, Math.max(1, total));
-  const pHead = new THREE.InstancedMesh(pg.head, headMat, Math.max(1, total));
-  pBody.name = 'myeongdong-people'; pHead.name = 'myeongdong-people-heads';
-  const clothes = ['#e63946', '#f1faee', '#a8dadc', '#457b9d', '#1d3557', '#ffb703', '#2a9d8f', '#e9c46a', '#f4a261', '#ffffff', '#222222', '#b5838d', '#6d6875', '#8ecae6', '#ff006e', '#3a86ff'].map((c) => new THREE.Color(c));
-  for (let i = 0; i < total; i++) pBody.setColorAt(i, clothes[Math.floor(rnd() * clothes.length)]);
-  vendors.forEach(([x, z, ry], k) => {
-    const i = NP + k; Q.setFromAxisAngle(Y, ry); V.set(x, heightAt(x, z), z); M.compose(V, Q, S1);
-    pBody.setMatrixAt(i, M); pHead.setMatrixAt(i, M); pBody.setColorAt(i, new THREE.Color('#f8f9fa'));
-  });
-  const uniCols = ['#ff4f9a', '#13b6c9', '#2f8f5b', '#7a3cff', '#e60012'].map((c) => new THREE.Color(c));
-  promoters.forEach(([x, z, ry], k) => {
-    const i = NP + vendors.length + k; Q.setFromAxisAngle(Y, ry); V.set(x, heightAt(x, z), z); M.compose(V, Q, S1);
-    pBody.setMatrixAt(i, M); pHead.setMatrixAt(i, M); pBody.setColorAt(i, uniCols[k % uniCols.length]);
-  });
-  pBody.count = pHead.count = total;
-  if (pBody.instanceColor) pBody.instanceColor.needsUpdate = true;
-  // 넓은 경계(사람이 움직여도 컬링되지 않게)
-  const bs = new THREE.Sphere(new THREE.Vector3((land.bounds.x0 + land.bounds.x1) / 2, 10, (land.bounds.z0 + land.bounds.z1) / 2), 700);
-  pBody.boundingSphere = bs; pHead.boundingSphere = bs;
-  if (total) g.add(pBody, pHead);
-
+  // [myeongdong-npc] 게임 표준 아바타 군중 (createAvatar/animateAvatar + buildCrowd). 예전 상자 몸 사람(personGeos)은 뺐다.
+  for (const p of paths) p.weight = p.weight || p.L;
+  const npc = paths.length ? createMyeongdongNpc({ parent: g, paths, vendors, promoters, heightAt, openStalls: () => openN, mobile }) : null;
+  const NP = npc ? npc.stats.pool : 0;
   function updatePeds(dt, pp) {
-    if (!NP) return;
-    if (pp && Math.hypot(Math.max(0, land.bounds.x0 - pp.x, pp.x - land.bounds.x1), Math.max(0, land.bounds.z0 - pp.z, pp.z - land.bounds.z1)) > 700) return;
-    const d = Math.min(0.1, dt);
-    for (let i = 0; i < NP; i++) {
-      const q = peds[i];
-      if (q.stop > 0) q.stop -= d;
-      else {
-        q.s += q.dir * q.v * d;
-        if (q.s < 0) { q.s = 0; q.dir = 1; } else if (q.s > q.p.L) { q.s = q.p.L; q.dir = -1; }
-        if (rnd() < d * 0.02) q.stop = 1 + rnd() * 3; // 구경하느라 멈춤
-      }
-      q.ph += d * q.v * 7;
-      const [x, z, tx, tz] = along(q.p.pts, q.p.cum, q.s);
-      const px = x - tz * q.lat, pz = z + tx * q.lat;
-      const bob = q.stop > 0 ? 0 : Math.abs(Math.sin(q.ph)) * 0.05;
-      Q.setFromAxisAngle(Y, Math.atan2(tx * q.dir, tz * q.dir));
-      V.set(px, heightAt(px, pz) + bob, pz); M.compose(V, Q, S1);
-      pBody.setMatrixAt(i, M); pHead.setMatrixAt(i, M);
-    }
-    pBody.instanceMatrix.needsUpdate = true; pHead.instanceMatrix.needsUpdate = true;
+    if (!npc) return;
+    if (!pp || Math.hypot(Math.max(0, land.bounds.x0 - pp.x, pp.x - land.bounds.x1), Math.max(0, land.bounds.z0 - pp.z, pp.z - land.bounds.z1)) > 260) { npc.sleep(); return; }
+    npc.update(dt, pp.x, pp.z);
   }
-  updatePeds(0.016, null);
   // ---------- 노점 영업시간: 16:00–23:30 전부, 11:00–16:00 낮 노점(약 35%)만, 그 밖엔 닫음 ----------
   //   ?mdstalls=all|day|none 로 고정. 닫힌 노점은 그리지 않고(instance count · drawRange) 막지도 않는다.
-  const vendorM = vendors.map((_, k) => { const m = new THREE.Matrix4(); pBody.getMatrixAt(NP + k, m); return m; });
-  const ZERO = new THREE.Matrix4().makeScale(0, 0, 0);
   const forceStalls = typeof location !== 'undefined' ? new URLSearchParams(location.search).get('mdstalls') : null;
   let openN = stallN, hourT = 0;
   const stallModeAt = (h) => (forceStalls === 'all' || forceStalls === 'day' || forceStalls === 'none' ? forceStalls : h >= 16 && h < 23.5 ? 'all' : h >= 11 && h < 16 ? 'day' : 'none');
@@ -562,8 +498,6 @@ export async function createMyeongdongStreet({ parent, data, land, atlas, ways, 
     if (foodMesh) foodMesh.geometry.setDrawRange(0, n === stallN ? Infinity : n === stallDayN ? foodDayIdx : 0);
     if (tagMesh) tagMesh.geometry.setDrawRange(0, n === stallN ? Infinity : n === stallDayN ? tagDayIdx : 0);
     bulbGeo.setDrawRange(0, festoonBulbN + n * 3);
-    for (let k = 0; k < vendors.length; k++) pBody.setMatrixAt(NP + k, k < n ? vendorM[k] : ZERO), pHead.setMatrixAt(NP + k, k < n ? vendorM[k] : ZERO);
-    pBody.instanceMatrix.needsUpdate = true; pHead.instanceMatrix.needsUpdate = true;
   }
   const hourNow = () => { try { return gameHour(); } catch { return 20; } };
   applyStallHours(stallModeAt(hourNow()));
@@ -581,6 +515,7 @@ export async function createMyeongdongStreet({ parent, data, land, atlas, ways, 
   return {
     group: g,
     cosmeticsShops,
+    npc,
     stallSpots: stallSpots.map((s) => ({ x: +s.x.toFixed(1), z: +s.z.toFixed(1), menu: STALL_MENUS[s.menu][1], kind: s.menu, day: s.day, tx: +s.tx.toFixed(3), tz: +s.tz.toFixed(3) })),
     get stallsOpen() { return openN; },
     isBlocked,
@@ -598,14 +533,13 @@ export async function createMyeongdongStreet({ parent, data, land, atlas, ways, 
       foodGlow.value = 0.12 + v * 0.6; // 노점 전구 아래 음식
       tagMat.emissiveIntensity = 0.3 + v * 0.7; tagMat.color.setScalar(1 - v * 0.35);
       stallMat.color.setScalar(1 - v * 0.25);
-      bodyMat.color.setScalar(1 - v * 0.3); headMat.color.setScalar(1 - v * 0.3);
     },
     update(dt, pp) {
       updatePeds(dt, pp);
       hourT -= dt; if (hourT <= 0) { hourT = 2; applyStallHours(stallModeAt(hourNow())); }
     },
     shops: shopsOut,
-    stats() { return { types: typeCount, banners: nBanner, promoters: promoters.length, fronts: nFront, signs: nSign, blades: nBlade, neonBlades: nNeon, stalls: stallN, stallsDay: stallDayN, stallsOpen: openN, foodTris, lamps: lampSpots.length, bulbs: bulbs.length / 3, peds: NP, signVerts: signGeo ? signGeo.attributes.position.count : 0 }; },
+    stats() { return { types: typeCount, banners: nBanner, promoters: promoters.length, fronts: nFront, signs: nSign, blades: nBlade, neonBlades: nNeon, stalls: stallN, stallsDay: stallDayN, stallsOpen: openN, foodTris, lamps: lampSpots.length, bulbs: bulbs.length / 3, peds: NP, npc: npc ? { ...npc.stats } : null, signVerts: signGeo ? signGeo.attributes.position.count : 0 }; },
   };
 }
 
