@@ -792,7 +792,8 @@ function rebuildJeongjaWorld() {
   const next = buildWorld(worldRoot, data, region, { ...worldOpts, reuseData: true });
   world.ground = next.ground;
   world.block = next.block;
-  if (terrain) terrain.build(worldRoot, world, overlay, terrainFineBox ? { fineBox: terrainFineBox } : undefined);
+  // 계단·징검다리 이름표는 부팅 때 이미 붙어 있다 — overlay 를 넘기면 드나들 때마다 같은 이름표가 쌓인다
+  if (terrain) terrain.build(worldRoot, world, null, terrainFineBox ? { fineBox: terrainFineBox } : undefined);
   worldRoot.visible = true;
 }
 const PARK_DROP_NAMES = new Set([
