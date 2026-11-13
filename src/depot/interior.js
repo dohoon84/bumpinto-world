@@ -743,12 +743,19 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit, a
     const c = st.cart, m = CART.mass + loadKg() + (st.extraKg || 0), g = CART.g; // extraKg: 스토리 소품 무게(6일차 금빛 박스)
     const fx = -Math.sin(c.yaw), fz = -Math.cos(c.yaw), rx = Math.cos(c.yaw), rz = -Math.sin(c.yaw);
     let vl = c.vx * fx + c.vz * fz, vs = c.vx * rx + c.vz * rz;
-    const f = axes.f || 0, vmax = (axes.run ? CART.run : CART.walk) * (st.vMul || 1); // vMul: 스토리 연출(6일차 경주 ×1.6 · 손전등 끔 ×0.6)
+    const rawF = axes.f || 0;
+    const f = Math.abs(rawF) < 0.12 ? 0 : rawF; // 조이스틱·스틱 잔여 입력은 안 밀기
+    const vmax = (axes.run ? CART.run : CART.walk) * (st.vMul || 1); // vMul: 스토리 연출(6일차 경주 ×1.6 · 손전등 끔 ×0.6)
     const Fr = CART.crr * m * g;
     let F = 0;
     if (f > 0) F = (Math.abs(vl) < 0.05 ? CART.pushPeak : CART.push) * f * THREE.MathUtils.clamp((vmax - vl) / 0.35, 0, 1);
     else if (f < 0) F = vl > 0.05 ? CART.push * f : CART.push * f * THREE.MathUtils.clamp((0.8 + vl) / 0.3, 0, 1);
-    if (Math.abs(vl) < 0.02 && Math.abs(F) <= CART.breakaway * Fr) { vl = 0; } // 출발 힘을 못 넘으면 안 움직임
+    if (f === 0) {
+      // 손잡이를 잡고 안 밀면 몸으로 세움. 굴림 저항(Crr 0.03)만으로는 1.8 m/s에서 5 m 이상 미끄러짐.
+      const brakeA = 8; // m/s² → 걷기 속도에서 약 0.2 s / 0.2 m
+      if (Math.abs(vl) < 0.03) vl = 0;
+      else { const nv = vl - Math.sign(vl) * brakeA * dt; vl = Math.sign(nv) !== Math.sign(vl) ? 0 : nv; }
+    } else if (Math.abs(vl) < 0.02 && Math.abs(F) <= CART.breakaway * Fr) { vl = 0; } // 출발 힘을 못 넘으면 안 움직임
     else {
       const dir = Math.abs(vl) > 0.02 ? Math.sign(vl) : Math.sign(F);
       let a = (F - dir * Fr) / m; const nv = vl + a * dt;
