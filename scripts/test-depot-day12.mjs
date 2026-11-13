@@ -20,12 +20,12 @@ const L = Object.fromEntries(D12.map((b) => [b.id, b]));
 assert.equal(D12[0].id, 'd12_000'); assert.equal(D11.find((b) => b.cmd === 'day.end').next, 'd12_000');
 checkRefs(D12, ['d13_000']);
 assert.equal(L.d12_026.event, 'E21'); assert.equal(L.d12_026.onMissed, 'd12_048'); assert.equal(L.d12_060.cmd, 'day.end'); assert.equal(L.d12_060.next, 'd13_000');
-assert.match(idx, /12: 'E21'/); assert.match(idx, /AFTER_CO = new Set\(\[[^\]]*'E21'/); assert.match(idx, /이야기는 준비 중이에요/);
+assert.ok(/12: 'E21'/.test(idx), String(/12: 'E21'/)); assert.ok(/AFTER_CO = new Set\(\[[^\]]*'E21'/.test(idx), String(/AFTER_CO = new Set\(\[[^\]]*'E21'/)); assert.ok(/이야기는 준비 중이에요/.test(idx), String(/이야기는 준비 중이에요/));
 assert.equal(EVENTS.week2Vitality.main.E21, 8);
 for (const b of D12) if (b.stage) for (const [, at] of Object.entries(b.stage)) if (at) assert.ok(tg[at], `${b.id} ${at}`);
 checkSfx(D12, [ev.E21]);
 // 나가기(afterCheckout): 새벽 사건 중 나가면 E21 놓침 · 메모 플래그 · 12일차 끝 카드로
-assert.match(idx, /d === 12 && wasLeft\?\.kind === 'event'[^\n]*d12_015[^\n]*d12_030/); assert.match(idx, /save\.flags\.recipeClue = 1; persist\(\); runFrom\('d12_060'\)/);
+assert.ok(/d === 12 && wasLeft\?\.kind === 'event'[^\n]*d12_015[^\n]*d12_030/.test(idx), String(/d === 12 && wasLeft\?\.kind === 'event'[^\n]*d12_015[^\n]*d12_030/)); assert.ok(/save\.flags\.recipeClue = 1; persist\(\); runFrom\('d12_060'\)/.test(idx), String(/save\.flags\.recipeClue = 1; persist\(\); runFrom\('d12_060'\)/));
 assert.match(idx, /d === 12 && b \? \(b >= 'd12_015' && b < 'd12_030' \? 2/, '이어 하기: 새벽 화면');
 void EXIT;
 
@@ -33,7 +33,7 @@ void EXIT;
 const P = (r, extra = {}) => walk(L, 'd12_000', { ev: { E20: 'success', E21: r }, mission: { E21: r }, ...extra });
 const ok = P('success'), part = P('partial'), bad = P('fail'), no = P('missed', { pick: { d12_024: 2 } }), late = P('missed');
 for (const p of [ok, part, bad, no, late]) { assert.equal(p.end, 'd12_060'); assert.equal(p.set['flag.recipeClue'], 1, '메모는 결과 무관'); for (const [w, at] of Object.entries(p.stage)) assert.ok(at === null || (w === 'spy' && at === 'secret-shelf'), `stage ${w} ${at}`); } // 비밀 칸 반기철은 day.end clearStage 로 치움
-assert.match(idx, /async function endDay[\s\S]{0,600}clearStage\(\)/);
+assert.ok(/async function endDay[\s\S]{0,600}clearStage\(\)/.test(idx), String(/async function endDay[\s\S]{0,600}clearStage\(\)/));
 assert.ok(ok.seen.includes('d12_031') && ok.seen.includes('d12_003')); assert.ok(part.seen.includes('d12_033')); assert.ok(bad.seen.includes('d12_035') && bad.seen.includes('d12_036'));
 assert.ok(no.seen.includes('d12_048') && !no.seen.includes('d12_026')); assert.ok(late.seen.includes('d12_026') && late.seen.includes('d12_048')); assert.deepEqual(L.d12_048.markMissed, ['E21']);
 assert.ok(P('success', { ev: { E20: 'fail' } }).seen.includes('d12_004'));

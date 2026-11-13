@@ -456,65 +456,70 @@
   {
    "id": "stage-area",
    "label": "입구 앞 대결 무대 자리",
-   "x": 65.0,
-   "z": 15.0,
+   "x": 68.5,
+   "z": 18.0,
    "r": 0,
-   "x0": 61.0,
-   "x1": 69.0,
-   "z0": 13.5,
-   "z1": 16.5,
+   "x0": 64.5,
+   "x1": 72.5,
+   "z0": 16.5,
+   "z1": 19.5,
    "source": "제안: 입구 안쪽 flyer-zone(z 4–11) 북쪽, 통로 02(x 59.4) 동쪽. 배치 확인 필요",
    "note": "E22 칸 4개, 13~14일차 팀장·보라 조끼 stage, E23 출발선",
    "status": "NEW",
-   "addedIn": "0.9"
+   "addedIn": "0.9",
+   "moved": "개발에서 옮김: 원래 자리(x 61–69, z 13.5–16.5)는 통로 03 랙(x 61.1–63.3, z 14–41)·입구 진열대(z 13.5–14.96)와 겹침 → 진열대 바로 뒤 빈 바닥. 앞쪽 띠에서 x 63.3–65.09 틈으로 들어옴"
   },
   {
    "id": "stage-slot-1",
    "label": "무대 다리 칸 1",
-   "x": 62.5,
-   "z": 15.0,
+   "x": 65.5,
+   "z": 18.0,
    "r": 0.6,
    "headingDeg": 0,
    "source": "제안: stage-area 안, 2 m 간격",
    "note": "E22 바닥 표시(데칼). headingDeg 0 = 카트 앞이 매장 안쪽(+z)",
    "status": "NEW",
-   "addedIn": "0.9"
+   "addedIn": "0.9",
+   "moved": "개발에서 옮김(stage-area 와 함께, 2 m 간격 · z 18)"
   },
   {
    "id": "stage-slot-2",
    "label": "무대 다리 칸 2",
-   "x": 64.5,
-   "z": 15.0,
+   "x": 67.5,
+   "z": 18.0,
    "r": 0.6,
    "headingDeg": 0,
    "source": "제안",
    "note": "E22",
    "status": "NEW",
-   "addedIn": "0.9"
+   "addedIn": "0.9",
+   "moved": "개발에서 옮김(stage-area 와 함께, 2 m 간격 · z 18)"
   },
   {
    "id": "stage-slot-3",
    "label": "무대 다리 칸 3",
-   "x": 66.5,
-   "z": 15.0,
+   "x": 69.5,
+   "z": 18.0,
    "r": 0.6,
    "headingDeg": 0,
    "source": "제안",
    "note": "E22",
    "status": "NEW",
-   "addedIn": "0.9"
+   "addedIn": "0.9",
+   "moved": "개발에서 옮김(stage-area 와 함께, 2 m 간격 · z 18)"
   },
   {
    "id": "stage-slot-4",
    "label": "무대 다리 칸 4",
-   "x": 68.5,
-   "z": 15.0,
+   "x": 71.5,
+   "z": 18.0,
    "r": 0.6,
    "headingDeg": 0,
    "source": "제안",
    "note": "E22. 출입문 쪽이라 손님 NPC 동선과 겹침(의도: 마지막 칸이 제일 어려움)",
    "status": "NEW",
-   "addedIn": "0.9"
+   "addedIn": "0.9",
+   "moved": "개발에서 옮김(stage-area 와 함께, 2 m 간격 · z 18)"
   }
  ],
  "usedBy": {

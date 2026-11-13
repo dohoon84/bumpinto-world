@@ -19,10 +19,10 @@ const L = Object.fromEntries(D11.map((b) => [b.id, b]));
 assert.equal(D11[0].id, 'd11_000'); assert.equal(D10.find((b) => b.cmd === 'day.end').next, 'd11_000');
 checkRefs(D11, ['d12_000']);
 assert.equal(L.d11_017.event, 'E20'); assert.equal(L.d11_017.onMissed, 'd11_038'); assert.equal(L.d11_070.cmd, 'day.end'); assert.equal(L.d11_070.next, 'd12_000');
-assert.match(idx, /11: 'E20'/); assert.match(idx, /E20: 'cart-corral'/); assert.match(idx, /이야기는 준비 중이에요/); assert.match(idx, /11: 'beomiHired'|beomiHired/);
+assert.ok(/11: 'E20'/.test(idx), String(/11: 'E20'/)); assert.ok(/E20: 'cart-corral'/.test(idx), String(/E20: 'cart-corral'/)); assert.ok(/이야기는 준비 중이에요/.test(idx), String(/이야기는 준비 중이에요/)); assert.ok(/11: 'beomiHired'|beomiHired/.test(idx), String(/11: 'beomiHired'|beomiHired/));
 assert.equal(EVENTS.week2Vitality.main.E20, 10); assert.deepEqual(EXIT.ignoreEvent.chainMissed.d11_017, ['E20']);
 for (const b of D11) if (b.stage) for (const [, at] of Object.entries(b.stage)) if (at) assert.ok(tg[at], `${b.id} ${at}`);
-assert.ok(REACT.reactions.find((r) => r.id === 'R72')); assert.match(idx, /fire\('R72'\)/);
+assert.ok(REACT.reactions.find((r) => r.id === 'R72')); assert.ok(/fire\('R72'\)/.test(idx), String(/fire\('R72'\)/));
 checkSfx(D11, [ev.E20]);
 for (let k = 1; k <= 5; k++) { const t = tg[`cart-stray-${k}`]; assert.ok(t, `cart-stray-${k}`); const r = strayRect({ x: t.x, z: t.z, yaw: strayYaw(t) }); for (const o of FRONT_OBS) assert.ok(!overlap(r, o), `stray ${k} 겹침 ${JSON.stringify(o)}`); }
 
