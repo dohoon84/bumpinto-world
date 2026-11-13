@@ -22,6 +22,8 @@ DATUM = 48.0
 BOUNDS = {'x0': -11420.0, 'z0': -22080.0, 'x1': -10530.0, 'z1': -21300.0}
 # 명동역 → 남산오르미 → 케이블카 하부정류장 연결 띠 (남산 섬 안, 길만 그린다)
 LINK = {'x0': -11160.0, 'z0': -21300.0, 'x1': -10900.0, 'z1': -20990.0}
+# 걸을 수 없는 바깥 띠(보이기만): 땅·건물·길을 여기까지 그리고 바깥 가장자리에서 남산 도심 높이로 내려 붙인다
+APRON = {'x0': -11530.0, 'z0': -22300.0, 'x1': -10455.0, 'z1': -21300.0}
 LON0, LAT0, LON1, LAT1 = 126.9776, 37.5560, 126.9898, 37.5672
 
 
@@ -128,7 +130,7 @@ def main():
     nodes, ways, rels = fetch_osm()
     print('osm', len(nodes), len(ways), len(rels))
     P = lambda nid: xz(nodes[nid]['lat'], nodes[nid]['lon']) if nid in nodes else None
-    both = lambda p: inside(p, BOUNDS, 30) or inside(p, LINK, 30)
+    both = lambda p: inside(p, APRON, 10) or inside(p, LINK, 30)
 
     out_ways, out_bld, areas, shops, exits, lamps = [], [], [], [], [], []
     station = cathedral = oreumi = None
@@ -157,9 +159,13 @@ def main():
             if t.get('indoor') == 'yes' or t.get('level', '0').startswith('-'):
                 continue
             wd = num(t.get('width')) or ROAD_W[hw]
-            if hw in ('primary', 'trunk', 'secondary') and t.get('lanes'):
+            if hw in ('primary', 'trunk', 'secondary', 'tertiary') and t.get('oneway') == 'yes' and not t.get('width'):
+                # 분리 차로(일방 한쪽) — 양방향 기본 폭을 쓰면 두 차로가 겹쳐 보도·출구를 덮는다
+                ln = num(t.get('lanes')) or (3 if hw in ('primary', 'trunk') else 2)
+                wd = ln * 3.25 + 0.6
+            elif hw in ('primary', 'trunk', 'secondary') and t.get('lanes'):
                 ln = num(t.get('lanes')) or 0
-                wd = max(wd, ln * 3.3 + (2 if t.get('oneway') != 'yes' else 0))
+                wd = max(wd, ln * 3.3 + 2)
             o = {'id': w['id'], 'k': hw, 'w': round(wd, 1), 'pts': pts}
             if t.get('name'): o['n'] = t['name']
             if t.get('name:en'): o['ne'] = t['name:en']
@@ -220,10 +226,10 @@ def main():
 
     # DEM 12.5 m (남산 25 m 격자와 같은 원점 정렬). 남쪽 변은 남산 DEM 첫 줄과 같게 맞춘다.
     DX = 12.5
-    x0 = -11275 - math.ceil((-11275 - BOUNDS['x0']) / DX) * DX
-    z0 = -21300 - math.ceil((-21300 - BOUNDS['z0']) / DX) * DX
+    x0 = -11275 - math.ceil((-11275 - APRON['x0']) / DX) * DX
+    z0 = -21300 - math.ceil((-21300 - APRON['z0']) / DX) * DX
     zEnd = LINK['z1']
-    nx = int(math.ceil((BOUNDS['x1'] - x0) / DX)) + 1
+    nx = int(math.ceil((APRON['x1'] - x0) / DX)) + 1
     nz = int(math.ceil((zEnd - z0) / DX)) + 1
     h = terrarium_dem(x0, z0, DX, nx, nz)
     dem = {'x0': x0, 'z0': z0, 'dx': DX, 'dz': DX, 'nx': nx, 'nz': nz, 'datum': DATUM, 'h': h,
@@ -232,7 +238,7 @@ def main():
         'meta': {'center': CENTER, 'kx': KX, 'kz': KZ, 'attribution': '© OpenStreetMap contributors (ODbL)',
                  'source': f'OSM API 0.6 map bbox {LON0},{LAT0},{LON1},{LAT1} (5x5 tiles), names of shops not stored',
                  'built': time.strftime('%Y-%m-%d')},
-        'bounds': BOUNDS, 'link': LINK, 'station': station, 'exits': sorted(exits, key=lambda e: (len(e['ref'] or ''), e['ref'] or '')),
+        'bounds': BOUNDS, 'apron': APRON, 'link': LINK, 'station': station, 'exits': sorted(exits, key=lambda e: (len(e['ref'] or ''), e['ref'] or '')),
         'cathedral': cathedral, 'oreumi': oreumi, 'ways': out_ways, 'buildings': out_bld, 'areas': areas,
         'shops': shops, 'lamps': lamps, 'dem': dem,
     }
