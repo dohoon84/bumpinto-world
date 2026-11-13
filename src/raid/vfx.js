@@ -87,7 +87,7 @@ export function createVfx(scene) {
       const m = new THREE.Mesh(new THREE.SphereGeometry(0.35, 8, 6), fadeMat(color));
       m.position.set(x, y, z);
       add(m, 0.28, 0);
-      m.userData.grow = 4;
+      m.userData.grow = 7;
     },
     sparks(x, y, z, color, n = 6) {
       const count = Math.min(n, 10);

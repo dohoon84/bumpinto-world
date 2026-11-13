@@ -65,7 +65,7 @@ export function createCombat({ audio, vfx, onFloat, onBossHurt, onBind, onHealPa
     state.dealt += hit.amount;
     onFloat(bossFloatPos(), hit.amount, hit.crit ? 'crit' : 'dmg');
     onImpact?.({ amount: hit.amount, crit: hit.crit });
-    audio.playSfx('hit');
+    audio.playSfx('hit', { x: bossFloatPos().x, z: bossFloatPos().z, big: hit.crit || hit.amount > 90 });
     vfx.sparks(x, y, z, hit.crit ? '#ffe14a' : skill.color, hit.crit ? 10 : 5);
     vfx.burst(x, y, z, hit.crit ? '#ffe14a' : skill.color);
     if (skill.gain) addRes(skill.gain);
@@ -102,7 +102,7 @@ export function createCombat({ audio, vfx, onFloat, onBossHurt, onBind, onHealPa
 
   function impact(skill, x, z, yaw) {
     const y = 1.35;
-    audio.playSfx(skill.sfx || 'slash');
+    audio.playSfx(skill.sfx || 'slash', { x, z });
     flourish(skill, x, z, yaw);
     if (skill.kind === 'melee') {
       strike(skill, x, z, y);

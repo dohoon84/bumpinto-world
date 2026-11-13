@@ -266,6 +266,7 @@ export function createBoss(scene) {
     hitFlash: 0,
     slow: 0,
     vortexWait: 0,
+    stage: 1,
   };
 
   const windSpots = [
@@ -278,6 +279,31 @@ export function createBoss(scene) {
   let slamHit = false;
   let windHit = false;
   let died = false;
+  let chargeHit = false;
+  let addClock = 0;
+  const adds = [];
+  const addMat = new THREE.MeshStandardMaterial({ color: '#3a2430', emissive: '#ff3355', emissiveIntensity: 0.8, roughness: 0.45 });
+  const lane = new THREE.Mesh(
+    new THREE.PlaneGeometry(2.4, 16),
+    new THREE.MeshBasicMaterial({ color: '#ffe1a8', transparent: true, opacity: 0.42, depthWrite: false, side: THREE.DoubleSide }),
+  );
+  lane.rotation.x = -Math.PI / 2;
+  lane.visible = false;
+  scene.add(lane);
+  const charge = { ax: home.x, az: home.z, bx: home.x, bz: home.z };
+
+  function stageNow() {
+    const ratio = state.hp / state.hpMax;
+    return ratio <= 0.25 ? 3 : ratio <= 0.6 ? 2 : 1;
+  }
+
+  function spawnAdd(side) {
+    const mesh = new THREE.Mesh(new THREE.CapsuleGeometry(0.28, 0.55, 4, 8), addMat);
+    mesh.position.set(home.x + side * 2.2, 0.7, home.z + 1.4);
+    mesh.castShadow = true;
+    scene.add(mesh);
+    adds.push({ mesh, wait: 0.4 });
+  }
 
   function showCircle(mesh, x, z) {
     mesh.visible = true;
@@ -295,6 +321,8 @@ export function createBoss(scene) {
     const { fightOn, player, onPlayerHit, onWind, onSlam } = ctx;
     if (state.dead) {
       columns.forEach((c) => { c.visible = false; });
+      lane.visible = false;
+      adds.forEach((a) => { a.mesh.visible = false; });
       built.group.position.y = Math.max(-0.45, built.group.position.y - dt * 0.22);
       built.rockMat.emissiveIntensity = Math.max(0.1, built.rockMat.emissiveIntensity - dt * 0.8);
       light.intensity = Math.max(0, light.intensity - dt * 8);
@@ -319,7 +347,13 @@ export function createBoss(scene) {
       return;
     }
     if (state.slow > 0) state.slow = Math.max(0, state.slow - dt);
-    state.t += dt * (state.slow > 0 ? 0.5 : 1);
+    const nextStage = stageNow();
+    if (nextStage !== state.stage) {
+      state.stage = nextStage;
+      ctx.onStage?.(nextStage);
+    }
+    const pace = state.stage === 3 ? 1.55 : state.stage === 2 ? 1.15 : 1;
+    state.t += dt * (state.slow > 0 ? 0.5 : pace);
 
     if (state.phase === 'wait') {
       state.phase = 'idle';
@@ -328,21 +362,50 @@ export function createBoss(scene) {
       state.castName = '';
       state.cast = 0;
       state.castMax = 0;
-      if (state.t > 4.2) {
+      const gap = state.stage === 3 ? 2.1 : state.stage === 2 ? 2.8 : 4.2;
+      if (state.t > gap) {
         const f = toFrame(player.x, player.z);
         const near = Math.abs(f.along - BOSS_ALONG) < 16 && Math.abs(f.across) < 10;
-        state.phase = near ? 'slam' : 'wind';
+        const roll = Math.random();
+        let next = 'wind';
+        if (state.stage === 1) next = near ? 'slam' : 'wind';
+        else if (state.stage === 2) next = roll < 0.5 ? 'charge' : near ? 'slam' : 'wind';
+        else next = roll < 0.4 ? 'charge' : roll < 0.7 ? 'adds' : 'slam';
+        state.phase = next;
         state.t = 0;
         slamHit = false;
         windHit = false;
+        chargeHit = false;
         if (state.phase === 'slam') {
           showCircle(slam, player.x, player.z);
           onSlam?.('telegraph');
-        } else {
+        } else if (state.phase === 'wind') {
           windSpots.forEach((p, i) => showCircle(winds[i], p.x, p.z));
           state.castName = '열풍';
           state.castMax = 2.35;
           onWind?.('telegraph');
+        } else if (state.phase === 'charge') {
+          charge.ax = built.group.position.x;
+          charge.az = built.group.position.z;
+          const dx = player.x - charge.ax;
+          const dz = player.z - charge.az;
+          const len = Math.hypot(dx, dz) || 1;
+          charge.bx = charge.ax + (dx / len) * 14;
+          charge.bz = charge.az + (dz / len) * 14;
+          lane.visible = true;
+          lane.position.set((charge.ax + charge.bx) / 2, 0.16, (charge.az + charge.bz) / 2);
+          lane.rotation.z = Math.atan2(charge.bx - charge.ax, charge.bz - charge.az);
+          lane.scale.set(1, 1, 1);
+          state.castName = '돌진';
+          state.castMax = 1.25;
+          onSlam?.('telegraph');
+        } else if (state.phase === 'adds') {
+          state.castName = '소환';
+          state.castMax = 1.4;
+          onWind?.('telegraph');
+          spawnAdd(-1);
+          spawnAdd(1);
+          if (state.stage === 3) spawnAdd(0);
         }
       }
     } else if (state.phase === 'slam') {
@@ -398,6 +461,38 @@ export function createBoss(scene) {
         state.phase = 'idle';
         state.t = 1.6;
       }
+    } else if (state.phase === 'charge') {
+      state.cast = Math.min(state.castMax, state.t);
+      const k = state.t / state.castMax;
+      lane.scale.set(1, 0.2 + k * 0.8, 1);
+      if (state.t >= state.castMax && !chargeHit) {
+        chargeHit = true;
+        onSlam?.('hit');
+        const px = player.x;
+        const pz = player.z;
+        const vx = charge.bx - charge.ax;
+        const vz = charge.bz - charge.az;
+        const len2 = vx * vx + vz * vz || 1;
+        const t = Math.max(0, Math.min(1, ((px - charge.ax) * vx + (pz - charge.az) * vz) / len2));
+        const cx = charge.ax + vx * t;
+        const cz = charge.az + vz * t;
+        if ((px - cx) ** 2 + (pz - cz) ** 2 <= 1.7 * 1.7) onPlayerHit?.(36, 'charge');
+        built.group.position.set(charge.bx, 0, charge.bz);
+      }
+      if (state.t > state.castMax + 0.7) {
+        lane.visible = false;
+        state.castName = '';
+        state.phase = 'idle';
+        state.t = 0;
+        built.group.position.set(home.x, 0, home.z);
+      }
+    } else if (state.phase === 'adds') {
+      state.cast = Math.min(state.castMax, state.t);
+      if (state.t > state.castMax + 0.4) {
+        state.castName = '';
+        state.phase = 'idle';
+        state.t = 0;
+      }
     }
 
     vortexClock += dt;
@@ -421,6 +516,26 @@ export function createBoss(scene) {
       onPlayerHit?.(14, 'vortex');
     } else state.vortexWait = Math.max(0, (state.vortexWait || 0) - dt);
 
+    addClock += dt;
+    if (state.stage === 3 && addClock > 8 && adds.length < 3) {
+      addClock = 0;
+      spawnAdd(adds.length % 2 ? 1 : -1);
+    }
+    for (let i = adds.length - 1; i >= 0; i--) {
+      const add = adds[i];
+      const dx = player.x - add.mesh.position.x;
+      const dz = player.z - add.mesh.position.z;
+      const len = Math.hypot(dx, dz) || 1;
+      add.mesh.position.x += (dx / len) * dt * (state.stage === 3 ? 3.4 : 2.4);
+      add.mesh.position.z += (dz / len) * dt * (state.stage === 3 ? 3.4 : 2.4);
+      add.mesh.rotation.y = Math.atan2(dx, dz);
+      add.wait = Math.max(0, add.wait - dt);
+      if (len < 1.15 && add.wait <= 0) {
+        add.wait = 1.1;
+        onPlayerHit?.(12, 'add');
+      }
+    }
+    if (state.stage === 3) light.intensity = 26;
     light.position.set(built.group.position.x, 8.2, built.group.position.z);
   }
 
@@ -447,7 +562,11 @@ export function createBoss(scene) {
     state.castMax = 0;
     state.hitFlash = 0;
     state.slow = 0;
+    state.stage = 1;
     died = false;
+    lane.visible = false;
+    for (const add of adds) scene.remove(add.mesh);
+    adds.length = 0;
     slamHit = false;
     windHit = false;
     built.group.visible = true;

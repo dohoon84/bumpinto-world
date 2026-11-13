@@ -210,13 +210,6 @@ function fitGlb(root, targetHeight, authored) {
       o.frustumCulled = false;
     }
   });
-  // 발 y=0, 최종 키로 들어온 파일은 배율과 좌우 중심 보정을 하지 않는다.
-  // 방패·활 바운딩이 몸을 0.1–0.2m 밀어 낸다.
-  if (authored) {
-    root.scale.setScalar(1);
-    root.position.set(0, 0, 0);
-    return;
-  }
   const box = new THREE.Box3().setFromObject(root);
   const size = new THREE.Vector3();
   const center = new THREE.Vector3();
@@ -224,7 +217,9 @@ function fitGlb(root, targetHeight, authored) {
   box.getCenter(center);
   const s = targetHeight / Math.max(0.001, size.y);
   root.scale.setScalar(s);
-  root.position.set(-center.x * s, -box.min.y * s, -center.z * s);
+  // 디자이너 GLB 는 방패·활 때문에 좌우 중심을 옮기지 않는다. 키만 시민 키에 맞춘다.
+  if (authored) root.position.set(0, -box.min.y * s, 0);
+  else root.position.set(-center.x * s, -box.min.y * s, -center.z * s);
 }
 
 function unfinished(bag, name) {

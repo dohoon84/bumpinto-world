@@ -144,7 +144,11 @@ export function createHud() {
         <button type="button" class="primary" data-pick-go>이 이력으로 출동</button>
       </div>
     </div>
-    <button type="button" class="mute" data-mute>소리 켜짐</button>
+    <div class="mix">
+      <button type="button" class="mute" data-mute>소리 켜짐</button>
+      <label>음악 <input type="range" min="0" max="1" step="0.01" value="0.72" data-vol-bgm></label>
+      <label>효과 <input type="range" min="0" max="1" step="0.01" value="0.9" data-vol-sfx></label>
+    </div>
   `;
   document.body.appendChild(root);
 
@@ -282,6 +286,7 @@ export function createHud() {
     onPeace: null,
     onWorld: null,
     onMute: null,
+    onVolume: null,
     onPick: null,
     onRepick: null,
     onDeploy: null,
@@ -290,6 +295,12 @@ export function createHud() {
       root.querySelector('[data-peace]').addEventListener('click', () => this.onPeace?.());
       root.querySelector('[data-world]').addEventListener('click', () => this.onWorld?.());
       root.querySelector('[data-mute]').addEventListener('click', () => this.onMute?.());
+      const pushVol = () => this.onVolume?.({
+        bgm: Number(root.querySelector('[data-vol-bgm]').value),
+        sfx: Number(root.querySelector('[data-vol-sfx]').value),
+      });
+      root.querySelector('[data-vol-bgm]').addEventListener('input', pushVol);
+      root.querySelector('[data-vol-sfx]').addEventListener('input', pushVol);
       root.querySelector('[data-repick]').addEventListener('click', () => this.onRepick?.());
       root.querySelector('[data-pick-go]').addEventListener('click', () => this.onPick?.(picked));
       root.querySelector('[data-deploy]').addEventListener('click', () => this.onDeploy?.());

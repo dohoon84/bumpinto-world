@@ -212,10 +212,17 @@
 }
 #bw-raid .card button.primary { border: 0; background: linear-gradient(180deg, #ffe7a0, #e0b44a); color: #2a2114; }
 #bw-raid .card button.ghost { border: 1px solid rgba(255,255,255,0.2); background: transparent; color: var(--ink); }
+#bw-raid .mix {
+  position: absolute; left: 12px; bottom: 12px; z-index: 2;
+  display: flex; gap: 8px; align-items: center; pointer-events: auto;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 6px 8px;
+  font-size: 11px; font-weight: 800;
+}
+#bw-raid .mix label { display: flex; gap: 4px; align-items: center; }
+#bw-raid .mix input { width: 64px; }
 #bw-raid .mute {
-  position: absolute; left: 16px; bottom: 16px;
   pointer-events: auto; border-radius: 8px; border: 1px solid var(--line);
-  background: var(--panel); color: var(--ink); font-weight: 800; padding: 6px 10px; cursor: pointer;
+  background: transparent; color: var(--ink); font-weight: 800; padding: 6px 10px; cursor: pointer;
 }
 #bw-raid .peace-note {
   position: absolute; left: 50%; bottom: 28px; transform: translateX(-50%);

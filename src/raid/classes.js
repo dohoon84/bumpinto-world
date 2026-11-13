@@ -2,11 +2,11 @@
 // 시민 키는 발바닥(0.04)에서 짧은 머리 끝까지. createAvatar(CITIZEN_LOOK) 가시 메시 기준.
 export const CITIZEN_HEIGHT = 1.8856;
 export const CLASS_SCALE = {
-  warrior: 1.7,
-  mage: 1.65,
-  priest: 1.6,
-  archer: 1.62,
-  assassin: 1.55,
+  warrior: 1,
+  mage: 1,
+  priest: 1,
+  archer: 1,
+  assassin: 1,
 };
 // 디자이너 GLB는 이미 최종 크기. 이름표·카메라 기준은 무기 포함 전체 키가 아니라 투구 정수리.
 export const CLASS_GLB = {

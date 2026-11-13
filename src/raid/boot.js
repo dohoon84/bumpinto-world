@@ -4,7 +4,7 @@ import { sanitizeLook } from '../look.js';
 import { createArena } from './arena.js';
 import { ghostOf, setGhostOpacity } from './models/kit.js';
 import { createClassModel } from './models/index.js';
-import { CLASS_GLB, CLASS_IDS, CLASS_MARKS, getClass, normalizeClass } from './classes.js';
+import { CITIZEN_HEIGHT, CLASS_GLB, CLASS_IDS, CLASS_MARKS, getClass, normalizeClass } from './classes.js';
 import { consumeIntroReset, createRiftClock, introSeen, markIntroSeen } from './riftClock.js';
 import { createBoss } from './boss.js';
 import { createCombat } from './combat.js';
@@ -91,8 +91,9 @@ for (const id of CLASS_IDS) {
   packs[id] = await createClassModel(id, { look, glbUrl, yaw });
   const mark = CLASS_MARKS[id];
   if (packs[id].source === 'glb' && mark) {
-    packs[id].group.userData.crownY = mark.crown;
-    packs[id].group.userData.headY = mark.head;
+    const fit = CITIZEN_HEIGHT / mark.height;
+    packs[id].group.userData.crownY = mark.crown * fit;
+    packs[id].group.userData.headY = mark.head * fit;
   }
 }
 consumeIntroReset(params);
@@ -198,8 +199,9 @@ const combat = createCombat({
     }
   },
   onImpact({ amount, crit }) {
-    shake = Math.min(0.5, shake + (crit ? 0.28 : amount > 80 ? 0.16 : 0.06));
-    if (crit || amount > 90) hitStop = 0.05;
+    shake = Math.min(0.7, shake + (crit ? 0.42 : amount > 80 ? 0.26 : 0.1));
+    if (crit || amount > 80) hitStop = crit ? 0.09 : 0.06;
+    hud.flash(crit ? 0.45 : 0.22);
   },
 });
 combat.setClass(classId);
@@ -211,6 +213,9 @@ let shake = 0;
 let hitStop = 0;
 let alerted = false;
 let sirenPlayed = false;
+let stepT = 0;
+let bossStage = 1;
+const earForward = new THREE.Vector3();
 const DIALOGUE = [
   '초행: 하늘이 갈라집니다. 장판을 먼저 보세요.',
   '서린: 흰 원 밖으로, 노란 선 안으로.',
@@ -228,7 +233,7 @@ let moveSpeed = 0;
 const portrait = shot === 'transform' || shot === 'form';
 let camYaw = PATH_YAW + (portrait ? Math.PI + 0.7 : 0.35);
 let camPitch = portrait ? 0.32 : 50 * Math.PI / 180;
-let camDist = shot === 'transform' ? 6.2 : shot === 'form' ? 7.4 : 36;
+let camDist = shot === 'transform' ? 4.4 : shot === 'form' ? 4.8 : 30;
 const keys = new Set();
 let shift = false;
 let dragging = false;
@@ -329,6 +334,7 @@ hud.onPick = (id) => beginRaid(id);
 hud.onDeploy = () => beginRaid(classId);
 hud.onIntroDone = () => markIntroSeen();
 hud.onRepick = () => { if (phase === 'peace' || phase === 'alert' || phase === 'calm') hud.showPick(); };
+hud.onVolume = (vols) => audio.setVolumes(vols);
 hud.onMute = () => {
   audio.unlock();
   audio.setMuted(!audio.muted);
@@ -502,6 +508,15 @@ function frame() {
     camera.position.y += (Math.random() - 0.5) * shake * 0.4;
     shake = Math.max(0, shake - dt * 1.6);
   }
+  camera.getWorldDirection(earForward);
+  audio.setListener({
+    x: camera.position.x,
+    y: camera.position.y,
+    z: camera.position.z,
+    fx: earForward.x,
+    fy: earForward.y,
+    fz: earForward.z,
+  });
   renderFrame();
   requestAnimationFrame(frame);
 }
@@ -553,6 +568,13 @@ function step(dt) {
     if (!st.attack) actor.rotation.y = dampAngle(actor.rotation.y, Math.atan2(mx, mz), dt);
     moveSpeed = base;
   } else moveSpeed = 0;
+  if (fighting && moveSpeed > 1.2 && st.down <= 0) {
+    stepT -= dt;
+    if (stepT <= 0) {
+      stepT = moveSpeed > 6 ? 0.32 : 0.46;
+      audio.playSfx('step', { x: actor.position.x, z: actor.position.z, gain: 0.35 });
+    }
+  }
 
   if (phase !== 'peace' && !boss.state.dead) {
     const pushed = pushOutOfBoss(actor.position.x, actor.position.z);
@@ -596,11 +618,23 @@ function step(dt) {
         for (let i = 0; i < 4; i++) vfx.windStreak(actor.position.x + (i - 1.5) * 2.2, actor.position.z, PATH_YAW);
       }
     },
+    onStage(stage) {
+      bossStage = stage;
+      audio.setBossPhase(stage);
+      audio.playSfx('roar', { x: boss.group.position.x, z: boss.group.position.z, big: true });
+      shake = Math.max(shake, stage === 3 ? 0.62 : 0.36);
+      hitStop = 0.08;
+      hud.flash(0.4);
+      hud.banner(stage === 3 ? '홀드 격노' : '홀드가 속도를 올립니다');
+    },
     onSlam(kind) {
-      if (kind === 'telegraph') audio.playSfx('warn');
+      if (kind === 'telegraph') audio.playSfx('warn', { x: boss.group.position.x, z: boss.group.position.z });
       else if (kind === 'hit') {
-        audio.playSfx('slam');
-        vfx.ring(boss.group.position.x, 0.25, boss.group.position.z, '#f4fbff', 6);
+        audio.playSfx('slam', { x: boss.group.position.x, z: boss.group.position.z, big: true });
+        vfx.ring(boss.group.position.x, 0.25, boss.group.position.z, '#f4fbff', 8);
+        vfx.burst(boss.group.position.x, 1.2, boss.group.position.z, '#fff6e0');
+        shake = Math.max(shake, bossStage === 3 ? 0.55 : 0.32);
+        hitStop = Math.max(hitStop, 0.07);
       }
     },
   });
@@ -780,7 +814,7 @@ if (shot === 'form') {
   actor.rotation.y = PATH_YAW;
   camYaw = PATH_YAW + Math.PI + 0.7;
   camPitch = 0.32;
-  camDist = 7.4;
+  camDist = 4.8;
   simPaused = true;
 }
 if (shot === 'fight') {
@@ -827,6 +861,7 @@ window.__raid = {
     skipIntro() { if (phase === 'intro') finishIntro(); },
     wind() { boss.forceWind(); },
     killBoss() { boss.hurt(boss.state.hp); },
+    hurtBoss(n) { boss.hurt(n); return boss.state.hp / boss.state.hpMax; },
     down() { combat.damagePlayer(9999); },
     res(n) { combat.state.res = n; },
     peace() { enterPeace(); },
