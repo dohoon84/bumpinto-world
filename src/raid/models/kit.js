@@ -2,6 +2,7 @@
 // 각 직업 파일은 이 도우미 위에 자기 메시만 올린다. 디자이너 GLB 는 glbUrl 로 통째로 갈아끼운다.
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
+import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { getHeadGeometry, getFaceMaterial } from '../../entities/faceTexture.js';
 import { CITIZEN_HEIGHT } from '../classes.js';
 
@@ -177,7 +178,37 @@ export function applyClassScale(group, mul) {
   return group;
 }
 
-function fitGlb(root, targetHeight) {
+const glbAnim = new WeakMap();
+
+function bindClips(root, clips) {
+  const mixer = new THREE.AnimationMixer(root);
+  const actions = {};
+  for (const clip of clips) {
+    const action = mixer.clipAction(clip);
+    action.enabled = true;
+    actions[clip.name] = action;
+  }
+  const bag = { mixer, actions, clips, clip: '' };
+  glbAnim.set(root, bag);
+  return bag;
+}
+
+function fitGlb(root, targetHeight, authored) {
+  root.updateMatrixWorld(true);
+  root.traverse((o) => {
+    if (o.isMesh) {
+      o.castShadow = true;
+      o.receiveShadow = true;
+      o.frustumCulled = false;
+    }
+  });
+  // 발 y=0, 최종 키로 들어온 파일은 배율과 좌우 중심 보정을 하지 않는다.
+  // 방패·활 바운딩이 몸을 0.1–0.2m 밀어 낸다.
+  if (authored) {
+    root.scale.setScalar(1);
+    root.position.set(0, 0, 0);
+    return;
+  }
   const box = new THREE.Box3().setFromObject(root);
   const size = new THREE.Vector3();
   const center = new THREE.Vector3();
@@ -186,12 +217,51 @@ function fitGlb(root, targetHeight) {
   const s = targetHeight / Math.max(0.001, size.y);
   root.scale.setScalar(s);
   root.position.set(-center.x * s, -box.min.y * s, -center.z * s);
-  root.traverse((o) => {
-    if (o.isMesh) {
-      o.castShadow = true;
-      o.receiveShadow = true;
-    }
-  });
+}
+
+function clipName(bag, motion) {
+  if (motion?.clip && bag.actions[motion.clip]) return motion.clip;
+  if (motion?.phase === 'intro' && bag.actions.transform_in) return 'transform_in';
+  if (motion?.hit && bag.actions.hit) return 'hit';
+  if (motion?.attack && bag.actions.attack) return 'attack';
+  if (bag.clip === 'attack' && bag.actions.attack) {
+    const action = bag.actions.attack;
+    if (action.time < action.getClip().duration - 0.05) return 'attack';
+  }
+  if (bag.clip === 'hit' && bag.actions.hit && !motion?.attack) {
+    const action = bag.actions.hit;
+    if (action.time < action.getClip().duration - 0.05) return 'hit';
+  }
+  if ((motion?.speed || 0) > 0.8 && bag.actions.run) return 'run';
+  return bag.actions.idle ? 'idle' : bag.clip;
+}
+
+function playClip(bag, name) {
+  const next = bag.actions[name];
+  if (!next || bag.clip === name) return;
+  const loop = name === 'idle' || name === 'run';
+  next.reset();
+  next.setLoop(loop ? THREE.LoopRepeat : THREE.LoopOnce, loop ? Infinity : 1);
+  next.clampWhenFinished = !loop;
+  const fade = bag.clip ? 0.12 : 0;
+  next.fadeIn(fade).play();
+  const prev = bag.actions[bag.clip];
+  if (prev) prev.fadeOut(fade);
+  bag.clip = name;
+}
+
+function animateLoaded(group, dt, motion, procedural) {
+  const bag = glbAnim.get(group);
+  if (!bag) {
+    procedural(group, dt, motion);
+    return;
+  }
+  const name = clipName(bag, motion);
+  if (name) playClip(bag, name);
+  bag.mixer.update(dt);
+  const action = name ? bag.actions[name] : null;
+  group.userData.clipName = name || '';
+  group.userData.clipTime = action ? action.time : 0;
 }
 
 export async function withGlb(glbUrl, yaw, look, build, animate, heightMul = 1) {
@@ -202,12 +272,16 @@ export async function withGlb(glbUrl, yaw, look, build, animate, heightMul = 1) 
       const group = new THREE.Group();
       group.name = 'bw-class';
       const inner = gltf.scene;
-      fitGlb(inner, CITIZEN_HEIGHT * heightMul);
+      const authored = glbUrl.includes('/dungeon/chars/');
+      fitGlb(inner, CITIZEN_HEIGHT * heightMul, authored);
       if (yaw) inner.rotation.y = yaw;
       group.add(inner);
+      if (gltf.animations?.length) bindClips(group, gltf.animations);
       group.userData.heightMul = heightMul;
       group.userData.baseScale = 1;
-      return { group, animate, source: 'glb' };
+      group.userData.authored = authored;
+      const play = (g, dt, motion) => animateLoaded(g, dt, motion, animate);
+      return { group, animate: play, source: 'glb' };
     } catch (err) {
       console.warn('[raid] class GLB failed, using procedural', err);
     }
@@ -272,7 +346,9 @@ export function animateRig(group, dt, motion) {
 }
 
 export function ghostOf(group, color = '#9fd6ff') {
-  const ghost = group.clone(true);
+  const ghost = SkeletonUtils.clone(group);
+  const src = glbAnim.get(group);
+  if (src?.clips?.length) bindClips(ghost, src.clips);
   ghost.name = 'past-life';
   ghost.traverse((o) => {
     if (o.isMesh) {

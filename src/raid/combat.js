@@ -34,6 +34,7 @@ export function createCombat({ audio, vfx, onFloat, onBossHurt, onBind, onHealPa
     nextMul: 1,
     stealth: 0,
     gcd: 0,
+    hitT: 0,
     dealt: 0,
     healed: 0,
     reviveGrace: 0,
@@ -155,6 +156,7 @@ export function createCombat({ audio, vfx, onFloat, onBossHurt, onBind, onHealPa
       state.gcd = 0;
       state.dealt = 0;
       state.healed = 0;
+      state.hitT = 0;
     },
     moveMul() {
       if (state.down > 0 || state.dodgeT > 0) return 0;
@@ -199,6 +201,7 @@ export function createCombat({ audio, vfx, onFloat, onBossHurt, onBind, onHealPa
       if (state.down > 0 || state.iframe > 0 || state.reviveGrace > 0 || state.stealth > 0) return;
       const taken = cls.id === 'warrior' ? Math.round(amount * 0.88) : amount;
       state.hp = Math.max(0, state.hp - taken);
+      state.hitT = 0.6;
       if (cls.res === 'rage') addRes(10);
       audio.playSfx('hurt');
       if (state.hp <= 0) {
@@ -218,6 +221,7 @@ export function createCombat({ audio, vfx, onFloat, onBossHurt, onBind, onHealPa
       state.debuff = Math.max(0, state.debuff - dt);
       state.stealth = Math.max(0, state.stealth - dt);
       state.gcd = Math.max(0, state.gcd - dt);
+      state.hitT = Math.max(0, state.hitT - dt);
       state.reviveGrace = Math.max(0, state.reviveGrace - dt);
       if (cls.regen) addRes(cls.regen * dt);
       if (state.attack) {

@@ -8,6 +8,21 @@ export const CLASS_SCALE = {
   archer: 1.62,
   assassin: 1.55,
 };
+// 디자이너 GLB는 이미 최종 크기. 이름표·카메라 기준은 무기 포함 전체 키가 아니라 투구 정수리.
+export const CLASS_GLB = {
+  warrior: '/dungeon/chars/warrior.glb',
+  mage: '/dungeon/chars/mage.glb',
+  priest: '/dungeon/chars/priest.glb',
+  archer: '/dungeon/chars/archer.glb',
+  assassin: '/dungeon/chars/assassin.glb',
+};
+export const CLASS_MARKS = {
+  warrior: { crown: 2.9029, head: 2.5903, height: 3.2055 },
+  mage: { crown: 2.758, head: 2.461, height: 3.1112 },
+  priest: { crown: 2.7041, head: 2.4129, height: 3.017 },
+  archer: { crown: 2.9697, head: 2.4676, height: 3.0547 },
+  assassin: { crown: 2.6465, head: 2.3615, height: 2.9227 },
+};
 const lock = (key) => ({ id: 'lock' + key, name: '잠김', key, cd: 0, cost: 0, lock: 0, locked: true, kind: 'lock' });
 
 function skill(partial) {

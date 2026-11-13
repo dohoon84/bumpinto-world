@@ -4,7 +4,7 @@ import { sanitizeLook } from '../look.js';
 import { createArena } from './arena.js';
 import { ghostOf, setGhostOpacity } from './models/kit.js';
 import { createClassModel } from './models/index.js';
-import { CLASS_IDS, getClass, normalizeClass } from './classes.js';
+import { CLASS_GLB, CLASS_IDS, CLASS_MARKS, getClass, normalizeClass } from './classes.js';
 import { createBoss } from './boss.js';
 import { createCombat } from './combat.js';
 import { createHud } from './hud.js';
@@ -84,9 +84,15 @@ const citizen = createAvatar(look);
 actor.add(citizen);
 const packs = {};
 for (const id of CLASS_IDS) {
-  const glbUrl = params.get(`${id}Glb`) || (id === 'warrior' ? (params.get('warriorGlb') || '') : '');
+  const override = params.has(`${id}Glb`) ? params.get(`${id}Glb`) : null;
+  const glbUrl = override === null ? CLASS_GLB[id] : (override || '');
   const yaw = Number(params.get(`${id}Yaw`) || (id === 'warrior' ? params.get('warriorYaw') : 0) || 0);
   packs[id] = await createClassModel(id, { look, glbUrl, yaw });
+  const mark = CLASS_MARKS[id];
+  if (packs[id].source === 'glb' && mark) {
+    packs[id].group.userData.crownY = mark.crown;
+    packs[id].group.userData.headY = mark.head;
+  }
 }
 const asked = normalizeClass(params.get('class'));
 const autoStart = !!(asked || shot);
@@ -457,7 +463,8 @@ function frame() {
   const cp = Math.cos(pitch);
   camera.position.set(focus.x - lx * dist * cp, focus.y + dist * Math.sin(pitch), focus.z - lz * dist * cp);
   const aim = portrait ? 0.1 : 6;
-  const lookY = portrait ? (shot === 'form' ? 1.35 : 1.15) : 0.2;
+  const crown = form?.group?.userData?.crownY;
+  const lookY = portrait ? (shot === 'form' && crown ? crown : shot === 'form' ? 1.35 : 1.15) : 0.2;
   camera.lookAt(focus.x + lx * aim, lookY, focus.z + lz * aim);
   renderFrame();
   requestAnimationFrame(frame);
@@ -538,7 +545,10 @@ function step(dt) {
     onPlayerHit(amount) {
       const before = st.hp;
       combat.damagePlayer(amount);
-      if (st.hp < before) hud.float(asVec({ x: actor.position.x, y: 1.8, z: actor.position.z }), amount, 'hurt');
+      if (st.hp < before) {
+        const crown = form.group.userData.crownY || 1.8;
+        hud.float(asVec({ x: actor.position.x, y: crown + 0.25, z: actor.position.z }), amount, 'hurt');
+      }
     },
     onWind(kind) {
       if (kind === 'telegraph') {
@@ -583,7 +593,16 @@ function step(dt) {
     }
   }
 
-  if (form.group.visible) form.animate(form.group, dt, { speed: moveSpeed, attack: st.attack, attackT: st.attackT });
+  const motion = {
+    speed: moveSpeed,
+    attack: st.attack,
+    attackT: st.attackT,
+    hit: st.hitT > 0,
+    phase,
+    clip: phase === 'intro' ? 'transform_in' : '',
+  };
+  form.animate(form.group, dt, motion);
+  if (phase === 'intro' && ghost?.userData) form.animate(ghost, dt, motion);
   if (citizen.visible) animateAvatar(citizen, phase === 'peace' || phase === 'pick' ? moveSpeed : 0.2, dt);
   if (phase !== 'intro') {
     const base = form.group.userData.baseScale || 1;
@@ -689,6 +708,8 @@ requestAnimationFrame(frame);
 window.__raid = {
   ready: true,
   source: form.source,
+  get clip() { return form.group.userData.clipName || ''; },
+  get clipTime() { return form.group.userData.clipTime || 0; },
   get classId() { return classId; },
   get phase() { return phase; },
   get fps() { return fps; },
