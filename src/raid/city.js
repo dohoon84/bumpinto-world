@@ -178,9 +178,19 @@ export async function createCity(scene) {
   }
   const smokeGeo = new THREE.BufferGeometry();
   smokeGeo.setAttribute('position', new THREE.BufferAttribute(smokeArr, 3));
+  const smokeMap = new THREE.TextureLoader().load('/assets/vfx/thirdparty/kenney/circle_05.webp?v=tp');
+  smokeMap.colorSpace = THREE.SRGBColorSpace;
   const smoke = new THREE.Points(smokeGeo, new THREE.PointsMaterial({
-    color: '#6a5348', size: 1.4, transparent: true, opacity: 0, depthWrite: false, sizeAttenuation: true,
+    color: '#6a5348', map: smokeMap, size: 0.85, transparent: true, opacity: 0, depthWrite: false,
+    sizeAttenuation: true, alphaTest: 0.05,
   }));
+  smoke.material.onBeforeCompile = (shader) => {
+    shader.vertexShader = shader.vertexShader.replace(
+      '#include <worldpos_vertex>',
+      'gl_PointSize = min(gl_PointSize, 10.0);\n#include <worldpos_vertex>',
+    );
+  };
+  smoke.material.customProgramCacheKey = () => 'city-smoke-soft';
   smoke.frustumCulled = false;
   root.add(smoke);
   smokes.push(smoke);
@@ -224,7 +234,7 @@ export async function createCity(scene) {
     mat.uniforms.uStage.value = next;
     const show = mood > 0.2 ? Math.min(fires.length, next === 0 ? 0 : 2 + next * 2) : 0;
     fires.forEach((s, i) => { s.visible = i < show; });
-    smoke.material.opacity = mood * (0.12 + next * 0.12);
+    smoke.material.opacity = mood * (0.08 + next * 0.05);
   }
 
   return {

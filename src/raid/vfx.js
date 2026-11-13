@@ -310,6 +310,17 @@ export function createVfx(scene) {
       add(facing(`${V3}/trails/dash_trail.png`, x + fx * 2.4, 1.15, z + fz * 2.4, 5.8, 1.4, '#FF8A12', 'add'), 0.5, 0);
       add(spark(`${V3}/particles/soft_glow.png`, x + fx * 2.6, 1.2, z + fz * 2.6, 0.55, 0.55, '#FFE7A0'), 0.35, 0);
     },
+    weaponSlash(x, y, z, yaw, color = '#FFB000', count = 1, life = 0.38) {
+      const names = ['slash_01', 'slash_02', 'slash_03', 'slash_04'];
+      for (let i = 0; i < count; i++) {
+        const tex = `${TP}/kenney/${names[i % 4]}.webp`;
+        const roll = (i - (count - 1) / 2) * 0.85;
+        const size = count > 1 ? 4.6 : 6.4;
+        add(facing(tex, x, y, z, size, size, color, 'normal', roll), life, 0);
+        add(upright(tex, x, y, z, size * 0.8, size * 0.8, yaw + roll, color), life, 0);
+      }
+      add(spark(`${TP}/kenney/spark_04.webp`, x, y, z, 0.5, 0.5, '#FFE7A0'), Math.min(life, 0.22), 0);
+    },
     slam(x, z) {
       add(decal(`${V3}/contrast/ring_dark.png`, x, z, 9.5, 9.5, '#140C08'), 0.9, 0);
       add(decal(`${TP}/glow/glow-circle.webp`, x, z, 9.0, 9.0, '#FFB000'), 0.8, 0);

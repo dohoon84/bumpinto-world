@@ -232,20 +232,27 @@ function bridgeGeo() {
   return mergeGeometries(parts, false);
 }
 
-function makeRain(count) {
-  const pos = new Float32Array(count * 3);
-  for (let i = 0; i < count; i++) {
-    pos[i * 3] = (Math.random() - 0.5) * 36;
-    pos[i * 3 + 1] = Math.random() * 18;
-    pos[i * 3 + 2] = (Math.random() - 0.5) * 36;
-  }
-  const geo = new THREE.BufferGeometry();
-  geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-  const mat = new THREE.PointsMaterial({ color: '#d7ecff', size: 0.12, transparent: true, opacity: 0.7, depthWrite: false });
-  const pts = new THREE.Points(geo, mat);
-  pts.frustumCulled = false;
-  pts.userData.home = pos;
-  return pts;
+function softPoints(color, size, opacity) {
+  const map = new THREE.TextureLoader().load('/assets/vfx/thirdparty/kenney/circle_05.webp?v=tp');
+  map.colorSpace = THREE.SRGBColorSpace;
+  const mat = new THREE.PointsMaterial({
+    color,
+    map,
+    size,
+    transparent: true,
+    opacity,
+    depthWrite: false,
+    sizeAttenuation: true,
+    alphaTest: 0.05,
+  });
+  mat.onBeforeCompile = (shader) => {
+    shader.vertexShader = shader.vertexShader.replace(
+      '#include <worldpos_vertex>',
+      'gl_PointSize = min(gl_PointSize, 8.0);\n#include <worldpos_vertex>',
+    );
+  };
+  mat.customProgramCacheKey = () => 'ember-points-8';
+  return mat;
 }
 
 export function createArena(scene) {
@@ -363,7 +370,8 @@ export function createArena(scene) {
   safeFill.position.set(safe.x, 0.06, safe.z);
   root.add(safeFill);
 
-  const rain = makeRain(1400);
+  const rain = new THREE.Group();
+  rain.visible = false;
   scene.add(rain);
 
   const bossAt = bossPoint();
@@ -409,9 +417,7 @@ export function createArena(scene) {
   }
   const ashGeo = new THREE.BufferGeometry();
   ashGeo.setAttribute('position', new THREE.BufferAttribute(ashArr, 3));
-  const ash = new THREE.Points(ashGeo, new THREE.PointsMaterial({
-    color: '#ffc2a8', size: 0.14, transparent: true, opacity: 0, depthWrite: false,
-  }));
+  const ash = new THREE.Points(ashGeo, softPoints('#e4cbb8', 0.42, 0));
   ash.frustumCulled = false;
   scene.add(ash);
 
@@ -581,14 +587,14 @@ export function createArena(scene) {
         mesh.visible = riftAmt > 0.08;
         mesh.material.opacity = riftAmt * 0.85;
       });
-      const ashGoal = phaseKey === 'p3' ? 0.9 : phaseKey === 'p2' ? 0.62 : phaseKey === 'p1' ? 0.4 : riftAmt * 0.2;
+      const ashGoal = phaseKey === 'p3' ? 0.42 : phaseKey === 'p2' ? 0.3 : phaseKey === 'p1' ? 0.22 : riftAmt * 0.12;
       ash.material.opacity = ashGoal;
       if (focus && riftAmt > 0.02) {
         const arr = ash.geometry.attributes.position.array;
         for (let i = 0; i < ashCount; i++) {
-          arr[i * 3 + 1] += dt * (0.4 + (i % 5) * 0.15);
-          arr[i * 3] += Math.sin(i + performance.now() * 0.001) * dt * 0.4;
-          if (arr[i * 3 + 1] > 14) arr[i * 3 + 1] = 0.2;
+          arr[i * 3 + 1] -= dt * (0.55 + (i % 5) * 0.12);
+          arr[i * 3] += Math.sin(i + performance.now() * 0.001) * dt * 0.15;
+          if (arr[i * 3 + 1] < 0.2) arr[i * 3 + 1] = 12;
         }
         ash.geometry.attributes.position.needsUpdate = true;
         ash.position.set(focus.x, 0, focus.z);
@@ -644,20 +650,10 @@ export function createArena(scene) {
       safeFill.material.opacity = 0.16 + safePulse * 0.14;
       safeRing.material.color.set(safePulse ? '#fff1a8' : '#ffe14a');
       neon.material.color.set(mood === 'peace' ? '#8fb8c4' : LIGHTING.railLight);
-      if (rainOn) rain.material.opacity = LIGHTING.rainOpacity;
       if (focus) {
         sky.position.set(focus.x, 0, focus.z);
         dir.target.position.set(focus.x, 0, focus.z);
         dir.position.set(focus.x - 16, 26, focus.z - 8);
-        if (rainOn) {
-          const arr = rain.geometry.attributes.position.array;
-          rain.position.set(focus.x, 0, focus.z);
-          for (let i = 0; i < arr.length; i += 3) {
-            arr[i + 1] -= dt * 16;
-            if (arr[i + 1] < 0) arr[i + 1] = 16 + Math.random() * 2;
-          }
-          rain.geometry.attributes.position.needsUpdate = true;
-        }
       }
       void pulse;
     },

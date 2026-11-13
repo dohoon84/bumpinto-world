@@ -74,8 +74,16 @@ export function createCombat({ audio, vfx, onFloat, onBossHurt, onBind, onHealPa
 
   function flourish(skill, x, z, yaw) {
     const id = skill.id;
+    const b = bossPoint();
+    const dx = x - b.x;
+    const dz = z - b.z;
+    const len = Math.hypot(dx, dz) || 1;
+    const hx = b.x + (dx / len) * 8;
+    const hz = b.z + (dz / len) * 8;
     if (id === 'charge') vfx.charge(x, z, yaw);
-    else if (id === 'slash' || id === 'shout') vfx.slam(x, z);
+    else if (id === 'slash') vfx.weaponSlash(hx, 6.2, hz, yaw, '#FFB000', 1);
+    else if (id === 'shout') vfx.ring(x, 0.4, z, '#FFB000', 3.2);
+    else if (id === 'daggers') vfx.weaponSlash(hx, 4.6, hz, yaw, '#FF3D8A', 2);
     else if (id === 'spin') vfx.whirl(x, z);
     else if (id === 'shard') vfx.fireball(x, 1.6, z, yaw);
     else if (id === 'nova' || id === 'blizzard') vfx.frost(x, z);
@@ -87,7 +95,6 @@ export function createCombat({ audio, vfx, onFloat, onBossHurt, onBind, onHealPa
     else if (id === 'shot' || id === 'mark') vfx.pierce(x, z, yaw);
     else if (id === 'rain') vfx.arrowRain(x, z);
     else if (id === 'shadow') vfx.blink(x, z, yaw);
-    else if (id === 'daggers') vfx.combo(x, z, yaw);
     else if (id === 'tape') vfx.poison(x, z);
     else if (id === 'stealth') vfx.burst(x, 1.1, z, '#9bb7d4');
     else vfx.slash(x, 1.3, z, yaw, skill.color);

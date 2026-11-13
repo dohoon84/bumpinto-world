@@ -159,7 +159,7 @@ function mountForm(id) {
 }
 mountForm(classId);
 
-const boss = createBoss(scene);
+const boss = await createBoss(scene);
 boss.setMobFactory(env.spawnMob);
 const home = boss.home;
 
@@ -289,8 +289,12 @@ function settleParty(yaw, dt = 0, live = false) {
           a.cd = 2.5;
           a.swing = 0.55;
           boss.hurt(16);
-          vfx.sparks(aimX, aimY, aimZ, '#FFB000', 5);
-          hud.float(new THREE.Vector3(aimX, aimY + 0.9, aimZ), 16, 'dmg');
+          const yaw = Math.atan2(aimX - a.mesh.position.x, aimZ - a.mesh.position.z);
+          const reach = Math.hypot(aimX - a.mesh.position.x, aimZ - a.mesh.position.z) || 1;
+          const hx = aimX + ((a.mesh.position.x - aimX) / reach) * 7;
+          const hz = aimZ + ((a.mesh.position.z - aimZ) / reach) * 7;
+          vfx.weaponSlash(hx, 5.6, hz, yaw, '#FFB000', 1);
+          hud.float(new THREE.Vector3(hx, 6.4, hz), 16, 'dmg');
           a.taunt -= 2.5;
           if (a.taunt <= 0) {
             a.taunt = 16;
@@ -300,8 +304,15 @@ function settleParty(yaw, dt = 0, live = false) {
           a.cd = 3.2;
           a.swing = 0.5;
           boss.hurt(12);
-          vfx.sparks(aimX, aimY, aimZ, a.color, 4);
-          hud.float(new THREE.Vector3(aimX, aimY + 0.8, aimZ), 12, 'dmg');
+          const yaw = Math.atan2(aimX - a.mesh.position.x, aimZ - a.mesh.position.z);
+          const reach = Math.hypot(aimX - a.mesh.position.x, aimZ - a.mesh.position.z) || 1;
+          const hx = aimX + ((a.mesh.position.x - aimX) / reach) * 7;
+          const hz = aimZ + ((a.mesh.position.z - aimZ) / reach) * 7;
+          if (a.classId === 'assassin') vfx.weaponSlash(hx, 4.4, hz, yaw, '#FF3D8A', 2);
+          else if (a.classId === 'archer') vfx.pierce(a.mesh.position.x, a.mesh.position.z, yaw);
+          else if (a.classId === 'mage') vfx.sparks(hx, 5.2, hz, a.color, 6);
+          else vfx.weaponSlash(hx, 5.4, hz, yaw, a.color || '#FFB000', 1);
+          hud.float(new THREE.Vector3(hx, 6.2, hz), 12, 'dmg');
         }
       }
     }
@@ -399,8 +410,8 @@ let won = false;
 let moveSpeed = 0;
 const portrait = shot === 'transform' || shot === 'form';
 let camYaw = PATH_YAW + (portrait ? Math.PI + 0.7 : 0.35);
-let camPitch = portrait ? 0.32 : 42 * Math.PI / 180;
-let camDist = shot === 'transform' ? 4.4 : shot === 'form' ? 4.8 : 30;
+let camPitch = portrait ? 0.32 : 50 * Math.PI / 180;
+let camDist = shot === 'transform' ? 4.4 : shot === 'form' ? 4.8 : 46;
 let shotLookY = null;
 let shotAim = null;
 const keys = new Set();
@@ -691,9 +702,10 @@ function frame() {
   const lz = Math.cos(lookYaw);
   const cp = Math.cos(pitch);
   camera.position.set(focus.x - lx * dist * cp, focus.y + dist * Math.sin(pitch), focus.z - lz * dist * cp);
-  const aim = shotAim != null ? shotAim : shot === 'wide' ? 1.5 : portrait ? 0.1 : 6;
+  const bossView = phase === 'fight' && shotLookY == null && !portrait;
+  const aim = shotAim != null ? shotAim : shot === 'wide' ? 1.5 : portrait ? 0.1 : bossView ? 18 : 6;
   const head = form?.group?.userData?.headY;
-  const lookY = shotLookY != null ? shotLookY : shot === 'wide' ? 1.15 : portrait ? (head || 1.1) : 0.2;
+  const lookY = shotLookY != null ? shotLookY : shot === 'wide' ? 1.15 : portrait ? (head || 1.1) : bossView ? 7 : 0.2;
   camera.lookAt(focus.x + lx * aim, lookY, focus.z + lz * aim);
   if (shake > 0) {
     camera.position.x += (Math.random() - 0.5) * shake;
@@ -1066,9 +1078,10 @@ function showKnights() {
   const mid = fromFrame(BOSS_ALONG - 14, 0);
   actor.position.set(mid.x, 0, mid.z);
   camYaw = PATH_YAW;
-  camPitch = 0.98;
-  camDist = 34;
-  shotLookY = 1.1;
+  camPitch = 50 * Math.PI / 180;
+  camDist = 46;
+  shotLookY = 7;
+  shotAim = 16;
   if (phase !== 'fight') finishIntro();
   hud.banner('');
   const banner = document.querySelector('#bw-raid [data-banner]');
@@ -1272,6 +1285,8 @@ window.__raid = {
   get actor() { return actor; },
   boss,
   env,
+  vfx,
+  hud,
   source: form.source,
   rift: {
     snapshot: () => rift.snapshot(),
@@ -1289,6 +1304,17 @@ window.__raid = {
   measure: measureScene,
   debug: {
     skipIntro() { if (phase === 'intro') finishIntro(); },
+    poseKnights() {
+      simPaused = true;
+      const swing = (g, id) => {
+        const pack = packs[id];
+        if (!pack?.animate || !g) return;
+        const attack = id === 'priest' ? 'heal' : id === 'mage' ? 'shard' : id === 'archer' ? 'shot' : 'slash';
+        pack.animate(g, 0.36, { attack, attackT: 0.28, phase: 'fight', speed: 0 });
+      };
+      swing(form.group, form.group.userData.shotClass || classId);
+      for (const g of extras) swing(g, g.userData.shotClass);
+    },
     wind() { boss.forceWind(); },
     killBoss() { boss.hurt(boss.state.hp); },
     hurtBoss(n) { boss.hurt(n); return boss.state.hp / boss.state.hpMax; },

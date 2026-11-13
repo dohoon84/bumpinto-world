@@ -105,6 +105,7 @@ function buildBossMesh() {
   girderMesh.castShadow = true;
 
   const group = new THREE.Group();
+  // Designer Hold GLB replaces these children. Keep the group name and the HUD bar ("홀드").
   group.name = 'hold';
   group.add(body, girderMesh);
 
@@ -226,13 +227,83 @@ function riftColumn() {
   return g;
 }
 
-export function createBoss(scene) {
-  const built = buildBossMesh();
+async function loadHolde() {
+  const [{ GLTFLoader }, { MeshoptDecoder }] = await Promise.all([
+    import('three/examples/jsm/loaders/GLTFLoader.js'),
+    import('three/examples/jsm/libs/meshopt_decoder.module.js'),
+  ]);
+  if (MeshoptDecoder.ready) await MeshoptDecoder.ready;
+  const loader = new GLTFLoader();
+  loader.setMeshoptDecoder(MeshoptDecoder);
+  const gltf = await loader.loadAsync('/dungeon/boss/holde.meshopt.glb');
+  const group = gltf.scene;
+  group.name = 'hold';
+  const armor = { armor_p1: [], armor_p2: [], armor_p3: [] };
+  const riftMats = [];
+  group.traverse((o) => {
+    if (/^armor_p1/.test(o.name)) armor.armor_p1.push(o);
+    else if (/^armor_p2/.test(o.name)) armor.armor_p2.push(o);
+    else if (/^armor_p3/.test(o.name)) armor.armor_p3.push(o);
+    if (!o.isMesh) return;
+    o.frustumCulled = false;
+    o.castShadow = true;
+    for (const mat of [].concat(o.material)) {
+      if (!mat) continue;
+      if (/rift/i.test(mat.name || '')) {
+        mat.emissive = mat.emissive || new THREE.Color('#FF6A1A');
+        mat.emissiveIntensity = Math.max(mat.emissiveIntensity || 1, 4.2);
+        riftMats.push(mat);
+      } else if (/hot/i.test(mat.name || '')) {
+        mat.emissiveIntensity = Math.min(Math.max(mat.emissiveIntensity || 1, 2.4), 2.6);
+      }
+    }
+  });
+  const mixer = new THREE.AnimationMixer(group);
+  const actions = {};
+  for (const clip of gltf.animations) {
+    const action = mixer.clipAction(clip);
+    action.clampWhenFinished = true;
+    actions[clip.name] = action;
+  }
+  const metaList = group.userData?.bw?.clips || [];
+  const meta = {};
+  for (const row of metaList) meta[row.name] = row;
+  const crack = new THREE.Group();
+  crack.name = 'spawn-crack';
+  const dark = new THREE.Mesh(
+    new THREE.CircleGeometry(7.4, 32),
+    new THREE.MeshBasicMaterial({ color: '#1a1412', transparent: true, opacity: 0.92, depthWrite: false }),
+  );
+  const glow = new THREE.Mesh(
+    new THREE.RingGeometry(1.2, 6.2, 32),
+    new THREE.MeshBasicMaterial({ color: '#ff6a1a', transparent: true, opacity: 0.85, depthWrite: false, side: THREE.DoubleSide }),
+  );
+  dark.rotation.x = -Math.PI / 2;
+  glow.rotation.x = -Math.PI / 2;
+  dark.position.y = 0.03;
+  glow.position.y = 0.05;
+  crack.add(dark, glow);
+  crack.visible = false;
+  return { group, holde: true, mixer, actions, meta, armor, riftMats, crack, armL: { rotation: { x: 0 } }, armR: { rotation: { x: 0 } }, rockMat: { emissiveIntensity: 1 }, sigil: { children: [] } };
+}
+
+export async function createBoss(scene) {
+  let built = null;
+  try {
+    built = await loadHolde();
+  } catch (err) {
+    console.warn('[raid] holde glb failed, using procedural boss', err);
+  }
+  if (!built) built = buildBossMesh();
   const home = bossPoint();
   built.group.position.set(home.x, 0, home.z);
   built.group.rotation.y = PATH_YAW + Math.PI;
-  built.group.scale.setScalar(1.45);
+  built.group.scale.setScalar(built.holde ? 1 : 1.45);
   scene.add(built.group);
+  if (built.crack) {
+    built.crack.position.set(home.x, 0, home.z);
+    scene.add(built.crack);
+  }
   let mobFactory = null;
 
   const light = new THREE.PointLight('#ff7a3a', 18, 26, 2);
@@ -262,6 +333,7 @@ export function createBoss(scene) {
     dead: false,
     hitFlash: 0,
     slow: 0,
+    hold: false,
     vortexWait: 0,
     stage: 1,
     dress: true,
@@ -289,6 +361,70 @@ export function createBoss(scene) {
   lane.visible = false;
   scene.add(lane);
   const charge = { ax: home.x, az: home.z, bx: home.x, bz: home.z };
+  let clipName = '';
+  const debris = [];
+
+  function applyArmor(stage) {
+    if (!built.holde) return;
+    for (const node of built.armor.armor_p1 || []) node.visible = stage < 2;
+    for (const node of built.armor.armor_p2 || []) node.visible = stage < 2;
+    for (const node of built.armor.armor_p3 || []) node.visible = stage < 3;
+    const pop = stage >= 2 ? 5.4 : 4.2;
+    for (const mat of built.riftMats || []) mat.emissiveIntensity = pop;
+  }
+
+  function playClip(name, loop = false, fromFrac = 0, fade = 0.08) {
+    if (!built.holde) return;
+    const next = built.actions[name];
+    if (!next) return;
+    if (fade > 0 && clipName === name && (next.isRunning() || next.paused)) return;
+    for (const action of Object.values(built.actions)) {
+      if (action === next) continue;
+      if (fade > 0) action.fadeOut(fade);
+      else action.stop();
+    }
+    next.reset();
+    next.setLoop(loop ? THREE.LoopRepeat : THREE.LoopOnce, loop ? Infinity : 1);
+    next.clampWhenFinished = !loop;
+    next.enabled = true;
+    if (fade > 0) next.fadeIn(fade).play();
+    else {
+      next.setEffectiveWeight(1);
+      next.play();
+    }
+    if (fromFrac > 0) next.time = next.getClip().duration * fromFrac;
+    clipName = name;
+    state.clip = name;
+    state.impactDone = {};
+  }
+
+  function clipTime() {
+    const action = built.holde ? built.actions[clipName] : null;
+    return action ? action.time : 0;
+  }
+
+  function clipEvent(frac, key) {
+    if (state.impactDone?.[key]) return false;
+    const dur = built.actions[clipName]?.getClip().duration || 1;
+    if (clipTime() < dur * frac) return false;
+    state.impactDone[key] = true;
+    return true;
+  }
+
+  function tossDebris(x, z, n = 10) {
+    for (let i = 0; i < n; i++) {
+      const m = new THREE.Mesh(
+        new THREE.BoxGeometry(0.35 + (i % 3) * 0.12, 0.16, 0.42),
+        new THREE.MeshStandardMaterial({ color: i % 2 ? '#8d8680' : '#5c534c', roughness: 0.9 }),
+      );
+      m.position.set(x + (Math.random() - 0.5) * 3, 0.3, z + (Math.random() - 0.5) * 2);
+      m.userData.vy = 3 + Math.random() * 3;
+      m.userData.vx = (Math.random() - 0.5) * 3;
+      m.userData.vz = (Math.random() - 0.5) * 3;
+      scene.add(m);
+      debris.push(m);
+    }
+  }
 
   function stageNow() {
     const ratio = state.hp / state.hpMax;
@@ -331,23 +467,37 @@ export function createBoss(scene) {
       columns.forEach((c) => { c.visible = false; });
       lane.visible = false;
       adds.forEach((a) => { a.mesh.visible = false; });
-      built.group.position.y = Math.max(-0.45, built.group.position.y - dt * 0.22);
-      built.rockMat.emissiveIntensity = Math.max(0.1, built.rockMat.emissiveIntensity - dt * 0.8);
-      light.intensity = Math.max(0, light.intensity - dt * 8);
-      const sigilMat = built.sigil.children[0]?.material;
-      if (sigilMat) {
-        sigilMat.transparent = true;
-        sigilMat.opacity = Math.max(0, sigilMat.opacity - dt * 0.8);
+      if (built.holde) {
+        playClip('death', false);
+        built.mixer.update(dt);
+        const death = built.actions.death;
+        if (death && death.time >= death.getClip().duration - 0.04) death.paused = true;
+        if (clipEvent(built.meta.death?.impactFrac || 0.6, 'death')) {
+          ctx.onSlam?.('hit');
+          tossDebris(built.group.position.x, built.group.position.z + 2, 14);
+        }
+      } else {
+        built.group.position.y = Math.max(-0.45, built.group.position.y - dt * 0.22);
+        built.rockMat.emissiveIntensity = Math.max(0.1, built.rockMat.emissiveIntensity - dt * 0.8);
+        const sigilMat = built.sigil.children[0]?.material;
+        if (sigilMat) {
+          sigilMat.transparent = true;
+          sigilMat.opacity = Math.max(0, sigilMat.opacity - dt * 0.8);
+        }
       }
+      light.intensity = Math.max(0, light.intensity - dt * 8);
       hideAll();
       return;
     }
     state.hitFlash = Math.max(0, state.hitFlash - dt * 3);
-    built.rockMat.emissiveIntensity = 1.25 + state.hitFlash * 1.4 + Math.sin(performance.now() * 0.003) * 0.15;
-    const sway = Math.sin(performance.now() * 0.0015) * 0.04;
-    built.group.rotation.z = sway;
-    built.armL.rotation.x = Math.sin(performance.now() * 0.001) * 0.08;
-    built.armR.rotation.x = Math.sin(performance.now() * 0.001 + 1) * 0.08;
+    if (!built.holde) {
+      built.rockMat.emissiveIntensity = 1.25 + state.hitFlash * 1.4 + Math.sin(performance.now() * 0.003) * 0.15;
+      built.group.rotation.z = Math.sin(performance.now() * 0.0015) * 0.04;
+      built.armL.rotation.x = Math.sin(performance.now() * 0.001) * 0.08;
+      built.armR.rotation.x = Math.sin(performance.now() * 0.001 + 1) * 0.08;
+    } else if (state.hitFlash > 0.2 && clipName === 'idle') {
+      playClip('hit', false);
+    }
 
     if (!fightOn) {
       columns.forEach((c) => { c.visible = false; });
@@ -358,14 +508,54 @@ export function createBoss(scene) {
     const nextStage = stageNow();
     if (nextStage !== state.stage) {
       state.stage = nextStage;
+      applyArmor(nextStage);
+      if (built.holde) playClip('roar', false);
       ctx.onStage?.(nextStage);
     }
     const pace = state.stage === 3 ? 1.55 : state.stage === 2 ? 1.15 : 1;
     state.t += dt * (state.slow > 0 ? 0.5 : pace);
+      if (built.holde) {
+        if (!state.hold) built.mixer.update(dt * (state.slow > 0 ? 0.5 : 1));
+        if (built.crack) built.crack.visible = state.phase === 'spawn';
+      for (let i = debris.length - 1; i >= 0; i--) {
+        const m = debris[i];
+        m.userData.vy -= dt * 12;
+        m.position.x += m.userData.vx * dt;
+        m.position.y += m.userData.vy * dt;
+        m.position.z += m.userData.vz * dt;
+        if (m.position.y < 0.1) {
+          scene.remove(m);
+          debris.splice(i, 1);
+        }
+      }
+      if (state.phase === 'idle' && !state.hold) {
+        const stuck = clipName === 'hit' || clipName === 'roar';
+        const action = built.actions[clipName];
+        const finished = stuck && action && (!action.isRunning() || action.paused);
+        if (finished || (!stuck && clipName !== 'idle')) playClip('idle', true);
+      }
+    }
 
     if (state.phase === 'wait') {
-      state.phase = 'idle';
+      state.phase = built.holde ? 'spawn' : 'idle';
       state.t = 0;
+      if (built.holde) playClip('spawn', false, 0.25);
+    } else if (state.phase === 'spawn') {
+      state.castName = '출현';
+      state.castMax = 3.4;
+      state.cast = Math.min(state.castMax, state.t);
+      if (clipEvent(0.36, 'spawn-front')) {
+        ctx.onSlam?.('hit');
+        tossDebris(built.group.position.x, built.group.position.z + 4, 12);
+      }
+      if (clipEvent(0.66, 'spawn-hind')) tossDebris(built.group.position.x, built.group.position.z - 3, 6);
+      if (clipEvent(0.78, 'spawn-roar')) ctx.onWind?.('hit');
+      const spawnAct = built.actions.spawn;
+      if (!built.holde || (spawnAct && spawnAct.time >= spawnAct.getClip().duration - 0.08)) {
+        state.phase = 'idle';
+        state.t = 0;
+        playClip('idle', true);
+      }
     } else if (state.phase === 'idle') {
       state.castName = '';
       state.cast = 0;
@@ -387,11 +577,17 @@ export function createBoss(scene) {
         if (state.phase === 'slam') {
           showCircle(slam, player.x, player.z);
           onSlam?.('telegraph');
+          playClip('slam', false);
+        } else if (state.phase === 'sweep') {
+          showCircle(slam, player.x, player.z);
+          onSlam?.('telegraph');
+          playClip('sweep', false);
         } else if (state.phase === 'wind') {
           windSpots.forEach((p, i) => showCircle(winds[i], p.x, p.z));
           state.castName = '열풍';
           state.castMax = 2.35;
           onWind?.('telegraph');
+          playClip('breath_charge', false);
         } else if (state.phase === 'charge') {
           charge.ax = built.group.position.x;
           charge.az = built.group.position.z;
@@ -405,8 +601,9 @@ export function createBoss(scene) {
           lane.rotation.z = Math.atan2(charge.bx - charge.ax, charge.bz - charge.az);
           lane.scale.set(1, 1, 1);
           state.castName = '돌진';
-          state.castMax = 1.25;
+          state.castMax = built.holde ? (built.meta.charge?.impactTime || 2.82) : 1.25;
           onSlam?.('telegraph');
+          playClip('charge', false);
         } else if (state.phase === 'adds') {
           state.castName = '소환';
           state.castMax = 1.4;
@@ -414,6 +611,7 @@ export function createBoss(scene) {
           spawnAdd(-1);
           spawnAdd(1);
           if (state.stage === 3) spawnAdd(0);
+          playClip('roar', false);
         }
       }
     } else if (state.phase === 'slam') {
@@ -425,9 +623,11 @@ export function createBoss(scene) {
       built.armR.rotation.x = built.armL.rotation.x;
       slam.scale.setScalar(1 + k * 0.04);
       paintFill(slam, k);
-      if (state.t >= 1.15 && !slamHit) {
+      const slamReady = built.holde ? clipEvent(built.meta.slam?.impactFrac || 0.54, 'slam') : state.t >= 1.15;
+      if (slamReady && !slamHit) {
         slamHit = true;
         onSlam?.('hit');
+        tossDebris(slam.position.x, slam.position.z, 8);
         const dx = player.x - slam.position.x;
         const dz = player.z - slam.position.z;
         if (dx * dx + dz * dz <= (slam.userData.r || 4.8) ** 2) onPlayerHit?.(34, 'slam');
@@ -446,9 +646,14 @@ export function createBoss(scene) {
         w.scale.setScalar(0.92 + k * 0.1);
         paintFill(w, k);
       }
-      built.group.scale.setScalar(1 + Math.sin(k * Math.PI) * 0.03);
-      if (state.t >= state.castMax && !windHit) {
+      if (!built.holde) built.group.scale.setScalar(1 + Math.sin(k * Math.PI) * 0.03);
+      const breathReady = built.holde
+        ? clipEvent(built.meta.breath_charge?.impactFrac || 0.98, 'breath')
+        : state.t >= state.castMax;
+      if (breathReady && !windHit) {
         windHit = true;
+        state.breathT = 0;
+        if (built.holde) playClip('breath_fire', true);
         onWind?.('hit');
         if (!inSafe(player.x, player.z)) {
           let inOrange = false;
@@ -460,7 +665,9 @@ export function createBoss(scene) {
           onPlayerHit?.(inOrange ? 42 : 32, 'wind');
         }
       }
-      if (state.t > state.castMax + 1.15) {
+      if (windHit) state.breathT = (state.breathT || 0) + dt;
+      const beam = built.holde ? (built.actions.breath_fire?.getClip().duration || 3) : 1.15;
+      if (windHit && state.breathT > beam) {
         hideAll();
         state.castName = '';
         state.cast = 0;
@@ -468,12 +675,21 @@ export function createBoss(scene) {
         built.group.scale.setScalar(1);
         state.phase = 'idle';
         state.t = 1.6;
+        if (built.holde) playClip('idle', true);
       }
     } else if (state.phase === 'charge') {
       state.cast = Math.min(state.castMax, state.t);
       const k = state.t / state.castMax;
       lane.scale.set(1, 0.2 + k * 0.8, 1);
-      if (state.t >= state.castMax && !chargeHit) {
+      if (built.holde && clipName === 'charge') {
+        const dur = built.actions.charge.getClip().duration || 3.2;
+        const frac = clipTime() / dur;
+        const u = Math.max(0, Math.min(1, (frac - 0.34) / 0.54));
+        built.group.position.x = charge.ax + (charge.bx - charge.ax) * u;
+        built.group.position.z = charge.az + (charge.bz - charge.az) * u;
+      }
+      const ram = built.holde ? clipEvent(built.meta.charge?.impactFrac || 0.88, 'charge-ram') : state.t >= state.castMax;
+      if (ram && !chargeHit) {
         chargeHit = true;
         onSlam?.('hit');
         const px = player.x;
@@ -487,7 +703,10 @@ export function createBoss(scene) {
         if ((px - cx) ** 2 + (pz - cz) ** 2 <= 1.7 * 1.7) onPlayerHit?.(36, 'charge');
         built.group.position.set(charge.bx, 0, charge.bz);
       }
-      if (state.t > state.castMax + 0.7) {
+      const chargeDone = built.holde
+        ? clipTime() >= (built.actions.charge?.getClip().duration || 3.2) - 0.06
+        : state.t > state.castMax + 0.7;
+      if (chargeDone) {
         lane.visible = false;
         state.castName = '';
         state.phase = 'idle';
@@ -589,7 +808,9 @@ export function createBoss(scene) {
     windHit = false;
     built.group.visible = true;
     built.group.position.y = 0;
-    built.group.scale.setScalar(1);
+    built.group.scale.setScalar(built.holde ? 1 : 1);
+    applyArmor(1);
+    if (built.holde) playClip('idle', true);
     built.group.rotation.z = 0;
     built.rockMat.emissiveIntensity = 1.35;
     light.intensity = 18;
@@ -620,6 +841,7 @@ export function createBoss(scene) {
     slamHit = false;
     showCircle(slam, p.x - 4, p.z - 2);
     paintFill(slam, 0.62);
+    playClip('slam', false);
   }
 
   function forceWind() {
@@ -640,6 +862,36 @@ export function createBoss(scene) {
     home,
     forceWind,
     forceSlam,
+    replaySpawn() {
+      state.dead = false;
+      died = false;
+      state.hold = false;
+      state.phase = 'spawn';
+      state.t = 0;
+      state.impactDone = {};
+      clipName = '';
+      playClip('spawn', false, 0.25);
+      if (built.crack) built.crack.visible = true;
+    },
+    pose(name, frac) {
+      state.hold = true;
+      state.hitFlash = 0;
+      state.dead = false;
+      died = false;
+      state.phase = name === 'spawn' ? 'spawn' : 'idle';
+      clipName = '';
+      playClip(name, false, frac, 0);
+      const action = built.actions[name];
+      if (action) {
+        built.mixer.update(1 / 60);
+        action.paused = true;
+      }
+      if (built.crack) built.crack.visible = name === 'spawn';
+    },
+    setStage(n) {
+      state.stage = n;
+      applyArmor(n);
+    },
     setMobFactory(fn) { mobFactory = fn; },
     hideDress,
     reset,
