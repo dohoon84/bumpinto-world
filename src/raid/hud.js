@@ -498,6 +498,25 @@ export function createHud() {
     ctx.restore();
   }
 
+  const HUD_OCCLUDERS = '.c-boss, .c-party, .rchat, .c-vitals, .c-portrait, .c-skills, .c-map, .c-auto, .c-warn';
+  function coversHud(x, y, w, h) {
+    const nodes = root.querySelectorAll(HUD_OCCLUDERS);
+    for (const el of nodes) {
+      if (el.hidden) continue;
+      const r = el.getBoundingClientRect();
+      if (r.width < 8 || r.height < 8) continue;
+      const pad = el.matches('.c-skills, .c-vitals, .c-portrait, .c-auto, .c-warn, .rchat') ? 72 : 18;
+      if (x < r.right + pad && x + w > r.left - pad && y < r.bottom + pad && y + h > r.top - pad) return true;
+    }
+    const chat = document.querySelector('.rchat');
+    if (chat) {
+      const r = chat.getBoundingClientRect();
+      const pad = 72;
+      if (r.width > 8 && r.height > 8 && x < r.right + pad && x + w > r.left - pad && y < r.bottom + pad && y + h > r.top - pad) return true;
+    }
+    return false;
+  }
+
   function tickFloats(dt, camera) {
     const w = innerWidth;
     const h = innerHeight;
@@ -521,6 +540,11 @@ export function createHud() {
           y -= 34;
         }
       }
+      if (coversHud(x - mine.w / 2, y - mine.h / 2, mine.w, mine.h)) {
+        f.el.style.visibility = 'hidden';
+        continue;
+      }
+      f.el.style.visibility = 'visible';
       placed.push({ x, y, w: mine.w, h: mine.h });
       f.el.style.left = `${x}px`;
       f.el.style.top = `${y}px`;
@@ -698,6 +722,7 @@ export function createHud() {
       el.textContent = text;
       bannerT = sec;
     },
+    coversHud,
     float(pos, text, kind) {
       const numeric = typeof text === 'number' || /^-?\d+$/.test(String(text));
       const amount = numeric ? Number(text) : 0;

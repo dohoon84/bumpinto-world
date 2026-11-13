@@ -303,6 +303,7 @@ function resolveNameplates(items) {
       if (a.hidden || !moved) break;
     }
     if (Math.abs(a.sy - a.baseSy) > maxOff) a.hidden = true;
+    if (!a.hidden && hud.coversHud(a.sx - a.gw / 2, a.sy - a.gh / 2, a.gw, a.gh)) a.hidden = true;
   }
 }
 function syncMarks() {
@@ -1219,12 +1220,26 @@ function clearCamera(desired, look) {
   const dx = pos.x - home.x;
   const dz = pos.z - home.z;
   const hd = Math.hypot(dx, dz);
-  const minR = 18;
+  const minR = 14;
   if (hd < minR) {
     const k = minR / (hd || 0.001);
     pos.x = home.x + dx * k;
     pos.z = home.z + dz * k;
-    pos.y = Math.max(pos.y, 9);
+    pos.y = Math.max(pos.y, 6);
+  }
+  let yaw = Math.atan2(pos.x - look.x, pos.z - look.z);
+  const orbit = Math.hypot(pos.x - look.x, pos.z - look.z) || 8;
+  for (let turn = 0; turn < 8; turn++) {
+    const dir = look.clone().sub(pos);
+    const span = dir.length() || 1;
+    dir.multiplyScalar(1 / span);
+    camRay.set(pos, dir);
+    camRay.far = Math.max(0.4, span - 0.6);
+    const block = camRay.intersectObjects(meshes, false).find((h) => !h.object.isInstancedMesh);
+    if (!block) break;
+    yaw += 0.32;
+    pos.x = look.x + Math.sin(yaw) * orbit;
+    pos.z = look.z + Math.cos(yaw) * orbit;
   }
   const down = new THREE.Vector3(0, -1, 0);
   for (let step = 0; step < 5; step++) {
@@ -1240,15 +1255,28 @@ function clearCamera(desired, look) {
     pos.z = next.z;
     pos.y = Math.max(pos.y + 1.5, roof.point.y + 1.8);
   }
+  const away = pos.clone().sub(look);
+  if (away.lengthSq() > 0.01) away.normalize();
+  else away.set(0, 1, 0);
+  for (let nudge = 0; nudge < 4; nudge++) {
+    const view = look.clone().sub(pos);
+    const viewLen = view.length() || 1;
+    view.multiplyScalar(1 / viewLen);
+    camRay.set(pos, view);
+    camRay.far = 2.4;
+    const near = camRay.intersectObjects(meshes, false)[0];
+    if (!near || near.distance > 2.1 || near.object.isInstancedMesh) break;
+    pos.addScaledVector(away, 2.6 - near.distance);
+  }
   const view = look.clone().sub(pos);
   const viewLen = view.length() || 1;
   view.multiplyScalar(1 / viewLen);
   camRay.set(pos, view);
-  camRay.far = Math.min(viewLen, 6);
+  camRay.far = 1.8;
   const blocked = camRay.intersectObjects(meshes, false);
   const keep = new Set();
   for (const hit of blocked) {
-    if (hit.distance > 1.7 || hit.object.isInstancedMesh) continue;
+    if (hit.distance > 1.6 || hit.object.isInstancedMesh) continue;
     fadeMesh(hit.object);
     keep.add(hit.object);
   }
@@ -1334,7 +1362,7 @@ function frame() {
     camera.position.set(camLock.px, camLock.py, camLock.pz);
     lookTarget.set(camLock.tx, camLock.ty, camLock.tz);
   }
-  if (!portrait) {
+  if (!portrait && !camLock) {
     camera.position.copy(clearCamera(camera.position, lookTarget));
   } else {
     restoreFaded();
@@ -2106,23 +2134,23 @@ window.__raid = {
       return marks.filter((g) => g.visible && g.userData.screen).map((g) => g.userData.screen);
     },
     flat() { bloomOn = false; },
+    look(px, py, pz, tx, ty, tz) {
+      camLock = { px, py, pz, tx, ty, tz };
+    },
     melee() {
       finishIntro();
       const b = boss.group.position;
-      const fx = Math.sin(PATH_YAW);
-      const fz = Math.cos(PATH_YAW);
-      const rx = Math.cos(PATH_YAW);
-      const rz = -Math.sin(PATH_YAW);
-      actor.position.set(b.x - fx * 6.4 + rx * 3.4, 0, b.z - fz * 6.4 + rz * 3.4);
+      actor.position.set(6.33, 0, 25.22);
       actor.rotation.y = Math.atan2(b.x - actor.position.x, b.z - actor.position.z);
+      if (form.group.parent !== actor) {
+        form.group.parent?.remove(form.group);
+        form.group.position.set(0, 0, 0);
+        form.group.rotation.set(0, 0, 0);
+        actor.add(form.group);
+      }
       form.group.visible = true;
       citizen.visible = false;
-      camYaw = PATH_YAW;
-      camPitch = 0.58;
-      camDist = 16;
-      camLock = null;
-      shotLookY = 3.2;
-      shotAim = 8;
+      camLock = { px: 12.47, py: 4.29, pz: 23.41, tx: 6.33, ty: 1.43, tz: 25.22 };
       simPaused = true;
     },
     report() {
