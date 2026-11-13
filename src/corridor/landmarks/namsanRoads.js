@@ -1934,8 +1934,40 @@ export function createNamsanRoads({ parent, osm, heightAt, overlay = null, city 
     console.info('[namsan-plate-live] ' + JSON.stringify(hits));
   }
 
+  // [myeongdong-perf] walkHits 격자 색인. 예전엔 질의마다 남산 길 전체 선분을 훑어
+  //   명동(남산 경계 600 m 안)의 NPC·화살표 높이 질의가 프레임 JS 의 16% 를 먹었다. 순서(먼저 넣은 것 우선)는 그대로.
+  const HIT_CELL = 32;
+  let hitIdx = null, hitIdxN = -1;
+  function buildHitIdx() {
+    hitIdxN = walkHits.length;
+    const cells = new Map();
+    let gx0 = Infinity, gz0 = Infinity, gx1 = -Infinity, gz1 = -Infinity;
+    walkHits.forEach((h, i) => {
+      let x0 = Infinity, z0 = Infinity, x1 = -Infinity, z1 = -Infinity;
+      for (const sg of h.segs) {
+        x0 = Math.min(x0, sg.a[0], sg.b[0]); x1 = Math.max(x1, sg.a[0], sg.b[0]);
+        z0 = Math.min(z0, sg.a[1], sg.b[1]); z1 = Math.max(z1, sg.a[1], sg.b[1]);
+      }
+      if (!Number.isFinite(x0)) return;
+      x0 -= h.pad; z0 -= h.pad; x1 += h.pad; z1 += h.pad;
+      gx0 = Math.min(gx0, x0); gz0 = Math.min(gz0, z0); gx1 = Math.max(gx1, x1); gz1 = Math.max(gz1, z1);
+      for (let cx = Math.floor(x0 / HIT_CELL); cx <= Math.floor(x1 / HIT_CELL); cx++) {
+        for (let cz = Math.floor(z0 / HIT_CELL); cz <= Math.floor(z1 / HIT_CELL); cz++) {
+          const k = cx * 65536 + cz;
+          let a = cells.get(k); if (!a) cells.set(k, (a = []));
+          a.push(i); // forEach 순서라 오름차순
+        }
+      }
+    });
+    hitIdx = { cells, gx0, gz0, gx1, gz1 };
+  }
   function floorY(x, z, refY) {
-    for (const h of walkHits) {
+    if (hitIdxN !== walkHits.length) buildHitIdx();
+    if (x < hitIdx.gx0 || x > hitIdx.gx1 || z < hitIdx.gz0 || z > hitIdx.gz1) return null;
+    const cand = hitIdx.cells.get(Math.floor(x / HIT_CELL) * 65536 + Math.floor(z / HIT_CELL));
+    if (!cand) return null;
+    for (let ci = 0; ci < cand.length; ci++) {
+      const h = walkHits[cand[ci]];
       if (nearSeg(x, z, h.segs, h.pad) <= h.pad) {
         const y = heightAt(x, z) + h.dy;
         if (Number.isFinite(refY) && y > refY + 0.55) return null;

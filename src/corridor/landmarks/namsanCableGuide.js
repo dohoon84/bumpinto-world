@@ -165,9 +165,9 @@ function dijkstraFrom(nodes, src) {
   return { dist, next };
 }
 
-function resample(pts, step) {
+function resample(pts, step, carry0 = 0) {
   const out = [];
-  let carry = 0;
+  let carry = carry0;
   for (let i = 1; i < pts.length; i++) {
     const a = pts[i - 1], b = pts[i];
     const dx = b[0] - a[0], dz = b[1] - a[1], L = Math.hypot(dx, dz);
@@ -341,10 +341,19 @@ export function createNamsanCableGuide({ parent, cable, ways = [], city = null, 
   parent.add(group);
   if (!info.length) return { group, update() {}, setNight() {}, onKey() { return false; }, get canAct() { return false; } };
 
+  // [myeongdong-perf] 바닥 높이 캐시 (5 cm 격자). 화살표는 문 쪽 끝에 맞춰 같은 자리에 놓이므로
+  //   걸을 때마다 다시 깔아도 대부분 캐시에서 나온다. 예전엔 3 m 마다 1440 번 남산 표면 질의 → 명동에서 0.4 초 끊김.
+  const gCache = new Map();
   const groundAt = (x, z) => {
+    const key = Math.round(x * 20) * 2097152 + Math.round(z * 20);
+    const c = gCache.get(key);
+    if (c !== undefined) return c;
     const h = heightAt(x, z);
     const s = surfaceY ? surfaceY(x, z, h + 1.4) : null;
-    return Number.isFinite(s) ? s : h;
+    const y = Number.isFinite(s) ? s : h;
+    if (gCache.size > 40000) gCache.clear();
+    gCache.set(key, y);
+    return y;
   };
 
   // 출입문 바로 앞(바깥 3 m)을 길 끝으로, 문 → 승강장 판까지는 안쪽 직선
@@ -413,7 +422,7 @@ export function createNamsanCableGuide({ parent, cable, ways = [], city = null, 
       return;
     }
     dummy.rotation.set(0, 0, 0);
-    const n = slopeAt(p.x, p.z);
+    const n = p.n || (p.n = slopeAt(p.x, p.z).clone()); // [myeongdong-perf] 테두리와 본체가 같은 법선을 쓴다
     const lift = 0.07;
     dummy.position.set(p.x + n.x * lift, p.y + n.y * lift, p.z + n.z * lift);
     const hx = Math.sin(p.yaw), hz = Math.cos(p.yaw);
@@ -437,11 +446,13 @@ export function createNamsanCableGuide({ parent, cable, ways = [], city = null, 
     // 경로 총 길이 (남은 거리 → 흐르는 빛)
     let total = 0;
     for (let i = 1; i < full.length; i++) total += Math.hypot(full[i][0] - full[i - 1][0], full[i][1] - full[i - 1][1]);
-    const rs = resample(full, STEP);
+    // [myeongdong-perf] 문 쪽 끝에서 STEP 배수 자리에 놓는다 → 걸어도 화살표가 미끄러지지 않고 높이 캐시가 맞는다
+    const s0 = total % STEP;
+    const rs = resample(full, STEP, s0);
     placed = [];
     for (let i = 0; i < rs.length && placed.length < MAX_ARROWS; i++) {
       const p = rs[i];
-      const acc = i * STEP;
+      const acc = s0 + i * STEP;
       if (acc < 3) continue; // 발밑은 비운다
       const inside = st.pts && pointInRing(p.x, p.z, st.pts);
       const y = inside ? st.y + 0.2 : groundAt(p.x, p.z);
@@ -575,8 +586,10 @@ export function createNamsanCableGuide({ parent, cable, ways = [], city = null, 
     };
   }
 
+  let gCacheT = 0;
   function update(dt, player, camera) {
     time += dt;
+    gCacheT += dt; if (gCacheT > 10) { gCacheT = 0; gCache.clear(); } // 늦게 올라온 남산 조각 높이도 반영
     if (!player) return;
     const P = player.position;
     // 토스트: 탑승·도착
