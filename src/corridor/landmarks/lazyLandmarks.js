@@ -139,6 +139,8 @@ export function wrapLandmark(meta) {
     get cathedral() { return impl?.cathedral ?? null; }, // [myeongdong]
     camInside: (...a) => impl?.camInside?.(...a) ?? false, // [myeongdong-cathedral] 성당 실내 카메라
     inCathedral: (...a) => impl?.inCathedral?.(...a) ?? false,
+    findSeat: (...a) => impl?.findSeat?.(...a) ?? null, // [cathedral-sit]
+    get cathedralInside() { return !!impl?.cathedralInside; }, // [cathedral-bgm]
     cathedralAt: (...a) => impl?.cathedralAt?.(...a) ?? null,
     cathedralUV: (...a) => impl?.cathedralUV?.(...a) ?? null,
     get cathedralInterior() { return impl?.cathedralInterior ?? null; },

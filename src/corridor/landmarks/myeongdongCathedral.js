@@ -663,6 +663,14 @@ export function createMyeongdongCathedral({ parent, data, land, overlay, atlas =
       return y < FL + inner.ceilAt(u, v) - 0.35 && y > FL + 0.2;
     },
     playerInside(x, z) { const [u, v] = toUV(x, z); return inWalk(u, v, -0.2) || inDoor(u, v, -0.2); },
+    /** [cathedral-sit] 실내에서 가까운 빈 장의자 자리 (game.js findNearbySeat 형식) */
+    findSeat(x, z) {
+      const [u, v] = toUV(x, z);
+      if (!inWalk(u, v, -0.3)) return null;
+      const st = inner.findSeat(u, v); if (!st) return null;
+      const [sx, sz] = W(st.u, st.v), [ex, ez] = W(st.exit[0], st.exit[1]);
+      return { kind: 'bench', label: '🙏 장의자에 앉기 (C)', labelEn: 'Sit on the pew', x: sx, z: sz, y: FL + st.y, ry: Math.atan2(-ax, -az), exitX: ex, exitZ: ez, pew: true, seat: st.seat };
+    },
     tickPlayer(dt, player, sky) {
       const p = player?.position; if (!p) return;
       const [u, v] = toUV(p.x, p.z);

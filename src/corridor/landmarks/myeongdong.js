@@ -469,6 +469,8 @@ export async function createMyeongdongAsync(opts = {}, yieldFn = null, slicer = 
     /** [myeongdong-cathedral] 카메라 점이 성당 실내 공간 안인가 (game.js 따라보기 붐 줄이기) */
     camInside: (x, z, y) => !!cathedral.camInside?.(x, z, y),
     inCathedral: (x, z) => !!cathedral.playerInside?.(x, z),
+    findSeat: (x, z) => cathedral.findSeat?.(x, z) ?? null, // [cathedral-sit] 장의자
+    get cathedralInside() { return !!cathedral.inside; }, // [cathedral-bgm] 실내(현관 포함, 문간 제외)
     cathedralAt: (u, v) => cathedral.at?.(u, v) ?? null,
     cathedralUV: (x, z) => cathedral.uv?.(x, z) ?? null,
     get cathedralInterior() { return cathedral.interior || null; },

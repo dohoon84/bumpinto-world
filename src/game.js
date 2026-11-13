@@ -1805,7 +1805,7 @@ let lastEmoteAt = 0;
 let mySit = ''; // '' | 'ground' | 'beanbag' | 'bench' | 'ledge'
 // [cityhall] plaza tier/promenade seats + stationPlaza beanbags/benches
 function findNearbySeat(px, pz) {
-  return stationPlaza.findSeat?.(px, pz) || corridor?.cityhall?.findSeat?.(px, pz) || null;
+  return stationPlaza.findSeat?.(px, pz) || corridor?.cityhall?.findSeat?.(px, pz) || corridor?.myeongdong?.findSeat?.(px, pz) || null; // [cathedral-sit] 명동성당 장의자
 }
 function seatSurfaceY(seat) {
   // avatar.js bench sit pose assumes player.y is ~0.44m below the seat top
@@ -1815,6 +1815,7 @@ function seatSurfaceY(seat) {
 }
 
 let sitExitPos = null; // 좌석에서 일어날 때 복귀할 안전한 좌표
+let mySeatPew = null; // [cathedral-sit] 명동성당 장의자 자리(앉아 있을 때)
 let myAfk = false;
 let idleTime = 0;
 let myZzzTimer = 0;
@@ -1830,6 +1831,7 @@ function standUpFromSeat() {
   }
   mySit = '';
   player.userData.sit = '';
+  if (mySeatPew) { corridor?.myeongdong?.cathedralInterior?.setPlayerSeat?.(null); mySeatPew = null; }
 }
 
 function syncMyNameTag() {
@@ -1937,12 +1939,13 @@ function toggleSit() {
     player.position.set(seat.x, ty, seat.z);
     player.rotation.y = seat.ry;
     mySit = seat.kind;
+    if (seat.pew) { mySeatPew = seat.seat || true; corridor?.myeongdong?.cathedralInterior?.setPlayerSeat?.(seat.seat); } // [cathedral-sit]
   } else {
     sitExitPos = null;
     mySit = 'ground';
   }
   player.userData.sit = mySit;
-  trackEvent('player_sit', { kind: mySit });
+  trackEvent('player_sit', { kind: mySit, ...(mySeatPew ? { place: 'cathedral_pew' } : {}) });
   renderEmoteBar();
   emitMyStateNow();
 }
@@ -3128,7 +3131,7 @@ ready: bootReady, region, tower, renderer, corridor, namsan: corridor?.namsan ||
   get arriving() { return arriving; }, // [arrivefix]
   gateEnter(at) { if (!joined) return; setPassportActive(true); pauseWorldSession(); handleGateEnter(region.id, at ? { at } : undefined); }, // [arrivefix] 테스트용: 게임 안 🌏 → 역 고르기와 같은 흐름
   teleport(x, z, y) {
-    const move = () => { ride?.forceAlight('teleport'); if (bikes.riding) dismountBike(); if (adminBike?.riding) adminBike.dismount(); dismountGiftRides(); player.position.set(x, y ?? (terrain ? terrain.getGroundHeight(x, z, 0) : 0), z); };
+    const move = () => { if (mySit) { sitExitPos = null; standUpFromSeat(); renderEmoteBar(); } ride?.forceAlight('teleport'); if (bikes.riding) dismountBike(); if (adminBike?.riding) adminBike.dismount(); dismountGiftRides(); player.position.set(x, y ?? (terrain ? terrain.getGroundHeight(x, z, 0) : 0), z); };
     if (corridor?.needsLandmark?.(x, z)) return corridor.ensureNear(x, z, { urgent: true }).then(move);
     move();
   }, // [terrain] [bike] [roadbike] [namsan] [hangang]
@@ -3139,7 +3142,9 @@ ready: bootReady, region, tower, renderer, corridor, namsan: corridor?.namsan ||
   subway, serverClock, // [subway] [subway-sync]
   bump24Game, arcadeGame, jeongjaBp24, bp24Nav, // [bump24game] [arcade] [bump24-jeongja] [bp24nav]
   titles: titleLayer, // [weekly-titles]
-  get pose() { return { sit: mySit, afk: myAfk, jy: jumpY }; }, // [subway-pose] 테스트용
+  get pose() { return { sit: mySit, afk: myAfk, jy: jumpY, pew: !!mySeatPew }; }, // [subway-pose] 테스트용
+  get pew() { return { near: !mySit && !!nearSeatHint?.pew, seated: !!mySeatPew && !!mySit }; }, // [cathedral-sit] 모바일 행동 버튼
+  toggleSit: () => toggleSit(), // [cathedral-sit] 테스트용
   bgm, // [bgm]
   nearNpc(i = 0, d = 3) { const n = npcs.list[i]; player.position.set(n.pos.x + d, 0, n.pos.z + d * 0.5); },
 };

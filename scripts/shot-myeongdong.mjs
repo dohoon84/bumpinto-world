@@ -25,6 +25,9 @@ const VIEWS0 = [
   { name: 'in-floorlight', px: 'cathPatch', pitch: 0.42, dist: 3, inside: true },
   { name: 'in-rose', px: 'cathIn', u: 'F.uBF-11', v: 0, tu: 'F.uF', tv: 0, pitch: -0.42, dist: 2.2, inside: true },
   { name: 'in-apse', px: 'cathIn', u: 'F.uT+4', v: 0, tu: 'F.uC-6', tv: 0, pitch: -0.32, dist: 3.5, inside: true },
+  // [cathedral-sit] 장의자에 앉은 플레이어(뒤에서) · 기도하는 사람들 넓은 신랑 (sit: 그 자리 근처 통로에 세운 뒤 C)
+  { name: 'in-sit-behind', px: 'cathIn', u: 'F.uT+F.BAY*2.2', v: 0.6, tu: 'F.uC-6', tv: 0.6, pitch: 0.22, dist: 3.4, inside: true, sit: true, yawOff: 0.28 },
+  { name: 'in-worship', px: 'cathIn', u: 'F.uBF-3.5', v: -0.4, tu: 'F.uC-4', tv: 0, pitch: 0.12, dist: 4.2, inside: true },
   // 낮에 열린 회오리감자 노점 클로즈업 (닫힌 노점을 비추지 않게 day+kind 지정)
   { name: 'food-closeup', px: 'stallSide', kind: 2, day: true, near: [-10916, -21580], side: 1.7, yawOff: -0.35, pitch: 0.38, dist: 4.0 },
   { name: 'cable-link', px: -11030, pz: -21085, yaw: 0.35, pitch: 0.25, dist: 12 },
@@ -100,7 +103,8 @@ for (const v of VIEWS) {
     if (v.home) J.teleport(0, 0); else { await J.corridor.preload(px, pz); const y = md.owns(px, pz) ? md.surfaceY(px, pz) : (v.px === 'ntower' ? J.namsan.spawnY() : (J.namsan?.surfaceY?.(px, pz) ?? undefined)); J.teleport(px, pz, y); }
     if (v.ov) { J.setMode('overview'); Object.assign(J.ov, { dist: v.dist, pitch: v.pitch, yaw }); } else Object.assign(J.cam, { dist: v.dist, pitch: v.pitch, yaw });
     await new Promise((r) => setTimeout(r, 3000));
-    return { px: +px.toFixed?.(1), pz: +pz.toFixed?.(1), yaw: typeof yaw === 'number' ? +yaw.toFixed(4) : yaw, y: +J.player?.position.y.toFixed(2) };
+    if (v.sit) { J.wake?.(); J.toggleSit?.(); await new Promise((r) => setTimeout(r, 1500)); Object.assign(J.cam, { dist: v.dist, pitch: v.pitch, yaw }); } // [cathedral-sit]
+    return { pose: J.pose, px: +px.toFixed?.(1), pz: +pz.toFixed?.(1), yaw: typeof yaw === 'number' ? +yaw.toFixed(4) : yaw, y: +J.player?.position.y.toFixed(2) };
   }, v);
   if (process.env.HIDE) await page.evaluate((names) => { const J = window.__jj; let sc = J.player; while (sc.parent) sc = sc.parent; sc.traverse((o) => { if (names.includes(o.name)) o.visible = false; }); }, process.env.HIDE.split(',')); // [md-roadblotch] 디버그: 이름 맞는 메시 숨기기
   await page.waitForTimeout(4000);

@@ -8,6 +8,23 @@
 import * as THREE from 'three';
 import { GeoBuf, hex3 } from './myeongdongGeo.js';
 import { lancetPath, GLASS_TINT, roseTint } from './myeongdongGlass.js';
+import { createAvatar, animateAvatar } from '../../entities/avatar.js';
+import { buildCrowd } from '../../entities/avatarCrowd.js';
+
+// [cathedral-sit] 장의자 좌석 · 기도하는 사람들 (표준 아바타, buildCrowd 인스턴싱 — 한 번 자세를 잡고 고정)
+const PEW_SEAT_Y = 0.47; // 장의자 앉는 면 높이 (pewGeo 0.44 + 두께/2)
+const SEAT_DU = 0.04; // 엉덩이 자리: 의자 가운데에서 등받이 쪽으로 살짝
+const W_TOPS = ['#2b2f36', '#3c4350', '#1f2a44', '#e8e0d2', '#5a4a3e', '#8b5e3c', '#f4f4f2', '#3b3f45', '#6c757d', '#4b3a5a', '#2f4a3a', '#c9ced6'];
+const W_PANTS = ['#22262b', '#2b2f36', '#3c4350', '#4a4038', '#1d3557'];
+const W_SKINS = ['#f2d0b0', '#e8c4a8', '#f6d7c3', '#d7a888'];
+const W_HAIRS = ['#1a1a1a', '#1a1a1a', '#2a211c', '#8a8a8a'];
+function worshipLook(r) {
+  const pick = (a) => a[Math.floor(r() * a.length)], f = r() < 0.6;
+  const look = { color: pick(W_TOPS), pants: pick(W_PANTS), gender: f ? 'f' : 'm', skin: pick(W_SKINS), hairColor: pick(W_HAIRS), hair: f ? pick(['long', 'medium', 'pony', 'short']) : pick(['short', 'short', 'medium']), top: 'long' };
+  if (r() < 0.12) look.neck = 'scarf';
+  if (r() < 0.08) look.glasses = 'round';
+  return look;
+}
 
 const S_N = 13.8, C_N = 18.2, S_A = 7.4, C_A = 9.9, S_P = 15.4, CAP = 7.0;
 const PR = 1.25, PN = Math.sqrt(PR * PR - (PR - 1) * (PR - 1));
@@ -101,6 +118,9 @@ export function createCathedralInterior({ parent, L, glassTex, atlas }) {
   };
 
   let built = false, mats = null, dyn = null;
+  const seats = []; // [cathedral-sit] { u, v, row, pew, exit:[u,v], taken }
+  const worship = { crowd: null, list: [], lamMats: [], stats: null };
+  let playerSeat = null;
   const stats = { draws: 0, tris: 0, windows: 0 };
   function build() {
     built = true;
@@ -448,6 +468,60 @@ export function createCathedralInterior({ parent, L, glassTex, atlas }) {
       rects.push([rows[0] - 0.55, rows[rows.length - 1] + 0.4, s > 0 ? 7.3 : -13.4, s > 0 ? 13.4 : -7.3]);
     }
 
+    // ================= 좌석 · 기도하는 사람들 [cathedral-sit] =================
+    //   좌석 = 장의자마다 같은 간격(4.2 m 의자 5석, 2.75 m 의자 3석). 일어나는 곳은 가까운 통로(가운데 통로 / 측랑 통로).
+    {
+      const add = (u, vc, n, len) => { for (let k = 0; k < n; k++) { const off = (k - (n - 1) / 2) * (len - 0.5) / Math.max(1, n - 1); seats.push({ u: u + SEAT_DU, v: vc + off, row: rows.indexOf(u), pew: vc }); } };
+      for (const u of rows) for (const s of [-1, 1]) { add(u, s * 3.3, 5, 4.2); add(u, s * 8.75, 3, 2.75); add(u, s * 11.95, 3, 2.75); }
+      for (const st of seats) {
+        const av = Math.abs(st.v), sg = Math.sign(st.v);
+        const cand = Math.abs(st.pew) < 5 ? (av < 3.3 ? [0.55, 6.35] : [6.35, 0.55]) : [6.35, 14.0, 0.55];
+        st.exit = null;
+        for (const ev of cand) if (ev < IHW - 0.5 && !isBlocked(st.u, sg * ev, 0.45)) { st.exit = [st.u, sg * ev]; break; }
+        if (!st.exit) st.exit = [st.u, sg * 0.55];
+      }
+      // 기도하는 사람 — 앞쪽 몇 줄에 많이, 뒤로 갈수록 드문드문. 통로 끝 자리는 비워 둔다(플레이어 몫).
+      let rs = 1898; const rnd = () => ((rs = (rs * 16807) % 2147483647) / 2147483647);
+      const NW = 16, picks = [];
+      const cands = seats.filter((st) => { const n = Math.abs(st.pew) < 5 ? 5 : 3, k = Math.round((Math.abs(st.v) - Math.abs(st.pew)) / ((Math.abs(st.pew) < 5 ? 3.7 : 2.25) / (n - 1)) + (n - 1) / 2); return k > 0 && k < n - 1; });
+      for (let tries = 0; picks.length < NW && tries < 400; tries++) {
+        const st = cands[Math.floor(rnd() * cands.length)];
+        if (st.taken) continue;
+        const front = 1 - st.row / Math.max(1, rows.length - 1); // 앞줄 1 → 뒷줄 0
+        if (rnd() > 0.25 + front * 0.75 || (Math.abs(st.pew) > 10 && rnd() < 0.6)) continue;
+        if (picks.some((q) => q.row === st.row && Math.abs(q.v - st.v) < 1.0)) continue;
+        st.taken = true; picks.push(st);
+      }
+      const holder = new THREE.Group(); holder.name = 'cathedral-interior-worshippers'; g.add(holder);
+      worship.crowd = buildCrowd(holder, { name: 'cathedralWorshippers' });
+      const ry = Math.atan2(-ax, -az);
+      picks.forEach((st, i) => {
+        const mesh = createAvatar(worshipLook(rnd)); const u = mesh.userData;
+        mesh.traverse((o) => { if (o.isMesh) o.castShadow = false; });
+        const kneel = i % 7 === 3, bow = kneel || rnd() < 0.4;
+        const [x, z] = kneel ? W(st.u - 0.36, st.v) : W(st.u, st.v);
+        mesh.position.set(x, FLY + (kneel ? 0 : PEW_SEAT_Y - 0.44), z); mesh.rotation.y = ry + (rnd() - 0.5) * 0.12;
+        u.sit = 'bench'; animateAvatar(mesh, 0, 0);
+        // 손: 기도(모은 손, 가슴 앞) 또는 무릎 위. armLz/armRz = 어깨에서 바깥으로 벌린 각
+        const pray = kneel || bow || rnd() < 0.3;
+        if (u.armL) {
+          const lz = u.armLz ?? -0.28, rz = u.armRz ?? 0.28;
+          if (pray) { u.armL.rotation.x = u.armR.rotation.x = kneel ? -1.05 : -0.9; u.armL.rotation.z = -lz * 0.35; u.armR.rotation.z = -rz * 0.35; }
+          else { u.armL.rotation.x = u.armR.rotation.x = -0.55; u.armL.rotation.z = lz * 0.5; u.armR.rotation.z = rz * 0.5; }
+        }
+        if (kneel) { // 무릎 꿇기: 무릎받이(높이 0.17) 위에, 허벅지는 아래로 조금 뒤로
+          u.rig.position.y = -0.36; u.rig.rotation.x = 0.08;
+          for (const lg of [u.legL, u.legR]) { lg.position.y = u.legLy ?? lg.position.y; lg.position.z = u.legLz ?? lg.position.z; lg.rotation.x = 0.55; }
+        }
+        if (bow && u.head) u.head.rotation.x = kneel ? 0.42 : 0.22 + rnd() * 0.16;
+        worship.list.push({ mesh, parts: worship.crowd.register(mesh), kneel, bow });
+      });
+      worship.crowd.finalize();
+      worship.crowd.begin(); for (const w of worship.list) worship.crowd.add(w.mesh, w.parts, false); worship.crowd.end();
+      for (const P of worship.crowd.parts.values()) { if (P.im) { P.im.castShadow = false; P.im.receiveShadow = false; if (P.lam) worship.lamMats.push(P.im.material); } }
+      worship.stats = { n: picks.length, kneel: worship.list.filter((w) => w.kneel).length, bowed: worship.list.filter((w) => w.bow).length, draws: [...worship.crowd.parts.values()].filter((P) => P.im?.count).length };
+    }
+
     // ================= 샹들리에 (신랑 칸 가운데 + 교차부) =================
     const chand = [];
     for (let i = 0; i < NB; i++) chand.push([uT + BI * (i + 0.5), 0]);
@@ -553,6 +627,7 @@ export function createCathedralInterior({ parent, L, glassTex, atlas }) {
     // 재질 밝기
     const amb = new THREE.Color(0.46, 0.37, 0.27).lerp(new THREE.Color(1, 0.97, 0.93).multiplyScalar(0.5 + 0.2 * (wet ? 0.3 : clearK)), dayK);
     mats.st.color.copy(amb); mats.fl.color.copy(amb); mats.pew.color.copy(amb); mats.dc.color.copy(amb);
+    for (const m of worship.lamMats) m.color.copy(amb).multiplyScalar(1.15); // [cathedral-sit] 기도하는 사람 몸도 실내 밝기로
     const gk = 0.18 + dayK * (wet ? 0.62 : 0.6 + 0.45 * clearK);
     mats.gl.color.setRGB(gk * (dayK > 0.2 ? 1 : 0.8), gk * (dayK > 0.2 ? 1 : 0.85), gk);
     mats.bulb.color.setRGB(0.55 + nightK * 0.45, 0.5 + nightK * 0.36, 0.42 + nightK * 0.12);
@@ -602,6 +677,22 @@ export function createCathedralInterior({ parent, L, glassTex, atlas }) {
     get built() { return built; },
     /** 가장 밝은 바닥 빛 조각 중심 [x, z] (샷 스크립트용) */
     brightPatch: () => dyn?.best || null,
+    /** [cathedral-sit] 축 좌표 (u,v) 근처 빈 장의자 자리 → { u, v, y(바닥 위 앉는 면), exit:[u,v], ry } 없으면 null */
+    findSeat(u, v, R = 2.6) {
+      if (!built) build();
+      let best = null, bd = R;
+      for (const st of seats) {
+        if (st.taken || Math.abs(st.u - u) > 0.9) continue;
+        const d = Math.hypot(st.u - u, st.v - v);
+        if (d < bd) { bd = d; best = st; }
+      }
+      return best ? { u: best.u, v: best.v, y: PEW_SEAT_Y, exit: best.exit, seat: best } : null;
+    },
+    /** 플레이어가 앉은 자리 표시 (다른 찾기에서 빼지 않음 — 같은 자리 다시 앉기 허용) */
+    setPlayerSeat(st) { playerSeat = st || null; },
+    get playerSeat() { return playerSeat; },
+    get seats() { return seats; },
+    get worshippers() { return worship.stats; },
     setVisible(v) {
       if (v && !built) build();
       g.visible = !!v;
