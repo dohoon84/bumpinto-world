@@ -12,6 +12,8 @@ import { n, sgn, T, tr, esc, EI, AXIS, axisName, axisTile, mockTag, bumPill, kar
 import { show, close, toastLayer } from './layer.js';
 import { balanceChip, countUp, refresh } from './hud.js';
 import { googleButton } from '../google.js';
+import { createTitleClient } from '../../titles/client.js'; // [weekly-titles]
+import { titlesEnabled } from '../../titles/flag.js';
 
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 const panel = (cls, html) => el('div', `v2-panel ve-panel ${cls}`, html);
@@ -200,8 +202,26 @@ export async function rewardSequence(ev, { stopAt = null } = {}) {
 }
 
 // ---------- 06 카르마 · 업적
+
+function weeklyBlock(weekly) {
+  if (!weekly || weekly.guest) return '';
+  const cur = weekly.current;
+  const hist = weekly.history || [];
+  const curLine = cur
+    ? tr(`이번 주 · ${T(cur.name)}`, `This week · ${T(cur.name)}`)
+    : tr('이번 주 칭호는 아직 없어요. 다음 정산(월요일 0시 KST)까지 기다려 주세요.', 'No title this week. The next settlement is Monday 00:00 KST.');
+  const rows = hist.length
+    ? hist.map((h) => `<span class="ve-step${cur && h.weekKey === cur.weekKey ? ' on' : ''}">${esc(T(h.record))}</span>`).join('')
+    : `<small>${esc(tr('지난 칭호 기록이 아직 없어요', 'No past titles yet'))}</small>`;
+  return `<div class="ve-ach"><b>${esc(tr('범편의점 주간 칭호', 'Weekly convenience-store titles'))}</b><small>${esc(curLine)}</small><div class="v2-hrow ve-lad" style="flex-wrap:wrap;gap:6px">${rows}</div></div>`;
+}
+
 export async function openKarma({ link } = {}) {
   const k = await econ.getKarma();
+  let weekly = null;
+  if (titlesEnabled()) {
+    try { weekly = await createTitleClient().load(); } catch { weekly = null; }
+  }
   const ach = k.achievements;
   const un = ach.find((a) => a.state === 'unlocked'), nx = ach.find((a) => a.state !== 'unlocked');
   const p = panel('ve-karma', '');
@@ -215,7 +235,7 @@ export async function openKarma({ link } = {}) {
   };
   p.innerHTML = `${k.asOf ? `<span class="ve-asof">${esc(T(k.asOf))}</span>` : ''}
     <div class="ve-kl">
-      <div class="v2-hrow">${head(tr('카르마', 'Karma'), { icon: v3i() ? gi('karma', 24, 've-gi-head') : EI.karma(20), size: 22 })}<b class="ve-t22 ve-gold">${esc(tr(`총 ${n(k.total)}`, `Total ${n(k.total)}`))}</b>${k.featured ? tag(tr(`대표 칭호 · ${T(k.featured)}`, `Title · ${T(k.featured)}`), '#20c997') : ''}${mockTag()}</div>
+      <div class="v2-hrow">${head(tr('카르마', 'Karma'), { icon: v3i() ? gi('karma', 24, 've-gi-head') : EI.karma(20), size: 22 })}<b class="ve-t22 ve-gold">${esc(tr(`총 ${n(k.total)}`, `Total ${n(k.total)}`))}</b>${(weekly?.featured?.name || weekly?.current?.name || k.featured) ? tag(tr(`대표 칭호 · ${T(weekly?.featured?.name || weekly?.current?.name || k.featured)}`, `Title · ${T(weekly?.featured?.name || weekly?.current?.name || k.featured)}`), '#20c997') : ''}${mockTag()}</div>
       <p class="ve-note">${esc(tr('행동을 하면 축별로 쌓여요. 칭호는 누적 점수로 열려요.', 'Actions add up per axis. Titles unlock by total points.'))}</p>
       ${k.guest ? `<div class="ve-empty sm"><b>${esc(tr('구글 계정을 연동하면 카르마와 업적이 쌓여요', 'Link a Google account to build karma and achievements'))}</b><button type="button" class="v2-btn sm primary" data-ve="link">${esc(tr('구글 계정 연동하고 bum 받기', 'Link Google account to earn bum'))}</button></div>` : ''}
       ${['health', 'explore', 'transit', 'neighbor', 'streak'].map(axisRow).join('')}
@@ -224,6 +244,7 @@ export async function openKarma({ link } = {}) {
       ${un ? `<div class="ve-ach on">${tag(tr('업적 달성!', 'Unlocked!'), '#ffe169')}<span class="ve-ach-coin">${EI.coin(28)}</span><b class="ve-t20">${esc(T(un.title))}</b><small class="ve-mono">${esc(un.rule)}</small>${bumPill(un.bonus, { cls: 'lg' })}<small>${esc(tr('(1회)', '(once)'))}</small></div>` : ''}
       ${nx ? `<div class="ve-ach"><b>${esc(tr('진행 중 업적', 'In progress'))}</b><small>${esc(T(nx.title))} · ${esc(tr(`보너스 +${n(nx.bonus)}`, `bonus +${n(nx.bonus)}`))}</small>${bar(nx.progress.value, nx.progress.target, { w: 380, h: 8, cls: 'violet' })}<small>${esc(unitText(nx.progress))}</small></div>` : ''}
       <div class="ve-ach"><b>${esc(tr('칭호 사다리', 'Title ladder'))}</b>${k.ladders.map((l) => `<div class="v2-hrow ve-lad"><span class="ve-dot" style="background:${AXIS[l.axis].c}">${EI[l.axis](10)}</span>${l.steps.map((s) => `<span class="ve-step${s.unlocked ? ' on' : ''}" style="--c:${AXIS[l.axis].c}">${s.unlocked ? '' : EI.lock(10)}${esc(T(s.title))} ${n(s.at)}</span>`).join('')}</div>`).join('')}</div>
+      ${weeklyBlock(weekly)}
     </div>${closeBtn()}`;
   p.addEventListener('click', (e) => { if (e.target.closest('[data-ve="link"]')) link?.(); });
   show(p, { key: '06' });
