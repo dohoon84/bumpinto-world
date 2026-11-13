@@ -1,5 +1,7 @@
 import * as THREE from 'three';
 import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js';
+import { createAvatar } from '../entities/avatar.js';
+import { sanitizeLook } from '../look.js';
 import { CLASS_MARKS } from './classes.js';
 
 const rt = new THREE.WebGLRenderTarget(256, 256);
@@ -131,6 +133,107 @@ function lookKey(source) {
 
 export function clearPortraitCache() {
   cache.clear();
+}
+
+function avatarLookKey(look) {
+  return JSON.stringify(sanitizeLook(look || {}));
+}
+
+function shootAvatar(renderer, avatar, mode) {
+  const prev = renderer.getRenderTarget();
+  const oldClear = renderer.getClearColor(new THREE.Color());
+  const oldAlpha = renderer.getClearAlpha();
+  const target = mode === 'figure' ? figureRt : rt;
+  renderer.setRenderTarget(target);
+  renderer.setClearColor(mode === 'figure' ? '#1a2744' : '#1a120c', 1);
+  avatar.position.set(0, 0, 0);
+  avatar.rotation.set(0, 0, 0);
+  avatar.scale.setScalar(1);
+  avatar.visible = true;
+  prepare(avatar);
+  portraitScene.add(avatar);
+  avatar.updateMatrixWorld(true);
+  const box = new THREE.Box3();
+  const part = new THREE.Box3();
+  const shown = (o) => {
+    let n = o;
+    while (n) {
+      if (!n.visible) return false;
+      n = n.parent;
+    }
+    return true;
+  };
+  avatar.traverse((o) => {
+    if (!o.isMesh || !shown(o) || !o.geometry) return;
+    if (!o.geometry.boundingBox) o.geometry.computeBoundingBox();
+    part.copy(o.geometry.boundingBox).applyMatrix4(o.matrixWorld);
+    box.union(part);
+  });
+  const top = box.max.y;
+  const midX = (box.min.x + box.max.x) * 0.5;
+  if (mode === 'figure') {
+    cam.fov = 32;
+    cam.aspect = 480 / 640;
+    const focusY = 0.98;
+    cam.position.set(midX + 0.42, focusY + 0.22, 3.35);
+    cam.lookAt(midX, focusY, 0);
+    key.position.set(midX + 1.2, top + 0.4, 2);
+    fill.position.set(midX - 1.4, focusY, 1.2);
+  } else {
+    cam.fov = 22;
+    cam.aspect = 1;
+    const focusY = top - 0.32;
+    cam.position.set(midX, focusY + 0.02, 1.62);
+    cam.lookAt(midX, focusY - 0.08, 0);
+    key.position.set(midX + 0.7, focusY + 0.5, 1.4);
+    fill.position.set(midX - 0.8, focusY, 0.6);
+  }
+  cam.updateProjectionMatrix();
+  renderer.render(portraitScene, cam);
+  const w = target.width;
+  const h = target.height;
+  const pixels = new Uint8Array(w * h * 4);
+  renderer.readRenderTargetPixels(target, 0, 0, w, h, pixels);
+  portraitScene.remove(avatar);
+  renderer.setRenderTarget(prev);
+  renderer.setClearColor(oldClear, oldAlpha);
+  return pixelsToURL(pixels, w, h);
+}
+
+function pixelsToURL(pixels, w, h) {
+  const canvas = document.createElement('canvas');
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext('2d');
+  const img = ctx.createImageData(w, h);
+  for (let y = 0; y < h; y++) {
+    const src = (h - 1 - y) * w * 4;
+    img.data.set(pixels.subarray(src, src + w * 4), y * w * 4);
+  }
+  ctx.putImageData(img, 0, 0);
+  return canvas.toDataURL('image/png');
+}
+
+const figureRt = new THREE.WebGLRenderTarget(480, 640);
+
+export function renderWorldPortrait(renderer, look) {
+  const key = `world|${avatarLookKey(look)}`;
+  const cached = cache.get(key);
+  if (cached) return cached;
+  const avatar = createAvatar(sanitizeLook(look || {}));
+  const url = shootAvatar(renderer, avatar, 'portrait');
+  if (url) cache.set(key, url);
+  return url;
+}
+
+export function renderWorldFigure(renderer, look) {
+  const key = `figure|${avatarLookKey(look)}`;
+  const cached = cache.get(key);
+  if (cached) return cached;
+  const avatar = createAvatar(sanitizeLook(look || {}));
+  const url = shootAvatar(renderer, avatar, 'figure');
+  if (url) cache.set(key, url);
+  return url;
 }
 
 export function renderClassPortrait(renderer, source, classId) {

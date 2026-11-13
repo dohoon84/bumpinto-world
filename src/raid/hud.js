@@ -600,12 +600,23 @@ export function createHud() {
         });
       });
     },
-    setPortrait(url, classId) {
+    setPortrait(url) {
       const portrait = root.querySelector('[data-portrait]');
       if (!portrait || !url) return;
+      this.playerPortrait = url;
       portrait.dataset.lock = '1';
-      if (classId) portrait.dataset.klass = classId;
       portrait.src = url;
+      const row = root.querySelector('.c-mate[data-mate="me"]');
+      if (!row) return;
+      let face = row.querySelector('.me-face');
+      if (!face) {
+        face = document.createElement('img');
+        face.className = 'me-face';
+        face.alt = '';
+        row.querySelector('.gem')?.remove();
+        row.prepend(face);
+      }
+      face.src = url;
     },
     setClass(id) {
       active = getClass(id);
@@ -697,9 +708,12 @@ export function createHud() {
         const dead = !!(m.down || (m.hp ?? 1) <= 0);
         const gem = dead ? '#5a5c64' : (m.gem || GEM[m.role] || '#8C7FFF');
         const hp = dead ? 0 : Math.round((m.hp ?? 1) * 100);
+        const mine = m.isMe && this.playerPortrait
+          ? `<img class="me-face" src="${this.playerPortrait}" alt="" />`
+          : `<i class="gem" style="--gem:${gem}"></i>`;
         return `
         <div class="c-mate${dead ? ' is-dead' : ''}${m.aggro ? ' is-aggro' : ''}" data-mate="${m.id}" data-gem="${GEM[m.role] || '#8C7FFF'}">
-          <i class="gem" style="--gem:${gem}"></i>
+          ${mine}
           <b>${m.name}</b>
           <span class="role" style="color:${gem}">${m.role}</span>
           <em data-pct>${dead ? '부활 대기' : `${hp}%`}</em>

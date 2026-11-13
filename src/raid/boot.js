@@ -13,7 +13,7 @@ import { createVfx } from './vfx.js';
 import { createCity } from './city.js';
 import { createEnvKit } from './envkit.js';
 import { createFlames } from './flames.js';
-import { clearPortraitCache, renderClassPortrait } from './portrait.js';
+import { clearPortraitCache, renderClassPortrait, renderWorldFigure, renderWorldPortrait } from './portrait.js';
 import { mountPlayerFace, readPlayerLook, writePlayerLook } from './playerFace.js';
 import { attachTrails, updateTrails } from './trails.js';
 import { createRaidRoom, mountRaidChat } from './chat.js';
@@ -124,7 +124,7 @@ actor.position.set(spawn.x, 0, spawn.z);
 actor.rotation.y = PATH_YAW;
 scene.add(actor);
 
-const citizen = createAvatar(look);
+let citizen = createAvatar(look);
 actor.add(citizen);
 const packs = {};
 for (const id of CLASS_IDS) {
@@ -163,11 +163,17 @@ function mountForm(id) {
   ghost.visible = false;
   scene.add(ghost);
 }
-function refreshPortrait(id) {
+function replaceCitizen(next) {
+  const parent = citizen.parent;
+  const vis = citizen.visible;
+  parent?.remove(citizen);
+  citizen = createAvatar(next);
+  citizen.visible = vis;
+  parent?.add(citizen);
+}
+function refreshPortrait(next = citizen.userData.look) {
   try {
-    const pack = packs[id];
-    pack?.animate?.(pack.group, 0.16, { speed: 0, phase: 'calm' });
-    hud.setPortrait(renderClassPortrait(renderer, pack.group, id), id);
+    hud.setPortrait(renderWorldPortrait(renderer, next));
   } catch (err) {
     console.warn('[raid] portrait', err);
   }
@@ -839,7 +845,7 @@ const combat = createCombat({
 });
 combat.setClass(classId);
 hud.setClass(classId);
-refreshPortrait(classId);
+refreshPortrait();
 layoutParty(classId);
 
 let phase = autoStart ? 'intro' : 'calm';
@@ -953,7 +959,7 @@ function beginRaid(id) {
   mountForm(id);
   combat.setClass(id);
   hud.setClass(id);
-  refreshPortrait(id);
+  refreshPortrait();
   hud.hidePick();
   hud.clearPeace();
   hud.closeCutscene();
@@ -1737,18 +1743,17 @@ if (shot === 'alert' || shot === 'cutscene') {
 }
 
 if (shot === 'transform') {
-  citizen.visible = false;
-  form.group.visible = true;
+  citizen.visible = true;
+  form.group.visible = false;
   if (ghost) ghost.visible = false;
-  form.animate(form.group, 0.2, { speed: 0, phase: 'calm' });
-  form.group.updateMatrixWorld(true);
-  const faceMesh = form.group.getObjectByName('player-face-mesh');
+  citizen.rotation.set(0, 0, 0);
+  citizen.updateMatrixWorld(true);
+  const head = citizen.userData.head;
   const facePos = new THREE.Vector3();
-  if (faceMesh) faceMesh.getWorldPosition(facePos);
-  else facePos.set(actor.position.x, (form.group.userData.headY || 1.25) + 0.16, actor.position.z);
+  head.getWorldPosition(facePos);
   const forward = new THREE.Vector3(0, 0, 1);
-  if (faceMesh) forward.applyQuaternion(faceMesh.getWorldQuaternion(new THREE.Quaternion())).normalize();
-  const dist = 1.85;
+  forward.applyQuaternion(head.getWorldQuaternion(new THREE.Quaternion())).normalize();
+  const dist = 1.35;
   camLock = {
     px: facePos.x + forward.x * dist,
     py: facePos.y + 0.06,
@@ -2136,13 +2141,21 @@ window.__raid = {
       for (const id of CLASS_IDS) out[id] = renderClassPortrait(renderer, packs[id].group, id);
       return out;
     },
+    avatarViews() {
+      const look = citizen.userData.look;
+      return {
+        figure: renderWorldFigure(renderer, look),
+        portrait: renderWorldPortrait(renderer, look),
+      };
+    },
     setLook(raw) {
       const next = writePlayerLook(raw);
       clearPortraitCache();
+      replaceCitizen(next);
       for (const id of CLASS_IDS) {
         if (packs[id].source === 'glb') mountPlayerFace(packs[id].group, next, id);
       }
-      refreshPortrait(classId);
+      refreshPortrait(next);
       return next;
     },
     playerLook() { return form?.group?.userData?.playerLook || null; },

@@ -622,6 +622,12 @@
   display: grid; grid-template-columns: 16px 42px 48px 1fr; grid-template-rows: 16px 6px 3px;
   column-gap: 4px; align-content: start; align-items: center; row-gap: 1px;
 }
+#bw-raid .c-mate .me-face {
+  width: 18px; height: 18px; border-radius: 50%; object-fit: cover;
+  grid-row: 1 / 4; grid-column: 1; justify-self: center;
+  box-shadow: 0 0 0 1px #8a6420, 0 0 0 2px #e8b64a;
+  background: #1a120c;
+}
 #bw-raid .c-mate .gem {
   width: 10px; height: 10px; margin-left: 2px; transform: rotate(45deg);
   background: var(--gem); box-shadow: 0 0 6px var(--gem); border: 1px solid var(--gold-hi);
