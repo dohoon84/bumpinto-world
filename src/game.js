@@ -3099,6 +3099,7 @@ function frame() {
     emoteFx.update(dt, innerWidth, innerHeight);
   }
   perfHud.tick();
+  if (bgm) { const mdA = corridor?.myeongdong; bgm.setAmbience(joined && !subway?.active && mdA?.ready && mdA.inCathedral?.(player.position.x, player.position.z) ? 'cathedral' : ''); } // [cathedral-bgm] 명동성당 안: 성당 배경음으로 크로스페이드 (바뀔 때만)
   bgm?.setDuck(!!ride?.active || !!adminBike?.riding || !!giftMount() || !!subway?.voiceActive); // [bgm] 버스·바이크 소리 · [subway-voice] 지하철 안내 방송 중 살짝 줄임 (바뀔 때만 동작)
   memHud.tick();
   requestAnimationFrame(frame);

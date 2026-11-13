@@ -14,6 +14,9 @@ export const DEFAULT_VOLUME = 0.55;
 export const DUCK_GAIN = 0.55; // 탈것 효과음(버스·바이크 엔진)이 나는 동안 BGM 을 이만큼으로
 const MIME = { webm: 'audio/webm; codecs="opus"', mp3: 'audio/mpeg' };
 const TICK_MS = 250;
+// [cathedral-bgm] 장소 배경음(성당 등): 64 초 반복 + 파일 끝에 처음 3 초를 덧붙여 두었다 → 요소 2개로 같은 소리끼리 겹쳐 이어서 빈틈 없이 돈다
+export const AMBIENCE = { cathedral: { loop: 64, overlap: 3 } };
+export const AMB_FADE = 2.6; // 월드 BGM ↔ 장소 배경음 크로스페이드(초)
 
 export function pickFormat(probe) {
   try {
@@ -54,6 +57,7 @@ export function createBgmPlayer({ base = './', storage = null, onChange = () => 
     ctx: null, bus: null, an: null, vol: null, decks: [], cur: null, xf: null, timer: 0, token: 0, fails: 0,
     entered: false, userPaused: false, held: false, heldWasPlaying: false, hidden: typeof document !== 'undefined' && document.hidden,
     started: false, playing: false, waitGesture: false, gestured: false, duck: false, fadeInTok: -1,
+    mus: null, amb: { want: '', id: '', els: null, gain: null, cur: 0, timer: 0, next: 0, off: 0, swap: 0, nodes: 0, tok: 0 }, // [cathedral-bgm]
     ...readPrefs(store),
   };
   // [mobile] 볼륨은 기기 하드웨어 버튼으로 — 게임 안 볼륨은 기본값 고정(예전에 저장된 값에 묶여 못 키우는 일 없게). 음소거는 그대로
@@ -81,10 +85,11 @@ export function createBgmPlayer({ base = './', storage = null, onChange = () => 
     s.an = s.ctx.createAnalyser(); s.an.fftSize = 256; s.an.smoothingTimeConstant = 0.78;
     s.vol = s.ctx.createGain(); s.vol.gain.value = volTarget();
     s.bus.connect(s.an); s.an.connect(s.vol); s.vol.connect(s.ctx.destination);
+    s.mus = s.ctx.createGain(); s.mus.gain.value = s.amb.want ? 0 : 1; s.mus.connect(s.bus); // [cathedral-bgm] 월드 곡 몫 (장소 배경음과 크로스페이드)
     s.decks = [0, 1].map((i) => {
       const el = new Audio(); el.preload = 'none'; el.crossOrigin = 'anonymous';
       const d = { i, el, node: s.ctx.createMediaElementSource(el), gain: s.ctx.createGain(), idx: -1, failed: false, timing: null };
-      d.gain.gain.value = 0; d.node.connect(d.gain); d.gain.connect(s.bus);
+      d.gain.gain.value = 0; d.node.connect(d.gain); d.gain.connect(s.mus);
       el.addEventListener('loadedmetadata', () => { d.timing = timingFor(el.duration, { skip: order[d.idx]?.skip || 0 }); });
       el.addEventListener('playing', () => {
         if (d !== s.cur) return;
@@ -116,6 +121,72 @@ export function createBgmPlayer({ base = './', storage = null, onChange = () => 
     else if (e?.name !== 'AbortError') console.warn('[bgm] play failed', order[d.idx]?.id, e?.message || e);
   });
 
+  // ---- [cathedral-bgm] 장소 배경음 ----
+  //   그래프: ambEl[0|1] → MediaElementSource → 요소 게인 → amb.gain ┐
+  //           (월드 곡 덱들) → mus ─────────────────────────────────┴→ bus → analyser → vol(볼륨·음소거·덕킹)
+  //   노드는 처음 한 번만 만들고 계속 쓴다(드나들어도 늘지 않음). 꺼지면 요소를 멈추고 src 를 비운다.
+  const A = s.amb;
+  const ambUrl = (id) => `${base}audio/ambience/${id}.${ext}`;
+  function ensureAmb() {
+    if (A.els) return;
+    A.gain = s.ctx.createGain(); A.gain.gain.value = 0; A.gain.connect(s.bus); A.nodes++;
+    A.els = [0, 1].map(() => {
+      const el = new Audio(); el.preload = 'none'; el.crossOrigin = 'anonymous';
+      const node = s.ctx.createMediaElementSource(el), g = s.ctx.createGain(); g.gain.value = 0; node.connect(g); g.connect(A.gain); A.nodes += 2;
+      el.addEventListener('error', () => { if (A.id) console.warn('[bgm] ambience load failed', A.id, el.error?.code); });
+      return { el, g };
+    });
+  }
+  const ambPlay = (e) => e.el.play().catch((err) => { if (err?.name === 'NotAllowedError') { s.waitGesture = true; emit('state'); } else if (err?.name !== 'AbortError') console.warn('[bgm] ambience play failed', err?.message || err); });
+  const clearAmbTimers = () => { if (A.timer) { clearInterval(A.timer); A.timer = 0; } if (A.next) { clearTimeout(A.next); A.next = 0; } if (A.swap) { clearTimeout(A.swap); A.swap = 0; } };
+  function ambTick() {
+    const spec = AMBIENCE[A.id]; if (!spec || A.next || !s.playing) return;
+    const cur = A.els[A.cur], t = cur.el.currentTime;
+    if (t < spec.loop - 0.6) return;
+    // 반복 지점(loop 초)에서 다른 요소를 0 초부터 — 덧붙인 꼬리와 같은 소리라 겹쳐도 티가 안 난다
+    A.next = setTimeout(() => {
+      A.next = 0; if (!A.id || !s.playing) return;
+      const o = A.els[A.cur], n = A.els[A.cur ^ 1], ov = spec.overlap - 0.4, t0 = now();
+      n.el.currentTime = 0; holdAt(n.g.gain, 0); ambPlay(n);
+      n.g.gain.linearRampToValueAtTime(1, t0 + ov); o.g.gain.cancelScheduledValues(t0); o.g.gain.setValueAtTime(1, t0); o.g.gain.linearRampToValueAtTime(0, t0 + ov);
+      A.cur ^= 1;
+      A.swap = setTimeout(() => { A.swap = 0; if (A.els[A.cur] !== o) o.el.pause(); }, ov * 1000 + 120);
+    }, Math.max(0, (spec.loop - t) * 1000 - 15));
+  }
+  function ambStart(id) {
+    ensureAmb(); clearAmbTimers();
+    A.id = id; A.cur = 0;
+    const e = A.els[0], o = A.els[1];
+    try { o.el.pause(); } catch { /* noop */ }
+    holdAt(o.g.gain, 0); holdAt(e.g.gain, 1);
+    e.el.preload = 'auto'; e.el.src = ambUrl(id); e.el.currentTime = 0;
+    o.el.preload = 'auto'; o.el.src = ambUrl(id); // 이어받을 요소도 같은 파일(브라우저 캐시) — 반복 지점에서 바로 0 초부터
+    ambPlay(e);
+    A.timer = setInterval(ambTick, 200);
+  }
+  function ambStop() {
+    clearAmbTimers(); A.id = '';
+    if (!A.els) return;
+    for (const e of A.els) { holdAt(e.g.gain, 0); try { e.el.pause(); e.el.removeAttribute('src'); e.el.load(); } catch { /* noop */ } }
+  }
+  const ambActive = () => (A.els && A.id ? [A.els[A.cur], ...(A.swap ? [A.els[A.cur ^ 1]] : [])] : []);
+  /** 원하는 장소 배경음(A.want)으로 dur 초 크로스페이드 */
+  function applyAmb(dur = AMB_FADE) {
+    if (!s.ctx || !s.mus) return; // 아직 소리 시작 전 — start() 때 맞춘다
+    const want = A.want, tok = ++A.tok;
+    if (A.off) { clearTimeout(A.off); A.off = 0; }
+    if (want) {
+      if (A.id !== want && s.playing) ambStart(want);
+      if (A.gain) fadeTo(A.gain.gain, 1, dur);
+      fadeTo(s.mus.gain, 0, dur);
+    } else {
+      fadeTo(s.mus.gain, 1, dur);
+      if (A.gain) fadeTo(A.gain.gain, 0, dur);
+      if (A.id) A.off = setTimeout(() => { A.off = 0; if (tok === A.tok && !A.want) ambStop(); }, dur * 1000 + 150);
+    }
+    emit('state');
+  }
+
   // ---- 시작 · 크로스페이드 ----
   function start() {
     s.token++; // 진행 중인 정지 페이드의 뒷정리를 무효화
@@ -129,6 +200,7 @@ export function createBgmPlayer({ base = './', storage = null, onChange = () => 
     s.cur.gain.gain.setValueAtTime(1, now());
     s.fadeInTok = s.token; // 'playing' 이벤트에서 페이드인
     play(s.cur);
+    if (A.want) { holdAt(s.mus.gain, 0); ambStart(A.want); holdAt(A.gain.gain, 1); s.fadeInTok = -1; fadeTo(s.bus.gain, 1, FADE.start); } // [cathedral-bgm] 성당 안에서 소리가 처음 켜지면 바로 성당 소리로
     startTimer(); emit('track');
   }
   function crossfade(dur) {
@@ -177,7 +249,7 @@ export function createBgmPlayer({ base = './', storage = null, onChange = () => 
     setTimeout(() => { if (tok === s.token) done(); }, dur * 1000 + 80);
   }
   function pause(dur = FADE.pause) {
-    fadeOutThen(dur, () => { for (const d of activeDecks()) d.el.pause(); s.ctx.suspend().catch(() => {}); emit('state'); });
+    fadeOutThen(dur, () => { for (const d of activeDecks()) d.el.pause(); for (const e of ambActive()) e.el.pause(); s.ctx.suspend().catch(() => {}); emit('state'); });
     emit('state');
   }
   function resume() {
@@ -185,12 +257,14 @@ export function createBgmPlayer({ base = './', storage = null, onChange = () => 
     if (s.ctx.state !== 'running') s.ctx.resume().catch(() => {});
     for (const d of activeDecks()) if (d.el.paused) play(d);
     s.playing = true; startTimer();
+    if (A.want && A.id !== A.want) { holdAt(s.mus.gain, 0); ambStart(A.want); holdAt(A.gain.gain, 1); } // [cathedral-bgm]
+    else for (const e of ambActive()) if (e.el.paused && e.el.src) ambPlay(e);
     fadeTo(s.bus.gain, 1, FADE.resume);
     emit('state');
   }
   function stop(dur = FADE.leave) {
     s.started = false;
-    fadeOutThen(dur, () => { for (const d of s.decks) unload(d); s.cur = null; s.xf = null; s.ctx?.suspend().catch(() => {}); emit('state'); });
+    fadeOutThen(dur, () => { for (const d of s.decks) unload(d); ambStop(); s.cur = null; s.xf = null; s.ctx?.suspend().catch(() => {}); emit('state'); });
     emit('state');
   }
   const canStart = () => s.gestured || !!navigator.userActivation?.hasBeenActive;
@@ -211,6 +285,7 @@ export function createBgmPlayer({ base = './', storage = null, onChange = () => 
     if (!s.ctx || !s.playing) return;
     if (s.ctx.state !== 'running') s.ctx.resume().catch(() => {});
     for (const d of activeDecks()) if (d.el.paused && d.el.src) play(d);
+    for (const e of ambActive()) if (e.el.paused && e.el.src) ambPlay(e); // [cathedral-bgm]
   }
   const onGesture = () => { s.gestured = true; if (s.waitGesture) apply(); else unlock(); };
   for (const ev of ['pointerdown', 'touchend', 'click', 'keydown']) addEventListener(ev, onGesture, { capture: true, passive: true });
@@ -276,6 +351,13 @@ export function createBgmPlayer({ base = './', storage = null, onChange = () => 
       if (s.muted && s.volume > 0) { s.muted = false; save(BGM_MUTED_KEY, '0'); }
       applyVol(); emit('state');
     },
+    /** [cathedral-bgm] 장소 배경음 켜기('cathedral') / 끄기('' · null) — 바뀔 때만 크로스페이드 (매 프레임 불러도 됨) */
+    setAmbience(id) {
+      id = id && AMBIENCE[id] ? id : '';
+      if (id === A.want) return;
+      A.want = id; applyAmb();
+    },
+    get ambience() { return A.want; },
     setDuck(on) { on = !!on; if (on === s.duck) return; s.duck = on; applyVol(0.25); },
     /** 외부(오락실 게임 등)가 월드 OST 를 완전히 멈춤. userPaused·muted 는 건드리지 않음. */
     hold(on) {
@@ -305,9 +387,13 @@ export function createBgmPlayer({ base = './', storage = null, onChange = () => 
         cur: d && d.idx >= 0 ? { deck: d.i, id: order[d.idx].id, t: +d.el.currentTime.toFixed(2), dur: d.el.duration, timing: d.timing } : null,
         decks: s.decks.map((k) => ({ deck: k.i, id: k.idx >= 0 ? order[k.idx].id : null, gain: +k.gain.gain.value.toFixed(3), paused: k.el.paused, t: +k.el.currentTime.toFixed(2), ready: k.el.readyState, net: k.el.networkState })),
         bus: s.bus ? +s.bus.gain.value.toFixed(3) : null, vol: s.vol ? +s.vol.gain.value.toFixed(3) : null,
+        mus: s.mus ? +s.mus.gain.value.toFixed(3) : null, // [cathedral-bgm]
+        amb: { want: A.want, id: A.id, gain: A.gain ? +A.gain.gain.value.toFixed(3) : null, nodes: A.nodes, timers: (A.timer ? 1 : 0) + (A.next ? 1 : 0) + (A.swap ? 1 : 0) + (A.off ? 1 : 0), els: A.els ? A.els.map((e) => ({ paused: e.el.paused, src: !!e.el.getAttribute('src'), t: +e.el.currentTime.toFixed(2), g: +e.g.gain.value.toFixed(3) })) : [] },
       };
     },
     /** 지금 곡을 크로스페이드 시작 sec 초 전으로 */
+    /** [cathedral-bgm] 장소 배경음을 반복 지점 sec 초 전으로 (이음매 확인용) */
+    seekAmbLoop(sec = 2) { const e = A.els?.[A.cur]; const sp = AMBIENCE[A.id]; if (!e || !sp) return false; e.el.currentTime = Math.max(0, sp.loop - sec); return true; },
     seekBeforeXfade(sec = 6) { const d = s.cur; if (!d?.timing) return false; d.el.currentTime = Math.max(0, d.timing.xfadeAt - sec); return true; },
     order: order.map((t) => t.id),
   };
