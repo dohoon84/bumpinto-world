@@ -23,6 +23,7 @@
     "accounts:test": "node scripts/test-accounts.mjs",
     "depot:day4:test": "node scripts/test-depot-day4.mjs",
     "depot:day5:test": "node scripts/test-depot-day5.mjs",
+    "depot:day6:test": "node scripts/test-depot-day6.mjs",
     "economy:test": "node scripts/test-economy.mjs && node scripts/test-econ-client.mjs",
     "bgm:test": "node scripts/test-bgm.mjs",
     "corridor:tancheon": "node --max-old-space-size=8192 scripts/corridor/build-tancheon.mjs",

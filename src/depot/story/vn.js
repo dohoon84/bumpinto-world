@@ -322,6 +322,13 @@ export function createVN({ assetBase, isMobile = false, getSettings, onCue = () 
     c.innerHTML = `<h2>${day}일차</h2><h3>${esc(title || '')}</h3><p>${esc(subtitle || '')}</p>${missed ? `<span class="miss">어제 놓친 사건 · ${esc(missed)}</span>` : ''}`;
     root.appendChild(c); await sleep(missed ? 2600 : 1600); c.remove();
   }
+  /** 시계 카드 (timeskip · 6일차 03:00) — 어두운 화면에 큰 시계 1.8초 */
+  async function clockCard({ clock, sub }) {
+    onCue('ui-pause');
+    const c = document.createElement('div'); c.className = 'card'; c.style.background = 'rgba(6,10,18,.94)'; c.style.textAlign = 'center';
+    c.innerHTML = `<h2 style="font-size:clamp(44px,9vh,84px);letter-spacing:4px;font-variant-numeric:tabular-nums">${esc(clock || '')}</h2>${sub ? `<p>${esc(sub)}</p>` : ''}`;
+    root.appendChild(c); await sleep(1800); c.remove();
+  }
   // 모바일: 왼쪽 칩 대신 오른쪽 카드 하나 — 다음 할 일(➜ 목적지 · m) 한 줄 + 목표/성공/보상은 처음 몇 초만 펼침, 탭하면 다시 펼침
   const M = { det: null, detName: '', openT: 0, ev: null, sig: '', hint: '', stat: '' };
   function renderM() {
@@ -446,7 +453,7 @@ export function createVN({ assetBase, isMobile = false, getSettings, onCue = () 
   $('.gear').addEventListener('pointerdown', (e) => { e.stopPropagation(); e.preventDefault(); gearHandler?.(); });
   let gearHandler = null;
   return {
-    root, say, choose, close, pickCard, nextDayCard, cutIn, dayCard, missionCard, setChip, setHint, shakeChip, stampCard, modeSelect, settings, confirmExit, toast, bubble, prefetch, setOffsets,
+    root, say, choose, close, pickCard, nextDayCard, cutIn, dayCard, clockCard, missionCard, setChip, setHint, shakeChip, stampCard, modeSelect, settings, confirmExit, toast, bubble, prefetch, setOffsets,
     set onExit(f) { exitHandler = f; }, set onGear(f) { gearHandler = f; },
     setInGame(on) { root.classList.toggle('ingame', on); },
     get isOpen() { return S.open || !!S.modal; }, get blocking() { return S.open || !!S.modal; },

@@ -44,6 +44,25 @@ const SYN = {
   'camera-shutter': [[4200, 0, 0.04, 'noise', 0.3], [2600, 0.07, 0.06, 'noise', 0.24], [2637, 0.1, 0.2, 'sine', 0.06]], // 휴대폰 찰칵 + 플래시 핑 0.3초
   'stinger.reveal': [[147, 0, 0.35, 'sawtooth', 0.09], [175, 0.32, 0.35, 'sawtooth', 0.09], [208, 0.64, 0.35, 'sawtooth', 0.09], [294, 0.98, 1.0, 'sawtooth', 0.1], [587, 0.98, 1.0, 'triangle', 0.08], [1175, 1.2, 0.8, 'sine', 0.04], [73, 0.98, 1.0, 'sine', 0.22]], // 정체 공개 2초
   'lava-hiss': [[5200, 0, 0.5, 'noise', 0.14], [2400, 0.02, 0.3, 'noise', 0.06]], // 바퀴가 선 밖 치익
+  // v0.7 대본·사건이 '기존 이름'으로 쓰지만 audio.play 에 없는 소리 (절차 합성)
+  'applause': [[2400, 0, 0.5, 'noise', 0.16], [3000, 0.2, 0.6, 'noise', 0.14], [2200, 0.45, 0.7, 'noise', 0.16], [2800, 0.8, 0.7, 'noise', 0.13], [2500, 1.2, 0.8, 'noise', 0.11], [2600, 1.7, 0.6, 'noise', 0.07]], // 박수 2초
+  'forklift-beep': [[1050, 0, 0.22, 'square', 0.06], [1050, 0.45, 0.22, 'square', 0.06], [1050, 0.9, 0.22, 'square', 0.05]], // 지게차 후진음 삐-삐-삐
+  'freezer-alarm': [[1480, 0, 0.12, 'square', 0.06], [1245, 0.15, 0.12, 'square', 0.06], [1480, 0.3, 0.12, 'square', 0.06]], // E09 녹음 90%↑
+  'rain-roof': [[700, 0, 1.6, 'noise', 0.03]], // 새벽 바람 (아주 낮게)
+  // v0.7 새 소리 (audio-cues.json newSfxV07) — 6·7일차
+  'race-countdown': [[880, 0, 0.16, 'square', 0.09], [880, 0.6, 0.16, 'square', 0.09], [880, 1.2, 0.16, 'square', 0.09], [1760, 1.8, 0.55, 'square', 0.1], [1320, 1.8, 0.6, 'triangle', 0.08]], // 삑-삑-삑-뽀옹 2.4초
+  'lap-bell': [[1568, 0, 0.7, 'sine', 0.16], [3136, 0, 0.35, 'sine', 0.05], [2349, 0.01, 0.5, 'sine', 0.04]], // 핸드벨 땡 (마지막 바퀴는 index.js 가 두 번)
+  'flashlight-click': [[3200, 0, 0.03, 'noise', 0.26], [1900, 0.07, 0.04, 'noise', 0.2]], // 손전등 딸깍 0.15초
+  'forklift-spot': [[1320, 0, 0.13, 'square', 0.08], [1320, 0.2, 0.13, 'square', 0.08], [72, 0.42, 0.38, 'sine', 0.38], [160, 0.42, 0.1, 'noise', 0.2]], // 경고음 + 쿵 0.8초
+  'gold-box-open': [[320, 0, 0.22, 'noise', 0.2], [1568, 0.3, 0.45, 'sine', 0.08], [2093, 0.45, 0.45, 'sine', 0.07], [2637, 0.6, 0.5, 'sine', 0.06], [4200, 0.95, 0.6, 'noise', 0.07]], // 뚜껑 + 반짝 + 종이 바스락 1.6초
+  'melt-drip': [[1250, 0, 0.05, 'sine', 0.12], [640, 0.04, 0.09, 'sine', 0.08]], // 녹음 +5%마다 똑
+  'tablet-tap': [[2600, 0, 0.025, 'noise', 0.2], [2700, 0.14, 0.025, 'noise', 0.17]], // 감사관 태블릿 톡톡
+  'check-stamp': [[118, 0, 0.14, 'sine', 0.36], [900, 0, 0.05, 'noise', 0.22]], // 고무도장 탁
+  'gold-stamp': [[90, 0, 0.16, 'sine', 0.38], [1568, 0.1, 0.35, 'sine', 0.07], [90, 0.55, 0.16, 'sine', 0.38], [1760, 0.65, 0.35, 'sine', 0.07], [90, 1.1, 0.16, 'sine', 0.38], [1976, 1.2, 0.35, 'sine', 0.07], [90, 1.65, 0.18, 'sine', 0.42], [2093, 1.75, 0.8, 'sine', 0.09], [6000, 1.8, 0.5, 'noise', 0.05]], // 금도장 쾅 ×4 + 반짝
+  'pa-sniff': [[1800, 0, 0.22, 'noise', 0.1], [1500, 0.45, 0.32, 'noise', 0.1]], // 방송 너머 훌쩍 (말소리 없음)
+  'phone-buzz': [[148, 0, 0.36, 'sawtooth', 0.06], [148, 0.5, 0.36, 'sawtooth', 0.06]], // 휴대폰 진동
+  'motif.auditor': [[2000, 0, 0.02, 'square', 0.08], [2000, 0.5, 0.02, 'square', 0.08], [2000, 1.0, 0.02, 'square', 0.08], [2000, 1.5, 0.02, 'square', 0.08], [117, 0, 1.9, 'sawtooth', 0.05], [175, 0.5, 1.4, 'sawtooth', 0.04], [156, 1.2, 0.8, 'sawtooth', 0.04]], // 메트로놈 틱 + 바순 2초
+  'stinger.finale': [[523, 0, 0.55, 'triangle', 0.16], [659, 0.55, 0.55, 'triangle', 0.16], [784, 1.1, 0.55, 'triangle', 0.16], [880, 1.65, 0.6, 'triangle', 0.16], [784, 2.3, 0.7, 'triangle', 0.15], [1047, 3.0, 1.0, 'triangle', 0.16], [262, 0, 3.8, 'sine', 0.08], [2093, 3.0, 1.0, 'sine', 0.06]], // Aisle Sunshine 첫 소절 느리게 + 종 4초
 };
 
 export function createStorySfx({ audio, getLevel }) {
@@ -87,6 +106,10 @@ export function createStorySfx({ audio, getLevel }) {
     'bgm.timesale': { bpm: 148, mul: 0.3, wave: 'square', g: 0.045, notes: [0, 0, 7, 0, 12, 0, 7, 10, 0, 0, 7, 0, 12, 14, 12, 10], root: 440, bass: [0, 0, 5, 7], bassG: 0.1, hat: true },
     'bgm.closing': { bpm: 76, mul: 0.4, wave: 'sine', g: 0.06, notes: [12, 7, 4, 0, 5, 9, 12, 9, 7, 4, 2, 7, 0, null, null, null], root: 659, bass: [0, -5, -3, -5], bassG: 0.05, len: 0.9 },
     'bgm.lava': { bpm: 120, mul: 0.35, wave: 'triangle', g: 0.05, notes: [0, 7, 3, 7, 0, 7, 5, 8, 0, 7, 3, 7, 10, 8, 7, 5], root: 330, bass: [0, 0, -4, -2], bassG: 0.09, hat: true }, // 막장 방송 '바닥은 용암'
+    'bgm.cartrace': { bpm: 160, mul: 0.3, wave: 'square', g: 0.04, notes: [0, 7, 12, 7, 0, 7, 12, 14, 0, 7, 12, 7, 15, 14, 12, 10], root: 392, bass: [0, 0, 5, 7], bassG: 0.1, hat: true }, // 6일차 마감 후 경주
+    'bgm.dawn': { bpm: 70, mul: 0.15, wave: 'sine', g: 0.05, notes: [0, null, 7, null, 3, null, 10, null, 0, null, 5, null, 3, null, null, null], root: 330, bass: [0, -4], bassG: 0.05, len: 1.4 }, // 새벽 3시 (작게)
+    'bgm.legend': { bpm: 84, mul: 0.3, wave: 'triangle', g: 0.06, notes: [0, 4, 7, 11, 12, 11, 7, 4, 5, 9, 12, 16, 14, 12, 9, 7], root: 523, bass: [0, -3, -7, -5], bassG: 0.06, len: 1.1 },
+    'bgm.audit': { bpm: 96, mul: 0.4, wave: 'triangle', g: 0.045, notes: [0, null, 0, null, 3, null, 0, null, -2, null, 0, null, 5, 3, 0, null], root: 247, bass: [0, 0, -2, -5], bassG: 0.08 }, // 7일차 감사 (메트로놈 느낌)
     'bgm.tension': { bpm: 104, mul: 0.6, wave: 'triangle', g: 0.04, notes: [0, null, 0, null, 1, null, 0, null], root: 196, bass: [0, 1], bassG: 0.06 },
   };
   let mood = null, moodTimer = 0, moodBus = null, step = 0, nextT = 0;

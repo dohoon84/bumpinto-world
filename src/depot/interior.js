@@ -630,6 +630,12 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit, a
     st.placedOnce = true;
     return true;
   }
+  /** 스토리: 조건에 맞는 카트 속 상품을 원래 선반으로 (6일차 경주용 범쌀 재고 반납) → 돌려놓은 개수 */
+  function returnItems(pred) {
+    let n = 0;
+    for (const it of items.slice()) if (pred(it)) { detachItem(it); disposeItemMesh(it.mesh); if (it.src) { it.src.im.setMatrixAt(it.src.id, it.src.m); it.src.im.instanceMatrix.needsUpdate = true; } n++; }
+    return n;
+  }
   function removeLast() { // X: 마지막에 넣은 상품을 원래 선반으로
     const it = items[items.length - 1]; if (!it) return;
     detachItem(it); disposeItemMesh(it.mesh);
@@ -734,10 +740,10 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit, a
     return null;
   }
   function driveCart(dt, axes) {
-    const c = st.cart, m = CART.mass + loadKg(), g = CART.g;
+    const c = st.cart, m = CART.mass + loadKg() + (st.extraKg || 0), g = CART.g; // extraKg: 스토리 소품 무게(6일차 금빛 박스)
     const fx = -Math.sin(c.yaw), fz = -Math.cos(c.yaw), rx = Math.cos(c.yaw), rz = -Math.sin(c.yaw);
     let vl = c.vx * fx + c.vz * fz, vs = c.vx * rx + c.vz * rz;
-    const f = axes.f || 0, vmax = axes.run ? CART.run : CART.walk;
+    const f = axes.f || 0, vmax = (axes.run ? CART.run : CART.walk) * (st.vMul || 1); // vMul: 스토리 연출(6일차 경주 ×1.6 · 손전등 끔 ×0.6)
     const Fr = CART.crr * m * g;
     let F = 0;
     if (f > 0) F = (Math.abs(vl) < 0.05 ? CART.pushPeak : CART.push) * f * THREE.MathUtils.clamp((vmax - vl) / 0.35, 0, 1);
@@ -780,7 +786,7 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit, a
     const me = st.me, yaw = me.yaw + st.head.yaw;
     const fx = -Math.sin(yaw), fz = -Math.cos(yaw), rx = Math.cos(yaw), rz = -Math.sin(yaw);
     let mx = fx * (axes.f || 0) + rx * (axes.s || 0), mz = fz * (axes.f || 0) + rz * (axes.s || 0); const l = Math.hypot(mx, mz);
-    if (l > 0.01) { const sp = (axes.run ? 2.4 : 1.4) * Math.min(1, l); mx /= l; mz /= l; let nx = me.x + mx * sp * dt, nz = me.z + mz * sp * dt; const h = collide2D(nx, nz, 0.3); if (h) { nx += h.nx * h.pen; nz += h.nz * h.pen; } me.x = nx; me.z = nz; }
+    if (l > 0.01) { const sp = (axes.run ? 2.4 : 1.4) * Math.min(1, l) * (st.vMul || 1); mx /= l; mz /= l; let nx = me.x + mx * sp * dt, nz = me.z + mz * sp * dt; const h = collide2D(nx, nz, 0.3); if (h) { nx += h.nx * h.pen; nz += h.nz * h.pen; } me.x = nx; me.z = nz; }
   }
 
   // ---------- 물리 스텝 (카트 좌표계 관성력) ----------
@@ -1076,7 +1082,7 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit, a
   const selfAvatar = new THREE.Object3D(); selfAvatar.userData = { jumpY: 0, sit: false };
   updateCamera(0);
   const api = {
-    player: selfAvatar, scene, camera, update, render, onKey, stats, measure, st, items, LEVELS,
+    player: selfAvatar, scene, camera, update, render, onKey, stats, measure, st, items, LEVELS, returnItems,
     get hover() { return hover; },
     mobileHint() { return { hint: st.mHint || '', stat: st.mStat || '' }; }, // 모바일 오른쪽 카드용
     mobileActs() { // 모바일 행동 버튼 (계산·출구·카트 잡기·집기·카트 놓기·놓기 등) — 터치 안내 문구의 「…」 와 같은 이름
