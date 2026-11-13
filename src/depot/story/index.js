@@ -19,6 +19,7 @@ import { createDay7Props, createAudit, createMelt, createFollower, auditChecks, 
 import { createDay8Props, createConvoy, createFlyers, convoyPath, evalE15, evalE16, weekStartVitality, week2Gain, E15 as E15T, E16 as E16T } from './day8.js';
 import { createDay9Props, createWagon, evalE18, handOverPick, D9_SPOTS, E17 as E17T, E18 as E18T } from './day9.js';
 import { createDay10Props, evalE19, palletLeft, endcapRect, ENDCAP, E19 as E19T } from './day10.js';
+import { createDay11Props, createTrain, evalE20, strayRect, strayYaw, E20 as E20T } from './day11.js';
 
 const KEY = 'bw.depot.story.v1';
 // 대본이 있는 날: data/dayN-script.json 을 넣기만 하면 그 일차가 열림 (v0.8: 1–9일차 — 8일차 첫 노드 w2_000 = 2주차 입구). 없으면 '준비 중' 카드 그대로.
@@ -109,6 +110,7 @@ export function createStory(ctx) {
   const d8 = createDay8Props({ THREE, scene, keep, cartObj: ctx.cartObj || null, isMobile });
   const d9 = createDay9Props({ THREE, scene, keep, cartObj: ctx.cartObj || null, isMobile });
   const d10 = createDay10Props({ THREE, scene, keep, look: ctx.look, isMobile });
+  const d11 = createDay11Props({ THREE, scene, keep });
   const art = { nextDay: (d) => nextDayArt(d) };
   const settings = () => save.settings;
 
@@ -403,6 +405,7 @@ export function createStory(ctx) {
       if (id === 'E17') startE17(m);
       if (id === 'E18') startE18(m);
       if (id === 'E19') startE19(m);
+      if (id === 'E20') startE20(m);
       vn.missionCard(ev); updateChip(true);
       reactions.setEventCast(ev.cast || []);
     });
@@ -427,6 +430,7 @@ export function createStory(ctx) {
     if (m.id === 'E17') endE17(m, result);
     if (m.id === 'E18') endE18(m);
     if (m.id === 'E19') endE19(m, result);
+    if (m.id === 'E20') endE20(m, result);
     mission = null; guide.set(null); updateChip(true);
     setBeat(next); persist();
     m.resolve(next);
@@ -446,6 +450,7 @@ export function createStory(ctx) {
     if (m.id === 'E11') return stopE11(m);
     if (m.id === 'E16') return stopE16(m);
     if (m.id === 'E19') return stopE19(m);
+    if (m.id === 'E20') return stopE20(m);
     if (m.id === 'E17') return m.wag.S.attached ? { ...m.final, label: '입구 2호 시식대 · 스르르', step: '2/2' } : { ...m.wagonAt, step: '1/2' };
     if (m.id === 'E06') return cartHas('water') < (m.ev.tuning?.waterPacks || E06T.waterPacks) ? { ...target('aisle-01-water'), label: '범샘물 2L×6 (통로 01 노란 선 안)', step: `1/2 · ${cartHas('water')}/3`, wi: 0 } : { ...m.final, step: '2/2 · 노란 선 안으로' };
     for (let i = 0; i < m.wps.length; i++) { const w = m.wps[i]; if (cartHas(w.item) < (w.n || 1)) return { ...target(w.target), label: w.label || w.item, step: `${i + 1}/${m.wps.length}`, wi: i }; }
@@ -969,6 +974,61 @@ export function createStory(ctx) {
   }
 
 
+  // ---------- 11일차: E20 카트 열차 정리 (열차·판정·카트 소품은 day11.js) ----------
+  //   두고 간 카트 5대(cart-stray-1..5)는 그 자리 장애물(story 'stray'). 내 카트 뒤 0.8 m 안에서 천천히 후진하면 꼬리에 끼워짐(cart-joint).
+  //   칸마다 18 kg(st.extraKg — 영수증 무게엔 안 들어감). 보관소(CORRAL)에 4대 이상 끌고 닿으면 판정. 3대 이하면 안내만 하고 계속(타임아웃 = 실패).
+  let trainObs = [], trainShown = null;
+  function syncStrayObs(tr) {
+    for (const o of trainObs) { const i = ctx.obstacles?.indexOf(o) ?? -1; if (i >= 0) ctx.obstacles.splice(i, 1); }
+    trainObs = tr ? tr.C.filter((c) => c.state === 'stray').map((c) => ({ ...strayRect(c), story: 'stray', strayId: c.i })) : [];
+    for (const o of trainObs) ctx.obstacles?.push(o);
+  }
+  function clearTrain() { syncStrayObs(null); d11.carts(null); trainShown = null; }
+  const fixedHit = (x, z, r) => (ctx.obstacles || []).some((o) => !o.story && !o.npc && (() => { const cx = Math.max(o.x0, Math.min(x, o.x1)), cz = Math.max(o.z0, Math.min(z, o.z1)); return Math.hypot(x - cx, z - cz) < r; })());
+  function startE20(m) {
+    const tu = m.ev.tuning || {}, ct = m.L.cartTrain || {};
+    m.t20 = { ...E20T, carts: ct.max || E20T.carts, linkR: ct.linkRadiusM ?? E20T.linkR, linkMaxSpeed: ct.linkMaxSpeed ?? E20T.linkMaxSpeed, cartKg: ct.eachKg ?? E20T.cartKg, breakDegPerSec: ct.breakTurnDegPerSec ?? E20T.breakDegPerSec, breakMinSpeed: ct.breakMinSpeed ?? E20T.breakMinSpeed };
+    m.limit ||= tu.timeLimitSec || E20T.timeLimitSec; m.startWithin = m.L.startWithinSec || tu.startWithinSec || E20T.startWithinSec;
+    const strays = [1, 2, 3, 4, 5].map((k) => target(`cart-stray-${k}`)).filter(Boolean).map((p) => ({ x: p.x, z: p.z, yaw: strayYaw(p) }));
+    m.rams0 = staff.S.rams; m.arrivedOk = false; m.shortToast = 0;
+    m.train = createTrain({ strays, t: m.t20, isBlocked: fixedHit, onEvent: (k, i) => onTrain(m, k, i) });
+    syncStrayObs(m.train); d11.carts(m.train.C); trainShown = m.train;
+  }
+  function onTrain(m, k, i) {
+    const c = m.train.C[i], pos = { x: c.x, y: 0.6, z: c.z };
+    if (k === 'link') { sfx.cue('cart-joint', { pos }); arrived(); updateChip(true); if (m.train.S.linked.length === 1) vn.toast({ face: face('beomi'), name: '범이', text: '철컥! 한 칸! 급하게 꺾지만 마요!', ms: 2200 }); }
+    if (k === 'break') { sfx.cue('cart-train-break', { pos }); vn.toast({ face: face('beomi'), name: '범이', text: '끊겼어요! 꼬리 칸이 저기 섰어요 — 다시 후진해서 끼워요.', ms: 2600 }); updateChip(true); }
+    if (k === 'rack') sfx.cue('cart-bump', { pos });
+    if (k !== 'rack') syncStrayObs(m.train);
+    st.extraKg = m.train.S.kg;
+  }
+  const rackE20 = (m) => m.train.S.rackHits + Math.max(0, staff.S.rams - m.rams0);
+  function stopE20(m) {
+    const S = m.train.S, n = S.linked.length;
+    if (n < m.t20.carts) { const c = m.train.nearestStray(st.me.x, st.me.z); if (c) return { id: 'stray', label: `두고 간 카트 · 꼬리를 대고 천천히 후진`, x: c.x, z: c.z, ax: c.x, az: c.z, r: 1.6, y: 2.0, step: `${n}/${m.t20.carts}`, wi: c.i }; }
+    return { ...CORRAL, label: `카트 보관소 · 열차 ${n}칸`, step: `${n}/${m.t20.carts}` };
+  }
+  function noteE20(m, t) { const S = m.train.S; return `열차 ${S.linked.length}/${m.t20.carts} · 끊김 ${S.breaks} · 매대 충돌 ${rackE20(m)} · 남은 ${mmss(m.limit - t)}`; }
+  function tickE20(m, t, dt) {
+    const tr = m.train, S = tr.S;
+    tr.step(dt, { x: st.me.x, z: st.me.z, yaw: st.cart.yaw, speed: cartSpeed(), yawRate: Math.abs(st.cart.w || 0) * 180 / Math.PI, held: st.hasCart && !lock.vn }, t);
+    st.extraKg = S.kg; d11.carts(tr.C);
+    const lt = m.limit - t; if (lt < 10 && lt > 0 && Math.floor(lt) !== m.tickS) { m.tickS = Math.floor(lt); sfx.cue('timer-tick'); }
+    const n = S.linked.length;
+    if (!S.engaged && t >= m.startWithin) { endMission('missed', m.L.onMissed || resumeOf(m)); return; }
+    if (n && meNear(CORRAL)) {
+      if (n >= m.t20.carts - 1) { m.arrivedOk = true; arrived(); endMission(evalE20({ arrived: true, linked: n, breaks: S.breaks, rackHits: rackE20(m), engaged: true }, m.t20), resumeOf(m)); return; }
+      if (now() - m.shortToast > 6) { m.shortToast = now(); vn.toast({ face: face('beomsuk'), name: nameOf('beomsuk')[0], text: `${n}칸이요? 다섯 대 다 끼워 와요. 원칙이에요.`, ms: 2400 }); }
+    }
+    if (t >= m.limit) endMission(evalE20({ arrived: false, linked: n, engaged: S.engaged }, m.t20), resumeOf(m));
+  }
+  function endE20(m, result) {
+    st.extraKg = 0; save.e20 = { linked: m.train.S.linked.length, breaks: m.train.S.breaks, rack: rackE20(m) };
+    if (result === 'success' || result === 'partial') { m.train.park({ x: CORRAL.ax + 1.2, z: CORRAL.az + 1.6 }); syncStrayObs(null); d11.carts(m.train.C); } // 보관소 줄 (오늘의 열차)
+    else if (result === 'missed') clearTrain(); // 범이가 한 대씩 밀어 넣음
+    else { m.train.C.forEach((c) => { if (c.state === 'linked') c.state = 'stray'; }); syncStrayObs(m.train); d11.carts(m.train.C); } // 탈선: 흩어진 그대로(그날)
+  }
+
   // ---------- 7일차: E11 본사 감사 (체크 5칸 · 반기철 방해 3번 · 감사관 6 m 뒤) + E09 전설의 아이스크림 + E10 200kg (판정·소품은 day7.js) ----------
   //   E09·E10 은 따로 시작하지 않고 E11 안에서 돎. checkout.start 때 적재율·무게(c2·c3·E10) 기록, checkout.done 때 E09·E10·E11 한꺼번에 판정 → d7_039.
   const SPY_TAG = '반기철(반값)';
@@ -1107,7 +1167,7 @@ export function createStory(ctx) {
     guide.set(s);
     // 지금 목표에 처음 닿으면 반짝 (진열대 · 최종 목표)
     const sk = s ? `${s.id}:${s.wi ?? ''}` : ''; if (s && s.id !== 'corral' && sk !== m.arrivedKey && meNear(s)) { m.arrivedKey = sk; if (s !== m.final) arrived(); }
-    const engaged = m.taken || m.stickered.size > 0 || (m.id !== 'E06' && m.wps.some((w) => cartHas(w.item) > 0)) || m.near6 || m.id === 'E13' || m.slide?.S.scooped > 0 || m.esc?.S.boarded || m.tail?.S.contact || m.lava?.S.started || (m.race && (m.race.S.phase !== 'wait' || cartHas('rice') > (m.rice0 || 0))) || m.stealth?.S.picked || m.fly?.S.engaged || m.wag?.S.attached;
+    const engaged = m.taken || m.stickered.size > 0 || (m.id !== 'E06' && m.wps.some((w) => cartHas(w.item) > 0)) || m.near6 || m.id === 'E13' || m.slide?.S.scooped > 0 || m.esc?.S.boarded || m.tail?.S.contact || m.lava?.S.started || (m.race && (m.race.S.phase !== 'wait' || cartHas('rice') > (m.rice0 || 0))) || m.stealth?.S.picked || m.fly?.S.engaged || m.wag?.S.attached || m.train?.S.engaged;
     const recallAt = m.id === 'E16' ? 20 : m.id === 'E05' || m.id === 'E06' ? 30 : AFTER_CO.has(m.id) ? E07T.recallSec : 90;
     if (m.id === 'E11') { if (!m.recalled && !m.melt.S.picked && t > 90) { m.recalled = true; recall(EVENTS.events.find((e) => e.id === 'E09')?.recallLine || '할머니가 냉동 코너에서 손님 기다리세요. 급하대요!'); } } // 감사는 놓침 없음 — 전설만 한 번 부름
     else if (!m.recalled && !engaged && (t > recallAt || (!AFTER_CO.has(m.id) && inCheckoutZone()))) { m.recalled = true; recall(EXIT.ignoreEvent.recallLines?.[m.id] || m.ev.recallLine || '손님! 한 번만 와 주세요!'); }
@@ -1147,6 +1207,7 @@ export function createStory(ctx) {
     else if (m.id === 'E17') tickE17(m, t, dt);
     else if (m.id === 'E18') tickE18(m, t);
     else if (m.id === 'E19') tickE19(m, t, dt);
+    else if (m.id === 'E20') tickE20(m, t, dt);
   }
   let chipT = 0;
   function updateChip(force) {
@@ -1180,6 +1241,7 @@ export function createStory(ctx) {
       if (m.id === 'E16') note = `전단지 ${m.fly.S.scooped}/12 · 남은 ${mmss(m.limit - t)} · 1.0 m/s 이하로 밟고 지나가요`;
       if (m.id === 'E17') note = noteE17(m, t);
       if (m.id === 'E19') note = noteE19(m, t);
+      if (m.id === 'E20') note = noteE20(m, t);
       if (m.id === 'E18') note = `${m.wps.filter((w) => cartHas(w.item) >= (w.n || 1)).length}/3 · 깨진 알 ${Math.max(0, staff.S.eggsToday - m.base.eggs)} · 남은 ${mmss(m.limit - t)}`;
       if (m.id === 'E06') { const L = m.lava, S = L.S; note = S.started ? `남은 ${mmss((m.limit || E06T.timeLimitSec) - L.elapsed)} · 선 밖 ${S.outsideSec.toFixed(1)}초 (3초까지) · 범샘물 ${cartHas('water')}/3` : `노란 선 안으로 들어가면 시작 · 범샘물 ${cartHas('water')}/3`; }
       vn.setChip({ name: m.ev.name, where: s ? `➜ ${s.step ? `${s.step} · ` : ''}${s.label} · ${dist()} m` : '', note });
@@ -1231,7 +1293,7 @@ export function createStory(ctx) {
   async function endDay(L) {
     const d = curDay(), ids = mains(d), rs = ids.map((id) => (save.ev[id] && save.ev[id] !== 'active' ? save.ev[id] : 'missed')), res = rs[0];
     const replay = !!save.replay, week = L.ui === 'ending-card' || !!L.ending; // 7일차 엔딩
-    d6.night(0); st.vMul = 1; st.extraKg = 0; clearStage(); d8.flyers(null); d9.hud(null); if (d9.wagonState === 'spilled' || d9.wagonState === 'cart') d9.wagon(null);
+    d6.night(0); st.vMul = 1; st.extraKg = 0; clearStage(); clearTrain(); d8.flyers(null); d9.hud(null); if (d9.wagonState === 'spilled' || d9.wagonState === 'cart') d9.wagon(null);
     if (week) { d7.auditor(null); d7.checklist(null); d7.clearMission(); }
     if (!replay) {
       if (L.vitality !== 'committed') ids.forEach((id, i) => { // 7일차는 d7_080 에서 이미 더함 (commit today)
@@ -1490,6 +1552,7 @@ export function createStory(ctx) {
     if (curDay() >= 8 && nearT('entrance-mat', 3)) fire('R70');
     // v0.9 R71 맞불 매대 · R72 정직원 명찰 · R73 할머니 메모 · R74 방송실 문틈 · R75 대결 무대
     if (okR(save.ev?.E19) && nearT('counter-endcap', 3)) fire('R71');
+    if (save.flags?.beomiHired && nearT('cart-corral', 3)) fire('R72');
     coinTick(dt);
     const bak = me.x < 13 && me.z > 14 && me.z < 40; if (bak && !det.inBakery && hour < 13) fire('R36'); det.inBakery = bak;
     const sea = me.x > 66 && me.x < 80 && me.z > 48 && me.z < 106; if (sea && !det.inSeason && [10, 11].includes(new Date().getMonth())) fire('R38'); det.inSeason = sea;
@@ -1555,9 +1618,9 @@ export function createStory(ctx) {
   };
   function suspendStory() { // 진행 중인 대사·사건을 체크포인트(save.beat)에 멈춰 둠 — 다시 이어 갈 땐 resumeStory()
     runTok++; running = talking = false; vn.close();
-    if (mission && !mission.result) { save.ev[mission.id] = 'active'; if (mission.id === 'E13') props.tray(false); if (mission.id === 'E14') props.shelfStickers(null); if (mission.id === 'E04') d4.clearSlide(); if (mission.id === 'E12') { d4.kid('off'); d4.desk(false); } if (mission.id === 'E05') endE05(); if (mission.id === 'E06') { d5.burn(false); d5.lava(false); } if (mission.id === 'E07') endE07(mission); if (mission.id === 'E08') { d6.lifts(0); d6.gold(null); d6.hud(null); st.extraKg = 0; st.vMul = 1; } if (mission.id === 'E11') endE11(mission); if (mission.id === 'E16') d8.flyers(null); if (mission.id === 'E17') { st.extraKg = 0; d9.hud(null); d9.wagon(null); } if (mission.id === 'E19') setEndcap(false); }
+    if (mission && !mission.result) { save.ev[mission.id] = 'active'; if (mission.id === 'E13') props.tray(false); if (mission.id === 'E14') props.shelfStickers(null); if (mission.id === 'E04') d4.clearSlide(); if (mission.id === 'E12') { d4.kid('off'); d4.desk(false); } if (mission.id === 'E05') endE05(); if (mission.id === 'E06') { d5.burn(false); d5.lava(false); } if (mission.id === 'E07') endE07(mission); if (mission.id === 'E08') { d6.lifts(0); d6.gold(null); d6.hud(null); st.extraKg = 0; st.vMul = 1; } if (mission.id === 'E11') endE11(mission); if (mission.id === 'E16') d8.flyers(null); if (mission.id === 'E17') { st.extraKg = 0; d9.hud(null); d9.wagon(null); } if (mission.id === 'E19') setEndcap(false); if (mission.id === 'E20') clearTrain(); }
     mission = null; job = null; guide.set(null); vn.setChip(null); if (tower) tower.visible = false; reactions.setEventCast(null);
-    d6.night(0); st.vMul = 1; st.extraKg = 0; d7.auditor(null); d7.checklist(null); d7.clearMission(); clearStage();
+    d6.night(0); st.vMul = 1; st.extraKg = 0; d7.auditor(null); d7.checklist(null); d7.clearMission(); clearStage(); clearTrain();
     persist();
   }
   function resumeStory() {
@@ -1627,6 +1690,7 @@ export function createStory(ctx) {
       d7: () => ({ props: d7.stats(), audit: mission?.audit && { t: mission.audit.S.t, rams: mission.audit.S.rams, blocks: mission.audit.B.map((b) => ({ id: b.id, state: b.state, why: b.why, at: b.at, side: b.side })) }, melt: mission?.melt && { ...mission.melt.S }, follow: mission?.follow && { ...mission.follow.S }, co: mission?.co || null, vals: mission?.id === 'E11' ? auditVals(mission) : null, ending: session.ending, audit0: save.audit || null }),
       endingNow: () => endingVitality(save.ev, EVENTS.endingVitality || {}),
       d8: () => ({ props: d8.stats(), d9: d9.stats(), stage: { auditor: stg.auditor, rivalboss: stg.rivalboss, squad: stg.squad, spy: stg.spy, spyN: !!stg.spyN }, convoy: stg.convoy && { d: +stg.convoy.S.d.toFixed(2), hits: stg.convoy.S.hits, paused: stg.convoy.paused(), carts: stg.convoy.C.map((x) => ({ x: +x.x.toFixed(2), z: +x.z.toFixed(2) })) }, hits: mission?.hits, fly: mission?.fly && { ...mission.fly.S, left: mission.fly.left(), states: mission.fly.F.map((f) => f.state[0]).join(''), floor: mission.fly.F.filter((f) => f.state === 'floor').map((f) => [+f.x.toFixed(2), +f.z.toFixed(2)]) }, lockVn: lock.vn, blocking: !!vn.blocking, mode: mode(), exitReq: !!exitReq, wag: mission?.wag && { ...mission.wag.S }, extraKg: st.extraKg || 0 }),
+      d11: () => ({ props: d11.stats(), e20: mission?.train ? { ...mission.train.S, linked: [...mission.train.S.linked], carts: mission.train.C.map((c) => ({ x: +c.x.toFixed(2), z: +c.z.toFixed(2), s: c.state[0] })) } : null, trainObs: trainObs.length, extraKg: st.extraKg || 0 }),
       d10: () => ({ props: d10.stats(), e19: mission?.id === 'E19' ? { placed: mission.placed, hits: mission.hits, gain: gainE19(mission), remaining: mission.remaining, holdT: mission.holdT } : null, endcapObs: !!endcapObs }),
       applyStage: (o) => applyStage(o), convoyOn: () => convoyOn(),
       setFlags: (o) => { for (const [k, v] of Object.entries(o)) { if (v == null) delete save.flags[k]; else save.flags[k] = v; } }, convoyD: (dd) => { const cv = stg.convoy; if (cv) { cv.S.d = dd; cv.S.pauseT = 0; cv.step(0); } },
@@ -1641,7 +1705,7 @@ export function createStory(ctx) {
         if (kind) save.left = { at: Date.now(), kind, n: items.length };
         persist(); // 하루(save.day)와 체크포인트(save.beat)는 그대로 — 나가기는 멈춤일 뿐
       }
-      alive = false; runTok++; props.dispose(); d4.dispose(); d5.dispose(); d6.dispose(); d7.dispose(); clearStage(); d8.dispose(); d9.dispose(); setEndcap(false); d10.dispose(); st.vMul = 1; st.extraKg = 0; if (mission?.id === 'E05' || mission?.spyN) shoppers?.puppet?.('spy', false); guide.set(null); vn.setChip(null); removeCoins(); clearTimeout(paTimer); clearTimeout(stageTimer); window.removeEventListener('depot:sfx', onSfx); window.removeEventListener('depot:pa', onPa); for (const w of waiters.done) w(); vn.dispose(); sfx.dispose();
+      alive = false; runTok++; props.dispose(); d4.dispose(); d5.dispose(); d6.dispose(); d7.dispose(); clearStage(); d8.dispose(); d9.dispose(); setEndcap(false); d10.dispose(); clearTrain(); d11.dispose(); st.vMul = 1; st.extraKg = 0; if (mission?.id === 'E05' || mission?.spyN) shoppers?.puppet?.('spy', false); guide.set(null); vn.setChip(null); removeCoins(); clearTimeout(paTimer); clearTimeout(stageTimer); window.removeEventListener('depot:sfx', onSfx); window.removeEventListener('depot:pa', onPa); for (const w of waiters.done) w(); vn.dispose(); sfx.dispose();
     },
   };
 }
