@@ -274,19 +274,24 @@ function buildShinsegae(ctx) {
       const tx = (e.q[0] - e.p[0]) / e.L, tz = (e.q[1] - e.p[1]) / e.L, mx = (e.p[0] + e.q[0]) / 2, mz = (e.p[1] + e.q[1]) / 2, ry = Math.atan2(tx, tz);
       // 가운데 돌출 발코니(3층) + 난간
       buf.box(mx + e.nx * 1.2, y0 + 13.2, mz + e.nz * 1.2, 2.4, 0.5, 18, ry, uvOf(R.stone), hex3('#e8e2d6'));
-      buf.box(mx + e.nx * 2.3, y0 + 14.0, mz + e.nz * 2.3, 0.2, 1.1, 18, ry, uvOf(R.stone), hex3('#f4efe6'));
+      
       // 시계(동그란 판 대신 팔각 상자) + 금빛 입구 아치 + SHINSEGAE 글씨
       buf.box(mx + e.nx * 0.5, y0 + 10.2, mz + e.nz * 0.5, 0.3, 2.4, 2.4, ry, uvOf(R.stone), hex3('#5a4a2a')); buf.box(mx + e.nx * 0.7, y0 + 10.2, mz + e.nz * 0.7, 0.1, 1.9, 1.9, ry, uvOf(R.stone), hex3('#fbf7ea'));
       // 금빛 아치 정문(2층 높이, 사진의 금색 소용돌이 틀): 기둥 2 + 반원 아치 조각 9 + 어두운 문
       buf.box(mx + e.nx * 0.35, y0 + 3.2, mz + e.nz * 0.35, 0.3, 6.4, 5.2, ry, uvOf(R.stone), hex3('#2a2620'));
       for (const sd of [-1, 1]) buf.box(mx + e.nx * 1.0 + tx * 3.1 * sd, y0 + 2.8, mz + e.nz * 1.0 + tz * 3.1 * sd, 1.3, 5.6, 1.1, ry, uvOf(R.stone), gold);
       for (let k = 0; k <= 8; k++) { const a = Math.PI * k / 8, ax = Math.cos(a) * 3.1, ay = Math.sin(a) * 2.6; buf.box(mx + e.nx * 1.0 + tx * ax, y0 + 5.6 + ay, mz + e.nz * 1.0 + tz * ax, 1.3, 1.25, 1.25, ry, uvOf(R.stone), gold); }
-      // 양옆 대형 현수막(세로 광고판): 어두운 틀 + 따뜻한 사진 색
-      for (const sd of [-1, 1]) { const off = e.L * 0.3 * sd, bx = mx + tx * off + e.nx * 0.45, bz = mz + tz * off + e.nz * 0.45;
-        buf.box(bx, y0 + 12.5, bz, 0.25, 11.5, 6.6, ry, uvOf(R.stone), hex3('#2b2522'));
-        buf.box(bx + e.nx * 0.15, y0 + 13.2, bz + e.nz * 0.15, 0.1, 9.4, 5.8, ry, uvOf(R.stone), sd < 0 ? hex3('#8c5a4a') : hex3('#e8dccb'));
-        buf.box(bx + e.nx * 0.22, y0 + 13.6, bz + e.nz * 0.22, 0.05, 6.2, 1.8, ry, uvOf(R.stone), sd < 0 ? hex3('#3b2a2a') : hex3('#a07c5a'));
-        buf.box(bx + e.nx * 0.22, y0 + 8.2, bz + e.nz * 0.22, 0.05, 0.7, 4.6, ry, uvOf(R.stone), hex3('#f5f1ea')); }
+      // 양옆 대형 현수막(세로 광고판): 얇은 흰 틀 + 사진 느낌(배경색 + 세로 인물 실루엣 + 아래 흰 글씨 띠)
+      for (const sd of [-1, 1]) { const off = e.L * 0.3 * sd, bx = mx + tx * off + e.nx * 0.3, bz = mz + tz * off + e.nz * 0.3;
+        const bg = sd < 0 ? hex3('#3a3036') : hex3('#ece4d8'), fig = sd < 0 ? hex3('#b0826c') : hex3('#a98a6a'), dress = sd < 0 ? hex3('#5e2f3a') : hex3('#c8b49a');
+        buf.box(bx, y0 + 12.6, bz, 0.12, 11.2, 6.2, ry, uvOf(R.stone), hex3('#f4f1ec'));
+        buf.box(bx + e.nx * 0.08, y0 + 12.6, bz + e.nz * 0.08, 0.04, 10.8, 5.8, ry, uvOf(R.stone), bg);
+        buf.box(bx + e.nx * 0.12, y0 + 16.2, bz + e.nz * 0.12, 0.04, 1.1, 0.9, ry, uvOf(R.stone), fig); // 얼굴
+        buf.box(bx + e.nx * 0.12, y0 + 12.9, bz + e.nz * 0.12, 0.04, 5.6, 1.7, ry, uvOf(R.stone), dress); // 옷
+        buf.box(bx + e.nx * 0.12, y0 + 8.4, bz + e.nz * 0.12, 0.04, 0.6, 4.4, ry, uvOf(R.stone), sd < 0 ? hex3('#f4f1ec') : hex3('#5a4a3a')); } // 아래 글씨 띠
+      // 발코니 난간 기둥(떠 있는 판처럼 보이지 않게)
+      for (let k = -8; k <= 8; k++) buf.box(mx + e.nx * 2.25 + tx * k, y0 + 13.95, mz + e.nz * 2.25 + tz * k, 0.22, 1.0, 0.22, ry, uvOf(R.stone), hex3('#f4efe6'));
+      buf.box(mx + e.nx * 2.25, y0 + 14.5, mz + e.nz * 2.25, 0.3, 0.15, 18, ry, uvOf(R.stone), hex3('#f4efe6'));
       signOn(buf, e.p, e.q, 0.7, 22, top - 3.4, top - 0.6, uvOf(R.sShinsegae), [e.nx, e.nz]);
       // 밤 미디어 파사드: 정면 + 양옆 모서리 면
       media.push({ e, y0: y0 + 5.4, y1: top - 4.0 });
@@ -348,7 +353,7 @@ function buildBok(ctx) {
     const stone = hex3('#ece6da');
     prism(buf, o, y0 - 0.4, top, uvOf(R.arch), ...T('arch'), stone, uvOf(R.stone), hex3('#9aa39c'));
     // 맨사드 지붕(사진의 초록 동판 경사 지붕): 안으로 들어간 경사 띠 + 위 판
-    { const ins = o.map(([x, z]) => [x + (cx - x) * 0.1, z + (cz - z) * 0.1]); for (let i = 0; i < o.length; i++) { const a = o[i], b = o[(i + 1) % o.length], a2 = ins[i], b2 = ins[(i + 1) % o.length]; const ccw = ringArea(o) > 0; const P = [a[0], top + 1.3, a[1]], Q = [b[0], top + 1.3, b[1]], Q2 = [b2[0], top + 4.2, b2[1]], P2 = [a2[0], top + 4.2, a2[1]]; if (ccw) buf.quad(Q, P, P2, Q2, uvOf(R.copper), hex3('#9fb5a6')); else buf.quad(P, Q, Q2, P2, uvOf(R.copper), hex3('#9fb5a6')); } cap(buf, ins, top + 4.2, uvOf(R.copper), hex3('#8aa493')); }
+    { const ins = o.map(([x, z]) => [x + (cx - x) * 0.1, z + (cz - z) * 0.1]); for (let i = 0; i < o.length; i++) { const a = o[i], b = o[(i + 1) % o.length], a2 = ins[i], b2 = ins[(i + 1) % o.length]; const ccw = ringArea(o) > 0; const P = [a[0], top + 1.3, a[1]], Q = [b[0], top + 1.3, b[1]], Q2 = [b2[0], top + 4.2, b2[1]], P2 = [a2[0], top + 4.2, a2[1]]; if (ccw) buf.quad(Q, P, P2, Q2, uvOf(R.copper), hex3('#b3c6b8')); else buf.quad(P, Q, Q2, P2, uvOf(R.copper), hex3('#b3c6b8')); } cap(buf, ins, top + 4.2, uvOf(R.copper), hex3('#a3b8a9')); }
     for (const e of edgesOut(o)) { wall(buf, e.p, e.q, top - 0.2, top + 1.3, uvOf(R.stone), 10, 1.5, hex3('#ddd6c8'), 0.45); wall(buf, e.p, e.q, y0 - 0.4, y0 + 1.6, uvOf(R.stone), 10, 2, hex3('#b8b1a4'), 0.3); }
     // 앞 = 남대문로(남쪽) · 로터리 쪽
     const fr = [-11300, -21560];
