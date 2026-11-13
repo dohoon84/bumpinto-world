@@ -44,7 +44,7 @@ renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.25));
 renderer.setSize(innerWidth, innerHeight);
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.05;
+renderer.toneMappingExposure = 1.38;
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFShadowMap;
 document.getElementById('app').appendChild(renderer.domElement);
@@ -973,6 +973,12 @@ requestAnimationFrame(frame);
 
 window.__raid = {
   ready: true,
+  THREE,
+  scene,
+  renderer,
+  arena,
+  get actor() { return actor; },
+  boss,
   source: form.source,
   rift: {
     snapshot: () => rift.snapshot(),

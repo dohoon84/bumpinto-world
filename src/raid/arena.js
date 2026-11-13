@@ -3,13 +3,14 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import {
   ALONG_MIN, ALONG_MAX, PATH_YAW, TANGENT, PERP, fromFrame, safePoint, bossPoint,
 } from './layout.js';
+import { LIGHTING, facadeMaterials, aimKeyAndRim } from './lighting.js';
 
 function pathTex() {
   const c = document.createElement('canvas');
   c.width = 256;
   c.height = 1024;
   const g = c.getContext('2d');
-  g.fillStyle = '#1a2330';
+  g.fillStyle = LIGHTING.pathBase;
   g.fillRect(0, 0, 256, 1024);
   g.strokeStyle = 'rgba(180, 200, 210, 0.18)';
   g.lineWidth = 2;
@@ -137,19 +138,10 @@ function neonGeo() {
   return mergeGeometries(geos, false);
 }
 
-function skyline(tex) {
+function skyline() {
   const geo = new THREE.BoxGeometry(1, 1, 1);
-  const mat = new THREE.MeshStandardMaterial({
-    color: '#141a24',
-    map: tex,
-    emissive: '#ffffff',
-    emissiveMap: tex,
-    emissiveIntensity: 0.85,
-    roughness: 0.82,
-    metalness: 0.1,
-  });
   const n = 28;
-  const mesh = new THREE.InstancedMesh(geo, mat, n);
+  const mesh = new THREE.InstancedMesh(geo, facadeMaterials(), n);
   mesh.castShadow = false;
   mesh.receiveShadow = false;
   const m = new THREE.Matrix4();
@@ -214,8 +206,9 @@ export function createArena(scene) {
     depthWrite: false,
     toneMapped: false,
     uniforms: {
-      uZenith: { value: new THREE.Color('#3A0E1E') },
-      uHorizon: { value: new THREE.Color('#9A2A22') },
+      uZenith: { value: new THREE.Color(LIGHTING.skyTop) },
+      uMid: { value: new THREE.Color(LIGHTING.skyMid) },
+      uHorizon: { value: new THREE.Color(LIGHTING.skyHorizon) },
       uFlash: { value: 0 },
       uRift: { value: 0.35 },
       uRiftI: { value: 2.5 },
@@ -230,12 +223,13 @@ export function createArena(scene) {
     `,
     fragmentShader: `
       varying vec3 vDir;
-      uniform vec3 uZenith, uHorizon;
+      uniform vec3 uZenith, uMid, uHorizon;
       uniform float uFlash, uRift, uRiftI, uTime;
       void main() {
         vec3 dir = normalize(vDir);
         float h = dir.y;
-        vec3 c = mix(uHorizon, uZenith, smoothstep(0.0, 0.72, h));
+        vec3 c = mix(uHorizon, uMid, smoothstep(-0.05, 0.38, h));
+        c = mix(c, uZenith, smoothstep(0.28, 0.85, h));
         float ang = atan(dir.z, dir.x);
         float jag = sin(ang * 9.0 + uTime * 0.6) * 0.04 + sin(ang * 23.0 - uTime * 1.3) * 0.02;
         float band = abs(ang - 0.15 - jag);
@@ -255,11 +249,11 @@ export function createArena(scene) {
   const water = new THREE.Mesh(
     new THREE.PlaneGeometry(220, 220),
     new THREE.MeshStandardMaterial({
-      color: '#0c3c46',
-      emissive: '#0e4a52',
-      emissiveIntensity: 0.45,
-      roughness: 0.18,
-      metalness: 0.55,
+      color: LIGHTING.water,
+      emissive: LIGHTING.waterEmissive,
+      emissiveIntensity: 1,
+      roughness: 0.35,
+      metalness: 0.2,
     }),
   );
   water.rotation.x = -Math.PI / 2;
@@ -270,28 +264,29 @@ export function createArena(scene) {
   const path = new THREE.Mesh(
     ribbonGeo(ALONG_MIN - 4, ALONG_MAX + 10, 8, 0),
     new THREE.MeshStandardMaterial({
-      color: '#ffffff',
+      color: LIGHTING.pathTint,
       map: pathTex(),
-      roughness: 0.32,
-      metalness: 0.42,
+      roughness: LIGHTING.pathRough,
+      metalness: LIGHTING.pathMetal,
     }),
   );
   path.receiveShadow = true;
   path.name = 'bike-path';
   root.add(path);
 
-  const rails = new THREE.Mesh(railGeo(), new THREE.MeshStandardMaterial({ color: '#8b949e', metalness: 0.7, roughness: 0.35 }));
+  const rails = new THREE.Mesh(railGeo(), new THREE.MeshStandardMaterial({ color: '#8b949e', metalness: 0.25, roughness: 0.55 }));
   rails.castShadow = false;
   root.add(rails);
 
-  const neon = new THREE.Mesh(neonGeo(), new THREE.MeshBasicMaterial({ color: '#3ee0d2' }));
+  const neon = new THREE.Mesh(neonGeo(), new THREE.MeshBasicMaterial({ color: LIGHTING.railLight }));
   root.add(neon);
   const neonMag = neon.clone();
   neonMag.material = new THREE.MeshBasicMaterial({ color: '#e15cff' });
   neonMag.position.y = 0.18;
+  neonMag.visible = false;
   root.add(neonMag);
 
-  root.add(skyline(windowTex()));
+  root.add(skyline());
   const bridge = new THREE.Mesh(bridgeGeo(), new THREE.MeshStandardMaterial({ color: '#2a3340', metalness: 0.4, roughness: 0.6 }));
   root.add(bridge);
 
@@ -328,7 +323,7 @@ export function createArena(scene) {
   portal.position.set(bossAt.x, 16, bossAt.z);
   portal.rotation.x = Math.PI / 2.4;
   scene.add(portal);
-  const riftLight = new THREE.PointLight('#c45cff', 0, 70, 2);
+  const riftLight = new THREE.PointLight(LIGHTING.riftColor, LIGHTING.riftI, 70, 2);
   riftLight.position.set(bossAt.x, 12, bossAt.z);
   scene.add(riftLight);
 
@@ -337,7 +332,7 @@ export function createArena(scene) {
     const p = fromFrame(18 + (i % 2) * 8, i < 2 ? -7 : 7);
     const mesh = new THREE.Mesh(
       new THREE.CylinderGeometry(0.35, 0.55, 6, 6),
-      new THREE.MeshStandardMaterial({ color: '#2a2030', emissive: '#ff4d8d', emissiveIntensity: 0.8, roughness: 0.45, metalness: 0.4 }),
+      new THREE.MeshStandardMaterial({ color: '#6a6460', emissive: LIGHTING.pillar, emissiveIntensity: 0.9, roughness: 0.6, metalness: 0.05 }),
     );
     mesh.position.set(p.x, 3, p.z);
     pillars.push(mesh);
@@ -371,9 +366,9 @@ export function createArena(scene) {
   ash.frustumCulled = false;
   scene.add(ash);
 
-  const hemi = new THREE.HemisphereLight('#6e4d92', '#14343c', 0.62);
+  const hemi = new THREE.HemisphereLight(LIGHTING.hemiSky, LIGHTING.hemiGround, LIGHTING.hemiI);
   scene.add(hemi);
-  const dir = new THREE.DirectionalLight('#d5e4ff', 0.9);
+  const dir = new THREE.DirectionalLight(LIGHTING.keyColor, LIGHTING.keyI);
   dir.castShadow = true;
   dir.shadow.mapSize.set(1024, 1024);
   dir.shadow.camera.near = 2;
@@ -385,7 +380,10 @@ export function createArena(scene) {
   dir.shadow.bias = -0.00035;
   scene.add(dir);
   scene.add(dir.target);
-  const warm = new THREE.PointLight('#ffb15a', 8, 40, 2);
+  const rim = new THREE.DirectionalLight(LIGHTING.rimColor, LIGHTING.rimI);
+  scene.add(rim);
+  scene.add(rim.target);
+  const warm = new THREE.PointLight(LIGHTING.warmColor, LIGHTING.warmI, 40, 2);
   const far = fromFrame(40, 8);
   warm.position.set(far.x, 6, far.z);
   scene.add(warm);
@@ -518,15 +516,17 @@ export function createArena(scene) {
       skyMat.uniforms.uRift.value = riftSize;
       skyMat.uniforms.uRiftI.value = riftGlow;
       skyMat.uniforms.uTime.value += dt;
-      scene.fog.color.lerp(new THREE.Color(spec.fog), k);
+      if (mood === 'peace') scene.fog.color.lerp(new THREE.Color(spec.fog), k);
       portal.visible = riftAmt > 0.04;
       portalRing.material.opacity = riftAmt * 0.9;
       portalDisc.material.opacity = riftAmt * 0.4;
       portal.rotation.z += dt * 0.35;
-      riftLight.intensity = riftAmt * 18;
+      riftLight.color.set(LIGHTING.riftColor);
+      riftLight.intensity = mood === 'peace' ? 0 : LIGHTING.riftI;
       pillars.forEach((mesh) => {
         mesh.visible = riftAmt > 0.08;
-        mesh.material.emissiveIntensity = riftAmt * 1.2;
+        mesh.material.emissive.set(LIGHTING.pillar);
+        mesh.material.emissiveIntensity = riftAmt > 0.08 ? 0.9 : 0;
       });
       cracks.forEach((mesh) => {
         mesh.visible = riftAmt > 0.08;
@@ -548,15 +548,28 @@ export function createArena(scene) {
         riftLight.position.x = portal.position.x;
         riftLight.position.z = portal.position.z;
       }
-      scene.fog.near = fogNear;
-      scene.fog.far = fogFar;
       if (mood === 'peace') {
+        scene.fog.near = fogNear;
+        scene.fog.far = fogFar;
         hemi.intensity = phaseKey === 'dawn' ? 0.8 : 0.55;
         dir.intensity = phaseKey === 'dawn' ? 1.15 : 0.7;
         warm.intensity = 4;
+        rim.intensity = 0.2;
       } else {
-        hemi.intensity = phaseKey === 'p3' ? 0.38 : 0.45;
-        dir.intensity = 0.72;
+        skyMat.uniforms.uZenith.value.set(LIGHTING.skyTop);
+        skyMat.uniforms.uMid.value.set(LIGHTING.skyMid);
+        skyMat.uniforms.uHorizon.value.set(LIGHTING.skyHorizon);
+        scene.fog.color.set(LIGHTING.fog);
+        scene.fog.near = LIGHTING.fogNear;
+        scene.fog.far = LIGHTING.fogFar;
+        hemi.color.set(LIGHTING.hemiSky);
+        hemi.groundColor.set(LIGHTING.hemiGround);
+        hemi.intensity = LIGHTING.hemiI;
+        dir.color.set(LIGHTING.keyColor);
+        dir.intensity = LIGHTING.keyI;
+        warm.color.set(LIGHTING.warmColor);
+        warm.intensity = LIGHTING.warmI;
+        if (focus) aimKeyAndRim(dir, rim, focus, bossPoint());
       }
       if (rainOn) {
         boltIn -= dt;
@@ -571,7 +584,8 @@ export function createArena(scene) {
       safeRing.scale.setScalar(1);
       safeFill.material.opacity = 0.16 + safePulse * 0.14;
       safeRing.material.color.set(safePulse ? '#fff1a8' : '#ffe14a');
-      neon.material.color.set(mood === 'peace' ? '#8fb8c4' : '#3ee0d2');
+      neon.material.color.set(mood === 'peace' ? '#8fb8c4' : LIGHTING.railLight);
+      if (rainOn) rain.material.opacity = LIGHTING.rainOpacity;
       if (focus) {
         sky.position.set(focus.x, 0, focus.z);
         dir.target.position.set(focus.x, 0, focus.z);

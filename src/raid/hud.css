@@ -383,7 +383,7 @@
   top: 196px; right: 16px; bottom: auto; width: 120px; min-width: 0;
   background: rgba(10, 12, 20, 0.6); border-color: rgba(214, 176, 98, 0.7);
 }
-#bw-raid.is-fight .mix { top: 16px; right: 180px; bottom: auto; left: auto; }
+#bw-raid.is-fight .mix { top: auto; right: 16px; bottom: 16px; left: auto; }
 #bw-raid.is-fight .dock {
   left: 50%; right: auto; bottom: 16px; transform: translateX(-50%);
   width: min(578px, calc(100vw - 420px)); margin: 0;
