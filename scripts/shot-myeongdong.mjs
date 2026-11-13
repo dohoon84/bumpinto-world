@@ -14,10 +14,10 @@ const VIEWS0 = [
   { name: 'myeongdong-gil', px: -10980, pz: -21800, yaw: -1.45, pitch: 0.12, dist: 9 },
   // 첨탑·십자가가 1280x800 과 모바일 가로 844x390 모두에 들어오게 조금 물러서서 위를 본다
   { name: 'cathedral', px: 'cath', back: 22, side: -3.5, pitch: -0.18, dist: 10 },
-  { name: 'cathedral-stairs', px: 'cath', back: 52, side: -3.5, pitch: -0.06, dist: 10 },
+  { name: 'cathedral-stairs', px: 'cath', back: 52, side: -3.5, pitch: -0.14, dist: 11 },
   { name: 'cathedral-aerial', px: 'cath', back: 10, ov: true, dist: 95, pitch: 0.55, yawOff: 0.5 },
   // 낮에 열린 회오리감자 노점 클로즈업 (닫힌 노점을 비추지 않게 day+kind 지정)
-  { name: 'food-closeup', px: 'stallSide', kind: 2, day: true, near: [-10916, -21580], side: 2.0, yawOff: -0.45, pitch: 0.38, dist: 3.2 },
+  { name: 'food-closeup', px: 'stallSide', kind: 2, day: true, near: [-10916, -21580], side: 1.7, yawOff: -0.35, pitch: 0.38, dist: 4.0 },
   { name: 'cable-link', px: -11030, pz: -21085, yaw: 0.35, pitch: 0.25, dist: 12 },
   { name: 'aerial', ov: true, px: -10930, pz: -21700, dist: 420, pitch: 0.72, yaw: 0.5 },
   { name: 'jeongja', px: 0, pz: 0, yaw: 0, pitch: 0.1, dist: 8, home: true },
