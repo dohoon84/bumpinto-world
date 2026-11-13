@@ -116,6 +116,8 @@ export function wrapLandmark(meta) {
     ownDist: (...a) => impl?.ownDist?.(...a) ?? Infinity,
     coversTileFlat: (...a) => impl?.coversTileFlat?.(...a) ?? false,
     isBlocked: (...a) => impl?.isBlocked?.(...a) ?? false,
+    blockedBy: (...a) => impl?.blockedBy?.(...a) ?? null, // [walk-sweep] 무엇이 막는지 (검사용)
+    walkWays: (...a) => impl?.walkWays?.(...a) ?? [], // [walk-sweep]
     tickPlayer: (...a) => impl?.tickPlayer?.(...a),
     update: (...a) => impl?.update?.(...a),
     setNight: (...a) => impl?.setNight?.(...a),

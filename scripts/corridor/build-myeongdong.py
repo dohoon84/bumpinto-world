@@ -188,6 +188,8 @@ def main():
             o = {'id': w['id'], 'o': pts[:-1]}
             if h: o['h'] = round(h, 1)
             if lv: o['lv'] = lv
+            mh = num(t.get('min_height')) or ((num(t.get('building:min_level')) or 0) * 3.4)
+            if mh: o['mh'] = round(mh, 1)  # 공중 다리·필로티 (mh ≥ 2.5 m 는 밑으로 지나간다)
             if t.get('building') and t['building'] != 'yes': o['k'] = t['building']
             if t.get('amenity'): o['am'] = t['amenity']
             if t.get('name') and (t.get('amenity') in ('place_of_worship',) or t.get('building') in ('cathedral', 'church') or t.get('historic') or t.get('tourism')):

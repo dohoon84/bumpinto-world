@@ -118,6 +118,50 @@ function offsetLine(pts, off) {
 function polyArea(o) { let a = 0; for (let i = 0, j = o.length - 1; i < o.length; j = i++) a += (o[j][0] + o[i][0]) * (o[j][1] - o[i][1]); return Math.abs(a / 2); }
 
 /** 건물 높이: OSM height > 층수 > 면적·해시로 명동다운 4–12층 */
+// [walk-sweep] 캐노피(building=roof): 평평한 얇은 지붕(땅 최고점 + 4.6 m) + 꼭짓점 기둥. 한 메시(정점색).
+function canopyMesh(list, heightAt) {
+  const buf = new GeoBuf({ uv: false, color: true });
+  const top = hex3(0xd8dadc), under = hex3(0x9a9ea3), edge = hex3(0xb8bcc0), post = hex3(0x4a4f55);
+  const H = 4.6, T = 0.3;
+  for (const b of list) {
+    let ring = b.o.map(([x, z]) => [x, z]);
+    if (ring.length > 3 && ring[0][0] === ring[ring.length - 1][0] && ring[0][1] === ring[ring.length - 1][1]) ring = ring.slice(0, -1);
+    if (ring.length < 3) continue;
+    let g = -Infinity; for (const [x, z] of ring) g = Math.max(g, heightAt(x, z));
+    const y1 = g + H, y0 = y1 - T;
+    const tris = THREE.ShapeUtils.triangulateShape(ring.map(([x, z]) => new THREE.Vector2(x, z)), []);
+    const pos = [], nrm = [], idx = [], posB = [], nrmB = [], idxB = [];
+    ring.forEach(([x, z]) => { pos.push(x, y1, z); nrm.push(0, 1, 0); posB.push(x, y0, z); nrmB.push(0, -1, 0); });
+    for (const [a, c, d] of tris) {
+      // 위에서 보아 +y 법선이 되게: (c-a)×(d-a) 의 y 성분 = dz1*dx2 - dx1*dz2 > 0 이면 그대로
+      const [ax, az] = ring[a], [cx, cz] = ring[c], [dx, dz] = ring[d];
+      const up = (cz - az) * (dx - ax) - (cx - ax) * (dz - az) > 0;
+      if (up) { idx.push(a, c, d); idxB.push(a, d, c); } else { idx.push(a, d, c); idxB.push(a, c, d); }
+    }
+    buf.raw(pos, idx, nrm, null, top);
+    buf.raw(posB, idxB, nrmB, null, under);
+    let area2 = 0; for (let i = 0; i < ring.length; i++) { const p = ring[i], q = ring[(i + 1) % ring.length]; area2 += p[0] * q[1] - q[0] * p[1]; }
+    for (let i = 0; i < ring.length; i++) {
+      const p = ring[i], q = ring[(i + 1) % ring.length];
+      // 바깥을 보는 옆면 (링 방향에 따라 순서 바꿈)
+      const [s0, s1] = area2 > 0 ? [q, p] : [p, q];
+      buf.quad([s0[0], y0, s0[1]], [s1[0], y0, s1[1]], [s1[0], y1, s1[1]], [s0[0], y1, s0[1]], undefined, edge);
+    }
+    // 기둥: 꼭짓점마다 (너무 촘촘하면 건너뜀), 땅에서 지붕 밑까지
+    let last = null;
+    for (const [x, z] of ring) {
+      if (last && Math.hypot(x - last[0], z - last[1]) < 3) continue;
+      last = [x, z];
+      const gy = heightAt(x, z), h = y0 - gy + 0.05; if (h <= 0.3) continue;
+      buf.box(x, gy + h / 2 - 0.05, z, 0.22, h, 0.22, 0, undefined, post, 15);
+    }
+  }
+  const geo = buf.build(); if (!geo) return null;
+  const m = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ vertexColors: true }));
+  m.name = 'myeongdong-canopies'; m.castShadow = true; m.receiveShadow = true;
+  return m;
+}
+
 function buildingHeight(b) {
   if (b.h) return Math.max(4, b.h);
   if (b.lv) return b.lv * 3.4 + 1.2;
@@ -248,6 +292,7 @@ export async function createMyeongdongAsync(opts = {}, yieldFn = null, slicer = 
   const blds = [];
   const cxMid = (A.x0 + A.x1) / 2, czMid = (A.z0 + A.z1) / 2;
   const buckets = [[], [], [], []];
+  const canopies = [];
   for (const b of data.buildings || []) {
     if (!b.o || b.o.length < 3 || b.id === catId) continue;
     if (b.part) continue;
@@ -258,9 +303,14 @@ export async function createMyeongdongAsync(opts = {}, yieldFn = null, slicer = 
     // 성당 외곽선과 겹치는 건물(같은 자리 중복 OSM 조각)도 뺀다 — 안 빼면 성당 벽에 상점 간판이 붙는다
     if (data.cathedral?.o && (pointInRing(cx, cz, data.cathedral.o) || b.o.some(([x, z]) => pointInRing(x, z, data.cathedral.o)))) continue;
     if (data.cathedral?.o && (b.h || 0) > 25 && data.cathedral.o.some((p, i, o) => { const q = o[(i + 1) % o.length]; return distToSeg(cx, cz, p[0], p[1], q[0], q[1]) < 12; })) continue; // 종탑(way/1139745172 · 47 m)은 성당 모델의 첨탑이 대신
+    // [walk-sweep] building=roof 는 지붕만 있는 캐노피(통로·주유소·시장 덮개). 예전엔 층수를 지어내 꽉 찬 건물로
+    //   세워서 그 밑 길(롯데 사이 보행로·퇴계로24길 등)이 막혔다 → 기둥 달린 얇은 지붕, 충돌 없음.
+    if (b.k === 'roof') { canopies.push(b); continue; }
     let mn = Infinity, mx = -Infinity;
     for (const [x, z] of b.o) { const y = heightAt(x, z); mn = Math.min(mn, y); mx = Math.max(mx, y); }
     const ht = buildingHeight(b);
+    // [walk-sweep] min_height ≥ 2.5 m = 공중 다리(남대문로7길 위 way/711239221 · 15–18 m 등): 떠 있게 그리고 충돌 없음 (코리더 타일과 같은 규칙)
+    if ((b.mh || 0) >= 2.5) { buckets[(cx >= cxMid ? 1 : 0) + (cz >= czMid ? 2 : 0)].push({ o: b.o, h: mx + Math.max(ht, b.mh + 1), mh: mx + b.mh, k: 'commercial' }); continue; }
     const rec = { id: b.id, o: b.o, base: mn - 0.4, ground: mx, top: mx + ht, ht, cx, cz, k: b.k, floors: Math.max(1, Math.round((ht - 1.2) / 3.4)), inBox: land.inBox(cx, cz) };
     let x0 = Infinity, z0 = Infinity, x1 = -Infinity, z1 = -Infinity;
     for (const [x, z] of b.o) { x0 = Math.min(x0, x); x1 = Math.max(x1, x); z0 = Math.min(z0, z); z1 = Math.max(z1, z); }
@@ -276,6 +326,7 @@ export async function createMyeongdongAsync(opts = {}, yieldFn = null, slicer = 
     const meshes = slicer ? await buildingMeshesAsync(buckets[i], 9133 + i * 31, slicer) : buildingMeshes(buckets[i], 9133 + i * 31);
     for (const m of meshes) { m.name = 'myeongdong-bld' + i; root.add(m); }
   }
+  if (canopies.length) { const m = canopyMesh(canopies, heightAt); if (m) root.add(m); }
   await tick('md-buildings');
   const bldAt = (x, z, pad = 0) => {
     for (const r of bldGrid.query(x, z)) {
@@ -306,22 +357,34 @@ export async function createMyeongdongAsync(opts = {}, yieldFn = null, slicer = 
   }
 
   // ---------- 높이·충돌 ----------
+  // [walk-sweep] 바깥 띠(apron)도 명동 땅(그려진 높이)이 바닥이다. 예전엔 상자(B) 밖이 0 m 바닥이라
+  //   상자 테두리(을지로·남대문로·삼일대로 쪽)에서 최대 19 m 단차 → 투명 벽처럼 못 나갔다.
   function surfaceY(x, z, refY = Infinity) {
-    if (!land.inBox(x, z, 0.5)) return null;
+    if (!land.inApron(x, z, 0.5)) return null;
     const c = cathedral.floorY?.(x, z, refY);
     const g = heightAt(x, z);
     return c != null && c > g ? c : g;
   }
   let unregSurface = null, guideLinesSent = false;
-  if (terrain?.addGroundSurface) unregSurface = terrain.addGroundSurface((x, z, refY) => surfaceY(x, z, refY));
+  if (terrain?.addGroundSurface) unregSurface = terrain.addGroundSurface((x, z, refY) => surfaceY(x, z, refY), { authoritative: true }); // [walk-sweep] 명동엔 아래층이 없다
   function isBlocked(x, z, r = 0.4) {
-    if (!land.inBox(x, z, 2)) return false;
+    if (!land.inApron(x, z, 2)) return false;
     if (bldAt(x, z, r)) return true;
     if (cathedral.isBlocked?.(x, z, r)) return true;
     if (street.isBlocked?.(x, z, r)) return true;
     if (station.isBlocked?.(x, z, r)) return true;
     if (signature?.isBlocked(x, z, r)) return true; // [myeongdong-signature] 남대문시장 노점·게이트
     return false;
+  }
+  /** [walk-sweep] 무엇이 막는지 (검사·디버그용): 'bld:<id>' | 'cathedral' | 'street' | 'station' | 'signature' | null */
+  function blockedBy(x, z, r = 0.4) {
+    if (!land.inApron(x, z, 2)) return null;
+    const b = bldAt(x, z, r); if (b) return 'bld:' + (b.id ?? '?');
+    if (cathedral.isBlocked?.(x, z, r)) return 'cathedral';
+    if (street.isBlocked?.(x, z, r)) return 'street';
+    if (station.isBlocked?.(x, z, r)) return 'station';
+    if (signature?.isBlocked(x, z, r)) return 'signature';
+    return null;
   }
 
   // ---------- 미니맵 ----------
@@ -367,6 +430,8 @@ export async function createMyeongdongAsync(opts = {}, yieldFn = null, slicer = 
     owns: (x, z) => land.inBox(x, z),
     ownDist: (x, z) => boundsDist(B, x, z),
     isBlocked,
+    blockedBy,
+    walkWays: () => ways.map((w) => ({ id: w.id, k: w.k, n: w.n, w: w.w, pts: w.pts })), // [walk-sweep]
     mini,
     station: station.info,
     cathedral: cathedral.info,

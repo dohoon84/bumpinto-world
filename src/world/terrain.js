@@ -201,8 +201,11 @@ export function createTerrain(T, data) {
   // [gyeongbu-bus] 깔린 노면처럼 "그 높이로 맞춘다"(낮출 수도 있음). extras 는 올리기만 해서
   // 평탄화된 차도보다 높은 옛 지형에 남으면 떠 버린다.
   const groundSurfaces = [];
-  function addGroundSurface(fn) {
+  // opts.authoritative: 그 자리에서는 refY 와 상관없이 그 높이가 바닥 (아래층이 없는 곳 — 예: 명동 땅).
+  //   refY 보다 높다고 버리면 아래(0 m·남산 바닥)로 떨어져 '보이는 땅 밑'을 걷는 층이 생긴다.
+  function addGroundSurface(fn, opts = {}) {
     if (typeof fn !== 'function') return () => {};
+    if (opts.authoritative) fn.authoritative = true;
     groundSurfaces.push(fn);
     return () => { const i = groundSurfaces.indexOf(fn); if (i >= 0) groundSurfaces.splice(i, 1); };
   }
@@ -222,7 +225,7 @@ export function createTerrain(T, data) {
     }
     for (const fn of groundSurfaces) {
       const e = fn(x, z, refY, h);
-      if (e == null || e > refY + MAX_STEP + 0.1) continue;
+      if (e == null || (e > refY + MAX_STEP + 0.1 && !fn.authoritative)) continue;
       h = e;
     }
     return h;
