@@ -2,7 +2,7 @@
 //   신랑(nave)·측랑·후진(apse)·정면 종탑과 팔각 첨탑(약 45 m)·버트레스·첨두창을 절차적으로 짓는다.
 //   재질 5개(창 벽돌·민 벽돌·지붕·첨탑 돌·금 십자가) = draw 5. 밤에는 창(스테인드글라스)과 벽돌 조명이 켜진다.
 import * as THREE from 'three';
-import { GeoBuf, pointInRing, distToSeg } from './myeongdongGeo.js';
+import { GeoBuf, pointInRing, distToSeg, hex3 } from './myeongdongGeo.js';
 
 function brickCanvas(win) {
   const c = document.createElement('canvas'); c.width = c.height = 512;
@@ -56,9 +56,22 @@ function slateCanvas() {
   for (let y = 0; y < 256; y += 16) for (let x = -((y / 16) % 2) * 8; x < 256; x += 16) { g.fillStyle = `hsl(200,6%,${22 + r() * 10}%)`; g.fillRect(x + 1, y + 1, 14, 14); }
   return c;
 }
+function graniteCanvas() {
+  const c = document.createElement('canvas'); c.width = c.height = 256;
+  const g = c.getContext('2d');
+  g.fillStyle = '#a9a59e'; g.fillRect(0, 0, 256, 256);
+  let s = 41; const r = () => ((s = (s * 16807) % 2147483647) / 2147483647);
+  // 큰 판석(6 m 를 4×4 → 1.5 m 판) + 가운데 띠
+  for (let y = 0; y < 256; y += 64) for (let x = 0; x < 256; x += 64) {
+    const l = 70 + r() * 9; g.fillStyle = `hsl(36,${5 + r() * 5}%,${l}%)`; g.fillRect(x + 1.5, y + 1.5, 61, 61);
+    for (let k = 0; k < 60; k++) { g.fillStyle = `rgba(${r() < 0.5 ? '0,0,0' : '255,255,255'},${0.05 + r() * 0.06})`; g.fillRect(x + r() * 62, y + r() * 62, 1.5, 1.5); }
+  }
+  g.fillStyle = 'rgba(120,70,50,.35)'; g.fillRect(0, 124, 256, 8);
+  return c;
+}
 const tex = (c, rep = true) => { const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; if (rep) t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 8; return t; };
 
-export function createMyeongdongCathedral({ parent, data, land, overlay }) {
+export function createMyeongdongCathedral({ parent, data, land, overlay, atlas = null }) {
   const o = data.cathedral?.o;
   const g = new THREE.Group(); g.name = 'myeongdong-cathedral'; parent.add(g);
   const noop = { setNight() {}, isBlocked: () => false, floorY: () => null, info: null };
@@ -236,18 +249,126 @@ export function createMyeongdongCathedral({ parent, data, land, overlay }) {
     g.add(m); meshes.push(m);
   }
 
-  // ---- 앞마당 포장 (성당 정면 광장) ----
-  {
-    const buf = new GeoBuf({ uv: true, color: true });
-    const pos = [], nrm = [], uv = [], idx = [];
-    const R = 16, n = 18, c = W(uF + 11, 0);
-    pos.push(c[0], land.heightAt(c[0], c[1]) + 0.13, c[1]); nrm.push(0, 1, 0); uv.push(0.5, 0.5);
-    for (let k = 0; k <= n; k++) { const a = (k / n) * Math.PI * 2, x = c[0] + Math.cos(a) * R, z = c[1] + Math.sin(a) * R * 0.75; pos.push(x, land.heightAt(x, z) + 0.13, z); nrm.push(0, 1, 0); uv.push(x / 3, z / 3); }
-    for (let k = 1; k <= n; k++) idx.push(0, k + 1, k);
-    buf.raw(pos, idx, nrm, uv, [0.86, 0.82, 0.76]);
-    const geo = buf.build();
-    const m = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ vertexColors: true, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3 }));
-    m.name = 'myeongdong-cathedral-plaza'; g.add(m); meshes.push(m);
+  // ---- [myeongdong-detail] 정면 광장: 화강암 판석 포장 + 앞 계단 + 낮은 담 + 나무·벤치·성모상 + 입구 문(간판) + 등 ----
+  //   땅 높이(myeongdongLand hill.plaza)가 광장을 평평하게, 계단 자리를 곧은 경사로 만든다. 여기선 그 위에 덮기만 한다.
+  //   draw: 포장 1 · 소품(담·계단·나무·벤치·문) 1 · 간판 1 · 등 1
+  const PL = land.hill?.plaza, F = land.hill?.frame;
+  const blockers = []; // 축 좌표 사각형 { u0, u1, v0, v1 }
+  let lampMat = null, signMat = null;
+  if (PL && F) {
+    const top = land.hill.top;
+    const H = (u, v) => { const [x, z] = F.W(u, v); return land.heightAt(x, z); };
+    const P3 = (u, v, y) => { const [x, z] = F.W(u, v); return [x, y, z]; };
+    const ry = Math.atan2(F.ax, F.az); // box 로컬 +z → 축 +u
+    // 포장: 2 m 격자를 광장 사각형 + 앞 경사로
+    {
+      const pos = [], nrm = [], uv = [], idx = [];
+      const uE = PL.u1 + PL.stairRun + 3; // 계단 양옆 경사면도 포장(오르막 진입로)
+      const nu = Math.ceil((uE - PL.u0) / 2), nv = Math.ceil((PL.v1 - PL.v0) / 2);
+      for (let j = 0; j <= nv; j++) for (let i = 0; i <= nu; i++) {
+        const u = PL.u0 + (uE - PL.u0) * i / nu, v = PL.v0 + (PL.v1 - PL.v0) * j / nv;
+        const [x, z] = F.W(u, v);
+        pos.push(x, land.heightAt(x, z) + 0.16, z); nrm.push(0, 1, 0); uv.push((u - PL.u0) / 6, (v - PL.v0) / 6);
+      }
+      for (let j = 0; j < nv; j++) for (let i = 0; i < nu; i++) { const a0 = j * (nu + 1) + i, b0 = a0 + 1, c0 = a0 + nu + 1, d0 = c0 + 1; idx.push(a0, b0, c0, b0, d0, c0); }
+      // 앞면이 위(+y)를 보게 감기 순서 확인
+      const t0 = [pos[0], pos[2]], t1 = [pos[3], pos[5]], t2 = [pos[(nu + 1) * 3], pos[(nu + 1) * 3 + 2]];
+      const up = (t1[1] - t0[1]) * (t2[0] - t0[0]) - (t1[0] - t0[0]) * (t2[1] - t0[1]);
+      if (up < 0) for (let k = 0; k < idx.length; k += 3) { const tmp = idx[k + 1]; idx[k + 1] = idx[k + 2]; idx[k + 2] = tmp; }
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+      geo.setAttribute('normal', new THREE.Float32BufferAttribute(nrm, 3));
+      geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+      geo.setIndex(idx); geo.computeBoundingSphere();
+      const pm = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ map: tex(graniteCanvas()), polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 }));
+      pm.name = 'myeongdong-cathedral-plaza'; pm.receiveShadow = true; g.add(pm); meshes.push(pm);
+    }
+    const props = new GeoBuf({ uv: false, color: true });
+    const stoneC = hex3('#b9b4aa'), stoneD = hex3('#9d988e'), brickC = hex3('#7d3d2b'), capC = hex3('#c8c2b6'), ironC = hex3('#2b2d31');
+    const pbox = (u, v, y, su, sy, sv, col) => { const [x, z] = F.W(u, v); props.box(x, y, z, sv, sy, su, ry, undefined, col); };
+    // 앞 계단 (u1 → u1+run, 폭 sv0..sv1): 디딤판 + 챌판, 양옆 돌난간
+    const yTop = top, yBot = H(PL.u1 + PL.stairRun + 0.5, (PL.sv0 + PL.sv1) / 2);
+    const N = Math.max(8, Math.round((yTop - yBot) / 0.17)), run = PL.stairRun / N, rise = (yTop - yBot) / N;
+    const sw = PL.sv1 - PL.sv0, sc = (PL.sv0 + PL.sv1) / 2;
+    for (let k = 0; k < N; k++) {
+      const u = PL.u1 + run * (k + 0.5), yT = yTop - rise * (k + 1) + 0.12;
+      pbox(u, sc, yT - 0.25, run + 0.02, 0.5, sw, k % 2 ? stoneC : stoneD);
+      for (const sv of [PL.sv0 - 0.25, PL.sv1 + 0.25]) pbox(u, sv, yT + 0.2, run + 0.02, 1.4, 0.5, capC);
+    }
+    for (const sv of [PL.sv0 - 0.25, PL.sv1 + 0.25]) blockers.push({ u0: PL.u1, u1: PL.u1 + PL.stairRun, v0: sv - 0.3, v1: sv + 0.3 });
+    // 앞 낮은 담(벽돌 + 돌 갓) — 계단 자리만 비운다. 왼쪽(v0) 옆은 비탈길(OSM service)이라 연다
+    const wallRun = (v0, v1) => {
+      if (v1 - v0 < 0.5) return;
+      const vc = (v0 + v1) / 2, y = H(PL.u1 - 0.3, vc);
+      pbox(PL.u1 - 0.3, vc, y + 0.3, 0.45, 0.8, v1 - v0, brickC);
+      pbox(PL.u1 - 0.3, vc, y + 0.74, 0.55, 0.08, v1 - v0 + 0.05, capC);
+      blockers.push({ u0: PL.u1 - 0.6, u1: PL.u1, v0, v1 });
+    };
+    wallRun(PL.v0, PL.sv0 - 0.5); wallRun(PL.sv1 + 0.5, PL.v1);
+    // 오른쪽 담(건물 쪽)
+    { const uc = (PL.u0 + 6 + PL.u1) / 2, L = PL.u1 - PL.u0 - 6, y = H(uc, PL.v1 + 0.2); pbox(uc, PL.v1 + 0.2, y + 0.3, L, 0.8, 0.45, brickC); pbox(uc, PL.v1 + 0.2, y + 0.74, L + 0.05, 0.08, 0.55, capC); blockers.push({ u0: PL.u0 + 6, u1: PL.u1, v0: PL.v1, v1: PL.v1 + 0.5 }); }
+    // 나무 (양옆 줄 + 비탈)
+    const trees = [];
+    for (let u = PL.u0 + 8; u < PL.u1 - 2; u += 7) { trees.push([u, PL.v0 + 2.2]); trees.push([u, PL.v1 - 1.6]); }
+    for (let u = PL.u1 + 4; u < PL.u1 + 16; u += 6) { trees.push([u, PL.sv0 - 6]); trees.push([u, PL.sv1 + 5]); }
+    trees.forEach(([u, v], i) => {
+      const y = H(u, v), [x, z] = F.W(u, v);
+      props.box(x, y + 1.3, z, 0.32, 2.6, 0.32, ry, undefined, hex3('#5a3d2b'));
+      const greens = ['#3f7a3a', '#4f8f45', '#5f9a4a', '#3b6e3f'];
+      for (const [dy, r0, dx] of [[3.4, 1.9, 0], [4.6, 1.4, 0.4], [3.9, 1.3, -0.7]]) {
+        const ico = new THREE.IcosahedronGeometry(r0, 0); ico.translate(x + dx * F.az, y + dy, z - dx * F.ax);
+        const ng = ico.toNonIndexed(); ng.computeVertexNormals();
+        const pp = Array.from(ng.attributes.position.array), ii = pp.map((_, k) => k).slice(0, pp.length / 3);
+        props.raw(pp, ii, Array.from(ng.attributes.normal.array), null, hex3(greens[(i + Math.round(dy)) % greens.length]));
+        ico.dispose(); ng.dispose();
+      }
+      blockers.push({ u0: u - 0.35, u1: u + 0.35, v0: v - 0.35, v1: v + 0.35 });
+    });
+    // 벤치 (양옆, 광장 쪽을 보게)
+    for (let u = PL.u0 + 11.5; u < PL.u1 - 4; u += 14) for (const [v, side] of [[PL.v0 + 3.6, 1], [PL.v1 - 3.0, -1]]) {
+      const y = H(u, v);
+      pbox(u, v, y + 0.45, 1.8, 0.08, 0.45, hex3('#8a5a3b'));
+      pbox(u, v - side * 0.22, y + 0.75, 1.8, 0.5, 0.07, hex3('#8a5a3b'));
+      for (const du of [-0.75, 0.75]) pbox(u + du, v, y + 0.22, 0.08, 0.45, 0.4, ironC);
+      blockers.push({ u0: u - 0.95, u1: u + 0.95, v0: v - 0.3, v1: v + 0.3 });
+    }
+    // 성모상 (광장 왼쪽 앞, 받침 + 흰 상)
+    {
+      const u = PL.u1 - 7, v = PL.v0 + 8, y = H(u, v), [x, z] = F.W(u, v);
+      pbox(u, v, y + 0.6, 1.3, 1.2, 1.3, stoneD); pbox(u, v, y + 1.25, 1.5, 0.1, 1.5, capC);
+      const robe = new THREE.CylinderGeometry(0.22, 0.42, 1.7, 8); robe.translate(x, y + 2.15, z);
+      const head = new THREE.IcosahedronGeometry(0.17, 1); head.translate(x, y + 3.13, z);
+      for (const gg of [robe, head]) { const ng = gg.toNonIndexed(); ng.computeVertexNormals(); const pp = Array.from(ng.attributes.position.array); props.raw(pp, pp.map((_, k) => k).slice(0, pp.length / 3), Array.from(ng.attributes.normal.array), null, hex3('#f3f1ec')); gg.dispose(); ng.dispose(); }
+      blockers.push({ u0: u - 0.8, u1: u + 0.8, v0: v - 0.8, v1: v + 0.8 });
+    }
+    // 입구 문 (계단 아래 길가): 벽돌 기둥 2 + 철 들보 + 간판
+    const gateU = PL.u1 + PL.stairRun + 1.6, gy = H(gateU, sc);
+    const gL = PL.sv0 - 1.0, gR = PL.sv1 + 1.0;
+    for (const v of [gL, gR]) { pbox(gateU, v, gy + 1.7, 0.9, 3.4, 0.9, brickC); pbox(gateU, v, gy + 3.5, 1.1, 0.2, 1.1, capC); blockers.push({ u0: gateU - 0.5, u1: gateU + 0.5, v0: v - 0.5, v1: v + 0.5 }); }
+    pbox(gateU, sc, gy + 4.05, 0.25, 0.22, gR - gL + 0.9, ironC);
+    pbox(gateU, sc, gy + 3.45, 0.2, 0.08, gR - gL - 0.6, ironC);
+    // 등 (기둥은 소품, 머리는 밤에 켜지는 등 메시)
+    const lampBuf = new GeoBuf({ uv: false, color: false });
+    const lampAt = (u, v) => { const y = H(u, v); pbox(u, v, y + 1.6, 0.12, 3.2, 0.12, ironC); const [x, z] = F.W(u, v); lampBuf.box(x, y + 3.35, z, 0.36, 0.42, 0.36, ry); };
+    for (let u = PL.u0 + 5; u < PL.u1; u += 10) { lampAt(u, PL.v0 + 0.8); lampAt(u, PL.v1 - 0.8); }
+    for (const v of [gL, gR]) { const [x, z] = F.W(gateU, v); lampBuf.box(x, gy + 3.85, z, 0.4, 0.5, 0.4, ry); }
+    const propsMesh = new THREE.Mesh(props.build(), new THREE.MeshLambertMaterial({ vertexColors: true }));
+    propsMesh.name = 'myeongdong-cathedral-props'; propsMesh.castShadow = false; propsMesh.receiveShadow = true; g.add(propsMesh); meshes.push(propsMesh);
+    lampMat = new THREE.MeshBasicMaterial({ color: '#8a8478' });
+    const lm = new THREE.Mesh(lampBuf.build(), lampMat); lm.name = 'myeongdong-cathedral-lamps'; g.add(lm);
+    // 간판 (양면, 아틀라스)
+    if (atlas?.texture) {
+      const sb = new GeoBuf({ uv: true, color: false });
+      const uvr = atlas.uv('cathSign'), y0 = gy + 3.55, y1 = gy + 4.6;
+      // 보는 사람 기준 왼쪽→오른쪽(오른쪽 = (nz, -nx)), 양면
+      for (const sgn of [1, -1]) {
+        const nx = F.ax * sgn, nz = F.az * sgn, [mx, mz] = F.W(gateU + 0.14 * sgn, sc), hw = (gR - gL - 1.2) / 2;
+        sb.quad([mx - nz * hw, y0, mz + nx * hw], [mx + nz * hw, y0, mz - nx * hw], [mx + nz * hw, y1, mz - nx * hw], [mx - nz * hw, y1, mz + nx * hw], uvr, null, [nx, 0, nz]);
+      }
+      signMat = new THREE.MeshLambertMaterial({ map: atlas.texture, emissive: '#ffffff', emissiveMap: atlas.texture, emissiveIntensity: 0.25 });
+      const sm = new THREE.Mesh(sb.build(), signMat); sm.name = 'myeongdong-cathedral-sign'; g.add(sm);
+    }
+    console.info(`[myeongdong] cathedral plaza ${(PL.u1 - PL.u0).toFixed(0)}×${(PL.v1 - PL.v0).toFixed(0)} m, stairs ${N} × ${rise.toFixed(2)} m, top=${top.toFixed(1)} bottom=${yBot.toFixed(1)}`);
   }
 
   if (overlay) {
@@ -258,8 +379,9 @@ export function createMyeongdongCathedral({ parent, data, land, overlay }) {
     group: g,
     info: { x: tc[0], z: tc[1], top: Y(SP_H), facade: W(uF + 12, 0), axis: [ax, az] },
     isBlocked(x, z, r = 0.4) {
-      if (Math.hypot(x - cx, z - cz) > L) return false;
+      if (Math.hypot(x - cx, z - cz) > L + 70) return false;
       if (pointInRing(x, z, ringO)) return true;
+      if (F && blockers.length) { const [u, v] = F.uv(x, z); for (const b of blockers) if (u > b.u0 - r && u < b.u1 + r && v > b.v0 - r && v < b.v1 + r) return true; }
       for (let i = 0; i < ringO.length; i++) { const a = ringO[i], b = ringO[(i + 1) % ringO.length]; if (distToSeg(x, z, a[0], a[1], b[0], b[1]) < r) return true; }
       return false;
     },
@@ -270,6 +392,8 @@ export function createMyeongdongCathedral({ parent, data, land, overlay }) {
       stoneMat.emissiveIntensity = v * 0.35;
       goldMat.emissiveIntensity = 0.15 + v * 0.9;
       roofMat.color.set(v > 0.5 ? '#4a5559' : '#7c8a8f');
+      if (lampMat) lampMat.color.set(v > 0.5 ? '#ffd9a0' : '#8a8478');
+      if (signMat) signMat.emissiveIntensity = 0.25 + v * 0.8;
     },
   };
 }

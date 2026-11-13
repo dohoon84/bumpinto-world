@@ -1,7 +1,8 @@
 // [myeongdong] 명동 지형 높이. terrarium DEM(12.5 m)을 부드럽게 펴고(건물 잡음 제거),
 //   남쪽 변(z = -21300)은 남산 높이(heightAt)로 이어 붙이고, 바깥 띠(apron)는 남산 도심 바닥 높이로 내린다.
 //   명동대성당은 실제처럼 언덕 위 — 성당 둘레를 평평한 마당으로 올리고 비탈로 잇는다.
-import { pointInRing, distToSeg } from './myeongdongGeo.js';
+//   [myeongdong-detail] 정면 광장(OSM pedestrian 면 u≈42–78)을 같은 높이로 넓게 펴고, 앞 계단 자리(u 78→94)는 곧은 경사(계단과 맞게).
+import { pointInRing, distToSeg, cathedralFrame } from './myeongdongGeo.js';
 
 const smooth = (t) => (t <= 0 ? 0 : t >= 1 ? 1 : t * t * (3 - 2 * t));
 
@@ -78,7 +79,10 @@ export function makeMyeongdongLand(data, { namsanHeightAt = null } = {}) {
     for (const [x, z] of cat) top = Math.max(top, baseY(x, z));
     top += 3.2;
     const FALL = 18;
-    const G = 2, R = 90;
+    // 정면 광장 사각형 (성당 축 좌표 u·v, m). 오른쪽(v>12)은 건물, 앞(u>78)은 계단 → 길
+    const F = cathedralFrame(cat);
+    const PL = { u0: F.uMax - 1, u1: F.uMax + 36, v0: -34, v1: 12, stairRun: 16, sv0: -8.5, sv1: 1.5 };
+    const G = 2, R = 125;
     const gx0 = cx - R, gz0 = cz - R, gn = Math.round((2 * R) / G) + 1;
     const lift = new Float32Array(gn * gn);
     for (let j = 0; j < gn; j++) for (let i = 0; i < gn; i++) {
@@ -88,12 +92,17 @@ export function makeMyeongdongLand(data, { namsanHeightAt = null } = {}) {
         d = Infinity;
         for (let k = 0; k < ring.length; k++) { const a = ring[k], b = ring[(k + 1) % ring.length]; d = Math.min(d, distToSeg(x, z, a[0], a[1], b[0], b[1])); }
       }
-      const w = 1 - smooth(d / FALL);
+      let w = 1 - smooth(d / FALL);
+      const [u, v] = F.uv(x, z);
+      const du = Math.max(PL.u0 - u, 0, u - PL.u1), dv = Math.max(PL.v0 - v, 0, v - PL.v1);
+      if (du === 0 && dv === 0) w = 1;
+      else if (u > PL.u1 && dv === 0) w = Math.max(w, 1 - Math.min(1, du / PL.stairRun)); // 계단 쪽: 곧은 경사
+      else w = Math.max(w, 1 - smooth(Math.hypot(du, dv) / 12));
       if (w <= 0) continue;
       const g0 = baseY(x, z);
       lift[j * gn + i] = Math.max(0, top - g0) * w;
     }
-    hill = { cx, cz, ring, top, G, gx0, gz0, gn, lift, R };
+    hill = { cx, cz, ring, top, G, gx0, gz0, gn, lift, R, frame: F, plaza: PL, inPlaza: (x, z, pad = 0) => { const [u, v] = F.uv(x, z); return u >= PL.u0 - pad && u <= PL.u1 + pad && v >= PL.v0 - pad && v <= PL.v1 + pad; } };
   }
   function hillLift(x, z) {
     if (!hill) return 0;

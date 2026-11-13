@@ -212,6 +212,24 @@ function drawGuideBoard(g, w, h) {
   g.font = `700 ${h * 0.12}px ${MD_FONT}`; g.fillStyle = '#bfe3ff'; g.fillText('N서울타워 N Seoul Tower', 20, h * 0.88);
 }
 
+function drawCathSign(g, w, h) {
+  g.fillStyle = '#2a1a14'; g.fillRect(0, 0, w, h);
+  g.strokeStyle = '#d4a64a'; g.lineWidth = 4; g.strokeRect(6, 6, w - 12, h - 12);
+  g.fillStyle = '#f6e7c8'; g.textAlign = 'center'; g.textBaseline = 'middle';
+  fitFont(g, '✝ 천주교 서울대교구 주교좌 명동대성당', w - 40, h * 0.34); g.fillText('✝ 천주교 서울대교구 주교좌 명동대성당', w / 2, h * 0.36);
+  g.fillStyle = '#d4a64a'; fitFont(g, 'MYEONGDONG CATHEDRAL · SINCE 1898', w - 60, h * 0.2, 800); g.fillText('MYEONGDONG CATHEDRAL · SINCE 1898', w / 2, h * 0.72);
+}
+
+function drawCableBanner(g, w, h) {
+  g.fillStyle = '#c62828'; g.fillRect(0, 0, w, h);
+  g.fillStyle = '#ffffff'; g.fillRect(0, h - 22, w, 22);
+  g.textAlign = 'left'; g.textBaseline = 'middle'; g.fillStyle = '#fff';
+  g.font = `900 ${h * 0.4}px ${MD_FONT}`; g.fillText('🚠', 14, h * 0.4);
+  fitFont(g, '남산 케이블카', w * 0.62, h * 0.38); g.fillText('남산 케이블카', 82, h * 0.32);
+  fitFont(g, 'NAMSAN CABLE CAR · 南山缆车 · ケーブルカー', w - 100, h * 0.16, 800); g.fillText('NAMSAN CABLE CAR · 南山缆车 · ケーブルカー', 84, h * 0.62);
+  g.fillStyle = '#c62828'; g.textAlign = 'center'; fitFont(g, '왕복 ROUND TRIP ₩15,000 · 10:00–23:00', w - 20, h * 0.13, 800); g.fillText('왕복 ROUND TRIP ₩15,000 · 10:00–23:00', w / 2, h - 11);
+}
+
 function drawPlain(g, w, h, color) { g.fillStyle = color; g.fillRect(0, 0, w, h); }
 
 /** 명동 아틀라스. uv(name) → [u0, v0, u1, v1] (three 텍스처 좌표, flipY 반영) */
@@ -228,6 +246,8 @@ export function createMyeongdongAtlas(tick = null) {
   for (let n = 1; n <= 12; n++) items.push({ name: 'exit' + n, w: 56, h: 56, draw: (g, w, h) => drawExitNo(g, w, h, n) });
   items.push({ name: 'guide', w: 96, h: 96, draw: drawGuide });
   items.push({ name: 'guideBoard', w: 512, h: 160, draw: drawGuideBoard });
+  items.push({ name: 'cathSign', w: 512, h: 96, draw: drawCathSign });
+  items.push({ name: 'cableBanner', w: 512, h: 128, draw: drawCableBanner });
   for (const [k, c] of Object.entries(NEON)) items.push({ name: 'neon-' + k, w: 24, h: 24, draw: (g, w, h) => drawPlain(g, w, h, c) });
   for (const [k, c] of Object.entries({ steel: '#b8bec6', dark: '#2a2d33', glass: '#9fd3e6', canopyRed: '#d62828', canopyBlue: '#1d4e89', canopyGreen: '#2a9d8f', canopyYellow: '#f4a261', white: '#ffffff', black: '#0b0b0d' })) {
     items.push({ name: 'c-' + k, w: 24, h: 24, draw: (g, w, h) => drawPlain(g, w, h, c) });

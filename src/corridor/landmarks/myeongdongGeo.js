@@ -99,3 +99,23 @@ export function hash01(a, b = 0) {
   return (h >>> 0) / 4294967296;
 }
 export function mulberry(seed) { let s = seed >>> 0; return () => { s = (s + 0x6D2B79F5) >>> 0; let t = s; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
+
+/** [myeongdong-detail] 명동대성당 외곽선 축(PCA): 후진(둥근 끝) → 정면 = +a. 지형(마당)과 성당 모델이 같은 틀을 쓴다.
+ *  u = 축 방향, v = 옆(오른손), W(u, v) → [x, z], uv(x, z) → [u, v] */
+export function cathedralFrame(o) {
+  let cx = 0, cz = 0; for (const p of o) { cx += p[0]; cz += p[1]; } cx /= o.length; cz /= o.length;
+  let sxx = 0, szz = 0, sxz = 0; for (const [x, z] of o) { const dx = x - cx, dz = z - cz; sxx += dx * dx; szz += dz * dz; sxz += dx * dz; }
+  const ang = 0.5 * Math.atan2(2 * sxz, sxx - szz);
+  let ax = Math.cos(ang), az = Math.sin(ang);
+  const proj = (p) => [(p[0] - cx) * ax + (p[1] - cz) * az, -(p[0] - cx) * az + (p[1] - cz) * ax];
+  let us = o.map(proj);
+  let uMin = Math.min(...us.map((q) => q[0])), uMax = Math.max(...us.map((q) => q[0]));
+  const nearMin = us.filter((q) => q[0] < uMin + 7).length, nearMax = us.filter((q) => q[0] > uMax - 7).length;
+  if (nearMin < nearMax) { ax = -ax; az = -az; us = o.map(proj); uMin = Math.min(...us.map((q) => q[0])); uMax = Math.max(...us.map((q) => q[0])); }
+  const vs = us.map((q) => q[1]);
+  return {
+    cx, cz, ax, az, uMin, uMax, vMin: Math.min(...vs), vMax: Math.max(...vs),
+    W: (u, v) => [cx + ax * u - az * v, cz + az * u + ax * v],
+    uv: (x, z) => [(x - cx) * ax + (z - cz) * az, -(x - cx) * az + (z - cz) * ax],
+  };
+}

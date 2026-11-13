@@ -220,9 +220,10 @@ export async function createMyeongdongAsync(opts = {}, yieldFn = null, slicer = 
       if (!green && a.k !== 'pedestrian' && a.k !== 'ped') continue;
       let cx = 0, cz = 0; for (const p of a.o) { cx += p[0]; cz += p[1]; } cx /= a.o.length; cz /= a.o.length;
       if (!land.inApron(cx, cz)) continue;
+      if (land.hill?.inPlaza?.(cx, cz)) continue; // [myeongdong-detail] 성당 광장은 판석 포장이 덮는다
       const shape = a.o.map(([x, z]) => new THREE.Vector2(x, z));
       let tris; try { tris = THREE.ShapeUtils.triangulateShape(shape, []); } catch { continue; }
-      const col = hex3(green ? (a.k === 'wood' ? '#4d7a3d' : '#6f9e52') : '#d9cdb8');
+      const col = hex3(green ? (a.k === 'wood' ? '#4d7a3d' : '#6f9e52') : '#c9c4bb'); // 보행 광장: 모래색 → 돌색
       const pos = [], nrm = [], uv = [];
       for (const [x, z] of a.o) { pos.push(x, heightAt(x, z) + (green ? 0.12 : 0.11), z); nrm.push(0, 1, 0); uv.push(x / 4, z / 4); }
       const idx = [];
@@ -282,7 +283,7 @@ export async function createMyeongdongAsync(opts = {}, yieldFn = null, slicer = 
   };
 
   // ---------- 성당 · 역/길안내 · 거리(간판·노점·가로등·사람) ----------
-  const cathedral = createMyeongdongCathedral({ parent: root, data, land, overlay });
+  const cathedral = createMyeongdongCathedral({ parent: root, data, land, overlay, atlas });
   await tick('md-cathedral');
   const station = createMyeongdongStation({ parent: root, data, land, atlas, overlay, roadAt, bldAt, namsan });
   await tick('md-station');
