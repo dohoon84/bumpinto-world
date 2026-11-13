@@ -14,6 +14,7 @@ import { createVfx } from './vfx.js';
 import { createCity } from './city.js';
 import { createEnvKit } from './envkit.js';
 import { createFlames } from './flames.js';
+import { renderClassPortrait } from './portrait.js';
 import { attachTrails, updateTrails } from './trails.js';
 import { createRaidRoom, mountRaidChat } from './chat.js';
 import { virtualPad } from '../input.js';
@@ -21,6 +22,7 @@ import { CITIZEN_LOOK } from './look.js';
 import {
   PATH_YAW, BOSS_ALONG, spawnPoint, safePoint, bossPoint, clampArena, pushOutOfBoss, fromFrame,
 } from './layout.js';
+import { bossFrame, chooseSkill, hurtVitals, makeVitals, roleGoal } from './partyAi.js';
 
 const params = new URLSearchParams(location.search);
 const shot = params.get('raidshot');
@@ -161,10 +163,18 @@ function mountForm(id) {
   ghost.visible = false;
   scene.add(ghost);
 }
+function refreshPortrait(id) {
+  try {
+    hud.setPortrait(renderClassPortrait(renderer, packs[id].group, id));
+  } catch (err) {
+    console.warn('[raid] portrait', err);
+  }
+}
 mountForm(classId);
 
 const boss = await createBoss(scene);
 boss.setMobFactory(env.spawnMob);
+boss.setObstacles(env.obstacles || []);
 const home = boss.home;
 
 const ROLE_OF = { warrior: 'tank', priest: 'heal', mage: 'dps', archer: 'dps', assassin: 'dps' };
@@ -273,6 +283,67 @@ function allyGoal(i, origin, yaw, kind) {
     z: origin.z + fz * fwd + rz * side,
   };
 }
+function bossAxes() {
+  const yaw = boss.group.rotation.y;
+  return {
+    x: boss.group.position.x,
+    z: boss.group.position.z,
+    fx: Math.sin(yaw),
+    fz: Math.cos(yaw),
+    rx: Math.cos(yaw),
+    rz: -Math.sin(yaw),
+  };
+}
+function stepOut(x, z) {
+  for (const zone of boss.state.zones || []) {
+    const dx = x - zone.x;
+    const dz = z - zone.z;
+    const d = Math.hypot(dx, dz);
+    if (d < zone.r + 0.8) {
+      const len = d || 1;
+      return { x: zone.x + (dx / len) * (zone.r + 1.7), z: zone.z + (dz / len) * (zone.r + 1.7) };
+    }
+  }
+  return null;
+}
+function fightSpot(a, i) {
+  const b = bossAxes();
+  const sway = Math.sin(performance.now() * 0.00055 + i * 1.7) * 2.2;
+  let gx;
+  let gz;
+  if (a.kind === 'tank') {
+    gx = b.x + b.fx * 8.4;
+    gz = b.z + b.fz * 8.4;
+  } else if (a.classId === 'assassin') {
+    gx = b.x - b.fx * 4.8 + b.rx * 3.3;
+    gz = b.z - b.fz * 4.8 + b.rz * 3.3;
+  } else if (a.classId === 'mage' || a.classId === 'archer') {
+    const dist = 12 + Math.sin(performance.now() * 0.00032 + i) * 1.5;
+    const side = (a.classId === 'mage' ? -3.4 : 3.4) + sway;
+    gx = b.x + b.fx * dist + b.rx * side;
+    gz = b.z + b.fz * dist + b.rz * side;
+  } else {
+    gx = b.x + b.fx * 9.2 + b.rx * -1.6;
+    gz = b.z + b.fz * 9.2 + b.rz * -1.6;
+    let worst = null;
+    let worstHp = 0.82;
+    const playerHp = combat.state.hp / combat.state.hpMax;
+    if (playerHp < worstHp) {
+      worst = actor.position;
+      worstHp = playerHp;
+    }
+    for (const mate of party) {
+      if (mate === a || mate.hp >= worstHp) continue;
+      worst = mate.mesh.position;
+      worstHp = mate.hp;
+    }
+    if (worst) {
+      gx = worst.x + b.rx * 1.5;
+      gz = worst.z + b.rz * 1.5;
+    }
+  }
+  return stepOut(gx, gz) || { x: gx, z: gz };
+}
 function makeCompanion(n) {
   const pack = packs[n.classId];
   if (pack?.source === 'glb') {
@@ -285,15 +356,16 @@ function makeCompanion(n) {
   console.warn('[raid] companion model missing', n.classId, pack?.source);
   return makeAllyBody(n.color);
 }
-function layoutParty(id) {
+function layoutParty(id, opts = {}) {
   clearMarks('party');
   clearMarks('player');
   for (const a of party) scene.remove(a.mesh);
-  const picked = NPC_POOL.filter((n) => n.classId !== id);
+  const picked = opts.all ? NPC_POOL.slice() : NPC_POOL.filter((n) => n.classId !== id);
   party = picked.map((n, i) => {
     const mesh = makeCompanion(n);
     scene.add(mesh);
-    return { ...n, mesh, hp: 1, cd: 0.6 + i * 0.35, ang: i, swing: 0, taunt: 8, moving: false };
+    const vitals = makeVitals(n.classId);
+    return { ...n, mesh, hp: 1, vitals, cd: 0.6 + i * 0.35, ang: i, swing: 0, swingId: '', taunt: 8, moving: false, think: 0.15 + i * 0.08, goal: null, dodgeWait: 0.16, slot: i, rezLeft: 0 };
   });
   settleParty(actor.rotation.y);
   addMark(form.group, '초행', id, 'player');
@@ -308,18 +380,180 @@ function layoutParty(id) {
   hud.setParty(frames);
 }
 
+function hurtMate(a, amount, kind) {
+  if (!a?.vitals) return 0;
+  const taken = hurtVitals(a.vitals, amount, a.kind);
+  a.hp = a.vitals.hp / a.vitals.hpMax;
+  if (taken > 0) {
+    hud.float(a.mesh.position.clone().setY(2.15), taken, 'hurt');
+    if (a.vitals.down > 0 && a.vitals.hp <= 0) room.system(`${a.name} 님이 쓰러졌습니다. 부활을 기다립니다`);
+  }
+  return taken;
+}
+function reviveMate(a, by) {
+  if (!a?.vitals || a.vitals.down <= 0) return;
+  a.vitals.down = 0;
+  a.vitals.hp = Math.round(a.vitals.hpMax * 0.42);
+  a.vitals.iframe = 1.6;
+  a.hp = a.vitals.hp / a.vitals.hpMax;
+  a.mesh.rotation.x = 0;
+  vfx.pillar(a.mesh.position.x, a.mesh.position.z, '#FFC845');
+  hud.float(a.mesh.position.clone().setY(2.2), '부활', 'heal');
+  if (by?.vitals) {
+    by.vitals.skills.rez = (by.vitals.skills.rez || 0) + 1;
+    by.vitals.healed += Math.round(a.vitals.hp);
+    room.system(`${by.name}: ${a.name} 님, 일어납니다`);
+  }
+}
+function castNpc(a) {
+  const v = a.vitals;
+  v.gcd = Math.max(0, v.gcd - 0);
+  for (const k of Object.keys(v.cds)) v.cds[k] = Math.max(0, v.cds[k]);
+  const dist = Math.hypot(a.mesh.position.x - boss.group.position.x, a.mesh.position.z - boss.group.position.z);
+  const id = chooseSkill({ ...a, x: a.mesh.position.x }, {
+    distBoss: dist,
+    inDanger: (boss.state.zones || []).some((z) => Math.hypot(a.mesh.position.x - z.x, a.mesh.position.z - z.z) < z.r + 0.4),
+    allies: party.concat([{ classId: 'player', vitals: { hp: combat.state.hp, hpMax: combat.state.hpMax, down: combat.state.down }, mesh: { position: actor.position } }]),
+  });
+  if (!id) return;
+  const spec = getClass(a.classId);
+  const skill = id === 'rez' ? { id: 'rez', cd: 14, lock: 2.1, sfx: 'heal', color: '#FFC845', heal: 0 } : spec.skills.find((s) => s.id === id);
+  if (!skill) return;
+  v.cds[id] = skill.cd || 8;
+  if (id === 'rez') v.rezCd = 14;
+  v.gcd = 0.85;
+  a.swing = skill.lock || 0.4;
+  a.swingId = id;
+  v.skills[id] = (v.skills[id] || 0) + 1;
+  const x = a.mesh.position.x;
+  const z = a.mesh.position.z;
+  const yaw = Math.atan2(boss.group.position.x - x, boss.group.position.z - z);
+  audio.playSfx(skill.sfx || 'slash', { x, z });
+  const hx = boss.group.position.x + Math.sin(yaw + Math.PI) * 4.2;
+  const hz = boss.group.position.z + Math.cos(yaw + Math.PI) * 4.2;
+  if (id === 'rez') {
+    const downed = party.find((m) => m !== a && m.vitals.down >= 6);
+    a.rezTarget = downed || null;
+    vfx.pillar(x, z, '#FFC845');
+    return;
+  }
+  if (id === 'slash' || id === 'spin') vfx.weaponSlash(hx, 3.6, hz, yaw, '#FFB000', id === 'spin' ? 2 : 1);
+  else if (id === 'charge') vfx.charge(x, z, yaw);
+  else if (id === 'shout') {
+    vfx.ring(x, 0.4, z, '#FFB000', 3);
+    a.taunt = 12;
+    room.system(`${a.name}: 홀드, 이쪽이다`);
+  } else if (id === 'daggers') vfx.weaponSlash(hx, 3.1, hz, yaw, '#FF3D8A', 2);
+  else if (id === 'shadow') vfx.blink(x, z, yaw);
+  else if (id === 'stealth') vfx.burst(x, 1.2, z, '#9bb7d4');
+  else if (id === 'tape') vfx.poison(hx, hz);
+  else if (id === 'shard' || id === 'freeze') {
+    vfx.bolt(hx, hz, yaw);
+    vfx.sparks(hx, 4.2, hz, '#C080FF', 8);
+  } else if (id === 'nova' || id === 'blizzard') vfx.frost(hx, hz);
+  else if (id === 'shot' || id === 'mark') vfx.pierce(x, z, yaw);
+  else if (id === 'volley') vfx.multi(x, z, yaw);
+  else if (id === 'rain') vfx.arrowRain(hx, hz);
+  else if (id === 'heal' || id === 'circle') vfx.pillar(x, z, '#FFC845');
+  else if (id === 'smite' || id === 'holy') vfx.holyBurst(hx, hz);
+  if (skill.power) {
+    const dealt = Math.round(skill.power * 0.35);
+    boss.hurt(dealt);
+    v.dealt += dealt;
+    hud.float(new THREE.Vector3(hx, 6.2, hz), dealt, 'dmg');
+  }
+  if (skill.heal) {
+    const mates = party.concat([{ vitals: { hp: combat.state.hp, hpMax: combat.state.hpMax, down: combat.state.down }, mesh: { position: actor.position }, isPlayer: true }]);
+    const hurt = mates.filter((m) => m.vitals.down <= 0).sort((p, q) => p.vitals.hp / p.vitals.hpMax - q.vitals.hp / q.vitals.hpMax)[0];
+    if (hurt?.isPlayer) {
+      combat.heal(skill.heal);
+      v.healed += skill.heal;
+    } else if (hurt) {
+      const before = hurt.vitals.hp;
+      hurt.vitals.hp = Math.min(hurt.vitals.hpMax, hurt.vitals.hp + skill.heal);
+      hurt.hp = hurt.vitals.hp / hurt.vitals.hpMax;
+      const got = Math.round(hurt.vitals.hp - before);
+      v.healed += got;
+      if (got > 0) hud.float(hurt.mesh.position.clone().setY(2.1), `+${got}`, 'heal');
+    }
+  }
+}
+let tankCleave = 2.4;
+let lastLive = false;
 function settleParty(yaw, dt = 0, live = false) {
+  lastLive = !!live;
   const st = combat.state;
   const bossPos = boss.group.position;
+  if (live) tankCleave -= dt;
   party.forEach((a, i) => {
-    const goal = allyGoal(i, actor.position, yaw, a.kind);
+    if (a.vitals) {
+      a.vitals.gcd = Math.max(0, a.vitals.gcd - dt);
+      a.vitals.iframe = Math.max(0, a.vitals.iframe - dt);
+      a.vitals.rezCd = Math.max(0, a.vitals.rezCd - dt);
+      for (const k of Object.keys(a.vitals.cds)) a.vitals.cds[k] = Math.max(0, a.vitals.cds[k] - dt);
+      a.hp = a.vitals.hp / a.vitals.hpMax;
+    }
+    if (live && a.vitals?.down > 0) {
+      a.mesh.rotation.x = Math.min(1.2, (a.mesh.rotation.x || 0) + dt * 2.6);
+      a.moving = false;
+      const pack = packs[a.classId];
+      if (pack?.animate) pack.animate(a.mesh, dt > 0 ? dt : 0.016, { speed: 0, hit: a.vitals.down > 8.2, phase: 'fight' });
+      return;
+    }
+    if (a.mesh.rotation.x) a.mesh.rotation.x = 0;
+    let goal;
+    if (live) {
+      const spot = roleGoal(
+        { classId: a.classId, kind: a.kind, slot: i, x: a.mesh.position.x, z: a.mesh.position.z, vitals: a.vitals, mesh: a.mesh },
+        {
+          boss: bossFrame(boss.group),
+          now: performance.now(),
+          zones: boss.state.zones || [],
+          allies: party,
+          mobs: (env.liveMobs || []).filter((m) => m.group && !m.dead).map((m) => ({ x: m.group.position.x, z: m.group.position.z })),
+        },
+      );
+      if (spot.dodge && !a._zoning) {
+        a._zoning = true;
+        a.dodgeWait = Math.random() < (a.kind === 'tank' ? 0.32 : 0.12) ? 1.05 : 0.18;
+      }
+      if (!spot.dodge) a._zoning = false;
+      if (spot.dodge && a.dodgeWait > 0) a.dodgeWait -= dt;
+      a.think -= dt;
+      if (a.think <= 0 || !a.goal) {
+        a.think = 0.3 + (i % 3) * 0.05;
+        a.goal = spot;
+      }
+      goal = (spot.dodge && a.dodgeWait <= 0) ? spot : (a.goal || spot);
+      const bd = Math.hypot(a.mesh.position.x - boss.group.position.x, a.mesh.position.z - boss.group.position.z);
+      a.vitals.distSum += bd;
+      a.vitals.distN += 1;
+      if (a.record) {
+        a.trail = a.trail || [];
+        if (a.trail.length < 900) a.trail.push(a.mesh.position.x, 0.25, a.mesh.position.z);
+        let line = a._trailLine;
+        if (!line) {
+          line = new THREE.Line(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color: CLASS_TINT[a.classId] || '#fff' }));
+          line.frustumCulled = false;
+          line.name = `trail-${a.classId}`;
+          scene.add(line);
+          a._trailLine = line;
+        }
+        line.geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(a.trail), 3));
+      }
+    } else {
+      goal = allyGoal(i, actor.position, yaw, a.kind);
+      if (dt <= 0) a.mesh.position.set(goal.x, 0, goal.z);
+    }
     const dx = goal.x - a.mesh.position.x;
     const dz = goal.z - a.mesh.position.z;
     const dist = Math.hypot(dx, dz);
-    if (dt <= 0 || dist < 0.05) {
-      if (dt <= 0) a.mesh.position.set(goal.x, 0, goal.z);
-    } else {
-      const step = Math.min(dist, dt * (a.kind === 'tank' ? 5.4 : 4.6));
+    if (live && dist >= 0.05) {
+      const step = Math.min(dist, dt * (a.kind === 'tank' ? 4.4 : a.classId === 'assassin' ? 5.1 : 4.3));
+      a.mesh.position.x += (dx / dist) * step;
+      a.mesh.position.z += (dz / dist) * step;
+    } else if (!live && dt > 0 && dist >= 0.05) {
+      const step = Math.min(dist, dt * 4.2);
       a.mesh.position.x += (dx / dist) * step;
       a.mesh.position.z += (dz / dist) * step;
     }
@@ -338,57 +572,27 @@ function settleParty(yaw, dt = 0, live = false) {
     a.mesh.rotation.y = live
       ? Math.atan2(aimX - a.mesh.position.x, aimZ - a.mesh.position.z)
       : yaw;
-    if (a.swing > 0) a.swing = Math.max(0, a.swing - dt);
-    if (live) {
-      a.cd -= dt;
-      if (a.cd <= 0) {
-        a.mesh.visible = true;
-        if (a.kind === 'heal') {
-          a.cd = 7.5;
-          a.swing = 0.7;
-          if (st.down <= 0 && st.hp < st.hpMax * 0.92) {
-            combat.heal(16);
-            vfx.ring(actor.position.x, 0.15, actor.position.z, '#FFC845', 1.5);
-          }
-        } else if (a.kind === 'tank') {
-          a.cd = 2.5;
-          a.swing = 0.55;
-          boss.hurt(16);
-          const yaw = Math.atan2(aimX - a.mesh.position.x, aimZ - a.mesh.position.z);
-          const reach = Math.hypot(aimX - a.mesh.position.x, aimZ - a.mesh.position.z) || 1;
-          const hx = aimX + ((a.mesh.position.x - aimX) / reach) * 5.2;
-          const hz = aimZ + ((a.mesh.position.z - aimZ) / reach) * 5.2;
-          vfx.weaponSlash(hx, 3.8, hz, yaw, '#FFB000', 1);
-          hud.float(new THREE.Vector3(hx, 6.4, hz), 16, 'dmg');
-          a.taunt -= 2.5;
-          if (a.taunt <= 0) {
-            a.taunt = 16;
-            room.system(`${a.name}: 홀드, 이쪽이다`);
-          }
-        } else {
-          a.cd = 3.2;
-          a.swing = 0.5;
-          boss.hurt(12);
-          const yaw = Math.atan2(aimX - a.mesh.position.x, aimZ - a.mesh.position.z);
-          const reach = Math.hypot(aimX - a.mesh.position.x, aimZ - a.mesh.position.z) || 1;
-          const hx = aimX + ((a.mesh.position.x - aimX) / reach) * 5.2;
-          const hz = aimZ + ((a.mesh.position.z - aimZ) / reach) * 5.2;
-          if (a.classId === 'assassin') vfx.weaponSlash(hx, 3.2, hz, yaw, '#FF3D8A', 2);
-          else if (a.classId === 'archer') vfx.pierce(a.mesh.position.x, a.mesh.position.z, yaw);
-          else if (a.classId === 'mage') vfx.sparks(hx, 5.2, hz, a.color, 6);
-          else vfx.weaponSlash(hx, 5.4, hz, yaw, a.color || '#FFB000', 1);
-          hud.float(new THREE.Vector3(hx, 6.2, hz), 12, 'dmg');
-        }
+    if (a.swing > 0) {
+      a.swing = Math.max(0, a.swing - dt);
+      if (a.swing === 0 && a.swingId === 'rez' && a.rezTarget) reviveMate(a.rezTarget, a);
+    }
+    if (live && a.vitals.gcd <= 0 && a.swing <= 0) castNpc(a);
+    if (live && a.kind === 'tank' && tankCleave <= 0 && a.vitals.down <= 0) {
+      const near = Math.hypot(a.mesh.position.x - bossPos.x, a.mesh.position.z - bossPos.z) < 9;
+      if (near) {
+        tankCleave = 3.4;
+        hurtMate(a, 22, 'cleave');
       }
     }
     const pack = packs[a.classId];
     if (pack?.animate) {
-      const attack = a.swing > 0
-        ? (a.kind === 'heal' ? 'heal' : a.classId === 'archer' ? 'shot' : a.classId === 'mage' ? 'shard' : 'slash')
-        : '';
+      const attack = a.swing > 0 ? (a.swingId || 'slash') : '';
+      const spell = ['shard', 'nova', 'freeze', 'blizzard', 'smite', 'heal', 'circle', 'holy', 'shot', 'volley', 'rain', 'shout'].includes(attack);
       pack.animate(a.mesh, dt > 0 ? dt : 0.016, {
         speed: a.moving ? 3.6 : 0,
-        attack,
+        attack: spell ? '' : attack,
+        cast: spell,
+        skill: ['charge', 'spin', 'shadow', 'tape', 'stealth'].includes(attack),
         attackT: a.swing > 0 ? Math.max(0, 0.55 - a.swing) : 0,
         phase: live ? 'fight' : 'calm',
       });
@@ -406,7 +610,7 @@ const room = createRaidRoom({
 });
 chat = mountRaidChat(hud.root, room);
 room.system('레이드 방 · 탄천 합수부');
-room.system('파티 / 레이드 채널. Enter 로 말합니다.');
+room.system('파티와 레이드 채널입니다. Enter로 말합니다.');
 
 const tmp = new THREE.Vector3();
 function asVec(p) {
@@ -423,8 +627,12 @@ const combat = createCombat({
   onBind(sec) { boss.slow(sec); },
   onHealParty() {
     for (const a of party) {
-      a.hp = 1;
-      hud.float(a.mesh.position.clone().setY(2.1), '+', 'heal');
+      if (a.vitals.down > 0) continue;
+      const before = a.vitals.hp;
+      a.vitals.hp = Math.min(a.vitals.hpMax, a.vitals.hp + 22);
+      a.hp = a.vitals.hp / a.vitals.hpMax;
+      const got = Math.round(a.vitals.hp - before);
+      if (got > 0) hud.float(a.mesh.position.clone().setY(2.1), `+${got}`, 'heal');
     }
   },
   onImpact({ amount, crit, melee }) {
@@ -448,6 +656,7 @@ const combat = createCombat({
 });
 combat.setClass(classId);
 hud.setClass(classId);
+refreshPortrait(classId);
 layoutParty(classId);
 
 let phase = autoStart ? 'intro' : 'calm';
@@ -515,13 +724,28 @@ function faceBoss() {
   actor.rotation.y = Math.atan2(b.x - actor.position.x, b.z - actor.position.z);
 }
 
-function useSkill(id) {
+let autoOn = false;
+try { autoOn = localStorage.getItem('bw-raid-auto') === '1'; } catch { autoOn = false; }
+let autoHold = 0;
+const playerStats = { skills: {}, dealt: 0, healed: 0, deaths: 0, distSum: 0, distN: 0 };
+let wipeT = 0;
+function setAuto(on) {
+  autoOn = !!on;
+  try { localStorage.setItem('bw-raid-auto', autoOn ? '1' : '0'); } catch { /* storage blocked */ }
+  hud.setAuto(autoOn);
+}
+
+function useSkill(id, fromAuto = false) {
   if (phase !== 'fight') return;
   const sk = combat.skill(id);
   if (!sk || sk.locked) return;
   if (sk.kind !== 'heal' && sk.kind !== 'healParty' && sk.kind !== 'stealth') faceBoss();
   const ok = combat.trySkill(id, true);
-  if (ok) room.system(`${getClass(classId).name} · ${sk.name}`);
+  if (ok) {
+    if (!fromAuto) autoHold = 3;
+    playerStats.skills[id] = (playerStats.skills[id] || 0) + 1;
+    room.system(`${getClass(classId).name} · ${sk.name}`);
+  }
   if (ok && sk.dash) {
     const b = home;
     const dx = b.x - actor.position.x;
@@ -534,10 +758,11 @@ function useSkill(id) {
 
 function beginRaid(id) {
   if (phase === 'fight' || phase === 'intro') return;
-  const fresh = phase === 'peace';
+  const fresh = phase === 'peace' || phase === 'victory' || phase === 'defeat';
   mountForm(id);
   combat.setClass(id);
   hud.setClass(id);
+  refreshPortrait(id);
   hud.hidePick();
   hud.clearPeace();
   hud.closeCutscene();
@@ -581,7 +806,10 @@ hud.onWorld = () => {
 hud.onPick = (id) => beginRaid(id);
 hud.onDeploy = () => beginRaid(classId);
 hud.onIntroDone = () => markIntroSeen();
-hud.onRepick = () => { if (phase === 'peace' || phase === 'alert' || phase === 'calm') hud.showPick(); };
+hud.onRepick = () => { hud.hideVictory(); hud.showPick(); };
+hud.onRedeploy = () => { hud.hideVictory(); beginRaid(classId); };
+hud.onAuto = () => setAuto(!autoOn);
+hud.setAuto(autoOn);
 hud.onVolume = (vols) => audio.setVolumes(vols);
 hud.onMute = () => {
   audio.unlock();
@@ -638,7 +866,7 @@ function finishIntro() {
   city.setStage(1);
   env.setPhase(1);
   hud.banner('붕괴의 거수 · 홀드');
-  room.system('전투 시작 · 1페이즈');
+  room.system('전투 시작. 1단계');
   audio.playSfx('transform');
 }
 
@@ -685,6 +913,14 @@ function onRevive() {
   actor.position.set(s.x, 0, s.z);
   actor.rotation.x = 0;
   hud.banner('노란 선에서 일어섰습니다');
+}
+
+function lose() {
+  if (won || phase === 'defeat') return;
+  phase = 'defeat';
+  hud.banner('파티가 전멸했습니다');
+  room.system('파티가 전멸했습니다');
+  hud.showDefeat();
 }
 
 function win() {
@@ -759,7 +995,7 @@ function frame() {
     debuff: st.debuff,
     party: [
       { id: 'me', hp: st.hp / st.hpMax, down: st.down > 0, sub: st.res / (st.resMax || 1), debuff: st.debuff > 0 },
-      ...party.map((a) => ({ id: a.id, hp: a.hp, down: false, sub: 0.75, debuff: false })),
+      ...party.map((a) => ({ id: a.id, hp: a.hp, down: a.vitals?.down > 0, sub: a.kind === 'tank' ? 0.7 : 0.55, debuff: false })),
     ],
   });
   if (camHold > 0) camHold = Math.max(0, camHold - dt);
@@ -812,18 +1048,37 @@ function step(dt) {
     timeLeft -= dt;
     if (timeLeft <= 0) {
       timeLeft = 5 * 60;
-      hud.banner('게이트가 조금 더 열려 있습니다');
+      hud.banner('봉인 제한 시간이 조금 늘었습니다');
     }
   }
 
   const st = combat.state;
   let mx = 0;
   let mz = 0;
+  if (autoHold > 0) autoHold = Math.max(0, autoHold - dt);
+  const manual = fighting && st.down <= 0 ? moveAxes() : null;
+  if (manual) autoHold = 3;
   if (fighting && st.down <= 0) {
-    const wish = moveAxes();
-    if (wish) {
-      mx = wish.x;
-      mz = wish.z;
+    if (manual) {
+      mx = manual.x;
+      mz = manual.z;
+    } else if (autoOn && autoHold <= 0) {
+      const spot = roleGoal(
+        { classId, kind: ROLE_OF[classId] || 'dps', slot: 2, x: actor.position.x, z: actor.position.z, vitals: { hp: st.hp, hpMax: st.hpMax, down: st.down, cds: {}, gcd: st.gcd, rezCd: 0 }, mesh: { position: actor.position } },
+        { boss: bossFrame(boss.group), now: performance.now(), zones: boss.state.zones || [], allies: party, mobs: (env.liveMobs || []).filter((m) => m.group && !m.dead).map((m) => ({ x: m.group.position.x, z: m.group.position.z })) },
+      );
+      const dx = spot.x - actor.position.x;
+      const dz = spot.z - actor.position.z;
+      const len = Math.hypot(dx, dz);
+      if (len > 0.45) { mx = dx / len; mz = dz / len; }
+      const sid = chooseSkill(
+        { classId, vitals: { down: 0, gcd: st.gcd, cds: Object.fromEntries(combat.skills.map((s, i) => [s.id, st.cds[i] || 0])), rezCd: 0 }, taunt: 0 },
+        { distBoss: Math.hypot(actor.position.x - boss.group.position.x, actor.position.z - boss.group.position.z), inDanger: spot.dodge, allies: party },
+      );
+      if (sid === 'rez') {
+        const downed = party.find((m) => m.vitals.down >= 6);
+        if (downed) reviveMate(downed, { name: '초행', vitals: playerStats });
+      } else if (sid) useSkill(sid, true);
     }
   }
   const running = shift && (mx || mz);
@@ -876,6 +1131,15 @@ function step(dt) {
   boss.update(dt, {
     fightOn: fighting && !boss.state.dead,
     player: actor.position,
+    obstacles: env.obstacles || [],
+    raiders: [
+      { id: 'player', x: actor.position.x, z: actor.position.z, role: ROLE_OF[classId] || 'dps', down: st.down > 0 },
+      ...party.map((a) => ({ id: a.id, x: a.mesh.position.x, z: a.mesh.position.z, role: a.kind, down: a.vitals.down > 0 })),
+    ],
+    onRaiderHit(id, amount, kind) {
+      const mate = party.find((a) => a.id === id);
+      if (mate) hurtMate(mate, amount, kind);
+    },
     onPlayerHit(amount, kind) {
       const before = st.hp;
       combat.damagePlayer(amount);
@@ -892,7 +1156,7 @@ function step(dt) {
     onWind(kind) {
       if (kind === 'telegraph') {
         audio.playSfx('warn');
-        hud.banner('열풍 — 흰 원 밖, 노란 선 안');
+        hud.banner('열풍입니다. 흰 원 밖, 노란 선 안으로 피하세요');
       } else {
         audio.playSfx('wind');
         for (let i = 0; i < 4; i++) vfx.windStreak(actor.position.x + (i - 1.5) * 2.2, actor.position.z, PATH_YAW);
@@ -910,7 +1174,7 @@ function step(dt) {
       shake = Math.max(shake, stage === 3 ? 0.62 : 0.36);
       hitStop = stage === 3 ? 0.16 : 0.1;
       hud.flash(0.4);
-      const line = stage === 3 ? '광폭화!' : '홀드가 분노합니다 — 다리가 무너집니다';
+      const line = stage === 3 ? '광폭화!' : '홀드가 분노합니다. 다리가 무너집니다';
       if (shot !== 'vfx' && shot !== 'vfxall') hud.banner(line);
       room.system(line);
     },
@@ -929,6 +1193,16 @@ function step(dt) {
   });
 
   if (fighting && boss.state.dead) win();
+  if (fighting && st.down > 0 && party.length && party.every((a) => a.vitals.down > 0)) {
+    wipeT += dt;
+    if (wipeT > 2.4) lose();
+  } else wipeT = 0;
+  if (fighting) {
+    playerStats.distSum += Math.hypot(actor.position.x - boss.group.position.x, actor.position.z - boss.group.position.z);
+    playerStats.distN += 1;
+    playerStats.dealt = st.dealt;
+    playerStats.healed = st.healed;
+  }
 
   settleParty(fighting && !boss.state.dead ? PATH_YAW : actor.rotation.y, dt, fighting && !boss.state.dead);
 
@@ -998,6 +1272,10 @@ addEventListener('keydown', (e) => {
   if (e.code === 'Space') e.preventDefault();
   keys.add(e.code);
   if (e.key === 'Shift') shift = true;
+  if (e.code === 'KeyZ' && !e.repeat) {
+    setAuto(!autoOn);
+    return;
+  }
   if (e.repeat) return;
   const slot = { Digit1: 0, Numpad1: 0, Digit2: 1, Numpad2: 1, Digit3: 2, Numpad3: 2, Digit4: 3, Numpad4: 3 }[e.code];
   if (slot != null) useSkill(combat.skills[slot]?.id);
@@ -1390,6 +1668,17 @@ window.__raid = {
   measure: measureScene,
   debug: {
     skipIntro() { if (phase === 'intro') finishIntro(); },
+    live() { return lastLive; },
+    party() {
+      return party.map((a) => ({
+        id: a.classId,
+        kind: a.kind,
+        x: +a.mesh.position.x.toFixed(2),
+        z: +a.mesh.position.z.toFixed(2),
+        goal: a.goal ? { x: +a.goal.x.toFixed(2), z: +a.goal.z.toFixed(2) } : null,
+        parent: a.mesh.parent?.type || '',
+      }));
+    },
     guard() {
       combat.state.iframe = 60;
       combat.state.down = 0;
@@ -1410,6 +1699,35 @@ window.__raid = {
     },
     wind() { boss.forceWind(); },
     killBoss() { boss.hurt(boss.state.hp); },
+    showDefeat() { phase = 'defeat'; hud.showDefeat(); },
+    setAuto(on) { setAuto(on); },
+    auto() { return { on: autoOn, hold: autoHold }; },
+    fullParty() { layoutParty(classId, { all: true }); finishIntro(); },
+    wave(n) { boss.spawnWave(n); },
+    downMate(i = 0) { const a = party[i]; if (a) hurtMate(a, 9999, 'dps'); },
+    pause(v = true) { simPaused = v; },
+    record(on = true) { for (const a of party) { a.record = on; a.trail = []; } },
+    report() {
+      const rows = party.map((a) => ({
+        class: a.classId,
+        name: a.name,
+        dist: a.vitals.distN ? +(a.vitals.distSum / a.vitals.distN).toFixed(1) : 0,
+        skills: a.vitals.skills,
+        dealt: a.vitals.dealt,
+        healed: a.vitals.healed,
+        deaths: a.vitals.deaths,
+        hp: +a.hp.toFixed(2),
+        down: a.vitals.down > 0,
+      }));
+      rows.push({
+        class: classId, name: '초행',
+        dist: playerStats.distN ? +(playerStats.distSum / playerStats.distN).toFixed(1) : 0,
+        skills: playerStats.skills, dealt: playerStats.dealt, healed: playerStats.healed,
+        deaths: combat.state.down > 0 ? 1 : 0, hp: +(combat.state.hp / combat.state.hpMax).toFixed(2),
+        down: combat.state.down > 0,
+      });
+      return rows;
+    },
     hurtBoss(n) { boss.hurt(n); return boss.state.hp / boss.state.hpMax; },
     down() { combat.damagePlayer(9999); },
     res(n) { combat.state.res = n; },

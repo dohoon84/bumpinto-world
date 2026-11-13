@@ -161,3 +161,52 @@ export function normalizeClass(raw) {
 export function getClass(id) {
   return CLASSES[id] || CLASSES.warrior;
 }
+
+const KIND_TIP = {
+  melee: ['근접', '전방의 대상을 벤다'],
+  dash: ['이동', '뛰어들며 피해를 준다'],
+  shout: ['광역', '주변 대상을 흔든다'],
+  spin: ['광역', '몸을 돌려 원을 벤다'],
+  projectile: ['투사체', '날려 맞춘다'],
+  nova: ['광역', '발밑에 고리를 친다'],
+  bind: ['제어', '대상을 묶거나 짓누른다'],
+  rain: ['장판', '범위 안에 계속 떨어진다'],
+  heal: ['치유', '아군의 체력을 회복한다'],
+  healParty: ['파티', '아군에게 보호를 건다'],
+  stealth: ['생존', '잠시 모습을 감춘다'],
+};
+
+export function describeSkill(s, cls) {
+  const spec = cls || getClass('warrior');
+  const [type, verb] = KIND_TIP[s.kind] || ['기술', '사용한다'];
+  let effect = verb;
+  if (s.power) effect += `. 피해 ${s.power}`;
+  if (s.heal) effect += `. 치유 ${s.heal}`;
+  if (s.gain) effect += `. ${spec.resLabel} +${s.gain}`;
+  if (s.gainOnCast) effect += `. ${spec.resLabel} +${s.gainOnCast}`;
+  const area = ['nova', 'spin', 'rain', 'shout', 'healParty'].includes(s.kind);
+  return {
+    name: s.name,
+    key: s.key,
+    type,
+    color: spec.seam,
+    effect,
+    cd: s.cd,
+    cost: s.cost || 0,
+    res: spec.resLabel,
+    range: s.range,
+    cast: s.lock || 0,
+    area,
+  };
+}
+
+export const AURAS = {
+  buff_power: { name: '힘의 인장', kind: '강화', effect: '가하는 피해가 오른다', color: '#ffb000' },
+  buff_shield: { name: '보호막', kind: '보호', effect: '받는 피해를 막는다', color: '#7ec8ff' },
+  buff_haste: { name: '가속', kind: '강화', effect: '공격 속도가 오른다', color: '#ffd27a' },
+  buff_regen: { name: '재생', kind: '치유', effect: '체력이 조금씩 돌아온다', color: '#7dffb0' },
+  debuff_burn: { name: '균열 화상', kind: '약화', effect: '지속 피해를 입는다', color: '#ff7a3a' },
+  debuff_armorbreak: { name: '방어 분쇄', kind: '약화', effect: '받는 피해가 늘어난다', color: '#e07070' },
+  debuff_slow: { name: '둔화', kind: '약화', effect: '이동이 느려진다', color: '#9fd6ff' },
+  debuff_stun: { name: '기절', kind: '제어', effect: '잠시 움직이지 못한다', color: '#f4e2b0' },
+};

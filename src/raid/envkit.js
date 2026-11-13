@@ -74,7 +74,7 @@ function greenBlades(geo) {
         const dx = pts[j][0] - x;
         const dy = pts[j][1] - y;
         const dz = pts[j][2] - z;
-        if (dx * dx + dy * dy + dz * dz < 6.5 * 6.5) {
+        if (dx * dx + dy * dy + dz * dz < 0.42 * 0.42) {
           used[j] = 1;
           stack.push(j);
         }
@@ -98,20 +98,10 @@ function greenBlades(geo) {
     const minX = blade.minX - pad; const maxX = blade.maxX + pad;
     const minY = blade.minY - pad; const maxY = blade.maxY + pad;
     const minZ = blade.minZ - pad; const maxZ = blade.maxZ + pad;
-    let fr = 0; let fg = 0; let fb = 0; let fn = 0;
-    for (let i = 0; i < col.count && fn < 40; i += 3) {
-      const x = pos.getX(i); const y = pos.getY(i); const z = pos.getZ(i);
-      if (x >= minX && x <= maxX && y >= minY && y <= maxY && z >= minZ && z <= maxZ) continue;
-      if (Math.abs(y - (blade.minY + blade.maxY) / 2) > blade.dy + 0.5) continue;
-      fr += col.getX(i); fg += col.getY(i); fb += col.getZ(i); fn += 1;
-    }
-    const cr = fn ? fr / fn : 0.55;
-    const cg = fn ? fg / fn : 0.52;
-    const cb = fn ? fb / fn : 0.5;
     for (let i = 0; i < col.count; i++) {
       const x = pos.getX(i); const y = pos.getY(i); const z = pos.getZ(i);
       if (x < minX || x > maxX || y < minY || y > maxY || z < minZ || z > maxZ) continue;
-      col.setXYZ(i, cr, cg, cb);
+      col.setXYZ(i, 0.42, 0.40, 0.38);
     }
   }
   if (blades.length) col.needsUpdate = true;
@@ -807,6 +797,20 @@ export async function createEnvKit(scene) {
     }
   }
 
+  const obstacles = [];
+  const markOb = (along, across, r) => {
+    const p = fromFrame(along, across);
+    obstacles.push({ x: p.x, z: p.z, r });
+  };
+  markOb(4, -2.6, 1.7);
+  markOb(20, 3.1, 2.4);
+  markOb(12, 2.4, 1.6);
+  markOb(24, -1.8, 1.6);
+  for (let along = -16; along <= 52; along += 6.6) {
+    markOb(along, -4.3, 1.55);
+    markOb(along, 4.3, 1.55);
+  }
+
   return {
     root,
     setPhase,
@@ -820,5 +824,6 @@ export async function createEnvKit(scene) {
     liveMobs,
     traffic,
     fireAnchors,
+    obstacles,
   };
 }

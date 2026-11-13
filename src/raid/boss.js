@@ -341,6 +341,7 @@ export async function createBoss(scene) {
     vortexWait: 0,
     stage: 1,
     dress: true,
+    zones: [],
   };
 
   const windSpots = [
@@ -435,22 +436,122 @@ export async function createBoss(scene) {
     return ratio <= 0.25 ? 3 : ratio <= 0.6 ? 2 : 1;
   }
 
-  function spawnAdd(side) {
+  const SPAWNS = [
+    { along: -18, across: -1.5 },
+    { along: 48, across: 1.7 },
+    { along: BOSS_ALONG, across: 0.2 },
+    { along: BOSS_ALONG - 3, across: 6.35 },
+    { along: BOSS_ALONG + 5, across: -6.25 },
+  ];
+  const ADD_R = { shard_runner: 0.55, rebar_brute: 0.85, pier_colossus: 1.15 };
+  let obstacles = [];
+
+  function spawnAdd(i = adds.length) {
+    const spot = SPAWNS[i % SPAWNS.length];
+    const climb = i % 5 >= 3;
+    const kinds = ['shard_runner', 'rebar_brute', 'pier_colossus'];
+    const kind = kinds[i % kinds.length];
+    const roll = (i * 7 + 3) % 10;
+    const threat = roll < 6 ? 'tank' : roll < 8 ? 'heal' : roll < 9 ? 'ranged' : 'player';
     if (mobFactory) {
-      const kinds = ['shard_runner', 'rebar_brute', 'pier_colossus'];
-      const kind = kinds[adds.length % kinds.length];
-      const spot = fromFrame(BOSS_ALONG - 6, side * 2.6);
-      const mob = mobFactory(kind, spot.x, spot.z);
+      const p = fromFrame(spot.along, spot.across);
+      const mob = mobFactory(kind, p.x, p.z);
       if (mob) {
-        adds.push({ mesh: mob.group, mob, wait: 1.8 });
+        if (climb) mob.group.position.y = 0.35;
+        adds.push({ mesh: mob.group, mob, wait: 0.7 + (i % 3) * 0.25, threat, slot: i % 6, radius: ADD_R[kind] || 0.6, kind });
         return;
       }
     }
     const mesh = new THREE.Mesh(new THREE.CapsuleGeometry(0.28, 0.55, 4, 8), addMat);
-    mesh.position.set(home.x + side * 2.2, 0.7, home.z + 1.4);
+    const p = fromFrame(spot.along, spot.across);
+    mesh.position.set(p.x, 0.7, p.z);
     mesh.castShadow = true;
     scene.add(mesh);
-    adds.push({ mesh, wait: 0.4 });
+    adds.push({ mesh, wait: 0.4, threat, slot: i % 6, radius: 0.55, kind: 'capsule' });
+  }
+
+  function addGoal(add, raiders) {
+    const live = (raiders || []).filter((r) => !r.down);
+    const pool = live.length ? live : (raiders || []);
+    if (!pool.length) return null;
+    const want = add.threat || 'tank';
+    let pick = pool.filter((r) => (
+      want === 'tank' ? r.role === 'tank'
+        : want === 'heal' ? r.role === 'heal'
+          : want === 'player' ? r.id === 'player'
+            : r.role === 'dps'
+    ));
+    if (!pick.length) pick = pool;
+    const t = pick[add.slot % pick.length];
+    const ang = (add.slot / 6) * Math.PI * 2 + 0.35;
+    const dist = Math.max((add.mob?.reach || 1.35) + 0.45, 1.75);
+    return { x: t.x + Math.cos(ang) * dist, z: t.z + Math.sin(ang) * dist, id: t.id, tx: t.x, tz: t.z };
+  }
+
+  function pushAdds(dt, raiders) {
+    for (const add of adds) {
+      if (add.mob && !add.mob.ready) continue;
+      const goal = addGoal(add, raiders);
+      if (!goal) continue;
+      const dx = goal.x - add.mesh.position.x;
+      const dz = goal.z - add.mesh.position.z;
+      const len = Math.hypot(dx, dz) || 1;
+      let vx = dx / len;
+      let vz = dz / len;
+      for (const other of adds) {
+        if (other === add) continue;
+        const ox = add.mesh.position.x - other.mesh.position.x;
+        const oz = add.mesh.position.z - other.mesh.position.z;
+        const d = Math.hypot(ox, oz) || 0.001;
+        const min = ((add.radius || 0.6) + (other.radius || 0.6)) * 1.2;
+        if (d < min) {
+          const push = (min - d) * 2.4;
+          vx += (ox / d) * push;
+          vz += (oz / d) * push;
+        }
+      }
+      for (const ob of obstacles) {
+        const ox = add.mesh.position.x - ob.x;
+        const oz = add.mesh.position.z - ob.z;
+        const d = Math.hypot(ox, oz) || 0.001;
+        const min = (add.radius || 0.6) + ob.r;
+        if (d < min) {
+          const push = (min - d) * 3.2;
+          vx += (ox / d) * push;
+          vz += (oz / d) * push;
+        }
+      }
+      const swinging = add.mob?.clip === 'attack';
+      if (!swinging) {
+        const sp = Math.hypot(vx, vz) || 1;
+        const speed = add.mob?.speed || 2.4;
+        add.mesh.position.x += (vx / sp) * dt * speed;
+        add.mesh.position.z += (vz / sp) * dt * speed;
+        add.mesh.rotation.y = Math.atan2(goal.tx - add.mesh.position.x, goal.tz - add.mesh.position.z);
+      }
+      if (add.mesh.position.y > 0.02) add.mesh.position.y = Math.max(0, add.mesh.position.y - dt * 1.4);
+      add._goal = goal;
+    }
+    for (let n = 0; n < 2; n++) {
+      for (let i = 0; i < adds.length; i++) {
+        for (let j = i + 1; j < adds.length; j++) {
+          const a = adds[i];
+          const b = adds[j];
+          const ox = b.mesh.position.x - a.mesh.position.x;
+          const oz = b.mesh.position.z - a.mesh.position.z;
+          const d = Math.hypot(ox, oz) || 0.001;
+          const min = (a.radius || 0.6) + (b.radius || 0.6);
+          if (d >= min) continue;
+          const push = (min - d) * 0.5;
+          const nx = ox / d;
+          const nz = oz / d;
+          a.mesh.position.x -= nx * push;
+          a.mesh.position.z -= nz * push;
+          b.mesh.position.x += nx * push;
+          b.mesh.position.z += nz * push;
+        }
+      }
+    }
   }
 
   function showCircle(mesh, x, z) {
@@ -467,6 +568,17 @@ export async function createBoss(scene) {
 
   function update(dt, ctx) {
     const { fightOn, player, onPlayerHit, onWind, onSlam } = ctx;
+    const hitRaid = (x, z, r, amount, kind) => {
+      const raiders = ctx.raiders?.length ? ctx.raiders : [{ id: 'player', x: player.x, z: player.z, down: false }];
+      for (const raider of raiders) {
+        if (raider.down) continue;
+        const dx = raider.x - x;
+        const dz = raider.z - z;
+        if (dx * dx + dz * dz > r * r) continue;
+        if (raider.id === 'player') onPlayerHit?.(amount, kind);
+        else ctx.onRaiderHit?.(raider.id, amount, kind);
+      }
+    };
     if (state.dead) {
       columns.forEach((c) => { c.visible = false; });
       lane.visible = false;
@@ -612,9 +724,10 @@ export async function createBoss(scene) {
           state.castName = '소환';
           state.castMax = 1.4;
           onWind?.('telegraph');
-          spawnAdd(-1);
-          spawnAdd(1);
-          if (state.stage === 3) spawnAdd(0);
+          spawnAdd(adds.length);
+          spawnAdd(adds.length);
+          spawnAdd(adds.length);
+          if (state.stage === 3) spawnAdd(adds.length);
           playClip('roar', false);
         }
       }
@@ -634,7 +747,7 @@ export async function createBoss(scene) {
         tossDebris(slam.position.x, slam.position.z, 8);
         const dx = player.x - slam.position.x;
         const dz = player.z - slam.position.z;
-        if (dx * dx + dz * dz <= (slam.userData.r || 4.8) ** 2) onPlayerHit?.(34, 'slam');
+        hitRaid(slam.position.x, slam.position.z, slam.userData.r || 4.8, 34, 'slam');
       }
       if (state.t > 2.15) {
         hideAll();
@@ -659,14 +772,17 @@ export async function createBoss(scene) {
         state.breathT = 0;
         if (built.holde) playClip('breath_fire', true);
         onWind?.('hit');
-        if (!inSafe(player.x, player.z)) {
+        for (const raider of (ctx.raiders?.length ? ctx.raiders : [{ id: 'player', x: player.x, z: player.z, down: false }])) {
+          if (raider.down || inSafe(raider.x, raider.z)) continue;
           let inOrange = false;
           for (const w of winds) {
-            const dx = player.x - w.position.x;
-            const dz = player.z - w.position.z;
+            const dx = raider.x - w.position.x;
+            const dz = raider.z - w.position.z;
             if (dx * dx + dz * dz <= (w.userData.r || 3.6) ** 2) inOrange = true;
           }
-          onPlayerHit?.(inOrange ? 42 : 32, 'wind');
+          const amount = inOrange ? 42 : 32;
+          if (raider.id === 'player') onPlayerHit?.(amount, 'wind');
+          else ctx.onRaiderHit?.(raider.id, amount, 'wind');
         }
       }
       if (windHit) state.breathT = (state.breathT || 0) + dt;
@@ -704,7 +820,7 @@ export async function createBoss(scene) {
         const t = Math.max(0, Math.min(1, ((px - charge.ax) * vx + (pz - charge.az) * vz) / len2));
         const cx = charge.ax + vx * t;
         const cz = charge.az + vz * t;
-        if ((px - cx) ** 2 + (pz - cz) ** 2 <= (1.7 * S) * (1.7 * S)) onPlayerHit?.(36, 'charge');
+        hitRaid(cx, cz, 1.7 * S, 36, 'charge');
         built.group.position.set(charge.bx, 0, charge.bz);
       }
       const chargeDone = built.holde
@@ -728,7 +844,7 @@ export async function createBoss(scene) {
 
     vortexClock += dt;
     const span = 22;
-    let vortexHit = false;
+    state.vortexWait = Math.max(0, (state.vortexWait || 0) - dt);
     columns.forEach((col, i) => {
       col.visible = state.dress && !state.dead && fightOn;
       const travel = (vortexClock * 5.2 + i * span * 0.5) % span;
@@ -737,47 +853,54 @@ export async function createBoss(scene) {
       const p = fromFrame(along, across);
       col.position.set(p.x, 0, p.z);
       col.rotation.y += dt * 1.6;
-      if (!fightOn || state.dead || !player) return;
-      const dx = player.x - p.x;
-      const dz = player.z - p.z;
-      if (dx * dx + dz * dz <= col.userData.r ** 2) vortexHit = true;
+      if (!fightOn || state.dead || !player || state.vortexWait > 0) return;
+      const before = state.vortexWait;
+      hitRaid(p.x, p.z, col.userData.r, 10, 'vortex');
+      if (state.vortexWait === before) {
+        const raiders = ctx.raiders?.length ? ctx.raiders : [{ id: 'player', x: player.x, z: player.z, down: false }];
+        if (raiders.some((r) => !r.down && (r.x - p.x) ** 2 + (r.z - p.z) ** 2 <= col.userData.r ** 2)) state.vortexWait = 0.7;
+      }
     });
-    if (vortexHit && state.vortexWait <= 0) {
-      state.vortexWait = 0.45;
-      onPlayerHit?.(14, 'vortex');
-    } else state.vortexWait = Math.max(0, (state.vortexWait || 0) - dt);
 
     addClock += dt;
-    if (state.stage === 3 && addClock > 8 && adds.length < 3) {
-      addClock = 0;
-      spawnAdd(adds.length % 2 ? 1 : -1);
-    }
-    for (let i = adds.length - 1; i >= 0; i--) {
-      const add = adds[i];
-      if (add.mob && !add.mob.ready) continue;
-      const dx = player.x - add.mesh.position.x;
-      const dz = player.z - add.mesh.position.z;
-      const len = Math.hypot(dx, dz) || 1;
-      const reach = add.mob?.reach || 1.15;
-      const swinging = add.mob?.clip === 'attack';
-      if (!swinging) {
-        const speed = add.mob?.speed || (state.stage === 3 ? 3.4 : 2.4);
-        add.mesh.position.x += (dx / len) * dt * speed;
-        add.mesh.position.z += (dz / len) * dt * speed;
-        add.mesh.rotation.y = Math.atan2(dx, dz);
+    if ((state.stage >= 2 && addClock > 9 && adds.length < 5) || (state.phase === 'adds' && adds.length < 2)) {
+      if (state.phase !== 'adds' || addClock > 0.2) {
+        if (state.stage >= 2 && addClock > 9) {
+          addClock = 0;
+          spawnAdd(adds.length);
+          if (adds.length < 4) spawnAdd(adds.length);
+        }
       }
-      add.wait = Math.max(0, add.wait - dt);
-      if (add.mob && len < reach && !swinging && add.wait <= 0) add.mob.play('attack');
-      if (add.mob?.consumeImpact() && len < reach + 0.8) {
-        add.wait = 0.45;
-        onPlayerHit?.(add.mob.power || 12, 'add');
-      } else if (!add.mob && len < 1.15 && add.wait <= 0) {
+    }
+    pushAdds(dt, ctx.raiders);
+    for (const add of adds) {
+      if (add.mob && !add.mob.ready) continue;
+      const goal = add._goal;
+      if (!goal) continue;
+      const reach = add.mob?.reach || 1.15;
+      const td = Math.hypot(goal.tx - add.mesh.position.x, goal.tz - add.mesh.position.z);
+      const swinging = add.mob?.clip === 'attack';
+      add.wait = Math.max(0, (add.wait || 0) - dt);
+      if (add.mob && td < reach && !swinging && add.wait <= 0) add.mob.play('attack');
+      if (add.mob?.consumeImpact() && td < reach + 0.9) {
+        add.wait = 0.55;
+        const amount = add.mob.power || 12;
+        if (goal.id === 'player') onPlayerHit?.(amount, 'add');
+        else ctx.onRaiderHit?.(goal.id, amount, 'add');
+      } else if (!add.mob && td < 1.15 && add.wait <= 0) {
         add.wait = 1.1;
-        onPlayerHit?.(12, 'add');
+        if (goal.id === 'player') onPlayerHit?.(12, 'add');
+        else ctx.onRaiderHit?.(goal.id, 12, 'add');
       }
     }
     if (state.stage === 3) light.intensity = 26;
     light.position.set(built.group.position.x, 8.2, built.group.position.z);
+    const zones = [];
+    if (slam.visible) zones.push({ x: slam.position.x, z: slam.position.z, r: slam.userData.r || 3 });
+    for (const w of winds) {
+      if (w.visible) zones.push({ x: w.position.x, z: w.position.z, r: w.userData.r || 2.4 });
+    }
+    state.zones = zones;
   }
 
   function hurt(amount) {
@@ -897,6 +1020,10 @@ export async function createBoss(scene) {
       applyArmor(n);
     },
     setMobFactory(fn) { mobFactory = fn; },
+    setObstacles(list) { obstacles = list || []; },
+    spawnWave(n = 4) {
+      for (let i = 0; i < n; i++) spawnAdd(adds.length);
+    },
     hideDress,
     reset,
     slow,

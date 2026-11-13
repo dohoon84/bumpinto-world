@@ -1,10 +1,10 @@
 import './hud.css';
-import { CLASS_IDS, getClass } from './classes.js';
+import { AURAS, CLASS_IDS, describeSkill, getClass } from './classes.js';
 import { toFrame, ALONG_MIN, ALONG_MAX, SAFE_ALONG, SAFE_R, BOSS_ALONG } from './layout.js';
 
 const VN_LINES = [
   { name: '안내', text: '탄천 합수부 하늘이 갈라집니다. 이 장면은 이 화면에서만, 처음 한 번만 보입니다.' },
-  { name: '초행', text: '전생의 이력이 손을 잡아당깁니다. 평소의 몸은 잠시 뒤에 둡니다.' },
+  { name: '초행', text: '익숙한 손놀림이 돌아옵니다. 평소의 몸은 잠시 뒤에 둡니다.' },
   { name: '서린', text: '장판이 깔리기 전에 자리를 잡으세요. 기둥은 길을 따라 옵니다.' },
   { name: '온유', text: '쓰러져도 노란 선에서 다시 일어납니다. 늦게 들어와도 보스가 살아 있으면 합류할 수 있습니다.' },
   { name: '안내', text: '준비가 되면 출동을 누르세요.' },
@@ -63,11 +63,11 @@ export function createHud() {
         <div class="c-boss-top">
           <b>홀드</b>
           <span data-boss-sub>2장 · 탄천 보스</span>
-          <span class="c-pips" data-boss-pips><i class="on"></i><i class="on"></i><i></i></span>
+          <span class="c-pips" data-boss-pips><b class="on">◆</b><b class="on">◆</b><b>◇</b></span>
           <em data-boss-pct>100%</em>
         </div>
         <div class="c-boss-line">
-          <svg class="c-cap" viewBox="0 0 120 44" aria-hidden="true"><path d="M108 22C78 6 36 4 8 16" fill="none" stroke="#785818" stroke-width="4"/><path d="M108 22C78 38 36 40 8 28" fill="none" stroke="#785818" stroke-width="4"/><path d="M104 22C80 10 44 10 18 18" fill="none" stroke="#E8B64A" stroke-width="2"/><path d="M104 22C80 34 44 34 18 26" fill="none" stroke="#E8B64A" stroke-width="2"/><path d="M100 22H78" stroke="#E8B64A" stroke-width="2"/><polygon points="100,9 113,22 100,35 87,22" fill="#E8B64A"/><polygon points="100,15 107,22 100,29 93,22" fill="#961A20"/></svg>
+          <svg class="c-cap" viewBox="0 0 92 36" aria-hidden="true"><path d="M86 18C62 4 28 2 6 12" fill="none" stroke="#6a4814" stroke-width="3.2"/><path d="M86 18C62 32 28 34 6 24" fill="none" stroke="#6a4814" stroke-width="3.2"/><path d="M84 18C64 8 34 7 12 15" fill="none" stroke="#f0c45a" stroke-width="1.6"/><path d="M84 18C64 28 34 29 12 21" fill="none" stroke="#f0c45a" stroke-width="1.6"/><path d="M78 18H58" stroke="#f0c45a" stroke-width="1.6"/><path d="M70 12l6 6-6 6-6-6z" fill="#e8b64a"/><path d="M70 15l3 3-3 3-3-3z" fill="#9a1c22"/><path d="M48 18h8" stroke="#e8b64a" stroke-width="1.4"/><circle cx="44" cy="18" r="1.4" fill="#f0c45a"/></svg>
           <div class="c-hp">
             <span class="ghost" data-boss-ghost></span>
             <span class="fill" data-boss-fill></span>
@@ -75,11 +75,11 @@ export function createHud() {
             <i class="tick" style="left:66.66%"></i>
             <b data-boss-num>0 / 0</b>
           </div>
-          <svg class="c-cap flip" viewBox="0 0 120 44" aria-hidden="true"><path d="M108 22C78 6 36 4 8 16" fill="none" stroke="#785818" stroke-width="4"/><path d="M108 22C78 38 36 40 8 28" fill="none" stroke="#785818" stroke-width="4"/><path d="M104 22C80 10 44 10 18 18" fill="none" stroke="#E8B64A" stroke-width="2"/><path d="M104 22C80 34 44 34 18 26" fill="none" stroke="#E8B64A" stroke-width="2"/><path d="M100 22H78" stroke="#E8B64A" stroke-width="2"/><polygon points="100,9 113,22 100,35 87,22" fill="#E8B64A"/><polygon points="100,15 107,22 100,29 93,22" fill="#961A20"/></svg>
+          <svg class="c-cap flip" viewBox="0 0 92 36" aria-hidden="true"><path d="M86 18C62 4 28 2 6 12" fill="none" stroke="#6a4814" stroke-width="3.2"/><path d="M86 18C62 32 28 34 6 24" fill="none" stroke="#6a4814" stroke-width="3.2"/><path d="M84 18C64 8 34 7 12 15" fill="none" stroke="#f0c45a" stroke-width="1.6"/><path d="M84 18C64 28 34 29 12 21" fill="none" stroke="#f0c45a" stroke-width="1.6"/><path d="M78 18H58" stroke="#f0c45a" stroke-width="1.6"/><path d="M70 12l6 6-6 6-6-6z" fill="#e8b64a"/><path d="M70 15l3 3-3 3-3-3z" fill="#9a1c22"/><path d="M48 18h8" stroke="#e8b64a" stroke-width="1.4"/><circle cx="44" cy="18" r="1.4" fill="#f0c45a"/></svg>
         </div>
         <div class="c-castrow">
-          <img src="/dungeon/hud/icons/debuff_burn.png" alt="" />
-          <img src="/dungeon/hud/icons/debuff_armorbreak.png" alt="" />
+          <img data-aura="debuff_burn" data-remain="6" src="/dungeon/hud/icons/debuff_burn.png" alt="" />
+          <img data-aura="debuff_armorbreak" data-remain="6" src="/dungeon/hud/icons/debuff_armorbreak.png" alt="" />
           <span data-cast-name></span>
           <div class="c-cast"><span data-cast-fill></span></div>
           <em data-cast-time></em>
@@ -93,9 +93,9 @@ export function createHud() {
       </div>
       <div class="c-vitals">
         <div class="c-buffs">
-          <img src="/dungeon/hud/icons/buff_power.png" alt="" />
-          <img src="/dungeon/hud/icons/buff_shield.png" alt="" />
-          <img src="/dungeon/hud/icons/buff_haste.png" alt="" />
+          <img data-aura="buff_power" data-remain="8" src="/dungeon/hud/icons/buff_power.png" alt="" />
+          <img data-aura="buff_shield" data-remain="8" src="/dungeon/hud/icons/buff_shield.png" alt="" />
+          <img data-aura="buff_haste" data-remain="8" src="/dungeon/hud/icons/buff_haste.png" alt="" />
           <span>8s</span>
         </div>
         <div class="c-vname"><b data-player-name>초행</b><span data-my-role>전사</span><em data-player-num>100 / 100</em></div>
@@ -104,11 +104,12 @@ export function createHud() {
         <span class="c-resread" data-res-read>분노 0</span>
       </div>
       <div class="c-portrait">
-        <img data-portrait src="/dungeon/hud/portraits/portrait_warrior.png" alt="" />
+        <img data-portrait alt="" />
         <span data-form>변신 42%</span>
         <b data-level>1</b>
       </div>
       <div class="c-skills" data-skills></div>
+      <button type="button" class="c-auto" data-auto aria-pressed="false">AUTO</button>
       <div class="c-map">
         <canvas class="c-minimap" width="152" height="152" data-map></canvas>
         <div class="c-clock" data-clock>00:00</div>
@@ -154,11 +155,11 @@ export function createHud() {
         <div class="plate panel">
           <div class="plate-name">홀드 <span>대상</span></div>
           <div class="bar thin hp"><span></span></div>
-          <div class="label"><span>대상 생명</span><span>100%</span></div>
+          <div class="label"><span>대상 체력</span><span>100%</span></div>
         </div>
       </div>
       <div class="skills"></div>
-      <div class="help">WASD 이동 · 휠 줌 · Space 회피 · 1–4 스킬 · 글로벌 쿨 1.2초</div>
+      <div class="help">WASD 이동 · 휠 줌 · Space 회피 · 1–4 스킬 · 전역 재사용 대기 1.2초 · Z 자동전투</div>
     </div>
     <div class="away" data-away hidden>탄천 합수부에 균열이 열렸습니다</div>
     <section class="alert panel" data-alert hidden>
@@ -167,7 +168,7 @@ export function createHud() {
       <p class="count" data-alert-count>01:30</p>
       <div class="alert-actions">
         <button type="button" class="primary" data-deploy>출동</button>
-        <button type="button" class="ghost" data-open-pick>다른 이력</button>
+        <button type="button" class="ghost" data-open-pick>직업 바꿔 출동</button>
       </div>
     </section>
     <div class="alert-line" data-alert-line hidden></div>
@@ -194,30 +195,31 @@ export function createHud() {
     <div class="banner panel" data-banner hidden></div>
     <div class="card-wrap" data-victory>
       <div class="card panel">
-        <div class="kicker">클리어</div>
-        <h2>균열이 걷혔습니다</h2>
-        <div class="xp">경험치 <b>+1,240</b> · Lv.1 → Lv.2</div>
-        <div class="bar hp"><span style="width:100%;background:linear-gradient(90deg,#e6c36a,#fff1b8)"></span></div>
-        <div class="drops">
+        <div class="kicker" data-result-kicker>클리어</div>
+        <h2 data-result-title>균열 봉인 완료</h2>
+        <p class="result-sub" data-result-sub>탄천교에 다시 평화가 찾아왔습니다</p>
+        <div class="result-actions">
+          <button type="button" class="primary" data-redeploy>다시 출동</button>
+          <button type="button" class="ghost" data-repick>직업 바꿔 출동</button>
+          <button type="button" class="ghost" data-peace>일상으로 돌아가기</button>
+        </div>
+        <div class="xp" data-result-xp>경험치 <b>+1,240</b> · Lv.1 → Lv.2</div>
+        <div class="drops" data-result-drops>
           <div class="drop r-rare"><span>안개 우산</span><i>희귀</i></div>
           <div class="drop r-common"><span>합수 자전거 벨</span><i>일반</i></div>
           <div class="drop r-key"><span>보딩패스 조각 STB-???</span><i>키</i></div>
         </div>
-        <div class="title-chip">칭호 『첫 출동』</div>
-        <button type="button" class="primary" data-peace>평온한 탄천으로</button>
-        <button type="button" class="ghost" data-world>오픈 월드에서 합수부 보기</button>
+        <div class="title-chip" data-result-titlechip>칭호 『첫 출동』</div>
       </div>
     </div>
-    <div class="peace-note panel">탄천이 다시 고요합니다 · 칭호 『첫 출동』
-      <button type="button" data-repick>다른 이력으로 다시 출동</button>
-    </div>
+    <div class="peace-note panel">탄천교에 다시 평화가 찾아왔습니다 · 칭호 『첫 출동』</div>
     <div class="pick" data-pick hidden>
       <div class="pick-card panel">
-        <p class="kicker">전생의 이력</p>
-        <h2>어느 손을 먼저 읽으시겠습니까</h2>
-        <p class="pick-note">던전에 들어간 뒤에는 바꿀 수 없습니다. 평온한 탄천으로 나온 뒤에 다시 고릅니다.</p>
+        <p class="kicker">직업 선택</p>
+        <h2>어떤 직업으로 출동할까요</h2>
+        <p class="pick-note">전투가 끝나면 직업을 다시 고를 수 있습니다.</p>
         <div class="pick-grid" data-pick-grid></div>
-        <button type="button" class="primary" data-pick-go>이 이력으로 출동</button>
+        <button type="button" class="primary" data-pick-go>이 직업으로 출동</button>
       </div>
     </div>
     <div class="mix">
@@ -225,6 +227,7 @@ export function createHud() {
       <label>음악 <input type="range" min="0" max="1" step="0.01" value="0.72" data-vol-bgm></label>
       <label>효과 <input type="range" min="0" max="1" step="0.01" value="0.9" data-vol-sfx></label>
     </div>
+    <div class="c-tip" data-tip hidden></div>
   `;
   document.body.appendChild(root);
 
@@ -241,10 +244,14 @@ export function createHud() {
     const cells = [];
     live.slice(0, 4).forEach((s) => cells.push({ skill: s, icon: SKILL_ICON[s.id], key: s.key }));
     while (cells.length < 4) cells.push({ key: String(cells.length + 1) });
-    extras.forEach((icon, i) => cells.push({ icon, key: EXTRA_KEYS[i] }));
+    extras.forEach((icon, i) => cells.push({
+      icon,
+      key: EXTRA_KEYS[i],
+      aura: icon.startsWith('buff_') || icon.startsWith('debuff_') ? icon : '',
+    }));
     cells.push({ key: 'T', empty: true });
     skillsEl.innerHTML = cells.map((c) => `
-      <button type="button" class="c-slot${c.empty ? ' is-empty' : ''}${c.skill?.locked ? ' locked' : ''}" ${c.skill ? `data-skill="${c.skill.id}"` : 'disabled'}>
+      <button type="button" class="c-slot${c.empty ? ' is-empty' : ''}${c.skill?.locked ? ' locked' : ''}" ${c.skill ? `data-skill="${c.skill.id}"` : ''} ${c.aura ? `data-aura="${c.aura}" data-remain="8"` : ''}>
         ${c.icon ? `<img src="/dungeon/hud/icons/${c.icon}.png" alt="" />` : ''}
         <span class="sweep" style="--p:0"></span>
         <span class="gcd" style="--g:0"></span>
@@ -253,10 +260,124 @@ export function createHud() {
       </button>
     `).join('');
     skillsEl.querySelectorAll('[data-skill]').forEach((btn) => {
-      btn.addEventListener('click', () => hud.onSkill?.(btn.getAttribute('data-skill')));
+      btn.addEventListener('click', () => {
+        if (btn.dataset.tipHold === '1') {
+          btn.dataset.tipHold = '';
+          return;
+        }
+        hud.onSkill?.(btn.getAttribute('data-skill'));
+      });
     });
   }
   paintSkills(active.skills);
+  function paintShowcase() {
+    const slash = '<svg viewBox="0 0 50 50"><path d="M10 38 L36 12" stroke="#f4e2b0" stroke-width="4" fill="none" stroke-linecap="round"/><path d="M30 12 h10 v8" stroke="#e8b64a" stroke-width="3" fill="none"/></svg>';
+    const triple = '<svg viewBox="0 0 50 50"><path d="M12 36 L34 14 M16 40 L38 18 M20 44 L42 22" stroke="#d7e4f2" stroke-width="3" fill="none" stroke-linecap="round"/></svg>';
+    const star = '<svg viewBox="0 0 50 50"><path d="M25 8 L29 20 H42 L32 28 L36 40 L25 32 L14 40 L18 28 L8 20 H21 Z" fill="#f0c45a"/></svg>';
+    const cross = '<svg viewBox="0 0 50 50"><rect x="20" y="8" width="10" height="34" rx="2" fill="#f4e7b8"/><rect x="8" y="20" width="34" height="10" rx="2" fill="#f4e7b8"/></svg>';
+    const cells = [
+      { key: '1', skill: 'slash', img: '/dungeon/hud/icons/warrior_attack.png' },
+      { key: '2', skill: 'charge', svg: slash },
+      { key: '3', skill: 'shout', img: '/dungeon/hud/icons/warrior_skill1.png' },
+      { key: '4', skill: 'spin', img: '/dungeon/hud/icons/warrior_skill2.png' },
+      { key: 'Q', aura: 'buff_power', img: '/dungeon/hud/icons/warrior_cast.png' },
+      { key: 'E', aura: 'buff_shield', img: '/dungeon/hud/icons/buff_shield.png' },
+      { key: 'R', skill: 'daggers', svg: triple },
+      { key: 'F', aura: 'buff_haste', svg: star },
+      { key: 'G', skill: 'heal', svg: cross },
+      { key: 'T', empty: true },
+    ];
+    skillsEl.dataset.mode = 'show';
+    skillsEl.innerHTML = cells.map((c) => `
+      <button type="button" class="c-slot${c.empty ? ' is-empty' : ''}" ${c.skill ? `data-skill="${c.skill}"` : ''} ${c.aura ? `data-aura="${c.aura}" data-remain="8"` : ''}>
+        ${c.img ? `<img src="${c.img}" alt="" />` : (c.svg || '')}
+        <span class="sweep" style="--p:0"></span>
+        <b class="key">${c.key}</b>
+        <b class="cd"></b>
+      </button>
+    `).join('');
+  }
+  const tip = root.querySelector('[data-tip]');
+  let tipTimer = 0;
+  function tipHtmlSkill(s, cls) {
+    const d = describeSkill(s, cls);
+    return `<div class="c-tip-top"><b>${d.name}</b><span>${d.key}</span></div>
+      <em style="color:${d.color}">${d.type}</em>
+      <p>${d.effect}</p>
+      <small>재사용 ${d.cd}초 · ${d.cost ? `${d.res} ${d.cost}` : `${d.res} 없음`} · ${d.area ? '범위' : '사거리'} ${d.range}m · 시전 ${d.cast}초</small>`;
+  }
+  function tipHtmlAura(id, remain) {
+    const a = AURAS[id];
+    if (!a) return '';
+    return `<div class="c-tip-top"><b>${a.name}</b></div>
+      <em style="color:${a.color}">${a.kind}</em>
+      <p>${a.effect}</p>
+      <small>남은 시간 ${remain || '—'}</small>`;
+  }
+  function placeTip(anchor) {
+    const r = anchor.getBoundingClientRect();
+    const w = tip.offsetWidth;
+    const h = tip.offsetHeight;
+    let x = r.left + r.width / 2 - w / 2;
+    let y = r.top - h - 10;
+    if (y < 8) y = r.bottom + 10;
+    x = Math.max(8, Math.min(window.innerWidth - w - 8, x));
+    y = Math.max(8, Math.min(window.innerHeight - h - 8, y));
+    const chat = root.querySelector('.rchat')?.getBoundingClientRect();
+    const partyBox = root.querySelector('.c-party')?.getBoundingClientRect();
+    const box = { left: x, top: y, right: x + w, bottom: y + h };
+    const hits = (o) => o && box.left < o.right && box.right > o.left && box.top < o.bottom && box.bottom > o.top;
+    if (hits(chat) || hits(partyBox)) {
+      y = Math.max(8, r.top - h - 10);
+      x = Math.max(8, Math.min(window.innerWidth - w - 8, r.right + 8));
+    }
+    tip.style.left = `${x}px`;
+    tip.style.top = `${y}px`;
+  }
+  function fillTip(anchor) {
+    const skillId = anchor.getAttribute('data-skill');
+    const auraId = anchor.getAttribute('data-aura');
+    let html = '';
+    if (skillId) {
+      const owned = active.skills.find((s) => s.id === skillId) || getClass('warrior').skills.find((s) => s.id === skillId) || getClass('assassin').skills.find((s) => s.id === skillId) || getClass('priest').skills.find((s) => s.id === skillId);
+      if (owned && !owned.locked) html = tipHtmlSkill(owned, skillId === 'heal' ? getClass('priest') : skillId === 'daggers' ? getClass('assassin') : active);
+    } else if (auraId) {
+      const remain = anchor.getAttribute('data-remain') || anchor.parentElement?.querySelector('span')?.textContent || '';
+      html = tipHtmlAura(auraId, remain);
+    }
+    if (!html) return false;
+    tip.innerHTML = html;
+    tip.hidden = false;
+    placeTip(anchor);
+    return true;
+  }
+  function hideTip() {
+    tip.hidden = true;
+    window.clearTimeout(tipTimer);
+  }
+  const coarse = window.matchMedia('(pointer: coarse)').matches;
+  root.addEventListener('pointerover', (e) => {
+    if (coarse) return;
+    const anchor = e.target.closest?.('[data-skill], [data-aura]');
+    if (!anchor || !root.contains(anchor)) return;
+    fillTip(anchor);
+  });
+  root.addEventListener('pointerout', (e) => {
+    const anchor = e.target.closest?.('[data-skill], [data-aura]');
+    if (!anchor) return;
+    if (anchor.contains(e.relatedTarget)) return;
+    hideTip();
+  });
+  root.addEventListener('pointerdown', (e) => {
+    const anchor = e.target.closest?.('.c-slot, [data-aura]');
+    if (!anchor) return;
+    window.clearTimeout(tipTimer);
+    tipTimer = window.setTimeout(() => {
+      if (fillTip(anchor)) anchor.dataset.tipHold = '1';
+    }, 350);
+  });
+  root.addEventListener('pointerup', () => window.clearTimeout(tipTimer));
+  root.addEventListener('pointercancel', () => { window.clearTimeout(tipTimer); hideTip(); });
   const grid = root.querySelector('[data-pick-grid]');
   grid.innerHTML = CLASS_IDS.map((id) => {
     const c = getClass(id);
@@ -392,6 +513,7 @@ export function createHud() {
     onSkill: null,
     onPeace: null,
     onWorld: null,
+    onRedeploy: null,
     onMute: null,
     onVolume: null,
     onPick: null,
@@ -400,7 +522,8 @@ export function createHud() {
     cutsceneOpen: () => cutscene,
     bind() {
       root.querySelector('[data-peace]').addEventListener('click', () => this.onPeace?.());
-      root.querySelector('[data-world]').addEventListener('click', () => this.onWorld?.());
+      root.querySelector('[data-redeploy]').addEventListener('click', () => this.onRedeploy?.());
+      root.querySelector('[data-auto]').addEventListener('click', () => this.onAuto?.());
       root.querySelector('[data-mute]').addEventListener('click', () => this.onMute?.());
       const pushVol = () => this.onVolume?.({
         bgm: Number(root.querySelector('[data-vol-bgm]').value),
@@ -427,6 +550,12 @@ export function createHud() {
         });
       });
     },
+    setPortrait(url) {
+      const portrait = root.querySelector('[data-portrait]');
+      if (!portrait || !url) return;
+      portrait.dataset.lock = '1';
+      portrait.src = url;
+    },
     setClass(id) {
       active = getClass(id);
       picked = active.id;
@@ -438,7 +567,7 @@ export function createHud() {
       const fill = root.querySelector('[data-rage-fill]');
       if (fill) fill.parentElement.dataset.res = active.resBar === 'mp' ? 'mana' : active.resBar;
       const portrait = root.querySelector('[data-portrait]');
-      if (portrait) portrait.src = `/dungeon/hud/portraits/portrait_${active.id}.png`;
+      if (portrait && !portrait.dataset.lock) portrait.removeAttribute('src');
       const nameEl = root.querySelector('[data-player-name]');
       if (nameEl && !this.caption) nameEl.textContent = '초행';
       paintSkills(active.skills);
@@ -509,7 +638,7 @@ export function createHud() {
       line.textContent = view.line || '';
       const sec = Math.max(0, Math.ceil(view.remaining || 0));
       root.querySelector('[data-alert-count]').textContent = `${String(Math.floor(sec / 60)).padStart(2, '0')}:${String(sec % 60).padStart(2, '0')}`;
-      root.querySelector('[data-alert-title]').textContent = sec > 0 ? '하늘이 갈라집니다' : '보스가 살아있는 동안 합류할 수 있습니다';
+      root.querySelector('[data-alert-title]').textContent = sec > 0 ? '하늘이 갈라집니다' : '보스가 살아 있는 동안 합류할 수 있습니다';
     },
     setParty(frames) {
       party.innerHTML = `<header><b>파티</b><span>${frames.length}/5</span></header>` + frames.map((m) => {
@@ -547,11 +676,33 @@ export function createHud() {
       root.querySelector('[data-floats]').appendChild(el);
       floats.push({ el, pos: pos.clone(), life: kind === 'crit' ? 1.05 : 0.85, y: 0, kind });
     },
-    showVictory() {
-      root.querySelector('[data-victory]').classList.add('show');
+    showResult(kind = 'victory') {
+      const card = root.querySelector('[data-victory]');
+      card.classList.add('show');
+      card.dataset.kind = kind;
+      root.classList.add('is-result');
+      const win = kind !== 'defeat';
+      root.querySelector('[data-result-kicker]').textContent = win ? '클리어' : '패배';
+      root.querySelector('[data-result-title]').textContent = win ? '균열 봉인 완료' : '파티가 전멸했습니다';
+      root.querySelector('[data-result-sub]').textContent = win
+        ? '탄천교에 다시 평화가 찾아왔습니다'
+        : '다시 출동하면 같은 직업으로 돌아옵니다';
+      root.querySelector('[data-result-xp]').hidden = !win;
+      root.querySelector('[data-result-drops]').hidden = !win;
+      root.querySelector('[data-result-titlechip]').hidden = !win;
     },
+    showVictory() { this.showResult('victory'); },
+    showDefeat() { this.showResult('defeat'); },
     hideVictory() {
       root.querySelector('[data-victory]').classList.remove('show');
+      root.classList.remove('is-result');
+    },
+    setAuto(on) {
+      const btn = root.querySelector('[data-auto]');
+      if (!btn) return;
+      btn.classList.toggle('is-on', !!on);
+      btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+      btn.textContent = on ? 'AUTO' : 'AUTO';
     },
     setPeace() {
       root.classList.add('is-peace');
@@ -570,7 +721,7 @@ export function createHud() {
       const stage = snap.bossDead ? 3 : pct <= 0.25 ? 3 : pct <= 0.6 ? 2 : 1;
       const sub = root.querySelector('[data-boss-sub]');
       if (sub && !cap) sub.textContent = `${stage}장 · 탄천 보스`;
-      root.querySelectorAll('[data-boss-pips] i').forEach((pip, i) => pip.classList.toggle('on', i < stage));
+      root.querySelectorAll('[data-boss-pips] b').forEach((pip, i) => pip.classList.toggle('on', i < (cap ? 2 : stage)));
       const castPct = cap ? cap.castPct : (snap.castMax > 0 ? (snap.cast / snap.castMax) * 100 : 0);
       setWidth(root.querySelector('[data-cast-fill]'), castPct);
       const castLeft = snap.castMax > 0 ? Math.max(0, snap.castMax - snap.cast) : 0;
@@ -591,7 +742,7 @@ export function createHud() {
       const healed = root.querySelector('[data-healed]');
       if (healed) healed.textContent = Math.round(snap.healed || 0).toLocaleString('ko-KR');
       const stageEl = root.querySelector('[data-stage]');
-      if (stageEl) stageEl.textContent = snap.bossDead ? '토벌 완료' : `레이드 진행 중 · ${stage}단계`;
+      if (stageEl) stageEl.textContent = snap.bossDead ? '토벌 완료' : (cap ? '레이드 진행 중 · 2단계' : `레이드 진행 중 · ${stage}단계`);
       const clock = root.querySelector('[data-clock]');
       if (clock) {
         const elapsed = cap ? cap.elapsed : Math.max(0, 600 - (snap.timeLeft || 0));
@@ -637,19 +788,20 @@ export function createHud() {
         }
       }
       if (cap?.slots) {
+        if (skillsEl.dataset.mode !== 'show') paintShowcase();
         const slots = skillsEl.querySelectorAll('.c-slot');
         const look = [
-          ['is-gcd', '', 0.3],
-          ['is-cd', '8', 0.6],
-          ['is-nores', '', 0],
+          ['', '', 0],
+          ['is-cd', '8', 0.62],
+          ['is-hot', '', 0],
           ['is-proc', '', 0],
-          ['is-cd', '45', 0.85],
+          ['is-cd', '45', 0.82],
         ];
         slots.forEach((btn, i) => {
           btn.classList.remove('is-gcd', 'is-cd', 'is-nores', 'is-proc');
           const row = look[i];
           if (!row) return;
-          btn.classList.add(row[0]);
+          if (row[0]) btn.classList.add(row[0]);
           btn.querySelector('.cd').textContent = row[1];
           btn.querySelector('.sweep').style.setProperty('--p', String(row[2]));
         });
@@ -673,7 +825,7 @@ export function createHud() {
       }
       if (snap.down > 0) {
         root.querySelector('[data-banner]').hidden = false;
-        root.querySelector('[data-banner]').textContent = `쓰러졌습니다 · 노란 선에서 기상 ${Math.ceil(snap.down)}초`;
+        root.querySelector('[data-banner]').textContent = `쓰러졌습니다. 노란 선에서 ${Math.ceil(snap.down)}초 뒤에 일어납니다`;
         bannerT = 0.2;
       }
       mapMode = cap ? 'show' : 'live';

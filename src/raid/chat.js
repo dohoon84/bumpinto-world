@@ -66,7 +66,7 @@ export function mountRaidChat(parent, room) {
     <div class="rchat-body">
       <header class="rchat-head">
         <div class="rchat-tabs" role="tablist">
-          ${TABS.map(([id, label], i) => `<button type="button" data-ch="${id}" class="${i === 0 ? 'on' : ''}">${label}<i data-dot hidden></i></button>`).join('')}
+          ${TABS.map(([id, label], i) => `<button type="button" data-ch="${id}" class="${i === 0 ? 'on' : ''}">${label}<i data-dot ${id === 'party' ? 'hidden' : ''}></i></button>`).join('')}
         </div>
         <button type="button" class="rchat-fold" data-fold aria-expanded="true">–</button>
       </header>
@@ -90,20 +90,16 @@ export function mountRaidChat(parent, room) {
   const lines = [];
   const seen = { party: true, raid: true, system: true };
 
-  function clock(t) {
-    const d = new Date(t || Date.now());
-    return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
-  }
   function paint() {
-    const view = lines.filter((m) => m.channel === channel).slice(-8);
+    const view = lines.filter((m) => m.channel === channel).slice(-6);
     log.innerHTML = view.map((m) => {
       const kind = m.kind || (m.system ? 'info' : '');
       if (m.channel === 'system') {
-        return `<p class="${kind}"><time>${clock(m.t)}</time> ${escapeHtml(m.text)}</p>`;
+        return `<p class="${kind}">${escapeHtml(m.text)}</p>`;
       }
       const chan = m.channel === 'raid' ? '[레이드]' : '[파티]';
       const chanColor = m.channel === 'raid' ? '#ff9650' : '#78beff';
-      return `<p class="${kind}"><time>${clock(m.t)}</time> <b style="color:${chanColor}">${chan}</b> <b style="color:${m.color || '#9fd6ff'}">${escapeHtml(m.name)}</b>: ${escapeHtml(m.text)}</p>`;
+      return `<p class="${kind}"><b style="color:${chanColor}">${chan}</b> <b style="color:${m.color || '#9fd6ff'}">${escapeHtml(m.name)}</b>: ${escapeHtml(m.text)}</p>`;
     }).join('') || '<p class="info">이 채널은 아직 조용합니다.</p>';
     log.scrollTop = log.scrollHeight;
     const label = TABS.find(([id]) => id === channel)?.[1] || '';
