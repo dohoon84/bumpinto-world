@@ -761,8 +761,8 @@ function buildFixtures({ isMobile = false, scene, keep, ct, atlas, unitBox, obst
       if (x > 72.5 && x < 74.5) continue;
       const [sx, sy, sz] = p.size;
       const nY = Math.max(1, Math.min(3, Math.floor(1.15 / sy)));
-      const nX = Math.max(1, Math.floor(1.1 / Math.max(sx, 0.2)));
-      const nZ = Math.max(1, Math.floor(0.9 / Math.max(sz, 0.2)));
+      const nX = Math.max(1, Math.floor(1.0 / Math.max(sx, 0.2))); // 칸 간격(1.0/nX · 0.85/nZ)보다 큰 상품은 옆 칸과 겹침
+      const nZ = Math.max(1, Math.floor(0.85 / Math.max(sz, 0.2)));
       const list = seaCluster.items.get(p.id) || []; seaCluster.items.set(p.id, list);
       for (let y = 0; y < nY; y++) for (let ix = 0; ix < nX; ix++) for (let iz = 0; iz < nZ; iz++) {
         list.push({ x: x - 0.5 + (ix + 0.5) * (1.0 / nX), y: 0.14 + sy * (y + 0.5), z: z - 0.4 + (iz + 0.5) * (0.85 / nZ), rot: 0, face: 1, pickable: y === nY - 1 && ix === 0 && PICKABLE_IDS.has(p.id), sx, sy, sz, pid: p.id });
@@ -961,11 +961,11 @@ function buildFixtures({ isMobile = false, scene, keep, ct, atlas, unitBox, obst
     const sign = new THREE.Mesh(keep(new THREE.PlaneGeometry(4.2, 0.7)), keep(new THREE.MeshBasicMaterial({ map: signTexLocal(keep, ct, '델리·통닭', '오늘 구운 범로스트치킨') })));
     sign.position.set(74, 2.15, 114.05); scene.add(sign);
     const p = BY_ID.rotisserie, p2 = BY_ID.chicken;
-    for (const [pr, n] of [[p, 8], [p2, 4]]) {
+    for (const [pr, n, ox] of [[p, 8, 0], [p2, 4, 0.7]]) { // 통닭 팩은 로티세리 사이 칸 (같은 자리 겹침 X)
       if (!pr) continue;
       const [sx, sy, sz] = pr.size;
       const list = deliCluster.items.get(pr.id) || []; deliCluster.items.set(pr.id, list);
-      for (let i = 0; i < n; i++) list.push({ x: 68.5 + i * 1.4, y: 1.12 + sy / 2, z: 114.7, rot: 0, face: 1, pickable: true, sx, sy, sz, pid: pr.id });
+      for (let i = 0; i < n; i++) list.push({ x: 68.5 + ox + i * 1.4, y: 1.12 + sy / 2, z: 114.7, rot: 0, face: 1, pickable: true, sx, sy, sz, pid: pr.id });
     }
     // [depot-live] 진열장 앞 초록 띠 + 가격 띠, 유리 안 온열대 뒤쪽에 3D 통닭 두 줄 (작은 20면체 인스턴스, 1 드로콜)
     const band = new THREE.Mesh(keep(new THREE.BoxGeometry(14, 0.14, 0.02)), green); band.position.set(74, 0.82, 114.09); scene.add(band);
@@ -995,15 +995,15 @@ function buildFixtures({ isMobile = false, scene, keep, ct, atlas, unitBox, obst
     top.position.set(x, 0.89, z); scene.add(top, legs);
     obstacles.push({ x0: x - 1.85, x1: x + 1.85, z0: z - 0.95, z1: z + 0.95 });
     const ids = z < 22 ? ['muffin', 'croissant'] : z < 28 ? ['croissant', 'bread'] : ['muffin', 'bread', 'choco'];
-    for (const id of ids) {
-      const p = BY_ID[id]; if (!p) continue;
-      const [sx, sy, sz] = p.size;
+    ids.forEach((id, li) => { // [depot] 품목마다 테이블 앞뒤 다른 줄 (예전엔 같은 자리에 겹쳐 쌓여 머핀 집으려다 크루아상이 집힘)
+      const p = BY_ID[id]; if (!p) return;
+      const [sx, sy, sz] = p.size, lz = z + (li - (ids.length - 1) / 2) * (ids.length > 2 ? 0.55 : 0.6);
       const list = bakCluster.items.get(id) || []; bakCluster.items.set(id, list);
       const nY = 3, nX = Math.max(1, Math.floor(3.2 / (sx + 0.02)));
       for (let y = 0; y < nY; y++) for (let ix = 0; ix < nX; ix++) {
-        list.push({ x: x - 1.5 + (ix + 0.5) * (3.0 / nX), y: 0.93 + sy * (y + 0.5), z, rot: 0, face: 1, pickable: y === nY - 1 && ix % 2 === 0, sx, sy, sz, pid: id });
+        list.push({ x: x - 1.5 + (ix + 0.5) * (3.0 / nX), y: 0.93 + sy * (y + 0.5), z: lz, rot: 0, face: 1, pickable: y === nY - 1 && ix % 2 === 0, sx, sy, sz, pid: id });
       }
-    }
+    });
   }
   // 베이커리 온열 선반
   {
@@ -1027,12 +1027,12 @@ function buildFixtures({ isMobile = false, scene, keep, ct, atlas, unitBox, obst
     const base = new THREE.Mesh(keep(new THREE.BoxGeometry(8.3, 0.7, 2.0)), green);
     base.position.set(6.5, 0.35, 41.0); scene.add(base);
     obstacles.push({ x0: 2.1, x1: 10.9, z0: 39.8, z1: 42.2 });
-    for (const id of ['socks', 'towelset']) {
+    for (const [id, lz] of [['socks', 40.55], ['towelset', 41.45]]) { // 품목마다 앞뒤 줄 (같은 자리 겹침 X)
       const p = BY_ID[id]; if (!p) continue;
       const [sx, sy, sz] = p.size;
       const list = appCluster.items.get(id) || []; appCluster.items.set(id, list);
       for (let i = 0; i < 8; i++) for (let y = 0; y < 2; y++) {
-        list.push({ x: 3.2 + i * 0.9, y: 0.86 + sy * (y + 0.5), z: 41.0, rot: 0, face: 1, pickable: y === 1 && i % 2 === 0, sx, sy, sz, pid: id });
+        list.push({ x: 3.2 + i * 0.9, y: 0.86 + sy * (y + 0.5), z: lz, rot: 0, face: 1, pickable: y === 1 && i % 2 === 0, sx, sy, sz, pid: id });
       }
     }
   }
@@ -1047,7 +1047,7 @@ function buildFixtures({ isMobile = false, scene, keep, ct, atlas, unitBox, obst
       obstacles.push({ x0: x - 0.65, x1: x + 0.65, z0: z - 0.55, z1: z + 0.55 });
       const [sx, sy, sz] = p.size;
       const list = alcCluster.items.get(p.id) || []; alcCluster.items.set(p.id, list);
-      const nY = 3, nX = Math.max(1, Math.floor(1.1 / sx)), nZ = Math.max(1, Math.floor(0.95 / sz));
+      const nY = 3, nX = Math.max(1, Math.floor(1.0 / sx)), nZ = Math.max(1, Math.floor(0.85 / sz)); // 칸 간격(1/nX · 0.85/nZ)이 상품보다 좁으면 겹침
       for (let y = 0; y < nY; y++) for (let ix = 0; ix < nX; ix++) for (let iz = 0; iz < nZ; iz++) {
         list.push({ x: x - 0.5 + (ix + 0.5) * (1 / nX), y: 0.14 + sy * (y + 0.5), z: z - 0.4 + (iz + 0.5) * (0.85 / nZ), rot: 0, face: 1, pickable: y === nY - 1 && ix === 0 && iz === 0, sx, sy, sz, pid: p.id });
       }
@@ -1079,7 +1079,7 @@ function buildFixtures({ isMobile = false, scene, keep, ct, atlas, unitBox, obst
       const [sx, sy, sz] = p.size;
       const list = petCluster.items.get(p.id) || []; petCluster.items.set(p.id, list);
       const nY = Math.max(1, Math.min(3, Math.floor(1.1 / sy)));
-      const nX = Math.max(1, Math.floor(1.1 / sx)), nZ = Math.max(1, Math.floor(0.95 / sz));
+      const nX = Math.max(1, Math.floor(1.0 / sx)), nZ = Math.max(1, Math.floor(0.85 / sz)); // 칸 간격보다 큰 상품은 겹치므로
       for (let y = 0; y < nY; y++) for (let ix = 0; ix < nX; ix++) for (let iz = 0; iz < nZ; iz++) {
         list.push({ x: x - 0.5 + (ix + 0.5) * (1 / nX), y: 0.14 + sy * (y + 0.5), z: z - 0.4 + (iz + 0.5) * (0.85 / nZ), rot: 0, face: 1, pickable: y === nY - 1 && ix === 0, sx, sy, sz, pid: p.id });
       }

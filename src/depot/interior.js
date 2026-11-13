@@ -562,7 +562,7 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit, a
   const REACH = 4.5;
   // 집기 대상: 진열 인스턴스는 레이캐스트, 카트 속·바닥 상품은 자기 상자(보이는 크기 OBB)에 레이 → 가장 가까운 것 하나.
   //   (예전: 메시 모양 그대로 맞혀서 화장지 롤 사이 틈·겹친 짐 너머의 다른 상품이 잡힘)
-  const _wp = new THREE.Vector3(), _wq = new THREE.Quaternion(), _ws = new THREE.Vector3();
+  const _wp = new THREE.Vector3(), _wq = new THREE.Quaternion(), _ws = new THREE.Vector3(), _rh = [];
   function pickTarget(at) {
     ray.setFromCamera(at || (mouse.on ? ndc.set(mouse.x, mouse.y) : ndc.set(0, 0)), camera); ray.far = REACH;
     let best = null;
@@ -577,8 +577,13 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit, a
     const o = ray.ray.origin, d = ray.ray.direction;
     const test = (mesh, p, size, mk) => {
       mesh.updateWorldMatrix(true, false); mesh.matrixWorld.decompose(_wp, _wq, _ws);
-      const t = rayObb(o, d, _wp, _wq, size);
-      if (t != null && t <= REACH && (!best || t < best.dist)) best = mk(t);
+      let t = rayObb(o, d, _wp, _wq, size);
+      if (t == null || t > REACH || (best && t >= best.dist)) return;
+      if (p.shape === 'pillow' || p.shape === 'sphere') { // 포대(가장자리 얇음)·수박(공): 상자 안 빈 공간이 커서 실제 모양으로 한 번 더 — 그 뒤 상품을 가리지 않게
+        _rh.length = 0; mesh.raycast(ray, _rh); if (!_rh.length) return;
+        t = Math.min(..._rh.map((h) => h.distance)); if (best && t >= best.dist) return;
+      }
+      best = mk(t);
     };
     for (const it of items) test(it.mesh, it.p, it.size, (t) => ({ kind: 'cart', it, p: it.p, dist: t }));
     for (const fi of floorItems) test(fi.mesh, fi.p, fi.p.size, (t) => ({ kind: 'floor', fi, p: fi.p, dist: t }));
@@ -642,7 +647,7 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit, a
     if (st.mode !== 'place' || !ghostSol) return false;
     const h = st.held, p = h.p; let away = 0;
     if (ghostSol.where !== 'floor') {
-      if (ghostSol.full) { toast(ghostSol.where === 'lower' ? '아래 받침대가 꽉 찼어요 · 윗바구니(Tab)에 놓거나 카트에서 빼고 넣어요' : '카트가 꽉 찼어요 · 더 쌓을 자리가 없어요 (아래 받침대 Tab · X 마지막 상품 빼기)', 2200, '#8a5a00'); return false; }
+      if (ghostSol.full) { toast(ghostSol.where === 'lower' ? '아래 받침대가 꽉 찼어요 · 윗바구니에 놓아 주세요' : '카트가 꽉 찼어요 · 더 쌓을 자리가 없어요 (아래 받침대나 카트 밖 바닥에)', 2200, '#8a5a00'); return false; }
       if (items.length >= MAX_ITEMS) { toast(`카트 안 상품은 ${MAX_ITEMS}개까지 (샘플 성능 상한)`, 1600, '#8a5a00'); return false; }
       if (loadKg() + p.kg > CART.maxLoad) { toast(`카트 허용 하중 ${CART.maxLoad} kg 초과`, 1600); return false; }
       addItem(p, ghostSol.where === 'lower' ? 'lower' : 'upper', ghostSol.x, ghostSol.y, ghostSol.z, st.rotY, st.tip, h.mesh);
