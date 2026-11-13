@@ -79,6 +79,8 @@ export const V_SIGNS = [
   ['칼국수', '#f4efe2', '#7a1f1f'], ['호텔', '#14213d', '#fca311'], ['만두', '#ffffff', '#c3002f'], ['치킨', '#ffb703', '#7a1f00'],
   ['카페', '#4b2e1e', '#f6e6c8'], ['한복', '#7b2cbf', '#ffe8fb'], ['면세점', '#e60012', '#ffffff'], ['안경', '#f1f5f9', '#0f172a'],
   ['BEAUTY', '#111111', '#ff5ccf'], ['COSME', '#00c2a8', '#ffffff'], ['SALE', '#ffe169', '#e60012'], ['K-POP', '#120b2e', '#46f0ff'],
+  // [myeongdong-detail] 골목 네온 돌출 간판용
+  ['네일', '#ffe4f0', '#d6246e'], ['마사지', '#0b3d2e', '#b6ffcf'], ['삼겹살', '#2b0a0a', '#ff6b35'], ['포토', '#111111', '#fff35c'], ['PC방', '#06063a', '#4cc9f0'], ['24시', '#00205b', '#ffffff'], ['떡볶이', '#c1121f', '#fff3b0'], ['게스트', '#1b4332', '#ffe8a3'],
 ];
 // 노점 메뉴 [ko, en, price, bg, fg]
 // 노점 메뉴 [ko, en, price, bg, fg] — 번호 = myeongdongFood.js 음식 종류
@@ -220,16 +222,6 @@ function drawCathSign(g, w, h) {
   g.fillStyle = '#d4a64a'; fitFont(g, 'MYEONGDONG CATHEDRAL · SINCE 1898', w - 60, h * 0.2, 800); g.fillText('MYEONGDONG CATHEDRAL · SINCE 1898', w / 2, h * 0.72);
 }
 
-function drawCableBanner(g, w, h) {
-  g.fillStyle = '#c62828'; g.fillRect(0, 0, w, h);
-  g.fillStyle = '#ffffff'; g.fillRect(0, h - 22, w, 22);
-  g.textAlign = 'left'; g.textBaseline = 'middle'; g.fillStyle = '#fff';
-  g.font = `900 ${h * 0.4}px ${MD_FONT}`; g.fillText('🚠', 14, h * 0.4);
-  fitFont(g, '남산 케이블카', w * 0.62, h * 0.38); g.fillText('남산 케이블카', 82, h * 0.32);
-  fitFont(g, 'NAMSAN CABLE CAR · 南山缆车 · ケーブルカー', w - 100, h * 0.16, 800); g.fillText('NAMSAN CABLE CAR · 南山缆车 · ケーブルカー', 84, h * 0.62);
-  g.fillStyle = '#c62828'; g.textAlign = 'center'; fitFont(g, '왕복 ROUND TRIP ₩15,000 · 10:00–23:00', w - 20, h * 0.13, 800); g.fillText('왕복 ROUND TRIP ₩15,000 · 10:00–23:00', w / 2, h - 11);
-}
-
 function drawPlain(g, w, h, color) { g.fillStyle = color; g.fillRect(0, 0, w, h); }
 
 /** 명동 아틀라스. uv(name) → [u0, v0, u1, v1] (three 텍스처 좌표, flipY 반영) */
@@ -247,7 +239,6 @@ export function createMyeongdongAtlas(tick = null) {
   items.push({ name: 'guide', w: 96, h: 96, draw: drawGuide });
   items.push({ name: 'guideBoard', w: 512, h: 160, draw: drawGuideBoard });
   items.push({ name: 'cathSign', w: 512, h: 96, draw: drawCathSign });
-  items.push({ name: 'cableBanner', w: 512, h: 128, draw: drawCableBanner });
   for (const [k, c] of Object.entries(NEON)) items.push({ name: 'neon-' + k, w: 24, h: 24, draw: (g, w, h) => drawPlain(g, w, h, c) });
   for (const [k, c] of Object.entries({ steel: '#b8bec6', dark: '#2a2d33', glass: '#9fd3e6', canopyRed: '#d62828', canopyBlue: '#1d4e89', canopyGreen: '#2a9d8f', canopyYellow: '#f4a261', white: '#ffffff', black: '#0b0b0d' })) {
     items.push({ name: 'c-' + k, w: 24, h: 24, draw: (g, w, h) => drawPlain(g, w, h, c) });

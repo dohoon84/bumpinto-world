@@ -40,6 +40,12 @@ for (const v of VIEWS) {
     if (yaw === 'face') yaw = md.face;
     const toward = (fx, fz, tx, tz) => Math.atan2(-(tx - fx), -(tz - fz));
     if (px === 'cath') { const c = md.cathedral; const f = c.facade; const k = v.back || 0; const sd = v.side || 0; px = f[0] + c.axis[0] * k - c.axis[1] * sd; pz = f[1] + c.axis[1] * k + c.axis[0] * sd; yaw = toward(px, pz, c.x, c.z) + (v.yawOff || 0); }
+    if (px === 'cableLower') { // [myeongdong-detail] 남산 케이블카 하부정류장 입구 앞
+      await J.corridor.preload(-10995.2, -21019.5);
+      for (let i = 0; i < 60 && !J.namsan?.cable?.stationInfo; i++) await new Promise((r) => setTimeout(r, 500));
+      const d = J.namsan?.cable?.stationInfo?.[1]?.door || { x: -10995.2, z: -21019.5, nx: 0, nz: 1 };
+      const b = v.back || 10, sd = v.side || 0; px = d.x + d.nx * b + d.nz * sd; pz = d.z + d.nz * b - d.nx * sd; yaw = toward(px, pz, d.x, d.z) + (v.yawOff || 0);
+    }
     if (px === 'oreumi') { const c = md.hooks.course; const a = c[1], b = c[2]; px = a.x + (a.x - b.x) * 0.25 + (v.ox || 0); pz = a.z + (a.z - b.z) * 0.25 + (v.oz || 0); yaw = toward(px, pz, b.x, b.z) + (v.yawOff || 0); }
     if (px === 'stall') { const st = md.hooks.stalls[v.i || 0]; px = st.x + (v.ox || 0); pz = st.z + (v.oz || 0); }
     if (px === 'stallSide') { // [myeongdong-detail] 노점 옆(보도)에서 판매대를 내려다보기. kind 를 주면 그 음식 노점

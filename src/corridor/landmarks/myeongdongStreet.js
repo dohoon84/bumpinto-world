@@ -90,7 +90,7 @@ export async function createMyeongdongStreet({ parent, data, land, atlas, ways, 
   const neonKeys = ['pink', 'cyan', 'violet', 'green', 'yellow', 'white', 'orange', 'red'];
 
   // ---------- 1) 1층 가게(종류별 실내 · 간판 · X배너 · 직원) ----------
-  let nFront = 0, nSign = 0, nBlade = 0, nBanner = 0;
+  let nFront = 0, nSign = 0, nBlade = 0, nBanner = 0, nNeon = 0;
   const typeCount = {};
   const shopsOut = [];
   const promoters = [];
@@ -211,6 +211,28 @@ export async function createMyeongdongStreet({ parent, data, land, atlas, ways, 
         wallQuad(signBuf, cx - tx * 0.09, y0, cz - tz * 0.09, -tx, -tz, 0.95, h, U('v' + vi));
         wallQuad(signBuf, cx + nx * 0.475, y0, cz + nz * 0.475, nx, nz, 0.18, h, U('neon-' + neonKeys[Math.floor(r() * neonKeys.length)]));
         nBlade++;
+      }
+      // [myeongdong-detail] 골목 네온 돌출 간판: 좁은 골목 벽을 따라 2~3층 높이 작은 세로 간판 + 네온 테두리 (signBuf 에 합쳐 드로우 0 추가)
+      if (core && !big && floors >= 2 && L >= 6) {
+        for (let s = 2.6 + r() * 3; s < L - 2.4; s += 6.5 + r() * 5) {
+          if (r() < 0.3) continue;
+          const ex = a[0] + tx * s, ez = a[1] + tz * s, gy = heightAt(ex + nx, ez + nz);
+          const h = 2.3 + r() * Math.min(2.2, Math.max(0, floors - 2) * 0.9), y0 = gy + 4.65, bwid = 0.66, out = 0.52;
+          const cx = ex + nx * out, cz = ez + nz * out;
+          const vu = U('v' + Math.floor(r() * V_SIGNS.length)), neon = U('neon-' + neonKeys[Math.floor(r() * neonKeys.length)]);
+          for (const sg of [1, -1]) {
+            const fx = cx + tx * 0.07 * sg, fz = cz + tz * 0.07 * sg, ox = tx * sg, oz = tz * sg;
+            wallQuad(signBuf, fx, y0, fz, ox, oz, bwid, h, vu);
+            const qx = fx + ox * 0.018, qz = fz + oz * 0.018; // 네온관: 면보다 살짝 앞
+            for (const e of [-1, 1]) wallQuad(signBuf, qx + nx * e * (bwid / 2 - 0.03), y0, qz + nz * e * (bwid / 2 - 0.03), ox, oz, 0.05, h, neon);
+            wallQuad(signBuf, qx, y0 + h - 0.06, qz, ox, oz, bwid, 0.05, neon);
+            wallQuad(signBuf, qx, y0 + 0.01, qz, ox, oz, bwid, 0.05, neon);
+          }
+          wallQuad(signBuf, cx + nx * (bwid / 2), y0, cz + nz * (bwid / 2), nx, nz, 0.14, h, neon);
+          // 벽 받침쇠 (위·아래)
+          for (const yy of [y0 + h - 0.35, y0 + 0.3]) signBuf.box(ex + nx * 0.1, yy, ez + nz * 0.1, 0.05, 0.05, 0.22, Math.atan2(nx, nz), U('c-dark'));
+          nNeon++;
+        }
       }
     }
     await tick?.('md-signs');
@@ -347,19 +369,21 @@ export async function createMyeongdongStreet({ parent, data, land, atlas, ways, 
     const pts = w.pts, cum = [0];
     for (let i = 1; i < pts.length; i++) cum.push(cum[i - 1] + Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]));
     const L = cum[cum.length - 1];
-    for (let s = 4; s < L - 8; s += 11) {
+    const dense = w.n === '명동8길'; // [myeongdong-detail] 명동8길: 촘촘한 X자 전구 줄
+    for (let s = 4; s < L - 8; s += dense ? 5.5 : 11) for (let flip = 0; flip < (dense ? 2 : 1); flip++) {
       const [x0, z0, tx0, tz0] = along(pts, cum, s);
       const [x1, z1, tx1, tz1] = along(pts, cum, s + 7);
       if (!land.inBox(x0, z0, -10) || roadAt(x0, z0, 6, CAR)) continue;
-      const hw = w.w / 2 + 1.4;
+      const hw = (w.w / 2 + 1.4) * (flip ? -1 : 1);
       const A = [x0 - tz0 * hw, z0 + tx0 * hw], Bp = [x1 + tz1 * hw, z1 - tx1 * hw];
       const ya = heightAt(A[0], A[1]) + 6.3, yb = heightAt(Bp[0], Bp[1]) + 6.3;
-      const D = Math.hypot(Bp[0] - A[0], Bp[1] - A[1]), n = Math.max(4, Math.round(D / 0.75));
+      const D = Math.hypot(Bp[0] - A[0], Bp[1] - A[1]), n = Math.max(4, Math.round(D / (dense ? 0.6 : 0.75)));
+      const lift = flip ? 0.35 : 0; // 두 줄이 겹치지 않게
       let prev = null;
-      const warm = hash01(Math.round(x0), Math.round(z0)) < 0.65;
+      const warm = hash01(Math.round(x0) + flip * 7, Math.round(z0)) < (dense ? 0.75 : 0.65);
       for (let k = 0; k <= n; k++) {
         const t = k / n, sag = Math.sin(t * Math.PI) * 0.9;
-        const p = [A[0] + (Bp[0] - A[0]) * t, ya + (yb - ya) * t - sag, A[1] + (Bp[1] - A[1]) * t];
+        const p = [A[0] + (Bp[0] - A[0]) * t, ya + (yb - ya) * t - sag + lift, A[1] + (Bp[1] - A[1]) * t];
         if (prev) lineP.push(prev[0], prev[1], prev[2], p[0], p[1], p[2]);
         prev = p;
         if (k > 0 && k < n) {
@@ -581,7 +605,7 @@ export async function createMyeongdongStreet({ parent, data, land, atlas, ways, 
       hourT -= dt; if (hourT <= 0) { hourT = 2; applyStallHours(stallModeAt(hourNow())); }
     },
     shops: shopsOut,
-    stats() { return { types: typeCount, banners: nBanner, promoters: promoters.length, fronts: nFront, signs: nSign, blades: nBlade, stalls: stallN, stallsDay: stallDayN, stallsOpen: openN, foodTris, lamps: lampSpots.length, bulbs: bulbs.length / 3, peds: NP, signVerts: signGeo ? signGeo.attributes.position.count : 0 }; },
+    stats() { return { types: typeCount, banners: nBanner, promoters: promoters.length, fronts: nFront, signs: nSign, blades: nBlade, neonBlades: nNeon, stalls: stallN, stallsDay: stallDayN, stallsOpen: openN, foodTris, lamps: lampSpots.length, bulbs: bulbs.length / 3, peds: NP, signVerts: signGeo ? signGeo.attributes.position.count : 0 }; },
   };
 }
 
