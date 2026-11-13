@@ -1,52 +1,69 @@
 import * as THREE from 'three';
 
+const V3 = '/dungeon/vfx/v3';
 const texCache = new Map();
 function tex(url) {
   if (!texCache.has(url)) {
-    const map = new THREE.TextureLoader().load(`${url}?v=v41fx`);
+    const map = new THREE.TextureLoader().load(`${url}?v=v3`);
     map.colorSpace = THREE.SRGBColorSpace;
     texCache.set(url, map);
   }
   return texCache.get(url);
 }
-function cellMap(url, frame = 5, cols = 4) {
-  const map = tex(url).clone();
-  map.repeat.set(1 / cols, 1 / cols);
-  const col = frame % cols;
-  const row = Math.floor(frame / cols);
-  map.offset.set(col / cols, 1 - (row + 1) / cols);
-  map.needsUpdate = true;
-  return map;
-}
-function billboard(rootAdd, url, x, y, z, w, h, color = '#ffffff', map) {
-  const mat = new THREE.SpriteMaterial({
-    map: map || tex(url),
-    color,
-    transparent: true,
-    depthWrite: false,
-    blending: THREE.AdditiveBlending,
-  });
-  const s = new THREE.Sprite(mat);
-  s.position.set(x, y, z);
-  s.scale.set(w, h || w, 1);
-  s.userData.life = 1.1;
-  s.userData.max = 1.1;
-  return s;
-}
-function groundDecal(url, x, z, size, color = '#ffffff') {
+function matOf(url, color, blend) {
   const mat = new THREE.MeshBasicMaterial({
     map: tex(url),
     color,
     transparent: true,
     depthWrite: false,
-    blending: THREE.AdditiveBlending,
+    toneMapped: false,
+    blending: blend === 'add' ? THREE.AdditiveBlending : THREE.NormalBlending,
     side: THREE.DoubleSide,
   });
-  const m = new THREE.Mesh(new THREE.PlaneGeometry(size, size), mat);
+  return mat;
+}
+function decal(url, x, z, w, h, color, blend = 'normal') {
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h || w), matOf(url, color, blend));
   m.rotation.x = -Math.PI / 2;
-  m.position.set(x, 0.12, z);
+  m.position.set(x, 0.06, z);
   m.renderOrder = 3;
+  m.userData.op = blend === 'add' ? 0.9 : 0.92;
   return m;
+}
+function upright(url, x, y, z, w, h, yaw, color, blend = 'normal') {
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), matOf(url, color, blend));
+  m.position.set(x, y, z);
+  m.rotation.y = yaw;
+  m.renderOrder = 4;
+  m.userData.op = blend === 'add' ? 0.95 : 0.94;
+  return m;
+}
+function crossed(url, x, y, z, w, h, color, blend = 'normal') {
+  return [0, Math.PI / 2].map((yaw) => upright(url, x, y, z, w, h, yaw, color, blend));
+}
+function facing(url, x, y, z, w, h, color, blend = 'normal', roll = 0) {
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), matOf(url, color, blend));
+  m.position.set(x, y, z);
+  m.renderOrder = 5;
+  m.userData.face = true;
+  m.userData.roll = roll;
+  m.userData.op = blend === 'add' ? 0.95 : 0.96;
+  return m;
+}
+function spark(url, x, y, z, w, h, color) {
+  const mat = new THREE.SpriteMaterial({
+    map: tex(url),
+    color,
+    transparent: true,
+    depthWrite: false,
+    toneMapped: false,
+    blending: THREE.AdditiveBlending,
+  });
+  const s = new THREE.Sprite(mat);
+  s.position.set(x, y, z);
+  s.scale.set(w, h || w, 1);
+  s.userData.op = 1;
+  return s;
 }
 
 function fadeMat(color) {
@@ -169,64 +186,71 @@ export function createVfx(scene) {
       inner.userData.grow = 2;
       add(inner, 0.25, 0);
     },
-    pillar(x, z, color = '#FFC845') {
-      const col = billboard(null, '/dungeon/vfx/magic/heal_pillar.png', x, 3.4, z, 2.2, 7.2, color);
-      add(col, 1.1, 0);
-      const halo = billboard(null, '/dungeon/vfx/rings/halo.png', x, 3.2, z, 1.3, 1.3, '#FFFBE8');
-      add(halo, 0.8, 0);
+    pillar(x, z) {
+      crossed(`${V3}/contrast/pillar_dark.png`, x, 3.8, z, 2.0, 8.0, '#3A2A10').forEach((m) => add(m, 1.2, 0));
+      crossed(`${V3}/magic/heal_pillar.png`, x, 3.8, z, 2.2, 7.6, '#FFC845').forEach((m) => add(m, 1.2, 0));
+      add(facing(`${V3}/magic/heal_pillar.png`, x, 3.8, z, 2.2, 7.6, '#FFC845'), 1.2, 0);
+      add(spark(`${V3}/particles/soft_glow.png`, x, 0.4, z, 0.6, 0.6, '#FFE7A0'), 0.8, 0);
+      add(facing(`${V3}/rings/halo.png`, x, 7.2, z, 2.4, 2.4, '#FFC845', 'add'), 0.9, 0);
     },
     shield(x, z) {
-      const dome = billboard(null, '/dungeon/vfx/magic/shield_bubble.png', x, 1.6, z, 4.2, 4.2, '#FFC845');
-      add(dome, 1.2, 0);
+      add(facing(`${V3}/magic/shield_bubble.png`, x, 1.8, z, 4.6, 4.6, '#FFC845'), 1.2, 0);
+      add(facing(`${V3}/magic/shield_hex.png`, x, 1.8, z, 4.5, 4.5, '#FFC845'), 1.2, 0);
     },
     holyBurst(x, z) {
-      const burst = billboard(null, '/dungeon/vfx/rings/halo_burst.png', x, 2.2, z, 6, 6, '#FFC845');
-      add(burst, 0.45, 0);
+      add(decal(`${V3}/contrast/halo_dark.png`, x, z, 7.6, 7.6, '#3A2A10'), 0.45, 0);
+      add(facing(`${V3}/rings/halo_shockwave.png`, x, 1.6, z, 6.6, 6.6, '#FFC845'), 0.4, 0);
+      add(spark(`${V3}/particles/flash.png`, x, 1.4, z, 0.7, 0.7, '#FFE7A0'), 0.25, 0);
     },
     multi(x, z, yaw) {
       for (let i = -2; i <= 2; i++) {
-        const s = billboard(null, '/dungeon/vfx/trails/arrow_trail.png', x + Math.sin(yaw + i * 0.1) * 2.4, 2.2 + Math.abs(i) * 0.3, z + Math.cos(yaw + i * 0.1) * 2.4, 3.2, 0.55, '#3DDC84');
-        s.material.rotation = -(yaw + i * 0.12);
-        add(s, 0.28, 0);
+        const s = facing(`${V3}/trails/arrow_trail.png`, x + Math.sin(yaw + i * 0.08) * 2.2, 1.6, z + Math.cos(yaw + i * 0.08) * 2.2, 5.2, 0.42, '#3DDC84', 'add');
+        add(s, 0.35, 0);
       }
     },
     pierce(x, z, yaw) {
-      const s = billboard(null, '/dungeon/vfx/trails/arrow_trail.png', x + Math.sin(yaw) * 2.4, 1.45, z + Math.cos(yaw) * 2.4, 3.4, 0.35, '#E8FFE8');
-      s.material.rotation = -yaw;
-      add(s, 0.3, 0);
-      add(groundDecal('/dungeon/vfx/particles/impact_ring.png', x + Math.sin(yaw) * 3, z + Math.cos(yaw) * 3, 1.2, '#3DDC84'), 0.25, 0);
+      const fx = Math.sin(yaw);
+      const fz = Math.cos(yaw);
+      add(facing(`${V3}/trails/beam_core.png`, x + fx * 3, 1.5, z + fz * 3, 8.0, 0.18, '#FFFFFF', 'add'), 0.3, 0);
+      add(facing(`${V3}/trails/arrow_trail.png`, x + fx * 3, 1.5, z + fz * 3, 8.2, 0.5, '#3DDC84', 'add'), 0.35, 0);
     },
     arrowRain(x, z) {
-      for (let i = 0; i < 6; i++) {
-        const s = billboard(null, '/dungeon/vfx/trails/arrow_trail.png', x + (i % 3) * 1.4 - 1.4, 4 + (i % 2) * 1.2, z + Math.floor(i / 3) * 1.2, 0.45, 2.6, '#7DFFB0');
-        add(s, 0.4, 0);
-      }
-    },
-    blink(x, z, yaw) {
-      const a = billboard(null, '/dungeon/vfx/particles/flash.png', x, 1.1, z, 1.2, 1.2, '#FF5C9A');
-      const b = billboard(null, '/dungeon/vfx/particles/flash.png', x + Math.sin(yaw) * 2.2, 1.1, z + Math.cos(yaw) * 2.2, 1.2, 1.2, '#FF3B4E');
-      add(a, 0.25, 0);
-      add(b, 0.25, 0);
-    },
-    combo(x, z, yaw) {
-      for (let i = 0; i < 3; i++) {
-        const s = billboard(null, '/dungeon/vfx/slashes/slash_crescent.png', x, 1.4 + i * 0.3, z, 3.6, 3.6, '#FF3B4E');
-        s.material.rotation = yaw + i * 0.8;
-        add(s, 0.28, 0);
-      }
-    },
-    poison(x, z) {
-      for (let i = 0; i < 5; i++) {
-        const s = billboard(null, '/dungeon/vfx/particles/poison_drip.png', x + (i - 2) * 0.35, 0.6 + (i % 2) * 0.4, z, 0.45, 0.7, '#80E040');
+      add(decal(`${V3}/decals/tele_circle.png`, x, z, 8.8, 8.8, '#143028'), 1.0, 0);
+      for (let i = 0; i < 16; i++) {
+        const a = (i / 16) * Math.PI * 2;
+        const r = 1.2 + (i % 4) * 0.7;
+        const s = upright(`${V3}/trails/arrow_streak_bold.png`, x + Math.cos(a) * r, 2.2 + (i % 3) * 0.8, z + Math.sin(a) * r, 0.5, 3.6, a, '#3DDC84');
         add(s, 0.7, 0);
       }
     },
+    blink(x, z, yaw) {
+      add(facing(`${V3}/particles/blink_burst.png`, x, 1.2, z, 3.2, 3.2, '#FF3D8A'), 0.3, 0);
+      add(facing(`${V3}/particles/blink_burst.png`, x + Math.sin(yaw) * 2.4, 1.2, z + Math.cos(yaw) * 2.4, 3.4, 3.4, '#FF3D8A'), 0.3, 0);
+      add(spark(`${V3}/particles/flash.png`, x, 1.2, z, 0.6, 0.6, '#FFE7A0'), 0.2, 0);
+    },
+    combo(x, z, yaw) {
+      const rolls = [-0.9, 0.15, 0.85];
+      const sizes = [7.0, 6.6, 7.2];
+      rolls.forEach((roll, i) => {
+        const tex = i === 2 ? `${V3}/slashes/crescent_bold_thin.png` : `${V3}/slashes/crescent_bold.png`;
+        const blend = i === 2 ? 'add' : 'normal';
+        add(facing(tex, x, 1.5, z, sizes[i], sizes[i], '#FF3D8A', blend, roll), 0.45, 0);
+        add(upright(tex, x, 1.5, z, sizes[i] * 0.85, sizes[i] * 0.85, yaw + roll, '#FF3D8A', blend), 0.45, 0);
+      });
+      add(spark(`${V3}/particles/flash.png`, x, 1.4, z, 0.7, 0.7, '#FFE7A0'), 0.25, 0);
+    },
+    poison(x, z) {
+      add(facing(`${V3}/flipbooks/poison_cloud_8x8.png`, x, 1.4, z, 5.6, 5.6, '#C6F25A'), 1.2, 0);
+      add(decal(`${V3}/flipbooks/poison_cloud_8x8.png`, x, z, 5.6, 5.6, '#8C7FFF'), 1.2, 0);
+    },
     classLook(id, x, z, yaw) {
-      if (id === 'warrior') this.slam(x + Math.sin(yaw) * 3, z + Math.cos(yaw) * 3);
-      else if (id === 'mage') this.fireball(x, 1.8, z, yaw);
+      const fx = Math.sin(yaw);
+      const fz = Math.cos(yaw);
+      if (id === 'warrior') this.slam(x + fx * 2.2, z + fz * 2.2);
+      else if (id === 'mage') this.fireball(x, 1.4, z, yaw);
       else if (id === 'priest') this.pillar(x, z);
-      else if (id === 'archer') this.arrowRain(x + Math.sin(yaw) * 3, z + Math.cos(yaw) * 3);
-      else if (id === 'assassin') { this.combo(x, z, yaw); this.blink(x, z, yaw); }
+      else if (id === 'archer') this.arrowRain(x + fx * 3.2, z + fz * 3.2);
+      else if (id === 'assassin') this.combo(x + fx * 1.4, z + fz * 1.4, yaw);
     },
     trail(x, y, z, yaw, color) {
       for (let i = 0; i < 4; i++) {
@@ -244,50 +268,58 @@ export function createVfx(scene) {
       }
     },
     charge(x, z, yaw) {
-      const s = billboard(null, '/dungeon/vfx/trails/dash_trail.png', x + Math.sin(yaw) * 1.2, 1.1, z + Math.cos(yaw) * 1.2, 2.4, 0.7, '#FF7A1A');
-      s.material.rotation = -yaw;
-      add(s, 0.45, 0);
-      add(groundDecal('/dungeon/vfx/rings/shockwave_ring.png', x, z, 2.2, '#FF7A1A'), 0.4, 0);
+      const fx = Math.sin(yaw);
+      const fz = Math.cos(yaw);
+      add(decal(`${V3}/contrast/trail_dark.png`, x + fx * 2.2, z + fz * 2.2, 6.0, 1.6, '#140C08'), 0.5, 0);
+      add(facing(`${V3}/trails/dash_trail.png`, x + fx * 2.4, 1.15, z + fz * 2.4, 5.8, 1.4, '#FF8A12', 'add'), 0.5, 0);
+      add(spark(`${V3}/particles/soft_glow.png`, x + fx * 2.6, 1.2, z + fz * 2.6, 0.55, 0.55, '#FFE7A0'), 0.35, 0);
     },
     slam(x, z) {
-      add(groundDecal('/dungeon/vfx/rings/shockwave_ring.png', x, z, 14, '#FF7A1A'), 0.7, 0);
-      add(groundDecal('/dungeon/vfx/decals/ground_crack.png', x, z, 10, '#FF6A1A'), 1.1, 0);
-      add(billboard(null, '/dungeon/vfx/particles/strike_flash.png', x, 3.2, z, 3.2, 6.5, '#FFF3C4'), 0.35, 0);
-      for (let i = 0; i < 10; i++) {
-        const a = (i / 10) * Math.PI * 2;
-        const d = billboard(null, '/dungeon/vfx/particles/dust.png', x + Math.cos(a) * 2, 1.2, z + Math.sin(a) * 2, 1.6, 1.6, '#E8D2B0');
-        d.userData.vx = Math.cos(a) * 4;
-        d.userData.vz = Math.sin(a) * 4;
-        d.userData.vy = 2;
-        add(d, 0.6, 0);
+      add(decal(`${V3}/contrast/ring_dark.png`, x, z, 9.5, 9.5, '#140C08'), 0.9, 0);
+      add(decal(`${V3}/rings/shockwave_ring.png`, x, z, 9.0, 9.0, '#FFB000'), 0.8, 0);
+      add(decal(`${V3}/decals/ground_crack.png`, x, z, 9.2, 9.2, '#E8C090'), 1.1, 0);
+      crossed(`${V3}/particles/strike_flash.png`, x, 1.5, z, 1.2, 2.6, '#FFE7A0', 'add').forEach((m) => add(m, 0.28, 0));
+      for (let i = 0; i < 8; i++) {
+        const a = (i / 8) * Math.PI * 2;
+        add(spark(`${V3}/particles/debris_chunk.png`, x + Math.cos(a) * 2.4, 0.6, z + Math.sin(a) * 2.4, 0.45, 0.45, '#E8C090'), 0.6, 0);
       }
     },
     whirl(x, z) {
-      add(groundDecal('/dungeon/vfx/slashes/spin_slash_ring.png', x, z, 8, '#FF7A1A'), 0.7, 2);
-      add(billboard(null, '/dungeon/vfx/slashes/slash_crescent.png', x, 1.6, z, 5, 5, '#FF7A1A'), 0.4, 0);
+      add(decal(`${V3}/contrast/spin_dark.png`, x, z, 8.4, 8.4, '#140C08'), 0.8, 0);
+      const ring = decal(`${V3}/slashes/spin_blade_ring.png`, x, z, 8.0, 8.0, '#FFB000');
+      add(ring, 0.8, 1.4);
+      add(facing(`${V3}/slashes/crescent_bold.png`, x, 1.3, z, 6.2, 6.2, '#FF8A12', 'add', 0.4), 0.4, 0);
+      add(facing(`${V3}/slashes/crescent_bold.png`, x, 1.5, z, 6.2, 6.2, '#FF8A12', 'add', -0.6), 0.4, 0);
     },
     fireball(x, y, z, yaw) {
-      add(billboard(null, '/dungeon/vfx/particles/fireball_orb.png', x + Math.sin(yaw) * 2, y + 1.2, z + Math.cos(yaw) * 2, 2.2, 2.2), 0.8, 0);
-      for (let i = 1; i <= 4; i++) {
-        add(billboard(null, '/dungeon/vfx/particles/ember.png', x + Math.sin(yaw) * i * 0.7, y + 1.1, z + Math.cos(yaw) * i * 0.7, 0.7, 0.7, '#FFB347'), 0.45, 0);
-      }
-      add(groundDecal('/dungeon/vfx/rings/rune_circle.png', x, z, 3.2, '#8C7FFF'), 0.45, 1);
-      const boom = billboard(null, '/dungeon/vfx/flipbooks/explosion_4x4.png', x + Math.sin(yaw) * 5, y + 2.2, z + Math.cos(yaw) * 5, 8, 8, '#ffffff', cellMap('/dungeon/vfx/flipbooks/explosion_4x4.png', 6));
-      add(boom, 0.8, 0);
-      add(billboard(null, '/dungeon/vfx/particles/soft_glow.png', x + Math.sin(yaw) * 5, y + 2, z + Math.cos(yaw) * 5, 6, 6, '#FF7A1A'), 0.5, 0);
+      const fx = Math.sin(yaw);
+      const fz = Math.cos(yaw);
+      const bx = x + fx * 3;
+      const bz = z + fz * 3;
+      add(facing(`${V3}/particles/comet_head_mage.png`, x + fx * 1.2, y + 0.4, z + fz * 1.2, 1.15, 1.15, '#FFFFFF'), 0.7, 0);
+      add(facing(`${V3}/trails/comet_trail_mage.png`, x + fx * 0.4, y + 0.35, z + fz * 0.4, 3.6, 0.9, '#FFFFFF'), 0.6, 0);
+      add(decal(`${V3}/contrast/burst_mage_dark.png`, bx, bz, 7.4, 7.4, '#100818'), 0.8, 0);
+      add(decal(`${V3}/particles/fire_burst_mage.png`, bx, bz, 6.6, 6.6, '#FFFFFF'), 0.85, 0);
+      crossed(`${V3}/particles/fire_burst_mage.png`, bx, 2.2, bz, 6.6, 6.6, '#FFFFFF').forEach((m) => add(m, 0.85, 0));
+      add(facing(`${V3}/particles/fire_burst_mage.png`, bx, 2.4, bz, 6.6, 6.6, '#FFFFFF'), 0.85, 0);
+      add(spark(`${V3}/particles/soft_glow.png`, bx, 2.2, bz, 0.7, 0.7, '#FFE7A0'), 0.3, 0);
+      add(decal(`${V3}/particles/smoke_ring.png`, bx, bz, 8.0, 8.0, '#FFFFFF'), 0.9, 0);
     },
     frost(x, z) {
-      add(groundDecal('/dungeon/vfx/rings/frost_ring.png', x, z, 9, '#8FD8FF'), 0.8, 0);
-      add(groundDecal('/dungeon/vfx/rings/rune_circle.png', x, z, 4.5, '#8C7FFF'), 0.55, 1);
-      for (let i = 0; i < 8; i++) {
-        const a = (i / 8) * Math.PI * 2;
-        add(billboard(null, '/dungeon/vfx/particles/strike_flash.png', x + Math.cos(a) * 2.2, 1.4, z + Math.sin(a) * 2.2, 0.5, 1.4, '#8FD8FF'), 0.45, 0);
+      add(decal(`${V3}/contrast/frost_dark.png`, x, z, 8.0, 8.0, '#102028'), 0.8, 0);
+      add(decal(`${V3}/rings/frost_ring.png`, x, z, 7.4, 7.4, '#8FD8FF'), 0.85, 0);
+      for (let i = 0; i < 10; i++) {
+        const a = (i / 10) * Math.PI * 2;
+        const shard = upright(`${V3}/particles/ice_shard_a.png`, x + Math.cos(a) * 2.4, 1.1, z + Math.sin(a) * 2.4, 0.55, 0.9, a, '#8FD8FF');
+        add(shard, 0.6, 0);
       }
     },
     bolt(x, z, yaw) {
-      add(billboard(null, '/dungeon/vfx/trails/lightning_bolt.png', x + Math.sin(yaw) * 2, 4.2, z + Math.cos(yaw) * 2, 2.2, 8, '#F4F0FF'), 0.35, 0);
-      add(billboard(null, '/dungeon/vfx/particles/strike_flash.png', x + Math.sin(yaw) * 2.4, 1.5, z + Math.cos(yaw) * 2.4, 3.4, 4.5, '#FFFFFF'), 0.28, 0);
-      add(billboard(null, '/dungeon/vfx/particles/soft_glow.png', x + Math.sin(yaw) * 2, 3, z + Math.cos(yaw) * 2, 4, 6, '#8C7FFF'), 0.3, 0);
+      crossed(`${V3}/contrast/bolt_dark.png`, x, 3.8, z, 2.0, 8.0, '#1A1030').forEach((m) => add(m, 0.35, 0));
+      crossed(`${V3}/trails/lightning_thick.png`, x, 3.8, z, 1.8, 7.6, '#C8B8FF', 'add').forEach((m) => add(m, 0.32, 0));
+      add(upright(`${V3}/trails/lightning_branch.png`, x, 3.2, z, 3.2, 5.2, yaw + 0.6, '#C8B8FF', 'add'), 0.3, 0);
+      add(decal(`${V3}/particles/ground_splash.png`, x, z, 5.4, 5.4, '#FFFFFF'), 0.4, 0);
+      add(spark(`${V3}/particles/flash.png`, x, 1.2, z, 0.7, 0.7, '#FFFFFF'), 0.2, 0);
     },
     portal(x, z) {
       const ring = new THREE.Mesh(new THREE.TorusGeometry(1.4, 0.08, 6, 18), fadeMat('#c45cff'));
@@ -303,12 +335,16 @@ export function createVfx(scene) {
       add(m, 0.55, 0);
       m.userData.drift = 10;
     },
-    update(dt) {
+    update(dt, camera) {
       for (let i = live.length - 1; i >= 0; i--) {
         const m = live[i];
         m.userData.life -= dt;
         const k = Math.max(0, m.userData.life / m.userData.max);
-        m.material.opacity = 0.85 * k;
+        if (m.material) m.material.opacity = (m.userData.op ?? 0.92) * Math.min(1, k + 0.15);
+        if (m.userData.face && camera) {
+          m.lookAt(camera.position);
+          if (m.userData.roll) m.rotateZ(m.userData.roll);
+        }
         if (m.userData.grow) {
           const s = 1 + (1 - k) * m.userData.grow;
           m.scale.setScalar(s);

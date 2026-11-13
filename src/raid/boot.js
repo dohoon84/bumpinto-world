@@ -66,7 +66,7 @@ try {
   ]);
   composer = new EffectComposer(renderer);
   composer.addPass(new RenderPass(scene, camera));
-  const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth / 2, innerHeight / 2), 0.48, 0.32, 0.78);
+  const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth / 2, innerHeight / 2), 0.16, 0.18, 0.9);
   composer.addPass(bloom);
   bloomPass = bloom;
   composer.addPass(new OutputPass());
@@ -112,7 +112,7 @@ for (const id of CLASS_IDS) {
 consumeIntroReset(params);
 const rift = createRiftClock(params);
 const asked = normalizeClass(params.get('class'));
-const autoStart = ['transform', 'form', 'fight', 'victory', 'skyline', 'phase1', 'phase3', 'close', 'slam', 'emerge', 'chat', 'bridge', 'mobs', 'collapse'].includes(shot);
+const autoStart = ['transform', 'form', 'fight', 'victory', 'skyline', 'phase1', 'phase3', 'close', 'slam', 'emerge', 'chat', 'bridge', 'mobs', 'collapse', 'vfx', 'vfxall'].includes(shot);
 let classId = asked || 'warrior';
 let form = null;
 let ghost = null;
@@ -504,7 +504,7 @@ function frame() {
   rim.intensity = form.group.visible || ghost.visible ? 8 : 1.2;
   const focus = actor.position;
   arena.update(dt, focus);
-  vfx.update(dt);
+  vfx.update(dt, camera);
   audio.tick(dt);
   city.update(dt);
   env.update(dt);
@@ -679,7 +679,7 @@ function step(dt) {
       hitStop = stage === 3 ? 0.16 : 0.1;
       hud.flash(0.4);
       const line = stage === 3 ? '광폭화!' : '홀드가 분노합니다 — 다리가 무너집니다';
-      hud.banner(line);
+      if (shot !== 'vfx' && shot !== 'vfxall') hud.banner(line);
       room.system(line);
     },
     onSlam(kind) {
@@ -1001,7 +1001,6 @@ function midFight() {
   boss.hurt(4600);
   const b = boss.group.position;
   hud.float(new THREE.Vector3(b.x, 10, b.z), 2480, 'crit');
-  if (bloomPass) bloomPass.strength = classId === 'mage' ? 0.85 : 0.62;
 }
 if (shot === 'fight' || shot === 'chat' || shot === 'party') {
   showKnights();
@@ -1077,6 +1076,30 @@ if (shot === 'bridge' || shot === 'collapse' || shot === 'mobs') {
     camDist = 14;
     shotLookY = 16;
     shotAim = 52;
+  }
+}
+if (shot === 'vfx' || shot === 'vfxall') {
+  showKnights();
+  const along = 8;
+  const ids = ['warrior', 'mage', 'priest', 'archer', 'assassin'];
+  const groups = extras.concat([form.group]);
+  groups.forEach((g, i) => {
+    const p = fromFrame(along, (i - 2) * 1.7);
+    g.position.set(p.x, 0, p.z);
+    g.rotation.set(0, PATH_YAW, 0);
+    g.visible = true;
+  });
+  actor.position.set(fromFrame(along, 0).x, 0, fromFrame(along, 0).z);
+  boss.hurt(Math.round(boss.state.hpMax * 0.42));
+  camYaw = PATH_YAW;
+  camPitch = 50 * Math.PI / 180;
+  camDist = 20;
+  shotLookY = 0.35;
+  shotAim = 6.5;
+  const fire = shot === 'vfxall' ? ids : [classId];
+  for (const id of fire) {
+    const g = groups.find((n) => n.userData.shotClass === id) || form.group;
+    vfx.classLook(id, g.position.x, g.position.z, PATH_YAW);
   }
 }
 if (shot === 'slam') {
