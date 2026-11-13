@@ -717,19 +717,20 @@ export function createTerrain(T, data) {
     return { channel, streamMesh, stoneMesh, bridgeLights, treeCount: tp.length };
   }
 
+  // opts.step(fn): 생성기 한 걸음을 감싸 실행(예: 저녁 감시자 모으기)
   function build(scene, world, overlay, opts) {
-    const g = buildGen(scene, world, overlay, opts);
-    let n = g.next();
-    while (!n.done) n = g.next();
+    const g = buildGen(scene, world, overlay, opts), step = opts?.step || ((f) => f());
+    let n = step(() => g.next());
+    while (!n.done) n = step(() => g.next());
     return n.value;
   }
 
   async function buildAsync(scene, world, overlay, slicer, opts) {
-    const g = buildGen(scene, world, overlay, opts);
-    let n = g.next();
+    const g = buildGen(scene, world, overlay, opts), step = opts?.step || ((f) => f());
+    let n = step(() => g.next());
     while (!n.done) {
       if (slicer) await slicer.tick(n.value || 'terrain');
-      n = g.next();
+      n = step(() => g.next());
     }
     return n.value;
   }

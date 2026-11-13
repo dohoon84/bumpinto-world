@@ -38,7 +38,7 @@ export function mountPerfMem({ scene, renderer, camera, params, getPlayer = () =
       if (!MERGE_TARGETS.includes(o.name) || o.userData.perfMerged) continue;
       o.userData.perfMerged = true;
       const m = mergeStatic(o, { matshare: F.matshare, keepOriginals: check });
-      out.merges.push({ name: o.name, ...m.stats, watch: m.watch });
+      out.merges.push({ name: o.name, ...m.stats, watch: m.watch, root: o });
     }
   }
   mergeTargets();
@@ -125,13 +125,15 @@ export function mountPerfMem({ scene, renderer, camera, params, getPlayer = () =
   };
   // 월드 묶음을 다시 지은 뒤(폰: 범창고에서 나올 때) 새 병합 대상·덩어리를 바로 다시 잡는다. 떨어져 나간 옛 메시는 instancer·cull 이 parent 로 알아서 푼다.
   out.rescan = () => {
-    if (out.merges.length > 64) out.merges.splice(0, out.merges.length - 32); // 여러 번 드나들어도 기록이 쌓이지 않게
+    // 다시 지어 떨어져 나간 옛 병합 기록(watch 클로저가 옛 메시를 붙잡음)은 버린다 — 드나들 때마다 쌓이지 않게
+    const attached = (o) => { for (let q = o; q; q = q.parent) if (q === scene) return true; return false; };
+    for (let i = out.merges.length - 1; i >= 0; i--) if (!attached(out.merges[i].root)) out.merges.splice(i, 1);
     mergeTargets(); discover(); discoverCull();
   };
   out.check = () => out.merges.map((m) => ({ name: m.name, changed: m.watch() }));
   out.summary = () => ({
     flags: F, mountMs: out.stats.mountMs, mergeMs: out.stats.mergeMs,
-    merges: out.merges.map(({ watch, ...m }) => m),
+    merges: out.merges.map(({ watch, root, ...m }) => m),
     instancer: inst ? { ...inst.stats } : null,
     cull: cull ? { ...cull.stats } : null,
     regions: corridor?.regions?.status?.() || null,

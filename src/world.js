@@ -320,19 +320,20 @@ export function* buildWorldGen(scene, data, region = null, opts = {}) {
   return { isBlocked, onRoad, walkPaths, cityWalkPaths, inWater, signPos: sp, bounds: { x0, x1, z0, z1 }, treeCount: treePts.length, ground, block, starbucksRooms, shops: shopsLayer, colours }; // [terrain] ground/block: terrain.build 가 하천 구간을 비운 형상으로 교체
 }
 
+// opts.step(fn): 생성기 한 걸음을 감싸 실행(예: 저녁 감시자 모으기). 없으면 그냥 실행
 export function buildWorld(scene, data, region = null, opts = {}) {
-  const g = buildWorldGen(scene, data, region, opts);
-  let n = g.next();
-  while (!n.done) n = g.next();
+  const g = buildWorldGen(scene, data, region, opts), step = opts.step || ((f) => f());
+  let n = step(() => g.next());
+  while (!n.done) n = step(() => g.next());
   return n.value;
 }
 
 export async function buildWorldAsync(scene, data, region, opts, slicer) {
-  const g = buildWorldGen(scene, data, region, opts);
-  let n = g.next();
+  const g = buildWorldGen(scene, data, region, opts), step = opts?.step || ((f) => f());
+  let n = step(() => g.next());
   while (!n.done) {
     if (slicer) await slicer.tick(n.value || 'world');
-    n = g.next();
+    n = step(() => g.next());
   }
   return n.value;
 }

@@ -31,8 +31,20 @@ export function setEvening(next) {
   return evening;
 }
 
+// [depot-perf] 월드를 다시 지을 때(폰: 범창고에서 나올 때) 옛 월드가 건 감시자를 풀 수 있게, 짓는 동안 건 감시자를 목록에 모은다.
+let scope = null;
+export function withEveningScope(list, fn) {
+  const prev = scope; scope = list;
+  try { return fn(); } finally { scope = prev; }
+}
+export function dropEveningWatchers(list) {
+  for (const fn of list) watchers.delete(fn);
+  list.length = 0;
+}
+
 export function watchEvening(fn) {
   watchers.add(fn);
+  scope?.push(fn);
   fn(evening);
   return () => watchers.delete(fn);
 }

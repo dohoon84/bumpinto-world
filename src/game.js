@@ -57,7 +57,7 @@ import { Taxis } from './entities/taxis.js'; // [taxi]
 import { mountJzTraffic, deliveryStops } from './entities/jzTraffic.js'; // [jz-traffic]
 import { parseTrafficFix } from './trafficFix.js'; // [traffic-fix]
 import { gameHour } from './weather.js'; // [jz-traffic]
-import { watchEvening as watchEveningJz } from './evening.js'; // [jz-traffic]
+import { watchEvening as watchEveningJz, withEveningScope, dropEveningWatchers } from './evening.js'; // [jz-traffic] [depot-perf]
 import { Police } from './entities/police.js';
 import { addRiversideFolk } from './entities/riversideFolk.js';
 import { addStationPlaza } from './world/stationPlaza.js';
@@ -405,7 +405,9 @@ const jeongjaBp24Prep = region.features?.jeongjaBuildings ? prepareJeongjaBp24(d
 const worldRoot = new THREE.Group(); worldRoot.name = 'jeongja-world'; worldRoot.userData.perfContainer = true; scene.add(worldRoot); // [memory] 정자 로컬 월드를 한 그룹에 모아 매장 안에서 내릴 수 있게
 const shopsPrep = prepareShops(data, shopsData);
 const coloursPrep = prepareBuildingColours(data, coloursData);
-const worldOpts = { shops: shopsPrep, colours: coloursPrep, isMobile: mobileMode };
+const worldWatchers = []; // [depot-perf] 정자 월드(건물·지형)가 건 저녁 감시자 — 폰에서 월드를 다시 지을 때 옛 것을 푼다
+const inWorldScope = (f) => withEveningScope(worldWatchers, f);
+const worldOpts = { shops: shopsPrep, colours: coloursPrep, isMobile: mobileMode, step: inWorldScope };
 let world = bootSlicer // [shops] 1층 상가 띠/차양/간판 · [colours] 건물 외벽·지붕 색
   ? await buildWorldAsync(worldRoot, data, region, worldOpts, bootSlicer)
   : buildWorld(worldRoot, data, region, worldOpts);
@@ -423,7 +425,7 @@ if (corridor?.namsan || corridor?.hangang) { camera.far = Math.max(camera.far, 1
 
 
 let terrainFineBox = bootSlicer ? bootFineBox : null; // [depot-perf] 폰에서 범창고를 나와 월드를 다시 지을 때 부팅 때와 같은 범위·밀도로 (먼 탄천은 rest 빌드가 돈 뒤에만)
-if (terrain) { bootSlicer ? await terrain.buildAsync(worldRoot, world, overlay, bootSlicer, { fineBox: bootFineBox }) : terrain.build(worldRoot, world, overlay); world.groundY = terrain.getGroundHeight; world.vehicleY = terrain.getVehicleHeight; }
+if (terrain) { bootSlicer ? await terrain.buildAsync(worldRoot, world, overlay, bootSlicer, { fineBox: bootFineBox, step: inWorldScope }) : terrain.build(worldRoot, world, overlay, { step: inWorldScope }); world.groundY = terrain.getGroundHeight; world.vehicleY = terrain.getVehicleHeight; }
 markBoot('terrain-build');
 if (corridor) {
   corridor.afterTerrain();
@@ -789,11 +791,14 @@ let worldCpuDropped = false;
 function rebuildJeongjaWorld() {
   try { clearGroup(worldRoot); } catch (e) { console.warn('[depot-park]', e); }
   try { clearWorldVisualCaches(); } catch (e) { console.warn('[depot-park]', e); }
+  dropEveningWatchers(worldWatchers); // 옛 월드의 저녁 감시자가 내린 메시를 붙잡고 쌓이지 않게
   const next = buildWorld(worldRoot, data, region, { ...worldOpts, reuseData: true });
   world.ground = next.ground;
   world.block = next.block;
+  // 매 프레임 world.* 로 읽는 간판 풀·스타벅스 문도 새 메시로 (isBlocked 등 game.js 가 감싼 함수는 그대로)
+  for (const k of ['shops', 'starbucksRooms', 'colours']) if (next[k]) world[k] = next[k];
   // 계단·징검다리 이름표는 부팅 때 이미 붙어 있다 — overlay 를 넘기면 드나들 때마다 같은 이름표가 쌓인다
-  if (terrain) terrain.build(worldRoot, world, null, terrainFineBox ? { fineBox: terrainFineBox } : undefined);
+  if (terrain) terrain.build(worldRoot, world, null, { fineBox: terrainFineBox || undefined, step: inWorldScope });
   worldRoot.visible = true;
 }
 const PARK_DROP_NAMES = new Set([
@@ -2511,7 +2516,7 @@ else if (travel && atQuery) {
       const startRest = () => {
         const restSlicer = makeSlicer(makeBuildYield({ idle: true }), { name: 'boot-rest' });
         terrainFineBox = null;
-        terrain.buildAsync(worldRoot, world, overlay, restSlicer, { fineBox: null }).catch((e) => console.warn('[boot-fast] terrain rest', e));
+        terrain.buildAsync(worldRoot, world, overlay, restSlicer, { fineBox: null, step: inWorldScope }).catch((e) => console.warn('[boot-fast] terrain rest', e));
       };
       setTimeout(startRest, 2500);
     }
