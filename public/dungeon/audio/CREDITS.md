@@ -21,3 +21,5 @@ Every file under `public/dungeon/audio/` is from a Creative Commons Zero (CC0 1.
 | `sfx/click_001.ogg` `click_002.ogg` `click_003.ogg` `bong_001.ogg` `error_003.ogg` `confirmation_001.ogg` | UI clicks and telegraph warning | https://opengameart.org/content/interface-sounds and https://kenney.nl/assets/interface-sounds | Kenney | CC0 |
 
 Kenney files were taken from the OpenGameArt CC0 uploads of those packs. The same recordings are published by Kenney as CC0.
+
+`bolt`, `poison`, `boom`, and `crumble` are not separate files. They are short tones synthesized in `src/raid/audio.js` (oscillator and noise buffer) and released with this project under the same terms as the game code. They stand in for the lightning, poison, distant explosion, and collapse cues in the raid cue table until dedicated CC0 recordings are added. Existing CC0 files above are reused for the other class and boss cues (slam, charge, whirl, fire, frost, heal, shield, holy, pierce, multi, rain, blink, combo) so each cue stays distinct.

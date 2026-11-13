@@ -18,17 +18,7 @@ export function mountOpenWorldRaidGate({ scene, getPlayer }) {
       <span>등급 C · 홀드</span>
       <button type="button">들어가기</button>
     `;
-    const css = document.createElement('style');
-    css.textContent = `
-      #bw-raid-gate { position: fixed; left: 50%; bottom: 88px; transform: translateX(-50%); z-index: 45;
-        display: flex; gap: 10px; align-items: center; padding: 10px 12px; border-radius: 12px;
-        background: rgba(8,16,28,.9); color: #e7f3f6; border: 1px solid rgba(230,195,106,.7);
-        font: 800 14px/1.2 "Nanum Gothic","Noto Sans CJK KR",sans-serif; }
-      #bw-raid-gate span { color: #3ecfc6; font-size: 12px; }
-      #bw-raid-gate button { border: 0; border-radius: 8px; padding: 8px 12px; font: inherit; font-weight: 900;
-        background: #ffe7a0; color: #2a2114; cursor: pointer; }
-    `;
-    document.head.appendChild(css);
+    // 위치·여백은 style.css 의 #bw-raid-gate (리액션 바 위, 8px). 여기선 문구만.
     document.body.appendChild(el);
     el.querySelector('button').onclick = () => {
       const url = new URL(location.href);

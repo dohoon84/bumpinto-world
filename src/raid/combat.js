@@ -73,31 +73,25 @@ export function createCombat({ audio, vfx, onFloat, onBossHurt, onBind, onHealPa
   }
 
   function flourish(skill, x, z, yaw) {
-    const id = cls.id;
-    const color = skill.color;
-    if (id === 'warrior') {
-      vfx.slash(x, 1.45, z, yaw, '#ffe7a0');
-      vfx.shockwave(x, z, '#ff7a1a');
-      if (skill.kind === 'spin' || skill.kind === 'dash') vfx.shockwave(x, z, '#ffd2a8');
-    } else if (id === 'mage') {
-      vfx.rune(x, z, '#8C7FFF');
-      vfx.arrow(x, 1.7, z, yaw, '#c9d4ff');
-      vfx.burst(x, 1.3, z, '#9eb6ff');
-    } else if (id === 'priest') {
-      if (skill.kind === 'heal' || skill.kind === 'healParty') vfx.pillar(x, z, '#FFC845');
-      else {
-        vfx.rune(x, z, '#ffe7a0');
-        vfx.arrow(x, 1.6, z, yaw, '#fff1b8');
-      }
-    } else if (id === 'archer') {
-      vfx.arrow(x, 1.55, z, yaw, '#3DDC84');
-      vfx.trail(x, 1.55, z, yaw, '#b8ffd8');
-    } else if (id === 'assassin') {
-      vfx.streak(x, z, yaw, '#FF5C9A');
-      if (skill.kind !== 'stealth') vfx.slash(x, 1.2, z, yaw, '#ff5c9a');
-    } else {
-      vfx.slash(x, 1.3, z, yaw, color);
-    }
+    const id = skill.id;
+    if (id === 'charge') vfx.charge(x, z, yaw);
+    else if (id === 'slash' || id === 'shout') vfx.slam(x, z);
+    else if (id === 'spin') vfx.whirl(x, z);
+    else if (id === 'shard') vfx.fireball(x, 1.6, z, yaw);
+    else if (id === 'nova' || id === 'blizzard') vfx.frost(x, z);
+    else if (id === 'freeze') vfx.bolt(x, z, yaw);
+    else if (id === 'heal') vfx.pillar(x, z, '#FFC845');
+    else if (id === 'circle') vfx.shield(x, z);
+    else if (id === 'holy' || id === 'smite') vfx.holyBurst(x, z);
+    else if (id === 'volley') vfx.multi(x, z, yaw);
+    else if (id === 'shot' || id === 'mark') vfx.pierce(x, z, yaw);
+    else if (id === 'rain') vfx.arrowRain(x, z);
+    else if (id === 'shadow') vfx.blink(x, z, yaw);
+    else if (id === 'daggers') vfx.combo(x, z, yaw);
+    else if (id === 'tape') vfx.poison(x, z);
+    else if (id === 'stealth') vfx.burst(x, 1.1, z, '#9bb7d4');
+    else vfx.slash(x, 1.3, z, yaw, skill.color);
+    vfx.sparks(x, 1.2, z, skill.color, 5);
   }
 
   function impact(skill, x, z, yaw) {

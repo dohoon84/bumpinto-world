@@ -1771,6 +1771,11 @@ function syncHudBaselines() {
   const root = document.documentElement.style;
   const er = emoteBar?.getBoundingClientRect();
   if (er && er.height > 0) root.setProperty('--emote-top', `${Math.round(innerHeight - er.top)}px`);
+  const buttons = document.getElementById('buttons');
+  const br = buttons?.getBoundingClientRect();
+  if (br && br.height > 0 && getComputedStyle(buttons).display !== 'none') {
+    root.setProperty('--chrome-top', `${Math.round(br.bottom + 8)}px`);
+  }
   const pr = document.getElementById('phone')?.getBoundingClientRect();
   if (pr && pr.height > 0) root.setProperty('--minimap-top', `${Math.round(innerHeight - pr.top)}px`);
 }

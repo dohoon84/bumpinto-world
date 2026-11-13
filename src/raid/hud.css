@@ -111,9 +111,9 @@
 #bw-raid .quest .tip { margin-top: 8px; font-size: 12px; line-height: 1.4; color: #d7efe8; }
 
 #bw-raid .dock {
-  position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%);
-  display: flex; flex-direction: column; align-items: center; gap: 6px;
-  width: min(760px, 94vw);
+  position: absolute; left: 304px; right: 148px; bottom: 16px; transform: none;
+  display: flex; flex-direction: column; align-items: center; gap: 8px;
+  width: auto; max-width: 760px; margin-left: auto; margin-right: auto;
 }
 #bw-raid .plates { display: flex; gap: 12px; width: min(640px, 86vw); justify-content: space-between; }
 #bw-raid .plate { flex: 1; padding: 6px 8px 7px; }
@@ -213,7 +213,7 @@
 #bw-raid .card button.primary { border: 0; background: linear-gradient(180deg, #ffe7a0, #e0b44a); color: #2a2114; }
 #bw-raid .card button.ghost { border: 1px solid rgba(255,255,255,0.2); background: transparent; color: var(--ink); }
 #bw-raid .mix {
-  position: absolute; left: 12px; bottom: 12px; z-index: 2;
+  position: absolute; left: auto; right: 16px; bottom: 72px; z-index: 3;
   display: flex; gap: 8px; align-items: center; pointer-events: auto;
   background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 6px 8px;
   font-size: 11px; font-weight: 800;
@@ -233,7 +233,7 @@
   text-align: center; pointer-events: none; text-shadow: 0 6px 24px #000;
 }
 #bw-raid .warn[hidden] { display: none; }
-#bw-raid .warn strong { display: block; font-size: 64px; letter-spacing: 0.14em; color: #f7fbff; font-weight: 900; }
+#bw-raid .warn strong { display: block; font-size: clamp(28px, 5vw, 64px); letter-spacing: 0.08em; color: #f7fbff; font-weight: 900; }
 #bw-raid .warn em { font-style: normal; font-size: 32px; color: #7ef6ff; font-weight: 900; }
 #bw-raid .meter {
   position: absolute; right: 12px; bottom: 12px; min-width: 108px; padding: 6px 8px;
@@ -297,4 +297,196 @@
 #bw-raid .class-card span { display: block; color: #c5d5de; font-size: 12px; line-height: 1.35; font-weight: 700; }
 #bw-raid .class-card.is-on { border-color: var(--gold); box-shadow: 0 0 0 1px var(--gold) inset; }
 #bw-raid .pick-card .primary { margin-top: 14px; width: 100%; height: 46px; border: 0; border-radius: 10px; font: inherit; font-weight: 900; background: linear-gradient(180deg, #ffe7a0, #e0b44a); color: #2a2114; cursor: pointer; }
+#bw-raid .rchat {
+  position: absolute; left: 16px; bottom: 16px; z-index: 6;
+  width: 272px; max-height: 188px;
+  display: flex; flex-direction: column;
+  pointer-events: auto;
+  padding: 8px;
+  border-color: var(--gold);
+  box-sizing: border-box;
+}
+#bw-raid .rchat.is-collapsed { max-height: 40px; }
+#bw-raid .rchat.is-collapsed .rchat-log,
+#bw-raid .rchat.is-collapsed .rchat-form { display: none; }
+#bw-raid .rchat-head { display: flex; align-items: center; gap: 8px; height: 24px; }
+#bw-raid .rchat-tabs { display: flex; gap: 4px; flex: 1; min-width: 0; }
+#bw-raid .rchat-tabs button, #bw-raid .rchat-fold {
+  height: 24px; padding: 0 8px; border-radius: 8px;
+  border: 1px solid rgba(230, 195, 106, 0.35);
+  background: transparent; color: var(--muted);
+  font: inherit; font-size: 11px; font-weight: 800; cursor: pointer;
+}
+#bw-raid .rchat-tabs button.on { color: #1a1408; background: var(--gold); border-color: var(--gold); }
+#bw-raid .rchat-log {
+  margin-top: 8px; height: 104px; overflow: auto;
+  font-size: 12px; line-height: 1.35; font-weight: 700;
+}
+#bw-raid .rchat-log p { margin: 0 0 4px; word-break: break-word; }
+#bw-raid .rchat-log b { color: var(--gold); margin-right: 4px; }
+#bw-raid .rchat-log .me b { color: #9fd6ff; }
+#bw-raid .rchat-log .sys { color: #ffb089; }
+#bw-raid .rchat-form { display: flex; margin-top: 8px; }
+#bw-raid .rchat-form input {
+  width: 100%; height: 32px; box-sizing: border-box;
+  border-radius: 8px; border: 1px solid rgba(230, 195, 106, 0.45);
+  background: rgba(0, 0, 0, 0.35); color: var(--ink);
+  font: inherit; font-size: 12px; font-weight: 700; padding: 0 8px;
+}
+#bw-raid.is-peace .rchat, #bw-raid.is-calm .rchat, #bw-raid.is-pick .rchat, #bw-raid.is-alert .rchat { display: none; }
 @media (max-width: 900px) { #bw-raid .pick-grid { grid-template-columns: 1fr 1fr; } }
+
+/* HUD C — 슬림 다크, 얇은 금테. 좌표는 layout-rects 레이드 모드. */
+#bw-raid.is-fight .raid-chip {
+  position: absolute; left: 16px; top: 16px; z-index: 20;
+  display: flex; align-items: center; gap: 8px;
+  height: 40px; width: 340px; max-width: calc(100vw - 32px); box-sizing: border-box;
+  padding: 0 12px; border-radius: 8px;
+  background: rgba(10, 12, 20, 0.6);
+  border: 1px solid rgba(214, 176, 98, 0.85);
+  font-weight: 800; font-size: 14px;
+}
+#bw-raid .raid-chip { display: none; }
+#bw-raid.is-fight .raid-chip i {
+  width: 8px; height: 8px; border-radius: 50%; background: #ff5a4a;
+  box-shadow: 0 0 0 3px rgba(255, 90, 74, 0.28);
+}
+#bw-raid.is-fight .raid-chip span { margin-left: auto; color: var(--gold); font-size: 12px; }
+#bw-raid.is-fight .boss {
+  top: 16px; width: min(480px, calc(100vw - 380px));
+  padding: 4px 12px 2px; border: 0; border-radius: 8px;
+  background: linear-gradient(180deg, rgba(8, 10, 18, 0.15), rgba(8, 10, 18, 0.62));
+  box-shadow: none;
+}
+#bw-raid.is-fight .boss .bar { height: 12px; margin-top: 4px; }
+#bw-raid.is-fight .boss .bar.cast { height: 4px; margin-top: 4px; }
+#bw-raid.is-fight .cast-label { min-height: 0; margin-top: 2px; font-size: 11px; }
+#bw-raid.is-fight .boss-name { font-size: 16px; }
+#bw-raid.is-fight .medallion { width: 28px; height: 28px; }
+#bw-raid.is-fight .party {
+  top: 174px; left: 16px; width: 196px; padding: 4px 8px 4px 8px; gap: 2px;
+  background: linear-gradient(90deg, rgba(8, 10, 16, 0.78), rgba(8, 10, 16, 0));
+  border: 0; border-left: 1px solid rgba(214, 176, 98, 0.8);
+  border-radius: 0; box-shadow: none;
+}
+#bw-raid.is-fight .mate { grid-template-columns: 32px 1fr; gap: 6px; }
+#bw-raid.is-fight .portrait { width: 32px; height: 32px; }
+#bw-raid.is-fight .portrait svg { width: 18px; height: 18px; }
+#bw-raid.is-fight .debuffs { display: none; }
+#bw-raid.is-fight .mate-top { font-size: 12px; }
+#bw-raid.is-fight .help { display: none; }
+#bw-raid.is-fight .dock { gap: 4px; }
+#bw-raid.is-fight .quest { display: none; }
+#bw-raid.is-fight .minimap-wrap { top: 16px; right: 16px; width: 152px; }
+#bw-raid.is-fight .minimap { width: 136px; height: 136px; }
+#bw-raid.is-fight .meter {
+  top: 196px; right: 16px; bottom: auto; width: 120px; min-width: 0;
+  background: rgba(10, 12, 20, 0.6); border-color: rgba(214, 176, 98, 0.7);
+}
+#bw-raid.is-fight .mix { top: 16px; right: 180px; bottom: auto; left: auto; }
+#bw-raid.is-fight .dock {
+  left: 50%; right: auto; bottom: 16px; transform: translateX(-50%);
+  width: min(578px, calc(100vw - 420px)); margin: 0;
+}
+#bw-raid.is-fight .face {
+  position: absolute; left: -84px; bottom: 4px;
+  width: 76px; height: 76px; border-radius: 50%;
+  display: grid; place-items: center;
+  border: 2px solid var(--gold);
+  background: radial-gradient(circle at 40% 30%, #4a4030, #141820 70%);
+  font-weight: 900; font-size: 28px; color: var(--gold);
+}
+#bw-raid.is-fight .plate:last-child { display: none; }
+#bw-raid.is-fight .plates { width: 100%; }
+#bw-raid.is-fight .skill { width: 44px; height: 44px; border-radius: 10px; }
+#bw-raid.is-fight .warn {
+  top: auto; bottom: 168px; left: 50%; transform: translateX(-50%);
+  width: min(420px, calc(100vw - 48px));
+  display: flex; justify-content: center; align-items: center; gap: 8px;
+  height: 32px; padding: 0 12px; border-radius: 16px;
+  background: rgba(10, 12, 20, 0.78);
+  border: 1px solid rgba(255, 80, 64, 0.85);
+}
+#bw-raid.is-fight .warn strong { font-size: 14px; letter-spacing: 0; display: inline; }
+#bw-raid.is-fight .warn em { font-size: 14px; color: #ffd0a8; }
+#bw-raid.is-fight .rchat {
+  left: 16px; bottom: 104px; top: auto;
+  width: 340px; height: 200px; max-height: none;
+  padding: 8px; border-radius: 8px;
+  background: rgba(10, 12, 20, 0.6);
+  border: 1px solid rgba(214, 176, 98, 0.9);
+  box-shadow: none;
+}
+#bw-raid.is-fight .rchat.is-collapsed { height: 36px; width: 340px; }
+#bw-raid.is-fight .rchat-chip {
+  display: flex; align-items: center; gap: 8px;
+  width: 100%; height: 22px; padding: 0;
+  border: 0; background: transparent; color: var(--ink);
+  font: inherit; font-size: 12px; font-weight: 700; cursor: pointer; text-align: left;
+}
+#bw-raid.is-fight .rchat-chip[hidden] { display: none; }
+#bw-raid.is-fight .rchat-chip b {
+  min-width: 16px; height: 16px; border-radius: 8px;
+  background: #ff3b30; color: #fff; font-size: 10px;
+  display: grid; place-items: center;
+}
+#bw-raid.is-fight .rchat-chip em {
+  flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-style: normal; color: #d7e4ee;
+}
+#bw-raid.is-fight .rchat-head { height: 28px; }
+#bw-raid.is-fight .rchat-tabs button { height: 24px; border-radius: 8px; position: relative; }
+#bw-raid.is-fight .rchat-tabs button i {
+  position: absolute; top: 2px; right: 2px; width: 8px; height: 8px; border-radius: 50%; background: #ff3b30;
+}
+#bw-raid.is-fight .rchat-log { height: 112px; font-size: 13px; font-weight: 500; }
+#bw-raid.is-fight .rchat-log time { color: #8a9aaa; margin-right: 6px; font-size: 12px; }
+#bw-raid.is-fight .rchat-log .hurt { color: #ff8a80; }
+#bw-raid.is-fight .rchat-log .heal { color: #7dffa8; }
+#bw-raid.is-fight .rchat-log .crit { color: #ffe14a; }
+#bw-raid.is-fight .rchat-log .info { color: #d7e4ee; }
+#bw-raid.is-fight .rchat-form { gap: 8px; align-items: center; }
+#bw-raid.is-fight .rchat-form span { color: #7ec8ff; font-size: 12px; font-weight: 800; flex: none; }
+#bw-raid.is-fight .rchat-form input { height: 30px; border-radius: 8px; }
+#bw-raid.is-fight .rchat-form button {
+  height: 30px; padding: 0 10px; border: 0; border-radius: 8px;
+  background: var(--gold); color: #1a1408; font: inherit; font-size: 12px; font-weight: 800; cursor: pointer;
+}
+@media (min-height: 741px) and (max-height: 899px) {
+  #bw-raid.is-fight .party { top: 222px; }
+  #bw-raid.is-fight .dock { left: auto; right: 16px; transform: none; width: min(518px, calc(100vw - 400px)); }
+}
+@media (max-height: 740px) {
+  #bw-raid.is-fight .dock { left: auto; right: 16px; transform: none; width: min(518px, calc(100vw - 400px)); }
+}
+@media (max-width: 900px) {
+  #bw-raid.is-fight .raid-chip { width: min(200px, 42vw); }
+  #bw-raid.is-fight .boss { width: min(320px, calc(100vw - 240px)); }
+  #bw-raid.is-fight .warn { display: none; }
+}
+@media (min-height: 900px) {
+  #bw-raid.is-fight .party { top: 427px; left: 24px; width: 216px; }
+  #bw-raid.is-fight .raid-chip, #bw-raid.is-fight .boss, #bw-raid.is-fight .minimap-wrap { top: 24px; }
+  #bw-raid.is-fight .raid-chip { left: 24px; }
+  #bw-raid.is-fight .minimap-wrap { right: 24px; }
+  #bw-raid.is-fight .minimap { width: 152px; height: 152px; }
+  #bw-raid.is-fight .boss { width: 560px; }
+  #bw-raid.is-fight .rchat { left: 24px; bottom: 24px; width: 420px; height: 224px; }
+  #bw-raid.is-fight .rchat.is-collapsed { width: 340px; height: 36px; }
+  #bw-raid.is-fight .dock { bottom: 24px; width: 578px; }
+  #bw-raid.is-fight .skill { width: 50px; height: 50px; }
+  #bw-raid.is-fight .meter { top: 232px; right: 24px; }
+}
+@media (max-height: 500px) {
+  #bw-raid.is-fight .party, #bw-raid.is-fight .meter, #bw-raid.is-fight .mix, #bw-raid.is-fight .quest { display: none; }
+  #bw-raid.is-fight .rchat { height: 88px; width: min(300px, 46vw); bottom: 8px; left: 8px; }
+  #bw-raid.is-fight .dock { bottom: 8px; width: min(460px, 52vw); }
+  #bw-raid.is-fight .face { width: 48px; height: 48px; left: -56px; font-size: 18px; }
+  #bw-raid.is-fight .warn { bottom: 96px; }
+}
+@media (max-width: 720px) {
+  #bw-raid.is-fight .raid-chip, #bw-raid.is-fight .party, #bw-raid.is-fight .minimap-wrap, #bw-raid.is-fight .meter, #bw-raid.is-fight .mix, #bw-raid.is-fight .face, #bw-raid.is-fight .help { display: none; }
+  #bw-raid.is-fight .dock { left: 8px; right: 8px; width: auto; transform: none; bottom: 8px; }
+  #bw-raid.is-fight .rchat { left: 8px; width: calc(100vw - 16px); height: 120px; bottom: 132px; }
+  #bw-raid.is-fight .boss { width: calc(100vw - 16px); }
+}

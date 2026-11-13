@@ -70,25 +70,23 @@ function buildSigil() {
 
 function buildBossMesh() {
   const rockMat = new THREE.MeshStandardMaterial({
-    color: '#3a3532',
-    roughness: 0.92,
-    metalness: 0.08,
+    color: '#c4c6c2',
+    roughness: 0.86,
+    metalness: 0.04,
     emissive: '#ff6a1a',
     emissiveMap: crackTex(),
-    emissiveIntensity: 1.35,
+    emissiveIntensity: 1.15,
   });
-  const steel = new THREE.MeshStandardMaterial({ color: '#6d767e', metalness: 0.78, roughness: 0.38 });
+  const steel = new THREE.MeshStandardMaterial({ color: '#d5d8dc', metalness: 0.35, roughness: 0.48 });
   const rockGeo = new THREE.IcosahedronGeometry(1, 0);
   const box = new THREE.BoxGeometry(1, 1, 1);
   const rocks = [];
   const chunks = [
-    [0, 7.2, 0, 3.3, 3.6, 2.6, 0.2, 0.4, 0.1],
-    [-1.4, 8.4, 0.4, 1.8, 1.6, 1.5, 0.4, 0.2, 0.5],
-    [1.6, 8.1, -0.2, 1.7, 1.5, 1.4, 0.1, 1, 0.3],
-    [0, 10.6, 0.2, 2.1, 1.8, 1.8, 0.3, 0.6, 0],
-    [0.2, 12.4, 0.3, 1.5, 1.3, 1.4, 0.2, 0.2, 0.4],
-    [-0.8, 5.2, 0.3, 1.4, 1.2, 1.2, 0.5, 0.1, 0.2],
-    [1.1, 5.0, -0.2, 1.3, 1.1, 1.2, 0.2, 0.8, 0.1],
+    [0, 8.4, 0, 3.4, 2.4, 7.2, 0.05, 0, 0],
+    [0, 9.6, 0.2, 2.6, 1.5, 5.4, 0.1, 0, 0],
+    [0, 7.6, 4.6, 2.2, 1.8, 2.4, 0.2, 0, 0],
+    [0, 8.2, 6.1, 1.6, 1.3, 1.5, 0.15, 0, 0],
+    [0, 7.2, -4.2, 2.0, 1.6, 2.2, -0.2, 0, 0],
   ];
   for (const c of chunks) rocks.push(place(rockGeo, ...c));
   const body = new THREE.Mesh(mergeGeometries(rocks, false), rockMat);
@@ -97,11 +95,10 @@ function buildBossMesh() {
 
   const girders = [];
   const ribs = [
-    [0, 7.4, 1.5, 4.2, 0.28, 0.28, 0, 0, 0.4],
-    [0, 7.4, 1.5, 4.2, 0.28, 0.28, 0, 0, -0.4],
-    [0, 9.2, 1.2, 3.4, 0.22, 0.22, 0.2, 0, 0],
-    [-2.2, 6.2, 0.2, 0.35, 3.2, 0.35, 0, 0, 0.15],
-    [2.2, 6.2, 0.2, 0.35, 3.2, 0.35, 0, 0, -0.15],
+    [0, 8.2, 1.2, 4.6, 0.22, 0.22, 0, 0, 0],
+    [0, 7.4, 2.4, 0.22, 0.22, 6.4, 0, 0, 0],
+    [-1.6, 8.8, 0, 0.2, 0.2, 5.2, 0, 0, 0],
+    [1.6, 8.8, 0, 0.2, 0.2, 5.2, 0, 0, 0],
   ];
   for (const c of ribs) girders.push(place(box, ...c));
   const girderMesh = new THREE.Mesh(mergeGeometries(girders, false), steel);
@@ -111,62 +108,44 @@ function buildBossMesh() {
   group.name = 'hold';
   group.add(body, girderMesh);
 
-  function arm(side) {
+  function pier(side, z) {
     const pivot = new THREE.Group();
-    pivot.position.set(side * 2.6, 8.6, 0.2);
-    const upper = new THREE.Mesh(new THREE.BoxGeometry(0.7, 2.4, 0.7), steel);
-    upper.position.y = -1.1;
+    pivot.position.set(side * 2.35, 7.6, z);
+    const column = new THREE.Mesh(new THREE.BoxGeometry(1.25, 7.2, 1.25), steel);
+    column.position.y = -3.6;
     const rock = new THREE.Mesh(rockGeo, rockMat);
-    rock.scale.set(0.9, 0.7, 0.8);
-    rock.position.y = -1.2;
-    const fore = new THREE.Group();
-    fore.position.y = -2.3;
-    const foreBox = new THREE.Mesh(new THREE.BoxGeometry(0.55, 2.1, 0.55), steel);
-    foreBox.position.y = -0.9;
-    const clawGeo = [];
-    for (const [ox, oz] of [[-0.28, 0.2], [0.28, 0.2], [0, 0.45]]) {
-      clawGeo.push(place(box, ox, -2.1, oz, 0.28, 1.1, 0.28, 0.4, 0, side * 0.2));
-    }
-    const claw = new THREE.Mesh(mergeGeometries(clawGeo, false), steel);
-    fore.add(foreBox, claw);
-    pivot.add(upper, rock, fore);
+    rock.scale.set(0.85, 1.1, 0.85);
+    rock.position.y = -2.4;
+    const foot = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.42, 2.3), steel);
+    foot.position.set(0, -7.15, 0.35);
+    pivot.add(column, rock, foot);
     pivot.traverse((o) => { if (o.isMesh) o.castShadow = true; });
     group.add(pivot);
     return pivot;
   }
-  const armL = arm(-1);
-  const armR = arm(1);
-
-  function leg(side) {
-    const pivot = new THREE.Group();
-    pivot.position.set(side * 1.3, 4.2, 0);
-    const thigh = new THREE.Mesh(new THREE.BoxGeometry(1.1, 2.2, 1.1), steel);
-    thigh.position.y = -1.1;
-    const rock = new THREE.Mesh(rockGeo, rockMat);
-    rock.scale.set(0.8, 0.6, 0.7);
-    rock.position.y = -1.4;
-    const shin = new THREE.Mesh(new THREE.BoxGeometry(0.9, 2.0, 1.2), steel);
-    shin.position.y = -2.6;
-    const foot = new THREE.Mesh(new THREE.BoxGeometry(1.3, 0.45, 1.8), steel);
-    foot.position.set(0, -3.6, 0.3);
-    pivot.add(thigh, rock, shin, foot);
-    pivot.traverse((o) => { if (o.isMesh) o.castShadow = true; });
-    group.add(pivot);
-    return pivot;
-  }
-  const legL = leg(-1);
-  const legR = leg(1);
+  const armL = pier(-1, 2.6);
+  const armR = pier(1, 2.6);
+  const legL = pier(-1, -2.8);
+  const legR = pier(1, -2.8);
 
   const sigil = buildSigil();
-  sigil.position.set(0, 7.5, 2.15);
+  sigil.position.set(0, 8.3, 3.4);
   group.add(sigil);
 
-  const eyeMat = new THREE.MeshBasicMaterial({ color: '#ffd27a' });
-  const eyeL = new THREE.Mesh(new THREE.BoxGeometry(0.38, 0.12, 0.12), eyeMat);
-  eyeL.position.set(-0.38, 12.5, 1.15);
+  const eyeMat = new THREE.MeshBasicMaterial({ color: '#9ff6ff' });
+  const eyeL = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.14, 0.12), eyeMat);
+  eyeL.position.set(-0.42, 8.15, 6.7);
   const eyeR = eyeL.clone();
   eyeR.position.x = 0.42;
   group.add(eyeL, eyeR);
+
+  const shadow = new THREE.Mesh(
+    new THREE.CircleGeometry(6.5, 24),
+    new THREE.MeshBasicMaterial({ color: '#05060a', transparent: true, opacity: 0.45, depthWrite: false }),
+  );
+  shadow.rotation.x = -Math.PI / 2;
+  shadow.position.y = 0.03;
+  group.add(shadow);
 
   rockGeo.dispose();
   box.dispose();
@@ -593,6 +572,18 @@ export function createBoss(scene) {
     columns.forEach((c) => { c.visible = false; });
   }
 
+  function forceSlam() {
+    const p = bossPoint();
+    state.phase = 'slam';
+    state.t = 0.72;
+    state.castName = '내려찍기';
+    state.castMax = 1.15;
+    state.cast = 0.72;
+    slamHit = false;
+    showCircle(slam, p.x - 4, p.z - 2);
+    paintFill(slam, 0.62);
+  }
+
   function forceWind() {
     state.phase = 'wind';
     state.t = 1.05;
@@ -610,6 +601,7 @@ export function createBoss(scene) {
     hurt,
     home,
     forceWind,
+    forceSlam,
     hideDress,
     reset,
     slow,

@@ -3,26 +3,35 @@
 
 const FILES = {
   slash: ['sfx/blade_01.ogg', 'sfx/blade_02.ogg', 'sfx/blade_03.ogg'],
+  slam: ['sfx/blade_01.ogg', 'sfx/chain_03.ogg'],
   charge: ['sfx/chain_03.ogg', 'sfx/blade_02.ogg'],
+  whirl: ['sfx/chop.ogg', 'sfx/blade_03.ogg'],
   shout: ['sfx/creature_roar_01.ogg'],
   spin: ['sfx/blade_03.ogg', 'sfx/chop.ogg'],
+  fire: ['sfx/magic2.ogg'],
+  frost: ['sfx/coldsnap.wav'],
+  heal: ['sfx/heal.ogg'],
+  holy: ['sfx/bong_001.ogg'],
+  shield: ['sfx/metalLatch.ogg'],
+  pierce: ['sfx/drawKnife2.ogg'],
+  multi: ['sfx/drawKnife1.ogg'],
+  rain: ['sfx/metalPot1.ogg'],
+  blink: ['sfx/footstep02.ogg'],
+  combo: ['sfx/knifeSlice.ogg', 'sfx/knifeSlice2.ogg'],
   dodge: ['sfx/footstep02.ogg', 'sfx/drawKnife1.ogg'],
   hit: ['sfx/blade_01.ogg', 'sfx/metalPot1.ogg', 'sfx/metalPot2.ogg'],
   hurt: ['sfx/metalLatch.ogg'],
   wind: ['sfx/coldsnap.wav'],
-  slam: ['sfx/coldsnap.wav', 'sfx/chain_03.ogg'],
   transform: ['sfx/magic2.ogg'],
   warn: ['sfx/bong_001.ogg', 'sfx/error_003.ogg'],
   ui: ['sfx/click_001.ogg', 'sfx/click_002.ogg', 'sfx/click_003.ogg'],
   ice: ['sfx/magic.ogg', 'sfx/magic2.ogg'],
-  holy: ['sfx/heal.ogg'],
   arrow: ['sfx/drawKnife1.ogg', 'sfx/drawKnife2.ogg'],
   arrowHit: ['sfx/metalClick.ogg', 'sfx/metalPot1.ogg'],
   dagger: ['sfx/knifeSlice.ogg', 'sfx/knifeSlice2.ogg', 'sfx/chop.ogg'],
   siren: ['alert-siren.ogg'],
   roar: ['sfx/creature_roar_01.ogg', 'sfx/creature_roar_02.ogg', 'sfx/creature_roar_03.ogg'],
   step: ['sfx/footstep00.ogg', 'sfx/footstep01.ogg', 'sfx/footstep02.ogg', 'sfx/footstep03.ogg'],
-  shield: ['sfx/metalLatch.ogg', 'sfx/metalClick.ogg'],
   levelup: ['sfx/level-up.mp3'],
   victory: ['victory.ogg'],
 };
@@ -54,6 +63,66 @@ export function createRaidAudio() {
   const loading = new Map();
   let currentMusic = null;
   let musicToken = 0;
+  let ambStage = 0;
+  let ambT = 3;
+  const SYNTH = new Set(['bolt', 'poison', 'boom', 'crumble']);
+
+  function synth(kind, gain) {
+    const ac = ensure();
+    if (!ac || muted) return;
+    const t = ac.currentTime;
+    const o = ac.createOscillator();
+    const filter = ac.createBiquadFilter();
+    const g = ac.createGain();
+    o.connect(filter);
+    filter.connect(g);
+    g.connect(sfxBus);
+    if (kind === 'bolt') {
+      o.type = 'sawtooth';
+      o.frequency.setValueAtTime(320, t);
+      o.frequency.exponentialRampToValueAtTime(50, t + 0.16);
+      filter.type = 'highpass';
+      filter.frequency.value = 500;
+      g.gain.setValueAtTime(gain, t);
+      g.gain.exponentialRampToValueAtTime(0.001, t + 0.18);
+      o.start(t);
+      o.stop(t + 0.2);
+    } else if (kind === 'poison') {
+      o.type = 'triangle';
+      o.frequency.setValueAtTime(180, t);
+      o.frequency.linearRampToValueAtTime(90, t + 0.4);
+      filter.type = 'bandpass';
+      filter.frequency.value = 700;
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.linearRampToValueAtTime(gain * 0.45, t + 0.04);
+      g.gain.exponentialRampToValueAtTime(0.001, t + 0.42);
+      o.start(t);
+      o.stop(t + 0.44);
+    } else if (kind === 'boom') {
+      o.type = 'sine';
+      o.frequency.setValueAtTime(110, t);
+      o.frequency.exponentialRampToValueAtTime(32, t + 0.45);
+      filter.type = 'lowpass';
+      filter.frequency.value = 240;
+      g.gain.setValueAtTime(gain * 0.55, t);
+      g.gain.exponentialRampToValueAtTime(0.001, t + 0.5);
+      o.start(t);
+      o.stop(t + 0.52);
+    } else {
+      const len = Math.floor(ac.sampleRate * 0.35);
+      const buf = ac.createBuffer(1, len, ac.sampleRate);
+      const data = buf.getChannelData(0);
+      for (let i = 0; i < len; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / len);
+      const src = ac.createBufferSource();
+      src.buffer = buf;
+      filter.type = 'lowpass';
+      filter.frequency.value = 500;
+      src.connect(filter);
+      g.gain.setValueAtTime(gain * 0.35, t);
+      g.gain.exponentialRampToValueAtTime(0.001, t + 0.34);
+      src.start(t);
+    }
+  }
 
   function ensure() {
     if (ctx) return ctx;
@@ -239,6 +308,10 @@ export function createRaidAudio() {
       const ac = ensure();
       if (!ac || muted) return;
       if (ac.state === 'suspended') ac.resume();
+      if (SYNTH.has(name)) {
+        synth(name, (opts.gain || 0.7) * (0.9 + Math.random() * 0.15));
+        return;
+      }
       const list = FILES[name];
       if (!list) return;
       const url = pick(list);
@@ -257,6 +330,14 @@ export function createRaidAudio() {
         load(FILES.victory[0]).then((buf) => playBuffer(buf, { gain: 0.9, bus: 'music' }));
       }
     },
-    tick() {},
+    setAmbience(stage) { ambStage = stage || 0; },
+    tick(dt = 0.016) {
+      if (!ambStage || muted) return;
+      ambT -= dt;
+      if (ambT > 0) return;
+      ambT = ambStage >= 3 ? 2.2 : ambStage === 2 ? 3.8 : 6.5;
+      this.playSfx(Math.random() < 0.45 ? 'boom' : 'crumble', { gain: 0.28 + ambStage * 0.05 });
+      if (ambStage >= 2 && Math.random() < 0.35) this.playSfx('siren', { gain: 0.18 });
+    },
   };
 }

@@ -43,6 +43,7 @@ export function createHud() {
   root.id = 'bw-raid';
   root.innerHTML = `
     <div class="flash" data-flash></div>
+    <div class="raid-chip" data-raid-chip><i></i><b>균열 · 탄천</b><span data-stage>1단계</span></div>
     <section class="party panel" data-party></section>
     <div class="minimap-wrap">
       <canvas class="minimap" width="168" height="168" data-map></canvas>
@@ -67,6 +68,7 @@ export function createHud() {
       <div class="cast-label"><span data-cast-name></span><span data-cast-time></span></div>
     </section>
     <div class="dock">
+      <div class="face" data-face>초</div>
       <div class="plates">
         <div class="plate panel">
           <div class="plate-name">초행 <span data-my-role>전사</span> <b data-player-num>100 / 100</b></div>
@@ -463,6 +465,11 @@ export function createHud() {
       root.querySelector('[data-player-num]').textContent = `${Math.ceil(snap.hp)} / ${snap.hpMax}`;
       root.querySelector('[data-dealt]').textContent = Math.round(snap.dealt || 0).toLocaleString('ko-KR');
       root.querySelector('[data-healed]').textContent = Math.round(snap.healed || 0).toLocaleString('ko-KR');
+      const stageEl = root.querySelector('[data-stage]');
+      if (stageEl) {
+        const ratio = snap.bossMax ? snap.bossHp / snap.bossMax : 1;
+        stageEl.textContent = snap.bossDead ? '토벌' : ratio <= 0.25 ? '3단계' : ratio <= 0.6 ? '2단계' : '1단계';
+      }
       root.querySelector('[data-kills]').textContent = snap.kills;
       const t = Math.max(0, Math.ceil(snap.timeLeft));
       root.querySelector('[data-time]').textContent = `${String(Math.floor(t / 60)).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}`;

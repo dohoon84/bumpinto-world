@@ -214,10 +214,12 @@ export function createArena(scene) {
     depthWrite: false,
     toneMapped: false,
     uniforms: {
-      uTop: { value: new THREE.Color('#16082a') },
-      uMid: { value: new THREE.Color('#14505c') },
-      uBot: { value: new THREE.Color('#3a1868') },
+      uZenith: { value: new THREE.Color('#3A0E1E') },
+      uHorizon: { value: new THREE.Color('#9A2A22') },
       uFlash: { value: 0 },
+      uRift: { value: 0.35 },
+      uRiftI: { value: 2.5 },
+      uTime: { value: 0 },
     },
     vertexShader: `
       varying vec3 vDir;
@@ -228,20 +230,26 @@ export function createArena(scene) {
     `,
     fragmentShader: `
       varying vec3 vDir;
-      uniform vec3 uTop, uMid, uBot;
-      uniform float uFlash;
+      uniform vec3 uZenith, uHorizon;
+      uniform float uFlash, uRift, uRiftI, uTime;
       void main() {
-        float h = normalize(vDir).y;
-        vec3 c = mix(uBot, uMid, smoothstep(-0.15, 0.35, h));
-        c = mix(c, uTop, smoothstep(0.15, 0.9, h));
-        float band = smoothstep(0.05, 0.2, h) * (1.0 - smoothstep(0.25, 0.55, h));
-        c += vec3(0.45, 0.15, 0.55) * band * 0.35;
-        c += vec3(0.65, 0.45, 0.85) * uFlash;
+        vec3 dir = normalize(vDir);
+        float h = dir.y;
+        vec3 c = mix(uHorizon, uZenith, smoothstep(0.0, 0.72, h));
+        float ang = atan(dir.z, dir.x);
+        float jag = sin(ang * 9.0 + uTime * 0.6) * 0.04 + sin(ang * 23.0 - uTime * 1.3) * 0.02;
+        float band = abs(ang - 0.15 - jag);
+        float crack = (1.0 - smoothstep(0.012, 0.02 + uRift * 0.28, band));
+        crack *= smoothstep(0.08, 0.28, h) * (1.0 - smoothstep(0.62, 0.92, h));
+        float pulse = 0.85 + 0.15 * sin(uTime * (uRift > 0.7 ? 5.0 : 1.6));
+        c += vec3(1.0, 0.42, 0.12) * crack * uRiftI * 0.22 * pulse;
+        c += vec3(1.0, 0.85, 0.6) * crack * crack * 0.35;
+        c += vec3(0.7, 0.25, 0.15) * uFlash;
         gl_FragColor = vec4(c, 1.0);
       }
     `,
   });
-  const sky = new THREE.Mesh(new THREE.SphereGeometry(220, 24, 16), skyMat);
+  const sky = new THREE.Mesh(new THREE.SphereGeometry(780, 28, 18), skyMat);
   scene.add(sky);
 
   const water = new THREE.Mesh(
@@ -421,15 +429,31 @@ export function createArena(scene) {
   let rainOn = true;
   let safePulse = 0;
 
-  scene.fog = new THREE.Fog(rift.fog.clone(), 26, 100);
+  scene.fog = new THREE.Fog(rift.fog.clone(), 55, 450);
+  const envPhase = {
+    peace: { zenith: '#0E1430', horizon: '#2B2F5A', fog: '#1A1F3A', near: 80, far: 600, rift: 0, glow: 0 },
+    crack: { zenith: '#1A1232', horizon: '#5A1F3A', fog: '#2A1A34', near: 70, far: 550, rift: 0.05, glow: 1.5 },
+    sortie: { zenith: '#2A0F28', horizon: '#7A2230', fog: '#3A1A26', near: 60, far: 500, rift: 0.15, glow: 2 },
+    p1: { zenith: '#3A0E1E', horizon: '#9A2A22', fog: '#4A1E1E', near: 55, far: 450, rift: 0.35, glow: 2.5 },
+    p2: { zenith: '#4A0A12', horizon: '#C0381A', fog: '#5A2014', near: 45, far: 400, rift: 0.6, glow: 3.5 },
+    p3: { zenith: '#5A0E10', horizon: '#E04A12', fog: '#6A2410', near: 35, far: 320, rift: 0.8, glow: 5 },
+    kill: { zenith: '#3A1030', horizon: '#A04040', fog: '#3A1A2A', near: 60, far: 480, rift: 0.2, glow: 1.2 },
+    dawn: { zenith: '#6A9ADA', horizon: '#FFB8A0', fog: '#E8C8C8', near: 120, far: 900, rift: 0, glow: 0 },
+  };
+  const zenith = new THREE.Color('#3A0E1E');
+  const horizon = new THREE.Color('#9A2A22');
+  let phaseKey = 'p1';
+  let riftSize = 0.35;
+  let riftGlow = 2.5;
+  let fogNear = 55;
+  let fogFar = 450;
   scene.background = null;
 
   function mixToward(target, dt) {
     const k = 1 - Math.exp(-dt * 1.4);
     for (const key of Object.keys(cur)) cur[key].lerp(target[key], k);
-    skyMat.uniforms.uTop.value.copy(cur.top);
-    skyMat.uniforms.uMid.value.copy(cur.mid);
-    skyMat.uniforms.uBot.value.copy(cur.bot);
+    skyMat.uniforms.uZenith.value.copy(zenith);
+    skyMat.uniforms.uHorizon.value.copy(horizon);
     scene.fog.color.copy(cur.fog);
     hemi.color.copy(cur.hemiSky);
     hemi.groundColor.copy(cur.hemiGround);
@@ -446,10 +470,35 @@ export function createArena(scene) {
     setMood(next, immediate) {
       mood = next;
       moodT = immediate ? 1 : 0;
+      if (next === 'peace') {
+        if (phaseKey !== 'dawn') phaseKey = 'peace';
+      } else if (phaseKey === 'peace' || phaseKey === 'dawn') phaseKey = 'p1';
       if (immediate) {
         mixToward(next === 'peace' ? peace : rift, 8);
         riftAmt = next === 'peace' ? 0 : 1;
+        const spec = envPhase[phaseKey];
+        zenith.set(spec.zenith);
+        horizon.set(spec.horizon);
+        riftSize = spec.rift;
+        riftGlow = spec.glow;
+        fogNear = spec.near;
+        fogFar = spec.far;
       }
+    },
+    setPhase(name, immediate) {
+      if (!envPhase[name]) return;
+      phaseKey = name;
+      mood = name === 'peace' || name === 'dawn' ? 'peace' : 'rift';
+      moodT = immediate ? 1 : 0;
+      if (!immediate) return;
+      const spec = envPhase[name];
+      zenith.set(spec.zenith);
+      horizon.set(spec.horizon);
+      riftSize = spec.rift;
+      riftGlow = spec.glow;
+      fogNear = spec.near;
+      fogFar = spec.far;
+      riftAmt = mood === 'peace' ? 0 : 1;
     },
     setRain(on) { rainOn = on; rain.visible = on; },
     setSafeHot(on) { safePulse = on ? 1 : 0; },
@@ -458,6 +507,18 @@ export function createArena(scene) {
       const goal = mood === 'peace' ? 0 : 1;
       riftAmt += (goal - riftAmt) * (1 - Math.exp(-dt * 1.15));
       mixToward(mood === 'peace' ? peace : rift, dt);
+      const spec = envPhase[phaseKey] || envPhase.p1;
+      const k = 1 - Math.exp(-dt * 0.8);
+      zenith.lerp(new THREE.Color(spec.zenith), k);
+      horizon.lerp(new THREE.Color(spec.horizon), k);
+      riftSize += (spec.rift - riftSize) * k;
+      riftGlow += (spec.glow - riftGlow) * k;
+      fogNear += (spec.near - fogNear) * k;
+      fogFar += (spec.far - fogFar) * k;
+      skyMat.uniforms.uRift.value = riftSize;
+      skyMat.uniforms.uRiftI.value = riftGlow;
+      skyMat.uniforms.uTime.value += dt;
+      scene.fog.color.lerp(new THREE.Color(spec.fog), k);
       portal.visible = riftAmt > 0.04;
       portalRing.material.opacity = riftAmt * 0.9;
       portalDisc.material.opacity = riftAmt * 0.4;
@@ -471,7 +532,8 @@ export function createArena(scene) {
         mesh.visible = riftAmt > 0.08;
         mesh.material.opacity = riftAmt * 0.85;
       });
-      ash.material.opacity = riftAmt * 0.75;
+      const ashGoal = phaseKey === 'p3' ? 0.9 : phaseKey === 'p2' ? 0.62 : phaseKey === 'p1' ? 0.4 : riftAmt * 0.2;
+      ash.material.opacity = ashGoal;
       if (focus && riftAmt > 0.02) {
         const arr = ash.geometry.attributes.position.array;
         for (let i = 0; i < ashCount; i++) {
@@ -486,17 +548,15 @@ export function createArena(scene) {
         riftLight.position.x = portal.position.x;
         riftLight.position.z = portal.position.z;
       }
+      scene.fog.near = fogNear;
+      scene.fog.far = fogFar;
       if (mood === 'peace') {
-        scene.fog.near = 40;
-        scene.fog.far = 160;
-        hemi.intensity = 0.85;
-        dir.intensity = 1.15;
+        hemi.intensity = phaseKey === 'dawn' ? 0.8 : 0.55;
+        dir.intensity = phaseKey === 'dawn' ? 1.15 : 0.7;
         warm.intensity = 4;
       } else {
-        scene.fog.near = 24;
-        scene.fog.far = 98;
-        hemi.intensity = 0.62;
-        dir.intensity = 0.9;
+        hemi.intensity = phaseKey === 'p3' ? 0.38 : 0.45;
+        dir.intensity = 0.72;
       }
       if (rainOn) {
         boltIn -= dt;

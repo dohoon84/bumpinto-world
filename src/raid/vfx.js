@@ -146,6 +146,127 @@ export function createVfx(scene) {
         add(m, 0.22, 0);
       }
     },
+    charge(x, z, yaw) {
+      this.streak(x, z, yaw, '#ffd2a8');
+      const flash = new THREE.Mesh(new THREE.CircleGeometry(1.1, 16), fadeMat('#fff1d2'));
+      flash.position.set(x, 1.2, z);
+      flash.lookAt(x + Math.sin(yaw), 1.2, z + Math.cos(yaw));
+      add(flash, 0.16, 0);
+      flash.userData.grow = 2;
+    },
+    slam(x, z) {
+      this.shockwave(x, z, '#ffe7a0');
+      this.shockwave(x, z, '#ff7a1a');
+      for (let i = 0; i < 8; i++) {
+        const m = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.12, 0.22), fadeMat(i % 2 ? '#8a5a32' : '#ffe1b0'));
+        m.position.set(x, 0.2, z);
+        const a = (i / 8) * Math.PI * 2;
+        m.userData.vx = Math.cos(a) * 3.2;
+        m.userData.vz = Math.sin(a) * 3.2;
+        m.userData.vy = 2.4;
+        add(m, 0.45, 0);
+      }
+      const crack = new THREE.Mesh(new THREE.RingGeometry(0.4, 2.2, 6), fadeMat('#ffb089'));
+      crack.rotation.x = -Math.PI / 2;
+      crack.position.set(x, 0.08, z);
+      add(crack, 0.7, 0);
+    },
+    whirl(x, z) {
+      for (let i = 0; i < 3; i++) {
+        const arc = new THREE.Mesh(new THREE.TorusGeometry(1.1 + i * 0.45, 0.05, 6, 20), fadeMat(i === 1 ? '#fff6d8' : '#ffb15a'));
+        arc.position.set(x, 0.9 + i * 0.25, z);
+        arc.rotation.x = Math.PI / 2;
+        add(arc, 0.34, 6 + i);
+      }
+    },
+    fireball(x, y, z, yaw) {
+      const m = new THREE.Mesh(new THREE.SphereGeometry(0.28, 8, 6), fadeMat('#ff7a1a'));
+      m.position.set(x, y, z);
+      m.userData.vx = Math.sin(yaw) * 16;
+      m.userData.vz = Math.cos(yaw) * 16;
+      add(m, 0.32, 0);
+      this.burst(x + Math.sin(yaw) * 4, y, z + Math.cos(yaw) * 4, '#ffb15a');
+    },
+    frost(x, z) {
+      for (let i = 0; i < 7; i++) {
+        const m = new THREE.Mesh(new THREE.ConeGeometry(0.12, 0.7, 5), fadeMat('#d7f6ff'));
+        const a = (i / 7) * Math.PI * 2;
+        m.position.set(x + Math.cos(a) * 1.1, 0.35, z + Math.sin(a) * 1.1);
+        m.rotation.z = a;
+        add(m, 0.4, 0);
+      }
+      this.rune(x, z, '#9fd6ff');
+    },
+    bolt(x, z, yaw) {
+      let px = x;
+      let pz = z;
+      for (let i = 0; i < 5; i++) {
+        const m = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.08, 1.1), fadeMat('#f4fbff'));
+        const j = (i % 2 ? 0.35 : -0.35);
+        m.position.set(px + Math.cos(yaw) * j, 1.6, pz);
+        m.rotation.y = yaw + j;
+        add(m, 0.16, 0);
+        px += Math.sin(yaw) * 1.1;
+        pz += Math.cos(yaw) * 1.1;
+      }
+    },
+    shield(x, z) {
+      const dome = new THREE.Mesh(new THREE.SphereGeometry(1.15, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2), fadeMat('#ffe7a0'));
+      dome.position.set(x, 0.05, z);
+      add(dome, 0.7, 0);
+    },
+    holyBurst(x, z) {
+      for (let i = 0; i < 8; i++) {
+        const m = new THREE.Mesh(new THREE.BoxGeometry(0.08, 2.2, 0.08), fadeMat('#fff6c8'));
+        const a = (i / 8) * Math.PI * 2;
+        m.position.set(x + Math.cos(a) * 0.8, 1.2, z + Math.sin(a) * 0.8);
+        add(m, 0.28, 0);
+      }
+      this.burst(x, 1.6, z, '#fff1b8');
+    },
+    multi(x, z, yaw) {
+      for (let i = -2; i <= 2; i++) this.arrow(x, 1.5, z, yaw + i * 0.12, '#b8ffd8');
+    },
+    pierce(x, z, yaw) {
+      const m = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.08, 6), fadeMat('#f4fff8'));
+      m.position.set(x + Math.sin(yaw) * 3, 1.45, z + Math.cos(yaw) * 3);
+      m.rotation.y = yaw;
+      add(m, 0.2, 0);
+    },
+    arrowRain(x, z) {
+      for (let i = 0; i < 8; i++) {
+        const m = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.7, 0.05), fadeMat('#fff1b8'));
+        m.position.set(x + (i % 4) - 1.5, 3.2 + (i % 3) * 0.4, z + Math.floor(i / 4) - 0.5);
+        m.userData.vy = -6;
+        add(m, 0.35, 0);
+      }
+    },
+    blink(x, z, yaw) {
+      this.streak(x, z, yaw, '#c9b6ff');
+      this.burst(x, 1, z, '#9aa6b2');
+      this.burst(x + Math.sin(yaw) * 3, 1, z + Math.cos(yaw) * 3, '#6a5a88');
+    },
+    combo(x, z, yaw) {
+      this.slash(x, 1.3, z, yaw, '#fff');
+      this.slash(x, 1.1, z, yaw + 1.2, '#ff5c9a');
+      this.slash(x, 1.5, z, yaw - 0.8, '#ffd0e4');
+    },
+    poison(x, z) {
+      for (let i = 0; i < 8; i++) {
+        const m = new THREE.Mesh(new THREE.SphereGeometry(0.16, 6, 5), fadeMat('#7dff6a'));
+        const a = (i / 8) * Math.PI * 2;
+        m.position.set(x + Math.cos(a) * 0.4, 0.4, z + Math.sin(a) * 0.4);
+        m.userData.vy = 1.1 + (i % 3) * 0.3;
+        add(m, 0.55, 0);
+      }
+    },
+    portal(x, z) {
+      const ring = new THREE.Mesh(new THREE.TorusGeometry(1.4, 0.08, 6, 18), fadeMat('#c45cff'));
+      ring.position.set(x, 0.2, z);
+      ring.rotation.x = Math.PI / 2;
+      add(ring, 0.8, 2);
+      this.pillar(x, z, '#9b5cff');
+    },
     windStreak(x, z, yaw) {
       const m = new THREE.Mesh(new THREE.BoxGeometry(14, 0.22, 0.9), fadeMat('#ffb070'));
       m.position.set(x, 1.1, z);

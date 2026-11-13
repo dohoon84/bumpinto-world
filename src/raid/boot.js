@@ -11,6 +11,9 @@ import { createCombat } from './combat.js';
 import { createHud } from './hud.js';
 import { createRaidAudio } from './audio.js';
 import { createVfx } from './vfx.js';
+import { createCity } from './city.js';
+import { attachTrails, updateTrails } from './trails.js';
+import { createRaidRoom, mountRaidChat } from './chat.js';
 import { CITIZEN_LOOK } from './look.js';
 import {
   PATH_YAW, BOSS_ALONG, spawnPoint, safePoint, bossPoint, clampArena, pushOutOfBoss, fromFrame,
@@ -71,6 +74,7 @@ try {
 }
 
 const arena = createArena(scene);
+const city = await createCity(scene);
 const vfx = createVfx(scene);
 const audio = createRaidAudio();
 const look = sanitizeLook(CITIZEN_LOOK);
@@ -96,11 +100,12 @@ for (const id of CLASS_IDS) {
     packs[id].group.userData.crownY = mark.crown * fit;
     packs[id].group.userData.headY = mark.head * fit;
   }
+  if (packs[id].source === 'glb') attachTrails(packs[id].group, id, scene);
 }
 consumeIntroReset(params);
 const rift = createRiftClock(params);
 const asked = normalizeClass(params.get('class'));
-const autoStart = ['transform', 'form', 'fight', 'victory'].includes(shot);
+const autoStart = ['transform', 'form', 'fight', 'victory', 'skyline', 'phase1', 'phase3', 'close', 'slam', 'emerge', 'chat'].includes(shot);
 let classId = asked || 'warrior';
 let form = null;
 let ghost = null;
@@ -179,6 +184,15 @@ function layoutParty(id) {
 
 const hud = createHud();
 hud.bind();
+let chat;
+const room = createRaidRoom({
+  roomId: 'tancheon-hold',
+  name: '초행',
+  onMessage: (msg) => chat?.push(msg),
+});
+chat = mountRaidChat(hud.root, room);
+room.system('레이드 방 · 탄천 합수부');
+room.system('파티 / 레이드 채널. Enter 로 말합니다.');
 
 const tmp = new THREE.Vector3();
 function asVec(p) {
@@ -234,7 +248,7 @@ let won = false;
 let moveSpeed = 0;
 const portrait = shot === 'transform' || shot === 'form';
 let camYaw = PATH_YAW + (portrait ? Math.PI + 0.7 : 0.35);
-let camPitch = portrait ? 0.32 : 50 * Math.PI / 180;
+let camPitch = portrait ? 0.32 : 42 * Math.PI / 180;
 let camDist = shot === 'transform' ? 4.4 : shot === 'form' ? 4.8 : 30;
 const keys = new Set();
 let shift = false;
@@ -276,6 +290,7 @@ function useSkill(id) {
   if (!sk || sk.locked) return;
   if (sk.kind !== 'heal' && sk.kind !== 'healParty' && sk.kind !== 'stealth') faceBoss();
   const ok = combat.trySkill(id, true);
+  if (ok) room.system(`${getClass(classId).name} · ${sk.name}`);
   if (ok && sk.dash) {
     const b = home;
     const dx = b.x - actor.position.x;
@@ -351,7 +366,10 @@ function enterPeace() {
   ghost.visible = false;
   boss.group.visible = false;
   for (const a of party) a.mesh.visible = false;
-  arena.setMood('peace');
+  arena.setPhase('dawn');
+  city.setMood('peace');
+  city.setStage(0);
+  audio.setAmbience(0);
   arena.setRain(false);
   arena.setSafeHot(false);
   audio.playBgm('peace');
@@ -381,7 +399,12 @@ function finishIntro() {
   hud.setMode('fight');
   if (shot === 'form') return;
   audio.playBgm('boss');
-  hud.banner(`${getClass(classId).name}의 이력이 인쇄됩니다`);
+  audio.setAmbience(1);
+  arena.setPhase('p1');
+  city.setMood('rift');
+  city.setStage(1);
+  hud.banner('붕괴의 거수 · 홀드');
+  room.system('전투 시작 · 1페이즈');
   audio.playSfx('transform');
 }
 
@@ -435,10 +458,15 @@ function win() {
   won = true;
   phase = 'victory';
   kills = '1 / 1';
+  hitStop = 0.55;
   combat.state.xp = 1240;
   combat.state.level = 2;
+  arena.setPhase('kill');
+  city.setStage(2);
+  audio.setAmbience(0);
   audio.playSting('levelup');
-  hud.banner('LEVEL UP');
+  hud.banner('토벌 성공');
+  room.system('토벌 성공');
   hud.showVictory();
 }
 
@@ -465,7 +493,12 @@ function frame() {
   const focus = actor.position;
   arena.update(dt, focus);
   vfx.update(dt);
-  audio.tick();
+  audio.tick(dt);
+  city.update(dt);
+  const now = performance.now() / 1000;
+  if (form?.group) updateTrails(form.group, now);
+  if (ghost) updateTrails(ghost, now);
+  for (const extra of extras) updateTrails(extra, now);
   const st = combat.state;
   hud.update(dt, camera, {
     x: focus.x,
@@ -623,16 +656,24 @@ function step(dt) {
     onStage(stage) {
       bossStage = stage;
       audio.setBossPhase(stage);
+      audio.setAmbience(stage);
+      arena.setPhase(stage === 3 ? 'p3' : stage === 2 ? 'p2' : 'p1');
+      city.setStage(stage);
+      city.setMood('rift');
       audio.playSfx('roar', { x: boss.group.position.x, z: boss.group.position.z, big: true });
       shake = Math.max(shake, stage === 3 ? 0.62 : 0.36);
-      hitStop = 0.08;
+      hitStop = stage === 3 ? 0.16 : 0.1;
       hud.flash(0.4);
-      hud.banner(stage === 3 ? '홀드 격노' : '홀드가 속도를 올립니다');
+      const line = stage === 3 ? '광폭화!' : '홀드가 분노합니다 — 다리가 무너집니다';
+      hud.banner(line);
+      room.system(line);
     },
     onSlam(kind) {
       if (kind === 'telegraph') audio.playSfx('warn', { x: boss.group.position.x, z: boss.group.position.z });
       else if (kind === 'hit') {
         audio.playSfx('slam', { x: boss.group.position.x, z: boss.group.position.z, big: true });
+        audio.playSfx('boom', { gain: 0.4 });
+        vfx.slam(boss.group.position.x, boss.group.position.z);
         vfx.ring(boss.group.position.x, 0.25, boss.group.position.z, '#f4fbff', 8);
         vfx.burst(boss.group.position.x, 1.2, boss.group.position.z, '#fff6e0');
         shake = Math.max(shake, bossStage === 3 ? 0.55 : 0.32);
@@ -708,7 +749,7 @@ addEventListener('pointerup', () => { dragging = false; });
 addEventListener('pointermove', (e) => {
   if (!dragging) return;
   camYaw -= (e.clientX - lastX) * 0.005;
-  camPitch = Math.max(portrait ? 0.12 : 0.55, Math.min(1.05, camPitch + (e.clientY - lastY) * 0.003));
+  camPitch = Math.max(portrait ? 0.12 : 0.32, Math.min(1.05, camPitch + (e.clientY - lastY) * 0.003));
   lastX = e.clientX;
   lastY = e.clientY;
 });
@@ -720,6 +761,13 @@ addEventListener('wheel', (e) => {
 
 addEventListener('keydown', (e) => {
   audio.unlock();
+  const typing = chat?.typing();
+  if (e.code === 'Enter' && !typing) {
+    e.preventDefault();
+    chat?.focus();
+    return;
+  }
+  if (typing) return;
   if (e.code === 'Space') e.preventDefault();
   keys.add(e.code);
   if (e.key === 'Shift') shift = true;
@@ -765,7 +813,9 @@ function beginAlert() {
   phase = 'alert';
   hud.setMode('alert');
   if (!rift.inRegion()) return;
-  arena.setMood('rift');
+  arena.setPhase('crack');
+  city.setMood('rift');
+  city.setStage(0);
   arena.setRain(true);
   boss.group.visible = true;
   if (!sirenPlayed) {
@@ -839,7 +889,10 @@ if (shot === 'wide') {
     const g = id === classId ? form.group : cloneAnimated(src);
     if (g.parent) g.parent.remove(g);
     scene.add(g);
-    if (id !== classId) extras.push(g);
+    if (id !== classId) {
+      extras.push(g);
+      attachTrails(g, id, scene);
+    }
     const p = fromFrame(BOSS_ALONG - 13, (i - 2) * 2.6);
     g.position.set(p.x, 0, p.z);
     g.rotation.set(0, PATH_YAW + Math.PI, 0);
@@ -852,16 +905,59 @@ if (shot === 'wide') {
   camPitch = 0.42;
   camDist = 11;
 }
-if (shot === 'fight') {
+function placeFight(yaw, pitch, dist, back) {
   finishIntro();
   const b = bossPoint();
-  const fx = Math.sin(PATH_YAW);
-  const fz = Math.cos(PATH_YAW);
-  actor.position.set(b.x - fx * 13, 0, b.z - fz * 13);
-  actor.rotation.y = PATH_YAW + 0.85;
+  actor.position.set(b.x - Math.sin(yaw) * back, 0, b.z - Math.cos(yaw) * back);
+  actor.rotation.y = yaw;
+  camYaw = yaw;
+  camPitch = pitch;
+  camDist = dist;
+}
+function seedChat() {
+  chat.push({ channel: 'party', name: '한결', color: '#FF7A1A', text: '장판 먼저 봅니다. 방패는 제가.', self: false, t: Date.now() });
+  chat.push({ channel: 'party', name: '온유', color: '#FFC845', text: '체력 볼게요. 노란 선으로 오세요.', self: false, t: Date.now() });
+  chat.push({ channel: 'raid', name: '서린', color: '#8C7FFF', text: '하늘 균열이 더 벌어집니다.', self: false, t: Date.now() });
+  chat.push({ channel: 'system', name: '시스템', text: '초행 슬래시 1,248', system: true, kind: 'hurt', t: Date.now() });
+  chat.push({ channel: 'system', name: '시스템', text: '치명타 3,912', system: true, kind: 'crit', t: Date.now() });
+  chat.push({ channel: 'system', name: '시스템', text: '온유 치유 +420', system: true, kind: 'heal', t: Date.now() });
+}
+if (shot === 'fight' || shot === 'chat') {
+  placeFight(PATH_YAW + 0.35, 0.62, 18, 12);
   boss.forceWind();
   combat.state.res = Math.max(combat.state.res, 55);
-  hud.float(new THREE.Vector3(b.x, 9.2, b.z), 168, 'crit');
+  seedChat();
+  hud.float(new THREE.Vector3(bossPoint().x, 8.2, bossPoint().z), 168, 'crit');
+}
+if (shot === 'skyline' || shot === 'emerge') {
+  placeFight(city.yaw, shot === 'emerge' ? 0.3 : 0.4, shot === 'emerge' ? 20 : 28, 16);
+  arena.setPhase('p1', true);
+  city.setMood('rift');
+  city.setStage(1);
+  seedChat();
+}
+if (shot === 'phase1') {
+  placeFight(city.yaw, 0.42, 24, 14);
+  arena.setPhase('p1', true);
+  city.setStage(1);
+}
+if (shot === 'phase3') {
+  placeFight(city.yaw, 0.4, 26, 15);
+  boss.hurt(8600);
+  arena.setPhase('p3', true);
+  city.setMood('rift');
+  city.setStage(3);
+  audio.setAmbience(3);
+}
+if (shot === 'close') {
+  placeFight(PATH_YAW, 0.5, 9, 7);
+  seedChat();
+}
+if (shot === 'slam') {
+  placeFight(PATH_YAW + 0.2, 0.48, 16, 11);
+  boss.forceSlam();
+  vfx.slam(boss.group.position.x, boss.group.position.z);
+  seedChat();
 }
 if (shot === 'victory') {
   finishIntro();

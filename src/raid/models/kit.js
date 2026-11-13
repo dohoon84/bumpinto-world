@@ -270,6 +270,7 @@ function animateLoaded(group, dt, motion, procedural) {
   const action = name ? bag.actions[name] : null;
   group.userData.clipName = name || '';
   group.userData.clipTime = action ? action.time : 0;
+  group.userData.clipDur = action ? action.getClip().duration : 1;
 }
 
 export async function withGlb(glbUrl, yaw, look, build, animate, heightMul = 1) {
