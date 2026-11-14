@@ -25,6 +25,12 @@ export function namsanGlobeEnabled(search = typeof location !== 'undefined' ? lo
   return new URLSearchParams(search || '').get('ntower') !== '0';
 }
 export const NAMSAN_LANDMARK = { id: 'ntower', ko: '남산서울타워', en: 'N Seoul Tower', landmark: true, namsan: true };
+// [myeongdong] 명동역(4호선) — 분당–잠실 노선 밖 역. 노선도 띠·가로 노선도 랜드마크 칸에 점선 칩으로 (남산과 같은 규칙: ?myeongdong=0 · ?ntower=0 이면 숨김)
+export const MYEONGDONG_LANDMARK = { id: 'myeongdong', ko: '명동', en: 'Myeongdong', lines: ['4호선'], offLine: true, myeongdong: true };
+export function myeongdongGlobeEnabled(search = typeof location !== 'undefined' ? location.search : '') {
+  const q = new URLSearchParams(search || '');
+  return q.get('myeongdong') !== '0' && q.get('ntower') !== '0';
+}
 export const BRANCH_STATIONS = [
   ...(pangyoEnabled() ? PANGYO_GLOBE_STATIONS : []),
   ...(migeumGlobeEnabled() ? MIGEUM_GLOBE_STATIONS : []),
@@ -47,6 +53,7 @@ export const CORRIDOR_STATION_COUNT = ALL_STATIONS.length + 1;
 // 입장 화면(로비 제목·로딩 문구)에 쓰는 역 이름 — ?at= 역 id 기준
 export function corridorStationLabel(id) {
   if (id === 'ntower' || id === 'namsan') return { ko: '남산서울타워', en: 'N Seoul Tower', short: 'N Seoul Tower' };
+  if (id === 'myeongdong') return { ko: '명동역', en: 'Myeongdong Station', short: 'Myeongdong' }; // [myeongdong] 4호선
   if (id === CORRIDOR_LANDMARK.id) return lotteClock.isOpen() ? { ko: CORRIDOR_LANDMARK.ko, en: CORRIDOR_LANDMARK.en, short: CORRIDOR_LANDMARK.en }
     : { ko: '잠실 랜드마크 공사현장', en: 'Jamsil Landmark site', short: 'Jamsil Landmark' }; // 오픈 전(lotteOpening.js)
   const s = ALL_STATIONS.find((x) => x.id === id);
@@ -215,7 +222,8 @@ export function mountGlobeCorridor({ root, camera, anchorSpot, globe, isEn, onEn
         <button type="button" class="gcm-close" aria-label="${en ? 'Close' : '닫기'}">✕</button></div>
       <div class="gcm-body" style="height:${L.height}px;width:${L.width}px"><svg width="${L.width}" height="${L.height}">${seg}${leaders}${dots}</svg>${labels}</div>
       <div class="gcm-ft">${en ? 'Real station positions (OpenStreetMap). Scroll to zoom the globe.' : '실제 역 위치(OpenStreetMap) 기준 · 휠로 지구본 확대/축소'}</div>
-      ${namsanGlobeEnabled() ? `<button type="button" class="gcm-stn" data-corridor-at="ntower" data-hot="ntower" style="position:relative;margin-top:8px;left:0;top:0">${en ? '🏙️ N Seoul Tower · start at the plaza' : '🏙️ 남산서울타워 · 광장에서 시작'}</button>` : ''}`;
+      ${namsanGlobeEnabled() ? `<button type="button" class="gcm-stn" data-corridor-at="ntower" data-hot="ntower" style="position:relative;margin-top:8px;left:0;top:0">${en ? '🏙️ N Seoul Tower · start at the plaza' : '🏙️ 남산서울타워 · 광장에서 시작'}</button>` : ''}
+      ${myeongdongGlobeEnabled() ? `<button type="button" class="gcm-stn" data-corridor-at="myeongdong" data-hot="myeongdong" style="position:relative;margin-top:8px;left:0;top:0">${en ? '🛍️ Myeongdong Stn. (Line 4) · start at Exit 6' : '🛍️ 명동역 (4호선) · 6번 출구에서 시작'}</button>` : ''}`;
     hot = null;
   }
   function setHot(id) {

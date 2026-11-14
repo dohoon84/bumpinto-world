@@ -87,7 +87,7 @@ function buildUmbrellaStand() {
   signTex.colorSpace = THREE.SRGBColorSpace;
   const signMesh = new THREE.Mesh(
     new THREE.PlaneGeometry(0.62, 0.27),
-    new THREE.MeshBasicMaterial({ map: signTex, side: THREE.DoubleSide }),
+    new THREE.MeshBasicMaterial({ map: signTex }), // [text-orientation] 앞면만 (DoubleSide 는 뒤에서 거울 글씨)
   );
   signMesh.position.set(0, 0.36, 0.34);
   g.add(signMesh);

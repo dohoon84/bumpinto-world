@@ -1,0 +1,552 @@
+// [myeongdong] 명동 거리 꾸밈: 1층 쇼윈도 + 간판(가로·세로 돌출) + 네온 띠 + 밤 빛 번짐, 가운데 노점 행렬, 가로등, 골목 위 전구 줄, 사람.
+//   draw: 간판/쇼윈도/노점메뉴 1 · 빛 번짐 1 · 노점 몸체 1 + 차양 1 · 가로등 1 · 빛 점 2 · 전선 1 · 사람 2 = 10 남짓
+import * as THREE from 'three';
+import { createMyeongdongNpc } from './myeongdongNpc.js'; // [myeongdong-npc]
+import { GeoBuf, hex3, CellGrid, distToSeg, mulberry, hash01, pointInRing } from './myeongdongGeo.js';
+import { SHOP_SIGNS, V_SIGNS, STALL_MENUS, SIGN_TYPES, X_BANNERS } from './myeongdongAtlas.js';
+import { stallFoodKinds } from './myeongdongFood.js';
+import { gameHour } from '../../weather.js';
+import { SHOP_ROOMS, createShopInteriorAtlas, createShopInteriorMaterial } from './myeongdongShops.js';
+
+const ALL_SIGNS = SHOP_SIGNS.map((_, i) => i);
+// OSM shop/amenity 값 → 1층 가게 종류
+const OSM_TYPE = {
+  cosmetics: 'beauty', beauty: 'beauty', perfumery: 'beauty',
+  clothes: 'fashion', fashion_accessories: 'fashion', sports: 'fashion', jewelry: 'fashion', department_store: 'fashion', mall: 'fashion', variety_store: 'fashion', optician: 'fashion',
+  shoes: 'shoes',
+  cafe: 'cafe', coffee: 'cafe', bakery: 'cafe', confectionery: 'cafe', chocolate: 'cafe',
+  convenience: 'convenience', supermarket: 'convenience',
+  pharmacy: 'pharmacy',
+  gift: 'souvenir', toys: 'souvenir', music: 'souvenir', stationery: 'souvenir', books: 'souvenir',
+  restaurant: 'restaurant', fast_food: 'restaurant',
+  bank: 'exchange', bureau_de_change: 'exchange',
+};
+// 명동 큰길(명동8길·명동길) 1층은 화장품 로드숍이 반쯤 — 실제 명동 거리 비율에 가깝게
+const MAIN_MIX = [['beauty', 0.42], ['fashion', 0.15], ['shoes', 0.06], ['cafe', 0.07], ['exchange', 0.06], ['convenience', 0.05], ['pharmacy', 0.05], ['souvenir', 0.08], ['restaurant', 0.06]];
+const SIDE_MIX = [['restaurant', 0.3], ['cafe', 0.14], ['convenience', 0.08], ['fashion', 0.15], ['beauty', 0.15], ['pharmacy', 0.05], ['souvenir', 0.07], ['exchange', 0.06]];
+const pickMix = (mix, r) => { let u = r(); for (const [k, w] of mix) { u -= w; if (u <= 0) return k; } return mix[0][0]; };
+
+
+const STALL_STREETS = new Set(['명동8길', '명동길', '명동10길']);
+const WALK_KINDS = new Set(['residential', 'pedestrian', 'living_street', 'service', 'footway', 'unclassified']);
+const CAR = new Set(['trunk', 'primary', 'secondary', 'tertiary', 'primary_link', 'secondary_link', 'tertiary_link']);
+
+function glowTexture() {
+  if (typeof document === 'undefined') return null;
+  const c = document.createElement('canvas'); c.width = c.height = 64;
+  const g = c.getContext('2d');
+  const r = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+  r.addColorStop(0, 'rgba(255,255,255,1)'); r.addColorStop(0.25, 'rgba(255,255,255,.75)'); r.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = r; g.fillRect(0, 0, 64, 64);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
+}
+function spillTexture() {
+  if (typeof document === 'undefined') return null;
+  const c = document.createElement('canvas'); c.width = 8; c.height = 64;
+  const g = c.getContext('2d');
+  const r = g.createLinearGradient(0, 64, 0, 0); // v=0(벽) 밝음 → v=1(바깥) 0
+  r.addColorStop(0, 'rgba(255,255,255,1)'); r.addColorStop(0.5, 'rgba(255,255,255,.35)'); r.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = r; g.fillRect(0, 0, 8, 64);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
+}
+
+/** 수직 사각형: 바닥 가운데 (x,y,z), 바깥 법선 (nx,nz), 너비 w, 높이 h */
+function wallQuad(buf, x, y, z, nx, nz, w, h, uv, col = null) {
+  const rx = nz, rz = -nx; // 보는 사람 오른쪽
+  const hw = w / 2;
+  buf.quad([x - rx * hw, y, z - rz * hw], [x + rx * hw, y, z + rz * hw], [x + rx * hw, y + h, z + rz * hw], [x - rx * hw, y + h, z - rz * hw], uv, col, [nx, 0, nz]);
+}
+
+function polyLen(pts) { let L = 0; for (let i = 1; i < pts.length; i++) L += Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]); return L; }
+function along(pts, cum, s) {
+  let i = 1; while (i < pts.length - 1 && cum[i] < s) i++;
+  const a = pts[i - 1], b = pts[i], seg = cum[i] - cum[i - 1] || 1, t = Math.max(0, Math.min(1, (s - cum[i - 1]) / seg));
+  const tx = (b[0] - a[0]) / seg, tz = (b[1] - a[1]) / seg;
+  return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, tx, tz];
+}
+
+export async function createMyeongdongStreet({ parent, data, land, atlas, ways, blds, roadAt, bldAt, station, tick }) {
+  const { heightAt } = land;
+  const g = new THREE.Group(); g.name = 'myeongdong-street'; parent.add(g);
+  const signBuf = new GeoBuf({ uv: true, color: false });
+  const spillBuf = new GeoBuf({ uv: true, color: true });
+  const cosmeticsShops = [];
+  const rnd = mulberry(20261113);
+  const U = (n) => atlas.uv(n);
+  const neonKeys = ['pink', 'cyan', 'violet', 'green', 'yellow', 'white', 'orange', 'red'];
+
+  // ---------- 1) 1층 가게(종류별 실내 · 간판 · X배너 · 직원) ----------
+  let nFront = 0, nSign = 0, nBlade = 0, nBanner = 0, nNeon = 0;
+  const typeCount = {};
+  const shopsOut = [];
+  const promoters = [];
+  const pickSign = (r) => ALL_SIGNS[Math.floor(r() * ALL_SIGNS.length)];
+  const pickTypeSign = (t, r) => { const L = SIGN_TYPES[t] || ALL_SIGNS; return L[Math.floor(r() * L.length)]; };
+  // 실제 OSM 가게 점(939곳 in 핵심 블록) 격자
+  const shopGrid = new CellGrid(12);
+  for (const sp of data.shops || []) shopGrid.add(sp, sp[0] - 0.1, sp[1] - 0.1, sp[0] + 0.1, sp[1] + 0.1);
+  const osmTypeAt = (x, z) => {
+    let best = null, bd = 7.5;
+    for (const sp of shopGrid.query(x, z)) { const d = Math.hypot(sp[0] - x, sp[1] - z); if (d < bd && OSM_TYPE[sp[2]]) { bd = d; best = OSM_TYPE[sp[2]]; } }
+    return best;
+  };
+  const roomTex = await createShopInteriorAtlas(tick ? (l) => tick(l) : null);
+  const room = createShopInteriorMaterial(roomTex);
+  const shopP = [], shopN = [], shopUV = [], shopR = [], shopI = [];
+  const shopQuad = (x, y, z, nx, nz, w, h, idx, D) => {
+    const rx = nz, rz = -nx, hw = w / 2, base = shopP.length / 3;
+    shopP.push(x - rx * hw, y, z - rz * hw, x + rx * hw, y, z + rz * hw, x + rx * hw, y + h, z + rz * hw, x - rx * hw, y + h, z - rz * hw);
+    for (let k = 0; k < 4; k++) { shopN.push(nx, 0, nz); shopR.push(idx, w, h, D); }
+    shopUV.push(0, 0, 1, 0, 1, 1, 0, 1);
+    shopI.push(base, base + 1, base + 2, base, base + 2, base + 3);
+  };
+  const basketUV = U('c-canopyRed');
+  for (const b of blds) {
+    if (!b.inBox) continue;
+    const o = b.o, r = mulberry(b.id % 2147483647);
+    const core = b.cx > -11230 && b.cx < -10720 && b.cz > -21990 && b.cz < -21455; // 명동 쇼핑 블록
+    for (let i = 0; i < o.length; i++) {
+      const a = o[i], c = o[(i + 1) % o.length];
+      const L = Math.hypot(c[0] - a[0], c[1] - a[1]);
+      if (L < 3.2) continue;
+      const tx = (c[0] - a[0]) / L, tz = (c[1] - a[1]) / L;
+      let nx = tz, nz = -tx;
+      const mx = (a[0] + c[0]) / 2, mz = (a[1] + c[1]) / 2;
+      if (pointInRing(mx + nx * 0.3, mz + nz * 0.3, o)) { nx = -nx; nz = -nz; }
+      if (bldAt(mx + nx * 1.6, mz + nz * 1.6)) continue; // 옆 건물에 붙은 벽
+      const w = roadAt(mx + nx * 4.5, mz + nz * 4.5, 1.5) || roadAt(mx + nx * 8, mz + nz * 8, 0.5);
+      if (!w) continue;
+      const big = CAR.has(w.k);
+      if (!core && !big && r() < 0.35) continue;
+      const nb = Math.max(1, Math.round(L / 5.2)), bw = L / nb;
+            for (let k = 0; k < nb; k++) {
+        const t = (k + 0.5) * bw;
+        const px = a[0] + tx * t, pz = a[1] + tz * t;
+        const gy = heightAt(px + nx * 0.8, pz + nz * 0.8);
+        const fx = px + nx * 0.05, fz = pz + nz * 0.05;
+        const blank = r() < (core ? 0.06 : 0.22);
+        const mainSt = STALL_STREETS.has(w.n) || (core && (w.k === 'pedestrian' || w.k === 'living_street'));
+        let type = osmTypeAt(px + nx * 1.5, pz + nz * 1.5);
+        if (type === 'restaurant' && mainSt && r() < 0.65) type = null; // OSM 식당 점은 위층 식당이 많다
+        if (!type) type = pickMix(core && (mainSt || r() < 0.5) ? MAIN_MIX : SIDE_MIX, r);
+        if (!blank) {
+          const rooms = SHOP_ROOMS[type], ri = rooms[Math.floor(r() * rooms.length)];
+          shopQuad(fx, gy - 0.15, fz, nx, nz, bw - 0.25, 3.35, ri, type === 'exchange' ? 2.8 : 3.6 + r() * 1.2);
+          nFront++; typeCount[type] = (typeCount[type] || 0) + 1;
+          // 빛 번짐 (밤에 거리 바닥으로)
+          const sx = px + nx * 0.2, sz = pz + nz * 0.2, rx = nz, rz = -nx, hw = (bw - 0.2) / 2, D = 3.4;
+          const y0 = gy + 0.16;
+          const ca = hex3(type === 'beauty' ? ['#ffe3f1', '#fff4e0', '#e4f7ff'][Math.floor(r() * 3)] : type === 'cafe' || type === 'restaurant' ? '#ffe0b0' : ['#fff4e0', '#e4f7ff', '#fff9d6'][Math.floor(r() * 3)]);
+          spillBuf.quad([sx + rx * hw, y0, sz + rz * hw], [sx - rx * hw, y0, sz - rz * hw], [sx - rx * hw + nx * D, y0, sz - rz * hw + nz * D], [sx + rx * hw + nx * D, y0, sz + rz * hw + nz * D], [0, 0, 1, 1], ca, [0, 1, 0]);
+          if (core) shopsOut.push({ type, x: +(px + nx * 2.4).toFixed(1), z: +(pz + nz * 2.4).toFixed(1), face: +Math.atan2(nx, nz).toFixed(3), w: +(bw - 0.25).toFixed(2) });
+          // 화장품 가게 앞: X배너 입간판 · 바구니 든 직원(호객)
+          if (type === 'beauty' && bw > 3.2 && r() < (core ? 0.55 : 0.25)) {
+            const side = r() < 0.5 ? -1 : 1, ox = px + rx * side * (bw * 0.38) + nx * 0.9, oz = pz + rz * side * (bw * 0.38) + nz * 0.9;
+            const by = heightAt(ox, oz), xb = U('xb' + Math.floor(r() * X_BANNERS.length));
+            wallQuad(signBuf, ox, by + 0.12, oz, nx, nz, 0.62, 1.86, xb);
+            wallQuad(signBuf, ox - nx * 0.02, by + 0.12, oz - nz * 0.02, -nx, -nz, 0.62, 1.86, xb);
+            signBuf.box(ox - nx * 0.12, by + 0.06, oz - nz * 0.12, 0.7, 0.12, 0.42, Math.atan2(nx, nz), U('c-dark'));
+            nBanner++;
+          }
+          if (type === 'beauty' && core && r() < 0.3) {
+            const side = r() < 0.5 ? -1 : 1, ox = px - rx * side * (bw * 0.25) + nx * 1.4, oz = pz - rz * side * (bw * 0.25) + nz * 1.4;
+            if (!roadAt(ox, oz, 0.5, CAR)) {
+              const ry = Math.atan2(nx, nz), c = Math.cos(ry), s2 = Math.sin(ry), gy2 = heightAt(ox, oz);
+              promoters.push([ox, oz, ry]);
+              const lx = 0.4, lz = 0.12; // 오른손 바구니
+              signBuf.box(ox + lx * c + lz * s2, gy2 + 0.82, oz - lx * s2 + lz * c, 0.34, 0.2, 0.24, ry, basketUV);
+            }
+          }
+        }
+        if (!blank && r() < 0.9) {
+          const si = pickTypeSign(type, r);
+          const sy = gy + 3.3, sh = 1.05;
+          wallQuad(signBuf, px + nx * 0.42, sy, pz + nz * 0.42, nx, nz, bw - 0.15, sh, U('h' + si));
+          // 간판 밑면 (어두운 판)
+          const rx = nz, rz = -nx, hw = (bw - 0.15) / 2;
+          signBuf.quad([px - rx * hw, sy, pz - rz * hw], [px + rx * hw, sy, pz + rz * hw], [px + rx * hw + nx * 0.42, sy, pz + rz * hw + nz * 0.42], [px - rx * hw + nx * 0.42, sy, pz - rz * hw + nz * 0.42], U('c-dark'), null, [0, -1, 0]);
+          // 네온 띠
+          if (r() < 0.6) wallQuad(signBuf, px + nx * 0.44, sy - 0.1, pz + nz * 0.44, nx, nz, bw - 0.15, 0.07, U('neon-' + neonKeys[Math.floor(r() * neonKeys.length)]));
+          nSign++;
+          if (type === 'beauty' && core) cosmeticsShops.push({ x: +(px + nx * 2.2).toFixed(1), z: +(pz + nz * 2.2).toFixed(1), face: Math.atan2(-nx, -nz), sign: SHOP_SIGNS[si][1] });
+        }
+      }
+      // 위층 가로 간판 (명동 특유의 층층 간판)
+      const upFloors = Math.floor((b.top - heightAt(mx, mz) - 4.6) / 3.4);
+      if (upFloors >= 1 && L >= 5) {
+        for (let f = 1; f <= Math.min(upFloors, core ? 5 : 2); f++) {
+          if (r() > (core ? 0.55 : 0.25)) continue;
+          const span = L * (0.5 + r() * 0.4), off = (L - span) * r();
+          const px = a[0] + tx * (off + span / 2), pz = a[1] + tz * (off + span / 2);
+          const gy = heightAt(mx + nx, mz + nz);
+          wallQuad(signBuf, px + nx * 0.12, gy + 3.4 * f + 1.6, pz + nz * 0.12, nx, nz, span, 1.2, U('h' + pickSign(r)));
+          nSign++;
+        }
+      }
+      // 세로 돌출 간판
+      const floors = Math.floor((b.top - heightAt(mx, mz)) / 3.4);
+      if (floors >= 3 && L >= 5 && r() < (core ? 0.7 : 0.35)) {
+        const end = r() < 0.5 ? 0.6 : L - 0.6;
+        const ex = a[0] + tx * end, ez = a[1] + tz * end;
+        const gy = heightAt(ex + nx, ez + nz);
+        const h = Math.min(10, (floors - 1.6) * 3.4), y0 = gy + 4.7;
+        const vi = Math.floor(r() * V_SIGNS.length);
+        const cx = ex + nx * 0.68, cz = ez + nz * 0.68;
+        // 양면: 법선 = ±(벽 방향)
+        wallQuad(signBuf, cx + tx * 0.09, y0, cz + tz * 0.09, tx, tz, 0.95, h, U('v' + vi));
+        wallQuad(signBuf, cx - tx * 0.09, y0, cz - tz * 0.09, -tx, -tz, 0.95, h, U('v' + vi));
+        wallQuad(signBuf, cx + nx * 0.475, y0, cz + nz * 0.475, nx, nz, 0.18, h, U('neon-' + neonKeys[Math.floor(r() * neonKeys.length)]));
+        nBlade++;
+      }
+      // [myeongdong-detail] 골목 네온 돌출 간판: 좁은 골목 벽을 따라 2~3층 높이 작은 세로 간판 + 네온 테두리 (signBuf 에 합쳐 드로우 0 추가)
+      if (core && !big && floors >= 2 && L >= 6) {
+        for (let s = 2.6 + r() * 3; s < L - 2.4; s += 6.5 + r() * 5) {
+          if (r() < 0.3) continue;
+          const ex = a[0] + tx * s, ez = a[1] + tz * s, gy = heightAt(ex + nx, ez + nz);
+          const h = 2.3 + r() * Math.min(2.2, Math.max(0, floors - 2) * 0.9), y0 = gy + 4.65, bwid = 0.66, out = 0.52;
+          const cx = ex + nx * out, cz = ez + nz * out;
+          const vu = U('v' + Math.floor(r() * V_SIGNS.length)), neon = U('neon-' + neonKeys[Math.floor(r() * neonKeys.length)]);
+          for (const sg of [1, -1]) {
+            const fx = cx + tx * 0.07 * sg, fz = cz + tz * 0.07 * sg, ox = tx * sg, oz = tz * sg;
+            wallQuad(signBuf, fx, y0, fz, ox, oz, bwid, h, vu);
+            const qx = fx + ox * 0.018, qz = fz + oz * 0.018; // 네온관: 면보다 살짝 앞
+            for (const e of [-1, 1]) wallQuad(signBuf, qx + nx * e * (bwid / 2 - 0.03), y0, qz + nz * e * (bwid / 2 - 0.03), ox, oz, 0.05, h, neon);
+            wallQuad(signBuf, qx, y0 + h - 0.06, qz, ox, oz, bwid, 0.05, neon);
+            wallQuad(signBuf, qx, y0 + 0.01, qz, ox, oz, bwid, 0.05, neon);
+          }
+          wallQuad(signBuf, cx + nx * (bwid / 2), y0, cz + nz * (bwid / 2), nx, nz, 0.14, h, neon);
+          // 벽 받침쇠 (위·아래)
+          for (const yy of [y0 + h - 0.35, y0 + 0.3]) signBuf.box(ex + nx * 0.1, yy, ez + nz * 0.1, 0.05, 0.05, 0.22, Math.atan2(nx, nz), U('c-dark'));
+          nNeon++;
+        }
+      }
+    }
+    await tick?.('md-signs');
+  }
+
+  // ---------- 2) 노점 행렬 (명동8길·명동길·명동10길 가운데) ----------
+  const stallSpots = [];
+  const block = new CellGrid(16);
+  const blockers = [];
+  for (const w of ways) {
+    if (!STALL_STREETS.has(w.n)) continue;
+    const pts = w.pts, cum = [0];
+    for (let i = 1; i < pts.length; i++) cum.push(cum[i - 1] + Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]));
+    const L = cum[cum.length - 1];
+    for (let s = 6; s < L - 6; s += 8.5) {
+      const [x, z, tx, tz] = along(pts, cum, s);
+      if (!land.inBox(x, z, -20)) continue;
+      if (roadAt(x, z, 9, CAR)) continue; // 퇴계로·을지로 입구는 비운다
+      // 교차로(다른 이름 길이 7 m 안)는 비운다
+      let jn = false;
+      for (const q of ways) {
+        if (q === w || q.n === w.n || q.k === 'footway' || q.k === 'steps') continue;
+        for (let i = 1; i < q.pts.length && !jn; i++) if (distToSeg(x, z, q.pts[i - 1][0], q.pts[i - 1][1], q.pts[i][0], q.pts[i][1]) < 7) jn = true;
+        if (jn) break;
+      }
+      if (jn) continue;
+      if (bldAt(x, z, 2.2)) continue;
+      if (station?.near?.(x, z, 6)) continue;
+      let menu = Math.floor(hash01(Math.round(x * 10), Math.round(z * 10)) * STALL_MENUS.length);
+      const prev = stallSpots[stallSpots.length - 1];
+      if (prev && prev.menu === menu) menu = (menu + 1 + Math.floor(hash01(Math.round(z), 3) * 5)) % STALL_MENUS.length; // 옆 노점과 메뉴 겹치지 않게
+      // 실제 명동 노점: 대부분 늦은 오후(16시)부터, 일부만 낮(11시)부터
+      stallSpots.push({ x, z, tx, tz, w, menu, day: hash01(Math.round(x * 7), Math.round(z * 7)) < 0.35 });
+    }
+  }
+  stallSpots.sort((a, b) => (b.day ? 1 : 0) - (a.day ? 1 : 0)); // 낮 노점 먼저 → 낮엔 앞부분만 그린다(drawRange / count)
+  const stallN = stallSpots.length, stallDayN = stallSpots.filter((s) => s.day).length;
+  const bodyBuf = new GeoBuf({ uv: false, color: true });
+  bodyBuf.box(0, 0.8, 0, 2.5, 0.9, 1.3, 0, undefined, hex3('#c4c9cf'));
+  bodyBuf.box(0, 1.28, 0, 2.62, 0.06, 1.46, 0, undefined, hex3('#e3e6ea'));
+  for (const sz of [-0.66, 0.66]) bodyBuf.box(0, 0.62, sz, 2.5, 0.18, 0.02, 0, undefined, hex3('#ffd23f'));
+  for (const sx of [-1.05, 1.05]) for (const sz of [-0.55, 0.55]) bodyBuf.box(sx, 0.17, sz, 0.3, 0.3, 0.12, 0, undefined, hex3('#1c1c1f'));
+  for (const sx of [-1.25, 1.25]) for (const sz of [-0.68, 0.68]) bodyBuf.box(sx, 1.95, sz, 0.05, 1.3, 0.05, 0, undefined, hex3('#8d939b'));
+  // 가스통 · 아이스박스 (판매대 밑)
+  bodyBuf.box(0.75, 0.25, -0.75, 0.3, 0.5, 0.3, 0, undefined, hex3('#c0392b'));
+  bodyBuf.box(-0.7, 0.2, 0.78, 0.5, 0.36, 0.34, 0, undefined, hex3('#2e86de'));
+  const canBuf = new GeoBuf({ uv: false, color: true });
+  // 박공 천막 (줄무늬: 색 / 흰색 번갈아) + 앞뒤 늘어진 가장자리
+  for (let k = 0; k < 6; k++) {
+    const x0 = -1.5 + k * 0.5, x1 = x0 + 0.5, c = k % 2 ? [1, 1, 1] : [0.82, 0.82, 0.82];
+    canBuf.quad([x0, 2.5, 1.0], [x1, 2.5, 1.0], [x1, 2.95, 0], [x0, 2.95, 0], undefined, k % 2 ? [0.97, 0.95, 0.9] : c);
+    canBuf.quad([x1, 2.5, -1.0], [x0, 2.5, -1.0], [x0, 2.95, 0], [x1, 2.95, 0], undefined, k % 2 ? [0.97, 0.95, 0.9] : c);
+  }
+  for (const sz of [-1.0, 1.0]) canBuf.box(0, 2.4, sz, 3.0, 0.2, 0.03, 0, undefined, [0.86, 0.86, 0.86]);
+  const stallMat = new THREE.MeshLambertMaterial({ vertexColors: true });
+  const canMat = new THREE.MeshLambertMaterial({ vertexColors: true, emissive: '#ffffff', emissiveIntensity: 0, side: THREE.DoubleSide });
+  const stallBody = new THREE.InstancedMesh(bodyBuf.build(), stallMat, Math.max(1, stallN));
+  const stallCan = new THREE.InstancedMesh(canBuf.build(), canMat, Math.max(1, stallN));
+  stallBody.name = 'myeongdong-stall-body'; stallCan.name = 'myeongdong-stall-canopy';
+  const canCols = ['#d62828', '#1d4e89', '#2a9d8f', '#f4a261', '#e76f51', '#8338ec', '#ff006e', '#ffbe0b'].map((c) => new THREE.Color(c));
+  const M = new THREE.Matrix4(), Q = new THREE.Quaternion(), Y = new THREE.Vector3(0, 1, 0), S1 = new THREE.Vector3(1, 1, 1), V = new THREE.Vector3();
+  const bulbs = [], bulbCols = [];
+  const stallBulbs = [], stallBulbCols = [];
+  const vendors = [];
+  // 음식(종류별 로컬 지오메트리 × 노점 행렬) + 메뉴판·가격표(아틀라스) — 각 1 메시, 낮엔 앞부분만
+  const kinds = stallFoodKinds();
+  const FS = 1.25, FSXZ = 1.08, FTOP = 1.31; // 음식은 판매대 윗면 기준 1.25배 높이(멀리서도 알아보게)
+  const foodP = [], foodN = [], foodC = [], foodI = [];
+  const tagBuf = new GeoBuf({ uv: true, color: false });
+  let foodDayIdx = 0, tagDayIdx = 0;
+  stallSpots.forEach((st, i) => {
+    const gy = heightAt(st.x, st.z);
+    const ry = Math.atan2(-st.tz, st.tx);
+    Q.setFromAxisAngle(Y, ry); V.set(st.x, gy, st.z);
+    M.compose(V, Q, S1); stallBody.setMatrixAt(i, M); stallCan.setMatrixAt(i, M);
+    stallCan.setColorAt(i, canCols[i % canCols.length]);
+    const e = M.elements, kd = kinds[st.menu % kinds.length], base = foodP.length / 3;
+    for (let k = 0; k < kd.p.length; k += 3) {
+      const x = kd.p[k] * FSXZ, y = FTOP + (kd.p[k + 1] - FTOP) * FS, z = kd.p[k + 2] * FSXZ, nx0 = kd.n[k], ny0 = kd.n[k + 1], nz0 = kd.n[k + 2];
+      foodP.push(e[0] * x + e[4] * y + e[8] * z + e[12], e[1] * x + e[5] * y + e[9] * z + e[13], e[2] * x + e[6] * y + e[10] * z + e[14]);
+      foodN.push(e[0] * nx0 + e[8] * nz0, ny0, e[2] * nx0 + e[10] * nz0);
+      foodC.push(kd.c[k], kd.c[k + 1], kd.c[k + 2]);
+    }
+    for (const q of kd.i) foodI.push(base + q);
+    // 메뉴판(양쪽) · 세운 가격표(양쪽)
+    const nx = -st.tz, nz = st.tx; // 길 오른쪽(로컬 +z 쪽 = 노점 옆면)
+    for (const s2 of [1, -1]) {
+      // 메뉴판은 천막 처마 밑(판매대 위 음식이 보이게 위로)
+      wallQuad(tagBuf, st.x + nx * s2 * 1.02, gy + 1.98, st.z + nz * s2 * 1.02, nx * s2, nz * s2, 2.3, 0.46, U('menu' + st.menu));
+      const tx0 = st.x + nx * s2 * 0.6 + st.tx * 0.95, tz0 = st.z + nz * s2 * 0.6 + st.tz * 0.95;
+      wallQuad(tagBuf, tx0, gy + 1.33, tz0, nx * s2, nz * s2, 0.34, 0.2, U('tag' + st.menu));
+    }
+    for (const k of [-1, 0, 1]) { stallBulbs.push(st.x + st.tx * k * 0.95, gy + 2.36, st.z + st.tz * k * 0.95); stallBulbCols.push(1, 0.82, 0.55); }
+    // 장수(노점 주인) — 한쪽 옆
+    vendors.push([st.x - nx * 0.95 + st.tx * 0.6, st.z - nz * 0.95 + st.tz * 0.6, Math.atan2(nx, nz)]);
+    const blk = { x: st.x, z: st.z, tx: st.tx, tz: st.tz, hl: 1.4, hd: 0.8, i };
+    blockers.push(blk); block.add(blk, st.x - 2, st.z - 2, st.x + 2, st.z + 2);
+    if (i === stallDayN - 1) { foodDayIdx = foodI.length; tagDayIdx = tagBuf.i.length; }
+  });
+  stallBody.instanceMatrix.needsUpdate = true; stallCan.instanceMatrix.needsUpdate = true;
+  if (stallCan.instanceColor) stallCan.instanceColor.needsUpdate = true;
+  stallBody.count = stallN; stallCan.count = stallN;
+  stallBody.computeBoundingSphere(); stallCan.computeBoundingSphere();
+  if (stallN) g.add(stallBody, stallCan);
+  let foodMesh = null, tagMesh = null;
+  // 노점 음식: 전구 아래라 제 색으로 빛나게(정점색 × uGlow 를 자체 발광에 더함 — 진짜 조명 없이)
+  const foodMat = new THREE.MeshLambertMaterial({ vertexColors: true });
+  const foodGlow = { value: 0.12 };
+  foodMat.onBeforeCompile = (sh) => {
+    sh.uniforms.uGlow = foodGlow;
+    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nuniform float uGlow;')
+      .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += diffuseColor.rgb * uGlow;');
+  };
+  foodMat.customProgramCacheKey = () => 'md-stall-food-v1';
+  if (foodP.length) {
+    const fg = new THREE.BufferGeometry();
+    fg.setAttribute('position', new THREE.Float32BufferAttribute(foodP, 3));
+    fg.setAttribute('normal', new THREE.Float32BufferAttribute(foodN, 3));
+    fg.setAttribute('color', new THREE.Float32BufferAttribute(foodC, 3));
+    fg.setIndex(foodP.length / 3 > 65535 ? new THREE.Uint32BufferAttribute(foodI, 1) : new THREE.Uint16BufferAttribute(foodI, 1));
+    fg.computeBoundingSphere();
+    foodMesh = new THREE.Mesh(fg, foodMat); foodMesh.name = 'myeongdong-stall-food'; g.add(foodMesh);
+  }
+  const tagMat = new THREE.MeshLambertMaterial({ map: atlas.texture, emissive: '#ffffff', emissiveMap: atlas.texture, emissiveIntensity: 0.3 });
+  const tagGeo = tagBuf.build();
+  if (tagGeo) { tagMesh = new THREE.Mesh(tagGeo, tagMat); tagMesh.name = 'myeongdong-stall-menus'; g.add(tagMesh); }
+  const foodTris = foodI.length / 3;
+  await tick?.('md-stalls');
+
+  // ---------- 3) 골목 위 전구 줄 (지그재그) ----------
+  const lineP = [];
+  for (const w of ways) {
+    if (!STALL_STREETS.has(w.n) && w.n !== '명동2길' && w.n !== '명동8나길') continue;
+    const pts = w.pts, cum = [0];
+    for (let i = 1; i < pts.length; i++) cum.push(cum[i - 1] + Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]));
+    const L = cum[cum.length - 1];
+    const dense = w.n === '명동8길'; // [myeongdong-detail] 명동8길: 촘촘한 X자 전구 줄
+    for (let s = 4; s < L - 8; s += dense ? 5.5 : 11) for (let flip = 0; flip < (dense ? 2 : 1); flip++) {
+      const [x0, z0, tx0, tz0] = along(pts, cum, s);
+      const [x1, z1, tx1, tz1] = along(pts, cum, s + 7);
+      if (!land.inBox(x0, z0, -10) || roadAt(x0, z0, 6, CAR)) continue;
+      const hw = (w.w / 2 + 1.4) * (flip ? -1 : 1);
+      const A = [x0 - tz0 * hw, z0 + tx0 * hw], Bp = [x1 + tz1 * hw, z1 - tx1 * hw];
+      const ya = heightAt(A[0], A[1]) + 6.3, yb = heightAt(Bp[0], Bp[1]) + 6.3;
+      const D = Math.hypot(Bp[0] - A[0], Bp[1] - A[1]), n = Math.max(4, Math.round(D / (dense ? 0.6 : 0.75)));
+      const lift = flip ? 0.35 : 0; // 두 줄이 겹치지 않게
+      let prev = null;
+      const warm = hash01(Math.round(x0) + flip * 7, Math.round(z0)) < (dense ? 0.75 : 0.65);
+      for (let k = 0; k <= n; k++) {
+        const t = k / n, sag = Math.sin(t * Math.PI) * 0.9;
+        const p = [A[0] + (Bp[0] - A[0]) * t, ya + (yb - ya) * t - sag + lift, A[1] + (Bp[1] - A[1]) * t];
+        if (prev) lineP.push(prev[0], prev[1], prev[2], p[0], p[1], p[2]);
+        prev = p;
+        if (k > 0 && k < n) {
+          bulbs.push(p[0], p[1] - 0.08, p[2]);
+          if (warm) bulbCols.push(1, 0.8, 0.5);
+          else { const c = new THREE.Color().setHSL((k * 0.13 + t) % 1, 0.9, 0.62); bulbCols.push(c.r, c.g, c.b); }
+        }
+      }
+    }
+  }
+  const glowTex = glowTexture();
+  let wires = null;
+  if (lineP.length) {
+    const lg = new THREE.BufferGeometry(); lg.setAttribute('position', new THREE.Float32BufferAttribute(lineP, 3));
+    wires = new THREE.LineSegments(lg, new THREE.LineBasicMaterial({ color: '#1d1f24' }));
+    wires.name = 'myeongdong-festoon-wires'; g.add(wires);
+  }
+  const festoonBulbN = bulbs.length / 3;
+  for (let k = 0; k < stallBulbs.length; k++) bulbs.push(stallBulbs[k]);
+  for (let k = 0; k < stallBulbCols.length; k++) bulbCols.push(stallBulbCols[k]);
+  const bulbGeo = new THREE.BufferGeometry();
+  bulbGeo.setAttribute('position', new THREE.Float32BufferAttribute(bulbs, 3));
+  bulbGeo.setAttribute('color', new THREE.Float32BufferAttribute(bulbCols, 3));
+  const bulbMat = new THREE.PointsMaterial({ size: 0.55, map: glowTex, vertexColors: true, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0.35, toneMapped: false });
+  const bulbPts = new THREE.Points(bulbGeo, bulbMat); bulbPts.name = 'myeongdong-bulbs'; g.add(bulbPts);
+  await tick?.('md-festoons');
+
+  // ---------- 4) 가로등 (차도변) ----------
+  const lampSpots = [];
+  for (const w of ways) {
+    if (!CAR.has(w.k)) continue;
+    const pts = w.pts, cum = [0];
+    for (let i = 1; i < pts.length; i++) cum.push(cum[i - 1] + Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]));
+    const L = cum[cum.length - 1];
+    const sides = w.ow ? [1] : [1, -1];
+    for (let s = 10; s < L; s += 32) {
+      const [x, z, tx, tz] = along(pts, cum, s);
+      if (!land.inApron(x, z, -4)) continue;
+      for (const sd of sides) {
+        const off = sd * (w.w / 2 + 1.0);
+        const lx = x - tz * off, lz = z + tx * off;
+        if (bldAt(lx, lz, 0.6) || roadAt(lx, lz, 0.2, CAR)) continue;
+        lampSpots.push([lx, lz, Math.atan2(sd * tz, -sd * tx)]);
+      }
+    }
+  }
+  const lampBuf = new GeoBuf({ uv: false, color: true });
+  lampBuf.box(0, 4.2, 0, 0.18, 8.4, 0.18, 0, undefined, hex3('#4a4f57'));
+  lampBuf.box(0, 8.3, 0.85, 0.12, 0.12, 1.8, 0, undefined, hex3('#4a4f57'));
+  lampBuf.box(0, 8.2, 1.7, 0.36, 0.16, 0.7, 0, undefined, hex3('#d7dbe0'));
+  const lampMesh = new THREE.InstancedMesh(lampBuf.build(), new THREE.MeshLambertMaterial({ vertexColors: true }), Math.max(1, lampSpots.length));
+  lampMesh.name = 'myeongdong-lamps';
+  const lampGlowP = [];
+  lampSpots.forEach(([x, z, ry], i) => {
+    const gy = heightAt(x, z);
+    Q.setFromAxisAngle(Y, ry); V.set(x, gy, z); M.compose(V, Q, S1); lampMesh.setMatrixAt(i, M);
+    lampGlowP.push(x + Math.sin(ry) * 1.7, gy + 8.05, z + Math.cos(ry) * 1.7);
+  });
+  lampMesh.count = lampSpots.length; lampMesh.instanceMatrix.needsUpdate = true; lampMesh.computeBoundingSphere();
+  if (lampSpots.length) g.add(lampMesh);
+  const lgGeo = new THREE.BufferGeometry(); lgGeo.setAttribute('position', new THREE.Float32BufferAttribute(lampGlowP, 3));
+  const lampGlowMat = new THREE.PointsMaterial({ size: 5.5, map: glowTex, color: '#ffd9a0', transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0, toneMapped: false });
+  const lampGlow = new THREE.Points(lgGeo, lampGlowMat); lampGlow.name = 'myeongdong-lamp-glow'; lampGlow.visible = false; g.add(lampGlow);
+
+  // ---------- 5) 간판 메시 (아틀라스 1장) + 빛 번짐 ----------
+  const signMat = new THREE.MeshLambertMaterial({ map: atlas.texture, emissive: '#ffffff', emissiveMap: atlas.texture, emissiveIntensity: 0.32 });
+  const signGeo = signBuf.build();
+  const signs = signGeo ? new THREE.Mesh(signGeo, signMat) : null;
+  if (signs) { signs.name = 'myeongdong-signs'; g.add(signs); }
+  // 1층 가게 실내(인테리어 매핑) — 사각형 묶음 1개
+  let shopMesh = null;
+  if (shopP.length) {
+    const sg = new THREE.BufferGeometry();
+    sg.setAttribute('position', new THREE.Float32BufferAttribute(shopP, 3));
+    sg.setAttribute('normal', new THREE.Float32BufferAttribute(shopN, 3));
+    sg.setAttribute('uv', new THREE.Float32BufferAttribute(shopUV, 2));
+    sg.setAttribute('aRoom', new THREE.Float32BufferAttribute(shopR, 4));
+    sg.setIndex(shopP.length / 3 > 65535 ? new THREE.Uint32BufferAttribute(shopI, 1) : new THREE.Uint16BufferAttribute(shopI, 1));
+    sg.computeBoundingSphere();
+    shopMesh = new THREE.Mesh(sg, room.material); shopMesh.name = 'myeongdong-shopfronts'; g.add(shopMesh);
+  }
+  const spillMat = new THREE.MeshBasicMaterial({ map: spillTexture(), vertexColors: true, transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 });
+  const spillGeo = spillBuf.build();
+  const spill = spillGeo ? new THREE.Mesh(spillGeo, spillMat) : null;
+  if (spill) { spill.name = 'myeongdong-spill'; spill.visible = false; g.add(spill); }
+  await tick?.('md-signmesh');
+
+  // ---------- 6) 사람 (관광객·쇼핑객) ----------
+  const paths = [];
+  for (const w of ways) {
+    if (!w.pts.some(([x, z]) => land.inBox(x, z, -15))) continue;
+    if (WALK_KINDS.has(w.k) || w.k === 'pedestrian') {
+      const L = polyLen(w.pts); if (L < 12) continue;
+      const weight = (STALL_STREETS.has(w.n) ? 5 : w.n && /명동/.test(w.n) ? 2.5 : 1) * L;
+      paths.push({ pts: w.pts, w: Math.max(2, w.w), weight, stall: STALL_STREETS.has(w.n) });
+    } else if (CAR.has(w.k)) {
+      for (const sd of [-1, 1]) {
+        const off = offsetPts(w.pts, sd * (w.w / 2 + 1.7));
+        const L = polyLen(off); if (L < 12) continue;
+        paths.push({ pts: off, w: 1.6, weight: L * 0.6, stall: false });
+      }
+    }
+  }
+  for (const p of paths) { p.cum = [0]; for (let i = 1; i < p.pts.length; i++) p.cum.push(p.cum[i - 1] + Math.hypot(p.pts[i][0] - p.pts[i - 1][0], p.pts[i][1] - p.pts[i - 1][1])); p.L = p.cum[p.cum.length - 1]; }
+  const totalW = paths.reduce((s, p) => s + p.weight, 0);
+  const mobile = typeof window !== 'undefined' && (window.matchMedia?.('(pointer: coarse)').matches || /mobile/i.test(location.search));
+  // [myeongdong-npc] 게임 표준 아바타 군중 (createAvatar/animateAvatar + buildCrowd). 예전 상자 몸 사람(personGeos)은 뺐다.
+  for (const p of paths) p.weight = p.weight || p.L;
+  const npc = paths.length ? createMyeongdongNpc({ parent: g, paths, vendors, promoters, heightAt, openStalls: () => openN, mobile }) : null;
+  const NP = npc ? npc.stats.pool : 0;
+  function updatePeds(dt, pp) {
+    if (!npc) return;
+    if (!pp || Math.hypot(Math.max(0, land.bounds.x0 - pp.x, pp.x - land.bounds.x1), Math.max(0, land.bounds.z0 - pp.z, pp.z - land.bounds.z1)) > 260) { npc.sleep(); return; }
+    npc.update(dt, pp.x, pp.z);
+  }
+  // ---------- 노점 영업시간: 16:00–23:30 전부, 11:00–16:00 낮 노점(약 35%)만, 그 밖엔 닫음 ----------
+  //   ?mdstalls=all|day|none 로 고정. 닫힌 노점은 그리지 않고(instance count · drawRange) 막지도 않는다.
+  const forceStalls = typeof location !== 'undefined' ? new URLSearchParams(location.search).get('mdstalls') : null;
+  let openN = stallN, hourT = 0;
+  const stallModeAt = (h) => (forceStalls === 'all' || forceStalls === 'day' || forceStalls === 'none' ? forceStalls : h >= 16 && h < 23.5 ? 'all' : h >= 11 && h < 16 ? 'day' : 'none');
+  function applyStallHours(mode) {
+    const n = mode === 'all' ? stallN : mode === 'day' ? stallDayN : 0;
+    if (n === openN) return;
+    openN = n;
+    stallBody.count = stallCan.count = n;
+    if (foodMesh) foodMesh.geometry.setDrawRange(0, n === stallN ? Infinity : n === stallDayN ? foodDayIdx : 0);
+    if (tagMesh) tagMesh.geometry.setDrawRange(0, n === stallN ? Infinity : n === stallDayN ? tagDayIdx : 0);
+    bulbGeo.setDrawRange(0, festoonBulbN + n * 3);
+  }
+  const hourNow = () => { try { return gameHour(); } catch { return 20; } };
+  applyStallHours(stallModeAt(hourNow()));
+
+  function isBlocked(x, z, r = 0.4) {
+    for (const b of block.query(x, z)) {
+      const dx = x - b.x, dz = z - b.z;
+      const u = Math.abs(dx * b.tx + dz * b.tz), v = Math.abs(-dx * b.tz + dz * b.tx);
+      if (b.i >= openN) continue; // 닫은 노점
+      if (u < b.hl + r && v < b.hd + r) return true;
+    }
+    return false;
+  }
+
+  return {
+    group: g,
+    cosmeticsShops,
+    npc,
+    stallSpots: stallSpots.map((s) => ({ x: +s.x.toFixed(1), z: +s.z.toFixed(1), menu: STALL_MENUS[s.menu][1], kind: s.menu, day: s.day, tx: +s.tx.toFixed(3), tz: +s.tz.toFixed(3) })),
+    get stallsOpen() { return openN; },
+    isBlocked,
+    setNight(v) {
+      // 가게 실내: 낮엔 유리 반사 + 약간 어둡게, 밤엔 실내가 주인공(1 을 넘지 않게 → 번짐 없음)
+      room.uniforms.uBright.value = 0.84 + v * 0.1;
+      room.uniforms.uRefl.value = 1 - v * 0.8;
+      room.uniforms.uSky.value.set(v > 0.5 ? '#1a2233' : '#bcd3e6');
+      signMat.emissiveIntensity = 0.32 + v * 0.78;
+      signMat.color.setScalar(1 - v * 0.35);
+      spillMat.opacity = v * 0.5; if (spill) spill.visible = v > 0.02;
+      bulbMat.opacity = 0.35 + v * 0.65; bulbMat.size = 0.55 + v * 0.35;
+      lampGlowMat.opacity = v * 0.8; lampGlow.visible = v > 0.02;
+      canMat.emissiveIntensity = v * 0.22;
+      foodGlow.value = 0.12 + v * 0.6; // 노점 전구 아래 음식
+      tagMat.emissiveIntensity = 0.3 + v * 0.7; tagMat.color.setScalar(1 - v * 0.35);
+      stallMat.color.setScalar(1 - v * 0.25);
+    },
+    update(dt, pp) {
+      updatePeds(dt, pp);
+      hourT -= dt; if (hourT <= 0) { hourT = 2; applyStallHours(stallModeAt(hourNow())); }
+    },
+    shops: shopsOut,
+    stats() { return { types: typeCount, banners: nBanner, promoters: promoters.length, fronts: nFront, signs: nSign, blades: nBlade, neonBlades: nNeon, stalls: stallN, stallsDay: stallDayN, stallsOpen: openN, foodTris, lamps: lampSpots.length, bulbs: bulbs.length / 3, peds: NP, npc: npc ? { ...npc.stats } : null, signVerts: signGeo ? signGeo.attributes.position.count : 0 }; },
+  };
+}
+
+function offsetPts(pts, off) {
+  return pts.map((p, i) => {
+    const a = pts[Math.max(0, i - 1)], b = pts[Math.min(pts.length - 1, i + 1)];
+    let tx = b[0] - a[0], tz = b[1] - a[1]; const tl = Math.hypot(tx, tz) || 1; tx /= tl; tz /= tl;
+    return [p[0] - tz * off, p[1] + tx * off];
+  });
+}

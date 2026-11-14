@@ -1,6 +1,7 @@
 // [namsan] 타워 주변 서울 도심. OSM 건물 외곽선(약 2.8 km)을 압출하고,
 //   밤에는 기존 코리더 창 불빛 셰이더(warm/cool 혼합)를 그대로 쓴다.
 //   간선도로는 노면 + 가로등 글로우 + 차량 궤적, 그 밖은 지평선 스카이라인 링.
+import { myeongdongClaims } from './myeongdongFlags.js'; // [myeongdong]
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { buildingMeshes, buildingMeshesAsync, roadGeometries, paint } from '../tileMesh.js';
@@ -270,6 +271,16 @@ export function cityJunctionApproaches(osm, cityRoads) {
   return kept;
 }
 
+/** [myeongdong] 명동 바깥 띠 안의 점을 빼고 남은 연속 구간만 (명동 길 메시가 대신 깐다) */
+function splitOutsideMyeongdong(pts) {
+  const out = []; let cur = [];
+  for (const p of pts) {
+    if (myeongdongClaims(p[0], p[1], -6)) { if (cur.length >= 2) out.push(cur); cur = []; } else cur.push(p);
+  }
+  if (cur.length >= 2) out.push(cur);
+  return out;
+}
+
 function beginNamsanCity({ parent, data, heightAt, parks = [], osm = null } = {}) {
   const g = new THREE.Group();
   g.name = 'namsan-city';
@@ -297,6 +308,7 @@ function beginNamsanCity({ parent, data, heightAt, parks = [], osm = null } = {}
     const o = b.o;
     if (!o || o.length < 3) continue;
     const c = centroid(o);
+    if (myeongdongClaims(c.x, c.z)) continue; // [myeongdong] 명동 OSM 건물이 그 자리를 채운다
     if (inNamsanPark(c.x, c.z, parks, heightAt)) continue;
     if (o.some((pt) => inNamsanPark(pt[0], pt[1], parks, heightAt))) continue;
     const gy = groundY(c.x, c.z, heightAt);
@@ -377,7 +389,7 @@ function dressNamsanCity(ctx) {
   const ARTERIES = new Set(['motorway', 'trunk', 'primary', 'secondary']);
   for (const r of roads) {
     if (!r.p || r.p.length < 2) continue;
-    const leftovers = clipCityRoadOutsideNamsan(r.p, keepouts);
+    const leftovers = clipCityRoadOutsideNamsan(r.p, keepouts).flatMap(splitOutsideMyeongdong); // [myeongdong]
     for (const piece of leftovers) {
       const pts = piece.map(([x, z]) => {
         const y = groundY(x, z, heightAt) + 0.06;

@@ -62,6 +62,94 @@ function stationDoorFromPts(pts, face) {
   return { x: c.x + nx * 8, z: c.z + nz * 8, nx, nz, cx: c.x, cz: c.z, L: 0 };
 }
 
+// [myeongdong-detail] 하부(회현) 정류장 입구 꾸밈: 큰 배너 + 차양 + 지붕선 LED 띠 + 바닥 빛 번짐.
+//   진짜 광원 없이 MeshBasic(발광처럼 보이는) 3 드로우. 밤엔 밝게, 낮엔 살짝 눌러 둔다.
+function cableBannerCanvas() {
+  const c = document.createElement('canvas'); c.width = 1024; c.height = 256;
+  const g = c.getContext('2d'), W = 1024, H = 256;
+  g.fillStyle = '#c62828'; g.fillRect(0, 0, W, H);
+  g.fillStyle = '#ffffff'; g.fillRect(0, H - 50, W, 50);
+  g.strokeStyle = '#ffd54f'; g.lineWidth = 6; g.strokeRect(5, 5, W - 10, H - 10);
+  // 곤돌라 아이콘
+  g.strokeStyle = '#fff'; g.lineWidth = 7; g.beginPath(); g.moveTo(26, 40); g.lineTo(186, 22); g.stroke();
+  g.beginPath(); g.moveTo(106, 31); g.lineTo(106, 62); g.stroke();
+  g.fillStyle = '#fff'; g.beginPath(); g.roundRect(52, 62, 108, 106, 16); g.fill();
+  g.fillStyle = '#c62828'; g.fillRect(64, 76, 38, 34); g.fillRect(110, 76, 38, 34);
+  g.textBaseline = 'middle'; g.textAlign = 'left'; g.fillStyle = '#fff';
+  const fit = (t, maxW, px, wt = 900) => { let f = px; do { g.font = `${wt} ${f}px "Noto Sans KR", "Noto Sans CJK KR", sans-serif`; f -= 2; } while (g.measureText(t).width > maxW && f > 10); };
+  fit('남산 케이블카', 800, 104); g.fillText('남산 케이블카', 200, 82);
+  fit('NAMSAN CABLE CAR · 南山缆车 · ケーブルカー', 800, 44, 800); g.fillText('NAMSAN CABLE CAR · 南山缆车 · ケーブルカー', 202, 160);
+  g.fillStyle = '#c62828'; g.textAlign = 'center';
+  fit('왕복 ROUND TRIP ₩15,000 · 편도 ONE-WAY ₩12,000 · 10:00–23:00', W - 40, 34, 800); g.fillText('왕복 ROUND TRIP ₩15,000 · 편도 ONE-WAY ₩12,000 · 10:00–23:00', W / 2, H - 25);
+  return c;
+}
+function glowCanvas() {
+  const c = document.createElement('canvas'); c.width = c.height = 64;
+  const g = c.getContext('2d'), gr = g.createRadialGradient(32, 64, 2, 32, 64, 64);
+  gr.addColorStop(0, 'rgba(255,236,200,1)'); gr.addColorStop(1, 'rgba(255,236,200,0)');
+  g.fillStyle = gr; g.fillRect(0, 0, 64, 64); return c;
+}
+function dressLowerStation(st, door) {
+  if (!door || !st.userData.pts) return null;
+  const y = st.userData.y, wallH = st.userData.wallH;
+  // door.nx/nz 는 중심→문 방향이라 벽과 비스듬할 수 있다 → 문이 놓인 변의 진짜 바깥 법선을 쓴다
+  let nx = door.nx, nz = door.nz;
+  { const P = st.userData.pts, C = st.userData.center; let bd = Infinity;
+    for (let i = 0; i < P.length; i++) {
+      const a = P[i], b = P[(i + 1) % P.length], L = Math.hypot(b[0] - a[0], b[1] - a[1]); if (L < 1) continue;
+      const mx = (a[0] + b[0]) / 2, mz = (a[1] + b[1]) / 2, d = Math.hypot(mx - door.x, mz - door.z);
+      if (d < bd) { bd = d; let ex = (b[1] - a[1]) / L, ez = -(b[0] - a[0]) / L; if (ex * (mx - C.x) + ez * (mz - C.z) < 0) { ex = -ex; ez = -ez; } nx = ex; nz = ez; }
+    } }
+  const rx = nz, rz = -nx, ang = Math.atan2(nx, nz);
+  const out = (d) => [door.x + nx * d, door.z + nz * d];
+  const parts = [];
+  // 배너 (문 위 상인방)
+  const bw = 9.6, bh = bw / 4; // 지붕선 위에 세운 큰 간판 (멀리서·가로 390 px 화면에서도 읽히게)
+  const btex = new THREE.CanvasTexture(cableBannerCanvas()); btex.colorSpace = THREE.SRGBColorSpace; btex.anisotropy = 4;
+  const bMat = new THREE.MeshBasicMaterial({ map: btex, color: '#e6e6e6' });
+  const banner = new THREE.Mesh(new THREE.PlaneGeometry(bw, bh), bMat);
+  const bY = y + wallH - 0.1 - bh / 2; // 문 위 벽면(상인방) — 계단 아래에서 올려다봐도 화면 안
+  { const [x, z] = out(0.36); banner.position.set(x, bY, z); banner.rotation.y = ang; banner.name = 'namsan-cable-lower-banner'; st.add(banner); }
+  // 차양 + LED: 한 MeshBasic (밝은 면만)
+  const ledMat = new THREE.MeshBasicMaterial({ color: '#fff2d6' });
+  const box = (w, h, d, x, yy, z) => { const b = new THREE.BoxGeometry(w, h, d); b.rotateY(ang); b.translate(x, yy, z); parts.push(b); };
+  const canW = 5.2, canD = 2.4, cy = y + 4.1;
+  { const [x, z] = out(0.2 + canD / 2); const cg = new THREE.BoxGeometry(canW, 0.04, canD); cg.rotateY(ang); cg.translate(x, cy - 0.16, z); parts.push(cg); }
+  // 차양 앞 끝 띠 + 배너 밑 띠
+  { const [x, z] = out(0.2 + canD); box(canW, 0.1, 0.06, x, cy - 0.05, z); }
+  { const [x, z] = out(0.4); box(bw, 0.08, 0.06, x, bY - bh / 2 - 0.12, z); }
+  // 지붕선 LED 띠 (벽 둘레, 바깥면)
+  const pts = st.userData.pts, c = st.userData.center;
+  for (let i = 0; i < pts.length; i++) {
+    const a = pts[i], b = pts[(i + 1) % pts.length], L = Math.hypot(b[0] - a[0], b[1] - a[1]); if (L < 0.6) continue;
+    let mx = (a[0] + b[0]) / 2, mz = (a[1] + b[1]) / 2; const d = Math.hypot(mx - c.x, mz - c.z) || 1;
+    mx += (mx - c.x) / d * 0.24; mz += (mz - c.z) / d * 0.24;
+    const g2 = new THREE.BoxGeometry(0.05, 0.12, L); g2.rotateY(Math.atan2(b[0] - a[0], b[1] - a[1])); g2.translate(mx, y + wallH - 0.08, mz); parts.push(g2);
+  }
+  const led = new THREE.Mesh(mergeGeometries(parts), ledMat); led.name = 'namsan-cable-lower-led'; st.add(led);
+  // 차양 아래 기둥 2개 (벽 재질에 맞춘 Lambert 1 — 차양 판은 위 LED 면과 함께)
+  const postMat = new THREE.MeshLambertMaterial({ color: '#3a4552' });
+  const posts = [];
+  for (const s of [-1, 1]) { const [x, z] = out(0.2 + canD - 0.15); const p = new THREE.BoxGeometry(0.14, cy - y, 0.14); p.translate(x + rx * s * (canW / 2 - 0.2), y + (cy - y) / 2, z + rz * s * (canW / 2 - 0.2)); posts.push(p); }
+  { const bp = new THREE.BoxGeometry(bw + 0.24, bh + 0.24, 0.12); bp.rotateY(ang); const [x, z] = out(0.27); bp.translate(x, bY, z); posts.push(bp); }
+  const roofG = new THREE.BoxGeometry(canW + 0.1, 0.12, canD + 0.05); roofG.rotateY(ang); { const [x, z] = out(0.2 + canD / 2); roofG.translate(x, cy - 0.08 + 0.1, z); } posts.push(roofG);
+  const postM = new THREE.Mesh(mergeGeometries(posts), postMat); postM.name = 'namsan-cable-lower-canopy'; st.add(postM);
+  // 바닥 빛 번짐
+  const gtex = new THREE.CanvasTexture(glowCanvas());
+  const spillMat = new THREE.MeshBasicMaterial({ map: gtex, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
+  const spill = new THREE.Mesh(new THREE.PlaneGeometry(7, 6), spillMat); spill.rotation.x = -Math.PI / 2; spill.rotation.z = ang + Math.PI;
+  { const [x, z] = out(3); spill.position.set(x, y + 0.08, z); } spill.name = 'namsan-cable-lower-spill'; spill.visible = false; st.add(spill);
+  const wallMat = st.children[0]?.material; // 벽(정류장마다 따로 만든 재질) — 밤에 살짝 밝게
+  return {
+    setNight(v) {
+      if (wallMat?.emissive) { wallMat.emissive.set('#4a5260'); wallMat.emissiveIntensity = v * 0.55; }
+      bMat.color.setScalar(0.86 + v * 0.14);
+      ledMat.color.set(v > 0.5 ? '#fff2d6' : '#d9d4c8');
+      spillMat.opacity = v * 0.55; spill.visible = v > 0.02;
+    },
+  };
+}
+
 function makeSign(text, w, h, bg = '#1c2834', fg = '#f3f6f8') {
   const c = document.createElement('canvas'); c.width = 768; c.height = 192;
   const x = c.getContext('2d');
@@ -355,6 +443,7 @@ export function createNamsanCable({ parent, osm, heightAt, overlay, guide = fals
   const upperSt = stationBuilding(upperPts, upperY, '남산 케이블카 · 상부', pts[0]);
   const lowerSt = stationBuilding(lowerPts, lowerY, '남산 케이블카 · 하부', pts[pts.length - 1]);
   g.add(upperSt, lowerSt);
+  const lowerDress = dressLowerStation(lowerSt, namsanStationDoors(osm).lower);
 
   const access = planStationAccess(osm, heightAt);
   const rampMat = new THREE.MeshLambertMaterial({ color: '#cfc6b6' });
@@ -789,6 +878,7 @@ export function createNamsanCable({ parent, osm, heightAt, overlay, guide = fals
     },
     tickPlayer,
     setNight(v) {
+      lowerDress?.setNight(v);
       cabinA.userData.glass.material.emissiveIntensity = v * 0.16;
       cabinB.userData.glass.material.emissiveIntensity = v * 0.16;
       cabinA.userData.ceil.material.emissiveIntensity = 0.45 + v * 0.7;

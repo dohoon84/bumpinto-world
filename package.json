@@ -24,6 +24,7 @@
     "economy:test": "node scripts/test-economy.mjs && node scripts/test-econ-client.mjs",
     "bgm:test": "node scripts/test-bgm.mjs",
     "routemap:test": "node scripts/test-route-map.mjs",
+    "routemap:mobile": "node scripts/verify-route-map-mobile.mjs",
     "corridor:tancheon": "node --max-old-space-size=8192 scripts/corridor/build-tancheon.mjs",
     "corridor:transit": "node scripts/corridor/build-transit.mjs",
     "corridor:drive": "node scripts/corridor/build-drive.mjs",
@@ -38,6 +39,11 @@
     "corridor:pangyo-npc": "node scripts/corridor/build-pangyo-npc.mjs",
     "corridor:pangyoexpress": "node scripts/corridor/build-pangyo-express.mjs",
     "corridor:pangyowater": "node scripts/corridor/build-pangyo-water.mjs",
+    "myeongdong:test": "node scripts/corridor/test/test-myeongdong.mjs && node scripts/corridor/test/test-text-mirror.mjs && node scripts/corridor/test/test-myeongdong-walk.mjs $MYEONGDONG_WALK_PORT",
+    "myeongdong:walk": "node scripts/corridor/test/test-myeongdong-walk.mjs ${MYEONGDONG_WALK_PORT:-5231}",
+    "myeongdong:trees": "node scripts/corridor/test/test-myeongdong-trees.mjs ${MYEONGDONG_WALK_PORT:-5231}",
+    "myeongdong:leak": "node scripts/corridor/test/test-myeongdong-leak.mjs ${MYEONGDONG_WALK_PORT:-5231}",
+    "text-mirror:test": "node scripts/corridor/test/test-text-mirror.mjs $TEXT_MIRROR_PORT",
     "corridor:test": "node scripts/corridor/test/test-tancheon.mjs && node scripts/corridor/test/test-bus-proxy.mjs && node scripts/corridor/test/test-bus-realtime.mjs && node scripts/corridor/test/test-fare.mjs && node scripts/corridor/test/test-ridelog.mjs && node scripts/corridor/test/test-ride-extras.mjs && node scripts/corridor/test/test-bus-spacing.mjs 600 && node scripts/corridor/test/test-bus-network.mjs && node scripts/corridor/test/test-bus-sfx.mjs && node scripts/corridor/test/test-vehicle-height.mjs && node scripts/corridor/test/test-life.mjs && node scripts/corridor/test/test-superbike.mjs && node scripts/corridor/test/test-streams.mjs && node scripts/corridor/test/test-bridge-lights.mjs && node scripts/corridor/test/test-playgrounds.mjs && node scripts/corridor/test/test-streetlights.mjs && node scripts/corridor/test/test-pangyo.mjs && node scripts/corridor/test/test-pangyo-link.mjs && node scripts/corridor/test/test-pangyo-npc.mjs && node scripts/corridor/test/test-pangyo-deck-lights.mjs && node scripts/corridor/test/test-pangyo-express.mjs && node scripts/corridor/test/test-pangyo-water.mjs && node scripts/corridor/test/test-pangyo-streetlights.mjs && node scripts/corridor/test/test-migeum.mjs && node scripts/corridor/test/test-migeum-streetlights.mjs && node scripts/corridor/test/test-migeum-water.mjs && node scripts/corridor/test/test-migeum-bus.mjs && node scripts/corridor/test/test-migeum-all.mjs && node scripts/corridor/test/test-migeum-globe.mjs && node scripts/corridor/test/test-yatap-school-zone.mjs && node scripts/corridor/test/test-cityhall.mjs && node scripts/corridor/test/test-gangnam.mjs && node scripts/corridor/test/test-gangnam-night.mjs && node scripts/corridor/test/test-gangnam-nightlife.mjs && node scripts/corridor/test/test-gangnam-street.mjs && node scripts/corridor/test/test-gangnam-brt.mjs && node scripts/corridor/test/test-gangnam-npc.mjs && node scripts/corridor/test/test-gangnam-globe.mjs && node scripts/corridor/test/test-gangnam-bus.mjs && node scripts/test-bus-arrivals.mjs && node scripts/corridor/test/test-gyeongbu-express.mjs && node scripts/corridor/test/test-gyeongbu-route.mjs && node scripts/corridor/test/test-gyeongbu-minimap.mjs",
     "corridor:migeumbus": "node scripts/corridor/build-migeum-bus.mjs",
     "shots": "node scripts/shots.mjs",
@@ -83,7 +89,9 @@
     "arrive:test": "node scripts/test-station-arrive.mjs",
     "arrive:e2e": "node scripts/e2e-station-arrive.mjs",
     "bp24:entry": "node scripts/e2e-bump24-jeongja-entry.mjs",
-    "titles:test": "node scripts/test-bp24-rank.mjs && node scripts/test-weekly-titles.mjs"
+    "titles:test": "node scripts/test-bp24-rank.mjs && node scripts/test-weekly-titles.mjs",
+    "guide:test": "node scripts/guides/test-place-guide.mjs ${MYEONGDONG_WALK_PORT:-5231} && node scripts/guides/test-guide-walk.mjs ${MYEONGDONG_WALK_PORT:-5231}",
+    "guide:walk": "node scripts/guides/test-guide-walk.mjs ${MYEONGDONG_WALK_PORT:-5231} && WALK_VIEW=844x390 node scripts/guides/test-guide-walk.mjs ${MYEONGDONG_WALK_PORT:-5231} && node scripts/guides/test-ndm-edges.mjs ${MYEONGDONG_WALK_PORT:-5231}"
   },
   "dependencies": {
     "three": "^0.186.1"

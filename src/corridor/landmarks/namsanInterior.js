@@ -2,6 +2,7 @@
 //   광장 5층 로비 · 타워 1층 테라스 상점 · 4·5층 링형 전망대(전면 유리) · 7층 프렌치 레스토랑.
 //   엘리베이터 코어는 가운데에 두고 창을 가리지 않는다.
 import * as THREE from 'three';
+import { addTextBack } from './textQuad.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { NT } from './namsanCoords.js';
 
@@ -31,9 +32,10 @@ function dirLabel(text) {
   x.font = 'bold 64px sans-serif';
   x.fillText(text, 512, 96);
   const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace;
-  return new THREE.Mesh(new THREE.PlaneGeometry(3.8, 0.72), new THREE.MeshBasicMaterial({
-    map: tex, transparent: true, depthWrite: false, side: THREE.DoubleSide,
-  }));
+  // [text-orientation] 앞뒤 두 장 (DoubleSide 한 장은 뒤에서 거울 글씨)
+  return addTextBack(new THREE.Mesh(new THREE.PlaneGeometry(3.8, 0.72), new THREE.MeshBasicMaterial({
+    map: tex, transparent: true, depthWrite: false,
+  })));
 }
 
 function tableSet(parent, x, z, y, cloth = '#f3efe6') {

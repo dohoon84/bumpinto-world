@@ -59,3 +59,15 @@ console.log('test-bgm: ok', order.join(' → '), `bins ${bins.map(([s, e]) => e 
   assert.ok(a.some((v, i) => v !== b[i]), '시간에 따라 움직여야 함');
   console.log('test-bgm: ok synthSpectrum');
 }
+
+// [cathedral-bgm] 장소 배경음: 두 형식 모두, 반복 길이 + 덧붙인 꼬리만큼 (1.5 MB 이하)
+{
+  const { AMBIENCE } = await import('../src/bgm/player.js');
+  for (const id of Object.keys(AMBIENCE)) for (const ext of ['webm', 'mp3']) {
+    const f = `public/audio/ambience/${id}.${ext}`;
+    assert.ok(fs.existsSync(f), `${f} 없음`);
+    assert.ok(fs.statSync(f).size < 1.5 * 1024 * 1024, `${f} 너무 큼`);
+  }
+  assert.ok(AMBIENCE.cathedral.overlap >= 2 && AMBIENCE.cathedral.loop >= 30);
+  console.log('test-bgm: ok ambience', Object.keys(AMBIENCE).join(','));
+}

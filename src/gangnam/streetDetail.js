@@ -492,7 +492,7 @@ export function createGangnamStreet({ scene, terrain = null, url, mobile = false
       const benchMat = new THREE.MeshLambertMaterial({ color: '#c9a36c' });
       const ledMat = new THREE.MeshBasicMaterial({
         map: ledTex, transparent: true, opacity: 0, blending: THREE.AdditiveBlending,
-        depthWrite: false, toneMapped: false, side: THREE.DoubleSide,
+        depthWrite: false, toneMapped: false, // [text-orientation] 앞면만 — 뒷면은 반 바퀴 돈 인스턴스가 따로
       });
       const nameMat = atlasMaterial(nameAt.tex);
       const shopSignMat = atlasMaterial(shopAt.tex);
@@ -578,7 +578,7 @@ export function createGangnamStreet({ scene, terrain = null, url, mobile = false
       const sideEdge = inst(roofEdgeGeo(false), edgeMat, sideMods.length, 'gnStreetSideEdge');
       const medEdge = inst(roofEdgeGeo(true), edgeMat, medMods.length, 'gnStreetMedEdge');
       const pools = inst(poolGeo(true), poolMat, modules.length, 'gnStreetPool');
-      const bis = inst(new THREE.PlaneGeometry(2.15, 0.62), ledMat, modules.length, 'gnStreetBis');
+      const bis = inst(new THREE.PlaneGeometry(2.15, 0.62), ledMat, modules.length * 2, 'gnStreetBis'); // 앞(대기 쪽)·뒤(차도 쪽) 두 장
       const ads = inst(new THREE.PlaneGeometry(1.05, 1.7), adMat, modules.length, 'gnStreetAds');
       const adGlows = inst(boxGeo(1.08, 1.74, 0.08, 0, 0, 0), adGlowMat, modules.length, 'gnStreetAdGlow');
       const signs = inst(new THREE.PlaneGeometry(1.55, 0.72), nameMat, sideMods.length * 2, 'gnStreetNames');
@@ -599,7 +599,9 @@ export function createGangnamStreet({ scene, terrain = null, url, mobile = false
         const rx = Math.cos(m.yaw), rz = -Math.sin(m.yaw);
         // BIS at the curb, facing the waiting area
         StreetXform.compose(m4, quat, pos, scl, m.x + fx * 0.98, gy + 2.22, m.z + fz * 0.98, m.yaw + Math.PI, 1, 1, 1);
-        bis.setMatrixAt(bisI, m4);
+        bis.setMatrixAt(bisI * 2, m4);
+        StreetXform.compose(m4, quat, pos, scl, m.x + fx * 0.98, gy + 2.22, m.z + fz * 0.98, m.yaw, 1, 1, 1);
+        bis.setMatrixAt(bisI * 2 + 1, m4);
         // ad on back panel, glowing into the shelter
         StreetXform.compose(m4, quat, pos, scl, m.x - fx * 1.08 - rx * 2.35, gy + 1.4, m.z - fz * 1.08 - rz * 2.35, m.yaw, 1, 1, 1);
         ads.setMatrixAt(bisI, m4);
@@ -614,7 +616,7 @@ export function createGangnamStreet({ scene, terrain = null, url, mobile = false
       };
       sideMods.forEach((m) => placeModule(m, sideMetal, sideGlass, sideBack, sideBench, sideStrip, sideEdge));
       medMods.forEach((m) => placeModule(m, medMetal, medGlass, medBack, medBench, medStrip, medEdge));
-      pools.count = poolI; bis.count = ads.count = adGlows.count = bisI;
+      pools.count = poolI; ads.count = adGlows.count = bisI; bis.count = bisI * 2;
 
       const pylons = j.pylons || [];
       const pylonIm = inst(pylonGeo(), pylonMat, pylons.length, 'gnStreetPylon', true);

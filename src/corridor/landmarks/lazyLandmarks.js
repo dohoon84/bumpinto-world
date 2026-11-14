@@ -1,5 +1,6 @@
 // [namsan] [hangang] 부트 때는 가벼운 스텁만 두고, 가까이 오면 메시를 만든다.
 import { NAMSAN_BOUNDS, HANGANG_BOXES, NAMSAN_SPAWN, HANGANG_SPAWN, HANGANG_HAP_SPAWNS, emptyLandmarkMini } from './landmarkBounds.js';
+import { MYEONGDONG_BOUNDS, MYEONGDONG_BOXES, MYEONGDONG_SPAWN } from './myeongdongFlags.js'; // [myeongdong]
 
 export function landmarkLazyEnabled(search = typeof location !== 'undefined' ? location.search : '') {
   const s = search instanceof URLSearchParams ? search : new URLSearchParams(search || '');
@@ -62,6 +63,13 @@ export function makeNamsanMeta(data) {
   };
 }
 
+/** [myeongdong] 부트 스텁: 경계·스폰만 (myeongdong.json 은 지을 때 받는다). 미니맵은 지은 뒤 impl.mini 를 쓴다. */
+export function makeMyeongdongMeta() {
+  const bounds = { ...MYEONGDONG_BOUNDS };
+  const spawn = { ...MYEONGDONG_SPAWN };
+  return { bounds, boxes: [bounds, ...MYEONGDONG_BOXES.slice(1).map((b) => ({ ...b }))], spawn, spawnY: () => spawn.y, mini: emptyLandmarkMini(), liveMini: true }; // [ndm-walk] + 남대문시장 섬
+}
+
 export function makeHangangMeta(data) {
   // [boot-fast] heightAt·미니맵·OSM 스캔은 메시를 지을 때로 미룬다. 부트 스텁은 경계·스폰만.
   const b1 = demBounds(data?.dem) || { ...HANGANG_BOXES[0] };
@@ -97,7 +105,7 @@ export function wrapLandmark(meta) {
     spawn: meta.spawn,
     bounds: meta.bounds,
     boxes: meta.boxes || (meta.bounds ? [meta.bounds] : []),
-    mini: meta.mini,
+    get mini() { return (meta.liveMini && impl?.mini) || meta.mini; }, // [myeongdong] 명동은 지은 뒤 실제 미니맵
     spawns: meta.spawns || {},
     connectEnds: meta.connectEnds || {},
     spawnY: (...a) => (impl?.spawnY ? impl.spawnY(...a) : meta.spawnY?.(...a) ?? (meta.spawn?.y ?? 0)),
@@ -108,6 +116,8 @@ export function wrapLandmark(meta) {
     ownDist: (...a) => impl?.ownDist?.(...a) ?? Infinity,
     coversTileFlat: (...a) => impl?.coversTileFlat?.(...a) ?? false,
     isBlocked: (...a) => impl?.isBlocked?.(...a) ?? false,
+    blockedBy: (...a) => impl?.blockedBy?.(...a) ?? null, // [walk-sweep] 무엇이 막는지 (검사용)
+    walkWays: (...a) => impl?.walkWays?.(...a) ?? [], // [walk-sweep]
     tickPlayer: (...a) => impl?.tickPlayer?.(...a),
     update: (...a) => impl?.update?.(...a),
     setNight: (...a) => impl?.setNight?.(...a),
@@ -125,6 +135,19 @@ export function wrapLandmark(meta) {
     get riding() { return !!impl?.riding; },
     get poolLightCount() { return impl?.poolLightCount ?? 0; },
     get revetmentView() { return impl?.revetmentView ?? null; },
+    get station() { return impl?.station ?? null; }, // [myeongdong]
+    get cathedral() { return impl?.cathedral ?? null; }, // [myeongdong]
+    camInside: (...a) => impl?.camInside?.(...a) ?? false, // [myeongdong-cathedral] 성당 실내 카메라
+    inCathedral: (...a) => impl?.inCathedral?.(...a) ?? false,
+    findSeat: (...a) => impl?.findSeat?.(...a) ?? null, // [cathedral-sit]
+    get cathedralInside() { return !!impl?.cathedralInside; }, // [cathedral-bgm]
+    cathedralAt: (...a) => impl?.cathedralAt?.(...a) ?? null,
+    cathedralUV: (...a) => impl?.cathedralUV?.(...a) ?? null,
+    get cathedralInterior() { return impl?.cathedralInterior ?? null; },
+    get ssgShow() { return impl?.ssgShow ?? null; }, // [ssg-facade]
+    get hooks() { return impl?.hooks ?? null; }, // [myeongdong] 미니게임 A·C 훅
+    get face() { return impl?.face ?? meta.face ?? null; }, // [myeongdong] 도착 때 카메라 방향
+    stats: (...a) => impl?.stats?.(...a) ?? null,
     _bind(api) { impl = api; },
   };
 }

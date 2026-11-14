@@ -15,7 +15,7 @@ const D = 176; // 지도 원 지름(CSS px)
 const R = D / 2;
 const MAJOR = new Set(['motorway', 'motorway_link', 'trunk', 'trunk_link', 'primary', 'primary_link', 'secondary', 'secondary_link', 'busway']);
 const MINOR = new Set(['tertiary', 'tertiary_link', 'residential', 'unclassified', 'living_street', 'service', 'road', 'rest_area']);
-const LINE_COLOR = { 신분당선: '#d4003b', 수인분당선: '#f5a200', 경강선: '#0054a6', '2호선': '#00a84d', '3호선': '#ef7c1c', '8호선': '#e6186c', '9호선': '#bdb092' };
+const LINE_COLOR = { 신분당선: '#d4003b', 수인분당선: '#f5a200', 경강선: '#0054a6', '2호선': '#00a84d', '3호선': '#ef7c1c', '8호선': '#e6186c', '9호선': '#bdb092', '4호선': '#00A5DE' }; // [myeongdong] 4호선
 
 const $ = (id) => document.getElementById(id);
 const jj = () => window.__jj || null;
@@ -34,6 +34,7 @@ let navHits = []; // [bp24nav] 이번 프레임 매장 아이콘 (클릭 판정)
 const chunks = new Map(); // key → { c, s, ver, used }
 let liveIdx = null; // { data, map: Map(chunkKey → feats) }
 let namsanIdx = null; // { mini, map }
+let myeongdongIdx = null; // [myeongdong] 명동은 지은 뒤 mini 가 생긴다
 let hangangIdx = null; // { mini, map }
 const bboxOf = new WeakMap();
 const stats = { frames: 0, ms: 0, msMax: 0, chunkMs: 0, chunkRenders: 0, bytes: 0 };
@@ -73,7 +74,7 @@ function close() {
   syncCornerPhone(false);
   // 닫으면 캐시 전부 버림(메모리 0). 다시 열면 보이는 청크만 다시 그린다(청크당 수 ms)
   for (const c of chunks.values()) { c.c.width = 0; c.c.height = 0; }
-  chunks.clear(); liveIdx = null; namsanIdx = null; hangangIdx = null; stats.bytes = 0;
+  chunks.clear(); liveIdx = null; namsanIdx = null; hangangIdx = null; myeongdongIdx = null; stats.bytes = 0;
 }
 
 function build() {
@@ -206,8 +207,21 @@ function hangangFeats() {
   hangangIdx = { mini, map };
   return map;
 }
+function myeongdongFeats() {
+  const mini = jj()?.myeongdong?.mini; if (!mini || !mini.roads?.length) return null;
+  if (myeongdongIdx?.mini === mini) return myeongdongIdx.map;
+  const map = new Map();
+  for (const k of MINI_KINDS) for (const f of mini[k] || []) {
+    const [x0, z0, x1, z1] = bb(f); if (!Number.isFinite(x0)) continue;
+    for (let i = Math.floor(x0 / CHUNK); i <= Math.floor(x1 / CHUNK); i++) for (let j = Math.floor(z0 / CHUNK); j <= Math.floor(z1 / CHUNK); j++) {
+      const key = ck(i, j); let m = map.get(key); if (!m) map.set(key, (m = emptyFeats())); m[k].push(f);
+    }
+  }
+  myeongdongIdx = { mini, map };
+  return map;
+}
 function landmarkFeats() {
-  const maps = [namsanFeats(), hangangFeats()].filter(Boolean);
+  const maps = [namsanFeats(), hangangFeats(), myeongdongFeats()].filter(Boolean);
   if (!maps.length) return null;
   if (maps.length === 1) return maps[0];
   const out = new Map();
@@ -236,6 +250,7 @@ function verFor(i, j, T, data, N) {
   let v = data ? 'L' : '';
   if (T) for (let di = -1; di <= 1; di++) for (let dj = -1; dj <= 1; dj++) if (T.has(ck(i + di, j + dj))) v += `${di}${dj}`;
   if (N?.has(ck(i, j))) v += 'N';
+  if (myeongdongIdx?.map.has(ck(i, j))) v += 'M'; // [myeongdong] 명동이 지어지면 그 칸을 다시 그린다
   return v;
 }
 
@@ -496,6 +511,11 @@ function subwayStations(J) {
     }
     stCache = list; stCache.d = d;
   }
+  const md = J.myeongdong?.station; // [myeongdong] 명동역(4호선) — 명동을 지은 뒤
+  if (md && Number.isFinite(md.x)) {
+    if (stCache.md !== md) { stCache.md = md; stCache.withMd = stCache.concat([{ x: md.x, z: md.z, name: md.name || '명동', nameEn: md.nameEn || 'Myeongdong', lines: ['4호선'] }]); }
+    return stCache.withMd;
+  }
   return stCache;
 }
 function busStops(J) {
@@ -540,6 +560,7 @@ function updatePlaque(J, x, z) {
   const nd = nt ? Math.hypot((nt.ox ?? nt.x) - x, (nt.oz ?? nt.z) - z) : Infinity;
   if (J.region?.id === 'starbase') t = 'Starbase';
 else if (cap) t = tr(cap.name, cap.nameEn || cap.name); // [gangnam-night] 같은 섬의 역·랜드마크만
+  else if (J.myeongdong?.ready && J.myeongdong.ownDist?.(x, z) < 60) t = tr('명동', 'Myeongdong'); // [myeongdong] 남산 반경 안이라도 명동 땅이면 명동
   else if (Number.isFinite(nd) && nd < 2800) t = tr('남산', 'Namsan');
 
   else if (best && bd < 900) t = tr(`${best.name}역${bd > 250 ? ' 근처' : ''}`, `${best.nameEn || best.name}${bd > 250 ? ' area' : ' Stn.'}`);

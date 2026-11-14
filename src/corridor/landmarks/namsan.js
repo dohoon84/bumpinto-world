@@ -1,6 +1,7 @@
 // [namsan] 남산서울타워(N서울타워) — OSM 실제 좌표·표고 위에 절차적 타워·지형·실내·케이블카.
 //   기본 켜짐. ?ntower=0 이면 전부 끄고, ?ncable=0 이면 케이블카만 끈다.
 //   브랜드 로고/실제 매장명/마스코트 없음. 층별 안내는 일반 이름만 쓴다.
+import { myeongdongClaims, MYEONGDONG_BOUNDS, MYEONGDONG_MARKET } from './myeongdongFlags.js'; // [myeongdong]
 import * as THREE from 'three';
 import { watchEvening } from '../../evening.js';
 import { NT, namsanBaseY, inNamsanPark } from './namsanCoords.js';
@@ -29,6 +30,7 @@ export function namsanMini(city, osm, heightAt) {
     if (!o || o.length < 3) return false;
     let x = 0, z = 0;
     for (const p of o) { x += p[0]; z += p[1]; }
+    if (myeongdongClaims(x / o.length, z / o.length)) return false; // [myeongdong]
     return !inNamsanPark(x / o.length, z / o.length, osm?.parks, heightAt);
   });
   const extraRoads = [];
@@ -115,7 +117,9 @@ function completeNamsan({ scene, overlay, terrain, osm, city, root, land, tower,
   let cableGuide = null;
   if (guideOn && car) {
     try {
-      cableGuide = createNamsanCableGuide({ parent: root, cable: car, ways: roads.ways || [], city, heightAt: land.heightAt, surfaceY: (x, z, refY) => surfaceY(x, z, refY) });
+      // [myeongdong] 명동 상자 안에서는 명동 바닥(보도·계단·성당 마당) 위에 화살표를 깐다. 예전엔 남산 지형 높이(약 9 m 아래)라 바닥에 묻혀 안 보였다.
+      const mdFloor = terrain?.getGroundHeight ? (x, z) => (myeongdongClaims(x, z, 0, MYEONGDONG_BOUNDS) ? terrain.getGroundHeight(x, z) : null) : null;
+      cableGuide = createNamsanCableGuide({ parent: root, cable: car, ways: roads.ways || [], city, heightAt: land.heightAt, surfaceY: (x, z, refY) => surfaceY(x, z, refY), floorAt: mdFloor });
     } catch (e) { console.warn('[cableguide] off:', e?.message || e); cableGuide = null; }
   }
 
@@ -270,6 +274,7 @@ function completeNamsan({ scene, overlay, terrain, osm, city, root, land, tower,
     return !!(tower.isBlocked?.(x, z, r) || interior.isBlocked?.(x, z, r) || car?.isBlocked?.(x, z, r) || land.isBlocked?.(x, z, r) || library.isBlocked?.(x, z, r));
   }
 
+  const farInt = root.getObjectByName('namsan-interior'), farGuides = root.getObjectByName('namsan-guides'); // [myeongdong]
   let night = 0;
   const api = {
     root,
@@ -294,6 +299,18 @@ function completeNamsan({ scene, overlay, terrain, osm, city, root, land, tower,
     tickPlayer(dt, player, cam) {
       // [station-loop] 남산 경계에서 8 km 밖이면 남산(카메라에 붙는 남산 하늘 구 포함)을 렌더·갱신에서 뺀다
       if (DORM && player?.position && !syncLandmarkDormant(root, namsanBoundsDist(land.bounds, player.position.x, player.position.z))) return;
+      // [myeongdong] 먼 남산 디테일 끄기: 타워 전망대 내부(약 250 드로우)는 타워에서 700 m 밖이면, 길 안내 화살표(낱개 메시 약 90)는
+      //   명동 상자 안에 있으면 안 그린다 — 명동에서 남산 쪽을 볼 때 1000 드로우 아래로.
+      if (player?.position) {
+        const px = player.position.x, pz = player.position.z;
+        const iv = interior.riding || Math.hypot(px - NT.tx, pz - NT.tz) < 700;
+        if (farInt && farInt.visible !== iv) farInt.visible = iv;
+        const gv = !myeongdongClaims(px, pz, 0, MYEONGDONG_BOUNDS) && !myeongdongClaims(px, pz, 0, MYEONGDONG_MARKET); // [ndm-walk] 시장도 명동 안
+        if (farGuides && farGuides.visible !== gv) farGuides.visible = gv;
+        // [ssg-facade] 남산도서관(낱개 메시 약 120 드로우)은 명동 상자 안(600 m 안쪽은 제외)에서는 끈다 — 신세계 광장에서 남산을 볼 때 1000 드로우 아래로
+        const lc = library?.center, lv = gv || !lc || Math.hypot(px - lc.x, pz - lc.z) < 600;
+        if (library?.group && library.group.visible !== lv) library.group.visible = lv;
+      }
       interior.tickPlayer?.(dt, player, cam);
       car?.tickPlayer?.(dt, player, cam);
       cableGuide?.update(dt, player, (typeof window !== 'undefined' && window.__jj?.camera) || null); // [cableguide]

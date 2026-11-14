@@ -1,6 +1,7 @@
 // [namsan] 남산 지형 — AWS Terrain Tiles(terrarium z=14) 높이장 + 숲 + 한양도성 + 팔각정·봉수대.
 //   게임 y = max(0, eleASL - 48). 타워 기단은 문서값 243 m(479.7 − 236.7)로 광장을 평평히 맞춘다.
 //   DEM 이 타워 구조물을 집어 정상부가 부풀어 오르는 것을 막기 위함이다.
+import { myeongdongClaims } from './myeongdongFlags.js'; // [myeongdong]
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { addInstancedTrees } from '../../world/trees.js';
@@ -576,6 +577,7 @@ export function createNamsanTerrain({ parent, dem, osm }) {
           const x00 = gx0 + i * STEP, z00 = gz0 + j * STEP;
           const x11 = x00 + STEP, z11 = z00 + STEP;
           if (insideCore(x00, z00) && insideCore(x11, z00) && insideCore(x00, z11) && insideCore(x11, z11)) continue;
+          if (myeongdongClaims(x00, z00) && myeongdongClaims(x11, z00) && myeongdongClaims(x00, z11) && myeongdongClaims(x11, z11)) continue; // [myeongdong] 명동 땅이 대신 깐다
           const a = ensure(i, j), b = ensure(i + 1, j), c = ensure(i, j + 1), d = ensure(i + 1, j + 1);
           idx.push(a, c, b, b, c, d);
         }
@@ -627,6 +629,7 @@ export function createNamsanTerrain({ parent, dem, osm }) {
       const dT = Math.hypot(jx - NT.tx, jz - NT.tz);
       if (dT < 70) continue;
       if (onWay(jx, jz) || onLibrary(jx, jz)) continue;
+      if (myeongdongClaims(jx, jz, 3)) continue; // [md-trees] 명동 땅(바깥 띠 포함)은 남산 DEM 이 아니라 명동 높이 — 남산 숲 나무가 퇴계로·소공로 위에 떠 있었다
       if (Math.hypot(jx + 10705, jz + 20554) < 28) continue;
       if (Math.hypot(jx + 10998, jz + 21021) < 36) continue;
       const y = heightAt(jx, jz);
@@ -646,6 +649,7 @@ export function createNamsanTerrain({ parent, dem, osm }) {
       const dT = Math.hypot(jx - NT.tx, jz - NT.tz);
       if (dT < 72 || dT > 280) continue;
       if (onWay(jx, jz) || onLibrary(jx, jz)) continue;
+      if (myeongdongClaims(jx, jz, 3)) continue; // [md-trees] 명동 땅(바깥 띠 포함)은 남산 DEM 이 아니라 명동 높이 — 남산 숲 나무가 퇴계로·소공로 위에 떠 있었다
       if (Math.hypot(jx + 10705, jz + 20554) < 28) continue;
       const y = heightAt(jx, jz);
       if (y < 8) continue;
@@ -662,6 +666,7 @@ export function createNamsanTerrain({ parent, dem, osm }) {
       const jx = x + (hash01(Math.round(x), Math.round(z) + 3) - 0.5) * 11;
       const jz = z + (hash01(Math.round(z), Math.round(x) + 5) - 0.5) * 11;
       if (onWay(jx, jz) || onLibrary(jx, jz)) continue;
+      if (myeongdongClaims(jx, jz, 3)) continue; // [md-trees] 명동 땅(바깥 띠 포함)은 남산 DEM 이 아니라 명동 높이 — 남산 숲 나무가 퇴계로·소공로 위에 떠 있었다
       const y = heightAt(jx, jz);
       if (y < 2) continue;
       const s = Math.hypot(heightAt(jx + 6, jz) - heightAt(jx - 6, jz), heightAt(jx, jz + 6) - heightAt(jx, jz - 6)) / 12;

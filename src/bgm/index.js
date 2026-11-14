@@ -23,5 +23,7 @@ export function mountBgm({ params, base = import.meta.env.BASE_URL }) {
     leave() { player.leave(); hud.hide(); },
     /** 탈것 효과음이 나는 동안 살짝 줄이기 (매 프레임 호출해도 바뀔 때만 동작) */
     setDuck: (on) => player.setDuck(on),
+    /** [cathedral-bgm] 장소 배경음('cathedral' | '') — 바뀔 때만 2.6 초 크로스페이드 */
+    setAmbience: (id) => player.setAmbience(id),
   };
 }

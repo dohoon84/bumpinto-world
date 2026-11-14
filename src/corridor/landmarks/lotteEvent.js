@@ -129,7 +129,7 @@ export function createLotteEvent({ root, tower, at, rotY = 0, height = 555, half
   const W = 160, H = height - 30;
   const board = makeBoard(W, H);
   const pg = new THREE.PlaneGeometry(W, H); pg.translate(0, 30 + H / 2, 0);
-  const pmat = new THREE.MeshBasicMaterial({ map: board.tex, fog: false, toneMapped: false, side: THREE.DoubleSide, transparent: false });
+  const pmat = new THREE.MeshBasicMaterial({ map: board.tex, fog: false, toneMapped: false, transparent: false }); // [text-orientation] 늘 카메라 쪽으로 돌린다 → 앞면만 (DoubleSide 는 뒤에서 거울 글씨)
   const panel = new THREE.Mesh(pg, pmat); panel.name = 'lotte-countdown'; panel.frustumCulled = false; panel.matrixAutoUpdate = false; panel.renderOrder = 1;
   panel.onBeforeRender = (renderer, scene, camera) => {
     _cp.setFromMatrixPosition(camera.matrixWorld);

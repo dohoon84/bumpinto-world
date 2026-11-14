@@ -20,6 +20,10 @@ export const LINES = Object.freeze({
   l9: { key: 'l9', ko: '9호선', short: '9호선', en: 'Line 9', ja: '9号線', color: '#BDB092', osmColour: '#A49D87', osmRef: '9',
     dirs: [{ ko: '중앙보훈병원 방면', en: 'for VHS Medical Center', ja: 'チュンアンボフンビョンウォン方面' }, { ko: '개화 방면', en: 'for Gaehwa', ja: 'ケファ方面' }] },
 });
+// [myeongdong] 4호선(명동역). 지금은 표시용(노선도 칩·미니맵·역 표지 색)만 — 승강장·열차·실시간 도착(SUBWAY_ID 1004)은 다음 단계에서
+//   LINES 에 넣는다(LINE_STOPS·TRAIN·워커 SUBWAY_ID 를 같이 채워야 subway 검사가 통과한다).
+export const LINE4 = Object.freeze({ key: 'l4', ko: '4호선', short: '4호선', en: 'Line 4', ja: '4号線', color: '#00A5DE', osmRef: '4', cars: 10, subwayId: 1004,
+  dirs: [{ ko: '오이도 방면', en: 'for Oido', ja: 'オイド方面' }, { ko: '진접 방면', en: 'for Jinjeop', ja: 'チンジョプ方面' }] });
 // 한 역에 여러 노선이면 이 순서로 (앞 = 주 노선: 대합실 승강장 안내·노선도). 정자 = 수인분당, 신분당 (기존 그대로)
 
 // [subway] 승강장·열차 (2단계). 편성 량수 = 실제 운행 편성 (출처: 보고서·DESIGN.md)

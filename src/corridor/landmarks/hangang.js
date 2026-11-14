@@ -10,6 +10,7 @@ import { createHangangCity, createHangangCityAsync } from './hangangCity.js';
 import { createHangangProps, createHangangPropsAsync } from './hangangProps.js';
 import { createHangangHap, createHangangHapAsync, mergeHangangMini } from './hangangHap.js';
 import { syncLandmarkDormant, landmarkDormEnabled } from './lazyLandmarks.js'; // [station-loop]
+import { myeongdongClaims, MYEONGDONG_BOUNDS, MYEONGDONG_LINK } from './myeongdongFlags.js'; // [myeongdong]
 const DORM = landmarkDormEnabled();
 
 export { HANGANG_DEM_FILE, HANGANG_OSM_FILE, HAP_DEM_FILE, HAP_OSM_FILE, HANGANG_TERRAIN_BAKE_FILE, HAP_TERRAIN_BAKE_FILE, hangangEnabled } from './hangangFlags.js';
@@ -79,6 +80,7 @@ function finishHangang({ scene, overlay, terrain, dem, osm, hap, foreign, root, 
       getPos: () => new THREE.Vector3(jamsuC.x, bridges.jamsuY(jamsuC.x, jamsuC.z) + 6, jamsuC.z),
       maxDist: 9000,
       minDist: 40,
+      visibleIf: () => root.visible, // [myeongdong] 한강이 쉬는 동안 이름표도 숨김
     });
     const banpoC = osm?.banpo?.outline?.pts ? centroid(osm.banpo.outline.pts) : jamsuC;
     overlay.add({
@@ -87,6 +89,7 @@ function finishHangang({ scene, overlay, terrain, dem, osm, hap, foreign, root, 
       getPos: () => new THREE.Vector3(banpoC.x, bridges.banpoY(banpoC.x, banpoC.z) + 8, banpoC.z),
       maxDist: 9000,
       minDist: 80,
+      visibleIf: () => root.visible, // [myeongdong] 한강이 쉬는 동안 이름표도 숨김
     });
     const parkC = osm?.park?.ring?.pts ? centroid(osm.park.ring.pts) : { x: spawn.x - 200, z: spawn.z + 80 };
     overlay.add({
@@ -95,6 +98,7 @@ function finishHangang({ scene, overlay, terrain, dem, osm, hap, foreign, root, 
       getPos: () => new THREE.Vector3(parkC.x, (land.heightAt(parkC.x, parkC.z) ?? land.waterY) + 8, parkC.z),
       maxDist: 8000,
       minDist: 40,
+      visibleIf: () => root.visible, // [myeongdong] 한강이 쉬는 동안 이름표도 숨김
     });
   }
 
@@ -226,8 +230,10 @@ function finishHangang({ scene, overlay, terrain, dem, osm, hap, foreign, root, 
       if (lightsOn && d > 1200) setLightsVisible(false);
       else if (!lightsOn && d < 800) setLightsVisible(true);
       // 카메라 far(14 km) 밖이면 한강 메시 1만여 개를 프러스텀 검사에서도 뺀다. 화면은 같다.
-      if (DORM) syncLandmarkDormant(root, rectDist(bounds, px, pz)); // [station-loop] 8 km 밖이면 통째로 뺀다
-      else root.visible = rectDist(bounds, px, pz) < 15000;
+      // [myeongdong] 명동·남산 오르미 길에서는 남산(262 m)이 한강을 가린다 — 한강 메시(남쪽을 보면 600 드로우 안팎)를 통째로 뺀다
+      const hid = myeongdongClaims(px, pz, 0, MYEONGDONG_BOUNDS) || myeongdongClaims(px, pz, 0, MYEONGDONG_LINK);
+      if (DORM) syncLandmarkDormant(root, hid ? Infinity : rectDist(bounds, px, pz)); // [station-loop] 8 km 밖이면 통째로 뺀다
+      else root.visible = !hid && rectDist(bounds, px, pz) < 15000;
       if (!lightsOn) return;
       lightT += dt || 0;
       if (lightT < 0.2 && Math.abs(px - lastLX) + Math.abs(pz - lastLZ) < 6) return;

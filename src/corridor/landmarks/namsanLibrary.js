@@ -501,7 +501,7 @@ export function createNamsanLibrary({ parent, osm, heightAt, overlay = null } = 
       const plateMap = signTexture('남산도서관', '서울특별시교육청', '#4a453c', '#f4eee0');
       const fascia = new THREE.Mesh(
         new THREE.PlaneGeometry(5.2, 1.05),
-        new THREE.MeshBasicMaterial({ map: plateMap, toneMapped: false, fog: false, side: THREE.DoubleSide }),
+        new THREE.MeshBasicMaterial({ map: plateMap, toneMapped: false, fog: false }), // [text-orientation] 앞면만 (뒤는 캐노피)
       );
       fascia.position.set(doorX + ehx * 3.18, doorY + 3.44, doorZ + ehz * 3.18);
       fascia.rotation.y = eyaw;

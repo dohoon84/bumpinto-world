@@ -9,6 +9,7 @@ import { OPEN_MAINLINE_STATIONS, OPEN_BRANCH_STATIONS, corridorName, namsanGlobe
 import { readSavedPassport, isPassportActive } from '../look.js';
 import { isStarbaseLive } from '../worldGateFlags.js';
 import { isEn, toggleLang } from '../i18n.js';
+import { routeMapWanted, routeMapHtml, layoutRouteMap, pickableIds } from './routeMap.js'; // [route-map mobile] 분당–잠실은 가로 노선도로 고른다
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const t = (ko, en) => (isEn() ? en : ko);
@@ -77,6 +78,14 @@ export function mountLanding() {
     }
 
     const finish = () => { root.remove(); document.body.classList.remove('in-mobile-landing'); resolve(); };
+    // [route-map mobile] 노선도는 화면 크기에 맞춰 배치한다 → 회전·주소창 변화 때 다시 그린다 (시작화면이 닫히면 스스로 해제)
+    let rmRaf = 0;
+    const onRmResize = () => {
+      if (!root.isConnected) { removeEventListener('resize', onRmResize); return; }
+      if (st.view !== 'pick' || !root.classList.contains('m-view-map')) return;
+      cancelAnimationFrame(rmRaf); rmRaf = requestAnimationFrame(() => { if (root.isConnected && st.view === 'pick') render(); });
+    };
+    addEventListener('resize', onRmResize);
     const go = () => {
       try { goInner(); } catch (e) {
         // 안전망: 고른 값을 URL 에 못 넣었더라도 로비는 연다 (기본 입장)
@@ -166,6 +175,14 @@ export function mountLanding() {
       }
       const regions = regionList();
       const reg = regions.find((r) => r.id === st.region) || regions[0];
+      // [route-map mobile] 분당–잠실 구간: 가로 노선도(역 칩=선택, 입장 버튼=data-act="go"). 다른 지역(스타베이스)은 옆 칸 버튼 → 아래 예전 화면
+      if (reg.stations && routeMapWanted()) {
+        if (!pickableIds().has(st.station)) st.station = 'jeongja';
+        root.className = 'm-view-pick m-view-map';
+        root.innerHTML = routeMapHtml({ sel: st.station, title: reg.title, others: regions.filter((r) => r.id !== reg.id) });
+        layoutRouteMap(root, st.station);
+        return;
+      }
       const stn = reg.stations?.find((s) => s.id === st.station) || reg.stations?.[0];
       root.className = 'm-view-pick';
       root.innerHTML = `

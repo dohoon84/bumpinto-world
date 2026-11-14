@@ -52,6 +52,7 @@ import { createSms } from './sms.js';
 import { accountsOn } from './account/flags.js'; // [accounts]
 import { takeResumePlace, takeContinue } from './ui-v2/resume.js'; // [econ-mobile] 모바일 '계속하기'·'이어서 입장' = 그만둔 자리 (#42 역을 직접 고르면 넘기지 않음)
 import { trackEvent } from './analytics.js';
+import { mountPlaceGuides, placeGuidesEnabled } from './guides/index.js'; // [place-guide]
 import { createTerrain } from './world/terrain.js'; // [terrain]
 import { Taxis } from './entities/taxis.js'; // [taxi]
 import { mountJzTraffic, deliveryStops } from './entities/jzTraffic.js'; // [jz-traffic]
@@ -776,6 +777,21 @@ const bp24Nav = mountBp24Nav({ // [bp24nav] ?bp24nav=0 이면 null. 매장 아�
 const presence = createPresence({ station: st, region });
 if (npcs.guard) presence.setGuard?.(npcs.guard);
 const remotes = new RemotePlayers(scene, overlay, presence, () => selfPos(), (t) => myBubble.say(t, 6000), terrain?.getGroundHeight, emoteFx); // [terrain] 원격 플레이어도 지형 높이
+// [myeongdong-cathedral] 성당 실내 전용 레이어(1). 실내는 창·벽이 닫혀 있어 바깥 도시를 그릴 필요가 없다 → draw 수를 실내 몫으로 줄인다.
+const CATH_LAYER = 1;
+let cathLayerReady = null;
+function layerAll(o) { o.traverse((c) => c.layers.enable(CATH_LAYER)); }
+function cathedralLayer() {
+  const md = corridor?.myeongdong;
+  if (cam.mode !== 'follow' || !md?.ready || !md.camInside?.(camera.position.x, camera.position.z, camera.position.y)) return false;
+  const cg = md.cathedralInterior?.group?.parent;
+  if (!cg) return false;
+  if (cathLayerReady !== cg) { cathLayerReady = cg; layerAll(cg); for (const c of scene.children) if (c.isLight) c.layers.enable(CATH_LAYER); if (skyDome) skyDome.layers.enable(CATH_LAYER); }
+  layerAll(player); // 옷·장비가 바뀌어도 따라가게 매번
+  for (const p of remotes.peers.values()) { layerAll(p.mesh); layerAll(p.bikeMesh); }
+  camera.layers.set(CATH_LAYER);
+  return true;
+}
 const titleLayer = titlesEnabled(params) ? mountTitles({ renderer, camera, overlay, nameTag, remotes, presence, params }) : null; // [weekly-titles] 머리 위 칭호(아틀라스 메시 1, ?titles=0 끔, ?titlePreview=1 미리보기)
 if (titleLayer) overlay.getOccluders = () => titleLayer.boxes || [];
 // [bike] 관리자 크루저 (인벤토리에서 어느 지역이든 소환/수납 가능, ?bike=0 끔)
@@ -1790,7 +1806,7 @@ let lastEmoteAt = 0;
 let mySit = ''; // '' | 'ground' | 'beanbag' | 'bench' | 'ledge'
 // [cityhall] plaza tier/promenade seats + stationPlaza beanbags/benches
 function findNearbySeat(px, pz) {
-  return stationPlaza.findSeat?.(px, pz) || corridor?.cityhall?.findSeat?.(px, pz) || null;
+  return stationPlaza.findSeat?.(px, pz) || corridor?.cityhall?.findSeat?.(px, pz) || corridor?.myeongdong?.findSeat?.(px, pz) || null; // [cathedral-sit] 명동성당 장의자
 }
 function seatSurfaceY(seat) {
   // avatar.js bench sit pose assumes player.y is ~0.44m below the seat top
@@ -1800,6 +1816,7 @@ function seatSurfaceY(seat) {
 }
 
 let sitExitPos = null; // 좌석에서 일어날 때 복귀할 안전한 좌표
+let mySeatPew = null; // [cathedral-sit] 명동성당 장의자 자리(앉아 있을 때)
 let myAfk = false;
 let idleTime = 0;
 let myZzzTimer = 0;
@@ -1815,6 +1832,7 @@ function standUpFromSeat() {
   }
   mySit = '';
   player.userData.sit = '';
+  if (mySeatPew) { corridor?.myeongdong?.cathedralInterior?.setPlayerSeat?.(null); mySeatPew = null; }
 }
 
 function syncMyNameTag() {
@@ -1922,12 +1940,13 @@ function toggleSit() {
     player.position.set(seat.x, ty, seat.z);
     player.rotation.y = seat.ry;
     mySit = seat.kind;
+    if (seat.pew) { mySeatPew = seat.seat || true; corridor?.myeongdong?.cathedralInterior?.setPlayerSeat?.(seat.seat); } // [cathedral-sit]
   } else {
     sitExitPos = null;
     mySit = 'ground';
   }
   player.userData.sit = mySit;
-  trackEvent('player_sit', { kind: mySit });
+  trackEvent('player_sit', { kind: mySit, ...(mySeatPew ? { place: 'cathedral_pew' } : {}) });
   renderEmoteBar();
   emitMyStateNow();
 }
@@ -2313,8 +2332,8 @@ homeBtn.onclick = () => {
   rememberPlace(true);
 };
 // [corridor] 순간이동(지구본 역 선택 · ?at=<역>|lotte) · 성능 HUD(`)
-function teleportTo(x, z, y) {
-  const move = () => teleportToMove(x, z, y);
+function teleportTo(x, z, y, face) {
+  const move = () => { teleportToMove(x, z, y); if (Number.isFinite(face)) { cam.yaw = face; cam.pitch = Math.min(cam.pitch, 0.12); } }; // [myeongdong] 도착 방향(명동 거리를 보게)
   if (corridor?.needsLandmark?.(x, z)) return corridor.ensureNear(x, z, { urgent: true }).then(move);
   return move();
 }
@@ -2331,6 +2350,14 @@ function teleportToMove(x, z, y) {
   setMode('follow');
   rememberPlace(true);
 }
+// [place-guide] 장소 가이드(남대문시장 …): 데이터(public/guides/*.json) + 일반 패널/길안내. 명동 땅이 준비되면 가까이서 붙는다
+const placeGuides = corridor && placeGuidesEnabled() ? mountPlaceGuides({
+  hosts: { myeongdong: () => corridor.myeongdong },
+  parentOf: () => scene,
+  camera, canvas: renderer.domElement, getPlayer: () => player, mobile: mobileMode,
+  setSuppressOthers: (on) => { const cg = corridor?.namsan?.cableGuide; if (cg) cg.suppressed = on; },
+  track: (n, p) => trackEvent(n, p),
+}) : null;
 const travel = corridor ? mountTravel({ corridor, home: () => homeBtn.onclick(), teleport: teleportTo }) : null;
 arriveTravel = travel; // [arrivefix]
 if (corridor) { corridor.place = (id) => travel?.go(id); corridor.placeOf = (id) => travel?.dests.find((d) => d.id === id) || null; }
@@ -2523,6 +2550,7 @@ leaveBtn.onclick = () => {
   startLobby?.();
 };
 input.onKey = (e) => {
+  if (placeGuides?.onKey(e)) return; // [place-guide] 남대문시장 안내판·안내원 E · 패널 Esc/1–6/←→
   if (corridor?.namsan?.cableGuide?.onKey?.(e)) return; // [cableguide] 케이블카 승강장 E/Enter: 바로 타기·다음 칸 예약
   if (arcadeGame?.onKey(e)) return; // [arcade] 오락실·범핑팡
   if (bump24Game?.onKey(e)) return; // [bump24game] 매장 들어가기·담기
@@ -2975,6 +3003,7 @@ function frame() {
     corridor.update(dt, cPre.x, cPre.z, cam.mode);
     corridor.namsan?.tickPlayer?.(dt, player, cam);
     corridor.hangang?.tickPlayer?.(dt, player, cam);
+    corridor.myeongdong?.tickPlayer?.(dt, player, cam, atmosphere); // [myeongdong] [myeongdong-cathedral] 해 방향·날씨
   }
 
   // 카메라
@@ -3002,6 +3031,10 @@ function frame() {
         return corridor.roofAt(q.x, q.z) > q.y + 0.6;
       });
     }
+    const mdC = corridor?.myeongdong; // [myeongdong-cathedral] 성당 안에서는 붐을 실내 공간 안으로
+    if (mdC?.ready && mdC.inCathedral?.(P.x, P.z)) {
+      dist = shortenBoom(dist, (d) => { const q = boomPoint(P.x, P.z, eye, yaw, pitch, d); return !mdC.camInside(q.x, q.z, q.y); }, { min: 1.2 });
+    }
     const bx = Math.sin(yaw), bz = Math.cos(yaw), cp = Math.cos(pitch), sp = Math.sin(pitch), aim = 4;
     const camX = P.x + bx * dist * cp, camZ = P.z + bz * dist * cp;
     // renderHeight 는 정자 DEM 만 본다. 남산 높이는 addGroundExtra 로만 들어가서
@@ -3013,7 +3046,12 @@ function frame() {
     const walkH = terrain?.getGroundHeight?.(camX, camZ, P.y);
     let camH = Number.isFinite(walkH) ? walkH : renderH;
     const nt = corridor?.namsan?.tower;
-    if (nt && Math.hypot(P.x - nt.ox, P.z - nt.oz) < 2800) {
+    const md = corridor?.myeongdong; // [myeongdong] 명동 땅 위면 남산 높이 대신 명동 높이로 카메라 바닥
+    const mdOwn = md?.ready && md.ownDist?.(camX, camZ) <= 60;
+    if (mdOwn) {
+      const mdH = md.heightAt?.(camX, camZ);
+      if (Number.isFinite(mdH) && !(Number.isFinite(camH) && camH >= mdH)) camH = mdH;
+    } else if (nt && Math.hypot(P.x - nt.ox, P.z - nt.oz) < 2800) {
       const nsH = corridor.namsan.surfaceY?.(camX, camZ) ?? corridor.namsan.heightAt?.(camX, camZ);
       if (Number.isFinite(nsH) && !(Number.isFinite(camH) && camH >= nsH)) camH = nsH;
     }
@@ -3063,12 +3101,20 @@ function frame() {
   sun.position.copy(sun.target.position).addScaledVector(atmosphere.sunDir, 500);
   // 원점에 고정된 r=3000 하늘은 남산(약 23 km) 밖에서 보이지 않는다. 카메라를 따라가게 한다.
   if (skyDome) skyDome.position.copy(camera.position);
+  if (joined) placeGuides?.update(dt); // [place-guide] 안내판·안내원·표지·길 화살표 (가까이 와야 JSON 을 받는다)
   if (!shouldSkipLandmarkPaint()) {
+    const inCath = cathedralLayer(); // [myeongdong-cathedral] 카메라가 성당 안이면 성당·아바타·조명만 그린다(창은 불투명 → 바깥은 안 보임)
+    // [cathedral-sit] 밤 성당 안: 하늘빛(hemi)이 달빛 수준이라 아바타(플레이어·기도하는 사람)만 까맣게 뜬다 → 그 프레임만 따뜻한 실내 밝기로 올렸다 되돌린다(새 조명 없음)
+    const hemiSave = inCath && hemi.intensity < 1.2 ? [hemi.intensity, hemi.color.getHex(), hemi.groundColor.getHex()] : null;
+    if (hemiSave) { hemi.intensity = 1.2; hemi.color.set('#ffe2bc'); hemi.groundColor.set('#7a5a3e'); }
     renderer.render(scene, camera);
+    if (hemiSave) { hemi.intensity = hemiSave[0]; hemi.color.setHex(hemiSave[1]); hemi.groundColor.setHex(hemiSave[2]); }
+    if (inCath) camera.layers.set(0);
     overlay.update(innerWidth, innerHeight); titleLayer?.render(renderer, innerWidth, innerHeight);
     emoteFx.update(dt, innerWidth, innerHeight);
   }
   perfHud.tick();
+  if (bgm) { const mdA = corridor?.myeongdong; bgm.setAmbience(joined && !subway?.active && mdA?.ready && mdA.inCathedral?.(player.position.x, player.position.z) ? 'cathedral' : ''); } // [cathedral-bgm] 명동성당 안: 성당 배경음으로 크로스페이드 (바뀔 때만)
   bgm?.setDuck(!!ride?.active || !!adminBike?.riding || !!giftMount() || !!subway?.voiceActive); // [bgm] 버스·바이크 소리 · [subway-voice] 지하철 안내 방송 중 살짝 줄임 (바뀔 때만 동작)
   memHud.tick();
   requestAnimationFrame(frame);
@@ -3088,10 +3134,13 @@ requestAnimationFrame(frame);
 
 // 스크린샷/디버그용 훅
 window.__jj = {
+  get placeGuide() { return placeGuides?.get('namdaemun') || null; }, // [place-guide] 테스트·모바일 HUD
+  placeGuides,
   createAvatar,
   sanitizeLook,
+  wake: () => wakeFromAfk(), // [myeongdong] 스크린샷 스크립트: 느린 렌더에서 자동 AFK(Zzz) 풀기
   perfmem: perfMem, // [perf-memory]
-ready: bootReady, region, tower, renderer, corridor, namsan: corridor?.namsan || null, hangang: corridor?.hangang || null, schoolZone: corridor?.schoolZone || null, playgrounds, streetlights, pangyoLamps, migeumLamps, gangnamNight, gangnamAds, gangnamNightlife, gangnamNpc, gangnamStreet, gangnamBrt, liveBus, // [corridor] [schoolzone] [playgrounds] [streetlights] [gangnam-night] [gangnam-nightlife] [gangnam-npc] [gangnam-street] [gangnam-brt] [livebus] [namsan]
+ready: bootReady, region, tower, renderer, corridor, namsan: corridor?.namsan || null, hangang: corridor?.hangang || null, myeongdong: corridor?.myeongdong || null, schoolZone: corridor?.schoolZone || null, playgrounds, streetlights, pangyoLamps, migeumLamps, gangnamNight, gangnamAds, gangnamNightlife, gangnamNpc, gangnamStreet, gangnamBrt, liveBus, // [corridor] [schoolzone] [playgrounds] [streetlights] [gangnam-night] [gangnam-nightlife] [gangnam-npc] [gangnam-street] [gangnam-brt] [livebus] [namsan]
   placeCaption: (x, z) => placeCaption(x, z, placeList, corridor?.bounds?.islands), // [gangnam-night]
 
   bungeo, // [bungeo]
@@ -3100,18 +3149,20 @@ ready: bootReady, region, tower, renderer, corridor, namsan: corridor?.namsan ||
   get arriving() { return arriving; }, // [arrivefix]
   gateEnter(at) { if (!joined) return; setPassportActive(true); pauseWorldSession(); handleGateEnter(region.id, at ? { at } : undefined); }, // [arrivefix] 테스트용: 게임 안 🌏 → 역 고르기와 같은 흐름
   teleport(x, z, y) {
-    const move = () => { ride?.forceAlight('teleport'); if (bikes.riding) dismountBike(); if (adminBike?.riding) adminBike.dismount(); dismountGiftRides(); player.position.set(x, y ?? (terrain ? terrain.getGroundHeight(x, z, 0) : 0), z); };
+    const move = () => { if (mySit) { sitExitPos = null; standUpFromSeat(); renderEmoteBar(); } ride?.forceAlight('teleport'); if (bikes.riding) dismountBike(); if (adminBike?.riding) adminBike.dismount(); dismountGiftRides(); player.position.set(x, y ?? (terrain ? terrain.getGroundHeight(x, z, 0) : 0), z); };
     if (corridor?.needsLandmark?.(x, z)) return corridor.ensureNear(x, z, { urgent: true }).then(move);
     move();
   }, // [terrain] [bike] [roadbike] [namsan] [hangang]
 
-  bikes, toggleRide, triggerEmote,
+  bikes, toggleRide, triggerEmote, clampWorld, // [ndm-walk] clampWorld: 걷기 테스트가 플레이어와 같은 경계 판정을 쓰게
   get ride() { return ride; }, remotes, presence, // [ride]
   cameraApp, // [camera]
   subway, serverClock, // [subway] [subway-sync]
   bump24Game, arcadeGame, jeongjaBp24, bp24Nav, // [bump24game] [arcade] [bump24-jeongja] [bp24nav]
   titles: titleLayer, // [weekly-titles]
-  get pose() { return { sit: mySit, afk: myAfk, jy: jumpY }; }, // [subway-pose] 테스트용
+  get pose() { return { sit: mySit, afk: myAfk, jy: jumpY, pew: !!mySeatPew }; }, // [subway-pose] 테스트용
+  get pew() { return { near: !mySit && !!nearSeatHint?.pew, seated: !!mySeatPew && !!mySit }; }, // [cathedral-sit] 모바일 행동 버튼
+  toggleSit: () => toggleSit(), // [cathedral-sit] 테스트용
   bgm, // [bgm]
   nearNpc(i = 0, d = 3) { const n = npcs.list[i]; player.position.set(n.pos.x + d, 0, n.pos.z + d * 0.5); },
 };

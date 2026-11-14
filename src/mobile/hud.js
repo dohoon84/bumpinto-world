@@ -471,6 +471,12 @@ export function mountMobileHud({ handset } = {}) {
       A.riding = false;
       return A;
     }
+    // [cathedral-sit] 명동성당 장의자: 가까이 가면 앉기, 앉아 있으면 일어나기 (C 키와 같음)
+    const pw = J?.pew;
+    if (pw?.near || pw?.seated) { add(pw.seated ? t('일어나기', 'Stand') : t('장의자에 앉기', 'Sit on pew'), 'sit', key('KeyC')); return A; }
+    // [place-guide] 남대문시장 안내판·안내원·입구: 가이드 열기
+    const pg = J?.placeGuide;
+    if (pg?.canOpen) { add(t('시장 안내', 'Guide'), 'map', () => pg.open()); return A; }
     // [cableguide] 남산 케이블카 승강장: 타기 · 다음 칸 예약
     const cg = J?.namsan?.cableGuide;
     if (cg?.canAct && !J?.namsan?.cable?.riding) { add(cg.actLabel || t('케이블카 타기', 'Board'), 'train', () => cg.act()); return A; }

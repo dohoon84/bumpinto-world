@@ -30,6 +30,7 @@ export class Overlay {
       const maxD = mob && kind === 2 ? it.maxDist * (/landmark|station/.test(it.el.className) ? 0.8 : 0.55) : it.maxDist;
       let show = p && d < maxD && d >= it.minDist;
       if (show && it.visibleIf && !it.visibleIf(cam, p, d)) show = false;
+      if (show && kind === 2 && this.hideLabels) show = false; // [myeongdong-cathedral] 실내(성당 안)에서는 벽 너머 지명 라벨을 숨긴다
       if (show) { v.copy(p).project(cam); show = v.z < 1 && v.z > -1 && Math.abs(v.x) < 1.2 && Math.abs(v.y) < 1.2; }
       let x = 0, y = 0;
       if (show) { x = ((v.x + 1) / 2) * w; y = ((1 - v.y) / 2) * h; }
