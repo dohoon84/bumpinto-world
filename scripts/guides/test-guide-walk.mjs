@@ -90,7 +90,7 @@ for (const spec of KEY_ROUTES) {
     let ok = false, best = Infinity, still = 0, last = null;
     for (let t = 0; t < 240; t++) {
       await page.waitForTimeout(500);
-      last = await page.evaluate(() => { const J = window.__jj, p = J.player.position, w = window.__kw; let rem = Math.hypot(w.P[w.i][0] - p.x, w.P[w.i][1] - p.z); for (let i = w.i + 1; i < w.P.length; i++) rem += Math.hypot(w.P[i][0] - w.P[i - 1][0], w.P[i][1] - w.P[i - 1][1]); return { x: +p.x.toFixed(1), z: +p.z.toFixed(1), rem: +rem.toFixed(1), by: J.myeongdong.blockedBy(p.x, p.z, 0.6) }; });
+      last = await page.evaluate(() => { const J = window.__jj, p = J.player.position, w = window.__kw; let rem = Math.hypot(w.P[w.i][0] - p.x, w.P[w.i][1] - p.z); for (let i = w.i + 1; i < w.P.length; i++) rem += Math.hypot(w.P[i][0] - w.P[i - 1][0], w.P[i][1] - w.P[i - 1][1]); const fx = -Math.sin(J.cam.yaw), fz = -Math.cos(J.cam.yaw); return { x: +p.x.toFixed(1), z: +p.z.toFixed(1), rem: +rem.toFixed(1), by: J.myeongdong.blockedBy(p.x + fx * 0.3, p.z + fz * 0.3), wb: J.world.isBlocked(p.x + fx * 0.3, p.z + fz * 0.3), bike: !!J.bikes?.blocks?.(p.x + fx * 0.3, p.z + fz * 0.3, null, p.y), cm: J.terrain.canMove(p.x, p.z, p.y, p.x + fx * 0.3, p.z + fz * 0.3) != null, yaw: +J.cam.yaw.toFixed(2), sit: !!J.pose?.sit, afk: !!J.pose?.afk }; });
       if (last.rem < 3) { ok = true; break; }
       if (last.rem < best - 0.3) { best = last.rem; still = 0; } else if (++still > 8) break;
     }
