@@ -111,7 +111,7 @@
   top: calc(118px + env(safe-area-inset-top));
   display: flex;
   align-items: stretch;
-  max-height: calc(100dvh - 230px);
+  max-height: none;
   width: 200px;
 }
 #bw-raid.is-handheld .m-tabs {
@@ -164,8 +164,11 @@
 }
 #bw-raid.is-handheld.is-fight .m-side .quest {
   display: block !important;
-  position: static;
-  width: auto;
+  position: static !important;
+  top: auto !important;
+  right: auto !important;
+  width: 100% !important;
+  max-width: 100%;
   padding: 0 22px 0 0;
   background: none;
   border: 0;
@@ -240,7 +243,14 @@
 #bw-raid.is-handheld .c-boss-top em { flex: none; font-size: 12px; min-width: 36px; }
 #bw-raid.is-handheld .c-boss-line { height: 16px; margin-top: 4px; overflow: hidden; }
 #bw-raid.is-handheld .c-hp { height: 16px; overflow: hidden; }
-#bw-raid.is-handheld .c-hp b { font-size: 12px; }
+#bw-raid.is-handheld .m-boss .c-hp .ghost { display: none; }
+#bw-raid.is-handheld .m-boss .c-hp .fill { box-shadow: none; }
+#bw-raid.is-handheld .m-boss .c-hp b {
+  z-index: 2;
+  font-size: 12px;
+  color: #fff;
+  text-shadow: 0 1px 2px #1a0508, 0 0 3px #1a0508;
+}
 #bw-raid.is-handheld .c-castrow { height: 18px; margin-top: 4px; overflow: hidden; }
 #bw-raid.is-handheld .c-cast { flex: 1; width: auto; min-width: 40px; }
 #bw-raid.is-handheld .c-castrow span,
@@ -286,7 +296,13 @@
 #bw-raid.is-handheld .c-map::before { display: none; }
 #bw-raid.is-handheld .c-minimap { width: 64px; height: 64px; margin: 0 0 0 auto; }
 #bw-raid.is-handheld .m-region { font-size: 12px; color: #ffe6a8; font-weight: 700; }
-#bw-raid.is-handheld .m-menu { display: flex; gap: 6px; align-items: center; }
+#bw-raid.is-handheld .m-menu {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  justify-content: flex-end;
+  max-width: calc(100vw - 16px - env(safe-area-inset-left) - env(safe-area-inset-right));
+}
 #bw-raid.is-handheld .m-menu.is-folded .c-auto,
 #bw-raid.is-handheld .m-menu.is-folded .m-icon { display: none; }
 #bw-raid.is-handheld .c-auto,
@@ -354,15 +370,35 @@
   display: flex !important;
   margin-top: 4px;
 }
+#bw-raid.is-handheld.is-fight .rchat-log,
 #bw-raid.is-handheld .rchat-log {
-  height: auto !important;
-  max-height: 68px;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  height: 72px !important;
+  max-height: 72px;
   overflow: hidden;
-  background: none;
+  padding: 2px 8px;
+  border-radius: 8px;
+  background: linear-gradient(180deg, rgba(6, 8, 14, 0), rgba(6, 8, 14, 0.72));
   font-size: 12px;
-  line-height: 16px;
+  line-height: 18px;
   text-shadow: 0 1px 2px #000;
 }
+#bw-raid.is-handheld.is-fight .rchat-log p,
+#bw-raid.is-handheld .rchat-log p {
+  position: static;
+  display: block;
+  flex: none;
+  height: 18px;
+  margin: 0;
+  line-height: 18px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 12px;
+}
+#bw-raid.is-handheld .rchat-log b { display: inline; margin-right: 4px; }
 #bw-raid.is-handheld .rchat.is-open {
   padding: 8px !important;
   background: rgba(10, 12, 20, 0.88) !important;
@@ -423,12 +459,22 @@
 #bw-raid.is-handheld .c-slot.m-out[data-arc="0"] { right: 174px; bottom: 16px; }
 #bw-raid.is-handheld .c-slot.m-out[data-arc="1"] { right: 180px; bottom: 78px; }
 #bw-raid.is-handheld .c-slot.m-out[data-arc="2"] { right: 128px; bottom: 132px; }
+#bw-raid.is-handheld .c-slot .sweep,
+#bw-raid.is-handheld .c-slot .gcd {
+  inset: 0;
+  border-radius: 50%;
+  background: none;
+}
+#bw-raid.is-handheld .c-slot.is-cd .sweep,
+#bw-raid.is-handheld .c-slot.is-gcd .sweep {
+  background: rgba(6, 8, 14, 0.5);
+}
 #bw-raid.is-handheld .c-slot .cd {
   font-size: 14px;
   line-height: 14px;
   padding: 0;
   border-radius: 50%;
-  z-index: 2;
+  z-index: 3;
 }
 #bw-raid.is-handheld .m-more {
   position: absolute;
@@ -479,29 +525,42 @@
   #bw-raid.is-handheld .m-player .c-vname em { font-size: 12px; }
   #bw-raid.is-handheld .m-boss {
     left: calc(8px + env(safe-area-inset-left));
-    right: calc(72px + env(safe-area-inset-right));
-    top: calc(120px + env(safe-area-inset-top));
+    right: calc(8px + env(safe-area-inset-right));
+    top: calc(196px + env(safe-area-inset-top));
     width: auto;
   }
   #bw-raid.is-handheld .m-side {
-    top: calc(248px + env(safe-area-inset-top));
-    width: min(200px, 52vw);
-    max-height: 150px;
+    top: calc(316px + env(safe-area-inset-top));
+    width: min(210px, 56vw);
+    max-height: none;
   }
-  #bw-raid.is-handheld .m-menu { flex-direction: column; position: absolute; right: 0; top: 92px; }
-  #bw-raid.is-handheld .m-autofight { bottom: calc(196px + env(safe-area-inset-bottom)); }
+  #bw-raid.is-handheld .m-menu {
+    position: static;
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    max-width: 148px;
+  }
+  #bw-raid.is-handheld .m-autofight { bottom: calc(168px + env(safe-area-inset-bottom)); }
   #bw-raid.is-handheld .rchat.is-ghost {
     left: calc(8px + env(safe-area-inset-left)) !important;
-    right: calc(168px + env(safe-area-inset-right)) !important;
-    bottom: calc(188px + env(safe-area-inset-bottom)) !important;
-    width: auto !important;
+    right: auto !important;
+    width: min(220px, 58vw) !important;
+    bottom: calc(156px + env(safe-area-inset-bottom)) !important;
   }
   #bw-raid.is-handheld .m-skills,
-  #bw-raid.is-handheld .m-skills .c-skills { width: 200px; height: 168px; }
+  #bw-raid.is-handheld .m-skills .c-skills { width: 160px; height: 124px; }
+  #bw-raid.is-handheld .c-slot.m-main { width: 56px; height: 56px; }
+  #bw-raid.is-handheld .c-slot.m-main img,
+  #bw-raid.is-handheld .c-slot.m-main svg { width: 56px; height: 56px; }
+  #bw-raid.is-handheld .c-slot.m-in[data-arc="0"] { right: 60px; bottom: 0; }
+  #bw-raid.is-handheld .c-slot.m-in[data-arc="1"] { right: 108px; bottom: 46px; }
+  #bw-raid.is-handheld .c-slot.m-in[data-arc="2"] { right: 52px; bottom: 68px; }
+  #bw-raid.is-handheld .c-slot.m-in[data-arc="3"] { right: 2px; bottom: 60px; }
 }
 
 @media (max-height: 380px) {
-  #bw-raid.is-handheld .m-side { max-height: 132px; }
+  #bw-raid.is-handheld .m-side { max-height: none; }
   #bw-raid.is-handheld .m-skills,
   #bw-raid.is-handheld .m-skills .c-skills { width: 210px; height: 158px; }
   #bw-raid.is-handheld .c-slot.m-main { width: 58px; height: 58px; }

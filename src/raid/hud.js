@@ -360,9 +360,13 @@ export function createHud() {
     const buttons = [...skillsEl.querySelectorAll('.c-slot')];
     const main = buttons[0];
     const rest = buttons.slice(1);
-    const page = rest.slice(wheelPage * 8, wheelPage * 8 + 8);
-    const inner = page.slice(0, 5);
-    const outer = page.slice(5, 8);
+    const narrow = window.innerHeight > window.innerWidth;
+    const innerCount = narrow ? 4 : 5;
+    const outerCount = narrow ? 0 : 3;
+    const pageSize = innerCount + outerCount;
+    const page = rest.slice(wheelPage * pageSize, wheelPage * pageSize + pageSize);
+    const inner = page.slice(0, innerCount);
+    const outer = page.slice(innerCount, innerCount + outerCount);
     buttons.forEach((btn) => {
       btn.classList.remove('m-main', 'm-in', 'm-out');
       btn.classList.add('m-off');
@@ -381,7 +385,7 @@ export function createHud() {
     });
     const more = root.querySelector('.m-more');
     if (more) {
-      more.hidden = rest.length <= 8;
+      more.hidden = rest.length <= pageSize;
       more.textContent = wheelPage ? '1' : '2';
       more.setAttribute('aria-pressed', wheelPage ? 'true' : 'false');
     }
@@ -877,6 +881,7 @@ export function createHud() {
       });
       side.querySelector('.m-side-fold').addEventListener('click', () => side.classList.add('is-folded'));
       showTab('gate');
+      if (window.innerHeight > window.innerWidth) side.classList.add('is-folded');
       const quest = root.querySelector('.quest');
       const heading = quest.querySelector('h3');
       if (heading) heading.textContent = '현재 관문';
@@ -925,7 +930,7 @@ export function createHud() {
         menu.classList.toggle('is-folded');
         menuFold.textContent = menu.classList.contains('is-folded') ? '›' : '‹';
       });
-      menu.append(auto, info, gear, exit, menuFold);
+      menu.append(menuFold, auto, info, gear, exit);
       const more = document.createElement('button');
       more.type = 'button';
       more.className = 'm-more';

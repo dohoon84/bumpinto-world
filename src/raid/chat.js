@@ -91,7 +91,8 @@ export function mountRaidChat(parent, room) {
   const seen = { party: true, raid: true, system: true };
 
   function paint() {
-    const view = lines.filter((m) => m.channel === channel).slice(-6);
+    const cap = el.closest('#bw-raid')?.classList.contains('is-handheld') ? 4 : 6;
+    const view = lines.filter((m) => m.channel === channel).slice(-cap);
     log.innerHTML = view.map((m) => {
       const kind = m.kind || (m.system ? 'info' : '');
       if (m.channel === 'system') {
