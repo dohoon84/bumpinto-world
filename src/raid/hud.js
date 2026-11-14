@@ -1032,7 +1032,10 @@ export function createHud() {
           chat.classList.toggle('is-open');
         });
         chat.prepend(toggle);
-        shell.querySelector('.m-autofight').after(chat);
+        const pill = shell.querySelector('.m-autofight');
+        const log = chat.querySelector('.rchat-log');
+        if (pill && log) log.before(pill);
+        shell.append(chat);
       }
       root.append(shell);
       paintSkills(active.skills);

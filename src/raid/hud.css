@@ -650,23 +650,26 @@
   border-left: 8px solid #eb4632; border-top: 6px solid transparent; border-bottom: 6px solid transparent;
 }
 
-#bw-raid .c-vitals { position: absolute; left: 671px; top: 946px; width: 578px; height: 32px; }
-#bw-raid .c-buffs { position: absolute; left: 132px; top: 0; display: flex; gap: 3px; align-items: center; height: 16px; }
-#bw-raid .c-buffs img { width: 16px; height: 16px; border-radius: 50%; object-fit: cover; }
+#bw-raid .c-vitals { position: absolute; left: 671px; top: 946px; width: 578px; height: 32px; overflow: hidden; }
+#bw-raid .c-buffs { position: absolute; left: 118px; top: 0; display: flex; gap: 3px; align-items: center; height: 16px; }
+#bw-raid .c-buffs img {
+  width: 16px; height: 16px; box-sizing: border-box; padding: 0; margin: 0;
+  border: 1px solid #e8b64a; border-radius: 50%; object-fit: cover; object-position: center; display: block;
+}
 #bw-raid .c-buffs span { font-size: 10px; color: #ced2e0; font-weight: 700; }
-#bw-raid .c-vname { position: absolute; left: 0; right: 0; top: 0; height: 16px; display: flex; align-items: baseline; gap: 6px; }
+#bw-raid .c-vname { position: absolute; left: 8px; right: 8px; top: 0; height: 16px; display: flex; align-items: baseline; gap: 6px; }
 #bw-raid .c-vname b { font-size: 13px; font-weight: 800; }
 #bw-raid .c-vname span { font-size: 11px; color: #b7b3aa; font-weight: 500; }
-#bw-raid .c-vname em { margin-left: auto; font-style: normal; font-size: 12px; font-weight: 700; color: #f4efe4; }
-#bw-raid .c-vitals .c-hp.thin { position: absolute; left: 0; right: 0; top: 16px; height: 8px; margin: 0; }
-#bw-raid .c-res { position: absolute; left: 0; right: 0; top: 26px; height: 4px; margin: 0; border-radius: 2px; background: rgba(20,18,26,.9); overflow: hidden; }
+#bw-raid .c-vname em { margin-left: auto; font-style: normal; font-size: 12px; font-weight: 700; color: #f4efe4; white-space: nowrap; }
+#bw-raid .c-vitals .c-hp.thin { position: absolute; left: 8px; right: 8px; top: 16px; height: 8px; margin: 0; }
+#bw-raid .c-res { position: absolute; left: 8px; right: 8px; top: 26px; height: 4px; margin: 0; border-radius: 2px; background: rgba(20,18,26,.9); overflow: hidden; }
 #bw-raid .c-res span { display: block; height: 100%; width: 0; }
 #bw-raid .c-res[data-res="rage"] span { background: linear-gradient(#ffc878, #ff7a1a); }
 #bw-raid .c-res[data-res="mana"] span { background: linear-gradient(#c4beff, #8c7fff); }
 #bw-raid .c-res[data-res="holy"] span { background: linear-gradient(#ffe28a, #ffc845); }
 #bw-raid .c-res[data-res="focus"] span { background: linear-gradient(#9dffc4, #3ddc84); }
 #bw-raid .c-res[data-res="energy"] span { background: linear-gradient(#ffb0cc, #ff5c9a); }
-#bw-raid .c-resread { position: absolute; left: 586px; top: 18px; font-size: 10px; color: #ffbe82; font-weight: 700; white-space: nowrap; }
+#bw-raid .c-resread { position: absolute; right: 8px; top: 17px; font-size: 10px; color: #ffbe82; font-weight: 700; white-space: nowrap; }
 
 #bw-raid .c-portrait { position: absolute; left: 587px; top: 976px; width: 76px; height: 76px; }
 #bw-raid .c-portrait img {
@@ -704,12 +707,16 @@
   box-shadow: inset 0 1px 0 rgba(255,240,210,.2), 0 4px 10px rgba(0,0,0,.35);
 }
 #bw-raid .c-slot {
-  width: 50px; height: 50px; padding: 0; position: relative; border: 0; border-radius: 50%;
-  background: #040509; box-shadow: inset 0 0 0 2px #e8b64a; cursor: pointer; overflow: hidden;
+  width: 50px; height: 50px; padding: 0; margin: 0; position: relative; box-sizing: border-box;
+  border: 2px solid #e8b64a; border-radius: 50%;
+  background: #040509; box-shadow: none; cursor: pointer; overflow: hidden;
 }
-#bw-raid .c-slot img { width: 44px; height: 44px; margin: 3px; display: block; border-radius: 50%; object-fit: cover; }
+#bw-raid .c-slot img {
+  position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; padding: 0;
+  display: block; border-radius: 0; object-fit: cover; object-position: center center;
+}
 #bw-raid .c-slot.is-empty {
-  background: #12151e; box-shadow: inset 0 0 0 2px rgba(156, 111, 30, 0.75); cursor: default;
+  background: #12151e; border-color: rgba(156, 111, 30, 0.75); box-shadow: none; cursor: default;
 }
 #bw-raid .c-slot.is-empty img { opacity: 0.7; filter: saturate(0.65) brightness(0.82); }
 #bw-raid .c-slot .key {
