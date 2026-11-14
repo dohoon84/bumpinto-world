@@ -29,11 +29,11 @@
   position: absolute;
   left: calc(8px + env(safe-area-inset-left));
   top: calc(8px + env(safe-area-inset-top));
-  width: 214px;
+  width: 192px;
   display: grid;
-  grid-template-columns: 58px 1fr;
+  grid-template-columns: 48px 1fr;
   column-gap: 8px;
-  row-gap: 8px;
+  row-gap: 4px;
   align-items: center;
   padding: 8px;
   background: rgba(10, 12, 20, 0.72);
@@ -46,14 +46,14 @@
   top: auto;
   grid-column: 1;
   grid-row: 1 / 5;
-  width: 58px;
-  height: 58px;
+  width: 48px;
+  height: 48px;
 }
 #bw-raid.is-handheld .c-portrait img {
-  left: 7px;
-  top: 7px;
-  width: 44px;
-  height: 44px;
+  left: 4px;
+  top: 4px;
+  width: 40px;
+  height: 40px;
 }
 #bw-raid.is-handheld .c-portrait b {
   right: 0;
@@ -269,13 +269,14 @@
 
 #bw-raid.is-handheld .m-boss {
   position: absolute;
-  left: calc(220px + env(safe-area-inset-left));
-  right: calc(230px + env(safe-area-inset-right));
+  left: 50%;
+  right: auto;
   top: calc(8px + env(safe-area-inset-top));
-  width: auto;
+  width: min(46vw, calc(100vw - 448px));
+  transform: translateX(-50%);
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 8px;
 }
 #bw-raid.is-handheld .m-boss .c-boss {
   position: relative;
@@ -285,11 +286,20 @@
   width: auto;
   height: auto;
   transform: none;
-  padding: 6px 8px 4px;
-  background: rgba(10, 12, 20, 0.72);
-  border: 1px solid rgba(232, 182, 74, 0.85);
-  border-radius: 8px;
-  box-shadow: inset 0 1px 0 rgba(255, 230, 170, 0.35);
+  padding: 4px 8px 6px;
+  background: rgba(10, 12, 20, 0.82);
+  border: 1px solid #e8b64a;
+  border-radius: 2px;
+  box-shadow: none;
+}
+#bw-raid.is-handheld .m-boss .c-boss::before {
+  content: "";
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  top: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, #ffe6a8 18%, #e8b64a 50%, #ffe6a8 82%, transparent);
 }
 #bw-raid.is-handheld .c-boss-top {
   height: 18px;
@@ -649,13 +659,14 @@
 }
 
 @media (orientation: portrait) {
-  #bw-raid.is-handheld .m-player { width: 196px; }
+  #bw-raid.is-handheld .m-player { width: 184px; }
   #bw-raid.is-handheld .m-player .c-vname em { font-size: 12px; }
   #bw-raid.is-handheld .m-boss {
     left: calc(8px + env(safe-area-inset-left));
     right: calc(8px + env(safe-area-inset-right));
-    top: calc(224px + env(safe-area-inset-top));
+    top: calc(168px + env(safe-area-inset-top));
     width: auto;
+    transform: none;
   }
   #bw-raid.is-handheld .m-side {
     top: calc(368px + env(safe-area-inset-top));
