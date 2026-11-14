@@ -161,7 +161,7 @@ body.mobile.bw-signed-in #lobby-card .v2-save-google { display: none !important;
 /* 가로 폰(높이 ≤ 440: 740×360 · 844×390 · 932×430 등): 옆 칸을 스크롤 없이 (명동 칩이 더해져도) — 노선 밖·랜드마크 칩은 2열(이름만, 두 줄까지), 다른 지역은 한 줄 */
 @media (max-height: 440px) {
   #m-landing .m-rm-side { gap: 6px; }
-  #m-landing .m-rm-lms { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; }
+  #m-landing .m-rm-lms { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 5px; }
   #m-landing .m-rm-lm { height: 40px; padding: 0 7px; gap: 5px; font-size: 12px; line-height: 1.1; white-space: normal; word-break: keep-all; }
   #m-landing .m-rm-lm span { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
   #m-landing .m-rm-lm small { display: none; }
@@ -170,6 +170,11 @@ body.mobile.bw-signed-in #lobby-card .v2-save-google { display: none !important;
   #m-landing .m-rm-region small { display: none; }
   #m-landing .m-rm-sel { gap: 6px; padding: 8px; }
   #m-landing .m-rm-sel .m-btn { min-height: 44px; }
+}
+/* 영문 + 좁은 옆 칸(180px): 2열 칩은 아이콘을 빼고 이름만 (Myeongdong · N Seoul Tower 가 잘리지 않게) */
+@media (max-height: 440px) and (max-width: 799.98px) {
+  #m-landing .m-rm.is-en .m-rm-lm > svg { display: none; }
+  #m-landing .m-rm.is-en .m-rm-lm { padding: 0 6px; font-size: 11px; letter-spacing: -.1px; }
 }
 @media (max-height: 370px) {
   #m-landing .m-rm-desc { display: none; }
