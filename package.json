@@ -24,6 +24,7 @@
     "economy:test": "node scripts/test-economy.mjs && node scripts/test-econ-client.mjs",
     "bgm:test": "node scripts/test-bgm.mjs",
     "routemap:test": "node scripts/test-route-map.mjs",
+    "routemap:mobile": "node scripts/verify-route-map-mobile.mjs",
     "corridor:tancheon": "node --max-old-space-size=8192 scripts/corridor/build-tancheon.mjs",
     "corridor:transit": "node scripts/corridor/build-transit.mjs",
     "corridor:drive": "node scripts/corridor/build-drive.mjs",

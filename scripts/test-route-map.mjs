@@ -112,5 +112,23 @@ assert.equal(fails, 0, `겹침 검사 실패 ${fails}건`);
   assert.equal(mm.labels.length, mainOnly.items.length);
   if (mrep.issues.length) { fails++; console.log('land main-only: ' + mrep.issues.join(', ')); }
 }
+// [route-map mobile] 모바일 시작화면 노선도(src/mobile/routeMap.js): 같은 역 목록 · 통과 역은 입장 불가 · 랜드마크 · ?mrm=0 끔
+{
+  const MR = await import('../src/mobile/routeMap.js');
+  const ms = MR.mapStations();
+  assert.deepEqual(ms.map((s) => s.id).sort(), [...all.keys()].sort(), '모바일 노선도 역 = 데스크톱 노선도 역');
+  const pick = MR.pickableIds();
+  assert.ok(!pick.has('yangjae') && !pick.has('yangjaeforest'), '통과 역은 입장 불가');
+  for (const id of ['jeongja', 'migeum', 'pangyo', 'gangnam', 'jamsil', 'bokjeong', 'yatap', 'ntower', 'lotte']) assert.ok(pick.has(id), `${id} 입장 가능`);
+  const lms = MR.landmarkStations().map((s) => s.id);
+  assert.equal(lms.includes('myeongdong'), !!G.MYEONGDONG_LANDMARK, '명동 칩은 명동이 있는 브랜치에서만');
+  assert.equal(MR.routeMapWanted('?mrm=0'), false);
+  assert.equal(MR.routeMapWanted(''), true);
+  const html = MR.routeMapHtml({ sel: 'jangji', title: '분당–잠실 구간', others: [{ id: 'starbase', title: '스타베이스', sub: '미국', locked: false }] });
+  assert.match(html, /data-act="go"/); assert.match(html, /data-act="back"/); assert.match(html, /data-region="starbase"/);
+  assert.match(html, /class="m-rm-stn on" data-stn="jangji"/);
+  assert.doesNotMatch(html, /data-stn="yangjae"/, '통과 역은 버튼이 아니다');
+  console.log(`mobile route map: ${ms.length} stations, pickable ${pick.size}, landmarks ${lms.join(',')}`);
+}
 if (fails) { console.error(`route map: ${fails} layout(s) with issues`); process.exit(1); }
 console.log('route map OK');
