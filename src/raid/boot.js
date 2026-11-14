@@ -839,7 +839,7 @@ const room = createRaidRoom({
 });
 chat = mountRaidChat(hud.root, room);
 if (mobile) {
-  hud.root.classList.add('is-handheld');
+  hud.useMobileLayout();
   chat.collapse();
   const credit = document.getElementById('attribution');
   if (credit) credit.hidden = true;
@@ -1409,10 +1409,20 @@ function frame() {
     ],
   });
   if (camHold > 0) camHold = Math.max(0, camHold - dt);
+  const phoneTall = mobile && innerHeight > innerWidth;
+  if (phoneTall && camera.fov !== 60) {
+    camera.fov = 60;
+    camera.updateProjectionMatrix();
+  } else if (!phoneTall && camera.fov !== 55) {
+    camera.fov = 55;
+    camera.updateProjectionMatrix();
+  }
   if (phase === 'fight' && shotLookY == null && !portrait && camHold <= 0) {
     const ph = boss.state?.phase;
     const big = ph === 'spawn' || ph === 'slam' || ph === 'sweep' || ph === 'charge' || ph === 'wind';
-    camDist = THREE.MathUtils.damp(camDist, mobile ? (big ? 28 : 24) : (big ? 38 : 35), 3, dt);
+    const far = phoneTall ? 32 : mobile ? 24 : (big ? 38 : 35);
+    camDist = THREE.MathUtils.damp(camDist, far, 3, dt);
+    if (phoneTall) camPitch = THREE.MathUtils.damp(camPitch, 40 * Math.PI / 180, 3, dt);
   }
   const lookYaw = camYaw;
   const pitch = camPitch;
@@ -1422,9 +1432,9 @@ function frame() {
   const cp = Math.cos(pitch);
   camera.position.set(focus.x - lx * dist * cp, focus.y + dist * Math.sin(pitch), focus.z - lz * dist * cp);
   const bossView = (phase === 'fight' || phase === 'intro') && shotLookY == null && !portrait && !camLock;
-  const aim = shotAim != null ? shotAim : shot === 'wide' ? 1.5 : portrait ? 0.1 : bossView ? (mobile ? 8 : 18) : 6;
+  const aim = shotAim != null ? shotAim : shot === 'wide' ? 1.5 : portrait ? 0.1 : bossView ? (phoneTall ? 3 : mobile ? 8 : 18) : 6;
   const head = form?.group?.userData?.headY;
-  const lookY = shotLookY != null ? shotLookY : shot === 'wide' ? 1.15 : portrait ? (head || 1.1) : bossView ? (mobile ? 4 : 7) : 0.2;
+  const lookY = shotLookY != null ? shotLookY : shot === 'wide' ? 1.15 : portrait ? (head || 1.1) : bossView ? (phoneTall ? 2.2 : mobile ? 4 : 7) : 0.2;
   const lookTarget = new THREE.Vector3(focus.x + lx * aim, lookY, focus.z + lz * aim);
   if (camLock) {
     camera.position.set(camLock.px, camLock.py, camLock.pz);
@@ -1880,8 +1890,8 @@ function showKnights() {
   const mid = fromFrame(BOSS_ALONG - 11, 0);
   actor.position.set(mid.x, 0, mid.z);
   camYaw = PATH_YAW;
-  camPitch = (mobile ? 42 : 50) * Math.PI / 180;
-  camDist = mobile ? 22 : 35;
+  camPitch = (mobile ? (innerHeight > innerWidth ? 40 : 42) : 50) * Math.PI / 180;
+  camDist = mobile ? (innerHeight > innerWidth ? 32 : 22) : 35;
   shotLookY = null;
   shotAim = null;
   if (phase !== 'fight') finishIntro();

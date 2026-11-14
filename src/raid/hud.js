@@ -1,4 +1,5 @@
 import './hud.css';
+import './mobile-hud.css';
 import { virtualPad } from '../input.js';
 import { AURAS, CLASS_IDS, describeSkill, getClass } from './classes.js';
 import { toFrame, ALONG_MIN, ALONG_MAX, SAFE_ALONG, SAFE_R, BOSS_ALONG } from './layout.js';
@@ -319,6 +320,7 @@ export function createHud() {
       }));
       cells.push({ key: 'T', empty: true });
     }
+    if (root.classList.contains('is-handheld')) cells = cells.filter((c) => !c.empty && (c.skill || c.icon));
     skillsEl.dataset.mode = 'live';
     skillsEl.dataset.klass = active.id;
     skillsEl.innerHTML = cells.map((c) => `
@@ -339,6 +341,28 @@ export function createHud() {
         hud.onSkill?.(btn.getAttribute('data-skill'));
       });
     });
+    if (root.classList.contains('is-handheld')) layoutWheel();
+  }
+  let wheelPage = 0;
+  function layoutWheel() {
+    const buttons = [...skillsEl.querySelectorAll('.c-slot')];
+    const main = buttons[0];
+    const rest = buttons.slice(1);
+    const start = wheelPage * 4;
+    const shown = new Set(rest.slice(start, start + 4));
+    main?.classList.add('m-main');
+    rest.forEach((btn) => {
+      const on = shown.has(btn);
+      btn.classList.toggle('m-arc', on);
+      btn.classList.toggle('m-off', !on);
+      if (on) btn.dataset.arc = String([...shown].indexOf(btn));
+    });
+    const more = root.querySelector('.m-more');
+    if (more) {
+      more.hidden = rest.length <= 4;
+      more.textContent = wheelPage ? '1' : '＋';
+      more.setAttribute('aria-pressed', wheelPage ? 'true' : 'false');
+    }
   }
   paintSkills(active.skills);
   const tip = root.querySelector('[data-tip]');
@@ -359,6 +383,17 @@ export function createHud() {
       <small>남은 시간 ${remain || '—'}</small>`;
   }
   function placeTip(anchor) {
+    if (root.classList.contains('is-handheld')) {
+      tip.style.width = '220px';
+      const w = 220;
+      const h = tip.offsetHeight || 96;
+      const x = Math.max(12, Math.min((window.innerWidth - w) / 2, window.innerWidth - w - 12));
+      const y = Math.max(112, Math.min(window.innerHeight * 0.4, window.innerHeight - h - 176));
+      tip.style.left = `${Math.round(x)}px`;
+      tip.style.top = `${Math.round(y)}px`;
+      root.classList.add('is-tip');
+      return;
+    }
     tip.style.width = '300px';
     const r = anchor.getBoundingClientRect();
     const w = tip.offsetWidth || 300;
@@ -414,6 +449,7 @@ export function createHud() {
   }
   function hideTip() {
     tip.hidden = true;
+    root.classList.remove('is-tip');
     window.clearTimeout(tipTimer);
   }
   const coarse = window.matchMedia('(pointer: coarse)').matches;
@@ -749,7 +785,7 @@ export function createHud() {
     },
     setParty(frames) {
       const rows = frames.slice(0, 5);
-      party.innerHTML = `<header><b>파티</b><span>${rows.length}/5</span></header>` + rows.map((m) => {
+      party.innerHTML = `<header><b>파티</b><span>${rows.length}/5</span><button type="button" class="m-fold" aria-label="파티 접기">▾</button></header>` + rows.map((m) => {
         const dead = !!(m.down || (m.hp ?? 1) <= 0);
         const gem = dead ? '#5a5c64' : (m.gem || GEM[m.role] || '#8C7FFF');
         const hp = dead ? 0 : Math.round((m.hp ?? 1) * 100);
@@ -766,6 +802,60 @@ export function createHud() {
           <div class="rs" style="--res:${gem}"><span data-sub style="width:${dead ? 0 : Math.round((m.sub ?? 0.5) * 100)}%"></span></div>
         </div>`;
       }).join('');
+      const fold = party.querySelector('.m-fold');
+      fold?.addEventListener('click', () => {
+        party.classList.toggle('is-folded');
+        fold.textContent = party.classList.contains('is-folded') ? '▸' : '▾';
+      });
+    },
+    useMobileLayout() {
+      if (root.querySelector('.m-shell')) return;
+      root.classList.add('is-handheld');
+      const shell = document.createElement('div');
+      shell.className = 'm-shell';
+      shell.innerHTML = `
+        <div class="m-top"></div>
+        <div class="m-partycol"></div>
+        <div class="m-left"></div>
+        <div class="m-right"></div>
+      `;
+      const stage = root.querySelector('.c-stage');
+      const top = shell.querySelector('.m-top');
+      const col = shell.querySelector('.m-partycol');
+      const left = shell.querySelector('.m-left');
+      const right = shell.querySelector('.m-right');
+      top.append(stage.querySelector('.c-boss'), stage.querySelector('.c-map'));
+      col.append(stage.querySelector('.c-party'), stage.querySelector('.c-warn'), root.querySelector('.banner'));
+      const me = document.createElement('div');
+      me.className = 'm-me';
+      me.append(stage.querySelector('.c-portrait'), stage.querySelector('.c-vitals'));
+      const icons = document.createElement('div');
+      icons.className = 'm-icons';
+      const more = document.createElement('button');
+      more.type = 'button';
+      more.className = 'm-more';
+      more.textContent = '＋';
+      more.setAttribute('aria-label', '다른 기술');
+      more.addEventListener('click', () => {
+        wheelPage = wheelPage ? 0 : 1;
+        layoutWheel();
+      });
+      const menu = document.createElement('button');
+      menu.type = 'button';
+      menu.className = 'm-icon';
+      menu.textContent = '☰';
+      menu.setAttribute('aria-label', '파티 접기');
+      menu.addEventListener('click', () => {
+        party.classList.toggle('is-folded');
+        const fold = party.querySelector('.m-fold');
+        if (fold) fold.textContent = party.classList.contains('is-folded') ? '▸' : '▾';
+      });
+      icons.append(stage.querySelector('.c-auto'), root.querySelector('.rchat'), more, menu);
+      left.append(root.querySelector('[data-joy]'), me, icons);
+      right.append(skillsEl);
+      root.append(shell);
+      layoutWheel();
+      paintSkills(active.skills);
     },
     setMuted(muted) {
       root.querySelector('[data-mute]').textContent = muted ? '소리 꺼짐' : '소리 켜짐';
@@ -874,7 +964,9 @@ export function createHud() {
       root.querySelector('[data-cast-name]').textContent = cap ? cap.cast : (snap.castName || '');
       root.querySelector('[data-cast-time]').textContent = cap ? cap.castTime : (snap.castMax > 0 ? castLeft.toFixed(1) : '');
       const warn = root.querySelector('[data-warn]');
-      if (cap?.warn || snap.castName) {
+      if (snap.down > 0) {
+        warn.hidden = true;
+      } else if (cap?.warn || snap.castName) {
         warn.hidden = false;
         root.querySelector('[data-warn-name]').textContent = cap?.warn || `${snap.castName} · 머리 앞 60°에서 벗어나기`;
         root.querySelector('[data-warn-time]').textContent = cap?.warnTime || castLeft.toFixed(1);
