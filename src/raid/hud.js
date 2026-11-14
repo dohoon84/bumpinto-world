@@ -34,7 +34,7 @@ const WARRIOR_BAR = [
   { key: 'R', icon: 'buff_haste' },
   { key: 'F', icon: 'hud_star' },
   { key: 'G', icon: 'buff_regen' },
-  { key: 'T', empty: true },
+  { key: 'T', icon: 'lock', empty: true },
 ];
 const EXTRA_KEYS = ['Q', 'E', 'R', 'F', 'G', 'T'];
 const GEM = { 전사: '#FF7A1A', 마법사: '#8C7FFF', 사제: '#FFC845', 궁수: '#3DDC84', 암살자: '#E5383B' };
@@ -334,7 +334,7 @@ export function createHud() {
         key: EXTRA_KEYS[i],
         aura: icon.startsWith('buff_') || icon.startsWith('debuff_') ? icon : '',
       }));
-      cells.push({ key: 'T', empty: true });
+      cells.push({ key: 'T', icon: 'lock', empty: true });
     }
     if (root.classList.contains('is-handheld')) cells = cells.filter((c) => !c.empty && (c.skill || c.icon));
     skillsEl.dataset.mode = 'live';

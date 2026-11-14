@@ -409,10 +409,8 @@
   color: #ffe6a8;
   font-weight: 700;
 }
-#bw-raid.is-handheld .c-auto,
 #bw-raid.is-handheld .m-icon,
-#bw-raid.is-handheld .m-menu-fold,
-#bw-raid.is-handheld .c-auto {
+#bw-raid.is-handheld .m-menu-fold {
   position: relative;
 }
 #bw-raid.is-handheld .m-icon,
@@ -432,13 +430,20 @@
   display: grid;
   place-items: center;
 }
-#bw-raid.is-handheld .c-auto {
+#bw-raid.is-handheld .c-auto,
+#bw-raid.is-handheld .c-auto.is-on {
   position: relative;
   left: auto;
   top: auto;
   width: 44px;
   height: 44px;
+  min-width: 44px;
+  max-width: 44px;
+  min-height: 44px;
+  max-height: 44px;
+  flex: 0 0 44px;
   padding: 0;
+  margin: 0;
   border-radius: 50%;
   border: 1px solid rgba(232, 182, 74, 0.85);
   background:
@@ -448,11 +453,10 @@
   letter-spacing: 0;
   display: grid;
   place-items: center;
+  overflow: hidden;
 }
 #bw-raid.is-handheld .c-auto.is-on {
-  background: #0a0c14;
-  color: #ffe6a8;
-  box-shadow: 0 0 0 2px #ffe7a0, inset 0 0 0 2px rgba(0, 0, 0, 0.45);
+  box-shadow: 0 0 0 2px #ffe7a0, 0 0 10px rgba(255, 226, 154, 0.9);
 }
 #bw-raid.is-handheld .m-menu { gap: 8px; }
 #bw-raid.is-handheld .m-menu-fold { background: transparent; }

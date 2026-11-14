@@ -89,7 +89,7 @@ const renderer = new THREE.WebGLRenderer({
   powerPreference: mobile ? 'default' : 'high-performance',
   alpha: false,
   failIfMajorPerformanceCaveat: false,
-  preserveDrawingBuffer: mobile,
+  preserveDrawingBuffer: mobile || !!shot,
 });
 renderer.setPixelRatio(mobile ? 1 : Math.min(window.devicePixelRatio || 1, 1.25));
 renderer.outputColorSpace = THREE.SRGBColorSpace;
