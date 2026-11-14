@@ -1010,11 +1010,16 @@ body.raid-handheld #attribution { display: none !important; }
   height: auto !important;
 }
 #bw-raid.is-handheld .rchat-chip {
+  width: 44px;
+  height: 44px;
   min-width: 44px;
   min-height: 44px;
-  padding: 0 12px;
-  font-size: 13px;
+  padding: 0;
+  justify-content: center;
+  font-size: 18px;
 }
+#bw-raid.is-handheld .rchat-chip em,
+#bw-raid.is-handheld .rchat-chip .rchat-caret { display: none; }
 #bw-raid.is-handheld.is-fight .rchat:not(.is-collapsed) {
   width: min(260px, 62vw) !important;
   height: 168px !important;
