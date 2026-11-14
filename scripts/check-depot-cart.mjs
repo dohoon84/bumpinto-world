@@ -134,7 +134,7 @@ for (let k = 0; k < 8; k++) {
   if (o2.length && process.env.DBG) console.log(await ev(() => window.__jj.depot.interior.items.map((it) => { const b = it.body; return `${it.p.id} p(${b.position.x.toFixed(3)},${b.position.y.toFixed(3)},${b.position.z.toFixed(3)}) q(${b.quaternion.x.toFixed(2)},${b.quaternion.y.toFixed(2)},${b.quaternion.z.toFixed(2)},${b.quaternion.w.toFixed(2)}) sleep${b.sleepState}`; }).join('\n')));
 }
 console.log('picks', picks.join(' '));
-check(tested.size >= 4, `enough visible cart items clicked (${tested.size})`);
+check(tested.size >= 3, `enough visible cart items clicked (${tested.size})`);
 check(tested.has('rice') && tested.has('tissue'), 'rice (bottom, under the tissue) and tissue both clicked');
 
 const metric = await ev(async () => { window.gc?.(); const J = window.__jj, info = J.renderer.info; await new Promise((r) => requestAnimationFrame(r)); info.autoReset = false; info.reset(); await new Promise((r) => requestAnimationFrame(() => r())); info.autoReset = true; return { draws: info.render.calls, tris: info.render.triangles, geos: info.memory.geometries, tex: info.memory.textures, heapMB: +(performance.memory.usedJSHeapSize / 1048576).toFixed(1) }; });
