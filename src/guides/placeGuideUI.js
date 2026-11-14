@@ -31,6 +31,7 @@ export function openState(status, clock) {
 const DOT = { most_open: 'ok', some_open: 'warn', night_wholesale: 'warn', closed_mostly: 'stop' };
 
 const CSS = `
+body.mobile.pg-open #m-hud{visibility:hidden}
 #pg-root{position:fixed;inset:0;pointer-events:none;z-index:140;font-family:Pretendard,"Noto Sans KR",system-ui,sans-serif;color:#111418;font-feature-settings:"tnum" 1;-webkit-font-smoothing:antialiased;
  --paper:#FBFAF7;--ink:#111418;--ink-2:#3A4048;--muted:#6E747C;--hair:#E2DFD7;--hair-2:#CFCBC1;--tint:#F2F0EA;--accent:#0B63CE;--accent-p:#0950A8;--l4:#00A5DE;--ok:#1E9E50;--warn:#C98A00;--stop:#C8372D;--sh:0 0 0 1px rgba(0,0,0,.08),0 10px 30px rgba(0,0,0,.16)}
 #pg-root *{box-sizing:border-box}
@@ -437,13 +438,14 @@ export function createPlaceGuideUI(o = {}) {
     sheet = null; detail = null;
     isOpen = true; render(true);
     (mobile ? mroot : panel).classList.add('on');
+    if (mobile) document.body.classList.add('pg-open'); // 모바일: 패널이 열린 동안 게임 조작 버튼을 숨긴다(게임 화면은 보임)
     tag.classList.remove('on'); hint.classList.remove('on');
     o.onOpenChange?.(true);
     if (!mobile && focus) setTimeout(() => panel.querySelector('.tab.on')?.focus({ preventScroll: true }), 30); // 키보드(E)로 열 때만 탭에 초점
   }
   function close() {
     if (!isOpen) return;
-    isOpen = false; panel.classList.remove('on'); mroot.classList.remove('on');
+    isOpen = false; panel.classList.remove('on'); mroot.classList.remove('on'); document.body.classList.remove('pg-open');
     o.onOpenChange?.(false);
     try { if (document.activeElement && root.contains(document.activeElement)) document.activeElement.blur(); } catch { /* */ }
   }
@@ -514,12 +516,12 @@ export function createPlaceGuideUI(o = {}) {
     if (info.destScreen) {
       dest.style.display = 'flex';
       const lb = dest.querySelector('.lb'); const tx = `${esc(name)}<span>≈${Math.round(rem)} m</span>`; if (lb.innerHTML !== tx) lb.innerHTML = tx;
-      const dx = Math.round(info.destScreen.x - dest.offsetWidth / 2), dy = Math.round(info.destScreen.y - dest.offsetHeight);
+      const dx = Math.round(Math.max(8, Math.min(innerWidth - dest.offsetWidth - 8, info.destScreen.x - dest.offsetWidth / 2))), dy = Math.round(info.destScreen.y - dest.offsetHeight);
       dest.style.transform = `translate(${dx}px,${dy}px)`;
       // 길 안내 카드·하단 바와 겹치면 숨김
       const b = { l: dx, r: dx + dest.offsetWidth, t: dy, b: dy + dest.offsetHeight };
       const over = [mobile ? msign : nav, eta, openg].some((el) => { if (!el || el.style.display === 'none') return false; const q = el.getBoundingClientRect(); return q.width && b.l < q.right && b.r > q.left && b.t < q.bottom && b.b > q.top; });
-      dest.style.visibility = over ? 'hidden' : '';
+      dest.style.visibility = over || dy < (mobile ? 72 : 92) ? 'hidden' : ''; // 위쪽 게임 HUD 줄도 피함
     } else dest.style.display = 'none';
   }
   function toast(title, sub = '', ms = 3200) {
@@ -539,6 +541,6 @@ export function createPlaceGuideUI(o = {}) {
     setTab(k) { tab = k; sheet = null; detail = null; render(true); },
     route: { show: routeShow, update: routeUpdate, hide: routeHide, get on() { return routeOn; } },
     refresh() { render(); },
-    dispose() { clearTimeout(toastT); clearTimeout(pressT); root.remove(); },
+    dispose() { clearTimeout(toastT); clearTimeout(pressT); document.body.classList.remove('pg-open'); root.remove(); },
   };
 }
