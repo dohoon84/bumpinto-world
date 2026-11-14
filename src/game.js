@@ -1771,6 +1771,11 @@ function syncHudBaselines() {
   const root = document.documentElement.style;
   const er = emoteBar?.getBoundingClientRect();
   if (er && er.height > 0) root.setProperty('--emote-top', `${Math.round(innerHeight - er.top)}px`);
+  const buttons = document.getElementById('buttons');
+  const br = buttons?.getBoundingClientRect();
+  if (br && br.height > 0 && getComputedStyle(buttons).display !== 'none') {
+    root.setProperty('--chrome-top', `${Math.round(br.bottom + 8)}px`);
+  }
   const pr = document.getElementById('phone')?.getBoundingClientRect();
   if (pr && pr.height > 0) root.setProperty('--minimap-top', `${Math.round(innerHeight - pr.top)}px`);
 }
@@ -2946,6 +2951,7 @@ function frame() {
   gyeongbuSoon?.tick(dt); // [gyeongbu]
   bungeo?.update(dt, joined ? player.position : null, camera, cam.mode); // [bungeo]
   dogPark.update(dt, player.position);
+  raidWorldGate?.tick?.(); // [raid] 탄천합수부 균열 개찰. 가까이 가기 전에는 아무 것도 만들지 않는다.
   {
     const doorPeople = [player.position];
     for (const n of npcs.list) if (n.active !== false) doorPeople.push(n.pos);
@@ -3084,6 +3090,12 @@ addEventListener('resize', () => { camera.aspect = innerWidth / innerHeight; cam
 const texBudget = applyTextureBudget(scene, { search: params, mobileMode });
 if (texBudget.count) markBoot('tex-budget-' + texBudget.count);
 const worldWarm = bootFast ? { noted: false } : null;
+let raidWorldGate = null;
+if (!shot && params.get('raidgate') !== '0') {
+  import('./raid/openWorldGate.js')
+    .then((m) => { raidWorldGate = m.mountOpenWorldRaidGate({ scene, getPlayer: () => player }); })
+    .catch((err) => console.warn('[raid-gate]', err));
+}
 requestAnimationFrame(frame);
 
 // 스크린샷/디버그용 훅
