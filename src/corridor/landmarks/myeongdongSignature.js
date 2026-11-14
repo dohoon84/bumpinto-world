@@ -194,6 +194,41 @@ function signOn(buf, P, Q, out, w, y0, y1, uv, outward) {
   const a = [mx - rx * w / 2, y0, mz - rz * w / 2], b = [mx + rx * w / 2, y0, mz + rz * w / 2];
   buf.quad(a, b, [b[0], y1, b[2]], [a[0], y1, a[2]], uv, [1, 1, 1], [nx, 0, nz]);
 }
+/** [ssg-facade] 볼록한 모서리를 반지름 R 로 둥글게 (seg 조각). 오목한 모서리·거의 곧은 점은 그대로 */
+function filletRing(o, R, seg = 8) {
+  const ccw = ringArea(o) > 0, out = [];
+  for (let i = 0; i < o.length; i++) {
+    const a = o[(i + o.length - 1) % o.length], v = o[i], b = o[(i + 1) % o.length];
+    const ax = a[0] - v[0], az = a[1] - v[1], bx = b[0] - v[0], bz = b[1] - v[1], la = Math.hypot(ax, az), lb = Math.hypot(bx, bz);
+    if (la < 0.3 || lb < 0.3) { out.push(v); continue; }
+    const cr = (v[0] - a[0]) * (b[1] - v[1]) - (v[1] - a[1]) * (b[0] - v[0]); // 진행 방향 꺾임 (ccw 링이면 + = 볼록)
+    const turn = Math.acos(Math.max(-1, Math.min(1, -(ax * bx + az * bz) / (la * lb))));
+    if ((ccw ? cr <= 0 : cr >= 0) || turn < 0.12) { out.push(v); continue; }
+    const d = Math.min(R * Math.tan(turn / 2), la * 0.48, lb * 0.48);
+    const p1 = [v[0] + ax / la * d, v[1] + az / la * d], p2 = [v[0] + bx / lb * d, v[1] + bz / lb * d];
+    for (let k = 0; k <= seg; k++) { const t = k / seg, u = 1 - t; out.push([u * u * p1[0] + 2 * u * t * v[0] + t * t * p2[0], u * u * p1[1] + 2 * u * t * v[1] + t * t * p2[1]]); }
+  }
+  return out;
+}
+/** [ssg-facade] 정면 변에서 양쪽으로, 법선이 정면 쪽(내적 > lim)인 동안 이어지는 바깥 꺾은선 — 밖에서 볼 때 왼→오 */
+function wrapRun(o, front, lim = -0.25) {
+  const E = edgesOut(o); let i0 = E.findIndex((e) => e.p === front.p && e.q === front.q); if (i0 < 0) i0 = 0;
+  const ok = (e) => e.nx * front.nx + e.nz * front.nz > lim;
+  let a = i0, b = i0; const n = E.length;
+  for (let k = 0; k < n - 1 && ok(E[(a + n - 1) % n]); k++) a = (a + n - 1) % n;
+  for (let k = 0; k < n - 1 && ok(E[(b + 1) % n]) && (b + 1) % n !== a; k++) b = (b + 1) % n;
+  const run = []; for (let k = a; ; k = (k + 1) % n) { run.push(E[k]); if (k === b) break; }
+  const pts = [run[0].p, ...run.map((e) => e.q)], nrm = [];
+  for (let k = 0; k < pts.length; k++) { // 꼭짓점 법선 = 이웃 변 법선의 평균 (마이터)
+    const e0 = run[Math.max(0, k - 1)], e1 = run[Math.min(run.length - 1, k)];
+    let nx = e0.nx + e1.nx, nz = e0.nz + e1.nz; const l = Math.hypot(nx, nz) || 1; nx /= l; nz /= l;
+    const c = Math.max(0.5, nx * e1.nx + nz * e1.nz); nrm.push([nx / c, nz / c]);
+  }
+  const right = [front.nz, -front.nx];
+  const dir = (pts[pts.length - 1][0] - pts[0][0]) * right[0] + (pts[pts.length - 1][1] - pts[0][1]) * right[1];
+  if (dir < 0) { pts.reverse(); nrm.reverse(); }
+  return { pts, nrm };
+}
 function edgesOut(o) {
   const ccw = ringArea(o) > 0; const out = [];
   for (let i = 0; i < o.length; i++) {
@@ -292,7 +327,8 @@ function buildShinsegae(ctx) {
     labels.push({ text: '신세계 더 헤리티지 The Heritage (옛 제일은행 1935)', x: cx, z: cz, y: top + 5, maxDist: 350, minDist: 12, cls: 'label' });
   }
   if (main) { // 본관(1930 옛 미쓰코시) — 크림색 돌, 5층, 가운데 발코니·시계·금빛 입구
-    const o = main.o, y0 = baseOf(o), top = y0 + 24; const [cx, cz] = centroid(o);
+    // [ssg-facade] 화면이 모서리를 하나의 곡면으로 감싸게 본관 모서리를 둥글게
+    const o = SSG_SHOW ? filletRing(main.o, 7, 10) : main.o, y0 = baseOf(o), top = y0 + 24; const [cx, cz] = centroid(o);
     prism(buf, o, y0 - 0.4, top, uvOf(R.stoneWin), ...T('stoneWin'), hex3('#d3cfc7'), uvOf(R.stone), hex3('#7f9a68')); // [polish] 사진처럼 회색 화강석 · 옥상 정원(초록)
     for (const e of edgesOut(o)) { wall(buf, e.p, e.q, top - 0.3, top + 1.4, uvOf(R.stone), 10, 1.7, hex3('#bdb9b1'), 0.6); wall(buf, e.p, e.q, y0 + 4.6, y0 + 5.1, uvOf(R.stone), 10, 0.5, hex3('#bdb9b1'), 0.35); wall(buf, e.p, e.q, y0 - 0.4, y0 + 4.6, uvOf(R.stone), 10, 5, hex3('#9f9b94'), 0.25); }
     // 꼭대기 한 층 물러난 층(펜트하우스)
@@ -326,13 +362,20 @@ function buildShinsegae(ctx) {
       if (!SSG_SHOW) buf.box(mx + e.nx * 2.25, y0 + 14.5, mz + e.nz * 2.25, 0.3, 0.15, 18, ry, uvOf(R.stone), hex3('#f4efe6'));
       signOn(buf, e.p, e.q, 0.7, 22, top - 3.4, top - 0.6, uvOf(R.sShinsegae), [e.nx, e.nz]);
       // 밤 미디어 파사드: 정면 + 양옆 모서리 면
-      // [ssg-facade] 정면 + 양옆 면을 감싸는 LED 화면 (정면 아래는 금빛 입구, 위는 SHINSEGAE 글씨)
+      // [ssg-facade] 정면에서 양옆으로 이어지는 하나의 곡면 LED 화면 (정면 아래는 금빛 입구, 위는 SHINSEGAE 글씨)
       const m0 = SSG_SHOW ? y0 + 5.2 : y0 + 5.4, m1 = SSG_SHOW ? top - 3.6 : top - 4.0;
-      media.push({ e, y0: m0, y1: m1, front: true });
-      for (const f of edgesOut(o)) if (f !== e && f.L > 18 && (f.nx * e.nx + f.nz * e.nz) > -0.2 && (f.nx * e.nx + f.nz * e.nz) < 0.7) media.push({ e: f, y0: m0, y1: m1 });
-      if (SSG_SHOW) for (const f of media) { // 화면 테두리 철골(짙은 틀 4변)
-        const fx = (f.e.q[0] - f.e.p[0]) / f.e.L, fz = (f.e.q[1] - f.e.p[1]) / f.e.L, fmx = (f.e.p[0] + f.e.q[0]) / 2, fmz = (f.e.p[1] + f.e.q[1]) / 2, fry = Math.atan2(fx, fz);
-        for (const yy of [m0 - 0.25, m1 + 0.25]) buf.box(fmx + f.e.nx * 0.42, yy, fmz + f.e.nz * 0.42, 0.3, 0.5, f.e.L * 0.98, fry, uvOf(R.stone), hex3('#2b2d31'));
+      if (SSG_SHOW) {
+        const run = wrapRun(o, e); const OUT = 0.35;
+        const path = run.pts.map((p, k) => [p[0] + run.nrm[k][0] * OUT, p[1] + run.nrm[k][1] * OUT]);
+        media.push({ path, y0: m0, y1: m1, front: e });
+        for (let k = 1; k < path.length; k++) { // 화면 위·아래 철골 띠 (조각마다 조금 겹쳐 틈 없음)
+          const a = path[k - 1], b = path[k], L = Math.hypot(b[0] - a[0], b[1] - a[1]); if (L < 0.05) continue;
+          const nx = (run.nrm[k - 1][0] + run.nrm[k][0]) / 2, nz = (run.nrm[k - 1][1] + run.nrm[k][1]) / 2, fry = Math.atan2(b[0] - a[0], b[1] - a[1]);
+          for (const yy of [m0 - 0.25, m1 + 0.25]) buf.box((a[0] + b[0]) / 2 + nx * 0.05, yy, (a[1] + b[1]) / 2 + nz * 0.05, 0.36, 0.5, L + 0.12, fry, uvOf(R.stone), hex3('#2b2d31'));
+        }
+      } else {
+        media.push({ e, y0: m0, y1: m1 });
+        for (const f of edgesOut(o)) if (f !== e && f.L > 18 && (f.nx * e.nx + f.nz * e.nz) > -0.2 && (f.nx * e.nx + f.nz * e.nz) < 0.7) media.push({ e: f, y0: m0, y1: m1 });
       }
     }
     labels.push({ text: '🏬 신세계백화점 본점 Shinsegae Department Store · 1930', x: cx, z: cz, y: top + 10, maxDist: 2600, minDist: 20, cls: 'label landmark' });

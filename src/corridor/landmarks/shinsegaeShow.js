@@ -196,8 +196,8 @@ void main() {
   if (uNextMix > 0.0) c = mix(c, scene(mod(uScene + 1.0, ${SHOW.scenes}.0), p, uLt - ${SHOW.scene}.0, fc, fw), uNextMix);
   // 철골 틀(세로·가로 멀리언) — 화면을 칸으로 나누는 짙은 선
   vec2 g = vec2(p.x / 0.26, p.y / 0.25); vec2 fg = abs(fract(g) - 0.5); vec2 w = fwidth(g) * 1.2;
-  float mull = max(1.0 - smoothstep(0.0, 0.012 + w.x, 0.5 - fg.x), 1.0 - smoothstep(0.0, 0.01 + w.y, 0.5 - fg.y));
-  c *= 1.0 - 0.75 * mull;
+  float mull = max(1.0 - smoothstep(0.0, 0.007 + w.x, 0.5 - fg.x), 1.0 - smoothstep(0.0, 0.006 + w.y, 0.5 - fg.y));
+  c *= 1.0 - 0.38 * mull; // 철골 칸 선은 은은하게
   float edge = smoothstep(0.0, 0.012, vUv.y) * smoothstep(1.0, 0.988, vUv.y); c *= edge;
   float b = mix(0.6, 1.0, uNight);
   gl_FragColor = vec4(c * b + (1.0 - uNight) * vec3(0.035), 1.0);
@@ -241,36 +241,27 @@ export function showClock(sec) {
 }
 
 /**
- * @param {{ parent: THREE.Object3D, faces: {e:any, y0:number, y1:number, front?:boolean}[], heightAt:(x:number,z:number)=>number, out?: number }} o
+ * @param {{ parent: THREE.Object3D, faces: {path:number[][], y0:number, y1:number, front:{p:number[],q:number[],nx:number,nz:number,L:number}}[], heightAt:(x:number,z:number)=>number }} o
+ *   path = 화면 바닥선(밖에서 볼 때 왼→오, 이미 벽에서 띄운 점들). 모서리는 둥근 꺾은선 → 하나의 곡면 · u 는 호 길이로 이어진다
  */
-export function createShinsegaeShow({ parent, faces, heightAt, out = 0.35 }) {
+export function createShinsegaeShow({ parent, faces, heightAt }) {
   const group = new THREE.Group(); group.name = 'md-ssg-show'; parent.add(group);
-  const front = faces.find((f) => f.front) || faces[0];
-  const fe = front.e, rx = fe.nz, rz = -fe.nx; // 정면을 바라볼 때 오른쪽
-  // 왼쪽 → 오른쪽 순서로 펼쳐서 u 를 잇는다
-  const list = faces.map((f) => {
-    const e = f.e; const ends = [e.p, e.q].map((p) => [p[0] + e.nx * out, p[1] + e.nz * out]);
-    // 이 면을 밖에서 볼 때 오른쪽 = (nz, -nx)
-    const r = [e.nz, -e.nx]; const s0 = ends[0][0] * r[0] + ends[0][1] * r[1], s1 = ends[1][0] * r[0] + ends[1][1] * r[1];
-    const [L, R] = s0 < s1 ? ends : [ends[1], ends[0]];
-    const mid = ((L[0] + R[0]) / 2) * rx + ((L[1] + R[1]) / 2) * rz;
-    return { ...f, L, R, w: Math.hypot(R[0] - L[0], R[1] - L[1]), key: mid };
-  }).sort((a, b) => a.key - b.key);
-  const H = Math.max(...list.map((f) => f.y1 - f.y0));
-  const totalW = list.reduce((s, f) => s + f.w, 0);
-  const pos = [], uv = [], idx = []; let u = 0, uF = [0, 1];
-  for (const f of list) {
-    const u0 = u / totalW, u1 = (u + f.w) / totalW; u += f.w;
-    if (f === list.find((q) => q.front) || f.e === fe) uF = [u0, u1];
-    const v0 = 0, v1 = (f.y1 - f.y0) / H;
-    const b = pos.length / 3;
-    pos.push(f.L[0], f.y0, f.L[1], f.R[0], f.y0, f.R[1], f.R[0], f.y1, f.R[1], f.L[0], f.y1, f.L[1]);
-    uv.push(u0, v0, u1, v0, u1, v1, u0, v1);
-    idx.push(b, b + 1, b + 2, b, b + 2, b + 3); // 밖에서 보면 반시계(앞면)
+  const F = faces[0], path = F.path, fe = F.front, rx = fe.nz, rz = -fe.nx; // 정면을 바라볼 때 오른쪽
+  const H = F.y1 - F.y0;
+  const acc = [0]; for (let k = 1; k < path.length; k++) acc.push(acc[k - 1] + Math.hypot(path[k][0] - path[k - 1][0], path[k][1] - path[k - 1][1]));
+  const totalW = acc[acc.length - 1];
+  // 정면 변의 호 길이 범위: 정면 변 양 끝에 가장 가까운 점
+  const near = (pt) => { let bi = 0, bd = Infinity; path.forEach((q, k) => { const d = Math.hypot(q[0] - pt[0], q[1] - pt[1]); if (d < bd) { bd = d; bi = k; } }); return acc[bi]; };
+  const s0 = near(fe.p), s1 = near(fe.q), uF = [Math.min(s0, s1) / totalW, Math.max(s0, s1) / totalW];
+  const pos = [], uv = [], idx = [];
+  for (let k = 0; k < path.length; k++) {
+    const u = acc[k] / totalW;
+    pos.push(path[k][0], F.y0, path[k][1], path[k][0], F.y1, path[k][1]); uv.push(u, 0, u, 1);
+    if (k) { const b = (k - 1) * 2; idx.push(b, b + 2, b + 3, b, b + 3, b + 1); } // 밖에서 보면 반시계(앞면): 왼아래→오아래→오위
   }
   const geo = new THREE.BufferGeometry();
   geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); geo.setIndex(idx);
-  geo.computeVertexNormals(); geo.computeBoundingSphere();
+  geo.computeBoundingSphere();
   const tex = textTexture();
   const uniforms = { uW: { value: totalW / H }, uFront: { value: new THREE.Vector2(uF[0], uF[1]) }, uScene: { value: 0 }, uLt: { value: 0 }, uNextMix: { value: 0 }, uNight: { value: 0 }, uClock: { value: 0 }, uText: { value: tex } };
   const mat = new THREE.ShaderMaterial({ vertexShader: VS, fragmentShader: FS, uniforms, toneMapped: false, fog: false });
@@ -278,9 +269,9 @@ export function createShinsegaeShow({ parent, faces, heightAt, out = 0.35 }) {
   const screen = new THREE.Mesh(geo, mat); screen.name = 'md-ssg-screen'; screen.renderOrder = 1; group.add(screen);
 
   // 광장 바닥 빛 번짐: 정면 앞 부채꼴 띠(바닥 높이를 따라 깐 격자)
-  const SPD = 26, NX = 16, NZ = 14; const fL = list.find((f) => f.e === fe) || list[0];
+  const SPD = 26, NX = 16, NZ = 14;
   const sp = [], su = [], si = [];
-  const wide = 1.25, cxF = (fL.L[0] + fL.R[0]) / 2, czF = (fL.L[1] + fL.R[1]) / 2, half = fL.w * wide / 2;
+  const wide = 1.25, cxF = (fe.p[0] + fe.q[0]) / 2 + fe.nx * 0.35, czF = (fe.p[1] + fe.q[1]) / 2 + fe.nz * 0.35, half = fe.L * wide / 2;
   for (let j = 0; j <= NZ; j++) for (let i = 0; i <= NX; i++) {
     const a = i / NX, d = j / NZ, sx = (a - 0.5) * 2 * half * (1 + d * 0.35), dd = 1.0 + d * SPD;
     const x = cxF + rx * sx + fe.nx * dd, z = czF + rz * sx + fe.nz * dd;
@@ -298,7 +289,7 @@ export function createShinsegaeShow({ parent, faces, heightAt, out = 0.35 }) {
   let clockOverride = null;
   return {
     group, screen, spill,
-    info: { width: +totalW.toFixed(1), height: +H.toFixed(1), area: Math.round(list.reduce((s, f) => s + f.w * (f.y1 - f.y0), 0)), faces: list.length },
+    info: { width: +totalW.toFixed(1), height: +H.toFixed(1), area: Math.round(totalW * H), segments: path.length - 1 },
     setNight(v) { nightT = v > 0.5 ? 1 : 0; },
     /** 테스트·스크린샷: 쇼 시각 고정 (초, null = 실제 시계) */
     setClock(sec) { clockOverride = sec; },
