@@ -264,16 +264,28 @@ export function createHud() {
     virtualPad.s = mag < 0.14 ? 0 : dx / joyR;
     virtualPad.f = mag < 0.14 ? 0 : -dy / joyR;
   };
-  joy.addEventListener('pointerdown', (e) => {
-    joyId = e.pointerId;
-    joy.setPointerCapture(e.pointerId);
-    const r = joy.getBoundingClientRect();
-    joyX = r.left + r.width / 2;
-    joyY = r.top + r.height / 2;
+  const armJoy = (id, cx, cy, px, py) => {
+    joyId = id;
+    joyX = cx;
+    joyY = cy;
+    joy.style.left = `${cx}px`;
+    joy.style.top = `${cy}px`;
     joy.classList.add('is-on');
-    setJoy(e.clientX - joyX, e.clientY - joyY);
+    try { joy.setPointerCapture(id); } catch { /* the touch already landed on the world */ }
+    setJoy(px - cx, py - cy);
+  };
+  joy.addEventListener('pointerdown', (e) => {
+    const r = joy.getBoundingClientRect();
+    armJoy(e.pointerId, r.left + r.width / 2, r.top + r.height / 2, e.clientX, e.clientY);
     e.preventDefault();
   });
+  window.addEventListener('pointerdown', (e) => {
+    if (!root.classList.contains('is-handheld') || joyId != null) return;
+    if (e.target.closest('button, a, input, textarea, .m-side, .m-player, .rchat, .c-slot, .m-menu, .c-map, .m-boss, .c-warn')) return;
+    if (e.clientX > window.innerWidth * 0.48 || e.clientY < window.innerHeight * 0.42) return;
+    e.stopPropagation();
+    armJoy(e.pointerId, e.clientX, e.clientY, e.clientX, e.clientY);
+  }, true);
   joy.addEventListener('pointermove', (e) => {
     if (e.pointerId !== joyId) return;
     setJoy(e.clientX - joyX, e.clientY - joyY);
@@ -348,19 +360,29 @@ export function createHud() {
     const buttons = [...skillsEl.querySelectorAll('.c-slot')];
     const main = buttons[0];
     const rest = buttons.slice(1);
-    const start = wheelPage * 4;
-    const shown = new Set(rest.slice(start, start + 4));
+    const page = rest.slice(wheelPage * 8, wheelPage * 8 + 8);
+    const inner = page.slice(0, 5);
+    const outer = page.slice(5, 8);
+    buttons.forEach((btn) => {
+      btn.classList.remove('m-main', 'm-in', 'm-out');
+      btn.classList.add('m-off');
+    });
+    main?.classList.remove('m-off');
     main?.classList.add('m-main');
-    rest.forEach((btn) => {
-      const on = shown.has(btn);
-      btn.classList.toggle('m-arc', on);
-      btn.classList.toggle('m-off', !on);
-      if (on) btn.dataset.arc = String([...shown].indexOf(btn));
+    inner.forEach((btn, i) => {
+      btn.classList.remove('m-off');
+      btn.classList.add('m-in');
+      btn.dataset.arc = String(i);
+    });
+    outer.forEach((btn, i) => {
+      btn.classList.remove('m-off');
+      btn.classList.add('m-out');
+      btn.dataset.arc = String(i);
     });
     const more = root.querySelector('.m-more');
     if (more) {
-      more.hidden = rest.length <= 4;
-      more.textContent = wheelPage ? '1' : '＋';
+      more.hidden = rest.length <= 8;
+      more.textContent = wheelPage ? '1' : '2';
       more.setAttribute('aria-pressed', wheelPage ? 'true' : 'false');
     }
   }
@@ -811,50 +833,125 @@ export function createHud() {
     useMobileLayout() {
       if (root.querySelector('.m-shell')) return;
       root.classList.add('is-handheld');
+      const stage = root.querySelector('.c-stage');
       const shell = document.createElement('div');
       shell.className = 'm-shell';
       shell.innerHTML = `
-        <div class="m-top"></div>
-        <div class="m-partycol"></div>
-        <div class="m-left"></div>
-        <div class="m-right"></div>
+        <div class="m-player"></div>
+        <aside class="m-side" data-tab="gate">
+          <div class="m-tabs">
+            <button type="button" data-tab="gate">관문</button>
+            <button type="button" data-tab="party">파티</button>
+          </div>
+          <div class="m-side-body">
+            <button type="button" class="m-side-fold" aria-label="패널 접기">‹</button>
+            <div data-pane="gate"></div>
+            <div data-pane="party" hidden></div>
+          </div>
+        </aside>
+        <div class="m-boss"></div>
+        <div class="m-corner">
+          <div class="m-region">탄천교</div>
+          <div class="m-menu"></div>
+        </div>
+        <div class="m-autofight">자동 전투</div>
+        <div class="m-skills"></div>
       `;
-      const stage = root.querySelector('.c-stage');
-      const top = shell.querySelector('.m-top');
-      const col = shell.querySelector('.m-partycol');
-      const left = shell.querySelector('.m-left');
-      const right = shell.querySelector('.m-right');
-      top.append(stage.querySelector('.c-boss'), stage.querySelector('.c-map'));
-      col.append(stage.querySelector('.c-party'), stage.querySelector('.c-warn'), root.querySelector('.banner'));
-      const me = document.createElement('div');
-      me.className = 'm-me';
-      me.append(stage.querySelector('.c-portrait'), stage.querySelector('.c-vitals'));
-      const icons = document.createElement('div');
-      icons.className = 'm-icons';
+      const side = shell.querySelector('.m-side');
+      const showTab = (id) => {
+        side.dataset.tab = id;
+        side.querySelectorAll('[data-pane]').forEach((pane) => {
+          pane.hidden = pane.dataset.pane !== id;
+        });
+        side.querySelectorAll('.m-tabs button').forEach((btn) => {
+          btn.classList.toggle('is-on', btn.dataset.tab === id);
+        });
+      };
+      side.querySelectorAll('.m-tabs button').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          if (side.classList.contains('is-folded') || side.dataset.tab !== btn.dataset.tab) {
+            side.classList.remove('is-folded');
+            showTab(btn.dataset.tab);
+          } else side.classList.add('is-folded');
+        });
+      });
+      side.querySelector('.m-side-fold').addEventListener('click', () => side.classList.add('is-folded'));
+      showTab('gate');
+      const quest = root.querySelector('.quest');
+      const heading = quest.querySelector('h3');
+      if (heading) heading.textContent = '현재 관문';
+      const reward = document.createElement('div');
+      reward.className = 'm-reward';
+      reward.textContent = '보상 · 균열 봉인';
+      quest.append(reward);
+      shell.querySelector('[data-pane="gate"]').append(quest);
+      shell.querySelector('[data-pane="party"]').append(stage.querySelector('.c-party'));
+      const boss = stage.querySelector('.c-boss');
+      const clock = stage.querySelector('[data-clock]');
+      boss.querySelector('.c-boss-top').append(clock);
+      shell.querySelector('.m-boss').append(boss, stage.querySelector('.c-warn'), root.querySelector('.banner'));
+      shell.querySelector('.m-player').append(stage.querySelector('.c-portrait'), stage.querySelector('.c-vitals'));
+      shell.querySelector('.m-corner').prepend(stage.querySelector('.c-map'));
+      const auto = stage.querySelector('.c-auto');
+      auto.textContent = 'A';
+      auto.setAttribute('aria-label', '자동 전투');
+      const info = document.createElement('button');
+      info.type = 'button';
+      info.className = 'm-icon';
+      info.textContent = 'i';
+      info.setAttribute('aria-label', '레이드 정보');
+      info.addEventListener('click', () => {
+        side.classList.remove('is-folded');
+        showTab('gate');
+      });
+      const gear = document.createElement('button');
+      gear.type = 'button';
+      gear.className = 'm-icon';
+      gear.textContent = '⚙';
+      gear.setAttribute('aria-label', '소리');
+      gear.addEventListener('click', () => hud.onMute?.());
+      const exit = document.createElement('button');
+      exit.type = 'button';
+      exit.className = 'm-icon m-exit';
+      exit.textContent = '나가기';
+      exit.addEventListener('click', () => hud.onWorld?.());
+      const menuFold = document.createElement('button');
+      menuFold.type = 'button';
+      menuFold.className = 'm-menu-fold';
+      menuFold.textContent = '‹';
+      menuFold.setAttribute('aria-label', '메뉴 접기');
+      const menu = shell.querySelector('.m-menu');
+      menuFold.addEventListener('click', () => {
+        menu.classList.toggle('is-folded');
+        menuFold.textContent = menu.classList.contains('is-folded') ? '›' : '‹';
+      });
+      menu.append(auto, info, gear, exit, menuFold);
       const more = document.createElement('button');
       more.type = 'button';
       more.className = 'm-more';
-      more.textContent = '＋';
+      more.textContent = '2';
       more.setAttribute('aria-label', '다른 기술');
       more.addEventListener('click', () => {
         wheelPage = wheelPage ? 0 : 1;
         layoutWheel();
       });
-      const menu = document.createElement('button');
-      menu.type = 'button';
-      menu.className = 'm-icon';
-      menu.textContent = '☰';
-      menu.setAttribute('aria-label', '파티 접기');
-      menu.addEventListener('click', () => {
-        party.classList.toggle('is-folded');
-        const fold = party.querySelector('.m-fold');
-        if (fold) fold.textContent = party.classList.contains('is-folded') ? '▸' : '▾';
-      });
-      icons.append(stage.querySelector('.c-auto'), root.querySelector('.rchat'), more, menu);
-      left.append(root.querySelector('[data-joy]'), me, icons);
-      right.append(skillsEl);
+      const skills = shell.querySelector('.m-skills');
+      skills.append(skillsEl, more);
+      const chat = root.querySelector('.rchat');
+      if (chat) {
+        chat.classList.add('is-ghost');
+        chat.classList.remove('is-collapsed');
+        const body = chat.querySelector('.rchat-body');
+        if (body) body.hidden = false;
+        const chip = chat.querySelector('[data-chip]');
+        if (chip) chip.hidden = true;
+        chat.addEventListener('click', (e) => {
+          if (e.target.closest('input, .rchat-form button, .rchat-tabs')) return;
+          chat.classList.toggle('is-open');
+        });
+        shell.querySelector('.m-autofight').after(chat);
+      }
       root.append(shell);
-      layoutWheel();
       paintSkills(active.skills);
     },
     setMuted(muted) {
@@ -935,10 +1032,11 @@ export function createHud() {
     },
     setAuto(on) {
       const btn = root.querySelector('[data-auto]');
+      root.classList.toggle('is-auto', !!on);
       if (!btn) return;
       btn.classList.toggle('is-on', !!on);
       btn.setAttribute('aria-pressed', on ? 'true' : 'false');
-      btn.textContent = on ? 'AUTO' : 'AUTO';
+      if (root.classList.contains('is-handheld')) btn.textContent = 'A';
     },
     setPeace() {
       root.classList.add('is-peace');

@@ -840,7 +840,6 @@ const room = createRaidRoom({
 chat = mountRaidChat(hud.root, room);
 if (mobile) {
   hud.useMobileLayout();
-  chat.collapse();
   const credit = document.getElementById('attribution');
   if (credit) credit.hidden = true;
 }
