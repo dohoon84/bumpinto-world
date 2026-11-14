@@ -97,6 +97,7 @@ const findTargets = () => ev(async () => {
   const rc = new T.Raycaster(), meshes = I.items.map((it) => it.mesh);
   for (const it of I.items) {
     if (it.level !== 'upper') continue;
+    const v0 = it.body.velocity, w0 = it.body.angularVelocity; if (Math.hypot(v0.x, v0.y, v0.z) > 0.02 || Math.hypot(w0.x, w0.y, w0.z) > 0.1) continue; // 아직 움직이는 짐은 건너뜀 (클릭 순간 자리가 바뀜)
     const [sx, sy, sz] = it.size;
     // 후보: 윗면 가운데·네 귀퉁이 쪽 · 옆면들 (상품 로컬 좌표) → 화면에서 '보이는 첫 메시'가 이 상품인 점 하나
     const cands = [[0, 0.5, 0], [0.3, 0.5, 0.3], [-0.3, 0.5, 0.3], [0.3, 0.5, -0.3], [-0.3, 0.5, -0.3], [0, 0, 0.5], [0, 0, -0.5], [0.5, 0, 0], [-0.5, 0, 0], [0, -0.5, 0]];
@@ -106,26 +107,34 @@ const findTargets = () => ev(async () => {
       rc.setFromCamera(new T.Vector2(ndc.x, ndc.y), cam);
       const hit = rc.intersectObjects(meshes, false)[0];
       if (!hit || hit.object !== it.mesh || Math.abs(hit.distance - cam.position.distanceTo(v)) > 0.03) continue; // 이 점이 화면에 보임
+      // 또렷이 보이는 곳만 (가장자리 몇 픽셀 틈 X): 주변 ±8 px 도 같은 상품
+      const k = W < 900 ? 8 : 16, px = k / W, py = k / H; // 모바일 가로는 화면이 작아 ±4 px
+      if (![[px, 0], [-px, 0], [0, py], [0, -py]].every(([dx, dy]) => { rc.setFromCamera(new T.Vector2(ndc.x + dx, ndc.y + dy), cam); return rc.intersectObjects(meshes, false)[0]?.object === it.mesh; })) continue;
       out.push({ id: it.p.id, sx: Math.round((ndc.x + 1) / 2 * W), sy: Math.round((1 - ndc.y) / 2 * H) }); break;
     }
   }
   return out;
 });
+await ev(() => { const I = window.__jj.depot.interior, d = I._dbg; for (let k = 0; k < 10 && I.items.some((x) => x.body.sleepState !== 2); k++) d.settle(0.5); });
 const targets = await findTargets(); console.log('targets', JSON.stringify(targets));
-check(targets.length >= 3, `enough visible cart items to click (${targets.length})`);
 const picks = [], tested = new Set();
 for (let k = 0; k < 8; k++) {
-  const t = (await findTargets()).find((q) => !tested.has(q.id)); if (!t) break; tested.add(t.id); // 매번 다시 찾음 (집었다 취소하면 짐이 움직임)
-  if (MOB) await p.touchscreen.tap(t.sx, t.sy); else { await p.mouse.move(t.sx, t.sy); await p.waitForTimeout(250); await p.mouse.click(t.sx, t.sy); }
+  let t = null;
+  for (let r = 0; r < 4 && !t; r++) { t = (await findTargets()).find((q) => !tested.has(q.id)); if (!t) await ev(() => window.__jj.depot.interior._dbg.settle(1.5)); } // 움직이는 짐은 멈출 때까지
+  if (!t) break; tested.add(t.id); // 매번 다시 찾음 (집었다 취소하면 짐이 움직임)
+  const pre = await ev(([x, y]) => window.__jj.depot.interior._dbg.pickAt(x / innerWidth * 2 - 1, 1 - y / innerHeight * 2), [t.sx, t.sy]);
+  check(pre?.id === t.id, `${MODE} same-frame pick resolution at the visible ${t.id} → ${pre?.id}`); // 판정 로직 (보이는 메시 레이 = 정답)
+  if (MOB) await p.touchscreen.tap(t.sx, t.sy); else await p.mouse.click(t.sx, t.sy); // 실제 입력 경로
   await p.waitForTimeout(300);
   const got = await ev(() => { const I = window.__jj.depot.interior; return { mode: I.st.mode, held: I.st.held?.p?.id || null }; });
   picks.push(`${t.id}→${got.held}`);
-  check(got.held === t.id, `${MODE} pick at ${t.id} → got ${got.held}`);
-  await ev(() => { const d = window.__jj.depot.interior._dbg; d.cancelPlace(); d.settle(2.5); });
+  check(got.held === t.id, `${MODE} ${MOB ? 'tap' : 'click'} at ${t.id} → got ${got.held} (same-frame pickAt: ${pre?.id})`);
+  await ev(() => { const I = window.__jj.depot.interior, d = I._dbg; d.cancelPlace(); for (let k = 0; k < 10 && I.items.some((x) => x.body.sleepState !== 2); k++) d.settle(0.5); });
   const o2 = await ev(() => window.__cartOverlaps()); check(!o2.length, `overlap after cancel ${t.id}: ${o2}`);
   if (o2.length && process.env.DBG) console.log(await ev(() => window.__jj.depot.interior.items.map((it) => { const b = it.body; return `${it.p.id} p(${b.position.x.toFixed(3)},${b.position.y.toFixed(3)},${b.position.z.toFixed(3)}) q(${b.quaternion.x.toFixed(2)},${b.quaternion.y.toFixed(2)},${b.quaternion.z.toFixed(2)},${b.quaternion.w.toFixed(2)}) sleep${b.sleepState}`; }).join('\n')));
 }
 console.log('picks', picks.join(' '));
+check(tested.size >= 4, `enough visible cart items clicked (${tested.size})`);
 check(tested.has('rice') && tested.has('tissue'), 'rice (bottom, under the tissue) and tissue both clicked');
 
 const metric = await ev(async () => { window.gc?.(); const J = window.__jj, info = J.renderer.info; await new Promise((r) => requestAnimationFrame(r)); info.autoReset = false; info.reset(); await new Promise((r) => requestAnimationFrame(() => r())); info.autoReset = true; return { draws: info.render.calls, tris: info.render.triangles, geos: info.memory.geometries, tex: info.memory.textures, heapMB: +(performance.memory.usedJSHeapSize / 1048576).toFixed(1) }; });

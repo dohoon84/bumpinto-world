@@ -564,7 +564,7 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit, a
   const REACH = 4.5;
   // 집기 대상: 진열 인스턴스는 레이캐스트, 카트 속·바닥 상품은 자기 상자(보이는 크기 OBB)에 레이 → 가장 가까운 것 하나.
   //   (예전: 메시 모양 그대로 맞혀서 화장지 롤 사이 틈·겹친 짐 너머의 다른 상품이 잡힘)
-  const _wp = new THREE.Vector3(), _wq = new THREE.Quaternion(), _ws = new THREE.Vector3(), _rh = [];
+  const _wp = new THREE.Vector3(), _wq = new THREE.Quaternion(), _ws = new THREE.Vector3(), _rh = [], REFINE_SHAPES = new Set(['pillow', 'sphere', 'tray', 'cyl']);
   function pickTarget(at) {
     ray.setFromCamera(at || (mouse.on ? ndc.set(mouse.x, mouse.y) : ndc.set(0, 0)), camera); ray.far = REACH;
     let best = null;
@@ -581,7 +581,8 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit, a
       mesh.updateWorldMatrix(true, false); mesh.matrixWorld.decompose(_wp, _wq, _ws);
       let t = rayObb(o, d, _wp, _wq, size);
       if (t == null || t > REACH || (best && t >= best.dist)) return;
-      if (p.shape === 'pillow' || p.shape === 'sphere') { // 포대(가장자리 얇음)·수박(공): 상자 안 빈 공간이 커서 실제 모양으로 한 번 더 — 그 뒤 상품을 가리지 않게
+      if (REFINE_SHAPES.has(p.shape)) { // 포대(가장자리 얇음)·수박(공)·고기 트레이(볼록 랩)·낱병(병목): 상자 안 빈 곳이 커서 실제 모양으로 한 번 더 — 그 뒤 상품을 가리지 않게
+        //   (화장지 롤·병 묶음은 상자 그대로: 롤 사이 틈으로 뒤 상품이 집히지 않게)
         _rh.length = 0; mesh.raycast(ray, _rh); if (!_rh.length) return;
         t = Math.min(..._rh.map((h) => h.distance)); if (best && t >= best.dist) return;
       }
@@ -1173,6 +1174,7 @@ export async function buildDepotInterior({ renderer, isMobile = false, onExit, a
       floorCount() { return floorItems.length; },
       floorIds() { return floorItems.map((f) => f.p.id); },
       clearFloor() { while (floorItems.length) { const fi = floorItems[0]; removeFloorItem(fi); disposeItemMesh(fi.mesh); } },
+      pickAt(nx, ny) { const t = pickTarget(new THREE.Vector2(nx, ny)); return t && { kind: t.kind, id: t.p.id }; }, // 화면 NDC 좌표의 집기 대상 (검증용)
       ghostState() { return ghostSol && { where: ghostSol.where, state: ghostSol.state }; },
       mischief(kind, amt) { staff.mischief(kind, amt); }, staff: () => ({ ...staff.S, x: staff.root.position.x, z: staff.root.position.z, ach: staff.S.ach.slice() }), staffAt(x, z) { staff.root.position.set(x, 0, z); },
       co: checkout.dbg, ach: (t) => staff.achieve(t),
