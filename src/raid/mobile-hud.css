@@ -120,7 +120,21 @@
   width: 24px;
   gap: 2px;
 }
-#bw-raid.is-handheld .m-player .c-buffs img { width: 24px; height: 24px; }
+#bw-raid.is-handheld .m-buffico {
+  display: block;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  overflow: hidden;
+  border: 1px solid #e8b64a;
+}
+#bw-raid.is-handheld .m-player .c-buffs img {
+  width: 28px;
+  height: 28px;
+  border-radius: 0;
+  object-fit: cover;
+  transform: scale(1.65);
+}
 #bw-raid.is-handheld .m-player .c-buffs > span:not(.m-buff) { display: none; }
 #bw-raid.is-handheld .m-bufftime {
   font-style: normal;
@@ -169,20 +183,28 @@
   font-weight: 800;
   color: #ffe6a8;
 }
+#bw-raid.is-handheld .m-reward em {
+  display: block;
+  margin-top: 4px;
+  font-style: normal;
+  font-size: 12px;
+  color: #fff6d8;
+  white-space: nowrap;
+}
 #bw-raid.is-handheld .m-rslots {
   display: flex;
-  align-items: center;
   gap: 8px;
   margin-top: 8px;
 }
-#bw-raid.is-handheld .m-rslots i {
-  width: 24px;
-  height: 24px;
-  border-radius: 4px;
-  border: 1px solid rgba(232, 182, 74, 0.85);
-  background: radial-gradient(circle at 50% 40%, #3a3018, #14100c);
+#bw-raid.is-handheld .m-rslots img {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  object-fit: cover;
+  transform: scale(1.65);
+  border: 1px solid #e8b64a;
 }
-#bw-raid.is-handheld .m-rslots em { font-style: normal; font-size: 12px; color: #fff6d8; }
+#bw-raid.is-handheld .quest .tip { display: none; }
 #bw-raid.is-handheld .m-side-body {
   position: relative;
   flex: 1;
@@ -360,8 +382,8 @@
   justify-content: flex-end;
   max-width: calc(100vw - 16px - env(safe-area-inset-left) - env(safe-area-inset-right));
 }
-#bw-raid.is-handheld .m-menu.is-folded .c-auto,
-#bw-raid.is-handheld .m-menu.is-folded .m-icon { display: none; }
+#bw-raid.is-handheld .m-menu.is-folded .m-util { display: none; }
+#bw-raid.is-handheld .m-menu:not(.is-folded) .m-menu-fold { display: none; }
 #bw-raid.is-handheld .m-util {
   display: flex;
   flex-direction: column;
@@ -542,12 +564,12 @@
 #bw-raid.is-handheld .c-slot img,
 #bw-raid.is-handheld .c-slot svg {
   position: absolute;
-  left: 20%;
-  top: 16%;
-  width: 60%;
-  height: 60%;
-  border-radius: 0;
-  object-fit: contain;
+  left: -32%;
+  top: -32%;
+  width: 164%;
+  height: 164%;
+  border-radius: 50%;
+  object-fit: cover;
 }
 #bw-raid.is-handheld .c-slot.m-off { display: none; }
 #bw-raid.is-handheld .c-slot.m-main { z-index: 2; }
@@ -555,17 +577,21 @@
   display: grid;
   place-items: center;
   position: absolute;
-  right: 6%;
-  bottom: 6%;
-  min-width: 16px;
-  height: 14px;
-  padding: 0 2px;
-  border-radius: 7px;
-  background: rgba(8, 10, 16, 0.85);
-  border: 1px solid rgba(232, 182, 74, 0.8);
+  top: auto;
+  left: 50%;
+  right: auto;
+  bottom: 1px;
+  transform: translateX(-50%);
+  width: auto;
+  min-width: 14px;
+  height: 12px;
+  padding: 0 3px;
+  border-radius: 6px;
+  background: rgba(8, 10, 16, 0.92);
+  border: 1px solid rgba(232, 182, 74, 0.85);
   color: #ffe6a8;
-  font-size: 10px;
-  line-height: 12px;
+  font-size: 9px;
+  line-height: 10px;
   z-index: 4;
 }
 #bw-raid.is-handheld .c-slot .sweep,
@@ -639,17 +665,17 @@
   #bw-raid.is-handheld .m-menu {
     position: static;
     flex-direction: row;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     justify-content: flex-end;
-    max-width: 112px;
+    max-width: none;
     gap: 8px;
   }
   #bw-raid.is-handheld .m-autofight { bottom: calc(168px + env(safe-area-inset-bottom)); }
   #bw-raid.is-handheld .rchat.is-ghost {
-    left: calc(8px + env(safe-area-inset-left)) !important;
+    left: calc(40px + env(safe-area-inset-left)) !important;
     right: auto !important;
-    width: min(220px, 58vw) !important;
-    bottom: calc(300px + env(safe-area-inset-bottom)) !important;
+    width: 180px !important;
+    bottom: calc(220px + env(safe-area-inset-bottom)) !important;
   }
 }
 

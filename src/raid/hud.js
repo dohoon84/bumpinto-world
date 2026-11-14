@@ -356,13 +356,12 @@ export function createHud() {
     if (root.classList.contains('is-handheld')) layoutWheel();
   }
   let wheelPage = 0;
-  const ARC = { attack: 96, inner: 60, outer: 48, util: 40, rIn: 150, rOut: 215 };
   const INNER_ANGLES = [102, 130, 158, 186];
   const OUTER_ANGLES = [142, 164, 186];
-  function placeOnArc(btn, size, deg, radius) {
+  function placeOnArc(btn, size, deg, radius, attack) {
     const rad = deg * Math.PI / 180;
-    const cx = ARC.attack / 2 - Math.cos(rad) * radius;
-    const cy = ARC.attack / 2 + Math.sin(rad) * radius;
+    const cx = attack / 2 - Math.cos(rad) * radius;
+    const cy = attack / 2 + Math.sin(rad) * radius;
     btn.style.width = `${size}px`;
     btn.style.height = `${size}px`;
     btn.style.right = `${cx - size / 2}px`;
@@ -372,6 +371,14 @@ export function createHud() {
     const buttons = [...skillsEl.querySelectorAll('.c-slot')];
     const main = buttons[0];
     const rest = buttons.slice(1);
+    const short = Math.min(window.innerWidth, window.innerHeight);
+    const scale = short / 366;
+    const attack = Math.round(80 * scale);
+    const innerSize = Math.round(52 * scale);
+    const outerSize = Math.round(42 * scale);
+    const util = Math.round(36 * scale);
+    const rIn = Math.round(100 * scale);
+    const rOut = Math.round(150 * scale);
     const pageSize = INNER_ANGLES.length + OUTER_ANGLES.length;
     const page = rest.slice(wheelPage * pageSize, wheelPage * pageSize + pageSize);
     const inner = page.slice(0, INNER_ANGLES.length);
@@ -383,34 +390,35 @@ export function createHud() {
     if (main) {
       main.classList.remove('m-off');
       main.classList.add('m-main');
-      main.style.width = `${ARC.attack}px`;
-      main.style.height = `${ARC.attack}px`;
+      main.style.width = `${attack}px`;
+      main.style.height = `${attack}px`;
       main.style.right = '0px';
       main.style.bottom = '0px';
     }
     inner.forEach((btn, i) => {
       btn.classList.remove('m-off');
       btn.classList.add('m-in');
-      placeOnArc(btn, ARC.inner, INNER_ANGLES[i], ARC.rIn);
+      placeOnArc(btn, innerSize, INNER_ANGLES[i], rIn, attack);
     });
     outer.forEach((btn, i) => {
       btn.classList.remove('m-off');
       btn.classList.add('m-out');
-      placeOnArc(btn, ARC.outer, OUTER_ANGLES[i], ARC.rOut);
+      placeOnArc(btn, outerSize, OUTER_ANGLES[i], rOut, attack);
     });
     const more = root.querySelector('.m-more');
     if (more) {
-      const needed = rest.length > pageSize;
-      more.hidden = !needed;
+      more.hidden = rest.length <= pageSize;
       more.textContent = '⇄';
-      placeOnArc(more, ARC.util, 78, 92);
+      placeOnArc(more, util, 78, Math.round(70 * scale), attack);
     }
     const box = skillsEl.parentElement;
     if (box) {
-      box.style.width = '300px';
-      box.style.height = '280px';
-      skillsEl.style.width = '300px';
-      skillsEl.style.height = '280px';
+      const w = Math.ceil(rOut + outerSize / 2 + attack / 2 + 8);
+      const h = Math.ceil(rOut + outerSize / 2 + attack / 2 + 8);
+      box.style.width = `${w}px`;
+      box.style.height = `${h}px`;
+      skillsEl.style.width = `${w}px`;
+      skillsEl.style.height = `${h}px`;
     }
   }
   paintSkills(active.skills);
@@ -904,13 +912,19 @@ export function createHud() {
       });
       side.querySelector('.m-side-fold').addEventListener('click', () => side.classList.add('is-folded'));
       showTab('gate');
-      if (window.innerHeight > window.innerWidth) side.classList.add('is-folded');
+      side.classList.add('is-folded');
       const quest = root.querySelector('.quest');
       const heading = quest.querySelector('h3');
       if (heading) heading.textContent = '현재 관문';
       const reward = document.createElement('div');
       reward.className = 'm-reward';
-      reward.innerHTML = '<span class="m-sec">보상</span><div class="m-rslots"><i></i><i></i><i></i><em>균열 봉인</em></div>';
+      reward.innerHTML = `<span class="m-sec">보상</span>
+        <div class="m-rslots">
+          <img src="/dungeon/hud/icons/debuff_rift.png" alt="" />
+          <img src="/dungeon/hud/icons/hud_star.png" alt="" />
+          <img src="/dungeon/hud/icons/buff_shield.png" alt="" />
+        </div>
+        <em>균열 봉인</em>`;
       quest.append(reward);
       shell.querySelector('[data-pane="gate"]').append(quest);
       shell.querySelector('[data-pane="party"]').append(stage.querySelector('.c-party'));
@@ -927,11 +941,14 @@ export function createHud() {
       vitals.querySelectorAll('.c-buffs img').forEach((img) => {
         const wrap = document.createElement('span');
         wrap.className = 'm-buff';
+        const ico = document.createElement('span');
+        ico.className = 'm-buffico';
         const time = document.createElement('i');
         time.className = 'm-bufftime';
         time.textContent = `${img.dataset.remain || 8}s`;
         img.replaceWith(wrap);
-        wrap.append(img, time);
+        ico.append(img);
+        wrap.append(ico, time);
       });
       const power = document.createElement('div');
       power.className = 'm-power';
@@ -968,10 +985,6 @@ export function createHud() {
       menuFold.textContent = '‹';
       menuFold.setAttribute('aria-label', '메뉴 접기');
       const menu = shell.querySelector('.m-menu');
-      menuFold.addEventListener('click', () => {
-        menu.classList.toggle('is-folded');
-        menuFold.textContent = menu.classList.contains('is-folded') ? '›' : '‹';
-      });
       const pack = (btn, label) => {
         const wrap = document.createElement('div');
         wrap.className = 'm-util';
@@ -981,6 +994,15 @@ export function createHud() {
         return wrap;
       };
       menu.append(pack(auto, '자동'), pack(info, '정보'), pack(gear, '설정'), pack(exit, '나가기'));
+      if (window.innerHeight > window.innerWidth) {
+        menu.classList.add('is-folded');
+        menu.append(menuFold);
+        menuFold.addEventListener('click', () => {
+          menu.classList.toggle('is-folded');
+          menuFold.textContent = menu.classList.contains('is-folded') ? '☰' : '‹';
+        });
+        menuFold.textContent = '☰';
+      }
       const more = document.createElement('button');
       more.type = 'button';
       more.className = 'm-more';
