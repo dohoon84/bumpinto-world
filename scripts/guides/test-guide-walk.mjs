@@ -28,7 +28,7 @@ const r = await page.evaluate(async () => {
       if (Math.hypot(end[0] - p.x, end[1] - p.z) < 2.5) return { ok: true };
       while (i < path.length - 1 && Math.hypot(path[i][0] - p.x, path[i][1] - p.z) < 0.6) i++;
       let mx = path[i][0] - p.x, mz = path[i][1] - p.z; const L = Math.hypot(mx, mz) || 1; mx /= L; mz /= L;
-      const st = 4.2 / 30, nx = p.x + mx * st, nz = p.z + mz * st, stuckNow = W.isBlocked(p.x, p.z); let y;
+      const st = 4.2 / 30, CW = J.clampWorld, bb = W.bounds, nx = CW ? CW(p.x + mx * st, p.z, bb).x : p.x + mx * st, nz = CW ? CW(p.x, p.z + mz * st, bb).z : p.z + mz * st, stuckNow = W.isBlocked(p.x, p.z); let y;
       if ((!W.isBlocked(nx, p.z) || stuckNow) && !bike(nx, p.z, p.y) && (y = T.canMove(p.x, p.z, p.y, nx, p.z)) != null) { p.x = nx; p.y = y; }
       if ((!W.isBlocked(p.x, nz) || stuckNow) && !bike(p.x, nz, p.y) && (y = T.canMove(p.x, p.z, p.y, p.x, nz)) != null) { p.z = nz; p.y = y; }
       const rem = Math.hypot(path[i][0] - p.x, path[i][1] - p.z) + (path.length - i) * 1000;
@@ -59,8 +59,51 @@ const r = await page.evaluate(async () => {
     for (let i = 0; i < P.count; i++) { if (!red(i)) continue; const x = P.getX(i), y = P.getY(i), z = P.getZ(i), gh = T.getGroundHeight(x, z, y); if (gh == null || y - gh > 12) continue; nTop++; if (y - gh < low) { low = y - gh; lowAt = [Math.round(x), Math.round(z)]; } } }
   return { res, lantern: { n: nTop, lowest: +low.toFixed(2), at: lowAt } };
 });
+// ---- 실제 입력: KeyW(+Shift 달리기)를 누른 채 카메라 yaw 만 길 쪽으로 돌린다 → game.js 이동 코드(clampWorld·bikes·isBlocked·canMove) 그대로 ----
+const keyRes = [];
+const KEY_ROUTES = (process.env.KEY_ROUTES || 'kal177:kalguksu,gate:galchi,gate:glasses,gate:stationery').split(',');
+await page.mouse.click(400, 250);
+for (const spec of KEY_ROUTES) {
+  const [from, to] = spec.split(':');
+  const ids = await page.evaluate(() => window.__jj.placeGuide.ui.guide.spots.map((s) => s.id));
+  for (const id of to === '*' ? ids : [to]) {
+    await page.evaluate(async ({ from, id }) => {
+      const J = window.__jj, md = J.myeongdong, G = J.placeGuide, spots = G.ui.guide.spots, k = spots.findIndex((s) => s.id === id), A = G.ui.guide.anchors;
+      const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+      let x = A.gate.x, z = A.gate.z;
+      let P = G.route.pathTo(spots, k, x, z);
+      if (from.startsWith('kal')) { // 칼국수까지 남은 거리 N m 지점(도훈 스크린샷 자리)
+        const rem = +from.slice(3); let tot = 0; for (let i = 1; i < P.length; i++) tot += Math.hypot(P[i][0] - P[i - 1][0], P[i][1] - P[i - 1][1]);
+        let acc = 0; const at = tot - rem;
+        for (let i = 1; i < P.length; i++) { const L = Math.hypot(P[i][0] - P[i - 1][0], P[i][1] - P[i - 1][1]); if (acc + L >= at) { const f = (at - acc) / L; x = P[i - 1][0] + (P[i][0] - P[i - 1][0]) * f; z = P[i - 1][1] + (P[i][1] - P[i - 1][1]) * f; break; } acc += L; }
+      }
+      await J.teleport(x, z, md.surfaceY(x, z)); await wait(800); J.setMode?.('follow');
+      P = G.route.pathTo(spots, k, J.player.position.x, J.player.position.z);
+      window.__kw = { P, i: 1 };
+      clearInterval(window.__kwT);
+      window.__kwT = setInterval(() => { const w = window.__kw, p = J.player.position; while (w.i < w.P.length - 1 && Math.hypot(w.P[w.i][0] - p.x, w.P[w.i][1] - p.z) < 1.5) w.i++; const q = w.P[w.i]; J.cam.yaw = Math.atan2(-(q[0] - p.x), -(q[1] - p.z)); }, 30);
+    }, { from, id });
+    const run = !from.startsWith('kal'); // 도훈 자리는 걷기, 나머지는 달리기(같은 이동 코드, 빨리 끝남)
+    if (run) await page.keyboard.down('ShiftLeft');
+    await page.keyboard.down('KeyW');
+    let ok = false, best = Infinity, still = 0, last = null;
+    for (let t = 0; t < 240; t++) {
+      await page.waitForTimeout(500);
+      last = await page.evaluate(() => { const J = window.__jj, p = J.player.position, w = window.__kw; let rem = Math.hypot(w.P[w.i][0] - p.x, w.P[w.i][1] - p.z); for (let i = w.i + 1; i < w.P.length; i++) rem += Math.hypot(w.P[i][0] - w.P[i - 1][0], w.P[i][1] - w.P[i - 1][1]); return { x: +p.x.toFixed(1), z: +p.z.toFixed(1), rem: +rem.toFixed(1), by: J.myeongdong.blockedBy(p.x, p.z, 0.6) }; });
+      if (last.rem < 3) { ok = true; break; }
+      if (last.rem < best - 0.3) { best = last.rem; still = 0; } else if (++still > 8) break;
+    }
+    await page.keyboard.up('KeyW'); if (run) await page.keyboard.up('ShiftLeft');
+    keyRes.push({ from, to: id, ok, ...last }); if (process.env.WALK_SHOW) console.log("key", from, id, ok, JSON.stringify(last), new Date().toISOString().slice(11, 19));
+  }
+}
+await page.evaluate(() => clearInterval(window.__kwT));
 await browser.close();
 const fails = [];
+const kbad = keyRes.filter((q) => !q.ok);
+for (const q of kbad) console.log('key-stuck', JSON.stringify(q));
+if (kbad.length) fails.push(`${kbad.length}/${keyRes.length} real-input (KeyW) walks blocked`);
+
 if (r.err) fails.push(r.err);
 const bad = (r.res || []).filter((q) => !q.ok);
 for (const q of bad.slice(0, +(process.env.WALK_SHOW || 12))) console.log('stuck', JSON.stringify(q));
@@ -68,4 +111,4 @@ if (bad.length) fails.push(`${bad.length}/${r.res.length} guide walks blocked`);
 if (r.lantern && r.lantern.n && r.lantern.lowest < 2.6) fails.push(`lantern low ${r.lantern.lowest} m at ${r.lantern.at}`);
 if (errors.length) fails.push('console errors: ' + errors.slice(0, 3).join(' | '));
 if (fails.length) { console.error('test-guide-walk FAIL:', fails.join('; ')); process.exit(1); }
-console.log(`test-guide-walk ok — ${r.res.length} controller walks (gate·NPC·board·8 spots → every spot, + restarts every 12 m along each route) all arrive; lanterns ${r.lantern.n} verts, lowest ${r.lantern.lowest} m above ground`);
+console.log(`test-guide-walk ok — ${keyRes.length} real KeyW walks + ${r.res.length} controller walks (gate·NPC·board·8 spots → every spot, + restarts every 12 m along each route) all arrive; lanterns ${r.lantern.n} verts, lowest ${r.lantern.lowest} m above ground`);

@@ -3154,7 +3154,7 @@ ready: bootReady, region, tower, renderer, corridor, namsan: corridor?.namsan ||
     move();
   }, // [terrain] [bike] [roadbike] [namsan] [hangang]
 
-  bikes, toggleRide, triggerEmote,
+  bikes, toggleRide, triggerEmote, clampWorld, // [ndm-walk] clampWorld: 걷기 테스트가 플레이어와 같은 경계 판정을 쓰게
   get ride() { return ride; }, remotes, presence, // [ride]
   cameraApp, // [camera]
   subway, serverClock, // [subway] [subway-sync]
