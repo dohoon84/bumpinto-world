@@ -103,6 +103,79 @@ body.mobile.bw-signed-in #lobby-card .v2-save-google { display: none !important;
 #m-landing .m-picked b { font-size: 16px; font-weight: 900; }
 #m-landing .m-picked span { font-size: 12px; color: #9eb4c6; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
+/* [route-map mobile] '어디서 시작할까요?' 분당–잠실 가로 노선도 (src/mobile/routeMap.js · 배치는 ui-v2/routeMapLand.js).
+   PC 짧은 창 노선도(ui-v2.css .v2-picker.is-land)와 같은 크기·색이지만 #m-landing 아래 .m-rm-* 만 쓴다 → PC 화면 영향 없음.
+   왼쪽: 고리 노선도(큰 칩, 누르면 선택만) · 오른쪽 좁은 칸: 뒤로·제목·범례·노선 밖/랜드마크·다른 지역·선택 역 + 입장 버튼(항상 보임) */
+#m-landing .m-rm { position: absolute; inset: 0; z-index: 1; box-sizing: border-box; display: grid; grid-template-columns: minmax(0, 1fr) 216px; gap: 10px; padding: max(6px, var(--sa-t)) max(10px, var(--sa-r)) max(6px, var(--sa-b)) max(10px, var(--sa-l)); background: radial-gradient(120% 90% at 30% 50%, rgba(29, 46, 75, .97), rgba(11, 19, 33, .98)); }
+#m-landing .m-rm-map { position: relative; min-width: 0; min-height: 0; border-radius: 14px; background: rgba(8, 16, 30, .32); border: 1px solid rgba(255, 255, 255, .06); overflow: hidden; }
+#m-landing .m-rm-map svg { position: absolute; left: 0; top: 0; pointer-events: none; }
+#m-landing .m-rm-stn { position: absolute; left: 0; top: 0; transform: translateY(-50%); display: inline-flex; align-items: center; justify-content: center; gap: 6px; box-sizing: border-box; height: 32px; min-width: 44px; padding: 0 10px; border-radius: 8px; border: 1px solid rgba(255, 255, 255, .2); background: rgba(15, 25, 42, .94); color: #fff; font: inherit; cursor: pointer; white-space: nowrap; touch-action: manipulation; }
+#m-landing .m-rm-stn[data-side="C"] { transform: translate(-50%, -50%); }
+#m-landing .m-rm-stn::before { content: ''; position: absolute; left: 0; right: 0; top: -6px; bottom: -6px; }
+#m-landing .m-rm-stn b { font-size: 14px; font-weight: 900; }
+#m-landing .m-rm-stn.on { height: 34px; padding: 0 10px; border-color: transparent; background: linear-gradient(180deg, #ffe169, #f5a200); box-shadow: 0 2px 0 #a65f00, 0 0 12px rgba(255, 225, 105, .5); color: #3a2a00; z-index: 1; }
+#m-landing .m-rm-stn.is-pass { height: 22px; min-width: 0; padding: 0 7px; gap: 4px; cursor: default; opacity: .78; border-style: dashed; background: rgba(15, 25, 42, .6); }
+#m-landing .m-rm-stn.is-pass::before { content: none; }
+#m-landing .m-rm-stn.is-pass b { font-size: 11.5px; font-weight: 700; color: #c9d6e2; }
+#m-landing .m-rm-stn.is-pass small { font-size: 10px; font-weight: 500; color: #9eb4c6; }
+#m-landing .m-rm.is-en .m-rm-stn:not(.is-pass) { padding: 0 8px; }
+#m-landing .m-rm.is-en .m-rm-stn:not(.is-pass) b { font-size: 13px; }
+#m-landing .m-rm-side { display: flex; flex-direction: column; gap: 8px; min-width: 0; min-height: 0; overflow: hidden auto; scrollbar-width: none; }
+#m-landing .m-rm-side::-webkit-scrollbar { display: none; }
+#m-landing .m-rm-side > * { flex: none; }
+#m-landing .m-rm-side > .m-rm-grow { flex: 1 1 0; min-height: 0; }
+#m-landing .m-rm-hd { display: flex; align-items: center; gap: 8px; min-height: 44px; }
+#m-landing .m-rm-hd .m-icon-btn { flex: none; width: 44px; height: 44px; padding: 0; }
+#m-landing .m-rm-hd h2 { min-width: 0; font-size: 16px; line-height: 1.15; color: #ffe169; }
+#m-landing .m-rm-desc { margin: -4px 0 0; font-size: 12px; color: #9eb4c6; }
+#m-landing .m-rm-legend { display: flex; flex-wrap: wrap; gap: 4px 10px; }
+#m-landing .m-rm-lg { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 700; color: #e2ecf8; white-space: nowrap; }
+#m-landing .m-rm-lg i { display: inline-block; flex: none; width: 14px; height: 4px; border-radius: 3px; }
+#m-landing .m-rm-lg.k { color: #9eb4c6; font-weight: 600; }
+#m-landing .m-rm-lg i.dot.p { box-sizing: border-box; width: 8px; height: 8px; border-radius: 50%; background: #9eb4c6; border: 2px solid #6b7a88; }
+#m-landing .m-rm-lms { display: flex; flex-direction: column; gap: 6px; }
+#m-landing .m-rm-lm { position: relative; display: flex; align-items: center; gap: 7px; box-sizing: border-box; height: 40px; padding: 0 10px; border-radius: 9px; background: rgba(76, 201, 240, .16); border: 1px solid rgba(76, 201, 240, .62); color: #bfefff; font: inherit; font-size: 13px; font-weight: 800; cursor: pointer; white-space: nowrap; text-align: left; touch-action: manipulation; }
+#m-landing .m-rm-lm svg { display: block; flex: none; }
+#m-landing .m-rm-lm span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+#m-landing .m-rm-lm small { display: inline-flex; align-items: center; gap: 3px; margin-left: auto; font-size: 10.5px; font-weight: 600; color: #8fb7c9; }
+#m-landing .m-rm-lm.is-off { border-style: dashed; }
+#m-landing .m-rm-lm.on { background: rgba(76, 201, 240, .32); border-color: #7fdcff; border-style: solid; box-shadow: 0 0 0 2px rgba(255, 225, 105, .85); }
+#m-landing .m-rm-regions { display: flex; flex-direction: column; gap: 6px; }
+#m-landing .m-rm-region { display: grid; grid-template-columns: auto 1fr; align-items: baseline; column-gap: 6px; box-sizing: border-box; min-height: 44px; padding: 4px 10px; border-radius: 9px; border: 1px solid rgba(255, 255, 255, .14); background: rgba(255, 255, 255, .06); color: #fff; font: inherit; text-align: left; cursor: pointer; touch-action: manipulation; }
+#m-landing .m-rm-region span { grid-row: 1 / 3; align-self: center; font-size: 10.5px; font-weight: 700; color: #9eb4c6; }
+#m-landing .m-rm-region b { font-size: 13px; font-weight: 900; }
+#m-landing .m-rm-region small { font-size: 10.5px; color: #9eb4c6; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#m-landing .m-rm-region:disabled { opacity: .45; }
+#m-landing .m-rm-sel { display: flex; flex-direction: column; align-items: stretch; gap: 8px; padding: 10px; border-radius: 14px; border: 1px solid rgba(255, 225, 105, .45); background: linear-gradient(180deg, #2a3346, #1a2436); box-shadow: 0 6px 18px rgba(0, 0, 0, .35); }
+#m-landing .m-rm-sel-t { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+#m-landing .m-rm-sel-t b { font-size: 15px; font-weight: 900; line-height: 1.25; color: #ffe169; }
+#m-landing .m-rm-sel-t small { font-size: 11.5px; color: #c9d6e2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#m-landing .m-rm-sel .m-btn { width: 100%; min-height: 48px; padding: 8px 12px; font-size: 15px; line-height: 1.2; white-space: normal; }
+@media (max-width: 799.98px) {
+  #m-landing .m-rm.is-en { grid-template-columns: minmax(0, 1fr) 180px; }
+  #m-landing .m-rm.is-en .m-rm-lm small { display: none; }
+  #m-landing .m-rm.is-en .m-rm-hd h2 { font-size: 14px; }
+  #m-landing .m-rm.is-en .m-rm-side { gap: 6px; }
+  #m-landing .m-rm.is-en .m-rm-sel-t b { font-size: 14px; }
+}
+/* 낮은 가로 폰(높이 ≤ 400: 740×360 · 844×390 등): 옆 칸을 스크롤 없이 — 노선 밖·랜드마크 칩은 2열(이름만, 두 줄까지), 다른 지역은 한 줄 */
+@media (max-height: 400px) {
+  #m-landing .m-rm-side { gap: 6px; }
+  #m-landing .m-rm-lms { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; }
+  #m-landing .m-rm-lm { height: 40px; padding: 0 7px; gap: 5px; font-size: 12px; line-height: 1.1; white-space: normal; word-break: keep-all; }
+  #m-landing .m-rm-lm span { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+  #m-landing .m-rm-lm small { display: none; }
+  #m-landing .m-rm-lm:last-child:nth-child(odd) { grid-column: 1 / -1; }
+  #m-landing .m-rm-region { display: flex; align-items: center; gap: 6px; min-height: 40px; padding: 0 10px; }
+  #m-landing .m-rm-region small { display: none; }
+  #m-landing .m-rm-sel { gap: 6px; padding: 8px; }
+  #m-landing .m-rm-sel .m-btn { min-height: 44px; }
+}
+@media (max-height: 370px) {
+  #m-landing .m-rm-desc { display: none; }
+  #m-landing .m-rm-sel-t b { font-size: 14px; }
+}
+
 /* ---------- 로비(캐릭터 입장) · 입장 로딩 — 기존 DOM 을 가로 한 화면에 맞게 ---------- */
 body.mobile.in-lobby #lobby { padding: var(--m-t) var(--m-r) var(--m-b) var(--m-l); place-items: stretch; overflow: hidden; grid-template-rows: minmax(0, 1fr); grid-template-columns: minmax(0, 1fr); }
 body.mobile #lobby-card { width: 100%; height: 100%; min-height: 0; box-sizing: border-box; max-height: 100%; grid-template-columns: minmax(150px, 26vw) 1fr; grid-template-rows: minmax(0, 1fr); gap: 12px; padding: 10px; background: rgba(255, 255, 255, .9); }
