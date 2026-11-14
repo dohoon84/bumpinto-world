@@ -10,6 +10,9 @@ export function myeongdongEnabled(search = typeof location !== 'undefined' ? loc
 
 /** 걸을 수 있는 섬. 남쪽 변(z1 = -21300)은 남산 DEM 북쪽 변과 맞닿는다 → 퇴계로에서 남산오르미까지 걸어서 이어진다. */
 export const MYEONGDONG_BOUNDS = { x0: -11420, z0: -22080, x1: -10530, z1: -21300 };
+/** [ndm-walk] 남대문시장(서쪽 띠 안, x < -11420)도 걸을 수 있는 섬. 없으면 clampWorld 가 x = -11420 에서 플레이어를 멈춘다(골목 중간의 보이지 않는 벽). */
+export const MYEONGDONG_MARKET = { x0: -11528, z0: -21545, x1: -11420, z1: -21300 };
+export const MYEONGDONG_BOXES = [MYEONGDONG_BOUNDS, MYEONGDONG_MARKET];
 /** 걸을 수는 없고 보이기만 하는 바깥 띠(땅·건물·길). 남산 도심(namsanCity)은 이 사각형 안을 비운다. */
 export const MYEONGDONG_APRON = { x0: -11530, z0: -22300, x1: -10455, z1: -21300 };
 /** 명동역 → 남산오르미 → 케이블카 하부정류장 길안내 띠 (남산 섬 안, 길안내만 그린다) */

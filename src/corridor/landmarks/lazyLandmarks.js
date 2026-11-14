@@ -1,6 +1,6 @@
 // [namsan] [hangang] 부트 때는 가벼운 스텁만 두고, 가까이 오면 메시를 만든다.
 import { NAMSAN_BOUNDS, HANGANG_BOXES, NAMSAN_SPAWN, HANGANG_SPAWN, HANGANG_HAP_SPAWNS, emptyLandmarkMini } from './landmarkBounds.js';
-import { MYEONGDONG_BOUNDS, MYEONGDONG_SPAWN } from './myeongdongFlags.js'; // [myeongdong]
+import { MYEONGDONG_BOUNDS, MYEONGDONG_BOXES, MYEONGDONG_SPAWN } from './myeongdongFlags.js'; // [myeongdong]
 
 export function landmarkLazyEnabled(search = typeof location !== 'undefined' ? location.search : '') {
   const s = search instanceof URLSearchParams ? search : new URLSearchParams(search || '');
@@ -67,7 +67,7 @@ export function makeNamsanMeta(data) {
 export function makeMyeongdongMeta() {
   const bounds = { ...MYEONGDONG_BOUNDS };
   const spawn = { ...MYEONGDONG_SPAWN };
-  return { bounds, boxes: [bounds], spawn, spawnY: () => spawn.y, mini: emptyLandmarkMini(), liveMini: true };
+  return { bounds, boxes: [bounds, ...MYEONGDONG_BOXES.slice(1).map((b) => ({ ...b }))], spawn, spawnY: () => spawn.y, mini: emptyLandmarkMini(), liveMini: true }; // [ndm-walk] + 남대문시장 섬
 }
 
 export function makeHangangMeta(data) {

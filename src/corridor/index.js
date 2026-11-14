@@ -737,12 +737,14 @@ const gnTransit = corridorData.gangnamTransit ? mountGangnamTransit(root, corrid
     if (bounds.islands?.length) bounds.islands.push(nb);
   }
   if (myeongdong?.bounds) { // [myeongdong] 남산 섬 북쪽 변(z=-21300)에 맞닿은 섬 → 명동역에서 남산오르미까지 걸어서 이어진다
-    const mb = { ...myeongdong.bounds };
-    bounds.x0 = Math.min(bounds.x0, mb.x0);
-    bounds.x1 = Math.max(bounds.x1, mb.x1);
-    bounds.z0 = Math.min(bounds.z0, mb.z0);
-    bounds.z1 = Math.max(bounds.z1, mb.z1);
-    if (bounds.islands?.length) bounds.islands.push(mb);
+    for (const b of myeongdong.boxes?.length ? myeongdong.boxes : [myeongdong.bounds]) { // [ndm-walk] 명동 + 남대문시장 섬
+      const mb = { x0: b.x0, x1: b.x1, z0: b.z0, z1: b.z1 };
+      bounds.x0 = Math.min(bounds.x0, mb.x0);
+      bounds.x1 = Math.max(bounds.x1, mb.x1);
+      bounds.z0 = Math.min(bounds.z0, mb.z0);
+      bounds.z1 = Math.max(bounds.z1, mb.z1);
+      if (bounds.islands?.length) bounds.islands.push(mb);
+    }
   }
   if (hangang?.bounds) {
     // [hangang-isolation] 1구간·2구간 사각형을 따로 섬으로 넣는다 (합친 사각형은 강남역~반포 사이 빈 땅까지 덮었다).
