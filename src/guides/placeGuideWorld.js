@@ -80,7 +80,18 @@ export function createPlaceGuideWorld(o) {
 
   // ---------- UI · 길 ----------
   const lines = (o.walkLines?.() || []).filter((w) => w.pts?.length >= 2);
-  const route = createGroundRoute({ parent: group, groundAt: (x, z) => ground(x, z) + 0.12, lines: lines.map((w) => w.pts) });
+  // 걸을 수 있는 직선인지: 0.5 m 마다 벽·노점(isBlocked, 플레이어 반경 0.4) · 땅 턱(> 0.9 m) 검사 → 화살표 길이 건물·노점을 뚫지 않게
+  const clear = o.isBlocked ? (ax, az, bx, bz) => {
+    const L = Math.hypot(bx - ax, bz - az), n = Math.max(1, Math.ceil(L / 0.5));
+    let py = ground(ax, az);
+    for (let i = 1; i <= n; i++) {
+      const x = ax + (bx - ax) * (i / n), z = az + (bz - az) * (i / n);
+      const d = L * (i / n); if (d > 1.2 && d < L - 1.2 && o.isBlocked(x, z, 0.4)) return false; // 양 끝 1.2 m 는 봐줌(노점 옆에 선 출발점·문 앞)
+      const y = ground(x, z); if (Math.abs(y - py) > 0.9) return false; py = y;
+    }
+    return true;
+  } : null;
+  const route = createGroundRoute({ parent: group, groundAt: (x, z) => ground(x, z) + 0.12, lines: lines.map((w) => w.pts), clear });
   // 길 이름: 가장 가까운 이름 있는 길 (단계 글)
   const named = lines.filter((w) => w.n);
   const nameAt = (x, z) => {

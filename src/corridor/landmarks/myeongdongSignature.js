@@ -489,11 +489,11 @@ function buildNamdaemun(ctx) {
   }
   buf.box(gx, sy1 + 0.75, gz, 0.4, 1.3, 2.6, ry, uvOf(R.stone), hex3('#1f2c7a'));
   buf.box(gx, sy1 + 0.75, gz, 0.5, 0.5, 1.6, ry, uvOf(R.stone), hex3('#ffd23f'));
-  // [md-market] 시장 골목 위로 가로지르는 빨강·노랑·파랑 삼각 깃발 줄 + 붉은 등 (멀리서도 '시장 골목'으로 읽히게). 충돌 없음(머리 위 5 m)
+  // [md-market] 시장 골목 위로 가로지르는 빨강·노랑·파랑 삼각 깃발 줄 + 붉은 등 (멀리서도 '시장 골목'으로 읽히게). 충돌 없음 · 깃발 끝 ≥ 땅+4.6 m, 등 밑 ≥ 땅+3.7 m (test-guide-walk 가 잰다)
   { const fl = [hex3('#e63946'), hex3('#ffd23f'), hex3('#2a6fdb'), hex3('#ffffff'), hex3('#2a9d8f')];
     for (let k = 1; k <= 7; k++) {
       const d = 9 * k, cx = gx + tx * d, cz = gz + tz * d; if (cx < -11520) break;
-      const hw = Math.max(2.6, half - 0.8), yy = y0 + 6.2;
+      const hw = Math.max(2.6, half - 0.8), yy = Math.max(y0, heightAt(cx, cz), heightAt(cx + nx * hw, cz + nz * hw), heightAt(cx - nx * hw, cz - nz * hw)) + 6.2; // [md-market] 줄마다 그 자리 땅(가장 높은 곳) 기준 — 오르막에서 깃발·등이 몸 높이로 내려오지 않게
       buf.box(cx, yy + 0.05, cz, 0.05, 0.05, 2 * hw, ry, uvOf(R.stone), hex3('#333333'));
       for (let i = 0; i < 9; i++) {
         const f = -hw + (2 * hw) * (i + 0.5) / 9, px = cx + nx * f, pz = cz + nz * f, sag = 0.5 * (1 - (f / hw) ** 2);
@@ -527,7 +527,7 @@ function buildNamdaemun(ctx) {
         const ux = (q[0] - p[0]) / sl, uz = (q[1] - p[1]) / sl, vx = -uz, vz = ux, fr = Math.atan2(vx, vz);
         for (let d = 4.5; d < sl - 3; d += 9) {
           const cx = p[0] + ux * d, cz = p[1] + uz * d; if (cx < MX0 + 6 || onOtherWay(cx, cz, w.id, 1)) continue;
-          const hw = (w.w || 4) / 2 + 1.6, yy = heightAt(cx, cz) + 5.6; kk++;
+          const hw = (w.w || 4) / 2 + 1.6, yy = Math.max(heightAt(cx, cz), heightAt(cx + vx * hw, cz + vz * hw), heightAt(cx - vx * hw, cz - vz * hw)) + 5.6; kk++;
           buf.box(cx, yy + 0.05, cz, 0.05, 0.05, 2 * hw, fr, uvOf(R.stone), hex3('#333333'));
           for (let j = 0; j < 7; j++) {
             const f = -hw + (2 * hw) * (j + 0.5) / 7, px = cx + vx * f, pz = cz + vz * f;

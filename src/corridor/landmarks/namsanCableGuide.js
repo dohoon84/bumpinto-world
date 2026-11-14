@@ -17,7 +17,8 @@ const MAX_ARROWS = 160;
 
 // ---------------------------------------------------------------- 길 그래프
 /** 폴리라인(osm ways · 시가지 도로)로 보행 그래프를 만들고, 각 정류장 출입문까지의 최단 경로 트리를 미리 구한다. */
-export function buildCableGraph(lines, targets, { radius = 760, link = 6 } = {}) {
+// clear(ax,az,bx,bz) (선택): 두 점 사이를 실제로 걸을 수 있는지(벽·노점·턱). 주면 막힌 길 조각은 크게 벌점, 잇기·출입문·출발 스냅은 막힌 것 제외.
+export function buildCableGraph(lines, targets, { radius = 760, link = 6, clear = null } = {}) {
   const nodes = []; // {x,z,e:[{t,w}]}
   const cell = 8;
   const grid = new Map();
@@ -52,7 +53,8 @@ export function buildCableGraph(lines, targets, { radius = 760, link = 6 } = {})
         for (let k = 1; k <= n; k++) {
           const x = q[0] + (p[0] - q[0]) * (k / n), z = q[1] + (p[1] - q[1]) * (k / n);
           const cur = node(x, z);
-          edge(prev, cur, L / n);
+          const a = nodes[prev];
+          edge(prev, cur, L / n + (clear && !clear(a.x, a.z, x, z) ? 5000 : 0)); // 막힌 조각: 다른 길이 전혀 없을 때만
           prev = cur;
         }
       } else prev = node(p[0], p[1]);
@@ -74,6 +76,7 @@ export function buildCableGraph(lines, targets, { radius = 760, link = 6 } = {})
     for (const j of around(nodes[i].x, nodes[i].z, link)) {
       if (j <= i) continue;
       if (nodes[i].e.some((e) => e.t === j)) continue;
+      if (clear && !clear(nodes[i].x, nodes[i].z, nodes[j].x, nodes[j].z)) continue;
       edge(i, j, Math.hypot(nodes[i].x - nodes[j].x, nodes[i].z - nodes[j].z) * 1.05);
     }
   }
@@ -101,7 +104,9 @@ export function buildCableGraph(lines, targets, { radius = 760, link = 6 } = {})
       seenC.add(c); pick.add(j);
       if (seenC.size >= 4) break;
     }
-    for (const j of pick) edge(ti, j, dOf(j) * 1.15);
+    let picked = [...pick];
+    if (clear) { const ok = picked.filter((j) => clear(t.x, t.z, nodes[j].x, nodes[j].z)); if (ok.length) picked = ok; else { const c2 = cand.filter((j) => clear(t.x, t.z, nodes[j].x, nodes[j].z)).slice(0, 3); if (c2.length) picked = c2; } }
+    for (const j of picked) edge(ti, j, dOf(j) * 1.15);
     return dijkstraFrom(nodes, ti);
   });
   return {
@@ -111,12 +116,18 @@ export function buildCableGraph(lines, targets, { radius = 760, link = 6 } = {})
       const tree = trees[k];
       if (!tree) return null;
       let best = -1, bd = Infinity;
+      const cs = [];
       for (const i of around(x, z, maxSnap)) {
         if (!Number.isFinite(tree.dist[i])) continue;
         // 가까움 + 남은 거리(되돌아가는 노드 피하기)
         const d = Math.hypot(nodes[i].x - x, nodes[i].z - z);
         const score = d * 1.6 + tree.dist[i];
+        cs.push([score, i]);
         if (score < bd) { bd = score; best = i; }
+      }
+      if (clear && cs.length) { // 출발점에서 곧장 걸어갈 수 있는 노드 중 점수 좋은 것 (벽 너머 노드로 화살표가 건물을 뚫지 않게)
+        cs.sort((a, b) => a[0] - b[0]);
+        for (let q = 0; q < cs.length && q < 60; q++) if (clear(x, z, nodes[cs[q][1]].x, nodes[cs[q][1]].z)) { best = cs[q][1]; break; }
       }
       if (best < 0) return null;
       const out = [[x, z]];

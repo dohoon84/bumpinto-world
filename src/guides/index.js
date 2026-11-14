@@ -27,6 +27,8 @@ export function mountPlaceGuides(o) {
         guide, parent: o.parentOf(host), camera: o.camera, canvas: o.canvas, getPlayer: o.getPlayer, mobile: o.mobile,
         surfaceY: (x, z) => host.surfaceY?.(x, z) ?? host.heightAt?.(x, z) ?? 0,
         walkLines: () => host.walkWays?.() || [],
+        // 길 찾기용 '못 걷는 곳': 벽·노점 + 랜드마크 땅 밖(명동 패치 경계의 턱 — surfaceY 가 null)
+        isBlocked: host.isBlocked ? (x, z, r) => !!host.isBlocked(x, z, r) || (host.surfaceY ? host.surfaceY(x, z) == null : false) : null,
         setSuppressOthers: o.setSuppressOthers, track: o.track,
       });
       live.set(def.id, w);

@@ -88,7 +88,8 @@
     "arrive:e2e": "node scripts/e2e-station-arrive.mjs",
     "bp24:entry": "node scripts/e2e-bump24-jeongja-entry.mjs",
     "titles:test": "node scripts/test-bp24-rank.mjs && node scripts/test-weekly-titles.mjs",
-    "guide:test": "node scripts/guides/test-place-guide.mjs ${MYEONGDONG_WALK_PORT:-5231}"
+    "guide:test": "node scripts/guides/test-place-guide.mjs ${MYEONGDONG_WALK_PORT:-5231} && node scripts/guides/test-guide-walk.mjs ${MYEONGDONG_WALK_PORT:-5231}",
+    "guide:walk": "node scripts/guides/test-guide-walk.mjs ${MYEONGDONG_WALK_PORT:-5231}"
   },
   "dependencies": {
     "three": "^0.186.1"

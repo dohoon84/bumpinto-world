@@ -40,7 +40,7 @@ export function routeSteps(path, nameAt, destName) {
 /**
  * @param {{ parent: THREE.Object3D, groundAt: (x:number,z:number)=>number, lines: number[][][] }} o
  */
-export function createGroundRoute({ parent, groundAt, lines }) {
+export function createGroundRoute({ parent, groundAt, lines, clear: walkable = null }) {
   const group = new THREE.Group(); group.name = 'place-guide-route'; parent.add(group);
   const mk = (color, off) => new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.96, depthWrite: false, side: THREE.DoubleSide, toneMapped: false, fog: false, polygonOffset: true, polygonOffsetFactor: off, polygonOffsetUnits: off });
   const arrowMat = mk('#ffffff', -4), rimMat = mk('#08244a', -3); rimMat.opacity = 0.9;
@@ -85,7 +85,7 @@ export function createGroundRoute({ parent, groundAt, lines }) {
   let spotsRef = null;
   function ensureGraph(spots) {
     if (graph && spotsRef === spots) return graph;
-    spotsRef = spots; graph = buildCableGraph(lines, spots.map((s) => ({ x: s.x, z: s.z })), { radius: 900, link: 6 });
+    spotsRef = spots; graph = buildCableGraph(lines, spots.map((s) => ({ x: s.x, z: s.z })), { radius: 900, link: 6, clear: walkable });
     return graph;
   }
   /** (x,z) → 목표까지 경로 [x,z][] (그래프에서 못 찾으면 직선) */
