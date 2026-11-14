@@ -132,9 +132,10 @@
 #bw-raid.is-handheld .m-player .c-buffs img {
   width: 28px;
   height: 28px;
-  border-radius: 0;
+  border-radius: 50%;
   object-fit: cover;
-  transform: scale(1.65);
+  box-shadow: 0 0 0 1px #e8b64a;
+  transform: none;
 }
 #bw-raid.is-handheld .m-player .c-buffs > span:not(.m-buff) { display: none; }
 #bw-raid.is-handheld .m-bufftime {
@@ -202,7 +203,7 @@
   height: 28px;
   border-radius: 50%;
   object-fit: cover;
-  transform: scale(1.65);
+  transform: none;
   border: 1px solid #e8b64a;
 }
 #bw-raid.is-handheld .quest .tip { display: none; }
@@ -410,6 +411,11 @@
 }
 #bw-raid.is-handheld .c-auto,
 #bw-raid.is-handheld .m-icon,
+#bw-raid.is-handheld .m-menu-fold,
+#bw-raid.is-handheld .c-auto {
+  position: relative;
+}
+#bw-raid.is-handheld .m-icon,
 #bw-raid.is-handheld .m-menu-fold {
   width: 44px;
   height: 44px;
@@ -430,11 +436,23 @@
   position: relative;
   left: auto;
   top: auto;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border-radius: 50%;
+  border: 1px solid rgba(232, 182, 74, 0.85);
+  background:
+    radial-gradient(circle at 50% 35%, rgba(255, 230, 170, 0.16), transparent 42%),
+    #0a0c14;
+  box-shadow: inset 0 0 0 2px rgba(0, 0, 0, 0.45);
   letter-spacing: 0;
+  display: grid;
+  place-items: center;
 }
 #bw-raid.is-handheld .c-auto.is-on {
-  background: linear-gradient(#ffe7a0, #e0b44a);
-  color: #2a2114;
+  background: #0a0c14;
+  color: #ffe6a8;
+  box-shadow: 0 0 0 2px #ffe7a0, inset 0 0 0 2px rgba(0, 0, 0, 0.45);
 }
 #bw-raid.is-handheld .m-menu { gap: 8px; }
 #bw-raid.is-handheld .m-menu-fold { background: transparent; }
@@ -575,12 +593,27 @@
 #bw-raid.is-handheld .c-slot img,
 #bw-raid.is-handheld .c-slot svg {
   position: absolute;
-  left: -32%;
-  top: -32%;
-  width: 164%;
-  height: 164%;
+  left: 3px;
+  top: 3px;
+  width: calc(100% - 6px);
+  height: calc(100% - 6px);
   border-radius: 50%;
   object-fit: cover;
+  transform: none;
+}
+#bw-raid.is-handheld .m-more img,
+#bw-raid.is-handheld .c-auto img,
+#bw-raid.is-handheld .m-icon img,
+#bw-raid.is-handheld .m-menu-fold img,
+#bw-raid.is-handheld .m-chat-toggle img {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+  transform: none;
 }
 #bw-raid.is-handheld .c-slot.m-off { display: none; }
 #bw-raid.is-handheld .c-slot.m-main { z-index: 2; }

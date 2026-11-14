@@ -601,7 +601,7 @@
   font-size: 10px; font-weight: 700; color: #fff; letter-spacing: 0.02em;
 }
 #bw-raid .c-castrow { display: flex; align-items: center; gap: 6px; height: 20px; margin-top: 2px; }
-#bw-raid .c-castrow img { width: 18px; height: 18px; border-radius: 3px; }
+#bw-raid .c-castrow img { width: 18px; height: 18px; border-radius: 50%; object-fit: cover; }
 #bw-raid .c-castrow span { font-size: 12px; color: #ffc48c; font-weight: 700; }
 #bw-raid .c-cast { width: 200px; height: 4px; border-radius: 2px; background: rgba(30,18,12,.9); box-shadow: 0 0 0 1px rgba(0,0,0,.65); overflow: hidden; }
 #bw-raid .c-cast span { display: block; height: 100%; width: 0; background: linear-gradient(90deg, #ff8c28, #ffdc96); }
@@ -652,7 +652,7 @@
 
 #bw-raid .c-vitals { position: absolute; left: 671px; top: 946px; width: 578px; height: 32px; }
 #bw-raid .c-buffs { position: absolute; left: 132px; top: 0; display: flex; gap: 3px; align-items: center; height: 16px; }
-#bw-raid .c-buffs img { width: 16px; height: 16px; border-radius: 3px; }
+#bw-raid .c-buffs img { width: 16px; height: 16px; border-radius: 50%; object-fit: cover; }
 #bw-raid .c-buffs span { font-size: 10px; color: #ced2e0; font-weight: 700; }
 #bw-raid .c-vname { position: absolute; left: 0; right: 0; top: 0; height: 16px; display: flex; align-items: baseline; gap: 6px; }
 #bw-raid .c-vname b { font-size: 13px; font-weight: 800; }
@@ -703,10 +703,10 @@
   box-shadow: inset 0 1px 0 rgba(255,240,210,.2), 0 4px 10px rgba(0,0,0,.35);
 }
 #bw-raid .c-slot {
-  width: 50px; height: 50px; padding: 0; position: relative; border: 0; border-radius: 8px;
-  background: #040509; box-shadow: 0 0 0 1px rgba(0,0,0,.8); cursor: pointer; overflow: hidden;
+  width: 50px; height: 50px; padding: 0; position: relative; border: 0; border-radius: 50%;
+  background: #040509; box-shadow: inset 0 0 0 2px #e8b64a; cursor: pointer; overflow: hidden;
 }
-#bw-raid .c-slot img { width: 50px; height: 50px; display: block; border-radius: 8px; }
+#bw-raid .c-slot img { width: 44px; height: 44px; margin: 3px; display: block; border-radius: 50%; object-fit: cover; }
 #bw-raid .c-slot.is-empty { background: rgba(16,18,28,.7); box-shadow: inset 0 0 0 1px rgba(120,88,24,.5); }
 #bw-raid .c-slot .key {
   position: absolute; left: 3px; top: 1px; font-size: 11px; color: #ced4e0; font-weight: 700;

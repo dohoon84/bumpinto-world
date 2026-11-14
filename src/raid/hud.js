@@ -13,18 +13,22 @@ const VN_LINES = [
 ];
 
 const SKILL_ICON = {
-  slash: 'warrior_attack', charge: 'warrior_dash', shout: 'warrior_skill1', spin: 'warrior_skill2',
-  shard: 'mage_skill1', nova: 'mage_skill2', freeze: 'mage_cast', blizzard: 'mage_attack',
-  smite: 'priest_attack', heal: 'priest_cast', circle: 'priest_skill1', holy: 'priest_skill2',
-  shot: 'archer_attack', volley: 'archer_skill1', mark: 'archer_cast', rain: 'archer_skill2',
-  daggers: 'assassin_attack', shadow: 'assassin_skill1', stealth: 'assassin_cast', tape: 'assassin_skill2',
+  slash: 'slash', charge: 'charge', shout: 'shout', spin: 'spin',
+  shard: 'shard', nova: 'nova', freeze: 'freeze', blizzard: 'blizzard',
+  smite: 'smite', heal: 'heal', circle: 'circle', holy: 'holy',
+  shot: 'shot', volley: 'volley', mark: 'mark', rain: 'rain',
+  daggers: 'daggers', shadow: 'shadow', stealth: 'stealth', tape: 'tape',
 };
+const BASIC_ATTACK = new Set(['slash', 'shard', 'smite', 'shot', 'daggers']);
+function roundIcon(id, large = false) {
+  return `/dungeon/hud/round/${id}${large ? '-lg' : ''}.webp`;
+}
 // HUD C 전사 바. 불꽃(warrior_cast)은 마법사 전용이라 여기 두지 않는다.
 const WARRIOR_BAR = [
-  { key: '1', id: 'slash', icon: 'warrior_attack' },
-  { key: '2', id: 'charge', icon: 'warrior_dash' },
-  { key: '3', id: 'shout', icon: 'warrior_skill1' },
-  { key: '4', id: 'spin', icon: 'warrior_skill2' },
+  { key: '1', id: 'slash', icon: 'slash' },
+  { key: '2', id: 'charge', icon: 'charge' },
+  { key: '3', id: 'shout', icon: 'shout' },
+  { key: '4', id: 'spin', icon: 'spin' },
   { key: 'Q', aura: 'buff_power', icon: 'buff_power' },
   { key: 'E', aura: 'buff_shield', icon: 'buff_shield' },
   { key: 'R', icon: 'buff_haste' },
@@ -93,8 +97,8 @@ export function createHud() {
           <svg class="c-cap flip" viewBox="0 0 96 40" aria-hidden="true"><g stroke-linecap="round"><path d="M78 20 L8 3" stroke="#6a4010" stroke-width="3.4"/><path d="M78 20 L3 9" stroke="#6a4010" stroke-width="3.2"/><path d="M78 20 L0 20" stroke="#6a4010" stroke-width="3.4"/><path d="M78 20 L3 31" stroke="#6a4010" stroke-width="3.2"/><path d="M78 20 L8 37" stroke="#6a4010" stroke-width="3.4"/><path d="M76 20 L14 6" stroke="#f6d78a" stroke-width="1.7"/><path d="M76 20 L8 12" stroke="#f6d78a" stroke-width="1.6"/><path d="M76 20 L6 20" stroke="#ffe7a8" stroke-width="1.8"/><path d="M76 20 L8 28" stroke="#f6d78a" stroke-width="1.6"/><path d="M76 20 L14 34" stroke="#f6d78a" stroke-width="1.7"/></g><path d="M82 20 H92" stroke="#f0c45a" stroke-width="2"/><path d="M84 11 l7 9 -7 9 -7 -9 z" fill="#e8b64a" stroke="#fff1c2" stroke-width="0.7"/><path d="M84 15.5 l2.6 4.5 -2.6 4.5 -2.6 -4.5 z" fill="#b4232c"/></svg>
         </div>
         <div class="c-castrow">
-          <img data-aura="debuff_burn" data-remain="6" src="/dungeon/hud/icons/debuff_burn.png" alt="" />
-          <img data-aura="debuff_armorbreak" data-remain="6" src="/dungeon/hud/icons/debuff_armorbreak.png" alt="" />
+          <img data-aura="debuff_burn" data-remain="6" src="/dungeon/hud/round/debuff_burn.webp" alt="" />
+          <img data-aura="debuff_armorbreak" data-remain="6" src="/dungeon/hud/round/debuff_armorbreak.webp" alt="" />
           <span data-cast-name></span>
           <div class="c-cast"><span data-cast-fill></span></div>
           <em data-cast-time></em>
@@ -108,9 +112,9 @@ export function createHud() {
       </div>
       <div class="c-vitals">
         <div class="c-buffs">
-          <img data-aura="buff_power" data-remain="8" src="/dungeon/hud/icons/buff_power.png" alt="" />
-          <img data-aura="buff_shield" data-remain="8" src="/dungeon/hud/icons/buff_shield.png" alt="" />
-          <img data-aura="buff_haste" data-remain="8" src="/dungeon/hud/icons/buff_haste.png" alt="" />
+          <img data-aura="buff_power" data-remain="8" src="/dungeon/hud/round/buff_power.webp" alt="" />
+          <img data-aura="buff_shield" data-remain="8" src="/dungeon/hud/round/buff_shield.webp" alt="" />
+          <img data-aura="buff_haste" data-remain="8" src="/dungeon/hud/round/buff_haste.webp" alt="" />
           <span>8s</span>
         </div>
         <div class="c-vname"><b data-player-name>도훈</b><span data-my-role>전사</span><em data-player-num>100 / 100</em></div>
@@ -337,7 +341,7 @@ export function createHud() {
     skillsEl.dataset.klass = active.id;
     skillsEl.innerHTML = cells.map((c) => `
       <button type="button" class="c-slot${c.empty ? ' is-empty' : ''}${c.skill?.locked ? ' locked' : ''}" ${c.skill ? `data-skill="${c.skill.id}"` : ''} ${c.aura ? `data-aura="${c.aura}" data-remain="8"` : ''}>
-        ${c.icon ? `<img src="/dungeon/hud/icons/${c.icon}.png" alt="" />` : ''}
+        ${c.icon ? `<img src="${roundIcon(c.icon, BASIC_ATTACK.has(c.icon))}" alt="" />` : ''}
         <span class="sweep" style="--p:0"></span>
         <span class="gcd" style="--g:0"></span>
         <b class="key">${c.key}</b>
@@ -408,7 +412,7 @@ export function createHud() {
     const more = root.querySelector('.m-more');
     if (more) {
       more.hidden = rest.length <= pageSize;
-      more.textContent = '⇄';
+      more.innerHTML = '<img src="/dungeon/hud/round/page.webp" alt="" />';
       placeOnArc(more, util, 78, Math.round(70 * scale), attack);
     }
     const box = skillsEl.parentElement;
@@ -920,9 +924,9 @@ export function createHud() {
       reward.className = 'm-reward';
       reward.innerHTML = `<span class="m-sec">보상</span>
         <div class="m-rslots">
-          <img src="/dungeon/hud/icons/debuff_rift.png" alt="" />
-          <img src="/dungeon/hud/icons/hud_star.png" alt="" />
-          <img src="/dungeon/hud/icons/buff_shield.png" alt="" />
+          <img src="/dungeon/hud/round/debuff_rift.webp" alt="" />
+          <img src="/dungeon/hud/round/hud_star.webp" alt="" />
+          <img src="/dungeon/hud/round/buff_shield.webp" alt="" />
         </div>
         <em>균열 봉인</em>`;
       quest.append(reward);
@@ -957,12 +961,12 @@ export function createHud() {
       player.append(stage.querySelector('.c-portrait'), vitals);
       shell.querySelector('.m-corner').prepend(stage.querySelector('.c-map'));
       const auto = stage.querySelector('.c-auto');
-      auto.textContent = 'A';
+      auto.innerHTML = '<img src="/dungeon/hud/round/auto.webp" alt="" />';
       auto.setAttribute('aria-label', '자동');
       const info = document.createElement('button');
       info.type = 'button';
       info.className = 'm-icon';
-      info.textContent = 'i';
+      info.innerHTML = '<img src="/dungeon/hud/round/info.webp" alt="" />';
       info.setAttribute('aria-label', '정보');
       info.addEventListener('click', () => {
         side.classList.remove('is-folded');
@@ -971,19 +975,19 @@ export function createHud() {
       const gear = document.createElement('button');
       gear.type = 'button';
       gear.className = 'm-icon';
-      gear.textContent = '⚙';
+      gear.innerHTML = '<img src="/dungeon/hud/round/settings.webp" alt="" />';
       gear.setAttribute('aria-label', '설정');
       gear.addEventListener('click', () => hud.onMute?.());
       const exit = document.createElement('button');
       exit.type = 'button';
       exit.className = 'm-icon m-exit';
-      exit.textContent = '↪';
+      exit.innerHTML = '<img src="/dungeon/hud/round/exit.webp" alt="" />';
       exit.addEventListener('click', () => hud.onWorld?.());
       const menuFold = document.createElement('button');
       menuFold.type = 'button';
       menuFold.className = 'm-menu-fold';
-      menuFold.textContent = '‹';
-      menuFold.setAttribute('aria-label', '메뉴 접기');
+      menuFold.innerHTML = '<img src="/dungeon/hud/round/menu.webp" alt="" />';
+      menuFold.setAttribute('aria-label', '메뉴');
       const menu = shell.querySelector('.m-menu');
       const pack = (btn, label) => {
         const wrap = document.createElement('div');
@@ -997,11 +1001,7 @@ export function createHud() {
       if (window.innerHeight > window.innerWidth) {
         menu.classList.add('is-folded');
         menu.append(menuFold);
-        menuFold.addEventListener('click', () => {
-          menu.classList.toggle('is-folded');
-          menuFold.textContent = menu.classList.contains('is-folded') ? '☰' : '‹';
-        });
-        menuFold.textContent = '☰';
+        menuFold.addEventListener('click', () => menu.classList.toggle('is-folded'));
       }
       const more = document.createElement('button');
       more.type = 'button';
@@ -1025,7 +1025,7 @@ export function createHud() {
         const toggle = document.createElement('button');
         toggle.type = 'button';
         toggle.className = 'm-chat-toggle';
-        toggle.textContent = '💬';
+        toggle.innerHTML = '<img src="/dungeon/hud/round/chat.webp" alt="" />';
         toggle.setAttribute('aria-label', '채팅');
         toggle.addEventListener('click', (e) => {
           e.stopPropagation();
@@ -1119,7 +1119,7 @@ export function createHud() {
       if (!btn) return;
       btn.classList.toggle('is-on', !!on);
       btn.setAttribute('aria-pressed', on ? 'true' : 'false');
-      if (root.classList.contains('is-handheld')) btn.textContent = 'A';
+      if (root.classList.contains('is-handheld')) btn.innerHTML = '<img src="/dungeon/hud/round/auto.webp" alt="" />';
     },
     setPeace() {
       root.classList.add('is-peace');
