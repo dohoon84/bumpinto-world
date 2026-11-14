@@ -153,15 +153,15 @@ vec3 sFire(vec2 p, float t, float fc) {
     vec2 ce = vec2(fc + (h1(fi + 11.0) - 0.5) * uW * 0.8, 0.55 + 0.3 * h1(fi + 3.0));
     vec3 col = hsv(h1(fi + 21.0), 0.55, 1.0);
     if (tb < 0.55) { float k = tb / 0.55; c += col * disc(p, vec2(ce.x, mix(0.05, ce.y, k)), 0.012, 0.006) * 1.2; continue; }
-    float e = tb - 0.55, r = 0.3 * (1.0 - exp(-e * 2.6)), fade = pow(max(0.0, 1.0 - e / 2.25), 1.5);
+    float e = tb - 0.55, r = (0.34 + 0.1 * h1(fi + 31.0)) * (1.0 - exp(-e * 2.6)), fade = pow(max(0.0, 1.0 - e / 2.25), 1.5);
     vec2 dd = p - ce + vec2(0.0, 0.05 * e * e);
     float a = atan(dd.y, dd.x), N = 26.0, k = floor(a / PI2 * N + 0.5), ak = k / N * PI2;
     float rk = r * (0.82 + 0.18 * h1(k + fi * 7.0));
     vec2 pp = vec2(cos(ak), sin(ak)) * rk;
-    float dot1 = 1.0 - smoothstep(0.004, 0.016, length(dd - pp));
-    float L = length(dd), tr = (1.0 - smoothstep(0.0025, 0.006, abs(L * sin(a - ak)))) * smoothstep(rk * 0.45, rk, L) * step(L, rk) * 0.4;
+    float dot1 = 1.0 - smoothstep(0.006, 0.024, length(dd - pp));
+    float L = length(dd), tr = (1.0 - smoothstep(0.0025, 0.006, abs(L * sin(a - ak)))) * smoothstep(rk * 0.3, rk, L) * step(L, rk) * 0.9;
     float tw = 0.7 + 0.3 * sin(uClock * 20.0 + k);
-    c += col * (dot1 * 1.4 + tr) * fade * tw + col * exp(-length(dd) * 10.0) * 0.25 * fade * step(e, 0.6);
+    c += col * (dot1 * 2.2 + tr) * fade * tw + col * exp(-length(dd) * 6.0) * 0.35 * fade + col * 0.12 * fade * step(e, 0.35);
   }
   return c;
 }
@@ -278,13 +278,13 @@ export function createShinsegaeShow({ parent, faces, heightAt, out = 0.35 }) {
   const screen = new THREE.Mesh(geo, mat); screen.name = 'md-ssg-screen'; screen.renderOrder = 1; group.add(screen);
 
   // 광장 바닥 빛 번짐: 정면 앞 부채꼴 띠(바닥 높이를 따라 깐 격자)
-  const SPD = 26, NX = 10, NZ = 8; const fL = list.find((f) => f.e === fe) || list[0];
+  const SPD = 26, NX = 16, NZ = 14; const fL = list.find((f) => f.e === fe) || list[0];
   const sp = [], su = [], si = [];
   const wide = 1.25, cxF = (fL.L[0] + fL.R[0]) / 2, czF = (fL.L[1] + fL.R[1]) / 2, half = fL.w * wide / 2;
   for (let j = 0; j <= NZ; j++) for (let i = 0; i <= NX; i++) {
     const a = i / NX, d = j / NZ, sx = (a - 0.5) * 2 * half * (1 + d * 0.35), dd = 1.0 + d * SPD;
     const x = cxF + rx * sx + fe.nx * dd, z = czF + rz * sx + fe.nz * dd;
-    sp.push(x, heightAt(x, z) + 0.08, z); su.push(a, d);
+    sp.push(x, heightAt(x, z) + 0.32, z); su.push(a, d);
   }
   for (let j = 0; j < NZ; j++) for (let i = 0; i < NX; i++) { const a = j * (NX + 1) + i, b = a + 1, c = a + NX + 1, d = c + 1; si.push(a, c, b, b, c, d); }
   const sgeo = new THREE.BufferGeometry(); sgeo.setAttribute('position', new THREE.Float32BufferAttribute(sp, 3)); sgeo.setAttribute('uv', new THREE.Float32BufferAttribute(su, 2)); sgeo.setIndex(si); sgeo.computeBoundingSphere();

@@ -307,6 +307,9 @@ function completeNamsan({ scene, overlay, terrain, osm, city, root, land, tower,
         if (farInt && farInt.visible !== iv) farInt.visible = iv;
         const gv = !myeongdongClaims(px, pz, 0, MYEONGDONG_BOUNDS);
         if (farGuides && farGuides.visible !== gv) farGuides.visible = gv;
+        // [ssg-facade] 남산도서관(낱개 메시 약 120 드로우)은 명동 상자 안(600 m 안쪽은 제외)에서는 끈다 — 신세계 광장에서 남산을 볼 때 1000 드로우 아래로
+        const lc = library?.center, lv = gv || !lc || Math.hypot(px - lc.x, pz - lc.z) < 600;
+        if (library?.group && library.group.visible !== lv) library.group.visible = lv;
       }
       interior.tickPlayer?.(dt, player, cam);
       car?.tickPlayer?.(dt, player, cam);

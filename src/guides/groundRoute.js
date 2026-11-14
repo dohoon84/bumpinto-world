@@ -47,7 +47,7 @@ export function createGroundRoute({ parent, groundAt, lines }) {
   const chev = chevronGeo();
   const arrows = new THREE.InstancedMesh(chev, arrowMat, MAX_ARROWS), rims = new THREE.InstancedMesh(chev, rimMat, MAX_ARROWS);
   arrows.name = 'place-guide-arrows'; rims.name = 'place-guide-arrow-rims';
-  for (const m of [arrows, rims]) { m.count = 0; m.frustumCulled = false; m.instanceMatrix.setUsage(THREE.DynamicDrawUsage); }
+  for (const m of [arrows, rims]) { m.count = 0; m.visible = false; m.frustumCulled = false; m.instanceMatrix.setUsage(THREE.DynamicDrawUsage); }
   arrows.renderOrder = 4; rims.renderOrder = 3;
   arrows.setColorAt(0, new THREE.Color('#0B63CE')); rims.setColorAt(0, new THREE.Color('#08244a'));
   group.add(rims, arrows);
@@ -76,10 +76,10 @@ export function createGroundRoute({ parent, groundAt, lines }) {
       const q = rs[i]; placed.push({ x: q.x, y: groundAt(q.x, q.z), z: q.z, yaw: Math.atan2(q.hx, q.hz), s: total - acc });
     }
     for (let i = 0; i < placed.length; i++) { pose(placed[i], 1.7); arrows.setMatrixAt(i, dummy.matrix); pose(placed[i], 1.7 * 1.22); rims.setMatrixAt(i, dummy.matrix); }
-    arrows.count = rims.count = placed.length;
+    arrows.count = rims.count = placed.length; arrows.visible = rims.visible = placed.length > 0;
     arrows.instanceMatrix.needsUpdate = rims.instanceMatrix.needsUpdate = true;
   }
-  function clear() { arrows.count = rims.count = 0; placed = []; path = null; key = ''; }
+  function clear() { arrows.count = rims.count = 0; arrows.visible = rims.visible = false; placed = []; path = null; key = ''; }
 
   /** spots: [{x,z}] 전부를 목표로 한 그래프(한 번 지음). 목표 k 로 길을 깐다 */
   let spotsRef = null;
