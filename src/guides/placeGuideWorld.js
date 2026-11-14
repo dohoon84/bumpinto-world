@@ -113,6 +113,7 @@ export function createPlaceGuideWorld(o) {
 
   function startRoute(id) {
     const k = spots.findIndex((s) => s.id === id); if (k < 0) return;
+    if (ui.isOpen) ui.close();
     const p = player(); if (!p) return;
     const path0 = route.pathTo(spots, k, p.position.x, p.position.z);
     const total = route.length(path0);
@@ -215,7 +216,7 @@ export function createPlaceGuideWorld(o) {
   }
   function onKey(e) {
     if (ui.onKey(e)) return true;
-    if (e.code === 'KeyE' && !e.repeat && inRange && !ui.isOpen) { ui.open(); return true; }
+    if (e.code === 'KeyE' && !e.repeat && inRange && !ui.isOpen) { ui.open(undefined, { focus: true }); return true; }
     return false;
   }
   return {

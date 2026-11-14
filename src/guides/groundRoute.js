@@ -19,7 +19,9 @@ export function routeSteps(path, nameAt, destName) {
     legs.push({ a, b, h, dist: L, d, at: plen(path.slice(0, i)) - 0 });
   }
   // 아주 짧은 다리는 앞 다리에 붙인다
-  for (let i = legs.length - 1; i > 0; i--) if (legs[i].dist < 6) { legs[i - 1].dist += legs[i].dist; legs[i - 1].b = legs[i].b; legs.splice(i, 1); }
+  for (let i = legs.length - 1; i > 0; i--) if (legs[i].dist < 8) { legs[i - 1].dist += legs[i].dist; legs[i - 1].b = legs[i].b; legs.splice(i, 1); }
+  // 첫 다리가 아주 짧으면(바로 꺾음) 다음 다리부터 '걷기'로 시작
+  if (legs.length > 1 && legs[0].dist < 10) { legs[1].dist += legs[0].dist; legs[1].a = legs[0].a; legs.shift(); }
   let acc = 0;
   const steps = legs.map((g, i) => {
     const mx = (g.a[0] + g.b[0]) / 2, mz = (g.a[1] + g.b[1]) / 2, st = nameAt?.(mx, mz) || '';

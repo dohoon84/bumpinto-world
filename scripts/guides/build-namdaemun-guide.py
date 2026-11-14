@@ -127,7 +127,11 @@ def add_spot(sid, name, x, z, placement, hours=None, s=None, kind='zone'):
         d, px, pz, street = snap(x, z)
     used.append((px, pz))
     spots.append({'id': sid, 'name': T(name), 'x': round(px, 1), 'z': round(pz, 1), 'placement': placement, 'street': street,
-                  'kind': kind, 'hours': hours, 'src': s or []})
+                  'kind': kind, 'hours': HRS(hours), 'src': s or []})
+
+def HRS(h):
+    if not h: return None
+    return {'en': h, 'ko': h.replace('(varies by shop)', '(가게마다 다름)')}
 
 FOOD_NAME = lambda f: {'en': f['name']['en'].split(' (')[0], 'ko': f['name']['ko'].split(' (')[0]}
 for k in real_ids:
@@ -199,7 +203,7 @@ def food_item(f, n):
         meta.append({'text': T(walk)})
     h = f.get('hours')
     if h and h.get('value'):
-        meta.append({'text': {'en': h['value'], 'ko': h['value']}, 'num': True, 'src': src(h.get('sources'))})
+        meta.append({'text': HRS(h['value']), 'num': True, 'src': src(h.get('sources'))})
     loc = f.get('location')
     sheet = None
     if loc and loc.get('variants'):

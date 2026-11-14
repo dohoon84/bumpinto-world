@@ -190,7 +190,7 @@ const CSS = `
 #pg-root .stp.now{color:var(--ink);font-weight:700}#pg-root .stp.now .k{color:var(--accent)}
 #pg-root .stp .d{font-size:12px;color:var(--muted);font-weight:500}
 #pg-root .nav .src.f{padding:6px 20px 12px;border-top:1px solid var(--hair)}
-#pg-root .openg{position:absolute;right:16px;top:16px;min-height:44px;padding:0 14px;display:none;align-items:center;gap:8px;background:var(--paper);border-radius:3px;box-shadow:0 0 0 1px rgba(0,0,0,.1);font-size:13px;font-weight:700;pointer-events:auto}
+#pg-root .openg{position:absolute;right:16px;top:96px;min-height:44px;padding:0 14px;display:none;align-items:center;gap:8px;background:var(--paper);border-radius:3px;box-shadow:0 0 0 1px rgba(0,0,0,.1);font-size:13px;font-weight:700;pointer-events:auto}
 #pg-root .eta{position:absolute;left:50%;bottom:16px;transform:translateX(-50%);display:none;align-items:stretch;background:var(--paper);border-radius:3px;box-shadow:var(--sh);min-height:60px;pointer-events:auto}
 #pg-root .eta>div{display:flex;flex-direction:column;justify-content:center;padding:0 20px;border-left:1px solid var(--hair)}#pg-root .eta>div:first-child{border-left:0}
 #pg-root .eta .big{font-size:24px;font-weight:800;letter-spacing:-.02em;line-height:1;white-space:nowrap}
@@ -274,9 +274,25 @@ export function createPlaceGuideUI(o = {}) {
       out += `<path d="${d}" stroke="#fff" stroke-width="${ww.toFixed(1)}" fill="none" stroke-linecap="round" stroke-linejoin="round"/>`;
     }
     if (a) { const [gx, gy] = P(a.x, a.z); out += `<rect x="${(gx - 5).toFixed(1)}" y="${(gy - 5).toFixed(1)}" width="10" height="10" fill="#111418"/>${compact ? '' : `<text x="${gx.toFixed(1)}" y="${(gy + 17).toFixed(1)}" font-size="9.5" font-weight="700" text-anchor="middle" fill="#111418">${esc(L === 'ko' ? '시장 게이트' : 'Market gate')}</text>`}`; }
+    // 번호 점은 다 그리고, 이름표는 겹치지 않는 쪽(오른쪽 → 왼쪽 → 위 → 아래)에만. 자리가 없으면 번호만
+    const boxes = [];
+    const hit = (b) => b.x0 < 2 || b.x1 > W - 2 || b.y0 < 2 || b.y1 > H - 2 || boxes.some((q) => b.x0 < q.x1 && b.x1 > q.x0 && b.y0 < q.y1 && b.y1 > q.y0);
+    const P2 = (G.spots || []).map((sp) => P(sp.x, sp.z));
+    for (const [x, y] of P2) boxes.push({ x0: x - 8, x1: x + 8, y0: y - 8, y1: y + 8 });
+    if (a) { const [gx, gy] = P(a.x, a.z); boxes.push({ x0: gx - 30, x1: gx + 30, y0: gy - 6, y1: gy + 20 }); }
     (G.spots || []).forEach((sp, i) => {
-      const [x, y] = P(sp.x, sp.z), on = sel === sp.id;
-      out += `<g transform="translate(${x.toFixed(1)},${y.toFixed(1)})"><circle r="${on ? 9 : 7.5}" fill="${on ? '#0B63CE' : '#111418'}"/><text y="3.2" font-size="${on ? 10 : 9}" font-weight="800" fill="#fff" text-anchor="middle">${i + 1}</text>${compact ? '' : `<text x="10" y="4" font-size="10" font-weight="600" fill="#111418">${esc(t(sp.short || sp.name).replace(/ (Street|Alley)$/, ''))}</text>`}</g>`;
+      const [x, y] = P2[i], on = sel === sp.id;
+      let lab = '';
+      if (!compact) {
+        const tx = t(sp.short || sp.name).replace(/ (Street|Alley)$/, ''), tw = [...tx].reduce((n, ch) => n + (ch.charCodeAt(0) > 0x2000 ? 10 : 5.6), 0);
+        const tries = [[10, 4, 'start'], [-10, 4, 'end'], [0, -11, 'middle'], [0, 19, 'middle']];
+        for (const [dx, dy, an] of tries) {
+          const lx = an === 'start' ? x + dx : an === 'end' ? x + dx - tw : x - tw / 2;
+          const b = { x0: lx - 1, x1: lx + tw + 1, y0: y + dy - 10, y1: y + dy + 3 };
+          if (!hit(b)) { boxes.push(b); lab = `<text x="${dx}" y="${dy}" font-size="10" font-weight="600" fill="#111418" text-anchor="${an}">${esc(tx)}</text>`; break; }
+        }
+      }
+      out += `<g transform="translate(${x.toFixed(1)},${y.toFixed(1)})"><circle r="${on ? 9 : 7.5}" fill="${on ? '#0B63CE' : '#111418'}"/><text y="3.2" font-size="${on ? 10 : 9}" font-weight="800" fill="#fff" text-anchor="middle">${i + 1}</text>${lab}</g>`;
     });
     if (md.you) { const [x, y] = P(Math.max(x0, Math.min(x1, md.you.x)), Math.max(z0, Math.min(z1, md.you.z))); out += `<g transform="translate(${x.toFixed(1)},${y.toFixed(1)})"><circle r="6.5" fill="#00A5DE" stroke="#fff" stroke-width="2"/>${compact ? '' : `<text x="-10" y="4" font-size="10" font-weight="700" text-anchor="end" fill="#111418">${esc(L === 'ko' ? '현재 위치' : 'you')}</text>`}</g>`; }
     return out + '</svg>';
@@ -301,7 +317,7 @@ export function createPlaceGuideUI(o = {}) {
        ${b.rows.map((r) => `<tr><td>${esc(t(r.label))}</td>${r.cells.map((v, i) => `<td class="t ${i === ti ? 'today' : ''}">${esc(v)}</td>`).join('')}</tr>`).join('')}</table>
        <div class="src" style="margin-top:6px">${esc(t(b.note))} · ${esc(G.checked)}${ti < 0 ? ` · <b>${esc(L === 'ko' ? '오늘(일) 대부분 휴무' : 'Today (Sun): mostly closed')}</b>` : ''}</div></div>`;
     }
-    if (b.type === 'map') return `<div class="mapw"><div class="bh"><span class="sc k">${esc(t(b.title))}</span><span class="src">${esc(t(b.note))}</span></div>${mapSvg(432, 132, { sel: detail })}</div>`;
+    if (b.type === 'map') return `<div class="mapw"><div class="bh"><span class="sc k">${esc(t(b.title))}</span><span class="src">${esc(t(b.note))}</span></div>${mapSvg(432, 190)}</div>`;
     if (b.type === 'list') {
       const aside = b.aside ? `<span class="src">${esc(t(b.aside))}</span>` : b.count ? `<span class="src">${esc(t(b.count))}</span>` : '';
       return `<div class="list"><div class="bh" style="margin-top:${b.mapThumb ? 16 : 0}px"><span class="sc k">${esc(t(b.title))}</span>${aside}</div>${b.items.map((it, i) => {
@@ -415,7 +431,7 @@ export function createPlaceGuideUI(o = {}) {
   const stop = (e) => e.stopPropagation();
   for (const el of [panel, mroot]) for (const ev of ['wheel', 'pointerdown', 'touchstart', 'mousedown']) el.addEventListener(ev, stop, { passive: true });
 
-  function open(tabKey) {
+  function open(tabKey, { focus = false } = {}) {
     if (!G) return;
     if (tabKey) tab = tabKey;
     sheet = null; detail = null;
@@ -423,7 +439,7 @@ export function createPlaceGuideUI(o = {}) {
     (mobile ? mroot : panel).classList.add('on');
     tag.classList.remove('on'); hint.classList.remove('on');
     o.onOpenChange?.(true);
-    if (!mobile) setTimeout(() => panel.querySelector('.tab.on')?.focus({ preventScroll: true }), 30);
+    if (!mobile && focus) setTimeout(() => panel.querySelector('.tab.on')?.focus({ preventScroll: true }), 30); // 키보드(E)로 열 때만 탭에 초점
   }
   function close() {
     if (!isOpen) return;
@@ -477,7 +493,7 @@ export function createPlaceGuideUI(o = {}) {
     const k = [L, sp.id, cur, Math.round(rem / 5), arrow, st.length].join('|');
     if (k !== lastNav) {
       lastNav = k;
-      const hrs = sp.hours ? `<div><span class="sc">${esc(L === 'ko' ? '영업' : 'Open')}</span><span class="v">${esc(sp.hours)}</span></div>` : '';
+      const hrs = sp.hours ? `<div><span class="sc">${esc(L === 'ko' ? '영업' : 'Open')}</span><span class="v">${esc(typeof sp.hours === 'string' ? sp.hours : t(sp.hours))}</span></div>` : '';
       const pl = sp.placement === 'manual' ? (L === 'ko' ? '수동 배치' : 'placed by hand') : (L === 'ko' ? '개략 배치' : 'schematic spot');
       if (mobile) {
         msign.style.display = 'flex';
@@ -498,7 +514,12 @@ export function createPlaceGuideUI(o = {}) {
     if (info.destScreen) {
       dest.style.display = 'flex';
       const lb = dest.querySelector('.lb'); const tx = `${esc(name)}<span>≈${Math.round(rem)} m</span>`; if (lb.innerHTML !== tx) lb.innerHTML = tx;
-      dest.style.transform = `translate(${Math.round(info.destScreen.x - dest.offsetWidth / 2)}px,${Math.round(info.destScreen.y - dest.offsetHeight)}px)`;
+      const dx = Math.round(info.destScreen.x - dest.offsetWidth / 2), dy = Math.round(info.destScreen.y - dest.offsetHeight);
+      dest.style.transform = `translate(${dx}px,${dy}px)`;
+      // 길 안내 카드·하단 바와 겹치면 숨김
+      const b = { l: dx, r: dx + dest.offsetWidth, t: dy, b: dy + dest.offsetHeight };
+      const over = [mobile ? msign : nav, eta, openg].some((el) => { if (!el || el.style.display === 'none') return false; const q = el.getBoundingClientRect(); return q.width && b.l < q.right && b.r > q.left && b.t < q.bottom && b.b > q.top; });
+      dest.style.visibility = over ? 'hidden' : '';
     } else dest.style.display = 'none';
   }
   function toast(title, sub = '', ms = 3200) {

@@ -104,6 +104,28 @@ for (const v of VIEWS) {
     if (v.ov) { J.setMode('overview'); Object.assign(J.ov, { dist: v.dist, pitch: v.pitch, yaw }); } else Object.assign(J.cam, { dist: v.dist, pitch: v.pitch, yaw });
     await new Promise((r) => setTimeout(r, 3000));
     if (v.sit) { J.wake?.(); J.toggleSit?.(); await new Promise((r) => setTimeout(r, 1500)); Object.assign(J.cam, { dist: v.dist, pitch: v.pitch, yaw }); } // [cathedral-sit]
+    if (v.guide) { // [place-guide] 패널 열기(탭·언어·상세) 또는 'Take me there' 길
+      for (let i = 0; i < 80 && !J.placeGuide; i++) await new Promise((r) => setTimeout(r, 250));
+      const G = J.placeGuide, g = v.guide;
+      if (G) {
+        if (g.lang) G.ui.lang = g.lang;
+        if (g.route) {
+          G.startRoute(g.route); await new Promise((r) => setTimeout(r, 1200));
+          if (g.startAt) { // 길을 startAt m 따라간 곳에 서서 본다
+            const Q = G.route.path || []; let a2 = 0;
+            for (let i = 1; i < Q.length; i++) { const L = Math.hypot(Q[i][0] - Q[i - 1][0], Q[i][1] - Q[i - 1][1]); if (a2 + L >= g.startAt) { const f = (g.startAt - a2) / L; px = Q[i - 1][0] + (Q[i][0] - Q[i - 1][0]) * f; pz = Q[i - 1][1] + (Q[i][1] - Q[i - 1][1]) * f; break; } a2 += L; }
+            J.teleport(px, pz, md.surfaceY(px, pz) ?? undefined); await new Promise((r) => setTimeout(r, 2000));
+          }
+          const P = G.route.path || []; let acc = 0, ax = px, az = pz;
+          for (let i = 1; i < P.length; i++) { acc += Math.hypot(P[i][0] - P[i - 1][0], P[i][1] - P[i - 1][1]); if (acc > (g.ahead || 14)) { ax = P[i][0]; az = P[i][1]; break; } }
+          yaw = Math.atan2(-(ax - px), -(az - pz)) + (g.yawOff || 0); Object.assign(J.cam, { dist: v.dist, pitch: v.pitch, yaw });
+        } else {
+          G.open(g.open || 'overview');
+          if (g.detail != null) G.ui.root.querySelector(`[data-det="${g.detail}"]`)?.click();
+        }
+        await new Promise((r) => setTimeout(r, 1500));
+      }
+    }
     return { pose: J.pose, px: +px.toFixed?.(1), pz: +pz.toFixed?.(1), yaw: typeof yaw === 'number' ? +yaw.toFixed(4) : yaw, y: +J.player?.position.y.toFixed(2) };
   }, v);
   if (process.env.HIDE) await page.evaluate((names) => { const J = window.__jj; let sc = J.player; while (sc.parent) sc = sc.parent; sc.traverse((o) => { if (names.includes(o.name)) o.visible = false; }); }, process.env.HIDE.split(',')); // [md-roadblotch] 디버그: 이름 맞는 메시 숨기기
