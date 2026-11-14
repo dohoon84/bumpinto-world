@@ -4,6 +4,7 @@
 //   재질: 아틀라스 캔버스 한 장(낮 색 + 밤 빛 emissiveMap) → 건물마다 병합 메시 1개(draw 1). 미디어 파사드만 따로(밤에만, draw 1).
 //   실제 Light 없음. 충돌은 외곽선(myeongdong.js bldGrid). 이름표는 한국어 + 영어.
 import * as THREE from 'three';
+import { createShinsegaeShow } from './shinsegaeShow.js'; // [ssg-facade]
 import { GeoBuf, hex3, pointInRing, cathedralFrame, hash01, CellGrid, distToSeg } from './myeongdongGeo.js';
 import { MD_FONT } from './myeongdongAtlas.js';
 import { markTextRects } from './textQuad.js';
@@ -260,6 +261,8 @@ function buildLotte(ctx) {
 
 
 // ---------------------------------------------------------------- 신세계
+/** [ssg-facade] ?ssgshow=0 이면 크리스마스 미디어 파사드 끄기 */
+const SSG_SHOW = typeof location === 'undefined' || new URLSearchParams(location.search).get('ssgshow') !== '0';
 const ROUNDABOUT = [-11262, -21566]; // 한국은행 앞 분수 로터리 (본관 정면이 보는 곳)
 function facing(o, pt) { // 외곽선 변 중 pt 를 가장 잘 보는 변
   const [cx, cz] = centroid(o); const dx = pt[0] - cx, dz = pt[1] - cz, dl = Math.hypot(dx, dz) || 1;
@@ -301,17 +304,17 @@ function buildShinsegae(ctx) {
     const e = facing(o, ROUNDABOUT);
     if (e) {
       const tx = (e.q[0] - e.p[0]) / e.L, tz = (e.q[1] - e.p[1]) / e.L, mx = (e.p[0] + e.q[0]) / 2, mz = (e.p[1] + e.q[1]) / 2, ry = Math.atan2(tx, tz);
-      // 가운데 돌출 발코니(3층) + 난간
-      buf.box(mx + e.nx * 1.2, y0 + 13.2, mz + e.nz * 1.2, 2.4, 0.5, 18, ry, uvOf(R.stone), hex3('#e8e2d6'));
+      // 가운데 돌출 발코니(3층) + 난간 — [ssg-facade] 미디어 파사드가 정면을 감싸면 뺀다
+      if (!SSG_SHOW) buf.box(mx + e.nx * 1.2, y0 + 13.2, mz + e.nz * 1.2, 2.4, 0.5, 18, ry, uvOf(R.stone), hex3('#e8e2d6'));
       
       // 시계(동그란 판 대신 팔각 상자) + 금빛 입구 아치 + SHINSEGAE 글씨
-      buf.box(mx + e.nx * 0.5, y0 + 10.2, mz + e.nz * 0.5, 0.3, 2.4, 2.4, ry, uvOf(R.stone), hex3('#5a4a2a')); buf.box(mx + e.nx * 0.7, y0 + 10.2, mz + e.nz * 0.7, 0.1, 1.9, 1.9, ry, uvOf(R.stone), hex3('#fbf7ea'));
+      if (!SSG_SHOW) buf.box(mx + e.nx * 0.5, y0 + 10.2, mz + e.nz * 0.5, 0.3, 2.4, 2.4, ry, uvOf(R.stone), hex3('#5a4a2a')); if (!SSG_SHOW) buf.box(mx + e.nx * 0.7, y0 + 10.2, mz + e.nz * 0.7, 0.1, 1.9, 1.9, ry, uvOf(R.stone), hex3('#fbf7ea'));
       // 금빛 아치 정문(2층 높이, 사진의 금색 소용돌이 틀): 기둥 2 + 반원 아치 조각 9 + 어두운 문
       buf.box(mx + e.nx * 0.35, y0 + 3.2, mz + e.nz * 0.35, 0.3, 6.4, 5.2, ry, uvOf(R.stone), hex3('#2a2620'));
       for (const sd of [-1, 1]) buf.box(mx + e.nx * 1.0 + tx * 3.1 * sd, y0 + 2.8, mz + e.nz * 1.0 + tz * 3.1 * sd, 1.3, 5.6, 1.1, ry, uvOf(R.stone), gold);
       for (let k = 0; k <= 8; k++) { const a = Math.PI * k / 8, ax = Math.cos(a) * 3.1, ay = Math.sin(a) * 2.6; buf.box(mx + e.nx * 1.0 + tx * ax, y0 + 5.6 + ay, mz + e.nz * 1.0 + tz * ax, 1.3, 1.25, 1.25, ry, uvOf(R.stone), gold); }
       // 양옆 대형 현수막(세로 광고판): 얇은 흰 틀 + 사진 느낌(배경색 + 세로 인물 실루엣 + 아래 흰 글씨 띠)
-      for (const sd of [-1, 1]) { const off = e.L * 0.3 * sd, bx = mx + tx * off + e.nx * 0.3, bz = mz + tz * off + e.nz * 0.3;
+      if (!SSG_SHOW) for (const sd of [-1, 1]) { const off = e.L * 0.3 * sd, bx = mx + tx * off + e.nx * 0.3, bz = mz + tz * off + e.nz * 0.3;
         const bg = sd < 0 ? hex3('#3a3036') : hex3('#ece4d8'), fig = sd < 0 ? hex3('#b0826c') : hex3('#a98a6a'), dress = sd < 0 ? hex3('#5e2f3a') : hex3('#c8b49a');
         buf.box(bx, y0 + 12.6, bz, 0.12, 11.2, 6.2, ry, uvOf(R.stone), hex3('#f4f1ec'));
         buf.box(bx + e.nx * 0.08, y0 + 12.6, bz + e.nz * 0.08, 0.04, 10.8, 5.8, ry, uvOf(R.stone), bg);
@@ -319,12 +322,18 @@ function buildShinsegae(ctx) {
         buf.box(bx + e.nx * 0.12, y0 + 12.9, bz + e.nz * 0.12, 0.04, 5.6, 1.7, ry, uvOf(R.stone), dress); // 옷
         buf.box(bx + e.nx * 0.12, y0 + 8.4, bz + e.nz * 0.12, 0.04, 0.6, 4.4, ry, uvOf(R.stone), sd < 0 ? hex3('#f4f1ec') : hex3('#5a4a3a')); } // 아래 글씨 띠
       // 발코니 난간 기둥(떠 있는 판처럼 보이지 않게)
-      for (let k = -8; k <= 8; k++) buf.box(mx + e.nx * 2.25 + tx * k, y0 + 13.95, mz + e.nz * 2.25 + tz * k, 0.22, 1.0, 0.22, ry, uvOf(R.stone), hex3('#f4efe6'));
-      buf.box(mx + e.nx * 2.25, y0 + 14.5, mz + e.nz * 2.25, 0.3, 0.15, 18, ry, uvOf(R.stone), hex3('#f4efe6'));
+      if (!SSG_SHOW) for (let k = -8; k <= 8; k++) buf.box(mx + e.nx * 2.25 + tx * k, y0 + 13.95, mz + e.nz * 2.25 + tz * k, 0.22, 1.0, 0.22, ry, uvOf(R.stone), hex3('#f4efe6'));
+      if (!SSG_SHOW) buf.box(mx + e.nx * 2.25, y0 + 14.5, mz + e.nz * 2.25, 0.3, 0.15, 18, ry, uvOf(R.stone), hex3('#f4efe6'));
       signOn(buf, e.p, e.q, 0.7, 22, top - 3.4, top - 0.6, uvOf(R.sShinsegae), [e.nx, e.nz]);
       // 밤 미디어 파사드: 정면 + 양옆 모서리 면
-      media.push({ e, y0: y0 + 5.4, y1: top - 4.0 });
-      for (const f of edgesOut(o)) if (f !== e && f.L > 18 && (f.nx * e.nx + f.nz * e.nz) > -0.2 && (f.nx * e.nx + f.nz * e.nz) < 0.7) media.push({ e: f, y0: y0 + 5.4, y1: top - 4.0 });
+      // [ssg-facade] 정면 + 양옆 면을 감싸는 LED 화면 (정면 아래는 금빛 입구, 위는 SHINSEGAE 글씨)
+      const m0 = SSG_SHOW ? y0 + 5.2 : y0 + 5.4, m1 = SSG_SHOW ? top - 3.6 : top - 4.0;
+      media.push({ e, y0: m0, y1: m1, front: true });
+      for (const f of edgesOut(o)) if (f !== e && f.L > 18 && (f.nx * e.nx + f.nz * e.nz) > -0.2 && (f.nx * e.nx + f.nz * e.nz) < 0.7) media.push({ e: f, y0: m0, y1: m1 });
+      if (SSG_SHOW) for (const f of media) { // 화면 테두리 철골(짙은 틀 4변)
+        const fx = (f.e.q[0] - f.e.p[0]) / f.e.L, fz = (f.e.q[1] - f.e.p[1]) / f.e.L, fmx = (f.e.p[0] + f.e.q[0]) / 2, fmz = (f.e.p[1] + f.e.q[1]) / 2, fry = Math.atan2(fx, fz);
+        for (const yy of [m0 - 0.25, m1 + 0.25]) buf.box(fmx + f.e.nx * 0.42, yy, fmz + f.e.nz * 0.42, 0.3, 0.5, f.e.L * 0.98, fry, uvOf(R.stone), hex3('#2b2d31'));
+      }
     }
     labels.push({ text: '🏬 신세계백화점 본점 Shinsegae Department Store · 1930', x: cx, z: cz, y: top + 10, maxDist: 2600, minDist: 20, cls: 'label landmark' });
   }
@@ -546,8 +555,10 @@ export function createMyeongdongSignature({ parent, data, heightAt, overlay = nu
   // 시장 노점 · 게이트 기둥 충돌 (방향 있는 상자)
   const blockGrid = new CellGrid(16); for (const b of blockers) { const e = Math.max(b.hl, b.hd) + 0.5; blockGrid.add(b, b.x - e, b.z - e, b.x + e, b.z + e); }
   // 신세계 밤 미디어 파사드: 면 몇 장 + 흐르는 텍스처(가산 혼합, 밤에만 보임, draw 1)
-  let mediaMesh = null, mediaTex = null;
-  if (media.length) {
+  let mediaMesh = null, mediaTex = null, show = null;
+  // [ssg-facade] 크리스마스 미디어 파사드(셰이더 화면 1 + 바닥 빛 1). ?ssgshow=0 이면 예전 밤 빛 띠
+  if (media.length && SSG_SHOW) show = createShinsegaeShow({ parent: g, faces: media, heightAt });
+  else if (media.length) {
     const buf = new GeoBuf({ uv: true });
     let u = 0;
     for (const { e, y0, y1 } of media) {
@@ -571,12 +582,13 @@ export function createMyeongdongSignature({ parent, data, heightAt, overlay = nu
   return {
     group: g,
     footprints: [...byId.values()].map((b) => ({ o: b.o })),
-    setNight(v) { M.body.emissiveIntensity = 0.05 + v * 0.95; if (mediaMesh) mediaMesh.visible = v > 0.5; },
+    setNight(v) { M.body.emissiveIntensity = 0.05 + v * 0.95; if (mediaMesh) mediaMesh.visible = v > 0.5; show?.setNight(v); },
+    show,
     isBlocked(x, z, r = 0.4) {
       for (const b of blockGrid.query(x, z)) { const dx = x - b.x, dz = z - b.z; if (Math.abs(dx * b.tx + dz * b.tz) < b.hl + r && Math.abs(dz * b.tx - dx * b.tz) < b.hd + r) return true; }
       return false;
     },
-    update(dt = 0) { if (mediaMesh?.visible && mediaTex) mediaTex.offset.x = (mediaTex.offset.x + dt * 0.035) % 1; },
+    update(dt = 0) { show?.update(dt); if (mediaMesh?.visible && mediaTex) mediaTex.offset.x = (mediaTex.offset.x + dt * 0.035) % 1; },
     stats() { return { blockers: blockers.length, meshes: meshes.length, tris: meshes.reduce((s, m) => s + (m.geometry.index ? m.geometry.index.count / 3 : 0), 0) }; },
   };
 }

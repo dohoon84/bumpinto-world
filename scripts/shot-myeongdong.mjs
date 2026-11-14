@@ -104,6 +104,7 @@ for (const v of VIEWS) {
     if (v.ov) { J.setMode('overview'); Object.assign(J.ov, { dist: v.dist, pitch: v.pitch, yaw }); } else Object.assign(J.cam, { dist: v.dist, pitch: v.pitch, yaw });
     await new Promise((r) => setTimeout(r, 3000));
     if (v.sit) { J.wake?.(); J.toggleSit?.(); await new Promise((r) => setTimeout(r, 1500)); Object.assign(J.cam, { dist: v.dist, pitch: v.pitch, yaw }); } // [cathedral-sit]
+    if (v.ssg != null) { const S = md.ssgShow; S?.setClock(v.ssg); } // [ssg-facade] 쇼 시각 고정(초)
     if (v.guide) { // [place-guide] 패널 열기(탭·언어·상세) 또는 'Take me there' 길
       for (let i = 0; i < 80 && !J.placeGuide; i++) await new Promise((r) => setTimeout(r, 250));
       const G = J.placeGuide, g = v.guide;

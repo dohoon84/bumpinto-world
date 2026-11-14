@@ -524,6 +524,7 @@ export async function createMyeongdongAsync(opts = {}, yieldFn = null, slicer = 
       unregSurface?.();
       scene.remove(root);
     },
+    get ssgShow() { return signature?.show || null; }, // [ssg-facade] 신세계 크리스마스 미디어 파사드 (테스트·스크린샷)
     stats() { return { blds: blds.length, ways: ways.length, ...street.stats(), signature: signature?.stats() || null }; },
   };
   void LINE4_COLOR;

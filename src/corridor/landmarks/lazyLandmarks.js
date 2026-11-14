@@ -144,6 +144,7 @@ export function wrapLandmark(meta) {
     cathedralAt: (...a) => impl?.cathedralAt?.(...a) ?? null,
     cathedralUV: (...a) => impl?.cathedralUV?.(...a) ?? null,
     get cathedralInterior() { return impl?.cathedralInterior ?? null; },
+    get ssgShow() { return impl?.ssgShow ?? null; }, // [ssg-facade]
     get hooks() { return impl?.hooks ?? null; }, // [myeongdong] 미니게임 A·C 훅
     get face() { return impl?.face ?? meta.face ?? null; }, // [myeongdong] 도착 때 카메라 방향
     stats: (...a) => impl?.stats?.(...a) ?? null,
