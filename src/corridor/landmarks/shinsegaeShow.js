@@ -197,7 +197,7 @@ void main() {
   // 철골 틀(세로·가로 멀리언) — 화면을 칸으로 나누는 짙은 선
   vec2 g = vec2(p.x / 0.26, p.y / 0.25); vec2 fg = abs(fract(g) - 0.5); vec2 w = fwidth(g) * 1.2;
   float mull = max(1.0 - smoothstep(0.0, 0.007 + w.x, 0.5 - fg.x), 1.0 - smoothstep(0.0, 0.006 + w.y, 0.5 - fg.y));
-  c *= 1.0 - 0.38 * mull; // 철골 칸 선은 은은하게
+  c *= 1.0 - 0.26 * mull; // 철골 칸 선은 은은하게
   float edge = smoothstep(0.0, 0.012, vUv.y) * smoothstep(1.0, 0.988, vUv.y); c *= edge;
   float b = mix(0.6, 1.0, uNight);
   gl_FragColor = vec4(c * b + (1.0 - uNight) * vec3(0.035), 1.0);
