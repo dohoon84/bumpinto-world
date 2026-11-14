@@ -165,7 +165,7 @@ function dijkstraFrom(nodes, src) {
   return { dist, next };
 }
 
-function resample(pts, step, carry0 = 0) {
+export function resample(pts, step, carry0 = 0) {
   const out = [];
   let carry = carry0;
   for (let i = 1; i < pts.length; i++) {
@@ -183,7 +183,7 @@ function resample(pts, step, carry0 = 0) {
 }
 
 // ---------------------------------------------------------------- 3D 소품
-function chevronGeo() {
+export function chevronGeo() {
   const s = new THREE.Shape();
   // 팁이 -Y. rotation 'YXZ' (x=-PI/2) 후 +Z(진행 방향)를 가리킨다.
   s.moveTo(0, -1.0);
@@ -592,6 +592,7 @@ export function createNamsanCableGuide({ parent, cable, ways = [], city = null, 
   }
 
   let gCacheT = 0;
+  let suppressed = false;
   function update(dt, player, camera) {
     time += dt;
     gCacheT += dt; if (gCacheT > 10) { gCacheT = 0; gCache.clear(); } // 늦게 올라온 남산 조각 높이도 반영
@@ -635,7 +636,7 @@ export function createNamsanCableGuide({ parent, cable, ways = [], city = null, 
     }
 
     // 바닥 화살표
-    const show = !riding && !atSt && st && d < SHOW_R;
+    const show = !suppressed && !riding && !atSt && st && d < SHOW_R; // [place-guide] 다른 길 안내 중이면 숨김
     if (!show) clearArrows();
     else {
       repathT -= dt;
@@ -698,6 +699,8 @@ export function createNamsanCableGuide({ parent, cable, ways = [], city = null, 
     get canAct() { return canAct; },
     get actLabel() { return actLabel; },
     get arrowCount() { return arrows.count; },
+    get suppressed() { return suppressed; },
+    set suppressed(v) { suppressed = !!v; },
     dispose() { dom?.dispose(); parent.remove(group); },
   };
 }

@@ -52,6 +52,7 @@ import { createSms } from './sms.js';
 import { accountsOn } from './account/flags.js'; // [accounts]
 import { takeResumePlace, takeContinue } from './ui-v2/resume.js'; // [econ-mobile] 모바일 '계속하기'·'이어서 입장' = 그만둔 자리 (#42 역을 직접 고르면 넘기지 않음)
 import { trackEvent } from './analytics.js';
+import { mountPlaceGuides, placeGuidesEnabled } from './guides/index.js'; // [place-guide]
 import { createTerrain } from './world/terrain.js'; // [terrain]
 import { Taxis } from './entities/taxis.js'; // [taxi]
 import { mountJzTraffic, deliveryStops } from './entities/jzTraffic.js'; // [jz-traffic]
@@ -2349,6 +2350,14 @@ function teleportToMove(x, z, y) {
   setMode('follow');
   rememberPlace(true);
 }
+// [place-guide] 장소 가이드(남대문시장 …): 데이터(public/guides/*.json) + 일반 패널/길안내. 명동 땅이 준비되면 가까이서 붙는다
+const placeGuides = corridor && placeGuidesEnabled() ? mountPlaceGuides({
+  hosts: { myeongdong: () => corridor.myeongdong },
+  parentOf: () => scene,
+  camera, canvas: renderer.domElement, getPlayer: () => player, mobile: mobileMode,
+  setSuppressOthers: (on) => { const cg = corridor?.namsan?.cableGuide; if (cg) cg.suppressed = on; },
+  track: (n, p) => trackEvent(n, p),
+}) : null;
 const travel = corridor ? mountTravel({ corridor, home: () => homeBtn.onclick(), teleport: teleportTo }) : null;
 arriveTravel = travel; // [arrivefix]
 if (corridor) { corridor.place = (id) => travel?.go(id); corridor.placeOf = (id) => travel?.dests.find((d) => d.id === id) || null; }
@@ -2541,6 +2550,7 @@ leaveBtn.onclick = () => {
   startLobby?.();
 };
 input.onKey = (e) => {
+  if (placeGuides?.onKey(e)) return; // [place-guide] 남대문시장 안내판·안내원 E · 패널 Esc/1–6/←→
   if (corridor?.namsan?.cableGuide?.onKey?.(e)) return; // [cableguide] 케이블카 승강장 E/Enter: 바로 타기·다음 칸 예약
   if (arcadeGame?.onKey(e)) return; // [arcade] 오락실·범핑팡
   if (bump24Game?.onKey(e)) return; // [bump24game] 매장 들어가기·담기
@@ -3091,6 +3101,7 @@ function frame() {
   sun.position.copy(sun.target.position).addScaledVector(atmosphere.sunDir, 500);
   // 원점에 고정된 r=3000 하늘은 남산(약 23 km) 밖에서 보이지 않는다. 카메라를 따라가게 한다.
   if (skyDome) skyDome.position.copy(camera.position);
+  if (joined) placeGuides?.update(dt); // [place-guide] 안내판·안내원·표지·길 화살표 (가까이 와야 JSON 을 받는다)
   if (!shouldSkipLandmarkPaint()) {
     const inCath = cathedralLayer(); // [myeongdong-cathedral] 카메라가 성당 안이면 성당·아바타·조명만 그린다(창은 불투명 → 바깥은 안 보임)
     // [cathedral-sit] 밤 성당 안: 하늘빛(hemi)이 달빛 수준이라 아바타(플레이어·기도하는 사람)만 까맣게 뜬다 → 그 프레임만 따뜻한 실내 밝기로 올렸다 되돌린다(새 조명 없음)
@@ -3123,6 +3134,8 @@ requestAnimationFrame(frame);
 
 // 스크린샷/디버그용 훅
 window.__jj = {
+  get placeGuide() { return placeGuides?.get('namdaemun') || null; }, // [place-guide] 테스트·모바일 HUD
+  placeGuides,
   createAvatar,
   sanitizeLook,
   wake: () => wakeFromAfk(), // [myeongdong] 스크린샷 스크립트: 느린 렌더에서 자동 AFK(Zzz) 풀기
