@@ -158,8 +158,8 @@ body.mobile.bw-signed-in #lobby-card .v2-save-google { display: none !important;
   #m-landing .m-rm.is-en .m-rm-side { gap: 6px; }
   #m-landing .m-rm.is-en .m-rm-sel-t b { font-size: 14px; }
 }
-/* 낮은 가로 폰(높이 ≤ 400: 740×360 · 844×390 등): 옆 칸을 스크롤 없이 — 노선 밖·랜드마크 칩은 2열(이름만, 두 줄까지), 다른 지역은 한 줄 */
-@media (max-height: 400px) {
+/* 가로 폰(높이 ≤ 440: 740×360 · 844×390 · 932×430 등): 옆 칸을 스크롤 없이 (명동 칩이 더해져도) — 노선 밖·랜드마크 칩은 2열(이름만, 두 줄까지), 다른 지역은 한 줄 */
+@media (max-height: 440px) {
   #m-landing .m-rm-side { gap: 6px; }
   #m-landing .m-rm-lms { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; }
   #m-landing .m-rm-lm { height: 40px; padding: 0 7px; gap: 5px; font-size: 12px; line-height: 1.1; white-space: normal; word-break: keep-all; }
