@@ -100,7 +100,7 @@ for (const v of VIEWS) {
     }
     if (typeof yaw === 'string' && yaw.startsWith('to:')) { const [tx, tz] = yaw.slice(3).split(',').map(Number); yaw = toward(px, pz, tx, tz); }
     J.setMode('follow');
-    if (v.home) J.teleport(0, 0); else { await J.corridor.preload(px, pz); const y = md.owns(px, pz) ? md.surfaceY(px, pz) : (v.px === 'ntower' ? J.namsan.spawnY() : (J.namsan?.surfaceY?.(px, pz) ?? undefined)); J.teleport(px, pz, y); }
+    if (v.home) J.teleport(0, 0); else { await J.corridor.preload(px, pz); const y = (md.owns(px, pz) || md.surfaceY(px, pz) != null) ? md.surfaceY(px, pz) : (v.px === 'ntower' ? J.namsan.spawnY() : (J.namsan?.surfaceY?.(px, pz) ?? undefined)); J.teleport(px, pz, y); }
     if (v.ov) { J.setMode('overview'); Object.assign(J.ov, { dist: v.dist, pitch: v.pitch, yaw }); } else Object.assign(J.cam, { dist: v.dist, pitch: v.pitch, yaw });
     await new Promise((r) => setTimeout(r, 3000));
     if (v.sit) { J.wake?.(); J.toggleSit?.(); await new Promise((r) => setTimeout(r, 1500)); Object.assign(J.cam, { dist: v.dist, pitch: v.pitch, yaw }); } // [cathedral-sit]

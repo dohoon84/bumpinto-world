@@ -4,7 +4,7 @@
 //   재질: 아틀라스 캔버스 한 장(낮 색 + 밤 빛 emissiveMap) → 건물마다 병합 메시 1개(draw 1). 미디어 파사드만 따로(밤에만, draw 1).
 //   실제 Light 없음. 충돌은 외곽선(myeongdong.js bldGrid). 이름표는 한국어 + 영어.
 import * as THREE from 'three';
-import { GeoBuf, hex3, pointInRing, cathedralFrame, hash01, CellGrid } from './myeongdongGeo.js';
+import { GeoBuf, hex3, pointInRing, cathedralFrame, hash01, CellGrid, distToSeg } from './myeongdongGeo.js';
 import { MD_FONT } from './myeongdongAtlas.js';
 import { markTextRects } from './textQuad.js';
 
@@ -453,8 +453,40 @@ function buildNamdaemun(ctx) {
   }
   labels.push({ text: '🏮 남대문시장 Namdaemun Market', x: gx, z: gz, y: y0 + 11, maxDist: 1800, minDist: 10, cls: 'label landmark' });
   // 시장 골목 노점: 남대문시장길 양쪽 (게이트 안쪽부터 바깥 띠 끝까지)
-  const ids = new Set([301285279, 78503333, 788296725, 382947009]);
+  //   [md-market] + 시장 안 골목(남대문로 쪽 남북 골목 · 남서 footway · 시장 광장 보행로 · 10길 북쪽 · 시장길 남쪽)도 양쪽에 노점
+  const ids = new Set([301285279, 78503333, 788296725, 382947009, 788296724, 78503342, 1128365154, 913406478, 913409138, 581906883]);
+  const inner = new Set([788296724, 78503342, 1128365154, 913406478, 913409138, 581906883]);
   const lines = (data.ways || []).filter((w) => ids.has(w.id));
+  // 노점이 다른 골목(가로지르는 길) 위에 서지 않게: 시장 둘레의 모든 길 선분 (자기 길 제외)
+  const MX0 = -11535, MX1 = -11300, MZ0 = -21560, MZ1 = -21280;
+  const segs = [];
+  for (const w of data.ways || []) for (let i = 1; i < (w.pts?.length || 0); i++) {
+    const a = w.pts[i - 1], b = w.pts[i];
+    if (Math.max(a[0], b[0]) < MX0 || Math.min(a[0], b[0]) > MX1 || Math.max(a[1], b[1]) < MZ0 || Math.min(a[1], b[1]) > MZ1) continue;
+    segs.push({ id: w.id, a, b, r: (w.w || 4) / 2 });
+  }
+  const onOtherWay = (x, z, id, pad) => segs.some((q) => q.id !== id && distToSeg(x, z, q.a[0], q.a[1], q.b[0], q.b[1]) < q.r + pad);
+  // 안쪽 골목 위 깃발 줄 (9 m 마다, 게이트 쪽 줄과 같은 모양)
+  { const fl = [hex3('#e63946'), hex3('#ffd23f'), hex3('#2a6fdb'), hex3('#ffffff'), hex3('#2a9d8f')];
+    let kk = 0;
+    for (const w of lines) { if (!inner.has(w.id)) continue;
+      for (let i = 1, pts = w.pts; i < pts.length; i++) {
+        const p = pts[i - 1], q = pts[i]; const sl = Math.hypot(q[0] - p[0], q[1] - p[1]); if (sl < 6) continue;
+        const ux = (q[0] - p[0]) / sl, uz = (q[1] - p[1]) / sl, vx = -uz, vz = ux, fr = Math.atan2(vx, vz);
+        for (let d = 4.5; d < sl - 3; d += 9) {
+          const cx = p[0] + ux * d, cz = p[1] + uz * d; if (cx < MX0 + 6 || onOtherWay(cx, cz, w.id, 1)) continue;
+          const hw = (w.w || 4) / 2 + 1.6, yy = heightAt(cx, cz) + 5.6; kk++;
+          buf.box(cx, yy + 0.05, cz, 0.05, 0.05, 2 * hw, fr, uvOf(R.stone), hex3('#333333'));
+          for (let j = 0; j < 7; j++) {
+            const f = -hw + (2 * hw) * (j + 0.5) / 7, px = cx + vx * f, pz = cz + vz * f;
+            const A = [px - vx * 0.45, yy, pz - vz * 0.45], B = [px + vx * 0.45, yy, pz + vz * 0.45], C = [px, yy - 1.0, pz];
+            buf.raw([...A, ...B, ...C], [0, 1, 2, 0, 2, 1], [ux, 0, uz, ux, 0, uz, ux, 0, uz], [0.5, 0.5, 0.5, 0.5, 0.5, 0.5], fl[(j + kk) % fl.length]);
+          }
+          if (kk % 2) buf.box(cx, yy - 1.5, cz, 0.5, 0.75, 0.5, fr, uvOf(R.stone), hex3('#d62828'));
+        }
+      }
+    }
+  }
   const r = rnd(4242); const awn = [R.awn0, R.awn1, R.awn2, R.awn3];
   const goods = ['#e63946', '#f4a261', '#2a9d8f', '#e9c46a', '#8ecae6', '#ffb4c6', '#6d597a', '#f1faee', '#264653'].map(hex3);
   let n = 0;
@@ -462,10 +494,16 @@ function buildNamdaemun(ctx) {
     const p = pts[i - 1], q = pts[i]; const sl = Math.hypot(q[0] - p[0], q[1] - p[1]); if (sl < 3) continue;
     const ux = (q[0] - p[0]) / sl, uz = (q[1] - p[1]) / sl, vx = -uz, vz = ux, sr = Math.atan2(ux, uz);
     for (let d = 1.6; d < sl - 1.6; d += 3.1) for (const side of [-1, 1]) {
-      const off = (w.w || 4) / 2 + 0.85; const x = p[0] + ux * d + vx * off * side, z = p[1] + uz * d + vz * off * side;
+      // 길 가장자리 바깥에 놓고, 건물이 붙어 있으면(시장 안 좁은 골목) 길 안쪽 가장자리로 들인다 — 가운데 ≥ 3.5 m 는 비운다
+      const ww = w.w || 4; let off = ww / 2 + 0.85, x = p[0] + ux * d + vx * off * side, z = p[1] + uz * d + vz * off * side;
       if (Math.hypot(x - gx, z - gz) < 7) continue;
-      if (bldAt && bldAt(x, z, 0.9)) continue;
-      if (x > -11345 || x < -11530) continue;
+      if (bldAt && bldAt(x, z, 0.9)) {
+        if (ww < 6) continue;
+        off = ww / 2 - 0.8; x = p[0] + ux * d + vx * off * side; z = p[1] + uz * d + vz * off * side;
+        if (bldAt(x, z, 0.3)) continue;
+      }
+      if (x > -11345 || x < -11527) continue;
+      if (onOtherWay(x, z, w.id, 1.6)) continue; // [md-market] 가로지르는 골목 입구는 비운다
       const y = heightAt(x, z); const k = Math.floor(r() * 4);
       // 판매대 + 상품 더미 + 차양(줄무늬) + 옷걸이 기둥
       buf.box(x, y + 0.45, z, 1.3, 0.9, 2.5, sr, uvOf(R.stone), hex3('#6b4f36'));

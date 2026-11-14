@@ -5,6 +5,7 @@
 //   node scripts/corridor/test/test-myeongdong-walk.mjs <vite port> [--json out.json]   (npm run myeongdong:walk — MYEONGDONG_WALK_PORT)
 //   포트가 없으면 건너뛴다(myeongdong:test 안에서 서버 없이 돌 때). WALK_DUMP="x,z;…" = 그 둘레 글자 지도.
 //   바깥 띠(apron) 바깥 가장자리는 명동 땅(남산 바닥 높이로 내려감)과 그 밖 0 m 바닥이 만나 단차가 있다 — 보고는 명동 상자(B) 안만.
+//   [md-market] 남대문시장 게이트 안 골목(상자 서쪽 바깥 띠 x −11524…−11420)도 보고에 넣는다 — 시장 골목 ≥ 300 m 를 못 재면 실패.
 //   허용: OSM 상 건물 안을 지나는 길(통로·아케이드) 끊김은 'bld:' 로 따로 센다. 그 외 끊김 0 · 빈 곳 0 이어야 통과.
 import fs from 'node:fs';
 import { chromium } from 'playwright';
@@ -25,7 +26,10 @@ const res = await page.evaluate(async (DUMP) => {
   // 채우기는 명동 상자 + 바깥 띠까지 (가장자리 빈 곳이 바깥 길로 이어지는지 보려고). 보고는 명동 상자 안만.
   // 바깥 띠(apron, build-myeongdong.py APRON)까지 + 10 m, 남쪽은 남산 쪽 60 m
   const B = { x0: -11540, z0: -22310, x1: -10445, z1: MB.z1 + 60 };
-  const inMB = (x, z) => x > MB.x0 + 1 && x < MB.x1 - 1 && z > MB.z0 + 1 && z < MB.z1 - 1;
+  // [md-market] 남대문시장 안 골목(명동 상자 서쪽 바깥 띠 — 시장 게이트 안)도 보고한다. 바깥 띠 끝(-11530) 단차 6 m 앞까지
+  const MK = { x0: -11524, x1: MB.x0 + 1, z0: -21545, z1: MB.z1 - 1 }; // 남쪽은 명동 상자와 같게(바깥 띠·남산 이음매 단차 제외)
+  const inMK = (x, z) => x > MK.x0 && x <= MK.x1 && z > MK.z0 && z < MK.z1;
+  const inMB = (x, z) => (x > MB.x0 + 1 && x < MB.x1 - 1 && z > MB.z0 + 1 && z < MB.z1 - 1) || inMK(x, z);
   const inB = (x, z) => x > B.x0 + 1 && x < B.x1 - 1 && z > B.z0 + 1 && z < B.z1 - 1;
   const WALK = new Set(['footway', 'pedestrian', 'living_street', 'residential', 'service', 'path', 'steps', 'unclassified', 'tertiary', 'secondary', 'primary', 'corridor', 'track', 'cycleway']);
   const ways = md.walkWays().filter((w) => WALK.has(w.k));
@@ -109,7 +113,7 @@ const res = await page.evaluate(async (DUMP) => {
   }
   // 5) 길마다 (빈 곳 탈출로 닿음 칠한 뒤) 1 m 간격 단면: 단면(폭 안) 에 닿는 칸이 하나도 없으면 '끊김'. 이유 = 단면 가운데를 막는 것
   const why = (x, z) => md.blockedBy(x, z, 0.35) || md.blockedBy(x, z, 0.45) || (J.namsan?.isBlocked?.(x, z, 0.35) ? 'namsan' : W.isBlocked(x, z) ? 'corridor' : 'step/pocket');
-  const runs = []; let stations = 0;
+  const runs = []; let stations = 0, mkSt = 0;
   for (const w of ways) {
     const hw = Math.max(1.2, (w.w || 4) / 2); let cur = null;
     const flush = () => { if (cur) { runs.push(cur); cur = null; } };
@@ -117,7 +121,7 @@ const res = await page.evaluate(async (DUMP) => {
       const [ax, az] = w.pts[k - 1], [bx, bz] = w.pts[k], L = Math.hypot(bx - ax, bz - az) || 1e-6, tx = (bx - ax) / L, tz = (bz - az) / L;
       for (let s = 0; s < L; s += 1) {
         const x = ax + tx * s, z = az + tz * s; if (!inMB(x, z)) { flush(); continue; }
-        stations++;
+        stations++; if (inMK(x, z)) mkSt++;
         let ok = false, blk = null;
         for (let o = -hw; o <= hw + 1e-6; o += 0.25) { const px = x - tz * o, pz = z + tx * o, i = Math.floor((px - B.x0) / G), j = Math.floor((pz - B.z0) / G); if (i < 0 || j < 0 || i >= nx || j >= nz) continue; const n = idx(i, j); if (reach[n]) { ok = true; break; } }
         if (!ok) {
@@ -129,12 +133,15 @@ const res = await page.evaluate(async (DUMP) => {
     }
     flush();
   }
+  const mkCut = runs.filter((q) => inMK(q.x0, q.z0) || inMK(q.x1, q.z1)).reduce((a, q) => a + q.n, 0);
+  let mkCells = 0, mkReach = 0; for (let k = 0; k < nx * nz; k++) { if (mask[k] !== 1 || !free[k]) continue; const i = k % nx, j = (k - i) / nx; if (!inMK(cx(i), cz(j))) continue; mkCells++; if (reach[k]) mkReach++; }
+  const market = { stations: mkSt, cutM: mkCut, cells: mkCells, reached: mkReach, ways: ways.filter((w) => w.pts.some(([x, z]) => inMK(x, z))).length };
   // 5) 길 띠 안의 '들어갈 수 없는 빈 곳'(통과 가능하지만 스폰에서 닿지 않는 칸 덩어리) ≥ 4 m²
   pockets.sort((a, b) => b.m2 - a.m2);
   let nReach = 0, nFree = 0; for (let k = 0; k < nx * nz; k++) { if (mask[k] !== 1) continue; if (free[k]) nFree++; if (reach[k]) nReach++; }
   // 디버그: WALK_DUMP="x,z;x,z" → 그 둘레 40 m 를 1 m 글자 지도로 (r 닿음 · . 통과가능·못닿음 · # 막힘 · 공백 길 아님)
   const dumps = DUMP.map(([X, Z]) => { const rows = []; for (let j = -40; j <= 40; j += 2) { let s = ''; for (let i = -40; i <= 40; i += 2) { const a = Math.floor((X + i * 0.5 - B.x0) / G), b = Math.floor((Z + j * 0.5 - B.z0) / G); const k = idx(a, b); s += !mask[k] ? ' ' : !free[k] ? '#' : reach[k] ? 'r' : '.'; } rows.push(s); } return { X, Z, rows }; });
-  return { escaped, dumps, stepAt, ways: ways.length, stations, cells: nMask, free: nFree, reached: nReach, steps, runs, pockets, ms: Math.round(performance.now() - t0) };
+  return { market, escaped, dumps, stepAt, ways: ways.length, stations, cells: nMask, free: nFree, reached: nReach, steps, runs, pockets, ms: Math.round(performance.now() - t0) };
 }, DUMP);
 for (const d of res.dumps) console.log(`map @(${d.X},${d.Z}) 1 m/char, x→ z↓\n` + d.rows.join('\n'));
 const r = (v) => +v.toFixed(1);
@@ -145,11 +152,13 @@ const pk = res.pockets;
 console.log(`ways ${res.ways} · street-band cells ${res.cells} (0.5 m) · free ${res.free} · reachable from spawn ${res.reached} (${(100 * res.reached / Math.max(1, res.free)).toFixed(1)}%) · step-refusals ${res.steps} · band cells reached via off-band ground ${res.escaped} · ${res.ms} ms`);
 console.log(`cut cross-sections (no reachable cell across the way's width): runs ${res.runs.length} (non-building ${bad.length}, OSM-way-through-building ${viaBld.length}) · metres by cause ${JSON.stringify(by)}`);
 for (const q of bad.slice(0, 60)) console.log(`  CUT ${q.why.padEnd(10)} ${q.k.padEnd(11)} ${String(q.name).padEnd(10)} way ${q.way}  (${r(q.x0)},${r(q.z0)})→(${r(q.x1)},${r(q.z1)})  ${q.n} m`);
+console.log(`남대문시장 inner market: ${res.market.ways} ways · ${res.market.stations} m of alley checked · cut ${res.market.cutM} m · band cells reached ${res.market.reached}/${res.market.cells} (${(100 * res.market.reached / Math.max(1, res.market.cells)).toFixed(1)}%)`);
 console.log(`unreachable free pockets ≥4 m² in street bands: ${pk.length}`);
 for (const p of pk.slice(0, 40)) console.log(`  POCKET (${r(p.x)},${r(p.z)}) ${p.m2.toFixed(1)} m²  walls ${JSON.stringify(p.walls)}`);
 if (outJson) fs.writeFileSync(outJson, JSON.stringify({ ...res, errors }, null, 1));
 await browser.close();
 const bigPockets = pk.filter((p) => p.m2 >= 4);
-const fail = bad.length > 0 || bigPockets.length > 0 || errors.length > 0;
-console.log(fail ? `test-myeongdong-walk: FAIL (${bad.length} cut runs, ${bigPockets.length} pockets, ${errors.length} console errors)` : 'test-myeongdong-walk: ok');
+const marketThin = res.market.stations < 300; // 시장 안 골목이 보고에서 빠지면 실패
+const fail = bad.length > 0 || bigPockets.length > 0 || errors.length > 0 || marketThin;
+console.log(fail ? `test-myeongdong-walk: FAIL (${bad.length} cut runs, ${bigPockets.length} pockets, ${errors.length} console errors${marketThin ? ', market not covered' : ''})` : 'test-myeongdong-walk: ok');
 process.exit(fail ? 1 : 0);
