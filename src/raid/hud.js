@@ -356,38 +356,61 @@ export function createHud() {
     if (root.classList.contains('is-handheld')) layoutWheel();
   }
   let wheelPage = 0;
+  const ARC = { attack: 96, inner: 60, outer: 48, util: 40, rIn: 150, rOut: 215 };
+  const INNER_ANGLES = [102, 130, 158, 186];
+  const OUTER_ANGLES = [142, 164, 186];
+  function placeOnArc(btn, size, deg, radius) {
+    const rad = deg * Math.PI / 180;
+    const cx = ARC.attack / 2 - Math.cos(rad) * radius;
+    const cy = ARC.attack / 2 + Math.sin(rad) * radius;
+    btn.style.width = `${size}px`;
+    btn.style.height = `${size}px`;
+    btn.style.right = `${cx - size / 2}px`;
+    btn.style.bottom = `${cy - size / 2}px`;
+  }
   function layoutWheel() {
     const buttons = [...skillsEl.querySelectorAll('.c-slot')];
     const main = buttons[0];
     const rest = buttons.slice(1);
-    const narrow = window.innerHeight > window.innerWidth;
-    const innerCount = narrow ? 4 : 5;
-    const outerCount = narrow ? 0 : 3;
-    const pageSize = innerCount + outerCount;
+    const pageSize = INNER_ANGLES.length + OUTER_ANGLES.length;
     const page = rest.slice(wheelPage * pageSize, wheelPage * pageSize + pageSize);
-    const inner = page.slice(0, innerCount);
-    const outer = page.slice(innerCount, innerCount + outerCount);
+    const inner = page.slice(0, INNER_ANGLES.length);
+    const outer = page.slice(INNER_ANGLES.length);
     buttons.forEach((btn) => {
       btn.classList.remove('m-main', 'm-in', 'm-out');
       btn.classList.add('m-off');
     });
-    main?.classList.remove('m-off');
-    main?.classList.add('m-main');
+    if (main) {
+      main.classList.remove('m-off');
+      main.classList.add('m-main');
+      main.style.width = `${ARC.attack}px`;
+      main.style.height = `${ARC.attack}px`;
+      main.style.right = '0px';
+      main.style.bottom = '0px';
+    }
     inner.forEach((btn, i) => {
       btn.classList.remove('m-off');
       btn.classList.add('m-in');
-      btn.dataset.arc = String(i);
+      placeOnArc(btn, ARC.inner, INNER_ANGLES[i], ARC.rIn);
     });
     outer.forEach((btn, i) => {
       btn.classList.remove('m-off');
       btn.classList.add('m-out');
-      btn.dataset.arc = String(i);
+      placeOnArc(btn, ARC.outer, OUTER_ANGLES[i], ARC.rOut);
     });
     const more = root.querySelector('.m-more');
     if (more) {
-      more.hidden = rest.length <= pageSize;
-      more.textContent = wheelPage ? '1' : '2';
-      more.setAttribute('aria-pressed', wheelPage ? 'true' : 'false');
+      const needed = rest.length > pageSize;
+      more.hidden = !needed;
+      more.textContent = '⇄';
+      placeOnArc(more, ARC.util, 78, 92);
+    }
+    const box = skillsEl.parentElement;
+    if (box) {
+      box.style.width = '300px';
+      box.style.height = '280px';
+      skillsEl.style.width = '300px';
+      skillsEl.style.height = '280px';
     }
   }
   paintSkills(active.skills);
@@ -887,24 +910,43 @@ export function createHud() {
       if (heading) heading.textContent = '현재 관문';
       const reward = document.createElement('div');
       reward.className = 'm-reward';
-      reward.textContent = '보상 · 균열 봉인';
+      reward.innerHTML = '<span class="m-sec">보상</span><div class="m-rslots"><i></i><i></i><i></i><em>균열 봉인</em></div>';
       quest.append(reward);
       shell.querySelector('[data-pane="gate"]').append(quest);
       shell.querySelector('[data-pane="party"]').append(stage.querySelector('.c-party'));
       const boss = stage.querySelector('.c-boss');
       const clock = stage.querySelector('[data-clock]');
-      boss.querySelector('.c-boss-top').append(clock);
+      const bossTop = boss.querySelector('.c-boss-top');
+      const capsule = document.createElement('div');
+      capsule.className = 'm-boss-cap';
+      capsule.append(bossTop.querySelector('.c-pips'), clock);
+      bossTop.append(capsule);
       shell.querySelector('.m-boss').append(boss, stage.querySelector('.c-warn'), root.querySelector('.banner'));
-      shell.querySelector('.m-player').append(stage.querySelector('.c-portrait'), stage.querySelector('.c-vitals'));
+      const player = shell.querySelector('.m-player');
+      const vitals = stage.querySelector('.c-vitals');
+      vitals.querySelectorAll('.c-buffs img').forEach((img) => {
+        const wrap = document.createElement('span');
+        wrap.className = 'm-buff';
+        const time = document.createElement('i');
+        time.className = 'm-bufftime';
+        time.textContent = `${img.dataset.remain || 8}s`;
+        img.replaceWith(wrap);
+        wrap.append(img, time);
+      });
+      const power = document.createElement('div');
+      power.className = 'm-power';
+      power.innerHTML = '<span>전투력</span><b>24,860</b>';
+      vitals.querySelector('.c-vname').after(power);
+      player.append(stage.querySelector('.c-portrait'), vitals);
       shell.querySelector('.m-corner').prepend(stage.querySelector('.c-map'));
       const auto = stage.querySelector('.c-auto');
       auto.textContent = 'A';
-      auto.setAttribute('aria-label', '자동 전투');
+      auto.setAttribute('aria-label', '자동');
       const info = document.createElement('button');
       info.type = 'button';
       info.className = 'm-icon';
       info.textContent = 'i';
-      info.setAttribute('aria-label', '레이드 정보');
+      info.setAttribute('aria-label', '정보');
       info.addEventListener('click', () => {
         side.classList.remove('is-folded');
         showTab('gate');
@@ -913,12 +955,12 @@ export function createHud() {
       gear.type = 'button';
       gear.className = 'm-icon';
       gear.textContent = '⚙';
-      gear.setAttribute('aria-label', '소리');
+      gear.setAttribute('aria-label', '설정');
       gear.addEventListener('click', () => hud.onMute?.());
       const exit = document.createElement('button');
       exit.type = 'button';
       exit.className = 'm-icon m-exit';
-      exit.textContent = '나가기';
+      exit.textContent = '↪';
       exit.addEventListener('click', () => hud.onWorld?.());
       const menuFold = document.createElement('button');
       menuFold.type = 'button';
@@ -930,7 +972,15 @@ export function createHud() {
         menu.classList.toggle('is-folded');
         menuFold.textContent = menu.classList.contains('is-folded') ? '›' : '‹';
       });
-      menu.append(menuFold, auto, info, gear, exit);
+      const pack = (btn, label) => {
+        const wrap = document.createElement('div');
+        wrap.className = 'm-util';
+        const cap = document.createElement('span');
+        cap.textContent = label;
+        wrap.append(btn, cap);
+        return wrap;
+      };
+      menu.append(pack(auto, '자동'), pack(info, '정보'), pack(gear, '설정'), pack(exit, '나가기'));
       const more = document.createElement('button');
       more.type = 'button';
       more.className = 'm-more';
@@ -950,10 +1000,16 @@ export function createHud() {
         if (body) body.hidden = false;
         const chip = chat.querySelector('[data-chip]');
         if (chip) chip.hidden = true;
-        chat.addEventListener('click', (e) => {
-          if (e.target.closest('input, .rchat-form button, .rchat-tabs')) return;
+        const toggle = document.createElement('button');
+        toggle.type = 'button';
+        toggle.className = 'm-chat-toggle';
+        toggle.textContent = '💬';
+        toggle.setAttribute('aria-label', '채팅');
+        toggle.addEventListener('click', (e) => {
+          e.stopPropagation();
           chat.classList.toggle('is-open');
         });
+        chat.prepend(toggle);
         shell.querySelector('.m-autofight').after(chat);
       }
       root.append(shell);
