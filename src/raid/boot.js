@@ -18,6 +18,7 @@ import { mountPlayerFace, readPlayerLook, writePlayerLook } from './playerFace.j
 import { attachTrails, updateTrails } from './trails.js';
 import { createRaidRoom, mountRaidChat } from './chat.js';
 import { virtualPad } from '../input.js';
+import { isMobileMode } from '../mobile/flag.js';
 import {
   PATH_YAW, BOSS_ALONG, spawnPoint, safePoint, bossPoint, clampArena, pushOutOfBoss, fromFrame, toFrame,
 } from './layout.js';
@@ -26,7 +27,21 @@ import { bossFrame, chooseSkill, hurtVitals, makeVitals, roleGoal } from './part
 const params = new URLSearchParams(location.search);
 const shot = params.get('raidshot');
 
+const mobile = isMobileMode();
+
+function viewPixels() {
+  const vv = window.visualViewport;
+  return {
+    w: Math.max(1, Math.round(vv?.width || window.innerWidth)),
+    h: Math.max(1, Math.round(vv?.height || window.innerHeight)),
+    x: Math.round(vv?.offsetLeft || 0),
+    y: Math.round(vv?.offsetTop || 0),
+  };
+}
+
 function hideWorldChrome() {
+  document.body.classList.add('raid-live');
+  if (mobile) document.body.classList.add('raid-handheld');
   document.body.classList.remove('in-gate', 'bw-early-start', 'in-lobby');
   const early = document.getElementById('bw-early-start');
   if (early) early.hidden = true;
@@ -69,41 +84,66 @@ function moveAxes() {
 
 hideWorldChrome();
 
-const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
-renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.25));
-renderer.setSize(innerWidth, innerHeight);
+const renderer = new THREE.WebGLRenderer({
+  antialias: !mobile,
+  powerPreference: mobile ? 'default' : 'high-performance',
+  alpha: false,
+  failIfMajorPerformanceCaveat: false,
+  preserveDrawingBuffer: mobile,
+});
+renderer.setPixelRatio(mobile ? 1 : Math.min(window.devicePixelRatio || 1, 1.25));
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.38;
-renderer.shadowMap.enabled = true;
+renderer.shadowMap.enabled = !mobile;
 renderer.shadowMap.type = THREE.PCFShadowMap;
-document.getElementById('app').appendChild(renderer.domElement);
+const appEl = document.getElementById('app');
+appEl.appendChild(renderer.domElement);
 renderer.domElement.addEventListener('contextmenu', (e) => e.preventDefault());
+renderer.domElement.style.width = '100%';
+renderer.domElement.style.height = '100%';
 
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, 0.15, 1200);
 
 let composer = null;
-let bloomOn = true;
+let bloomOn = !mobile;
 let bloomPass = null;
-try {
-  const [{ EffectComposer }, { RenderPass }, { UnrealBloomPass }, { OutputPass }] = await Promise.all([
-    import('three/examples/jsm/postprocessing/EffectComposer.js'),
-    import('three/examples/jsm/postprocessing/RenderPass.js'),
-    import('three/examples/jsm/postprocessing/UnrealBloomPass.js'),
-    import('three/examples/jsm/postprocessing/OutputPass.js'),
-  ]);
-  composer = new EffectComposer(renderer);
-  composer.addPass(new RenderPass(scene, camera));
-  const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth / 2, innerHeight / 2), 0.16, 0.18, 0.9);
-  composer.addPass(bloom);
-  bloomPass = bloom;
-  composer.addPass(new OutputPass());
-} catch (err) {
-  console.warn('[raid] bloom off', err);
+if (mobile) {
   bloomOn = false;
-  composer = null;
+} else {
+  try {
+    const [{ EffectComposer }, { RenderPass }, { UnrealBloomPass }, { OutputPass }] = await Promise.all([
+      import('three/examples/jsm/postprocessing/EffectComposer.js'),
+      import('three/examples/jsm/postprocessing/RenderPass.js'),
+      import('three/examples/jsm/postprocessing/UnrealBloomPass.js'),
+      import('three/examples/jsm/postprocessing/OutputPass.js'),
+    ]);
+    const { w, h } = viewPixels();
+    composer = new EffectComposer(renderer);
+    composer.addPass(new RenderPass(scene, camera));
+    const bloom = new UnrealBloomPass(new THREE.Vector2(w / 2, h / 2), 0.16, 0.18, 0.9);
+    composer.addPass(bloom);
+    bloomPass = bloom;
+    composer.addPass(new OutputPass());
+  } catch (err) {
+    console.warn('[raid] bloom off', err);
+    bloomOn = false;
+    composer = null;
+  }
 }
+function fitStage() {
+  const box = viewPixels();
+  appEl.style.left = `${box.x}px`;
+  appEl.style.top = `${box.y}px`;
+  appEl.style.width = `${box.w}px`;
+  appEl.style.height = `${box.h}px`;
+  camera.aspect = box.w / box.h;
+  camera.updateProjectionMatrix();
+  renderer.setSize(box.w, box.h, false);
+  if (bloomOn && composer) composer.setSize(box.w, box.h);
+}
+fitStage();
 
 const arena = createArena(scene);
 const city = await createCity(scene);
@@ -798,6 +838,12 @@ const room = createRaidRoom({
   onMessage: (msg) => chat?.push(msg),
 });
 chat = mountRaidChat(hud.root, room);
+if (mobile) {
+  hud.root.classList.add('is-handheld');
+  chat.collapse();
+  const credit = document.getElementById('attribution');
+  if (credit) credit.hidden = true;
+}
 room.system('레이드 방 · 탄천 합수부');
 room.system('파티와 레이드 채널입니다. Enter로 말합니다.');
 
@@ -1366,7 +1412,7 @@ function frame() {
   if (phase === 'fight' && shotLookY == null && !portrait && camHold <= 0) {
     const ph = boss.state?.phase;
     const big = ph === 'spawn' || ph === 'slam' || ph === 'sweep' || ph === 'charge' || ph === 'wind';
-    camDist = THREE.MathUtils.damp(camDist, big ? 38 : 35, 3, dt);
+    camDist = THREE.MathUtils.damp(camDist, mobile ? (big ? 28 : 24) : (big ? 38 : 35), 3, dt);
   }
   const lookYaw = camYaw;
   const pitch = camPitch;
@@ -1376,9 +1422,9 @@ function frame() {
   const cp = Math.cos(pitch);
   camera.position.set(focus.x - lx * dist * cp, focus.y + dist * Math.sin(pitch), focus.z - lz * dist * cp);
   const bossView = (phase === 'fight' || phase === 'intro') && shotLookY == null && !portrait && !camLock;
-  const aim = shotAim != null ? shotAim : shot === 'wide' ? 1.5 : portrait ? 0.1 : bossView ? 18 : 6;
+  const aim = shotAim != null ? shotAim : shot === 'wide' ? 1.5 : portrait ? 0.1 : bossView ? (mobile ? 8 : 18) : 6;
   const head = form?.group?.userData?.headY;
-  const lookY = shotLookY != null ? shotLookY : shot === 'wide' ? 1.15 : portrait ? (head || 1.1) : bossView ? 7 : 0.2;
+  const lookY = shotLookY != null ? shotLookY : shot === 'wide' ? 1.15 : portrait ? (head || 1.1) : bossView ? (mobile ? 4 : 7) : 0.2;
   const lookTarget = new THREE.Vector3(focus.x + lx * aim, lookY, focus.z + lz * aim);
   if (camLock) {
     camera.position.set(camLock.px, camLock.py, camLock.pz);
@@ -1678,12 +1724,9 @@ addEventListener('keyup', (e) => {
   keys.delete(e.code);
   if (e.key === 'Shift') shift = false;
 });
-addEventListener('resize', () => {
-  camera.aspect = innerWidth / innerHeight;
-  camera.updateProjectionMatrix();
-  renderer.setSize(innerWidth, innerHeight);
-  composer?.setSize(innerWidth, innerHeight);
-});
+addEventListener('resize', fitStage);
+window.visualViewport?.addEventListener('resize', fitStage);
+window.visualViewport?.addEventListener('scroll', fitStage);
 
 function beginAlert() {
   if (alerted || phase === 'fight' || phase === 'intro' || phase === 'victory' || phase === 'peace') return;
@@ -1837,8 +1880,8 @@ function showKnights() {
   const mid = fromFrame(BOSS_ALONG - 11, 0);
   actor.position.set(mid.x, 0, mid.z);
   camYaw = PATH_YAW;
-  camPitch = 50 * Math.PI / 180;
-  camDist = 35;
+  camPitch = (mobile ? 42 : 50) * Math.PI / 180;
+  camDist = mobile ? 22 : 35;
   shotLookY = null;
   shotAim = null;
   if (phase !== 'fight') finishIntro();
@@ -2163,6 +2206,11 @@ window.__raid = {
       return marks.filter((g) => g.visible && g.userData.screen).map((g) => g.userData.screen);
     },
     flat() { bloomOn = false; },
+    mobile,
+    knock() {
+      combat.state.hp = 0;
+      combat.state.down = 3;
+    },
     look(px, py, pz, tx, ty, tz) {
       camLock = { px, py, pz, tx, ty, tz };
     },

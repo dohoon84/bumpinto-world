@@ -1,4 +1,5 @@
 import './hud.css';
+import { virtualPad } from '../input.js';
 import { AURAS, CLASS_IDS, describeSkill, getClass } from './classes.js';
 import { toFrame, ALONG_MIN, ALONG_MAX, SAFE_ALONG, SAFE_R, BOSS_ALONG } from './layout.js';
 
@@ -241,8 +242,51 @@ export function createHud() {
       <label>효과 <input type="range" min="0" max="1" step="0.01" value="0.9" data-vol-sfx></label>
     </div>
     <div class="c-tip" data-tip hidden></div>
+    <div class="m-joy" data-joy>
+      <i></i>
+    </div>
   `;
   document.body.appendChild(root);
+  const joy = root.querySelector('[data-joy]');
+  const knob = joy.querySelector('i');
+  let joyId = null;
+  let joyX = 0;
+  let joyY = 0;
+  const joyR = 46;
+  const setJoy = (dx, dy) => {
+    const dist = Math.hypot(dx, dy) || 1;
+    const k = dist > joyR ? joyR / dist : 1;
+    dx *= k;
+    dy *= k;
+    knob.style.transform = `translate(${dx}px, ${dy}px)`;
+    const mag = Math.min(1, dist / joyR);
+    virtualPad.s = mag < 0.14 ? 0 : dx / joyR;
+    virtualPad.f = mag < 0.14 ? 0 : -dy / joyR;
+  };
+  joy.addEventListener('pointerdown', (e) => {
+    joyId = e.pointerId;
+    joy.setPointerCapture(e.pointerId);
+    const r = joy.getBoundingClientRect();
+    joyX = r.left + r.width / 2;
+    joyY = r.top + r.height / 2;
+    joy.classList.add('is-on');
+    setJoy(e.clientX - joyX, e.clientY - joyY);
+    e.preventDefault();
+  });
+  joy.addEventListener('pointermove', (e) => {
+    if (e.pointerId !== joyId) return;
+    setJoy(e.clientX - joyX, e.clientY - joyY);
+  });
+  const endJoy = (e) => {
+    if (e.pointerId !== joyId) return;
+    joyId = null;
+    joy.classList.remove('is-on');
+    knob.style.transform = '';
+    virtualPad.f = 0;
+    virtualPad.s = 0;
+  };
+  joy.addEventListener('pointerup', endJoy);
+  joy.addEventListener('pointercancel', endJoy);
 
   const party = root.querySelector('[data-party]');
   let vnIndex = 0;
@@ -518,8 +562,9 @@ export function createHud() {
   }
 
   function tickFloats(dt, camera) {
-    const w = innerWidth;
-    const h = innerHeight;
+    const vv = window.visualViewport;
+    const w = vv?.width || innerWidth;
+    const h = vv?.height || innerHeight;
     const placed = [];
     for (let i = floats.length - 1; i >= 0; i--) {
       const f = floats[i];
