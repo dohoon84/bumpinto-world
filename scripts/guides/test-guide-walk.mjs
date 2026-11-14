@@ -6,9 +6,10 @@ import { chromium } from 'playwright';
 const PORT = /^\d+$/.test(process.argv[2] || '') ? process.argv[2] : process.env.MYEONGDONG_WALK_PORT;
 if (!PORT) { console.log('test-guide-walk: skipped (no vite port)'); process.exit(0); }
 const browser = await chromium.launch({ executablePath: '/usr/bin/google-chrome', args: ['--use-gl=angle', '--use-angle=swiftshader-webgl', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
-const page = await (await browser.newContext({ viewport: { width: 800, height: 500 } })).newPage();
+const [VW, VH] = (process.env.WALK_VIEW || '1280x800').split('x').map(Number), MOB = VW < 900; // 844x390 = 폰 가로
+const page = await (await browser.newContext({ viewport: { width: VW, height: VH }, isMobile: MOB, hasTouch: MOB })).newPage();
 const errors = []; page.on('pageerror', (e) => errors.push(e.message)); page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
-await page.goto(`http://127.0.0.1:${PORT}/?ws=mock&at=myeongdong&hour=14&shot=1&noticePopup=0&controlscard=0`);
+await page.goto(`http://127.0.0.1:${PORT}/?ws=mock&at=myeongdong&hour=14&shot=1&noticePopup=0&controlscard=0${MOB ? '&mobile=1' : ''}`);
 await page.waitForFunction(() => window.__jj?.ready && window.__jj?.myeongdong?.ready, null, { timeout: 300000 });
 const r = await page.evaluate(async () => {
   const J = window.__jj, md = J.myeongdong, W = J.world, T = J.terrain, B = J.bikes;
@@ -62,7 +63,7 @@ const r = await page.evaluate(async () => {
 // ---- 실제 입력: KeyW(+Shift 달리기)를 누른 채 카메라 yaw 만 길 쪽으로 돌린다 → game.js 이동 코드(clampWorld·bikes·isBlocked·canMove) 그대로 ----
 const keyRes = [];
 const KEY_ROUTES = (process.env.KEY_ROUTES || 'kal177:kalguksu,gate:galchi,gate:glasses,gate:stationery').split(',');
-await page.mouse.click(400, 250);
+await page.mouse.click(VW / 2, VH / 2);
 for (const spec of KEY_ROUTES) {
   const [from, to] = spec.split(':');
   const ids = await page.evaluate(() => window.__jj.placeGuide.ui.guide.spots.map((s) => s.id));
