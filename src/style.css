@@ -165,46 +165,96 @@ html.cc-on #cc-reopen {
   font: inherit; font-size: 20px; font-weight: 900; line-height: 1; cursor: pointer;
   box-shadow: 0 3px 0 #a65f00, 0 6px 14px rgba(8, 16, 30, .28), inset 0 1px 0 rgba(255, 255, 255, .55);
 }
-#buttons { position: fixed; right: 12px; top: 10px; display: flex; gap: 6px; }
-#buttons button { font: inherit; font-size: 13px; border: 0; border-radius: 10px; padding: 7px 10px; background: rgba(255,255,255,.85); box-shadow: 0 1px 4px rgba(0,0,0,.15); cursor: pointer; }
+/* [hud-layout] 8px 그리드 · 안전 영역 · 쌓임.
+   z: 바 20, 토스트(개찰·탑승) 46. 채팅 입력과 리액션 바는 같은 좌우 칸.
+   오른쪽은 휴대폰·핸드셋을 비우고, 좁은 창에서는 그 여백을 접어 바가 화면 안에 남게 한다. */
+#buttons {
+  position: fixed;
+  top: var(--safe-t);
+  left: var(--safe-l);
+  right: var(--safe-r);
+  z-index: 25;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
+  pointer-events: none;
+}
+#buttons button {
+  pointer-events: auto;
+  flex: 0 0 auto;
+  box-sizing: border-box;
+  max-width: calc(100vw - 32px);
+  height: 32px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 800;
+  border: 0;
+  border-radius: 8px;
+  padding: 0 10px;
+  background: rgba(255,255,255,.92);
+  box-shadow: 0 1px 4px rgba(0,0,0,.15);
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 :root {
-  /* [hudfix] game.js 가 실제 리액션 바·미니맵 위치로 갱신(창 크기·바 접힘·줄바꿈 반영). 탈것 안내/속도계가 이 위에 놓임 */
-  --emote-top: 100px;
+  --safe-l: max(16px, env(safe-area-inset-left, 0px));
+  --safe-r: max(16px, env(safe-area-inset-right, 0px));
+  --safe-b: max(16px, env(safe-area-inset-bottom, 0px));
+  --safe-t: max(8px, env(safe-area-inset-top, 0px));
+  --m: 16px;
+  --gap: 8px;
+  --z-bar: 20;
+  --z-toast: 46;
+  --emote-top: 108px;
+  --chrome-top: 56px;
   --minimap-top: 236px;
   --handset-right: 180px;
   --handset-w: calc(min(560px, 100vh - 96px) / 2.08);
-  --dock-left: 296px;
   --dock-right: calc(var(--handset-right) + var(--handset-w) + 16px);
+  --dock-left: 296px;
   --dock-inset: max(var(--dock-left), var(--dock-right));
-  --dock-span: calc(100vw - 2 * var(--dock-inset));
+  --dock-span: calc(100vw - var(--safe-l) - var(--dock-right));
+}
+@media (min-width: 1600px) {
+  :root { --m: 24px; }
 }
 #chat {
   position: fixed;
   left: 50%;
-  bottom: 14px;
-  transform: translateX(-50%);
-  width: min(500px, var(--dock-span));
+  right: auto;
+  bottom: var(--m);
+  width: min(560px, calc(100vw - 32px - 288px));
+  height: 40px;
+  margin: 0;
+  box-sizing: border-box;
   display: flex;
   align-items: center;
   gap: 8px;
-  z-index: 7;
+  z-index: 30;
+  transform: translateX(-50%);
 }
-#chat input { flex: 1; min-width: 0; font: inherit; font-size: 14px; padding: 9px 14px; border-radius: 20px; border: 1px solid rgba(0,0,0,.1); background: rgba(255,255,255,.88); outline: none; box-shadow: 0 2px 10px rgba(18,32,51,.12); }
+#chat input { flex: 1; min-width: 0; height: 40px; box-sizing: border-box; font: inherit; font-size: 14px; padding: 0 14px; border-radius: 12px; border: 1px solid rgba(0,0,0,.1); background: rgba(255,255,255,.92); outline: none; box-shadow: 0 2px 10px rgba(18,32,51,.12); }
 #chat input:focus { background: rgba(255,255,255,.98); border-color: rgba(31,95,191,.45); }
 #chat-log-toggle {
   position: relative;
   flex-shrink: 0;
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: 8px;
+  height: 40px;
+  box-sizing: border-box;
   font: inherit;
   font-size: 13px;
   font-weight: 800;
   color: #fff;
   background: rgba(18, 32, 51, 0.92);
   border: 1.5px solid rgba(255, 255, 255, 0.22);
-  border-radius: 999px;
-  padding: 9px 13px;
+  border-radius: 12px;
+  padding: 0 12px;
   cursor: pointer;
   box-shadow: 0 4px 12px rgba(18, 32, 51, 0.24);
   backdrop-filter: blur(6px);
@@ -234,22 +284,26 @@ html.cc-on #cc-reopen {
 #emote-bar {
   position: fixed;
   left: 50%;
-  bottom: 58px;
+  right: auto;
+  bottom: calc(var(--m) + 48px);
+  width: min(560px, calc(100vw - 32px - 288px));
+  height: 40px;
+  margin: 0;
+  box-sizing: border-box;
   transform: translateX(-50%);
-  width: fit-content;
-  max-width: var(--dock-span);
-  z-index: 7;
+  z-index: 34;
   display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 2px 6px 3px;
-  border-radius: 999px;
+  gap: 8px;
+  padding: 4px 8px;
+  border-radius: 16px;
   background: rgba(15, 25, 42, 0.78);
   border: 1px solid rgba(255, 255, 255, 0.18);
   box-shadow: 0 4px 14px rgba(12, 22, 38, 0.25);
   backdrop-filter: blur(6px);
   user-select: none;
   min-width: 0;
+  overflow: hidden;
 }
 #emote-bar.folded {
   padding: 0;
@@ -260,10 +314,12 @@ html.cc-on #cc-reopen {
 #emote-bar .emote-list {
   display: flex;
   align-items: center;
-  gap: 3px;
+  gap: 8px;
+  scroll-snap-type: x mandatory;
+  flex: 1 1 auto;
   min-width: 0;
   max-width: 100%;
-  padding: 6px 3px 5px;
+  padding: 4px 0;
   overflow-x: auto;
   overscroll-behavior-x: contain;
   touch-action: pan-x;
@@ -367,16 +423,51 @@ html.cc-on #cc-reopen {
   background: rgba(255, 255, 255, 0.18);
   color: #ffe169;
 }
-#ride-btn { position: fixed; left: 50%; bottom: 110px; transform: translateX(-50%); z-index: 6; font: inherit; font-size: 14px; font-weight: 800; color: #3a2a00; background: #fee500; border: 0; border-radius: 999px; padding: 8px 14px; box-shadow: 0 2px 8px rgba(0,0,0,.18); cursor: pointer; }
+#ride-btn { position: fixed; left: 50%; bottom: calc(var(--emote-top, 108px) + 8px); transform: translateX(-50%); z-index: var(--z-toast); max-width: calc(100vw - 32px); box-sizing: border-box; font: inherit; font-size: 14px; font-weight: 800; color: #3a2a00; background: #fee500; border: 0; border-radius: 12px; padding: 8px 14px; box-shadow: 0 2px 8px rgba(0,0,0,.18); cursor: pointer; }
 #ride-btn[hidden] { display: none !important; }
 body.in-lobby #ride-btn { display: none !important; }
-#chat-log-panel {
+#bw-raid-gate {
   position: fixed;
   left: 50%;
-  bottom: 98px;
+  bottom: calc(var(--m) + 96px);
   transform: translateX(-50%);
-  width: min(500px, var(--dock-span));
-  z-index: 12;
+  z-index: 40;
+  box-sizing: border-box;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+  width: min(400px, calc(100vw - 48px));
+  max-width: calc(100vw - 32px);
+  min-height: 56px;
+  padding: 8px 12px;
+  border-radius: 12px;
+  background: rgba(8, 16, 28, .92);
+  color: #e7f3f6;
+  border: 1px solid rgba(230, 195, 106, .7);
+  font: 800 14px/1.3 "Nanum Gothic", "Noto Sans CJK KR", sans-serif;
+}
+body:has(#ride-btn:not([hidden])) #bw-raid-gate { bottom: calc(var(--emote-top, 108px) + 56px); }
+#bw-raid-gate[hidden] { display: none !important; }
+#bw-raid-gate b { font-weight: 900; }
+#bw-raid-gate span { color: #3ecfc6; font-size: 12px; }
+#bw-raid-gate button {
+  border: 0; border-radius: 8px; height: 32px; padding: 0 12px;
+  font: inherit; font-weight: 900; background: #ffe7a0; color: #2a2114; cursor: pointer;
+}
+#chat-log-panel {
+  position: fixed;
+  left: var(--safe-l);
+  right: var(--dock-right);
+  bottom: calc(var(--emote-top, 108px) + 8px);
+  width: auto;
+  max-width: 720px;
+  margin-left: auto;
+  margin-right: auto;
+  box-sizing: border-box;
+  transform: none;
+  z-index: 24;
   background: rgba(15, 25, 42, 0.92);
   color: #e8f2f8;
   border: 1px solid rgba(255, 255, 255, 0.18);
@@ -389,7 +480,13 @@ body.in-lobby #ride-btn { display: none !important; }
 @media (max-width: 1180px) {
   #emote-bar .emote-btn[data-emote-id] .em-lbl { display: none; }
 }
-#ride-btn:not([hidden]) ~ #chat-log-panel { bottom: 154px; }
+@media (max-width: 980px) {
+  :root { --dock-right: var(--safe-r); }
+  #chat, #emote-bar { width: min(560px, calc(100vw - 32px)); }
+  #phone { bottom: calc(var(--m) + 96px); }
+  #handset:not(.open) { bottom: var(--m); }
+}
+#ride-btn:not([hidden]) ~ #chat-log-panel { bottom: calc(var(--emote-top, 108px) + 56px); }
 #chat-log-panel[hidden] { display: none !important; }
 #chat-log-panel .c-head {
   display: flex;
@@ -566,14 +663,15 @@ body.in-lobby #ride-btn { display: none !important; }
 #stick { position: absolute; left: 50%; top: 50%; width: 46px; height: 46px; margin: -23px 0 0 -23px; border-radius: 50%; background: rgba(255,255,255,.8); }
 #top-right-bar {
   position: fixed;
-  right: 12px;
-  top: 50px;
+  right: var(--safe-r);
+  top: var(--chrome-top, 56px);
   z-index: 8;
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 7px;
+  gap: 8px;
   flex-wrap: wrap;
+  max-width: calc(100vw - 32px);
 }
 #presence-status {
   display: inline-flex;
@@ -1477,15 +1575,26 @@ body.in-lobby #hud, body.in-lobby #buttons, body.in-lobby #top-right-bar, body.i
 }
 
 #handset {
-  --h: min(560px, calc(100vh - 96px));
-  position: fixed; right: 180px; bottom: 14px; z-index: 6;
-  width: calc(var(--h) / 2.08); height: var(--h);
-  transform: translateY(calc(100% - 74px));
-  transition: transform .48s cubic-bezier(.2, .85, .25, 1);
+  --h: min(560px, calc(100vh - 48px));
+  position: fixed;
+  right: max(16px, env(safe-area-inset-right));
+  bottom: max(16px, env(safe-area-inset-bottom));
+  z-index: 20;
+  width: 272px;
+  height: 96px;
+  overflow: hidden;
+  transform: none;
+  transition: height .28s ease, width .28s ease;
   filter: drop-shadow(0 18px 28px rgba(16, 22, 34, .32));
   user-select: none; cursor: pointer;
 }
-#handset.open { transform: translateY(0); cursor: default; }
+#handset.open {
+  width: calc(var(--h) / 2.08);
+  height: var(--h);
+  overflow: visible;
+  z-index: 80;
+  cursor: default;
+}
 #handset .handset-toast {
   position: absolute;
   left: 50%;
@@ -1581,10 +1690,10 @@ body.in-lobby #hud, body.in-lobby #buttons, body.in-lobby #top-right-bar, body.i
 #phone-screen { height: 168px; border-radius: 14px; overflow: hidden; background: #ebe4d4; }
 #phone-map { display: block; width: 100%; height: 100%; }
 @media (max-width: 720px) {
-  :root { --handset-right: 148px; }
-  #phone { width: 128px; bottom: 78px; }
+  :root { --handset-right: 12px; --dock-right: var(--safe-r); }
+  #phone { width: 128px; bottom: calc(var(--emote-top, 108px) + 8px); }
   #phone-screen { height: 140px; }
-  #handset { right: 148px; bottom: 78px; }
+  #handset { right: 12px; bottom: calc(var(--emote-top, 108px) + 8px); }
   #attribution { left: 8px; right: auto; }
 }
 #attribution { z-index: 40; }
