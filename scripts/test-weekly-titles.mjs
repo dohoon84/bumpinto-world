@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 import { titlesEnabled, titlePreviewEarn, titlePreviewId } from '../src/titles/flag.js';
 import { composeTitle, earnDuration, langPack, restQuadCount, sfxCues } from '../src/titles/eval.js';
-import { earnPresentMul, fitWorldScale, ownRestScale, placeOrigin, remoteScale, worldScale, OWN_REST_W_DESKTOP, OWN_REST_W_MOBILE, EARN_PRESENT } from '../src/titles/layout.js';
+import { earnPresentMul, fitWorldScale, ownRestScale, placeOrigin, remoteScale, titleRestScale, worldScale, NAME_LABEL_FONT_DESKTOP, NAME_LABEL_FONT_MOBILE, TITLE_LETTER_PT, TITLE_VS_NAME, EARN_PRESENT } from '../src/titles/layout.js';
 import { awardWeeklyTitles, loadTitles, markTitleSeen, titlePublic } from '../server/phone/src/bump24/titles.js';
 import { settleWeek, daysOfWeek } from '../server/phone/src/bump24/db.js';
 import { WEEKLY_TITLES, titleHistoryLabel, weekPeriodLabel } from '../server/phone/src/bump24/rules.js';
@@ -68,12 +68,18 @@ for (const [id, expectRest, expectEarn] of [
 }
 ok('atlas eval: rest 6/5/4, earn peak 25/19/15, reduced, sfx cues');
 
-assert.ok(Math.abs(ownRestScale(98, false) - OWN_REST_W_DESKTOP / 98) < 1e-6);
-assert.ok(ownRestScale(98, false) * 98 >= 150 && ownRestScale(98, false) * 98 <= 180);
-assert.ok(Math.abs(ownRestScale(98, true) - OWN_REST_W_MOBILE / 98) < 1e-6);
-assert.ok(ownRestScale(98, true) * 98 >= 125);
-assert.ok(remoteScale(98, 8, 80) * 98 >= 90);
-assert.ok(remoteScale(98, 80, 80) * 98 <= 72);
+const desktopS = (NAME_LABEL_FONT_DESKTOP * TITLE_VS_NAME) / TITLE_LETTER_PT;
+const mobileS = (NAME_LABEL_FONT_MOBILE * TITLE_VS_NAME) / TITLE_LETTER_PT;
+assert.ok(Math.abs(titleRestScale(false) - desktopS) < 1e-6);
+assert.ok(Math.abs(ownRestScale(98, false) - desktopS) < 1e-6);
+assert.ok(Math.abs(ownRestScale(200, false) - ownRestScale(98, false)) < 1e-6, 'scale ignores row width');
+assert.ok(Math.abs(ownRestScale(98, true) - mobileS) < 1e-6);
+assert.ok(desktopS * TITLE_LETTER_PT > NAME_LABEL_FONT_DESKTOP, 'title lettering slightly larger than name');
+assert.ok(desktopS * TITLE_LETTER_PT <= NAME_LABEL_FONT_DESKTOP * 1.4, 'title stays close to the name label');
+assert.ok(desktopS * 98 < 130, 'plaque is no longer the old 168px width');
+assert.equal(remoteScale(98, 8, 80, false), remoteScale(98, 80, 80, false), 'remote size ignores distance');
+assert.equal(remoteScale(98, 8, 80, false), ownRestScale(98, false), 'remote matches local rest size');
+assert.equal(worldScale({ local: false, rowWidthPt: 98, mobile: false, dist: 8, maxDist: 80 }), worldScale({ local: false, rowWidthPt: 98, mobile: false, dist: 80, maxDist: 80 }));
 assert.equal(earnPresentMul(0, 2950, false), 1);
 assert.equal(earnPresentMul(800, 2950, false), EARN_PRESENT);
 assert.equal(earnPresentMul(800, 2950, true), 1);
@@ -87,7 +93,7 @@ assert.ok(fitted <= oEarn && fitted >= oRest);
 const placed = placeOrigin({ labelX: 640, labelTop: 356, restScale: oRest, worldScale: fitted, minYpt: -62, maxYpt: 6, mobile: false });
 assert.ok(placed.oy + 6 * fitted <= 356 - 7.5, 'foot stays above nickname');
 assert.ok(placed.oy + (-62) * fitted >= 88 - 0.5, 'earn title stays below HUD');
-ok('layout: own rest 168/130, remote min, earn 2.35x then back, reduced=1, HUD clamp');
+ok('layout: fixed size slightly above name label, no distance scale, earn 2.35x then back, reduced=1, HUD clamp');
 
 // 불투명 픽셀 기준 가장 낮은 점은 디자인 검증에서 +3.40pt(메달 그림자).
 // 쿼드 AABB 는 알약 스프라이트 여백 때문에 +6 까지 내려가지만, 그 아래는 투명하다.

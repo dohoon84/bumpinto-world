@@ -1,7 +1,7 @@
 // [bump24-rank] 서버 전광판. ?bp24rank=0 이면 이 공급자를 쓰지 않고 기기 기록만 남긴다.
 import { deviceId } from '../sms.js';
 import { accountBase } from '../account/api.js'; // 로그인 쿠키가 있는 계정 API 주소(api.bumpinto.world). smsBase(workers.dev)로 보내면 쿠키가 안 실려 게스트로 처리된다
-import { attemptCap, LIMIT_MSG } from '../../server/phone/src/bump24/rules.js';
+import { attemptCap, LIMIT_MSG, WEEKLY_BUM, WEEKLY_REST, MONTHLY_BUM, MONTHLY_REST } from '../../server/phone/src/bump24/rules.js';
 
 export function bp24RankOn(search = typeof location !== 'undefined' ? location.search : '') {
   try { return new URLSearchParams(search || '').get('bp24rank') !== '0'; } catch { return true; }
@@ -14,6 +14,31 @@ export function bp24ShotMode(search = typeof location !== 'undefined' ? location
 
 const TAB = { yesterday: '어제', weekly: '이번 주', monthly: '이달' };
 const EMPTY = { yesterday: '어제 기록이 아직', weekly: '이번 주 첫 도전자를', monthly: '이달 순위가 아직' };
+
+// 서버는 월요일(view=weekly)·월간 발표 주(view=monthly)여도, 포디움 행이 있을 때만 tab 을 '이번 주'/'이달' 로 준다.
+// 없으면 second 는 어제 점수(원)로 떨어지므로 tab 만 보고 단위를 고른다.
+export function isPodiumTab(meta) {
+  const tab = meta?.tab;
+  return tab === '이번 주' || tab === '이달';
+}
+export function boardUnit(meta, period = 'today') {
+  return period === 'week' && isPodiumTab(meta) ? '점' : '원';
+}
+export function locLabel(meta, period = 'today', fallback = '오늘 랭킹') {
+  if (period !== 'week') return fallback || '오늘 랭킹';
+  if (meta?.tab === '이번 주') return '지난주 정산 순위';
+  if (meta?.tab === '이달') return '지난달 정산 순위';
+  return '어제 랭킹';
+}
+function formatPayout(amounts, rest) {
+  const n = (x) => Math.round(Number(x) || 0).toLocaleString('ko-KR');
+  return `1위 ${n(amounts[0])} · 2위 ${n(amounts[1])} · 3위 ${n(amounts[2])} · 4~10위 ${n(rest)} bum`;
+}
+export function payoutLine(meta) {
+  if (meta?.tab === '이번 주') return formatPayout(WEEKLY_BUM, WEEKLY_REST);
+  if (meta?.tab === '이달') return formatPayout(MONTHLY_BUM, MONTHLY_REST);
+  return '';
+}
 
 // 로그인(세션 쿠키) 사용자를 서버가 알아보도록 쿠키를 실어 보낸다. 워커가 아직 Allow-Credentials 를 주지 않으면(구버전) 응답을 못 읽으니
 // GET 만 쿠키 없이 다시 보낸다. POST 는 이미 서버에 닿아 기록됐을 수 있어 다시 보내지 않는다(중복 기록 방지).
@@ -35,8 +60,9 @@ export function createRankProvider({ base, device } = {}) {
     if (!r.ok) return null;
     const j = await r.json();
     if (!j?.ok) return null;
-    const tab = TAB[j.view] || '어제';
-    meta.set(storeId, { tabs: [['today', '오늘'], ['week', tab]], empty2: EMPTY[j.view] || EMPTY.yesterday, view: j.view });
+    const tab = (j.tab === '이번 주' || j.tab === '이달') ? j.tab : '어제';
+    const emptyKey = tab === '이번 주' ? 'weekly' : tab === '이달' ? 'monthly' : 'yesterday';
+    meta.set(storeId, { tabs: [['today', '오늘'], ['week', tab]], empty2: EMPTY[emptyKey], view: j.view, tab });
     return j;
   }
   return {
