@@ -1,8 +1,15 @@
 // 머리 위 칭호 화면 크기·획득 연출 배율. three 없음(테스트 가능).
-export const OWN_REST_W_DESKTOP = 168; // CSS px, 간판(rowWidth) 목표
-export const OWN_REST_W_MOBILE = 130;
-export const REMOTE_W_NEAR = 100;
-export const REMOTE_W_FAR = 68;
+// 칭호는 이름표(.tag, 데스크톱 11px / 모바일 10px)와 같이 화면 고정 크기(거리·앵글과 무관).
+// 간판 글자(디자인 약 13pt)를 이름표보다 살짝 크게(×1.25) 맞춘다.
+export const NAME_LABEL_FONT_DESKTOP = 11;
+export const NAME_LABEL_FONT_MOBILE = 10;
+export const TITLE_LETTER_PT = 13;
+export const TITLE_VS_NAME = 1.25;
+// 예전 폭 상수 이름은 호출부가 남아 있을 수 있어 같은 고정 배율에서 유도한다.
+export const OWN_REST_W_DESKTOP = 98 * ((NAME_LABEL_FONT_DESKTOP * TITLE_VS_NAME) / TITLE_LETTER_PT);
+export const OWN_REST_W_MOBILE = 98 * ((NAME_LABEL_FONT_MOBILE * TITLE_VS_NAME) / TITLE_LETTER_PT);
+export const REMOTE_W_NEAR = OWN_REST_W_DESKTOP;
+export const REMOTE_W_FAR = OWN_REST_W_DESKTOP;
 export const REMOTE_NEAR_D = 14;
 export const EARN_PRESENT = 2.35; // 내 획득 연출은 평소 대비 이 배율
 export const EARN_UP_MS = 280;
@@ -22,18 +29,19 @@ export function easeInOutCubic(u) {
   return x < 0.5 ? 4 * x * x * x : 1 - ((-2 * x + 2) ** 3) / 2;
 }
 
-export function ownRestScale(rowWidthPt, mobile) {
-  const target = mobile ? OWN_REST_W_MOBILE : OWN_REST_W_DESKTOP;
-  const row = Math.max(1, Number(rowWidthPt) || 98);
-  return Math.max(1, target / row);
+export function titleRestScale(mobile) {
+  const font = mobile ? NAME_LABEL_FONT_MOBILE : NAME_LABEL_FONT_DESKTOP;
+  return (font * TITLE_VS_NAME) / TITLE_LETTER_PT;
 }
 
-export function remoteScale(rowWidthPt, dist, maxDist) {
-  const row = Math.max(1, Number(rowWidthPt) || 98);
-  const far = Math.max(Number(maxDist) || 80, REMOTE_NEAR_D + 1);
-  const t = Math.max(0, Math.min(1, (Number(dist) - REMOTE_NEAR_D) / (far - REMOTE_NEAR_D)));
-  const w = REMOTE_W_NEAR + (REMOTE_W_FAR - REMOTE_W_NEAR) * t;
-  return Math.max(REMOTE_W_FAR, w) / row;
+// 이름표와 같이 고정 배율. rowWidth 는 간판 가로만 바꾸고 배율은 이름표 기준이다.
+export function ownRestScale(_rowWidthPt, mobile) {
+  return titleRestScale(mobile);
+}
+
+// 거리와 상관없이 내 칭호와 같은 고정 크기(이름표가 멀어져도 안 줄어드는 것과 같음).
+export function remoteScale(_rowWidthPt, _dist, _maxDist, mobile) {
+  return titleRestScale(mobile);
 }
 
 /** 내 획득 연출 배율(평소 대비). 움직임 줄이기면 1. */
@@ -53,7 +61,7 @@ export function earnPresentMul(tMs, durationMs, reduced) {
 }
 
 export function worldScale({ local, rowWidthPt, mobile, dist, maxDist, earning, tMs, durationMs, reduced }) {
-  const rest = local ? ownRestScale(rowWidthPt, mobile) : remoteScale(rowWidthPt, dist, maxDist);
+  const rest = titleRestScale(mobile);
   if (local && earning) return rest * earnPresentMul(tMs, durationMs, reduced);
   return rest;
 }
