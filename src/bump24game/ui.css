@@ -192,6 +192,8 @@ body.b24-inside .b24-outside-hidden { visibility: hidden !important; pointer-eve
 .b24-board .tabs button { height: 36px; border-radius: 11px; background: transparent; color: #bcd3ee; font-size: 15px; font-weight: 900; }
 .b24-board .tabs button.on { background: var(--b-yellow); color: var(--b-navy); box-shadow: 0 3px 0 #b38f00; }
 .b24-board .mine { font-size: 13px; font-weight: 800; color: #cfe3ff; } .b24-board .mine b { color: var(--b-yellow); }
+.b24-board .pay { margin: 0; font-size: 11px; font-weight: 700; color: #8fb0d6; line-height: 1.4; }
+.b24-board .pay[hidden] { display: none; }
 .b24-board .loc { align-self: flex-start; padding: 3px 10px; border-radius: 10px; background: rgba(255,255,255,.1); color: #9fb4d0; font-size: 11px; font-weight: 800; }
 .b24-board ol { margin: 4px 0; padding: 0 2px 0 0; list-style: none; display: grid; gap: 5px; align-content: start; flex: 1; min-height: 0; overflow: auto; max-height: 46vh; }
 .b24-board li { display: flex; align-items: center; gap: 10px; padding: 8px 12px 8px 8px; border-radius: 14px; background: rgba(255,255,255,.07); font-weight: 800; font-size: 15px; }

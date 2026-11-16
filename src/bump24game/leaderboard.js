@@ -7,6 +7,7 @@
 import * as THREE from 'three';
 import { drawLogo } from '../corridor/bp24.js';
 import { todayKey } from './products.js';
+import { boardUnit } from './rankClient.js';
 
 const KEY_BOARD = 'bw.bump24.localBoard';
 const FONT = '"Pretendard Variable","Pretendard","Apple SD Gothic Neo","Noto Sans KR",sans-serif';
@@ -98,6 +99,7 @@ async function load(b) {
     const meta = provider.boardMeta?.(b.storeId);
     if (meta?.tabs) b.tabs = meta.tabs;
     if (meta?.empty2) b.empty2 = meta.empty2;
+    b.meta = meta || null;
     b.data = { today: today || [], week: week || [] }; draw(b);
   } catch (e) { console.warn('[bump24 board]', e); }
 }
@@ -165,7 +167,7 @@ function tabs(c, x, y, w, h, period, labels) {
     c.fillText(label, x + tw * i + tw / 2, y + h / 2 + 1);
   });
 }
-function rowsBlock(c, x, y, w, rowH, list, period, emptyExtra) {
+function rowsBlock(c, x, y, w, rowH, list, period, emptyExtra, meta) {
   let me = ''; try { me = getMe?.() || ''; } catch { me = ''; }
   if (!list.length) {
     c.fillStyle = '#ffffff'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.font = `900 ${rowH * 0.34}px ${FONT}`;
@@ -182,7 +184,7 @@ function rowsBlock(c, x, y, w, rowH, list, period, emptyExtra) {
     medal(c, x + rowH * 0.5, yy + rowH * 0.47, rowH * 0.3, i);
     const sx = x + w - 18;
     c.textBaseline = 'middle'; c.textAlign = 'right'; c.fillStyle = i === 0 ? '#ffd400' : '#ffffff'; c.font = `900 ${rowH * 0.36}px ${FONT}`;
-    const sc = `${won(r.score)}원`; c.fillText(sc, sx, yy + rowH / 2 + 1);
+    const sc = `${won(r.score)}${boardUnit(meta, period)}`; c.fillText(sc, sx, yy + rowH / 2 + 1);
     const sw = c.measureText(sc).width;
     c.textAlign = 'left'; c.fillStyle = '#eaf3ff'; c.font = `800 ${rowH * 0.33}px ${FONT}`;
     c.fillText(fit(c, r.name, w - rowH - sw - 40), x + rowH * 0.98, yy + rowH / 2 + 1);
@@ -202,7 +204,7 @@ function panelTall(c, w, h, b, period) {
   c.fillStyle = '#ffffff'; c.font = `900 50px ${FONT}`; c.fillText('장보기 랭킹', 126, 122);
   tabs(c, 36, 150, w - 72, 56, period, b.tabs);
   c.fillStyle = '#7f9cc4'; c.font = `800 20px ${FONT}`; c.textAlign = 'center'; c.fillText(fit(c, `${b.storeName || 'BUMP24'} · 30초 장보기 최고 금액`, w - 80), w / 2, 236);
-  rowsBlock(c, 30, 254, w - 60, 86, b.data[period] || [], period, b.empty2);
+  rowsBlock(c, 30, 254, w - 60, 86, b.data[period] || [], period, b.empty2, b.meta);
   footer(c, 34, h - 72, w - 68, 40, false);
 }
 function panelWide(c, w, h, b, period) {
@@ -215,7 +217,7 @@ function panelWide(c, w, h, b, period) {
   tabs(c, 40, 216, lw - 60, 58, period);
   c.fillStyle = '#7f9cc4'; c.font = `800 21px ${FONT}`; c.fillText(fit(c, b.storeName || 'BUMP24', lw - 60), 42, 320);
   c.fillText('30초 동안 담은 최고 금액', 42, 350);
-  rowsBlock(c, lw + 6, 40, w - lw - 46, 90, b.data[period] || [], period);
+  rowsBlock(c, lw + 6, 40, w - lw - 46, 90, b.data[period] || [], period, b.empty2, b.meta);
   footer(c, 40, h - 66, w - 86, 38, true);
 }
 

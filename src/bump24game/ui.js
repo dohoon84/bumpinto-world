@@ -1,6 +1,7 @@
 // [bump24game] 매장 안 DOM UI: HUD(타이머 링·금액 롤업·무게 게이지·콤보) · 카운트다운 · 영수증 · 결과(색종이) · 가로 안내
 import './ui.css';
 import { leaderboard, PERIODS } from './leaderboard.js';
+import { boardUnit, locLabel, payoutLine } from './rankClient.js';
 import { requestGoogleSignIn, googleNotReadyText } from '../ui-v2/google.js';
 import { tr } from '../i18n.js';
 
@@ -270,20 +271,33 @@ export function createBump24UI({ onGrab, onExit, onMute, onHintTap, onIntroGo, o
           <div class="st">${esc(storeName)} · 30초 동안 담은 최고 금액</div>
           <div class="tabs">${PERIODS.map(([p, l]) => `<button data-p="${p}">${l}</button>`).join('')}</div>
           <div class="mine"></div>
+          <p class="pay" hidden></p>
           <span class="loc">${esc(leaderboard.label)}${leaderboard.provider.kind === 'local' ? ' · 서버 랭킹 준비 중' : ''}</span>
           <button class="close">닫기</button></div>
         <ol></ol></div></div>`;
       const box = el.modal.querySelector('.b24-board'), ol = box.querySelector('ol'), mine = box.querySelector('.mine');
+      const loc = box.querySelector('.loc'), pay = box.querySelector('.pay');
+      const local = leaderboard.provider.kind === 'local';
       let seq = 0;
       const show = async (p) => {
         period = p; const n = ++seq;
         for (const b of box.querySelectorAll('.tabs button')) b.classList.toggle('on', b.dataset.p === p);
         let rows = []; try { rows = await leaderboard.top({ storeId, period: p, limit: 20 }) || []; } catch { rows = []; }
         if (n !== seq || !box.isConnected) return;
-        ol.innerHTML = rows.length ? rows.map((r, i) => `<li class="${i < 3 ? `m${i + 1}` : ''}${me && r.name === me ? ' me' : ''}"><b>${i + 1}</b><span>${esc(r.name)}${me && r.name === me ? '<i>나</i>' : ''}</span><em>${won(r.score)}원</em></li>`).join('')
-          : `<li class="empty"><div class="crown">👑</div><b>첫 번째 장보기왕이 되어보세요!</b><small>${p === 'week' ? '이번 주' : '오늘'} 기록이 아직 없어요 · 문 앞에서 30초 장보기</small></li>`;
+        const meta = leaderboard.boardMeta(storeId);
+        if (meta?.tabs) for (const b of box.querySelectorAll('.tabs button')) {
+          const pair = meta.tabs.find(([k]) => k === b.dataset.p);
+          if (pair) b.textContent = pair[1];
+        }
+        const unit = boardUnit(meta, p);
+        const tabName = p === 'week' ? (meta?.tabs?.[1]?.[1] || meta?.tab || '이번 주') : '오늘';
+        ol.innerHTML = rows.length ? rows.map((r, i) => `<li class="${i < 3 ? `m${i + 1}` : ''}${me && r.name === me ? ' me' : ''}"><b>${i + 1}</b><span>${esc(r.name)}${me && r.name === me ? '<i>나</i>' : ''}</span><em>${won(r.score)}${unit}</em></li>`).join('')
+          : `<li class="empty"><div class="crown">👑</div><b>첫 번째 장보기왕이 되어보세요!</b><small>${tabName} 기록이 아직 없어요 · 문 앞에서 30초 장보기</small></li>`;
         const i = rows.findIndex((r) => me && r.name === me);
-        mine.innerHTML = i >= 0 ? `내 순위 <b>${i + 1}위</b> · ${won(rows[i].score)}원` : `${esc(me || '나')} · ${p === 'week' ? '이번 주' : '오늘'} 기록 없음 — 한 판 해보세요!`;
+        mine.innerHTML = i >= 0 ? `내 순위 <b>${i + 1}위</b> · ${won(rows[i].score)}${unit}` : `${esc(me || '나')} · ${tabName} 기록 없음 — 한 판 해보세요!`;
+        const payText = p === 'week' ? payoutLine(meta) : '';
+        if (pay) { pay.textContent = payText; pay.hidden = !payText; }
+        if (loc && !local) loc.textContent = locLabel(meta, p, leaderboard.label);
       };
       for (const b of box.querySelectorAll('.tabs button')) b.onclick = () => show(b.dataset.p);
       box.querySelector('.close').onclick = close;
