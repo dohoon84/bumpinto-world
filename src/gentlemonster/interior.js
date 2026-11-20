@@ -9,7 +9,9 @@ import { PLAN as P } from './plan.js';
 const FY = P.floorY;
 const TAU = Math.PI * 2;
 
-export function buildInterior(mats, imats, shell, ext) {
+export function buildInterior(mats, imats, shell, ext, sculpts) {
+  const SC = sculpts; // name → BufferGeometry (SDF 조각)
+  const sculptMesh = (name, key, o = {}) => { const m = new THREE.Mesh(SC[name], M[key]); m.position.set(o.x || 0, o.y || 0, o.z || 0); m.rotation.y = o.ry || 0; m.scale.setScalar(o.s || 1); m.name = 'gm-sculpt-' + name; return m; };
   const M = { ...mats, ...imats };
   const meshes = [], anims = [], aabbs = [], circles = [];
   const mk = (n) => { const B = new Builder(); B.project('floor2', 1.6).project('ply', 1.2); return B; };
@@ -37,18 +39,13 @@ export function buildInterior(mats, imats, shell, ext) {
   {
     const y0 = FY[1], B = mk(1); const yy = y0 + 0.0;
     // 잠자는 하운드
-    const hr = new Rig(); F.hound(hr);
-    place(hr, B, { x: -0.6, y: yy, z: 4.7, ry: 0.0, sx: 0.92, sy: 0.92, sz: 0.92 });
-    col(-3.3, 4.7, 3.6, 5.8, yy, yy + 2.2);
-    // 숨쉬는 가슴
-    const cB = mk(1), cr = new Rig(); F.houndChest(cr); cr.emit(cB);
-    const cg = new THREE.Group(); cg.position.set(-0.6 + 1.7 * 0.92, yy + 1.05 * 0.92, 4.7); cg.scale.setScalar(0.92); flush(cB, 'chest', cg, 1); meshes.push(cg);
-    anims.push((t) => { const k = 1 + 0.035 * Math.sin(t * 1.1); cg.scale.set(0.92 * (1 + 0.012 * Math.sin(t * 1.1)), 0.92 * k, 0.92 * k); });
-    // 웅크린 하얀 거인 둘
-    for (const [x, z, ry] of [[-7.4, 5.4, 0.7], [8.4, 2.0, -2.3]]) {
-      const g = new Rig(); F.giant(g, { pose: 'crouch', body: 0xf0eee8, joint: 0x17181b, bodyKey: 'gloss' });
-      place(g, B, { x, y: yy, z, ry, sx: 1.0, sy: 1.0, sz: 1.0 }); circ(x, z, 1.5, yy, yy + 3.6);
-    }
+    const hg = new THREE.Group(); hg.position.set(-0.9, yy, 4.7); hg.scale.setScalar(0.9); hg.name = 'gm-hound'; meshes.push(hg);
+    hg.add(sculptMesh('hound', 'velvet'), sculptMesh('houndArmor', 'alu'));
+    { const cB = mk(1); cB.tor('alu', 0.6, 0.07, { x: 3.0, y: 1.36, z: 0.03, ry: Math.PI / 2, rx: 0.52, color: 0xc9ccd1 }, 10, 40); flush(cB, 'collar', hg, 1); }
+    col(-3.7, 4.6, 3.7, 6.0, yy, yy + 2.2); circ(-4.0, 5.6, 0.5, yy, yy + 1); circ(4.3, 4.7, 0.6, yy, yy + 1);
+    anims.push((t) => { const k = Math.sin(t * 1.05); hg.scale.set(0.9, 0.9 * (1 + 0.013 * k), 0.9 * (1 + 0.01 * k)); });
+    // 웅크린 알루미늄 거인 둘
+    for (const [x, z, ry] of [[-7.4, 5.4, 0.7], [8.4, 2.0, -2.3]]) { meshes.push(sculptMesh('giantCrouch', 'alu', { x, y: yy, z, ry })); circ(x, z, 1.5, yy, yy + 3.6); }
     // 곡선 카운터 + 병 (검은 테라조)
     const cx = -9, cz = -10, R = 3.4;
     arc(B, 'floor2', cx, cz, R, 0.12 * Math.PI, 0.88 * Math.PI, 1.05, 0.95, yy, 0xffffff, { segLen: 0.7 });
@@ -89,8 +86,10 @@ export function buildInterior(mats, imats, shell, ext) {
     anims.push((t) => { for (const [g, i, tilt, ph] of rings) { g.rotation.x = tilt + t * (0.35 + i * 0.17) * (i % 2 ? -1 : 1); g.rotation.y = ph + t * (0.22 + i * 0.1); g.rotation.z = t * 0.12 * (i + 1); } });
     // 무릎 꿇은 선글라스 거인 (크롬)
     for (const [x, z, ry] of [[4.3, 7.4, -0.9], [-6.8, -4.8, 2.4]]) {
-      const g = new Rig(); F.giant(g, { pose: 'kneel', body: 0xd7dce2, joint: 0x101114, bodyKey: 'chrome', shades: true });
-      place(g, B, { x, y: y0 + 0.02, z, ry, sx: 0.95, sy: 0.95, sz: 0.95 }); circ(x, z, 1.5, y0, y0 + 3.9);
+      const gg = new THREE.Group(); gg.position.set(x, y0 + 0.02, z); gg.rotation.y = ry; gg.scale.setScalar(0.95); meshes.push(gg);
+      gg.add(sculptMesh('giantKneel', 'chromeHi'));
+      const sB = mk(2), sr = new Rig(); F.shades(sr, { s: 4.6 }); sr.emit(sB, mat({ y: 3.27, z: 0.22 + 0.44 })); flush(sB, 'shades', gg, 2);
+      circ(x, z, 1.5, y0, y0 + 3.9);
     }
     // 로봇 팔 4기 (움직임)
     const arms = [];
@@ -138,7 +137,7 @@ export function buildInterior(mats, imats, shell, ext) {
     const sg = new THREE.Group(); sg.position.set(-2.0, y0 + 0.02, 7.4); meshes.push(sg);
     { const sB = mk(3), sr = new Rig(); F.plyShell(sr, {}); sr.emit(sB); flush(sB, 'ply', sg, 3); circ(-2.0, 7.4, 1.9, y0, y0 + 3.8); anims.push((t) => { sg.rotation.y = t * 0.06; }); }
     // 구겨진 크롬 마네킹
-    for (let i = 0; i < 5; i++) { const x = 7.4 + (i % 3) * 1.1 - 0.8, z = -5.2 + Math.floor(i / 3) * 1.6 + (i % 2) * 0.5; const r = new Rig(); F.mannequin(r, i + 3, { arm: i * 0.3 }); place(r, B, { x, y: y0 + 0.02, z, ry: i * 1.3 - 0.4 }); circ(x, z, 0.45, y0, y0 + 2.0); }
+    for (let i = 0; i < 5; i++) { const x = 7.4 + (i % 3) * 1.1 - 0.8, z = -5.2 + Math.floor(i / 3) * 1.6 + (i % 2) * 0.5; meshes.push(sculptMesh(i % 2 ? 'mannequinB' : 'mannequinA', 'chromeHi', { x, y: y0 + 0.02, z, ry: i * 1.3 - 0.4, s: 1 + (i % 3) * 0.04 })); circ(x, z, 0.45, y0, y0 + 2.0); }
     // 하얀 보행 로봇
     { const r = new Rig(); F.walkerBot(r, {}); place(r, B, { x: -9.5, y: y0 + 0.02, z: 8.6, ry: 0.5, sx: 0.8, sy: 0.8, sz: 0.8 }); circ(-9.5, 8.6, 1.5, y0, y0 + 3.6); }
     // 아쿠아 받침대 + 병
@@ -189,11 +188,33 @@ export function buildInterior(mats, imats, shell, ext) {
   }
 
   // ================= 조명 슬롯 (층마다 5개 포인트 라이트를 옮겨 쓴다) =================
-  const lightSlots = {
+  const lightSlots = { // [x, (미사용), z, 색, 세기] — preview 가 천장에서 아래로 스포트라이트를 쏜다
     1: [[0, FY[1] + 3.3, 4.7, 0xfff1dc, 35], [-9, FY[1] + 3.0, -7, 0xffe2b4, 45], [8.5, FY[1] + 3.2, 5, 0xfff1dc, 35], [-7, FY[1] + 3.2, 5.5, 0xfff1dc, 30], [10, FY[1] + 3.2, -1, 0xfff1dc, 35]],
     2: [[-0.5, FY[2] + 3.0, 1.2, 0xbfeaff, 90], [4.3, FY[2] + 3.2, 7.4, 0xffffff, 55], [-6.8, FY[2] + 3.2, -4.8, 0xffffff, 55], [0, FY[2] + 3.0, 11.5, 0xffe9d0, 45], [-8.5, FY[2] + 3.0, 9.6, 0xffd2b8, 45]],
     3: [[-2, FY[3] + 3.2, 7.4, 0xfff0d8, 70], [8, FY[3] + 3.2, -4.6, 0xffffff, 55], [-9.5, FY[3] + 3.2, 8.6, 0xffffff, 55], [0, FY[3] + 3.2, -3, 0xbff5ef, 45], [-9, FY[3] + 3.0, 12, 0xfff0d8, 40]],
     5: [[0.5, FY[5] + 2.6, 3.0, 0xffd9a0, 70], [-9, FY[5] + 2.8, 0.5, 0xffe0b0, 45], [-2, FY[5] + 2.8, 9.5, 0xffe0b0, 45], [4.5, FY[5] + 2.8, 5, 0xffe0b0, 45], [0, FY[5] + 2.8, -9, 0xffe0b0, 40]],
   };
+  // ================= 바닥 빛 웅덩이 + 벽 스캘럽 (한 장으로 합침 → 1 draw) =================
+  {
+    const PB = new Builder(); const pools = [];
+    for (const fl of [1, 2, 3, 5]) for (const s of lightSlots[fl]) pools.push([s[0], FY[fl], s[2], 2.6, s[3], 0.9]);
+    const extra = {
+      1: [[-9, -7, 2.2], [-9, -10.5, 1.8], [8.5, 7.8, 2.4], [-1, -4.5, 2.0], [6, -8, 1.8], [-12, 1, 1.6]],
+      2: [[-8.5, 12, 1.6], [-4, 12.4, 1.6], [1, 12.4, 1.6], [6, 12, 1.6], [-7.5, -4.6, 1.8], [-3.5, -5.6, 1.8], [0.5, -4.6, 1.8], [4.5, -5.6, 1.8]],
+      3: [[-1, -3, 2.4], [-9, 12, 2.2], [-7.5, -1.5, 2.0], [6, 5, 2.0]],
+      5: [[-9, 8, 1.8], [-2, 9.5, 1.8], [4.5, 5, 1.8], [-3, -6.5, 1.8], [6.5, -6, 1.8], [-9, 0.5, 1.8], [-8.6, -11.6, 2.4]],
+    };
+    const tint = { 1: 0xfff0d8, 2: 0xdde9ff, 3: 0xfff4e4, 5: 0xffd9a0 };
+    for (const fl of [1, 2, 3, 5]) for (const [x, z, r] of extra[fl]) pools.push([x, FY[fl], z, r, tint[fl], 0.55]);
+    const c3 = new THREE.Color();
+    for (const [x, y, z, r, hex, k] of pools) { c3.set(hex).multiplyScalar(k); const g = new THREE.PlaneGeometry(r * 2, r * 2); g.rotateX(-Math.PI / 2); PB.add('pool', g, { x, y: y + 0.02, z, color: c3.getHex() }); g.dispose(); }
+    // 벽 스캘럽: 안쪽 피부를 따라 2.4m 간격 (2·3·5층), 1층은 유리라 생략
+    const ring = shell.ring;
+    for (const fl of [2, 3, 5]) for (let s0 = 0; s0 < ring.perim; s0 += 2.4) {
+      const q = ringAt(ring, s0, P.skin - 0.03), g = new THREE.PlaneGeometry(1.4, 2.6); g.rotateY(Math.atan2(-q[2], -q[3]));
+      c3.set(tint[fl]).multiplyScalar(fl === 2 ? 0.35 : 0.5); PB.add('scallop', g, { x: q[0], y: FY[fl] + (fl === 5 ? 2.15 : 2.5), z: q[1], color: c3.getHex() }); g.dispose();
+    }
+    for (const m of PB.build(M)) { m.renderOrder = 2; meshes.push(m); }
+  }
   return { meshes, colliders: aabbs, circles, anims, labels, lightSlots, update(t) { for (const f of anims) f(t); } };
 }

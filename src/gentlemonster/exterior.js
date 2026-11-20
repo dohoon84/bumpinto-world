@@ -81,7 +81,7 @@ export function buildExterior(mats) {
   const sE = ring.len[ring.N / 4]; // 남쪽 중앙(정문)
   const glassOff = (s) => { // 유리선 안쪽 offset(음수) — 정문 앞에서 깊이 파고든다
     const d = Math.abs(((s - sE + ring.perim / 2) % ring.perim + ring.perim) % ring.perim - ring.perim / 2);
-    const w = 1 - smooth(5.5, 8.0, d); // 1 = 포치 안
+    const w = 1 - smooth(6.0, 10.5, d); // 1 = 포치 안 (넓고 완만하게)
     return P.GLASS_OFF + (P.PORCH_OFF - P.GLASS_OFF) * w;
   };
   const SEG = 160, y0g = 0.1, y1g = P.t0 - 0.05;
@@ -105,9 +105,14 @@ export function buildExterior(mats) {
   // 멀리언(프레임) 가로 2줄 + 세로 약 2.3m 간격
   const frameStrip = (yy, hh) => { const gp = [], gi = []; for (let j = 0; j <= SEG; j++) { const s = (j / SEG) * ring.perim, q = ringAt(ring, s, glassOff(s) + 0.02); gp.push(q[0], yy, q[1], q[0], yy + hh, q[1]); } for (let j = 0; j < SEG; j++) { const s = (j / SEG) * ring.perim, d = Math.abs(((s - sE + ring.perim / 2) % ring.perim + ring.perim) % ring.perim - ring.perim / 2); if (d < door && Math.abs(P.PORCH_OFF - glassOff(s)) < 0.05) continue; const a = j * 2; gi.push(a, a + 2, a + 1, a + 1, a + 2, a + 3); } const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(gp, 3)); g.setIndex(gi); g.computeVertexNormals(); return g; };
   B.add('frame', frameStrip(y1g - 0.18, 0.18)); B.add('frame', frameStrip(y0g, 0.12)); B.add('frame', frameStrip(2.6, 0.08));
-  for (let s = 0; s < ring.perim; s += 2.4) { const q = ringAt(ring, s, glassOff(s) + 0.02); const dd = Math.abs(((s - sE + ring.perim / 2) % ring.perim + ring.perim) % ring.perim - ring.perim / 2); if (dd < door + 0.4 && Math.abs(P.PORCH_OFF - glassOff(s)) < 0.05) continue; B.box('frame', 0.07, y1g - y0g, 0.07, { x: q[0], y: (y0g + y1g) / 2, z: q[1] }); }
+  for (let s = 0; s < ring.perim; s += 3.0) { const q = ringAt(ring, s, glassOff(s) + 0.02); const dd = Math.abs(((s - sE + ring.perim / 2) % ring.perim + ring.perim) % ring.perim - ring.perim / 2); if (dd < 11) continue; B.box('frame', 0.06, y1g - y0g, 0.07, { x: q[0], y: (y0g + y1g) / 2, z: q[1] }); }
   // 정문 문틀: 포치 안쪽 벽 가운데 4m 개구 — 문 양옆 프레임 + 위 가로 보
-  { const q = ringAt(ring, sE, P.PORCH_OFF); B.box('frame', 0.14, y1g - y0g, 0.14, { x: q[0] - door, y: (y0g + y1g) / 2, z: q[1] }); B.box('frame', 0.14, y1g - y0g, 0.14, { x: q[0] + door, y: (y0g + y1g) / 2, z: q[1] }); B.box('frame', door * 2, 0.35, 0.16, { x: q[0], y: 3.7, z: q[1] }); info.door = { x: q[0], z: q[1] }; }
+  { const q = ringAt(ring, sE, P.PORCH_OFF); info.door = { x: q[0], z: q[1] };
+    // 스테인리스 문틀(가늘게) + 문 위 띠 사인판 + 캐노피 판 + 캐노피 다운라이트
+    for (const sg of [-1, 1]) B.box('metal', 0.06, 2.95, 0.1, { x: q[0] + sg * door, y: 1.55, z: q[1], color: 0xb9bcc0 });
+    B.box('metal', door * 2 + 0.06, 0.08, 0.1, { x: q[0], y: 3.03, z: q[1], color: 0xb9bcc0 });
+    B.box('metal', 9.6, 0.12, 3.2, { x: q[0], y: 3.32, z: q[1] + 1.5, color: 0xa9adb2 });
+    for (let i = -3; i <= 3; i++) for (const dz of [0.8, 2.3]) B.cyl('lamp', 0.11, 0.11, 0.02, { x: q[0] + i * 1.3, y: 3.25, z: q[1] + dz, color: 0xfff1d6 }, 14); }
   // 기둥 (원형 노출 콘크리트)
   { const r = mulberry(7); const n = Math.round(ring.perim / 6.2); info.columns = [];
     for (let i = 0; i < n; i++) { const s = (i + 0.5) * ring.perim / n; const dd = Math.abs(((s - sE + ring.perim / 2) % ring.perim + ring.perim) % ring.perim - ring.perim / 2); if (dd < 7) continue; const q = ringAt(ring, s, -1.35 + (r() - 0.5) * 0.1); B.cyl('conc', 0.42, 0.5, P.t0 + 0.05, { x: q[0], y: (P.t0 + 0.05) / 2, z: q[1] }, 14); info.columns.push([q[0], q[1], 0.5]); }
@@ -134,6 +139,14 @@ export function buildExterior(mats) {
   // 코어 (동쪽 세로 홈) + 서쪽 작은 코어
   B.box('fluted', 3.2, P.midH + 0.5, 17, { x: H + 1.2, y: (yMid0 + yMid1) / 2, z: -2.5 });
   B.box('fluted', 1.6, P.midH + 0.5, 6, { x: -H - 0.6, y: (yMid0 + yMid1) / 2, z: 5.5 });
+  { // 코어 세로 홈: 반원 리브를 촘촘히 (동쪽 코어 바깥면 + 양 끝면, 서쪽 코어 바깥면)
+    const hy = P.midH + 0.5, cy = (yMid0 + yMid1) / 2, rib = new THREE.CylinderGeometry(0.17, 0.17, hy, 8, 1, true, 0, Math.PI);
+    const addRib = (x, z, ry) => B.add('fluted', rib, { x, y: cy, z, ry, color: 0xcfcac0 });
+    for (let i = 0; i < 44; i++) addRib(H + 2.8, -10.8 + i * 0.38, Math.PI / 2 * 0 + 0);
+    for (let i = 0; i < 8; i++) { addRib(H - 0.2 + 0.4 + i * 0.38, 6.0, -Math.PI / 2); addRib(H - 0.2 + 0.4 + i * 0.38, -11.0, Math.PI / 2); }
+    for (let i = 0; i < 15; i++) addRib(-H - 1.4, 2.7 + i * 0.38, Math.PI);
+    rib.dispose();
+  }
   // 층 슬래브 가장자리(보 연결부)
   for (let f = 0; f <= 6; f++) { const y = yMid0 + f * 4.1; B.box('beam', H * 2 + 0.2, 0.5, 0.6, { x: 0, y, z: H }); B.box('beam', H * 2 + 0.2, 0.5, 0.6, { x: 0, y, z: -H }); B.box('beam', 0.6, 0.5, H * 2 + 0.2, { x: H, y, z: 0 }); B.box('beam', 0.6, 0.5, H * 2 + 0.2, { x: -H, y, z: 0 }); }
 
@@ -172,16 +185,16 @@ export function buildExterior(mats) {
     for (const g of info.midFaces) { const m = new THREE.Mesh(g, mats.curtain); m.name = 'gm-curtain'; meshes.push(m); } }
   // 내민보 InstancedMesh
   {
-    const sh = new THREE.Shape(); sh.moveTo(-0.27, -0.2); sh.lineTo(0.27, -0.2); sh.lineTo(0.16, 0.2); sh.lineTo(-0.16, 0.2); sh.closePath();
-    const bg = new THREE.ExtrudeGeometry(sh, { depth: 1.75, bevelEnabled: false });
-    const cols = 16, rows = 24, count = cols * rows * 4;
+    const sh = new THREE.Shape(); sh.moveTo(-0.36, -0.26); sh.lineTo(0.36, -0.26); sh.lineTo(0.21, 0.26); sh.lineTo(-0.21, 0.26); sh.closePath();
+    const bg = new THREE.ExtrudeGeometry(sh, { depth: 1.7, bevelEnabled: false });
+    const cols = 16, rows = 12, count = cols * rows * 4;
     const im = new THREE.InstancedMesh(bg, mats.beamI, count); im.name = 'gm-beams';
     const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), pp = new THREE.Vector3(), one = new THREE.Vector3(1, 1, 1), up = new THREE.Vector3(0, 1, 0);
     let n = 0;
     for (const [fx, fz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
       q.setFromAxisAngle(up, Math.atan2(fx, fz));
       for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
-        const u = -H + (c + 0.5 + (r % 2 ? 0.5 : 0)) * (2 * H / cols), y = yMid0 + 0.55 + r * (P.midH / rows);
+        const u = -H + (c + 0.5 + (r % 2 ? 0.5 : 0)) * (2 * H / cols), y = yMid0 + 0.6 + r * (P.midH / rows) + (r % 2 ? 0.25 : 0);
         if (u > H - 0.3) continue;
         if (fx !== 0) pp.set(fx * (H - 0.1), y, u); else pp.set(u, y, fz * (H - 0.1));
         m4.compose(pp, q, one); im.setMatrixAt(n++, m4);

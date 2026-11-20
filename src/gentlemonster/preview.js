@@ -9,6 +9,7 @@ import { buildSite } from './site.js';
 import { buildShell, pointInPoly, LEVEL_NAME } from './shell.js';
 import { createWorldPhysics, createWalker } from './walker.js';
 import { buildInterior } from './interior.js';
+import { loadSculpts } from './sculptLoader.js';
 import { createAvatar, animateAvatar } from '../entities/avatar.js';
 import { skyTex } from './textures.js';
 import { PLAN as P } from './plan.js';
@@ -42,8 +43,14 @@ export async function startPreview() {
   const envIn = pm.fromScene(new RoomEnvironment(), 0.04).texture;
   pm.dispose();
   const uplights = new THREE.Group(); uplights.name = 'gm-uplights';
-  for (const [x, z] of [[14, 14], [-14, 14], [14, -14], [-14, -14]]) { const sp = new THREE.SpotLight(0xffe2bd, 1500, 80, 0.5, 0.85, 1.6); sp.position.set(x * 1.15, 23.8, z * 1.15); sp.target.position.set(x * 1.0, 52, z * 1.0); uplights.add(sp, sp.target); }
-  for (const [x, z] of [[-9, 30], [9, 30]]) { const sp = new THREE.SpotLight(0xffe8c8, 500, 60, 0.7, 0.8, 1.6); sp.position.set(x, 1, z); sp.target.position.set(x * 0.3, 14, 0); uplights.add(sp, sp.target); }
+  const upl = (pos, tgt, col, I, ang = 0.5) => { const sp = new THREE.SpotLight(col, I, 90, ang, 0.85, 1.6); sp.position.set(...pos); sp.target.position.set(...tgt); sp.userData.I = I; uplights.add(sp, sp.target); };
+  // 중층 지붕 모서리 → 윙 아랫면 (따뜻한 색, 세기 다르게)
+  upl([16, 23.8, 16], [14, 52, 14], 0xffd9a8, 1500); upl([-16, 23.8, 16], [-14, 52, 14], 0xffe6c4, 1100);
+  upl([16, 23.8, -16], [14, 52, -14], 0xffe6c4, 900); upl([-16, 23.8, -16], [-14, 52, -14], 0xffd9a8, 1250);
+  // 정원 바닥 → 하층 곡면 띠를 스치듯 (차가운 흰색)
+  upl([-11, 0.3, 21], [-9, 14, 15], 0xe8eeff, 520, 0.42); upl([11, 0.3, 21], [9, 14, 15], 0xe8eeff, 520, 0.42);
+  // 꼭대기 유리 박스에서 위로 은은하게
+  upl([0, 61, 0], [0, 90, 0], 0xfff4e0, 300, 0.9);
   scene.add(uplights);
   const hemi = new THREE.HemisphereLight(0xcfe0f5, 0x8a8478, 0.4); scene.add(hemi);
   const dir = new THREE.DirectionalLight(0xfff0d8, 2.0); dir.position.set(-60, 90, 70); scene.add(dir);
@@ -54,17 +61,26 @@ export async function startPreview() {
   const world = new THREE.Group(); world.name = 'gm-world'; scene.add(world);
   for (const m of [...site.meshes, ...ext.meshes]) world.add(m);
   const interior = new THREE.Group(); interior.name = 'gm-interior'; for (const m of shell.meshes) interior.add(m); world.add(interior);
-  const inner = buildInterior(mats, imats, shell, ext);
-  for (const m of inner.meshes) interior.add(m);
+  // 실내 오브제는 늦게: 조각(SDF)은 워커에서 만들고, 플레이어가 가까워지면 실내를 채운다
+  const sculptsP = loadSculpts({ mobile });
+  let inner = { meshes: [], colliders: [], circles: [], lightSlots: {}, update() {} }, innerP = null;
+  const ensureInterior = () => innerP || (innerP = sculptsP.then((sc) => {
+    inner = buildInterior(mats, imats, shell, ext, sc);
+    for (const m of inner.meshes) interior.add(m);
+    physics.addColliders(inner.colliders, inner.circles);
+    lightFloor(state.floor);
+    return inner;
+  }));
   const extGroup = [...ext.meshes];
   // 층 조명: 포인트 라이트 5개를 현재 층으로 옮겨 쓴다(셰이더 재컴파일 없게 개수 고정)
-  const pls = []; for (let i = 0; i < 5; i++) { const l = new THREE.PointLight(0xffffff, 0, 14, 1.6); l.name = 'gm-pl' + i; scene.add(l); pls.push(l); }
-  const lightFloor = (fl) => { const slots = inner.lightSlots[fl]; pls.forEach((l, i) => { const s = slots?.[i]; if (!s) { l.intensity = 0; return; } l.position.set(s[0], s[1], s[2]); l.color.set(s[3]); l.intensity = s[4]; }); };
+  const pls = []; for (let i = 0; i < 5; i++) { const l = new THREE.SpotLight(0xffffff, 0, 18, 0.62, 0.65, 1.4); l.name = 'gm-spot' + i; scene.add(l, l.target); pls.push(l); }
+  const CEIL = { 1: P.t0 - 0.1, 2: P.floorY[3] - P.SLAB - 0.1, 3: P.floorY[4] - P.SLAB - 0.1, 5: 22.5 };
+  const lightFloor = (fl) => { const slots = inner.lightSlots[fl]; pls.forEach((l, i) => { const s = slots?.[i]; if (!s) { l.intensity = 0; return; } l.position.set(s[0] + 0.6, CEIL[fl], s[2] + 0.8); l.target.position.set(s[0], P.floorY[fl] + 0.6, s[2]); l.target.updateMatrixWorld(); l.color.set(s[3]); l.intensity = s[4] * 2.4; }); };
 
   // ---- 물리 ----
   const segs = ext.colliders; // 1층 유리선
   const circles = [...site.circles, ...ext.columns.map(([x, z, r]) => ({ x, z, r, y0: 0, y1: P.t0 }))];
-  const physics = createWorldPhysics({ regions: shell.regions, colliders: [...shell.colliders, ...site.colliders, ...inner.colliders], circles: [...circles, ...inner.circles], segments: segs });
+  const physics = createWorldPhysics({ regions: shell.regions, colliders: [...shell.colliders, ...site.colliders], circles, segments: segs });
   const avatar = createAvatar({ color: '#e8e4da', pants: '#2b2f36', hair: 'short', hairColor: '#1a1a1a' });
   avatar.name = 'gm-player'; world.add(avatar);
   const FY = P.floorY;
@@ -87,10 +103,10 @@ export async function startPreview() {
     const inside = state.inside;
     renderer.toneMappingExposure = inside ? 0.85 : (night ? 0.95 : 0.82);
     scene.environment = inside ? envIn : (night ? envNight : envDay);
-    scene.environmentIntensity = inside ? (state.floor === 5 || state.floor === 2 ? 0.55 : 0.75) : (night ? 0.7 : 0.6);
+    scene.environmentIntensity = inside ? ({ 1: 0.5, 2: 0.42, 3: 0.48, 5: 0.38 }[state.floor] ?? 0.5) : (night ? 0.7 : 0.6);
     sky.material.map = night ? skyNight : skyDay; sky.material.needsUpdate = true;
     scene.fog.color.set(night ? 0x1c2433 : 0xc9d6e2);
-    hemi.color.set(night ? 0x4b5c88 : 0xcfe0f5); hemi.groundColor.set(night ? 0x1b1b22 : 0x8a8478); hemi.intensity = inside ? 0.18 : (night ? 1.1 : 0.4); uplights.visible = night && !inside;
+    hemi.color.set(night ? 0x4b5c88 : 0xcfe0f5); hemi.groundColor.set(night ? 0x1b1b22 : 0x8a8478); hemi.intensity = inside ? 0.08 : (night ? 1.1 : 0.4); for (const o of uplights.children) if (o.isSpotLight) o.intensity = night && !inside ? o.userData.I : 0;
     dir.color.set(night ? 0x8fa2d8 : 0xfff0d8); dir.intensity = inside ? 0 : (night ? 0.35 : 2.0);
     setNight(mats, night);
   }
@@ -140,6 +156,7 @@ export async function startPreview() {
   function frame() {
     const dt = Math.min(0.05, clock.getDelta()); t += dt;
     site.update(t); inner.update(t);
+    if (!innerP && Math.hypot(walker.p.x, walker.p.z) < 70) ensureInterior();
     walker.update(dt); animateAvatar(avatar, walker.st.speed, dt);
     const p = walker.p;
     const inFoot = pointInPoly(shell.levelsInfo[2].poly, p.x, p.z) || pointInPoly(shell.levelsInfo[1].poly, p.x, p.z);
@@ -153,7 +170,8 @@ export async function startPreview() {
   applyLook();
   renderer.setAnimationLoop(frame);
   window.__gm = {
-    THREE, scene, camera, renderer, mats, imats, ext, site, shell, interior, physics, walker, state, ready: true,
+    THREE, scene, camera, renderer, mats, imats, ext, site, shell, interior, physics, walker, state, ready: false, ensureInterior, get inner() { return inner; },
+    mem: () => { let geo = 0; const seen = new Set(); scene.traverse((o) => { const g = o.geometry; if (!g || seen.has(g)) return; seen.add(g); for (const k in g.attributes) geo += g.attributes[k].array.byteLength; if (g.index) geo += g.index.array.byteLength; if (o.isInstancedMesh) geo += o.instanceMatrix.array.byteLength; }); return { geoMB: +(geo / 1048576).toFixed(1), jsHeapMB: performance.memory ? +(performance.memory.usedJSHeapSize / 1048576).toFixed(1) : null }; },
     draws: () => renderer.info.render.calls, tris: () => renderer.info.render.triangles,
     hideExterior: (h) => { for (const m of extGroup) m.visible = !h; },
     setNight: setNightMode, avatar,
@@ -161,4 +179,5 @@ export async function startPreview() {
     freeCam: (arr) => { free.on = !!arr; free.v = arr; },
     hud: (on) => { hud.style.display = on ? '' : 'none'; hint.style.display = on ? '' : 'none'; tgl.style.display = on ? '' : 'none'; },
   };
+  ensureInterior().then(() => { window.__gm.ready = true; });
 }

@@ -15,7 +15,7 @@ export function createMaterials({ maxAniso = 4 } = {}) {
     roofTop: std({ map: T.gravelTex(), roughness: 1 }),
     curtain: new THREE.MeshStandardMaterial({ map: T.curtainTex(), emissiveMap: T.curtainTex({ night: true }), emissive: 0xffffff, emissiveIntensity: 0, metalness: 0.5, roughness: 0.2, envMapIntensity: 1.0, color: 0xdde6ee }),
     slit: std({ side: THREE.DoubleSide, color: 0x1a232e, metalness: 0.85, roughness: 0.08, emissive: 0xffc27a, emissiveIntensity: 0, envMapIntensity: 1.2 }),
-    topGlass: std({ side: THREE.DoubleSide, color: 0x17222d, metalness: 0.85, roughness: 0.07, emissive: 0xffd2a0, emissiveIntensity: 0, envMapIntensity: 1.2 }),
+    topGlass: std({ side: THREE.DoubleSide, color: 0x6f8496, metalness: 0.6, roughness: 0.08, emissive: 0xfff1dc, emissiveIntensity: 0.12, envMapIntensity: 1.3 }),
     glass: new THREE.MeshStandardMaterial({ color: 0x2b3a46, metalness: 0.7, roughness: 0.04, transparent: true, opacity: 0.2, depthWrite: false, envMapIntensity: 1.3 }),
     frame: std({ color: 0x1b1c1f, metalness: 0.7, roughness: 0.4 }),
     gravel: std({ map: T.gravelTex(), roughness: 1 }),
@@ -45,6 +45,6 @@ export function setNight(m, night) {
   m.curtain.emissiveIntensity = night ? 0.8 : 0;
   m.curtain.map.needsUpdate = false;
   m.slit.emissiveIntensity = night ? 0.9 : 0;
-  m.topGlass.emissiveIntensity = night ? 0.5 : 0;
+  m.topGlass.emissiveIntensity = night ? 0.6 : 0.12; m.topGlass.color.set(night ? 0x2a3540 : 0x6f8496);
   m.glass.opacity = night ? 0.12 : 0.2;
 }

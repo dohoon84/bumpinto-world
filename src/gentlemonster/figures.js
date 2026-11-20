@@ -127,20 +127,32 @@ export function pod(r, { h = 1.3, w = 0.45, color = 0xe8dcc0, glow = false, seed
 
 /** 합판 껍질 조각 — 자작 합판 띠 하나가 알 모양 둘레를 나선으로 감으며 아래로 벗겨져 나온다. 높이 ~3.8m */
 export function plyShell(r, { R = 1.35, turns = 3.4, key = 'ply' } = {}) {
-  const N = 260, M = 4, pos = [], idx = [];
-  const at = (t, v) => { // t 0..1 나선, v -1..1 띠 폭
+  const N = 300, M = 4, T = 0.035, cy = R * 1.45;
+  const at = (t, v) => {
     const th = 0.16 + t * 2.55 + v * 0.17, ph = t * turns * Math.PI * 2;
-    const peel = Math.max(0, t - 0.72) / 0.28; // 아래 끝은 바깥으로 벗겨짐
-    const rr = R * (1 + 0.55 * peel * peel) + v * 0.02;
-    const y = Math.cos(th) * R * 1.32 * (1 - 0.35 * peel) - peel * peel * 0.5;
-    return [Math.sin(th) * rr * Math.cos(ph), R * 1.45 + y, Math.sin(th) * rr * Math.sin(ph) * 0.92];
+    const peel = Math.max(0, t - 0.7) / 0.3;
+    const rr = R * (1 + 0.6 * peel * peel);
+    const y = Math.cos(th) * R * 1.32 * (1 - 0.35 * peel) - peel * peel * 0.55;
+    return [Math.sin(th) * rr * Math.cos(ph), cy + y, Math.sin(th) * rr * Math.sin(ph) * 0.92];
   };
-  for (let i = 0; i <= N; i++) for (let j = 0; j <= M; j++) pos.push(...at(i / N, j / M * 2 - 1));
-  for (let i = 0; i < N; i++) for (let j = 0; j < M; j++) { const a = i * (M + 1) + j, b = a + M + 1; idx.push(a, b, a + 1, a + 1, b, b + 1); }
-  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setIndex(idx); g.computeVertexNormals();
-  r.add(key, g, { color: 0xe2c9a0 });
-  // 안쪽 알 (어두운 호두색) + 받침
-  r.ell('ply', R * 0.9, R * 1.18, R * 0.82, { y: R * 1.45, color: 0x8a6a45 });
+  const P = []; for (let i = 0; i <= N; i++) { const row = []; for (let j = 0; j <= M; j++) row.push(at(i / N, j / M * 2 - 1)); P.push(row); }
+  const nrm = (i, j) => { const a = P[Math.min(N, i + 1)][j], b = P[Math.max(0, i - 1)][j], c = P[i][Math.min(M, j + 1)], d = P[i][Math.max(0, j - 1)]; const u = [a[0] - b[0], a[1] - b[1], a[2] - b[2]], v = [c[0] - d[0], c[1] - d[1], c[2] - d[2]]; const n = [u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]]; const l = Math.hypot(...n) || 1; const p = P[i][j]; const out = (p[0] * n[0] + (p[1] - cy) * n[1] + p[2] * n[2]) > 0 ? 1 : -1; return n.map((x) => x / l * out); };
+  const off = (i, j, s) => { const n = nrm(i, j), p = P[i][j]; return [p[0] + n[0] * T * s, p[1] + n[1] * T * s, p[2] + n[2] * T * s]; };
+  const pos = [], col = []; const c3 = new THREE.Color();
+  const tri = (a, b, c, hex) => { pos.push(...a, ...b, ...c); c3.set(hex); for (let k = 0; k < 3; k++) col.push(c3.r, c3.g, c3.b); };
+  const quad = (a, b, c, d, hex) => { tri(a, b, c, hex); tri(a, c, d, hex); };
+  for (let i = 0; i < N; i++) for (let j = 0; j < M; j++) {
+    quad(off(i, j, 1), off(i + 1, j, 1), off(i + 1, j + 1, 1), off(i, j + 1, 1), 0xe6cfa6);       // 바깥 면 (밝은 자작)
+    quad(off(i, j, -1), off(i, j + 1, -1), off(i + 1, j + 1, -1), off(i + 1, j, -1), 0xc9a878);   // 안쪽 면
+  }
+  const L = 5; // 가장자리 적층(합판 켜)
+  for (const j of [0, M]) for (let i = 0; i < N; i++) for (let l = 0; l < L; l++) {
+    const s0 = -1 + 2 * l / L, s1 = -1 + 2 * (l + 1) / L, hex = l % 2 ? 0x8a6238 : 0xf0dcb4;
+    quad(off(i, j, s0), off(i + 1, j, s0), off(i + 1, j, s1), off(i, j, s1), hex);
+  }
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3)); g.computeVertexNormals();
+  r.add(key, g);
+  r.ell('ply', R * 0.9, R * 1.18, R * 0.82, { y: cy, color: 0x6e4f30 });
   r.ell('matte', 0.5, 0.05, 0.5, { y: 0.03, color: 0x1a1a1a });
   r.cyl('matte', 0.12, 0.6, { y: 0.3, color: 0x1a1a1a, lo: true });
 }

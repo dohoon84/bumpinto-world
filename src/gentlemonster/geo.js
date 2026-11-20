@@ -36,10 +36,13 @@ export class Builder {
     keep.setAttribute('normal', g.attributes.normal);
     const us = this.uvScale.get(key);
     if (us) { projectUV(keep, us); } else keep.setAttribute('uv', g.attributes.uv || new THREE.BufferAttribute(new Float32Array(g.attributes.position.count * 2), 2));
-    if (o.color != null) _c.set(o.color); else _c.set(0xffffff);
-    const cnt = keep.attributes.position.count, col = new Float32Array(cnt * 3);
-    for (let i = 0; i < cnt; i++) { col[i * 3] = _c.r; col[i * 3 + 1] = _c.g; col[i * 3 + 2] = _c.b; }
-    keep.setAttribute('color', new THREE.BufferAttribute(col, 3));
+    const cnt = keep.attributes.position.count;
+    if (o.color == null && g.attributes.color) keep.setAttribute('color', g.attributes.color);
+    else {
+      _c.set(o.color ?? 0xffffff); const col = new Float32Array(cnt * 3);
+      for (let i = 0; i < cnt; i++) { col[i * 3] = _c.r; col[i * 3 + 1] = _c.g; col[i * 3 + 2] = _c.b; }
+      keep.setAttribute('color', new THREE.BufferAttribute(col, 3));
+    }
     g.dispose();
     let arr = this.parts.get(key); if (!arr) this.parts.set(key, arr = []);
     arr.push(keep); this.tris += cnt / 3;

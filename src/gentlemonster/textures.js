@@ -195,3 +195,18 @@ export function waffleMaskTex() {
   for (let j = 0; j < 2; j++) for (let i = 0; i < 2; i++) { if (i === 1 && j === 0) continue; const cx = i * 256 + 128, cy = j * 256 + 128; g.fillStyle = 'rgb(140,120,90)'; g.beginPath(); g.arc(cx, cy, 30, 0, 6.3); g.fill(); g.fillStyle = '#fff'; g.beginPath(); g.arc(cx, cy, 15, 0, 6.3); g.fill(); }
   return tex(c);
 }
+
+/** 바닥 빛 웅덩이 (가운데 밝고 가장자리 부드럽게, 살짝 링) */
+export function poolTex() {
+  const [c, g] = cv(256); const gr = g.createRadialGradient(128, 128, 0, 128, 128, 128);
+  gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(0.35, 'rgba(255,255,255,0.75)'); gr.addColorStop(0.62, 'rgba(255,255,255,0.32)'); gr.addColorStop(0.8, 'rgba(255,255,255,0.12)'); gr.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = gr; g.fillRect(0, 0, 256, 256); return tex(c, { rep: false });
+}
+/** 벽 스캘럽 (다운라이트가 벽에 만드는 포물선 빛) */
+export function scallopTex() {
+  const [c, g] = cv(128, 256); const gr = g.createRadialGradient(64, 40, 4, 64, 120, 140);
+  gr.addColorStop(0, 'rgba(255,255,255,0.95)'); gr.addColorStop(0.45, 'rgba(255,255,255,0.35)'); gr.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = gr; g.fillRect(0, 0, 128, 256);
+  const fade = g.createLinearGradient(0, 0, 0, 40); fade.addColorStop(0, 'rgba(0,0,0,1)'); fade.addColorStop(1, 'rgba(0,0,0,0)'); g.globalCompositeOperation = 'destination-out'; g.fillStyle = fade; g.fillRect(0, 0, 128, 40);
+  return tex(c, { rep: false });
+}

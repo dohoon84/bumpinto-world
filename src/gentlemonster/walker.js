@@ -7,6 +7,7 @@ const STEP_UP = 0.46, DROP = 1.1;
 
 export function createWorldPhysics({ regions, colliders, circles = [], segments = [], bounds = 118 }) {
   const aabbs = colliders.filter((c) => c.t === 'a');
+  circles = [...circles];
   /** (x,z) 에서 cur 높이 근처에 선 수 있는 가장 높은 면 → y 또는 null */
   function support(x, z, cur) {
     let best = null;
@@ -56,7 +57,8 @@ export function createWorldPhysics({ regions, colliders, circles = [], segments 
     for (const c of circles) { if (y < c.y0 || y > c.y1) continue; if ((x - c.x) ** 2 + (z - c.z) ** 2 < (c.r + 0.15) ** 2) return true; }
     return false;
   }
-  return { support, blocked, tryMove, camBlocked };
+  const addColliders = (a = [], c = []) => { for (const x of a) if (x.t === 'a') aabbs.push(x); circles.push(...c); };
+  return { support, blocked, tryMove, camBlocked, addColliders };
 }
 
 export function createWalker({ physics, avatar, camera, start, ceilingAt }) {

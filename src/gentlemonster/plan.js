@@ -9,7 +9,7 @@ export const PLAN = {
   midHalf: 12, midH: 24.6,       // 중층 정사각 20×20, 6층 × 4.1m
   wingOut: 18.5, wingHalfTop: 6.2, wingHalfBot: 4.6, topH: 13.5,
   GLASS_OFF: -3.2,               // 1층 유리선 (하층 외곽선 기준 안쪽)
-  PORCH_OFF: -8.2,               // 정문 포치 깊이
+  PORCH_OFF: -6.4,               // 정문 포치 깊이
 };
 PLAN.t0 = 4.4;                          // 첫 띠 바닥 (1층 천장 슬래브 아래)
 PLAN.baseTop = PLAN.t0 + PLAN.TIER_H * PLAN.TIERS; // 23.2
