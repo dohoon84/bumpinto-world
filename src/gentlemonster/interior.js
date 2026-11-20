@@ -57,7 +57,7 @@ export function buildInterior(mats, imats, shell, ext) {
       place(r, B, { x: cx + Math.cos(a) * R, y: yy + 1.05, z: cz + Math.sin(a) * R });
     }
     // 노란 타원 러그
-    for (const [x, z, rx, rz, c] of [[-9, -5.2, 2.6, 1.4, 0xf0c32a], [-0.5, 9.4, 2.4, 1.3, 0xf0c32a], [-1.0, -3.4, 1.6, 2.4, 0xe9e5dc]]) B.add('matte', new THREE.CylinderGeometry(1, 1, 0.025, 36), { x, y: yy + 0.014, z, sx: rx, sz: rz, color: c });
+    for (const [x, z, rx, rz, c] of [[-9, -5.2, 2.6, 1.4, 0xf0c32a], [4.5, -4.5, 2.4, 1.3, 0xf0c32a], [-1.0, -3.4, 1.6, 2.4, 0xe9e5dc]]) B.add('matte', new THREE.CylinderGeometry(1, 1, 0.025, 36), { x, y: yy + 0.014, z, sx: rx, sz: rz, color: c });
     // 섬형 진열대
     {
       const x = 8.5, z = 7.8;
@@ -190,7 +190,7 @@ export function buildInterior(mats, imats, shell, ext) {
 
   // ================= 조명 슬롯 (층마다 5개 포인트 라이트를 옮겨 쓴다) =================
   const lightSlots = {
-    1: [[0, FY[1] + 3.3, 4.7, 0xfff1dc, 70], [-9, FY[1] + 3.0, -7, 0xffe2b4, 50], [8.5, FY[1] + 3.2, 5, 0xfff1dc, 55], [-7, FY[1] + 3.2, 5.5, 0xfff1dc, 45], [10, FY[1] + 3.2, -1, 0xfff1dc, 35]],
+    1: [[0, FY[1] + 3.3, 4.7, 0xfff1dc, 35], [-9, FY[1] + 3.0, -7, 0xffe2b4, 45], [8.5, FY[1] + 3.2, 5, 0xfff1dc, 35], [-7, FY[1] + 3.2, 5.5, 0xfff1dc, 30], [10, FY[1] + 3.2, -1, 0xfff1dc, 35]],
     2: [[-0.5, FY[2] + 3.0, 1.2, 0xbfeaff, 90], [4.3, FY[2] + 3.2, 7.4, 0xffffff, 55], [-6.8, FY[2] + 3.2, -4.8, 0xffffff, 55], [0, FY[2] + 3.0, 11.5, 0xffe9d0, 45], [-8.5, FY[2] + 3.0, 9.6, 0xffd2b8, 45]],
     3: [[-2, FY[3] + 3.2, 7.4, 0xfff0d8, 70], [8, FY[3] + 3.2, -4.6, 0xffffff, 55], [-9.5, FY[3] + 3.2, 8.6, 0xffffff, 55], [0, FY[3] + 3.2, -3, 0xbff5ef, 45], [-9, FY[3] + 3.0, 12, 0xfff0d8, 40]],
     5: [[0.5, FY[5] + 2.6, 3.0, 0xffd9a0, 70], [-9, FY[5] + 2.8, 0.5, 0xffe0b0, 45], [-2, FY[5] + 2.8, 9.5, 0xffe0b0, 45], [4.5, FY[5] + 2.8, 5, 0xffe0b0, 45], [0, FY[5] + 2.8, -9, 0xffe0b0, 40]],

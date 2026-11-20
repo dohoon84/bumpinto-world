@@ -61,7 +61,7 @@ export function buildShell(mats, ext, imats) {
     if (ceilKey) { const gb = new THREE.ShapeGeometry(shp); gb.rotateX(Math.PI / 2); gb.translate(0, y - P.SLAB, 0); B.add(ceilKey, gb, { color: 0xffffff }); }
   }
   // 5층 지붕 슬래브 아래면 (천장)
-  { const sp = slabs[5]; const gb = new THREE.ShapeGeometry(sp.shp); gb.rotateX(Math.PI / 2); gb.translate(0, 22.6, 0); B.add('ceil5', gb, { color: 0xffffff }); }
+  { const sp = slabs[5]; const solid = new THREE.Shape(); sp.out.forEach((q, i) => (i ? solid.lineTo(q[0], -q[1]) : solid.moveTo(q[0], -q[1]))); const gb = new THREE.ShapeGeometry(solid); gb.rotateX(Math.PI / 2); gb.translate(0, 22.6, 0); B.add('ceil5', gb, { color: 0xffffff }); }
 
   // 슬래브 구멍 테두리(콘크리트 면)
   const rim = (x0, x1, z0, z1, y, th = 0.6) => { const cx = (x0 + x1) / 2, cz = (z0 + z1) / 2, w = x1 - x0, d = z1 - z0; B.box('conc', w + 0.24, th, 0.12, { x: cx, y: y - th / 2, z: z0 - 0.06 }); B.box('conc', w + 0.24, th, 0.12, { x: cx, y: y - th / 2, z: z1 + 0.06 }); B.box('conc', 0.12, th, d, { x: x0 - 0.06, y: y - th / 2, z: cz }); B.box('conc', 0.12, th, d, { x: x1 + 0.06, y: y - th / 2, z: cz }); };
