@@ -26,7 +26,7 @@ for (const v of views) {
     if (v.js) await (new Function('G', `return (async()=>{${v.js}})()`))(G);
     for (let i = 0; i < 6; i++) await new Promise((r) => requestAnimationFrame(r));
     await new Promise((r) => setTimeout(r, v.wait ?? 1500));
-    return { draws: G.renderer.info.render.calls, tris: G.renderer.info.render.triangles, geo: G.renderer.info.memory.geometries, tex: G.renderer.info.memory.textures };
+    return { draws: G.renderer.info.render.calls, tris: G.renderer.info.render.triangles, geo: G.renderer.info.memory.geometries, tex: G.renderer.info.memory.textures, mem: G.mem ? G.mem() : null };
   }, v);
   await page.screenshot({ path: `${OUT}/${v.file || v.name}.png` });
   results[v.name] = info;
