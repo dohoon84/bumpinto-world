@@ -27,6 +27,13 @@ export function pointInPoly(pts, x, z) {
   return inside;
 }
 
+// 천장면용 Shape: rotateX(+π/2) 는 shape y → world z 이므로 (x, +z) 로 만들어야 남북이 뒤집히지 않는다
+function flipShape(out, hs) {
+  const shp = new THREE.Shape(); out.forEach((q, i) => (i ? shp.lineTo(q[0], q[1]) : shp.moveTo(q[0], q[1])));
+  for (const [x0, x1, z0, z1] of hs) { const h = new THREE.Path(); h.moveTo(x0, z0); h.lineTo(x0, z1); h.lineTo(x1, z1); h.lineTo(x1, z0); h.closePath(); shp.holes.push(h); }
+  return shp;
+}
+
 export function buildShell(mats, ext, imats) {
   const B = new Builder();
   for (const k of ['floor1', 'floor3', 'floor4', 'floor5']) B.project(k, 4); B.project('floor2', 2.2);
@@ -58,10 +65,10 @@ export function buildShell(mats, ext, imats) {
     B.add(floorKey, gt, { color: 0xffffff });
     // 슬래브 아래면 = 아래층 천장 (2→1층, 3→2층, 4→3층) · 5층 슬래브 아래는 비개방(4층)이라 생략
     const ceilKey = { 2: 'ceil1', 3: 'ceil2', 4: 'ceil3' }[n];
-    if (ceilKey) { const gb = new THREE.ShapeGeometry(shp); gb.rotateX(Math.PI / 2); gb.translate(0, y - P.SLAB, 0); B.add(ceilKey, gb, { color: 0xffffff }); }
+    if (ceilKey) { const gb = new THREE.ShapeGeometry(flipShape(out, holes[n])); gb.rotateX(Math.PI / 2); gb.translate(0, y - P.SLAB, 0); B.add(ceilKey, gb, { color: 0xffffff }); }
   }
   // 5층 지붕 슬래브 아래면 (천장)
-  { const sp = slabs[5]; const solid = new THREE.Shape(); sp.out.forEach((q, i) => (i ? solid.lineTo(q[0], -q[1]) : solid.moveTo(q[0], -q[1]))); const gb = new THREE.ShapeGeometry(solid); gb.rotateX(Math.PI / 2); gb.translate(0, 22.6, 0); B.add('ceil5', gb, { color: 0xffffff }); }
+  { const gb = new THREE.ShapeGeometry(flipShape(slabs[5].out, [])); gb.rotateX(Math.PI / 2); gb.translate(0, 22.6, 0); B.add('ceil5', gb, { color: 0xffffff }); }
 
   // 슬래브 구멍 테두리(콘크리트 면)
   const rim = (x0, x1, z0, z1, y, th = 0.6) => { const cx = (x0 + x1) / 2, cz = (z0 + z1) / 2, w = x1 - x0, d = z1 - z0; B.box('conc', w + 0.24, th, 0.12, { x: cx, y: y - th / 2, z: z0 - 0.06 }); B.box('conc', w + 0.24, th, 0.12, { x: cx, y: y - th / 2, z: z1 + 0.06 }); B.box('conc', 0.12, th, d, { x: x0 - 0.06, y: y - th / 2, z: cz }); B.box('conc', 0.12, th, d, { x: x1 + 0.06, y: y - th / 2, z: cz }); };

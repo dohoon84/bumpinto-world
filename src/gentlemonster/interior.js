@@ -197,15 +197,15 @@ export function buildInterior(mats, imats, shell, ext, sculpts) {
   // ================= 바닥 빛 웅덩이 + 벽 스캘럽 (한 장으로 합침 → 1 draw) =================
   {
     const PB = new Builder(); const pools = [];
-    for (const fl of [1, 2, 3, 5]) for (const s of lightSlots[fl]) pools.push([s[0], FY[fl], s[2], 2.6, s[3], 0.9]);
+    for (const fl of [1, 2, 3, 5]) for (const s of lightSlots[fl]) pools.push([s[0], FY[fl], s[2], 2.6, fl === 5 ? 0xffe2bc : s[3], fl === 5 ? 0.55 : 0.9]);
     const extra = {
       1: [[-9, -7, 2.2], [-9, -10.5, 1.8], [8.5, 7.8, 2.4], [-1, -4.5, 2.0], [6, -8, 1.8], [-12, 1, 1.6]],
       2: [[-8.5, 12, 1.6], [-4, 12.4, 1.6], [1, 12.4, 1.6], [6, 12, 1.6], [-7.5, -4.6, 1.8], [-3.5, -5.6, 1.8], [0.5, -4.6, 1.8], [4.5, -5.6, 1.8]],
       3: [[-1, -3, 2.4], [-9, 12, 2.2], [-7.5, -1.5, 2.0], [6, 5, 2.0]],
       5: [[-9, 8, 1.8], [-2, 9.5, 1.8], [4.5, 5, 1.8], [-3, -6.5, 1.8], [6.5, -6, 1.8], [-9, 0.5, 1.8], [-8.6, -11.6, 2.4]],
     };
-    const tint = { 1: 0xfff0d8, 2: 0xdde9ff, 3: 0xfff4e4, 5: 0xffd9a0 };
-    for (const fl of [1, 2, 3, 5]) for (const [x, z, r] of extra[fl]) pools.push([x, FY[fl], z, r, tint[fl], 0.55]);
+    const tint = { 1: 0xfff0d8, 2: 0xdde9ff, 3: 0xfff4e4, 5: 0xf2dcc0 };
+    for (const fl of [1, 2, 3, 5]) for (const [x, z, r] of extra[fl]) pools.push([x, FY[fl], z, r, tint[fl], fl === 5 ? 0.38 : 0.55]);
     const c3 = new THREE.Color();
     for (const [x, y, z, r, hex, k] of pools) { c3.set(hex).multiplyScalar(k); const g = new THREE.PlaneGeometry(r * 2, r * 2); g.rotateX(-Math.PI / 2); PB.add('pool', g, { x, y: y + 0.02, z, color: c3.getHex() }); g.dispose(); }
     // 벽 스캘럽: 안쪽 피부를 따라 2.4m 간격 (2·3·5층), 1층은 유리라 생략
