@@ -339,6 +339,53 @@ function drawMyeongdongMini(ctx, x, z, w, h, viewW) {
   return true;
 }
 
+// [depot-ext] 범창고: 지도 안이면 초록 사각+상자 마크(귀 없음)+이름, 밖이면(1.6 km 안) 가장자리 화살표+거리. 누르면 문 앞 안내선
+function drawDepotMini(ctx, x, z, w, h, viewW, viewH, s) {
+  const dm = window.__jj?.depot?.mapMarker;
+  const canvas = ctx.canvas;
+  canvas._depotHit = null;
+  if (!dm) return;
+  const px = w / viewW, pz = h / viewH;
+  let sx = w / 2 + (dm.x - x) * px, sy = h / 2 + (dm.z - z) * pz;
+  const inside = sx > 10 * s && sy > 10 * s && sx < w - 10 * s && sy < h - 22 * s;
+  const dist = Math.hypot(dm.x - x, dm.z - z);
+  ctx.save();
+  ctx.font = `900 ${Math.round(11 * s)}px Pretendard, "Apple SD Gothic Neo", sans-serif`;
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.lineJoin = 'round';
+  if (inside) {
+    const r = Math.max(8, w / 24);
+    { const t = (performance.now() % 1600) / 1600; ctx.save(); // [depot-live] 반짝이는 고리 (hud-v3 미니맵과 같은 모양)
+      ctx.globalAlpha = 0.35 + 0.25 * Math.sin(t * Math.PI * 2); ctx.fillStyle = '#F2C230'; ctx.beginPath(); ctx.arc(sx, sy, r * 1.25, 0, Math.PI * 2); ctx.fill();
+      for (let o = 0; o < 1; o += 0.5) { const u = (t + o) % 1; ctx.globalAlpha = (1 - u) * 0.9; ctx.lineWidth = 2.4 * s; ctx.strokeStyle = '#F2C230'; ctx.beginPath(); ctx.arc(sx, sy, r * 1.15 + u * 14 * s, 0, Math.PI * 2); ctx.stroke(); }
+      ctx.restore(); }
+    ctx.fillStyle = '#1E5A45'; ctx.strokeStyle = '#F3EADA'; ctx.lineWidth = 1.6 * s;
+    ctx.beginPath(); if (ctx.roundRect) ctx.roundRect(sx - r, sy - r * 0.9, r * 2, r * 1.8, r * 0.35); else ctx.rect(sx - r, sy - r * 0.9, r * 2, r * 1.8); ctx.fill(); ctx.stroke();
+    { // 작은 상자 마크(귀·동물 요소 없음) — hud-v3 minimap drawDepotMark 와 같은 모양
+      const k = r / 9; ctx.lineJoin = 'round'; ctx.lineWidth = 0.9 * k; ctx.strokeStyle = '#123B2D';
+      const poly = (pts, fill) => { ctx.beginPath(); pts.forEach(([px2, py2], i) => (i ? ctx.lineTo(sx + px2 * k, sy + py2 * k) : ctx.moveTo(sx + px2 * k, sy + py2 * k))); ctx.closePath(); ctx.fillStyle = fill; ctx.fill(); ctx.stroke(); };
+      poly([[0, -5.5], [5, -3.4], [0, -1.3], [-5, -3.4]], '#E0B47A');
+      poly([[-5, -3.4], [0, -1.3], [0, 5], [-5, 3]], '#C99A5E');
+      poly([[0, -1.3], [5, -3.4], [5, 3], [0, 5]], '#B8864C');
+    }
+    ctx.lineWidth = 3 * s; ctx.strokeStyle = 'rgba(16,32,51,.92)'; ctx.strokeText(dm.label, sx, sy + r + 8 * s); ctx.fillStyle = '#ffffff'; ctx.fillText(dm.label, sx, sy + r + 8 * s);
+    canvas._depotHit = { sx, sy, r: r + 6 };
+  } else if (dist < 1600) {
+    const a = Math.atan2(sy - h / 2, sx - w / 2), m = 14 * s;
+    const k = Math.min((w / 2 - m) / Math.max(1e-3, Math.abs(Math.cos(a))), (h / 2 - m - 10 * s) / Math.max(1e-3, Math.abs(Math.sin(a))));
+    sx = w / 2 + Math.cos(a) * k; sy = h / 2 + Math.sin(a) * k;
+    ctx.save(); ctx.translate(sx, sy); ctx.rotate(a);
+    ctx.beginPath(); ctx.moveTo(8 * s, 0); ctx.lineTo(-5 * s, -6 * s); ctx.lineTo(-2 * s, 0); ctx.lineTo(-5 * s, 6 * s); ctx.closePath();
+    { const t = (performance.now() % 1600) / 1600; ctx.shadowColor = '#F2C230'; ctx.shadowBlur = (6 + 8 * Math.sin(t * Math.PI * 2) ** 2) * s; } // 가장자리 화살표도 반짝
+    ctx.fillStyle = '#2fae74'; ctx.strokeStyle = '#0d2a20'; ctx.lineWidth = 1.5 * s; ctx.fill(); ctx.stroke(); ctx.restore();
+    const t = `범창고 ${dist >= 1000 ? (dist / 1000).toFixed(1) + 'km' : Math.round(dist / 10) * 10 + 'm'}`;
+    const tx = sx - Math.cos(a) * 16 * s, ty = sy - Math.sin(a) * 12 * s;
+    ctx.textAlign = Math.cos(a) > 0.4 ? 'right' : Math.cos(a) < -0.4 ? 'left' : 'center';
+    ctx.lineWidth = 3 * s; ctx.strokeStyle = 'rgba(16,32,51,.92)'; ctx.strokeText(t, tx, ty); ctx.fillStyle = '#9ff0c4'; ctx.fillText(t, tx, ty);
+    canvas._depotHit = { sx, sy, r: 18 * s };
+  }
+  ctx.restore();
+}
+
 function drawNamsanMini(ctx, x, z, w, h, viewW, viewH) {
   const n = (typeof window !== 'undefined' && window.__jj?.namsan) || null;
   const mini = n?.mini;
@@ -484,10 +531,12 @@ export function mountPhone({ data, region = null, extraTiles = null, placeAt = n
   canvas.addEventListener('click', (e) => { // [bp24nav] 매장 아이콘만. 다른 곳은 예전처럼 클릭이 없다
     const nav = window.__jj?.bp24Nav;
     const hits = canvas._bp24Hits;
-    if (!nav?.on || !hits?.length) return;
     const r = canvas.getBoundingClientRect();
     const sx = (e.clientX - r.left) * (canvas.width / Math.max(1, r.width));
     const sy = (e.clientY - r.top) * (canvas.height / Math.max(1, r.height));
+    const dh = canvas._depotHit; // [depot-ext] 범창고 아이콘/가장자리 화살표 → 문 앞 안내
+    if (dh && (dh.sx - sx) ** 2 + (dh.sy - sy) ** 2 < dh.r * dh.r && window.__jj?.depot?.guide?.()) return;
+    if (!nav?.on || !hits?.length) return;
     const hit = hits.find((h) => (h.sx - sx) ** 2 + (h.sy - sy) ** 2 < h.r * h.r);
     if (hit) nav.guide(hit.id);
   });
@@ -540,6 +589,7 @@ export function mountPhone({ data, region = null, extraTiles = null, placeAt = n
       const peersDraw = peerHere ? peers.filter((p) => peerHere(p.x || 0, p.z || 0, x, z)) : peers;
       drawPeerMarkers(ctx, peersDraw, x, z, w, h, viewW, viewH, now, s);
       drawBp24(ctx, x, z, w, h, viewW, viewH); // [bp24nav] 꺼져 있으면 그리지 않음
+      drawDepotMini(ctx, x, z, w, h, viewW, viewH, s); // [depot-ext]
       const cap = placeAt?.(x, z);
       if (cap?.name) {
         const label = String(cap.name).slice(0, 14);

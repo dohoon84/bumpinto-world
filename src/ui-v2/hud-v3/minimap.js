@@ -107,6 +107,7 @@ function build() {
       const sx = (e.clientX - rect.left) * (cv.width / Math.max(1, rect.width));
       const sy = (e.clientY - rect.top) * (cv.height / Math.max(1, rect.height));
       const hit = navHits.find((h) => (h.sx - sx) ** 2 + (h.sy - sy) ** 2 < h.r * h.r);
+      if (hit?.depot && window.__jj?.depot?.guide?.()) return; // [depot-ext] 범창고 → 문 앞 안내
       if (hit && window.__jj?.bp24Nav?.guide?.(hit.id)) return; // [bp24nav] 매장 아이콘 → 문 앞 안내. 다른 클릭은 예전대로 위에서 보기
       if (hit?.arcade) {
         const pos = window.__jj?.player?.position;
@@ -315,6 +316,7 @@ function loop(now) {
 
 let headSm = null;
 function draw(now, J, P) {
+  if (J.depot?.active && J.depot.mmDraw) { drawDepotInside(J); return; } // [depot-live] 매장 안: 평면도 + 목적지 핀
   const x = P.position.x, z = P.position.z;
   const viewYaw = J.cam?.mode === 'overview' ? (J.ov?.yaw ?? 0) : (J.cam?.yaw ?? 0);
   const theta = prefs.rot ? viewYaw : 0; // 화면 회전각: 카메라 정면(-sin, -cos) 이 위로
@@ -442,6 +444,19 @@ function draw(now, J, P) {
     if (hover) { const d = (hover.x - sx) ** 2 + (hover.y - sy) ** 2; if (d < hovD) { hovD = d; hov = { sx, sy, t: st.name }; } }
   }
 
+  // [depot-ext] 범창고 아이콘(초록 사각 + 박스 마크) · 이름 · 누르면 문 앞 안내선
+  const dm = J.depot?.mapMarker;
+  if (dm) {
+    const [sx, sy] = toS(dm.x, dm.z);
+    if (inC(sx, sy, 2)) {
+      depotPulse(g, sx, sy, 10, 1); // [depot-live] 반짝이는 고리 — 바닥 화살표 대신 미니맵에서 눈에 띄게
+      drawDepotMark(g, sx, sy);
+      labels.push({ sx, sy: sy - 12, t: dm.label });
+      navHits.push({ sx, sy, r: 13, id: 'depot', name: dm.label, depot: true });
+      if (hover) { const d = (hover.x - sx) ** 2 + (hover.y - sy) ** 2; if (d < hovD) { hovD = d; hov = { sx, sy, t: dm.label }; } }
+    }
+  }
+
   // 목적지 (원 밖이면 테두리에 화살표)
   if (route?.dest) {
     const [sx, sy] = toS(route.dest.x, route.dest.z);
@@ -490,6 +505,15 @@ function draw(now, J, P) {
   const ms = performance.now() - t0;
   stats.frames++; stats.ms = stats.ms ? stats.ms * 0.9 + ms * 0.1 : ms; if (stats.frames > 5) stats.msMax = Math.max(stats.msMax, ms);
 }
+function drawDepotInside(J) {
+  const dpr = Math.min(devicePixelRatio || 1, 2), W = Math.round(D * dpr);
+  if (cv.width !== W) { cv.width = W; cv.height = W; }
+  const g = ctx; g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, D, D);
+  g.save(); g.beginPath(); g.arc(R, R, R, 0, Math.PI * 2); g.clip();
+  g.fillStyle = 'rgba(8, 16, 30, .9)'; g.fillRect(0, 0, D, D);
+  try { J.depot.mmDraw(g, R); } catch { /* */ }
+  g.restore(); sig = ''; setCompass(0);
+}
 let lastFull = 0, lastEvict = 0;
 function dropChunk(key) { const c = chunks.get(key); if (!c) return; stats.bytes -= c.c.width * c.c.height * 4; c.c.width = 0; c.c.height = 0; chunks.delete(key); }
 
@@ -537,6 +561,24 @@ function fitCableLabel(sx, sy, text) {
   let lx = sx, ly = sy < R * 0.38 ? sy + 16 : sy - 12;
   [lx, ly] = clamp(lx, ly);
   return { sx: lx, sy: ly, t: text, fit: 1 };
+}
+function depotPulse(g, sx, sy, r0, k) { // 1.6초 주기 두 겹 고리 + 노란 후광 (할당 없음)
+  const t = (performance.now() % 1600) / 1600;
+  g.save();
+  g.globalAlpha = 0.35 + 0.25 * Math.sin(t * Math.PI * 2); g.fillStyle = '#F2C230'; g.beginPath(); g.arc(sx, sy, r0 + 3 * k, 0, Math.PI * 2); g.fill();
+  for (let o = 0; o < 1; o += 0.5) { const u = (t + o) % 1; g.globalAlpha = (1 - u) * 0.9; g.lineWidth = 2.4 * k; g.strokeStyle = '#F2C230'; g.beginPath(); g.arc(sx, sy, r0 + u * 14 * k, 0, Math.PI * 2); g.stroke(); }
+  g.restore();
+}
+function drawDepotMark(g, sx, sy) { // [depot-ext] 초록 사각 + 작은 상자(귀 없음)
+  g.save(); g.translate(sx, sy);
+  g.beginPath(); g.roundRect ? g.roundRect(-9, -8, 18, 16, 4) : g.rect(-9, -8, 18, 16); g.fillStyle = '#1E5A45'; g.fill();
+  g.lineWidth = 1.6; g.strokeStyle = '#F3EADA'; g.stroke();
+  g.lineJoin = 'round'; g.lineWidth = 0.9; g.strokeStyle = '#123B2D';
+  const poly = (pts, fill) => { g.beginPath(); pts.forEach(([x, y], i) => (i ? g.lineTo(x, y) : g.moveTo(x, y))); g.closePath(); g.fillStyle = fill; g.fill(); g.stroke(); };
+  poly([[0, -5.5], [5, -3.4], [0, -1.3], [-5, -3.4]], '#E0B47A');
+  poly([[-5, -3.4], [0, -1.3], [0, 5], [-5, 3]], '#C99A5E');
+  poly([[0, -1.3], [5, -3.4], [5, 3], [0, 5]], '#B8864C');
+  g.restore();
 }
 function drawCableMark(g, sx, sy) {
   g.beginPath(); g.arc(sx, sy, 7.2, 0, Math.PI * 2); g.fillStyle = '#0b1424'; g.fill();

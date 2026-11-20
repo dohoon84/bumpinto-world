@@ -21,6 +21,19 @@
     "shops:test": "node scripts/test-ground-floor-shops.mjs",
     "photo-cloud:test": "node scripts/test-photo-cloud.mjs",
     "accounts:test": "node scripts/test-accounts.mjs && node scripts/test-account-consent.mjs && node scripts/test-account-consent-ui.mjs",
+    "depot:cart:test": "node scripts/test-depot-cart.mjs",
+    "depot:day4:test": "node scripts/test-depot-day4.mjs",
+    "depot:day5:test": "node scripts/test-depot-day5.mjs",
+    "depot:day6:test": "node scripts/test-depot-day6.mjs",
+    "depot:day7:test": "node scripts/test-depot-day7.mjs",
+    "depot:day8:test": "node scripts/test-depot-day8.mjs",
+    "depot:day9:test": "node scripts/test-depot-day9.mjs",
+    "depot:day10:test": "node scripts/test-depot-day10.mjs",
+    "depot:day11:test": "node scripts/test-depot-day11.mjs",
+    "depot:day12:test": "node scripts/test-depot-day12.mjs",
+    "depot:day13:test": "node scripts/test-depot-day13.mjs",
+    "depot:day14:test": "node scripts/test-depot-day14.mjs",
+    "depot:week2:test": "node scripts/test-depot-week2-endings.mjs",
     "economy:test": "node scripts/test-economy.mjs && node scripts/test-econ-client.mjs",
     "bgm:test": "node scripts/test-bgm.mjs",
     "routemap:test": "node scripts/test-route-map.mjs",
@@ -94,6 +107,7 @@
     "guide:walk": "node scripts/guides/test-guide-walk.mjs ${MYEONGDONG_WALK_PORT:-5231} && WALK_VIEW=844x390 node scripts/guides/test-guide-walk.mjs ${MYEONGDONG_WALK_PORT:-5231} && node scripts/guides/test-ndm-edges.mjs ${MYEONGDONG_WALK_PORT:-5231}"
   },
   "dependencies": {
+    "cannon-es": "^0.20.0",
     "three": "^0.186.1"
   },
   "devDependencies": {
