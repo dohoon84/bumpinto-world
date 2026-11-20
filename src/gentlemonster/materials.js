@@ -13,8 +13,8 @@ export function createMaterials({ maxAniso = 4 } = {}) {
     beam: std({ map: ct, roughness: 0.92 }),
     beamI: new THREE.MeshStandardMaterial({ map: ct, roughness: 0.92, color: 0xc4c0b8 }),
     roofTop: std({ map: T.gravelTex(), roughness: 1 }),
-    curtain: new THREE.MeshStandardMaterial({ map: T.curtainTex(), emissiveMap: T.curtainTex({ night: true }), emissive: 0xffffff, emissiveIntensity: 0, metalness: 0.5, roughness: 0.2, envMapIntensity: 1.0, color: 0xdde6ee }),
-    slit: std({ side: THREE.DoubleSide, map: T.pillGlassTex(), emissiveMap: T.pillGlassTex({ night: true }), color: 0xffffff, metalness: 0.55, roughness: 0.06, emissive: 0xffffff, emissiveIntensity: 0, envMapIntensity: 1.6 }),
+    curtain: new THREE.MeshStandardMaterial({ map: T.curtainTex(), emissiveMap: T.curtainTex({ night: true }), emissive: 0xffffff, emissiveIntensity: 0, metalness: 0.45, roughness: 0.14, envMapIntensity: 1.2, color: 0xe3e9e5 }),
+    slit: std({ side: THREE.DoubleSide, map: T.pillGlassTex(), emissiveMap: T.pillGlassTex({ night: true }), color: 0xffffff, metalness: 0.7, roughness: 0.04, emissive: 0xffffff, emissiveIntensity: 0, envMapIntensity: 1.6 }),
     skin: std({ map: T.skinTex(), roughness: 0.9, metalness: 0, side: THREE.DoubleSide, color: 0xeae2d4 }),
     reveal: std({ map: ct, roughness: 0.82, metalness: 0, side: THREE.DoubleSide, color: 0xeee9df }),
     tierRib: std({ map: T.ribTex(), normalMap: T.ribTex({ normal: true }), normalScale: new THREE.Vector2(1.4, 1.4), roughness: 0.9, side: THREE.DoubleSide, color: 0xdcd6cb }),
@@ -26,9 +26,14 @@ export function createMaterials({ maxAniso = 4 } = {}) {
     asphalt: std({ map: T.asphaltTex(), roughness: 0.96 }),
     paver: std({ map: T.paverTex(), roughness: 0.9 }),
     brick: std({ map: T.brickTex(), roughness: 0.95 }),
-    stucco: std({ map: T.stuccoTex(), roughness: 0.95 }),
+    stucco: std({ map: T.stuccoTex(), emissiveMap: T.brickFacadeTex({ night: true, seed: 501 }), emissive: 0xffffff, emissiveIntensity: 0, roughness: 0.95 }),
     soffit: std({ map: T.waffleTex({ lights: false }), roughness: 0.9 }),
     paint: std({ roughness: 0.8 }),
+    brickR: std({ map: T.brickFacadeTex({ tone: '#8e4a37', seed: 201 }), emissiveMap: T.brickFacadeTex({ night: true, seed: 201 }), emissive: 0xffffff, emissiveIntensity: 0, roughness: 0.92 }),
+    brickD: std({ map: T.brickFacadeTex({ tone: '#5e3a2e', seed: 301 }), emissiveMap: T.brickFacadeTex({ night: true, seed: 301 }), emissive: 0xffffff, emissiveIntensity: 0, roughness: 0.92 }),
+    brickW: std({ map: T.brickFacadeTex({ tone: '#d9d4ca', seed: 401 }), emissiveMap: T.brickFacadeTex({ night: true, seed: 401 }), emissive: 0xffffff, emissiveIntensity: 0, roughness: 0.9 }),
+    shop: std({ map: T.shopfrontTex(), emissiveMap: T.shopfrontTex({ night: true }), emissive: 0xffffff, emissiveIntensity: 0, roughness: 0.25, metalness: 0.3, envMapIntensity: 1 }),
+    corr: std({ map: T.corrugatedTex(), roughness: 0.55, metalness: 0.45 }),
     leaf: std({ roughness: 0.9, flatShading: true }),
     metal: std({ metalness: 0.85, roughness: 0.3, envMapIntensity: 1 }),
     chrome: std({ metalness: 1, roughness: 0.06, envMapIntensity: 1.5 }),
@@ -47,9 +52,11 @@ export function createMaterials({ maxAniso = 4 } = {}) {
 
 /** 밤 켜기: 창과 유리 emissive */
 export function setNight(m, night) {
-  m.curtain.emissiveIntensity = night ? 0.8 : 0;
+  m.curtain.emissiveIntensity = night ? 1.45 : 0;
   m.curtain.map.needsUpdate = false;
   m.slit.emissiveIntensity = night ? 1.25 : 0;
-  m.topGlass.emissiveIntensity = night ? 0.6 : 0.12; m.topGlass.color.set(night ? 0x2a3540 : 0x6f8496);
+  m.topGlass.emissiveIntensity = night ? 0.7 : 0.12; m.topGlass.color.set(night ? 0x2a3540 : 0x6f8496);
   m.glass.opacity = night ? 0.12 : 0.2;
+  for (const k of ['brickR', 'brickD', 'brickW']) m[k].emissiveIntensity = night ? 0.9 : 0;
+  m.shop.emissiveIntensity = night ? 1.1 : 0; m.stucco.emissiveIntensity = night ? 0.7 : 0;
 }

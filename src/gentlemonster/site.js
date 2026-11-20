@@ -12,7 +12,7 @@ export const SITE = {
 
 export function buildSite(mats, { night = false } = {}) {
   const B = new Builder();
-  B.project('gravel', 3).project('asphalt', 6).project('paver', 2).project('brick', 3).project('stucco', 3).project('conc', 2.4);
+  B.project('gravel', 3).project('asphalt', 6).project('paver', 2).project('brick', 3).project('stucco', 12).project('conc', 2.4).project('brickR', 12).project('brickD', 12).project('brickW', 12).project('shop', 12).project('corr', 2);
   const r = mulberry(2025);
   const cols = [], circ = [];
   const wall = (x, z, w, d, h) => cols.push({ t: 'a', x0: x - w / 2, x1: x + w / 2, z0: z - d / 2, z1: z + d / 2, y0: 0, y1: h });
@@ -74,25 +74,77 @@ export function buildSite(mats, { night = false } = {}) {
   }
   for (let i = 0; i < 90; i++) { const x = -33 + r() * 62, z = -29 + r() * 49; if (Math.hypot(x / 21, z / 18) < 1.15) continue; B.add('leaf', new THREE.ConeGeometry(0.28 + r() * 0.22, 0.9 + r() * 0.5, 5), { x, y: 0.5, z, color: new THREE.Color(0xc9b66a).offsetHSL(0, 0, (r() - 0.5) * 0.1) }); }
 
-  // ---- 주변 저층 건물 (성수 공장지대) ----
-  const bld = (x, z, w, d, h, kind) => {
+  // ---- 주변 저층 건물 (성수동: 붉은 벽돌 2~5층 + 1층 카페/편집숍, 골함석 창고) ----
+  // 블록을 9~15 m 필지로 나눠 필지마다 높이·벽돌색·간판·옥상 설비를 다르게. 3 m 격자에 맞춰 창이 층에 맞는다.
+  const awnCols = [0x1f3a2c, 0x161616, 0x8a4a2e, 0xd8cfbb, 0x2c3e55, 0x6b6f3a];
+  const signCols = [0xfff1d6, 0xffd38a, 0xf7f3ea, 0xbfe3ff, 0xffb37a];
+  const lotBuild = (cx, cz, w, d, face, floors, type) => {
+    const h = floors * 3;
+    if (type === 'ware') {
+      const hw = 6 + (r() * 3 | 0);
+      B.box('corr', w, hw, d, { x: cx, y: hw / 2, z: cz });
+      const sh = new THREE.Shape(); const span = face[0] ? d : w; sh.moveTo(-span / 2 - 0.3, 0); sh.lineTo(span / 2 + 0.3, 0); sh.lineTo(0, span * 0.22); sh.closePath();
+      const rg = new THREE.ExtrudeGeometry(sh, { depth: (face[0] ? w : d) + 0.6, bevelEnabled: false }); rg.translate(0, 0, -((face[0] ? w : d) + 0.6) / 2);
+      B.add('paint', rg, { x: cx, y: hw, z: cz, ry: face[0] ? 0 : Math.PI / 2, color: [0x5a5d60, 0x7a4b36, 0x8b9094][(r() * 3) | 0] }); rg.dispose();
+      // 정면: 큰 셔터 + 카페로 바꾼 유리 입구
+      const fx = cx + face[0] * (w / 2 + 0.03), fz = cz + face[1] * (d / 2 + 0.03), lw = face[0] ? 0.06 : Math.min(w * 0.5, 7), ld = face[0] ? Math.min(d * 0.5, 7) : 0.06;
+      B.box('shop', lw, 3, ld, { x: fx, y: 1.5, z: fz });
+      B.box('paint', face[0] ? 0.08 : lw + 0.4, 0.5, face[0] ? ld + 0.4 : 0.08, { x: fx + face[0] * 0.02, y: 3.35, z: fz + face[1] * 0.02, color: signCols[(r() * 5) | 0] });
+      return hw + span * 0.22;
+    }
+    const mat = type === 'white' ? 'brickW' : type === 'dark' ? 'brickD' : 'brickR';
+    B.box('shop', w, 3, d, { x: cx, y: 1.5, z: cz });
+    B.box(mat, w, h - 3, d, { x: cx, y: 3 + (h - 3) / 2, z: cz, color: new THREE.Color(1, 1, 1).multiplyScalar(0.9 + r() * 0.12) });
+    B.box('paint', w + 0.12, 0.18, d + 0.12, { x: cx, y: 3.0, z: cz, color: 0x2a2a2a }); // 1층 위 띠
+    B.box('paint', w + 0.2, 0.55, d + 0.2, { x: cx, y: h + 0.27, z: cz, color: type === 'white' ? 0xc9c5bc : 0x6e5a4e }); // 파라펫
+    // 차양 + 간판
+    const fx = cx + face[0] * (w / 2), fz = cz + face[1] * (d / 2), along = face[0] ? d : w;
+    if (r() < 0.7) { const aw = along * (0.45 + r() * 0.4); B.box('paint', face[0] ? 1.1 : aw, 0.08, face[0] ? aw : 1.1, { x: fx + face[0] * 0.55, y: 2.75, z: fz + face[1] * 0.55, rx: face[1] * 0.18, rz: -face[0] * 0.18, color: awnCols[(r() * awnCols.length) | 0] }); }
+    if (r() < 0.75) { const sx = fx + face[0] * 0.5 + (face[1] ? (r() - 0.5) * along * 0.6 : 0), sz = fz + face[1] * 0.5 + (face[0] ? (r() - 0.5) * along * 0.6 : 0); B.box('lamp', face[0] ? 0.6 : 0.12, 1.4, face[0] ? 0.12 : 0.6, { x: sx, y: 4.6, z: sz, color: signCols[(r() * 5) | 0] }); }
+    // 옥상: 물탱크·실외기·철제 난간
+    if (r() < 0.6) B.cyl('metal', 0.9, 0.9, 1.6, { x: cx + (r() - 0.5) * w * 0.5, y: h + 0.8, z: cz + (r() - 0.5) * d * 0.5, color: r() < 0.5 ? 0xcfd8de : 0x6f9fc4 }, 12);
+    for (let i = 0, n = 1 + (r() * 3 | 0); i < n; i++) B.box('paint', 0.9, 0.7, 0.6, { x: cx + (r() - 0.5) * w * 0.7, y: h + 0.35, z: cz + (r() - 0.5) * d * 0.7, color: 0xd9d9d4 });
+    if (r() < 0.4) { B.box('metal', face[0] ? 0.05 : w * 0.6, 1.0, face[0] ? d * 0.6 : 0.05, { x: cx + face[0] * (w / 2 - 0.3), y: h + 1.0, z: cz + face[1] * (d / 2 - 0.3), color: 0x2a2c2e }); }
+    return h;
+  };
+  const snap = (v) => Math.max(6, Math.round(v / 3) * 3);
+  const bld = (x, z, w, d, hMax) => {
     wall(x, z, w, d, 60);
-    B.box(kind ? 'brick' : 'stucco', w, h, d, { x, y: h / 2, z, color: kind ? new THREE.Color(0xffffff).offsetHSL(0, 0, (r() - 0.5) * 0.15) : 0xffffff });
-    B.box('paint', w + 0.3, 0.4, d + 0.3, { x, y: h + 0.2, z, color: 0x6d6a66 });
+    const face = Math.abs(x) > Math.abs(z) * 1.2 ? [-Math.sign(x), 0] : [0, -Math.sign(z)];
+    const alongX = !face[0]; const L = alongX ? w : d; let u = -L / 2;
+    while (u < L / 2 - 0.5) {
+      let lw = snap(9 + r() * 6); if (L / 2 - (u + lw) < 6) lw = L / 2 - u;
+      const c = u + lw / 2, floors = Math.max(2, Math.min(5, Math.round(hMax / 3 * (0.45 + r() * 0.6))));
+      const t = r(), type = t < 0.5 ? 'red' : t < 0.68 ? 'white' : t < 0.84 ? 'ware' : 'dark';
+      lotBuild(alongX ? x + c : x, alongX ? z : z + c, alongX ? lw - 0.15 : w, alongX ? d : lw - 0.15, face, floors, type);
+      u += lw;
+    }
   };
   const list = [
-    [-55, -10, 18, 22, 11, 1], [-55, 14, 18, 18, 8, 0], [-76, -2, 18, 30, 16, 0], [-48, -42, 30, 18, 14, 1], [-10, -50, 24, 20, 21, 0], [20, -50, 22, 20, 12, 1], [48, -46, 30, 18, 17, 0],
-    [80, -10, 22, 30, 12, 1], [85, 18, 24, 18, 9, 0], [-30, 50, 24, 16, 13, 0], [-3, 52, 22, 14, 9, 1], [26, 50, 24, 16, 18, 1], [60, 52, 30, 18, 12, 0], [-62, 48, 20, 16, 10, 1], [100, 50, 26, 18, 22, 0], [110, -30, 24, 24, 15, 1],
+    [-55, -10, 18, 22, 11], [-55, 14, 18, 18, 8], [-76, -2, 18, 30, 16], [-48, -42, 30, 18, 14], [-10, -50, 24, 20, 15], [20, -50, 22, 20, 12], [48, -46, 30, 18, 15],
+    [80, -10, 22, 30, 12], [85, 18, 24, 18, 9], [-30, 50, 24, 16, 13], [-3, 52, 22, 14, 9], [26, 50, 24, 16, 15], [60, 52, 30, 18, 12], [-62, 48, 20, 16, 10], [100, 50, 26, 18, 15], [110, -30, 24, 24, 15],
   ];
   for (const b of list) bld(...b);
+  // 전봇대 + 전선 (서울 골목의 상징) — 전선은 한 번에 LineSegments
+  const wirePts = []; const poles = [];
+  for (let x = -70; x <= 120; x += 21) poles.push([x, SITE.roadZ1 + 1.2]);
+  for (let z = -60; z <= 20; z += 20) poles.push([SITE.laneX1 + 0.8, z]);
+  for (const [x, z] of poles) { circ.push({ x, z, r: 0.2, y0: 0, y1: 9 }); B.cyl('conc', 0.13, 0.19, 9.5, { x, y: 4.75, z, color: 0xb9b6ae }, 8); B.box('metal', 1.6, 0.1, 0.1, { x, y: 8.6, z, color: 0x333333 }); B.box('metal', 1.2, 0.1, 0.1, { x, y: 7.8, z, color: 0x333333 }); if (r() < 0.5) B.cyl('paint', 0.25, 0.25, 0.7, { x: x + 0.4, y: 7.2, z, color: 0x7c8287 }, 8); }
+  const chain = (ps) => { for (let i = 0; i < ps.length - 1; i++) for (const [oy, ox] of [[8.6, -0.7], [8.6, 0.7], [7.8, 0]]) { const a = ps[i], b2 = ps[i + 1]; let prev = null; for (let k = 0; k <= 8; k++) { const t = k / 8, sag = Math.sin(t * Math.PI) * 0.55; const p = [a[0] + (b2[0] - a[0]) * t + (a[1] === b2[1] ? 0 : ox), oy - sag, a[1] + (b2[1] - a[1]) * t + (a[1] === b2[1] ? ox * 0.3 : 0)]; if (prev) wirePts.push(...prev, ...p); prev = p; } } };
+  chain(poles.filter(([, z]) => z === SITE.roadZ1 + 1.2)); chain(poles.filter(([x]) => x === SITE.laneX1 + 0.8));
+  // 길가 주차 차 몇 대 (단순 박스)
+  const carCols = [0xe8e8e6, 0x1c1d20, 0x8c9095, 0x3d4b5c, 0xc8c3b6];
+  for (let i = 0; i < 9; i++) { const x = -60 + i * 17 + r() * 4; if (Math.abs(x) < 10) continue; const z = SITE.roadZ1 - 1.6, c = carCols[(r() * 5) | 0]; B.box('gloss', 4.3, 0.75, 1.8, { x, y: 0.62, z, color: c }); B.box('gloss', 2.3, 0.6, 1.6, { x: x - 0.2, y: 1.28, z, color: c }); B.box('frame', 2.25, 0.42, 1.62, { x: x - 0.2, y: 1.3, z, color: 0x101418 }); for (const dx of [-1.35, 1.35]) for (const dz of [-0.82, 0.82]) B.cyl('frame', 0.33, 0.33, 0.22, { x: x + dx, y: 0.33, z: z + dz, rx: Math.PI / 2, color: 0x111111 }, 10); }
   // 멀리 고층 몇 개 (스카이라인)
-  for (const [x, z, w, h] of [[-190, -150, 24, 60], [-120, -190, 22, 80], [-30, -200, 26, 55], [60, -190, 22, 75], [150, -160, 20, 60], [210, -60, 18, 50]]) B.box('stucco', w, h, w, { x, y: h / 2, z, color: 0xaeb4bb });
+  for (const [x, z, w, h] of [[-190, -150, 24, 60], [-120, -190, 22, 80], [-30, -200, 26, 55], [60, -190, 22, 75], [150, -160, 20, 60], [210, -60, 18, 50]]) { B.box('stucco', w, h, w, { x, y: h / 2, z, color: [0xc9c4ba, 0xb7bcc2, 0xd6d0c4][(x / 10 | 0) & 1 ? 1 : 0] }); B.box('paint', w + 0.4, 1.2, w + 0.4, { x, y: h + 0.6, z, color: 0x7d7f82 }); }
 
   // 사인 글자 (밝은 plane)
   const meshes = B.build(mats);
   const tex = labelTex('HAUS NOWHERE', { w: 640, h: 160, bg: '#d4d1ca', fg: '#1b1b1b', font: '800 66px "Helvetica Neue", Arial, sans-serif', sub: 'SEOUL · 433 Ttukseom-ro', subFont: '500 28px "Helvetica Neue", Arial, sans-serif' });
   const sign = new THREE.Mesh(new THREE.PlaneGeometry(3.2, 0.8), new THREE.MeshBasicMaterial({ map: tex, toneMapped: false })); sign.position.set(10.5, 0.62, 19.44); sign.name = 'gm-sign';
-  const out = { meshes: [...meshes, sign], colliders: cols, circles: circ, domes: null };
+  const wg = new THREE.BufferGeometry(); wg.setAttribute('position', new THREE.Float32BufferAttribute(wirePts, 3));
+  const wires = new THREE.LineSegments(wg, new THREE.LineBasicMaterial({ color: 0x1a1a1a })); wires.name = 'gm-wires';
+  const out = { meshes: [...meshes, sign, wires], colliders: cols, circles: circ, domes: null };
 
   // ---- 맞은편 대지 설치: 숨 쉬는 에어돔 밭 (오리지널) ----
   {

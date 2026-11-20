@@ -160,13 +160,19 @@ export function stuccoTex(base = '#d9d4c8', win = '#30363f') {
 }
 /** 커튼월 유리: 세로 멀리언 + 층 수평재, 하늘 반사 그라데이션(낮) — UV 0..1 = 한 면 전체, repeat 로 칸 수 조절 */
 export function curtainTex({ night = false } = {}) {
-  const [c, g] = cv(128, 256);
-  const gr = g.createLinearGradient(0, 0, 0, 256);
-  if (night) { gr.addColorStop(0, '#f4e6c8'); gr.addColorStop(1, '#e8d2a6'); } else { gr.addColorStop(0, '#8aa4b8'); gr.addColorStop(0.5, '#a9bfcc'); gr.addColorStop(1, '#6f8696'); }
-  g.fillStyle = gr; g.fillRect(0, 0, 128, 256);
-  if (night) { g.fillStyle = 'rgba(70,50,30,0.55)'; for (let y = 40; y < 256; y += 64) g.fillRect(0, y, 128, 7); g.fillStyle = 'rgba(255,255,255,0.45)'; for (let y = 8; y < 256; y += 64) g.fillRect(6, y, 116, 3); }
-  else { g.fillStyle = 'rgba(40,52,64,0.35)'; for (let y = 56; y < 256; y += 64) g.fillRect(0, y, 128, 10); g.fillStyle = 'rgba(255,255,255,0.18)'; g.fillRect(14, 20, 24, 200); g.fillRect(70, 8, 10, 120); }
-  g.fillStyle = night ? '#5b4a36' : '#3b4856'; g.fillRect(0, 0, 3, 256); g.fillRect(125, 0, 3, 256); g.fillRect(0, 0, 128, 4); g.fillRect(0, 252, 128, 4);
+  const W = 1024, H = 768, C = 16, R = 6; const [c, g] = cv(W, H); const r = mulberry(231);
+  for (let y = 0; y < R; y++) for (let x = 0; x < C; x++) {
+    const xx = x * W / C, yy = y * H / R, w = W / C, h = H / R;
+    const lit = r() > 0.2, warm = r() > 0.65, v = 0.6 + r() * 0.4;
+    const gr = g.createLinearGradient(xx, yy, xx + w, yy + h);
+    if (night) { gr.addColorStop(0, lit ? (warm ? '#f5deb2' : '#e5efe8') : '#1c2630'); gr.addColorStop(0.35, lit ? (warm ? '#b8a080' : '#9eafa9') : '#101922'); gr.addColorStop(1, lit ? '#4b514a' : '#101820'); }
+    else { const vv = 1 - y / R * 0.1; gr.addColorStop(0, `rgb(${110 * vv * v | 0},${134 * vv * v | 0},${148 * vv * v | 0})`); gr.addColorStop(0.6, `rgb(${150 * vv * v | 0},${169 * vv * v | 0},${176 * vv * v | 0})`); gr.addColorStop(1, '#667a83'); }
+    g.fillStyle = gr; g.fillRect(xx, yy, w, h);
+    if (night && lit) { g.fillStyle = warm ? '#fff4d4' : '#f4fff7'; g.fillRect(xx + 7, yy + 12, w - 14, 3); g.fillStyle = 'rgba(10,16,18,0.4)'; g.fillRect(xx + 8 + r() * 20, yy + h * 0.6, 8 + r() * 22, h * 0.35); }
+    else if (!night) { g.fillStyle = 'rgba(225,240,250,0.12)'; g.fillRect(xx + w * 0.2, yy + 5, w * 0.13, h - 14); }
+    g.fillStyle = night ? '#18201f' : '#606c70'; g.fillRect(xx, yy, 2, h); g.fillRect(xx + w - 2, yy, 2, h); g.fillRect(xx, yy + h - 7, w, 7);
+    g.fillStyle = night ? '#69736a' : '#a4aba9'; g.fillRect(xx + 2, yy + h - 7, w - 4, 1);
+  }
   return tex(c);
 }
 /** 안내판/사인 텍스트 (흰 글씨, 투명 배경이 아닌 지정 배경) */
@@ -183,7 +189,7 @@ export function labelTex(text, { w = 512, h = 128, bg = '#16161a', fg = '#f2f0ea
 export function skyTex(night = false) {
   const [c, g] = cv(8, 256);
   const gr = g.createLinearGradient(0, 0, 0, 256);
-  if (night) { gr.addColorStop(0, '#04070f'); gr.addColorStop(0.5, '#0d1830'); gr.addColorStop(0.62, '#23324e'); gr.addColorStop(1, '#2d2f3a'); }
+  if (night) { gr.addColorStop(0, '#040c22'); gr.addColorStop(0.5, '#163b72'); gr.addColorStop(0.62, '#526786'); gr.addColorStop(1, '#9c7764'); }
   else { gr.addColorStop(0, '#3f78c4'); gr.addColorStop(0.45, '#8fbbe6'); gr.addColorStop(0.58, '#d3e4f2'); gr.addColorStop(1, '#c9ccc9'); }
   g.fillStyle = gr; g.fillRect(0, 0, 8, 256);
   return tex(c, { rep: false });
@@ -215,10 +221,10 @@ export function scallopTex() {
 export function skinTex() {
   const S = 1024; const [c, g] = cv(S); const r = mulberry(171);
   g.fillStyle = '#c3bfb6'; g.fillRect(0, 0, S, S);
-  for (let i = 0; i < 90; i++) { const x = r() * S, y = r() * S, rad = 60 + r() * 220; const gr = g.createRadialGradient(x, y, 1, x, y, rad); const v = r() < 0.5 ? 235 : 120; gr.addColorStop(0, `rgba(${v},${v - 2},${v - 8},${0.035 + r() * 0.04})`); gr.addColorStop(1, 'rgba(0,0,0,0)'); g.fillStyle = gr; g.fillRect(x - rad, y - rad, rad * 2, rad * 2); }
+  for (let i = 0; i < 90; i++) { const x = r() * S, y = r() * S, rad = 60 + r() * 220; const gr = g.createRadialGradient(x, y, 1, x, y, rad); const v = r() < 0.5 ? 235 : 150; gr.addColorStop(0, `rgba(${v},${v - 2},${v - 8},${0.02 + r() * 0.025})`); gr.addColorStop(1, 'rgba(0,0,0,0)'); g.fillStyle = gr; g.fillRect(x - rad, y - rad, rad * 2, rad * 2); }
   // 빗물 얼룩 (세로로 흐린 줄) — 위에서 아래로 옅어진다
-  for (let i = 0; i < 70; i++) { const x = r() * S, w = 2 + r() * 10, y = r() * S, h = 80 + r() * 300; const gr = g.createLinearGradient(0, y, 0, y + h); gr.addColorStop(0, `rgba(80,76,70,${0.05 + r() * 0.06})`); gr.addColorStop(1, 'rgba(80,76,70,0)'); g.fillStyle = gr; g.fillRect(x, y, w, h); }
-  noise(g, S, S, r, 26000, 0.03, 0.12, 150, 70);
+  for (let i = 0; i < 70; i++) { const x = r() * S, w = 2 + r() * 10, y = r() * S, h = 80 + r() * 300; const gr = g.createLinearGradient(0, y, 0, y + h); gr.addColorStop(0, `rgba(90,86,80,${0.03 + r() * 0.04})`); gr.addColorStop(1, 'rgba(80,76,70,0)'); g.fillStyle = gr; g.fillRect(x, y, w, h); }
+  noise(g, S, S, r, 26000, 0.02, 0.08, 170, 50);
   // 타설 줄 (1.2 m 마다 아주 옅게) + 거푸집 이음 (2.4 m)
   for (let k = 0; k < 4; k++) { const y = k * S / 4 + 1; g.fillStyle = 'rgba(70,66,60,0.16)'; g.fillRect(0, y, S, 2); g.fillStyle = 'rgba(255,255,255,0.10)'; g.fillRect(0, y + 2, S, 1); }
   for (let k = 0; k < 2; k++) { const x = k * S / 2 + 1; g.fillStyle = 'rgba(70,66,60,0.12)'; g.fillRect(x, 0, 2, S); }
@@ -249,10 +255,57 @@ export function pillGlassTex({ night = false } = {}) {
   const [c, g] = cv(256, 128); const r = mulberry(night ? 191 : 193);
   const gr = g.createLinearGradient(0, 0, 0, 128);
   if (night) { gr.addColorStop(0, '#ffe9c4'); gr.addColorStop(0.18, '#fff4dc'); gr.addColorStop(0.32, '#f2c98e'); gr.addColorStop(0.75, '#b9824c'); gr.addColorStop(1, '#6d4a2a'); }
-  else { gr.addColorStop(0, '#5d6a74'); gr.addColorStop(0.22, '#3a444c'); gr.addColorStop(0.6, '#1f262c'); gr.addColorStop(1, '#151a1f'); }
+  else { gr.addColorStop(0, '#8b9aa6'); gr.addColorStop(0.25, '#5f6c76'); gr.addColorStop(0.6, '#3a434a'); gr.addColorStop(1, '#2a3036'); }
   g.fillStyle = gr; g.fillRect(0, 0, 256, 128);
   // 실내 실루엣 (진열대·사람·오브제)
   for (let i = 0; i < 14; i++) { const x = r() * 256, w = 6 + r() * 26, h = 24 + r() * 58; g.fillStyle = night ? `rgba(60,36,18,${0.25 + r() * 0.35})` : `rgba(0,0,0,${0.15 + r() * 0.2})`; g.fillRect(x, 128 - h, w, h); }
   if (night) { for (let i = 0; i < 6; i++) { const x = r() * 256; const rg = g.createRadialGradient(x, 18, 1, x, 18, 40); rg.addColorStop(0, 'rgba(255,250,235,0.9)'); rg.addColorStop(1, 'rgba(255,250,235,0)'); g.fillStyle = rg; g.fillRect(x - 40, 0, 80, 60); } }
+  return tex(c);
+}
+
+/** 성수동 벽돌 외벽 + 창 — 1 repeat = 12 m × 12 m (4×4 칸, 한 칸 = 한 층 3 m). night → 창 emissive 마스크(칸마다 켜짐/꺼짐) */
+export function brickFacadeTex({ tone = '#8e4a37', night = false, seed = 201 } = {}) {
+  const S = 512, C = S / 4; const [c, g] = cv(S); const r = mulberry(seed), rl = mulberry(seed + 7); const col = new THREE.Color(tone);
+  if (night) { g.fillStyle = '#000'; g.fillRect(0, 0, S, S); }
+  else {
+    g.fillStyle = '#6a625b'; g.fillRect(0, 0, S, S);
+    const bh = S / 176, bw = S / 44;
+    for (let j = 0; j < 176; j++) for (let i = -1; i < 45; i++) { const k = 0.78 + r() * 0.34; g.fillStyle = `rgb(${(col.r * 255 * k) | 0},${(col.g * 255 * k) | 0},${(col.b * 255 * k) | 0})`; g.fillRect(i * bw + (j % 2) * bw / 2 + 0.5, j * bh + 0.5, bw - 1, bh - 1); }
+    noise(g, S, S, r, 5000, 0.05, 0.15, 110, 60);
+  }
+  for (let cy = 0; cy < 4; cy++) for (let cx = 0; cx < 4; cx++) {
+    const ox = cx * C, oy = cy * C, wide = rl() < 0.3;
+    const x0 = ox + C * (wide ? 0.12 : 0.27), x1 = ox + C * (wide ? 0.88 : 0.73), y0 = oy + C * 0.24, y1 = oy + C * 0.76;
+    if (night) { const lit = rl() < 0.5; if (lit) { const gr = g.createLinearGradient(0, y0, 0, y1); gr.addColorStop(0, rl() < 0.3 ? '#dfe8ff' : '#ffe0aa'); gr.addColorStop(1, '#b07a44'); g.fillStyle = gr; g.fillRect(x0, y0, x1 - x0, y1 - y0); g.fillStyle = 'rgba(40,24,10,0.5)'; g.fillRect(x0 + (x1 - x0) * rl() * 0.6, y0, (x1 - x0) * 0.3, y1 - y0); } continue; }
+    rl();
+    g.fillStyle = '#c9c3b8'; g.fillRect(x0 - 3, y0 - 6, x1 - x0 + 6, 6);
+    g.fillStyle = '#bdb8ae'; g.fillRect(x0 - 2, y1, x1 - x0 + 4, 3);
+    g.fillStyle = '#262a2e'; g.fillRect(x0, y0, x1 - x0, y1 - y0);
+    const gr = g.createLinearGradient(x0, y0, x1, y1); gr.addColorStop(0, 'rgba(170,195,220,0.6)'); gr.addColorStop(0.5, 'rgba(70,90,110,0.2)'); gr.addColorStop(1, 'rgba(150,175,200,0.45)'); g.fillStyle = gr; g.fillRect(x0 + 2, y0 + 2, x1 - x0 - 4, y1 - y0 - 4);
+    g.fillStyle = '#dcdad4'; g.fillRect((x0 + x1) / 2 - 1, y0, 2, y1 - y0); g.fillRect(x0, y0, x1 - x0, 2); g.fillRect(x0, y1 - 2, x1 - x0, 2); g.fillRect(x0, y0, 2, y1 - y0); g.fillRect(x1 - 2, y0, 2, y1 - y0);
+  }
+  return tex(c);
+}
+/** 1층 카페/편집숍 쇼윈도 — 1 repeat = 12 m × 12 m (가로 4칸; 줄마다 다르게). 위 0.2 는 간판 띠 */
+export function shopfrontTex({ night = false } = {}) {
+  const S = 512, C = S / 4; const [c, g] = cv(S); const r = mulberry(211);
+  g.fillStyle = night ? '#000' : '#1d1e20'; g.fillRect(0, 0, S, S);
+  const warm = ['#ffe2b0', '#ffd08a', '#f6eee0', '#ffc98f'];
+  for (let cy = 0; cy < 4; cy++) for (let cx = 0; cx < 4; cx++) {
+    const ox = cx * C, oy = cy * C, gy0 = oy + C * 0.22, gy1 = oy + C * 0.98;
+    const gr = g.createLinearGradient(0, gy0, 0, gy1);
+    if (night) { gr.addColorStop(0, warm[(r() * 4) | 0]); gr.addColorStop(1, '#a8743e'); } else { gr.addColorStop(0, '#b9ab98'); gr.addColorStop(0.5, '#8a7b6a'); gr.addColorStop(1, '#5a4e43'); r(); }
+    g.fillStyle = gr; g.fillRect(ox + 4, gy0, C - 8, gy1 - gy0);
+    for (let i = 0; i < 3; i++) { const x = ox + 6 + r() * (C - 30), w = 6 + r() * 16, h = 10 + r() * 40; g.fillStyle = night ? 'rgba(90,50,20,0.45)' : 'rgba(20,16,14,0.45)'; g.fillRect(x, gy1 - h, w, h); }
+    if (!night) { const rf = g.createLinearGradient(ox, gy0, ox + C, gy1); rf.addColorStop(0, 'rgba(200,215,230,0.35)'); rf.addColorStop(0.45, 'rgba(200,215,230,0.05)'); rf.addColorStop(1, 'rgba(200,215,230,0.25)'); g.fillStyle = rf; g.fillRect(ox + 4, gy0, C - 8, gy1 - gy0); }
+    g.fillStyle = night ? '#000' : '#111'; g.fillRect(ox + C / 2 - 2, gy0, 4, gy1 - gy0);
+  }
+  return tex(c);
+}
+/** 골함석 창고 벽 (세로 골, 1 repeat = 2 m) */
+export function corrugatedTex(base = '#b9bcbc') {
+  const [c, g] = cv(128); const r = mulberry(221); const col = new THREE.Color(base);
+  for (let x = 0; x < 128; x++) { const k = 0.82 + 0.2 * Math.sin(x / 128 * Math.PI * 2 * 16); g.fillStyle = `rgb(${(col.r * 255 * k) | 0},${(col.g * 255 * k) | 0},${(col.b * 255 * k) | 0})`; g.fillRect(x, 0, 1, 128); }
+  for (let i = 0; i < 30; i++) { const x = r() * 128, h = 20 + r() * 90; const gr = g.createLinearGradient(0, 0, 0, h); gr.addColorStop(0, 'rgba(110,70,40,0.25)'); gr.addColorStop(1, 'rgba(110,70,40,0)'); g.fillStyle = gr; g.fillRect(x, r() * 40, 2 + r() * 4, h); }
   return tex(c);
 }
