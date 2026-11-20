@@ -81,7 +81,8 @@ body.depot-inside #ve-hud{display:none !important} /* 매장 안: 왼쪽 위 할
     try { interior?.dispose(); } catch (e) { console.warn('[depot]', e); }
     interior = null; active = false; document.body.classList.remove('depot-inside');
     fadeSub.textContent = '주변을 다시 그리는 중';
-    try { await Promise.resolve(onPark?.(false)); } catch (e) { console.warn('[depot-park]', e); }
+    // [depot-leave] 월드 복구가 (예외 없이) 영영 안 끝나도 나가기가 멈춘 채 남지 않게 6초 상한
+    try { await Promise.race([Promise.resolve(onPark?.(false)), new Promise((r) => setTimeout(r, 6000))]); } catch (e) { console.warn('[depot-park]', e); }
     try { audio?.leave(); } catch (e) { console.warn('[depot-audio]', e); }
     paEl.hidden = true;
     try { const p = getPlayer?.()?.position; if (p) { p.x = DEPOT_SPAWN.x; p.z = DEPOT_SPAWN.z; } } catch (e) { console.warn('[depot]', e); }
@@ -90,6 +91,17 @@ body.depot-inside #ve-hud{display:none !important} /* 매장 안: 왼쪽 위 할
   function tickFade(dt) {
     if (!fade.phase) return;
     fade.t += dt;
+    // [depot-leave] 안전장치: 나가는 중(페이드 아웃 뒤 매장 정리)이 12초를 넘으면 강제로 마무리해 게임이 까만 화면/매장 프레임에 갇히지 않게 한다
+    if (fade.leaving && fade.phase === 'out' && fade.t > FADE + 12) {
+      console.warn('[depot] leave watchdog: forcing exit');
+      try { onInterior?.('', null); } catch { /* */ }
+      try { interior?.dispose(); } catch { /* */ }
+      interior = null; active = false; leavingWait = false; document.body.classList.remove('depot-inside');
+      try { onPark?.(false); } catch { /* */ }
+      try { audio?.leave(); } catch { /* */ }
+      paEl.hidden = true; fade = { t: -0.1, phase: 'in', leaving: false };
+      return;
+    }
     const a = fade.phase === 'out' ? Math.min(1, fade.t / FADE) : Math.max(0, 1 - fade.t / FADE);
     fadeEl.style.opacity = String(a);
     if (fade.phase === 'out' && fade.t >= FADE) {
