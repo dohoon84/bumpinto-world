@@ -1,8 +1,24 @@
-const {chromium}=require('playwright');(async()=>{const b=await chromium.launch({executablePath:'/usr/bin/google-chrome',args:['--use-gl=angle','--use-angle=swiftshader-webgl','--enable-unsafe-swiftshader','--no-sandbox']});const p=await b.newPage();p.on('pageerror',e=>console.log('ERR',e.message));await p.goto('http://localhost:5311/?gm=1');await p.waitForFunction(()=>window.__gm?.ready,null,{timeout:240000});
-const r=await p.evaluate(()=>{const G=window.__gm,P=G.physics,out=[];const run=(p,dx,dz,n)=>{for(let i=0;i<n;i++)P.tryMove(p,dx,dz);return [p.x.toFixed(2),p.y.toFixed(2),p.z.toFixed(2)].join(',');};
-let p={x:-13,z:10,y:0.12};out.push('escA '+run(p,0,-0.08,200));
-p={x:13.5,z:-3.6,y:5.0};out.push('escB '+run(p,0,0.08,200));
-p={x:9.4,z:-4.4,y:0.12};out.push('st1 '+run(p,0,-0.08,120));const x=10.3,z=-10.6,y=2.56;out.push(JSON.stringify(G.shell.colliders.concat(G.site.colliders).filter(c=>y>=c.y0&&y<=c.y1-0.2&&x>c.x0-0.32&&x<c.x1+0.32&&z>c.z0-0.32&&z<c.z1+0.32)));out.push(JSON.stringify(G.ext.columns.filter(c=>Math.hypot(c[0]-x,c[1]-z)<c[2]+0.4)));out.push('blk '+P.blocked(10.3,-11.76,2.56)+' sup '+P.support(10.3,-11.76,2.56));out.push('st1b '+run(p,0.08,0,50));out.push('st1c '+run(p,0,0.08,120));out.push('st1d '+run(p,-0.08,0,40));out.push('st1e '+run(p,0,-0.08,120));out.push('st1f '+run(p,0.08,0,50));out.push('st1g '+run(p,0,0.08,120));out.push('st1h '+run(p,-0.08,0,40));
-out.push('door '+JSON.stringify(G.ext.door));p={x:G.ext.door.x,z:30,y:0.03};out.push('enter '+run(p,0,-0.08,300));p={x:-5,z:30,y:0.03};out.push('enter2 '+run(p,0,-0.08,300));
-p={x:-6,z:12,y:0.12};out.push('exitS '+run(p,0,0.08,300));
-return out.join('\n')});console.log(r);await b.close()})()
+// [gentle-monster] 걷기 경로 점검: 에스컬레이터 2개, 계단 1→5층, 정문 진입. node scripts/gm-physics-check.cjs [port]
+const { chromium } = require('playwright');
+(async () => {
+  const port = process.argv[2] || '5311';
+  const b = await chromium.launch({ executablePath: '/usr/bin/google-chrome', args: ['--use-gl=angle', '--use-angle=swiftshader-webgl', '--enable-unsafe-swiftshader', '--no-sandbox'] });
+  const p = await b.newPage(); p.on('pageerror', (e) => console.log('ERR', e.message));
+  await p.goto(`http://localhost:${port}/?gm=1`); await p.waitForFunction(() => window.__gm?.ready, null, { timeout: 240000 });
+  const r = await p.evaluate(() => {
+    const G = window.__gm, P = G.physics, out = [];
+    const run = (q, dx, dz, n) => { for (let i = 0; i < n; i++) P.tryMove(q, dx, dz); return `${q.x.toFixed(2)},${q.y.toFixed(2)},${q.z.toFixed(2)}`; };
+    let q = { x: -13, z: 10, y: 0.12 }; out.push('escA 1F→2F: ' + run(q, 0, -0.08, 200));
+    q = { x: 13.5, z: -2.2, y: 5.0 }; out.push('escB 2F→3F: ' + run(q, 0, 0.08, 200));
+    q = { x: 9.4, z: -4.4, y: 0.12 };
+    // 각 목적지에 도달할 때까지 작은 스텝. 4층은 문이 없으므로 경사 상단(-5.1)에서 바로 다음 계단으로 돌아선다.
+    const goZ = (zz) => { for (let i = 0; i < 400 && Math.abs(q.z - zz) > 0.03; i++) { const d = Math.max(-0.05, Math.min(0.05, zz - q.z)); if (!P.tryMove(q, 0, d)) break; } };
+    const goX = (xx) => { for (let i = 0; i < 200 && Math.abs(q.x - xx) > 0.03; i++) { const d = Math.max(-0.05, Math.min(0.05, xx - q.x)); if (!P.tryMove(q, d, 0)) break; } };
+    for (let f = 1; f <= 4; f++) { goX(9.4); goZ(-10.5); goX(11.7); goZ(-5.1); out.push(`stair ${f}F→${f + 1}F: ${q.x.toFixed(2)},${q.y.toFixed(2)},${q.z.toFixed(2)}`); }
+    q = { x: G.ext.door.x, z: 30, y: 0.03 }; out.push('enter front door: ' + run(q, 0, -0.08, 300));
+    q = { x: 11.9, z: -4.6, y: 19.1 }; out.push('5F exit stair to floor: ' + run(q, 0, 0.08, 60));
+    q = { x: 11.9, z: -4.6, y: 14.4 }; out.push('4F sealed (z should stay ≤ -4.25): ' + run(q, 0, 0.08, 60));
+    return out.join('\n');
+  });
+  console.log(r); await b.close();
+})();

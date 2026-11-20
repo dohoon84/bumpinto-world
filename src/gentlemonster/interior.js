@@ -137,7 +137,7 @@ export function buildInterior(mats, imats, shell, ext, sculpts) {
     const sg = new THREE.Group(); sg.position.set(-2.0, y0 + 0.02, 7.4); meshes.push(sg);
     { const sB = mk(3), sr = new Rig(); F.plyShell(sr, {}); sr.emit(sB); flush(sB, 'ply', sg, 3); circ(-2.0, 7.4, 1.9, y0, y0 + 3.8); anims.push((t) => { sg.rotation.y = t * 0.06; }); }
     // 구겨진 크롬 마네킹
-    for (let i = 0; i < 5; i++) { const x = 7.4 + (i % 3) * 1.1 - 0.8, z = -5.2 + Math.floor(i / 3) * 1.6 + (i % 2) * 0.5; meshes.push(sculptMesh(i % 2 ? 'mannequinB' : 'mannequinA', 'chromeHi', { x, y: y0 + 0.02, z, ry: i * 1.3 - 0.4, s: 1 + (i % 3) * 0.04 })); circ(x, z, 0.45, y0, y0 + 2.0); }
+    for (let i = 0; i < 5; i++) { const x = 5.6 + (i % 3) * 1.0, z = -2.8 + Math.floor(i / 3) * 1.5 + (i % 2) * 0.4; meshes.push(sculptMesh(i % 2 ? 'mannequinB' : 'mannequinA', 'chromeHi', { x, y: y0 + 0.02, z, ry: i * 1.3 - 0.4, s: 1 + (i % 3) * 0.04 })); circ(x, z, 0.45, y0, y0 + 2.0); }
     // 하얀 보행 로봇
     { const r = new Rig(); F.walkerBot(r, {}); place(r, B, { x: -9.5, y: y0 + 0.02, z: 8.6, ry: 0.5, sx: 0.8, sy: 0.8, sz: 0.8 }); circ(-9.5, 8.6, 1.5, y0, y0 + 3.6); }
     // 아쿠아 받침대 + 병

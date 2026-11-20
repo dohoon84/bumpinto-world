@@ -140,10 +140,11 @@ export function buildShell(mats, ext, imats) {
   B.box('conc', S.x1 - S.x0 + 0.6, wallH, 0.3, { x: (S.x0 + S.x1) / 2, y: wallH / 2, z: S.z0 - 0.15 }); colliders.push({ t: 'a', x0: S.x0 - 0.3, x1: S.x1 + 0.3, z0: S.z0 - 0.3, z1: S.z0, y0: 0, y1: 30 });
   // 남쪽 벽: 1·2·3·5층만 문 개구(높이 2.7m), 4층은 막힘 (STAFF ONLY)
   { const zw = S.z1 + 0.15, W = S.x1 - S.x0 + 0.6, cx = (S.x0 + S.x1) / 2;
-    const solid = [[FY[1] + 2.7, FY[2]], [FY[2] + 2.7, FY[3]], [FY[3] + 2.7, FY[5]], [FY[5] + 2.7, wallH]];
+    const solid = [[FY[1] + 2.7, FY[2]], [FY[2] + 2.7, FY[3]], [FY[3] + 2.7, FY[4]], [FY[4] + 2.7, FY[5]], [FY[5] + 2.7, wallH]];
+    B.box('metal', W - 0.6, 2.7, 0.08, { x: cx, y: FY[4] + 1.35, z: S.z1 + 0.95, color: 0x5a5d62 }); // 4층 잠긴 철문
     for (const [a, b] of solid) { B.box('conc', W, b - a, 0.3, { x: cx, y: (a + b) / 2, z: zw }); }
     // 층 바닥 아래 (문 아래) 벽은 슬래브가 대신함. 문 위 벽 + 4층 막힘 충돌
-    colliders.push({ t: 'a', x0: S.x0 - 0.3, x1: S.x1 + 0.3, z0: zw - 0.15, z1: zw + 0.15, y0: FY[3] + 0.5, y1: FY[5] - 0.2 });
+    colliders.push({ t: 'a', x0: S.x0 - 0.3, x1: S.x1 + 0.3, z0: S.z1 + 0.9, z1: S.z1 + 1.05, y0: FY[4] - 0.4, y1: FY[5] - 0.2 });
     // 계단실 문 사인
     B.box('lamp', 0.9, 0.22, 0.04, { x: cx, y: FY[1] + 2.45, z: zw + 0.17, color: 0xffe9b8 });
   }
