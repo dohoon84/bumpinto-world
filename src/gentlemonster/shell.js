@@ -29,7 +29,7 @@ export function pointInPoly(pts, x, z) {
 
 export function buildShell(mats, ext, imats) {
   const B = new Builder();
-  for (const k of ['floor1', 'floor2', 'floor3', 'floor4', 'floor5']) B.project(k, 4);
+  for (const k of ['floor1', 'floor3', 'floor4', 'floor5']) B.project(k, 4); B.project('floor2', 2.2);
   for (const k of ['ceil1', 'ceil2', 'ceil3', 'ceil5']) B.project(k, 2.4);
   B.project('conc', 2.4).project('plaster', 3);
   const ring = ringShape(P.A, P.B, P.N, 360);

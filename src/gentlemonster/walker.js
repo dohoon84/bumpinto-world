@@ -93,7 +93,7 @@ export function createWalker({ physics, avatar, camera, start, ceilingAt }) {
     st.dEff = d;
     camera.position.set(tx + dirx * d, ty + diry * d, tz + dirz * d);
     tmp.set(tx, ty - 0.1, tz); camera.lookAt(tmp);
-    avatar.visible = d > 0.8;
+    avatar.visible = d > 0.8 && !st.hide;
   }
   return { p, st, update, keys, stick, teleport(o) { if (o.x != null) { p.x = o.x; p.z = o.z; p.y = physics.support(o.x, o.z, o.y ?? 0.5) ?? (o.y ?? 0.03); } if (o.yaw != null) { st.camYaw = o.yaw; st.yaw = o.faceYaw ?? (o.yaw + Math.PI); } if (o.pitch != null) st.pitch = o.pitch; if (o.dist != null) { st.dist = o.dist; st.dMax = o.dist; } } };
 }

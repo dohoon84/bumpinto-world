@@ -47,6 +47,8 @@ export class Builder {
   }
   box(key, w, h, d, o = {}) { return this.add(key, new THREE.BoxGeometry(w, h, d), o); }
   cyl(key, rt, rb, h, o = {}, seg = 16) { return this.add(key, new THREE.CylinderGeometry(rt, rb, h, seg), o); }
+  /** 반지름 r 원기둥 (cyl 은 rt,rb 따로) */
+  cy(key, r, h, o = {}, seg = 16) { return this.add(key, new THREE.CylinderGeometry(r, r, h, seg), o); }
   sph(key, r, o = {}, ws = 14, hs = 10) { return this.add(key, new THREE.SphereGeometry(r, ws, hs), o); }
   cap(key, r, len, o = {}, seg = 10) { return this.add(key, new THREE.CapsuleGeometry(r, len, 3, seg), o); }
   tor(key, R, r, o = {}, rs = 8, ts = 24) { return this.add(key, new THREE.TorusGeometry(R, r, rs, ts), o); }

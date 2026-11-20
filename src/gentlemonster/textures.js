@@ -90,10 +90,10 @@ export function polishedTex({ tone = '#a7a6a2', jointed = true } = {}) {
 }
 /** 검정 반짝이 테라조 (카운터·2층 바닥) */
 export function blackTerrazzoTex() {
-  const [c, g] = cv(256); const r = mulberry(61);
-  g.fillStyle = '#0d0d10'; g.fillRect(0, 0, 256, 256);
-  const cols = ['#e8e4d8', '#9ea1a8', '#2a2a34', '#c9b27a', '#5b5f6a'];
-  for (let i = 0; i < 700; i++) { g.fillStyle = cols[(r() * cols.length) | 0]; g.globalAlpha = 0.5 + r() * 0.5; const s = 1 + r() * 3.5; g.save(); g.translate(r() * 256, r() * 256); g.rotate(r() * 6.3); g.fillRect(0, 0, s * 1.6, s); g.restore(); }
+  const [c, g] = cv(512); const r = mulberry(61);
+  g.fillStyle = '#0b0b0d'; g.fillRect(0, 0, 512, 512);
+  const cols = ['#8d8a84', '#5d6068', '#24242b', '#8a7a55', '#3b3e46', '#24242b', '#3b3e46'];
+  for (let i = 0; i < 2600; i++) { g.fillStyle = cols[(r() * cols.length) | 0]; g.globalAlpha = 0.35 + r() * 0.5; const s = 0.8 + r() * 2.0; g.save(); g.translate(r() * 512, r() * 512); g.rotate(r() * 6.3); g.fillRect(0, 0, s * 1.6, s); g.restore(); }
   g.globalAlpha = 1; return tex(c);
 }
 /** 회색 털 카펫 / 인조모피 느낌 */
@@ -101,7 +101,7 @@ export function shagTex(base = '#6d7078') {
   const [c, g] = cv(256); const r = mulberry(71);
   g.fillStyle = base; g.fillRect(0, 0, 256, 256);
   for (let i = 0; i < 9000; i++) { const v = 90 + r() * 120; g.fillStyle = `rgba(${v},${v},${v + 8},${0.2 + r() * 0.5})`; g.fillRect(r() * 256, r() * 256, 1.5, 1.5 + r() * 1.5); }
-  for (let i = 0; i < 600; i++) { const cols = ['#c0502f', '#d6b24a', '#3b6fa6', '#e8e4d8', '#2f2f35']; g.fillStyle = cols[(r() * 5) | 0]; g.fillRect(r() * 256, r() * 256, 2, 2); }
+  for (let i = 0; i < 120; i++) { const cols = ['#8a8d94', '#5a5d64', '#9a9ca2', '#4a4c52', '#2f2f35']; g.fillStyle = cols[(r() * 5) | 0]; g.fillRect(r() * 256, r() * 256, 2, 2); }
   return tex(c);
 }
 /** 합판/자작나무 줄무늬 (층판) */
@@ -120,11 +120,11 @@ export function drapeTex(base = '#87933f') {
   return tex(c);
 }
 /** 올리브/베이지 얼룩 카펫 (누데이크) */
-export function mottledTex(a = '#b9b98f', b = '#8d9456') {
+export function mottledTex(a = '#5d6234', b = '#3c4220') {
   const [c, g] = cv(256); const r = mulberry(91);
   g.fillStyle = a; g.fillRect(0, 0, 256, 256);
   for (let i = 0; i < 80; i++) { const x = r() * 256, y = r() * 256, rad = 8 + r() * 28; const gr = g.createRadialGradient(x, y, 1, x, y, rad); gr.addColorStop(0, b); gr.addColorStop(1, 'rgba(0,0,0,0)'); g.globalAlpha = 0.35; g.fillStyle = gr; g.fillRect(x - rad, y - rad, rad * 2, rad * 2); }
-  g.globalAlpha = 1; noise(g, 256, 256, r, 3000, 0.05, 0.18, 150, 60); return tex(c);
+  g.globalAlpha = 1; noise(g, 256, 256, r, 3000, 0.05, 0.14, 90, 40, [1, 1.05, 0.7]); return tex(c);
 }
 /** 흰 자갈 (1 repeat = 3 m) */
 export function gravelTex() {
@@ -162,11 +162,11 @@ export function stuccoTex(base = '#d9d4c8', win = '#30363f') {
 export function curtainTex({ night = false } = {}) {
   const [c, g] = cv(128, 256);
   const gr = g.createLinearGradient(0, 0, 0, 256);
-  if (night) { gr.addColorStop(0, '#ffe2a8'); gr.addColorStop(1, '#ffcf8a'); } else { gr.addColorStop(0, '#6c9ccb'); gr.addColorStop(0.5, '#8bb4d6'); gr.addColorStop(1, '#4d6f90'); }
+  if (night) { gr.addColorStop(0, '#f4e6c8'); gr.addColorStop(1, '#e8d2a6'); } else { gr.addColorStop(0, '#8aa4b8'); gr.addColorStop(0.5, '#a9bfcc'); gr.addColorStop(1, '#6f8696'); }
   g.fillStyle = gr; g.fillRect(0, 0, 128, 256);
-  if (night) { g.fillStyle = 'rgba(255,255,255,0.35)'; for (let y = 8; y < 256; y += 64) g.fillRect(6, y, 116, 3); }
-  g.fillStyle = night ? '#6b5a44' : '#2c3b4a'; g.fillRect(0, 0, 4, 256); g.fillRect(124, 0, 4, 256); g.fillRect(0, 0, 128, 5); g.fillRect(0, 251, 128, 5);
-  g.fillStyle = 'rgba(255,255,255,0.12)'; g.fillRect(14, 20, 24, 200);
+  if (night) { g.fillStyle = 'rgba(70,50,30,0.55)'; for (let y = 40; y < 256; y += 64) g.fillRect(0, y, 128, 7); g.fillStyle = 'rgba(255,255,255,0.45)'; for (let y = 8; y < 256; y += 64) g.fillRect(6, y, 116, 3); }
+  else { g.fillStyle = 'rgba(40,52,64,0.35)'; for (let y = 56; y < 256; y += 64) g.fillRect(0, y, 128, 10); g.fillStyle = 'rgba(255,255,255,0.18)'; g.fillRect(14, 20, 24, 200); g.fillRect(70, 8, 10, 120); }
+  g.fillStyle = night ? '#5b4a36' : '#3b4856'; g.fillRect(0, 0, 3, 256); g.fillRect(125, 0, 3, 256); g.fillRect(0, 0, 128, 4); g.fillRect(0, 252, 128, 4);
   return tex(c);
 }
 /** 안내판/사인 텍스트 (흰 글씨, 투명 배경이 아닌 지정 배경) */

@@ -135,7 +135,7 @@ export function buildExterior(mats) {
   B.box('fluted', 3.2, P.midH + 0.5, 17, { x: H + 1.2, y: (yMid0 + yMid1) / 2, z: -2.5 });
   B.box('fluted', 1.6, P.midH + 0.5, 6, { x: -H - 0.6, y: (yMid0 + yMid1) / 2, z: 5.5 });
   // 층 슬래브 가장자리(보 연결부)
-  for (let f = 0; f <= 6; f++) { const y = yMid0 + f * 4.1; B.box('beam', H * 2 + 0.2, 0.34, 0.5, { x: 0, y, z: H }); B.box('beam', H * 2 + 0.2, 0.34, 0.5, { x: 0, y, z: -H }); B.box('beam', 0.5, 0.34, H * 2 + 0.2, { x: H, y, z: 0 }); B.box('beam', 0.5, 0.34, H * 2 + 0.2, { x: -H, y, z: 0 }); }
+  for (let f = 0; f <= 6; f++) { const y = yMid0 + f * 4.1; B.box('beam', H * 2 + 0.2, 0.5, 0.6, { x: 0, y, z: H }); B.box('beam', H * 2 + 0.2, 0.5, 0.6, { x: 0, y, z: -H }); B.box('beam', 0.6, 0.5, H * 2 + 0.2, { x: H, y, z: 0 }); B.box('beam', 0.6, 0.5, H * 2 + 0.2, { x: -H, y, z: 0 }); }
 
   // ---- 상층: 십자 전망 박스 4개 (UHPC) ----
   const Y0 = yMid1, Y1 = P.top, zOf = (y) => P.wingHalfBot + (y - Y0) / (Y1 - Y0) * (P.wingHalfTop - P.wingHalfBot);
@@ -172,21 +172,22 @@ export function buildExterior(mats) {
     for (const g of info.midFaces) { const m = new THREE.Mesh(g, mats.curtain); m.name = 'gm-curtain'; meshes.push(m); } }
   // 내민보 InstancedMesh
   {
-    const sh = new THREE.Shape(); sh.moveTo(-0.19, -0.2); sh.lineTo(0.19, -0.2); sh.lineTo(0.12, 0.2); sh.lineTo(-0.12, 0.2); sh.closePath();
-    const bg = new THREE.ExtrudeGeometry(sh, { depth: 1.55, bevelEnabled: false });
-    const cols = 15, rows = 12, count = cols * rows * 4;
+    const sh = new THREE.Shape(); sh.moveTo(-0.27, -0.2); sh.lineTo(0.27, -0.2); sh.lineTo(0.16, 0.2); sh.lineTo(-0.16, 0.2); sh.closePath();
+    const bg = new THREE.ExtrudeGeometry(sh, { depth: 1.75, bevelEnabled: false });
+    const cols = 16, rows = 24, count = cols * rows * 4;
     const im = new THREE.InstancedMesh(bg, mats.beamI, count); im.name = 'gm-beams';
     const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), pp = new THREE.Vector3(), one = new THREE.Vector3(1, 1, 1), up = new THREE.Vector3(0, 1, 0);
     let n = 0;
     for (const [fx, fz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
       q.setFromAxisAngle(up, Math.atan2(fx, fz));
       for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
-        const u = -H + (c + 0.5) * (2 * H / cols), y = yMid0 + 0.9 + r * 2.05 + (r % 2 ? 0 : 0);
+        const u = -H + (c + 0.5 + (r % 2 ? 0.5 : 0)) * (2 * H / cols), y = yMid0 + 0.55 + r * (P.midH / rows);
+        if (u > H - 0.3) continue;
         if (fx !== 0) pp.set(fx * (H - 0.1), y, u); else pp.set(u, y, fz * (H - 0.1));
         m4.compose(pp, q, one); im.setMatrixAt(n++, m4);
       }
     }
-    im.instanceMatrix.needsUpdate = true; im.frustumCulled = false; meshes.push(im);
+    im.count = n; im.instanceMatrix.needsUpdate = true; im.frustumCulled = false; meshes.push(im);
   }
   info.meshes = meshes; info.colliders = colliders; info.sE = sE; info.glassOff = glassOff;
   info.tris = B.tris;
