@@ -9,7 +9,7 @@ export function createMaterials({ maxAniso = 4 } = {}) {
   const lam = (o) => new THREE.MeshLambertMaterial({ vertexColors: true, ...o });
   const ct = T.panelTex({ base: '#d8d3c9', cols: 2, rows: 2, dots: true }), up = T.panelTex({ base: '#e2ddd2', cols: 2, rows: 1, joint: 'rgba(90,84,76,0.4)' }), fl = T.ribTex();
   const m = {
-    conc: lam({ map: ct, side: THREE.DoubleSide, color: 0xe2dcd0 }),
+    conc: lam({ map: ct, side: THREE.DoubleSide, color: 0xd2ccc1 }),
     uhpc: lam({ map: up, color: 0xeee9df }),
     crownSoffit: lam({ map: up, color: 0xe3ddd1, emissive: 0xffe3b4, emissiveIntensity: 0 }),
     fluted: lam({ map: fl, color: 0xdcd6ca }),
@@ -18,9 +18,9 @@ export function createMaterials({ maxAniso = 4 } = {}) {
     roofTop: lam({ color: 0xc9c5bc }),
     curtain: new THREE.MeshStandardMaterial({ map: T.curtainTex(), emissiveMap: T.curtainTex({ night: true }), emissive: 0xffffff, emissiveIntensity: 0, metalness: 0.45, roughness: 0.14, envMapIntensity: 1.2, color: 0xe3e9e5 }),
     slit: std({ side: THREE.DoubleSide, map: T.pillGlassTex(), emissiveMap: T.pillGlassTex({ night: true }), color: 0xffffff, metalness: 0.7, roughness: 0.04, emissive: 0xffffff, emissiveIntensity: 0, envMapIntensity: 1.6 }),
-    skin: lam({ map: T.panelTex({ base: '#e6e0d5', cols: 2, rows: 4, joint: 'rgba(90,84,76,0.16)', hi: 'rgba(255,255,255,0.14)' }), side: THREE.DoubleSide, color: 0xffffff }),
-    reveal: lam({ side: THREE.DoubleSide, color: 0xf3efe7 }),
-    tierRib: lam({ map: T.ribTex(), normalMap: T.ribTex({ normal: true }), normalScale: new THREE.Vector2(1.2, 1.2), side: THREE.DoubleSide, color: 0xf2ede3 }),
+    skin: lam({ map: T.panelTex({ base: '#c4bdb1', cols: 2, rows: 4, joint: 'rgba(70,64,56,0.2)', hi: 'rgba(255,255,255,0.14)' }), side: THREE.DoubleSide, color: 0xffffff }),
+    reveal: lam({ side: THREE.DoubleSide, color: 0xd3ccc0 }),
+    tierRib: lam({ map: T.ribTex(), normalMap: T.ribTex({ normal: true }), normalScale: new THREE.Vector2(1.2, 1.2), side: THREE.DoubleSide, color: 0xcfc6b8 }),
     pframe: std({ color: 0x3a3936, metalness: 0.75, roughness: 0.35, side: THREE.DoubleSide }),
     topGlass: std({ side: THREE.DoubleSide, color: 0x6f8496, metalness: 0.6, roughness: 0.08, emissive: 0xfff1dc, emissiveIntensity: 0.12, envMapIntensity: 1.3 }),
     glass: new THREE.MeshStandardMaterial({ color: 0x2b3a46, metalness: 0.7, roughness: 0.04, transparent: true, opacity: 0.2, depthWrite: false, envMapIntensity: 1.3 }),
