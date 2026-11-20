@@ -9,6 +9,7 @@ export function createMaterials({ maxAniso = 4 } = {}) {
   const m = {
     conc: std({ map: ct, roughness: 0.93, metalness: 0, side: THREE.DoubleSide, color: 0xd6cfc2 }),
     uhpc: std({ map: up, roughness: 0.78, metalness: 0.02, color: 0xd9d3c8 }),
+    crownSoffit: std({ map: up, roughness: 0.85, color: 0xe5dfd2, emissive: 0xffe3b4, emissiveIntensity: 0 }),
     fluted: std({ map: fl, roughness: 0.9, color: 0xc4c0b8 }),
     beam: std({ map: ct, roughness: 0.92 }),
     beamI: new THREE.MeshStandardMaterial({ map: ct, roughness: 0.92, color: 0xc4c0b8 }),
@@ -55,6 +56,7 @@ export function setNight(m, night) {
   m.curtain.emissiveIntensity = night ? 1.45 : 0;
   m.curtain.map.needsUpdate = false;
   m.slit.emissiveIntensity = night ? 1.25 : 0;
+  m.crownSoffit.emissiveIntensity = night ? 0.26 : 0;
   m.topGlass.emissiveIntensity = night ? 0.7 : 0.12; m.topGlass.color.set(night ? 0x2a3540 : 0x6f8496);
   m.glass.opacity = night ? 0.12 : 0.2;
   for (const k of ['brickR', 'brickD', 'brickW']) m[k].emissiveIntensity = night ? 0.9 : 0;

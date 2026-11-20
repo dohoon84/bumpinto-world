@@ -64,13 +64,13 @@ export function buildSite(mats, { night = false } = {}) {
   for (const [x, z, s] of [[-24, 12, 0.95], [-25, -6, 1.1], [-22, -20, 1.0], [24, 14, 1.0], [25, -10, 1.15], [23, -23, 0.9], [-8, -25, 1.05], [10, -26, 1.1], [-30, 17, 0.9], [27, 19, 0.85]]) tree(x, z, s, (x | 0) & 3);
   // 들꽃 + 억새 덩이 (정원 가장자리)
   const flowerCols = [0xe06d9e, 0xf3d34a, 0xffffff, 0xb28ee6, 0xf08a4b, 0x6fb7e9];
-  for (let i = 0; i < 520; i++) {
+  for (let i = 0; i < 300; i++) {
     const side = r(); let x, z;
     if (side < 0.34) { x = -33 + r() * 9; z = -29 + r() * 46; } else if (side < 0.68) { x = SITE.laneX0 - 1 - r() * 8; z = -29 + r() * 46; } else { x = -33 + r() * 63; z = -29 + r() * 7; }
     if (Math.hypot(x / 21, z / 18) < 1.12) continue;
     const c = flowerCols[(r() * 6) | 0];
     B.cyl('leaf', 0.012, 0.012, 0.5 + r() * 0.3, { x, y: 0.28, z, color: 0x5d7c36 }, 4);
-    B.sph('paint', 0.07 + r() * 0.05, { x, y: 0.55 + r() * 0.3, z, color: c }, 6, 4);
+    const fg = new THREE.CircleGeometry(0.06 + r() * 0.05, 5); B.add('paint', fg, { x, y: 0.55 + r() * 0.3, z, rx: -Math.PI / 2, color: c }); fg.dispose();
   }
   for (let i = 0; i < 90; i++) { const x = -33 + r() * 62, z = -29 + r() * 49; if (Math.hypot(x / 21, z / 18) < 1.15) continue; B.add('leaf', new THREE.ConeGeometry(0.28 + r() * 0.22, 0.9 + r() * 0.5, 5), { x, y: 0.5, z, color: new THREE.Color(0xc9b66a).offsetHSL(0, 0, (r() - 0.5) * 0.1) }); }
 
@@ -148,7 +148,7 @@ export function buildSite(mats, { night = false } = {}) {
 
   // ---- 맞은편 대지 설치: 숨 쉬는 에어돔 밭 (오리지널) ----
   {
-    const geo = new THREE.SphereGeometry(1, 20, 12, 0, Math.PI * 2, 0, Math.PI / 2);
+    const geo = new THREE.SphereGeometry(1, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2);
     const N = 54, im = new THREE.InstancedMesh(geo, new THREE.MeshStandardMaterial({ roughness: 0.28, metalness: 0.15, envMapIntensity: 1.2 }), N); im.name = 'gm-domes';
     const dat = [], col = new THREE.Color(), rr = mulberry(77);
     for (let i = 0; i < N; i++) {

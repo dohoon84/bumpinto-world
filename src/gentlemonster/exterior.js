@@ -90,7 +90,7 @@ const TIER_CURL = [[0.905, 0.70], [0.95, 0.36], [1, -0.9]];
 
 export function buildExterior(mats) {
   const B = new Builder();
-  B.project('conc', 2.4).project('reveal', 1.2).project('uhpc', 2.4).project('fluted', 1.2).project('paver', 2).project('beam', 2.4).project('soffit', 2.4).project('roofTop', 3);
+  B.project('conc', 2.4).project('reveal', 1.2).project('uhpc', 2.4).project('crownSoffit', 2.4).project('fluted', 1.2).project('paver', 2).project('beam', 2.4).project('soffit', 2.4).project('roofTop', 3);
   const ring = ringShape(P.A, P.B, P.N, 192);
   const geoms = []; // [key, geometry]
   const colliders = []; // 선분 {x1,z1,x2,z2}
@@ -206,7 +206,11 @@ export function buildExterior(mats) {
     const pts = []; for (const [x, y] of prof) { const z = zOf(y); pts.push(new THREE.Vector3(x, y, z), new THREE.Vector3(x, y, -z)); }
     const g = new ConvexGeometry(pts); g.rotateY(rot); return g;
   };
-  for (const rot of [0, Math.PI / 2, Math.PI, -Math.PI / 2]) B.add('uhpc', wingGeo(rot));
+  for (const rot of [0, Math.PI / 2, Math.PI, -Math.PI / 2]) {
+    const g = wingGeo(rot), p = g.attributes.position, n = g.attributes.normal, down = [], up = [];
+    for (let i = 0; i < p.count; i += 3) { const a = n.getY(i) < -0.08 ? down : up; for (let j = 0; j < 3; j++) a.push(p.getX(i + j), p.getY(i + j), p.getZ(i + j)); }
+    for (const [key, arr] of [['uhpc', up], ['crownSoffit', down]]) { const gg = new THREE.BufferGeometry(); gg.setAttribute('position', new THREE.Float32BufferAttribute(arr, 3)); gg.computeVertexNormals(); B.add(key, gg); gg.dispose(); } g.dispose();
+  }
   // 윙 띠창 (끝면 + 옆면)
   for (const rot of [0, Math.PI / 2, Math.PI, -Math.PI / 2]) {
     const ya = Y1 - 4.4, yb = Y1 - 1.7;

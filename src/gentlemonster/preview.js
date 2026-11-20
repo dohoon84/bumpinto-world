@@ -45,8 +45,8 @@ export async function startPreview() {
   const uplights = new THREE.Group(); uplights.name = 'gm-uplights';
   const upl = (pos, tgt, col, I, ang = 0.5) => { const sp = new THREE.SpotLight(col, I, 90, ang, 0.85, 1.6); sp.position.set(...pos); sp.target.position.set(...tgt); sp.userData.I = I; uplights.add(sp, sp.target); };
   // 중층 지붕 모서리 → 윙 아랫면 (따뜻한 색, 세기 다르게)
-  upl([16, 32, 16], [12, 51, 10], 0xffe5bf, 950, 0.65); upl([-16, 32, 16], [-12, 51, 10], 0xffedcf, 1200, 0.65);
-  upl([16, 32, -16], [12, 51, -10], 0xffedcf, 900, 0.65); upl([-16, 32, -16], [-12, 51, -10], 0xffe5bf, 1000, 0.65);
+  upl([16, 46, 16], [10, 52, 9], 0xffe5bf, 40, 0.9); upl([-16, 46, 16], [-10, 52, 9], 0xffedcf, 55, 0.9);
+  upl([16, 46, -16], [10, 52, -9], 0xffedcf, 35, 0.9); upl([-16, 46, -16], [-10, 52, -9], 0xffe5bf, 45, 0.9);
   // 정원 바닥 → 하층 곡면 띠를 스치듯 (차가운 흰색)
   upl([-11, 0.3, 23], [-9, 16, 13], 0xe8eeff, 160, 0.3); upl([11, 0.3, 23], [9, 16, 13], 0xe8eeff, 160, 0.3);
   // 꼭대기 유리 박스에서 위로 은은하게
