@@ -123,6 +123,19 @@ function plaqueTile(ctx, w, h) {
   ctx.fillStyle = '#c9d1d9'; fitText(ctx, '경부고속도로 아래 · 보행자 전용 · 약 140 m', w - 40, Math.round(h * 0.16), 700); ctx.fillText('경부고속도로 아래 · 보행자 전용 · 약 140 m', w / 2, h * 0.84);
 }
 
+// 삼각형 묶음(비인덱스) 지오메트리를 무게중심 기준으로 n 갈래로 쪼갠다
+function splitTris(g, key) {
+  const names = Object.keys(g.attributes), src = names.map((n) => g.attributes[n]), P = g.attributes.position;
+  const out = [0, 1, 2].map(() => names.map(() => []));
+  for (let i = 0; i + 2 < P.count; i += 3) {
+    const k = key((P.getX(i) + P.getX(i + 1) + P.getX(i + 2)) / 3, (P.getZ(i) + P.getZ(i + 1) + P.getZ(i + 2)) / 3);
+    for (let a = 0; a < names.length; a++) { const it = src[a].itemSize; for (let v = 0; v < 3; v++) for (let c = 0; c < it; c++) out[k][a].push(src[a].array[(i + v) * it + c]); }
+  }
+  return out.map((arrs) => { const ng = new THREE.BufferGeometry(); names.forEach((n, a) => ng.setAttribute(n, new THREE.Float32BufferAttribute(arrs[a], src[a].itemSize))); ng.computeBoundingSphere(); ng.computeBoundingBox(); return ng; });
+}
+const MID_A = 34, MID_B = UP.L - 34; // 가운데 몸통 범위(s). 바깥은 항상 켜진 입구/출구 덩어리
+const LABEL_R = 320;                 // 입구·출구 이름표가 보이는 거리(m)
+
 // ---------- 마운트 ----------
 export function mountUnderpass({ scene, overlay = null, terrain, getPlayer, getBikeState = null, search = typeof location !== 'undefined' ? location.search : '' } = {}) {
   const prm = new URLSearchParams(search);
@@ -303,8 +316,8 @@ export function mountUnderpass({ scene, overlay = null, terrain, getPlayer, getB
     M.quad([x - r[0] * w / 2, y - hh / 2, z - r[1] * w / 2], [x + r[0] * w / 2, y - hh / 2, z + r[1] * w / 2], [x + r[0] * w / 2, y + hh / 2, z + r[1] * w / 2], [x - r[0] * w / 2, y + hh / 2, z - r[1] * w / 2], '#ffffff', 1, tPlaque);
   }
   // 3i) 지상 길가 표지: 횡단보도 서쪽 끝(계단 입구 앞) · 두산타워 쪽 횡단보도 시작 · 서쪽 출구 앞
-  const post = (x, z, faceYaw, uvr, w = 2.6) => { // faceYaw: 판이 바라보는 방향(+z 기준, three yaw). 읽는 사람 화면 오른쪽 = (cosYaw, −sinYaw)
-    const hh = w * (SH / SW), y = 2.75;
+  const post = (x, z, faceYaw, uvr, w = 2.6, y = 2.75) => { // faceYaw: 판이 바라보는 방향(+z 기준, three yaw). 읽는 사람 화면 오른쪽 = (cosYaw, −sinYaw)
+    const hh = w * (SH / SW);
     const r = [Math.cos(faceYaw), -Math.sin(faceYaw)];
     for (const sg of [1]) {
       const ox = x + Math.sin(faceYaw) * 0.07, oz = z + Math.cos(faceYaw) * 0.07;
@@ -315,14 +328,19 @@ export function mountUnderpass({ scene, overlay = null, terrain, getPlayer, getB
     const bx = x - Math.sin(faceYaw) * 0.07, bz = z - Math.cos(faceYaw) * 0.07;
     M.quad([bx + r[0] * w / 2, y - hh / 2, bz + r[1] * w / 2], [bx - r[0] * w / 2, y - hh / 2, bz - r[1] * w / 2], [bx - r[0] * w / 2, y + hh / 2, bz - r[1] * w / 2], [bx + r[0] * w / 2, y + hh / 2, bz + r[1] * w / 2], '#ffffff', 0.9, uvr);
   };
-  const pole = (x, z) => { // 세로 기둥 (월드 축 정렬 작은 상자)
+  const pole = (x, z, top = 3.4) => { // 세로 기둥 (월드 축 정렬 작은 상자)
     const [ps, pt] = [(x - UP.O[0]) * UP.ux + (z - UP.O[1]) * UP.uz, (x - UP.O[0]) * UP.nx + (z - UP.O[1]) * UP.nz];
-    M.box(ps - 0.06, ps + 0.06, pt - 0.06, pt + 0.06, 0, 3.4, '#3b4046');
+    M.box(ps - 0.07, ps + 0.07, pt - 0.07, pt + 0.07, 0, top, '#3b4046');
   };
-  const postAt = (x, z, yaw, uvr) => { pole(x, z); post(x, z, yaw, uvr); };
-  postAt(-350.4, 314.2, Math.PI / 2, tCross);    // 횡단보도 서쪽 끝: 건너온(서쪽을 보는) 사람이 읽도록 동쪽(+x)을 향함
-  postAt(-303.6, 325.4, Math.PI / 2, tDepotCW);   // 두산타워 쪽 횡단보도 시작 (서쪽을 보고 걸어오는 사람)
-  postAt(-514.5, 312.4, Math.PI / 2, tDepotOut);  // 서쪽 출구 앞 (서쪽을 보고 나오는 사람, 범창고는 왼쪽=남쪽)
+  // 멀리서도 읽히게 크고 높게. extra = 다른 방향에서 걸어오는 사람용 판(판은 서로 모서리만 닿게 살짝 어긋나게)
+  const postAt = (x, z, yaw, uvr, o = {}) => {
+    const w = o.w ?? 2.6, y = o.y ?? 2.75; pole(x, z, y + w * (SH / SW) / 2 + 0.35);
+    post(x, z, yaw, uvr, w, y);
+    for (const [k, yy] of (o.extra || []).entries()) post(x + Math.sin(yy) * 0.2 * (k + 1), z + Math.cos(yy) * 0.2 * (k + 1), yy, uvr, w, y);
+  };
+  postAt(-350.4, 314.2, Math.PI / 2, tCross, { w: 3.2, y: 3.9 });    // 횡단보도 서쪽 끝: 건너온(서쪽을 보는) 사람이 읽도록 동쪽(+x)을 향함
+  postAt(-303.6, 325.4, Math.PI / 2, tDepotCW, { w: 3.8, y: 4.6, extra: [Math.PI, 0] }); // 동·북·남 세 방향   // 두산타워 쪽 횡단보도 시작 (서쪽을 보고 걸어오는 사람)
+  postAt(-514.5, 312.4, Math.PI / 2, tDepotOut, { w: 3.2, y: 3.9, extra: [Math.PI] });  // 서쪽 출구 앞 (서쪽을 보고 나오는 사람, 범창고는 왼쪽=남쪽)
 
   const geo = M.geometry();
   const stats = { verts: M.verts };
@@ -354,27 +372,35 @@ export function mountUnderpass({ scene, overlay = null, terrain, getPlayer, getB
   // 6) 메시 올리기
   const group = new THREE.Group(); group.name = 'underpass';
   const mats = [];
-  const under = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ vertexColors: true, map: tex, side: THREE.DoubleSide, toneMapped: false }));
-  under.renderOrder = 1002; under.name = 'underpass-body'; under.frustumCulled = true; mats.push(under.material);
+  // [depot-underpass v2] 본체를 동쪽 입구(지상 표지판·기둥·정자·계단) / 터널 가운데 / 서쪽 출구 셋으로 쪼갠다.
+  //   입구·출구 덩어리는 항상 켜 두고(프러스텀 컬링은 각자 경계로) 멀리서도 보이게, 땅 밑 가운데만 가까울 때 켠다(어차피 땅에 가려 있음).
+  const bodyMat = new THREE.MeshBasicMaterial({ vertexColors: true, map: tex, side: THREE.DoubleSide, toneMapped: false }); mats.push(bodyMat);
+  const parts = splitTris(geo, (cx, cz) => { const s = (cx - UP.O[0]) * UP.ux + (cz - UP.O[1]) * UP.uz; return s < MID_A ? 0 : s > MID_B ? 2 : 1; });
+  const bodies = parts.map((g, i) => { const m = new THREE.Mesh(g, bodyMat); m.renderOrder = 1002; m.name = 'underpass-body-' + ['east', 'mid', 'west'][i]; m.frustumCulled = true; return m; });
+  const under = bodies[1];
   const S = { stencilWrite: true, stencilRef: 1 };
   const markMat = new THREE.MeshBasicMaterial({ colorWrite: false, depthWrite: false, side: THREE.DoubleSide, ...S, stencilFunc: THREE.AlwaysStencilFunc, stencilZPass: THREE.ReplaceStencilOp });
-  const markMesh = new THREE.Mesh(mk, markMat); markMesh.renderOrder = 1000; markMesh.name = 'underpass-mark'; mats.push(markMat);
+  const mkE = new THREE.BufferGeometry(), mkW = new THREE.BufferGeometry();
+  { const a = mk.getAttribute('position').array; mkE.setAttribute('position', new THREE.Float32BufferAttribute(a.slice(0, 18), 3)); mkW.setAttribute('position', new THREE.Float32BufferAttribute(a.slice(18, 36), 3)); }
+  const markMesh = new THREE.Mesh(mkE, markMat); markMesh.renderOrder = 1000; markMesh.name = 'underpass-mark'; mats.push(markMat);
+  const markMeshW = new THREE.Mesh(mkW, markMat); markMeshW.renderOrder = 1000; markMeshW.name = 'underpass-mark-w';
   const clearMat = new THREE.ShaderMaterial({
     vertexShader: 'void main(){ gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
     fragmentShader: 'void main(){ gl_FragDepth = 1.0; gl_FragColor = vec4(0.0); }',
     colorWrite: false, depthWrite: true, depthTest: true, depthFunc: THREE.AlwaysDepth, side: THREE.DoubleSide, ...S, stencilFunc: THREE.EqualStencilFunc,
   });
-  const clearMesh = new THREE.Mesh(mk, clearMat); clearMesh.renderOrder = 1001; clearMesh.name = 'underpass-clear'; mats.push(clearMat);
+  const clearMesh = new THREE.Mesh(mkE, clearMat); clearMesh.renderOrder = 1001; clearMesh.name = 'underpass-clear'; mats.push(clearMat);
+  const clearMeshW = new THREE.Mesh(mkW, clearMat); clearMeshW.renderOrder = 1001; clearMeshW.name = 'underpass-clear-w';
   const zebraMesh = new THREE.Mesh(zebra, new THREE.MeshBasicMaterial({ vertexColors: true, toneMapped: false, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }));
   zebraMesh.name = 'underpass-zebra'; zebraMesh.renderOrder = 2; mats.push(zebraMesh.material);
   // 구멍 근처에서만 평가 — 멀리선 통째로 숨김
-  group.add(zebraMesh, markMesh, clearMesh, under);
+  group.add(zebraMesh, markMesh, clearMesh, markMeshW, clearMeshW, ...bodies);
   scene.add(group);
 
   // 7) 이름표
   const labels = [];
   if (overlay?.add) {
-    const w = (s, text) => { const [x, z] = toWorld(s, 0); const v = new THREE.Vector3(x, 4.4, z); return overlay.add({ cls: 'label up-label', text, getPos: () => v, maxDist: 90, minDist: 0 }); };
+    const w = (s, text) => { const [x, z] = toWorld(s, 0); const v = new THREE.Vector3(x, 4.4, z); return overlay.add({ cls: 'label up-label', text, getPos: () => v, maxDist: LABEL_R, minDist: 0 }); };
     labels.push(w(0, '🚶 토끼굴 지하보도 → 범창고'), w(UP.L, '🚶 토끼굴 서쪽 출구 · 범창고 190 m'));
   }
 
@@ -414,8 +440,9 @@ export function mountUnderpass({ scene, overlay = null, terrain, getPlayer, getB
   function tick(player) {
     if (!player) return;
     const P = player.position;
-    const near = Math.abs(P.x - (UP.O[0] + UP.E[0]) / 2) < 120 && Math.abs(P.z - UP.O[1]) < 120;
-    group.visible = near || under.userData.keep === true;
+    // 가운데(땅 밑) 몸통만 가까울 때 켠다. 입구·출구·횡단보도·표지판은 항상 켜져 있고 카메라 프러스텀으로만 걸러진다(팝인 없음).
+    const mx = (UP.O[0] + UP.E[0]) / 2;
+    under.visible = (Math.abs(P.x - mx) < 120 + Math.abs(UP.E[0] - UP.O[0]) / 2 && Math.abs(P.z - UP.O[1]) < 120) || under.userData.keep === true;
     setDeep(covered(P));
     const u = isUnder(P);
     if (player !== lastPlayer || u !== lastUnder) {
@@ -454,7 +481,7 @@ export function mountUnderpass({ scene, overlay = null, terrain, getPlayer, getB
     zone: (x, z) => { const { s, t } = locate(x, z); return inRange(s) && Math.abs(t) < H + 0.3 ? s : null; },
     dispose() {
       setDeep(false); style?.remove(); offSurface(); scene.remove(group);
-      geo.dispose(); mk.dispose(); zebra.dispose(); for (const m of mats) m.dispose(); tex.dispose();
+      geo.dispose(); mk.dispose(); mkE.dispose(); mkW.dispose(); for (const g of parts) g.dispose(); zebra.dispose(); for (const m of mats) m.dispose(); tex.dispose();
       for (const it of labels) overlay?.remove?.(it);
       if (lastPlayer) setOrder(lastPlayer, false);
     },
