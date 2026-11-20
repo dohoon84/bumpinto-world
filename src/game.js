@@ -109,6 +109,7 @@ import { arcadeAtSpot, ARCADE_AT } from './arcade/flag.js'; // [arcade] 위치�
 import { prepareJeongjaBp24, mountBasemapBp24, bp24DoorInfo } from './corridor/bp24.js'; // [bump24-jeongja]
 import { mountBp24Nav } from './corridor/bp24Nav.js'; // [bp24nav]
 import { BUMP24_JEONGJA_AT, bump24AtSpot } from './corridor/bp24Locations.js';
+import { mountUnderpass } from './world/underpass.js'; // [depot-underpass] 정자동 토끼굴(경부고속도로 밑 보행 지하통로)
 import { mountDepot, DEPOT_AT, DEPOT_SPAWN } from './depot/index.js'; // [depot] 범창고 정자점 (?depot=0 끔, ?at=depot 입구 앞)
 import { evictGpu } from './evictGpu.js'; // [memory] 매장 입장 때 바깥 월드 GPU 를 잠시 내림
 import { clearGroup, usedOutside } from './hibernate.js'; // [memory] 폰: 바깥 월드 CPU(정점·캔버스)도 내림
@@ -873,6 +874,8 @@ const depot = mountDepot({
   },
 });
 if (depot) { const withDepot = world.isBlocked; world.isBlocked = (x, z, r) => withDepot(x, z, r) || depot.blocks(x, z, r); }
+const underpass = region.id === 'jeongja' && subwayOn ? mountUnderpass({ scene, overlay, terrain, getPlayer: () => player }) : null; // [depot-underpass] ?underpass=0 끔 (스텐실 구멍은 subway 와 같은 renderer 설정)
+if (underpass) { const withUp = world.isBlocked; world.isBlocked = (x, z, r) => withUp(x, z, r) || underpass.blocks(x, z, r); }
 const gyeongbuSoon = corridor && !corridorData?.gangnam ? mountGyeongbuSoon({ getPos: () => player.position, params, isEn }) : null; // [gyeongbu] 강남이 열려 있으면 본선이 이어지므로 안내하지 않음
 const seoulToll = mountSeoulToll(scene, location.search); // [gyeongbu-bus] 궁내동 서울요금소 (?seoultg=0 끔)
 void seoulToll;
@@ -3123,6 +3126,7 @@ function frame() {
   bump24Game?.outdoorTick(dt, (subwayCanEnter() && !subway?.active && !arcadeGame?.active) ? player.position : null); // [bump24game] 문 앞 들어가기 안내
   arcadeGame?.outdoorTick(dt, arcadeCanApproach() ? player.position : null); // [arcade] joined 대기 없이 문 앞 안내
   depot?.outdoorTick(dt, (arcadeCanApproach() && !arcadeGame?.active) ? player.position : null); // [depot] 범창고 문 앞 안내
+  if (underpass) { underpass.tick(player); if (bikes.riding && underpass.zone(player.position.x, player.position.z) != null && player.position.y < -0.05) dismountBike(); } // [depot-underpass]
   gyeongbuSoon?.tick(dt); // [gyeongbu]
   bungeo?.update(dt, joined ? player.position : null, camera, cam.mode); // [bungeo]
   dogPark.update(dt, player.position);
@@ -3196,6 +3200,7 @@ function frame() {
       if (up != null) pitch = up;
       else dist = shortenBoom(dist, inCar(pitch), { min: 1.2 });
     }
+    if (underpass?.covered(P)) dist = shortenBoom(dist, (d) => { const q = boomPoint(P.x, P.z, eye, yaw, pitch, d); return underpass.camBlocked(q.x, q.y, q.z); }, { min: 1.0 }); // [depot-underpass] 토끼굴 안: 붐을 터널 안으로
     const bx = Math.sin(yaw), bz = Math.cos(yaw), cp = Math.cos(pitch), sp = Math.sin(pitch), aim = 4;
     const camX = P.x + bx * dist * cp, camZ = P.z + bz * dist * cp;
     // renderHeight 는 정자 DEM 만 본다. 남산 높이는 addGroundExtra 로만 들어가서
@@ -3223,6 +3228,7 @@ function frame() {
     }
     const camFloor = terrain ? 1.2 + (Number.isFinite(camH) ? camH : 0) : 0.45;
     camera.position.set(camX, Math.max(camFloor, eye + dist * sp), camZ);
+    underpass?.clampCamera(camera.position, P); // [depot-underpass] 덮인 터널 안이면 카메라를 터널 부피 안에 가둠
     camera.lookAt(P.x - bx * aim * cp, eye - aim * sp, P.z - bz * aim * cp); // [terrain] 시선 기준 높이는 P.y + 1.6
     sun.target.position.copy(P);
   } else {
@@ -3319,7 +3325,7 @@ ready: bootReady, region, tower, renderer, corridor, namsan: corridor?.namsan ||
   get ride() { return ride; }, remotes, presence, // [ride]
   cameraApp, // [camera]
   subway, serverClock, // [subway] [subway-sync]
-  bump24Game, arcadeGame, jeongjaBp24, bp24Nav, depot, // [depot] // [bump24game] [arcade] [bump24-jeongja] [bp24nav]
+  bump24Game, arcadeGame, jeongjaBp24, bp24Nav, depot, underpass, // [depot] [depot-underpass] // [bump24game] [arcade] [bump24-jeongja] [bp24nav]
   titles: titleLayer, // [weekly-titles]
   get pose() { return { sit: mySit, afk: myAfk, jy: jumpY, pew: !!mySeatPew }; }, // [subway-pose] 테스트용
   get pew() { return { near: !mySit && !!nearSeatHint?.pew, seated: !!mySeatPew && !!mySit }; }, // [cathedral-sit] 모바일 행동 버튼

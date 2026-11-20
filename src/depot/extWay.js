@@ -1,9 +1,10 @@
 // [depot-ext] 범창고 길 안내 — 이정표(면마다 길 방향 화살표), 3D 이름표, 미니맵 표시(반짝임)/안내선. 바닥 화살표는 [depot-live] 에서 뺌.
-//   ⚠ 데이터에 경부고속도로를 건너는 보행로가 없어, 정자역 길은 고속도로 동쪽 가장자리(이정표)에서 끝난다.
+//   [depot-underpass] 경부고속도로는 두산타워 앞 횡단보도 → 토끼굴(지하보도)로 건넌다. 정자역 길·안내선·이정표는 그 길을 지난다.
 import * as THREE from 'three';
 import { DEPOT_SITE as S } from './flag.js';
 import { LOT as L } from './extLayout.js';
 import { kit, quads } from './extKit.js';
+import { UNDERPASS_ROUTE, CROSSWALK } from '../world/underpass.js'; // [depot-underpass] 토끼굴(경부고속도로 밑 지하보도)
 
 const STEP = 3.6;
 const DOOR = [S.door.x, L.tower.z0 - 1.6];
@@ -11,13 +12,13 @@ const DOOR = [S.door.x, L.tower.z0 - 1.6];
 const sw = (pts) => pts.map(([x, z]) => [x + 13.9, z]);
 // 길(마지막 점 = 입구 문 앞). 정자역 길은 OSM 도로 그래프 최단 경로를 차도 밖(나란한 차도까지 피해 반폭+1 m 이상)으로 옮긴 선 — 큰길 건너는 곳만 차도 위.
 export const ROUTES = [
-  { id: 'station', pts: [[-4.3, 12.5], [-3.9, 28], [-3.5, 43.6], [-157.2, 43.2], [-155.9, 103.2], [-293, 103.5], [-291.5, 137.6], [-292.4, 204.4], [-297.7, 265.5], [-306.4, 322], [-351.3, 312.4], [-354.9, 334.1], [-366.5, 398.4], [-373, 442.6], [-376, 464.7]] },
+  { id: 'station', pts: [[-4.3, 12.5], [-3.9, 28], [-3.5, 43.6], [-157.2, 43.2], [-155.9, 103.2], [-293, 103.5], [-291.5, 137.6], [-292.4, 204.4], [-297.7, 265.5], [-306.4, 322], ...UNDERPASS_ROUTE, [-503, 330], [DOOR[0], 340], [DOOR[0], 404], DOOR] },
   { id: 'north', pts: [...sw([[-596.7, 312], [-597.1, 384.2], [-597.1, 387], [-597.4, 442]]), [-576, 442], [-576, 453.5], [DOOR[0] - 4.5, 453.5], [DOOR[0], 458], DOOR] },
   { id: 'south', pts: [...sw([[-581.3, 700], [-580.6, 698.1], [-582.6, 656.8], [-585, 609], [-591.3, 542.8], [-595, 508.8], [-597.1, 480.1], [-597.3, 464]]), [-576, 464], [-576, 455.5] ] },
-  { id: 'service', pts: [[-503, 306], [DOOR[0], 330], [DOOR[0], 404], DOOR] },
+  { id: 'service', pts: [[-508, 308.6], [-503, 330], [DOOR[0], 340], [DOOR[0], 404], DOOR] },
 ];
 // 이정표: [x, z, 바라보는 yaw, 아틀라스 칸]
-const POSTS = [[-1, 30, Math.PI / 2, 'post0'], [-379.5, 467, Math.PI, 'post1'], [-580.6, 324, Math.PI, 'post3'], [-566.6, 690, 0, 'post3'], [-498, 309, Math.PI + 0.4, 'post2'], [-498.5, 404.5, Math.PI, 'post2']];
+const POSTS = [[-1, 30, Math.PI / 2, 'post0'], [-580.6, 324, Math.PI, 'post3'], [-566.6, 690, 0, 'post3'], [-497, 318, Math.PI + 0.4, 'post2'], [-498.5, 404.5, Math.PI, 'post2']]; // [depot-underpass] 고속도로 동쪽 끝 이정표(post1)는 뺌 — 이제 지하보도로 건넘
 
 function resample(pts, step) {
   const out = []; let carry = 0;
@@ -68,8 +69,15 @@ export function createDepotWayfinding({ scene, overlay, groundY = () => 0, signT
   function guide() {
     const p = getPos?.(); const from = p ? [p.x, p.z] : [DOOR[0], DOOR[1] - 40];
     guiding = { from };
-    dispatchEvent(new CustomEvent('bw:nav-route', { detail: { points: [from, DOOR], dest: { x: DOOR[0], z: DOOR[1], label: '범창고 입구' } } }));
+    dispatchEvent(new CustomEvent('bw:nav-route', { detail: { points: routeFrom(from), dest: { x: DOOR[0], z: DOOR[1], label: '범창고 입구' } } }));
     return true;
+  }
+  // [depot-underpass] 고속도로 동쪽(정자역·두산타워 쪽)이면 횡단보도 → 토끼굴 → 서쪽 출구를 거쳐서, 이미 서쪽이면 곧장
+  function routeFrom(from) {
+    const [x, z] = from;
+    if (x > UNDERPASS_ROUTE[2][0] && x < UNDERPASS_ROUTE[1][0] - 4 && Math.abs(z - UNDERPASS_ROUTE[1][1]) < 7) return [from, UNDERPASS_ROUTE[2], [-503, 330], DOOR]; // 터널 안
+    if (x > UNDERPASS_ROUTE[2][0] + 14 && z < 480) return [from, ...(x > CROSSWALK.a[0] + 4 ? [CROSSWALK.a] : []), ...(x > UNDERPASS_ROUTE[0][0] + 3 ? [UNDERPASS_ROUTE[0]] : []), UNDERPASS_ROUTE[1], UNDERPASS_ROUTE[2], [-503, 330], DOOR]; // 고속도로 동쪽·사이
+    return [from, DOOR];
   }
   return {
     root, marker, guide, routes: ROUTES,
@@ -78,7 +86,7 @@ export function createDepotWayfinding({ scene, overlay, groundY = () => 0, signT
       if (!pos) return;
       if (guiding) {
         if (Math.hypot(pos.x - DOOR[0], pos.z - DOOR[1]) < 5) { guiding = null; dispatchEvent(new CustomEvent('bw:nav-route', { detail: null })); return; }
-        gAcc += dt; if (gAcc > 0.6 && Math.hypot(pos.x - guiding.from[0], pos.z - guiding.from[1]) > 3) { gAcc = 0; guiding.from = [pos.x, pos.z]; dispatchEvent(new CustomEvent('bw:nav-route', { detail: { points: [guiding.from, DOOR], dest: { x: DOOR[0], z: DOOR[1], label: '범창고 입구' } } })); }
+        gAcc += dt; if (gAcc > 0.6 && Math.hypot(pos.x - guiding.from[0], pos.z - guiding.from[1]) > 3) { gAcc = 0; guiding.from = [pos.x, pos.z]; dispatchEvent(new CustomEvent('bw:nav-route', { detail: { points: routeFrom(guiding.from), dest: { x: DOOR[0], z: DOOR[1], label: '범창고 입구' } } })); }
       }
     },
     dispose() { root.removeFromParent(); pg?.dispose(); qg?.dispose(); postMat.dispose(); if (label) overlay?.remove?.(label); css.remove(); },
