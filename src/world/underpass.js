@@ -214,7 +214,6 @@ export function mountUnderpass({ scene, overlay = null, terrain, getPlayer, getB
       }
     }
   }
-  void wallTop;
   // 벽 녹색 띠(범창고 색, 터널 안내선) — 벽 높이 1.0~1.18 (바닥 기준)
   for (const t of [-H + 0.005, H - 0.005]) {
     const tt = t < 0 ? -H + 0.005 : H - 0.005;
@@ -315,7 +314,6 @@ export function mountUnderpass({ scene, overlay = null, terrain, getPlayer, getB
     // 뒷면
     const bx = x - Math.sin(faceYaw) * 0.07, bz = z - Math.cos(faceYaw) * 0.07;
     M.quad([bx + r[0] * w / 2, y - hh / 2, bz + r[1] * w / 2], [bx - r[0] * w / 2, y - hh / 2, bz - r[1] * w / 2], [bx - r[0] * w / 2, y + hh / 2, bz - r[1] * w / 2], [bx + r[0] * w / 2, y + hh / 2, bz + r[1] * w / 2], '#ffffff', 0.9, uvr);
-    M.box ? null : null;
   };
   const pole = (x, z) => { // 세로 기둥 (월드 축 정렬 작은 상자)
     const [ps, pt] = [(x - UP.O[0]) * UP.ux + (z - UP.O[1]) * UP.uz, (x - UP.O[0]) * UP.nx + (z - UP.O[1]) * UP.nz];
