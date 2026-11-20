@@ -78,14 +78,14 @@ export function buildInterior(mats, imats, shell, ext) {
     // 키네틱 크롬 링 (천장에 매달림)
     const rc = [-0.5, y0 + 3.0, 1.2];
     B.cy('floor2', 0.9, 0.5, { x: rc[0], y: y0 + 0.25, z: rc[2] }, 28); B.cy('lamp', 0.72, 0.03, { x: rc[0], y: y0 + 0.51, z: rc[2], color: 0x9fe8ff }, 28); circ(rc[0], rc[2], 1.0, y0, y0 + 0.6);
-    const rg = new THREE.Group(); rg.position.set(rc[0], y0 + 3.0, rc[2]); meshes.push(rg);
+    const rg = new THREE.Group(); rg.position.set(rc[0], y0 + 2.35, rc[2]); meshes.push(rg);
     const rings = [];
-    [[0.98, 0.05, 0.35, 0.0], [0.78, 0.045, 1.1, 0.5], [0.58, 0.04, 0.2, 1.3], [0.38, 0.035, 0.7, 2.1]].forEach(([R, r, tilt, ph], i) => {
+    [[1.5, 0.07, 0.35, 0.0], [1.2, 0.06, 1.1, 0.5], [0.9, 0.055, 0.2, 1.3], [0.6, 0.05, 0.7, 2.1]].forEach(([R, r, tilt, ph], i) => {
       const RB = mk(2); RB.tor('chrome', R, r, { color: 0xeef1f4 }, 12, 64);
       for (let k = 0; k < 3; k++) RB.sph('chrome', 0.13 - i * 0.015, { x: Math.cos(k * 2.09) * R, y: Math.sin(k * 2.09) * R, color: 0xf6f8fa });
       const g = new THREE.Group(); flush(RB, `ring${i}`, g, 2); g.rotation.set(tilt, ph, 0); rg.add(g); rings.push([g, i, tilt, ph]);
     });
-    const cB = mk(2); cB.sph('chrome', 0.2, { color: 0xffffff }, 24, 16); cB.sph('lamp', 0.1, { color: 0xbff4ff }); flush(cB, 'core', rg, 2);
+    const cB = mk(2); cB.sph('chrome', 0.28, { color: 0xffffff }, 24, 16); cB.sph('lamp', 0.1, { color: 0xbff4ff }); flush(cB, 'core', rg, 2);
     anims.push((t) => { for (const [g, i, tilt, ph] of rings) { g.rotation.x = tilt + t * (0.35 + i * 0.17) * (i % 2 ? -1 : 1); g.rotation.y = ph + t * (0.22 + i * 0.1); g.rotation.z = t * 0.12 * (i + 1); } });
     // 무릎 꿇은 선글라스 거인 (크롬)
     for (const [x, z, ry] of [[4.3, 7.4, -0.9], [-6.8, -4.8, 2.4]]) {

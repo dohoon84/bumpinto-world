@@ -41,7 +41,7 @@ export function buildShell(mats, ext, imats) {
   const H_SH = [S.x0, S.x1, S.z0, S.z1];
   for (const n of [2, 3, 4, 5]) holes[n].push(H_SH);
   holes[2].push([eA.x0, eA.x1, eA.zTop, 3.7]);
-  holes[3].push([eB.x0, eB.x1, -0.4, eB.zTop + 0.3]);
+  holes[3].push([eB.x0, eB.x1, eB.zBot + 4.1, eB.zTop + 0.3]);
   // 엘리베이터 승강로
   const EL = P.elev; for (const n of [1, 2, 3, 4, 5]) holes[n].push([EL.x0, EL.x1, EL.z0, EL.z1]);
 
@@ -93,7 +93,9 @@ export function buildShell(mats, ext, imats) {
   const colsXZ = [];
   for (const x of [-13.5, -4.5, 4.5, 13.5]) for (const z of [-8.5, 0.5, 9]) {
     if (x > 8 && z < -5) continue; // 계단실
-    if (x > -3 && x < 3.5 && z < -8) continue; // 승강로
+    if (x > -3 && x < 3.5 && z < -6.5) continue; // 승강로
+    if (x > eA.x0 - 0.9 && x < eA.x1 + 0.9 && z > eA.zTop - 1 && z < eA.zBot + 1.6) continue; // 에스컬레이터 A 자리
+    if (x > eB.x0 - 0.9 && x < eB.x1 + 0.9 && z > eB.zBot - 1.6 && z < eB.zTop + 1) continue; // 에스컬레이터 B 자리
     colsXZ.push([x, z]);
   }
   for (const n of [1, 2, 3, 5]) {

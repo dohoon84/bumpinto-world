@@ -1,0 +1,8 @@
+const {chromium}=require('playwright');(async()=>{const b=await chromium.launch({executablePath:'/usr/bin/google-chrome',args:['--use-gl=angle','--use-angle=swiftshader-webgl','--enable-unsafe-swiftshader','--no-sandbox']});const p=await b.newPage();p.on('pageerror',e=>console.log('ERR',e.message));await p.goto('http://localhost:5311/?gm=1');await p.waitForFunction(()=>window.__gm?.ready,null,{timeout:240000});
+const r=await p.evaluate(()=>{const G=window.__gm,P=G.physics,out=[];const run=(p,dx,dz,n)=>{for(let i=0;i<n;i++)P.tryMove(p,dx,dz);return [p.x.toFixed(2),p.y.toFixed(2),p.z.toFixed(2)].join(',');};
+let p={x:-13,z:10,y:0.12};out.push('escA '+run(p,0,-0.08,200));
+p={x:13.5,z:-3.6,y:5.0};out.push('escB '+run(p,0,0.08,200));
+p={x:9.4,z:-4.4,y:0.12};out.push('st1 '+run(p,0,-0.08,120));const x=10.3,z=-10.6,y=2.56;out.push(JSON.stringify(G.shell.colliders.concat(G.site.colliders).filter(c=>y>=c.y0&&y<=c.y1-0.2&&x>c.x0-0.32&&x<c.x1+0.32&&z>c.z0-0.32&&z<c.z1+0.32)));out.push(JSON.stringify(G.ext.columns.filter(c=>Math.hypot(c[0]-x,c[1]-z)<c[2]+0.4)));out.push('blk '+P.blocked(10.3,-11.76,2.56)+' sup '+P.support(10.3,-11.76,2.56));out.push('st1b '+run(p,0.08,0,50));out.push('st1c '+run(p,0,0.08,120));out.push('st1d '+run(p,-0.08,0,40));out.push('st1e '+run(p,0,-0.08,120));out.push('st1f '+run(p,0.08,0,50));out.push('st1g '+run(p,0,0.08,120));out.push('st1h '+run(p,-0.08,0,40));
+out.push('door '+JSON.stringify(G.ext.door));p={x:G.ext.door.x,z:30,y:0.03};out.push('enter '+run(p,0,-0.08,300));p={x:-5,z:30,y:0.03};out.push('enter2 '+run(p,0,-0.08,300));
+p={x:-6,z:12,y:0.12};out.push('exitS '+run(p,0,0.08,300));
+return out.join('\n')});console.log(r);await b.close()})()

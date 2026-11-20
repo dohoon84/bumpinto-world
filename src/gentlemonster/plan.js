@@ -20,7 +20,7 @@ PLAN.top = PLAN.midTop + PLAN.topH;                // 60.8
 PLAN.skin = -0.45;          // 실내 벽(안쪽 피부) offset
 PLAN.walk = -0.95;          // 걸어 다닐 수 있는 한계 offset
 PLAN.ceil = (n) => PLAN.floorY[n] - 0 + (n === 1 ? PLAN.t0 - PLAN.floorY[1] : (n === 5 ? 22.6 - PLAN.floorY[5] : PLAN.TIER_H - PLAN.SLAB * 2)); // 층 바닥 → 천장(슬래브 아래) 높이
-PLAN.stair = { x0: 8.3, x1: 13.1, z0: -14.0, z1: -7.0, entryZ: -6.4 };      // 계단실
-PLAN.elev = { x0: -1.6, x1: 3.2, z0: -14.3, z1: -9.0 };                  // 화물 엘리베이터 승강로
+PLAN.stair = { x0: 8.3, x1: 13.1, z0: -12.0, z1: -5.0, entryZ: -4.4 };      // 계단실
+PLAN.elev = { x0: -1.6, x1: 3.2, z0: -12.0, z1: -7.2 };                  // 화물 엘리베이터 승강로
 PLAN.escA = { x0: -14.4, x1: -9.6, zTop: -1.5, zBot: 8.0 };             // 1→2층 에스컬레이터 (서쪽, 남→북 오름)
-PLAN.escB = { x0: 10.2, x1: 15.0, zTop: 5.0, zBot: -4.5 };               // 2→3층 에스컬레이터 (동쪽, 북→남 오름)
+PLAN.escB = { x0: 10.2, x1: 15.0, zTop: 8.5, zBot: -1.0 };               // 2→3층 에스컬레이터 (동쪽, 북→남 오름)
