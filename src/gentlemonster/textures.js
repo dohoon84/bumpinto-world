@@ -309,3 +309,49 @@ export function corrugatedTex(base = '#b9bcbc') {
   for (let i = 0; i < 30; i++) { const x = r() * 128, h = 20 + r() * 90; const gr = g.createLinearGradient(0, 0, 0, h); gr.addColorStop(0, 'rgba(110,70,40,0.25)'); gr.addColorStop(1, 'rgba(110,70,40,0)'); g.fillStyle = gr; g.fillRect(x, r() * 40, 2 + r() * 4, h); }
   return tex(c);
 }
+
+// ---------------- 월드 톤(정자·명동과 같은 납작한 색 + 선) ----------------
+/** 단색 패널 + 가는 줄눈만 (노이즈 없음). cols×rows 패널 / repeat */
+export function panelTex({ base = '#d9d4ca', joint = 'rgba(80,76,70,0.32)', hi = 'rgba(255,255,255,0.22)', cols = 2, rows = 2, dots = false, S = 256 } = {}) {
+  const [c, g] = cv(S); g.fillStyle = base; g.fillRect(0, 0, S, S);
+  for (let i = 0; i < cols; i++) { const x = i * S / cols; g.fillStyle = joint; g.fillRect(x, 0, 2, S); g.fillStyle = hi; g.fillRect(x + 2, 0, 1, S); }
+  for (let j = 0; j < rows; j++) { const y = j * S / rows; g.fillStyle = joint; g.fillRect(0, y, S, 2); g.fillStyle = hi; g.fillRect(0, y + 2, S, 1); }
+  if (dots) { g.fillStyle = joint; for (let i = 0; i < cols * 2; i++) for (let j = 0; j < rows * 2; j++) { g.beginPath(); g.arc((i + 0.5) * S / cols / 2, (j + 0.5) * S / rows / 2, 2.2, 0, 6.3); g.fill(); } }
+  return tex(c);
+}
+/** 주변 건물 외벽(납작한 색) + 창 줄 — 1 repeat = 12 m (4×4 칸 = 층 3 m). night → 켜진 창 마스크 */
+export function flatFacadeTex({ wall = '#c9b9a6', win = '#5d7389', frame = '#eeeae2', night = false, seed = 301, wide = 0.3 } = {}) {
+  const S = 512, C = S / 4; const [c, g] = cv(S); const rl = mulberry(seed);
+  g.fillStyle = night ? '#000' : wall; g.fillRect(0, 0, S, S);
+  if (!night) { g.fillStyle = 'rgba(0,0,0,0.07)'; for (let j = 0; j < 4; j++) g.fillRect(0, j * C + C - 6, S, 6); }
+  for (let cy = 0; cy < 4; cy++) for (let cx = 0; cx < 4; cx++) {
+    const w = rl() < wide, x0 = cx * C + C * (w ? 0.1 : 0.24), x1 = cx * C + C * (w ? 0.9 : 0.76), y0 = cy * C + C * 0.26, y1 = cy * C + C * 0.74, lit = rl() < 0.55, cool = rl() < 0.3;
+    if (night) { if (lit) { g.fillStyle = cool ? '#d9e6ff' : '#ffd99c'; g.fillRect(x0, y0, x1 - x0, y1 - y0); } continue; }
+    g.fillStyle = frame; g.fillRect(x0 - 4, y0 - 4, x1 - x0 + 8, y1 - y0 + 8);
+    g.fillStyle = win; g.fillRect(x0, y0, x1 - x0, y1 - y0);
+    g.fillStyle = 'rgba(255,255,255,0.28)'; g.fillRect(x0, y0, x1 - x0, (y1 - y0) * 0.22);
+    g.fillStyle = frame; g.fillRect((x0 + x1) / 2 - 2, y0, 4, y1 - y0);
+  }
+  return tex(c);
+}
+/** 1층 가게 (납작): 밝은 실내 색 + 검정 틀 — 1 repeat = 12 m, 4칸 */
+export function flatShopTex({ night = false } = {}) {
+  const S = 512, C = S / 4; const [c, g] = cv(S); const r = mulberry(241);
+  const inside = ['#f3e3c4', '#efe9dc', '#f5d9b0', '#e6efe9', '#f2dcd0', '#fbefd2'];
+  g.fillStyle = night ? '#000' : '#2a2b2e'; g.fillRect(0, 0, S, S);
+  for (let cy = 0; cy < 4; cy++) for (let cx = 0; cx < 4; cx++) {
+    const col = inside[(r() * inside.length) | 0], x0 = cx * C + 6, x1 = cx * C + C - 6, y0 = cy * C + C * 0.24, y1 = cy * C + C - 4;
+    g.fillStyle = night ? col : col; g.globalAlpha = night ? 1 : 0.85; g.fillRect(x0, y0, x1 - x0, y1 - y0); g.globalAlpha = 1;
+    // 진열 실루엣(단색 블록 두세 개)
+    for (let i = 0; i < 3; i++) { g.fillStyle = ['#b98b5e', '#7f8c7a', '#c56b4f', '#5d6f86'][(r() * 4) | 0]; const w = 10 + r() * 18, h = 16 + r() * 34, x = x0 + 6 + r() * (x1 - x0 - 30); g.fillRect(x, y1 - h, w, h); }
+    g.fillStyle = night ? '#000' : '#2a2b2e'; g.fillRect((x0 + x1) / 2 - 2, y0, 4, y1 - y0);
+  }
+  return tex(c);
+}
+/** 성수 동네 간판 아틀라스 (지어낸 상호) — 4×4 칸, 칸 = 256×64 */
+export const SIGN_NAMES = [['성수 로스터리', '#1f3a2c', '#f4efe2'], ['빵 굽는 창고', '#f4efe2', '#2a2420'], ['수제화 공방', '#7a2f22', '#f7e9d0'], ['카페 모퉁이', '#e9b949', '#1d1d1d'], ['서울숲 꽃집', '#3f6b45', '#ffffff'], ['연남 아니고 성수', '#16161a', '#f2f0ea'], ['가죽 작업실', '#5a3a24', '#f0dcc0'], ['성수동 국밥', '#c8372d', '#ffffff'], ['편집숍 NOWHERE', '#efefea', '#111111'], ['문구점 연필', '#2c3e8a', '#ffffff'], ['낮술 비스트로', '#6b2140', '#ffe9f0'], ['인쇄소 2F', '#f0f0f0', '#d23b2f'], ['붕어빵 상회', '#f6d26b', '#3b2a14'], ['젤라또 성수', '#f2b8c6', '#4a2a33'], ['자전거 정비', '#20242b', '#f6c344'], ['갤러리 창고', '#ffffff', '#222222']];
+export function signAtlasTex() {
+  const W = 1024, H = 256; const [c, g] = cv(W, H);
+  SIGN_NAMES.forEach(([t, bg, fg], i) => { const x = (i % 4) * 256, y = ((i / 4) | 0) * 64; g.fillStyle = bg; g.fillRect(x, y, 256, 64); g.fillStyle = fg; g.font = '800 30px "Noto Sans KR", "Apple SD Gothic Neo", system-ui, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(t, x + 128, y + 33, 236); g.fillStyle = 'rgba(0,0,0,0.25)'; g.fillRect(x, y + 60, 256, 4); });
+  const t = tex(c, { rep: false }); return t;
+}

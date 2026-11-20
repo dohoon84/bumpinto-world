@@ -12,7 +12,7 @@ export const SITE = {
 
 export function buildSite(mats, { night = false } = {}) {
   const B = new Builder();
-  B.project('gravel', 3).project('asphalt', 6).project('paver', 2).project('brick', 3).project('stucco', 12).project('conc', 2.4).project('brickR', 12).project('brickD', 12).project('brickW', 12).project('shop', 12).project('corr', 2);
+  B.project('gravel', 3).project('asphalt', 6).project('paver', 2).project('brick', 3).project('stucco', 12).project('conc', 2.4).project('brickR', 12).project('brickD', 12).project('brickW', 12).project('shop', 12).project('corr', 2.4);
   const r = mulberry(2025);
   const cols = [], circ = [];
   const wall = (x, z, w, d, h) => cols.push({ t: 'a', x0: x - w / 2, x1: x + w / 2, z0: z - d / 2, z1: z + d / 2, y0: 0, y1: h });
@@ -57,7 +57,7 @@ export function buildSite(mats, { night = false } = {}) {
     circ.push({ x, z, r: 0.22 * s, y0: 0, y1: 8 });
     const h = 3.2 * s, c = [0x6c8a3f, 0x7c9a45, 0xb6a73c][kind % 3];
     B.cyl('paint', 0.08 * s, 0.14 * s, h, { x, y: h / 2, z, color: 0x5b4a3a }, 6);
-    for (let i = 0; i < 7; i++) { const a = r() * 6.3, d = r() * 1.0 * s; B.add('leaf', new THREE.IcosahedronGeometry((0.75 + r() * 0.45) * s, 1), { x: x + Math.cos(a) * d, y: h + 0.2 * s + r() * 1.0 * s, z: z + Math.sin(a) * d, color: new THREE.Color(c).offsetHSL((r() - 0.5) * 0.04, 0, (r() - 0.5) * 0.12), rx: r() * 3, ry: r() * 3 }); }
+    for (let i = 0; i < 5; i++) { const a = r() * 6.3, d = r() * 0.9 * s; B.add('leaf', new THREE.IcosahedronGeometry((0.9 + r() * 0.5) * s, 0), { x: x + Math.cos(a) * d, y: h + 0.2 * s + r() * 1.0 * s, z: z + Math.sin(a) * d, color: new THREE.Color(c).offsetHSL((r() - 0.5) * 0.04, 0, (r() - 0.5) * 0.12), rx: r() * 3, ry: r() * 3 }); }
   };
   // 도로변 가로수 + 정원의 어린 나무
   for (let x = -54; x <= 100; x += 9) if (Math.abs(x) > 6) tree(x, 22.4 + (x > SITE.laneX0 - 3 && x < SITE.laneX1 + 3 ? 4 : 0), 1.0 + r() * 0.3, (x / 9 | 0) & 3);
@@ -77,7 +77,6 @@ export function buildSite(mats, { night = false } = {}) {
   // ---- 주변 저층 건물 (성수동: 붉은 벽돌 2~5층 + 1층 카페/편집숍, 골함석 창고) ----
   // 블록을 9~15 m 필지로 나눠 필지마다 높이·벽돌색·간판·옥상 설비를 다르게. 3 m 격자에 맞춰 창이 층에 맞는다.
   const awnCols = [0x1f3a2c, 0x161616, 0x8a4a2e, 0xd8cfbb, 0x2c3e55, 0x6b6f3a];
-  const signCols = [0xfff1d6, 0xffd38a, 0xf7f3ea, 0xbfe3ff, 0xffb37a];
   const lotBuild = (cx, cz, w, d, face, floors, type) => {
     const h = floors * 3;
     if (type === 'ware') {
@@ -89,7 +88,7 @@ export function buildSite(mats, { night = false } = {}) {
       // 정면: 큰 셔터 + 카페로 바꾼 유리 입구
       const fx = cx + face[0] * (w / 2 + 0.03), fz = cz + face[1] * (d / 2 + 0.03), lw = face[0] ? 0.06 : Math.min(w * 0.5, 7), ld = face[0] ? Math.min(d * 0.5, 7) : 0.06;
       B.box('shop', lw, 3, ld, { x: fx, y: 1.5, z: fz });
-      B.box('paint', face[0] ? 0.08 : lw + 0.4, 0.5, face[0] ? ld + 0.4 : 0.08, { x: fx + face[0] * 0.02, y: 3.35, z: fz + face[1] * 0.02, color: signCols[(r() * 5) | 0] });
+      shopSign(fx, fz, face, Math.max(lw, ld) + 2, 3.7);
       return hw + span * 0.22;
     }
     const mat = type === 'white' ? 'brickW' : type === 'dark' ? 'brickD' : 'brickR';
@@ -100,12 +99,19 @@ export function buildSite(mats, { night = false } = {}) {
     // 차양 + 간판
     const fx = cx + face[0] * (w / 2), fz = cz + face[1] * (d / 2), along = face[0] ? d : w;
     if (r() < 0.7) { const aw = along * (0.45 + r() * 0.4); B.box('paint', face[0] ? 1.1 : aw, 0.08, face[0] ? aw : 1.1, { x: fx + face[0] * 0.55, y: 2.75, z: fz + face[1] * 0.55, rx: face[1] * 0.18, rz: -face[0] * 0.18, color: awnCols[(r() * awnCols.length) | 0] }); }
-    if (r() < 0.75) { const sx = fx + face[0] * 0.5 + (face[1] ? (r() - 0.5) * along * 0.6 : 0), sz = fz + face[1] * 0.5 + (face[0] ? (r() - 0.5) * along * 0.6 : 0); B.box('lamp', face[0] ? 0.6 : 0.12, 1.4, face[0] ? 0.12 : 0.6, { x: sx, y: 4.6, z: sz, color: signCols[(r() * 5) | 0] }); }
+    shopSign(fx, fz, face, along, 3.62);
+    if (r() < 0.75) { const sx = fx + face[0] * 0.5 + (face[1] ? (r() - 0.5) * along * 0.6 : 0), sz = fz + face[1] * 0.5 + (face[0] ? (r() - 0.5) * along * 0.6 : 0); B.box('paint', face[0] ? 0.6 : 0.12, 1.4, face[0] ? 0.12 : 0.6, { x: sx, y: 5.0, z: sz, color: awnCols[(r() * awnCols.length) | 0] }); }
     // 옥상: 물탱크·실외기·철제 난간
     if (r() < 0.6) B.cyl('metal', 0.9, 0.9, 1.6, { x: cx + (r() - 0.5) * w * 0.5, y: h + 0.8, z: cz + (r() - 0.5) * d * 0.5, color: r() < 0.5 ? 0xcfd8de : 0x6f9fc4 }, 12);
     for (let i = 0, n = 1 + (r() * 3 | 0); i < n; i++) B.box('paint', 0.9, 0.7, 0.6, { x: cx + (r() - 0.5) * w * 0.7, y: h + 0.35, z: cz + (r() - 0.5) * d * 0.7, color: 0xd9d9d4 });
     if (r() < 0.4) { B.box('metal', face[0] ? 0.05 : w * 0.6, 1.0, face[0] ? d * 0.6 : 0.05, { x: cx + face[0] * (w / 2 - 0.3), y: h + 1.0, z: cz + face[1] * (d / 2 - 0.3), color: 0x2a2c2e }); }
     return h;
+  };
+  let signI = 0;
+  const shopSign = (fx, fz, face, along, y = 3.6) => {
+    const i = signI++ % 16, w = Math.min(along * 0.55, 5.2), h = w / 4, g = new THREE.PlaneGeometry(w, h), uv = g.attributes.uv;
+    for (let k = 0; k < uv.count; k++) uv.setXY(k, ((i % 4) + uv.getX(k)) / 4, 1 - (((i / 4) | 0) + 1 - uv.getY(k)) / 4);
+    B.add('signs', g, { x: fx + face[0] * 0.08, y, z: fz + face[1] * 0.08, ry: Math.atan2(face[0], face[1]) }); g.dispose();
   };
   const snap = (v) => Math.max(6, Math.round(v / 3) * 3);
   const bld = (x, z, w, d, hMax) => {
