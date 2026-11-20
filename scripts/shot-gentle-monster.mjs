@@ -26,7 +26,9 @@ for (const v of views) {
     if (v.js) await (new Function('G', `return (async()=>{${v.js}})()`))(G);
     for (let i = 0; i < 6; i++) await new Promise((r) => requestAnimationFrame(r));
     await new Promise((r) => setTimeout(r, v.wait ?? 1500));
-    return { draws: G.renderer.info.render.calls, tris: G.renderer.info.render.triangles, geo: G.renderer.info.memory.geometries, tex: G.renderer.info.memory.textures, mem: G.mem ? G.mem() : null };
+    let top;
+    if (v.top) { const L = []; G.scene.traverseVisible((o) => { if (!o.isMesh) return; const g = o.geometry; const t = (g.index ? g.index.count : g.attributes.position.count) / 3 * (o.isInstancedMesh ? o.count : 1); L.push([o.name || o.parent?.name || '?', Math.round(t)]); }); L.sort((a, b) => b[1] - a[1]); top = L.slice(0, v.top); }
+    return { top, draws: G.renderer.info.render.calls, tris: G.renderer.info.render.triangles, geo: G.renderer.info.memory.geometries, tex: G.renderer.info.memory.textures, mem: G.mem ? G.mem() : null };
   }, v);
   await page.screenshot({ path: `${OUT}/${v.file || v.name}.png` });
   results[v.name] = info;

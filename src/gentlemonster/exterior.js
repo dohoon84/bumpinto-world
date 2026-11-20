@@ -8,17 +8,17 @@ const smooth = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a
 
 /** 링을 프로필(t,off)로 스윕한 띠 지오메트리 (바깥 법선) */
 function sweep(ring, y0, h, prof, seg = 192, flip = false) {
-  const M = prof.length, pos = [], idx = [];
+  const M = prof.length, pos = [], idx = [], uv = [];
   for (let j = 0; j <= seg; j++) {
     const s = (j / seg) * ring.perim;
-    for (let k = 0; k < M; k++) { const [t, off] = prof[k]; const q = ringAt(ring, s, off); pos.push(q[0], y0 + t * h, q[1]); }
+    for (let k = 0; k < M; k++) { const [t, off] = prof[k]; const q = ringAt(ring, s, off); pos.push(q[0], y0 + t * h, q[1]); uv.push(s / 4.8, (y0 + t * h) / 4.8); }
   }
   for (let j = 0; j < seg; j++) for (let k = 0; k < M - 1; k++) {
     const a = j * M + k, b = (j + 1) * M + k, c = (j + 1) * M + k + 1, d = j * M + k + 1;
     if (flip) idx.push(a, d, c, a, c, b); else idx.push(a, b, c, a, c, d);
   }
   const g = new THREE.BufferGeometry();
-  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setIndex(idx); g.computeVertexNormals();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setIndex(idx); g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); g.computeVertexNormals();
   return g;
 }
 /** 링 위 알약 모양 창 (호 길이 s0..s1, 높이 y0..y1, 링 offset) */
@@ -31,24 +31,66 @@ function pillGeo(ring, s0, s1, ya, yb, off) {
   for (let i = cap; i >= 0; i--) { const th = (i / cap) * Math.PI / 2; cols.push([s1 - hh + hh * Math.cos(th), hh * Math.sin(th)]); }
   // 중복 제거 (첫 cap 끝 = mid0)
   const cs = []; for (const c of cols) { if (!cs.length || Math.abs(c[0] - cs[cs.length - 1][0]) > 1e-4 || Math.abs(c[1] - cs[cs.length - 1][1]) > 1e-4) cs.push(c); }
-  const pos = [], idx = [];
-  for (const [u, hv] of cs) { const q = ringAt(ring, u, off); pos.push(q[0], yc - hv, q[1], q[0], yc + hv, q[1]); }
+  const pos = [], idx = [], uv = [];
+  for (const [u, hv] of cs) { const q = ringAt(ring, u, off); pos.push(q[0], yc - hv, q[1], q[0], yc + hv, q[1]); uv.push((u - s0) / 3.2, (hh - hv) / (hh * 2), (u - s0) / 3.2, (hh + hv) / (hh * 2)); }
   for (let i = 0; i < cs.length - 1; i++) { const a = i * 2, b = a + 1, c = a + 2, d = a + 3; idx.push(a, c, b, b, c, d); }
   const g = new THREE.BufferGeometry();
-  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setIndex(idx); g.computeVertexNormals();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setIndex(idx); g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); g.computeVertexNormals();
   return g;
+}
+
+// A real aperture: rounded reveal from the concrete lip to the recessed glass.
+function pillEdge(ring, a, b, ya, yb, off, inset = 0) {
+  const r = (yb - ya) / 2 - inset, yc = (ya + yb) / 2, out = [];
+  const add = (s, y) => { const q = ringAt(ring, s, off); out.push([q[0], y, q[1]]); };
+  const c0 = a + (yb - ya) / 2, c1 = b - (yb - ya) / 2;
+  for (let i = 0; i <= 12; i++) { const th = Math.PI / 2 + i / 12 * Math.PI; add(c0 + r * Math.cos(th), yc + r * Math.sin(th)); }
+  const N = Math.ceil((c1 - c0) / 0.65);
+  for (let i = 1; i < N; i++) add(c0 + (c1 - c0) * i / N, yc - r);
+  for (let i = 0; i <= 12; i++) { const th = -Math.PI / 2 + i / 12 * Math.PI; add(c1 + r * Math.cos(th), yc + r * Math.sin(th)); }
+  for (let i = N - 1; i > 0; i--) add(c0 + (c1 - c0) * i / N, yc + r);
+  return out;
+}
+function edgeLoft(A, C) {
+  const p = [];
+  for (let i = 0; i < A.length; i++) { const j = (i + 1) % A.length; p.push(...A[i], ...A[j], ...C[i], ...A[j], ...C[j], ...C[i]); }
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(p, 3)); g.computeVertexNormals(); return g;
+}
+// Fill the recess around (never behind) the analytic pill silhouettes.
+function apertureWall(ring, ya, yb, low, high, pills) {
+  const p = [], uv = [];
+  const quad = (s, t, y0, y1, z0, z1) => {
+    const a = ringAt(ring, s, 0.5), b = ringAt(ring, t, 0.5);
+    const A=[a[0],y0,a[1]], B=[b[0],z0,b[1]], C=[b[0],z1,b[1]], D=[a[0],y1,a[1]];
+    p.push(...A,...B,...C,...A,...C,...D);
+    uv.push(s/4.8,y0/4.8,t/4.8,z0/4.8,t/4.8,z1/4.8,s/4.8,y0/4.8,t/4.8,z1/4.8,s/4.8,y1/4.8);
+  };
+  const yc=(ya+yb)/2, hh=(yb-ya)/2;
+  const height = (s,a,b) => { const d=Math.max(a+hh-s, s-(b-hh),0); return Math.sqrt(Math.max(0,hh*hh-d*d)); };
+  let last=0;
+  const span=(a,b) => { const N=Math.max(1,Math.ceil((b-a)/0.5)); for(let i=0;i<N;i++) quad(a+(b-a)*i/N,a+(b-a)*(i+1)/N,low,high,low,high); };
+  for(const [a,b] of pills) {
+    span(last,a);
+    const cuts=[a,a+hh,b-hh,b]; for(let i=1;i<12;i++){ const x=hh*(1-Math.cos(i/12*Math.PI/2)); cuts.push(a+x,b-x); }
+    for(let x=a+hh+0.6;x<b-hh;x+=0.6) cuts.push(x); cuts.sort((x,y)=>x-y);
+    for(let i=0;i<cuts.length-1;i++){ const s=cuts[i],t=cuts[i+1],h0=height(s,a,b),h1=height(t,a,b); quad(s,t,low,yc-h0,low,yc-h1); quad(s,t,yc+h0,high,yc+h1,high); }
+    last=b;
+  }
+  span(last,ring.perim);
+  const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(p,3));g.setAttribute('uv',new THREE.Float32BufferAttribute(uv,2));g.computeVertexNormals();return g;
 }
 
 // 하층 한 겹(띠) 프로필: [t(0..1), 바깥 offset(m)] — 아래 배, 띠창 오목, 위 배(눈썹), 위쪽으로 말려 들어감
 const TIER_BODY = [[0, -0.9], [0.04, -0.55], [0.12, 0.08], [0.24, 0.6], [0.34, 0.8], [0.385, 0.84]];
-const TIER_LEDGE = [[0.385, 0.84], [0.395, 0.1]];
-const TIER_REC = [[0.395, 0.1], [0.69, 0.1]];
-const TIER_LEDGE2 = [[0.69, 0.1], [0.70, 0.84]];
-const TIER_TOP = [[0.70, 0.84], [0.74, 0.86], [0.84, 0.66], [0.94, 0.0], [1, -0.9]];
+const TIER_LEDGE = [[0.385, 0.84], [0.395, 0.5]];
+const TIER_LEDGE2 = [[0.69, 0.5], [0.70, 0.84]];
+const TIER_TOP = [[0.70, 0.84], [0.722, 0.92], [0.745, 0.88], [0.758, 0.70]];
+const TIER_RIB = [[0.758, 0.70], [0.905, 0.70]];
+const TIER_CURL = [[0.905, 0.70], [0.95, 0.36], [1, -0.9]];
 
 export function buildExterior(mats) {
   const B = new Builder();
-  B.project('conc', 2.4).project('uhpc', 2.4).project('fluted', 1.2).project('paver', 2).project('beam', 2.4).project('soffit', 2.4).project('roofTop', 3);
+  B.project('conc', 2.4).project('reveal', 1.2).project('uhpc', 2.4).project('fluted', 1.2).project('paver', 2).project('beam', 2.4).project('soffit', 2.4).project('roofTop', 3);
   const ring = ringShape(P.A, P.B, P.N, 192);
   const geoms = []; // [key, geometry]
   const colliders = []; // 선분 {x1,z1,x2,z2}
@@ -57,17 +99,24 @@ export function buildExterior(mats) {
   // ---- 하층 띠 4겹 ----
   for (let k = 0; k < P.TIERS; k++) {
     const y0 = P.t0 + k * P.TIER_H;
-    for (const prof of [TIER_BODY, TIER_LEDGE, TIER_REC, TIER_LEDGE2, TIER_TOP]) {
-      B.add('conc', sweep(ring, y0, P.TIER_H, prof, 192, prof === TIER_LEDGE || prof === TIER_LEDGE2), { color: 0xffffff });
+    for (const prof of [TIER_BODY, TIER_LEDGE, TIER_LEDGE2, TIER_TOP, TIER_CURL]) {
+      B.add('skin', sweep(ring, y0, P.TIER_H, prof, 256, prof === TIER_LEDGE || prof === TIER_LEDGE2), { color: 0xffffff });
     }
     // 알약 띠창
     const r = mulberry(100 + k); let s = r() * 6; const pl = []; info.pills.push(pl);
     const ya = y0 + 0.4 * P.TIER_H + 0.05, yb = y0 + 0.685 * P.TIER_H - 0.05;
     while (s < ring.perim - 7) {
       const len = 5.5 + r() * 4.5, e = Math.min(s + len, ring.perim - 0.6);
-      B.add('slit', pillGeo(ring, s, e, ya, yb, 0.14)); info.windows++; pl.push([s, e]);
+      B.add('slit', pillGeo(ring, s + 0.045, e - 0.045, ya + 0.045, yb - 0.045, -0.13), { color: new THREE.Color().setScalar(0.85 + r() * 0.15) });
+      const lip = pillEdge(ring,s,e,ya,yb,0.5), back = pillEdge(ring,s,e,ya,yb,-0.12,0.025), glassEdge = pillEdge(ring,s,e,ya,yb,-0.105,0.065);
+      B.add('reveal', edgeLoft(lip,back)); B.add('pframe', edgeLoft(back, glassEdge));
+      // Thin aluminium transoms follow the curved glazing; opaque texture supplies interior depth.
+      for (let u=s+1.3;u<e-0.7;u+=1.65) { const q=ringAt(ring,u,-0.10); B.box('pframe',0.035,yb-ya-0.09,0.035,{x:q[0],y:(ya+yb)/2,z:q[1],ry:Math.atan2(q[2],q[3])}); }
+      info.windows++; pl.push([s, e]);
       s = e + 0.9 + r() * 0.8;
     }
+    B.add('skin', apertureWall(ring,ya,yb,y0+0.395*P.TIER_H,y0+0.69*P.TIER_H,pl));
+    B.add('tierRib', sweep(ring, y0, P.TIER_H, TIER_RIB, 384));
   }
   // 지붕 (하층 맨 위): 안쪽 오프셋 -0.9 윤곽의 평면
   {

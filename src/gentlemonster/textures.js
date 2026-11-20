@@ -210,3 +210,49 @@ export function scallopTex() {
   const fade = g.createLinearGradient(0, 0, 0, 40); fade.addColorStop(0, 'rgba(0,0,0,1)'); fade.addColorStop(1, 'rgba(0,0,0,0)'); g.globalCompositeOperation = 'destination-out'; g.fillStyle = fade; g.fillRect(0, 0, 128, 40);
   return tex(c, { rep: false });
 }
+
+/** 하층 곡면 노출 콘크리트 — 4.8 m 반복, 매끈한 타설면 + 은은한 타설 줄 + 빗물 얼룩 + 희미한 타이홀 */
+export function skinTex() {
+  const S = 1024; const [c, g] = cv(S); const r = mulberry(171);
+  g.fillStyle = '#c3bfb6'; g.fillRect(0, 0, S, S);
+  for (let i = 0; i < 90; i++) { const x = r() * S, y = r() * S, rad = 60 + r() * 220; const gr = g.createRadialGradient(x, y, 1, x, y, rad); const v = r() < 0.5 ? 235 : 120; gr.addColorStop(0, `rgba(${v},${v - 2},${v - 8},${0.035 + r() * 0.04})`); gr.addColorStop(1, 'rgba(0,0,0,0)'); g.fillStyle = gr; g.fillRect(x - rad, y - rad, rad * 2, rad * 2); }
+  // 빗물 얼룩 (세로로 흐린 줄) — 위에서 아래로 옅어진다
+  for (let i = 0; i < 70; i++) { const x = r() * S, w = 2 + r() * 10, y = r() * S, h = 80 + r() * 300; const gr = g.createLinearGradient(0, y, 0, y + h); gr.addColorStop(0, `rgba(80,76,70,${0.05 + r() * 0.06})`); gr.addColorStop(1, 'rgba(80,76,70,0)'); g.fillStyle = gr; g.fillRect(x, y, w, h); }
+  noise(g, S, S, r, 26000, 0.03, 0.12, 150, 70);
+  // 타설 줄 (1.2 m 마다 아주 옅게) + 거푸집 이음 (2.4 m)
+  for (let k = 0; k < 4; k++) { const y = k * S / 4 + 1; g.fillStyle = 'rgba(70,66,60,0.16)'; g.fillRect(0, y, S, 2); g.fillStyle = 'rgba(255,255,255,0.10)'; g.fillRect(0, y + 2, S, 1); }
+  for (let k = 0; k < 2; k++) { const x = k * S / 2 + 1; g.fillStyle = 'rgba(70,66,60,0.12)'; g.fillRect(x, 0, 2, S); }
+  for (let i = 0; i < 4; i++) for (let j = 0; j < 8; j++) { const x = (i + 0.5) * S / 4, y = (j + 0.5) * S / 8; g.fillStyle = 'rgba(70,66,60,0.32)'; g.beginPath(); g.arc(x, y, 3.4, 0, 6.3); g.fill(); g.fillStyle = 'rgba(255,255,255,0.12)'; g.beginPath(); g.arc(x + 1.2, y + 1.2, 3, 0, 6.3); g.fill(); }
+  return tex(c);
+}
+/** 세로 리브 띠 (8 홈 / 반복) — color + normal */
+export function ribTex({ normal = false } = {}) {
+  const W = 256, H = 64; const [c, g] = cv(W, H); const r = mulberry(181);
+  const img = g.createImageData(W, H);
+  for (let x = 0; x < W; x++) {
+    const f = (x % 32) / 32; // 0..1 한 홈
+    // 볼록 리브(가운데 0.5)와 사이 좁은 홈
+    const d = (f - 0.5) * 2, slope = Math.abs(d) < 0.82 ? -d * 0.9 : (d > 0 ? 1 : -1) * 2.2;
+    const shade = Math.abs(d) < 0.82 ? 1 - d * d * 0.18 : 0.62;
+    for (let y = 0; y < H; y++) {
+      const i = (y * W + x) * 4;
+      if (normal) { const nx = slope, l = Math.hypot(nx, 1); img.data[i] = (nx / l * 0.5 + 0.5) * 255; img.data[i + 1] = 128; img.data[i + 2] = (1 / l * 0.5 + 0.5) * 255; }
+      else { const v = (190 + (r() - 0.5) * 14) * shade; img.data[i] = v; img.data[i + 1] = v * 0.985; img.data[i + 2] = v * 0.95; }
+      img.data[i + 3] = 255;
+    }
+  }
+  g.putImageData(img, 0, 0);
+  return tex(c, { srgb: !normal });
+}
+/** 알약 창 유리 — 낮: 어두운 실내 + 위쪽 천장 빛 / 밤(emissive): 따뜻한 실내, 천장 띠가 가장 밝다. u = 3.2 m 반복 */
+export function pillGlassTex({ night = false } = {}) {
+  const [c, g] = cv(256, 128); const r = mulberry(night ? 191 : 193);
+  const gr = g.createLinearGradient(0, 0, 0, 128);
+  if (night) { gr.addColorStop(0, '#ffe9c4'); gr.addColorStop(0.18, '#fff4dc'); gr.addColorStop(0.32, '#f2c98e'); gr.addColorStop(0.75, '#b9824c'); gr.addColorStop(1, '#6d4a2a'); }
+  else { gr.addColorStop(0, '#5d6a74'); gr.addColorStop(0.22, '#3a444c'); gr.addColorStop(0.6, '#1f262c'); gr.addColorStop(1, '#151a1f'); }
+  g.fillStyle = gr; g.fillRect(0, 0, 256, 128);
+  // 실내 실루엣 (진열대·사람·오브제)
+  for (let i = 0; i < 14; i++) { const x = r() * 256, w = 6 + r() * 26, h = 24 + r() * 58; g.fillStyle = night ? `rgba(60,36,18,${0.25 + r() * 0.35})` : `rgba(0,0,0,${0.15 + r() * 0.2})`; g.fillRect(x, 128 - h, w, h); }
+  if (night) { for (let i = 0; i < 6; i++) { const x = r() * 256; const rg = g.createRadialGradient(x, 18, 1, x, 18, 40); rg.addColorStop(0, 'rgba(255,250,235,0.9)'); rg.addColorStop(1, 'rgba(255,250,235,0)'); g.fillStyle = rg; g.fillRect(x - 40, 0, 80, 60); } }
+  return tex(c);
+}

@@ -14,7 +14,11 @@ export function createMaterials({ maxAniso = 4 } = {}) {
     beamI: new THREE.MeshStandardMaterial({ map: ct, roughness: 0.92, color: 0xc4c0b8 }),
     roofTop: std({ map: T.gravelTex(), roughness: 1 }),
     curtain: new THREE.MeshStandardMaterial({ map: T.curtainTex(), emissiveMap: T.curtainTex({ night: true }), emissive: 0xffffff, emissiveIntensity: 0, metalness: 0.5, roughness: 0.2, envMapIntensity: 1.0, color: 0xdde6ee }),
-    slit: std({ side: THREE.DoubleSide, color: 0x1a232e, metalness: 0.85, roughness: 0.08, emissive: 0xffc27a, emissiveIntensity: 0, envMapIntensity: 1.2 }),
+    slit: std({ side: THREE.DoubleSide, map: T.pillGlassTex(), emissiveMap: T.pillGlassTex({ night: true }), color: 0xffffff, metalness: 0.55, roughness: 0.06, emissive: 0xffffff, emissiveIntensity: 0, envMapIntensity: 1.6 }),
+    skin: std({ map: T.skinTex(), roughness: 0.9, metalness: 0, side: THREE.DoubleSide, color: 0xeae2d4 }),
+    reveal: std({ map: ct, roughness: 0.82, metalness: 0, side: THREE.DoubleSide, color: 0xeee9df }),
+    tierRib: std({ map: T.ribTex(), normalMap: T.ribTex({ normal: true }), normalScale: new THREE.Vector2(1.4, 1.4), roughness: 0.9, side: THREE.DoubleSide, color: 0xdcd6cb }),
+    pframe: std({ color: 0x3a3936, metalness: 0.75, roughness: 0.35, side: THREE.DoubleSide }),
     topGlass: std({ side: THREE.DoubleSide, color: 0x6f8496, metalness: 0.6, roughness: 0.08, emissive: 0xfff1dc, emissiveIntensity: 0.12, envMapIntensity: 1.3 }),
     glass: new THREE.MeshStandardMaterial({ color: 0x2b3a46, metalness: 0.7, roughness: 0.04, transparent: true, opacity: 0.2, depthWrite: false, envMapIntensity: 1.3 }),
     frame: std({ color: 0x1b1c1f, metalness: 0.7, roughness: 0.4 }),
@@ -36,6 +40,7 @@ export function createMaterials({ maxAniso = 4 } = {}) {
     lamp: new THREE.MeshBasicMaterial({ vertexColors: true, toneMapped: false }),
   };
   m.conc.map.repeat.set(1, 1);
+  m.tierRib.map.repeat.set(2.4, 1); m.tierRib.normalMap.repeat.set(2.4, 1);
   for (const k of Object.keys(m)) { const t = m[k].map; if (t) t.anisotropy = maxAniso; }
   return m;
 }
@@ -44,7 +49,7 @@ export function createMaterials({ maxAniso = 4 } = {}) {
 export function setNight(m, night) {
   m.curtain.emissiveIntensity = night ? 0.8 : 0;
   m.curtain.map.needsUpdate = false;
-  m.slit.emissiveIntensity = night ? 0.9 : 0;
+  m.slit.emissiveIntensity = night ? 1.25 : 0;
   m.topGlass.emissiveIntensity = night ? 0.6 : 0.12; m.topGlass.color.set(night ? 0x2a3540 : 0x6f8496);
   m.glass.opacity = night ? 0.12 : 0.2;
 }

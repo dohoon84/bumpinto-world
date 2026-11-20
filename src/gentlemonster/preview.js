@@ -66,7 +66,8 @@ export async function startPreview() {
   let inner = { meshes: [], colliders: [], circles: [], lightSlots: {}, update() {} }, innerP = null;
   const ensureInterior = () => innerP || (innerP = sculptsP.then((sc) => {
     inner = buildInterior(mats, imats, shell, ext, sc);
-    for (const m of inner.meshes) interior.add(m);
+    for (const m of inner.meshes) { interior.add(m); m.updateMatrixWorld(true); const b = new THREE.Box3().setFromObject(m); const y = b.isEmpty() ? 0 : b.min.y + 0.3; m.userData.fl = y > FY[5] - 0.7 ? 5 : y > FY[4] - 0.7 ? 4 : y > FY[3] - 0.7 ? 3 : y > FY[2] - 0.7 ? 2 : 1; m.userData.span = b.isEmpty() ? 0 : b.max.y - b.min.y; }
+    cullKey = '';
     physics.addColliders(inner.colliders, inner.circles);
     lightFloor(state.floor);
     return inner;
@@ -76,6 +77,16 @@ export async function startPreview() {
   const pls = []; for (let i = 0; i < 5; i++) { const l = new THREE.SpotLight(0xffffff, 0, 18, 0.62, 0.65, 1.4); l.name = 'gm-spot' + i; scene.add(l, l.target); pls.push(l); }
   const CEIL = { 1: P.t0 - 0.1, 2: P.floorY[3] - P.SLAB - 0.1, 3: P.floorY[4] - P.SLAB - 0.1, 5: 22.5 };
   const lightFloor = (fl) => { const slots = inner.lightSlots[fl]; pls.forEach((l, i) => { const s = slots?.[i]; if (!s) { l.intensity = 0; return; } l.position.set(s[0] + 0.6, CEIL[fl], s[2] + 0.8); l.target.position.set(s[0], P.floorY[fl] + 0.6, s[2]); l.target.updateMatrixWorld(); l.color.set(s[3]); l.intensity = s[4] * 2.4; }); };
+
+  // 층별 표시: 카메라가 건물 밖이면 1층(유리 너머 보이는)만, 안이면 지금 층 ±1 만 그린다 (폰 삼각형 절약)
+  let cullKey = '';
+  const cullFloors = () => {
+    const c = camera.position;
+    const inB = c.y < P.baseTop && (pointInPoly(shell.levelsInfo[2].poly, c.x, c.z) || pointInPoly(shell.levelsInfo[1].poly, c.x, c.z));
+    const cf = !inB ? 0 : c.y > FY[5] - 0.6 ? 5 : c.y > FY[4] - 0.6 ? 4 : c.y > FY[3] - 0.6 ? 3 : c.y > FY[2] - 0.6 ? 2 : 1;
+    const key = 'k' + cf; if (key === cullKey) return; cullKey = key;
+    for (const m of inner.meshes) { const f = m.userData.fl; if (!f || m.userData.span > 12) continue; m.visible = cf === 0 ? f === 1 : Math.abs(f - cf) <= 1; }
+  };
 
   // ---- 물리 ----
   const segs = ext.colliders; // 1층 유리선
@@ -164,6 +175,7 @@ export async function startPreview() {
     let fl = 0; if (inFoot) { fl = p.y > FY[5] - 0.6 ? 5 : p.y > FY[4] - 0.6 ? 4 : p.y > FY[3] - 0.6 ? 3 : p.y > FY[2] - 0.6 ? 2 : 1; }
     if (fl !== state.floor) { state.floor = fl; floorEl.textContent = fl ? LEVEL_NAME[fl] : ''; lightFloor(fl); applyLook(); }
     if (free.on) { const f = free.v; camera.position.set(f[0], f[1], f[2]); camera.lookAt(f[3], f[4], f[5]); if (f[6] && camera.fov !== f[6]) { camera.fov = f[6]; camera.updateProjectionMatrix(); } }
+    cullFloors();
     sky.position.copy(camera.position);
     renderer.render(scene, camera);
   }

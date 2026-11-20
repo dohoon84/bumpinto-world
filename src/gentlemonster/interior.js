@@ -11,7 +11,7 @@ const TAU = Math.PI * 2;
 
 export function buildInterior(mats, imats, shell, ext, sculpts) {
   const SC = sculpts; // name → BufferGeometry (SDF 조각)
-  const sculptMesh = (name, key, o = {}) => { const m = new THREE.Mesh(SC[name], M[key]); m.position.set(o.x || 0, o.y || 0, o.z || 0); m.rotation.y = o.ry || 0; m.scale.setScalar(o.s || 1); m.name = 'gm-sculpt-' + name; return m; };
+  const sculptMesh = (name, key, o = {}) => { const m = new THREE.LOD(); m.addLevel(new THREE.Mesh(SC[name], M[key]), 0); if (SC[name + '_lo']) m.addLevel(new THREE.Mesh(SC[name + '_lo'], M[key]), 15); m.position.set(o.x || 0, o.y || 0, o.z || 0); m.rotation.y = o.ry || 0; m.scale.setScalar(o.s || 1); m.name = 'gm-sculpt-' + name; return m; };
   const M = { ...mats, ...imats };
   const meshes = [], anims = [], aabbs = [], circles = [];
   const mk = (n) => { const B = new Builder(); B.project('floor2', 1.6).project('ply', 1.2); return B; };
