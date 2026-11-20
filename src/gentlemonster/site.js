@@ -57,7 +57,7 @@ export function buildSite(mats, { night = false } = {}) {
     circ.push({ x, z, r: 0.22 * s, y0: 0, y1: 8 });
     const h = 3.2 * s, c = [0x6c8a3f, 0x7c9a45, 0xb6a73c][kind % 3];
     B.cyl('paint', 0.08 * s, 0.14 * s, h, { x, y: h / 2, z, color: 0x5b4a3a }, 6);
-    for (let i = 0; i < 5; i++) { const a = r() * 6.3, d = r() * 0.9 * s; B.add('leaf', new THREE.IcosahedronGeometry((0.9 + r() * 0.5) * s, 0), { x: x + Math.cos(a) * d, y: h + 0.2 * s + r() * 1.0 * s, z: z + Math.sin(a) * d, color: new THREE.Color(c).offsetHSL((r() - 0.5) * 0.04, 0, (r() - 0.5) * 0.12), rx: r() * 3, ry: r() * 3 }); }
+    for (let i = 0; i < 7; i++) { const a = r() * 6.3, d = r() * 1.0 * s; B.add('leaf', new THREE.IcosahedronGeometry((0.75 + r() * 0.45) * s, 1), { x: x + Math.cos(a) * d, y: h + 0.2 * s + r() * 1.0 * s, z: z + Math.sin(a) * d, color: new THREE.Color(c).offsetHSL((r() - 0.5) * 0.04, 0, (r() - 0.5) * 0.12), rx: r() * 3, ry: r() * 3 }); }
   };
   // 도로변 가로수 + 정원의 어린 나무
   for (let x = -54; x <= 100; x += 9) if (Math.abs(x) > 6) tree(x, 22.4 + (x > SITE.laneX0 - 3 && x < SITE.laneX1 + 3 ? 4 : 0), 1.0 + r() * 0.3, (x / 9 | 0) & 3);

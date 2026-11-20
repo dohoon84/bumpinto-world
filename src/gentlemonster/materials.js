@@ -35,7 +35,7 @@ export function createMaterials({ maxAniso = 4 } = {}) {
     brickW: std({ map: T.brickFacadeTex({ tone: '#d9d4ca', seed: 401 }), emissiveMap: T.brickFacadeTex({ night: true, seed: 401 }), emissive: 0xffffff, emissiveIntensity: 0, roughness: 0.9 }),
     shop: std({ map: T.shopfrontTex(), emissiveMap: T.shopfrontTex({ night: true }), emissive: 0xffffff, emissiveIntensity: 0, roughness: 0.25, metalness: 0.3, envMapIntensity: 1 }),
     corr: std({ map: T.corrugatedTex(), roughness: 0.55, metalness: 0.45 }),
-    leaf: std({ roughness: 0.9, flatShading: true }),
+    leaf: std({ roughness: 0.85 }),
     metal: std({ metalness: 0.85, roughness: 0.3, envMapIntensity: 1 }),
     chrome: std({ metalness: 1, roughness: 0.06, envMapIntensity: 1.5 }),
     mech: std({ metalness: 0.7, roughness: 0.33, envMapIntensity: 1.1 }),
