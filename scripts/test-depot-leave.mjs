@@ -22,11 +22,16 @@ await p.evaluate(() => window.__jj.teleport(-492, 496.6)); await p.waitForTimeou
 await p.keyboard.press('e');
 await p.waitForFunction(() => window.__jj.depot.active, null, { timeout: 150000 });
 await p.waitForTimeout(6000);
+if (process.env.CART) { // 카트에 상품을 담은 채(계산 안 함) 나가기 — 직원 정리·물리 몸체 정리 경로
+  await p.evaluate(() => { const d = window.__jj.depot.interior._dbg; d.setMe(77, 11, 0); d.grabCart(); d.setCart(53.9, 40, 0); d.push(1.0, 1); for (const [id, lv, x, z] of [['soda', 'lower', 0, -0.2], ['water', 'lower', 0, 0.3], ['rice', 'upper', 0, 0.5], ['egg', 'upper', 0, -0.3]]) d.drop(id, lv, x, z, 0); d.run(1); });
+  await p.waitForTimeout(1500);
+}
 if (mode === 'button') await p.evaluate(() => window.__jj.depot.leave());
-else { await p.evaluate(() => { const i = window.__jj.depot.interior; i.st.me.x = 6; i.st.me.z = 1.0; }); await p.waitForTimeout(500); await p.keyboard.press('e'); }
+else { await p.evaluate((cart) => { const i = window.__jj.depot.interior; if (cart) i._dbg.setCart(6, 1.5, 0); else { i.st.me.x = 6; i.st.me.z = 1.0; } }, !!process.env.CART); await p.waitForTimeout(500); await p.keyboard.press('e'); if (process.env.CART) { await p.waitForTimeout(800); await p.keyboard.press('e'); } }
 // 나가기 → 최대 45초 안에 매장 상태가 풀려야 한다
 const t0 = Date.now(); let left = false;
 while (Date.now() - t0 < 45000) { await p.waitForTimeout(1000); const s = await p.evaluate(() => ({ a: window.__jj.depot.active, bz: window.__jj.depot.busy })); if (!s.a && !s.bz) { left = true; break; } }
+if (!left) { const st = await p.evaluate(() => ({ a: window.__jj.depot.active, bz: window.__jj.depot.busy, fr: window.__fr, body: document.body.className, co: window.__jj.depot.interior?._dbg?.co && Object.keys(window.__jj.depot.interior._dbg.co).slice(0, 8) })); console.log('STUCK', JSON.stringify(st), errs.slice(0, 3)); await p.screenshot({ path: process.env.SHOT || '/tmp/depot-leave-stuck.png' }); }
 assert.ok(left, 'depot leave never finished (active/busy stuck)');
 // 5초 걷기 동안 프레임이 계속 흘러야 한다(소프트웨어 렌더라 최소만 요구)
 await p.keyboard.down('w'); const f0 = await p.evaluate(() => window.__fr); await p.waitForTimeout(5000); await p.keyboard.up('w');
