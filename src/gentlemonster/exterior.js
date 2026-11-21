@@ -201,7 +201,11 @@ export function buildExterior(mats) {
 
   // ---- 상층: 십자 전망 박스 4개 (UHPC) ----
   const Y0 = yMid1, Y1 = P.top, zOf = (y) => P.wingHalfBot + (y - Y0) / (Y1 - Y0) * (P.wingHalfTop - P.wingHalfBot);
-  const prof = [[2, Y0], [10.5, Y0], [P.wingOut, Y1 - 7.6], [P.wingOut, Y1], [2, Y1]];
+  // [v4] 사진(tsl-002/004): 박스 바깥 끝은 막힌 면이 아니라 깊게 파인 빈 액자(얇은 벽 튜브) — 안은 어둡고 안쪽 벽에 띠창.
+  //   몸통은 끝에서 XD 안쪽까지만 꽉 차고, 그 앞은 위·아래·양옆 판만 남긴다.
+  const XD = 3.8, XF = P.wingOut - XD, TH = 0.6;
+  const botY = (x) => (x <= 10.5 ? Y0 : Y0 + (x - 10.5) / (P.wingOut - 10.5) * (Y1 - 7.6 - Y0));
+  const prof = [[2, Y0], [10.5, Y0], [XF, botY(XF)], [XF, Y1], [2, Y1]];
   const wingGeo = (rot) => {
     const pts = []; for (const [x, y] of prof) { const z = zOf(y); pts.push(new THREE.Vector3(x, y, z), new THREE.Vector3(x, y, -z)); }
     const g = new ConvexGeometry(pts); g.rotateY(rot); return g;
@@ -211,13 +215,36 @@ export function buildExterior(mats) {
     for (let i = 0; i < p.count; i += 3) { const a = n.getY(i) < -0.08 ? down : up; for (let j = 0; j < 3; j++) a.push(p.getX(i + j), p.getY(i + j), p.getZ(i + j)); }
     for (const [key, arr] of [['uhpc', up], ['crownSoffit', down]]) { const gg = new THREE.BufferGeometry(); gg.setAttribute('position', new THREE.Float32BufferAttribute(arr, 3)); gg.computeVertexNormals(); B.add(key, gg); gg.dispose(); } g.dispose();
   }
-  // 윙 띠창 (끝면 + 옆면)
+  // 끝 액자(튜브) + 안쪽: 어두운 속 벽 · 안쪽 끝 유리 · 안쪽 옆벽 띠창
+  const XT = P.wingOut;
+  const hullAdd = (pts, rot, key) => { const g = new ConvexGeometry(pts.map(([x, y, z]) => new THREE.Vector3(x, y, z))); g.rotateY(rot); B.add(key, g); g.dispose(); };
+  const quadAdd = (q, rot, key) => { const g = new THREE.BufferGeometry(), f = []; for (const i of [0, 1, 2, 0, 2, 3]) f.push(...q[i]); g.setAttribute('position', new THREE.Float32BufferAttribute(f, 3)); g.computeVertexNormals(); g.rotateY(rot); B.add(key, g); g.dispose(); };
+  for (const rot of [0, Math.PI / 2, Math.PI, -Math.PI / 2]) {
+    const zt = zOf(Y1);
+    // 위판
+    hullAdd([XF, XT].flatMap((x) => [[x, Y1, zt], [x, Y1, -zt], [x, Y1 - TH, zOf(Y1 - TH)], [x, Y1 - TH, -zOf(Y1 - TH)]]), rot, 'uhpc');
+    // 아래판 (경사 밑면 따라)
+    hullAdd([XF, XT].flatMap((x) => { const y = botY(x); return [[x, y, zOf(y)], [x, y, -zOf(y)], [x, y + TH, zOf(y + TH)], [x, y + TH, -zOf(y + TH)]]; }), rot, 'uhpc');
+    // 양옆판
+    for (const sg of [-1, 1]) hullAdd([XF, XT].flatMap((x) => { const ya = botY(x); return [[x, ya, sg * zOf(ya)], [x, Y1, sg * zt], [x, ya, sg * (zOf(ya) - TH)], [x, Y1, sg * (zt - TH)]]; }), rot, 'uhpc');
+    // 어두운 속 (안쪽 네 면에 얇은 안감) — 깊은 구멍이 그늘져 보이게
+    const yi0 = (x) => botY(x) + TH + 0.02, yi1 = Y1 - TH - 0.02, zi = (y) => zOf(y) - TH - 0.02;
+    quadAdd([[XF, yi1, -zi(yi1)], [XT - 0.05, yi1, -zi(yi1)], [XT - 0.05, yi1, zi(yi1)], [XF, yi1, zi(yi1)]], rot, 'pframe');
+    quadAdd([[XF, yi0(XF), zi(yi0(XF))], [XT - 0.05, yi0(XT), zi(yi0(XT))], [XT - 0.05, yi0(XT), -zi(yi0(XT))], [XF, yi0(XF), -zi(yi0(XF))]], rot, 'pframe');
+    for (const sg of [-1, 1]) {
+      quadAdd([[XF, yi0(XF), sg * zi(yi0(XF))], [XF, yi1, sg * zi(yi1)], [XT - 0.05, yi1, sg * zi(yi1)], [XT - 0.05, yi0(XT), sg * zi(yi0(XT))]], rot, 'pframe');
+      // 안쪽 옆벽 띠창 2줄
+      for (const [ya, yb] of [[Y1 - 3.6, Y1 - 2.6], [Y1 - 2.2, Y1 - 1.4]]) quadAdd([[XF + 0.3, ya, sg * (zi(ya) - 0.03)], [XF + 0.3, yb, sg * (zi(yb) - 0.03)], [XT - 0.4, yb, sg * (zi(yb) - 0.03)], [XT - 0.4, ya, sg * (zi(ya) - 0.03)]], rot, 'topGlass');
+    }
+    // 안쪽 끝(몸통 면): 어두운 유리 + 가로 멀리온
+    const yA = yi0(XF), za = zi(yA), zb = zi(yi1);
+    quadAdd([[XF + 0.03, yA, -za], [XF + 0.03, yA, za], [XF + 0.03, yi1, zb], [XF + 0.03, yi1, -zb]], rot, 'topGlass');
+    const c = Math.cos(rot), sn = Math.sin(rot);
+    for (const y of [yA + (yi1 - yA) * 0.4, yA + (yi1 - yA) * 0.72]) B.box('frame', 0.1, 0.1, za + zb, { x: (XF + 0.1) * c, y, z: -(XF + 0.1) * sn, ry: rot });
+  }
+  // 윙 띠창 (옆면)
   for (const rot of [0, Math.PI / 2, Math.PI, -Math.PI / 2]) {
     const ya = Y1 - 4.4, yb = Y1 - 1.7;
-    const end = new THREE.PlaneGeometry(1, 1);
-    const pp = [[P.wingOut + 0.04, ya, -(zOf(ya) - 0.55)], [P.wingOut + 0.04, ya, zOf(ya) - 0.55], [P.wingOut + 0.04, yb, zOf(yb) - 0.55], [P.wingOut + 0.04, yb, -(zOf(yb) - 0.55)]];
-    const g = new THREE.BufferGeometry(); const fl = []; for (const i of [0, 1, 2, 0, 2, 3]) fl.push(...pp[i]); g.setAttribute('position', new THREE.Float32BufferAttribute(fl, 3)); g.computeVertexNormals(); g.rotateY(rot);
-    B.add('topGlass', g); end.dispose();
     for (const sg of [-1, 1]) {
       const x0 = 5.0, x1 = P.wingOut - 1.3, off = 0.04, a = zOf(ya) + off, b = zOf(yb) + off;
       const q = [[x0, ya, sg * a], [x1, ya, sg * a], [x1, yb, sg * b], [x0, yb, sg * b]];

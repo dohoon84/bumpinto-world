@@ -2,7 +2,7 @@
 //   1구간 createHangangTerrain/Paths/City/Props 를 재사용한다. 반포·잠수교 메시는 만들지 않는다.
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { inWater, centroid, projectOnLine } from './hangangCoords.js';
+import { inWater, centroid, projectOnLine, pointInRings } from './hangangCoords.js';
 import { createHangangTerrain, createHangangTerrainAsync, waterYAt } from './hangangTerrain.js';
 import { createHangangPaths, createHangangPathsAsync } from './hangangPaths.js';
 import { createHangangCity, createHangangCityAsync } from './hangangCity.js';
@@ -474,6 +474,46 @@ function startHangangHap(parent, osm) {
   return root;
 }
 
+// [seongsu-v4] 한강 북단(성수·자양 쪽, 성수대교~청담대교) 땅: 2구간 DEM 은 전부 잔디 텍스처라 아파트 단지·길 자리까지
+//   푸른 잔디였다. 공원(OSM 뚝섬한강공원 등)과 물가 둔치 띠(물에서 ~110 m)만 잔디로 두고, 나머지 시가지는 포장 회색 메시로 옮긴다.
+const URBAN_BAND = { x0: -7000, x1: -3000, z0: -18700, z1: -17950 };
+function splitHapUrban(root, osm) {
+  if (osm?.meta?.segment !== 'hap') return;
+  const dems = []; root.traverse((o) => { if (o.isMesh && o.name === 'hangang-dem') dems.push(o); }); // 구운 DEM 은 여러 조각
+  for (const dem of dems) splitDemUrban(dem, osm);
+}
+function splitDemUrban(dem, osm) {
+  const g = dem?.geometry, pos = g?.attributes?.position; if (!pos) return;
+  g.computeBoundingBox?.(); const bx = g.boundingBox;
+  if (bx && (bx.max.x < URBAN_BAND.x0 || bx.min.x > URBAN_BAND.x1 || bx.max.z < URBAN_BAND.z0 || bx.min.z > URBAN_BAND.z1)) return;
+  const parks = (osm.parks || []).filter((p) => p.o?.length >= 3);
+  const memo = new Map(), C = 20, B = URBAN_BAND;
+  const urban = (x, z) => {
+    if (x < B.x0 || x > B.x1 || z < B.z0 || z > B.z1) return false;
+    const key = Math.floor(x / C) * 100000 + Math.floor(z / C); let u = memo.get(key);
+    if (u === undefined) {
+      const cx = (Math.floor(x / C) + 0.5) * C, cz = (Math.floor(z / C) + 0.5) * C, W = osm.water;
+      u = !inWater(cx, cz, W) && !pointInRings(cx, cz, parks) && ![[0, 45], [0, 90], [0, 125], [45, 30], [-45, 30], [70, 0], [-70, 0]].some(([dx, dz]) => inWater(cx + dx, cz + dz, W));
+      memo.set(key, u);
+    }
+    return u;
+  };
+  const idx = g.index, n = idx ? idx.count : pos.count, v = (i) => (idx ? idx.getX(i) : i), keep = [], city = [];
+  for (let i = 0; i + 2 < n; i += 3) {
+    const a = v(i), b = v(i + 1), c = v(i + 2);
+    // 격자 한 칸(삼각형 둘)의 가운데로 판정 → 경계가 톱니가 아니라 칸 단위 계단
+    const xa = pos.getX(a), xb = pos.getX(b), xc = pos.getX(c), za = pos.getZ(a), zb = pos.getZ(b), zc = pos.getZ(c);
+    const cx = (Math.min(xa, xb, xc) + Math.max(xa, xb, xc)) / 2, cz = (Math.min(za, zb, zc) + Math.max(za, zb, zc)) / 2;
+    (urban(cx, cz) ? city : keep).push(a, b, c);
+  }
+  if (!city.length) return;
+  g.setIndex(keep); g.computeBoundingSphere?.(); g.computeBoundingBox?.();
+  const ug = new THREE.BufferGeometry(); ug.setAttribute('position', pos); if (g.attributes.normal) ug.setAttribute('normal', g.attributes.normal); else ug.computeVertexNormals();
+  ug.setIndex(city); ug.computeBoundingSphere(); ug.computeBoundingBox();
+  const m = new THREE.Mesh(ug, new THREE.MeshLambertMaterial({ color: '#bcb8ae' })); m.name = 'hangang-dem-urban'; m.receiveShadow = true;
+  dem.parent.add(m);
+}
+
 function finishHangangHap({ parent, overlay, terrain, dem, osm, foreign = null, root, land } = {}) {
   const paths = createHangangPaths({ parent: root, osm, land });
   const city = createHangangCity({ parent: root, osm, land });
@@ -500,6 +540,7 @@ function finishHangangHap({ parent, overlay, terrain, dem, osm, foreign = null, 
       dropTriangles(o.geometry, (cx, cz) => !owns(cx, cz));
     });
   }
+  splitHapUrban(root, osm);
   const props = createHangangProps({ parent: root, osm, land });
   if (typeof foreign === 'function') clearIslandOverlaysSync(root, islandFloorFn(ownRect, owns)); // [jamsil-float]
   return finishHangangHapApi({ overlay, osm, root, land, paths, city, bridges, underpasses, props, ownRect, owns, ownHeightAt });
@@ -697,6 +738,7 @@ async function finishHangangHapAsync({ parent, overlay, terrain, dem, osm, forei
       else dropTriangles(o.geometry, (cx, cz) => !owns(cx, cz));
     }
   }
+  splitHapUrban(root, osm);
   if (slicer) slicer.flush('hangang-hap-clip');
   else if (y) await y();
   const props = slicer

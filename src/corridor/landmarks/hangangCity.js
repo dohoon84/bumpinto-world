@@ -294,7 +294,9 @@ function* dressHangangCityGen(ctx) {
     if (run.length >= 2) runs.push(run);
     for (const r of runs) {
       if (elevated) { elevatedDeck(r, width); yield 'hangang-city-deck'; continue; }
-      const geo = ribbon(r, width, (x, z) => (heightAt(x, z) ?? lv.waterY) + 0.14, 0.1);
+      // [seongsu-v4] OSM 꼭짓점만으로 띠를 깔면 긴 직선 구간이 굴곡진 DEM 속에 묻혀 '잔디 위 검은 판' 조각만 보였다 → 6 m 마다 다시 찍는다
+      const rr = []; for (let i = 0; i < r.length; i++) { if (i) { const [ax, az] = r[i - 1], [bx, bz] = r[i], L = Math.hypot(bx - ax, bz - az), k = Math.ceil(L / 6); for (let t = 1; t < k; t++) rr.push([ax + (bx - ax) * t / k, az + (bz - az) * t / k]); } rr.push(r[i]); }
+      const geo = ribbon(rr, width, (x, z) => (heightAt(x, z) ?? lv.waterY) + 0.14, 0.1);
       if (geo) exprGeos.push(geo);
     }
     yield 'hangang-city-dress';

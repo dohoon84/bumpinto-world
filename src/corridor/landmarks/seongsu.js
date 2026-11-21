@@ -381,7 +381,7 @@ export async function createSeongsuAsync({ scene, overlay, terrain, data, mobile
     // 유리문·손잡이·알루미늄 멀리온 + 위 캐노피 + 옆 메뉴판
     for (let k = -1; k <= 1; k++) hb.box('frame', 0.07, 2.3, 0.08, { ...side(k * (w - 0.4) / 3, 0.31, 1.4), color: '#d2d5d4' });
     hb.box('metal', 0.04, 0.6, 0.04, { ...side(-0.23, 0.38, 1.3), color: '#d6d9d9' });
-    hb.box('paint', w + 0.2, 0.14, 1.1, { ...side(0, 0.6, 2.7), rx: 0.09, color: kind[2] });
+    hb.box('paint', w + 0.2, 0.14, 1.0, { ...side(0, 0.6, 2.5), rx: 0.09, color: kind[2] }); // [seongsu-v4] 차양은 간판(2.6~3.5) 아래
     hb.box('paint', 0.6, 1.1, 0.1, { ...side(w / 2 - 0.5, 0.33, 1.3), color: '#eee8da' });
     for (let k = 0; k < 5; k++) hb.box('paint', 0.4, 0.025, 0.02, { ...side(w / 2 - 0.5, 0.4, 1.55 - k * 0.12), color: kind[2] });
     if (/cafe|coffee|bakery/.test(p[2])) { // 쇼윈도 안 바·커피 머신·둥근 빵/컵: 들어갈 수는 없는 얕은 상점 전면
@@ -397,7 +397,7 @@ export async function createSeongsuAsync({ scene, overlay, terrain, data, mobile
     heroShops.forEach((s, i) => { ctx.fillStyle = s.kind[2]; ctx.fillRect(0, i * 128, 1024, 128); ctx.fillStyle = '#fffdf3'; ctx.textAlign = 'center'; ctx.font = '700 56px "Noto Sans KR", sans-serif'; ctx.fillText(s.kind[0], 512, i * 128 + 61); ctx.font = '500 28px sans-serif'; ctx.fillText(s.kind[1], 512, i * 128 + 104); });
     const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace;
     const sm = new THREE.MeshBasicMaterial({ map: tex, toneMapped: false }); hq.mats.stationShops = sm;
-    heroShops.forEach((s, i) => { const g = new THREE.PlaneGeometry(Math.min(8, s.L - 0.4), 0.9), uv = g.attributes.uv; for (let k = 0; k < uv.count; k++) uv.setY(k, 1 - (i + 1 - uv.getY(k)) / heroShops.length); hb.add('stationShops', g, { x: s.x + s.nx * 0.35, y: 3.05, z: s.z + s.nz * 0.35, ry: s.ry }); g.dispose(); });
+    heroShops.forEach((s, i) => { const g = new THREE.PlaneGeometry(Math.min(8, s.L - 0.4), 0.9), uv = g.attributes.uv; for (let k = 0; k < uv.count; k++) uv.setY(k, 1 - (i + 1 - uv.getY(k)) / heroShops.length); hb.add('stationShops', g, { x: s.x + s.nx * 0.36, y: 3.05, z: s.z + s.nz * 0.36, ry: s.ry }); g.dispose(); });
     for (const m0 of hb.build(hq.mats)) { m0.name = 'seongsu-real-shops-' + m0.userData.key; for (const m of chunkMesh(m0, DET_CELL)) addDetail(m); }
     // 가까이서 실제 유형명 확인하는 간판 (최대 110m에서만)
     for (const s of heroShops) addLabel(s.kind[0], s.x, s.z, 4, 35, 8); // 간판에 이미 글씨 → 가까이서만
@@ -415,13 +415,16 @@ export async function createSeongsuAsync({ scene, overlay, terrain, data, mobile
       for (const r of roadGrid.query(x + nx * 6, z + nz * 6)) { const d = distToSeg(x, z, r.a[0], r.a[1], r.b[0], r.b[1]) - r.r; if (d < best && d > -2) { edge = { x, z, L, nx, nz }; best = d; } }
     }
     if (!edge || best > 10 || heroShops.some((h) => Math.hypot(h.x - edge.x, h.z - edge.z) < 6)) continue;
-    const e = edge, n = signN++ % 16, w = Math.min(e.L * 0.68, 7.0), h = w / 4, ry = Math.atan2(e.nx, e.nz);
+    // [seongsu-v4] 간판: 1층 문·쇼윈도 위(2.5~3.3 m) 띠에, 외벽 판(0.11)·2층 창 띠(0.15)·층 턱(0.25) 보다 앞(0.34)에 + 뒤판(테두리).
+    //   예전엔 3.4 m 높이·벽에서 7 cm 라 외벽 판·창 띠가 간판 윗부분을 덮었다.
+    const e = edge, n = signN++ % 16, w = Math.min(e.L * 0.68, 3.2), h = w / 4, ry = Math.atan2(e.nx, e.nz), SY = 2.92, SO = 0.34;
     const g = new THREE.PlaneGeometry(w, h), uv = g.attributes.uv;
     for (let k = 0; k < uv.count; k++) uv.setXY(k, ((n % 4) + uv.getX(k)) / 4, 1 - (((n / 4) | 0) + 1 - uv.getY(k)) / 4);
-    sb.add('signs', g, { x: e.x + e.nx * 0.07, y: 3.4, z: e.z + e.nz * 0.07, ry }); g.dispose();
-    // 큰 쇼윈도(형상 단순, 빛은 재질) + 차양
-    sb.box('frame', Math.min(4.0, e.L * 0.6), 2.2, 0.04, { x: e.x + e.nx * 0.05, y: 1.35, z: e.z + e.nz * 0.05, ry, color: '#1e292c' });
-    if (hash01(b.id, 4) < 0.65) sb.box('paint', w + 0.2, 0.10, 1.1, { x: e.x + e.nx * 0.5, y: 2.7, z: e.z + e.nz * 0.5, ry, rx: 0.1, color: ['#273a31', '#f2e9d7', '#684a3d', '#303541'][b.id % 4] });
+    sb.add('signs', g, { x: e.x + e.nx * SO, y: SY, z: e.z + e.nz * SO, ry }); g.dispose();
+    sb.box('paint', w + 0.16, h + 0.12, 0.16, { x: e.x + e.nx * (SO - 0.09), y: SY, z: e.z + e.nz * (SO - 0.09), ry, color: '#2b2f33' });
+    // 큰 쇼윈도(형상 단순, 빛은 재질) + 차양 (간판 아래)
+    sb.box('frame', Math.min(4.0, e.L * 0.6), 2.0, 0.04, { x: e.x + e.nx * 0.05, y: 1.25, z: e.z + e.nz * 0.05, ry, color: '#1e292c' });
+    if (hash01(b.id, 4) < 0.65) sb.box('paint', w + 0.2, 0.10, 0.9, { x: e.x + e.nx * 0.5, y: 2.36, z: e.z + e.nz * 0.5, ry, rx: 0.1, color: ['#273a31', '#f2e9d7', '#684a3d', '#303541'][b.id % 4] });
     if (hash01(b.id, 6) < 0.45) { props.cyl('metal', 0.75, 0.75, 1.3, { x: b.cx, y: b.ht + 0.65, z: b.cz, color: '#b7c1c6' }, 8); props.box('paint', 1, 0.7, 0.6, { x: b.cx + 1.4, y: b.ht + 0.35, z: b.cz, color: '#d7d5cd' }); }
     await tick('ss-signs');
   }
@@ -625,6 +628,7 @@ export async function createSeongsuAsync({ scene, overlay, terrain, data, mobile
     parks: (data.areas || []).filter((a) => /park|garden|grass|wood/.test(a.k)).map((a) => ({ o: a.o })),
     water: waterRing ? [{ o: waterRing }] : [], waterLines: [],
     station: { x: st.x, z: st.z, exits: data.exits.map((e) => ({ x: e.x, z: e.z, ref: e.ref })) },
+    hq: H.o ? { o: H.o } : null, apron: { ...A }, // [seongsu-v4] 코너맵: 사옥 강조 · 성수 땅 범위
   };
   root.visible = true;
   return {
