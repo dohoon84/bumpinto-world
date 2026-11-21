@@ -258,7 +258,7 @@ export async function createSeongsuAsync({ scene, overlay, terrain, data, mobile
     blds.push(rec); if (base < 2.5) bldGrid.add(rec, ...bb);
     const ix = Math.min(BNX - 1, Math.max(0, Math.floor((cx - A.x0) / (A.x1 - A.x0) * BNX))), iz = Math.min(BNZ - 1, Math.max(0, Math.floor((cz - A.z0) / (A.z1 - A.z0) * BNZ)));
     if (waterAt(cx, cz)) continue;
-    buckets[ix + iz * BNX].push({ o: b.o, h: top, mh: base, k: b.k || (hash01(b.id, 3) < 0.6 ? 'commercial' : 'industrial') });
+    buckets[ix + iz * BNX].push({ o: b.o, h: top, mh: base, tint: b.tint, k: b.k || (hash01(b.id, 3) < 0.6 ? 'commercial' : 'industrial') });
   }
   // [seongsu-v3] 거리 소품·간판·외벽·다리 난간 칸 (300m): 카메라에서 멀면 이 프레임만 숨김 (big = 역·다리처럼 멀리서도 보이는 것)
   const DET_CELL = 300, detailFar = [];
@@ -281,6 +281,75 @@ export async function createSeongsuAsync({ scene, overlay, terrain, data, mobile
 
   // 상점 전면: 가장 가까운 길을 향하는 벽에만(이웃 건물과 맞댄 벽엔 안 붙인다). 간판은 fictional Korean names 아틀라스(프리뷰와 같은 것).
   const sb = new Builder(), props = new Builder();
+  // [seongsu-v3] 추정 건물은 낮고 다양한 지붕(평지붕·박공·한쪽 경사·옥탑) + 비대칭 발코니/파라펫. OSM 건물 윤곽은 그대로 둠
+  for (const b of blds) {
+    if (!b.f || !b.wh) continue;
+    const w = b.wh[0], d = b.wh[1], ry = b.ang || 0, c = Math.cos(ry), sn = Math.sin(ry);
+    const at = (u, v, y) => [b.cx + c * u + sn * v, y, b.cz - sn * u + c * v];
+    const roofCol = ['#697c7c', '#797775', '#a27764', '#6c7d8b'][b.id % 4], h = 0.9 + hash01(b.id, 23) * 1.3;
+    if (b.rf === 'gable' || b.rf === 'shed') {
+      const geo = new GeoBuf({ uv: false, color: true }), co = hex3(roofCol), half = b.rf === 'gable';
+      const l0 = at(-w / 2 - 0.2, -d / 2 - 0.2, b.ht), l1 = at(-w / 2 - 0.2, d / 2 + 0.2, b.ht), r0 = at(w / 2 + 0.2, -d / 2 - 0.2, b.ht), r1 = at(w / 2 + 0.2, d / 2 + 0.2, b.ht);
+      const m0 = at(half ? 0 : w / 2 + 0.2, -d / 2 - 0.2, b.ht + h), m1 = at(half ? 0 : w / 2 + 0.2, d / 2 + 0.2, b.ht + h);
+      geo.quad(l1, m1, m0, l0, undefined, co); geo.quad(m1, r1, r0, m0, undefined, co); geo.quad(l0, m0, m1, l1, undefined, co); geo.quad(m0, r0, r1, m1, undefined, co); // 양면(감기 방향 무관)
+      if (!half) { geo.quad(r0, m0, m1, r1, undefined, co); geo.quad(r1, m1, m0, r0, undefined, co); }
+      const g = geo.build(); props.add('paint', g); g.dispose();
+    } else if (b.o.length === 4) {
+      for (const sg of [-1, 1]) { const p = at(sg * (w / 2 - 0.15), 0, b.ht + 0.22); props.box('paint', 0.2, 0.45, d, { x: p[0], y: p[1], z: p[2], ry, color: roofCol }); }
+      const p = at(-w * 0.21, d * 0.18, b.ht + h / 2); props.box('paint', w * 0.35, h, d * 0.28, { x: p[0], y: p[1], z: p[2], ry, color: b.tint });
+    }
+    await tick('ss-fill-roofs');
+  }
+
+  // [seongsu-v3] OSM cafe/convenience/bakery 점에 대응하는 건물의 실제 길 면에 상점. 길·역 출입구 막는 가짜 상자 없음.
+  //   OSM엔 상호가 없어서 간판은 유형명(성수커피·동네편의점 등), 브랜드/실제 상호를 꾸며내지 않음.
+  const shopKinds = { cafe: ['성수커피', 'SEONGSU COFFEE', '#385c50'], coffee: ['커피 · 로스터리', 'COFFEE / TAKE OUT', '#755141'], convenience: ['동네편의점', '24  CONVENIENCE', '#296b69'], bakery: ['성수 베이커리', 'BREAD & COFFEE', '#9c6244'], fast_food: ['분식 · 김밥', 'GIMBAP / SNACKS', '#ba6843'] };
+  const heroShops = [], hb = new Builder();
+  for (const p of data.shops || []) {
+    const kind = shopKinds[p[2]]; if (!kind || Math.hypot(p[0] - st.x, p[1] - st.z) > 300) continue;
+    let best = null;
+    for (const b of blds) {
+      if (b.base > 1 || Math.hypot(b.cx - p[0], b.cz - p[1]) > 45) continue;
+      for (let i = 0; i < b.o.length; i++) {
+        const a = b.o[i], c = b.o[(i + 1) % b.o.length], dx = c[0] - a[0], dz = c[1] - a[1], L = Math.hypot(dx, dz); if (L < 5 || L > 70) continue;
+        const x = (a[0] + c[0]) / 2, z = (a[1] + c[1]) / 2; let nx = dz / L, nz = -dx / L;
+        if ((x - b.cx) * nx + (z - b.cz) * nz < 0) { nx = -nx; nz = -nz; }
+        if (bldAt(x + nx * 0.6, z + nz * 0.6, 0.1)) continue;
+        let roadD = Infinity; for (const r of roadGrid.query(x + nx * 6, z + nz * 6)) roadD = Math.min(roadD, distToSeg(x, z, r.a[0], r.a[1], r.b[0], r.b[1]) - r.r);
+        if (roadD < -1 || roadD > 12) continue;
+        const dd = Math.hypot(x - p[0], z - p[1]) + roadD * 0.2;
+        if (!best || dd < best.dd) best = { x, z, nx, nz, L, dd, ry: Math.atan2(nx, nz) };
+      }
+    }
+    if (!best || heroShops.some((h) => Math.hypot(h.x - best.x, h.z - best.z) < 7)) continue;
+    const e = { ...best, kind, type: p[2] }; heroShops.push(e);
+    const w = Math.min(8, e.L - 0.4), side = (u, v, y) => ({ x: e.x + e.nz * u + e.nx * v, z: e.z - e.nx * u + e.nz * v, y, ry: e.ry });
+    hb.box('paint', w, 3.2, 0.18, { ...side(0, 0.08, 1.6), color: kind[2] });
+    hb.box('paint', w - 0.35, 2.2, 0.12, { ...side(0, 0.22, 1.4), color: '#7499a7' });
+    // 유리문·손잡이·알루미늄 멀리온 + 위 캐노피 + 옆 메뉴판
+    for (let k = -1; k <= 1; k++) hb.box('frame', 0.07, 2.3, 0.08, { ...side(k * (w - 0.4) / 3, 0.31, 1.4), color: '#d2d5d4' });
+    hb.box('metal', 0.04, 0.6, 0.04, { ...side(-0.23, 0.38, 1.3), color: '#d6d9d9' });
+    hb.box('paint', w + 0.2, 0.14, 1.1, { ...side(0, 0.6, 2.7), rx: 0.09, color: kind[2] });
+    hb.box('paint', 0.6, 1.1, 0.1, { ...side(w / 2 - 0.5, 0.33, 1.3), color: '#eee8da' });
+    for (let k = 0; k < 5; k++) hb.box('paint', 0.4, 0.025, 0.02, { ...side(w / 2 - 0.5, 0.4, 1.55 - k * 0.12), color: kind[2] });
+    if (/cafe|coffee|bakery/.test(p[2])) { // 쇼윈도 안 바·커피 머신·둥근 빵/컵: 들어갈 수는 없는 얕은 상점 전면
+      hb.box('paint', w * 0.35, 0.17, 0.35, { ...side(-w * 0.25, 0.32, 0.8), color: '#ab7d52' });
+      for (let k = 0; k < 4; k++) hb.cyl('paint', 0.08, 0.06, 0.15, { ...side(-w * 0.36 + k * 0.3, 0.4, 0.98), color: '#f1ede2' }, 6);
+    } else { // 편의점 냉장고·상품 진열 띠
+      for (let k = 0; k < 3; k++) hb.box('paint', w * 0.32, 0.1, 0.07, { ...side(-w * 0.27, 0.35, 0.7 + k * 0.4), color: ['#d0ad57', '#8ea79a', '#d78568'][k] });
+    }
+    if (heroShops.length >= 18) break;
+  }
+  if (heroShops.length) {
+    const cv = document.createElement('canvas'); cv.width = 1024; cv.height = heroShops.length * 128; const ctx = cv.getContext('2d');
+    heroShops.forEach((s, i) => { ctx.fillStyle = s.kind[2]; ctx.fillRect(0, i * 128, 1024, 128); ctx.fillStyle = '#fffdf3'; ctx.textAlign = 'center'; ctx.font = '700 56px "Noto Sans KR", sans-serif'; ctx.fillText(s.kind[0], 512, i * 128 + 61); ctx.font = '500 28px sans-serif'; ctx.fillText(s.kind[1], 512, i * 128 + 104); });
+    const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace;
+    const sm = new THREE.MeshBasicMaterial({ map: tex, toneMapped: false }); hq.mats.stationShops = sm;
+    heroShops.forEach((s, i) => { const g = new THREE.PlaneGeometry(Math.min(8, s.L - 0.4), 0.9), uv = g.attributes.uv; for (let k = 0; k < uv.count; k++) uv.setY(k, 1 - (i + 1 - uv.getY(k)) / heroShops.length); hb.add('stationShops', g, { x: s.x + s.nx * 0.35, y: 3.05, z: s.z + s.nz * 0.35, ry: s.ry }); g.dispose(); });
+    for (const m0 of hb.build(hq.mats)) { m0.name = 'seongsu-real-shops-' + m0.userData.key; for (const m of chunkMesh(m0, DET_CELL)) addDetail(m); }
+    // 가까이서 실제 유형명 확인하는 간판 (최대 110m에서만)
+    for (const s of heroShops) addLabel(s.kind[0], s.x, s.z, 4, 110, 8);
+  }
   let signN = 0;
   for (const b of blds) {
     if (b.ht > 40 || b.base > 1 || area(b.o) < 30) continue;
@@ -293,7 +362,7 @@ export async function createSeongsuAsync({ scene, overlay, terrain, data, mobile
       if (bldAt(x + nx * 1.0, z + nz * 1.0, 0.1)) continue;
       for (const r of roadGrid.query(x + nx * 6, z + nz * 6)) { const d = distToSeg(x, z, r.a[0], r.a[1], r.b[0], r.b[1]) - r.r; if (d < best && d > -2) { edge = { x, z, L, nx, nz }; best = d; } }
     }
-    if (!edge || best > 10) continue;
+    if (!edge || best > 10 || heroShops.some((h) => Math.hypot(h.x - edge.x, h.z - edge.z) < 6)) continue;
     const e = edge, n = signN++ % 16, w = Math.min(e.L * 0.68, 7.0), h = w / 4, ry = Math.atan2(e.nx, e.nz);
     const g = new THREE.PlaneGeometry(w, h), uv = g.attributes.uv;
     for (let k = 0; k < uv.count; k++) uv.setXY(k, ((n % 4) + uv.getX(k)) / 4, 1 - (((n / 4) | 0) + 1 - uv.getY(k)) / 4);
@@ -564,7 +633,7 @@ export async function createSeongsuAsync({ scene, overlay, terrain, data, mobile
       if (Math.hypot(lx, lz) < 135) hqNpc?.update(dt, lastP.x, lastP.z); else hqNpc?.sleep();
     },
     setNight(on) { night = !!on; hq.setNight(night); },
-    stats() { return { clad, zebras: zebras.length, decks: decks.length, buckets: BNX * BNZ, fill: blds.filter((b) => b.f).length, buildings: blds.length, ways: roads.length, signs: signN, trees: treeSpots.length, hqNpcs: hqNpc?.stats || null, streetNpcs: streetNpc?.stats || null }; },
+    stats() { return { heroShops: heroShops.length, clad, zebras: zebras.length, decks: decks.length, buckets: BNX * BNZ, fill: blds.filter((b) => b.f).length, buildings: blds.length, ways: roads.length, signs: signN, trees: treeSpots.length, hqNpcs: hqNpc?.stats || null, streetNpcs: streetNpc?.stats || null }; },
     dispose() { unwatch?.(); unregSurface?.(); streetNpc?.dispose(); hqNpc?.dispose(); root.removeFromParent(); for (const l of labels) l?.remove?.(); },
   };
 }

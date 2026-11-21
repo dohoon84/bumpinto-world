@@ -140,7 +140,7 @@ def make_fill(ways, blds, areas, landuse, nofill, rail, bank, hq, station):
     14m 격자 칸마다: 길·철길·공원/물·학교/숲·사옥/역에서 떨어져 있고, (주거·상업·공업 landuse 안이거나 기존 건물 60m 안)이면
     가까운 길 방향으로 돌린 10~12m 저층 건물 하나. 높이 2~5층(성수 골목 저층 상가·공장·다세대)."""
     import random
-    CELL = 14.0
+    CELL = 12.0
     grid = {}
     def gadd(key, item, x0, z0, x1, z1):
         for i in range(int(x0 // 28), int(x1 // 28) + 1):
@@ -191,6 +191,13 @@ def make_fill(ways, blds, areas, landuse, nofill, rail, bank, hq, station):
                     for i in range(len(ring)):
                         if seg_d(x, z, ring[i - 1], ring[i])[0] < 7.5: return True, True
         return hit_in, hit_near
+    def hits_osm(x, z, pad):
+        for bb, ring in gq('b', x, z):
+            if bb[0] - pad <= x <= bb[2] + pad and bb[1] - pad <= z <= bb[3] + pad:
+                if pip(x, z, ring): return True
+                for i in range(len(ring)):
+                    if seg_d(x, z, ring[i - 1], ring[i])[0] < pad: return True
+        return False
     out = []
     rnd = random.Random(4339)
     nid = 9_000_000_000
@@ -199,7 +206,7 @@ def make_fill(ways, blds, areas, landuse, nofill, rail, bank, hq, station):
         bz = bank_z(bank, x) if bank else None
         z = BOUNDS['z0'] + CELL / 2
         while z < BOUNDS['z1']:
-            cx, cz = x + rnd.uniform(-1.2, 1.2), z + rnd.uniform(-1.2, 1.2)
+            cx, cz = x + rnd.uniform(-3.5, 3.5), z + rnd.uniform(-3.5, 3.5)
             ok = True
             if bz is not None and cz > bz - 45: ok = False                      # 물가·강변북로 둔치
             if ok and math.hypot(cx - hq['x'], cz - hq['z']) < 90: ok = False
@@ -210,20 +217,33 @@ def make_fill(ways, blds, areas, landuse, nofill, rail, bank, hq, station):
             if ok and in_rings('p', cx, cz): ok = False
             if ok:
                 inside_b, near_b = bld_near(cx, cz, 60)
-                if inside_b: ok = False
+                if hits_osm(cx, cz, 3.0): ok = False
                 elif not (near_b or in_rings('l', cx, cz)): ok = False
             if ok:
                 dx, dz = best[1]
                 ang = math.atan2(dx, dz)
-                w = rnd.uniform(9.5, 12.0); d = rnd.uniform(9.5, 12.5)
-                c, s2 = math.cos(ang), math.sin(ang)
-                ring = []
-                for u, v in ((-w / 2, -d / 2), (w / 2, -d / 2), (w / 2, d / 2), (-w / 2, d / 2)):
-                    ring.append([r1(cx + u * c + v * s2), r1(cz - u * s2 + v * c)])
-                if not any(near_road(p[0], p[1], 0.5)[0] for p in ring):
-                    lv = rnd.choice((2, 3, 3, 4, 4, 5))
-                    k = rnd.choice(('commercial', 'commercial', 'residential', 'industrial'))
-                    out.append({'id': nid, 'o': ring, 'lv': lv, 'k': k, 'f': 1}); nid += 1
+                W0 = rnd.uniform(8.0, 16.0); D0 = rnd.uniform(8.0, 19.0); Lsh = rnd.random() < 0.33
+                for shrink in (1.0, 0.78, 0.6):
+                  w = W0 * shrink; d = D0 * shrink
+                  c, s2 = math.cos(ang), math.sin(ang)
+                  ring = []
+                  # [seongsu-v3] 길 방향을 따르는 불규칙 필지 매스: 좁은 상가·긴 공장·L자 빈 마당 / 색·지붕·층수 다양화.
+                  footprint = [(-w / 2, -d / 2), (w / 2, -d / 2), (w / 2, d / 2), (-w / 2, d / 2)]
+                  if Lsh:
+                      footprint = [(-w / 2, -d / 2), (w / 2, -d / 2), (w / 2, 0), (w * 0.05, 0), (w * 0.05, d / 2), (-w / 2, d / 2)]
+                  for u, v in footprint:
+                      ring.append([r1(cx + u * c + v * s2), r1(cz - u * s2 + v * c)])
+                  # 길·공원·물·기존 건물에서 모서리도 벗어나지 않음. 새 fill 끼리 최소 1m 간격.
+                  xs = [p[0] for p in ring]; zs = [p[1] for p in ring]
+                  bb = (min(xs), min(zs), max(xs), max(zs))
+                  overlap = any(not (bb[2] + 1 < ob[0] or bb[0] - 1 > ob[2] or bb[3] + 1 < ob[1] or bb[1] - 1 > ob[3]) for ob in gq('f', cx, cz))
+                  if not overlap and not any(near_road(p[0], p[1], 0.8)[0] or in_rings('p', p[0], p[1]) or hits_osm(p[0], p[1], 1.2) for p in ring):
+                      lv = rnd.choice((1, 2, 2, 3, 3, 4, 5, 6))
+                      k = rnd.choice(('commercial', 'commercial', 'residential', 'industrial', 'house', 'yes'))
+                      rf = rnd.choice(('flat', 'flat', 'shed', 'gable')) if len(ring) == 4 else 'flat'
+                      out.append({'id': nid, 'o': ring, 'lv': lv, 'k': k, 'f': 1, 'rf': rf, 'ang': round(ang, 3), 'wh': [round(w, 1), round(d, 1)], 'tint': rnd.choice(('#c6c9cb', '#f2e9db', '#b9c9cf', '#d3aa92', '#bcc5bc', '#eeeef0'))}); nid += 1
+                      gadd('f', bb, bb[0] - 24, bb[1] - 24, bb[2] + 24, bb[3] + 24)
+                      break
             z += CELL
         x += CELL
     return out
@@ -379,7 +399,7 @@ def main():
     print('ways', len(out_ways), 'furn', len(furn), 'fill', len(fill), 'bank', len(bank), 'landuse', len(landuse), 'bld', len(out_bld), 'areas', len(areas), 'shops', len(shops), 'exits', len(exits), 'rail', len(rail), 'station', station, 'hq', {k: v for k, v in hq_out.items() if k != 'o'})
     data = {
         'meta': {'center': CENTER, 'kx': KX, 'kz': KZ, 'attribution': '© OpenStreetMap contributors (ODbL)',
-                 'source': f'OSM API 0.6 map bbox {LON0},{LAT0},{LON1},{LAT1} (5x5 tiles), names of shops not stored',
+                 'source': f'OSM API 0.6 map bbox {LON0},{LAT0},{LON1},{LAT1} (12x5 tiles), names of shops not stored; f=1 is plausible fill, not surveyed',
                  'built': time.strftime('%Y-%m-%d')},
         'bounds': BOUNDS, 'apron': APRON, 'station': station,
         'exits': sorted(exits, key=lambda e: (len(e['ref'] or ''), e['ref'] or '')),
