@@ -179,7 +179,7 @@ function mountGate({ root, corridorGlobe, enter, focus, teardown }, onBackToStar
       : '';
     // [seongsu] 성수(2호선 · 하우스 노웨어) — 잠실에서 2호선으로 가는 노선 밖 칩 (2호선 초록 원 배지)
     const ss = seongsuGlobeEnabled()
-      ? `<button type="button" class="v2-lm is-off is-ss${sel === 'seongsu' ? ' on' : ''}" data-v2-at="seongsu" data-hot="seongsu" title="${esc(en ? 'Seongsu Stn. · Line 2 · Haus Nowhere Seoul' : '성수역 · 2호선 · 하우스 노웨어 서울')}">${IC_L2}<span>${esc(en ? SEONGSU_LANDMARK.en : SEONGSU_LANDMARK.ko)}</span><small>${IC_OFF}${esc(compact ? tr('2호선', 'Line 2') : tr('2호선 · 노선 밖', 'Line 2 · off line'))}</small></button>`
+      ? `<button type="button" class="v2-lm is-off is-ss${sel === 'seongsu' ? ' on' : ''}" data-v2-at="seongsu" data-hot="seongsu" title="${esc(en ? 'Seongsu Stn. · Line 2 · Haus Nowhere Seoul' : '성수역 · 2호선 · 하우스 노웨어 서울')}">${IC_L2}<span>${esc(en ? SEONGSU_LANDMARK.en : SEONGSU_LANDMARK.ko)}</span><small>${IC_OFF}${esc(tr('2호선', 'Line 2'))}</small></button>`
       : '';
     return nt + md + ss + lotte;
   }
