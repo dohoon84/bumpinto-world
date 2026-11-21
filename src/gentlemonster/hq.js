@@ -111,6 +111,7 @@ export function createHQ({ mobile = false, maxAniso = 4, core = true } = {}) {
     get inner() { return inner; },
     ensureInterior, ceilingAt, inFoot, cull, setNight,
     /** 사람·소품을 이 높이(사옥 로컬 y)에서 그릴까 — 밖에서는 1층·바깥만, 안에서는 지금 층 ±1 */
+    floorY: FY, // [seongsu] 층 바닥 높이 (스크린샷·이동)
     showY: (y) => (y < FY[2] - 0.6 ? true : camFloor === 0 ? false : Math.abs(floorOfY(y) - camFloor) <= 1),
     get night() { return night; },
     update(t) { site.update?.(t); inner.update?.(t); },
