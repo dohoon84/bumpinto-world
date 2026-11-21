@@ -8,7 +8,7 @@ import { el, esc, ICON, headHtml, tagHtml, guestChip } from './kit.js';
 import { setTop, backChip, liveChip, langChip } from './topbar.js';
 import { regionSummary, stationLabel, readLastStation } from './data.js';
 import { OPEN_REGIONS, UPCOMING_REGIONS, getRegion, countryOf, regionBlurb } from '../regions/index.js';
-import { CORRIDOR_STATION_IDS, CORRIDOR_STATION_COUNT, corridorName, layoutCorridorMap, OPEN_BRANCH_IDS, namsanGlobeEnabled, NAMSAN_LANDMARK, MYEONGDONG_LANDMARK, myeongdongGlobeEnabled } from '../corridor/globeCorridor.js';
+import { CORRIDOR_STATION_IDS, CORRIDOR_STATION_COUNT, corridorName, layoutCorridorMap, OPEN_BRANCH_IDS, namsanGlobeEnabled, NAMSAN_LANDMARK, MYEONGDONG_LANDMARK, myeongdongGlobeEnabled, SEONGSU_LANDMARK, seongsuGlobeEnabled } from '../corridor/globeCorridor.js';
 
 import { lotteSiteLabel } from '../corridor/lotteOpening.js';
 import { buildRouteMap, lotteChipX, RM_LEGEND, RM_MODE, RM_COLOR, RM_PASS_SHORT_EN } from './routeMap.js';
@@ -22,6 +22,7 @@ const COUNTRY = { KR: ['KR', '한국', 'Korea'], US: ['US', '미국', 'USA'], ET
 // [route-map v1] 노선도 랜드마크 칩 아이콘 — 일반 도형(송신탑형 · 마천루형)만, 로고 아님
 const IC_TOWER = '<svg class="v2-ic" width="14" height="18" viewBox="0 0 14 18" fill="none" stroke="#bfefff" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="M7 1v5"/><rect x="4" y="6" width="6" height="3" rx="1.2"/><path d="M6 9l-1 8M8 9l1 8M4 17h6"/></svg>';
 const IC_SKY = '<svg class="v2-ic" width="12" height="18" viewBox="0 0 12 18" fill="none" stroke="#bfefff" stroke-width="1.6" stroke-linejoin="round" aria-hidden="true"><path d="M6 1L3.2 17h5.6L6 1z"/><path d="M2 17h8"/></svg>';
+const IC_L2 = '<svg class="v2-ic" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="7.2" fill="#33a23d" stroke="#fff" stroke-width="1.2"/><text x="8" y="11.4" text-anchor="middle" font-size="10" font-weight="900" fill="#fff" font-family="sans-serif">2</text></svg>'; // [seongsu] 2호선
 const IC_L4 = '<svg class="v2-ic" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="7.2" fill="#00A5DE" stroke="#fff" stroke-width="1.2"/><text x="8" y="11.4" text-anchor="middle" font-size="10" font-weight="900" fill="#fff" font-family="sans-serif">4</text></svg>'; // [myeongdong] 4호선
 const IC_OFF = '<svg class="v2-ic" width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="#9eb4c6" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 10L2.5 2.5M2.5 7V2.5H7"/></svg>';
 // 좁은 화면(< 768px)은 바텀시트 노선도. ui-v2 는 PC 전용(body.mobile·핸드폰이면 켜지지 않음)이라 데스크톱 창을 좁힌 경우다.
@@ -110,7 +111,7 @@ function mountGate({ root, corridorGlobe, enter, focus, teardown }, onBackToStar
 
   // ---- 03 역 선택 (실제 역 좌표 · layoutCorridorMap → routeMap.js 배치, 시안 bw-route-map v1)
   const BASE = layoutCorridorMap({ height: 430, width: 320 });
-  const allStations = () => [...BASE.items, ...BASE.branches, BASE.landmark, ...(namsanGlobeEnabled() ? [NAMSAN_LANDMARK] : []), ...(myeongdongGlobeEnabled() ? [MYEONGDONG_LANDMARK] : [])];
+  const allStations = () => [...BASE.items, ...BASE.branches, BASE.landmark, ...(namsanGlobeEnabled() ? [NAMSAN_LANDMARK] : []), ...(myeongdongGlobeEnabled() ? [MYEONGDONG_LANDMARK] : []), ...(seongsuGlobeEnabled() ? [SEONGSU_LANDMARK] : [])];
   const linesOf = (s) => (s.live ? ['신분당선', '수인분당선'] : (s.lines || []));
   let rm = null; // 마지막 노선도 배치 (setHot 이 점을 다시 그릴 때)
   const isLand = () => typeof matchMedia === 'function' && matchMedia(LAND_MQ).matches;
@@ -176,7 +177,11 @@ function mountGate({ root, corridorGlobe, enter, focus, teardown }, onBackToStar
     const md = myeongdongGlobeEnabled()
       ? `<button type="button" class="v2-lm is-off is-md${sel === 'myeongdong' ? ' on' : ''}" data-v2-at="myeongdong" data-hot="myeongdong" title="${esc(en ? 'Myeongdong Stn. · Line 4' : '명동역 · 4호선')}">${IC_L4}<span>${esc(en ? MYEONGDONG_LANDMARK.en : MYEONGDONG_LANDMARK.ko)}</span><small>${IC_OFF}${esc(compact ? tr('4호선', 'Line 4') : tr('4호선 · 노선 밖', 'Line 4 · off line'))}</small></button>`
       : '';
-    return nt + md + lotte;
+    // [seongsu] 성수(2호선 · 하우스 노웨어) — 잠실에서 2호선으로 가는 노선 밖 칩 (2호선 초록 원 배지)
+    const ss = seongsuGlobeEnabled()
+      ? `<button type="button" class="v2-lm is-off is-ss${sel === 'seongsu' ? ' on' : ''}" data-v2-at="seongsu" data-hot="seongsu" title="${esc(en ? 'Seongsu Stn. · Line 2 · Haus Nowhere Seoul' : '성수역 · 2호선 · 하우스 노웨어 서울')}">${IC_L2}<span>${esc(en ? SEONGSU_LANDMARK.en : SEONGSU_LANDMARK.ko)}</span><small>${IC_OFF}${esc(compact ? tr('2호선', 'Line 2') : tr('2호선 · 노선 밖', 'Line 2 · off line'))}</small></button>`
+      : '';
+    return nt + md + ss + lotte;
   }
   // [route-map landscape] 폰 가로 전용: 전체 화면 · 왼쪽 가로 고리 노선도(큰 칩) · 오른쪽 좁은 칸(제목·범례·랜드마크·선택 역 + 입장 버튼 고정)
   //   칩·랜드마크는 누르면 '선택'만(바로 입장하지 않음) → 오른쪽 아래 입장 버튼으로 들어간다.
@@ -307,7 +312,7 @@ function mountGate({ root, corridorGlobe, enter, focus, teardown }, onBackToStar
     }
     // 랜드마크 띠: 남산 칩은 왼쪽, 롯데 칩은 잠실 x 가운데(남산 칩 + 12px 이상), 칩 아래에서 띠 아래까지 점선 시선
     const band = picker.querySelector('.v2-band');
-    const cap = band.querySelector('.v2-band-cap'), nt = band.querySelector('.v2-lm.is-off:not(.is-md)'), mdc = band.querySelector('.v2-lm.is-md');
+    const cap = band.querySelector('.v2-band-cap'), nt = band.querySelector('.v2-lm.is-off:not(.is-md):not(.is-ss)'), mdc = band.querySelector('.v2-lm.is-md'), ssc = band.querySelector('.v2-lm.is-ss');
     const lotte = band.querySelector(`.v2-lm[data-v2-at="${BASE.landmark.id}"]`), sight = band.querySelector('.v2-sight');
     const chipTop = (M.bandH - M.chipH) / 2;
     let namR = -Infinity;
@@ -316,13 +321,19 @@ function mountGate({ root, corridorGlobe, enter, focus, teardown }, onBackToStar
       nt.style.left = `${ntLeft}px`; nt.style.top = `${chipTop}px`;
       namR = ntLeft + nt.offsetWidth;
       // 영문 등으로 두 칩이 한 줄에 안 들어가면 남산 칩 보조 글자를 접는다
-      if (lotte && namR + 12 + lotte.offsetWidth + (mdc ? mdc.offsetWidth + 8 : 0) > W - 8) { nt.classList.add('is-tight'); namR = ntLeft + nt.offsetWidth; }
+      if (lotte && namR + 12 + lotte.offsetWidth + (mdc ? mdc.offsetWidth + 8 : 0) + (ssc ? ssc.offsetWidth + 8 : 0) > W - 8) { nt.classList.add('is-tight'); namR = ntLeft + nt.offsetWidth; }
     }
     if (mdc) { // [myeongdong] 남산 칩 바로 오른쪽 (자리가 모자라면 보조 글자를 접는다)
       const mdLeft = Number.isFinite(namR) ? namR + 8 : (cap ? cap.offsetLeft + cap.offsetWidth + 10 : 8);
-      if (lotte && mdLeft + mdc.offsetWidth + 12 + lotte.offsetWidth > W - 8) mdc.classList.add('is-tight');
+      if (lotte && mdLeft + mdc.offsetWidth + 12 + lotte.offsetWidth + (ssc ? ssc.offsetWidth + 8 : 0) > W - 8) mdc.classList.add('is-tight');
       mdc.style.left = `${mdLeft}px`; mdc.style.top = `${chipTop}px`;
       namR = mdLeft + mdc.offsetWidth;
+    }
+    if (ssc) { // [seongsu] 명동 칩 바로 오른쪽
+      const ssLeft = Number.isFinite(namR) ? namR + 8 : (cap ? cap.offsetLeft + cap.offsetWidth + 10 : 8);
+      if (lotte && ssLeft + ssc.offsetWidth + 12 + lotte.offsetWidth > W - 8) ssc.classList.add('is-tight');
+      ssc.style.left = `${ssLeft}px`; ssc.style.top = `${chipTop}px`;
+      namR = ssLeft + ssc.offsetWidth;
     }
     if (lotte) {
       const jx = m.diamond ? m.diamond[0] : W / 2;

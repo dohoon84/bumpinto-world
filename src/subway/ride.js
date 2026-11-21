@@ -4,7 +4,7 @@
 //   좌표(승강장 Scene): x = 선로 방향, 열차 진행 방향 = +x (1호차 = +x 끝), 승강장 쪽 z < 0, 스크린도어 z = 0, 선로 z > 0
 import { LINES, TRAIN, CAR_LEN, DOOR_OFF } from './lines.js';
 import { LINE_STOPS } from './stationsData.js';
-import { STATIONS, STATIONS_BASE, EXT_STATIONS, gangnamSubEnabled } from './roster.js'; // [migeum-sub] 플래그 반영 역 목록 · 확장 전 역 목록
+import { STATIONS, STATIONS_BASE, EXT_STATIONS, gangnamSubEnabled, seongsuSubEnabled } from './roster.js'; // [migeum-sub] 플래그 반영 역 목록 · 확장 전 역 목록
 import { jaName, jaDir } from './ja.js';
 import { GAP_STOPS } from './stopCoords.js'; // [gangnam] 정자↔강남·잠실↔강남 사이 게임 밖 역의 OSM 좌표
 
@@ -13,8 +13,10 @@ export const isGameStop = (line, name) => !!BY_NAME.get(name)?.lines.includes(li
 export const stopsOf = (line) => LINE_STOPS[line]?.stops || [];
 // [gangnam] 개통 구간에서 내리지 않고 지나가는 역. ?gangnam=0 / ?gangnamsub=0 이면 표시하지 않는다.
 const PASS_BY_LINE = { shin: ['판교', '청계산입구', '양재시민의숲', '양재'], l2: ['잠실새내', '종합운동장', '삼성', '선릉', '역삼'] };
+const PASS_SEONGSU = { l2: ['잠실나루', '강변', '구의', '건대입구'] }; // [seongsu] 잠실 → 성수 사이 통과 역
 export function isPassStop(line, name) {
-  return gangnamSubEnabled() && (PASS_BY_LINE[line] || []).includes(name) && !isGameStop(line, name);
+  if (isGameStop(line, name)) return false;
+  return (gangnamSubEnabled() && (PASS_BY_LINE[line] || []).includes(name)) || (seongsuSubEnabled() && (PASS_SEONGSU[line] || []).includes(name));
 }
 export const alightAllowed = (stop) => !!stop?.game;
 

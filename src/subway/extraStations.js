@@ -38,4 +38,25 @@ export const EXTRA_STATIONS = [
       { ref: '2', osm: 3408315044, lat: 37.4476886, lon: 127.0549909, place: { x: -4720.9, z: -8974.6, ry: -2.692, shift: 0, bad: 0 } },
     ],
   },
+  // [seongsu] 성수 — 2호선 지상(고가) 역. 게임에선 다른 역처럼 지하 대합실 틀을 쓰고, 출입구 4곳은 OSM subway_entrance 자리.
+  //   ext: 'seongsu' → ?seongsu=0 / ?seongsusub=0 이면 빠진다. 좌표 = public/corridor/seongsu/seongsu.json (scripts/corridor/build-seongsu.py)
+  {
+    id: 'seongsu',
+    name: '성수',
+    nameEn: 'Seongsu',
+    x: -4622.6,
+    z: -19683.7,
+    osmStations: [5935554450],
+    lines: ['l2'],
+    osmLineColours: { l2: '#00A23F' },
+    osmRoutes: { l2: [4729409] },
+    route: { line: 'l2', rel: 4729409, stops: ['한양대', '뚝섬', '성수', '건대입구', '구의', '강변', '잠실나루', '잠실'] },
+    ext: 'seongsu',
+    exits: [
+      { ref: '1', osm: 3404887383, lat: 37.5450398, lon: 127.0551237, place: { x: -4709.1, z: -19735.8, ry: -1.931, shift: 0, bad: 0 } },
+      { ref: '2', osm: 3404887385, lat: 37.5444263, lon: 127.0570324, place: { x: -4540.3, z: -19668.0, ry: -1.928, shift: 0, bad: 0 } },
+      { ref: '3', osm: 3404887386, lat: 37.5441528, lon: 127.0569174, place: { x: -4550.4, z: -19637.7, ry: 1.228, shift: 0, bad: 0 } },
+      { ref: '4', osm: 3404887384, lat: 37.5447446, lon: 127.0550065, place: { x: -4719.5, z: -19703.2, ry: 1.203, shift: 0, bad: 0 } },
+    ],
+  },
 ];

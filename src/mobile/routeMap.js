@@ -18,6 +18,7 @@ const LINE_EN = { '수인분당선': 'Suin-Bundang', '신분당선': 'Shinbundan
 const BACK = '<svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5 L8 12 L15 19" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 const IC_TOWER = '<svg width="14" height="18" viewBox="0 0 14 18" fill="none" stroke="#bfefff" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="M7 1v5"/><rect x="4" y="6" width="6" height="3" rx="1.2"/><path d="M6 9l-1 8M8 9l1 8M4 17h6"/></svg>';
 const IC_SKY = '<svg width="12" height="18" viewBox="0 0 12 18" fill="none" stroke="#bfefff" stroke-width="1.6" stroke-linejoin="round" aria-hidden="true"><path d="M6 1L3.2 17h5.6L6 1z"/><path d="M2 17h8"/></svg>';
+const IC_L2 = '<svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="7.2" fill="#33a23d" stroke="#fff" stroke-width="1.2"/><text x="8" y="11.4" text-anchor="middle" font-size="10" font-weight="900" fill="#fff" font-family="sans-serif">2</text></svg>'; // [seongsu]
 const IC_L4 = '<svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="7.2" fill="#00A5DE" stroke="#fff" stroke-width="1.2"/><text x="8" y="11.4" text-anchor="middle" font-size="10" font-weight="900" fill="#fff" font-family="sans-serif">4</text></svg>';
 const IC_OFF = '<svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="#9eb4c6" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 10L2.5 2.5M2.5 7V2.5H7"/></svg>';
 
@@ -31,6 +32,13 @@ const myeongdong = () => {
   const lm = GC.MYEONGDONG_LANDMARK;
   if (!lm) return null;
   try { return typeof GC.myeongdongGlobeEnabled !== 'function' || GC.myeongdongGlobeEnabled() ? lm : null; } catch { return null; }
+};
+
+// [seongsu] 성수(2호선 · 하우스 노웨어 서울) — ?seongsu=0 이면 숨김
+const seongsu = () => {
+  const lm = GC.SEONGSU_LANDMARK;
+  if (!lm) return null;
+  try { return typeof GC.seongsuGlobeEnabled !== 'function' || GC.seongsuGlobeEnabled() ? lm : null; } catch { return null; }
 };
 
 let BASE = null;
@@ -48,6 +56,8 @@ export function landmarkStations() {
   if (GC.namsanGlobeEnabled()) out.push({ ...GC.NAMSAN_LANDMARK, kind: 'namsan' });
   const md = myeongdong();
   if (md) out.push({ ...md, kind: 'myeongdong', lines: md.lines || ['4호선'] });
+  const ss = seongsu();
+  if (ss) out.push({ ...ss, kind: 'seongsu', lines: ss.lines || ['2호선'] });
   const lotte = base().landmark;
   out.push({ id: lotte.id, ko: lotte.ko, en: lotte.en, landmark: true, kind: 'lotte' });
   return out;
@@ -69,6 +79,7 @@ function selInfo(id) {
       const lines = (lm.lines || []).map((l) => (en ? (LINE_EN[l] || l) : l)).join(' · ');
       return { name: en ? `${lm.en} Stn.` : `${lm.ko}역`, sub: [lines, en ? lm.ko : lm.en, t('노선 밖', 'off line')].filter(Boolean).join(' · '), go: en ? `Enter ${lm.en}` : `${lm.ko}역으로 입장` };
     }
+    if (lm.kind === 'seongsu') return { name: t('성수 · 하우스 노웨어', 'Seongsu · Haus Nowhere'), sub: [t('2호선', 'Line 2'), t('젠틀몬스터 성수 사옥 앞에서 시작', 'Start at Gentle Monster HQ'), t('노선 밖', 'off line')].join(' · '), go: t('성수로 입장', 'Enter Seongsu') };
     return { name: en ? lm.en : lm.ko, sub: t('타워 앞 광장에서 시작', 'Start at the tower plaza'), go: t(`${lm.ko}에 입장`, `Enter ${lm.en}`) };
   }
   const s = mapStations().find((x) => x.id === id) || mapStations().find((x) => x.id === 'jeongja');
@@ -92,6 +103,7 @@ function landmarkChip(s, sel) {
     return `<button type="button" class="m-rm-lm${on}" data-stn="${s.id}" title="${esc(site ? site.main : main)}">${IC_SKY}<span>${esc(main)}</span>${sub ? `<small>${esc(sub)}</small>` : ''}</button>`;
   }
   if (s.kind === 'myeongdong') return `<button type="button" class="m-rm-lm is-off${on}" data-stn="${s.id}" title="${esc(t('명동역 · 4호선', 'Myeongdong Stn. · Line 4'))}">${IC_L4}<span>${esc(en ? s.en : s.ko)}</span><small>${IC_OFF}${esc(t('4호선', 'Line 4'))}</small></button>`;
+  if (s.kind === 'seongsu') return `<button type="button" class="m-rm-lm is-off${on}" data-stn="${s.id}" title="${esc(t('성수역 · 2호선 · 하우스 노웨어 서울', 'Seongsu Stn. · Line 2 · Haus Nowhere Seoul'))}">${IC_L2}<span>${esc(en ? s.en : s.ko)}</span><small>${IC_OFF}${esc(t('2호선', 'Line 2'))}</small></button>`;
   return `<button type="button" class="m-rm-lm is-off${on}" data-stn="${s.id}">${IC_TOWER}<span>${esc(en ? s.en : s.ko)}</span><small>${IC_OFF}${esc(t('노선 밖', 'Off line'))}</small></button>`;
 }
 

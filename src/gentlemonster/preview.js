@@ -13,6 +13,8 @@ import { loadSculpts } from './sculptLoader.js';
 import { createAvatar, animateAvatar } from '../entities/avatar.js';
 import { skyTex } from './textures.js';
 import { PLAN as P } from './plan.js';
+import { createMyeongdongNpc } from '../corridor/landmarks/myeongdongNpc.js';
+import { hqCrowdInput, staffLook, guestLook, withCum } from './hqNpc.js';
 
 export async function startPreview() {
   const q = new URLSearchParams(location.search);
@@ -94,6 +96,10 @@ export async function startPreview() {
   const physics = createWorldPhysics({ regions: shell.regions, colliders: [...shell.colliders, ...site.colliders], circles, segments: segs });
   const avatar = createAvatar({ color: '#e8e4da', pants: '#2b2f36', hair: 'short', hairColor: '#1a1a1a' });
   avatar.name = 'gm-player'; world.add(avatar);
+  // [seongsu] 사람들: 직원·쇼핑객·관람객·누데이크 손님 + 앞 보도 행인 (게임 성수 리전과 같은 자리 표)
+  const crowdIn = hqCrowdInput((x, z) => [x, z]);
+  const walkPaths = [...crowdIn.paths, { pts: [[-60, 22.6], [100, 22.6]], w: 2.4, weight: 3, y: 0.04 }, { pts: [[-60, 39.8], [100, 39.8]], w: 2.4, weight: 2, y: 0.04 }].map(withCum);
+  const npc = q.get('npc') === '0' ? null : createMyeongdongNpc({ parent: world, paths: walkPaths, vendors: crowdIn.vendors, promoters: crowdIn.promoters, heightAt: () => 0.04, mobile, seed: 433, name: 'hnCrowd', looks: { promo: staffLook, vendor: guestLook }, pools: { peds: mobile ? 16 : 26, vendors: crowdIn.vendors.length, promoters: crowdIn.promoters.length }, getHour: () => (night ? 19 : 15), cull: (y) => (y < FY[2] - 0.6 ? true : !cullKey || cullKey === 'k0' ? false : Math.abs(+cullKey.slice(1) - (y > FY[5] - 0.6 ? 5 : y > FY[4] - 0.6 ? 4 : y > FY[3] - 0.6 ? 3 : 2)) <= 1) });
   const FY = P.floorY;
   const ceilingAt = (x, z, y) => {
     if (!pointInPoly(shell.levelsInfo[2].poly, x, z)) return null;
@@ -169,6 +175,7 @@ export async function startPreview() {
     site.update(t); inner.update(t);
     if (!innerP && Math.hypot(walker.p.x, walker.p.z) < 70) ensureInterior();
     walker.update(dt); animateAvatar(avatar, walker.st.speed, dt);
+    npc?.update(dt, walker.p.x, walker.p.z);
     const p = walker.p;
     const inFoot = pointInPoly(shell.levelsInfo[2].poly, p.x, p.z) || pointInPoly(shell.levelsInfo[1].poly, p.x, p.z);
     if (inFoot !== state.inside) { state.inside = inFoot; applyLook(); }
@@ -182,7 +189,7 @@ export async function startPreview() {
   applyLook();
   renderer.setAnimationLoop(frame);
   window.__gm = {
-    THREE, scene, camera, renderer, mats, imats, ext, site, shell, interior, physics, walker, state, ready: false, ensureInterior, get inner() { return inner; },
+    THREE, scene, camera, renderer, mats, imats, ext, site, shell, interior, physics, walker, state, npc, ready: false, ensureInterior, get inner() { return inner; },
     mem: () => { let geo = 0; const seen = new Set(); scene.traverse((o) => { const g = o.geometry; if (!g || seen.has(g)) return; seen.add(g); for (const k in g.attributes) geo += g.attributes[k].array.byteLength; if (g.index) geo += g.index.array.byteLength; if (o.isInstancedMesh) geo += o.instanceMatrix.array.byteLength; }); return { geoMB: +(geo / 1048576).toFixed(1), jsHeapMB: performance.memory ? +(performance.memory.usedJSHeapSize / 1048576).toFixed(1) : null }; },
     draws: () => renderer.info.render.calls, tris: () => renderer.info.render.triangles,
     hideExterior: (h) => { for (const m of extGroup) m.visible = !h; },

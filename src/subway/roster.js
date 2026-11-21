@@ -24,7 +24,16 @@ export function gangnamSubEnabled(search = typeof location !== 'undefined' ? loc
   const p = new URLSearchParams(search);
   return p.get('gangnam') !== '0' && p.get('gangnamsub') !== '0';
 }
-const EXT_ON = { migeum: migeumSubEnabled(), gangnam: gangnamSubEnabled() };
+// [seongsu] ?seongsusub=0 성수 지하철만 끔. ?seongsu=0 이면 지상(하우스 노웨어 섬)과 함께 끔. Node: SEONGSUSUB=0 / SEONGSU=0
+export function seongsuSubEnabled(search = typeof location !== 'undefined' ? location.search : null) {
+  if (search == null) {
+    const env = typeof process !== 'undefined' ? process.env || {} : {};
+    return env.SEONGSU !== '0' && env.SEONGSUSUB !== '0';
+  }
+  const p = new URLSearchParams(search);
+  return p.get('seongsu') !== '0' && p.get('seongsusub') !== '0';
+}
+const EXT_ON = { migeum: migeumSubEnabled(), gangnam: gangnamSubEnabled(), seongsu: seongsuSubEnabled() };
 // 확장 전 역 목록 (ext 없는 역) — 기존 역 시간표 기준(ride.js lineOffsets)은 늘 이것으로 잰다
 const MERGED = ALL.concat(EXTRA_STATIONS);
 export const STATIONS_BASE = Object.freeze(MERGED.filter((s) => !s.ext));

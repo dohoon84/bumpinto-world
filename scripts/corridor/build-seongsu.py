@@ -204,25 +204,27 @@ def main():
                 if best is None or d < best[0]: best = (d, dx, dz)
         ry = math.atan2(best[1], best[2]) if best else 0.0
         e['place'] = {'x': e['x'], 'z': e['z'], 'ry': round(ry, 3), 'shift': 0, 'bad': 0}
-    # 하우스 노웨어: 가장 가까운 큰 길(뚝섬로) 방향 → 정문(+z 로컬)이 길을 보게
-    ttuk = None
-    for w in out_ways:
-        if '뚝섬로' not in (w.get('n') or '') : continue
-        for i in range(1, len(w['pts'])):
-            d, (dx, dz) = seg_d(hq[0], hq[1], w['pts'][i - 1], w['pts'][i])
-            if ttuk is None or d < ttuk[0]:
-                a, b = w['pts'][i - 1], w['pts'][i]
-                t_ = max(0, min(1, ((hq[0] - a[0]) * dx + (hq[1] - a[1]) * dz) / (dx * dx + dz * dz or 1)))
-                ttuk = (d, dx, dz, a[0] + dx * t_, a[1] + dz * t_)
+    # 하우스 노웨어: 가장 가까운 뚝섬로(이름이 정확히 '뚝섬로') 구간과 나란히 → 정문(로컬 +z)이 길을 보게.
+    #   사옥 모델의 길 쪽 경계(정원 앞 보도 끝)는 로컬 z = 25. 길 가장자리가 그 바깥에 오도록 중심을 길 쪽으로 조금(HQ_SHIFT) 민다.
     hq_out = {'x': hq[0], 'z': hq[1], 'osm': hq_bld and hq_bld['id'], 'o': hq_bld and hq_bld['o']}
     if hq_bld:
-        cx = sum(p[0] for p in hq_bld['o']) / len(hq_bld['o']); cz = sum(p[1] for p in hq_bld['o']) / len(hq_bld['o'])
-        hq_out['x'], hq_out['z'] = r1(cx), r1(cz)
-    if ttuk:
-        # 로컬 +z(정문) = 건물 중심 → 뚝섬로 가장 가까운 점
-        fx, fz = ttuk[3] - hq_out['x'], ttuk[4] - hq_out['z']
-        hq_out['ry'] = round(math.atan2(fx, fz), 4)
-        hq_out['roadD'] = round(ttuk[0], 1)
+        hq_out['x'] = r1(sum(p[0] for p in hq_bld['o']) / len(hq_bld['o'])); hq_out['z'] = r1(sum(p[1] for p in hq_bld['o']) / len(hq_bld['o']))
+    best = None
+    for w in out_ways:
+        if (w.get('n') or '') != '뚝섬로': continue
+        for i in range(1, len(w['pts'])):
+            d, (dx, dz) = seg_d(hq_out['x'], hq_out['z'], w['pts'][i - 1], w['pts'][i])
+            if best is None or d < best[0]: best = (d, dx, dz, w['w'], w['pts'][i - 1])
+    if best:
+        d, dx, dz, rw, a = best
+        L = math.hypot(dx, dz) or 1; ux, uz = dx / L, dz / L
+        nx, nz = -uz, ux
+        if (a[0] - hq_out['x']) * nx + (a[1] - hq_out['z']) * nz < 0: nx, nz = -nx, -nz
+        perp = (a[0] - hq_out['x']) * nx + (a[1] - hq_out['z']) * nz
+        shift = max(0.0, perp - rw / 2 - 27.0)
+        hq_out['x'] = r1(hq_out['x'] + nx * shift); hq_out['z'] = r1(hq_out['z'] + nz * shift)
+        hq_out['ry'] = round(math.atan2(nx, nz), 4)
+        hq_out['roadD'] = round(perp - shift, 1); hq_out['roadW'] = rw
     print('ways', len(out_ways), 'bld', len(out_bld), 'areas', len(areas), 'shops', len(shops), 'exits', len(exits), 'rail', len(rail), 'station', station, 'hq', {k: v for k, v in hq_out.items() if k != 'o'})
     data = {
         'meta': {'center': CENTER, 'kx': KX, 'kz': KZ, 'attribution': '© OpenStreetMap contributors (ODbL)',

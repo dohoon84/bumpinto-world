@@ -148,6 +148,9 @@ export function wrapLandmark(meta) {
     get hooks() { return impl?.hooks ?? null; }, // [myeongdong] 미니게임 A·C 훅
     get face() { return impl?.face ?? meta.face ?? null; }, // [myeongdong] 도착 때 카메라 방향
     stats: (...a) => impl?.stats?.(...a) ?? null,
+    get hq() { return impl?.hq ?? null; }, // [seongsu] 하우스 노웨어 서울
+    get hqFloor() { return impl?.hqFloor ?? 0; }, // [seongsu] 플레이어가 선 사옥 층(밖이면 0)
+    camBlocked: (...a) => impl?.camBlocked?.(...a) ?? false, // [seongsu] 사옥 실내 카메라 붐
     _bind(api) { impl = api; },
   };
 }

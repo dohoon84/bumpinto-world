@@ -10,7 +10,8 @@ export const SITE = {
   lot: { x0: 35, x1: 70, z0: -24, z1: 21 },
 };
 
-export function buildSite(mats, { night = false } = {}) {
+// core: 게임 월드(성수 리전)에 놓을 때 — 사옥 정원·담·꽃·나무·사인·에어돔만. 길·주변 블록·전봇대·차·스카이라인은 OSM 리전이 대신한다.
+export function buildSite(mats, { night = false, core = false } = {}) {
   const B = new Builder();
   B.project('gravel', 3).project('asphalt', 6).project('paver', 2).project('brick', 3).project('stucco', 12).project('conc', 2.4).project('brickR', 12).project('brickD', 12).project('brickW', 12).project('shop', 12).project('corr', 2.4);
   const r = mulberry(2025);
@@ -18,22 +19,22 @@ export function buildSite(mats, { night = false } = {}) {
   const wall = (x, z, w, d, h) => cols.push({ t: 'a', x0: x - w / 2, x1: x + w / 2, z0: z - d / 2, z1: z + d / 2, y0: 0, y1: h });
   const flat = (key, x0, z0, x1, z1, y, color = 0xffffff) => { const g = new THREE.PlaneGeometry(x1 - x0, z1 - z0); g.rotateX(-Math.PI / 2); B.add(key, g, { x: (x0 + x1) / 2, y, z: (z0 + z1) / 2, color }); };
   // 땅 전체 (자갈은 사옥 정원 + 맞은편 대지, 나머지 포장)
-  flat('paver', -140, -140, 140, 140, -0.02, 0x8d8a84);
+  if (!core) flat('paver', -140, -140, 140, 140, -0.02, 0x8d8a84);
   flat('gravel', -34, -30, SITE.laneX0, 22, 0.0); // 사옥 정원
   flat('paver', -34, 20, SITE.laneX1, SITE.roadZ0, 0.03, 0xd4d1ca); // 남쪽 보도 (z 20..25)
-  flat('asphalt', -140, SITE.roadZ0, 140, SITE.roadZ1, 0.015); // 큰 길
-  flat('asphalt', SITE.laneX0, -140, SITE.laneX1, SITE.roadZ0, 0.015); // 좁은 차로
-  flat('paver', -140, SITE.roadZ1, 140, SITE.roadZ1 + 4, 0.03, 0xd4d1ca);
+  if (!core) flat('asphalt', -140, SITE.roadZ0, 140, SITE.roadZ1, 0.015); // 큰 길
+  if (!core) flat('asphalt', SITE.laneX0, -140, SITE.laneX1, SITE.roadZ0, 0.015); // 좁은 차로
+  if (!core) flat('paver', -140, SITE.roadZ1, 140, SITE.roadZ1 + 4, 0.03, 0xd4d1ca);
   flat('gravel', SITE.lot.x0, SITE.lot.z0, SITE.lot.x1, SITE.lot.z1, 0.0); // 맞은편 대지
-  flat('paver', SITE.lot.x0, SITE.lot.z1, 140, SITE.roadZ0, 0.03, 0xd4d1ca);
+  if (!core) flat('paver', SITE.lot.x0, SITE.lot.z1, 140, SITE.roadZ0, 0.03, 0xd4d1ca);
   // 중앙선·차선
   const dash = (x, z, w, d) => { const g = new THREE.PlaneGeometry(w, d); g.rotateX(-Math.PI / 2); B.add('paint', g, { x, y: 0.03, z, color: 0xe9c34a }); };
-  for (let x = -138; x < 138; x += 6) dash(x, (SITE.roadZ0 + SITE.roadZ1) / 2, 3.2, 0.14);
+  if (!core) for (let x = -138; x < 138; x += 6) dash(x, (SITE.roadZ0 + SITE.roadZ1) / 2, 3.2, 0.14);
   const white = (x, z, w, d) => { const g = new THREE.PlaneGeometry(w, d); g.rotateX(-Math.PI / 2); B.add('paint', g, { x, y: 0.032, z, color: 0xeeeeea }); };
   for (let x = -138; x < 138; x += 1) { if (Math.abs(x - 2) < 6) continue; } // (도로 가장자리선)
-  white(0, SITE.roadZ0 + 0.35, 276, 0.12); white(0, SITE.roadZ1 - 0.35, 276, 0.12);
+  if (!core) { white(0, SITE.roadZ0 + 0.35, 276, 0.12); white(0, SITE.roadZ1 - 0.35, 276, 0.12); }
   // 횡단보도 (정문 앞)
-  for (let i = -6; i <= 6; i++) white(i * 1.0, (SITE.roadZ0 + SITE.roadZ1) / 2, 0.5, SITE.roadZ1 - SITE.roadZ0 - 1);
+  if (!core) for (let i = -6; i <= 6; i++) white(i * 1.0, (SITE.roadZ0 + SITE.roadZ1) / 2, 0.5, SITE.roadZ1 - SITE.roadZ0 - 1);
   // 정문 앞 보행로 (정원을 가르는 포장)
   flat('paver', -3.6, 16, 3.6, 20.2, 0.035, 0xe0ddd5);
   // 정원 디딤돌 (불규칙 콘크리트 판)
@@ -52,7 +53,7 @@ export function buildSite(mats, { night = false } = {}) {
   B.box('conc', 3.4, 1.15, 0.45, { x: 10.5, y: 0.575, z: 19.2 }); wall(10.5, 19.2, 3.4, 0.45, 1.15);
   // 가로등 / 도로 가로수
   const lamp = (x, z) => { circ.push({ x, z, r: 0.12, y0: 0, y1: 8 }); B.cyl('metal', 0.07, 0.1, 7.5, { x, y: 3.75, z }, 8); B.box('metal', 1.6, 0.1, 0.1, { x: x - 0.7, y: 7.5, z }); B.box('lamp', 0.5, 0.08, 0.18, { x: x - 1.4, y: 7.43, z, color: 0xfff1cf }); };
-  for (let x = -60; x <= 100; x += 24) lamp(x, SITE.roadZ0 - 0.4);
+  if (!core) for (let x = -60; x <= 100; x += 24) lamp(x, SITE.roadZ0 - 0.4);
   const tree = (x, z, s = 1, kind = 0) => {
     circ.push({ x, z, r: 0.22 * s, y0: 0, y1: 8 });
     const h = 3.2 * s, c = [0x6c8a3f, 0x7c9a45, 0xb6a73c][kind % 3];
@@ -60,7 +61,7 @@ export function buildSite(mats, { night = false } = {}) {
     for (let i = 0; i < 5; i++) { const a = r() * 6.3, d = r() * 0.9 * s; B.add('leaf', new THREE.IcosahedronGeometry((0.9 + r() * 0.5) * s, 0), { x: x + Math.cos(a) * d, y: h + 0.2 * s + r() * 1.0 * s, z: z + Math.sin(a) * d, color: new THREE.Color(c).offsetHSL((r() - 0.5) * 0.04, 0, (r() - 0.5) * 0.12), rx: r() * 3, ry: r() * 3 }); }
   };
   // 도로변 가로수 + 정원의 어린 나무
-  for (let x = -54; x <= 100; x += 9) if (Math.abs(x) > 6) tree(x, 22.4 + (x > SITE.laneX0 - 3 && x < SITE.laneX1 + 3 ? 4 : 0), 1.0 + r() * 0.3, (x / 9 | 0) & 3);
+  for (let x = -54; x <= (core ? 28 : 100); x += 9) if (Math.abs(x) > 6 && (!core || x > -36)) tree(x, 22.4 + (x > SITE.laneX0 - 3 && x < SITE.laneX1 + 3 ? 4 : 0), 1.0 + r() * 0.3, (x / 9 | 0) & 3);
   for (const [x, z, s] of [[-24, 12, 0.95], [-25, -6, 1.1], [-22, -20, 1.0], [24, 14, 1.0], [25, -10, 1.15], [23, -23, 0.9], [-8, -25, 1.05], [10, -26, 1.1], [-30, 17, 0.9], [27, 19, 0.85]]) tree(x, z, s, (x | 0) & 3);
   // 들꽃 + 억새 덩이 (정원 가장자리)
   const flowerCols = [0xe06d9e, 0xf3d34a, 0xffffff, 0xb28ee6, 0xf08a4b, 0x6fb7e9];
@@ -130,19 +131,19 @@ export function buildSite(mats, { night = false } = {}) {
     [-55, -10, 18, 22, 11], [-55, 14, 18, 18, 8], [-76, -2, 18, 30, 16], [-48, -42, 30, 18, 14], [-10, -50, 24, 20, 15], [20, -50, 22, 20, 12], [48, -46, 30, 18, 15],
     [80, -10, 22, 30, 12], [85, 18, 24, 18, 9], [-30, 50, 24, 16, 13], [-3, 52, 22, 14, 9], [26, 50, 24, 16, 15], [60, 52, 30, 18, 12], [-62, 48, 20, 16, 10], [100, 50, 26, 18, 15], [110, -30, 24, 24, 15],
   ];
-  for (const b of list) bld(...b);
+  if (!core) for (const b of list) bld(...b);
   // 전봇대 + 전선 (서울 골목의 상징) — 전선은 한 번에 LineSegments
   const wirePts = []; const poles = [];
-  for (let x = -70; x <= 120; x += 21) poles.push([x, SITE.roadZ1 + 1.2]);
-  for (let z = -60; z <= 20; z += 20) poles.push([SITE.laneX1 + 0.8, z]);
+  if (!core) for (let x = -70; x <= 120; x += 21) poles.push([x, SITE.roadZ1 + 1.2]);
+  if (!core) for (let z = -60; z <= 20; z += 20) poles.push([SITE.laneX1 + 0.8, z]);
   for (const [x, z] of poles) { circ.push({ x, z, r: 0.2, y0: 0, y1: 9 }); B.cyl('conc', 0.13, 0.19, 9.5, { x, y: 4.75, z, color: 0xb9b6ae }, 8); B.box('metal', 1.6, 0.1, 0.1, { x, y: 8.6, z, color: 0x333333 }); B.box('metal', 1.2, 0.1, 0.1, { x, y: 7.8, z, color: 0x333333 }); if (r() < 0.5) B.cyl('paint', 0.25, 0.25, 0.7, { x: x + 0.4, y: 7.2, z, color: 0x7c8287 }, 8); }
   const chain = (ps) => { for (let i = 0; i < ps.length - 1; i++) for (const [oy, ox] of [[8.6, -0.7], [8.6, 0.7], [7.8, 0]]) { const a = ps[i], b2 = ps[i + 1]; let prev = null; for (let k = 0; k <= 8; k++) { const t = k / 8, sag = Math.sin(t * Math.PI) * 0.55; const p = [a[0] + (b2[0] - a[0]) * t + (a[1] === b2[1] ? 0 : ox), oy - sag, a[1] + (b2[1] - a[1]) * t + (a[1] === b2[1] ? ox * 0.3 : 0)]; if (prev) wirePts.push(...prev, ...p); prev = p; } } };
   chain(poles.filter(([, z]) => z === SITE.roadZ1 + 1.2)); chain(poles.filter(([x]) => x === SITE.laneX1 + 0.8));
   // 길가 주차 차 몇 대 (단순 박스)
   const carCols = [0xe8e8e6, 0x1c1d20, 0x8c9095, 0x3d4b5c, 0xc8c3b6];
-  for (let i = 0; i < 9; i++) { const x = -60 + i * 17 + r() * 4; if (Math.abs(x) < 10) continue; const z = SITE.roadZ1 - 1.6, c = carCols[(r() * 5) | 0]; B.box('gloss', 4.3, 0.75, 1.8, { x, y: 0.62, z, color: c }); B.box('gloss', 2.3, 0.6, 1.6, { x: x - 0.2, y: 1.28, z, color: c }); B.box('frame', 2.25, 0.42, 1.62, { x: x - 0.2, y: 1.3, z, color: 0x101418 }); for (const dx of [-1.35, 1.35]) for (const dz of [-0.82, 0.82]) B.cyl('frame', 0.33, 0.33, 0.22, { x: x + dx, y: 0.33, z: z + dz, rx: Math.PI / 2, color: 0x111111 }, 10); }
+  if (!core) for (let i = 0; i < 9; i++) { const x = -60 + i * 17 + r() * 4; if (Math.abs(x) < 10) continue; const z = SITE.roadZ1 - 1.6, c = carCols[(r() * 5) | 0]; B.box('gloss', 4.3, 0.75, 1.8, { x, y: 0.62, z, color: c }); B.box('gloss', 2.3, 0.6, 1.6, { x: x - 0.2, y: 1.28, z, color: c }); B.box('frame', 2.25, 0.42, 1.62, { x: x - 0.2, y: 1.3, z, color: 0x101418 }); for (const dx of [-1.35, 1.35]) for (const dz of [-0.82, 0.82]) B.cyl('frame', 0.33, 0.33, 0.22, { x: x + dx, y: 0.33, z: z + dz, rx: Math.PI / 2, color: 0x111111 }, 10); }
   // 멀리 고층 몇 개 (스카이라인)
-  for (const [x, z, w, h] of [[-190, -150, 24, 60], [-120, -190, 22, 80], [-30, -200, 26, 55], [60, -190, 22, 75], [150, -160, 20, 60], [210, -60, 18, 50]]) { B.box('stucco', w, h, w, { x, y: h / 2, z, color: [0xc9c4ba, 0xb7bcc2, 0xd6d0c4][(x / 10 | 0) & 1 ? 1 : 0] }); B.box('paint', w + 0.4, 1.2, w + 0.4, { x, y: h + 0.6, z, color: 0x7d7f82 }); }
+  if (!core) for (const [x, z, w, h] of [[-190, -150, 24, 60], [-120, -190, 22, 80], [-30, -200, 26, 55], [60, -190, 22, 75], [150, -160, 20, 60], [210, -60, 18, 50]]) { B.box('stucco', w, h, w, { x, y: h / 2, z, color: [0xc9c4ba, 0xb7bcc2, 0xd6d0c4][(x / 10 | 0) & 1 ? 1 : 0] }); B.box('paint', w + 0.4, 1.2, w + 0.4, { x, y: h + 0.6, z, color: 0x7d7f82 }); }
 
   // 사인 글자 (밝은 plane)
   const meshes = B.build(mats);

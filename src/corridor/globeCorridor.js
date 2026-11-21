@@ -31,6 +31,11 @@ export function myeongdongGlobeEnabled(search = typeof location !== 'undefined' 
   const q = new URLSearchParams(search || '');
   return q.get('myeongdong') !== '0' && q.get('ntower') !== '0';
 }
+// [seongsu] 성수동(2호선 성수역 · 하우스 노웨어 서울) — 잠실에서 2호선 외선 5정거장. 명동처럼 노선도 칩으로 (?seongsu=0 이면 숨김)
+export const SEONGSU_LANDMARK = { id: 'seongsu', ko: '성수', en: 'Seongsu', lines: ['2호선'], offLine: true, seongsu: true };
+export function seongsuGlobeEnabled(search = typeof location !== 'undefined' ? location.search : '') {
+  return new URLSearchParams(search || '').get('seongsu') !== '0';
+}
 export const BRANCH_STATIONS = [
   ...(pangyoEnabled() ? PANGYO_GLOBE_STATIONS : []),
   ...(migeumGlobeEnabled() ? MIGEUM_GLOBE_STATIONS : []),
@@ -44,16 +49,19 @@ const MAP_STATIONS = BRANCH_STATIONS.concat(MAP_PASS_STATIONS);
 const ALL_STATIONS = CORRIDOR_STATIONS.concat(BRANCH_STATIONS);
 export const CORRIDOR_STATION_IDS = new Set(ALL_STATIONS.map((s) => s.id));
 // [globe-open] 지역 현황 목록에서 '열림'으로 따로 보이는 지선 역 (판교역 → 입장하면 ?at=pangyo 와 같은 자리). ?pangyo=0 이면 빈 목록 → 기존 그대로
-export const OPEN_BRANCH_IDS = new Set(BRANCH_STATIONS.map((s) => s.id));
+// [seongsu] 성수(2호선)는 노선도 밖 칩이지만 지역 현황에선 '열림' 역 1곳 (UPCOMING_REGIONS 의 seongsu 카드가 '준비중' → '열림', 누르면 ?at=seongsu)
+const OPEN_LANDMARK_STATIONS = seongsuGlobeEnabled() ? [SEONGSU_LANDMARK] : [];
+export const OPEN_BRANCH_IDS = new Set([...BRANCH_STATIONS, ...OPEN_LANDMARK_STATIONS].map((s) => s.id));
 // [globe-open] 지구본 '오픈' 수는 지역이 아니라 열린 역 수로 센다 — 노선도에 점으로 그려지는 본선 역(정자~잠실) + 지선 역(판교). 롯데월드타워는 랜드마크라 뺀다
 export const OPEN_MAINLINE_STATIONS = [CORRIDOR_ORIGIN, ...CORRIDOR_STATIONS];
-export const OPEN_BRANCH_STATIONS = BRANCH_STATIONS;
+export const OPEN_BRANCH_STATIONS = [...BRANCH_STATIONS, ...OPEN_LANDMARK_STATIONS];
 // 정자 포함 역 수 (롯데월드타워는 역이 아니라 랜드마크)
 export const CORRIDOR_STATION_COUNT = ALL_STATIONS.length + 1;
 // 입장 화면(로비 제목·로딩 문구)에 쓰는 역 이름 — ?at= 역 id 기준
 export function corridorStationLabel(id) {
   if (id === 'ntower' || id === 'namsan') return { ko: '남산서울타워', en: 'N Seoul Tower', short: 'N Seoul Tower' };
   if (id === 'myeongdong') return { ko: '명동역', en: 'Myeongdong Station', short: 'Myeongdong' }; // [myeongdong] 4호선
+  if (id === 'seongsu') return { ko: '성수 · 하우스 노웨어', en: 'Seongsu · Haus Nowhere', short: 'Seongsu' }; // [seongsu] 2호선
   if (id === CORRIDOR_LANDMARK.id) return lotteClock.isOpen() ? { ko: CORRIDOR_LANDMARK.ko, en: CORRIDOR_LANDMARK.en, short: CORRIDOR_LANDMARK.en }
     : { ko: '잠실 랜드마크 공사현장', en: 'Jamsil Landmark site', short: 'Jamsil Landmark' }; // 오픈 전(lotteOpening.js)
   const s = ALL_STATIONS.find((x) => x.id === id);
@@ -223,7 +231,8 @@ export function mountGlobeCorridor({ root, camera, anchorSpot, globe, isEn, onEn
       <div class="gcm-body" style="height:${L.height}px;width:${L.width}px"><svg width="${L.width}" height="${L.height}">${seg}${leaders}${dots}</svg>${labels}</div>
       <div class="gcm-ft">${en ? 'Real station positions (OpenStreetMap). Scroll to zoom the globe.' : '실제 역 위치(OpenStreetMap) 기준 · 휠로 지구본 확대/축소'}</div>
       ${namsanGlobeEnabled() ? `<button type="button" class="gcm-stn" data-corridor-at="ntower" data-hot="ntower" style="position:relative;margin-top:8px;left:0;top:0">${en ? '🏙️ N Seoul Tower · start at the plaza' : '🏙️ 남산서울타워 · 광장에서 시작'}</button>` : ''}
-      ${myeongdongGlobeEnabled() ? `<button type="button" class="gcm-stn" data-corridor-at="myeongdong" data-hot="myeongdong" style="position:relative;margin-top:8px;left:0;top:0">${en ? '🛍️ Myeongdong Stn. (Line 4) · start at Exit 6' : '🛍️ 명동역 (4호선) · 6번 출구에서 시작'}</button>` : ''}`;
+      ${myeongdongGlobeEnabled() ? `<button type="button" class="gcm-stn" data-corridor-at="myeongdong" data-hot="myeongdong" style="position:relative;margin-top:8px;left:0;top:0">${en ? '🛍️ Myeongdong Stn. (Line 4) · start at Exit 6' : '🛍️ 명동역 (4호선) · 6번 출구에서 시작'}</button>` : ''}
+      ${seongsuGlobeEnabled() ? `<button type="button" class="gcm-stn" data-corridor-at="seongsu" data-hot="seongsu" style="position:relative;margin-top:8px;left:0;top:0">${en ? '🕶️ Seongsu (Line 2) · Haus Nowhere Seoul' : '🕶️ 성수 (2호선) · 하우스 노웨어 서울 앞에서 시작'}</button>` : ''}`;
     hot = null;
   }
   function setHot(id) {
