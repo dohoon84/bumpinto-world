@@ -13,6 +13,8 @@ const VIEWS0 = [
   { name: 'hq-corner', hl: [38, 36], to: [0, 0], pitch: 0.08, dist: 10 },
   { name: 'hq-tower', hl: [-40, 75], to: [0, 0], pitch: -0.32, dist: 14 }, // [v3] 색 비교용 (thesystemlab 사진 009 처럼 아래에서 올려다봄)
   { name: 'hq-ref', ov: true, hl: [0, 0], dist: 105, pitch: 0.1, yaw: 0.6 }, // [v3] 색 비교 (사진 002 처럼 길 건너 빈 대지 쪽에서)
+  { name: 'crown-1', hl: [22, 44], to: [0, 0], hide: true, pitch: -0.72, dist: 3 }, // [v4b] 왕관 끝 슬롯 가까이 (사옥 앞 길에서 올려다봄)
+  { name: 'crown-2', hl: [44, 26], to: [0, 0], hide: true, pitch: -0.72, dist: 3 },
   { name: 'hq-ref-s', hl: [0, 110], to: [0, 0], pitch: -0.18, dist: 10 },
   { name: 'hq-ref-se', hl: [80, 80], to: [0, 0], pitch: -0.18, dist: 10 },
   { name: 'hq-ref-sw', hl: [-80, 80], to: [0, 0], pitch: -0.18, dist: 10 },
@@ -186,7 +188,7 @@ if (RIDE) {
       if (v.fl) { await S.ensureInterior(); y = S.hq.floorY[v.fl] + 0.05; } else y = S.surfaceY(px, pz, 0.3) ?? 0.05;
       J.setMode('follow'); await J.corridor.preload(px, pz); J.teleport(px, pz, y);
       if (v.ov) { J.setMode('overview'); Object.assign(J.ov, { dist: v.dist, pitch: v.pitch, yaw }); } else Object.assign(J.cam, { dist: v.dist, pitch: v.pitch, yaw });
-      J.player.rotation.y = yaw + Math.PI;
+      J.player.rotation.y = yaw + Math.PI; J.player.visible = !v.hide;
       await new Promise((r) => setTimeout(r, 2500));
     }, v);
     await page.waitForTimeout(3500); await waitPaint();

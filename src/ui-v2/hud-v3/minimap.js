@@ -573,13 +573,19 @@ function updatePlaque(J, x, z) {
   let t;
   const nt = J.namsan?.tower;
   const nd = nt ? Math.hypot((nt.ox ?? nt.x) - x, (nt.oz ?? nt.z) - z) : Infinity;
+  // [v4b] 늦게 짓는 동네(성수·한강)는 역 목록에 없어 '분당'으로 떨어졌다 → 땅 주인 먼저, 그다음 아무 역(4 km), 마지막에 지역 이름
+  const ssD = J.seongsu?.ownDist?.(x, z) ?? Infinity, hgD = J.hangang?.ownDist?.(x, z) ?? Infinity;
   if (J.region?.id === 'starbase') t = 'Starbase';
+  else if (ssD < 60) t = tr('성수동', 'Seongsu-dong');
 else if (cap) t = tr(cap.name, cap.nameEn || cap.name); // [gangnam-night] 같은 섬의 역·랜드마크만
   else if (J.myeongdong?.ready && J.myeongdong.ownDist?.(x, z) < 60) t = tr('명동', 'Myeongdong'); // [myeongdong] 남산 반경 안이라도 명동 땅이면 명동
   else if (Number.isFinite(nd) && nd < 2800) t = tr('남산', 'Namsan');
 
   else if (best && bd < 900) t = tr(`${best.name}역${bd > 250 ? ' 근처' : ''}`, `${best.nameEn || best.name}${bd > 250 ? ' area' : ' Stn.'}`);
-  else t = tr('분당', 'Bundang');
+  else if (hgD < 1) t = tr('한강', 'Hangang');
+  else if (best && bd < 4000) t = tr(`${best.name}역 근처`, `${best.nameEn || best.name} area`);
+  else if (J.region?.id === 'jeongja') t = tr('분당', 'Bundang');
+  else t = tr(String(J.region?.name || '').replace(/\s*\(.*$/, '') || '분당', J.region?.enName || 'Bundang');
   if (t !== plaqueText) { plaqueText = t; plaque.textContent = t; }
 }
 let compAng = null;
