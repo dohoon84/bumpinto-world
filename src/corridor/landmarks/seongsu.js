@@ -146,11 +146,16 @@ export async function createSeongsuAsync({ scene, overlay, terrain, data, mobile
   // [seongsu-v3] 서쪽(응봉·금호 쪽 2.3km)·북쪽(600m) 빈 곳: OSM 을 안 받은 곳이라 '먼 시가지' 덩어리로 경계를 정리 (걸을 수 없음, 바닥 + 블록 상자 인스턴스 1 draw)
   const rim = new GeoBuf({ uv: false, color: true }), RIM = [];
   const rimBox = (x0, z0, x1, z1) => { RIM.push([x0, z0, x1, z1]); rim.quad([x0, 0.0, z1], [x1, 0.0, z1], [x1, 0.0, z0], [x0, 0.0, z0], undefined, hex3('#bdb9b0')); };
-  rimBox(A.x0 - 2300, A.z0 - 600, A.x0, -19100); rimBox(A.x0, A.z0 - 600, A.x1 + 400, A.z0);
+  const bzW = Math.min(HAP_EDGE_Z - 40, Number.isFinite(bankZ(A.x0 + 1)) ? bankZ(A.x0 + 1) : rawBZ(A.x0 + 1)), XW = A.x0 - 2300;
+  rimBox(XW, A.z0 - 600, A.x0, bzW); rimBox(A.x0, A.z0 - 600, A.x1 + 400, A.z0);
+  // 서쪽 물가: 성수 둔치와 같은 단면(풀 비탈 → 돌 → 수면 −28)으로 합수부 물까지
+  rim.quad([XW, 0.0, bzW], [XW, -9, bzW + 12], [A.x0, -9, bzW + 12], [A.x0, 0.0, bzW], undefined, hex3('#7e9a57'));
+  rim.quad([XW, -9, bzW + 12], [XW, -28.2, bzW + 30], [A.x0, -28.2, bzW + 30], [A.x0, -9, bzW + 12], undefined, hex3('#9c978b'));
+  rim.quad([XW, -28.3, bzW + 28], [XW, -28.3, -17700], [A.x0, -28.3, -17700], [A.x0, -28.3, bzW + 28], undefined, hex3('#5f9aa5')); // 강 남쪽 끝까지 (합수부 땅이 있으면 그 밑에 숨음)
   { const g = rim.build(); if (g) { const m = new THREE.Mesh(g, mat); m.name = 'seongsu-rim-ground'; root.add(m); } }
   {
     const spots = [], BL = 64;
-    for (const [x0, z0, x1, z1] of RIM) for (let x = x0 + 6; x < x1 - BL / 2; x += BL) for (let z = z0 + 6; z < z1 - BL / 2; z += BL) {
+    for (const [x0, z0, x1, z1] of RIM) for (let x = x0 + 6; x < x1 - BL / 2; x += BL) for (let z = z0 + 6; z < z1 - BL / 2 - (z1 === bzW ? 30 : 0); z += BL) {
       const hsh = hash01(Math.round(x * 7 + z), 31); if (hsh < 0.12) continue; // 공원·빈터 자리
       const n = 1 + (hsh > 0.55) + (hsh > 0.85);
       for (let k = 0; k < n; k++) { const w = 14 + hash01(x + k, z) * 26, d = 14 + hash01(z + k, x) * 24, h = 6 + Math.pow(hash01(x * 3 + k, z * 5), 2.2) * 42; const cx = x + 6 + (k % 2) * (BL - 12 - w) / 1 * 0.9 + w / 2, cz = z + 6 + ((k / 2) | 0) * (BL - 12 - d) * 0.9 + d / 2; spots.push([cx, cz, Math.min(w, BL - 12), Math.min(d, BL - 12), h, hsh]); }
@@ -395,7 +400,7 @@ export async function createSeongsuAsync({ scene, overlay, terrain, data, mobile
     heroShops.forEach((s, i) => { const g = new THREE.PlaneGeometry(Math.min(8, s.L - 0.4), 0.9), uv = g.attributes.uv; for (let k = 0; k < uv.count; k++) uv.setY(k, 1 - (i + 1 - uv.getY(k)) / heroShops.length); hb.add('stationShops', g, { x: s.x + s.nx * 0.35, y: 3.05, z: s.z + s.nz * 0.35, ry: s.ry }); g.dispose(); });
     for (const m0 of hb.build(hq.mats)) { m0.name = 'seongsu-real-shops-' + m0.userData.key; for (const m of chunkMesh(m0, DET_CELL)) addDetail(m); }
     // 가까이서 실제 유형명 확인하는 간판 (최대 110m에서만)
-    for (const s of heroShops) addLabel(s.kind[0], s.x, s.z, 4, 110, 8);
+    for (const s of heroShops) addLabel(s.kind[0], s.x, s.z, 4, 35, 8); // 간판에 이미 글씨 → 가까이서만
   }
   let signN = 0;
   for (const b of blds) {
@@ -681,7 +686,7 @@ export async function createSeongsuAsync({ scene, overlay, terrain, data, mobile
       if (Math.hypot(lx, lz) < 135) hqNpc?.update(dt, lastP.x, lastP.z); else hqNpc?.sleep();
     },
     setNight(on) { night = !!on; hq.setNight(night); },
-    stats() { return { heroShops: heroShops.length, clad, zebras: zebras.length, decks: decks.length, buckets: BNX * BNZ, fill: blds.filter((b) => b.f).length, buildings: blds.length, ways: roads.length, signs: signN, trees: treeSpots.length, hqNpcs: hqNpc?.stats || null, streetNpcs: streetNpc?.stats || null }; },
+    stats() { return { heroAt: heroShops.map((h) => [Math.round(h.x), Math.round(h.z), h.type, +h.nx.toFixed(3), +h.nz.toFixed(3)]), heroShops: heroShops.length, clad, zebras: zebras.length, decks: decks.length, buckets: BNX * BNZ, fill: blds.filter((b) => b.f).length, buildings: blds.length, ways: roads.length, signs: signN, trees: treeSpots.length, hqNpcs: hqNpc?.stats || null, streetNpcs: streetNpc?.stats || null }; },
     dispose() { unwatch?.(); unregSurface?.(); streetNpc?.dispose(); hqNpc?.dispose(); root.removeFromParent(); for (const l of labels) l?.remove?.(); },
   };
 }
