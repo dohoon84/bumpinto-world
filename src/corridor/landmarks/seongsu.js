@@ -215,6 +215,15 @@ export async function createSeongsuAsync({ scene, overlay, terrain, data, mobile
   for (const [buf, name] of [[rb, 'seongsu-roads'], [paint, 'seongsu-road-paint']]) { const g = buf.build(); if (g) { const m = new THREE.Mesh(g, mat); m.name = name; root.add(m); } }
   const roadAt = (x, z, pad = 0) => roadGrid.query(x, z).find((s) => distToSeg(x, z, s.a[0], s.a[1], s.b[0], s.b[1]) <= s.r + pad)?.w || null;
 
+  // [seongsu-elevated] 역 틀 (건물 거르기에도 씀: OSM 역 건물 윤곽은 고가역 모델이 대신)
+  const st = data.station;
+  let sr = 0, sd = Infinity;
+  for (const r of data.rail || []) for (let i = 1; i < r.pts.length; i++) { const a = r.pts[i - 1], c = r.pts[i], d = distToSeg(st.x, st.z, a[0], a[1], c[0], c[1]); if (d < sd) { sd = d; sr = Math.atan2(c[0] - a[0], c[1] - a[1]); } }
+  const SN = Math.sin(sr), CS = Math.cos(sr);
+  const SL = 200, SW = 13.6; // 승강장 길이(10량 = 200m) · 반폭
+  const sAt = (a, v) => ({ x: st.x + SN * a + CS * v, z: st.z + CS * a - SN * v });
+  const sLoc = (x, z) => { const dx = x - st.x, dz = z - st.z; return { a: dx * SN + dz * CS, v: dx * CS - dz * SN }; };
+  const inStationBox = (x, z, pad = 0) => { const q = sLoc(x, z); return Math.abs(q.a) < SL / 2 + 6 + pad && Math.abs(q.v) < SW + 2 + pad; };
   // 실제 OSM 필지. 높이가 없으면 낮은 공장·상가(2~5층); 큰 아파트는 OSM 층수 우선.
   // [seongsu-v2] 넓어진 섬: 450m 칸마다 병합 메시 하나씩 (칸 단위 frustum culling)
   const BNX = Math.max(1, Math.round((A.x1 - A.x0) / 450)), BNZ = Math.max(1, Math.round((A.z1 - A.z0) / 450));
@@ -222,7 +231,7 @@ export async function createSeongsuAsync({ scene, overlay, terrain, data, mobile
   for (const b of data.buildings || []) {
     if (!b.o || b.o.length < 3 || b.part || b.k === 'roof') continue;
     const cx = b.o.reduce((s, p) => s + p[0], 0) / b.o.length, cz = b.o.reduce((s, p) => s + p[1], 0) / b.o.length;
-    if (!inApron(cx, cz) || hqSite(cx, cz, 2) || b.o.some(([x, z]) => { const [lx, lz] = local(x, z); return Math.abs(lx) < 22 && Math.abs(lz) < 18; })) continue;
+    if (!inApron(cx, cz) || hqSite(cx, cz, 2) || inStationBox(cx, cz) || b.o.some(([x, z]) => inStationBox(x, z, -1.5)) || b.o.some(([x, z]) => { const [lx, lz] = local(x, z); return Math.abs(lx) < 22 && Math.abs(lz) < 18; })) continue;
     const ht = b.h || (b.lv ? b.lv * 3.2 + 0.6 : (b.k === 'industrial' || b.k === 'warehouse') ? 7 + hash01(b.id, 9) * 3 : 6 + Math.floor(hash01(b.id, 7) * 4) * 3.2);
     const top = Math.max(4, Math.min(120, ht)), base = b.mh || 0.02;
     const xs = b.o.map((p) => p[0]), zs = b.o.map((p) => p[1]), bb = [Math.min(...xs), Math.min(...zs), Math.max(...xs), Math.max(...zs)];
@@ -376,13 +385,6 @@ export async function createSeongsuAsync({ scene, overlay, terrain, data, mobile
 
   // [seongsu-elevated] 성수역 = 지상 3층 고가역 (2층 대합실 · 3층 2면 4선 쌍섬식 승강장, 선로 3 1 | 2 4, 지붕 13.4m) — 아차산로 바로 위.
   //   역 틀: 역 중심(data.station)에서 가장 가까운 고가 구간 방향(sr)을 따라 a(길이)·v(폭) 좌표. 출입구 1~4(subway/entrance.js 고가형)는 양 끝.
-  const st = data.station;
-  let sr = 0, sd = Infinity;
-  for (const r of data.rail || []) for (let i = 1; i < r.pts.length; i++) { const a = r.pts[i - 1], c = r.pts[i], d = distToSeg(st.x, st.z, a[0], a[1], c[0], c[1]); if (d < sd) { sd = d; sr = Math.atan2(c[0] - a[0], c[1] - a[1]); } }
-  const SN = Math.sin(sr), CS = Math.cos(sr);
-  const SL = 200, SW = 13.6; // 승강장 길이(10량 = 200m) · 반폭
-  const sAt = (a, v) => ({ x: st.x + SN * a + CS * v, z: st.z + CS * a - SN * v });
-  const sLoc = (x, z) => { const dx = x - st.x, dz = z - st.z; return { a: dx * SN + dz * CS, v: dx * CS - dz * SN }; };
   const sBox = (key, w, h, d, a, v, y, color) => { const q = sAt(a, v); props.box(key, w, h, d, { x: q.x, y, z: q.z, ry: sr, color }); };
   const Y = Object.freeze({ CON0: 5.1, CON1: 8.6, BED: 9.0, PLAT: 10.1, ROOF: 13.0 });
   // 2호선 고가 (OSM railway=subway, bridge=yes): 교각·녹색 거더·상판·레일, 상판 윗면 9.0m. 역 몸체 안쪽 조각은 건너뜀 (역 선로가 대신)
