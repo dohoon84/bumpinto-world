@@ -151,6 +151,8 @@ export function wrapLandmark(meta) {
     get hq() { return impl?.hq ?? null; }, // [seongsu] 하우스 노웨어 서울
     get hqFloor() { return impl?.hqFloor ?? 0; }, // [seongsu] 플레이어가 선 사옥 층(밖이면 0)
     camBlocked: (...a) => impl?.camBlocked?.(...a) ?? false, // [seongsu] 사옥 실내 카메라 붐
+    hideFar: (...a) => impl?.hideFar?.(...a) ?? null, // [seongsu] 섬 안에서 먼 랜드마크 이 프레임만 숨김
+    showFar: (...a) => impl?.showFar?.(...a),
     toWorld: (...a) => impl?.toWorld?.(...a) ?? null, // [seongsu] 사옥 로컬 → 월드
     local: (...a) => impl?.local?.(...a) ?? null, // [seongsu] 월드 → 사옥 로컬
     ensureInterior: (...a) => impl?.ensureInterior?.(...a), // [seongsu] 실내 조각상·층 (지연)

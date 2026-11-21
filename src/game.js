@@ -3112,7 +3112,9 @@ function frame() {
     // [cathedral-sit] 밤 성당 안: 하늘빛(hemi)이 달빛 수준이라 아바타(플레이어·기도하는 사람)만 까맣게 뜬다 → 그 프레임만 따뜻한 실내 밝기로 올렸다 되돌린다(새 조명 없음)
     const hemiSave = inCath && hemi.intensity < 1.2 ? [hemi.intensity, hemi.color.getHex(), hemi.groundColor.getHex()] : null;
     if (hemiSave) { hemi.intensity = 1.2; hemi.color.set('#ffe2bc'); hemi.groundColor.set('#7a5a3e'); }
+    const ssFar = corridor?.seongsu?.ready ? corridor.seongsu.hideFar() : null; // [seongsu] 성수 섬 안: 먼 랜드마크는 이 프레임만 숨김
     renderer.render(scene, camera);
+    if (ssFar) corridor.seongsu.showFar(ssFar);
     if (hemiSave) { hemi.intensity = hemiSave[0]; hemi.color.setHex(hemiSave[1]); hemi.groundColor.setHex(hemiSave[2]); }
     if (inCath) camera.layers.set(0);
     overlay.update(innerWidth, innerHeight); titleLayer?.render(renderer, innerWidth, innerHeight);

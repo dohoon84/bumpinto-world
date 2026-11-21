@@ -50,8 +50,10 @@ function areaMesh(buf, ring, y, color) {
 }
 function area(ring) { let a = 0; for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) a += ring[j][0] * ring[i][1] - ring[i][0] * ring[j][1]; return Math.abs(a / 2); }
 
+const FAR_HIDE = 1400;
 export async function createSeongsuAsync({ scene, overlay, terrain, data, mobile = false }, slicer = null) {
   const tick = async (s) => { await slicer?.tick?.(s); };
+  const farCache = new WeakMap();
   slicer?.mark?.(); // json·모듈 기다린 시간은 메인 스레드 블록이 아니다
   await tick('ss-start');
   const root = new THREE.Group(); root.name = 'seongsu'; root.visible = false; scene.add(root);
@@ -255,6 +257,29 @@ export async function createSeongsuAsync({ scene, overlay, terrain, data, mobile
     camBlocked(x, y, z) { const [lx, lz] = local(x, z); return !hq.inFoot(lx, lz) || hq.physics.camBlocked(lx, y, lz, hq.ceilingAt(lx, lz, y)); }, // 실내에 선 플레이어 카메라: 바깥 곡면 벽 밖으로도 나가지 않게
     local, toWorld,
     ensureInterior: () => hq.ensureInterior(),
+    /** [seongsu] 성수 섬 안에서는 1.4 km 밖 다른 랜드마크(남산 산·탄천 합수부·명동·청계산 숲…)를 이 프레임만 숨긴다 → 폰 tris.
+     *  game.js 가 renderer.render 앞뒤로 부른다. 숨긴 것만 되돌리므로 각 랜드마크의 자체 dormancy(visible) 와 겹치지 않는다. */
+    hideFar() {
+      if (!lastP || !inApron(lastP.x, lastP.z) || !root.visible) return null;
+      const hidden = [];
+      const far = (o) => {
+        let c = farCache.get(o); const key = o.children.length + ':' + (o.isMesh ? o.geometry?.id : '');
+        if (!c || c.key !== key) { c = { key, b: new THREE.Box3().setFromObject(o) }; farCache.set(o, c); }
+        if (c.b.isEmpty()) return -1;
+        const dx = Math.max(c.b.min.x - lastP.x, 0, lastP.x - c.b.max.x), dz = Math.max(c.b.min.z - lastP.z, 0, lastP.z - c.b.max.z);
+        return Math.hypot(dx, dz);
+      };
+      const visit = (o, depth) => {
+        if (o === root || !o.visible || o.isLight || /sky|OuterGround|sun/i.test(o.name || '')) return;
+        const d = far(o); if (d < 0) return;
+        if (d > FAR_HIDE) { o.visible = false; hidden.push(o); return; }
+        if (depth < 2 && o.children.length && o.children.length < 400) for (const k of o.children) visit(k, depth + 1);
+      };
+      for (const o of scene.children) visit(o, 0);
+      for (const o of scene.parent?.children || []) if (/cheonggye|gyeongbu|hangang|namsan|myeongdong|gangnam/i.test(o.name || '')) visit(o, 0);
+      return hidden;
+    },
+    showFar(hidden) { if (hidden) for (const o of hidden) o.visible = true; },
     tickPlayer(dt, player, cam, sky, camera) {
       lastP = player?.position || null; if (!lastP) return;
       lastY = lastP.y;

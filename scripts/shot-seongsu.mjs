@@ -8,7 +8,7 @@ const MOBILE = +W < 900;
 fs.mkdirSync(OUT, { recursive: true });
 // hl = 사옥 로컬 [x,z] (+fl 층), to = 바라볼 로컬 점. w = 월드 [x,z]
 const VIEWS0 = [
-  { name: 'arrival', spawn: true, toHq: true, pitch: 0.1, dist: 9 },
+  { name: 'arrival', spawn: true, toHq: true, pitch: 0.16, dist: 15 },
   { name: 'hq-front', hl: [0, 48], to: [0, 0], pitch: 0.04, dist: 12 },
   { name: 'hq-corner', hl: [38, 36], to: [0, 0], pitch: 0.08, dist: 10 },
   { name: 'street', near: 'road', pitch: 0.1, dist: 9 },
