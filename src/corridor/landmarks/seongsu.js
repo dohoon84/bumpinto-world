@@ -65,6 +65,8 @@ function ribbonY(buf, pts, ys, w, col) {
     buf.quad([a[0] + nx, ys[i - 1], a[1] + nz], [b[0] + nx, ys[i], b[1] + nz], [b[0] - nx, ys[i], b[1] - nz], [a[0] - nx, ys[i - 1], a[1] - nz], undefined, col);
   }
 }
+const HAP_EDGE_Z = -18625, HAP_EDGE_X0 = -6830;
+const HAP_EDGE_Y = [-31.2,-31.0,-30.9,-30.7,-30.6,-30.4,-30.2,-30.1,-29.9,-29.8,-29.6,-29.4,-29.3,-29.1,-29.0,-28.8,-28.6,-28.5,-28.3,-28.2,-28.0,-27.9,-27.7,-27.5,-27.4,-27.2,-27.1,-26.9,-26.7,-26.6,-26.4,-26.3,-26.1,-25.9,-25.8,-25.6,-25.5,-25.3,-25.2,-25,-24.8,-24.7,-24.5,-24.4,-24.2,-24.0,-23.9,-23.7,-23.6,-23.4,-23.2,-23.1,-22.9,-22.8,-22.6,-22.5,-22.3,-22.1,-22.0,-21.8,-21.7,-21.5,-21.4,-21.2,-21.0,-20.9,-20.7,-20.6,-20.4,-20.2,-20.1,-19.9,-19.8,-19.6,-13.8,-15.5,-10.7,-9.1,-7.0,-4.8,-2.9,-0.2,2.1,3.9,4.3,4.3,2.4,-0.1,-1.6,-0.8,0,-1.0,-2.2,-3.2,-4.1,-5.5,-6.1,-7.9,-7.8,-5.6,-4.3,-4.4,-3.0,-1.4,-1.0,-1.2,-1.2,-1.0,-0.8,-1.2,-1.1,0.3,0.8,0.8,0.4,0.5,0.5,0.6,0.9,0.4,0.1,0.2,0.5,1.8,2.6,3.0,3.2,3.2,2.7,2.9,4.2,4.8,3.7,2.2,2.6,5.8,9.4,9.6,7.7];
 const smooth = (t) => { const k = Math.max(0, Math.min(1, t)); return k * k * (3 - 2 * k); };
 /** [seongsu-v3] 병합 메시를 xz 격자 칸(cell m)으로 쪼갠다 (삼각형 무게중심 기준) → 칸마다 frustum culling·거리 숨김. */
 function chunkMesh(m, cell) {
@@ -112,6 +114,14 @@ export async function createSeongsuAsync({ scene, overlay, terrain, data, mobile
   const rawBank = data.bank || [];
   const rawBZ = (x) => { for (let i = 1; i < rawBank.length; i++) { const a = rawBank[i - 1], b = rawBank[i]; if ((a[0] - x) * (b[0] - x) <= 0 && a[0] !== b[0]) return a[1] + (b[1] - a[1]) * (x - a[0]) / (b[0] - a[0]); } return A.z1; };
   for (let x = A.x0; x < A.x1; x += 16) { const xx = Math.min(A.x1, x + 16), z0 = Math.min(A.z1, rawBZ(x)), z1 = Math.min(A.z1, rawBZ(xx)); gb.quad([x, 0.02, z0], [xx, 0.02, z1], [xx, 0.02, A.z0], [x, 0.02, A.z0], undefined, hex3('#c7c3b9')); }
+  // [seongsu-v3] 성수 땅 남쪽 끝(A.z1, y 0) → 합수부 땅(z −18625, 실측 높이) 사이 28m 틈을 비탈로 메움 (probe-seam-edge.mjs, x −6830부터 25m)
+  for (let i = 1; i < HAP_EDGE_Y.length; i++) {
+    const xa = HAP_EDGE_X0 + (i - 1) * 25, xb = xa + 25;
+    if (rawBZ(xa) < A.z1 - 1 || rawBZ(xb) < A.z1 - 1) continue; // 물(둔치 비탈이 대신)
+    const ya = HAP_EDGE_Y[i - 1] - 0.15, yb = HAP_EDGE_Y[i] - 0.15, col = hex3('#9aa58a');
+    gb.quad([xa, 0.02, A.z1], [xa, ya, HAP_EDGE_Z + 3], [xb, yb, HAP_EDGE_Z + 3], [xb, 0.02, A.z1], undefined, col);
+    gb.quad([xb, 0.02, A.z1], [xb, yb, HAP_EDGE_Z + 3], [xa, ya, HAP_EDGE_Z + 3], [xa, 0.02, A.z1], undefined, col);
+  }
   for (const a of data.areas || []) {
     if (a.o.some(([x, z]) => hqSite(x, z, 3))) continue;
     const green = /garden|grass|park|wood|scrub|recreation|pitch/.test(a.k);
@@ -123,7 +133,7 @@ export async function createSeongsuAsync({ scene, overlay, terrain, data, mobile
   const waterAt = (x, z, pad = 0) => bank.length > 1 && z > bankZ(x) - pad;
   let waterRing = null;
   if (bank.length > 1) {
-    const zz = A.z1 + 2, b0 = bank[0], b1 = bank[bank.length - 1];
+    const zz = HAP_EDGE_Z + 3, b0 = bank[0], b1 = bank[bank.length - 1]; // [seongsu-v3] 합수부 물(z −18625~)과 이어지게
     waterRing = bank.filter((p) => p[1] < zz).concat([[b1[0], zz], [b0[0], zz]]);
     if (waterRing.length > 3) areaMesh(gb, waterRing, -28, hex3('#5f9aa5'));
     // 둔치 비탈(물가 → 수면, 2구간 수면 높이에 맞춤): 위 풀색 · 아래 돌
@@ -133,6 +143,24 @@ export async function createSeongsuAsync({ scene, overlay, terrain, data, mobile
       gb.quad([m0[0], -9, m0[1]], [q0[0], -28.2, q0[1]], [q1[0], -28.2, q1[1]], [m1[0], -9, m1[1]], undefined, hex3('#9c978b')); }
   }
   const ground = new THREE.Mesh(gb.build(), mat); ground.name = 'seongsu-ground'; root.add(ground);
+  // [seongsu-v3] 서쪽(응봉·금호 쪽 2.3km)·북쪽(600m) 빈 곳: OSM 을 안 받은 곳이라 '먼 시가지' 덩어리로 경계를 정리 (걸을 수 없음, 바닥 + 블록 상자 인스턴스 1 draw)
+  const rim = new GeoBuf({ uv: false, color: true }), RIM = [];
+  const rimBox = (x0, z0, x1, z1) => { RIM.push([x0, z0, x1, z1]); rim.quad([x0, 0.0, z1], [x1, 0.0, z1], [x1, 0.0, z0], [x0, 0.0, z0], undefined, hex3('#bdb9b0')); };
+  rimBox(A.x0 - 2300, A.z0 - 600, A.x0, -19100); rimBox(A.x0, A.z0 - 600, A.x1 + 400, A.z0);
+  { const g = rim.build(); if (g) { const m = new THREE.Mesh(g, mat); m.name = 'seongsu-rim-ground'; root.add(m); } }
+  {
+    const spots = [], BL = 64;
+    for (const [x0, z0, x1, z1] of RIM) for (let x = x0 + 6; x < x1 - BL / 2; x += BL) for (let z = z0 + 6; z < z1 - BL / 2; z += BL) {
+      const hsh = hash01(Math.round(x * 7 + z), 31); if (hsh < 0.12) continue; // 공원·빈터 자리
+      const n = 1 + (hsh > 0.55) + (hsh > 0.85);
+      for (let k = 0; k < n; k++) { const w = 14 + hash01(x + k, z) * 26, d = 14 + hash01(z + k, x) * 24, h = 6 + Math.pow(hash01(x * 3 + k, z * 5), 2.2) * 42; const cx = x + 6 + (k % 2) * (BL - 12 - w) / 1 * 0.9 + w / 2, cz = z + 6 + ((k / 2) | 0) * (BL - 12 - d) * 0.9 + d / 2; spots.push([cx, cz, Math.min(w, BL - 12), Math.min(d, BL - 12), h, hsh]); }
+    }
+    const geo = new THREE.BoxGeometry(1, 1, 1); geo.translate(0, 0.5, 0);
+    const im = new THREE.InstancedMesh(geo, new THREE.MeshLambertMaterial(), spots.length); im.name = 'seongsu-rim-blocks';
+    const m4 = new THREE.Matrix4(), cc = new THREE.Color(), PAL = ['#e7e1d6', '#d8dee5', '#efe4d3', '#cfd5d8', '#e3d6c6', '#d5d0c8'];
+    spots.forEach(([x, z, w, d, h, hh], i) => { m4.makeScale(w, h, d).setPosition(x, 0, z); im.setMatrixAt(i, m4); im.setColorAt(i, cc.set(PAL[(hh * 97 | 0) % PAL.length])); });
+    im.computeBoundingBox(); im.computeBoundingSphere(); root.add(im);
+  }
   // 길 + 보도 + 중앙선 (OSM 이름·폭·차로). 골목은 회갈색 포장, 큰 길은 짙은 회색.
   const roads = (data.ways || []).filter((w) => w.pts?.length >= 2);
   const roadGrid = new CellGrid(24), rb = new GeoBuf({ uv: false, color: true }), paint = new GeoBuf({ uv: false, color: true });
@@ -145,6 +173,10 @@ export async function createSeongsuAsync({ scene, overlay, terrain, data, mobile
   const brEnds = new Map(); for (const w of brWays) for (const p of [w.pts[0], w.pts[w.pts.length - 1]]) brEnds.set(endKey(p), (brEnds.get(endKey(p)) || 0) + 1);
   const deckH = (w) => (w.ly ? 6 + 2.6 * Math.min(3, w.ly - 1) : 6.5);
   const decks = [];
+  // [seongsu-v3] 교각 충돌 (회전 사각형 반폭 hw × hd) — 고가차도·2호선 고가·역 교각
+  const pierGrid = new CellGrid(24);
+  const pierAdd = (x, z, hw, ry, hd) => { const r = Math.hypot(hw, hd); pierGrid.add({ x, z, hw, hd, c: Math.cos(ry), s: Math.sin(ry) }, x - r, z - r, x + r, z + r); };
+  const pierAt = (x, z, pad) => pierGrid.query(x, z).some((p) => { const dx = x - p.x, dz = z - p.z, u = dx * p.c - dz * p.s, v = dx * p.s + dz * p.c; return Math.abs(u) < p.hw + pad && Math.abs(v) < p.hd + pad; });
   for (const w of brWays) {
     // 이음점(한강 다리 북단) 근처면 그 z 에서 자르고 끝 높이 = 이음점 높이
     let pts = w.pts, joinY = null;
@@ -176,16 +208,30 @@ export async function createSeongsuAsync({ scene, overlay, terrain, data, mobile
   for (const J of BRIDGE_JOINS) {
     let best = null; // 고가 상판 끝 중 이음점에 가장 가까운 것 (같은 다리 접속 고가)
     for (const dk of decks) for (const k of [0, dk.pts.length - 1]) { const p = dk.pts[k], d = Math.hypot(p[0] - J.x, p[1] - J.z); if (p[1] < J.z - 3 && d < 320 && (!best || d < best.d)) best = { d, p, w: dk.w, y0: dk.ys[k] }; }
+    let ground = false;
+    if (!best) { // [seongsu-v3] 청담대교: 성수 쪽 고가 끝이 멀다(560m) → 가장 가까운 큰 땅 길 끝에서 고가 진입로를 새로 (합수부 강변북로 위로 넘어감)
+      for (const w of roads) { if (!CAR.has(w.k) || w.br || w.w < 9) continue; for (const k of [0, w.pts.length - 1]) { const p = w.pts[k], d = Math.hypot(p[0] - J.x, p[1] - J.z); if (p[1] < A.z1 + 2 && d < 800 && (!best || d < best.d)) best = { d, p, w, y0: 0.1 }; } }
+      ground = true;
+    }
     if (!best || best.d < 6) continue;
     const y0 = best.y0;
     const n = Math.max(2, Math.ceil(best.d / 10)), pts = [], ys = [];
-    for (let i = 0; i <= n; i++) { const t = i / n; pts.push([best.p[0] + (J.x - best.p[0]) * t, best.p[1] + (J.z - best.p[1]) * t]); ys.push(y0 + (J.y - y0) * smooth(t) + (i === n ? 0.1 : 0)); }
+    for (let i = 0; i <= n; i++) {
+      const t = i / n, s2 = t * best.d; pts.push([best.p[0] + (J.x - best.p[0]) * t, best.p[1] + (J.z - best.p[1]) * t]);
+      // 땅에서 시작하면 80m 안에 7.5m 로 올라 강변북로를 넘고, 마지막 140m 에서 다리 상판 높이로 내려간다
+      const y = ground ? Math.min(0.1 + 7.4 * smooth(s2 / 80), 7.5 + (J.y - 7.5) * smooth((s2 - (best.d - 140)) / 140)) : y0 + (J.y - y0) * smooth(t);
+      ys.push(y + (i === n ? 0.1 : 0));
+    }
     const cum = pts.map((p, i) => i * best.d / n);
-    decks.push({ w: { ...best.w, w: Math.max(best.w.w, 16) }, pts, ys, cum, join: J.name });
+    decks.push({ w: { ...best.w, id: ground ? 'join-' + J.name : best.w.id, w: Math.max(best.w.w, 16) }, pts, ys, cum, join: J.name, ground });
   }
-  for (const { w, pts, ys, cum } of decks) {
+  for (const { w, pts, ys, cum, join } of decks) {
     const col = hex3(roadColor(w));
     ribbonY(deckTop, pts, ys, w.w + 1.2, col);
+    if (join) { // [seongsu-v3] 이음 상판: 가운데 노란 겹선 + 흰 차선 점선 → 멀리서도 길로 읽힘
+      for (const o of [-0.25, 0.25]) ribbonY(deckTop, offset(pts, o), ys.map((y) => y + 0.04), 0.18, hex3('#edc357'));
+      for (const o of [-w.w / 4, w.w / 4]) { const op = offset(pts, o); for (let i = 1; i < op.length; i++) if (i % 2) ribbonY(deckTop, [op[i - 1], op[i]], [ys[i - 1] + 0.04, ys[i] + 0.04], 0.16, hex3('#f1f1ed')); }
+    }
     for (const sg of [-1, 1]) {
       const side = offset(pts, sg * (w.w / 2 + 0.45));
       for (let i = 1; i < side.length; i++) { const a = side[i - 1], b = side[i], L = Math.hypot(b[0] - a[0], b[1] - a[1]); if (L < 0.2) continue; const yy = (ys[i - 1] + ys[i]) / 2; brb.box('paint', 0.3, 1.0 + Math.max(0, Math.min(1.4, yy)) , L + 0.05, { x: (a[0] + b[0]) / 2, y: yy - 0.3, z: (a[1] + b[1]) / 2, ry: Math.atan2(b[0] - a[0], b[1] - a[1]), rx: -Math.atan2(ys[i] - ys[i - 1], L), color: '#c9cac4' }); }
@@ -200,6 +246,7 @@ export async function createSeongsuAsync({ scene, overlay, terrain, data, mobile
       if (y < 3.2) continue;
       const g0 = y < 0 ? y - 8 : 0, ry = Math.atan2(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]);
       brb.box('paint', Math.min(w.w * 0.5, 7), y - 1.5 - g0, 1.6, { x, y: g0 + (y - 1.5 - g0) / 2, z, ry, color: '#a9aaa3' });
+      if (g0 === 0) pierAdd(x, z, Math.min(w.w * 0.25, 3.5), ry, 0.8);
     }
     if (w.n && !named.has(w.n) && /대교|고가/.test(w.n + (decks.find((d) => d.w === w)?.join || ''))) { const p = pts[Math.floor(pts.length / 2)]; addLabel(w.n, p[0], p[1], ys[Math.floor(pts.length / 2)] + 6, 900, 30); named.add(w.n); }
     await tick('ss-decks');
@@ -493,11 +540,11 @@ export async function createSeongsuAsync({ scene, overlay, terrain, data, mobile
         vb.box('paint', 4.3, 0.25, l + 0.1, { x, y: 8.9, z, ry, color: '#b6b9b2' });
         for (const sg of [-1, 1]) vb.box('metal', 0.08, 0.12, l, { x: x + Math.cos(ry) * sg * 0.72, y: 9.08, z: z - Math.sin(ry) * sg * 0.72, ry, color: '#51565a' });
       }
-      for (let s2 = 5; s2 < L; s2 += 24) { const px = a[0] + dx * s2 / L, pz = a[1] + dz * s2 / L, q = sLoc(px, pz); if (Math.abs(q.a) < SL / 2 + 4 && Math.abs(q.v) < SW + 1) continue; vb.box('paint', 1.0, 7.6, 1.2, { x: px, y: 3.8, z: pz, ry, color: '#b4b5ae' }); }
+      for (let s2 = 5; s2 < L; s2 += 24) { const px = a[0] + dx * s2 / L, pz = a[1] + dz * s2 / L, q = sLoc(px, pz); if (Math.abs(q.a) < SL / 2 + 4 && Math.abs(q.v) < SW + 1) continue; vb.box('paint', 1.0, 7.6, 1.2, { x: px, y: 3.8, z: pz, ry, color: '#b4b5ae' }); pierAdd(px, pz, 0.5, ry, 0.6); }
     }
   }
   // 교각 쌍 (20m마다, 아차산로 차로 사이) + 가로보
-  for (let a = -SL / 2; a <= SL / 2 + 0.1; a += 20) { for (const v of [-9, 9]) sBox('paint', 1.4, Y.CON0, 1.4, a, v, Y.CON0 / 2, '#b9bab3'); sBox('paint', 1.6, 0.7, SW * 2 - 1, a, 0, Y.CON0 - 0.35, '#a8aaa3'); }
+  for (let a = -SL / 2; a <= SL / 2 + 0.1; a += 20) { for (const v of [-9, 9]) { sBox('paint', 1.4, Y.CON0, 1.4, a, v, Y.CON0 / 2, '#b9bab3'); const q = sAt(a, v); pierAdd(q.x, q.z, 0.7, sr, 0.7); } sBox('paint', 1.6, 0.7, SW * 2 - 1, a, 0, Y.CON0 - 0.35, '#a8aaa3'); }
   // 2층 대합실 (길 위 상자): 아래 띠 · 창 띠(멀리온 4m) · 위 띠 + 녹색 줄
   sBox('paint', SW * 2, 0.5, SL, 0, 0, Y.CON0 + 0.25, '#c4c5bf');
   sBox('paint', SW * 2 - 0.5, Y.CON1 - Y.CON0 - 1.2, SL - 0.5, 0, 0, (Y.CON0 + Y.CON1 + 0.7 - 0.5) / 2, '#5b707b');
@@ -560,6 +607,7 @@ export async function createSeongsuAsync({ scene, overlay, terrain, data, mobile
   function isBlocked(x, z, r = 0.35) {
     if (!inApron(x, z, 1)) return false;
     if (bldAt(x, z, r)) return true;
+    if (lastY < 3 && pierAt(x, z, r)) return true; // [seongsu-v3] 교각
     if (waterAt(x, z, -1) && deckY(x, z, lastY) == null) return true; // [seongsu-v2] 한강
     if (hqSite(x, z, 1)) { const [lx, lz] = local(x, z); if (hq.physics.blocked(lx, lz, lastY)) return true; }
     return false;

@@ -171,6 +171,7 @@ export function curtainTex({ night = false } = {}) {
     if (night && lit) { g.fillStyle = warm ? '#fff4d4' : '#f4fff7'; g.fillRect(xx + 7, yy + 12, w - 14, 3); g.fillStyle = 'rgba(10,16,18,0.4)'; g.fillRect(xx + 8 + r() * 20, yy + h * 0.6, 8 + r() * 22, h * 0.35); }
     else if (!night) { g.fillStyle = 'rgba(225,240,250,0.12)'; g.fillRect(xx + w * 0.2, yy + 5, w * 0.13, h - 14); }
     g.fillStyle = night ? '#18201f' : '#606c70'; g.fillRect(xx, yy, 2, h); g.fillRect(xx + w - 2, yy, 2, h); g.fillRect(xx, yy + h - 7, w, 7);
+    if (!night) { g.fillStyle = '#e4e7e8'; g.fillRect(xx, yy + h - 12, w, 6); g.fillRect(xx, yy + h * 0.45, w, 3); } // [v3] 사진처럼 유리 앞 흰 가로 루버 띠
     g.fillStyle = night ? '#69736a' : '#a4aba9'; g.fillRect(xx + 2, yy + h - 7, w - 4, 1);
   }
   return tex(c);

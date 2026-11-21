@@ -4,6 +4,14 @@ import * as THREE from 'three';
 import * as T from './textures.js';
 
 const DAY_LIFT = ['skin', 'tierRib', 'reveal', 'fluted', 'uhpc', 'beam', 'beamI', 'conc'];
+// [v3] 화면 색 보정(사진 표본과 7×7 px 중앙값 비교 → 채널별 빛 배율). 낮에만, setNight 에서 1 로.
+//   빛(직사+간접)에만 곱하므로 면마다 음영 차이는 그대로 남는다. 키 → [r,g,b]
+const DAY_GAIN = { skin: [1.5, 1.45, 1.4], tierRib: [1.5, 1.45, 1.4], reveal: [1.35, 1.32, 1.3], fluted: [2.65, 2.38, 2.28], beam: [1.25, 1.25, 1.25], beamI: [1.25, 1.25, 1.25], uhpc: [0.8, 0.81, 0.8], curtain: [0.88, 1.48, 1.72] };
+function addGain(mat, g) {
+  const u = { value: new THREE.Vector3(...g) }; mat.userData.gain = u; mat.userData.gainDay = g;
+  mat.onBeforeCompile = (sh) => { sh.uniforms.uDayGain = u; sh.fragmentShader = 'uniform vec3 uDayGain;\n' + sh.fragmentShader.replace('#include <opaque_fragment>', 'outgoingLight *= uDayGain;\n#include <opaque_fragment>'); };
+  mat.customProgramCacheKey = () => 'gmDayGain';
+}
 export function createMaterials({ maxAniso = 4 } = {}) {
   const std = (o) => new THREE.MeshStandardMaterial({ vertexColors: true, ...o });
   // [v3] 외벽 색: thesystemlab 사진(김용관) 낮 표본 — 그늘 면 #8e9092·#767470, 해 면 #c7beba·#c0b6ac. 해가 따뜻한 색(#fff4e0)이라
@@ -53,6 +61,7 @@ export function createMaterials({ maxAniso = 4 } = {}) {
   };
   // [v3] 낮 콘크리트가 사진보다 어둡고 누렇게 보이지 않게: 찬 회색 바탕빛을 조금 더한다 (밤엔 끔, setNight)
   for (const k of DAY_LIFT) { m[k].emissive = new THREE.Color(0x3a3e42); m[k].emissiveIntensity = 1; }
+  for (const [k, g] of Object.entries(DAY_GAIN)) addGain(m[k], g);
   m.conc.map.repeat.set(1, 1);
   m.tierRib.map.repeat.set(2.4, 1); m.tierRib.normalMap.repeat.set(2.4, 1); m.fluted.map.repeat.set(1, 1);
   for (const k of Object.keys(m)) { const t = m[k].map; if (t) t.anisotropy = maxAniso; }
@@ -69,5 +78,6 @@ export function setNight(m, night) {
   m.glass.opacity = night ? 0.12 : 0.2;
   for (const k of ['brickR', 'brickD', 'brickW']) m[k].emissiveIntensity = night ? 0.9 : 0;
   for (const k of DAY_LIFT) if (m[k]) m[k].emissiveIntensity = night ? 0 : 1;
+  for (const k of Object.keys(DAY_GAIN)) { const g = m[k]?.userData.gain; if (g) g.value.set(...(night ? [1, 1, 1] : m[k].userData.gainDay)); }
   m.shop.emissiveIntensity = night ? 0.95 : 0; m.signs.emissiveIntensity = night ? 0.95 : 0.3; m.stucco.emissiveIntensity = night ? 0.7 : 0;
 }
