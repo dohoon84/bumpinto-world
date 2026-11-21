@@ -230,6 +230,13 @@ export async function createSeongsuAsync({ scene, overlay, terrain, data, mobile
     const cum = pts.map((p, i) => i * best.d / n);
     decks.push({ w: { ...best.w, id: ground ? 'join-' + J.name : best.w.id, w: Math.max(best.w.w, 16) }, pts, ys, cum, join: J.name, ground });
   }
+  // [v4b] 고가 상판 끝끼리 몇 m 떨어져 끊긴 곳(능동로 → 청담대교 진입 상판 9 m 틈, 1 m 낭떠러지) → 짧은 이음 상판
+  { const links = [], n0 = decks.length;
+    for (let di = 0; di < n0; di++) { const d = decks[di]; for (const k of [0, d.pts.length - 1]) { const E = d.pts[k], ey = d.ys[k]; let best = null;
+      for (let dj = 0; dj < n0; dj++) { if (dj === di) continue; const o = decks[dj]; for (let i = 1; i < o.pts.length; i++) { const a = o.pts[i - 1], b = o.pts[i], dx = b[0] - a[0], dz = b[1] - a[1], LL = dx * dx + dz * dz; if (!LL) continue; const t = Math.max(0, Math.min(1, ((E[0] - a[0]) * dx + (E[1] - a[1]) * dz) / LL)); const q = [a[0] + dx * t, a[1] + dz * t], dd = Math.hypot(E[0] - q[0], E[1] - q[1]), qy = o.ys[i - 1] + (o.ys[i] - o.ys[i - 1]) * t; if (!best || dd < best.dd) best = { dd, q, qy, o }; } }
+      if (!best || best.dd > 15 || best.dd < best.o.w.w / 2 || Math.abs(best.qy - ey) > 1.5) continue;
+      links.push({ w: { ...d.w, id: 'link-' + d.w.id + '-' + best.o.w.id, n: undefined, w: Math.max(12, Math.min(d.w.w, best.o.w.w)) }, pts: [E, best.q], ys: [ey, best.qy], cum: [0, best.dd] }); } }
+    decks.push(...links); }
   for (const { w, pts, ys, cum, join } of decks) {
     const col = hex3(roadColor(w));
     ribbonY(deckTop, pts, ys, w.w + 1.2, col);
@@ -604,7 +611,8 @@ export async function createSeongsuAsync({ scene, overlay, terrain, data, mobile
 
   // 바닥·충돌. 반경 밖은 다른 섬/코리더가 담당. HQ에서는 현재 refY 근처의 바닥(층·에스컬레이터·계단)을 고른다.
   let lastY = 0.04, lastP = null, t = 0, lastCamY = 0; const lastCam = new THREE.Vector3();
-  const deckY = (x, z, refY = Infinity) => { let best = null; for (const d of decks) for (let i = 1; i < d.pts.length; i++) { const a = d.pts[i - 1], b = d.pts[i], dx = b[0] - a[0], dz = b[1] - a[1], LL = dx * dx + dz * dz; if (!LL) continue; const tr = ((x - a[0]) * dx + (z - a[1]) * dz) / LL; if ((tr < 0 ? -tr : tr - 1) * Math.sqrt(LL) > 0.6) continue; const t = Math.max(0, Math.min(1, tr)); if (Math.hypot(x - a[0] - dx * t, z - a[1] - dz * t) > d.w.w / 2 + 0.5) continue; /* [v4b] 끝에서 반지름 8 m 둥근 '모자'가 다음 상판보다 높게 잡혀 0.7 m 턱(성수대교 남행 막힘) → 길이 방향 0.6 m 까지만 */ const y = d.ys[i - 1] + (d.ys[i] - d.ys[i - 1]) * t; if (Number.isFinite(refY) && y > refY + 1.0) continue; if (best == null || y > best) best = y; } return best; };
+  const deckY = (x, z, refY = Infinity) => deckY0(x, z, refY, 0.6) ?? deckY0(x, z, refY, 8); // [v4b] 끝 모자는 다른 상판이 없을 때만 (고가 이음목 틈 메움)
+  const deckY0 = (x, z, refY, ext) => { let best = null; for (const d of decks) for (let i = 1; i < d.pts.length; i++) { const a = d.pts[i - 1], b = d.pts[i], dx = b[0] - a[0], dz = b[1] - a[1], LL = dx * dx + dz * dz; if (!LL) continue; const tr = ((x - a[0]) * dx + (z - a[1]) * dz) / LL; if ((tr < 0 ? -tr : tr - 1) * Math.sqrt(LL) > Math.min(ext, d.w.w / 2)) continue; const t = Math.max(0, Math.min(1, tr)); if (Math.hypot(x - a[0] - dx * t, z - a[1] - dz * t) > d.w.w / 2 + 0.5) continue; /* [v4b] 끝에서 반지름 8 m 둥근 '모자'가 다음 상판보다 높게 잡혀 0.7 m 턱(성수대교 남행 막힘) → 길이 방향 0.6 m 까지만 */ const y = d.ys[i - 1] + (d.ys[i] - d.ys[i - 1]) * t; if (Number.isFinite(refY) && y > refY + 1.0) continue; if (best == null || y > best) best = y; } return best; };
 
   // [v4b] 성수 땅 끝(A.z1, y 0) → 합수부 땅 끝(z −18625) 비탈(보이는 비탈 판과 같은 면). 예전엔 바닥이 없어 걸을 수 없었다.
   const edgeSlopeY = (x, z) => {
@@ -705,7 +713,7 @@ export async function createSeongsuAsync({ scene, overlay, terrain, data, mobile
       if (Math.hypot(lx, lz) < 135) hqNpc?.update(dt, lastP.x, lastP.z); else hqNpc?.sleep();
     },
     setNight(on) { night = !!on; hq.setNight(night); },
-    stats() { return { joinProfiles: decks.filter((d) => d.join).map((d) => ({ name: d.join, w: d.w.w, ground: d.ground, pts: d.pts, ys: d.ys })), signAt: signSpots2, heroAt: heroShops.map((h) => [Math.round(h.x), Math.round(h.z), h.type, +h.nx.toFixed(3), +h.nz.toFixed(3)]), heroShops: heroShops.length, clad, zebras: zebras.length, decks: decks.length, buckets: BNX * BNZ, fill: blds.filter((b) => b.f).length, buildings: blds.length, ways: roads.length, signs: signN, trees: treeSpots.length, hqNpcs: hqNpc?.stats || null, streetNpcs: streetNpc?.stats || null }; },
+    stats(nx, nz, nr = 400) { return { decksNear: nx == null ? undefined : decks.filter((d) => d.pts.some((p) => Math.hypot(p[0] - nx, p[1] - nz) < nr)).map((d) => ({ id: d.w.id, n: d.w.n, w: d.w.w, join: d.join || null, pts: d.pts.map((p) => p.map((v) => +v.toFixed(1))), ys: d.ys.map((v) => +v.toFixed(2)) })), joinProfiles: decks.filter((d) => d.join).map((d) => ({ name: d.join, w: d.w.w, ground: d.ground, pts: d.pts, ys: d.ys })), signAt: signSpots2, heroAt: heroShops.map((h) => [Math.round(h.x), Math.round(h.z), h.type, +h.nx.toFixed(3), +h.nz.toFixed(3)]), heroShops: heroShops.length, clad, zebras: zebras.length, decks: decks.length, buckets: BNX * BNZ, fill: blds.filter((b) => b.f).length, buildings: blds.length, ways: roads.length, signs: signN, trees: treeSpots.length, hqNpcs: hqNpc?.stats || null, streetNpcs: streetNpc?.stats || null }; },
     dispose() { unwatch?.(); unregSurface?.(); streetNpc?.dispose(); hqNpc?.dispose(); root.removeFromParent(); for (const l of labels) l?.remove?.(); },
   };
 }
