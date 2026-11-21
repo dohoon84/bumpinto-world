@@ -13,6 +13,11 @@ const VIEWS0 = [
   { name: 'hq-corner', hl: [38, 36], to: [0, 0], pitch: 0.08, dist: 10 },
   { name: 'street', near: 'road', pitch: 0.1, dist: 9 },
   { name: 'station', station: true, back: 34, pitch: -0.02, dist: 10 },
+  { name: 'viaduct', sv: [-75, -30], sto: [-10, 0], pitch: -0.12, dist: 11 },
+  { name: 'viaduct-under', sv: [-40, -5], sto: [40, 3], pitch: -0.2, dist: 7 },
+  { name: 'station-aerial', ov: true, sv: [0, 0], dist: 120, pitch: 0.5, yaw: 2.2 },
+  { name: 'exit-3', exit: '3', back: 14, pitch: 0.02, dist: 9 },
+  { name: 'exit-1', exit: '1', back: 14, pitch: 0.02, dist: 9 },
   { name: 'aerial', ov: true, hl: [0, 0], dist: 260, pitch: 0.72, yaw: 0.6 },
   { name: 'in-1f', hl: [0, 9.5], fl: 1, to: [0, -4], pitch: 0.12, dist: 4.2, inside: true },
   { name: 'in-2f', hl: [-2, 5], fl: 2, to: [2, -3], pitch: 0.12, dist: 3.8, inside: true },
@@ -95,8 +100,23 @@ if (RIDE) {
     res.alight = await page.evaluate(() => ({ room: window.__jj.subway.room, station: window.__jj.subway.station?.name }));
     console.log('alight', JSON.stringify(res.alight));
     await shot('ride-4-seongsu-platform');
-    await page.evaluate(() => window.__jj.subway.toConcourse?.({ well: 1 }));
-    await until(() => window.__jj.subway.room === 'concourse' && !window.__jj.subway.swapping, 60000).catch(() => {});
+    // [seongsu-elevated] 고가 승강장: 길 쪽(뒤 난간 너머)과 건너편 섬식 승강장이 보이게 몇 장 더
+    await page.evaluate(() => { const i = window.__jj.subway.inside; i.setView(-30, -2.6, -Math.PI / 2 - 0.35, 0.12, 6); });
+    await page.waitForTimeout(1500); await shot('ride-4b-platform-view');
+    await page.evaluate(() => { const i = window.__jj.subway.inside; i.setView(22, -3.6, -0.55, 0.32, 5); });
+    await page.waitForTimeout(1500); await shot('ride-4c-platform-street');
+    // 걸어서 내려가기: 계단 입구 앞 → W 로 계단(아래로) → 대합실
+    await page.evaluate(() => { const i = window.__jj.subway.inside; i.setView(0, -3.2, 0, 0.25, 4.5); i.player.rotation.y = Math.PI; });
+    await page.waitForTimeout(800);
+    await page.keyboard.down('KeyW'); await page.waitForTimeout(1000); await page.keyboard.up('KeyW');
+    res.stairY = await page.evaluate(() => +window.__jj.subway.inside?.player?.position?.y?.toFixed?.(2));
+    await shot('ride-5a-stairs-down');
+    await page.keyboard.down('KeyW');
+    for (let t0 = Date.now(); Date.now() - t0 < 15000;) { await page.waitForTimeout(150); if (await page.evaluate(() => window.__jj.subway.room === 'concourse' && !window.__jj.subway.swapping)) break; }
+    await page.keyboard.up('KeyW');
+    res.walkedDown = await page.evaluate(() => window.__jj.subway.room);
+    console.log('walkedDown', res.walkedDown, 'stairY', res.stairY);
+    if (res.walkedDown !== 'concourse') { await page.evaluate(() => window.__jj.subway.toConcourse?.({ well: 1 })); await until(() => window.__jj.subway.room === 'concourse' && !window.__jj.subway.swapping, 60000).catch(() => {}); }
     await shot('ride-5-seongsu-concourse');
     await page.evaluate(() => { const S = window.__jj.subway; S.openChooser(); const id = S.exits.find((e) => e.ref === '3')?.id || S.exits[0]?.id; if (id) S.choose(id); S.go(); });
     await until(() => window.__jj.subway.state.phase !== 'inside', 60000).catch(() => {});
@@ -106,6 +126,9 @@ if (RIDE) {
     await page.evaluate(() => { const J = window.__jj; J.setMode('follow'); Object.assign(J.cam, { dist: 9, pitch: 0.12 }); });
     await page.waitForTimeout(3000);
     await shot('ride-6-seongsu-exit');
+    await page.evaluate(() => { const J = window.__jj; Object.assign(J.cam, { dist: 16, pitch: 0.05, yaw: J.cam.yaw + Math.PI }); });
+    await page.waitForTimeout(2500);
+    await shot('ride-7-exit-looking-back');
   } catch (err) { console.error('ride failed', err.message); errors.push('ride failed: ' + err.message); await page.screenshot({ path: `${OUT}/${W}x${H}-ride-error.png` }).catch(() => {}); }
 } else {
   await page.waitForFunction(() => window.__jj?.seongsu?.ready, null, { timeout: 240000 });
@@ -122,6 +145,8 @@ if (RIDE) {
         let best = null; for (const r of S.roads) { if (!/primary|secondary|tertiary|residential/.test(r.k)) continue; for (let i = 1; i < r.pts.length; i++) { const [ax, az] = r.pts[i - 1], [bx, bz] = r.pts[i]; const mx = (ax + bx) / 2, mz = (az + bz) / 2; const dd = Math.hypot(mx - hqW[0], mz - hqW[1]); if (dd > 80 && dd < 140 && Math.hypot(bx - ax, bz - az) > 25 && (!best || Math.abs(dd - 110) < best.e)) best = { e: Math.abs(dd - 110), mx, mz, ax, az, bx, bz, w: r.w }; } }
         if (best) { const L = Math.hypot(best.bx - best.ax, best.bz - best.az), nx = -(best.bz - best.az) / L, nz = (best.bx - best.ax) / L; px = best.mx + nx * (best.w / 2 + 2); pz = best.mz + nz * (best.w / 2 + 2); yaw = toward(px, pz, best.bx, best.bz); }
       }
+      if (v.sv) { const q = S.stationAt(v.sv[0], v.sv[1]); px = q.x; pz = q.z; if (v.sto) { const t = S.stationAt(v.sto[0], v.sto[1]); yaw = toward(px, pz, t.x, t.z); } }
+      if (v.exit) { const e = J.subway.entrances.find((q) => q.exit?.id === `seongsu-x${v.exit}`); if (!e) return; const s2 = Math.sin(e.ry), c2 = Math.cos(e.ry); px = e.x - s2 * v.back + c2 * 5; pz = e.z - c2 * v.back - s2 * 5; yaw = toward(px, pz, e.x + s2 * 6, e.z + c2 * 6); }
       if (v.toHq) yaw = toward(px, pz, hqW[0], hqW[1]);
       if (v.to) { const t = W2(v.to); yaw = toward(px, pz, t[0], t[1]); }
       if (v.fl) { await S.ensureInterior(); y = S.hq.floorY[v.fl] + 0.05; } else y = S.surfaceY(px, pz, 0.3) ?? 0.05;

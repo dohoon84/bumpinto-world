@@ -126,6 +126,7 @@ export function wrapLandmark(meta) {
     get hap() { return impl?.hap; },
     get tower() { return impl?.tower; },
     get roads() { return impl?.roads; },
+    stationAt: (a, v) => impl?.stationAt?.(a, v) ?? null, // [seongsu-elevated]
     get cable() { return impl?.cable; },
     get cableGuide() { return impl?.cableGuide; },
     get interior() { return impl?.interior; },

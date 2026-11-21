@@ -26,6 +26,7 @@ export function stationTheme(def) {
     wells: prim.dirs,
     map: { title: `${prim.ko} (간략)`, stops: def.route.stops, me: def.name, color: prim.color },
     ad: { title: '동네 한 바퀴', sub: `${def.name}역 · ${def.nameEn}` },
+    elevated: !!def.elevated, // [seongsu-elevated] 고가역: 출입구는 올라가는 계단, 승강장은 하늘이 보이는 고가 승강장
   };
   if (def.id === 'jeongja') Object.assign(t, JEONGJA_THEME_EXTRA);
   return t;

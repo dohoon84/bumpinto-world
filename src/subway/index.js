@@ -285,7 +285,8 @@ export function mountSubway({ scene, overlay, data, world, terrain, renderer, ge
     }
     lastNear = n;
     const th = n && stationOf(n)?.theme;
-    setHint(n ? `<kbd>E</kbd>${n.exit.ref ? tr(`${th.name}역 ${n.exit.ref}번 출구로 내려가기`, `Go down · ${th.nameEn} Exit ${n.exit.ref}`) : tr(`${th.name}역으로 내려가기`, `Go down to ${th.nameEn} Stn.`)}` : '');
+    const up = !!th?.elevated, vk = up ? '올라가기' : '내려가기', ve = up ? 'Go up' : 'Go down'; // [seongsu-elevated] 고가역은 올라간다
+    setHint(n ? `<kbd>E</kbd>${n.exit.ref ? tr(`${th.name}역 ${n.exit.ref}번 출구로 ${vk}`, `${ve} · ${th.nameEn} Exit ${n.exit.ref}`) : tr(`${th.name}역으로 ${vk}`, `${ve} to ${th.nameEn} Stn.`)}` : '');
   }
 
   // ---------- [subway] 방 바꾸기 (대합실 ⇄ 승강장 → 열차 → 다른 역 승강장 …) ----------

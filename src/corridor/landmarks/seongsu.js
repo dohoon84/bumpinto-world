@@ -68,7 +68,7 @@ export async function createSeongsuAsync({ scene, overlay, terrain, data, mobile
   const addLabel = (text, x, z, up, maxDist, minDist = 8, cls = 'label') => { if (overlay) labels.push(overlay.add({ cls, text, getPos: () => new THREE.Vector3(x, up, z), maxDist, minDist })); };
   addLabel('성수동 · Seongsu-dong', H.x, H.z, 64, 2400, 120, 'label landmark');
   addLabel('HAUS NOWHERE SEOUL · 하우스 노웨어 서울', H.x, H.z, 36, 700, 20, 'label landmark');
-  addLabel('🚇 성수역 Seongsu · 2호선', data.station.x, data.station.z, 14, 800, 30, 'label landmark');
+  addLabel('🚇 성수역 Seongsu · 2호선', data.station.x, data.station.z, 17, 800, 30, 'label landmark');
   await tick('ss-hq');
 
   // 평지. 코리더 기본 바닥(y=0)과 깜빡이지 않게 2 cm 위에 놓는다.
@@ -185,30 +185,69 @@ export async function createSeongsuAsync({ scene, overlay, terrain, data, mobile
       }
     }
   }
-  // 2호선 고가 (OSM railway=subway, bridge=yes). 교각·상판·녹색 거더·레일 — 땅에서 8m, 밑으로 걸을 수 있다.
+  // [seongsu-elevated] 성수역 = 지상 3층 고가역 (2층 대합실 · 3층 2면 4선 쌍섬식 승강장, 선로 3 1 | 2 4, 지붕 13.4m) — 아차산로 바로 위.
+  //   역 틀: 역 중심(data.station)에서 가장 가까운 고가 구간 방향(sr)을 따라 a(길이)·v(폭) 좌표. 출입구 1~4(subway/entrance.js 고가형)는 양 끝.
+  const st = data.station;
+  let sr = 0, sd = Infinity;
+  for (const r of data.rail || []) for (let i = 1; i < r.pts.length; i++) { const a = r.pts[i - 1], c = r.pts[i], d = distToSeg(st.x, st.z, a[0], a[1], c[0], c[1]); if (d < sd) { sd = d; sr = Math.atan2(c[0] - a[0], c[1] - a[1]); } }
+  const SN = Math.sin(sr), CS = Math.cos(sr);
+  const SL = 200, SW = 13.6; // 승강장 길이(10량 = 200m) · 반폭
+  const sAt = (a, v) => ({ x: st.x + SN * a + CS * v, z: st.z + CS * a - SN * v });
+  const sLoc = (x, z) => { const dx = x - st.x, dz = z - st.z; return { a: dx * SN + dz * CS, v: dx * CS - dz * SN }; };
+  const sBox = (key, w, h, d, a, v, y, color) => { const q = sAt(a, v); props.box(key, w, h, d, { x: q.x, y, z: q.z, ry: sr, color }); };
+  const Y = Object.freeze({ CON0: 5.1, CON1: 8.6, BED: 9.0, PLAT: 10.1, ROOF: 13.0 });
+  // 2호선 고가 (OSM railway=subway, bridge=yes): 교각·녹색 거더·상판·레일, 상판 윗면 9.0m. 역 몸체 안쪽 조각은 건너뜀 (역 선로가 대신)
   for (const r of data.rail || []) {
     if (!r.br || r.k !== 'subway') continue;
     for (let i = 1; i < r.pts.length; i++) {
       const a = r.pts[i - 1], c = r.pts[i], dx = c[0] - a[0], dz = c[1] - a[1], L = Math.hypot(dx, dz), ry = Math.atan2(dx, dz);
       if (L < 0.1) continue;
-      const x = (a[0] + c[0]) / 2, z = (a[1] + c[1]) / 2;
-      props.box('paint', 4.4, 1.1, L + 0.1, { x, y: 7.8, z, ry, color: '#627c67' });
-      props.box('paint', 4.3, 0.25, L + 0.1, { x, y: 8.5, z, ry, color: '#b6b9b2' });
-      for (const sg of [-1, 1]) props.box('metal', 0.08, 0.12, L, { x: x + Math.cos(ry) * sg * 0.72, y: 8.68, z: z - Math.sin(ry) * sg * 0.72, ry, color: '#51565a' });
-      for (let s = 5; s < L; s += 24) { const px = a[0] + dx * s / L, pz = a[1] + dz * s / L; props.box('paint', 1.0, 7.2, 1.2, { x: px, y: 3.6, z: pz, ry, color: '#b4b5ae' }); }
+      const n = Math.max(1, Math.ceil(L / 12)), l = L / n;
+      for (let k = 0; k < n; k++) {
+        const x = a[0] + dx * (k + 0.5) / n, z = a[1] + dz * (k + 0.5) / n, q = sLoc(x, z);
+        if (Math.abs(q.a) < SL / 2 + 4 && Math.abs(q.v) < SW + 1) continue;
+        props.box('paint', 4.4, 1.1, l + 0.1, { x, y: 8.2, z, ry, color: '#627c67' });
+        props.box('paint', 4.3, 0.25, l + 0.1, { x, y: 8.9, z, ry, color: '#b6b9b2' });
+        for (const sg of [-1, 1]) props.box('metal', 0.08, 0.12, l, { x: x + Math.cos(ry) * sg * 0.72, y: 9.08, z: z - Math.sin(ry) * sg * 0.72, ry, color: '#51565a' });
+      }
+      for (let s2 = 5; s2 < L; s2 += 24) { const px = a[0] + dx * s2 / L, pz = a[1] + dz * s2 / L, q = sLoc(px, pz); if (Math.abs(q.a) < SL / 2 + 4 && Math.abs(q.v) < SW + 1) continue; props.box('paint', 1.0, 7.6, 1.2, { x: px, y: 3.8, z: pz, ry, color: '#b4b5ae' }); }
     }
   }
-  // 성수역 고가 승강장(지상 시각 모델, 대합실·승강장은 기존 subway 모듈이 담당)
-  const st = data.station;
-  let sr = 0, sd = Infinity; // 역 중심에서 가장 가까운 고가 구간 방향
-  for (const r of data.rail || []) for (let i = 1; i < r.pts.length; i++) { const a = r.pts[i - 1], c = r.pts[i], d = distToSeg(st.x, st.z, a[0], a[1], c[0], c[1]); if (d < sd) { sd = d; sr = Math.atan2(c[0] - a[0], c[1] - a[1]); } }
-  props.box('paint', 13, 1, 125, { x: st.x, y: 8.8, z: st.z, ry: sr, color: '#8f9991' });
-  props.box('paint', 15.2, 1.1, 128, { x: st.x, y: 13.2, z: st.z, ry: sr, color: '#ced4cc' });
-  for (const s of [-1, 1]) props.box('frame', 0.16, 3.4, 121, { x: st.x + Math.cos(sr) * s * 6.3, y: 10.7, z: st.z - Math.sin(sr) * s * 6.3, ry: sr, color: '#496a50' });
+  // 교각 쌍 (20m마다, 아차산로 차로 사이) + 가로보
+  for (let a = -SL / 2; a <= SL / 2 + 0.1; a += 20) { for (const v of [-9, 9]) sBox('paint', 1.4, Y.CON0, 1.4, a, v, Y.CON0 / 2, '#b9bab3'); sBox('paint', 1.6, 0.7, SW * 2 - 1, a, 0, Y.CON0 - 0.35, '#a8aaa3'); }
+  // 2층 대합실 (길 위 상자): 아래 띠 · 창 띠(멀리온 4m) · 위 띠 + 녹색 줄
+  sBox('paint', SW * 2, 0.5, SL, 0, 0, Y.CON0 + 0.25, '#c4c5bf');
+  sBox('paint', SW * 2 - 0.5, Y.CON1 - Y.CON0 - 1.2, SL - 0.5, 0, 0, (Y.CON0 + Y.CON1 + 0.7 - 0.5) / 2, '#5b707b');
+  sBox('paint', SW * 2, Y.BED - Y.CON1 + 0.7, SL, 0, 0, (Y.CON1 - 0.7 + Y.BED) / 2, '#d2d3cd');
+  for (const v of [-1, 1]) { sBox('paint', 0.06, 0.28, SL, 0, v * (SW + 0.02), Y.CON1 - 0.25, '#00a84d'); for (let a = -SL / 2 + 2; a < SL / 2; a += 4) sBox('frame', 0.14, Y.CON1 - Y.CON0 - 1.2, 0.14, a, v * (SW - 0.2), (Y.CON0 + Y.CON1 + 0.2) / 2, '#3d434b'); }
+  // 3층: 선로 4개 (v = 측선 -11.2, 본선 -3.8 | 3.8, 측선 11.2) · 섬식 승강장 2개 (v ±7.5, 폭 4)
+  for (const v of [-11.2, -3.8, 3.8, 11.2]) { sBox('paint', 3.0, 0.1, SL + 6, 0, v, Y.BED + 0.05, '#4a4945'); for (const s2 of [-0.75, 0.75]) sBox('metal', 0.08, 0.14, SL + 6, 0, v + s2, Y.BED + 0.17, '#51565a'); }
+  for (const v of [-1, 1]) sBox('paint', 0.3, 1.2, SL, 0, v * (SW - 0.15), Y.BED + 0.6, '#d0d2cc'); // 바깥 난간
+  for (const iv of [-7.5, 7.5]) {
+    sBox('paint', 4, Y.PLAT - Y.BED, SL - 10, 0, iv, (Y.PLAT + Y.BED) / 2, '#b9b4aa');
+    for (const e of [-1, 1]) {
+      const ev = iv + e * 1.95;
+      sBox('paint', 0.08, 1.9, SL - 12, 0, ev, Y.PLAT + 0.95, '#93aebb');                         // 스크린도어 유리
+      sBox('paint', 0.14, 0.32, SL - 12, 0, ev, Y.PLAT + 2.05, '#30363b');                       // 위 띠
+      sBox('paint', 0.16, 0.08, SL - 12, 0, ev, Y.PLAT + 2.15, '#00a84d');                       // 2호선 녹색 줄
+      for (let a = -SL / 2 + 7; a < SL / 2 - 6; a += 7) sBox('frame', 0.1, 1.9, 0.12, a, ev, Y.PLAT + 0.95, '#59636b');
+    }
+    for (let a = -SL / 2 + 8; a < SL / 2 - 4; a += 16) sBox('paint', 0.36, Y.ROOF - Y.PLAT, 0.36, a, iv, (Y.ROOF + Y.PLAT) / 2, '#e9ecef'); // 지붕 기둥
+    sBox('paint', 7.2, 0.4, SL - 6, 0, iv, Y.ROOF + 0.2, '#e2e4e1');                              // 승강장 지붕
+    for (const e of [-1, 1]) sBox('paint', 0.1, 0.36, SL - 6, 0, iv + e * 3.62, Y.ROOF + 0.16, '#00a84d');
+    for (const a of [-SL / 2 + 12, SL / 2 - 12]) { sBox('paint', 2.6, 2.4, 8, a, iv, Y.PLAT + 1.2, '#cfd6d8'); sBox('paint', 2.8, 0.15, 8.4, a, iv, Y.PLAT + 2.5, '#e2e4e1'); } // 양 끝 계단실 (대합실로)
+  }
   for (const m of props.build(hq.mats)) { m.name = 'seongsu-street-' + m.userData.key; root.add(m); }
-  // 역 외벽 이름 (먼 거리에서 보이는 글자; 실제 계단 입구는 subway/entrance.js가 그린다)
-  const sign = new THREE.Mesh(new THREE.PlaneGeometry(19, 2.2), new THREE.MeshBasicMaterial({ map: labelTex('성수  Seongsu', { w: 768, h: 128, bg: '#00a84d', fg: '#ffffff', font: '800 58px "Noto Sans KR", sans-serif', sub: '2  ·  HAUS NOWHERE SEOUL ↘', subFont: '500 25px sans-serif' }), toneMapped: false }));
-  sign.position.set(st.x + Math.cos(sr) * 6.4, 11.0, st.z - Math.sin(sr) * 6.4); sign.rotation.y = Math.atan2(Math.cos(sr), -Math.sin(sr)); sign.name = 'seongsu-station-sign'; root.add(sign);
+  // 역 이름 (녹색 2호선 간판): 대합실 양 옆(큰 것 2) + 승강장 지붕 밑(작은 것 8) — 판 하나 InstancedMesh (draw 1)
+  const signGeo = new THREE.PlaneGeometry(1, 1);
+  const signMat = new THREE.MeshBasicMaterial({ map: labelTex('성수  Seongsu', { w: 768, h: 128, bg: '#00a84d', fg: '#ffffff', font: '800 58px "Noto Sans KR", sans-serif', sub: '2  ·  211  ·  건대입구 ← → 뚝섬', subFont: '500 25px sans-serif' }), toneMapped: false, side: THREE.DoubleSide });
+  const signSpots = [];
+  for (const v of [-1, 1]) for (const a of [-40, 40]) signSpots.push({ a, v: v * (SW + 0.08), y: (Y.CON0 + Y.CON1) / 2 + 0.2, w: 19, h: 2.2, face: v });
+  for (const iv of [-7.5, 7.5]) for (const a of [-60, -20, 20, 60]) signSpots.push({ a, v: iv, y: Y.ROOF - 0.55, w: 4.2, h: 0.7, face: 0 });
+  const sign = new THREE.InstancedMesh(signGeo, signMat, signSpots.length); sign.name = 'seongsu-station-sign';
+  { const m4 = new THREE.Matrix4(), qq = new THREE.Quaternion(), sc = new THREE.Vector3(), ps = new THREE.Vector3(), up = new THREE.Vector3(0, 1, 0);
+    signSpots.forEach((g, k) => { const q = sAt(g.a, g.v); ps.set(q.x, g.y, q.z); qq.setFromAxisAngle(up, g.face ? Math.atan2(CS * g.face, -SN * g.face) : sr + Math.PI / 2); sc.set(g.w, g.h, 1); m4.compose(ps, qq, sc); sign.setMatrixAt(k, m4); }); }
+  root.add(sign);
   await tick('ss-props');
 
   // HQ와 성수역 사이의 실제 길 위 사람들. 거리 풀(폰 50/PC90)과 HQ 풀(직원10/관람객25/보행자18)은 각각 부품 인스턴싱.
@@ -247,7 +286,7 @@ export async function createSeongsuAsync({ scene, overlay, terrain, data, mobile
   root.visible = true;
   return {
     root, bounds: B, boxes: [B], spawn: { ...SEONGSU_SPAWN }, spawnY: () => SEONGSU_SPAWN.y, face: H.ry,
-    mini, hq, station: st, roads,
+    mini, hq, station: st, roads, stationAt: (a, v) => sAt(a, v), // [seongsu-elevated] 역 틀 (a 길이·v 폭) → 월드
     owns: (x, z) => inSeongsu(x, z), ownDist: (x, z) => distBox(B, x, z),
     heightAt: (x, z) => inApron(x, z) ? 0.04 : null, surfaceY, groundHeight: surfaceY, isBlocked,
     blockedBy: (x, z, r) => isBlocked(x, z, r) ? 'seongsu' : null,
