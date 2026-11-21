@@ -98,8 +98,9 @@ export function createHQ({ mobile = false, maxAniso = 4, core = true } = {}) {
     const inB = ly < P.baseTop && inFoot(lx, lz);
     const cf = !inB ? 0 : floorOfY(ly);
     camFloor = cf;
-    const key = 'k' + cf; if (key === cullKey) return cf; cullKey = key;
-    for (const m of inner.meshes) { const f = m.userData.fl; if (!f || m.userData.span > 12) continue; m.visible = cf === 0 ? f === 1 : Math.abs(f - cf) <= 1; }
+    const detail = Math.hypot(lx, lz) < 230; // [v4] 먼 항공뷰에선 실내 소품만 생략 (외관·바닥 셸 유지), 1M tri 여유
+    const key = 'k' + cf + ':' + detail; if (key === cullKey) return cf; cullKey = key;
+    for (const m of inner.meshes) { const f = m.userData.fl; if (!f || m.userData.span > 12) continue; m.visible = detail && (cf === 0 ? f === 1 : Math.abs(f - cf) <= 1); }
     // 위층 셸(바닥판·천장)도 밖에서는 그릴 필요가 없다 — 셸은 층을 나눠 만들지 않아서 그대로 둔다
     return cf;
   }

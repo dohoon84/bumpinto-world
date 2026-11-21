@@ -419,14 +419,17 @@ export async function createSeongsuAsync({ scene, overlay, terrain, data, mobile
     // [seongsu-v4] 간판: 1층 문·쇼윈도 위(2.5~3.3 m) 띠에, 외벽 판(0.11)·2층 창 띠(0.15)·층 턱(0.25) 보다 앞(0.34)에 + 뒤판(테두리).
     //   예전엔 3.4 m 높이·벽에서 7 cm 라 외벽 판·창 띠가 간판 윗부분을 덮었다.
     const e = edge, n = signN++ % 16, w = Math.min(e.L * 0.68, OLD_SIGN ? 7.0 : 4.0), h = w / 4, ry = Math.atan2(e.nx, e.nz), SY = OLD_SIGN ? 3.4 : 2.96, SO = OLD_SIGN ? 0.07 : 0.34;
+    const quad = (key, qw, qh, off, qy, color, along = 0) => { const pg = new THREE.PlaneGeometry(qw, qh); sb.add(key, pg, { x: e.x + e.nx * off + e.nz * along, y: qy, z: e.z + e.nz * off - e.nx * along, ry, color }); pg.dispose(); };
     const g = new THREE.PlaneGeometry(w, h), uv = g.attributes.uv;
     for (let k = 0; k < uv.count; k++) uv.setXY(k, ((n % 4) + uv.getX(k)) / 4, 1 - (((n / 4) | 0) + 1 - uv.getY(k)) / 4);
     sb.add('signs', g, { x: e.x + e.nx * SO, y: SY, z: e.z + e.nz * SO, ry }); g.dispose();
     if (signSpots2.length < 40 && Math.hypot(e.x - st.x, e.z - st.z) < 250) signSpots2.push([Math.round(e.x), Math.round(e.z), '', +e.nx.toFixed(3), +e.nz.toFixed(3)]);
-    if (!OLD_SIGN) sb.box('paint', w + 0.16, h + 0.12, 0.16, { x: e.x + e.nx * (SO - 0.09), y: SY, z: e.z + e.nz * (SO - 0.09), ry, color: '#2b2f33' });
+    // 뒤판·쇼윈도·문살은 평면(2 tri)으로 — 상자(12 tri)면 2.9천 개 간판에서 삼각형 예산(1M)을 넘는다
+    if (!OLD_SIGN) quad('paint', w + 0.16, h + 0.12, SO - 0.03, SY, '#2b2f33');
     // 큰 쇼윈도(형상 단순, 빛은 재질) + 차양 (간판 아래)
-    sb.box(OLD_SIGN ? 'frame' : 'paint', Math.min(4.0, e.L * 0.6), 2.0, 0.04, { x: e.x + e.nx * 0.05, y: 1.25, z: e.z + e.nz * 0.05, ry, color: OLD_SIGN ? '#1e292c' : '#4f6872' }); // 쇼윈도 유리(검은 판 → 푸른 회색)
-    if (!OLD_SIGN) for (const u of [-0.5, 0, 0.5]) sb.box('paint', 0.06, 2.0, 0.06, { x: e.x + e.nx * 0.09 + e.nz * u * Math.min(4.0, e.L * 0.6), y: 1.25, z: e.z + e.nz * 0.09 - e.nx * u * Math.min(4.0, e.L * 0.6), ry, color: '#c9cdcf' });
+    const WW = Math.min(4.0, e.L * 0.6);
+    quad(OLD_SIGN ? 'frame' : 'paint', WW, 2.0, 0.05, 1.25, OLD_SIGN ? '#1e292c' : '#4f6872'); // 쇼윈도 유리(검은 판 → 푸른 회색)
+    if (!OLD_SIGN) for (const u of [-0.5, 0, 0.5]) quad('paint', 0.07, 2.0, 0.08, 1.25, '#c9cdcf', u * WW);
     if (hash01(b.id, 4) < 0.65) sb.box('paint', w + 0.2, 0.10, 0.9, { x: e.x + e.nx * 0.5, y: OLD_SIGN ? 2.7 : 2.36, z: e.z + e.nz * 0.5, ry, rx: 0.1, color: ['#273a31', '#f2e9d7', '#684a3d', '#303541'][b.id % 4] });
     if (hash01(b.id, 6) < 0.45) { props.cyl('metal', 0.75, 0.75, 1.3, { x: b.cx, y: b.ht + 0.65, z: b.cz, color: '#b7c1c6' }, 8); props.box('paint', 1, 0.7, 0.6, { x: b.cx + 1.4, y: b.ht + 0.35, z: b.cz, color: '#d7d5cd' }); }
     await tick('ss-signs');
