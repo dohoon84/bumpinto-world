@@ -39,10 +39,10 @@ export function buildInterior(mats, imats, shell, ext, sculpts) {
   {
     const y0 = FY[1], B = mk(1); const yy = y0 + 0.0;
     // 잠자는 하운드
-    const hg = new THREE.Group(); hg.position.set(-0.9, yy, 4.7); hg.scale.setScalar(0.9); hg.name = 'gm-hound'; meshes.push(hg);
+    const hg = new THREE.Group(); hg.position.set(-0.6, yy, 4.7); hg.scale.setScalar(1.15); hg.name = 'gm-hound'; meshes.push(hg);
     hg.add(sculptMesh('hound', 'velvet'), sculptMesh('houndArmor', 'alu'));
-    { const cB = mk(1); cB.tor('alu', 0.6, 0.07, { x: 3.0, y: 1.36, z: 0.03, ry: Math.PI / 2, rx: 0.52, color: 0xc9ccd1 }, 10, 40); flush(cB, 'collar', hg, 1); }
-    col(-3.7, 4.6, 3.7, 6.0, yy, yy + 2.2); circ(-4.0, 5.6, 0.5, yy, yy + 1); circ(4.3, 4.7, 0.6, yy, yy + 1);
+    { const cB = mk(1); cB.tor('alu', 0.37, 0.05, { x: 1.86, y: 1.62, z: 0, ry: Math.PI / 2, rx: -0.82, color: 0xc9ccd1 }, 10, 40); flush(cB, 'collar', hg, 1); }
+    col(-3.2, 2.9, 3.95, 5.45, yy, yy + 2.0); circ(-2.6, 5.5, 0.5, yy, yy + 1); circ(3.0, 4.7, 0.55, yy, yy + 0.5); circ(2.2, 4.7, 0.45, yy, yy + 2.9);
     anims.push((t) => { const k = Math.sin(t * 1.05); hg.scale.set(0.9, 0.9 * (1 + 0.013 * k), 0.9 * (1 + 0.01 * k)); });
     // 웅크린 알루미늄 거인 둘
     for (const [x, z, ry] of [[-7.4, 5.4, 0.7], [8.4, 2.0, -2.3]]) { meshes.push(sculptMesh('giantCrouch', 'alu', { x, y: yy, z, ry })); circ(x, z, 1.5, yy, yy + 3.6); }

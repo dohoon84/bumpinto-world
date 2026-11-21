@@ -52,11 +52,14 @@ function area(ring) { let a = 0; for (let i = 0, j = ring.length - 1; i < ring.l
 
 export async function createSeongsuAsync({ scene, overlay, terrain, data, mobile = false }, slicer = null) {
   const tick = async (s) => { await slicer?.tick?.(s); };
+  slicer?.mark?.(); // json·모듈 기다린 시간은 메인 스레드 블록이 아니다
+  await tick('ss-start');
   const root = new THREE.Group(); root.name = 'seongsu'; root.visible = false; scene.add(root);
   const q = new URLSearchParams(typeof location !== 'undefined' ? location.search : '');
   const B = { ...SEONGSU_BOUNDS }, A = { ...SEONGSU_APRON }, H = { ...SEONGSU_HQ, ...data.hq };
   const local = (x, z) => hqLocal(x, z, H), toWorld = (x, z) => hqWorld(x, z, H);
   const hq = createHQ({ mobile, core: true });
+  await tick('ss-hq-built');
   hq.group.position.set(H.x, 0, H.z); hq.group.rotation.y = H.ry; root.add(hq.group);
   const hqSite = (x, z, pad = 0) => { const [lx, lz] = local(x, z); return lx > -35 - pad && lx < 72 + pad && lz > -32 - pad && lz < 25 + pad; };
   const labels = [];
