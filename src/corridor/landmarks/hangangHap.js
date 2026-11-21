@@ -477,6 +477,44 @@ function startHangangHap(parent, osm) {
 // [seongsu-v4] 한강 북단(성수·자양 쪽, 성수대교~청담대교) 땅: 2구간 DEM 은 전부 잔디 텍스처라 아파트 단지·길 자리까지
 //   푸른 잔디였다. 공원(OSM 뚝섬한강공원 등)과 물가 둔치 띠(물에서 ~110 m)만 잔디로 두고, 나머지 시가지는 포장 회색 메시로 옮긴다.
 const URBAN_BAND = { x0: -7000, x1: -3000, z0: -18700, z1: -17950 };
+
+// [v4b] 북단 도시 바닥(성수 쪽) → 강변 공원: 강변북로 옹벽·난간(DEM 의 얇은 가시 + 4~6 m 낙차) 때문에 걸어서 못 내려갔다.
+//   x 마다 남북으로 1 m 씩 땅 높이를 훑고(물에 닿으면 그 x 는 버림), 가시는 9 m 중앙값으로 지우고,
+//   앞뒤로 경사 ≤ 0.25 로 깎아 걸을 수 있는 길 높이를 만든다. 땅과 0.25 m 넘게 다른 구간만 경사로 판 + 낮은 난간을 보인다.
+const RAMP_XS = [-4450, -4300, -4150, -4000, -3850, -3400, -3250, -3100]; // 청담 나들목 상판(−3750~−3480) 밑은 비움
+function buildNorthRamps(root, land, osm) {
+  const ramps = [], hw = 2.5, H = (x, z) => land.heightAt(x, z), G = 0.25;
+  const wet = (x, z, h) => { const wy = waterYAt(x, z, land.levels, osm?.meta?.datumBlend); return wy != null && h <= wy + 0.4; };
+  const gb = [], col = new THREE.Color('#aaa69c'), wcol = new THREE.Color('#8f8b82');
+  for (const x of RAMP_XS) {
+    const z0 = Math.max(URBAN_BAND.z0 + 60, land.bounds.z0 + 1), z1 = URBAN_BAND.z1 + 40, hs = [];
+    let ok = true;
+    for (let z = z0; z <= z1; z += 1) { const h = H(x, z); if (h == null) { ok = false; break; } if (wet(x, z, h)) break; hs.push(h); }
+    if (!ok || hs.length < 100) continue;
+    hs.splice(Math.max(100, hs.length - 5)); // 물가의 5 m 는 남겨두고 끝
+    const med = hs.map((_, i) => { const w = hs.slice(Math.max(0, i - 4), i + 5).sort((p, q) => p - q); return w[w.length >> 1]; });
+    const ys = med.slice();
+    for (let k = 0; k < 3; k++) { for (let i = 1; i < ys.length; i++) ys[i] = Math.min(Math.max(ys[i], ys[i - 1] - G), ys[i - 1] + G); for (let i = ys.length - 2; i >= 0; i--) ys[i] = Math.min(Math.max(ys[i], ys[i + 1] - G), ys[i + 1] + G); }
+    // 끝을 실제 땅에 맞춤 (처음·끝 3 m 는 땅)
+    for (let i = 0; i < 3; i++) { ys[i] = hs[i]; ys[ys.length - 1 - i] = hs[hs.length - 1 - i]; }
+    ramps.push({ x, z0, z1: z0 + ys.length - 1, ys, hw });
+    for (let i = 1; i < ys.length; i += 2) {
+      const j = Math.min(ys.length - 1, i + 1), dev = Math.max(Math.abs(ys[i - 1] - hs[i - 1]), Math.abs(ys[j] - hs[j]));
+      if (dev < 0.25) continue;
+      const za = z0 + i - 1, zb = z0 + j, ya = ys[i - 1] + 0.05, yb = ys[j] + 0.05;
+      gb.push([[x - hw, ya, za], [x + hw, ya, za], [x + hw, yb, zb], [x - hw, yb, zb], col]);
+      for (const sx of [-1, 1]) gb.push([[x + sx * hw, ya - 1.5, za], [x + sx * hw, yb - 1.5, zb], [x + sx * hw, yb + 0.9, zb], [x + sx * hw, ya + 0.9, za], wcol]);
+    }
+  }
+  if (gb.length) {
+    const pos = [], cols = [];
+    for (const [p0, p1, p2, p3, c] of gb) for (const q of [p0, p1, p2, p0, p2, p3, p0, p2, p1, p0, p3, p2]) { pos.push(...q); cols.push(c.r, c.g, c.b); }
+    const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('color', new THREE.Float32BufferAttribute(cols, 3)); g.computeVertexNormals();
+    const m = new THREE.Mesh(g, new THREE.MeshLambertMaterial({ vertexColors: true })); m.name = 'hangang-north-ramps'; root.add(m);
+  }
+  const at = (x, z) => { for (const r of ramps) if (Math.abs(x - r.x) <= r.hw && z >= r.z0 && z <= r.z1) { const f = z - r.z0, i = Math.min(r.ys.length - 2, Math.floor(f)); return r.ys[i] + (r.ys[i + 1] - r.ys[i]) * (f - i); } return null; };
+  return { ramps, at };
+}
 function splitHapUrban(root, osm) {
   if (osm?.meta?.segment !== 'hap') return;
   const dems = []; root.traverse((o) => { if (o.isMesh && o.name === 'hangang-dem') dems.push(o); }); // 구운 DEM 은 여러 조각
@@ -756,6 +794,7 @@ async function finishHangangHapAsync({ parent, overlay, terrain, dem, osm, forei
 }
 
 function finishHangangHapApi({ overlay, osm, root, land, paths, city, bridges, underpasses, props, ownRect, owns, ownHeightAt }) {
+  const north = buildNorthRamps(root, land, osm); // [v4b] 북단 → 강변 공원 경사로
   const rootShown = () => { for (let o = root; o; o = o.parent) if (!o.visible) return false; return true; }; // [myeongdong]
   if (overlay) {
     const hap = osm?.spawns?.['tancheon-hap'] || osm?.connectEnds?.tancheonHap;
@@ -794,6 +833,7 @@ function finishHangangHapApi({ overlay, osm, root, land, paths, city, bridges, u
   }
 
   function surfaceY(x, z, refY = Infinity) {
+    { const ry = north.at(x, z); if (ry != null && (!Number.isFinite(refY) || ry <= refY + 0.6)) return ry; } // 위로 지나는 상판 아래에선 양보
     if (paths.isTunnel?.(x, z)) {
       const py = paths.floorY?.(x, z, refY);
       if (py != null) return py;
@@ -811,7 +851,7 @@ function finishHangangHapApi({ overlay, osm, root, land, paths, city, bridges, u
       if (y == null || y > cap) continue;
       if (best == null || y > best) best = y;
     }
-    return best;
+    return best ?? g; // [v4b] 높은 옹벽에서 null → 기본 y0 으로 튀지 않게 진짜 땅 유지
   }
 
   function setNight(v) {
@@ -827,6 +867,7 @@ function finishHangangHapApi({ overlay, osm, root, land, paths, city, bridges, u
     root,
     bounds: land.bounds,
     heightAt: (x, z) => ownHeightAt(x, z),
+    northRamps: north.ramps,
     owns,
     surfaceY,
     levels: land.levels,

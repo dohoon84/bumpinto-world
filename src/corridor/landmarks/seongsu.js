@@ -604,11 +604,20 @@ export async function createSeongsuAsync({ scene, overlay, terrain, data, mobile
 
   // 바닥·충돌. 반경 밖은 다른 섬/코리더가 담당. HQ에서는 현재 refY 근처의 바닥(층·에스컬레이터·계단)을 고른다.
   let lastY = 0.04, lastP = null, t = 0, lastCamY = 0; const lastCam = new THREE.Vector3();
-  const deckY = (x, z, refY = Infinity) => { let best = null; for (const d of decks) for (let i = 1; i < d.pts.length; i++) { const a = d.pts[i - 1], b = d.pts[i], dx = b[0] - a[0], dz = b[1] - a[1], LL = dx * dx + dz * dz; if (!LL) continue; const t = Math.max(0, Math.min(1, ((x - a[0]) * dx + (z - a[1]) * dz) / LL)); if (Math.hypot(x - a[0] - dx * t, z - a[1] - dz * t) > d.w.w / 2 + 0.5) continue; const y = d.ys[i - 1] + (d.ys[i] - d.ys[i - 1]) * t; if (Number.isFinite(refY) && y > refY + 1.0) continue; if (best == null || y > best) best = y; } return best; };
+  const deckY = (x, z, refY = Infinity) => { let best = null; for (const d of decks) for (let i = 1; i < d.pts.length; i++) { const a = d.pts[i - 1], b = d.pts[i], dx = b[0] - a[0], dz = b[1] - a[1], LL = dx * dx + dz * dz; if (!LL) continue; const tr = ((x - a[0]) * dx + (z - a[1]) * dz) / LL; if ((tr < 0 ? -tr : tr - 1) * Math.sqrt(LL) > 0.6) continue; const t = Math.max(0, Math.min(1, tr)); if (Math.hypot(x - a[0] - dx * t, z - a[1] - dz * t) > d.w.w / 2 + 0.5) continue; /* [v4b] 끝에서 반지름 8 m 둥근 '모자'가 다음 상판보다 높게 잡혀 0.7 m 턱(성수대교 남행 막힘) → 길이 방향 0.6 m 까지만 */ const y = d.ys[i - 1] + (d.ys[i] - d.ys[i - 1]) * t; if (Number.isFinite(refY) && y > refY + 1.0) continue; if (best == null || y > best) best = y; } return best; };
 
+  // [v4b] 성수 땅 끝(A.z1, y 0) → 합수부 땅 끝(z −18625) 비탈(보이는 비탈 판과 같은 면). 예전엔 바닥이 없어 걸을 수 없었다.
+  const edgeSlopeY = (x, z) => {
+    if (z <= A.z1 || z > HAP_EDGE_Z + 3) return null;
+    const f = (x - HAP_EDGE_X0) / 25, i = Math.floor(f); if (i < 0 || i >= HAP_EDGE_Y.length - 1) return null;
+    const xa = HAP_EDGE_X0 + i * 25; if (rawBZ(xa) < A.z1 - 1 || rawBZ(xa + 25) < A.z1 - 1) return null; // 물 쪽은 둔치 비탈이 대신
+    const ye = HAP_EDGE_Y[i] + (HAP_EDGE_Y[i + 1] - HAP_EDGE_Y[i]) * (f - i) - 0.15, t = (z - A.z1) / (HAP_EDGE_Z + 3 - A.z1);
+    return 0.02 + (ye - 0.02) * t;
+  };
   function surfaceY(x, z, refY = 0.04) {
     const dy = deckY(x, z, refY);
     if (dy != null) return dy;
+    { const e = edgeSlopeY(x, z); if (e != null) return e; }
     if (!inApron(x, z, 0.5) || waterAt(x, z)) return null;
     const [lx, lz] = local(x, z);
     const cur = Number.isFinite(refY) ? refY : 0.04;

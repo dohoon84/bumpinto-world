@@ -223,9 +223,16 @@ export function createTerrain(T, data) {
       if (e == null || !(e > h) || e > refY + MAX_STEP + 0.1) continue;
       h = e;
     }
+    let auth = null; // [v4b] 권위 바닥이 둘 겹치면(성수 상판 ↔ 한강 땅) 나중 것이 무조건 이기지 않게: 발 높이로 갈 수 있는 것 중 높은 쪽, 없으면 낮은 쪽
     for (const fn of groundSurfaces) {
       const e = fn(x, z, refY, h);
       if (e == null || (e > refY + MAX_STEP + 0.1 && !fn.authoritative)) continue;
+      if (fn.authoritative && auth != null) {
+        const lim = refY + MAX_STEP + 0.1, okA = auth <= lim, okE = e <= lim;
+        const pick = okA && okE ? Math.max(auth, e) : okA ? auth : okE ? e : Math.min(auth, e);
+        auth = pick; h = pick; continue;
+      }
+      if (fn.authoritative) auth = e;
       h = e;
     }
     return h;

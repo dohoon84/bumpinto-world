@@ -49,7 +49,7 @@ import { namsanEnabled, namsanCableEnabled, NAMSAN_DEM_FILE, NAMSAN_OSM_FILE, NA
 import { landmarkLazyEnabled, LANDMARK_NEAR_M, LANDMARK_PREFETCH_M, makeNamsanMeta, makeHangangMeta, makeMyeongdongMeta, wrapLandmark, yieldPaint, makeBuildYield, makeSlicer, beginLandmarkBuild, landmarkBuildGate, LANDMARK_URGENT_SLICE_MS } from './landmarks/lazyLandmarks.js'; // [namsan] [hangang] 메시 지연 생성
 import { createNamsanNpc, namsanNpcEnabled } from './landmarks/namsanNpc.js'; // [namsan-npc]
 import { myeongdongEnabled, MYEONGDONG_FILE } from './landmarks/myeongdongFlags.js'; // [myeongdong]
-import { seongsuEnabled, SEONGSU_FILE, SEONGSU_BOUNDS, SEONGSU_SPAWN } from './landmarks/seongsuFlags.js'; // [seongsu]
+import { seongsuEnabled, SEONGSU_FILE, SEONGSU_BOUNDS, SEONGSU_SPAWN, SEONGSU_LINK } from './landmarks/seongsuFlags.js'; // [seongsu]
 import { hangangEnabled, HANGANG_DEM_FILE, HANGANG_OSM_FILE, HAP_DEM_FILE, HAP_OSM_FILE, HANGANG_TERRAIN_BAKE_FILE, HAP_TERRAIN_BAKE_FILE } from './landmarks/hangangFlags.js'; // [hangang]
 
 // streams: 탄천 지류 하도(streams.json). ?streams=0 이면 false → 예전과 같은 데이터만
@@ -792,6 +792,7 @@ const gnTransit = corridorData.gangnamTransit ? mountGangnamTransit(root, corrid
     bounds.x0 = Math.min(bounds.x0, sb.x0); bounds.x1 = Math.max(bounds.x1, sb.x1);
     bounds.z0 = Math.min(bounds.z0, sb.z0); bounds.z1 = Math.max(bounds.z1, sb.z1);
     if (bounds.islands?.length) bounds.islands.push(sb);
+    if (bounds.islands?.length && hangang?.bounds) bounds.islands.push({ ...SEONGSU_LINK }); // [v4b] 성수 ↔ 북단 강변·다리 (걸어서 이어짐)
   }
   if (hangang?.bounds) {
     // [hangang-isolation] 1구간·2구간 사각형을 따로 섬으로 넣는다 (합친 사각형은 강남역~반포 사이 빈 땅까지 덮었다).

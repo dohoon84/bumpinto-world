@@ -13,8 +13,8 @@ const VIEWS0 = [
   { name: 'hq-corner', hl: [38, 36], to: [0, 0], pitch: 0.08, dist: 10 },
   { name: 'hq-tower', hl: [-40, 75], to: [0, 0], pitch: -0.32, dist: 14 }, // [v3] 색 비교용 (thesystemlab 사진 009 처럼 아래에서 올려다봄)
   { name: 'hq-ref', ov: true, hl: [0, 0], dist: 105, pitch: 0.1, yaw: 0.6 }, // [v3] 색 비교 (사진 002 처럼 길 건너 빈 대지 쪽에서)
-  { name: 'crown-1', hl: [22, 44], to: [0, 0], hide: true, pitch: -0.72, dist: 3 }, // [v4b] 왕관 끝 슬롯 가까이 (사옥 앞 길에서 올려다봄)
-  { name: 'crown-2', hl: [44, 26], to: [0, 0], hide: true, pitch: -0.72, dist: 3 },
+  { name: 'crown-1', hl: [52, 98], to: [0, 0], hide: true, pitch: -0.52, dist: 3 }, // [v4b] 왕관 끝 슬롯 (길 건너에서 올려다봄)
+  { name: 'crown-2', hl: [98, 52], to: [0, 0], hide: true, pitch: -0.52, dist: 3 },
   { name: 'hq-ref-s', hl: [0, 110], to: [0, 0], pitch: -0.18, dist: 10 },
   { name: 'hq-ref-se', hl: [80, 80], to: [0, 0], pitch: -0.18, dist: 10 },
   { name: 'hq-ref-sw', hl: [-80, 80], to: [0, 0], pitch: -0.18, dist: 10 },
@@ -64,7 +64,7 @@ const errors = [], logs = [];
 page.on('pageerror', (e) => errors.push('pageerror: ' + e.message));
 page.on('console', (m) => { const t = m.text(); if (m.type() === 'error') errors.push(t); else if (/seongsu|gentle|hq/i.test(t)) logs.push(t); });
 const RIDE = process.env.RIDE === '1';
-const q = `ws=mock&at=${RIDE ? 'jamsil' : 'seongsu'}&hour=${HOUR}&weather=clear&shot=1&noticePopup=0&controlscard=0&bgm=0&subwayVoice=0&subwayRt=0${MOBILE ? '&mobile=1' : ''}${process.env.EXTRA ? '&' + process.env.EXTRA : ''}`;
+const q = `ws=mock&at=${RIDE ? 'jamsil' : 'seongsu'}&hour=${HOUR}&weather=clear${process.env.NOSHOT === '1' ? '' : '&shot=1'}&noticePopup=0&controlscard=0&bgm=0&subwayVoice=0&subwayRt=0${MOBILE ? '&mobile=1' : ''}${process.env.EXTRA ? '&' + process.env.EXTRA : ''}`;
 await page.goto(`http://localhost:${PORT}/?${q}`, { timeout: 180000 });
 await page.waitForFunction(() => window.__jj?.ready, null, { timeout: 240000 });
 if (process.env.BREAKDOWN) await page.evaluate((d) => { window.__SS_BREAKDOWN = 1; window.__SS_BREAKDOWN_DEPTH = d; }, +process.env.BREAKDOWN || 3);
