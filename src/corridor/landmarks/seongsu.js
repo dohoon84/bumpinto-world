@@ -402,7 +402,8 @@ export async function createSeongsuAsync({ scene, overlay, terrain, data, mobile
     // 가까이서 실제 유형명 확인하는 간판 (최대 110m에서만)
     for (const s of heroShops) addLabel(s.kind[0], s.x, s.z, 4, 35, 8); // 간판에 이미 글씨 → 가까이서만
   }
-  let signN = 0;
+  const OLD_SIGN = q.get('ssSignV3') === '1'; // 비교 샷용: v3 간판 자리(높고 벽에 붙음)
+  let signN = 0; const signSpots2 = []; // [seongsu-v4] 간판 자리 (거리 샷용)
   for (const b of blds) {
     if (b.ht > 40 || b.base > 1 || area(b.o) < 30) continue;
     let edge = null, best = 40;
@@ -417,14 +418,16 @@ export async function createSeongsuAsync({ scene, overlay, terrain, data, mobile
     if (!edge || best > 10 || heroShops.some((h) => Math.hypot(h.x - edge.x, h.z - edge.z) < 6)) continue;
     // [seongsu-v4] 간판: 1층 문·쇼윈도 위(2.5~3.3 m) 띠에, 외벽 판(0.11)·2층 창 띠(0.15)·층 턱(0.25) 보다 앞(0.34)에 + 뒤판(테두리).
     //   예전엔 3.4 m 높이·벽에서 7 cm 라 외벽 판·창 띠가 간판 윗부분을 덮었다.
-    const e = edge, n = signN++ % 16, w = Math.min(e.L * 0.68, 3.2), h = w / 4, ry = Math.atan2(e.nx, e.nz), SY = 2.92, SO = 0.34;
+    const e = edge, n = signN++ % 16, w = Math.min(e.L * 0.68, OLD_SIGN ? 7.0 : 4.0), h = w / 4, ry = Math.atan2(e.nx, e.nz), SY = OLD_SIGN ? 3.4 : 2.96, SO = OLD_SIGN ? 0.07 : 0.34;
     const g = new THREE.PlaneGeometry(w, h), uv = g.attributes.uv;
     for (let k = 0; k < uv.count; k++) uv.setXY(k, ((n % 4) + uv.getX(k)) / 4, 1 - (((n / 4) | 0) + 1 - uv.getY(k)) / 4);
     sb.add('signs', g, { x: e.x + e.nx * SO, y: SY, z: e.z + e.nz * SO, ry }); g.dispose();
-    sb.box('paint', w + 0.16, h + 0.12, 0.16, { x: e.x + e.nx * (SO - 0.09), y: SY, z: e.z + e.nz * (SO - 0.09), ry, color: '#2b2f33' });
+    if (signSpots2.length < 40 && Math.hypot(e.x - st.x, e.z - st.z) < 250) signSpots2.push([Math.round(e.x), Math.round(e.z), '', +e.nx.toFixed(3), +e.nz.toFixed(3)]);
+    if (!OLD_SIGN) sb.box('paint', w + 0.16, h + 0.12, 0.16, { x: e.x + e.nx * (SO - 0.09), y: SY, z: e.z + e.nz * (SO - 0.09), ry, color: '#2b2f33' });
     // 큰 쇼윈도(형상 단순, 빛은 재질) + 차양 (간판 아래)
-    sb.box('frame', Math.min(4.0, e.L * 0.6), 2.0, 0.04, { x: e.x + e.nx * 0.05, y: 1.25, z: e.z + e.nz * 0.05, ry, color: '#1e292c' });
-    if (hash01(b.id, 4) < 0.65) sb.box('paint', w + 0.2, 0.10, 0.9, { x: e.x + e.nx * 0.5, y: 2.36, z: e.z + e.nz * 0.5, ry, rx: 0.1, color: ['#273a31', '#f2e9d7', '#684a3d', '#303541'][b.id % 4] });
+    sb.box(OLD_SIGN ? 'frame' : 'paint', Math.min(4.0, e.L * 0.6), 2.0, 0.04, { x: e.x + e.nx * 0.05, y: 1.25, z: e.z + e.nz * 0.05, ry, color: OLD_SIGN ? '#1e292c' : '#4f6872' }); // 쇼윈도 유리(검은 판 → 푸른 회색)
+    if (!OLD_SIGN) for (const u of [-0.5, 0, 0.5]) sb.box('paint', 0.06, 2.0, 0.06, { x: e.x + e.nx * 0.09 + e.nz * u * Math.min(4.0, e.L * 0.6), y: 1.25, z: e.z + e.nz * 0.09 - e.nx * u * Math.min(4.0, e.L * 0.6), ry, color: '#c9cdcf' });
+    if (hash01(b.id, 4) < 0.65) sb.box('paint', w + 0.2, 0.10, 0.9, { x: e.x + e.nx * 0.5, y: OLD_SIGN ? 2.7 : 2.36, z: e.z + e.nz * 0.5, ry, rx: 0.1, color: ['#273a31', '#f2e9d7', '#684a3d', '#303541'][b.id % 4] });
     if (hash01(b.id, 6) < 0.45) { props.cyl('metal', 0.75, 0.75, 1.3, { x: b.cx, y: b.ht + 0.65, z: b.cz, color: '#b7c1c6' }, 8); props.box('paint', 1, 0.7, 0.6, { x: b.cx + 1.4, y: b.ht + 0.35, z: b.cz, color: '#d7d5cd' }); }
     await tick('ss-signs');
   }
@@ -690,7 +693,7 @@ export async function createSeongsuAsync({ scene, overlay, terrain, data, mobile
       if (Math.hypot(lx, lz) < 135) hqNpc?.update(dt, lastP.x, lastP.z); else hqNpc?.sleep();
     },
     setNight(on) { night = !!on; hq.setNight(night); },
-    stats() { return { heroAt: heroShops.map((h) => [Math.round(h.x), Math.round(h.z), h.type, +h.nx.toFixed(3), +h.nz.toFixed(3)]), heroShops: heroShops.length, clad, zebras: zebras.length, decks: decks.length, buckets: BNX * BNZ, fill: blds.filter((b) => b.f).length, buildings: blds.length, ways: roads.length, signs: signN, trees: treeSpots.length, hqNpcs: hqNpc?.stats || null, streetNpcs: streetNpc?.stats || null }; },
+    stats() { return { joinProfiles: decks.filter((d) => d.join).map((d) => ({ name: d.join, w: d.w.w, ground: d.ground, pts: d.pts, ys: d.ys })), signAt: signSpots2, heroAt: heroShops.map((h) => [Math.round(h.x), Math.round(h.z), h.type, +h.nx.toFixed(3), +h.nz.toFixed(3)]), heroShops: heroShops.length, clad, zebras: zebras.length, decks: decks.length, buckets: BNX * BNZ, fill: blds.filter((b) => b.f).length, buildings: blds.length, ways: roads.length, signs: signN, trees: treeSpots.length, hqNpcs: hqNpc?.stats || null, streetNpcs: streetNpc?.stats || null }; },
     dispose() { unwatch?.(); unregSurface?.(); streetNpc?.dispose(); hqNpc?.dispose(); root.removeFromParent(); for (const l of labels) l?.remove?.(); },
   };
 }
