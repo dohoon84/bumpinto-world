@@ -3,25 +3,28 @@
 import * as THREE from 'three';
 import * as T from './textures.js';
 
+const DAY_LIFT = ['skin', 'tierRib', 'reveal', 'fluted', 'uhpc', 'beam', 'beamI', 'conc'];
 export function createMaterials({ maxAniso = 4 } = {}) {
   const std = (o) => new THREE.MeshStandardMaterial({ vertexColors: true, ...o });
+  // [v3] 외벽 색: thesystemlab 사진(김용관) 낮 표본 — 그늘 면 #8e9092·#767470, 해 면 #c7beba·#c0b6ac. 해가 따뜻한 색(#fff4e0)이라
+  //   재질은 아주 밝고 살짝 찬 회색(따뜻한 해·땅 반사 #c9b99a 를 상쇄)으로 둔다 → 화면에서 사진처럼 밝은 회색, 누런 기 없음. 유리는 하늘 비친 푸른 회색, 멀리온은 짙은 회색.
   // 월드(정자·명동·남산) 톤: Lambert + 납작한 색 + 줄눈만. 사진 같은 노이즈 질감은 쓰지 않는다.
   const lam = (o) => new THREE.MeshLambertMaterial({ vertexColors: true, ...o });
-  const ct = T.panelTex({ base: '#d8d3c9', cols: 2, rows: 2, dots: true }), up = T.panelTex({ base: '#e2ddd2', cols: 2, rows: 1, joint: 'rgba(90,84,76,0.4)' }), fl = T.ribTex();
+  const ct = T.panelTex({ base: '#e2e6ea', cols: 2, rows: 2, dots: true }), up = T.panelTex({ base: '#e8ecef', cols: 2, rows: 1, joint: 'rgba(84,86,88,0.4)' }), fl = T.ribTex();
   const m = {
-    conc: lam({ map: ct, side: THREE.DoubleSide, color: 0xd2ccc1 }),
-    uhpc: lam({ map: up, color: 0xeee9df }),
-    crownSoffit: lam({ map: up, color: 0xe3ddd1, emissive: 0xffe3b4, emissiveIntensity: 0 }),
-    fluted: lam({ map: fl, color: 0xdcd6ca }),
-    beam: lam({ color: 0xe6e1d6 }),
-    beamI: new THREE.MeshLambertMaterial({ color: 0xe9e4d9 }),
-    roofTop: lam({ color: 0xc9c5bc }),
-    curtain: new THREE.MeshStandardMaterial({ map: T.curtainTex(), emissiveMap: T.curtainTex({ night: true }), emissive: 0xffffff, emissiveIntensity: 0, metalness: 0.45, roughness: 0.14, envMapIntensity: 1.2, color: 0xe3e9e5 }),
+    conc: lam({ map: ct, side: THREE.DoubleSide, color: 0xeef2f5 }),
+    uhpc: lam({ map: up, color: 0xffffff }),
+    crownSoffit: lam({ map: up, color: 0xe9edf1, emissive: 0xffe3b4, emissiveIntensity: 0 }),
+    fluted: lam({ map: fl, color: 0xffffff }),
+    beam: lam({ color: 0xf2f5f8 }),
+    beamI: new THREE.MeshLambertMaterial({ color: 0xf2f5f8 }),
+    roofTop: lam({ color: 0xd5d8db }),
+    curtain: new THREE.MeshStandardMaterial({ map: T.curtainTex(), emissiveMap: T.curtainTex({ night: true }), emissive: 0xffffff, emissiveIntensity: 0, metalness: 0.45, roughness: 0.14, envMapIntensity: 1.2, color: 0xc4d6ee }),
     slit: std({ side: THREE.DoubleSide, map: T.pillGlassTex(), emissiveMap: T.pillGlassTex({ night: true }), color: 0xffffff, metalness: 0.7, roughness: 0.04, emissive: 0xffffff, emissiveIntensity: 0, envMapIntensity: 1.6 }),
-    skin: lam({ map: T.panelTex({ base: '#c4bdb1', cols: 2, rows: 4, joint: 'rgba(70,64,56,0.2)', hi: 'rgba(255,255,255,0.14)' }), side: THREE.DoubleSide, color: 0xffffff }),
-    reveal: lam({ side: THREE.DoubleSide, color: 0xd3ccc0 }),
-    tierRib: lam({ map: T.ribTex(), normalMap: T.ribTex({ normal: true }), normalScale: new THREE.Vector2(1.2, 1.2), side: THREE.DoubleSide, color: 0xcfc6b8 }),
-    pframe: std({ color: 0x3a3936, metalness: 0.75, roughness: 0.35, side: THREE.DoubleSide }),
+    skin: lam({ map: T.panelTex({ base: '#e4e9ed', cols: 2, rows: 4, joint: 'rgba(66,68,70,0.2)', hi: 'rgba(255,255,255,0.14)' }), side: THREE.DoubleSide, color: 0xffffff }),
+    reveal: lam({ side: THREE.DoubleSide, color: 0xd8dde2 }),
+    tierRib: lam({ map: T.ribTex(), normalMap: T.ribTex({ normal: true }), normalScale: new THREE.Vector2(1.2, 1.2), side: THREE.DoubleSide, color: 0xf2f6fa }),
+    pframe: std({ color: 0x3c3f43, metalness: 0.75, roughness: 0.35, side: THREE.DoubleSide }),
     topGlass: std({ side: THREE.DoubleSide, color: 0x6f8496, metalness: 0.6, roughness: 0.08, emissive: 0xfff1dc, emissiveIntensity: 0.12, envMapIntensity: 1.3 }),
     glass: new THREE.MeshStandardMaterial({ color: 0x2b3a46, metalness: 0.7, roughness: 0.04, transparent: true, opacity: 0.2, depthWrite: false, envMapIntensity: 1.3 }),
     frame: std({ color: 0x1b1c1f, metalness: 0.7, roughness: 0.4 }),
@@ -48,6 +51,8 @@ export function createMaterials({ maxAniso = 4 } = {}) {
     bag: std({ metalness: 0.1, roughness: 0.25, envMapIntensity: 1.2 }),
     lamp: new THREE.MeshBasicMaterial({ vertexColors: true, toneMapped: false }),
   };
+  // [v3] 낮 콘크리트가 사진보다 어둡고 누렇게 보이지 않게: 찬 회색 바탕빛을 조금 더한다 (밤엔 끔, setNight)
+  for (const k of DAY_LIFT) { m[k].emissive = new THREE.Color(0x3a3e42); m[k].emissiveIntensity = 1; }
   m.conc.map.repeat.set(1, 1);
   m.tierRib.map.repeat.set(2.4, 1); m.tierRib.normalMap.repeat.set(2.4, 1); m.fluted.map.repeat.set(1, 1);
   for (const k of Object.keys(m)) { const t = m[k].map; if (t) t.anisotropy = maxAniso; }
@@ -63,5 +68,6 @@ export function setNight(m, night) {
   m.topGlass.emissiveIntensity = night ? 0.7 : 0.12; m.topGlass.color.set(night ? 0x2a3540 : 0x6f8496);
   m.glass.opacity = night ? 0.12 : 0.2;
   for (const k of ['brickR', 'brickD', 'brickW']) m[k].emissiveIntensity = night ? 0.9 : 0;
+  for (const k of DAY_LIFT) if (m[k]) m[k].emissiveIntensity = night ? 0 : 1;
   m.shop.emissiveIntensity = night ? 0.95 : 0; m.signs.emissiveIntensity = night ? 0.95 : 0.3; m.stucco.emissiveIntensity = night ? 0.7 : 0;
 }

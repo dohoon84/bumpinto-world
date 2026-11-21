@@ -11,6 +11,12 @@ const VIEWS0 = [
   { name: 'arrival', spawn: true, toHq: true, pitch: 0.16, dist: 15 },
   { name: 'hq-front', hl: [0, 48], to: [0, 0], pitch: 0.04, dist: 12 },
   { name: 'hq-corner', hl: [38, 36], to: [0, 0], pitch: 0.08, dist: 10 },
+  { name: 'hq-tower', hl: [-40, 75], to: [0, 0], pitch: -0.32, dist: 14 }, // [v3] 색 비교용 (thesystemlab 사진 009 처럼 아래에서 올려다봄)
+  { name: 'hq-ref', ov: true, hl: [0, 0], dist: 105, pitch: 0.1, yaw: 0.6 }, // [v3] 색 비교 (사진 002 처럼 길 건너 빈 대지 쪽에서)
+  { name: 'hq-ref-s', hl: [0, 110], to: [0, 0], pitch: -0.18, dist: 10 },
+  { name: 'hq-ref-se', hl: [80, 80], to: [0, 0], pitch: -0.18, dist: 10 },
+  { name: 'hq-ref-sw', hl: [-80, 80], to: [0, 0], pitch: -0.18, dist: 10 },
+  { name: 'hq-ref-e', hl: [110, 0], to: [0, 0], pitch: -0.18, dist: 10 },
   { name: 'street', near: 'road', pitch: 0.1, dist: 9 },
   { name: 'station', station: true, back: 34, pitch: -0.02, dist: 10 },
   { name: 'viaduct', sv: [-170, 4], sto: [0, 0], pitch: -0.06, dist: 12 },
@@ -48,18 +54,18 @@ const RIDE = process.env.RIDE === '1';
 const q = `ws=mock&at=${RIDE ? 'jamsil' : 'seongsu'}&hour=${HOUR}&weather=clear&shot=1&noticePopup=0&controlscard=0&bgm=0&subwayVoice=0&subwayRt=0${MOBILE ? '&mobile=1' : ''}${process.env.EXTRA ? '&' + process.env.EXTRA : ''}`;
 await page.goto(`http://localhost:${PORT}/?${q}`, { timeout: 180000 });
 await page.waitForFunction(() => window.__jj?.ready, null, { timeout: 240000 });
-if (process.env.BREAKDOWN) await page.evaluate(() => { window.__SS_BREAKDOWN = 1; });
+if (process.env.BREAKDOWN) await page.evaluate((d) => { window.__SS_BREAKDOWN = 1; window.__SS_BREAKDOWN_DEPTH = d; }, +process.env.BREAKDOWN || 3);
 const waitPaint = async () => { for (let i = 0; i < 150; i++) { const f = await page.evaluate(async () => { const R = window.__jj.renderer; const a = R.info.render.frame; await new Promise((r) => setTimeout(r, 1500)); return R.info.render.frame - a; }); if (f >= 2) return; } };
 const metrics = () => page.evaluate(async () => {
   const J = window.__jj, R = J.renderer; await new Promise((ok) => requestAnimationFrame(() => requestAnimationFrame(ok)));
   let by;
   if (window.__SS_BREAKDOWN) { // 한 프레임 동안 그려진 객체를 장면 경로 앞 3단 이름별 삼각형 수로
     by = {}; let sc = J.player; while (sc.parent) sc = sc.parent; const saved = [];
-    sc.traverse((o) => { if (!o.isMesh) return; let a = o; const path = []; while (a.parent) { path.unshift(a.name || a.type); a = a.parent; } const k = path.slice(0, 3).join('/'); const prev = o.onBeforeRender; saved.push([o, prev, Object.prototype.hasOwnProperty.call(o, 'onBeforeRender')]);
+    sc.traverse((o) => { if (!o.isMesh) return; let a = o; const path = []; while (a.parent) { path.unshift(a.name || a.type); a = a.parent; } const k = path.slice(0, +(window.__SS_BREAKDOWN_DEPTH || 3)).join('/'); const prev = o.onBeforeRender; saved.push([o, prev, Object.prototype.hasOwnProperty.call(o, 'onBeforeRender')]);
       o.onBeforeRender = function (...a2) { const g = this.geometry; const n = ((g.index ? g.index.count : g.attributes.position.count) / 3) * (this.isInstancedMesh ? this.count : 1); by[k] = (by[k] || 0) + n; return prev.apply(this, a2); }; });
     const f0 = R.info.render.frame; while (R.info.render.frame < f0 + 1) await new Promise((ok) => requestAnimationFrame(ok));
     for (const [o, prev, own] of saved) { if (own) o.onBeforeRender = prev; else delete o.onBeforeRender; }
-    by = Object.fromEntries(Object.entries(by).sort((a, b) => b[1] - a[1]).slice(0, 25).map(([k, v]) => [k, Math.round(v / 1000) + 'k']));
+    by = Object.fromEntries(Object.entries(by).sort((a, b) => b[1] - a[1]).slice(0, 40).map(([k, v]) => [k, Math.round(v / 1000) + 'k']));
   }
   const i = R.info; const mem = performance.memory;
   return { draws: i.render.calls, tris: i.render.triangles, geos: i.memory.geometries, tex: i.memory.textures, heapMB: mem ? Math.round(mem.usedJSHeapSize / 1048576) : null, pos: [+J.player.position.x.toFixed(1), +J.player.position.y.toFixed(2), +J.player.position.z.toFixed(1)], hqFloor: J.seongsu?.hqFloor ?? null, by };

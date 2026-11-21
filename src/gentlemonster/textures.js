@@ -166,7 +166,7 @@ export function curtainTex({ night = false } = {}) {
     const lit = r() > 0.2, warm = r() > 0.65, v = 0.6 + r() * 0.4;
     const gr = g.createLinearGradient(xx, yy, xx + w, yy + h);
     if (night) { gr.addColorStop(0, lit ? (warm ? '#f5deb2' : '#e5efe8') : '#1c2630'); gr.addColorStop(0.35, lit ? (warm ? '#b8a080' : '#9eafa9') : '#101922'); gr.addColorStop(1, lit ? '#4b514a' : '#101820'); }
-    else { const vv = 1 - y / R * 0.1; gr.addColorStop(0, `rgb(${110 * vv * v | 0},${134 * vv * v | 0},${148 * vv * v | 0})`); gr.addColorStop(0.6, `rgb(${150 * vv * v | 0},${169 * vv * v | 0},${176 * vv * v | 0})`); gr.addColorStop(1, '#667a83'); }
+    else { const vv = 1 - y / R * 0.1; gr.addColorStop(0, `rgb(${92 * vv * v | 0},${124 * vv * v | 0},${154 * vv * v | 0})`); gr.addColorStop(0.6, `rgb(${136 * vv * v | 0},${166 * vv * v | 0},${192 * vv * v | 0})`); gr.addColorStop(1, '#5d7890'); } // [v3] 사진처럼 하늘 비친 푸른 유리
     g.fillStyle = gr; g.fillRect(xx, yy, w, h);
     if (night && lit) { g.fillStyle = warm ? '#fff4d4' : '#f4fff7'; g.fillRect(xx + 7, yy + 12, w - 14, 3); g.fillStyle = 'rgba(10,16,18,0.4)'; g.fillRect(xx + 8 + r() * 20, yy + h * 0.6, 8 + r() * 22, h * 0.35); }
     else if (!night) { g.fillStyle = 'rgba(225,240,250,0.12)'; g.fillRect(xx + w * 0.2, yy + 5, w * 0.13, h - 14); }
@@ -243,7 +243,7 @@ export function ribTex({ normal = false } = {}) {
     for (let y = 0; y < H; y++) {
       const i = (y * W + x) * 4;
       if (normal) { const nx = slope, l = Math.hypot(nx, 1); img.data[i] = (nx / l * 0.5 + 0.5) * 255; img.data[i + 1] = 128; img.data[i + 2] = (1 / l * 0.5 + 0.5) * 255; }
-      else { const v = (190 + (r() - 0.5) * 14) * shade; img.data[i] = v; img.data[i + 1] = v * 0.985; img.data[i + 2] = v * 0.95; }
+      else { const v = (190 + (r() - 0.5) * 14) * shade; img.data[i] = v; img.data[i + 1] = v * 0.997; img.data[i + 2] = v * 0.99; }
       img.data[i + 3] = 255;
     }
   }

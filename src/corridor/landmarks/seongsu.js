@@ -66,6 +66,25 @@ function ribbonY(buf, pts, ys, w, col) {
   }
 }
 const smooth = (t) => { const k = Math.max(0, Math.min(1, t)); return k * k * (3 - 2 * k); };
+/** [seongsu-v3] 병합 메시를 xz 격자 칸(cell m)으로 쪼갠다 (삼각형 무게중심 기준) → 칸마다 frustum culling·거리 숨김. */
+function chunkMesh(m, cell) {
+  let g = m.geometry; if (g.index) g = g.toNonIndexed();
+  const pos = g.attributes.position, n = pos.count / 3, keys = new Int32Array(n), buckets = new Map();
+  for (let t = 0; t < n; t++) {
+    const cx = (pos.getX(t * 3) + pos.getX(t * 3 + 1) + pos.getX(t * 3 + 2)) / 3, cz = (pos.getZ(t * 3) + pos.getZ(t * 3 + 1) + pos.getZ(t * 3 + 2)) / 3;
+    const k = (Math.floor(cx / cell) + 1000) * 4000 + (Math.floor(cz / cell) + 2000); keys[t] = k; buckets.set(k, (buckets.get(k) || 0) + 1);
+  }
+  if (buckets.size < 2) return [m];
+  const names = Object.keys(g.attributes), out = [];
+  for (const [k, cnt] of buckets) {
+    const ng = new THREE.BufferGeometry();
+    for (const nm of names) { const src = g.attributes[nm], sz = src.itemSize, arr = new src.array.constructor(cnt * 3 * sz); let o = 0; for (let t = 0; t < n; t++) { if (keys[t] !== k) continue; arr.set(src.array.subarray(t * 3 * sz, t * 3 * sz + 3 * sz), o); o += 3 * sz; } ng.setAttribute(nm, new THREE.BufferAttribute(arr, sz, src.normalized)); }
+    ng.computeBoundingBox(); ng.computeBoundingSphere();
+    const c = new THREE.Mesh(ng, m.material); c.name = m.name; c.castShadow = m.castShadow; c.receiveShadow = m.receiveShadow; c.userData = { ...m.userData }; c.matrixAutoUpdate = false; out.push(c);
+  }
+  if (g !== m.geometry) g.dispose(); m.geometry.dispose();
+  return out;
+}
 export async function createSeongsuAsync({ scene, overlay, terrain, data, mobile = false }, slicer = null) {
   const tick = async (s) => { await slicer?.tick?.(s); };
   const farCache = new WeakMap();
@@ -241,6 +260,9 @@ export async function createSeongsuAsync({ scene, overlay, terrain, data, mobile
     if (waterAt(cx, cz)) continue;
     buckets[ix + iz * BNX].push({ o: b.o, h: top, mh: base, k: b.k || (hash01(b.id, 3) < 0.6 ? 'commercial' : 'industrial') });
   }
+  // [seongsu-v3] 거리 소품·간판·외벽·다리 난간 칸 (300m): 카메라에서 멀면 이 프레임만 숨김 (big = 역·다리처럼 멀리서도 보이는 것)
+  const DET_CELL = 300, detailFar = [];
+  const addDetail = (m, big = false) => { root.add(m); m.updateMatrix(); if (!m.geometry.boundingBox) m.geometry.computeBoundingBox(); detailFar.push({ o: m, b: m.geometry.boundingBox.clone(), big }); };
   const ownFar = []; // [seongsu-v2] 내 건물 칸: 땅 위 시점에서 멀면(폰 700m/PC 1000m) 이 프레임만 숨김 → tris
   for (let i = 0; i < buckets.length; i++) {
     if (!buckets[i].length) continue;
@@ -282,7 +304,7 @@ export async function createSeongsuAsync({ scene, overlay, terrain, data, mobile
     if (hash01(b.id, 6) < 0.45) { props.cyl('metal', 0.75, 0.75, 1.3, { x: b.cx, y: b.ht + 0.65, z: b.cz, color: '#b7c1c6' }, 8); props.box('paint', 1, 0.7, 0.6, { x: b.cx + 1.4, y: b.ht + 0.35, z: b.cz, color: '#d7d5cd' }); }
     await tick('ss-signs');
   }
-  for (const m of sb.build(hq.mats)) { m.name = 'seongsu-shopfronts-' + m.userData.key; root.add(m); }
+  for (const m0 of sb.build(hq.mats)) { m0.name = 'seongsu-shopfronts-' + m0.userData.key; for (const m of chunkMesh(m0, DET_CELL)) addDetail(m); }
 
   // 가로수·가로등 (큰 길 양쪽, 28m마다). 고가 아래에도 서는 얇은 가로수(명동과 같은 단순 다면체).
   const treeSpots = [];
@@ -380,12 +402,13 @@ export async function createSeongsuAsync({ scene, overlay, terrain, data, mobile
       }
     }
   }
-  { const g = zb.build(); if (g) { const m = new THREE.Mesh(g, mat); m.name = 'seongsu-crosswalks'; root.add(m); } }
+  { const g = zb.build(); if (g) { const m0 = new THREE.Mesh(g, mat); m0.name = 'seongsu-crosswalks'; for (const m of chunkMesh(m0, DET_CELL)) addDetail(m); } }
   await tick('ss-detail');
 
   // [seongsu-elevated] 성수역 = 지상 3층 고가역 (2층 대합실 · 3층 2면 4선 쌍섬식 승강장, 선로 3 1 | 2 4, 지붕 13.4m) — 아차산로 바로 위.
   //   역 틀: 역 중심(data.station)에서 가장 가까운 고가 구간 방향(sr)을 따라 a(길이)·v(폭) 좌표. 출입구 1~4(subway/entrance.js 고가형)는 양 끝.
-  const sBox = (key, w, h, d, a, v, y, color) => { const q = sAt(a, v); props.box(key, w, h, d, { x: q.x, y, z: q.z, ry: sr, color }); };
+  const vb = new Builder(); // [seongsu-v3] 고가·역 (멀리서도 보임)
+  const sBox = (key, w, h, d, a, v, y, color) => { const q = sAt(a, v); vb.box(key, w, h, d, { x: q.x, y, z: q.z, ry: sr, color }); };
   const Y = Object.freeze({ CON0: 5.1, CON1: 8.6, BED: 9.0, PLAT: 10.1, ROOF: 13.0 });
   // 2호선 고가 (OSM railway=subway, bridge=yes): 교각·녹색 거더·상판·레일, 상판 윗면 9.0m. 역 몸체 안쪽 조각은 건너뜀 (역 선로가 대신)
   for (const r of data.rail || []) {
@@ -397,11 +420,11 @@ export async function createSeongsuAsync({ scene, overlay, terrain, data, mobile
       for (let k = 0; k < n; k++) {
         const x = a[0] + dx * (k + 0.5) / n, z = a[1] + dz * (k + 0.5) / n, q = sLoc(x, z);
         if (Math.abs(q.a) < SL / 2 + 4 && Math.abs(q.v) < SW + 1) continue;
-        props.box('paint', 4.4, 1.1, l + 0.1, { x, y: 8.2, z, ry, color: '#627c67' });
-        props.box('paint', 4.3, 0.25, l + 0.1, { x, y: 8.9, z, ry, color: '#b6b9b2' });
-        for (const sg of [-1, 1]) props.box('metal', 0.08, 0.12, l, { x: x + Math.cos(ry) * sg * 0.72, y: 9.08, z: z - Math.sin(ry) * sg * 0.72, ry, color: '#51565a' });
+        vb.box('paint', 4.4, 1.1, l + 0.1, { x, y: 8.2, z, ry, color: '#627c67' });
+        vb.box('paint', 4.3, 0.25, l + 0.1, { x, y: 8.9, z, ry, color: '#b6b9b2' });
+        for (const sg of [-1, 1]) vb.box('metal', 0.08, 0.12, l, { x: x + Math.cos(ry) * sg * 0.72, y: 9.08, z: z - Math.sin(ry) * sg * 0.72, ry, color: '#51565a' });
       }
-      for (let s2 = 5; s2 < L; s2 += 24) { const px = a[0] + dx * s2 / L, pz = a[1] + dz * s2 / L, q = sLoc(px, pz); if (Math.abs(q.a) < SL / 2 + 4 && Math.abs(q.v) < SW + 1) continue; props.box('paint', 1.0, 7.6, 1.2, { x: px, y: 3.8, z: pz, ry, color: '#b4b5ae' }); }
+      for (let s2 = 5; s2 < L; s2 += 24) { const px = a[0] + dx * s2 / L, pz = a[1] + dz * s2 / L, q = sLoc(px, pz); if (Math.abs(q.a) < SL / 2 + 4 && Math.abs(q.v) < SW + 1) continue; vb.box('paint', 1.0, 7.6, 1.2, { x: px, y: 3.8, z: pz, ry, color: '#b4b5ae' }); }
     }
   }
   // 교각 쌍 (20m마다, 아차산로 차로 사이) + 가로보
@@ -428,8 +451,9 @@ export async function createSeongsuAsync({ scene, overlay, terrain, data, mobile
     for (const e of [-1, 1]) sBox('paint', 0.1, 0.36, SL - 6, 0, iv + e * 3.62, Y.ROOF + 0.16, '#00a84d');
     for (const a of [-SL / 2 + 12, SL / 2 - 12]) { sBox('paint', 2.6, 2.4, 8, a, iv, Y.PLAT + 1.2, '#cfd6d8'); sBox('paint', 2.8, 0.15, 8.4, a, iv, Y.PLAT + 2.5, '#e2e4e1'); } // 양 끝 계단실 (대합실로)
   }
-  for (const m of props.build(hq.mats)) { m.name = 'seongsu-street-' + m.userData.key; root.add(m); }
-  for (const m of brb.build(hq.mats)) { m.name = 'seongsu-bridges-' + m.userData.key; root.add(m); }
+  for (const m0 of props.build(hq.mats)) { m0.name = 'seongsu-street-' + m0.userData.key; for (const m of chunkMesh(m0, DET_CELL)) addDetail(m); }
+  for (const m0 of vb.build(hq.mats)) { m0.name = 'seongsu-viaduct-' + m0.userData.key; for (const m of chunkMesh(m0, DET_CELL)) addDetail(m, true); }
+  for (const m0 of brb.build(hq.mats)) { m0.name = 'seongsu-bridges-' + m0.userData.key; for (const m of chunkMesh(m0, DET_CELL)) addDetail(m, true); }
   // 역 이름 (녹색 2호선 간판): 대합실 양 옆(큰 것 2) + 승강장 지붕 밑(작은 것 8) — 판 하나 InstancedMesh (draw 1)
   const signGeo = new THREE.PlaneGeometry(1, 1);
   const signMat = new THREE.MeshBasicMaterial({ map: labelTex('성수  Seongsu', { w: 768, h: 128, bg: '#00a84d', fg: '#ffffff', font: '800 58px "Noto Sans KR", sans-serif', sub: '2  ·  211  ·  건대입구 ← → 뚝섬', subFont: '500 25px sans-serif' }), toneMapped: false, side: THREE.DoubleSide });
@@ -449,7 +473,7 @@ export async function createSeongsuAsync({ scene, overlay, terrain, data, mobile
   await tick('ss-npc');
 
   // 바닥·충돌. 반경 밖은 다른 섬/코리더가 담당. HQ에서는 현재 refY 근처의 바닥(층·에스컬레이터·계단)을 고른다.
-  let lastY = 0.04, lastP = null, t = 0, lastCamY = 0;
+  let lastY = 0.04, lastP = null, t = 0, lastCamY = 0; const lastCam = new THREE.Vector3();
   const deckY = (x, z, refY = Infinity) => { let best = null; for (const d of decks) for (let i = 1; i < d.pts.length; i++) { const a = d.pts[i - 1], b = d.pts[i], dx = b[0] - a[0], dz = b[1] - a[1], LL = dx * dx + dz * dz; if (!LL) continue; const t = Math.max(0, Math.min(1, ((x - a[0]) * dx + (z - a[1]) * dz) / LL)); if (Math.hypot(x - a[0] - dx * t, z - a[1] - dz * t) > d.w.w / 2 + 0.5) continue; const y = d.ys[i - 1] + (d.ys[i] - d.ys[i - 1]) * t; if (Number.isFinite(refY) && y > refY + 1.0) continue; if (best == null || y > best) best = y; } return best; };
 
   function surfaceY(x, z, refY = 0.04) {
@@ -496,7 +520,7 @@ export async function createSeongsuAsync({ scene, overlay, terrain, data, mobile
     /** [seongsu] 성수 섬 안에서는 1.4 km 밖 다른 랜드마크(남산 산·탄천 합수부·명동·청계산 숲…)를 이 프레임만 숨긴다 → 폰 tris.
      *  game.js 가 renderer.render 앞뒤로 부른다. 숨긴 것만 되돌리므로 각 랜드마크의 자체 dormancy(visible) 와 겹치지 않는다. */
     hideFar() {
-      if (!lastP || !inApron(lastP.x, lastP.z) || !root.visible) return null;
+      if (!lastP || !inApron(lastP.x, lastP.z, 700) || !root.visible) return null; // [seongsu-v3] 다리 북단(합수부 쪽)에 서 있을 때도
       const hidden = [];
       const far = (o) => {
         let c = farCache.get(o); const key = o.children.length + ':' + (o.isMesh ? o.geometry?.id : '');
@@ -506,14 +530,20 @@ export async function createSeongsuAsync({ scene, overlay, terrain, data, mobile
         return Math.hypot(dx, dz);
       };
       const visit = (o, depth) => {
-        if (o === root || !o.visible || o.isLight || /sky|OuterGround|sun/i.test(o.name || '')) return;
+        if (o === root || !o.visible || o.isLight || /sky|sun/i.test(o.name || '')) return;
+        // [seongsu-v3] 코리더 바깥 바닥(279k 삼각형 한 장): 성수·다리 쪽 땅 시점에선 그 자리 바닥을 합수부(2구간)·성수가 덮고 나머지는 2km+ → 숨김. 높은 개관 시점만 둔다
+        if (o.name === 'corridorOuterGround') { if (lastCam.y < 400) { o.visible = false; hidden.push(o); } return; }
         const d = far(o); if (d < 0) return;
         if (d > FAR_HIDE) { o.visible = false; hidden.push(o); return; }
-        if (depth < 2 && o.children.length && o.children.length < 400) for (const k of o.children) visit(k, depth + 1);
+        if (depth < 6 && o.children.length && o.children.length < 2000) for (const k of o.children) visit(k, depth + 1); // [seongsu-v3] 깊이 6까지 (합수부 조각별)
       };
+      { // [seongsu-v3] 거리 소품 칸: 카메라에서 3D 거리 (폰 380/PC 480 m, 고가·역·다리 1000/1400 m)
+        const c = lastCam, dl = mobile ? 380 : 480, db = mobile ? 1000 : 1400;
+        for (const f of detailFar) { if (!f.o.visible) continue; const b = f.b, dx = Math.max(b.min.x - c.x, 0, c.x - b.max.x), dy = Math.max(b.min.y - c.y, 0, c.y - b.max.y), dz = Math.max(b.min.z - c.z, 0, c.z - b.max.z); if (Math.hypot(dx, dy, dz) > (f.big ? db : dl)) { f.o.visible = false; hidden.push(f.o); } }
+      }
       if (lastCamY < 90) { const lim = mobile ? 700 : 1000; for (const f of ownFar) { if (!f.o.visible) continue; const b = f.b, dx = Math.max(b.min.x - lastP.x, 0, lastP.x - b.max.x), dz = Math.max(b.min.z - lastP.z, 0, lastP.z - b.max.z); if (Math.hypot(dx, dz) > lim) { f.o.visible = false; hidden.push(f.o); } } }
       for (const o of scene.children) visit(o, 0);
-      for (const o of scene.parent?.children || []) if (/cheonggye|gyeongbu|hangang|namsan|myeongdong|gangnam/i.test(o.name || '')) visit(o, 0);
+      for (const o of scene.parent?.children || []) if (o !== scene && !o.isCamera) visit(o, 0); // [seongsu-v3] 최상위 전부 (liveWaterLines·탄천 지형 등)
       return hidden;
     },
     showFar(hidden) { if (hidden) for (const o of hidden) o.visible = true; },
@@ -523,7 +553,7 @@ export async function createSeongsuAsync({ scene, overlay, terrain, data, mobile
       if (!syncLandmarkDormant(root, distBox(A, lastP.x, lastP.z))) { streetNpc?.sleep(); hqNpc?.sleep(); return; }
       const [lx, lz] = local(lastP.x, lastP.z);
       if (Math.hypot(lx, lz) < 160) void hq.ensureInterior();
-      const cp = camera?.position || lastP, [cx, cz] = local(cp.x, cp.z); lastCamY = cp.y;
+      const cp = camera?.position || lastP, [cx, cz] = local(cp.x, cp.z); lastCamY = cp.y; lastCam.copy(cp);
       hq.cull(cx, cp.y, cz);
     },
     update(dt) {

@@ -190,7 +190,7 @@ export function buildExterior(mats) {
   B.box('fluted', 1.6, P.midH + 0.5, 6, { x: -H - 0.6, y: (yMid0 + yMid1) / 2, z: 5.5 });
   { // 코어 세로 홈: 반원 리브를 촘촘히 (동쪽 코어 바깥면 + 양 끝면, 서쪽 코어 바깥면)
     const hy = P.midH + 0.5, cy = (yMid0 + yMid1) / 2, rib = new THREE.CylinderGeometry(0.17, 0.17, hy, 8, 1, true, 0, Math.PI);
-    const addRib = (x, z, ry) => B.add('fluted', rib, { x, y: cy, z, ry, color: 0xcfcac0 });
+    const addRib = (x, z, ry) => B.add('fluted', rib, { x, y: cy, z, ry, color: 0xf4f8fb });
     for (let i = 0; i < 44; i++) addRib(H + 2.8, -10.8 + i * 0.38, Math.PI / 2 * 0 + 0);
     for (let i = 0; i < 8; i++) { addRib(H - 0.2 + 0.4 + i * 0.38, 6.0, -Math.PI / 2); addRib(H - 0.2 + 0.4 + i * 0.38, -11.0, Math.PI / 2); }
     for (let i = 0; i < 15; i++) addRib(-H - 1.4, 2.7 + i * 0.38, Math.PI);
