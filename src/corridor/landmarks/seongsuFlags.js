@@ -12,10 +12,10 @@ export function seongsuEnabled(search = typeof location !== 'undefined' ? locati
   return s.get('seongsu') !== '0';
 }
 
-/** 걸을 수 있는 섬 (성수역 ~ 연무장길 ~ 뚝섬로 하우스 노웨어). build-seongsu.py BOUNDS 와 같다 */
-export const SEONGSU_BOUNDS = { x0: -5029.7, z0: -19952.5, x1: -3968.0, z1: -18758.6 };
+/** 걸을 수 있는 섬 (서울숲 ~ 성수역 ~ 연무장길 ~ 뚝섬로 하우스 노웨어 ~ 자양동 능동로). build-seongsu.py BOUNDS 와 같다 */
+export const SEONGSU_BOUNDS = { x0: -6710.7, z0: -19952.5, x1: -3481.4, z1: -18758.6 }; // [seongsu-v2] 서울숲·성수대교 북단 ~ 청담대교 북단(능동로)
 /** 보이기만 하는 바깥 띠 */
-export const SEONGSU_APRON = { x0: -5135.9, z0: -20085.1, x1: -3861.9, z1: -18648.1 };
+export const SEONGSU_APRON = { x0: -6825.8, z0: -20085.1, x1: -3366.4, z1: -18648.1 };
 /** 하우스 노웨어 서울 (뚝섬로 433) — 사옥 로컬 원점·방향. ry = 로컬 +z(정문)가 뚝섬로를 보게 */
 export const SEONGSU_HQ = { x: -4371.7, z: -18970.1, ry: -0.3197 };
 /** 도착 자리: 사옥 정문 앞 보도(로컬 2, 24), 사옥을 보게 (cam.yaw = ry) */

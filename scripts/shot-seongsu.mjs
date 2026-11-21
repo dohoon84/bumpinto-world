@@ -19,6 +19,11 @@ const VIEWS0 = [
   { name: 'station-aerial', ov: true, sv: [0, 0], dist: 150, pitch: 0.95, yaw: 2.6 },
   { name: 'exit-3', exit: '3', back: 14, pitch: 0.02, dist: 9 },
   { name: 'exit-1', exit: '1', back: 14, pitch: 0.02, dist: 9 },
+  { name: 'seongsu-bridge-n', ov: true, w: [-6470, -18930], dist: 300, pitch: 0.5, yaw: 0.5 },
+  { name: 'yeongdong-n', ov: true, w: [-4400, -18700], dist: 260, pitch: 0.45, yaw: 0.25 },
+  { name: 'cheongdam-n', ov: true, w: [-3650, -18560], dist: 280, pitch: 0.45, yaw: -0.35 },
+  { name: 'aerial-wide', ov: true, w: [-5100, -19380], dist: 1500, pitch: 1.0, yaw: 0.0 },
+  { name: 'seoulforest', ov: true, w: [-6000, -19600], dist: 420, pitch: 0.6, yaw: 0.8 },
   { name: 'aerial', ov: true, hl: [0, 0], dist: 260, pitch: 0.72, yaw: 0.6 },
   { name: 'in-1f', hl: [0, 9.5], fl: 1, to: [0, -4], pitch: 0.12, dist: 4.2, inside: true },
   { name: 'in-2f', hl: [-2, 5], fl: 2, to: [2, -3], pitch: 0.12, dist: 3.8, inside: true },
@@ -146,6 +151,7 @@ if (RIDE) {
         let best = null; for (const r of S.roads) { if (!/primary|secondary|tertiary|residential/.test(r.k)) continue; for (let i = 1; i < r.pts.length; i++) { const [ax, az] = r.pts[i - 1], [bx, bz] = r.pts[i]; const mx = (ax + bx) / 2, mz = (az + bz) / 2; const dd = Math.hypot(mx - hqW[0], mz - hqW[1]); if (dd > 80 && dd < 140 && Math.hypot(bx - ax, bz - az) > 25 && (!best || Math.abs(dd - 110) < best.e)) best = { e: Math.abs(dd - 110), mx, mz, ax, az, bx, bz, w: r.w }; } }
         if (best) { const L = Math.hypot(best.bx - best.ax, best.bz - best.az), nx = -(best.bz - best.az) / L, nz = (best.bx - best.ax) / L; px = best.mx + nx * (best.w / 2 + 2); pz = best.mz + nz * (best.w / 2 + 2); yaw = toward(px, pz, best.bx, best.bz); }
       }
+      if (v.w) { [px, pz] = v.w; }
       if (v.sv) { const q = S.stationAt(v.sv[0], v.sv[1]); px = q.x; pz = q.z; if (v.sto) { const t = S.stationAt(v.sto[0], v.sto[1]); yaw = toward(px, pz, t.x, t.z); } }
       if (v.exit) { const e = J.subway.entrances.find((q) => q.exit?.id === `seongsu-x${v.exit}`); if (!e) return; const s2 = Math.sin(e.ry), c2 = Math.cos(e.ry); px = e.x - s2 * v.back + c2 * 5; pz = e.z - c2 * v.back - s2 * 5; yaw = toward(px, pz, e.x + s2 * 6, e.z + c2 * 6); }
       if (v.toHq) yaw = toward(px, pz, hqW[0], hqW[1]);
