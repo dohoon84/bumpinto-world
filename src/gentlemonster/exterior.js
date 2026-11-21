@@ -227,16 +227,16 @@ export function buildExterior(mats) {
     for (const sg of [-1, 1]) hullAdd([XF, XT - WRAP].flatMap((x) => [[x, S0, sg * zOf(S0)], [x, S1, sg * zOf(S1)], [x, S0, sg * (zOf(S0) - TH)], [x, S1, sg * (zOf(S1) - TH)]]), rot, 'uhpc');
     const yA = S0 + 0.02, yB = S1 - 0.02, zi = (y) => zOf(y) - TH;
     // 슬롯 천장·바닥과 안쪽 옆벽은 짙은 그늘
-    quadAdd([[XF, yB, -zOf(yB)], [XT - 0.05, yB, -zOf(yB)], [XT - 0.05, yB, zOf(yB)], [XF, yB, zOf(yB)]], rot, 'pframe');
-    quadAdd([[XF, yA, zOf(yA)], [XT - 0.05, yA, zOf(yA)], [XT - 0.05, yA, -zOf(yA)], [XF, yA, -zOf(yA)]], rot, 'pframe');
+    quadAdd([[XF, yB, -zOf(yB)], [XT - 0.05, yB, -zOf(yB)], [XT - 0.05, yB, zOf(yB)], [XF, yB, zOf(yB)]], rot, 'slotDark');
+    quadAdd([[XF, yA, zOf(yA)], [XT - 0.05, yA, zOf(yA)], [XT - 0.05, yA, -zOf(yA)], [XF, yA, -zOf(yA)]], rot, 'slotDark');
     for (const sg of [-1, 1]) {
-      quadAdd([[XF, yA, sg * zi(yA)], [XF, yB, sg * zi(yB)], [XT - 0.05, yB, sg * zi(yB)], [XT - 0.05, yA, sg * zi(yA)]], rot, 'pframe');
+      quadAdd([[XF, yA, sg * zi(yA)], [XF, yB, sg * zi(yB)], [XT - 0.05, yB, sg * zi(yB)], [XT - 0.05, yA, sg * zi(yA)]], rot, 'slotDark');
       // 안쪽 낮은 창띠 (슬롯 높이 안에서만)
       const ya = S0 + 0.25, yb = S0 + 0.95;
-      quadAdd([[XF + 0.3, ya, sg * (zi(ya) - 0.03)], [XF + 0.3, yb, sg * (zi(yb) - 0.03)], [XT - 0.4, yb, sg * (zi(yb) - 0.03)], [XT - 0.4, ya, sg * (zi(ya) - 0.03)]], rot, 'topGlass');
+      quadAdd([[XF + 0.3, ya, sg * (zi(ya) - 0.03)], [XF + 0.3, yb, sg * (zi(yb) - 0.03)], [XT - 0.4, yb, sg * (zi(yb) - 0.03)], [XT - 0.4, ya, sg * (zi(ya) - 0.03)]], rot, 'slotDark');
     }
-    // 3.8 m 안쪽 끝은 어두운 유리. 얇은 가로 프레임 하나만.
-    quadAdd([[XF + 0.03, yA, -zi(yA)], [XF + 0.03, yA, zi(yA)], [XF + 0.03, yB, zi(yB)], [XF + 0.03, yB, -zi(yB)]], rot, 'topGlass');
+    // 3.8 m 안쪽 끝은 무광 짙은 그늘(slotDark: 하늘 반사로 밝아 보이지 않게). 얇은 가로 프레임 하나만.
+    quadAdd([[XF + 0.03, yA, -zi(yA)], [XF + 0.03, yA, zi(yA)], [XF + 0.03, yB, zi(yB)], [XF + 0.03, yB, -zi(yB)]], rot, 'slotDark');
     const c = Math.cos(rot), sn = Math.sin(rot);
     B.box('frame', 0.1, 0.08, zi(yA) + zi(yB), { x: (XF + 0.1) * c, y: S0 + 0.85, z: -(XF + 0.1) * sn, ry: rot });
   }

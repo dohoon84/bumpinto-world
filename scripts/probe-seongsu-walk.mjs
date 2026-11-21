@@ -32,8 +32,8 @@ for (const L of LINES) {
   const scan = await page.evaluate((L) => {
     const J = window.__jj, T = J.terrain, B = J.corridor.bounds, W = J.world;
     const inIsl = (x, z) => !B?.islands?.length || B.islands.some((b) => x >= b.x0 && x <= b.x1 && z >= b.z0 && z <= b.z1) || (B.corridors || []).some(() => false);
-    const [ax, az] = L.a, [bx, bz] = L.b, n = Math.ceil(Math.hypot(bx - ax, bz - az) / 0.5);
-    let y = T.getGroundHeight(ax, az, 1), firstStop = null; const samples = [];
+    const PTS = [L.a, ...(L.via || []), L.b]; let y = T.getGroundHeight(L.a[0], L.a[1], L.y0 ?? 1), firstStop = null; const samples = [];
+    for (let sgi = 0; sgi < PTS.length - 1 && !firstStop; sgi++) { const [ax, az] = PTS[sgi], [bx, bz] = PTS[sgi + 1], n = Math.ceil(Math.hypot(bx - ax, bz - az) / 0.5);
     for (let i = 1; i <= n; i++) {
       const x0 = ax + (bx - ax) * (i - 1) / n, z0 = az + (bz - az) * (i - 1) / n, x = ax + (bx - ax) * i / n, z = az + (bz - az) * i / n;
       const isl = inIsl(x, z), blk = W.isBlocked(x, z, 0.35), ny = T.canMove(x0, z0, y, x, z);
@@ -42,14 +42,15 @@ for (const L of LINES) {
       if (why) { const prof = []; for (let k = -6; k <= 6; k++) { const t = (i + k * 2) / n; const px = ax + (bx - ax) * t, pz = az + (bz - az) * t; prof.push(+T.getGroundHeight(px, pz, y).toFixed(2)); } firstStop = { at: [+x.toFixed(1), +z.toFixed(1)], why, prof1m: prof }; break; }
       y = ny;
     }
+    }
     return { firstStop, endY: +y.toFixed(2), samples };
   }, L);
   let walk = null;
   if (WALK) {
-    await page.evaluate((L) => { const J = window.__jj; J.setMode('follow'); const y = J.terrain.getGroundHeight(L.a[0], L.a[1], 1); J.teleport(L.a[0], L.a[1], y); const yaw = Math.atan2(-(L.b[0] - L.a[0]), -(L.b[1] - L.a[1])); J.cam.yaw = yaw; J.player.rotation.y = yaw + Math.PI; }, L);
+    await page.evaluate((L) => { const J = window.__jj; J.setMode('follow'); const y = J.terrain.getGroundHeight(L.a[0], L.a[1], L.y0 ?? 1); J.teleport(L.a[0], L.a[1], y); const t0 = (L.via || [L.b])[0]; const yaw = Math.atan2(-(t0[0] - L.a[0]), -(t0[1] - L.a[1])); J.cam.yaw = yaw; J.player.rotation.y = yaw + Math.PI; }, L);
     await page.waitForTimeout(2500);
-    await page.keyboard.down('ShiftLeft'); await page.keyboard.down('KeyW'); const trace = [], dist = Math.hypot(L.b[0] - L.a[0], L.b[1] - L.a[1]);
-    for (let k = 0; k < Math.min(70, Math.ceil(dist / 7) + 6); k++) { await page.waitForTimeout(2000); trace.push(await page.evaluate(() => { const p = window.__jj.player.position; return [+p.x.toFixed(1), +p.z.toFixed(1), +p.y.toFixed(2)]; })); const c = trace[trace.length - 1]; if (process.env.SHOTS && (k % 3 === 0)) { fs.mkdirSync(process.env.SHOTS, { recursive: true }); await page.screenshot({ path: `${process.env.SHOTS}/${res.length}-${String(k).padStart(2, '0')}.png` }); } if (Math.hypot(L.b[0] - c[0], L.b[1] - c[1]) < 6) break; if (trace.length > 4) { const o = trace[trace.length - 4]; if (Math.hypot(c[0] - o[0], c[1] - o[1]) < 1 || Math.hypot(L.b[0] - o[0], L.b[1] - o[1]) - Math.hypot(L.b[0] - c[0], L.b[1] - c[1]) < 1.5) break; } }
+    await page.keyboard.down('ShiftLeft'); await page.keyboard.down('KeyW'); const trace = [], TG = [...(L.via || []), L.b]; let ti = 0, kSw = -9; const PT = [L.a, ...TG]; let dist = 0; for (let i = 1; i < PT.length; i++) dist += Math.hypot(PT[i][0] - PT[i - 1][0], PT[i][1] - PT[i - 1][1]);
+    for (let k = 0; k < Math.min(70, Math.ceil(dist / 7) + 6); k++) { await page.waitForTimeout(2000); trace.push(await page.evaluate(() => { const p = window.__jj.player.position; return [+p.x.toFixed(1), +p.z.toFixed(1), +p.y.toFixed(2)]; })); const c = trace[trace.length - 1]; if (process.env.SHOTS && (k % 3 === 0)) { fs.mkdirSync(process.env.SHOTS, { recursive: true }); await page.screenshot({ path: `${process.env.SHOTS}/${res.length}-${String(k).padStart(2, '0')}.png` }); } if (ti < TG.length - 1 && Math.hypot(TG[ti][0] - c[0], TG[ti][1] - c[1]) < 5) { ti++; kSw = k; await page.evaluate((t) => { const J = window.__jj, p = J.player.position; const yaw = Math.atan2(-(t[0] - p.x), -(t[1] - p.z)); J.cam.yaw = yaw; J.player.rotation.y = yaw + Math.PI; }, TG[ti]); continue; } if (Math.hypot(L.b[0] - c[0], L.b[1] - c[1]) < 6) break; if (trace.length > 4 && k - kSw > 3) { const o = trace[trace.length - 4]; if (Math.hypot(c[0] - o[0], c[1] - o[1]) < 1 || Math.hypot(TG[ti][0] - o[0], TG[ti][1] - o[1]) - Math.hypot(TG[ti][0] - c[0], TG[ti][1] - c[1]) < 1.5) break; } }
     await page.keyboard.up('KeyW'); await page.keyboard.up('ShiftLeft');
     const last = trace[trace.length - 1], prev = trace[Math.max(0, trace.length - 4)];
     walk = { trace, end: last, stuck: Math.hypot(last[0] - prev[0], last[1] - prev[1]) < 1, toGo: +Math.hypot(L.b[0] - last[0], L.b[1] - last[1]).toFixed(1) };

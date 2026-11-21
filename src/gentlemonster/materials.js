@@ -36,6 +36,7 @@ export function createMaterials({ maxAniso = 4 } = {}) {
     topGlass: std({ side: THREE.DoubleSide, color: 0x6f8496, metalness: 0.6, roughness: 0.08, emissive: 0xfff1dc, emissiveIntensity: 0.12, envMapIntensity: 1.3 }),
     glass: new THREE.MeshStandardMaterial({ color: 0x2b3a46, metalness: 0.7, roughness: 0.04, transparent: true, opacity: 0.2, depthWrite: false, envMapIntensity: 1.3 }),
     frame: std({ color: 0x1b1c1f, metalness: 0.7, roughness: 0.4 }),
+    slotDark: std({ color: 0x1e1f22, metalness: 0, roughness: 0.95, envMapIntensity: 0.15, side: THREE.DoubleSide }), // [v4b] 왕관 슬롯 안쪽: 하늘 반사 없는 짙은 그늘
     gravel: lam({ map: T.panelTex({ base: '#e4e1da', joint: 'rgba(0,0,0,0)', hi: 'rgba(0,0,0,0)', cols: 1, rows: 1 }) }),
     asphalt: lam({ color: 0x5b5d62 }),
     paver: lam({ map: T.panelTex({ base: '#cfccc5', cols: 4, rows: 4, joint: 'rgba(0,0,0,0.10)', hi: 'rgba(255,255,255,0.10)' }) }),
