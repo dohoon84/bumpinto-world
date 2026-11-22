@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url';
 // [gangnam] 이 파일은 미금만 본다. 강남 지하철이 켜지면 강남 오프셋이 달라지므로 여기서는 끈다.
 if (process.env.GANGNAMSUB == null) process.env.GANGNAMSUB = '0';
 const ON = process.env.MIGEUM !== '0' && process.env.MIGEUMSUB !== '0';
+const SS_ON = process.env.SEONGSU !== '0' && process.env.SEONGSUSUB !== '0'; // [seongsu]
 const { migeumSubEnabled, STATIONS, STATIONS_BASE, EXT_STATIONS } = await import('../src/subway/roster.js');
 const { STATIONS: ALL, LINE_STOPS } = await import('../src/subway/stationsData.js');
 const R = await import('../src/subway/ride.js');
@@ -24,18 +25,36 @@ assert.equal(migeumSubEnabled(''), true); assert.equal(migeumSubEnabled('?ws=moc
 { const { migeumSubwayDrawsEntrances: D } = await import('../src/corridor/migeum.js'); // 1단계 출입구 캐노피와 겹치지 않게
   assert.equal(D(''), true); assert.equal(D('?migeumsub=0'), false); assert.equal(D('?migeum=0'), false); assert.equal(D('?subway=0'), false, '지하철 전체 끔 → 1단계 캐노피 유지'); }
 assert.equal(STATIONS_BASE.length, 15); assert.ok(STATIONS_BASE.every((d) => !d.ext));
-assert.equal(STATIONS.length, ON ? 16 : 15); assert.deepEqual(EXT_STATIONS.map((d) => d.id), ON ? ['migeum'] : []);
-assert.deepEqual(ALL.slice(0, 15).map((d) => d.id), STATIONS_BASE.map((d) => d.id), '기존 역 순서 그대로, 미금은 맨 뒤');
+assert.equal(STATIONS.length, 15 + (ON ? 1 : 0) + (SS_ON ? 1 : 0)); // [seongsu] 성수 역이 붙어도 미금 플래그만 이 파일에서 본다 (강남은 위에서 끔)
+assert.equal(EXT_STATIONS.some((d) => d.id === 'migeum'), ON);
+assert.equal(EXT_STATIONS.some((d) => d.id === 'seongsu'), SS_ON);
+assert.deepEqual(ALL.slice(0, 15).map((d) => d.id), STATIONS_BASE.map((d) => d.id), '기존 역 순서 그대로');
 
-// 2) 기존 역 시각 = 확장 전 (꺼짐: 460개 전부, 켜짐: 미금 4개만 다름)
+// 2) 기존 역 시각 = 확장 전 (꺼짐: 460개 전부, 켜짐: 미금 4개만 다름). [seongsu] 잠실↔성수 구간 오프셋은 성수 테스트가 본다.
+const SS_PASS = new Set(['잠실나루', '강변', '구의', '건대입구', '성수']);
 const base = JSON.parse(fs.readFileSync(new URL('./fixtures/subway-line-offsets-base.json', import.meta.url), 'utf8'));
 const now = {};
 for (const l of Object.keys(LINE_STOPS)) for (const d of [0, 1]) now[`${l}-${d}`] = Object.fromEntries(R.lineOffsets(l, d));
 let n = 0; const diff = [];
 for (const [k, m] of Object.entries(base)) for (const [s, v] of Object.entries(m)) { n++; if (now[k][s] !== v) diff.push(`${k}:${s}`); }
 assert.equal(n, 460);
-assert.deepEqual(diff.sort(), ON ? ['shin-0:미금', 'shin-1:미금', 'suin-0:미금', 'suin-1:미금'] : [], '기존 역 오프셋 그대로');
-for (const k of Object.keys(base)) { assert.deepEqual(Object.keys(now[k]), Object.keys(base[k]), k); const first = Object.entries(now[k])[0]; assert.equal(first[1], 0, `${k} 원점 = 첫 역 (${first[0]})`); }
+const migeumDiff = ['shin-0:미금', 'shin-1:미금', 'suin-0:미금', 'suin-1:미금'];
+const extra = diff.filter((k) => {
+  const name = k.slice(k.indexOf(':') + 1);
+  if (name === '미금') return false;
+  if (SS_ON && SS_PASS.has(name)) return false;
+  return true;
+});
+assert.deepEqual(extra.sort(), [], '기존 역 오프셋 그대로 ' + extra.join(','));
+if (ON) assert.ok(migeumDiff.every((k) => diff.includes(k)), '미금 켠 경우 미금 4개 오프셋은 바뀜');
+else assert.ok(!diff.some((k) => k.endsWith(':미금')), '미금 끄면 미금 오프셋도 예전 값');
+for (const k of Object.keys(base)) {
+  const nowKeys = Object.keys(now[k]).filter((s) => !(SS_ON && SS_PASS.has(s)));
+  const baseKeys = Object.keys(base[k]).filter((s) => !(SS_ON && SS_PASS.has(s)));
+  assert.deepEqual(nowKeys, baseKeys, k);
+  const first = Object.entries(now[k])[0];
+  assert.equal(first[1], 0, `${k} 원점 = 첫 역 (${first[0]})`);
+}
 assert.equal(now['suin-0']['정자'], base['suin-0']['정자']); assert.equal(now['shin-1']['정자'], base['shin-1']['정자']);
 
 // 3) 정자 ↔ 미금: 실제 거리(역 좌표 직선) · 같은 열차(run)
