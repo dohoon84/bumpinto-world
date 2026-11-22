@@ -36,6 +36,7 @@ let liveIdx = null; // { data, map: Map(chunkKey → feats) }
 let namsanIdx = null; // { mini, map }
 let myeongdongIdx = null; // [myeongdong] 명동은 지은 뒤 mini 가 생긴다
 let hangangIdx = null; // { mini, map }
+let seongsuIdx = null; // [seongsu-v4] 성수동은 지은 뒤 mini(길·건물·사옥·공원·한강) 가 생긴다
 const bboxOf = new WeakMap();
 const stats = { frames: 0, ms: 0, msMax: 0, chunkMs: 0, chunkRenders: 0, bytes: 0 };
 let onChange = () => {};
@@ -74,7 +75,7 @@ function close() {
   syncCornerPhone(false);
   // 닫으면 캐시 전부 버림(메모리 0). 다시 열면 보이는 청크만 다시 그린다(청크당 수 ms)
   for (const c of chunks.values()) { c.c.width = 0; c.c.height = 0; }
-  chunks.clear(); liveIdx = null; namsanIdx = null; hangangIdx = null; myeongdongIdx = null; stats.bytes = 0;
+  chunks.clear(); liveIdx = null; namsanIdx = null; hangangIdx = null; myeongdongIdx = null; seongsuIdx = null; stats.bytes = 0;
 }
 
 function build() {
@@ -221,8 +222,21 @@ function myeongdongFeats() {
   myeongdongIdx = { mini, map };
   return map;
 }
+function seongsuFeats() {
+  const mini = jj()?.seongsu?.mini; if (!mini || !mini.roads?.length) return null;
+  if (seongsuIdx?.mini === mini) return seongsuIdx.map;
+  const map = new Map();
+  for (const k of MINI_KINDS) for (const f of mini[k] || []) {
+    const [x0, z0, x1, z1] = bb(f); if (!Number.isFinite(x0)) continue;
+    for (let i = Math.floor(x0 / CHUNK); i <= Math.floor(x1 / CHUNK); i++) for (let j = Math.floor(z0 / CHUNK); j <= Math.floor(z1 / CHUNK); j++) {
+      const key = ck(i, j); let m = map.get(key); if (!m) map.set(key, (m = emptyFeats())); m[k].push(f);
+    }
+  }
+  seongsuIdx = { mini, map };
+  return map;
+}
 function landmarkFeats() {
-  const maps = [namsanFeats(), hangangFeats(), myeongdongFeats()].filter(Boolean);
+  const maps = [namsanFeats(), hangangFeats(), myeongdongFeats(), seongsuFeats()].filter(Boolean);
   if (!maps.length) return null;
   if (maps.length === 1) return maps[0];
   const out = new Map();
@@ -251,7 +265,8 @@ function verFor(i, j, T, data, N) {
   let v = data ? 'L' : '';
   if (T) for (let di = -1; di <= 1; di++) for (let dj = -1; dj <= 1; dj++) if (T.has(ck(i + di, j + dj))) v += `${di}${dj}`;
   if (N?.has(ck(i, j))) v += 'N';
-  if (myeongdongIdx?.map.has(ck(i, j))) v += 'M'; // [myeongdong] 명동이 지어지면 그 칸을 다시 그린다
+  if (myeongdongIdx?.map.has(ck(i, j))) v += 'M';
+  if (seongsuIdx?.map.has(ck(i, j))) v += 'S'; // [seongsu-v4] // [myeongdong] 명동이 지어지면 그 칸을 다시 그린다
   return v;
 }
 
@@ -600,13 +615,19 @@ function updatePlaque(J, x, z) {
   let t;
   const nt = J.namsan?.tower;
   const nd = nt ? Math.hypot((nt.ox ?? nt.x) - x, (nt.oz ?? nt.z) - z) : Infinity;
+  // [v4b] 늦게 짓는 동네(성수·한강)는 역 목록에 없어 '분당'으로 떨어졌다 → 땅 주인 먼저, 그다음 아무 역(4 km), 마지막에 지역 이름
+  const ssD = J.seongsu?.ownDist?.(x, z) ?? Infinity, hgD = J.hangang?.ownDist?.(x, z) ?? Infinity;
   if (J.region?.id === 'starbase') t = 'Starbase';
+  else if (ssD < 60) t = tr('성수동', 'Seongsu-dong');
 else if (cap) t = tr(cap.name, cap.nameEn || cap.name); // [gangnam-night] 같은 섬의 역·랜드마크만
   else if (J.myeongdong?.ready && J.myeongdong.ownDist?.(x, z) < 60) t = tr('명동', 'Myeongdong'); // [myeongdong] 남산 반경 안이라도 명동 땅이면 명동
   else if (Number.isFinite(nd) && nd < 2800) t = tr('남산', 'Namsan');
 
   else if (best && bd < 900) t = tr(`${best.name}역${bd > 250 ? ' 근처' : ''}`, `${best.nameEn || best.name}${bd > 250 ? ' area' : ' Stn.'}`);
-  else t = tr('분당', 'Bundang');
+  else if (hgD < 1) t = tr('한강', 'Hangang');
+  else if (best && bd < 4000) t = tr(`${best.name}역 근처`, `${best.nameEn || best.name} area`);
+  else if (J.region?.id === 'jeongja') t = tr('분당', 'Bundang');
+  else t = tr(String(J.region?.name || '').replace(/\s*\(.*$/, '') || '분당', J.region?.enName || 'Bundang');
   if (t !== plaqueText) { plaqueText = t; plaque.textContent = t; }
 }
 let compAng = null;

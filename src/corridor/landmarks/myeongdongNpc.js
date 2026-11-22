@@ -77,13 +77,14 @@ const lam = (c) => new THREE.MeshLambertMaterial({ color: c });
  * @param {Array} o.promoters [[x,z,ry]]
  * @param {(x,z)=>number} o.heightAt
  */
-export function createMyeongdongNpc({ parent, paths, vendors = [], promoters = [], heightAt, openStalls = () => vendors.length, mobile = false, seed = 20261114, getHour = () => { try { return gameHour(); } catch { return 20; } }, force = 0 } = {}) {
-  const holder = new THREE.Group(); holder.name = 'myeongdong-npc'; parent?.add(holder);
-  const crowd = buildCrowd(holder, { name: 'myeongdongCrowd' });
+// [seongsu] 성수(하우스 노웨어)도 같은 군중을 쓴다: looks.vendor/promo(k, rnd) → 직원·방문객 차림, 길 p.y · 자리 [x,z,ry,y,sit] 로 층 높이·앉기.
+export function createMyeongdongNpc({ parent, paths, vendors = [], promoters = [], heightAt, openStalls = () => vendors.length, mobile = false, seed = 20261114, getHour = () => { try { return gameHour(); } catch { return 20; } }, force = 0, looks = {}, name = 'myeongdongCrowd', pools = {}, cull = null } = {}) {
+  const holder = new THREE.Group(); holder.name = name === 'myeongdongCrowd' ? 'myeongdong-npc' : name + '-npc'; parent?.add(holder);
+  const crowd = buildCrowd(holder, { name });
   let rs = seed; const rnd = () => ((rs = (rs * 16807) % 2147483647) / 2147483647);
   const pick = (a) => a[Math.floor(rnd() * a.length)];
   const PG = propGeo();
-  const POOL = force || (mobile ? 80 : 150), VPOOL = mobile ? 14 : 26, PPOOL = mobile ? 8 : 14;
+  const POOL = force || pools.peds || (mobile ? 80 : 150), VPOOL = pools.vendors || (mobile ? 14 : 26), PPOOL = pools.promoters || (mobile ? 8 : 14);
 
   // ---------- 보행자 ----------
   const peds = [];
@@ -110,11 +111,12 @@ export function createMyeongdongNpc({ parent, paths, vendors = [], promoters = [
   // ---------- 노점 상인 · 호객 직원 ----------
   const mkWorker = (kind, k) => {
     const f = rnd() < (kind === 'promo' ? 0.7 : 0.45);
-    const look = kind === 'promo'
+    const custom = looks[kind]?.(k, rnd);
+    const look = custom || (kind === 'promo'
       ? { color: PROMO[k % PROMO.length], pants: '#22262b', gender: f ? 'f' : 'm', skin: pick(SKINS), hairColor: '#1a1a1a', hair: f ? pick(['pony', 'long']) : 'short', top: 'long', hat: 'cap', hatColor: '#ffffff' }
-      : { color: '#f4f4f2', pants: '#3c4350', gender: f ? 'f' : 'm', skin: pick(SKINS), hairColor: '#1a1a1a', hair: 'short', top: 'long', hat: rnd() < 0.5 ? 'band' : 'beanie', hatColor: rnd() < 0.5 ? '#c1121f' : '#2b2f36' };
+      : { color: '#f4f4f2', pants: '#3c4350', gender: f ? 'f' : 'm', skin: pick(SKINS), hairColor: '#1a1a1a', hair: 'short', top: 'long', hat: rnd() < 0.5 ? 'band' : 'beanie', hatColor: rnd() < 0.5 ? '#c1121f' : '#2b2f36' });
     const mesh = createAvatar(look); const u = mesh.userData;
-    if (kind === 'vendor') u.rig.add(new THREE.Mesh(PG.apron, lam(APRON[k % APRON.length])));
+    if (kind === 'vendor' && !custom) u.rig.add(new THREE.Mesh(PG.apron, lam(APRON[k % APRON.length])));
     mesh.traverse((o) => { if (o.isMesh) o.castShadow = false; });
     mesh.visible = false;
     return { kind, mesh, parts: crowd.register(mesh), spot: -1, yaw0: 0, look: 0, lookT: rnd() * 6 };
@@ -192,9 +194,9 @@ export function createMyeongdongNpc({ parent, paths, vendors = [], promoters = [
         const d = Math.hypot(px - fx, pz - fz);
         if (check && d > REPLACE_R) { hide(a); if (a.follower) hide(a.follower); break; }
         act++;
-        b.mesh.position.set(px, heightAt(px, pz), pz);
+        b.mesh.position.set(px, a.path.y ?? heightAt(px, pz), pz);
         b.mesh.rotation.y = Math.atan2(tx * a.dir, tz * a.dir);
-        const near = d < SHOW_R; b.mesh.visible = near; b.shown = near;
+        const near = d < SHOW_R && (!cull || cull(b.mesh.position.y)); b.mesh.visible = near; b.shown = near;
         if (!near) continue;
         vis++;
         animateAvatar(b.mesh, v, dt);
@@ -215,8 +217,8 @@ export function createMyeongdongNpc({ parent, paths, vendors = [], promoters = [
       const [x, z, ry] = sp, d = Math.hypot(x - fx, z - fz);
       w.lookT -= dt; if (w.lookT <= 0) { w.lookT = 2.5 + rnd() * 5; w.look = (rnd() - 0.5) * (w.kind === 'promo' ? 1.4 : 0.8); }
       w.yaw0 += (w.look - w.yaw0) * Math.min(1, dt * 3);
-      w.mesh.position.set(x, heightAt(x, z), z); w.mesh.rotation.y = ry + w.yaw0;
-      w.mesh.visible = d < SHOW_R; if (!w.mesh.visible) continue;
+      w.mesh.position.set(x, sp[3] ?? heightAt(x, z), z); w.mesh.rotation.y = ry + (sp[4] ? 0 : w.yaw0); w.mesh.userData.sit = sp[4] || '';
+      w.mesh.visible = d < SHOW_R && (!cull || cull(w.mesh.position.y)); if (!w.mesh.visible) continue;
       if (w.kind === 'vendor') nv++; else np++;
       animateAvatar(w.mesh, 0, dt);
       crowd.add(w.mesh, w.parts, d > LOD_R);

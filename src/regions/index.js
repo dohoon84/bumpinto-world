@@ -21,7 +21,7 @@ export const UPCOMING_REGIONS = [
   { id: 'pangyo', name: '판교역', enName: 'Pangyo Stn.', desc: '테크노밸리 · 화랑공원', enDesc: 'Techno Valley · Hwarang Park', lat: 37.3947, lon: 127.1112 },
   { id: 'migeum', name: '미금역', enName: 'Migeum Stn.', desc: '출구 1–8번 · 탄천', enDesc: 'Exits 1–8 · Tancheon', lat: 37.3498, lon: 127.1090 },
   { id: 'gangnam', name: '강남역', enName: 'Gangnam Stn.', desc: '강남대로 · 테헤란로', enDesc: 'Gangnam-daero · Teheran-ro', openDesc: '강남 개통 · 2호선 · 신분당선', enOpenDesc: 'Gangnam open · Line 2 · Shinbundang', lat: 37.4979, lon: 127.0276 },
-  { id: 'seongsu', name: '성수동', enName: 'Seongsu-dong', desc: '연무장길 · 서울숲', enDesc: 'Seoul Forest · Cafe St.', lat: 37.5445, lon: 127.0560 },
+  { id: 'seongsu', name: '성수동', enName: 'Seongsu-dong', desc: '연무장길 · 서울숲', enDesc: 'Seoul Forest · Cafe St.', openDesc: '성수 개통 · 2호선 · 하우스 노웨어 서울', enOpenDesc: 'Seongsu open · Line 2 · Haus Nowhere Seoul', lat: 37.5445, lon: 127.0560 },
   { id: 'hongdae', name: '홍대입구', enName: 'Hongdae', desc: '경의선숲길 · 걷고싶은거리', enDesc: 'Hongik Univ. Street', lat: 37.5572, lon: 126.9245 },
 ];
 

@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { projectLatLon } from '../src/subway/exits.js';
 
 const ON = process.env.GANGNAM !== '0' && process.env.GANGNAMSUB !== '0';
+const SS_ON = process.env.SEONGSU !== '0' && process.env.SEONGSUSUB !== '0'; // [seongsu]
 const { gangnamSubEnabled, STATIONS, STATIONS_BASE, EXT_STATIONS } = await import('../src/subway/roster.js');
 const { STATIONS: ALL, LINE_STOPS } = await import('../src/subway/stationsData.js');
 const R = await import('../src/subway/ride.js');
@@ -32,12 +33,14 @@ const diff = [];
 for (const [k, m] of Object.entries(base)) for (const [s, v] of Object.entries(m)) if (now[k][s] !== v) diff.push(`${k}:${s}`);
 const extra = diff.filter((k) => {
   const name = k.slice(k.indexOf(':') + 1);
-  if (name === '미금' || name === '강남') return false;
+  if (name === '미금' || name === '강남' || name === '성수') return false; // [seongsu] 성수는 새 게임 역 (OSM 역 좌표)
   if (ON && gapNames.has(name)) return false; // 강남으로 가는 게임 밖 역만 실거리로 바뀜
+  if (SS_ON && ['잠실나루', '강변', '구의', '건대입구'].includes(name)) return false; // [seongsu] 잠실→성수 사이 통과 역도 실거리
   return true;
 });
 assert.deepEqual(extra, [], '기존 게임 역 오프셋 그대로 ' + extra.join(','));
-if (!ON) assert.ok(!diff.some((k) => k.endsWith(':강남') || [...gapNames].some((n) => k.endsWith(':' + n))), '꺼지면 강남 구간 오프셋도 예전 값');
+const SS_PASS = new Set(['잠실나루', '강변', '구의', '건대입구', '성수']);
+if (!ON) assert.ok(!diff.some((k) => k.endsWith(':강남') || [...gapNames].filter((n) => !(SS_ON && SS_PASS.has(n))).some((n) => k.endsWith(':' + n))), '꺼지면 강남 구간 오프셋도 예전 값');
 
 const G = ALL.find((d) => d.id === 'gangnam');
 assert.equal(G.nameEn, 'Gangnam'); assert.deepEqual(G.lines, ['l2', 'shin']); assert.equal(G.ext, 'gangnam');
@@ -56,7 +59,7 @@ for (const id of G.osmStations) assert.ok(raw.some((e) => e.id === id && e.tags?
 assert.deepEqual(ZONES.slice(121, 126), ['gangnam-station', 'gangnam-station/p-l2-0', 'gangnam-station/p-l2-1', 'gangnam-station/p-shin-0', 'gangnam-station/p-shin-1']);
 assert.equal(zoneSlot(R.platformZone('gangnam', 'l2', 0)), 122);
 assert.equal(zoneSlot(R.platformZone('gangnam', 'shin', 1)), 125);
-assert.equal(ZONES.length, 134);
+assert.equal(ZONES.length, 137); // [seongsu] 134..136 덧붙임
 assert.equal(zoneSlot('pangyo-station'), 126);
 assert.equal(zoneSlot('cheonggyesan-station'), 131);
 
@@ -83,7 +86,16 @@ if (ON) {
   assert.deepEqual(l2.filter((q) => q.pass).map((q) => q.name), ['잠실새내', '종합운동장', '삼성', '선릉', '역삼']);
   assert.equal(R.alightAllowed(l2.at(-1)), true);
   const back2 = R.rideStops('l2', 1, '강남');
-  assert.equal(back2.at(-1).id, 'jamsil');
+  assert.equal(back2.at(-1).id, SS_ON ? 'seongsu' : 'jamsil'); // [seongsu] 잠실 다음 2호선 게임 역 = 성수
+  assert.ok(back2.some((q) => q.id === 'jamsil' && q.game));
+  if (SS_ON) { // [seongsu] 잠실 → 성수: 잠실나루·강변·구의·건대입구 통과, 성수에서 내림
+    const ss = R.rideStops('l2', 1, '잠실');
+    assert.equal(ss.at(-1).id, 'seongsu');
+    assert.deepEqual(ss.filter((q) => q.pass).map((q) => q.name), ['잠실나루', '강변', '구의', '건대입구']);
+    assert.equal(R.alightAllowed(ss.at(-1)), true);
+    const dj = R.segmentDist('잠실', '잠실나루');
+    assert.ok(dj > 500 && dj < 1500, `잠실-잠실나루 ${dj}`);
+  }
   // 게임 밖 구간은 OSM 좌표. 정자→판교는 1.2km 가 아니다.
   const d = R.segmentDist('정자', '판교');
   const a = GAP_STOPS['판교'];

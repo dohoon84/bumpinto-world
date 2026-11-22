@@ -2,6 +2,12 @@ import { isHandheld, showPcOnly } from './pcOnly.js';
 import { initAnalytics, trackEvent } from './analytics.js';
 import { isMobileMode } from './mobile/flag.js';
 
+// [gentle-monster] ?gm=1 — 젠틀몬스터 성수 사옥(하우스 노웨어 서울) 프리뷰 장면. 게임 부팅 없이 이것만 연다.
+const GM_PREVIEW = new URLSearchParams(location.search).has('gm');
+if (GM_PREVIEW) {
+  const { startPreview } = await import('./gentlemonster/preview.js');
+  await startPreview();
+} else {
 initAnalytics();
 // [bp24-poster] 이벤트 포스터는 첫 화면이 아니라 게임 입장 뒤에 띄운다 (game.js completeWorldJoin).
 import('./notice/launchPopup.js').then((m) => m.showLaunchNotice()).catch(() => {});
@@ -38,4 +44,5 @@ if (isMobileMode()) {
   mountMobileGate();
 } else {
   await import('./game.js');
+}
 }

@@ -36,7 +36,7 @@ function skylineTex() {
   return t;
 }
 
-function ribbon(pts, width, yFn, dy = 0.08) {
+function ribbon(pts, width, yFn, dy = 0.08, perSide = false) {
   if (!pts || pts.length < 2) return null;
   const pos = [], idx = [];
   for (let i = 0; i < pts.length; i++) {
@@ -46,7 +46,10 @@ function ribbon(pts, width, yFn, dy = 0.08) {
     dx /= L; dz /= L;
     const hw = width / 2;
     const y = (yFn(p[0], p[1]) ?? 0) + dy;
-    pos.push(p[0] - dz * hw, y, p[1] + dx * hw, p[0] + dz * hw, y, p[1] - dx * hw);
+    // perSide: 양쪽 가장자리 높이를 따로 (중앙·가장자리 중 높은 쪽) — 넓은 도로가 비탈 DEM 에 반쯤 묻히는 톱니 방지
+    const lx = p[0] - dz * hw, lz = p[1] + dx * hw, rx = p[0] + dz * hw, rz = p[1] - dx * hw;
+    const yl = perSide ? Math.max(y, (yFn(lx, lz) ?? -1e9) + dy) : y, yr = perSide ? Math.max(y, (yFn(rx, rz) ?? -1e9) + dy) : y;
+    pos.push(lx, yl, lz, rx, yr, rz);
     if (i > 0) {
       const k = (i - 1) * 2;
       idx.push(k, k + 2, k + 1, k + 1, k + 2, k + 3);
@@ -294,7 +297,9 @@ function* dressHangangCityGen(ctx) {
     if (run.length >= 2) runs.push(run);
     for (const r of runs) {
       if (elevated) { elevatedDeck(r, width); yield 'hangang-city-deck'; continue; }
-      const geo = ribbon(r, width, (x, z) => (heightAt(x, z) ?? lv.waterY) + 0.14, 0.1);
+      // [seongsu-v4] OSM 꼭짓점만으로 띠를 깔면 긴 직선 구간이 굴곡진 DEM 속에 묻혀 '잔디 위 검은 판' 조각만 보였다 → 6 m 마다 다시 찍는다
+      const rr = []; for (let i = 0; i < r.length; i++) { if (i) { const [ax, az] = r[i - 1], [bx, bz] = r[i], L = Math.hypot(bx - ax, bz - az), k = Math.ceil(L / 6); for (let t = 1; t < k; t++) rr.push([ax + (bx - ax) * t / k, az + (bz - az) * t / k]); } rr.push(r[i]); }
+      const geo = ribbon(rr, width, (x, z) => (heightAt(x, z) ?? lv.waterY) + 0.14, 0.1, true);
       if (geo) exprGeos.push(geo);
     }
     yield 'hangang-city-dress';

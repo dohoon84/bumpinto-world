@@ -3160,6 +3160,7 @@ function frame() {
     corridor.namsan?.tickPlayer?.(dt, player, cam);
     corridor.hangang?.tickPlayer?.(dt, player, cam);
     corridor.myeongdong?.tickPlayer?.(dt, player, cam, atmosphere); // [myeongdong] [myeongdong-cathedral] 해 방향·날씨
+    corridor.seongsu?.tickPlayer?.(dt, player, cam, atmosphere, camera); // [seongsu] 사옥 층별 표시·실내 지연 생성
   }
 
   // 카메라
@@ -3201,6 +3202,10 @@ function frame() {
       else dist = shortenBoom(dist, inCar(pitch), { min: 1.2 });
     }
     if (underpass?.covered(P)) dist = shortenBoom(dist, (d) => { const q = boomPoint(P.x, P.z, eye, yaw, pitch, d); return underpass.camBlocked(q.x, q.y, q.z); }, { min: 1.0 }); // [depot-underpass] 토끼굴 안: 붐을 터널 안으로
+    const ssC = corridor?.seongsu; // [seongsu] 하우스 노웨어 실내: 붐을 벽·천장 안쪽으로
+    if (ssC?.ready && ssC.hqFloor) {
+      dist = shortenBoom(dist, (d) => { const q = boomPoint(P.x, P.z, eye, yaw, pitch, d); return ssC.camBlocked(q.x, q.y, q.z); }, { min: 1.2 });
+    }
     const bx = Math.sin(yaw), bz = Math.cos(yaw), cp = Math.cos(pitch), sp = Math.sin(pitch), aim = 4;
     const camX = P.x + bx * dist * cp, camZ = P.z + bz * dist * cp;
     // renderHeight 는 정자 DEM 만 본다. 남산 높이는 addGroundExtra 로만 들어가서
@@ -3274,7 +3279,9 @@ function frame() {
     // [cathedral-sit] 밤 성당 안: 하늘빛(hemi)이 달빛 수준이라 아바타(플레이어·기도하는 사람)만 까맣게 뜬다 → 그 프레임만 따뜻한 실내 밝기로 올렸다 되돌린다(새 조명 없음)
     const hemiSave = inCath && hemi.intensity < 1.2 ? [hemi.intensity, hemi.color.getHex(), hemi.groundColor.getHex()] : null;
     if (hemiSave) { hemi.intensity = 1.2; hemi.color.set('#ffe2bc'); hemi.groundColor.set('#7a5a3e'); }
+    const ssFar = corridor?.seongsu?.ready ? corridor.seongsu.hideFar() : null; // [seongsu] 성수 섬 안: 먼 랜드마크는 이 프레임만 숨김
     renderer.render(scene, camera);
+    if (ssFar) corridor.seongsu.showFar(ssFar);
     if (hemiSave) { hemi.intensity = hemiSave[0]; hemi.color.setHex(hemiSave[1]); hemi.groundColor.setHex(hemiSave[2]); }
     if (inCath) camera.layers.set(0);
     overlay.update(innerWidth, innerHeight); titleLayer?.render(renderer, innerWidth, innerHeight);
@@ -3307,7 +3314,7 @@ window.__jj = {
   sanitizeLook,
   wake: () => wakeFromAfk(), // [myeongdong] 스크린샷 스크립트: 느린 렌더에서 자동 AFK(Zzz) 풀기
   perfmem: perfMem, // [perf-memory]
-ready: bootReady, region, tower, renderer, corridor, namsan: corridor?.namsan || null, hangang: corridor?.hangang || null, myeongdong: corridor?.myeongdong || null, schoolZone: corridor?.schoolZone || null, playgrounds, streetlights, pangyoLamps, migeumLamps, gangnamNight, gangnamAds, gangnamNightlife, gangnamNpc, gangnamStreet, gangnamBrt, liveBus, // [corridor] [schoolzone] [playgrounds] [streetlights] [gangnam-night] [gangnam-nightlife] [gangnam-npc] [gangnam-street] [gangnam-brt] [livebus] [namsan]
+ready: bootReady, region, tower, renderer, corridor, namsan: corridor?.namsan || null, hangang: corridor?.hangang || null, myeongdong: corridor?.myeongdong || null, seongsu: corridor?.seongsu || null, schoolZone: corridor?.schoolZone || null, playgrounds, streetlights, pangyoLamps, migeumLamps, gangnamNight, gangnamAds, gangnamNightlife, gangnamNpc, gangnamStreet, gangnamBrt, liveBus, // [corridor] [schoolzone] [playgrounds] [streetlights] [gangnam-night] [gangnam-nightlife] [gangnam-npc] [gangnam-street] [gangnam-brt] [livebus] [namsan]
   placeCaption: (x, z) => placeCaption(x, z, placeList, corridor?.bounds?.islands), // [gangnam-night]
 
   bungeo, // [bungeo]

@@ -75,6 +75,10 @@ export const ZONES = Object.freeze([
   'cheonggyesan-station',          // 131
   'cheonggyesan-station/p-shin-0', // 132
   'cheonggyesan-station/p-shin-1', // 133
+  // [seongsu] 성수 (2호선, 2026-11-21). 덧붙이기만: 134 대합실, 135·136 2호선 방면 0/1. ?seongsu=0 이어도 슬롯은 그대로. 열차 구역은 기존 l2 슬롯.
+  'seongsu-station',          // 134
+  'seongsu-station/p-l2-0',   // 135
+  'seongsu-station/p-l2-1',   // 136
 ]);
 const SLOT = new Map(ZONES.map((z, i) => [z, i]));
 
