@@ -6,7 +6,7 @@
 //   낮에는 숨기고, 해 질 녘/아침에 evening.js 페이드를 따라 켜지고 꺼진다.
 import * as THREE from 'three';
 import { createNightFade } from '../world/nightLights.js';
-import { unpackTributeDots, TRIBUTE_DOT_COUNT } from './chooTributeDots.js';
+import { unpackTributeDots, TRIBUTE_DOT_COUNT, TRIBUTE_LINE2_WIDTH } from './chooTributeDots.js';
 
 export const TRIBUTE_ENABLED = true;
 export const TRIBUTE_UNTIL_MS = Date.parse('2026-11-30T23:59:59+09:00');
@@ -45,11 +45,12 @@ function glowTexture() {
   cv.width = cv.height = 64;
   const x = cv.getContext('2d');
   const g = x.createRadialGradient(32, 32, 0, 32, 32, 32);
-  g.addColorStop(0, 'rgba(255,255,245,1)');
-  g.addColorStop(0.16, 'rgba(255,230,160,0.9)');
-  g.addColorStop(0.4, 'rgba(255,180,80,0.22)');
-  g.addColorStop(0.7, 'rgba(255,150,50,0.05)');
-  g.addColorStop(1, 'rgba(255,120,30,0)');
+  // 작고 밝은 원반. 꼬리를 짧게 해서 이웃 점과 안 섞이게
+  g.addColorStop(0.0, 'rgba(255,255,255,1)');
+  g.addColorStop(0.28, 'rgba(255,255,250,1)');
+  g.addColorStop(0.5, 'rgba(255,245,210,0.55)');
+  g.addColorStop(0.7, 'rgba(255,230,170,0)');
+  g.addColorStop(1.0, 'rgba(0,0,0,0)');
   x.fillStyle = g;
   x.fillRect(0, 0, 64, 64);
   const t = new THREE.CanvasTexture(cv);
@@ -67,12 +68,12 @@ const VS = /* glsl */ `
   #include <common>
   #include <logdepthbuf_pars_vertex>
   void main() {
-    float tw = 0.74 + 0.26 * sin(uTime * 2.3 + aPhase);
+    float tw = 0.90 + 0.10 * sin(uTime * 2.1 + aPhase);
     vA = aAlpha * uNight * tw;
     vC = color;
     vec4 mv = modelViewMatrix * vec4(position, 1.0);
     gl_Position = projectionMatrix * mv;
-    gl_PointSize = vA > 0.01 ? clamp(uSize * uScale / max(-mv.z, 1.0), 1.4, 36.0) : 0.0;
+    gl_PointSize = vA > 0.01 ? clamp(uSize * uScale / max(-mv.z, 1.0), 2.0, 9.0) : 0.0;
     #include <logdepthbuf_vertex>
   }
 `;
@@ -87,7 +88,7 @@ const FS = /* glsl */ `
     vec4 s = texture2D(uGlow, gl_PointCoord);
     float g = s.a * s.r;
     if (g < 0.01 || vA < 0.01) discard;
-    gl_FragColor = vec4(vC * (g * vA * 1.15), 1.0);
+    gl_FragColor = vec4(vC * (g * vA * 2.15), 1.0);
   }
 `;
 
@@ -97,7 +98,7 @@ function makeMat(tex, size) {
       uTime: { value: 0 },
       uNight: { value: 0 },
       uSize: { value: size },
-      uScale: { value: 720 },
+      uScale: { value: 600 },
       uGlow: { value: tex },
     },
     vertexShader: VS,
@@ -118,14 +119,15 @@ function makeFormation(tex) {
   const col = new Float32Array(n * 3);
   const phase = new Float32Array(n);
   const alpha = new Float32Array(n);
-  const TEXT = [1.0, 0.88, 0.55];
-  const GLOVE = [1.0, 0.64, 0.26];
+  const TEXT = [1.0, 0.95, 0.82];
+  const GLOVE = [1.0, 0.18, 0.10];
+  const CUFF = [1.0, 1.0, 0.96];
   for (let i = 0; i < n; i++) {
     pos[i * 3] = x[i];
     pos[i * 3 + 1] = y[i];
-    pos[i * 3 + 2] = (hash01(i, 3) - 0.5) * 2.4;
-    const c = kind[i] ? GLOVE : TEXT;
-    const jig = 0.92 + hash01(i, 9) * 0.16;
+    pos[i * 3 + 2] = (hash01(i, 3) - 0.5) * 1.6;
+    const c = kind[i] === 2 ? CUFF : kind[i] === 1 ? GLOVE : TEXT;
+    const jig = 0.94 + hash01(i, 9) * 0.10;
     col[i * 3] = c[0] * jig;
     col[i * 3 + 1] = c[1] * jig;
     col[i * 3 + 2] = c[2] * jig;
@@ -137,7 +139,7 @@ function makeFormation(tex) {
   geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
   geo.setAttribute('aPhase', new THREE.BufferAttribute(phase, 1));
   geo.setAttribute('aAlpha', new THREE.BufferAttribute(alpha, 1));
-  const mat = makeMat(tex, 6.5);
+  const mat = makeMat(tex, 3.7);
   const pts = new THREE.Points(geo, mat);
   pts.name = 'choo-tribute-drones';
   pts.frustumCulled = false;
@@ -166,12 +168,13 @@ function makeFireworks(tex) {
   pts.renderOrder = 5;
   pts.visible = false;
   let live = 0;
-  function burst() {
+  function burst(opts = {}) {
     // 글러브 위·글자 사이 쪽에서 작게 터짐
-    const cx = -40 + (Math.random() - 0.5) * 90;
-    const cy = 18 + (Math.random() - 0.5) * 28;
-    const cz = (Math.random() - 0.5) * 6;
-    const pal = [[1, 0.85, 0.45], [1, 0.7, 0.25], [1, 0.95, 0.8], [1, 0.55, 0.2]];
+    // 글자 위쪽, 글자를 가리지 않게. burst({ x, y }) 로 위치 지정 가능
+    const cx = opts.x != null ? opts.x : 0;
+    const cy = opts.y != null ? opts.y : 58;
+    const cz = opts.z != null ? opts.z : 0;
+    const pal = [[1, 0.92, 0.55], [1, 0.55, 0.2], [1, 1, 0.92], [1, 0.25, 0.12]];
     const c = pal[(Math.random() * pal.length) | 0];
     const c2 = pal[(Math.random() * pal.length) | 0];
     const sp = 22 + Math.random() * 16;
@@ -180,7 +183,7 @@ function makeFireworks(tex) {
       const v = sp * (0.7 + Math.random() * 0.4);
       pos[i * 3] = cx; pos[i * 3 + 1] = cy; pos[i * 3 + 2] = cz;
       vel[i * 3] = Math.cos(a) * s * v;
-      vel[i * 3 + 1] = u * v * 0.85 + 4;
+      vel[i * 3 + 1] = u * v * 0.85 + 10;
       vel[i * 3 + 2] = Math.sin(a) * s * v;
       const cc = i % 3 ? c : c2;
       col[i * 3] = cc[0]; col[i * 3 + 1] = cc[1]; col[i * 3 + 2] = cc[2];
@@ -246,7 +249,25 @@ export function createChooTribute({ scene }) {
   let nextBurst = 40 + Math.random() * 20; // 첫 불꽃은 40~60초 뒤, 스크린샷은 글자가 먼저
   let allowed = tributeWanted();
 
-  let ticks = 0;
+
+  function isCompactView(camera) {
+    const aspect = camera.aspect || (typeof innerWidth === 'number' ? innerWidth / innerHeight : 1.6);
+    const h = typeof innerHeight === 'number' ? innerHeight : 800;
+    return aspect >= 1.85 || h <= 430;
+  }
+
+  /** 긴 줄이 데스크톱 화면 폭의 ~46%, 모바일 가로의 ~58% 가 되도록 배율. */
+  function fitScale(camera) {
+    const aspect = camera.aspect || (typeof innerWidth === 'number' ? innerWidth / innerHeight : 16 / 9);
+    const vFov = ((camera.fov || 55) * Math.PI) / 180;
+    const hFov = 2 * Math.atan(Math.tan(vFov * 0.5) * aspect);
+    const frac = isCompactView(camera) ? 0.56 : 0.48;
+    const dist = Math.hypot(DIST, HEIGHT);
+    const want = 2 * dist * Math.tan(hFov * frac * 0.5);
+    return want / TRIBUTE_LINE2_WIDTH;
+  }
+
+  let ticks = 0; let lastScale = 1;
   function place(camera, dt) {
     ticks++;
     camera.updateMatrixWorld?.();
@@ -264,10 +285,13 @@ export function createChooTribute({ scene }) {
       else smooth.normalize();
     }
     inited = true;
+    lastScale = fitScale(camera);
+    group.scale.setScalar(lastScale);
     const bob = Math.sin(time * 0.62) * BOB;
+    const elev = isCompactView(camera) ? 0.88 : 1; // 모바일은 조금 낮춰 상단 버튼에 안 가리게
     group.position.set(
       camera.position.x + smooth.x * DIST,
-      camera.position.y + HEIGHT + bob,
+      camera.position.y + HEIGHT * elev + bob,
       camera.position.z + smooth.z * DIST,
     );
     look.set(camera.position.x, group.position.y, camera.position.z);
@@ -323,8 +347,10 @@ export function createChooTribute({ scene }) {
       pos: group.position.toArray(),
       fwd: smooth.toArray(),
       ticks,
+      scale: lastScale,
+      line2: TRIBUTE_LINE2_WIDTH,
     };
   }
 
-  return { update, dispose, burst: () => fw.burst(), stats, group, wanted: tributeWanted };
+  return { update, dispose, burst: (opts) => fw.burst(opts || {}), stats, group, wanted: tributeWanted };
 }
