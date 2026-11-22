@@ -73,6 +73,7 @@ import { addStrayCats } from './world/strayCats.js';
 import { createRoadsterShow } from './events/roadsterShow.js';
 import { createTowerAddon } from './entities/towerAddon.js';
 import { createLaunchShow } from './events/launchShow.js';
+import { createChooTribute } from './events/chooTribute.js'; // [choo-tribute]
 import { createTrucks } from './entities/trucks.js';
 import { createAdminBike } from './entities/adminCruiser/adminBike.js'; // [bike]
 import { createRoadBike, ROADBIKE_GIFT_ID, ROADBIKE_WHITE_GIFT_ID, ROADBIKE_WHITE_VEH_ID } from './entities/roadBike/roadBike.js'; // [roadbike]
@@ -642,6 +643,7 @@ const atmosphere = createAtmosphere({
 });
 npcs.setCrowdLevel(atmosphere.state.rush || 'normal');
 let rushNow = atmosphere.state.rush || 'normal';
+const tribute = createChooTribute({ scene }); // [choo-tribute] 밤하늘 드론쇼. ?tribute=0 숨김 · ?tribute=1 강제
 
 // --- 멀티플레이 프레즌스(지금은 목업, ?ws=URL 이면 실서버) ---
 const emoteFx = new EmoteFX(scene, document.getElementById('overlay'), camera);
@@ -3098,6 +3100,7 @@ function frame() {
   atmosphere.update(dt, camera);
   roadster?.update(dt); // [roadster] 시네마틱 카메라가 켜져 있으면 camera/sun.target 덮어씀
   launch?.update(dt); // [launch] 5분 주기 발사·핫스테이징·젓가락 캐치 쇼
+  tribute?.update(dt, camera, cam.mode); // [choo-tribute] 카메라 전방 하늘, 밤만
   sun.position.copy(sun.target.position).addScaledVector(atmosphere.sunDir, 500);
   // 원점에 고정된 r=3000 하늘은 남산(약 23 km) 밖에서 보이지 않는다. 카메라를 따라가게 한다.
   if (skyDome) skyDome.position.copy(camera.position);
@@ -3144,7 +3147,7 @@ ready: bootReady, region, tower, renderer, corridor, namsan: corridor?.namsan ||
   placeCaption: (x, z) => placeCaption(x, z, placeList, corridor?.bounds?.islands), // [gangnam-night]
 
   bungeo, // [bungeo]
-  launch, roadster, trucks, bike: adminBike, giftRides, inventory, data, world, npcs, transit, camera, cam, ov, setMode, terrain, taxis, jzTraffic, police, weather: atmosphere, umbrellas, dogPark, strayCats, // [terrain] [taxi] [roadster] [tower] [launch] [truck] [bike] [roadbike] [inventory]
+  launch, tribute, roadster, trucks, bike: adminBike, giftRides, inventory, data, world, npcs, transit, camera, cam, ov, setMode, terrain, taxis, jzTraffic, police, weather: atmosphere, umbrellas, dogPark, strayCats, // [terrain] [taxi] [roadster] [tower] [launch] [truck] [bike] [roadbike] [inventory]
   get player() { return player; },
   get arriving() { return arriving; }, // [arrivefix]
   gateEnter(at) { if (!joined) return; setPassportActive(true); pauseWorldSession(); handleGateEnter(region.id, at ? { at } : undefined); }, // [arrivefix] 테스트용: 게임 안 🌏 → 역 고르기와 같은 흐름
