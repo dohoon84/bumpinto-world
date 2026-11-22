@@ -1,3 +1,4 @@
+import { createRoadClearance } from '../roadClearance.js';
 // [seongsu] 성수동 — 실제 OSM 길·필지·2호선 고가철도 + 하우스 노웨어 서울(젠틀몬스터 성수 사옥).
 //   세계관: 정자·명동과 같은 단색 Lambert · 단순 매스 · 한글 간판. 고해상도는 HQ 형상·전시물에만 쓴다.
 //   리전은 정자 월드의 섬(명동·남산·강남과 같은 패턴): 별도 멀티플레이 서버/DB가 필요 없다.
@@ -168,6 +169,7 @@ export async function createSeongsuAsync({ scene, overlay, terrain, data, mobile
   }
   // 길 + 보도 + 중앙선 (OSM 이름·폭·차로). 골목은 회갈색 포장, 큰 길은 짙은 회색.
   const roads = (data.ways || []).filter((w) => w.pts?.length >= 2);
+  const roadClearSegs = [], buildingFix = [];
   const roadGrid = new CellGrid(24), rb = new GeoBuf({ uv: false, color: true }), paint = new GeoBuf({ uv: false, color: true });
   const paths = [];
   const named = new Set();
@@ -275,7 +277,7 @@ export async function createSeongsuAsync({ scene, overlay, terrain, data, mobile
       const a = w.pts[i - 1], b = w.pts[i], mx = (a[0] + b[0]) / 2, mz = (a[1] + b[1]) / 2;
       if (hqSite(mx, mz, 0) || mz > A.z1 + 4 || waterAt(mx, mz, -2)) { if (cur.length > 1) pieces.push(cur); cur = []; continue; } // 2구간(합수부)·물 위 길은 그리지 않는다
       if (!cur.length) cur.push(a); cur.push(b);
-      const r = w.w / 2; roadGrid.add({ a, b, r, w }, Math.min(a[0], b[0]) - r - 4, Math.min(a[1], b[1]) - r - 4, Math.max(a[0], b[0]) + r + 4, Math.max(a[1], b[1]) + r + 4);
+      const r = w.w / 2; roadClearSegs.push({ a, b, r, w }); roadGrid.add({ a, b, r, w }, Math.min(a[0], b[0]) - r - 4, Math.min(a[1], b[1]) - r - 4, Math.max(a[0], b[0]) + r + 4, Math.max(a[1], b[1]) + r + 4);
     }
     if (cur.length > 1) pieces.push(cur);
     for (const pts of pieces) {
@@ -293,6 +295,7 @@ export async function createSeongsuAsync({ scene, overlay, terrain, data, mobile
   for (const [buf, name] of [[rb, 'seongsu-roads'], [paint, 'seongsu-road-paint']]) { const g = buf.build(); if (g) { const m = new THREE.Mesh(g, mat); m.name = name; root.add(m); } }
   const roadAt = (x, z, pad = 0) => roadGrid.query(x, z).find((s) => distToSeg(x, z, s.a[0], s.a[1], s.b[0], s.b[1]) <= s.r + pad)?.w || null;
 
+  const roadClear = createRoadClearance(roadClearSegs.filter((s) => !PED.has(s.w.k) || s.w.k === 'living_street'));
   // [seongsu-elevated] 역 틀 (건물 거르기에도 씀: OSM 역 건물 윤곽은 고가역 모델이 대신)
   const st = data.station;
   let sr = 0, sd = Infinity;
@@ -306,10 +309,16 @@ export async function createSeongsuAsync({ scene, overlay, terrain, data, mobile
   // [seongsu-v2] 넓어진 섬: 450m 칸마다 병합 메시 하나씩 (칸 단위 frustum culling)
   const BNX = Math.max(1, Math.round((A.x1 - A.x0) / 450)), BNZ = Math.max(1, Math.round((A.z1 - A.z0) / 450));
   const bldGrid = new CellGrid(24), blds = [], buckets = Array.from({ length: BNX * BNZ }, () => []);
-  for (const b of data.buildings || []) {
+  for (let b of data.buildings || []) {
     if (!b.o || b.o.length < 3 || b.part || b.k === 'roof') continue;
     const cx = b.o.reduce((s, p) => s + p[0], 0) / b.o.length, cz = b.o.reduce((s, p) => s + p[1], 0) / b.o.length;
     if (!inApron(cx, cz) || hqSite(cx, cz, 2) || inStationBox(cx, cz) || b.o.some(([x, z]) => inStationBox(x, z, -1.5)) || b.o.some(([x, z]) => { const [lx, lz] = local(x, z); return Math.abs(lx) < 22 && Math.abs(lz) < 18; })) continue;
+    // [v4c] OSM 실제 윤곽도 게임 길 폭과 다를 수 있다. 차도+0.35 m를 건물/충돌/간판에서 같이 잘라 냄 (fill 포함). 고가 위 건물은 제외.
+    if ((b.mh || 0) < 2.5 && !['train_station', 'station', 'bridge', 'canopy', 'carport', 'transportation'].includes(b.k)) {
+      const cl = roadClear.clip(b.o), a0 = area(b.o);
+      if (cl.changed && cl.removedArea > a0 * 0.45 && a0 > 400) buildingFix.push({ id: b.id, fill: !!b.f, at: [+cx.toFixed(1), +cz.toFixed(1)], action: 'keep-overpass', removedArea: cl.removedArea, roads: cl.roads });
+      else if (cl.changed && cl.removedArea >= 0.3) { const keep = cl.ring && area(cl.ring) >= 8; buildingFix.push({ id: b.id, fill: !!b.f, at: [+cx.toFixed(1), +cz.toFixed(1)], action: keep ? 'trim' : 'remove', removedArea: cl.removedArea, roads: cl.roads }); if (!keep) continue; b = { ...b, o: cl.ring, holes: cl.holes, f: 0 }; }
+    }
     const ht = b.h || (b.lv ? b.lv * 3.2 + 0.6 : (b.k === 'industrial' || b.k === 'warehouse') ? 7 + hash01(b.id, 9) * 3 : 6 + Math.floor(hash01(b.id, 7) * 4) * 3.2);
     const top = Math.max(4, Math.min(120, ht)), base = b.mh || 0.02;
     const xs = b.o.map((p) => p[0]), zs = b.o.map((p) => p[1]), bb = [Math.min(...xs), Math.min(...zs), Math.max(...xs), Math.max(...zs)];
@@ -317,7 +326,7 @@ export async function createSeongsuAsync({ scene, overlay, terrain, data, mobile
     blds.push(rec); if (base < 2.5) bldGrid.add(rec, ...bb);
     const ix = Math.min(BNX - 1, Math.max(0, Math.floor((cx - A.x0) / (A.x1 - A.x0) * BNX))), iz = Math.min(BNZ - 1, Math.max(0, Math.floor((cz - A.z0) / (A.z1 - A.z0) * BNZ)));
     if (waterAt(cx, cz)) continue;
-    buckets[ix + iz * BNX].push({ o: b.o, h: top, mh: base, tint: b.tint, k: b.k || (hash01(b.id, 3) < 0.6 ? 'commercial' : 'industrial') });
+    buckets[ix + iz * BNX].push({ o: b.o, holes: b.holes, h: top, mh: base, tint: b.tint, k: b.k || (hash01(b.id, 3) < 0.6 ? 'commercial' : 'industrial') });
   }
   // [seongsu-v3] 거리 소품·간판·외벽·다리 난간 칸 (300m): 카메라에서 멀면 이 프레임만 숨김 (big = 역·다리처럼 멀리서도 보이는 것)
   const DET_CELL = 300, detailFar = [];
@@ -453,7 +462,7 @@ export async function createSeongsuAsync({ scene, overlay, terrain, data, mobile
       const nx = -dz / L, nz = dx / L;
       for (let s = 12; s < L - 3; s += 28) for (const sg of [-1, 1]) {
         const x = a[0] + dx * s / L + nx * sg * (w.w / 2 + 2.2), z = a[1] + dz * s / L + nz * sg * (w.w / 2 + 2.2);
-        if (!inApron(x, z, -4) || hqSite(x, z, 2) || bldAt(x, z, 1.1) || roadAt(x, z, -0.2) || waterAt(x, z, 4)) continue;
+        if (!inApron(x, z, -4) || hqSite(x, z, 2) || bldAt(x, z, 1.1) || roadAt(x, z, 0.35) || waterAt(x, z, 4)) continue;
         if (treeSpots.some((p) => Math.hypot(p[0] - x, p[1] - z) < 12)) continue;
         treeSpots.push([x, z]); props.cyl('paint', 0.09, 0.15, 3.1, { x, y: 1.55, z, color: '#6e5943' }, 5); props.add('leaf', new THREE.IcosahedronGeometry(1.55, 0), { x, y: 4.0, z, sy: 1.2, color: ['#77934a', '#97a548', '#6f8b48'][treeSpots.length % 3] });
         if (treeSpots.length % 2 === 0) { const lx = x + nx * 0.6, lz = z + nz * 0.6; props.cyl('metal', 0.065, 0.09, 7.2, { x: lx, y: 3.6, z: lz }, 6); props.box('lamp', 0.8, 0.12, 0.25, { x: lx, y: 7.15, z: lz, ry: Math.atan2(dx, dz), color: '#f5e2b2' }); }
@@ -465,13 +474,17 @@ export async function createSeongsuAsync({ scene, overlay, terrain, data, mobile
   const nearSt = (x, z, r) => Math.hypot(x - stX, z - stZ) < r;
   const nearHot = (x, z, r) => nearSt(x, z, r) || Math.hypot(x - H.x, z - H.z) < r;
   const zb = new GeoBuf({ uv: false, color: true }), WHITE = hex3('#f4f3ee');
-  const roadDir = (x, z) => { let best = null; for (const r of roadGrid.query(x, z)) { if (!CAR.has(r.w.k)) continue; const d = distToSeg(x, z, r.a[0], r.a[1], r.b[0], r.b[1]); if (!best || d < best.d) best = { d, r }; } if (!best) return null; const { a, b } = best.r, L = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1; return { ux: (b[0] - a[0]) / L, uz: (b[1] - a[1]) / L, w: best.r.w.w, d: best.d }; };
+  const roadDir = (x, z) => { let best = null; for (const r of roadGrid.query(x, z)) { if (!CAR.has(r.w.k)) continue; const d = distToSeg(x, z, r.a[0], r.a[1], r.b[0], r.b[1]); if (!best || d < best.d) best = { d, r }; } if (!best) return null; const { a, b } = best.r, L = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1, ux = (b[0] - a[0]) / L, uz = (b[1] - a[1]) / L, t = Math.max(0, Math.min(L, (x - a[0]) * ux + (z - a[1]) * uz)), fx = a[0] + ux * t, fz = a[1] + uz * t; return { ux, uz, w: best.r.w.w, d: best.d, fx, fz, side: ((x - fx) * -uz + (z - fz) * ux) >= 0 ? 1 : -1 }; };
+  // [v4c] 길 위 소품 금지: 차가 다니는 길(보행 전용 길 제외) 리본 반폭 + pad 안이면 길 위. all=1 이면 보행로까지.
+  const VEH = (w) => !PED.has(w.k) || w.k === 'living_street';
+  const onRoad = (x, z, pad = 0, all = false) => roadGrid.query(x, z).some((s) => (all || VEH(s.w)) && distToSeg(x, z, s.a[0], s.a[1], s.b[0], s.b[1]) <= s.r + pad);
+  const roadFix = []; // stats().roadClear: 옮기거나 뺀 소품
   const zebras = [];
   const zebra = (x, z, ux, uz, w, sig) => {
     if (zebras.some((q) => Math.hypot(q[0] - x, q[1] - z) < 7)) return; zebras.push([x, z]);
     const nx = -uz, nz = ux, y = 0.078;
     for (let s2 = -w / 2 + 0.6; s2 < w / 2 - 0.3; s2 += 1.0) { const cx = x + nx * s2, cz = z + nz * s2, ax = ux * 1.5, az = uz * 1.5, bx = nx * 0.25, bz = nz * 0.25; zb.quad([cx - ax - bx, y, cz - az - bz], [cx - ax + bx, y, cz - az + bz], [cx + ax + bx, y, cz + az + bz], [cx + ax - bx, y, cz + az - bz], undefined, WHITE); }
-    if (sig) for (const sg of [-1, 1]) { const px = x + nx * sg * (w / 2 + 1.2) + ux * 2.2 * sg, pz = z + nz * sg * (w / 2 + 1.2) + uz * 2.2 * sg; props.cyl('metal', 0.07, 0.09, 4.2, { x: px, y: 2.1, z: pz, color: '#5d6166' }, 6); props.box('paint', 0.36, 1.0, 0.3, { x: px, y: 3.7, z: pz, ry: Math.atan2(ux, uz), color: '#2a2c2e' }); props.box('lamp', 0.24, 0.24, 0.06, { x: px + ux * 0.16 * -sg, y: 3.45, z: pz + uz * 0.16 * -sg, ry: Math.atan2(ux, uz), color: '#3fd26a' }); }
+    if (sig) for (const sg of [-1, 1]) { const px = x + nx * sg * (w / 2 + 1.2) + ux * 2.2 * sg, pz = z + nz * sg * (w / 2 + 1.2) + uz * 2.2 * sg; if (onRoad(px, pz, 0.25)) { roadFix.push({ kind: 'signal', at: [+px.toFixed(1), +pz.toFixed(1)], to: null }); continue; } props.cyl('metal', 0.07, 0.09, 4.2, { x: px, y: 2.1, z: pz, color: '#5d6166' }, 6); props.box('paint', 0.36, 1.0, 0.3, { x: px, y: 3.7, z: pz, ry: Math.atan2(ux, uz), color: '#2a2c2e' }); props.box('lamp', 0.24, 0.24, 0.06, { x: px + ux * 0.16 * -sg, y: 3.45, z: pz + uz * 0.16 * -sg, ry: Math.atan2(ux, uz), color: '#3fd26a' }); }
   };
   for (const f of data.furn || []) if (f[2] === 'x') { const r = roadDir(f[0], f[1]); if (r && r.d < 3 && !waterAt(f[0], f[1])) zebra(f[0], f[1], r.ux, r.uz, r.w, nearHot(f[0], f[1], 420)); }
   { // 역·사옥 450m 안 큰길 교차로: 팔마다 횡단보도 + 신호등
@@ -486,10 +499,19 @@ export async function createSeongsuAsync({ scene, overlay, terrain, data, mobile
     }
   }
   // 버스정류장 (OSM bus_stop) · 따릉이 (bicycle_rental)
-  for (const f of data.furn || []) {
+  for (let f of data.furn || []) {
     if (f[2] !== 'bus' && f[2] !== 'bike') continue;
-    const r = roadDir(f[0], f[1]); if (!r || waterAt(f[0], f[1]) || bldAt(f[0], f[1], 1.5)) continue;
-    const ry = Math.atan2(r.ux, r.uz), ox = -r.uz, oz = r.ux;
+    const r = roadDir(f[0], f[1]); if (!r || waterAt(f[0], f[1])) continue;
+    // [v4c] OSM 정류장 점은 차도 가운데·가장자리에 찍힌 경우가 많다 → 가장 가까운 차도 가장자리 밖(인도)으로 옮기고, 안 되면 뺀다
+    let fx = f[0], fz = f[1]; const need = f[2] === 'bus' ? 1.3 : 0.6;
+    if (onRoad(fx, fz, need)) {
+      let ok = null;
+      for (const side of [r.side, -r.side]) { const off = r.w / 2 + need + 0.4, qx = r.fx - r.uz * side * off, qz = r.fz + r.ux * side * off; if (!onRoad(qx, qz, need) && !bldAt(qx, qz, 1.2) && !waterAt(qx, qz)) { ok = [qx, qz]; break; } }
+      roadFix.push({ kind: f[2], at: [f[0], f[1]], to: ok && ok.map((v) => +v.toFixed(1)) }); if (!ok) continue; [fx, fz] = ok;
+    }
+    if (bldAt(fx, fz, 1.5)) continue;
+    const ry = Math.atan2(r.ux, r.uz), sd = ((fx - r.fx) * -r.uz + (fz - r.fz) * r.ux) >= 0 ? 1 : -1, ox = -r.uz * sd, oz = r.ux * sd; // ox/oz = 길에서 멀어지는 쪽 (벽·의자가 뒤)
+    f = [fx, fz, f[2]];
     if (f[2] === 'bus') {
       props.box('paint', 0.12, 2.4, 4.2, { x: f[0] + ox * 0.9, y: 1.2, z: f[1] + oz * 0.9, ry, color: '#a8c6d4' });
       props.box('paint', 1.9, 0.12, 4.6, { x: f[0], y: 2.5, z: f[1], ry, color: '#2f5f8a' });
@@ -523,9 +545,20 @@ export async function createSeongsuAsync({ scene, overlay, terrain, data, mobile
   // 역 출구 옆 가판대·편의점 키오스크, 방향 안내판, 큰길 볼라드·화분
   for (const e of data.exits || []) {
     const r = roadDir(e.x, e.z); if (!r) continue; const ox = -r.uz, oz = r.ux, sg = ((e.x - stX) * ox + (e.z - stZ) * oz) > 0 ? 1 : -1, ry = Math.atan2(r.ux, r.uz);
-    for (const k of [-1, 1]) { const kx = e.x + r.ux * k * 9 + ox * sg * 3.2, kz = e.z + r.uz * k * 9 + oz * sg * 3.2; if (bldAt(kx, kz, 1)) continue;
+    const kiosks = [];
+    for (const k of [-1, 1]) {
+      // [v4c] 출구에서 길 따라 9 m 자리가 교차로의 다른 큰길(성수이로) 차도·횡단보도 위에 떨어지던 것 → 인도 위 빈자리만 (길 따라 9→6→13→17 m, 길 반대쪽 옆도), 없으면 뺀다
+      const k0x = e.x + r.ux * k * 9 + ox * sg * 3.2, k0z = e.z + r.uz * k * 9 + oz * sg * 3.2; let kx = null, kz = null;
+      const clear = (qx, qz) => !onRoad(qx, qz, 2.1, true) && !zebras.some((q) => Math.hypot(q[0] - qx, q[1] - qz) < 5);
+      if (clear(k0x, k0z)) { if (!bldAt(k0x, k0z, 1)) { kx = k0x; kz = k0z; } else continue; } // 종전 자리가 길 밖이면 그대로 (종전처럼 건물이면 뺌)
+      for (const sd of [sg, -sg]) for (const al of [9, 6, 13, 17, 22]) for (const off of [3.2, 4.4, 5.6, 2.4]) { if (kx != null) break; const qx = e.x + r.ux * k * al + ox * sd * off, qz = e.z + r.uz * k * al + oz * sd * off;
+        if (!clear(qx, qz) || bldAt(qx, qz, 1.0) || zebras.some((q) => Math.hypot(q[0] - qx, q[1] - qz) < 5) || kiosks.some((q) => Math.hypot(q[0] - qx, q[1] - qz) < 4.5) || Math.hypot(qx - e.x, qz - e.z) < 3.5 || waterAt(qx, qz)) continue; kx = qx; kz = qz; }
+      if (kx == null || Math.hypot(kx - k0x, kz - k0z) > 0.01) roadFix.push({ kind: k > 0 ? 'kiosk-green' : 'kiosk-cream', exit: e.ref, at: [+k0x.toFixed(1), +k0z.toFixed(1)], onRoad: onRoad(k0x, k0z, 1.4), to: kx == null ? null : [+kx.toFixed(1), +kz.toFixed(1)] });
+      if (kx == null) continue; kiosks.push([kx, kz]);
       props.box('paint', 2.2, 2.5, 2.8, { x: kx, y: 1.25, z: kz, ry, color: k > 0 ? '#2f7d43' : '#e9e4d8' }); props.box('paint', 2.6, 0.12, 3.2, { x: kx, y: 2.6, z: kz, ry, color: k > 0 ? '#f2c230' : '#c94f3d' }); props.box('lamp', 0.05, 0.8, 2.2, { x: kx - ox * sg * 1.12, y: 1.6, z: kz - oz * sg * 1.12, ry, color: '#fff3d6' }); }
-    const px = e.x + r.ux * 4 + ox * sg * 1.8, pz = e.z + r.uz * 4 + oz * sg * 1.8; props.cyl('metal', 0.06, 0.06, 3.0, { x: px, y: 1.5, z: pz, color: '#4a4f55' }, 6); props.box('paint', 1.5, 0.5, 0.06, { x: px, y: 2.7, z: pz, ry: ry + Math.PI / 2, color: '#00a84d' }); props.box('paint', 1.5, 0.35, 0.06, { x: px, y: 2.25, z: pz, ry: ry + Math.PI / 2, color: '#1e5fae' });
+    let px = e.x + r.ux * 4 + ox * sg * 1.8, pz = e.z + r.uz * 4 + oz * sg * 1.8;
+    if (onRoad(px, pz, 0.8)) { const q = [e.x - r.ux * 4 + ox * sg * 1.8, e.z - r.uz * 4 + oz * sg * 1.8]; const ok = !onRoad(q[0], q[1], 0.8) && !bldAt(q[0], q[1], 0.8); roadFix.push({ kind: 'exit-sign', exit: e.ref, at: [+px.toFixed(1), +pz.toFixed(1)], to: ok ? q.map((v) => +v.toFixed(1)) : null }); if (!ok) continue; [px, pz] = q; }
+    props.cyl('metal', 0.06, 0.06, 3.0, { x: px, y: 1.5, z: pz, color: '#4a4f55' }, 6); props.box('paint', 1.5, 0.5, 0.06, { x: px, y: 2.7, z: pz, ry: ry + Math.PI / 2, color: '#00a84d' }); props.box('paint', 1.5, 0.35, 0.06, { x: px, y: 2.25, z: pz, ry: ry + Math.PI / 2, color: '#1e5fae' });
   }
   for (const w of roads) {
     if (!CAR.has(w.k) || w.w < 12 || brSet.has(w.id)) continue;
@@ -533,7 +566,7 @@ export async function createSeongsuAsync({ scene, overlay, terrain, data, mobile
       const a = w.pts[i - 1], c = w.pts[i], dx = c[0] - a[0], dz = c[1] - a[1], L = Math.hypot(dx, dz); if (L < 6) continue;
       const nx = -dz / L, nz = dx / L;
       for (let s2 = 3; s2 < L - 3; s2 += 4) { const x0 = a[0] + dx * s2 / L, z0 = a[1] + dz * s2 / L; if (!nearSt(x0, z0, 230)) continue;
-        for (const sg of [-1, 1]) { const x = x0 + nx * sg * (w.w / 2 + 0.45), z = z0 + nz * sg * (w.w / 2 + 0.45); if (bldAt(x, z, 0.5) || zebras.some((q) => Math.hypot(q[0] - x, q[1] - z) < w.w / 2 + 3)) continue;
+        for (const sg of [-1, 1]) { const x = x0 + nx * sg * (w.w / 2 + 0.45), z = z0 + nz * sg * (w.w / 2 + 0.45); if (onRoad(x, z, 0.2) || bldAt(x, z, 0.5) || zebras.some((q) => Math.hypot(q[0] - x, q[1] - z) < w.w / 2 + 3)) continue;
           if ((s2 / 4 | 0) % 6 === 0) { props.box('paint', 1.1, 0.55, 0.7, { x: x + nx * sg * 0.4, y: 0.28, z: z + nz * sg * 0.4, ry: Math.atan2(dx, dz), color: '#8f8a80' }); props.add('leaf', new THREE.IcosahedronGeometry(0.45, 0), { x: x + nx * sg * 0.4, y: 0.85, z: z + nz * sg * 0.4, color: '#6f9a4a' }); }
           else props.cyl('metal', 0.09, 0.09, 0.85, { x, y: 0.43, z, color: '#4b5056' }, 6); }
       }
@@ -713,7 +746,7 @@ export async function createSeongsuAsync({ scene, overlay, terrain, data, mobile
       if (Math.hypot(lx, lz) < 135) hqNpc?.update(dt, lastP.x, lastP.z); else hqNpc?.sleep();
     },
     setNight(on) { night = !!on; hq.setNight(night); },
-    stats(nx, nz, nr = 400) { return { decksNear: nx == null ? undefined : decks.filter((d) => d.pts.some((p) => Math.hypot(p[0] - nx, p[1] - nz) < nr)).map((d) => ({ id: d.w.id, n: d.w.n, w: d.w.w, join: d.join || null, pts: d.pts.map((p) => p.map((v) => +v.toFixed(1))), ys: d.ys.map((v) => +v.toFixed(2)) })), joinProfiles: decks.filter((d) => d.join).map((d) => ({ name: d.join, w: d.w.w, ground: d.ground, pts: d.pts, ys: d.ys })), signAt: signSpots2, heroAt: heroShops.map((h) => [Math.round(h.x), Math.round(h.z), h.type, +h.nx.toFixed(3), +h.nz.toFixed(3)]), heroShops: heroShops.length, clad, zebras: zebras.length, decks: decks.length, buckets: BNX * BNZ, fill: blds.filter((b) => b.f).length, buildings: blds.length, ways: roads.length, signs: signN, trees: treeSpots.length, hqNpcs: hqNpc?.stats || null, streetNpcs: streetNpc?.stats || null }; },
+    stats(nx, nz, nr = 400) { return { roadClear: { props: roadFix, buildings: buildingFix }, decksNear: nx == null ? undefined : decks.filter((d) => d.pts.some((p) => Math.hypot(p[0] - nx, p[1] - nz) < nr)).map((d) => ({ id: d.w.id, n: d.w.n, w: d.w.w, join: d.join || null, pts: d.pts.map((p) => p.map((v) => +v.toFixed(1))), ys: d.ys.map((v) => +v.toFixed(2)) })), joinProfiles: decks.filter((d) => d.join).map((d) => ({ name: d.join, w: d.w.w, ground: d.ground, pts: d.pts, ys: d.ys })), signAt: signSpots2, heroAt: heroShops.map((h) => [Math.round(h.x), Math.round(h.z), h.type, +h.nx.toFixed(3), +h.nz.toFixed(3)]), heroShops: heroShops.length, clad, zebras: zebras.length, decks: decks.length, buckets: BNX * BNZ, fill: blds.filter((b) => b.f).length, buildings: blds.length, ways: roads.length, signs: signN, trees: treeSpots.length, hqNpcs: hqNpc?.stats || null, streetNpcs: streetNpc?.stats || null }; },
     dispose() { unwatch?.(); unregSurface?.(); streetNpc?.dispose(); hqNpc?.dispose(); root.removeFromParent(); for (const l of labels) l?.remove?.(); },
   };
 }
